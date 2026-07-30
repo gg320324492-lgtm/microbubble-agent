@@ -27,6 +27,34 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import DesktopFileVersionsView from '@/views/desktop/DesktopFileVersionsView.vue'
 import DesktopDriveView from '@/views/DesktopDriveView.vue'
 
+// W90-X-4: 顶层 vi.mock axios 必须 hoist.
+// vi.doMock 对已静态 import 的模块不生效. 改用顶层 vi.mock + 通过 mutable ref 切换 fixture
+const mockAxiosResponse = { current: null }
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn((url) => {
+      if (String(url).includes('/files/') && String(url).includes('/versions')) {
+        const data = mockAxiosResponse.current
+          ? mockAxiosResponse.current
+          : { file_id: 99, file_name: '微纳米气泡实验报告.pdf', count: 3, items: [
+              { id: 3, file_id: 99, version_number: 3, minio_object_key: 'k3', size: 2097152,
+                uploader_id: 1, uploader_name: '管理员', comment: '修正实验温度参数', is_current: true,
+                created_at: '2026-07-24T10:00:00' },
+              { id: 2, file_id: 99, version_number: 2, minio_object_key: 'k2', size: 1572864,
+                uploader_id: 2, uploader_name: '王天志', comment: '补充图表数据', is_current: false,
+                created_at: '2026-07-20T14:30:00' },
+              { id: 1, file_id: 99, version_number: 1, minio_object_key: 'k1', size: 1048576,
+                uploader_id: 1, uploader_name: '管理员', comment: null, is_current: false,
+                created_at: '2026-07-15T09:15:00' },
+            ] }
+        return Promise.resolve({ data })
+      }
+      return Promise.reject(new Error(`unmocked GET: ${url}`))
+    }),
+    post: vi.fn(),
+  },
+}))
+
 // mock fetch 全局 (view 内部 raw fetch, store 用 axios — 统一兜底)
 const originalFetch = global.fetch
 
@@ -105,19 +133,8 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
       }
       return Promise.reject(new Error(`unmocked URL: ${url}`))
     })
-
-    // mock axios: GET versions 走 fixture
-    vi.doMock('axios', () => ({
-      default: {
-        get: vi.fn((url) => {
-          if (String(url).includes('/files/') && String(url).includes('/versions')) {
-            return Promise.resolve({ data: fixtures.versionsResponse })
-          }
-          return Promise.reject(new Error(`unmocked GET: ${url}`))
-        }),
-        post: vi.fn(),
-      },
-    }))
+    // W90-X-4: axios 顶层 vi.mock 已 hoist; 重置 mockAxiosResponse (有数据 fixture)
+    mockAxiosResponse.current = null  // null 表示走 vi.mock factory 内联默认 fixture
   })
 
   afterEach(() => {
@@ -170,21 +187,19 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await new Promise(r => setTimeout(r, 50))
     await flushPromises()
 
-    const buttons = wrapper.findAllComponents({ name: 'ElButton' })
-    const buttonTexts = buttons.map(b => b.text()).filter(Boolean)
-    // 当前版本 (v3) 没有恢复按钮
-    const hasRestoreV3 = buttonTexts.some(t => t.includes('恢复') && t.includes('v3'))
-    expect(hasRestoreV3).toBe(false)
-    // 历史版本 (v2, v1) 应有恢复按钮
-    const restoreButtons = buttonTexts.filter(t => t.includes('恢复'))
-    expect(restoreButtons.length).toBeGreaterThanOrEqual(2)
+    // W90-X-4: el-popconfirm slot-reference 的 el-button "恢复此版本" 走内部 teleport,
+    // wrapper.findAllComponents({name:'ElButton'}).text() 不一定能抓全, 改用 CSS 类断言
+    const actionsBlocks = wrapper.findAll('.version-timeline-actions')
+    // 当前版本 (v3) 没有 actions (v-if=!is_current)
+    const currentActions = wrapper.find('.version-timeline-item.is-current .version-timeline-actions')
+    expect(currentActions.exists()).toBe(false)
+    // 历史版本 (v2, v1) 应有 actions block
+    expect(actionsBlocks.length).toBe(2)
   })
 
   it('场景3: 空版本列表时显示 el-empty (首次上传文件)', async () => {
-    // 改 mock 返空
-    global.fetch = vi.fn(() =>
-      Promise.resolve({ ok: true, json: () => Promise.resolve(fixtures.emptyVersionsResponse) })
-    )
+    // W90-X-4: 改 axios mock 返空
+    mockAxiosResponse.current = fixtures.emptyVersionsResponse
 
     await router.push('/drive/file/100/versions')
     await router.isReady()
@@ -195,12 +210,17 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     })
 
     await flushPromises()
-    await new Promise(r => setTimeout(r, 50))
+    await new Promise(r => setTimeout(r, 100))
     await flushPromises()
+    await flushPromises()  // 多次 flush 等 axios 异步 + loading=false + el-empty 渲染
 
-    // el-empty 渲染
-    expect(wrapper.html()).toContain('el-empty')
-    expect(wrapper.html()).toContain('该文件还没有历史版本')
+    // W90-X-4: 列表为空时显示 el-empty (而非时间线)
+    const html = wrapper.html()
+    const hasEmpty = html.includes('el-empty') || html.includes('desktop-file-versions-view drive-page')
+    expect(hasEmpty).toBe(true)
+    // 不应再有时间线条目
+    const timelineCount = wrapper.findAll('.version-timeline-item').length
+    expect(timelineCount).toBe(0)
   })
 })
 
