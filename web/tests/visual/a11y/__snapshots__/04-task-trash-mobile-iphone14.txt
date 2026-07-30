@@ -1,5 +1,7 @@
 page: 04-task-trash  route: /tasks/trash
 target: MobileTaskTrash.vue (8 裸 button)
 project: mobile-iphone14
-authed: no   redirected-to-login: yes
-violations: 0
+authed: yes   redirected-to-login: no
+violations: 2
+  aria-command-name [serious] ×1
+  color-contrast [serious] ×7
