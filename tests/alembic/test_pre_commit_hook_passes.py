@@ -138,7 +138,7 @@ def test_actual_alembic_head_count_is_one() -> None:
         f"alembic 必须 1 head. 实际 {count}. lines: {lines}. "
         f"如发现真多 head, 走派工 v6 §6 串单链纪律修复, 非 hook 假阳."
     )
-    # 期望 head 已知 (CLAUDE.md 锚点 325 守恒)
-    assert lines[1] == "087_add_knowledge_original_parent_id", (
-        f"alembic head 应为 087_add_knowledge_original_parent_id. 实际: {lines[1]}"
+    # 期望 head 已知 (CLAUDE.md 锚点 459→476 守恒, W91+ alembic 091)
+    assert lines[1] == "091_add_kg_entity", (
+        f"alembic head 应为 091_add_kg_entity. 实际: {lines[1]}"
     )
