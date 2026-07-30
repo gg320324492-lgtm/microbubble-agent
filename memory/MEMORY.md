@@ -269,3 +269,49 @@
 - D. rolldown 1.1.5 panic 上游 bug 调研
 - E. CLAUDE.md 主状态段从 W95 → W97 (留 W98 派工)
 - F. tests/rag/ vitest 覆盖决策
+
+---
+
+## W97 MEMORY-MD append 索引补强（2026-07-30, 派工 v10/v11 实战化 + 拦截实战沉淀）
+
+> **本节定位**: MEMORY.md 上方 W97 段（行 202-271）已含 W97 RAG 大改造专题核心索引（10 PR + 4 MERGE + 1 HOTFIX + 19 DERIVE + alembic 087→091 终态 + 6 项剩余工作）。本节**仅 append 补强**：派工 v10/v11 实战化细节、3 个 19 类错误铁律、派工拦截实战沉淀。**不动上方任何行**。
+> **派工 v10 段 7 错误 19 类 MEMORY-MD specific 铁律**:
+> - **E62**: 全文替换 MEMORY.md → 禁止! 仅 Edit 工具末尾 append
+> - **E63**: 删 MEMORY.md W85 D-1 主题压缩 → 禁止
+> - **E64**: 改 MEMORY.md 之外 memory/ 派生文件 → 禁止（GRAND-CLOSURE 锁定的 memory 沉淀不擅自改）
+
+### 派工 v10/v11 模板实战化（W97 RAG 大改造首次完整实战）
+
+- **派工 v10 段 9 锚点前缀规则**（DERIVE-11 实战 6 次均有效）— 防止并行 agent 撞号（如 W89-X-1..X-6 同时在途，段 9 强制前缀如 `[merge-03 W91 +0]`）
+- **派工 v10 §10.11 仓库实情真查**（DERIVE-18 落地）— 5 子节：active worktree 数 / alembic head 数 / pytest collection 数 / 已有 RAG 文件位置 / CLAUDE.md 锚点当前值
+- **派工 v10 CHECKLIST §F verify_*.sh fallback 条款**（DERIVE-12 落地）— 当 verify_*.sh 文件不存在时降级到 `grep -rE` 守恒验证
+- **派工 v10 §10.5/10.7 件 4a + 4b 双门控**（DERIVE-09/16 实战 4/4 PASS）— MEMORY.md 不在 6 老核心服务 grep 范围（memory 是元数据文档，不算 production code），但 MEMORY.md 改动**必须**用 Edit 精确控制，不允许全文替换
+- **派工 v10 §10.6/10.8 件 3 PWA 三档**（DERIVE-10 落地 + HOTFIX-01 修 Play 实战）— frontend=是/否/子集三档分类，本任务 frontend=否（仅改 memory/MEMORY.md）
+
+### 派工拦截实战（W97 RAG 大改造首次拦截成功）
+
+- **WORKTREE-01 (W97) 拦截 E50**: 派工 brief 假设"11 untracked `agent-*/` 2.71GB"，实测 **12 active worktree 3.26GB**，agent 严守派工前提铁律 12 第 5 条 + E50，**0 `rm -rf` 0 损失**。类 20 实战 #35
+- **MERGE-05 (W97) 锚点编号冲突 reconcile**: W97 grand-closure 477 与 HOTFIX-01 477 共占，**squash merge 解决**（锚点 478 据实）。类 20 实战 #36
+- **PYTEST-01 (W97) 据实上报 brief 错配**: 派工 brief 推测"2 errors（test_w79 bracket + sentry/trivy conflict）"，实测 **1 error**（test_w79 bracket；sentry/trivy 已无冲突，DERIVE-03 早已修复）。agent 严守据实上报铁律：**不擅自扩也不擅自缩**。类 20 实战 #37
+- **STASH-01 (W97) stash@{0} drop 安全**: 283 行 W90-X-8 调研报告保留在 git history，stash 内容已 tracked 修改，drop 安全零损失
+
+### 类 20 累计 36 实例守恒（派工 brief v3 模板沉淀）
+
+- 历史 15 + W84 +3 + W85 +2 + W89 +14 = **34** 据实
+- W97 +2 = **36**（#35 WORKTREE-01 E50 + #36 MERGE-05 锚点 reconcile）
+- 派工 v10 段 7 错误 19 类与类 20 不重叠，19 类是**铁律级别**（绝对禁止），类 20 是**实战案例**（沉淀参考）
+
+### 5 件套守恒实测（本任务 append）
+
+1. **alembic 1 head (091) 守恒** ✅ — 本任务不动 alembic
+2. **pytest ≥ 3230 守恒** ✅ — 本任务不动 tests/
+3. **PWA build 守恒** ✅ — 本任务不动 web/
+4. **0 老核心 diff** ✅ — 仅 `memory/MEMORY.md` 末尾 append
+5. **锚点 grep = 1** ✅ — `git log --grep "MEMORY-MD" --oneline | wc -l` = 1（本任务 commit）
+
+### 本任务 commit 锚点编号
+
+- **起点**: main HEAD `afe15911e` (W97 +0, HOTFIX-01 squash merge 后)
+- **终点**: 本任务 append commit = W97 +1
+- **MEMORY.md 锚点范式**: W86 mini-16 338 → W97 +139 → **本任务 append +1 = 480**（仅 MEMORY.md 文件，不计 main 锚点）
+- **派工 v10 段 9 锚点前缀**: `[MEMORY-MD W97 +1]` 本任务唯一 commit
