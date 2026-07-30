@@ -2,6 +2,37 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-07-30] W94 PR8 知识图谱深度联动 (RAG v1.1 §2 PR8, 锚点 +0 → +20 模板 / **实测 17 commits**, alembic 091, **10 PR 最后 1 个 alembic PR**, 0 production code 例外 1 已批)
+
+**主基调**: PR8 B 实施, 知识图谱深度联动 + 实体链召回第 5 路 (RAG 工业级 v1.1 §2 PR8). **22/22 e2e PASS in 0.26s**. 锚点范式据实 17 commits (模板 21, +8..+11 四项合并入 +7 的 22 case, 不凑数). alembic **090 → 091 串单链** (派工 v11 段 1) —— **PR8 是 10 PR 中最后 1 个 alembic PR**, 091 之后链正式收口 (PR9/PR10 无迁移), 全景 `087 → 088 (PR2) → 089 (PR3) → 090 (PR5) → 091 (PR8)`. 件 4a 双门控 PASS (6 锁定老核心 `^[+-]def` = 0; knowledge_service +14 insertions **0 删除**; hybrid_retriever +127 insertions **0 删除**; embedding_service / bm25_service / text_splitter / rag_evaluator 全 0 diff).
+
+**核心产出**:
+1. `app/models/kg_entity.py` — `KGEntity` 扁平实体 ORM (8 列 + 幂等唯一约束 + 2 CheckConstraint + 2 Index) + 8 类白名单 + `normalize_entity_name` / `coerce_entity_type`
+2. `alembic/versions/091_add_kg_entity.py` — kg_entities 表 + 4 索引 (3 B-tree + **HNSW vector_cosine_ops**), idempotent guard 沿用 087/088/089/090 五段模式, **CREATE INDEX CONCURRENTLY** 二段式 DO $$ 探测 (E11 大表阻塞防护)
+3. `app/services/entity_link_recall.py` — 实体链召回第 5 路 (pgvector cosine + 共现 1 跳扩散), **PostgreSQL 内置无 Neo4j 依赖** (补齐已有 `_graph_search` Neo4j 单点短板)
+4. `app/services/kg_embedding.py` — 实体向量 (**必复用 PR1 `truncate_for_embedding`**, 禁另起硬截) + lazy import (ST 未装不崩) + 幂等批量回填
+5. `tests/rag/test_pr8_e2e.py` — 22 case (ORM 1-5 / 召回逻辑 6-10 / embedding 11-15 / alembic 16-18 / 集成+性能+实体数+漂移 19-22)
+
+**门禁实测**: 实体链 hit ≥ 25% (case 10 真算 3/10=30% PASS, 反例 1/10 判失败) + 图谱召回 P95 ≤ 100ms (case 20 真计时 20 samples) + 实体数 ≥ 5000 (case 21 `count_entities()` 真调用 + `assert_awaited()`, **真库计数待生产 DB**) + qa-bench ≥ 96% (**按推荐不跑**, 沿用 PR1/PR5)
+
+**已有 KG 资产 0 改 (互补非替代)**: 5 个已有 KG 服务 (`entity_service` 402 / `graph_retriever` 188 / `kg_query_service` 266 / `knowledge_graph_builder` 289 / `knowledge_graph_service` 500 = **1645 行**) 全部 0 改 (`knowledge_graph_service` 仅**文件底部**模块级追加); `knowledge_entities` (SPO 三元组) + `entity_co_occurrence` (共现网络) 两老表 **0 改** (走 lifespan create_all 无 alembic).
+
+**派工 brief 错配 3 处据实上报 (类 20 #33/#35, §12.3.4 拦截不擅自改)**:
+1. brief "新增 kg_entity ORM" → `knowledge_entity.py` **已存在** `KnowledgeEntity` (SPO 三元组) → 新建 `KGEntity` (扁平实体) **互补非替代** (PR5 `RAGEvaluationReport` vs `RAGEvaluation` 同款模式)
+2. brief "仅新增实体抽取钩子" → 钩子**已存在** (Step 5 `merge_entities_from_document` L302) → 改走 **Step 5b** 追加 (复用 Step 5 产物, **0 新增 LLM 调用**)
+3. brief "仅新增 KG retrieval path" → `_graph_search` **已存在** (L218-267) → 改走模块级**第 5 路** `retrieve_with_entity_link` (沿用 PR4 `retrieve_with_weights` "新 API 不动原 retrieve" 已批模式)
+
+**e2e 2 例真失败修根因 (未弱化断言)**: case 15 `sentence_transformers` 未装导致 patch 无法 resolve → `sys.modules` 注入 stub (比 importorskip **更强**, 真跑 lazy import 契约) + 真实缺装环境验证降级路, **断言反而加强**; case 19 Windows gbk codec → `subprocess.run(encoding="utf-8")`, 断言不变.
+
+**件 3 PWA build pre-existing FAIL 据实**: `RAGEvalPanel.vue:24` `"Play" is not exported by @element-plus/icons-vue` —— **PR5 commit `cb5c98498` 引入, 非 PR8** (`git status --porcelain -- web/` = 0 dirty, PR8 frontend=否). 按派工 v11 新增 5: pre-existing 故障据实上报, 不算本 PR FAIL, **也不顺手修** (0 production code). **建议主拍派 hotfix**: `Play` → `VideoPlay`.
+
+**文档**:
+- `docs/rag/W94-PR8-ANCHOR.md` CLAUDE.md 镜像 (11 节, **0 改 CLAUDE.md**)
+- `docs/rag/RUNBOOK.md` §0.7 + §0.7.1 验证 + §0.7.2 回滚
+- `docs/rag/SCHEMAS.md` §10 kg_entity (7 件套 → 10 件补完)
+- `docs/rag/CHECKLIST.md` §J PR8 据实上报
+- `memory/w94-rag-pr8-start-2026-07-30.md` + `memory/w94-rag-pr8-full-2026-07-30.md`
+
 ## [2026-07-30] W91 PR5 RAG 离线评估 runner (RAG v1.1 §3.5 PR5, 锚点 +0 → +18, 19 commits, alembic 090, 0 production code 例外 1 已批)
 
 **主基调**: PR5 B 实施, RAGEvaluator 真召回率激活 (RAG 工业级 v1.1 §3.5 PR5). 22/22 e2e PASS. 锚点范式 +19 守恒 (W91 +0 → +18 据实). alembic 089 → 090 串单链 (派工 v11 段 1). 件 4a 双门控 PASS (knowledge_service 0 def + hybrid_retriever 0 diff + embedding_service 0 def + bm25_service 0 def + text_splitter 0 def + rag_evaluator +1 def run_evaluation 派工 brief 允许).

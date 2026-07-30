@@ -498,3 +498,173 @@ class KnowledgeGraphService:
             "relations": relation_count,
             "auto_researched": auto_researched,
         }
+
+
+# ============================================================================
+# PR8 (W94 +4): 实体链接入口 — 模块级新增, 0 改 KnowledgeGraphService 类方法
+#
+# 派工 brief 段 2: "knowledge_graph_service.py —— 仅新增 _add_entity_links 入口
+#                  (不改原 build_relations_for 函数体)"
+#
+# 类 20 #35 据实上报: brief 用词 "_add_entity_links 入口" 暗示类方法 (下划线前缀).
+# 实测 build_relations_for 是 KnowledgeGraphService 类方法 (L24), 若把
+# _add_entity_links 加为类方法则 `git diff -U0 | grep '^[+-]def'` 仍为 0
+# (类方法缩进 4 空格, 不匹配 `^[+-]def`), **但**件 4a 语义是"老核心 unchanged".
+#
+# 处置 (沿用 PR3 bm25_service.py +3 module-level 包装函数已批模式):
+# 采用**模块级函数** `_add_entity_links(db, knowledge_id)`, 理由:
+# 1. 0 触碰类体 (连缩进块都不进), 件 4a 语义最强守恒
+# 2. 与 get_kg_builder() / get_graph_retriever() 模块级工厂函数风格一致
+# 3. 可被 knowledge_service Step 5b 钩子直接 import 调用, 无需实例化 Service
+# 保留下划线前缀 (brief 命名) 表示内部入口, 同时导出无下划线别名供钩子调用.
+# ============================================================================
+
+
+async def _add_entity_links(db: AsyncSession, knowledge_id: int) -> dict:
+    """为单条知识抽取扁平实体并写 kg_entities (PR8 实体链召回数据源)
+
+    独立容错: 任何异常都不抛出 (调用方 Step 5b 钩子已包 try/except, 双保险),
+    返回统计 dict 供日志。
+
+    与已有实体链路的分工:
+    - Step 4 build_relations_for  → knowledge_relations (知识条目间关联)
+    - Step 5 merge_entities_from_document → knowledge_entities (SPO 三元组)
+    - Step 6 build_graph_for_knowledge   → Neo4j 图谱
+    - **Step 5b _add_entity_links        → kg_entities (扁平命名实体, PR8 新增)**
+
+    Returns:
+        {"created": int, "updated": int, "skipped": int, "total": int}
+    """
+    stats = {"created": 0, "updated": 0, "skipped": 0, "total": 0}
+    try:
+        from app.models.kg_entity import KGEntity, coerce_entity_type, normalize_entity_name
+        from app.services.kg_embedding import generate_kg_entity_embedding
+
+        candidates = await _extract_flat_entities(db, knowledge_id)
+        stats["total"] = len(candidates)
+        if not candidates:
+            return stats
+
+        for cand in candidates:
+            name = normalize_entity_name(cand.get("entity_name"))
+            etype = coerce_entity_type(cand.get("entity_type"))
+            if not name:
+                stats["skipped"] += 1
+                continue
+
+            existing_q = select(KGEntity).where(
+                and_(
+                    KGEntity.entity_name == name,
+                    KGEntity.entity_type == etype,
+                    KGEntity.knowledge_id == knowledge_id,
+                )
+            )
+            existing = (await db.execute(existing_q)).scalar_one_or_none()
+
+            if existing is not None:
+                # 幂等: 重跑只累计 mention_count + 刷新 last_seen_at
+                existing.mention_count = (existing.mention_count or 1) + 1
+                existing.last_seen_at = func.now()
+                stats["updated"] += 1
+                continue
+
+            entity = KGEntity(
+                entity_name=name,
+                entity_type=etype,
+                knowledge_id=knowledge_id,
+                mention_count=int(cand.get("mention_count") or 1),
+            )
+            emb = await generate_kg_entity_embedding(name, etype)
+            if emb:
+                entity.embedding = emb
+            db.add(entity)
+            stats["created"] += 1
+
+        await db.commit()
+        logger.info(
+            "[PR8] kg_entities 写入完成(knowledge_id=%s): %s",
+            knowledge_id,
+            stats,
+        )
+    except Exception as e:
+        logger.warning(
+            "[PR8] 实体链接入失败(knowledge_id=%s): %s", knowledge_id, e
+        )
+    return stats
+
+
+async def _extract_flat_entities(
+    db: AsyncSession, knowledge_id: int
+) -> List[dict]:
+    """从已有 knowledge_entities (SPO 三元组) 派生扁平实体候选
+
+    **复用而非重算** — 已有 Step 5 EntityService.merge_entities_from_document
+    已做过 LLM 三元组抽取, PR8 不重复调 LLM (省 token + 省延迟):
+    - subject → 扁平实体 (类型按 predicate 启发式推断)
+    - object  → 扁平实体 (同上)
+    - 三元组 occurrence_count → mention_count
+
+    Neo4j 路 (Step 6) 已抽实体但依赖外部服务, 不作为数据源 (降级安全)。
+    """
+    out: List[dict] = []
+    try:
+        from app.models.knowledge_entity import KnowledgeEntity
+
+        stmt = select(KnowledgeEntity).where(
+            KnowledgeEntity.source_knowledge_ids.any(knowledge_id)
+        )
+        rows = (await db.execute(stmt)).scalars().all()
+        seen: set = set()
+        for triple in rows:
+            for raw_name, role in (
+                (triple.subject, "subject"),
+                (triple.object, "object"),
+            ):
+                if not raw_name:
+                    continue
+                name = str(raw_name).strip()
+                if not name or len(name) > 500:
+                    continue
+                etype = _infer_entity_type(name, triple.predicate, role)
+                key = (name, etype)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(
+                    {
+                        "entity_name": name,
+                        "entity_type": etype,
+                        "mention_count": max(1, int(triple.occurrence_count or 1)),
+                    }
+                )
+    except Exception as e:
+        logger.debug("[PR8] 扁平实体派生跳过(knowledge_id=%s): %s", knowledge_id, e)
+    return out
+
+
+# predicate 关键词 → 实体类型启发式 (确定性映射, 不调 LLM)
+# 参考 kg_query_service.py input validation 白名单范式 (plan §6)
+_PREDICATE_TYPE_HINTS = (
+    (("作者", "发表", "隶属", "任职", "指导"), "PERSON"),
+    (("机构", "单位", "期刊", "会议", "实验室"), "ORG"),
+    (("方法", "采用", "测定", "制备", "工艺"), "METHOD"),
+    (("材料", "组成", "成分", "添加"), "MATERIAL"),
+    (("设备", "仪器", "装置"), "EQUIPMENT"),
+    (("指标", "数值", "效率", "浓度", "粒径", "电位"), "METRIC"),
+)
+
+
+def _infer_entity_type(name: str, predicate: Optional[str], role: str) -> str:
+    """确定性实体类型推断 — 0 LLM 调用 (召回侧延迟预算 P95 ≤ 100ms)
+
+    策略: predicate 关键词命中优先 → 兜底 CONCEPT (subject) / OTHER (object)
+    """
+    pred = (predicate or "").lower()
+    for keywords, etype in _PREDICATE_TYPE_HINTS:
+        if any(kw in pred for kw in keywords):
+            return etype
+    return "CONCEPT" if role == "subject" else "OTHER"
+
+
+# 无下划线别名 — 供 knowledge_service Step 5b 钩子调用 (语义: 公开入口)
+add_entity_links = _add_entity_links

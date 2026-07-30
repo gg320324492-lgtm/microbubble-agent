@@ -27,6 +27,52 @@
 - knowledge_service 钩子 `_incremental_add_document` 在 `_run_analyze_and_embed` 中调用
 - 本机测试环境 jieba/rank_bm25 未装时 importorskip 守护, 生产环境必装 (`pip install jieba rank_bm25`)
 
+## 0.7 PR8 (W94) 新增 kg_entities 部署细节
+
+> **PR8 是 10 PR 中最后 1 个 alembic PR** — 091 之后 alembic 链正式收口 (PR9/PR10 无迁移)。
+> 串单链全景: `087 → 088 (PR2 chunk) → 089 (PR3 GIN/tsvector) → 090 (PR5 rag_eval) → 091 (PR8 kg_entity)`
+
+- **alembic 091 新建 kg_entities 表** (`alembic/versions/091_add_kg_entity.py`), down_revision = `090_add_rag_eval_report`
+- **HNSW 索引是事务外操作** (沿用 089 二段式): `CREATE INDEX CONCURRENTLY` 不能套 `IF NOT EXISTS`（PG 限制）→ `DO $$ BEGIN IF NOT EXISTS (pg_indexes) ... EXECUTE 'CREATE INDEX CONCURRENTLY' ... END$$` 探测 + 创建
+- **索引列表**:
+  - `ix_kg_entities_name`: B-tree (entity_name), 实体链召回精确匹配路
+  - `ix_kg_entities_type`: B-tree (entity_type), 类型聚合统计
+  - `ix_kg_entities_knowledge_id`: B-tree (knowledge_id), FK join
+  - `ix_kg_entities_embedding_hnsw`: **HNSW (embedding vector_cosine_ops)**, 实体链语义召回 (门禁 b P95 ≤ 100ms)
+- **大表阻塞风险 (RISKS §R4)**: kg_entities 首次为**空表** 0 阻塞; 幂等重放时 `CONCURRENTLY` 保证无写锁。监控创建时长 ≤ 120s 门禁
+- **0 改老表**: `knowledge_entities` (SPO 三元组) + `entity_co_occurrence` (共现网络) 两表走 `Base.metadata.create_all` lifespan (**0 alembic 迁移**, 仅 030 改过 embedding 维度), 091 **不动**
+- **knowledge_service 钩子**: `_run_analyze_and_embed` 中 **Step 5b** (PR8) 必排在 Step 5 实体融合**之后** —— `_extract_flat_entities` 读 `knowledge_entities.source_knowledge_ids.any(kid)`, Step 5 未写入时读到空 → 0 实体, 顺序倒置即静默失效
+- **0 新增 LLM 调用**: PR8 复用 Step 5 已做的 LLM 三元组抽取产物派生扁平实体 (省 token + 省延迟), `_infer_entity_type` 走确定性 predicate 关键词映射
+- **embedding 回填**: 历史知识条目无 kg_entities 数据时跑 `backfill_kg_entity_embeddings(db)` (`app/services/kg_embedding.py`), 幂等仅处理 `embedding IS NULL`, 可重跑
+
+### 0.7.1 PR8 部署后验证
+
+```bash
+# 1. verify 1 head = 091 (E01)
+python -m alembic heads    # 期望: 091_add_kg_entity (head)
+
+# 2. 表 + 4 索引存在
+docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble -c "\d kg_entities"
+
+# 3. 门禁 c 实体数 ≥ 5000 (E39 真查询)
+docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble \
+  -c "SELECT count(*) FROM kg_entities;"
+# < 5000 时跑 embedding 回填 + 等入库 pipeline 积累, 不改门禁凑数
+
+# 4. 门禁 a 实体链 hit ≥ 25% / 门禁 b P95 ≤ 100ms
+pytest tests/rag/test_pr8_e2e.py -v --ignore=tests/test_w79_commercial_private_deployment_e2e.py
+```
+
+### 0.7.2 PR8 回滚
+
+```bash
+# alembic 单步回滚 (DROP TABLE kg_entities CASCADE, 自动级联索引/约束)
+docker exec microbubble-agent-app-1 alembic downgrade -1
+# 期望回到 090_add_rag_eval_report
+# 注: 第 5 路 entity_link 默认可关 (enable_entity_link=False → 行为等价原 4 路 retrieve),
+#     无需回滚代码即可止血
+```
+
 ## 1. 部署步骤（含 alembic 的 PR: PR2/3/5/8）
 
 ```bash

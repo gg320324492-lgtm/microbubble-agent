@@ -308,6 +308,20 @@ async def _run_analyze_and_embed(
     except Exception as e:
         logger.warning(f"实体融合失败(knowledge_id={knowledge_id}): {e}")
 
+    # Step 5b (PR8 W94 +5): kg_entities 扁平实体抽取 (实体链召回数据源)
+    # 必排在 Step 5 之后 — 复用 Step 5 已写入的 knowledge_entities SPO 三元组派生,
+    # 0 新增 LLM 调用 (省 token + 省延迟). 独立容错, 与 PR2 chunk / PR3 tsvector 同模式.
+    try:
+        from app.services.knowledge_graph_service import _add_entity_links
+        async with session_factory() as db:
+            kg_stats = await _add_entity_links(db, knowledge_id)
+        if kg_stats.get("created") or kg_stats.get("updated"):
+            logger.info(
+                f"[PR8] kg_entities 实体链写入(knowledge_id={knowledge_id}): {kg_stats}"
+            )
+    except Exception as e:
+        logger.warning(f"kg_entities 实体链写入失败(knowledge_id={knowledge_id}): {e}")
+
     # Step 6: Neo4j 知识图谱构建（独立容错）
     try:
         from app.services.knowledge_graph_builder import get_kg_builder
