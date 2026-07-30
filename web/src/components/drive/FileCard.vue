@@ -170,8 +170,20 @@
 
     <!-- 列表视图: 右侧操作栏 -->
     <div v-if="viewMode === 'list'" class="file-card-list-actions">
-      <el-button size="small" :icon="Download" circle @click.stop="handleDownload" />
-      <el-button size="small" :icon="View" circle @click.stop="$emit('preview', file)" />
+      <el-button
+        size="small"
+        :icon="Download"
+        circle
+        :aria-label="`下载 ${file.title || file.file_name || '文件'}`"
+        @click.stop="handleDownload"
+      />
+      <el-button
+        size="small"
+        :icon="View"
+        circle
+        :aria-label="`预览 ${file.title || file.file_name || '文件'}`"
+        @click.stop="$emit('preview', file)"
+      />
     </div>
 
     <!--
