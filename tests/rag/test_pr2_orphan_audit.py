@@ -119,9 +119,18 @@ def test_orphan_task_32_dry_run_via_subprocess():
         capture_output=True, text=True, cwd=".",
     )
     output = result.stdout.strip()
-    # 088 已落 script_location, 期望 088 (或 087 if 088 not detected)
-    assert "088_add_knowledge_chunk" in output or "087_add_knowledge_original_parent_id" in output, \
-        f"unexpected alembic heads: {output!r}"
-    # 只 1 head (派工 v11 段 7 E01)
+    # W91+ alembic 091 是当前 head (087→088→089→090→091 串单链)
+    # 087/088/089/090/091 都可能出现在 heads (取决于本地 chain 长度)
+    assert any(
+        rev in output
+        for rev in [
+            "091_add_kg_entity",
+            "090_add_rag_eval_report",
+            "089_gin_trgm_tsvector",
+            "088_add_knowledge_chunk",
+            "087_add_knowledge_original_parent_id",
+        ]
+    ), f"unexpected alembic heads: {output!r}"
+    # 只 1 head (派工 v11 段 7 E01) — 不超 1 即合规 (chain 链上必须有 1 head)
     lines = [l for l in output.splitlines() if "(" in l]
-    assert len(lines) <= 1, f"multiple heads: {output!r}"
+    assert len(lines) <= 1, f"alembic 多 head 违规, 实测 {output!r}"
