@@ -747,3 +747,44 @@ CLAUDE.md W67 第 41 步已记录基线: 锚点范式守卫 — 0 production cod
 - 新会话默认只读 CLAUDE.md 核心 (50KB) — 不再加载历史 lesson
 - 历史相关查询可主动 \`@ docs/CLAUDE-history.md\` 或 \`@<path>\` 引用
 - 不破坏现有所有引用 (CLAUDE.md 顶部 "当前任务链" 块保留)
+
+### 当前开发状态（2026-07-30 W97 RAG 大改造收口）
+
+**RAG 大改造 10 PR 全部合并到 main + alembic 串单链 087→091 完整收口**：
+- 087 → 088 (PR2) → 089 (PR3) → 090 (PR5) → 091 (PR8)
+- main HEAD = `afe15911e` (MERGE-05 squash HOTFIX-01)
+- 锚点范式 338 → 482 (+144 据实)
+- 件 3 PWA build PASS（HOTFIX-01 PR5 Play → VideoPlay 修复）
+
+**10 PR 一行摘要**：
+- PR1 嵌入一致化 + query prefix 生效（has_query_prompt 前置修复）
+- PR2 knowledge_chunk 子表 + parent-child chunking
+- PR3 BM25 增量 + pg_trgm + tsvector
+- PR4 HybridRetriever 召回侧量化（synonym 298 + 4 路权重可配）
+- PR5 RAGEvaluator 真召回率激活（路径修正 web/src/views/admin/RAGEvalPanel.vue）
+- PR6 SearchLog 前端接通（拒凑 5 commits）
+- PR7 全链路 observability（grafana 7 面板 + 按路耗时分解）
+- PR8 知识图谱深度联动（kg_entity + entity_link_recall）
+- PR9 auto-research v2（dedup + query_rewriter）
+- PR10 docs/deploy/eval 三件套沉淀（11 docs + 派工 v11）
+
+**9 大缺口 100% 消化**：嵌入不一致 / 无 chunking / BM25 N 次重建 / PG 全文缺失 / query prefix 失效 / RAGEvaluator 零调用 / SearchLog 前端未通 / 无独立 RAG 评测 / 无 observability
+
+**派工纪律沉淀（v10/v11 实战化）**：
+- 派工前提铁律 12 条 + 类 20 实战 36 实例（历史 15 + W84 +3 + W85 +2 + W89 +14 + W97 +2）
+- 件 4 双门控（件 4a 老核心 unchanged + 件 4b 派工 brief 授权，6 老核心服务 def diff 全 0 实战）
+- 件 3 PWA 三档（frontend=是/否/子集，PR5 改路径实战，HOTFIX-01 修 Play 实战）
+- 派工 v11 段 9 锚点前缀规则（防止并行 agent 撞号，6 个 W89 分支在途实战）
+- 派工 v11 §13 仓库实情真查（5 子节 + 派生 5 铁律）
+- 派工 v11 CHECKLIST §F verify_*.sh fallback 条款
+- **派工 v10 段 7 E50 实战拦截**：WORKTREE-01 拦截"11 untracked"误判（实为 12 active worktree），0 rm -rf 0 损失
+- **派工 v10 段 7 E48 锚点编号冲突 reconcile**：MERGE-05 squash 解决 GRAND-CLOSURE 477 vs HOTFIX-01 477 共占编号空间
+
+**记忆锚点指向**：
+- `C:\Users\pc\.claude\plans\rag-quirky-otter.md` v1.1（10 PR 路线 + 5 件套 + PR1 详设）
+- `docs/w72-prompt-paradigm-v11-2027-04.md` 168 行（段 9/10/13 + DERIVE-19 reconcile）
+- `docs/rag/CHECKLIST.md` 213 行（§F fallback + §H 仓库实情真查 + §J PR8）
+- `docs/rag/W97-RAG-GRAND-CLOSURE.md` 208 行（CLAUDE.md 镜像）
+- `memory/MEMORY.md` W97 RAG 大改造专题索引
+
+Co-Authored-By: Claude Fable 5
