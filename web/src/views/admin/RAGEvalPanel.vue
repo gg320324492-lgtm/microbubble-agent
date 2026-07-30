@@ -24,7 +24,7 @@
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Play, DataAnalysis } from '@element-plus/icons-vue'
+import { Refresh, VideoPlay, DataAnalysis } from '@element-plus/icons-vue'
 import { useRAGEval } from '@/composables/useRAGEval'
 
 const { reports, loading, error, lastUpdate, listReports, runEvaluation, fetchReportDetail } = useRAGEval()
@@ -111,7 +111,7 @@ onUnmounted(() => {
             <el-icon><Refresh /></el-icon> 刷新
           </el-button>
           <el-button type="primary" :loading="running" @click="onRun">
-            <el-icon><Play /></el-icon> 跑一次评估
+            <el-icon><VideoPlay /></el-icon> 跑一次评估
           </el-button>
         </div>
       </div>
