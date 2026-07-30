@@ -1,5 +1,7 @@
 page: 02-drive  route: /drive
 target: drive-view.css 引用页 (DesktopDriveView/MobileDriveView)
 project: desktop-chrome
-authed: no   redirected-to-login: no
-violations: 0
+authed: yes   redirected-to-login: no
+violations: 2
+  color-contrast [serious] ×9
+  scrollable-region-focusable [serious] ×1
