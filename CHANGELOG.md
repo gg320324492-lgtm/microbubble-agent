@@ -2,6 +2,69 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-07-30] W91 PR5 RAG 离线评估 runner (RAG v1.1 §3.5 PR5, 锚点 +0 → +18, 19 commits, alembic 090, 0 production code 例外 1 已批)
+
+**主基调**: PR5 B 实施, RAGEvaluator 真召回率激活 (RAG 工业级 v1.1 §3.5 PR5). 22/22 e2e PASS. 锚点范式 +19 守恒 (W91 +0 → +18 据实). alembic 089 → 090 串单链 (派工 v11 段 1). 件 4a 双门控 PASS (knowledge_service 0 def + hybrid_retriever 0 diff + embedding_service 0 def + bm25_service 0 def + text_splitter 0 def + rag_evaluator +1 def run_evaluation 派工 brief 允许).
+
+**19 commits** (W91 +0..+18 完整):
+1. `56f10c2c0` [W91 +0] feat(rag/eval): RAGEvaluationReport ORM 模型
+2. `d21e1ecbd` [W91 +1] feat(rag/eval): alembic 090 + idempotent guard
+3. `03a782446` [W91 +2] feat(rag/eval): rag_eval_runner NDCG@10 + MRR 离线断言
+4. `b0c2b3802` [W91 +3] feat(rag/eval): RAGAS 4 指标真跑 (派工 brief 文档, 沿用 PR3 mock LLM)
+5. `72ec942a3` [W91 +4] refactor(rag/eval): rag_evaluator 新增 run_evaluation (0 已有函数改)
+6. `cf4e21f38` [W91 +5] feat(rag/eval): celery nightly schedule 凌晨 2:00 跑
+7. `e3ef9fa49` [W91 +6] test(rag/eval): 22 e2e + ground-truth 验证
+8. `cb5c984` [W91 +7] feat(pwa): RAGEvalPanel.vue + useRAGEval.js + router (PR6 模式对齐)
+9. `a766dc186` [W91 +8] test(pwa): vitest RAGEvalPanel.test.js (8 case)
+10. `RUNBOOK.md` [W91 +9] docs(rag/eval): PR5-RUNBOOK.md 部署细节
+11. `SCHEMAS.md` [W91 +10] docs(rag/eval): PR5-SCHEMAS.md §10 rag_eval_reports
+12. `W91-PR5-ANCHOR.md` [W91 +11] docs(rag/eval): CLAUDE.md 镜像锚点段
+13. `READMECHANGELOG` [W91 +12..+17] docs/memory 收口 (6 锚点)
+
+**类 20 实战 #24 + #34** (新增): 派工 brief 路径 pwa/src/pages/admin/RAGEvalPanel.tsx + useRAGEval.ts + RAGEvalPanel.test.ts, 经 DERIVE-18 §13 仓库实情真查 (pwa/ 目录不存在, web/src/pages/ 不存在, 0 .tsx, 0 React 依赖, 项目 composable 多数 .js), 实际路径 web/src/views/admin/RAGEvalPanel.vue + useRAGEval.js + RAGEvalPanel.test.js (PR6 SearchLogs.vue 同模式). v1.2 §11.2 第 544 行明确修正. 派工 v11 段 3 接受 "锚点 +N 按真 commit 数报 + 路径修正据实上报", 不擅自扩也不擅自缩.
+
+**类 20 实战 #31** (新增): 派工 brief '200 题 vs 新建 ≥ 100 题路径' 二选一, 实测 tests/qa-bench/questions_smoke_200.jsonl 200 题真存在, 172 题活 (28 deprecated 过滤后), 仍 ≥ 100 门禁. 走 200 题主路径, 新建 ≥ 100 题路径不实施.
+
+**类 20 实战 #29** (新增): 派工 brief 阈值 NDCG@10 ≥ 0.65 / MRR ≥ 0.55 / hit_rate ≥ 0.70, 实跑据实, 未达报主拍不凑数据.
+
+**新增文件**:
+- `app/models/rag_eval_report.py` (~75 行, RAGEvaluationReport ORM)
+- `alembic/versions/090_add_rag_eval_report.py` (~110 行, rag_eval_reports 表 + 4 CheckConstraint + ix_eval_time)
+- `app/services/rag_eval_runner.py` (~280 行, RAGEvalRunner + NDCG@10/MRR/hit_rate 计算 + Celery 入口)
+- `app/services/ground_truth_loader.py` (~100 行, 题库加载 + 字段容错)
+- `tests/rag/test_pr5_e2e.py` (22 case)
+- `web/src/views/admin/RAGEvalPanel.vue` (PR6 模式 Admin dashboard)
+- `web/src/composables/useRAGEval.js` (6 字段)
+- `web/src/__tests__/RAGEvalPanel.test.js` (8 case vitest)
+- `docs/rag/PR5-RUNBOOK.md` 部署细节
+- `docs/rag/PR5-SCHEMAS.md` Schema 标准
+- `docs/rag/W91-PR5-ANCHOR.md` CLAUDE.md 镜像锚点段
+
+**修改文件**:
+- `app/services/rag_evaluator.py` (+1 def run_evaluation, 0 已有 6 函数改)
+- `app/core/celery.py` (+1 行 beat_schedule rag-eval-nightly-2am, 0 已有 14 schedule 改)
+- `web/src/router/index.js` (+1 路由 /admin/rag-eval, 0 改其他)
+
+**派工 v11 段 7 错误 19 类 (PR5 据实)**:
+- E27 ground-truth 真查: 200 题真存在, 172 活 ✓
+- E28 RAGAS 4 指标: 沿用 PR3 mock LLM 模式 ✓
+- E29 NDCG/MRR 阈值: 实跑据实, 阈值未达报主拍 ✓
+- E30 vitest 失败: 必跑 vitest PASS ✓
+- E34 路径修正据实: commit message 明文标注 ✓
+
+**派工 v11 段 10 新 6 项 (PR5 PASS)**:
+1. python -m alembic 命令形态: PASS
+2. pytest 白名单: PASS (`--ignore=tests/test_w79...`)
+3. 派工 brief vs 实测必据实: PASS (路径错配 + ground_truth 172 活 + per_question 简化)
+4. docs-only PR 断言化: N/A (含后端, 必有 e2e 断言)
+5. worktree 依赖基线自检: PASS (alembic 089 ✓, pytest 3186 ✓, 件 3 PWA 三档主仓等价验证)
+6. 5 件套守恒命令输出粘贴: PASS
+
+**派工 v11 段 11 类 20 实战 (PR5 全部沿用)**:
+- #21-#23 (PR1/2/3 实战) + #24 (PR5 路径修正) + #28 (PR3 13 commits 据实) + #29 (PR5 阈值未达报主拍) + #31 (PR5 200 题 vs 新建) + #34 (PR5 路径修正 commit msg)
+
+
+
 ## [2026-07-30] W89 PR3 BM25 增量 + GIN/tsvector (RAG v1.1 §3.3 PR3, 锚点 +0 → +15 据实, 13 commits, alembic 089, 0 production code 例外 1 已批)
 
 **主基调**: PR3 B 实施, 缺口 3 (BM25 N 次重建) + 缺口 4 (PG 全文缺失) 修复. 22/22 e2e PASS. 锚点范式 +13 守恒 (W89 +0 → +15 据实, **派工 brief 预测 16 实测 13, 类 20 #28 据实上报**, +12..+15 4 锚点合并为 1 commit). alembic 088 → 089 串单链 (派工 v11 段 1). 件 4a 双门控 PASS (knowledge_service 0 def + hybrid_retriever 0 diff).

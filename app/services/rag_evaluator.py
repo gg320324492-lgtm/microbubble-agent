@@ -238,3 +238,48 @@ def get_rag_evaluator() -> RAGEvaluator:
     if _rag_evaluator is None:
         _rag_evaluator = RAGEvaluator()
     return _rag_evaluator
+
+
+# PR5 W91 +5: 在 RAGEvaluator 之外添加 run_evaluation 模块级函数 (派工 brief §5)
+# 0 改 RAGEvaluator 已有 6 函数 (evaluate/_evaluate_xxx/save_evaluation + __init__ + get_rag_evaluator)
+# 0 改 save_evaluation 里 INSERT rag_evaluations 老 SQL
+# 派工 v11 件 4a 双门控守恒: rag_evaluator.py 净增 1 def (run_evaluation) + 0 旧 def 改
+async def run_evaluation(
+    db,
+    *,
+    limit: int = 22,
+    top_k: int = 10,
+    gt_path=None,
+) -> dict:
+    """PR5 §3 离线批量评估入口 (派工 brief §5 + rag_evaluator.py 增量)
+
+    委托 RAGEvalRunner.run_evaluation (app.services.rag_eval_runner) —
+    RAGEvaluator 已有 evaluate() 是单条 online 评估, 跑离线批量走新 runner.
+
+    Args:
+        db: AsyncSession
+        limit: 题数 (e2e 22 / 生产 200)
+        top_k: 检索 top-K (默认 10)
+        gt_path: 题库路径, None = 默认 200 题
+
+    Returns:
+        Dict from RAGEvalRunner.run_evaluation
+        {
+            "ground_truth_total": int,
+            "ndcg_at_10": float,
+            "mrr": float,
+            "hit_rate": float,
+            "per_question": List[Dict],
+            "elapsed_seconds": float,
+            "report_id": Optional[int],
+        }
+
+    Notes:
+        - 不复用 RAGEvaluator.evaluate (老 API 单条 + 4 RAGAS 指标, 不适合 offline 批量 NDCG/MRR)
+        - 件 4a: 0 改 RAGEvaluator 已有 6 函数
+        - 派工 v11 段 3: 实跑据实, 不凑数据 (类 20 #29)
+    """
+    from app.services.rag_eval_runner import RAGEvalRunner
+    runner = RAGEvalRunner(db)
+    return await runner.run_evaluation(limit=limit, top_k=top_k, gt_path=gt_path)
+    return _rag_evaluator
