@@ -168,6 +168,19 @@
 - 5 段新增: 双锚定 base ref + 分支名 fallback + subagent EnterWorktree fallback 路径 + base ref 实测 + 集成 e2e 一致性 + 类 20 沉淀必查
 - 主指挥合并流程 v3: cherry-pick by hash 而非 merge 嵌套分支
 
+**派工 brief v4 提案 (W89-X-27, 类 20.60-68 + 类 20.82)**: 详见 `docs/dispatch-template-v4.md` 提案文件, 实测位于 `origin/claude/w89-x27-brief-v4` commit `e59b501d5`, main 当前不包含. 9 段必读主题: axe SOP / Playwright 集成 / visual baseline / 软断言改硬门禁 / 真 CI 触发 / vitest 调研 / runner 边界 / 长连接等待 / 真环境验证 v2. 类 20.82 沉淀: 模板升级必含纪律 + 实战证据 + CLAUDE.md 永久引用.
+
+**派工 brief v4.1 升级 (W92-X-6, 6 必读段 + 8 类 20)**:
+- 详见 `docs/dispatch-template-v4.1.md` (本任务新建)
+- 6 必读段: 段 0.1 base ref 实测 (类 20.46/20.32) / 段 0.2 branch 与 hash 实测 (类 20.47) / 段 0.3 套件路径存在性探测 (类 20.97) / 段 0.4 merge-base 假阳性拦截 (类 20.98) / 段 0.5 收官验证 6 步 (类 20.108) / 段 0.6 调研标"推断"必先实测 (类 20.109)
+- 8 类 20: 20.46 / 20.85 / 20.86 / 20.97 / 20.98 / 20.108 / 20.109 / 20.110
+- v3 双锚定实战升级: 8 必填字段 (commit_hash_预期 / branch_name_预期 / base_ref_实测 / worktree_path / boundary_allow_deny / e2e_smoke_test / cherry_pick_conflict / stop_condition)
+- 不可证台账 fail-loud: W91 在项目历史中实存 (远端有 W91-WR-1 + W91-X-15..X-31 多个 ref), 缺的是 W91-X-27 / W91-X-32 / W91-X-33 三个具体台账项, 不能据此扩成"整个 W91 不存在"
+- 累计 113+ 只作历史台账口径, 不可由类号推算, 也不得为了对齐累计数伪造不可证实例
+- 实战来源: 8 次拦截/核验 (W87-G-1 6 处错配 / W89-X-27 v4 未进 main / W90-X-14 27 套件全 MISS / W91-X-15 53 分支 ahead/behind / W91-X-17 WR-1 未合 / W91-X-22 probe 证伪 / W91-X-23 8 violations / W91-X-31 + ref 审计)
+- 守卫: `tests/brief_v41_x6/test_doc_exists.py` 3 PASS
+- memory: `memory/w92-x6-brief-v41-2026-07-30.md`
+
 **集成 e2e 验证 (W87-X-5 全跑, 派工 v6 §1.2 真验证)**:
 - W86 4 套件: 91 PASSED + 10 SKIPPED + 0 FAILED (96.29s)
 - W87 6 套件 (k6/sentry/request_context/dist_health/npm_audit/alembic): 74 PASSED + 0 FAILED (13.79s)
