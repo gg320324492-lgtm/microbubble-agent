@@ -41,7 +41,7 @@
           <div v-for="(item, idx) in form.agenda" :key="idx" class="item-row">
             <span class="item-dot" />
             <el-input v-model="form.agenda[idx]" placeholder="议题描述" />
-            <el-button :icon="Delete" circle size="small" class="item-del" @click="form.agenda.splice(idx, 1)" />
+            <el-button :icon="Delete" circle size="small" class="item-del" aria-label="删除议题" @click="form.agenda.splice(idx, 1)" />
           </div>
           <el-button dashed size="small" class="item-add" @click="form.agenda.push('')">
             <el-icon><Plus /></el-icon> 添加议题
@@ -65,7 +65,7 @@
             <div v-for="(point, i) in form.key_points" :key="'kp'+i" class="item-row">
               <span class="item-dot" />
               <el-input v-model="form.key_points[i]" placeholder="输入要点..." />
-              <el-button :icon="Delete" circle size="small" class="item-del" @click="form.key_points.splice(i, 1)" />
+              <el-button :icon="Delete" circle size="small" class="item-del" :aria-label="`删除要点 ${i + 1}`" @click="form.key_points.splice(i, 1)" />
             </div>
             <el-button dashed size="small" class="item-add" @click="form.key_points.push('')">
               <el-icon><Plus /></el-icon> 添加要点
@@ -77,7 +77,7 @@
             <div v-for="(d, i) in form.decisions" :key="'dc'+i" class="item-row decision">
               <span class="item-dot decision-dot" />
               <el-input v-model="form.decisions[i]" placeholder="输入决议..." />
-              <el-button :icon="Delete" circle size="small" class="item-del" @click="form.decisions.splice(i, 1)" />
+              <el-button :icon="Delete" circle size="small" class="item-del" :aria-label="`删除决议 ${i + 1}`" @click="form.decisions.splice(i, 1)" />
             </div>
             <el-button dashed size="small" class="item-add decision-add" @click="form.decisions.push('')">
               <el-icon><Plus /></el-icon> 添加决议
