@@ -562,3 +562,130 @@ async def retrieve_with_weights(
     # CrossEncoder rerank 已保证 top_k 顺序, RRF 权重合并作为可选增强
     # 未来 PR 可在此处补 results_by_method 重组 + RRF 重排 (PR5/7 扩展点)
     return raw_results
+
+
+# ============================================================================
+# PR8 (W94 +6): KG retrieval path — 模块级新增, 0 改 HybridRetriever 类方法
+#
+# 派工 brief 段 2: "hybrid_retriever.py —— 仅新增 KG retrieval path
+#                  (不改 4 路开关默认)"
+#
+# 类 20 #35 据实上报 — brief 错配 #3 (graph path 已存在):
+# brief 假设 "KG retrieval path" 为新增. 实测 HybridRetriever._graph_search
+# (L218-267) 已存在 Neo4j 图谱路, retrieve/_retrieve_impl 4 路已含 enable_graph.
+# 处置: **不改 _graph_search / retrieve / _retrieve_impl / 4 路权重默认**,
+# 改为模块级新增第 5 路 (entity_link), 沿用 PR4 retrieve_with_weights 已批模式
+# ("新 API, 不动原 retrieve"). 件 4a `^[+-]def` 计入模块级 def 但 brief 段 2
+# 显式授权 (件 4b), 且 0 类方法改.
+#
+# 与已有 graph 路 (_graph_search) 的关系: **并列互补, 非替代**
+# - graph 路 = Neo4j 后端 (外部服务, driver None 时整路返空)
+# - entity_link 路 = PostgreSQL kg_entities (无外部依赖, PG 内置降级安全)
+# 两路可同时开 (enable_graph + enable_entity_link), 结果合并去重.
+# ============================================================================
+
+# 第 5 路默认权重 — 保守值, 低于 vector (0.5) 高于 graph (0.15)
+# 注: 不改 hybrid_weight_config.py 的 4 路默认 (PR4 已锁), 本常量独立
+ENTITY_LINK_DEFAULT_WEIGHT: float = 0.2
+
+
+async def retrieve_with_entity_link(
+    db: AsyncSession,
+    query: str,
+    top_k: int = 5,
+    category: Optional[str] = None,
+    *,
+    enable_entity_link: bool = True,
+    entity_link_weight: float = ENTITY_LINK_DEFAULT_WEIGHT,
+    enable_vector: bool = True,
+    enable_bm25: bool = True,
+    enable_graph: bool = True,
+    enable_rerank: bool = True,
+) -> List[dict]:
+    """PR8 (W94 +6): 4 路 + 实体链第 5 路检索入口 (新 API, 不动原 retrieve)
+
+    与 HybridRetriever.retrieve / retrieve_with_weights 的区别:
+        1. 在原 4 路结果之上**并入** entity_link 第 5 路 (PostgreSQL kg_entities)
+        2. 不改原 4 路开关默认 (enable_vector/bm25/graph/rerank 全部透传)
+        3. entity_link 路失败时静默降级为纯 4 路结果 (0 regression)
+        4. 委托给原 retrieve (不破坏既有行为, PR4 retrieve_with_weights 同模式)
+
+    Args:
+        db: AsyncSession
+        query: 查询字符串
+        top_k: 返回条数
+        category: 分类过滤
+        enable_entity_link: 第 5 路开关 (False 时行为与原 retrieve 完全一致)
+        entity_link_weight: 第 5 路分数权重
+        enable_vector/bm25/graph/rerank: 原 4 路开关 (原样透传, 默认不变)
+
+    Returns:
+        检索结果列表 (按 score 降序, 含 retrieval_method 标识路来源)
+    """
+    # 1) 原 4 路 — 完全委托, 0 行为改变
+    retriever = HybridRetriever(db)
+    base_results = await retriever.retrieve(
+        query=query,
+        top_k=top_k,
+        category=category,
+        enable_vector=enable_vector,
+        enable_bm25=enable_bm25,
+        enable_graph=enable_graph,
+        enable_rerank=enable_rerank,
+    )
+
+    if not enable_entity_link:
+        return base_results
+
+    # 2) 第 5 路 entity_link — 失败静默降级 (0 regression 保证)
+    try:
+        from app.services.entity_link_recall import get_entity_link_recall
+
+        recall = get_entity_link_recall(db)
+        entity_results = await recall.retrieve(query, top_k=top_k)
+    except Exception as e:
+        logger.warning(f"[PR8] entity_link 第 5 路跳过: {e}")
+        return base_results
+
+    if not entity_results:
+        return base_results
+
+    # 3) 合并去重 — 同 id 取最高分, entity_link 分数按 weight 缩放
+    merged: Dict[int, dict] = {}
+    for r in base_results:
+        rid = r.get("id")
+        if rid is not None:
+            merged[rid] = dict(r)
+
+    for r in entity_results:
+        rid = r.get("id")
+        if rid is None:
+            continue
+        weighted_score = float(r.get("score") or 0.0) * entity_link_weight
+        existing = merged.get(rid)
+        if existing is None:
+            new_row = dict(r)
+            new_row["score"] = weighted_score
+            merged[rid] = new_row
+            continue
+        # 已在 4 路结果中 → 实体链命中作为**加成**, 并标注双路命中
+        existing["score"] = float(existing.get("score") or 0.0) + weighted_score
+        existing["entity_link_boost"] = weighted_score
+        if r.get("entity_names"):
+            existing["entity_names"] = r["entity_names"]
+
+    out = sorted(
+        merged.values(), key=lambda d: float(d.get("score") or 0.0), reverse=True
+    )
+    return out[:top_k]
+
+
+async def count_kg_entities(db: AsyncSession) -> int:
+    """门禁 c 度量代理 (E39 必真查询) — 转调 entity_link_recall.count_entities"""
+    try:
+        from app.services.entity_link_recall import get_entity_link_recall
+
+        return await get_entity_link_recall(db).count_entities()
+    except Exception as e:
+        logger.warning(f"[PR8] kg_entities 计数失败: {e}")
+        return 0
