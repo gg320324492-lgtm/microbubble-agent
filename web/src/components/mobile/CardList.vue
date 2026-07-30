@@ -33,16 +33,23 @@
 
     <!-- 列表本体 -->
     <div v-else class="list-body" :class="{ 'multi-select': selectable }">
-      <button
+      <!-- W89-X-20: 改为 div + role="button" 防 nested-interactive (嵌套的 inner .action-btn 子按钮
+           不能再被外层 <button> 包裹, axe WCAG 2.1 AA fail).
+           keyboard support 加 @keydown.enter / @keydown.space. -->
+      <div
         v-for="(item, idx) in items"
         :key="getKey(item, idx)"
-        type="button"
+        role="button"
+        tabindex="0"
         class="list-item"
         :class="{
           selected: selectable && isSelected(item),
           'no-select': selectable,
         }"
+        :aria-label="getField(item, 'title') ? getField(item, 'title') : `列表项 ${idx + 1}`"
         @click="onItemClick(item, idx)"
+        @keydown.enter="onItemClick(item, idx)"
+        @keydown.space.prevent="onItemClick(item, idx)"
       >
         <!-- 多选 checkbox -->
         <span v-if="selectable" class="checkbox">
@@ -107,7 +114,7 @@
 
         <!-- 箭头 -->
         <span v-if="!selectable" class="item-arrow">›</span>
-      </button>
+      </div>
     </div>
 
     <!-- 底部加载更多 -->
