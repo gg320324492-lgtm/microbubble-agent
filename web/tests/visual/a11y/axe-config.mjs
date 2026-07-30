@@ -56,7 +56,13 @@ export function axeBuilder(page) {
  */
 export async function injectAuth(page, baseUrl) {
   const token = process.env.TEST_TOKEN
-  if (!token) return false
+  if (!token) {
+    throw new Error(
+      'injectAuth: TEST_TOKEN env 未设或 authInfo 缺 token. ' +
+      '真登录态是 a11y baseline 必填, 不可静默降级. ' +
+      '设 export PLAYWRIGHT_TEST_TOKEN=$(curl ... /api/v1/auth/login) 重跑.'
+    )
+  }
 
   await page.context().addCookies([
     { name: 'access_token', value: token, domain: new URL(baseUrl).hostname, path: '/' },
