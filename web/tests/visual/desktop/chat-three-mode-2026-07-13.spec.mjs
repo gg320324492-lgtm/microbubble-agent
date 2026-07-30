@@ -21,7 +21,7 @@
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3100'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const TEST_TOKEN = process.env.TEST_TOKEN || ''
 
 // 监听 /api/v1/chat/stream 响应, 提取 SSE done 事件 (mode/model/duration)
