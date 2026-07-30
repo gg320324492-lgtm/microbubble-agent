@@ -1802,4 +1802,119 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
    但 dark 下 text-primary #e8eaed on primary-light #FF7A5C 在 dark card 下不直接, dark 模式不针对 primary btn) */
 [data-theme="dark"] .el-button--primary > span { color: #ffffff; }  /* dark 模式强制白字 */
 
+/* ============================================
+   W91-X-19: light mode a11y contrast 真修 (真登录态 axe 实测)
+
+   为什么需要本段 (W89-X-20 只覆盖 dark):
+     W90-X-14 / W89-X-20 的 baseline 全部是**匿名态** (authed:no, 被 router 守卫
+     打到 /login), 只扫到登录页 3 处 color-contrast — 派工纪律 3 "假绿".
+     W91-X-19 用真 TEST_TOKEN 跑 5 路由 desktop-chrome 实测:
+       01-chat        color-contrast ×26 + scrollable-region-focusable ×1
+       02-drive       color-contrast ×9  + scrollable-region-focusable ×1
+       03-mobile-chat color-contrast ×26 + scrollable-region-focusable ×1
+       04-task-trash  color-contrast ×4
+       05-file-comments color-contrast ×7
+     scrollable-region-focusable 由 W89-X-20 #3 (.session-list/.folder-tree) 覆盖.
+     剩余 color-contrast 全部落在 light mode token, 本段修.
+
+   axe 实测违规 → 根因 token (全部 light :root):
+     #909399 on #ffffff  = 3.08  (.user-role / .drive-filter-* / .drive-status-*)
+     #909399 on #fef5f1  = 2.87  (.sidebar-bottom-item > span)
+     #909399 on #fff8f5  = 2.93  (.session-meta .time/.count / .session-preview)
+     #909399 on #fff0ed  = 2.78  (.session-* 在 .is-active 暖底上, 最差底色)
+     #909399 on #f5f7fa  = 2.87  (.empty-hint)
+       → --color-text-secondary #909399 → #6B6E76 (最差底 #fff0ed 上 4.60, 全部 ≥AA)
+     #ff7a5c on #ffffff  = 2.56  (#chat-jump-to-top span / 面包屑 aria-current / thinking-mode active)
+       → 新增 --color-primary-text #B84523 (on #ffffff 5.37 / on #fff0ed 4.84)
+     #ffffff on #ff7a5c  = 2.56  (.is-active > span / .new-btn-text 主色实底按钮)
+       → 新增 --color-primary-strong #B84523 作实底, 白字 5.37
+     #e6a23c on #fdf6ec  = 2.04  (task-trash 倒计时 warning tag)
+       → 新增 --color-warning-text #8C5200 (on #fdf6ec 5.89)
+
+   策略: 只调 light :root token + 精准选择器, 不动 dark (X-20 已覆盖),
+        不改组件结构 — 6 套主题继承同一 token 体系.
+   ============================================ */
+:root {
+  /* 中性副文本提暗: 3.08 → 5.10 (白底) / 4.60 (最差暖底 #fff0ed) */
+  --color-text-secondary: #6B6E76;
+  --color-text-secondary-rgb: 107, 110, 118;
+
+  /* 主色**文字**变体 — 主色 #FF7A5C 是 bg/装饰用色 (2.56 on white, 永远 fail AA),
+     文字场景一律用本 token. 不改 --color-primary 本身 (改了整站视觉全变). */
+  --color-primary-text: #B84523;   /* on #ffffff = 5.37, on #fff0ed = 4.84 */
+  /* 主色**实底**变体 — 需要白字的实心按钮/激活项用它 (白字 5.37) */
+  --color-primary-strong: #B84523;
+  /* 警示**文字**变体 — #E6A23C 仅 2.04 on #fdf6ec */
+  --color-warning-text: #8C5200;   /* on #fdf6ec = 5.89 */
+}
+
+/* --- 主色文字 (透明/白底上的 accent 文字) --- */
+:root #chat-jump-to-top,
+:root #chat-jump-to-top > span {
+  color: var(--color-primary-text);
+}
+/* thinking-mode 选中项文字 (白底 + 主色字) */
+:root .thinking-mode-switch .el-radio-button__original-radio:checked + .el-radio-button__inner,
+:root .thinking-mode-switch .is-active > span {
+  color: var(--color-primary-text);
+}
+/* Drive 面包屑当前页 (aria-current="page") 主色字 on 白底 */
+:root .el-breadcrumb__item[aria-current="page"] > .el-breadcrumb__inner,
+:root .el-breadcrumb__item[aria-current="page"] > .el-breadcrumb__inner.is-link {
+  color: var(--color-primary-text);
+}
+
+/* --- 主色实底 + 白字 (侧栏激活菜单 / 新对话按钮) --- */
+:root .el-menu-item.is-active,
+:root .el-menu-item.is-active > span,
+:root .menu-item.is-active,
+:root .menu-item.is-active > span {
+  background-color: var(--color-primary-strong);
+  color: #ffffff;
+}
+:root .new-btn-text,
+:root .el-button--primary > .new-btn-text {
+  color: #ffffff;
+}
+:root .el-button--primary:not(.is-text):not(.is-link) {
+  /* 实心主色按钮底色加深, 白字 2.56 → 5.37 */
+  background-color: var(--color-primary-strong);
+  border-color: var(--color-primary-strong);
+}
+
+/* --- 警示文字 (task-trash 倒计时 tag) --- */
+:root .el-tag--warning,
+:root .el-tag--warning .el-tag__content,
+:root .countdown-warning,
+:root .status-text--warning {
+  color: var(--color-warning-text);
+}
+/* MobileTaskTrash 倒计时/提示条: --color-warning #E6A23C on --color-warning-bg #FDF6EC = 2.04 */
+:root .trash-hint,
+:root .countdown-urgent {
+  color: var(--color-warning-text);
+}
+
+/* --- 第 2 轮 (注入验证后残余 5 处) ---
+   ThinkingModeSwitch / DesktopFileCommentsView 是 scoped style, token 值虽已提暗,
+   但这两处直接写 var(--color-primary) 当**文字**色, 主色本身就 fail AA — 必须换
+   --color-primary-text. 用非 scoped 全局块覆盖 (CLAUDE.md dark mode 跨组件纪律同款). */
+:root .mode-option.active {
+  color: var(--color-primary-text);   /* #B84523 on #ffffff = 5.37 (原 #FF7A5C = 2.56) */
+}
+:root .dfcv-tab-btn.active {
+  color: var(--color-primary-text);   /* on --color-primary-bg #FFF0ED = 4.84 (原 2.31) */
+}
+/* .dci-hint 用 --color-text-placeholder #C0C4CC = 1.74 on white — 占位符级别灰太浅.
+   不动 --color-text-placeholder 本身 (input placeholder 语义上允许弱), 只提示文字场景换色. */
+:root .dci-hint {
+  color: var(--color-text-secondary); /* #6B6E76 on #ffffff = 5.10 */
+}
+/* DesktopFileCommentsView .dfcv-empty .empty-hint 用 opacity:0.75 把 #6B6E76 淡成
+   实际渲染 #8e9097 (2.97 on #f5f7fa) — axe 按合成后颜色判. 去 opacity 改实色. */
+:root .dfcv-empty .empty-hint {
+  opacity: 1;
+  color: var(--color-text-secondary); /* #6B6E76 on #f5f7fa = 4.75 */
+}
+
 
