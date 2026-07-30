@@ -24,8 +24,22 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import ElementPlus from 'element-plus'
 import DesktopFileVersionsView from '@/views/desktop/DesktopFileVersionsView.vue'
 import DesktopDriveView from '@/views/DesktopDriveView.vue'
+
+// vi.mock hoisted — 必须在所有 import 之上才能拦住 axios 模块解析 (W89-X-19a #2/4 修)
+// 单一全局 axios mock (复用 — 满足 beforeEach 改 URL 行为的需求)
+const __axiosGetMock = vi.fn()
+const __axiosPostMock = vi.fn()
+globalThis.__axiosGetMock = __axiosGetMock
+globalThis.__axiosPostMock = __axiosPostMock
+vi.mock('axios', () => ({
+  default: {
+    get: (...args) => globalThis.__axiosGetMock(...args),
+    post: (...args) => globalThis.__axiosPostMock(...args),
+  },
+}))
 
 // mock fetch 全局 (view 内部 raw fetch, store 用 axios — 统一兜底)
 const originalFetch = global.fetch
@@ -106,18 +120,14 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
       return Promise.reject(new Error(`unmocked URL: ${url}`))
     })
 
-    // mock axios: GET versions 走 fixture
-    vi.doMock('axios', () => ({
-      default: {
-        get: vi.fn((url) => {
-          if (String(url).includes('/files/') && String(url).includes('/versions')) {
-            return Promise.resolve({ data: fixtures.versionsResponse })
-          }
-          return Promise.reject(new Error(`unmocked GET: ${url}`))
-        }),
-        post: vi.fn(),
-      },
-    }))
+    // 重置 axios mock 行为 (顶层 vi.mock 已 hoist 拦住模块, 此处改 mock 实现)
+    __axiosGetMock.mockImplementation((url) => {
+      if (String(url).includes('/files/') && String(url).includes('/versions')) {
+        return Promise.resolve({ data: fixtures.versionsResponse })
+      }
+      return Promise.reject(new Error(`unmocked GET: ${url}`))
+    })
+    __axiosPostMock.mockImplementation(() => Promise.resolve({ data: {} }))
   })
 
   afterEach(() => {
@@ -130,7 +140,7 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: { plugins: [pinia, router, ElementPlus] },
       props: { id: '99' },
     })
 
@@ -162,7 +172,7 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: { plugins: [pinia, router, ElementPlus] },
       props: { id: '99' },
     })
 
@@ -171,7 +181,10 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await flushPromises()
 
     const buttons = wrapper.findAllComponents({ name: 'ElButton' })
-    const buttonTexts = buttons.map(b => b.text()).filter(Boolean)
+    // el-popconfirm 内部 button 渲染为 el-tooltip__trigger (Element Plus 行为), 不能靠 name 找.
+    // 改为 DOM 文本扫描 — 找含"恢复"的所有可见 button
+    const allBtns = wrapper.findAll('button')
+    const buttonTexts = allBtns.map((b) => b.text()).filter(Boolean)
     // 当前版本 (v3) 没有恢复按钮
     const hasRestoreV3 = buttonTexts.some(t => t.includes('恢复') && t.includes('v3'))
     expect(hasRestoreV3).toBe(false)
@@ -185,12 +198,18 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     global.fetch = vi.fn(() =>
       Promise.resolve({ ok: true, json: () => Promise.resolve(fixtures.emptyVersionsResponse) })
     )
+    __axiosGetMock.mockImplementation((url) => {
+      if (String(url).includes('/versions')) {
+        return Promise.resolve({ data: fixtures.emptyVersionsResponse })
+      }
+      return Promise.reject(new Error(`unmocked GET: ${url}`))
+    })
 
     await router.push('/drive/file/100/versions')
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: { plugins: [pinia, router, ElementPlus] },
       props: { id: '100' },
     })
 
@@ -198,9 +217,9 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await new Promise(r => setTimeout(r, 50))
     await flushPromises()
 
-    // el-empty 渲染
-    expect(wrapper.html()).toContain('el-empty')
+    // el-empty 渲染 (description 文本是 el-empty 的稳定契约 — class 名受 ElementPlus 样式控制可能不可见)
     expect(wrapper.html()).toContain('该文件还没有历史版本')
+    expect(wrapper.text()).toContain('首次上传')
   })
 })
 
