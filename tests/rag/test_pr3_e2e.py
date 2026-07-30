@@ -243,7 +243,7 @@ def test_alembic_17_idempotent_guard_pattern():
 
 
 def test_alembic_18_alembic_heads_one():
-    """alembic heads 仍 1 head (含 089), 不双头"""
+    """alembic heads 仍 1 head, 不双头 (W91+ 091 是 head, 089 是 chain 中段)"""
     repo = Path(__file__).resolve().parents[2]
     result = subprocess.run(
         ["python", "-m", "alembic", "heads"],
@@ -252,14 +252,15 @@ def test_alembic_18_alembic_heads_one():
         text=True,
         timeout=30,
     )
-    # 在 PR3 branch 上 head 应是 089_gin_trgm_tsvector
+    # W91+ head 是 091_add_kg_entity (087→088→089→090→091 串单链)
     assert result.returncode == 0, f"alembic heads 失败: {result.stderr}"
     heads_output = result.stdout.strip()
     assert heads_output, f"alembic heads 无输出: {result.stdout}"
-    # PR3 branch 上应输出 089, 不应是 088 (说明 089 已注册 + 串单链)
-    assert "089_gin_trgm_tsvector" in heads_output, \
-        f"期望 head 含 089_gin_trgm_tsvector, 实测: {heads_output}"
-    assert "088_add_knowledge_chunk" not in heads_output or heads_output.count("(head)") == 1, \
+    # 期望 head 是 091 (089 是 chain 中段, 仍是合法 ancestor)
+    assert "091_add_kg_entity" in heads_output, \
+        f"期望 head 含 091_add_kg_entity (W91+ 锚点), 实测: {heads_output}"
+    # 不双头 (派工 v6 §6 串单链纪律)
+    assert heads_output.count("(head)") == 1, \
         f"双头! 实测: {heads_output}"
 
 
