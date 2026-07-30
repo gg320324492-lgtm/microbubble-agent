@@ -106,7 +106,7 @@
                     <div v-for="(p, i) in minutesForm.key_points" :key="'kp'+i" class="item-row">
                       <span class="item-dot" />
                       <el-input v-model="minutesForm.key_points[i]" placeholder="输入要点..." />
-                      <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.key_points.splice(i,1)" />
+                      <el-button :icon="Delete" circle size="small" class="item-del" :aria-label="`删除要点 ${i + 1}`" @click="minutesForm.key_points.splice(i,1)" />
                     </div>
                     <el-button dashed size="small" class="item-add" @click="minutesForm.key_points.push('')">
                       <el-icon><Plus /></el-icon> 添加要点
@@ -119,7 +119,7 @@
                     <div v-for="(d, i) in minutesForm.decisions" :key="'dc'+i" class="item-row decision">
                       <span class="item-dot decision-dot" />
                       <el-input v-model="minutesForm.decisions[i]" placeholder="输入决议..." />
-                      <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.decisions.splice(i,1)" />
+                      <el-button :icon="Delete" circle size="small" class="item-del" :aria-label="`删除决议 ${i + 1}`" @click="minutesForm.decisions.splice(i,1)" />
                     </div>
                     <el-button dashed size="small" class="item-add decision-add" @click="minutesForm.decisions.push('')">
                       <el-icon><Plus /></el-icon> 添加决议
