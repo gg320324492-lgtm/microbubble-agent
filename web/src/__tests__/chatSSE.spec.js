@@ -103,6 +103,7 @@ describe('sseFetch', () => {
 // ============================================================
 
 describe('RichContent registry', () => {
+  // W90-X-4: 显式 15s timeout (默认 5s 在 dynamic import 时不足, registry.ts 含大量组件 import 链)
   it('type 映射到正确组件', async () => {
     const { resolveBlock } = await import('@/components/chat/blocks/registry')
     expect(resolveBlock('meeting')).toBeDefined()
@@ -110,7 +111,7 @@ describe('RichContent registry', () => {
     expect(resolveBlock('knowledge_ref')).toBeDefined()
     expect(resolveBlock('member')).toBeDefined()
     expect(resolveBlock('fallback')).toBeDefined()
-  })
+  }, 15000)
 
   it('未知 type fallback 到 FallbackBlock', async () => {
     const { resolveBlock } = await import('@/components/chat/blocks/registry')
