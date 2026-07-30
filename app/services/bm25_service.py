@@ -129,6 +129,58 @@ class BM25Service:
         self._bm25 = BM25L(self._tokenized_corpus)
 
 
+# =====================================================================
+# PR3 (W89 +3) 新增增量 BM25 钩子 — 不改原 add_document / search 函数体
+# 派工 brief 要求: 不动 BM25Service 类内函数 (add_document / search / build_index)
+# 增量索引走 BM25IncrementalIndex, 由 knowledge_service 钩子调用
+# =====================================================================
+
+def _incremental_add_document(doc: dict) -> bool:
+    """PR3 (W89 +3): 增量添加文档到 BM25 增量索引 (O(M) 非 O(N))
+
+    调用方: knowledge_service.create_knowledge / _run_analyze_and_embed
+    Returns: True if added, False if failed
+    """
+    try:
+        from app.services.bm25_incremental import get_bm25_incremental_index
+        idx = get_bm25_incremental_index()
+        idx.add(doc)
+        return True
+    except Exception as e:
+        logger.debug(f"[bm25_incremental] _incremental_add_document 失败: {e}")
+        return False
+
+
+def _incremental_remove_document(doc_id: int) -> bool:
+    """PR3 (W89 +3): 增量从 BM25 增量索引移除文档 (O(M))
+
+    调用方: knowledge_service.delete_knowledge / update_knowledge (content 变化时)
+    Returns: True if removed, False if not found or failed
+    """
+    try:
+        from app.services.bm25_incremental import get_bm25_incremental_index
+        idx = get_bm25_incremental_index()
+        return idx.remove(doc_id)
+    except Exception as e:
+        logger.debug(f"[bm25_incremental] _incremental_remove_document 失败: {e}")
+        return False
+
+
+def _incremental_search(query: str, top_k: int = 5) -> list:
+    """PR3 (W89 +3): BM25 增量索引搜索入口
+
+    调用方: hybrid_retriever._bm25_search (新增分支, 不改老 _bm25_search 函数体)
+    Returns: 搜索结果 list (与 BM25Service.search 格式一致)
+    """
+    try:
+        from app.services.bm25_incremental import get_bm25_incremental_index
+        idx = get_bm25_incremental_index()
+        return idx.search(query, top_k=top_k)
+    except Exception as e:
+        logger.debug(f"[bm25_incremental] _incremental_search 失败: {e}")
+        return []
+
+
 # 全局单例（惰性初始化）
 _bm25_service: Optional[BM25Service] = None
 

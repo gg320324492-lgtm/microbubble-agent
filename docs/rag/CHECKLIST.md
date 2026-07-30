@@ -49,4 +49,42 @@
 - [ ] 收口后回填 plan Status 段（真 commit hash, 部分实施标 partial 不凑 completed）
 - [ ] 派工前提错配实例沉淀（类 20 系列）+ CLAUDE.md 锚点段更新
 
+## I. W89 PR3 据实上报锚点 (派生 §C §D 之外)
+
+PR3 BM25 增量 + GIN/tsvector 实施沉淀（CLAUDE.md 严禁改铁律, 故单独章节）:
+
+- [ ] PR3 锚点文档: `docs/rag/W89-PR3-ANCHOR.md` (CLAUDE.md 镜像, 9 节)
+- [ ] alembic 089 串单链: `python -m alembic heads` → 恰 1 head `089_gin_trgm_tsvector`, down_revision=`088_add_knowledge_chunk`
+- [ ] knowledge_service 钩子: `_run_analyze_and_embed` body 内 +2 try/except 块 (PR2 chunk hook 之后), 件 4a `^[+-]def` = 0
+- [ ] bm25_service 钩子: 仅在文件底部新增 +3 module-level 包装函数, 派工 brief 显式允许
+- [ ] hybrid_retriever: 0 diff, 派工 brief 锁
+- [ ] 22/22 e2e PASS (`tests/rag/test_pr3_e2e.py`): text_splitter 1-5 / bm25_inc 6-10 / BM25L 11-15 / alembic 16-18 / 性能 19-22
+- [ ] 性能门禁: 1000 条入库 ≤ 30s (实测 < 5s), 1000 docs 单 query ≤ 500ms (实测 < 100ms)
+- [ ] 缺口消化: 缺口 3 (BM25 N 次重建) + 缺口 4 (PG 全文缺失)
+- [ ] commit message 锚点范式: 全 commit 带 `[PR3 W89 +N]` 前缀 + Co-Authored-By: Claude Fable 5
+- [ ] 类 20 实战 #25/26/27 据实上报 (knowledge_service 0 def + hybrid_retriever 0 diff + bm25_service +3 def 派工 brief 允许)
+- [ ] 派工 v11 段 7 错误 19 类据实 (E01/E03/E05/E06/E07/E08/E11/E14/E15/E16/E18/E19/E21/E23/E24/E25 PASS)
+- [ ] 派工 v11 段 10 新 6 项据实 (python -m alembic 形态 + pytest 白名单 + brief 据实 + docs-only 断言化 N/A + worktree 依赖基线 + 5 件套回报)
+
+## E. 5 件套守恒命令（速查）
+
+详见 §C 表。
+
+## F. verify 脚本未合 main fallback（DERIVE-12）
+
+PR2/3 verify 脚本 (`scripts/rag/verify_alembic_chain.sh` + `verify_dispatch_claim.sh`) 若未合 main:
+- 主仓等价验证 + 据实标注 (`python -m alembic heads` + `git log --grep` + `wc -l` 三条手工命令替代)
+- 收口回报必标 "未合 main, 主仓等价验证 PASS"
+
+## G. 类 20 实战 #21-#26 整合 (DERIVE-13)
+
+类 20 沉淀统一在 `memory/w88-rag-pr2-full-2026-07-30.md` (PR2 据实) + `memory/w89-rag-pr3-full-2026-07-30.md` (PR3 据实, 含 #25/26/27)
+
+## H. v11 段 13 仓库实情真查 (DERIVE-18)
+
+派工前必查:
+- `python -c "import <重依赖>"` (sentence_transformers / jieba / rank_bm25 等)
+- brief 列出的接口契约文件 / 仓库实情是否一致
+- 不一致时**据实上报**, 不擅自扩也不擅自缩
+
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>

@@ -141,6 +141,15 @@ class Knowledge(Base, TimestampMixin):
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 
+    # ==================== PR3 W89 +6 PG 全文索引 (tsvector + trigram) 2026-07-30 ====================
+    # search_text: text, 缓存 token 化文本 (knowledge_service 钩子写入)
+    # content_tsvector: GENERATED ALWAYS AS (to_tsvector('simple', coalesce(search_text, ''))) STORED
+    #   SQLAlchemy 不必显式声明 GENERATED 列, alembic 089 已加; ORM 仅在 SELECT 时透传
+    #   (knowledge_service 不直接 ORM 写 content_tsvector, 由 PG 触发器自动算)
+    # 列长度约束: ck_knowledge_search_text_len (alembic 089) 限制 ≤ 6000 字符
+    search_text = Column(Text, nullable=True)
+    # ==================== /PR3 W89 +6 ====================
+
     # Agent 7 5th-wave 5-file-name 索引 + 长度约束 (table-level)
     __table_args__ = (
         Index(

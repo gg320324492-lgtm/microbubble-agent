@@ -121,6 +121,47 @@ async def _run_analyze_and_embed(
                         logger.warning(
                             f"chunk 写入失败(knowledge_id={knowledge_id}): {chunk_err}"
                         )
+
+                    # PR3 (W89 +6): tsvector search_text 写入 (PG 全文索引 GIN)
+                    # 仅 embedding 成功后写, 失败兜底 (与 PR2 chunk hook 同模式)
+                    try:
+                        from app.services.text_splitter import split_for_tsvector
+                        async with session_factory() as db:
+                            result = await db.execute(
+                                select(Knowledge).where(Knowledge.id == knowledge_id)
+                            )
+                            knowledge = result.scalar_one_or_none()
+                            if knowledge:
+                                knowledge.search_text = split_for_tsvector(content)
+                                await db.commit()
+                    except Exception as ts_err:
+                        logger.warning(
+                            f"tsvector search_text 写入失败(knowledge_id={knowledge_id}): {ts_err}"
+                        )
+
+                    # PR3 (W89 +6): BM25 增量索引 hook (O(M) 非 O(N))
+                    # 复用 BM25 service 既有 _tokenize 切词路径 (派工 v10 §13 铁律 6)
+                    # 仅 title + content 必填, 其他字段透传
+                    try:
+                        from app.services.bm25_service import _incremental_add_document
+                        async with session_factory() as db:
+                            result = await db.execute(
+                                select(Knowledge).where(Knowledge.id == knowledge_id)
+                            )
+                            knowledge = result.scalar_one_or_none()
+                            if knowledge:
+                                _incremental_add_document({
+                                    "id": knowledge.id,
+                                    "title": knowledge.title or "",
+                                    "content": knowledge.content or "",
+                                    "category": knowledge.category,
+                                    "tags": knowledge.tags,
+                                    "source": knowledge.source,
+                                })
+                    except Exception as bm25_err:
+                        logger.warning(
+                            f"BM25 增量 add 失败(knowledge_id={knowledge_id}): {bm25_err}"
+                        )
     except Exception as e:
         logger.warning(f"Embedding 生成失败(knowledge_id={knowledge_id}): {e}")
 
