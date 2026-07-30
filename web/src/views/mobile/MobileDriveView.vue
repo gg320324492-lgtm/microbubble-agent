@@ -645,11 +645,11 @@ watch(() => route.query.tab, (newTab) => {
 .drive-header { position: sticky; top: 0; z-index: 100; }
 .drive-tabs { display: flex; gap: 4px; padding: 8px 12px; background: var(--color-bg-card); border-bottom: 1px solid var(--color-border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .drive-tab-btn { flex: 1; min-width: 64px; padding: 8px 6px; background: transparent; border: none; border-radius: 8px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
-.drive-tab-btn.active { background: var(--color-primary-bg); color: var(--color-primary); font-weight: 600; }
+.drive-tab-btn.active { background: var(--color-primary-bg); color: var(--color-primary-text); font-weight: 600; }
 .drive-tab-icon { display: block; font-size: 18px; margin-bottom: 2px; }
 .folder-chip-row { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; background: var(--color-bg-card); border-bottom: 1px solid var(--color-border-light); -webkit-overflow-scrolling: touch; }
 .folder-chip { flex-shrink: 0; padding: 6px 12px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; color: var(--color-text-regular); cursor: pointer; white-space: nowrap; }
-.folder-chip.active { background: var(--color-primary); color: var(--el-color-white); border-color: var(--color-primary); }
+.folder-chip.active { background: var(--color-primary-strong); color: var(--el-color-white); border-color: var(--color-primary-strong); }
 .drive-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; touch-action: pan-y; }
 .drive-file-card { position: relative; display: flex; flex-direction: column; align-items: center; padding: 16px 8px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 8px; cursor: pointer; transition: transform 0.2s ease; }
 .drive-file-card:active { transform: scale(0.97); }
@@ -744,7 +744,7 @@ watch(() => route.query.tab, (newTab) => {
 <style>
 [data-theme="dark"] .drive-file-card { background: var(--color-bg-card); border-color: var(--color-border); }
 [data-theme="dark"] .folder-chip { background: var(--color-bg-page); color: var(--color-text-regular); }
-[data-theme="dark"] .folder-chip.active { background: var(--color-primary); color: var(--el-color-white); }
+[data-theme="dark"] .folder-chip.active { background: var(--color-primary-strong); color: var(--el-color-white); }
 [data-theme="dark"] .drive-sticky-search { background: var(--color-bg-card); border-color: var(--color-border); }
 [data-theme="dark"] .drive-sticky-search-input-wrap { background: var(--color-bg-page); }
 [data-theme="dark"] .drive-sticky-search-grid { background: var(--color-bg-card); border-color: var(--color-border); color: var(--color-text-regular); }

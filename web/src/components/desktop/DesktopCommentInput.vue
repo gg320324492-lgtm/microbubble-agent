@@ -308,7 +308,8 @@ onMounted(() => {
 
 .dci-hint {
   font-size: 11px;
-  color: var(--color-text-placeholder, #c0c4cc);
+  /* v92 X-2 a11y: 副文本 token (on #ffffff = 4.96, AA) — 原 --color-text-placeholder (#C0C4CC) 仅 1.74 */
+  color: var(--color-text-secondary);
 }
 
 .dci-send-btn {

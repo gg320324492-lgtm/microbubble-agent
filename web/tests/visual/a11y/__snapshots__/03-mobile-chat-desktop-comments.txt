@@ -2,6 +2,4 @@ page: 03-mobile-chat  route: /chat
 target: MobileChatView.vue (mobile project 下解析)
 project: desktop-comments
 authed: yes   redirected-to-login: no
-violations: 2
-  color-contrast [serious] ×28
-  scrollable-region-focusable [serious] ×1
+violations: 0

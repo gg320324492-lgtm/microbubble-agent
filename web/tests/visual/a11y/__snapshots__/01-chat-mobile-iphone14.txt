@@ -2,6 +2,4 @@ page: 01-chat  route: /chat
 target: ChatViewSSE.vue
 project: mobile-iphone14
 authed: yes   redirected-to-login: no
-violations: 2
-  aria-command-name [serious] ×1
-  color-contrast [serious] ×6
+violations: 0
