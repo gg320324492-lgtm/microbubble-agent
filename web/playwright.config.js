@@ -28,6 +28,18 @@ export default defineConfig({
   // v76.2f: 限定 testMatch 到 tests/visual 下, 避免扫到 vitest 测试文件
   // (playwright 默认 testMatch 是 **/*.@(spec|test).?(c|m)[jt]s?(x), 会扫全项目所有 .test.js)
   testMatch: /tests\/visual\/.*\.spec\.mjs/,
+  // W89-X-23 (派工 v3 § 反馈 类 20.78): 用 exclude 而非 include 收窄 testMatch
+  // 根因: 宽 testMatch + 5 project 重复匹配同 spec 导致 113 baseline 重复
+  // (61 张独立 baseline × 重复匹配). 排除 a11y/e2e/pwa 后:
+  //   - a11y: 有专属 config (tests/visual/a11y/playwright.a11y.config.mjs)
+  //   - pwa:  也用专属 config 路径 (未来 W87-P-3)
+  //   - e2e:  W89-P-10 移到 tests/visual/e2e/ (comprehensive 端到端不需要 baseline 对比)
+  // 用 exclude (而非 include) 更安全: 未来加新 spec 目录只需加一行 exclude, 不会漏 spec
+  exclude: [
+    /tests\/visual\/a11y\/.*\.spec\.mjs$/,
+    /tests\/visual\/e2e\/.*\.spec\.m?js$/,
+    /tests\/visual\/pwa\/.*\.spec\.mjs$/,
+  ],
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
