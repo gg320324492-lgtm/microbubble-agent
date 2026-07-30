@@ -2,6 +2,4 @@ page: 03-mobile-chat  route: /chat
 target: MobileChatView.vue (mobile project 下解析)
 project: mobile-comments
 authed: yes   redirected-to-login: no
-violations: 2
-  aria-command-name [serious] ×1
-  color-contrast [serious] ×6
+violations: 0

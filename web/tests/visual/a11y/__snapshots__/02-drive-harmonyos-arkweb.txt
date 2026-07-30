@@ -2,6 +2,4 @@ page: 02-drive  route: /drive
 target: drive-view.css 引用页 (DesktopDriveView/MobileDriveView)
 project: harmonyos-arkweb
 authed: yes   redirected-to-login: no
-violations: 2
-  aria-command-name [serious] ×1
-  color-contrast [serious] ×11
+violations: 0

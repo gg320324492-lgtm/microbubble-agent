@@ -225,7 +225,7 @@ onUpdated(() => {
       <span class="sync-icon">⚠</span>
       <span class="sync-text" :title="chatHistoryStore.syncError">同步失败</span>
     </div>
-    <div v-if="!collapsed" class="session-list" ref="sessionListRef" role="list" tabindex="0" aria-label="会话列表">
+    <div v-if="!collapsed" class="session-list" ref="sessionListRef" tabindex="0" aria-label="会话列表">
       <div
         v-for="s in filteredSessions"
         :key="s.id"

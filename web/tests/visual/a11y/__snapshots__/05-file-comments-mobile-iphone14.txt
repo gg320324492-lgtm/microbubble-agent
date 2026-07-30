@@ -2,6 +2,4 @@ page: 05-file-comments  route: /drive/file/1/comments
 target: DesktopCommentThread.vue (22 aria 对照)
 project: mobile-iphone14
 authed: yes   redirected-to-login: no
-violations: 2
-  aria-command-name [serious] ×1
-  color-contrast [serious] ×5
+violations: 0
