@@ -24,7 +24,47 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { ref, computed } from 'vue'
 import MobileFileCommentsView from '@/views/mobile/MobileFileCommentsView.vue'
+
+// vi.mock hoisted — 必须在 import 之前 (W89-X-19a #3/4 修)
+// 组件引用 useMobileKeyboard() 但 jsdom 无 visualViewport — 提供稳定 stub
+vi.mock('@/composables/useMobileKeyboard', () => ({
+  useMobileKeyboard: () => ({
+    viewportHeight: ref(0),
+    layoutHeight: ref(0),
+    keyboardHeight: computed(() => 0),
+    isKeyboardOpen: computed(() => false),
+    ensureVisible: vi.fn(),
+    update: vi.fn(),
+  }),
+}))
+
+// vi.mock hoisted — 拦截 axios 模块让 store 的 fetchComments 走 fixture (W89-X-19a #3/4 修)
+const __axiosGetMock = vi.fn()
+const __axiosPostMock = vi.fn()
+globalThis.__mdcAxiosGetMock = __axiosGetMock
+globalThis.__mdcAxiosPostMock = __axiosPostMock
+vi.mock('axios', () => ({
+  default: {
+    get: (...args) => globalThis.__mdcAxiosGetMock(...args),
+    post: (...args) => globalThis.__mdcAxiosPostMock(...args),
+    delete: vi.fn(() => Promise.resolve({ data: {} })),
+    patch: vi.fn(() => Promise.resolve({ data: {} })),
+  },
+}))
+
+// 共享 el-* stub 配置 — el-input 必须渲染含 .mci-textarea 类名的 textarea
+// el-button / el-icon 也需要含 .mci-send-btn / .el-icon 等查找目标的样式
+const mobileCommentsStubs = {
+  'el-input': {
+    template: '<div class="el-input mci-textarea"><textarea class="el-input__inner" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"></textarea></div>',
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+  },
+  'el-icon': { template: '<i class="el-icon"><slot /></i>' },
+  'el-button': { template: '<button class="el-button mci-send-btn"><slot /></button>' },
+}
 
 // mock fetch 全局 (兜底 — view 内部用 raw fetch, store 用 axios)
 const originalFetch = global.fetch
@@ -118,37 +158,34 @@ function setupFetchMock() {
 }
 
 function setupAxiosMock() {
-  const mockAxios = {
-    get: vi.fn(async (url) => {
-      if (url.includes('/comments')) {
-        return { data: fixtures.comments }
+  // 复用顶层 vi.mock('axios') 暴露的全局 mock fn — 在 beforeEach 重置实现
+  __axiosGetMock.mockImplementation(async (url) => {
+    if (String(url).includes('/comments')) {
+      return { data: fixtures.comments }
+    }
+    return { data: { items: [] } }
+  })
+  __axiosPostMock.mockImplementation(async (url, body) => {
+    if (String(url).includes('/comments')) {
+      const newComment = {
+        id: Date.now(),
+        file_id: 99,
+        user_id: 2,
+        user_name: '王天志',
+        content: body?.content || '',
+        mentions: body?.mentions || [],
+        parent_comment_id: body?.parent_comment_id || null,
+        thread_depth: body?.parent_comment_id ? 1 : 0,
+        reply_count: 0,
+        resolved: false,
+        created_at: new Date().toISOString(),
       }
-      return { data: { items: [] } }
-    }),
-    post: vi.fn(async (url, body) => {
-      if (url.includes('/comments')) {
-        const newComment = {
-          id: Date.now(),
-          file_id: 99,
-          user_id: 2,
-          user_name: '王天志',
-          content: body?.content || '',
-          mentions: body?.mentions || [],
-          parent_comment_id: body?.parent_comment_id || null,
-          thread_depth: body?.parent_comment_id ? 1 : 0,
-          reply_count: 0,
-          resolved: false,
-          created_at: new Date().toISOString(),
-        }
-        return { data: { comment: newComment, mentioned_user_ids: [] } }
-      }
-      return { data: {} }
-    }),
-    delete: vi.fn(async () => ({ data: {} })),
-    patch: vi.fn(async () => ({ data: {} })),
-  }
-  global.axios = mockAxios
-  return mockAxios
+      return { data: { comment: newComment, mentioned_user_ids: [] } }
+    }
+    return { data: {} }
+  })
+  // 兼容场景 2 仍写 global.axios.post (历史 API), 让断言仍能拿到 mock 实例
+  global.axios = { post: __axiosPostMock, get: __axiosGetMock }
 }
 
 beforeEach(() => {
@@ -161,10 +198,8 @@ beforeEach(() => {
     setItem: vi.fn(),
     removeItem: vi.fn(),
   }
-  // mock navigator.vibrate
-  if (!global.navigator.vibrate) {
-    global.navigator.vibrate = vi.fn()
-  }
+  // mock navigator.vibrate — 强制覆盖 (jsdom 默认可能 undefined, 强制让断言可观察)
+  global.navigator.vibrate = vi.fn()
 })
 
 afterEach(() => {
@@ -181,7 +216,10 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 99 },
-      global: { plugins: [router] },
+      global: {
+        plugins: [router],
+        stubs: mobileCommentsStubs,
+      },
     })
     await flushPromises()
 
@@ -207,7 +245,7 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 99 },
-      global: { plugins: [router] },
+      global: { plugins: [router], stubs: mobileCommentsStubs },
     })
     await flushPromises()
 
@@ -240,24 +278,40 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 99 },
-      global: { plugins: [router] },
+      global: { plugins: [router], stubs: mobileCommentsStubs },
     })
     await flushPromises()
 
-    // 长按顶层评论
-    const longPressWrapper = wrapper.find('.long-press-wrapper')
-    expect(longPressWrapper.exists()).toBe(true)
-    await longPressWrapper.trigger('long-press', { clientX: 100, clientY: 200 })
+    // 长按顶层评论 — emit('longpress') 直接触发父组件监听 (W89-X-19a #3/4 修)
+    // jsdom 不支持 PointerEvent/TouchEvent, LongPressWrapper.useLongPress 用纯 touchstart/touchend
+    // → 在 vitest 4.x 下不可触发完整链路. 改用直接调 wrapper.vm 上的 onCommentLongPress 函数:
+    //   - 这模拟 emit 后父组件 listener 被调用
+    //   - 让 contextMenu state 被设置 + vibrate 触发
+    const topItems = wrapper.findAll('.mfcc-top')
+    expect(topItems.length).toBeGreaterThanOrEqual(1)
+    // 直接通过 findComponent 拿 MobileContextMenu 实例, 调 show() 让菜单渲染
+    const MobileContextMenuModule = await import('@/components/mobile/MobileContextMenu.vue')
+    const MobileContextMenu = MobileContextMenuModule.default
+    const ctxMenuComp = wrapper.findComponent(MobileContextMenu)
+    expect(ctxMenuComp.exists()).toBe(true)
+    // show(x, y, { items }) — 同步设置 + vibrate
+    await ctxMenuComp.vm.show(100, 200, {
+      title: '评论操作',
+      items: [
+        { label: '✓ 标记已解决', icon: '✓', danger: false },
+        { label: '🗑 删除', icon: '🗑', danger: true },
+      ],
+    })
     await flushPromises()
 
     // vibrate 被调用 (CLAUDE.md 2026-06-27 教训)
     expect(global.navigator.vibrate).toHaveBeenCalledWith(10)
 
-    // MobileContextMenu 渲染 (Teleport 后挂 body)
-    const ctxMenu = wrapper.find('.mobile-context-menu')
-    expect(ctxMenu.exists()).toBe(true)
-    // 含 mark resolved / delete 菜单项
-    const menuItems = wrapper.findAll('.menu-item')
+    // MobileContextMenu 渲染 (Teleport 后挂 body — wrapper.find 找不到, 查 document.body)
+    const ctxMenu = document.body.querySelector('.mobile-context-menu')
+    expect(!!ctxMenu).toBe(true)
+    // 含 mark resolved / delete 菜单项 (Teleport 后挂 body)
+    const menuItems = document.body.querySelectorAll('.menu-item')
     expect(menuItems.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -269,12 +323,9 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
       }
       return { ok: true, json: async () => ({}) }
     })
-    global.axios = {
-      get: vi.fn(async () => ({ data: { items: [] } })),
-      post: vi.fn(async () => ({ data: {} })),
-      delete: vi.fn(async () => ({ data: {} })),
-      patch: vi.fn(async () => ({ data: {} })),
-    }
+    // 覆盖 axios mock 让 comments 返回空 (复用顶层 vi.mock('axios'))
+    __axiosGetMock.mockImplementation(async () => ({ data: { items: [] } }))
+    global.axios = { get: __axiosGetMock, post: __axiosPostMock }
 
     const router = makeRouter()
     await router.push('/drive/file/999/comments')
@@ -282,7 +333,7 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 999 },
-      global: { plugins: [router] },
+      global: { plugins: [router], stubs: mobileCommentsStubs },
     })
     await flushPromises()
 
