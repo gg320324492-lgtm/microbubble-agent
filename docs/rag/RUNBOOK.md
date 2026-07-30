@@ -5,11 +5,27 @@
 
 ## 0. alembic chain 风险（部署文档第 0 节铁律）
 
-- **当前 head**: `087_add_knowledge_original_parent_id`（`python -m alembic heads` 实测, 2026-07-30）
+- **当前 head (PR3 W89 落库后)**: `089_gin_trgm_tsvector`（`python -m alembic heads` 实测, 2026-07-30）
 - **本系列新增迁移**: 088 (PR2 knowledge_chunk) / 089 (PR3 GIN+tsvector) / 090 (PR5 rag_eval_report) / 091 (PR8 kg_entity), 每张必填 down_revision 接上游
 - **回滚步骤**: `alembic downgrade -1`（逐张回退）
-- **离线窗口**: 089 GIN 索引创建 ≤ 120s（`CREATE INDEX CONCURRENTLY` 不阻塞写）; 其余迁移秒级
+- **离线窗口**: 089 GIN 索引创建 ≤ 120s（`CREATE INDEX CONCURRENTLY` 不阻塞写, DO $$ 探测 + 创建二段式）; 其余迁移秒级
 - **merge 顺序**: 严格按 PR 编号串行合并; 双头立即报主指挥, 禁止私改
+
+## 0.5 PR3 (W89) 新增 GIN/tsvector 部署细节
+
+- **alembic 089 索引创建是事务外操作**: 不能简单 `CREATE INDEX CONCURRENTLY IF NOT EXISTS`（PG 限制）; 用 DO $$ BEGIN IF NOT EXISTS (pg_indexes) ... EXECUTE 'CREATE INDEX CONCURRENTLY' ... END$$ 探测 + 创建二段式
+- **索引列表**:
+  - `ix_knowledge_search_text_trgm`: GIN (gin_trgm_ops) WHERE search_text IS NOT NULL, OOV 兜底
+  - `ix_knowledge_content_tsvector`: GIN (tsvector), 全文路召回
+- **大表阻塞风险 (RISKS §R4)**: `CONCURRENTLY` 防阻塞写, 但 creation 仍需时间; 监控创建时长 ≤ 120s 门禁
+- **knowledge_service 钩子**: `_run_analyze_and_embed` 中 PR3 钩子在 PR2 chunk hook 之后, 失败兜底 log warning, 不阻塞 Celery 任务
+
+## 0.6 PR3 BM25 增量索引 (不需 alembic)
+
+- `BM25IncrementalIndex` 单例 (`app/services/bm25_incremental.py`) 替代 BM25L 全量重建
+- 切词路径走 `text_splitter` 公共 API + bm25_service 既有 STOP_WORDS 单源 (派工 v10 §13 铁律 6)
+- knowledge_service 钩子 `_incremental_add_document` 在 `_run_analyze_and_embed` 中调用
+- 本机测试环境 jieba/rank_bm25 未装时 importorskip 守护, 生产环境必装 (`pip install jieba rank_bm25`)
 
 ## 1. 部署步骤（含 alembic 的 PR: PR2/3/5/8）
 
