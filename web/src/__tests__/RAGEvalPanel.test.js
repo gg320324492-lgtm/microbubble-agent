@@ -104,8 +104,11 @@ describe('RAGEvalPanel.vue 组件 (PR5 W91 +11)', () => {
   })
 
   it('8. 组件 <script setup> 抽取 5 个核心变量 (limit/detailReport/running/error/reports)', async () => {
-    const src = await import.meta.glob('@/views/admin/RAGEvalPanel.vue', { as: 'raw' })
-    const code = src['/src/views/admin/RAGEvalPanel.vue']
+    // 静态 import 校验 (编译时兜底) — 改用 fs.readFileSync 绕 import.meta.glob 兼容问题
+    const fs = await import('fs')
+    const path = await import('path')
+    const filePath = path.resolve(__dirname, '../views/admin/RAGEvalPanel.vue')
+    const code = fs.readFileSync(filePath, 'utf-8')
     expect(code).toContain('const limit = ref(10)')
     expect(code).toContain('const detailReport = ref(null)')
     expect(code).toContain('const running = ref(false)')
