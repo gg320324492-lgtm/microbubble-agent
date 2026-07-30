@@ -2,8 +2,11 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import MobileFab from '@/components/mobile/MobileFab.vue'
 
+// LongPressWrapper stub 必须含 .long-press-wrapper className (W89-X-19a #4/4 修)
+// 真实 LongPressWrapper.vue 的根元素 class 是 long-press-wrapper,
+// component CSS 选择器 `:deep(.long-press-wrapper)` 也指向 className
 const LongPressStub = {
-  template: '<div @longpress="$emit(\'longpress\')"><slot /></div>',
+  template: '<div class="long-press-wrapper" @longpress="$emit(\'longpress\')"><slot /></div>',
   emits: ['longpress'],
 }
 
