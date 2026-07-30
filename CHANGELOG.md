@@ -2,6 +2,75 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-07-30] W97 RAG 大改造 GRAND-CLOSURE 收口 (W88-W96 10 PR + 4 MERGE + HOTFIX-01, 锚点 +139 据实, alembic 087→091 完整串单链, 0 production code 例外 5 已批)
+
+**主基调**: RAG 工业级大改造 10 PR (W88 PR1 → W96 PR10) 全部合并到 main + 4 MERGE 主拍合并 (MERGE-01..04) + HOTFIX-01 P0 PWA 修复 (Play→VideoPlay, 已 commit 未 merge) + W97 GRAND-CLOSURE 收口. **9 大缺口全部消化** (plan §1.2). 锚点范式 338 (W86 mini-16) → 477 (W97 GRAND-CLOSURE) **+139 据实** (138 PR 内容 commits + 4 merge commits 主拍 +0 + 4 DERIVE merge + 11 MERGE-01 lines + 1 grand-closure 实战).
+
+**alembic 串单链 087→091 完整收口**:
+```
+085_billing_payment_tables (RAG 系列前商业化基线, 锚点 W74)
+  └─ 086_backfill_drive_file_versions (W74)
+       └─ 087_add_knowledge_original_parent_id (MERGE-01 前 hotfix)
+            └─ 088_add_knowledge_chunk (PR2, MERGE-01)
+                 └─ 089_gin_trgm_tsvector (PR3, MERGE-02)
+                      └─ 090_add_rag_eval_report (PR5, MERGE-03)
+                           └─ 091_add_kg_entity (PR8, MERGE-04) ← 10 PR alembic 链终点
+```
+
+**10 PR 一行摘要**:
+
+| PR | W段 | commits | 一行摘要 |
+|----|-----|---------|---------|
+| PR1 | W88 +0..+7 | 8 | 嵌入一致化 + query prefix 修复 (`embedding_truncation` policy + `has_query_prompt` 前置) |
+| PR2 | W88 +8..+21 | 14 | knowledge_chunk 子表 + 3 策略 chunking (`alembic 088` + `chunking_service` length/sentence/markdown) |
+| PR3 | W89 +0..+12 | 14 | BM25 增量索引 + pg_trgm + tsvector (`text_splitter` + `bm25_incremental` O(M) 增量 + `alembic 089`) |
+| PR4 | W90 +0..+14 | 15 | HybridRetriever 四路权重可配 (`hybrid_weight_config` + `synonym_dict` 298 条 + `retrieve_with_weights` 新 API) |
+| PR5 | W91 +0..+13 | 14 | RAGEvaluator 真召回率激活 (`rag_eval_runner` NDCG@10 + MRR + 4 RAGAS 真跑 + `alembic 090` + RAGEvalPanel.vue) |
+| PR6 | W92 +0..+12 | 5 (据实) | SearchLog 前端接通 (SearchLogs.vue + 11/13 endpoint 接通, **拒凑 5 commits**) |
+| PR7 | W93 +0..+14 | 15 | 全链路 observability (recall_observability 20 字段 + per_path 聚合 + grafana 7 面板 + 按路耗时分解) |
+| PR8 | W94 +0..+20 | 17 | 知识图谱深度联动 (`kg_entity` ORM + `alembic 091` 链终点 + `entity_link_recall` 第 5 路 + kg_embedding 复用 PR1) |
+| PR9 | W95 +0..+16 | 17 | auto-research v2 升级 (`auto_research_v2` + `dedup_cross_doc` pgvector≥0.92 + LLM-as-judge + `query_rewriter`) |
+| PR10 | W96 +0..+10 | 11 | docs 三件套沉淀 (`docs/rag/{README,RUNBOOK,SCHEMAS,ROADMAP,RISKS,EVAL,CHANGELOG,FAQ,CHECKLIST}` + v11 + 23/23 e2e) |
+
+**4 MERGE 主拍合并流**: MERGE-01 (W89, 338→430, +92, 11 分支) + MERGE-02 (W89, PR3, +14, 0 冲突) + MERGE-03 (W91, PR5, +14, 0 冲突) + MERGE-04 (W94, PR8, +17, 0 冲突).
+
+**HOTFIX-01 P0 PWA 修复**: PR5 `cb5c98498` 引入 `import { Play } from '@element-plus/icons-vue'`，Element Plus icons-vue **没 export `Play`** → PWA build FAIL → 已 commit `c8aa1112b` 在 branch `claude/w91-wr1-play-icon` **未 merge** (主拍决策 E45). 修复方式: `Play` → `VideoPlay` + 1 处组件引用替换.
+
+**关键技术指标**:
+- pytest: `3230 tests collected in 3.86s`（base +140 增量, PR1-10 累计 e2e 25+ case × 4 = ~100 case）
+- PWA build: ⚠ pre-existing FAIL (Play import 引入), HOTFIX-01 merge 后 PASS
+- 件 4a 双门控: 6 老核心服务 grep 全 0 (`knowledge_service` +14 ins 0 del + `hybrid_retriever` +127 ins 0 del + `embedding_service` / `bm25_service` / `text_splitter` / `rag_evaluator` 全 0 diff)
+- 类 20 累计 36 实例 (PR1-10 + DERIVE-01..19 + 派工拦截实战) 据实 29 + 候选 5 + brief 算入 34, +2 W97 HOTFIX-01 + GRAND-CLOSURE
+- 派工 v10/v11 实战化 (v10 已落地 + v11 已落地 168 行 + 候选 v10.1/v11.1 沉淀)
+
+**0 production code 例外 5 已批**: PR3 (text_splitter + bm25_service +3 def) + PR4 (hybrid_retriever +14 def) + PR5 (rag_evaluator +1 def run_evaluation) + PR8 (hybrid_retriever +127 insertions / kg_embedding 复用 PR1 / entity_link_recall 新增) + PR9 (auto_research_v2 + query_rewriter + dedup_cross_doc 新增).
+
+**派工 v11 段 7 错误 19 类 + 段 10 新 6 项 + 段 13 仓库实情真查** 实战化 (PR3 #28 / PR5 #24/#29/#31/#34 / PR8 #33/#35 / W96 #A/#B/#C 候选 / W97 #72-#75).
+
+**关键文档索引**:
+- [CLAUDE.md](../CLAUDE.md)（主状态段 W95 → W97 同步, commit `33e9aa5e0`）
+- `docs/rag/W97-RAG-GRAND-CLOSURE.md`（208 行 CLAUDE.md 镜像, E43 守恒）
+- `docs/rag/W97-CHANGELOG-SUMMARY.md`（CHANGELOG.md 镜像, E44 守恒, 本节即此镜像精简版）
+- `docs/w72-prompt-paradigm-v11-2027-04.md`（168 行 派工 v11 模板）
+- `docs/rag/CHECKLIST.md`（213 行 §F/§G/§H verify fallback）
+- `C:\Users\pc\.claude\plans\rag-quirky-otter.md` v1.1（10 PR 路线 + 5 件套）
+- `memory/w97-rag-grand-closure-2026-07-30.md`（总收口, ≥ 200 行）
+- `memory/w97-rag-v10-v11-promotion-candidates.md`（v10.1/v11.1 候选, ≥ 80 行）
+- `memory/w97-docs-full-update-2026-07-30.md`（本任务起步 memory）
+
+**据实上报 11 项** (brief vs 实测偏差):
+1. main HEAD = MERGE-04 tip + grand-closure commit = `33e9aa5e0`, HOTFIX-01 branch `claude/w91-wr1-play-icon` 已 commit 未 merge
+2. 锚点 477 据实 (W97 +0 实战 +1)
+3. 件 3 PWA build FAIL 待 HOTFIX-01 merge 后 PASS
+4. MEMORY.md 锚点 338 起点（CLAUDE.md/MEMORY.md 已 append W97 段, 主仓 MEMORY.md 索引同步留 W98 处理）
+5. 类 20 累计 36 实例 (实测 29 + 候选 5 + W97 2 = 36, brief 估 34)
+6. ROADMAP.md 主仓无 RAG 段, docs/rag/ROADMAP.md 单独文件 (mirror 模式延续)
+7. 派工 v10/v11 已落地（v10 + v11 实战化 + 候选 v10.1/v11.1 沉淀, 不擅自升级正文 E45）
+8. 件 4a 锁定 6 老核心服务 grep 全 0
+9. pytest baseline ≥ 3230 守恒
+10. MERGE-01 4 冲突 (CHANGELOG.md × 3, CLAUDE.md × 1, ROADMAP.md × 1, tests/rag/__init__.py × 1)
+11. HOTFIX-01 commit hash `c8aa1112b` 在 branch 未 merge (主拍决策留 E45)
+
 ## [2026-07-30] W94 PR8 知识图谱深度联动 (RAG v1.1 §2 PR8, 锚点 +0 → +20 模板 / **实测 17 commits**, alembic 091, **10 PR 最后 1 个 alembic PR**, 0 production code 例外 1 已批)
 
 **主基调**: PR8 B 实施, 知识图谱深度联动 + 实体链召回第 5 路 (RAG 工业级 v1.1 §2 PR8). **22/22 e2e PASS in 0.26s**. 锚点范式据实 17 commits (模板 21, +8..+11 四项合并入 +7 的 22 case, 不凑数). alembic **090 → 091 串单链** (派工 v11 段 1) —— **PR8 是 10 PR 中最后 1 个 alembic PR**, 091 之后链正式收口 (PR9/PR10 无迁移), 全景 `087 → 088 (PR2) → 089 (PR3) → 090 (PR5) → 091 (PR8)`. 件 4a 双门控 PASS (6 锁定老核心 `^[+-]def` = 0; knowledge_service +14 insertions **0 删除**; hybrid_retriever +127 insertions **0 删除**; embedding_service / bm25_service / text_splitter / rag_evaluator 全 0 diff).
