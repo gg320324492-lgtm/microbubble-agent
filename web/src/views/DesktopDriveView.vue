@@ -55,6 +55,7 @@
           <el-button
             :type="viewMode === 'detail' ? 'primary' : 'default'"
             :title="'详情列表视图'"
+            aria-label="详情列表视图"
             @click="viewMode = 'detail'"
           >
             <el-icon><Tickets /></el-icon>
@@ -62,6 +63,7 @@
           <el-button
             :type="viewMode === 'grid' ? 'primary' : 'default'"
             :title="'网格视图'"
+            aria-label="网格视图"
             @click="viewMode = 'grid'"
           >
             <el-icon><Grid /></el-icon>
@@ -69,6 +71,7 @@
           <el-button
             :type="viewMode === 'list' ? 'primary' : 'default'"
             :title="'紧凑列表视图'"
+            aria-label="紧凑列表视图"
             @click="viewMode = 'list'"
           >
             <el-icon><List /></el-icon>
