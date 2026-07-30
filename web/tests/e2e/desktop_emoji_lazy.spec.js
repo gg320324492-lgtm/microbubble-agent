@@ -287,8 +287,8 @@ describe('desktop_emoji_lazy 评论级 popover (W68 第 12 批 C-3)', () => {
     // popover 仅在 hover 显示, 默认可能不存在. 改为断言: 当存在时默认 8 emoji
 
     // 强制让 picker 显示: 通过 wrapper.vm 或者 data 属性
-    // 简单做法: 直接访问 component instance
-    const vm: any = wrapper.vm as any
+    // 简单做法: 直接访问 component instance (plain JS — 避免 .spec.js 混入 TypeScript 语法导致 Rollup 解析失败)
+    const vm = wrapper.vm
     if (vm && typeof vm === 'object') {
       vm.showEmojiPicker = true
     }
