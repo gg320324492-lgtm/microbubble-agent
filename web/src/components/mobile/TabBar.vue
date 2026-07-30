@@ -94,7 +94,8 @@ function handleSwitch(name) {
    注意: NutUI 4 不加 .active class，而是用反向命名 .nut-tabbar-item__icon--unactive
    所以 active 选择器是 :not(.nut-tabbar-item__icon--unactive) */
 :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
-  color: var(--color-primary);
+  /* v92 X-2 a11y: 主色文字变体 (on #fff0ed = 4.84, AA) — 原 --color-primary (#FF7A5C) 仅 2.31 */
+  color: var(--color-primary-text);
   background: var(--color-primary-bg);
   border-radius: 10px;
   margin: 6px 4px;
