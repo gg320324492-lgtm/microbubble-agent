@@ -3,6 +3,21 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
+## 当前状态 (2026-07-30 W92-X-1 main merge 收口 — 5 W91 cherry-pick + X-16 真修合入 W97 main, 锚点 483 → 491 守恒 +8 据实上报, 派工 v3 双锚定 + 类 20.46/97/108 加固)
+
+**W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工)**: 锚点 483 → 491 +8 据实上报, 5 个 W91 真未合 cherry-pick + 1 WR-1 no-op + 1 D-2 docs sync.
+
+**派工前提据实错配 5 处主拍拦截**: brief 假设 W92 main (实测 W97) + `c8a8a12b` hash (实测不存在, 真 `c8aa1112b`/`38deb8c45`/`afe15911e`) + W94 hotfix 必修 (实测 W97 squash 已合 main) + 5 Playwright (实测不全 Playwright) + 锚点 +1 (实测 +8).
+
+**5 真 cherry-pick 真修**:
+- **X-16 alembic 091** 真修闭合 087→091 baseline FAIL → PASS
+- **X-18 a11y 真登录态** 25 .txt authed:yes + 25 conflict 全解
+- **X-24 alembic all** 仅 memory
+- **X-28 src/__tests__ rename** 5 .spec.js → .test.js 文件 rename 0 逻辑
+- **X-29 ci real** 2 ci 真部署测试 + memory
+
+**0 production code 改动铁律 7/7 守恒** + **0 FAILED regression** (派工 v6 §6 实战). 详见 `memory/w92-1st-grand-closure-full-2026-07-30.md`.
+
 ## 当前状态 (2026-07-30 W90 第 1 批 PR4 收口 — RAG 工业级大改造 v1.1 PR4 HybridRetriever 召回侧量化, 锚点范式 W89 +N → W90 +14 守恒 +15 据实上报, 0 production code 守恒)
 
 **W90 第 1 批 PR4 B-4 实施 (主指挥协调范式第 67 次派工, RAG v1.1 plan §2)**: 锚点范式 W89 +N → W90 第 1 批 +14 守恒 (+15 据实上报: W90 +0..+5 + +6..+8 (派工模板数字位移) + +9..+11 + +12..+14). 当前 main HEAD = `<pending>` (W90 PR4 grand closure 待主指挥合并). 15 commits ahead of base `3a1ab24b3` (W86 mini-16 doc update, 锚点 338). 1 agent 完成 PR4 B-4 实施:
