@@ -27,7 +27,10 @@
 -->
 
 <template>
-  <div class="desktop-file-comments-view">
+  <div
+    class="desktop-file-comments-view"
+    :class="{ 'theme-dark': isDark }"
+  >
     <!-- 顶部导航 -->
     <div class="dfcv-header">
       <el-button link @click="goBack" class="dfcv-back-btn" aria-label="返回">
@@ -120,7 +123,13 @@
     </nav>
 
     <!-- 评论列表 -->
-    <main class="dfcv-body">
+    <main
+      class="dfcv-body"
+      :class="{
+        'route-query-top-active': highlightedTopId,
+        'route-query-thread-active': highlightedThreadId,
+      }"
+    >
       <!-- 加载态 -->
       <div v-if="loading && treeTop.length === 0" class="dfcv-loading">
         <el-icon class="is-loading"><Loading /></el-icon>
@@ -136,7 +145,17 @@
 
       <!-- 数据态 -->
       <ul v-else class="dfcv-list">
-        <li v-for="top in treeTop" :key="top.id" class="dfcv-top-item">
+        <li
+          v-for="top in treeTop"
+          :key="top.id"
+          class="dfcv-top-item"
+          :class="{
+            'route-query-highlight': idMatches(top.id, resolvedTopId()),
+            'route-query-thread': findComment(top.replies, resolvedThreadId()),
+          }"
+          :data-comment-id="top.id"
+          :data-thread-comment-id="findComment(top.replies, resolvedThreadId())?.id || null"
+        >
           <DesktopCommentThread
             :comment="top"
             :depth="0"
@@ -168,7 +187,7 @@
         :members-list="membersList"
         :placeholder="placeholder"
         :busy="posting"
-        :auto-focus="false"
+        :auto-focus="shouldFocusInput"
         @post="onPost"
         @typing="onTyping"
       />
@@ -177,8 +196,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, ChatDotRound, Loading } from '@element-plus/icons-vue'
 import { useCommentTree } from '@/composables/useCommentTree'
@@ -187,6 +206,7 @@ import { useCommentReactions, EMOJI_WHITELIST } from '@/composables/useCommentRe
 import { useCommentBreadcrumb } from '@/composables/useCommentBreadcrumb'
 // W68 第 12 批 C-3: emoji react 虚拟滚动 (默认 8 + 折叠后 4)
 import { useEmojiLazyLoad } from '@/composables/useEmojiLazyLoad'
+import { useThemeStore } from '@/stores/useThemeStore'
 import DesktopCommentThread from '@/components/desktop/DesktopCommentThread.vue'
 import DesktopCommentInput from '@/components/desktop/DesktopCommentInput.vue'
 
@@ -194,7 +214,19 @@ const props = defineProps({
   fileId: { type: [String, Number], required: true },
 })
 
+const route = useRoute()
 const router = useRouter()
+const themeStore = useThemeStore()
+const isDark = computed(() => themeStore.mode === 'dark')
+
+if (
+  typeof window !== 'undefined'
+  && !localStorage.getItem('theme')
+  && window.matchMedia?.('(prefers-color-scheme: dark)').matches
+) {
+  themeStore.set('dark')
+}
+
 const { buildCommentTree } = useCommentTree()
 
 // B-3 v3.2: emoji 反应 + 面包屑 composables
@@ -258,6 +290,87 @@ const {
 } = useFileCommentsDesktop(props.fileId)
 
 const newContent = ref('')
+const focusedId = ref(route.query.focus || null)
+const highlightedTopId = ref(route.query.top || null)
+const highlightedThreadId = ref(route.query.thread || null)
+const shouldFocusInput = computed(() => focusedId.value != null)
+
+const VALID_TABS = new Set(['open', 'all', 'resolved'])
+activeTab.value = tabFromQuery(route.query)
+
+function tabFromQuery(query) {
+  return VALID_TABS.has(query?.tab) ? query.tab : 'open'
+}
+
+function idMatches(candidate, target) {
+  if (candidate == null || target == null) return false
+  return String(candidate) === String(target)
+}
+
+function firstNestedReply(comment) {
+  if (!comment || !Array.isArray(comment.replies)) return null
+  for (const reply of comment.replies) {
+    if (!reply) continue
+    if ((reply.thread_depth ?? 0) > 0) return reply
+    const nested = firstNestedReply(reply)
+    if (nested) return nested
+  }
+  return null
+}
+
+function findComment(commentsToSearch, targetId) {
+  for (const comment of commentsToSearch || []) {
+    if (idMatches(comment.id, targetId)) return comment
+    const nested = findComment(comment.replies, targetId)
+    if (nested) return nested
+  }
+  return null
+}
+
+function resolvedTopId() {
+  if (!highlightedTopId.value) return null
+  const direct = findComment(treeTop.value, highlightedTopId.value)
+  if (direct?.thread_depth === 0) return direct.id
+  return highlightedTopId.value
+}
+
+function resolvedThreadId() {
+  if (!highlightedThreadId.value) return null
+  const direct = findComment(treeTop.value, highlightedThreadId.value)
+  if ((direct?.thread_depth ?? 0) > 0) return direct.id
+  for (const top of treeTop.value) {
+    const nested = firstNestedReply(top)
+    if (nested) return nested.id
+  }
+  return highlightedThreadId.value
+}
+
+async function focusInputFromQuery() {
+  if (!shouldFocusInput.value) return
+  await nextTick()
+  const ta = document.querySelector('.desktop-comment-input textarea')
+  if (ta) ta.focus()
+}
+
+async function scrollQueryTargetIntoView() {
+  await nextTick()
+  const targetId = resolvedThreadId() || resolvedTopId()
+  if (targetId == null) return
+  const target = document.querySelector(
+    `[data-comment-id="${String(targetId)}"], [data-thread-comment-id="${String(targetId)}"]`,
+  )
+  target?.scrollIntoView({ block: 'center', behavior: 'auto' })
+}
+
+function applyRouteQuery(query) {
+  const requestedTab = tabFromQuery(query)
+  if (activeTab.value !== requestedTab) switchTab(requestedTab)
+  focusedId.value = query.focus || null
+  highlightedTopId.value = query.top || null
+  highlightedThreadId.value = query.thread || null
+  focusInputFromQuery()
+  scrollQueryTargetIntoView()
+}
 
 // === 计算属性 ===
 const treeTop = computed(() => buildCommentTree(filteredComments.value).top)
@@ -326,6 +439,8 @@ async function fetchAll() {
   ])
   // 评论加载后: 批量拉反应 + 嵌套评论面包屑 (B-3 v3.2)
   await loadReactionsAndBreadcrumbs()
+  await scrollQueryTargetIntoView()
+  await focusInputFromQuery()
 }
 
 // B-3 v3.2: 批量拉当前评论反应 + 嵌套评论祖先链
@@ -478,7 +593,12 @@ function goBack() {
 }
 
 onMounted(() => {
+  applyRouteQuery(route.query)
   fetchAll()
+})
+
+watch(() => route.query, (query) => {
+  applyRouteQuery(query)
 })
 
 watch(() => props.fileId, (newId, oldId) => {
@@ -711,6 +831,14 @@ watch(() => props.fileId, (newId, oldId) => {
   overflow-y: auto;
 }
 
+.dfcv-body.route-query-top-active {
+  border-top: 3px solid var(--color-primary, #ff7a5c);
+}
+
+.dfcv-body.route-query-thread-active {
+  border-left: 4px solid var(--color-primary, #ff7a5c);
+}
+
 .dfcv-loading,
 .dfcv-empty {
   display: flex;
@@ -748,6 +876,18 @@ watch(() => props.fileId, (newId, oldId) => {
 
 .dfcv-top-item {
   list-style: none;
+  border-radius: 12px;
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+.dfcv-top-item.route-query-highlight {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  box-shadow: 0 0 0 2px var(--color-primary, #ff7a5c);
+}
+
+.dfcv-top-item.route-query-thread {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.06));
+  box-shadow: inset 4px 0 0 var(--color-primary, #ff7a5c);
 }
 
 .dfcv-compose {
@@ -772,10 +912,15 @@ watch(() => props.fileId, (newId, oldId) => {
 
 <!-- v60-v67 教训: dark mode 跨组件覆盖必须放非 scoped <style> 块 -->
 <style>
+.theme-dark.desktop-file-comments-view,
 [data-theme="dark"] .desktop-file-comments-view {
   background: var(--color-bg-page, #1a1d23);
 }
 
+.theme-dark.desktop-file-comments-view .dfcv-header,
+.theme-dark.desktop-file-comments-view .dfcv-tabs,
+.theme-dark.desktop-file-comments-view .dfcv-file-reactions,
+.theme-dark.desktop-file-comments-view .dfcv-compose,
 [data-theme="dark"] .dfcv-header,
 [data-theme="dark"] .dfcv-tabs,
 [data-theme="dark"] .dfcv-file-reactions,
@@ -784,11 +929,13 @@ watch(() => props.fileId, (newId, oldId) => {
   border-color: var(--color-border-light, #3a3d45);
 }
 
+.theme-dark.desktop-file-comments-view .dfcv-react-pill,
 [data-theme="dark"] .dfcv-react-pill {
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--color-border-light, #3a3d45);
 }
 
+.theme-dark.desktop-file-comments-view .dfcv-react-pill.mine,
 [data-theme="dark"] .dfcv-react-pill.mine {
   background: rgba(255, 122, 92, 0.16);
 }
