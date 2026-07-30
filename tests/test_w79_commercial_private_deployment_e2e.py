@@ -250,7 +250,7 @@ def test_09_private_deployment_monitor_sh():
     body = mon.read_text(encoding="utf-8")
     assert "set -e" in body, "monitor missing 'set -e'"
     # 4 case 标识
-    for case in ("[1/4]", "[2/4]", "[3/4]", "[4/4]"]:
+    for case in ("[1/4]", "[2/4]", "[3/4]", "[4/4]"):
         assert case in body, f"monitor missing {case}"
 
     # bash 语法检查
