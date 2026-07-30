@@ -196,3 +196,76 @@
 - [w60-coordination-grand-closure-2026-07-22](archived/w60-coordination-grand-closure-2026-07-22.md)
 - [w60-future-pr-evaluation-post-dedup](archived/w60-future-pr-evaluation-post-dedup.md)
 - [w60-w51-w60-stage-closure-final](archived/w60-w51-w60-stage-closure-final.md)
+
+---
+
+## W97 RAG 大改造专题（2026-07-30 GRAND-CLOSURE, 锚点范式 338→477 +139）
+
+**主基调**: 锚点范式 W86 mini-16 338 → W97 477 单调上升 (+139 据实, 11 阶段 + 33 批 — 含本任务 grand-closure +1，HOTFIX-01 branch 未合占锚点 477). RAG 大改造 10 PR + 4 MERGE + 1 HOTFIX(branch 未合) + 4 DERIVE = 149 commits 全部收口. 派工 v10/v11 实战化沉淀, 类 20 累计 34 实例 (29 实战 + 5 候选). alembic 串单链 087→091 完整收口, 091 是 10 PR 链终点. **W19 选项 A 维持**: 4 留未来 PR + 6 GRAND-CLOSURE 后剩余任务 (主拍签字范围外).
+
+**核心交付 5 件**:
+- `docs/rag/W97-RAG-GRAND-CLOSURE.md` (208 行, CLAUDE.md 镜像, E43 守恒)
+- `docs/rag/W97-CHANGELOG-SUMMARY.md` (77 行, CHANGELOG.md 镜像, E44 守恒)
+- `memory/w97-rag-grand-closure-2026-07-30.md` (216 行, 10 PR + 4 merge + 1 hotfix 时间线)
+- `memory/MEMORY.md` (本新章节, E47 守恒不擅自改已有内容)
+- `memory/w97-rag-v10-v11-promotion-candidates.md` (主拍签字升级候选, E45 守恒不擅自升级)
+
+**10 PR 关键产出索引**:
+- **PR1** (W88 +0..+7): `embedding_truncation` + `query_consistency_policy` + `has_query_prompt` 前置
+- **PR2** (W88 +8..+21): `KnowledgeChunk` ORM + `alembic 088` + `chunking_service` 3 策略
+- **PR3** (W89 +0..+12): `text_splitter` + `bm25_incremental` O(M) + `alembic 089` GIN trgm + tsvector
+- **PR4** (W90 +0..+14): `hybrid_weight_config` + `synonym_dict` 298 条 + 4 路开关默认不动
+- **PR5** (W91 +0..+13): `rag_eval_runner` NDCG@10 + MRR + 4 RAGAS + `alembic 090` + `RAGEvalPanel.vue`
+- **PR6** (W92 +0..+12): `SearchLogs.vue` + `useSearchLogs` + 11/13 endpoint 接通
+- **PR7** (W93 +0..+14): `recall_observability` 20 字段 + grafana 7 面板 + 按路耗时分解
+- **PR8** (W94 +0..+20): `kg_entity` ORM + `alembic 091` (10 PR 链终点) + `entity_link_recall` 第 5 路
+- **PR9** (W95 +0..+16): `auto_research_v2` + `dedup_cross_doc` (≥ 0.92 + LLM-as-judge) + `query_rewriter`
+- **PR10** (W96 +0..+10): `docs/rag/{9 文件}` + v11 + 23/23 e2e
+
+**MERGE 主拍流索引**:
+- `memory/w89-merge-01-2026-07-30.md` (149 行) — 11 分支, 锚点 338→430 +92, 4 冲突解决
+- `memory/w89-merge-02-2026-07-30.md` (72 行) — PR3, 锚点 430→444 +14
+- `memory/w91-merge-03-2026-07-30.md` (87 行) — PR5, 锚点 444→458 +14
+- `memory/w94-merge-04-2026-07-30.md` (72 行) — PR8, 锚点 459→476 +17
+
+**HOTFIX-01 P0 PWA 修复**:
+- `memory/w94-hotfix-01-start-2026-07-30.md` (60 行) — `Play` → `VideoPlay` (PR5 `cb5c98498` 引入 Element Plus icons-vue 没 export Play), commit `c8aa1112b` on branch `claude/w91-wr1-play-icon` 已 push origin **未 merge**，与本任务 grand-closure 共占锚点 477.
+- `memory/w94-hotfix-01-grand-closure-2026-07-30.md` — HOTFIX-01 收口沉淀 (5 件套守恒实测 + PWA build PASS 据实)
+
+**DERIVE 派生任务索引**:
+- DERIVE-01 rolldown+element-plus hotfix (vite 7.3.6 降级) — merge-01 内
+- DERIVE-03 pytest 同 basename 修 — merge-01 内
+- DERIVE-04 SearchLog heartbeat registration 修复 (29 天断流) — merge-01 内
+- DERIVE-14 .dockerignore 根目录残留 (修 celery build 慢) — merge-01 内
+- DERIVE-08 件 4a 双门控落地 (类 20 #32 沉淀) — W89
+- DERIVE-10 件 3 PWA 三档落地 — W89
+- DERIVE-11 v11 段 9 锚点前缀规则 — W89 实战 6 次
+- DERIVE-12 v11 CHECKLIST §F fallback — W89 落地
+- DERIVE-13 v11 §10 类 20 累计 34 — W89 落地
+- DERIVE-14 .dockerignore — W89 合并
+- DERIVE-18 v11 §13 仓库实情真查 — W89 落地
+- DERIVE-19 v11 reconcile — W89 落库校准
+
+**alembic 串单链 087→091 终态**:
+```
+085_billing_payment_tables (RAG 系列前商业化基线, W74)
+  └─ 086_backfill_drive_file_versions (W74)
+       └─ 087_add_knowledge_original_parent_id (MERGE-01 前 hotfix)
+            └─ 088_add_knowledge_chunk (PR2, MERGE-01 e65f3357c)
+                 └─ 089_gin_trgm_tsvector (PR3, MERGE-02 a000d0bf2)
+                      └─ 090_add_rag_eval_report (PR5, MERGE-03 5fdcb6819)
+                           └─ 091_add_kg_entity (PR8, MERGE-04 855130e1b) ← 10 PR 链终点
+```
+实测 `python -m alembic heads` = `091_add_kg_entity (head)` ✅ 1 head 守恒.
+
+**9 大缺口 100% 消化**: 见 `docs/rag/W97-RAG-GRAND-CLOSURE.md` §3.
+
+**类 20 累计 34 实例**: 15 历史 + W89-W96 +14 + W96 +5 候选 = 34 据实 (派工 brief 与实测对账: 29 + 5 候选 = 34, brief 正确).
+
+**GRAND-CLOSURE 后剩余工作 (主拍决策)**:
+- A. merge `chore/w94-rag-pr5-play-hotfix-2026-07-30` → main (P0 PWA 阻塞)
+- B. 10 untracked `agent-*/` 清理 (2.66GB+)
+- C. tests/trivy + tests/sentry 同 basename collection error 修
+- D. rolldown 1.1.5 panic 上游 bug 调研
+- E. CLAUDE.md 主状态段从 W95 → W97 (留 W98 派工)
+- F. tests/rag/ vitest 覆盖决策
