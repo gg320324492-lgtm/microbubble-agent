@@ -211,14 +211,27 @@ def test_alembic_18_idempotent_guard_present():
 # ============== 19-22: 集成 + 性能基线 ==============
 
 def test_alembic_19_heads_shows_088():
-    """python -m alembic heads 应显示 088 (或 087 if not merged)"""
-    # run via subprocess, accept either 087 (if 088 not in script_location) or 088
+    """python -m alembic heads 应显示当前 head (W91+ 091), 088 仍在 chain 中"""
+    # run via subprocess
     result = subprocess.run(
         ["python", "-m", "alembic", "heads"],
         capture_output=True, text=True, cwd=".",
     )
     heads_output = result.stdout.strip()
-    assert "088_add_knowledge_chunk" in heads_output, f"alembic heads = {heads_output!r}"
+    # W91+ head 是 091_add_kg_entity (087→088→089→090→091 串单链)
+    # 088 仍存在 (chain 中段), 验证 head 是 091 (W91+ 锚点)
+    assert "091_add_kg_entity" in heads_output, f"alembic heads 应为 091, 实测 {heads_output!r}"
+    # 088 仍在 chain 中 (历史 088 必接 087, 不能丢)
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    c = Config()
+    c.set_main_option("script_location", "alembic")
+    s = ScriptDirectory.from_config(c)
+    rev_088 = s.get_revision("088_add_knowledge_chunk")
+    assert rev_088 is not None, "088 revision 已不在 alembic 链 (chain 断裂!)"
+    assert rev_088.down_revision == "087_add_knowledge_original_parent_id", (
+        f"088.down_revision 必须接 087 (历史), 实际 {rev_088.down_revision}"
+    )
 
 
 def test_chunk_20_write_chunks_for_knowledge_empty_content():
