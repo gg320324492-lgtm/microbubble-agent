@@ -120,10 +120,28 @@
 - 类 20.35 "npm audit 必须 high/critical 门禁, moderate 留 overrides" (W87 X-4c)
 - 类 20.36 "cherry-pick 改 deps 必重跑 npm run build" (W87 X-2)
 
-**派工 brief v3 模板 (W87-X-5 新增 docs/ 写入权, 类 20.31/32 双锚定)**:
-- 详见 `docs/dispatch-template-v3.md` (本任务新建)
-- 5 段新增: 双锚定 base ref + 分支名 fallback + subagent EnterWorktree fallback 路径 + base ref 实测 + 集成 e2e 一致性 + 类 20 沉淀必查
-- 主指挥合并流程 v3: cherry-pick by hash 而非 merge 嵌套分支
+**派工前提铁律 12 + 类 20 累计 45 实例 (W89 第 1+2 批 + 9: 20.60-68)** (W89-X-27 沉淀):
+- 类 20.60 "axe SOP doc 必含 ≥ 5 规则 + 每规则 ≥ 3 段 + CI 段 + 留 W89+ 段 + e2e 门禁" (W89-P-12)
+- 类 20.61 "Playwright 集成必含: 真跑 build:a11y + pre-commit + 3 件套联动" (W89-P-13)
+- 类 20.62 "visual baseline 重 sync 必逐 spec + 统一 canonical project + 拍板 ≤ 120 张" (W89-X-10)
+- 类 20.63 "Playwright 软断言改硬门禁必 TEST_TOKEN 真注入 + throw if missing" (W89-X-11)
+- 类 20.64 "真 CI 触发必含: gh auth status + act 模拟 + 真部署文档化" (W89-X-12)
+- 类 20.65 "19 vitest failed 调研必: 4 类根因分类 (import 错位 / fixture 污染 / async timeout / 依赖缺失) + 修法优先级 + 不擅自修" (W89-X-13)
+- 类 20.66 "vitest spec 必无 test.use() (playwright API), 描述 test.use 必在 playwright spec" (W89-X-14 拦截)
+- 类 20.67 "WS/SSE/long-polling 页面必删 networkidle, 等明确 UI locator 或目标 API" (W89-X-15)
+- 类 20.68 "Playwright 真环境验证 v2 必含 6 步曲: docker ps 查重 + 12 services + a11y + visual + e2e + 真功能, 前置 npm install" (W89-X-16)
+
+**派工 v6 §5 反馈类 20.82 沉淀 (W89-X-27 实战)**:
+- 类 20.82 "派工 brief v4 升级必含 ≥ 9 铁律 + 实战举例 + CLAUDE.md 永久纪律" (W89-X-27)
+
+**派工 brief v4 模板 (W89-X-27 新增 docs/ 写入权, 类 20.60-68 + 类 20.82 双锚定)**:
+- 详见 `docs/dispatch-template-v4.md` (本任务新建)
+- 9 段新增: 类 20.60 axe SOP / 类 20.61 Playwright 集成 / 类 20.62 visual baseline / 类 20.63 硬门禁 / 类 20.64 CI 触发 / 类 20.65 vitest 调研 / 类 20.66 test.use 拦截 / 类 20.67 networkidle / 类 20.68 真环境 v2
+- 实战举例: W89-P-6 cherry-pick 冲突选 P-6 版本 / W89-X-14 mobile_swipe_gesture 拦截 / W89-X-10 visual 113 缺 baseline = 61 张独立 × 重复
+- 主指挥合并流程 v3 + v4 沿用: cherry-pick by hash 而非 merge 嵌套分支
+
+**集成 e2e 验证 (W89-X-27 dispatch-template-v4 + 9 类铁律守恒)**:
+- tests/brief_v4_x27/test_doc_exists.py: 2 PASS (v4 doc 存在 + 含 9 新类)
 
 **集成 e2e 验证 (W87-X-5 全跑, 派工 v6 §1.2 真验证)**:
 - W86 4 套件: 91 PASSED + 10 SKIPPED + 0 FAILED (96.29s)
