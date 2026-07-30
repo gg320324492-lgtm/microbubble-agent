@@ -100,8 +100,8 @@ async def test_087_orm_db_schema_match():
         await engine.dispose()
 
 
-def test_087_alembic_single_head():
-    """场景 3: alembic 链 1 head: ['087_add_knowledge_original_parent_id']"""
+def test_alembic_single_head_087_in_chain():
+    """场景 3: alembic 链 1 head (W91+ 091_add_kg_entity), 087 仍在 chain 中段"""
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
@@ -110,13 +110,18 @@ def test_087_alembic_single_head():
     s = ScriptDirectory.from_config(c)
 
     heads = s.get_heads()
-    assert heads == ["087_add_knowledge_original_parent_id"], (
-        f"alembic 链非 1 head 或 head 不是 087: {heads}"
+    assert len(heads) == 1, f"alembic 链非 1 head: {heads}"
+    # W91+ head 是 091_add_kg_entity, 但 087_add_knowledge_original_parent_id 仍在 chain 中
+    assert heads[0] == "091_add_kg_entity", (
+        f"alembic 头必为 091_add_kg_entity (W91+ 锚点 459→476 守恒), 实测: {heads}"
     )
+    # 087 必仍在 chain 中 (串单链 087→088→089→090→091)
+    rev_087 = s.get_revision("087_add_knowledge_original_parent_id")
+    assert rev_087 is not None, "087 revision 已不在 alembic 链 (chain 断裂!)"
 
 
 def test_087_down_revision_chains_to_086():
-    """场景 4: 087.down_revision 必须接 086 (类 20.13 拦截铁律)"""
+    """场景 4: 087.down_revision 必须接 086 (类 20.13 拦截铁律) — 历史属性不变"""
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
