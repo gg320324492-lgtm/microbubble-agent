@@ -24,6 +24,69 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
+
+// mock axios — useDriveFiles.listVersions 调用 axios.get, 必须 vi.mock (hoisted) 不能 vi.doMock
+// vi.mock 在 import 之前 hoist 到顶部, 拦截 useDriveFiles 内部 `import axios from 'axios'`
+vi.mock('axios', () => {
+  const versionsResponse = {
+    file_id: 99,
+    file_name: '微纳米气泡实验报告.pdf',
+    count: 3,
+    items: [
+      {
+        id: 3, file_id: 99, version_number: 3,
+        minio_object_key: 'uploads/drive/1/v3_abc123def456_20260724.pdf',
+        size: 2097152,
+        uploader_id: 1, uploader_name: '管理员',
+        comment: '修正实验温度参数',
+        is_current: true,
+        created_at: '2026-07-24T10:00:00',
+      },
+      {
+        id: 2, file_id: 99, version_number: 2,
+        minio_object_key: 'uploads/drive/1/v2_def456abc789_20260720.pdf',
+        size: 1572864,
+        uploader_id: 2, uploader_name: '王天志',
+        comment: '补充图表数据',
+        is_current: false,
+        created_at: '2026-07-20T14:30:00',
+      },
+      {
+        id: 1, file_id: 99, version_number: 1,
+        minio_object_key: 'uploads/drive/1/v1_789abc123def_20260715.pdf',
+        size: 1048576,
+        uploader_id: 1, uploader_name: '管理员',
+        comment: null,
+        is_current: false,
+        created_at: '2026-07-15T09:15:00',
+      },
+    ],
+  }
+  const emptyVersionsResponse = {
+    file_id: 100,
+    file_name: '首次上传文件.txt',
+    count: 0,
+    items: [],
+  }
+  return {
+    default: {
+      get: vi.fn((url) => {
+        if (String(url).includes('/files/') && String(url).includes('/versions')) {
+          // 根据 fileId 返回空或非空
+          if (String(url).includes('/100/')) {
+            return Promise.resolve({ data: emptyVersionsResponse })
+          }
+          return Promise.resolve({ data: versionsResponse })
+        }
+        return Promise.reject(new Error(`unmocked GET: ${url}`))
+      }),
+      post: vi.fn(() => Promise.resolve({ data: {} })),
+      put: vi.fn(() => Promise.resolve({ data: {} })),
+      delete: vi.fn(() => Promise.resolve({ data: {} })),
+    },
+  }
+})
+
 import DesktopFileVersionsView from '@/views/desktop/DesktopFileVersionsView.vue'
 import DesktopDriveView from '@/views/DesktopDriveView.vue'
 
@@ -95,7 +158,7 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
       ],
     })
 
-    // mock fetch 返 fixture
+    // mock fetch 返 fixture (兜底 — view 内部可能用 raw fetch)
     global.fetch = vi.fn((url) => {
       if (String(url).includes('/versions') && !String(url).includes('/download')) {
         return Promise.resolve({
@@ -105,19 +168,6 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
       }
       return Promise.reject(new Error(`unmocked URL: ${url}`))
     })
-
-    // mock axios: GET versions 走 fixture
-    vi.doMock('axios', () => ({
-      default: {
-        get: vi.fn((url) => {
-          if (String(url).includes('/files/') && String(url).includes('/versions')) {
-            return Promise.resolve({ data: fixtures.versionsResponse })
-          }
-          return Promise.reject(new Error(`unmocked GET: ${url}`))
-        }),
-        post: vi.fn(),
-      },
-    }))
   })
 
   afterEach(() => {
@@ -130,7 +180,16 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          'el-upload': { template: '<div class="el-upload"><slot /></div>' },
+          'el-popconfirm': {
+            template: '<span class="el-popconfirm"><slot name="reference" /><slot /></span>'
+          },
+          'el-icon': { template: '<span class="el-icon"><slot /></span>' },
+        },
+      },
       props: { id: '99' },
     })
 
@@ -162,7 +221,16 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          'el-upload': { template: '<div class="el-upload"><slot /></div>' },
+          'el-popconfirm': {
+            template: '<span class="el-popconfirm"><slot name="reference" /><slot /></span>'
+          },
+          'el-icon': { template: '<span class="el-icon"><slot /></span>' },
+        },
+      },
       props: { id: '99' },
     })
 
@@ -170,27 +238,45 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await new Promise(r => setTimeout(r, 50))
     await flushPromises()
 
-    const buttons = wrapper.findAllComponents({ name: 'ElButton' })
-    const buttonTexts = buttons.map(b => b.text()).filter(Boolean)
-    // 当前版本 (v3) 没有恢复按钮
-    const hasRestoreV3 = buttonTexts.some(t => t.includes('恢复') && t.includes('v3'))
-    expect(hasRestoreV3).toBe(false)
-    // 历史版本 (v2, v1) 应有恢复按钮
-    const restoreButtons = buttonTexts.filter(t => t.includes('恢复'))
-    expect(restoreButtons.length).toBeGreaterThanOrEqual(2)
+    // 通过 CSS class 找恢复按钮 (stub el-button = <button><slot /></button>)
+    const html = wrapper.html()
+    const restoreCount = (html.match(/恢复此版本/g) || []).length
+    // 历史版本 (v2, v1) 应有恢复按钮 (>= 2)
+    expect(restoreCount).toBeGreaterThanOrEqual(2)
+    // 当前版本 (v3) 不应有恢复按钮 — 检查没有 "v3 恢复" 或 "恢复 v3" 同时出现
+    // (在版本 v3 的 li 内不能有恢复按钮 — 简化为: 出现 "v3 当前版本" 时相邻无 "恢复")
+    const hasCurrentRestore = /当前版本[\s\S]{0,200}恢复/.test(html) || /恢复[\s\S]{0,200}当前版本/.test(html)
+    expect(hasCurrentRestore).toBe(false)
   })
 
   it('场景3: 空版本列表时显示 el-empty (首次上传文件)', async () => {
-    // 改 mock 返空
+    // 改 mock 返空 — 同时 mock axios 和 fetch, 因为 production 可能走任一路径
     global.fetch = vi.fn(() =>
       Promise.resolve({ ok: true, json: () => Promise.resolve(fixtures.emptyVersionsResponse) })
     )
+    // 重新 mock axios 返回空 — vi.mock 在 import 时已 hoist, 这里用 vi.spyOn 覆盖
+    const axios = (await import('axios')).default
+    vi.spyOn(axios, 'get').mockImplementation((url) => {
+      if (String(url).includes('/files/') && String(url).includes('/versions')) {
+        return Promise.resolve({ data: fixtures.emptyVersionsResponse })
+      }
+      return Promise.reject(new Error(`unmocked GET: ${url}`))
+    })
 
     await router.push('/drive/file/100/versions')
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          'el-upload': { template: '<div class="el-upload"><slot /></div>' },
+          'el-popconfirm': {
+            template: '<span class="el-popconfirm"><slot name="reference" /><slot /></span>'
+          },
+          'el-icon': { template: '<span class="el-icon"><slot /></span>' },
+        },
+      },
       props: { id: '100' },
     })
 
@@ -198,9 +284,9 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await new Promise(r => setTimeout(r, 50))
     await flushPromises()
 
-    // el-empty 渲染
-    expect(wrapper.html()).toContain('el-empty')
-    expect(wrapper.html()).toContain('该文件还没有历史版本')
+    // 验证空状态显示 — 通过文本而非 class (因为 el-empty 全局 stub 是 <div /> 无 class)
+    const html = wrapper.html()
+    expect(html).toContain('该文件还没有历史版本')
   })
 })
 
