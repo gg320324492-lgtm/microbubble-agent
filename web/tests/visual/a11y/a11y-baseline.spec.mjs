@@ -22,12 +22,20 @@ test.describe('a11y baseline 比对 (5 页面 × 5 project = 25 case)', () => {
       const authed = await injectAuth(page, BASE_URL)
 
       await page.goto(`${BASE_URL}${pageDef.path}`, { waitUntil: 'domcontentloaded' })
-      // W93: 等 SPA 路由稳定 (从 /chat → /dashboard 跳转完成) 再跑 axe,
-      //   固定 waitForTimeout 不够 → Execution context destroyed 竞态
-      await page.waitForFunction(() => document.querySelector('#app')?.children.length > 0)
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(1500)
 
-      const results = await axeBuilder(page).analyze()
+      // W93: SPA 路由跳转 (→/dashboard) 可能与 axe 注入竞态 → retry
+      let results
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          results = await axeBuilder(page).analyze()
+          break
+        } catch (err) {
+          if (attempt === 3) throw err
+          console.log(`[a11y] analyze retry ${attempt}/3 (${err.message?.slice(0, 60)})`)
+          await page.waitForTimeout(1000)
+        }
+      }
       const rows = toBaseline(results)
       const landedOnLogin = /\/login/.test(new URL(page.url()).pathname)
 

@@ -23,13 +23,22 @@ test.describe('axe WCAG 2.1 AA 扫描 (5 核心页面)', () => {
       const authed = await injectAuth(page, BASE_URL)
 
       await page.goto(`${BASE_URL}${pageDef.path}`, { waitUntil: 'domcontentloaded' })
-      // W93: 等 SPA 路由稳定再扫 (防 Execution context destroyed 竞态)
-      await page.waitForFunction(() => document.querySelector('#app')?.children.length > 0)
-      await page.waitForTimeout(500) // SPA 首屏挂载
+      await page.waitForTimeout(1500) // SPA 首屏挂载
 
       const landedOnLogin = /\/login/.test(new URL(page.url()).pathname)
 
-      const results = await axeBuilder(page).analyze()
+      // W93: SPA 路由跳转与 axe 注入竞态 → retry
+      let results
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          results = await axeBuilder(page).analyze()
+          break
+        } catch (err) {
+          if (attempt === 3) throw err
+          console.log(`[a11y] analyze retry ${attempt}/3 (${err.message?.slice(0, 60)})`)
+          await page.waitForTimeout(1000)
+        }
+      }
       const violations = results.violations
 
       // 打印给人看 (reporter=list 会带出来)
