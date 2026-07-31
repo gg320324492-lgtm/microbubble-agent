@@ -228,6 +228,9 @@
 - `memory/w91-merge-03-2026-07-30.md` (87 行) — PR5, 锚点 444→458 +14
 - `memory/w94-merge-04-2026-07-30.md` (72 行) — PR8, 锚点 459→476 +17
 
+**X-series cherry-pick 收口 (W92-X-1, 锚点 491 据实 +8)**:
+- `memory/w92-1st-grand-closure-full-2026-07-30.md` (263 行) — W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工), 5 W91 真未合 cherry-pick (X-16 alembic 091 真修 + X-18 a11y 真登录态 + X-24 alembic all + X-28 src/spec rename + X-29 ci real) + WR-1 no-op (W97 `afe15911e` 已合) + D-2 6 类文档同步. 派工前提错配 5 处置实主拍拦截: c8a8a12b 不存在 + W94 hotfix 必修错配 + 5 Playwright 含糊 + base W92 假设错配 W97 实测 + 锚点 +1 估算错配. 类 20 累计 113+ 实例 (本任务新增 5: 20.46 c8a8a12b 拼写拦截 + 20.97 ahead=0 ≠ 不必 cherry-pick + 20.108 tail-30 grep 加固 + 20.31 worktree fallback + 20.98 沿用 W91-X-15).
+
 **HOTFIX-01 P0 PWA 修复**:
 - `memory/w94-hotfix-01-start-2026-07-30.md` (60 行) — `Play` → `VideoPlay` (PR5 `cb5c98498` 引入 Element Plus icons-vue 没 export Play), commit `c8aa1112b` on branch `claude/w91-wr1-play-icon` 已 push origin **未 merge**，与本任务 grand-closure 共占锚点 477.
 - `memory/w94-hotfix-01-grand-closure-2026-07-30.md` — HOTFIX-01 收口沉淀 (5 件套守恒实测 + PWA build PASS 据实)

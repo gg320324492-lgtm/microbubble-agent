@@ -18,7 +18,7 @@
 <template>
   <!-- v2.0 (2026-07-09) Drive 美化: .drive-folder-tree 走共享 CSS (玻璃态侧栏 + 多色 special) -->
   <!-- v2.8 (2026-07-10) 右键菜单: 5 个根项 + 3 个 sub (FolderTreeNode 内) 全部用 FolderContextMenu 包裹 -->
-  <div class="folder-tree drive-folder-tree">
+  <div class="folder-tree drive-folder-tree" tabindex="0" aria-label="文件夹树">
     <!-- 顶级固定节点: 我的网盘 (渐变激活) -->
     <FolderContextMenu :items="rootMenuItems" placement="right-start" @command="(cmd) => onRootContext(cmd)">
       <div

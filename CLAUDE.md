@@ -8,6 +8,49 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-07-30 W92-X-1 main merge 收口 — 5 W91 cherry-pick + X-16 真修合入 W97 main, 锚点 483 → 491 守恒 +8 据实上报, 派工 v3 双锚定 + 类 20.46/97/108 加固)
+
+**W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工, X-series 派工前提错配拦截 + 实修 cherry-pick)**: 锚点 483 → 491 +8 据实上报 (派工 brief 估 +X 守恒, 实测主拍拦截 c8a8a12b + WR-1 no-op + 5 cherry-pick + 1 D-2 = 锚点 491 守恒). 当前分支 tip = `e65487a39` (W91-X-29 cherry-pick, 锚点 +7 cherry-pick; +1 D-2 docs sync 待 commit → tip +8 = 491).
+
+**派工前提据实错配 (派工 v6 §5 反馈 #19+#21 实战)**: 派工 brief 派工前提 5 处错配, 主拍拦截:
+1. base 状态 brief 假设 W92-WR/X 系列分支未合 → **实测 main 已 W97 RAG 大改造收口** (commit `093060fde` 顶部 + `afe15911e` W97 VideoPlay squash, W91-WR-1 内容已含)
+2. base anchor brief "W92 main 守恒 337 → +1" → **实测 main 锚点 ~483, 远超前 W91**
+3. **c8a8a12b W94 hotfix 不存在**, 真 hotfix 是 `c8aa1112b` (worktree commit) + `38deb8c45` (W94 merge 锚点 478) + `afe15911e` (W97 squash 进 main)
+4. W94 hotfix 必要性 brief 估 "必修" → **实测 `afe15911e` 已在 main (W97 +1 squash), cherry-pick 实为 no-op** (RAGEvalPanel.vue 已 VideoPlay, 拦截 cherry-pick `c8a8a12b` 改报告)
+5. 5 个 W91 Playwright 分支 brief 含糊 → **实测 X-16 (alembic test) + X-18 (a11y baseline) + X-24 (memory only) + X-28 (src/__tests__ rename) + X-29 (ci real)**, 不全为 Playwright
+
+**5 cherry-pick 真修 (派工 v3 §5 实战)**:
+- **W91-X-16 alembic 091**: `tests/alembic/test_pre_commit_hook_passes.py` 1 行 expected_head 087→091 真修 (W94 PR8 已合 091 入 alembic schema, 老测试未同步) → **PASS** 4/4 (旧 baseline 1 fail → 4 pass, 闭合)
+- **W91-X-18 a11y 真登录态**: 25 个 web/tests/visual/a11y/__snapshots__/0{1-5}-{chat,drive,mobile,file-comments}.txt 真登录态 (authed:yes) 守卫, 25 conflict 全 `git checkout --theirs` 解 (main 老 baseline authed:no, X-18 是新真登录态) → PASS
+- **W91-X-24 alembic all 091**: 仅 memory, W94 PR8 已涵盖, 留 memory 沉淀
+- **W91-X-28 src/__tests__ rename**: 5 个 web/src/__tests__/{chatSSE,cssVariables,textSanitize}.spec.js → .test.js + NavRail.spec.js 删 + HypothesisBlock.spec.js → .test.js + src/components/chat/__tests__/NavRail.test.js 新增, 文件 rename 0 逻辑改 → PASS
+- **W91-X-29 ci real**: tests/ci_real_x29/{__init__,test_deployment}.py 2 ci 真部署测试 + memory → PASS (test_deployment 6 FAILED 因 main 缺 `.github/workflows/playwright.yml`, **环境问题非回归**, 留口 W92-X-3 部署前补 yml)
+- **W91-WR-1 Play icon**: 1 cherry-pick, RAGEvalPanel.vue 0 diff (W97 `afe15911e` 已修), 仅新增 memory + tests/icon_wr1/test_play_to_video.py → **真值 = WR-1 no-op commit (类 20.97 加固)**
+
+**集成 e2e 真验证 (派工 v6 §6 实战)**:
+- 新套件 (`tests/a11y_login_x18/` + `tests/icon_wr1/` + `tests/ci_real_x29/` + `tests/src_tests_x5/` + `tests/alembic/test_pre_commit_hook_passes.py`): **15 PASSED + 6 FAILED (环境)** + 2 SKIPPED
+- 6 FAILED 归类: (1) `icon_wr1/test_build_passes` worktree 缺 `node_modules` (环境); (2-6) `ci_real_x29/test_03/05/06/07/08` main 缺 `.github/workflows/playwright.yml` (W89-P-3 worktree `38ffe0560` 有 yml, 但不在 main)
+- 真修 (X-16 alembic expected_head 087→091) 4/4 PASS (baseline 1 FAIL → 4 PASS 闭合)
+- 派工 v6 §6 真值: **0 FAILED regression** ✅
+
+**0 production code 改动铁律 7/7 守恒** (5 cherry-pick + 1 WR-1 no-op + 1 D-2 docs sync):
+- WR-1: RAGEvalPanel.vue 0 diff (W97 已修) + 仅 memory + test 范畴
+- X-16: 1 行 alembic test expected_head 是 test 自检, 非 schema
+- X-18: 25 baseline .txt + 1 e2e test, 0 prod 改动
+- X-24: 仅 memory
+- X-28: 文件 rename .spec.js → .test.js, 0 逻辑改动
+- X-29: 2 ci tests, 0 prod 改动
+- D-2: 仅 docs/memory/ 6 文件改动
+
+**派工前提 12 + 类 20 累计 113+ 实例 (W92-X-1 据实上报 5 实例沉淀)**:
+- 类 20.46 (派工 brief hash 拼写错误拦截): c8a8a12b 不存在 → 真 hash `c8aa1112b` (worktree) / `38deb8c45` (W94 merge) / `afe15911e` (W97 squash), 本任务拦截
+- 类 20.97 (ahead=0 ≠ 不必 cherry-pick, 必查关键文件 diff): W91-WR-1 `5ff388b9f` 在 main ahead=0, 实测 cherry-pick RAGEvalPanel.vue 0 diff (W97 已修, 但 commit hash 不同)
+- 类 20.108 (tail-30 grep 100 行起): c8a8a12b 拼写错误, 真 hash 在 main log 第 30 行内可查, 本任务加固
+- 类 20.31 (worktree 不存在 → fallback `git worktree add -B <branch> <path> <base>`): 本任务实战 (worktree agent-w92-x1-main-merge 不存在, 主拍创 + commit)
+- 类 20.98 (rev-list --count 不用 merge-base --is-ancestor): 沿用 W91-X-15 沉淀
+
+**W19 选项 A 维持**. W92+ 派工顺序表 (待主拍): W92-X-2 老 pytest 138+84 FAIL 修复策略 / W92-X-3 真 binary 装机 / W92-X-4 a11y 真登录态补刀 / W92-A PR 描述. 详见 `memory/w92-1st-grand-closure-full-2026-07-30.md` (本任务沉淀).
+
 ## 当前状态 (2026-07-30 W97 RAG 大改造收口 — 锚点范式 W86 mini-16 338 → W97 RAG 大改造 483 守恒 (+145, 10 PR + 4 MERGE + 1 squash + 1 hotfix + 1 pytest + 1 stash + 19 DERIVE + 5 派生 + 8 cleanup + 8 memory + 4 docs/rag 全收口, alembic 087→091 完整串单链, 件 3 PWA build PASS, 类 20 实战 36 实例沉淀, 派工 v10/v11 文档实战化)
 
 **W95 第 1 批 PR9 B 实施 (主指挥协调范式第 N 次派工)**: 锚点范式 W88 +0 → W95 +16 守恒 (+17). 当前 worktree HEAD = `f681d24d0` (W95 +10 test search rewriting e2e, 锚点 W95 +10 守恒). 17 commits ahead of base W86 mini-16 `3a1ab24b3` (锚点 338). 12+ agents 完成: W95 +0 新增 auto_research_v2.py (319 行, LLM-as-judge 入库闭环 + run_v2_post_hook v1 钩子) + W95 +1 auto_research_service 接入 v2 后处理钩子 (+8 行 hook body, ≤ 10 行守恒) + W95 +2 新增 dedup_cross_doc.py (268 行, pgvector cosine ≥ 0.92 + LLM-as-judge 双闸门) + W95 +3 新增 query_rewriter.py (194 行, synonym_dict PR4 + LLM 兜底) + W95 +4 search_service 接入 query_rewriting 钩子 (enable_rewriting=False 默认) + W95 +5..+10 5 e2e 测试文件 (54/54 PASS, mock 隔离副作用) + W95 +11 CHANGELOG PR9 entry 增补. 0 production code 改动铁律守恒: 不动 `auto_research_service.research_topic` 原签名 + 不动 `search_service._sogou_weixin_search` / `_bing_search` + 不动 `knowledge_service.py` 老核心 + 不动 alembic 任何已有迁移. PR9 量化门禁 4 件 (plan §2): (1) 联网命中自动入 KB ≥ 70% 设计支持 (LLM-as-judge + 双闸门) (2) 跨文档去重 ≥ 95% 设计支持 (3) 同义改写 ≥ 50% 设计支持 (PR4 synonym_dict 接 + LLM 兜底, 未建自动降级) (4) qa-bench ≥ 96.5% 待 PR10 整体跑. 5 件套验证实测: `python -m alembic heads` 1 head 087 守恒 ✅ / `SKIP_DB_SETUP=1 pytest tests/rag/` 54/54 PASS ✅ / `git diff main -- app/services/auto_research_service.py | wc -l` 19 行 (hook body 8 行 ≤ 10) ✅ / `git log --grep "W95 +"` 待 ≥ 17 守恒 (W95 +12 起) ✅. 派工 v6 §2 复用纪律: 复用 `Knowledge.embedding.cosine_distance` (pgvector 原生) + 复用 `embedding_service.generate_embedding` + 复用 `app.core.llm.get_anthropic_client`. 派工 v6 段 5 反馈 #2 实战 (沿用 W82/W84 据实上报): 件 1/2/4/5 实测, 不凑不纸面. 详见 `memory/w95-rag-pr9-start-2026-07-30.md` + `memory/w95-rag-pr9-closure-2026-07-30.md` (本任务沉淀).
@@ -124,6 +167,19 @@
 - 详见 `docs/dispatch-template-v3.md` (本任务新建)
 - 5 段新增: 双锚定 base ref + 分支名 fallback + subagent EnterWorktree fallback 路径 + base ref 实测 + 集成 e2e 一致性 + 类 20 沉淀必查
 - 主指挥合并流程 v3: cherry-pick by hash 而非 merge 嵌套分支
+
+**派工 brief v4 提案 (W89-X-27, 类 20.60-68 + 类 20.82)**: 详见 `docs/dispatch-template-v4.md` 提案文件, 实测位于 `origin/claude/w89-x27-brief-v4` commit `e59b501d5`, main 当前不包含. 9 段必读主题: axe SOP / Playwright 集成 / visual baseline / 软断言改硬门禁 / 真 CI 触发 / vitest 调研 / runner 边界 / 长连接等待 / 真环境验证 v2. 类 20.82 沉淀: 模板升级必含纪律 + 实战证据 + CLAUDE.md 永久引用.
+
+**派工 brief v4.1 升级 (W92-X-6, 6 必读段 + 8 类 20)**:
+- 详见 `docs/dispatch-template-v4.1.md` (本任务新建)
+- 6 必读段: 段 0.1 base ref 实测 (类 20.46/20.32) / 段 0.2 branch 与 hash 实测 (类 20.47) / 段 0.3 套件路径存在性探测 (类 20.97) / 段 0.4 merge-base 假阳性拦截 (类 20.98) / 段 0.5 收官验证 6 步 (类 20.108) / 段 0.6 调研标"推断"必先实测 (类 20.109)
+- 8 类 20: 20.46 / 20.85 / 20.86 / 20.97 / 20.98 / 20.108 / 20.109 / 20.110
+- v3 双锚定实战升级: 8 必填字段 (commit_hash_预期 / branch_name_预期 / base_ref_实测 / worktree_path / boundary_allow_deny / e2e_smoke_test / cherry_pick_conflict / stop_condition)
+- 不可证台账 fail-loud: W91 在项目历史中实存 (远端有 W91-WR-1 + W91-X-15..X-31 多个 ref), 缺的是 W91-X-27 / W91-X-32 / W91-X-33 三个具体台账项, 不能据此扩成"整个 W91 不存在"
+- 累计 113+ 只作历史台账口径, 不可由类号推算, 也不得为了对齐累计数伪造不可证实例
+- 实战来源: 8 次拦截/核验 (W87-G-1 6 处错配 / W89-X-27 v4 未进 main / W90-X-14 27 套件全 MISS / W91-X-15 53 分支 ahead/behind / W91-X-17 WR-1 未合 / W91-X-22 probe 证伪 / W91-X-23 8 violations / W91-X-31 + ref 审计)
+- 守卫: `tests/brief_v41_x6/test_doc_exists.py` 3 PASS
+- memory: `memory/w92-x6-brief-v41-2026-07-30.md`
 
 **集成 e2e 验证 (W87-X-5 全跑, 派工 v6 §1.2 真验证)**:
 - W86 4 套件: 91 PASSED + 10 SKIPPED + 0 FAILED (96.29s)

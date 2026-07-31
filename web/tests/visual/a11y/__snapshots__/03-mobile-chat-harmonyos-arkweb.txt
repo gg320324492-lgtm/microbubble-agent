@@ -1,5 +1,5 @@
 page: 03-mobile-chat  route: /chat
 target: MobileChatView.vue (mobile project 下解析)
 project: harmonyos-arkweb
-authed: no   redirected-to-login: yes
+authed: yes   redirected-to-login: no
 violations: 0
