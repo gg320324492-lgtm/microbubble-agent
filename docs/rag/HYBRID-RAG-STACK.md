@@ -35,7 +35,7 @@
 ## 依赖 (On by default)
 
 - langchain>=0.3.0 / langchain-community / langchain-anthropic
-- llama-index>=0.12.0 / llama-index-vector-stores-pgvector / readers-file
+- llama-index>=0.12.0 / llama-index-vector-stores-postgres / readers-file
 - langfuse>=2.0.0
 
 ## 测试

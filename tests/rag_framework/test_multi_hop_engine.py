@@ -33,7 +33,7 @@ def mock_all_frameworks():
         'llama_index.core.retrievers': MagicMock(),
         'llama_index.core.tools': MagicMock(),
         'llama_index.vector_stores': MagicMock(),
-        'llama_index.vector_stores.pgvector': MagicMock(),
+        'llama_index.vector_stores.postgres': MagicMock(),
         'llama_index.embeddings.langchain': MagicMock(),
         'llama_index.readers': MagicMock(),
         'llama_index.readers.file': MagicMock(),

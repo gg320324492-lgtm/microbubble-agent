@@ -94,7 +94,7 @@ class DenseSparseRouter:
         if self._vector_index is not None:
             return self._vector_index
         from llama_index.core import VectorStoreIndex
-        from llama_index.vector_stores.pgvector import PGVectorStore
+        from llama_index.vector_stores.postgres import PGVectorStore
 
         from app.config import settings
         from app.rag.config import LLAMAINDEX_EMBEDDING_DIM, LLAMAINDEX_PGVECTOR_SCHEMA
