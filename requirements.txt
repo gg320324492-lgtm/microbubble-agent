@@ -52,7 +52,9 @@ pysoundfile            # soundfile 的 Python 绑定（部分平台需要）
 edge-tts>=7.2.8,<8.0.0
 
 # 向量数据库
-pgvector==0.2.4
+# 2026-07-31 RAG-FW-DEPLOY 修复: pgvector==0.2.4 过老, llama-index-vector-stores-postgres 要求 >=0.3.6
+# (0.3.6~0.5.0 wheel 实测: pgvector/sqlalchemy/vector.py 模块 + Vector(dim) API 均保留, 兼容)
+pgvector>=0.3.6,<1.0.0
 sentence-transformers==5.6.0
 # optimum 不装：实测 ONNX 在 GPU 上慢 12-22x（无收益）
 # optimum[onnxruntime]>=1.20.0
