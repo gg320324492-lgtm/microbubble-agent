@@ -56,7 +56,11 @@ jobs:
         run: |
           # W89-P-3: 复用 W68 第 7 批 A-3 已建的 docker-compose.test.yml
           #   (qa-bench 物理隔离栈: pg-test 5433 + app-test 8001)
-          #   起 app + db 两个核心 service, 其他 (redis/minio) 由 service 自带 health 兜底
+          #   复用 W67 第 48 步 pre-built image 模式 (build-image.yml push 时自动 build):
+          #   先 pull ghcr.io pre-built image → tag app-test:ci → compose 用 image: 而非 build
+          docker pull ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest 2>&1 | tail -3
+          docker tag ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest app-test:ci
+          docker images app-test:ci --format "✓ app-test:ci ready, {{.Size}}"
           docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test minio-test 2>&1 | tail -10
 
           # 等 app /health 200 (最长 180s, app 启动 ~30-60s)
@@ -127,6 +131,10 @@ jobs:
 
       - name: "Start test environment"
         run: |
+          # 复用 W67 第 48 步 pre-built image 模式
+          docker pull ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest 2>&1 | tail -3
+          docker tag ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest app-test:ci
+          docker images app-test:ci --format "✓ app-test:ci ready, {{.Size}}"
           docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test minio-test 2>&1 | tail -10
 
           for i in {1..90}; do

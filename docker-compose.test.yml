@@ -79,6 +79,9 @@ services:
 
   # 主应用 (复用生产 Dockerfile, 独立 env, 端口错开)
   app-test:
+    # W93: CI 复用 W67 pre-built image 模式 (build-image.yml push 时自动 build)
+    #   本地已有 app-test:ci (docker pull + tag) 时直接用, 不 build
+    image: app-test:ci
     build:
       context: .
       dockerfile: Dockerfile
