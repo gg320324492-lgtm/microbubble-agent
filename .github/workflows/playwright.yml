@@ -77,12 +77,31 @@ jobs:
             sleep 2
           done
 
+      - name: Start vite dev server (proxy -> app-test:8001)
+        working-directory: web
+        env:
+          VITE_API_PROXY_TARGET: http://localhost:8001
+        run: |
+          npx vite --port 3000 --strictPort > /tmp/vite-a11y.log 2>&1 &
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000/ > /dev/null 2>&1; then
+              echo "✓ vite dev OK (attempt $i/60)"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "✗ vite dev never started"
+              cat /tmp/vite-a11y.log
+              exit 1
+            fi
+            sleep 2
+          done
+
       - name: Run axe-core a11y tests
         working-directory: web
         env:
-          BASE_URL: http://localhost
+          BASE_URL: http://localhost:3000
+          VITE_API_PROXY_TARGET: http://localhost:8001
           # W87-G-1 派工 brief: TEST_TOKEN 注入登录态, 否则 router 守卫打到 /login
-          # 默认 CI 不传 token, a11y baseline.spec 已 fallback 到匿名路径
           TEST_TOKEN: ${{ secrets.PLAYWRIGHT_TEST_TOKEN || '' }}
         run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --reporter=list
 
@@ -150,10 +169,30 @@ jobs:
             sleep 2
           done
 
+      - name: Start vite dev server (proxy -> app-test:8001)
+        working-directory: web
+        env:
+          VITE_API_PROXY_TARGET: http://localhost:8001
+        run: |
+          npx vite --port 3000 --strictPort > /tmp/vite-visual.log 2>&1 &
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000/ > /dev/null 2>&1; then
+              echo "✓ vite dev OK (attempt $i/60)"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "✗ vite dev never started"
+              cat /tmp/vite-visual.log
+              exit 1
+            fi
+            sleep 2
+          done
+
       - name: Run visual regression tests
         working-directory: web
         env:
-          BASE_URL: http://localhost
+          BASE_URL: http://localhost:3000
+          VITE_API_PROXY_TARGET: http://localhost:8001
           CI: 'true'
           TEST_TOKEN: ${{ secrets.PLAYWRIGHT_TEST_TOKEN || '' }}
         run: npx playwright test --reporter=list
@@ -162,7 +201,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: web
         env:
-          BASE_URL: http://localhost
+          BASE_URL: http://localhost:3000
+          VITE_API_PROXY_TARGET: http://localhost:8001
           CI: 'true'
           TEST_TOKEN: ${{ secrets.PLAYWRIGHT_TEST_TOKEN || '' }}
         run: npx playwright test --update-snapshots --reporter=list

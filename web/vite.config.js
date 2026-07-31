@@ -313,11 +313,12 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // W93: CI 可覆盖 (app-test 在 8001, 本地 dev 在 8000)
+        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: (process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000').replace('http', 'ws'),
         ws: true
       }
     }
