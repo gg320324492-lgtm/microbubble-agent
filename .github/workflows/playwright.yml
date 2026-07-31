@@ -102,13 +102,26 @@ jobs:
             sleep 2
           done
 
+      - name: Get fresh TEST_TOKEN from app-test
+        env:
+          TEST_USERNAME: ${{ secrets.PLAYWRIGHT_TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+        run: |
+          # W93: CI 的 app-test 用 TEST_SECRET_KEY (test_jwt_secret_different_from_prod),
+          #   本地 token 无效 → 必须从 CI 自己的后端现场拿
+          #   secret 未设置时用默认测试账号 (env 层 || 生效, 比 secrets.X || 默认 可靠)
+          USER="${TEST_USERNAME:-xiaoqi_testbot}"
+          PASS="${TEST_PASSWORD:-testbot_pass_2026}"
+          TOKEN=$(curl -s -X POST http://localhost:8001/api/v1/auth/login             -H "Content-Type: application/json"             -d "{\"username\":\"$USER\",\"password\":\"$PASS\"}")
+          echo "TOKEN_LEN=${#TOKEN}"
+          echo "PLAYWRIGHT_TEST_TOKEN=$TOKEN" >> $GITHUB_ENV
+
       - name: Run axe-core a11y tests
         working-directory: web
         env:
           BASE_URL: http://localhost:3000
           VITE_API_PROXY_TARGET: http://localhost:8001
-          # W87-G-1 派工 brief: TEST_TOKEN 注入登录态, 否则 router 守卫打到 /login
-          TEST_TOKEN: ${{ secrets.PLAYWRIGHT_TEST_TOKEN || '' }}
+          TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
         run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --reporter=list
 
       - name: Upload a11y report on failure
@@ -200,13 +213,24 @@ jobs:
             sleep 2
           done
 
+      - name: Get fresh TEST_TOKEN from app-test
+        env:
+          TEST_USERNAME: ${{ secrets.PLAYWRIGHT_TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.PLAYWRIGHT_TEST_PASSWORD }}
+        run: |
+          USER="${TEST_USERNAME:-xiaoqi_testbot}"
+          PASS="${TEST_PASSWORD:-testbot_pass_2026}"
+          TOKEN=$(curl -s -X POST http://localhost:8001/api/v1/auth/login             -H "Content-Type: application/json"             -d "{\"username\":\"$USER\",\"password\":\"$PASS\"}")
+          echo "TOKEN_LEN=${#TOKEN}"
+          echo "PLAYWRIGHT_TEST_TOKEN=$TOKEN" >> $GITHUB_ENV
+
       - name: Run visual regression tests
         working-directory: web
         env:
           BASE_URL: http://localhost:3000
           VITE_API_PROXY_TARGET: http://localhost:8001
           CI: 'true'
-          TEST_TOKEN: ${{ secrets.PLAYWRIGHT_TEST_TOKEN || '' }}
+          TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
         run: npx playwright test --reporter=list
 
       - name: Update snapshots (only on main push)
@@ -216,7 +240,7 @@ jobs:
           BASE_URL: http://localhost:3000
           VITE_API_PROXY_TARGET: http://localhost:8001
           CI: 'true'
-          TEST_TOKEN: ${{ secrets.PLAYWRIGHT_TEST_TOKEN || '' }}
+          TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
         run: npx playwright test --update-snapshots --reporter=list
 
       - name: Upload visual diff on failure
