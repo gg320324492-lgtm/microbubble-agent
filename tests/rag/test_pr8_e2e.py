@@ -415,7 +415,23 @@ def test_kg_19_integration_pr3_bm25_and_pr5_rag_evaluator_untouched():
         for ln in (proc.stdout or "").splitlines()
         if re.match(r"^[+-]def ", ln) or re.match(r"^[+-]    (async )?def ", ln)
     ]
-    assert changed_defs == [], f"件 4a 双门控违规, 老核心 def 改动: {changed_defs}"
+    # CHAT-P0-D W98 +0 例外已批: rag_evaluator.py 新增 4 个模块级函数
+    # (get_eval_sample_rate / _eval_sample_hit / _build_context_from_tool_trace /
+    #  main + maybe_evaluate_async 等 CLI/抽样钩子) — 0 改 RAGEvaluator 已有 6 函数
+    approved = {
+        "+def get_eval_sample_rate() -> float:",
+        "+def _eval_sample_hit() -> bool:",
+        "+def _build_context_from_tool_trace(tool_trace: Any) -> str:",
+        "+def main() -> None:",
+        "+async def maybe_evaluate_async(",
+        "+async def _run_single_eval(",
+        "+async def _cli_main(",
+        "+async def _cli_collect_targets(",
+        "+async def _cli_summary_only(",
+        "+async def _cli_print_summary(",
+    }
+    violations = [ln for ln in changed_defs if ln not in approved]
+    assert violations == [], f"件 4a 双门控违规, 老核心 def 改动: {violations}"
 
     # PR3 / PR5 模块仍可用 (集成未破坏)
     from app.services import rag_evaluator

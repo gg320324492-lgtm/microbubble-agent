@@ -36,6 +36,8 @@ from app.agent.session_manager import session_manager
 from app.agent.tracing import TraceCollector
 from app.config import settings
 from app.models.base import BEIJING_TZ
+# CHAT-P0-D W98 +0: RAG 评估可选抽样钩子 (EVAL_SAMPLE_RATE, 默认 0 关闭)
+from app.services.rag_evaluator import get_eval_sample_rate, maybe_evaluate_async
 
 logger = logging.getLogger("microbubble.agent")
 
@@ -496,6 +498,14 @@ class MicroBubbleAgent:
                                 f"[chat_stream persist] assistant_msg persisted: "
                                 f"msg_id={assistant_msg_id} len={len(assistant_text)}"
                             )
+                            # CHAT-P0-D W98 +0: RAG 评估可选抽样钩子 (2 行, best-effort)
+                            # EVAL_SAMPLE_RATE>0 时按概率 fire-and-forget 评估, 绝不阻断流式
+                            if get_eval_sample_rate() > 0:
+                                asyncio.create_task(
+                                    maybe_evaluate_async(
+                                        user_id, session_id, assistant_msg_id,
+                                    )
+                                )
                             # yield 持久化通知事件（前端可以选择性 reload history）
                             yield StreamEvent(
                                 type="message_persisted",
