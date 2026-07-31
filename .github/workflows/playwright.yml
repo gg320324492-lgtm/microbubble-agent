@@ -57,7 +57,7 @@ jobs:
           # W89-P-3: 复用 W68 第 7 批 A-3 已建的 docker-compose.test.yml
           #   (qa-bench 物理隔离栈: pg-test 5433 + app-test 8001)
           #   起 app + db 两个核心 service, 其他 (redis/minio) 由 service 自带 health 兜底
-          docker compose -f docker-compose.test.yml up -d app pg-test 2>&1 | tail -10
+          docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test minio-test 2>&1 | tail -10
 
           # 等 app /health 200 (最长 180s, app 启动 ~30-60s)
           for i in {1..90}; do
@@ -67,7 +67,7 @@ jobs:
             fi
             if [ "$i" -eq 90 ]; then
               echo "✗ app /health never returned 200"
-              docker compose -f docker-compose.test.yml logs app | tail -50
+              docker compose -f docker-compose.test.yml logs app-test | tail -50
               exit 1
             fi
             sleep 2
@@ -127,7 +127,7 @@ jobs:
 
       - name: "Start test environment"
         run: |
-          docker compose -f docker-compose.test.yml up -d app pg-test 2>&1 | tail -10
+          docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test minio-test 2>&1 | tail -10
 
           for i in {1..90}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
@@ -136,7 +136,7 @@ jobs:
             fi
             if [ "$i" -eq 90 ]; then
               echo "✗ app /health never returned 200"
-              docker compose -f docker-compose.test.yml logs app | tail -50
+              docker compose -f docker-compose.test.yml logs app-test | tail -50
               exit 1
             fi
             sleep 2
