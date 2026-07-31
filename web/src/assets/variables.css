@@ -43,6 +43,7 @@
   --color-border-light: #F0F0F0;
   --color-bg-page: #F5F7FA;
   --color-bg-card: #FFFFFF;
+  --color-bg-secondary: #F0F2F5; /* W98: RAGEvalPanel / FigureCard 代码块与图占位背景 (此前为 orphan token) */
   --color-bg-card-rgb: 255, 255, 255; /* v77 P2: glass.css 玻璃态工具 6 主题自适应 */
 
   /* P3-11: file type icon 颜色 (NotificationBell 等用, 6 主题自动跟随) */
@@ -667,6 +668,7 @@ body {
   --color-text-placeholder: #606266;
   --color-bg-page: #1a1d23;
   --color-bg-card: #2a2d35;
+  --color-bg-secondary: #2f333b; /* W98: dark 模式代码块/占位背景 (与 --color-bg-card 同族提亮) */
   --color-bg-card-rgb: 42, 45, 53; /* v77 P2: dark 模式玻璃态背景 */
   --color-bg-warm: #2a2d35; /* v69: 新增 — 任务配对卡 / task-row hover 暖色背景 */
 

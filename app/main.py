@@ -65,6 +65,7 @@ def _import_application_routers():
         dashboard,
         drive_files,
         drive_folders,
+        drive_to_kb,  # W98: 网盘文件入库 RAG (drive → kb)
         drive_comments,  # v2 PR9 评论 thread
         drive_versions,  # v2 PR9 文件版本历史
         drive_version_diff,  # v2 PR9 文件版本对比
@@ -126,6 +127,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (admin_kb_monitor.router, {"prefix": "/api/v1", "tags": ["KB 监控"]}),  # qa-bench v3.1 D5
         (drive_folders.router, {"prefix": "/api/v1", "tags": ["网盘文件夹"]}),
         (drive_files.router, {"prefix": "/api/v1", "tags": ["网盘文件"]}),
+        (drive_to_kb.router, {"prefix": "/api/v1", "tags": ["网盘入库 RAG"]}),  # W98
         (drive_files.share_router, {"prefix": "/api/v1", "tags": ["网盘公开分享"]}),
         (drive_comments.router, {"prefix": "/api/v1", "tags": ["网盘评论 thread"]}),  # v2 PR9
         (drive_versions.router, {"prefix": "/api/v1", "tags": ["网盘文件版本"]}),  # v2 PR9
