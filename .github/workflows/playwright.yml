@@ -116,7 +116,15 @@ jobs:
           echo "TOKEN_LEN=${#TOKEN}"
           echo "PLAYWRIGHT_TEST_TOKEN=$TOKEN" >> $GITHUB_ENV
 
-      - name: Run axe-core a11y tests
+      - name: Update a11y snapshots (record CI empty-DB state)
+        working-directory: web
+        env:
+          BASE_URL: http://localhost:3000
+          VITE_API_PROXY_TARGET: http://localhost:8001
+          TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
+        run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --update-snapshots --reporter=list
+
+      - name: Run axe-core a11y tests (verify snapshots stable)
         working-directory: web
         env:
           BASE_URL: http://localhost:3000
