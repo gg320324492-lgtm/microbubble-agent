@@ -359,7 +359,8 @@ const handleLogout = () => {
 }
 
 .sidebar-menu .el-menu-item.is-active {
-  background: var(--color-primary) !important;
+  /* W93: 主色实底 2.56 → 5.37 (白字 AA) */
+  background: var(--color-primary-strong) !important;
   color: var(--color-bg-card) !important;
   font-weight: var(--font-weight-bold);
 }
@@ -407,7 +408,8 @@ const handleLogout = () => {
 }
 
 .sidebar-bottom-item.active {
-  background: var(--color-primary);
+  /* W93: 主色实底 2.56 → 5.37 (白字 AA) */
+  background: var(--color-primary-strong);
   color: var(--color-bg-card);
   font-weight: var(--font-weight-bold);
 }
