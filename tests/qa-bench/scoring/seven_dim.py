@@ -31,8 +31,9 @@ A-F 分级 (基于 weighted_sum × 100):
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 # 7 维固定顺序 (决定 weights.json 加权时的遍历顺序)
 DIMENSIONS: Tuple[str, ...] = (
@@ -235,16 +236,120 @@ def _score_perf(item: Mapping[str, Any]) -> float:
 
 
 def _score_consistency(item: Mapping[str, Any], benchmark: Mapping[str, Any]) -> float:
-    """Consistency 维度: 多轮上下文是否一致 (跨轮次 session state 稳定性).
+    """Consistency 维度: 多轮上下文是否一致 (CHAT-P0-D 双轮实体延续真实现).
 
-    简化: 比较本轮响应与 previous_responses 期望关键词的交集.
+    2026-07-31 CHAT-P0-D 改造: 从"单轮关键词命中"升级为"双轮实体延续"。
+    W98 +0 铁律: 0 改生产代码, 仅 tests/qa-bench 域改造。
+
+    评分口径 (分层, 与 runner.py score_seven_dim 第 7 维同构):
+    - item 有上一轮记录 (prev_query + prev_response):
+        * 本轮 query 命中 follow_up 词 (再/继续/多介绍/展开/还有/接着/详细说说)
+          → 上轮核心实体在本轮回答中的覆盖率 (实体提取见 _extract_noun_entities)
+        * 无 follow_up 词 → 本轮 query 与上轮回答的实体重叠率 (延续参考, 中性偏高分)
+        * 上轮实体集为空 (无可延续实体) → 中性 0.5 (无法计算, 不惩罚)
+    - item 无上一轮 (单轮题) → 中性 0.5 (双轮语料才可算, 单轮不凑分)
+
+    backward-compatible 兼容层:
+    - benchmark['consistent_keywords'] 非空 (老语料) → 回退老关键词命中率口径
+    - item['prev_entities'] 显式实体列表 (runner 注入) → 优先使用, 跳过正则提取
+
+    item 输入约定 (新):
+      item['prev_query']: str      — 上一轮用户问题
+      item['prev_response']: str   — 上一轮 assistant 回答
+      item['follow_up']: bool      — 本轮是否 follow_up (runner 判定)
+      item['prev_entities']: list  — (可选) 上一轮核心实体 (runner 注入)
     """
+    # --- 兼容层 1: 老语料 consistent_keywords 关键词命中口径 (W71-B-1 老行为) ---
     expected_consistent = benchmark.get("consistent_keywords", [])
-    if not expected_consistent:
-        return 1.0
-    response = (item.get("response") or "").lower()
-    hits = sum(1 for kw in expected_consistent if kw.lower() in response)
-    return hits / len(expected_consistent)
+    if expected_consistent:
+        response = (item.get("response") or "").lower()
+        hits = sum(1 for kw in expected_consistent if kw.lower() in response)
+        return hits / len(expected_consistent)
+
+    # --- 兼容层 2: 显式注入实体 (runner score_seven_dim 已提取) ---
+    prev_entities = item.get("prev_entities")
+    prev_query = item.get("prev_query") or ""
+    prev_response = item.get("prev_response") or ""
+    response_text = item.get("response") or ""
+
+    if not prev_query and not prev_response:
+        # 单轮题 / 无上轮语料 → 中性 0.5 (双轮才可算, 不凑满分)
+        return 0.5
+
+    if prev_entities is None:
+        # 上一轮核心实体: 上轮问题 + 上轮回答联合提取 (回答是知识载体,
+        # 问题是 follow_up 锚点; 与 runner.py _score_consistency_runner 同口径)
+        prev_entities = _extract_noun_entities(f"{prev_query} {prev_response}")
+    if not prev_entities:
+        # 上轮实体为空 (如纯寒暄/短句) → 无法计算, 中性 0.5
+        return 0.5
+
+    is_follow_up = bool(item.get("follow_up")) or bool(re.search(r"(再|继续|多介绍|展开|还有|接着|详细说说)", prev_query))
+    if is_follow_up:
+        # follow_up 题: 上轮核心实体在本轮回答中的覆盖率 (核心口径)
+        return _entity_overlap(prev_entities, response_text)
+
+    # 非 follow_up 的延续轮: 本轮 query 对上轮回答的实体重叠率 (延续参考, 中性偏高分)
+    return _entity_overlap(prev_entities, prev_query + response_text)
+
+
+# 2-char 停用噪音 (长 CJK run 切 2 字窗口时过滤常见虚词/功能词)
+_CONSISTENCY_STOP_BIGRAMS = {
+    "可以", "研究", "什么", "怎么", "为什么", "如何", "一个", "这个", "那个",
+    "进行", "相关", "我们", "你们", "他们", "课题", "现在", "需要", "应该",
+    "知道", "看到", "谈到", "提到", "数据", "结果", "以及", "然后", "了解",
+    "获取", "回答", "问题", "信息", "内容", "方法", "方面", "包括", "主要",
+    "还有", "更多", "详细", "继续", "介绍", "讲讲", "关注", "涉及", "属于",
+    "是否", "通过", "对于", "关于", "由于",
+}
+
+
+def _extract_noun_entities(text: str) -> List[str]:
+    """轻量名词短语提取 — 中文 2-4 字连续 n-gram + 英文单词 (正则).
+
+    CHAT-P0-D W98 +0 实现: 句读切段后对每个 CJK run 生成 2/3/4 字重叠
+    n-gram (覆盖"中文 2-6 字连续词"口径, 且保证 run 开头姓名/术语被捕获,
+    如 "杨慈研究饮用水..." → "杨慈"). 英文按 2-20 字符单词提取
+    (pH/DLS/zeta 等). 去重保序 + 2 字停用过滤.
+    与 runner.py `_extract_noun_entities_runner` 同口径 (tests/qa-bench 域内
+    双实现, 不 import 生产代码).
+    """
+    if not text:
+        return []
+    seen: List[str] = []
+
+    def _push(tok: str) -> None:
+        if len(tok) == 2 and tok in _CONSISTENCY_STOP_BIGRAMS:
+            return
+        if tok not in seen:
+            seen.append(tok)
+
+    # 英文单词 (字母/数字/±/·)
+    for m in re.finditer(r"[A-Za-z][A-Za-z0-9±·]{1,19}", text):
+        _push(m.group(0))
+
+    # 中文: 句读切段 → 每段生成 2/3/4 字 n-gram
+    for seg in re.split(r"[，。！？；：、,.!?;:\s]+", text):
+        run = re.sub(r"[^一-鿿]", "", seg)
+        if len(run) < 2:
+            continue
+        if len(run) <= 6:
+            _push(run)  # 短段整体 (术语/姓名完整形态)
+        for i in range(len(run) - 1):
+            _push(run[i:i + 2])
+        for i in range(len(run) - 2):
+            _push(run[i:i + 3])
+        for i in range(len(run) - 3):
+            _push(run[i:i + 4])
+    return seen[:300]  # 安全上限, 防病态长文退化
+
+
+def _entity_overlap(entities: List[str], text: str) -> float:
+    """实体集在目标文本中的覆盖率 — 子串命中 (支持 2-6 字实体嵌入更长词)."""
+    if not entities:
+        return 0.5
+    hits = sum(1 for e in entities if e in text)
+    return round(hits / len(entities), 4)
 
 
 def score_item(item: Mapping[str, Any],
