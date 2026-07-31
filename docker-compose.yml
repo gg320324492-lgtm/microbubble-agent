@@ -364,3 +364,20 @@ services:
     networks:
       - default
     restart: unless-stopped
+
+  # === LangFuse — 开源 LLM 可观测平台 (2026-07-31 Hybrid RAG Stack) ===
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:2
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/microbubble
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-change-me-in-production}
+      - SALT=${LANGFUSE_SALT:-change-me-in-production}
+      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-change-me-in-production}
+    depends_on:
+      - db
+    networks:
+      - default
