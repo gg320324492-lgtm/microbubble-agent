@@ -151,6 +151,14 @@ jobs:
           TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
         run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --reporter=list
 
+      - name: Upload a11y snapshots (CI 真 baseline 回灌仓库用)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-snapshots
+          path: web/tests/visual/a11y/__snapshots__/
+          retention-days: 7
+
       - name: Debug - print actual snapshots on failure
         if: failure()
         working-directory: web
