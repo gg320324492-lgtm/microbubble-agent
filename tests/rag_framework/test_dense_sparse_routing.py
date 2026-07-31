@@ -15,6 +15,14 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import app.services.bm25_service  # noqa: F401  — 预热 import (RAG-FW-14 W98 +0)
+# 顺序污染修复: test_agent_retriever.py 的 bm25 测试在 patch.dict("sys.modules")
+# 上下文内首次真实 import bm25_service, fixture 退出还原 sys.modules 后
+# app.services.bm25_service 属性残留失效 → 本文件 TestRealInit 的
+# patch("app.services.bm25_service.get_bm25_service") 解析失败
+# (AttributeError: module 'app.services' has no attribute 'bm25_service').
+# 模块级预热 import 保证 app.services.bm25_service 属性先于任何测试永久存在.
+
 from app.rag import dense_sparse_routing
 from app.rag.dense_sparse_routing import DenseSparseRouter
 
