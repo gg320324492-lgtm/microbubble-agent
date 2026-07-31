@@ -2,6 +2,10 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-07-31] RAG-FW W98
+
+`[RAG-FW W98] feat: Hybrid RAG Stack — 8 项框架能力 (LangChain + LlamaIndex + LangFuse) 全线交付`
+
 ## [2026-07-30] W92-X-1 main merge 收口 (X-series 派工前提错配拦截 + 5 W91 cherry-pick, 锚点 483 → 491 +8 据实, 派工 v3 双锚定 + 类 20.46/97/108 加固)
 
 **W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工)**: 锚点 W97 483 → 491 守恒 +8 据实上报.
