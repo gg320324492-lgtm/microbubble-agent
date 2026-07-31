@@ -77,6 +77,7 @@
         @move="(f) => $emit('file-move', f)"
         @update-visibility="(f) => $emit('file-update-visibility', f)"
         @extract-to-kb="(f) => $emit('file-extract-to-kb', f)"
+        @to-kb="(f) => $emit('file-to-kb', f)"
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
         @view-comments="(f) => $emit('file-view-comments', f)"
@@ -100,6 +101,7 @@
         @move="(f) => $emit('file-move', f)"
         @update-visibility="(f) => $emit('file-update-visibility', f)"
         @extract-to-kb="(f) => $emit('file-extract-to-kb', f)"
+        @to-kb="(f) => $emit('file-to-kb', f)"
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
         @view-comments="(f) => $emit('file-view-comments', f)"
@@ -123,6 +125,7 @@
         @move="(f) => $emit('file-move', f)"
         @update-visibility="(f) => $emit('file-update-visibility', f)"
         @extract-to-kb="(f) => $emit('file-extract-to-kb', f)"
+        @to-kb="(f) => $emit('file-to-kb', f)"
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
         @view-comments="(f) => $emit('file-view-comments', f)"
@@ -168,7 +171,7 @@ const props = defineProps({
   searchKeyword: { type: String, default: '' }   // v2.0: 用于 "未找到与 X 相关" 文案
 })
 
-defineEmits(['retry', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-share-link', 'file-view-comments', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
+defineEmits(['retry', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-to-kb', 'file-share-link', 'file-view-comments', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
 
 // === v2.0: 空态多态 (top-level / folder / search) ===
 const emptyState = computed(() => {

@@ -204,6 +204,7 @@
             @file-move="handleFileMove"
             @file-update-visibility="handleFileUpdateVisibility"
             @file-extract-to-kb="handleFileExtractToKb"
+            @file-to-kb="handleFileToKb"
             @file-share-link="handleFileShareLink"
             @file-view-comments="handleFileViewComments"
             @file-delete="handleFileDelete"
@@ -389,6 +390,7 @@ const {
   moveFile,
   updateVisibility: doUpdateVisibility,
   extractToKb: doExtractToKb,
+  ingestToKb: doIngestToKb, // W98: 网盘入库 RAG (drive → kb)
   createShareLink,
   revokeShareLink,
   toggleStar,
@@ -850,6 +852,21 @@ function handleFileExtractToKb(file) {
   extractDialogFile.value = file
   extractTargetVisibility.value = 'team'
   showExtractDialog.value = true
+}
+
+async function handleFileToKb(file) {
+  // W98: 网盘入库 RAG — drive 文件一键"加入知识库"
+  // 新管线: 新建 kb 条目 + 完整 RAG 管线 (解析/embedding/分析), 原 drive 行保留
+  try {
+    const res = await doIngestToKb(file.id)
+    if (res?.already_ingested) {
+      ElMessage.info('该文件已加入知识库，无需重复入库')
+    } else {
+      ElMessage.success('已加入知识库，可在知识库问答中检索')
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '加入知识库失败')
+  }
 }
 
 async function doConfirmExtract() {

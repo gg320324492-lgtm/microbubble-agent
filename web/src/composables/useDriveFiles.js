@@ -159,6 +159,28 @@ export function useDriveFiles() {
     }
   }
 
+  // W98: 网盘文件入库 RAG (drive → kb 完整管线, 原 drive 行保留)
+  const ingestToKb = async (id) => {
+    try {
+      const resp = await axios.post(`/api/v1/drive/${id}/to-kb`)
+      return resp.data // { knowledge_id, already_ingested, title, content_length, source_file_id }
+    } catch (e) {
+      throw new Error(e.response?.data?.error?.message || '加入知识库失败')
+    }
+  }
+
+  // W98: 文件夹批量入库
+  const ingestFolderToKb = async (folderId, dryRun = false) => {
+    try {
+      const resp = await axios.post(`/api/v1/drive/folders/${folderId}/to-kb`, null, {
+        params: dryRun ? { dry_run: 'true' } : {}
+      })
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.error?.message || '文件夹入库失败')
+    }
+  }
+
   const createShareLink = async (id, { expiresHours = 168, password = null } = {}) => {
     try {
       const payload = { expires_hours: expiresHours }
@@ -457,6 +479,9 @@ export function useDriveFiles() {
     moveFile,
     updateVisibility,
     extractToKb,
+    // W98: 网盘入库 RAG
+    ingestToKb,
+    ingestFolderToKb,
     createShareLink,
     revokeShareLink,
     // v2 PR2 新方法
