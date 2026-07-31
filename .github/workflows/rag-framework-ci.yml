@@ -1,0 +1,76 @@
+name: RAG Framework CI
+
+# [RAG-FW-12 W98 +0] CI workflow 注册 — Hybrid RAG Stack 框架测试
+#
+# 设计:
+#   - tests/rag_framework/ 全部 mock (conftest patch sys.modules), CI 无需装
+#     langchain/llama-index/langfuse 框架依赖 → 精装最小依赖集, 避免 torch
+#     (~2GB CPU wheel) + funasr/modelscope 等重依赖拖慢每次 PR.
+#   - pytest + pytest-asyncio (root pytest.ini asyncio_mode=auto) + app 轻依赖链
+#     (pydantic-settings / python-dotenv / httpx / sqlalchemy / alembic 及其依赖)
+#     即可把 app/rag 模块 import 起来 (app/rag/*.py 顶层只依赖 app.rag.config
+#     + app.rag.gate, 框架 import 全部在函数内 try/except).
+#   - SKIP_DB_SETUP=1: tests/conftest.py 条件跳过 DB 初始化与重型 import
+#     (app.main / app.core.database / 全模型), rag_framework 测试不需要 DB.
+#   - alembic heads 守卫: 期望恰好 1 head = 091_add_kg_entity (串单链纪律,
+#     CLAUDE.md 永久锚点). alembic heads 只读脚本目录, 不加载 env.py, 不连 DB.
+#
+# 注意 (对齐现有 workflow 风格: actions/checkout@v4 + actions/setup-python@v5
+#   + permissions: contents: read, 参考 qa-bench-smoke.yml / qa-bench-ci.yml):
+#   - 不在此 workflow 内改任何 app/ 文件; 不动 alembic; 不改现有 workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rag-framework-tests:
+    name: RAG framework tests (mock mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      # 精装最小依赖集 (见 workflow 头注释). 不 --no-deps:
+      #   --no-deps 会跳过依赖解析, pytest 的 pluggy/exceptiongroup/iniconfig
+      #   等传递依赖丢失 → pytest 收集阶段直接崩; 且 langchain-core 0.3
+      #   会被显式装进去 (requirements.txt 声明的 langchain-core 依赖链
+      #   通过 deps 正常解析, 无 torch 侧漏).
+      - name: Install core deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic
+
+      - name: Run RAG framework tests (mock mode)
+        env:
+          SKIP_DB_SETUP: "1"
+        run: |
+          python -m pytest tests/rag_framework/ -v
+
+      # alembic heads 只读脚本目录 (不加载 env.py, 不连 DB).
+      # 输出格式: "<revision_id> (head)" 每 head 一行; revision_id 即文件名
+      # (如 091_add_kg_entity), 期望恰好 1 行.
+      - name: Verify alembic chain (1 head expected)
+        run: |
+          heads=$(python -m alembic heads)
+          echo "$heads"
+          count=$(echo "$heads" | grep -c '(head)')
+          if [ "$count" -ne 1 ]; then
+            echo "FAIL: expected exactly 1 alembic head, got $count"
+            exit 1
+          fi
+          echo "$heads" | grep -q '091_add_kg_entity' || { echo "FAIL: head is not 091_add_kg_entity"; exit 1; }
