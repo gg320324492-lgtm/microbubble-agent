@@ -52,6 +52,12 @@ jobs:
         working-directory: web
         run: npx playwright install --with-deps chromium
 
+      - name: Install CJK fonts (a11y color-contrast 需中文字体)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          fc-list | grep -i "noto.*cjk" | head -3
+
       - name: "Start test environment (W89: docker-compose.test.yml reuse)"
         run: |
           # W89-P-3: 复用 W68 第 7 批 A-3 已建的 docker-compose.test.yml
@@ -147,6 +153,12 @@ jobs:
       - name: Install Playwright browsers
         working-directory: web
         run: npx playwright install --with-deps chromium
+
+      - name: Install CJK fonts (a11y color-contrast 需中文字体)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          fc-list | grep -i "noto.*cjk" | head -3
 
       - name: "Start test environment"
         run: |
