@@ -23,7 +23,9 @@ test.describe('axe WCAG 2.1 AA 扫描 (5 核心页面)', () => {
       const authed = await injectAuth(page, BASE_URL)
 
       await page.goto(`${BASE_URL}${pageDef.path}`, { waitUntil: 'domcontentloaded' })
-      await page.waitForTimeout(1500) // SPA 首屏挂载
+      // W93: 等 SPA 路由稳定再扫 (防 Execution context destroyed 竞态)
+      await page.waitForFunction(() => document.querySelector('#app')?.children.length > 0)
+      await page.waitForTimeout(500) // SPA 首屏挂载
 
       const landedOnLogin = /\/login/.test(new URL(page.url()).pathname)
 

@@ -22,7 +22,10 @@ test.describe('a11y baseline 比对 (5 页面 × 5 project = 25 case)', () => {
       const authed = await injectAuth(page, BASE_URL)
 
       await page.goto(`${BASE_URL}${pageDef.path}`, { waitUntil: 'domcontentloaded' })
-      await page.waitForTimeout(1500)
+      // W93: 等 SPA 路由稳定 (从 /chat → /dashboard 跳转完成) 再跑 axe,
+      //   固定 waitForTimeout 不够 → Execution context destroyed 竞态
+      await page.waitForFunction(() => document.querySelector('#app')?.children.length > 0)
+      await page.waitForTimeout(500)
 
       const results = await axeBuilder(page).analyze()
       const rows = toBaseline(results)
