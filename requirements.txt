@@ -75,9 +75,9 @@ Pillow>=10.0.0          # 图片处理（缩放、模式转换）
 
 # 工具库
 python-dotenv==1.0.0
-# 2026-07-31 Hybrid RAG Stack: langchain-community>=0.3.0 要求 pydantic-settings>=2.4.0 (原 ==2.1.0 pin 过老)
+# 2026-07-31 RAG-FW-DEPLOY 修复: pydantic==2.5.2 pin 与 langchain (>=2.7.4) + llama-index-core 0.13 (>=2.8.0) 冲突, 放宽到 >=2.8.0
 pydantic-settings>=2.4.0
-pydantic[email]==2.5.2
+pydantic[email]>=2.8.0,<3.0.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
@@ -101,13 +101,13 @@ langchain-anthropic>=0.2.0,<0.3.0
 
 # === LlamaIndex 家族 ===
 # 2026-07-31 RAG-FW-DEPLOY 修复: llama-index-vector-stores-pgvector 在 PyPI 404 (包名笔误),
-# 真实包名 llama-index-vector-stores-postgres (模块路径 llama_index.vector_stores.postgres),
-# 且其所有版本要求 llama-index-core>=0.13.0, 故放宽 llama-index 家族上限到 <0.15.0
-llama-index>=0.12.0,<0.15.0
-llama-index-core>=0.12.0,<0.15.0
+# 真实包名 llama-index-vector-stores-postgres (模块路径 llama_index.vector_stores.postgres)
+# 且其所有版本要求 llama-index-core>=0.13.0, 故 llama-index 家族统一升到 0.13 系列
+llama-index>=0.13.0,<0.14.0
+llama-index-core>=0.13.0,<0.14.0
 llama-index-vector-stores-postgres>=0.6.0,<0.9.0
-llama-index-readers-file>=0.4.0,<0.5.0
-llama-index-embeddings-langchain>=0.3.0,<0.4.0
+llama-index-readers-file>=0.5.0,<0.7.0
+llama-index-embeddings-langchain>=0.4.0,<0.6.0
 
 # === LangFuse (开源 Tracing, 替代 LangSmith) ===
 langfuse>=2.0.0,<3.0.0
