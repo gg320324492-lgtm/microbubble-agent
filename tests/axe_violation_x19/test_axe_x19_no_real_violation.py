@@ -1,4 +1,8 @@
-"""tests/axe_violation_x19/test_no_real_violation.py — W91-X-19 真违规 axe rule 修门禁
+"""tests/axe_violation_x19/test_axe_x19_no_real_violation.py — W91-X-19 真违规 axe rule 修门禁
+
+(文件原名 test_no_real_violation.py — W98 RAG-FW-14 因与
+tests/a11y_violation_x2/test_no_real_violation.py 同名 basename 触发 pytest
+"import file mismatch" collection error, 参照 DERIVE-03 先例 rename 成唯一 basename)
 
 背景 (派工纪律 3 "真登录态, 匿名态 0 violations 是假绿"):
   W89-P-6 / W89-X-29 sync 的 25 个 baseline .txt 全部是**匿名态** —
