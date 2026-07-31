@@ -102,6 +102,17 @@ jobs:
             sleep 2
           done
 
+      - name: "Init test DB schema + seed + test user (W98 fix)"
+        run: |
+          # W98 (2026-07-31): CI 空库 app-test 无 xiaoqi_testbot → login AUTH_ERROR →
+          #   injectAuth 注入无效 token → 所有页面被 router 守卫带去看 dashboard,
+          #   a11y baseline 记录的 25 个全 0 violations 是假绿 (X-18 真登录态守卫).
+          #   复用 qa-bench-ci.yml 同一模式: docker exec app-test 跑 init_test_db_all.py
+          #   (create_all + seed 24 members + ensure_test_user 幂等建号).
+          #   init_db.py 读 settings.DATABASE_URL (容器默认指向 pg-test, compose 内网直连).
+          docker exec -e SKIP_DB_SETUP=1 app-test python scripts/init_test_db_all.py 2>&1 | tail -20
+          # 期望输出: init_db "数据库初始化完成" + ensure_test_user "[OK] 测试账号已存在" 或 "[CREATED]"
+
       - name: Get fresh TEST_TOKEN from app-test
         env:
           TEST_USERNAME: ${{ secrets.PLAYWRIGHT_TEST_USERNAME }}
@@ -116,7 +127,7 @@ jobs:
           echo "TOKEN_LEN=${#TOKEN}"
           echo "PLAYWRIGHT_TEST_TOKEN=$TOKEN" >> $GITHUB_ENV
 
-      - name: Update a11y snapshots (record CI empty-DB state)
+      - name: Update a11y snapshots (record CI baseline)
         working-directory: web
         env:
           BASE_URL: http://localhost:3000
@@ -234,6 +245,12 @@ jobs:
             fi
             sleep 2
           done
+
+      - name: "Init test DB schema + seed + test user (W98 fix)"
+        run: |
+          # W98 (2026-07-31): 同 a11y job — CI 空库无 xiaoqi_testbot → login AUTH_ERROR.
+          #   必须先 init_test_db_all.py 建号再拿 token, 否则 visual 全被重定向到 /dashboard.
+          docker exec -e SKIP_DB_SETUP=1 app-test python scripts/init_test_db_all.py 2>&1 | tail -20
 
       - name: Get fresh TEST_TOKEN from app-test
         env:
