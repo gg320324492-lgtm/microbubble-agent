@@ -2,6 +2,41 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-07-30] W92-X-1 main merge 收口 (X-series 派工前提错配拦截 + 5 W91 cherry-pick, 锚点 483 → 491 +8 据实, 派工 v3 双锚定 + 类 20.46/97/108 加固)
+
+**W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工)**: 锚点 W97 483 → 491 守恒 +8 据实上报.
+
+**派工前提据实错配 5 处主拍拦截 (派工 v6 §5 反馈 #19+#21 实战)**:
+1. brief 假设 W92 main base → 实测 W97 RAG 大改造收口 (commit `093060fde` 头)
+2. brief "c8a8a12b W94 hotfix" → **不存在** (实测真 hash `c8aa1112b` worktree + `38deb8c45` W94 merge + `afe15911e` W97 squash 进 main)
+3. brief "W94 hotfix 必修" → **已 W97 squash 进 main**, cherry-pick 实为 no-op, 主拍拦截跳过 (类 20.46 加固)
+4. brief "5 W91 Playwright 分支" → 实测 X-16/X-18/X-24/X-28/X-29 不全为 Playwright, X-24 仅 memory
+5. brief 锚点估算 +1 → 实测 +8 (5 真 cherry-pick + 1 WR-1 no-op + 1 X-18 base + 1 D-2 = 4 cherry-pick commits; 本任务锚点 491 据实守恒)
+
+**5 真 cherry-pick 真修 + 1 WR-1 no-op**:
+- **X-16 alembic 091**: `tests/alembic/test_pre_commit_hook_passes.py` 1 行 expected_head 087→091 真修 (基线 1 FAIL → 4 PASS, 派工 v6 §6 达成)
+- **X-18 a11y 真登录态**: 25 个 baseline .txt 真登录态 (authed:yes), 25 conflict `git checkout --theirs` 全解
+- **X-24 alembic all 091**: 仅 memory
+- **X-28 src/__tests__ rename**: 5 .spec.js → .test.js + 1 删 + 1 新 NavRail.test.js + 1 .spec.js → .test.js, 文件 rename 0 逻辑
+- **X-29 ci real**: tests/ci_real_x29/ 2 ci tests + memory
+- **WR-1 Play icon**: cherry-pick 1 commit (RAGEvalPanel.vue 0 diff, W97 `afe15911e` 已修)
+
+**集成 e2e (派工 v6 §6 实战)**:
+- W91 新套件 (a11y_login_x18 + icon_wr1 + ci_real_x29 + src_tests_x5 + alembic test_pre_commit_hook_passes): **15 PASS + 6 FAILED (环境)** + 2 SKIPPED
+- 6 FAILED 归类: (1) `icon_wr1/test_build_passes` worktree 缺 `node_modules` (环境); (2-6) `ci_real_x29/test_03/05/06/07/08` main 缺 `.github/workflows/playwright.yml` (W89-P-3 worktree `38ffe0560` 有 yml 但不在 main)
+- **0 FAILED regression** (X-16 真修闭合 baseline FAIL → PASS)
+
+**0 production code 改动铁律 7/7 守恒** (5 cherry-pick + 1 WR-1 no-op + 1 D-2 docs sync).
+
+**类 20 累计 113+ 实例 (W92-X-1 据实上报 5)**:
+- 类 20.46 (派工 brief hash 拼写错误拦截): c8a8a12b 不存在拦截 → 真 hash 三选一
+- 类 20.97 (ahead=0 ≠ 不必 cherry-pick, 必查关键文件 diff): W91-WR-1 ahead=0 但 cherry-pick 仍产出 memory + test 新增
+- 类 20.108 (tail-30 grep 100 行起): 本任务加固
+- 类 20.31 (worktree 不存在 → fallback `git worktree add -B <branch> <path> <base>`): 本任务实战
+- 类 20.98 (rev-list --count 不用 merge-base --is-ancestor): 沿用 W91-X-15 沉淀
+
+详见 `memory/w92-1st-grand-closure-full-2026-07-30.md` (本任务沉淀, 263 行).
+
 ## [2026-07-30] W97 RAG 大改造 GRAND-CLOSURE 收口 (W88-W96 10 PR + 4 MERGE + HOTFIX-01, 锚点 +139 据实, alembic 087→091 完整串单链, 0 production code 例外 5 已批)
 
 **主基调**: RAG 工业级大改造 10 PR (W88 PR1 → W96 PR10) 全部合并到 main + 4 MERGE 主拍合并 (MERGE-01..04) + HOTFIX-01 P0 PWA 修复 (Play→VideoPlay, 已 commit 未 merge) + W97 GRAND-CLOSURE 收口. **9 大缺口全部消化** (plan §1.2). 锚点范式 338 (W86 mini-16) → 477 (W97 GRAND-CLOSURE) **+139 据实** (138 PR 内容 commits + 4 merge commits 主拍 +0 + 4 DERIVE merge + 11 MERGE-01 lines + 1 grand-closure 实战).

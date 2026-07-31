@@ -683,7 +683,8 @@ watch(() => props.fileId, (newId, oldId) => {
 
 .dfcv-tab-btn.active {
   background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
-  color: var(--color-primary, #ff7a5c);
+  /* v92 X-2 a11y: 主色文字 token (on rgba(.1) = AA) — 原 --color-primary (#FF7A5C) 仅 2.31 */
+  color: var(--color-primary-text);
   font-weight: 600;
 }
 
@@ -734,7 +735,9 @@ watch(() => props.fileId, (newId, oldId) => {
 .dfcv-empty .empty-hint {
   margin: 0;
   font-size: 12px;
-  opacity: 0.75;
+  /* v92 X-2 a11y: 取消 opacity 合成稀释 — axe 按合成后颜色判对比度,
+     opacity:.75 把 #6B6E76 衰减成 #8e9097, 仍 fail AA. 用 --color-text-secondary 实色 */
+  color: var(--color-text-secondary);
 }
 
 .dfcv-list {

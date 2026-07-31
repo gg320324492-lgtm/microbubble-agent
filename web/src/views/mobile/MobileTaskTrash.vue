@@ -280,7 +280,8 @@ onMounted(() => {
   background: var(--color-warning-bg);
   border-radius: var(--radius-md);
   font-size: 12px;
-  color: var(--color-warning, #E6A23C);
+  /* v92 X-2 a11y: 警示文字 token (on #fdf6ec = 5.89, AA) — 原 --color-warning (#E6A23C) 仅 2.03 */
+  color: var(--color-warning-text);
   margin-bottom: 12px;
 }
 

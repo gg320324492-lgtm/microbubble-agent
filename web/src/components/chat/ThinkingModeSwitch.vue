@@ -109,7 +109,8 @@ function onChange(value: ThinkingMode): void {
 
 .mode-option.active {
   background: var(--color-bg-card);
-  color: var(--color-primary);
+  /* v92 X-2 a11y: 主色文字 token (on #ffffff = 5.37, AA) — 原 --color-primary (#FF7A5C) 仅 2.56 */
+  color: var(--color-primary-text);
   box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.06));
 }
 
@@ -130,6 +131,7 @@ function onChange(value: ThinkingMode): void {
 [data-theme="dark"] .mode-option:hover { color: var(--color-text-primary); }
 [data-theme="dark"] .mode-option.active {
   background: var(--color-bg-card);
-  color: var(--color-primary);
+  /* v92 X-2 a11y: dark mode 主色文字 token (var(--color-primary-text) 在 dark 段亦定义) */
+  color: var(--color-primary-text);
 }
 </style>

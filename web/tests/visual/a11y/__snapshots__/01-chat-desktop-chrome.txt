@@ -1,6 +1,5 @@
 page: 01-chat  route: /chat
 target: ChatViewSSE.vue
 project: desktop-chrome
-authed: no   redirected-to-login: yes
-violations: 1
-  color-contrast [serious] ×3
+authed: yes   redirected-to-login: no
+violations: 0
