@@ -124,6 +124,20 @@ jobs:
           TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
         run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --reporter=list
 
+      - name: Debug - print actual snapshots on failure
+        if: failure()
+        working-directory: web
+        run: |
+          echo "=== actual snapshot diffs ==="
+          for f in test-results/*-actual.txt; do
+            if [ -f "$f" ]; then
+              echo "--- $f ---"
+              cat "$f"
+            fi
+          done
+          echo "=== test-results dir ==="
+          ls test-results/ 2>/dev/null | head -20
+
       - name: Upload a11y report on failure
         if: failure()
         uses: actions/upload-artifact@v4
