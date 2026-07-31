@@ -349,11 +349,11 @@ class TestRealInit:
                     "llama_index": MagicMock(),
                     "llama_index.core": MagicMock(),
                     "llama_index.vector_stores": MagicMock(),
-                    "llama_index.vector_stores.pgvector": MagicMock(),
+                    "llama_index.vector_stores.postgres": MagicMock(),
                 },
             ),
             patch("llama_index.core.VectorStoreIndex.from_vector_store", return_value=index),
-            patch("llama_index.vector_stores.pgvector.PGVectorStore") as mock_pg,
+            patch("llama_index.vector_stores.postgres.PGVectorStore") as mock_pg,
         ):
             results = await router.retrieve("微气泡 zeta 电位", top_k=5, mode="dense")
 

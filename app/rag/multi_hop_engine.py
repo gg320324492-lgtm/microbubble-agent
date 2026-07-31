@@ -33,7 +33,7 @@ class MultiHopEngine:
         """初始化 LlamaIndex SubQuestionQueryEngine
 
         - 用 llama_index.core.query_engine.SubQuestionQueryEngine
-        - 用 llama_index.vector_stores.pgvector 指向现有 knowledge 表
+        - 用 llama_index.vector_stores.postgres 指向现有 knowledge 表
         - embedding 用 langchain 桥接 (llama_index.embeddings.langchain)
 
         幂等: 重复调用返回同一引擎实例。
@@ -46,7 +46,7 @@ class MultiHopEngine:
         from llama_index.core.query_engine import SubQuestionQueryEngine
         from llama_index.core.tools import QueryEngineTool, ToolMetadata
         from llama_index.embeddings.langchain import LangchainEmbedding
-        from llama_index.vector_stores.pgvector import PGVectorStore
+        from llama_index.vector_stores.postgres import PGVectorStore
         from sqlalchemy import make_url
 
         from app.rag.config import (

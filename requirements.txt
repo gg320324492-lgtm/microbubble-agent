@@ -100,9 +100,12 @@ langchain-community>=0.3.0,<0.4.0
 langchain-anthropic>=0.2.0,<0.3.0
 
 # === LlamaIndex 家族 ===
-llama-index>=0.12.0,<0.13.0
-llama-index-core>=0.12.0,<0.13.0
-llama-index-vector-stores-pgvector>=0.6.0,<0.7.0
+# 2026-07-31 RAG-FW-DEPLOY 修复: llama-index-vector-stores-pgvector 在 PyPI 404 (包名笔误),
+# 真实包名 llama-index-vector-stores-postgres (模块路径 llama_index.vector_stores.postgres),
+# 且其所有版本要求 llama-index-core>=0.13.0, 故放宽 llama-index 家族上限到 <0.15.0
+llama-index>=0.12.0,<0.15.0
+llama-index-core>=0.12.0,<0.15.0
+llama-index-vector-stores-postgres>=0.6.0,<0.9.0
 llama-index-readers-file>=0.4.0,<0.5.0
 llama-index-embeddings-langchain>=0.3.0,<0.4.0
 
