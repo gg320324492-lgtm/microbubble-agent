@@ -146,6 +146,10 @@
             <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
               📚 加入公共知识库
             </el-dropdown-item>
+            <!-- W98: 网盘入库 RAG (drive → kb 完整管线, 原 drive 行保留) -->
+            <el-dropdown-item v-if="file.storage_mode === 'drive'" command="to-kb">
+              📚 加入知识库
+            </el-dropdown-item>
             <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
               🔗 生成分享链接
             </el-dropdown-item>
@@ -242,6 +246,10 @@
               <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
                 📚 加入公共知识库
               </el-dropdown-item>
+              <!-- W98: 网盘入库 RAG (drive → kb 完整管线, 原 drive 行保留) -->
+              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="to-kb">
+                📚 加入知识库
+              </el-dropdown-item>
               <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
                 🔗 生成分享链接
               </el-dropdown-item>
@@ -284,7 +292,7 @@ const props = defineProps({
   viewMode: { type: String, default: 'detail' }  // detail | grid | list (v2.16 detail 默认)
 })
 
-defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
+defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'to-kb', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
 
 // === v2.0 (2026-07-09) Drive 美化: 按 file_type 提取 type key 用于 data-type ===
 // 与 drive-view.css 中的 .drive-file-card[data-type="pdf|doc|ppt|excel|image|video|audio|text"] 配套
