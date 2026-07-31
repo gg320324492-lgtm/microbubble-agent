@@ -605,9 +605,9 @@ onMounted(() => {
 
 .welcome-right { display: flex; gap: 12px; position: relative; z-index: 1; }
 
-.btn-welcome {
+.btn-welcome { /* W93: 主色文字 2.56 → primary-text 5.37 */
   background: var(--color-bg-card) !important;
-  color: var(--color-primary) !important;
+  color: var(--color-primary-text) !important;
   border: none !important;
   font-weight: var(--font-weight-semibold);
   box-shadow: var(--shadow-md);
@@ -676,8 +676,10 @@ onMounted(() => {
 
 .stat-content { flex: 1; min-width: 0; }
 .stat-label { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: 4px; }
-.stat-value { font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold); color: var(--color-text-primary); line-height: 1.1; }
-.stat-hint { font-size: var(--font-size-xs); color: var(--color-text-placeholder); margin-top: 4px; }
+/* W93 a11y: placeholder 过浅 (1.54-2.72), 用 AA 中性色 */
+.stat-hint { font-size: var(--font-size-xs); color: #6B6E76; margin-top: 4px; }
+.stat-value { font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold); color: #4A4E57; line-height: 1.1; }
+
 
 .stat-card-primary { border-left: 4px solid var(--color-primary); }
 .stat-card-success { border-left: 4px solid var(--color-success); }
@@ -727,7 +729,7 @@ onMounted(() => {
 }
 .card-icon { font-size: 18px; }
 .card-actions { display: flex; align-items: center; gap: 12px; }
-.view-all-btn { color: var(--color-primary); font-weight: var(--font-weight-medium); }
+.view-all-btn { color: var(--color-primary-text); font-weight: var(--font-weight-medium); }
 .view-all-btn:hover { color: var(--color-primary-dark); }
 
 .empty-state { display: flex; justify-content: center; align-items: center; padding: 40px 0; }
@@ -920,6 +922,6 @@ onMounted(() => {
   /* === 动画相关（hero 在 dark 模式文字保持白色） === */
   [data-theme="dark"] .welcome-text { color: var(--color-bg-card); }
   [data-theme="dark"] .tip-text { color: rgba(255, 255, 255, 0.9); }
-  [data-theme="dark"] .btn-welcome { color: var(--color-bg-card); }
+  [data-theme="dark"] .btn-welcome { /* W93: 主色文字用 primary-text (5.37) */ color: var(--color-bg-card); }
   [data-theme="dark"] .btn-welcome-secondary { color: var(--color-bg-card); background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); }
 </style>
