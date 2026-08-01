@@ -516,6 +516,15 @@ class KnowledgeService:
             analyze_knowledge_task.delay(knowledge.id, title, content)
         except Exception as e:
             logger.warning(f"[knowledge_service] Celery 任务入队失败(knowledge_id={knowledge.id}): {e}")
+        # W101 P2 Auto-RAG: fire-and-forget 后台检索背景知识
+        try:
+            from app.services.auto_rag_service import auto_rag_service
+            await auto_rag_service.trigger_and_dispatch(
+                "knowledge.upload", knowledge.id,
+                (title or "") + " " + (content or "")[:500]
+            )
+        except Exception as _e:
+            logger.debug(f"[W101 P2] auto-rag trigger failed (non-blocking): {_e}")
         # 刷新 BM25 索引
         try:
             from app.services.bm25_service import get_bm25_service
