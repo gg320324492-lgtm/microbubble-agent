@@ -21,7 +21,18 @@ const props = defineProps<{
 
 const suggestions = ref<string[]>([])
 const isVisible = ref(false)
+/* ===== W99 +16 FollowUpChips skeleton 等待态 =====
+   用户发新消息 → 用 isWaiting 占位 5s skeleton, suggestions 到达或超时后切换 */
+const isWaiting = ref(false)
+let waitTimer: ReturnType<typeof setTimeout> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const stopWait = () => {
+  if (waitTimer) {
+    clearTimeout(waitTimer)
+    waitTimer = null
+  }
+}
 
 /**
  * 监听 suggestions 事件:
@@ -35,6 +46,8 @@ const handleSuggestions = (e: Event) => {
   const detail = (e as CustomEvent).detail
   if (!detail || detail.sessionId !== props.sessionId) return
   const items = Array.isArray(detail.suggestions) ? detail.suggestions : []
+  stopWait()
+  isWaiting.value = false
   if (items.length === 0) {
     isVisible.value = false
     return
@@ -44,8 +57,15 @@ const handleSuggestions = (e: Event) => {
 }
 
 const handleSendStart = () => {
-  // 用户发新消息 → 隐藏旧 suggestions
+  // 用户发新消息 → 隐藏旧 suggestions + 进入等待态
   isVisible.value = false
+  suggestions.value = []
+  isWaiting.value = true
+  stopWait()
+  // 5s 超时兜底（避免 suggestions 永远不到时永远转）
+  waitTimer = setTimeout(() => {
+    isWaiting.value = false
+  }, 5000)
 }
 
 onMounted(() => {
@@ -60,6 +80,7 @@ onBeforeUnmount(() => {
     clearInterval(pollTimer)
     pollTimer = null
   }
+  stopWait()
 })
 
 function clickChip(s: string) {
@@ -73,6 +94,13 @@ function clickChip(s: string) {
 
 <template>
   <Transition name="chip-fade">
+    <!-- ===== W99 +16 skeleton 等待态 ===== -->
+    <div v-if="isWaiting" class="followup-chips followup-skeleton" aria-label="正在生成追问建议">
+      <span class="hint-text">💡 追问:</span>
+      <span class="skeleton skeleton-chip" style="width: 88px" />
+      <span class="skeleton skeleton-chip" style="width: 120px" />
+      <span class="skeleton skeleton-chip" style="width: 96px" />
+    </div>
     <div v-if="isVisible && suggestions.length" class="followup-chips">
       <span class="hint-text">💡 追问:</span>
       <button
@@ -123,6 +151,36 @@ function clickChip(s: string) {
 }
 .chip:active {
   transform: scale(0.96);
+}
+
+/* ===== W99 +16 skeleton 等待态（复用全局 .skeleton 阴影效果） ===== */
+.followup-skeleton {
+  /* 与正常 chips 同行布局，仅内部 skeleton 元素 shimmer */
+}
+.skeleton-chip {
+  display: inline-block;
+  height: 18px;
+  border-radius: 16px;
+  background: var(--color-bg-warm);
+  opacity: 0.6;
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-bg-card) 50%,
+    transparent 100%
+  );
+  animation: var(--animation-shimmer);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-chip::after { animation: none; }
 }
 
 /* 渐显动画 */
