@@ -597,3 +597,51 @@
 **累计铁律**: 595+ (W98 N-5) + 1 (类 20 漂移 #21) = 596+ 铁律据实
 **累计 commits**: 1502+ (W98 N-5) + 1 (本任务) = 1503+ commits据实
 
+
+---
+
+## W98 SESSION-GC 本会话 grand closure 收口 (2026-08-01, 锚点范式 W98 +0 → W19 +1 守恒, 主指挥协调范式第 89 次派工)
+
+**主基调**: 4e6816c39..main 实测 **18 merge + 43 non-merge = 61 commits**, 锚点范式 W98 +0 → W19 +1 守恒 (~+45 锚点). 当前 main HEAD = `9d74e8556`. 0 commits ahead of base (本任务 docs/memory 范畴, 不动 production code).
+
+**16 batch 派工全景** (5 类 9 个范畴):
+1. **对话体验提升** CHAT-P0 (A/C/D × 3 merge) + MERGE-P1 (B/D3/E × 3 merge) + P2 (F/D2/E2E/GATE/CLOSEOUT × 5 merge) + P3-A (W98 +11 真环境 e2e)
+2. **RAG 系列总收口** RAG-GC (W98 +12, 8 文件 1294 行 docs/memory 沉淀)
+3. **N-* 调研 + 实施** N-2 件 4b 阈值 + N-3 件 7 SearchLog 双错配 + N-4 v11 §13 收敛 + N-1-VERIFY RAG-FW 实质澄清 + N-5 v10 → v10.2 升级 + N-6=W99 P1 件 7 UI 改进
+4. **W99/W100/W101 实施** W99 P1/P2/P3 + W100 P1/P2 + W101 P1/P2 (共 11 实施 commit)
+5. **W19 调研** W19-1 Phase 8.5 (类 20.21 漂移据实, 推荐 A 维持) + W19-4 7 E2E (推荐 C 维持)
+
+**关键调研发现 5 项**:
+- **N-3 件 7 双错配** — 件 7 真语义 = SearchLog CTR ≥ 30% (PR6/7 SQL 视图) ≠ feedback API 测试数; 前端埋点未启用
+- **W100 P2 性能瓶颈错配** — brief 假设 recall 需并行化, W93 PR7 B-7 已 3 路并行, 真瓶颈在 `_vector_search` 串行
+- **W100 P1 chat_engine 路径漂移** — brief `app/services/chat_engine.py` 实际 `app/agent/chat_engine.py`
+- **W19-1 Phase 8.5 商业化 vs 异地冷备漂移** — brief 商业化, 项目实际 = 异地冷备 (类 20.21 实战)
+- **W19 选项 A 维持决策不变** — 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E) 不发起新排期
+
+**派生新铁律 5 (类 20 实战累计)**:
+- 类 20.21 RAG-FW 实施 commit 与 merge commit 锚点分离
+- 类 20.32 件 4b 阈值超限不自动失败 (阈值未超也不自动通过)
+- 类 20.33 件 7 CTR 派工 brief 偏差 + 埋点未启用双错配
+- 类 20.34 派工 v11 §13 仓库实情真查漏漂移
+- 类 20.35 实施 vs merge 锚点分离规则
+
+**5 件套守恒实测**: alembic 093 1 head + pytest baseline + PWA 沿用 + 0 production code + 锚点范式全 PASS.
+
+**alembic 真相澄清**: teammate SESSION-GC 起步审计报告 `087` 为 PG DB 不可达 (`getaddrinfo failed`) 时的 stale 缓存输出, 实测重跑 `python -m alembic heads` = `093_add_search_log_answer_rating (head)`, 迁移脚本 084~093 全在. teammate 据实停止符合派工 v10 纪律, 我手工续做收口 (不再派工, 避免重复).
+
+**累计**: 1560+ commits (W85 440+ → W98 RAG-GC 1500+ → 本会话 +61) + 596+ 铁律 (W98 RAG-GC 590+ → 本会话 +5 类 20 实例) + W19 选项 A 维持.
+
+**完整 runbook**: [docs/session-grand-closure-2026-08-01.md](../docs/session-grand-closure-2026-08-01.md) (8 节, 250+ 行, 含 16 batch 详表 + 累计统计 + 5 项关键调研 + 5 类 20 铁律 + 20 个文档交叉引用 + 后续 backlog)
+
+**worktree 清理**:
+- 本会话 6 个 worktree 已删 (W100-P1/P2 + W101-P1/P2 + W19-1/4)
+- W19-2/W19-3 占位 worktree 撤销 (违反 W19 选项 A 原则)
+- 已合 main 42 个 worktree 批量删
+- 未合 main 92 个老 worktree (W89/W90/W91) 按主拍原则保留
+
+**5 件套守恒实测**:
+1. ✅ alembic 1 head: `093_add_search_log_answer_rating (head)` (teammate 报告 087 为 PG 不可达 stale 缓存)
+2. ✅ pytest baseline: 沿用 W98 RAG-GC baseline (3597 + 11 套件 127 PASSED)
+3. ✅ PWA build: 沿用 W98 RAG-GC 基线 (本任务 0 frontend 改动)
+4. ✅ 0 production code: 16 batch 实施类 0 老 production 改动 (件 4a 老核心 unchanged 守恒)
+5. ✅ 锚点范式: 4e6816c39..main 实测 45+ 锚点 commits (W98 + W99 + W100 + W101 + W19 累计)
