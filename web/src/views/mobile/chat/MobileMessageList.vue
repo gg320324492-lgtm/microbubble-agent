@@ -19,6 +19,7 @@
           @followup="(text) => $emit('followup', text)"
           @regenerate="(m) => $emit('regenerate', m)"
           @copy="(m) => $emit('copy', m)"
+          @pro-entry="(m, kind) => $emit('pro-entry', m, kind)"
         />
       </template>
     </TransitionGroup>

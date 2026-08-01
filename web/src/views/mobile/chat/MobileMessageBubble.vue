@@ -83,6 +83,15 @@
             @regenerate.stop="$emit('regenerate', msg)"
             @copy.stop="$emit('copy', msg)"
           />
+          <!-- W100 +24: 知识图谱 / 公式 / 假设入口 (移动端 compact 模式) -->
+          <ProEntries
+            v-if="msg.role === 'assistant' && msg.content"
+            mode="mobile"
+            :intent="msg.intent || null"
+            :content="msg.content"
+            :tool-trace="msg.toolTrace || []"
+            @entry-click.stop="$emit('pro-entry', msg, $event)"
+          />
           <!-- W98 CHAT-P1-D3: 移动端反馈按钮 -->
           <FeedbackButtons
             v-if="msg.role === 'assistant' && msg.content"
@@ -117,6 +126,7 @@ import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileRichCard from './MobileRichCard.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 import ChatMessageActions from '@/components/chat/ChatMessageActions.vue'  // W100 +23 重生成 + 复制按钮
+import ProEntries from '@/components/chat/ProEntries.vue'  // W100 +24 知识图谱/公式/假设入口
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // ===== W99 +15 移动端接入：ThinkingCapsule 取代 RetrievalStatus 挂载 =====
 // RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（基线兼容）
@@ -132,7 +142,7 @@ const props = defineProps({
   sessionId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['longpress', 'play-tts', 'followup', 'regenerate', 'copy'])
+const emit = defineEmits(['longpress', 'play-tts', 'followup', 'regenerate', 'copy', 'pro-entry'])
 
 function onLongPress(e) {
   emit('longpress', props.msg, e)
