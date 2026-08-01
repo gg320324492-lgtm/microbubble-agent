@@ -170,7 +170,11 @@ def test_anonymous_success_no_message_id():
 
 
 def test_authed_user_with_message_id_updates_search_log():
-    """登录用户 + message_id → 200 + search_logs.answer_rating 更新"""
+    """登录用户 + message_id → 200 + search_logs.answer_rating 更新
+
+    W99 N-6 改进 (5): 同步写 search_log 现在优先按 session_id 匹配
+    (之前先按 user_id 兜底); 匿名用户也会写 search_log (匿名数据盲区修复)
+    """
     mock_db = AsyncMock()
 
     # mock refresh 行为
@@ -183,7 +187,9 @@ def test_authed_user_with_message_id_updates_search_log():
     search_log_mock = MagicMock()
     search_log_mock.answer_rating = None
 
-    # 2 次 execute: 1) SELECT ChatMessage → 存在 2) SELECT SearchLog → 找到
+    # 2 次 execute:
+    #   1) SELECT ChatMessage → 存在 (message_id 校验)
+    #   2) SELECT SearchLog (按 session_id) → 找到 search_log_mock
     result_msg = MagicMock()
     result_msg.scalar_one_or_none.return_value = 42
     result_log = MagicMock()
@@ -220,6 +226,56 @@ def test_authed_user_with_message_id_updates_search_log():
     assert data["rating"] == -1
     # search_log_mock.answer_rating 应被设为 -1
     assert search_log_mock.answer_rating == -1
+
+
+def test_anonymous_user_with_session_id_updates_search_log():
+    """W99 N-6 改进 (5): 匿名用户 + session_id + message_id → 200 + search_log 同步
+
+    旧: user_id=0 时跳过 search_log 同步 → 匿名反馈不进回收率统计
+    新: 优先按 session_id 定位 search_log, 匿名也写
+    """
+    mock_db = AsyncMock()
+
+    async def _refresh(obj):
+        obj.id = 12
+    mock_db.refresh = AsyncMock(side_effect=_refresh)
+    mock_db.commit = AsyncMock()
+
+    # 1) SELECT ChatMessage → 存在
+    # 2) SELECT SearchLog (按 session_id) → 找到
+    search_log_mock = MagicMock()
+    search_log_mock.answer_rating = None
+
+    result_msg = MagicMock()
+    result_msg.scalar_one_or_none.return_value = 88
+    result_log = MagicMock()
+    result_log.scalar_one_or_none.return_value = search_log_mock
+
+    call_idx = {"n": 0}
+
+    async def _execute_side_effect(*args, **kwargs):
+        idx = call_idx["n"]
+        call_idx["n"] += 1
+        return result_msg if idx == 0 else result_log
+
+    mock_db.execute = AsyncMock(side_effect=_execute_side_effect)
+
+    # 匿名: 不传 mock_user → 走 get_current_user_optional 返 None
+    app = _make_test_app_with_db(mock_db, mock_user=None)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/api/v1/chat/feedback",
+        json={
+            "rating": 1,
+            "message_id": 88,
+            "session_id": "anon_sess_abc",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    # 匿名 + session_id 也能写 search_log
+    assert search_log_mock.answer_rating == 1
 
 
 def test_search_log_sync_failure_does_not_rollback_feedback():
