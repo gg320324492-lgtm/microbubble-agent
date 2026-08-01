@@ -122,6 +122,31 @@ class SessionManager:
                 result[k] = v
         return result
 
+    async def get_session_meta(self, sid: str, field: str) -> Any:
+        """读取一个 JSON 编码的 session meta 字段。
+
+        业务态（如 ``last_turn``）与基础字段共用 ``agent_session:{sid}:meta``
+        Redis Hash；不存在时返回 ``None``，非 JSON 的历史值保持原样返回。
+        """
+        r = await get_redis()
+        raw = await r.hget(self._meta_key(sid), field)
+        if raw is None:
+            return None
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return raw
+
+    async def set_session_meta(self, sid: str, field: str, value: Any) -> None:
+        """JSON 编码并写入一个 session meta 字段，同时续期 session TTL。"""
+        r = await get_redis()
+        meta_key = self._meta_key(sid)
+        payload = json.dumps(value, ensure_ascii=False, default=str)
+        await r.hset(meta_key, field, payload)
+        await r.expire(meta_key, self.ttl)
+
     # ---- Dirty flag（WS 断连标志，替代 clear_session） ----
 
     async def mark_dirty(self, sid: str, reason: str = "ws_disconnect"):

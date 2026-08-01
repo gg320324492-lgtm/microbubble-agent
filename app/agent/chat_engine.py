@@ -65,6 +65,8 @@ class ChatEngine:
         synthesis_model_override: Optional[str] = None,
         # 2026-07-13 #P1 三态推理模式 (fast/balanced/deep): 'fast' | 'balanced' | 'deep' | None (= settings 默认)
         thinking_mode: Optional[str] = None,
+        # CHAT-P1-B: micro_bubble_agent 预分类后复用，避免 engine 二次分类
+        preclassified_intent: Optional[IntentResult] = None,
     ) -> AsyncIterator[StreamEvent]:
         """方案 C 单阶段流式综合主入口
 
@@ -99,12 +101,15 @@ class ChatEngine:
             thinking_config=thinking_config,
             mode_label=thinking_config.label,
         )
-        intent: Optional[IntentResult] = None
+        intent: Optional[IntentResult] = preclassified_intent
+        intent_category: Optional[str] = intent.category.value if intent else None
         try:
-            intent = await classify_intent(
-                question=_last_user_text(messages),
-                ctx=ctx,
-            )
+            if intent is None:
+                intent = await classify_intent(
+                    question=_last_user_text(messages),
+                    ctx=ctx,
+                )
+            intent_category = intent.category.value
             yield intent_to_sse_event(intent)
         except Exception as e:
             # intent 分类失败不阻塞（降级已在 classify_intent 内部处理）
@@ -117,9 +122,9 @@ class ChatEngine:
         # - SEARCH_INFO/EXPLAIN_CONCEPT/RECOMMEND_PERSON → ≥300 字 + 三段式 + 引用
         # feature flag AGENT_INTENT_AWARE_PROMPTS 控制开关，便于紧急回滚
         # 2026-07-13 #P1: 优先读 thinking_config.intent_aware_prompts (mode-aware), 否则读 settings 默认
-        if thinking_config.intent_aware_prompts and settings.AGENT_INTENT_AWARE_PROMPTS:
+        if (thinking_config.intent_aware_prompts and settings.AGENT_INTENT_AWARE_PROMPTS
+                and intent_category not in {"casual_chat", "follow_up"}):
             from app.agent.prompts import get_intent_aware_guidelines
-            intent_category = intent.category.value if intent else None
             intent_section = get_intent_aware_guidelines(intent_category)
             if intent_section:
                 system = system + "\n" + intent_section
@@ -236,6 +241,7 @@ class ChatEngine:
         synthesis_model_override: Optional[str] = None,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode: Optional[str] = None,
+        preclassified_intent: Optional[IntentResult] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式接口 — 内部转给 synthesize_stream
 
@@ -251,6 +257,7 @@ class ChatEngine:
             synthesis_model_override=synthesis_model_override,
             # 2026-07-13 #P1 透传
             thinking_mode=thinking_mode,
+            preclassified_intent=preclassified_intent,
         ):
             yield evt
 
