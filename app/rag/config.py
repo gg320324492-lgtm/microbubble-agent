@@ -97,6 +97,21 @@ INTENT_CLASSIFIER_ENABLED: bool = (
 )
 INTENT_FALLBACK: str = os.getenv("INTENT_FALLBACK", "factual")
 
+# ===== W100-RAG-4 Reranker 多 backend =====
+# 仅追加, 不改既有 17 项配置 (8 框架 + 5 RAG-1 + 2 RAG-2 + 2 RAG-3)
+# 1) RERANKER_BACKEND — backend 选择 (cross_encoder / bge_v2 / cohere)
+# 2) RERANKER_MODEL — 模型名, 默认沿用 W75 BGE m3
+# 3) RERANKER_API_KEY — Cohere API key (cross_encoder / bge_v2 不需要)
+# 4) RERANKER_ACCEPTANCE_GATE — 92% acceptance gate (类 20.127 失败必 raise)
+# 详见 app/services/reranker_v2.py 类 20.127/128 铁律
+# + app/services/reranker_service.py 既有 W75 接口 (cross_encoder 默认 backend)
+RERANKER_BACKEND: str = os.getenv("RERANKER_BACKEND", "cross_encoder")
+RERANKER_MODEL: str = os.getenv("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
+RERANKER_API_KEY: str = os.getenv("RERANKER_API_KEY", "")
+RERANKER_ACCEPTANCE_GATE: float = float(
+    os.getenv("RERANKER_ACCEPTANCE_GATE", "0.92")
+)
+
 # ===== 框架配置 =====
 # LangFuse 自托管服务地址
 LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
