@@ -123,6 +123,23 @@ MULTIMODAL_RETRIEVER_WEIGHT: float = float(
     os.getenv("MULTIMODAL_RETRIEVER_WEIGHT", "0.15")
 )
 
+# ===== W100-RAG-6 Temporal Retriever 时间衰减 =====
+# 仅追加, 不改既有 19 项配置 (8 框架 + 5 RAG-1 + 2 RAG-2 + 2 RAG-3 + 4 RAG-4 + 2 RAG-5)
+# 1) TEMPORAL_DECAY_ENABLED — 总开关 (默认 True)
+# 2) TEMPORAL_BOOST_YEARS — 近 N 年内加权 (默认 2)
+# 3) TEMPORAL_BOOST_FACTOR — 近 N 年加权幅度 (默认 +0.2)
+# 4) TEMPORAL_DECAY_YEARS — 超过 N 年减权 (默认 5)
+# 5) TEMPORAL_DECAY_FACTOR — 老资料减权幅度 (默认 0.3)
+# 详见 app/services/temporal_retriever.py 类 20.131/132 铁律
+TEMPORAL_DECAY_ENABLED: bool = (
+    RAG_FRAMEWORK_ENABLED
+    and os.getenv("TEMPORAL_DECAY_ENABLED", "1").lower() in ("1", "true", "yes")
+)
+TEMPORAL_BOOST_YEARS: int = int(os.getenv("TEMPORAL_BOOST_YEARS", "2"))
+TEMPORAL_BOOST_FACTOR: float = float(os.getenv("TEMPORAL_BOOST_FACTOR", "0.2"))
+TEMPORAL_DECAY_YEARS: int = int(os.getenv("TEMPORAL_DECAY_YEARS", "5"))
+TEMPORAL_DECAY_FACTOR: float = float(os.getenv("TEMPORAL_DECAY_FACTOR", "0.3"))
+
 # ===== 框架配置 =====
 # LangFuse 自托管服务地址
 LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
