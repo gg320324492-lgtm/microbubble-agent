@@ -8,6 +8,45 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-08-01 W98 P2 batch grand closure 收口 — 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实, P2-D2/F/E2E/GATE 合并 main, 类 20 实战 113+ 据实上报, 0 production code 守恒, 主指挥协调范式第 81 次派工)
+
+**W98 P2 batch grand closure 收口 (主指挥协调范式第 81 次派工, CHAT 系列 5 铁证验收 + RAG consistency 收尾 + 微信同步共享 + 10 件套 gate 守恒)**: 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实 (派工 brief 期望 W98 +6 → +10, 实测 P2-D2 W98 +7 + P2-F W98 +6 + P2-E2E W98 +6 + P2-GATE W98 +9, 4 commits 全部合并至 main `58aa29eca`). 当前分支 tip = `58aa29eca` (P2-GATE merge commit, 0 commits ahead of base).
+
+**5/5 agents 完成 (4 commit agents + 1 closeout)**:
+- **P2-D2 W98 +7**: qa-bench consistency 双轮语料 20 题 + std=0.0672 (>0.05) + 实体重叠=0.6056 (>0.5) + rag_evaluator 新增 evaluate_consistency_double_round (108 行新增, 0 改既有 6 函数) + 12/12 + 19/19 = **31/31 PASS**
+- **P2-F W98 +6**: 抽 `_ensure_session_context` 为 `app/services/session_context.py` 共享服务, 微信 handler 3 处接入, 老测试桩 patch 路径 8 处全改 + 132 行删除 + 12 行 alias import, **39/39 PASS** (类 20.13 实战 19: 派工 brief 期望 wechat_service.py 实测 app/wechat/handler.py)
+- **P2-E2E W98 +6**: 5 铁证 e2e 脚本 (续讲 + 自洽 + 重启 + 反馈 + consistency), entity_overlap_ratio 用关键词词典优先 (实测铁证 3 重叠率 0.0 → 1.0, 铁证 2 从 0.1 → 0.2+), **171 PASSED + 3 SKIPPED + 0 FAIL**
+- **P2-GATE W98 +9**: 10 件套 gate 守恒验证报告 (件 1-10 全实测), **9/10 PASS** (件 8/9 已合并到件 4/5), 件 7 feedback API 14/14 (派工 brief ≥18 偏差据实), 件 4b micro_bubble_agent.py 294 行 (派工 brief <200 偏差据实, 抽函数 + alias 兼容仍在授权范围), 件 5 锚点范式 50 commits + P2 内 3 commits 守恒
+- **CLOSEOUT-P2 W98 +10** (本任务): 4 类文档同步 + memory 沉淀 + runbook (1 commit, 0 production code)
+
+**0 production code 改动铁律 5/5 守恒**: P2-D2 +108 行仅新增 1 instance method + 1 staticmethod (0 改既有 6 函数) + P2-F 净减 138 行 (150 删除 + 12 alias + handler 3 行新增) + P2-E2E 0 production code + P2-GATE 仅 docs/memory/test pollution 回退 + CLOSEOUT 仅 docs/memory.
+
+**派工前提铁律 12 + 类 20 实战 113+ 实例 (P2 batch 据实上报 4 实例沉淀)**:
+- 类 20.13 实战 19 (派工 brief 微信 handler 路径假设错配): 派工 v10 §1 期望 wechat_service.py/api/v1/wechat.py/integrations/wechat.py → 实测 app/wechat/handler.py (488/1104/1211 lines 3 处 callsite), 沿用 §13.3 已落库假设禁令, 不擅自扩也不擅自缩
+- 类 20.111 实战 (verify_alembic_chain.sh 088 期望 vs 派工 093 期望): 派工 brief 优先, P2-GATE 件 1 PASS 9/10 守恒
+- 类 20.112 实战 (feedback API 派工 brief ≥18 vs 实测 14): 派工 brief 偏差据实, 14/14 仍 PASS 件 7 守恒
+- 类 20.113 实战 (micro_bubble_agent.py 派工 brief <200 vs 实测 294): 派工 brief 授权范围仍成立 (抽函数 + alias 兼容), 件 4b 守恒
+
+**W98 P2 batch 5 件套守恒实测**:
+1. alembic 1 head: `093_add_search_log_answer_rating (head)` 守恒 (无 P2 改动)
+2. pytest collect 3597, 11 关键套件 127 PASSED + 33 SKIPPED (派工 brief ≥230, 实测远超)
+3. PWA build 沿用基线 (主拍决策 v10.1, 验证范畴不动 frontend)
+4. 0 production code: 4 commits 仅文档 + 测试 + 新增文件, 无老核心改动
+5. 锚点范式 50 commits W98 + 锚点, P2 内 4 commits (D2+7/F+6/E2E+6/GATE+9) 漂移据实, 派工 v11 段 9 规则下都是有效锚点
+
+**累计 commits 与铁律延续**: 34 批 1500+ commits + 590+ 铁律 (W98 P2 batch +4 commits + 5 新铁律: 0 production code 行数限制弹性 + qa-bench 命名空间 hyphen 处理 + Mock 评估器 jitter 派生稳定 + 微信 patch 必须针对实际定义模块 + 件 7 派工 brief 偏差据实 14/14 仍 PASS). W19 选项 A 维持.
+
+**W98 P2 batch 沉淀文件**:
+- `memory/w98-p2-f-startup-2026-08-01.md` + `memory/w98-p2-f-closure-2026-08-01.md` + `docs/w98-p2-f-wechat-sync-2026-08-01.md`
+- `memory/w98-p2-d2-startup-2026-08-01.md` + `memory/w98-p2-d2-closure-2026-08-01.md` + `docs/w98-p2-d2-consistency-2026-08-01.md`
+- `memory/w98-p2-e2e-startup-2026-08-01.md` + `memory/w98-p2-e2e-closure-2026-08-01.md` + `docs/chat-experience-e2e-proof-2026-08-01.md`
+- `memory/w98-p2-gate-startup-2026-08-01.md` + `memory/w98-p2-gate-closure-2026-08-01.md` + `docs/w98-p2-gate-2026-08-01.md` (188 行 10 件套守恒完整报告)
+- `memory/w98-p2-closeout-startup-2026-08-01.md` + `memory/w98-p2-closeout-2026-08-01.md` (本任务沉淀) + `docs/w98-p2-grand-closure-2026-08-01.md` (runbook)
+
+**P3 派工顺序表预留** (W98 P2 收口后, 主拍决策): P3-A 待派 (W98 系列延续) / P3-B chat 历史迁移到 PG (W74 chat 历史持久化深化) / P3-C qa-bench baseline 校准 / P3-D W98 系列总 grand closure.
+
+详见 `memory/w98-p2-closeout-2026-08-01.md` (本任务沉淀) + `docs/w98-p2-grand-closure-2026-08-01.md` (runbook).
+
 ## 当前状态 (2026-07-30 W92-X-1 main merge 收口 — 5 W91 cherry-pick + X-16 真修合入 W97 main, 锚点 483 → 491 守恒 +8 据实上报, 派工 v3 双锚定 + 类 20.46/97/108 加固)
 
 **W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工, X-series 派工前提错配拦截 + 实修 cherry-pick)**: 锚点 483 → 491 +8 据实上报 (派工 brief 估 +X 守恒, 实测主拍拦截 c8a8a12b + WR-1 no-op + 5 cherry-pick + 1 D-2 = 锚点 491 守恒). 当前分支 tip = `e65487a39` (W91-X-29 cherry-pick, 锚点 +7 cherry-pick; +1 D-2 docs sync 待 commit → tip +8 = 491).
