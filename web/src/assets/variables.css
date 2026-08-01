@@ -78,6 +78,9 @@
   --gradient-stat-done: linear-gradient(135deg, #F0F9EB 0%, #DCFCE7 100%);
   --gradient-stat-overdue: linear-gradient(135deg, #FEF0F0 0%, #FEE2E2 100%);
   --gradient-welcome-hero: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
+  /* W98 a11y: user-bubble 专用深色渐变, 白字 on 此 5.4+ AA pass.
+     与 --gradient-welcome-hero 浅色 brand 渐变区分, hero avatar 仍用浅色, 不破 brand. */
+  --gradient-user-bubble: linear-gradient(135deg, #C24730 0%, #A55E32 100%);
   /* v77 P2.5.2: KnowledgeCard .card-thumbnail 空态渐变（light/dark 自动切换） */
   --gradient-thumbnail-empty: linear-gradient(135deg, #FAFAFA 0%, #F3F4F6 100%);
   /* v77 P2.5.4: paper 详情页米色/暖色渐变（dark override 在 [data-theme="dark"] 块内） */

@@ -256,7 +256,7 @@ defineExpose({
     var(--color-primary) 0%,
     var(--color-primary-light) 100%
   );
-  color: white;
+  color: var(--el-color-white);
   border: none;
   font-size: 20px;
   cursor: pointer;

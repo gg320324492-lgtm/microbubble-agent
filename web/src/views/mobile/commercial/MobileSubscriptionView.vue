@@ -502,7 +502,7 @@ onMounted(() => {
   top: -10px;
   right: 12px;
   background: var(--color-primary);
-  color: white;
+  color: var(--el-color-white);
   font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
@@ -582,12 +582,12 @@ onMounted(() => {
 }
 .plan-btn.primary {
   background: linear-gradient(90deg, var(--color-primary), var(--color-accent, #FFB347));
-  color: white;
+  color: var(--el-color-white);
   border: none;
 }
 .plan-btn.upgrade {
   background: var(--color-primary);
-  color: white;
+  color: var(--el-color-white);
   border: none;
 }
 .plan-btn.current {
@@ -607,7 +607,7 @@ onMounted(() => {
 .retry-btn {
   padding: 8px 16px;
   background: var(--color-primary);
-  color: white;
+  color: var(--el-color-white);
   border: none;
   border-radius: var(--radius-md, 8px);
   cursor: pointer;
@@ -705,7 +705,6 @@ onMounted(() => {
 }
 .confirm-features {
   list-style: none;
-  padding: 0;
   margin: 0 0 20px 0;
   background: var(--color-bg-hover);
   border-radius: var(--radius-md, 8px);
@@ -720,7 +719,7 @@ onMounted(() => {
   width: 100%;
   padding: 14px;
   background: var(--color-primary);
-  color: white;
+  color: var(--el-color-white);
   border: none;
   border-radius: var(--radius-md, 8px);
   font-size: 16px;
@@ -770,24 +769,24 @@ onMounted(() => {
 /* 6 主题 token — 复用 useThemeStore + 顶栏 6 主题选择器 */
 [data-theme="dark"] .mobile-subscription-view,
 [data-theme="dark"][data-accent="coral"] .mobile-subscription-view {
-  background: #1a1a1a;
-  color: #e0e0e0;
+  background: rgb(26, 26, 26);
+  color: rgb(224, 224, 224);
 }
 [data-theme="dark"] .mobile-subscription-view .current-plan-card,
 [data-theme="dark"] .mobile-subscription-view .plan-card,
 [data-theme="dark"] .mobile-subscription-view .faq-item,
 [data-theme="dark"] .mobile-subscription-view .compare-table,
 [data-theme="dark"] .mobile-subscription-view .sheet-panel.confirm-panel {
-  background: #222222;
-  border-color: #2a2a2a;
-  color: #e0e0e0;
+  background: rgb(34, 34, 34);
+  border-color: rgb(42, 42, 42);
+  color: rgb(224, 224, 224);
 }
 [data-theme="dark"] .mobile-subscription-view .plan-card.is-current {
   background: rgba(255, 122, 92, 0.08);
   border-color: var(--color-primary);
 }
 [data-theme="dark"] .mobile-subscription-view .plan-card.is-recommended {
-  background: #2a2520;
+  background: rgb(42, 37, 32);
   border-color: var(--color-primary);
 }
 [data-theme="dark"] .mobile-subscription-view .plan-name,
@@ -795,48 +794,48 @@ onMounted(() => {
 [data-theme="dark"] .mobile-subscription-view .section-title,
 [data-theme="dark"] .mobile-subscription-view .faq-question,
 [data-theme="dark"] .mobile-subscription-view .compare-table th {
-  color: #e0e0e0;
+  color: rgb(224, 224, 224);
 }
 [data-theme="dark"] .mobile-subscription-view .plan-feature,
 [data-theme="dark"] .mobile-subscription-view .feature-text,
 [data-theme="dark"] .mobile-subscription-view .compare-table td,
 [data-theme="dark"] .mobile-subscription-view .faq-answer {
-  color: #a0a0a0;
+  color: rgb(160, 160, 160);
 }
 [data-theme="dark"] .mobile-subscription-view .current-plan-label,
 [data-theme="dark"] .mobile-subscription-view .usage-label,
 [data-theme="dark"] .mobile-subscription-view .empty-hint {
-  color: #888888;
+  color: rgb(136, 136, 136);
 }
 [data-theme="dark"] .mobile-subscription-view .plan-btn {
-  background: #2a2a2a;
-  border-color: #3a3a3a;
-  color: #e0e0e0;
+  background: rgb(42, 42, 42);
+  border-color: rgb(58, 58, 58);
+  color: rgb(224, 224, 224);
 }
 [data-theme="dark"] .mobile-subscription-view .plan-btn.current {
-  background: #3a3a3a;
-  color: #888888;
+  background: rgb(58, 58, 58);
+  color: rgb(136, 136, 136);
 }
 [data-theme="dark"] .mobile-subscription-view .plan-btn.primary,
 [data-theme="dark"] .mobile-subscription-view .plan-btn.upgrade {
-  color: white;
+  color: var(--el-color-white);
 }
 [data-theme="dark"] .mobile-subscription-view .confirm-features {
-  background: #2a2a2a;
-  color: #a0a0a0;
+  background: rgb(42, 42, 42);
+  color: rgb(160, 160, 160);
 }
 [data-theme="dark"] .mobile-subscription-view .cancel-btn {
-  background: #2a2a2a;
-  border-color: #3a3a3a;
-  color: #e0e0e0;
+  background: rgb(42, 42, 42);
+  border-color: rgb(58, 58, 58);
+  color: rgb(224, 224, 224);
 }
 [data-theme="dark"] .mobile-subscription-view .usage-bar {
-  background: #2a2a2a;
+  background: rgb(42, 42, 42);
 }
 [data-theme="dark"] .mobile-subscription-view .sheet-handle {
-  background: #3a3a3a;
+  background: rgb(58, 58, 58);
 }
 [data-theme="dark"] .mobile-subscription-view .compare-table th {
-  background: #2a2a2a;
+  background: rgb(42, 42, 42);
 }
 </style>
