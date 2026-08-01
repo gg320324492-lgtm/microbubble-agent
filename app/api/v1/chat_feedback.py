@@ -125,21 +125,32 @@ async def submit_chat_feedback(
     )
 
     # 2. (可选) 同步写 search_logs.answer_rating 维度
-    #    策略: 同 user_id + 同 session 最新的 search_log 行 UPDATE answer_rating
+    #    策略: 同 session 最近的 search_log 行 UPDATE answer_rating
     #    失败不回滚 (best-effort, 不阻塞主路径)
-    if payload.message_id is not None and user_id > 0:
+    # W99 N-6 改进 (5): 匿名用户填补
+    #   旧: 仅 user_id > 0 才同步 → 匿名用户反馈不进 SearchLog 回收率统计 (数据盲区)
+    #   新: 不论 user_id 0 / 真实, 优先用 session_id 定位 search_log, 找不到再按 user_id 兜底
+    if payload.message_id is not None and payload.session_id:
         try:
             from app.models.search_log import SearchLog
-            # 同 session 取最近一条 (无 session 时为 None)
+            # 优先按 session_id 匹配最近一条 (匿名 + 登录都覆盖)
             target_q = (
                 select(SearchLog)
-                .where(SearchLog.user_id == user_id)
+                .where(SearchLog.session_id == payload.session_id)
                 .order_by(SearchLog.created_at.desc())
                 .limit(1)
             )
-            if payload.session_id:
-                target_q = target_q.where(SearchLog.session_id == payload.session_id)
+            # 若仍无, 登录用户可按 user_id 兜底
+            if user_id > 0:
+                target_q_alt = (
+                    select(SearchLog)
+                    .where(SearchLog.user_id == user_id)
+                    .order_by(SearchLog.created_at.desc())
+                    .limit(1)
+                )
             target = (await db.execute(target_q)).scalar_one_or_none()
+            if target is None and user_id > 0:
+                target = (await db.execute(target_q_alt)).scalar_one_or_none()
             if target is not None:
                 target.answer_rating = payload.rating
                 await db.commit()
