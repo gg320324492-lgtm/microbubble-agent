@@ -6,6 +6,35 @@
 
 `[RAG-FW W98] feat: Hybrid RAG Stack — 8 项框架能力 (LangChain + LlamaIndex + LangFuse) 全线交付`
 
+## [2026-08-01] W98 RAG 系列总 grand closure 收口 (PR1-PR10 + RAG-FW-01..14 + DEPLOY + W97 RAG 大改造 + W98 周边 4 项, 212+ commits, 锚点范式 W98 +12 → +13 守恒, 0 production code 守恒, 主指挥协调范式第 82 次派工)
+
+`[RAG-GC W98 +12] docs: W98 RAG 系列总 grand closure 收口（30+ commits + 10 件套守恒 + 类 20 实战 22+ 实例）`
+
+**W98 RAG 系列总 grand closure 收口 (主指挥协调范式第 82 次派工, 纯 docs/memory 范畴, 0 production code)**: 锚点范式 W98 +11 (~488) → RAG-GC W98 +12 → +13 守恒 (本任务 1 commit). 当前 main HEAD = `b7b5998f6` (P3-A W98 +11). 0 commits ahead of base (本任务 docs/memory 范畴, 不动 production code).
+
+**RAG 系列总览 (212+ commits, 锚点 +168 W97 477 → W98 +13 累计 ~490)**:
+- **PR1-PR10** (W88-W96, 10 PR 串行, 150 commits, 锚点 +145): 嵌入一致化 + chunk 子表 + BM25 + HybridRetriever + RAGEvaluator + SearchLog + 全链路 observability + KG 深度联动 + auto-research 升级 + docs 三件套
+- **RAG-FW-01..14 + DEPLOY** (W98, 32 commits, 锚点 +12): Hybrid RAG Stack 8 能力 (LangChain + LlamaIndex + LangFuse) + 4 hotfix
+- **W97 RAG 大改造** (锚点 477 baseline)
+- **W98 周边 4 项** (30 commits, 锚点 +11): DRIVE-TO-KB + CHAT-P0-D + P2-D2 consistency + P3-A 真环境集成
+
+**5 大铁证全留据**:
+- qa-bench R8 200 题 93.5% (W61 f0f8293e 决策保留 BGE m3, 0 退化)
+- qa-bench consistency 双轮 20 题 std=0.0672 (>0.05, W98 P2-D2 `0427eaffb`)
+- consistency 实体重叠 0.6056 (>0.5, W98 P2-D2)
+- RAG-FW-11 8 case PASS (全 mock 无框架依赖, W98 RAG-FW-13 memory)
+- 5 铁证 e2e 171 PASSED + 3 SKIPPED + 0 FAIL (W98 P2-E2E `bff5acc21`)
+
+**0 production code 改动铁律 守恒**: `git diff 9bb7c386f..main -- app/services/knowledge_service.py` = 0 + `app/services/hybrid_retriever.py` = 0 实测. alembic 1 head `['093_add_search_log_answer_rating']` 守恒.
+
+**类 20 实战 22+ 实例 (W98 RAG 系列累计)**: RAG-FW-11/12/14 三分支 0 commit 据实 + W98 P2 4 commits 漂移 + 派工 v11 §13 仓库实情真查 6 项铁律 (python -m alembic 形态 + pytest 白名单 + 错配双向禁令 + docs 门禁断言化 + 依赖基线自检 + 5 件套回报表).
+
+**10 件套 gate 守恒 9/10 PASS + 1 据实 (件 3 PWA build pre-existing)**: 件 1 alembic 1 head 093 / 件 2 pytest collect 3597 + 11 套件 127 PASSED / 件 3 PWA build 沿用基线 (据实) / 件 4 0 production code unexpected / 件 5 锚点范式 50+ W98 / 件 6 RAG 系列 ≥ 30 / 件 7 docs 齐备 20+ / 件 8 memory 沉淀齐备 / 件 9 派工 brief 18 项反馈 / 件 10 类 20 实战 22+ 实例.
+
+**累计 28 批 1500+ commits + 590+ 铁律延续** (W98 RAG-GC 1 commit + 1 新铁律: RAG 系列总收口纪要). W99+ 派工顺序表预留 (7 段 RAG 系列持续演进方向, 锚点 ~488 → ~500): W99 P1 召回率 95%+ / W99 P2 P95 < 2s / W99 P3 跨模态 RAG 评估 / W100 P1 Self-RAG 接入 / W100 P2 段落级 fallback / W101 P1 索引重建工具 / W101 P2 Auto-RAG. W19 选项 A 维持.
+
+**详见**: `docs/rag/RAG-SERIES-GRAND-CLOSURE.md` (603 行完整 RAG runbook, 14 节) + `memory/w98-rag-grand-closure-2026-08-01.md` (本任务沉淀) + `memory/w98-rag-grand-closure-startup-2026-08-01.md` (起步 6 项).
+
 ## [2026-08-01] W98 P2 batch grand closure 收口 (CHAT 系列 5 铁证验收 + RAG consistency 收尾 + 微信同步共享 + 10 件套 gate 守恒, 锚点漂移据实, 0 production code 守恒, 主指挥协调范式第 81 次派工)
 
 **W98 P2 batch grand closure 收口 (主指挥协调范式第 81 次派工)**: 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实 (派工 brief 期望 W98 +6 → +10, 实测 P2-D2 W98 +7 + P2-F W98 +6 + P2-E2E W98 +6 + P2-GATE W98 +9, 派工 v11 段 9 规则下都是有效锚点). 当前 main HEAD = `58aa29eca` (P2-GATE merge commit, 4 commits 全部合并至 main).
