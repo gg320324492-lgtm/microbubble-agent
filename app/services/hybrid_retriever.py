@@ -699,6 +699,61 @@ async def retrieve_with_weights(
     except Exception as _e:
         logger.debug(f"[W100-RAG-4] reranker hook skip: {_e}")
 
+    # 7) W100-RAG-5: Multimodal Retriever 第 5 路 image
+    # query 向量复用 embedding cache；candidate 向量由 completed OCR 文本批量实时生成。
+    # 只在 body 追加，不改任何既有 def 签名；失败时保留原四路结果。
+    try:
+        from app.rag import config as _rag_config
+
+        if _rag_config.MULTIMODAL_RETRIEVER_ENABLED:
+            from app.services.hybrid_weight_config import HybridWeights
+            from app.services.multimodal_retriever import MultimodalRetriever
+
+            _effective_weights = weights if isinstance(weights, HybridWeights) else HybridWeights()
+            _image_weight = float(
+                getattr(_effective_weights, "image", _rag_config.MULTIMODAL_RETRIEVER_WEIGHT)
+            )
+            if _image_weight > 0:
+                _image_results = await MultimodalRetriever(db).search_images(
+                    query=query,
+                    top_k=top_k,
+                )
+                if _image_results:
+                    _merged_by_id = {
+                        item.get("id"): dict(item)
+                        for item in raw_results
+                        if item.get("id") is not None
+                    }
+                    for _image in _image_results:
+                        _knowledge_id = _image.get("knowledge_id")
+                        if _knowledge_id is None:
+                            continue
+                        _weighted_image_score = float(_image.get("score") or 0.0) * _image_weight
+                        _existing = _merged_by_id.get(_knowledge_id)
+                        if _existing is None:
+                            _standalone = dict(_image)
+                            _standalone["score"] = _weighted_image_score
+                            _standalone["image_score"] = float(_image.get("score") or 0.0)
+                            _merged_by_id[_knowledge_id] = _standalone
+                        else:
+                            _existing["image_score"] = float(_image.get("score") or 0.0)
+                            _existing["image_boost"] = _weighted_image_score
+                            _existing.setdefault("image_matches", []).append(dict(_image))
+                            _existing.setdefault("retrieval_methods", []).append("image")
+                            _existing["score"] = float(_existing.get("score") or 0.0) + _weighted_image_score
+                    raw_results = sorted(
+                        _merged_by_id.values(),
+                        key=lambda item: float(item.get("score") or 0.0),
+                        reverse=True,
+                    )[:top_k]
+                    logger.debug(
+                        "[W100-RAG-5] multimodal hook applied: images=%d weight=%.3f",
+                        len(_image_results),
+                        _image_weight,
+                    )
+    except Exception as _e:
+        logger.debug(f"[W100-RAG-5] multimodal hook skip: {_e}")
+
     return raw_results
 
 
