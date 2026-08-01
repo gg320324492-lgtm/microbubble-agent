@@ -47,6 +47,7 @@
         @followup="onFollowUp"
         @regenerate="onRegenerate"
         @copy="onCopyBubble"
+        @pro-entry="onProEntryMobile"
       />
     </main>
 
@@ -169,6 +170,7 @@
  */
 
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useChatSessionsStore } from '@/stores/chatSessions'
@@ -641,6 +643,25 @@ async function onCopyBubble(msg) {
 // ============================================================================
 // 生命周期
 // ============================================================================
+// W100 +24: 知识图谱 / 公式 / 假设入口 (派工前提错配 #21: 实际 tab 路由, 非独立路由)
+const router = useRouter()
+function onProEntryMobile(msg, kind) {
+  try {
+    if (kind === 'graph') {
+      router.push({ path: '/knowledge/graph', query: { session: sessionId, msg: String(msg?.id || '') } })
+    } else if (kind === 'formula') {
+      const kws = msg?.intent?.keywords
+      const search = Array.isArray(kws) && kws.length ? kws[0] : ''
+      router.push({ path: '/knowledge', query: { tab: 'formulas', search } })
+    } else if (kind === 'hypothesis') {
+      router.push({ path: '/knowledge', query: { tab: 'hypotheses', from: String(msg?.id || '') } })
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[MobileChatView] onProEntryMobile router.push failed', e)
+  }
+}
+
 onMounted(() => {
   // 初始 scroll to bottom
   nextTick(() => messageListRef.value?.scrollToBottom(true))
