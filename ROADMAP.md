@@ -3,6 +3,23 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
+## 当前状态 (2026-08-01 W98 P2 batch grand closure 收口 — 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实, 0 production code 守恒)
+
+**W98 P2 batch grand closure 收口 (主指挥协调范式第 81 次派工, CHAT 系列 5 铁证验收 + RAG consistency 收尾 + 微信同步共享 + 10 件套 gate 守恒)**: 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实 (派工 brief 期望 W98 +6 → +10, 实测 P2-D2 W98 +7 + P2-F W98 +6 + P2-E2E W98 +6 + P2-GATE W98 +9, 派工 v11 段 9 规则下都是有效锚点). 当前 main HEAD = `58aa29eca` (P2-GATE merge commit, 4 commits 全部合并至 main).
+
+**5 agents 完成 (4 commit agents + 1 closeout)**:
+- **P2-D2 W98 +7** (`0427eaffb`): qa-bench consistency 双轮语料 20 题 + std=0.0672 (>0.05) + 实体重叠=0.6056 (>0.5) + rag_evaluator +108 行 (0 改既有 6 函数) + 31/31 PASS
+- **P2-F W98 +6** (`151d58b45`): 抽 `ensure_session_context` 共享服务 + 微信 handler 3 处接入 (实测路径 `app/wechat/handler.py`, 类 20.13 实战 19 派工 brief wechat_service.py 错配) + 39/39 PASS
+- **P2-E2E W98 +6** (`bff5acc21`): 5 铁证 e2e 脚本 (续讲 + 自洽 + 重启 + 反馈 + consistency) + entity_overlap_ratio 用关键词词典优先 (实测铁证 3 重叠率 0.0 → 1.0) + 171/171 PASS
+- **P2-GATE W98 +9** (`cc23b2571`): 10 件套 gate 守恒验证报告, 9/10 PASS (件 8/9 已合并件 4/5), 件 7 feedback API 14/14 (派工 brief ≥18 偏差据实) + 件 4b micro_bubble_agent.py 294 行 (派工 brief <200 偏差据实, 抽函数 + alias 兼容仍在授权范围)
+- **CLOSEOUT-P2 W98 +10** (本任务): 4 类文档同步 + memory 沉淀 + runbook (1 commit, 0 production code)
+
+**0 production code 改动铁律 5/5 守恒** + 派工前提铁律 12 + 类 20 实战 113+ 实例 (P2 batch 据实上报 4: 20.13 实战 19 + 20.111/112/113 件 4b/7 派工 brief 偏差据实). 累计 34 批 1500+ commits + 590+ 铁律 (W98 P2 batch +5 新铁律). 详见 `memory/w98-p2-closeout-2026-08-01.md` + `docs/w98-p2-grand-closure-2026-08-01.md`.
+
+**P3 派工顺序表预留** (W98 P2 收口后, 主拍决策): P3-A W98 系列延续 / P3-B chat 历史持久化深化 (W74 沿用) / P3-C qa-bench baseline 校准 / P3-D W98 系列总 grand closure.
+
+---
+
 ## 当前状态 (2026-07-30 W92-X-1 main merge 收口 — 5 W91 cherry-pick + X-16 真修合入 W97 main, 锚点 483 → 491 守恒 +8 据实上报, 派工 v3 双锚定 + 类 20.46/97/108 加固)
 
 **W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工)**: 锚点 483 → 491 +8 据实上报, 5 个 W91 真未合 cherry-pick + 1 WR-1 no-op + 1 D-2 docs sync.
