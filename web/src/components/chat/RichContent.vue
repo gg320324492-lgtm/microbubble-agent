@@ -99,8 +99,14 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
     </button>
 
     <!-- 真实 block 组件：用 v-show 而非 v-if 折叠，保留 DOM 存在性（向后兼容旧测试） -->
+    <!-- W100-BUGFIX (类 20.123 据实上报): 转发 block.data.citations 给 KnowledgeRefBlock,
+         否则 KnowledgeRefBlock 的 citation 高亮逻辑收到空数组. block.data 已含 citations (search_knowledge 工具写入). -->
     <div class="rich-expanded" v-show="shouldBeExpanded">
-      <component :is="resolveBlock(block.type)" :block="block" />
+      <component
+        :is="resolveBlock(block.type)"
+        :block="block"
+        :citations="block.data?.citations || []"
+      />
     </div>
   </div>
 </template>
