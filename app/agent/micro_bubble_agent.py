@@ -43,6 +43,181 @@ logger = logging.getLogger("microbubble.agent")
 
 
 # ============================================================================
+# 2026-07-31 #CHAT-P0-A: 会话上下文闭环 — PG 回填 Redis（"失忆客服"根因修复）
+# ============================================================================
+# 背景: chat_stream 读历史只从 Redis（短期缓存, SESSION_TTL=48h），PG 有持久化
+#       历史但不回填 → Redis 过期/重启后 LLM 只看到当前单条消息 → "你好！有什么
+#       可以帮你的吗？"完全失忆 (用户实测: "介绍一下课题组近况" 后追问即断片)。
+# 设计 (A1/A3):
+#   - _ensure_session_context(): Redis 空 → PG 全量回填最近 N 条; Redis 非空 →
+#     last_pg_id 增量回填 (session_meta 存 Redis hash agent_session:{sid}:meta)
+#   - 只 import 复用 chat_history_service.list_messages (不改), 消息格式统一
+#     {"role", "content"} 两键, 过滤 partial/deleted/tool/system 角色
+#   - best-effort: PG 加载任何失败 → 返回 None → 调用方走现有 Redis 逻辑
+#   - 排序一律用 id 游标 (after_id, 非 created_at)
+# ============================================================================
+
+# 回填窗口: 取最近 12 轮 (24 条) 进 LLM messages
+_SESSION_CONTEXT_MAX_TURNS = 12
+_SESSION_CONTEXT_MAX_MSGS = _SESSION_CONTEXT_MAX_TURNS * 2
+# Redis meta hash 里记录 PG 最新落库 message id 的字段名
+_META_LAST_PG_ID_FIELD = "last_pg_id"
+
+
+async def _fetch_pg_messages(
+    db,
+    user_id: int,
+    session_id: str,
+    *,
+    after_id: int = 0,
+    limit: int = _SESSION_CONTEXT_MAX_MSGS,
+) -> Optional[List[Dict]]:
+    """从 PG 拉取会话消息（复用 chat_history_service.list_messages，只 import 不改）
+
+    返回统一格式 [{"role": "user"/"assistant", "content": str}]（只保留 role/content
+    两键, 过滤 partial / deleted / system / tool 角色）。失败返回 None（best-effort）。
+    """
+    try:
+        from app.services import chat_history_service as chat_svc
+        msgs, _has_more = await chat_svc.list_messages(
+            db, user_id, session_id,
+            page_size=limit,
+            after_id=after_id,
+        )
+        out: List[Dict] = []
+        for m in msgs:
+            if m.role not in ("user", "assistant"):
+                continue  # 过滤 system/tool 角色
+            if getattr(m, "is_partial", False) or getattr(m, "is_deleted", False):
+                continue  # 过滤流式中断半截 / 单条软删除
+            content = m.content or ""
+            out.append({"role": m.role, "content": content})
+        return out or None
+    except Exception as e:
+        # best-effort 铁律: PG 加载失败绝不阻塞 chat
+        logger.warning(f"_fetch_pg_messages failed (best-effort None): {e}", exc_info=True)
+        return None
+
+
+def _window_messages(messages: List[Dict]) -> List[Dict]:
+    """窗口化 + 按消息 id 语义去重（进 LLM 前调用）
+
+    - 只保留最近 _SESSION_CONTEXT_MAX_MSGS (24) 条（12 轮）
+    - 去重: 同一 role + 同一 content 的相邻重复只保留最后一条
+      (防御 PG 重复行 / Redis 与 PG 双写叠加的重复)
+    """
+    deduped: List[Dict] = []
+    for m in messages:
+        if deduped and deduped[-1].get("role") == m.get("role") and deduped[-1].get("content") == m.get("content"):
+            deduped[-1] = m  # 相邻重复 → 保留最后一条
+        else:
+            deduped.append(m)
+    return deduped[-_SESSION_CONTEXT_MAX_MSGS:]
+
+
+async def _get_last_pg_id(session_id: str) -> Optional[int]:
+    """读 Redis meta hash 的 last_pg_id（无/损坏返回 None, best-effort）"""
+    try:
+        meta = await session_manager.get_meta(session_id)
+        val = meta.get(_META_LAST_PG_ID_FIELD)
+        if val is None:
+            return None
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            logger.warning(f"last_pg_id 非整数, 忽略: {val!r}")
+            return None
+    except Exception as e:
+        logger.warning(f"_get_last_pg_id failed (best-effort None): {e}")
+        return None
+
+
+async def _set_last_pg_id(session_id: str, message_id: int):
+    """写 Redis meta hash 的 last_pg_id（best-effort, 失败只告警不抛）"""
+    if not message_id:
+        return
+    try:
+        from app.core.redis import get_redis
+        r = await get_redis()
+        await r.hset(session_manager._meta_key(session_id), _META_LAST_PG_ID_FIELD, message_id)
+        await r.expire(session_manager._meta_key(session_id), session_manager.ttl)
+    except Exception as e:
+        logger.warning(f"_set_last_pg_id failed (best-effort): {e}")
+
+
+async def _ensure_session_context(
+    db,
+    user_id: Optional[int],
+    session_id: str,
+) -> List[Dict]:
+    """确保会话上下文完整（核心: PG 回填 Redis）
+
+    - Redis 空 → PG 全量回填最近 24 条
+    - Redis 非空 → last_pg_id 增量回填（只补 PG 新增消息, 追加到 Redis 尾部）
+    - user_id 为 None（匿名 webchat 等）→ 不加载 DB 历史（越权铁律: list_messages
+      必须先验证 session 归属）→ 直接返回现有 Redis 消息
+    - 任何 PG/Redis 异常 → best-effort 返回现有 Redis 消息, 绝不阻塞 chat
+    """
+    try:
+        redis_msgs = await session_manager.get_messages(session_id)
+    except Exception as e:
+        logger.warning(f"_ensure_session_context: Redis 读取失败 (best-effort 空): {e}")
+        redis_msgs = []
+
+    if not user_id or not db:
+        return redis_msgs
+
+    try:
+        if redis_msgs:
+            # 增量回填: 用 last_pg_id 查 PG 新消息（Redis 过期重连期间 PG 可能已追加）
+            last_pg_id = await _get_last_pg_id(session_id)
+            if last_pg_id:
+                new_msgs = await _fetch_pg_messages(
+                    db, user_id, session_id,
+                    after_id=last_pg_id,
+                    limit=_SESSION_CONTEXT_MAX_MSGS,
+                )
+                if new_msgs:
+                    redis_msgs = redis_msgs + new_msgs
+                    # 整体覆盖 Redis List（比逐条 RPUSH 更稳）
+                    await session_manager.save_messages(session_id, redis_msgs)
+            return redis_msgs
+
+        # 全量回填: Redis 空 → PG 加载最近 24 条（重启 / Redis 过期后首次请求）
+        pg_msgs = await _fetch_pg_messages(
+            db, user_id, session_id,
+            after_id=0,
+            limit=_SESSION_CONTEXT_MAX_MSGS,
+        )
+        if pg_msgs:
+            await session_manager.save_messages(session_id, pg_msgs)
+            return pg_msgs
+        return redis_msgs
+    except Exception as e:
+        logger.warning(f"_ensure_session_context failed (best-effort 现有 Redis 消息): {e}")
+        return redis_msgs
+
+
+async def _inject_memories(db, user_id: int, query: str) -> str:
+    """长期记忆注入段（共享函数, 流式/非流式路径统一调用 — A4）
+
+    返回追加文本（如 "\n关于用户的长期记忆:\n- [...]"）；无记忆或失败返回 ""。
+    """
+    try:
+        from app.services.memory_service import MemoryService
+        mem_svc = MemoryService(db)
+        memories = await mem_svc.search_memories(user_id, query, top_k=5)
+        if memories:
+            memory_text = "\n".join(
+                f"- [{m['memory_type']}] {m['content']}" for m in memories
+            )
+            return f"\n关于用户的长期记忆:\n{memory_text}"
+    except Exception as e:
+        logger.warning(f"构建记忆提示词失败: {e}")
+    return ""
+
+
+# ============================================================================
 # 2026-07-15 #P2: 课题组概览上下文注入 (Redis 1h 缓存)
 # ============================================================================
 # 背景: 之前 system prompt 不注入课题组成员/项目, "详细介绍本课题组" 类查询
@@ -350,14 +525,16 @@ class MicroBubbleAgent:
         # 0. 持久化前置条件：无 db 或无 user_id 时跳过（兼容老调用）
         persist_enabled = db is not None and user_id is not None
 
-        # 1. 加载 session（保留 Redis 短期缓存，老行为不变）
-        messages = await session_manager.get_messages(session_id)
+        # 1. [CHAT-P0-A] 加载 session 上下文（PG 回填 Redis + 窗口化 + 去重）
+        #    Redis 空 → PG 全量回填最近 24 条；Redis 非空 → last_pg_id 增量回填
+        messages = await _ensure_session_context(db, user_id, session_id)
+        messages = _window_messages(messages)
 
         # 2. 构造 user content
         content = self._build_user_content(message, image_data, image_media_type)
         messages.append({"role": "user", "content": content})
 
-        # 3. 构造 system prompt
+        # 3. 构造 system prompt（流式路径同样注入长期记忆 — A4）
         system = await self._build_system_prompt(user_id, message, db) if user_id else get_system_prompt()
 
         # 4. #043 持久化入场
@@ -494,9 +671,37 @@ class MicroBubbleAgent:
                             )
                             assistant_msg_id = assistant_msg.id
                             assistant_msg_persisted = True
+                            # [CHAT-P0-A A3] assistant 落库后更新 last_pg_id（增量回填游标）
+                            await _set_last_pg_id(session_id, assistant_msg_id)
+                            # [CHAT-P0-A A4] 流式完成后 fire-and-forget 记忆提取（闭环: 流式
+                            # 回答也进长期记忆, 不再"非流式才提取")
+                            if user_id and db:
+                                conv_msgs = [
+                                    {"role": m.get("role"), "content": m.get("content")}
+                                    for m in messages
+                                    if isinstance(m, dict)
+                                ] + [{"role": "assistant", "content": assistant_text}]
+                                asyncio.create_task(
+                                    self._extract_memories_bg(user_id, conv_msgs, session_id)
+                                )
                             logger.info(
                                 f"[chat_stream persist] assistant_msg persisted: "
                                 f"msg_id={assistant_msg_id} len={len(assistant_text)}"
+                            )
+                            # [CHAT-P0-A A5] 反馈锚点: 补发带 message_id 的 done 事件
+                            # （前端可据 message_id 做"这个回答没用"反馈）
+                            # 注意: text_without_json 必须复用首个 done 的干净文本
+                            # (event.text_without_json, 已剥 fake XML/元话语) —
+                            # 不能用 raw assistant_text (text_delta 累积可能含脏文本)
+                            yield StreamEvent(
+                                type="done",
+                                duration_ms=assistant_duration_ms,
+                                session_id=session_id,
+                                text_without_json=event.text_without_json,
+                                message_id=assistant_msg_id,
+                                mode=event.mode,
+                                model=event.model,
+                                thinking_tokens_used=event.thinking_tokens_used,
                             )
                             # CHAT-P0-D W98 +0: RAG 评估可选抽样钩子 (2 行, best-effort)
                             # EVAL_SAMPLE_RATE>0 时按概率 fire-and-forget 评估, 绝不阻断流式
@@ -710,17 +915,9 @@ class MicroBubbleAgent:
             logger.error(f"_build_system_prompt: team_overview injection failed: {e}", exc_info=True)
 
         # 3. 长期记忆
-        try:
-            from app.services.memory_service import MemoryService
-            mem_svc = MemoryService(db)
-            memories = await mem_svc.search_memories(user_id, query, top_k=5)
-            if memories:
-                memory_text = "\n".join(
-                    f"- [{m['memory_type']}] {m['content']}" for m in memories
-                )
-                parts.append(f"\n关于用户的长期记忆:\n{memory_text}")
-        except Exception as e:
-            logger.warning(f"构建记忆提示词失败: {e}")
+        memory_text = await _inject_memories(db, user_id, query)
+        if memory_text:
+            parts.append(memory_text)
 
         # 4. 会议转录检测
         if _is_meeting_transcript_query(query):

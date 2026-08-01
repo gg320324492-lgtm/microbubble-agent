@@ -380,6 +380,29 @@ def _block_dump(block) -> Dict:
     return {"type": getattr(block, "type", "unknown"), "text": getattr(block, "text", str(block))}
 
 
+def _add_ref_snippets(data: Dict) -> Dict:
+    """2026-07-31 #CHAT-P0-A A5: knowledge_ref 每项加 snippet（≤200 字 chunk 原文）
+
+    前端引用卡反馈需要"引用了哪段原文"——content 可能很长, 显式派生 snippet
+    字段（剥 HTML + 压缩空白 + 截 200 字）。只加字段不删原字段, LLM 侧
+    tool_result 契约不变（此处只作用于 rich_block SSE 输出）。
+    """
+    import re as _re
+    items = data.get("results") or data.get("refs") or data.get("items")
+    if not isinstance(items, list):
+        return data
+    def to_snippet(content) -> str:
+        if not isinstance(content, str) or not content.strip():
+            return ""
+        text = _re.sub(r"<[^>]+>", " ", content)
+        text = _re.sub(r"\s+", " ", text).strip()
+        return text[:200] + ("..." if len(text) > 200 else "")
+    for item in items:
+        if isinstance(item, dict) and not item.get("snippet"):
+            item["snippet"] = to_snippet(item.get("content"))
+    return data
+
+
 def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
     """从工具结果中提取 RichBlock（与原实现兼容）"""
     from typing import get_args
@@ -394,6 +417,8 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
     rb_type = result.get("rich_block_type")
     if rb_type and rb_type in valid_types:
         data = {k: v for k, v in result.items() if k != "rich_block_type"}
+        if rb_type == "knowledge_ref":
+            data = _add_ref_snippets(data)
         return RichBlock(
             type=rb_type,
             data=data,
