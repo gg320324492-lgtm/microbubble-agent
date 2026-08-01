@@ -175,6 +175,10 @@
   --animation-confetti-fall: confetti-fall 1.5s var(--ease-out) forwards;
   --animation-done-bounce: done-bounce 0.5s var(--ease-bounce) both;
   --animation-btn-glow: btn-glow 2s var(--ease-in-out) infinite;
+  /* ===== W99 +14 统一 Thinking Capsule =====
+     只动 border-color + box-shadow（合成层友好），不动 layout。
+     旧 WebView（HarmonyOS ArkWeb 6.0 / 老 Safari）无 color-mix 时降级为无描边动画。 */
+  --animation-capsule-breathe: capsule-breathe 2s var(--ease-in-out) infinite;
 
   /* ===== 断点（CSS @media 数值必须硬写 CSS 不支持变量，这里仅作文档参考；JS 在 useIsMobile.js 中维护） =====
      xs  < 480px    iPhone SE 一代等极小屏
@@ -348,6 +352,20 @@ body {
    优先用独立 `rotate:` 绕开 webhint paint 警告 (CLAUDE.md:772 范例) */
 @keyframes spin {
   to { rotate: 360deg; }
+}
+
+/* ===== W99 +14 Thinking Capsule 边框呼吸 =====
+   只动 border-color + box-shadow（合成层友好），不动 layout。
+   旧 WebView（HarmonyOS ArkWeb 6.0 / 老 Safari）无 color-mix 时降级为无描边动画。 */
+@keyframes capsule-breathe {
+  0%, 100% {
+    border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 0%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 10%, transparent);
+  }
 }
 
 /* 通用：脉冲 (15 处重复 → 1 处权威, opacity + 独立 scale)
