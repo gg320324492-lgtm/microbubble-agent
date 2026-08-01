@@ -20,19 +20,23 @@ import asyncio
 import base64
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from sqlalchemy import select
 
 from app.agent.chat_engine import ChatEngine
+from app.agent.intent_classifier import classify_intent
 from app.agent.prompts import (
     _is_meeting_transcript_query,
+    get_intent_aware_guidelines,
     get_meeting_analyzer_prompt,
     get_system_prompt,
 )
 from app.agent.protocol import StreamEvent
 from app.agent.session_manager import session_manager
+from app.agent.thinking_config import resolve_thinking_config
+from app.agent.tool_registry import ToolContext
 from app.agent.tracing import TraceCollector
 from app.config import settings
 from app.models.base import BEIJING_TZ
@@ -62,6 +66,129 @@ _SESSION_CONTEXT_MAX_TURNS = 12
 _SESSION_CONTEXT_MAX_MSGS = _SESSION_CONTEXT_MAX_TURNS * 2
 # Redis meta hash 里记录 PG 最新落库 message id 的字段名
 _META_LAST_PG_ID_FIELD = "last_pg_id"
+_LAST_TURN_META_FIELD = "last_turn"
+
+
+def _compact_topic_results(results: List[Dict], limit: int = 10) -> List[Dict]:
+    """把 search_knowledge 结果压缩为 last_turn 可序列化锚点。"""
+    compact: List[Dict] = []
+    for row in results[:limit]:
+        if not isinstance(row, dict) or row.get("id") is None:
+            continue
+        compact.append({
+            "id": row["id"],
+            "title": (row.get("title") or "")[:200],
+            "content": (row.get("content") or "")[:500],
+        })
+    return compact
+
+
+def _build_last_turn(intent, query: str, answer: str, results: List[Dict]) -> Dict[str, Any]:
+    """构造回答完成后写入 Redis Hash 的 last_turn。"""
+    compact = _compact_topic_results(results)
+    return {
+        "intent": intent.category.value if intent is not None else "casual_chat",
+        "query": query,
+        "chunk_ids": [row["id"] for row in compact],
+        "answer_summary": (answer or "")[:200],
+        "topics": [row["title"] for row in compact[:5] if row.get("title")],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def _set_last_turn(session_id: str, intent, query: str, answer: str, results: List[Dict]):
+    """best-effort 保存 last_turn，Redis 故障不阻断流式。"""
+    try:
+        await session_manager.set_session_meta(
+            session_id,
+            _LAST_TURN_META_FIELD,
+            _build_last_turn(intent, query, answer, results),
+        )
+    except Exception as e:
+        logger.warning(f"set last_turn failed (best-effort): {e}")
+
+
+async def _load_knowledge_by_ids(db, ids: List[int]) -> List[Dict]:
+    """按 last_turn 顺序回查上一轮知识条目。"""
+    if db is None or not ids:
+        return []
+    from app.models.knowledge import Knowledge
+
+    rows = (await db.execute(select(Knowledge).where(
+        Knowledge.id.in_(ids),
+        Knowledge.deleted_at.is_(None),
+        Knowledge.storage_mode == "kb",
+        Knowledge.visibility.in_(["team", "public"]),
+    ))).scalars().all()
+    by_id = {row.id: row for row in rows}
+    return [
+        {"id": row.id, "title": row.title or "", "content": (row.content or "")[:500]}
+        for kid in ids
+        if (row := by_id.get(kid)) is not None
+    ]
+
+
+async def _build_follow_up_context(db, session_id: str, query: str) -> str:
+    """若上一轮是 search_info，复用其结果并追加一次 0.8s 上限检索。"""
+    try:
+        last_turn = await session_manager.get_session_meta(session_id, _LAST_TURN_META_FIELD)
+        if not isinstance(last_turn, dict) or last_turn.get("intent") != "search_info":
+            return ""
+
+        reused: List[Dict] = []
+        ids = [int(x) for x in last_turn.get("chunk_ids", [])[:10]]
+        if db is not None and ids:
+            try:
+                reused = await _load_knowledge_by_ids(db, ids)
+            except Exception as e:
+                logger.warning(f"follow_up id reuse skipped: {e}")
+
+        fresh: List[Dict] = []
+        if db is not None:
+            try:
+                from app.services.hybrid_retriever import get_hybrid_retriever
+                retrieval_query = " ".join(filter(None, [
+                    str(last_turn.get("query") or "").strip(),
+                    " ".join(str(x) for x in last_turn.get("topics", [])[:5] if x),
+                    query.strip(),
+                ]))
+                fresh = await asyncio.wait_for(
+                    get_hybrid_retriever(db).retrieve(
+                        query=retrieval_query or query, top_k=5,
+                        enable_vector=True, enable_bm25=True,
+                        enable_graph=False, enable_rerank=False,
+                    ),
+                    timeout=0.8,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("follow_up additional retrieval timed out")
+            except Exception as e:
+                logger.warning(f"follow_up additional retrieval skipped: {e}")
+
+        combined: List[Dict] = []
+        seen = set()
+        for row in reused + fresh:
+            rid = row.get("id") if isinstance(row, dict) else None
+            if rid is None or rid in seen:
+                continue
+            seen.add(rid)
+            combined.append(row)
+
+        topics = [str(x) for x in last_turn.get("topics", []) if x][:5]
+        lines = [
+            "## 上一轮话题（续讲指代消解）",
+            f"上一轮主题：{str(last_turn.get('answer_summary') or '')[:200]}",
+            f"话题：{'、'.join(topics)}",
+            "用户是在要求续讲上一轮，不是开启无关新话题。优先沿用以下资料，再自然补充新角度：",
+        ]
+        lines.extend(
+            f"- [{row.get('id')}] {row.get('title') or '未命名'}：{(row.get('content') or '')[:240]}"
+            for row in combined[:10]
+        )
+        return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"follow_up context failed (best-effort): {e}")
+        return ""
 
 
 async def _fetch_pg_messages(
@@ -537,6 +664,40 @@ class MicroBubbleAgent:
         # 3. 构造 system prompt（流式路径同样注入长期记忆 — A4）
         system = await self._build_system_prompt(user_id, message, db) if user_id else get_system_prompt()
 
+        # B1: prompt 构造后分类一次；闲聊/续讲显式覆盖 fast，并传 engine 复用。
+        try:
+            intent = await classify_intent(
+                question=message,
+                ctx=ToolContext(db=db, user_id=user_id),
+            )
+        except Exception as e:
+            # classify_intent 本身已有降级；顶层再兜一层，保证分类基础设施故障不阻断 chat。
+            from app.agent.intent_classifier import IntentCategory, IntentResult
+            logger.warning(f"chat_stream intent preclassification failed: {e}")
+            intent = IntentResult(
+                category=IntentCategory.CASUAL_CHAT,
+                confidence=0.0,
+                reasoning=f"preclassification failed: {e}",
+            )
+        if intent.category.value in ("casual_chat", "follow_up"):
+            config = resolve_thinking_config("fast")
+            thinking_mode = "fast"
+            casual_section = get_intent_aware_guidelines(intent.category.value)
+            if casual_section:
+                system = system + "\n" + casual_section
+            logger.debug(
+                "chat_stream fast path: intent=%s rounds=%s critique=%s",
+                intent.category.value,
+                config.max_tool_rounds,
+                config.skip_critique,
+            )
+
+        # B2: follow_up 读取上一轮结果集 + 追加一轮检索，注入指代消解 prompt。
+        if intent.category.value == "follow_up":
+            context_block = await _build_follow_up_context(db, session_id, message)
+            if context_block:
+                system = system + "\n" + context_block
+
         # 4. #043 持久化入场
         # 关键：所有持久化操作都用 try/except 兜底，绝不阻塞流式
         # 幂等键：同一 stream 重试时（网络断开重连）不会重复落库
@@ -588,13 +749,13 @@ class MicroBubbleAgent:
         assistant_critique: Optional[Dict[str, Any]] = None
         assistant_usage: Optional[Dict[str, int]] = None
         assistant_duration_ms: Optional[int] = None
+        retrieved_chunks: List[Dict[str, Any]] = []
         t0 = time.monotonic()
 
         # 6. 调用 ChatEngine 流式（for-await 累积所有事件）
         # 关键设计：ChatEngine.chat_stream() 透传 synthesize_stream() 的 events，
-        # 我们在 micro_bubble_agent 这一层用 for-await 拦截并累积，
-        # ChatEngine 内部不需要改（关注点分离：engine 只管 LLM 编排，
-        # persistence 只在 agent 层做）
+        # 我们在 micro_bubble_agent 这一层用 for-await 拦截并累积；意图在此入口
+        # 预分类一次后透传给 engine，避免闲聊快路径重复调用分类 LLM。
         stream_iter = self.engine.chat_stream(
             messages=messages,
             system=system,
@@ -603,8 +764,9 @@ class MicroBubbleAgent:
             channel_user_id=channel_user_id,
             session_id=session_id,
             synthesis_model_override=model,
-            # 2026-07-13 #P1 透传
+            # 2026-07-13 #P1 透传 + CHAT-P1-B 复用预分类
             thinking_mode=thinking_mode,
+            preclassified_intent=intent,
         )
 
         try:
@@ -628,13 +790,21 @@ class MicroBubbleAgent:
                         "duration_ms": event.tool_duration_ms,
                         "error": event.tool_error,
                     })
+                    if event.tool_name == "search_knowledge" and isinstance(event.tool_output, dict):
+                        rows = event.tool_output.get("results")
+                        if isinstance(rows, list):
+                            retrieved_chunks.extend(rows)
                 elif event.type == "rich_block" and event.block:
                     assistant_rich_blocks.append(event.block.model_dump())
                 elif event.type == "intent_detected" and event.intent:
                     assistant_intent = event.intent
                 elif event.type == "critique" and event.critique:
                     assistant_critique = event.critique
+                elif event.type == "retry":
+                    assistant_text = ""
                 elif event.type == "done":
+                    if event.text_without_json is not None:
+                        assistant_text = event.text_without_json
                     assistant_usage = event.usage
                     assistant_duration_ms = event.duration_ms
 
@@ -643,6 +813,14 @@ class MicroBubbleAgent:
 
                 # 在 done 事件后立即落库 assistant（client 看到 done 后即可查 history）
                 if event.type == "done":
+                    # B2: done 已先下发给客户端；紧接着写本轮 last_turn（与 PG 持久化独立）。
+                    await _set_last_turn(
+                        session_id=session_id,
+                        intent=intent,
+                        query=message,
+                        answer=assistant_text,
+                        results=retrieved_chunks,
+                    )
                     if persist_enabled:
                         try:
                             from app.services import chat_history_service as chat_svc
