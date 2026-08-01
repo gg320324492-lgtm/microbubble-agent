@@ -33,7 +33,13 @@ const contextMenuY = ref(0)
 
 const filteredSessions = computed(() => {
   const kw = filterKw.value.trim().toLowerCase()
-  const all = store.sortedSessions
+  let all = store.sortedSessions
+  // [CHAT-P1-E E3] 归档区过滤
+  if (archiveFilter.value === 'active') {
+    all = all.filter((s) => !s.is_archived)
+  } else if (archiveFilter.value === 'archived') {
+    all = all.filter((s) => s.is_archived)
+  }
   if (!kw) return all
   return all.filter((s) => {
     if ((s.title || '').toLowerCase().includes(kw)) return true
@@ -149,6 +155,20 @@ const onTogglePinned = (session) => {
   store.setPinned(session.id, !session.is_pinned)
 }
 
+// [CHAT-P1-E E3] 归档/恢复 (复用 chatSessions.ts:497-502 setArchived, store API 已存在)
+const onToggleArchive = async (session) => {
+  closeContextMenu()
+  try {
+    await store.setArchived(session.id, !session.is_archived)
+    ElMessage.success(session.is_archived ? '已恢复' : '已归档')
+  } catch (e) {
+    ElMessage.error(session.is_archived ? '恢复失败' : '归档失败')
+  }
+}
+
+// [CHAT-P1-E E3] 顶栏 tab 切换 全部/未归档/已归档
+const archiveFilter = ref('active')  // 'all' | 'active' | 'archived'
+
 // ★ 2026-07-01 修复 bug 2.4: 侧边栏 scroll 位置保留
 // 切会话 / filterKw 变化 / v-for reorder 时,Vue 会 re-render .session-item 列表
 // Chrome 浏览器会尝试 scroll anchoring 自动调整 scrollTop → 用户感知为"跳动"
@@ -214,6 +234,27 @@ onUpdated(() => {
         >
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
+      </div>
+      <!-- [CHAT-P1-E E3] 归档区过滤 tab -->
+      <div v-if="!collapsed" class="archive-filter-tabs">
+        <button
+          type="button"
+          class="archive-tab"
+          :class="{ active: archiveFilter === 'all' }"
+          @click="archiveFilter = 'all'"
+        >全部</button>
+        <button
+          type="button"
+          class="archive-tab"
+          :class="{ active: archiveFilter === 'active' }"
+          @click="archiveFilter = 'active'"
+        >未归档</button>
+        <button
+          type="button"
+          class="archive-tab"
+          :class="{ active: archiveFilter === 'archived' }"
+          @click="archiveFilter = 'archived'"
+        >已归档</button>
       </div>
     </div>
     <!-- 同步状态徽章 -->
@@ -289,6 +330,11 @@ onUpdated(() => {
         <span>{{ contextMenuSession.is_pinned ? '📍' : '📌' }}</span>
         <span>{{ contextMenuSession.is_pinned ? '取消置顶' : '置顶会话' }}</span>
       </li>
+      <!-- [CHAT-P1-E E3] 归档/恢复 (归档区显示"恢复", 否则显示"归档") -->
+      <li role="menuitem" class="ctx-item" @click="onToggleArchive(contextMenuSession)">
+        <el-icon><Delete /></el-icon>
+        <span>{{ contextMenuSession.is_archived ? '✅ 恢复会话' : '🗄️ 归档会话' }}</span>
+      </li>
       <li role="menuitem" class="ctx-item" @click="onShare(contextMenuSession)">
         <el-icon><Share /></el-icon><span>分享</span>
       </li>
@@ -321,6 +367,30 @@ onUpdated(() => {
 .new-btn { width: 100%; }
 .new-btn-text { margin-left: 4px; }
 .icon { font-size: 16px; margin-right: 4px; }
+
+/* [CHAT-P1-E E3] 归档过滤 tab */
+.archive-filter-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.archive-tab {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+.archive-tab:hover { background: var(--color-bg-hover); }
+.archive-tab.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
 .session-list { flex: 1; overflow-y: auto; padding: 8px 0; overflow-anchor: none; }
 .session-item {
   padding: 10px 16px;
