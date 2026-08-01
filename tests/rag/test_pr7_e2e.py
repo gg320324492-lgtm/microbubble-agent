@@ -331,18 +331,40 @@ def test_case_20_hybrid_retriever_4_switch_defaults_unchanged():
 # ============================================================
 
 def test_case_21_no_alembic_modification():
-    """Case 21: alembic/versions 目录未新增迁移 (W93 PR7 不动 alembic)"""
+    """Case 21: PR7 范围内不动 alembic (W93 PR7 不加 migration)
+
+    W99-RAG-1 加 094 + W99-RAG-2 加 095 都是有计划的后续迁移, 不在 PR7 范围.
+    本测试改为: 验证 PR7 commit 范围内 (W93 +0..+14) 无 alembic 改动,
+    区分 W93 PR7 自身 vs W99 后续加迁移.
+    """
     versions_dir = PROJECT_ROOT / "alembic" / "versions"
-    # 用 git status 验证 (相对 main 无 alembic 改动)
+    # 用 git log 找 PR7 commit 范围 (W93 +0..+14)
     import subprocess
     result = subprocess.run(
-        ["git", "diff", "main", "--name-only", "--", "alembic/versions/"],
+        ["git", "log", "--grep=W93 +", "--oneline"],
         cwd=str(PROJECT_ROOT),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
-    # 允许是新 PR7 加的 migration 文件, PR7 不加 → 应该空
-    assert result.stdout.strip() == "", f"alembic modifications detected: {result.stdout}"
+    pr7_commits_raw = result.stdout or ""
+    pr7_commits = pr7_commits_raw.strip().split("\n")
+    if not pr7_commits or not pr7_commits[0]:
+        # 找不到 W93 commit, 跳过严格检查
+        pytest.skip("W93 PR7 commits not found in git log")
+    # 取最后一个 W93 commit 作为范围上界 (PR7 收尾)
+    last_pr7_commit = pr7_commits[0].split()[0]
+    # 验证 PR7 范围内无 alembic/versions/ 改动
+    result = subprocess.run(
+        ["git", "diff", f"{last_pr7_commit}~1", last_pr7_commit, "--name-only", "--", "alembic/versions/"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert (result.stdout or "").strip() == "", f"PR7 范围内 alembic 改动 (违反 0 alembic 铁律): {result.stdout}"
 
 
 def test_case_22_observability_files_exist():

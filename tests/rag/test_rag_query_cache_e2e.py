@@ -71,9 +71,13 @@ def _run_cmd(cmd: str) -> str:
 
 
 def test_e2e_01_alembic_single_head() -> None:
-    """件 1: python -m alembic heads → 1 head (094)"""
+    """件 1: python -m alembic heads → 1 head
+
+    W99-RAG-1 时期望 094; W99-RAG-2 加 095 迁移后, head 已推进到 095.
+    测试期望从 094 调整为 095 (W99-RAG-2 据实更新, 沿用 W99 S-series 累计迁移推进模式)
+    """
     out = _run_cmd("python -m alembic heads")
-    assert "094" in out, f"094 应在 alembic heads 中: {out}"
+    assert "095" in out, f"095 应在 alembic heads 中 (W99-RAG-2 最新迁移): {out}"
     assert "Multiple" not in out, f"alembic 多 head, 不应: {out}"
 
 

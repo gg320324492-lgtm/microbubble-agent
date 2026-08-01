@@ -360,7 +360,11 @@ def test_kg_17_alembic_091_idempotent_guard_and_concurrently():
 
 
 def test_kg_18_alembic_single_head_091():
-    """alembic 恰 1 head = 091 (E01 多 head 残留, 10 PR 最后 1 个 alembic)"""
+    """alembic 恰 1 head (W97 RAG 大改造 10 PR 链收口)
+
+    W99-RAG-2 W99 +11 已加 095 迁移 (down_revision=094), head 现为 095.
+    本测试验证 1 head 守恒 + 串单链 087→088→089→090→091 仍完整 (PR8 链核心).
+    """
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
@@ -368,22 +372,36 @@ def test_kg_18_alembic_single_head_091():
     cfg.set_main_option("script_location", "alembic")
     heads = ScriptDirectory.from_config(cfg).get_heads()
     assert len(heads) == 1, f"E01 多 head: {heads}"
-    assert heads[0] == "091_add_kg_entity", f"head 必为 091, 实测 {heads}"
+    # W99-RAG-2 加 095 后 head 已推进, 但 PR8 串单链 087→088→089→090→091 仍存在
+    # 验证 PR8 chain 在当前 head 上溯可达
+    assert heads[0] in (
+        "091_add_kg_entity",
+        "094_add_rag_query_cache_metrics",
+        "095_add_rag_citation_metrics",
+    ), f"head 不在 W97-W99 RAG 链范围内, 实测 {heads}"
 
-    # 串单链验证: 087 → 088 → 089 → 090 → 091 (10 PR alembic 收口)
+    # 串单链验证: 当前 head 上溯 9 级 (W99 +094/+095 后链更长)
+    # 链: 095 → 094 → 093 → 092 → 091 → 090 → 089 → 088 → 087
     script = ScriptDirectory.from_config(cfg)
     chain = []
     rev = heads[0]
-    for _ in range(5):
+    for _ in range(15):  # 留余量, 兼容未来再加迁移
         chain.append(rev)
         down = script.get_revision(rev).down_revision
         if not down:
             break
         rev = down if isinstance(down, str) else down[0]
-    assert chain[0] == "091_add_kg_entity"
-    assert "090_add_rag_eval_report" in chain
+    # PR8 链核心 5 个必须出现 (注意: 088 文件名是 088_add_knowledge_chunk.py,
+    # 089 文件名是 089_gin_trgm_tsvector.py - PR3 BM25 + pg_trgm + tsvector 合并 1 个迁移)
+    for expected in ("087_add_knowledge_original_parent_id", "088_add_knowledge_chunk",
+                     "089_gin_trgm_tsvector", "090_add_rag_eval_report",
+                     "091_add_kg_entity"):
+        assert expected in chain, f"PR8 链核心 {expected} 缺失, 实测 chain: {chain}"
     assert "089_gin_trgm_tsvector" in chain
     assert "088_add_knowledge_chunk" in chain
+    # 兼容 W99 链: 092/093/094/095 也在 chain
+    assert "094_add_rag_query_cache_metrics" in chain
+    assert "095_add_rag_citation_metrics" in chain
 
 
 # ============== 19-22: 集成 + 性能 + 实体数 + 漂移 ==============
@@ -418,6 +436,8 @@ def test_kg_19_integration_pr3_bm25_and_pr5_rag_evaluator_untouched():
     # CHAT-P0-D W98 +0 例外已批: rag_evaluator.py 新增 4 个模块级函数
     # (get_eval_sample_rate / _eval_sample_hit / _build_context_from_tool_trace /
     #  main + maybe_evaluate_async 等 CLI/抽样钩子) — 0 改 RAGEvaluator 已有 6 函数
+    # W99-RAG-2 W99 +9 新增例外: RAGEvaluator 类内 ADD evaluate_citations +
+    # _fallback_citation_score (LLM-as-judge citation 评估, 0 改既有 11 def)
     approved = {
         "+def get_eval_sample_rate() -> float:",
         "+def _eval_sample_hit() -> bool:",
@@ -429,6 +449,9 @@ def test_kg_19_integration_pr3_bm25_and_pr5_rag_evaluator_untouched():
         "+async def _cli_collect_targets(",
         "+async def _cli_summary_only(",
         "+async def _cli_print_summary(",
+        # W99-RAG-2 例外: 类内 ADD (与已有 11 def 并列, 不改既有)
+        "+    async def evaluate_citations(",
+        "+    def _fallback_citation_score(",
     }
     violations = [ln for ln in changed_defs if ln not in approved]
     assert violations == [], f"件 4a 双门控违规, 老核心 def 改动: {violations}"
