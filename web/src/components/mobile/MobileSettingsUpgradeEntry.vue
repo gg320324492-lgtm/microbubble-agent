@@ -69,7 +69,7 @@ function onClick() {
   height: 40px;
   border-radius: 50%;
   background: linear-gradient(135deg, #FF7A5C, #FFB347);
-  color: white;
+  color: var(--el-color-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -110,9 +110,9 @@ function onClick() {
   border-color: rgba(255, 122, 92, 0.35);
 }
 [data-theme="dark"] .settings-upgrade-entry .entry-desc {
-  color: #a0a0a0;
+  color: rgb(160, 160, 160);
 }
 [data-theme="dark"] .settings-upgrade-entry .entry-arrow {
-  color: #888888;
+  color: rgb(136, 136, 136);
 }
 </style>

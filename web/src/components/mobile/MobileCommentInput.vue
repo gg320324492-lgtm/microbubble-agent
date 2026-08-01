@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
   height: 28px;
   border-radius: 50%;
   background: var(--color-primary, #ff7a5c);
-  color: #fff;
+  color: var(--el-color-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -254,7 +254,7 @@ onBeforeUnmount(() => {
   height: 36px;
   padding: 0 14px;
   background: var(--color-primary, #ff7a5c);
-  color: #fff;
+  color: var(--el-color-white);
   border: none;
   border-radius: 8px;
   font-size: 13px;

@@ -696,7 +696,7 @@ watch(() => props.fileId, (newId, oldId) => {
   height: 18px;
   padding: 0 5px;
   background: var(--color-text-placeholder, #c0c4cc);
-  color: #fff;
+  color: var(--el-color-white);
   border-radius: 9px;
   font-size: 11px;
   font-weight: 600;

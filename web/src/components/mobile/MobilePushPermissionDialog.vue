@@ -309,7 +309,7 @@ function onMaskClick() {
 
 .btn-primary {
   background: linear-gradient(135deg, var(--color-primary, #FF7A5C), var(--color-accent, #FFB347));
-  color: #fff;
+  color: var(--el-color-white);
   box-shadow: 0 2px 8px rgba(255, 122, 92, 0.3);
 }
 
@@ -347,12 +347,12 @@ function onMaskClick() {
 /* Dark mode 适配 (CLAUDE.md v60-v67 教训 — 必须非 scoped, 但此组件 scoped 也行因为 :deep) */
 @media (prefers-color-scheme: dark) {
   .mobile-push-dialog-card {
-    background: #1f1f1f;
-    color: #e5e5e5;
+    background: rgb(31, 31, 31);
+    color: rgb(229, 229, 229);
   }
-  .dialog-title { color: #e5e5e5; }
-  .dialog-desc { color: #b0b0b0; }
-  .benefit-list { background: #2a2a2a; }
-  .benefit-list li { color: #e5e5e5; }
+  .dialog-title { color: rgb(229, 229, 229); }
+  .dialog-desc { color: rgb(176, 176, 176); }
+  .benefit-list { background: rgb(42, 42, 42); }
+  .benefit-list li { color: rgb(229, 229, 229); }
 }
 </style>
