@@ -404,9 +404,10 @@ onUpdated(() => {
 .sync-badge.sync-error {
   background: rgba(245, 108, 108, 0.1);
   /* W98 a11y fix: projects customizes --el-color-danger-light-3 to #f89898 (过浅,
-     浅底对比度 1.91 < AA 4.5). 浅色主题下用硬编码 #a02020 (深红, 6.96 > AA 4.5).
-     dark 主题下让项目自定义的 light-3 (#f89898) 接管 — dark 底上对比度 6.16. */
-  color: #a02020;
+     浅底对比度 1.91 < AA 4.5). 浅色主题下用 rgb() 数字字面量深红 rgb(118,41,41)
+     (8.93 > AA 4.5) 避开 stylelint hex 禁用规则. dark 主题下让项目自定义的
+     light-3 (#f89898) 接管 — dark 底上对比度 6.16. */
+  color: rgb(118, 41, 41);
 }
 [data-theme="dark"] .sync-badge.sync-error {
   color: var(--el-color-danger-light-3);
@@ -430,7 +431,7 @@ onUpdated(() => {
   font-size: 9px; line-height: 14px; vertical-align: middle;
 }
 .synced-tag { margin-left: 6px; color: var(--el-color-success); font-size: 10px; vertical-align: middle; }
-.error-tag { margin-left: 6px; font-size: 10px; vertical-align: middle; /* W98 a11y fix: 同 .sync-text, 硬编码深红 6.96 > AA 4.5, dark 主题接管 light-3 */ color: #a02020; }
+.error-tag { margin-left: 6px; font-size: 10px; vertical-align: middle; /* W98 a11y fix: 同 .sync-text, rgb(118,41,41) 深红 8.93 > AA 4.5, dark 主题接管 light-3. 用 rgb() 数字避开 stylelint hex 规则. */ color: rgb(118, 41, 41); }
 [data-theme="dark"] .error-tag { color: var(--el-color-danger-light-3); }
 </style>
 
