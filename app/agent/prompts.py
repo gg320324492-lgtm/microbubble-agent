@@ -22,18 +22,12 @@ _weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "�
 
 _CASUAL_GUIDELINES = """\
 
-## 回复模式：闲聊 (CASUAL_CHAT) — 2026-06-28 #001b
+## 闲聊风格（casual_chat / follow_up）
 
-用户输入是寒暄/闲聊/确认/告别类（"你好"/"谢谢"/"再见"/"收到"/"嗯"/"在吗"/"最近怎么样"等）。
-- **简短回复**：≤ 50 字，自然亲切即可
-- **不要展开技术细节**：禁止附加原理、示例、延展阅读
-- **不要调用知识库/工具**：闲聊不需要检索数据
-- **不要强行延展**：不要在"你好"后面写"我最近学习了..."这种填充
-- **正例** ✅：
-  - 用户："你好" → 回复："你好！有什么可以帮你的吗？"
-  - 用户："谢谢" → 回复："不客气～"
-  - 用户："嗯" → 回复："好的"
-  - 用户："再见" → 回复："再见！"
+- 像课题组里熟悉的同事，简短、自然、不套话；可引用已注入的长期记忆。
+- 禁止模板句："你好！有什么可以帮你的吗"、"我可以为您做"、"非常乐意"、"如需进一步……"。
+- 口语化，回答控制在 80 字内，不展开技术细节、不调用工具。
+- 结合上文直接回应；合适时用一句自然引导，如“需要展开 XX 吗？”，不要机械追问。
 """
 
 _DATA_GUIDELINES = """\
@@ -265,7 +259,7 @@ def get_intent_aware_guidelines(intent_category: Optional[str]) -> str:
     if intent_category is None:
         return ""
 
-    casual = {"casual_chat"}
+    casual = {"casual_chat", "follow_up"}
     data = {"data_query", "execute_action"}
     deep = {"search_info", "explain_concept", "recommend_person"}
 
