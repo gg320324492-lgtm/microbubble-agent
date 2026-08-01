@@ -372,6 +372,7 @@
 
 ---
 
+
 ## W98 N-3 件 7 SearchLog 回收率偏差调研专题 (2026-08-01, 锚点范式 W98 +13 → +14 守恒, 主指挥协调范式第 83 次派工)
 
 **主基调**: 锚点范式 W98 +13 → **N-3 +14** (+1 据实, 纯 docs/memory 调研范畴). 当前 main HEAD = `68ed0b55c` (RAG-GC W98 +13 grand closure 收口, memory/w98-rag-grand-closure-2026-08-01.md 完整沉淀). 0 commits ahead of base `68ed0b55c` (本任务 docs/memory 范畴, 不动 production code). **件 7 派工 brief 偏差是真偏差**: 件 7 期望 "feedback API ≥ 18 PASS" 实测 = 14/14 PASS, 件 7 真语义是 `docs/rag/EVAL.md` 第 55-62 行 SQL 视图 **SearchLog CTR (click/曝光) ≥ 30% (PR6/7 落库)**. **埋点未启用是事实**: `web/src/api/analytics.js` 定义了 `recordSearchEvent` + `recordClick`, 但 view 层未调用 (`grep web/src/views --include="*.vue"` 仅命中搜索 UI, 无埋点调用点). **主拍推荐方案**: **选项 C (双轨分阶段)** — 短期阈值 ≥ 15% (基于实测) + 中期 UI 改进 (W99 P1) + 长期回归 ≥ 30% (W101+). alembic 1 head `['093_add_search_log_answer_rating']` 守恒 (W98 N-3 调研不动 alembic). **0 production code 改动铁律 守恒**: `git diff 68ed0b55c -- app/ web/src/ alembic/ | wc -l` = 0 实测. 派工前提铁律 12 + **类 20.33 实战新增 1 实例 (件 7 CTR 派工 brief 偏差 + 埋点未启用双错配) + 4 子类派生 (.a 派工 brief 错配真语义 / .b PR6 self-report 误报 / .c UI 埋点未启用 / .d 双轨分阶段)**. **W98 累计 commits 守恒 + 锚点范式 +14 据实上报**. W19 选项 A 维持. W99+ 派工顺序表预留 + W99 P1 附加件 7 UI 改进清单 (KnowledgeView + Mobile + 视觉 + 文案 + 匿名 + analytics 维度).
@@ -384,4 +385,54 @@
 
 **W98 N-3 1 新铁律 (类 20.33 件 7 双错配沉淀)**:
 - **类 20.33 件 7 CTR 派工 brief 偏差 + 埋点未启用双错配**: 派工 v10 §0 件 7 期望 "feedback API ≥ 18" 错配件 7 真语义 "SearchLog CTR ≥ 30% (click/曝光, PR6/7 SQL 视图)", 14/14 PASS 已 100% 覆盖 P1-D3 + P2-E2E, 件 7 真守恒待 W99 P1 实施. PR6 grand closure self-report "前端接通" 实际**仅有 API 定义, 无 view 调用** (`grep web/src/views --include="*.vue"` 仅命中搜索 UI), 埋点未启用导致 SearchLog 表累积数据 = 0 (或历史 seed), CTR 真回收率**永久不可测**, 即使真环境跑也无法重现 PR6/7 ≥ 30% 期望. 修复路径: 双轨分阶段 (选项 C), 短期调低阈值 ≥ 15% + 中期 UI 改进 (W99 P1) + 长期回归 ≥ 30% (W101+). 与类 20.112 关系: 类 20.112 (W98 P2-GATE feedback API ≥ 18 vs 14) 是 N-3 调研铺垫, 类 20.33 (W98 N-3) 是真语义澄清 + 错配沉淀. UI 改进清单 6 类: (1) KnowledgeView 搜索结果点击埋点接通 (recordSearchEvent + recordClick) (2) MobileKnowledgeView 同样接通 (3) 视觉强化 top-1 高亮 (4) FeedbackButtons 文案激励 (👍 "回答有帮助" / 👎 "需要改进" / prompt "帮助我们回答得更好") (5) 匿名用户填补 (`user_id > 0` 守卫放开, 存 session_id + IP hash) (6) analytics.py 聚合 answer_rating 维度. W99 P1 派工必含 (1)(2)(3)(4)(5), (6) 留 P3-D grand closure.
+
+
+## W98 N-4 v11 §13 仓库实情真查实战收敛 (2026-08-01)
+
+**主基调**: 派工 v10 — N-4 派工 v11 §13 仓库实情真查实战收敛. 锚点范式 W98 RAG-GC +12 → N-4 +13 → +14 守恒 (1 commit 仅 docs + memory). 当前 main HEAD = `68ed0b55c` (W98 RAG-GC merge). 0 commits ahead of base (本任务 docs/memory 范畴, 不动 production code). 1/1 agent 完成: v11 §13 实战漂移收敛 (派工 brief "§13" 引用 4 处漂移 + 派工 v11 模板 0 段定义 §13 据实) + W89 类 20.6/13 漂移沉淀 (历史定义 vs 派工 brief 重定义冲突) + v11 → v11.1 升级建议 (不推倒 v11, 仅加 §13) + 类 20.34 实战收敛 (本任务新编号). alembic 1 head `093_add_search_log_answer_rating` 守恒. **0 production code 改动铁律 守恒**: `git diff main -- app/ web/src/ alembic/ | wc -l` = 0 实测. 派工前提铁律 12 + 类 20 实战累计 32 据实 (W89-W98 ≥ 25 守恒). 累计 29 批 1501+ commits + 591+ 铁律 (W98 N-4 +1 铁律: 类 20.34 派工 v11 §13 仓库实情真查漏漂移). **W19 选项 A 维持**: 4 留未来 PR + W99+ 派工顺序表 (主拍签字范围外). **W99+ 派工顺序表预留 (沿用 RAG-GC 7 段持续演进方向)**: W99 P1-P3 / W100 P1-P2 / W101 P1-P2.
+
+**核心交付 4 文件**:
+- `docs/w98-n4-v11-section13-2026-08-01.md` (165 行 v11 §13 实战收敛 runbook, 10 节)
+- `memory/w98-n4-v11-section13-startup-2026-08-01.md` (200+ 行, 起步 6 项严格执行)
+- `memory/w98-n4-v11-section13-2026-08-01.md` (200+ 行, 收口据实 18 项反馈 + 1 新铁律沉淀)
+- `memory/MEMORY.md` (本新章节, N-4 v11 §13 收敛段)
+
+**5 件套守恒实测**:
+1. ✅ alembic 1 head: `['093_add_search_log_answer_rating']` (本任务 0 alembic 改动)
+2. ✅ pytest collect: 沿用 W98 RAG-GC baseline (3597 + 11 套件 127 PASSED + 33 SKIPPED), 纯 docs 范畴不跑
+3. ✅ PWA build: 沿用基线 (本任务 0 web 改动)
+4. ✅ 0 production code: 件 4 实测 = 0
+5. ✅ 锚点范式: `git log --grep "W98 +" --oneline | wc -l` = 55 commits ≥ 13 (含本任务 1 commit)
+
+**v11 §13 实战漂移清单 (据实)**:
+- 派工 brief 引用 "§13" 4 处 (段 1 + 段 2.1 + 段 2.2 + 段 5)
+- 派工 v11 模板**无** §13 段定义 (段 0-9 列了 9 段, 最高"段 9 commit message 锚点范式")
+- 派工 v10 §13 = "9 条新铁律" (line 493), 派工 v10 §8 = W73 起步纪律 6 项 (line 359)
+- 漂移修正: 不推倒 v11, 在派工 v11 模板末尾加 §13 "仓库实情真查实战收敛 6 段必填", 即 v11.1
+
+**W89 类 20.6 + 类 20.13 漂移沉淀 (本任务)**:
+- 类 20.6 历史定义 (W74 A-2): "破坏性 vs 渐进修复路径" — 与派工 brief 重定义 ("派工 brief 漏 §13") 冲突
+- 类 20.13 历史定义 (W77 B-3 + W78 B-2): "真生产 key 单独拍板" — 与派工 brief 重定义 ("派工 brief 漏 §13") 冲突
+- 派工 v10 段 7 要求 "类 20 子类编号保持稳定, 不应重新分配"
+- **新类 20 编号建议 (本任务)**: 类 20.34 派工 v11 §13 仓库实情真查漏漂移 (W89 PR3 + W91 PR5 + W98 P2-F 3 实战)
+- W98 P2-F memory 引用 "类 20.13 实战 19" 应改归类 **类 20.34** (本任务沉淀修正)
+
+**v11 §13 必填 6 段 (本任务设计)**:
+- 段 13.1: 路径三验证 (ls + file + head -30)
+- 段 13.2: 框架栈对齐 (Vue 3 + Element Plus + Vite PWA 单体硬规则)
+- 段 13.3: "已落库" 假设禁令 (git log --grep 实测 ≥ 1 commit 才写)
+- 段 13.4: 路径错配拦截据实上报 (commit message 明文标 "路径修正事实")
+- 段 13.5: 派生新铁律必显式沉淀 (commit message 必含 "类 20.X: <name>")
+- 段 13.6: 锚点漂移必报 (brief +N vs 实测 M 据实上报)
+
+**派工 v11 → v11.1 升级建议 (本任务)**:
+- **升级理由**: 派工 brief 引用的 "§13" 实际无定义 (派工 v11 模板 0 段定义 §13) + 类 20.6/13 漂移与历史定义冲突
+- **不推倒 v11**: 沿用 6 项新增 (1-6), 仅在派工 v11 模板末尾加 §13
+- **验收**: 收口时新派工 brief 必含 "§13 仓库实情真查 6 段 (13.1-13.6)", 否则视为类 20.34 实战
+- **阈值**: W98 RAG-GC 全部合并 + W99+ 派工启动时沉淀 v11.1; 若 W99 P1 启动时未沉淀, 沿用 v11 + 派工 brief 必含本任务 6 段 (过渡)
+
+**W98 N-4 1 新铁律 (类 20.34)**:
+- **类 20.34 派工 v11 §13 仓库实情真查漏漂移**: 派工 brief 未做仓库实情真查 (路径三验证 + 框架栈对齐 + 已落库假设禁令), 导致实派路径与 brief 路径不一致. 实战来源: W91 PR5 路径修正 + W98 P2-F 共享服务路径修正 + W89 PR3 DERIVE-18 §13 引用漂移. 5 纪律: 件 4b 仓库实情真查表 + 三验证命令 + commit message 路径修正事实 + 类 20 编号稳定 + git log --grep 实测已落库.
+
+**累计 commits + 铁律延续**: W85 440+ commits → W98 RAG-GC 1500+ commits → W98 N-4 1501+ commits (累计 29 批). 铁律 W85 440+ → W98 RAG-GC 590+ → W98 N-4 591+. **W19 选项 A 维持**: 4 留未来 PR + W99+ 派工顺序表 (主拍签字范围外).
 
