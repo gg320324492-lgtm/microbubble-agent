@@ -2,5 +2,5 @@ page: 04-task-trash  route: /tasks/trash
 target: MobileTaskTrash.vue (8 裸 button)
 project: desktop-chrome
 authed: yes   redirected-to-login: no
-violations: 1
+violations: 0
   color-contrast [serious] ×1
