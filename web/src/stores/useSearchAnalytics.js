@@ -51,9 +51,12 @@ export const useSearchAnalyticsStore = defineStore('searchAnalytics', {
     /**
      * 发起搜索时调用: POST 到后端, 存 search_event_id 备用.
      * 失败不抛异常 (静默忽略, 不影响搜索功能).
+     *
+     * FIX-N6 W99 +18: 守卫收紧 — 仅在 topIds 是非空数组时才发.
+     * api/analytics.js 内层守卫对齐, 防止 422.
      */
     async startSearch(query, topIds, source = 'knowledge_search') {
-      if (!query || !topIds || topIds.length === 0) return
+      if (!query || !Array.isArray(topIds) || topIds.length === 0) return
       try {
         const resp = await recordSearchEvent({
           query,

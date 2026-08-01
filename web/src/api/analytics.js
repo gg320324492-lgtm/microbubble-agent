@@ -7,9 +7,23 @@
 
 import axios from 'axios'
 
-/** 记录一次搜索事件. 返回 { search_event_id } */
-export const recordSearchEvent = (payload) =>
-  axios.post('/api/v1/analytics/search-event', payload).then(r => r.data)
+/**
+ * 记录一次搜索事件. 返回 { search_event_id }
+ *
+ * FIX-N6 W99 +18: 加 top_ids 守卫 (后端 schema min_items=1)
+ * 防止任何调用点漏传 top_ids 触发 422, 与 store 层守卫对齐.
+ */
+export const recordSearchEvent = (payload) => {
+  if (!payload || !Array.isArray(payload.top_ids) || payload.top_ids.length === 0) {
+    return Promise.reject(new Error('[analytics] recordSearchEvent: top_ids required'))
+  }
+  // 截断 top_ids 到 max 20 (后端 schema max_items=20)
+  const safePayload = {
+    ...payload,
+    top_ids: payload.top_ids.slice(0, 20),
+  }
+  return axios.post('/api/v1/analytics/search-event', safePayload).then(r => r.data)
+}
 
 /** 更新点击: clicked_id + click_position (1-based, 在 top_ids 数组中的位置) */
 export const recordClick = (eventId, payload) =>
