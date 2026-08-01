@@ -399,7 +399,12 @@ onUpdated(() => {
 }
 .sync-badge.sync-loading {
   background: rgba(64, 158, 255, 0.1);
-  color: var(--el-color-primary);
+  /* W98 a11y: 蓝底 0.1 alpha + --el-color-primary (#FF7A5C) 2.33 < AA 4.5.
+     改用 rgb 数字深蓝 6.43 > AA 4.5. dark 主题接管 light-3. */
+  color: rgb(32, 100, 168);
+}
+[data-theme="dark"] .sync-badge.sync-loading {
+  color: var(--el-color-primary-light-3);
 }
 .sync-badge.sync-error {
   background: rgba(245, 108, 108, 0.1);
