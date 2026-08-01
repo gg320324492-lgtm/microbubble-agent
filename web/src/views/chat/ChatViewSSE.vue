@@ -33,6 +33,7 @@ import ShareDialog from '@/components/chat/ShareDialog.vue'
 import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
+import ChatMessageActions from '@/components/chat/ChatMessageActions.vue'  // W100 +23 重生成 + 复制按钮
 // #CHAT-P1-E E2 + E5
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // ===== W99 +15 桌面/移动接入：ThinkingCapsule 完全替代 RetrievalStatus 在 assistant 气泡内的所有挂载 =====
@@ -398,6 +399,83 @@ async function playTTSWrap(text: string) {
 }
 
 // ============================================================================
+// W100 +23: 重生成 + 复制按钮 handler
+// ============================================================================
+
+/**
+ * regenerate(msg): 找到目标 assistant 气泡之前的最后一个 user 消息内容,
+ * 重新调 sendMessage(text) 发起新的 SSE 流式.
+ *
+ * 边界:
+ * - 找不到前置 user (e.g. 第一条就是 welcome) → ElMessage 提示, 不发
+ * - 当前正在流式生成 → 静默忽略, 让用户先点 ⏹ 停止
+ * - sendMessage 内部已自动滚动 + loading 状态 + 持久化, 复用即可
+ */
+async function regenerate(msg: ChatMessage) {
+  if (isCurrentSessionSending.value) {
+    ElMessage.warning('当前正在生成中，请先点 ⏹ 停止')
+    return
+  }
+  // 查找目标 msg 之前的最后一条 user 消息
+  const list = messages.value || []
+  const idx = list.findIndex((m) => m.id === msg.id)
+  if (idx === -1) {
+    ElMessage.error('找不到原始消息，无法重新生成')
+    return
+  }
+  // 从 idx 往前找最近一条 role='user' 且 content 非空
+  let userContent = ''
+  for (let i = idx - 1; i >= 0; i--) {
+    const m = list[i]
+    if (m?.role === 'user' && (m.content || '').trim()) {
+      userContent = (m.content || '').trim()
+      break
+    }
+  }
+  if (!userContent) {
+    ElMessage.warning('找不到对应的用户提问，无法重新生成')
+    return
+  }
+  ElMessage.info('正在重新生成...')
+  await sendMessage(userContent)
+}
+
+/**
+ * copyMessage(msg): 调 navigator.clipboard.writeText, 失败降级到 execCommand.
+ *
+ * 边界:
+ * - 内容为空 → 不复制
+ * - clipboard API 不可用 (HTTP / 老 Safari) → fallback execCommand
+ * - 复制失败 → ElMessage 错误提示
+ */
+async function copyMessage(msg: ChatMessage) {
+  const text = (msg?.content || '').trim()
+  if (!text) return
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      ElMessage.success('已复制')
+      return
+    }
+    // 降级: execCommand
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    if (ok) ElMessage.success('已复制')
+    else ElMessage.error('复制失败，请手动选择文本')
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[copyMessage] failed', e)
+    ElMessage.error('复制失败，请手动选择文本')
+  }
+}
+
+// ============================================================================
 // 生命周期
 // ============================================================================
 onMounted(async () => {
@@ -570,6 +648,14 @@ onUnmounted(() => {
               <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
               <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
               <el-button v-if="msg.content" text size="small" @click="playTTSWrap(msg.content)" title="播放语音">🔊</el-button>
+              <!-- W100 +23: 重生成 + 复制按钮 (桌面端 hover 才显示) -->
+              <ChatMessageActions
+                v-if="msg.role === 'assistant' && msg.content"
+                mode="desktop"
+                :message-id="msg.id"
+                @regenerate="regenerate(msg)"
+                @copy="copyMessage(msg)"
+              />
               <!-- W98 CHAT-P1-D3: 用户反馈按钮 (仅 assistant 完成态展示) -->
               <FeedbackButtons
                 v-if="msg.role === 'assistant' && msg.content"

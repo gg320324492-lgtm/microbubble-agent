@@ -75,6 +75,14 @@
             title="播放语音"
             @click.stop="$emit('play-tts', msg.content)"
           >🔊</button>
+          <!-- W100 +23: 重生成 + 复制按钮 (移动端始终显示) -->
+          <ChatMessageActions
+            v-if="msg.role === 'assistant' && msg.content"
+            mode="mobile"
+            :message-id="msg.id"
+            @regenerate.stop="$emit('regenerate', msg)"
+            @copy.stop="$emit('copy', msg)"
+          />
           <!-- W98 CHAT-P1-D3: 移动端反馈按钮 -->
           <FeedbackButtons
             v-if="msg.role === 'assistant' && msg.content"
@@ -108,6 +116,7 @@
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileRichCard from './MobileRichCard.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
+import ChatMessageActions from '@/components/chat/ChatMessageActions.vue'  // W100 +23 重生成 + 复制按钮
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // ===== W99 +15 移动端接入：ThinkingCapsule 取代 RetrievalStatus 挂载 =====
 // RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（基线兼容）
@@ -123,7 +132,7 @@ const props = defineProps({
   sessionId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['longpress', 'play-tts', 'followup'])
+const emit = defineEmits(['longpress', 'play-tts', 'followup', 'regenerate', 'copy'])
 
 function onLongPress(e) {
   emit('longpress', props.msg, e)

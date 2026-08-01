@@ -17,6 +17,8 @@
           @longpress="(e) => $emit('longpress', msg, e)"
           @play-tts="(text) => $emit('play-tts', text)"
           @followup="(text) => $emit('followup', text)"
+          @regenerate="(m) => $emit('regenerate', m)"
+          @copy="(m) => $emit('copy', m)"
         />
       </template>
     </TransitionGroup>

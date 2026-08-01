@@ -45,6 +45,8 @@
         @play-tts="onPlayTTS"
         @quick-action="onQuickAction"
         @followup="onFollowUp"
+        @regenerate="onRegenerate"
+        @copy="onCopyBubble"
       />
     </main>
 
@@ -567,6 +569,73 @@ function swipeToPrevSession() {
 // ============================================================================
 async function onPlayTTS(text) {
   await playTTS(text)
+}
+
+// ============================================================================
+// W100 +23: 重生成 + 复制 (移动端, ChatMessageActions emit 上抛)
+// ============================================================================
+
+/**
+ * onRegenerate(msg): 找到目标 assistant 之前的最后一条 user 内容,
+ * 复用 sendMessage() 发起新的 SSE 流式.
+ *
+ * 与桌面端 ChatViewSSE.regenerate 逻辑一致 — 单源真相, 但独立函数
+ * (避免组件耦合). 失败/找不到/正在发送 全部静默提示.
+ */
+async function onRegenerate(msg) {
+  if (isCurrentSessionSending.value) {
+    ElMessage.warning('当前正在生成中，请先点 ⏹ 停止')
+    haptic.warning()
+    return
+  }
+  const list = messages.value || []
+  const idx = list.findIndex((m) => m?.id === msg?.id)
+  if (idx === -1) return
+  let userContent = ''
+  for (let i = idx - 1; i >= 0; i--) {
+    const m = list[i]
+    if (m?.role === 'user' && (m.content || '').trim()) {
+      userContent = (m.content || '').trim()
+      break
+    }
+  }
+  if (!userContent) {
+    ElMessage.warning('找不到对应的用户提问，无法重新生成')
+    haptic.warning()
+    return
+  }
+  ElMessage.info('正在重新生成...')
+  await sendMessage(userContent)
+}
+
+/**
+ * onCopyBubble(msg): 调 navigator.clipboard.writeText, 失败降级到 execCommand.
+ * 移动端长按 ActionSheet 的 copyMessage 是另一个路径 (从 actionSheet 拿 msg),
+ * 这里气泡内点 📋 走另一条 (直接拿 emit 上来的 msg).
+ */
+async function onCopyBubble(msg) {
+  const text = (msg?.content || '').trim()
+  if (!text) return
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    ElMessage.success('已复制')
+    haptic.success?.()
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[onCopyBubble] failed', e)
+    ElMessage.error('复制失败，请手动选择文本')
+  }
 }
 
 // ============================================================================
