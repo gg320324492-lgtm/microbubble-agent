@@ -43,12 +43,29 @@ router = APIRouter(tags=["检索质量"])
 
 
 class SearchEventRequest(BaseModel):
-    """POST /analytics/search-event 请求体"""
+    """POST /analytics/search-event 请求体
 
+    W100-BUGFIX (类 20.123 据实上报):
+    新增 4 个 RAG 升级字段 (cache_hit / cache_similarity / citation_count /
+    image_score) — 前端可逐步接入. 全部 Optional 兼容老客户端 (类 20.124 不擅自扩).
+    字段类型对齐 SearchLog model + RecallTrace, int 0/1 而非 bool (PG schema 约定).
+    """
+
+    # 核心字段
     query: str = Field(..., min_length=1, max_length=500)
     top_ids: List[int] = Field(..., min_items=1, max_items=20)
     session_id: Optional[str] = Field(None, max_length=100)
     source: Optional[str] = Field(None, max_length=50)  # 'knowledge_search' / 'agent_chat'
+
+    # ==================== W100-BUGFIX: RAG 升级观测字段 (Optional, 0 改老语义) ====================
+    # W99-RAG-1 query cache 命中观测
+    cache_hit: Optional[int] = Field(None, ge=0, le=1)  # 0/1
+    cache_similarity: Optional[float] = Field(None, ge=0.0, le=1.0)
+    # W99-RAG-2 段落级 citation 计数
+    citation_count: Optional[int] = Field(None, ge=0)
+    # W100-RAG-5 OCR 图片召回 top-1 similarity
+    image_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+    # ==================== W100-BUGFIX RAG 字段结束 ====================
 
 
 class SearchEventResponse(BaseModel):
@@ -100,6 +117,11 @@ async def record_search_event(
         session_id=payload.session_id,
         source=payload.source or "knowledge_search",
         user_id=current_user.id if current_user else None,
+        # W100-BUGFIX: 4 个 RAG 观测字段 (Optional, 老客户端未传走 model default None)
+        cache_hit=payload.cache_hit,
+        cache_similarity=payload.cache_similarity,
+        citation_count=payload.citation_count,
+        image_score=payload.image_score,
     )
     db.add(log)
     await db.commit()
