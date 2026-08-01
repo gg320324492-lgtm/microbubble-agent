@@ -487,3 +487,47 @@
 - C. P3-C qa-bench baseline 校准
 - D. P3-D W98 系列总 grand closure
 
+
+# W98 N-1-VERIFY RAG-FW 实质落地证据 (2026-08-01)
+
+> **派工 v10 — N-1-VERIFY 沉淀**: 锚点范式 W98 +16 → +17 守恒 (1 commit 仅 docs + memory). 当前 main HEAD `9b3aa6810` (W98 N-2 件 4b 双门控阈值主拍决策 merge). 0 production code 改动铁律守恒 (git diff = 0). alembic 1 head `['093_add_search_log_answer_rating']` 守恒.
+
+## RAG-FW-11/12/14 三分支实质落地 (据实)
+
+| 分支 | 实质 commit | merge commit | 文件改动 | 锚点贡献 | 当前状态 |
+|------|-------------|--------------|----------|----------|----------|
+| RAG-FW-11 | `ecd2512eb` (+0) | `28b885226` (+0) | test_e2e_framework_gate.py 187 行 | merge +0 | 8 case 已合 |
+| RAG-FW-12 | `4e978d504` (+0) | `a80274bac` (+1) | rag-framework-ci.yml 76 行 | merge +1 | CI workflow 已注册 |
+| RAG-FW-14 | `fac9fd483` (+0) | `8a1623b23` (+3) | rename + 预热 13 行 | merge +3 | 3374 collected 0 errors |
+
+**总锚点贡献**: merge commit 3 个 +0/+1/+3 = +4 总锚点贡献 (实施 commit 3 个全 +0).
+
+## 类 20 实战 21/22/23/24 据实沉淀
+
+- **类 20.21**: RAG-FW-11 派工 brief "0 commit" 漂移 (实施 commit 在分支 + merge 带入)
+- **类 20.22**: RAG-FW-11 merge 锚点 +0 vs 实施锚点 0 分离 (锚点全在 merge commit)
+- **类 20.23**: RAG-FW-12 CI workflow "实施会 +X" vs merge +1 漂移 (复合规则)
+- **类 20.24**: RAG-FW-14 修复 13 行 merge +3 严重反常 (主拍决策 +3)
+- **类 20.35 建议新增**: RAG-FW 三分支实质落地澄清 — 实施 commit 与 merge commit 锚点分离
+
+## N-1a/b/c 派工撤销
+
+- **N-1a**: 撤销 (RAG-FW-11 8 case 已落地, 不需要二次确认)
+- **N-1b**: 撤销 (RAG-FW-12 CI workflow 已落地, 不需要二次确认)
+- **N-1c**: 撤销 (RAG-FW-14 修复已落地, 不需要二次确认)
+- **N-1 本任务**: 改为沉淀 docs/memory (本次任务实际执行)
+
+## 累计类 20 实战 (W82-W98)
+
+| 批 | 类 20 实战新增 | 累计 |
+|----|----------------|------|
+| W82 | #16 (B-2 拦截) | 1 |
+| W83 | 0 (沿用 W82 B-2 拦截 #16) | 1 |
+| W84 | #17/#18/#19 (据实上报 3 实例) | 4 |
+| W85 | #20 (B-2 useTask 0 hit 跳过) + #21 (类 20.13 实战 19) | 6 |
+| W98 | #22/#23/#24 (RAG-FW 三分支 据实上报) + #35 (本次建议) | 10 |
+
+**派工 brief 假设**: W89-W98 类 20 实战累计数 ≥ 35.
+**实测**: W89-W98 类 20 实战累计数 ~10 (派工 brief 假设有偏差, 据实上报不凑).
+
+**详细沉淀**: [w98-n1-verify-ragfw-2026-08-01](w98-n1-verify-ragfw-2026-08-01.md) (12 节, 类 20.21/22/23/24 + 类 20.35 建议 + 据实上报 18 项).
