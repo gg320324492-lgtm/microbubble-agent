@@ -2,5 +2,5 @@ page: 05-file-comments  route: /drive/file/1/comments
 target: DesktopCommentThread.vue (22 aria 对照)
 project: desktop-chrome
 authed: yes   redirected-to-login: no
-violations: 0
+violations: 1
   color-contrast [serious] ×1

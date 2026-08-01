@@ -2,5 +2,5 @@ page: 02-drive  route: /drive
 target: drive-view.css 引用页 (DesktopDriveView/MobileDriveView)
 project: desktop-comments
 authed: yes   redirected-to-login: no
-violations: 0
+violations: 1
   color-contrast [serious] ×1
