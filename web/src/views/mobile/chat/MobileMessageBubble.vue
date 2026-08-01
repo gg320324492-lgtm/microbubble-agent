@@ -16,6 +16,12 @@
           :retry-count="msg.retryCount"
           compact
         />
+        <!-- ===== W100 +22 plan_step 折叠展开：compact 模式 ===== -->
+        <PlanSteps
+          v-if="msg.plan && msg.plan.length"
+          :steps="msg.plan"
+          compact
+        />
         <!-- 工具调用 trace — W100 +21 接入 ToolTraceItem（可点展开） -->
         <div v-if="msg.toolTrace && msg.toolTrace.length" class="tool-trace">
           <ToolTraceItem
@@ -107,6 +113,7 @@ import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（基线兼容）
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
+import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (compact 模式)
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
