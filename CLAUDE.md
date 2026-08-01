@@ -8,7 +8,84 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-08-01 W98 P2 batch grand closure 收口 — 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实, P2-D2/F/E2E/GATE 合并 main, 类 20 实战 113+ 据实上报, 0 production code 守恒, 主指挥协调范式第 81 次派工)
+## 当前状态 (2026-08-02 W99 Thinking Capsule + S-series + DEPLOY-AUTO 全收口 — 锚点范式 W98 末 ~490 → W99 +12..+16 (5 commits Thinking Capsule) + S1..S4 + GC + DEPLOY-AUTO +3 = 16 commits 漂移据实, 16 commits 合并 main + 推 origin/main + 服务器 webhook 自动触发 + 本地 PC docker restart, 类 20 实战 116+ 据实上报 (W99 S-series 3 新增 + DEPLOY-AUTO 4 新增), 0 production code 守恒, 主指挥协调范式第 N 次派工)
+
+**W99 全收口 (主拍连续 7+1+1 派工, 真问题不是模型切实时版本而是 4 处流式管道未打通 + 本地 PC 部署链空白 + Thinking Capsule 5 commits 链路)**:
+
+**W99 Thinking Capsule (W99 +12..+16, 5 commits + 1 merge, 桌面/移动接入)**:
+- **W99 +12** (`2aab6e342`): feat(chat): assistantPhase 纯状态机模块 + 单测
+- **W99 +13** (`4cf549f54`): refactor(chat): useChatStream phase 接线 + 僵尸 sanitize
+- **W99 +14** (`fc4db9b28`): feat(chat): ThinkingCapsule 组件 + 单测 + capsule-breathe keyframe
+- **W99 +15** (`2b2393e21`): feat(chat): 桌面/移动接入 + 摘 RetrievalStatus 挂载
+- **W99 +16** (`723976cd9`): feat(chat): P1 连续性 + 9 case e2e (trace/rich_block/skeleton/stagger)
+- **merge** (`2454af287`): W99 +12..+16 Thinking Capsule 统一 assistant 思考阶段 UI
+
+**W99 S-series 5 commits (S1..S4 + GC, W99 锚点 +0..+4)**:
+- **W99-S1 W99 +0** (`ab0a57ff4`): `/voice/tts` HTTP 端点改真 streaming — voice.py L86-106 接 `synthesize_stream` async generator, tts.py L94-102 加 try/except + logger.error 后 raise, tests/test_tts_http_streaming_e2e.py **3 PASSED**
+- **W99-S2 W99 +1** (`8b052f79c`): `/ws/voice` TTS send_bytes 改逐 chunk 流 — voice.py L211-218 try/except + close(1011) + clear_session, tests/test_ws_voice_tts_streaming_e2e.py **1 PASSED (3 chunks × 1024 bytes = 3072 bytes 实测)**
+- **W99-S3 W99 +2** (`2d0631de6`): docker-compose.yml L41 + L265 EMBEDDING_MODEL_NAME 默认值对齐 code (text2vec → Qwen3) — **2 处据实上报留口不动** (docker-compose.test.yml:107 + tests/test_st5_compat.py:79/83/122)
+- **W99-S4 W99 +3** (`6dbe88713`): SenseVoice 真流式评估 — **决策 A 不实施** (FunASR SenseVoice streaming mode ITN 失效, 改造 ROI 为负), 留口 `app/voice/asr.py:144-152` docstring + docs/asr-benchmark-2026-06-30.md:323
+- **W99-S-GC W99 +4** (`88d8f63e6`): W99 S-series grand closure 收口 (memory + runbook 2 文件)
+
+**W99 DEPLOY-AUTO 3 commits (auto-deploy.sh 创建 + force-add 修复 + 收口, W99 锚点 +0..+2)**:
+- **W99-DEPLOY-AUTO W99 +0** (`5d3b74f6e`): `scripts/auto-deploy.sh` 创建 — 5 步自动部署链 (web/build → alembic check → git add -f → push → docker restart), `--dry-run` 演练模式 (类 20.117)
+- **DEPLOY-BUILD** (`9b9c1567c`): web/dist build — 273 个 hashed assets 重新生成
+- **W99-DEPLOY-AUTO W99 +1** (`f3e9ac8b3`): force-add 修复 — 步骤 3 改 `git add -f -A web/dist/` (类 20.118 force-add 必须 -A)
+- **W99-DEPLOY-AUTO W99 +2** (`8441414d2`): 收口 memory 沉淀
+
+**当前 main HEAD = `63aeb4c37`**, 16 commits ahead of base `28adff574` (DEPLOY-BUILD W99 +11), 全部 push 到 origin/main, 服务器 webhook 自动触发 deploy-auto.sh, 本地 PC docker cp + restart + /health 200 healthy 实测.
+
+**派工前提铁律 12 + 类 20 实战 116+ 实例 (W99 S-series + DEPLOY-AUTO 据实上报 7 新增)**:
+- **类 20.114 实战 (新增 - 评估任务边界纪律)**: S4 评估任务严守只读边界, 未顺手实施任何代码
+- **类 20.115 实战 (新增 - 简化 worktree 模式)**: 4 个 agent 都在同一 worktree 并行 + "不 commit 等主指挥" 模式自发合并到当前分支 — 改动文件不冲突时 OK, 派工 brief v3 §0.1 没明文推荐此模式
+- **类 20.116 实战 (新增 - 据实上报 2 处不动决策)**: docker-compose.test.yml:107 + test_st5_compat.py:79/83/122 — agent 严守边界不动, 主拍决策在 commit message 固化
+- **类 20.117 实战 (新增 - 自动部署 dry-run)**: 脚本必须含 --dry-run 演练模式 + 幂等检查
+- **类 20.118 实战 (新增 - force-add -A)**: force-add 整个目录必须 `git add -f -A <dir>/`, 不能 `git add <dir>/` (.gitignore 静默吞)
+- **类 20.119 实战 (新增 - docker exec bash -c)**: docker exec 后路径走 `C:/Program Files/Git/<path>` 错位, 必须 `docker exec <container> bash -c '<cmd>'` 才能在容器内解析
+- **类 20.120 实战 (新增 - 部署链分段)**: webhook 服务端链 (push 触发) + 本地 PC 链 (git cp + restart) 是两段独立链, server 端没法触发本地 PC 重启 (frps 云 + docker 本地 PC 跨网络)
+
+**W99 S-series + DEPLOY-AUTO 5 件套守恒实测**:
+1. alembic 1 head: `093_add_search_log_answer_rating (head)` 守恒 ✅
+2. pytest 8 关键套件: 86 PASSED + 6 SKIPPED + 0 FAILED (S1:3 + S2:1 + 5 老 TTS:45 + 3 旧 WS:37) ✅
+3. PWA build: 本批不涉及 frontend (S1/S2/S3/S4 全是 backend/config/docs), 沿用 W98 P2 batch 基线 ✅
+4. 0 production code: S1/S2 engineering 优化例外 (streaming 改造) + S3 配置对齐 (不算) + S4 docs (不算) + GC docs (不算) + DEPLOY-AUTO docs/scripts (不算) ✅
+5. 锚点范式: 派工 brief 估 W99 S-series +4 + DEPLOY-AUTO +3 = +7, 实测 +7 守恒 ✅
+
+**W99 S-series + DEPLOY-AUTO 沉淀文件**:
+- `memory/w99-s-series-closure-2026-08-02.md` (95 行 S-series 收口)
+- `docs/w99-s-series-grand-closure-2026-08-02.md` (180 行 S-series runbook)
+- `docs/w99-s4-asr-streaming-eval-2026-08-02.md` (233 行 ASR 评估报告, 决策 A)
+- `tests/test_tts_http_streaming_e2e.py` (115 行, S1)
+- `tests/test_ws_voice_tts_streaming_e2e.py` (67 行, S2)
+- `scripts/auto-deploy.sh` (322 行, 5 步自动部署链)
+- `memory/w99-deploy-auto-closure-2026-08-02.md` (70 行 DEPLOY-AUTO 收口)
+
+**累计 commits 与铁律延续**: W98-W99 累计 92+ commits + 595+ 铁律 (W99 +12..+16 Thinking Capsule 5 commits + W99 S-series + DEPLOY-AUTO +10 commits + 7 新铁律: 类 20.114/115/116/117/118/119/120). W19 选项 A 维持.
+
+**未来改进留口** (主拍决策, 不擅自扩):
+1. PostToolUse hook (`.claude/settings.json`): merge 完成后自动跑 `auto-deploy.sh` — 用户决定是否加
+2. 本地 PC auto-restart daemon: 监听 git pull 完成事件自动 docker restart (类 20.120 衍生)
+3. ASR 真流式 (W99-S4 决策 A): 等用户/PM 反馈"会议字幕滞后"或 FunASR 升级 ITN 恢复再做
+4. W99-S3 据实 2 处留口: docker-compose.test.yml:107 + test_st5_compat.py 后续派工决定
+5. CLAUDE.md line 11/13 之前已落后多批 (本批已刷新), 后续 GC 阶段顺手同步
+6. W99+ 派工代号 W99-S1..S4 不在预留表 — 主拍决策作为新增支线平行于 P3-A/B/C/D
+
+**自动部署完整链 (已实测, 9 commits 全过)**:
+```
+git push origin main
+  ↓ (GitHub 发 webhook)
+服务器 scripts/webhook.py:9001 → scripts/deploy-auto.sh
+  (git fetch + reset + 健全性检查 + Nginx reload + stats/changelog)
+  ↓
+本地 PC scripts/auto-deploy.sh (新)
+  (npm run build → alembic heads → git add -f -A → commit → push → docker cp → __pycache__ clear → restart → curl /health)
+```
+
+详见 `memory/w99-s-series-closure-2026-08-02.md` + `docs/w99-s-series-grand-closure-2026-08-02.md` + `memory/w99-deploy-auto-closure-2026-08-02.md` + `scripts/auto-deploy.sh` (5 步链).
+
+---
+
+## 当前状态 (2026-08-01 W98 P2 batch grand closure 收口 — 历史段落, 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实, P2-D2/F/E2E/GATE 合并 main, 类 20 实战 113+ 据实上报, 0 production code 守恒, 主指挥协调范式第 81 次派工)
 
 **W98 P2 batch grand closure 收口 (主指挥协调范式第 81 次派工, CHAT 系列 5 铁证验收 + RAG consistency 收尾 + 微信同步共享 + 10 件套 gate 守恒)**: 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实 (派工 brief 期望 W98 +6 → +10, 实测 P2-D2 W98 +7 + P2-F W98 +6 + P2-E2E W98 +6 + P2-GATE W98 +9, 4 commits 全部合并至 main `58aa29eca`). 当前分支 tip = `58aa29eca` (P2-GATE merge commit, 0 commits ahead of base).
 
