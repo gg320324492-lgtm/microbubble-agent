@@ -69,6 +69,18 @@ class TaskService:
         elif due_date and assignee_id:
             await self._create_default_reminders(task)
 
+        # W101 P2 Auto-RAG: fire-and-forget 后台检索背景知识
+        try:
+            from app.services.auto_rag_service import auto_rag_service
+            await auto_rag_service.trigger_and_dispatch(
+                "task.create", task.id, (title or "") + " " + (description or "")
+            )
+        except Exception as _e:
+            import logging
+            logging.getLogger("microbubble.task").debug(
+                f"[W101 P2] auto-rag trigger failed (non-blocking): {_e}"
+            )
+
         return task
 
     async def _create_default_reminders(self, task: Task):
