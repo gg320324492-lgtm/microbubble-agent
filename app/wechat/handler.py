@@ -18,6 +18,7 @@ from app.wechat.identity import identity_resolver
 from app.wechat.analyzer import analyzer
 from app.services.vision_service import vision_service
 from app.services.reminder_service import ReminderService
+from app.services.session_context import ensure_session_context
 from app.core.redis import get_redis
 
 logger = logging.getLogger("microbubble.wechat")
@@ -485,6 +486,8 @@ class MessageHandler:
         """异步处理群聊 agent 对话"""
         try:
             enriched_msg = f"[群聊, 用户: {member.name}, 角色: {member.role}] {content}"
+            # W98 P2-F: 微信同步 — 会话上下文预加载 (PG 回填 Redis, 防失忆客服)
+            await ensure_session_context(db, member.id, session_id)
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id, channel_user_id=user_id)
             reply = result.get("content", "抱歉，处理失败了。")
             await self._reply_long_text_to_group(chat_id, reply)
@@ -1101,6 +1104,8 @@ class MessageHandler:
         user_id = msg.get("_resolved_user_id") or msg.get("FromUserName", "")
         try:
             enriched_msg = f"[用户: {member.name}, 角色: {member.role}] {content}"
+            # W98 P2-F: 微信同步 — 会话上下文预加载 (PG 回填 Redis, 防失忆客服)
+            await ensure_session_context(db, member.id, session_id)
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id, channel_user_id=user_id)
             reply = result.get("content", "抱歉，处理失败了。")
             await self._reply_long_text(user_id, reply, is_external, msg=msg)
@@ -1208,6 +1213,8 @@ class MessageHandler:
         """调用 Agent 处理微信客服消息"""
         try:
             session_id = f"kf:{user_id}"
+            # W98 P2-F: 微信同步 — 会话上下文预加载 (PG 回填 Redis, 防失忆客服)
+            await ensure_session_context(db, member.id, session_id)
             result = await agent.chat(
                 message=f"[用户: {member.name}, 角色: {member.role}] {content}",
                 session_id=session_id,
