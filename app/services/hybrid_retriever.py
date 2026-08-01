@@ -754,6 +754,65 @@ async def retrieve_with_weights(
     except Exception as _e:
         logger.debug(f"[W100-RAG-5] multimodal hook skip: {_e}")
 
+    # 8) W100-RAG-6: Temporal Retriever 时间衰减 (件 4 门控 B 守恒 - 仅在 body 追加)
+    # 沿用 W99-RAG-1 cache + W99-RAG-2 citation + W100-RAG-3 intent + W100-RAG-4 rerank
+    # + W100-RAG-5 multimodal 同模式 (类 20.115 S-series 同 worktree 模式)
+    # 顺序: multimodal → temporal (temporal 作为最终乘子, 在 multimodal 合并之后应用)
+    # 类 20.132: temporal 因子不影响 RRF score 结构, 仅作最终 score 乘子
+    # 失败 best-effort 静默降级 (类 20.121, 沿用 cache/citation/rerank 模式)
+    try:
+        from app.rag.config import (
+            TEMPORAL_DECAY_ENABLED as _T_ENABLED,
+            TEMPORAL_BOOST_YEARS as _T_BOOST_YEARS,
+            TEMPORAL_BOOST_FACTOR as _T_BOOST_FACTOR,
+            TEMPORAL_DECAY_YEARS as _T_DECAY_YEARS,
+            TEMPORAL_DECAY_FACTOR as _T_DECAY_FACTOR,
+        )
+        if _T_ENABLED and raw_results:
+            from app.services.temporal_retriever import TemporalRetriever
+
+            _temporal = TemporalRetriever()
+            from app.models.base import utcnow as _utcnow
+            _now = _utcnow()
+            _temporal_factor: dict = {}
+            for _r in raw_results:
+                _kid = _r.get("id")
+                if _kid is None:
+                    continue
+                _created = _r.get("created_at")
+                if _created is None:
+                    # 防御: 结果没带 created_at → 给中性权重 1.0 (不影响排序)
+                    _temporal_factor[_kid] = 1.0
+                    continue
+                _temporal_factor[_kid] = _temporal.compute_temporal_weight(
+                    created_at=_created,
+                    now=_now,
+                    boost_years=_T_BOOST_YEARS,
+                    boost_factor=_T_BOOST_FACTOR,
+                    decay_years=_T_DECAY_YEARS,
+                    decay_factor=_T_DECAY_FACTOR,
+                )
+            # 应用 temporal 乘子: score *= temporal_weight, 重排取 top_k
+            for _r in raw_results:
+                _kid = _r.get("id")
+                if _kid is not None and _kid in _temporal_factor:
+                    _r["temporal_weight"] = round(_temporal_factor[_kid], 4)
+                    _r["score"] = round(
+                        float(_r.get("score", 0.0)) * _temporal_factor[_kid],
+                        6,
+                    )
+            raw_results = sorted(
+                raw_results,
+                key=lambda item: float(item.get("score", 0.0)),
+                reverse=True,
+            )[:top_k]
+            logger.debug(
+                "[W100-RAG-6] temporal hook applied: %d results",
+                len(raw_results),
+            )
+    except Exception as _e:
+        logger.debug(f"[W100-RAG-6] temporal hook skip: {_e}")
+
     return raw_results
 
 
