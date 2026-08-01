@@ -7,10 +7,13 @@
 
     <LongPressWrapper class="bubble-wrapper" @longpress="onLongPress">
       <div class="bubble" :class="`bubble-${msg.role}`">
-        <!-- [CHAT-P1-E E5] 移动端检索过程可视化 -->
-        <RetrievalStatus
-          v-if="msg.role === 'assistant' && msg.state === 'streaming'"
-          :session-id="sessionId"
+        <!-- ===== W99 +15 移动端接入：ThinkingCapsule 取代 RetrievalStatus + 3-dot typing-bubble ===== -->
+        <ThinkingCapsule
+          v-if="msg.role === 'assistant' && msg.phase"
+          :phase="msg.phase"
+          :started-at="msg.phaseStartedAt"
+          :found-count="msg.foundCount"
+          :retry-count="msg.retryCount"
           compact
         />
         <!-- 工具调用 trace -->
@@ -55,14 +58,6 @@
 
         <!-- 错误 -->
         <div v-if="msg.error" class="msg-error">⚠️ {{ msg.error }}</div>
-
-        <!-- typing 指示器 -->
-        <div
-          v-if="msg.state === 'streaming' && !msg.content && !msg.toolTrace?.length"
-          class="typing-bubble"
-        >
-          <span /><span /><span />
-        </div>
 
         <!-- 完成态 meta -->
         <div
@@ -113,7 +108,9 @@ import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileRichCard from './MobileRichCard.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
-import RetrievalStatus from '@/components/chat/RetrievalStatus.vue'
+// ===== W99 +15 移动端接入：ThinkingCapsule 取代 RetrievalStatus 挂载 =====
+// RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（基线兼容）
+import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
@@ -264,21 +261,8 @@ function onFollowUpClick(suggestion) {
   margin-top: 6px;
 }
 
-/* typing 动画 */
-.typing-bubble {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px 0;
-}
-.typing-bubble span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  animation: td 1.4s infinite;
-}
-.typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
-.typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
+/* ===== W99 +15 typing-bubble CSS 删除（已被 ThinkingCapsule 取代） ===== */
+
 /* 完成态 */
 .msg-meta {
   font-size: 11px;
