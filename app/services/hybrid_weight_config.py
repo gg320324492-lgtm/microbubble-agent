@@ -54,6 +54,7 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "graph": 0.1,
     "rerank": 0.2,
     "image": 0.15,
+    "temporal": 0.0,
 }
 
 # 默认 A/B 灰度 — A 组 = 全开, B 组 = 强化 bm25 (实验性)
@@ -96,10 +97,12 @@ class HybridWeights:
     rerank: float = 0.2
     # W100-RAG-5: OCR 图片召回第 5 路
     image: float = 0.15
+    # W100-RAG-6: 时间衰减 — 不作为 RRF 路权重 (temporal=0), 仅作最终乘子
+    temporal: float = 0.0
 
     def __post_init__(self) -> None:
-        # 防御性: 负权重 / NaN 守护；第 5 路必须同步加入白名单
-        for field_name in ("vector", "bm25", "graph", "rerank", "image"):
+        # 防御性: 负权重 / NaN 守护；第 5/6 路必须同步加入白名单
+        for field_name in ("vector", "bm25", "graph", "rerank", "image", "temporal"):
             v = getattr(self, field_name)
             if not isinstance(v, (int, float)):
                 raise ValueError(
@@ -117,10 +120,10 @@ class HybridWeights:
         """从 dict 创建 (用于 yaml / DB 反序列化)
 
         Args:
-            data: 含 vector/bm25/graph/rerank/image 键的 dict, 缺键走默认
+            data: 含 vector/bm25/graph/rerank/image/temporal 键的 dict, 缺键走默认
         """
         kwargs: Dict[str, float] = {}
-        for k in ("vector", "bm25", "graph", "rerank", "image"):
+        for k in ("vector", "bm25", "graph", "rerank", "image", "temporal"):
             if k in data:
                 kwargs[k] = float(data[k])
         return cls(**kwargs)
@@ -285,6 +288,7 @@ def apply_weights(
     results_by_method: Dict[str, List[Dict[str, Any]]],
     weights: HybridWeights,
     top_k: int = 10,
+    temporal_factor: Optional[Dict[Any, float]] = None,
 ) -> List[Dict[str, Any]]:
     """对多路结果按权重合并 + RRF 归一化
 
@@ -302,11 +306,17 @@ def apply_weights(
         3. 同一 doc_id 在多路命中 → RRF 分数累加
         4. 按 RRF 总分降序排, 取 top_k
         5. 输出带 rrf_score 字段 + retrieval_methods 列表
+        6. W100-RAG-6: 若 temporal_factor 不为 None, 对每个 doc 乘 temporal 乘子
+           (类 20.132: 仅作最终乘子, 不影响 RRF score 结构)
 
     Args:
         results_by_method: 各路结果 dict
         weights: HybridWeights 权重
         top_k: 最终返回条数
+        temporal_factor: W100-RAG-6 时间衰减因子
+            - None 或空 dict → 不应用 temporal 乘子 (与 W100-RAG-5 行为一致)
+            - dict: key = doc_id, value ∈ [0, 1.5] 时间权重
+            - 缺 key 的 doc → 不乘 (保持原 RRF score)
 
     Returns:
         按 rrf_score 降序排的 top_k 列表
@@ -317,6 +327,7 @@ def apply_weights(
         "graph": weights.graph,
         "rerank": weights.rerank,
         "image": weights.image,
+        "temporal": weights.temporal,
     }
 
     rrf_totals: Dict[Any, float] = {}
@@ -355,7 +366,13 @@ def apply_weights(
     merged: List[Dict[str, Any]] = []
     for doc_id, rrf_total in rrf_totals.items():
         meta = dict(doc_meta[doc_id])
-        meta["rrf_score"] = round(rrf_total, 6)
+        # W100-RAG-6: temporal 乘子 (类 20.132 仅作最终乘子, 不影响 RRF 排序结构)
+        if temporal_factor and doc_id in temporal_factor:
+            _t_factor = float(temporal_factor[doc_id])
+            meta["rrf_score"] = round(rrf_total * _t_factor, 6)
+            meta["temporal_weight"] = round(_t_factor, 4)
+        else:
+            meta["rrf_score"] = round(rrf_total, 6)
         meta["retrieval_methods"] = doc_methods.get(doc_id, [])
         merged.append(meta)
 
