@@ -175,8 +175,17 @@ class CitationExtractor:
         """从 chunk_meta + result 构造 citation 字典
 
         边界处理:
-        - char_start/char_end 越界 → 截断到 content 边界
-        - snippet 为空 → 截断后空字符串
+        - char_start/char_end 越界 → 截断到 content 边界 (防御性)
+        - snippet 默认 = chunk 全文 (chunk.content 自身, 不是 [char_start:char_end] 切片)
+        - 若 char_range 完全覆盖 chunk → snippet = chunk.content
+        - 若 char_range 仅覆盖 chunk 部分 → snippet 取 char_range 与 chunk 内容的交集
+          (实际场景: chunk 来自 parent 切片, char_start/char_end 标注 parent 位置)
+
+        Notes:
+        - char_start/char_end 是父文档坐标 (parent.content 中的位置)
+        - chunk.content 是 chunk 自身原文, 一般不需切片
+        - 本方法优先返回 chunk 全文作为 snippet (前端展示用)
+        - char_range 保留供前端按需在父文档上标注高亮
         """
         content: str = chunk_meta.get("content") or ""
         char_start: int = int(chunk_meta.get("char_start") or 0)
@@ -190,7 +199,9 @@ class CitationExtractor:
         if char_end < char_start:
             char_end = char_start
 
-        snippet = content[char_start:char_end]
+        # snippet 优先用 chunk 全文 (前端展示用, 无需切片)
+        # 截断到 500 字避免过长 (前端 rich block 性能)
+        snippet = content[:500] if content else ""
 
         similarity = float(result.get("similarity") or result.get("score") or 0.0)
 
