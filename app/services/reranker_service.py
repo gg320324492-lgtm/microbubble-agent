@@ -229,3 +229,35 @@ def reset_reranker_service() -> None:
     """重置单例 (测试用, 允许重新初始化)"""
     global _reranker_service
     _reranker_service = None
+
+
+# ============================================================
+# W100-RAG-4: RerankerV2 工厂 (仅 ADD, 件 4 门控 D 守恒)
+# 委托给 RerankerV2 (app/services/reranker_v2.py)
+# 默认 backend = cross_encoder (类 20.128, 不破坏 W75 baseline 93.5%)
+# ============================================================
+
+
+def get_reranker_instance(
+    backend: Optional[str] = None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+):
+    """获取 RerankerV2 实例 (W100-RAG-4 工厂).
+
+    委托给 app.services.reranker_v2.get_reranker_v2_instance,
+    避免 import 循环 + 维持 W75 工厂命名一致性.
+
+    Args:
+        backend: 后端选择 (cross_encoder / bge_v2 / cohere), 默认 cross_encoder
+        model: 模型名, 默认 BAAI/bge-reranker-v2-m3
+        api_key: API key (仅 cohere 需要)
+
+    Returns:
+        RerankerV2 实例
+    """
+    from app.services.reranker_v2 import get_reranker_v2_instance
+
+    return get_reranker_v2_instance(
+        backend=backend, model=model, api_key=api_key
+    )
