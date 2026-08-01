@@ -126,6 +126,9 @@ class SearchLog(Base, TimestampMixin):
     citation_count = Column(Integer, nullable=True)  # 本次召回生成的 citation 数
     # ==================== W99-RAG-2 扩展字段结束 ====================
 
+    # W100-RAG-5: 第 5 路 OCR 图片召回 top-1 similarity
+    image_score = Column(Float, nullable=True)
+
     # 时间戳 (TimestampMixin 提供 created_at/updated_at)
     # 单独加 raw 字段方便查询时直接 SELECT
     # 注: TimestampMixin.created_at 已是 DateTime, 这里不重复定义

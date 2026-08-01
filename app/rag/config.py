@@ -112,6 +112,17 @@ RERANKER_ACCEPTANCE_GATE: float = float(
     os.getenv("RERANKER_ACCEPTANCE_GATE", "0.92")
 )
 
+# ===== W100-RAG-5 Multimodal Retriever 第 5 路 =====
+# OCR 已完成的图片通过 ocr_text 双塔召回；candidate 向量不持久化。
+MULTIMODAL_RETRIEVER_ENABLED: bool = (
+    RAG_FRAMEWORK_ENABLED
+    and os.getenv("MULTIMODAL_RETRIEVER_ENABLED", "1").lower()
+    in ("1", "true", "yes")
+)
+MULTIMODAL_RETRIEVER_WEIGHT: float = float(
+    os.getenv("MULTIMODAL_RETRIEVER_WEIGHT", "0.15")
+)
+
 # ===== 框架配置 =====
 # LangFuse 自托管服务地址
 LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
