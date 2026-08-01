@@ -668,6 +668,37 @@ async def retrieve_with_weights(
     except Exception as _e:
         logger.debug(f"[W99-RAG-2] citation hook skip: {_e}")
 
+    # 6) W100-RAG-4: Reranker v2 hook (件 4 门控 B 守恒 - 仅在 body 追加, 不改签名)
+    # 沿用 W99-RAG-1 cache + W99-RAG-2 citation + W100-RAG-3 intent 模式
+    # 顺序: intent → cache → rerank → citation (Reranker 在 cache 写入之后、
+    # citation 提取之前, 避免 cache 写入被 rerank 截断的 candidates 影响)
+    # 失败 best-effort 静默降级 (类 20.127), 默认 backend = CrossEncoder (类 20.128)
+    try:
+        from app.rag.config import RERANKER_BACKEND as _RR_BACKEND
+        from app.rag.config import RERANKER_MODEL as _RR_MODEL
+        from app.rag.config import RERANKER_API_KEY as _RR_KEY
+        from app.services.reranker_v2 import get_reranker_v2_instance
+
+        _reranker = get_reranker_v2_instance(
+            backend=_RR_BACKEND, model=_RR_MODEL, api_key=_RR_KEY
+        )
+        if raw_results and _reranker is not None:
+            # 给 candidates 标 original_index (rerank 后回溯 ground truth 用)
+            for _idx, _c in enumerate(raw_results):
+                _c["original_index"] = _idx
+            # rerank top_k 与函数参数 top_k 对齐
+            _reranked = await _reranker.rerank(
+                query=query, candidates=raw_results, top_k=top_k
+            )
+            # 把 rerank_score 挂回原 results (与 W75 行为一致)
+            if _reranked:
+                raw_results = _reranked
+                logger.debug(
+                    f"[W100-RAG-4] reranker hook applied: backend={_RR_BACKEND}"
+                )
+    except Exception as _e:
+        logger.debug(f"[W100-RAG-4] reranker hook skip: {_e}")
+
     return raw_results
 
 
