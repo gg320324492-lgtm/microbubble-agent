@@ -21,6 +21,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
@@ -34,6 +35,7 @@ import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 import ChatMessageActions from '@/components/chat/ChatMessageActions.vue'  // W100 +23 重生成 + 复制按钮
+import ProEntries from '@/components/chat/ProEntries.vue'  // W100 +24 知识图谱/公式/假设入口
 // #CHAT-P1-E E2 + E5
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // ===== W99 +15 桌面/移动接入：ThinkingCapsule 完全替代 RetrievalStatus 在 assistant 气泡内的所有挂载 =====
@@ -478,6 +480,29 @@ async function copyMessage(msg: ChatMessage) {
 // ============================================================================
 // 生命周期
 // ============================================================================
+// W100 +24: 知识图谱 / 公式 / 假设入口跳转 (派工前提错配 #21: 实际 tab 路由, 非独立路由)
+const router = useRouter()
+function onProEntryClick(msg: ChatMessage, kind: 'graph' | 'formula' | 'hypothesis') {
+  try {
+    if (kind === 'graph') {
+      // 派工前提错配 #21: 派工 brief 写 /knowledge/graph?session=&msg=, 实际路由仅 /knowledge/graph (W86 mini-3 决策)
+      // 知识图谱主入口已统一到 /knowledge?tab=entities (W86 mini-3), 但 /knowledge/graph 路由保留作 fallback
+      router.push({ path: '/knowledge/graph', query: { session: sessionId, msg: String(msg.id || '') } })
+    } else if (kind === 'formula') {
+      // 派工前提错配 #21: 派工 brief 写 /formulas?search=, 实际入口是 /knowledge?tab=formulas
+      const kws = msg.intent?.keywords
+      const search = Array.isArray(kws) && kws.length ? kws[0] : ''
+      router.push({ path: '/knowledge', query: { tab: 'formulas', search } })
+    } else if (kind === 'hypothesis') {
+      // 派工前提错配 #21: 派工 brief 写 /hypotheses?from=, 实际入口是 /knowledge?tab=hypotheses
+      router.push({ path: '/knowledge', query: { tab: 'hypotheses', from: String(msg.id || '') } })
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[ChatViewSSE] onProEntryClick router.push failed', e)
+  }
+}
+
 onMounted(async () => {
   await nextTick()
   scrollToBottom()
@@ -655,6 +680,15 @@ onUnmounted(() => {
                 :message-id="msg.id"
                 @regenerate="regenerate(msg)"
                 @copy="copyMessage(msg)"
+              />
+              <!-- W100 +24: 知识图谱 / 公式 / 假设入口 (桌面端 hover 才显示) -->
+              <ProEntries
+                v-if="msg.role === 'assistant' && msg.content"
+                mode="desktop"
+                :intent="msg.intent || null"
+                :content="msg.content"
+                :tool-trace="msg.toolTrace || []"
+                @entry-click="onProEntryClick(msg, $event)"
               />
               <!-- W98 CHAT-P1-D3: 用户反馈按钮 (仅 assistant 完成态展示) -->
               <FeedbackButtons
