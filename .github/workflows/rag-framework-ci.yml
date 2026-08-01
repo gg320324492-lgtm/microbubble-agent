@@ -53,7 +53,10 @@ jobs:
       - name: Install core deps
         run: |
           python -m pip install --upgrade pip
-          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic
+          # W98 (2026-08-01): tests/rag_framework/test_dense_sparse_routing.py
+          #   import app.services.bm25_service 触发 jieba (BM25 分词依赖).
+          #   不补 jieba → ModuleNotFoundError, RAG framework job 在 main 连 3+ fail.
+          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic jieba
 
       - name: Run RAG framework tests (mock mode)
         env:
