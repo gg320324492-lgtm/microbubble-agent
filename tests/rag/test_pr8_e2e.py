@@ -378,7 +378,8 @@ def test_kg_18_alembic_single_head_091():
         "091_add_kg_entity",
         "094_add_rag_query_cache_metrics",
         "095_add_rag_citation_metrics",
-    ), f"head 不在 W97-W99 RAG 链范围内, 实测 {heads}"
+        "096_add_rag_multimodal_metrics",
+    ), f"head 不在 W97-W100 RAG 链范围内, 实测 {heads}"
 
     # 串单链验证: 当前 head 上溯 9 级 (W99 +094/+095 后链更长)
     # 链: 095 → 094 → 093 → 092 → 091 → 090 → 089 → 088 → 087
