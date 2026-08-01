@@ -403,7 +403,7 @@ onBeforeUnmount(() => {
   padding: 0 8px;
   border-radius: 12px;
   background: var(--color-primary, #ff7a5c);
-  color: #fff;
+  color: var(--el-color-white);
   font-size: 12px;
   font-weight: 600;
 }
@@ -449,7 +449,7 @@ onBeforeUnmount(() => {
   height: 18px;
   padding: 0 5px;
   background: var(--color-text-placeholder, #c0c4cc);
-  color: #fff;
+  color: var(--el-color-white);
   border-radius: 9px;
   font-size: 11px;
   font-weight: 600;

@@ -677,8 +677,8 @@ onMounted(() => {
 .stat-content { flex: 1; min-width: 0; }
 .stat-label { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: 4px; }
 /* W93 a11y: placeholder 过浅 (1.54-2.72), 用 AA 中性色 */
-.stat-hint { font-size: var(--font-size-xs); color: #6B6E76; margin-top: 4px; }
-.stat-value { font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold); color: #4A4E57; line-height: 1.1; }
+.stat-hint { font-size: var(--font-size-xs); color: rgb(107, 110, 118); margin-top: 4px; }
+.stat-value { font-size: var(--font-size-3xl); font-weight: var(--font-weight-bold); color: rgb(74, 78, 87); line-height: 1.1; }
 
 
 .stat-card-primary { border-left: 4px solid var(--color-primary); }

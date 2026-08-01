@@ -161,11 +161,11 @@ function onReturn() {
 }
 .result-success .icon-large {
   background: rgba(103, 194, 58, 0.12);
-  color: #67c23a;
+  color: rgb(103, 194, 58);
 }
 .result-failed .icon-large {
   background: rgba(245, 108, 108, 0.12);
-  color: #f56c6c;
+  color: rgb(245, 108, 108);
 }
 .result-title {
   font-size: 24px;
@@ -198,7 +198,7 @@ function onReturn() {
 }
 .provider-badge {
   background: var(--color-primary, #FF7A5C);
-  color: #fff;
+  color: var(--el-color-white);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;

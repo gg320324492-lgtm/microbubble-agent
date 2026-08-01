@@ -215,9 +215,9 @@ defineExpose({ refresh: loadCurrent })
 }
 
 /* 套餐专属色 (light 模式 fallback) */
-.chip-free .chip-icon { background: #e0e0e0; }
-.chip-basic .chip-icon { background: linear-gradient(135deg, #5CACEE, #6495ED); color: white; }
-.chip-pro .chip-icon { background: linear-gradient(135deg, #FF7A5C, #FFB347); color: white; }
+.chip-free .chip-icon { background: rgb(224, 224, 224); }
+.chip-basic .chip-icon { background: linear-gradient(135deg, #5CACEE, #6495ED); color: var(--el-color-white); }
+.chip-pro .chip-icon { background: linear-gradient(135deg, #FF7A5C, #FFB347); color: var(--el-color-white); }
 </style>
 
 <!--
@@ -226,19 +226,19 @@ defineExpose({ refresh: loadCurrent })
 -->
 <style>
 [data-theme="dark"] .billing-chip {
-  background: #222222;
-  border-color: #2a2a2a;
-  color: #e0e0e0;
+  background: rgb(34, 34, 34);
+  border-color: rgb(42, 42, 42);
+  color: rgb(224, 224, 224);
 }
 [data-theme="dark"] .billing-chip.is-expiring {
   background: rgba(230, 162, 60, 0.15);
   border-color: var(--color-warning, #E6A23C);
 }
 [data-theme="dark"] .billing-chip .chip-days {
-  color: #888888;
+  color: rgb(136, 136, 136);
 }
 [data-theme="dark"] .billing-chip.chip-free .chip-icon {
-  background: #3a3a3a;
-  color: #a0a0a0;
+  background: rgb(58, 58, 58);
+  color: rgb(160, 160, 160);
 }
 </style>

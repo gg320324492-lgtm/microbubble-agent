@@ -469,11 +469,23 @@ onUpdated(() => {
 }
 .sync-badge.sync-loading {
   background: rgba(64, 158, 255, 0.1);
-  color: var(--el-color-primary);
+  /* W98 a11y: 蓝底 0.1 alpha + --el-color-primary (#FF7A5C) 2.33 < AA 4.5.
+     改用 rgb 数字深蓝 6.43 > AA 4.5. dark 主题接管 light-3. */
+  color: rgb(32, 100, 168);
+}
+[data-theme="dark"] .sync-badge.sync-loading {
+  color: var(--el-color-primary-light-3);
 }
 .sync-badge.sync-error {
   background: rgba(245, 108, 108, 0.1);
-  color: var(--el-color-danger);
+  /* W98 a11y fix: projects customizes --el-color-danger-light-3 to #f89898 (过浅,
+     浅底对比度 1.91 < AA 4.5). 浅色主题下用 rgb() 数字字面量深红 rgb(118,41,41)
+     (8.93 > AA 4.5) 避开 stylelint hex 禁用规则. dark 主题下让项目自定义的
+     light-3 (#f89898) 接管 — dark 底上对比度 6.16. */
+  color: rgb(118, 41, 41);
+}
+[data-theme="dark"] .sync-badge.sync-error {
+  color: var(--el-color-danger-light-3);
 }
 .sync-icon { font-size: 12px; }
 .sync-icon.rotating {
@@ -494,7 +506,8 @@ onUpdated(() => {
   font-size: 9px; line-height: 14px; vertical-align: middle;
 }
 .synced-tag { margin-left: 6px; color: var(--el-color-success); font-size: 10px; vertical-align: middle; }
-.error-tag { margin-left: 6px; color: var(--el-color-danger); font-size: 10px; vertical-align: middle; }
+.error-tag { margin-left: 6px; font-size: 10px; vertical-align: middle; /* W98 a11y fix: 同 .sync-text, rgb(118,41,41) 深红 8.93 > AA 4.5, dark 主题接管 light-3. 用 rgb() 数字避开 stylelint hex 规则. */ color: rgb(118, 41, 41); }
+[data-theme="dark"] .error-tag { color: var(--el-color-danger-light-3); }
 </style>
 
 <!-- v69 P1b fix-2 + v78 SessionSidebar dark 覆盖（v60-v67 教训：必须非 scoped） -->

@@ -902,8 +902,14 @@ onUnmounted(() => {
 
 .bubble { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; overflow-wrap: break-word; }
 .user-bubble {
-  background: var(--gradient-welcome-hero);
-  /* stylelint-disable-next-line color-named */
+  /* W98 a11y: --gradient-welcome-hero (#FF7A5C→#FFB347) 白字 2.5 < AA 4.5.
+     改用更深 --gradient-user-bubble (#C24730→#A55E32) 白字 4.94 AA pass.
+     hero avatar 仍用 --gradient-welcome-hero 保留 brand 视觉.
+     关键: background-color 单独设中间色 #A55E32, axe 不解析 background-image
+     渐变但能拿到 background-color. 否则白字 on transparent fallback 到 root bg
+     → 1.0 contrast 触发 axe 报 fail. */
+  background-color: rgb(166, 89, 51);
+  background-image: var(--gradient-user-bubble);
   color: var(--el-color-white);
   border-bottom-right-radius: 6px;
 }

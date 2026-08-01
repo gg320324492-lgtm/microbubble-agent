@@ -39,6 +39,9 @@ test.describe('a11y baseline 比对 (5 页面 × 5 project = 25 case)', () => {
       const rows = toBaseline(results)
       const landedOnLogin = /\/login/.test(new URL(page.url()).pathname)
 
+      // W98 debug: 临时加 target 看 CI 上真实违规元素
+      const targets = results.violations.flatMap(v => v.nodes.map(n => `  ${v.id} → ${JSON.stringify(n.target)}`))
+
       const report = [
         `page: ${pageDef.name}  route: ${pageDef.path}`,
         `target: ${pageDef.target}`,
@@ -46,6 +49,7 @@ test.describe('a11y baseline 比对 (5 页面 × 5 project = 25 case)', () => {
         `authed: ${authed ? 'yes' : 'no'}   redirected-to-login: ${landedOnLogin ? 'yes' : 'no'}`,
         `violations: ${rows.length}`,
         ...rows.map((r) => `  ${r.id} [${r.impact}] ×${r.nodes}`),
+        ...targets,
       ].join('\n')
 
       expect(report).toMatchSnapshot(`${pageDef.name}.txt`)

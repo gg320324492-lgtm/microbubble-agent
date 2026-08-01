@@ -117,11 +117,13 @@ export default {
 
 .swipe-edge-shadow-right {
   right: 0;
+
   --shadow-direction: right;
 }
 
 .swipe-edge-shadow-left {
   left: 0;
+
   --shadow-direction: left;
 }
 
