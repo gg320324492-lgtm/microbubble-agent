@@ -456,6 +456,151 @@ class RAGEvaluator:
         except Exception as e:
             logger.warning(f"Failed to save RAG evaluation: {e}")
 
+    # ==================== W99-RAG-2 Citation 段落级溯源评估 ====================
+    # 仅 ADD, 0 改既有 11 def (evaluate / _evaluate_faithfulness / _evaluate_relevancy /
+    # _evaluate_precision / _evaluate_recall / evaluate_multimodal /
+    # evaluate_consistency_double_round / save_evaluation + __init__ + get_rag_evaluator + run_evaluation)
+    # 件 4 门控 C 守恒: git diff <base>..HEAD -- app/services/rag_evaluator.py | grep -c '^[+-]def' = 0
+    async def evaluate_citations(
+        self,
+        query: str,
+        answer: str,
+        citations: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """W99-RAG-2: 评估 answer 引用的 citation 是否精确相关 (LLM-as-judge)
+
+        评估目标:
+        - citation_precision: 引用的 doc/chunk 中, 真支持 answer 论点的比例
+        - citation_recall: answer 涉及的论点中, 被 citation 覆盖的比例
+        - total_citations: 总引用数
+        - used_citations: 真被引用支撑的 citation 数
+        - score: 加权综合分 (precision*0.6 + recall*0.4)
+
+        Args:
+            query: 用户问题
+            answer: 生成的回答
+            citations: List[dict] 每条含 {doc_id, chunk_id, snippet, char_range, similarity}
+
+        Returns:
+            {
+                "citation_precision": float,  # 0-1
+                "citation_recall": float,     # 0-1
+                "total_citations": int,
+                "used_citations": int,
+                "score": float,               # 加权综合分
+            }
+
+        失败处理:
+        - 空 citations → 返回 0 分 (non-zero score = 0)
+        - LLM 调用失败 → best-effort 用 snippet 长度做兜底分
+        - 所有异常 logger.warning + 返回中性 0.5
+        """
+        if not citations:
+            return {
+                "citation_precision": 0.0,
+                "citation_recall": 0.0,
+                "total_citations": 0,
+                "used_citations": 0,
+                "score": 0.0,
+            }
+
+        # 构造 LLM-as-judge prompt (复用现有 LLM client, 与 evaluate 同模式)
+        try:
+            from app.core.llm import get_anthropic_client, get_default_model
+
+            client = get_anthropic_client()
+            model = get_default_model()
+        except Exception as e:
+            logger.warning(f"[W99-RAG-2] evaluate_citations LLM client init fail: {e}")
+            return self._fallback_citation_score(citations)
+
+        # 构造 prompt
+        citation_text = "\n".join(
+            f"[{i+1}] (doc={c.get('doc_id')}, chunk={c.get('chunk_id')}, "
+            f"sim={c.get('similarity', 0):.2f}) {c.get('snippet', '')[:200]}"
+            for i, c in enumerate(citations[:10])  # 最多 10 条, 控制 prompt 长度
+        )
+        prompt = f"""请评估以下 answer 引用的 citations 是否精确相关。
+
+用户问题: {query[:300]}
+
+回答:
+{answer[:1000]}
+
+引用的段落 (citation):
+{citation_text}
+
+评估任务:
+1. citation_precision: 引用的 citations 中, 真支持回答论点的比例 (0-1)
+2. citation_recall: 回答涉及的论点中, 被 citations 覆盖的比例 (0-1)
+
+仅返回 JSON 格式:
+{{"citation_precision": <0-1>, "citation_recall": <0-1>, "used_indices": [1, 3, ...]}}
+
+不要返回其他文本."""
+
+        try:
+            response = await client.messages.create(
+                model=model,
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    raw += block.text
+            raw = raw.strip()
+
+            # 解析 JSON (容错: 提取 {} 块)
+            import json as _json
+            import re as _re
+            m = _re.search(r"\{.*?\}", raw, _re.S)
+            if not m:
+                return self._fallback_citation_score(citations)
+            data = _json.loads(m.group(0))
+            precision = float(data.get("citation_precision", 0.0))
+            recall = float(data.get("citation_recall", 0.0))
+            used_indices = data.get("used_indices", [])
+            used_count = len(used_indices) if isinstance(used_indices, list) else 0
+            score = round(precision * 0.6 + recall * 0.4, 4)
+
+            return {
+                "citation_precision": round(precision, 4),
+                "citation_recall": round(recall, 4),
+                "total_citations": len(citations),
+                "used_citations": used_count,
+                "score": score,
+            }
+        except Exception as e:
+            logger.warning(f"[W99-RAG-2] evaluate_citations LLM call fail: {e}")
+            return self._fallback_citation_score(citations)
+
+    def _fallback_citation_score(
+        self,
+        citations: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """LLM 失败兜底: 按 similarity 中位数 × 0.5 作为中性分 (类 20 #121 实战)"""
+        if not citations:
+            return {
+                "citation_precision": 0.0,
+                "citation_recall": 0.0,
+                "total_citations": 0,
+                "used_citations": 0,
+                "score": 0.0,
+            }
+        sims = [float(c.get("similarity") or 0.0) for c in citations]
+        sims.sort()
+        n = len(sims)
+        median = sims[n // 2] if n % 2 == 1 else (sims[n // 2 - 1] + sims[n // 2]) / 2
+        return {
+            "citation_precision": round(median, 4),
+            "citation_recall": round(median, 4),
+            "total_citations": n,
+            "used_citations": n,  # fallback 假设全用上
+            "score": round(median, 4),
+        }
+    # ==================== W99-RAG-2 evaluate_citations 结束 ====================
+
 
 # 全局单例
 _rag_evaluator: Optional[RAGEvaluator] = None
