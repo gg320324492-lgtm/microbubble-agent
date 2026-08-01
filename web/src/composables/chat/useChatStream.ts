@@ -492,6 +492,10 @@ export function useChatStream() {
     const controller = new AbortController()
     abortControllers[targetSessionId] = controller
     sendingSessions.add(targetSessionId)
+    // [CHAT-P1-E E2] 通知 chip 组件隐藏 (用户发新消息 → 旧 suggestions 失效)
+    window.dispatchEvent(new CustomEvent('chat:send-start', {
+      detail: { sessionId: targetSessionId },
+    }))
 
     try {
       if (file || img) {
@@ -574,6 +578,17 @@ export function useChatStream() {
           // 2026-07-02 Round 5c: 前端兜底剥除 fake XML (兜底防 Round 5a/5b 都没完全解决的情况)
           const cleanedDelta = stripFakeXml(evt.delta || '')
           currentAssistant.content = (currentAssistant.content || '') + cleanedDelta
+          // [CHAT-P1-E E5] 检索过程可视化: 首个 text_delta → generating 阶段
+          if (currentAssistant.content && !currentAssistant._generatingDispatched) {
+            currentAssistant._generatingDispatched = true
+            window.dispatchEvent(new CustomEvent('chat:retrieval-status', {
+              detail: {
+                sessionId: targetSessionId,
+                stage: 'generating',
+                messageId: currentAssistant.id,
+              },
+            }))
+          }
           break
         case 'brief':
           // [snapshot, deprecated] v1 客户端兼容，v2+ 忽略
@@ -610,6 +625,17 @@ export function useChatStream() {
               (evt.tool_input as Record<string, unknown>).q as string ||
               ''
           }
+          // [CHAT-P1-E E5] 检索过程可视化: 检索类工具触发 searching 阶段
+          if (evt.tool_name && ['search_knowledge', 'web_search', 'hybrid_retrieve'].includes(evt.tool_name)) {
+            window.dispatchEvent(new CustomEvent('chat:retrieval-status', {
+              detail: {
+                sessionId: targetSessionId,
+                stage: 'searching',
+                toolName: evt.tool_name,
+                messageId: currentAssistant.id,
+              },
+            }))
+          }
           break
         case 'tool_result': {
           // [snapshot] 工具调用结果
@@ -641,6 +667,22 @@ export function useChatStream() {
                 .catch(() => { /* import 失败静默 */ })
             }
             pendingAgentSearchQuery = null
+          }
+          // [CHAT-P1-E E5] 检索过程可视化: 检索类工具结果 → found 阶段 (N 条)
+          if (evt.tool_name && ['search_knowledge', 'web_search', 'hybrid_retrieve'].includes(evt.tool_name)) {
+            const output = (evt.tool_output as Record<string, unknown>) || {}
+            const count = Array.isArray(output.results) ? (output.results as unknown[]).length
+              : Array.isArray(output.items) ? (output.items as unknown[]).length
+              : 0
+            window.dispatchEvent(new CustomEvent('chat:retrieval-status', {
+              detail: {
+                sessionId: targetSessionId,
+                stage: 'found',
+                toolName: evt.tool_name,
+                count,
+                messageId: currentAssistant.id,
+              },
+            }))
           }
           break
         }
@@ -791,6 +833,21 @@ export function useChatStream() {
               persistSessionSync(targetSessionId)
             }
           })
+          break
+        }
+        // ===== #CHAT-P1-E E2: 追问 chips =====
+        case 'suggestions': {
+          // [snapshot] 追问建议 (assistant 回答后从 topics 派生, best-effort)
+          const suggestions = Array.isArray(evt.suggestions) ? evt.suggestions : []
+          if (suggestions.length > 0) {
+            // 通过 window CustomEvent 通知 FollowUpChips 组件
+            window.dispatchEvent(new CustomEvent('chat:suggestions', {
+              detail: {
+                sessionId: targetSessionId,
+                suggestions,
+              },
+            }))
+          }
           break
         }
       }

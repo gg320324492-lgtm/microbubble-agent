@@ -30,6 +30,7 @@
       @rename="onRenameSession"
       @delete="onDeleteSession"
       @toggle-pin="onTogglePinSession"
+      @toggle-archive="onToggleArchiveSession"
     />
 
     <main
@@ -39,9 +40,11 @@
       <MobileMessageList
         ref="messageListRef"
         :messages="messages"
+        :session-id="sessionId"
         @longpress="onLongPress"
         @play-tts="onPlayTTS"
         @quick-action="onQuickAction"
+        @followup="onFollowUp"
       />
     </main>
 
@@ -275,6 +278,15 @@ async function onTogglePinSession(s) {
   await sessionsStore.setPinned(s.id, !s.is_pinned)
   ElMessage.success(s.is_pinned ? '已收藏' : '已取消收藏')
 }
+// [CHAT-P1-E E3] 移动端归档/恢复 (复用 store.setArchived)
+async function onToggleArchiveSession(s) {
+  try {
+    await sessionsStore.setArchived(s.id, !s.is_archived)
+    ElMessage.success(s.is_archived ? '已恢复' : '已归档')
+  } catch (e) {
+    ElMessage.error(s.is_archived ? '恢复失败' : '归档失败')
+  }
+}
 const imageInputRef = ref(null)
 const fileInputRef = ref(null)
 const messageListRef = ref(null)
@@ -507,6 +519,13 @@ function deleteMessage() {
 function onQuickAction(text) {
   haptic.tap()
   inputText.value = text
+  sendMessage()
+}
+
+// [CHAT-P1-E E2] 追问 chip 点击 → 触发新 SSE (复用 onQuickAction)
+function onFollowUp(suggestion) {
+  haptic.tap()
+  inputText.value = suggestion
   sendMessage()
 }
 

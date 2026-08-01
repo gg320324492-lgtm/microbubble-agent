@@ -35,9 +35,31 @@
             <span>搜索会话</span>
           </button>
 
+          <!-- [CHAT-P1-E E3] 移动端归档过滤 tab -->
+          <div class="archive-filter-tabs">
+            <button
+              type="button"
+              class="archive-tab"
+              :class="{ active: archiveFilter === 'all' }"
+              @click="archiveFilter = 'all'"
+            >全部</button>
+            <button
+              type="button"
+              class="archive-tab"
+              :class="{ active: archiveFilter === 'active' }"
+              @click="archiveFilter = 'active'"
+            >未归档</button>
+            <button
+              type="button"
+              class="archive-tab"
+              :class="{ active: archiveFilter === 'archived' }"
+              @click="archiveFilter = 'archived'"
+            >已归档</button>
+          </div>
+
           <div class="session-list">
             <LongPressWrapper
-              v-for="session in sessions"
+              v-for="session in filteredSessions"
               :key="session.id"
               :delay="600"
               @longpress="onLongPress(session)"
@@ -106,6 +128,9 @@ const emit = defineEmits([
   'share',
   'export',
   'delete',
+  'toggle-pin',
+  // [CHAT-P1-E E3] 移动端归档/恢复
+  'toggle-archive',
 ])
 
 // ============================================================================
@@ -117,10 +142,13 @@ const actionSession = ref(null)
 const actionSheetItems = computed(() => {
   const s = actionSession.value
   const pinned = !!s?.is_pinned
+  const archived = !!s?.is_archived
   return [
     { name: '重命名', icon: '✎', key: 'rename' },
     { name: '编辑标签', icon: '🏷', key: 'edit-tags' },
     { name: pinned ? '取消收藏' : '收藏', icon: pinned ? '📌' : '📍', key: 'toggle-pin' },
+    // [CHAT-P1-E E3] 归档/恢复 (归档区显示"恢复")
+    { name: archived ? '✅ 恢复会话' : '🗄️ 归档会话', icon: archived ? '✅' : '🗄️', key: 'toggle-archive' },
     { name: '分享', icon: '🔗', key: 'share' },
     { name: '导出', icon: '📤', key: 'export' },
     { name: '删除', icon: '🗑', key: 'delete', danger: true },
@@ -146,6 +174,8 @@ function onActionSelect(action) {
     case 'rename': emit('rename', s); break
     case 'edit-tags': emit('edit-tags', s); break
     case 'toggle-pin': emit('toggle-pin', s); break
+    // [CHAT-P1-E E3] 移动端归档/恢复 emit
+    case 'toggle-archive': emit('toggle-archive', s); break
     case 'share': emit('share', s); break
     case 'export': emit('export', s); break
     case 'delete': emit('delete', s); break
@@ -160,6 +190,19 @@ function onSwitch(session) {
 function close() {
   emit('update:modelValue', false)
 }
+
+// [CHAT-P1-E E3] 移动端归档过滤
+const archiveFilter = ref('active')
+const filteredSessions = computed(() => {
+  if (archiveFilter.value === 'all') return props.sessions
+  if (archiveFilter.value === 'active') {
+    return props.sessions.filter((s) => !s.is_archived)
+  }
+  if (archiveFilter.value === 'archived') {
+    return props.sessions.filter((s) => s.is_archived)
+  }
+  return props.sessions
+})
 </script>
 
 <style scoped>
@@ -192,6 +235,29 @@ function close() {
   padding-top: var(--sat);
   transform: translateX(-100%);
   transition: transform 0.3s var(--ease-bounce);
+}
+
+/* [CHAT-P1-E E3] 移动端归档过滤 tab */
+.archive-filter-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px 8px;
+}
+.archive-tab {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+.archive-tab.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
 }
 
 [data-theme="dark"] .session-drawer-body {
