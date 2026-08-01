@@ -430,7 +430,8 @@ onUpdated(() => {
   font-size: 9px; line-height: 14px; vertical-align: middle;
 }
 .synced-tag { margin-left: 6px; color: var(--el-color-success); font-size: 10px; vertical-align: middle; }
-.error-tag { margin-left: 6px; color: var(--el-color-danger); font-size: 10px; vertical-align: middle; }
+.error-tag { margin-left: 6px; font-size: 10px; vertical-align: middle; /* W98 a11y fix: 同 .sync-text, 硬编码深红 6.96 > AA 4.5, dark 主题接管 light-3 */ color: #a02020; }
+[data-theme="dark"] .error-tag { color: var(--el-color-danger-light-3); }
 </style>
 
 <!-- v69 P1b fix-2 + v78 SessionSidebar dark 覆盖（v60-v67 教训：必须非 scoped） -->
