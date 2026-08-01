@@ -250,14 +250,18 @@ const formulaTabRef = ref(null)
 const memoryTabRef = ref(null)
 
 // ── 搜索和筛选 ──
+// W99 N-6 改进 (1): KnowledgeView 搜索结果点击埋点接通 + 改进 (3) top-1 高亮
+//   - 每次搜索都触发 startSearch (含 0 结果场景, 仍可记录 query + result_count)
+//   - 切换 query 时先 reset, 避免上一轮 eventId 串味
+//   - top-1 通过 KnowledgeCard 的 :top-result prop 高亮 (CSS token: --color-primary)
 const handleSearch = async (query) => {
   searchQuery.value = query
   currentPage.value = 1
+  searchAnalytics.reset()
   await fetchKnowledge()
   const topIds = knowledgeList.value.map(k => k.id)
-  if (topIds.length > 0) {
-    searchAnalytics.startSearch(query, topIds, 'knowledge_search')
-  }
+  // 始终埋点, 即使空结果, 也保留"搜索但没结果"的事实
+  searchAnalytics.startSearch(query, topIds, 'knowledge_search')
 }
 
 const handleViewDetail = (id) => {

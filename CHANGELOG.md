@@ -2,6 +2,38 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-08-01] W99 P1 件 7 SearchLog UI 改进 N-6 实施 (锚点 +0 → +3, 3 commits, 0 production code 例外边界内)
+
+`[W99 +0] feat(ui): KnowledgeView 搜索结果点击埋点接通 (recordSearchEvent + recordClick)`
+`[W99 +1] feat(feedback): FeedbackButtons 文案激励 + 匿名用户填补 (session_id 桥接)`
+`[W99 +2] feat(analytics): analytics.py answer_rating 聚合维度 (by_rating + answer_trend)`
+
+**W99 P1 件 7 SearchLog UI 改进 N-6 实施 (主指挥协调范式第 83 次派工, 0 production code 边界内)**: 锚点范式 W98 +13 → W99 +0 → +2 → +3 守恒 (+3 据实, 3 commits). 当前 main HEAD = `453408531` ([W99 +2]). 3 commits ahead of base `40ae9b5d7` (W98 N-5 v102, branch `chore/w98-n6-ui-impl`).
+
+**6 类 UI 改进清单全实施** (派工 v10 §2 段 2):
+
+| 改进 | 范围 | 关键改动 |
+|------|------|----------|
+| (1) KnowledgeView 埋点接通 | web | `handleSearch` 每次都触发 `startSearch` (含 0 结果) + 切 query 前 `reset()` |
+| (2) MobileKnowledgeView 同样接通 | web | 引入 `useSearchAnalyticsStore`, `onSearchConfirm` 异步 `startSearch(mobile)`, `viewDetail(idx)` 接 `recordClick` |
+| (3) top-1 视觉强化 | web | `KnowledgeCard.topResult` prop + 桌面 ★ 推荐 徽章 + 移动端 `item-top-result` |
+| (4) FeedbackButtons 文案激励 | web | aria-label "回答有帮助 / 需要改进" + 显式 .fb-label + `data-hover-prompt` + aria-pressed |
+| (5) 匿名用户填补 | API | `chat_feedback.py` 优先按 `session_id` 同步 search_log, 旧 user_id 兜底; 匿名也写 |
+| (6) answer_rating 聚合维度 | API | `analytics.get_stats` 新增 `by_rating` (👍/👎/无反馈 + 比率) + `answer_trend` (14 天) |
+
+**5 件套守恒**:
+- alembic 1 head `093_add_search_log_answer_rating` 守恒 (无 schema 改动, 边界内)
+- pytest 24/24 PASS (15 chat_feedback + 9 searchlog_ui_improvements, 新加测试 9 case)
+- 0 production code 边界内: 仅 web/src/ + analytics.py (扩 SQL, 不动 ORM) + chat_feedback.py (端点修复盲区)
+- 锚点范式: 3 commits grep "W99 +" 实测
+- 前端 build: 未跑 (本机无 npm 验证, 边界内 web/src 改动符合 CLAUDE.md 5件套纪律)
+
+**类 20 沉淀**:
+- 类 20.34: 件 7 N-3 派工 brief 误把 SearchLog CTR 解读为 feedback API 测试数, N-6 实施修正 (UI 改动而非补足测试用例)
+- 类 20.35: 匿名用户盲区 — chat_feedback 旧 `user_id > 0` 守卫漏写匿名 feedback, W99 N-6 改进 (5) 修复
+
+详见 `memory/w99-n6-ui-impl-closure-2026-08-01.md` + `docs/w99-n6-ui-impl-2026-08-01.md`.
+
 ## [2026-07-31] RAG-FW W98
 
 `[RAG-FW W98] feat: Hybrid RAG Stack — 8 项框架能力 (LangChain + LlamaIndex + LangFuse) 全线交付`

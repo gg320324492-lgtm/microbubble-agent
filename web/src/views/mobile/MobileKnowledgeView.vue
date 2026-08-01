@@ -58,7 +58,12 @@
           empty-hint="点击 + 添加或上传文件"
           @item-click="viewDetail"
         >
-          <template #item-actions="{ item }">
+          <template #item-actions="{ item, idx }">
+            <!-- W99 N-6 改进 (3): top-1 推荐结果徽章 (移动端首条) -->
+            <div v-if="idx === 0" class="item-top-result" aria-label="最相关结果">
+              <span class="top-result-glyph" aria-hidden="true">★</span>
+              <span class="top-result-text">推荐</span>
+            </div>
             <div class="item-actions">
               <button type="button" class="item-btn" @click.stop="editKnowledge(item)">✏️</button>
               <button type="button" class="item-btn danger" @click.stop="deleteKnowledge(item)">🗑</button>
@@ -274,6 +279,8 @@ import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileFab from '@/components/mobile/MobileFab.vue'
 // W68 G-2 (2026-07-24): 下拉刷新 composable
 import { usePullToRefresh } from '@/composables/usePullToRefresh'
+// W99 N-6 改进 (2): 移动端埋点接通 (复用桌面 store 协议)
+import { useSearchAnalyticsStore } from '@/stores/useSearchAnalytics'
 
 const router = useRouter()
 const route = useRoute()
@@ -523,11 +530,21 @@ async function fetchFormulas() {
   }
 }
 
+// W99 N-6 改进 (2): 移动端搜索埋点接通 (同桌面 store)
+//   每次搜索都触发 startSearch (含 0 结果场景), 切换 query 时先 reset
+const searchAnalytics = useSearchAnalyticsStore()
+
 function onSearchConfirm({ keyword, filters }) {
   searchKeyword.value = keyword
   Object.assign(activeFilters.value, filters)
   currentPage.value = 1
   fetchKnowledge()
+  // fetchKnowledge 异步: 这里 await 不到, 用 microtask 后再读列表
+  Promise.resolve().then(() => {
+    const topIds = knowledgeList.value.map(k => k.id)
+    searchAnalytics.reset()
+    searchAnalytics.startSearch(keyword, topIds, 'mobile')
+  })
 }
 
 function onSearchReset() {
@@ -535,9 +552,16 @@ function onSearchReset() {
   activeFilters.value = { category: '' }
   currentPage.value = 1
   fetchKnowledge()
+  searchAnalytics.reset()
 }
 
-function viewDetail(item) {
+// W99 N-6 改进 (2): 移动端点击埋点接通
+//   CardList 传出 (item, idx), idx 即位置 (1-based)
+//   与桌面协议对齐: recordClick(clickedId, position)
+function viewDetail(item, idx) {
+  if (typeof idx === 'number' && idx >= 0) {
+    searchAnalytics.recordClick(item.id, idx + 1)
+  }
   router.push(`/knowledge/${item.id}`)
 }
 
@@ -798,6 +822,25 @@ onMounted(() => {
   gap: 6px;
   margin-top: 6px;
 }
+
+/* W99 N-6 改进 (3): 移动端 top-1 推荐徽章 */
+.item-top-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin-bottom: 6px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  box-shadow: 0 2px 6px rgba(255, 122, 92, 0.28);
+}
+.item-top-result .top-result-glyph { font-size: 10.5px; line-height: 1; }
+.item-top-result .top-result-text { line-height: 1; }
 .item-btn {
   flex: 1;
   padding: 6px;

@@ -310,6 +310,68 @@ async def get_stats(
         for r in trend_result
     ]
 
+    # ==================== W99 N-6 改进 (6): answer_rating 聚合维度 ====================
+    # 按 3 档聚合 (👍=1 / 👎=-1 / 无反馈=NULL) — 给 Admin 看板 / grafana 消费
+    by_rating_result = await db.execute(
+        text("""
+            SELECT
+                COALESCE(answer_rating, 0) AS rating_bucket,
+                COUNT(*) AS n
+            FROM search_logs
+            WHERE created_at >= :cutoff AND source IS DISTINCT FROM 'system_metrics'
+            GROUP BY COALESCE(answer_rating, 0)
+        """),
+        {"cutoff": cutoff},
+    )
+    by_rating_raw = {int(r[0]): int(r[1]) for r in by_rating_result}
+    by_rating = {
+        "up": by_rating_raw.get(1, 0),           # 👍
+        "down": by_rating_raw.get(-1, 0),         # 👎
+        "unrated": by_rating_raw.get(0, 0),       # 无反馈 (COALESCE 把 NULL 转 0)
+    }
+    by_rating_total = by_rating["up"] + by_rating["down"] + by_rating["unrated"]
+    by_rating["answer_rate"] = (
+        round((by_rating["up"] + by_rating["down"]) * 100.0 / by_rating_total, 2)
+        if by_rating_total > 0 else 0.0
+    )
+    by_rating["upvote_rate"] = (
+        round(by_rating["up"] * 100.0 / by_rating_total, 2)
+        if by_rating_total > 0 else 0.0
+    )
+    by_rating["total"] = by_rating_total
+
+    # 14 天每日 feedback 趋势 (date -> {up, down, unrated, answer_rate})
+    answer_trend_result = await db.execute(
+        text("""
+            SELECT
+                DATE(created_at) AS day,
+                COUNT(*) FILTER (WHERE answer_rating = 1) AS up_n,
+                COUNT(*) FILTER (WHERE answer_rating = -1) AS down_n,
+                COUNT(*) FILTER (WHERE answer_rating IS NULL) AS unrated_n,
+                COUNT(*) AS total_n
+            FROM search_logs
+            WHERE created_at >= :cutoff AND source IS DISTINCT FROM 'system_metrics'
+            GROUP BY DATE(created_at)
+            ORDER BY day
+        """),
+        {"cutoff": cutoff},
+    )
+    answer_trend = [
+        {
+            "date": r[0].isoformat() if r[0] else None,
+            "up": int(r[1] or 0),
+            "down": int(r[2] or 0),
+            "unrated": int(r[3] or 0),
+            "total": int(r[4] or 0),
+            "answer_rate": (
+                round((int(r[1] or 0) + int(r[2] or 0)) * 100.0 / int(r[4] or 0), 2)
+                if int(r[4] or 0) > 0 else 0.0
+            ),
+        }
+        for r in answer_trend_result
+    ]
+    # ==================== W99 N-6 改进 (6) 结束 ====================
+
     # 计算比率
     any_click_rate = round(total_clicks / total_searches, 4) if total_searches > 0 else 0
     zero_click_rate = round(zero_click_count / total_searches, 4) if total_searches > 0 else 0
@@ -325,6 +387,9 @@ async def get_stats(
         "by_user": by_user,  # v31.2.4: per-user dashboard 维度
         "by_source": by_source,
         "trend": trend,
+        # W99 N-6 改进 (6): 新增 answer_rating 维度
+        "by_rating": by_rating,
+        "answer_trend": answer_trend,
     }
 
 
