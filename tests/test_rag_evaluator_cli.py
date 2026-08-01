@@ -358,3 +358,28 @@ def test_module_imports_smoke():
     assert callable(re_mod.maybe_evaluate_async)
     assert callable(re_mod.main)
     assert hasattr(re_mod, "__main__") or re_mod.__name__ == "app.services.rag_evaluator"
+
+
+# === 9. P2-D2 W98 +7: consistency 双轮新接口 ===
+
+def test_consistency_double_round_import():
+    """新增 (P2-D2 W98 +7): RAGEvaluator 新增 evaluate_consistency_double_round 方法."""
+    from app.services.rag_evaluator import RAGEvaluator
+    assert hasattr(RAGEvaluator, "evaluate_consistency_double_round"), \
+        "派工 v10 §2: 必须新增 evaluate_consistency_double_round 方法"
+    # 静态方法 _compute_entity_overlap 也必新增
+    assert hasattr(RAGEvaluator, "_compute_entity_overlap"), \
+        "派工 v10 §2: 必须新增 _compute_entity_overlap 静态方法"
+
+
+def test_consistency_runner_module_importable():
+    """新增 (P2-D2 W98 +7): consistency_runner.py 可 import."""
+    import sys
+    from pathlib import Path
+    qa_bench_dir = Path(__file__).parent / "qa-bench"
+    if str(qa_bench_dir) not in sys.path:
+        sys.path.insert(0, str(qa_bench_dir))
+    import consistency_runner  # noqa: E402 — sys.path 注入
+    assert callable(consistency_runner.run_consistency_double_round)
+    assert callable(consistency_runner.load_corpus)
+    assert hasattr(consistency_runner, "_MockEvaluator")
