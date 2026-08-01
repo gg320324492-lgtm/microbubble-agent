@@ -547,3 +547,23 @@
 
 **累计铁律**: 591+ (W98 N-1-VERIFY) + 4 (类 20.32-35) = 595+ 铁律据实
 **累计 commits**: 1501+ (W98 N-1-VERIFY) + 1 (本任务) = 1502+ commits据实
+
+# 13. W19-4 7 E2E 测试套件调研 (2026-08-01)
+
+- **w19-4-7-e2e-survey-2026-08-01** (memory/) — W19-4 7 E2E 测试套件调研 (W19 选项 A 维持, 选项 C 推荐, 现有 5 套 E2E 覆盖, 2 缺口留未来)
+- **w19-4-7-e2e-survey-2026-08-01** (docs/) — 9 节完整 runbook (现有资产盘点 + 3 候选方案 + 主拍决策依据 3 维度 + 推荐 7 套 + 实施路线图 + CI 时间 + W19 选项 A 兼容性)
+
+**调研结论**:
+- **W19 选项 A 维持** — 现有 5 大类 E2E 已覆盖业务关键路径 (chat_basic + chat_history + rag_recall + rag_consistency + rag_perf), 不发起新排期
+- **2 缺口留未来** — chat_feedback + self_rag e2e 留未来 PR, 量化触发条件维持 (W51 检查 4 触发器 4 不触发)
+- **现有资产** — 192 test_*.py + 68 test_*_e2e.py + 17 RAG PR e2e + 8 RAG framework e2e + 5 realenv e2e + 9 CI workflow
+- **3 候选方案对比** — 选项 A (79% 覆盖 + 4 PR) / 选项 B (79% 覆盖 + 2 PR) / 选项 C (57% 覆盖 + 0 PR), 维护成本与选项 A 兼容性反相关
+- **派工 brief 命名漂移 3 项据实上报** — chat_history + self_rag + rag_fw 11 实际是 unit test 不是 e2e, 不擅自扩也不擅自缩
+
+**W51 检查 4 触发器实测**:
+- 主指挥决策变更: ❌ 维持选项 A
+- 9 文件合跑 baseline σ > 0.05s: ❌ σ ≈ 0.015s (历史最优)
+- 真 DB 模式生产阻塞 ≥ 1 报告: ❌ 0 阻塞
+- 用户真实体验反馈 ≥ 3 次/月: ❌ 0 反馈
+
+**5 件套守恒实测**: alembic 1 head (093) ✅ + pytest baseline 不跑 ✅ + PWA build 不跑 ✅ + 0 production code (0) ✅ + 锚点范式 (本调研 +1 ≥ 1) ✅
