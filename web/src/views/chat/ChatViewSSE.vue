@@ -38,6 +38,7 @@ import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // ===== W99 +15 桌面/移动接入：ThinkingCapsule 完全替代 RetrievalStatus 在 assistant 气泡内的所有挂载 =====
 // RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（外部可能已订阅 chat:retrieval-status）
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
+import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
 import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
@@ -545,15 +546,8 @@ onUnmounted(() => {
             />
             <TransitionGroup v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
               tag="div" name="trace" class="tool-trace">
-              <div v-for="(t, i) in msg.toolTrace" :key="`${i}-${t.name || t.label}`"
-                class="trace-item" :class="[t.state, `stagger-${Math.min(i + 1, 6)}`]">
-                <span v-if="t.type === 'thinking'">{{ t.label }}</span>
-                <span v-else>
-                  <span v-if="t.state === 'running'" class="trace-spinner" aria-hidden="true" />
-                  🔧 {{ t.name }} {{ t.state === 'running' ? '' : '✓' }}
-                  <span v-if="t.duration_ms" class="duration"> {{ t.duration_ms }}ms</span>
-                </span>
-              </div>
+              <ToolTraceItem v-for="(t, i) in msg.toolTrace" :key="`${i}-${t.name || t.label}`"
+                :trace="t" :index="i" :data-testid="`desktop-tti-${i}`" />
             </TransitionGroup>
 
             <div v-if="msg.content" class="msg-content" v-html="renderMarkdown(msg.content)" />
