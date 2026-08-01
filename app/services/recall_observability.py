@@ -97,6 +97,9 @@ class RecallTrace:
     citation_count: int = 0  # 本次召回生成的 citation 数 (W99-RAG-2 新增)
     # ==================== W99-RAG-2 扩展字段结束 ====================
 
+    # W100-RAG-5: 第 5 路 OCR 图片召回 top-1 similarity
+    image_score: Optional[float] = None
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
