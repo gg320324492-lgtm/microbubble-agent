@@ -877,8 +877,9 @@ class KnowledgeService:
                 # pgvector 不可用，回退到关键词搜索
                 return await self._search_keyword_fallback(query, top_k, category)
 
-            from app.services.embedding_service import generate_embedding
-            query_embedding = await generate_embedding(query, for_query=True, has_query_prompt=True)
+            from app.services.embedding_service import get_or_compute_query_embedding
+            # W99 P2 perf: query embedding 走 Redis 缓存, 命中 < 5ms
+            query_embedding = await get_or_compute_query_embedding(query, has_query_prompt=True)
             if query_embedding is None:
                 return await self._search_keyword_fallback(query, top_k, category)
 
