@@ -403,7 +403,13 @@ onUpdated(() => {
 }
 .sync-badge.sync-error {
   background: rgba(245, 108, 108, 0.1);
-  color: var(--el-color-danger);
+  /* W98 a11y fix: projects customizes --el-color-danger-light-3 to #f89898 (过浅,
+     浅底对比度 1.91 < AA 4.5). 浅色主题下用硬编码 #a02020 (深红, 6.96 > AA 4.5).
+     dark 主题下让项目自定义的 light-3 (#f89898) 接管 — dark 底上对比度 6.16. */
+  color: #a02020;
+}
+[data-theme="dark"] .sync-badge.sync-error {
+  color: var(--el-color-danger-light-3);
 }
 .sync-icon { font-size: 12px; }
 .sync-icon.rotating {
