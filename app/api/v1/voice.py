@@ -88,24 +88,21 @@ async def text_to_speech(
     request: TTSRequest,
     current_user: Member = Depends(get_current_user)
 ):
-    """语音合成（TTS）"""
-    try:
-        audio_data = await tts_service.synthesize(
+    """语音合成（TTS）— 真 streaming"""
+    async def audio_generator():
+        async for chunk in tts_service.synthesize_stream(
             text=request.text,
             voice=request.voice,
             rate=request.rate,
-            volume=request.volume
-        )
+            volume=request.volume,
+        ):
+            yield chunk
 
-        return StreamingResponse(
-            io.BytesIO(audio_data),
-            media_type="audio/mpeg",
-            headers={
-                "Content-Disposition": "attachment; filename=speech.mp3"
-            }
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
+    return StreamingResponse(
+        audio_generator(),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": "attachment; filename=speech.mp3"}
+    )
 
 
 @router.post("/voice/chat")
@@ -211,8 +208,14 @@ async def voice_websocket(websocket: WebSocket, user_id: str, token: str = ""):
                         "text": response_text
                     })
 
-                    audio_data = await tts_service.synthesize(text=response_text)
-                    await websocket.send_bytes(audio_data)
+                    try:
+                        async for chunk in tts_service.synthesize_stream(text=response_text):
+                            await websocket.send_bytes(chunk)
+                    except Exception as e:
+                        logger.error(f"WebSocket TTS 流式合成失败: {e}", exc_info=True)
+                        await websocket.close(code=1011)
+                        await agent.clear_session(session_id)
+                        return
 
                 except Exception as e:
                     await websocket.send_json({
