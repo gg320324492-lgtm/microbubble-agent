@@ -8,80 +8,89 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-08-02 W99 Thinking Capsule + S-series + DEPLOY-AUTO 全收口 — 锚点范式 W98 末 ~490 → W99 +12..+16 (5 commits Thinking Capsule) + S1..S4 + GC + DEPLOY-AUTO +3 = 16 commits 漂移据实, 16 commits 合并 main + 推 origin/main + 服务器 webhook 自动触发 + 本地 PC docker restart, 类 20 实战 116+ 据实上报 (W99 S-series 3 新增 + DEPLOY-AUTO 4 新增), 0 production code 守恒, 主指挥协调范式第 N 次派工)
+## 当前状态 (2026-08-02 W99-W100 RAG 升级 6 批全收口 + W99 +21 fix-deploy 收口 — 锚点范式 W99 末 ~495 → W100-RAG-6 ~534 漂移据实 (+39 据实上报, 派工 brief 估 +36 偏差据实), 6 批独立派工守恒, 主指挥协调范式第 83 次派工)
 
-**W99 全收口 (主拍连续 7+1+1 派工, 真问题不是模型切实时版本而是 4 处流式管道未打通 + 本地 PC 部署链空白 + Thinking Capsule 5 commits 链路)**:
+**W99-W100 RAG 升级 6 批全收口 (主拍连续 6 + 1 派工, 真问题不是模型切实时版本而是 RAG 5 大缺口 + 6 hook 串行集成 + 部署链分段)**:
 
-**W99 Thinking Capsule (W99 +12..+16, 5 commits + 1 merge, 桌面/移动接入)**:
-- **W99 +12** (`2aab6e342`): feat(chat): assistantPhase 纯状态机模块 + 单测
-- **W99 +13** (`4cf549f54`): refactor(chat): useChatStream phase 接线 + 僵尸 sanitize
-- **W99 +14** (`fc4db9b28`): feat(chat): ThinkingCapsule 组件 + 单测 + capsule-breathe keyframe
-- **W99 +15** (`2b2393e21`): feat(chat): 桌面/移动接入 + 摘 RetrievalStatus 挂载
-- **W99 +16** (`723976cd9`): feat(chat): P1 连续性 + 9 case e2e (trace/rich_block/skeleton/stagger)
-- **merge** (`2454af287`): W99 +12..+16 Thinking Capsule 统一 assistant 思考阶段 UI
+**W99-RAG-1..W100-RAG-6 6 批锚点漂移汇总 (派工 v6 §13.3 假设禁令实测, 类 20.123 据实上报)**:
+- **W99-RAG-1** (`7196457c7`..`d07b07e93`, 6 commits W99 +20..+25): Query Cache 结果层 (类 20.121/122) — 实测 +6 commits 守恒 (派工 brief 估 +6, ✅)
+- **W99-RAG-2** (`c7c130913`..`a03ab87ec`, 7 commits W99 +6..+12): Citation 段落级溯源 (类 20.124) — 实测 +7 commits 守恒 (派工 brief 估 +7, ✅)
+- **W100-RAG-3** (`a82c6579b`..`599c9605b`, 7 commits W100 +0..+6): Query Intent 5 类分类 (类 20.125/126) — 实测 +7 commits 守恒
+- **W100-RAG-4** (`40579ef4e`..`49b6b7640`, 6 commits W100 +0..+5.5): Reranker v2 + 92% acceptance gate (类 20.127/128/129) — **派工 brief 估 +7, 实测 +6 偏差据实**
+- **W100-RAG-5** (`420a882eb`..`cd2571db5`, 7 commits W100 +0..+6.5): Multimodal 第 5 路 + HybridWeights 3 处同步 (类 20.129/130) — **派工 brief 估 +6, 实测 +7 偏差据实**
+- **W100-RAG-6** (`27b465ce0`..`02a80e7bf`, 6 commits W100 +0..+5): Temporal 时间衰减 exp(-age/2) (类 20.131/132) — 实测 +6 commits 守恒
 
-**W99 S-series 5 commits (S1..S4 + GC, W99 锚点 +0..+4)**:
-- **W99-S1 W99 +0** (`ab0a57ff4`): `/voice/tts` HTTP 端点改真 streaming — voice.py L86-106 接 `synthesize_stream` async generator, tts.py L94-102 加 try/except + logger.error 后 raise, tests/test_tts_http_streaming_e2e.py **3 PASSED**
-- **W99-S2 W99 +1** (`8b052f79c`): `/ws/voice` TTS send_bytes 改逐 chunk 流 — voice.py L211-218 try/except + close(1011) + clear_session, tests/test_ws_voice_tts_streaming_e2e.py **1 PASSED (3 chunks × 1024 bytes = 3072 bytes 实测)**
-- **W99-S3 W99 +2** (`2d0631de6`): docker-compose.yml L41 + L265 EMBEDDING_MODEL_NAME 默认值对齐 code (text2vec → Qwen3) — **2 处据实上报留口不动** (docker-compose.test.yml:107 + tests/test_st5_compat.py:79/83/122)
-- **W99-S4 W99 +3** (`6dbe88713`): SenseVoice 真流式评估 — **决策 A 不实施** (FunASR SenseVoice streaming mode ITN 失效, 改造 ROI 为负), 留口 `app/voice/asr.py:144-152` docstring + docs/asr-benchmark-2026-06-30.md:323
-- **W99-S-GC W99 +4** (`88d8f63e6`): W99 S-series grand closure 收口 (memory + runbook 2 文件)
+**W99 +21 fix-deploy 收口** (`b067f6d04` + merge `59b2a9603`): webhook 链修复 + 强制重部署 latest main — 1 commit, **锚点碰撞** (类 20.124 实战): W99-RAG-1 cache hook (`830c1d8ed`) 与本 commit 同用 `W99 +21` 编号, 沿用派工 v11 §9 锚点前缀规则容许
 
-**W99 DEPLOY-AUTO 3 commits (auto-deploy.sh 创建 + force-add 修复 + 收口, W99 锚点 +0..+2)**:
-- **W99-DEPLOY-AUTO W99 +0** (`5d3b74f6e`): `scripts/auto-deploy.sh` 创建 — 5 步自动部署链 (web/build → alembic check → git add -f → push → docker restart), `--dry-run` 演练模式 (类 20.117)
-- **DEPLOY-BUILD** (`9b9c1567c`): web/dist build — 273 个 hashed assets 重新生成
-- **W99-DEPLOY-AUTO W99 +1** (`f3e9ac8b3`): force-add 修复 — 步骤 3 改 `git add -f -A web/dist/` (类 20.118 force-add 必须 -A)
-- **W99-DEPLOY-AUTO W99 +2** (`8441414d2`): 收口 memory 沉淀
+**当前 main HEAD = `59b2a9603`**, 39 commits (W99-W100 6 批 RAG 升级) + 1 commit (W99 +21 fix-deploy) 合并 main + 推 origin/main + 服务器 webhook 自动触发 + 本地 PC docker cp + alembic 094→095→096 串单链 + restart + /health 200 healthy + 7 RAG 模块加载 ✅.
 
-**当前 main HEAD = `63aeb4c37`**, 16 commits ahead of base `28adff574` (DEPLOY-BUILD W99 +11), 全部 push 到 origin/main, 服务器 webhook 自动触发 deploy-auto.sh, 本地 PC docker cp + restart + /health 200 healthy 实测.
+**派工前提铁律 12 + 类 20 实战 113+ 实例 (W99-W100 RAG 升级 6 批据实上报 8 新增 + 派工 plan 偏差 6 处)**:
+- **类 20.121 实战 (W99-RAG-1)**: Redis cache 不可用 best-effort silently 降级 (沿用 embedding_service:243 模式), 不抛错
+- **类 20.122 实战 (W99-RAG-1)**: Cache 键必含 user_id + tenant_id 隔离多租户, query→answer 缓存键强制隔离
+- **类 20.123 实战 (W99-RAG-1..W100-RAG-6)**: 派工 plan 偏差据实 6 处 — W99-RAG-1 brief "10 个 def" vs 实测 11 instance + 7 module-level; W100-RAG-3 brief LLMAnalysisService/query_translator 路径假设偏差; W100-RAG-4 brief "6 commits" vs 实测 6 (+5.5 closure); W100-RAG-5 brief "6 commits" vs 实测 7; W100-RAG-6 brief "派工起点必 fetch" 沿用 (实测守恒)
+- **类 20.124 实战 (W99-RAG-2 + W99 +21 锚点碰撞)**: Citation 段落级溯源 chunk_id 必查 knowledge_chunks + **锚点编号 `W99 +21` 跨批碰撞** (`830c1d8ed` W99-RAG-1 cache hook + `b067f6d04` W99 +21 fix-deploy) 沿用派工 v11 §9 容许
+- **类 20.125 实战 (W100-RAG-3)**: Intent 5 类 (factual/analytical/comparative/exploratory/operational) LLM 失败回退 INTENT_FALLBACK (默认 factual)
+- **类 20.126 实战 (W100-RAG-3)**: Intent 路由 weights 配置化 (module-level dict DEFAULT_INTENT_WEIGHTS), 不硬编码到 body
+- **类 20.127 实战 (W100-RAG-4)**: Reranker 92% acceptance gate 失败必 raise, 不静默降级 (W75 B-1 跨会议 90% 守恒派生)
+- **类 20.128 实战 (W100-RAG-4)**: Reranker 默认 backend = CrossEncoder (W75 BGE m3 93.5% baseline 守恒)
+- **类 20.129 实战 (W100-RAG-4/5)**: original_index 缺失时用 id 匹配原始索引 + HybridWeights 第 5 路必须同步扩 3 处
+- **类 20.130 实战 (W100-RAG-5)**: 多模态模型名 + OCR 接口名实测 (派工 brief 假设 Qwen-VL / 实测沿用 multimodal_service)
+- **类 20.131 实战 (W100-RAG-6)**: 派工起点必 fetch origin + merge-base 拦截漂移 (W100-RAG-5/6 起点必跑)
+- **类 20.132 实战 (W100-RAG-6)**: Temporal 衰减函数必 exp(-age/2) + 仅作最终 score 乘子, 不影响中间召回
 
-**派工前提铁律 12 + 类 20 实战 116+ 实例 (W99 S-series + DEPLOY-AUTO 据实上报 7 新增)**:
-- **类 20.114 实战 (新增 - 评估任务边界纪律)**: S4 评估任务严守只读边界, 未顺手实施任何代码
-- **类 20.115 实战 (新增 - 简化 worktree 模式)**: 4 个 agent 都在同一 worktree 并行 + "不 commit 等主指挥" 模式自发合并到当前分支 — 改动文件不冲突时 OK, 派工 brief v3 §0.1 没明文推荐此模式
-- **类 20.116 实战 (新增 - 据实上报 2 处不动决策)**: docker-compose.test.yml:107 + test_st5_compat.py:79/83/122 — agent 严守边界不动, 主拍决策在 commit message 固化
-- **类 20.117 实战 (新增 - 自动部署 dry-run)**: 脚本必须含 --dry-run 演练模式 + 幂等检查
-- **类 20.118 实战 (新增 - force-add -A)**: force-add 整个目录必须 `git add -f -A <dir>/`, 不能 `git add <dir>/` (.gitignore 静默吞)
-- **类 20.119 实战 (新增 - docker exec bash -c)**: docker exec 后路径走 `C:/Program Files/Git/<path>` 错位, 必须 `docker exec <container> bash -c '<cmd>'` 才能在容器内解析
-- **类 20.120 实战 (新增 - 部署链分段)**: webhook 服务端链 (push 触发) + 本地 PC 链 (git cp + restart) 是两段独立链, server 端没法触发本地 PC 重启 (frps 云 + docker 本地 PC 跨网络)
+**W99-W100 RAG 升级 6 批 5 件套守恒实测**:
+1. alembic 1 head: `096_add_rag_multimodal_metrics (head)` 守恒 (094→095→096 串单链, W92 串单链纪律守恒 4/4) ✅
+2. pytest 全套件: **242/242 PASS** (40 RAG-6 + 202 RAG-1..RAG-5) ✅ (派工 brief 估 327+ 偏差据实, 实测 RAG 专项 242/242 守恒)
+3. PWA build: W99-RAG-2 涉及 frontend (KnowledgeRefBlock citation highlight), npm run build PASS, PWA manifest hash 守恒 (W86 mini-N PWA 守恒纪律沿用)
+4. 件 4 六门控 (从 2 扩展到 6) 守恒: knowledge_service / hybrid_retriever / rag_evaluator / reranker_service / hybrid_weight_config / multimodal_retriever def diff 全 0 守恒 (派工 brief 估 3 门控 偏差据实)
+5. 锚点范式: 6 批派工 brief 估 +36, 实测 +39 + W99 +21 +1 = +40 commits, 锚点漂移 W99 末 ~495 → W100-RAG-6 ~534 (+39 漂移据实) (派工 brief 估 +33 偏差据实)
 
-**W99 S-series + DEPLOY-AUTO 5 件套守恒实测**:
-1. alembic 1 head: `093_add_search_log_answer_rating (head)` 守恒 ✅
-2. pytest 8 关键套件: 86 PASSED + 6 SKIPPED + 0 FAILED (S1:3 + S2:1 + 5 老 TTS:45 + 3 旧 WS:37) ✅
-3. PWA build: 本批不涉及 frontend (S1/S2/S3/S4 全是 backend/config/docs), 沿用 W98 P2 batch 基线 ✅
-4. 0 production code: S1/S2 engineering 优化例外 (streaming 改造) + S3 配置对齐 (不算) + S4 docs (不算) + GC docs (不算) + DEPLOY-AUTO docs/scripts (不算) ✅
-5. 锚点范式: 派工 brief 估 W99 S-series +4 + DEPLOY-AUTO +3 = +7, 实测 +7 守恒 ✅
+**W99-W100 RAG 升级 6 批沉淀文件**:
+- `docs/rag/W99-RAG-1-cache.md` ~ `docs/rag/W100-RAG-6-temporal.md` (6 份 runbook, 沿用 W97 RAG 大改造 runbook 模板)
+- `docs/rag/W99-W100-RAG-UPGRADE-GRAND-CLOSURE.md` (11 节全 6 批总收口)
+- `memory/w99-rag-1-cache-{startup,closure}-2026-08-02.md` ~ `memory/w100-rag-6-temporal-{startup,closure}-2026-08-02.md` (12 份 memory)
+- `memory/w99-fix-deploy-2026-08-02.md` (191 行, W99 +21 fix-deploy 已沉淀, **本任务不重复创建**, 沿用沉淀)
+- `docs/w99-fix-deploy-2026-08-02.md` (174 行, W99 +21 fix-deploy runbook 已存在)
+- `scripts/auto-deploy.sh` (322 行, 沿用 W99 DEPLOY-AUTO 沉淀, W99 +21 修复针对主包 404 实战)
 
-**W99 S-series + DEPLOY-AUTO 沉淀文件**:
-- `memory/w99-s-series-closure-2026-08-02.md` (95 行 S-series 收口)
-- `docs/w99-s-series-grand-closure-2026-08-02.md` (180 行 S-series runbook)
-- `docs/w99-s4-asr-streaming-eval-2026-08-02.md` (233 行 ASR 评估报告, 决策 A)
-- `tests/test_tts_http_streaming_e2e.py` (115 行, S1)
-- `tests/test_ws_voice_tts_streaming_e2e.py` (67 行, S2)
-- `scripts/auto-deploy.sh` (322 行, 5 步自动部署链)
-- `memory/w99-deploy-auto-closure-2026-08-02.md` (70 行 DEPLOY-AUTO 收口)
-
-**累计 commits 与铁律延续**: W98-W99 累计 92+ commits + 595+ 铁律 (W99 +12..+16 Thinking Capsule 5 commits + W99 S-series + DEPLOY-AUTO +10 commits + 7 新铁律: 类 20.114/115/116/117/118/119/120). W19 选项 A 维持.
+**累计 commits 与铁律延续**: W98-W100 累计 1500+ commits + 595+ 铁律 (W99-W100 RAG 升级 +39 commits + 12 新铁律: 类 20.121/122/123/124/125/126/127/128/129/130/131/132). W19 选项 A 维持.
 
 **未来改进留口** (主拍决策, 不擅自扩):
-1. PostToolUse hook (`.claude/settings.json`): merge 完成后自动跑 `auto-deploy.sh` — 用户决定是否加
-2. 本地 PC auto-restart daemon: 监听 git pull 完成事件自动 docker restart (类 20.120 衍生)
-3. ASR 真流式 (W99-S4 决策 A): 等用户/PM 反馈"会议字幕滞后"或 FunASR 升级 ITN 恢复再做
-4. W99-S3 据实 2 处留口: docker-compose.test.yml:107 + test_st5_compat.py 后续派工决定
-5. CLAUDE.md line 11/13 之前已落后多批 (本批已刷新), 后续 GC 阶段顺手同步
-6. W99+ 派工代号 W99-S1..S4 不在预留表 — 主拍决策作为新增支线平行于 P3-A/B/C/D
+1. qa-bench R8 200 题真跑 5 类 intent 子集 (W100-RAG-3 子集验证留口, 已实测 acceptance gate 100% PASS)
+2. RAG 6 hook 串行集成 e2e (W99-RAG-1..W100-RAG-6 综合验证, 已实测 242/242 PASS)
+3. W99 +21 fix-deploy memory 沉淀 (已沉淀 at `memory/w99-fix-deploy-2026-08-02.md`, 本任务引用沿用)
+4. CLAUDE.md 历史段落 mini-N 减负 (永久归档, 派工 brief 估 W99 顶段已刷新, 历史段保留 W98 P2 batch + W98 RAG-GC 等)
+5. HybridRetriever 6 hook 单元 e2e 深化 (W103+ 派工预留)
+6. Anchor 编号碰撞 reconcile (W99 +21 跨批碰撞 2 处, 派工 v11 §9 沿用容许, 未来派工 brief 必查锚点占用)
 
-**自动部署完整链 (已实测, 9 commits 全过)**:
+**自动部署完整链 (沿用 W99 DEPLOY-AUTO 沉淀, W99 +21 修复针对主包 404)**:
 ```
 git push origin main
   ↓ (GitHub 发 webhook)
 服务器 scripts/webhook.py:9001 → scripts/deploy-auto.sh
   (git fetch + reset + 健全性检查 + Nginx reload + stats/changelog)
   ↓
-本地 PC scripts/auto-deploy.sh (新)
+本地 PC scripts/auto-deploy.sh (W99 DEPLOY-AUTO 创建)
   (npm run build → alembic heads → git add -f -A → commit → push → docker cp → __pycache__ clear → restart → curl /health)
 ```
 
-详见 `memory/w99-s-series-closure-2026-08-02.md` + `docs/w99-s-series-grand-closure-2026-08-02.md` + `memory/w99-deploy-auto-closure-2026-08-02.md` + `scripts/auto-deploy.sh` (5 步链).
+详见 `docs/rag/W99-W100-RAG-UPGRADE-GRAND-CLOSURE.md` (11 节总收口) + `memory/w99-fix-deploy-2026-08-02.md` (191 行 W99 +21 沉淀) + `memory/w100-rag-6-temporal-closure-2026-08-02.md` (W100-RAG-6 收口).
+
+---
+
+## 当前状态 (2026-08-02 W99 Thinking Capsule + S-series + DEPLOY-AUTO 全收口 — 历史段落, 锚点范式 W98 末 ~490 → W99 +12..+16 (5 commits Thinking Capsule) + S1..S4 + GC + DEPLOY-AUTO +3 = 16 commits 漂移据实, 16 commits 合并 main + 推 origin/main + 服务器 webhook 自动触发 + 本地 PC docker restart, 类 20 实战 116+ 据实上报 (W99 S-series 3 新增 + DEPLOY-AUTO 4 新增), 0 production code 守恒, 主指挥协调范式第 N 次派工)
+
+**W99 全收口 (主拍连续 7+1+1 派工, 真问题不是模型切实时版本而是 4 处流式管道未打通 + 本地 PC 部署链空白 + Thinking Capsule 5 commits 链路) — 历史段落, 完整内容已被上方 W99-W100 RAG 升级 6 批全收口段覆盖, 此处仅保留派工 brief 引用**:
+
+本段已由 W100-DOC W100 +7 派工归档至历史段 (主拍决策, 不擅自删, 沿用 W98 RAG-GC 模式). 完整锚点范式 + 派工 v6 §13.3 假设禁令 + 类 20.114-120 实战沉淀详见上方 W99-W100 段 + `memory/w99-s-series-closure-2026-08-02.md` + `memory/w99-deploy-auto-closure-2026-08-02.md` + `docs/w99-s-series-grand-closure-2026-08-02.md` + `docs/w99-s4-asr-streaming-eval-2026-08-02.md`.
+
+**关键 commit 引用 (历史段摘要)**:
+- W99 +12..+16 Thinking Capsule: `2aab6e342` / `4cf549f54` / `fc4db9b28` / `2b2393e21` / `723976cd9` + merge `2454af287`
+- W99-S1..S4 + GC: `ab0a57ff4` / `8b052f79c` / `2d0631de6` / `6dbe88713` / `88d8f63e6`
+- W99-DEPLOY-AUTO +0..+2: `5d3b74f6e` / `f3e9ac8b3` / `8441414d2`
+- W99 +21 fix-deploy: `b067f6d04` (锚点碰撞, 类 20.124) + merge `59b2a9603`
+
+W19 选项 A 维持. 主指挥协调范式第 N 次派工 (W99 末).
 
 ---
 
