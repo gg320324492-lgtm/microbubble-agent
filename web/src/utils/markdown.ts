@@ -55,7 +55,44 @@ marked.use(
 
 marked.setOptions({ breaks: true, gfm: true })
 
+// [W99 +20 派工 v10] 图片加载失败兜底：v-html 注入的 <img> 不会触发 Vue @error，
+// 必须在 HTML 字符串里内联 onerror 才能兜底。占位符走内联 SVG data URL，
+// 不依赖外链资源，加载失败时立即切到占位（不闪白）。
+const IMG_FALLBACK_SVG =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80">' +
+      '<rect width="240" height="80" fill="#f5f5f5"/>' +
+      '<text x="120" y="44" font-family="sans-serif" font-size="13" fill="#909399" text-anchor="middle">' +
+        '🖼️ 图片加载失败' +
+      '</text>' +
+    '</svg>'
+  )
+
+const IMG_FALLBACK_HANDLER =
+  `this.onerror=null;this.src='${IMG_FALLBACK_SVG}';this.alt=this.alt||'图片加载失败';` +
+  `this.style.maxWidth='240px';this.style.height='auto';`
+
+/**
+ * 后处理 marked 输出的 HTML，为 <img> 注入 onerror 内联兜底。
+ * v-html 派工已知问题：v-html 注入的 img 不会触发 Vue @error 监听
+ * （资源加载错误不冒泡到祖先元素），必须在 HTML 字符串里 inline onerror。
+ */
+function injectImgOnerror(html: string): string {
+  if (!html || html.indexOf('<img') === -1) return html
+  // 匹配 <img ...> 标签（self-closing 或带 src/alt/...）
+  return html.replace(/<img\b([^>]*?)\/?>/g, (match, attrs: string) => {
+    // 已注入过跳过（防重复）
+    if (/onerror\s*=/.test(attrs)) return match
+    // 提取 alt 文本（如有），拼到 fallback 上保留语义
+    const altMatch = /(?:^|\s)alt\s*=\s*"([^"]*)"/.exec(attrs)
+    const altText = altMatch ? altMatch[1] : '图片'
+    return `<img${attrs} onerror="${IMG_FALLBACK_HANDLER}" data-fallback-text="${altText} 加载失败" />`
+  })
+}
+
 export function renderMarkdown(text: string): string {
   if (!text) return ''
-  return marked.parse(text) as string
+  const raw = marked.parse(text) as string
+  return injectImgOnerror(raw)
 }

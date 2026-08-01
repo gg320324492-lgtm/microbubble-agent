@@ -38,6 +38,7 @@ import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // ===== W99 +15 桌面/移动接入：ThinkingCapsule 完全替代 RetrievalStatus 在 assistant 气泡内的所有挂载 =====
 // RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（外部可能已订阅 chat:retrieval-status）
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
+import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -517,7 +518,13 @@ onUnmounted(() => {
           <div class="bubble user-bubble">
             <div v-html="renderMarkdown(msg.content)" />
             <div v-if="msg.imageUrl" class="msg-image">
-              <img :src="msg.imageUrl" :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" @click="openImage(msg.imageUrl)" />
+              <ImageWithFallback
+                :src="msg.imageUrl"
+                :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
+                :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
+                img-class="msg-image-clickable"
+                @click="openImage(msg.imageUrl)"
+              />
             </div>
           </div>
         </div>
