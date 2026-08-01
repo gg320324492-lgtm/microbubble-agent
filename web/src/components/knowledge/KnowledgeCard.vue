@@ -4,10 +4,15 @@
     :class="[
       `card-source-${item.source_type || 'default'}`,
       `card-mode-${hasFile ? 'file' : 'normal'}`,
-      { 'card-has-file': item.file_path }
+      { 'card-has-file': item.file_path, 'card-top-result': topResult }
     ]"
     @click="$emit('click', item)"
   >
+    <!-- W99 N-6 改进 (3): top-1 结果推荐徽章 (金橙边框 + 浅光) -->
+    <span v-if="topResult" class="top-result-badge" aria-label="最相关结果">
+      <span class="top-result-glyph" aria-hidden="true">★</span>
+      <span class="top-result-text">推荐</span>
+    </span>
     <!-- v28 step 74: 卡片顶部 - 文件 hero（上传的文件显示大图标）/ 或 缩略图 -->
     <div v-if="hasFile" class="card-file-hero" :class="fileTypeInfo.heroClass">
       <div class="file-hero-icon">{{ fileHeroIcon }}</div>
@@ -102,7 +107,9 @@ import { computed } from 'vue'
 import { Download, Edit, Delete } from '@element-plus/icons-vue'
 
 const props = defineProps({
-  item: { type: Object, required: true }
+  item: { type: Object, required: true },
+  /** W99 N-6 改进 (3): 是否为 top-1 推荐结果 */
+  topResult: { type: Boolean, default: false }
 })
 
 defineEmits(['click', 'edit', 'delete', 'download'])
@@ -233,6 +240,42 @@ const formatDate = (dateStr) => {
   height: 100%;
   min-height: 220px;
   max-height: 280px;
+  position: relative;
+}
+
+/* W99 N-6 改进 (3): top-1 推荐结果视觉强化 (金橙边框 + 阴影) */
+.knowledge-card.card-top-result {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+.knowledge-card.card-top-result:hover {
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-3px);
+}
+
+.top-result-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(255, 122, 92, 0.32);
+}
+.top-result-glyph {
+  font-size: 11px;
+  line-height: 1;
+}
+.top-result-text {
+  line-height: 1;
 }
 
 .knowledge-card:hover {
@@ -510,5 +553,21 @@ const formatDate = (dateStr) => {
     min-height: 200px;
     max-height: 260px;
   }
+  .top-result-badge {
+    top: 8px;
+    right: 8px;
+  }
+}
+</style>
+
+<style>
+/* W99 N-6 改进 (3): dark mode top-1 推荐徽章非 scoped 覆盖 */
+[data-theme="dark"] .knowledge-card.card-top-result {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+[data-theme="dark"] .top-result-badge {
+  background: var(--color-primary);
+  color: #fff;
 }
 </style>

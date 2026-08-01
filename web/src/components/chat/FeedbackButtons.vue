@@ -22,12 +22,15 @@
       type="button"
       class="fb-btn"
       :class="{ active: localRating === 1 }"
-      :aria-label="'点赞'"
-      :title="localRating === 1 ? '已点赞 (再点取消)' : '有帮助'"
+      :aria-label="'回答有帮助'"
+      :title="localRating === 1 ? '已点赞 (再点取消)' : '回答有帮助'"
+      :aria-pressed="localRating === 1"
+      data-hover-prompt="帮助我们回答得更好"
       :disabled="submitting"
       @click.stop="onClick(1)"
     >
-      <span class="fb-icon">👍</span>
+      <span class="fb-icon" aria-hidden="true">👍</span>
+      <span class="fb-label">回答有帮助</span>
     </button>
     <button
       v-if="localRating === -1"
@@ -44,12 +47,15 @@
       type="button"
       class="fb-btn"
       :class="{ active: localRating === -1 }"
-      :aria-label="'点踩'"
-      :title="localRating === -1 ? '已点踩 (再点取消)' : '没帮助'"
+      :aria-label="'需要改进'"
+      :title="localRating === -1 ? '已点踩 (再点取消)' : '需要改进'"
+      :aria-pressed="localRating === -1"
+      data-hover-prompt="帮助我们回答得更好"
       :disabled="submitting"
       @click.stop="onClick(-1)"
     >
-      <span class="fb-icon">👎</span>
+      <span class="fb-icon" aria-hidden="true">👎</span>
+      <span class="fb-label">需要改进</span>
     </button>
   </div>
 </template>
@@ -196,24 +202,46 @@ async function submit(rating, comment) {
 .feedback-buttons {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 6px;
   font-size: 12px;
 }
 .fb-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 22px;
-  padding: 0;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0.7;
   transition: all 0.18s ease;
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #6b7280);
+}
+/* W99 N-6 改进 (4): hover 时弹"帮助我们回答得更好"提示 (CSS ::after tooltip) */
+.fb-btn:hover:not(:disabled)::after {
+  content: attr(data-hover-prompt);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  background: var(--color-text-primary, #1f2937);
+  color: var(--color-bg-card, #fff);
+  font-size: 11px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0.95;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+.fb-btn {
+  position: relative;
 }
 .fb-btn:hover:not(:disabled) {
   opacity: 1;
@@ -223,9 +251,15 @@ async function submit(rating, comment) {
   opacity: 1;
   border-color: var(--color-primary, #FF7A5C);
   background: rgba(255, 122, 92, 0.08);
+  color: var(--color-primary, #FF7A5C);
+}
+.fb-label {
+  font-size: 12px;
+  line-height: 1;
 }
 .fb-comment-btn {
-  width: 22px;
+  width: 24px;
+  padding: 0;
   font-size: 11px;
   color: var(--color-primary, #FF7A5C);
 }
