@@ -2,20 +2,34 @@
 /**
  * KnowledgeRefBlock.vue — 知识库引用卡 (CHAT-P1-E E1 升级)
  *
- * 接收 block.data = {results: [{id, title, content, score, category, tags, source, snippet}]}
+ * 接收 block.data = {results: [{id, title, content, score, category, tags, source, snippet}], citations?: [...]}
  *
  * CHAT-P1-E E1: hover/长按显示 snippet 浮层
  * - 数据源: refs[i].snippet (A5 已加, ≤200 字 chunk 原文)
  * - 桌面: CSS :hover tooltip
  * - 移动: 长按 → ElMessageBox 详情弹窗
+ *
+ * W99-RAG-2 (2026-08-02): citation 高亮 props
+ * - 新增 props.citations: Array (默认 [])
+ *   每条: {doc_id, chunk_id, char_range: [start, end], similarity, snippet, strategy, retrieval_method}
+ * - 当 citations 中有匹配 chunk_id 时, 在 ref-content 中用 <mark> 高亮 char_range 段落
+ * - 派工 v11 §3 E03 实战: 0 改既有 props/事件, 仅 ADD 新 props
  */
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 
-const props = defineProps({ block: { type: Object, required: true } })
+const props = defineProps({
+  block: { type: Object, required: true },
+  // W99-RAG-2 新增 — 段落级 citation 列表 (来自 hybrid_retriever.citation hook)
+  citations: {
+    type: Array,
+    default: () => [],
+  },
+})
 const router = useRouter()
 
 const results = (props.block.data || {}).results || []
+const citations = props.citations || []
 
 const stripHtml = (html) => {
   if (!html) return ''
@@ -58,6 +72,34 @@ const getTooltipContent = (r) => {
   return snippet.length > 60 ? snippet.slice(0, 60) + '...' : snippet
 }
 
+// W99-RAG-2: 查找与某个 result 关联的 citation (按 chunk_id 匹配)
+// 返回首个匹配的 citation 或 null
+const findCitationForResult = (r) => {
+  if (!r.chunk_id || !citations.length) return null
+  return citations.find(c => c.chunk_id === r.chunk_id) || null
+}
+
+// W99-RAG-2: 渲染高亮 snippet (用 <mark> 标黄 char_range 区间)
+// 返回 HTML 字符串, 避免 v-html XSS (只用 chunk 原文 + 标记)
+const renderHighlightedSnippet = (r) => {
+  const cit = findCitationForResult(r)
+  if (!cit) return null  // 无 citation → 不高亮, 走原逻辑
+  const snippet = getSnippet(r)
+  const range = cit.char_range || cit.charRange  // 兼容 list / tuple 两种格式
+  if (!Array.isArray(range) || range.length !== 2) return null
+  const [start, end] = range
+  if (typeof start !== 'number' || typeof end !== 'number') return null
+  // 边界截断
+  const safeStart = Math.max(0, Math.min(start, snippet.length))
+  const safeEnd = Math.max(safeStart, Math.min(end, snippet.length))
+  if (safeEnd <= safeStart) return null
+  return {
+    before: snippet.slice(0, safeStart),
+    highlight: snippet.slice(safeStart, safeEnd),
+    after: snippet.slice(safeEnd),
+  }
+}
+
 // Vue h() for Element Plus ElMessageBox message slot
 import { h } from 'vue'
 </script>
@@ -87,7 +129,11 @@ import { h } from 'vue'
       >
         <div class="ref-content-wrap">
           <div class="ref-title">{{ r.title }}</div>
-          <div class="ref-content">{{ stripHtml(r.content).slice(0, 200) }}{{ stripHtml(r.content).length > 200 ? '...' : '' }}</div>
+          <!-- W99-RAG-2: citation 高亮 (有 chunk_id 匹配时用 <mark>) -->
+          <div v-if="renderHighlightedSnippet(r)" class="ref-content ref-content-citation">
+            {{ renderHighlightedSnippet(r).before }}<mark class="citation-mark">{{ renderHighlightedSnippet(r).highlight }}</mark>{{ renderHighlightedSnippet(r).after }}
+          </div>
+          <div v-else class="ref-content">{{ stripHtml(r.content).slice(0, 200) }}{{ stripHtml(r.content).length > 200 ? '...' : '' }}</div>
           <div class="ref-meta">
             <span v-if="r.category" class="meta">📁 {{ r.category }}</span>
             <span v-if="r.source" class="meta">📎 {{ r.source }}</span>
@@ -135,6 +181,21 @@ import { h } from 'vue'
 /* v77 P2.5.3: dark mode hover */
 [data-theme="dark"] .ref-item:hover {
   background: var(--color-bg-hover);
+}
+
+/* W99-RAG-2: citation 高亮样式 (段落级溯源) */
+.citation-mark {
+  background: rgba(255, 215, 0, 0.4);
+  color: inherit;
+  padding: 1px 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
+[data-theme="dark"] .citation-mark {
+  background: rgba(255, 215, 0, 0.3);
+}
+.ref-content-citation {
+  position: relative;
 }
 </style>
 
