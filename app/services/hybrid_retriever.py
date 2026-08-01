@@ -564,6 +564,24 @@ async def retrieve_with_weights(
     Returns:
         检索结果列表 (按 rrf_score 降序)
     """
+    # 0) W99-RAG-1: Query Cache hook (件 4 门控 B 守恒 - 仅追加, 不改原签名)
+    # 缓存键含 user_id + tenant_id 隔离多租户 (类 20.122)
+    # Redis 不可用 best-effort silently 降级 (类 20.121, 沿用 embedding_service:243 模式)
+    user_id: Optional[int] = None
+    tenant_id: Optional[int] = None
+    try:
+        from app.rag.config import RAG_QUERY_CACHE_ENABLED as _CFG_ENABLED
+        from app.services.rag_query_cache import get_rag_query_cache
+        if _CFG_ENABLED:
+            _cache = get_rag_query_cache()
+            # 先查精确匹配
+            _cached = await _cache.get(query, user_id=user_id, tenant_id=tenant_id)
+            if _cached is not None and _cached.get("results"):
+                logger.debug(f"[W99-RAG-1] query cache HIT (exact) for query={query[:30]}")
+                return _cached["results"]
+    except Exception as _e:
+        logger.debug(f"[W99-RAG-1] query cache lookup skip: {_e}")
+
     # 1) 同义词改写
     expanded_query = await _apply_synonyms(query) if enable_synonym_expansion else query
 
@@ -582,6 +600,31 @@ async def retrieve_with_weights(
     # 3) 当前简化路径: 直接返回原 retrieve 的结果
     # CrossEncoder rerank 已保证 top_k 顺序, RRF 权重合并作为可选增强
     # 未来 PR 可在此处补 results_by_method 重组 + RRF 重排 (PR5/7 扩展点)
+
+    # 4) W99-RAG-1: 写缓存 (best-effort, 失败不影响主流程)
+    if raw_results:
+        try:
+            from app.rag.config import RAG_QUERY_CACHE_ENABLED as _CFG_ENABLED
+            from app.services.rag_query_cache import get_rag_query_cache
+            if _CFG_ENABLED:
+                _cache = get_rag_query_cache()
+                _top_score = float(raw_results[0].get("score", 0.0)) if raw_results else 0.0
+                _retrieval_method = raw_results[0].get("retrieval_method", "hybrid") if raw_results else "hybrid"
+                await _cache.set(
+                    query=query,
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    result={
+                        "results": raw_results,
+                        "citations": [],  # W99-RAG-1 不存 citations (retriever 不返回), 留口
+                        "retrieval_method": _retrieval_method,
+                        "score": _top_score,
+                        "top_k": top_k,
+                    },
+                )
+        except Exception as _e:
+            logger.debug(f"[W99-RAG-1] query cache set skip: {_e}")
+
     return raw_results
 
 
