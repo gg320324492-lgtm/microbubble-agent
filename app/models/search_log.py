@@ -115,6 +115,12 @@ class SearchLog(Base, TimestampMixin):
     error_msg = Column(Text, nullable=True)  # 首个错误信息 (截断 500 字)
     # ==================== W93 PR7 B-7 扩展字段结束 ====================
 
+    # ==================== W99-RAG-1 Query Cache 扩展字段 ====================
+    # 仅追加, 不改老字段, 全部 nullable=True (老数据兼容, 不破坏已有 schema)
+    cache_hit = Column(Integer, nullable=True)  # 0/1, 是否命中 query cache (精确 / 语义相似)
+    cache_similarity = Column(Float, nullable=True)  # 语义相似命中 cosine 值, 精确命中 1.0
+    # ==================== W99-RAG-1 扩展字段结束 ====================
+
     # 时间戳 (TimestampMixin 提供 created_at/updated_at)
     # 单独加 raw 字段方便查询时直接 SELECT
     # 注: TimestampMixin.created_at 已是 DateTime, 这里不重复定义

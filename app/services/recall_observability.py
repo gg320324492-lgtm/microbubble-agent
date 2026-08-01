@@ -86,6 +86,11 @@ class RecallTrace:
     per_path_latency_ms: Dict[str, float] = field(default_factory=dict)
     per_path_count: Dict[str, int] = field(default_factory=dict)
     per_path_error: Dict[str, int] = field(default_factory=dict)
+    # ==================== W99-RAG-1 Query Cache 扩展字段 ====================
+    # 仅追加, 不改既有 22 字段, 全部 nullable=True 兼容老 trace
+    cache_hit: bool = False  # 是否命中 query cache (精确 / 语义相似)
+    cache_similarity: Optional[float] = None  # 语义相似命中时为 cosine 值, 精确命中为 1.0
+    # ==================== W99-RAG-1 扩展字段结束 ====================
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

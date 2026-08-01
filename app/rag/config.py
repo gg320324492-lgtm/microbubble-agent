@@ -55,6 +55,25 @@ MULTIMODAL_PARSER_ENABLED: bool = (
     and os.getenv("MULTIMODAL_PARSER_ENABLED", "1").lower() in ("1", "true", "yes")
 )
 
+# ===== W99-RAG-1 Query Cache 结果层 =====
+# 仅追加, 不改既有 8 项配置
+# 1) RAG_QUERY_CACHE_ENABLED — 总开关 (默认 True)
+# 2) RAG_QUERY_CACHE_TTL — 缓存 TTL 秒 (默认 86400 = 24h)
+# 3) RAG_QUERY_CACHE_SIM_THRESHOLD — 语义相似命中 cosine 阈值 (默认 0.95)
+# 4) RAG_QUERY_CACHE_PREFIX — 缓存键前缀 (默认 rag:q:)
+# 5) RAG_QUERY_CACHE_NN_PROBE — 语义相似扫描深度 (默认 5)
+# 详见 app/services/rag_query_cache.py 类 20.121/122 铁律
+RAG_QUERY_CACHE_ENABLED: bool = (
+    RAG_FRAMEWORK_ENABLED
+    and os.getenv("RAG_QUERY_CACHE_ENABLED", "1").lower() in ("1", "true", "yes")
+)
+RAG_QUERY_CACHE_TTL: int = int(os.getenv("RAG_QUERY_CACHE_TTL", "86400"))
+RAG_QUERY_CACHE_SIM_THRESHOLD: float = float(
+    os.getenv("RAG_QUERY_CACHE_SIM_THRESHOLD", "0.95")
+)
+RAG_QUERY_CACHE_PREFIX: str = os.getenv("RAG_QUERY_CACHE_PREFIX", "rag:q:")
+RAG_QUERY_CACHE_NN_PROBE: int = int(os.getenv("RAG_QUERY_CACHE_NN_PROBE", "5"))
+
 # ===== 框架配置 =====
 # LangFuse 自托管服务地址
 LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
