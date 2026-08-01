@@ -213,6 +213,114 @@ class RAGEvaluator:
         except:
             return 0.5
 
+    async def evaluate_consistency_double_round(
+        self,
+        rounds: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """P2-D2 W98 +7: 双轮一致性评估 (派工 v10 段 2).
+
+        接收 list[Round] 参数, 每轮含 query + answer + context, 跑两轮 4 RAGAS 指标后
+        计算 consistency_score (两轮指标差值) + 实体重叠率 (Jaccard).
+
+        Args:
+            rounds: [{"query": str, "answer": str, "context": str, "reference"?: str}, ...]
+                    必须正好 2 轮, 顺序为 [round_1, round_2]
+
+        Returns:
+            {
+                "round_1_metrics": dict,  # faithfulness/relevancy/precision/recall
+                "round_2_metrics": dict,
+                "consistency_score": float,  # |avg(r1) - avg(r2)| 越小越一致
+                "entity_overlap": float,     # Jaccard-like [0, 1]
+                "pass": bool,                # consistency_score < 0.2 AND overlap > 0.5
+            }
+
+        Notes:
+        - 0 改 RAGEvaluator 已有 6 函数 (派工 v10 段 2 严禁)
+        - 0 改 alembic / app/rag/* (派工约束)
+        - 异常 best-effort: 任一轮失败 → 返回 {consistency_score: 0.5, entity_overlap: 0.0, pass: False}
+        """
+        if not isinstance(rounds, list) or len(rounds) != 2:
+            return {"consistency_score": 0.5, "entity_overlap": 0.0, "pass": False,
+                    "round_1_metrics": {}, "round_2_metrics": {}}
+
+        try:
+            # 复用现有 evaluate() 跑单轮
+            r1 = await self.evaluate(
+                query=rounds[0].get("query", ""),
+                answer=rounds[0].get("answer", ""),
+                context=rounds[0].get("context", ""),
+                reference=rounds[0].get("reference"),
+            )
+            r2 = await self.evaluate(
+                query=rounds[1].get("query", ""),
+                answer=rounds[1].get("answer", ""),
+                context=rounds[1].get("context", ""),
+                reference=rounds[1].get("reference"),
+            )
+
+            keys = ("faithfulness", "answer_relevancy", "context_precision", "context_recall")
+            avg1 = sum(r1.get(k, 0.5) for k in keys) / len(keys)
+            avg2 = sum(r2.get(k, 0.5) for k in keys) / len(keys)
+            consistency_score = abs(avg1 - avg2)
+
+            # 实体重叠率 (Jaccard-like) — 内联简化版避免跨模块依赖
+            entity_overlap = self._compute_entity_overlap(
+                rounds[0].get("answer", ""), rounds[1].get("answer", "")
+            )
+
+            pass_flag = (consistency_score < 0.2) and (entity_overlap > 0.5)
+
+            return {
+                "round_1_metrics": {k: round(r1.get(k, 0.0), 3) for k in keys},
+                "round_2_metrics": {k: round(r2.get(k, 0.0), 3) for k in keys},
+                "consistency_score": round(consistency_score, 4),
+                "entity_overlap": round(entity_overlap, 4),
+                "pass": pass_flag,
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[rag_eval] evaluate_consistency_double_round 失败: {e}", exc_info=True)
+            return {"consistency_score": 0.5, "entity_overlap": 0.0, "pass": False,
+                    "round_1_metrics": {}, "round_2_metrics": {}}
+
+    @staticmethod
+    def _compute_entity_overlap(text_a: str, text_b: str) -> float:
+        """Jaccard-like 实体重叠率 (停用词过滤, 中文字 + 英文 word).
+
+        简化版: 去标点 + 小写 + 按字/词切 + 去停用词 + 长度 >= 2.
+        与 tests/qa-bench/consistency_runner._extract_tokens 等价语义.
+        """
+        stopwords = {
+            "的", "了", "是", "在", "和", "与", "或", "我", "你", "他", "她", "它",
+            "我们", "他们", "什么", "怎么", "为什么", "吗", "呢", "请", "这", "那",
+            "里", "上", "下", "中", "不", "也", "都", "还", "就", "把", "被", "对",
+            "a", "an", "the", "is", "are", "was", "were", "be", "been",
+            "and", "or", "but", "for", "with", "of", "to", "in", "on", "at", "by",
+            "from", "as", "it", "this", "that", "what", "how", "i", "you", "he",
+            "she", "we", "they", "me", "him", "her",
+        }
+        import re
+
+        def _tokens(text: str) -> set:
+            if not text:
+                return set()
+            toks = set()
+            for ch in text:
+                if "一" <= ch <= "鿿" and ch not in stopwords:
+                    toks.add(ch)
+            for w in re.findall(r"[A-Za-z]+|\d+", text):
+                if w.lower() not in stopwords and len(w) >= 2:
+                    toks.add(w.lower())
+            return toks
+
+        sa, sb = _tokens(text_a), _tokens(text_b)
+        if not sa and not sb:
+            return 1.0
+        if not sa or not sb:
+            return 0.0
+        union = sa | sb
+        return len(sa & sb) / len(union) if union else 0.0
+
     async def save_evaluation(
         self,
         db,

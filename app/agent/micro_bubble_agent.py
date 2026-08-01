@@ -42,6 +42,16 @@ from app.config import settings
 from app.models.base import BEIJING_TZ
 # CHAT-P0-D W98 +0: RAG 评估可选抽样钩子 (EVAL_SAMPLE_RATE, 默认 0 关闭)
 from app.services.rag_evaluator import get_eval_sample_rate, maybe_evaluate_async
+# CHAT-P2-F W98 +6: 会话上下文公共函数 (微信 handler 同步共用)
+# 旧实现下划线私有函数已被删除, 通过 alias 暴露给老测试桩 (TestFetchPgMessages
+# / TestEnsureSessionContext / TestLastPgId / TestChatStreamHistoryInjection)
+from app.services.session_context import (
+    _fetch_pg_messages,
+    _get_last_pg_id,
+    SESSION_CONTEXT_MAX_MSGS as _SESSION_CONTEXT_MAX_MSGS,
+    ensure_session_context as _ensure_session_context,
+    set_last_pg_id as _set_last_pg_id,
+)
 
 logger = logging.getLogger("microbubble.agent")
 
@@ -49,23 +59,11 @@ logger = logging.getLogger("microbubble.agent")
 # ============================================================================
 # 2026-07-31 #CHAT-P0-A: 会话上下文闭环 — PG 回填 Redis（"失忆客服"根因修复）
 # ============================================================================
-# 背景: chat_stream 读历史只从 Redis（短期缓存, SESSION_TTL=48h），PG 有持久化
-#       历史但不回填 → Redis 过期/重启后 LLM 只看到当前单条消息 → "你好！有什么
-#       可以帮你的吗？"完全失忆 (用户实测: "介绍一下课题组近况" 后追问即断片)。
-# 设计 (A1/A3):
-#   - _ensure_session_context(): Redis 空 → PG 全量回填最近 N 条; Redis 非空 →
-#     last_pg_id 增量回填 (session_meta 存 Redis hash agent_session:{sid}:meta)
-#   - 只 import 复用 chat_history_service.list_messages (不改), 消息格式统一
-#     {"role", "content"} 两键, 过滤 partial/deleted/tool/system 角色
-#   - best-effort: PG 加载任何失败 → 返回 None → 调用方走现有 Redis 逻辑
-#   - 排序一律用 id 游标 (after_id, 非 created_at)
-# ============================================================================
+# W98 P2-F 抽公共: ensure_session_context + set_last_pg_id 已迁至
+#   app/services/session_context.py (微信 handler 共用)。本文件保留
+#   _window_messages (chat 内调用, 不动) + _LAST_TURN_META_FIELD (回填元数据)。
 
-# 回填窗口: 取最近 12 轮 (24 条) 进 LLM messages
-_SESSION_CONTEXT_MAX_TURNS = 12
-_SESSION_CONTEXT_MAX_MSGS = _SESSION_CONTEXT_MAX_TURNS * 2
-# Redis meta hash 里记录 PG 最新落库 message id 的字段名
-_META_LAST_PG_ID_FIELD = "last_pg_id"
+# 回填元数据: session_meta 字段名 (CHAT-P0-A 配套, 保留)
 _LAST_TURN_META_FIELD = "last_turn"
 
 
@@ -191,41 +189,6 @@ async def _build_follow_up_context(db, session_id: str, query: str) -> str:
         return ""
 
 
-async def _fetch_pg_messages(
-    db,
-    user_id: int,
-    session_id: str,
-    *,
-    after_id: int = 0,
-    limit: int = _SESSION_CONTEXT_MAX_MSGS,
-) -> Optional[List[Dict]]:
-    """从 PG 拉取会话消息（复用 chat_history_service.list_messages，只 import 不改）
-
-    返回统一格式 [{"role": "user"/"assistant", "content": str}]（只保留 role/content
-    两键, 过滤 partial / deleted / system / tool 角色）。失败返回 None（best-effort）。
-    """
-    try:
-        from app.services import chat_history_service as chat_svc
-        msgs, _has_more = await chat_svc.list_messages(
-            db, user_id, session_id,
-            page_size=limit,
-            after_id=after_id,
-        )
-        out: List[Dict] = []
-        for m in msgs:
-            if m.role not in ("user", "assistant"):
-                continue  # 过滤 system/tool 角色
-            if getattr(m, "is_partial", False) or getattr(m, "is_deleted", False):
-                continue  # 过滤流式中断半截 / 单条软删除
-            content = m.content or ""
-            out.append({"role": m.role, "content": content})
-        return out or None
-    except Exception as e:
-        # best-effort 铁律: PG 加载失败绝不阻塞 chat
-        logger.warning(f"_fetch_pg_messages failed (best-effort None): {e}", exc_info=True)
-        return None
-
-
 def _window_messages(messages: List[Dict]) -> List[Dict]:
     """窗口化 + 按消息 id 语义去重（进 LLM 前调用）
 
@@ -233,6 +196,8 @@ def _window_messages(messages: List[Dict]) -> List[Dict]:
     - 去重: 同一 role + 同一 content 的相邻重复只保留最后一条
       (防御 PG 重复行 / Redis 与 PG 双写叠加的重复)
     """
+    if not messages:
+        return messages
     deduped: List[Dict] = []
     for m in messages:
         if deduped and deduped[-1].get("role") == m.get("role") and deduped[-1].get("content") == m.get("content"):
@@ -240,89 +205,6 @@ def _window_messages(messages: List[Dict]) -> List[Dict]:
         else:
             deduped.append(m)
     return deduped[-_SESSION_CONTEXT_MAX_MSGS:]
-
-
-async def _get_last_pg_id(session_id: str) -> Optional[int]:
-    """读 Redis meta hash 的 last_pg_id（无/损坏返回 None, best-effort）"""
-    try:
-        meta = await session_manager.get_meta(session_id)
-        val = meta.get(_META_LAST_PG_ID_FIELD)
-        if val is None:
-            return None
-        try:
-            return int(val)
-        except (ValueError, TypeError):
-            logger.warning(f"last_pg_id 非整数, 忽略: {val!r}")
-            return None
-    except Exception as e:
-        logger.warning(f"_get_last_pg_id failed (best-effort None): {e}")
-        return None
-
-
-async def _set_last_pg_id(session_id: str, message_id: int):
-    """写 Redis meta hash 的 last_pg_id（best-effort, 失败只告警不抛）"""
-    if not message_id:
-        return
-    try:
-        from app.core.redis import get_redis
-        r = await get_redis()
-        await r.hset(session_manager._meta_key(session_id), _META_LAST_PG_ID_FIELD, message_id)
-        await r.expire(session_manager._meta_key(session_id), session_manager.ttl)
-    except Exception as e:
-        logger.warning(f"_set_last_pg_id failed (best-effort): {e}")
-
-
-async def _ensure_session_context(
-    db,
-    user_id: Optional[int],
-    session_id: str,
-) -> List[Dict]:
-    """确保会话上下文完整（核心: PG 回填 Redis）
-
-    - Redis 空 → PG 全量回填最近 24 条
-    - Redis 非空 → last_pg_id 增量回填（只补 PG 新增消息, 追加到 Redis 尾部）
-    - user_id 为 None（匿名 webchat 等）→ 不加载 DB 历史（越权铁律: list_messages
-      必须先验证 session 归属）→ 直接返回现有 Redis 消息
-    - 任何 PG/Redis 异常 → best-effort 返回现有 Redis 消息, 绝不阻塞 chat
-    """
-    try:
-        redis_msgs = await session_manager.get_messages(session_id)
-    except Exception as e:
-        logger.warning(f"_ensure_session_context: Redis 读取失败 (best-effort 空): {e}")
-        redis_msgs = []
-
-    if not user_id or not db:
-        return redis_msgs
-
-    try:
-        if redis_msgs:
-            # 增量回填: 用 last_pg_id 查 PG 新消息（Redis 过期重连期间 PG 可能已追加）
-            last_pg_id = await _get_last_pg_id(session_id)
-            if last_pg_id:
-                new_msgs = await _fetch_pg_messages(
-                    db, user_id, session_id,
-                    after_id=last_pg_id,
-                    limit=_SESSION_CONTEXT_MAX_MSGS,
-                )
-                if new_msgs:
-                    redis_msgs = redis_msgs + new_msgs
-                    # 整体覆盖 Redis List（比逐条 RPUSH 更稳）
-                    await session_manager.save_messages(session_id, redis_msgs)
-            return redis_msgs
-
-        # 全量回填: Redis 空 → PG 加载最近 24 条（重启 / Redis 过期后首次请求）
-        pg_msgs = await _fetch_pg_messages(
-            db, user_id, session_id,
-            after_id=0,
-            limit=_SESSION_CONTEXT_MAX_MSGS,
-        )
-        if pg_msgs:
-            await session_manager.save_messages(session_id, pg_msgs)
-            return pg_msgs
-        return redis_msgs
-    except Exception as e:
-        logger.warning(f"_ensure_session_context failed (best-effort 现有 Redis 消息): {e}")
-        return redis_msgs
 
 
 async def _inject_memories(db, user_id: int, query: str) -> str:
