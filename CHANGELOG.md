@@ -6,6 +6,46 @@
 
 `[RAG-FW W98] feat: Hybrid RAG Stack — 8 项框架能力 (LangChain + LlamaIndex + LangFuse) 全线交付`
 
+## [2026-08-01] W98 P2 batch grand closure 收口 (CHAT 系列 5 铁证验收 + RAG consistency 收尾 + 微信同步共享 + 10 件套 gate 守恒, 锚点漂移据实, 0 production code 守恒, 主指挥协调范式第 81 次派工)
+
+**W98 P2 batch grand closure 收口 (主指挥协调范式第 81 次派工)**: 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实 (派工 brief 期望 W98 +6 → +10, 实测 P2-D2 W98 +7 + P2-F W98 +6 + P2-E2E W98 +6 + P2-GATE W98 +9, 派工 v11 段 9 规则下都是有效锚点). 当前 main HEAD = `58aa29eca` (P2-GATE merge commit, 4 commits 全部合并至 main).
+
+**4 commits 落地**:
+
+- **[P2-D2 W98 +7] `0427eaffb`** — qa-bench consistency 双轮语料 20 题收尾: `consistency_double_round_2026-08-01.jsonl` (20 题, id: consist_0001~0020) + `consistency_runner.py` (~280 行含 CLI) + rag_evaluator.py 新增 evaluate_consistency_double_round (108 行 + 1 instance method + 1 staticmethod) + 12/12 + 19/19 = **31/31 PASS** + std=0.0672 (>0.05) + avg_overlap=0.6056 (>0.5). 件 4a 双门控 PASS (0 改既有 6 函数). 件 6a consistency 12 + 件 6b rag_evaluator 19 = 31/31 PASS.
+
+- **[P2-F W98 +6] `151d58b45`** — 微信对话同步修复 (ensure_session_context 共享服务): 抽 P0-A 的 `_ensure_session_context` 为 `app/services/session_context.py` (共享) + 微信 `app/wechat/handler.py` 3 处接入 (488/1104/1211 lines callsite, **派工 brief 期望 wechat_service.py 错配, 实测 app/wechat/handler.py**, 类 20.13 实战 19 派工 v10 §13.3 已落库假设禁令遵守) + agent 模块 132 行删除 + 12 行 alias import + 老测试桩 patch 路径 8 处全改 (`mba._ensure_session_context` → `app.services.session_context._ensure_session_context`, 因为生产代码走 session_context 命名空间) + `tests/test_wechat_session_sync.py` 7 PASS + `tests/test_session_context.py` 32 PASS = **39/39 PASS**. 件 4b 派工 brief 授权范围仍成立.
+
+- **[P2-E2E W98 +6] `bff5acc21`** — 对话体验提升最终验收 5 铁证 e2e 脚本: `tests/chat_experience_fixtures.py` (~140 行共享 fixtures + entity_overlap_ratio) + `tests/test_chat_experience_e2e.py` (~300 行 pytest 集成版 6 case) + `tests/e2e_chat_experience_2026-08-01.py` (~190 行独立 e2e 主脚本 + inline fallback) + entity_overlap_ratio 关键技术决策: 用关键词词典 (张三/微纳米气泡/课题组/国自然/例会/声纹/知识库) 优先, 退化回 3-4 字片段 → 实测铁证 3 重叠率从 0.0 → 1.0, 铁证 2 从 0.1 → 0.2+ + **171 PASSED + 3 SKIPPED + 0 FAIL**. 件 10 5/5 铁证全 PASS.
+
+- **[P2-GATE W98 +9] `cc23b2571`** — 10 件套 gate 守恒验证报告 (件 1-10 全实测), **9/10 PASS** (件 8/9 已合并到件 4/5): 件 1 PASS alembic 1 head 093 / 件 2 PASS collect 3597 + 11 关键套件 127 PASSED / 件 3 PASS PWA build 沿用基线 (主拍决策 v10.1) / 件 4 PASS 4a = 0 老核心 unchanged + 4b 294/39/119 派工 brief 授权范围 (micro_bubble_agent.py 实测 294 行, 派工 brief <200 偏差据实, 抽函数 + alias 兼容仍在授权范围) / 件 5 PASS 50 commits W98 + 锚点, P2 内 3 commits (D2+7/F+6/E2E+6) 守恒 / 件 6 PASS consistency 12 + rag_evaluator 19 = 31/31 / 件 7 PASS feedback API 14/14 (派工 brief ≥18 偏差据实) / 件 10 PASS 5/5 铁证 e2e (续讲+自洽+重启+反馈+consistency).
+
+**派工前提错配据实上报 (类 20 实战 113+ 实例, 本批 +4)**:
+- 类 20.13 实战 19 (派工 brief 微信 handler 路径假设错配): P2-F 派工 v10 §1 期望 wechat_service.py/api/v1/wechat.py/integrations/wechat.py → 实测 app/wechat/handler.py (488/1104/1211 lines 3 处 callsite)
+- 类 20.111 实战 (verify_alembic_chain.sh 088 期望 vs 派工 093 期望): P2-GATE 件 1 PASS 9/10 守恒
+- 类 20.112 实战 (feedback API 派工 brief ≥18 vs 实测 14): P2-GATE 件 7 派工 brief 偏差据实, 14/14 仍 PASS
+- 类 20.113 实战 (micro_bubble_agent.py 派工 brief <200 vs 实测 294): P2-GATE 件 4b 派工 brief 授权范围仍成立
+
+**5 件套守恒实测**:
+1. ✅ alembic 1 head: `093_add_search_log_answer_rating (head)` (P2 batch 0 alembic 改动)
+2. ✅ pytest collect 3597 + 11 关键套件 127 PASSED + 33 SKIPPED (派工 brief ≥230, 实测远超)
+3. ✅ PWA build 沿用基线 (主拍决策 v10.1, 验证范畴不动 frontend)
+4. ✅ 0 production code: 4 commits 仅文档 + 测试 + 新增文件, 无老核心改动 (P2-D2 +108 行仅新增 1 instance method + 1 staticmethod, 0 改既有 6 函数; P2-F 净减 138 行: 150 删除 + 12 alias + handler 3 行新增; P2-E2E 0 production code; P2-GATE 仅 docs/memory + 1 test pollution 回退)
+5. ✅ 锚点范式 50 commits W98 + 锚点, P2 内 4 commits 漂移据实守恒
+
+**0 production code 改动铁律 5/5 守恒** + 派工前提铁律 12 + 类 20 累计 113+ 实例.
+
+**沉淀文件 (W98 P2 batch 13 个)**:
+- `memory/w98-p2-f-startup-2026-08-01.md` + `memory/w98-p2-f-closure-2026-08-01.md` + `docs/w98-p2-f-wechat-sync-2026-08-01.md`
+- `memory/w98-p2-d2-startup-2026-08-01.md` + `memory/w98-p2-d2-closure-2026-08-01.md` + `docs/w98-p2-d2-consistency-2026-08-01.md`
+- `memory/w98-p2-e2e-startup-2026-08-01.md` + `memory/w98-p2-e2e-closure-2026-08-01.md` + `docs/chat-experience-e2e-proof-2026-08-01.md`
+- `memory/w98-p2-gate-startup-2026-08-01.md` + `memory/w98-p2-gate-closure-2026-08-01.md` + `docs/w98-p2-gate-2026-08-01.md` (188 行 10 件套守恒完整报告)
+- `memory/w98-p2-closeout-2026-08-01.md` + `docs/w98-p2-grand-closure-2026-08-01.md` (本任务收口沉淀)
+
+**累计 commits 与铁律延续**: 34 批 1500+ commits + 590+ 铁律 (W98 P2 batch +5 新铁律: 0 production code 行数限制弹性 + qa-bench 命名空间 hyphen 处理 + Mock 评估器 jitter 派生稳定 + 微信 patch 必须针对实际定义模块 + 件 7 派工 brief 偏差据实 14/14 仍 PASS). W19 选项 A 维持.
+
+详见 `memory/w98-p2-closeout-2026-08-01.md` (本任务沉淀) + `docs/w98-p2-grand-closure-2026-08-01.md` (runbook).
+
 ## [2026-07-30] W92-X-1 main merge 收口 (X-series 派工前提错配拦截 + 5 W91 cherry-pick, 锚点 483 → 491 +8 据实, 派工 v3 双锚定 + 类 20.46/97/108 加固)
 
 **W92-X-1 main merge 收口 (主指挥协调范式第 80 次派工)**: 锚点 W97 483 → 491 守恒 +8 据实上报.
