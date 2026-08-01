@@ -139,6 +139,6 @@ def test_actual_alembic_head_count_is_one() -> None:
         f"如发现真多 head, 走派工 v6 §6 串单链纪律修复, 非 hook 假阳."
     )
     # 期望 head 已知 (实测当前 head, 不凭 CLAUDE.md 历史)
-    assert lines[1] == "091_add_kg_entity", (
-        f"alembic head 应为 091_add_kg_entity. 实际: {lines[1]}"
+    assert lines[1] == "093_add_search_log_answer_rating", (
+        f"alembic head 应为 093_add_search_log_answer_rating (W98 CHAT-P1-D3 增 092 + 093, 接 091). 实际: {lines[1]}"
     )
