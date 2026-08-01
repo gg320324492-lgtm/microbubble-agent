@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import random
+import re
 from typing import Any, Dict, List, Optional
 
 # 模块级别名 (database.py lazy init, 导入无副作用) — 让测试可 monkeypatch,
@@ -34,6 +35,59 @@ from typing import Any, Dict, List, Optional
 from app.core.database import async_session  # noqa: E402
 
 logger = logging.getLogger("microbubble.rag_evaluator")
+
+
+class _TableCellParser:
+    """Extract normalized table cell text without adding an HTML dependency."""
+
+    def __init__(self):
+        self.cells: List[str] = []
+
+    def parse(self, html: str) -> List[str]:
+        self.cells = []
+        for cell in re.findall(r"<(?:td|th)\\b[^>]*>(.*?)</(?:td|th)>", html or "", flags=re.I | re.S):
+            text = re.sub(r"<[^>]+>", " ", cell)
+            self.cells.append(" ".join(text.split()))
+        return self.cells
+
+
+def _multimodal_text(value: Any, kind: str) -> str:
+    """Read the content field used by one image/table/formula reference."""
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        return ""
+    keys = {
+        "image_ref": ("ocr_text", "text", "content", "answer"),
+        "table_ref": ("html", "table_html", "text", "content", "answer"),
+        "formula_ref": ("latex", "formula_latex", "text", "content", "answer"),
+    }.get(kind, ("text", "content", "answer"))
+    return next((str(value[k]) for k in keys if value.get(k) is not None), "")
+
+
+def _canonical_multimodal(value: str, kind: str) -> str:
+    if kind == "table_ref":
+        parser = _TableCellParser()
+        value = " | ".join(parser.parse(value or "")) or re.sub(r"<[^>]+>", " ", value or "")
+    value = re.sub(r"\\(?:left|right)\b", "", value or "")
+    value = value.replace("\\cdot", "*").replace("·", "*")
+    return " ".join(value.replace("$", "").split()).strip().lower()
+
+
+def _multimodal_similarity(predicted: str, expected: str, kind: str) -> float:
+    predicted = _canonical_multimodal(predicted, kind)
+    expected = _canonical_multimodal(expected, kind)
+    if not expected:
+        return 1.0 if not predicted else 0.0
+    if predicted == expected:
+        return 1.0
+    expected_tokens = set(re.findall(r"[\\w\\u4e00-\\u9fff]+", expected))
+    predicted_tokens = set(re.findall(r"[\\w\\u4e00-\\u9fff]+", predicted))
+    if not expected_tokens:
+        return 0.0
+    recall = len(expected_tokens & predicted_tokens) / len(expected_tokens)
+    precision = len(expected_tokens & predicted_tokens) / len(predicted_tokens or {"_"})
+    return round((2 * recall * precision / (recall + precision)) if recall + precision else 0.0, 4)
 
 
 class RAGEvaluator:
@@ -212,6 +266,53 @@ class RAGEvaluator:
             return float(result.get("score", 0.5))
         except:
             return 0.5
+
+    async def evaluate_multimodal(
+        self,
+        question: str,
+        multimodal_refs: List[Dict[str, Any]],
+        ground_truth: Any,
+    ) -> Dict[str, Any]:
+        """Evaluate image, table, and formula references without an LLM call.
+
+        Each reference is compared against its matching ground-truth asset. Images
+        use OCR text, tables use normalized HTML cell text, and formulas use
+        normalized LaTeX text. The method is deterministic and best-effort so it
+        can be used by offline evaluation runners.
+        """
+        if not isinstance(multimodal_refs, list):
+            multimodal_refs = [multimodal_refs] if isinstance(multimodal_refs, dict) else []
+        truths = ground_truth if isinstance(ground_truth, list) else [ground_truth]
+        truth_by_asset = {
+            item.get("asset_id"): item
+            for item in truths
+            if isinstance(item, dict) and item.get("asset_id")
+        }
+        results: List[Dict[str, Any]] = []
+        for ref in multimodal_refs:
+            if not isinstance(ref, dict):
+                continue
+            kind = str(ref.get("type", ""))
+            if kind not in {"image_ref", "table_ref", "formula_ref"}:
+                continue
+            asset_id = ref.get("asset_id")
+            expected = truth_by_asset.get(asset_id, ground_truth)
+            expected_text = _multimodal_text(expected, kind)
+            predicted_text = _multimodal_text(ref, kind)
+            results.append({
+                "type": kind,
+                "asset_id": asset_id,
+                "score": _multimodal_similarity(predicted_text, expected_text, kind),
+                "matched": bool(expected_text) and _canonical_multimodal(predicted_text, kind)
+                == _canonical_multimodal(expected_text, kind),
+            })
+        scores = [item["score"] for item in results]
+        return {
+            "question": question,
+            "modalities": results,
+            "overall": round(sum(scores) / len(scores), 4) if scores else 0.0,
+            "evaluated": len(results),
+        }
 
     async def evaluate_consistency_double_round(
         self,
