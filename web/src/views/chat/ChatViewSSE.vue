@@ -32,6 +32,7 @@ import ThinkingModeSwitch from '@/components/chat/ThinkingModeSwitch.vue'
 import ShareDialog from '@/components/chat/ShareDialog.vue'
 import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
+import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -538,6 +539,13 @@ onUnmounted(() => {
               <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
               <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
               <el-button v-if="msg.content" text size="small" @click="playTTSWrap(msg.content)" title="播放语音">🔊</el-button>
+              <!-- W98 CHAT-P1-D3: 用户反馈按钮 (仅 assistant 完成态展示) -->
+              <FeedbackButtons
+                v-if="msg.role === 'assistant' && msg.content"
+                :message-id="msg.server_id"
+                :session-id="sessionId"
+                :agent-reply="msg.content"
+              />
             </div>
           </div>
         </div>

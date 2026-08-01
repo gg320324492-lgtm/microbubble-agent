@@ -66,6 +66,13 @@
             title="播放语音"
             @click.stop="$emit('play-tts', msg.content)"
           >🔊</button>
+          <!-- W98 CHAT-P1-D3: 移动端反馈按钮 -->
+          <FeedbackButtons
+            v-if="msg.role === 'assistant' && msg.content"
+            :message-id="msg.server_id"
+            :session-id="msg.sessionId || null"
+            :agent-reply="msg.content"
+          />
         </div>
       </div>
     </LongPressWrapper>
@@ -86,6 +93,7 @@
 
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileRichCard from './MobileRichCard.vue'
+import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
