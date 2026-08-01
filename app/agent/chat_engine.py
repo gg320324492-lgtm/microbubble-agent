@@ -307,6 +307,9 @@ class ChatEngine:
         critique: Optional[Dict] = None
         usage: Optional[Dict] = None
         duration_ms: Optional[int] = None
+        # W100 P1 Self-RAG: 集成不可靠答案自动重检索
+        self_rag_assessment: Optional[Dict[str, Any]] = None
+        retrieved_chunks_for_assessment: List[Dict[str, Any]] = []
 
         async for evt in self.synthesize_stream(
             messages=messages,
@@ -334,6 +337,14 @@ class ChatEngine:
                     "name": evt.tool_name,
                     "result": evt.tool_output,
                 })
+                # W100 P1 Self-RAG: 从 hybrid_retrieve 工具结果收 chunks 用于事后评估
+                if (
+                    evt.tool_name in ("hybrid_retrieve", "search_knowledge", "rag_search")
+                    and isinstance(evt.tool_output, dict)
+                ):
+                    items = evt.tool_output.get("results") or evt.tool_output.get("items") or []
+                    if isinstance(items, list):
+                        retrieved_chunks_for_assessment.extend(items)
             elif evt.type == "rich_block" and evt.block:
                 rich_blocks.append(evt.block)
             elif evt.type == "intent_detected" and evt.intent:
@@ -343,6 +354,32 @@ class ChatEngine:
             elif evt.type == "done":
                 usage = evt.usage
                 duration_ms = evt.duration_ms
+
+        # W100 P1 Self-RAG: 不可靠信号评估 (独立分支调用, 不影响 streaming)
+        if content and retrieved_chunks_for_assessment:
+            try:
+                from app.services.self_rag_service import SelfRAGService
+
+                question = _last_user_text(messages)
+                service = SelfRAGService(db=db)
+                self_rag_assessment = await service.assess_answer(
+                    question=question,
+                    answer=content,
+                    retrieved_chunks=retrieved_chunks_for_assessment,
+                )
+                # 不可靠时主动重检索 + 追加 warning (best-effort)
+                if self_rag_assessment.get("should_retry"):
+                    new_chunks = await service.retry_with_reformulation(
+                        question=question,
+                        original_chunks=retrieved_chunks_for_assessment,
+                    )
+                    self_rag_assessment["retry_chunks_returned"] = len(new_chunks)
+                    logger.info(
+                        f"self_rag triggered: reason={self_rag_assessment.get('reason')} "
+                        f"retry_chunks={len(new_chunks)}"
+                    )
+            except Exception as e:
+                logger.warning(f"self_rag assessment failed: {e}")
 
         return {
             "content": content,
@@ -356,6 +393,8 @@ class ChatEngine:
             "intent": intent,
             "critique": critique,
             "is_brief": False,  # deprecated 永远 False
+            # W100 P1 Self-RAG: 评估结果 (供可观测 + 测试断言, 不影响既有字段)
+            "self_rag_assessment": self_rag_assessment,
         }
 
 
