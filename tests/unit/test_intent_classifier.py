@@ -22,12 +22,13 @@ from app.agent.intent_classifier import (
 
 
 class TestIntentCategory:
-    """7 种闭集分类（2026-07-15 #P2: 新增 team_overview）"""
+    """8 种闭集分类（2026-07-15 #P2: 新增 team_overview; 2026-07-31 CHAT-P0-C: 新增 follow_up）"""
 
-    def test_seven_categories_defined(self):
+    def test_eight_categories_defined(self):
         cats = list(IntentCategory)
         # 2026-07-15 #P2: 6 类 → 7 类（新增 TEAM_OVERVIEW 课题组概览）
-        assert len(cats) == 7
+        # 2026-07-31 CHAT-P0-C: 7 类 → 8 类（新增 FOLLOW_UP 续讲）
+        assert len(cats) == 8
         assert IntentCategory.RECOMMEND_PERSON in cats
         assert IntentCategory.SEARCH_INFO in cats
         assert IntentCategory.EXPLAIN_CONCEPT in cats
@@ -35,6 +36,7 @@ class TestIntentCategory:
         assert IntentCategory.DATA_QUERY in cats
         assert IntentCategory.CASUAL_CHAT in cats
         assert IntentCategory.TEAM_OVERVIEW in cats  # 2026-07-15 #P2 新增
+        assert IntentCategory.FOLLOW_UP in cats  # 2026-07-31 CHAT-P0-C 新增
 
 
 class TestMapCategory:
@@ -132,7 +134,11 @@ class TestClassifyIntentMocked:
 
     @pytest.mark.asyncio
     async def test_classify_fallback_on_llm_error(self):
-        """LLM 失败时降级返回 SEARCH_INFO + confidence=0"""
+        """LLM 失败时降级返回 CASUAL_CHAT + confidence=0（C1 2026-07-31 修复）
+
+        原行为: 失败一律降级 SEARCH_INFO → "你好" 掉进检索路径 (慢 + 答非所问)
+        修复后: 默认降级 CASUAL_CHAT (快、零副作用); 检索特征 query (疑问词+领域词) 仍走 SEARCH_INFO
+        """
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(side_effect=RuntimeError("LLM 503"))
 
@@ -140,10 +146,16 @@ class TestClassifyIntentMocked:
         ctx.redis = None
         ctx.llm = mock_llm
 
+        # 无检索特征的 query → CASUAL_CHAT 安全默认
         result = await classify_intent("任意问题", ctx)
-        assert result.category == IntentCategory.SEARCH_INFO
+        assert result.category == IntentCategory.CASUAL_CHAT
         assert result.confidence == 0.0
         assert "failed" in result.reasoning.lower() or "失败" in result.reasoning
+
+        # 检索特征 query（疑问词 + 领域词）→ 仍走 SEARCH_INFO
+        result2 = await classify_intent("什么是微纳米气泡", ctx)
+        assert result2.category == IntentCategory.SEARCH_INFO
+        assert result2.confidence == 0.0
 
     @pytest.mark.asyncio
     async def test_classify_handles_markdown_codeblock(self):
