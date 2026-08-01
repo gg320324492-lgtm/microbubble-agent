@@ -29,7 +29,7 @@ class TestFetchPgMessages:
     @pytest.mark.asyncio
     async def test_fetch_filters_partial_deleted_tool(self):
         """过滤 partial/deleted/system/tool, 只留 user/assistant 的 role/content 两键"""
-        from app.agent.micro_bubble_agent import _fetch_pg_messages
+        from app.services.session_context import _fetch_pg_messages
         from app.services import chat_history_service as real_chat_svc
 
         def make_msg(mid, role, content, is_partial=False, is_deleted=False):
@@ -64,7 +64,7 @@ class TestFetchPgMessages:
     @pytest.mark.asyncio
     async def test_fetch_failure_returns_none(self):
         """PG 失败 → None（best-effort, 不抛）"""
-        from app.agent.micro_bubble_agent import _fetch_pg_messages
+        from app.services.session_context import _fetch_pg_messages
         from app.services import chat_history_service as real_chat_svc
 
         mock_db = MagicMock()
@@ -115,7 +115,7 @@ class TestWindowMessages:
 
 
 class TestEnsureSessionContext:
-    """_ensure_session_context: PG 回填 Redis 的核心逻辑"""
+    """ensure_session_context: PG 回填 Redis 的核心逻辑 (W98 P2-F 抽公共)"""
 
     @pytest.mark.asyncio
     async def test_redis_empty_pg_full_backfill(self):
@@ -133,8 +133,8 @@ class TestEnsureSessionContext:
         session_manager_mock.save_messages = AsyncMock()
         session_manager_mock.get_meta = AsyncMock(return_value={})
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", AsyncMock(return_value=pg_msgs)):
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=pg_msgs)):
             result = await mba._ensure_session_context(MagicMock(), user_id=1, session_id="s1")
 
         assert result == pg_msgs
@@ -166,8 +166,8 @@ class TestEnsureSessionContext:
             captured["limit"] = limit
             return new_msgs
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", fake_fetch):
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", fake_fetch):
             result = await mba._ensure_session_context(MagicMock(), user_id=1, session_id="s1")
 
         assert captured["after_id"] == 10  # 断言 list_messages(after_id=last_pg_id)
@@ -183,8 +183,8 @@ class TestEnsureSessionContext:
         session_manager_mock.get_messages = AsyncMock(return_value=[])
         session_manager_mock.save_messages = AsyncMock()
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", AsyncMock(return_value=None)):
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=None)):
             result = await mba._ensure_session_context(MagicMock(), user_id=1, session_id="s1")
 
         assert result == []
@@ -199,8 +199,8 @@ class TestEnsureSessionContext:
         session_manager_mock.get_messages = AsyncMock(return_value=[{"role": "user", "content": "x"}])
         mock_fetch = AsyncMock(return_value=[{"role": "user", "content": "y"}])
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", mock_fetch):
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", mock_fetch):
             result = await mba._ensure_session_context(MagicMock(), user_id=None, session_id="s1")
 
         assert result == [{"role": "user", "content": "x"}]
@@ -216,8 +216,8 @@ class TestEnsureSessionContext:
         session_manager_mock.save_messages = AsyncMock()
         pg_msgs = [{"role": "user", "content": "m0"}]
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", AsyncMock(return_value=pg_msgs)):
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=pg_msgs)):
             result = await mba._ensure_session_context(MagicMock(), user_id=1, session_id="s1")
 
         assert result == pg_msgs
@@ -253,7 +253,7 @@ class TestLastPgId:
             return await fake_hgetall(f"agent_session:{sid}:meta")
         session_manager_mock.get_meta = _get_meta
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
              patch("app.core.redis.get_redis", AsyncMock(return_value=r)):
             await mba._set_last_pg_id("s1", 42)
             val = await mba._get_last_pg_id("s1")
@@ -265,7 +265,7 @@ class TestLastPgId:
         import app.agent.micro_bubble_agent as mba
         session_manager_mock = MagicMock()
         session_manager_mock.get_meta = AsyncMock(return_value={"last_pg_id": "not-an-int"})
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock):
+        with patch("app.services.session_context.session_manager", session_manager_mock):
             assert await mba._get_last_pg_id("s1") is None
 
 
@@ -356,9 +356,9 @@ class TestChatStreamHistoryInjection:
         agent = mba.MicroBubbleAgent()
         agent.engine.chat_stream = fake_engine_stream
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", AsyncMock(return_value=pg_msgs)), \
-             patch.object(mba, "_set_last_pg_id", AsyncMock()):
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=pg_msgs)), \
+             patch("app.services.session_context.set_last_pg_id", AsyncMock()):
             events = []
             async for evt in agent.chat_stream(
                 "介绍一下课题组近况", session_id="s1", db=MagicMock(), user_id=1,
@@ -398,9 +398,9 @@ class TestChatStreamHistoryInjection:
         agent = mba.MicroBubbleAgent()
         agent.engine.chat_stream = fake_engine_stream
 
-        with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", AsyncMock(return_value=pg_msgs)), \
-             patch.object(mba, "_set_last_pg_id", AsyncMock()):
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=pg_msgs)), \
+             patch("app.services.session_context.set_last_pg_id", AsyncMock()):
             async for _ in agent.chat_stream("追问", session_id="s1", db=MagicMock(), user_id=1):
                 pass
 
@@ -417,6 +417,7 @@ class TestChatStreamHistoryInjection:
         session_manager_mock = MagicMock()
         session_manager_mock.get_messages = AsyncMock(return_value=[])
         session_manager_mock.save_messages = AsyncMock()
+        # W98 P2-F: 抽公共后, 拦截 agent 模块的 _set_last_pg_id alias (原测试直接替换 mba 属性)
         mba._set_last_pg_id = AsyncMock()  # noqa: 直接替换避免 patch 开销
 
         async def fake_engine_stream(**kwargs):
@@ -431,10 +432,10 @@ class TestChatStreamHistoryInjection:
         user_msg.id = 100
         chat_svc_mock.append_message = AsyncMock(side_effect=[user_msg, MagicMock(id=200)])
         import app.services
+        import app.services.chat_history_service  # noqa: F401  确保子模块在 sys.modules + parent attr
         with patch.object(app.services, "chat_history_service", chat_svc_mock), \
-             patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
-             patch.object(mba, "_fetch_pg_messages", AsyncMock(return_value=None)), \
-             patch.object(mba, "_set_last_pg_id", AsyncMock()) as set_last:
+             patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=None)):
             events = []
             async for evt in agent.chat_stream("你好", session_id="s1", db=MagicMock(), user_id=1):
                 events.append(evt)
@@ -442,7 +443,7 @@ class TestChatStreamHistoryInjection:
         done_events = [e for e in events if e.type == "done" and e.message_id is not None]
         assert done_events, "应补发带 message_id 的 done 事件"
         assert done_events[0].message_id == 200
-        set_last.assert_awaited_once_with("s1", 200)
+        mba._set_last_pg_id.assert_awaited_once_with("s1", 200)
 
 
 # ============================================================================
@@ -486,7 +487,7 @@ async def test_integration_redis_empty_pg_backfill(db, test_member):
     session_manager_mock.get_meta = AsyncMock(return_value={})
     session_manager_mock.ttl = 172800
 
-    with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
+    with patch("app.services.session_context.session_manager", session_manager_mock), \
          patch("app.core.redis.get_redis", AsyncMock(return_value=fake)):
         result = await mba._ensure_session_context(db, user_id=test_member.id, session_id=sid)
 
@@ -524,7 +525,7 @@ async def test_integration_restart_simulation(db, test_member):
     session_manager_mock.get_meta = AsyncMock(return_value={})
     session_manager_mock.ttl = 172800
 
-    with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
+    with patch("app.services.session_context.session_manager", session_manager_mock), \
          patch("app.core.redis.get_redis", AsyncMock(return_value=fake)):
         first = await mba._ensure_session_context(db, user_id=test_member.id, session_id=sid)
 
@@ -589,9 +590,209 @@ async def test_integration_incremental_backfill(db, test_member):
     session_manager_mock.save_messages = AsyncMock()
     session_manager_mock.ttl = 172800
 
-    with patch("app.agent.micro_bubble_agent.session_manager", session_manager_mock), \
+    with patch("app.services.session_context.session_manager", session_manager_mock), \
          patch("app.core.redis.get_redis", AsyncMock(return_value=fake)):
         result = await mba._ensure_session_context(db, user_id=test_member.id, session_id=sid)
 
     assert len(result) == 2 + 3  # Redis 2 条 + 增量 3 条
     assert result[-1]["content"] == "新消息2"
+
+
+# ============================================================================
+# W98 P2-F 抽公共新增测试 (派工 v10 §3)
+# 覆盖 12 case:
+#   PG miss → 回填 / PG hit → 复用 / Redis-only → 回填 / windowed 12 轮 / id dedup
+#   + set_last_pg_id best-effort / importable 公共符号 / 微信 handler 共用铁证
+# ============================================================================
+
+class TestSessionContextPublicAPI:
+    """W98 P2-F — session_context 公共函数 import + 行为契约"""
+
+    def test_public_symbols_importable(self):
+        """公共符号可以从 app.services.session_context 直接 import (无下划线)"""
+        from app.services.session_context import (
+            ensure_session_context,
+            set_last_pg_id,
+            SESSION_CONTEXT_MAX_MSGS,
+            SESSION_CONTEXT_MAX_TURNS,
+            META_LAST_PG_ID_FIELD,
+        )
+        assert callable(ensure_session_context)
+        assert callable(set_last_pg_id)
+        assert SESSION_CONTEXT_MAX_MSGS == 24
+        assert SESSION_CONTEXT_MAX_TURNS == 12
+        assert META_LAST_PG_ID_FIELD == "last_pg_id"
+
+    def test_public_signature_no_underscore(self):
+        """ensure_session_context / set_last_pg_id 不带下划线 (公开 API 约定)"""
+        import app.services.session_context as sc
+        public_names = [n for n in dir(sc) if not n.startswith("_")]
+        assert "ensure_session_context" in public_names
+        assert "set_last_pg_id" in public_names
+        assert "SESSION_CONTEXT_MAX_MSGS" in public_names
+
+    @pytest.mark.asyncio
+    async def test_ensure_session_context_pg_miss_full_backfill(self):
+        """Redis 空 + db 注入 PG → 全量回填 24 条"""
+        from app.services.session_context import ensure_session_context
+
+        session_manager_mock = MagicMock()
+        session_manager_mock.get_messages = AsyncMock(return_value=[])
+        session_manager_mock.save_messages = AsyncMock()
+        session_manager_mock.get_meta = AsyncMock(return_value={})
+
+        pg_msgs = [
+            {"role": "user" if i % 2 == 0 else "assistant", "content": f"m{i}"}
+            for i in range(20)
+        ]
+
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=pg_msgs)):
+            result = await ensure_session_context(MagicMock(), user_id=42, session_id="wx_s1")
+
+        assert result == pg_msgs
+        session_manager_mock.save_messages.assert_awaited_once_with("wx_s1", pg_msgs)
+
+    @pytest.mark.asyncio
+    async def test_ensure_session_context_pg_hit_incremental(self):
+        """Redis 非空 + last_pg_id=10 + PG 新增 3 条 → 增量回填 after_id=10"""
+        from app.services.session_context import ensure_session_context
+
+        redis_msgs = [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"}]
+        new_msgs = [
+            {"role": "user", "content": "q2"},
+            {"role": "assistant", "content": "a2"},
+            {"role": "user", "content": "q3"},
+        ]
+
+        session_manager_mock = MagicMock()
+        session_manager_mock.get_messages = AsyncMock(return_value=redis_msgs)
+        session_manager_mock.get_meta = AsyncMock(return_value={"last_pg_id": 10})
+        session_manager_mock.save_messages = AsyncMock()
+
+        captured = {}
+        async def fake_fetch(db, user_id, session_id, *, after_id=0, limit=24):
+            captured["after_id"] = after_id
+            return new_msgs
+
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", fake_fetch):
+            result = await ensure_session_context(MagicMock(), user_id=42, session_id="wx_s1")
+
+        assert captured["after_id"] == 10
+        assert result == redis_msgs + new_msgs
+        session_manager_mock.save_messages.assert_awaited_once_with("wx_s1", redis_msgs + new_msgs)
+
+    @pytest.mark.asyncio
+    async def test_ensure_session_context_user_id_none_越权铁律(self):
+        """user_id=None → 不加载 DB 历史, 直接返回 Redis 消息 (越权铁律)"""
+        from app.services.session_context import ensure_session_context
+
+        session_manager_mock = MagicMock()
+        session_manager_mock.get_messages = AsyncMock(return_value=[{"role": "user", "content": "anon"}])
+        session_manager_mock.save_messages = AsyncMock()
+
+        with patch("app.services.session_context.session_manager", session_manager_mock):
+            result = await ensure_session_context(MagicMock(), user_id=None, session_id="wx_anon")
+
+        assert result == [{"role": "user", "content": "anon"}]
+        session_manager_mock.save_messages.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ensure_session_context_db_none_越权铁律(self):
+        """db=None → 不加载 DB 历史 (同 user_id=None 语义)"""
+        from app.services.session_context import ensure_session_context
+
+        session_manager_mock = MagicMock()
+        session_manager_mock.get_messages = AsyncMock(return_value=[{"role": "user", "content": "x"}])
+        session_manager_mock.save_messages = AsyncMock()
+
+        with patch("app.services.session_context.session_manager", session_manager_mock):
+            result = await ensure_session_context(None, user_id=42, session_id="wx_s1")
+
+        assert result == [{"role": "user", "content": "x"}]
+        session_manager_mock.save_messages.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_ensure_session_context_pg_failure_best_effort(self):
+        """PG 返回 None → best-effort 返回 Redis msgs (不抛)"""
+        from app.services.session_context import ensure_session_context
+
+        session_manager_mock = MagicMock()
+        session_manager_mock.get_messages = AsyncMock(return_value=[{"role": "user", "content": "fallback"}])
+        session_manager_mock.save_messages = AsyncMock()
+
+        with patch("app.services.session_context.session_manager", session_manager_mock), \
+             patch("app.services.session_context._fetch_pg_messages", AsyncMock(return_value=None)):
+            result = await ensure_session_context(MagicMock(), user_id=42, session_id="wx_s1")
+
+        assert result == [{"role": "user", "content": "fallback"}]
+
+    @pytest.mark.asyncio
+    async def test_windowed_12_turns_constant(self):
+        """SESSION_CONTEXT_MAX_MSGS = 24 (12 轮) — 派工 brief 验证铁律"""
+        from app.services.session_context import SESSION_CONTEXT_MAX_MSGS, SESSION_CONTEXT_MAX_TURNS
+        assert SESSION_CONTEXT_MAX_MSGS == SESSION_CONTEXT_MAX_TURNS * 2
+        assert SESSION_CONTEXT_MAX_MSGS == 24
+
+    @pytest.mark.asyncio
+    async def test_id_dedup_window_messages_callable(self):
+        """_window_messages (agent 私有) 仍存在并能 dedup 相邻同 role+content"""
+        from app.agent.micro_bubble_agent import _window_messages
+        msgs = [
+            {"role": "user", "content": "q1"},
+            {"role": "user", "content": "q1"},  # 重复
+            {"role": "assistant", "content": "a1"},
+        ]
+        out = _window_messages(msgs)
+        assert out == [
+            {"role": "user", "content": "q1"},
+            {"role": "assistant", "content": "a1"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_set_last_pg_id_zero_noop(self):
+        """set_last_pg_id(id=0) → 无 Redis write (best-effort)"""
+        from app.services.session_context import set_last_pg_id
+        # 不抛即通过
+        await set_last_pg_id("wx_zero", 0)
+
+    @pytest.mark.asyncio
+    async def test_set_last_pg_id_valid_writes_redis(self):
+        """set_last_pg_id(id=42) → 调 get_redis + hset (best-effort)"""
+        from app.services.session_context import set_last_pg_id
+
+        r_mock = MagicMock()
+        r_mock.hset = AsyncMock()
+        r_mock.expire = AsyncMock()
+        get_redis_mock = AsyncMock(return_value=r_mock)
+        session_manager_mock = MagicMock()
+        session_manager_mock._meta_key = MagicMock(return_value="agent_session:wx_s1:meta")
+
+        with patch("app.core.redis.get_redis", get_redis_mock), \
+             patch("app.services.session_context.session_manager", session_manager_mock):
+            await set_last_pg_id("wx_s1", 42)
+
+        r_mock.hset.assert_awaited_once()
+        r_mock.expire.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_wechat_handler_imports_shared_function(self):
+        """微信 handler 真导入 ensure_session_context (派工 v10 §1 真验证)"""
+        import app.wechat.handler
+        import inspect
+        from app.services.session_context import ensure_session_context
+        # handler 模块源文件应 import ensure_session_context
+        src = inspect.getsource(app.wechat.handler)
+        assert "ensure_session_context" in src, "微信 handler 未接入共享 ensure_session_context"
+        assert "from app.services.session_context import" in src, "微信 handler 未走共享 import 路径"
+
+    @pytest.mark.asyncio
+    async def test_wechat_handler_calls_pre_agent_chat(self):
+        """微信 handler 3 处 agent.chat 前都先 ensure_session_context (派工 v10 §2)"""
+        import inspect
+        import app.wechat.handler
+        src = inspect.getsource(app.wechat.handler)
+        # 计数: 3 处 ensure_session_context 调用 (群聊 + 私聊 + kf)
+        call_count = src.count("await ensure_session_context(")
+        assert call_count == 3, f"微信 handler 应有 3 处 ensure_session_context 调用, 实际 {call_count}"
