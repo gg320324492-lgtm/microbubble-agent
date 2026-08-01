@@ -108,11 +108,11 @@ def _make_mock_llm_queue(responses: list) -> AsyncMock:
 
 
 def test_e2e_01_alembic_single_head() -> None:
-    """件 1: python -m alembic heads → 1 head (095)
-    W100-RAG-3 不写 alembic migration, head 仍 095 (W99-RAG-2 末态)
+    """件 1: python -m alembic heads → 1 head (096)
+    W100-RAG-5 加 096 迁移, head 推进到 096 (W100-RAG-3 不动 schema 但 W100-RAG-5 推进了 1 步).
     """
     out = _run_cmd("python -m alembic heads")
-    assert "095" in out, f"095 应在 alembic heads 中: {out}"
+    assert "096" in out, f"096 应在 alembic heads 中: {out}"
     assert "Multiple" not in out, f"alembic 多 head 不应: {out}"
 
 
