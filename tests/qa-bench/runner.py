@@ -274,6 +274,113 @@ def collect_critique_score(events: List[Dict[str, Any]]) -> Optional[int]:
     return None
 
 
+# === CHAT-P0-D W98 +0: consistency 双轮实体延续 (runner 侧计算入口) ===
+# 设计 (派工 brief D2): 双轮实体重叠 — 取本轮 query + 上轮 assistant 回答,
+# 轻量名词短语提取 (中文 2-6 字连续词 + 英文单词), 得分 = 上轮核心实体在本轮
+# 回答中的覆盖率。单轮题 (prev_record=None) 给 0.5 中性分, 不凑满分。
+
+_FOLLOWUP_RE = re.compile(r"(再|继续|多介绍|展开|还有|接着|详细说说|再多|补充)")
+
+
+def _is_followup_question(question: str) -> bool:
+    """本轮 query 是否含 follow_up 词 (再/继续/多介绍/展开/还有/接着/详细说说)."""
+    return bool(question and _FOLLOWUP_RE.search(question))
+
+
+# 2-char 停用噪音 (长 CJK run 切 2 字窗口时过滤常见虚词/功能词)
+_CONSISTENCY_STOP_BIGRAMS = {
+    "可以", "研究", "什么", "怎么", "为什么", "如何", "一个", "这个", "那个",
+    "进行", "相关", "我们", "你们", "他们", "课题", "现在", "需要", "应该",
+    "知道", "看到", "谈到", "提到", "数据", "结果", "以及", "然后", "了解",
+    "获取", "回答", "问题", "信息", "内容", "方法", "方面", "包括", "主要",
+    "还有", "更多", "详细", "继续", "介绍", "讲讲", "关注", "涉及", "属于",
+    "是否", "通过", "对于", "关于", "由于",
+}
+
+
+def _extract_noun_entities_runner(text: str) -> List[str]:
+    """轻量名词短语提取 — 中文 2-4 字连续 n-gram + 英文单词 (与 seven_dim 同口径).
+
+    tests/qa-bench 域内独立实现 (不 import app 生产代码 — W68 0 production code 铁律).
+    """
+    if not text:
+        return []
+    seen: List[str] = []
+
+    def _push(tok: str) -> None:
+        if len(tok) == 2 and tok in _CONSISTENCY_STOP_BIGRAMS:
+            return
+        if tok not in seen:
+            seen.append(tok)
+
+    # 英文单词
+    for m in re.finditer(r"[A-Za-z][A-Za-z0-9±·]{1,19}", text):
+        _push(m.group(0))
+
+    # 中文: 句读切段 → 每段生成 2/3/4 字 n-gram
+    for seg in re.split(r"[，。！？；：、,.!?;:\s]+", text):
+        run = re.sub(r"[^一-鿿]", "", seg)
+        if len(run) < 2:
+            continue
+        if len(run) <= 6:
+            _push(run)  # 短段整体 (术语/姓名完整形态)
+        for i in range(len(run) - 1):
+            _push(run[i:i + 2])
+        for i in range(len(run) - 2):
+            _push(run[i:i + 3])
+        for i in range(len(run) - 3):
+            _push(run[i:i + 4])
+    return seen[:300]
+
+
+def _entity_overlap_runner(entities: List[str], text: str) -> float:
+    """实体集在目标文本中的覆盖率 — 子串命中."""
+    if not entities:
+        return 0.5
+    hits = sum(1 for e in entities if e in text)
+    return round(hits / len(entities), 4)
+
+
+def _score_consistency_runner(
+    expect: Dict[str, Any],
+    actual: Dict[str, Any],
+    prev_record: Optional[Dict[str, Any]],
+) -> float:
+    """runner 侧 consistency 真计算 (双轮实体延续).
+
+    优先级 (从高到低):
+    1. expect['consistent_keywords'] 非空 (老语料) → 老关键词命中口径
+    2. prev_record 存在 → 双轮实体重叠:
+       - 上轮核心实体提取自 prev_record 的 question + content (question 是 follow_up
+         锚点, content 是知识载体)
+       - follow_up 题 → 上轮核心实体在本轮回答中的覆盖率
+       - 非 follow_up → 本轮 query 与上轮回答的实体重叠率 (延续参考)
+    3. prev_record 缺失 (单轮题) → 中性 0.5 (不再恒 1.0)
+    """
+    expected_consistent = expect.get("consistent_keywords", [])
+    if expected_consistent:
+        response = (actual.get("content") or "").lower()
+        hits = sum(1 for kw in expected_consistent if kw.lower() in response)
+        return hits / len(expected_consistent)
+
+    if not prev_record:
+        return 0.5
+
+    prev_question = prev_record.get("question") or ""
+    prev_content = (prev_record.get("actual") or {}).get("content") or ""
+    prev_entities = _extract_noun_entities_runner(
+        f"{prev_question} {prev_content}"
+    )
+    if not prev_entities:
+        return 0.5
+
+    current_question = actual.get("question") or ""
+    current_content = actual.get("content") or ""
+    if _is_followup_question(current_question):
+        return _entity_overlap_runner(prev_entities, current_content)
+    return _entity_overlap_runner(prev_entities, current_question + current_content)
+
+
 def collect_duration(events: List[Dict[str, Any]]) -> Optional[int]:
     for evt in events:
         if evt.get("type") == "done" and evt.get("duration_ms") is not None:
@@ -469,11 +576,16 @@ def score_seven_dim(
     expect_issues: List[Dict[str, Any]],
     duration_ms: int,
     temperature: float = 0.0,
+    prev_record: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """7 维评分（v3.0）
 
     ``temperature`` is retained as explicit configuration plumbing; the
     deterministic local scoring rules do not use it.
+
+    CHAT-P0-D W98 +0: 新增 ``prev_record`` 参数 (上一轮 QA 记录, 供 consistency
+    双轮实体延续真计算). 单轮场景 (prev_record=None) consistency 给 0.5 中性分,
+    不再恒 1.0 满分占位.
 
     Returns:
         {
@@ -610,8 +722,11 @@ def score_seven_dim(
     else:
         dim_scores["perf"] = 0.2
 
-    # 7. 一致性（暂无数据时给满分 — W3 阶段实现 idempotency 后接入）
-    dim_scores["consistency"] = 1.0
+    # 7. 一致性（CHAT-P0-D W98 +0: 恒满分占位 → 真计算）
+    # 老实现: dim_scores["consistency"] = 1.0 (注释 "暂无数据时给满分")
+    # 新实现: 双轮实体延续 (双轮语料才可算, 单轮题给 0.5 中性分)
+    consistency = _score_consistency_runner(expect, actual, prev_record)
+    dim_scores["consistency"] = consistency
 
     # 总分
     total = sum(dim_scores[k] * DIM_WEIGHTS[k] for k in DIM_WEIGHTS) * 100
@@ -643,8 +758,12 @@ async def run_single_question(
     token: str,
     temperature: float = 0.0,
     round_index: int = 1,
+    prev_record: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """跑一道题并返回结果"""
+    """跑一道题并返回结果
+
+    CHAT-P0-D W98 +0: ``prev_record`` 上一轮 QA 记录 (双轮语料 consistency 用).
+    """
     qid = question_data["id"]
     question = question_data["question"]
     expect = question_data.get("expect", {})
@@ -807,6 +926,7 @@ async def run_single_question(
     seven_dim = score_seven_dim(
         expect, actual, auto_issues, expect_issues, duration_ms,
         temperature=temperature,
+        prev_record=prev_record,  # CHAT-P0-D W98 +0: consistency 双轮实体延续
     )
     actual.pop("_events", None)  # 清理临时字段
 
@@ -962,6 +1082,10 @@ async def main():
                         help="A1: 脱敏后 fixture SQL 路径 (配合 --use-test-stack, 空则跳过灌入)")
     parser.add_argument("--skip-down", action="store_true",
                         help="A1: 跑测后不自动销毁测试栈 (调试用)")
+    # CHAT-P0-D W98 +0: 双轮语料模式 (questions_followup_20.jsonl)
+    # 第二轮 consistency 依赖第一轮回答 → 强制顺序执行 (禁并发)
+    parser.add_argument("--followup", action="store_true",
+                        help="CHAT-P0-D: 双轮语料模式 (顺序执行, consistency 双轮实体延续)")
     args = parser.parse_args()
     if args.rounds < 1:
         parser.error("--rounds must be >= 1")
@@ -1052,20 +1176,35 @@ async def main():
     print_lock = asyncio.Lock()
     async with httpx.AsyncClient() as client:
         semaphore = asyncio.Semaphore(args.concurrency)
+        # CHAT-P0-D W98 +0: consistency 双轮实体延续 — 按 pair id 维护上一轮记录
+        # (prev_record 链按题聚合: 同 id 的两轮之间才串联, 不跨题/跨 pair 污染)
+        prev_by_id: Dict[str, Optional[Dict[str, Any]]] = {}
 
         async def run_with_progress(q, i):
             nonlocal completed
             async with semaphore:
                 t0 = time.monotonic()
                 round_results = []
+                # 双轮语料模式: 第二轮 (round==2) 拿同 id 第一轮的回答做 prev_record
+                prev_record: Optional[Dict[str, Any]] = None
+                if args.followup and q.get("round") == 2:
+                    prev_record = prev_by_id.get(str(q.get("id")))
                 for round_index in range(1, args.rounds + 1):
-                    round_results.append(
-                        await run_single_question(
-                            client, q, args.token,
-                            temperature=temperature,
-                            round_index=round_index,
-                        )
+                    rr = await run_single_question(
+                        client, q, args.token,
+                        temperature=temperature,
+                        round_index=round_index,
+                        prev_record=prev_record,
                     )
+                    round_results.append(rr)
+                    if rr.get("actual") and rr.get("actual", {}).get("content"):
+                        prev_by_id[str(q.get("id"))] = {
+                            "question": q.get("question", ""),
+                            "actual": {
+                                "content": rr["actual"]["content"],
+                                "question": q.get("question", ""),
+                            },
+                        }
                 r = _aggregate_round_results(round_results, args.verdict_consensus)
                 dt = time.monotonic() - t0
                 verdict = r.get("verdict", "ERROR")
@@ -1081,8 +1220,15 @@ async def main():
                     )
                 return r
 
-        tasks = [run_with_progress(q, i) for i, q in enumerate(questions)]
-        results = await asyncio.gather(*tasks)
+        # CHAT-P0-D W98 +0: 双轮语料 (questions_followup_20.jsonl) 必须顺序执行 —
+        # 第二轮的 consistency 依赖第一轮回答作为 prev_record, 并发会破坏上下文链
+        if args.followup:
+            results = []
+            for i, q in enumerate(questions):
+                results.append(await run_with_progress(q, i))
+        else:
+            tasks = [run_with_progress(q, i) for i, q in enumerate(questions)]
+            results = await asyncio.gather(*tasks)
 
     # === 写报告 ===
     summary = {
@@ -1127,10 +1273,31 @@ async def main():
             veto_count += 1
     if dim_count:
         dim_avg = {k: round(v / dim_count, 3) for k, v in dim_totals.items()}
+        # CHAT-P0-D W98 +0: 输出 variance (std > 0 才有区分度 — 恒满分占位无区分度)
+        dim_std: Dict[str, float] = {}
+        for k in DIM_WEIGHTS:
+            vals = [
+                r["seven_dim"]["dim_scores"][k]
+                for r in results
+                if "seven_dim" in r and k in r["seven_dim"]["dim_scores"]
+            ]
+            if vals:
+                mean = dim_totals[k] / dim_count
+                variance = sum((v - mean) ** 2 for v in vals) / len(vals)
+                dim_std[k] = round(variance ** 0.5, 4)
+        # consistency 区分度警告: std == 0 说明评分退化 (无区分度)
+        consistency_std = dim_std.get("consistency", 0.0)
+        if consistency_std == 0 and dim_count > 1:
+            print(
+                f"⚠️  consistency 维度 std=0 (无区分度): 双轮语料请用 --followup 顺序模式, "
+                f"单轮题给 0.5 中性分"
+            )
+        summary["seven_dim"]["dim_std"] = dim_std
     else:
         dim_avg = {}
     summary["seven_dim"] = {
         "dim_avg": dim_avg,
+        "dim_std": dim_std if dim_count else {},
         "grade_dist": grade_dist,
         "veto_count": veto_count,
         "total_scored": dim_count,
@@ -1172,10 +1339,10 @@ async def main():
         md.append("\n## 7 维评分汇总 (v3.0)\n")
         md.append(f"**评分题数**: {sd['total_scored']} | **一票否决**: {sd['veto_count']}\n")
         md.append("\n### 维度均分\n")
-        md.append("| 维度 | 权重 | 均分 |")
-        md.append("|---|---|---|")
+        md.append("| 维度 | 权重 | 均分 | std |")
+        md.append("|---|---|---|---|")
         for k, w in DIM_WEIGHTS.items():
-            md.append(f"| {k} | {int(w*100)}% | {sd['dim_avg'].get(k, 0):.2f} |")
+            md.append(f"| {k} | {int(w*100)}% | {sd['dim_avg'].get(k, 0):.2f} | {sd.get('dim_std', {}).get(k, 0):.3f} |")
         md.append("\n### 分级分布\n")
         md.append("| 等级 | 范围 | 题数 |")
         md.append("|---|---|---|")

@@ -295,15 +295,15 @@ def test_alembic_17_idempotent_guard_pattern():
 
 
 def test_alembic_18_alembic_heads_one():
-    """alembic 090 串单链 089, python -m alembic heads = 1"""
+    """alembic 串单链 (090 → 091), python -m alembic heads = 1"""
     import subprocess
     result = subprocess.run(
         ["python", "-m", "alembic", "heads"],
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, f"alembic heads 失败: {result.stderr}"
-    # 期望 090 是 head
-    assert "090_add_rag_eval_report" in result.stdout, f"派工 brief 期望 090 是 head, 实测 {result.stdout}"
+    # CHAT-P0-D W98 +0 修复: 期望 head 更新为 091_add_kg_entity (W94 PR8 接入后 090 不再是 head)
+    assert "091_add_kg_entity" in result.stdout, f"alembic head 应为 091_add_kg_entity, 实测 {result.stdout}"
     # 单链 (只有 1 行)
     assert len(result.stdout.strip().splitlines()) == 1, f"派工 brief 期望 1 head, 实测 {result.stdout}"
 
