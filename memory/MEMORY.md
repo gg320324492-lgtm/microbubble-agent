@@ -369,3 +369,19 @@
 
 **W98 RAG-GC 1 新铁律 (RAG 系列总收口纪要)**:
 - **RAG 系列总收口纪要**: PR1-PR10 + RAG-FW-01..14 + DEPLOY + W97 RAG 大改造 + W98 周边 4 项 跨 8 周 (W88-W98) 累计 212+ commits + 锚点范式 +168 (W97 477 → W98 +13 累计 ~490). 0 production code 守恒 10 PR + 14 RAG-FW + 8 周边 全部实测. 派工 v11 §13 仓库实情真查 6 项铁律实战化 (python -m alembic 形态 + pytest 白名单 + 错配双向禁令 + docs 门禁断言化 + 依赖基线自检 + 5 件套回报表). 5 大铁证全留据 (qa-bench R8 93.5% + consistency std=0.0672 + 实体重叠 0.6056 + RAG-FW-11 8 case + 5 e2e PASS). W19 选项 A 维持 + W99+ 派工顺序表预留 (7 段 RAG 系列持续演进方向).
+
+---
+
+## W98 N-3 件 7 SearchLog 回收率偏差调研专题 (2026-08-01, 锚点范式 W98 +13 → +14 守恒, 主指挥协调范式第 83 次派工)
+
+**主基调**: 锚点范式 W98 +13 → **N-3 +14** (+1 据实, 纯 docs/memory 调研范畴). 当前 main HEAD = `68ed0b55c` (RAG-GC W98 +13 grand closure 收口, memory/w98-rag-grand-closure-2026-08-01.md 完整沉淀). 0 commits ahead of base `68ed0b55c` (本任务 docs/memory 范畴, 不动 production code). **件 7 派工 brief 偏差是真偏差**: 件 7 期望 "feedback API ≥ 18 PASS" 实测 = 14/14 PASS, 件 7 真语义是 `docs/rag/EVAL.md` 第 55-62 行 SQL 视图 **SearchLog CTR (click/曝光) ≥ 30% (PR6/7 落库)**. **埋点未启用是事实**: `web/src/api/analytics.js` 定义了 `recordSearchEvent` + `recordClick`, 但 view 层未调用 (`grep web/src/views --include="*.vue"` 仅命中搜索 UI, 无埋点调用点). **主拍推荐方案**: **选项 C (双轨分阶段)** — 短期阈值 ≥ 15% (基于实测) + 中期 UI 改进 (W99 P1) + 长期回归 ≥ 30% (W101+). alembic 1 head `['093_add_search_log_answer_rating']` 守恒 (W98 N-3 调研不动 alembic). **0 production code 改动铁律 守恒**: `git diff 68ed0b55c -- app/ web/src/ alembic/ | wc -l` = 0 实测. 派工前提铁律 12 + **类 20.33 实战新增 1 实例 (件 7 CTR 派工 brief 偏差 + 埋点未启用双错配) + 4 子类派生 (.a 派工 brief 错配真语义 / .b PR6 self-report 误报 / .c UI 埋点未启用 / .d 双轨分阶段)**. **W98 累计 commits 守恒 + 锚点范式 +14 据实上报**. W19 选项 A 维持. W99+ 派工顺序表预留 + W99 P1 附加件 7 UI 改进清单 (KnowledgeView + Mobile + 视觉 + 文案 + 匿名 + analytics 维度).
+
+**W98 N-3 据实上报 18 项 (派工 v10 §5)**: 1 任务目标完成度 ✅ 报告完成 / 2 文件清单 2 新建 1 改 / 3 件 7 偏差 5 处对照 / 4 SearchLog ORM 11+20 字段实测 / 5 chat_feedback 1 endpoint + best-effort / 6 回收率 3 定义 / 7 数据样本本机不可达 / 8 选项 A 降级风险 / 9 选项 B 派工原意 / 10 选项 C 双轨分阶段 / 11 **主拍推荐选项 C** / 12 UI 改进 6 类 / 13 0 production code = 0 / 14 alembic 1 head 093 / 15 锚点 W98 +14 / 16 类 20.33 沉淀 / 17 push 待验证 / 18 风险 0.
+
+**W98 N-3 沉淀文件**:
+- `docs/w98-n3-searchlog-ctr-2026-08-01.md` (250+ 行 runbook: 派工 brief 偏差 + SearchLog ORM 全文 + chat_feedback 全文 + 回收率 3 定义 + 实际数据不可达 + 3 方案对比 + UI 改进清单 6 类 + 据实上报 18 项 + W99+ 派工建议)
+- `memory/w98-n3-searchlog-ctr-2026-08-01.md` (本任务沉淀: 启动 5 段 + 类 20.33 + 据实上报 + 类 20.33.d 双轨分阶段)
+
+**W98 N-3 1 新铁律 (类 20.33 件 7 双错配沉淀)**:
+- **类 20.33 件 7 CTR 派工 brief 偏差 + 埋点未启用双错配**: 派工 v10 §0 件 7 期望 "feedback API ≥ 18" 错配件 7 真语义 "SearchLog CTR ≥ 30% (click/曝光, PR6/7 SQL 视图)", 14/14 PASS 已 100% 覆盖 P1-D3 + P2-E2E, 件 7 真守恒待 W99 P1 实施. PR6 grand closure self-report "前端接通" 实际**仅有 API 定义, 无 view 调用** (`grep web/src/views --include="*.vue"` 仅命中搜索 UI), 埋点未启用导致 SearchLog 表累积数据 = 0 (或历史 seed), CTR 真回收率**永久不可测**, 即使真环境跑也无法重现 PR6/7 ≥ 30% 期望. 修复路径: 双轨分阶段 (选项 C), 短期调低阈值 ≥ 15% + 中期 UI 改进 (W99 P1) + 长期回归 ≥ 30% (W101+). 与类 20.112 关系: 类 20.112 (W98 P2-GATE feedback API ≥ 18 vs 14) 是 N-3 调研铺垫, 类 20.33 (W98 N-3) 是真语义澄清 + 错配沉淀. UI 改进清单 6 类: (1) KnowledgeView 搜索结果点击埋点接通 (recordSearchEvent + recordClick) (2) MobileKnowledgeView 同样接通 (3) 视觉强化 top-1 高亮 (4) FeedbackButtons 文案激励 (👍 "回答有帮助" / 👎 "需要改进" / prompt "帮助我们回答得更好") (5) 匿名用户填补 (`user_id > 0` 守卫放开, 存 session_id + IP hash) (6) analytics.py 聚合 answer_rating 维度. W99 P1 派工必含 (1)(2)(3)(4)(5), (6) 留 P3-D grand closure.
+
