@@ -186,27 +186,26 @@ section "步骤 3/5: Git commit (web/dist force-add)"
 
 if [ "$DRY_RUN" = "1" ]; then
     info "  [DRY-RUN] 检查 web/dist 是否需要 force-add"
-    info "  [DRY-RUN] 检查是否有未跟踪的 manifest.{hash}.webmanifest (必须 force-add, .gitignore 拦了)"
+    info "  [DRY-RUN] web/dist/ 整个目录被 .gitignore 拦了, 改任何文件必须 force-add -A"
 else
-    # 检查新增的 hashed manifest 文件 (vite-plugin-pwa 输出, .gitignore 拦了必须 force-add)
-    NEW_MANIFEST=$(git status --porcelain web/dist/ 2>/dev/null | grep "^??" | grep "manifest\..*\.webmanifest$" | head -3)
-    if [ -n "$NEW_MANIFEST" ]; then
-        warn "发现新增 hashed manifest 文件 (未跟踪):"
-        echo "$NEW_MANIFEST" | while IFS= read -r line; do info "  $line"; done
-        info "逐一 force-add (不能用 git add web/dist/ 因为 .gitignore 拦了)..."
-        echo "$NEW_MANIFEST" | awk '{print $2}' | while IFS= read -r f; do
+    # 关键: web/dist/ 整个目录被 .gitignore 拦了 (CLAUDE.md 2026-07-14 铁律, 服务器 deploy-auto.sh
+    # git clean -fdx -e web/dist 排除, 依赖 git 里已 force-add 的 dist), 所以任何 web/dist 改动都
+    # 必须 git add -f -A, 不能用 git add web/dist/ (会全部被 .gitignore 静默忽略)
+    info "force-add 整个 web/dist (必须 -f, .gitignore 拦了)..."
+    git add -f -A web/dist/ 2>&1 | tail -3
+
+    # 二次检查: stage 后是否还有 untracked web/dist 文件 (健全性)
+    UNTRACKED_DIST=$(git status --porcelain web/dist/ 2>/dev/null | grep "^??" | head -3)
+    if [ -n "$UNTRACKED_DIST" ]; then
+        warn "⚠️ web/dist 仍有 untracked 文件 (可能 git add -f 被某个 rename 干扰):"
+        echo "$UNTRACKED_DIST" | while IFS= read -r line; do info "  $line"; done
+        info "逐一 force-add 兜底..."
+        echo "$UNTRACKED_DIST" | awk '{print $2}' | while IFS= read -r f; do
             if [ -f "$f" ]; then
                 git add -f "$f"
                 info "  + $f"
             fi
         done
-    fi
-
-    # 检查整个 dist 是否有改动
-    if ! git diff --quiet HEAD -- web/dist/ 2>/dev/null; then
-        info "web/dist 有改动, 添加..."
-        git add web/dist/
-        info "✓ web/dist 已 stage"
     fi
 
     # 检查是否有 staged 改动需要 commit
