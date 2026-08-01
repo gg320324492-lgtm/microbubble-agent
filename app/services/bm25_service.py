@@ -135,6 +135,40 @@ class BM25Service:
 # 增量索引走 BM25IncrementalIndex, 由 knowledge_service 钩子调用
 # =====================================================================
 
+# =====================================================================
+# W100 P2 (commit +4) 模块级 helper — 不动 BM25Service 类内任何 def
+# 派工 brief 件 4a 老核心 unchanged. 与 PR3 增量索引模式一致:
+#   - _incremental_add_document / _incremental_remove_document / _incremental_search
+#   - _tokenize_for_bm25 (新增): 模块级 tokenizer, 供 paragraph_retriever 复用
+# =====================================================================
+
+
+def _tokenize_for_bm25(text: str) -> List[str]:
+    """W100 P2 模块级 BM25 tokenizer — 复用 BM25Service 的清洗 + jieba + 停用词规则
+
+    Args:
+        text: 任意文本
+
+    Returns:
+        List[str] token 列表 (已应用 STOP_WORDS + 单字符 + 纯数字过滤)
+
+    Notes:
+        - 与 BM25Service._tokenize 等效 (派工件 4a "不动类内 def" 是约束, 不禁止新增模块级 helper)
+        - 供 paragraph_retriever._bm25_chunk_search 复用 (避免重复实例化 BM25Service)
+    """
+    if not text:
+        return []
+    text = re.sub(r"[^一-鿿\w]+", " ", text)
+    tokens = list(jieba.cut(text))
+    return [
+        t.lower().strip()
+        for t in tokens
+        if t.lower().strip() not in STOP_WORDS
+        and len(t.strip()) > 1
+        and not t.strip().isdigit()
+    ]
+
+
 def _incremental_add_document(doc: dict) -> bool:
     """PR3 (W89 +3): 增量添加文档到 BM25 增量索引 (O(M) 非 O(N))
 
