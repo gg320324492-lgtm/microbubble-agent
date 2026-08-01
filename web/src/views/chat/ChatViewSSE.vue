@@ -39,6 +39,7 @@ import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（外部可能已订阅 chat:retrieval-status）
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
+import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (📋 计划步骤用户可视化)
 import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
@@ -543,6 +544,11 @@ onUnmounted(() => {
               :started-at="msg.phaseStartedAt"
               :found-count="msg.foundCount"
               :retry-count="msg.retryCount"
+            />
+            <!-- ===== W100 +22 plan_step 折叠展开：放在 ThinkingCapsule 之后、ToolTrace 之前 ===== -->
+            <PlanSteps
+              v-if="msg.plan && msg.plan.length"
+              :steps="msg.plan"
             />
             <TransitionGroup v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
               tag="div" name="trace" class="tool-trace">

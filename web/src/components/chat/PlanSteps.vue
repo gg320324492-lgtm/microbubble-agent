@@ -1,0 +1,369 @@
+<!--
+  PlanSteps.vue — W100 +22 plan_step 折叠展开
+
+  设计约束（用户视角 P0 #2）：
+  - 折叠态：📋 计划中: N 个步骤
+  - 展开态：列出 step / tool / status（01/02/03 编号 + status 圆点）
+  - 全部 done 后自动折叠
+  - 与 ThinkingCapsule 风格统一：3px 左蓝边 + fadeSlideUp + stagger
+  - a11y: role=button + aria-expanded + keyboard Enter/Space
+  - 移动端 compact 模式：36px tap target
+  - dark mode: 走非 scoped 块（v60-v67 教训）
+
+  数据结构 contract（来自 useChatStream.ts:126）：
+  Array<{ step: string; tool?: string; status: 'pending' | 'running' | 'done' }>
+-->
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+
+interface PlanStep {
+  step: string
+  tool?: string
+  status: 'pending' | 'running' | 'done'
+}
+
+const props = withDefaults(
+  defineProps<{
+    steps: PlanStep[]
+    compact?: boolean
+  }>(),
+  { compact: false },
+)
+
+/** 默认折叠。用户点击展开。全部 done 后自动折叠。 */
+const expanded = ref(false)
+
+const doneCount = computed(() => props.steps.filter((s) => s.status === 'done').length)
+const runningIndex = computed(() => props.steps.findIndex((s) => s.status === 'running'))
+const total = computed(() => props.steps.length)
+
+/** 摘要文案 — 不同状态下显示不同进度感 */
+const summary = computed(() => {
+  const t = total.value
+  const d = doneCount.value
+  if (d === 0) return `计划中: ${t} 个步骤`
+  if (d === t) return `计划完成: ${t} 个步骤`
+  return `计划中: ${d}/${t} 步骤`
+})
+
+/** 全部 done 后自动折叠（一次性 watch） */
+watch(
+  doneCount,
+  (newVal, oldVal) => {
+    if (oldVal > 0 && newVal === total.value && total.value > 0) {
+      expanded.value = false
+    }
+  },
+  { flush: 'sync' },
+)
+
+function toggle() {
+  expanded.value = !expanded.value
+}
+
+function pad(n: number): string {
+  return String(n + 1).padStart(2, '0')
+}
+
+function statusGlyph(s: PlanStep['status']): string {
+  if (s === 'done') return '✓'
+  if (s === 'running') return ''
+  return ''
+}
+</script>
+
+<template>
+  <div
+    v-if="steps && steps.length"
+    class="plan-steps"
+    :class="{ compact }"
+    data-testid="plan-steps"
+  >
+    <div
+      class="plan-steps-header"
+      role="button"
+      tabindex="0"
+      :aria-expanded="expanded ? 'true' : 'false'"
+      :aria-controls="`plan-steps-detail`"
+      :aria-label="`${expanded ? '收起' : '展开'}计划步骤: ${summary}`"
+      @click="toggle"
+      @keydown.enter.prevent="toggle"
+      @keydown.space.prevent="toggle"
+    >
+      <span class="plan-steps-icon" aria-hidden="true">📋</span>
+      <span class="plan-steps-summary" data-testid="plan-steps-summary">{{ summary }}</span>
+      <span v-if="runningIndex >= 0 && !expanded" class="plan-steps-running-dot" aria-hidden="true" />
+      <span class="plan-steps-toggle" aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span>
+    </div>
+
+    <Transition name="plan-steps-detail">
+      <ul
+        v-if="expanded"
+        id="plan-steps-detail"
+        class="plan-steps-list"
+        data-testid="plan-steps-list"
+        role="list"
+      >
+        <li
+          v-for="(s, i) in steps"
+          :key="i"
+          class="plan-step"
+          :class="[`plan-step-${s.status}`, `stagger-${Math.min(i + 1, 6)}`]"
+          :data-testid="`plan-step-${i}`"
+          :data-status="s.status"
+        >
+          <span class="plan-step-num" aria-hidden="true">{{ pad(i) }}</span>
+          <span class="plan-step-name" :data-testid="`plan-step-${i}-name`">{{ s.step }}</span>
+          <span
+            v-if="s.tool"
+            class="plan-step-tool"
+            :data-testid="`plan-step-${i}-tool`"
+            >{{ s.tool }}</span
+          >
+          <span
+            class="plan-step-status"
+            :class="`plan-step-status-${s.status}`"
+            :data-testid="`plan-step-${i}-status`"
+            :aria-label="s.status === 'done' ? '已完成' : s.status === 'running' ? '进行中' : '待执行'"
+          >
+            <span v-if="s.status === 'running'" class="plan-step-spinner" aria-hidden="true" />
+            <span v-else-if="s.status === 'done'" class="plan-step-tick" aria-hidden="true">✓</span>
+            <span v-else class="plan-step-pending" aria-hidden="true" />
+          </span>
+        </li>
+      </ul>
+    </Transition>
+  </div>
+</template>
+
+<style scoped>
+.plan-steps {
+  display: block;
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-regular);
+  background: var(--color-bg-card);
+  border-left: 3px solid var(--color-primary);
+  padding: 4px 0;
+  margin: 4px 0 8px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.plan-steps.compact {
+  font-size: 11.5px;
+  padding: 2px 0;
+  margin: 2px 0 6px;
+}
+
+.plan-steps-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  min-height: 44px;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+  transition: background 150ms ease;
+}
+.plan-steps.compact .plan-steps-header {
+  min-height: 36px;
+  padding: 4px 9px;
+  gap: 6px;
+}
+.plan-steps-header:hover { background: var(--color-primary-bg); }
+.plan-steps-header:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.plan-steps-icon {
+  font-size: 13px;
+}
+.plan-steps.compact .plan-steps-icon {
+  font-size: 11px;
+}
+
+.plan-steps-summary {
+  font-weight: 500;
+  flex: 1;
+}
+
+.plan-steps-running-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: var(--animation-pulse-dot, pulse-dot 1.4s ease-in-out infinite);
+}
+
+.plan-steps-toggle {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  min-width: 12px;
+  text-align: right;
+}
+
+.plan-steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.plan-steps.compact .plan-steps-list {
+  padding: 2px 9px 6px;
+}
+
+.plan-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 12.5px;
+}
+.plan-steps.compact .plan-step {
+  padding: 3px 4px;
+  font-size: 11px;
+  gap: 6px;
+}
+
+/* pending 步骤半透明 */
+.plan-step-pending {
+  opacity: 0.55;
+}
+/* running 高亮 — 背景浅珊瑚 */
+.plan-step-running {
+  background: var(--color-primary-bg);
+  opacity: 1;
+}
+/* done 实色 */
+.plan-step-done {
+  opacity: 1;
+}
+
+.plan-step-num {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  min-width: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-step-name {
+  flex: 1;
+  color: var(--color-text-regular);
+}
+
+.plan-step-tool {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary, #F0F2F5);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+}
+.plan-steps.compact .plan-step-tool {
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+.plan-step-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  min-height: 18px;
+}
+
+.plan-step-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-primary-bg);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: var(--animation-spin, spin 0.8s linear infinite);
+}
+
+.plan-step-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.plan-step-pending {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-placeholder, #C0C4CC);
+}
+
+/* stagger 入场 — 与 ToolTraceItem 保持一致 */
+.plan-step.stagger-1 { animation: var(--animation-fadeSlideUp, fadeSlideUp) 0.2s ease-out 0.0s both; }
+.plan-step.stagger-2 { animation: var(--animation-fadeSlideUp, fadeSlideUp) 0.2s ease-out 0.05s both; }
+.plan-step.stagger-3 { animation: var(--animation-fadeSlideUp, fadeSlideUp) 0.2s ease-out 0.10s both; }
+.plan-step.stagger-4 { animation: var(--animation-fadeSlideUp, fadeSlideUp) 0.2s ease-out 0.15s both; }
+.plan-step.stagger-5 { animation: var(--animation-fadeSlideUp, fadeSlideUp) 0.2s ease-out 0.20s both; }
+.plan-step.stagger-6 { animation: var(--animation-fadeSlideUp, fadeSlideUp) 0.2s ease-out 0.25s both; }
+
+/* 展开收起过渡 */
+.plan-steps-detail-enter-active {
+  transition: opacity var(--duration-fast, 150ms) ease, transform var(--duration-fast, 150ms) ease;
+}
+.plan-steps-detail-leave-active {
+  transition: opacity var(--duration-fast, 150ms) ease, transform var(--duration-fast, 150ms) ease;
+}
+.plan-steps-detail-enter-from { opacity: 0; transform: translateY(-4px); }
+.plan-steps-detail-leave-to { opacity: 0; transform: translateY(-4px); }
+
+/* 脉冲呼吸 — 给 running dot 用 */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-step,
+  .plan-steps-running-dot,
+  .plan-step-spinner,
+  .plan-steps-detail-enter-active,
+  .plan-steps-detail-leave-active {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+</style>
+
+<!-- dark mode 走非 scoped 块（v60-v67 教训） -->
+<style>
+[data-theme='dark'] .plan-steps {
+  background: var(--color-bg-card);
+  border-left-color: var(--color-primary);
+}
+[data-theme='dark'] .plan-steps-header:hover { background: var(--color-bg-hover); }
+[data-theme='dark'] .plan-step-tool {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+[data-theme='dark'] .plan-step-running {
+  background: rgba(var(--color-primary-rgb), 0.1);
+}
+</style>
