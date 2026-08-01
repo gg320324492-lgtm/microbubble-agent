@@ -7,6 +7,12 @@
 
     <LongPressWrapper class="bubble-wrapper" @longpress="onLongPress">
       <div class="bubble" :class="`bubble-${msg.role}`">
+        <!-- [CHAT-P1-E E5] 移动端检索过程可视化 -->
+        <RetrievalStatus
+          v-if="msg.role === 'assistant' && msg.state === 'streaming'"
+          :session-id="sessionId"
+          compact
+        />
         <!-- 工具调用 trace -->
         <div v-if="msg.toolTrace && msg.toolTrace.length" class="tool-trace">
           <div
@@ -39,6 +45,13 @@
             :block="rb"
           />
         </div>
+
+        <!-- [CHAT-P1-E E2] 移动端追问 chips (复用桌面组件, 走 ResponsiveProps.sessionId) -->
+        <FollowUpChips
+          v-if="msg.role === 'assistant' && msg.state === 'idle'"
+          :session-id="sessionId"
+          :on-click="onFollowUpClick"
+        />
 
         <!-- 错误 -->
         <div v-if="msg.error" class="msg-error">⚠️ {{ msg.error }}</div>
@@ -82,21 +95,35 @@
  * - 富文本块通过 MobileRichCard 渲染
  * - typing 动画 3 个点
  * - 完成态显示 token 数 + TTS 按钮
+ *
+ * [CHAT-P1-E] E1/E2/E5 mobile 端:
+ * - E1: KnowledgeRefBlock 内部已带 long-press ElMessageBox 弹窗, 移动端自动启用
+ * - E2: FollowUpChips 复用桌面组件
+ * - E5: RetrievalStatus 复用桌面组件 (compact 模式)
  */
 
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileRichCard from './MobileRichCard.vue'
+import FollowUpChips from '@/components/chat/FollowUpChips.vue'
+import RetrievalStatus from '@/components/chat/RetrievalStatus.vue'
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
   msg: { type: Object, required: true },
   isLast: { type: Boolean, default: false },
+  // [CHAT-P1-E] sessionId + onFollowUpClick 透传 (从父 MobileChatView 传)
+  sessionId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['longpress', 'play-tts'])
+const emit = defineEmits(['longpress', 'play-tts', 'followup'])
 
 function onLongPress(e) {
   emit('longpress', props.msg, e)
+}
+
+// [CHAT-P1-E E2] 追问点击 → emit 给父组件 (父组件触发 sendSSE)
+function onFollowUpClick(suggestion) {
+  emit('followup', suggestion)
 }
 </script>
 

@@ -13,8 +13,10 @@
         <MobileMessageBubble
           :msg="msg"
           :is-last="idx === messages.length - 1"
+          :session-id="sessionId"
           @longpress="(e) => $emit('longpress', msg, e)"
           @play-tts="(text) => $emit('play-tts', text)"
+          @followup="(text) => $emit('followup', text)"
         />
       </template>
     </TransitionGroup>
@@ -60,9 +62,11 @@ const props = defineProps({
   messages: { type: Array, default: () => [] },
   /** 是否自动滚动到底部（用户已在底部时） */
   autoScroll: { type: Boolean, default: true },
+  /** [CHAT-P1-E] session id 透传给 bubble (E2 followup + E5 retrieval status) */
+  sessionId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['longpress', 'play-tts', 'quick-action'])
+const emit = defineEmits(['longpress', 'play-tts', 'quick-action', 'followup'])
 
 const messagesRef = ref(null)
 const lastScrollTop = ref(0)

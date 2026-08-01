@@ -32,6 +32,9 @@ import ThinkingModeSwitch from '@/components/chat/ThinkingModeSwitch.vue'
 import ShareDialog from '@/components/chat/ShareDialog.vue'
 import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
+// #CHAT-P1-E E2 + E5
+import FollowUpChips from '@/components/chat/FollowUpChips.vue'
+import RetrievalStatus from '@/components/chat/RetrievalStatus.vue'
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -324,6 +327,12 @@ function autoResize() {
 function sendQuickMessage(t: string) { inputText.value = t; sendMessage(t) }
 function triggerImageUpload() { imageInputRef.value?.click() }
 function triggerFileUpload() { fileInputRef.value?.click() }
+
+// [CHAT-P1-E E2] 追问 chip 点击 → 触发新 SSE (复用 sendMessage 同 session)
+function onFollowUpClick(suggestion: string) {
+  inputText.value = suggestion
+  sendMessage(suggestion)
+}
 function openImage(url: string) { window.open(url, '_blank') }
 
 function handleImageSelect(e: Event) {
@@ -515,6 +524,11 @@ onUnmounted(() => {
             <el-icon><ChatDotRound /></el-icon>
           </el-avatar>
           <div class="bubble bot-bubble">
+            <!-- [CHAT-P1-E E5] 检索过程可视化: 默认可见, 不依赖 showThinking -->
+            <RetrievalStatus
+              v-if="msg.state === 'streaming'"
+              :session-id="sessionId"
+            />
             <div v-if="showThinking && msg.toolTrace && msg.toolTrace.length" class="tool-trace">
               <div v-for="(t, i) in msg.toolTrace" :key="i" class="trace-item" :class="t.state">
                 <span v-if="t.type === 'thinking'">{{ t.label }}</span>
@@ -539,6 +553,13 @@ onUnmounted(() => {
               <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
               <el-button v-if="msg.content" text size="small" @click="playTTSWrap(msg.content)" title="播放语音">🔊</el-button>
             </div>
+
+            <!-- [CHAT-P1-E E2] 追问 chips: assistant 回答完 (state=idle) 后显示 -->
+            <FollowUpChips
+              v-if="msg.role === 'assistant' && msg.state === 'idle'"
+              :session-id="sessionId"
+              :on-click="onFollowUpClick"
+            />
           </div>
         </div>
       </template>

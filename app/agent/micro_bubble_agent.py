@@ -703,6 +703,21 @@ class MicroBubbleAgent:
                                 model=event.model,
                                 thinking_tokens_used=event.thinking_tokens_used,
                             )
+                            # [CHAT-P1-E E2] 追问 chips: 从 last_turn.topics 派生 1-3 个
+                            # 模板追问 (best-effort, 绝不阻塞主链路)
+                            try:
+                                suggestions = self._build_followup_suggestions(
+                                    assistant_text=assistant_text,
+                                    tool_trace=assistant_tool_trace,
+                                    thinking_mode=thinking_mode,
+                                )
+                                if suggestions:
+                                    yield StreamEvent(
+                                        type="suggestions",
+                                        suggestions=suggestions,
+                                    )
+                            except Exception as sug_e:
+                                logger.warning(f"[chat_stream] suggestions 生成失败 (非阻塞): {sug_e}")
                             # CHAT-P0-D W98 +0: RAG 评估可选抽样钩子 (2 行, best-effort)
                             # EVAL_SAMPLE_RATE>0 时按概率 fire-and-forget 评估, 绝不阻断流式
                             if get_eval_sample_rate() > 0:
@@ -829,6 +844,81 @@ class MicroBubbleAgent:
         新行为：只删 session 内容，不动 meta。WS 断连时用 mark_dirty。
         """
         await session_manager.delete(session_id)
+
+    # =========================================================================
+    # [CHAT-P1-E E2] 追问 chips 生成 (best-effort, 绝不阻塞主链路)
+    # =========================================================================
+    def _build_followup_suggestions(
+        self,
+        assistant_text: str,
+        tool_trace: List[Dict[str, Any]],
+        thinking_mode: str = "balanced",
+    ) -> List[str]:
+        """从 assistant 回答 + 工具调用派生 1-3 个追问模板 (best-effort, 无 LLM 调用)
+
+        设计原则:
+        - **绝不**调 LLM (避免延迟阻塞主链路)
+        - 从工具调用 trace 提取关键 topic (search_knowledge / web_search / hybrid_retrieve)
+        - 兜底模板从回答前 100 字提取关键词
+        - 最多 3 个 chip, 少于 1 个返回空 list (前端不渲染)
+        """
+        suggestions: List[str] = []
+        try:
+            # 1. 从工具调用 trace 提取 topic
+            topics: List[str] = []
+            for t in (tool_trace or []):
+                if t.get("type") != "tool_use":
+                    continue
+                tool_name = t.get("name") or ""
+                tool_input = t.get("input") or {}
+                # 从 search 工具的 query 提取 topic
+                if tool_name in ("search_knowledge", "web_search", "hybrid_retrieve"):
+                    query = (tool_input.get("query") or tool_input.get("q") or "").strip()
+                    if query and len(query) < 30:
+                        topics.append(query)
+
+            # 2. 从 assistant 文本提取关键词 (前 100 字, 简单按标点切分)
+            if not topics and assistant_text:
+                snippet = assistant_text.strip()[:100]
+                # 按中英文标点和空格切分, 取 2-5 字短词
+                import re as _re
+                words = _re.split(r'[，。！？；\s,.!?;]+', snippet)
+                for w in words:
+                    w = w.strip()
+                    if 2 <= len(w) <= 8 and _re.search(r'[一-龥]', w):
+                        topics.append(w)
+                    if len(topics) >= 3:
+                        break
+
+            # 3. 派生模板
+            if topics:
+                t1 = topics[0]
+                suggestions.append(f"展开讲讲 {t1}")
+            if len(topics) >= 2:
+                t2 = topics[1]
+                suggestions.append(f"具体说说 {t2}")
+            if len(topics) >= 3:
+                t3 = topics[2]
+                suggestions.append(f"还有哪些关于 {t3} 的内容")
+            else:
+                # 兜底: 加一个通用的"举个例子"追问 (deep 模式更深入)
+                if thinking_mode == "deep":
+                    suggestions.append("能举个具体例子吗")
+                else:
+                    suggestions.append("能再说详细一点吗")
+
+            # 去重 + 截断到 3 个
+            seen = set()
+            unique = []
+            for s in suggestions:
+                if s not in seen:
+                    seen.add(s)
+                    unique.append(s)
+                if len(unique) >= 3:
+                    break
+            return unique
+        except Exception:
+            return []
 
     # =========================================================================
     # 内部方法
