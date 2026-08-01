@@ -424,7 +424,7 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
 }
 [data-theme="dark"] .entity-pagination .el-pager li.is-active {
   background-color: var(--color-primary) !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
 }
 [data-theme="dark"] .entity-pagination .el-pager li:hover,
 [data-theme="dark"] .entity-pagination .btn-prev:hover,

@@ -90,7 +90,7 @@ function goSubscription() {
   border-left: 3px solid var(--color-primary);
 }
 [data-theme="dark"] .action-item.highlight .action-label {
-  color: #FFB347;
+  color: rgb(255, 179, 71);
   font-weight: 700;
 }
 </style>

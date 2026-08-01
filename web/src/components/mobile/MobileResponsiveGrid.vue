@@ -297,7 +297,7 @@ export default {
 
 .col-btn.active {
   background: var(--color-primary, #FF7A5C);
-  color: #fff;
+  color: var(--el-color-white);
   border-color: var(--color-primary, #FF7A5C);
 }
 

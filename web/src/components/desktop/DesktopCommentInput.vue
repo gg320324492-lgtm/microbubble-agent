@@ -270,7 +270,7 @@ onMounted(() => {
   height: 28px;
   border-radius: 50%;
   background: var(--color-primary, #ff7a5c);
-  color: #fff;
+  color: var(--el-color-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -317,7 +317,7 @@ onMounted(() => {
   height: 32px;
   padding: 0 18px;
   background: var(--color-primary, #ff7a5c);
-  color: #fff;
+  color: var(--el-color-white);
   border: none;
   border-radius: 8px;
   font-size: 13px;

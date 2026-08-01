@@ -251,7 +251,7 @@ function onChildReply(reply) {
   font-size: 14px;
   line-height: 1.55;
   color: var(--color-text-primary, #303133);
-  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .mci-body :deep(.mention) {
