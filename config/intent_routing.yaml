@@ -1,0 +1,43 @@
+# W100-RAG-3 Intent 路由策略
+# 类 20.126 铁律: intent 路由 weights 配置化, 不硬编码到 intent_router.py
+#
+# 当前实现: DEFAULT_INTENT_WEIGHTS 是 module-level dict (app/rag/intent_router.py),
+#          本 yaml 文件作为 ops 参考 + 未来 yaml/DB override 入口 (本任务未接).
+#
+# 5 类意图 × 4 路权重 (vector / bm25 / graph / rerank), 4 路 sum 接近 1.0 (允许 ±0.05 误差)
+#
+# 设计原则:
+#   - factual: 重向量 (具体事实/数据查 recall), 弱图 (factual 一般不需要跨文档图)
+#   - conceptual: 向量+BM25+图均衡 (概念解释/原理)
+#   - procedural: 重 BM25 (操作步骤, 关键词匹配强)
+#   - multi_doc_synthesis: 重图 (跨文档关联)
+#   - hypothesis_generation: 4 路均衡 (无明确倾向)
+#
+# 如需调整, 改 DEFAULT_INTENT_WEIGHTS 模块级 dict (app/rag/intent_router.py).
+# 测试可在 conftest/fixture 里 patch DEFAULT_INTENT_WEIGHTS 验证.
+intent_weights:
+  factual:
+    vector: 0.6
+    bm25: 0.2
+    graph: 0.0
+    rerank: 0.2
+  conceptual:
+    vector: 0.4
+    bm25: 0.3
+    graph: 0.1
+    rerank: 0.2
+  procedural:
+    vector: 0.2
+    bm25: 0.4
+    graph: 0.2
+    rerank: 0.2
+  multi_doc_synthesis:
+    vector: 0.3
+    bm25: 0.2
+    graph: 0.3
+    rerank: 0.2
+  hypothesis_generation:
+    vector: 0.25
+    bm25: 0.25
+    graph: 0.25
+    rerank: 0.25
