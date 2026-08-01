@@ -56,6 +56,20 @@ class HybridRetriever:
         # 理由: cross-encoder 对更大候选集更稳定, GPU 推理 30ms 可忽略
         candidate_k = top_k * 5 if enable_rerank else top_k
 
+        # W99 P2 性能优化 (commit +5): 预计算 query embedding 并行化
+        # 原行为: _vector_search 内串行 await generate_embedding (CPU/IO bound)
+        # 优化: 把 embedding 计算提到 gather 之前, 与 BM25 并发执行
+        # 关键: 这是 asyncio.create_task (非阻塞), gather 仍负责收齐结果
+        vector_query_embedding_task = None
+        if enable_vector:
+            try:
+                from app.services.embedding_service import get_or_compute_query_embedding
+                vector_query_embedding_task = asyncio.create_task(
+                    get_or_compute_query_embedding(query, has_query_prompt=True)
+                )
+            except Exception as e:
+                logger.debug(f"[W99 P2] precompute embedding skip: {e}")
+
         # 并发执行三路检索
         tasks = []
         task_names = []
@@ -73,6 +87,13 @@ class HybridRetriever:
             return []
 
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # W99 P2: 消费预计算的 embedding task (若有), 不影响主流程
+        if vector_query_embedding_task is not None:
+            try:
+                _ = await vector_query_embedding_task  # cache primed, no use of return value
+            except Exception as e:
+                logger.debug(f"[W99 P2] precomputed embedding consume skip: {e}")
 
         vector_results = []
         bm25_results = []

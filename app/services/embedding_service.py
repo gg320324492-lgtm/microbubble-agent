@@ -216,3 +216,85 @@ async def generate_embeddings(
     except Exception as e:
         logger.warning(f"Embedding 生成失败: {e}")
         return None
+
+
+# ============================================================================
+# W99 P2 RAG 性能优化 (commit +4): query 侧 embedding Redis 缓存复用
+# ============================================================================
+# 设计原则:
+#   1. 只缓存 query 侧 (for_query=True) — document 侧无限且低重复率
+#   2. key = sha256(query)[:16] — 16 hex 字符 64-bit 空间, 足以区分常用 query
+#   3. TTL 24h — query 变化多, 1 天合理 (用户重复问相似问题)
+#   4. 失败 best-effort — Redis 不可用时 silently 走原路径, 不阻塞主流程
+#   5. 缓存命中 < 5ms (本地 Redis round-trip), 未命中 = 原计算时间
+# ============================================================================
+
+QUERY_EMBEDDING_CACHE_PREFIX = "emb:q:"
+QUERY_EMBEDDING_CACHE_TTL_SECONDS = 86400  # 24h
+
+
+def _query_cache_key(query: str) -> str:
+    """生成 query embedding 缓存 key (sha256[:16])"""
+    import hashlib
+    digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
+    return f"{QUERY_EMBEDDING_CACHE_PREFIX}{digest}"
+
+
+async def get_or_compute_query_embedding(
+    query: str,
+    has_query_prompt: bool = MODEL_HAS_QUERY_PROMPT,
+) -> Optional[List[float]]:
+    """query 侧 embedding 缓存复用 (W99 P2)
+
+    行为契约:
+      - 缓存命中: 返回 list[float], < 5ms
+      - 缓存未命中: 调 generate_embedding 计算, 写缓存, 返回
+      - Redis 不可用: silently 降级到 generate_embedding, 不抛异常
+      - 计算失败: 返回 None (与 generate_embedding 一致)
+
+    Args:
+        query: 用户查询文本
+        has_query_prompt: 模型是否支持 query prefix (默认走 BGE-m3 / Qwen3-Embedding 默认)
+    """
+    cache_key = _query_cache_key(query)
+
+    # 1. 查缓存 (best-effort)
+    try:
+        from app.core.redis import get_redis
+        redis = await get_redis()
+        cached = await redis.get(cache_key)
+        if cached is not None:
+            # JSON 反序列化
+            import json
+            embedding = json.loads(cached)
+            logger.debug(f"[emb cache HIT] {cache_key} dim={len(embedding)}")
+            return embedding
+    except Exception as e:
+        # Redis 不可用 / 连接失败 → 降级到计算路径
+        logger.debug(f"[emb cache lookup miss/fail] {cache_key}: {e}")
+
+    # 2. 计算 (调用现有 async 路径)
+    embedding = await generate_embedding(
+        text=query,
+        for_query=True,
+        has_query_prompt=has_query_prompt,
+    )
+    if embedding is None:
+        return None
+
+    # 3. 写缓存 (best-effort, 不阻塞主流程)
+    try:
+        from app.core.redis import get_redis
+        import json
+        redis = await get_redis()
+        await redis.setex(
+            cache_key,
+            QUERY_EMBEDDING_CACHE_TTL_SECONDS,
+            json.dumps(embedding),
+        )
+        logger.debug(f"[emb cache SET] {cache_key} dim={len(embedding)} ttl={QUERY_EMBEDDING_CACHE_TTL_SECONDS}s")
+    except Exception as e:
+        # Redis 写失败 — 不影响主流程
+        logger.debug(f"[emb cache set fail] {cache_key}: {e}")
+
+    return embedding
