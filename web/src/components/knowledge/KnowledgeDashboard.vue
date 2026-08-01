@@ -82,9 +82,10 @@
 
       <div v-else class="knowledge-grid">
         <KnowledgeCard
-          v-for="item in displayedItems"
+          v-for="(item, idx) in displayedItems"
           :key="item.id"
           :item="item"
+          :top-result="idx === 0"
           @click="$emit('view-detail', item.id)"
           @edit="$emit('edit', item)"
           @delete="$emit('delete', item)"
