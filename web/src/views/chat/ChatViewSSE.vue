@@ -35,7 +35,9 @@ import TagsEditor from '@/components/chat/TagsEditor.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 // #CHAT-P1-E E2 + E5
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
-import RetrievalStatus from '@/components/chat/RetrievalStatus.vue'
+// ===== W99 +15 桌面/移动接入：ThinkingCapsule 完全替代 RetrievalStatus 在 assistant 气泡内的所有挂载 =====
+// RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（外部可能已订阅 chat:retrieval-status）
+import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -525,10 +527,14 @@ onUnmounted(() => {
             <el-icon><ChatDotRound /></el-icon>
           </el-avatar>
           <div class="bubble bot-bubble">
-            <!-- [CHAT-P1-E E5] 检索过程可视化: 默认可见, 不依赖 showThinking -->
-            <RetrievalStatus
-              v-if="msg.state === 'streaming'"
-              :session-id="sessionId"
+            <!-- ===== W99 +15 统一 Thinking Capsule：assistant 占位 → done 全程胶囊伴随 =====
+                 取代 3-dot typing-bubble + RetrievalStatus（已摘挂载保留文件） -->
+            <ThinkingCapsule
+              v-if="msg.role === 'assistant' && msg.phase"
+              :phase="msg.phase"
+              :started-at="msg.phaseStartedAt"
+              :found-count="msg.foundCount"
+              :retry-count="msg.retryCount"
             />
             <div v-if="showThinking && msg.toolTrace && msg.toolTrace.length" class="tool-trace">
               <div v-for="(t, i) in msg.toolTrace" :key="i" class="trace-item" :class="t.state">
@@ -544,10 +550,6 @@ onUnmounted(() => {
             </div>
 
             <div v-if="msg.error" class="msg-error">⚠️ {{ msg.error }}</div>
-
-            <div v-if="msg.state === 'streaming' && !msg.content && !msg.toolTrace?.length" class="typing-bubble">
-              <span /><span /><span />
-            </div>
 
             <div v-if="msg.state === 'idle' && (msg.usage || msg.durationMs)" class="msg-meta">
               <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
@@ -940,10 +942,8 @@ onUnmounted(() => {
 .msg-error { color: var(--color-danger); font-size: 13px; margin-top: 8px; }
 .msg-meta { font-size: 11px; color: var(--color-text-secondary); margin-top: 8px; display: flex; gap: 12px; }
 
-.typing-bubble { display: inline-flex; gap: 4px; }
-.typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); animation: td 1.4s infinite; }
-.typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
-.typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
+/* ===== W99 +15 typing-bubble CSS 删除（已被 ThinkingCapsule 取代） ===== */
+
 .welcome-hero { text-align: center; padding: 60px 20px 20px; }
 .hero-avatar { background: var(--gradient-welcome-hero); margin-bottom: 16px; }
 .welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }
