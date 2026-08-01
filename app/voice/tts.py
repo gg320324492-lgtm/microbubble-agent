@@ -4,7 +4,7 @@ import logging
 import edge_tts
 from typing import AsyncGenerator
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("microbubble.tts")
 
 
 # 2026-06-13 修复：edge-tts 6.1.9 的 TrustedClientToken 已过期，
@@ -92,9 +92,13 @@ class TextToSpeech:
             text=text, voice=voice_id, rate=rate, volume=volume
         )
 
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                yield chunk["data"]
+        try:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]
+        except Exception as e:
+            logger.error(f"TTS streaming failed: {e}", exc_info=True)
+            raise
 
     def get_voice_options(self) -> list:
         return [
