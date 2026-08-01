@@ -78,6 +78,11 @@ class SearchLog(Base, TimestampMixin):
     clicked_id = Column(Integer, nullable=True)
     click_position = Column(Integer, nullable=True)  # 1-based, 在 top_ids 中的位置
 
+    # W98 CHAT-P1-D3: 答案评价 (-1=👎 / 1=👍 / NULL=未反馈)
+    # 与 feedback.message_id 同步写入: 前端 POST /chat/feedback 双写
+    # CHECK 约束 ck_search_logs_answer_rating 在 alembic 093 实施 (server 端 NULL + 强校验)
+    answer_rating = Column(Integer, nullable=True, index=True)
+
     # 上下文
     session_id = Column(String(100), nullable=True, index=True)  # 前端生成 UUID
     source = Column(
