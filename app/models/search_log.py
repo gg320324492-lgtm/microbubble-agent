@@ -121,6 +121,11 @@ class SearchLog(Base, TimestampMixin):
     cache_similarity = Column(Float, nullable=True)  # 语义相似命中 cosine 值, 精确命中 1.0
     # ==================== W99-RAG-1 扩展字段结束 ====================
 
+    # ==================== W99-RAG-2 Citation 段落级溯源 扩展字段 ====================
+    # 仅追加, 不改老字段, 全部 nullable=True (老数据兼容, 不破坏已有 schema)
+    citation_count = Column(Integer, nullable=True)  # 本次召回生成的 citation 数
+    # ==================== W99-RAG-2 扩展字段结束 ====================
+
     # 时间戳 (TimestampMixin 提供 created_at/updated_at)
     # 单独加 raw 字段方便查询时直接 SELECT
     # 注: TimestampMixin.created_at 已是 DateTime, 这里不重复定义
