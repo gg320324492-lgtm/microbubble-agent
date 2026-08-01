@@ -536,18 +536,26 @@ onUnmounted(() => {
               :found-count="msg.foundCount"
               :retry-count="msg.retryCount"
             />
-            <div v-if="showThinking && msg.toolTrace && msg.toolTrace.length" class="tool-trace">
-              <div v-for="(t, i) in msg.toolTrace" :key="i" class="trace-item" :class="t.state">
+            <TransitionGroup v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
+              tag="div" name="trace" class="tool-trace">
+              <div v-for="(t, i) in msg.toolTrace" :key="`${i}-${t.name || t.label}`"
+                class="trace-item" :class="[t.state, `stagger-${Math.min(i + 1, 6)}`]">
                 <span v-if="t.type === 'thinking'">{{ t.label }}</span>
-                <span v-else>🔧 {{ t.name }} {{ t.state === 'running' ? '...' : '✓' }}<span v-if="t.duration_ms" class="duration"> {{ t.duration_ms }}ms</span></span>
+                <span v-else>
+                  <span v-if="t.state === 'running'" class="trace-spinner" aria-hidden="true" />
+                  🔧 {{ t.name }} {{ t.state === 'running' ? '' : '✓' }}
+                  <span v-if="t.duration_ms" class="duration"> {{ t.duration_ms }}ms</span>
+                </span>
               </div>
-            </div>
+            </TransitionGroup>
 
             <div v-if="msg.content" class="msg-content" v-html="renderMarkdown(msg.content)" />
 
-            <div v-if="msg.richBlocks && msg.richBlocks.length" class="rich-blocks">
-              <RichContent v-for="(rb, i) in msg.richBlocks" :key="i" :block="rb" />
-            </div>
+            <TransitionGroup v-if="msg.richBlocks && msg.richBlocks.length"
+              tag="div" name="rb" class="rich-blocks">
+              <RichContent v-for="(rb, i) in msg.richBlocks" :key="rb.type + '-' + i"
+                :block="rb" :class="`stagger-${Math.min(i + 1, 6)}`" />
+            </TransitionGroup>
 
             <div v-if="msg.error" class="msg-error">⚠️ {{ msg.error }}</div>
 
@@ -921,6 +929,27 @@ onUnmounted(() => {
 .trace-item { font-size: 12px; color: var(--color-text-regular); padding: 2px 0; }
 .trace-item.running { color: var(--color-primary); }
 .trace-item .duration { color: var(--color-text-secondary); font-size: 11px; }
+
+/* ===== W99 +16 P1 连续性：trace/rich_block 渐进入场 ===== */
+.trace-enter-active { animation: var(--animation-fadeSlideUp); }
+.trace-leave-active { transition: opacity var(--duration-fast) var(--ease-in); }
+.trace-leave-to { opacity: 0; }
+.trace-spinner {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--color-primary-bg);
+  border-top-color: var(--color-primary);
+  animation: var(--animation-spin);
+}
+.rb-enter-active { animation: var(--animation-fadeSlideUp); }
+.rb-leave-active { transition: opacity var(--duration-fast) var(--ease-in); }
+.rb-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .trace-enter-active, .rb-enter-active, .trace-spinner { animation: none; }
+}
 
 /* 2026-06-14 收官：thinking toggle 按钮激活态高亮 */
 .thinking-toggle.active { color: var(--color-primary, #FF7A5C); background: var(--color-primary-bg); }
