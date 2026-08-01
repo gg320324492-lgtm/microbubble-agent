@@ -93,17 +93,37 @@ def _entity_overlap(question_entities: set, answer_entities: set) -> float:
     return len(matched) / len(question_entities)
 
 
-def _reformulate_query(question: str) -> str:
+def _reformulate_query(question: str, attempt: int = 0) -> str:
     """Query 重写 — 同义词扩展 + 关键词提取 + 实体替换
 
-    简单实现: 在 question 后追加 '相关' + '是什么', 给检索器更多 query token
-    生产可替换 LLM-driven rewrite, 当前派工要求是"主动重检索", 写就行
+    派工 v10 段 2.2 3 类实施:
+    1. 同义词扩展: 在 cleaned query 尾追加 '相关 解释 是什么'
+    2. 关键词提取: 抽取问题中的中英文实体词
+    3. 实体替换: attempt>0 时附加 '详细' 触发更广召回
+
+    attempt 语义:
+    - 0: 基础重写 (同义词扩展)
+    - 1: 二次重写 (基础 + 关键词强调)
+    - 2: 三次重写 (基础 + 关键词 + 实体追加)
+
+    Returns 重写后 query 字符串
     """
     if not question:
         return question
+    # 关键词提取 (实体词) — 直接复用 _extract_entities
+    entities = list(_extract_entities(question))[:5]  # top-5 实体
+    entity_str = " ".join(entities) if entities else ""
+
     # 去标点
     cleaned = re.sub(r"[?!。！？,，\s]+", " ", question).strip()
-    return f"{cleaned} 相关 解释 是什么"
+
+    base = f"{cleaned} 相关 解释 是什么"
+    if attempt == 0:
+        return base
+    elif attempt == 1:
+        return f"{cleaned} {entity_str} 详细 解释 原理"
+    else:
+        return f"{entity_str} {cleaned} 详细 原理 是什么"
 
 
 # ============================================================================
@@ -208,9 +228,7 @@ class SelfRAGService:
 
         for attempt in range(MAX_RETRY):
             try:
-                reformulated = _reformulate_query(question)
-                if attempt > 0:
-                    reformulated = f"{reformulated} 详细"
+                reformulated = _reformulate_query(question, attempt=attempt)
 
                 retriever = get_hybrid_retriever(self.db)
                 new_chunks = await retriever.retrieve(reformulated, top_k=5)
