@@ -94,6 +94,17 @@ class MeetingService:
 
         await self.db.commit()
         await self.db.refresh(meeting)
+
+        # W101 P2 Auto-RAG: fire-and-forget 后台检索背景知识
+        try:
+            from app.services.auto_rag_service import auto_rag_service
+            await auto_rag_service.trigger_and_dispatch(
+                "meeting.create", meeting.id,
+                (title or "") + " " + (description or "")
+            )
+        except Exception as _e:
+            logger.debug(f"[W101 P2] auto-rag trigger failed (non-blocking): {_e}")
+
         return meeting
 
     async def update_meeting(self, meeting_id: int, **kwargs) -> Optional[Meeting]:
