@@ -31,6 +31,9 @@ export type StreamEventType =
   // ===== 2026-06-29 #043 新增 2 种事件 =====
   | 'message_persisted' // [snapshot] 后端已落库某条消息（user 流开始时 + assistant 流结束时 各 yield 一次）
   | 'sync_required'     // [snapshot] 流式中断/异常，前端需重新拉历史（流中断兜底）
+  // ===== 2026-07-31 #CHAT-P0-A A5 新增 2 种事件 =====
+  | 'refs'              // [snapshot] 知识引用列表（每项含 snippet ≤200 字, 引用卡反馈用）
+  | 'suggestions'       // [snapshot] 追问 chips 容器（E2 后续填充, 本期后端不 emit）
 
 export type RichBlockType =
   | 'meeting'
@@ -134,6 +137,13 @@ export interface StreamEvent {
   persisted_is_partial?: boolean                       // 是否 partial（流式中断标记）
   // ===== #043 新增字段（sync_required 事件） =====
   sync_reason?: 'aborted' | 'error'                     // 中断原因
+  // ===== 2026-07-31 #CHAT-P0-A A5 新增字段 =====
+  // done 事件: assistant 落库后的 chat_messages.id（反馈锚点）
+  message_id?: number
+  // refs 事件: [{id, title, snippet, ...}]（snippet ≤200 字 chunk 原文）
+  refs?: Array<{ id?: string | number; title?: string; snippet?: string; [k: string]: any }>
+  // suggestions 事件: 追问 chips 文案列表（E2 填充）
+  suggestions?: string[]
   // ===== 2026-07-13 #P1 三档推理模式反馈字段 (done 事件携带) =====
   // mode: 实际跑的 mode (fast / balanced / deep)
   mode?: 'fast' | 'balanced' | 'deep'

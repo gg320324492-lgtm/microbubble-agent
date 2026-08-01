@@ -73,6 +73,9 @@ StreamEventType = Literal[
     # ===== 2026-06-29 #043 账号持久化聊天历史 — 持久化事件 =====
     "message_persisted", # [snapshot] 消息已落库（chat_messages 表），含 message_id/role/client_msg_id/is_partial
     "sync_required",     # [snapshot] 流式中断，前端需重新拉历史（含 reason: aborted|error）
+    # ===== 2026-07-31 #CHAT-P0-A A5 — 反馈锚点 + 引用 snippet + 追问容器 =====
+    "refs",              # [snapshot] 知识引用列表（含 snippet, 前端引用卡反馈用）
+    "suggestions",       # [snapshot] 追问 chips 容器（E2 后续填充, 本期不 emit）
 ]
 
 
@@ -128,13 +131,19 @@ class StreamEvent(BaseModel):
     retry_reason: Optional[str] = None
     retry_count: Optional[int] = None
     # ===== 2026-06-29 #043 持久化事件字段 =====
-    # message_persisted
+    # message_persisted / done (2026-07-31 #CHAT-P0-A A5: done 事件也复用此字段做反馈锚点
+    # — assistant 落库后的 chat_messages.id, 前端反馈"这个回答没用"时可精确定位)
     message_id: Optional[int] = None  # chat_messages.id
     persisted_role: Optional[Literal["user", "assistant", "system", "tool"]] = None
     persisted_client_msg_id: Optional[str] = None
     persisted_is_partial: Optional[bool] = None
     # sync_required
     sync_reason: Optional[str] = None  # "aborted" | "error"
+    # ===== 2026-07-31 #CHAT-P0-A A5: refs snippet + suggestions 容器 =====
+    # refs 事件（知识引用反馈）: 每项可带 snippet（≤200 字 chunk 原文, 前端渲染引用卡用）
+    # suggestions 事件容器: 预留追问 chips（E2 后续填充, 本期不 emit）
+    refs: Optional[list[dict[str, Any]]] = None  # [{id, title, snippet, ...}]
+    suggestions: Optional[list[str]] = None
     # ===== 2026-07-13 #P1 三档推理模式反馈字段 (done 事件携带, 前端 mode badge 显示) =====
     # mode: 实际跑的 mode (fast/balanced/deep)
     mode: Optional[Literal["fast", "balanced", "deep"]] = None
