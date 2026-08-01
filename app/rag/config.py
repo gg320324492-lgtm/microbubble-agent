@@ -85,6 +85,18 @@ CITATION_ENABLED: bool = (
 )
 CITATION_MAX_PER_RESULT: int = int(os.getenv("CITATION_MAX_PER_RESULT", "3"))
 
+# ===== W100-RAG-3 Query Intent 分类 =====
+# 仅追加, 不改既有 15 项配置 (8 框架 + 5 RAG-1 + 2 RAG-2)
+# 1) INTENT_CLASSIFIER_ENABLED — 总开关 (默认 True)
+# 2) INTENT_FALLBACK — LLM 失败回退 intent (默认 factual)
+# 详见 app/rag/intent_classifier.py 类 20.125 铁律
+# + app/rag/intent_router.py 类 20.126 铁律 (weights 配置化)
+INTENT_CLASSIFIER_ENABLED: bool = (
+    RAG_FRAMEWORK_ENABLED
+    and os.getenv("INTENT_CLASSIFIER_ENABLED", "1").lower() in ("1", "true", "yes")
+)
+INTENT_FALLBACK: str = os.getenv("INTENT_FALLBACK", "factual")
+
 # ===== 框架配置 =====
 # LangFuse 自托管服务地址
 LANGFUSE_HOST: str = os.getenv("LANGFUSE_HOST", "http://localhost:3000")
