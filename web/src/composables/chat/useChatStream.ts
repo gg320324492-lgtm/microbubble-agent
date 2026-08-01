@@ -91,6 +91,11 @@ export interface ChatMessage {
     name?: string
     state?: 'running' | 'done'
     duration_ms?: number
+    // ===== W100 +21 工具调用结果可点展开 =====
+    /** 工具输出 payload（tool_result 事件写入，展开态显示） */
+    tool_output?: Record<string, any>
+    /** 工具输出单行预览（折叠态显示，截断 80 字符） */
+    tool_output_preview?: string
     // 2026-06-14 方案 C Stage 4：附加压缩信息（tool_compressed 事件）
     compression?: {
       original_count: number
@@ -670,6 +675,19 @@ export function useChatStream() {
           if (last && last.type === 'tool' && last.name === evt.tool_name) {
             last.state = 'done'
             last.duration_ms = evt.tool_duration_ms
+            // ===== W100 +21 工具输出可点展开 =====
+            if (evt.tool_output) {
+              last.tool_output = evt.tool_output
+              // 派生单行预览（折叠态显示，截断 80 字符）
+              try {
+                const json = JSON.stringify(evt.tool_output)
+                last.tool_output_preview = json.length > 80
+                  ? json.slice(0, 80) + '…'
+                  : json
+              } catch {
+                last.tool_output_preview = '[unserializable output]'
+              }
+            }
           }
           // v31 埋点: 收到 search_knowledge 结果, POST 到 analytics (含 top_ids)
           if (

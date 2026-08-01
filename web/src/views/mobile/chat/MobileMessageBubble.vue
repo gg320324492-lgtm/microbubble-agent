@@ -16,21 +16,16 @@
           :retry-count="msg.retryCount"
           compact
         />
-        <!-- 工具调用 trace -->
+        <!-- 工具调用 trace — W100 +21 接入 ToolTraceItem（可点展开） -->
         <div v-if="msg.toolTrace && msg.toolTrace.length" class="tool-trace">
-          <div
+          <ToolTraceItem
             v-for="(t, i) in msg.toolTrace"
             :key="i"
-            class="trace-item"
-            :class="t.state"
-          >
-            <span v-if="t.type === 'thinking'">💭 {{ t.label }}</span>
-            <span v-else>
-              🔧 {{ t.name }}
-              {{ t.state === 'running' ? '...' : '✓' }}
-              <span v-if="t.duration_ms" class="duration">{{ t.duration_ms }}ms</span>
-            </span>
-          </div>
+            :trace="t"
+            :index="i"
+            compact
+            :data-testid="`mobile-tti-${i}`"
+          />
         </div>
 
         <!-- 文本内容 -->
@@ -111,6 +106,7 @@ import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 // ===== W99 +15 移动端接入：ThinkingCapsule 取代 RetrievalStatus 挂载 =====
 // RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（基线兼容）
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
+import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
