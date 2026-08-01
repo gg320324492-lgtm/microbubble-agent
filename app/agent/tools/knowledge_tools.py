@@ -61,29 +61,38 @@ def _filter_result_for_llm(doc: dict) -> dict:
     output_model=SearchKnowledgeOutput,
 )
 async def search_knowledge(input: SearchKnowledgeInput, ctx: ToolContext) -> dict:
-    """知识库四路混合检索（向量 + BM25 + Graph + Rerank）"""
-    from app.services.hybrid_retriever import get_hybrid_retriever
+    """知识库四路混合检索（向量 + BM25 + Graph + Rerank）
 
-    retriever = get_hybrid_retriever(ctx.db)
-    results = await retriever.retrieve(
+    W100-BUGFIX (类 20.123 据实上报):
+    原调用 HybridRetriever.retrieve() 走的是老 API, 不会触发 W99-RAG-2 citation hook.
+    改为调模块级 retrieve_with_weights() — 新 API, 不改原 retrieve 签名, 触发 citation hook.
+    同步返回 .citations 字段供前端 KnowledgeRefBlock.vue 段落级溯源高亮.
+    """
+    from app.services.hybrid_retriever import retrieve_with_weights
+
+    # 调 retrieve_with_weights (W90 PR4 + W99-RAG-1/2 + W100-RAG-3/4/5/6 全 hook 入口)
+    raw_results = await retrieve_with_weights(
+        ctx.db,
         query=input.query,
         top_k=input.top_k,
-        enable_vector=True,
-        enable_bm25=True,
-        enable_graph=True,
-        enable_rerank=True,
     )
     # 2026-07-02 Round 5b: 过滤内部字段，避免 LLM 模仿 tool_use 协议输出 fake XML
-    filtered = [_filter_result_for_llm(r) for r in results]
+    filtered = [_filter_result_for_llm(r) for r in raw_results]
+
+    # W100-BUGFIX: 把 .citations 写入 result dict (前端 RichContent.vue 转发给 KnowledgeRefBlock)
+    _citations = getattr(raw_results, "citations", []) or []
+
     result = {
         "status": "success",
         "count": len(filtered),
         "results": filtered,
         "rich_block_type": "knowledge_ref",
+        # W100-BUGFIX (类 20.123): citation 字段透传, 老客户端忽略
+        "citations": _citations,
     }
     # 2026-06-14 收官：本地知识库返回 0 结果时，hint 调 web_search 补充
     # 防狼：防止模型在 synthesis 阶段 fake 输出 <function=web_search> 误导用户
-    if len(results) == 0:
+    if len(filtered) == 0:
         result["hint"] = (
             "本地知识库无结果。建议继续调 web_search 工具获取最新网络资料。"
             "调用示例: web_search(query='<用户问题>', max_results=5)"

@@ -645,7 +645,10 @@ async def retrieve_with_weights(
     # 5) W99-RAG-2: Citation hook (件 4 门控 B 守恒 - 仅在 body 追加, 不改签名 / 不改返回类型)
     # 段落级溯源: 从 raw_results 的 chunk_id 批量查 knowledge_chunks → char_start/char_end
     # 返回类型保持 List[dict] (与原 retrieve_with_weights 一致), 调用方通过 attribute 获取 citations
-    # 失败 best-effort 静默降级 (类 20 #1 实战, 与 cache hook 同模式)
+    # W100-BUGFIX (类 20.123 据实上报): hooks 在 W99-RAG-2 之后被 rerank/multimodal/temporal
+    # 多次 reassign raw_results, 导致挂在原 list 的 .citations 属性丢失. 改为"延迟挂载":
+    # 先把 _citations 缓存到本地变量, 在函数返回前再 attach 到 FINAL raw_results.
+    _cached_citations: List[Dict[str, Any]] = []
     try:
         from app.rag.config import CITATION_ENABLED as _CIT_ENABLED
         from app.rag.config import CITATION_MAX_PER_RESULT as _CIT_MAX
@@ -653,18 +656,13 @@ async def retrieve_with_weights(
             from app.services.citation_extractor import CitationExtractor
 
             extractor = CitationExtractor(db)
-            _citations = await extractor.extract_citations(
+            _cached_citations = await extractor.extract_citations(
                 query=query,
                 results=raw_results,
                 max_per_result=_CIT_MAX,
             )
-            # 不破坏返回类型 — 把 citations 作为属性挂在 list 上 (与 W99-RAG-1 cache payload 对齐)
-            # 调用方: result = await retrieve_with_weights(...); result.citations if has citations attr
-            try:
-                raw_results.citations = _citations  # type: ignore[attr-defined]
-            except AttributeError:
-                # 极少见: raw_results 不是 list 派生. 静默兜底.
-                pass
+            # 不在 hook 阶段挂载 (rerank/multimodal/temporal hooks 会 reassign 丢失)
+            # 改为函数返回前 final attach (类 20.133 bugfix)
     except Exception as _e:
         logger.debug(f"[W99-RAG-2] citation hook skip: {_e}")
 
@@ -812,6 +810,21 @@ async def retrieve_with_weights(
             )
     except Exception as _e:
         logger.debug(f"[W100-RAG-6] temporal hook skip: {_e}")
+
+    # W100-BUGFIX (类 20.133): citation 最终挂载到 FINAL raw_results
+    # rerank/multimodal/temporal hooks 可能 reassign raw_results 多次, 在每个 hook 中挂
+    # .citations 都会被随后的 reassign 丢弃. 在函数 return 之前 final attach 才稳.
+    if _cached_citations:
+        try:
+            raw_results.citations = _cached_citations  # type: ignore[attr-defined]
+            logger.debug(
+                f"[W100-BUGFIX] citation final attach: "
+                f"len={len(_cached_citations)}"
+            )
+        except AttributeError:
+            # raw_results 不是 list 派生. 兜底: 写到第一个 dict 的 _citations_for_frontend 字段
+            # 极少数边界 case, 不抛, 静默降级
+            logger.debug("[W100-BUGFIX] citation final attach skip: raw_results not list-derived")
 
     return raw_results
 
