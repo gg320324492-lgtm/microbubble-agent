@@ -69,10 +69,10 @@ import { h } from 'vue'
       <span class="title">{{ block.title || '知识引用' }} ({{ results.length }})</span>
     </div>
     <div
-      v-for="r in results"
+      v-for="(r, i) in results"
       :key="r.id"
       class="ref-item"
-      :class="{ 'has-snippet': r.snippet }"
+      :class="{ 'has-snippet': r.snippet, [`stagger-${Math.min(i + 1, 6)}`]: true }"
       @click="goToKnowledge(r.id)"
     >
       <!-- E1: hover tooltip 显示 snippet (桌面 CSS only, 移动禁用 hover 由长按触发) -->
@@ -116,9 +116,13 @@ import { h } from 'vue'
 .rich-card { background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
-.ref-item { padding: 10px 0; border-top: 1px solid var(--color-border-light); cursor: pointer; transition: background 0.15s; }
+.ref-item { padding: 10px 0; border-top: 1px solid var(--color-border-light); cursor: pointer; transition: background 0.15s; animation: var(--animation-fadeSlideUp); }
 .ref-item:first-of-type { border-top: none; }
 .ref-item:hover { background: var(--color-bg-warm); margin: 0 -8px; padding: 10px 8px; border-radius: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ref-item { animation: none; }
+}
 .ref-content-wrap { width: 100%; }
 .ref-title { font-weight: 500; font-size: 14px; color: var(--color-primary); }
 .ref-content { font-size: 13px; color: var(--color-text-regular); margin-top: 4px; line-height: 1.5; }

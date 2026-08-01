@@ -18,6 +18,14 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+// ===== W99 +13 统一 Thinking Capsule 状态机 =====
+import {
+  advancePhase,
+  isTerminalPhase,
+  phaseFromEvent,
+  countResults,
+  sanitizeRestored,
+} from './assistantPhase'
 
 // 2026-07-02 Round 5c + Phase I 修复: 前端兜底剥除 fake XML
 // 镜像 Python app/agent/agentic_loop.py:_strip_fake_tool_calls (line 394-419)
@@ -93,6 +101,15 @@ export interface ChatMessage {
   timestamp: string
   // 2026-06-14 方案 C Stage 4：state 加 'aborted'
   state?: 'streaming' | 'idle' | 'aborted'
+  // ===== W99 +13 统一 Thinking Capsule =====
+  /** 推导式阶段（UI 唯一数据源，不再从 state/content/toolTrace 反推） */
+  phase?: import('./assistantPhase').AssistantPhase
+  /** 占位创建时刻（epoch ms）— elapsed time 基准 */
+  phaseStartedAt?: number
+  /** found 阶段结果数（来自 tool_result.output.results.length） */
+  foundCount?: number
+  /** 原 `_generatingDispatched` 隐式字段（首个 text_delta 时 true）补进接口 */
+  generatingDispatched?: boolean
   is_brief?: boolean
   error?: string | null
   usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
@@ -329,7 +346,9 @@ export function useChatStream() {
         // server 真实 0 条消息 → 保留空数组 (用户可看到欢迎 hero)
         return
       }
-      messagesBySession.value[id] = items.map(serverToClient)
+      messagesBySession.value[id] = items.map(serverToClient).map(sanitizeRestored)
+      // 持久化同步（防 localStorage 反序列化再次读到 zombie phase）
+      persistSessionSync(id, { updateActivity: false })
       // 写回 localStorage: 下次启动直接 cache hit,不用再 server fetch
       try {
         localStorage.setItem(
@@ -480,6 +499,9 @@ export function useChatStream() {
       toolTrace: [],
       timestamp: new Date().toISOString(),
       state: 'streaming',
+      // ===== W99 +13 占位即有 phase 反馈 =====
+      phase: 'queued',
+      phaseStartedAt: Date.now(),
       is_brief: true,
       error: null,
     }
@@ -520,6 +542,11 @@ export function useChatStream() {
       const finalAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
       finalAssistant.state = 'idle'
       finalAssistant.is_brief = false
+      // ===== W99 +13 终态收敛 — phase 也必须落定 =====
+      // 仅当非终态时显式落 done；aborted/error 不覆盖（advancePhase 终态不可复活守卫）
+      if (!isTerminalPhase(finalAssistant.phase ?? 'queued')) {
+        finalAssistant.phase = advancePhase(finalAssistant.phase, 'done')
+      }
       if (activeAssistantMap.value[targetSessionId] === assistantMsg) {
         delete activeAssistantMap.value[targetSessionId]
       }
@@ -829,7 +856,7 @@ export function useChatStream() {
           chatHistoryStore.refreshSession(targetSessionId).then((msgs) => {
             if (msgs && Array.isArray(msgs)) {
               // 替换当前会话的 messages（server 数据为准，避免本地状态错乱）
-              messagesBySession.value[targetSessionId] = msgs.map(serverToClient)
+              messagesBySession.value[targetSessionId] = msgs.map(serverToClient).map(sanitizeRestored)
               persistSessionSync(targetSessionId)
             }
           })
@@ -851,6 +878,19 @@ export function useChatStream() {
           break
         }
       }
+      // ===== W99 +13 SSE switch 之后集中推导 phase =====
+      // 不在每个 case 散写（散写必漏，现有 E5 就漏了 synthesis_start 和 retry）
+      // 终态守卫由 advancePhase 提供（abort/done/error 互不复活）
+      const nextPhase = phaseFromEvent(evt)
+      if (nextPhase) {
+        if (nextPhase === 'found' && (evt as any).tool_output) {
+          currentAssistant.foundCount = countResults((evt as any).tool_output)
+        }
+        currentAssistant.phase = advancePhase(
+          currentAssistant.phase,
+          nextPhase,
+        )
+      }
       // 流式增量持久化（防后台丢数据；debounce 100ms）
       persistSessionDebounced(targetSessionId)
     }
@@ -870,6 +910,10 @@ export function useChatStream() {
       if (assistant && assistant.state === 'streaming') {
         assistant.state = 'aborted'
         assistant.is_partial = true  // #043: 流式中断标记
+        // ===== W99 +13 显式落 phase='aborted' =====
+        // 跳过 switch case 后 phase 不会被自动收敛；这里必须显式 set
+        // 绕过 advancePhase 直接赋值（终态是显式重置指令）
+        assistant.phase = 'aborted'
         // 后续 SSE 事件被忽略（state !== 'streaming'，switch case 不再处理）
         // 立即关闭 loading
         sendingSessions.delete(sid)
@@ -1005,7 +1049,7 @@ export function useChatStream() {
 
   // #043: Server → Client 消息映射（sync_required refreshSession 用）
   function serverToClient(serverMsg: any): ChatMessage {
-    return {
+    const m: ChatMessage = {
       id: `server_${serverMsg.id}`,
       role: serverMsg.role === 'assistant' ? 'assistant' : serverMsg.role === 'user' ? 'user' : 'assistant',
       content: serverMsg.content || '',
@@ -1017,6 +1061,8 @@ export function useChatStream() {
       is_partial: !!serverMsg.is_partial,
       state: 'idle',
     }
+    // ===== W99 +13 server 数据也可能残留 zombie phase，防御性 sanitize =====
+    return sanitizeRestored(m)
   }
 
   onMounted(async () => {

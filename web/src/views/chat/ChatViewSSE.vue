@@ -35,7 +35,9 @@ import TagsEditor from '@/components/chat/TagsEditor.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 // #CHAT-P1-E E2 + E5
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
-import RetrievalStatus from '@/components/chat/RetrievalStatus.vue'
+// ===== W99 +15 桌面/移动接入：ThinkingCapsule 完全替代 RetrievalStatus 在 assistant 气泡内的所有挂载 =====
+// RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（外部可能已订阅 chat:retrieval-status）
+import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -525,29 +527,37 @@ onUnmounted(() => {
             <el-icon><ChatDotRound /></el-icon>
           </el-avatar>
           <div class="bubble bot-bubble">
-            <!-- [CHAT-P1-E E5] 检索过程可视化: 默认可见, 不依赖 showThinking -->
-            <RetrievalStatus
-              v-if="msg.state === 'streaming'"
-              :session-id="sessionId"
+            <!-- ===== W99 +15 统一 Thinking Capsule：assistant 占位 → done 全程胶囊伴随 =====
+                 取代 3-dot typing-bubble + RetrievalStatus（已摘挂载保留文件） -->
+            <ThinkingCapsule
+              v-if="msg.role === 'assistant' && msg.phase"
+              :phase="msg.phase"
+              :started-at="msg.phaseStartedAt"
+              :found-count="msg.foundCount"
+              :retry-count="msg.retryCount"
             />
-            <div v-if="showThinking && msg.toolTrace && msg.toolTrace.length" class="tool-trace">
-              <div v-for="(t, i) in msg.toolTrace" :key="i" class="trace-item" :class="t.state">
+            <TransitionGroup v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
+              tag="div" name="trace" class="tool-trace">
+              <div v-for="(t, i) in msg.toolTrace" :key="`${i}-${t.name || t.label}`"
+                class="trace-item" :class="[t.state, `stagger-${Math.min(i + 1, 6)}`]">
                 <span v-if="t.type === 'thinking'">{{ t.label }}</span>
-                <span v-else>🔧 {{ t.name }} {{ t.state === 'running' ? '...' : '✓' }}<span v-if="t.duration_ms" class="duration"> {{ t.duration_ms }}ms</span></span>
+                <span v-else>
+                  <span v-if="t.state === 'running'" class="trace-spinner" aria-hidden="true" />
+                  🔧 {{ t.name }} {{ t.state === 'running' ? '' : '✓' }}
+                  <span v-if="t.duration_ms" class="duration"> {{ t.duration_ms }}ms</span>
+                </span>
               </div>
-            </div>
+            </TransitionGroup>
 
             <div v-if="msg.content" class="msg-content" v-html="renderMarkdown(msg.content)" />
 
-            <div v-if="msg.richBlocks && msg.richBlocks.length" class="rich-blocks">
-              <RichContent v-for="(rb, i) in msg.richBlocks" :key="i" :block="rb" />
-            </div>
+            <TransitionGroup v-if="msg.richBlocks && msg.richBlocks.length"
+              tag="div" name="rb" class="rich-blocks">
+              <RichContent v-for="(rb, i) in msg.richBlocks" :key="rb.type + '-' + i"
+                :block="rb" :class="`stagger-${Math.min(i + 1, 6)}`" />
+            </TransitionGroup>
 
             <div v-if="msg.error" class="msg-error">⚠️ {{ msg.error }}</div>
-
-            <div v-if="msg.state === 'streaming' && !msg.content && !msg.toolTrace?.length" class="typing-bubble">
-              <span /><span /><span />
-            </div>
 
             <div v-if="msg.state === 'idle' && (msg.usage || msg.durationMs)" class="msg-meta">
               <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
@@ -920,6 +930,27 @@ onUnmounted(() => {
 .trace-item.running { color: var(--color-primary); }
 .trace-item .duration { color: var(--color-text-secondary); font-size: 11px; }
 
+/* ===== W99 +16 P1 连续性：trace/rich_block 渐进入场 ===== */
+.trace-enter-active { animation: var(--animation-fadeSlideUp); }
+.trace-leave-active { transition: opacity var(--duration-fast) var(--ease-in); }
+.trace-leave-to { opacity: 0; }
+.trace-spinner {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 50%;
+  border: 2px solid var(--color-primary-bg);
+  border-top-color: var(--color-primary);
+  animation: var(--animation-spin);
+}
+.rb-enter-active { animation: var(--animation-fadeSlideUp); }
+.rb-leave-active { transition: opacity var(--duration-fast) var(--ease-in); }
+.rb-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .trace-enter-active, .rb-enter-active, .trace-spinner { animation: none; }
+}
+
 /* 2026-06-14 收官：thinking toggle 按钮激活态高亮 */
 .thinking-toggle.active { color: var(--color-primary, #FF7A5C); background: var(--color-primary-bg); }
 /* 2026-06-30 #009 Self-RAG 深度思考 toggle 激活态高亮 */
@@ -940,10 +971,8 @@ onUnmounted(() => {
 .msg-error { color: var(--color-danger); font-size: 13px; margin-top: 8px; }
 .msg-meta { font-size: 11px; color: var(--color-text-secondary); margin-top: 8px; display: flex; gap: 12px; }
 
-.typing-bubble { display: inline-flex; gap: 4px; }
-.typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); animation: td 1.4s infinite; }
-.typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
-.typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
+/* ===== W99 +15 typing-bubble CSS 删除（已被 ThinkingCapsule 取代） ===== */
+
 .welcome-hero { text-align: center; padding: 60px 20px 20px; }
 .hero-avatar { background: var(--gradient-welcome-hero); margin-bottom: 16px; }
 .welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }

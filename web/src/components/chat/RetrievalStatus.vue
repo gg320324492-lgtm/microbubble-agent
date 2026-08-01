@@ -5,6 +5,12 @@ RetrievalStatus.vue — CHAT-P1-E E5 检索过程可视化组件
 2. found — 找到 N 条相关内容 (tool_result 触发)
 3. generating — 生成中 (首个 text_delta 触发)
 
+===== W99 +15 @deprecated =====
+已在 ChatViewSSE.vue 和 MobileMessageBubble.vue 摘除挂载（ThinkingCapsule 完全替代）。
+保留文件 + window.dispatchEvent('chat:retrieval-status', ...) 兼容外部订阅者。
+如需删除本文件，请先 grep 全仓无订阅再删。
+====================================
+
 设计要点:
 - 默认可见, 不依赖 showThinking 开关
 - 三段行级显示, 紧凑布局
