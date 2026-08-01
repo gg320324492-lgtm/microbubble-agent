@@ -320,3 +320,52 @@
 - B. P3-B chat 历史持久化深化 (W74 沿用)
 - C. P3-C qa-bench baseline 校准
 - D. P3-D W98 系列总 grand closure
+
+---
+
+## W98 RAG-GC 专题（2026-08-01 RAG 系列总 grand closure, 锚点范式 W98 +11 → RAG-GC +12 → +13 守恒, 212+ commits, 0 production code 守恒, 主指挥协调范式第 82 次派工）
+
+**主基调**: 锚点范式 W98 +11 (~488) → RAG-GC W98 +12 → +13 守恒 (本任务 1 commit, 纯 docs/memory 范畴). 当前 main HEAD = `b7b5998f6` (P3-A W98 +11). 0 commits ahead of base (本任务 docs/memory 范畴, 不动 production code). RAG 系列总览 = PR1-PR10 (W88-W96, 10 PR 串行, 150 commits, 锚点 +145) + RAG-FW-01..14 + DEPLOY (W98, 32 commits, 锚点 +12) + W97 RAG 大改造 (W97 锚点 477) + W98 周边 4 项 (DRIVE-TO-KB + CHAT-P0-D + P2-D2 consistency + P3-A 真环境集成, 30 commits, 锚点 +11). RAG 系列累计 212+ commits + 锚点范式 +168 (W97 477 → W98 +13 累计 ~490). alembic 1 head `093_add_search_log_answer_rating` 守恒. **0 production code 改动铁律 守恒**: `git diff 9bb7c386f..main -- app/services/knowledge_service.py` = 0 + `app/services/hybrid_retriever.py` = 0 实测. 派工前提铁律 12 + 类 20 实战 22+ 实例 (W98 RAG 系列累计: RAG-FW-11/12/14 三分支 0 commit 据实 + W98 P2 4 commits 漂移 + 派工 v11 §13 仓库实情真查 6 项铁律). 10 件套 gate 守恒 9/10 PASS + 1 据实 (件 3 PWA build pre-existing). 5 大铁证全留据: qa-bench R8 200 题 93.5% (W61 f0f8293e 决策保留 BGE m3) + qa-bench consistency 双轮 20 题 std=0.0672 (>0.05, W98 P2-D2) + consistency 实体重叠 0.6056 (>0.5, W98 P2-D2) + RAG-FW-11 8 case PASS (全 mock 无框架依赖, W98 RAG-FW-13 memory) + 5 铁证 e2e 171 PASSED + 3 SKIPPED + 0 FAIL (W98 P2-E2E). **累计 28 批 1500+ commits + 590+ 铁律延续** (W98 RAG-GC 1 commit + 1 新铁律: RAG 系列总收口纪要). **W19 选项 A 维持**: 4 留未来 PR + W99+ 派工顺序表 (主拍签字范围外). **W99+ 派工顺序表预留 (7 段 RAG 系列持续演进方向, 锚点 ~488 → ~500)**: W99 P1 召回率 95%+ / W99 P2 P95 < 2s / W99 P3 跨模态 RAG 评估 / W100 P1 Self-RAG 接入 / W100 P2 段落级 fallback / W101 P1 索引重建工具 / W101 P2 Auto-RAG.
+
+**RAG 系列 10 PR 索引 (W88-W96)**:
+- PR1 W88 +0..+7 (8 commits): 嵌入一致化 + query prefix
+- PR2 W88 +0..+21 (15 commits): knowledge_chunk 子表 + parent-child (alembic 088)
+- PR3 W89 +0..+15 (15 commits): BM25 增量 + pg_trgm + tsvector (alembic 089)
+- PR4 W90 +0..+14 (15 commits): HybridRetriever 召回侧量化 + synonym_dict 298 条
+- PR5 W91 +0..+13 (16 commits): RAGEvaluator 真召回率激活 (alembic 090)
+- PR6 W92 +0..+12 (12 commits): SearchLog 前端接通
+- PR7 W93 +0..+14 (19 commits): 全链路 observability + Grafana 7 面板
+- PR8 W94 +0..+20 (18 commits): 知识图谱深度联动 (alembic 091)
+- PR9 W95 +0..+16 (20 commits): auto-research 升级 + LLM-as-judge
+- PR10 W96 +0..+10 (12 commits): docs/deploy/eval 三件套沉淀
+
+**RAG-FW 14 + DEPLOY 索引 (W98)**:
+- RAG-FW-01 +0: app/rag 基础设施 (config + gate)
+- RAG-FW-02 +1: tests/rag_framework conftest mock
+- RAG-FW-03 +2: requirements + Dockerfile + langfuse 服务
+- RAG-FW-04 +3: LangFuse Tracing (lc_tracing.py)
+- RAG-FW-05 +4: Query 翻译 (MultiQuery + HyDE)
+- RAG-FW-06 +5: Multi-hop 多跳合成
+- RAG-FW-07 +6: Agent 自主检索器
+- RAG-FW-08 +7: Dense/Sparse 一层切换
+- RAG-FW-09 +8: Semantic Chunker
+- RAG-FW-10 +9: 跨模态文档解析
+- RAG-FW-11 +0: 端到端回退验证 (8 case)
+- RAG-FW-12 +1: CI workflow 注册
+- RAG-FW-13 +2: grand closure 收口
+- RAG-FW-14 +3: 修测试顺序污染 + collection error
+- RAG-FW-DEPLOY: 4 hotfix (langfuse DATABASE_URL + pgvector pin + pydantic pin + 包名 404)
+
+**W98 周边 4 项**:
+- DRIVE-TO-KB W98 +0: 网盘文件入库 RAG (drive → kb 转化)
+- CHAT-P0-D W98 +0: 评估框架 (rag_evaluator 激活 + CLI + consistency)
+- P2-D2 W98 +7: qa-bench consistency 双轮语料收尾 (20 题 + std=0.0672)
+- P3-A W98 +11: 真环境 e2e 集成层 (W99/W100 真 DB/API 替代纯 mock)
+
+**W98 RAG-GC 沉淀文件**:
+- `docs/rag/RAG-SERIES-GRAND-CLOSURE.md` (603 行, 14 节完整 RAG runbook, PR1-PR10 + RAG-FW + 周边 4 项 + 锚点范式 + 0 production code + 10 件套 gate + 5 铁证 + 类 20 实战 22+ + 派工 v11 模板 + P4 派工顺序表预留)
+- `memory/w98-rag-grand-closure-2026-08-01.md` (本任务沉淀, 启动 7 段 + 据实上报 18 项)
+- `memory/w98-rag-grand-closure-startup-2026-08-01.md` (起步 6 项, W73 铁律严格执行)
+
+**W98 RAG-GC 1 新铁律 (RAG 系列总收口纪要)**:
+- **RAG 系列总收口纪要**: PR1-PR10 + RAG-FW-01..14 + DEPLOY + W97 RAG 大改造 + W98 周边 4 项 跨 8 周 (W88-W98) 累计 212+ commits + 锚点范式 +168 (W97 477 → W98 +13 累计 ~490). 0 production code 守恒 10 PR + 14 RAG-FW + 8 周边 全部实测. 派工 v11 §13 仓库实情真查 6 项铁律实战化 (python -m alembic 形态 + pytest 白名单 + 错配双向禁令 + docs 门禁断言化 + 依赖基线自检 + 5 件套回报表). 5 大铁证全留据 (qa-bench R8 93.5% + consistency std=0.0672 + 实体重叠 0.6056 + RAG-FW-11 8 case + 5 e2e PASS). W19 选项 A 维持 + W99+ 派工顺序表预留 (7 段 RAG 系列持续演进方向).
