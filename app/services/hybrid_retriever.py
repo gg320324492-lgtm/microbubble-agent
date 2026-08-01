@@ -564,6 +564,23 @@ async def retrieve_with_weights(
     Returns:
         检索结果列表 (按 rrf_score 降序)
     """
+    # -1) W100-RAG-3: Intent hook (件 4 门控 B 守恒 - 仅追加, 不改原签名)
+    # 推断 query 意图 → 决定 HybridWeights (vector/bm25/graph/rerank 4 路权重)
+    # 失败 best-effort 静默降级到默认 weights (类 20.125 + 类 20.126)
+    # 注意: Intent hook 在 Cache hook 之前 (W99-RAG-1 cache 命中就跳过整个 retrieve
+    # 含 intent 推断, 节省 LLM 调用)
+    # weights 参数已存在 (W90 PR4 留口), 这里在 weights=None 时用 intent 推断填充,
+    # 未来 PR 可接 _retrieve_impl 做 per-intent 调参 (本任务只埋点)
+    try:
+        from app.rag.config import INTENT_CLASSIFIER_ENABLED as _IC_ENABLED
+        if _IC_ENABLED and weights is None:
+            from app.rag.intent_router import get_intent_router
+            _router = get_intent_router()
+            weights = await _router.route(query)
+            logger.debug(f"[W100-RAG-3] intent-inferred weights attached: {weights}")
+    except Exception as _e:
+        logger.debug(f"[W100-RAG-3] intent hook skip: {_e}")
+
     # 0) W99-RAG-1: Query Cache hook (件 4 门控 B 守恒 - 仅追加, 不改原签名)
     # 缓存键含 user_id + tenant_id 隔离多租户 (类 20.122)
     # Redis 不可用 best-effort silently 降级 (类 20.121, 沿用 embedding_service:243 模式)
