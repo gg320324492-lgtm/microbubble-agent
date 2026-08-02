@@ -537,6 +537,10 @@ onUnmounted(() => {
 
 <template>
   <div class="chat-immersive" :class="{ 'is-dragging': isDragging }">
+    <!-- W101 P3-A11Y: skip-link WCAG 2.4.1 跳过导航直达主内容
+         屏幕阅读器 / 纯键盘用户首个 Tab 即跳到 #chat-main
+         hidden by default, focus-visible 时显示 (沿用全局 focus-visible token) -->
+    <a href="#chat-main" class="skip-link" data-testid="skip-link">跳到主内容</a>
     <!-- 网络断线横幅 -->
     <div v-if="!isOnline" class="network-banner">
       <span class="nb-dot" />网络已断开，正在等待恢复...
@@ -553,7 +557,7 @@ onUnmounted(() => {
         @edit-tags="onEditTagsSession"
       />
 
-      <div class="chat-main">
+      <div class="chat-main" id="chat-main" role="main" aria-label="聊天对话主区域">
         <!-- v78 UI-redesign 3-zone 顶栏 — W72 B-3 子 plan ③ 起步
              (派工 v6 段 5 反馈 #3 实战: TopBarZone type hint 必含)
              (派工 v6 段 5 反馈 #4 实战: 派生新任务必含真验证)
@@ -928,6 +932,34 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* W101 P3-A11Y: skip-link WCAG 2.4.1
+   隐藏 by default, focus-visible 时显示在左上角
+   复用全局 --focus-outline-* token (W101 +1) */
+.skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 9999;
+  padding: 8px 14px;
+  background: var(--color-primary);
+  color: #ffffff;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transform: translateY(-200%);
+  transition: transform 150ms ease;
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: var(--focus-outline-width) solid #ffffff;
+  outline-offset: var(--focus-outline-offset);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+[data-theme="dark"] .skip-link {
+  background: var(--color-primary-light);
+  color: var(--color-text-primary);
+}
 .chat-immersive {
   display: flex; flex-direction: column;
   height: calc(100vh - 120px);
