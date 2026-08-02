@@ -105,9 +105,9 @@ import { h } from 'vue'
 </script>
 
 <template>
-  <div class="kb-ref rich-card">
-    <div class="card-header">
-      <span class="icon">📚</span>
+  <div class="kb-ref rich-card" role="list" aria-label="知识库引用列表">
+    <div class="card-header" role="heading" aria-level="3">
+      <span class="icon" aria-hidden="true">📚</span>
       <span class="title">{{ block.title || '知识引用' }} ({{ results.length }})</span>
     </div>
     <div
@@ -115,7 +115,12 @@ import { h } from 'vue'
       :key="r.id"
       class="ref-item"
       :class="{ 'has-snippet': r.snippet, [`stagger-${Math.min(i + 1, 6)}`]: true }"
+      role="listitem"
+      tabindex="0"
+      :aria-label="`知识引用 ${i + 1}: ${r.title || '无标题'}, 相似度 ${r.score != null ? Math.round(r.score * 100) + '%' : '未知'}`"
       @click="goToKnowledge(r.id)"
+      @keydown.enter.prevent="goToKnowledge(r.id)"
+      @keydown.space.prevent="goToKnowledge(r.id)"
     >
       <!-- E1: hover tooltip 显示 snippet (桌面 CSS only, 移动禁用 hover 由长按触发) -->
       <el-tooltip
