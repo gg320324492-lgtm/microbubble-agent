@@ -1,21 +1,40 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+import { execSync } from 'child_process'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import NutUIResolver from '@nutui/nutui/dist/resolver'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// 2026-07-20 cache-bust 时间窗: 全局 __BUILD_TIMESTAMP__ 常量
-// 注入时机: build 启动时 (process.hrtime / Date.now), 在 main.js 入口 console.log 出来
-// 浏览器看到的时间戳可帮运维快速判断:
-//   1. 部署是否真的生效 (用户报 cache miss → 对比 dist hash + 时间戳)
-//   2. CDN/边缘节点是否回源 (同 URL 不同时间戳 = 边缘 cache)
-//   3. 用户是否拿到旧 build (DevTools 顶部 console + 时间戳 + 版本号)
-// 设计: 用 ISO 字符串 (人可读) 而非 epoch ms, 同时附 build_id (随机 6 字符, 多容器并行 build 区分)
-// ⚠️ 与 main.js 的 console.log 必须同步, 否则用户看不到时间戳 = 功能无效
-const BUILD_TIMESTAMP = new Date().toISOString()
-const BUILD_ID = Math.random().toString(36).slice(2, 8)
+// 2026-08-03 [DEPLOY-DETERM] 修复 npm run build 非确定性 (类 20.133):
+//   旧实现用 `new Date().toISOString()` + `Math.random()` 做 BUILD_TIMESTAMP/BUILD_ID，
+//   每次 build 都不同 → vite define 注入到 entry chunk → 所有 chunk 内容 hash 全变
+//   → 同源码 build 两次产出 bit-different dist (实测: index-27e37c81.js → index-c243f137.js,
+//   ~50 个 chunk 全部 rename), git 仓库 dist 历史每次部署都污染一份。
+//
+//   新实现: 从 git HEAD 派生 BUILD_TIMESTAMP/BUILD_ID。
+//   - BUILD_TIMESTAMP = `git log -1 --format=%cI` (commit author date, ISO 8601 with TZ)
+//   - BUILD_ID = `git rev-parse --short HEAD` (8 字符 commit hash)
+//   这两个值对**同一 git HEAD 永远稳定** → vite define 注入同样稳定 → 同源码 build 产出
+//   bit-identical dist (git diff -- web/dist/ 应为空, 验证见 memory/w100-deploy-determ-2026-08-03.md)。
+//
+//   诊断价值保留: 用户截图 console 第一行 → "[build] 2026-08-02T17:59:14+08:00 (id=ed79b2558)"
+//   → 仍然能区分不同部署 (不同 commit 时间戳/hash 不同), 但同一个 commit 重建 dist 不再产生新 hash。
+//
+//   Sentry release 沿用 BUILD_ID (commit hash 是天然 release version, 比 6 字符随机串更稳定)。
+//
+//   git 命令失败兜底 (CI 容器无 .git / detached 环境) → 退回 'unknown-{pid}-{time}' 标识,
+//   失败路径虽然非确定性但**只发生在异常环境**, 仍优于旧的每次都非确定性。
+function safeExec(cmd, fallback) {
+  try {
+    return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf-8' }).trim()
+  } catch {
+    return fallback
+  }
+}
+const BUILD_TIMESTAMP = safeExec('git log -1 --format=%cI', `unknown-${process.pid}-${Date.now()}`)
+const BUILD_ID = safeExec('git rev-parse --short HEAD', 'unknown-head')
 
 // webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
 // 不参与 Vite rollup hash 流程，文件名固定 → webhint cache-busting 永远报警告。
