@@ -29,6 +29,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -77,7 +78,7 @@ class RetrievalCache:
 
     Plan §D3.D3.2 用法:
         cache = RetrievalCache()
-        cached = cache.get(query, user_id, tenant_id)
+        cached = await cache.get(query, user_id, tenant_id)
         if cached is None:
             # 实际检索
             result = await retriever.retrieve(query, ...)
@@ -96,16 +97,16 @@ class RetrievalCache:
         self.ttl = ttl
 
     # ============================================================
-    # 同步路径 (qa-bench 单线程)
+    # 异步路径 (主流程 / hybrid_retriever hook)
     # ============================================================
 
-    def get(
+    async def get(
         self,
         query: str,
         user_id: Optional[int] = None,
         tenant_id: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
-        """精确查询缓存命中检查 (同步)
+        """精确查询缓存命中检查 (异步)
 
         Args:
             query: 用户查询
@@ -124,9 +125,9 @@ class RetrievalCache:
 
         key = _exact_cache_key(query, user_id, tenant_id)
         try:
-            from app.core.redis import get_redis_sync
-            redis = get_redis_sync()
-            raw = redis.get(key)
+            from app.core.redis import get_redis
+            redis = await get_redis()
+            raw = await redis.get(key)
         except Exception as e:
             logger.debug(f"[RetrievalCache.get] redis lookup fail: {e}")
             return None
@@ -144,7 +145,7 @@ class RetrievalCache:
 
         return value
 
-    def set(
+    async def set(
         self,
         query: str,
         user_id: Optional[int],
@@ -152,7 +153,7 @@ class RetrievalCache:
         result: Dict[str, Any],
         ttl: Optional[int] = None,
     ) -> bool:
-        """写缓存 (best-effort, 同步)
+        """写缓存 (best-effort, 异步)
 
         Args:
             query: 用户查询
@@ -191,22 +192,22 @@ class RetrievalCache:
             return False
 
         try:
-            from app.core.redis import get_redis_sync
-            redis = get_redis_sync()
-            redis.setex(key, effective_ttl, payload)
+            from app.core.redis import get_redis
+            redis = await get_redis()
+            await redis.setex(key, effective_ttl, payload)
         except Exception as e:
             logger.debug(f"[RetrievalCache.set] redis setex fail: {e}")
             return False
 
         # 写 user+tenant 索引 (用于语义相似扫描, 失败不影响主缓存)
         try:
-            self._index_for_similar(key, value.get("query_embedding", []), user_id, tenant_id, effective_ttl)
+            await self._index_for_similar(key, value.get("query_embedding", []), user_id, tenant_id, effective_ttl)
         except Exception as e:
             logger.debug(f"[RetrievalCache.set] index write fail: {e}")
 
         return True
 
-    def invalidate(
+    async def invalidate(
         self,
         query: str,
         user_id: Optional[int] = None,
@@ -221,9 +222,9 @@ class RetrievalCache:
             return False
         key = _exact_cache_key(query, user_id, tenant_id)
         try:
-            from app.core.redis import get_redis_sync
-            redis = get_redis_sync()
-            redis.delete(key)
+            from app.core.redis import get_redis
+            redis = await get_redis()
+            await redis.delete(key)
             return True
         except Exception as e:
             logger.debug(f"[RetrievalCache.invalidate] fail: {e}")
@@ -233,7 +234,7 @@ class RetrievalCache:
     # 内部 helpers
     # ============================================================
 
-    def _index_for_similar(
+    async def _index_for_similar(
         self,
         exact_key: str,
         query_embedding: List[float],
@@ -251,10 +252,9 @@ class RetrievalCache:
         idx_key = _user_tenant_index_key(user_id, tenant_id)
         now = time.time()
         try:
-            from app.core.redis import get_redis_sync
-            redis = get_redis_sync()
-            await_score = now  # 显式别名, 避免 pylint W0612
-            redis.zadd(idx_key, {exact_key: now})  # noqa: F841 (await_score 占位)
+            from app.core.redis import get_redis
+            redis = await get_redis()
+            await redis.zadd(idx_key, {exact_key: now})
         except Exception as e:
             logger.debug(f"[RetrievalCache._index_for_similar] zadd fail: {e}")
 
