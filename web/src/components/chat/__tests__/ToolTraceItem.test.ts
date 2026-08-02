@@ -124,12 +124,7 @@ describe('ToolTraceItem — W100 +21', () => {
   it('⑧ 边界：tool_output 缺失 → detail 显示 "(没有 output)" 占位', async () => {
     const wrapper = mount(ToolTraceItem, {
       props: {
-        trace: {
-          type: 'tool',
-          name: 'no_output_tool',
-          state: 'done',
-          duration_ms: 50,
-        },
+        trace: { type: 'tool', name: 'no_output_tool', state: 'done', duration_ms: 50 },
         index: 7,
       },
     })
@@ -137,5 +132,43 @@ describe('ToolTraceItem — W100 +21', () => {
     await nextTick()
     expect(wrapper.find('[data-testid="tti-7-empty"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="tti-7-empty"]').text()).toContain('没有')
+  })
+
+  it('⑨ drive 列表提取 items[0].id 并 emit 文件跳转', async () => {
+    const wrapper = mount(ToolTraceItem, {
+      props: {
+        trace: { type: 'tool', name: 'list_drive_files', state: 'done', tool_output: { items: [{ id: 42 }] } },
+        index: 8,
+      },
+    })
+    await wrapper.find('[role="button"]').trigger('click')
+    await wrapper.find('[data-testid="tti-8-jump"]').trigger('click')
+    expect(wrapper.emitted('jump')).toEqual([[{ type: 'drive', id: 42 }]])
+  })
+
+  it('⑩ task 统计无详情 ID 时 emit 任务列表跳转', async () => {
+    const wrapper = mount(ToolTraceItem, {
+      props: {
+        trace: { type: 'tool', name: 'get_task_stats', state: 'done', tool_output: { stats: { total: 3 } } },
+        index: 9,
+      },
+    })
+    await wrapper.find('[role="button"]').trigger('click')
+    const jump = wrapper.find('[data-testid="tti-9-jump"]')
+    expect(jump.attributes('aria-label')).toContain('打开任务')
+    await jump.trigger('click')
+    expect(wrapper.emitted('jump')).toEqual([[{ type: 'task', id: undefined }]])
+  })
+
+  it('⑪ meeting 兼容 meetings[0].id 并 emit 会议详情跳转', async () => {
+    const wrapper = mount(ToolTraceItem, {
+      props: {
+        trace: { type: 'tool', name: 'query_meetings', state: 'done', tool_output: { meetings: [{ id: 7 }] } },
+        index: 10,
+      },
+    })
+    await wrapper.find('[role="button"]').trigger('click')
+    await wrapper.find('[data-testid="tti-10-jump"]').trigger('click')
+    expect(wrapper.emitted('jump')).toEqual([[{ type: 'meeting', id: 7 }]])
   })
 })
