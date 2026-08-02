@@ -23,6 +23,18 @@
 
       <!-- v78 UI-redesign: 搜索下沉到 SessionDrawer，header 不再显示搜索 button -->
       <!-- #043 兼容保留 search emit 但不渲染触发器 -->
+      <!-- W100 +29 上下文可见性面板 toggle -->
+      <button
+        id="mobile-header-context"
+        name="mobile-header-context"
+        type="button"
+        class="icon-btn context-btn"
+        aria-label="AI 记住了什么"
+        title="AI 记住了什么"
+        @click="$emit('open-context')"
+      >
+        <el-icon :size="20"><View /></el-icon>
+      </button>
       <button
         id="mobile-header-theme"
         name="mobile-header-theme"
@@ -48,7 +60,7 @@
  * - 极简 ☰ menu / 标题 + 状态 / 🌙 三件套
  */
 
-import { Menu, Moon, Sunny } from '@element-plus/icons-vue'
+import { Menu, Moon, Sunny, View } from '@element-plus/icons-vue'
 
 defineProps({
   title: { type: String, default: '小气' },
@@ -56,7 +68,7 @@ defineProps({
   isDark: { type: Boolean, default: false },
 })
 
-defineEmits(['open-menu', 'toggle-theme', 'search'])
+defineEmits(['open-menu', 'toggle-theme', 'search', 'open-context'])
 </script>
 
 <style scoped>
