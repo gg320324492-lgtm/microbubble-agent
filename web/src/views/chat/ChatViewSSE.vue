@@ -18,11 +18,11 @@
  * - Rich Block 注册表 (web/src/components/chat/blocks/registry.ts)
  * - Pinia chatSessions store
  */
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny, View } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import RichContent from '@/components/chat/RichContent.vue'
+// RichContent 也已封装到 ChatMessageRow.vue, 此处不再直接 import
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
 // #043 Phase 6 UI 升级
@@ -34,21 +34,14 @@ import ShareDialog from '@/components/chat/ShareDialog.vue'
 import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
-import ChatMessageActions from '@/components/chat/ChatMessageActions.vue'  // W100 +23 重生成 + 复制按钮
-import ProEntries from '@/components/chat/ProEntries.vue'  // W100 +24 知识图谱/公式/假设入口
-// #CHAT-P1-E E2 + E5
-import FollowUpChips from '@/components/chat/FollowUpChips.vue'
-// ===== W99 +15 桌面/移动接入：ThinkingCapsule 完全替代 RetrievalStatus 在 assistant 气泡内的所有挂载 =====
-// RetrievalStatus 摘挂载保留文件 + 保留事件 dispatch（外部可能已订阅 chat:retrieval-status）
-import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
-import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
-import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (📋 计划步骤用户可视化)
-import ContentBriefDetail from '@/components/chat/ContentBriefDetail.vue'  // W100 +25 双段折叠 (brief / detail 自动识别 \n\n)
-import EventBadges from '@/components/chat/EventBadges.vue'  // W100 +26 SSE 事件徽章 (synthesis / retry / critique / compressed)
-import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
+import ChatMessageRow from '@/components/chat/ChatMessageRow.vue'  // W100 +45 单条消息复用 (虚拟列表集成)
+// ===== W100 +45 P3-VIRTUAL RETRY: 下列组件已封装到 ChatMessageRow.vue, 此处不再直接 import =====
+// ThinkingCapsule / ToolTraceItem / PlanSteps / ContentBriefDetail / EventBadges /
+// ImageWithFallback / ChatMessageActions / ProEntries / FollowUpChips / RichContent
 import ContextPanel from '@/components/chat/ContextPanel.vue'  // W100 +29 上下文可见性面板
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useMemo } from '@/composables/useMemo'
+import { useVirtualList } from '@/composables/useVirtualList'  // W100 +45 虚拟滚动
 import { useChatStream, type ChatMessage } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -188,6 +181,20 @@ const STICK_THRESHOLD_PX = 80  // 距底 < 80px 算"贴底"
 const USER_SCROLL_UP_THRESHOLD = 120  // 距底 > 120px 视为"用户主动上滚"
 const TOP_THRESHOLD_PX = 100  // P0-#2: 距顶 < 100px 算"贴顶"
 
+// ===== W100 +45 P3-VIRTUAL RETRY: 虚拟滚动 (messages > 50 时启用) =====
+// 单一 composable 实例, items 用 readonly messages, 容器挂在 messagesRef
+// itemHeight 经验值 (用户消息 ~80px, 助手消息 ~120-300px, 折中 120)
+// 阈值 50 (派工 v11 §9 指定 50 items threshold)
+const VIRTUAL_ITEM_HEIGHT = 120
+const VIRTUAL_THRESHOLD = 50
+const virtualList = useVirtualList({
+  containerRef: messagesRef,
+  items: messages as unknown as Ref<readonly ChatMessage[]>,
+  itemHeight: VIRTUAL_ITEM_HEIGHT,
+  threshold: VIRTUAL_THRESHOLD,
+  overscan: 5,
+})
+
 const scrollToBottom = async (force = false) => {
   await nextTick()
   if (messagesRef.value) {
@@ -215,6 +222,9 @@ const onMessagesScroll = () => {
   const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
   const distanceFromBottom = scrollHeight - scrollTop - clientHeight
   const distanceFromTop = scrollTop
+
+  // W100 +45: 同步 scrollTop 到虚拟列表 (内部用其切片 visibleItems)
+  virtualList._updateScroll(scrollTop, clientHeight)
 
   if (distanceFromBottom < STICK_THRESHOLD_PX) {
     // 接近底部 → 重新启用 autoStick
@@ -655,119 +665,58 @@ onUnmounted(() => {
         @record-error="onRecordError"
       />
 
+      <!-- W100 +45 P3-VIRTUAL RETRY: 虚拟滚动分流
+           ≤ VIRTUAL_THRESHOLD 全量渲染 (与原 v-for 行为 0 差异)
+           > VIRTUAL_THRESHOLD 改虚拟渲染 (absolute positioning + ChatMessageRow) -->
+      <template v-if="!virtualList.isVirtualized.value">
       <TransitionGroup name="msg">
       <template v-for="(msg, idx) in messages" :key="msg.id || idx">
         <div v-if="idx > 0 && new Date(msg.timestamp) - new Date(messages[idx-1].timestamp) > 5*60*1000" class="time-divider">
           {{ new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }}
         </div>
 
-        <div v-if="msg.role === 'user'" class="msg-row user">
-          <div class="bubble user-bubble">
-            <div v-html="renderMarkdown(msg.content)" />
-            <div v-if="msg.imageUrl" class="msg-image">
-              <ImageWithFallback
-                :src="msg.imageUrl"
-                :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
-                :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
-                img-class="msg-image-clickable"
-                @click="openImage(msg.imageUrl)"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div v-else class="msg-row bot">
-          <el-avatar :size="32" class="bot-msg-avatar" alt="小气助手头像" title="小气助手">
-            <el-icon><ChatDotRound /></el-icon>
-          </el-avatar>
-          <div class="bubble bot-bubble">
-            <!-- ===== W99 +15 统一 Thinking Capsule：assistant 占位 → done 全程胶囊伴随 =====
-                 取代 3-dot typing-bubble + RetrievalStatus（已摘挂载保留文件） -->
-            <ThinkingCapsule
-              v-if="msg.role === 'assistant' && msg.phase"
-              :phase="msg.phase"
-              :started-at="msg.phaseStartedAt"
-              :found-count="msg.foundCount"
-              :retry-count="msg.retryCount"
-            />
-            <!-- ===== W100 +22 plan_step 折叠展开：放在 ThinkingCapsule 之后、ToolTrace 之前 ===== -->
-            <PlanSteps
-              v-if="msg.plan && msg.plan.length"
-              :steps="msg.plan"
-            />
-            <TransitionGroup v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
-              tag="div" name="trace" class="tool-trace">
-              <ToolTraceItem v-for="(t, i) in msg.toolTrace" :key="`${i}-${t.name || t.label}`"
-                :trace="t" :index="i" :data-testid="`desktop-tti-${i}`" @jump="onToolJump" />
-            </TransitionGroup>
-
-            <!-- W100 +25: 双段折叠 (brief / detail 自动识别 \n\n) -->
-            <ContentBriefDetail
-              v-if="msg.role === 'assistant' && msg.content"
-              :content="msg.content"
-              class="msg-content"
-              :data-testid="`desktop-cbd-${msg.id}`"
-            />
-            <!-- W100 +26: SSE 事件徽章 (synthesis 闪动 / retry 持续 / critique 完成 / compressed 一次) -->
-            <EventBadges
-              v-if="msg.role === 'assistant'"
-              :msg="msg"
-              :data-testid="`desktop-eb-${msg.id}`"
-            />
-            <div
-              v-else-if="msg.content"
-              class="msg-content"
-              v-html="renderMarkdown(msg.content)"
-            />
-
-            <TransitionGroup v-if="msg.richBlocks && msg.richBlocks.length"
-              tag="div" name="rb" class="rich-blocks">
-              <RichContent v-for="(rb, i) in msg.richBlocks" :key="rb.type + '-' + i"
-                :block="rb" :class="`stagger-${Math.min(i + 1, 6)}`" />
-            </TransitionGroup>
-
-            <div v-if="msg.error" class="msg-error">⚠️ {{ msg.error }}</div>
-
-            <div v-if="msg.state === 'idle' && (msg.usage || msg.durationMs)" class="msg-meta">
-              <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
-              <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
-              <el-button v-if="msg.content" text size="small" @click="playTTSWrap(msg.content)" title="播放语音">🔊</el-button>
-              <!-- W100 +23: 重生成 + 复制按钮 (桌面端 hover 才显示) -->
-              <ChatMessageActions
-                v-if="msg.role === 'assistant' && msg.content"
-                mode="desktop"
-                :message-id="msg.id"
-                @regenerate="regenerate(msg)"
-                @copy="copyMessage(msg)"
-              />
-              <!-- W100 +24: 知识图谱 / 公式 / 假设入口 (桌面端 hover 才显示) -->
-              <ProEntries
-                v-if="msg.role === 'assistant' && msg.content"
-                mode="desktop"
-                :intent="msg.intent || null"
-                :content="msg.content"
-                :tool-trace="msg.toolTrace || []"
-                @entry-click="onProEntryClick(msg, $event)"
-              />
-              <!-- W98 CHAT-P1-D3: 用户反馈按钮 (仅 assistant 完成态展示) -->
-              <FeedbackButtons
-                v-if="msg.role === 'assistant' && msg.content"
-                :message-id="msg.server_id"
-                :session-id="sessionId"
-                :agent-reply="msg.content"
-              />
-            </div>
-
-            <!-- [CHAT-P1-E E2] 追问 chips: assistant 回答完 (state=idle) 后显示 -->
-            <FollowUpChips
-              v-if="msg.role === 'assistant' && msg.state === 'idle'"
-              :session-id="sessionId"
-              :on-click="onFollowUpClick"
-            />
-          </div>
-        </div>
+        <ChatMessageRow
+          :msg="msg"
+          :prev-timestamp="idx > 0 ? messages[idx-1].timestamp : null"
+          :session-id="sessionId"
+          :show-thinking="showThinking"
+          @tool-jump="onToolJump"
+          @regenerate="regenerate"
+          @copy="copyMessage"
+          @pro-entry-click="(p: any) => onProEntryClick(p.msg, p.entry)"
+          @image-open="openImage"
+          @tts-play="playTTSWrap"
+          @follow-up-click="onFollowUpClick"
+        />
       </template>
       </TransitionGroup>
+      </template>
+
+      <!-- 虚拟列表: visibleItems 内的消息 absolute 定位, virtualTop = index * itemHeight -->
+      <template v-else>
+        <div
+          class="virtual-list-spacer"
+          :style="{ position: 'relative', height: virtualList.totalHeight.value + 'px' }"
+        >
+          <ChatMessageRow
+            v-for="entry in virtualList.visibleItems.value"
+            :key="`virtual-${entry.item.id}-${entry.index}`"
+            :msg="entry.item"
+            :prev-timestamp="entry.index > 0 ? messages[entry.index - 1].timestamp : null"
+            :session-id="sessionId"
+            :show-thinking="showThinking"
+            :virtual-top="entry.index * virtualList.itemHeight"
+            :virtual-mode="true"
+            @tool-jump="onToolJump"
+            @regenerate="regenerate"
+            @copy="copyMessage"
+            @pro-entry-click="(p: any) => onProEntryClick(p.msg, p.entry)"
+            @image-open="openImage"
+            @tts-play="playTTSWrap"
+            @follow-up-click="onFollowUpClick"
+          />
+        </div>
+      </template>
 
       <div v-if="messages.length === 1" class="welcome-hero">
         <el-avatar :size="80" class="hero-avatar" alt="小气助手大头像" title="小气助手">
