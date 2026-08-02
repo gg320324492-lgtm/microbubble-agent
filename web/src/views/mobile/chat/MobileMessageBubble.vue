@@ -42,6 +42,13 @@
           class="msg-content"
           :data-testid="`mobile-cbd-${msg.id}`"
         />
+        <!-- W100 +26: SSE 事件徽章 (compact 模式 — 移动端字号更小) -->
+        <EventBadges
+          v-if="msg.role === 'assistant'"
+          :msg="msg"
+          compact
+          :data-testid="`mobile-eb-${msg.id}`"
+        />
         <div
           v-else-if="msg.content"
           class="msg-content"
@@ -141,6 +148,7 @@ import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
 import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (compact 模式)
 import ContentBriefDetail from '@/components/chat/ContentBriefDetail.vue'  // W100 +25 双段折叠 (compact)
+import EventBadges from '@/components/chat/EventBadges.vue'  // W100 +26 SSE 事件徽章 (compact 模式)
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({

@@ -44,6 +44,7 @@ import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
 import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (📋 计划步骤用户可视化)
 import ContentBriefDetail from '@/components/chat/ContentBriefDetail.vue'  // W100 +25 双段折叠 (brief / detail 自动识别 \n\n)
+import EventBadges from '@/components/chat/EventBadges.vue'  // W100 +26 SSE 事件徽章 (synthesis / retry / critique / compressed)
 import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
@@ -666,6 +667,12 @@ onUnmounted(() => {
               :content="msg.content"
               class="msg-content"
               :data-testid="`desktop-cbd-${msg.id}`"
+            />
+            <!-- W100 +26: SSE 事件徽章 (synthesis 闪动 / retry 持续 / critique 完成 / compressed 一次) -->
+            <EventBadges
+              v-if="msg.role === 'assistant'"
+              :msg="msg"
+              :data-testid="`desktop-eb-${msg.id}`"
             />
             <div
               v-else-if="msg.content"
