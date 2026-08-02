@@ -15,6 +15,7 @@
       @open-menu="showDrawer = true"
       @toggle-theme="onToggleTheme"
       @search="onOpenSearch"
+      @open-context="showContextPanel = true"
     />
 
     <MobileSessionDrawer
@@ -149,6 +150,16 @@
       v-model="showTagsEditor"
       :session="dialogSession"
     />
+    <!-- W100 +29 上下文可见性面板 (移动端 bottom sheet) -->
+    <el-drawer
+      v-model="showContextPanel"
+      title="AI 记住了什么"
+      direction="btt"
+      size="60vh"
+      :destroy-on-close="true"
+    >
+      <ContextPanel :messages="messages" />
+    </el-drawer>
   </div>
   </MobileSwipeNavigation>
 </template>
@@ -189,6 +200,7 @@ import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import ShareDialog from '@/components/chat/ShareDialog.vue'
 import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
+import ContextPanel from '@/components/chat/ContextPanel.vue'  // W100 +29 上下文可见性面板
 import { ElMessageBox } from 'element-plus'
 
 const theme = useThemeStore()
@@ -221,6 +233,7 @@ const showSearch = ref(false)
 const showShareDialog = ref(false)
 const showExportDialog = ref(false)
 const showTagsEditor = ref(false)
+const showContextPanel = ref(false)  // W100 +29 上下文可见性面板
 const dialogSession = ref(null)
 
 function onOpenSearch() {
