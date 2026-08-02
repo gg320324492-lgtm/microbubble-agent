@@ -111,6 +111,16 @@ class Settings(BaseSettings):
     CLAUDE_MAX_TOKENS: int = 8192
     SESSION_WINDOW_SIZE: int = 30
 
+    # 2026-08-03 [W100 +31] qa-bench v3.1 D1: LLM 测评温度配置 (plan §D1)
+    # LLM 测评稳定性: temperature=0.0 (Anthropic deterministic mode) + 3 轮取众数 fallback.
+    # 默认 0.0 用于 qa-bench/测评场景; 默认流式聊天维持 0.3 (不在 settings 层覆盖, 走 app/core/llm.py 默认).
+    # 详见 C:\Users\pc\.claude\plans\qa-bench-v3.1-decisions.md §D1
+    LLM_TEMPERATURE: float = 0.0
+    # qa-bench 场景专用温度 (派工 v6 §段 5 反馈 #6 — 专用配置, 不硬编码到 body)
+    LLM_TEMPERATURE_QA_BENCH: float = 0.0
+    # 3 轮取众数 fallback rounds (qa-bench runner.py --rounds 参数 default)
+    LLM_QA_BENCH_ROUNDS: int = 3
+
     # 任务垃圾桶：软删除任务保留多少天后自动永久删除
     # 2026-06-03：硬编码 3 改为可配置，运维/测试时可临时缩短（如 0 立即清空）
     TRASH_RETENTION_DAYS: int = 3
