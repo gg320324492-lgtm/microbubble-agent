@@ -143,6 +143,32 @@ describe('RichContent.vue', () => {
     expect(wrapper.find('.meeting-card').exists()).toBe(true)
   })
 
+  it('默认展开真实内容且不渲染折叠按钮', async () => {
+    const RichContent = (await import('@/components/chat/RichContent.vue')).default
+    const wrapper = mount(RichContent, {
+      props: { block: { type: 'meeting', data: { meetings: [] } } }
+    })
+    expect(wrapper.find('.rich-expanded').isVisible()).toBe(true)
+    expect(wrapper.find('button[aria-expanded]').exists()).toBe(false)
+  })
+
+  it('collapsed_by_default=true 时保留折叠兼容', async () => {
+    const RichContent = (await import('@/components/chat/RichContent.vue')).default
+    const wrapper = mount(RichContent, {
+      props: { block: { type: 'meeting', collapsed_by_default: true, data: { meetings: [] } } }
+    })
+    expect(wrapper.find('.rich-expanded').exists()).toBe(true)
+    expect(wrapper.find('.rich-expanded').isVisible()).toBe(false)
+  })
+
+  it('collapsed_by_default=false 时展开真实内容', async () => {
+    const RichContent = (await import('@/components/chat/RichContent.vue')).default
+    const wrapper = mount(RichContent, {
+      props: { block: { type: 'meeting', collapsed_by_default: false, data: { meetings: [] } } }
+    })
+    expect(wrapper.find('.rich-expanded').isVisible()).toBe(true)
+  })
+
   it('未知 type 渲染为 fallback', async () => {
     const RichContent = (await import('@/components/chat/RichContent.vue')).default
     const wrapper = mount(RichContent, {
