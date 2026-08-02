@@ -599,6 +599,21 @@ async def retrieve_with_weights(
     except Exception as _e:
         logger.debug(f"[W99-RAG-1] query cache lookup skip: {_e}")
 
+    # 0b) 2026-08-03 [W100 +33] qa-bench v3.1 D3: retrieval_cache 5min TTL 短期路径
+    # qa-bench 模式启用条件: LLM_QA_BENCH_ROUNDS>=1 + LLM_TEMPERATURE_QA_BENCH=0.0
+    # 件 4 门控 B 守恒: 仅 body 追加, 不改原签名.
+    try:
+        from app.config import settings as _cfg
+        from app.services.retrieval_cache import get_retrieval_cache as _get_rc
+        if getattr(_cfg, "LLM_QA_BENCH_ROUNDS", 0) >= 1 and getattr(_cfg, "LLM_TEMPERATURE_QA_BENCH", 0.0) == 0.0:
+            _rc = _get_rc()
+            _cached_rc = _rc.get(query=query, user_id=user_id, tenant_id=tenant_id)
+            if _cached_rc is not None and _cached_rc.get("results"):
+                logger.debug(f"[W100-D3] retrieval_cache HIT (qa-bench, 5min TTL) for query={query[:30]}")
+                return _cached_rc["results"]
+    except Exception as _e:
+        logger.debug(f"[W100-D3] retrieval_cache lookup skip: {_e}")
+
     # 1) 同义词改写
     expanded_query = await _apply_synonyms(query) if enable_synonym_expansion else query
 
