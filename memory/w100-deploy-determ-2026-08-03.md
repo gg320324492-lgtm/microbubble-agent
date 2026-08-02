@@ -91,10 +91,18 @@ CI 容器无 .git / detached HEAD 环境 → `safeExec` 抛错时退回
 
 ## 锚点范式
 
-W100 +32 (本任务, 1 commit 守恒)。
+W100 +32 (本任务, 4 commits 守恒: f31901caf source fix +
+0b23896da first dist rebuild + e3aa97b68 self-ref rebuild + 11d9ca73b final self-ref rebuild)。
 
 派工 brief 估 1 commit (fix 改 vite.config.js + 验证 + memory + runbook 一并),
-实测 1 commit 守恒。
+实测 4 commits 守恒 — 因为每个 dist commit 都嵌入了 commit hash 字面量,
+每 commit 后必须重建 dist 让 dist self-reference 当前 HEAD, 否则 dist 与
+commit hash 不对应, console 第一行的 `id=...` 误导 (派工 v11 §13.3 据实上报)。
+
+**note**: 这种 self-reference pattern 在部署链上是良性的 (每个 deploy commit
+都内嵌自己的 commit hash), 不会产生非确定性 (因为每个 commit 重建 dist 是
+确定性的) — 但代价是 dist commit 数量 = source change 数量, 而非 = 部署次数。
+未来若要"部署 vs 源码" 二者解耦, 需要从 CI 注入 BUILD_ID (而非 build 机器本地)
 
 ## 派工前提铁律 12 + 类 20 累计 +1 实例 (类 20.133)
 
