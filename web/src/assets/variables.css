@@ -59,6 +59,16 @@
   --color-file-default-rgb: 144, 147, 153;
   --color-bg-warm: #FFF8F5;
 
+  /* W101 P3-A11Y: 统一 focus-visible token (WCAG 2.4.7 焦点可见)
+     各组件 (NavRail / PlanSteps / ContentBriefDetail / ChatMessageActions)
+     散落的 :focus-visible outline 抽 token, 改一处生效全部.
+     - --focus-outline-width: 2px (WCAG 推荐最低)
+     - --focus-outline-color: 复用 --color-primary (品牌色)
+     - --focus-outline-offset: 2px (避免与元素边重叠) */
+  --focus-outline-width: 2px;
+  --focus-outline-color: var(--color-primary);
+  --focus-outline-offset: 2px;
+
   /* ===== 侧边栏玻璃拟态 ===== */
   --color-bg-sidebar: rgba(255, 245, 240, 0.92);
   --color-sidebar-border: rgba(255, 122, 92, 0.12);
@@ -1938,6 +1948,22 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
 :root .dfcv-empty .empty-hint {
   opacity: 1;
   color: var(--color-text-secondary); /* #6B6E76 on #f5f7fa = 4.75 */
+}
+
+/* W101 P3-A11Y: 全局 :focus-visible 兜底 (WCAG 2.4.7)
+   组件内已有 :focus-visible 规则的 (e.g. NavRail / PlanSteps / ContentBriefDetail /
+   ChatMessageActions) 不受影响; 未明确写的元素 (e.g. 通用 <button>/<a>) 仍可见焦点.
+   复用变量 --focus-outline-width/color/offset 保持品牌色一致.
+   使用 :focus-visible 而非 :focus 避免鼠标点击时显示 outline (键盘用户专属). */
+:focus-visible {
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
+  outline-offset: var(--focus-outline-offset);
+  border-radius: 2px;
+}
+
+/* dark mode: focus 在深色背景下需更高对比度, 切换到 --color-primary-light */
+[data-theme="dark"] :focus-visible {
+  outline-color: var(--color-primary-light);
 }
 
 
