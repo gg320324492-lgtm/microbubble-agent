@@ -77,16 +77,28 @@
       >
         <div class="tti-detail-header">
           <span class="tti-detail-label">完整输出</span>
-          <button
-            v-if="hasOutput"
-            type="button"
-            class="tti-copy"
-            :data-testid="`tti-${index}-copy`"
-            :aria-label="copyLabel"
-            @click.stop="copyOutput"
-          >
-            {{ copied ? '✓ 已复制' : '📋 复制' }}
-          </button>
+          <div class="tti-detail-actions">
+            <button
+              v-if="jumpTarget"
+              type="button"
+              class="tti-jump"
+              :data-testid="`tti-${index}-jump`"
+              :aria-label="`${jumpTarget.label}：${trace.name}`"
+              @click.stop="emitJump"
+            >
+              {{ jumpTarget.label }}
+            </button>
+            <button
+              v-if="hasOutput"
+              type="button"
+              class="tti-copy"
+              :data-testid="`tti-${index}-copy`"
+              :aria-label="copyLabel"
+              @click.stop="copyOutput"
+            >
+              {{ copied ? '✓ 已复制' : '📋 复制' }}
+            </button>
+          </div>
         </div>
         <pre v-if="hasOutput" class="tti-json"><code>{{ prettyJson }}</code></pre>
         <div v-else class="tti-empty" :data-testid="`tti-${index}-empty`">
@@ -106,7 +118,7 @@ interface TraceItem {
   name?: string
   state?: 'running' | 'done'
   duration_ms?: number
-  tool_output?: Record<string, any>
+  tool_output?: Record<string, any> | any[]
   tool_output_preview?: string
   compression?: {
     original_count: number
@@ -120,6 +132,10 @@ const props = defineProps<{
   index: number
   /** 移动端紧凑模式：减小 padding + 36px tap target */
   compact?: boolean
+}>()
+
+const emit = defineEmits<{
+  jump: [target: { type: 'drive' | 'task' | 'meeting'; id?: string | number }]
 }>()
 
 const expanded = ref(false)
@@ -137,6 +153,49 @@ const prettyJson = computed(() => {
     return String(props.trace.tool_output)
   }
 })
+
+interface JumpTarget {
+  type: 'drive' | 'task' | 'meeting'
+  id?: string | number
+  label: string
+}
+
+function firstResult(output: Record<string, any> | any[] | undefined) {
+  if (!output) return undefined
+  if (Array.isArray(output)) return output[0]
+  for (const key of ['items', 'meetings', 'results', 'data', 'groups']) {
+    if (Array.isArray(output[key]) && output[key].length) return output[key][0]
+  }
+  return output
+}
+
+const jumpTarget = computed<JumpTarget | null>(() => {
+  if (props.trace.state === 'running' || !props.trace.tool_output) return null
+
+  const name = props.trace.name || ''
+  const output = props.trace.tool_output
+  const first = firstResult(output)
+  const id = first?.id ?? first?.meeting_id
+
+  if (['list_drive_files', 'search_my_files'].includes(name)) {
+    return id != null ? { type: 'drive', id, label: '📁 打开文件' } : null
+  }
+  if (['query_all_member_tasks', 'get_task_stats'].includes(name)) {
+    return { type: 'task', label: '📋 打开任务' }
+  }
+  if (name === 'list_meeting' || name === 'query_meetings' || name.includes('meeting')) {
+    return id != null
+      ? { type: 'meeting', id, label: '📅 打开会议' }
+      : { type: 'meeting', label: '📅 打开会议' }
+  }
+  return null
+})
+
+function emitJump() {
+  if (!jumpTarget.value) return
+  const { type, id } = jumpTarget.value
+  emit('jump', { type, id })
+}
 
 function toggle() {
   expanded.value = !expanded.value
@@ -277,6 +336,23 @@ async function copyOutput() {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+.tti-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tti-jump {
+  background: var(--color-primary-bg, #FFF0ED);
+  border: 1px solid var(--color-primary-border, rgba(255, 122, 92, 0.2));
+  color: var(--color-primary, #FF7A5C);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  min-height: 24px;
+}
+.tti-jump:hover { background: var(--color-primary, #FF7A5C); color: #fff; }
+.tti-jump:focus-visible { outline: 2px solid var(--color-primary, #FF7A5C); outline-offset: 1px; }
 .tti-copy {
   background: var(--color-primary-bg, #FFF0ED);
   border: 1px solid var(--color-primary-border, rgba(255, 122, 92, 0.2));

@@ -484,6 +484,23 @@ async function copyMessage(msg: ChatMessage) {
 // ============================================================================
 // W100 +24: 知识图谱 / 公式 / 假设入口跳转 (派工前提错配 #21: 实际 tab 路由, 非独立路由)
 const router = useRouter()
+function onToolJump(target: { type: 'drive' | 'task' | 'meeting'; id?: string | number }) {
+  try {
+    if (target.type === 'drive' && target.id != null) {
+      router.push({ name: 'DriveFileDetail', params: { id: String(target.id) } })
+    } else if (target.type === 'task') {
+      router.push({ name: 'Tasks', query: target.id != null ? { id: String(target.id) } : {} })
+    } else if (target.type === 'meeting') {
+      target.id != null
+        ? router.push({ name: 'MeetingDetail', params: { id: String(target.id) } })
+        : router.push({ name: 'Meetings' })
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[ChatViewSSE] onToolJump router.push failed', e)
+  }
+}
+
 function onProEntryClick(msg: ChatMessage, kind: 'graph' | 'formula' | 'hypothesis') {
   try {
     if (kind === 'graph') {
@@ -658,7 +675,7 @@ onUnmounted(() => {
             <TransitionGroup v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
               tag="div" name="trace" class="tool-trace">
               <ToolTraceItem v-for="(t, i) in msg.toolTrace" :key="`${i}-${t.name || t.label}`"
-                :trace="t" :index="i" :data-testid="`desktop-tti-${i}`" />
+                :trace="t" :index="i" :data-testid="`desktop-tti-${i}`" @jump="onToolJump" />
             </TransitionGroup>
 
             <!-- W100 +25: 双段折叠 (brief / detail 自动识别 \n\n) -->

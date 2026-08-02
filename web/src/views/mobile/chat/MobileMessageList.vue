@@ -20,6 +20,7 @@
           @regenerate="(m) => $emit('regenerate', m)"
           @copy="(m) => $emit('copy', m)"
           @pro-entry="(m, kind) => $emit('pro-entry', m, kind)"
+          @jump="(target) => $emit('jump', target)"
         />
       </template>
     </TransitionGroup>
@@ -69,7 +70,7 @@ const props = defineProps({
   sessionId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['longpress', 'play-tts', 'quick-action', 'followup'])
+const emit = defineEmits(['longpress', 'play-tts', 'quick-action', 'followup', 'regenerate', 'copy', 'pro-entry', 'jump'])
 
 const messagesRef = ref(null)
 const lastScrollTop = ref(0)
