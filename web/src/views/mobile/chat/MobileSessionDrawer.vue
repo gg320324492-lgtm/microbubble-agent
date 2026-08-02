@@ -57,6 +57,20 @@
             >已归档</button>
           </div>
 
+          <!-- W100 +28: 批量管理 toggle -->
+          <div class="batch-row">
+            <button
+              type="button"
+              class="batch-toggle-btn"
+              :class="{ active: batchMode }"
+              @click="toggleBatchMode"
+            >{{ batchMode ? '退出批量' : '批量管理' }}</button>
+            <template v-if="batchMode">
+              <button type="button" class="batch-mini-btn" @click="selectAll">全选</button>
+              <button type="button" class="batch-mini-btn" :disabled="!selectedIds.size" @click="clearSelection">清空</button>
+            </template>
+          </div>
+
           <div class="session-list">
             <LongPressWrapper
               v-for="session in filteredSessions"
@@ -64,24 +78,57 @@
               :delay="600"
               @longpress="onLongPress(session)"
             >
-              <button
-                type="button"
-                class="session-item"
-                :class="{ active: session.id === currentId }"
-                @click="onSwitch(session)"
+              <div
+                class="session-item-wrapper"
+                :class="{ active: session.id === currentId, selected: batchMode && selectedIds.has(session.id), 'batch-mode': batchMode }"
+                @click="batchMode ? toggleSelect(session.id) : onSwitch(session)"
               >
-                <div class="session-title">
-                  <span class="session-title-text">{{ session.title || '新对话' }}</span>
-                  <span v-if="session.is_pinned" class="pinned-mark" title="已收藏">📌</span>
-                </div>
-                <div class="session-preview">{{ session.preview || '暂无消息' }}</div>
-                <div v-if="session.tags && session.tags.length" class="session-tags">
-                  <span v-for="tag in session.tags.slice(0, 3)" :key="tag" class="tag-chip">{{ tag }}</span>
-                  <span v-if="session.tags.length > 3" class="tag-more">+{{ session.tags.length - 3 }}</span>
-                </div>
-              </button>
+                <label v-if="batchMode" class="batch-checkbox" @click.stop>
+                  <input
+                    type="checkbox"
+                    :checked="selectedIds.has(session.id)"
+                    @change="toggleSelect(session.id)"
+                    :aria-label="`选择 ${session.title || '新对话'}`"
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="session-item"
+                  :class="{ active: session.id === currentId }"
+                >
+                  <div class="session-title">
+                    <span class="session-title-text">{{ session.title || '新对话' }}</span>
+                    <span v-if="session.is_pinned" class="pinned-mark" title="已收藏">📌</span>
+                    <span v-if="session.is_archived" class="archived-mark" title="已归档">🗄️</span>
+                  </div>
+                  <div class="session-preview">{{ session.preview || '暂无消息' }}</div>
+                  <div v-if="session.tags && session.tags.length" class="session-tags">
+                    <span v-for="tag in session.tags.slice(0, 3)" :key="tag" class="tag-chip">{{ tag }}</span>
+                    <span v-if="session.tags.length > 3" class="tag-more">+{{ session.tags.length - 3 }}</span>
+                  </div>
+                </button>
+              </div>
             </LongPressWrapper>
             <div v-if="!sessions.length" class="empty">暂无会话</div>
+          </div>
+
+          <!-- W100 +28: 批量操作 action bar -->
+          <div v-if="batchMode" class="batch-action-bar" data-testid="mobile-batch-action-bar">
+            <span class="batch-count">已选 {{ selectedIds.size }} 个</span>
+            <div class="batch-actions">
+              <button
+                type="button"
+                class="batch-action-btn"
+                :disabled="!selectedIds.size"
+                @click="onBatchArchive"
+              >🗄️ 归档</button>
+              <button
+                type="button"
+                class="batch-action-btn danger"
+                :disabled="!selectedIds.size"
+                @click="onBatchDelete"
+              >🗑 删除</button>
+            </div>
           </div>
         </div>
       </div>
@@ -131,6 +178,9 @@ const emit = defineEmits([
   'toggle-pin',
   // [CHAT-P1-E E3] 移动端归档/恢复
   'toggle-archive',
+  // W100 +28: 批量操作
+  'batch-archive',
+  'batch-delete',
 ])
 
 // ============================================================================
@@ -203,6 +253,50 @@ const filteredSessions = computed(() => {
   }
   return props.sessions
 })
+
+// W100 +28: 批量操作
+const batchMode = ref(false)
+const selectedIds = ref(new Set())
+
+const toggleBatchMode = () => {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) selectedIds.value.clear()
+}
+
+const toggleSelect = (id) => {
+  if (selectedIds.value.has(id)) {
+    selectedIds.value.delete(id)
+  } else {
+    selectedIds.value.add(id)
+  }
+  selectedIds.value = new Set(selectedIds.value)
+}
+
+const selectAll = () => {
+  filteredSessions.value.forEach(s => selectedIds.value.add(s.id))
+  selectedIds.value = new Set(selectedIds.value)
+}
+
+const clearSelection = () => {
+  selectedIds.value.clear()
+  selectedIds.value = new Set()
+}
+
+const onBatchArchive = () => {
+  const ids = [...selectedIds.value]
+  emit('batch-archive', ids)
+  batchMode.value = false
+  selectedIds.value.clear()
+  selectedIds.value = new Set()
+}
+
+const onBatchDelete = () => {
+  const ids = [...selectedIds.value]
+  emit('batch-delete', ids)
+  batchMode.value = false
+  selectedIds.value.clear()
+  selectedIds.value = new Set()
+}
 </script>
 
 <style scoped>
@@ -427,4 +521,111 @@ const filteredSessions = computed(() => {
   color: var(--color-text-secondary);
   font-size: 12px;
 }
+
+/* W100 +28: 批量操作 */
+.batch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 8px;
+}
+.batch-toggle-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+.batch-toggle-btn.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+.batch-mini-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+.batch-mini-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.session-item-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.session-item-wrapper.active {
+  background: var(--color-primary-bg);
+}
+.session-item-wrapper.selected {
+  background: rgba(64, 158, 255, 0.08);
+}
+.session-item-wrapper.batch-mode {
+  padding: 0 4px;
+}
+.session-item-wrapper .session-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.batch-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.batch-checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.archived-mark { font-size: 11px; }
+
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
+  gap: 8px;
+  /* iOS 底部安全区 */
+  padding-bottom: calc(10px + var(--sab, 0px));
+}
+.batch-count {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.batch-actions {
+  display: flex;
+  gap: 8px;
+}
+.batch-action-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+}
+.batch-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.batch-action-btn.danger { color: var(--color-danger); border-color: var(--el-color-danger-light-5); }
 </style>
