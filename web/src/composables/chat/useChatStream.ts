@@ -151,7 +151,50 @@ const LEGACY_MESSAGES_KEY = 'chat_messages_v2' // 旧单会话兼容键（仅写
 const MESSAGES_KEY_PREFIX = 'chat_msgs_' // per-session 消息
 
 const PERSIST_DEBOUNCE_MS = 100
+const TEXT_DELTA_BATCH_MS = 100
 const MESSAGES_SLICE_KEEP = 200
+
+/**
+ * 将高频 text_delta 合并为低频 content 更新。非 text_delta 事件可主动 flush，
+ * 以保持 SSE 事件顺序（例如 retry 清空、done 最终文本替换）。
+ */
+export function createTextDeltaBatcher(
+  onFlush: (delta: string) => void,
+  delayMs = TEXT_DELTA_BATCH_MS,
+) {
+  let pending: string[] = []
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  function flush() {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+    if (pending.length === 0) return
+    const delta = pending.join('')
+    pending = []
+    onFlush(delta)
+  }
+
+  function push(delta: string) {
+    if (!delta) return
+    pending.push(delta)
+    if (!timer) timer = setTimeout(flush, delayMs)
+  }
+
+  function cancel() {
+    if (timer) clearTimeout(timer)
+    timer = null
+    pending = []
+  }
+
+  return {
+    push,
+    flush,
+    cancel,
+    get pendingCount() { return pending.length },
+  }
+}
 
 // ============================================================================
 // useChatStream Composable
@@ -279,11 +322,13 @@ export function useChatStream() {
     }
   }
 
-  /** debounce 持久化 — SSE 流式 yield 时调用，避免 localStorage 写入风暴 */
+  /** debounce 持久化 — SSE 批次 flush 后调用，避免 localStorage 写入风暴 */
   function persistSessionDebounced(id: string) {
     if (persistTimers[id]) clearTimeout(persistTimers[id])
     persistTimers[id] = setTimeout(() => {
-      persistSessionSync(id)
+      delete persistTimers[id]
+      // 对齐 Vue flush: 'post'：timer 到期后再排入 microtask，避开当前响应式更新栈。
+      queueMicrotask(() => persistSessionSync(id))
     }, PERSIST_DEBOUNCE_MS)
   }
 
@@ -573,17 +618,28 @@ export function useChatStream() {
     // targetSessionId 是 sendMessage 启动时捕获的闭包变量
     // 2026-07-13 #P1: 读三档 thinkingMode (fast/balanced/deep) 塞 fetch body
     const thinkingMode = ui.thinkingMode
-    for await (const evt of sseFetch(
-      '/api/v1/chat/stream',
-      {
-        message: content,
-        session_id: targetSessionId,
-        thinking_mode: thinkingMode,  // 2026-07-13 #P1 三档模式 (fast/balanced/deep)
-        // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
-      },
-      { signal }
-    )) {
-      const currentAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
+    const textDeltaBatcher = createTextDeltaBatcher((delta) => {
+      const targetAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
+      if (targetAssistant.state === 'aborted') return
+      targetAssistant.content = (targetAssistant.content || '') + delta
+      // 只在真正改变 content 的批次边界触发持久化，而不是每个 SSE delta 都重置 timer。
+      persistSessionDebounced(targetSessionId)
+    })
+
+    try {
+      for await (const evt of sseFetch(
+        '/api/v1/chat/stream',
+        {
+          message: content,
+          session_id: targetSessionId,
+          thinking_mode: thinkingMode,  // 2026-07-13 #P1 三档模式 (fast/balanced/deep)
+          // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
+        },
+        { signal }
+      )) {
+        // snapshot/control 事件必须先落下 pending delta，保持服务端事件顺序。
+        if (evt.type !== 'text_delta') textDeltaBatcher.flush()
+        const currentAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
 
       // 2026-06-14 方案 C Stage 4：abort 状态机守卫
       // 用户点 ⏹ → stopGeneration 把 state 改为 'aborted'
@@ -609,9 +665,9 @@ export function useChatStream() {
           }
           // 2026-07-02 Round 5c: 前端兜底剥除 fake XML (兜底防 Round 5a/5b 都没完全解决的情况)
           const cleanedDelta = stripFakeXml(evt.delta || '')
-          currentAssistant.content = (currentAssistant.content || '') + cleanedDelta
-          // [CHAT-P1-E E5] 检索过程可视化: 首个 text_delta → generating 阶段
-          if (currentAssistant.content && !currentAssistant._generatingDispatched) {
+          textDeltaBatcher.push(cleanedDelta)
+          // [CHAT-P1-E E5] 首个有效 text_delta 立即派发 generating；不等待 100ms content flush。
+          if (cleanedDelta && !currentAssistant._generatingDispatched) {
             currentAssistant._generatingDispatched = true
             window.dispatchEvent(new CustomEvent('chat:retrieval-status', {
               detail: {
@@ -909,8 +965,13 @@ export function useChatStream() {
           nextPhase,
         )
       }
-      // 流式增量持久化（防后台丢数据；debounce 100ms）
-      persistSessionDebounced(targetSessionId)
+      // 非 text_delta 事件仍需落本地状态；text_delta 由 batch flush 统一触发。
+      if (evt.type !== 'text_delta') persistSessionDebounced(targetSessionId)
+      }
+    } finally {
+      // 流正常结束或异常退出都不能丢最后不足 100ms 的增量。
+      textDeltaBatcher.flush()
+      textDeltaBatcher.cancel()
     }
   }
 
