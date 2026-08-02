@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:web/dist/assets/MobileRichCard-05764767.js
-import{R as c}from"./RichContent-62d6f6cf.js";import{e as r,y as t,z as a,c as l}from"./element-plus-desktop-0dead4fa.js";import"./index-d126b033.js";import"./echarts-b1c18b25.js";import"./marked.esm-c428be44.js";const d={__name:"MobileRichCard",props:{block:{type:Object,required:!0}},setup(e){const o=l(()=>c);return(s,m)=>(r(),t(a(o.value),{block:e.block,compact:!0,class:"mobile-rich-card"},null,8,["block"]))}};export{d as default};
-========
-import{R as c}from"./RichContent-3dfbbf00.js";import{e as r,y as t,z as a,c as l}from"./element-plus-desktop-69cbacd4.js";import"./index-3a068fba.js";import"./echarts-b1c18b25.js";import"./marked.esm-c428be44.js";const d={__name:"MobileRichCard",props:{block:{type:Object,required:!0}},setup(e){const o=l(()=>c);return(s,m)=>(r(),t(a(o.value),{block:e.block,compact:!0,class:"mobile-rich-card"},null,8,["block"]))}};export{d as default};
->>>>>>>> origin/chore/ui-context:web/dist/assets/MobileRichCard-cb3d89be.js
