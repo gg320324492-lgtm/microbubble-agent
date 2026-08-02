@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * SessionSidebar.vue — 多会话侧栏 (#043 Phase 6 + v78 UI-redesign)
  *
@@ -10,15 +10,16 @@
  *
  * 2026-07-01 修复侧边栏点击跳动（bug 2）:
  * - 1) CSS: .session-list 加 overflow-anchor: none（关闭 Chrome scroll anchoring）
- * - 2) CSS: .session-item 默认 border-left: 3px solid transparent（占位避免 active 切换 reflow）
- * - 3) JS: onBeforeUpdate/onUpdated 保留 scrollTop（filterKw / v-for reorder 时位置不丢）
+ * - 2) JS: onBeforeUpdate/onUpdated 保留 scrollTop（filterKw / v-for reorder 时位置不丢）
  */
-import { ref, computed, onBeforeUpdate, onUpdated, nextTick } from 'vue'
+import { ref, computed, onBeforeUpdate, onUpdated, nextTick, type Ref } from 'vue'
 import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatHistoryStore } from '@/stores/chatHistory'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Search, Edit, Share, Download, CollectionTag, Delete, FolderOpened, Top, Select } from '@element-plus/icons-vue'
 import SessionActions from './SessionActions.vue'
+import SessionItemRow from './SessionItemRow.vue'  // W100 +45 P3-VIRTUAL RETRY
+import { useVirtualList } from '@/composables/useVirtualList'  // W100 +45 P3-VIRTUAL RETRY
 
 const emit = defineEmits(['switch', 'create', 'share', 'export', 'edit-tags'])
 const props = defineProps({ collapsed: { type: Boolean, default: false } })
@@ -35,6 +36,19 @@ const contextMenuY = ref(0)
 // W100 +28: 批量操作模式
 const batchMode = ref(false)
 const selectedIds = ref(new Set())
+
+// W100 +45 P3-VIRTUAL RETRY: session 列表专用虚拟滚动
+// 经验值: session 卡片高 56px, 阈值 50 (会话 > 50 启用虚拟化)
+// batch mode 下统一虚拟; 分组模式 (非 batch) 下每组独立虚拟 (3 个独立实例共享同一容器)
+// 因为 batch 模式 filteredSessions 单一列表 + 分组模式 pinned/recent 各自独立
+const SESSION_ITEM_HEIGHT = 56
+const SESSION_VIRTUAL_THRESHOLD = 50
+const sessionListRef = ref<HTMLElement | null>(null)  // 共享滚动容器
+// 实际 virtualList 创建在 groupedSessions / filteredSessions 声明之后 (见下方)
+// 3 个 let 变量, 避免 TDZ hoist 报错
+let pinnedVirtual: ReturnType<typeof useVirtualList>
+let recentVirtual: ReturnType<typeof useVirtualList>
+let filteredVirtual: ReturnType<typeof useVirtualList>
 
 const filteredSessions = computed(() => {
   const kw = filterKw.value.trim().toLowerCase()
@@ -184,6 +198,36 @@ const groupedSessions = computed(() => {
   return { pinned, recent }
 })
 
+// W100 +45 P3-VIRTUAL RETRY: 虚拟滚动实例初始化
+// 必须在 groupedSessions / filteredSessions 之后, 这样 items 能绑到 computed
+// 注意: 这是 setup 阶段同步初始化, 3 个 useVirtualList 共享 sessionListRef 容器
+// 但各自维护 visibleItems (基于自己的 items ref 分组)
+// 滚动事件通过容器自带的 scroll listener (useVirtualList 内部) 共享
+const pinnedItemsRef = computed(() => groupedSessions.value.pinned) as unknown as Ref<readonly any[]>
+const recentItemsRef = computed(() => groupedSessions.value.recent) as unknown as Ref<readonly any[]>
+const filteredItemsRef = computed(() => filteredSessions.value) as unknown as Ref<readonly any[]>
+pinnedVirtual = useVirtualList({
+  containerRef: sessionListRef as unknown as Ref<HTMLElement | null>,
+  items: pinnedItemsRef,
+  itemHeight: SESSION_ITEM_HEIGHT,
+  threshold: SESSION_VIRTUAL_THRESHOLD,
+  overscan: 3,
+})
+recentVirtual = useVirtualList({
+  containerRef: sessionListRef as unknown as Ref<HTMLElement | null>,
+  items: recentItemsRef,
+  itemHeight: SESSION_ITEM_HEIGHT,
+  threshold: SESSION_VIRTUAL_THRESHOLD,
+  overscan: 3,
+})
+filteredVirtual = useVirtualList({
+  containerRef: sessionListRef as unknown as Ref<HTMLElement | null>,
+  items: filteredItemsRef,
+  itemHeight: SESSION_ITEM_HEIGHT,
+  threshold: SESSION_VIRTUAL_THRESHOLD,
+  overscan: 3,
+})
+
 // W100 +28: 批量操作
 const toggleBatchMode = () => {
   batchMode.value = !batchMode.value
@@ -250,7 +294,7 @@ const batchDelete = async () => {
 // 切会话 / filterKw 变化 / v-for reorder 时,Vue 会 re-render .session-item 列表
 // Chrome 浏览器会尝试 scroll anchoring 自动调整 scrollTop → 用户感知为"跳动"
 // 解决: 渲染前快照 scrollTop, 渲染后 nextTick 恢复
-const sessionListRef = ref(null)
+// W100 +45 P3-VIRTUAL: sessionListRef 已在文件顶部声明 (供 useVirtualList 共享容器)
 let pendingScrollTop = null
 
 onBeforeUpdate(() => {
@@ -366,136 +410,227 @@ onUpdated(() => {
         <div v-if="groupedSessions.pinned.length" class="session-group-header" role="heading" aria-level="3">
           <span class="group-icon">📌</span><span>置顶</span>
         </div>
-        <div
-          v-for="s in groupedSessions.pinned"
-          :key="s.id"
-          :data-session-id="s.id"
-          class="session-item"
-          :class="{ active: s.id === store.currentId }"
-          @click="onSwitch(s.id)"
-          @contextmenu="onContextMenu(s, $event)"
-          @touchstart="onTouchStart(s, $event)"
-          @touchend="onTouchEnd"
-          @touchmove="onTouchEnd"
-        >
-          <div class="session-content">
-            <div class="session-title">
-              <span class="session-title-text">{{ s.title || '新对话' }}</span>
-              <span v-if="s.is_pinned" class="pinned-mark" title="已收藏" aria-label="已收藏">📌</span>
-              <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
-              <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端" aria-label="已同步到云端">✓</span>
-              <span v-else-if="s._syncStatus === 'error'" class="error-tag" title="同步失败" aria-label="同步失败">⚠</span>
-              <el-tag
-                v-for="tag in (s.tags || []).slice(0, 2)"
-                :key="tag"
-                size="small"
-                effect="plain"
-                class="session-tag-chip"
-              >{{ tag }}</el-tag>
-              <el-tag
-                v-if="(s.tags || []).length > 2"
-                size="small"
-                effect="plain"
-                class="session-tag-more"
-              >+{{ s.tags.length - 2 }}</el-tag>
-            </div>
-            <div class="session-meta">
-              <span class="time">{{ formatTime(s.updatedAt) }}</span>
-              <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
-            </div>
-            <div v-if="s.preview" class="session-preview">{{ s.preview }}</div>
+        <!-- W100 +45 P3-VIRTUAL: 置顶组虚拟化 -->
+        <template v-if="pinnedVirtual.isVirtualized.value">
+          <div
+            class="virtual-list-spacer"
+            :style="{ position: 'relative', height: pinnedVirtual.totalHeight.value + 'px' }"
+          >
+            <SessionItemRow
+              v-for="entry in pinnedVirtual.visibleItems.value"
+              :key="`pinned-${entry.item.id}-${entry.index}`"
+              :session="entry.item"
+              :active="entry.item.id === store.currentId"
+              :store="store"
+              :format-time="formatTime"
+              :on-switch="onSwitch"
+              :on-context-menu="onContextMenu"
+              :on-touch-start="onTouchStart"
+              :on-touch-end="onTouchEnd"
+              :on-toggle-pinned="onTogglePinned"
+              :on-toggle-archive="onToggleArchive"
+              :on-delete="onDelete"
+              :toggle-select="toggleSelect"
+              :is-virtual="true"
+              :virtual-top="entry.index * pinnedVirtual.itemHeight"
+              @switch="onSwitch"
+              @toggle="toggleSelect"
+            />
           </div>
-          <!-- W100 +28: hover 快捷操作 (非批量模式) -->
-          <SessionActions
-            mode="sidebar"
-            :session="s"
-            @pin="onTogglePinned"
-            @archive="onToggleArchive"
-            @delete="onDelete"
-          />
-        </div>
+        </template>
+        <template v-else>
+          <div
+            v-for="s in groupedSessions.pinned"
+            :key="s.id"
+            :data-session-id="s.id"
+            class="session-item"
+            :class="{ active: s.id === store.currentId }"
+            @click="onSwitch(s.id)"
+            @contextmenu="onContextMenu(s, $event)"
+            @touchstart="onTouchStart(s, $event)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchEnd"
+          >
+            <div class="session-content">
+              <div class="session-title">
+                <span class="session-title-text">{{ s.title || '新对话' }}</span>
+                <span v-if="s.is_pinned" class="pinned-mark" title="已收藏" aria-label="已收藏">📌</span>
+                <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
+                <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端" aria-label="已同步到云端">✓</span>
+                <span v-else-if="s._syncStatus === 'error'" class="error-tag" title="同步失败" aria-label="同步失败">⚠</span>
+                <el-tag
+                  v-for="tag in (s.tags || []).slice(0, 2)"
+                  :key="tag"
+                  size="small"
+                  effect="plain"
+                  class="session-tag-chip"
+                >{{ tag }}</el-tag>
+                <el-tag
+                  v-if="(s.tags || []).length > 2"
+                  size="small"
+                  effect="plain"
+                  class="session-tag-more"
+                >+{{ s.tags.length - 2 }}</el-tag>
+              </div>
+              <div class="session-meta">
+                <span class="time">{{ formatTime(s.updatedAt) }}</span>
+                <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
+              </div>
+              <div v-if="s.preview" class="session-preview">{{ s.preview }}</div>
+            </div>
+            <SessionActions
+              mode="sidebar"
+              :session="s"
+              @pin="onTogglePinned"
+              @archive="onToggleArchive"
+              @delete="onDelete"
+            />
+          </div>
+        </template>
         <!-- 最近组 -->
         <div v-if="groupedSessions.recent.length" class="session-group-header" role="heading" aria-level="3">
           <span class="group-icon">🕒</span><span>最近</span>
         </div>
-        <div
-          v-for="s in groupedSessions.recent"
-          :key="s.id"
-          :data-session-id="s.id"
-          class="session-item"
-          :class="{ active: s.id === store.currentId }"
-          @click="onSwitch(s.id)"
-          @contextmenu="onContextMenu(s, $event)"
-          @touchstart="onTouchStart(s, $event)"
-          @touchend="onTouchEnd"
-          @touchmove="onTouchEnd"
-        >
-          <div class="session-content">
-            <div class="session-title">
-              <span class="session-title-text">{{ s.title || '新对话' }}</span>
-              <span v-if="s.is_pinned" class="pinned-mark" title="已收藏" aria-label="已收藏">📌</span>
-              <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
-              <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端" aria-label="已同步到云端">✓</span>
-              <span v-else-if="s._syncStatus === 'error'" class="error-tag" title="同步失败" aria-label="同步失败">⚠</span>
-              <el-tag
-                v-for="tag in (s.tags || []).slice(0, 2)"
-                :key="tag"
-                size="small"
-                effect="plain"
-                class="session-tag-chip"
-              >{{ tag }}</el-tag>
-              <el-tag
-                v-if="(s.tags || []).length > 2"
-                size="small"
-                effect="plain"
-                class="session-tag-more"
-              >+{{ s.tags.length - 2 }}</el-tag>
-            </div>
-            <div class="session-meta">
-              <span class="time">{{ formatTime(s.updatedAt) }}</span>
-              <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
-            </div>
-            <div v-if="s.preview" class="session-preview">{{ s.preview }}</div>
+        <!-- W100 +45 P3-VIRTUAL: 最近组虚拟化 -->
+        <template v-if="recentVirtual.isVirtualized.value">
+          <div
+            class="virtual-list-spacer"
+            :style="{ position: 'relative', height: recentVirtual.totalHeight.value + 'px' }"
+          >
+            <SessionItemRow
+              v-for="entry in recentVirtual.visibleItems.value"
+              :key="`recent-${entry.item.id}-${entry.index}`"
+              :session="entry.item"
+              :active="entry.item.id === store.currentId"
+              :store="store"
+              :format-time="formatTime"
+              :on-switch="onSwitch"
+              :on-context-menu="onContextMenu"
+              :on-touch-start="onTouchStart"
+              :on-touch-end="onTouchEnd"
+              :on-toggle-pinned="onTogglePinned"
+              :on-toggle-archive="onToggleArchive"
+              :on-delete="onDelete"
+              :toggle-select="toggleSelect"
+              :is-virtual="true"
+              :virtual-top="entry.index * recentVirtual.itemHeight"
+              @switch="onSwitch"
+              @toggle="toggleSelect"
+            />
           </div>
-          <SessionActions
-            mode="sidebar"
-            :session="s"
-            @pin="onTogglePinned"
-            @archive="onToggleArchive"
-            @delete="onDelete"
-          />
-        </div>
+        </template>
+        <template v-else>
+          <div
+            v-for="s in groupedSessions.recent"
+            :key="s.id"
+            :data-session-id="s.id"
+            class="session-item"
+            :class="{ active: s.id === store.currentId }"
+            @click="onSwitch(s.id)"
+            @contextmenu="onContextMenu(s, $event)"
+            @touchstart="onTouchStart(s, $event)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchEnd"
+          >
+            <div class="session-content">
+              <div class="session-title">
+                <span class="session-title-text">{{ s.title || '新对话' }}</span>
+                <span v-if="s.is_pinned" class="pinned-mark" title="已收藏" aria-label="已收藏">📌</span>
+                <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
+                <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端" aria-label="已同步到云端">✓</span>
+                <span v-else-if="s._syncStatus === 'error'" class="error-tag" title="同步失败" aria-label="同步失败">⚠</span>
+                <el-tag
+                  v-for="tag in (s.tags || []).slice(0, 2)"
+                  :key="tag"
+                  size="small"
+                  effect="plain"
+                  class="session-tag-chip"
+                >{{ tag }}</el-tag>
+                <el-tag
+                  v-if="(s.tags || []).length > 2"
+                  size="small"
+                  effect="plain"
+                  class="session-tag-more"
+                >+{{ s.tags.length - 2 }}</el-tag>
+              </div>
+              <div class="session-meta">
+                <span class="time">{{ formatTime(s.updatedAt) }}</span>
+                <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
+              </div>
+              <div v-if="s.preview" class="session-preview">{{ s.preview }}</div>
+            </div>
+            <SessionActions
+              mode="sidebar"
+              :session="s"
+              @pin="onTogglePinned"
+              @archive="onToggleArchive"
+              @delete="onDelete"
+            />
+          </div>
+        </template>
       </template>
       <!-- W100 +28: 批量模式 (flat list + checkbox) -->
       <template v-else>
-        <div
-          v-for="s in filteredSessions"
-          :key="s.id"
-          :data-session-id="s.id"
-          class="session-item batch-item"
-          :class="{ active: s.id === store.currentId, selected: selectedIds.has(s.id) }"
-          @click="toggleSelect(s.id)"
-        >
-          <label class="batch-checkbox" @click.stop>
-            <input
-              type="checkbox"
-              :checked="selectedIds.has(s.id)"
-              @change="toggleSelect(s.id)"
-              :aria-label="`选择 ${s.title || '新对话'}`"
+        <!-- W100 +45 P3-VIRTUAL: 批量模式统一虚拟化 -->
+        <template v-if="filteredVirtual.isVirtualized.value">
+          <div
+            class="virtual-list-spacer"
+            :style="{ position: 'relative', height: filteredVirtual.totalHeight.value + 'px' }"
+          >
+            <SessionItemRow
+              v-for="entry in filteredVirtual.visibleItems.value"
+              :key="`filtered-${entry.item.id}-${entry.index}`"
+              :session="entry.item"
+              :active="entry.item.id === store.currentId"
+              :selected="selectedIds.has(entry.item.id)"
+              :show-batch-checkbox="true"
+              :store="store"
+              :format-time="formatTime"
+              :on-switch="onSwitch"
+              :on-context-menu="onContextMenu"
+              :on-touch-start="onTouchStart"
+              :on-touch-end="onTouchEnd"
+              :on-toggle-pinned="onTogglePinned"
+              :on-toggle-archive="onToggleArchive"
+              :on-delete="onDelete"
+              :toggle-select="toggleSelect"
+              :is-virtual="true"
+              :virtual-top="entry.index * filteredVirtual.itemHeight"
+              @switch="onSwitch"
+              @toggle="toggleSelect"
             />
-          </label>
-          <div class="session-content">
-            <div class="session-title">
-              <span class="session-title-text">{{ s.title || '新对话' }}</span>
-              <span v-if="s.is_pinned" class="pinned-mark">📌</span>
-              <span v-if="s.is_archived" class="archived-mark" title="已归档">🗄️</span>
-            </div>
-            <div class="session-meta">
-              <span class="time">{{ formatTime(s.updatedAt) }}</span>
-              <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
+          </div>
+        </template>
+        <template v-else>
+          <div
+            v-for="s in filteredSessions"
+            :key="s.id"
+            :data-session-id="s.id"
+            class="session-item batch-item"
+            :class="{ active: s.id === store.currentId, selected: selectedIds.has(s.id) }"
+            @click="toggleSelect(s.id)"
+          >
+            <label class="batch-checkbox" @click.stop>
+              <input
+                type="checkbox"
+                :checked="selectedIds.has(s.id)"
+                @change="toggleSelect(s.id)"
+                :aria-label="`选择 ${s.title || '新对话'}`"
+              />
+            </label>
+            <div class="session-content">
+              <div class="session-title">
+                <span class="session-title-text">{{ s.title || '新对话' }}</span>
+                <span v-if="s.is_pinned" class="pinned-mark">📌</span>
+                <span v-if="s.is_archived" class="archived-mark" title="已归档">🗄️</span>
+              </div>
+              <div class="session-meta">
+                <span class="time">{{ formatTime(s.updatedAt) }}</span>
+                <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </template>
       <div v-if="!filteredSessions.length && !store.sessions.length" class="empty">暂无会话</div>
       <div v-else-if="!filteredSessions.length" class="empty">没有匹配「{{ filterKw }}」的会话</div>
