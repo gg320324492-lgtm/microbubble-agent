@@ -1,5 +1,0 @@
-<<<<<<<< HEAD:web/dist/assets/useIsMobile-a17d47fa.js
-import{f}from"./index-d126b033.js";import{o as p,c as o}from"./element-plus-desktop-0dead4fa.js";const s=Object.freeze({xs:480,sm:768,md:1024,lg:1280});function g(){const{width:t,height:r,dpr:i,isMobile:n,isTablet:m,isDesktop:u,isPortrait:c}=f(),l=o(()=>t.value<s.sm),a=o(()=>{const e=t.value;return e<s.sm?"xs":e<s.md?"sm":e<s.lg?"md":"lg"});return p(()=>{}),{width:t,height:r,dpr:i,bp:a,isMobileXS:l,isMobile:n,isTablet:m,isDesktop:u,isPortrait:c}}export{g as u};
-========
-import{f}from"./index-3a068fba.js";import{o as p,c as o}from"./element-plus-desktop-69cbacd4.js";const s=Object.freeze({xs:480,sm:768,md:1024,lg:1280});function g(){const{width:t,height:r,dpr:i,isMobile:n,isTablet:m,isDesktop:u,isPortrait:c}=f(),l=o(()=>t.value<s.sm),a=o(()=>{const e=t.value;return e<s.sm?"xs":e<s.md?"sm":e<s.lg?"md":"lg"});return p(()=>{}),{width:t,height:r,dpr:i,bp:a,isMobileXS:l,isMobile:n,isTablet:m,isDesktop:u,isPortrait:c}}export{g as u};
->>>>>>>> origin/chore/ui-context:web/dist/assets/useIsMobile-9457a16e.js
