@@ -20,7 +20,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny, View } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
@@ -46,6 +46,7 @@ import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step �
 import ContentBriefDetail from '@/components/chat/ContentBriefDetail.vue'  // W100 +25 双段折叠 (brief / detail 自动识别 \n\n)
 import EventBadges from '@/components/chat/EventBadges.vue'  // W100 +26 SSE 事件徽章 (synthesis / retry / critique / compressed)
 import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
+import ContextPanel from '@/components/chat/ContextPanel.vue'  // W100 +29 上下文可见性面板
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
@@ -122,6 +123,7 @@ const voiceMode = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const sidebarCollapsed = ref(false)
+const showContextPanel = ref(false)  // W100 +29 上下文可见性面板
 const loading = ref(false)
 
 // 网络状态
@@ -582,6 +584,17 @@ onUnmounted(() => {
           </div>
           <div class="header-right">
             <el-button
+              id="chat-header-context-toggle"
+              name="chat-header-context-toggle"
+              text
+              size="small"
+              aria-label="AI 记住了什么"
+              title="AI 记住了什么"
+              @click="showContextPanel = true"
+            >
+              <el-icon><View /></el-icon>
+            </el-button>
+            <el-button
               id="chat-header-new-session"
               name="chat-header-new-session"
               type="primary"
@@ -901,6 +914,16 @@ onUnmounted(() => {
       v-model="showTagsEditor"
       :session="dialogSession"
     />
+    <!-- W100 +29 上下文可见性面板 -->
+    <el-drawer
+      v-model="showContextPanel"
+      title="AI 记住了什么"
+      direction="rtl"
+      size="380px"
+      :destroy-on-close="true"
+    >
+      <ContextPanel :messages="messages" />
+    </el-drawer>
   </div>
 </template>
 
