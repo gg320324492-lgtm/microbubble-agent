@@ -78,6 +78,32 @@ git push origin main
 
 ---
 
+## 当前状态 (2026-08-02 W100 RAG 升级收口后 plans 审计 + 部署 bug 修复 — 锚点范式 W100 末 ~534 → W100 +28(主仓库)/+29(主仓库 + worktree memory)/+30(worktree memory) 据实累计 ~537, 主仓库 HEAD = `ed79b2558`, 类 20.135/20.136 新增)
+
+**三轮新工作收口 (W100 +28/+29/+30, UI 可见性增强 + plans Status 据实审计 + auto-deploy Step 3 fail-loud 修复)**:
+
+1. **W100 +28 主仓库 UI 体验链**: UI-CONTEXT 上下文可见性面板、UI-ARCHIVE 会话归档、UI-TOOL-JUMP `tool_use` 跳详情、7 事件 badge、content 双段折叠已落地；merge commit 物证为 `6abb874e1` / `3f6dc2e67` / `91d359188` / `fc3f50258` / `479ed92c2`。
+2. **plans 审计 (worktree +28, `8b4133593`)**: 对 65 个非 stub plan 做 `git show` + 源码 grep 三验证，发现 Status 系统性失真；26 份据实更新，8 份真正未完成据实标注：`exe-logical-pie` DEFERRED（含实时语音助手）、`dazzling-leaping-pretzel` DEFERRED、`2-3-plan-floating-popcorn` 与 `nature-majestic-biscuit` NOT_IN_REPO、Self-RAG REINTRODUCED、`qa-bench-v3.1` PARTIAL 4/8、`pwa-sw-iridescent-honey` PARTIAL、`a-c-mighty-phoenix` PARTIAL；另 13 份 BORROWED_COMMIT 改用真实 commit。
+3. **auto-deploy.sh Step 3 grep+pipefail bug 修复 (主仓库 +29, `d6ee1532c`)**: `scripts/auto-deploy.sh` line 198 的 `UNTRACKED_DIST` grep 管道加 `|| true` 关键兜底，line 174 的 alembic HEAD grep 加 `|| echo "0"` latent 兜底；worktree +30 完成 memory 沉淀。根因是 `set -euo pipefail` 下成功场景 grep 无匹配也返回 1，导致 force-add 后脚本中止。
+
+**派工 v11 §9 锚点前缀规则实战**: UI-CONTEXT `+29` 与 auto-deploy fix `+29` 为允许的跨分支撞号，两条提交 hash 不同，均保留物证，不擅自改号。
+
+**派工前提铁律与 Self-RAG 风险**:
+- **类 20.135**: plans Status 段必须用 plan-specific commit + `git show` + 源码 grep 三验证；W66 通用模板/借用同 wave commit 会造成系统性失真，不能信 Status 自述。
+- **类 20.136**: `set -euo pipefail` 下 grep 无匹配是合法空结果而非脚本成功路径异常；命令替换管道必须显式 `|| true` 或数值 `|| echo "0"` 兜底，commit `d6ee1532c` 精确修复 Step 3。
+- Self-RAG 是 W100 P1 有意重新引入的新实现，但尚未完成效果 benchmark；R7/R8 benchmark 验证待派工，plan 已就绪：`~/.claude/plans/selfrag-r7-r8-benchmark-verify-2026-08-02.md`。若仍 0 触发或无质量提升，沿用证伪决策再次删除，不第三次反复。
+
+**本轮 5 件套守恒实测/沿用**:
+1. alembic: `python -m alembic heads` 应输出 1 head `096_add_rag_multimodal_metrics`（W100 RAG-6 head 守恒，本文档未改 migration）。
+2. pytest: 本轮不强求重跑，沿用 W100-RAG-6 基线 **242/242 PASS**。
+3. PWA build: 本次未涉及 frontend，仅 CLAUDE.md 文本 + `scripts/` 修，沿用 W100-RAG-6 基线（`vite-plugin-pwa disable: true`，PWA 已禁用）。
+4. 0 production code: 严格守恒，仅 CLAUDE.md / `memory/` / `scripts/` 范畴，未改 `app/` 或 `web/src/`。
+5. 锚点范式: 实测口径 `git log origin/main --oneline -50 | grep -oE 'W10[0-9] \\+[0-9.]+'`，据实标注 W100 +28/+29/+30，W100 末 ~534 → ~537；主仓库当前 HEAD = `ed79b2558`。
+
+**关联沉淀**: `memory/plans-audit-2026-08-02.md`、`memory/selfrag-w100-reintro-unverified-2026-08-02.md`、`memory/auto-deploy-sh-step3-grep-pipefail-abort-2026-08-02.md`（如主仓库缺失则沿用对应 worktree memory 物证）。
+
+---
+
 ## 当前状态 (2026-08-02 W99 Thinking Capsule + S-series + DEPLOY-AUTO 全收口 — 历史段落, 锚点范式 W98 末 ~490 → W99 +12..+16 (5 commits Thinking Capsule) + S1..S4 + GC + DEPLOY-AUTO +3 = 16 commits 漂移据实, 16 commits 合并 main + 推 origin/main + 服务器 webhook 自动触发 + 本地 PC docker restart, 类 20 实战 116+ 据实上报 (W99 S-series 3 新增 + DEPLOY-AUTO 4 新增), 0 production code 守恒, 主指挥协调范式第 N 次派工)
 
 **W99 全收口 (主拍连续 7+1+1 派工, 真问题不是模型切实时版本而是 4 处流式管道未打通 + 本地 PC 部署链空白 + Thinking Capsule 5 commits 链路) — 历史段落, 完整内容已被上方 W99-W100 RAG 升级 6 批全收口段覆盖, 此处仅保留派工 brief 引用**:
