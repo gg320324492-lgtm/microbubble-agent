@@ -104,6 +104,19 @@ git push origin main
 
 ---
 
+## W100 构建确定性永久纪律（2026-08-03，类 20.133）
+
+- **Vite build 必须 deterministic**：同一 source、同一依赖锁定版本、同一构建配置必须产出相同的 `dist` 文件内容、文件名和 hash；提交前应使用两次连续 build + `diff -r` 或 manifest/hash 清单核验。
+- **禁止向构建产物注入进程态值**：build-time `define`、banner/footer、插件 `augmentChunkHash` 等不得使用 `process.env`、`Date.now()`、`new Date()`、`Math.random()`、`crypto.randomUUID()`、`process.pid` 或其他随机/时间/进程 ID 生成 build ID。若需要版本标识，必须从 git commit/tree hash 或 CI 显式固定输入派生。
+- **`NODE_ENV` 必须在 build script 显式声明**：`NODE_ENV` 与 Vite `mode` 是两个独立维度；不得假定 `vite build` 的 production mode 会替代 `process.env.NODE_ENV`。跨平台脚本应使用仓库认可的环境变量注入方式，并在 CI 日志中打印并核验实际值。
+- **Vite/Rollup 默认不会凭时间生成 chunk hash**：`[hash]` 是渲染内容及依赖关系的内容 hash；任何插件、loader、注入常量或非固定环境输入改变 chunk 字节，都会沿依赖图触发连锁 rename。调查证据见 `docs/research-build-determinism-2026-08-03.md`。
+- **异常 fallback 也必须 fail-loud 或确定**：无 `.git`/detached 环境不得静默退回 PID+时间随机标识；应由 CI 提供固定 `VITE_BUILD_ID`/`VITE_BUILD_TIMESTAMP`，或明确失败并阻止发布。`f31901caf` 的现有 fallback 是后续加固留口，不得复制到新构建配置。
+- **构建锁定纪律**：使用 `npm ci`、提交并校验 `package-lock.json`，固定 Node/Vite/Rollup 版本；不得用未锁定的 `npm install` 作为可复现 build 证据。
+
+类 20.133 的实战证据与 18 项调查反馈详见 `docs/research-build-determinism-2026-08-03.md`；本任务仅新增文档/规则/memory，不修改 `app/`、`web/src/` 或构建实现。
+
+---
+
 ## 当前状态 (2026-08-02 W99 Thinking Capsule + S-series + DEPLOY-AUTO 全收口 — 历史段落, 锚点范式 W98 末 ~490 → W99 +12..+16 (5 commits Thinking Capsule) + S1..S4 + GC + DEPLOY-AUTO +3 = 16 commits 漂移据实, 16 commits 合并 main + 推 origin/main + 服务器 webhook 自动触发 + 本地 PC docker restart, 类 20 实战 116+ 据实上报 (W99 S-series 3 新增 + DEPLOY-AUTO 4 新增), 0 production code 守恒, 主指挥协调范式第 N 次派工)
 
 **W99 全收口 (主拍连续 7+1+1 派工, 真问题不是模型切实时版本而是 4 处流式管道未打通 + 本地 PC 部署链空白 + Thinking Capsule 5 commits 链路) — 历史段落, 完整内容已被上方 W99-W100 RAG 升级 6 批全收口段覆盖, 此处仅保留派工 brief 引用**:
