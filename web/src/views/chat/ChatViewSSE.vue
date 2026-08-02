@@ -48,7 +48,8 @@ import EventBadges from '@/components/chat/EventBadges.vue'  // W100 +26 SSE 事
 import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
 import ContextPanel from '@/components/chat/ContextPanel.vue'  // W100 +29 上下文可见性面板
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
-import { useChatStream } from '@/composables/chat/useChatStream'
+import { useMemo } from '@/composables/useMemo'
+import { useChatStream, type ChatMessage } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useChatSessionsStore } from '@/stores/chatSessions'
@@ -89,6 +90,11 @@ const {
   playTTS,
   asrRecognize,
 } = useChatStream()
+
+// Cache the message-id lookup used by regenerate; unrelated UI updates reuse it.
+const messageIndexById = useMemo(() => new Map(
+  messages.value.map((message, index) => [message.id, index]),
+))
 
 // ============================================================================
 // 主题（PR #1 useThemeStore）
@@ -424,7 +430,7 @@ async function regenerate(msg: ChatMessage) {
   }
   // 查找目标 msg 之前的最后一条 user 消息
   const list = messages.value || []
-  const idx = list.findIndex((m) => m.id === msg.id)
+  const idx = messageIndexById.value.get(msg.id) ?? -1
   if (idx === -1) {
     ElMessage.error('找不到原始消息，无法重新生成')
     return

@@ -111,6 +111,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useMemo } from '@/composables/useMemo'
 
 interface TraceItem {
   type: 'thinking' | 'tool'
@@ -145,14 +146,14 @@ const detailId = computed(() => `tti-detail-${props.index}-${(props.trace.name |
 const hasOutput = computed(() => Boolean(props.trace.tool_output))
 const copyLabel = computed(() => (copied.value ? '已复制到剪贴板' : '复制 JSON 到剪贴板'))
 
-const prettyJson = computed(() => {
+const prettyJson = useMemo(() => {
   if (!props.trace.tool_output) return ''
   try {
     return JSON.stringify(props.trace.tool_output, null, 2)
   } catch {
     return String(props.trace.tool_output)
   }
-})
+}, () => [props.trace.tool_output])
 
 interface JumpTarget {
   type: 'drive' | 'task' | 'meeting'
