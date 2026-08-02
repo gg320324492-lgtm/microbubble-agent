@@ -171,7 +171,9 @@ info "检查 alembic head 数..."
 if [ "$DRY_RUN" = "1" ]; then
     info "  [DRY-RUN] python -m alembic heads (期望 1 head)"
 else
-    HEADS=$(python -m alembic heads 2>&1 | grep -E "^[0-9a-z]+_" | wc -l)
+    # grep 无匹配返回 exit 1, 在 set -euo pipefail 下会让管道返回 1 触发脚本中止
+    # (alembic 失败或无 head 时 grep 无匹配), 必须加 || echo "0" 兜底 (沿用 line 260 模式)
+    HEADS=$(python -m alembic heads 2>&1 | grep -E "^[0-9a-z]+_" | wc -l || echo "0")
     if [ "$HEADS" -ne 1 ]; then
         error "alembic head 数异常 ($HEADS 个), 期望 1 个. 详见 CLAUDE.md 2026-07-24 alembic 串单链纪律"
     fi
@@ -195,7 +197,9 @@ else
     git add -f -A web/dist/ 2>&1 | tail -3
 
     # 二次检查: stage 后是否还有 untracked web/dist 文件 (健全性)
-    UNTRACKED_DIST=$(git status --porcelain web/dist/ 2>/dev/null | grep "^??" | head -3)
+    # 注意: grep 无匹配返回 exit 1, 在 set -euo pipefail 下会让管道返回 1 触发脚本中止
+    # (这正是成功场景 - 所有 dist 已 force-add, 无 untracked), 必须加 || true 兜底
+    UNTRACKED_DIST=$(git status --porcelain web/dist/ 2>/dev/null | grep "^??" | head -3 || true)
     if [ -n "$UNTRACKED_DIST" ]; then
         warn "⚠️ web/dist 仍有 untracked 文件 (可能 git add -f 被某个 rename 干扰):"
         echo "$UNTRACKED_DIST" | while IFS= read -r line; do info "  $line"; done
