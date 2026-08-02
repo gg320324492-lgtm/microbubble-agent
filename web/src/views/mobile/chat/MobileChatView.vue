@@ -48,6 +48,7 @@
         @regenerate="onRegenerate"
         @copy="onCopyBubble"
         @pro-entry="onProEntryMobile"
+        @jump="onToolJumpMobile"
       />
     </main>
 
@@ -645,6 +646,23 @@ async function onCopyBubble(msg) {
 // ============================================================================
 // W100 +24: 知识图谱 / 公式 / 假设入口 (派工前提错配 #21: 实际 tab 路由, 非独立路由)
 const router = useRouter()
+function onToolJumpMobile(target) {
+  try {
+    if (target.type === 'drive' && target.id != null) {
+      router.push({ name: 'DriveFileDetail', params: { id: String(target.id) } })
+    } else if (target.type === 'task') {
+      router.push({ name: 'Tasks', query: target.id != null ? { id: String(target.id) } : {} })
+    } else if (target.type === 'meeting') {
+      target.id != null
+        ? router.push({ name: 'MeetingDetail', params: { id: String(target.id) } })
+        : router.push({ name: 'Meetings' })
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[MobileChatView] onToolJumpMobile router.push failed', e)
+  }
+}
+
 function onProEntryMobile(msg, kind) {
   try {
     if (kind === 'graph') {
