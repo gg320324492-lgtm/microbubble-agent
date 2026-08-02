@@ -17,7 +17,8 @@ import { ref, computed, onBeforeUpdate, onUpdated, nextTick } from 'vue'
 import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatHistoryStore } from '@/stores/chatHistory'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { Search, Edit, Share, Download, CollectionTag, Delete } from '@element-plus/icons-vue'
+import { Search, Edit, Share, Download, CollectionTag, Delete, FolderOpened, Top, Select } from '@element-plus/icons-vue'
+import SessionActions from './SessionActions.vue'
 
 const emit = defineEmits(['switch', 'create', 'share', 'export', 'edit-tags'])
 const props = defineProps({ collapsed: { type: Boolean, default: false } })
@@ -30,6 +31,10 @@ const filterKw = ref('')
 const contextMenuSession = ref(null)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
+
+// W100 +28: 批量操作模式
+const batchMode = ref(false)
+const selectedIds = ref(new Set())
 
 const filteredSessions = computed(() => {
   const kw = filterKw.value.trim().toLowerCase()
@@ -44,6 +49,8 @@ const filteredSessions = computed(() => {
   return all.filter((s) => {
     if ((s.title || '').toLowerCase().includes(kw)) return true
     if ((s.tags || []).some((t) => t.toLowerCase().includes(kw))) return true
+    // W100 +28: 搜索扩展 - 预览/最后消息也匹配
+    if ((s.preview || '').toLowerCase().includes(kw)) return true
     return false
   })
 })
@@ -169,6 +176,76 @@ const onToggleArchive = async (session) => {
 // [CHAT-P1-E E3] 顶栏 tab 切换 全部/未归档/已归档
 const archiveFilter = ref('active')  // 'all' | 'active' | 'archived'
 
+// W100 +28: 分组显示 (置顶 / 最近)
+const groupedSessions = computed(() => {
+  const list = filteredSessions.value
+  const pinned = list.filter(s => s.is_pinned)
+  const recent = list.filter(s => !s.is_pinned)
+  return { pinned, recent }
+})
+
+// W100 +28: 批量操作
+const toggleBatchMode = () => {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) selectedIds.value.clear()
+}
+
+const toggleSelect = (id) => {
+  if (selectedIds.value.has(id)) {
+    selectedIds.value.delete(id)
+  } else {
+    selectedIds.value.add(id)
+  }
+  // trigger reactivity
+  selectedIds.value = new Set(selectedIds.value)
+}
+
+const selectAll = () => {
+  filteredSessions.value.forEach(s => selectedIds.value.add(s.id))
+  selectedIds.value = new Set(selectedIds.value)
+}
+
+const clearSelection = () => {
+  selectedIds.value.clear()
+  selectedIds.value = new Set()
+}
+
+const batchArchive = async () => {
+  if (!selectedIds.value.size) return
+  try {
+    await ElMessageBox.confirm(
+      `归档 ${selectedIds.value.size} 个会话？归档后可在"已归档"tab 恢复。`,
+      '批量归档',
+      { type: 'warning', confirmButtonText: '归档', cancelButtonText: '取消' }
+    )
+    for (const id of selectedIds.value) {
+      await store.setArchived(id, true)
+    }
+    ElMessage.success(`已归档 ${selectedIds.value.size} 个会话`)
+    batchMode.value = false
+    selectedIds.value.clear()
+    selectedIds.value = new Set()
+  } catch { /* 用户取消 */ }
+}
+
+const batchDelete = async () => {
+  if (!selectedIds.value.size) return
+  try {
+    await ElMessageBox.confirm(
+      `永久删除 ${selectedIds.value.size} 个会话？此操作不可撤销。`,
+      '批量删除',
+      { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' }
+    )
+    for (const id of selectedIds.value) {
+      store.deleteSession(id)
+    }
+    ElMessage.success(`已删除 ${selectedIds.value.size} 个会话`)
+    batchMode.value = false
+    selectedIds.value.clear()
+    selectedIds.value = new Set()
+  } catch { /* 用户取消 */ }
+}
+
 // ★ 2026-07-01 修复 bug 2.4: 侧边栏 scroll 位置保留
 // 切会话 / filterKw 变化 / v-for reorder 时,Vue 会 re-render .session-item 列表
 // Chrome 浏览器会尝试 scroll anchoring 自动调整 scrollTop → 用户感知为"跳动"
@@ -256,6 +333,22 @@ onUpdated(() => {
           @click="archiveFilter = 'archived'"
         >已归档</button>
       </div>
+      <!-- W100 +28: 批量操作 toggle -->
+      <div v-if="!collapsed" class="batch-toggle-row">
+        <button
+          type="button"
+          class="batch-toggle-btn"
+          :class="{ active: batchMode }"
+          @click="toggleBatchMode"
+        >
+          <el-icon><Select /></el-icon>
+          <span>{{ batchMode ? '退出批量' : '批量管理' }}</span>
+        </button>
+        <template v-if="batchMode">
+          <button type="button" class="batch-mini-btn" @click="selectAll">全选</button>
+          <button type="button" class="batch-mini-btn" @click="clearSelection" :disabled="!selectedIds.size">清空</button>
+        </template>
+      </div>
     </div>
     <!-- 同步状态徽章 -->
     <div v-if="!collapsed && chatHistoryStore.syncStatus === 'syncing'" class="sync-badge sync-loading">
@@ -267,51 +360,170 @@ onUpdated(() => {
       <span class="sync-text" :title="chatHistoryStore.syncError">同步失败</span>
     </div>
     <div v-if="!collapsed" class="session-list" ref="sessionListRef" tabindex="0" aria-label="会话列表">
-      <div
-        v-for="s in filteredSessions"
-        :key="s.id"
-        :data-session-id="s.id"
-        class="session-item"
-        :class="{ active: s.id === store.currentId }"
-        @click="onSwitch(s.id)"
-        @contextmenu="onContextMenu(s, $event)"
-        @touchstart="onTouchStart(s, $event)"
-        @touchend="onTouchEnd"
-        @touchmove="onTouchEnd"
-      >
-        <div class="session-content">
-          <div class="session-title">
-            <span class="session-title-text">{{ s.title || '新对话' }}</span>
-            <span v-if="s.is_pinned" class="pinned-mark" title="已收藏" aria-label="已收藏">📌</span>
-            <!-- 同步状态小标记 -->
-            <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
-            <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端" aria-label="已同步到云端">✓</span>
-            <span v-else-if="s._syncStatus === 'error'" class="error-tag" title="同步失败" aria-label="同步失败">⚠</span>
-            <!-- tags inline chip（最多 2 个 + +N） -->
-            <el-tag
-              v-for="tag in (s.tags || []).slice(0, 2)"
-              :key="tag"
-              size="small"
-              effect="plain"
-              class="session-tag-chip"
-            >{{ tag }}</el-tag>
-            <el-tag
-              v-if="(s.tags || []).length > 2"
-              size="small"
-              effect="plain"
-              class="session-tag-more"
-            >+{{ s.tags.length - 2 }}</el-tag>
-          </div>
-          <div class="session-meta">
-            <span class="time">{{ formatTime(s.updatedAt) }}</span>
-            <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
-          </div>
-          <div v-if="s.preview" class="session-preview">{{ s.preview }}</div>
+      <!-- W100 +28: 分组显示 (非批量模式) -->
+      <template v-if="!batchMode">
+        <!-- 置顶组 -->
+        <div v-if="groupedSessions.pinned.length" class="session-group-header" role="heading" aria-level="3">
+          <span class="group-icon">📌</span><span>置顶</span>
         </div>
-        <!-- v78: actions 彻底移除 absolute hover，改为 right-click/long-press 上下文菜单 -->
-      </div>
+        <div
+          v-for="s in groupedSessions.pinned"
+          :key="s.id"
+          :data-session-id="s.id"
+          class="session-item"
+          :class="{ active: s.id === store.currentId }"
+          @click="onSwitch(s.id)"
+          @contextmenu="onContextMenu(s, $event)"
+          @touchstart="onTouchStart(s, $event)"
+          @touchend="onTouchEnd"
+          @touchmove="onTouchEnd"
+        >
+          <div class="session-content">
+            <div class="session-title">
+              <span class="session-title-text">{{ s.title || '新对话' }}</span>
+              <span v-if="s.is_pinned" class="pinned-mark" title="已收藏" aria-label="已收藏">📌</span>
+              <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
+              <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端" aria-label="已同步到云端">✓</span>
+              <span v-else-if="s._syncStatus === 'error'" class="error-tag" title="同步失败" aria-label="同步失败">⚠</span>
+              <el-tag
+                v-for="tag in (s.tags || []).slice(0, 2)"
+                :key="tag"
+                size="small"
+                effect="plain"
+                class="session-tag-chip"
+              >{{ tag }}</el-tag>
+              <el-tag
+                v-if="(s.tags || []).length > 2"
+                size="small"
+                effect="plain"
+                class="session-tag-more"
+              >+{{ s.tags.length - 2 }}</el-tag>
+            </div>
+            <div class="session-meta">
+              <span class="time">{{ formatTime(s.updatedAt) }}</span>
+              <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
+            </div>
+            <div v-if="s.preview" class="session-preview">{{ s.preview }}</div>
+          </div>
+          <!-- W100 +28: hover 快捷操作 (非批量模式) -->
+          <SessionActions
+            mode="sidebar"
+            :session="s"
+            @pin="onTogglePinned"
+            @archive="onToggleArchive"
+            @delete="onDelete"
+          />
+        </div>
+        <!-- 最近组 -->
+        <div v-if="groupedSessions.recent.length" class="session-group-header" role="heading" aria-level="3">
+          <span class="group-icon">🕒</span><span>最近</span>
+        </div>
+        <div
+          v-for="s in groupedSessions.recent"
+          :key="s.id"
+          :data-session-id="s.id"
+          class="session-item"
+          :class="{ active: s.id === store.currentId }"
+          @click="onSwitch(s.id)"
+          @contextmenu="onContextMenu(s, $event)"
+          @touchstart="onTouchStart(s, $event)"
+          @touchend="onTouchEnd"
+          @touchmove="onTouchEnd"
+        >
+          <div class="session-content">
+            <div class="session-title">
+              <span class="session-title-text">{{ s.title || '新对话' }}</span>
+              <span v-if="s.is_pinned" class="pinned-mark" title="已收藏" aria-label="已收藏">📌</span>
+              <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
+              <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端" aria-label="已同步到云端">✓</span>
+              <span v-else-if="s._syncStatus === 'error'" class="error-tag" title="同步失败" aria-label="同步失败">⚠</span>
+              <el-tag
+                v-for="tag in (s.tags || []).slice(0, 2)"
+                :key="tag"
+                size="small"
+                effect="plain"
+                class="session-tag-chip"
+              >{{ tag }}</el-tag>
+              <el-tag
+                v-if="(s.tags || []).length > 2"
+                size="small"
+                effect="plain"
+                class="session-tag-more"
+              >+{{ s.tags.length - 2 }}</el-tag>
+            </div>
+            <div class="session-meta">
+              <span class="time">{{ formatTime(s.updatedAt) }}</span>
+              <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
+            </div>
+            <div v-if="s.preview" class="session-preview">{{ s.preview }}</div>
+          </div>
+          <SessionActions
+            mode="sidebar"
+            :session="s"
+            @pin="onTogglePinned"
+            @archive="onToggleArchive"
+            @delete="onDelete"
+          />
+        </div>
+      </template>
+      <!-- W100 +28: 批量模式 (flat list + checkbox) -->
+      <template v-else>
+        <div
+          v-for="s in filteredSessions"
+          :key="s.id"
+          :data-session-id="s.id"
+          class="session-item batch-item"
+          :class="{ active: s.id === store.currentId, selected: selectedIds.has(s.id) }"
+          @click="toggleSelect(s.id)"
+        >
+          <label class="batch-checkbox" @click.stop>
+            <input
+              type="checkbox"
+              :checked="selectedIds.has(s.id)"
+              @change="toggleSelect(s.id)"
+              :aria-label="`选择 ${s.title || '新对话'}`"
+            />
+          </label>
+          <div class="session-content">
+            <div class="session-title">
+              <span class="session-title-text">{{ s.title || '新对话' }}</span>
+              <span v-if="s.is_pinned" class="pinned-mark">📌</span>
+              <span v-if="s.is_archived" class="archived-mark" title="已归档">🗄️</span>
+            </div>
+            <div class="session-meta">
+              <span class="time">{{ formatTime(s.updatedAt) }}</span>
+              <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
+            </div>
+          </div>
+        </div>
+      </template>
       <div v-if="!filteredSessions.length && !store.sessions.length" class="empty">暂无会话</div>
       <div v-else-if="!filteredSessions.length" class="empty">没有匹配「{{ filterKw }}」的会话</div>
+    </div>
+
+    <!-- W100 +28: 批量操作 action bar -->
+    <div v-if="!collapsed && batchMode" class="batch-action-bar" data-testid="batch-action-bar">
+      <span class="batch-count">已选 {{ selectedIds.size }} 个</span>
+      <div class="batch-actions">
+        <button
+          type="button"
+          class="batch-action-btn"
+          :disabled="!selectedIds.size"
+          @click="batchArchive"
+        >
+          <el-icon><FolderOpened /></el-icon>
+          <span>归档</span>
+        </button>
+        <button
+          type="button"
+          class="batch-action-btn danger"
+          :disabled="!selectedIds.size"
+          @click="batchDelete"
+        >
+          <el-icon><Delete /></el-icon>
+          <span>删除</span>
+        </button>
+      </div>
     </div>
 
     <!-- v78: 右键/长按 上下文菜单 -->
@@ -402,9 +614,125 @@ onUpdated(() => {
   border-left: 3px solid transparent;
   /* ★ 2026-07-01 修复 bug 2.1: 关闭 Chrome scroll anchoring,避免 .active 切换触发 scroll 跳变 */
   overflow-anchor: none;
+  /* W100 +28: flex 布局让 SessionActions 对齐右侧 */
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .session-item:hover { background: var(--color-primary-bg); }
 .session-item.active { background: var(--color-primary-bg); border-left-color: var(--color-primary); }
+.session-item.selected { background: rgba(64, 158, 255, 0.08); border-left-color: var(--el-color-primary); }
+
+/* W100 +28: 分组 header */
+.session-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.session-group-header .group-icon { font-size: 12px; }
+
+/* W100 +28: 批量操作 toggle */
+.batch-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.batch-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+.batch-toggle-btn:hover { background: var(--color-bg-hover); }
+.batch-toggle-btn.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+.batch-mini-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  -webkit-tap-highlight-color: transparent;
+}
+.batch-mini-btn:hover { background: var(--color-bg-hover); }
+.batch-mini-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* W100 +28: 批量模式 checkbox */
+.batch-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.batch-checkbox input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.batch-item { cursor: pointer; }
+.batch-item .session-content { flex: 1; min-width: 0; }
+
+/* W100 +28: 批量操作 action bar */
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
+  gap: 8px;
+}
+.batch-count {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.batch-actions {
+  display: flex;
+  gap: 6px;
+}
+.batch-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-primary);
+  -webkit-tap-highlight-color: transparent;
+}
+.batch-action-btn:hover:not(:disabled) { background: var(--color-bg-hover); }
+.batch-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.batch-action-btn.danger { color: var(--color-danger); border-color: var(--el-color-danger-light-5); }
+.batch-action-btn.danger:hover:not(:disabled) { background: rgba(245, 108, 108, 0.1); }
+.batch-action-btn .el-icon { font-size: 14px; }
+
+.archived-mark { font-size: 10px; }
 
 /* v78: session-content 用 flex + min-width: 0 让 title-text 自然收缩，actions 绝对定位重叠 bug 修复 */
 .session-content {
@@ -552,4 +880,16 @@ onUpdated(() => {
 [data-theme="dark"] .local-only-tag {
   background: var(--color-text-secondary, #909399);
 }
+
+/* W100 +28: dark 模式覆盖 (批量操作 + 分组) */
+[data-theme="dark"] .session-group-header { color: var(--color-text-secondary); }
+[data-theme="dark"] .batch-toggle-btn { color: var(--color-text-secondary); border-color: var(--color-border-light); }
+[data-theme="dark"] .batch-toggle-btn:hover { background: var(--color-bg-hover); }
+[data-theme="dark"] .batch-toggle-btn.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+[data-theme="dark"] .batch-mini-btn { color: var(--color-text-secondary); border-color: var(--color-border-light); }
+[data-theme="dark"] .batch-action-bar { background: var(--color-bg-card); border-top-color: var(--color-border-light); }
+[data-theme="dark"] .batch-action-btn { color: var(--color-text-primary); border-color: var(--color-border-light); }
+[data-theme="dark"] .batch-action-btn:hover:not(:disabled) { background: var(--color-bg-hover); }
+[data-theme="dark"] .batch-action-btn.danger { color: var(--color-danger); }
+[data-theme="dark"] .session-item.selected { background: rgba(64, 158, 255, 0.15); }
 </style>
