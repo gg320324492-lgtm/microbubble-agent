@@ -34,9 +34,16 @@
           />
         </div>
 
-        <!-- 文本内容 -->
+        <!-- 文本内容 — W100 +25 双段折叠 -->
+        <ContentBriefDetail
+          v-if="msg.role === 'assistant' && msg.content"
+          :content="msg.content"
+          compact
+          class="msg-content"
+          :data-testid="`mobile-cbd-${msg.id}`"
+        />
         <div
-          v-if="msg.content"
+          v-else-if="msg.content"
           class="msg-content"
           v-html="renderMarkdown(msg.content)"
         />
@@ -133,6 +140,7 @@ import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
 import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (compact 模式)
+import ContentBriefDetail from '@/components/chat/ContentBriefDetail.vue'  // W100 +25 双段折叠 (compact)
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({

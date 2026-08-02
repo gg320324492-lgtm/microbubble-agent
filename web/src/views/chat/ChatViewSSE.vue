@@ -43,6 +43,7 @@ import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工具调用结果可点展开
 import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (📋 计划步骤用户可视化)
+import ContentBriefDetail from '@/components/chat/ContentBriefDetail.vue'  // W100 +25 双段折叠 (brief / detail 自动识别 \n\n)
 import ImageWithFallback from '@/components/chat/ImageWithFallback.vue'  // W99 +20 图片兜底
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
@@ -659,7 +660,18 @@ onUnmounted(() => {
                 :trace="t" :index="i" :data-testid="`desktop-tti-${i}`" />
             </TransitionGroup>
 
-            <div v-if="msg.content" class="msg-content" v-html="renderMarkdown(msg.content)" />
+            <!-- W100 +25: 双段折叠 (brief / detail 自动识别 \n\n) -->
+            <ContentBriefDetail
+              v-if="msg.role === 'assistant' && msg.content"
+              :content="msg.content"
+              class="msg-content"
+              :data-testid="`desktop-cbd-${msg.id}`"
+            />
+            <div
+              v-else-if="msg.content"
+              class="msg-content"
+              v-html="renderMarkdown(msg.content)"
+            />
 
             <TransitionGroup v-if="msg.richBlocks && msg.richBlocks.length"
               tag="div" name="rb" class="rich-blocks">
