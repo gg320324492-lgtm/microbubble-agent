@@ -111,6 +111,7 @@ function statusGlyph(s: PlanStep['status']): string {
           :class="[`plan-step-${s.status}`, `stagger-${Math.min(i + 1, 6)}`]"
           :data-testid="`plan-step-${i}`"
           :data-status="s.status"
+          :aria-label="`步骤 ${i + 1}: ${s.step}${s.tool ? ', 使用工具 ' + s.tool : ''}, ${s.status === 'done' ? '已完成' : s.status === 'running' ? '进行中' : '待执行'}`"
         >
           <span class="plan-step-num" aria-hidden="true">{{ pad(i) }}</span>
           <span class="plan-step-name" :data-testid="`plan-step-${i}-name`">{{ s.step }}</span>
