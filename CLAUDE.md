@@ -8,7 +8,10 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-08-02 W99-W100 RAG 升级 6 批全收口 + W99 +21 fix-deploy 收口 — 锚点范式 W99 末 ~495 → W100-RAG-6 ~534 漂移据实 (+39 据实上报, 派工 brief 估 +36 偏差据实), 6 批独立派工守恒, 主指挥协调范式第 83 次派工)
+## 当前状态 (2026-08-03 W100 +48 RichContent 默认展开)
+
+RichContent 去除手动折叠按钮，默认直接展示真实任务数据；仅在 LLM 显式传 `collapsed_by_default=true` 时隐藏内容，保留协议兼容。定向 Vitest 14/14 PASS、PWA build PASS、alembic 单 head `096_add_rag_multimodal_metrics` 守恒。类 20.144：组件 lifecycle/显隐测试复用 `mount(ParentComponent)`，同时断言 DOM 存在性与 `isVisible()`，避免把 `v-show` 隐藏误判为未渲染。
+
 
 **W99-W100 RAG 升级 6 批全收口 (主拍连续 6 + 1 派工, 真问题不是模型切实时版本而是 RAG 5 大缺口 + 6 hook 串行集成 + 部署链分段)**:
 

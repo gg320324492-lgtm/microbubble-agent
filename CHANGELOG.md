@@ -2,7 +2,12 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
-## [2026-08-01] W99 P1 件 7 SearchLog UI 改进 N-6 实施 (锚点 +0 → +3, 3 commits, 0 production code 例外边界内)
+## [2026-08-03] W100 +48 RichContent 默认展开
+
+- 删除 RichContent summary 折叠按钮，默认直接展示真实任务数据。
+- 保留 `collapsed_by_default=true` 协议兼容；显式长列表仍可隐藏。
+- RichContent 定向 Vitest 14/14 PASS，PWA build PASS；alembic 单 head `096_add_rag_multimodal_metrics` 守恒。
+
 
 `[W99 +0] feat(ui): KnowledgeView 搜索结果点击埋点接通 (recordSearchEvent + recordClick)`
 `[W99 +1] feat(feedback): FeedbackButtons 文案激励 + 匿名用户填补 (session_id 桥接)`
