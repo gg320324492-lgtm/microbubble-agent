@@ -31,6 +31,7 @@
             :index="i"
             compact
             :data-testid="`mobile-tti-${i}`"
+            @jump="$emit('jump', $event)"
           />
         </div>
 
@@ -158,7 +159,7 @@ const props = defineProps({
   sessionId: { type: String, default: '' },
 })
 
-const emit = defineEmits(['longpress', 'play-tts', 'followup', 'regenerate', 'copy', 'pro-entry'])
+const emit = defineEmits(['longpress', 'play-tts', 'followup', 'regenerate', 'copy', 'pro-entry', 'jump'])
 
 function onLongPress(e) {
   emit('longpress', props.msg, e)
