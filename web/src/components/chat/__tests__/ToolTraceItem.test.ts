@@ -171,4 +171,24 @@ describe('ToolTraceItem — W100 +21', () => {
     await wrapper.find('[data-testid="tti-10-jump"]').trigger('click')
     expect(wrapper.emitted('jump')).toEqual([[{ type: 'meeting', id: 7 }]])
   })
+
+  it('⑫ prettyJson 仅在 tool_output 引用变化时重算', async () => {
+    const stringifySpy = vi.spyOn(JSON, 'stringify')
+    const trace = { ...sampleToolTrace, tool_output: { results: [{ id: 1 }] } }
+    const wrapper = mount(ToolTraceItem, { props: { trace, index: 11 } })
+
+    await wrapper.find('[role="button"]').trigger('click')
+    await nextTick()
+    const afterFirstRender = stringifySpy.mock.calls.length
+
+    await wrapper.setProps({ trace: { ...trace, duration_ms: 999 } })
+    await nextTick()
+    expect(stringifySpy.mock.calls.length).toBe(afterFirstRender)
+
+    await wrapper.setProps({ trace: { ...trace, tool_output: { results: [{ id: 2 }] } } })
+    await nextTick()
+    expect(stringifySpy.mock.calls.length).toBe(afterFirstRender + 1)
+    expect(wrapper.find('pre code').text()).toContain('2')
+    stringifySpy.mockRestore()
+  })
 })
