@@ -49,8 +49,17 @@ class WsClient {
 
     this.ws.onopen = () => {
       this.connected = true
-      this.reconnectAttempts = 0
-      this.lastPongAt = Date.now()
+      // ===== W100 +50b 修复: 不在 onopen 立即 reset attempts =====
+      // 历史 bug: connect-立刻-close (e.g. server 端 401/403/auth race) 会反复 trigger
+      //   onopen→onclose, 每次 onopen 都把 reconnectAttempts 重置为 0,
+      //   导致 _scheduleReconnect 永远 attempts=1 / delay=1000ms → 死循环 1s 重连。
+      // 修复: 仅在 lastPongAt 距离上次成功握手 > 30s 时才重置 (稳定连接守恒),
+      //   短期 connect-then-close 不重置 attempts, 让指数退避真正生效。
+      const now = Date.now()
+      if (this.lastPongAt && (now - this.lastPongAt) > 30000) {
+        this.reconnectAttempts = 0
+      }
+      this.lastPongAt = now
       this.emit('open')
     }
 

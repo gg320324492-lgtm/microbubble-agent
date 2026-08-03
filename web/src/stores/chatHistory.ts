@@ -111,8 +111,15 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
       return await chatHistoryApi.appendMessage(sid, msg)
     } catch (e: any) {
       const status = e?.response?.status
-      // 仅 404 重试: 服务端明确拒绝 (session 不存在), 安全可重试
-      if (status === 404) {
+      // ===== W100 +50 修复: 401/403/404 都触发 createServerSession 重试 =====
+      // 历史逻辑仅 404 重试 (因 401/403 当时假定是 token 问题不该创建新 session)
+      // 实战发现: 401 经常因"前端 localStorage session_id 格式与 server 期望不一致"
+      //   (如 user_<ts>_<rand> 本地 ID) 而触发, 此时 createServerSession(client_session_id)
+      //   能复用本地 ID 注册到 server, 后续 appendMessage 命中。
+      // 403 同理: 偶发因 tenant 切换后旧 sid 失效, 重建即恢复。
+      // 安全约束: 仅在第一次 appendMessage 失败时重建 (createServerSession 内部幂等),
+      //   重试仍失败 → 走原错误路径 (best-effort silent fail, 不阻塞流式)。
+      if (status === 404 || status === 401 || status === 403) {
         try {
           const created = await createServerSession({
             clientSessionId: sid,
