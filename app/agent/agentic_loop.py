@@ -1004,12 +1004,16 @@ class AgenticLoop:
                     })
                     success_count += 1
 
-                    # [snapshot] plan_step running (每个 tool 完成后更新进度)
+                    # [snapshot] plan_step done (W100 +53: 每个 tool_result 后 yield done 原地更新)
+                    # 前端 useChatStream 按 tool_use_id 去重, 此处 yield 是对刚 push 的 step 状态更新,
+                    # 不再 push 新 step; auto-collapse watcher 才触发 (PlanSteps.vue:77 oldVal>0 guard)
                     yield StreamEvent(
                         type="plan_step",
-                        step="phase0_plan",
-                        plan_status="running",
-                        label=f"📋 执行计划中 ({success_count}/{len(planned)})...",
+                        step=tool_name,  # 用 tool_name 作为 step 标识, 便于前端 log
+                        tool_name=tool_name,
+                        tool_use_id=tool_use_id,  # 关键: 前端按 id 去重
+                        plan_status="done",
+                        label=f"✓ {tool_name}",
                     )
 
                 # 注入 messages (Anthropic tool_use 协议格式, 与 Phase 1 一致)
@@ -1024,11 +1028,11 @@ class AgenticLoop:
                     })
                     messages.append({"role": "user", "content": plan_step_results})
 
-                # [snapshot] plan_step done
+                # W100 +53: 不再 yield post-loop plan_step done — 每个 tool_result 后已就地更新 status,
+                # 再 yield "phase0_plan done" 会变成孤儿 step (无 tool_use_id 匹配, push 新行).
+                # 阶段完成提示改走 thinking 流 (前端 toolTrace 显示), 不污染 plan 数组.
                 yield StreamEvent(
-                    type="plan_step",
-                    step="phase0_plan",
-                    plan_status="done",
+                    type="thinking",
                     label=f"📋 计划完成 ({success_count}/{len(planned)})",
                 )
 
