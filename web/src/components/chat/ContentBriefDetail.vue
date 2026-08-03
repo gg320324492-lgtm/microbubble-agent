@@ -1,16 +1,16 @@
 <!--
   ContentBriefDetail.vue — W100 +25 双段折叠 (brief / detail 自动识别 \n\n)
+  W100 +49a RICHTEXT-UNFOLD 沿用: 默认直接渲染全部段落, 仅 LLM 显式
+  collapsedByDefault=true 时保留折叠 UI (协议兼容).
 
-  用户视角 P1-B 兜底方案：在 assistant 消息中显示双段折叠。
-  不依赖 msg.brief / msg.detail 字段（那两个字段 deprecated），
-  通过 msg.content 中 \n\n 分段实现。
+  行为（默认 collapsedByDefault=false）:
+  - 直接渲染所有 paragraphs, 无 toggle 按钮, 无折叠动画
+  - 1 段 / 2+ 段都全显示
 
-  行为：
+  行为（collapsedByDefault=true，向后兼容）:
   - 1 段 = 完整显示（不折叠）
-  - 2+ 段 = 第一段 brief + 后续 detail 折叠
-  - 可点击展开 / 折叠
+  - 2+ 段 = 第一段 brief + 后续 detail 折叠 + 切换按钮
   - a11y: aria-expanded + aria-controls + role="button" + Enter/Space 键盘
-  - 移动端 compact tap ≥ 44px
 -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
@@ -22,11 +22,17 @@ const props = withDefaults(
     content: string
     /** 移动端紧凑模式 */
     compact?: boolean
+    /**
+     * LLM 显式要求折叠时才保留折叠 UI。
+     * 默认 false 与 RICHTEXT-UNFOLD 协议一致：默认展开，真实任务数据直接可见。
+     */
+    collapsedByDefault?: boolean
   }>(),
-  { compact: false },
+  { compact: false, collapsedByDefault: false },
 )
 
-const expanded = ref(false)
+/** collapsedByDefault=true 时初始折叠（待用户点击）；默认模式永远展开 */
+const expanded = ref(!props.collapsedByDefault)
 
 /** 按 \n\n 拆段，空段剔除 */
 const paragraphs = computed(() => {
@@ -41,6 +47,11 @@ const brief = computed(() => paragraphs.value[0] ?? '')
 const detail = computed(() => paragraphs.value.slice(1).join('\n\n'))
 const hasDetail = computed(() => paragraphs.value.length >= 2)
 
+/** 默认模式下永远展开；LLM 显式折叠时初始折叠待用户点击 */
+const shouldShowFold = computed(() => props.collapsedByDefault === true)
+/** 折叠模式下受 expanded 控制；默认模式恒 true */
+const shouldShowDetail = computed(() => !shouldShowFold.value || expanded.value)
+
 const detailId = computed(
   () => `cbd-detail-${Math.random().toString(36).slice(2, 10)}`,
 )
@@ -54,10 +65,10 @@ function toggle() {
   <div
     v-if="brief"
     class="cbd-root"
-    :class="{ 'cbd-compact': compact }"
+    :class="{ 'cbd-compact': compact, 'cbd-unfolded': !shouldShowFold }"
     :data-testid="'content-brief-detail'"
     :data-paragraph-count="paragraphs.length"
-    :data-expanded="expanded ? 'true' : 'false'"
+    :data-collapsed-by-default="shouldShowFold ? 'true' : 'false'"
   >
     <!-- brief: 第一段始终显示（1 段时不折叠） -->
     <div
@@ -67,28 +78,40 @@ function toggle() {
       v-html="renderMarkdown(brief)"
     />
 
-    <!-- detail 折叠按钮 + 展开内容 -->
-    <template v-if="hasDetail">
+    <!-- detail：默认模式直接 v-for 渲染所有剩余段落，无折叠门控 -->
+    <template v-if="hasDetail && !shouldShowFold">
+      <div
+        v-for="(para, idx) in paragraphs.slice(1)"
+        :key="idx"
+        class="cbd-detail-para"
+        :class="{ 'cbd-compact': compact }"
+        :data-testid="`cbd-detail-para-${idx}`"
+        v-html="renderMarkdown(para)"
+      />
+    </template>
+
+    <!-- detail 折叠按钮 + 展开内容（仅 LLM 显式 collapsedByDefault=true 时） -->
+    <template v-if="hasDetail && shouldShowFold">
       <button
         type="button"
         class="cbd-toggle"
-        :aria-expanded="expanded ? 'true' : 'false'"
+        :aria-expanded="shouldShowDetail ? 'true' : 'false'"
         :aria-controls="detailId"
-        :aria-label="expanded ? '折叠详情' : `展开详情（${paragraphs.length - 1} 段）`"
+        :aria-label="shouldShowDetail ? '折叠详情' : `展开详情（${paragraphs.length - 1} 段）`"
         :data-testid="'cbd-toggle'"
         @click="toggle"
         @keydown.enter.prevent="toggle"
         @keydown.space.prevent="toggle"
       >
-        <span class="cbd-toggle-icon" aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span>
+        <span class="cbd-toggle-icon" aria-hidden="true">{{ shouldShowDetail ? '▾' : '▸' }}</span>
         <span class="cbd-toggle-text">
-          {{ expanded ? '收起详情' : `展开更多（${paragraphs.length - 1} 段）` }}
+          {{ shouldShowDetail ? '收起详情' : `展开更多（${paragraphs.length - 1} 段）` }}
         </span>
       </button>
 
       <Transition name="cbd-fade">
         <div
-          v-if="expanded"
+          v-if="shouldShowDetail"
           :id="detailId"
           class="cbd-detail"
           :class="{ 'cbd-compact': compact }"
