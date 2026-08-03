@@ -935,16 +935,18 @@ class AgenticLoop:
                         planned = expanded
 
                 # [snapshot] plan_step pending (让前端先看到意图)
+                # W100 +55a: 改用 __plan_summary__ 前缀, 前端按 startsWith('__') 隐藏整行
+                # (避免行号 00 显出 + 老消息兼容 — useChatStream fallback 3 仍兜底)
                 yield StreamEvent(
                     type="plan_step",
-                    step="phase0_plan",
+                    step="__plan_summary__",
                     plan_status="pending",
                     label=f"📋 准备执行计划 ({len(planned)} 个工具)...",
                 )
                 # [snapshot] plan_step running (启动第一个 tool 前)
                 yield StreamEvent(
                     type="plan_step",
-                    step="phase0_plan",
+                    step="__plan_summary__",
                     plan_status="running",
                     label=f"📋 执行计划中 (0/{len(planned)})...",
                 )
