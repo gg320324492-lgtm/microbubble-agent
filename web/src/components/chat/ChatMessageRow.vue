@@ -212,10 +212,17 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
 </template>
 
 <style scoped>
+/* W100 +50a 修复: virtual 模式下父容器 display: block, 内部 .msg-row (flex)
+   需要显式 width:100% 才能让 justify-content:flex-end 推 bubble 靠右;
+   否则虚拟列表绝对定位下子元素宽度收缩, 用户消息看起来在左 */
 .chat-message-row.inline {
   display: block;
 }
 .chat-message-row.virtual {
   display: block;
+}
+.chat-message-row.virtual :deep(.msg-row) {
+  width: 100%;
+  box-sizing: border-box;
 }
 </style>
