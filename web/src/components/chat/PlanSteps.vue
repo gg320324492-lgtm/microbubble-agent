@@ -9,6 +9,8 @@
   默认模式: 初次显示全部 step (expanded=true) → 全部 done 后 auto-collapse → 折叠态显示单行
   "✓ 计划完成: N 个步骤" + 一个展开 icon (点击可重新展开 step 列表).
   折叠模式 (collapsedByDefault=true): 用户主动 toggle 控制, auto-collapse 不干预.
+  W100 +55d: plan_step 视觉升级 — done 绿色 line-through + running 蓝色 2px 左边框 + tool
+  胶囊; placeholder step (以 __ 开头) 整行隐藏避免行号 00 显出.
 
   设计约束（用户视角 P0 #2）：
   - 默认折叠态：📋 计划中: N 个步骤 (折叠模式初始) / ✓ 计划完成: N 个步骤 (auto-collapse 后默认模式)
@@ -54,9 +56,17 @@ const props = withDefaults(
  */
 const expanded = ref(!props.collapsedByDefault)
 
-const doneCount = computed(() => props.steps.filter((s) => s.status === 'done').length)
-const runningIndex = computed(() => props.steps.findIndex((s) => s.status === 'running'))
-const total = computed(() => props.steps.length)
+const doneCount = computed(() => visibleSteps.value.filter((s) => s.status === 'done').length)
+const runningIndex = computed(() => visibleSteps.value.findIndex((s) => s.status === 'running'))
+const total = computed(() => visibleSteps.value.length)
+
+/**
+ * W100 +55d: 过滤掉以 __ 开头的 placeholder step (后端 pre-loop 的 __plan_summary__).
+ * 前端不让"行号 00"显出, 但保留原 steps 数组不变 (响应式数据契约不动).
+ */
+const visibleSteps = computed(() =>
+  props.steps.filter((s) => !s.step.startsWith('__')),
+)
 
 /** 摘要文案 — 不同状态下显示不同进度感 */
 const summary = computed(() => {
@@ -158,7 +168,7 @@ function statusGlyph(s: PlanStep['status']): string {
       role="list"
     >
       <li
-        v-for="(s, i) in steps"
+        v-for="(s, i) in visibleSteps"
         :key="i"
         class="plan-step"
         :class="[`plan-step-${s.status}`, `stagger-${Math.min(i + 1, 6)}`]"
@@ -195,7 +205,7 @@ function statusGlyph(s: PlanStep['status']): string {
         role="list"
       >
         <li
-          v-for="(s, i) in steps"
+          v-for="(s, i) in visibleSteps"
           :key="i"
           class="plan-step"
           :class="[`plan-step-${s.status}`, `stagger-${Math.min(i + 1, 6)}`]"
@@ -367,14 +377,25 @@ function statusGlyph(s: PlanStep['status']): string {
 .plan-step-pending {
   opacity: 0.55;
 }
-/* running 高亮 — 背景浅珊瑚 */
+/* W100 +55d: running 高亮 — 背景浅珊瑚 + 蓝色 2px 左边框 + 脉冲呼吸 */
 .plan-step-running {
   background: var(--color-primary-bg);
   opacity: 1;
+  border-left: 2px solid var(--color-primary);
+  padding-left: 4px;
+  animation: var(--animation-pulse-dot, pulse-dot) 1.4s ease-in-out infinite;
 }
-/* done 实色 */
+/* W100 +55d: done — 浅绿底 + 绿色 line-through + 绿色编号 */
 .plan-step-done {
   opacity: 1;
+  background: var(--color-success-bg, #f0f9eb);
+  color: var(--color-success, #67c23a);
+}
+.plan-step-done .plan-step-name,
+.plan-step-done .plan-step-num {
+  text-decoration: line-through;
+  text-decoration-color: var(--color-success, #67c23a);
+  color: var(--color-success, #67c23a);
 }
 
 .plan-step-num {
@@ -383,6 +404,8 @@ function statusGlyph(s: PlanStep['status']): string {
   color: var(--color-text-secondary);
   min-width: 18px;
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .plan-step-name {
@@ -390,13 +413,14 @@ function statusGlyph(s: PlanStep['status']): string {
   color: var(--color-text-regular);
 }
 
+/* W100 +55d: tool 字段胶囊化 */
 .plan-step-tool {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 11px;
   color: var(--color-text-secondary);
   background: var(--color-bg-secondary, #F0F2F5);
   padding: 1px 6px;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-full, 9999px);
 }
 .plan-steps.compact .plan-step-tool {
   font-size: 10px;
@@ -498,6 +522,16 @@ function statusGlyph(s: PlanStep['status']): string {
 }
 [data-theme='dark'] .plan-step-running {
   background: rgba(var(--color-primary-rgb), 0.1);
+}
+/* W100 +55d: dark mode 下 done 用深绿底 */
+[data-theme='dark'] .plan-step-done {
+  background: rgba(103, 194, 58, 0.12);
+  color: var(--color-success, #67c23a);
+}
+[data-theme='dark'] .plan-step-done .plan-step-name,
+[data-theme='dark'] .plan-step-done .plan-step-num {
+  text-decoration-color: var(--color-success, #67c23a);
+  color: var(--color-success, #67c23a);
 }
 /* W100 +52: dark mode 下 auto-collapse header 用深绿底 */
 [data-theme='dark'] .plan-steps-header-auto {
