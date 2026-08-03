@@ -91,7 +91,9 @@
             aria-label="播放语音"
             title="播放语音"
             @click.stop="$emit('play-tts', msg.content)"
-          >🔊</button>
+          >
+            <el-icon><Headset /></el-icon>
+          </button>
           <!-- W100 +23: 重生成 + 复制按钮 (移动端始终显示) -->
           <ChatMessageActions
             v-if="msg.role === 'assistant' && msg.content"
@@ -152,6 +154,7 @@ import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'  // W100 +21 工
 import PlanSteps from '@/components/chat/PlanSteps.vue'  // W100 +22 plan_step 折叠展开 (compact 模式)
 import ContentBriefDetail from '@/components/chat/ContentBriefDetail.vue'  // W100 +25 双段折叠 (compact)
 import EventBadges from '@/components/chat/EventBadges.vue'  // W100 +26 SSE 事件徽章 (compact 模式)
+import { Headset } from '@element-plus/icons-vue'  // W100 +51a TTS 按钮现代化
 import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
@@ -321,8 +324,14 @@ function onFollowUpClick(suggestion) {
   padding: 2px 6px;
   cursor: pointer;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .tts-btn:active {
   background: var(--color-primary-bg);
+}
+.tts-btn :deep(.el-icon) {
+  font-size: 18px;
 }
 </style>

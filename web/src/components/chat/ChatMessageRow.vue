@@ -22,7 +22,7 @@
  * - @follow-up-click (FollowUpChips -> ChatViewSSE.onFollowUpClick)
  */
 import { computed } from 'vue'
-import { ChatDotRound } from '@element-plus/icons-vue'
+import { ChatDotRound, Headset } from '@element-plus/icons-vue'
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import PlanSteps from '@/components/chat/PlanSteps.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'
@@ -174,24 +174,30 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
             <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
             <el-button
               v-if="msg.content" text size="small"
+              class="tts-btn"
               title="播放语音"
+              aria-label="播放语音"
               @click="emit('tts-play', msg.content)"
-            >🔊</el-button>
-            <ChatMessageActions
-              v-if="msg.role === 'assistant' && msg.content"
-              mode="desktop"
-              :message-id="msg.id"
-              @regenerate="emit('regenerate', msg)"
-              @copy="emit('copy', msg)"
-            />
-            <ProEntries
-              v-if="msg.role === 'assistant' && msg.content"
-              mode="desktop"
-              :intent="msg.intent || null"
-              :content="msg.content"
-              :tool-trace="msg.toolTrace || []"
-              @entry-click="emit('pro-entry-click', { msg, entry: $event })"
-            />
+            >
+              <el-icon><Headset /></el-icon>
+            </el-button>
+            <div class="msg-actions">
+              <ChatMessageActions
+                v-if="msg.role === 'assistant' && msg.content"
+                mode="desktop"
+                :message-id="msg.id"
+                @regenerate="emit('regenerate', msg)"
+                @copy="emit('copy', msg)"
+              />
+              <ProEntries
+                v-if="msg.role === 'assistant' && msg.content"
+                mode="desktop"
+                :intent="msg.intent || null"
+                :content="msg.content"
+                :tool-trace="msg.toolTrace || []"
+                @entry-click="emit('pro-entry-click', { msg, entry: $event })"
+              />
+            </div>
             <FeedbackButtons
               v-if="msg.role === 'assistant' && msg.content"
               :message-id="msg.server_id"
@@ -224,5 +230,18 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
 .chat-message-row.virtual :deep(.msg-row) {
   width: 100%;
   box-sizing: border-box;
+}
+
+/* W100 +51a 按钮现代化: TTS 按钮 / 操作按钮组
+   - TTS 按钮沿用 el-button text 风格, 仅图标
+   - .msg-actions 是 ChatMessageActions + ProEntries 容器, gap 8px */
+.msg-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tts-btn :deep(.el-icon) {
+  font-size: 16px;
 }
 </style>
