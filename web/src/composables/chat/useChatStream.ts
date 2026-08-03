@@ -593,6 +593,10 @@ export function useChatStream() {
         targetAssistant.error = e.message || '发送失败'
         targetAssistant.content =
           targetAssistant.content || '抱歉，我暂时无法回复，请稍后再试。'
+        // ===== W100 +50c 修复: catch 路径下显式落 phase='error' 防御 =====
+        // finally 兜底走得到, 但若 finally 因外部异常跳过 (e.g. page unload race / persistSync throw),
+        //   phase 会卡在 generating。直接显式 set, finally 兜底不会再被 isTerminalPhase 守卫拒绝。
+        targetAssistant.phase = 'error'
         ElMessage.error(e.message || '发送失败')
       }
     } finally {
