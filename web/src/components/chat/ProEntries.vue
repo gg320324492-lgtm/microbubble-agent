@@ -15,7 +15,7 @@
       @click.stop="onClick('graph')"
       data-testid="pro-graph"
     >
-      <span class="entry-icon" aria-hidden="true">🕸️</span>
+      <el-icon class="entry-icon" aria-hidden="true"><Share /></el-icon>
       <span v-if="mode === 'mobile'" class="entry-text">{{ graphLabel }}</span>
     </button>
 
@@ -28,7 +28,7 @@
       @click.stop="onClick('formula')"
       data-testid="pro-formula"
     >
-      <span class="entry-icon" aria-hidden="true">📐</span>
+      <el-icon class="entry-icon" aria-hidden="true"><DataAnalysis /></el-icon>
       <span v-if="mode === 'mobile'" class="entry-text">{{ formulaLabel }}</span>
     </button>
 
@@ -41,7 +41,7 @@
       @click.stop="onClick('hypothesis')"
       data-testid="pro-hypothesis"
     >
-      <span class="entry-icon" aria-hidden="true">💡</span>
+      <el-icon class="entry-icon" aria-hidden="true"><Aim /></el-icon>
       <span v-if="mode === 'mobile'" class="entry-text">{{ hypothesisLabel }}</span>
     </button>
   </div>
@@ -76,6 +76,7 @@
  */
 
 import { computed } from 'vue'
+import { Share, DataAnalysis, Aim } from '@element-plus/icons-vue'
 
 export type EntryMode = 'desktop' | 'mobile'
 export type EntryKind = 'graph' | 'formula' | 'hypothesis'
@@ -229,8 +230,17 @@ function onClick(kind: EntryKind) {
 }
 
 .entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 14px;
-  display: inline-block;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.entry-icon :deep(svg) {
+  width: 1em;
+  height: 1em;
 }
 
 .entry-text {
