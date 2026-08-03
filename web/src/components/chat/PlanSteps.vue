@@ -3,6 +3,9 @@
   W100 +49c RICHTEXT-UNFOLD 沿用: 默认 (collapsedByDefault=false) 直接渲染全部 step,
   无 toggle 按钮; LLM 显式 collapsedByDefault=true 时保留 ▼ ▸ 折叠切换 UI (协议兼容).
   W100 +52 升级: 默认模式下，全部 step done 后自动折叠成单行摘要 (类 20.124 风格保留).
+  W100 +53 协议补全: 后端 SSE 每条 done 事件带 tool_use_id → 前端 useChatStream 按 id 去重
+  原地更新 status, 不再 push 新行 → doneCount 自动 = total → auto-collapse 触发.
+  PlanStep 接口新增 tool_use_id 字段 (老消息无此字段 → 前端 fallback push 新行, 向后兼容).
   默认模式: 初次显示全部 step (expanded=true) → 全部 done 后 auto-collapse → 折叠态显示单行
   "✓ 计划完成: N 个步骤" + 一个展开 icon (点击可重新展开 step 列表).
   折叠模式 (collapsedByDefault=true): 用户主动 toggle 控制, auto-collapse 不干预.
@@ -19,7 +22,7 @@
   - dark mode: 走非 scoped 块（v60-v67 教训）
 
   数据结构 contract（来自 useChatStream.ts:126）：
-  Array<{ step: string; tool?: string; status: 'pending' | 'running' | 'done' }>
+  Array<{ step: string; tool?: string; tool_use_id?: string; status: 'pending' | 'running' | 'done' }>
 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
@@ -27,6 +30,7 @@ import { computed, ref, watch } from 'vue'
 interface PlanStep {
   step: string
   tool?: string
+  tool_use_id?: string
   status: 'pending' | 'running' | 'done'
 }
 

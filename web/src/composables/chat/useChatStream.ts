@@ -123,7 +123,7 @@ export interface ChatMessage {
   imageUrl?: string
   // 2026-06-14 方案 C Stage 4：新增 4 个字段（对应 6 个新事件）
   intent?: { category: string; confidence: number; keywords?: string[]; reasoning?: string }
-  plan?: Array<{ step: string; tool?: string; status: 'pending' | 'running' | 'done' }>
+  plan?: Array<{ step: string; tool?: string; tool_use_id?: string; status: 'pending' | 'running' | 'done' }>
   critique?: { score: number; addresses_question?: boolean; has_synthesis?: boolean; has_citations?: boolean; suggestion?: string }
   retryCount?: number
   // ===== W100 +49 RICHTEXT-UNFOLD 协议 =====
@@ -834,10 +834,28 @@ export function useChatStream() {
         }
         case 'plan_step': {
           // [snapshot] 工具规划单步（2026-06-14 Stage 4）
+          // W100 +53: 后端每条 done 事件带 tool_use_id, 按 id 原地更新 status (不 push 新行)
+          // 老消息无 tool_use_id → findIndex 返回 -1 → fallback push 新 step (向后兼容)
           if (!currentAssistant.plan) currentAssistant.plan = []
+          const incomingToolId = evt.tool_use_id || evt.tool_name
+          if (incomingToolId) {
+            const existingIdx = currentAssistant.plan.findIndex(
+              (s: { tool_use_id?: string; tool?: string }) =>
+                s.tool_use_id === incomingToolId ||
+                (!s.tool_use_id && s.tool === incomingToolId),
+            )
+            if (existingIdx >= 0 && evt.plan_status) {
+              currentAssistant.plan[existingIdx].status = evt.plan_status
+              // 触发响应式更新 (Vue 3 reactive proxy 在 mutate 同对象时通常也会触发,
+              // 但 spread 替换数组引用是最稳的强制刷新)
+              currentAssistant.plan = [...currentAssistant.plan]
+              break
+            }
+          }
           currentAssistant.plan.push({
             step: evt.step || evt.label || '',
             tool: evt.tool_name,
+            tool_use_id: evt.tool_use_id,
             status: evt.plan_status || 'pending',
           })
           break
