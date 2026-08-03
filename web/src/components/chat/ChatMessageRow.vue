@@ -21,7 +21,7 @@
  * - @tts-play (el-button -> ChatViewSSE.playTTSWrap)
  * - @follow-up-click (FollowUpChips -> ChatViewSSE.onFollowUpClick)
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ChatDotRound, Headset } from '@element-plus/icons-vue'
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import PlanSteps from '@/components/chat/PlanSteps.vue'
@@ -35,6 +35,7 @@ import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'
 import FollowUpChips from '@/components/chat/FollowUpChips.vue'
 import RichContent from '@/components/chat/RichContent.vue'
 import { renderMarkdown } from '@/utils/markdown'
+import { formatTimeDivider } from '@/utils/timeDivider'
 import type { ChatMessage } from '@/composables/chat/useChatStream'
 
 const props = withDefaults(defineProps<{
@@ -72,7 +73,36 @@ const hasTimeDivider = computed(() => {
 
 const timeDividerText = computed(() => {
   if (!hasTimeDivider.value || !props.prevTimestamp) return ''
-  return new Date(props.msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  // W100 +55c: 三档 (今天/昨天/YYYY-MM-DD) — 沿用 utils/timeDivider
+  return formatTimeDivider(new Date(props.msg.timestamp), new Date())
+})
+
+/**
+ * W100 +55c: 打字机 mask — 流式中 reveal 进度
+ * 仅 assistant 流式生成中(state !== 'idle')显示 typing mask
+ * reveal = min(100, length/80 * 100), 80 字约 100% (打字机平均速度)
+ */
+const revealProgress = ref(100)  // idle 默认满
+const isStreaming = computed(() => props.msg.state !== 'idle' && props.msg.role === 'assistant')
+watch(
+  () => [props.msg.state, props.msg.content] as const,
+  ([state, content]) => {
+    if (state === 'idle') {
+      revealProgress.value = 100
+    } else {
+      const len = (content || '').length
+      revealProgress.value = Math.min(100, Math.max(0, (len / 80) * 100))
+    }
+  },
+  { immediate: true },
+)
+const msgContentClass = computed(() => [
+  'msg-content',
+  isStreaming.value ? 'msg-content-typing' : '',
+])
+const msgContentStyle = computed(() => {
+  if (!isStreaming.value) return undefined
+  return { '--reveal': `${revealProgress.value}%` } as Record<string, string>
 })
 
 const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已足够
@@ -141,7 +171,8 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
             v-if="msg.role === 'assistant' && msg.content"
             :content="msg.content"
             :collapsed-by-default="!!msg.collapsedByDefault"
-            class="msg-content"
+            :class="msgContentClass"
+            :style="msgContentStyle"
             :data-testid="`desktop-cbd-${msg.id}`"
           />
           <EventBadges
@@ -151,7 +182,8 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
           />
           <div
             v-else-if="msg.content"
-            class="msg-content"
+            :class="msgContentClass"
+            :style="msgContentStyle"
             v-html="renderMarkdown(msg.content)"
           />
 
