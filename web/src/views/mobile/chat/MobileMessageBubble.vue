@@ -16,10 +16,11 @@
           :retry-count="msg.retryCount"
           compact
         />
-        <!-- ===== W100 +22 plan_step 折叠展开：compact 模式 ===== -->
+        <!-- ===== W100 +22 plan_step 折叠展开：compact 模式 / W100 +49c RICHTEXT-UNFOLD ===== -->
         <PlanSteps
           v-if="msg.plan && msg.plan.length"
           :steps="msg.plan"
+          :collapsed-by-default="!!msg.collapsedByDefault"
           compact
         />
         <!-- 工具调用 trace — W100 +21 接入 ToolTraceItem（可点展开） -->
@@ -35,10 +36,11 @@
           />
         </div>
 
-        <!-- 文本内容 — W100 +25 双段折叠 -->
+        <!-- 文本内容 — W100 +25 双段折叠 / W100 +49a RICHTEXT-UNFOLD -->
         <ContentBriefDetail
           v-if="msg.role === 'assistant' && msg.content"
           :content="msg.content"
+          :collapsed-by-default="!!msg.collapsedByDefault"
           compact
           class="msg-content"
           :data-testid="`mobile-cbd-${msg.id}`"

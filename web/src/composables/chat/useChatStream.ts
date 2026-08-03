@@ -126,6 +126,14 @@ export interface ChatMessage {
   plan?: Array<{ step: string; tool?: string; status: 'pending' | 'running' | 'done' }>
   critique?: { score: number; addresses_question?: boolean; has_synthesis?: boolean; has_citations?: boolean; suggestion?: string }
   retryCount?: number
+  // ===== W100 +49 RICHTEXT-UNFOLD 协议 =====
+  /**
+   * LLM 在 synthesis 阶段可 override 默认折叠/展开。
+   * 默认 false 让用户第一眼看到真实任务数据；
+   * 显式 true 时 ContentBriefDetail / PlanSteps 保留折叠 UI (协议兼容)。
+   * 与 RichBlock.collapsed_by_default 同语义 (见 protocol.ts:60)。
+   */
+  collapsedByDefault?: boolean
   // ===== #043 新增字段（服务端持久化追踪） =====
   /** 服务端 message id（持久化成功后填入） */
   server_id?: number
