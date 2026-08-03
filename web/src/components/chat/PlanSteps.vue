@@ -2,12 +2,16 @@
   PlanSteps.vue — W100 +22 plan_step 折叠展开
   W100 +49c RICHTEXT-UNFOLD 沿用: 默认 (collapsedByDefault=false) 直接渲染全部 step,
   无 toggle 按钮; LLM 显式 collapsedByDefault=true 时保留 ▼ ▸ 折叠切换 UI (协议兼容).
+  W100 +52 升级: 默认模式下，全部 step done 后自动折叠成单行摘要 (类 20.124 风格保留).
+  默认模式: 初次显示全部 step (expanded=true) → 全部 done 后 auto-collapse → 折叠态显示单行
+  "✓ 计划完成: N 个步骤" + 一个展开 icon (点击可重新展开 step 列表).
+  折叠模式 (collapsedByDefault=true): 用户主动 toggle 控制, auto-collapse 不干预.
 
   设计约束（用户视角 P0 #2）：
-  - 默认折叠态：📋 计划中: N 个步骤（仅在 collapsedByDefault=true 时存在）
-  - 默认展开态：列出 step / tool / status（01/02/03 编号 + status 圆点）
+  - 默认折叠态：📋 计划中: N 个步骤 (折叠模式初始) / ✓ 计划完成: N 个步骤 (auto-collapse 后默认模式)
+  - 默认展开态：列出 step / tool / status (01/02/03 编号 + status 圆点)
   - 全部 done 后自动折叠（独立于 collapsedByDefault，类 20.124 风格不可破）
-    - 默认模式：所有 step 直接渲染，无折叠门控，auto-collapse 不影响显示
+    - 默认模式：all-done → 折叠成单行摘要 + 展开 icon (W100 +52 升级)
     - LLM-controlled 折叠模式：保留原有 watch + auto-collapse 行为
   - 与 ThinkingCapsule 风格统一：3px 左蓝边 + fadeSlideUp + stagger
   - a11y: role=button + aria-expanded + keyboard Enter/Space
@@ -39,7 +43,11 @@ const props = withDefaults(
   { compact: false, collapsedByDefault: false },
 )
 
-/** 默认模式 expanded 永远 true，无需 toggle；折叠模式初始 false 等用户点击 */
+/**
+ * 初始 expanded 沿用 W100 +49c 行为 (true 默认模式 / false 折叠模式)。
+ * W100 +52 升级：auto-collapse watcher 在默认模式 + all-done 时把 expanded 翻为 false，
+ * 折叠模式跳过此逻辑 (用户控制)。
+ */
 const expanded = ref(!props.collapsedByDefault)
 
 const doneCount = computed(() => props.steps.filter((s) => s.status === 'done').length)
@@ -56,25 +64,25 @@ const summary = computed(() => {
 })
 
 /**
- * 全部 done 后自动折叠（一次性 watch）。
- * 仅在 LLM-controlled 折叠模式 (collapsedByDefault=true) 下生效：
- * 默认模式下 expanded 永远 true，auto-collapse 不影响显示。
- * 类 20.124 风格：保留 watch 行为不变（独立于 collapsedByDefault），
- * 仅门控 collapse 副作用本身。
+ * 全部 done 后自动折叠（一次性 watch, W100 +52 升级：默认模式生效, 折叠模式跳过）。
+ * 默认模式: 从"进行中" (oldVal > 0) 变为"全部 done" → 折叠成单行摘要 (新行为).
+ * 折叠模式: 用户手动 toggle 控制展开/折叠, auto-collapse 不干预 (LLM 显式要求保留折叠 UI).
+ * 边界: 必须 `oldVal > 0` 守卫 — 初次加载如果所有 step 已 done 状态 (oldVal=0) 不应折叠.
+ * 类 20.124 风格: 保留 watch 行为不变 (flush: 'sync'), 仅门控副作用.
  */
 watch(
   doneCount,
   (newVal, oldVal) => {
-    if (oldVal > 0 && newVal === total.value && total.value > 0
-      && props.collapsedByDefault === true) {
+    if (props.collapsedByDefault) return  // 折叠模式跳过自动折叠
+    if (oldVal > 0 && newVal === total.value && total.value > 0) {
       expanded.value = false
     }
   },
   { flush: 'sync' },
 )
 
-/** 当前是否展开：默认模式恒 true；折叠模式受 expanded 控制 */
-const isShown = computed(() => !props.collapsedByDefault || expanded.value)
+/** 当前是否展开：默认模式受 expanded 控制 (含 auto-collapse); 折叠模式同 */
+const isShown = computed(() => expanded.value)
 
 function toggle() {
   expanded.value = !expanded.value
@@ -95,7 +103,7 @@ function statusGlyph(s: PlanStep['status']): string {
   <div
     v-if="steps && steps.length"
     class="plan-steps"
-    :class="{ compact }"
+    :class="{ compact, 'auto-collapsed': !collapsedByDefault && !expanded }"
     data-testid="plan-steps"
     :data-collapsed-by-default="collapsedByDefault ? 'true' : 'false'"
   >
@@ -118,9 +126,28 @@ function statusGlyph(s: PlanStep['status']): string {
       <span class="plan-steps-toggle" aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span>
     </div>
 
-    <!-- 默认模式：直接渲染列表，无 toggle，无折叠过渡 -->
+    <!-- 默认模式 (W100 +52): 全部 done 后 auto-collapse 成单行摘要 + 展开 icon -->
+    <div
+      v-else-if="!expanded"
+      class="plan-steps-header plan-steps-header-auto"
+      role="button"
+      tabindex="0"
+      :aria-expanded="'false'"
+      :aria-controls="`plan-steps-detail`"
+      :aria-label="`展开计划步骤: ${summary}`"
+      data-testid="plan-steps-toggle-header"
+      @click="toggle"
+      @keydown.enter.prevent="toggle"
+      @keydown.space.prevent="toggle"
+    >
+      <span class="plan-steps-icon plan-steps-tick" aria-hidden="true">✓</span>
+      <span class="plan-steps-summary" data-testid="plan-steps-summary">{{ summary }}</span>
+      <span class="plan-steps-toggle" aria-hidden="true">▸</span>
+    </div>
+
+    <!-- 默认模式：展开态直接渲染列表，无折叠过渡 -->
     <ul
-      v-if="!collapsedByDefault"
+      v-else
       id="plan-steps-detail"
       class="plan-steps-list plan-steps-list-unfolded"
       data-testid="plan-steps-list"
@@ -155,7 +182,7 @@ function statusGlyph(s: PlanStep['status']): string {
         </span>
       </li>
     </ul>
-    <Transition v-else name="plan-steps-detail">
+    <Transition v-if="collapsedByDefault" name="plan-steps-detail">
       <ul
         v-if="isShown"
         id="plan-steps-detail"
@@ -194,9 +221,9 @@ function statusGlyph(s: PlanStep['status']): string {
       </ul>
     </Transition>
 
-    <!-- 默认模式：纯展示，summary 仅作 a11y 隐藏对屏幕阅读器可见 -->
+    <!-- 默认模式 a11y 隐藏 summary (展开态时)，仅屏幕阅读器可见 -->
     <div
-      v-if="!collapsedByDefault"
+      v-if="!collapsedByDefault && expanded"
       class="plan-steps-summary plan-steps-summary-static"
       data-testid="plan-steps-summary-static"
       role="status"
@@ -246,6 +273,17 @@ function statusGlyph(s: PlanStep['status']): string {
 .plan-steps-header:hover { background: var(--color-primary-bg); }
 .plan-steps-header:focus-visible {
   box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+/* W100 +52: 默认模式 auto-collapse 后的单行 header，绿色 tick 视觉提示完成 */
+.plan-steps-header-auto {
+  background: var(--color-success-bg, #f0f9eb);
+  border-left-color: var(--color-success, #67c23a);
+}
+.plan-steps-header-auto:hover { background: var(--color-success-bg-hover, #e1f3d8); }
+.plan-steps-header-auto .plan-steps-tick {
+  color: var(--color-success, #67c23a);
+  font-weight: 700;
 }
 
 .plan-steps-icon {
@@ -456,5 +494,12 @@ function statusGlyph(s: PlanStep['status']): string {
 }
 [data-theme='dark'] .plan-step-running {
   background: rgba(var(--color-primary-rgb), 0.1);
+}
+/* W100 +52: dark mode 下 auto-collapse header 用深绿底 */
+[data-theme='dark'] .plan-steps-header-auto {
+  background: rgba(103, 194, 58, 0.15);
+}
+[data-theme='dark'] .plan-steps-header-auto:hover {
+  background: rgba(103, 194, 58, 0.25);
 }
 </style>

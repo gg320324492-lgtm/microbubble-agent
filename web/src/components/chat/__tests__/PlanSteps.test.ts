@@ -111,14 +111,22 @@ describe('PlanSteps — W100 +49c RICHTEXT-UNFOLD 默认展开', () => {
     expect(wrapper.find('[data-testid="plan-steps-summary"]').text()).toBe('计划中: 1/3 步骤')
   })
 
-  it('⑥ 折叠模式全部 done 时摘要改为 "计划完成: N 个步骤" 且自动折叠', async () => {
+  it('⑥ 折叠模式全部 done 时摘要改为 "计划完成: N 个步骤" (auto-collapse 不干预, W100 +52)', async () => {
+    // 旧行为 (W100 +49c): 折叠模式 + all-done → 自动折叠
+    // 新行为 (W100 +52): 折叠模式不受 auto-collapse 影响, 完全由用户控制 toggle
+    // (LLM 显式要求保留折叠 UI, auto-collapse 不干预)
+    // 详细 5 case 测试见 PlanStepsAutoCollapse.test.ts
     const wrapper = mount(PlanSteps, {
       props: { steps: allDoneSample, collapsedByDefault: true },
     })
     expect(wrapper.find('[data-testid="plan-steps-summary"]').text()).toBe('计划完成: 2 个步骤')
+    // 列表仍不可见 (用户未点开)
+    expect(wrapper.find('[data-testid="plan-steps-list"]').exists()).toBe(false)
+    // 用户点击 header → 列表出现
     await wrapper.find('[role="button"]').trigger('click')
     await nextTick()
     expect(wrapper.find('[data-testid="plan-steps-list"]').exists()).toBe(true)
+    // 步骤从 2 变 3 (running 变 all-done), 折叠模式 auto-collapse 不干预
     await wrapper.setProps({
       steps: [
         { step: '查询知识库', tool: 'search_knowledge', status: 'done' as const },
@@ -127,10 +135,14 @@ describe('PlanSteps — W100 +49c RICHTEXT-UNFOLD 默认展开', () => {
       ],
     })
     await new Promise((r) => setTimeout(r, 250))
-    expect(wrapper.find('[data-testid="plan-steps-list"]').exists()).toBe(false)
+    // 列表仍然可见 (折叠模式不受影响)
+    expect(wrapper.find('[data-testid="plan-steps-list"]').exists()).toBe(true)
   })
 
-  it('⑦ 默认模式 + 全部 done 时不会自动隐藏（auto-collapse 仅折叠模式生效）', async () => {
+  it('⑦ 默认模式 + 步骤从 1→2 (running 变 all-done) 触发 auto-collapse (W100 +52 升级)', async () => {
+    // 旧行为 (W100 +49c RICHTEXT-UNFOLD): 默认模式不 auto-collapse
+    // 新行为 (W100 +52): 默认模式 all-done → 折叠成单行摘要
+    // 详细 5 case 测试见 PlanStepsAutoCollapse.test.ts
     const wrapper = mount(PlanSteps, {
       props: { steps: mixedSample },
     })
@@ -142,7 +154,12 @@ describe('PlanSteps — W100 +49c RICHTEXT-UNFOLD 默认展开', () => {
       ],
     })
     await new Promise((r) => setTimeout(r, 250))
-    expect(wrapper.find('[data-testid="plan-steps-list"]').exists()).toBe(true)
+    // 列表已折叠
+    expect(wrapper.find('[data-testid="plan-steps-list"]').exists()).toBe(false)
+    // 折叠 header 显示 "计划完成: 2 个步骤"
+    const header = wrapper.find('[data-testid="plan-steps-toggle-header"]')
+    expect(header.exists()).toBe(true)
+    expect(header.text()).toContain('计划完成: 2 个步骤')
   })
 
   it('⑧ 边界：空 steps 数组 → 组件不渲染', () => {
