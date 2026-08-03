@@ -122,6 +122,7 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
           <PlanSteps
             v-if="msg.plan && msg.plan.length"
             :steps="msg.plan"
+            :collapsed-by-default="!!msg.collapsedByDefault"
           />
           <TransitionGroup
             v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
@@ -139,6 +140,7 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
           <ContentBriefDetail
             v-if="msg.role === 'assistant' && msg.content"
             :content="msg.content"
+            :collapsed-by-default="!!msg.collapsedByDefault"
             class="msg-content"
             :data-testid="`desktop-cbd-${msg.id}`"
           />

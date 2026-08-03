@@ -1,16 +1,18 @@
 /**
- * ContentBriefDetail 组件单测 — W100 +25
- * 6 case 覆盖：1 段 / 2 段 / 3+ 段 / 折叠态 / 展开态 / 边界
+ * ContentBriefDetail 组件单测 — W100 +25 / W100 +49a
+ * W100 +49a RICHTEXT-UNFOLD 沿用:
+ *   - 默认 (collapsedByDefault 不传 / false) = 全部段直接渲染, 无 toggle 按钮
+ *   - collapsedByDefault=true = 折叠模式, 保留 toggle UI
  *
- * 注：detail 折叠使用 <Transition> 200ms 渐隐。
- * 收起后断言 expanded=false 而非 DOM 存在性，等 transition 完成再断言 DOM。
+ * 7 case 覆盖：默认渲染 / 折叠模式渲染 / 折叠模式点击展开 / 折叠模式 keyboard
+ * / aria 完备 / 边界 / collapsedByDefault=true 显式折叠
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ContentBriefDetail from '../ContentBriefDetail.vue'
 
-describe('ContentBriefDetail — W100 +25', () => {
+describe('ContentBriefDetail — W100 +49a RICHTEXT-UNFOLD 默认展开', () => {
   beforeEach(() => {
     // noop
   })
@@ -24,69 +26,71 @@ describe('ContentBriefDetail — W100 +25', () => {
     expect(wrapper.find('[data-testid="cbd-toggle"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(false)
     expect(wrapper.attributes('data-paragraph-count')).toBe('1')
-    expect(wrapper.attributes('data-expanded')).toBe('false')
+    expect(wrapper.attributes('data-collapsed-by-default')).toBe('false')
   })
 
-  it('② 2 段文本默认折叠，brief 显示 + 折叠按钮可点', async () => {
+  it('② 2 段文本默认直接渲染全部段，无折叠按钮', async () => {
     const wrapper = mount(ContentBriefDetail, {
       props: { content: '第一段简报内容。\n\n第二段详情内容比较长。' },
     })
     await nextTick()
-    expect(wrapper.find('[data-testid="cbd-toggle"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="cbd-toggle"]').text()).toContain('展开')
-    expect(wrapper.find('[data-testid="cbd-toggle"]').text()).toContain('1 段')
-    expect(wrapper.attributes('data-paragraph-count')).toBe('2')
-    expect(wrapper.find('[data-testid="cbd-toggle"]').attributes('aria-expanded')).toBe(
-      'false',
-    )
+    expect(wrapper.find('[data-testid="cbd-toggle"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(false)
+    expect(wrapper.attributes('data-paragraph-count')).toBe('2')
+    // 第二段作为 detail-para 渲染
+    expect(wrapper.find('[data-testid="cbd-detail-para-0"]').exists()).toBe(true)
   })
 
-  it('③ 3+ 段折叠，点击展开后渲染多段 detail', async () => {
+  it('③ 3+ 段默认全部渲染，无折叠按钮', async () => {
     const wrapper = mount(ContentBriefDetail, {
       props: {
         content: '简要结论\n\n第一段详情\n\n第二段详情\n\n第三段详情',
       },
     })
     await nextTick()
-    expect(wrapper.find('[data-testid="cbd-toggle"]').text()).toContain('3 段')
+    expect(wrapper.find('[data-testid="cbd-toggle"]').exists()).toBe(false)
     expect(wrapper.attributes('data-paragraph-count')).toBe('4')
-    // 点击展开
-    await wrapper.find('[data-testid="cbd-toggle"]').trigger('click')
-    await nextTick()
-    expect((wrapper.vm as any).expanded).toBe(true)
-    expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(true)
     expect(wrapper.findAll('[data-testid^="cbd-detail-para-"]').length).toBe(3)
-    // 再次点击收起
-    await wrapper.find('[data-testid="cbd-toggle"]').trigger('click')
-    await nextTick()
-    expect((wrapper.vm as any).expanded).toBe(false)
-    // transition leave 动画 ~200ms
-    await new Promise((r) => setTimeout(r, 300))
-    await nextTick()
-    expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(false)
   })
 
-  it('④ 键盘 Enter / Space 触发折叠切换', async () => {
+  it('④ collapsedByDefault=true 折叠模式：toggle 存在，detail 默认折叠', async () => {
     const wrapper = mount(ContentBriefDetail, {
-      props: { content: '第一段\n\n第二段' },
+      props: { content: '简要\n\n详细一\n\n详细二', collapsedByDefault: true },
+    })
+    await nextTick()
+    const toggle = wrapper.find('[data-testid="cbd-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(false)
+    expect(wrapper.attributes('data-collapsed-by-default')).toBe('true')
+    await toggle.trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-testid^="cbd-detail-para-"]').length).toBe(2)
+  })
+
+  it('⑤ collapsedByDefault=true 折叠模式键盘 Enter / Space 触发折叠切换', async () => {
+    const wrapper = mount(ContentBriefDetail, {
+      props: { content: '第一段\n\n第二段', collapsedByDefault: true },
     })
     await nextTick()
     const toggle = wrapper.find('[data-testid="cbd-toggle"]')
     // Enter
     await toggle.trigger('keydown', { key: 'Enter' })
     await nextTick()
-    expect((wrapper.vm as any).expanded).toBe(true)
     expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(true)
     // Space
     await toggle.trigger('keydown', { key: ' ' })
     await nextTick()
-    expect((wrapper.vm as any).expanded).toBe(false)
+    // Transition leave 200ms, 等动画完成断言 DOM 移除
+    await new Promise((r) => setTimeout(r, 300))
+    await nextTick()
+    expect(wrapper.find('[data-testid="cbd-detail"]').exists()).toBe(false)
   })
 
-  it('⑤ aria 完备：aria-expanded + aria-controls + aria-label', async () => {
+  it('⑥ collapsedByDefault=true 折叠模式 aria 完备', async () => {
     const wrapper = mount(ContentBriefDetail, {
-      props: { content: '简要\n\n详细一\n\n详细二' },
+      props: { content: '简要\n\n详细一\n\n详细二', collapsedByDefault: true },
     })
     await nextTick()
     const toggle = wrapper.find('[data-testid="cbd-toggle"]')
@@ -94,16 +98,14 @@ describe('ContentBriefDetail — W100 +25', () => {
     const detailId = toggle.attributes('aria-controls')
     expect(detailId).toBeTruthy()
     expect(toggle.attributes('aria-label')).toContain('2 段')
-    // 展开后 aria-label 变化
     await toggle.trigger('click')
     await nextTick()
     expect(toggle.attributes('aria-label')).toBe('折叠详情')
-    // detail 元素 id 与 aria-controls 对应
     const detail = wrapper.find('[data-testid="cbd-detail"]')
     expect(detail.attributes('id')).toBe(detailId)
   })
 
-  it('⑥ 边界：空 content / 仅空白段 / 多 \\n\\n', async () => {
+  it('⑦ 边界：空 content / 仅空白段 / 多 \\n\\n', async () => {
     // 空
     const w1 = mount(ContentBriefDetail, { props: { content: '' } })
     await nextTick()
@@ -124,6 +126,7 @@ describe('ContentBriefDetail — W100 +25', () => {
     })
     await nextTick()
     expect(w3.attributes('data-paragraph-count')).toBe('3')
-    expect(w3.find('[data-testid="cbd-toggle"]').text()).toContain('2 段')
+    expect(w3.find('[data-testid="cbd-toggle"]').exists()).toBe(false)
+    expect(w3.findAll('[data-testid^="cbd-detail-para-"]').length).toBe(2)
   })
 })

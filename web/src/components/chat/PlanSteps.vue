@@ -1,10 +1,14 @@
 <!--
   PlanSteps.vue — W100 +22 plan_step 折叠展开
+  W100 +49c RICHTEXT-UNFOLD 沿用: 默认 (collapsedByDefault=false) 直接渲染全部 step,
+  无 toggle 按钮; LLM 显式 collapsedByDefault=true 时保留 ▼ ▸ 折叠切换 UI (协议兼容).
 
   设计约束（用户视角 P0 #2）：
-  - 折叠态：📋 计划中: N 个步骤
-  - 展开态：列出 step / tool / status（01/02/03 编号 + status 圆点）
-  - 全部 done 后自动折叠
+  - 默认折叠态：📋 计划中: N 个步骤（仅在 collapsedByDefault=true 时存在）
+  - 默认展开态：列出 step / tool / status（01/02/03 编号 + status 圆点）
+  - 全部 done 后自动折叠（独立于 collapsedByDefault，类 20.124 风格不可破）
+    - 默认模式：所有 step 直接渲染，无折叠门控，auto-collapse 不影响显示
+    - LLM-controlled 折叠模式：保留原有 watch + auto-collapse 行为
   - 与 ThinkingCapsule 风格统一：3px 左蓝边 + fadeSlideUp + stagger
   - a11y: role=button + aria-expanded + keyboard Enter/Space
   - 移动端 compact 模式：36px tap target
@@ -26,12 +30,17 @@ const props = withDefaults(
   defineProps<{
     steps: PlanStep[]
     compact?: boolean
+    /**
+     * LLM 显式要求折叠时才保留折叠 UI。
+     * 默认 false 与 RICHTEXT-UNFOLD 协议一致：默认展开，真实 step 数据直接可见。
+     */
+    collapsedByDefault?: boolean
   }>(),
-  { compact: false },
+  { compact: false, collapsedByDefault: false },
 )
 
-/** 默认折叠。用户点击展开。全部 done 后自动折叠。 */
-const expanded = ref(false)
+/** 默认模式 expanded 永远 true，无需 toggle；折叠模式初始 false 等用户点击 */
+const expanded = ref(!props.collapsedByDefault)
 
 const doneCount = computed(() => props.steps.filter((s) => s.status === 'done').length)
 const runningIndex = computed(() => props.steps.findIndex((s) => s.status === 'running'))
@@ -46,16 +55,26 @@ const summary = computed(() => {
   return `计划中: ${d}/${t} 步骤`
 })
 
-/** 全部 done 后自动折叠（一次性 watch） */
+/**
+ * 全部 done 后自动折叠（一次性 watch）。
+ * 仅在 LLM-controlled 折叠模式 (collapsedByDefault=true) 下生效：
+ * 默认模式下 expanded 永远 true，auto-collapse 不影响显示。
+ * 类 20.124 风格：保留 watch 行为不变（独立于 collapsedByDefault），
+ * 仅门控 collapse 副作用本身。
+ */
 watch(
   doneCount,
   (newVal, oldVal) => {
-    if (oldVal > 0 && newVal === total.value && total.value > 0) {
+    if (oldVal > 0 && newVal === total.value && total.value > 0
+      && props.collapsedByDefault === true) {
       expanded.value = false
     }
   },
   { flush: 'sync' },
 )
+
+/** 当前是否展开：默认模式恒 true；折叠模式受 expanded 控制 */
+const isShown = computed(() => !props.collapsedByDefault || expanded.value)
 
 function toggle() {
   expanded.value = !expanded.value
@@ -78,14 +97,17 @@ function statusGlyph(s: PlanStep['status']): string {
     class="plan-steps"
     :class="{ compact }"
     data-testid="plan-steps"
+    :data-collapsed-by-default="collapsedByDefault ? 'true' : 'false'"
   >
     <div
+      v-if="collapsedByDefault"
       class="plan-steps-header"
       role="button"
       tabindex="0"
       :aria-expanded="expanded ? 'true' : 'false'"
       :aria-controls="`plan-steps-detail`"
       :aria-label="`${expanded ? '收起' : '展开'}计划步骤: ${summary}`"
+      data-testid="plan-steps-toggle-header"
       @click="toggle"
       @keydown.enter.prevent="toggle"
       @keydown.space.prevent="toggle"
@@ -96,9 +118,46 @@ function statusGlyph(s: PlanStep['status']): string {
       <span class="plan-steps-toggle" aria-hidden="true">{{ expanded ? '▾' : '▸' }}</span>
     </div>
 
-    <Transition name="plan-steps-detail">
+    <!-- 默认模式：直接渲染列表，无 toggle，无折叠过渡 -->
+    <ul
+      v-if="!collapsedByDefault"
+      id="plan-steps-detail"
+      class="plan-steps-list plan-steps-list-unfolded"
+      data-testid="plan-steps-list"
+      role="list"
+    >
+      <li
+        v-for="(s, i) in steps"
+        :key="i"
+        class="plan-step"
+        :class="[`plan-step-${s.status}`, `stagger-${Math.min(i + 1, 6)}`]"
+        :data-testid="`plan-step-${i}`"
+        :data-status="s.status"
+        :aria-label="`步骤 ${i + 1}: ${s.step}${s.tool ? ', 使用工具 ' + s.tool : ''}, ${s.status === 'done' ? '已完成' : s.status === 'running' ? '进行中' : '待执行'}`"
+      >
+        <span class="plan-step-num" aria-hidden="true">{{ pad(i) }}</span>
+        <span class="plan-step-name" :data-testid="`plan-step-${i}-name`">{{ s.step }}</span>
+        <span
+          v-if="s.tool"
+          class="plan-step-tool"
+          :data-testid="`plan-step-${i}-tool`"
+          >{{ s.tool }}</span
+        >
+        <span
+          class="plan-step-status"
+          :class="`plan-step-status-${s.status}`"
+          :data-testid="`plan-step-${i}-status`"
+          :aria-label="s.status === 'done' ? '已完成' : s.status === 'running' ? '进行中' : '待执行'"
+        >
+          <span v-if="s.status === 'running'" class="plan-step-spinner" aria-hidden="true" />
+          <span v-else-if="s.status === 'done'" class="plan-step-tick" aria-hidden="true">✓</span>
+          <span v-else class="plan-step-pending" aria-hidden="true" />
+        </span>
+      </li>
+    </ul>
+    <Transition v-else name="plan-steps-detail">
       <ul
-        v-if="expanded"
+        v-if="isShown"
         id="plan-steps-detail"
         class="plan-steps-list"
         data-testid="plan-steps-list"
@@ -134,6 +193,17 @@ function statusGlyph(s: PlanStep['status']): string {
         </li>
       </ul>
     </Transition>
+
+    <!-- 默认模式：纯展示，summary 仅作 a11y 隐藏对屏幕阅读器可见 -->
+    <div
+      v-if="!collapsedByDefault"
+      class="plan-steps-summary plan-steps-summary-static"
+      data-testid="plan-steps-summary-static"
+      role="status"
+      aria-live="polite"
+    >
+      {{ summary }}
+    </div>
   </div>
 </template>
 
@@ -215,6 +285,26 @@ function statusGlyph(s: PlanStep['status']): string {
 }
 .plan-steps.compact .plan-steps-list {
   padding: 2px 9px 6px;
+}
+/* 默认模式（always unfolded）：列表无 padding-top，与 header 拆开 */
+.plan-steps-list-unfolded {
+  padding: 8px 12px 10px;
+}
+.plan-steps.compact .plan-steps-list-unfolded {
+  padding: 6px 9px 8px;
+}
+
+/* 默认模式 a11y 隐藏 summary，仅屏幕阅读器可见 */
+.plan-steps-summary-static {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .plan-step {
