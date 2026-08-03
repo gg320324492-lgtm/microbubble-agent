@@ -20,7 +20,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny, View } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny, View, Notebook } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 // RichContent 也已封装到 ChatMessageRow.vue, 此处不再直接 import
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
@@ -608,11 +608,13 @@ onUnmounted(() => {
               name="chat-header-context-toggle"
               text
               size="small"
-              aria-label="AI 记住了什么"
-              title="AI 记住了什么"
+              class="header-context-toggle"
+              aria-label="AI 上下文"
+              title="AI 上下文：聊天历史 / 知识引用 / 工具调用"
               @click="showContextPanel = true"
             >
-              <el-icon><View /></el-icon>
+              <el-icon><Notebook /></el-icon>
+              <span class="btn-label">上下文</span>
             </el-button>
             <el-button
               id="chat-header-new-session"
@@ -965,6 +967,17 @@ onUnmounted(() => {
 .bot-avatar { background: var(--gradient-welcome-hero); }
 .bot-msg-avatar { background: var(--gradient-welcome-hero); flex-shrink: 0; }
 .header-text { line-height: 1.2; }
+
+/* W100 +51b: 头部上下文按钮 - icon + 文字标签 */
+.header-context-toggle :deep(.el-icon) {
+  font-size: 16px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.header-context-toggle .btn-label {
+  font-size: 13px;
+  line-height: 1;
+}
 .bot-name { font-weight: 600; font-size: 15px; }
 .bot-status { font-size: 12px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }

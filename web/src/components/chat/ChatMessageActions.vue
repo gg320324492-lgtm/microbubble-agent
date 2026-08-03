@@ -8,7 +8,9 @@
       :disabled="regenerating"
       @click.stop="onRegenerateClick"
     >
-      <span class="action-icon" aria-hidden="true">🔄</span>
+      <el-icon class="action-icon" aria-hidden="true">
+        <component :is="regenerating ? Loading : Refresh" />
+      </el-icon>
       <span v-if="mode === 'mobile'" class="action-text">{{ regenerateLabel }}</span>
     </button>
     <button
@@ -19,7 +21,9 @@
       :disabled="copying"
       @click.stop="onCopyClick"
     >
-      <span class="action-icon" aria-hidden="true">{{ copying ? '✅' : '📋' }}</span>
+      <el-icon class="action-icon" aria-hidden="true">
+        <component :is="copying ? Check : CopyDocument" />
+      </el-icon>
       <span v-if="mode === 'mobile'" class="action-text">{{ copyLabel }}</span>
     </button>
     <!-- 可视复制反馈 (desktop hover-mode 显示) -->
@@ -47,6 +51,7 @@
  */
 
 import { computed, ref } from 'vue'
+import { Refresh, CopyDocument, Check, Loading } from '@element-plus/icons-vue'
 
 const props = defineProps({
   /** 模式: desktop (hover 显示) / mobile (始终显示) */
@@ -178,8 +183,17 @@ function onCopyClick() {
 }
 
 .action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 14px;
-  display: inline-block;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.action-icon :deep(svg) {
+  width: 1em;
+  height: 1em;
 }
 
 .action-text {
@@ -197,7 +211,6 @@ function onCopyClick() {
 .chat-message-actions.mode-mobile .action-icon {
   font-size: 18px;
 }
-
 /* dark mode: 文字色 + 高亮调整 */
 [data-theme='dark'] .action-btn {
   color: var(--color-text-secondary);
