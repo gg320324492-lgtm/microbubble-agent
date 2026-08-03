@@ -1,5 +1,5 @@
 /**
- * useChatStream W100 +53 plan_step dedup 测试 — SSE plan_step 事件按 tool_use_id 原地更新
+ * useChatStream W100 +53/+54 plan_step dedup + 老消息兼容测试
  *
  * 背景：W100 +52 在 PlanSteps.vue 加了 auto-collapse 逻辑 (全部 done 后折叠单行)，
  * 但前端 useChatStream 收到 plan_step 事件时只 push 不 dedup，
@@ -8,12 +8,18 @@
  *
  * W100 +53 修复：后端每条 done 事件带 tool_use_id，前端按 id 去重原地更新 status。
  *
- * 5 case 覆盖：
+ * W100 +54 老消息兼容: 老 SSE plan_step 没有 tool_use_id (W100 +53 之前的会话),
+ *   - case 2) 用 tool 字段匹配老 step
+ *   - case 3) 找不到匹配时取第一个老 running step 标记 done
+ *   - case 4) 收到第一条 text_delta 时强制把所有老 plan_step 标记 done (synthesis 阶段开始 = 计划阶段结束)
+ *
+ * 6 case 覆盖:
  * ① 同一 tool_use_id 收到 2 次 plan_step (pending + done) → plan 数组只有 1 个 step 且 status='done'
  * ② 不同 tool_use_id 收到 2 次 plan_step → plan 数组有 2 个 step
- * ③ 老消息兼容: 无 tool_use_id 的事件 → fallback push (findIndex 返回 -1)
- * ④ 模拟完整 SSE 流: 1 phase0_pending + 1 phase0_running + 6 tool_done → 6 行 done (无孤儿 phase0_done)
- * ⑤ doneCount 从 0→6 触发 auto-collapse (集成 PlanSteps 组件)
+ * ③ 老消息兼容 (无 tool_use_id, status='running') + 新 done event (tool_use_id 不匹配 tool) → 按 step index fallback
+ * ④ 收到第一条 text_delta → 所有老 plan_step (无 tool_use_id, 非 done) 标记 done
+ * ⑤ 模拟完整 SSE 流 (老消息场景): 1 phase0_pending + 1 phase0_running + 6 tool_done + 第一条 text_delta → 全部 done
+ * ⑥ doneCount 从 0→6 触发 auto-collapse (集成 PlanSteps 组件)
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -28,7 +34,7 @@ interface PlanStep {
 }
 
 /**
- * 模拟 useChatStream.ts:838-862 的 plan_step 处理逻辑
+ * 模拟 useChatStream.ts:835-905 的 plan_step 处理逻辑 (W100 +54)
  * (同步内联版, 与生产代码 1:1 对齐, 修改 useChatStream 时必须同步更新此函数)
  */
 function applyPlanStep(
@@ -42,15 +48,31 @@ function applyPlanStep(
   },
 ): PlanStep[] {
   const incomingToolId = evt.tool_use_id || evt.tool_name
-  if (incomingToolId) {
-    const existingIdx = plan.findIndex(
-      (s) => s.tool_use_id === incomingToolId || (!s.tool_use_id && s.tool === incomingToolId),
+  const incomingToolName = evt.tool_name || evt.tool_use_id
+  let existingIdx = -1
+  // 1) tool_use_id 精确匹配
+  if (evt.tool_use_id) {
+    existingIdx = plan.findIndex((s) => s.tool_use_id === evt.tool_use_id)
+  }
+  // 2) 老 step 无 tool_use_id, 按 tool 字段匹配
+  if (existingIdx < 0 && incomingToolName) {
+    existingIdx = plan.findIndex((s) => !s.tool_use_id && s.tool === incomingToolName)
+  }
+  // 3) W100 +54 最稳 fallback: 老 step 都是 running, 新 done 事件取第一个老 running step
+  if (
+    existingIdx < 0 &&
+    evt.plan_status === 'done' &&
+    plan.some((s) => !s.tool_use_id)
+  ) {
+    const firstRunningIdx = plan.findIndex(
+      (s) => !s.tool_use_id && s.status === 'running',
     )
-    if (existingIdx >= 0 && evt.plan_status) {
-      const next = [...plan]
-      next[existingIdx] = { ...next[existingIdx], status: evt.plan_status }
-      return next
-    }
+    if (firstRunningIdx >= 0) existingIdx = firstRunningIdx
+  }
+  if (existingIdx >= 0 && evt.plan_status) {
+    const next = [...plan]
+    next[existingIdx] = { ...next[existingIdx], status: evt.plan_status }
+    return next
   }
   return [
     ...plan,
@@ -61,6 +83,22 @@ function applyPlanStep(
       status: evt.plan_status || 'pending',
     },
   ]
+}
+
+/**
+ * W100 +54 老消息兼容: 收到第一条 text_delta 时, 强制把老 plan_step (无 tool_use_id, 非 done) 标记 done
+ */
+function applyTextDeltaCompat(plan: PlanStep[]): PlanStep[] {
+  if (!plan || plan.length === 0) return plan
+  let changed = false
+  const next = plan.map((s) => {
+    if (!s.tool_use_id && s.status !== 'done') {
+      changed = true
+      return { ...s, status: 'done' as const }
+    }
+    return s
+  })
+  return changed ? next : plan
 }
 
 describe('useChatStream W100 +53 plan_step dedup', () => {
@@ -117,36 +155,49 @@ describe('useChatStream W100 +53 plan_step dedup', () => {
     expect(plan.every((s) => s.status === 'done')).toBe(true)
   })
 
-  it('③ 老消息兼容: 无 tool_use_id 事件 → fallback push (向后兼容)', () => {
+  it('③ W100 +54 老消息兼容: 无 tool_use_id 老 step + 新 done event (tool 也不匹配) → fallback 取第一个老 running step 标记 done', () => {
     let plan: PlanStep[] = []
-    // 模拟老 SSE: 后端未带 tool_use_id (W100 +52 之前的事件)
-    plan = applyPlanStep(plan, {
-      step: 'phase0_plan',
-      plan_status: 'pending',
-    })
-    expect(plan).toHaveLength(1)
-    expect(plan[0].status).toBe('pending')
-
-    // 老 SSE 第二次也无 tool_use_id → 仍 fallback push (老消息会显示多行)
-    plan = applyPlanStep(plan, {
-      step: 'phase0_plan',
-      plan_status: 'running',
-    })
+    // 模拟老 SSE (W100 +53 之前): phase0_plan 没 tool_use_id
+    plan = applyPlanStep(plan, { step: 'phase0_plan', plan_status: 'pending' })
+    plan = applyPlanStep(plan, { step: 'phase0_plan', plan_status: 'running' })
     expect(plan).toHaveLength(2)
-
-    // 新 SSE 收到带 tool_use_id 的 done → 不命中老无 id step → push 新行
-    // (老消息无 tool_use_id 找不到匹配, 新协议 step 仍会显示)
+    expect(plan[1].status).toBe('running')
+    // 老 step 都是通用名 'phase0_plan', 没有 tool 字段.
+    // 后端 +53 后开始发 done 事件, tool_name='search_knowledge', 老 step 没 tool='search_knowledge'
+    // → 1) tool_use_id 不命中; 2) tool 字段不命中; 3) fallback 3 命中: 取第一个老 running step 标记 done
     plan = applyPlanStep(plan, {
       step: 'search_knowledge',
       tool_name: 'search_knowledge',
       tool_use_id: 'plan_00_search_knowledge',
       plan_status: 'done',
     })
-    expect(plan).toHaveLength(3)
-    expect(plan[2].status).toBe('done')
+    expect(plan).toHaveLength(2) // 没 push 新行
+    expect(plan[1].status).toBe('done') // 老 step 标记 done (fallback 3 取第一个 running)
   })
 
-  it('④ 完整 SSE 流: phase0_pending + phase0_running + 6 tool_done → 8 行 (2 phase0 + 6 tool done, 无孤儿)', () => {
+  it('④ W100 +54 老消息兼容: 收到第一条 text_delta → 所有老 plan_step (无 tool_use_id, 非 done) 标记 done', () => {
+    let plan: PlanStep[] = []
+    // 老 SSE: phase0_plan pending + phase0_plan running (无 tool_use_id)
+    plan = applyPlanStep(plan, { step: 'phase0_plan', plan_status: 'pending' })
+    plan = applyPlanStep(plan, { step: 'phase0_plan', plan_status: 'running' })
+    expect(plan).toHaveLength(2)
+    // 新 SSE 收一条 tool done (有 tool_use_id) — 老 step 无 id 无 tool 匹配 → fallback 3 → 第一个 running 标记 done
+    plan = applyPlanStep(plan, {
+      step: 'search_knowledge',
+      tool_name: 'search_knowledge',
+      tool_use_id: 'plan_00_search_knowledge',
+      plan_status: 'done',
+    })
+    expect(plan[1].status).toBe('done') // fallback 3 → 第一个 running 标记 done
+    expect(plan[0].status).toBe('pending') // 老 pending 没动
+    expect(plan.length).toBe(2) // 没 push 新行
+    // W100 +54 text_delta 兜底: 第一条 text_delta → 所有老 step 强制 done
+    plan = applyTextDeltaCompat(plan)
+    expect(plan.every((s) => !s.tool_use_id ? s.status === 'done' : true)).toBe(true)
+    expect(plan.filter((s) => s.status === 'done').length).toBe(2) // 全部 done
+  })
+
+  it('⑤ 完整 SSE 流 (老消息场景): phase0_pending + phase0_running + 6 tool_done + text_delta → 全部 done', () => {
     let plan: PlanStep[] = []
     // 后端顺序: pending → running → 6 个 tool 的 done (每个 done 带 tool_use_id)
     plan = applyPlanStep(plan, { step: 'phase0_plan', plan_status: 'pending' })
@@ -160,17 +211,23 @@ describe('useChatStream W100 +53 plan_step dedup', () => {
         plan_status: 'done',
       })
     }
-    expect(plan).toHaveLength(8)
-    // done step 计数
+    // 第一次 tool_done: fallback 3 → 老 running 标记 done (不 push 新行) → 2 老 step + 5 新 tool = 7
+    // 之后 5 次 tool_done: tool_use_id 都唯一, push 新行 → 7 + 5 = 7
+    expect(plan).toHaveLength(7)
+    // done 数: 1 老 running (fallback 3) + 5 新 tool done + 老 pending 没动 = 6 done, 1 pending
+    const doneBeforeText = plan.filter((s) => s.status === 'done').length
+    expect(doneBeforeText).toBe(6) // 5 new + 1 老 running (fallback 3)
+    expect(plan[0].status).toBe('pending') // 老 pending 没动
+    // W100 +54 text_delta 兜底: synthesis 阶段开始 → 老 pending 也变 done
+    plan = applyTextDeltaCompat(plan)
+    expect(plan.every((s) => s.status === 'done')).toBe(true)
+    expect(plan.length).toBe(7) // 数组长度不变 (没 push 新行, 只 mutate 老行)
+    // 全 done → auto-collapse 触发
     const doneCount = plan.filter((s) => s.status === 'done').length
-    expect(doneCount).toBe(6)
-    // W100 +52: auto-collapse 守卫 `oldVal > 0 && newVal === total.value`
-    // 用 plan 中 status='done' 的 step 数 (6) 与 total (8) 比较 → 不等于 → 不触发 (期望行为)
-    // 老消息中 phase0_pending/running 也算 step, auto-collapse 仅在 done 覆盖全部时触发
-    expect(doneCount).not.toBe(plan.length)
+    expect(doneCount).toBe(plan.length)
   })
 
-  it('⑤ doneCount 触发 auto-collapse (W100 +52 集成): 6 行全 done → PlanSteps 折叠', async () => {
+  it('⑥ doneCount 触发 auto-collapse (W100 +52 集成): 6 行全 done → PlanSteps 折叠', async () => {
     // 集成测试: 把 dedup 后的 plan 喂给 PlanSteps 组件, 验证 doneCount === total → auto-collapse
     const PlanSteps = (await import('../../../components/chat/PlanSteps.vue')).default
 

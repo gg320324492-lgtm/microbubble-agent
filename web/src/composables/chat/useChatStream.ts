@@ -667,6 +667,20 @@ export function useChatStream() {
           // [increment] 累加 delta 到 content
           // 防 brief 重复 bug（2026-06-12 commit cf70ff5 根因）：
           //   检测单次 delta > 100 字且不包含已有内容前 50 字 → 长度异常
+          // W100 +54 老消息兼容: 老 SSE plan_step 没 tool_use_id, 后端不会再发 done 事件.
+          //   当收到第一条 text_delta (synthesis 阶段开始 = 计划阶段已结束),
+          //   强制把所有老 plan_step (无 tool_use_id, 状态非 done) 标记 done,
+          //   让 doneCount = total, PlanSteps auto-collapse 触发 (老 session 消息兼容).
+          if (evt.delta && currentAssistant.plan && currentAssistant.plan.length > 0) {
+            let planChanged = false
+            for (const s of currentAssistant.plan) {
+              if (!s.tool_use_id && s.status !== 'done') {
+                s.status = 'done'
+                planChanged = true
+              }
+            }
+            if (planChanged) currentAssistant.plan = [...currentAssistant.plan]
+          }
           if (evt.delta && evt.delta.length > 100) {
             const prevPrefix = (currentAssistant.content || '').slice(0, 50)
             if (prevPrefix && !evt.delta.includes(prevPrefix)) {
@@ -835,22 +849,45 @@ export function useChatStream() {
         case 'plan_step': {
           // [snapshot] 工具规划单步（2026-06-14 Stage 4）
           // W100 +53: 后端每条 done 事件带 tool_use_id, 按 id 原地更新 status (不 push 新行)
-          // 老消息无 tool_use_id → findIndex 返回 -1 → fallback push 新 step (向后兼容)
+          // W100 +54 老消息兼容: 老 SSE 没有 tool_use_id, 用 3 层 fallback 匹配老 step:
+          //   1) tool_use_id 精确匹配
+          //   2) 老 step 无 tool_use_id 但 tool 字段匹配 (老 step 是通用名 'phase0_plan', 新 tool 全部按 tool 字段匹配)
+          //   3) 老 step 全是 status='running' 且新事件是 done → 取第一个老 running step 标记 done (兼容老通用名)
           if (!currentAssistant.plan) currentAssistant.plan = []
           const incomingToolId = evt.tool_use_id || evt.tool_name
-          if (incomingToolId) {
-            const existingIdx = currentAssistant.plan.findIndex(
-              (s: { tool_use_id?: string; tool?: string }) =>
-                s.tool_use_id === incomingToolId ||
-                (!s.tool_use_id && s.tool === incomingToolId),
+          const incomingToolName = evt.tool_name || evt.tool_use_id
+          let existingIdx = -1
+          // 1) tool_use_id 精确匹配
+          if (evt.tool_use_id) {
+            existingIdx = currentAssistant.plan.findIndex(
+              (s: { tool_use_id?: string }) => s.tool_use_id === evt.tool_use_id,
             )
-            if (existingIdx >= 0 && evt.plan_status) {
-              currentAssistant.plan[existingIdx].status = evt.plan_status
-              // 触发响应式更新 (Vue 3 reactive proxy 在 mutate 同对象时通常也会触发,
-              // 但 spread 替换数组引用是最稳的强制刷新)
-              currentAssistant.plan = [...currentAssistant.plan]
-              break
-            }
+          }
+          // 2) 老 step 无 tool_use_id, 按 tool 字段匹配 (W100 +54 兼容老消息)
+          if (existingIdx < 0 && incomingToolName) {
+            existingIdx = currentAssistant.plan.findIndex(
+              (s: { tool_use_id?: string; tool?: string }) =>
+                !s.tool_use_id && s.tool === incomingToolName,
+            )
+          }
+          // 3) 最稳 fallback: 老 step 都是 status='running' 通用名, 新 done 事件按数组下标取第一个老 running step
+          if (
+            existingIdx < 0 &&
+            evt.plan_status === 'done' &&
+            currentAssistant.plan.some((s: { tool_use_id?: string }) => !s.tool_use_id)
+          ) {
+            const firstRunningIdx = currentAssistant.plan.findIndex(
+              (s: { tool_use_id?: string; status: string }) =>
+                !s.tool_use_id && s.status === 'running',
+            )
+            if (firstRunningIdx >= 0) existingIdx = firstRunningIdx
+          }
+          if (existingIdx >= 0 && evt.plan_status) {
+            currentAssistant.plan[existingIdx].status = evt.plan_status
+            // 触发响应式更新 (Vue 3 reactive proxy 在 mutate 同对象时通常也会触发,
+            // 但 spread 替换数组引用是最稳的强制刷新)
+            currentAssistant.plan = [...currentAssistant.plan]
+            break
           }
           currentAssistant.plan.push({
             step: evt.step || evt.label || '',
