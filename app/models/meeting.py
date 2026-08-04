@@ -57,6 +57,13 @@ class Meeting(Base, TimestampMixin):
     # 2026-07-12 死代码清理: 删 5 个 audio_archive_* 列 (audio_archive_service.py 孤儿, 列 write-only)
     # alembic 059_drop_audio_archive_columns.py DROP COLUMN IF EXISTS
 
+    # 2026-08-04 Batch B-1 / D-4: 持久化阶段关联 + 阶段状态 + 真实媒体时长
+    # nullable 新增, 不破坏老字段; alembic 097 已建对应列
+    processing_status = Column(String(16), nullable=True)
+    quality_status = Column(String(16), nullable=True)
+    media_duration_seconds = Column(Integer, nullable=True)
+    last_processing_run_id = Column(BigInteger, ForeignKey("meeting_processing_runs.id", ondelete="SET NULL"), nullable=True)
+
     # 2026-07-16 +060: 落库 User-Agent, 便于事后排查兼容性失败 (HarmonyOS ArkWeb / iOS Safari / 企业微信 X5)
     user_agent = Column(String(500), nullable=True)
 
