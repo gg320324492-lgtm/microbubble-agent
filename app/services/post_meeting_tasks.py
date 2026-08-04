@@ -68,6 +68,19 @@ def _edit_distance(a: str, b: str) -> int:
     return dp[lb]
 
 
+# 2026-08-04 Batch B-3: 持久化阶段记录的薄包装. 主流程仍由 update_progress 推 Redis 实时进度,
+# 该函数仅写 DB; 失败 best-effort, 不抛错 (DB 异常不能影响主流程).
+async def _persist_stage(proc_svc, run, stage_name: str, status: str, *, error=None, metrics=None):
+    try:
+        stage_row = await proc_svc.start_stage(run, stage_name)
+        await proc_svc.finish_stage(
+            stage_row, status=status, error=error, metrics=metrics,
+        )
+        await proc_svc.db.commit()
+    except Exception as e:
+        logger.warning(f"持久化阶段 {stage_name}/{status} 失败: {e}")
+
+
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def post_meeting_process(self, meeting_id: int):
     """
@@ -75,6 +88,8 @@ def post_meeting_process(self, meeting_id: int):
 
     阶段 4 修复（2026-06-12）：阶段 0/1-5 失败时真实调用 self.retry()
     让 Celery 真正重试（之前 max_retries 形同虚设，失败直接落 error）。
+
+    2026-08-04 Batch B-3: 持久化阶段记录 (DB) + 与 Redis 实时进度协同.
     """
     logger.info(f"开始后处理: meeting_id={meeting_id}")
 
@@ -92,6 +107,20 @@ def post_meeting_process(self, meeting_id: int):
                 logger.error(f"会议不存在: {meeting_id}")
                 return
 
+            # 2026-08-04 Batch B-3: 持久化阶段记录 (DB, 与 Redis 实时进度协同)
+            from app.services.meeting_processing_service import MeetingProcessingService
+            proc_svc = MeetingProcessingService(db)
+            run = await proc_svc.start_run(
+                meeting_id,
+                task_id=getattr(self.request, "id", None),
+                trigger="initial",
+                requested_stages=[
+                    "downloading_audio", "transcribing", "identifying_speakers",
+                    "ai_polish", "generating_analysis", "creating_tasks",
+                    "storing_results", "done",
+                ],
+            )
+
             try:
                 # ===== 阶段 0: 下载音频 + VAD 分段 =====
                 await update_progress(meeting_id, ProgressStage.DOWNLOADING_AUDIO, detail="下载音频并转码", redis_override=redis_client)
@@ -104,6 +133,7 @@ def post_meeting_process(self, meeting_id: int):
 
                 audio_pcm, segments, sample_rate = await audio_processor.convert_and_segment(audio_data)
                 logger.info(f"音频转码+VAD 分段完成: {len(segments)} 段, 总时长 {len(audio_pcm)/sample_rate:.1f}s")
+                await _persist_stage(proc_svc, run, "downloading_audio", "success", metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2)})
 
                 # ===== 阶段 1: ASR 转写 =====
                 await update_progress(meeting_id, ProgressStage.TRANSCRIBING, detail=f"转写 {len(segments)} 个语音段", redis_override=redis_client)
@@ -124,6 +154,7 @@ def post_meeting_process(self, meeting_id: int):
                     logger.debug(f"  段 {i+1}/{len(segments)}: [{seg.start_time:.1f}-{seg.end_time:.1f}s] {text[:50]}")
 
                 logger.info(f"ASR 转写完成: {len(transcript_segments)}/{len(segments)} 段有文本")
+                await _persist_stage(proc_svc, run, "transcribing", "success", metrics={"raw_segments": len(segments), "with_text": len(transcript_segments)})
 
                 # ===== 阶段 1.3: 语义断句（基于规则的对话切换检测） =====
                 import re
@@ -589,6 +620,7 @@ def post_meeting_process(self, meeting_id: int):
                         speaker_mapping[seg["speaker_label"]] = sp
 
                 logger.info(f"声纹识别完成: {len(set(seg.get('speaker','') for seg in transcript_segments))} 位发言人")
+                await _persist_stage(proc_svc, run, "identifying_speakers", "success", metrics={"speaker_count": len(set(seg.get("speaker","") for seg in transcript_segments))})
 
                 # ===== 阶段 1.7: 低占比发言人过滤（2026-06-30 铁律: 王天志只言片语误识） =====
                 # 触发条件（任一）:
@@ -668,6 +700,7 @@ def post_meeting_process(self, meeting_id: int):
                         logger.warning("AI 润色返回空结果，使用原文")
                 except Exception as e:
                     logger.warning(f"AI 润色失败（降级为原文）: {e}")
+                await _persist_stage(proc_svc, run, "ai_polish", "success", metrics={"polished_segments": len(polished_segments) if polished_segments else 0})
 
                 # 将识别出的发言人添加为会议参与者
                 from app.models.meeting import MeetingParticipant
@@ -732,6 +765,15 @@ def post_meeting_process(self, meeting_id: int):
                 analysis_failure = bool(analysis.get("failure"))
                 analysis_warning = bool(analysis.get("warning"))
                 analysis_errors = analysis.get("errors") or []
+                await _persist_stage(
+                    proc_svc, run, "generating_analysis",
+                    "error" if analysis_failure else ("warning" if analysis_warning else "success"),
+                    metrics={
+                        "success_chunk_count": analysis.get("success_chunk_count", 0),
+                        "failure_chunk_count": analysis.get("failure_chunk_count", 0),
+                    },
+                    error=analysis_errors[0] if analysis_errors else None,
+                )
 
                 # 对 AI 输出也做文本纠错（"小七助手"→"小气助手" 等）
                 meeting.summary = analysis.get("summary")
@@ -751,6 +793,14 @@ def post_meeting_process(self, meeting_id: int):
                         seg["text_polished"] = _name_clean(seg["text_polished"])
 
                 # 保存转写结果（原始 + 润色版）
+                # 2026-08-04 Batch B-5: 落库前强制清洗 SenseVoice 控制 token,
+                # 持久化前必须 0 泄漏 (会议 242 实测 236/591 段含 <|EMO_UNKNOWN|>).
+                from app.services.meeting_quality_service import sanitize_text as _sanitize_seg
+                for _seg in transcript_segments:
+                    if isinstance(_seg.get("text"), str):
+                        _seg["text"] = _sanitize_seg(_seg["text"])
+                    if isinstance(_seg.get("text_polished"), str):
+                        _seg["text_polished"] = _sanitize_seg(_seg["text_polished"])
                 meeting.transcript = transcript_segments
                 meeting.speaker_mapping = speaker_mapping
 
@@ -795,6 +845,7 @@ def post_meeting_process(self, meeting_id: int):
                         f"（{len(analysis.get('decisions', []))} 个 decisions 未创建任务；"
                         f"ENABLE_AUTO_TASK_FROM_MEETING=False）"
                     )
+                await _persist_stage(proc_svc, run, "creating_tasks", "skipped", metrics={"enabled": settings.ENABLE_AUTO_TASK_FROM_MEETING})
 
                 # ===== 阶段 5: 存储结果 =====
                 await update_progress(meeting_id, ProgressStage.STORING_RESULTS, detail="保存结果", redis_override=redis_client)
@@ -825,6 +876,30 @@ def post_meeting_process(self, meeting_id: int):
                     final_status = "completed"
 
                 meeting.status = final_status
+                # 2026-08-04 Batch B-4: 落库前质量评估, 写 meeting.quality_status + run.metrics
+                from app.services.meeting_quality_service import evaluate_meeting as _eval_quality
+                meeting_dict = {
+                    "audio_url": meeting.audio_url,
+                    "audio_duration": meeting.audio_duration,
+                    "media_duration_seconds": getattr(meeting, "media_duration_seconds", None),
+                    "transcript": meeting.transcript,
+                    "transcript_polished": meeting.transcript_polished,
+                    "summary": meeting.summary,
+                    "key_points": meeting.key_points,
+                    "decisions": meeting.decisions,
+                }
+                qa_result = _eval_quality(meeting_dict)
+                meeting.quality_status = qa_result["status"]
+                run.metrics = {**(run.metrics or {}), "quality": qa_result["metrics"], "quality_issues": qa_result["issues"]}
+                await db.commit()
+                await _persist_stage(proc_svc, run, "storing_results", "success", metrics={"final_status": final_status, "quality_status": qa_result["status"]})
+                await proc_svc.attach_to_meeting(meeting_id, run.id)
+                await proc_svc.finish_run(
+                    run,
+                    overall_status=final_status,
+                    warning_count=int(analysis_warning),
+                    error_summary=meeting.error_reason,
+                )
                 await db.commit()
 
                 # ===== 阶段 6: 完成 =====
