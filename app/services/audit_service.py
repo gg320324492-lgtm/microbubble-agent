@@ -55,6 +55,8 @@ VALID_ACTIONS = frozenset({
     "file_request_deactivate",
     # admin
     "admin_action",
+    # 2026-08-04 W2-2: 会议管理 audit action
+    "meeting_reprocess",
     # ws + 通知
     "ws_connect", "ws_disconnect",
     "notification_read",
