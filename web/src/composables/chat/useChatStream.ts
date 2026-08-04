@@ -70,6 +70,42 @@ function stripFakeXml(text: string): string {
   }
   return result
 }
+
+// W100 +58 meta clean: 删除 LLM 自动追加的"数据来源:..."meta 段
+// (prompt +58a 已加硬规则, 这是兜底, 防止老 session / 老 prompt 仍泄漏)
+// 5 条规则:
+//   1. 删除 "数据来源: xxx" 整行 (任意位置)
+//   2. 删除 "来源: xxx" 整行 (排除"参考资料来源"等作为参考资料的合法用法)
+//   3. 引用编号后括号内 tool 名清除: "[1] xxx (query_xxx)" → "[1] xxx"
+//   4. 删除 "**数据来源: ...**" 整行 (含 ** 加粗)
+//   5. 删除 "**来源: XXX**" 整行
+// 全部用 gm flag + 行模式锚定, 多轮迭代防规则冲突
+const META_CLEAN_PATTERNS: RegExp[] = [
+  // 1. "数据来源: xxx" 整行 (任意位置含 "数据来源:")
+  /^.*数据来源[::].*\n?/gm,
+  // 2. "来源: xxx" 整行 (排除"参考资料来源"等)
+  /^[^\n]*来源[::][^\n]*\n?/gm,
+  // 3. 引用编号后括号内 tool 名清除
+  /(\[\d+\][^\n]*?)\s*\((query_[a-z_]+|search_[a-z_]+|list_[a-z_]+|hybrid_[a-z_]+|get_[a-z_]+)\)/g,
+  // 4. "**数据来源: ...**" 整行
+  /^.*\*\*数据来源[^*]*\*\*.*\n?/gm,
+  // 5. "**来源: XXX**" 整行
+  /^.*\*\*\s*来源[^*]*\*\*.*\n?/gm,
+]
+
+export function stripMetaSuffix(text: string): string {
+  if (!text) return text
+  let result = text
+  for (let i = 0; i < 3; i++) {
+    const before = result
+    for (let j = 0; j < META_CLEAN_PATTERNS.length; j++) {
+      const pattern = META_CLEAN_PATTERNS[j]
+      result = result.replace(pattern, j === 2 ? '$1' : '')
+    }
+    if (result === before) break
+  }
+  return result
+}
 import { ElMessage } from 'element-plus'
 import { sseFetch } from '@/api/agent/sse'
 import { useChatSessionsStore } from '@/stores/chatSessions'
@@ -633,7 +669,12 @@ export function useChatStream() {
     const textDeltaBatcher = createTextDeltaBatcher((delta) => {
       const targetAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
       if (targetAssistant.state === 'aborted') return
-      targetAssistant.content = (targetAssistant.content || '') + delta
+      const prevContent = targetAssistant.content || ''
+      const nextContent = prevContent + delta
+      // W100 +58 meta clean: 兜底过滤 LLM 自动追加的"数据来源:..."meta 段
+      // (prompt +58a 已加硬规则, 这是兜底, 防止老 session / 老 prompt 仍泄漏)
+      const cleaned = stripMetaSuffix(nextContent)
+      targetAssistant.content = cleaned
       // 只在真正改变 content 的批次边界触发持久化，而不是每个 SSE delta 都重置 timer。
       persistSessionDebounced(targetSessionId)
     })
