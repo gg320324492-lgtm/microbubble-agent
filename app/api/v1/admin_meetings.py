@@ -15,7 +15,7 @@ from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import get_current_admin
+from app.api.v1.admin import get_current_admin
 from app.models.member import Member
 from app.models.meeting import Meeting
 from app.models.meeting_processing import MeetingProcessingRun, MeetingProcessingStage
