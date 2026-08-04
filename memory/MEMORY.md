@@ -652,3 +652,20 @@
 - **w100-meeting-inspector-2026-08-04** — meeting_inspector service 5 类异常巡检 (completed_but_minutes_empty 等), Celery beat 每 6h
 - **w100-meeting-reprocessing-2026-08-04** — MeetingReprocessingService 幂等键 + snapshot + transcription force gate
 - **w100-meeting-242-fixture-2026-08-04** — 会议 242 真实分布 fixture (591 段 + 236 EMO + 354s gap) 用于 dry-run 验证
+
+# 15. W2 持续治理 + 整合 main (2026-08-04)
+
+- **w2-2-audit-log-reprocess** — POST /admin/meetings/{id}/reprocess 写 audit_log
+  (action=meeting_reprocess), metadata 含 stages/force/trigger/reused/run_id/errors
+  /warnings, audit 失败 best-effort 不抛. 类 20.138 新增沉淀.
+- **w2-6-polish-log-percent-fix** — meeting_ai_polish.py:206 字面 `>10%` 触发
+  logger % 格式化 ValueError; 改 `差异超过 10%%` + 新增 log_safe 测试 3 case
+- **w2-7-audio-duration-real** — 新增 app/services/audio_metadata.py (ffprobe_duration
+  + ffprobe_duration_async); upload-audio / merge-chunks 写入 media_duration_seconds,
+  保留 audio_duration 墙钟字段; 12 case 测试通过
+- **w2-5-pwa-deterministic-INCONCLUSIVE** — 独立 worktree 缺 node_modules 致
+  npm run build exit 1, 诚实记录 INCONCLUSIVE 不伪造结果, 待 docker/web 容器
+  环境复跑; 文档 docs/pwa-build-deterministic-2026-08-04.md + deterministic_violations.txt
+- **w2-integration-main** — meeting-w2-integration 分支按序合并 W2-6 → W2-7 → W2-5,
+  main HEAD = `cf20124d1`, 全套会议测试 103 PASS / 2 pre-existing Redis fail,
+  0 regression
