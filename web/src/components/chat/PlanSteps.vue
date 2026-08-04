@@ -115,7 +115,7 @@ function statusGlyph(s: PlanStep['status']): string {
 
 <template>
   <div
-    v-if="steps && steps.length"
+    v-if="visibleSteps.length > 0"
     class="plan-steps"
     :class="{ compact, 'auto-collapsed': !collapsedByDefault && !expanded }"
     data-testid="plan-steps"
