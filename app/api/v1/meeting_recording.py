@@ -17,6 +17,7 @@ from app.models.member import Member
 from app.models.meeting import Meeting
 from app.services.file_service import file_service
 from app.services.chunked_upload_service import chunked_upload_service
+from app.services.audio_metadata import ffprobe_duration_async
 
 router = APIRouter()
 
@@ -104,6 +105,14 @@ async def upload_audio(
     # 2026-08-04 P0: 一次性上传视为"整段上传完成 1 块", 避免 completed + last_chunk_index=-1/total_chunks=NULL 的矛盾状态
     meeting.last_chunk_index = 0
     meeting.total_chunks = 1
+    # W2-7: 用 ffprobe 探测真实媒体时长，写入 media_duration_seconds
+    # audio_duration 字段（墙钟差）保持不变，由 stop-recording 阶段写入
+    try:
+        media_dur = await ffprobe_duration_async(file_data)
+        if media_dur is not None and media_dur > 0:
+            meeting.media_duration_seconds = media_dur
+    except Exception as e:  # noqa: BLE001 — best-effort 兜底
+        logger.warning(f"upload-audio ffprobe 探测失败 (会议 {meeting_id}): {e}")
     await db.commit()
 
     return {"audio_url": meeting.audio_url, "size": len(file_data)}
@@ -200,6 +209,16 @@ async def merge_chunks_endpoint(
     meeting.audio_url = merged_object_name
     meeting.upload_status = "completed"
     meeting.audio_size_bytes = None  # 让后处理阶段重新计算
+    # W2-7: 下载合并后的文件，ffprobe 探测真实媒体时长写入 media_duration_seconds
+    # audio_duration（墙钟差）由 stop-recording 阶段写入，此处不动
+    try:
+        merged_bytes = await file_service.download_file(merged_object_name)
+        if merged_bytes:
+            media_dur = await ffprobe_duration_async(merged_bytes)
+            if media_dur is not None and media_dur > 0:
+                meeting.media_duration_seconds = media_dur
+    except Exception as e:  # noqa: BLE001 — best-effort 兜底
+        logger.warning(f"merge-chunks ffprobe 探测失败 (会议 {meeting_id}): {e}")
     await db.commit()
 
     # 顺手清掉 chunks
