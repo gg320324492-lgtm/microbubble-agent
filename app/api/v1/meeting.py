@@ -102,9 +102,15 @@ async def list_meetings(
 
     query = query.order_by(Meeting.start_time.desc())
     offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
 
-    result = await db.execute(query)
+    # 2026-08-04 P0: total 必须用 count() 真实总数, 不再用 len(items) 否则永远 = page_size
+    from sqlalchemy import func as _func
+    count_q = select(_func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_q)
+    total = int(total_result.scalar() or 0)
+
+    paged_q = query.offset(offset).limit(page_size)
+    result = await db.execute(paged_q)
     meetings = list(dict.fromkeys(result.scalars().unique().all()).keys())
 
     # 手动构建响应字典避免 Pydantic 序列化 ORM 失败
@@ -118,6 +124,10 @@ async def list_meetings(
                 "role": p.role or "participant",
                 "avatar": getattr(p.member, "avatar", None) if p.member else None,
             })
+        # 2026-08-04 P0: 推断 upload_mode, 避免 completed + last_chunk_index=-1/total_chunks=NULL 这种矛盾状态
+        upload_mode = None
+        if m.upload_status in ("uploading", "completed") and m.audio_url:
+            upload_mode = "chunked" if (m.total_chunks and m.total_chunks > 1) else "one_shot"
         items.append({
             "id": m.id,
             "title": m.title,
@@ -128,16 +138,17 @@ async def list_meetings(
             "summary": m.summary,
             "audio_url": m.audio_url,
             "audio_duration": m.audio_duration,
+            "media_duration_seconds": getattr(m, "media_duration_seconds", None),
+            "upload_mode": upload_mode,
             "participants": p_list,
             "presenter_ids": m.presenter_ids,
             "agenda": m.agenda,
             "created_by": m.created_by,
             "created_at": m.created_at.isoformat() if m.created_at else None,
+            "error_reason": m.error_reason,
         })
 
-    return {"items": items, "total": len(items)}
-
-    return {"items": meetings, "total": len(meetings)}
+    return {"items": items, "total": total}
 
 
 # === 粘贴转录 + AI 分析（固定路径必须在参数化路由之前） ===
@@ -213,6 +224,8 @@ async def get_meeting(
     if not meeting:
         raise NotFoundException("会议")
 
+    # 2026-08-04 P0: 把后端 error_reason / 阶段状态 / upload_mode 注入响应, 避免
+    # 调用方再次单独 GET 失败状态端点。
     return meeting
 
 

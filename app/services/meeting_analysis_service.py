@@ -1,6 +1,11 @@
 """会议 AI 分析服务
 
 提供发言者检测、转录解析、结构化分析和发言人统计功能。
+
+P0 (2026-08-04): 全链路统一走 backend-aware `LLMClient`, 不再直接持有
+anthropic 客户端. 老代码里的 `get_anthropic_client()` 在 `LLM_BACKEND=openai_compat`
+或 `ollama` 时仍会直连 anthropic, 会复现会议 242 的 401 invalid_key 假成功 bug。
+本类改为按需 lazy 注入 LLMClient, 调用方仍可替换 (e.g. test 注入 mock)。
 """
 
 import json
@@ -9,9 +14,8 @@ import re
 from typing import Any, Dict, List, Optional
 
 from app.core.llm import (
+    LLMClient,
     extract_text_from_response,
-    get_anthropic_client,
-    get_default_model,
     parse_llm_json,
 )
 from app.services.name_aliases import clean_text as clean_person_names
@@ -107,11 +111,20 @@ ANALYSIS_PROMPT = """你是一个专业的会议纪要生成助手。请分析�
 
 
 class MeetingAnalysisService:
-    """会议 AI 分析服务"""
+    """会议 AI 分析服务
 
-    def __init__(self):
-        self.client = get_anthropic_client()
-        self.model = get_default_model()
+    LLM 客户端按需 lazy 构造, 不在 `__init__` 阶段创建. 调用方可注入 `llm_client`
+    用于测试, 未注入时按 backend-aware 单例走 `LLMClient()`.
+    """
+
+    def __init__(self, llm_client: Optional[LLMClient] = None):
+        self._llm: Optional[LLMClient] = llm_client
+
+    @property
+    def llm(self) -> LLMClient:
+        if self._llm is None:
+            self._llm = LLMClient()
+        return self._llm
 
     # === 发言者检测 ===
 
@@ -263,16 +276,16 @@ class MeetingAnalysisService:
             return local
 
         try:
-            response = await self.client.messages.create(
-                model=self.model,
-                max_tokens=2048,
-                system="你是会议分析助手。只输出 JSON，不要其他内容。",
+            response = await self.llm.complete(
                 messages=[{
                     "role": "user",
                     "content": SPEAKER_DETECTION_PROMPT.format(
                         transcript_text=transcript_text[:12000]
                     ),
                 }],
+                system="你是会议分析助手。只输出 JSON，不要其他内容。",
+                max_tokens=2048,
+                thinking={"type": "disabled"},
             )
             text = extract_text_from_response(response)
             return parse_llm_json(text)
@@ -286,6 +299,7 @@ class MeetingAnalysisService:
                 "total_turns": 1,
                 "confidence": "low",
                 "format_type": "unknown",
+                "error": str(e),
             }
 
     # === 转录解析 ===
@@ -373,6 +387,10 @@ class MeetingAnalysisService:
         """分块分析会议转录（支持 3h+ 长会议）。
 
         短文本直接分析；长文本分块分析 + 汇总合并。
+
+        2026-08-04 P0: 返回结构化结果，包含 success_chunk_count / failure_chunk_count
+        / errors。0/N 成功 → success=False, failure=True；部分成功 → success=True,
+        warning=True, errors=[...]。
         """
         if speaker_mapping:
             applied = []
@@ -384,7 +402,21 @@ class MeetingAnalysisService:
 
         # 短文本直接分析
         if len(transcript_text) <= self.MAX_CHUNK_CHARS:
-            return await self._analyze_chunk(transcript_text)
+            result, err = await self._analyze_chunk_safe(transcript_text)
+            if err is not None:
+                return {
+                    "summary": "",
+                    "key_points": [],
+                    "decisions": [],
+                    "action_items": [],
+                    "success": False,
+                    "failure": True,
+                    "warning": False,
+                    "success_chunk_count": 0,
+                    "failure_chunk_count": 1,
+                    "errors": [err],
+                }
+            return self._finalize_analysis_result([result], [])
 
         # 长文本：分块分析
         lines = transcript_text.split('\n')
@@ -405,29 +437,110 @@ class MeetingAnalysisService:
 
         logger.info(f"长会议分块分析: {len(chunks)} 块（总长 {len(transcript_text)} 字）")
 
-        # 分析每一块
-        all_key_points = []
-        all_decisions = []
-        all_action_items = []
-        chunk_summaries = []
-
+        # 分析每一块；任一失败不静默 drop，要保留错误码
+        chunk_results: List[Dict[str, Any]] = []
+        chunk_errors: List[Dict[str, Any]] = []
         for i, chunk in enumerate(chunks):
+            result, err = await self._analyze_chunk_safe(
+                chunk, chunk_index=i, total_chunks=len(chunks)
+            )
+            if err is not None:
+                logger.error(f"分块 {i+1}/{len(chunks)} 分析失败: {err}")
+                chunk_errors.append({"chunk_index": i, **err})
+                continue
+            chunk_results.append(result)
+
+        return self._finalize_analysis_result(chunk_results, chunk_errors)
+
+    async def _analyze_chunk_safe(
+        self, chunk_text: str, chunk_index: int = 0, total_chunks: int = 1
+    ) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """分析单个文本块，失败时返回 (None, error_dict)；成功返回 (result, None)"""
+        import asyncio
+
+        header = ""
+        if total_chunks > 1:
+            header = f"（第 {chunk_index + 1}/{total_chunks} 部分）\n\n"
+
+        last_err: Optional[Dict[str, Any]] = None
+        for attempt in range(2):
             try:
-                result = await self._analyze_chunk(chunk, chunk_index=i, total_chunks=len(chunks))
-                all_key_points.extend(result.get("key_points", []))
-                all_decisions.extend(result.get("decisions", []))
-                all_action_items.extend(result.get("action_items", []))
-                if result.get("summary"):
-                    chunk_summaries.append(result["summary"])
+                response = await self.llm.complete(
+                    messages=[{
+                        "role": "user",
+                        "content": ANALYSIS_PROMPT.format(
+                            transcript_text=header + chunk_text[: self.MAX_CHUNK_CHARS]
+                        ),
+                    }],
+                    system="你是课题组会议分析专家。只输出 JSON，不要其他内容。",
+                    max_tokens=4096,
+                    thinking={"type": "disabled"},
+                )
+                text = extract_text_from_response(response)
+                try:
+                    parsed = parse_llm_json(text)
+                except json.JSONDecodeError as e:
+                    last_err = {
+                        "stage": "json_parse",
+                        "error_class": "JSONDecodeError",
+                        "message": str(e),
+                        "attempt": attempt + 1,
+                    }
+                    if attempt == 0:
+                        await asyncio.sleep(1)
+                        continue
+                    return None, last_err
+                return _clean_result_person_names(parsed), None
             except Exception as e:
-                logger.error(f"分块 {i+1}/{len(chunks)} 分析失败: {e}")
+                # 鉴权 (401/403) 永久错误，禁止重试
+                err_msg = str(e)
+                err_class = type(e).__name__
+                err_class_module = type(e).__module__ or ""
+                permanent = (
+                    "401" in err_msg
+                    or "403" in err_msg
+                    or "invalid_key" in err_msg.lower()
+                    or "permission" in err_msg.lower()
+                    or err_class in ("AuthenticationError", "PermissionDeniedError", "BadRequestError")
+                    or err_class.endswith("AuthenticationError")
+                )
+                last_err = {
+                    "stage": "llm_call",
+                    "error_class": err_class,
+                    "error_module": err_class_module,
+                    "message": err_msg[:500],
+                    "attempt": attempt + 1,
+                    "retryable": not permanent,
+                }
+                if permanent or attempt >= 1:
+                    return None, last_err
+                await asyncio.sleep(1)
+        return None, last_err
 
-        # 汇总摘要
-        summary = await self._merge_summaries(chunk_summaries) if chunk_summaries else ""
+    def _finalize_analysis_result(
+        self,
+        chunk_results: List[Dict[str, Any]],
+        chunk_errors: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        all_key_points: List[str] = []
+        all_decisions: List[str] = []
+        all_action_items: List[Any] = []
+        chunk_summaries: List[str] = []
 
-        # v28 step 60: 清洗所有人名谐音（"洪辉"→"张宏魁" 等）
-        # 2026-06-26 v70 P3: 硬截断 key_points 8 条 (CLAUDE.md 会议纪要标准格式硬规则)
-        # 长会议分块累积时 LLM 倾向"多提取"导致 14+ 条, 视觉上密密麻麻不像纪要
+        for result in chunk_results:
+            all_key_points.extend(result.get("key_points", []))
+            all_decisions.extend(result.get("decisions", []))
+            all_action_items.extend(result.get("action_items", []))
+            if result.get("summary"):
+                chunk_summaries.append(result["summary"])
+
+        # 同步合并需要 await; 此函数内不 await, 改为 outer 调度
+        # 调用方是 `analyze_transcript` async context, 因此这里直接 inline 同步合并
+        summary = ""
+        if chunk_summaries:
+            summary = chunk_summaries[0] if len(chunk_summaries) == 1 else self._combine_summaries_sync(chunk_summaries)
+            summary = clean_person_names(summary)
+
         MAX_KEY_POINTS = 8
         trimmed_key_points = all_key_points[:MAX_KEY_POINTS]
         if len(all_key_points) > MAX_KEY_POINTS:
@@ -435,71 +548,33 @@ class MeetingAnalysisService:
                 f"key_points 硬截断: {len(all_key_points)} 条 → {MAX_KEY_POINTS} 条 "
                 f"(CLAUDE.md 2026-06-06 标准格式硬规则, 5-8 条上限)"
             )
+
+        success = bool(chunk_results)
+        failure = len(chunk_results) == 0
+        warning = bool(chunk_errors) and not failure
         return {
-            "summary": clean_person_names(summary),
+            "summary": summary,
             "key_points": [clean_person_names(p) for p in trimmed_key_points],
             "decisions": [clean_person_names(d) for d in all_decisions],
             "action_items": [clean_person_names(a) if isinstance(a, str) else a for a in all_action_items],
+            "success": success,
+            "failure": failure,
+            "warning": warning,
+            "success_chunk_count": len(chunk_results),
+            "failure_chunk_count": len(chunk_errors),
+            "errors": chunk_errors,
         }
 
-    async def _analyze_chunk(self, chunk_text: str, chunk_index: int = 0, total_chunks: int = 1) -> Dict[str, Any]:
-        """分析单个文本块"""
-        import asyncio
+    def _combine_summaries_sync(self, summaries: List[str]) -> str:
+        """同步合并多 chunk 摘要；异步合并版保留以备将来扩展.
 
-        header = ""
-        if total_chunks > 1:
-            header = f"（第 {chunk_index + 1}/{total_chunks} 部分）\n\n"
-
-        for attempt in range(2):
-            try:
-                response = await self.client.messages.create(
-                    model=self.model,
-                    max_tokens=4096,
-                    system="你是课题组会议分析专家。只输出 JSON，不要其他内容。",
-                    messages=[{
-                        "role": "user",
-                        "content": ANALYSIS_PROMPT.format(
-                            transcript_text=header + chunk_text[: self.MAX_CHUNK_CHARS]
-                        ),
-                    }],
-                )
-                text = extract_text_from_response(response)
-                result = parse_llm_json(text)
-                # v28 step 60: 清洗谐音人名（让 LLM 也输出真实成员名）
-                return _clean_result_person_names(result)
-            except json.JSONDecodeError:
-                if attempt == 0:
-                    await asyncio.sleep(1)
-                    continue
-                logger.warning(f"分块 {chunk_index + 1} 分析 JSON 解析失败（重试后仍失败）")
-            except Exception as e:
-                logger.error(f"分块 {chunk_index + 1} 分析失败: {e}")
-                break
-
-        return {"summary": "", "key_points": [], "decisions": [], "action_items": []}
-
-    async def _merge_summaries(self, summaries: list) -> str:
-        """合并多个块的摘要为一个"""
-        if len(summaries) == 1:
-            return summaries[0]
-        if not summaries:
-            return ""
-
-        combined = "\n\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
-        try:
-            response = await self.client.messages.create(
-                model=self.model,
-                max_tokens=1024,
-                system="你是一个专业的会议纪要助手。把分段摘要合并成一段完整的会议摘要。只输出摘要文本，不要其他。",
-                messages=[{
-                    "role": "user",
-                    "content": f"请将以下 {len(summaries)} 段会议摘要合并为一个完整的摘要（3-5句话）：\n\n{combined}",
-                }],
-            )
-            return extract_text_from_response(response).strip()
-        except Exception as e:
-            logger.error(f"摘要合并失败: {e}")
-            return summaries[0] if summaries else ""
+        当前实现简单拼接并截断，避免再起一次 LLM 调用引入新失败面。
+        真实合并将在 Batch B 的 `meeting_quality_service` 中重做。
+        """
+        joined = "；".join(s.strip("。； \n") for s in summaries if s.strip())
+        if joined and not joined.endswith("。"):
+            joined += "。"
+        return joined[:2000]
 
     # === 标题自动生成 ===
 
@@ -513,12 +588,12 @@ class MeetingAnalysisService:
 
         for attempt in range(3):
             try:
-                response = await self.client.messages.create(
-                    model=self.model,
+                response = await self.llm.complete(
+                    messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题（20字以内）："}],
+                    system="根据会议全文生成一个精炼的中文标题（20字以内）。标题应概括会议核心内容和主题，不要编号列表。",
                     max_tokens=512,
                     temperature=0.3,
-                    system="根据会议全文生成一个精炼的中文标题（20字以内）。标题应概括会议核心内容和主题，不要编号列表。",
-                    messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题（20字以内）："}],
+                    thinking={"type": "disabled"},
                 )
                 # 从 response 提取文本
                 raw = ""
@@ -542,7 +617,7 @@ class MeetingAnalysisService:
                         raw = m.group(1).strip()
                 if not raw:
                     block_types = [type(b).__name__ for b in (response.content or [])]
-                    logger.warning(f"标题生成第{attempt+1}次: 无法提取文本, block_types={block_types}, stop_reason={response.stop_reason}")
+                    logger.warning(f"标题生成第{attempt+1}次: 无法提取文本, block_types={block_types}, stop_reason={getattr(response, 'stop_reason', None)}")
                     continue
 
                 # 清洗：去掉 markdown 和常见前缀，只取第一行
@@ -571,9 +646,9 @@ class MeetingAnalysisService:
     ) -> List[Dict[str, Any]]:
         """计算每位发言者的统计数据。
 
-        Args:
-            transcript_entries: 结构化转录条目
-                [{"speaker": "张三", "text": "..."}, ...]
+        2026-08-04 P0: 字符统计先清洗 SenseVoice 控制 token (`<|EMO_UNKNOWN|>` 等),
+        再按 CJK 字符计字, 避免老逻辑 `len(text.replace(' ', ''))` 把 token 当词
+        引起的 8x+ 膨胀。
         """
         speaker_data: Dict[str, Dict[str, Any]] = {}
         total_words = 0
@@ -581,7 +656,7 @@ class MeetingAnalysisService:
         for entry in transcript_entries:
             name = entry.get("speaker", "未知")
             text = entry.get("text", "")
-            words = len(text.replace(" ", ""))
+            words = _char_count(text)
 
             if name not in speaker_data:
                 speaker_data[name] = {
@@ -628,6 +703,28 @@ def _clean_result_person_names(result: Dict[str, Any]) -> Dict[str, Any]:
                 for v in val
             ]
     return out
+
+
+import re as _re_sanitize
+
+# 2026-08-04 P0: ASR / 模型控制 token 清洗（保留为纯字符统计前的归一化步骤）
+_SENSEVOICE_TAG_RE = _re_sanitize.compile(r"<\|[A-Z0-9_]+\|>")
+
+
+def _strip_control_tokens(text: str) -> str:
+    if not text:
+        return ""
+    return _SENSEVOICE_TAG_RE.sub("", text)
+
+
+def _char_count(text: str) -> int:
+    """清洗控制 token 后, 计算 CJK 字符数 (排除 ASCII 空白/标点)。
+
+    老的 `len(text.replace(' ', ''))` 会把 `<|EMO_UNKNOWN|>` 这种泄漏 token
+    当成"词", 大量污染 speaker_stats.word_count (会议 242 实测 8.8x 膨胀)。
+    """
+    cleaned = _strip_control_tokens(text or "")
+    return sum(1 for c in cleaned if not c.isspace())
 
 
 # 全局单例

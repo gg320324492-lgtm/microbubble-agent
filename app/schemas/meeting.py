@@ -72,6 +72,10 @@ class MeetingResponse(MeetingBase):
     upload_status: Optional[str] = None
     last_chunk_index: Optional[int] = None
     total_chunks: Optional[int] = None
+    # 2026-08-04 P0: 暴露后端真实失败原因, 不再把"error" 伪装成 "completed"
+    error_reason: Optional[str] = None
+    # 2026-08-04 P0: 上传模式 (one_shot / chunked), 客户端据此判断 chunk 字段语义
+    upload_mode: Optional[str] = None
 
     class Config:
         from_attributes = True
