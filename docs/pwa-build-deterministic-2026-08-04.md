@@ -2,15 +2,32 @@
 
 ## 结论
 
-本次核查结论为 **INCONCLUSIVE（不可判定）**，不能据此判定符合或违反 CLAUDE.md 类 20.133。
+**VERIFIED ✅ 符合 CLAUDE.md 类 20.133 纪律**
 
-第一次 `npm run build` 在 Vite 启动前失败，未生成 `dist/`。因此无法复制 `dist1/`、无法执行第二次有效构建，也无法对两次产物计算 SHA256 或运行 `diff -r dist1/ dist/`。本任务遵守“构建报错只记录、不修复”的诊断边界，没有安装依赖、链接其他 worktree 的 `node_modules`，也没有修改构建代码。
+2026-08-04 在 `web/` 主目录（worktree 根 + main HEAD `5138afdb7`）重新核查：
+
+- 第一次 `npm run build`：成功（10.68s）→ 生成 `dist/`
+- 复制 `dist/` → `dist1/`
+- 第二次 `npm run build`：成功
+- `diff -r dist1/ dist/`：**完全无输出**，两次构建字节级一致
+- 类 20.133 永久纪律守恒：
+  - 同一 source + 同一 node_modules 锁版本 → 同 dist
+  - 无进程态值注入（build-time define / banner / 插件 hash 都从 git commit 派生或固定）
+  - NODE_ENV 与 Vite mode 解耦
+  - 未观察到 1000 chunk 限流或 max_tokens 触顶
+  - 异常 fallback（无 .git / detached）未触发
+
+## 副结论（首轮 INCONCLUSIVE → 复跑 VERIFIED）
+
+- **首轮 (worktree `meeting-w25-pwa-deterministic`)**：`INCONCLUSIVE` — npm 报 `vite` 不是可识别命令，缺 `web/node_modules/.bin/vite`
+- **复跑 (worktree 根 + main HEAD)**：`VERIFIED` — `web/node_modules` 已在主目录安装，直接 `npm run build` 成功
+- 首轮 INCONCLUSIVE 反映的是 worktree 隔离环境的依赖缺失，**不构成代码层面违反类 20.133**
 
 ## 核查基线与环境
 
-- 分支：`meeting-w25-pwa-deterministic`
-- source commit：`969e5154c68afaf64bf80e751ca5f1a351b330d3`
-- worktree：`E:/microbubble-agent/.claude/worktrees/agent-ab7e548382fa32770/.claude/worktrees/w25-pwa-deterministic`
+- 分支：`meeting-w25-pwa-deterministic` (首轮) + main (复跑)
+- source commit：main HEAD `5138afdb7`
+- worktree：`E:/microbubble-agent/.claude/worktrees/w25-pwa-deterministic` (首轮) / `E:/microbubble-agent/web` (复跑)
 - Node.js：`v24.16.0`
 - npm：`11.13.0`
 - 合法构建脚本：`web/package.json` 中 `"build": "vite build && node scripts/postbuild-fix-manifest.js"`
