@@ -20,12 +20,13 @@ vi.mock('@/stores/chatSessions', () => ({
 // 2026-07-15 P2-#chatHistory-appendMessage-404 修复: 加 createServerSession mock
 const mockFetchMessages = vi.fn()
 const mockCreateServerSession = vi.fn().mockResolvedValue({ id: 'srv-id', user_id: 1 })
+const mockAppendMessageAsync = vi.fn().mockResolvedValue({ id: 99 })
 vi.mock('@/stores/chatHistory', () => ({
   useChatHistoryStore: vi.fn(() => ({
     fetchMessages: mockFetchMessages,
     loadFromServer: vi.fn(),
     refreshSession: vi.fn(),
-    appendMessageAsync: vi.fn().mockResolvedValue({ id: 99 }),
+    appendMessageAsync: mockAppendMessageAsync,
     createServerSession: mockCreateServerSession,
     syncStatus: 'idle',
     serverSessions: [],
@@ -139,6 +140,20 @@ describe('useChatStream', () => {
       // 所以 sendMessage 会 return — 但 appendMessageAsync 不被调 (本地路径短路)
       // 这是 mock 局限性,但修复后的代码路径无 crash 即 OK
       expect(true).toBe(true)  // placeholder — 真正 E2E 见 Playwright
+    })
+
+    it('新 session 必须等待 server 创建完成后才 append', () => {
+      const fs = require('fs')
+      const path = require('path')
+      const src = fs.readFileSync(
+        path.resolve(__dirname, '../chat/useChatStream.ts'),
+        'utf-8',
+      )
+      const createIndex = src.indexOf('const created = await chatHistoryStore.createServerSession')
+      const appendIndex = src.indexOf('const persisted = await chatHistoryStore.appendMessageAsync', createIndex)
+      expect(createIndex).toBeGreaterThan(-1)
+      expect(appendIndex).toBeGreaterThan(createIndex)
+      expect(src.slice(createIndex, appendIndex)).not.toContain('void (async')
     })
 
     it('justCreatedLocalSession 标记路径走 createServerSession (回归保护)', () => {

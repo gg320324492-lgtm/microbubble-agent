@@ -13,16 +13,25 @@ import axios from 'axios'
  * FIX-N6 W99 +18: 加 top_ids 守卫 (后端 schema min_items=1)
  * 防止任何调用点漏传 top_ids 触发 422, 与 store 层守卫对齐.
  */
-export const recordSearchEvent = (payload) => {
-  if (!payload || !Array.isArray(payload.top_ids) || payload.top_ids.length === 0) {
-    return Promise.reject(new Error('[analytics] recordSearchEvent: top_ids required'))
+export const recordSearchEvent = async (payload) => {
+  if (!payload || typeof payload.query !== 'string' || !payload.query.trim() ||
+      !Array.isArray(payload.top_ids) || payload.top_ids.length === 0) {
+    return null
   }
   // 截断 top_ids 到 max 20 (后端 schema max_items=20)
   const safePayload = {
     ...payload,
+    query: payload.query.trim().slice(0, 500),
     top_ids: payload.top_ids.slice(0, 20),
   }
-  return axios.post('/api/v1/analytics/search-event', safePayload).then(r => r.data)
+  try {
+    const response = await axios.post('/api/v1/analytics/search-event', safePayload)
+    return response.data
+  } catch (error) {
+    // 埋点校验失败不应污染 chat console 或影响主流程。
+    if (error?.response?.status === 422) return null
+    throw error
+  }
 }
 
 /** 更新点击: clicked_id + click_position (1-based, 在 top_ids 数组中的位置) */
