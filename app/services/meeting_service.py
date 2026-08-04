@@ -12,7 +12,7 @@ from app.models.reminder import Reminder
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.wechat.analyzer import analyzer
 from app.wechat.identity import identity_resolver
-from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
+from app.core.llm import LLMClient, extract_text_from_response
 from app.services.meeting_analysis_service import meeting_analysis
 from app.services.reminder_scheduler import reminder_scheduler
 
@@ -404,18 +404,16 @@ class MeetingService:
 
     @classmethod
     async def _generate_summary(cls, transcript_text: str) -> str:
-        """用 Claude 生成会议摘要"""
+        """用 Claude 生成会议摘要
+
+        2026-08-04 P0: 改为走 backend-aware `LLMClient`, 与 `meeting_analysis_service` 一致,
+        避免 `LLM_BACKEND=openai_compat|ollama` 时仍直连 anthropic 复现会议 242 的
+        401 invalid_key bug。失败时返回空串, 上层根据该 fallback 决定是否
+        进入 degraded / error 状态。
+        """
         try:
-            client = get_anthropic_client()
-            model = get_default_model()
-            response = await client.messages.create(
-                model=model,
-                max_tokens=2048,
-                system=(
-                    "你是课题组会议纪要助手。请按 docs/meeting-minutes-standard.md 的标准，"
-                    "参考“2026.5.28 例行例会”的信息密度总结会议：必须包含背景、讨论过程、"
-                    "关键人物观点、结论和后续方向。不要只写短摘要，不要虚构转录中没有的信息。"
-                ),
+            llm = LLMClient()
+            response = await llm.complete(
                 messages=[{
                     "role": "user",
                     "content": (
@@ -424,6 +422,13 @@ class MeetingService:
                         f"{transcript_text[:8000]}"
                     ),
                 }],
+                system=(
+                    "你是课题组会议纪要助手。请按 docs/meeting-minutes-standard.md 的标准，"
+                    "参考“2026.5.28 例行例会”的信息密度总结会议：必须包含背景、讨论过程、"
+                    "关键人物观点、结论和后续方向。不要只写短摘要，不要虚构转录中没有的信息。"
+                ),
+                max_tokens=2048,
+                thinking={"type": "disabled"},
             )
             return extract_text_from_response(response)
         except Exception as e:

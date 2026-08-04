@@ -68,11 +68,19 @@ async def upload_audio(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """上传录音文件到 MinIO（兼容旧版一次性上传，新代码优先用 PUT /audio-chunk）"""
+    """上传录音文件到 MinIO（兼容旧版一次性上传，新代码优先用 PUT /audio-chunk）
+
+    2026-08-04 P0: 加上 created_by 越权守卫, 防止其他登录用户替换不属于自己的会议录音.
+    一次性上传成功时同时置 total_chunks=1 / last_chunk_index=0, 避免与 `completed`
+    状态字段语义不一致. 注意: 此端点不允许 admin 越权, 与 chunk/merge/stop 行为一致.
+    """
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
+    # 2026-08-04 P0: 越权守卫 (与其他端点一致)
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可上传录音")
     if meeting.status != "recording":
         raise HTTPException(status_code=400, detail="会议不在录音状态")
 
@@ -93,6 +101,9 @@ async def upload_audio(
     # 保存 object_name（而非 presigned URL，后者会过期）
     meeting.audio_url = upload_result.get("object_name")
     meeting.upload_status = "completed"
+    # 2026-08-04 P0: 一次性上传视为"整段上传完成 1 块", 避免 completed + last_chunk_index=-1/total_chunks=NULL 的矛盾状态
+    meeting.last_chunk_index = 0
+    meeting.total_chunks = 1
     await db.commit()
 
     return {"audio_url": meeting.audio_url, "size": len(file_data)}

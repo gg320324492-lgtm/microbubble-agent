@@ -100,8 +100,13 @@ async def update_progress(
         "updated_at": now,
     }
     if stage == ProgressStage.DONE:
-        update_data["percent"] = 100.0
-        update_data["status"] = "done"
+        # 2026-08-04 P0: DONE 阶段仍允许 caller 传入 status="error",
+        # 否则会把永久失败强写为 done, 复现会议 242 "error reason + status=done" 的假成功.
+        if status != "error":
+            update_data["percent"] = 100.0
+            update_data["status"] = "done"
+        else:
+            update_data["percent"] = 100.0
 
     await r.hset(key, mapping=update_data)
     if stage == ProgressStage.DONE:

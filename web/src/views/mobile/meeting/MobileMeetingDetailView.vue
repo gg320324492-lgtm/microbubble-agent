@@ -101,22 +101,37 @@
 
         <!-- 转录 -->
         <div v-if="activeTab === 'transcript'" class="transcript-tab">
-          <div v-if="meeting.transcript?.length" class="transcript-list">
+          <!-- 2026-08-04 P0: 桌面端优先 transcript_polished, 移动端之前只读 transcript,
+               导致后端已生成润色版但前端显示 "暂无转录内容". 改用同一份 composable
+               选择 polished || raw. -->
+          <div v-if="displaySegments.length" class="transcript-list">
             <div
-              v-for="(seg, i) in meeting.transcript"
+              v-for="(seg, i) in displaySegments"
               :key="i"
               class="transcript-segment"
             >
               <div class="seg-meta">
                 <span class="seg-speaker">{{ seg.speaker || '发言人' }}</span>
-                <span v-if="seg.timestamp" class="seg-time">{{ formatTime(seg.timestamp) }}</span>
+                <!-- 2026-08-04 P0: 后端 transcript_polished 用 `ts` 字段,
+                     老代码读 `seg.timestamp` 永远是 undefined. 改用 ts ?? start 兼容. -->
+                <span v-if="formatSegTs(seg) != null" class="seg-time">{{ formatTime(formatSegTs(seg)) }}</span>
               </div>
               <div class="seg-text">{{ seg.text }}</div>
             </div>
+            <!-- 2026-08-04 P0: 大转录不一次性渲染, 桌面端 50/页, 移动端更轻 30/页 + 展开按钮 -->
+            <button
+              v-if="hasMoreSegments"
+              type="button"
+              class="load-more"
+              @click="loadMoreSegments"
+            >
+              展开剩余 {{ totalSegments - visibleSegmentCount }} 段
+            </button>
           </div>
           <div v-else class="empty-tab">
             <div class="empty-icon">🎙️</div>
             <div class="empty-title">暂无转录内容</div>
+            <div v-if="meeting.error_reason" class="empty-hint error">{{ meeting.error_reason }}</div>
           </div>
         </div>
 
@@ -179,6 +194,7 @@ import { Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import axios from 'axios'
 import PageHeader from '@/components/mobile/PageHeader.vue'
+import { useMeetingTranscript } from '@/composables/useMeetingTranscript'
 
 const route = useRoute()
 const router = useRouter()
@@ -186,13 +202,24 @@ const router = useRouter()
 const meeting = ref(null)
 const loading = ref(true)
 const activeTab = ref('minutes')
+const PAGE_SIZE = 30
+
+// 2026-08-04 P0: 抽出 polished||raw + ts/start 兼容逻辑到 composable, 桌面/移动复用.
+const { displaySegments, totalSegments, hasMoreSegments, loadMoreSegments } = useMeetingTranscript(meeting, PAGE_SIZE)
+function formatSegTs(seg) {
+  if (!seg) return null
+  if (typeof seg.ts === 'number') return seg.ts
+  if (typeof seg.start === 'number') return seg.start
+  if (typeof seg.timestamp === 'number') return seg.timestamp
+  return null
+}
 
 const tabs = computed(() => [
   { name: 'minutes', label: '纪要' },
   {
     name: 'transcript',
     label: '转录',
-    count: meeting.value?.transcript?.length || 0,
+    count: totalSegments.value || 0,
   },
   {
     name: 'stats',
@@ -211,7 +238,15 @@ function formatTime(t) {
   return dayjs(t).add(8, 'hour').format('HH:mm:ss')
 }
 function getStatusLabel(s) {
-  return { scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s
+  return {
+    scheduled: '已预约',
+    recording: '录制中',
+    processing: '处理中',
+    completed: '已完成',
+    completed_with_warnings: '已完成（含警告）',
+    cancelled: '已取消',
+    error: '处理失败',
+  }[s] || s
 }
 
 // 发言人统计（简单聚合）
@@ -250,7 +285,8 @@ async function fetchMeeting() {
 
 function playAudio() {
   if (!meeting.value?.audio_url) return
-  window.open(meeting.value.audio_url, '_blank')
+  // 2026-08-04 P0: 与桌面端一致走受控 proxy, 避免相对路径在 MinIO 上 404.
+  window.open(`/api/v1/meetings/${meeting.value.id}/audio`, '_blank')
 }
 
 function handleStartLive() {
@@ -539,6 +575,22 @@ watch(() => route.params.id, fetchMeeting)
   font-size: 12px;
   color: var(--color-text-secondary);
 }
+.empty-hint.error {
+  color: var(--color-danger, #F56C6C);
+}
+
+.load-more {
+  display: block;
+  margin: 12px auto 0;
+  padding: 8px 16px;
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-regular);
+  font-size: 13px;
+  cursor: pointer;
+}
+.load-more:active { background: var(--color-bg-hover); }
 
 .loading-state {
   flex: 1;

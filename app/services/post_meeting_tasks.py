@@ -703,9 +703,18 @@ def post_meeting_process(self, meeting_id: int):
                     for seg in transcript_segments
                 )
 
-                # 生成标题
-                need_title = not meeting.title or meeting.title.startswith("听会") or meeting.title == "未命名会议"
-                if need_title:
+                # 2026-08-04 P0: 占位标题判断扩展, 兼容"正在听会（ID N）"格式
+                # 之前只识别 startswith("听会")/空/精确等于"未命名会议",
+                # 会留下"正在听会（ID 242）"这种占位文本, 导致从未触发生成逻辑.
+                import re as _re_title
+                _title_raw = (meeting.title or "").strip()
+                _title_is_placeholder = (
+                    not _title_raw
+                    or _title_raw.startswith("听会")
+                    or _title_raw == "未命名会议"
+                    or bool(_re_title.match(r"^正在听会[（(]ID\s*\d+[)）]\s*$", _title_raw))
+                )
+                if _title_is_placeholder:
                     logger.info(f"开始生成标题，当前标题: '{meeting.title}'")
                     new_title = await meeting_analysis.generate_title(transcript_text)
                     logger.info(f"标题生成结果: '{new_title}'")
@@ -715,13 +724,19 @@ def post_meeting_process(self, meeting_id: int):
                         logger.warning(f"标题生成返回无效: '{new_title}'，保留原标题")
 
                 # 分析摘要/要点/决议
+                # 2026-08-04 P0: 返回结构化结果 (success/failure/warning + errors),
+                # 决定最终状态, 不能再用空白纪要伪装成功。
                 analysis = await meeting_analysis.analyze_transcript(
                     transcript_text, speaker_mapping=speaker_mapping
                 )
+                analysis_failure = bool(analysis.get("failure"))
+                analysis_warning = bool(analysis.get("warning"))
+                analysis_errors = analysis.get("errors") or []
+
+                # 对 AI 输出也做文本纠错（"小七助手"→"小气助手" 等）
                 meeting.summary = analysis.get("summary")
                 meeting.key_points = analysis.get("key_points", [])
                 meeting.decisions = analysis.get("decisions", [])
-                # 对 AI 输出也做文本纠错（"小七助手"→"小气助手" 等）
                 meeting.summary = _apply_text_corrections(meeting.summary or "", TEXT_CORRECTIONS)
                 meeting.key_points = [_apply_text_corrections(kp, TEXT_CORRECTIONS) for kp in (meeting.key_points or [])]
                 meeting.decisions = [_apply_text_corrections(d, TEXT_CORRECTIONS) for d in (meeting.decisions or [])]
@@ -783,12 +798,54 @@ def post_meeting_process(self, meeting_id: int):
 
                 # ===== 阶段 5: 存储结果 =====
                 await update_progress(meeting_id, ProgressStage.STORING_RESULTS, detail="保存结果", redis_override=redis_client)
-                meeting.status = "completed"
+
+                # 2026-08-04 P0: 决定最终状态.
+                # - 转录 + 润色落库成功但分析 0/N 失败 → 不能标 completed, 改为 error 并把原因写入 error_reason.
+                # - 分析部分成功 (warning) → completed_with_warnings, error_reason 记录首条错误.
+                # - 全部成功 → completed.
+                if analysis_failure:
+                    final_status = "error"
+                    err_msg = "; ".join(
+                        f"chunk{e.get('chunk_index', '?')}:{e.get('error_class','?')}:{e.get('message','')[:120]}"
+                        for e in analysis_errors[:5]
+                    ) or "meeting analysis 0 chunk 成功"
+                    meeting.error_reason = (meeting.error_reason or "")[:200] + f" | analysis failed: {err_msg}"[:500]
+                    # 清空可能被旧版写入的空白纪要字段, 避免误以为是真实数据
+                    meeting.summary = None
+                    meeting.key_points = []
+                    meeting.decisions = []
+                elif analysis_warning:
+                    final_status = "completed_with_warnings"
+                    first_err = analysis_errors[0] if analysis_errors else {}
+                    meeting.error_reason = (
+                        f"analysis partial: {first_err.get('error_class', '?')}: "
+                        f"{first_err.get('message', '')[:200]}"
+                    )[:500]
+                else:
+                    final_status = "completed"
+
+                meeting.status = final_status
                 await db.commit()
 
                 # ===== 阶段 6: 完成 =====
-                await update_progress(meeting_id, ProgressStage.DONE, detail="处理完成", redis_override=redis_client)
-                logger.info(f"后处理完成: meeting_id={meeting_id}, 转写{len(transcript_segments)}段, 标题={meeting.title}")
+                done_detail = {
+                    "completed": "处理完成",
+                    "completed_with_warnings": "处理完成（含部分警告）",
+                    "error": "处理失败",
+                }.get(final_status, "处理完成")
+                await update_progress(
+                    meeting_id,
+                    ProgressStage.DONE,
+                    detail=done_detail,
+                    status=final_status,
+                    redis_override=redis_client,
+                )
+                logger.info(
+                    f"后处理完成: meeting_id={meeting_id}, 转写{len(transcript_segments)}段, "
+                    f"标题={meeting.title}, status={final_status}, "
+                    f"chunk_success={analysis.get('success_chunk_count', 0)}, "
+                    f"chunk_failure={analysis.get('failure_chunk_count', 0)}"
+                )
 
             except Exception as e:
                 # ★ 阶段 4 修复：瞬时错误（ValueError/IOError/ConnectionError）→ self.retry
@@ -833,6 +890,8 @@ def post_meeting_process(self, meeting_id: int):
                             m2.status = "error"
                             m2.error_reason = str(e)[:500]
                             await db2.commit()
+                    # 2026-08-04 P0: progress DONE 强制 status="done" 会覆盖 error,
+                    # 改为显式传 status="error", 让前端能看到真实失败.
                     await update_progress(
                         meeting_id, ProgressStage.DONE,
                         detail=f"处理失败: {str(e)[:80]}",
@@ -843,7 +902,9 @@ def post_meeting_process(self, meeting_id: int):
                     await err_engine.dispose()
                 except Exception as push_err:
                     logger.error(f"推送 error 状态也失败: {push_err}")
-                return  # 永久错误：return 不 raise（Celery 视为 success）
+                # 2026-08-04 P0: 永久错误必须 raise, 让 Celery 记 FAILURE.
+                # 原代码 `return` 让 Celery 视为 SUCCESS, 无法在 Flower / 监控发现.
+                raise
 
         await redis_client.aclose()
         await engine.dispose()

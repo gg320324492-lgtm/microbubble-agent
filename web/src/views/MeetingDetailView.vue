@@ -917,8 +917,24 @@ const formatDuration = (sec) => {
   const s = sec % 60
   return m > 0 ? `${m}分${s}秒` : `${s}秒`
 }
-const statusLabel = (s) => ({ scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s)
-const statusType = (s) => ({ scheduled: 'info', recording: 'warning', processing: 'warning', completed: 'success', cancelled: 'info', error: 'danger' }[s] || '')
+const statusLabel = (s) => ({
+  scheduled: '已预约',
+  recording: '录制中',
+  processing: '处理中',
+  completed: '已完成',
+  completed_with_warnings: '已完成（含部分警告）',
+  cancelled: '已取消',
+  error: '处理失败',
+}[s] || s)
+const statusType = (s) => ({
+  scheduled: 'info',
+  recording: 'warning',
+  processing: 'warning',
+  completed: 'success',
+  completed_with_warnings: 'warning',
+  cancelled: 'info',
+  error: 'danger',
+}[s] || '')
 
 onMounted(async () => {
   await memberStore.fetchMembers()
