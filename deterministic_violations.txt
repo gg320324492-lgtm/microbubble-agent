@@ -1,0 +1,13 @@
+W2-5 PWA BUILD DETERMINISM CHECK
+STATUS=INCONCLUSIVE
+CLASS_20_133=NOT_VERIFIED
+SOURCE_COMMIT=969e5154c68afaf64bf80e751ca5f1a351b330d3
+BUILD_COMMAND=npm run build
+BUILD_1_EXIT_CODE=1
+BUILD_1_DIST_SHA256=N/A
+BUILD_2_STATUS=NOT_RUN
+BUILD_2_DIST_SHA256=N/A
+DIFF_STATUS=NOT_RUN
+DIFF_FILES=N/A
+ERROR=Local web/node_modules/.bin/vite was absent; npm reported that vite was not recognized as a command.
+NOTE=diff -r dist1/ dist/ was not executed because the first build generated no dist directory, so dist1 was never created. This is not evidence of zero differences.
