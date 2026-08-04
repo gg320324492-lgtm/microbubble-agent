@@ -8,6 +8,62 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-08-04 W100 +34..+38 meeting pipeline grand closure 收口)
+
+会议管线 P0/持久化/重跑/队列/巡检 5 Batch 全收口, 持续治理 W2 阶段沉淀:
+
+- **P0 (Batch A)** `meeting-p0-batch-a-2026-08-04` `7f7466c8f` (11 files, +679/-128):
+  meeting_analysis_service / meeting_service 改走 backend-aware `LLMClient`,
+  analyze_transcript 返回结构化 success/failure/warning + errors, 0/N 失败 → status=error
+  (不再伪装 completed); 永久错误 raise (Celery FAILURE); progress DONE 透传 error;
+  upload-audio 加 created_by 守卫 + 一次性上传 total_chunks=1/last_chunk_index=0;
+  list_meetings 用真 count() + upload_mode 字段; MeetingResponse 暴露 error_reason;
+  compute_speaker_stats 清洗 `<|EMO_UNKNOWN|>` 等 token; useMeetingTranscript composable
+  桌面/移动统一 polished||raw + ts/start 兼容 + 30 段/页.
+
+- **持久化 (Batch B)** `meeting-batch-b-persistence-2026-08-04` `646861f81` (6 files, +879):
+  alembic `097_meeting_processing_persistence` 接 096 head 单链
+  (meeting_processing_runs + meeting_processing_stages + 4 个 nullable 列);
+  meeting_processing_service start_run/start_stage/finish_stage/finish_run;
+  post_meeting_tasks 接入 8 阶段持久化记录 (helper `_persist_stage` best-effort);
+  meeting_quality_service 确定性指标 + 硬门禁 (transcript_empty / control_token_leak
+  / unknown_speaker_high / minutes_empty / polish_no_effective_change);
+  sanitize_text 统一入口, post_meeting_tasks 落库前强制清洗.
+
+- **重跑 + 队列 + 巡检 (Batch C/D)** `meeting-batch-cde-2026-08-04` `50956c3a7`
+  + `fe3720d0c` (10 files, +991):
+  MeetingReprocessingService (SUPPORTED_STAGES, idempotency_key, snapshot, transcription
+  force gate); admin API `/admin/meetings/{reprocess, runs, failures, health}`
+  + Redis 60s 缓存; scripts/reprocess_via_service.py + recover_meeting_242.py CLI;
+  Celery task_routes → meeting-processing 队列 + 新 celery-meeting-worker service;
+  ASR 受控并发 (Semaphore(4) + 段级重试 + 25 段进度); MeetingInspector Celery beat
+  每 6h 扫描 5 类异常 (completed_but_minutes_empty 等).
+
+- **测试 + 文档 (Batch E)** `meeting-batch-cde-2026-08-04` `90ab80cb5` (5 files, +536):
+  44/44 pytest PASS (8 P0 + 12 质量门 + 5 C/D + 3 inspector + 7 reprocess + 4 dryrun + 5 e2e);
+  `docs/w100-meeting-pipeline-grand-closure-2026-08-04.md` 11 节完整 runbook;
+  类 20 实战新增 5 条: 20.133 (deterministic build 沿用) / 20.134 (持久化 + Redis 二元) /
+  20.135 (重跑 idempotency + snapshot) / 20.136 (Celery 队列隔离) /
+  20.137 (inspector finally dispose).
+
+**真实生产快照 (7 天)**:
+```
+{"meetings_total": 2, "by_status": {"completed": 2},
+ "processing_stuck_over_2h": 0, "note": "alembic 097 未部署"}
+```
+
+**累计 (W100)**:
+- 5 个独立分支, 4 个主 commit, 30+ 文件, 2000+ 行净增 (含测试)
+- 44 pytest PASS, 0 FAILED
+- 8 大证据 + 5 件套守恒实测 + 类 20.133-137 新增
+- 锚点范式 W100 末 ~537 → W100 +28..+38 据实累计 (派工 v6 §13.3 据实上报)
+- W2+ 派工顺序 (audit_log 接入 / 会议 242 真实恢复 / 声纹 acceptance gate 复演 /
+  PWA build 确定性 / polish 日志修复 / 真实媒体时长) 已写入 grand-closure runbook §9
+
+**派工 v11 §13 仓库实情真查沿用**: 5 件套实测, 不凑不纸面; 类 20 累计 137+ 实例.
+
+---
+
 ## 当前状态 (2026-08-03 W100 +48 RichContent 默认展开)
 
 RichContent 去除手动折叠按钮，默认直接展示真实任务数据；仅在 LLM 显式传 `collapsed_by_default=true` 时隐藏内容，保留协议兼容。定向 Vitest 14/14 PASS、PWA build PASS、alembic 单 head `096_add_rag_multimodal_metrics` 守恒。类 20.144：组件 lifecycle/显隐测试复用 `mount(ParentComponent)`，同时断言 DOM 存在性与 `isVisible()`，避免把 `v-show` 隐藏误判为未渲染。
