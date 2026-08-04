@@ -689,7 +689,7 @@ def post_meeting_process(self, meeting_id: int):
                     polish_result = await polish_segments_with_lock(
                         meeting_id, segments_for_polish, polish_context
                     )
-                    polished_segments = polish_result.get("polished", [])
+                    polished_segments = polish_result.get("polished", []) or []
                     if polished_segments:
                         # 将润色后的文本回写到 transcript_segments
                         for i, polished in enumerate(polished_segments):
@@ -699,6 +699,7 @@ def post_meeting_process(self, meeting_id: int):
                     else:
                         logger.warning("AI 润色返回空结果，使用原文")
                 except Exception as e:
+                    polished_segments = []  # 类 20.146 W2+N 修复: 显式初始化避免 UnboundLocalError
                     logger.warning(f"AI 润色失败（降级为原文）: {e}")
                 await _persist_stage(proc_svc, run, "ai_polish", "success", metrics={"polished_segments": len(polished_segments) if polished_segments else 0})
 
