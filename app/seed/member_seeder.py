@@ -9,11 +9,14 @@ W2 +N 2026-08-04: 修复 init_db.py 永跳 bug + 接入 lifespan
 数据来源: scripts/init_db.py line 52-312 (原 24 个真实成员数据)
 """
 from typing import Any
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.security import get_password_hash
 from app.models.member import Member
+
+logger = logging.getLogger("microbubble.member_seeder")
 
 
 # 24 个默认成员数据 (从 scripts/init_db.py 抽取, 字段对齐 Member model)
@@ -321,6 +324,45 @@ async def seed_default_members(db: AsyncSession) -> dict:
         db.add(m)
         added += 1
 
-    await db.commit()
+    # W2 +N 类 20.152 强化: 逐行 commit, 避免 unique constraint 失败导致整 batch rollback
+    # (例如 self-heal 路径, 24 个 members 中部分已存在, 整体 INSERT 失败 → added=0)
+    try:
+        await db.commit()
+    except Exception as batch_err:
+        await db.rollback()
+        added = 0
+        for member_data in DEFAULT_MEMBERS:
+            existing = await db.scalar(
+                select(Member).where(Member.username == member_data["username"])
+            )
+            if existing is not None:
+                skipped += 1
+                continue
+            try:
+                m = Member(
+                    username=member_data["username"],
+                    password_hash=password_hash,
+                    name=member_data["name"],
+                    grade=member_data.get("grade"),
+                    research_area=member_data.get("research_area", ""),
+                    skills=member_data.get("skills", []),
+                    role=member_data.get("role", "member"),
+                    email=member_data.get("email"),
+                    personal_wechat_id=member_data.get("personal_wechat_id"),
+                    bio=member_data.get("bio", ""),
+                    is_active=member_data.get("is_active", True),
+                )
+                if not m.wechat_id:
+                    m.wechat_id = m.username + "_default"
+                m.voice_embedding = None
+                m.voice_enrolled_at = None
+                m.voice_confirmed_at = None
+                m.drive_quota_updated_at = None
+                db.add(m)
+                await db.commit()
+                added += 1
+            except Exception as row_err:
+                await db.rollback()
+                # 单行失败不阻断后续
 
     return {"added": added, "skipped": skipped, "total": len(DEFAULT_MEMBERS)}

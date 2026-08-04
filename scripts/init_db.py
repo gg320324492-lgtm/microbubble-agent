@@ -36,6 +36,11 @@ async def seed_data():
     - 改为检测关键 admin 'wangtianzhi' 是否存在
     - 若有数据但缺关键 admin, 强制 seed (自愈路径, 修复 0 用户事故)
     - 调用 app/seed/member_seeder.py 的 seed_default_members (按 username 幂等)
+
+    W2 +N 2026-08-04 强化 (类 20.152): 不仅查 wangtianzhi, 而是查所有 critical admins
+    - 从 app/seed/member_seeder.py DEFAULT_MEMBERS 抽所有 username 进 CRITICAL_ADMINS
+    - 单一数据源, 未来增删成员自动同步
+    - 任一 critical admin 缺失即触发自愈
     """
     async with async_session() as session:
         # 检查是否已有数据
@@ -44,14 +49,19 @@ async def seed_data():
         count = count_result.scalar() or 0
 
         if count > 0:
-            # 检查关键 admin 'wangtianzhi' 是否存在 (W2 +N 修复)
-            admin_exists = await session.scalar(
-                select(Member).where(Member.username == "wangtianzhi")
+            # W2 +N 类 20.152: 查所有 critical admins (从 DEFAULT_MEMBERS 单源)
+            from app.seed.member_seeder import DEFAULT_MEMBERS
+            CRITICAL_USERS = [m["username"] for m in DEFAULT_MEMBERS]
+
+            existing_usernames = set(
+                (await session.execute(select(Member.username))).scalars()
             )
-            if admin_exists is not None:
-                print(f"数据库已有 {count} 条数据且关键 admin 'wangtianzhi' 存在, 跳过初始数据插入")
+            missing = [u for u in CRITICAL_USERS if u not in existing_usernames]
+
+            if not missing:
+                print(f"数据库已有 {count} 条数据且所有 {len(CRITICAL_USERS)} 个 critical users 存在, 跳过")
                 return
-            print(f"数据库已有 {count} 条数据但关键 admin 'wangtianzhi' 缺失, 强制 seed (W2 +N 自愈)")
+            print(f"数据库已有 {count} 条数据, critical users 缺失: {missing}, 强制 seed (W2 +N 自愈)")
 
         # 走 app/seed/member_seeder.py (按 username 幂等, 含 wechat_id/voice/drive NULL 防护)
         from app.seed.member_seeder import seed_default_members
