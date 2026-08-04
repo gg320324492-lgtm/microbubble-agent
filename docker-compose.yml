@@ -276,6 +276,15 @@ services:
       redis:
         condition: service_healthy
     mem_limit: 4g
+    # W2 +N 类 20.149: 3D-Speaker 524 段 CPU 推理 5+ 分钟卡死 (CPU 99.97% 单核)
+    # 给 celery-worker 加 GPU 资源 (Docker Desktop 需启用 WSL2 GPU passthrough)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     restart: unless-stopped
 
   # 2026-08-04 Batch D-1: 会议处理独立 worker, 只消费 meeting-processing 队列
@@ -303,6 +312,14 @@ services:
       redis:
         condition: service_healthy
     mem_limit: 4g
+    # W2 +N 类 20.149: 会议后处理 3D-Speaker 阶段必须 GPU, 否则 CPU 99.97% 卡死
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     restart: unless-stopped
 
   # Celery Beat (定时任务)
