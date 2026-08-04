@@ -203,7 +203,7 @@ def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict
             else:
                 # 改写幅度过大，回退原文
                 logger.warning(
-                    "AI 润色疑似改写（>10%差异），已回退原文: original=%s polished=%s",
+                    "AI 润色疑似改写（差异超过 10%%），已回退原文: original=%s polished=%s",
                     original.get("text", "")[:80],
                     candidate[:80],
                 )
