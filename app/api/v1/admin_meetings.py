@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,9 +38,18 @@ class ReprocessBody(BaseModel):
 async def start_reprocess(
     meeting_id: int,
     body: ReprocessBody,
+    request: Request,
     current_admin: Member = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """启动重跑. 同步返回运行结果.
+
+    W2-2: 写 audit_log (action=meeting_reprocess), 失败 best-effort 不抛.
+
+    限制:
+    - transcription stage 必须 force=true 才允许 (会覆盖原始 transcript)
+    - 非管理员 403
+    """
     try:
         req = ReprocessRequest(
             meeting_id=meeting_id,
@@ -53,6 +62,35 @@ async def start_reprocess(
         raise HTTPException(status_code=400, detail=str(e))
     service = MeetingReprocessingService(db)
     result = await service.execute(req)
+    # 2026-08-04 W2-2: 写审计 (失败 best-effort 不抛, 沿用 audit_service 约定)
+    try:
+        from app.services.audit_service import AuditService
+        ip = request.client.host if request.client else None
+        ua = request.headers.get("User-Agent")
+        await AuditService.log(
+            db,
+            user_id=current_admin.id,
+            ip_address=ip,
+            user_agent=ua,
+            method="POST",
+            path=f"/api/v1/admin/meetings/{meeting_id}/reprocess",
+            action="meeting_reprocess",
+            resource_type="meeting",
+            resource_id=meeting_id,
+            status_code=200,
+            metadata={
+                "stages": body.stages,
+                "force": body.force,
+                "trigger": req.trigger,
+                "reused": result.reused,
+                "run_id": result.run_id,
+                "completed_stages": result.completed_stages,
+                "errors": result.errors,
+                "warnings": result.warnings,
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[Audit] meeting reprocess audit log failed: {e}")
     return {
         "meeting_id": result.meeting_id,
         "run_id": result.run_id,
