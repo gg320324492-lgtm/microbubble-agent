@@ -29,6 +29,8 @@
 
 6. **类 20.143 (新增, 永久铁律, W2 +N 完全自愈)**: 电脑重启后**完全无需人工**恢复, 通过 `schtasks` 监听 `Microsoft-Windows-Winlogon EventID=7002` (用户登录 session 创建) + DELAY 2 分钟, 触发 `scripts/auto-recovery-eventlog.ps1`. 触发链: 智能等 docker daemon (5 min timeout) → 跑 `bash scripts/restart-recovery-after-gui-restart.sh` → 检测端口冲突 → 自动 Quit+Start Docker Desktop GUI (类 20.138 自愈, **最多 1 次**避免循环) → TTS 反馈 + JSON 日志. **Docker Desktop 通过 WSL2 backend 运行, 不写 EventLog** (2026-08-04 实测确认), 因此不能用 Docker Desktop 启动事件触发, 必须用 Winlogon EventID=7002. 安装: 管理员 PowerShell 跑 `E:\microbubble-agent\scripts\install-auto-recovery.bat` (一次性). 卸载: `schtasks /Delete /TN "MicroBubble-Auto-Recovery" /F`.
 
+7. **类 20.144 (新增, 永久铁律, W2 +N 0 用户事故)**: 生产代码路径必须包含所有 seed step. 表现: `scripts/init_db.py` 有完整 24 个真实成员数据 (含 dutonghe/wangtianzhi 等), 但 `app/main.py` lifespan 只跑 `create_all` + `seed_formula_library`, **从不**调用 seed_data. 第二次 bug: `seed_data()` 用 `count > 0` 检测跳过, DB 里有任意 1 个用户就**永远跳过** seed. 修复 3 件套: ① `app/seed/member_seeder.py` 新增 + `DEFAULT_MEMBERS` 24 字典 + `seed_default_members()` 函数 (按 username 幂等, wechat_id fallback 处理 NOT NULL) ② `scripts/init_db.py` 改为按关键 admin 'wangtianzhi' 检测 (admin 缺失强制 seed 自愈, admin 存在跳过) ③ `app/main.py` lifespan 新增 `seed_default_members` 调用 (try/except, 失败不阻塞启动). 配套 `scripts/verify_backup_restore.sh`: 创建临时 DB + gunzip 还原 + 验证表数 ≥ 50 + 用户数 ≥ 24 + DROP. **部署纪律**: 主拍合并 migration 后必须重跑 lifespan seed 验证 (DB 不空但关键 admin 缺失场景).
+
 **worktree 下 compose 启动额外步骤**: `cp <repo-root>/.env <worktree>/.env` (worktree 路径下 .env 缺失, docker compose 启动会报 `env file ... not found`).
 
 **一键恢复脚本**: `scripts/restart-recovery-after-gui-restart.sh` (用户 Docker GUI 重启后执行, 自动 attach network + 验证 7 个端点 + 5 件套守恒).
