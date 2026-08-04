@@ -64,6 +64,11 @@ export const useSearchAnalyticsStore = defineStore('searchAnalytics', {
           source,
           session_id: getOrCreateSessionId(),
         })
+        if (!resp) {
+          this.currentSearchId = null
+          this.lastTopIds = []
+          return
+        }
         this.currentSearchId = resp.search_event_id
         this.lastTopIds = topIds.slice(0, 20)
       } catch (err) {

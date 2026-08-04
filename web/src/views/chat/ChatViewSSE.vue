@@ -980,6 +980,16 @@ onUnmounted(() => {
   font-size: 13px;
   line-height: 1;
 }
+/* W100 +61 polish: Notebook 按钮 hover/focus 态 (W100 +55b 漏写) */
+.header-context-toggle:hover,
+.header-context-toggle:focus-visible {
+  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+}
+.header-context-toggle:focus-visible {
+  outline: var(--focus-outline-width, 2px) solid var(--focus-outline-color, var(--color-primary));
+  outline-offset: var(--focus-outline-offset, 2px);
+}
 .bot-name { font-weight: 600; font-size: 15px; }
 .bot-status { font-size: 12px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
@@ -1193,6 +1203,22 @@ onUnmounted(() => {
   .bubble,
   .bubble:hover { transform: none; transition: none; }
 }
+/* W100 +61 polish: print 模式适配 (省墨 + 黑底白字废 4 色墨水 → 全黑白 + 隐藏装饰元素) */
+@media print {
+  .bubble,
+  .user-bubble,
+  .bot-bubble {
+    background: #fff !important;
+    background-image: none !important;
+    color: #000 !important;
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+  }
+  .user-bubble::before,
+  .bot-bubble::before,
+  .bot-bubble::after { display: none !important; }
+  .msg-content-typing { mask-image: none !important; -webkit-mask-image: none !important; }
+}
 
 .tool-trace { margin-bottom: 12px; padding: 8px 12px; background: var(--color-bg-warm); border-radius: 8px; border-left: 3px solid var(--color-primary); }
 .trace-item { font-size: 12px; color: var(--color-text-regular); padding: 2px 0; }
@@ -1243,9 +1269,18 @@ onUnmounted(() => {
   -webkit-mask-image: linear-gradient(90deg, black 0%, black var(--reveal), transparent var(--reveal));
   transition: --reveal 250ms linear;
 }
+/* W100 +61 polish: 不支持 CSS custom property transition → 退化为完整可见 (无 mask 动画)
+   Safari < 17.4 / 老 webkit 走这条, mask 失效时直接全可见 */
 @supports not (transition: --reveal 1s) {
-  /* 不支持 CSS custom property transition → 退化为完整可见 (无 mask 动画) */
   .msg-content-typing { mask-image: none; -webkit-mask-image: none; }
+}
+/* W100 +61 polish: 仅支持 webkit mask 但不支持 custom property transition (Safari 15-17.3)
+   强制 mask=none, 避免半遮罩锁死文本 */
+@supports (-webkit-mask-image: linear-gradient(black, black)) and (not (transition: --reveal 1s)) {
+  .msg-content-typing {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
 }
 
 .rich-blocks { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -1367,6 +1402,34 @@ onUnmounted(() => {
 [data-theme="dark"] .bot-bubble {
   background: var(--color-bg-card);
   color: var(--color-text-primary);
+}
+/* W100 +61 polish: 用户气泡 dark mode 适配 (W100 +55b 漏写, 边框 + glow 在 dark 几乎不可见) */
+[data-theme="dark"] .user-bubble {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45),
+              0 0 0 1px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+/* W100 +61 polish: 用户气泡小尾巴 dark mode 适配 */
+[data-theme="dark"] .user-bubble::before {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+}
+/* W100 +61 polish: 助手气泡小尾巴 dark mode 适配 (border + clip-path 视觉补强) */
+[data-theme="dark"] .bot-bubble::after {
+  border-left-color: var(--color-border-base);
+  border-bottom-color: var(--color-border-base);
+  box-shadow: -1px 1px 3px rgba(0, 0, 0, 0.35);
+}
+/* W100 +61 polish: 打字机 mask 在 dark mode 用更亮过渡边界 */
+[data-theme="dark"] .msg-content-typing {
+  --reveal-start: rgba(232, 234, 237, 0.92);
+  --reveal-end: rgba(232, 234, 237, 0);
+  mask-image: linear-gradient(90deg, var(--reveal-start) 0%, var(--reveal-start) var(--reveal), var(--reveal-end) var(--reveal));
+  -webkit-mask-image: linear-gradient(90deg, var(--reveal-start) 0%, var(--reveal-start) var(--reveal), var(--reveal-end) var(--reveal));
+}
+/* W100 +61 polish: Notebook 按钮 dark mode hover/focus */
+[data-theme="dark"] .header-context-toggle:hover,
+[data-theme="dark"] .header-context-toggle:focus-visible {
+  background-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  color: var(--color-primary-light);
 }
 [data-theme="dark"] .msg-content :deep(pre),
 [data-theme="dark"] .msg-content :deep(code) {

@@ -11,6 +11,8 @@
   折叠模式 (collapsedByDefault=true): 用户主动 toggle 控制, auto-collapse 不干预.
   W100 +55d: plan_step 视觉升级 — done 绿色 line-through + running 蓝色 2px 左边框 + tool
   胶囊; placeholder step (以 __ 开头) 整行隐藏避免行号 00 显出.
+  W100 +60: 行号修正 — 显出"原始 step 编号"而非 visibleSteps 数组 index,
+    placeholder 在中间被过滤掉时不再跳号 (1,3,4 → 1,2,3 是错误的).
 
   设计约束（用户视角 P0 #2）：
   - 默认折叠态：📋 计划中: N 个步骤 (折叠模式初始) / ✓ 计划完成: N 个步骤 (auto-collapse 后默认模式)
@@ -63,9 +65,15 @@ const total = computed(() => visibleSteps.value.length)
 /**
  * W100 +55d: 过滤掉以 __ 开头的 placeholder step (后端 pre-loop 的 __plan_summary__).
  * 前端不让"行号 00"显出, 但保留原 steps 数组不变 (响应式数据契约不动).
+ *
+ * W100 +60: visibleSteps 同时记录原 props.steps 数组的 index (originalIndex),
+ *   让 placeholder 在中间被过滤掉时, 显示的行号仍是原始 step 编号 (1-5),
+ *   而不是 visibleSteps 数组 index (会跳号 1,3,4 → 1,2,3).
  */
 const visibleSteps = computed(() =>
-  props.steps.filter((s) => !s.step.startsWith('__')),
+  props.steps
+    .map((s, originalIndex) => ({ ...s, __originalIndex: originalIndex }))
+    .filter((s) => !s.step.startsWith('__')),
 )
 
 /** 摘要文案 — 不同状态下显示不同进度感 */
@@ -104,6 +112,16 @@ function toggle() {
 
 function pad(n: number): string {
   return String(n + 1).padStart(2, '0')
+}
+
+/**
+ * W100 +60: 行号用原始 props.steps index, 不用 visibleSteps index,
+ *   避免 placeholder 在中间被过滤掉时显示跳号.
+ * 默认模式 (always unfolded) + 折叠模式 (Transition v-if) 两处 v-for 都用.
+ */
+function stepNum(s: PlanStep & { __originalIndex?: number }): string {
+  const originalIndex = typeof s.__originalIndex === 'number' ? s.__originalIndex : 0
+  return pad(originalIndex)
 }
 
 function statusGlyph(s: PlanStep['status']): string {
@@ -169,14 +187,14 @@ function statusGlyph(s: PlanStep['status']): string {
     >
       <li
         v-for="(s, i) in visibleSteps"
-        :key="i"
+        :key="s.__originalIndex ?? i"
         class="plan-step"
         :class="[`plan-step-${s.status}`, `stagger-${Math.min(i + 1, 6)}`]"
         :data-testid="`plan-step-${i}`"
         :data-status="s.status"
         :aria-label="`步骤 ${i + 1}: ${s.step}${s.tool ? ', 使用工具 ' + s.tool : ''}, ${s.status === 'done' ? '已完成' : s.status === 'running' ? '进行中' : '待执行'}`"
       >
-        <span class="plan-step-num" aria-hidden="true">{{ pad(i) }}</span>
+        <span class="plan-step-num" aria-hidden="true">{{ stepNum(s) }}</span>
         <span class="plan-step-name" :data-testid="`plan-step-${i}-name`">{{ s.step }}</span>
         <span
           v-if="s.tool"
@@ -206,14 +224,14 @@ function statusGlyph(s: PlanStep['status']): string {
       >
         <li
           v-for="(s, i) in visibleSteps"
-          :key="i"
+          :key="s.__originalIndex ?? i"
           class="plan-step"
           :class="[`plan-step-${s.status}`, `stagger-${Math.min(i + 1, 6)}`]"
           :data-testid="`plan-step-${i}`"
           :data-status="s.status"
           :aria-label="`步骤 ${i + 1}: ${s.step}${s.tool ? ', 使用工具 ' + s.tool : ''}, ${s.status === 'done' ? '已完成' : s.status === 'running' ? '进行中' : '待执行'}`"
         >
-          <span class="plan-step-num" aria-hidden="true">{{ pad(i) }}</span>
+          <span class="plan-step-num" aria-hidden="true">{{ stepNum(s) }}</span>
           <span class="plan-step-name" :data-testid="`plan-step-${i}-name`">{{ s.step }}</span>
           <span
             v-if="s.tool"

@@ -549,18 +549,14 @@ export function useChatStream() {
     }
     targetMsgs.push(userMsg)
 
-    // #043: user 消息 fire-and-forget 持久化到 server
-    // CLAUDE.md 2026-06-12 "持久化失败必须 best-effort" 铁律 — appendMessageAsync 内部已 try/except
+    // #043: user 消息持久化到 server
+    // 新建本地 session 必须阻塞等待 server 注册完成，避免 append/fetch 抢跑产生 404。
     if (justCreatedLocalSession) {
-      // ★ 2026-07-15 修复: 新建 session 必须先注册 server 再 appendMessage
-      // 用 clientSessionId 让后端 create_session 复用本地 ID (chat_history_service.py:140-149)
-      // 不 await 顶层: 不阻塞流式 chat, 本地消息已立即可见
-      // 串行 IIFE: 避免 appendMessage 抢跑触发 404/timeout
-      void (async () => {
-        await chatHistoryStore.createServerSession({
-          clientSessionId: targetSessionId,
-          firstMessage: content,
-        })
+      const created = await chatHistoryStore.createServerSession({
+        clientSessionId: targetSessionId,
+        firstMessage: content,
+      })
+      if (created) {
         const persisted = await chatHistoryStore.appendMessageAsync(targetSessionId, {
           role: 'user',
           content,
@@ -570,7 +566,7 @@ export function useChatStream() {
           client_msg_id: userMsg.client_msg_id,
         })
         if (persisted?.id) userMsg.server_id = persisted.id
-      })()
+      }
     } else {
       chatHistoryStore.appendMessageAsync(targetSessionId, {
         role: 'user',

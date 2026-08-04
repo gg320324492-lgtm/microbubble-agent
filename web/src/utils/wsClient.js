@@ -23,6 +23,8 @@ class WsClient {
     this.shouldReconnect = true
     this.connected = false
     this.lastPongAt = 0
+    this.lastConnectAt = 0
+    this.successfulConnects = 0
   }
 
   connect(token, options = {}) {
@@ -49,17 +51,18 @@ class WsClient {
 
     this.ws.onopen = () => {
       this.connected = true
-      // ===== W100 +50b 修复: 不在 onopen 立即 reset attempts =====
-      // 历史 bug: connect-立刻-close (e.g. server 端 401/403/auth race) 会反复 trigger
-      //   onopen→onclose, 每次 onopen 都把 reconnectAttempts 重置为 0,
-      //   导致 _scheduleReconnect 永远 attempts=1 / delay=1000ms → 死循环 1s 重连。
-      // 修复: 仅在 lastPongAt 距离上次成功握手 > 30s 时才重置 (稳定连接守恒),
-      //   短期 connect-then-close 不重置 attempts, 让指数退避真正生效。
-      const now = Date.now()
-      if (this.lastPongAt && (now - this.lastPongAt) > 30000) {
+      // ===== W100 +60 修复 lastPongAt falsy 短路 + 稳定连接才 reset attempts =====
+      // 历史 bug (W100 +50b): lastPongAt 是 connect 后**第一次收到 pong** 才更新,
+      //   server 401 立即 close 时 lastPongAt 还是 0 → 条件 `this.lastPongAt && ...`
+      //   因为 0 是 falsy → 短路 false → attempts 永远不重置.
+      // 修复: 累计成功连接次数, 稳定连接 (>=2 次成功) 才 reset attempts.
+      //   单次 connect 立即 close (auth race 等) 不重置, 让指数退避真正生效.
+      this.successfulConnects = (this.successfulConnects || 0) + 1
+      if (this.successfulConnects >= 2) {
         this.reconnectAttempts = 0
       }
-      this.lastPongAt = now
+      this.lastConnectAt = Date.now()
+      this.lastPongAt = Date.now()
       this.emit('open')
     }
 
