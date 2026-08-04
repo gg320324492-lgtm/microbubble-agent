@@ -645,3 +645,10 @@
 3. ✅ PWA build: 沿用 W98 RAG-GC 基线 (本任务 0 frontend 改动)
 4. ✅ 0 production code: 16 batch 实施类 0 老 production 改动 (件 4a 老核心 unchanged 守恒)
 5. ✅ 锚点范式: 4e6816c39..main 实测 45+ 锚点 commits (W98 + W99 + W100 + W101 + W19 累计)
+
+# 14. W100 会议管线 grand closure (2026-08-04)
+
+- **w100-meeting-pipeline-grand-closure** — 5 Batch 全收口 (P0 / 持久化 / 重跑 + 队列 / 巡检 / 测试 + 文档), 44/44 pytest PASS, 8 大证据 + 类 20.133-137 新增 5 条
+- **w100-meeting-inspector-2026-08-04** — meeting_inspector service 5 类异常巡检 (completed_but_minutes_empty 等), Celery beat 每 6h
+- **w100-meeting-reprocessing-2026-08-04** — MeetingReprocessingService 幂等键 + snapshot + transcription force gate
+- **w100-meeting-242-fixture-2026-08-04** — 会议 242 真实分布 fixture (591 段 + 236 EMO + 354s gap) 用于 dry-run 验证
