@@ -975,7 +975,10 @@ class AgenticLoop:
                         logger.warning(f"plan_step tool {tool_name} not found, skip")
                         yield StreamEvent(
                             type="plan_step",
-                            step="phase0_plan",
+                            # W100 +56: ToolNotFound 错误事件也用 placeholder 前缀,
+                            # 前端 PlanSteps template 按 startsWith('__') 隐藏整行
+                            # (老消息恢复自 DB step="phase0_plan" 走 fallback 3 兜底)
+                            step="__plan_summary__",
                             plan_status="running",
                             label=f"⚠️ 工具 {tool_name} 不存在, 跳过",
                         )
