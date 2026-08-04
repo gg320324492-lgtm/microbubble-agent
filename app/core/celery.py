@@ -22,6 +22,15 @@ celery_app.conf.update(
     task_soft_time_limit=540,  # 9 分钟软警告，给任务清理资源的机会
     worker_max_tasks_per_child=1000,  # 定期回收 worker，防止长期内存泄漏
     worker_prefetch_multiplier=1,
+    # 2026-08-04 Batch D-1: 路由表, 让 meeting-processing 走独立队列
+    task_routes={
+        "app.services.post_meeting_process.*": {"queue": "meeting-processing"},
+        "app.services.meeting_reprocessing.*": {"queue": "meeting-processing"},
+        "app.services.qa_bench_tasks.*": {"queue": "meeting-processing"},
+    },
+    task_annotations={
+        "app.services.post_meeting_process.*": {"rate_limit": "6/m"},
+    },
     beat_schedule={
         "check-reminders": {
             "task": "app.services.reminder_service.process_reminders_task",
@@ -138,6 +147,11 @@ celery_app.conf.update(
             "task": "app.services.analytics_tasks.analytics_heartbeat",
             "schedule": 300.0,
         },
+        # 2026-08-04 Batch D-4: 会议健康巡检
+        "meeting-inspector-daily": {
+            "task": "app.services.meeting_inspector.scan_meeting_health",
+            "schedule": 6 * 3600.0,
+        },
     },
 )
 
@@ -170,6 +184,7 @@ celery_app.conf.imports = [
     "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
     "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册 Celery beat
     "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
+    "app.services.meeting_inspector",  # Batch D-4: 会议健康巡检
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -194,6 +209,7 @@ celery_app.autodiscover_tasks(
         "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
         "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册
         "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
+        "app.services.meeting_inspector",  # Batch D-4: 会议健康巡检
         "app.wechat.scheduler",
     ],
     related_name=None,

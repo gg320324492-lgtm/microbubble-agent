@@ -278,6 +278,33 @@ services:
     mem_limit: 4g
     restart: unless-stopped
 
+  # 2026-08-04 Batch D-1: 会议处理独立 worker, 只消费 meeting-processing 队列
+  # 避免 35min 会议后处理阻塞默认 worker 184s (会议 242 实测).
+  celery-meeting-worker:
+    build: .
+    command: >
+      celery -A app.core.celery worker
+        --loglevel=info --pool=solo
+        -Q meeting-processing
+        --concurrency=1
+        -n meeting-worker@%h
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models/hf_cache:/root/.cache/huggingface
+      - ./models/torch_hub:/root/.cache/torch/hub
+      - ./models/modelscope:/root/.cache/modelscope
+      - ./alembic/versions:/app/alembic/versions
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 4g
+    restart: unless-stopped
+
   # Celery Beat (定时任务)
   celery-beat:
     build: .
