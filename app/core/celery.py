@@ -152,6 +152,18 @@ celery_app.conf.update(
             "task": "app.services.meeting_inspector.scan_meeting_health",
             "schedule": 6 * 3600.0,
         },
+        # W100 +73: RAG auto-ingest pending files (knowledge.analysis_status='pending')
+        # 每 1 小时扫描, 与 knowledge_polling_service 错开 (polling 是 analysis 流水线,
+        # 本 task 显式走 ingestion 状态机 pending → ingesting → done | failed)
+        "rag-auto-ingest-hourly": {
+            "task": "app.services.rag_auto_ingest_service.auto_ingest_pending_files_task",
+            "schedule": 3600.0,  # 每 1 小时
+        },
+        # W100 +74: 每日 03:00 聚合负面反馈 → knowledge_quarantine (Knowledge.meta JSONB)
+        "rag-feedback-aggregate-daily": {
+            "task": "app.services.rag_feedback_iteration_service.aggregate_feedback_daily_task",
+            "schedule": 24 * 3600.0,  # 每天一次
+        },
     },
 )
 
@@ -185,8 +197,10 @@ celery_app.conf.imports = [
     "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册 Celery beat
     "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
     "app.services.meeting_inspector",  # Batch D-4: 会议健康巡检
+    "app.services.rag_auto_ingest_service",  # W100 +73: RAG 自动 ingestion 流水线
+    "app.services.rag_feedback_iteration_service",  # W100 +74: 负面反馈聚合 quarantine
     "app.wechat.scheduler",
-]
+]  # fmt: skip
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
 celery_app.autodiscover_tasks(
     [
@@ -210,6 +224,8 @@ celery_app.autodiscover_tasks(
         "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册
         "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
         "app.services.meeting_inspector",  # Batch D-4: 会议健康巡检
+        "app.services.rag_auto_ingest_service",  # W100 +73: RAG 自动 ingestion
+        "app.services.rag_feedback_iteration_service",  # W100 +74: 反馈聚合 quarantine
         "app.wechat.scheduler",
     ],
     related_name=None,
