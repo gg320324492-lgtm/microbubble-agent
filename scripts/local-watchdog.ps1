@@ -14,15 +14,21 @@ $LogDir = Join-Path $ProjectRoot "logs\watchdog"
 $LogFile = Join-Path $LogDir ("watchdog-{0}.log" -f (Get-Date -Format 'yyyyMMdd'))
 $StateFile = Join-Path $LogDir "last-state.json"
 
-# Expected services (7 Docker services)
+# Expected services (W100 +N updated: 13 containers)
 $ExpectedServices = @(
     "microbubble-agent-app-1",
     "microbubble-agent-db-1",
     "microbubble-agent-redis-1",
     "microbubble-agent-minio-1",
-    "microbubble-agent-whisper-1",
     "microbubble-agent-celery-worker-1",
-    "microbubble-agent-celery-beat-1"
+    "microbubble-agent-celery-beat-1",
+    "microbubble-agent-celery-meeting-worker-1",
+    "microbubble-agent-neo4j-1",
+    "microbubble-agent-ollama-1",
+    "microbubble-agent-sensevoice-1",
+    "microbubble-agent-vision-mcp-1",
+    "microbubble-agent-pg-exporter-dev-1",
+    "microbubble-agent-langfuse-1"
 )
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
