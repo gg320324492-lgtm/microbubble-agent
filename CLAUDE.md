@@ -8,6 +8,37 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-08-04 服务器+本地电脑双关机恢复 W100 +N — 类 20.138/139/140/141/142 新增, 锚点范式 W100 +N 据实累计, 0 production code 守恒)
+
+**服务器 502 + 本地 app 无法启动 5 层根因修复 (类 20.138-142)**:
+
+1. **类 20.138 (新增, 永久铁律)**: Docker Desktop for Windows **端口转发 endpoint metadata 缓存**只能在 **GUI 完全 Quit + 重新启动** 时清掉. 以下操作**全部不修复**:
+   - `Restart-Service com.docker.service` (WSL2 backend 不依赖该 service, Stop-Service 报"无法打开服务控制管理器数据库")
+   - `Start-Process Docker Desktop.exe` (启动进程但 com.docker.service 仍 Stopped, 端口转发 iptables 没注册)
+   - `netsh winsock reset` / `netsh int ip reset` (WSL2 backend 不走 Windows 网络栈)
+   - 重启 Windows (用户报告已试, 无效)
+   - **唯一修复路径**: 任务栏 Docker 图标 → 右键 → Quit Docker Desktop → 等待 5-10s → 重新启动 Docker Desktop.
+
+2. **类 20.139 (新增, 永久铁律)**: 服务器 nginx `proxy_pass http://127.0.0.1:8000` 是 **FRP 隧道另一头指向本地电脑** app:8000, 服务器**不跑**应用容器 (与 deploy-cloud.sh 第 7-8 行注释一致). 服务器 502 = 本地电脑 app 没起, 排查入口永远是**本地**, 不是服务器.
+
+3. **类 20.140 (新增, 永久铁律)**: Docker Desktop 重启后 `docker compose up -d` 起的容器**有时**漏 attach 到 default network. 表现: `getent hosts <other-container>` 返回空, `/dev/tcp/<ip>/<port>` 报 "Network is unreachable". 修复: `docker network connect --alias <name> <network> <container>`. 预防: up 后**必须**跑 `docker network inspect` 验证 app 在列表.
+
+4. **类 20.141 (新增, 永久铁律)**: pgvector extension 装在 PostgreSQL 镜像系统层 (`/usr/local/share/postgresql/extension/`), bind mount `./data/postgres` **不持久化**. db 容器重建后扩展丢失, app 启动时 `CREATE EXTENSION vector` 报 `type "vector" does not exist`. 修复需手工重装 (apk add postgresql16-dev gcc git make musl-dev + git clone pgvector v0.7.0 + make + make install + su postgres pg_ctl restart + CREATE EXTENSION). **预防**: app/Dockerfile 改用 `pgvector/pgvector:pg16-alpine` 镜像 (内置), 或本地 db image build 后 `docker commit` 持久化扩展.
+
+5. **类 20.142 (新增, 永久铁律, 本事故最隐蔽根因)**: `microbubble-agent-app:latest` 镜像 build 时间**早于**当前 commit, 容器内 `alembic/versions/` 看不到新增 migration (092-097). 表现: `alembic heads` 只显示老 head 091 但代码 HEAD 是 097, DB 表数 50 (期望 64+). 修复 5 步: `docker cp` 拷新 migration + `rm -rf __pycache__` + `alembic stamp <current_db_state>` (DB 已实际有 50 张表但 alembic_version 表为空) + `ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)` (旧列 32 字符装不下 `097_meeting_processing_persistence` 35 字符) + `alembic upgrade head` + `docker commit` 持久化新镜像. **预防**: bind mount `./alembic` 到容器 (类似 `./app`), 或主拍合并后强制 `docker build` 重建镜像, 或运行 `bash scripts/auto-deploy.sh` (含 `docker cp + __pycache__ clear + docker restart` 流程).
+
+**worktree 下 compose 启动额外步骤**: `cp <repo-root>/.env <worktree>/.env` (worktree 路径下 .env 缺失, docker compose 启动会报 `env file ... not found`).
+
+**一键恢复脚本**: `scripts/restart-recovery-after-gui-restart.sh` (用户 Docker GUI 重启后执行, 自动 attach network + 验证 7 个端点 + 5 件套守恒).
+
+**5 件套守恒实测**: alembic head `097_meeting_processing_persistence` 与代码 HEAD `2e12f0dcf` 守恒 / PostgreSQL 16.14 + pgvector 0.7.0 + 53 张表 / Celery worker + beat + meeting-worker 全部 ping pong OK / 本地 `/health` 200 / 服务器 7 个 API 502 → 401 (不再 502).
+
+**沉淀**: `memory/w100-meeting-pipeline-restart-2026-08-04.md` (事故 + 5 铁律) + `docs/w100-meeting-pipeline-restart-2026-08-04.md` (runbook 7 步 + 5 铁律 + 不要做清单). 详见 `MEMORY.md` #14.
+
+**0 production code 守恒**: 仅 `CLAUDE.md` + `docs/` + `scripts/` 范畴, 未改 `app/` `web/src/` `alembic/versions/` `docker-compose.yml`. 锚点范式 W100 +28/+29/+30 (~537) 据实累计, 不擅自扩.
+
+---
+
 ## 当前状态 (2026-08-04 W100 +34..+38 meeting pipeline grand closure 收口)
 
 会议管线 P0/持久化/重跑/队列/巡检 5 Batch 全收口, 持续治理 W2 阶段沉淀:
