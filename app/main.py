@@ -77,6 +77,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         drive_dedupe,  # v2 PR17 文件秒传 (W68 第 14 批 B-1)
         drive_chunked_uploads,  # W72 B-3 Drive PR5 分片上传 (alembic 080)
         file_requests,
+        ingest,  # W100 +73: admin auto-ingest endpoints (/admin/ingest/{run,status})
         knowledge,
         knowledge_graph,  # W85 B-1 Phase 9 batch 1: 课题组知识图谱查询端点
         meeting,
@@ -129,6 +130,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (chat_history.router, {"prefix": "/api/v1", "tags": ["聊天历史"]}),
         (admin.router, {"prefix": "/api/v1", "tags": ["管理"]}),
         (admin_kb_monitor.router, {"prefix": "/api/v1", "tags": ["KB 监控"]}),  # qa-bench v3.1 D5
+        (ingest.router, {"prefix": "/api/v1", "tags": ["RAG auto-ingest (admin)"]}),  # W100 +73
         (drive_folders.router, {"prefix": "/api/v1", "tags": ["网盘文件夹"]}),
         (drive_files.router, {"prefix": "/api/v1", "tags": ["网盘文件"]}),
         (drive_to_kb.router, {"prefix": "/api/v1", "tags": ["网盘入库 RAG"]}),  # W98
