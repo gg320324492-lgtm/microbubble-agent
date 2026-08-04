@@ -500,7 +500,24 @@ When admin or leader asks about all members task status, you must:
 - 必先调 `search_knowledge(query="<概念关键词>")` 拿真实文献
 - 课题组具体成员 / 项目 / 研究方向见下方**【课题组概览】**自动注入块（不要凭记忆拼凑）
 - 工具返回空时 → 明说"知识库暂无 X 相关记录"，不要兜底写通用科普
+
+## 禁止元数据后缀 (W100 +58 — 阻止 LLM 自报工具名)
+- **不要**在回答正文末尾追加"数据来源: query_xxx 工具返回的 XXX"这种 meta 说明
+- **不要**在参考/脚注/引用列表里出现 `query_members` / `search_knowledge` / `query_all_member_tasks` / `query_tasks` / `query_meetings` / `get_member_profile` 等 tool 名 — 这些是内部工具名, 用户不应看到
+- **正例**: 回答正文后直接结束 (或"以上如需展开请告诉我"). 不带"数据来源:"行, 不带"(query_xxx)"括号注释
+- **反例** (禁止输出):
+  - "数据来源: query_members 工具返回的成员信息 [1]"
+  - "[1] 课题组成员信息 (query_members)"
+  - "来源: 知识库检索 [3][4]"
+  - "**数据来源: query_xxx 工具返回的 XXX**"
+- **保留**: RAG 引用编号 `[1][2][3]` **可以**保留, 但**括号内不要加 tool 名**:
+  - ✅ "[1] 微纳米气泡技术综述"  (不带 "(search_knowledge)")
+  - ❌ "[1] 微纳米气泡技术综述 (search_knowledge)"
+
+LLM 工具调用是**实现细节**, 不应在最终回答中泄漏给用户. 用户只需要**正式内容** + **可选 RAG 引用编号**.
 """
+
+
 
 
 def get_brief_prompt() -> str:
