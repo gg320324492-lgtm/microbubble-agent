@@ -238,6 +238,23 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"内置公式库初始化失败（可忽略）: {e}")
 
+        # W2 +N 2026-08-04: 默认成员 seed (修复 0 用户事故)
+        # 按 username 幂等, 既存用户不动, 不会阻塞启动
+        try:
+            from app.core.database import async_session
+            from app.seed.member_seeder import seed_default_members
+            async with async_session() as db:
+                seed_result = await seed_default_members(db)
+                if seed_result["added"] > 0:
+                    print(
+                        f"默认成员 seed: +{seed_result['added']} / "
+                        f"跳过 {seed_result['skipped']} / 总数 {seed_result['total']}"
+                    )
+                else:
+                    print(f"默认成员已存在 (跳过 {seed_result['skipped']})")
+        except Exception as e:
+            print(f"默认成员 seed 失败（不影响启动）: {e}")
+
         # 启动时同步待发送提醒到 Redis（实现秒级精确提醒）
         try:
             from app.core.database import async_session

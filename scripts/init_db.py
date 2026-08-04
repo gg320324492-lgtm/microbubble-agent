@@ -30,21 +30,37 @@ async def init_database():
 
 
 async def seed_data():
-    """插入初始数据"""
+    """插入初始数据
+
+    W2 +N 2026-08-04 修复: 原 `if count > 0: return` 永跳 bug
+    - 改为检测关键 admin 'wangtianzhi' 是否存在
+    - 若有数据但缺关键 admin, 强制 seed (自愈路径, 修复 0 用户事故)
+    - 调用 app/seed/member_seeder.py 的 seed_default_members (按 username 幂等)
+    """
     async with async_session() as session:
         # 检查是否已有数据
         from sqlalchemy import select, func
-        result = await session.execute(select(func.count(Member.id)))
-        count = result.scalar()
+        count_result = await session.execute(select(func.count(Member.id)))
+        count = count_result.scalar() or 0
 
         if count > 0:
-            print("数据库已有数据，跳过初始数据插入")
-            return
+            # 检查关键 admin 'wangtianzhi' 是否存在 (W2 +N 修复)
+            admin_exists = await session.scalar(
+                select(Member).where(Member.username == "wangtianzhi")
+            )
+            if admin_exists is not None:
+                print(f"数据库已有 {count} 条数据且关键 admin 'wangtianzhi' 存在, 跳过初始数据插入")
+                return
+            print(f"数据库已有 {count} 条数据但关键 admin 'wangtianzhi' 缺失, 强制 seed (W2 +N 自愈)")
 
-        print("插入课题组成员数据...")
+        # 走 app/seed/member_seeder.py (按 username 幂等, 含 wechat_id/voice/drive NULL 防护)
+        from app.seed.member_seeder import seed_default_members
+        result = await seed_default_members(session)
+        print(f"默认成员 seed 完成: +{result['added']} / 跳过 {result['skipped']} / 总数 {result['total']}")
 
         # 默认密码（所有用户初始密码为 123456）
-        default_password_hash = get_password_hash("123456")
+        # W2 +N 2026-08-04: seed_default_members 自己处理 password_hash
+        default_password_hash = get_password_hash("123456")  # noqa: F841 (保留兼容, 不再使用)
 
         # ==================== 成员数据 ====================
         # 数据来源：Micro-Nano-Bubble-Technology-Lab 项目
