@@ -182,6 +182,85 @@ docker commit --change 'CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--
 - ❌ 不要重启 Docker service — WSL2 backend 不依赖 com.docker.service, 操作无效
 - ❌ 不要 `netsh winsock reset` / `netsh int ip reset` — WSL2 backend 不走 Windows 网络栈
 
+## §8 完全自愈 (W2 +N, 类 20.143)
+
+**目的**: 电脑开机 → 用户登录 → 自动恢复服务, 全程**无需人工干预**.
+
+### 触发链路
+
+```
+电脑开机 → Windows 启动 → Docker Desktop 自动启动 (WSL2 backend)
+↓
+用户登录桌面 (Winlogon EventID=7002)
+↓
+schtasks DELAY 2 分钟 (给 Docker daemon + WSL2 init 充分时间)
+↓
+schtasks 触发 scripts/auto-recovery-eventlog.ps1
+↓
+智能等 docker info (5 分钟 timeout)
+↓
+跑 scripts/restart-recovery-after-gui-restart.sh (7 步)
+↓
+如果端口冲突 → 自动 Quit + Start Docker Desktop GUI (类 20.138 自愈)
+↓
+TTS 反馈 "MicroBubble fully restored" 或 "recovery failed"
+↓
+写 logs/auto-recovery/auto-recovery-YYYYMMDD.log JSON 日志
+```
+
+### 安装步骤 (一次)
+
+```powershell
+# 管理员 PowerShell
+E:\microbubble-agent\scripts\install-auto-recovery.bat
+```
+
+或手动:
+
+```bat
+schtasks /Create /TN "MicroBubble-Auto-Recovery" ^
+  /TR "\"E:\microbubble-agent\scripts\auto-recovery-eventlog.ps1\"" ^
+  /SC ONEVENT ^
+  /EC Application ^
+  /MO "*[System[Provider[@Name='Microsoft-Windows-Winlogon']] and EventID=7002]" ^
+  /DELAY 0002:00 ^
+  /RL HIGHEST ^
+  /F
+```
+
+### 验证任务注册
+
+```bat
+schtasks /Query /TN "MicroBubble-Auto-Recovery" /V /FO LIST
+```
+
+### 手动触发 (测试用)
+
+```bat
+schtasks /Run /TN "MicroBubble-Auto-Recovery"
+```
+
+### 查看日志
+
+```powershell
+Get-Content E:\microbubble-agent\logs\auto-recovery\auto-recovery-20260804.log
+```
+
+### 卸载
+
+```bat
+schtasks /Delete /TN "MicroBubble-Auto-Recovery" /F
+```
+
+### 触发器选择理由 (类 20.143)
+
+**实测探索 (2026-08-04)**:
+- ❌ Application log **没有** "Docker Desktop" provider (Docker Desktop 通过 WSL2 backend 运行, 不写 EventLog)
+- ❌ System log 只有 Service Control Manager 7045 (一次性 service 安装, 不触发)
+- ✅ 唯一可靠: **Winlogon EventID=7002** (用户登录 session 创建) + DELAY 2 分钟
+
+锁屏唤醒**不**触发 (语义正确, 不需要恢复)
+
 ## 关联文档
 
 - `memory/w100-meeting-pipeline-restart-2026-08-04.md` (本事故 memory)

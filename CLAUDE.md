@@ -27,6 +27,8 @@
 
 5. **类 20.142 (新增, 永久铁律, 本事故最隐蔽根因)**: `microbubble-agent-app:latest` 镜像 build 时间**早于**当前 commit, 容器内 `alembic/versions/` 看不到新增 migration (092-097). 表现: `alembic heads` 只显示老 head 091 但代码 HEAD 是 097, DB 表数 50 (期望 64+). 修复 5 步: `docker cp` 拷新 migration + `rm -rf __pycache__` + `alembic stamp <current_db_state>` (DB 已实际有 50 张表但 alembic_version 表为空) + `ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)` (旧列 32 字符装不下 `097_meeting_processing_persistence` 35 字符) + `alembic upgrade head` + `docker commit` 持久化新镜像. **预防**: bind mount `./alembic` 到容器 (类似 `./app`), 或主拍合并后强制 `docker build` 重建镜像, 或运行 `bash scripts/auto-deploy.sh` (含 `docker cp + __pycache__ clear + docker restart` 流程).
 
+6. **类 20.143 (新增, 永久铁律, W2 +N 完全自愈)**: 电脑重启后**完全无需人工**恢复, 通过 `schtasks` 监听 `Microsoft-Windows-Winlogon EventID=7002` (用户登录 session 创建) + DELAY 2 分钟, 触发 `scripts/auto-recovery-eventlog.ps1`. 触发链: 智能等 docker daemon (5 min timeout) → 跑 `bash scripts/restart-recovery-after-gui-restart.sh` → 检测端口冲突 → 自动 Quit+Start Docker Desktop GUI (类 20.138 自愈, **最多 1 次**避免循环) → TTS 反馈 + JSON 日志. **Docker Desktop 通过 WSL2 backend 运行, 不写 EventLog** (2026-08-04 实测确认), 因此不能用 Docker Desktop 启动事件触发, 必须用 Winlogon EventID=7002. 安装: 管理员 PowerShell 跑 `E:\microbubble-agent\scripts\install-auto-recovery.bat` (一次性). 卸载: `schtasks /Delete /TN "MicroBubble-Auto-Recovery" /F`.
+
 **worktree 下 compose 启动额外步骤**: `cp <repo-root>/.env <worktree>/.env` (worktree 路径下 .env 缺失, docker compose 启动会报 `env file ... not found`).
 
 **一键恢复脚本**: `scripts/restart-recovery-after-gui-restart.sh` (用户 Docker GUI 重启后执行, 自动 attach network + 验证 7 个端点 + 5 件套守恒).
