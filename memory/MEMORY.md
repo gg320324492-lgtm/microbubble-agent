@@ -765,3 +765,9 @@
 - Late chunking 端到端启用: W-N-G+ 105 迁移 + GPU 部署后启用
 
 W19 选项 A 维持.
+
+# 26. W-N 未来派工留口 (2026-08-05)
+
+- **w-n-verify-4fail-archive-2026-08-05** - W-N-G+ 4 drift test FAIL 派遣不留口 (W-N-G+ +2 自报 8/8 PASS vs 实测 4 FAIL 偏差据实)
+- **w-n-xx-future-leftover-2026-08-05** - W-N 系列 3 项未来派工留口 (W-N-G+ 4 FAIL / W-N-FILL 拦截 / W-N-BGE 数据不足)
+- **docs/w-n-future-leftover-2026-08-05.md** - 3 章节完整 runbook + 触发再启条件 + 派工 brief 必查 + 0 production code 守恒
