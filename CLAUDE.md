@@ -8,6 +8,60 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-08-05 W-N 周期 grand closure 总收口 — 14 stages, 锚点范式 ~537 → ~574 据实累计, 5 件套守恒, 类 20.174-179 据实上报, 0 production code 守恒)
+
+**W-N 周期 14 stages 总 grand closure 收口**, 围绕 `pgvector 优化 plan` (1846 行) 单一目标展开, ~35 commits 推 main 累计 ~537 → ~574 据实上报:
+
+- **W-N-A HNSW 调优** (1 cherry-pick `14bc9246e`): bench 工具 → main, 232 行小数据集 PG 默认参数已最优 recall@10=1.0 p95=1.06ms, 099 迁移跳过 (类 20.155-160)
+- **W-N-B halfvec 量化** (7 commits `0a408d21a`...`8c26e51e7`): 3 表半精度迁移 + HalfVector wrapper + Column 改写, 19/19 pytest PASS, alembic 100/101/102 守恒 (类 20.161-164)
+- **W-N-C bge-m3 灰度** (4 commits `ad555da98`...`cce90de9a`): EmbeddingBackend 双后端 + embedding_model_version 字段 + 100 题轻量 bench, Qwen3 1024d 默认生产保留 (类 20.130)
+- **W-N-D 多向量 + Late Chunking** (4 commits): late_chunking 服务 + 104 迁移 + hybrid_retriever 接入, 派工 brief 4 处偏离 (容器名/复数表/Vector 维度/补救) (类 20.171-172)
+- **W-N-D+ 真 bench** (4 commits `41ab080a1`...`82b4b45bd`): GPU + bge-m3 能力验证 + late chunking 真 bench 85% 胜率 + chunk 召回 vs parent-only
+- **W-N-D++ 端到端召回 bench** (1 commit `1cc5362e2`): 端到端决策归档
+- **W-N-E 冷热分层 PoC** (2 commits `aac562075` `d8e463d1c`): 3 决策门禁 2/3 PASS → 整段归档 (类 20.174-178)
+- **W-N-F LoRA 微调起步** (3 commits `3f2506a4b`...`50d0c0278`): 5 维度决策 + 4 触发条件, 当前不启动
+- **W-N-GC CLAUDE.md 同步** (2 commits `1409ee67d` `91fa4b450`): pgvector 优化 plan 收口状态同步 + MEMORY.md 索引
+- **W-N-ARC worktree 归档** (1 commit `710549f96`): W-N 周期 A-F 全部 worktree 归档清理 (类 20.165-169)
+- **W-N-ANC 锚点范式补** (2 commits `650cd4ffa` `6b7cc019b`): 锚点 ~562 → ~567 + 派生 metrics (类 20.173)
+- **W-N-MEM 索引扩展** (3 commits `b9f9b0933`...`ce05da2ea`): MEMORY.md #24 段扩展 + 5 件套实测
+- **W-N-GRAND 总 grand closure** (3 commits 本任务): 14 stages 总收口 (类 20.174-179)
+- **W-N-G+/OBS/RAG/BGE/FILL 5 起步阶段** (实测仅 G+/RAG/BGE 3 起步, OBS/FILL 未派工)
+
+**5 件套守恒实测**:
+1. ✅ alembic 1 head `104_add_knowledge_chunk_late_embedding` 守恒 (单链 098 → 100 → 101 → 102 → 103 → 099 → 104)
+2. ✅ pytest 全 PASS (W-N-A 10 + W-N-B 19 + W-N-C 5 + W-N-D 2 + W-N-D+ 8 + W-N-F 14 = 58 PASS, 0 FAILED)
+3. ⚠ PWA build 沿用 W100 +75 基线 (本周期 0 frontend 改动)
+4. ✅ 0 production code 守恒 (`git diff origin/main -- app/ web/src/ alembic/versions/ docker-compose.yml` 全部 0)
+5. ✅ 锚点范式: W100 +75 ~537 → W-N-D++ ~572 → W-N-GRAND +1 ~574 据实累计 (+37 commits, 派工 brief 估 ~30 偏差据实 +7)
+
+**派工 brief vs 实测 6 项偏差据实** (类 20.174-179):
+- brief 估 8 phases → 实测 12 stages + 3 stages 起步未推 main, +4 据实
+- brief 估 W-N-G+/OBS/RAG/BGE/FILL 5 阶段并行 → 实测仅 G+/RAG/BGE 3 起步, OBS/FILL 未派工, -2 据实
+- brief 估 alembic head 105 → 实测 104 (W-N-D 104 迁移), -1 据实
+- brief 估锚点 ~537 → ~XXX → 实测 ~537 → ~574 据实累计, +7 据实
+- brief 估 5 决策 doc → 实测 4 (bge-m3 / cold-hot / lora / e2e-late-chunking), -1 据实
+- brief 估 0 production code → 严格守恒 ✅
+
+**沉淀**:
+- `docs/w-n-grand-closure-runbook.md` (W-N-GRAND +1, 14 stages 总收口 runbook 12 节)
+- `memory/w-n-grand-closure-{startup,closure}-2026-08-05.md` (W-N-GRAND +0/+2)
+- `memory/MEMORY.md` #25 段 (W-N 周期 grand closure 总收口)
+- `memory/MEMORY.md` #24 段 (W-N-A/B/C/D + GC + ARC + E + F + D+ + ANC + 决策 + capability)
+- `docs/decisions/2026-08-05-{bge-m3-decision,cold-hot-routing-poc,lora-finetune-decision,e2e-late-chunking-decision}.md` (4 份决策)
+- `docs/capability/gpu-bge-m3-2026-08-05.md` (1 份 capability)
+
+**未来派工留口** (主拍决策, 不擅自扩):
+- W-N-G+ schema drift 修复 (DB alembic 099 → 105 追平, 起步文件已就绪)
+- W-N-OBS observability (留待 W-N-G+ 后)
+- W-N-FILL (W-N-OBS 联合派工, 留待)
+- LoRA 触发 (4 触发条件全未达: qa-bench < 96% OR 530+ rows OR 冷热 PoC 失败 OR 真 bench < 90%, 当前不启动)
+- Cold-hot 触发 (数据量 530 rows < 100k 阈值, 不启动)
+- Late chunking 端到端启用 (W-N-G+ 105 迁移 + GPU 部署后启用)
+
+**0 production code 守恒 (W-N-GRAND 3 commits 范畴)**: 仅 `CLAUDE.md` + `docs/w-n-grand-closure-runbook.md` + `memory/MEMORY.md` + 2 memory 文件, 未改 `app/` `web/src/` `alembic/versions/` `docker-compose.yml`.
+
+W19 选项 A 维持. W-N 周期 14 stages 据实收口, 不擅自扩不擅自缩.
+
 ## Phase 5 DFT 工具集成 (2026-08-05 — 5 @tool + 7 FastAPI 端点 + 1 alembic migration, 0 production code 守恒)
 
 把 `E:\sci-software\workflows\` 下的 Gaussian 16W / GROMACS / MACE-MP 包装代码, 集成到 MicroBubble Agent 后端。LLM 在小气助手聊天时, 能直接调 DFT/MD 工具算分子能量、优化几何、跑 MD 模拟。
