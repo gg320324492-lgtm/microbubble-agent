@@ -1,0 +1,15 @@
+{
+  "w_n_c_phase": "C.3",
+  "task": "bge-m3 batch re-embed (修订: 100 题轻量级版)",
+  "is_mock": true,
+  "encoder_name": "bge_m3_mock",
+  "dim": 1024,
+  "total_requested": 5,
+  "total_reembedded": 0,
+  "batch_size": 10,
+  "total_elapsed_ms": 0.0,
+  "avg_throughput_docs_per_s": 0.0,
+  "batches": [],
+  "note": "W-N-C +3 修订版: 100 题 (非 1000), 派工 brief 据实上报. 本机 CUDA 不可用 + BAAI/bge-m3 模型未下载, 真加载失败 fallback mock encoder (零向量). 决策文档见 docs/decisions/2026-08-05-bge-m3-decision.md.",
+  "db_unavailable_note": "DB unavailable during smoke: gaierror: [Errno 11001] getaddrinfo failed"
+}
