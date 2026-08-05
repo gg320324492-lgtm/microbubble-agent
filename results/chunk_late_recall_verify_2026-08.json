@@ -1,0 +1,28 @@
+{
+  "knowledge_id": 1,
+  "query": "微纳米气泡 表面张力",
+  "timestamp": "2026-08-05T13:55:14.866092+00:00",
+  "routes_check": {
+    "retrieve": "OK",
+    "chunk_late": "OK"
+  },
+  "late_chunking_check": {
+    "embedding_ok": true,
+    "embedding_ms": 0,
+    "results_count": 0,
+    "elapsed_ms": 1,
+    "first_result": null,
+    "path_works": true,
+    "note": "no chunk_embedding data yet (empty result is expected)"
+  },
+  "schema_check": {
+    "knowledge.embedding_model_version": true,
+    "meetings.embedding_model_version": true,
+    "knowledge_chunks.chunk_embedding": true
+  },
+  "results": {
+    "retrieve_count": 5,
+    "retrieve_elapsed_ms": 91197,
+    "retrieve_first_method": "bm25"
+  }
+}
