@@ -90,6 +90,9 @@ services:
     restart: unless-stopped
 
   # 2026-07-29 W87-B-1: GlitchTip all-in-one; host port 8001 avoids production 8000.
+  # 2026-08-05 W-N-GLITCH-IMPL +1: 加 aliases [db, redis] 让 glitchtip 容器在 default network
+  #   漏 attach 时仍能通过 service_name 解析主机名 (类 20.140 沉淀补强).
+  #   up 后必须 docker network inspect 验证 attach 成功 (W-N-GLITCH +1 沉淀).
   glitchtip:
     image: glitchtip/glitchtip:6.2.2
     container_name: microbubble-agent-glitchtip-dev-1
@@ -109,7 +112,10 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - default
+      default:
+        aliases:
+          - db
+          - redis
     restart: unless-stopped
 
   # 2026-07-29 W86-F-1: pg_exporter — PostgreSQL Prometheus 暴露
