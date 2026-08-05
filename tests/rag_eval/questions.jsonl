@@ -1,0 +1,5 @@
+{"qid": "rag-001", "question": "微纳米气泡的 zeta 电位如何测量？", "relevant_knowledge_ids": [], "key_facts": ["电泳光散射法", "Smoluchowski 公式"]}
+{"qid": "rag-002", "question": "微纳米气泡在水处理中的主要应用有哪些？", "relevant_knowledge_ids": [], "key_facts": ["气浮", "高级氧化", "消毒"]}
+{"qid": "rag-003", "question": "微纳米气泡发生器常见类型有哪些？", "relevant_knowledge_ids": [], "key_facts": ["加压溶气气浮", "微孔释放", "旋流剪切"]}
+{"qid": "rag-004", "question": "微纳米气泡与传统气泡的关键区别是什么？", "relevant_knowledge_ids": [], "key_facts": ["停留时间长", "比表面积大", "传质效率高"]}
+{"qid": "rag-005", "question": "微纳米气泡稳定性受哪些因素影响？", "relevant_knowledge_ids": [], "key_facts": ["zeta 电位", "气泡尺寸分布", "溶液 pH"]}
