@@ -22,6 +22,8 @@
   flex-direction: column;
   gap: var(--space-4);
   height: 100%;
+  min-height: 0;  /* W2 +N 2026-08-05: 滚轮修复 — flex column 容器 min-height: 0 防止子项撑大容器 */
+  max-height: 100%;
   overflow: hidden;
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
