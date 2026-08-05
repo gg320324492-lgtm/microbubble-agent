@@ -80,12 +80,13 @@ async def run_backfill(
         dict 形式 LateEmbeddingBackfillResult
     """
     # 延迟 import 避免 CLI 启动时 sqlalchemy 失败
-    from app.core.database import AsyncSessionLocal
+    # W-N-FILL-REAL +1 修: AsyncSessionLocal 不存在 (PEP 562 proxy 只有 async_session)
+    from app.core.database import async_session
     from app.services.late_embedding_backfill import LateEmbeddingBackfillService
 
     tokenizer, forward = _build_mock_model()
 
-    async with AsyncSessionLocal() as db:
+    async with async_session() as db:
         svc = LateEmbeddingBackfillService(
             db,
             model_tokenizer=tokenizer,
