@@ -60,6 +60,13 @@ class Knowledge(Base, TimestampMixin):
     # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
     embedding = Column(HalfVector(1024), nullable=True)  # W-N-B 阶段 B.5: float32 -> float16
 
+    # W-N-C 阶段 C.2: embedding 后端版本标记 (qwen3-0.6b | bge-m3 灰度)
+    # nullable=False + server_default="qwen3-0.6b" 兼容历史全部行
+    # 灰度切换时: WHERE embedding_model_version = 'qwen3-0.6b' 选行重 embed
+    embedding_model_version = Column(
+        String(32), nullable=False, server_default="qwen3-0.6b", index=True
+    )
+
     # 创建者
     created_by = Column(Integer, ForeignKey("members.id"))
 
