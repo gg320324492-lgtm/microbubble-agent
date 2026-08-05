@@ -41,6 +41,7 @@
 
 .meeting-list-card {
   flex: 1;
+  min-height: 0;  /* W2 +N 2026-08-05: 滚轮修复 — flex 子项默认 min-height: auto 会撑满内容, 必须显式 min-height: 0 让 flex:1 生效 */
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -51,13 +52,14 @@
 
 .meeting-list-card .el-card__body {
   flex: 1;
+  min-height: 0;  /* W2 +N 2026-08-05: 滚轮修复 — flex 子项 min-height: 0 三层传递 (card -> body -> list) */
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
 .meeting-list {
-  min-height: 0;
+  min-height: 0;  /* W2 +N 2026-08-05: 滚轮修复 — flex 子项必须 min-height: 0 才能让 overflow-y: auto 触发滚动 */
   max-height: 100%;
   flex: 1;
   overflow-y: auto;
