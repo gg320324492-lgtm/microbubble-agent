@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, ARRAY, Boolean, Float, BigInteger
 from sqlalchemy.orm import relationship
-from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
+from app.models.types import HalfVector  # W-N-B 阶段 B.5: halfvec 量化
 
 
 class Meeting(Base, TimestampMixin):
@@ -70,7 +70,7 @@ class Meeting(Base, TimestampMixin):
     # Wave 3a: 跨会议关联
     agenda = Column(JSON, nullable=True)
     # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
-    embedding = Column(Vector(1024), nullable=True)
+    embedding = Column(HalfVector(1024), nullable=True)  # W-N-B 阶段 B.5: float32 -> float16
     related_meeting_ids = Column(JSON, nullable=True)
 
     # 汇报人员（可多选，存为 JSON 数组）

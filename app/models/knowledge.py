@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
-from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
+from app.models.types import HalfVector  # W-N-B 阶段 B.5: halfvec 量化 (Vector -> HalfVector)
 
 
 class Knowledge(Base, TimestampMixin):
@@ -58,7 +58,7 @@ class Knowledge(Base, TimestampMixin):
     # ==================== /Agent 7 5th-wave 索引 ====================
 
     # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
-    embedding = Column(Vector(1024), nullable=True)
+    embedding = Column(HalfVector(1024), nullable=True)  # W-N-B 阶段 B.5: float32 -> float16
 
     # 创建者
     created_by = Column(Integer, ForeignKey("members.id"))

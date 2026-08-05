@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Text, ARRAY, DateTime, JSON
 from sqlalchemy.orm import relationship
-from pgvector.sqlalchemy import Vector
 from app.core.database import Base
 from app.models.base import TimestampMixin
+from app.models.types import HalfVector  # W-N-B 阶段 B.5: halfvec 量化
 
 
 class Member(Base, TimestampMixin):
@@ -46,7 +46,7 @@ class Member(Base, TimestampMixin):
     #  "snoozed_until": "2026-06-16T03:00:00Z"}
 
     # 声纹识别
-    voice_embedding = Column(Vector(192))  # 3D-Speaker ERes2Net 192 维说话人嵌入
+    voice_embedding = Column(HalfVector(192))  # W-N-B 阶段 B.5: float32 -> float16. 3D-Speaker ERes2Net 192 维说话人嵌入
     voice_enrolled_at = Column(DateTime)  # 声纹录入时间
     voice_sample_count = Column(Integer, default=0)  # 采样次数
 
