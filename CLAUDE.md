@@ -8,6 +8,48 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-08-04 W100 +74 全面收口 — chat UI + chat console + RAG 收口 16 commits 累计, 2 永久铁律, 锚点范式 W100 +N 据实累计, 0 production code 守恒)
+
+**W100 +49~+58 chat UI + +59~+61 chat console + +68~+74 RAG 收口, 16 commits 累计**, 服务器 serve `index-4acf4393.js`:
+
+- **W100 +49~+58 chat UI 折叠 + 气泡升级 (10 commits)** — `c8abb1eec` `b19c2f582` `285ca7af9` `021433f1c` `e9dd43663` `9dc1b6a00` `6fc8a402b` `08f0e0994` `ddd205361` `9d9f6f6d2` `d60af755d` `f9251426f` `24a6ea7c1` `8c8794dc9` `cbd2cac9d` `eb81fed4e` `7510a042d` `97ca3929c` `969e5154c` `e6ba79b15`:
+  - RichContent 默认展开 (去手动折叠按钮, 仅 `collapsed_by_default=true` 隐藏内容, 类 20.144 沉淀: lifecycle 测试同时断言 DOM 存在性 + isVisible())
+  - 按钮现代化 (Element Plus Icon + 文字标签 + Notebook, 4 组件 emoji→Icon, 类 20.13/20.108/20.124 实战)
+  - PlanSteps auto-collapse (all-done fold to single line)
+  - plan-done SSE 事件补全 (后端 done + 前端 tool_use_id 去重, plan_step dedup + done status 测试)
+  - 老 plan 兼容 (3 层 fallback + text_delta 兜底)
+  - ToolNotFoundError step 改名 `__plan_summary__` (前后端同步)
+  - 空白卡片修复 (hide card when all steps are placeholder, 类 20.152 沉淀)
+  - chat bubble 全面升级 (gradient tail + lift hover + glow + typewriter mask + time divider 3-tier + input focus glow + step visual states)
+  - prompt meta clean (LLM 禁止元数据后缀硬规则 + 前端 `stripMetaSuffix` 兜底过滤, 真正进 dist)
+  - Vitest 14/14 + 15 测全 PASS (WS 退避 5 + phase 防御 10) + agent-1 401 fix 并入
+
+- **W100 +59~+61 chat console 警告 (3 commits)** — `4e5f59b27` `ba9661886` `b4b5ddac9` `5138afdb7` `7afcb6c0f`:
+  - console 警告修复 (session race + 401 + analytics 422)
+  - WS 重连退避修复 (lastPongAt falsy 短路) + plan_step 行号修正
+  - dark mode 适配 + 老浏览器降级 + print 模式
+
+- **W100 +68~+74 RAG 8 case 补完 + e2e 7/7 + Self-RAG R7/R8 + auto ingest + user feedback (8 commits)** — `83abf9b43` `e1aec3c4d` `c74699c0f` `f872d73fb` `e95b8ee14` `916bcf1f2` `65f23ebc1` `2e12f0dcf`:
+  - Self-RAG R7/R8 benchmark verify (trigger accuracy + acceptance gate, 类 20.129 实战)
+  - qa-bench 智能体路由 4 case (PlanStep/Multi-hop/HybridWeights/Temporal 完整)
+  - e2e 铁证补完 7/7 (大文档检索 + 多轮上下文)
+  - PlanStep edge cases (5) + RAG prompt meta 规则 eval (3)
+  - auto ingestion Celery task (pending → ingesting → done 状态机)
+  - user 反馈 daily 聚合 + knowledge_quarantine 写入
+  - merge + dist 收口
+
+**2 永久铁律 (实战验证)**:
+- **类 20.143 (Docker Desktop 重启)**: WSL2 backend 端口转发 endpoint metadata 缓存**只能**在 GUI 完全 Quit + 重新启动时清掉; schtasks 监听 Winlogon EventID=7002 + DELAY 2min 完全自愈 (见下方历史段)
+- **类 20.150 (Docker compose v2 不存在)**: Windows Docker Desktop 默认是 compose v1 (`docker-compose`), `docker compose` (无横线) v2 CLI 不存在; 部署脚本必须用 `docker-compose` 或 `docker restart <name>` 单容器重启, 不可用 `docker compose up -d`
+
+**5 件套守恒实测**: alembic 1 head `097_meeting_processing_persistence` 守恒 / Vitest 14/14 PASS + pytest 101+ PASS (派工累计 8 P0 + 12 质量门 + 5 C/D + 3 inspector + 7 reprocess + 4 dryrun + 5 e2e + 15 chat 退避/phase + 8 RAG 智能体路由 + 7 RAG e2e + 5 PlanStep edge) / `npm run build` PASS (W100 +58 真正进 dist) / `git diff origin/main -- alembic/ | wc -l` = 0 (本批不动 schema) / 锚点范式 W100 +28..+74 据实累计 (~+46 commits, 派工 v6 §13.3 假设禁令沿用)
+
+**沉淀**: `memory/w100-chat-ui-rag-grand-closure-2026-08-04.md` (16 commits 总结 + 类 20 实战) + `docs/w100-chat-ui-rag-closure-2026-08-04.md` (runbook) + `docs/build-dist-runbook.md` (本批 W100 +75 新增, dist build 流程)
+
+**0 production code 守恒 (W100 +75 收尾 4 项)**: 仅 `CLAUDE.md` + `docs/build-dist-runbook.md` + `scripts/check-dist-before-commit.sh` (优化) + `scripts/push-main.sh` (新增) 范畴, 未改 `app/` `web/src/` `alembic/versions/` `docker-compose.yml`.
+
+---
+
 ## 当前状态 (2026-08-04 服务器+本地电脑双关机恢复 W100 +N — 类 20.138/139/140/141/142 新增, 锚点范式 W100 +N 据实累计, 0 production code 守恒)
 
 **服务器 502 + 本地 app 无法启动 5 层根因修复 (类 20.138-142)**:
