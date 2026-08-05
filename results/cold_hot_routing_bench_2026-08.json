@@ -1,0 +1,88 @@
+{
+  "metadata": {
+    "table": "knowledge",
+    "n_queries": 100,
+    "n_total_rows": 530,
+    "n_hot_rows": 530,
+    "n_cold_rows": 0,
+    "threshold_months": 6,
+    "decision_gates": {
+      "hot_p50_ms_limit": 50.0,
+      "cold_p95_ms_limit": 500.0,
+      "cold_proportion_threshold": 0.1
+    }
+  },
+  "results": {
+    "hot_partition": {
+      "n": 100,
+      "min_ms": 0.5134469975018874,
+      "max_ms": 1.9811920064967126,
+      "avg_ms": 0.6155441903683823,
+      "median_ms": 0.5898094968870282,
+      "p50_ms": 0.5903040000703186,
+      "p95_ms": 0.7515920005971566,
+      "p99_ms": 1.9811920064967126,
+      "stdev_ms": 0.14992378302559084,
+      "n_rows_returned": 100
+    },
+    "cold_partition": {
+      "n": 100,
+      "min_ms": 0.4043389926664531,
+      "max_ms": 0.9897510026348755,
+      "avg_ms": 0.4598981502931565,
+      "median_ms": 0.44578449887922034,
+      "p50_ms": 0.44604299182537943,
+      "p95_ms": 0.5385969998314977,
+      "p99_ms": 0.9897510026348755,
+      "stdev_ms": 0.07017966065865062,
+      "n_rows_returned": 0
+    },
+    "cold_seq_scan_simulation": {
+      "n": 100,
+      "min_ms": 13.817461003782228,
+      "max_ms": 18.08591600274667,
+      "avg_ms": 15.081016260373872,
+      "median_ms": 14.982344000600278,
+      "p50_ms": 14.996074998634867,
+      "p95_ms": 16.263279001577757,
+      "p99_ms": 18.08591600274667,
+      "stdev_ms": 0.6089183831114365,
+      "n_rows_returned": 90
+    },
+    "all_no_filter": {
+      "n": 100,
+      "min_ms": 0.5183830071473494,
+      "max_ms": 1.1521239939611405,
+      "avg_ms": 0.6230532005429268,
+      "median_ms": 0.6160685006761923,
+      "p50_ms": 0.6168249965412542,
+      "p95_ms": 0.7078099879436195,
+      "p99_ms": 1.1521239939611405,
+      "stdev_ms": 0.07921810465918336,
+      "n_rows_returned": 100
+    }
+  },
+  "decisions": {
+    "gate_1_hot_p50_under_50ms": {
+      "value_ms": 0.5903040000703186,
+      "limit_ms": 50.0,
+      "pass": true
+    },
+    "gate_2_cold_p95_under_500ms": {
+      "value_ms": 16.263279001577757,
+      "limit_ms": 500.0,
+      "pass": true
+    },
+    "gate_3_cold_proportion_above_10pct": {
+      "value_pct": 0.0,
+      "threshold_pct": 10.0,
+      "n_cold": 0,
+      "n_total": 530,
+      "pass": false
+    },
+    "overall": {
+      "all_pass": false,
+      "recommendation": "PoC 价值不大, 据实归档阶段 E (cold 数据缺失, 路由层代码保留)"
+    }
+  }
+}
