@@ -9,6 +9,9 @@ W73 铁律: 测试必断言实际行为, 不能仅信 _log 输出.
 0 production code 改动: 仅 tests/ 范畴.
 """
 import asyncio
+import os
+import subprocess
+
 import pytest
 from sqlalchemy import text
 
@@ -16,60 +19,93 @@ from app.core.database import async_session
 from app.services.hybrid_retriever import HybridRetriever
 
 
+_DB_CONTAINER = os.getenv("W_N_G_PLUS_DB_CONTAINER", "microbubble-agent-db-1")
+
+
+async def _query_schema_scalar(sql: str):
+    """Read production schema in both supported integration environments.
+
+    ``INTEGRATION=1`` is the app-container path: the application DATABASE_URL
+    resolves the Compose ``db`` hostname.  The default Windows-host path uses
+    read-only ``docker exec ... psql`` because the healthy db container does
+    not publish port 5432 to localhost.
+    """
+    if os.getenv("INTEGRATION") == "1":
+        async with async_session() as db:
+            row = await db.execute(text(sql))
+            return row.scalar()
+
+    def _docker_psql() -> str:
+        try:
+            completed = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    _DB_CONTAINER,
+                    "psql",
+                    "-U",
+                    "postgres",
+                    "-d",
+                    "microbubble",
+                    "-Atqc",
+                    sql,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            pytest.fail(
+                f"schema integration query failed via {_DB_CONTAINER}: {exc}",
+                pytrace=False,
+            )
+        return completed.stdout.strip()
+
+    return await asyncio.to_thread(_docker_psql)
+
+
 # ============ schema 检查 (W-N-G+ +1 修复的 3 个列) ============
 
 @pytest.mark.asyncio
 async def test_schema_drift_knowledge_embedding_model_version():
     """knowledge.embedding_model_version 列存在 (W-N-G+ +1 修复 1)"""
-    async with async_session() as db:
-        row = await db.execute(
-            text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_name='knowledge' AND column_name='embedding_model_version'"
-            )
-        )
-        assert row.scalar() == 1, "knowledge.embedding_model_version MISSING"
+    value = await _query_schema_scalar(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='knowledge' AND column_name='embedding_model_version'"
+    )
+    assert str(value) == "1", "knowledge.embedding_model_version MISSING"
 
 
 @pytest.mark.asyncio
 async def test_schema_drift_meetings_embedding_model_version():
     """meetings.embedding_model_version 列存在 (W-N-G+ +1 修复 2)"""
-    async with async_session() as db:
-        row = await db.execute(
-            text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_name='meetings' AND column_name='embedding_model_version'"
-            )
-        )
-        assert row.scalar() == 1, "meetings.embedding_model_version MISSING"
+    value = await _query_schema_scalar(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='meetings' AND column_name='embedding_model_version'"
+    )
+    assert str(value) == "1", "meetings.embedding_model_version MISSING"
 
 
 @pytest.mark.asyncio
 async def test_schema_drift_knowledge_chunks_chunk_embedding():
     """knowledge_chunks.chunk_embedding 列存在 (W-N-G+ +1 修复 3)"""
-    async with async_session() as db:
-        row = await db.execute(
-            text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_name='knowledge_chunks' AND column_name='chunk_embedding'"
-            )
-        )
-        assert row.scalar() == 1, "knowledge_chunks.chunk_embedding MISSING"
+    value = await _query_schema_scalar(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='knowledge_chunks' AND column_name='chunk_embedding'"
+    )
+    assert str(value) == "1", "knowledge_chunks.chunk_embedding MISSING"
 
 
 @pytest.mark.asyncio
 async def test_schema_drift_chunk_embedding_type_is_vector_array():
     """knowledge_chunks.chunk_embedding 是 vector 数组类型"""
-    async with async_session() as db:
-        row = await db.execute(
-            text(
-                "SELECT udt_name FROM information_schema.columns "
-                "WHERE table_name='knowledge_chunks' AND column_name='chunk_embedding'"
-            )
-        )
-        udt = row.scalar()
-        # pgvector 数组的 udt_name 是 _vector
-        assert udt == "_vector", f"chunk_embedding udt_name={udt!r}, expected '_vector'"
+    udt = await _query_schema_scalar(
+        "SELECT udt_name FROM information_schema.columns "
+        "WHERE table_name='knowledge_chunks' AND column_name='chunk_embedding'"
+    )
+    # pgvector 数组的 udt_name 是 _vector
+    assert udt == "_vector", f"chunk_embedding udt_name={udt!r}, expected '_vector'"
 
 
 # ============ _chunk_late_recall 路径 (W-N-G+ +2 核心验证) ============
