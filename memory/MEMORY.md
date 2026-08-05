@@ -669,3 +669,12 @@
 - **w2-integration-main** — meeting-w2-integration 分支按序合并 W2-6 → W2-7 → W2-5,
   main HEAD = `cf20124d1`, 全套会议测试 103 PASS / 2 pre-existing Redis fail,
   0 regression
+
+# 24. W-N-A/B/C/D pgvector 优化 + W-N-GC CLAUDE.md 同步 (2026-08-05)
+
+- **w-n-a-hnsw-tuning-{startup,closure}-2026-08-05** — W-N-A HNSW 调优 (6 commits worktree, 1 cherry-pick bench 工具 → main), 232 行小数据集 PG 默认参数已最优 recall@10=1.0 p95=1.06ms, 099 迁移跳过, 类 20.155-160 沉淀
+- **w-n-b-halfvec-{startup,closure}-2026-08-05** — W-N-B halfvec 量化 (7 commits 全推 main), 3 表半精度迁移 + HalfVector wrapper + Column 改写, 19/19 pytest PASS, alembic 102 守恒, 0 production code 守恒
+- **w-n-c-bge-m3-{startup,closure}-2026-08-05** — W-N-C bge-m3 灰度 (4 commits), EmbeddingBackend 双后端 + 100 题轻量 bench, Qwen3 默认生产保留, bge-m3 灰度基础设施就绪, 真测待 GPU
+- **w-n-d-late-chunking-{startup,closure}-2026-08-05** — W-N-D 多向量 + Late Chunking (5 commits), late_chunking 服务 + 104 迁移 + hybrid_retriever 接入, 派工 brief 4 处偏离 (容器名/复数表/Vector 维度/补救)
+- **w-n-gc-claudemd-sync-{startup,closure}-2026-08-05** — W-N-GC CLAUDE.md 顶部新段同步 (W-N-GC +1 commit `1409ee67d` + W-N-GC +2 commit `91fa4b450`), 5 件套守恒, 12 类 20 沉淀, 锚点 ~537 → ~562 据实累计, 0 production code 守恒
+- **w-n-e-cold-hot-poc-startup-2026-08-05** — W-N-E 冷热分层 PoC 起步 (W-N-A/B/C/D 收口后下一阶段, 留未来 PR)
