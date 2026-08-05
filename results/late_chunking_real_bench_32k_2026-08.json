@@ -1,0 +1,238 @@
+{
+  "rows": [
+    {
+      "doc_id": 14,
+      "query": "微纳米气泡的 ζ 电位如何影响稳定性",
+      "chunk_count": 147,
+      "parent_score": 0.421494,
+      "chunk_best_score": 0.467722,
+      "chunk_best_index": 107,
+      "chunk_mean_score": 0.407325
+    },
+    {
+      "doc_id": 14,
+      "query": "臭氧微纳米气泡对有机污染物的降解机理",
+      "chunk_count": 147,
+      "parent_score": 0.551651,
+      "chunk_best_score": 0.580777,
+      "chunk_best_index": 56,
+      "chunk_mean_score": 0.511607
+    },
+    {
+      "doc_id": 14,
+      "query": "气泡尺寸分布的测量方法",
+      "chunk_count": 147,
+      "parent_score": 0.304695,
+      "chunk_best_score": 0.473751,
+      "chunk_best_index": 107,
+      "chunk_mean_score": 0.367056
+    },
+    {
+      "doc_id": 14,
+      "query": "微纳米气泡强化传质的实验证据",
+      "chunk_count": 147,
+      "parent_score": 0.463915,
+      "chunk_best_score": 0.535609,
+      "chunk_best_index": 107,
+      "chunk_mean_score": 0.467103
+    },
+    {
+      "doc_id": 14,
+      "query": "消毒副产物的控制策略",
+      "chunk_count": 147,
+      "parent_score": 0.445755,
+      "chunk_best_score": 0.557546,
+      "chunk_best_index": 56,
+      "chunk_mean_score": 0.470567
+    },
+    {
+      "doc_id": 16,
+      "query": "微纳米气泡的 ζ 电位如何影响稳定性",
+      "chunk_count": 75,
+      "parent_score": 0.594952,
+      "chunk_best_score": 0.597057,
+      "chunk_best_index": 20,
+      "chunk_mean_score": 0.478494
+    },
+    {
+      "doc_id": 16,
+      "query": "臭氧微纳米气泡对有机污染物的降解机理",
+      "chunk_count": 75,
+      "parent_score": 0.673726,
+      "chunk_best_score": 0.611053,
+      "chunk_best_index": 69,
+      "chunk_mean_score": 0.532745
+    },
+    {
+      "doc_id": 16,
+      "query": "气泡尺寸分布的测量方法",
+      "chunk_count": 75,
+      "parent_score": 0.484973,
+      "chunk_best_score": 0.530599,
+      "chunk_best_index": 35,
+      "chunk_mean_score": 0.422688
+    },
+    {
+      "doc_id": 16,
+      "query": "微纳米气泡强化传质的实验证据",
+      "chunk_count": 75,
+      "parent_score": 0.592721,
+      "chunk_best_score": 0.584837,
+      "chunk_best_index": 35,
+      "chunk_mean_score": 0.498001
+    },
+    {
+      "doc_id": 16,
+      "query": "消毒副产物的控制策略",
+      "chunk_count": 75,
+      "parent_score": 0.519383,
+      "chunk_best_score": 0.56943,
+      "chunk_best_index": 0,
+      "chunk_mean_score": 0.479115
+    },
+    {
+      "doc_id": 17,
+      "query": "微纳米气泡的 ζ 电位如何影响稳定性",
+      "chunk_count": 82,
+      "parent_score": 0.562361,
+      "chunk_best_score": 0.581687,
+      "chunk_best_index": 24,
+      "chunk_mean_score": 0.477346
+    },
+    {
+      "doc_id": 17,
+      "query": "臭氧微纳米气泡对有机污染物的降解机理",
+      "chunk_count": 82,
+      "parent_score": 0.621683,
+      "chunk_best_score": 0.629457,
+      "chunk_best_index": 62,
+      "chunk_mean_score": 0.524201
+    },
+    {
+      "doc_id": 17,
+      "query": "气泡尺寸分布的测量方法",
+      "chunk_count": 82,
+      "parent_score": 0.459666,
+      "chunk_best_score": 0.528611,
+      "chunk_best_index": 28,
+      "chunk_mean_score": 0.421097
+    },
+    {
+      "doc_id": 17,
+      "query": "微纳米气泡强化传质的实验证据",
+      "chunk_count": 82,
+      "parent_score": 0.56856,
+      "chunk_best_score": 0.584136,
+      "chunk_best_index": 62,
+      "chunk_mean_score": 0.495513
+    },
+    {
+      "doc_id": 17,
+      "query": "消毒副产物的控制策略",
+      "chunk_count": 82,
+      "parent_score": 0.497783,
+      "chunk_best_score": 0.571595,
+      "chunk_best_index": 0,
+      "chunk_mean_score": 0.481688
+    },
+    {
+      "doc_id": 19,
+      "query": "微纳米气泡的 ζ 电位如何影响稳定性",
+      "chunk_count": 72,
+      "parent_score": 0.524608,
+      "chunk_best_score": 0.56573,
+      "chunk_best_index": 18,
+      "chunk_mean_score": 0.416001
+    },
+    {
+      "doc_id": 19,
+      "query": "臭氧微纳米气泡对有机污染物的降解机理",
+      "chunk_count": 72,
+      "parent_score": 0.690822,
+      "chunk_best_score": 0.622413,
+      "chunk_best_index": 20,
+      "chunk_mean_score": 0.523224
+    },
+    {
+      "doc_id": 19,
+      "query": "气泡尺寸分布的测量方法",
+      "chunk_count": 72,
+      "parent_score": 0.425844,
+      "chunk_best_score": 0.518273,
+      "chunk_best_index": 18,
+      "chunk_mean_score": 0.370833
+    },
+    {
+      "doc_id": 19,
+      "query": "微纳米气泡强化传质的实验证据",
+      "chunk_count": 72,
+      "parent_score": 0.558542,
+      "chunk_best_score": 0.595408,
+      "chunk_best_index": 18,
+      "chunk_mean_score": 0.459687
+    },
+    {
+      "doc_id": 19,
+      "query": "消毒副产物的控制策略",
+      "chunk_count": 72,
+      "parent_score": 0.437171,
+      "chunk_best_score": 0.509724,
+      "chunk_best_index": 43,
+      "chunk_mean_score": 0.425
+    }
+  ],
+  "documents": [
+    {
+      "doc_id": 14,
+      "title": "δ-MnO2活化PMS强化NaClO预氧化对有机微污染原水中锰污染控制研究",
+      "chars": 134375,
+      "chunk_count": 147,
+      "parent_encode_ms": 1067.82,
+      "late_chunk_encode_ms": 1116.5
+    },
+    {
+      "doc_id": 16,
+      "title": "Disinfection mechanism of chlorine-resistant bacteria by micro-nano bubbles in d",
+      "chars": 61178,
+      "chunk_count": 75,
+      "parent_encode_ms": 346.44,
+      "late_chunk_encode_ms": 376.66
+    },
+    {
+      "doc_id": 17,
+      "title": "Disinfection mechanism of micro-nano bubbles on Bacillus cereus in drinking wate",
+      "chars": 65224,
+      "chunk_count": 82,
+      "parent_encode_ms": 392.59,
+      "late_chunk_encode_ms": 436.45
+    },
+    {
+      "doc_id": 19,
+      "title": "Catalyst-free aqueous-phase oxidation of toluene by ozone micro-nanobubbles coup",
+      "chars": 59463,
+      "chunk_count": 72,
+      "parent_encode_ms": 323.97,
+      "late_chunk_encode_ms": 355.39
+    }
+  ],
+  "summary": {
+    "pairs": 20,
+    "chunk_win": 17,
+    "parent_win": 3,
+    "tie": 0,
+    "chunk_win_rate": 0.85,
+    "delta_mean": 0.040755,
+    "delta_p50": 0.043374,
+    "delta_p95": 0.114654,
+    "delta_min": -0.068409,
+    "delta_max": 0.169056
+  },
+  "mock": false,
+  "model": "Qwen/Qwen3-Embedding-0.6B",
+  "device": "cuda",
+  "chunk_size": 256,
+  "overlap": 32,
+  "max_length": 32768,
+  "n_documents": 4,
+  "n_queries": 5
+}
