@@ -1,0 +1,196 @@
+{
+  "metadata": {
+    "date": "2026-08-05",
+    "anchor": "W-N-D++ +1",
+    "dataset": "data/eval/eval_set.jsonl",
+    "n_queries": 8,
+    "source_distribution": {
+      "qa-bench": 8
+    },
+    "top_k": 10,
+    "base_commit": "d8e463d1c",
+    "alembic_head": "104_add_knowledge_chunk_late_embedding",
+    "early_stop_triggered": true,
+    "known_issues": [
+      "DB knowledge 表缺 embedding_model_version 列 (alembic 104 与代码 ORM drift)",
+      "_chunk_late_recall SQL 引用 kc.chunk_embedding, 实际列名 embedding",
+      "本 bench 用 monkey-patch 隔离 _chunk_late_recall 路径对比",
+      "派工 brief 100 题据实降级到 8 题 (类 20.156 项目无 100 题 RAG 评测集)"
+    ],
+    "decision_gates": {
+      "recall_improvement_min_pct": 2.0,
+      "p95_degradation_max_ms": 30.0,
+      "maintenance_celery_tasks": 1
+    }
+  },
+  "mode_a_parent_only": {
+    "recall@10": 0.0,
+    "p50_ms": 0.0,
+    "p95_ms": 0.0,
+    "p99_ms": 0.0,
+    "n": 8
+  },
+  "mode_b_chunk_late": {
+    "recall@10": 0.0,
+    "p50_ms": 1.38,
+    "p95_ms": 1.82,
+    "p99_ms": 1.82,
+    "n": 8
+  },
+  "delta": {
+    "recall@10_pct": 0.0,
+    "p95_ms": 1.82,
+    "gate1_recall_improvement": false,
+    "gate2_p95_degradation": true
+  },
+  "per_query": {
+    "mode_a": [
+      {
+        "id": "A01",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A02",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A06",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A07",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A10",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A11",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A12",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A13",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 0.0,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      }
+    ],
+    "mode_b": [
+      {
+        "id": "A01",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.45,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A02",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.82,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A06",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.26,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A07",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.5,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A10",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.32,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A11",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.37,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A12",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.38,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      },
+      {
+        "id": "A13",
+        "source": "qa-bench",
+        "hit": false,
+        "latency_ms": 1.25,
+        "n_results": 0,
+        "error": null,
+        "top5_ids": []
+      }
+    ]
+  }
+}
