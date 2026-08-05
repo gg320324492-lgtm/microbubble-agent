@@ -1,12 +1,11 @@
 """add dft_jobs table (Phase 5 DFT 工具集成)
 
 Revision ID: 099_add_dft_jobs
-Revises: 102_voiceprint_halfvec
+Revises: 103_add_embedding_model_version
 Create Date: 2026-08-05
 
 串单链纪律 (CLAUDE.md W68-W92 实战): 不允许双 head, down_revision 必须接最新 head。
-当前 main alembic 真实最新 head 是 102_voiceprint_halfvec (含 100/101 halfvec 链),
-不是 098。本文件改 down_revision = "102_voiceprint_halfvec" 保证单链。
+实测 main alembic 链顶端 (100 → 101 → 102 → 103), 103 是当前最新 head, 099 接 103 保持单链。
 """
 from alembic import op
 import sqlalchemy as sa
@@ -14,7 +13,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 
 revision = "099_add_dft_jobs"
-down_revision = "102_voiceprint_halfvec"
+down_revision = "103_add_embedding_model_version"
 branch_labels = None
 depends_on = None
 
