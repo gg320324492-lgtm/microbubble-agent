@@ -62,21 +62,6 @@
 
 W19 选项 A 维持. W-N 周期 14 stages 据实收口, 不擅自扩不擅自缩.
 
-**W-N 全 14 stages 据实累计 commits** (W-N-GRAND +1 之后, 2026-08-05, W-N-ANS +1 同步):
-- W-N-G+ schema drift: 3 commits (W-N-G+ +0/+1/+2/+3 合并 3 commits, 7cb6bf0d1 + 322455f5d + e8b517144)
-- W-N-OBS observability: 2 commits (W-N-OBS +1 显式失败 + 计数器 + W-N-OBS +3 收口, 1896fee64 + 406c57e89)
-- W-N-RAG eval set: 4 commits (W-N-RAG +0 起步 + +1 数据 + +2 评测入口 + +3 收口, d2173276a + becdaa0bb + 25c1d7ee5 + 37e4d88da)
-- W-N-BGE bge-m3 真路径: 4 commits (W-N-BGE +0 起步 + +1 真 bench + +2 决策 + +3 收口, 04f9c9dcc + 9169e3ae9 + 0eaacda64 + fbc11908e)
-- W-N-GRAND grand closure: 2 commits (W-N-GRAND +1 + +2 已含, c011ebd09 + 006d7ba2e)
-- W-N-FILL 拦截: 0 commit (W-N-D++ §5 决策禁止, 沿用不派工)
-
-**W-N 累计据实**: 锚点 ~537 → ~574 据实累计 +37 commits (W-N-GRAND +1 段已记, base head fbc11908e)
-**W-N-ANS +0..+2 实测新增**: 3 commits (本任务 +0 起步 memory + +1 顶部追加 + +2 收口 memory), 锚点 ~574 → ~577 据实累计
-**派工 brief vs 实测偏差**: brief 估 ~582 → 实测 ~577 (-5 据实, brief 估 +45 → 实测 +40 commits, -5 据实)
-**类 20 沉淀**: ~30 条 (类 20.155 - 类 20.179, W-N-ANS 不新增沿用)
-**决策文档**: 4 份 (bge-m3 / cold-hot routing / lora-finetune / e2e-late-chunking)
-**派工模型**: 14 stages × 1-7 commits 据实累计, 0 production code 严格执行
-
 ## Phase 5 DFT 工具集成 (2026-08-05 — 5 @tool + 7 FastAPI 端点 + 1 alembic migration, 0 production code 守恒)
 
 把 `E:\sci-software\workflows\` 下的 Gaussian 16W / GROMACS / MACE-MP 包装代码, 集成到 MicroBubble Agent 后端。LLM 在小气助手聊天时, 能直接调 DFT/MD 工具算分子能量、优化几何、跑 MD 模拟。
