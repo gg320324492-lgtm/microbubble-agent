@@ -1,0 +1,39 @@
+// Prisma schema mirror for dft_jobs table — W-N-P3-A-POC 试点
+// W-N-P3-A 决策(b) 暂不启动, 派工允许 1 张表试点, 验证 Prisma 集成真实成本
+// 派工 brief 严禁: 0 改 alembic/versions/ + 0 改 package.json + 0 pip install prisma
+// 派工 brief 严禁: 0 改 app/models/dft_job.py 既有文件 (本文件与 prisma_dft_jobs.py 并存)
+
+generator client {
+  provider = "prisma-client-py"
+  output   = "../app/models/prisma_dft_jobs_client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1 张表试点: dft_jobs (W-N-DFT agent 写, alembic 099 创建)
+// 字段类型映射实战:
+model DftJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      Int?      @map("user_id")  // FK members.id, ondelete SET NULL (Prisma 无原生注解, 需 service 层手写)
+  tool        String    @db.VarChar(32)
+  smiles      String
+  params      Json      @default("{}")
+  status      String    @default("queued") @db.VarChar(32)
+  result      Json?
+  logPath     String?   @map("log_path")
+  errorMsg    String?   @map("error_msg")
+  submitTime  DateTime  @default(now()) @map("submit_time") @db.Timestamptz(6)
+  finishTime  DateTime? @map("finish_time") @db.Timestamptz(6)
+  createdAt   DateTime? @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime? @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([id])
+  @@index([tool])
+  @@index([status])
+  @@index([userId, submitTime])
+  @@index([tool, status])
+  @@map("dft_jobs")
+}
