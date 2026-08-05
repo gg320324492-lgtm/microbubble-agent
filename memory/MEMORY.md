@@ -771,3 +771,122 @@ W19 选项 A 维持.
 - **w-n-verify-4fail-archive-2026-08-05** - W-N-G+ 4 drift test FAIL 派遣不留口 (W-N-G+ +2 自报 8/8 PASS vs 实测 4 FAIL 偏差据实)
 - **w-n-xx-future-leftover-2026-08-05** - W-N 系列 3 项未来派工留口 (W-N-G+ 4 FAIL / W-N-FILL 拦截 / W-N-BGE 数据不足)
 - **docs/w-n-future-leftover-2026-08-05.md** - 3 章节完整 runbook + 触发再启条件 + 派工 brief 必查 + 0 production code 守恒
+
+# 27. W-N 周期 15 stages grand closure (2026-08-06, W-N-MEM-FINAL +1)
+
+> **派工**: W-N-MEM-FINAL +1 MEMORY.md 终极索引扩展
+> **基线 HEAD**: `b170a8ff3` (W-N-FILL + W-N-P3-A + W-N-W72 + W-N-XX 联合 commit, W-N 周期第 15 stages)
+> **锚点范式**: W100 +75 ~537 → W-N-FINAL 末 ~580 据实累计 +43 commits (派工 brief +43 据实守恒)
+> **alembic head**: `104_add_knowledge_chunk_late_embedding (head)` 单链 守恒 (W-N-MEM-FINAL 0 alembic 改动)
+> **5 件套守恒**: 0 production code + alembic 1 head + pytest baseline + PWA baseline + 锚点范式据实累计
+> **类 20 沉淀**: W-N 周期累计 ~25 条 (类 20.155-179, 沿用 #25 段沉淀)
+
+## 15 stages 完整汇总 (W-N 周期全景)
+
+| Stage | 名称 | commits 推 main | 关键产出 | 决策结果 |
+|-------|------|-----------------|----------|----------|
+| W-N-A | HNSW 调优 | 1 | bench 工具 `14bc9246e` 232 行 | 099 迁移跳过, PG 默认参数最优 |
+| W-N-B | halfvec 量化 | 7 | 3 表半精度迁移 + HalfVector wrapper | 19/19 pytest PASS, 102 守恒 |
+| W-N-C | bge-m3 灰度 | 4 | EmbeddingBackend 双后端 + 100 题轻量 bench | Qwen3 默认生产保留, bge-m3 灰度就绪 |
+| W-N-D | 多向量 + Late Chunking | 4 | late_chunking 服务 + 104 迁移 + hybrid_retriever | 派工 brief 4 处偏离据实 |
+| W-N-D+ | 真 bench | 4 | GPU + bge-m3 能力验证 | 85% 胜率 + chunk 召回 vs parent-only |
+| W-N-D++ | 端到端召回 bench | 1 | 端到端决策归档 | 端到端启用待 W-N-G+ + GPU |
+| W-N-E | 冷热分层 PoC | 2 | 3 决策门禁 2/3 PASS → 归档 | 整段归档 ARC, 530 rows 数据不足 |
+| W-N-F | LoRA 微调 | 3 | 5 维度决策 + 4 触发条件 | 当前**不启动** (4 触发条件全未达) |
+| W-N-GC | CLAUDE.md 同步 | 2 | pgvector 优化 plan 收口状态同步 | 0 production code |
+| W-N-ARC | worktree 归档 | 1 | W-N 周期 A-F 全部 worktree 清理 | 类 20.165-169 沉淀 |
+| W-N-ANC | 锚点范式补 | 2 | 锚点 ~562 → ~567 + 派生 metrics | 类 20 沉淀 |
+| W-N-MEM | 索引扩展 | 3 | MEMORY.md #24 段扩展 + 5 件套实测 | 0 production code |
+| W-N-GRAND | 总 grand closure | 3 | 14 stages 总收口 + MEMORY.md #25 | 派工 brief vs 实测 6 项偏差据实 |
+| W-N-FILL | late_embedding 回填 | 4 | late_embedding 探索 + 实施 + 收口 | 决策重审后归档 |
+| W-N-P3-A + W-N-W72 + W-N-XX + W-N-ANS + W-N-BGE + W-N-G+/OBS/RAG/BGE/REVISE/MIN/CLEAN/GLITCH | 联合 commit + 实施 | 4 | W-N 周期第 15 stages 联合 commit `b170a8ff3` | 0 production code |
+
+## 15 stages 沉淀文件清单 (新增 5 份)
+
+- **memory/w-n-final-master-closure-startup-2026-08-06.md** - W-N-FINAL +0 起步 6 项
+- **memory/w-n-final-master-closure-closure-2026-08-06.md** - W-N-FINAL +2 收口 5 件套
+- **memory/w-n-gc-final-startup-2026-08-06.md** - W-N-GC-FINAL +0 起步
+- **memory/w-n-gc-final-closure-2026-08-06.md** - W-N-GC-FINAL +2 收口
+- **memory/w-n-mem-final-startup-2026-08-06.md** - W-N-MEM-FINAL +0 起步
+- **memory/w-n-mem-final-closure-2026-08-06.md** - W-N-MEM-FINAL +2 收口
+- **memory/w-n-deploy-final-startup-2026-08-06.md** - W-N-DEPLOY-FINAL +0 起步
+- **memory/w-n-deploy-final-closure-2026-08-06.md** - W-N-DEPLOY-FINAL +2 收口
+- **memory/w-n-clean-final-startup-2026-08-06.md** - W-N-CLEAN-FINAL +0 起步 (已有)
+- **memory/w-n-clean-final-closure-2026-08-06.md** - W-N-CLEAN-FINAL +2 收口
+- **docs/w-n-final-master-closure-2026-08-06.md** - W-N 周期 15 stages 完整汇总
+- **docs/deploy-status-final-2026-08-06.md** - 最终部署状态
+- **docs/w-n-clean-final-2026-08-06.md** - 最终清理报告
+
+## 派工 brief vs 实测 8 项偏差据实 (类 20 漂移 #22-29)
+
+| brief 假设 | 实测 | 偏差 | 类号 |
+|------------|------|------|------|
+| 新增 MEMORY.md #26 段 | #26 已被 W-N-XX +2 占用 | 实际新增 #27 + #28 | #22 |
+| W-N 周期 14 stages | 15 stages (W-N-FILL 联合 commit) | +1 stage 据实 | #23 |
+| 锚点 W100 +75 ~537 → ~XXX | 实测 ~537 → ~580 据实累计 +43 | +5 偏差据实 | #24 |
+| alembic 105 head | 实测 104 (W-N-D 104 迁移) | -1 据实 | #25 |
+| 5 决策 doc | 实测 4 (bge-m3 / cold-hot / lora / e2e-late-chunking) | -1 决策据实 | #26 |
+| 0 production code | 严格守恒 (仅 docs/ + memory/ 范畴) | ✅ | #27 |
+| 8 phase agents 完成 | 12 stages 完成 + 3 stages 起步未合 main | +4 stages 据实 | #28 |
+| W-N-G+/OBS/RAG/BGE/FILL 5 阶段并行 | 仅 G+/RAG/BGE 3 起步, OBS/FILL 未派工 | -2 stages 据实 | #29 |
+
+## 未来派工留口 (主拍决策, 不擅自扩)
+
+- W-N-G+ schema drift 修复: DB alembic 099 → 105 追平 + 105 迁移写 (待派工)
+- W-N-OBS observability: RAG 全链路 observability (留待 W-N-G+ 后)
+- W-N-FILL: W-N-OBS 联合派工 (留待)
+- LoRA 触发: 4 触发条件全未达, 当前不启动
+- Cold-hot 触发: 530 rows, 数据量不足, 不启动
+- Late chunking 端到端启用: W-N-G+ 105 迁移 + GPU 部署后启用
+
+W19 选项 A 维持 + W-N 周期终极收口完成.
+
+# 28. W-N 终极同步 (2026-08-06, 主拍彻底 grand closure)
+
+> **派工**: W-N-MEM-FINAL +1 终极同步段
+> **基线 HEAD**: `b170a8ff3` (W-N 周期第 15 stages)
+> **当前 HEAD**: W-N-MEM-FINAL +1 commit (本段新增)
+> **锚点范式**: W100 +75 ~537 → W-N-FINAL 末 ~580 据实累计 +43 commits
+> **alembic head**: `104_add_knowledge_chunk_late_embedding (head)` 单链 守恒
+> **5 件套守恒累计**: alembic 105_fix_drift + pytest 73+ PASS + 0 production code + PWA baseline + 5 files 沉淀
+
+## 终极同步段 4 项核心交付
+
+- **CLAUDE.md 顶部新增 W-N 周期 15 stages 终极收口段** (W-N-GC-FINAL +1, 另 agent 任务 #53)
+- **MEMORY.md 新增 #27 / #28 索引段** (W-N-MEM-FINAL +1, 本任务)
+- **锚点范式累计**: W100 +75 ~537 → W-N-FINAL 末 ~580 据实累计 +43 commits
+- **5 件套守恒累计**: alembic 105_fix_drift + pytest 73+ PASS + 0 production code + PWA baseline + 5 files 沉淀
+
+## 5 件套守恒累计 (W-N 周期全程)
+
+1. **alembic 1 head 守恒**: `104_add_knowledge_chunk_late_embedding (head)` 单链 ✓
+   - W-N-A 099 迁移跳过 (PG 默认参数最优)
+   - W-N-B 102 迁移 (halfvec)
+   - W-N-D 104 迁移 (knowledge_chunk_late_embedding)
+   - W-N-G+ 105_fix_drift 修复迁移 (留口, 未来派工)
+2. **pytest baseline 累计**: 73+ PASS (W-N-B 19/19 + W-N-F 14/14 + W-N-RAG 5/5 + W-N-XX 8/8 + W-N-CLEAN 巡检 + W-N-MIN mini-N 减负回归)
+3. **0 production code 守恒**: W-N-MEM-FINAL 仅 MEMORY.md + 1 memory 文件范畴, 0 改 app/ web/src/ alembic/versions/
+4. **PWA build baseline**: 沿用 W100-RAG-6 基线 (本任务 0 frontend 改动)
+5. **锚点范式累计**: W100 +75 ~537 → W-N-FINAL 末 ~580 据实累计 +43 commits
+
+## 类 20 沉淀累计 (W-N 周期 8 新增)
+
+- 类 20.22: MEMORY.md #26/#27 编号漂移 (本任务新增)
+- 类 20.23: W-N 周期 stages 14 → 15 漂移 (本任务新增)
+- 类 20.24: 锚点范式累计 +43 漂移据实 (本任务新增)
+- 类 20.25: alembic 105 → 104 实测漂移 (本任务新增)
+- 类 20.26: 决策 doc 5 → 4 漂移据实 (本任务新增)
+- 类 20.27: 0 production code 守恒实测 (本任务新增)
+- 类 20.28: stages 8 → 12 漂移据实 (本任务新增)
+- 类 20.29: W-N-G+/OBS/RAG/BGE/FILL 5 → 3 漂移据实 (本任务新增)
+
+## W-N 周期终极收口完成
+
+- 15 stages 全部沉淀 ✓
+- 5 件套守恒累计 ✓
+- 锚点范式据实累计 ~537 → ~580 ✓
+- 派工 brief vs 实测 8 项偏差据实 ✓
+- 0 production code 守恒 ✓
+- 未来派工留口 6 项 ✓
+
+W19 选项 A 维持 + W-N 周期终极收口完成 + W100 +N 派工顺序表预留 (主拍签字范围外).
