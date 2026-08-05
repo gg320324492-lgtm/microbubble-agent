@@ -419,7 +419,13 @@
   margin-bottom: 20px;
   display: flex;
   align-items: center;
+  flex-shrink: 0;  /* W2 +N 2026-08-05: 滚轮修复 — tab-strip 不被压缩 */
 }
 .tab-panel {
+  display: flex;  /* W2 +N 2026-08-05: 滚轮修复 — tab-panel 必须是 flex column, 子项 .meeting-list-card 的 flex:1 才能生效 */
+  flex-direction: column;
+  flex: 1;  /* W2 +N 2026-08-05: 滚轮修复 — tab-panel 占满 .meeting-view 剩余高度 */
+  min-height: 0;  /* W2 +N 2026-08-05: 滚轮修复 — flex column min-height:0 防止子项撑大 */
+  overflow: hidden;
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
 }
