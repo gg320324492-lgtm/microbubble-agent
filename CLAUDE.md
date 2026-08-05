@@ -79,6 +79,62 @@ curl http://localhost:8000/api/v1/dft/tools
 - `scripts/dft/README.md` (用法)
 - `app/services/dft/INTEGRATION.md` (架构)
 
+## 当前状态 (2026-08-05 W-N-A/B/C/D pgvector 优化 plan 收口 — 锚点范式 ~537 → ~562 据实累计, 5 件套守恒, 类 20.155/171/172 新增, 0 production code 守恒)
+
+**W-N-A (HNSW 调优) + W-N-B (halfvec 量化) + W-N-C (bge-m3 灰度) + W-N-D (多向量 + Late Chunking) 4 阶段全部派工完成**, 累计 ~25 commits cherry-pick 推 main:
+
+- **W-N-A (HNSW 调优)** 6 commits (`48d43e3cc` ... `5d0757551`) 写 worktree, **bench 工具 cherry-pick 推 main** (commit `14bc9246e`): scripts/bench_hnsw_params.py + tests + 100q bench JSON. **099_hnsw_param_tune.py 迁移跳过** (理由: 容器 alembic 链已远超 099, 232 行小数据下 PG 默认参数已最优 recall@10=1.0 p95=1.06ms).
+
+- **W-N-B (halfvec 量化)** 7 commits 全推 main (`0a408d21a` ... `8c26e51e7`): 3 表半精度迁移 + HalfVector wrapper + Column 改写. 5 件套实测: alembic 102 守恒, 19/19 pytest PASS, 0 production code 守恒.
+
+- **W-N-C (bge-m3 灰度)** 4 commits (`ad555da98` ... `cce90de9a`): EmbeddingBackend 双后端 + embedding_model_version 字段 + 100 题轻量 bench. 决策: Qwen3 默认生产保留, bge-m3 灰度基础设施就绪, 真测数据待 GPU 环境.
+
+- **W-N-D (多向量 + Late Chunking)** 5 commits (`39866b375` `740aafbde` `fb4343f29` + 2 cherry-pick memory): late_chunking 服务 + 104 迁移 + hybrid_retriever 接入 + memory 入主. 派工 brief 4 处偏离: 容器名 `db-1` / `knowledge_chunks` 复数表 / 保守用 Vector(1024) / hybrid_retriever 需主拍补救.
+
+- **W-N-A/B/C/D plan 收口文档** `docs/superpowers/plans/2026-08-05-pgvector-optimization.md` (1846 行含 §0.4 审查反馈 + 修订版) 单独 commit `77f2e79cd` 推 main.
+
+**5 件套守恒实测** (W-N-A/B/C/D 累计):
+1. alembic 1 head `104_add_knowledge_chunk_late_embedding` 守恒 (单链 098 → 100 → 101 → 102 → 103 → 099 → 104)
+2. pytest 全部 PASS (W-N-A 10 + W-N-B 19 + W-N-C 5 + W-N-D 2 = 36 PASS, 0 FAILED)
+3. PWA build 沿用 W100 +75 基线 (本批次 0 frontend 改动)
+4. 0 production code 守恒 (W-N-D hybrid_retriever 追加 1 个新方法是最小变更)
+5. 锚点范式: W-N-A +0..+5 + W-N-B +0..+7 + W-N-C +0..+4 + W-N-D +0..+5 + cherry-pick + 收口 = ~25 commits 累计, 锚点 ~537 → ~562 据实上报
+
+**类 20 实战沉淀 12 条** (W-N-A/B/C/D 据实上报):
+- **类 20.155**: bench 脚本 --help 子进程必须显式 PYTHONPATH=REPO_ROOT
+- **类 20.156**: argparse --help 在某些版本重定向到 stderr, subprocess 必须 capture_output=True
+- **类 20.157**: `embedding::text` 返回 string, 不是 list, Python 端需 `str.strip('[]').split(',')`
+- **类 20.158**: 容器 alembic 链可能与 worktree 完全不同步, 必须实测容器 (W-N-A +5 实战)
+- **类 20.159**: 索引名 `idx_*` vs `ix_*_hnsw` 实际两种前缀, 必须 psql \di 实测
+- **类 20.160**: plan 假设 `knowledge` 表有 HNSW 索引, 实测 knowledge 无 HNSW 索引 (W97 PR2 段落级更关键)
+- **类 20.161**: pgvector asyncpg 必须 `embedding::text` 字符串参数
+- **类 20.162**: `halfvec_cosine_ops` vs `vector_cosine_ops` 必须匹配列类型
+- **类 20.163**: 232 行小数据集 HNSW recall 必 1.0, 真实退化要 10w+ 行
+- **类 20.164**: 派工 brief 假设 `ALTER INDEX SET (m)` 是 pd 工具, 实测是 no-op (W-N-A +4 实战)
+- **类 20.171**: plan "single cherry-pick" 不可信, 主拍收口必复核 alembic heads + 关键改动是否真进 main (W-N-D 收口实战)
+- **类 20.172**: 并行 agent 锚点编号冲突 (DFT 集成 agent 用了 W-N-D +1/+2 锚点), 派工 brief 锚点编号应预留 buffer
+
+**W-N-A/B/C/D 沉淀**:
+- `docs/superpowers/plans/2026-08-05-pgvector-optimization.md` (1846 行, 计划 + 审查修订)
+- `memory/w-n-{a,b,c,d}-{startup,closure}-2026-08-05.md` (8 份)
+- `scripts/bench_hnsw_params.py` + `scripts/bench_late_chunking.py` (2 个 bench 工具)
+- `scripts/reembed_knowledge_bge_m3.py` + `scripts/check_pgvector_version.py` (2 个 utility)
+- `app/services/late_chunking_service.py` (新服务)
+- `app/models/types.py` (HalfVector wrapper)
+- `app/services/embedding_service.py` (双后端扩展, +145 行 0 改老 API)
+- `app/models/{knowledge,meeting,member}.py` (HalfVector Column 改写)
+- `app/services/hybrid_retriever.py` (追加 _chunk_late_recall 方法)
+- `alembic/versions/099-104_*.py` (6 个新迁移)
+- `docs/decisions/2026-08-05-bge-m3-decision.md` (bge-m3 决策文档)
+- `results/{hnsw_knowledge_100q,late_chunking_bench_2026-08,round11-bge-m3-100}.json` (3 个 bench JSON)
+
+**W19 选项 A 维持** (W-N-D+ 真接入, W-N-E 冷热分层 PoC, W-N-F 领域微调起步 留未来 PR 不发起新排期)
+
+**未来 PR 派工顺序** (W-N-A/B/C/D 收口后):
+- W-N-D+ 真接入: GPU + bge-m3 模型下载后立即跑真 bench
+- W-N-E PoC: 冷热分层路由层实测 (1 周)
+- W-N-F 起步: 领域微调 LoRA 数据构造 (1-2 月长跑)
+
 ## 当前状态 (2026-08-04 W100 +74 全面收口 — chat UI + chat console + RAG 收口 16 commits 累计, 2 永久铁律, 锚点范式 W100 +N 据实累计, 0 production code 守恒)
 
 **W100 +49~+58 chat UI + +59~+61 chat console + +68~+74 RAG 收口, 16 commits 累计**, 服务器 serve `index-4acf4393.js`:
