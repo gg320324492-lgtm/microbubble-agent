@@ -1,0 +1,42 @@
+{
+  "mock": true,
+  "documents": 5,
+  "queries": 5,
+  "rows": [
+    {
+      "doc_id": "doc-0",
+      "query": "微纳米气泡 ζ 电位",
+      "chunk_count": 4,
+      "parent_score": 1024.0,
+      "chunk_late_score": 1024.0
+    },
+    {
+      "doc_id": "doc-1",
+      "query": "气泡传质",
+      "chunk_count": 4,
+      "parent_score": 1024.0,
+      "chunk_late_score": 1024.0
+    },
+    {
+      "doc_id": "doc-2",
+      "query": "界面科学",
+      "chunk_count": 4,
+      "parent_score": 1024.0,
+      "chunk_late_score": 1024.0
+    },
+    {
+      "doc_id": "doc-3",
+      "query": "水处理",
+      "chunk_count": 4,
+      "parent_score": 1024.0,
+      "chunk_late_score": 1024.0
+    },
+    {
+      "doc_id": "doc-4",
+      "query": "实验方法",
+      "chunk_count": 4,
+      "parent_score": 1024.0,
+      "chunk_late_score": 1024.0
+    }
+  ]
+}
