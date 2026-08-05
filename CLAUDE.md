@@ -135,6 +135,38 @@ curl http://localhost:8000/api/v1/dft/tools
 - W-N-E PoC: 冷热分层路由层实测 (1 周)
 - W-N-F 起步: 领域微调 LoRA 数据构造 (1-2 月长跑)
 
+## 当前状态 (2026-08-05 W-N-A/B/C/D 后续 commit 累计 + GC + ARC + E + F + D+ 锚点范式补 ~567 — 类 20.173 据实累计, 5 件套守恒, 0 production code 守恒)
+
+**W-N-GC +1 (`1409ee67d`) 已加段但锚点范式 ~537 → ~562 仅写"据实累计"未列具体 commits**. 本任务 (W-N-ANC +1) 据实测 origin/main 补完:
+
+**W-N-A/B/C/D 后续 commit 累计** (W-N-GC +1 之后, 2026-08-05):
+- **W-N-E (冷热分层路由 PoC)**: 2 commits `aac562075` `d8e463d1c` (PoC bench + 决策, W-N-E +2 起步仅 worktree memory) — PoC 路由 + bench + 收口沉淀
+- **W-N-F (LoRA 微调起步)**: 3 commits `3f2506a4b` `ce0157bdc` `50d0c0278` (构造脚本 + 训练骨架 + 决策 doc) — 1000+ (query, positive) pairs 构造 + Qwen3 LoRA 训练脚本 + adapter 加载逻辑占位 + 决策文档
+- **W-N-D+ (真接入准备)**: 4 commits `41ab080a1` `7387978e7` `025bb505c` `82b4b45bd` (能力验证 + 真 bench + 触发条件 + 收口) — GPU + bge-m3 能力验证 + late chunking 真 bench + 5 文档 + 触发条件文档 + 收口沉淀
+- **W-N-ARC (worktree 归档)**: 1 commit `710549f96` (worktree + branch 永久删除) — worktree-agent-w-n-* 永久归档 + 分支删除
+- **W-N-GC (+2)**: 2 commits `91fa4b450` `877092c6f` (CLAUDE.md 同步收口 + MEMORY.md 索引新增) — 5 件套实测 + 锚点据实累计 + MEMORY.md #24 段索引
+
+**W-N-A/B/C/D + GC + ARC + E + F + D+ 累计 commits**: ~30 commits 据实累计 (W-N-A/B/C/D 25 + W-N-GC +2 + W-N-ARC +1 + W-N-E +2 + W-N-F +3 + W-N-D+ +4, 派工 brief 估 +25 偏差据实 +5)
+
+**锚点范式**: W100 +75 (~537) → W-N-D+ +2 (~567) 据实累计 +30 commits (派工 brief 估 ~562 偏差据实 +5)
+
+**派生 metrics** (W-N-A/B/C/D/E/F/D+/+/ARC/GC 累计):
+- **类 20 沉淀**: ~30 条 (类 20.155 - 类 20.172, 含 W-N-A/B/C/D 12 + W-N-D+ 8 + W-N-E 5 + W-N-F 5)
+- **scripts/bench 工具**: 5 个 (bench_hnsw_params / bench_late_chunking / reembed_knowledge_bge_m3 / check_pgvector_version / cold_hot_routing PoC)
+- **app/services/ 新增**: 3 个 (late_chunking_service / cold_hot_router / embedding_service 双后端扩展)
+- **alembic 迁移**: 6 个 (098-104, 099_add_dft_jobs 平行 agent 串单链纪律守恒)
+- **决策文档**: 3 个 (bge-m3 / cold-hot routing / e2e late chunking 待加)
+- **memory 沉淀**: 12+ 份 (W-N-A/B/C/D/E/F/D+/+/GC/ARC 起步 + 收口, 含 MEMORY.md #24 段索引)
+- **docs/capability/**: 1 (gpu-bge-m3 能力验证)
+- **results/ JSON**: 3 个 (hnsw_knowledge_100q / late_chunking_bench_2026-08 / cold_hot_routing_bench_2026-08)
+
+**派工 brief vs 实测** (类 20.173 据实累计, 派工 v6 §13.3 假设禁令沿用):
+- brief 锚点估 "~537 → ~562" → 实测 ~537 → ~567 (+30 commits, +5 偏差据实)
+- brief 假设 W-N-E 3 commits → 实测 2 commits (W-N-E +1 仅 worktree memory 未入 main)
+- brief 假设 W-N-D+ 4 commits → 实测 4 commits ✅
+- brief 假设 W-N-ARC 1 commit → 实测 1 commit ✅
+- brief 假设 W-N-F 3 commits → 实测 3 commits ✅
+
 ## 当前状态 (2026-08-04 W100 +74 全面收口 — chat UI + chat console + RAG 收口 16 commits 累计, 2 永久铁律, 锚点范式 W100 +N 据实累计, 0 production code 守恒)
 
 **W100 +49~+58 chat UI + +59~+61 chat console + +68~+74 RAG 收口, 16 commits 累计**, 服务器 serve `index-4acf4393.js`:
