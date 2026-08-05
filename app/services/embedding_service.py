@@ -15,6 +15,7 @@ Phase 2 重构 (2026-06-24 sentence-transformers 5.6.0 升级)：
 import asyncio
 import logging
 import os
+from abc import ABC, abstractmethod
 from sentence_transformers import SentenceTransformer
 from typing import List, Optional
 
@@ -33,6 +34,150 @@ MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B")
 DEVICE_OVERRIDE = os.getenv("EMBEDDING_DEVICE", "auto").lower()
 # 批量大小：GPU 上 64 更舒服，CPU 32 够用
 BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
+
+# W-N-C +1: 双后端抽象 (Qwen3 默认 | bge_m3 灰度)
+# 注意: 保留原 _model singleton + 通过 EMBEDDING_BACKEND env var 路由,
+# 不破坏现有 generate_embedding_sync / generate_embedding / generate_embeddings /
+# get_or_compute_query_embedding 调用方.
+EMBEDDING_BACKEND_NAME = os.getenv("EMBEDDING_BACKEND", "qwen3").lower()  # qwen3 | bge_m3
+BGE_M3_MODEL_NAME = "BAAI/bge-m3"
+
+
+class EmbeddingBackend(ABC):
+    """Embedding 后端抽象 (W-N-C +1, 阶段 C.1).
+
+    设计:
+      - 双轨兼容: 现有 _model singleton 仍生效 (Qwen3 路径), BGEM3Backend 通过
+        SentenceTransformer 独立加载, 互不干扰
+      - from_env() 路由 EMBEDDING_BACKEND env var -> Qwen3Backend / BGEM3Backend
+      - encode_async 默认在线程池跑, 不阻塞 event loop
+      - 子类提供 name + dim + encode() 即可, 单测用 monkeypatch 替换底层
+    """
+    name: str = ""
+    dim: int = 1024
+
+    @abstractmethod
+    def encode(self, texts: List[str]) -> "np.ndarray":
+        ...
+
+    async def encode_async(self, texts: List[str]) -> "np.ndarray":
+        """默认在线程池跑, 避免阻塞事件循环.
+
+        重写可选, 但 BGEM3Backend / Qwen3Backend 都用默认实现已足够.
+        """
+        import asyncio
+        return await asyncio.to_thread(self.encode, texts)
+
+    @classmethod
+    def from_env(cls) -> "EmbeddingBackend":
+        if EMBEDDING_BACKEND_NAME == "bge_m3":
+            return BGEM3Backend()
+        return Qwen3Backend()
+
+
+class Qwen3Backend(EmbeddingBackend):
+    """Qwen3-Embedding-0.6B 后端 (默认, 1024d).
+
+    复用现有 _model singleton — 不重复加载模型.
+    现有 generate_embedding_sync / generate_embedding / generate_embeddings 已经
+    走 _model 路径, 本 backend 仅作为 from_env() 的返回类型.
+    """
+    name = "qwen3"
+    dim = 1024
+
+    def encode(self, texts: List[str]) -> "np.ndarray":
+        """复用 _model singleton. 失败返回空 ndarray (上层 generate_embedding 已 try/except)."""
+        import numpy as np
+        model = _get_model()
+        if model is None:
+            return np.zeros((len(texts), self.dim), dtype=np.float32)
+        prompt = build_embedding_prompt(False, MODEL_HAS_QUERY_PROMPT)
+        return model.encode(
+            texts,
+            prompt=prompt,
+            normalize_embeddings=True,
+            batch_size=BATCH_SIZE,
+            convert_to_numpy=True,
+        ).astype(np.float32)
+
+
+class BGEM3Backend(EmbeddingBackend):
+    """BAAI/bge-m3 后端 (灰度候选, 1024d, MTEB 多语言).
+
+    独立 _model_holder, 不复用 Qwen3 singleton. 这样:
+      1. 现有 Qwen3 路径零影响 (默认 EMBEDDING_BACKEND=qwen3 时 BGEM3Backend 永不实例化)
+      2. 灰度时切换 ENV 即可, 不需要清理 Qwen3 _model
+      3. 失败回退: 加载失败时 _model_holder = None, encode 返回零向量 (上层 catch)
+
+    注意: 本机 CUDA 不可用时, BGEM3Backend 仍可用 SentenceTransformer(BAAI/bge-m3,
+    device="cpu") 加载 (慢但功能正确). GPU pass-through 由 _detect_device() 自动选.
+    """
+    name = "bge_m3"
+    dim = 1024
+
+    def __init__(self) -> None:
+        import numpy as np
+        self._model_holder: Optional[SentenceTransformer] = None
+        try:
+            device = _detect_device()
+            logger.info(
+                f"[bge_m3] 加载模型: {BGE_M3_MODEL_NAME}, device={device}"
+            )
+            self._model_holder = SentenceTransformer(
+                BGE_M3_MODEL_NAME,
+                device=device,
+                trust_remote_code=True,
+            )
+            actual_device = next(self._model_holder.parameters()).device
+            logger.info(
+                f"[bge_m3] 模型加载完成: {BGE_M3_MODEL_NAME}, "
+                f"dim={self._model_holder.get_embedding_dimension()}, "
+                f"max_seq_length={self._model_holder.max_seq_length}, "
+                f"actual_device={actual_device}"
+            )
+        except Exception as e:
+            logger.warning(
+                f"[bge_m3] 模型加载失败 ({type(e).__name__}: {str(e)[:200]}), "
+                f"encode 将返回零向量"
+            )
+            self._model_holder = None
+
+    def encode(self, texts: List[str]) -> "np.ndarray":
+        """bge-m3 推理. 失败返回零向量 (上层 try/except 不抛)."""
+        import numpy as np
+        if self._model_holder is None:
+            return np.zeros((len(texts), self.dim), dtype=np.float32)
+        try:
+            return self._model_holder.encode(
+                texts,
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+            ).astype(np.float32)
+        except Exception as e:
+            logger.warning(f"[bge_m3] encode 失败: {e}")
+            return np.zeros((len(texts), self.dim), dtype=np.float32)
+
+
+_backend_singleton: Optional["EmbeddingBackend"] = None
+
+
+def get_embedding_backend() -> "EmbeddingBackend":
+    """获取 EmbeddingBackend singleton (W-N-C +1, 阶段 C.1).
+
+    路由逻辑:
+      1. 首次调用: 根据 EMBEDDING_BACKEND env var 实例化对应 backend
+      2. 后续调用: 返回同一个 instance (singleton, 不重复加载模型)
+      3. 现有 _model (Qwen3 路径) 与 _backend_singleton (双后端路径) 并存,
+         不破坏 generate_embedding_sync / generate_embedding 等老 API
+    """
+    global _backend_singleton
+    if _backend_singleton is None:
+        _backend_singleton = EmbeddingBackend.from_env()
+        logger.info(
+            f"Embedding backend (W-N-C +1): {_backend_singleton.name} "
+            f"(dim={_backend_singleton.dim})"
+        )
+    return _backend_singleton
 
 _model = None
 _model_loading = False
