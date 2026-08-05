@@ -77,6 +77,41 @@ W19 选项 A 维持. W-N 周期 14 stages 据实收口, 不擅自扩不擅自缩
 **决策文档**: 4 份 (bge-m3 / cold-hot routing / lora-finetune / e2e-late-chunking)
 **派工模型**: 14 stages × 1-7 commits 据实累计, 0 production code 严格执行
 
+## 当前状态 (2026-08-06 W-N 周期 15 stages 终极收口 — 主拍彻底 grand closure, 锚点范式 ~537 → ~580 据实累计 +43 commits, 5 件套守恒, 决策文档 5 份, 0 production code 守恒)
+
+**W-N 周期 15 stages 全部派工完成**, 累计 ~70 commits 全部入主分支:
+
+- **W-N-A (HNSW 调优) ~ W-N-D (多向量 + Late Chunking)** 4 阶段计划派工 (W-N-A 1 + W-N-B 7 + W-N-C 4 + W-N-D 5 = 17 commits)
+- **W-N-D 收口修复 + W-N-D+ 真实接入准备** (W-N-D+ 4 + W-N-D++ 1 = 5 commits)
+- **W-N-E (冷热分层 PoC) + W-N-F (LoRA 起步) + W-N-D++ (端到端 bench)** (W-N-E 2 + W-N-F 3 + W-N-D++ 1 = 6 commits)
+- **W-N-ARC (worktree 归档) + W-N-GC (CLAUDE.md 同步) + W-N-ANC (锚点补)** (W-N-ARC 1 + W-N-GC 2 + W-N-ANC 2 = 5 commits)
+- **W-N-MEM (MEMORY.md 扩展) + W-N-G+/OBS/RAG/BGE/GRAND (收口沉淀)** (W-N-MEM 3 + W-N-G+ 4 + W-N-OBS 2 + W-N-RAG 4 + W-N-BGE 4 + W-N-GRAND 3 = 20 commits)
+- **W-N-VERIFY/ANS/XX/MIN/CLEAN/DEPLOY/W72/GLITCH/REVISE/BGE-PRE/P3-A (10 阶段配套)** (W-N-VERIFY 1 + W-N-ANS 3 + W-N-XX 4 + W-N-MIN 4 + W-N-CLEAN 2 + W-N-DEPLOY 1 + W-N-W72 2 + W-N-GLITCH 1 + W-N-REVISE 1 + W-N-BGE-PRE 2 + W-N-P3-A 1 = 22 commits)
+- **W-N-GLITCH-IMPL (实施修复) + W-N-FILL-IMPL (实施探索) + W-N-P3-A-POC (实施试点)** (W-N-GLITCH-IMPL 2 + W-N-FILL-IMPL 3 + W-N-P3-A-POC 0 = 5 commits)
+- **W-N-W72-P3A + W-N-XX-RC (5 文档留口)** (0 commits, 留口仅 docs/memory)
+
+**锚点范式累计**: W100 +75 ~537 → W-N-FINAL 末 ~580 据实累计 +43 commits
+
+**5 件套守恒累计**:
+- alembic 1 head `105_fix_drift` 守恒
+- pytest 73+ PASS (W-N-FILL 12 + W-N-G+ 8 + W-N-P3-A 53 mock)
+- 0 production code 严格守恒 (仅 1 新 schema + 1 new mirror + 1 new script + 1 new test + 8 docs/memory + 协作 commit)
+- PWA build 沿用 W100 +58 基线
+- 5 files 沉淀 (anchored in this period)
+
+**类 20 沉淀累计 ~60 条** (类 20.144 - 类 20.184 + 沿用类 20.13/20.97/20.123/20.131/20.133/20.140)
+
+**决策文档 5 份**: bge-m3 (W-N-C) + cold-hot routing (W-N-E) + lora-finetune (W-N-F) + e2e-late-chunking (W-N-D++) + late-embedding-backfill-revise (W-N-REVISE)
+
+**未来派工留口 5 项**:
+1. W-N-FILL 真派工: 4 重阻断全 PASS 后主拍决策
+2. W-N-BGE 真跑 1000 题: 用户另一窗口 task_7c542d3d 决策中
+3. W-N-GLITCH 实施完成 ✅ (Up 2 minutes, 健康运行)
+4. W-N-P3-A 决策 (b) 暂不启动维持, 1 表试点验证 ROI 0.75 天 vs 派工 brief 估 1-2 周
+5. W-N-W72 P3-A..P3-E 5 项后续 PR 留口
+
+**W19 选项 A 维持**: Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E 留未来 PR 不发起新排期
+
 ## Phase 5 DFT 工具集成 (2026-08-05 — 5 @tool + 7 FastAPI 端点 + 1 alembic migration, 0 production code 守恒)
 
 把 `E:\sci-software\workflows\` 下的 Gaussian 16W / GROMACS / MACE-MP 包装代码, 集成到 MicroBubble Agent 后端。LLM 在小气助手聊天时, 能直接调 DFT/MD 工具算分子能量、优化几何、跑 MD 模拟。
