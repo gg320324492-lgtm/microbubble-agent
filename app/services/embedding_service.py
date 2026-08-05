@@ -42,6 +42,17 @@ BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
 EMBEDDING_BACKEND_NAME = os.getenv("EMBEDDING_BACKEND", "qwen3").lower()  # qwen3 | bge_m3
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
 
+# W-N-F +3: LoRA adapter 加载逻辑占位 (派工 brief 派工起点, 严禁真加载)
+# 派工 brief: 1-2 月长跑训练未实施, 此处仅 env var 占位
+# 真加载逻辑待 W-N-G+ 派工 (peft + sentence-transformers 集成)
+# 设计意图:
+#   - LORA_ENABLED=false (默认) → 走原 base model, 0 改动
+#   - LORA_ENABLED=true + LORA_PATH=有效路径 → 加载 peft adapter
+#   - 加载失败 → logger.error + 立即回退 base model, 不阻塞生产
+LORA_ENABLED = os.getenv("LORA_ENABLED", "false").lower() in ("1", "true", "yes")
+LORA_PATH = os.getenv("LORA_PATH", "")  # e.g. data/finetune/lora_adapter/
+LORA_DEFAULT_DISABLED_REASON = "W-N-F +3 占位, 真加载待 W-N-G+ 派工"
+
 
 class EmbeddingBackend(ABC):
     """Embedding 后端抽象 (W-N-C +1, 阶段 C.1).
