@@ -91,11 +91,16 @@ class HybridRetriever:
         # W99 P2: 消费预计算的 embedding task (若有), 不影响主流程
         if vector_query_embedding_task is not None:
             try:
-                _ = await vector_query_embedding_task  # cache primed, no use of return value
+                query_embedding = await vector_query_embedding_task  # cache primed + chunk recall input
+                if query_embedding is not None:
+                    chunk_results = await self._chunk_late_recall(
+                        query_embedding, candidate_k, category
+                    )
             except Exception as e:
-                logger.debug(f"[W99 P2] precomputed embedding consume skip: {e}")
+                logger.debug(f"[late-chunking] embedding consume skip: {e}")
 
         vector_results = []
+        chunk_results = []
         bm25_results = []
         graph_results = []
         for i, (result, name) in enumerate(zip(results_list, task_names)):
@@ -109,8 +114,10 @@ class HybridRetriever:
             elif name == "graph":
                 graph_results = result
 
-        # 合并去重（三路）
+        # 合并去重（三路 + late-chunking）
         merged = self._merge_results(vector_results, bm25_results, graph_results)
+        if chunk_results:
+            merged = self._merge_results(merged, chunk_results)
 
         if not merged:
             return []
@@ -301,6 +308,45 @@ class HybridRetriever:
             r["normalized_score"] = round((r.get("score", 0) - min_score) / score_range, 4)
 
         return results
+
+    async def _chunk_late_recall(
+        self,
+        query_embedding: List[float],
+        top_k: int = 10,
+        category: Optional[str] = None,
+    ) -> List[dict]:
+        """追加的 late-chunking 召回；失败时返回空集，不影响父级检索。"""
+        from sqlalchemy import text
+
+        stmt = text(
+            """
+            SELECT kc.knowledge_id, min(v <=> :query_embedding) AS distance
+            FROM knowledge_chunks AS kc
+            CROSS JOIN LATERAL unnest(kc.chunk_embedding) AS vectors(v)
+            JOIN knowledge AS k ON k.id = kc.knowledge_id
+            WHERE kc.chunk_embedding IS NOT NULL
+              AND (:category IS NULL OR k.category = :category)
+            GROUP BY kc.knowledge_id
+            ORDER BY distance
+            LIMIT :top_k
+            """
+        )
+        try:
+            result = await self.db.execute(
+                stmt,
+                {"query_embedding": query_embedding, "category": category, "top_k": top_k},
+            )
+            return [
+                {
+                    "id": row.knowledge_id,
+                    "score": float(1.0 - row.distance),
+                    "retrieval_method": "chunk_late",
+                }
+                for row in result.fetchall()
+            ]
+        except Exception as exc:
+            logger.warning("late chunking 召回失败: %s", exc)
+            return []
 
     async def evaluate(
         self,
