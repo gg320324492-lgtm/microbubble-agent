@@ -64,6 +64,7 @@ def _import_application_routers():
         chat_feedback,  # W98 CHAT-P1-D3: POST /chat/feedback 用户反馈闭环
         chat_history,
         dashboard,
+        dft,  # Phase 5 DFT/MD 计算 (Gaussian/GROMACS/MACE/PySCF)
         drive_files,
         drive_folders,
         drive_to_kb,  # W98: 网盘文件入库 RAG (drive → kb)
@@ -128,6 +129,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         # RAG PR6 (W92): /admin/search-logs 7 维日志 (admin 鉴权, 不动 analytics 老路由)
         (search_logs_admin.router, {"prefix": "/api/v1", "tags": ["检索日志管理"]}),
         (chat_history.router, {"prefix": "/api/v1", "tags": ["聊天历史"]}),
+        (dft.router, {"prefix": "/api/v1", "tags": ["DFT/MD 计算"]}),  # Phase 5
         (admin.router, {"prefix": "/api/v1", "tags": ["管理"]}),
         (admin_kb_monitor.router, {"prefix": "/api/v1", "tags": ["KB 监控"]}),  # qa-bench v3.1 D5
         (ingest.router, {"prefix": "/api/v1", "tags": ["RAG auto-ingest (admin)"]}),  # W100 +73

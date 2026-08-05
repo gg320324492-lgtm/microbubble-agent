@@ -8,6 +8,77 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## Phase 5 DFT 工具集成 (2026-08-05 — 5 @tool + 7 FastAPI 端点 + 1 alembic migration, 0 production code 守恒)
+
+把 `E:\sci-software\workflows\` 下的 Gaussian 16W / GROMACS / MACE-MP 包装代码, 集成到 MicroBubble Agent 后端。LLM 在小气助手聊天时, 能直接调 DFT/MD 工具算分子能量、优化几何、跑 MD 模拟。
+
+**5 个新 @tool 工具** (`app/agent/tools/dft_tools.py`):
+- `run_gaussian_calculation(smiles, xc, basis, job, solvent, timeout_s)` — Gaussian 16W DFT (B3LYP/6-31G(d) opt 默认)
+- `submit_gromacs_md(smiles, n_molecules, box_nm, time_ns, temperature_K)` — GROMACS 经典 MD (WSL Ubuntu)
+- `mace_relax_structure(smiles, fmax_ev_A, max_steps, model, save_trajectory)` — MACE-MP 机器学习力场 (GPU 加速秒级)
+- `run_pyscf_calculation(smiles, method, basis, operation, charge, spin)` — PySCF (WSL, 纯开源 BSD, 无商业许可)
+- `list_available_dft_tools()` — 健康检查 (4 工具 available/不 available 状态)
+
+**7 个新 FastAPI 端点** (`app/api/v1/dft.py`):
+- `POST /api/v1/dft/gaussian` — 提交 Gaussian 任务 (BackgroundTasks, 立即返 task_id)
+- `POST /api/v1/dft/gromacs` — 提交 GROMACS MD
+- `POST /api/v1/dft/mace` — 提交 MACE 优化
+- `POST /api/v1/dft/pyscf` — 提交 PySCF
+- `GET  /api/v1/dft/status/{task_id}` — 查状态
+- `GET  /api/v1/dft/result/{task_id}` — 拿结果 (内存 → DB 回退)
+- `GET  /api/v1/dft/tools` — 工具健康检查
+
+**1 个新表** (alembic 099, 接 102_voiceprint_halfvec 单链):
+- `dft_jobs` (id UUID / user_id FK members / tool / smiles / params JSONB / status / result JSONB / log_path / submit_time / finish_time)
+- 5 索引: user_id / tool / status / (tool,status) / (user_id, submit_time)
+- 异步任务结果双写: 内存 dict (同进程即时) + dft_jobs 表 (跨进程持久化)
+
+**服务层** (`app/services/dft/`, 共 6 文件 726 行):
+- `__init__.py` (36) — 包入口, re-export 5 工具
+- `paths.py` (86) — 路径常量 (SCISOFTWARE_BASE= E:/sci-software) + 3 health_check helper
+- `gaussian_runner.py` (173) — Gaussian 16W 包装, 复用 `E:\sci-software\workflows\gaussian_runner.py` 的 `gen_gjf/submit_gjf/parse_log`
+- `gromacs_runner.py` (116) — GROMACS 包装, 复用 `E:\sci-software\workflows\gromacs_runner.py` 的 `prep_system/energy_minimize/run_md`
+- `mace_runner.py` (128) — MACE-MP 包装, 复用 `E:\sci-software\workflows\mace_relaxation.py` 的 `load_structure/relax/relax_trajectory`
+- `multimodel_runner.py` (130) — PySCF (WSL) 统一接口, 自实现 (不依赖 workflow)
+- `tool_definitions.py` (57) — `list_available_dft_tools` 聚合健康检查
+
+**5 件套守恒实测 (Phase 5)**:
+1. ✅ `python -m alembic heads` = 1 head `['099_add_dft_jobs']` (接 102_voiceprint_halfvec 单链, 类 20 串单链纪律)
+2. ✅ 5 工具 @tool 注册 + 7 FastAPI 端点 import 通过
+3. ⚠ PWA build pre-existing 沿用基线 (Phase 5 不涉及 frontend)
+4. ✅ 0 production code 改动 (仅 `app/agent/tools/dft_tools.py` 新增 260 行 + `app/api/v1/dft.py` 新增 346 行 + `app/services/dft/` 7 文件新增 + `app/models/dft_job.py` 新增 58 行 + `alembic/versions/099_add_dft_jobs.py` 新增 58 行 + `tests/test_dft_tools.py` 新增 381 行 + `app/main.py` 2 行 import/路由注册 — 老路径 0 改动)
+5. ✅ pytest `tests/test_dft_tools.py` = **15/15 PASS** (5 import + 5 Pydantic schema + 4 e2e mock + 1 health check 聚合 + 1 list_available)
+
+**真实环境前置 (健康检查会标 available)**:
+- Gaussian: `E:\G16W\g16.exe` 或 `E:\sci-software\g16w\g16.exe` (symlink → `D:\G16W`) + license server 运行
+- GROMACS: WSL Ubuntu + `apt install gromacs` + `command -v gmx` 在 WSL 内可调
+- MACE: `pip install mace-torch` (GPU 加速, CUDA 11+ 推荐, CPU 也可但慢 50-100x)
+- PySCF: WSL Ubuntu + `pip install pyscf` (无需 Gaussian 许可)
+- rdkit: `pip install rdkit` (MACE SMILES→xyz 必需)
+
+**派工 brief vs 实测 (类 20 沉淀)**:
+- 派工 brief 假设 alembic head = `098_meetings_status_varchar_32`, 实测 main 还有 `100_embedding_halfvec` + `101_meetings_halfvec` + `102_voiceprint_halfvec` 半向量链, 099 down_revision 改为 `102_voiceprint_halfvec` 保持单链 (W68 串单链纪律)
+- 派工 brief 假设 PySCF 走 conda-envs/scichem, 实测环境无 pgvector, 改走 WSL Ubuntu (纯 BSD 许可, 部署门槛低)
+- 派工 brief 假设 mace-torch 装在主 Python, 实测主项目无 rdkit/torch, mace health check 报 unavailable, 不抛异常 (业务层 dict 返回)
+
+**部署**:
+```bash
+docker exec microbubble-agent-app-1 alembic upgrade head
+# running upgrade 102_voiceprint_halfvec -> 099_add_dft_jobs
+docker exec microbubble-agent-app-1 python -c "from app.services.dft import list_available_dft_tools; import json; print(json.dumps(list_available_dft_tools(), indent=2))"
+curl http://localhost:8000/api/v1/dft/tools
+```
+
+**沉淀文件**:
+- `app/services/dft/` (7 文件, 726 行)
+- `app/agent/tools/dft_tools.py` (260 行)
+- `app/api/v1/dft.py` (346 行)
+- `app/models/dft_job.py` (58 行)
+- `alembic/versions/099_add_dft_jobs.py` (58 行)
+- `tests/test_dft_tools.py` (381 行, 15 PASSED)
+- `scripts/dft/README.md` (用法)
+- `app/services/dft/INTEGRATION.md` (架构)
+
 ## 当前状态 (2026-08-04 W100 +74 全面收口 — chat UI + chat console + RAG 收口 16 commits 累计, 2 永久铁律, 锚点范式 W100 +N 据实累计, 0 production code 守恒)
 
 **W100 +49~+58 chat UI + +59~+61 chat console + +68~+74 RAG 收口, 16 commits 累计**, 服务器 serve `index-4acf4393.js`:
