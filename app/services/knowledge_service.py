@@ -478,6 +478,35 @@ class KnowledgeService:
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def list_knowledge_partition(
+        self,
+        partition: str = "hot",
+        limit: int = 100,
+        threshold_months: int = 6,
+    ) -> List[Knowledge]:
+        """W-N-E +1 PoC: 按时间分区列出知识 (逻辑分区, 0 schema 改动)
+
+        Args:
+            partition: "hot" | "cold" | "all"
+            limit: 最大返回行数
+            threshold_months: 冷热分界(月)
+
+        Returns:
+            Knowledge 列表, 按 created_at DESC 排序
+        """
+        from app.services.cold_hot_router import get_partition_where_clause
+
+        where_clause = get_partition_where_clause(partition, threshold_months)
+        # ORM 路径: select(Knowledge).where(text(f"deleted_at IS NULL AND {where_clause}"))
+        query = (
+            select(Knowledge)
+            .where(text(f"deleted_at IS NULL AND {where_clause}"))
+            .order_by(Knowledge.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
     async def create_knowledge(
         self,
         title: str,
