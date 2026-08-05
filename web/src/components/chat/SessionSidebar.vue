@@ -297,6 +297,17 @@ const batchDelete = async () => {
 // W100 +45 P3-VIRTUAL: sessionListRef 已在文件顶部声明 (供 useVirtualList 共享容器)
 let pendingScrollTop = null
 
+// 类 20.152 + 类 20.153: SessionItem.active 状态时 SessionActions 显示 (pin-btn/archive-btn/delete-btn)
+//   鼠标 hover 在按钮上时 wheel 事件 target 是按钮, 默认不冒泡 → SessionList 滚轮失效
+//   解决: 在 SessionList 上加 @wheel 监听, 强制 scrollBy 接管 (无论 target)
+//   浏览器仍可 click 按钮 (click vs wheel 分离)
+const onListWheel = (e: WheelEvent) => {
+  if (sessionListRef.value) {
+    sessionListRef.value.scrollTop += e.deltaY
+    e.preventDefault()  // 阻止按钮自己处理 (避免 button-specific default 如 slider 滚动)
+  }
+}
+
 onBeforeUpdate(() => {
   if (sessionListRef.value) {
     pendingScrollTop = sessionListRef.value.scrollTop
@@ -403,7 +414,7 @@ onUpdated(() => {
       <span class="sync-icon">⚠</span>
       <span class="sync-text" :title="chatHistoryStore.syncError">同步失败</span>
     </div>
-    <div v-if="!collapsed" class="session-list" ref="sessionListRef" tabindex="0" aria-label="会话列表">
+    <div v-if="!collapsed" class="session-list" ref="sessionListRef" tabindex="0" aria-label="会话列表" @wheel="onListWheel">
       <!-- W100 +28: 分组显示 (非批量模式) -->
       <template v-if="!batchMode">
         <!-- 置顶组 -->
