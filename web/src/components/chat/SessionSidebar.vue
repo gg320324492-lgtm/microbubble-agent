@@ -701,6 +701,7 @@ onUpdated(() => {
 
 <style scoped>
 .session-sidebar {
+  height: 100%; min-height: 0;
   display: flex; flex-direction: column;
   width: 240px;
   background: var(--color-bg-warm);
