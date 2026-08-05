@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from pgvector.sqlalchemy import Vector
 
 revision = "104_add_knowledge_chunk_late_embedding"
-down_revision = "103_add_embedding_model_version"
+down_revision = "099_add_dft_jobs"
 branch_labels = None
 depends_on = None
 
