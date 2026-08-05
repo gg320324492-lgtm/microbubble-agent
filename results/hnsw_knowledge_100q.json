@@ -1,0 +1,69 @@
+{
+  "table": "knowledge",
+  "param_grid": "m,ef_construction,ef_search",
+  "k": 10,
+  "n_queries": 100,
+  "needs_reindex": true,
+  "results": {
+    "m=16,ef_c=64,ef_s=40": {
+      "m": 16,
+      "ef_construction": 64,
+      "ef_search": 40,
+      "recall_at_k": 1.0,
+      "p50_ms": 0.8432545000687242,
+      "p95_ms": 1.0632903511577751,
+      "n_queries": 100,
+      "drop_create_ms": 278.0355180002516
+    },
+    "m=16,ef_c=64,ef_s=100": {
+      "m": 16,
+      "ef_construction": 64,
+      "ef_search": 100,
+      "recall_at_k": 1.0,
+      "p50_ms": 1.0381460015196353,
+      "p95_ms": 1.31173049157951,
+      "n_queries": 100,
+      "drop_create_ms": 286.2453249981627
+    },
+    "m=16,ef_c=64,ef_s=200": {
+      "m": 16,
+      "ef_construction": 64,
+      "ef_search": 200,
+      "recall_at_k": 1.0,
+      "p50_ms": 1.327908001258038,
+      "p95_ms": 1.5523100570135284,
+      "n_queries": 100,
+      "drop_create_ms": 353.4005950059509
+    },
+    "m=24,ef_c=64,ef_s=40": {
+      "m": 24,
+      "ef_construction": 64,
+      "ef_search": 40,
+      "recall_at_k": 1.0,
+      "p50_ms": 0.9776789956958964,
+      "p95_ms": 1.2292977939068805,
+      "n_queries": 100,
+      "drop_create_ms": 279.78357300162315
+    },
+    "m=24,ef_c=64,ef_s=100": {
+      "m": 24,
+      "ef_construction": 64,
+      "ef_search": 100,
+      "recall_at_k": 1.0,
+      "p50_ms": 1.1106694946647622,
+      "p95_ms": 1.2936945451656356,
+      "n_queries": 100,
+      "drop_create_ms": 313.1493499968201
+    },
+    "m=24,ef_c=64,ef_s=200": {
+      "m": 24,
+      "ef_construction": 64,
+      "ef_search": 200,
+      "recall_at_k": 1.0,
+      "p50_ms": 1.4927914962754585,
+      "p95_ms": 1.871060798293911,
+      "n_queries": 100,
+      "drop_create_ms": 392.1469170018099
+    }
+  }
+}
