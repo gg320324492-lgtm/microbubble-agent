@@ -694,3 +694,74 @@
 ### Capability 报告 (1 份)
 
 - **docs/capability/gpu-bge-m3-2026-08-05.md** — W-N-D+ GPU + bge-m3 能力验证 (RTX 5090 32GB + bge-m3 embedding 速度, Qwen3 1024d 折中方案)
+
+# 25. W-N 周期 grand closure 总收口 (2026-08-05, 14 stages)
+
+> **派工**: W-N-GRAND +1 主拍协调范式第 N 次派工, W-N 周期 14 stages 总收口
+> **基线 HEAD**: `1cc5362e2` (W-N-D++ 端到端 late chunking 召回 bench + 决策归档)
+> **当前 HEAD**: W-N-GRAND +1 commit (本 runbook + MEMORY.md #25 + CLAUDE.md 顶部新段)
+> **锚点范式**: W100 +75 ~537 → W-N-D++ ~572 据实累计 (+35 commits)
+> **alembic head**: `104_add_knowledge_chunk_late_embedding (head)` 单链, 1 head 守恒 ✓
+> **5 件套守恒**: 0 production code 守恒 + alembic 1 head 守恒 + pytest 沿用基线 + PWA build 沿用基线 + 锚点范式据实累计
+> **类 20 沉淀**: W-N 周期新增 ~25 条 (类 20.155-179, 含 W-N-A 6 + W-N-B 4 + W-N-C 1 + W-N-D 2 + W-N-ARC 5 + W-N-ANC 1 + W-N-GRAND 6)
+
+## 14 stages 累计 (~35 commits 推 main)
+
+- **W-N-A HNSW 调优** (1 cherry-pick): bench 工具 `14bc9246e`, 232 行小数据集 PG 默认参数已最优, 099 迁移跳过
+- **W-N-B halfvec 量化** (7 commits): 3 表半精度迁移 + HalfVector wrapper, 19/19 pytest PASS
+- **W-N-C bge-m3 灰度** (4 commits): EmbeddingBackend 双后端 + 100 题轻量 bench, Qwen3 默认生产保留
+- **W-N-D 多向量 + Late Chunking** (4 commits): late_chunking 服务 + 104 迁移 + hybrid_retriever 接入
+- **W-N-D+ 真 bench** (4 commits): GPU + bge-m3 能力验证 + late chunking 真 bench 85% 胜率
+- **W-N-D++ 端到端召回 bench** (1 commit): 端到端决策归档
+- **W-N-E 冷热分层 PoC** (2 commits): 3 决策门禁 2/3 PASS → 整段归档
+- **W-N-F LoRA 微调起步** (3 commits): 5 维度决策 + 4 触发条件, 当前不启动
+- **W-N-GC CLAUDE.md 同步** (2 commits): pgvector 优化 plan 收口状态同步
+- **W-N-ARC worktree 归档** (1 commit): W-N 周期 A-F 全部 worktree 归档清理
+- **W-N-ANC 锚点范式补** (2 commits): 锚点 ~562 → ~567 + 派生 metrics
+- **W-N-MEM 索引扩展** (3 commits): MEMORY.md #24 段扩展 + 5 件套实测
+- **W-N-GRAND 总 grand closure** (3 commits: +0 startup + +1 runbook + +2 closure): 14 stages 总收口
+- **W-N-G+/OBS/RAG/BGE/FILL 5 起步阶段** (实测仅 G+/RAG/BGE 3 起步): OBS/FILL 未派工
+
+## 派工 brief vs 实测 6 项偏差据实 (类 20.174-179)
+
+| brief 假设 | 实测 | 偏差 |
+|------------|------|------|
+| 8 phase agents 完成 | 12 stages 完成 + 3 stages 起步未合 main (G+/RAG/BGE) | +4 stages 据实 |
+| W-N-G+/OBS/RAG/BGE/FILL 5 阶段并行 | 仅 G+/RAG/BGE 3 起步, OBS/FILL 未派工 | -2 stages 据实 |
+| alembic head 105 | 实测 104 (W-N-D 104 迁移) | -1 据实 |
+| 锚点 ~537 → ~XXX | 实测 35 commits 推 main 累计 ~537 → ~572 据实 | +5 偏差据实 |
+| 5 决策 doc | 实测 4 (bge-m3 / cold-hot / lora / e2e-late-chunking) | -1 决策据实 (e2e-late-chunking 由 W-N-D++ 加) |
+| 0 production code | 严格守恒 (仅 docs/ + memory/ 范畴) | ✅ |
+
+## 沉淀文件 (24 份 memory + 5 份决策/capability + 1 份 runbook)
+
+### 24 份 W-N memory (含本任务 3 份)
+
+- w-n-{a,b,c,d,d-plus-realbench,d-plus-e2e-bench,e,f,gc,arc,anc,mem,grand}-{startup,closure}-2026-08-05.md
+- w-n-g-plus-schema-drift-startup-2026-08-05.md (untracked, W-N-G+ 起步未推 main)
+- w-n-bge-m3-realpath-startup-2026-08-05.md (worktree, W-N-BGE 起步)
+- w-n-rag-eval-set-startup-2026-08-05.md (worktree, W-N-RAG 起步)
+- w-n-rag-eval-set-closure-2026-08-05.md (worktree, W-N-RAG 收口)
+
+### 5 份决策/capability
+
+- docs/decisions/2026-08-05-bge-m3-decision.md (W-N-C)
+- docs/decisions/2026-08-05-cold-hot-routing-poc.md (W-N-E)
+- docs/decisions/2026-08-05-lora-finetune-decision.md (W-N-F)
+- docs/decisions/2026-08-05-e2e-late-chunking-decision.md (W-N-D++)
+- docs/capability/gpu-bge-m3-2026-08-05.md (W-N-D+)
+
+### 1 份 runbook
+
+- docs/w-n-grand-closure-runbook.md (W-N-GRAND +1)
+
+## 未来派工留口 (主拍决策, 不擅自扩)
+
+- W-N-G+ schema drift 修复: DB alembic 099 → 105 追平 + 105 迁移写 (待派工)
+- W-N-OBS observability: RAG 全链路 observability (留待 W-N-G+ 后)
+- W-N-FILL: W-N-OBS 联合派工 (留待)
+- LoRA 触发: 4 触发条件全未达, 当前不启动
+- Cold-hot 触发: 530 rows, 数据量不足, 不启动
+- Late chunking 端到端启用: W-N-G+ 105 迁移 + GPU 部署后启用
+
+W19 选项 A 维持.
