@@ -315,7 +315,12 @@ class HybridRetriever:
         top_k: int = 10,
         category: Optional[str] = None,
     ) -> List[dict]:
-        """追加的 late-chunking 召回；失败时返回空集，不影响父级检索。"""
+        """追加的 late-chunking 召回；失败时返回空集，不影响父级检索。
+
+        W-N-OBS: 失败必须显式记录 + 计数器 +1 (不允许静默吞掉),
+        但仍 best-effort 返回空集不阻塞主流程.
+        """
+        import time
         from sqlalchemy import text
 
         stmt = text(
@@ -331,21 +336,63 @@ class HybridRetriever:
             LIMIT :top_k
             """
         )
+        start = time.perf_counter()
         try:
             result = await self.db.execute(
                 stmt,
                 {"query_embedding": query_embedding, "category": category, "top_k": top_k},
             )
+            rows = result.fetchall()
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 3)
+
+            # W-N-OBS: 成功路径也记录 (延迟 + 计数), 供 grafana panel 1 (P95) / panel 2 (命中率) 使用
+            try:
+                from app.services.recall_observability import RecallObserver
+                observer = RecallObserver.get()
+                observer.record_chunk_late_recall(
+                    success=True,
+                    latency_ms=elapsed_ms,
+                    result_count=len(rows),
+                )
+            except Exception as obs_exc:
+                logger.debug(f"[W-N-OBS] observer record_chunk_late_recall skip: {obs_exc}")
+
             return [
                 {
                     "id": row.knowledge_id,
                     "score": float(1.0 - row.distance),
                     "retrieval_method": "chunk_late",
                 }
-                for row in result.fetchall()
+                for row in rows
             ]
         except Exception as exc:
-            logger.warning("late chunking 召回失败: %s", exc)
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 3)
+            error_msg = f"{type(exc).__name__}: {exc}"
+
+            # W-N-OBS 铁律: 失败必须显式 logger.warning + 计数器 +1, 不允许静默吞掉
+            logger.warning(
+                "chunk_late_recall FAILED latency_ms=%.3f category=%s top_k=%d error=%s",
+                elapsed_ms,
+                category,
+                top_k,
+                error_msg,
+            )
+
+            # W-N-OBS: 调用 RecallObserver 计数器 (失败路径, +1)
+            try:
+                from app.services.recall_observability import RecallObserver
+                observer = RecallObserver.get()
+                observer.record_chunk_late_recall(
+                    success=False,
+                    latency_ms=elapsed_ms,
+                    result_count=0,
+                    error_msg=error_msg,
+                )
+            except Exception as obs_exc:
+                # 观测失败不阻断主流程 (best-effort)
+                logger.debug(f"[W-N-OBS] observer record_chunk_late_recall skip: {obs_exc}")
+
+            # 仍返回空集, 不 raise 阻塞父级检索 (best-effort 设计守恒)
             return []
 
     async def evaluate(

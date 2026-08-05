@@ -100,6 +100,14 @@ class RecallTrace:
     # W100-RAG-5: 第 5 路 OCR 图片召回 top-1 similarity
     image_score: Optional[float] = None
 
+    # ==================== W-N-OBS 第 6 路 late-chunking 召回追踪 ====================
+    # 仅追加, 不改既有 25 字段 (W93 + W99-RAG-1/2 + W100-RAG-5), 全部默认 False 兼容老 trace
+    chunk_late_recall_path: bool = False  # 本次召回是否触发了 _chunk_late_recall 路径
+    chunk_late_recall_count: int = 0  # 本次召回 _chunk_late_recall 返回的结果数
+    chunk_late_recall_failed: bool = False  # 本次召回 _chunk_late_recall 是否失败
+    chunk_late_recall_error: Optional[str] = None  # 失败时的异常类型 + message
+    # ==================== W-N-OBS 扩展字段结束 ====================
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -131,6 +139,13 @@ class RecallObserver:
         # 滚动统计 (用于 grafana)
         self.recent_latencies_ms: List[float] = []
         self.max_recent = 1000
+        # ==================== W-N-OBS late-chunking 召回专用计数器 ====================
+        # 仅追加, 不动既有 self.traces / recent_latencies_ms / max_recent
+        # 进程内全局累加 (非滚动), 供 grafana panel 3 (失败计数器) 使用
+        self._chunk_late_recall_failures_total: int = 0
+        self._chunk_late_recall_successes_total: int = 0
+        self._chunk_late_recall_latencies_ms: List[float] = []  # 滚动, 仅最近 1000
+        # ==================== W-N-OBS 计数器结束 ====================
 
     @classmethod
     def get(cls) -> "RecallObserver":
@@ -258,6 +273,99 @@ class RecallObserver:
         """测试用: 清空 traces + 滚动缓冲"""
         self.traces.clear()
         self.recent_latencies_ms.clear()
+        # ==================== W-N-OBS 清空 ====================
+        self._chunk_late_recall_failures_total = 0
+        self._chunk_late_recall_successes_total = 0
+        self._chunk_late_recall_latencies_ms.clear()
+        # ==================== W-N-OBS 清空结束 ====================
+
+    # ============================================================
+    # W-N-OBS late-chunking 召回计数器 (新增, 不动既有 record/get_stats)
+    # ============================================================
+
+    def record_chunk_late_recall(
+        self,
+        success: bool,
+        latency_ms: float = 0.0,
+        result_count: int = 0,
+        error_msg: Optional[str] = None,
+    ) -> None:
+        """W-N-OBS: 记录 _chunk_late_recall 单次执行结果
+
+        Args:
+            success: True=成功 (返回非空或空集但执行成功) / False=异常被捕获
+            latency_ms: 本次执行耗时 (毫秒)
+            result_count: 成功时返回的结果数 (0 也算成功)
+            error_msg: 失败时的异常类型 + message (成功时 None)
+
+        副作用:
+            - 自增 _chunk_late_recall_failures_total / successes_total
+            - 追加 latency_ms 到滚动缓冲 (最近 1000, 用于 P95 panel)
+            - 显式 logger.warning (失败) / logger.debug (成功)
+        """
+        if not ENABLE_OBSERVABILITY:
+            return  # 关闭时静默 no-op, 沿用 observe() 的 NullTrace 模式
+
+        if success:
+            self._chunk_late_recall_successes_total += 1
+            logger.debug(
+                "chunk_late_recall success result_count=%d latency_ms=%.3f",
+                result_count,
+                latency_ms,
+            )
+        else:
+            self._chunk_late_recall_failures_total += 1
+            # W-N-OBS 铁律: 失败必须显式 logger.warning, 不允许静默吞掉
+            logger.warning(
+                "chunk_late_recall FAILED latency_ms=%.3f error=%s "
+                "(failures_total=%d successes_total=%d)",
+                latency_ms,
+                error_msg,
+                self._chunk_late_recall_failures_total,
+                self._chunk_late_recall_successes_total,
+            )
+
+        # 滚动延迟缓冲 (最近 1000 条)
+        self._chunk_late_recall_latencies_ms.append(round(latency_ms, 3))
+        if len(self._chunk_late_recall_latencies_ms) > 1000:
+            self._chunk_late_recall_latencies_ms = self._chunk_late_recall_latencies_ms[-1000:]
+
+    def get_chunk_late_recall_stats(self) -> Dict[str, Any]:
+        """W-N-OBS: 获取 late-chunking 召回统计 (供 grafana / health check 使用)
+
+        Returns:
+            {
+                "failures_total": int,
+                "successes_total": int,
+                "failure_ratio": float,  # failures_total / (successes+failures)
+                "p50_ms": float,
+                "p95_ms": float,
+                "p99_ms": float,
+                "sample_count": int,
+            }
+        """
+        failures = self._chunk_late_recall_failures_total
+        successes = self._chunk_late_recall_successes_total
+        total = failures + successes
+
+        latencies = sorted(self._chunk_late_recall_latencies_ms)
+        n = len(latencies)
+
+        def _percentile(p: float) -> float:
+            if n == 0:
+                return 0.0
+            idx = min(int(n * p), n - 1)
+            return round(latencies[idx], 3)
+
+        return {
+            "failures_total": failures,
+            "successes_total": successes,
+            "failure_ratio": round(failures / total, 4) if total > 0 else 0.0,
+            "p50_ms": _percentile(0.50),
+            "p95_ms": _percentile(0.95),
+            "p99_ms": _percentile(0.99),
+            "sample_count": n,
+        }
 
 
 # ============================================================
