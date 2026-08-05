@@ -1,0 +1,120 @@
+{
+  "annotations": {"list": []},
+  "description": "Late-chunking 召回专用仪表盘 (W-N-OBS) — 3 面板: P95 延迟 / 召回命中率 / 失败计数器",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Late-chunking 召回 P95 延迟 (ms, 来自 RecallObserver._chunk_late_recall_latencies_ms)",
+      "type": "timeseries",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT date_trunc('minute', timestamp) AS time, percentile_cont(0.50) WITHIN GROUP (ORDER BY (per_path_latency_ms->>'chunk_late')::float) AS p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY (per_path_latency_ms->>'chunk_late')::float) AS p95, percentile_cont(0.99) WITHIN GROUP (ORDER BY (per_path_latency_ms->>'chunk_late')::float) AS p99 FROM search_logs WHERE created_at >= $__timeFrom() AND created_at < $__timeTo() AND per_path_latency_ms ? 'chunk_late' GROUP BY 1 ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 200}
+            ]
+          }
+        }
+      },
+      "description": "W-N-OBS 监控 _chunk_late_recall 单次执行延迟. P95 > 200ms 触发红色阈值告警."
+    },
+    {
+      "id": 2,
+      "title": "Late-chunking 召回命中率 (24h, result_count > 0 占比)",
+      "type": "stat",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT ROUND(AVG(CASE WHEN (per_path_count->>'chunk_late')::int > 0 THEN 1.0 ELSE 0.0 END), 4) AS hit_ratio, COUNT(*) FILTER (WHERE per_path_count ? 'chunk_late') AS sample_count FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND per_path_count ? 'chunk_late'",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.3},
+              {"color": "green", "value": 0.7}
+            ]
+          }
+        }
+      },
+      "description": "W-N-OBS 召回命中率 = result_count > 0 的请求占比. < 30% 触发黄色, < 默认阈值触发红色."
+    },
+    {
+      "id": 3,
+      "title": "Late-chunking 失败计数器 (24h, logger.warning 'chunk_late_recall FAILED')",
+      "type": "timeseries",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "rawSql": "SELECT date_trunc('minute', timestamp) AS time, COUNT(*) AS failure_count FROM logs WHERE level = 'WARNING' AND logger = 'microbubble.hybrid_retriever' AND msg LIKE '%chunk_late_recall FAILED%' AND timestamp >= NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          }
+        }
+      },
+      "description": "W-N-OBS 失败计数器 = _chunk_late_recall 被 try/except 捕获的次数. > 1/min 触发黄色, > 10/min 触发红色. 替代 RecallObserver._chunk_late_recall_failures_total 进程内计数."
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["rag", "observability", "w-n-obs", "late-chunking"],
+  "time": {"from": "now-24h", "to": "now"},
+  "title": "Late-chunking 召回可观测性 (W-N-OBS)",
+  "uid": "rag-late-chunking-recall",
+  "version": 1,
+  "__meta": {
+    "w_n_obs_anchor": "W-N-OBS +2",
+    "data_sources": {
+      "panel_1_p95_latency": "PostgreSQL search_logs.per_path_latency_ms->>'chunk_late'",
+      "panel_2_hit_ratio": "PostgreSQL search_logs.per_path_count->>'chunk_late'",
+      "panel_3_failure_counter": "Loki logs (level=WARNING, logger=microbubble.hybrid_retriever, msg LIKE '%chunk_late_recall FAILED%')"
+    },
+    "related_anchor": "W-N-OBS +1 (代码)",
+    "design_notes": [
+      "Panel 1 P95 延迟: 基于结构化 JSON 字段 per_path_latency_ms['chunk_late'], 不硬编码字段路径, 后续新增路径自动接入 (类 20.NEW 沉淀)",
+      "Panel 2 命中率: result_count > 0 占比, 反映 _chunk_late_recall 真实命中能力",
+      "Panel 3 失败计数器: 替代 RecallObserver._chunk_late_recall_failures_total 进程内计数器 (跨进程/重启不持久), 用 PostgreSQL/Loki 持久层做实际告警源",
+      "W-N-OBS 铁律: best-effort 路径异常必须显式记录 + 计数器 +1, 此 dashboard 是该铁律的运维可视化兜底"
+    ]
+  }
+}
