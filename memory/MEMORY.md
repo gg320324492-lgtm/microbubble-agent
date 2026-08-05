@@ -678,3 +678,19 @@
 - **w-n-d-late-chunking-{startup,closure}-2026-08-05** — W-N-D 多向量 + Late Chunking (5 commits), late_chunking 服务 + 104 迁移 + hybrid_retriever 接入, 派工 brief 4 处偏离 (容器名/复数表/Vector 维度/补救)
 - **w-n-gc-claudemd-sync-{startup,closure}-2026-08-05** — W-N-GC CLAUDE.md 顶部新段同步 (W-N-GC +1 commit `1409ee67d` + W-N-GC +2 commit `91fa4b450`), 5 件套守恒, 12 类 20 沉淀, 锚点 ~537 → ~562 据实累计, 0 production code 守恒
 - **w-n-e-cold-hot-poc-startup-2026-08-05** — W-N-E 冷热分层 PoC 起步 (W-N-A/B/C/D 收口后下一阶段, 留未来 PR)
+- **w-n-e-cold-hot-poc-closure-2026-08-05** — W-N-E 收口: 3 决策门禁 2/3 PASS (迁移成本过高压倒) → 整段归档 ARC, 530 rows COUNT(*) FILTER hot/cold 实战数据沉淀
+- **w-n-d-plus-e2e-bench-startup-2026-08-05** — W-N-D+ e2e bench 起步 (晚于 W-N-D realbench, 派工 brief 据实偏差 1 commit)
+- **w-n-d-plus-realbench-{startup,closure}-2026-08-05** — W-N-D+ 真 bench (GPU 验证 + bge-m3 决策): 85% 胜率 + chunk 召回 vs parent-only 对比, late chunking 真 bench 触发条件 + bge-m3 路径留口
+- **w-n-f-lora-finetune-{startup,closure}-2026-08-05** — W-N-F LoRA 微调: 4 触发条件前置评估 (W-N-D+ 真 bench < 90% OR 冷热 PoC 失败 OR qa-bench < 96% OR 生产 530+ rows), 14 tests PASS + 5 维度决策, 当前**不启动** (4 触发条件全未达)
+- **w-n-arc-worktree-archive-{startup,closure}-2026-08-05** — W-N-ARC 归档: W-N 周期 A-F 全部 worktree 归档清理, 类 20.165-169 沉淀
+- **w-n-anc-anchor-update-{startup,closure}-2026-08-05** — W-N-ANC 锚点范式补: W-N-E/F/D+/ARC/GC+2 后续 commits 同步, 锚点 ~562 → ~567, 派生 metrics 1 commit `650cd4ffa`
+
+### 决策文档 (3 份)
+
+- **docs/decisions/2026-08-05-bge-m3-decision.md** — W-N-C bge-m3 决策 (Qwen3 1024d 默认生产保留, bge-m3 灰度基础设施就绪, 真测待 GPU)
+- **docs/decisions/2026-08-05-cold-hot-routing-poc.md** — W-N-E 冷热分层 PoC 决策 (3 决策门禁 2/3 PASS → 整段归档, 迁移成本过高压倒)
+- **docs/decisions/2026-08-05-lora-finetune-decision.md** — W-N-F LoRA 决策 (5 维度 + 4 触发条件, 当前不启动, 未来达成任一触发条件再评估)
+
+### Capability 报告 (1 份)
+
+- **docs/capability/gpu-bge-m3-2026-08-05.md** — W-N-D+ GPU + bge-m3 能力验证 (RTX 5090 32GB + bge-m3 embedding 速度, Qwen3 1024d 折中方案)
