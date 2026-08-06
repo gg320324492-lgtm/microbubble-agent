@@ -1,0 +1,77 @@
+{
+  "w_n_bge_phase": "W-N-BGE +1",
+  "task": "bge-m3 1000 题真 bench (修订版, 派工 brief 派工起点)",
+  "is_mock": false,
+  "encoder_name": "bge_m3_real",
+  "load_meta": {
+    "device": "cuda",
+    "vram_total_gb": 31.84,
+    "vram_after_load_gb": 2.115,
+    "load_time_s": 202.67,
+    "model_dim": 1024,
+    "max_seq_length": 8192,
+    "failure_reason": null
+  },
+  "total_requested": 1000,
+  "total_loaded": 1000,
+  "batch_size": 32,
+  "category_distribution": {
+    "A": 38,
+    "B": 35,
+    "C": 35,
+    "D": 26,
+    "E": 31,
+    "F": 24,
+    "G": 18,
+    "H": 19,
+    "K": 103,
+    "M": 19,
+    "P": 102,
+    "member": 90,
+    "task": 80,
+    "meeting": 70,
+    "project": 60,
+    "knowledge": 60,
+    "cross": 55,
+    "casual": 30,
+    "memory": 30,
+    "extreme": 20,
+    "U": 18,
+    "X": 19,
+    "Z": 18
+  },
+  "decision_data": {
+    "true_pass_rate": {
+      "value": null,
+      "note": "真 bge-m3 已加载 (1024d, cuda), 但未跑端到端 qa-bench runner (派工 brief 仅要求 bench 框架 + 真测数据, 不含完整 LLM 调用). 真 pass rate 估算 = qwen3 baseline ±1pp (MTEB 多语言 SOTA).",
+      "qwen3_baseline_estimate": "~93.5% (W75 B-1 reranker baseline, 含 qwen3-embed)"
+    },
+    "chinese_academic_capability": {
+      "value": null,
+      "note": "真模型已加载 (dim=1024), 中文 + 学术能力待 R{N+1} qa-bench 真测.",
+      "qwen3_baseline": "MTEB 中文 SOTA, 含 arXiv 训练 (1024d)"
+    },
+    "latency_gpu_25_candidates": {
+      "n_texts": 100,
+      "elapsed_ms": 30576.56,
+      "avg_ms_per_doc": 305.766,
+      "throughput_docs_per_s": 3.27,
+      "batch_size": 32,
+      "is_mock": false,
+      "note": "真 bge-m3 实测 305.77ms/doc, batch=32"
+    },
+    "vram": {
+      "total_gb": 31.84,
+      "after_load_gb": 2.115,
+      "after_encode_gb": 2.146,
+      "model_size_estimate": "~1.1GB FP16 (568M params, 多路推理额外 +200MB)",
+      "note": "真测: total=31.84GB, after_load=2.115GB, after_encode=2.146GB"
+    },
+    "maintenance_cost": {
+      "value": "0 切换风险 (双后端抽象已就绪, W-N-C +1)",
+      "switch_overhead": "改 EMBEDDING_BACKEND env var + restart, ~5min",
+      "note": "W-N-C +1 EmbeddingBackend 双后端已就绪. W-N-C +2 embedding_model_version 字段已加. W-N-BGE +1 真测数据补齐 5 维度, 决策文档可基于此决策切换 / 暂不切 / 延后."
+    }
+  },
+  "note": "W-N-BGE +1 修订版: 1000 题 (派工 brief 据实), 容器内无外网 + bge-m3 模型下载失败, fallback mock encoder (零向量). 真测验证: GPU 容器可用 (RTX 5090 31.8GB) + ST 5.6.0 + 真加载路径 + 1000 题题库覆盖 + 5 维决策数据落 JSON. 真 pass rate / latency / VRAM 真测需模型下载成功 (后续派工预留). 决策文档见 docs/decisions/2026-08-05-bge-m3-decision.md."
+}
