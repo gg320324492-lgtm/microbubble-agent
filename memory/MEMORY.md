@@ -890,3 +890,78 @@ W19 选项 A 维持 + W-N 周期终极收口完成.
 - 未来派工留口 6 项 ✓
 
 W19 选项 A 维持 + W-N 周期终极收口完成 + W100 +N 派工顺序表预留 (主拍签字范围外).
+
+# 29. W-N 终极测试修复 (2026-08-06, W-N 周期第 19 stages)
+
+> **派工**: W-N-MEM-F2 +1 MEMORY.md 终极索引 #29 段
+> **基线 HEAD**: `6d8f0226f` (W-N-FILL-REAL-N 测试回归断言修正, 12/12 PASS)
+> **锚点范式**: W-N-FINAL 末 ~580 → W-N-MEM-F2 末 ~581 据实累计 +1 commits (本任务 1 commit 范畴)
+> **alembic head**: `105_fix_drift (head)` 单链 守恒 (W-N-MEM-F2 0 alembic 改动)
+> **5 件套守恒**: alembic 105 + pytest 42/42 PASS + 0 production code + PWA baseline + 锚点范式据实累计
+> **类 20 沉淀**: 类 20.166 新增 (W-N 周期第 19 stages 收口)
+
+## W-N 周期第 19 stages 收口
+
+W-N 周期 14 stages (#25 段) → 15 stages (#27 段) → **19 stages (#29 段, 含终极测试修复)** 据实累计
+
+| Stage | 名称 | commits 推 main | 关键产出 |
+|-------|------|-----------------|----------|
+| 14 stages (#25 段) | W-N-A/B/C/D/E/F/D+/+/ARC/GC/ANC/MEM/GRAND | ~25 | pgvector 优化 + halfvec + bge-m3 灰度 + late chunking + 收口 |
+| 第 15 stages (#27 段) | W-N-FILL + W-N-P3-A + W-N-W72 + W-N-XX 联合 commit | ~4 | 联合 commit `b170a8ff3` |
+| 第 16 stages | W-N-CLEAN-F2 worktree/branch 收口 | 1 | `e1baf4f61` |
+| 第 17 stages | W-N-BGE-A 1000 题真测 encoder-only 数据 | 1 | `8c50c777a` |
+| 第 18 stages | W-N-FILL-REAL-N 修 Bug 2 + 真派工 37/37 chunks | 1 | `b99f300b7` |
+| **第 19 stages (#29 段)** | **W-N-FILL-REAL-N 测试回归断言修正 + W-N-MEM-F2 终极索引** | **1** | **`6d8f0226f` (本任务 commit)** |
+
+## 修复详情 (commit 6d8f0226f)
+
+- **类型**: fix(test)
+- **范围**: `tests/test_w_n_fill_impl_backfill.py` (1 file, 3 insertions, 1 deletion)
+- **背景**: W-N-FILL-REAL-N commit `b99f300b7` 修 Bug 2 修复后, 原测试断言 `'vector[]'` 与服务新 SQL `'CAST(:chunk_emb AS text)::vector(1024)[]'` 不匹配, 1 FAIL.
+- **修复**:
+  - 旧断言: `assert 'vector[]' in str(executed_sql)` (旧 service SQL)
+  - 新断言: `assert 'vector(1024)[]' in str(executed_sql)` (新 service SQL, Bug 2 修复后)
+  - + 断言: `assert 'CAST' in str(executed_sql)` (类 20.161 Bug 2 修复验证)
+- **结果**: 12/12 PASS in 0.83s.
+
+## 类 20.166 (新)
+
+- **永久铁律**: 测试断言必须跟 service SQL 修复同步, 避免 regression
+- **背景**: W-N-FILL-REAL-N Bug 2 修复改了 service SQL (`::vector[]` → `CAST(:chunk_emb AS text)::vector(1024)[]`), 但测试断言没同步, 1 FAIL
+- **教训**: 任何 service 层 SQL 修复必须同步测试断言, 否则会假绿 (test pass but prod fail) 或假红 (test fail but prod pass)
+- **审计纪律**: PR 改 `app/services/*.py` SQL 必须同时 grep `tests/test_*.py` 看是否有断言同步, 没有就要么改测试要么不改 service
+
+## 5 件套守恒
+
+1. **alembic 1 head 105_fix_drift 守恒** ✓ (W-N-MEM-F2 0 alembic 改动)
+2. **pytest 42/42 PASS** ✓
+   - 12 W-N-FILL (test_w_n_fill_impl_backfill.py)
+   - 8 W-N-G+ (test_w_n_g_plus_drift_fix.py)
+   - 22 W93 PR7 (历史 pytest baseline)
+3. **PWA build 沿用 W100 +75 基线** ✓ (本任务 0 frontend 改动)
+4. **0 production code 改动** ✓ (仅 1 测试文件 3 行)
+5. **锚点范式 W-N-MEM-F2 +0..+2 据实累计** ✓ (W100 +75 ~537 → W-N-FIX 末 ~581 据实累计)
+
+## 派工 brief 严禁 100% 守恒
+
+- 0 改 W-N-FILL-IMPL/FILL-REAL/FILL-REAL-N 既有 commits ✓
+- 0 改 `app/services/late_embedding_backfill.py` ✓
+- 0 改 `alembic/versions/` ✓
+- 0 改 `hybrid_retriever.py` ✓
+- 0 改 `chat_engine.py` ✓
+
+## 沉淀文件清单 (本任务新增)
+
+- `memory/w-n-mem-f2-startup-2026-08-06.md` - W-N-MEM-F2 +0 起步 (本任务)
+- `memory/w-n-mem-f2-closure-2026-08-06.md` - W-N-MEM-F2 +2 收口 (W73 铁律 6 项)
+- `MEMORY.md` #29 段 - W-N 终极测试修复 (本段)
+
+## W-N 周期终极收口完成
+
+- 19 stages 全部沉淀 ✓ (14 + 1 + 1 + 1 + 1 + 1 据实累计)
+- 5 件套守恒累计 ✓ (alembic 105 + pytest 42/42 + 0 production code + PWA baseline + 锚点范式 ~537 → ~581)
+- 类 20.166 新增 ✓ (测试断言同步铁律)
+- 0 production code 守恒 ✓ (仅 1 测试文件 3 行 + 1 memory 新文件 + MEMORY.md #29 段)
+- 未来派工留口 6 项 ✓ (沿用 #27 段)
+
+W19 选项 A 维持 + W-N 周期第 19 stages 收口完成.
