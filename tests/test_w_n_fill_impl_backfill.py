@@ -109,7 +109,9 @@ async def test_backfill_one_chunk_apply_path():
     # 验证 SQL 包含 pgvector array literal
     executed_sql = db.execute.call_args[0][0]
     assert "chunk_embedding" in str(executed_sql)
-    assert "vector[]" in str(executed_sql)
+    assert "vector(1024)[]" in str(executed_sql)
+    # 类 20.161: 验证 Bug 2 修复 - 用 CAST() 表达式替代 ::vector[] 双冒号歧义
+    assert "CAST" in str(executed_sql)
 
 
 @pytest.mark.asyncio
