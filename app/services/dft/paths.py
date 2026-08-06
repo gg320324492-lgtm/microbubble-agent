@@ -1,9 +1,14 @@
 """DFT 工具路径常量与 sci-software 接入
 
 约定:
-- SCISOFTWARE_BASE = E:/sci-software
+- SCISOFTWARE_BASE = E:/sci-software  (Windows 主机)
 - WORKFLOWS = E:/sci-software/workflows
 - DFT_OUTPUT_ROOT = E:/microbubble-agent/data/dft_jobs  (job 输出根目录)
+
+容器 (Linux) 中:
+- SCISOFTWARE_BASE 通过环境变量覆盖为 /app (docker bind mount /e/sci-software → /app)
+- WORKFLOWS = /app/workflows
+- g16w = /app/g16w (D:/G16W bind mount)
 
 WSL/Gaussian 路径在 Windows 上, 用 raw 字符串, 不做 path conversion。
 """
