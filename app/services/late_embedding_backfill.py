@@ -268,11 +268,19 @@ class LateEmbeddingBackfillService:
             )
 
         # 真写库 (W-N-FILL 真派工时)
-        chunk_emb_array = "{" + ",".join(encoded) + "}"
+        # W-N-FILL-REAL-N +1 修 Bug 2: 原 "{[v1,v2],[v3,v4]}" 单引号嵌套格式 + "::vector[]" cast
+        # 报 asyncpg DataError (sized iterable 误判) / SQLAlchemy text() '::' 解析歧义. 改用:
+        # (1) PG 标准双引号 array 字面量 '{"[v1,v2]","[v3,v4]"}'
+        # (2) SQLAlchemy 兼容的 CAST 表达式 CAST(:chunk_emb AS text)::vector(1024)[]
+        #     ('::text::vector[]' 被 SQLAlchemy text() 解析成 ':chunk_emb' 漏掉第 2 个 ':' 报 syntax error)
+        # 实测: 容器内 asyncpg + pgvector 0.7.0 + 1024 dim 通过.
+        chunk_emb_array = (
+            '{"' + '","'.join(encoded) + '"}'
+        )
         await self.db.execute(
             text(
                 "UPDATE knowledge_chunks "
-                "SET chunk_embedding = :chunk_emb::vector[], updated_at = NOW() "
+                "SET chunk_embedding = CAST(:chunk_emb AS text)::vector(1024)[], updated_at = NOW() "
                 "WHERE id = :chunk_id"
             ),
             {"chunk_emb": chunk_emb_array, "chunk_id": chunk_id},
@@ -357,11 +365,13 @@ class LateEmbeddingBackfillService:
                 if len(errors) < 10:
                     errors.append(f"chunk {chunk['id']}: encode failed")
                 continue
-            chunk_emb_array = "{" + ",".join(encoded) + "}"
+            chunk_emb_array = (
+                '{"' + '","'.join(encoded) + '"}'
+            )
             await self.db.execute(
                 text(
                     "UPDATE knowledge_chunks "
-                    "SET chunk_embedding = :chunk_emb::vector[], updated_at = NOW() "
+                    "SET chunk_embedding = CAST(:chunk_emb AS text)::vector(1024)[], updated_at = NOW() "
                     "WHERE id = :chunk_id"
                 ),
                 {"chunk_emb": chunk_emb_array, "chunk_id": chunk["id"]},
@@ -448,11 +458,13 @@ class LateEmbeddingBackfillService:
                 if len(errors) < 10:
                     errors.append(f"chunk {chunk['id']}: encode failed")
                 continue
-            chunk_emb_array = "{" + ",".join(encoded) + "}"
+            chunk_emb_array = (
+                '{"' + '","'.join(encoded) + '"}'
+            )
             await self.db.execute(
                 text(
                     "UPDATE knowledge_chunks "
-                    "SET chunk_embedding = :chunk_emb::vector[], updated_at = NOW() "
+                    "SET chunk_embedding = CAST(:chunk_emb AS text)::vector(1024)[], updated_at = NOW() "
                     "WHERE id = :chunk_id"
                 ),
                 {"chunk_emb": chunk_emb_array, "chunk_id": chunk["id"]},
