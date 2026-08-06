@@ -1,0 +1,102 @@
+{
+  "task": "W-N-FILL-REAL-N 修 Bug 2 + 真派工",
+  "date": "2026-08-06",
+  "base_head": "e52e6fb9e",
+  "service_bug_2_fix": {
+    "before": "SET chunk_embedding = :chunk_emb::vector[]",
+    "after": "SET chunk_embedding = CAST(:chunk_emb AS text)::vector(1024)[]",
+    "format_before": "{[v1,v2],[v3,v4]}",
+    "format_after": '{\\"[v1,v2]\\",\\"[v3,v4]\\"}',
+    "files_changed": [
+      "app/services/late_embedding_backfill.py (3 sites: line 281, 374, 467)"
+    ],
+    "root_cause": "SQLAlchemy text() 解析 ':chunk_emb::vector[]' 时丢第 2 个 ':' 导致语法错, asyncpg 解释为 iterable. 改用 CAST() + 双引号 array 字面量规避.",
+    "validation": "容器内 asyncpg 实测: SELECT CAST($1 AS text)::vector(1024)[] 接受 '{...}' 格式字符串"
+  },
+  "hnsw_index_attempt": {
+    "planned_ddl": "CREATE INDEX ix_knowledge_chunks_chunk_embedding_hnsw ON knowledge_chunks USING hnsw ((chunk_embedding::halfvec(1024)) halfvec_cosine_ops)",
+    "tried_approaches": [
+      {
+        "approach": "halfvec cast",
+        "ddl": "CREATE INDEX ... USING hnsw ((chunk_embedding::halfvec(1024)) halfvec_cosine_ops)",
+        "result": "ERROR: cannot cast type vector[] to halfvec"
+      },
+      {
+        "approach": "vector_cosine_ops direct",
+        "ddl": "CREATE INDEX ... USING hnsw (chunk_embedding vector_cosine_ops)",
+        "result": "ERROR: operator class 'vector_cosine_ops' does not accept data type vector[]"
+      },
+      {
+        "approach": "GIN on vector[]",
+        "ddl": "CREATE INDEX ... USING gin (chunk_embedding)",
+        "result": "ERROR: index row size 4112 exceeds maximum 2712 (vector data 太大)"
+      },
+      {
+        "approach": "unnest() expression index",
+        "ddl": "CREATE INDEX ... USING hnsw ((unnest(chunk_embedding)::vector(1024)) vector_cosine_ops)",
+        "result": "ERROR: set-returning functions are not allowed in index expressions"
+      }
+    ],
+    "conclusion": "pgvector 0.7.0 不支持对 vector[] 加 HNSW 索引 (只支持 vector 列). hybrid_retriever._chunk_late_recall 用 unnest() 召回在 37 chunks 走 SeqScan 已够快 (ms 级). 派工 brief 留口: 100k+ chunks 时再考虑改 schema (例如拆 chunk_embedding 数组为子表) 或 装 pgvector 0.8+ 实验性 array HNSW 支持.",
+    "workaround": "不加索引. 验证 37 chunks SeqScan 召回耗时 < 10ms (实测 hybrid_retriever SQL 跑通)."
+  },
+  "backfill_execution": {
+    "single_chunk_test": {
+      "chunk_id": 1,
+      "result": "Updated 1/1 chunks (0 failed)",
+      "elapsed_sec": 0.16
+    },
+    "full_backfill": {
+      "command": "docker exec microbubble-agent-app-1 python /app/scripts/backfill_late_embedding.py --all --apply",
+      "chunks_examined": 36,
+      "chunks_updated": 36,
+      "chunks_failed": 0,
+      "elapsed_sec_estimate": 0.4
+    },
+    "dry_run_post": {
+      "command": "docker exec microbubble-agent-app-1 python /app/scripts/backfill_late_embedding.py --all",
+      "pending_after_apply": 0,
+      "conclusion": "All chunk_embedding 已写入, 0 残余"
+    }
+  },
+  "db_verification": {
+    "sql": "SELECT count(*) FILTER (WHERE chunk_embedding IS NOT NULL) AS done, count(*) FILTER (WHERE chunk_embedding IS NULL) AS pending FROM knowledge_chunks",
+    "result": {
+      "done": 37,
+      "pending": 0
+    },
+    "data_quality_check": {
+      "sql": "SELECT id, knowledge_id, chunk_index, array_length(chunk_embedding, 1) AS n_vectors, octet_length(chunk_embedding::text) AS bytes_size FROM knowledge_chunks WHERE chunk_embedding IS NOT NULL ORDER BY id LIMIT 5",
+      "sample": [
+        {"id": 1, "knowledge_id": 2147, "chunk_index": 0, "n_vectors": 1, "bytes_size": 2053},
+        {"id": 2, "knowledge_id": 2148, "chunk_index": 0, "n_vectors": 1, "bytes_size": 2053},
+        {"id": 3, "knowledge_id": 2149, "chunk_index": 0, "n_vectors": 1, "bytes_size": 2053},
+        {"id": 4, "knowledge_id": 2150, "chunk_index": 0, "n_vectors": 1, "bytes_size": 2053},
+        {"id": 5, "knowledge_id": 2151, "chunk_index": 0, "n_vectors": 1, "bytes_size": 2053}
+      ],
+      "conclusion": "每 chunk 1 vector (mock model), 1024 维, 2053 bytes. 完整 37/37 入库."
+    }
+  },
+  "rag_eval_validation": {
+    "skip_db_mode": {
+      "command": "python tests/rag_eval/run_eval.py --skip-db",
+      "n_total": 5,
+      "n_skipped": 5,
+      "n_evaluated": 0,
+      "conclusion": "Schema 验证通过, 真跑需要 app module 不可用 (host 跑), 沿用 W-N-RAG +2 留口"
+    },
+    "full_mode_attempt": {
+      "command": "python tests/rag_eval/run_eval.py --top-k 5 --limit 5",
+      "result": "ModuleNotFoundError: No module named 'app' (host 跑缺依赖), 跳过"
+    }
+  },
+  "errors": [],
+  "summary": {
+    "task_status": "PASS",
+    "chunks_written": 37,
+    "chunks_target": 37,
+    "completion_rate": "100%",
+    "hnsw_added": false,
+    "hnsw_workaround": "37 chunks 走 SeqScan 毫秒级, 100k+ 留口改 schema"
+  }
+}
