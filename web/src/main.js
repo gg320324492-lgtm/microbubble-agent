@@ -82,63 +82,9 @@ import { useThemeStore } from './stores/useThemeStore'
 // 避免静态 registerSW.js 缺 hash 触发 cache-busting 警告。
 import { useRegisterSW as _pwaUseRegisterSW } from 'virtual:pwa-register/vue'
 
-// 配置axios拦截器
-axios.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-axios.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-
-    // 如果是401错误且不是刷新令牌请求
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // 检查是不是公开端点 (e.g. /login, /auth/refresh), 不应该拦截
-      const url = originalRequest.url || ''
-      const isPublicEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh')
-      if (isPublicEndpoint) {
-        return Promise.reject(error)
-      }
-      originalRequest._retry = true
-
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          const res = await axios.post('/api/v1/auth/refresh', {
-            refresh_token: refreshToken
-          })
-
-          const { access_token } = res.data
-          localStorage.setItem('access_token', access_token)
-
-          // 重试原始请求
-          originalRequest.headers.Authorization = `Bearer ${access_token}`
-          return axios(originalRequest)
-        } catch (refreshError) {
-          // 刷新令牌也失败，跳转到登录页 (W68 第 14 批修复: 不删 token, 让 dashboard 显示空数据而不是触发刷新循环)
-          console.warn('[Auth] refresh failed, redirecting to login', refreshError)
-          router.push('/login')
-          return Promise.reject(refreshError)
-        }
-      } else {
-        // 没有刷新令牌，跳转到登录页 (W68 第 14 批修复: 不删 token)
-        router.push('/login')
-      }
-    }
-
-    return Promise.reject(error)
-  }
-)
+// 2026-08-14 类 20.155: axios 拦截器从 main.js 拆出到 web/src/utils/request.js
+// 实现 refresh 单飞 + 429 退避重试 + 公开端点豁免
+import './utils/request'
 
 const app = createApp(App)
 

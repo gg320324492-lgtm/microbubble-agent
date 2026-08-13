@@ -18,7 +18,8 @@
 
 | Tier | 限制 (max/min) | 窗口 (秒) | 适用场景 | 应用位置 | 关键路径 |
 |------|---------------|-----------|----------|----------|----------|
-| `auth` | 20 | 60 | 真认证动作（login/refresh/change-password/reset-password/init-password） | `/api/v1/auth/*` 白名单 | [`_AUTH_SENSITIVE_PATHS`](../app/core/rate_limit.py#L133-L140) |
+| `auth` | 20 | 60 | 真认证动作（login/change-password/reset-password/init-password） | `/api/v1/auth/*` 白名单 | [`_AUTH_SENSITIVE_PATHS`](../app/core/rate_limit.py#L133-L140) |
+| `auth_refresh` | 60 | 60 | /auth/refresh (2026-08-14 类 20.155 单独, 签名 token 必须有效不易暴力) | `/api/v1/auth/refresh` 单点 | [`_AUTH_REFRESH_PATH`](../app/core/rate_limit.py#L226-L227) |
 | `write` | 30 | 60 | 写操作（POST/PUT/PATCH/DELETE 默认） | 任务/会议/项目/知识/成员等 | [`_get_rate_limit_type`](../app/core/rate_limit.py#L259-L261) |
 | `read` | 200 | 60 | 读操作（GET 默认） | 所有非显式标注的 GET | [`_get_rate_limit_type`](../app/core/rate_limit.py#L262-L264) |
 | `upload` | 10 | 60 | 单文件上传 | `/upload`、`/upload/meeting/{id}` 等含 `/upload` 的路径 | [`_get_rate_limit_type`](../app/core/rate_limit.py#L255-L257) |

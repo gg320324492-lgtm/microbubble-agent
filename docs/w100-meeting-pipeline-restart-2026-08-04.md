@@ -110,11 +110,38 @@ done
 
 ```bash
 docker exec microbubble-agent-app-1 python -m alembic heads | head -3
-# 期望: 097_meeting_processing_persistence (head)
+# 期望: 105_fix_drift (head)
 
 docker exec microbubble-agent-app-1 celery -A app.core.celery inspect ping --timeout 5
 # 期望: pong + OK
 ```
+
+### 步骤 7.5: 浏览器清理 (类 20.155, 2026-08-13 沉淀)
+
+**触发**: 后端 API 全 200/401 恢复, **但用户浏览器仍 401 + 触发 refresh 风暴 + 429 + redirecting-to-login 循环**.
+
+**根因 (3 层)**:
+1. **JWT token 失效**: 浏览器 localStorage 缓存了关机前旧 token (`exp=2026-08-06T18:01:10`), 服务端 secret 可能轮换或 in-memory cache 重启后清空 → 旧 token 解析失败 401
+2. **401 触发 refresh 风暴**: 前端 axios 拦截器对每个 401 自动调 `POST /api/v1/auth/refresh`. 并发 4+ 请求 (auth/me + dashboard/stats + notifications + members + WS 重连) 同时触发 refresh
+3. **refresh 限流**: `/api/v1/auth/refresh` 走 auth tier 限流 (20/min). 401 风暴直接打爆 → 429 → refresh 失败 → 前端跳 login → 新请求继续触发 refresh → 循环
+
+**WS 也 403**: WebSocket 握手带旧 token, 服务端 reject, 客户端 1-2s 重连又触发新一轮 401.
+
+**用户操作 (0 代码改动, 必做)**:
+```text
+浏览器右上角 avatar → 退出登录 (若按钮可见)
+或: DevTools → Application → Storage → Clear site data (清 localStorage + IndexedDB + SW)
+硬刷: Ctrl+Shift+R
+重新输入账号密码登录
+```
+
+**服务端预防 (4 项, 类 20.155 实施 2026-08-14)**:
+1. 前端 refresh 单飞 + 退避 (`web/src/utils/authRefresh.js`)
+2. refresh 端点单独限流 60/min (`app/core/rate_limit.py` 新增 `auth_refresh` tier)
+3. JWT secret 防御性加固 (`app/main.py` 启动日志 + `app/config.py` validator)
+4. **本 runbook 步骤 7.5** (本节)
+
+**关联**: `memory/server-shutdown-refresh-429-loop-2026-08-13.md`
 
 ## 关键铁律
 
@@ -264,6 +291,8 @@ schtasks /Delete /TN "MicroBubble-Auto-Recovery" /F
 ## 关联文档
 
 - `memory/w100-meeting-pipeline-restart-2026-08-04.md` (本事故 memory)
+- `memory/server-shutdown-celery-worker-no-auto-restart-2026-08-13.md` (类 20.154)
+- `memory/server-shutdown-refresh-429-loop-2026-08-13.md` (类 20.155)
 - `docs/deploy.md` (主部署文档)
 - `scripts/auto-deploy.sh` (本地 merge 后增量同步, 含 `docker cp + __pycache__ clear + docker restart`)
 - `scripts/webhook.py` (服务器 GitHub webhook 监听 → deploy-auto.sh)

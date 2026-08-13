@@ -39,4 +39,13 @@ find "$BACKUP_DIR" -name "microbubble_*.sql.gz" -mtime +$KEEP_DAYS -delete
 echo "[$(date)] 当前备份文件:"
 ls -lh "$BACKUP_DIR"/microbubble_*.sql.gz 2>/dev/null || echo "  无备份文件"
 
+# 2026-08-14 类 20.155: 提醒 SECRET_KEY 是独立资产, 不在 DB 备份里
+# 若 .env 中 SECRET_KEY 已轮换, 旧 refresh_token 全部失效, 用户会被强制登出
+# 推荐同时把 .env 备份到 BACKUP_DIR/env_*.bak (或独立密码管理器)
+if [ -f ".env" ]; then
+  ENV_HASH=$(grep "^SECRET_KEY=" .env | sha256sum | cut -c1-8)
+  echo "[$(date)] 当前 SECRET_KEY sha256[0:8]=$ENV_HASH (备份 DB 不含此 key)"
+  echo "[$(date)] 提醒: 恢复 DB 后若 SECRET_KEY 已变, 所有用户须重新登录 (类 20.155)"
+fi
+
 echo "[$(date)] 备份完成"

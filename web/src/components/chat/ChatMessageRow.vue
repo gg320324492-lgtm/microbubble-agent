@@ -63,6 +63,7 @@ const emit = defineEmits<{
   (e: 'image-open', url: string): void
   (e: 'tts-play', text: string): void
   (e: 'follow-up-click', payload: any): void
+  (e: 'quote', payload: any): void
 }>()
 
 const hasTimeDivider = computed(() => {
@@ -106,6 +107,19 @@ const msgContentStyle = computed(() => {
 })
 
 const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已足够
+
+// W-N 周期: Reaction 切换
+const activeReactions = ref<Map<string, boolean>>(new Map())
+function toggleReaction(emoji: string) {
+  const key = `${props.msg.id}-${emoji}`
+  if (activeReactions.value.has(key)) {
+    activeReactions.value.delete(key)
+  } else {
+    activeReactions.value.set(key, true)
+  }
+  // 触发响应式
+  activeReactions.value = new Map(activeReactions.value)
+}
 </script>
 
 <template>
@@ -132,6 +146,14 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
               @click="emit('image-open', msg.imageUrl)"
             />
           </div>
+        </div>
+        <!-- Reactions -->
+        <div class="reactions-bar">
+          <button class="react-btn" @click.stop="toggleReaction('😊')" title="笑脸">😊</button>
+          <button class="react-btn" @click.stop="toggleReaction('👍')" title="点赞">👍</button>
+          <button class="react-btn" @click.stop="toggleReaction('❤️')" title="爱心">❤️</button>
+          <button class="react-btn" @click.stop="toggleReaction('🎉')" title="庆祝">🎉</button>
+          <button class="react-btn" @click.stop="emit('quote', { msg: props.msg })" title="引用回复" style="font-size:11px;width:auto;padding:0 6px"><svg class="icon" width="12" height="12"><use href="#i-corner-down-left"/></svg></button>
         </div>
       </div>
     </template>
@@ -244,6 +266,14 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
             :on-click="(payload: any) => emit('follow-up-click', payload)"
           />
         </div>
+        <!-- Reactions -->
+        <div class="reactions-bar">
+          <button class="react-btn" @click.stop="toggleReaction('😊')" title="笑脸">😊</button>
+          <button class="react-btn" @click.stop="toggleReaction('👍')" title="点赞">👍</button>
+          <button class="react-btn" @click.stop="toggleReaction('❤️')" title="爱心">❤️</button>
+          <button class="react-btn" @click.stop="toggleReaction('🎉')" title="庆祝">🎉</button>
+          <button class="react-btn" @click.stop="emit('quote', { msg: props.msg })" title="引用回复" style="font-size:11px;width:auto;padding:0 6px"><svg class="icon" width="12" height="12"><use href="#i-corner-down-left"/></svg></button>
+        </div>
       </div>
     </template>
   </div>
@@ -275,5 +305,48 @@ const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已�
 
 .tts-btn :deep(.el-icon) {
   font-size: 16px;
+}
+
+/* W-N 视觉设计: 气泡卡片风格 */
+.bubble {
+  max-width: 80%;
+  padding: 14px 18px;
+  border-radius: 16px;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+  position: relative;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.bot-bubble {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.02);
+}
+.bot-bubble:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.02);
+}
+.user-bubble {
+  border-radius: 18px 18px 4px 18px;
+  background: linear-gradient(135deg, #FF7A5C, #E85A3A);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 14px rgba(255,122,92,0.18), 0 1px 3px rgba(255,122,92,0.08);
+}
+.user-bubble:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255,122,92,0.22), 0 2px 4px rgba(255,122,92,0.1);
+}
+.msg-row {
+  display: flex;
+  margin-bottom: 16px;
+  gap: 8px;
+}
+.msg-row.user {
+  justify-content: flex-end;
+}
+.msg-row.bot {
+  justify-content: flex-start;
 }
 </style>

@@ -10,7 +10,8 @@
     +-----------------+----------+---------+----------------------------------------------+
     | Tier            | 限制      | 窗口(秒) | 应用场景                                       |
     +-----------------+----------+---------+----------------------------------------------+
-    | auth            | 20/min   | 60      | /auth/login, /auth/refresh, /auth/change-pwd |
+    | auth            | 20/min   | 60      | /auth/login, /auth/change-pwd, /auth/reset-pwd |
+    | auth_refresh    | 60/min   | 60      | /auth/refresh (2026-08-14 类 20.155 单独)     |
     | write           | 30/min   | 60      | POST/PUT/PATCH/DELETE 默认                    |
     | read            | 200/min  | 60      | GET 默认                                       |
     | upload          | 10/min   | 60      | 单文件上传（/upload）                          |
@@ -39,7 +40,8 @@
     3. _CHUNKED_UPLOAD_PATH_RE + PUT → chunked_upload
     4. /api/v1/drive/* + /api/v1/upload/* → drive_upload / drive_list
     5. _ANALYTICS_PATH_RE → unlimited (写) / read (读)
-    6. /api/v1/auth/* 白名单 → auth, 其他 /auth/* 写 → write, 读 → read
+    6. /api/v1/auth/refresh → auth_refresh (2026-08-14 类 20.155)
+       /api/v1/auth/* 白名单 → auth, 其他 /auth/* 写 → write, 读 → read
     7. 含 /upload → upload
     8. POST/PUT/PATCH/DELETE → write
     9. GET → read
@@ -204,7 +206,8 @@ class AsyncRedisRateLimiter:
 # 优势: 抗 docker compose restart, 跨实例共享, 真实滑动窗口
 # 劣势: 多 1 次 Redis round-trip (~1ms), Redis 不可用时静默降级 (try/except)
 _rate_limiters = {
-    "auth": AsyncRedisRateLimiter(max_attempts=20, window_seconds=60),      # 真认证动作：登录/刷新/改密 20次/分钟
+    "auth": AsyncRedisRateLimiter(max_attempts=20, window_seconds=60),      # 真认证动作：登录/改密/重置 20次/分钟
+    "auth_refresh": AsyncRedisRateLimiter(max_attempts=60, window_seconds=60),  # 2026-08-14 类 20.155: refresh 单独 tier 60/min (签名 token 必须有效, 不易暴力)
     "write": AsyncRedisRateLimiter(max_attempts=30, window_seconds=60),     # 写操作：30次/分钟
     "read": AsyncRedisRateLimiter(max_attempts=200, window_seconds=60),     # 读操作：200次/分钟
     "upload": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),    # 上传：10次/分钟
@@ -215,13 +218,18 @@ _rate_limiters = {
 }
 
 # /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流
+# 2026-08-14 类 20.155: /auth/refresh 移除出 _AUTH_SENSITIVE_PATHS, 单独走 auth_refresh tier 60/min
+# 原因: refresh 需要有效签名 refresh_token 才能调用, 不易暴力; 但前端 401 风暴或浏览器标签页 N 个并发
+# 容易触发 20/min 限流 → 429 → redirect 循环, 必须放宽. 同时 60/min 上限防止真暴力枚举.
 _AUTH_SENSITIVE_PATHS = frozenset({
     "/api/v1/auth/login",
-    "/api/v1/auth/refresh",
     "/api/v1/auth/change-password",
     "/api/v1/auth/reset-password",
     "/api/v1/auth/init-password",
 })
+
+# 2026-08-14 类 20.155: refresh 端点单独路径常量, dispatch 在 _AUTH_SENSITIVE_PATHS 检查之前
+_AUTH_REFRESH_PATH = "/api/v1/auth/refresh"
 
 # 2026-06-18 用户强烈反馈：/auth/me 即便 200/min 也被高频 polling 触发 429
 # （MainLayout / MeetingView 每次 reactive set value 都触发 useUserStore 重新拉 /auth/me）
@@ -332,14 +340,19 @@ def _get_rate_limit_type(request: Request) -> str:
             return "unlimited"
         return "read"
 
-    # /auth/ 路径细分（4 类）：
-    #  1. 白名单内（login/refresh/change-password 等敏感） → auth tier (20/min)
-    #  2. 写操作（PUT /auth/profile 等） → write tier (30/min)
-    #  3. 其他 /auth/* 只读 → read tier (200/min)
-    #  4. 其他 /auth/* 未列出 → auth tier fallback（防 401 风暴）
+    # /auth/ 路径细分（5 类）：
+    #  1. /auth/refresh → auth_refresh tier (60/min, 2026-08-14 类 20.155 单独)
+    #  2. 白名单内（login/change-password 等敏感） → auth tier (20/min)
+    #  3. 写操作（PUT /auth/profile 等） → write tier (30/min)
+    #  4. 其他 /auth/* 只读 → read tier (200/min)
+    #  5. 其他 /auth/* 未列出 → auth tier fallback（防 401 风暴）
     # v31.2.3: 改用 _is_under_auth() prefix 匹配, 取代 substring "/auth/" in path
     # (修复 /api/v1/authentication/... 等带 auth 子串但非 /auth/ 路径的误匹配)
     if _is_under_auth(path):
+        # 2026-08-14 类 20.155: refresh 单独 tier, 必须在 _AUTH_SENSITIVE_PATHS 检查之前
+        # (否则会被 catch-all 'auth' 20/min 吃掉)
+        if path == _AUTH_REFRESH_PATH:
+            return "auth_refresh"
         if path in _AUTH_SENSITIVE_PATHS:
             return "auth"
         if method in ("POST", "PUT", "PATCH", "DELETE"):

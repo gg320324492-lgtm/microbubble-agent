@@ -211,6 +211,19 @@ async def lifespan(app: FastAPI):
         else:
             warnings.warn("SECRET_KEY 使用了不安全的默认值，生产环境请务必修改")
 
+    # 2026-08-14 类 20.155: 启动日志打印 sha256[:8] + length, 运维可跨重启比对是否轮换
+    # 持久化: .env bind mount 已被 docker-compose.yml env_file 注入, 跨重启守恒
+    # 校验: 若部署前记录了 sha256[:8], 部署后可对比; 不一致 = SECRET_KEY 已轮换, 所有旧 refresh_token 立即失效
+    import hashlib as _hashlib
+    _sk_hash = _hashlib.sha256(settings.SECRET_KEY.encode("utf-8")).hexdigest()[:8]
+    _sk_len = len(settings.SECRET_KEY)
+    if _sk_len < 32:
+        warnings.warn(
+            f"[startup] SECRET_KEY length {_sk_len} < 32 chars; HS256 推荐 ≥64. "
+            f"sha256[0:8]={_sk_hash}"
+        )
+    print(f"[startup] SECRET_KEY sha256[0:8]={_sk_hash} length={_sk_len} app_env={settings.APP_ENV}")
+
     # 启动时执行
     # W67 第 41 步 (Agent 21): SKIP_DB_SETUP=1 时全量跳过 lifespan 内 DB 启动操作.
     # CI test app (qa-bench-ci.yml) 由 scripts/init_db.py 单独 docker exec 跑 create_all + seed,

@@ -92,12 +92,25 @@ echo "  PASS: $PASS / $TOTAL"
 # Step 7: 5 件套守恒验证
 echo "--- Step 7: 5 件套守恒验证 ---"
 HEAD=$(docker exec microbubble-agent-app-1 python -m alembic heads 2>&1 | head -1)
-[ "$HEAD" = "097_meeting_processing_persistence (head)" ] \
+[ "$HEAD" = "105_fix_drift (head)" ] \
   && ok "alembic head 守恒: $HEAD" \
-  || fail "alembic head 漂移: $HEAD (期望 097_meeting_processing_persistence)"
+  || fail "alembic head 漂移: $HEAD (期望 105_fix_drift)"
 
 CELERY=$(docker exec microbubble-agent-celery-worker-1 celery -A app.core.celery inspect ping --timeout 5 2>&1 | grep -c "pong")
 [ "$CELERY" -ge "1" ] && ok "celery worker 响应 ($CELERY pong)" || fail "celery worker 无响应"
+
+# Step 8: 提示用户清理浏览器 (类 20.155, 后端 JWT 无法清前端缓存)
+echo "--- Step 8: 提示用户清理浏览器 (前端 JWT 已过期) ---"
+echo "  后端 API 全恢复, 但浏览器 localStorage 仍缓存旧 access_token + refresh_token."
+echo "  单纯 reload 会触发 401 → /auth/refresh → 限流 → 429 → redirect 循环."
+echo "  用户必须执行:"
+echo "    1) 浏览器 DevTools → Application → Storage → Clear site data"
+echo "    2) 或浏览器右上角 avatar → 退出登录 (若按钮可见)"
+echo "    3) 硬刷 Ctrl+Shift+R"
+echo "    4) 重新输入账号密码登录"
+echo "  原因: refresh_token 7 天过期, 即使服务端仍健康, 旧 token 无法续命"
+echo "  根因 / 修复 / 铁律: 类 20.155 (memory/server-shutdown-refresh-429-loop-2026-08-13.md)"
+ok "前端清理步骤已显示"
 
 echo ""
 echo "============================================"

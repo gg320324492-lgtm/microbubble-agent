@@ -153,6 +153,12 @@ class WsClient {
     this.connected = false
   }
 
+  // 2026-08-14 类 20.155: authRefresh.hardLogout 调这个, 语义 alias of disconnect()
+  // 命名清晰: "disable reconnect" 比 "disconnect" 更明确意图
+  disableReconnect() {
+    return this.disconnect()
+  }
+
   on(event, handler) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, [])
