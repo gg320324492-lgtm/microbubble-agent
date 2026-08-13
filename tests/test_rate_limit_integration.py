@@ -141,9 +141,9 @@ def _token(user_id: int) -> str:
     return create_access_token({"sub": str(user_id)})
 
 
-def test_anonymous_ip_exceeds_auth_threshold_with_429_retry_after(client, redis, clock):
-    """A/F: no token means an IP-scoped anonymous key and a standard 429 response."""
-    with _limit("auth", max_attempts=2):
+def test_anonymous_ip_exceeds_auth_refresh_threshold_with_429_retry_after(client, redis, clock):
+    """A/F: no token means an IP-scoped anonymous key on auth_refresh tier (60/min, 2026-08-14 类 20.155)."""
+    with _limit("auth_refresh", max_attempts=2):
         headers = {"X-Forwarded-For": "203.0.113.10"}
         assert client.post("/api/v1/auth/refresh", headers=headers).status_code == 200
         clock["now"] += 0.001
@@ -153,13 +153,15 @@ def test_anonymous_ip_exceeds_auth_threshold_with_429_retry_after(client, redis,
 
     assert response.status_code == 429
     assert response.headers["retry-after"] == "60"
+    assert response.headers["x-ratelimit-policy"] == "auth_refresh"
     assert response.json() == {
         "error": {
             "code": "RATE_LIMIT_EXCEEDED",
             "message": "请求过于频繁，请 60 秒后重试",
         }
     }
-    assert len(redis.zsets["rl:auth:203.0.113.10:anon"].members) == 2
+    # 2026-08-14 类 20.155: refresh 单独 tier auth_refresh, Redis key 前缀变化
+    assert len(redis.zsets["rl:auth_refresh:203.0.113.10:anon"].members) == 2
 
 
 def test_login_errors_are_401_until_stricter_login_quota_returns_429(

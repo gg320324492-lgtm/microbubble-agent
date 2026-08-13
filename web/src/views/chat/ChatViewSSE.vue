@@ -136,6 +136,121 @@ const showExportDialog = ref(false)
 const showTagsEditor = ref(false)
 const dialogSession = ref<any>(null)
 
+// W-N 周期: 对话内搜索栏
+const showChatSearch = ref(false)
+const searchQuery = ref('')
+const searchMatches = ref<HTMLElement[]>([])
+const searchIndex = ref(-1)
+const searchInputRef = ref<HTMLInputElement | null>(null)
+
+// W-N 周期: 图片灯箱
+const lightboxUrl = ref('')
+const showLightbox = ref(false)
+function openLightbox(url: string) {
+  lightboxUrl.value = url
+  showLightbox.value = true
+}
+function closeLightbox() {
+  showLightbox.value = false
+  lightboxUrl.value = ''
+}
+
+// W-N 周期: 引用回复
+const quotedMessage = ref<{ author: string; text: string; card: HTMLElement } | null>(null)
+function quoteMsg(btn: HTMLElement) {
+  const card = btn.closest('.card') as HTMLElement | null
+  if (!card) return
+  const content = card.querySelector('.content')
+  const author = card.closest('.msg')?.classList.contains('user') ? '我' : '小气助手'
+  const text = content ? content.textContent?.trim().substring(0, 100) || '' : ''
+  quotedMessage.value = { author, text, card }
+  nextTick(() => {
+    const ta = document.querySelector('.input-wrapper textarea') as HTMLTextAreaElement | null
+    if (ta) ta.focus()
+  })
+  addQuoteRef(card)
+}
+function clearQuote() {
+  quotedMessage.value = null
+}
+function addQuoteRef(card: HTMLElement) {
+  card.classList.add('quote-ref')
+  // Activate with delay for CSS animation
+  setTimeout(() => card.classList.add('active'), 50)
+}
+
+// W-N 周期: 从 ChatMessageRow 收到 quote 事件
+function onQuote(payload: any) {
+  const card = document.querySelector(`[data-msg-id="${payload?.msg?.id}"] .card`) as HTMLElement | null
+  if (card) quoteMsg(card)
+}
+
+// W-N 周期: 对话内搜索逻辑
+function toggleChatSearch() {
+  showChatSearch.value = !showChatSearch.value
+  if (!showChatSearch.value) {
+    clearSearchHighlights()
+  } else {
+    nextTick(() => searchInputRef.value?.focus())
+  }
+}
+function clearSearchHighlights() {
+  document.querySelectorAll('.search-highlight').forEach(el => {
+    const parent = el.parentNode
+    if (parent) parent.replaceChild(document.createTextNode(el.textContent || ''), el)
+  })
+  searchMatches.value = []
+  searchIndex.value = -1
+  searchQuery.value = ''
+}
+function doSearch(query: string) {
+  clearSearchHighlights()
+  if (!query.trim()) return
+  const lower = query.toLowerCase()
+  const textNodes: Text[] = []
+  const messagesEl = document.querySelector('.messages')
+  if (!messagesEl) return
+  const walker = document.createTreeWalker(messagesEl, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => {
+      const el = n.parentElement
+      if (!el) return NodeFilter.FILTER_ACCEPT
+      if (el.closest('.chat-search-bar, .jump-to-bottom, .jump-to-top, .typing-indicator'))
+        return NodeFilter.FILTER_REJECT
+      return NodeFilter.FILTER_ACCEPT
+    }
+  })
+  let node: Text | null
+  while ((node = walker.nextNode() as Text | null)) textNodes.push(node)
+  textNodes.forEach(tn => {
+    const text = tn.textContent || ''
+    const idx = text.toLowerCase().indexOf(lower)
+    if (idx === -1) return
+    const span = document.createElement('span')
+    span.className = 'search-highlight'
+    span.textContent = text.substring(idx, idx + query.length)
+    const range = document.createRange()
+    range.setStart(tn, idx)
+    range.setEnd(tn, idx + query.length)
+    range.deleteContents()
+    range.insertNode(span)
+    searchMatches.value.push(span)
+  })
+  searchIndex.value = searchMatches.value.length > 0 ? 0 : -1
+}
+function updateSearchNav() {
+  searchMatches.value.forEach((el, i) => {
+    el.classList.toggle('active', i === searchIndex.value)
+    if (i === searchIndex.value) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
+function searchNav(dir: number) {
+  if (searchMatches.value.length === 0) return
+  searchIndex.value = (searchIndex.value + dir + searchMatches.value.length) % searchMatches.value.length
+  updateSearchNav()
+}
+
 function onShareSession(session: any) {
   dialogSession.value = session
   showShareDialog.value = true
@@ -363,7 +478,7 @@ function onFollowUpClick(suggestion: string) {
   inputText.value = suggestion
   sendMessage(suggestion)
 }
-function openImage(url: string) { window.open(url, '_blank') }
+function openImage(url: string) { openLightbox(url) }
 
 function handleImageSelect(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return
@@ -544,12 +659,23 @@ function onProEntryClick(msg: ChatMessage, kind: 'graph' | 'formula' | 'hypothes
 onMounted(async () => {
   await nextTick()
   scrollToBottom()
+  // W-N 周期: Ctrl+F 搜索
+  document.addEventListener('keydown', handleSearchKeydown)
 })
 
 onUnmounted(() => {
+  document.removeEventListener('keydown', handleSearchKeydown)
   // useChatStream 的 onUnmounted 已处理：abort 所有 SSE + 持久化所有 session
   // 这里无需额外逻辑
 })
+
+// W-N 周期: Ctrl+F 快捷键
+function handleSearchKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault()
+    toggleChatSearch()
+  }
+}
 </script>
 
 <template>
@@ -605,6 +731,17 @@ onUnmounted(() => {
           </div>
           <div class="header-right">
             <el-button
+              id="chat-header-search-toggle"
+              text
+              size="small"
+              :class="{ 'is-active': showChatSearch }"
+              aria-label="搜索当前对话"
+              title="搜索当前对话 (Ctrl+F)"
+              @click="toggleChatSearch"
+            >
+              <el-icon><Search /></el-icon>
+            </el-button>
+            <el-button
               id="chat-header-context-toggle"
               name="chat-header-context-toggle"
               text
@@ -631,6 +768,25 @@ onUnmounted(() => {
             </el-button>
           </div>
         </header>
+
+        <!-- 对话内搜索栏 (W-N 周期) -->
+        <div class="chat-search-bar" :class="{ active: showChatSearch }">
+          <span class="csb-icon"><el-icon><Search /></el-icon></span>
+          <input
+            ref="searchInputRef"
+            :value="searchQuery"
+            @input="searchQuery = ($event.target as HTMLInputElement).value; doSearch(searchQuery)"
+            type="text"
+            placeholder="搜索当前对话..."
+            aria-label="搜索当前对话"
+          />
+          <span class="csb-count">{{ searchMatches.length > 0 ? `${searchIndex+1}/${searchMatches.length}` : '' }}</span>
+          <div class="csb-nav">
+            <button :disabled="searchMatches.length <= 1" @click="searchNav(-1)" title="上一个" aria-label="上一个匹配"><el-icon><ArrowUp /></el-icon></button>
+            <button :disabled="searchMatches.length <= 1" @click="searchNav(1)" title="下一个" aria-label="下一个匹配"><el-icon><ArrowDown /></el-icon></button>
+          </div>
+          <button class="csb-close" @click="toggleChatSearch()" title="关闭搜索" aria-label="关闭搜索">✕</button>
+        </div>
 
     <!-- 消息区 -->
     <div ref="messagesRef" class="messages" @scroll="onMessagesScroll">
@@ -690,6 +846,7 @@ onUnmounted(() => {
           @image-open="openImage"
           @tts-play="playTTSWrap"
           @follow-up-click="onFollowUpClick"
+          @quote="onQuote"
         />
       </template>
       </TransitionGroup>
@@ -717,6 +874,7 @@ onUnmounted(() => {
             @image-open="openImage"
             @tts-play="playTTSWrap"
             @follow-up-click="onFollowUpClick"
+            @quote="onQuote"
           />
         </div>
       </template>
@@ -734,6 +892,15 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- W-N 周期: 引用回复栏 -->
+    <div class="quote-bar" :class="{ active: !!quotedMessage }">
+      <div v-if="quotedMessage" class="quote-preview">
+        <div class="qp-author">{{ quotedMessage.author }}</div>
+        <div class="qp-text">{{ quotedMessage.text }}{{ quotedMessage.text.length >= 100 ? '...' : '' }}</div>
+      </div>
+      <button class="qc-close" @click="clearQuote" title="取消引用">✕</button>
     </div>
 
     <!-- v78 UI-redesign: 思考模式分段控件 (输入栏上方) -->
@@ -887,6 +1054,13 @@ onUnmounted(() => {
     >
       <ContextPanel :messages="messages" />
     </el-drawer>
+
+    <!-- 图片灯箱 (W-N 周期) -->
+    <Teleport to="body">
+      <div v-if="showLightbox" class="lightbox-overlay" @click="closeLightbox">
+        <img :src="lightboxUrl" alt="放大图片" @click.stop />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -922,10 +1096,11 @@ onUnmounted(() => {
 .chat-immersive {
   display: flex; flex-direction: column;
   height: calc(100vh - 120px);
-  background: linear-gradient(180deg, #f8f9fb 0%, #fefefe 100%);
-  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, #faf8f5 0%, #f5f2ed 100%);
+  border-radius: 18px;
   overflow: hidden;
   position: relative;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.04);
 }
 .chat-layout { display: flex; flex: 1; overflow: hidden; }
 .chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -944,14 +1119,16 @@ onUnmounted(() => {
 .msg-enter-from { opacity: 0; transform: translateY(8px); }
 .chat-header {
   display: grid;
-  /* W72 B-3: 3-zone grid — 派工 v6 段 5 反馈 #3 实战 (TopBarZone type hint 必含)
-     desktop: TOPBAR_ZONES[*].desktopFr = 4 4 4 → 4fr 4fr 4fr */
-  grid-template-columns: 4fr 4fr 4fr;  /* v78 3-zone: 左 / 中 / 右 */
+  grid-template-columns: 4fr 4fr 4fr;
   align-items: center;
   gap: 12px;
-  padding: 8px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--color-border-light);
-  min-height: 56px;
+  min-height: 71px;
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
 }
 /* W72 B-3 移动端断点: TOPBAR_ZONES[*].mobileFr = 1 2 1 → 1fr 2fr 1fr
    (派工 v6 段 5 反馈 #6 实战: W72 起步纪律 4 项必读) */
@@ -967,7 +1144,15 @@ onUnmounted(() => {
 .header-center { display: flex; align-items: center; justify-content: center; min-width: 0; }
 .header-right { display: flex; align-items: center; gap: 4px; }
 .bot-avatar { background: var(--gradient-welcome-hero); }
-.bot-msg-avatar { background: var(--gradient-welcome-hero); flex-shrink: 0; }
+.bot-msg-avatar {
+  background: var(--gradient-welcome-hero);
+  flex-shrink: 0;
+  border-radius: 10px !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px;
+  --el-avatar-size: 34px;
+}
 .header-text { line-height: 1.2; }
 
 /* W100 +51b: 头部上下文按钮 - icon + 文字标签 */
@@ -1001,7 +1186,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--color-border-light);
 }
 
-.messages { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
+.messages { flex: 1; overflow-y: auto; padding: 20px; position: relative; background: transparent; }
 
 /* 2026-06-14 智能 sticky scroll：跳到最新按钮 */
 .jump-to-bottom {
@@ -1164,9 +1349,9 @@ onUnmounted(() => {
 }
 .bot-bubble {
   background: var(--color-bg-card);
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.02);
   border: 1px solid var(--color-border-light);
-  border-bottom-left-radius: 4px;
+  border-radius: 18px 18px 18px 4px;
 }
 /* W100 +55b: 助手气泡左上方小尾巴 (::after clip-path) + 微光泽 (::before) */
 .bot-bubble::before {
@@ -1178,13 +1363,13 @@ onUnmounted(() => {
   height: 1px;
   background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%);
   pointer-events: none;
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
 }
 .bot-bubble::after {
   content: '';
   position: absolute;
-  top: 0;
+  top: 6px;
   left: -8px;
   width: 14px;
   height: 14px;
@@ -1196,8 +1381,20 @@ onUnmounted(() => {
 }
 /* W100 +55b: hover lift */
 .bubble:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.02);
+}
+/* W-N 视觉设计: 用户气泡卡片风格 */
+.user-bubble {
+  border-radius: 18px 18px 4px 18px;
+  box-shadow: 0 4px 14px rgba(255,122,92,0.18), 0 1px 3px rgba(255,122,92,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: linear-gradient(135deg, #FF7A5C, #E85A3A);
+  color: #fff;
+}
+.user-bubble:hover {
   transform: translateY(-1px);
-  box-shadow: var(--shadow-lg, 0 4px 16px rgba(0, 0, 0, 0.1));
+  box-shadow: 0 6px 20px rgba(255,122,92,0.22), 0 2px 4px rgba(255,122,92,0.1);
 }
 @media (prefers-reduced-motion: reduce) {
   .bubble,
@@ -1289,10 +1486,10 @@ onUnmounted(() => {
 
 /* ===== W99 +15 typing-bubble CSS 删除（已被 ThinkingCapsule 取代） ===== */
 
-.welcome-hero { text-align: center; padding: 60px 20px 20px; }
-.hero-avatar { background: var(--gradient-welcome-hero); margin-bottom: 16px; }
-.welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }
-.welcome-hero p { color: var(--color-text-regular); margin: 0 0 24px; }
+.welcome-hero { text-align: center; padding: 40px 20px 20px; }
+.hero-avatar { background: var(--gradient-welcome-hero); margin-bottom: 12px; }
+.welcome-hero h2 { font-size: 22px; margin: 0 0 6px; color: var(--color-text-primary); font-weight: 700; }
+.welcome-hero p { color: var(--color-text-regular); margin: 0 0 20px; font-size: 14px; }
 .quick-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .quick-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 20px; cursor: pointer; transition: var(--transition-all-normal); }
 .quick-btn:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); }
@@ -1301,15 +1498,15 @@ onUnmounted(() => {
 /* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 (assets/glass.css)
    blur 20px 降到 .glass-lg 默认 16px（dark mode 自动适配收益更大）
    border-top #eee 硬编码 → var(--color-border-light) */
-.input-bar { padding: 16px 20px 8px; border-top: 1px solid var(--color-border-light); }
+.input-bar { padding: 16px 20px 8px; border-top: 1px solid var(--color-border-light); background: var(--color-bg-card); }
 .input-core {
   display: flex;
   align-items: center;
   gap: 8px;
   background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: 20px;
-  padding: 4px 8px;
+  border: 1.5px solid var(--color-border-light);
+  border-radius: 24px;
+  padding: 4px 8px 4px 16px;
   transition: border-color var(--duration-fast, 150ms) var(--ease-out, ease),
               box-shadow var(--duration-fast, 150ms) var(--ease-out, ease);
 }

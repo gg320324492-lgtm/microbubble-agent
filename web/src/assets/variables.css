@@ -41,7 +41,7 @@
   --color-text-placeholder: #C0C4CC;
   --color-border: #EBEEF5;
   --color-border-light: #F0F0F0;
-  --color-bg-page: #F5F7FA;
+  --color-bg-page: #F3F1ED;
   --color-bg-card: #FFFFFF;
   --color-bg-secondary: #F0F2F5; /* W98: RAGEvalPanel / FigureCard 代码块与图占位背景 (此前为 orphan token) */
   --color-bg-card-rgb: 255, 255, 255; /* v77 P2: glass.css 玻璃态工具 6 主题自适应 */
@@ -280,7 +280,7 @@ body {
     'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
   font-size: var(--font-size-base);
   color: var(--color-text-primary);
-  background-color: var(--color-bg-page);
+  background-color: #F3F1ED;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1964,6 +1964,97 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
 /* dark mode: focus 在深色背景下需更高对比度, 切换到 --color-primary-light */
 [data-theme="dark"] :focus-visible {
   outline-color: var(--color-primary-light);
+}
+
+/* ============================================
+   W-N 周期 UI 升级 — 反应按钮 / 搜索栏 / 引用线 / 动效增强
+   ============================================ */
+
+/* ===== Message Reactions ===== */
+.reactions-bar{display:flex;gap:2px;padding:2px 0;margin-top:2px;opacity:1;transform:translateY(0);transition:opacity .15s ease,transform .15s ease}
+.react-btn{width:24px;height:24px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;transition:all .12s ease;line-height:1}
+.react-btn:hover{background:rgba(0,0,0,0.05);transform:scale(1.12)}
+.react-btn.active{background:rgba(255,122,92,0.1)}
+.user-bubble .react-btn:hover{background:rgba(255,255,255,0.12)}
+.user-bubble .react-btn.active{background:rgba(255,255,255,0.15)}
+.react-badge{display:inline-flex;align-items:center;gap:2px;padding:1px 6px 1px 5px;border-radius:12px;background:#fff;border:1px solid #e8e8e8;font-size:10px;cursor:pointer;transition:all .12s ease;animation:reactPop .25s cubic-bezier(.34,1.56,.64,1);margin:2px 2px 0 0;line-height:1.4}
+.react-badge:hover{transform:scale(1.06);border-color:var(--color-primary);box-shadow:0 1px 4px rgba(255,122,92,0.1)}
+@keyframes reactPop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.user-bubble .react-badge{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15)}
+.user-bubble .react-badge:hover{background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.3)}
+.react-badge .rb-count{font-size:9px;color:#666;font-weight:600;min-width:8px;text-align:center}
+.user-bubble .react-badge .rb-count{color:rgba(255,255,255,0.8)}
+
+/* ===== Inline Search Bar ===== */
+.chat-search-bar{display:flex;align-items:center;gap:8px;padding:0 16px;max-height:0;overflow:hidden;opacity:0;transition:all .2s ease;background:var(--color-bg-card);border-bottom:1px solid var(--color-border)}
+.chat-search-bar.active{max-height:48px;padding:8px 16px;opacity:1}
+.chat-search-bar .csb-icon{color:var(--color-text-placeholder);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.chat-search-bar input{flex:1;border:none;outline:none;font-size:13px;color:var(--color-text-primary);font-family:inherit;background:transparent}
+.chat-search-bar input::placeholder{color:var(--color-text-placeholder)}
+.chat-search-bar .csb-count{font-size:11px;color:var(--color-text-secondary);white-space:nowrap;flex-shrink:0}
+.chat-search-bar .csb-nav{display:flex;gap:2px;flex-shrink:0}
+.chat-search-bar .csb-nav button{width:22px;height:22px;border-radius:4px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--color-text-secondary);transition:all .1s}
+.chat-search-bar .csb-nav button:hover{background:var(--color-bg-secondary);color:var(--color-primary)}
+.chat-search-bar .csb-nav button:disabled{opacity:.3;cursor:default}
+.chat-search-bar .csb-close{width:22px;height:22px;border-radius:4px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--color-text-secondary);flex-shrink:0;transition:all .1s}
+.chat-search-bar .csb-close:hover{background:var(--color-bg-secondary);color:var(--color-primary)}
+.search-highlight{background:rgba(255,179,71,0.25);border-radius:2px;padding:0 1px}
+.search-highlight.active{background:rgba(255,122,92,0.3);box-shadow:0 0 0 1px rgba(255,122,92,0.2)}
+
+/* ===== Quote Reference Line ===== */
+.quote-ref{position:relative}
+.quote-ref::before{content:'';position:absolute;left:-6px;top:4px;bottom:4px;width:3px;background:var(--color-primary);border-radius:2px;opacity:0;transform:scaleY(0);transition:all .2s cubic-bezier(.34,1.56,.64,1);transform-origin:top}
+.quote-ref.active::before{opacity:1;transform:scaleY(1)}
+
+/* ===== Quote Reply Bar (ChatViewSSE) ===== */
+.quote-bar{display:none;align-items:flex-start;gap:8px;padding:6px 16px;background:var(--color-bg-card);border-top:1px solid var(--color-border);position:relative}
+.quote-bar.active{display:flex}
+.quote-bar .qc-close{position:absolute;top:6px;right:8px;width:20px;height:20px;border-radius:4px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--color-text-secondary);font-size:14px;transition:all .1s}
+.quote-bar .qc-close:hover{background:var(--color-bg-secondary);color:var(--color-primary)}
+.quote-preview{flex:1;padding:6px 10px;background:var(--color-bg-secondary);border-radius:8px;border-left:3px solid var(--color-primary)}
+.quote-preview .qp-author{font-size:12px;font-weight:600;color:var(--color-primary);margin-bottom:2px}
+.quote-preview .qp-text{font-size:12px;color:var(--color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;line-height:1.4}
+
+/* ===== Enhanced Follow-up Chips ===== */
+.follow-up-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.follow-up-chip{transition:all .15s ease;animation:chipIn .25s cubic-bezier(.34,1.56,.64,1) both}
+.follow-up-chip:nth-child(1){animation-delay:0ms}
+.follow-up-chip:nth-child(2){animation-delay:80ms}
+.follow-up-chip:nth-child(3){animation-delay:160ms}
+@keyframes chipIn{from{opacity:0;transform:translateY(6px) scale(0.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* ===== Enhanced Message Hover ===== */
+.bot-bubble,.user-bubble{transition:transform .2s var(--ease-out, ease),box-shadow .2s var(--ease-out, ease)}
+.bot-bubble:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.05)}
+.user-bubble:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(255,122,92,0.15)}
+
+/* ===== Lightbox ===== */
+.lightbox-overlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease;cursor:pointer}
+.lightbox-overlay img{max-width:90vw;max-height:85vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.3);cursor:default;animation:lightbox-zoom .25s ease}
+@keyframes lightbox-zoom{from{transform:scale(0.8);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* W-N 视觉: AI 头像方形 34x34 */
+.bot-msg-avatar {
+  background: var(--gradient-welcome-hero) !important;
+  border-radius: 10px !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  --el-avatar-size: 34px !important;
+}
+.bot-msg-avatar .el-icon { font-size: 18px !important; }
+
+/* W-N 视觉: 侧栏搜索框圆角 */
+.session-sidebar .el-input__wrapper,
+.session-sidebar .sidebar-search input,
+.session-sidebar .el-input {
+  border-radius: 10px !important;
+}
+.session-sidebar .el-input__wrapper {
+  box-shadow: 0 0 0 1px var(--color-border-light) inset !important;
+}
+.session-sidebar .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-primary) inset, 0 0 0 3px rgba(255,122,92,0.08) !important;
 }
 
 

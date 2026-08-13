@@ -321,5 +321,7 @@ else
     echo "  2. 服务器端: curl -sk https://agent.mnb-lab.cn/api/v1/health"
     echo "  3. 本地 PC: docker ps (确认 app/celery-worker 已重启)"
     echo "  4. 浏览器: 硬刷 (Ctrl+Shift+R) 或 DevTools → Clear site data"
+    echo "     原因: 后端 JWT/refresh_token 在部署后可能失效, localStorage 旧 token 触发 401→refresh→429 循环 (类 20.155)"
+    echo "     若前端改动 (本次 commit 含 web/dist/), 浏览器 SW 也会缓存旧资源, Clear site data 才能生效"
 fi
 echo ""

@@ -1,4 +1,6 @@
 from pydantic_settings import BaseSettings
+from pydantic import validator
+import os
 
 
 class Settings(BaseSettings):
@@ -305,6 +307,28 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
+
+    # 2026-08-14 类 20.155: SECRET_KEY 防御性校验
+    # 启动时拒绝弱 key (production hard fail, dev warn) + 长度 < 32 warn
+    @validator("SECRET_KEY")
+    def _validate_secret_key(cls, v: str) -> str:
+        weak = {"", "change-this-to-a-random-string", "secret", "your-secret-key"}
+        if v in weak:
+            if os.getenv("APP_ENV") == "production":
+                raise ValueError(
+                    "SECRET_KEY 未设置或使用不安全默认值, production 必须配置. "
+                    "生成: `openssl rand -hex 32`"
+                )
+            import warnings as _w
+            _w.warn(
+                "SECRET_KEY 是弱默认值; production 部署前必须轮换 (类 20.155)"
+            )
+        if v and len(v) < 32:
+            import warnings as _w
+            _w.warn(
+                f"SECRET_KEY length {len(v)} < 32 chars; HS256 推荐 ≥64 chars (类 20.155)"
+            )
+        return v
 
 
 settings = Settings()

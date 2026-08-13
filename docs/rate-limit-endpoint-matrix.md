@@ -6,7 +6,8 @@
 
 | Tier | 限制 | endpoint 数 | 主要路径 |
 |------|------|------------|----------|
-| `auth` | 20/min | 5 | `/api/v1/auth/login`、`/refresh`、`/change-password`、`/reset-password`、`/init-password` |
+| `auth` | 20/min | 4 | `/api/v1/auth/login`、`/change-password`、`/reset-password`、`/init-password` |
+| `auth_refresh` | 60/min | 1 | `/api/v1/auth/refresh` (2026-08-14 类 20.155 单独) |
 | `write` | 30/min | 70+ | 任务/会议/项目/知识/成员/聊天历史等所有默认 POST/PUT/PATCH/DELETE |
 | `read` | 200/min | 60+ | 所有默认 GET + `/auth/me` 等只读 |
 | `upload` | 10/min | 4 | `/upload`、`/upload/meeting/{id}`、`/upload/{object_name}` |
@@ -25,14 +26,15 @@
 | Endpoint | Method | Tier | 客户端维度 | 备注 |
 |----------|--------|------|------------|------|
 | `/auth/login` | POST | `auth` (20/min) | IP | 密码错 5 次额外触发 `login_limiter` (5/300s) |
-| `/auth/refresh` | POST | `auth` (20/min) | user_id (refresh_token 解析) | |
+| `/auth/refresh` | POST | `auth_refresh` (60/min) | IP (anon, refresh_token 解析在端点内) | 2026-08-14 类 20.155 单独 tier, 签名 token 必须有效不易暴力, 但前端 401 风暴或 N tab 并发易触 20/min 限流 |
 | `/auth/change-password` | POST | `auth` (20/min) | user_id | |
 | `/auth/reset-password` | POST | `auth` (20/min) | IP | |
 | `/auth/init-password` | POST | `auth` (20/min) | IP | |
 | `/auth/me` | GET | **unlimited** | — | v31.2.3 豁免，JWT 鉴权已防滥用 |
 | `/auth/profile` | PUT | `write` (30/min) | user_id | |
 
-> `_AUTH_SENSITIVE_PATHS` 白名单 5 个：login/refresh/change-password/reset-password/init-password → `auth` tier。
+> `_AUTH_SENSITIVE_PATHS` 白名单 4 个：login/change-password/reset-password/init-password → `auth` tier。
+> `_AUTH_REFRESH_PATH` 单点：/auth/refresh → `auth_refresh` tier (2026-08-14)。
 > `_AUTH_UNLIMITED_PATHS` 白名单 1 个：`/auth/me` → 完全豁免。
 
 ---

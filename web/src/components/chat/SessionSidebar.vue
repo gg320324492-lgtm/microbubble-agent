@@ -714,7 +714,7 @@ onUpdated(() => {
 .session-sidebar {
   height: 100%; min-height: 0;
   display: flex; flex-direction: column;
-  width: 240px;
+  width: 260px;
   background: var(--color-bg-warm);
   border-right: 1px solid var(--color-border-light);
   transition: width var(--duration-normal, 200ms) ease;
@@ -752,9 +752,9 @@ onUpdated(() => {
 }
 .session-list { flex: 1; overflow-y: auto; padding: 8px 0; overflow-anchor: none; }
 .session-item {
-  padding: 10px 16px;
+  padding: 10px 12px;
   margin: 2px 8px;
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
   transition: background 0.15s;
   /* ★ 2026-07-01 修复 bug 2.3: 默认 border-left 透明占位 3px,active 切换只改色不改尺寸 */
@@ -766,8 +766,8 @@ onUpdated(() => {
   align-items: center;
   gap: 4px;
 }
-.session-item:hover { background: var(--color-primary-bg); }
-.session-item.active { background: var(--color-primary-bg); border-left-color: var(--color-primary); }
+.session-item:hover { background: #f8f6f3; }
+.session-item.active { background: #fff5f2; border-left-color: #FF7A5C; }
 .session-item.selected { background: rgba(64, 158, 255, 0.08); border-left-color: var(--el-color-primary); }
 
 /* W100 +28: 分组 header */
