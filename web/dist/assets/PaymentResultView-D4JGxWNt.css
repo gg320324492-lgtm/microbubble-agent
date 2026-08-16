@@ -1,0 +1,120 @@
+
+.payment-result-view[data-v-3b07379d] {
+  padding: 24px 16px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.result-card[data-v-3b07379d] {
+  text-align: center;
+  padding: 48px 24px;
+  border-radius: 16px;
+  background: var(--color-bg-card, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border-top: 4px solid var(--color-primary, #FF7A5C);
+}
+.result-success[data-v-3b07379d] {
+  border-top-color: #67c23a;
+}
+.result-failed[data-v-3b07379d] {
+  border-top-color: #f56c6c;
+}
+.result-pending[data-v-3b07379d] {
+  border-top-color: #e6a23c;
+}
+.result-refunded[data-v-3b07379d] {
+  border-top-color: #909399;
+}
+.result-icon[data-v-3b07379d] {
+  font-size: 72px;
+  margin-bottom: 16px;
+}
+.icon-large[data-v-3b07379d] {
+  display: inline-block;
+  width: 96px;
+  height: 96px;
+  line-height: 96px;
+  border-radius: 50%;
+  background: var(--color-bg-soft, #f5f5f5);
+}
+.result-success .icon-large[data-v-3b07379d] {
+  background: rgba(103, 194, 58, 0.12);
+  color: rgb(103, 194, 58);
+}
+.result-failed .icon-large[data-v-3b07379d] {
+  background: rgba(245, 108, 108, 0.12);
+  color: rgb(245, 108, 108);
+}
+.result-title[data-v-3b07379d] {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: var(--color-text-primary, #333);
+}
+.result-details[data-v-3b07379d] {
+  text-align: left;
+  margin: 24px 0;
+  padding: 16px;
+  background: var(--color-bg-soft, #f5f5f5);
+  border-radius: 8px;
+}
+.detail-row[data-v-3b07379d] {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.label[data-v-3b07379d] {
+  color: var(--color-text-secondary, #666);
+}
+.value[data-v-3b07379d] {
+  color: var(--color-text-primary, #333);
+  font-weight: 500;
+  word-break: break-all;
+  text-align: right;
+  max-width: 60%;
+}
+.provider-badge[data-v-3b07379d] {
+  background: var(--color-primary, #FF7A5C);
+  color: var(--el-color-white);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.result-message[data-v-3b07379d] {
+  font-size: 14px;
+  color: var(--color-text-secondary, #666);
+  margin: 16px 0;
+}
+.actions[data-v-3b07379d] {
+  margin-top: 24px;
+}
+.return-button[data-v-3b07379d] {
+  min-width: 160px;
+}
+
+/* Dark mode (W72 第 2 批 C-3 实战: 6 主题 dark mode) */
+:root[data-theme="dark"] .result-card[data-v-3b07379d],
+html[data-theme="dark"] .result-card[data-v-3b07379d],
+html.dark .result-card[data-v-3b07379d],
+.theme-dark .result-card[data-v-3b07379d] {
+  background-color: var(--color-bg-card-dark, #1f1f1f);
+  color: var(--color-text-primary-dark, #e0e0e0);
+}
+:root[data-theme="dark"] .result-title[data-v-3b07379d],
+html[data-theme="dark"] .result-title[data-v-3b07379d],
+html.dark .result-title[data-v-3b07379d],
+.theme-dark .result-title[data-v-3b07379d] {
+  color: var(--color-text-primary-dark, #e0e0e0);
+}
+:root[data-theme="dark"] .result-details[data-v-3b07379d],
+html[data-theme="dark"] .result-details[data-v-3b07379d],
+html.dark .result-details[data-v-3b07379d],
+.theme-dark .result-details[data-v-3b07379d] {
+  background-color: var(--color-bg-soft-dark, #2a2a2a);
+}
+:root[data-theme="dark"] .value[data-v-3b07379d],
+html[data-theme="dark"] .value[data-v-3b07379d],
+html.dark .value[data-v-3b07379d],
+.theme-dark .value[data-v-3b07379d] {
+  color: var(--color-text-primary-dark, #e0e0e0);
+}

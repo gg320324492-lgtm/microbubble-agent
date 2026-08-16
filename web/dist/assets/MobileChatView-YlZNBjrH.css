@@ -1,0 +1,105 @@
+
+.mobile-chat-root[data-v-3caa1246] {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: var(--vh, 100vh);
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .mobile-chat-root[data-v-3caa1246] {
+  background: var(--color-bg-page);
+}
+.chat-main[data-v-3caa1246] {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* paddingBottom 由 messagesPaddingBottom 动态控制（输入栏 + 键盘 + safe-area） */
+}
+
+/* ActionSheet */
+.action-sheet-overlay[data-v-3caa1246] {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.action-sheet-panel[data-v-3caa1246] {
+  width: 100%;
+  background: var(--color-bg-card);
+  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
+  padding: 8px 16px calc(16px + var(--sab, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: calc(var(--tabbar-height, 56px));
+}
+.action-item[data-v-3caa1246] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--color-bg-page);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.action-item[data-v-3caa1246]:active {
+  background: var(--color-bg-hover);
+}
+.action-item.danger[data-v-3caa1246] {
+  color: var(--color-danger, #F56C6C);
+}
+.action-item.cancel[data-v-3caa1246] {
+  background: var(--color-bg-card);
+  font-weight: 500;
+  margin-top: 4px;
+}
+.action-sheet-enter-active[data-v-3caa1246],
+.action-sheet-leave-active[data-v-3caa1246] {
+  transition: opacity 0.25s ease;
+}
+.action-sheet-enter-active .action-sheet-panel[data-v-3caa1246],
+.action-sheet-leave-active .action-sheet-panel[data-v-3caa1246] {
+  transition: transform 0.3s var(--ease-sheet);
+}
+.action-sheet-enter-from[data-v-3caa1246],
+.action-sheet-leave-to[data-v-3caa1246] {
+  opacity: 0;
+}
+.action-sheet-enter-from .action-sheet-panel[data-v-3caa1246],
+.action-sheet-leave-to .action-sheet-panel[data-v-3caa1246] {
+  transform: translateY(100%);
+}
+
+/* MobileChatView action sheet / 输入栏 / 消息列表 / 加载态 在 dark 适配 */
+[data-theme="dark"] .mobile-chat-root {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .action-sheet-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] .action-sheet-panel {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .action-item {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .action-item:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .action-item.danger {
+  color: var(--color-danger);
+}
+[data-theme="dark"] .action-item.cancel {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+}

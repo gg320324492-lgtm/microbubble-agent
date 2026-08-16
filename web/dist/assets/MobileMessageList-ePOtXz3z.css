@@ -1,0 +1,119 @@
+
+.mobile-message-list[data-v-b856ca9f] {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+  /* 底部 padding 由父组件根据键盘高度动态设置 */
+  -webkit-overflow-scrolling: touch;
+}
+.msg-group[data-v-b856ca9f] {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.time-divider[data-v-b856ca9f] {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 8px 0;
+  position: relative;
+}
+.time-divider[data-v-b856ca9f]::before,
+.time-divider[data-v-b856ca9f]::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 30%;
+  height: 1px;
+  background: var(--color-border-light);
+}
+.time-divider[data-v-b856ca9f]::before { left: 5%;
+}
+.time-divider[data-v-b856ca9f]::after { right: 5%;
+}
+
+/* 消息入场动画 */
+.msg-enter-active[data-v-b856ca9f] {
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+.msg-enter-from[data-v-b856ca9f] {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* 欢迎页 */
+.welcome-hero[data-v-b856ca9f] {
+  text-align: center;
+  padding: 40px 20px;
+}
+.hero-avatar[data-v-b856ca9f] {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-primary);
+}
+.hero-icon[data-v-b856ca9f] {
+  font-size: 36px;
+}
+.welcome-hero h2[data-v-b856ca9f] {
+  font-size: 20px;
+  font-weight: var(--font-weight-semibold, 600);
+  margin: 0 0 6px;
+  color: var(--color-text-primary);
+}
+.welcome-hero p[data-v-b856ca9f] {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  margin: 0 0 24px;
+}
+.quick-actions[data-v-b856ca9f] {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.quick-btn[data-v-b856ca9f] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  -webkit-tap-highlight-color: transparent;
+  transition: all var(--transition-all-fast);
+}
+.quick-btn[data-v-b856ca9f]:active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+.qa-icon[data-v-b856ca9f] {
+  font-size: 18px;
+}
+
+/* 消息列表 + 时间分割 + 引用块在 dark 模式适配 */
+[data-theme="dark"] .message-time-divider {
+  color: var(--color-text-placeholder);
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .message-quote {
+  background: var(--color-bg-page);
+  border-left: 3px solid var(--color-primary);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .qa-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .qa-card.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
