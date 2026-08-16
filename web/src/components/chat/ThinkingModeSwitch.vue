@@ -195,23 +195,47 @@ const currentModeLabel = () => {
   font-size: 12px;
   font-weight: 500;
   color: var(--color-text-secondary);
-  transition: var(--transition-all-fast, all 0.15s ease);
+  /* #P5: 切换动效 — 弹性 scale + 颜色 + 阴影 */
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   -webkit-tap-highlight-color: transparent;
+  position: relative;
+  z-index: 1;
+}
+.mode-option:not(.active):hover {
+  color: var(--color-text-primary);
+  transform: scale(1.06);
+}
+.mode-option:active {
+  transform: scale(0.94);
 }
 .mode-option:hover { color: var(--color-text-primary); }
 .mode-option:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 
 .mode-option.active {
-  background: var(--color-bg-card);
-  /* v92 X-2 a11y: 主色文字 token (on #ffffff = 5.37, AA) — 原 --color-primary (#FF7A5C) 仅 2.56 */
-  color: var(--color-primary-text);
-  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.06));
+  /* #P5: 统一所有模式选中态为深色实心背景 (主色珊瑚橙) + 白字 */
+  background: linear-gradient(135deg, #FF5722 0%, #FF7A5C 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(255, 87, 34, 0.35);
+  /* #P5: 选中态弹跳 + 阴影增强 */
+  transform: scale(1.08);
+  animation: mode-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.mode-option.active:hover {
+  transform: scale(1.1);
+}
+@keyframes mode-pulse {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1.08); }
 }
 
-/* 2026-07-13 #P1: 深度模式专属紫色调 (明显区别于快速/平衡) */
+/* 2026-07-13 #P1: 深度模式专属紫色调 (与快速/平衡区分 — 用紫色实心) */
 .mode-option.active.mode-deep {
-  background: linear-gradient(135deg, var(--color-primary-700, #5b21b6), var(--color-primary, #FF7A5C));
+  background: linear-gradient(135deg, var(--color-primary-700, #5b21b6), #7c3aed);
   color: var(--el-color-white);
+  box-shadow: 0 2px 6px rgba(91, 33, 182, 0.35);
+  transform: scale(1.08);
+  animation: mode-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* [CHAT-P1-E E4] 移动端折叠面板 */

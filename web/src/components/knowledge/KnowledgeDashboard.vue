@@ -86,10 +86,11 @@
           :key="item.id"
           :item="item"
           :top-result="idx === 0"
-          @click="$emit('view-detail', item.id)"
-          @edit="$emit('edit', item)"
-          @delete="$emit('delete', item)"
-          @download="$emit('download', item)"
+          @click="onViewDetailRelay(item.id)"
+          @edit="onEditRelay(item)"
+          @delete="onDeleteRelay(item)"
+          @download="onDownloadRelay(item)"
+          v-on:attach-to-chat="onAttachRelay"
         />
       </div>
     </div>
@@ -139,8 +140,26 @@ const emit = defineEmits([
   'delete',
   'download',
   'retry',  // 2026-06-30: loadError 三态空态, 错误时重试
-  'navigate'  // v2 PR3: 跳转 chip emit, 父级响应 router.push
+  'navigate',  // v2 PR3: 跳转 chip emit, 父级响应 router.push
+  'attach-to-chat',  // 2026-08-15 #P4: 转发 KnowledgeCard 的"附加到对话"事件
 ])
+
+// 2026-08-15 #P4: 转发 attach-to-chat, 避免 template 用 $event (vue 模板非法)
+function onAttachRelay(payload) {
+  emit('attach-to-chat', payload)
+}
+function onViewDetailRelay(id) {
+  emit('view-detail', id)
+}
+function onEditRelay(item) {
+  emit('edit', item)
+}
+function onDeleteRelay(item) {
+  emit('delete', item)
+}
+function onDownloadRelay(item) {
+  emit('download', item)
+}
 
 const handleCategoryClick = (cat) => {
   // v2 PR3: 跳转 chip 不参与过滤, 直接 emit navigate 让父级 router.push

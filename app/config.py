@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # 默认复用 OLLAMA_MODEL (qwen3:8b), 未来可改 qwen3:14b 等更稳 fallback.
     OLLAMA_FALLBACK_MODEL: str = ""
 
-    # Vision MCP 配置（DeepSeek 切换时使用）
+    # Vision MCP 配置（保留开关，未来切本地 vision 模型时启用）
     VISION_USE_MCP: bool = False
     VISION_MCP_TRANSPORT: str = "stdio"  # stdio 或 http
     VISION_MCP_SERVER_CMD: str = "python -m mcp_server.server"
@@ -245,7 +245,8 @@ class Settings(BaseSettings):
     AGENT_COMPRESSOR_MODEL: str = "claude-haiku-4-5-20251001"  # 工具结果压缩（量大但浅）
     AGENT_INTENT_MODEL: str = "claude-haiku-4-5-20251001"  # 意图分类（闭集 6 选 1）
     AGENT_REFLECTION_MODEL: str = "claude-sonnet-4-6"  # 自评（accuracy critical）
-    AGENT_SYNTHESIS_MODEL: str = ""  # 综合主模型，空时用 CLAUDE_MODEL
+    # 2026-08-16: 切回 qwen2.5vl:7b — gemma3:12b 误识别中文为日文, qwen2.5-vl 中文 OCR 表现更好
+    AGENT_SYNTHESIS_MODEL: str = "qwen2.5vl:7b"  # 综合主模型 (默认)
     # 流程控制
     AGENT_MAX_TOOL_ROUNDS: int = 5  # agentic loop 最多轮数
     AGENT_MAX_SYNTHESIS_TOKENS: int = 4000  # 综合阶段 max_tokens
@@ -267,20 +268,21 @@ class Settings(BaseSettings):
     # 2026-07-13 #P1: 三态推理模式 (fast / balanced / deep)
     # - fast: 本地 Qwen3-8B + 小 budget + 跳过完整 agent 流程 (闲聊 / 简单查找)
     # - balanced: 本地 Qwen3-8B + 默认 budget + 完整 agent 流程
-    # - deep: DeepSeek-R1-Distill-Qwen-7B + 大 budget + reasoning_content
+    # - deep: 本地 Qwen3-8B + 大 budget + 启用 thinking (W-N 2026-08-14 统一 qwen, 替代 deepseek-r1:7b)
     # - 用户切换通过前端 useUiStore.thinkingMode (localStorage 'mnb:ui:thinkingMode') → SSE body thinking_mode
     # - balanced = 当前默认行为逐字段对齐, 零行为差异作为迁移期兜底
     # ========================================================================
     AGENT_THINKING_MODE_DEFAULT: str = "balanced"  # 'fast' | 'balanced' | 'deep', 全局默认
-    AGENT_THINKING_MODE_FAST_MODEL: str = "qwen3:8b"  # fast 模式 Ollama model tag
+    # 2026-08-16: 全部模式统一用多模态 gemma3:12b (用户上传图片时 AI 能直接看到)
+    AGENT_THINKING_MODE_FAST_MODEL: str = "qwen2.5vl:7b"  # fast 模式 Ollama model tag
     AGENT_THINKING_MODE_FAST_MAX_TOKENS: int = 3000  # fast synthesis max_tokens
     AGENT_THINKING_MODE_FAST_MAX_TOOL_TOKENS: int = 500  # fast Phase 1 tool loop max_tokens
-    AGENT_THINKING_MODE_BALANCED_MODEL: str = "qwen3:8b"  # balanced 模式 Ollama model tag (与 fast 同模型, 不同 config)
+    AGENT_THINKING_MODE_BALANCED_MODEL: str = "qwen2.5vl:7b"  # balanced 模式 Ollama model tag (与 fast 同模型, 不同 config)
     AGENT_THINKING_MODE_BALANCED_MAX_TOKENS: int = 6000  # balanced synthesis max_tokens (与 AGENT_MAX_SYNTHESIS_TOKENS=4000 略大)
-    AGENT_THINKING_MODE_DEEP_MODEL: str = "deepseek-r1:7b"  # deep 模式 Ollama model tag (原生 reasoning_content) — 2026-07-13 实际 pull 后修正
-    AGENT_THINKING_MODE_DEEP_MAX_TOKENS: int = 12000  # deep synthesis max_tokens (留足 DeepSeek-R1 完整 reasoning + 长答案)
+    AGENT_THINKING_MODE_DEEP_MODEL: str = "qwen2.5vl:7b"  # deep 模式 Ollama model tag (统一多模态)
+    AGENT_THINKING_MODE_DEEP_MAX_TOKENS: int = 12000  # deep synthesis max_tokens (留足完整 thinking + 长答案)
     AGENT_THINKING_MODE_DEEP_MAX_TOOL_TOKENS: int = 1500  # deep Phase 1 tool loop max_tokens (允许更复杂工具调用)
-    AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR: int = 30  # deep 模式单用户每小时限次 (防 DeepSeek 7B 满载)
+    AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR: int = 30  # deep 模式单用户每小时限次 (防 Qwen3 8B 满载)
 
     # ========================================================================
     # 2026-07-28 W78 第 1 批 B-2: 商业化真支付生产 key 启用 (类 20.13 主拍决策落地)

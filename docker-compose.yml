@@ -185,10 +185,13 @@ services:
 
   # 2026-07-13 #P1: Ollama 服务 (本地 LLM, fast/balanced/deep 三档模式都用)
   # - fast/balanced: qwen3:8b (默认)
-  # - deep: deepseek-r1-distill-qwen:7b (原生 reasoning_content 通道)
+  # - deep: qwen3:8b (统一 qwen 模型, deepseek 已移除)
   # - volume ./data/ollama 持久化模型 (首次 pull ~4GB)
   # - GPU: deploy.resources.reservations.devices 走 NVIDIA driver (与 app 共享同一 GPU)
-  # - OLLAMA_KEEP_ALIVE=10m: 模型空闲 10 分钟后自动 unload 释放显存
+  # - OLLAMA_KEEP_ALIVE=-1: 模型永久常驻显存（不再 10m 自动 unload）
+  #   显存占用: qwen3:8b fp16 ≈ 5-6 GB（RTX 5090 32GB 显存中占比约 18-20%）
+  #   优点: 提问生成 LLM 调用 0 秒等待（之前首次需 30-60s load weights）
+  #   缺点: 显存持续占用，闲置时不释放（按 RTX 5090 容量可接受）
   ollama:
     # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
     image: ollama/ollama:0.31.1
@@ -197,7 +200,7 @@ services:
     volumes:
       - ./data/ollama:/root/.ollama
     environment:
-      - OLLAMA_KEEP_ALIVE=10m
+      - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_HOST=0.0.0.0:11434
     extra_hosts:
       # Docker Desktop Windows 默认只 bind IPv6, 加 host-gateway 强制 IPv4 NAT

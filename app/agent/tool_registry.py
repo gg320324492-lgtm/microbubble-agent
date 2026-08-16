@@ -60,6 +60,8 @@ class ToolContext:
         # None 时回落 settings 默认 (即旧 behavior), 兼容旧调用点
         thinking_config=None,  # ThinkingConfig | None (循环 import 防护: 不引入类型注解)
         mode_label: str = "balanced",  # UI 展示名, 流式 done 事件回填
+        # #P5: 用户手动附加的知识库文档 ID 列表 (非空时屏蔽 RAG 类工具)
+        attached_knowledge_ids: Optional[list[int]] = None,
     ):
         self.db = db
         self.user_id = user_id
@@ -72,6 +74,7 @@ class ToolContext:
         self.synthesis_model_override = synthesis_model_override
         self.thinking_config = thinking_config  # None 时 agentic_loop 走 settings fallback 路径
         self.mode_label = mode_label
+        self.attached_knowledge_ids = attached_knowledge_ids or []
         # 2026-06-14 收官：grounding 守卫用 — 工具返回里出现过的成员 ID + 姓名
         # agentic_loop._extract_rich_block_json 解析 LLM 输出的 rich_block.data 时
         # 校验 name 是否在这个集合里，否则丢弃（防 LLM 凭空捏造成员名）
@@ -171,9 +174,19 @@ def tool(
     return deco
 
 
-def get_all_tool_schemas() -> list[dict]:
-    """导出所有工具的 Anthropic tool_use schema — 喂给 LLM"""
-    return [td.to_anthropic_schema() for td in TOOL_REGISTRY.values()]
+def get_all_tool_schemas(exclude_tools: Optional[set[str]] = None) -> list[dict]:
+    """导出所有工具的 Anthropic tool_use schema — 喂给 LLM
+
+    #P5 改进: 当用户附加了知识库文档 (attached_knowledge_ids 非空), 应该
+    屏蔽 RAG 类工具, 强制 LLM 只基于附加文档回答 (避免无关文档污染回复).
+
+    Args:
+        exclude_tools: 要排除的工具名集合. 例: {"search_knowledge", "hybrid_retrieve", "web_search"}
+    """
+    schemas = [td.to_anthropic_schema() for td in TOOL_REGISTRY.values()]
+    if exclude_tools:
+        schemas = [s for s in schemas if s.get("name") not in exclude_tools]
+    return schemas
 
 
 # ============================================================================

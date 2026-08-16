@@ -27,7 +27,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Response
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.responses import PlainTextResponse, JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -36,7 +36,7 @@ from app.core.security import get_current_user
 from app.models.member import Member
 from app.schemas.chat_history import (
     ChatSessionCreate, ChatSessionUpdate, ChatSessionOut, ChatSessionListItem, ChatSessionListResponse,
-    ChatMessageCreate, ChatMessageOut, ChatMessagesPage,
+    ChatMessageCreate, ChatMessageOut, ChatMessageContentUpdate, ChatMessagesPage,
     ChatShareCreate, ChatShareOut, ChatSharePublicOut,
     ChatSyncRequest, ChatSyncResponse,
     ChatSearchResponse,
@@ -256,8 +256,122 @@ async def append_message(
         message_metadata=body.message_metadata,
         is_partial=body.is_partial,
         client_msg_id=body.client_msg_id,
+        # #P5: 透传 attached_knowledge_ids
+        attached_knowledge_ids=body.attached_knowledge_ids,
+        # #P5+: 透传 image_url (MinIO 永久 URL)
+        image_url=body.image_url,
     )
     return _message_to_out(msg)
+
+
+# ============================================================================
+# 7b. PATCH /chat/sessions/{id}/messages/{msg_id} — 编辑用户消息 (ChatGPT 风格 #71)
+# ============================================================================
+
+@router.patch(
+    "/chat/sessions/{session_id}/messages/{message_id}",
+    response_model=ChatMessageOut,
+)
+async def edit_user_message(
+    session_id: str,
+    message_id: int,
+    body: ChatMessageContentUpdate,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """2026-08-16 #71: 编辑用户消息内容 (只允许 user 角色消息).
+    - service.update_user_message_content 校验 role='user' + 该 user 拥有此 session
+    - 不删后续消息 (前端 edit 流程: 仅修改 → 用户预览 → 决定 resend 或保留原状)
+    - resend 是另一个 endpoint"""
+    msg = await svc.update_user_message_content(
+        db, current_user.id, message_id, body.content,
+    )
+    if msg is None:
+        raise NotFoundException("消息不存在或已删除")
+    return _message_to_out(msg)
+
+
+# ============================================================================
+# 7c. POST /chat/sessions/{id}/messages/{msg_id}/resend — 编辑后重发 (ChatGPT 风格 #71)
+# ============================================================================
+
+@router.post(
+    "/chat/sessions/{session_id}/messages/{message_id}/resend",
+)
+async def resend_user_message(
+    session_id: str,
+    message_id: int,
+    body: ChatMessageCreate,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """2026-08-16 #71: 编辑用户消息后重新发给 LLM 生成回答 (ChatGPT 风格).
+
+    流程:
+    1. 先 PATCH message content (用 body.content 作为新内容)
+    2. DELETE session 内所有 id >= message_id 的消息 (包括原 assistant 回复)
+       — 这是 ChatGPT 行为: 编辑后点发送, 原回复全部清空, 重新生成
+    3. 重新调 chat_stream 生成新 assistant 回复 (SSE 流式)
+    4. 写 user message (client_msg_id 幂等)
+    5. 流式生成 assistant, yield message_persisted / text_delta / done / [DONE]
+
+    body 字段:
+    - content: 新内容 (必填)
+    - client_msg_id: 幂等键 (可选, 防重复写)
+    - thinking_mode / model: 透传 (与 /chat/stream 一致)
+    - attached_knowledge_ids: 透传 (与 /chat/stream 一致)
+    - image_url: 透传 (与 /chat/stream 一致)
+    """
+    # 1) PATCH message content
+    patched = await svc.update_user_message_content(
+        db, current_user.id, message_id, body.content,
+    )
+    if patched is None:
+        raise NotFoundException("消息不存在或已删除")
+
+    # 2) DELETE 该消息之后所有消息 (含原 assistant 回复)
+    deleted = await svc.delete_messages_after(
+        db, current_user.id, session_id, message_id,
+    )
+    logger.info(
+        f"[resend] session={session_id} msg_id={message_id} deleted_after={deleted}",
+    )
+
+    # 3) 复用 chat_stream 的核心逻辑 — 与 chat_stream_route 等价, 但跳过再次落库 user msg
+    #    (PATCH 已更新内容, 不再 append)
+    from app.agent.micro_bubble_agent import agent as v2_agent
+    from app.agent.protocol import StreamEvent
+
+    async def event_generator():
+        try:
+            async for event in v2_agent.chat_stream(
+                message=body.content,
+                session_id=session_id,
+                db=db,
+                user_id=current_user.id,
+                model=getattr(body, 'model', None),  # ChatMessageCreate 无 model 字段, 兜底 None 走 settings.AGENT_SYNTHESIS_MODEL
+                thinking_mode=getattr(body, 'thinking_mode', None),
+                attached_knowledge_ids=getattr(body, 'attached_knowledge_ids', None),
+                # 2026-08-16 #71: chat_stream() 不接受 image_url (string) - 只接 image_data (bytes)
+                # resend 编辑的是文字, 不会改图片, 不传
+            ):
+                yield event.to_sse()
+        except Exception as e:
+            logger.error(f"resend 流式异常: {e}", exc_info=True)
+            err = StreamEvent(type="error", code="RESEND_ERROR", message=str(e))
+            yield err.to_sse()
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ============================================================================

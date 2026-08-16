@@ -197,7 +197,7 @@ const isChatRoute = computed(() => route.path.startsWith('/chat'))
 
 const sidebarWidth = computed(() => {
   if (isMobile.value) return '0px'
-  return isCollapse.value ? '64px' : '220px'
+  return isCollapse.value ? '64px' : '260px'
 })
 
 const currentRoute = computed(() => route.path)
@@ -834,8 +834,30 @@ const handleLogout = () => {
     color: var(--color-primary) !important;
   }
   [data-theme="dark"] .sidebar-menu .el-menu-item.is-active {
-    background-color: var(--color-primary-bg) !important;
+    /* v77 P2.6-rev3: dark 模式选中态 — 实测 rgba(primary, 0.55) 在 #1a1d23 背景上呈
+       粉橙 rgb(255,157,133), 与未选中项反差过大、视觉像"hover 高亮"而非"激活".
+       改为: 低饱和深灰底 (rgba 255,255,255,0.08) + 主色文字 + 加粗
+       → 与 light 模式 (深棕红底 + 白字) 视觉权重对称, 但 dark 下不抢眼 */
+    background: rgba(255, 255, 255, 0.08) !important;
     color: var(--color-primary) !important;
+    font-weight: var(--font-weight-bold);
+  }
+  /* v77 P2.6-rev3: dark 模式选中态左侧竖条 — 默认 light 模式 .is-active::before 是
+     白色 rgba(255,255,255,0.9), 在 dark 背景上呈"实心方块"视觉突兀, 与未选中项
+     (主色 4px 细竖条) 视觉权重不一致. 改为主色珊瑚橙 + 加长 32px + 加粗 4px. */
+  [data-theme="dark"] .sidebar-menu .el-menu-item.is-active::before {
+    background: var(--color-primary) !important;
+    width: 4px !important;
+    height: 32px !important;
+  }
+  /* v77 P2.6-rev4: variables.css line 1901-1907 全局规则
+     :root .el-menu-item.is-active > span { background: var(--color-primary-strong); color: #fff }
+     在 dark 模式下给 .is-active > span 强制设深棕红实底, 用户感知"文字外有橙色色块".
+     必须覆盖: 文字背景透明 + 文字用主色. */
+  [data-theme="dark"] .sidebar-menu .el-menu-item.is-active > span {
+    background-color: transparent !important;
+    color: var(--color-primary) !important;
+    font-weight: var(--font-weight-bold);
   }
   [data-theme="dark"] .sidebar-bottom {
     border-top: 1px solid var(--color-border-light);

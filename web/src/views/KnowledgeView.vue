@@ -1,5 +1,23 @@
 <template>
   <div class="knowledge-view">
+    <!-- 2026-08-15 #P4: 资料库 → 聊天 闭环 banner (从聊天页跳过来选文档时显示) -->
+    <div v-if="showChatSelectionBanner" class="chat-selection-banner" role="region" aria-label="选择文档附加到对话">
+      <div class="csb-content">
+        <span class="csb-icon">📎</span>
+        <span class="csb-text">
+          正在为对话选择资料库文档 (已选 <strong>{{ chatCtx.count }}</strong> / 8)
+        </span>
+      </div>
+      <div class="csb-actions">
+        <el-button type="primary" size="small" @click="onFinishChatSelection">
+          完成选择并返回对话
+        </el-button>
+        <el-button size="small" link @click="chatCtx.clear()">
+          取消
+        </el-button>
+      </div>
+    </div>
+
     <!-- 铁律 31: 全项目 tab 必须用 <TabStrip> 替代 <el-tabs> -->
     <div class="tab-strip-wrapper">
       <TabStrip v-model="activeTab" :items="tabItems" aria-label="知识库视图切换" />
@@ -41,6 +59,7 @@
         @download="downloadFile"
         @retry="fetchKnowledge"
         @navigate="handleDashboardNavigate"
+        @attach-to-chat="onAttachToChat"
       />
 
       <!-- 健康度摘要 -->
@@ -181,13 +200,14 @@
  * 1 个 dialog 抽出:
  *   - KnowledgeCreateDialog (v77 P2.6-E.3 新增)
  */
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { Document, Share, MagicStick, Histogram, Memo } from '@element-plus/icons-vue'
 import { useKnowledge } from '@/composables/useKnowledge'
 import { useSearchAnalyticsStore } from '@/stores/useSearchAnalytics'
+import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4
 import TabStrip from '@/components/common/TabStrip.vue'
 import KnowledgeToolbar from '@/components/knowledge/KnowledgeToolbar.vue'
 import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
@@ -238,6 +258,31 @@ const tabItems = [
 ]
 
 const searchAnalytics = useSearchAnalyticsStore()
+
+// ===== 2026-08-15 #P4: 资料库 → 聊天 闭环 =====
+const chatCtx = useChatContextStore()
+
+const showChatSelectionBanner = computed(() => chatCtx.selectingForChat)
+
+function onAttachToChat(item) {
+  // #P5: add() 现在是 async, 调后端 API + 乐观更新
+  chatCtx.add(item).then(() => {
+    ElMessage.success(`已附加: ${item.title}`)
+  }).catch((e) => {
+    ElMessage.warning(e?.message || '附加失败')
+  })
+}
+
+function onFinishChatSelection() {
+  const targetSession = chatCtx.sourceSessionId
+  chatCtx.finishSelecting()  // 关闭 selectingForChat (附加文档已持久到 server)
+  // 跳回 chat 路由 (path: 'chat' 不接受 :id 子路由, 用 query 携带)
+  if (targetSession && targetSession !== 'default') {
+    router.push({ path: '/chat', query: { session: targetSession } })
+  } else {
+    router.push('/chat')
+  }
+}
 
 // Entity tab 状态
 const showEntityDetailDialog = ref(false)
@@ -484,6 +529,32 @@ onUnmounted(() => {
   flex-direction: column;
   gap: var(--space-4);
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
+}
+
+/* ===== 2026-08-15 #P4: 资料库 → 聊天 闭环 banner ===== */
+.chat-selection-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(255, 122, 92, 0.1), rgba(255, 179, 71, 0.08));
+  border: 1.5px solid var(--color-primary, #FF7A5C);
+  border-radius: 12px;
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+}
+.chat-selection-banner .csb-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+.chat-selection-banner .csb-icon { font-size: 18px; }
+.chat-selection-banner .csb-text strong { color: var(--color-primary); font-weight: 700; padding: 0 2px; }
+.chat-selection-banner .csb-actions { display: flex; gap: 6px; flex-shrink: 0; }
+[data-theme="dark"] .chat-selection-banner {
+  background: linear-gradient(135deg, rgba(255, 157, 133, 0.15), rgba(255, 192, 103, 0.08));
 }
 
 /* TabStrip 容器（铁律 31: 替代 el-tabs border-card） */

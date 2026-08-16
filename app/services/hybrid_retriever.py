@@ -325,15 +325,15 @@ class HybridRetriever:
 
         stmt = text(
             """
-            SELECT kc.knowledge_id, min(v <=> :query_embedding) AS distance
+            SELECT kc.knowledge_id, min(v <=> CAST(:query_embedding AS vector)) AS distance
             FROM knowledge_chunks AS kc
             CROSS JOIN LATERAL unnest(kc.chunk_embedding) AS vectors(v)
             JOIN knowledge AS k ON k.id = kc.knowledge_id
             WHERE kc.chunk_embedding IS NOT NULL
-              AND (:category IS NULL OR k.category = :category)
+              AND (CAST(:category AS varchar) IS NULL OR k.category = CAST(:category AS varchar))
             GROUP BY kc.knowledge_id
             ORDER BY distance
-            LIMIT :top_k
+            LIMIT CAST(:top_k AS integer)
             """
         )
         start = time.perf_counter()

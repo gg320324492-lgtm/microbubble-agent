@@ -67,6 +67,8 @@ class ChatEngine:
         thinking_mode: Optional[str] = None,
         # CHAT-P1-B: micro_bubble_agent 预分类后复用，避免 engine 二次分类
         preclassified_intent: Optional[IntentResult] = None,
+        # #P5: 用户手动附加的知识库文档 ID 列表, 屏蔽 RAG 类工具
+        attached_knowledge_ids: Optional[List[int]] = None,
     ) -> AsyncIterator[StreamEvent]:
         """方案 C 单阶段流式综合主入口
 
@@ -100,6 +102,8 @@ class ChatEngine:
             # 2026-07-13 #P1: 注入 thinking_config 给 intent_classifier 等后续步骤
             thinking_config=thinking_config,
             mode_label=thinking_config.label,
+            # #P5: 用户手动附加文档 → agentic_loop 屏蔽 RAG 类工具
+            attached_knowledge_ids=attached_knowledge_ids,
         )
         intent: Optional[IntentResult] = preclassified_intent
         intent_category: Optional[str] = intent.category.value if intent else None
@@ -242,6 +246,8 @@ class ChatEngine:
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode: Optional[str] = None,
         preclassified_intent: Optional[IntentResult] = None,
+        # #P5: 用户手动附加文档 → 屏蔽 RAG 工具
+        attached_knowledge_ids: Optional[List[int]] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式接口 — 内部转给 synthesize_stream
 
@@ -258,6 +264,8 @@ class ChatEngine:
             # 2026-07-13 #P1 透传
             thinking_mode=thinking_mode,
             preclassified_intent=preclassified_intent,
+            # #P5: 透传附加文档 ID
+            attached_knowledge_ids=attached_knowledge_ids,
         ):
             yield evt
 
@@ -279,6 +287,8 @@ class ChatEngine:
         synthesis_model_override: Optional[str] = None,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode: Optional[str] = None,
+        # #P5: 透传附加文档 → 屏蔽 RAG 工具
+        attached_knowledge_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """非流式接口 — 消费 synthesize_stream 收集为 dict
 
@@ -321,6 +331,8 @@ class ChatEngine:
             synthesis_model_override=synthesis_model_override,
             # 2026-07-13 #P1 透传
             thinking_mode=thinking_mode,
+            # #P5: 透传附加文档 ID → 屏蔽 RAG 工具
+            attached_knowledge_ids=attached_knowledge_ids,
         ):
             if evt.type == "text_delta":
                 content += evt.delta or ""

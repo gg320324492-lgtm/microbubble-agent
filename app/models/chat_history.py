@@ -101,6 +101,8 @@ class ChatMessage(Base):
     - tool_trace: 工具调用链路（JSONB），含 tool_name / input / output / duration_ms
     - metadata: 系统元信息（JSONB），含 model / usage / intent_category / session_id（防 SQL 注入）
       注意：metadata 是 SQLAlchemy 保留字，用 Column("metadata", JSONB) 别名
+    - attached_knowledge_ids: 本消息引用的附加文档 ID 数组 (JSONB)
+      默认 '[]' 兼容旧消息, 用于审计 + UI 引用标注
     - is_partial: 流式中断的半截消息（True = 用户关闭 / 断网 / 取消）
     - is_deleted: 单条软删除（前端"重新生成"会标记旧消息 is_deleted）
     - client_msg_id: 前端生成的幂等键（同一消息多次写不会重复入库）
@@ -118,6 +120,10 @@ class ChatMessage(Base):
     tool_trace = Column(JSONB, default=dict, nullable=False)
     # 注：metadata 是 SQLAlchemy 保留字，用 Column 别名映射到 "metadata" 列
     message_metadata = Column("metadata", JSONB, default=dict, nullable=False)
+    # #P5: 本次消息引用的附加文档 ID 数组 (用于审计 + UI 标注)
+    attached_knowledge_ids = Column(JSONB, default=list, nullable=False)
+    # #P5+: 用户上传图片附件的永久 URL (MinIO 公网 URL, 刷新后仍有效)
+    image_url = Column(String, nullable=True)
     is_partial = Column(Boolean, default=False, nullable=False, index=True)
     is_deleted = Column(Boolean, default=False, nullable=False, index=True)
     client_msg_id = Column(String(64), nullable=True, index=True)  # 幂等键
@@ -128,6 +134,8 @@ class ChatMessage(Base):
         Index("ix_chat_messages_session_created", "session_id", "created_at"),
         # 流式中断的半截消息快速查询
         Index("ix_chat_messages_session_partial", "session_id", "is_partial"),
+        # #P5: 按附加文档 ID 查历史消息 (GIN 索引)
+        Index("ix_chat_messages_attached_knowledge_ids", "attached_knowledge_ids", postgresql_using="gin"),
     )
 
 

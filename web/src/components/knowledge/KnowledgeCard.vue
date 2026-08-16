@@ -94,9 +94,20 @@
         <span v-if="item.tags.length > 4" class="tag-chip tag-more">+{{ item.tags.length - 4 }}</span>
       </div>
 
-      <!-- 底部：时间 -->
+      <!-- 底部：时间 + 附加按钮 (2026-08-15 #P4) -->
       <div class="card-footer">
         <span class="card-time">{{ formatDate(item.created_at) }}</span>
+        <el-button
+          v-if="chatCtx.selectingForChat"
+          size="small"
+          type="primary"
+          :disabled="chatCtx.attachedDocuments.find(x => x.id === item.id) != null"
+          @click.stop="$emit('attach-to-chat', { id: item.id, title: item.title, category: item.category, snippet: item.snippet })"
+          class="card-attach-btn"
+        >
+          <el-icon><Link /></el-icon>
+          <span>{{ chatCtx.attachedDocuments.find(x => x.id === item.id) ? '已附加' : '附加到对话' }}</span>
+        </el-button>
       </div>
     </div>
   </div>
@@ -104,7 +115,8 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Download, Edit, Delete } from '@element-plus/icons-vue'
+import { Download, Edit, Delete, Link } from '@element-plus/icons-vue'
+import { useChatContextStore } from '@/stores/chatContext'
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -112,7 +124,10 @@ const props = defineProps({
   topResult: { type: Boolean, default: false }
 })
 
-defineEmits(['click', 'edit', 'delete', 'download'])
+// 2026-08-15 #P4: "从资料库添加"闭环 - 选择模式时显示附加按钮
+const chatCtx = useChatContextStore()
+
+defineEmits(['click', 'edit', 'delete', 'download', 'attach-to-chat'])  // 2026-08-15 #P4
 
 // v28 step 74: 上传文件卡片专用 computed
 const hasFile = computed(() => !!props.item.file_path)
@@ -526,6 +541,13 @@ const formatDate = (dateStr) => {
   border-top: 1px solid var(--color-border-light);
   margin-top: auto;
   flex-shrink: 0;
+  gap: 8px;
+}
+.card-attach-btn {
+  flex-shrink: 0;
+  font-size: 11px !important;
+  height: 24px !important;
+  padding: 0 8px !important;
 }
 
 .card-time {

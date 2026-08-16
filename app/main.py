@@ -61,7 +61,9 @@ def _import_application_routers():
         billing_webhooks,  # W82 B-1 P0: 商业化支付 webhook 路由
         tenants,  # W73 第 1 批 B-1 多租户管理
         chat,
+        chat_attachments,  # #P5: 全局附加文档 API (跨 session 复用)
         chat_feedback,  # W98 CHAT-P1-D3: POST /chat/feedback 用户反馈闭环
+        chat_image_upload,  # #P5+: 聊天图片附件上传 (持久 URL)
         chat_history,
         dashboard,
         dft,  # Phase 5 DFT/MD 计算 (Gaussian/GROMACS/MACE/PySCF)
@@ -107,6 +109,8 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
     return [
         (auth.router, {"prefix": "/api/v1", "tags": ["认证"]}),
         (chat.router, {"prefix": "/api/v1", "tags": ["对话"]}),
+        (chat_attachments.router, {"prefix": "/api/v1", "tags": ["对话附加文档"]}),  # #P5
+        (chat_image_upload.router, {"prefix": "/api/v1", "tags": ["对话图片附件"]}),  # #P5+ 永久 URL
         (chat_feedback.router, {"prefix": "/api/v1", "tags": ["对话反馈"]}),  # W98 CHAT-P1-D3
         (task.router, {"prefix": "/api/v1", "tags": ["任务"]}),
         (meeting_recording.router, {"prefix": "/api/v1", "tags": ["录音会议"]}),

@@ -1044,11 +1044,20 @@ class AgenticLoop:
             # ===== Phase 1: 工具循环 =====
             for round_idx in range(max_rounds):
                 try:
+                    # #P5: 用户手动附加文档时屏蔽 RAG 类工具, 强制 LLM 只基于附加文档回答
+                    _exclude_tools = None
+                    if getattr(ctx, 'attached_knowledge_ids', None):
+                        _exclude_tools = {
+                            'search_knowledge', 'hybrid_retrieve', 'web_search',
+                            'auto_research', 'knowledge_search', 'semantic_search',
+                        }
+                        logger.info(f"[P5-tools] attached_knowledge_ids={ctx.attached_knowledge_ids}, exclude RAG tools: {_exclude_tools}")
+
                     # 2026-07-02 Phase I.3 取证: dump LLM 真实输入 (DEBUG_DUMP_LLM_INPUT=1 启用)
                     maybe_dump(
                         messages=messages,
                         system=system,
-                        tools=get_all_tool_schemas(),
+                        tools=get_all_tool_schemas(exclude_tools=_exclude_tools),
                         model=getattr(settings, "AGENT_SYNTHESIS_MODEL", None)
                             or getattr(settings, "CLAUDE_MODEL", None)
                             or "mimo-v2.5",
@@ -1058,7 +1067,7 @@ class AgenticLoop:
                     response = await llm.complete(
                         messages=messages,
                         system=system,
-                        tools=get_all_tool_schemas(),
+                        tools=get_all_tool_schemas(exclude_tools=_exclude_tools),
                         max_tokens=(ctx.thinking_config.max_tool_tokens if _has_thinking_config(ctx) else 500),
                         temperature=0.3,
                         # 2026-07-13 #P1: 透传 mode-aware model + thinking (None 时用 LLMClient 默认 fallback chain)

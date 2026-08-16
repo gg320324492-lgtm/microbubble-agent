@@ -111,8 +111,8 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
       return await chatHistoryApi.appendMessage(sid, msg)
     } catch (e: any) {
       const status = e?.response?.status
-      // 404 表示 session 尚未注册：阻塞创建后只重试一次。
-      // 401 是认证失败，绝不能通过重建 session 掩盖或形成重试噪音；403 同理。
+      // 404 表示 session 尚未注册: 阻塞创建后只重试一次。
+      // 401 是认证失败, 绝不能通过重建 session 掩盖或形成重试噪音; 403 同理。
       if (status === 404) {
         try {
           const created = await createServerSession({
@@ -120,6 +120,11 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
             firstMessage: msg?.content,
           })
           if (created) {
+            return await chatHistoryApi.appendMessage(sid, msg)
+          } else {
+            // #P5+: createServerSession 返 null (可能 409 冲突或 server 错误)
+            // 等待 200ms 再试一次 (等 server session 注册生效)
+            await new Promise(r => setTimeout(r, 200))
             return await chatHistoryApi.appendMessage(sid, msg)
           }
         } catch {

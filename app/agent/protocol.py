@@ -149,7 +149,7 @@ class StreamEvent(BaseModel):
     mode: Optional[Literal["fast", "balanced", "deep"]] = None
     # model: 实际跑的 model (Ollama tag 或 Anthropic model id)
     model: Optional[str] = None
-    # thinking_tokens_used: Anthropic SDK 返回的 thinking tokens (Ollama deepseek-r1 当前返 0, 走 reasoning_content 通道)
+    # thinking_tokens_used: Anthropic SDK 返回的 thinking tokens
     thinking_tokens_used: Optional[int] = None
 
     def to_sse(self) -> str:
