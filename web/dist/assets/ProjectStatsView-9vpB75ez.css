@@ -1,0 +1,384 @@
+
+.project-stats-view[data-v-bd25a668] {
+  max-width: 1200px;
+  padding-bottom: 30px;
+}
+
+/* 铁律 31: tab-strip-wrapper + tab-panel 容器 */
+.tab-strip-wrapper[data-v-bd25a668] {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+.tab-panel[data-v-bd25a668] {
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+}
+
+/* 页面标题 */
+.page-header[data-v-bd25a668] {
+  margin-bottom: 24px;
+}
+.page-title[data-v-bd25a668] {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin: 0 0 8px 0;
+}
+.page-subtitle[data-v-bd25a668] {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* 卡片 */
+.stats-card[data-v-bd25a668] {
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+}
+.card-header[data-v-bd25a668] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.card-title[data-v-bd25a668] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-md);
+}
+.card-icon[data-v-bd25a668] {
+  font-size: 18px;
+}
+
+/* 体量统计网格 */
+.stats-grid[data-v-bd25a668] {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+.stat-box[data-v-bd25a668] {
+  text-align: center;
+  padding: 24px 16px;
+  background: var(--color-bg-warm);
+  border-radius: var(--radius-lg);
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+.stat-box[data-v-bd25a668]:hover {
+  transform: translateY(-4px);
+}
+.stat-value[data-v-bd25a668] {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+.stat-label[data-v-bd25a668] {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: 8px;
+}
+
+/* 痛点网格 */
+.pain-points-grid[data-v-bd25a668] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+.pain-group-card[data-v-bd25a668] {
+  background: var(--color-bg-warm);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+.pain-group-card[data-v-bd25a668]:hover {
+  transform: translateY(-2px);
+}
+.pain-group-header[data-v-bd25a668] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pain-icon[data-v-bd25a668] {
+  font-size: 20px;
+}
+.pain-category[data-v-bd25a668] {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+.pain-list[data-v-bd25a668] {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.pain-item[data-v-bd25a668] {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--color-border);
+}
+.pain-item[data-v-bd25a668]:last-child {
+  border-bottom: none;
+}
+
+/* 待做事项网格 */
+.todos-grid[data-v-bd25a668] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+.todo-card[data-v-bd25a668] {
+  background: var(--color-bg-warm);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+.todo-card[data-v-bd25a668]:hover {
+  transform: translateY(-2px);
+}
+.todo-header[data-v-bd25a668] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.todo-phase[data-v-bd25a668] {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-placeholder);
+  font-weight: var(--font-weight-medium);
+}
+.todo-name[data-v-bd25a668] {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+.todo-cycle[data-v-bd25a668] {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* 代码分布 */
+.code-breakdown[data-v-bd25a668] {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.lang-row[data-v-bd25a668] {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lang-info[data-v-bd25a668] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lang-icon[data-v-bd25a668] {
+  font-size: 18px;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.lang-name[data-v-bd25a668] {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  min-width: 80px;
+}
+.lang-lines[data-v-bd25a668] {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  min-width: 80px;
+}
+.lang-files[data-v-bd25a668] {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-placeholder);
+  margin-left: auto;
+}
+.lang-bar-track[data-v-bd25a668] {
+  width: 100%;
+  height: 10px;
+  background: var(--color-border-light);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.lang-bar-fill[data-v-bd25a668] {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 1.2s var(--ease-bounce);
+  min-width: 4px;
+}
+
+/* 更新日志 */
+.log-content[data-v-bd25a668] {
+  padding: 4px 0;
+}
+.log-title[data-v-bd25a668] {
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: 8px;
+}
+.log-meta[data-v-bd25a668] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* v76.6 fix: 更新日志 el-tag 文字加深 + 字重 700 + 边框加粗
+   原因: EP el-tag default effect = 浅色背景 (--el-color-primary-light-9 ≈ #FDF2EF)
+   + 主色文字 (--el-color-primary). 在 6 主题下 coral/ocean/forest 文字都是中亮色,
+   浅背景+中亮文字对比度仅 ~2.5:1, 不到 WCAG AA 4.5:1.
+   修法: scoped 强制覆盖 text-color 用 EP 自带 dark 变体 + 字重 700 + 边框 2px.
+   兼容 6 主题: --el-color-*-dark-2 在 6 主题全定义, 不需写 6 套. */
+.log-meta .el-tag[data-v-bd25a668] {
+  font-weight: 700 !important;
+  border-width: 2px !important;
+}
+.log-meta .el-tag.el-tag--primary[data-v-bd25a668] {
+  --el-tag-text-color: var(--el-color-primary-dark-2);
+}
+.log-meta .el-tag.el-tag--success[data-v-bd25a668] {
+  --el-tag-text-color: var(--el-color-success-dark-2);
+}
+.log-meta .el-tag.el-tag--danger[data-v-bd25a668] {
+  --el-tag-text-color: var(--el-color-danger-dark-2);
+}
+.log-meta .el-tag.el-tag--warning[data-v-bd25a668] {
+  --el-tag-text-color: var(--el-color-warning-dark-2);
+}
+.log-meta .el-tag.el-tag--info[data-v-bd25a668] {
+  --el-tag-text-color: var(--el-color-info-dark-2);
+}
+.log-pain[data-v-bd25a668] {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+.stats-grid[data-v-bd25a668] {
+    grid-template-columns: repeat(2, 1fr);
+}
+.pain-points-grid[data-v-bd25a668] {
+    grid-template-columns: 1fr;
+}
+.todos-grid[data-v-bd25a668] {
+    grid-template-columns: repeat(2, 1fr);
+}
+}
+
+/* W6 D5: KB 入库监控 tab 样式 */
+.kb-monitor-tab {
+&[data-v-bd25a668] {
+  /* metric card 4 列 */
+  }
+.metric-card[data-v-bd25a668] {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+}
+.metric-label[data-v-bd25a668] {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+}
+.metric-value[data-v-bd25a668] {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.2;
+}
+.metric-unit[data-v-bd25a668] {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+}
+.metric-sub[data-v-bd25a668] {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+}
+.trend-card[data-v-bd25a668],
+  .status-card[data-v-bd25a668] {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 16px;
+}
+.trend-bars[data-v-bd25a668] {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 180px;
+    padding: 12px 0;
+    gap: 8px;
+}
+.trend-bar-wrapper[data-v-bd25a668] {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-width: 40px;
+}
+.trend-bar-value[data-v-bd25a668] {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+.trend-bar[data-v-bd25a668] {
+    width: 100%;
+    max-width: 48px;
+    background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-accent) 100%);
+    border-radius: 4px 4px 0 0;
+    transition: height 0.3s ease;
+}
+.trend-bar-zero[data-v-bd25a668] {
+    background: var(--color-border);  /* W6 D5 改进: 0 时用灰色, 视觉上区别"有数据" vs "全 0" */
+    opacity: 0.3;
+}
+.trend-bar-day[data-v-bd25a668] {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+}
+.trend-bar-day-today[data-v-bd25a668] {
+    color: var(--color-primary);  /* 突出"今日" */
+    font-weight: 600;
+}
+.trend-header[data-v-bd25a668] {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+.trend-empty-hint[data-v-bd25a668] {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+.status-item[data-v-bd25a668] {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.status-item[data-v-bd25a668]:last-child {
+    border-bottom: none;
+}
+.status-label[data-v-bd25a668] {
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+.header-actions[data-v-bd25a668] {
+    margin-left: auto;
+}
+}
