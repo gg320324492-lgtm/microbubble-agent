@@ -321,13 +321,18 @@ async def append_message(
     message_metadata: Optional[Dict[str, Any]] = None,
     is_partial: bool = False,
     client_msg_id: Optional[str] = None,
+    # #P5: 本消息引用的附加文档 ID 列表
+    attached_knowledge_ids: Optional[List[int]] = None,
+    # #P5+: 用户上传图片附件的永久 URL (MinIO 公网 URL)
+    image_url: Optional[str] = None,
 ) -> ChatMessage:
     """追加单条消息（自动维护 message_count + last_message_at）"""
     if role not in VALID_ROLES:
         raise ValidationException(f"role 必须是 {VALID_ROLES} 之一")
     if len(content) > 1_048_576:  # 1MB
         logger.warning(f"消息超过 1MB: len={len(content)} sid={session_id}")
-    if not content:
+    # #P5+: 允许空 content (用户只发图片/文件不输文字场景) — 图片本身就是内容
+    if not content and not attached_knowledge_ids and not image_url:
         raise ValidationException("content 不能为空")
 
     # 越权防护 + 拿 session（更新计数）
@@ -359,6 +364,10 @@ async def append_message(
         message_metadata=message_metadata or {},
         is_partial=is_partial,
         client_msg_id=client_msg_id,
+        # #P5: 写入本消息引用的附加文档 ID 列表
+        attached_knowledge_ids=attached_knowledge_ids or [],
+        # #P5+: 写入用户上传图片附件的永久 URL (MinIO)
+        image_url=image_url,
     )
     db.add(msg)
     # 维护冗余字段
@@ -926,6 +935,71 @@ async def mark_message_partial(
         return msg
 
     return None
+
+
+async def update_user_message_content(
+    db: AsyncSession,
+    user_id: int,
+    message_id: int,
+    new_content: str,
+) -> Optional[ChatMessage]:
+    """2026-08-16 #71: 用户编辑自己发的消息 (ChatGPT 风格).
+    只允许修改 role='user' 的消息; assistant 消息不允许编辑 (要走 regenerate).
+
+    流程: PATCH content → 标记 edited=true + edited_at → 写 message_metadata.
+    不删后续消息 (那是 resend 的职责, 不属于 edit).
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    msg = await db.get(ChatMessage, message_id)
+    if msg is None:
+        return None
+    # 越权防护: user 必须拥有此 session
+    await get_session(db, user_id, msg.session_id)
+    # 只允许修改 user 消息 (不允许编辑 assistant 历史回答)
+    if msg.role != "user":
+        raise ValidationException("只能编辑用户消息")
+    # 内容长度校验 (与 append_message 一致)
+    if not new_content or not new_content.strip():
+        raise ValidationException("content 不能为空")
+    if len(new_content) > 1_048_576:
+        raise ValidationException("消息内容超过 1MB")
+
+    msg.content = new_content
+    # 标记 edited 到 message_metadata JSONB (保留原 metadata, 只追加 edited 字段)
+    meta = dict(msg.message_metadata or {})
+    meta["edited"] = True
+    meta["edited_at"] = datetime.utcnow().isoformat()
+    msg.message_metadata = meta
+    flag_modified(msg, "message_metadata")
+
+    await db.commit()
+    await db.refresh(msg)
+    return msg
+
+
+async def delete_messages_after(
+    db: AsyncSession,
+    user_id: int,
+    session_id: str,
+    message_id: int,
+) -> int:
+    """2026-08-16 #71: 物理删除某条消息及其之后的所有消息 (ChatGPT 'resend' 用).
+    返回删除条数.
+
+    场景: 用户编辑了 message_id=N 的 user 消息, 想重新发 → 删除 N+1, N+2, ... 所有后续消息
+    (包括原 assistant 回复), 让 chat_stream 从编辑后的内容重新生成.
+    """
+    await get_session(db, user_id, session_id)  # 越权防护
+    from app.models.chat_history import ChatMessage as _M
+    stmt = (
+        delete(_M)
+        .where(_M.session_id == session_id, _M.id >= message_id)
+        .execution_options(synchronize_session=False)
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount or 0
 
 
 async def update_message_content(

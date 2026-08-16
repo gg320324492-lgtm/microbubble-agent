@@ -129,16 +129,10 @@ function onCopyClick() {
   position: relative;
 }
 
-/* desktop mode: hover 才显示 */
+/* 2026-08-16 #69: 用户要求复制/重新生成按钮**常驻显示** (不 hover), 同时删除 reactions-bar.
+   旧规则: hover 才显示 (避免视觉杂乱). 新规则: 常驻 (用户明确要求).
+   mobile mode 仍走 line 147 的 opacity:1 */
 .chat-message-actions.mode-desktop {
-  opacity: 0;
-  transition: opacity 200ms ease;
-}
-
-/* 父 .bot-bubble hover 或自身 focus 显示 */
-.bot-bubble:hover .chat-message-actions.mode-desktop,
-.bot-bubble:focus-within .chat-message-actions.mode-desktop,
-.chat-message-actions.mode-desktop:focus-within {
   opacity: 1;
 }
 

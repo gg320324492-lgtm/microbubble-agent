@@ -90,6 +90,30 @@ function clickChip(s: string) {
   // 点击后立即隐藏 (用户已经选择)
   isVisible.value = false
 }
+
+/* 2026-08-16 #87: 彻底清理后端 suggestions 残留标记 (LLM 输出各种格式)
+   - 去 "1. " "2. " 序号 (中英文标点 + 中文数字)
+   - 去 **加粗** / `code` / [link](url)
+   - 去 【】『』 「」 中文括号包裹
+   - 截到第一句 (句号/问号/感叹号)
+   - 截断到 28 字 (更紧凑, ChatGPT 风格) */
+function cleanSuggestion(s: string): string {
+  if (!s) return ''
+  let cleaned = s
+    .replace(/^\s*[\d一二三四五六七八九十]+[\.\)、:：]\s*/, '')
+    .replace(/\*\*/g, '')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^[#\-\*•]\s*/, '')
+    .replace(/^[【『「《]\s*/, '')
+    .replace(/[】』」》]\s*$/, '')
+    .trim()
+  const m = cleaned.match(/^[^。！？；;!?]+[。！？;!?]/)
+  if (m) cleaned = m[0]
+  if (cleaned.length > 28) cleaned = cleaned.slice(0, 28) + '…'
+  return cleaned
+}
 </script>
 
 <template>
@@ -112,7 +136,7 @@ function clickChip(s: string) {
         :title="s"
         @click="clickChip(s)"
       >
-        {{ s }}
+        {{ cleanSuggestion(s) }}
       </button>
     </div>
   </Transition>
@@ -123,31 +147,39 @@ function clickChip(s: string) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 8px 0;
-  margin-top: 4px;
+  gap: 8px;
+  padding: 10px 0 6px 0;
+  margin-top: 2px;
 }
 .hint-text {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-text-secondary);
-  margin-right: 4px;
+  margin-right: 6px;
+  flex-shrink: 0;
 }
+/* 2026-08-16 #85: ChatGPT 风格 — 浅灰背景 + 短问句 + 紧凑 padding + 单行截断.
+   旧样式: 橙边 + 大块 padding + 多行 (撑爆成气泡) */
 .chip {
   display: inline-block;
-  padding: 5px 12px;
+  padding: 6px 14px;
   font-size: 13px;
-  background: var(--color-bg-warm);
-  color: var(--color-primary);
-  border: 1px solid var(--color-primary);
-  border-radius: 16px;
+  line-height: 1.4;
+  max-width: 280px;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--color-text-primary);
+  border: 1px solid transparent;
+  border-radius: 18px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   -webkit-tap-highlight-color: transparent;
 }
 .chip:hover {
-  background: var(--color-primary);
-  color: white;
+  background: rgba(255, 122, 92, 0.12);
+  border-color: rgba(255, 122, 92, 0.4);
+  color: var(--color-primary);
 }
 .chip:active {
   transform: scale(0.96);

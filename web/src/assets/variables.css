@@ -1971,7 +1971,11 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
    ============================================ */
 
 /* ===== Message Reactions ===== */
-.reactions-bar{display:flex;gap:2px;padding:2px 0;margin-top:2px;opacity:1;transform:translateY(0);transition:opacity .15s ease,transform .15s ease}
+.reactions-bar{display:flex;gap:2px;padding:2px 0;margin-top:2px;opacity:0;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease;pointer-events:none}
+.msg-row:hover > .reactions-bar{opacity:1;transform:translateY(0);pointer-events:auto}
+/* 解决 esbuild minify bug：用 :not(:hover) 显式锁定未 hover 状态，minify 不会优化 */
+.msg-row:not(:hover) > .reactions-bar{opacity:0;pointer-events:none}
+.msg-row:hover .reactions-bar{opacity:1;transform:translateY(0);pointer-events:auto}
 .react-btn{width:24px;height:24px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center;transition:all .12s ease;line-height:1}
 .react-btn:hover{background:rgba(0,0,0,0.05);transform:scale(1.12)}
 .react-btn.active{background:rgba(255,122,92,0.1)}
@@ -2033,16 +2037,16 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
 .lightbox-overlay img{max-width:90vw;max-height:85vh;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.3);cursor:default;animation:lightbox-zoom .25s ease}
 @keyframes lightbox-zoom{from{transform:scale(0.8);opacity:0}to{transform:scale(1);opacity:1}}
 
-/* W-N 视觉: AI 头像方形 34x34 */
+/* W-N 视觉: AI 头像方形 34x34 (全局规则避开 scoped data-v 限制) */
 .bot-msg-avatar {
-  background: var(--gradient-welcome-hero) !important;
+  background: transparent !important;
   border-radius: 10px !important;
   width: 34px !important;
   height: 34px !important;
-  min-width: 34px !important;
-  --el-avatar-size: 34px !important;
+  display: block !important;
+  flex-shrink: 0;
+  object-fit: cover !important;
 }
-.bot-msg-avatar .el-icon { font-size: 18px !important; }
 
 /* W-N 视觉: 侧栏搜索框圆角 */
 .session-sidebar .el-input__wrapper,

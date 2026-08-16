@@ -84,6 +84,10 @@ class ChatMessageCreate(BaseModel):
     message_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, alias="metadata", description="model / usage / intent_category")
     is_partial: Optional[bool] = False
     client_msg_id: Optional[str] = Field(None, max_length=64, description="幂等键")
+    # #P5: 本消息引用的附加文档 ID 列表 (用于审计 + UI 引用标注)
+    attached_knowledge_ids: Optional[List[int]] = Field(default_factory=list, description="本次消息引用的知识库文档 ID 列表")
+    # #P5+: 用户上传图片附件的永久 URL (MinIO 公网 URL, 刷新后仍有效)
+    image_url: Optional[str] = Field(None, max_length=2048, description="图片附件 MinIO URL (永久有效)")
 
     model_config = ConfigDict(populate_by_name=True)  # 同时接受 metadata 和 message_metadata
 
@@ -103,9 +107,19 @@ class ChatMessageOut(BaseModel):
     is_partial: bool
     is_deleted: bool
     client_msg_id: Optional[str] = None
+    # #P5: 本消息引用的附加文档 ID 列表
+    attached_knowledge_ids: List[int] = Field(default_factory=list)
+    # #P5+: 用户上传图片附件的永久 URL (MinIO 公网 URL, 刷新后仍有效)
+    image_url: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class ChatMessageContentUpdate(BaseModel):
+    """2026-08-16 #71: 编辑用户消息内容 (PATCH /chat/sessions/{id}/messages/{msg_id}).
+    只允许改 content; 不改 role/rich_blocks/tool_trace 等其他字段 (避免破坏流式完整性)."""
+    content: str = Field(..., max_length=1048576, description="编辑后的消息内容 (1MB 上限)")
 
 
 class ChatMessagesPage(BaseModel):

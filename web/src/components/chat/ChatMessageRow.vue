@@ -21,8 +21,9 @@
  * - @tts-play (el-button -> ChatViewSSE.playTTSWrap)
  * - @follow-up-click (FollowUpChips -> ChatViewSSE.onFollowUpClick)
  */
-import { computed, ref, watch } from 'vue'
-import { ChatDotRound, Headset } from '@element-plus/icons-vue'
+import { computed, ref, watch, nextTick } from 'vue'
+import { ChatDotRound, Headset, Document } from '@element-plus/icons-vue'
+import { useChatContextStore } from '@/stores/chatContext'
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
 import PlanSteps from '@/components/chat/PlanSteps.vue'
 import ToolTraceItem from '@/components/chat/ToolTraceItem.vue'
@@ -38,6 +39,13 @@ import { renderMarkdown } from '@/utils/markdown'
 import { formatTimeDivider } from '@/utils/timeDivider'
 import type { ChatMessage } from '@/composables/chat/useChatStream'
 
+// #P5+: 消息气泡显示附加文档列表 (消息级附件)
+const chatCtx = useChatContextStore()
+function attachedDocsById(ids?: number[]) {
+  if (!ids || ids.length === 0) return []
+  return chatCtx.getDocsByIds(ids)
+}
+
 const props = withDefaults(defineProps<{
   msg: ChatMessage
   prevTimestamp?: string | null
@@ -48,11 +56,14 @@ const props = withDefaults(defineProps<{
   virtualTop?: number
   /** 虚拟列表模式: 渲染为绝对定位 div, 不渲染 TimeDivider (由外部统一管) */
   virtualMode?: boolean
+  /** W-N 2026-08-14: 同一天不重复 time-divider 判断用 */
+  allMessages?: ChatMessage[]
 }>(), {
   showThinking: false,
   disabled: false,
   virtualTop: 0,
   virtualMode: false,
+  allMessages: undefined,
 })
 
 const emit = defineEmits<{
@@ -64,6 +75,8 @@ const emit = defineEmits<{
   (e: 'tts-play', text: string): void
   (e: 'follow-up-click', payload: any): void
   (e: 'quote', payload: any): void
+  // 2026-08-16 #71: ChatGPT 风格 — 编辑用户消息后重发
+  (e: 'edit-send', payload: { msg: ChatMessage; newContent: string; serverId: number; sessionId: string }): void
 }>()
 
 const hasTimeDivider = computed(() => {
@@ -74,6 +87,15 @@ const hasTimeDivider = computed(() => {
 
 const timeDividerText = computed(() => {
   if (!hasTimeDivider.value || !props.prevTimestamp) return ''
+  // W-N 2026-08-14: 同一天不重复显示（避免"今天 02:07"在每条消息前都出现）
+  if (props.allMessages && props.msg.id) {
+    const today = new Date(props.msg.timestamp).toDateString()
+    const alreadyShown = props.allMessages.some(m =>
+      m.id !== props.msg.id &&
+      new Date(m.timestamp).toDateString() === today
+    )
+    if (alreadyShown) return ''
+  }
   // W100 +55c: 三档 (今天/昨天/YYYY-MM-DD) — 沿用 utils/timeDivider
   return formatTimeDivider(new Date(props.msg.timestamp), new Date())
 })
@@ -108,17 +130,66 @@ const msgContentStyle = computed(() => {
 
 const prevMsg = computed(() => null)  // 保留 — 模板里 prevTimestamp 已足够
 
-// W-N 周期: Reaction 切换
-const activeReactions = ref<Map<string, boolean>>(new Map())
-function toggleReaction(emoji: string) {
-  const key = `${props.msg.id}-${emoji}`
-  if (activeReactions.value.has(key)) {
-    activeReactions.value.delete(key)
-  } else {
-    activeReactions.value.set(key, true)
+// 2026-08-16 #71: ChatGPT 风格 — 用户编辑自己消息
+const isEditing = ref(false)
+const editContent = ref('')
+const editTextareaRef = ref<HTMLTextAreaElement | null>(null)
+
+function startEdit() {
+  if (!props.msg.server_id) {
+    ElMessage.warning('该消息尚未同步到服务器，无法编辑')
+    return
   }
-  // 触发响应式
-  activeReactions.value = new Map(activeReactions.value)
+  editContent.value = props.msg.content || ''
+  isEditing.value = true
+  // 下一帧 focus + 光标到末尾
+  nextTick(() => {
+    const ta = editTextareaRef.value
+    if (ta) {
+      ta.focus()
+      ta.setSelectionRange(ta.value.length, ta.value.length)
+      // 自适应高度
+      ta.style.height = 'auto'
+      ta.style.height = ta.scrollHeight + 'px'
+    }
+  })
+}
+
+function cancelEdit() {
+  isEditing.value = false
+  editContent.value = ''
+}
+
+function confirmEdit() {
+  const newContent = (editContent.value || '').trim()
+  if (!newContent) {
+    ElMessage.warning('内容不能为空')
+    return
+  }
+  if (newContent === props.msg.content) {
+    cancelEdit()
+    return
+  }
+  emit('edit-send', {
+    msg: props.msg,
+    newContent,
+    serverId: props.msg.server_id,
+    sessionId: props.sessionId,
+  })
+  isEditing.value = false
+}
+
+function onCopyUserMessage() {
+  emit('copy', props.msg)
+}
+
+function onEditKeydown(e: KeyboardEvent) {
+  // Esc 取消, Ctrl+Enter 发送
+  if (e.key === 'Escape') {
+    cancelEdit()
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    confirmEdit()
+  }
 }
 </script>
 
@@ -134,36 +205,62 @@ function toggleReaction(emoji: string) {
     </div>
 
     <template v-if="msg.role === 'user'">
-      <div class="msg-row user">
-        <div class="bubble user-bubble">
-          <div v-html="renderMarkdown(msg.content)" />
-          <div v-if="msg.imageUrl" class="msg-image">
-            <ImageWithFallback
-              :src="msg.imageUrl"
-              :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
-              :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
-              img-class="msg-image-clickable"
-              @click="emit('image-open', msg.imageUrl)"
-            />
+      <!-- 2026-08-16 #71: 编辑态 vs 正常态 — 用 v-if 切换两个独立 div, 不用 template 嵌套 v-else (Vue 编译错乱) -->
+      <div v-if="isEditing" class="msg-row user editing">
+        <div class="user-edit-wrap">
+          <textarea
+            ref="editTextareaRef"
+            v-model="editContent"
+            class="user-edit-textarea"
+            rows="3"
+            placeholder="编辑消息..."
+            @keydown="onEditKeydown"
+          />
+          <div class="user-edit-actions">
+            <el-button size="small" @click="cancelEdit">取消</el-button>
+            <el-button size="small" type="primary" @click="confirmEdit">发送</el-button>
           </div>
         </div>
-        <!-- Reactions -->
-        <div class="reactions-bar">
-          <button class="react-btn" @click.stop="toggleReaction('😊')" title="笑脸">😊</button>
-          <button class="react-btn" @click.stop="toggleReaction('👍')" title="点赞">👍</button>
-          <button class="react-btn" @click.stop="toggleReaction('❤️')" title="爱心">❤️</button>
-          <button class="react-btn" @click.stop="toggleReaction('🎉')" title="庆祝">🎉</button>
-          <button class="react-btn" @click.stop="emit('quote', { msg: props.msg })" title="引用回复" style="font-size:11px;width:auto;padding:0 6px"><svg class="icon" width="12" height="12"><use href="#i-corner-down-left"/></svg></button>
-        </div>
+      </div>
+      <div v-else class="msg-row user">
+        <div class="bubble user-bubble">
+            <div v-html="renderMarkdown(msg.content)" />
+            <div v-if="msg.imageUrl" class="msg-image">
+              <ImageWithFallback
+                :src="msg.imageUrl"
+                :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
+                :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`"
+                img-class="msg-image-clickable"
+                @click="emit('image-open', msg.imageUrl)"
+              />
+            </div>
+            <!-- 2026-08-16 #P5+: 消息气泡显示附加文档列表 (消息级附件) -->
+            <div v-if="msg.attachedDocs && msg.attachedDocs.length > 0" class="msg-attached-docs" role="list" aria-label="附加文档">
+              <div v-for="doc in attachedDocsById(msg.attachedDocs)" :key="doc.id" class="msg-attached-doc" role="listitem">
+                <el-icon :size="14" class="msg-attached-doc-icon"><Document /></el-icon>
+                <div class="msg-attached-doc-info">
+                  <div class="msg-attached-doc-title">{{ doc.title }}</div>
+                  <div v-if="doc.category" class="msg-attached-doc-cat">{{ doc.category }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- 2026-08-16 #71: hover 用户气泡显示 复制 + 编辑 按钮 (ChatGPT 风格) -->
+          <div class="user-actions">
+            <button class="user-action-btn" title="复制" @click.stop="onCopyUserMessage" aria-label="复制消息">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <button class="user-action-btn" title="编辑" @click.stop="startEdit" aria-label="编辑消息">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+          </div>
       </div>
     </template>
 
     <template v-else>
-      <div class="msg-row bot">
-        <el-avatar :size="32" class="bot-msg-avatar" alt="小气助手头像" title="小气助手">
-          <el-icon><ChatDotRound /></el-icon>
-        </el-avatar>
-        <div class="bubble bot-bubble">
+      <div class="msg-row bot-row">
+        <img src="/lab-logo.png" class="bot-msg-avatar" alt="小气助手" title="小气助手" />
+        <div class="bot-content">
           <ThinkingCapsule
             v-if="msg.role === 'assistant' && msg.phase"
             :phase="msg.phase"
@@ -223,7 +320,10 @@ function toggleReaction(emoji: string) {
 
           <div v-if="msg.error" class="msg-error">⚠️ {{ msg.error }}</div>
 
-          <div v-if="msg.state === 'idle' && (msg.usage || msg.durationMs)" class="msg-meta">
+          <!-- 2026-08-16 #68 修复: 原条件 `msg.state === 'idle' && (msg.usage || msg.durationMs)'
+               在历史消息(usage/durationMs 未映射)时不渲染 → 所有按钮消失.
+               改成"有内容就渲染" — usage/durationMs span 内部各自 v-if -->
+          <div v-if="msg.state === 'idle' && msg.content" class="msg-meta">
             <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
             <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
             <el-button
@@ -266,14 +366,6 @@ function toggleReaction(emoji: string) {
             :on-click="(payload: any) => emit('follow-up-click', payload)"
           />
         </div>
-        <!-- Reactions -->
-        <div class="reactions-bar">
-          <button class="react-btn" @click.stop="toggleReaction('😊')" title="笑脸">😊</button>
-          <button class="react-btn" @click.stop="toggleReaction('👍')" title="点赞">👍</button>
-          <button class="react-btn" @click.stop="toggleReaction('❤️')" title="爱心">❤️</button>
-          <button class="react-btn" @click.stop="toggleReaction('🎉')" title="庆祝">🎉</button>
-          <button class="react-btn" @click.stop="emit('quote', { msg: props.msg })" title="引用回复" style="font-size:11px;width:auto;padding:0 6px"><svg class="icon" width="12" height="12"><use href="#i-corner-down-left"/></svg></button>
-        </div>
       </div>
     </template>
   </div>
@@ -297,14 +389,91 @@ function toggleReaction(emoji: string) {
 /* W100 +51a 按钮现代化: TTS 按钮 / 操作按钮组
    - TTS 按钮沿用 el-button text 风格, 仅图标
    - .msg-actions 是 ChatMessageActions + ProEntries 容器, gap 8px */
+
+/* 2026-08-16 #70: 修复按钮水平不对齐. .msg-meta 是 TTS 按钮 + .msg-actions + FeedbackButtons 三个组件的容器
+   (每个内部高度/padding/font-size 各异 → baseline 自然不齐)
+   改用 flex + align-items:center 强制同一基线 + gap 控制间距 */
+.msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
 .msg-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.tts-btn :deep(.el-icon) {
-  font-size: 16px;
+/* 2026-08-16 #71: 用户消息编辑 + hover 复制/编辑按钮 (ChatGPT 风格) */
+.user-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.msg-row.user:hover .user-actions {
+  opacity: 1;
+}
+
+.user-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.user-action-btn:hover {
+  background-color: rgba(255, 122, 92, 0.1);
+  border-color: rgba(255, 122, 92, 0.3);
+  color: var(--color-primary, #ff7a5c);
+}
+
+.user-edit-wrap {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.user-edit-textarea {
+  width: 100%;
+  min-height: 60px;
+  max-height: 400px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 122, 92, 0.4);
+  background: rgba(0, 0, 0, 0.12);  /* 深色背景, 白色文字才可见 */
+  color: #fff;  /* 白色文字 */
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  caret-color: #FF7A5C;  /* 主色光标 */
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.user-edit-textarea:focus {
+  border-color: rgba(255, 122, 92, 0.8);
+  background: rgba(0, 0, 0, 0.2);
+}
+.user-edit-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+.user-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* W-N 视觉设计: 气泡卡片风格 */
@@ -338,15 +507,109 @@ function toggleReaction(emoji: string) {
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(255,122,92,0.22), 0 2px 4px rgba(255,122,92,0.1);
 }
+/* 2026-08-16 #P5+: 消息气泡图片缩略图 (用户上传图后气泡内显示) */
+.msg-image {
+  margin-top: 8px;
+  display: inline-block;
+}
+.msg-image .image-with-fallback,
+.msg-image-clickable {
+  display: block;
+  max-width: 200px;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  object-fit: cover;
+  display: block;
+}
+.msg-image-clickable:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+/* 2026-08-16 #P5+: 消息气泡附加文档列表 (消息级附件, 每条消息独立显示) */
+.msg-attached-docs {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 360px;
+}
+.msg-attached-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.msg-attached-doc-icon {
+  color: var(--el-color-primary);
+  flex-shrink: 0;
+}
+.msg-attached-doc-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+.msg-attached-doc-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.95);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+.msg-attached-doc-cat {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+}
 .msg-row {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   margin-bottom: 16px;
-  gap: 8px;
+  gap: 4px;
+  position: relative;
 }
 .msg-row.user {
-  justify-content: flex-end;
+  align-items: flex-end;
 }
 .msg-row.bot {
-  justify-content: flex-start;
+  align-items: flex-start;
 }
+.msg-row > .bot-msg-avatar {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+  object-fit: cover !important;
+  display: block !important;
+  flex-shrink: 0;
+}
+.msg-row.bot-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  position: relative;
+}
+.msg-row.bot-row > .bot-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.msg-row.bot-row > .bot-content > .bubble {
+  max-width: 80%;
+}
+.msg-row > .bot-bubble { padding-left: 42px; }
 </style>

@@ -368,5 +368,9 @@ export default defineConfig({
         },
       },
     },
+  },
+  build: {
+    cssMinify: false,  // W-N 2026-08-14 保留 :hover 规则（esbuild minify 会错误优化掉）
+    cacheDir: '',  // 禁用 build 缓存，强制每次重编译
   }
 })

@@ -17,7 +17,7 @@
 
 import json
 import logging
-from typing import Any, AsyncIterator, Literal, Optional
+from typing import Any, AsyncIterator, Literal, Optional, List
 
 from fastapi import (
     APIRouter,
@@ -31,6 +31,7 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select  # #P5: 查 chat_session_attached_documents
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.micro_bubble_agent import agent as v2_agent
@@ -57,6 +58,10 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None  # 覆盖 settings.AGENT_SYNTHESIS_MODEL
     # 2026-07-13 #P1 三档推理模式 (fast / balanced / deep), 前端 useChatStream 透传
     thinking_mode: Optional[Literal["fast", "balanced", "deep"]] = None  # None 走 settings.AGENT_THINKING_MODE_DEFAULT
+    # 2026-08-15 #P4: 用户从知识库手动附加的文档 ID 列表
+    # 附加后, 这些文档的完整内容会注入本轮对话的 system prompt 作为优先参考来源
+    # 约束: 最多 8 个, 顺序保持, 后端静默跳过不存在/已删除的 ID (best-effort)
+    attached_knowledge_ids: Optional[List[int]] = None
 
 
 class ChatResponse(BaseModel):
@@ -98,6 +103,17 @@ async def chat(
 
     返回 v2 字段：rich_blocks（结构化富文本块）+ tool_trace（工具调用链）
     """
+    # #P5: 自动从 DB 读用户全局附加文档 (与 /chat/stream 对齐)
+    effective_attached_ids = request.attached_knowledge_ids
+    if effective_attached_ids is None and current_user.id:
+        from app.models.chat_session_attached_document import ChatSessionAttachedDocument
+        stmt = (
+            select(ChatSessionAttachedDocument.knowledge_id)
+            .where(ChatSessionAttachedDocument.user_id == current_user.id)
+            .limit(8)
+        )
+        effective_attached_ids = [r[0] for r in (await db.execute(stmt)).all()]
+
     result = await v2_agent.chat(
         message=request.message,
         session_id=request.session_id,
@@ -106,6 +122,8 @@ async def chat(
         model=request.model,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode=request.thinking_mode,
+        # #P5: 透传附加文档 → 屏蔽 RAG 工具
+        attached_knowledge_ids=effective_attached_ids,
     )
     return ChatResponse(
         content=result["content"],
@@ -129,8 +147,28 @@ async def chat_with_image(
     db: AsyncSession = Depends(get_db),
     # 2026-07-13 #P1 三档推理模式 (fast/balanced/deep)
     thinking_mode: Optional[str] = Form(None),
+    # #P5: 用户从知识库附加的文档 ID 列表 (JSON 字符串, 逗号分隔)
+    # Form 不支持 list[int], 用 str + 手动 split
+    attached_knowledge_ids: Optional[str] = Form(None),
 ):
     """图片对话接口"""
+    # #P5: 解析附加文档 ID (与 /chat/stream 自动从 DB 读对齐: 没传时查 DB)
+    effective_attached_ids: Optional[List[int]] = None
+    if attached_knowledge_ids is None or attached_knowledge_ids.strip() == "":
+        from app.models.chat_session_attached_document import ChatSessionAttachedDocument
+        stmt = (
+            select(ChatSessionAttachedDocument.knowledge_id)
+            .where(ChatSessionAttachedDocument.user_id == current_user.id)
+            .limit(8)
+        )
+        effective_attached_ids = [r[0] for r in (await db.execute(stmt)).all()]
+    else:
+        # 解析 "12,47,89" → [12, 47, 89]
+        try:
+            effective_attached_ids = [int(x.strip()) for x in attached_knowledge_ids.split(",") if x.strip()]
+        except (ValueError, TypeError):
+            effective_attached_ids = None
+
     image_data = await image.read()
     content_type = image.content_type or "image/png"
     media_type_map = {
@@ -149,6 +187,7 @@ async def chat_with_image(
         image_media_type=media_type,
         user_id=current_user.id,
         thinking_mode=thinking_mode,  # 2026-07-13 #P1 透传
+        attached_knowledge_ids=effective_attached_ids,  # #P5 透传附加文档
     )
     return ChatResponse(
         content=result["content"],
@@ -168,8 +207,26 @@ async def chat_with_file(
     db: AsyncSession = Depends(get_db),
     # 2026-07-13 #P1 三档推理模式
     thinking_mode: Optional[str] = Form(None),
+    # #P5: 附加文档 ID (逗号分隔)
+    attached_knowledge_ids: Optional[str] = Form(None),
 ):
     """文件对话接口（图片/PDF/Word/Excel/TXT）"""
+    # #P5: 解析附加文档 ID
+    effective_attached_ids: Optional[List[int]] = None
+    if attached_knowledge_ids is None or attached_knowledge_ids.strip() == "":
+        from app.models.chat_session_attached_document import ChatSessionAttachedDocument
+        stmt = (
+            select(ChatSessionAttachedDocument.knowledge_id)
+            .where(ChatSessionAttachedDocument.user_id == current_user.id)
+            .limit(8)
+        )
+        effective_attached_ids = [r[0] for r in (await db.execute(stmt)).all()]
+    else:
+        try:
+            effective_attached_ids = [int(x.strip()) for x in attached_knowledge_ids.split(",") if x.strip()]
+        except (ValueError, TypeError):
+            effective_attached_ids = None
+
     file_data = await file.read()
     content_type = file.content_type or "application/octet-stream"
     filename = file.filename or "unknown"
@@ -184,6 +241,7 @@ async def chat_with_file(
             image_media_type=media_type,
             user_id=current_user.id,
             thinking_mode=thinking_mode,  # 2026-07-13 #P1 透传
+            attached_knowledge_ids=effective_attached_ids,  # #P5 透传
         )
         return ChatResponse(
             content=result["content"], session_id=session_id,
@@ -229,6 +287,7 @@ async def chat_with_file(
         message=full_message, session_id=session_id, db=db,
         user_id=current_user.id,
         thinking_mode=thinking_mode,  # 2026-07-13 #P1 透传
+        attached_knowledge_ids=effective_attached_ids,  # #P5 透传
     )
     return ChatResponse(
         content=result["content"],
@@ -284,9 +343,25 @@ async def chat_stream_route(
     - 流结束时 assistant 消息落库（含完整 accumulated text + rich_blocks + tool_trace）
     - 中断（CancelledError）时已累积 assistant text 作为 is_partial=True 落库
     - 异常（非中断）时同样落 partial + yield sync_required
+
+    # #P5 改进: attached_knowledge_ids 优先级:
+    #   - 显式传 (request.attached_knowledge_ids 非 None) → 用显式的 (临时覆盖)
+    #   - 没传 (None) → 自动从 chat_session_attached_documents 查用户全局附加
+    # 这样前端不用每次发消息都传 ID, 用户全局附加的文档会自动注入
     """
     async def event_generator() -> AsyncIterator[str]:
         try:
+            # #P5: 自动从 DB 读用户全局附加 (如果没显式传)
+            effective_attached_ids = request.attached_knowledge_ids
+            if effective_attached_ids is None:
+                from app.models.chat_session_attached_document import ChatSessionAttachedDocument
+                stmt = (
+                    select(ChatSessionAttachedDocument.knowledge_id)
+                    .where(ChatSessionAttachedDocument.user_id == current_user.id)
+                    .limit(8)
+                )
+                effective_attached_ids = [r[0] for r in (await db.execute(stmt)).all()]
+
             async for event in v2_agent.chat_stream(
                 message=request.message,
                 session_id=request.session_id,
@@ -295,6 +370,8 @@ async def chat_stream_route(
                 model=request.model,
                 # 2026-07-13 #P1 三档推理模式透传
                 thinking_mode=request.thinking_mode,
+                # #P5: 知识库手动附加文档 (显式传优先, 否则查用户全局)
+                attached_knowledge_ids=effective_attached_ids,
             ):
                 yield event.to_sse()
         except Exception as e:

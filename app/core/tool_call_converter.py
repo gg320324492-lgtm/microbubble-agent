@@ -86,8 +86,9 @@ def anthropic_messages_to_openai(
             if isinstance(content, str):
                 openai_messages.append({"role": "user", "content": content})
             elif isinstance(content, list):
-                # 分离 text 和 tool_result
+                # 分离 text / image / tool_result
                 text_parts = []
+                image_urls = []
                 tool_results = []
                 for block in content:
                     if not isinstance(block, dict):
@@ -95,6 +96,25 @@ def anthropic_messages_to_openai(
                     btype = block.get("type")
                     if btype == "text":
                         text_parts.append(block.get("text", ""))
+                    elif btype == "image":
+                        # #P5: Anthropic image block (含 base64 source) → OpenAI image_url content part
+                        # 不转 base64 → 直接用 data URL (OpenAI/Ollama 兼容)
+                        source = block.get("source", {})
+                        stype = source.get("type")
+                        if stype == "base64":
+                            media_type = source.get("media_type", "image/png")
+                            b64_data = source.get("data", "")
+                            image_urls.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{media_type};base64,{b64_data}",
+                                },
+                            })
+                        elif stype == "url":
+                            image_urls.append({
+                                "type": "image_url",
+                                "image_url": {"url": source.get("url", "")},
+                            })
                     elif btype == "tool_result":
                         # Anthropic tool_result 块 -> OpenAI tool message
                         tr_content = block.get("content", "")
@@ -111,10 +131,16 @@ def anthropic_messages_to_openai(
                             "tool_call_id": block.get("tool_use_id", ""),
                             "content": tr_text,
                         })
-                if text_parts:
+                # #P5: 构造 OpenAI multimodal content (text + image_url 数组)
+                if image_urls or text_parts:
+                    oai_content_parts = []
+                    for img in image_urls:
+                        oai_content_parts.append(img)
+                    for t in text_parts:
+                        oai_content_parts.append({"type": "text", "text": t})
                     openai_messages.append({
                         "role": "user",
-                        "content": "\n".join(text_parts),
+                        "content": oai_content_parts,
                     })
                 openai_messages.extend(tool_results)
 

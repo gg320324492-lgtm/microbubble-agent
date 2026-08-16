@@ -111,6 +111,7 @@ import { sseFetch } from '@/api/agent/sse'
 import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatHistoryStore } from '@/stores/chatHistory'
 import { useUiStore } from '@/stores/useUiStore'
+import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4: 资料库附加文档传递
 
 // ============================================================================
 // 类型定义
@@ -157,6 +158,8 @@ export interface ChatMessage {
   durationMs?: number
   type?: 'text' | 'image' | 'file'
   imageUrl?: string
+  // #P5+: 本消息附带的知识库文档 ID 列表 (消息级附件, 不跨消息常驻)
+  attachedDocs?: number[]
   // 2026-06-14 方案 C Stage 4：新增 4 个字段（对应 6 个新事件）
   intent?: { category: string; confidence: number; keywords?: string[]; reasoning?: string }
   plan?: Array<{ step: string; tool?: string; tool_use_id?: string; status: 'pending' | 'running' | 'done' }>
@@ -183,6 +186,8 @@ export interface SendOptions {
   text?: string
   file?: File | null
   image?: File | null
+  // #P5+: 消息气泡显示图片缩略图 (blob URL, 由调用方生成)
+  imageUrl?: string | null
 }
 
 // ============================================================================
@@ -504,10 +509,17 @@ export function useChatStream() {
   // --------------------------------------------------------------------------
 
   async function sendMessage(opts: SendOptions = {}) {
-    const content = (opts.text ?? '').trim()
+    let content = (opts.text ?? '').trim()
     const file = opts.file ?? null
     const img = opts.image ?? null
+    // #P5+: 读 store 当前附加, 发消息时绑到 userMsg.attachedDocs
+    const chatCtx = useChatContextStore()
+    const storeAttached = chatCtx.attachedDocuments.map(d => d.id)
     if (!content && !img && !file) return
+
+    // #P5+: 不需要 placeholder, 图片本身就是内容. 设为空字符串 (后端 service 允许只发图, 不输文字)
+    if (!content && img) content = ''
+    else if (!content && file) content = ''
     if (sendingSessions.has(sessionId.value)) return
 
     // ★ 2026-07-01 修复 bug 1a: 无 session 时(用户首次发消息) → 创建一个
@@ -544,7 +556,14 @@ export function useChatStream() {
       richBlocks: [],
       timestamp: new Date().toISOString(),
       type: img ? 'image' : file ? 'file' : 'text',
-      // #043: 客户端幂等键（用于重试不重复写 server）
+      // #P5+: 消息气泡显示缩略图. 用 opts.imageUrl 字符串值 (避免 ref 共享)
+      imageUrl: opts.imageUrl || undefined,
+      // #P5+: 消息气泡显示附加文档列表 (绑当前 store 全部 + AI 引用范围一致)
+      // 优先用 opts 显式传, 否则读前端 store (storeAttached 已读)
+      attachedDocs: opts.attachedDocs && opts.attachedDocs.length > 0
+        ? opts.attachedDocs
+        : (storeAttached && storeAttached.length > 0 ? storeAttached : undefined),
+      // #P5+: 客户端幂等键（用于重试不重复写 server）
       client_msg_id: `chat_user_${targetSessionId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     }
     targetMsgs.push(userMsg)
@@ -564,6 +583,8 @@ export function useChatStream() {
           tool_trace: {},
           message_metadata: { source: 'chat_stream_user_first' },
           client_msg_id: userMsg.client_msg_id,
+          // #P5+: 透传 image_url 让消息历史 (含刷新) 显示图片缩略图
+          image_url: userMsg.imageUrl,
         })
         if (persisted?.id) userMsg.server_id = persisted.id
       }
@@ -575,6 +596,8 @@ export function useChatStream() {
         tool_trace: {},
         message_metadata: { source: 'chat_stream_user' },
         client_msg_id: userMsg.client_msg_id,
+        // #P5+: 透传 image_url
+        image_url: userMsg.imageUrl,
       }).then((persisted) => {
         if (persisted?.id) userMsg.server_id = persisted.id
       })
@@ -629,6 +652,12 @@ export function useChatStream() {
         // finally 兜底走得到, 但若 finally 因外部异常跳过 (e.g. page unload race / persistSync throw),
         //   phase 会卡在 generating。直接显式 set, finally 兜底不会再被 isTerminalPhase 守卫拒绝。
         targetAssistant.phase = 'error'
+        // #P5+: 错误时移除 userMsg, 避免重试导致重复 push (错位堆叠)
+        const list = messagesBySession.value[targetSessionId]
+        if (list) {
+          const idx = list.indexOf(userMsg)
+          if (idx >= 0) list.splice(idx, 1)
+        }
         ElMessage.error(e.message || '发送失败')
       }
     } finally {
@@ -676,14 +705,19 @@ export function useChatStream() {
     })
 
     try {
+      // #P5: 不传 attached_knowledge_ids → 后端自动从 chat_session_attached_documents
+      // 查用户全局附加. 旧 #P4 代码会读前端 store, 现在 store 只作 UI 状态.
+      const sendPayload = {
+        message: content,
+        session_id: targetSessionId,
+        thinking_mode: thinkingMode,  // 2026-07-13 #P1 三档模式 (fast/balanced/deep)
+        // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
+        // attached_knowledge_ids 不传: 后端自动从 chat_session_attached_documents 查全局
+      }
+      console.log('[P5-send] sessionId=', targetSessionId, 'message=', content.slice(0, 30))
       for await (const evt of sseFetch(
         '/api/v1/chat/stream',
-        {
-          message: content,
-          session_id: targetSessionId,
-          thinking_mode: thinkingMode,  // 2026-07-13 #P1 三档模式 (fast/balanced/deep)
-          // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
-        },
+        sendPayload,
         { signal }
       )) {
         // snapshot/control 事件必须先落下 pending delta，保持服务端事件顺序。
@@ -1232,17 +1266,25 @@ export function useChatStream() {
 
   // #043: Server → Client 消息映射（sync_required refreshSession 用）
   function serverToClient(serverMsg: any): ChatMessage {
+    // 2026-08-16 #68: 历史消息缺 usage/durationMs 导致 .msg-meta 不渲染 → 所有按钮消失
+    // DB schema 把 usage + duration_ms 嵌套在 metadata dict, 这里解构到顶层字段
+    const meta = serverMsg.message_metadata || serverMsg.metadata || {}
     const m: ChatMessage = {
       id: `server_${serverMsg.id}`,
       role: serverMsg.role === 'assistant' ? 'assistant' : serverMsg.role === 'user' ? 'user' : 'assistant',
       content: serverMsg.content || '',
       richBlocks: serverMsg.rich_blocks || [],
-      toolTrace: serverMsg.tool_trace || [],
+      toolTrace: Array.isArray(serverMsg.tool_trace) ? serverMsg.tool_trace : [],
       timestamp: serverMsg.created_at || new Date().toISOString(),
       server_id: serverMsg.id,
       client_msg_id: serverMsg.client_msg_id,
       is_partial: !!serverMsg.is_partial,
       state: 'idle',
+      // #P5+: 用户上传图片的 MinIO 永久 URL (刷新后仍有效)
+      imageUrl: serverMsg.image_url || serverMsg.imageUrl || undefined,
+      // #68: 恢复历史消息的 usage/durationMs (从 message_metadata dict 解出)
+      usage: meta.usage || undefined,
+      durationMs: meta.duration_ms || undefined,
     }
     // ===== W99 +13 server 数据也可能残留 zombie phase，防御性 sanitize =====
     return sanitizeRestored(m)
@@ -1337,6 +1379,132 @@ export function useChatStream() {
   })
 
   // --------------------------------------------------------------------------
+  // 2026-08-16 #71: 用户编辑消息后重新发给 LLM 生成新回答 (ChatGPT 风格).
+  //
+  // 流程:
+  //   1) 前置: 后端 /resend endpoint 已 PATCH 内容 + DELETE 该 msg 之后所有消息
+  //   2) 前端: 把 messagesBySession 里该 msg 之后的所有消息 remove (与后端同步)
+  //   3) 在 messagesBySession 末尾 push 新 assistant 占位
+  //   4) 调 POST /api/v1/chat/sessions/{sid}/messages/{msg_id}/resend (SSE 流)
+  //   5) 处理事件 (与 sendSSE 相同逻辑, 但 URL 不同)
+  //
+  // 与 sendMessage 的关键区别:
+  //   - URL 不同 (resend 路径)
+  //   - 不重新 append user message (后端已 PATCH)
+  //   - 不删 user msg 自身, 只删其后续
+  // --------------------------------------------------------------------------
+  async function resendUserMessage(opts: {
+    userMsgId: string  // 前端 message.id (server_<id>)
+    serverId: number   // 后端 ChatMessage.id (走 URL path)
+    sessionId: string
+    newContent: string
+  }): Promise<void> {
+    const sid = opts.sessionId
+    const list = messagesBySession.value[sid] || []
+    // 找到对应 user msg 在列表里的 index
+    const idx = list.findIndex(m => m.id === opts.userMsgId)
+    if (idx < 0) {
+      console.warn('[resend] 未找到 user msg:', opts.userMsgId)
+      return
+    }
+    // 更新本地 user msg 内容 (前端立即反映)
+    list[idx].content = opts.newContent
+    list[idx].message_metadata = { ...(list[idx].message_metadata || {}), edited: true }
+
+    // 删 idx 之后的所有消息 (与后端 DELETE 对齐)
+    const removed = list.splice(idx + 1)
+
+    // 创建新 assistant 占位
+    const assistantMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      richBlocks: [],
+      toolTrace: [],
+      timestamp: new Date().toISOString(),
+      state: 'streaming',
+      phase: 'queued',
+      phaseStartedAt: Date.now(),
+      is_brief: true,
+      error: null,
+    }
+    list.push(assistantMsg)
+    activeAssistantMap.value[sid] = assistantMsg
+
+    abortControllers[sid]?.abort()
+    const controller = new AbortController()
+    abortControllers[sid] = controller
+    sendingSessions.add(sid)
+
+    try {
+      const sendPayload = {
+        role: 'user',
+        content: opts.newContent,
+        thinking_mode: ui.thinkingMode,
+        // 复用原 client_msg_id 走幂等键 (resend 是更新不是新建)
+        client_msg_id: `resend_${opts.serverId}_${Date.now()}`,
+      }
+      const textDeltaBatcher = createTextDeltaBatcher((delta) => {
+        const targetAssistant = activeAssistantMap.value[sid] || assistantMsg
+        if (targetAssistant.state === 'aborted') return
+        const nextContent = (targetAssistant.content || '') + delta
+        targetAssistant.content = stripMetaSuffix(nextContent)
+        persistSessionDebounced(sid)
+      })
+
+      for await (const evt of sseFetch(
+        `/api/v1/chat/sessions/${encodeURIComponent(sid)}/messages/${opts.serverId}/resend`,
+        sendPayload,
+        { signal: controller.signal }
+      )) {
+        if (evt.type !== 'text_delta') textDeltaBatcher.flush()
+        const currentAssistant = activeAssistantMap.value[sid] || assistantMsg
+        if (currentAssistant.state === 'aborted') {
+          persistSessionDebounced(sid)
+          continue
+        }
+        // 复用 sendSSE 的事件处理: 这里简化 — 只关心 text_delta + done + message_persisted
+        switch (evt.type) {
+          case 'text_delta':
+            textDeltaBatcher.push(stripFakeXml(evt.delta || ''))
+            break
+          case 'message_persisted':
+            if (evt.persisted_role === 'assistant') {
+              currentAssistant.server_id = evt.message_id
+              currentAssistant.is_partial = evt.persisted_is_partial ?? false
+            }
+            break
+          case 'done':
+            currentAssistant.usage = evt.usage
+            currentAssistant.durationMs = evt.duration_ms
+            currentAssistant.state = 'idle'
+            break
+          case 'error':
+            currentAssistant.error = evt.message
+            currentAssistant.state = 'idle'
+            break
+        }
+        persistSessionDebounced(sid)
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        console.error('[resend] error', e)
+        assistantMsg.error = e.message || '重新发送失败'
+        ElMessage.error(e.message || '重新发送失败')
+      }
+    } finally {
+      sendingSessions.delete(sid)
+      const finalAssistant = activeAssistantMap.value[sid] || assistantMsg
+      finalAssistant.state = 'idle'
+      finalAssistant.is_brief = false
+      if (activeAssistantMap.value[sid] === assistantMsg) {
+        delete activeAssistantMap.value[sid]
+      }
+      persistSessionSync(sid)
+    }
+  }
+
+  // --------------------------------------------------------------------------
   // 返回 API（UI 层用）
   // --------------------------------------------------------------------------
   return {
@@ -1357,6 +1525,8 @@ export function useChatStream() {
     sendMessage,
     // 2026-06-14 方案 C Stage 4：停止生成按钮
     stopGeneration,
+    // 2026-08-16 #71: ChatGPT 风格编辑消息后重发
+    resendUserMessage,
 
     // 辅助
     playTTS,

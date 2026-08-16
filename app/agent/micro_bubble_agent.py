@@ -189,6 +189,87 @@ async def _build_follow_up_context(db, session_id: str, query: str) -> str:
         return ""
 
 
+async def _build_attached_knowledge_block(db, knowledge_ids: List[int]) -> str:
+    """从知识库加载用户手动附加的文档, 拼成 system context block。
+
+    2026-08-15 #P4: 资料库 → 聊天闭环核心。
+    - 硬上限 8 条 (防 system prompt 爆炸)
+    - 每条 content 截断 2000 字
+    - 按输入顺序保持
+    - 失败 / 不存在 / 已删除 / 网盘文件 静默跳过 (best-effort)
+    """
+    logger.info(f"[P4-attached] 收到 {len(knowledge_ids)} 个 ID: {knowledge_ids[:10]}")
+    try:
+        # 1. 去重 + 截断到上限
+        seen: set = set()
+        unique_ids: List[int] = []
+        for kid in (knowledge_ids or [])[:8]:
+            try:
+                kid_int = int(kid)
+            except (ValueError, TypeError):
+                continue
+            if kid_int and kid_int not in seen:
+                seen.add(kid_int)
+                unique_ids.append(kid_int)
+
+        if not unique_ids:
+            return ""
+
+        # 2. 查库 (复用与 KB list 相同的 storage_mode 过滤, 避免 drive 文件泄露)
+        from app.models.knowledge import Knowledge
+        from sqlalchemy import select
+        result = await db.execute(
+            select(Knowledge).where(
+                Knowledge.id.in_(unique_ids),
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "kb",
+            )
+        )
+        rows = list(result.scalars().all())
+        if not rows:
+            return ""
+
+        # 3. 按输入顺序排序
+        id_order = {kid: i for i, kid in enumerate(unique_ids)}
+        rows.sort(key=lambda r: id_order.get(r.id, 999))
+
+        # 4. 拼 system prompt block
+        lines = [
+            "## 【用户手动附加的知识库文档】(本轮对话的**强制参考来源**, 优先级高于历史对话和工具检索)",
+            "",
+            f"用户从项目知识库手动选择了 **{len(rows)} 份文档**作为本次对话的强制参考资料。",
+            "",
+            "**重要规则**:",
+            "1. **必须**基于以下文档内容回答用户当前问题, 不要被历史对话中的其他主题干扰",
+            "2. 如果当前问题与历史对话主题不同 (例如历史在谈声纹, 附加文档是微纳米气泡), 以**附加文档**为准",
+            "3. **必须**在回答中引用文档 ID (如 [123]) 让用户知道信息来源",
+            "4. 不要去调用 search_knowledge 工具检索其他文档 — 用户已经手动指定了参考来源",
+            "",
+        ]
+        for r in rows:
+            content_preview = (r.content or "")[:2000]
+            if len(r.content or "") > 2000:
+                content_preview += "\n... (内容过长, 已截断)"
+            lines.append(f"### [{r.id}] {r.title}")
+            if r.category:
+                lines.append(f"分类: {r.category}")
+            tags = r.tags or []
+            if tags:
+                lines.append(f"标签: {', '.join(tags)}")
+            if r.summary:
+                lines.append(f"摘要: {r.summary[:300]}")
+            lines.append("")
+            lines.append("```")
+            lines.append(content_preview)
+            lines.append("```")
+            lines.append("")
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.warning(f"build_attached_knowledge_block failed (best-effort): {e}")
+        return ""
+
+
 def _window_messages(messages: List[Dict]) -> List[Dict]:
     """窗口化 + 按消息 id 语义去重（进 LLM 前调用）
 
@@ -439,6 +520,8 @@ class MicroBubbleAgent:
         model: Optional[str] = None,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode: Optional[str] = None,
+        # #P5: 用户手动附加的知识库文档 ID 列表
+        attached_knowledge_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """对话接口（非流式）
 
@@ -466,7 +549,13 @@ class MicroBubbleAgent:
         messages.append({"role": "user", "content": content})
 
         # 3. 构造 system prompt
-        system = await self._build_system_prompt(user_id, message, db)
+        system = await self._build_system_prompt(user_id, message, db) if user_id else get_system_prompt()
+
+        # #P5: 注入用户手动附加的文档 (与 chat_stream 对齐)
+        if attached_knowledge_ids and db is not None:
+            attached_block = await _build_attached_knowledge_block(db, attached_knowledge_ids)
+            if attached_block:
+                system = system + "\n" + attached_block
 
         # 4. 调用 ChatEngine
         result = await self.engine.chat_with_brief_and_detail(
@@ -479,6 +568,8 @@ class MicroBubbleAgent:
             synthesis_model_override=model,
             # 2026-07-13 #P1 透传
             thinking_mode=thinking_mode,
+            # #P5: 透传附加文档 ID → 屏蔽 RAG 工具 (与 chat_stream 一致)
+            attached_knowledge_ids=attached_knowledge_ids,
         )
 
         # 5. 持久化 session（截断到 window size）
@@ -509,6 +600,8 @@ class MicroBubbleAgent:
         model: Optional[str] = None,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode: Optional[str] = None,
+        # 2026-08-15 #P4: 用户手动附加的知识库文档 ID 列表, 注入 system prompt
+        attached_knowledge_ids: Optional[List[int]] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式对话接口
 
@@ -580,6 +673,14 @@ class MicroBubbleAgent:
             if context_block:
                 system = system + "\n" + context_block
 
+        # 2026-08-15 #P4: 用户从知识库手动附加的文档 → 注入 system prompt (优先参考来源)
+        logger.info(f"[P4-chat_stream] 收到 attached_knowledge_ids: {attached_knowledge_ids}")
+        if attached_knowledge_ids and db is not None:
+            attached_block = await _build_attached_knowledge_block(db, attached_knowledge_ids)
+            logger.info(f"[P4-chat_stream] block 长度: {len(attached_block)} chars")
+            if attached_block:
+                system = system + "\n" + attached_block
+
         # 4. #043 持久化入场
         # 关键：所有持久化操作都用 try/except 兜底，绝不阻塞流式
         # 幂等键：同一 stream 重试时（网络断开重连）不会重复落库
@@ -649,6 +750,8 @@ class MicroBubbleAgent:
             # 2026-07-13 #P1 透传 + CHAT-P1-B 复用预分类
             thinking_mode=thinking_mode,
             preclassified_intent=intent,
+            # #P5: 透传 attached_knowledge_ids → 屏蔽 RAG 工具
+            attached_knowledge_ids=attached_knowledge_ids,
         )
 
         try:
@@ -704,6 +807,7 @@ class MicroBubbleAgent:
                         results=retrieved_chunks,
                     )
                     if persist_enabled:
+                        logger.info(f"[P5-debug] 进入 assistant append, assistant_text len={len(assistant_text) if assistant_text else 0}")
                         try:
                             from app.services import chat_history_service as chat_svc
                             # 把 accumulated rich_blocks + tool_trace + intent + critique + usage
@@ -748,7 +852,6 @@ class MicroBubbleAgent:
                                 f"[chat_stream persist] assistant_msg persisted: "
                                 f"msg_id={assistant_msg_id} len={len(assistant_text)}"
                             )
-                            # [CHAT-P0-A A5] 反馈锚点: 补发带 message_id 的 done 事件
                             # （前端可据 message_id 做"这个回答没用"反馈）
                             # 注意: text_without_json 必须复用首个 done 的干净文本
                             # (event.text_without_json, 已剥 fake XML/元话语) —
@@ -763,14 +866,20 @@ class MicroBubbleAgent:
                                 model=event.model,
                                 thinking_tokens_used=event.thinking_tokens_used,
                             )
-                            # [CHAT-P1-E E2] 追问 chips: 从 last_turn.topics 派生 1-3 个
-                            # 模板追问 (best-effort, 绝不阻塞主链路)
+                            # [CHAT-P1-E E2] 追问 chips: 优先 LLM 生成对话式追问（失败降级到本地启发式）
                             try:
-                                suggestions = self._build_followup_suggestions(
+                                suggestions = await self._build_smart_followups_with_llm(
                                     assistant_text=assistant_text,
                                     tool_trace=assistant_tool_trace,
                                     thinking_mode=thinking_mode,
                                 )
+                                if not suggestions:
+                                    # LLM 调用失败 / 超时 → 降级到本地启发式
+                                    suggestions = self._build_followup_suggestions(
+                                        assistant_text=assistant_text,
+                                        tool_trace=assistant_tool_trace,
+                                        thinking_mode=thinking_mode,
+                                    )
                                 if suggestions:
                                     yield StreamEvent(
                                         type="suggestions",
@@ -907,6 +1016,9 @@ class MicroBubbleAgent:
 
     # =========================================================================
     # [CHAT-P1-E E2] 追问 chips 生成 (best-effort, 绝不阻塞主链路)
+    # W-N 2026-08-14: 重写为"对话式"追问 — 不再用固定模板
+    # ("展开讲讲 X"、"具体说说 X"、"还有哪些关于 X 的内容"),
+    # 而是根据 AI 回复内容、工具调用 trace、thinking_mode 智能生成。
     # =========================================================================
     def _build_followup_suggestions(
         self,
@@ -914,73 +1026,337 @@ class MicroBubbleAgent:
         tool_trace: List[Dict[str, Any]],
         thinking_mode: str = "balanced",
     ) -> List[str]:
-        """从 assistant 回答 + 工具调用派生 1-3 个追问模板 (best-effort, 无 LLM 调用)
+        """从 assistant 回答 + 工具调用派生 1-3 个追问 (best-effort, 无 LLM 调用)
 
-        设计原则:
-        - **绝不**调 LLM (避免延迟阻塞主链路)
-        - 从工具调用 trace 提取关键 topic (search_knowledge / web_search / hybrid_retrieve)
-        - 兜底模板从回答前 100 字提取关键词
-        - 最多 3 个 chip, 少于 1 个返回空 list (前端不渲染)
+        三种生成路径（按优先级）:
+        1. 工具调用 trace 提取精确 topic → 精确模板
+        2. AI 回复文本提取关键句（数字/单位/专有名词）→ 追问具体细节
+        3. 兜底: 基于 thinking_mode 深度
         """
         suggestions: List[str] = []
         try:
-            # 1. 从工具调用 trace 提取 topic
-            topics: List[str] = []
-            for t in (tool_trace or []):
-                if t.get("type") != "tool_use":
-                    continue
-                tool_name = t.get("name") or ""
-                tool_input = t.get("input") or {}
-                # 从 search 工具的 query 提取 topic
-                if tool_name in ("search_knowledge", "web_search", "hybrid_retrieve"):
-                    query = (tool_input.get("query") or tool_input.get("q") or "").strip()
-                    if query and len(query) < 30:
-                        topics.append(query)
+            # 1. 从工具调用 trace 提取 topic + 上下文
+            topic_context = self._extract_topic_from_tool_trace(tool_trace or [])
 
-            # 2. 从 assistant 文本提取关键词 (前 100 字, 简单按标点切分)
-            if not topics and assistant_text:
-                snippet = assistant_text.strip()[:100]
-                # 按中英文标点和空格切分, 取 2-5 字短词
-                import re as _re
-                words = _re.split(r'[，。！？；\s,.!?;]+', snippet)
-                for w in words:
-                    w = w.strip()
-                    if 2 <= len(w) <= 8 and _re.search(r'[一-龥]', w):
-                        topics.append(w)
-                    if len(topics) >= 3:
-                        break
+            # 2. 从 AI 回复文本提取关键句
+            text_topics = self._extract_topic_from_assistant_text(assistant_text or "")
 
-            # 3. 派生模板
-            if topics:
-                t1 = topics[0]
-                suggestions.append(f"展开讲讲 {t1}")
-            if len(topics) >= 2:
-                t2 = topics[1]
-                suggestions.append(f"具体说说 {t2}")
-            if len(topics) >= 3:
-                t3 = topics[2]
-                suggestions.append(f"还有哪些关于 {t3} 的内容")
-            else:
-                # 兜底: 加一个通用的"举个例子"追问 (deep 模式更深入)
-                if thinking_mode == "deep":
-                    suggestions.append("能举个具体例子吗")
+            # 合并 topic（去重）
+            all_topics = []
+            seen = set()
+            for t in topic_context + text_topics:
+                if t and t not in seen and len(t) >= 2:
+                    seen.add(t)
+                    all_topics.append(t)
+                if len(all_topics) >= 3:
+                    break
+
+            # 3. 智能生成追问
+            suggestions = self._build_smart_followups(all_topics, thinking_mode or "balanced")
+
+            # 兜底: 完全没有 topic 时给通用对话追问
+            if not suggestions:
+                if (thinking_mode or "").lower() == "deep":
+                    suggestions = ["能举个具体研究案例吗？", "还有哪些相关方向？"]
                 else:
-                    suggestions.append("能再说详细一点吗")
+                    suggestions = ["能再详细说说吗？", "有什么实际应用场景？"]
 
             # 去重 + 截断到 3 个
-            seen = set()
+            seen2 = set()
             unique = []
             for s in suggestions:
-                if s not in seen:
-                    seen.add(s)
+                if s and s not in seen2:
+                    seen2.add(s)
                     unique.append(s)
                 if len(unique) >= 3:
                     break
-            return unique
+            return unique[:3]
         except Exception:
             return []
 
+    def _extract_topic_from_tool_trace(self, tool_trace: List[Dict[str, Any]]) -> List[str]:
+        """从工具调用 trace 提取对话式 topic — 区分工具类型用不同模板
+
+        Args:
+            tool_trace: 工具调用列表 [{"type": "tool_use", "name": "...", "input": {...}}]
+
+        Returns:
+            topic 列表（带短上下文，最多 3 个）
+        """
+        topics: List[str] = []
+        try:
+            for t in tool_trace:
+                if not isinstance(t, dict) or t.get("type") != "tool_use":
+                    continue
+                tool_name = t.get("name") or ""
+                tool_input = t.get("input") or {}
+
+                # 按工具类型产生不同模板
+                if tool_name in ("search_knowledge", "web_search", "hybrid_retrieve"):
+                    query = (tool_input.get("query") or tool_input.get("q") or "").strip()
+                    if not query:
+                        continue
+                    # 限制 5-15 字
+                    if len(query) > 15:
+                        query = query[:15]
+                    topics.append(query)
+                elif tool_name in ("get_meeting_transcript", "search_meetings"):
+                    mt = (tool_input.get("meeting_id") or tool_input.get("title") or "").strip()
+                    if mt:
+                        topics.append(str(mt)[:15])
+                elif tool_name.startswith("task_"):
+                    # 任务相关
+                    tname = (tool_input.get("task_name") or tool_input.get("title") or "").strip()
+                    if tname:
+                        topics.append(str(tname)[:15])
+                else:
+                    # 其他工具: 用工具名+第一个 string 参数
+                    params = tool_input.get("query") or tool_input.get("q") or tool_input.get("name") or ""
+                    if isinstance(params, str) and params.strip():
+                        topics.append(params.strip()[:15])
+
+                if len(topics) >= 3:
+                    break
+        except Exception:
+            pass
+        return topics
+
+    def _extract_topic_from_assistant_text(self, assistant_text: str) -> List[str]:
+        """从 AI 回复文本提取关键句 — 优先选含数字/单位/专有名词的句子
+
+        Args:
+            assistant_text: AI 完整回复
+
+        Returns:
+            关键句子列表（最多 3 个）
+        """
+        if not assistant_text:
+            return []
+
+        import re as _re
+
+        # 按中英文标点切分完整句子
+        sentences = _re.split(r'[。！？\n]+', assistant_text)
+        scored = []
+        for s in sentences:
+            s = s.strip()
+            if not s or len(s) < 5 or len(s) > 80:
+                continue
+
+            score = 0
+            # 含数字/单位 → 高分（"X mg/L"、"Y 秒"、"Z 步"）
+            if _re.search(r'\d+(\.\d+)?\s*(mg|μg|kg|g|cm|mm|°C|秒|分钟|小时|%)', s):
+                score += 5
+            elif _re.search(r'\d', s):
+                score += 2
+            # 含专有名词 → 中分
+            if _re.search(r'(课题组|实验室|项目|论文|气泡|臭氧|反应器|传感器|浓度|粒径)', s):
+                score += 3
+            # 包含列表标记
+            if _re.search(r'[\d一二三四五六七八九十]+[、，,]\s*[\d一二三四五六七八九十]', s):
+                score += 3
+            # 包含技术动作
+            if _re.search(r'(校准|测试|测量|分析|记录|添加|调整)', s):
+                score += 2
+            # 包含 "例如" 类短语（暗示举例）
+            if _re.search(r'(例如|比如|典型|通常)', s):
+                score += 1
+
+            if score > 0:
+                scored.append((score, s))
+
+        # 按分数排序, 取前 3 (每条限制 30 字, 保留完整名词)
+        scored.sort(key=lambda x: -x[0])
+        result = []
+        for _, s in scored[:3]:
+            if len(s) > 30:
+                s = s[:30].rstrip('，,。 ')
+            result.append(s)
+        return result
+
+    def _build_smart_followups(self, topics: List[str], thinking_mode: str) -> List[str]:
+        """根据 topic + thinking_mode 生成"对话式"追问
+
+        不再用固定模板, 而是基于:
+
+        - topic 是否有数字 → 追问"具体数值范围/标准"
+        - topic 是否有动作（校准/测试）→ 追问"具体操作步骤"
+        - topic 是否是专有名词 → 追问"定义/原理"
+        - thinking_mode 深度 → 追问角度
+
+        Args:
+            topics: 1-3 个 topic
+            thinking_mode: fast / balanced / deep
+
+        Returns:
+            1-3 个追问
+        """
+        import re as _re
+        suggestions: List[str] = []
+
+        thinking_mode = (thinking_mode or "balanced").lower()
+
+        for topic in topics[:3]:
+            if not topic:
+                continue
+
+            # 按 topic 内容判断追问方向 — 优先级: 会议 > 动作 > 名词 > 数字
+            if _re.search(r'(会议|纪要|讨论|周会|例会)', topic):
+                # 会议纪要 → 追问关键点
+                if thinking_mode == "deep":
+                    suggestions.append(f"能详细列出『{topic}』的关键发现吗？")
+                else:
+                    suggestions.append(f"『{topic}』主要讨论了什么？")
+            elif _re.search(r'(校准|测试|测量|分析|采集|处理|添加)', topic):
+                # 动作 → 追问步骤
+                suggestions.append(f"具体怎么操作？")
+            elif _re.search(r'(课题组|实验室|项目|论文|气泡|装置|反应器|系统|设备)', topic):
+                # 名词 → 追问定义/原理（优先于数字分支）
+                if thinking_mode == "deep":
+                    suggestions.append(f"能详细解释一下『{topic}』的原理吗？")
+                else:
+                    suggestions.append(f"这个『{topic}』主要做什么？")
+            elif _re.search(r'\d+\s*(mg|μg|kg|g|cm|mm|°C|秒|分钟|小时|%)', topic):
+                # 数字 + 单位 → 追问精度/范围
+                if thinking_mode == "deep":
+                    suggestions.append(f"这个数值的合理范围是多少？")
+                else:
+                    suggestions.append(f"参考资料里这个数值通常是多少？")
+            else:
+                # 通用：基于 thinking_mode
+                if thinking_mode == "deep":
+                    suggestions.append(f"『{topic}』的深层原理是什么？")
+                elif thinking_mode == "fast":
+                    suggestions.append(f"和『{topic}』相关的还有哪些？")
+                else:
+                    suggestions.append(f"能介绍下『{topic}』吗？")
+
+        # 如果 topics 太少但还有空间, 加一个 thinking_mode 风格的通用追问
+        if not suggestions:
+            if thinking_mode == "deep":
+                suggestions.append("能深入分析一下吗？")
+            else:
+                suggestions.append("能举个例子吗？")
+        elif len(suggestions) < 2:
+            if thinking_mode == "deep":
+                suggestions.append("还有哪些延伸方向？")
+            else:
+                suggestions.append("它在实际中怎么用？")
+
+        return suggestions[:3]
+
+    async def _build_smart_followups_with_llm(
+        self,
+        assistant_text: str,
+        tool_trace: List[Dict[str, Any]],
+        thinking_mode: str = "balanced",
+    ) -> List[str]:
+        """调用 LLM 生成 3 个对话式追问（基于 AI 回复内容具体场景）
+
+        W-N 2026-08-14: 硬调用 LLM 替换固定模板池 — 真正"对话式"
+
+        失败降级：调用失败 / 网络异常 → 使用 _build_smart_followups 启发式结果
+        超时：5 秒（避免阻塞主链路，但用户能接受）
+
+        默认走本地 ollama（LLM_BACKEND=ollama 时），没有 ollama 时 fallback 到 Claude API。
+
+        Args:
+            assistant_text: AI 完整回复
+            tool_trace: 工具调用 trace
+            thinking_mode: fast / balanced / deep
+
+        Returns:
+            1-3 个对话式追问 string 列表
+        """
+        try:
+            from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response, parse_llm_json
+            from app.config import settings as _settings
+            import asyncio
+            import aiohttp
+            import os
+
+            if not assistant_text or not assistant_text.strip():
+                return []
+
+            # 提取关键 context 给 LLM
+            snippet = assistant_text.strip()
+            if len(snippet) > 800:
+                snippet = snippet[:800] + "..."
+
+            tool_summary = []
+            for t in (tool_trace or [])[:3]:
+                if isinstance(t, dict) and t.get("type") == "tool_use":
+                    name = t.get("name") or ""
+                    ti = t.get("input") or {}
+                    q = ti.get("query") or ti.get("q") or ti.get("title") or ti.get("meeting_id") or ""
+                    if isinstance(q, str):
+                        tool_summary.append(f"{name}({q})")
+            tool_summary_str = ", ".join(tool_summary) if tool_summary else "无"
+
+            prompt = f"""你是课题组智能助手"小气"，刚回答了用户的问题，请基于回答内容生成 3 个用户最可能想继续追问的方向。
+
+要求：
+- 每条 8-25 字、像真人对话（不要"展开讲讲"、"具体说说"、"还有哪些关于"这种机械模板）
+- 必须是针对这条具体回答的内容（不要宽泛的"举例"、"延伸"）
+- 只返回 JSON: {{"questions": ["...", "...", "..."]}}
+
+用户问题/回答上下文：
+{snippet}
+
+工具调用：{tool_summary_str}
+
+直接输出 JSON，不要其他文字。"""
+
+            backend = getattr(_settings, "LLM_BACKEND", "anthropic") or "anthropic"
+            model_name = "qwen3:8b" if backend == "ollama" else get_default_model()
+
+            # 优先走 ollama 本地（避免 Claude API 模型名限制）
+            if backend == "ollama":
+                # OLLAMA_BASE_URL 可能是 "http://localhost:11434/v1" / "http://ollama:11434/v1"
+                # 提取 host:port, 拼接 "/api/chat"
+                from urllib.parse import urlparse
+                parsed_url = urlparse(_settings.OLLAMA_BASE_URL)
+                host = parsed_url.hostname or "localhost"
+                port = parsed_url.port or 11434
+                # 优先用 OLLAMA_HOST 环境变量（"host.docker.internal" 或 "ollama"）
+                # 容器内 localhost 解析不到 ollama 服务
+                if host == "localhost" or host == "127.0.0.1":
+                    host = os.environ.get("OLLAMA_HOST") or "ollama"
+                ollama_url = f"http://{host}:{port}/api/chat"
+                async with aiohttp.ClientSession() as session:
+                    # ollama 首次调用需 load 模型到显存（30-60s）
+                    async with asyncio.timeout(60.0):
+                        async with session.post(ollama_url, json={
+                            "model": model_name,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "stream": False,
+                        }) as resp:
+                            data = await resp.json()
+                            text = data.get("message", {}).get("content", "").strip()
+            else:
+                # Claude API 路径
+                client = get_anthropic_client()
+                response = await asyncio.wait_for(
+                    client.messages.create(
+                        model=model_name,
+                        max_tokens=300,
+                        messages=[{"role": "user", "content": prompt}],
+                    ),
+                    timeout=5.0,
+                )
+                text = extract_text_from_response(response).strip()
+
+            parsed = parse_llm_json(text) if 'parsed' in dir() else __import__('json').loads(text)
+            questions = parsed.get("questions") or []
+            valid = [q for q in questions if isinstance(q, str) and q.strip() and 5 <= len(q) <= 50]
+            return valid[:3]
+        except Exception as e:
+            logger.warning(f"[build_followups] LLM 生成失败，降级到启发式: {e}")
+            return []
+
     # =========================================================================
+    # 内部方法
+    # =========================================================================    # =========================================================================
     # 内部方法
     # =========================================================================
 

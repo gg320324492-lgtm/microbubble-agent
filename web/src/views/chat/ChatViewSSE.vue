@@ -20,7 +20,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny, View, Notebook } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, VideoPause, MagicStick, Cpu, Moon, Sunny, View, Notebook, Close, Document } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 // RichContent 也已封装到 ChatMessageRow.vue, 此处不再直接 import
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
@@ -38,6 +38,7 @@ import ChatMessageRow from '@/components/chat/ChatMessageRow.vue'  // W100 +45 �
 // ===== W100 +45 P3-VIRTUAL RETRY: 下列组件已封装到 ChatMessageRow.vue, 此处不再直接 import =====
 // ThinkingCapsule / ToolTraceItem / PlanSteps / ContentBriefDetail / EventBadges /
 // ImageWithFallback / ChatMessageActions / ProEntries / FollowUpChips / RichContent
+import InputToolPanel from '@/components/chat/InputToolPanel.vue'  // ChatGPT 风格 "+" 工具面板
 import ContextPanel from '@/components/chat/ContextPanel.vue'  // W100 +29 上下文可见性面板
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useMemo } from '@/composables/useMemo'
@@ -46,6 +47,7 @@ import { useChatStream, type ChatMessage } from '@/composables/chat/useChatStrea
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUiStore } from '@/stores/useUiStore'
 import { useChatSessionsStore } from '@/stores/chatSessions'
+import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4: 资料库附加文档
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { renderMarkdown } from '@/utils/markdown'
 import { formatTimeDivider } from '@/utils/timeDivider'
@@ -83,6 +85,8 @@ const {
   stopGeneration,  // 2026-06-14 方案 C Stage 4：停止生成按钮
   playTTS,
   asrRecognize,
+  // 2026-08-16 #71: ChatGPT 风格 — 编辑消息后重发
+  resendUserMessage,
 } = useChatStream()
 
 // Cache the message-id lookup used by regenerate; unrelated UI updates reuse it.
@@ -143,6 +147,9 @@ const searchMatches = ref<HTMLElement[]>([])
 const searchIndex = ref(-1)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 
+// ChatGPT 风格 "+" 工具面板开关
+const toolPanelOpen = ref(false)
+
 // W-N 周期: 图片灯箱
 const lightboxUrl = ref('')
 const showLightbox = ref(false)
@@ -172,6 +179,23 @@ function quoteMsg(btn: HTMLElement) {
 }
 function clearQuote() {
   quotedMessage.value = null
+}
+
+// 2026-08-16 #P5+: 清除已选图片预览 (注意: 不要 revokeObjectURL,
+// 因为 userMsg.imageUrl 引用同一个 URL, 消息气泡需要继续显示)
+function clearSelectedImage() {
+  selectedImage.value = null
+  imagePreviewUrl.value = ''
+}
+function clearSelectedFile() {
+  selectedFile.value = null
+}
+// 2026-08-16 #P5+: 格式化文件大小 (B/KB/MB)
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return ''
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 function addQuoteRef(card: HTMLElement) {
   card.classList.add('quote-ref')
@@ -421,6 +445,8 @@ async function sendMessage(text?: string) {
   inputText.value = ''
   const file = selectedFile.value
   const img = selectedImage.value
+  // 2026-08-16 #P5+: 先读 imagePreviewUrl 再清空 (保留给消息气泡用)
+  const currentImageUrl = imagePreviewUrl.value
   selectedImage.value = null
   imagePreviewUrl.value = ''
   selectedFile.value = null
@@ -431,11 +457,41 @@ async function sendMessage(text?: string) {
   await scrollToBottom(true)
 
   try {
+    // 2026-08-16 #P5+: 如果带图片, 先上传到 MinIO 拿永久 URL (避免刷新后 blob URL 失效)
+    let uploadedImageUrl: string | null = currentImageUrl
+    if (img && currentImageUrl && currentImageUrl.startsWith('blob:')) {
+      try {
+        const formData = new FormData()
+        formData.append('image', img)
+        const uploadRes = await fetch('/api/v1/chat/upload-image', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+          body: formData,
+        })
+        if (uploadRes.ok) {
+          const data = await uploadRes.json()
+          uploadedImageUrl = data.url  // 永久 MinIO URL
+          console.log('[P5] 图片已上传到 MinIO:', uploadedImageUrl)
+        } else {
+          console.warn('[P5] 图片上传失败, 降级用 blob URL:', uploadRes.status)
+        }
+      } catch (uploadErr) {
+        console.error('[P5] 图片上传异常, 降级用 blob URL:', uploadErr)
+      }
+    }
+
     await sendMessageCore({
       text: content,
       file,
       image: img,
+      // #P5+: 传 imageUrl (MinIO 永久 URL, 刷新后仍有效)
+      imageUrl: uploadedImageUrl,
     })
+    // #P5+: **立即**清空附加文档 (不等 sendMessageCore 完成, 否则用户看到 AI 回复期间顶部块还显示)
+    // 顶部块立即消失, 后端 chat_session_attached_documents 仍存 (供 AI 引用)
+    if (chatCtx.count > 0) {
+      chatCtx.clear().catch(e => console.warn('[P5] 清空附加失败 (后台清, 不阻塞)', e))
+    }
   } catch {
     // 错误已由 useChatStream 内部处理
   } finally {
@@ -515,6 +571,32 @@ function onDrop(e: DragEvent) {
 // 录音面板
 // ============================================================================
 function toggleVoiceMode() { voiceMode.value = !voiceMode.value }
+
+// ChatGPT 风格: 单击麦克风触发语音对话入口 — 当前为占位, 提示功能开发中
+// 后续接入: 长按说话 / Web Speech API / 持续对话
+function onVoiceTrigger() {
+  ElMessage.info('🎤 语音对话功能开发中，目前可使用下方录音按钮')
+  // 保留录音按钮入口, 后续可同时实现长按说话 / 短按占位
+  toggleVoiceMode()
+}
+
+// 2026-08-15 #P4: "从资料库添加" → 跳知识库并启动选择模式
+const chatCtx = useChatContextStore()
+function onPickFromKnowledge() {
+  if (!sessionId.value) {
+    // 没 session 时, 让 useChatStream.sendMessage 自己创建一个 (line 524 已有逻辑)
+    chatCtx.startSelecting('default')
+  } else {
+    chatCtx.startSelecting(sessionId.value)
+  }
+  router.push('/knowledge')
+}
+
+// InputToolPanel 触发但未实现的功能 (placeholder 提示)
+function onFeatureNotReady(name: string) {
+  ElMessage.info(`${name} 功能开发中，敬请期待`)
+}
+
 function onRecordStart() {
   ElMessage.info('🎤 录音中...')
 }
@@ -586,6 +668,16 @@ async function regenerate(msg: ChatMessage) {
  * - clipboard API 不可用 (HTTP / 老 Safari) → fallback execCommand
  * - 复制失败 → ElMessage 错误提示
  */
+// 2026-08-16 #71: ChatGPT 风格 — 用户编辑消息后重发
+async function onUserEditSend(payload: { msg: any; newContent: string; serverId: number; sessionId: string }) {
+  await resendUserMessage({
+    userMsgId: payload.msg.id,
+    serverId: payload.serverId,
+    sessionId: payload.sessionId,
+    newContent: payload.newContent,
+  })
+}
+
 async function copyMessage(msg: ChatMessage) {
   const text = (msg?.content || '').trim()
   if (!text) return
@@ -658,10 +750,26 @@ function onProEntryClick(msg: ChatMessage, kind: 'graph' | 'formula' | 'hypothes
 
 onMounted(async () => {
   await nextTick()
+  // #P5: 加载用户全局附加文档 (从 server, 跨刷新持久)
+  chatCtx.loadFromServer()
   scrollToBottom()
   // W-N 周期: Ctrl+F 搜索
   document.addEventListener('keydown', handleSearchKeydown)
 })
+
+// #P5: 格式化附件时间 (友好显示)
+function formatAttachedTime(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = Date.now()
+  const diff = Math.floor((now - d.getTime()) / 1000)
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleSearchKeydown)
@@ -760,6 +868,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
               type="primary"
               round
               size="default"
+              class="header-new-session"
               aria-label="新建对话"
               title="新建对话"
               @click="onNewSession"
@@ -829,16 +938,15 @@ function handleSearchKeydown(e: KeyboardEvent) {
            > VIRTUAL_THRESHOLD 改虚拟渲染 (absolute positioning + ChatMessageRow) -->
       <template v-if="!virtualList.isVirtualized.value">
       <TransitionGroup name="msg">
-      <template v-for="(msg, idx) in messages" :key="msg.id || idx">
-        <div v-if="idx > 0 && new Date(msg.timestamp) - new Date(messages[idx-1].timestamp) > 5*60*1000" class="time-divider">
-          {{ formatTimeDivider(new Date(msg.timestamp), new Date()) }}
-        </div>
+      <template v-for="(msg, idx) in messages" :key="msg.id || msg.client_msg_id || `idx-${idx}`">
+        <!-- 外层 time-divider 移除（ChatMessageRow 内部已有，避免重复显示） -->
 
         <ChatMessageRow
           :msg="msg"
           :prev-timestamp="idx > 0 ? messages[idx-1].timestamp : null"
           :session-id="sessionId"
           :show-thinking="showThinking"
+          :all-messages="messages"
           @tool-jump="onToolJump"
           @regenerate="regenerate"
           @copy="copyMessage"
@@ -847,6 +955,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
           @tts-play="playTTSWrap"
           @follow-up-click="onFollowUpClick"
           @quote="onQuote"
+          @edit-send="onUserEditSend"
         />
       </template>
       </TransitionGroup>
@@ -875,6 +984,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
             @tts-play="playTTSWrap"
             @follow-up-click="onFollowUpClick"
             @quote="onQuote"
+            @edit-send="onUserEditSend"
           />
         </div>
       </template>
@@ -903,45 +1013,92 @@ function handleSearchKeydown(e: KeyboardEvent) {
       <button class="qc-close" @click="clearQuote" title="取消引用">✕</button>
     </div>
 
-    <!-- v78 UI-redesign: 思考模式分段控件 (输入栏上方) -->
-    <div class="thinking-switch-row">
-      <ThinkingModeSwitch />
+    <!-- 2026-08-15 #P5: 会话顶部系统块 - 用户全局附加的参考文档 (跨 session 持久) -->
+    <div v-if="chatCtx.isAttached" class="chat-attached-docs-block" role="region" aria-label="本对话参考文档">
+      <div class="cad-header">
+        <span class="cad-icon">📚</span>
+        <span class="cad-title">本对话参考文档 ({{ chatCtx.count }})</span>
+        <span class="cad-hint">AI 回答时会基于这些文档</span>
+      </div>
+      <div class="cad-list">
+        <div
+          v-for="doc in chatCtx.attachedDocuments"
+          :key="doc.id"
+          class="cad-doc"
+          :class="{ pending: doc._pending }"
+        >
+          <span class="cad-doc-icon">📄</span>
+          <div class="cad-doc-info">
+            <div class="cad-doc-title">{{ doc.title }}</div>
+            <div class="cad-doc-meta">
+              {{ doc.category || '未分类' }} · 附加于 {{ formatAttachedTime(doc.attached_at) }}
+              <span v-if="doc._pending" class="cad-doc-syncing">同步中...</span>
+            </div>
+          </div>
+          <el-button link size="small" :disabled="doc._pending" @click="chatCtx.remove(doc.id)">移除</el-button>
+        </div>
+      </div>
+      <div class="cad-footer">
+        <el-button link :disabled="chatCtx.loading" @click="chatCtx.clear()">清空全部</el-button>
+      </div>
     </div>
 
     <footer class="input-bar glass glass-lg">
       <div class="input-core">
-        <div class="input-actions-left">
-          <el-button
-            id="chat-image-upload-btn"
-            name="chat-image-upload"
-            text
-            aria-label="上传图片"
-            title="上传图片"
-            @click="triggerImageUpload"
-          >
-            <el-icon :size="18"><Picture /></el-icon>
-          </el-button>
-          <el-button
-            id="chat-file-upload-btn"
-            name="chat-file-upload"
-            text
-            aria-label="上传文件"
-            title="上传文件"
-            @click="triggerFileUpload"
-          >
-            <el-icon :size="18"><Paperclip /></el-icon>
-          </el-button>
-          <el-button
-            id="chat-voice-toggle-btn"
-            name="chat-voice-toggle"
-            text
-            :type="voiceMode ? 'primary' : ''"
-            aria-label="录音"
-            title="录音"
-            @click="toggleVoiceMode"
-          >
-            <el-icon :size="18"><Microphone /></el-icon>
-          </el-button>
+        <!-- ChatGPT 风格: 左侧单个 "+" 按钮触发工具面板 -->
+        <button
+          id="chat-plus-trigger"
+          name="chat-plus-trigger"
+          class="plus-trigger"
+          :class="{ active: toolPanelOpen }"
+          aria-label="打开工具面板"
+          :aria-expanded="toolPanelOpen"
+          title="更多工具"
+          @click="toolPanelOpen = !toolPanelOpen"
+        >
+          <span class="plus-icon">+</span>
+        </button>
+        <InputToolPanel
+          v-model:visible="toolPanelOpen"
+          @pick-image="triggerImageUpload"
+          @pick-file="triggerFileUpload"
+          @pick-from-drive="onPickFromKnowledge"
+          @feature-not-ready="onFeatureNotReady"
+        />
+        <!-- 2026-08-16 #P5+: 已选图片/文件预览 (ChatGPT 风格缩略图) -->
+        <div v-if="selectedImage || selectedFile" class="input-attachment-preview" role="region" aria-label="已选附件预览">
+          <div v-if="selectedImage" class="iap-image">
+            <img :src="imagePreviewUrl" :alt="selectedImage.name" />
+            <div class="iap-info">
+              <span class="iap-name">{{ selectedImage.name }}</span>
+              <span class="iap-size">{{ formatFileSize(selectedImage.size) }}</span>
+            </div>
+            <button
+              type="button"
+              class="iap-remove"
+              aria-label="移除图片"
+              title="移除图片"
+              @click="clearSelectedImage"
+            >
+              <el-icon :size="14"><Close /></el-icon>
+            </button>
+          </div>
+          <div v-else-if="selectedFile" class="iap-file">
+            <el-icon :size="20"><Document /></el-icon>
+            <div class="iap-info">
+              <span class="iap-name">{{ selectedFile.name }}</span>
+              <span class="iap-size">{{ formatFileSize(selectedFile.size) }}</span>
+            </div>
+            <button
+              type="button"
+              class="iap-remove"
+              aria-label="移除文件"
+              title="移除文件"
+              @click="clearSelectedFile"
+            >
+              <el-icon :size="14"><Close /></el-icon>
+            </button>
+          </div>
         </div>
         <textarea
           ref="textareaRef"
@@ -956,47 +1113,44 @@ function handleSearchKeydown(e: KeyboardEvent) {
           @keydown="handleKeydown"
           @input="autoResize"
         />
-        <!-- 2026-07-13 #P1: mode badge — 实时显示上一次响应的 mode/model/duration/thinkingTokens -->
-        <span
-          v-if="uiStore.lastModeInfo.mode"
-          id="chat-mode-badge"
-          class="mode-badge"
-          :class="`mode-${uiStore.lastModeInfo.mode}`"
-          :title="`mode=${uiStore.lastModeInfo.mode}, model=${uiStore.lastModeInfo.model}, ${uiStore.lastModeInfo.durationMs}ms`"
+        <!-- 思考模式 dropdown: ChatGPT 风格 — 右侧 inline -->
+        <ThinkingModeSwitch class="input-thinking-switch" />
+        <!-- 语音按钮: ChatGPT 风格 — 麦克风图标 -->
+        <button
+          id="chat-voice-trigger"
+          name="chat-voice-trigger"
+          class="voice-trigger"
+          aria-label="启动语音功能"
+          title="启动语音功能"
+          @click="onVoiceTrigger"
         >
-          <span class="mode-badge-label">{{ uiStore.lastModeInfo.mode }}</span>
-          <span v-if="uiStore.lastModeInfo.model" class="mode-badge-model">{{ uiStore.lastModeInfo.model }}</span>
-          <span class="mode-badge-duration">{{ uiStore.lastModeInfo.durationMs }}ms</span>
-          <span v-if="uiStore.lastModeInfo.thinkingTokens > 0" class="mode-badge-thinking">
-            思考 {{ uiStore.lastModeInfo.thinkingTokens }}tok
-          </span>
-        </span>
-        <el-button
+          <el-icon :size="18"><Microphone /></el-icon>
+        </button>
+        <!-- 圆形发送按钮: ChatGPT 风格 — pill 内最右端 -->
+        <button
           v-if="!isCurrentSessionSending"
           id="chat-send-btn"
           name="chat-send"
-          type="primary"
-          class="send-btn"
-          :disabled="!inputText.trim()"
+          class="send-btn-pill"
+          :disabled="!inputText.trim() && !selectedImage && !selectedFile"
           aria-label="发送消息"
           title="发送消息"
           @click="sendMessage()"
         >
-          <el-icon :size="18"><Promotion /></el-icon>
-        </el-button>
-        <!-- 2026-06-14 方案 C Stage 4：停止生成按钮（流式中变 ⏹） -->
-        <el-button
+          发送
+        </button>
+        <!-- 流式中: 文字 ⏹ 停止按钮 -->
+        <button
           v-else
           id="chat-stop-btn"
           name="chat-stop"
-          type="danger"
-          class="stop-btn"
+          class="stop-btn-pill"
           aria-label="停止生成"
           title="停止生成"
           @click="stopGeneration()"
         >
-          <el-icon :size="18"><VideoPause /></el-icon>
-        </el-button>
+          停止
+        </button>
       </div>
       <input
         ref="imageInputRef"
@@ -1186,7 +1340,9 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-top: 1px solid var(--color-border-light);
 }
 
-.messages { flex: 1; overflow-y: auto; padding: 20px; position: relative; background: transparent; }
+.messages { flex: 1; overflow-y: auto; padding: 20px 20px 20px 12px; position: relative; background: transparent; }
+/* AI 头像定位在消息左上角 */
+.chat-immersive .messages > * { position: relative; }
 
 /* 2026-06-14 智能 sticky scroll：跳到最新按钮 */
 .jump-to-bottom {
@@ -1307,9 +1463,9 @@ function handleSearchKeydown(e: KeyboardEvent) {
   max-width: 80px;
 }
 
-.msg-row { display: flex; margin-bottom: 16px; gap: 8px; }
-.msg-row.user { justify-content: flex-end; }
-.msg-row.bot { justify-content: flex-start; }
+.msg-row { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 16px; gap: 4px; }
+.msg-row.user { align-items: flex-end; }
+.msg-row.bot { align-items: flex-start; }
 
 /* ===== W100 +55b 气泡视觉升级 (gradient tail + lift hover + glow) ===== */
 .bubble {
@@ -1499,21 +1655,116 @@ function handleSearchKeydown(e: KeyboardEvent) {
    blur 20px 降到 .glass-lg 默认 16px（dark mode 自动适配收益更大）
    border-top #eee 硬编码 → var(--color-border-light) */
 .input-bar { padding: 16px 20px 8px; border-top: 1px solid var(--color-border-light); background: var(--color-bg-card); }
-.input-core {
+
+/* ===== 2026-08-15 #P5: 会话顶部系统块 - 全局附加文档 ===== */
+.chat-attached-docs-block {
+  margin: 12px 16px 4px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(255, 122, 92, 0.06), rgba(255, 179, 71, 0.04));
+  border: 1.5px solid var(--color-primary, #FF7A5C);
+  border-radius: 14px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: var(--animation-fadeSlideUp);
+}
+.chat-attached-docs-block .cad-header {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.chat-attached-docs-block .cad-icon {
+  font-size: 18px;
+}
+.chat-attached-docs-block .cad-title {
+  font-weight: 600;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+.chat-attached-docs-block .cad-hint {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  flex: 1;
+  text-align: right;
+}
+.chat-attached-docs-block .cad-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chat-attached-docs-block .cad-doc {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: 10px;
+  transition: background 0.12s ease;
+}
+.chat-attached-docs-block .cad-doc:hover {
+  background: var(--color-bg-hover);
+}
+.chat-attached-docs-block .cad-doc.pending {
+  opacity: 0.6;
+}
+.chat-attached-docs-block .cad-doc-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.chat-attached-docs-block .cad-doc-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-attached-docs-block .cad-doc-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-attached-docs-block .cad-doc-meta {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.chat-attached-docs-block .cad-doc-syncing {
+  color: var(--color-warning, #E6A23C);
+  font-style: italic;
+}
+.chat-attached-docs-block .cad-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+[data-theme="dark"] .chat-attached-docs-block {
+  background: linear-gradient(135deg, rgba(255, 157, 133, 0.10), rgba(255, 192, 103, 0.06));
+  border-color: rgba(255, 157, 133, 0.3);
+}
+.input-core {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;  /* 2026-08-16 #P5+: 支持附件预览块换行 */
+  gap: 6px;
   background: var(--color-bg-card);
   border: 1.5px solid var(--color-border-light);
-  border-radius: 24px;
-  padding: 4px 8px 4px 16px;
+  border-radius: 28px;
+  padding: 6px 6px 6px 14px;
+  flex: 1;
+  min-width: 0;
   transition: border-color var(--duration-fast, 150ms) var(--ease-out, ease),
               box-shadow var(--duration-fast, 150ms) var(--ease-out, ease);
 }
-/* W100 +55c: 输入区 focus 边框 + 3px ring */
+/* W100 +55c: 输入区 focus 边框 + 3px ring — #P5: 改成淡边框 + 主色焦点 ring, 避免整条变橙和发送按钮混淆 */
 .input-core:focus-within {
-  border-color: var(--color-primary, #FF7A5C);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #FF7A5C) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary, #FF7A5C) 50%, var(--color-border-light));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #FF7A5C) 12%, transparent);
 }
 .input-hint {
   font-size: 11px;
@@ -1523,7 +1774,110 @@ function handleSearchKeydown(e: KeyboardEvent) {
   letter-spacing: 0.02em;
 }
 .input-actions-left { display: flex; gap: 4px; }
-.input-textarea { flex: 1; border: none; outline: none; resize: none; font: inherit; padding: 8px; max-height: 120px; background: transparent; }
+.input-textarea { flex: 1; border: none; outline: none; resize: none; font: inherit; padding: 6px; max-height: 120px; background: transparent; min-width: 0; }
+
+/* 2026-08-16 #P5+: 附件预览块 (图片缩略图 + 文件名 + 大小 + 删除) — ChatGPT 风格 */
+.input-attachment-preview {
+  display: flex;
+  flex: 1 1 100%;  /* 撑满整行, 让 textarea 换到下一行 */
+  min-width: 200px;
+}
+.input-attachment-preview .iap-image,
+.input-attachment-preview .iap-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 6px;
+  background: var(--color-bg-warm, #f5f7fa);
+  border: 1.5px solid var(--color-primary, #FF7A5C);
+  border-radius: 16px;
+  max-width: 280px;
+  position: relative;
+}
+.input-attachment-preview .iap-image img {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.input-attachment-preview .iap-file {
+  color: var(--color-primary, #FF7A5C);
+}
+.input-attachment-preview .iap-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.input-attachment-preview .iap-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+.input-attachment-preview .iap-size {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+.input-attachment-preview .iap-remove {
+  /* #P5: 强制 20×20 圆形 (flex 容器内 button 易被拉伸/被 el-button 默认 padding 影响) */
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  border: none !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1;
+  font-size: 0;
+  box-sizing: border-box !important;
+  aspect-ratio: 1;
+}
+.input-attachment-preview .iap-remove > * {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.input-attachment-preview .iap-remove:hover {
+  background: var(--color-danger-bg, #fde2e2) !important;
+  color: var(--color-danger, #f56c6c) !important;
+}
+.input-attachment-preview .iap-remove:hover {
+  background: var(--color-danger-bg, #fde2e2);
+  color: var(--color-danger, #f56c6c);
+}
+[data-theme="dark"] .input-attachment-preview .iap-image,
+[data-theme="dark"] .input-attachment-preview .iap-file {
+  background: var(--color-bg-warm, #2a2d35);
+}
+
+/* ChatGPT 风格: 思考模式 segmented control 在 input-core 内 (小尺寸) */
+.input-thinking-switch {
+  flex-shrink: 0;
+  transform: scale(0.9);
+  transform-origin: right center;
+}
+.input-actions-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
 /* 2026-07-13 #P1: mode badge — send 按钮左边的实时 mode/model/duration 状态 */
 .mode-badge {
@@ -1554,15 +1908,16 @@ function handleSearchKeydown(e: KeyboardEvent) {
 [data-theme="dark"] .mode-badge { background: var(--color-bg-warm, #2a2d35); }
 
 .send-btn {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border-radius: 50%;
-  background: var(--gradient-welcome-hero);
-  border: none;
-  /* stylelint-disable-next-line color-named */
-  color: var(--el-color-white);
-  font-size: 18px;
+  min-width: 34px !important;
+  height: 34px !important;
+  padding: 0 14px !important;
+  border-radius: 17px !important;
+  background: var(--gradient-welcome-hero) !important;
+  border: none !important;
+  color: var(--el-color-white) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: 1px !important;
   transition: transform var(--duration-fast, 150ms) var(--ease-bounce, cubic-bezier(0.34, 1.56, 0.64, 1));
 }
 /* W100 +55c: send-btn hover scale + active scale */
@@ -1572,6 +1927,151 @@ function handleSearchKeydown(e: KeyboardEvent) {
 .send-btn:active:not(:disabled) {
   transform: scale(0.96);
 }
+
+/* ===== ChatGPT 风格: + 触发按钮 + 圆形发送 + 语音入口 ===== */
+/* + 触发器: 38×38 圆角方块, 灰色背景, hover 时主色边框 */
+.plus-trigger {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-warm, #f5f7fa);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast, 150ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.plus-trigger:hover {
+  border-color: var(--color-primary, #FF7A5C);
+  color: var(--color-primary, #FF7A5C);
+  background: var(--color-primary-bg);
+  transform: scale(1.04);
+}
+.plus-trigger:active {
+  transform: scale(0.96);
+}
+.plus-trigger.active {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: rotate(45deg);
+}
+.plus-icon {
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* 语音入口: 32×32 圆形按钮 (ChatGPT 风格, 与发送按钮一致尺寸) */
+.voice-trigger {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast, 150ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.voice-trigger:hover {
+  color: var(--color-primary, #FF7A5C);
+  background: var(--color-primary-bg);
+  transform: scale(1.04);
+}
+.voice-trigger:active {
+  transform: scale(0.96);
+}
+
+/* 发送按钮: pill 文字按钮 (高对比 — 用"发送"文字, 用户一眼看到) */
+.send-btn-pill {
+  flex-shrink: 0;
+  height: 32px;
+  min-width: 64px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: none;
+  background: linear-gradient(135deg, #FF5722 0%, #FF7A5C 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(255, 87, 34, 0.4);
+  transition: transform var(--duration-fast, 150ms) var(--ease-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)),
+              box-shadow var(--duration-fast, 150ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+  margin-left: 2px;
+}
+.send-btn-pill:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 4px 14px rgba(255, 87, 34, 0.55);
+}
+.send-btn-pill:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.send-btn-pill:disabled {
+  background: #c0c4cc;
+  color: #ffffff;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 停止按钮: pill 文字按钮 */
+.stop-btn-pill {
+  flex-shrink: 0;
+  height: 32px;
+  min-width: 64px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: none;
+  background: var(--color-danger, #f56c6c);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(245, 108, 108, 0.3);
+  transition: transform var(--duration-fast, 150ms) var(--ease-out, ease);
+  -webkit-tap-highlight-color: transparent;
+  margin-left: 2px;
+}
+.stop-btn-pill:hover {
+  transform: scale(1.05);
+}
+.stop-btn-pill:active {
+  transform: scale(0.96);
+}
+
+/* 旧 mode-badge 在新布局下保留样式以防 fallback */
+[data-theme="dark"] .plus-trigger {
+  background: var(--color-bg-warm, #2a2d35);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .voice-trigger {
+  background: transparent;
+  border-color: var(--color-border-base);
+}
+
+/* W-N 2026-08-14: 顶栏 ➕ 与侧栏 "新对话" 按钮避免重复显示
+   - 侧栏展开时: 顶栏 ➕ 隐藏（侧栏已有显眼按钮）
+   - 侧栏折叠时: 顶栏 ➕ 显示（侧栏没入口） */
+.header-new-session { display: inline-flex; }
+:has(.session-sidebar:not(.collapsed)) .header-new-session { display: none; }
 
 @media (max-width: 768px) {
   .bubble { max-width: 92%; }

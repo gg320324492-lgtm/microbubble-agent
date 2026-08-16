@@ -33,7 +33,7 @@ class ThinkingConfig:
 
     字段说明：
     - mode: 'fast' | 'balanced' | 'deep'
-    - model: Ollama model tag (qwen3:8b / deepseek-r1-distill-qwen:7b)
+    - model: Ollama model tag (统一用 qwen3:8b)
     - thinking: Anthropic SDK thinking 字段 (disabled / enabled+budget_tokens); ollama backend
       在 deep 模式实际走 reasoning_content 通道，此字段仅作类型合规占位
     - max_tokens: synthesis 阶段 LLMClient.stream 的 max_tokens

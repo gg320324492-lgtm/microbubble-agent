@@ -367,7 +367,7 @@ curl http://localhost:8000/api/v1/dft/tools
 - `chat()` 和 `chat_stream()` 接收 `db: AsyncSession` 参数，由 API 路由通过 `Depends(get_db)` 传入
 - 使用 `AsyncAnthropic` 客户端，不阻塞事件循环
 - **Agent 回复采用"先简要后详细"双层结构** — 两阶段并行调用，简要立即返回，详细后台追加
-- **MCP 视觉服务架构** — 预写架构，切换 DeepSeek 等文本模型时支持图片识别
+- **MCP 视觉服务架构** — 预写架构，切换支持图片识别的文本模型时启用（如未来切 Claude 视觉）
 - 认证使用 JWT，`app/core/security.py` 已实现，31 个端点全部接入 `get_current_user`
 - 会话存储已迁移到 Redis（`RedisSessionStore`，24 小时 TTL）
 - 知识库使用 pgvector 做向量搜索（扩展已在 main.py 启动时自动安装，已接入 text2vec-base-chinese 真实语义搜索）
