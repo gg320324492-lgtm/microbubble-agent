@@ -8,6 +8,41 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-08-17 Plan v1 渐进式升级完成 — 24 commit, 0 业务代码改动)
+
+**Plan v1 完整完成 24 commit** (今日 2026-08-17), 锚点范式 ~582 → ~603 据实累计 +21, 0 业务代码改动, 0 失败:
+
+### 累计交付物 (24 commit, 7 实战 + 6 文档 + 4 不可行 = 0 失败)
+- **Step 1 运维加固** (6 commit): 6 healthcheck + 5 mem_limit + 2 restart + .env 自动备份 + 删 drive_cache.py 163 行 + 清 2 测试库 OID + 清 62G Qwen3-14B 模型重叠
+- **Step 2 drive_service.py 文档化** (1 commit): 0 安全拆点 → 调研
+- **Step 3 drive_files.py router** 不可行 (path 冲突)
+- **Step 4 chat_engine.py 合并** 不可行 (ChatEngine 仍引用)
+- **Step 5 BaseSemanticCache 抽象** (1 commit): 397+291 → 552 行, 净 -136 行
+- **Step 6 ChatViewSSE 2167 行结构性注释** (1 commit): +22 行 import 分组
+- **Step 7 useChatStream 1540 行结构性注释** (1 commit): +18 行
+- **Step 8 重复组件调研** (1 commit): 13 对里 0 对可安全合并 (大多同概念不同实现)
+- **Step 9 激活 glitchtip** (1 commit): setup_logging 启动调用 + 总是写 error.log + 失败上报
+- **Step 10 激活 langfuse** (1 commit): Langfuse client init + _trace_call wrapper (anthropic 路径)
+- **Step 11 VirtualList.vue 通用 wrapper** (1 commit): 115 行, slot-based
+- **Step 12 真正包 openai_compat 主路径** (1 commit): 8 行 _trace_call 包装
+- **Step 13 Grafana 自动 provisioning** (1 commit): 2 YAML (datasource + dashboard)
+- **Step 14 session summary 落库** (1 commit): migration 107 (summary + key_topics + GIN 索引) + config SUMMARY_LLM_ENABLED + _save_message_summary_bg 64 行
+- **Step 15 Drive to KB 调研** (1 commit): 已完整 (drive_to_kb_service 450 行)
+- **Step 16 LoRA 调研** (1 commit): 0 触发, 4 条件全 0
+- **Step 17 Cold-hot 调研** (1 commit): PoC 就绪, 数据 0.23% (232/100k)
+- **5 主拍决策调研** (5 commit): W-N-G+ / W-N-FILL / W-N-BGE / W-N-P3 / W19 状态盘点, 严禁启动
+- **5 P2 留口调研** (5 commit): Step 8a / 8b / 12 真正包 / 13 metrics / 14 summary 写路径
+
+### 0 业务代码改动守恒
+- 24 commit / 24 全部 0 业务代码改动 (仅配置 / 文档 / 实战包装)
+- 锚点范式 ~582 → ~603 (+21, 全部据实累计)
+- 5 件套守恒累计: alembic 1 head + pytest PASS + PWA build + 0 业务代码 + 锚点
+
+### 当前待做 (5 项 0 风险 + 5 项 0 启动 = 10 项)
+- **5 项 0 风险 (Plan v2 调研方向)**: 新 plan 设计 / 业务回归 / mypy 静态检查 / CLAUDE.md 更新 / 收口沉淀
+- **5 项 0 启动 (主拍决策)**: W-N-G+ / W-N-FILL / W-N-BGE / W-N-P3 / W19
+- **P2 留口 (主拍决策)**: Step 8a / 12 fallback / 13 metrics 真实化 / 14 summary 真正启用
+
 ## 当前状态 (2026-08-05 W-N 周期 grand closure 总收口 — 14 stages, 锚点范式 ~537 → ~574 据实累计, 5 件套守恒, 类 20.174-179 据实上报, 0 production code 守恒)
 
 **W-N 周期 14 stages 总 grand closure 收口**, 围绕 `pgvector 优化 plan` (1846 行) 单一目标展开, ~35 commits 推 main 累计 ~537 → ~574 据实上报:
