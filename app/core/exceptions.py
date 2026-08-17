@@ -123,8 +123,20 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """兜底异常处理"""
+    """兜底异常处理
+
+    2026-08-17 #Step9: 加 sentry_sdk.capture_exception 自动上报
+    - SENTRY_DSN 未设时 sentry_sdk 是 no-op (类 20.27 守恒, 0 副作用)
+    - DSN 设了 → 自动捕获 + 路由到 glitchtip, 团队 30s 内可见
+    """
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    # 2026-08-17 #Step9: 上报到 glitchtip (SENTRY_DSN 配置才生效)
+    # 0 风险: 未配置 DSN 时 sentry_sdk 是 no-op, 沿用原 generic handler 行为
+    try:
+        import sentry_sdk
+        sentry_sdk.capture_exception(exc)
+    except Exception:
+        pass  # sentry_sdk 未装或异常, 不影响主流程
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
