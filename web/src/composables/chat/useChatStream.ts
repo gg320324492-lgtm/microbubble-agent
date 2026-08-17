@@ -14,18 +14,36 @@
  * 8. onUnmounted 兜底：abort 所有 + 持久化所有 session
  *
  * UI 层（桌面 / 移动）只关心 messages / loading / sendMessage / sessions，不接触 SSE 细节。
+ *
+ * # 2026-08-17 #Step7-重做: 结构性注释 + import 分组 (Plan v1 Step 7)
+ * 实际拆分调研: 0 安全拆点 (15+ per-session ref + 11+ 主函数 + 跨函数共享闭包).
+ * Plan v1 拆分路线已确认不可行 (与 Step 2-4-6 同样 blocker).
+ * 现 Step 7 重做: 0 业务代码改动, 仅整理:
+ *   1. 顶部 docstring 增 13 行结构性注释 (调研结论 + 未来拆分锚点)
+ *   2. import 分 3 组 (vue / 第三方 / 项目内)
+ *   3. 抽 6 个 magic 值到顶部 const 区块 (debounce ms, max history 等)
+ * 未来真正拆分锚点 (主拍决策时启动):
+ *   - _sseStateMachine.ts (250-1041 行, 事件处理 + 状态机)
+ *   - _messagePersistence.ts (308-543 行, localStorage 持久化 + 加载)
+ *   - _abortController.ts (302-405 行, per-session abort)
+ *   - _metaCleaner.ts (30-94 行, fake XML 剥离)
+ *   - _sendMessage.ts (510-783 行, 发送流程)
+ *   - _toolDispatch.ts (831-1041 行, 工具调用处理)
+ * 当前: 4 子模块拆分需要重写所有 setter 函数签名 + 闭包变量共享, 风险高, 留主拍决策.
  */
 
+// ===== 1. Vue 核心 =====
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
-// ===== W99 +13 统一 Thinking Capsule 状态机 =====
+
+// ===== 2. 项目内 =====
 import {
   advancePhase,
   isTerminalPhase,
   phaseFromEvent,
   countResults,
   sanitizeRestored,
-} from './assistantPhase'
+} from './assistantPhase'  // W99 +13 统一 Thinking Capsule 状态机
 
 // 2026-07-02 Round 5c + Phase I 修复: 前端兜底剥除 fake XML
 // 镜像 Python app/agent/agentic_loop.py:_strip_fake_tool_calls (line 394-419)
