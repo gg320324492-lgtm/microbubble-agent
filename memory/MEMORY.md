@@ -965,3 +965,53 @@ W-N 周期 14 stages (#25 段) → 15 stages (#27 段) → **19 stages (#29 段,
 - 未来派工留口 6 项 ✓ (沿用 #27 段)
 
 W19 选项 A 维持 + W-N 周期第 19 stages 收口完成.
+
+# 28. Plan v1 渐进式升级完成 (2026-08-17, 24 commit 据实累计)
+
+## Plan v1 (17/17 Step, 5 主拍决策 + 5 P2 留口) 完整完成
+
+锚点范式 ~582 → ~603 (+21), 0 业务代码改动, 0 失败, 7 实战 + 6 调研 + 4 不可行.
+
+### 17 Step 累计
+- Step 1 运维加固 (6 commit, 实战)
+- Step 2 drive_service 文档化 (调研)
+- Step 3 drive_files router (不可行, path 冲突)
+- Step 4 chat_engine (不可行, ChatEngine 仍引用)
+- Step 5 BaseSemanticCache (-136 行, 实战)
+- Step 6 ChatViewSSE 结构性注释 (+22 行, 文档化)
+- Step 7 useChatStream 结构性注释 (+18 行, 文档化)
+- Step 8 重复组件调研 (13 对里 0 对可合并)
+- Step 9 glitchtip 激活 (实战)
+- Step 10 langfuse 客户端 (实战)
+- Step 11 VirtualList wrapper (115 行, 实战)
+- Step 12 真正包 openai_compat trace (8 行, 实战)
+- Step 13 Grafana provisioning (2 YAML, 实战)
+- Step 14 summary 写路径 (migration 107 + 64 行, 实战)
+- Step 15-17 调研 (Drive to KB / LoRA / Cold-hot 留口)
+
+### 5 主拍决策 (W-N 留口) 全部 0 启动
+- W-N-G+ schema drift (启动 3/4 满足, 等主拍批准)
+- W-N-FILL 真派工 (4 阻断全 0, 严禁启动)
+- W-N-BGE 真测 (1000 题完成, 等 GPU 部署切流)
+- W-N-P3-A..E 5 项严禁启动
+- W19 选项 A 4 留未来 PR 30 批沿用
+
+### 5 P2 留口 (主拍决策) 0 启动
+- Step 8a BaseChunkedUpload 抽象 (1 周+ 中风险)
+- Step 8b BaseAudioRecorder 抽象 (已抽 composable, 0 价值)
+- Step 12 fallback trace (后端切 openai_compat 时补)
+- Step 13 prometheus_client metrics 真实化 (PROMETHEUS_ENABLED=true)
+- Step 14 summary 真正启用 (SUMMARY_LLM_ENABLED=true)
+
+### 待做 (5 项 0 风险 + 5 项 0 启动 = 10 项)
+- 0 风险: 新 plan 设计 / 业务回归 / mypy 静态 / CLAUDE.md 更新 / 收口沉淀
+- 0 启动: 5 W-N 主拍决策
+
+## Plan v2 留口方向 (主拍决策时)
+
+下一步候选 (P2 留口 + 主拍):
+- 业务回归: e2e 跑通 + 性能压测 + 错误路径覆盖
+- 新功能: 跨 session 检索 / 自动入库 / 知识图谱增强
+- 监控: 全链路 langfuse + glitiphook 接入 / Grafana 业务面板
+- 性能: drive upload 大文件分片 / chat 流式优化
+- 安全: secret rotation / rate limit / audit log 增强
