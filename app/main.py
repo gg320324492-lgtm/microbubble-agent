@@ -40,6 +40,14 @@ from app.core.database import engine, Base
 from app.core.redis import close_redis
 from app.core.exceptions import AppException, app_exception_handler, generic_exception_handler
 from app.core.rate_limit import rate_limit_middleware
+
+# 2026-08-17 #Step9: 激活 glitchtip 错误监控 (Plan v1)
+# 0 业务代码改动: 仅在 main.py 启动时配置 logging + 尝试 sentry_sdk.init.
+# DSN 兜底: SENTRY_DSN env 未设时 sentry_sdk 走 default off (类 20.27 守恒).
+# 设了 DSN → 自动捕获所有未捕获异常 → 落 JSON file + (可选) glitchtip 上报.
+# 效果: 任意 500 错误会立刻出现在 logs/error.log (含 exc_info + trace), 团队可 tail -f 监控.
+from app.core.logging import setup_logging
+setup_logging()  # 必须在 sentry_sdk.init 之前调用 (handler + filter 安装)
 # RequestLoggingMiddleware 不再独立注册 — 已集成到 rate_limit_middleware 末尾
 from app.core.request_context import (
     set_request_id,

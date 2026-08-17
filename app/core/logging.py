@@ -57,17 +57,30 @@ def setup_logging():
     handlers = [logging.StreamHandler(sys.stdout)]
 
     # 生产环境同时写文件（JSON 格式）
+    # 2026-08-17 #Step9: 总是写 error.log 文件 (无论 debug 与否)
+    # debug 模式原本只 console, 但 #Step9 目标 = 错误监控, 必须持久化
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_dir / "error.log",
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
+        encoding="utf-8"
+    )
+    file_handler.setLevel(logging.ERROR)  # 只记 ERROR + CRITICAL
+    file_handler.setFormatter(JSONFormatter())
+    handlers.append(file_handler)
+
+    # 生产环境再写 app.log (全 INFO+)
     if not settings.APP_DEBUG:
-        log_dir = Path("logs")
-        log_dir.mkdir(exist_ok=True)
-        file_handler = logging.handlers.RotatingFileHandler(
+        file_handler_info = logging.handlers.RotatingFileHandler(
             log_dir / "app.log",
-            maxBytes=10 * 1024 * 1024,  # 10MB
+            maxBytes=10 * 1024 * 1024,
             backupCount=5,
             encoding="utf-8"
         )
-        file_handler.setFormatter(JSONFormatter())
-        handlers.append(file_handler)
+        file_handler_info.setFormatter(JSONFormatter())
+        handlers.append(file_handler_info)
 
     # 控制台格式
     fmt = "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"
