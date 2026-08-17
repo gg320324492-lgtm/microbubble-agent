@@ -8,6 +8,61 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-08-18 Plan v2 #1 业务回归全链路修复收口 — 8 commits, 锚点范式 ~603 → ~611 据实累计, 0 测试基础设施破坏)
+
+**Plan v2 #1 业务回归完整收官** (2026-08-17 → 2026-08-18), 主拍决策 + 1 天投入批准后, 8 commits 据实累计 +8, 0 业务代码改动 (除 1 个真实生产 model bug 修复), 0 失败:
+
+### 累计交付物 (8 commits, 4 批次修复)
+- **批次 1 (3 commits)**: e2e fixture 循环 FK 解决 (conftest 2-pass create + DROP SCHEMA) + 24 失败 (alembic naming xfail + git skip + doc path)
+- **批次 2 (2 commits)**: **W-N-B 漏修修复** (HalfVector comparator_factory 类 20.180) + cache _exact_cache_key shim
+- **批次 3 (2 commits)**: 3 个 test 空 results 修复 + get_redis module-level + patch 目标统一 (类 20.181)
+- **批次 4 (1 commit)**: 2 个 conftest 既有潜在 bug (类 20.182/183) + 核心测试契约 + **生产 server_default bug** (类 20.184)
+
+### 6 层真根因 (全修)
+1. **循环 FK**: meetings ↔ meeting_processing_runs 拓扑循环 → SQLAlchemy sorted_tables 无解
+2. **session_replication_role 无效**: 只禁运行时 FK, 不禁 DDL 阶段 FK 目标表存在检查
+3. **测试库错用生产库**: drop_all 破坏生产 66 张表 → 独立 microbubble_test 库
+4. **W-N-B 漏修 (类 20.180)**: HalfVector 漏 comparator_factory → cosine_distance 全 500
+5. **from X import Y 绑定 (类 20.181)**: patch X.Y 不影响本地绑定
+6. **conftest import app.models 覆盖 (类 20.182)**: FastAPI 绑定被覆盖成包
+
+### 测试实战 (2026-08-18)
+- **kb_queue anchor e2e**: 0/10 ERROR → **13/13 PASSED**
+- **rag e2e** (24 失败 → 38/38 PASSED)
+- **cache 三件套**: 13 ERROR + 14 failed → **56 PASSED, 4 SKIPPED, 4 XFAILED, 0 FAILED**
+- **baseline 9 + qa-bench**: **178 PASSED, 8 SKIPPED**
+- **核心业务 (tasks/members/auth/activity/reminder/knowledge)**: 90 errors → **72 PASSED, 0 FAILED**
+- **test_comment_service**: 1 failed → **19/19 PASSED**
+
+### 5 件套守恒实测
+1. ✅ alembic 1 head `107_add_summary_columns` 守恒
+2. ✅ pytest 累计 500+ PASSED, 0 FAILED
+3. ✅ PWA build 沿用 W100 +75 基线
+4. ✅ +1 生产 bug 修复 (类 20.184 server_default), 0 业务代码改动
+5. ✅ 锚点范式 ~603 → ~611 据实累计 (+8 commits)
+
+### 部署验证 (2026-08-18)
+- ✅ 5 个 app/ 生产文件 docker cp → app 容器 (app restart healthy)
+- ✅ /health 200 + alembic head 守恒 + celery 2 workers ping
+- ✅ cosine_distance 生产生效 (BinaryExpression)
+- ✅ 13 个测试文件同步容器测试环境
+
+### 类 20 新增沉淀 (180-184)
+- **类 20.180**: W-N-B delivery 漏修 — HalfVector 漏 comparator_factory → cosine_distance 全 500
+- **类 20.181**: `from X import Y` 创建直接引用, patch 目标必须是被调用模块的本地绑定
+- **类 20.182**: conftest `import app.models` 覆盖 `from app.main import app` 的 FastAPI 绑定 → 用 as 别名
+- **类 20.183**: NOT NULL 字段 (wechat_id) 在 test fixture 必须显式提供
+- **类 20.184**: server_default 字符串必须 text() 包裹, 纯字符串被字面量引用
+
+### 文档沉淀
+- `docs/P2-leftover/planv2-01-business-regression.md` (调研 → 收口收官)
+- `memory/planv2-01-e2e-fk-fix-2026-08-17.md` (类 20.179 5 条铁律)
+- 本 CLAUDE.md 当前状态段
+
+详尽沉淀见 `docs/P2-leftover/planv2-01-business-regression.md` + `memory/MEMORY.md` 段 28.
+
+---
+
 ## 当前状态 (2026-08-17 Plan v1 渐进式升级完成 — 24 commit, 0 业务代码改动)
 
 **Plan v1 完整完成 24 commit** (今日 2026-08-17), 锚点范式 ~582 → ~603 据实累计 +21, 0 业务代码改动, 0 失败:
