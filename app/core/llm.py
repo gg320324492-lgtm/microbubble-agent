@@ -529,7 +529,14 @@ class LLMClient:
         for m in models_to_try:
             try:
                 params["model"] = m
-                resp = await self.openai_client.chat.completions.create(**params)
+                # 2026-08-17 #Step12: langfuse span 包裹 openai_compat 主路径
+                _span = self._trace_call(m, messages, system, "complete_openai", max_tokens=max_tokens, temperature=temperature)
+                _span.__enter__()
+                try:
+                    resp = await self.openai_client.chat.completions.create(**params)
+                finally:
+                    _span.update(output={"model": m, "status": "ok"})
+                    _span.__exit__(None, None, None)
                 # 包装 OpenAI ChatCompletion 响应为 Anthropic Message 形状
                 return openai_response_to_anthropic_message(resp)
             except Exception as e:
