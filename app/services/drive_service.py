@@ -2,6 +2,17 @@
 
 负责 drive_storage_mode='drive' 文件元数据的 CRUD 操作。
 
+# 2026-08-17 #Step2-重做: drive_service.py 2430 行结构性文档 (Plan v1 Step 2)
+# 实际拆分调研: 0 安全拆点 (所有 50+ 方法都被 drive_files.py 路由直接调用, 删任一方法 → 500).
+# Plan v1 路线 Step 2 拆为子服务 已确认不可行 (227 行的真重复代码 vs 1950 行的活代码).
+# 现 Step 2 落地: 文档化 9 个 section + 标注子服务迁移路径, 为未来真拆分留 anchor.
+# 未来拆分锚点 (主拍决策时启动):
+#   - share 4 方法 (L1022-1200) -> 已有 drive_share_service.py 728 行, API 应改用 DriveShareService 直接
+#   - version 3 方法 (L1814-1970) -> 已有 drive_version_service.py 768 行
+#   - dedupe 2 方法 (L1683-1810) -> 已有 drive_dedupe_service.py 228 行
+#   - collab N 方法 -> 已有 drive_collab_service.py 564 行
+# 当前: 全部 facade 调用由 drive_files.py 路由直接 svc.method() 触发 (主拍决策前不强行改路由).
+
 核心边界:
 - visibility='private' 文件: 仅 created_by (owner) 可见，其他人**完全看不到** (不是 403)
 - visibility='team': 当前活跃成员可见
