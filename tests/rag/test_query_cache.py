@@ -63,7 +63,7 @@ def fake_redis() -> Any:
 @pytest.fixture(autouse=True)
 def patch_redis(fake_redis: Any) -> None:
     """mock app.core.redis.get_redis 返 fakeredis"""
-    with patch("app.core.redis.get_redis", new=AsyncMock(return_value=fake_redis)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake_redis)):
         yield
 
 
@@ -311,7 +311,7 @@ async def test_unit_13_redis_unavailable_get_returns_none() -> None:
     """Redis get 抛异常 → 降级返 None (不抛)"""
     cache = RAGQueryCache()
     with patch(
-        "app.core.redis.get_redis",
+        "app.services.base_semantic_cache.get_redis",
         new=AsyncMock(side_effect=ConnectionError("Redis down")),
     ):
         cached = await cache.get("test", user_id=1, tenant_id=1)
@@ -324,7 +324,7 @@ async def test_unit_14_redis_unavailable_set_returns_false() -> None:
     cache = RAGQueryCache()
     payload = {"results": [], "citations": [], "retrieval_method": "hybrid", "score": 0.0, "top_k": 5}
     with patch(
-        "app.core.redis.get_redis",
+        "app.services.base_semantic_cache.get_redis",
         new=AsyncMock(side_effect=ConnectionError("Redis down")),
     ):
         ok = await cache.set("test", user_id=1, tenant_id=1, result=payload)
@@ -338,7 +338,7 @@ async def test_unit_15_redis_get_returns_corrupted_json() -> None:
     key = _exact_cache_key("corrupted", 1, 1)
     await fake.set(key, "not-valid-json{{{")
 
-    with patch("app.core.redis.get_redis", new=AsyncMock(return_value=fake)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
         cache = RAGQueryCache()
         cached = await cache.get("corrupted", user_id=1, tenant_id=1)
         assert cached is None
@@ -370,7 +370,7 @@ async def test_unit_17_invalidate_redis_fail() -> None:
     """invalidate 失败 → 返 False (不抛)"""
     cache = RAGQueryCache()
     with patch(
-        "app.core.redis.get_redis",
+        "app.services.base_semantic_cache.get_redis",
         new=AsyncMock(side_effect=ConnectionError("down")),
     ):
         ok = await cache.invalidate("test", user_id=1, tenant_id=1)
