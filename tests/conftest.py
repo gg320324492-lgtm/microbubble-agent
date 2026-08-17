@@ -184,6 +184,13 @@ else:
         # 测试环境不需要 FK 强约束, 但加回确保模型完整性 + drop_all 时清理干净.
         from sqlalchemy import MetaData
         async with conftest_engine.begin() as conn:
+            # 2026-08-18 #Plan v2 #8 加固: 每次 setup 先清空 public schema (幂等),
+            # 防 app lifespan create_all / 上次测试残留 schema 导致 DuplicateTable.
+            # app 的 FastAPI lifespan 在 client 首次请求时对测试库跑 create_all
+            # (checkfirst=True 无害), 但会与 setup_db 竞争 schema 状态.
+            await conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+            await conn.exec_driver_sql("CREATE SCHEMA public")
+            await conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
             # Pass 1: 克隆 metadata, 删所有 FK constraint, create_all
             # 用 dict items() 而非 sorted_tables 是关键 (避循环 FK 解析)
             test_meta = MetaData()

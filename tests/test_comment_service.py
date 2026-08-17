@@ -69,6 +69,21 @@ async def _ensure_test_knowledge(db):
                 created_by=59,
             )
             session.add(file_kb)
+        # 2026-08-18 #Plan v2 #10: @zhaohangjia mention 测试依赖 member id=2 (生产 seed),
+        # 测试库空库无此行 → mentioned_ids 空 → assert 2 in [] 失败.
+        # 补建 zhaohangjia (id=2) 自包含, 防测试依赖生产 seed 数据.
+        result = await session.execute(
+            select(Member).where(Member.id == 2)
+        )
+        if not result.scalar_one_or_none():
+            session.add(Member(
+                id=2,
+                username="zhaohangjia",
+                name="赵航佳",
+                wechat_id="__NULL_BACKFILL_2__",
+                is_active=True,
+                role="member",
+            ))
         await session.commit()
 
 
@@ -92,6 +107,13 @@ class TestCreateComment:
 
     async def test_create_comment_with_mention(self, db):
         """@username 自动创建 file_mention"""
+        # 2026-08-18 #Plan v2 #10: 先清 (file 540, user 2) 既有 mention,
+        # 让 24h dedup 不拦截 → new_mentioned_ids 确定性含 2
+        await db.execute(delete(FileMention).where(
+            FileMention.file_id == 540,
+            FileMention.mentioned_user_id == 2,
+        ))
+        await db.commit()
         comment, mentioned_ids = await comment_service.create_comment(
             db, file_id=540, user_id=59, content="@zhaohangjia 麻烦看下",
         )
