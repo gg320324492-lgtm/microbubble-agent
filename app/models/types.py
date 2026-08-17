@@ -105,3 +105,9 @@ class HalfVector(UserDefinedType):
 
         def l1_distance(self, other: Any, /) -> Any:
             return self.op("<+>", return_type=Float)(other)
+
+    # 关键: comparator_factory 让 SQLAlchemy InstrumentedAttribute.comparator
+    # 用我们的 Comparator (含 cosine_distance / l2_distance / etc.)
+    # 否则 InstrumentedAttribute 用默认 ColumnProperty.Comparator,
+    # 访问 .cosine_distance 抛 AttributeError (W-N-B 漏修, 2026-08-17 e2e 实战发现)
+    comparator_factory = Comparator
