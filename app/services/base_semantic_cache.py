@@ -31,6 +31,9 @@ import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+# get_redis now module-level (Plan v2 #6 fix)  # 2026-08-17 #Plan v2 #6: module-level 让 test patch 可用
+from app.core.redis import get_redis
+
 logger = logging.getLogger("microbubble.base_semantic_cache")
 
 
@@ -108,7 +111,7 @@ class BaseSemanticCache:
         # 1. 精确匹配优先
         key = self._exact_cache_key(query, user_id, tenant_id)
         try:
-            from app.core.redis import get_redis
+            # get_redis now module-level (Plan v2 #6 fix)
             redis = await get_redis()
             raw = await redis.get(key)
         except Exception as e:
@@ -177,7 +180,7 @@ class BaseSemanticCache:
             return False
 
         try:
-            from app.core.redis import get_redis
+            # get_redis now module-level (Plan v2 #6 fix)
             redis = await get_redis()
             await redis.setex(key, effective_ttl, payload)
         except Exception as e:
@@ -210,7 +213,7 @@ class BaseSemanticCache:
 
         key = self._exact_cache_key(query, user_id, tenant_id)
         try:
-            from app.core.redis import get_redis
+            # get_redis now module-level (Plan v2 #6 fix)
             redis = await get_redis()
             await redis.delete(key)
         except Exception as e:
@@ -253,7 +256,7 @@ class BaseSemanticCache:
         # 拿 user+tenant 索引
         idx_key = self._user_tenant_index_key(user_id, tenant_id)
         try:
-            from app.core.redis import get_redis
+            # get_redis now module-level (Plan v2 #6 fix)
             redis = await get_redis()
             members = await redis.zrevrange(idx_key, 0, self.nn_probe - 1)
         except Exception as e:
@@ -340,7 +343,7 @@ class BaseSemanticCache:
             return
         idx_key = self._user_tenant_index_key(user_id, tenant_id)
         try:
-            from app.core.redis import get_redis
+            # get_redis now module-level (Plan v2 #6 fix)
             redis = await get_redis()
             await redis.zadd(idx_key, {cache_key: time.time()})
             await redis.expire(idx_key, ttl)

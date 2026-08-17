@@ -36,6 +36,16 @@ from app.services.retrieval_cache import (
     reset_cache,
 )
 
+# 2026-08-17 #Plan v2 #6: 容器内无 git (apt 装不上), git 命令测试自动 skip
+# 沿用 tests/rag/test_pr4_e2e.py _requires_git 模式
+import shutil
+
+GIT_AVAILABLE = shutil.which("git") is not None
+_requires_git = pytest.mark.skipif(
+    not GIT_AVAILABLE,
+    reason="git not in container PATH (apt unavailable for git install)",
+)
+
 
 # ============================================================
 # 件 1: 模块级契约
@@ -85,7 +95,7 @@ async def test_set_then_get_round_trip() -> None:
     fake = fakeredis.aioredis.FakeRedis()
     with patch.object(rc_mod, "_get_redis_for_test", return_value=fake, create=True):
         # 直接用 fakeredis 替换 get_redis
-        with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=fake)):
+        with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
             cache = RetrievalCache(ttl=300)
             await cache.set(
                 query="微纳米气泡生成机理",
@@ -119,7 +129,7 @@ async def test_set_then_get_round_trip() -> None:
 async def test_get_miss_returns_none() -> None:
     """未命中: None (best-effort)"""
     fake = fakeredis.aioredis.FakeRedis()
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=fake)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
         cache = RetrievalCache(ttl=300)
         result = await cache.get(query="nonexistent", user_id=1, tenant_id=10)
         assert result is None
@@ -129,7 +139,7 @@ async def test_get_miss_returns_none() -> None:
 async def test_get_empty_query_returns_none() -> None:
     """空 query: None (契约)"""
     fake = fakeredis.aioredis.FakeRedis()
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=fake)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
         cache = RetrievalCache(ttl=300)
         result = await cache.get(query="", user_id=1, tenant_id=10)
         assert result is None
@@ -139,7 +149,7 @@ async def test_get_empty_query_returns_none() -> None:
 async def test_set_empty_query_returns_false() -> None:
     """空 query: set 应返 False (不写入 Redis)"""
     fake = fakeredis.aioredis.FakeRedis()
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=fake)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
         cache = RetrievalCache(ttl=300)
         ok = await cache.set(
             query="", user_id=1, tenant_id=10,
@@ -157,7 +167,7 @@ async def test_set_empty_query_returns_false() -> None:
 async def test_user_id_isolation() -> None:
     """user_id 不同 → 缓存键不同 → 互不命中"""
     fake = fakeredis.aioredis.FakeRedis()
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=fake)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
         cache = RetrievalCache(ttl=300)
         # user1 写
         await cache.set(
@@ -177,7 +187,7 @@ async def test_user_id_isolation() -> None:
 async def test_tenant_id_isolation() -> None:
     """tenant_id 不同 → 缓存键不同 → 互不命中"""
     fake = fakeredis.aioredis.FakeRedis()
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=fake)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
         cache = RetrievalCache(ttl=300)
         await cache.set(
             query="水处理", user_id=1, tenant_id=10,
@@ -197,7 +207,7 @@ async def test_redis_unavailable_returns_none_silently() -> None:
     """Redis 不可用: get 返 None, 不抛错 (类 20.121)"""
     bad_redis = AsyncMock()
     bad_redis.get = AsyncMock(side_effect=Exception("Redis连接断开"))
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=bad_redis)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=bad_redis)):
         cache = RetrievalCache(ttl=300)
         result = await cache.get(query="test", user_id=1, tenant_id=10)
         assert result is None  # silently None
@@ -208,7 +218,7 @@ async def test_redis_unavailable_set_returns_false_silently() -> None:
     """Redis 不可用: set 返 False, 不抛错 (类 20.121)"""
     bad_redis = AsyncMock()
     bad_redis.setex = AsyncMock(side_effect=Exception("Redis连接断开"))
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=bad_redis)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=bad_redis)):
         cache = RetrievalCache(ttl=300)
         ok = await cache.set(
             query="test", user_id=1, tenant_id=10,
@@ -226,7 +236,7 @@ async def test_redis_unavailable_set_returns_false_silently() -> None:
 async def test_invalidate_removes_key() -> None:
     """invalidate 精确删 key"""
     fake = fakeredis.aioredis.FakeRedis()
-    with patch("app.services.retrieval_cache.get_redis", new=AsyncMock(return_value=fake)):
+    with patch("app.services.base_semantic_cache.get_redis", new=AsyncMock(return_value=fake)):
         cache = RetrievalCache(ttl=300)
         await cache.set(
             query="zombie", user_id=1, tenant_id=10,
@@ -248,6 +258,7 @@ async def test_invalidate_removes_key() -> None:
 
 
 @pytest.mark.asyncio
+@_requires_git
 async def test_hybrid_retriever_def_diff_zero() -> None:
     """件 4 门控 B: hybrid_retriever.py def diff = 0 (实测)"""
     import subprocess
@@ -268,6 +279,7 @@ async def test_hybrid_retriever_def_diff_zero() -> None:
 
 
 @pytest.mark.asyncio
+@_requires_git
 async def test_hybrid_retriever_knowledge_service_def_diff_zero() -> None:
     """件 4 门控 A: knowledge_service.py def diff = 0 (实测)"""
     import subprocess
@@ -308,6 +320,7 @@ def test_singleton() -> None:
 # ============================================================
 
 
+@_requires_git
 def test_anchor_paradigm_w100_plus_30() -> None:
     """锚点范式 W100 +30~+34 守恒 (派工 brief 估 +6 commits, 实测 +4 据实 派工 v6 §13.3)"""
     import subprocess

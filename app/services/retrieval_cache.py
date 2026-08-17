@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 import os
 
+from app.core.redis import get_redis  # 2026-08-17 #Plan v2 #6: module-level 让 test patch 可用
 from app.services.base_semantic_cache import BaseSemanticCache
 
 logger = logging.getLogger("microbubble.retrieval_cache")
