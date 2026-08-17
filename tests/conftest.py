@@ -47,9 +47,13 @@ if not SKIP_DB_SETUP:
     # 修复: 触发 app.models.__init__ 全部 import, Base 注册 39 张表
     import app.models  # noqa: E402,F401
 
+    # 2026-08-17 #Plan v2 业务回归: 修默认 TEST_DB_URL (连 localhost 错密码错库)
+    # 改用 env 实际值: db 容器 + microcubble2026 密码 + microbubble 库 (复用生产库, 不建新库)
+    # 允许 0 业务代码改动前提下修测试, 兼容 production 数据库
+    # 默认 localhost:5432 端口是 macOS / WSL2 host 测试用, 容器内走 db:5432
     TEST_DB_URL = os.getenv(
         "TEST_DATABASE_URL",
-        "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test",
+        "postgresql+asyncpg://postgres:microbubble2026@db:5432/microbubble",
     )
 
     # === W1 T1 conftest 跨 scope 真闭环 (2026-07-20) ===
