@@ -17,17 +17,34 @@
  * - useThemeStore (Pinia 全局主题)
  * - Rich Block 注册表 (web/src/components/chat/blocks/registry.ts)
  * - Pinia chatSessions store
+ *
+ * # 2026-08-17 #Step6-重做: 结构性注释 + import 分组 (Plan v1 Step 6)
+ * 实际拆分调研: 2167 行 ChatViewSSE 无 0 风险拆点 (主路径 11+ props 接口 + 复杂 store 联动).
+ * Plan v1 拆分路线已确认不可行 (与 Step 2-4 同样 blocker).
+ * 现 Step 6 重做: 0 业务代码改动, 仅整理:
+ *   1. import 块分 3 组 (vue / element-plus / @/)
+ *   2. 删 5 个 inline 注释 (派工 brief + P3 注释)
+ *   3. 顶部加模块结构注释 (后续拆分锚点)
+ * 未来真正拆分锚点 (主拍决策时启动):
+ *   - ChatHeader.vue: 829-900 行 (header 3-zone)
+ *   - ChatMessageArea.vue: 937-1100 行 (sticky + virtual + welcome-hero)
+ *   - ChatInputBar.vue: 1100-1220 行 (input + send + quotes + attachments)
+ *   - ChatDialogs.vue: 800+ 行 (SearchPalette + ShareDialog + ExportDialog + TagsEditor)
+ * 当前: 4 子组件拆分需要重写 ChatMessageRow props 接口 + emit 链, 风险高, 留主拍决策.
  */
+
+// ===== 1. Vue 核心 =====
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, type Ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+// ===== 2. Element Plus + Icons =====
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, VideoPause, MagicStick, Cpu, Moon, Sunny, View, Notebook, Close, Document } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
-// RichContent 也已封装到 ChatMessageRow.vue, 此处不再直接 import
+
+// ===== 3. 项目内组件 =====
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
-// #043 Phase 6 UI 升级
 import SearchPalette from '@/components/chat/SearchPalette.vue'
-// v78 UI-redesign：3-zone 新组件
 import ChatBreadcrumb from '@/components/chat/ChatBreadcrumb.vue'
 import ThinkingModeSwitch from '@/components/chat/ThinkingModeSwitch.vue'
 import ShareDialog from '@/components/chat/ShareDialog.vue'
@@ -35,11 +52,10 @@ import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
 import FeedbackButtons from '@/components/chat/FeedbackButtons.vue'  // W98 CHAT-P1-D3
 import ChatMessageRow from '@/components/chat/ChatMessageRow.vue'  // W100 +45 单条消息复用 (虚拟列表集成)
-// ===== W100 +45 P3-VIRTUAL RETRY: 下列组件已封装到 ChatMessageRow.vue, 此处不再直接 import =====
-// ThinkingCapsule / ToolTraceItem / PlanSteps / ContentBriefDetail / EventBadges /
-// ImageWithFallback / ChatMessageActions / ProEntries / FollowUpChips / RichContent
 import InputToolPanel from '@/components/chat/InputToolPanel.vue'  // ChatGPT 风格 "+" 工具面板
 import ContextPanel from '@/components/chat/ContextPanel.vue'  // W100 +29 上下文可见性面板
+
+// ===== 4. Composables + Stores + Utils =====
 import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useMemo } from '@/composables/useMemo'
 import { useVirtualList } from '@/composables/useVirtualList'  // W100 +45 虚拟滚动
@@ -51,6 +67,13 @@ import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4: �
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { renderMarkdown } from '@/utils/markdown'
 import { formatTimeDivider } from '@/utils/timeDivider'
+
+// ============================================================================
+// 模块常量 (Plan v1 Step 6 重做: 集中 magic 值, 后续重构 + 测试容易)
+// ============================================================================
+
+/** 虚拟滚动阈值 (消息数 > VIRTUAL_THRESHOLD 启用 absolute positioning 渲染) */
+const VIRTUAL_THRESHOLD = 50
 
 // ============================================================================
 // W72 B-3: 顶栏 3-zone 类型 (派工 v6 段 5 反馈 #3 实战: SubAgent 编排 type hint 必含)
@@ -324,9 +347,8 @@ const TOP_THRESHOLD_PX = 100  // P0-#2: 距顶 < 100px 算"贴顶"
 // ===== W100 +45 P3-VIRTUAL RETRY: 虚拟滚动 (messages > 50 时启用) =====
 // 单一 composable 实例, items 用 readonly messages, 容器挂在 messagesRef
 // itemHeight 经验值 (用户消息 ~80px, 助手消息 ~120-300px, 折中 120)
-// 阈值 50 (派工 v11 §9 指定 50 items threshold)
+// VIRTUAL_THRESHOLD 已在顶部模块常量定义 (Plan v1 Step 6 重做)
 const VIRTUAL_ITEM_HEIGHT = 120
-const VIRTUAL_THRESHOLD = 50
 const virtualList = useVirtualList({
   containerRef: messagesRef,
   items: messages as unknown as Ref<readonly ChatMessage[]>,
