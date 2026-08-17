@@ -45,7 +45,12 @@ if not SKIP_DB_SETUP:
     # 旧只 import Member → Base.metadata.tables 只有 Member (1 张)
     # → E2E 报 "knowledge_extractions table does not exist"
     # 修复: 触发 app.models.__init__ 全部 import, Base 注册 39 张表
-    import app.models  # noqa: E402,F401
+    # 2026-08-18 #Plan v2 #6 验证: 必须用 `import app.models as _app_models`
+    # (as 别名) 而非 `import app.models` — 后者会把 app 包 module 绑定到名字 app,
+    # 覆盖 line 41 `from app.main import app` (FastAPI 实例) 的绑定,
+    # 导致 client fixture `app.dependency_overrides` 报
+    # "module 'app' has no attribute 'dependency_overrides'" (类 20.182 新)
+    import app.models as _app_models  # noqa: E402,F401
 
     # 2026-08-17 #Plan v2 业务回归: 修默认 TEST_DB_URL (连 localhost 错密码错库)
     # 改用 env 实际值: db 容器 + microcubble2026 密码 + microbubble 库 (复用生产库, 不建新库)
@@ -257,6 +262,10 @@ async def test_member(db):
         role="member",
         grade="研一",
         is_active=True,
+        # 2026-08-18 #Plan v2 #7 验证: wechat_id 是 NOT NULL (alembic 057_wechat_id_not_null,
+        # 类 20.144 W2 +N 曾加 member_seeder wechat_id fallback). 旧 fixture 不传 wechat_id
+        # → NotNullViolationError. 补 testuser_wechat 唯一值 (防 UNIQUE 冲突).
+        wechat_id="testuser_wechat",
     )
     db.add(member)
     await db.commit()
@@ -303,6 +312,8 @@ async def admin_member(db):
         password_hash=get_password_hash(TEST_BOT_PASSWORD),
         role="admin",  # 保留 hardcoded, 不引用 TEST_BOT_ROLE — fixture 与 conftest 常量最小耦合
         is_active=True,
+        # 2026-08-18 #Plan v2 #7 验证: wechat_id NOT NULL (alembic 057), 补唯一值
+        wechat_id=f"{TEST_BOT_USERNAME}_wechat",
     )
     db.add(member)
     await db.commit()
