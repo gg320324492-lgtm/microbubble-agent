@@ -15,7 +15,8 @@ async def test_create_task(client: AsyncClient, auth_headers):
     assert resp.status_code == 201
     data = resp.json()
     assert data["title"] == "测试任务"
-    assert data["status"] == "todo"
+    # 2026-08-18 #Plan v2 #8: 状态统一后新建任务默认 in_progress (非 todo, 见 CLAUDE.md 状态统一)
+    assert data["status"] == "in_progress"
 
 
 @pytest.mark.asyncio
@@ -30,7 +31,9 @@ async def test_list_tasks(client: AsyncClient, auth_headers):
     assert resp.status_code == 200
     data = resp.json()
     assert "items" in data
-    assert data["total"] >= 1
+    # 2026-08-18 #Plan v2 #8: 统一分页模型 PaginatedResponse 用 pagination.total,
+    # 无顶层 total 字段 (见 app/schemas/pagination.py)
+    assert data["pagination"]["total"] >= 1
 
 
 @pytest.mark.asyncio

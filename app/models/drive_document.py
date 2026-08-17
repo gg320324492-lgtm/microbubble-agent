@@ -172,7 +172,11 @@ class DriveDocOpLog(Base):
     applied_at = Column(
         DateTime,
         nullable=False,
-        server_default="CURRENT_TIMESTAMP",
+        # 2026-08-18 #Plan v2 #8 fix (类 20.184): server_default 必须 text() 包裹,
+        # 纯字符串 "CURRENT_TIMESTAMP" 被 SQLAlchemy 当字面量引用 → DEFAULT 'CURRENT_TIMESTAMP'
+        # → PostgreSQL timestamp 解析失败 (InvalidDatetimeFormatError),
+        # 测试 create_all 二次建表必炸 (第一次因 checkfirst 跳过建表未暴露)
+        server_default=text("CURRENT_TIMESTAMP"),
         comment="op 应用时间",
     )
 
