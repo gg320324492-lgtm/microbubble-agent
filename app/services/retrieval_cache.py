@@ -94,3 +94,21 @@ def reset_cache() -> None:
     """重置单例 (主要用于测试)"""
     global _cache_instance
     _cache_instance = None
+
+
+# ============================================================
+# 向后兼容 alias (2026-08-17 #Plan v2 #4 e2e 修跑通)
+# ============================================================
+# Plan v1 Step 5 把 _exact_cache_key / _user_tenant_index_key 移到 BaseSemanticCache
+# 作为 instance methods. 但 tests/rag/test_retrieval_cache.py 等单测还在用
+# module-level import (旧 API). 加 module-level 包装保持向后兼容.
+# 0 业务代码改动, 纯 import compatibility shim.
+
+def _exact_cache_key(query: str, user_id, tenant_id) -> str:
+    """向后兼容: 委托给 RetrievalCache._exact_cache_key"""
+    return get_retrieval_cache()._exact_cache_key(query, user_id, tenant_id)
+
+
+def _user_tenant_index_key(user_id, tenant_id) -> str:
+    """向后兼容: 委托给 RetrievalCache._user_tenant_index_key"""
+    return get_retrieval_cache()._user_tenant_index_key(user_id, tenant_id)
