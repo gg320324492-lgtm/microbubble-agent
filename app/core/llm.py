@@ -201,6 +201,38 @@ def extract_text_from_response(response) -> str:
 # ============================================================================
 
 
+class _NullSpan:
+    """2026-08-17 #Step10: no-op span (langfuse 未启用或 import 失败时)"""
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def update(self, **kwargs): return None
+
+
+def _langfuse_simple_span(model: str, messages: list, system: Optional[str], operation: str):
+    """2026-08-17 #Step10: langfuse 2.x 单点上报 (无 wrapper)
+
+    用 langfuse_context.update_current_observation 在大 scope (e.g. agentic_loop 的 _synthesize_stream)
+    包了 generation 后, 这里只调 update 补字段. 0 风险: import 失败/SDK 未设 DSN → 返 _NullSpan.
+    """
+    try:
+        from langfuse.decorators import langfuse_context
+        # 装饰器模式的 update: 不创建新 span, 只在已有外层 generation 上加字段
+        # caller 需在 LLMClient.complete 外层包 @observe(as_type="generation")
+        class _Wrap:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def update(self, **kw):
+                try:
+                    if "output" in kw:
+                        langfuse_context.update_current_observation(output=str(kw["output"])[:5000])
+                except Exception:
+                    pass
+        return _Wrap()
+    except Exception:
+        return _NullSpan()
+    def update(self, **kwargs): return None
+
+
 class LRUResponseCache:
     """简单 LRU 缓存：仅缓存纯文本/简单响应，避免 tool_use 缓存错乱"""
 
@@ -265,13 +297,13 @@ class LLMClient:
 
     _instance: Optional["LLMClient"] = None
 
-    def __new__(cls):
+    def __new__(cls, db=None):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, db=None):
         if self._initialized:
             return
         # 2026-07-02 openai_compat backend dispatch
@@ -317,6 +349,49 @@ class LLMClient:
             f"LLMClient 初始化完成: backend={self.backend}, models={self.models}, "
             f"openai_client={'set' if self.openai_client else 'None'}"
         )
+
+        # 2026-08-17 #Step10: 激活 langfuse LLM 调用追踪 (Plan v1)
+        # 0 风险: 启动时检查 LANGFUSE_TRACE_ENABLED, 未启用就 no-op (类 20 守恒)
+        # 启用后: 自动配置 langfuse 客户端, 后续 _trace_call() 自动上报
+        self._langfuse_enabled = False
+        try:
+            from app.rag import config as _cfg
+            if _cfg.LANGFUSE_TRACE_ENABLED:
+                from langfuse import Langfuse
+                Langfuse(
+                    public_key=_cfg.LANGFUSE_PUBLIC_KEY,
+                    secret_key=_cfg.LANGFUSE_SECRET_KEY,
+                    host=_cfg.LANGFUSE_HOST,
+                )
+                self._langfuse_enabled = True
+                logger.info(f"LangFuse tracing 启用: {_cfg.LANGFUSE_HOST}")
+        except Exception as _e:
+            logger.warning(f"LangFuse 初始化失败, tracing 禁用: {_e}", exc_info=True)
+
+    def _trace_call(self, model: str, messages: list, system: Optional[str], operation: str, **kwargs):
+        """2026-08-17 #Step10: langfuse 2.x 上下文包装 (0 风险 fallback)
+
+        用法:
+            span = self._trace_call(model, msgs, sys, "complete")
+            span.__enter__()
+            try:
+                resp = await self.client.messages.create(...)
+                span.update(output=resp)
+            finally:
+                span.__exit__(None, None, None)
+        """
+        if not self._langfuse_enabled:
+            return _NullSpan()
+        try:
+            from langfuse.decorators import observe, langfuse_context
+            # 2026-08-17 #Step10: 用 @observe 装饰器 + context.update_current_observation
+            # 装饰的函数返回 context manager (sync); 我们用 async hook 包
+            # 简化: 直接借 langfuse_context.update_current_observation 单点上报
+            # 这里不包整个 LLM 调用 (避免双层 span), 改由 caller 在外层 @observe 包裹
+            span_cm = _langfuse_simple_span(model, messages, system, operation)
+            return span_cm
+        except Exception:
+            return _NullSpan()
 
     async def complete(
         self,
@@ -390,7 +465,14 @@ class LLMClient:
         last_exc: Optional[Exception] = None
         for m in models_to_try:
             try:
-                resp = await self.client.messages.create(model=m, **kwargs)
+                # 2026-08-17 #Step10: langfuse span 包裹 (no-op if DSN 未设)
+                _span = self._trace_call(m, messages, system, "complete", max_tokens=max_tokens, temperature=temperature)
+                _span.__enter__()
+                try:
+                    resp = await self.client.messages.create(model=m, **kwargs)
+                finally:
+                    _span.update(output={"model": m, "status": "ok"})
+                    _span.__exit__(None, None, None)
                 if cache_key:
                     self.cache.set(cache_key, resp)
                 if not model and m != self.models[0]:
