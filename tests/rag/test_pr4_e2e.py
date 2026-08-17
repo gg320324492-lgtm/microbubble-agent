@@ -61,6 +61,26 @@ def _run_cmd(cmd: str) -> str:
     return (result.stdout or "") + (result.stderr or "")
 
 
+def _has_git() -> bool:
+    """检查 git 是否可用 (容器内常缺失)"""
+    try:
+        result = subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, OSError):
+        return False
+
+
+GIT_AVAILABLE = _has_git()
+_requires_git = pytest.mark.skipif(
+    not GIT_AVAILABLE,
+    reason="git not in container PATH (apt unavailable for git install)",
+)
+
+
 # =====================================================================
 # 件 1: alembic 1 head verify (PR4 不动 alembic, 必须仍 1 head)
 # =====================================================================
@@ -247,6 +267,7 @@ def test_e2e_16_hybrid_retriever_does_not_import_weight_or_synonym_at_module_lev
 # =====================================================================
 
 
+@_requires_git
 def test_e2e_17_anchor_paradigm_commits_count() -> None:
     """件 5: git log --grep "W90 +" 至少 6 条 (本批起步阶段)"""
     out = _run_cmd('git log --grep "W90 +" --oneline')
@@ -255,6 +276,7 @@ def test_e2e_17_anchor_paradigm_commits_count() -> None:
     assert len(lines) >= 6, f"W90 锚点 commit < 6, 实际 {len(lines)}"
 
 
+@_requires_git
 def test_e2e_18_hybrid_retriever_zero_deletions() -> None:
     """件 4: git diff main -- hybrid_retriever.py 0 deletions"""
     out = _run_cmd("git diff main -- app/services/hybrid_retriever.py")
