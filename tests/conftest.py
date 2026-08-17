@@ -165,11 +165,31 @@ else:
         - 跨 loop lazy 仍正确: _get_conftest_engine() 按 loop 重建 engine
         """
         conftest_engine = _get_conftest_engine()
+        # 2026-08-17 #Plan v2 #1 业务回归: 修循环 FK 依赖 (meetings ↔ meeting_processing_runs)
+        # 真根因: meetings.last_processing_run_id FK meeting_processing_runs,
+        #         meeting_processing_runs.meeting_id FK meetings → 循环依赖.
+        # SQLAlchemy sorted_tables 解决不了 (拓扑循环).
+        # 修复: 临时禁用 FK 检查 (测试 DB, 0 业务代码改动, 生产路径不受影响).
+        # 方案: postgresql 启动 session 关闭 FK, asyncpg 不能 SET local_in_oid,
+        #        但 session_replication_role='replica' 实际生效 (实测).
+        from sqlalchemy.schema import sort_tables
         async with conftest_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            tables = list(Base.metadata.sorted_tables)
+            # 异步 pg 启动 - replica 角色 (绕开 FK 检查)
+            await conn.exec_driver_sql("SET session_replication_role = 'replica'")
+            try:
+                await conn.run_sync(
+                    lambda c: Base.metadata.create_all(c, tables=tables, checkfirst=False)
+                )
+            finally:
+                await conn.exec_driver_sql("SET session_replication_role = 'origin'")
         yield
         async with conftest_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+            await conn.exec_driver_sql("SET session_replication_role = 'replica'")
+            try:
+                await conn.run_sync(Base.metadata.drop_all)
+            finally:
+                await conn.exec_driver_sql("SET session_replication_role = 'origin'")
         await conftest_engine.dispose()
         _reset_conftest_engine_cache()  # W8.1: dispose 后必须重置, 否则 db fixture 拿到 stale sessionmaker
 
