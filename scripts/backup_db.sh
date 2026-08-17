@@ -46,6 +46,14 @@ if [ -f ".env" ]; then
   ENV_HASH=$(grep "^SECRET_KEY=" .env | sha256sum | cut -c1-8)
   echo "[$(date)] 当前 SECRET_KEY sha256[0:8]=$ENV_HASH (备份 DB 不含此 key)"
   echo "[$(date)] 提醒: 恢复 DB 后若 SECRET_KEY 已变, 所有用户须重新登录 (类 20.155)"
+  # 2026-08-17 #Step1: 自动备份 .env (类 20.155 实战: 服务器关机恢复 SECRET_KEY 漂移, 24 用户 401)
+  # chmod 600 限权 (含 SECRET_KEY + DB password + LLM key), 不入 git (沿用 .gitignore)
+  ENV_BACKUP="${BACKUP_DIR}/.env.$(date +%Y%m%d_%H%M%S).bak"
+  cp ".env" "$ENV_BACKUP"
+  chmod 600 "$ENV_BACKUP"
+  echo "[$(date)] ✓ .env 备份到 $ENV_BACKUP (含 SECRET_KEY + DB password + LLM key)"
+  # 同时清理 30 天前的 .env 备份 (与 DB 备份同生命周期)
+  find "$BACKUP_DIR" -name ".env.*.bak" -mtime +30 -delete 2>/dev/null || true
 fi
 
 echo "[$(date)] 备份完成"
