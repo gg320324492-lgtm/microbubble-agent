@@ -210,6 +210,10 @@ def test_alembic_18_idempotent_guard_present():
 
 # ============== 19-22: 集成 + 性能基线 ==============
 
+@pytest.mark.xfail(
+    reason="W-N anchor 推进后 alembic head 演进 (W97 PR1-10 加 087-091 + W-N 半精度链 100-104 + chat-attach 106 + summary 107). 此 PR2 era 测试期望 088 head 已过时, 用 xfail 标记 obsolete.",
+    strict=False,
+)
 def test_alembic_19_heads_shows_088():
     """python -m alembic heads 应显示 088 (或 087 if not merged)"""
     # run via subprocess, accept either 087 (if 088 not in script_location) or 088
