@@ -848,6 +848,13 @@ class MicroBubbleAgent:
                                 asyncio.create_task(
                                     self._extract_memories_bg(user_id, conv_msgs, session_id)
                                 )
+                            # 2026-08-17 #Step14: summary 写路径 (Plan v1 P2)
+                            # 复用 fire-and-forget 模式: 异步 LLM 压缩 chat_messages.summary + key_topics
+                            # 不阻塞主流程. 走 settings.SUMMARY_LLM_ENABLED 开关
+                            if user_id and db and getattr(settings, "SUMMARY_LLM_ENABLED", False):
+                                asyncio.create_task(
+                                    self._save_message_summary_bg(assistant_msg_id, assistant_text)
+                                )
                             logger.info(
                                 f"[chat_stream persist] assistant_msg persisted: "
                                 f"msg_id={assistant_msg_id} len={len(assistant_text)}"
@@ -1467,6 +1474,63 @@ class MicroBubbleAgent:
                 )
         except Exception as e:
             logger.error(f"后台记忆提取失败: {e}")
+
+    async def _save_message_summary_bg(self, message_id: int, content: str) -> None:
+        """2026-08-17 #Step14: chat_messages.summary 写路径 (Plan v1 P2)
+
+        Fire-and-forget: 异步 LLM 压缩消息 → 写 chat_messages.summary + key_topics.
+        不阻塞主流程, 失败仅 log (best-effort, 类 20.121 守恒).
+        触发条件: settings.SUMMARY_LLM_ENABLED=True (默认 False, P2 启用时主拍决策).
+
+        流程:
+        1. LLM 调用生成 summary (1 句话 ≤ 200 字) + key_topics (3-5 个关键词)
+        2. UPDATE chat_messages SET summary=$1, key_topics=$2 WHERE id=$3
+        3. 失败: log + return (P2 启用时增强重试)
+        """
+        from app.core.database import async_session
+        try:
+            # 截断避免 LLM 超 token
+            truncated = content[:3000] if len(content) > 3000 else content
+            # 简化版 prompt (P2 启用时换更精细的 prompt)
+            summary_prompt = f"用 1 句话 (≤ 100 字) 总结以下对话, 并列出 3-5 个关键词 (逗号分隔):\n\n{truncated}\n\n格式:\nSUMMARY: <一句话>\nTOPICS: <关键词1>, <关键词2>, <关键词3>"
+            # LLM 调用 (复用现有 lru cache + 完整版块)
+            from app.core.llm import get_anthropic_client, get_default_model
+            client = get_anthropic_client()
+            model = get_default_model()
+            resp = await client.messages.create(
+                model=model,
+                max_tokens=300,
+                temperature=0.0,
+                messages=[{"role": "user", "content": summary_prompt}],
+            )
+            # 解析 SUMMARY + TOPICS
+            text = ""
+            for block in resp.content:
+                if hasattr(block, "text"):
+                    text = block.text
+                    break
+            summary = ""
+            topics_str = ""
+            for line in text.split("\n"):
+                if line.startswith("SUMMARY:"):
+                    summary = line[len("SUMMARY:"):].strip()[:500]
+                elif line.startswith("TOPICS:"):
+                    topics_str = line[len("TOPICS:"):].strip()
+            topics = [t.strip() for t in topics_str.split(",") if t.strip()][:5]
+            # 异步落库
+            async with async_session() as db:
+                from sqlalchemy import update, text as sa_text
+                from app.models.chat_history import ChatMessage
+                stmt = update(ChatMessage).where(ChatMessage.id == message_id).values(
+                    summary=summary,
+                    key_topics=topics,
+                )
+                await db.execute(stmt)
+                await db.commit()
+                logger.debug(f"[Step14] summary saved for msg_id={message_id}: {summary[:50]}...")
+        except Exception as e:
+            logger.error(f"[Step14] summary save failed for msg_id={message_id}: {e}", exc_info=True)
+            # 0 阻塞: 失败仅 log, 不影响主流程
 
     async def _extract_knowledge_bg(self, user_id: int, messages: List[Dict], session_id: str):
         """后台知识提取（从对话中）

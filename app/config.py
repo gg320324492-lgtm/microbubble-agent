@@ -163,6 +163,11 @@ class Settings(BaseSettings):
 
     # 数据库连接池
     DB_POOL_SIZE: int = 20
+
+    # 2026-08-17 #Step14: session summary 写路径 (Plan v1 P2)
+    # assistant message 完成后异步 LLM 压缩, 写 chat_messages.summary + key_topics
+    # 默认 False (P2 启用时主拍决策), True 后跑 chat_stream 每个 assistant message 触发
+    SUMMARY_LLM_ENABLED: bool = os.getenv("SUMMARY_LLM_ENABLED", "0").lower() in ("1", "true", "yes")
     DB_MAX_OVERFLOW: int = 10
 
     # JWT 令牌有效期
