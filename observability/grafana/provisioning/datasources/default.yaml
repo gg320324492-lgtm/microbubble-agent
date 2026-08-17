@@ -1,0 +1,40 @@
+apiVersion: 1
+
+# 2026-08-17 #Step13: 业务指标 + Grafana 仪表盘 (Plan v1)
+# Grafana 自动 provisioning datasource (启动时自动加载, 无需手动点 UI)
+# 0 风险: 新增文件, 不改任何 grafana 容器配置
+#
+# 复用路径:
+# - prometheus_uid "prometheus": 跑 pg-exporter 收集 postgres 指标
+# - postgres_uid "pg-microbubble": 直接连 microbubble DB 跑自定义 SQL 面板 (RAG dashboard)
+# - dashboard_path: 自动导入 observability/grafana/rag_dashboard.json
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://pg-exporter:9187/metrics
+    isDefault: false
+    editable: true
+    jsonData:
+      timeInterval: 30s
+
+  - name: MicroBubble PG
+    type: postgres
+    uid: pg-microbubble
+    access: proxy
+    url: db:5432
+    user: postgres
+    secureJsonData:
+      password: microbubble2026
+    database: microbubble
+    isDefault: true
+    editable: true
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 600
+      postgresVersion: 1600
+      timescaledb: false
