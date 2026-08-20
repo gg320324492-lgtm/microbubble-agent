@@ -7450,6 +7450,304 @@ def test_160_research_agent_v1_release_smoke():
 
 
 # ---------------------------------------------------------------------------
+# Phase 14.1 — Follow-up Intelligence Layer tests
+# ---------------------------------------------------------------------------
+def test_161_followup_schema():
+    """Phase 14.1 §1: Follow-up schema dataclass + categories."""
+    from app.services.followup_schema import (
+        CATEGORY_COMPARISON,
+        CATEGORY_DETAIL,
+        CATEGORY_EXPLANATION,
+        CATEGORY_KNOWLEDGE_GAP,
+        CATEGORY_NEXT_ACTION,
+        DEFAULT_CATEGORIES,
+        FollowUpQuestion,
+        followups_to_dicts,
+        make_followup,
+    )
+
+    # All 5 default categories present
+    assert set(DEFAULT_CATEGORIES) == {
+        CATEGORY_DETAIL,
+        CATEGORY_EXPLANATION,
+        CATEGORY_COMPARISON,
+        CATEGORY_NEXT_ACTION,
+        CATEGORY_KNOWLEDGE_GAP,
+    }
+
+    # Constructor + clamping + invalid category
+    fq = make_followup(
+        question="How does pH affect microbubble nucleation?",
+        category=CATEGORY_DETAIL,
+        intent="deep_dive",
+        reason="user requested explanation",
+        confidence=1.5,  # over 1.0 → clamp
+        priority=-0.5,  # under 0.0 → clamp
+    )
+    assert fq.confidence == 1.0
+    assert fq.priority == 0.0
+    assert fq.category == CATEGORY_DETAIL
+    assert fq.intent == "deep_dive"
+
+    # Invalid category falls back to detail
+    fq_bad = FollowUpQuestion(question="x", category="not_real")
+    assert fq_bad.category == CATEGORY_DETAIL
+
+    # to_dict + batch helper
+    d = fq.to_dict()
+    assert d["question"].startswith("How does pH")
+    assert d["category"] == CATEGORY_DETAIL
+    batch = followups_to_dicts([fq, fq_bad])
+    assert len(batch) == 2
+    for item in batch:
+        assert "confidence" in item and "priority" in item
+
+
+def test_162_followup_generator():
+    """Phase 14.1 §2: generator returns up to max_questions, always non-empty."""
+    from app.services.followup_generator import generate_followup_questions
+    from app.services.followup_schema import (
+        FollowUpQuestion,
+        DEFAULT_CATEGORIES,
+    )
+
+    out = generate_followup_questions(
+        user_prompt="Investigate the effect of pH on microbubble nucleation",
+        answer="The pH influences nucleation rate via surface charge.",
+        memory_hits=None,
+        reasoning_output=None,
+        intent=None,
+        max_questions=3,
+    )
+    assert isinstance(out, list)
+    assert 1 <= len(out) <= 3
+    for fq in out:
+        assert isinstance(fq, FollowUpQuestion)
+        assert fq.question
+        assert fq.category in DEFAULT_CATEGORIES
+        assert 0.0 <= fq.confidence <= 1.0
+        assert 0.0 <= fq.priority <= 1.0
+
+
+def test_163_deep_dive_followup():
+    """Phase 14.1 §2: deep-dive dimension (detail / explanation) covered."""
+    from app.services.followup_generator import generate_followup_questions
+    from app.services.followup_schema import (
+        CATEGORY_DETAIL,
+        CATEGORY_EXPLANATION,
+    )
+
+    out = generate_followup_questions(
+        user_prompt="Explain how the zeta potential influences coalescence",
+        answer="",
+        memory_hits=[],
+        reasoning_output=type("R", (), {"bayesian_posterior": 0.3})(),
+        intent=type("I", (), {"task_type": "deep_dive"})(),
+        max_questions=3,
+    )
+    categories = {f.category for f in out}
+    # The deep-dive dimension must include at least one of detail/explanation
+    assert categories & {CATEGORY_DETAIL, CATEGORY_EXPLANATION}
+
+
+def test_164_knowledge_gap_followup():
+    """Phase 14.1 §2: knowledge-gap dimension triggers on empty memory."""
+    from app.services.followup_generator import generate_followup_questions
+    from app.services.followup_schema import CATEGORY_KNOWLEDGE_GAP
+
+    out = generate_followup_questions(
+        user_prompt="How does ultrasound amplitude relate to bubble size distribution?",
+        answer="",
+        memory_hits=None,  # signals a knowledge gap
+        reasoning_output=None,
+        intent=None,
+        max_questions=3,
+    )
+    categories = {f.category for f in out}
+    assert CATEGORY_KNOWLEDGE_GAP in categories
+
+
+def test_165_followup_ranking():
+    """Phase 14.1 §3: ranker applies weighted scoring formula and ranks top-k."""
+    from app.services.followup_generator import generate_followup_questions
+    from app.services.followup_ranker import (
+        W_INTENT_MATCH,
+        W_KNOWLEDGE_GAP,
+        W_NOVELTY,
+        W_USEFULNESS,
+        rank_followups,
+    )
+
+    followups = generate_followup_questions(
+        user_prompt="Compare microbubble vs nanobubble generation methods",
+        answer="",
+        memory_hits=None,
+        reasoning_output=None,
+        intent=None,
+        max_questions=4,
+    )
+
+    ranked = rank_followups(followups, expected_intent="compare_alternatives")
+    assert len(ranked) == len(followups)
+    scores = [f.metadata.get("score", 0.0) for f in ranked]
+    # Scores are monotonically non-increasing
+    assert scores == sorted(scores, reverse=True)
+    # Weights sum to 1.0
+    assert abs(
+        W_INTENT_MATCH + W_KNOWLEDGE_GAP + W_USEFULNESS + W_NOVELTY - 1.0
+    ) < 1e-9
+    # top_k respected
+    top2 = rank_followups(followups, expected_intent="compare_alternatives", top_k=2)
+    assert len(top2) == 2
+    # Each item carries a score component breakdown
+    for f in ranked:
+        comp = f.metadata.get("score_components")
+        assert isinstance(comp, dict)
+        assert set(comp) >= {
+            "intent_match",
+            "knowledge_gap",
+            "usefulness",
+            "novelty",
+            "score",
+        }
+
+
+def test_166_report_followup_integration():
+    """Phase 14.1 §4: ResearchReport gains followup_questions field, populated by generator."""
+    from app.services.research_report import (
+        ResearchReport,
+        generate_research_report,
+    )
+
+    report = generate_research_report(
+        user_prompt="Evaluate carbon nanotube doping in microbubble sensors",
+        intent=type("I", (), {"objective": "study", "domain": "materials", "task_type": "evaluate"})(),
+        plan=None,
+        execution_result=None,
+        evaluation=type("E", (), {
+            "overall_score": 0.81,
+            "quality_score": 0.83,
+            "completeness_score": 0.79,
+            "confidence_score": 0.84,
+            "issues": [],
+        })(),
+        improvement_plan=None,
+        reasoning_output=type("R", (), {"summary": "ok", "action": "x", "bayesian_posterior": 0.6})(),
+        knowledge_output=[],
+        memory_hits=["m1"],
+        steps=[],
+    )
+    assert isinstance(report, ResearchReport)
+    # Phase 14.1 added field, must be present (additive only)
+    assert isinstance(report.followup_questions, list)
+    assert len(report.followup_questions) >= 1
+    for fq in report.followup_questions:
+        for k in ("question", "category", "intent", "reason", "confidence", "priority"):
+            assert k in fq
+    # to_dict carries the field through
+    d = report.to_dict()
+    assert "followup_questions" in d
+    assert d["followup_questions"]
+
+
+def test_167_empty_answer_fallback():
+    """Phase 14.1 §2: empty answer / no memory / no reasoning still produces a question."""
+    from app.services.followup_generator import generate_followup_questions
+    from app.services.followup_schema import FollowUpQuestion
+
+    # Empty inputs — must not raise, must produce at least 1 question
+    out = generate_followup_questions(
+        user_prompt="",
+        answer="",
+        memory_hits=None,
+        reasoning_output=None,
+        intent=None,
+        max_questions=3,
+    )
+    assert isinstance(out, list)
+    assert len(out) >= 1
+    for fq in out:
+        assert isinstance(fq, FollowUpQuestion)
+        assert fq.question  # non-empty
+
+    # None prompt explicitly
+    out2 = generate_followup_questions(
+        user_prompt=None,  # type: ignore[arg-type]
+        answer=None,
+        memory_hits=None,
+        reasoning_output=None,
+        intent=None,
+        max_questions=2,
+    )
+    assert isinstance(out2, list)
+    assert len(out2) >= 1
+
+
+def test_168_followup_end_to_end():
+    """Phase 14.1 §2-§4: deterministic e2e — generator → ranker → report attach."""
+    from app.services.followup_generator import generate_followup_questions
+    from app.services.followup_ranker import rank_followups
+    from app.services.research_report import (
+        ResearchReport,
+        generate_research_report,
+    )
+    from app.services.followup_schema import FollowUpQuestion
+
+    user_prompt = (
+        "Design an experiment to measure the effect of surfactant concentration "
+        "on microbubble stability in ceramic membrane filtration"
+    )
+    intent = type(
+        "I",
+        (),
+        {"objective": "design_experiment", "domain": "membrane", "task_type": "design_experiment"},
+    )()
+    reasoning_output = type(
+        "R",
+        (),
+        {"summary": "needs more runs", "action": "expand", "bayesian_posterior": 0.4},
+    )()
+
+    # Step 1: generate
+    followups = generate_followup_questions(
+        user_prompt=user_prompt,
+        answer="",
+        memory_hits=["hit1", "hit2"],
+        reasoning_output=reasoning_output,
+        intent=intent,
+        max_questions=3,
+    )
+    assert isinstance(followups, list)
+    assert all(isinstance(f, FollowUpQuestion) for f in followups)
+
+    # Step 2: rank
+    ranked = rank_followups(followups, expected_intent="design_experiment")
+    assert ranked
+    scores = [f.metadata["score"] for f in ranked]
+    assert scores == sorted(scores, reverse=True)
+
+    # Step 3: attach to report
+    report = generate_research_report(
+        user_prompt=user_prompt,
+        intent=intent,
+        plan=None,
+        execution_result=None,
+        evaluation=None,
+        improvement_plan=None,
+        reasoning_output=reasoning_output,
+        knowledge_output=[],
+        memory_hits=["hit1", "hit2"],
+        steps=[],
+    )
+    assert isinstance(report, ResearchReport)
+    assert 1 <= len(report.followup_questions) <= 5
+    # All questions in the report carry score metadata (already ranked)
+    d = report.to_dict()
+    assert "followup_questions" in d
+    assert len(d["followup_questions"]) >= 1
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 def _run_all() -> tuple:

@@ -1,0 +1,73 @@
+{
+  "phase": "14.1",
+  "target": "Research Agent V1.0 follow-up experience",
+  "status": "COMPLETE",
+  "date": "2026-08-21",
+  "branch": "claude/follow-up-intelligence-layer-0d54ed",
+  "anchor": "Phase 14.0 V1.0 release (frozen)",
+  "compliance": {
+    "additive_only": true,
+    "no_db_migrations": true,
+    "no_frozen_module_changes": true,
+    "fallback_required": true,
+    "deterministic_first": true,
+    "four_dimensions": true,
+    "ranker_formula_weights": [0.4, 0.3, 0.2, 0.1]
+  },
+  "files_created": [
+    "app/services/followup_schema.py",
+    "app/services/followup_generator.py",
+    "app/services/followup_ranker.py",
+    "docs/phase14/p01_followup_intelligence_report.md",
+    "docs/phase14/phase14_1_followup_results.json"
+  ],
+  "files_modified": [
+    "app/services/research_report.py (additive field only)",
+    "tests/test_phase7b_integration.py (+8 new tests: test_161 .. test_168)"
+  ],
+  "files_not_modified": [
+    "app/rag/* (DO NOT MODIFY)",
+    "app/services/workflow/* (DO NOT MODIFY)",
+    "app/core/* celery task state machine (DO NOT MODIFY)",
+    "DEFAULT_MODEL / qwen2.5vl:7b (DO NOT MODIFY)",
+    "alembic/versions/* (no DB migrations)"
+  ],
+  "schema": {
+    "dataclass": "FollowUpQuestion",
+    "fields": ["question", "category", "intent", "reason", "confidence", "priority"],
+    "categories": [
+      "detail",
+      "explanation",
+      "comparison",
+      "next_action",
+      "knowledge_gap"
+    ]
+  },
+  "generation_dimensions": [
+    "deep_understanding (detail / explanation)",
+    "related_analysis (comparison)",
+    "next_action_suggestion (next_action)",
+    "knowledge_gap_completion (knowledge_gap)"
+  ],
+  "ranking_formula": "score = 0.4*intent_match + 0.3*knowledge_gap + 0.2*usefulness + 0.1*novelty",
+  "tests_added": [
+    {"id": 161, "name": "test_161_followup_schema", "verifies": "dataclass + 5 categories + clamping"},
+    {"id": 162, "name": "test_162_followup_generator", "verifies": "max_questions cap"},
+    {"id": 163, "name": "test_163_deep_dive_followup", "verifies": "deep understanding dimension"},
+    {"id": 164, "name": "test_164_knowledge_gap_followup", "verifies": "knowledge_gap on empty memory"},
+    {"id": 165, "name": "test_165_followup_ranking", "verifies": "ranker formula + top_k"},
+    {"id": 166, "name": "test_166_report_followup_integration", "verifies": "followup_questions in ResearchReport"},
+    {"id": 167, "name": "test_167_empty_answer_fallback", "verifies": "graceful fallback on empty/None"},
+    {"id": 168, "name": "test_168_followup_end_to_end", "verifies": "end-to-end gen -> rank -> attach"}
+  ],
+  "test_results": {
+    "total_in_file": 168,
+    "new_passed": 8,
+    "new_skipped": 0,
+    "new_failed": 0,
+    "command": "SKIP_DB_SETUP=1 python -m pytest tests/test_phase7b_integration.py -k \"test_161 or test_162 or test_163 or test_164 or test_165 or test_166 or test_167 or test_168\"",
+    "result": "8 passed, 160 deselected in 0.07s",
+    "pre_existing_notes": "tests/test_phase7b_integration.py contains 160 pre-existing tests for Phases 7B-13 that require legacy modules (app.services.memory, app.agent.ollama_client, etc.) which were scoped out of the current worktree branch. State of those tests (147 fail / 21 pass) is unrelated to Phase 14.1 additive changes and reflects pre-existing branch state."
+  },
+  "result_sha": "PHASE14_1_RESULT_SHA"
+}
