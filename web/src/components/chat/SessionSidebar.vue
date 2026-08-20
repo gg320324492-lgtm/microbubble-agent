@@ -38,11 +38,11 @@ const batchMode = ref(false)
 const selectedIds = ref(new Set())
 
 // W100 +45 P3-VIRTUAL RETRY: session 列表专用虚拟滚动
-// 经验值: session 卡片高 56px, 阈值 50 (会话 > 50 启用虚拟化)
-// batch mode 下统一虚拟; 分组模式 (非 batch) 下每组独立虚拟 (3 个独立实例共享同一容器)
-// 因为 batch 模式 filteredSessions 单一列表 + 分组模式 pinned/recent 各自独立
-const SESSION_ITEM_HEIGHT = 56
-const SESSION_VIRTUAL_THRESHOLD = 50
+// ★ 修实际渲染卡片高度 ~64-72px (min-height 64 + padding 10 + border 3 + line-height margin),
+//   原 56 偏小 → 卡片虚拟定位 top 间距 56 但实际占 64+, 每对卡片视觉重叠 8px (18/18 overlaps).
+// ★ 真实案例: 19 items 触发虚拟化, 18 对全部 overlap. 解决 = virtual item height 严格等于渲染高度.
+const SESSION_ITEM_HEIGHT = 72
+const SESSION_VIRTUAL_THRESHOLD = 200
 const sessionListRef = ref<HTMLElement | null>(null)  // 共享滚动容器
 // 实际 virtualList 创建在 groupedSessions / filteredSessions 声明之后 (见下方)
 // 3 个 let 变量, 避免 TDZ hoist 报错
@@ -753,7 +753,7 @@ onUpdated(() => {
 .session-list { flex: 1; overflow-y: auto; padding: 8px 0; overflow-anchor: none; }
 .session-item {
   padding: 10px 12px;
-  margin: 2px 8px;
+  margin: 2px 8px 8px;
   border-radius: 12px;
   cursor: pointer;
   transition: background 0.15s;
@@ -765,6 +765,18 @@ onUpdated(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  /* ★ ★ 修复 sidebar 卡片重叠: 用户实测 18/18 仍有重叠.
+     此处用 !important 强约束覆盖任何其他规则 (scoped 优先级/继承 line-height).
+     防御: SessionActions ::before tap target = 44px, 默认 flex-shrink: 1
+     把 .session-content 压扁. min-height + flex-shrink: 0 + overflow:hidden
+     + position:relative 四件套 */
+  min-height: 64px !important;
+  overflow: hidden !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  /* ★ ★ 用户视觉感知修复: 用 box-shadow 替代 border 立体感 + 增加可见间距 (margin-bottom 8px),
+     让卡片间有清晰视觉分隔, 不再看起来"挤成一坨" */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 .session-item:hover { background: #f8f6f3; }
 .session-item.active { background: #fff5f2; border-left-color: #FF7A5C; }
@@ -881,12 +893,16 @@ onUpdated(() => {
 
 .archived-mark { font-size: 10px; }
 
-/* v78: session-content 用 flex + min-width: 0 让 title-text 自然收缩，actions 绝对定位重叠 bug 修复 */
+/* v78: session-content 用 flex + min-width: 0 让 title-text 自然收缩，actions 绝对定位重叠 bug 修复
+   ★ ★ 修复 sidebar UI 重叠: 删 width: 100% + 加 flex: 1 + flex-shrink: 0, 防止
+      .session-actions (flex-shrink:0, 高度 44px 含 ::before) 把 .session-content
+      flex-shrink:1 压缩到 44px, 导致 title/meta/preview 三行文字叠加. */
 .session-content {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  width: 100%;
+  flex: 1;
+  flex-shrink: 0;
 }
 .session-title {
   display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
@@ -901,8 +917,20 @@ onUpdated(() => {
   min-width: 0;
   /* v78: 移除写死 max-width: 160px，改 flex 自然收缩 */
 }
-.session-meta { display: flex; gap: 8px; font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
-.session-preview { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-meta { display: flex; gap: 8px; font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; flex-shrink: 0; }
+.session-preview {
+  font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;
+  /* ★ 用户实测: preview 数据含 \n 换行, 旧 nowrap 渲染出多行. 改用 -webkit-line-clamp 2 行截断 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  /* 防止 flex 容器把 preview 撑开, 强制单卡固定高度可预测 */
+  flex-shrink: 0;
+}
 
 /* v78: 上下文菜单（原 .session-actions hover 区彻底删除） */
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 12px; }

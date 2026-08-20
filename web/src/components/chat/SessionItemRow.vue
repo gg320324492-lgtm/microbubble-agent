@@ -105,3 +105,64 @@ const emit = defineEmits<{
     />
   </div>
 </template>
+
+<style scoped>
+/* ★ 防御塌缩: SessionItemRow 在 virtual 模式下走 SessionSidebar scope
+   styles 缺失(本组件独立 file,scope 不互通). 即使没引父级 .session-item
+   CSS, 这里独立保证卡片最低 64px 高 + overflow 隔离. */
+.session-item {
+  min-height: 64px;
+  padding: 10px 12px;
+  margin: 2px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* 子元素不允许溢出影响父层位置 (prevent title/meta/preview 视觉重叠) */
+  overflow: hidden;
+  position: relative;
+  background: transparent;
+  transition: background 0.15s;
+  border-left: 3px solid transparent;
+}
+.session-item.active {
+  background: #fff5f2;
+  border-left-color: #FF7A5C;
+}
+.session-item.selected {
+  background: rgba(64, 158, 255, 0.08);
+  border-left-color: var(--el-color-primary);
+}
+.session-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  flex-shrink: 0;
+}
+.session-title {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 500;
+  min-width: 0;
+}
+.session-title-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.session-meta {
+  display: flex; gap: 8px; font-size: 11px;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+.session-preview {
+  font-size: 11px;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>

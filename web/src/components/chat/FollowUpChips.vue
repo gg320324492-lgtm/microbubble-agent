@@ -117,15 +117,15 @@ function cleanSuggestion(s: string): string {
 </script>
 
 <template>
-  <Transition name="chip-fade">
+  <Transition name="chip-fade" mode="out-in">
     <!-- ===== W99 +16 skeleton 等待态 ===== -->
-    <div v-if="isWaiting" class="followup-chips followup-skeleton" aria-label="正在生成追问建议">
+    <div v-if="isWaiting" key="skeleton" class="followup-chips followup-skeleton" aria-label="正在生成追问建议">
       <span class="hint-text">💡 追问:</span>
       <span class="skeleton skeleton-chip" style="width: 88px" />
       <span class="skeleton skeleton-chip" style="width: 120px" />
       <span class="skeleton skeleton-chip" style="width: 96px" />
     </div>
-    <div v-if="isVisible && suggestions.length" class="followup-chips">
+    <div v-else-if="isVisible && suggestions.length" key="list" class="followup-chips">
       <span class="hint-text">💡 追问:</span>
       <button
         v-for="(s, i) in suggestions"
