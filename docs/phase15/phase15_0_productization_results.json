@@ -152,5 +152,5 @@
       "actual": "205 collected. 15 new Phase 15.0 PASS + 22 Phase 14.2+14.3 PASS + 21 prior tests PASS = 58 PASS. 147 legacy Phase 7B-13 tests fail with ModuleNotFoundError for research_intent_parser / research_planner / research_executor / research_hypothesis ORM models — those modules live on the parent Phase 14 main branch only and were not part of the Phase 14.0 cherry-pick onto this worktree branch. These pre-existing module gaps are unrelated to Phase 15.0 additive changes."
     }
   },
-  "result_sha": "PHASE15_0_RESULT_SHA"
+  "result_sha": "1fec2d91457ff9982f3fdeb20c7ec03835de7176"
 }
