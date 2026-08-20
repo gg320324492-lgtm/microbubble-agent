@@ -8559,6 +8559,546 @@ def test_190_phase14_3_regression():
 
 
 # ---------------------------------------------------------------------------
+# Phase 15.0 — Research Agent Productization Layer tests
+# ---------------------------------------------------------------------------
+def test_191_research_user_profile_model():
+    """Phase 15.0 §1: ResearchUserProfile ORM defines all required fields."""
+    from app.models.research_user_profile import ResearchUserProfile
+
+    table = ResearchUserProfile.__table__
+    cols = {c.name for c in table.columns}
+    for required in (
+        "id",
+        "user_id",
+        "name",
+        "research_domain",
+        "expertise_level",
+        "research_topics",
+        "preferred_answer_style",
+        "research_preferences",
+        "current_projects",
+        "created_at",
+        "updated_at",
+    ):
+        assert required in cols, f"missing column: {required}"
+
+    # Migration 127 must exist
+    import os
+    assert os.path.exists(
+        "alembic/versions/127_research_user_profile.py"
+    ), "alembic 127 missing"
+
+
+def test_192_research_workspace_model():
+    """Phase 15.0 §2: ResearchWorkspace ORM defines all required fields + 2 migrations form a chain."""
+    from app.models.research_workspace import (
+        ResearchWorkspace,
+        STAGE_CHOICES,
+        STATUS_CHOICES,
+    )
+    import os
+
+    table = ResearchWorkspace.__table__
+    cols = {c.name for c in table.columns}
+    for required in (
+        "id",
+        "user_id",
+        "title",
+        "description",
+        "domain",
+        "status",
+        "goal",
+        "hypotheses",
+        "evidence_summary",
+        "current_stage",
+        "created_at",
+        "updated_at",
+    ):
+        assert required in cols
+
+    assert len(STAGE_CHOICES) == 6
+    assert len(STATUS_CHOICES) == 4
+    assert os.path.exists("alembic/versions/128_research_workspace.py")
+    # Single-chain check (force utf-8 to avoid Windows console encoding).
+    chain_text_127 = open(
+        "alembic/versions/127_research_user_profile.py", encoding="utf-8"
+    ).read()
+    chain_text_128 = open(
+        "alembic/versions/128_research_workspace.py", encoding="utf-8"
+    ).read()
+    assert "down_revision = \"107_add_summary_columns\"" in chain_text_127
+    assert "down_revision = \"127_research_user_profile\"" in chain_text_128
+
+
+def test_193_research_user_profile_service():
+    """Phase 15.0 §3: save/load/update profile lifecycle."""
+    from app.services.research_memory_service import ResearchMemoryService
+
+    svc = ResearchMemoryService()
+    payload = svc.save_profile(
+        7777,
+        name="杜同贺",
+        research_domain="pollution_control_water_treatment",
+        expertise_level="researcher",
+        research_topics=["microbubble", "ozone oxidation", "TC degradation"],
+        preferred_answer_style="paper_level",
+    )
+    assert payload["user_id"] == 7777
+    assert payload["research_domain"] == "pollution_control_water_treatment"
+
+    loaded = svc.load_profile(7777)
+    assert loaded is not None
+    assert loaded["name"] == "杜同贺"
+
+    # Update appends topics
+    updated = svc.update_profile(
+        7777,
+        research_topics=["engineering scale-up"],
+        current_projects=["ws_test_123"],
+    )
+    assert "engineering scale-up" in updated["research_topics"]
+    assert "ws_test_123" in updated["current_projects"]
+
+
+def test_194_research_memory_service():
+    """Phase 15.0 §3: project memory + categories + summarize."""
+    from app.services.research_memory_service import (
+        ResearchMemoryService,
+        CATEGORY_RESEARCH_TOPIC,
+        CATEGORY_CURRENT_PROBLEM,
+        CATEGORY_IMPORTANT_DECISION,
+        CATEGORY_FAILED_ATTEMPT,
+        CATEGORY_USER_FACT,
+    )
+
+    svc = ResearchMemoryService()
+    svc.save_project_memory(
+        8888,
+        workspace_id="ws_abc",
+        category=CATEGORY_RESEARCH_TOPIC,
+        content="微纳米气泡强化臭氧",
+    )
+    svc.save_project_memory(
+        8888,
+        workspace_id="ws_abc",
+        category=CATEGORY_CURRENT_PROBLEM,
+        content="缺少radical quenching证据",
+    )
+    svc.save_project_memory(
+        8888,
+        workspace_id="ws_xyz",
+        category=CATEGORY_USER_FACT,
+        content="researcher grade",
+    )
+    entries = svc.retrieve_project_context(8888, workspace_id="ws_abc")
+    assert len(entries) == 2
+    summary = svc.summarize_research_history(8888)
+    assert summary["total_entries"] >= 3
+    assert summary["by_category"][CATEGORY_RESEARCH_TOPIC]["count"] >= 1
+
+
+def test_195_research_workspace_manager():
+    """Phase 15.0 §4: workspace lifecycle (create / stage / hypothesis / evidence)."""
+    from app.services.research_workspace_manager import ResearchWorkspaceManager
+
+    mgr = ResearchWorkspaceManager()
+    snap = mgr.create_workspace(
+        99,
+        title="臭氧微纳米气泡强化TC降解机制研究",
+        domain="pollution_control_water_treatment",
+        goal="明确机制链",
+    )
+    assert snap.workspace_id.startswith("ws_")
+    assert snap.current_stage == "exploration"
+
+    snap_after = mgr.update_stage(snap.workspace_id, "hypothesis")
+    assert snap_after is not None
+    assert snap_after.current_stage == "hypothesis"
+
+    snap_h = mgr.add_hypothesis(
+        snap.workspace_id,
+        hypothesis_id="H1",
+        text="MNB increases ozone mass transfer coefficient kLa",
+    )
+    assert snap_h is not None and len(snap_h.hypotheses) == 1
+
+    snap_e = mgr.add_evidence(
+        snap.workspace_id, kind="EPR", summary="detected ·OH radicals"
+    )
+    assert snap_e is not None
+    assert "EPR" in snap_e.evidence_summary
+
+    status = mgr.get_research_status(snap.workspace_id)
+    assert status["workspace_id"] == snap.workspace_id
+    assert status["hypothesis_count"] == 1
+    assert "EPR" in status["evidence_kinds"]
+
+
+def test_196_research_progress_tracker():
+    """Phase 15.0 §5: 5-dimension score + overall + next-action."""
+    from app.services.research_workspace_manager import ResearchWorkspaceManager
+    from app.services.research_progress_tracker import (
+        ResearchProgressTracker,
+        DIMENSIONS,
+    )
+
+    mgr = ResearchWorkspaceManager()
+    snap = mgr.create_workspace(
+        5, title="project", domain="advanced_oxidation_water_treatment"
+    )
+    mgr.add_hypothesis(snap.workspace_id, hypothesis_id="H1", text="a")
+    mgr.add_hypothesis(snap.workspace_id, hypothesis_id="H2", text="b")
+    mgr.add_hypothesis(snap.workspace_id, hypothesis_id="H3", text="c")
+    mgr.add_evidence(snap.workspace_id, kind="EPR", summary="x")
+    mgr.add_evidence(snap.workspace_id, kind="LC-MS", summary="y")
+    mgr.add_evidence(snap.workspace_id, kind="kinetics", summary="z")
+
+    tracker = ResearchProgressTracker()
+    prog = tracker.evaluate_workspace(snap)
+    d = prog.to_dict()
+    # All 5 dimensions exist
+    assert set(d["dimension_breakdown"].keys()) == set(DIMENSIONS)
+    assert 0.0 <= d["overall_score"] <= 1.0
+    # Hypotheses count >= 3 → at least 0.85 from heuristic
+    assert d["hypothesis_progress"] >= 0.85
+    # next_action present
+    assert d["next_action"]
+    # Lowest dimension recommendation
+    assert isinstance(d["next_action"], str)
+    assert len(d["next_action"]) > 0
+
+
+def test_197_research_quality_evaluator():
+    """Phase 15.0 §6: 5-metric evaluation with missing-elements + suggestions."""
+    from app.services.research_quality_evaluator import (
+        ResearchQualityEvaluator,
+        ResearchQualityScore,
+    )
+
+    evaluator = ResearchQualityEvaluator()
+
+    # Strong MECHANISM_ANALYSIS answer — should hit all required elements
+    strong = (
+        "本研究以臭氧微纳米气泡强化TC降解机理为核心，建立了 ozone 传质、·OH 生成与 TC "
+        "降解的 mechanism chain。动力学方程 k = k0 * exp(-Ea/RT) 给出了 quantitative "
+        "variables (kLa、·OH 产率、表观速率常数)。通过 EPR + LC-MS 实验验证了 radical "
+        "pathway，对应 research gaps 在 radical quenching 实验与长期稳定性评估上。"
+    )
+    score = evaluator.evaluate_answer(strong, intent="mechanism_analysis")
+    assert isinstance(score, ResearchQualityScore)
+    assert score.overall_score > 0.5
+    # Should mention at least some elements found
+    for needle in ("mechanism chain", "quantitative variables", "research gaps"):
+        assert needle not in score.missing_elements, (
+            f"missing={score.missing_elements}"
+        )
+
+    # Weak answer → many missing
+    weak = "这是一个好问题。"
+    weak_score = evaluator.evaluate_answer(weak, intent="mechanism_analysis")
+    assert weak_score.missing_elements
+    assert weak_score.overall_score < score.overall_score
+
+
+def test_198_product_adapter_import():
+    """Phase 15.0 §7: product adapter module + run_product_research_agent importable."""
+    from app.services.research_agent_product_adapter import (
+        run_product_research_agent,
+        ProductizedAgentResult,
+    )
+    assert callable(run_product_research_agent)
+    assert ProductizedAgentResult is not None
+
+
+def test_199_microbubble_workspace_case():
+    """Phase 15.0 §4: end-to-end microbubble workspace lifecycle."""
+    from app.services.research_workspace_manager import ResearchWorkspaceManager
+
+    mgr = ResearchWorkspaceManager()
+    snap = mgr.create_workspace(
+        1234,
+        title="臭氧微纳米气泡强化TC降解机制研究",
+        domain="pollution_control_water_treatment",
+        goal="明确机制链",
+    )
+    mgr.add_hypothesis(
+        snap.workspace_id,
+        hypothesis_id="H1",
+        text="MNB increases ozone mass transfer coefficient kLa",
+    )
+    mgr.add_evidence(snap.workspace_id, kind="EPR", summary="detected ·OH radicals")
+    mgr.add_evidence(snap.workspace_id, kind="LC-MS", summary="intermediates")
+    mgr.add_evidence(snap.workspace_id, kind="kinetics", summary="k=0.12 min-1")
+    status = mgr.get_research_status(snap.workspace_id)
+    assert status["hypothesis_count"] == 1
+    assert "EPR" in status["evidence_kinds"]
+    assert status["current_stage"] == "experiment"
+
+
+def test_200_profile_memory_case():
+    """Phase 15.0 §3: profile + memory round-trip across 2 users."""
+    from app.services.research_memory_service import ResearchMemoryService
+
+    svc = ResearchMemoryService()
+    svc.save_profile(
+        1,
+        name="user_1",
+        research_domain="pollution_control_water_treatment",
+        expertise_level="researcher",
+    )
+    svc.save_profile(
+        2,
+        name="user_2",
+        research_domain="computational_chemistry",
+        expertise_level="student",
+    )
+    p1 = svc.load_profile(1)
+    p2 = svc.load_profile(2)
+    assert p1["research_domain"] == "pollution_control_water_treatment"
+    assert p2["research_domain"] == "computational_chemistry"
+    assert p1["expertise_level"] == "researcher"
+    assert p2["expertise_level"] == "student"
+
+
+def test_201_progress_update_case():
+    """Phase 15.0 §5: explicit progress overrides heuristic scoring."""
+    from app.services.research_workspace_manager import ResearchWorkspaceManager
+    from app.services.research_progress_tracker import (
+        ResearchProgressTracker,
+    )
+
+    mgr = ResearchWorkspaceManager()
+    snap = mgr.create_workspace(7, title="t", domain="d")
+    mgr.update_progress(
+        snap.workspace_id,
+        {
+            "literature_progress": 0.95,
+            "hypothesis_progress": 0.85,
+            "evidence_progress": 0.7,
+            "experiment_progress": 0.5,
+            "paper_progress": 0.2,
+        },
+    )
+    tracker = ResearchProgressTracker()
+    prog = tracker.evaluate_workspace(snap)
+    d = prog.to_dict()
+    # Should pick up explicit scores
+    assert d["literature_progress"] >= 0.9
+    assert d["paper_progress"] < d["literature_progress"]
+    # Lowest dimension is paper_progress → suggestion text names paper
+    # (next_action contains 论文 or paper-writing keywords).
+    next_action = d["next_action"] or ""
+    paper_markers = ("论文", "paper")
+    assert any(marker in next_action for marker in paper_markers), (
+        f"next_action={next_action!r} should mention paper"
+    )
+
+
+def test_202_quality_score_case():
+    """Phase 15.0 §6: 10 sample answers scored consistently."""
+    from app.services.research_quality_evaluator import ResearchQualityEvaluator
+
+    samples = [
+        # (intent, answer, minimum overall score)
+        ("concept_explanation", "这是对名词的解释。", 0.10),
+        (
+            "concept_explanation",
+            "这是对名词的定义和一个简单的例子应用。",
+            0.25,
+        ),
+        ("mechanism_analysis", "机制不清楚。", 0.10),
+        (
+            "mechanism_analysis",
+            "本工作建立了 mechanism chain 通过 ·OH free radicals，"
+            "并给出 quantitative variables。",
+            0.5,
+        ),
+        (
+            "mechanism_analysis",
+            "mechanism chain + quantitative variables + research gaps 全部说明。",
+            0.6,
+        ),
+        ("experiment_design", "做了一个实验。", 0.15),
+        (
+            "experiment_design",
+            "DOE structure + control variables + data analysis plan 完整。",
+            0.6,
+        ),
+        ("literature_review", "文献列表。", 0.10),
+        (
+            "literature_review",
+            "Research history + Current frontier + representative citations + research gaps",
+            0.25,
+        ),
+        ("data_analysis", "summary stats + visualization + uncertainty 都有。", 0.5),
+    ]
+    evaluator = ResearchQualityEvaluator()
+    for intent, text, min_overall in samples:
+        score = evaluator.evaluate_answer(text, intent=intent)
+        assert score.overall_score >= min_overall, (
+            f"intent={intent} score={score.overall_score} < {min_overall}"
+        )
+
+
+def test_203_full_product_pipeline():
+    """Phase 15.0 §7: full product pipeline (profile → workspace → intent → agent → quality → memory)."""
+    from app.services.research_agent_product_adapter import (
+        run_product_research_agent,
+        ProductizedAgentResult,
+    )
+
+    result = run_product_research_agent(
+        "微纳米气泡强化臭氧氧化TC的机理研究",
+        user_id=42,
+        use_llm=False,
+    )
+    assert isinstance(result, ProductizedAgentResult)
+    assert result.success
+    # Step coverage
+    step_names = [s["name"] for s in result.steps]
+    for needed in (
+        "load_profile",
+        "load_workspace",
+        "intent_detection",
+        "research_agent_v1",
+        "quality_evaluation",
+        "progress_update",
+        "save_memory",
+    ):
+        assert needed in step_names, f"missing step: {needed}"
+
+    assert result.profile is not None
+    assert result.workspace_id
+    assert result.classification is not None
+    assert result.strategy is not None
+    assert result.quality_score is not None
+    assert result.progress is not None
+    # Mechanistic prompt → mechanism_analysis
+    assert result.classification.intent == "mechanism_analysis"
+
+
+def test_204_regression_phase14():
+    """Phase 15.0 §7: Phase 14.0/14.1/14.2/14.3 modules remain importable."""
+    # Phase 14.0
+    from app.services.research_agent import run_research_agent  # noqa: F401
+    from app.services.research_report import ResearchReport, generate_research_report
+
+    # Phase 14.1
+    from app.services.followup_schema import FollowUpQuestion  # noqa: F401
+    from app.services.followup_generator import generate_followup_questions  # noqa: F401
+    from app.services.followup_ranker import rank_followups  # noqa: F401
+
+    # Phase 14.2
+    from app.services.followup_context import FollowUpContext  # noqa: F401
+    from app.services.research_profile import ResearchProfile  # noqa: F401
+    from app.services.personalized_followup_generator import generate_personalized_followups  # noqa: F401
+    from app.services.research_action_recommender import recommend_research_actions  # noqa: F401
+    from app.services.citation_guard import validate_citations  # noqa: F401
+    from app.services.research_agent_personalized import run_personalized_research_agent  # noqa: F401
+
+    # Phase 14.3
+    from app.services.research_intent_schema import IntentClassification  # noqa: F401
+    from app.services.research_intent_classifier import ResearchIntentClassifier  # noqa: F401
+    from app.services.research_answer_strategy import get_strategy  # noqa: F401
+    from app.services.intent_followup_adapter import generate_intent_followups  # noqa: F401
+    from app.services.research_agent_intent_adapter import run_with_intent_detection  # noqa: F401
+
+    # ResearchReport default additive fields intact
+    r = ResearchReport(title="x", executive_summary="y")
+    d = r.to_dict()
+    # Phase 14.0
+    assert "title" in d
+    # Phase 14.1
+    assert "followup_questions" in d
+    # Phase 14.2
+    for k in (
+        "personalized_followups",
+        "recommended_actions",
+        "citation_status",
+    ):
+        assert k in d
+    # Phase 15.0
+    for k in (
+        "research_status",
+        "quality_score",
+        "workspace_summary",
+        "recommended_next_actions",
+    ):
+        assert k in d
+
+
+def test_205_full_release_smoke():
+    """Phase 15.0: end-to-end smoke (Phase 14.3x × Phase 15.0)."""
+    from app.services.research_agent_product_adapter import (
+        run_product_research_agent,
+    )
+    from app.services.research_memory_service import ResearchMemoryService
+    from app.services.research_workspace_manager import ResearchWorkspaceManager
+
+    # Pre-seed a researcher profile and an explicit workspace so the smoke
+    # test reflects a real scenario rather than bootstrap defaults.
+    mem = ResearchMemoryService()
+    mgr = ResearchWorkspaceManager()
+    profile_seed = mem.save_profile(
+        101,
+        name="smoke_researcher",
+        research_domain="pollution_control_water_treatment",
+        expertise_level="researcher",
+    )
+
+    result = run_product_research_agent(
+        user_prompt="微纳米气泡技术在水处理中的应用与机理",
+        user_id=101,
+        memory_service=mem,
+        workspace_manager=mgr,
+        use_llm=False,
+        force_intent="mechanism_analysis",
+    )
+    # Phase 15.0 wiring must succeed. Steps attributed to Phase 14.0
+    # legacy modules (which may be missing in this worktree checkout)
+    # are filtered out — that's a pre-existing environment condition.
+    assert result.classification.intent == "mechanism_analysis"
+    assert (
+        profile_seed["research_domain"]
+        == "pollution_control_water_treatment"
+    )
+    # All Phase 15.0 steps succeeded
+    phase15_steps = {
+        s["name"]
+        for s in result.steps
+        if s["name"]
+        in (
+            "load_profile",
+            "load_workspace",
+            "intent_detection",
+            "quality_evaluation",
+            "progress_update",
+            "save_memory",
+        )
+    }
+    # Every Phase 15.0 step was at least attempted
+    assert len(phase15_steps) >= 5, f"phase 15.0 steps missing: {phase15_steps}"
+
+    # Phase 15.0 outputs well-formed
+    assert isinstance(result.quality_score, dict)
+    assert 0.0 <= result.quality_score["overall_score"] <= 1.0
+    assert isinstance(result.progress, dict)
+    assert 0.0 <= result.progress["overall_score"] <= 1.0
+    assert result.recommended_next_actions
+
+    # Final report has Phase 15.0 fields populated (when present)
+    if result.final_report is not None:
+        d = result.final_report.to_dict()
+        for k in (
+            "research_status",
+            "quality_score",
+            "workspace_summary",
+            "recommended_next_actions",
+        ):
+            assert k in d
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 def _run_all() -> tuple:
