@@ -250,6 +250,7 @@ const selectAll = () => {
 
 const clearSelection = () => {
   // 清空所有已选 (Vue ref collection reactivity quirk workaround: use triggerRef)
+  // ★ 2026-08-21: 强制让 vite content hash 变化, 触发新 bundle 释放客户端 1 年 immutable cache
   selectedIds.value.clear()
   triggerRef(selectedIds)
 }
