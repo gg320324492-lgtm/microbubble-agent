@@ -307,7 +307,6 @@ let pendingScrollTop = null
 const onListWheel = (e: WheelEvent) => {
   if (sessionListRef.value) {
     sessionListRef.value.scrollTop += e.deltaY
-    e.preventDefault()  // 阻止按钮自己处理 (避免 button-specific default 如 slider 滚动)
   }
 }
 
@@ -417,7 +416,7 @@ onUpdated(() => {
       <span class="sync-icon">⚠</span>
       <span class="sync-text" :title="chatHistoryStore.syncError">同步失败</span>
     </div>
-    <div v-if="!collapsed" class="session-list" ref="sessionListRef" tabindex="0" aria-label="会话列表" @wheel="onListWheel">
+    <div v-if="!collapsed" class="session-list" ref="sessionListRef" tabindex="0" aria-label="会话列表" @wheel.passive="onListWheel">
       <!-- W100 +28: 分组显示 (非批量模式) -->
       <template v-if="!batchMode">
         <!-- 置顶组 -->
