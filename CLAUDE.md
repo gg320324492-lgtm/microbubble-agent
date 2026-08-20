@@ -1,6 +1,76 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-08-21 E 盘整理 + sidebar fix 全修收口 — 3 commits 主拍放行, 0 业务代码改动, 释放 ~362 MB)
+
+本次跨 2026-08-20 → 2026-08-21, 主拍全权委托本地 PC 整理 + 修复会话列表重叠 / 批量管理不响应 bug。3 commits 全部线下 verify + push 远程 `git fetch` 拉取 + 远程 nginx 服务新 dist。
+
+### Commit 链
+- `b00d1fb9e` — fix(web): sidebar 卡片重叠 + FollowUpChips Transition bug + lab-logo.png 回归 (SessionSidebar.vue + SessionItemRow.vue + MobileSessionDrawer.vue + FollowUpChips.vue + web/dist/)
+- `487c8a412` — fix(web): batch 批量管理"清空"按钮不响应 (Vue ref collection reactivity, 全部 batch 操作改用 triggerRef 防 stale)
+- `da4478d40` — fix(web): simplify clearSelection, drop redundant reassign branch
+
+### E 盘整理 6 阶段 (释放 ~362 MB)
+- **P0-A 异常/空目录** — `microbubble-agent;C` + `data/` + `frp/` + `microbubble-w4/` (Windows 非法名残 + 空目录 + 悬挂软链)
+- **P0-B 8 个孤立 worktree 残留** — `agent-deploy-build` / `agent-p3-e2e-retry` / `agent-p3-ragux-retry` / `agent-ui-brief-newline` / `agent-ui-context` / `agent-w89-p4-playwright-real`(46M 含老 postgres/minio/redis 数据) / `agent-w91-x18-a11y-login` / `agent-w91-x26-deploy`(46M 含老 postgres 数据) — 全部 `rm -rf`,前置 `docker rm agent-w91-x26-deploy-db-1` 解除 bind mount
+- **P0-C 过时 dev 脚本** — `/e/app/` (内含 `stage2d_pre_canary_real_cud.py` `app/fix_update.py`, 已集成进 main)
+- **P1 claude-pet 独立项目** — `/e/projects/claude-pet/`(192 MB,完整 pyproject.toml + src + tests,与本项目无关,用户授权删除)
+- **P2 主仓库 `.worktrees/`** — 29 个 git 索引已知但物理空目录,`git rm -r --cached .worktrees/` 清索引(已 commit 后续 chore)
+- **P3 主仓库根临时文件** — `chat_response_phase1.json` / `debug.log` / `deterministic_violations.txt` / `meeting83_final.md` + 主仓库根 `agent-w91-wr1-play-icon/` 孤立 worktree + 空 `test-results/` Playwright 残留
+
+### sidebar UI 重叠根因 + 修复 (类 20.185-188)
+3 个组件(桌面/虚拟/移动)同一根因的不同触发,统一规则:
+
+- **类 20.185**: `.session-item` / `.session-item-wrapper` `display: flex; align-items: center` + `.session-actions { flex-shrink: 0 }` + 内部 button `::before { inset: -8px }` 把 actions 最小高度撑到 ~44px;`.session-content` 默认 `flex-shrink: 1` 被压扁成单行,`title + meta + preview` 三行文字叠在一起
+- **类 20.186**: `SessionItemRow.vue` **完全无 `<style scoped>` 块** — virtual 模式渲染时所有 `.session-item` 0 padding/margin/min-height, 全裸奔堆在 (0,0)。**任何独立渲染组件必须自包含 `<style scoped>`** 或由父 scoped 传递
+- **类 20.187**: `SESSION_ITEM_HEIGHT = 56`(V-N-I 估算)远小于实际渲染卡片 ~64-72px,在 SessionItemRow virtual 模式下每对相邻卡片 top: 0/56 视觉重叠 8px(Virtual 模式用 `position: absolute; top: virtualTop + 'px'`,但 spacer 高度 < total real height)
+- **类 20.188**: 移动端使用 `MobileSessionDrawer.vue`,不是桌面 `SessionSidebar.vue`,二者 class 名 `.session-item` 但 CSS scope 独立,**对话重叠截图必须先确认是 mobile 还是 desktop**,移动端修 `MobileSessionDrawer.vue`,桌面修 `SessionSidebar.vue`
+
+**统一修复模式** (适用所有 3 组件):
+- `.session-item[.session-item-wrapper]` 加 4 件强约束:`min-height: 64px !important; overflow: hidden !important; position: relative !important; box-sizing: border-box !important`
+- `.session-content` / `.session-item` 加 `flex-shrink: 0` 防 flex 容器压扁
+- `.session-item` margin `2px 8px` → `2px 8px 8px`(卡片间 8px 间距)+ `box-shadow: 0 1px 3px rgba(0,0,0,0.04)` 视觉立体感
+- `.session-preview` 用 `-webkit-line-clamp: 2; line-clamp: 2; display: -webkit-box; overflow: hidden` 强制 2 行截断(LLM 消息 preview 数据常含 `\n`,旧 `nowrap` 不截断导致卡片极高)
+- 桌面版再调 `SESSION_ITEM_HEIGHT: 56 → 72` + `SESSION_VIRTUAL_THRESHOLD: 50 → 200`(小数据自动 inline flow,不触发 virtual 模式 absolute 定位)
+
+### Vue ref collection reactivity quirk (类 20.189)
+`ref(new Set())` 当 reassign `.value = new Set()` 时模板里 `:disabled="!selectedIds.size"` / `:checked="selectedIds.has(s.id)"` 可能 stale——Vue 触发 ref.value 依赖,但模板依赖的是旧 Proxy 的 size / has trap。
+
+**修复模式**(统一 4 处 batch 操作):
+```ts
+import { ref, triggerRef } from 'vue'
+const selectedIds = ref(new Set())
+const clearSelection = () => {
+  selectedIds.value.clear()
+  triggerRef(selectedIds)  // 显式重触,防 stale
+}
+```
++ 迭代 `for (const id of [...selectedIds.value])`(spread 防 mutation during iteration)
+
+### 部署链路 (本地 → remote 手动)
+本会话发现 GitHub webhook + SSH reverse tunnel 链断(隧道 2026-08-18 死,2222 sshd 不接受,kex exchange close)。所有 push 后,手动 SSH `root@agent.mnb-lab.cn`(默认 22 端口) + `bash scripts/deploy-auto.sh` 在 remote 拉 git + 重载 nginx。
+
+**远程验证**(push 后必跑):
+- `ssh root@agent.mnb-lab.cn "cd /opt/microbubble-agent && git log --oneline -1"`(HEAD 应是新 commit)
+- `curl -sI https://agent.mnb-lab.cn/ | grep Last-Modified`(应显示 today)
+- `curl -s https://agent.mnb-lab.cn/ | grep index-[a-zA-Z0-9_-]+\.js` 抽新 JS hash(应 != 老 hash)
+- `curl -sI https://agent.mnb-lab.cn/lab-logo.png` 应 HTTP 200(老 build 缺此文件)
+
+### 用户侧浏览器验证
+浏览器有 1 年 immutable cache(`location ~* \.(js|css|...)$ { expires 1y; immutable }`),看到新 dist 必须:
+1. **隐身窗口**(`Ctrl+Shift+N`)打开 → 无 HTTP cache,自动拉新
+2. 或 DevTools → Network → 勾 "Disable cache" + `Ctrl+Shift+R`
+3. 或 DevTools → Application → Storage → **Clear site data** + 硬刷
+
+### P2 留口(可单独 fix, 0 紧迫)
+- `.worktrees/agent-*` 29 项物理删除已在 staging,需要单独立 chore commit 收口
+- Vue `useChatStream` 长 reactive trace 是 chat stream 内部 scheduler 正常 effect chain,不是 bug
+- `M app/stats.json` 是上一次会话遗留的 LLM 编辑,跟本次修复无关
+
+---
+
+## 当前状态 (2026-08-18 Plan v2 #1 业务回归全链路修复收口 — 8 commits, 锚点范式 ~603 → ~611 据实累计, 0 测试基础设施破坏)
+
 "小气" - 微纳米气泡课题组智能Agent系统，约20人研究实验室的AI助手。
 
 - 后端: Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery

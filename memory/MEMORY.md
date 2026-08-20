@@ -1,6 +1,8 @@
 # MicroBubble Agent - 记忆索引 (W86 mini-16 减负, 锚点 337 → 338 +1, 67 active + 96 archived = 163)
 
 > **W86 mini-16 减负收口**: 主指挥协调范式第 67 次派工. 锚点范式 W87 337 → W87-X-5 338 (+1, docs/memory 同步实施, 0 production code 例外 1 沿用 W86 mini-12). 历史 batch closure memory 大幅归档, active 文件 178 → 67 (-62%), 总文件 234 → 163 (-30%). MEMORY.md 主题索引同步重整, 9 类主题分类保留.
+>
+> **2026-08-20→21 修正**: 用户截图反馈 sidebar UI 重叠 + 批量管理"清空"无效, 主拍委派本地 PC 一次性整理 E 盘 + 3 commits 修复 + 远程 SSH `bash scripts/deploy-auto.sh` 手动 deploy. 详尽沉淀见 [`memory/e-drive-cleanup-sidebar-fix-2026-08-20-21.md`](./memory/e-drive-cleanup-sidebar-fix-2026-08-20-21.md).
 
 **W86 mini-16 减负实战**:
 - `memory/archived/w68-batch-detail/` 46 文件 (W68 第 5/8/9/11/12/13/14 批 route-* + hotfix h2-h5 + plan-1/2 + drive-pr9 deploy/version + b/b2/b3/qc + h2 mobile v3.1 docs + 5 route-qa-bench-cache-rollout)
