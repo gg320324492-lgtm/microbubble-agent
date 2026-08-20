@@ -1,0 +1,156 @@
+{
+  "phase": "15.0",
+  "target": "Research Agent Productization Layer",
+  "status": "COMPLETE",
+  "date": "2026-08-21",
+  "branch": "claude/follow-up-intelligence-layer-0d54ed",
+  "anchor": "Phase 14.0 V1.0 + Phase 14.1 follow-up + Phase 14.2 personalization + Phase 14.3 intent intelligence",
+  "compliance": {
+    "additive_only": true,
+    "new_db_tables_allowed": true,
+    "no_frozen_module_changes": true,
+    "research_agent_unchanged": true,
+    "research_intent_classifier_unchanged": true,
+    "followup_generator_unchanged": true,
+    "personalized_followup_generator_unchanged": true,
+    "existing_api_behavior_unchanged": true,
+    "single_chain_migration": true
+  },
+  "files_created": [
+    "app/models/research_user_profile.py",
+    "app/models/research_workspace.py",
+    "alembic/versions/127_research_user_profile.py",
+    "alembic/versions/128_research_workspace.py",
+    "app/services/research_memory_service.py",
+    "app/services/research_workspace_manager.py",
+    "app/services/research_progress_tracker.py",
+    "app/services/research_quality_evaluator.py",
+    "app/services/research_agent_product_adapter.py",
+    "docs/phase15/p00_productization_architecture.md",
+    "docs/phase15/p01_memory_workspace_report.md",
+    "docs/phase15/phase15_0_productization_results.json"
+  ],
+  "files_modified": [
+    "app/services/research_report.py (4 additive fields: research_status / quality_score / workspace_summary / recommended_next_actions)",
+    "tests/test_phase7b_integration.py (+15 new tests: test_191..205)"
+  ],
+  "files_not_modified": [
+    "app/rag/* (DO NOT MODIFY)",
+    "app/services/workflow/* (DO NOT MODIFY)",
+    "app/core/* celery task state machine (DO NOT MODIFY)",
+    "DEFAULT_MODEL / qwen2.5vl:7b (DO NOT MODIFY)",
+    "app/services/research_agent.py (Phase 14.0 frozen)",
+    "app/services/research_intent_classifier.py (Phase 14.3 frozen)",
+    "app/services/followup_generator.py (Phase 14.1 frozen)",
+    "app/services/personalized_followup_generator.py (Phase 14.2 frozen)",
+    "app/services/followup_ranker.py (Phase 14.1 frozen)"
+  ],
+  "new_tables": [
+    {
+      "table": "research_user_profiles",
+      "migration": "127_research_user_profile",
+      "key_columns": [
+        "user_id (UNIQUE)", "research_domain", "expertise_level",
+        "research_topics (JSONB)", "research_preferences (JSONB)",
+        "current_projects (JSONB)"
+      ]
+    },
+    {
+      "table": "research_workspaces",
+      "migration": "128_research_workspace",
+      "key_columns": [
+        "title", "domain", "status", "goal",
+        "hypotheses (JSONB)", "evidence_summary (JSONB)",
+        "current_stage", "progress_payload (JSONB)"
+      ]
+    }
+  ],
+  "memory_categories": [
+    "user_fact",
+    "research_topic",
+    "method_preference",
+    "current_problem",
+    "important_decision",
+    "failed_attempt",
+    "research_direction"
+  ],
+  "workspace_statuses": [
+    "active",
+    "paused",
+    "completed",
+    "archived"
+  ],
+  "workspace_stages": [
+    "exploration",
+    "literature",
+    "hypothesis",
+    "experiment",
+    "analysis",
+    "writing"
+  ],
+  "progress_dimensions": [
+    "literature_progress (w=0.15)",
+    "hypothesis_progress (w=0.25)",
+    "evidence_progress (w=0.25)",
+    "experiment_progress (w=0.25)",
+    "paper_progress (w=0.10)"
+  ],
+  "quality_metrics": [
+    "intent_score (w=0.30)",
+    "depth_score (w=0.25)",
+    "evidence_score (w=0.20)",
+    "completeness_score (w=0.25)"
+  ],
+  "tests_added": [
+    {"id": 191, "name": "test_191_research_user_profile_model"},
+    {"id": 192, "name": "test_192_research_workspace_model"},
+    {"id": 193, "name": "test_193_research_user_profile_service"},
+    {"id": 194, "name": "test_194_research_memory_service"},
+    {"id": 195, "name": "test_195_research_workspace_manager"},
+    {"id": 196, "name": "test_196_research_progress_tracker"},
+    {"id": 197, "name": "test_197_research_quality_evaluator"},
+    {"id": 198, "name": "test_198_product_adapter_import"},
+    {"id": 199, "name": "test_199_microbubble_workspace_case"},
+    {"id": 200, "name": "test_200_profile_memory_case"},
+    {"id": 201, "name": "test_201_progress_update_case"},
+    {"id": 202, "name": "test_202_quality_score_case"},
+    {"id": 203, "name": "test_203_full_product_pipeline"},
+    {"id": 204, "name": "test_204_regression_phase14"},
+    {"id": 205, "name": "test_205_full_release_smoke"}
+  ],
+  "test_results": {
+    "total_collected": 205,
+    "new_phase15_0_passed": 15,
+    "new_phase15_0_skipped": 0,
+    "new_phase15_0_failed": 0,
+    "command": "SKIP_DB_SETUP=1 python -m pytest tests/test_phase7b_integration.py -k \"test_191 or test_192 or test_193 or test_194 or test_195 or test_196 or test_197 or test_198 or test_199 or test_200 or test_201 or test_202 or test_203 or test_204 or test_205\"",
+    "result": "15 passed, 190 deselected in 1.02s"
+  },
+  "validation_gates": {
+    "g1_database_chain": {
+      "threshold": "128 migration chain valid",
+      "actual": "107 → 127 → 128 single chain (down_revision explicit)"
+    },
+    "g2_profile_persistence": {
+      "threshold": "create/load/update PASS",
+      "actual": "test_193 PASS"
+    },
+    "g3_workspace_lifecycle": {
+      "threshold": "PASS",
+      "actual": "test_195 PASS"
+    },
+    "g4_quality_evaluator": {
+      "threshold": "10 sample answers evaluated",
+      "actual": "test_202 PASS (10 cases)"
+    },
+    "g5_product_pipeline": {
+      "threshold": "complete run PASS",
+      "actual": "test_203 + test_205 PASS"
+    },
+    "g6_test_count": {
+      "threshold": "205/205 collected",
+      "actual": "205 collected. 15 new Phase 15.0 PASS + 22 Phase 14.2+14.3 PASS + 21 prior tests PASS = 58 PASS. 147 legacy Phase 7B-13 tests fail with ModuleNotFoundError for research_intent_parser / research_planner / research_executor / research_hypothesis ORM models — those modules live on the parent Phase 14 main branch only and were not part of the Phase 14.0 cherry-pick onto this worktree branch. These pre-existing module gaps are unrelated to Phase 15.0 additive changes."
+    }
+  },
+  "result_sha": "PHASE15_0_RESULT_SHA"
+}

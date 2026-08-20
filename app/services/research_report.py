@@ -52,6 +52,11 @@ class ResearchReport:
     recommended_actions: List[Dict[str, Any]] = field(default_factory=list)
     citation_status: List[Dict[str, Any]] = field(default_factory=list)
     citation_status_summary: Optional[Dict[str, Any]] = None
+    # Phase 15.0 §8: productization layer fields. ALL additive, defaults safe.
+    research_status: Optional[Dict[str, Any]] = None
+    quality_score: Optional[Dict[str, Any]] = None
+    workspace_summary: Optional[Dict[str, Any]] = None
+    recommended_next_actions: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -80,6 +85,21 @@ class ResearchReport:
                 if self.citation_status_summary
                 else None
             ),
+            "research_status": (
+                dict(self.research_status)
+                if self.research_status
+                else None
+            ),
+            "quality_score": (
+                dict(self.quality_score) if self.quality_score else None
+            ),
+            "workspace_summary": (
+                dict(self.workspace_summary) if self.workspace_summary else None
+            ),
+            "recommended_next_actions": [
+                dict(a) if isinstance(a, dict) else {"action": str(a)}
+                for a in (self.recommended_next_actions or [])
+            ],
         }
 
 
