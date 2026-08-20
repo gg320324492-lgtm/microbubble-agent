@@ -249,14 +249,9 @@ const selectAll = () => {
 }
 
 const clearSelection = () => {
-  // ★ 修复: clearSelection 不响应. 根因是 ref(new Set()) 的 collection reactive
-  //   在 reassign 选 new Set() 时, Vue 的 ref 触发了 ref.value 依赖, 但模板里
-  //   的 `:disabled="!selectedIds.size"` 计算属性依赖的是 _旧_ Proxy 的 size 跟 has
-  //   依赖. 改用 triggerRef 显式重触 + 直接 mutate in-place + 同 ref identity 重赋值.
+  // 清空所有已选 (Vue ref collection reactivity quirk workaround: use triggerRef)
   selectedIds.value.clear()
   triggerRef(selectedIds)
-  // 双保险: 重新触发现金 selectedIds 的 set 操作, Vue 模板的 :disabled / :checked / :class 都会重算
-  if (selectedIds.value.size > 0) selectedIds.value = new Set()
 }
 
 const batchArchive = async () => {
