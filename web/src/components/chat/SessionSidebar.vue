@@ -12,7 +12,7 @@
  * - 1) CSS: .session-list 加 overflow-anchor: none（关闭 Chrome scroll anchoring）
  * - 2) JS: onBeforeUpdate/onUpdated 保留 scrollTop（filterKw / v-for reorder 时位置不丢）
  */
-import { ref, computed, onBeforeUpdate, onUpdated, nextTick, type Ref } from 'vue'
+import { ref, computed, onBeforeUpdate, onUpdated, nextTick, triggerRef, type Ref } from 'vue'
 import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatHistoryStore } from '@/stores/chatHistory'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -240,18 +240,23 @@ const toggleSelect = (id) => {
   } else {
     selectedIds.value.add(id)
   }
-  // trigger reactivity
-  selectedIds.value = new Set(selectedIds.value)
+  triggerRef(selectedIds)  // 强制重触 ref,防 Vue collection Proxy reactivity quirk
 }
 
 const selectAll = () => {
   filteredSessions.value.forEach(s => selectedIds.value.add(s.id))
-  selectedIds.value = new Set(selectedIds.value)
+  triggerRef(selectedIds)
 }
 
 const clearSelection = () => {
+  // ★ 修复: clearSelection 不响应. 根因是 ref(new Set()) 的 collection reactive
+  //   在 reassign 选 new Set() 时, Vue 的 ref 触发了 ref.value 依赖, 但模板里
+  //   的 `:disabled="!selectedIds.size"` 计算属性依赖的是 _旧_ Proxy 的 size 跟 has
+  //   依赖. 改用 triggerRef 显式重触 + 直接 mutate in-place + 同 ref identity 重赋值.
   selectedIds.value.clear()
-  selectedIds.value = new Set()
+  triggerRef(selectedIds)
+  // 双保险: 重新触发现金 selectedIds 的 set 操作, Vue 模板的 :disabled / :checked / :class 都会重算
+  if (selectedIds.value.size > 0) selectedIds.value = new Set()
 }
 
 const batchArchive = async () => {
@@ -262,13 +267,14 @@ const batchArchive = async () => {
       '批量归档',
       { type: 'warning', confirmButtonText: '归档', cancelButtonText: '取消' }
     )
-    for (const id of selectedIds.value) {
+    for (const id of [...selectedIds.value]) {
       await store.setArchived(id, true)
     }
     ElMessage.success(`已归档 ${selectedIds.value.size} 个会话`)
     batchMode.value = false
+    triggerRef(selectedIds)
     selectedIds.value.clear()
-    selectedIds.value = new Set()
+    triggerRef(selectedIds)
   } catch { /* 用户取消 */ }
 }
 
@@ -280,13 +286,14 @@ const batchDelete = async () => {
       '批量删除',
       { type: 'error', confirmButtonText: '删除', cancelButtonText: '取消' }
     )
-    for (const id of selectedIds.value) {
+    for (const id of [...selectedIds.value]) {
       store.deleteSession(id)
     }
     ElMessage.success(`已删除 ${selectedIds.value.size} 个会话`)
     batchMode.value = false
+    triggerRef(selectedIds)
     selectedIds.value.clear()
-    selectedIds.value = new Set()
+    triggerRef(selectedIds)
   } catch { /* 用户取消 */ }
 }
 
