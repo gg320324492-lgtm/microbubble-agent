@@ -45,6 +45,13 @@ class ResearchReport:
     user_prompt: str = ""
     # Phase 14.1 §4: intent-aware follow-up questions (additive)
     followup_questions: List[Dict[str, Any]] = field(default_factory=list)
+    # Phase 14.2 §7: personalized follow-ups + recommended actions + citation
+    # status. All additive, all default to empty lists / None so existing
+    # callers keep working without changes.
+    personalized_followups: List[Dict[str, Any]] = field(default_factory=list)
+    recommended_actions: List[Dict[str, Any]] = field(default_factory=list)
+    citation_status: List[Dict[str, Any]] = field(default_factory=list)
+    citation_status_summary: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -59,6 +66,20 @@ class ResearchReport:
             ),
             "user_prompt": self.user_prompt,
             "followup_questions": [dict(q) for q in (self.followup_questions or [])],
+            "personalized_followups": [
+                dict(q) for q in (self.personalized_followups or [])
+            ],
+            "recommended_actions": [
+                dict(a) for a in (self.recommended_actions or [])
+            ],
+            "citation_status": [
+                dict(c) for c in (self.citation_status or [])
+            ],
+            "citation_status_summary": (
+                dict(self.citation_status_summary)
+                if self.citation_status_summary
+                else None
+            ),
         }
 
 
