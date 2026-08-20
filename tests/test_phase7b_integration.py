@@ -7748,6 +7748,436 @@ def test_168_followup_end_to_end():
 
 
 # ---------------------------------------------------------------------------
+# Phase 14.2 — Personalized Research Intelligence Layer tests
+# ---------------------------------------------------------------------------
+def test_169_followup_context_schema():
+    """Phase 14.2 §1: FollowUpContext dataclass + build_followup_context()."""
+    from app.services.followup_context import (
+        FollowUpContext,
+        build_followup_context,
+    )
+
+    ctx = build_followup_context(
+        user_prompt="微纳米气泡在水处理中的应用",
+        answer="basic answer",
+        memory_hits=[{"text": "臭氧微纳米气泡强化传质效率"}],
+        user_expertise_level="researcher",
+        research_goal="engineering scale-up",
+    )
+    assert isinstance(ctx, FollowUpContext)
+    assert ctx.current_question.startswith("微纳米气泡")
+    assert ctx.user_expertise_level == "researcher"
+    assert ctx.research_goal == "engineering scale-up"
+    assert isinstance(ctx.memory_hits, list)
+    # Heuristic should pick up microbubble / water-treatment domain
+    assert ctx.research_domain
+
+    # Default empty construction
+    empty = FollowUpContext()
+    assert empty.current_question == ""
+    assert empty.user_expertise_level == "general"
+    assert empty.memory_hits == []
+    # to_dict exposes summary metadata
+    d = empty.to_dict()
+    assert "memory_hits_count" in d
+    assert d["memory_hits_count"] == 0
+
+
+def test_170_research_profile_extraction():
+    """Phase 14.2 §2: profile extraction from memory (no LLM, rule-based)."""
+    from app.services.research_profile import (
+        ResearchProfile,
+        extract_profile_from_memory,
+    )
+
+    profile = extract_profile_from_memory([
+        {"text": "研究臭氧微纳米气泡强化水处理中的·OH自由基生成机制"},
+        {"text": "考察 kLa 与传质系数对污染物降解的影响"},
+    ])
+    assert isinstance(profile, ResearchProfile)
+    assert profile.domain == "pollution_control_water_treatment"
+    assert profile.expertise_level in ("researcher", "practitioner")
+    assert profile.keywords, "Should capture some keyword signals"
+
+    # Empty memory → empty profile
+    empty = extract_profile_from_memory([])
+    assert empty.domain == ""
+    assert empty.expertise_level == "general"
+
+
+def test_171_researcher_profile_detection():
+    """Phase 14.2 §2: researcher domain detection (微纳米气泡/臭氧/CFD)."""
+    from app.services.research_profile import extract_profile_from_memory
+
+    microbubble = extract_profile_from_memory([
+        {"text": "微纳米气泡技术在污染控制中的应用研究"},
+    ])
+    assert microbubble.domain == "pollution_control_water_treatment"
+    assert microbubble.expertise_level == "researcher"
+
+    ozone = extract_profile_from_memory([
+        {"text": "臭氧气泡强化 ·OH 自由基生成的高级氧化机理"},
+    ])
+    assert "advanced_oxidation" in ozone.domain or ozone.domain
+    assert ozone.expertise_level == "researcher"
+
+    cfd = extract_profile_from_memory([
+        {"text": "CFD 模拟 bubble column reactor 的速度场分布"},
+    ])
+    assert cfd.domain == "computational_fluid_dynamics"
+
+    general = extract_profile_from_memory([
+        {"text": "我刚学习Python，想做个简单的网页"},
+    ])
+    assert general.domain == ""
+
+
+def test_172_personalized_generator():
+    """Phase 14.2 §3: generator produces diverse categories for researcher."""
+    from app.services.followup_context import build_followup_context
+    from app.services.research_profile import ResearchProfile
+    from app.services.personalized_followup_generator import (
+        generate_personalized_followups,
+        W_INTENT_MATCH,
+        W_KNOWLEDGE_GAP,
+        W_USER_RELEVANCE,
+        W_NOVELTY,
+        W_RESEARCH_VALUE,
+    )
+
+    profile = ResearchProfile(
+        domain="pollution_control_water_treatment",
+        keywords=["微纳米气泡", "臭氧"],
+        expertise_level="researcher",
+    )
+    ctx = build_followup_context(
+        user_prompt="微纳米气泡技术在水处理中的应用",
+        memory_hits=["关注臭氧微纳米气泡的传质系数 kLa 与 ·OH 自由基"],
+        user_expertise_level="researcher",
+    )
+    ctx.user_profile = profile
+    ctx.user_expertise_level = "researcher"
+    out = generate_personalized_followups(ctx, max_questions=3)
+    assert 1 <= len(out) <= 3
+    categories = {f.category for f in out}
+    # A researcher scenario must include multiple dimensions
+    assert len(categories) >= 2
+    # Weights sum to 1.0
+    assert abs(
+        W_INTENT_MATCH + W_KNOWLEDGE_GAP + W_USER_RELEVANCE
+        + W_RESEARCH_VALUE + W_NOVELTY - 1.0
+    ) < 1e-9
+    # No "你想深入了解..." generic patterns
+    for fq in out:
+        assert "想深入了解" not in fq.question
+        assert "想不想了解更多" not in fq.question
+
+
+def test_173_user_relevance_scoring():
+    """Phase 14.2 §3: user_relevance axis promotes domain-matching questions."""
+    from app.services.followup_context import build_followup_context
+    from app.services.research_profile import ResearchProfile
+    from app.services.personalized_followup_generator import (
+        generate_personalized_followups,
+        _user_relevance,
+    )
+    from app.services.followup_schema import make_followup, CATEGORY_DETAIL
+
+    profile = ResearchProfile(
+        domain="pollution_control_water_treatment",
+        keywords=["微纳米气泡", "臭氧"],
+        expertise_level="researcher",
+    )
+    ctx = build_followup_context(
+        user_prompt="微纳米气泡应用",
+        memory_hits=[],
+        user_expertise_level="researcher",
+    )
+    ctx.user_profile = profile
+    ctx.user_expertise_level = "researcher"
+
+    # Researcher-aligned question should score higher than a generic one
+    q_good = make_followup(
+        question="微纳米气泡强化臭氧传质的kLa与·OH机制如何量化？",
+        category=CATEGORY_DETAIL,
+    )
+    q_generic = make_followup(
+        question="了解更多关于水处理的基础知识",  # hits generic pattern
+        category=CATEGORY_DETAIL,
+    )
+
+    score_good = _user_relevance(q_good, profile, "researcher")
+    score_generic = _user_relevance(q_generic, profile, "researcher")
+    assert score_good > score_generic, (
+        f"researcher-aligned question should score higher "
+        f"({score_good} vs {score_generic})"
+    )
+
+    # End-to-end the personalized generator picks good questions
+    out = generate_personalized_followups(ctx, max_questions=3)
+    assert out, "Personalized generator must produce at least one question"
+    for fq in out:
+        assert fq.metadata.get("generator") == "personalized"
+
+
+def test_174_research_action_recommendation():
+    """Phase 14.2 §4: research action recommendation returns ranked actions."""
+    from app.services.followup_context import build_followup_context
+    from app.services.research_profile import ResearchProfile
+    from app.services.research_action_recommender import (
+        recommend_research_actions,
+        ACTION_DEEPEN_MECHANISM,
+        ACTION_LITERATURE_REVIEW,
+        ACTION_VALIDATE_EXPERIMENT,
+        ACTION_ENGINEERING_DESIGN,
+        ACTION_TYPES,
+    )
+
+    profile = ResearchProfile(
+        domain="pollution_control_water_treatment",
+        keywords=["微纳米气泡", "臭氧"],
+        expertise_level="researcher",
+    )
+    ctx = build_followup_context(
+        user_prompt="微纳米气泡强化臭氧氧化处理TC",
+        memory_hits=[{"text": "kLa 传质 / ·OH 生成 / 降解率"}],
+        user_profile=profile,
+        user_expertise_level="researcher",
+    )
+    actions = recommend_research_actions(ctx, max_actions=6)
+    assert actions
+    types = {a.action_type for a in actions}
+    # Researcher scenario should yield multiple action types
+    assert ACTION_DEEPEN_MECHANISM in types
+    # One of compare / experiment / review / engineering / expand should appear
+    assert any(
+        t in types for t in (
+            ACTION_LITERATURE_REVIEW,
+            ACTION_VALIDATE_EXPERIMENT,
+            ACTION_ENGINEERING_DESIGN,
+        )
+    )
+    # All action types must be canonical
+    for a in actions:
+        assert a.action_type in ACTION_TYPES
+    # Sorted by priority desc
+    priorities = [a.priority for a in actions]
+    assert priorities == sorted(priorities, reverse=True)
+
+
+def test_175_citation_guard():
+    """Phase 14.2 §5: validates safe citations, blocks invented ones."""
+    from app.services.citation_guard import (
+        validate_citations,
+        CITATION_VERIFIED,
+        CITATION_UNCERTAIN,
+        CITATION_GENERATED,
+    )
+
+    text_clean = "本研究在不添加氧化剂条件下提升了 12% 的降解率。"
+    cleaned, records = validate_citations(text_clean)
+    assert cleaned == text_clean
+    assert records == []
+
+    text_with_brackets = (
+        "已有研究[1]显示微纳米气泡技术在水处理中应用广泛。"
+    )
+    cleaned, records = validate_citations(text_with_brackets)
+    # Without allowed_sources, [1] is treated as generated
+    assert "[1]" not in cleaned or "建议参考相关研究" in cleaned
+    statuses = [r.status for r in records]
+    assert CITATION_GENERATED in statuses or CITATION_UNCERTAIN in statuses
+
+    text_verified = "已有研究[12]显示..."
+    cleaned, records = validate_citations(
+        text_verified, allowed_sources=[{"marker": "[12]", "year": 2023}]
+    )
+    # [12] is allowed → verified
+    assert any(r.status == CITATION_VERIFIED and r.marker == "[12]" for r in records)
+
+
+def test_176_citation_uncertain_handling():
+    """Phase 14.2 §5: uncertain/author-year style triggers safe placeholder."""
+    from app.services.citation_guard import (
+        validate_citations,
+        CITATION_UNCERTAIN,
+        summarize_citation_status,
+    )
+
+    text = "Smith et al., 2023 reported improved ozonation efficiency."
+    cleaned, records = validate_citations(text)
+    # Without allowed sources the author/year string is replaced
+    statuses = [r.status for r in records]
+    assert CITATION_UNCERTAIN in statuses
+    summary = summarize_citation_status(records)
+    assert summary["total"] >= 1
+    assert summary["has_hallucination_risk"] is True
+
+
+def test_177_personalized_agent_pipeline():
+    """Phase 14.2 §6: end-to-end personalized agent pipeline runs."""
+    from app.services.research_agent_personalized import (
+        run_personalized_research_agent,
+        PersonalizedAgentResult,
+    )
+
+    result = run_personalized_research_agent(
+        user_prompt="探讨微纳米气泡强化臭氧氧化处理四环素的效果与机制",
+        use_llm=False,
+        enable_memory=True,
+        enable_reasoning=True,
+        enable_reflection=True,
+        memory_hits=[
+            {"text": "研究臭氧微纳米气泡技术在水处理中的传质强化与 ·OH 自由基生成"},
+        ],
+        historical_projects=[
+            {"title": "臭氧微纳米气泡处理TC的机理研究"},
+        ],
+        user_expertise_level="researcher",
+    )
+    assert isinstance(result, PersonalizedAgentResult)
+    # Successful unless V1.0 path is broken on this checkout
+    assert result.success
+    step_names = [s["name"] for s in result.steps]
+    assert "profile_extraction" in step_names
+    assert "research_agent_v1" in step_names
+    assert "citation_guard" in step_names
+    assert "personalized_followup" in step_names
+    assert "research_action_recommendation" in step_names
+    # Personalized follow-ups produced for a researcher
+    assert result.personalized_followups
+    # All additives on final report
+    if result.final_report is not None:
+        d = result.final_report.to_dict()
+        for k in (
+            "personalized_followups",
+            "recommended_actions",
+            "citation_status",
+            "citation_status_summary",
+        ):
+            assert k in d, f"missing additive field: {k}"
+
+
+def test_178_microbubble_researcher_scenario():
+    """Phase 14.2 §3 §4: researcher scenario produces researcher-grade suggestions."""
+    from app.services.followup_context import build_followup_context
+    from app.services.research_profile import ResearchProfile
+    from app.services.personalized_followup_generator import (
+        generate_personalized_followups,
+    )
+    from app.services.research_action_recommender import (
+        recommend_research_actions,
+        ACTION_DEEPEN_MECHANISM,
+        ACTION_VALIDATE_EXPERIMENT,
+        ACTION_LITERATURE_REVIEW,
+        ACTION_ENGINEERING_DESIGN,
+    )
+
+    prompt = "微纳米气泡技术在水处理中的应用"
+    profile = ResearchProfile(
+        domain="pollution_control_water_treatment",
+        keywords=["微纳米气泡", "臭氧", "kLa"],
+        expertise_level="researcher",
+    )
+    ctx = build_followup_context(
+        user_prompt=prompt,
+        memory_hits=[
+            {"text": "臭氧微纳米气泡强化传质与 ·OH 自由基生成用于污染物降解"},
+        ],
+        user_profile=profile,
+        user_expertise_level="researcher",
+        research_goal="engineering scale-up",
+    )
+    followups = generate_personalized_followups(ctx, max_questions=3)
+    actions = recommend_research_actions(ctx, max_actions=5)
+
+    # Researcher scenario covers multiple high-value dimensions
+    followup_categories = {f.category for f in followups}
+    action_types = {a.action_type for a in actions}
+    # At least mechanism / experiment / literature / engineering covered across
+    # follow-ups + actions combined
+    coverage = followup_categories | action_types
+    assert ACTION_DEEPEN_MECHANISM in coverage
+    assert any(
+        t in coverage for t in (
+            ACTION_VALIDATE_EXPERIMENT,
+            ACTION_LITERATURE_REVIEW,
+            ACTION_ENGINEERING_DESIGN,
+        )
+    )
+    # No generic "了解更多" patterns
+    for fq in followups:
+        assert "了解更多" not in fq.question
+    for a in actions:
+        assert "了解更多" not in a.description
+
+
+def test_179_generic_user_scenario():
+    """Phase 14.2 §3: general user gets accessible entry-level follow-ups."""
+    from app.services.followup_context import build_followup_context
+    from app.services.personalized_followup_generator import (
+        generate_personalized_followups,
+    )
+
+    ctx = build_followup_context(
+        user_prompt="微纳米气泡有什么作用？",
+        memory_hits=[],
+        user_expertise_level="general",
+    )
+    out = generate_personalized_followups(ctx, max_questions=3)
+    assert out
+    # General user must not receive a heavy researcher-only question as the
+    # single answer; we check at least one "detail" or comparison entry is
+    # present.
+    cats = {f.category for f in out}
+    assert "detail" in cats or "comparison" in cats
+
+
+def test_180_phase14_2_regression():
+    """Phase 14.2 §7: ResearchReport preserves Phase 14.0/14.1 fields + exposes new ones."""
+    from app.services.research_report import (
+        ResearchReport,
+        generate_research_report,
+    )
+
+    # Direct construction: default additive fields
+    r = ResearchReport(title="x", executive_summary="y")
+    d = r.to_dict()
+    # Phase 14.0 fields still present
+    for k in ("title", "executive_summary", "methodology", "findings",
+              "next_steps", "provenance", "user_prompt"):
+        assert k in d
+    # Phase 14.1 field
+    assert "followup_questions" in d
+    # Phase 14.2 fields
+    assert "personalized_followups" in d
+    assert "recommended_actions" in d
+    assert "citation_status" in d
+    assert "citation_status_summary" in d
+    # All additive defaults safe
+    assert d["personalized_followups"] == []
+    assert d["recommended_actions"] == []
+    assert d["citation_status"] == []
+    assert d["citation_status_summary"] is None
+
+    # Through generator: phase 14.1 follow-up_questions populated
+    r2 = generate_research_report(
+        user_prompt="针对微纳米气泡强化臭氧氧化处理TC的机制研究",
+        intent=type("I", (), {"objective": "study", "domain": "pollution_control_water_treatment", "task_type": "investigate"})(),
+        memory_hits=["关注·OH生成机制与传质系数 kLa"],
+        reasoning_output=type("R", (), {"summary": "ok", "action": "x", "bayesian_posterior": 0.4})(),
+    )
+    assert isinstance(r2, ResearchReport)
+    # Phase 14.2 fields still default-empty (Phase 14.0 generator path doesn't
+    # populate them — that's the run_personalized_research_agent's job).
+    assert r2.personalized_followups == []
+    assert r2.recommended_actions == []
+    assert r2.citation_status == []
+    # Phase 14.1 follow-ups populated as before
+    assert r2.followup_questions
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 def _run_all() -> tuple:

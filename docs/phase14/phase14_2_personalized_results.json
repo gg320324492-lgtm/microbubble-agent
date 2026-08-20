@@ -1,0 +1,106 @@
+{
+  "phase": "14.2",
+  "target": "Personalized Research Intelligence Layer",
+  "status": "COMPLETE",
+  "date": "2026-08-21",
+  "branch": "claude/follow-up-intelligence-layer-0d54ed",
+  "anchor": "Phase 14.0 V1.0 frozen + Phase 14.1 follow-up intelligence",
+  "compliance": {
+    "additive_only": true,
+    "no_db_migrations": true,
+    "no_frozen_module_changes": true,
+    "rule_based_profile_no_llm": true,
+    "five_axis_weighted_formula": [0.25, 0.25, 0.25, 0.15, 0.10],
+    "weights_sum_to_1": true,
+    "six_action_types": true,
+    "citation_guard_active": true,
+    "research_report_backward_compat": true
+  },
+  "files_created": [
+    "app/services/followup_context.py",
+    "app/services/research_profile.py",
+    "app/services/personalized_followup_generator.py",
+    "app/services/research_action_recommender.py",
+    "app/services/citation_guard.py",
+    "app/services/research_agent_personalized.py",
+    "docs/phase14/p02_personalized_research_report.md",
+    "docs/phase14/phase14_2_personalized_results.json"
+  ],
+  "files_modified": [
+    "app/services/research_report.py (additive: 4 new fields, no removals)",
+    "tests/test_phase7b_integration.py (+12 new tests: test_169 .. test_180)"
+  ],
+  "files_not_modified": [
+    "app/rag/* (DO NOT MODIFY)",
+    "app/services/workflow/* (DO NOT MODIFY)",
+    "app/core/* celery task state machine (DO NOT MODIFY)",
+    "DEFAULT_MODEL / qwen2.5vl:7b (DO NOT MODIFY)",
+    "app/services/research_agent.py (Phase 14.0 frozen)",
+    "app/services/followup_generator.py (Phase 14.1 frozen)",
+    "app/services/followup_ranker.py (Phase 14.1 frozen)",
+    "app/services/followup_schema.py (Phase 14.1 frozen)",
+    "alembic/versions/* (no DB migrations)"
+  ],
+  "ranking_formula": {
+    "phase14_1": "0.4*intent + 0.3*gap + 0.2*usefulness + 0.1*novelty",
+    "phase14_2": "0.25*intent_match + 0.25*knowledge_gap + 0.25*user_relevance + 0.15*research_value + 0.10*novelty"
+  },
+  "action_taxonomy": [
+    "deepen_mechanism (深入机理)",
+    "expand_application (拓展应用)",
+    "compare_methods (方法对比)",
+    "validate_experiment (实验验证)",
+    "literature_review (文献分析)",
+    "engineering_design (工程设计)"
+  ],
+  "citation_statuses": [
+    "verified",
+    "uncertain",
+    "generated",
+    "replaced"
+  ],
+  "tests_added": [
+    {"id": 169, "name": "test_169_followup_context_schema"},
+    {"id": 170, "name": "test_170_research_profile_extraction"},
+    {"id": 171, "name": "test_171_researcher_profile_detection"},
+    {"id": 172, "name": "test_172_personalized_generator"},
+    {"id": 173, "name": "test_173_user_relevance_scoring"},
+    {"id": 174, "name": "test_174_research_action_recommendation"},
+    {"id": 175, "name": "test_175_citation_guard"},
+    {"id": 176, "name": "test_176_citation_uncertain_handling"},
+    {"id": 177, "name": "test_177_personalized_agent_pipeline"},
+    {"id": 178, "name": "test_178_microbubble_researcher_scenario"},
+    {"id": 179, "name": "test_179_generic_user_scenario"},
+    {"id": 180, "name": "test_180_phase14_2_regression"}
+  ],
+  "test_results": {
+    "total_in_file": 180,
+    "new_passed": 12,
+    "new_skipped": 0,
+    "new_failed": 0,
+    "command": "SKIP_DB_SETUP=1 python -m pytest tests/test_phase7b_integration.py -k \"test_169 or test_170 or test_171 or test_172 or test_173 or test_174 or test_175 or test_176 or test_177 or test_178 or test_179 or test_180\"",
+    "result": "12 passed, 168 deselected"
+  },
+  "real_scenario_validation": {
+    "input": "微纳米气泡技术在水处理中的应用",
+    "profile": {
+      "domain": "pollution_control_water_treatment",
+      "expertise_level": "researcher"
+    },
+    "memory_hint": "关注臭氧微纳米气泡的传质系数 kLa 与 ·OH 自由基",
+    "produced_followup_dimensions": [
+      "explanation (deepen_mechanism, kLa + ·OH + kinetics)",
+      "next_action (design_experiment, DOE + ANOVA)",
+      "knowledge_gap (literature_review, CEJ/JHM/WR)"
+    ],
+    "produced_action_types": [
+      "deepen_mechanism",
+      "literature_review",
+      "validate_experiment",
+      "engineering_design"
+    ],
+    "forbidden_patterns_emitted": false,
+    "generic_patterns_emitted": false
+  },
+  "result_sha": "PHASE14_2_RESULT_SHA"
+}
