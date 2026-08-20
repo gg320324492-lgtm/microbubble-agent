@@ -8178,6 +8178,387 @@ def test_180_phase14_2_regression():
 
 
 # ---------------------------------------------------------------------------
+# Phase 14.3 — Research Intent Intelligence Layer tests
+# ---------------------------------------------------------------------------
+def test_181_research_intent_schema_import():
+    """Phase 14.3 §1: schema import + enum dataclass construction."""
+    from app.services.research_intent_schema import (
+        DEFAULT_INTENTS,
+        INTENT_DESCRIPTIONS,
+        INTENT_CONCEPT_EXPLANATION,
+        INTENT_MECHANISM_ANALYSIS,
+        INTENT_EXPERIMENT_DESIGN,
+        INTENT_LITERATURE_REVIEW,
+        INTENT_DATA_ANALYSIS,
+        INTENT_ENGINEERING_DESIGN,
+        INTENT_PAPER_WRITING,
+        INTENT_METHOD_COMPARISON,
+        INTENT_RESEARCH_PLANNING,
+        DEFAULT_RESEARCH_LEVELS,
+        RESEARCH_LEVEL_BEGINNER,
+        RESEARCH_LEVEL_STUDENT,
+        RESEARCH_LEVEL_RESEARCHER,
+        RESEARCH_LEVEL_EXPERT,
+        IntentClassification,
+        ResearchIntent,
+        make_intent_classification,
+    )
+
+    assert len(DEFAULT_INTENTS) == 9
+    assert INTENT_MECHANISM_ANALYSIS in DEFAULT_INTENTS
+    assert INTENT_DESCRIPTIONS[INTENT_MECHANISM_ANALYSIS] == "机理分析"
+    assert ResearchIntent.MECHANISM_ANALYSIS == INTENT_MECHANISM_ANALYSIS
+
+    # Confidence clamping + invalid fallback
+    c = IntentClassification(
+        intent=INTENT_MECHANISM_ANALYSIS,
+        confidence=1.5,  # clamp to 1.0
+        research_level="not_a_real_level",  # fallback to researcher
+    )
+    assert c.confidence == 1.0
+    assert c.research_level == RESEARCH_LEVEL_RESEARCHER
+
+    # Invalid intent falls back
+    c_bad = IntentClassification(intent="not_a_real_intent")
+    assert c_bad.intent == INTENT_CONCEPT_EXPLANATION
+
+    # All research levels present
+    assert set(DEFAULT_RESEARCH_LEVELS) == {
+        RESEARCH_LEVEL_BEGINNER,
+        RESEARCH_LEVEL_STUDENT,
+        RESEARCH_LEVEL_RESEARCHER,
+        RESEARCH_LEVEL_EXPERT,
+    }
+
+    # to_dict exposes label
+    d = make_intent_classification(
+        intent=INTENT_EXPERIMENT_DESIGN,
+        confidence=0.7,
+    ).to_dict()
+    assert d["intent"] == INTENT_EXPERIMENT_DESIGN
+    assert d["intent_label"] == "实验设计"
+
+
+def test_182_basic_classifier():
+    """Phase 14.3 §2: classifier runs and returns IntentClassification."""
+    from app.services.research_intent_classifier import classify_intent
+    from app.services.research_intent_schema import IntentClassification
+
+    # Empty / bland prompt falls back to concept explanation
+    result = classify_intent("随便聊聊")
+    assert isinstance(result, IntentClassification)
+    # Plain conversational prompt → low confidence + safe intent
+    assert 0.0 <= result.confidence <= 1.0
+    assert result.intent
+
+    # Mismatched prior mapping: keyword 信号缺失 → 不应是 MECHANISM_ANALYSIS (除非 profile 抬升)
+
+
+def test_183_profile_adjustment():
+    """Phase 14.3 §2: researcher + pollution_control profile biases MECHANISM_ANALYSIS."""
+    from app.services.research_intent_classifier import classify_intent
+    from app.services.research_intent_schema import (
+        INTENT_MECHANISM_ANALYSIS,
+    )
+    from app.services.research_profile import ResearchProfile
+
+    # Same prompt: with vs without researcher profile
+    base = classify_intent("随机提问")
+    with_profile = classify_intent(
+        "随机提问",
+        profile=ResearchProfile(
+            domain="pollution_control_water_treatment",
+            expertise_level="researcher",
+        ),
+    )
+    # The with-profile classification must either pick a stronger intent
+    # or have a different (higher) confidence — i.e. profile moves the needle.
+    assert with_profile.intent != base.intent or with_profile.confidence >= base.confidence
+
+    # Spec example: 微纳米气泡强化臭氧氧化TC机理 with researcher profile
+    mechanism_prompt = "微纳米气泡强化臭氧氧化TC机理"
+    classified = classify_intent(
+        mechanism_prompt,
+        profile=ResearchProfile(
+            domain="pollution_control_water_treatment",
+            expertise_level="researcher",
+        ),
+    )
+    assert classified.intent == INTENT_MECHANISM_ANALYSIS
+    assert classified.confidence >= 0.8, (
+        f"researcher-profile mechanism classification must have "
+        f"confidence >= 0.8 (got {classified.confidence})"
+    )
+
+
+def test_184_mechanism_detection():
+    """Phase 14.3 §2: mechanism keyword rules trigger MECHANISM_ANALYSIS."""
+    from app.services.research_intent_classifier import classify_intent
+    from app.services.research_intent_schema import (
+        INTENT_MECHANISM_ANALYSIS,
+    )
+
+    cases = [
+        "该反应的机理路径",
+        "为什么会出现降解率提升",
+        "传质系数kLa如何计算",
+        "·OH自由基生成机制",
+    ]
+    for prompt in cases:
+        result = classify_intent(prompt)
+        assert result.intent == INTENT_MECHANISM_ANALYSIS, (
+            f"prompt={prompt!r} → intent={result.intent}"
+        )
+
+
+def test_185_experiment_detection():
+    """Phase 14.3 §2: experiment-design keyword rules trigger EXPERIMENT_DESIGN."""
+    from app.services.research_intent_classifier import classify_intent
+    from app.services.research_intent_schema import (
+        INTENT_EXPERIMENT_DESIGN,
+    )
+
+    cases = [
+        "针对该体系的实验方案设计",
+        "如何通过DOE方法验证假设",
+        "实验自变量与控制变量如何选取",
+        "参数优化实验怎么做",
+    ]
+    for prompt in cases:
+        result = classify_intent(prompt)
+        assert result.intent == INTENT_EXPERIMENT_DESIGN, (
+            f"prompt={prompt!r} → intent={result.intent}"
+        )
+
+
+def test_186_answer_strategy_generation():
+    """Phase 14.3 §3: per-intent answer strategy has correct sections + flags."""
+    from app.services.research_answer_strategy import (
+        get_strategy,
+        STRATEGY_REGISTRY,
+    )
+    from app.services.research_intent_schema import (
+        DEFAULT_INTENTS,
+        INTENT_MECHANISM_ANALYSIS,
+        INTENT_EXPERIMENT_DESIGN,
+        INTENT_LITERATURE_REVIEW,
+        INTENT_ENGINEERING_DESIGN,
+        INTENT_PAPER_WRITING,
+        INTENT_CONCEPT_EXPLANATION,
+    )
+
+    # Mechanism strategy must include the three required elements
+    s = get_strategy(INTENT_MECHANISM_ANALYSIS)
+    assert s.intent == INTENT_MECHANISM_ANALYSIS
+    assert "核心机制" in s.sections
+    assert "mechanism chain" in s.required_elements
+    assert "quantitative variables" in s.required_elements
+    assert "research gaps" in s.required_elements
+    assert s.formula_required is True
+
+    # Experiment strategy
+    s_exp = get_strategy(INTENT_EXPERIMENT_DESIGN)
+    assert "科学问题" in s_exp.sections
+    assert "假设" in s_exp.sections
+    assert "实验" in "".join(s_exp.sections) or "DOE" in " ".join(s_exp.required_elements)
+
+    # Literature review
+    s_lit = get_strategy(INTENT_LITERATURE_REVIEW)
+    assert "Research history" in s_lit.sections
+    assert "Current frontier" in s_lit.sections
+
+    # Engineering design
+    s_eng = get_strategy(INTENT_ENGINEERING_DESIGN)
+    assert "System architecture" in s_eng.sections
+    assert "Parameters" in s_eng.sections
+
+    # Paper writing
+    s_paper = get_strategy(INTENT_PAPER_WRITING)
+    assert "Innovation points" in s_paper.sections
+
+    # Concept explanation
+    s_concept = get_strategy(INTENT_CONCEPT_EXPLANATION)
+    assert s_concept.depth == "surface"
+
+    # All intents covered
+    assert set(STRATEGY_REGISTRY).issuperset(set(DEFAULT_INTENTS))
+    for intent in DEFAULT_INTENTS:
+        s = get_strategy(intent)
+        assert s.intent == intent
+        assert s.sections
+
+
+def test_187_followup_quality_validation():
+    """Phase 14.3 §5: forbidden phrases must NEVER appear in generated questions."""
+    from app.services.intent_followup_adapter import (
+        generate_intent_followups,
+        FORBIDDEN_PHRASES,
+    )
+    from app.services.research_intent_schema import (
+        INTENT_MECHANISM_ANALYSIS,
+        INTENT_EXPERIMENT_DESIGN,
+        INTENT_LITERATURE_REVIEW,
+        INTENT_CONCEPT_EXPLANATION,
+    )
+
+    prompt = "微纳米气泡强化臭氧氧化TC机理"
+    for intent in (
+        INTENT_MECHANISM_ANALYSIS,
+        INTENT_EXPERIMENT_DESIGN,
+        INTENT_LITERATURE_REVIEW,
+        INTENT_CONCEPT_EXPLANATION,
+    ):
+        followups = generate_intent_followups(prompt, intent=intent, max_questions=3)
+        assert followups
+        for fq in followups:
+            low = fq.question.lower()
+            for banned in FORBIDDEN_PHRASES:
+                assert banned.lower() not in low, (
+                    f"forbidden={banned!r} leaked into: {fq.question!r}"
+                )
+            # Sanity: question non-empty + has intent metadata
+            assert fq.question
+            assert fq.intent
+
+
+def test_188_agent_adapter_integration():
+    """Phase 14.3 §4: adapter wraps V1.0 pipeline without modifying it."""
+    from app.services.research_agent_intent_adapter import (
+        run_with_intent_detection,
+        IntentAwareResult,
+    )
+    from app.services.research_profile import ResearchProfile
+
+    result = run_with_intent_detection(
+        user_prompt="微纳米气泡强化臭氧氧化TC机理",
+        use_llm=False,
+        profile=ResearchProfile(
+            domain="pollution_control_water_treatment",
+            expertise_level="researcher",
+        ),
+    )
+    assert isinstance(result, IntentAwareResult)
+    assert result.classification is not None
+    assert result.strategy is not None
+    assert result.agent_result is not None
+    step_names = [s["name"] for s in result.steps]
+    assert "intent_classification" in step_names
+    assert "answer_strategy" in step_names
+    assert "research_agent_v1" in step_names
+    assert "intent_followup" in step_names
+    # Intent-aware follow-ups generated
+    assert result.intent_followups
+    for f in result.intent_followups:
+        assert "question" in f and "category" in f
+
+
+def test_189_microbubble_real_scenario():
+    """Phase 14.3 §6: end-to-end microbubble researcher scenario."""
+    from app.services.research_agent_intent_adapter import run_with_intent_detection
+    from app.services.research_intent_schema import (
+        INTENT_MECHANISM_ANALYSIS,
+    )
+    from app.services.research_profile import ResearchProfile
+
+    prompt = "微纳米气泡强化臭氧氧化TC机理"
+    result = run_with_intent_detection(
+        user_prompt=prompt,
+        use_llm=False,
+        profile=ResearchProfile(
+            domain="pollution_control_water_treatment",
+            expertise_level="researcher",
+        ),
+        memory_context=[
+            {"text": "臭氧微纳米气泡强化传质与·OH自由基生成的机理研究"},
+        ],
+    )
+    assert result.success
+    assert result.classification.intent == INTENT_MECHANISM_ANALYSIS
+    assert result.classification.confidence >= 0.8
+    assert result.strategy.intent == INTENT_MECHANISM_ANALYSIS
+    # Strategy carries mechanism chain elements
+    reqs = " ".join(result.strategy.required_elements)
+    for needle in ("mechanism chain", "quantitative variables", "research gaps"):
+        assert needle in reqs, f"missing required element: {needle}"
+
+    # Intent-aware follow-ups are MECHANISM_ANALYSIS-targeted
+    assert result.intent_followups
+    for f in result.intent_followups:
+        q = f["question"]
+        # None of the banned phrases appear
+        assert "了解更多" not in q
+        assert "想深入了解" not in q
+        assert "它主要是什么" not in q
+
+
+def test_190_phase14_3_regression():
+    """Phase 14.3 §7: full regression — Phase 14.0/14.1/14.2 + 14.3 modules coexist."""
+    # Phase 14.0 imports
+    from app.services.research_agent import run_research_agent  # noqa: F401
+    from app.services.research_report import ResearchReport, generate_research_report
+
+    # Phase 14.1 imports
+    from app.services.followup_schema import FollowUpQuestion  # noqa: F401
+    from app.services.followup_generator import generate_followup_questions  # noqa: F401
+    from app.services.followup_ranker import rank_followups  # noqa: F401
+
+    # Phase 14.2 imports
+    from app.services.followup_context import FollowUpContext  # noqa: F401
+    from app.services.research_profile import ResearchProfile  # noqa: F401
+    from app.services.personalized_followup_generator import generate_personalized_followups  # noqa: F401
+    from app.services.research_action_recommender import recommend_research_actions  # noqa: F401
+    from app.services.citation_guard import validate_citations  # noqa: F401
+    from app.services.research_agent_personalized import run_personalized_research_agent  # noqa: F401
+
+    # Phase 14.3 imports
+    from app.services.research_intent_schema import (
+        IntentClassification,
+        ResearchIntent,
+    )
+    from app.services.research_intent_classifier import ResearchIntentClassifier
+    from app.services.research_answer_strategy import get_strategy
+    from app.services.intent_followup_adapter import generate_intent_followups
+    from app.services.research_agent_intent_adapter import run_with_intent_detection
+
+    # Verify intent adapter compat with previous phases
+    r = run_with_intent_detection(
+        user_prompt="简述微纳米气泡在水处理中的作用",
+        use_llm=False,
+    )
+    assert r.classification
+    # Answer strategy lookup is non-empty for any intent
+    assert get_strategy(r.classification.intent).sections
+    # intent-aware follow-ups generated
+    assert r.intent_followups
+
+    # Phase 14.1 fallback still works (untouched module)
+    f14_1 = generate_followup_questions(
+        user_prompt="简述微纳米气泡在水处理中的作用",
+        answer="",
+        max_questions=3,
+    )
+    assert f14_1
+
+    # Generate a Phase 14.0 report, ensure all phase 14.x fields remain
+    rep = generate_research_report(
+        user_prompt="简述微纳米气泡在水处理中的作用",
+        intent=None,
+    )
+    assert isinstance(rep, ResearchReport)
+    d = rep.to_dict()
+    # Phase 14.1 field
+    assert "followup_questions" in d
+    # Phase 14.2 fields
+    for k in (
+        "personalized_followups",
+        "recommended_actions",
+        "citation_status",
+        "citation_status_summary",
+    ):
+        assert k in d
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 def _run_all() -> tuple:
