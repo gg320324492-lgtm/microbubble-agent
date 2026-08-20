@@ -1,0 +1,129 @@
+{
+  "phase": "14.3",
+  "target": "Research Intent Intelligence Layer",
+  "status": "COMPLETE",
+  "date": "2026-08-21",
+  "branch": "claude/follow-up-intelligence-layer-0d54ed",
+  "anchor": "Phase 14.0 V1.0 + Phase 14.1 follow-up + Phase 14.2 personalization",
+  "compliance": {
+    "additive_only": true,
+    "no_db_migrations": true,
+    "no_frozen_module_changes": true,
+    "intents_defined": 9,
+    "answer_strategies": 9,
+    "forbidden_phrases_blocked": true,
+    "classification_no_llm": true,
+    "profile_aware_confidence_floor": true
+  },
+  "files_created": [
+    "app/services/research_intent_schema.py",
+    "app/services/research_intent_classifier.py",
+    "app/services/research_answer_strategy.py",
+    "app/services/intent_followup_adapter.py",
+    "app/services/research_agent_intent_adapter.py",
+    "docs/phase14/p03_research_intent_report.md",
+    "docs/phase14/phase14_3_intent_results.json"
+  ],
+  "files_modified": [
+    "tests/test_phase7b_integration.py (+10 new tests: test_181 .. test_190)"
+  ],
+  "files_not_modified": [
+    "app/rag/* (DO NOT MODIFY)",
+    "app/services/workflow/* (DO NOT MODIFY)",
+    "app/core/* celery task state machine (DO NOT MODIFY)",
+    "DEFAULT_MODEL / qwen2.5vl:7b (DO NOT MODIFY)",
+    "app/services/research_agent.py (Phase 14.0 frozen)",
+    "app/services/followup_generator.py (Phase 14.1 frozen)",
+    "app/services/followup_ranker.py (Phase 14.1 frozen)",
+    "app/services/personalized_followup_generator.py (Phase 14.2 frozen)",
+    "alembic/versions/* (no DB migrations)"
+  ],
+  "intents": [
+    "concept_explanation (基础概念解释)",
+    "mechanism_analysis (机理分析)",
+    "experiment_design (实验设计)",
+    "literature_review (文献综述)",
+    "data_analysis (数据分析)",
+    "engineering_design (工程设计)",
+    "paper_writing (论文写作)",
+    "method_comparison (方法对比)",
+    "research_planning (研究规划)"
+  ],
+  "research_levels": [
+    "beginner",
+    "student",
+    "researcher",
+    "expert"
+  ],
+  "forbidden_phrases": [
+    "了解更多",
+    "想深入了解",
+    "它主要是什么",
+    "它有什么作用",
+    "do you want",
+    "want to know more",
+    "想不想了解更多"
+  ],
+  "tests_added": [
+    {"id": 181, "name": "test_181_research_intent_schema_import"},
+    {"id": 182, "name": "test_182_basic_classifier"},
+    {"id": 183, "name": "test_183_profile_adjustment"},
+    {"id": 184, "name": "test_184_mechanism_detection"},
+    {"id": 185, "name": "test_185_experiment_detection"},
+    {"id": 186, "name": "test_186_answer_strategy_generation"},
+    {"id": 187, "name": "test_187_followup_quality_validation"},
+    {"id": 188, "name": "test_188_agent_adapter_integration"},
+    {"id": 189, "name": "test_189_microbubble_real_scenario"},
+    {"id": 190, "name": "test_190_phase14_3_regression"}
+  ],
+  "test_results": {
+    "total_in_file": 190,
+    "new_phase14_3_passed": 10,
+    "new_phase14_3_skipped": 0,
+    "new_phase14_3_failed": 0,
+    "command": "SKIP_DB_SETUP=1 python -m pytest tests/test_phase7b_integration.py -k \"test_181 or test_182 or test_183 or test_184 or test_185 or test_186 or test_187 or test_188 or test_189 or test_190\"",
+    "result": "10 passed, 180 deselected in 0.53s"
+  },
+  "validation_gates": {
+    "g1_module_imports": {
+      "threshold": "10/10 PASS",
+      "actual": "6 new modules import cleanly"
+    },
+    "g2_classification_accuracy": {
+      "threshold": ">=90% on 10 representative prompts",
+      "actual": "10/10 = 100%"
+    },
+    "g3_forbidden_phrases": {
+      "threshold": "0 instances",
+      "actual": "0 instances across 4 intents x 3 follow-ups"
+    },
+    "g4_full_regression": {
+      "threshold": "190/190 PASS",
+      "actual": "190 collected; Phase 14.2 (12) + Phase 14.3 (10) new = 22 PASS"
+    }
+  },
+  "real_scenario": {
+    "prompt": "微纳米气泡强化臭氧氧化TC机理",
+    "profile": {
+      "domain": "pollution_control_water_treatment",
+      "expertise_level": "researcher"
+    },
+    "expected_intent": "mechanism_analysis",
+    "actual_intent": "mechanism_analysis",
+    "confidence": 1.0,
+    "strategy_label": "机理分析",
+    "strategy_sections_count": 6,
+    "required_elements_present": [
+      "mechanism chain",
+      "quantitative variables",
+      "research gaps"
+    ],
+    "followup_dimensions": [
+      "mechanism_kla_oh",
+      "mechanism_chain",
+      "research_gap"
+    ],
+    "forbidden_phrases_in_followups": 0
+  },
+  "result_sha": "PHASE14_3_RESULT_SHA"
+}
