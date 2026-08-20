@@ -1,4 +1,4 @@
-"""Research Report Generator — Phase 14.0 §2.
+"""Research Report Generator — Phase 14.0 §2, Phase 14.1 §4.
 
 Generates a structured research report from the pipeline outputs.
 
@@ -8,10 +8,11 @@ Per spec §2: report contains:
 - Findings (evaluation, reasoning)
 - Next steps (improvement plan, knowledge updates)
 - Provenance (steps + metadata)
+- Follow-up questions (Phase 14.1 §4 — intent-aware)
 
 Public API:
 - ResearchReport dataclass: title, executive_summary, methodology,
-  findings, next_steps, provenance
+  findings, next_steps, provenance, followup_questions
 - generate_research_report(...) -> ResearchReport
 """
 from __future__ import annotations
@@ -24,10 +25,15 @@ from typing import Dict, List, Optional
 
 _logger = logging.getLogger(__name__)
 
+# Phase 14.1: lightweight import surface so we don't crash if the follow-up
+# stack is missing on a frozen checkout. ``generate_followup_questions`` and
+# ``rank_followups`` are lazy-imported inside the helper to avoid loading
+# optional modules (LLM clients, etc.) at import time.
+
 
 @dataclass
 class ResearchReport:
-    """Phase 14.0 §2: structured research report."""
+    """Phase 14.0 §2: structured research report (Phase 14.1 §4 adds follow-up questions)."""
 
     title: str
     executive_summary: str
@@ -37,6 +43,8 @@ class ResearchReport:
     provenance: Dict[str, Any] = field(default_factory=dict)
     generated_at: Optional[datetime] = None
     user_prompt: str = ""
+    # Phase 14.1 §4: intent-aware follow-up questions (additive)
+    followup_questions: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -50,6 +58,7 @@ class ResearchReport:
                 self.generated_at.isoformat() if self.generated_at else None
             ),
             "user_prompt": self.user_prompt,
+            "followup_questions": [dict(q) for q in (self.followup_questions or [])],
         }
 
 
@@ -163,6 +172,59 @@ def _summarize_memory(memory_hits) -> List[str]:
     return [f"Memories retrieved: {len(memory_hits)}"]
 
 
+def _build_followup_questions(
+    user_prompt: str,
+    intent,
+    memory_hits,
+    reasoning_output,
+    max_questions: int = 3,
+    expected_intent: str = "",
+) -> List[Dict[str, Any]]:
+    """Phase 14.1 §4: build follow-up questions + rank.
+
+    Lazy import avoids hard-fail if the follow-up stack is missing on a
+    frozen checkout.
+    """
+    try:
+        from app.services.followup_generator import generate_followup_questions
+        from app.services.followup_ranker import rank_followups
+    except Exception as exc:  # pragma: no cover - non-critical
+        _logger.debug("Follow-up modules unavailable: %s", exc)
+        return []
+
+    answer_excerpt = ""
+    try:
+        if reasoning_output is not None and getattr(reasoning_output, "summary", None):
+            answer_excerpt = str(reasoning_output.summary or "")[:600]
+    except Exception:
+        answer_excerpt = ""
+
+    try:
+        followups = generate_followup_questions(
+            user_prompt=user_prompt or "",
+            answer=answer_excerpt,
+            context=None,
+            memory_hits=memory_hits,
+            reasoning_output=reasoning_output,
+            intent=intent,
+            max_questions=max_questions,
+        )
+    except Exception as exc:  # pragma: no cover - non-critical
+        _logger.debug("generate_followup_questions failed: %s", exc)
+        return []
+
+    if not followups:
+        return []
+
+    try:
+        ranked = rank_followups(followups, expected_intent=expected_intent)
+    except Exception as exc:  # pragma: no cover
+        _logger.debug("rank_followups failed: %s", exc)
+        ranked = list(followups)
+
+    return [f.to_dict() for f in (ranked or [])]
+
+
 def generate_research_report(
     *,
     user_prompt: str,
@@ -251,12 +313,30 @@ def generate_research_report(
             "Phase 8.3 (Reflection + Improvement Plan)",
             "Phase 11.0/11.1/11.2 (Bayesian Reasoning + Adaptive)",
             "Phase 12.0/13.0 (Experiment Design + Execution)",
+            "Phase 14.1 (Follow-up Intelligence Layer)",
         ],
         "step_durations": [
             {"name": s.name, "duration": s.duration_seconds, "success": s.success}
             for s in (steps or [])
         ],
     }
+
+    expected_intent = ""
+    if intent is not None:
+        expected_intent = (
+            getattr(intent, "task_type", "")
+            or getattr(intent, "domain", "")
+            or ""
+        )
+
+    followup_questions: List[Dict[str, Any]] = _build_followup_questions(
+        user_prompt=user_prompt,
+        intent=intent,
+        memory_hits=memory_hits,
+        reasoning_output=reasoning_output,
+        max_questions=3,
+        expected_intent=expected_intent,
+    )
 
     return ResearchReport(
         title=title,
@@ -267,4 +347,5 @@ def generate_research_report(
         provenance=provenance,
         generated_at=datetime.now(timezone.utc),
         user_prompt=user_prompt,
+        followup_questions=followup_questions,
     )
