@@ -492,9 +492,15 @@ const onBatchDelete = () => {
 .session-preview {
   font-size: 12px;
   color: var(--color-text-secondary);
-  white-space: nowrap;
+  /* ★ 修复: preview 数据含 \n 时旧 nowrap 渲染出多行导致卡片看起来重叠.
+     用 -webkit-line-clamp 强制 2 行截断 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-word;
 }
 
 /* #043 Phase 6: tags inline chip */
@@ -563,6 +569,18 @@ const onBatchDelete = () => {
   margin-bottom: 4px;
   border-radius: var(--radius-md);
   cursor: pointer;
+  /* ★ ★ 修复移动端 sidebar 卡片重叠: 用户实测 19 条卡片互相重叠.
+     同桌面 SessionSidebar 根因: .session-item-wrapper 用 flex row + align-items center,
+     内部 button .session-item 默认 flex-shrink: 1 被 batch-checkbox 36px 撑高压成
+     单行塌陷. min-height + flex-shrink: 0 + box-shadow 三件套 */
+  min-height: 64px !important;
+  overflow: hidden !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  /* 卡片间更多视觉分隔 */
+  margin: 2px 4px 8px !important;
+  padding: 4px 0;
 }
 .session-item-wrapper.active {
   background: var(--color-primary-bg);
@@ -576,6 +594,7 @@ const onBatchDelete = () => {
 .session-item-wrapper .session-item {
   flex: 1;
   min-width: 0;
+  flex-shrink: 0;
 }
 
 .batch-checkbox {
