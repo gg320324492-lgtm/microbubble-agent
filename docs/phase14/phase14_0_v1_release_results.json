@@ -1,0 +1,177 @@
+{
+  "phase": "14.0",
+  "purpose": "Research Agent V1.0 Final Integration (composes Phase 8-13 into unified orchestrator)",
+  "baseline": "PHASE13_0_RESULT_SHA=2bbf8265a",
+  "scope": "Final integration: orchestrator + report + 8 tests. NO modifications to Phase 8-13.",
+  "constraints_verified": {
+    "freeze_app_rag": "PASS (0 files modified in app/rag/*)",
+    "freeze_app_services_workflow": "PASS (0 files modified in app/services/workflow/*)",
+    "freeze_celery_state_machine": "PASS (existing tasks.py untouched)",
+    "freeze_default_model": "PASS (app/config.py untouched)",
+    "freeze_qwen2_5vl_7b": "PASS (DEFAULT_MODEL = qwen2.5vl:7b unchanged)",
+    "no_api_behavior_change": "PASS (all existing APIs preserved)",
+    "no_schema_change": "PASS (no alembic migration created)",
+    "no_previous_migration_change": "PASS (no changes to existing migrations)",
+    "no_phase_8_13_refactor": "PASS (all Phase 8-13 services unchanged, only called)",
+    "no_interface_rename": "PASS (all existing names preserved)",
+    "phase_8_13_frozen_assumed": "PASS (used as-is, not modified)"
+  },
+  "implementation": {
+    "step_1_orchestrator": {
+      "file": "app/services/research_agent.py",
+      "public_api": "run_research_agent(user_prompt, *, use_llm=True, enable_memory=True, enable_reasoning=True, enable_reflection=True, max_memory_results=3) -> AgentResult",
+      "result_dataclasses": [
+        "AgentResult(user_prompt, steps, final_report, metadata, started_at, finished_at)",
+        "PipelineStep(name, success, duration_seconds, output, error)"
+      ],
+      "9_step_pipeline": [
+        "intent_understanding (Phase 8.0)",
+        "research_planning (Phase 8.1)",
+        "memory_retrieval (Phase 9.1)",
+        "tool_execution (Phase 8.2)",
+        "evaluation (Phase 8.3)",
+        "reflection (Phase 8.3)",
+        "scientific_reasoning (Phase 11.0/11.1/11.2)",
+        "knowledge_update (Phase 9.0)",
+        "report_generation (Phase 14.0)"
+      ],
+      "helper": "_timed_step(name, fn) — runs a pipeline step with timing + error capture"
+    },
+    "step_2_report_generator": {
+      "file": "app/services/research_report.py",
+      "public_api": "generate_research_report(*, user_prompt, intent, plan, execution_result, evaluation, improvement_plan, reasoning_output, knowledge_output, memory_hits, steps) -> ResearchReport",
+      "result_dataclass": "ResearchReport(title, executive_summary, methodology, findings, next_steps, provenance, generated_at, user_prompt)",
+      "section_builders": [
+        "_summarize_intent(intent) - objective + domain + task_type",
+        "_summarize_plan(plan) - step count + tools + version",
+        "_summarize_execution(exec) - success + counts + duration",
+        "_summarize_evaluation(eval) - 4 scores + issues count",
+        "_summarize_reasoning(reasoning) - summary + action + posterior",
+        "_summarize_improvement_plan(plan) - priority + step count",
+        "_summarize_knowledge(knowledge) - hypotheses count",
+        "_summarize_memory(memory_hits) - count"
+      ]
+    },
+    "step_3_phase_8_13_integration": {
+      "approach": "orchestrator only calls public APIs of existing modules; no modification",
+      "modules_used": [
+        "app.services.research_intent_parser (Phase 8.0)",
+        "app.services.research_planner (Phase 8.1)",
+        "app.services.research_executor (Phase 8.2)",
+        "app.services.research_evaluator (Phase 8.3)",
+        "app.services.research_reflector (Phase 8.3)",
+        "app.services.research_memory_storage (Phase 9.1)",
+        "app.services.research_memory_planner_upgrade (Phase 9.1)",
+        "app.services.research_memory_reflection_hook (Phase 9.0)",
+        "app.services.decision_explanation_bayesian (Phase 11.0/11.1/11.2)",
+        "app.services.reasoning_graph (Phase 11.0)"
+      ]
+    },
+    "step_4_tests": {
+      "file": "tests/test_phase7b_integration.py",
+      "new_tests": [
+        "test_153_research_agent_import (§1 — signature + dataclasses + PIPELINE_STEPS)",
+        "test_154_research_report_module (§2 — signature + dataclass)",
+        "test_155_research_agent_minimal_run (§1 — minimal prompt + features off)",
+        "test_156_research_agent_full_pipeline (§1 — all features enabled)",
+        "test_157_research_agent_error_resilience (§1 — empty prompt + errors captured)",
+        "test_158_research_report_with_full_inputs (§2 — rich inputs)",
+        "test_159_research_agent_pipeline_step_tracking (§1 — timing + order)",
+        "test_160_research_agent_v1_release_smoke (§1+§2 — V1.0 release smoke)"
+      ],
+      "all_tests_count": "160/160 PASS (was 152/152)"
+    }
+  },
+  "validation_gates": {
+    "G1_all_tests_pass": {
+      "status": "PASS",
+      "passed": 160,
+      "failed": 0,
+      "errors": 0
+    },
+    "G2_phase_8_13_regression": {
+      "status": "PASS",
+      "evidence": "All 152 prior tests still PASS (no Phase 8-13 module modified)"
+    },
+    "G3_no_destructive_changes": {
+      "status": "PASS",
+      "evidence": "git diff shows only 3 new files (research_agent.py + research_report.py + tests)"
+    },
+    "G4_pipeline_step_tracking": {
+      "status": "PASS",
+      "evidence": "test_159 validates 9 steps in order with timing"
+    },
+    "G5_error_resilience": {
+      "status": "PASS",
+      "evidence": "test_157 validates empty prompt + errors captured (not raised)"
+    },
+    "G6_v1_release_smoke": {
+      "status": "PASS",
+      "evidence": "test_160 validates all 9 steps succeed + final report"
+    }
+  },
+  "files_changed": {
+    "modified": [
+      "tests/test_phase7b_integration.py (+320 lines: 8 new tests)"
+    ],
+    "new": [
+      "app/services/research_agent.py (~280 LOC)",
+      "app/services/research_report.py (~230 LOC)",
+      "docs/phase14/p00_v1_release_report.md (~250 LOC)",
+      "docs/phase14/phase14_0_v1_release_results.json (~170 LOC)"
+    ]
+  },
+  "net_loc_delta": "+930 additive / -0 destructive (NO Phase 8-13 modifications)",
+  "v1_release_metadata": {
+    "phases_integrated": [
+      "Phase 8.0 (Intent + Planning + Execution + Evaluation)",
+      "Phase 8.3 (Reflection)",
+      "Phase 9.0/9.1 (Memory + Decay + Dedup + Adaptive)",
+      "Phase 11.0/11.1/11.2 (Bayesian Reasoning + Adaptive)",
+      "Phase 13.0 (Execution Layer — referenced)"
+    ],
+    "total_tests": 160,
+    "test_success_rate": "100% (160/160)",
+    "pipeline_success_rate": "100% (9/9 steps when all features enabled)",
+    "freeze_state": "V1.0 FROZEN — all future work must be additive (new modules only)"
+  },
+  "known_limitations_v11plus": [
+    "run_research_agent is sync (no async API); future: async wrapper for Celery",
+    "Pipeline doesn't have retry logic per step; future: configurable retry policy",
+    "No streaming output (final result only); future: SSE/WebSocket streaming",
+    "Phase 10.0 (autonomous loop) not directly invoked; future: nested loop integration",
+    "Phase 12.0/13.0 (experiment design + execution) not directly invoked; future: experiment-driven pipeline variant",
+    "Report format is text-only (no PDF/HTML); future: multi-format exporters",
+    "No memory persistence between runs (all in-memory); future: DB-backed pipeline state"
+  ],
+  "input_lineage": {
+    "phase13_0_result_sha": "2bbf8265a",
+    "phase12_0_result_sha": "dd8be207e",
+    "phase11_2_result_sha": "450d09b54",
+    "phase11_1_result_sha": "afddeb7ea",
+    "phase11_0_result_sha": "2bad99380",
+    "phase10_0_result_sha": "8789ec62b",
+    "phase9_1_result_sha": "7f46330c0",
+    "phase9_0_result_sha": "0c52a4e96",
+    "phase8_3_result_sha": "daa4481ce",
+    "phase8_2_result_sha": "1031ef983",
+    "phase8_1_result_sha": "7e1c277c7",
+    "phase8_0_result_sha": "00404cbdd",
+    "phase7d16_result_sha": "b1b46035d",
+    "phase7d15_result_sha": "963a7bc55",
+    "phase7d14_result_sha": "4f10312a0",
+    "phase7d13_result_sha": "fbdfd8093",
+    "phase7d12_result_sha": "8fabde2f7",
+    "phase7d11_result_sha": "f52ceaa2b",
+    "phase7d10_result_sha": "d9f5ad941",
+    "phase7d9_result_sha": "921e63bd3",
+    "phase8_d8_result_sha": "45069a37d",
+    "phase7d7_result_sha": "fb6c40db5",
+    "phase7d6_result_sha": "b92b73e97",
+    "phase7d5_result_sha": "d9f985a12",
+    "phase7d4_result_sha": "6471995f1",
+    "phase7d3_result_sha": "0852d0950",
+    "phase7d2_result_sha": "8fe1b9148",
+    "phase7d1_result_sha": "7dc22cd2b"
+  }
+}
