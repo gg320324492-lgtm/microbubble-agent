@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Content Security Policy (基础基线，详见 docs/desktop-conversion/security.md §CSP):
+      - default-src 'self' 仅允许同源资源
+      - script-src 'self' 禁 eval / inline
+      - style-src 'self' 'unsafe-inline' (Vue scoped styles 注入需要)
+      - connect-src 'self' (Phase 1 起加 https://agent.mnb-lab.cn)
+      - 禁 object / frame / worker
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'self'; form-action 'none';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MicroBubble Desktop</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

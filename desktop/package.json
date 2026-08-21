@@ -1,0 +1,30 @@
+{
+  "name": "microbubble-desktop",
+  "version": "0.1.0",
+  "description": "MicroBubble Desktop Client — Electron + Vue 3 + TypeScript (Phase 0 skeleton)",
+  "main": "out/main/index.js",
+  "private": true,
+  "author": "MicroBubble Lab",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && vue-tsc --noEmit -p tsconfig.web.json",
+    "start": "electron-vite preview",
+    "build:win": "electron-vite build && electron-builder --win --config electron-builder.yml",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "electron": "^32.2.7",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vue-tsc": "^2.1.10"
+  }
+}
