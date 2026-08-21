@@ -111,10 +111,32 @@ export interface DesktopSessionApi {
   onSessionExpired: (cb: () => void) => void
 }
 
+/**
+ * Chat SSE Streaming API (Phase 2-Impl-3B)。
+ *
+ * 流程:
+ *   renderer.startStream({ message, session_id }) → streamId
+ *   main → renderer: 多次 push chunk / end / error
+ *   renderer 监听 onChunk / onEnd / onError 处理
+ *
+ * 安全:
+ *   - 不暴露 ipcRenderer 实例
+ *   - 不暴露 channel 名 (renderer 只能走白名单方法)
+ *   - onChunk / onEnd / onError 返回 unsubscribe 闭包
+ */
+export interface DesktopChatStreamApi {
+  startStream: (payload: import('./chat-types').ChatStreamRequest) => Promise<string>
+  cancelStream: (streamId: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  onChunk: (cb: (streamId: string, event: import('./chat-types').StreamEvent) => void) => () => void
+  onEnd: (cb: (streamId: string, payload: import('./chat-types').StreamEndPayload) => void) => () => void
+  onError: (cb: (streamId: string, error: import('./chat-types').StreamErrorPayload) => void) => () => void
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
   session: DesktopSessionApi
+  chat: DesktopChatStreamApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 
