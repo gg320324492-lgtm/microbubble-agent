@@ -285,10 +285,11 @@ class VoiceprintService:
 
         embedding_list = embedding.tolist()
 
+        # 2026-08-21 #Step14.9: 过滤掉已毕业/已停用成员 (is_active=false), 避免误识别
         # 查询已录入声纹的成员，按余弦距离排序
         result = await db.execute(
             select(Member)
-            .where(Member.voice_embedding.isnot(None))
+            .where(Member.voice_embedding.isnot(None), Member.is_active == True)
             .order_by(Member.voice_embedding.cosine_distance(embedding_list))
             .limit(1)
         )
@@ -334,7 +335,7 @@ class VoiceprintService:
 
         result = await db.execute(
             select(Member)
-            .where(Member.voice_embedding.isnot(None))
+            .where(Member.voice_embedding.isnot(None), Member.is_active == True)
             .order_by(Member.voice_embedding.cosine_distance(embedding_list))
             .limit(1)
         )
@@ -358,7 +359,7 @@ class VoiceprintService:
         from app.models.member import Member
 
         result = await db.execute(
-            select(Member).where(Member.voice_embedding.isnot(None))
+            select(Member).where(Member.voice_embedding.isnot(None), Member.is_active == True)
         )
         members = result.scalars().all()
         return [
@@ -385,6 +386,7 @@ class VoiceprintService:
             select(Member).where(
                 Member.voice_embedding.isnot(None),
                 Member.voice_confirmed_at.isnot(None),
+                Member.is_active == True,
             ).order_by(Member.voice_confirmed_at)
         )
         return list(result.scalars().all())
