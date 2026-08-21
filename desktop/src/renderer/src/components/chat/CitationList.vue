@@ -1,38 +1,47 @@
 <script setup lang="ts">
 /**
- * CitationList (Phase 3-C1).
+ * CitationList (Phase 3-C2: sort + knowledge-open relay).
  *
- * 渲染一组 citation 卡. 来源: 流式 streamingMessage.citations 或
- * 已完成消息 metadata.citations.
+ * 渲染一组 citation 卡:
+ *   - 0 citations: 渲染 nothing (DOM 干净)
+ *   - ≥1 citations: sort by score desc (Phase 3-C2) + "📚 引用 N 条" 标题
  *
- * 渲染规则:
- * - 0 citations: 渲染 nothing (DOM 干净)
- * - ≥1 citations: 列表 + 标题 "📚 引用 N 条"
+ * 与 MarkdownViewer 互补: 正文 markdown 由 MarkdownViewer 负责,
+ * 引用列表单独渲染, 不嵌入 markdown 主体.
  *
- * 与 MarkdownViewer 互补: 正文 markdown 解析由 MarkdownViewer 负责,
- * 引用列表由本组件单独渲染, 不嵌入 markdown 主体.
+ * Phase 3-C2: 通过 emit('knowledge-open', id) 把 knowledgeId 回调给上层
+ * (ChatView 可选监听), Phase 4+ 接 router.
  */
+import { computed } from 'vue'
 import CitationCard from './CitationCard.vue'
+import { sortCitations } from '../../utils/citation'
 import type { StreamCitationEntry } from '@shared/chat-types'
 
 interface Props {
   citations: StreamCitationEntry[]
 }
-defineProps<Props>()
+const props = defineProps<Props>()
+
+const emit = defineEmits<{
+  'knowledge-open': [knowledgeId: number]
+}>()
+
+const sorted = computed(() => sortCitations(props.citations))
 </script>
 
 <template>
-  <section v-if="citations && citations.length > 0" class="citation-list">
+  <section v-if="sorted && sorted.length > 0" class="citation-list">
     <header class="citation-list__head">
       <span class="citation-list__icon">📚</span>
-      <span class="citation-list__title">引用 {{ citations.length }} 条</span>
+      <span class="citation-list__title">引用 {{ sorted.length }} 条</span>
     </header>
     <div class="citation-list__items">
       <CitationCard
-        v-for="(c, i) in citations"
+        v-for="(c, i) in sorted"
         :key="`cit-${c.knowledgeId}-${i}`"
         :citation="c"
         :index="i"
+        @knowledge-open="(id) => emit('knowledge-open', id)"
       />
     </div>
   </section>

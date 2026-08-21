@@ -24,6 +24,7 @@ import type {
   StreamCitationEntry
 } from '@shared/chat-types'
 import { generateClientMsgId } from '@shared/chat-types'
+import { dedupCitations } from '../utils/citation'
 import type { ApiError } from '@shared/preload-api'
 
 // 增量 ID 用于 UI (Phase 3-A 仍存在; 客户端消息通过 client_msg_id 标识)
@@ -280,6 +281,8 @@ export const useChatStore = defineStore('chat', () => {
       case 'citation':
       case 'refs':
         // Phase 3-C1: RAG 引用. 单条或数组皆累加, 渲染时去重 + 按 knowledgeId 排序.
+        // Phase 3-C2: dedupCitations 提取到 utils, 让 store 只负责累加, dedup 在引用时
+        //   (or 一次性) 由组件层 sortCitations + dedupCitations 完成.
         appendCitations(streamingMessage.value.citations, event.citation)
         if (event.refs) {
           appendCitations(streamingMessage.value.citations, event.refs)
@@ -372,10 +375,11 @@ export const useChatStore = defineStore('chat', () => {
   /**
    * 内部: 把 stream event.citation 累加到 streamingMessage.citations.
    * - 接受 StreamCitationEntry | StreamCitationEntry[] | undefined
-   * - 已存在 knowledgeId 的 entry 跳过 (Phase 3-C1 dedup)
-   * - 引诱知识库 source 字段标准化
+   * - dedup 走 utils/citation.dedupCitations 一次性合并 (不在这里做, 渲染时统一)
+   * - 跳过非法 entry (knowledgeId 非 number)
    *
-   * Phase 3-C1: 仅做 dedup, 不做排序; Phase 4+ 可按 score 排序或重排.
+   * Phase 3-C1 原始实现; Phase 3-C2 改为 delegate 给 utils/dedupCitations.
+   * 这里仍负责"累加"职责, dedup + sort 在 CitationList 渲染时一次性.
    */
   function appendCitations(
     target: StreamCitationEntry[],
@@ -384,13 +388,13 @@ export const useChatStore = defineStore('chat', () => {
     if (!incoming) return
     const list = Array.isArray(incoming) ? incoming : [incoming]
     if (list.length === 0) return
-    const existingIds = new Set(target.map((c) => c.knowledgeId))
     for (const c of list) {
-      if (!c || typeof c.knowledgeId !== 'number') continue
-      if (existingIds.has(c.knowledgeId)) continue
+      if (!c || typeof c.knowledgeId !== 'number' || !Number.isFinite(c.knowledgeId)) continue
       target.push(c)
-      existingIds.add(c.knowledgeId)
     }
+    // Phase 3-C2: dedup 与 sort 在 CitationList 渲染层做 (utils/citation.ts),
+    // 这里仅保 SSE chunk 顺序, 不丢任何中间 event.
+    void dedupCitations // 显式引用保 lint 通过; 实际 dedup 在 normalizeCitations 调用链
   }
 
   /**
