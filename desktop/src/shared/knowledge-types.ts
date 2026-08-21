@@ -1,6 +1,6 @@
 // Knowledge 模块共享类型契约。
 // 一律对照 app/api/v1/knowledge.py + app/schemas/knowledge.py (Pydantic)。
-// 任何后端字段改动必须先改 docs/desktop-conversion/knowledge-api-contract.md 再改本文件。
+// 任何后端字段改动必须先改 docs/desktop-conversion/{knowledge-api-contract,knowledge-detail-contract}.md 再改本文件。
 
 /**
  * 左侧 "知识库分类" 列表项 (来自 DynamicCategory)。
@@ -49,8 +49,7 @@ export interface KnowledgeList {
 }
 
 /**
- * 文档详情基础字段 (来自 KnowledgeBase, KnowledgeResponse 继承这些 + 自身。
- * 不强求完全覆盖所有字段; UI 用到的子集 + 自由扩展)。
+ * 文档详情基础字段 (KnowledgeBase, KnowledgeResponse 继承这些 + 自身)。
  */
 export interface KnowledgeBaseFields {
   title: string
@@ -73,7 +72,7 @@ export interface KnowledgeBaseFields {
 }
 
 /**
- * 文档详情 (KnowledgeResponse) — 全部字段 (含 id + source + file_* 等)。
+ * 文档详情 (KnowledgeResponse) — 全字段。
  */
 export interface KnowledgeResponse extends KnowledgeBaseFields {
   id: number
@@ -83,6 +82,22 @@ export interface KnowledgeResponse extends KnowledgeBaseFields {
   file_name: string | null
   file_type: string | null
   summary: string | null
+  // formatted_content 是 LLM 预格式化 HTML, 严禁 v-html 直接渲染
+  // Phase 2-Impl-2B 不渲染, Phase 3+ 需先 sanitize
+  formatted_content?: string | null
+}
+
+/**
+ * 关联知识 (RelatedKnowledge) — 引用的基础。
+ */
+export interface RelatedKnowledge {
+  id: number
+  title: string
+  category: string | null
+  summary: string | null
+  relation_type: string
+  score: number
+  reason: string | null
 }
 
 /**
@@ -100,8 +115,50 @@ export interface KnowledgeSearchResult {
 }
 
 /**
- * UI 派生：analysis_status → 中文 + 颜色 (与 web 端 analysis_status map 类似)。
- * 'pending' | 'processing' | 'completed' | 'failed' | 其他 -> '未分析'
+ * 分页 UI 状态 (Phase 2-Impl-2B)。
+ */
+export interface PageInfo {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+/**
+ * 派生 PageInfo。
+ * totalPages = max(1, ceil(total / pageSize))
+ */
+export function derivePageInfo(page: number, pageSize: number, total: number): PageInfo {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  return {
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrev: page > 1
+  }
+}
+
+/**
+ * Citation (Phase 3 留口) — 来自 RelatedKnowledge 可派生。
+ *
+ * 暂不在 Phase 2-Impl-2B 渲染, UI 占位 (Reference & Citation 区)。
+ */
+export interface Citation {
+  id: string
+  knowledgeId: number
+  sourceKnowledgeId: number
+  snippet: string
+  score: number
+  relationship: 'semantic' | 'explicit' | 'structural' | string
+  reason?: string
+}
+
+/**
+ * UI 派生：analysis_status → 中文 + 颜色。
  */
 export function statusLabel(s: string | null | undefined): string {
   switch (s) {
@@ -125,7 +182,6 @@ export function statusVariant(s: string | null | undefined): 'ok' | 'warn' | 'er
 
 /**
  * UI 派生：把 ISO 时间字符串格式化成 zh-CN 本地时间。
- * 失败兜底空字符串。
  */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return ''

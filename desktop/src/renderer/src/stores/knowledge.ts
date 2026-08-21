@@ -1,4 +1,4 @@
-// Knowledge Pinia store —— 分类 + 文档列表 + 当前详情 + 搜索 query。
+// Knowledge Pinia store —— 分类 + 文档列表 (分页) + 当前详情 + 搜索 query。
 //
 // 拉数据全部走 IPC 委托 main api.service。renderer 不持久化任何数据。
 
@@ -9,12 +9,16 @@ import {
   listKnowledge,
   getKnowledge
 } from '../api/knowledge'
-import type {
-  DynamicCategory,
-  KnowledgeListItem,
-  KnowledgeResponse
+import {
+  derivePageInfo,
+  type DynamicCategory,
+  type KnowledgeListItem,
+  type KnowledgeResponse,
+  type PageInfo
 } from '@shared/knowledge-types'
 import type { ApiError } from '@shared/preload-api'
+
+const DEFAULT_PAGE_SIZE = 20
 
 export const useKnowledgeStore = defineStore('knowledge', () => {
   // 分类 + 选中分类
@@ -25,10 +29,10 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const items = ref<KnowledgeListItem[]>([])
   const total = ref(0)
   const page = ref(1)
-  const pageSize = ref(20)
+  const pageSize = ref(DEFAULT_PAGE_SIZE)
   const keyword = ref('')
 
-  // 详情（Phase 2-Impl-2A 路由占位）
+  // 详情（Phase 2-Impl-2B Pro）
   const currentDetail = ref<KnowledgeResponse | null>(null)
   const detailLoading = ref(false)
 
@@ -36,23 +40,16 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const lastError = ref<ApiError | null>(null)
   const loading = ref(false)
 
-  /**
-   * 分类总数 (排除 'all' 自身)。
-   */
-  const totalCount = computed(() => {
-    return categories.value.reduce((acc, c) => acc + c.count, 0)
-  })
-
-  /**
-   * 选中分类的 count（'all' -> 所有汇总）。
-   */
+  // ============ 派生 ============
+  const totalCount = computed(() => categories.value.reduce((acc, c) => acc + c.count, 0))
   const selectedCategoryCount = computed(() => {
     if (selectedCategory.value === 'all') return totalCount.value
     const c = categories.value.find((x) => x.name === selectedCategory.value)
     return c?.count ?? 0
   })
+  const pageInfo = computed<PageInfo>(() => derivePageInfo(page.value, pageSize.value, total.value))
 
-  /** 拉左侧分类。 */
+  // ============ Actions ============
   async function loadCategories(): Promise<boolean> {
     const r = await getCategories()
     if (r.ok) {
@@ -63,7 +60,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     return false
   }
 
-  /** 拉中间文档列表（按当前 selectedCategory + keyword + page）。 */
   async function loadList(): Promise<boolean> {
     loading.value = true
     try {
@@ -85,17 +81,22 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     }
   }
 
-  /** 用户改变分类。 */
   async function selectCategory(name: string): Promise<void> {
     selectedCategory.value = name
     page.value = 1
     await loadList()
   }
 
-  /** 用户改搜索框 (debounced in view, 这里直接调)。 */
   async function search(q: string): Promise<void> {
     keyword.value = q
     page.value = 1
+    await loadList()
+  }
+
+  async function goToPage(p: number): Promise<void> {
+    if (p < 1 || p > pageInfo.value.totalPages) return
+    if (p === page.value) return
+    page.value = p
     await loadList()
   }
 
@@ -122,7 +123,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     lastError.value = null
   }
 
-  /** 进入页面一次拉全部分类 + 列表。 */
   async function bootstrap(): Promise<void> {
     loading.value = true
     try {
@@ -133,6 +133,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   }
 
   return {
+    // state
     categories,
     selectedCategory,
     items,
@@ -144,12 +145,16 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     detailLoading,
     lastError,
     loading,
+    // derived
     totalCount,
     selectedCategoryCount,
+    pageInfo,
+    // actions
     loadCategories,
     loadList,
     selectCategory,
     search,
+    goToPage,
     loadDetail,
     clearDetail,
     clearError,
