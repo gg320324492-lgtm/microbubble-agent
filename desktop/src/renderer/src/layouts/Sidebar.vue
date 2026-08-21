@@ -24,6 +24,7 @@ interface NavItem {
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { name: 'dashboard', label: '仪表盘', icon: '🏠', routeName: 'dashboard', badge: 'wip' },
   { name: 'knowledge', label: '知识库', icon: '📚', routeName: 'knowledge', badge: 'wip' },
+  { name: 'chat', label: 'AI 对话', icon: '💬', routeName: 'chat', badge: 'wip' },
   { name: 'tasks', label: '任务', icon: '📋', routeName: 'tasks', badge: 'soon' },
   { name: 'meeting', label: '会议', icon: '🎙️', routeName: 'meeting', badge: 'soon' }
 ]

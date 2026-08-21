@@ -40,6 +40,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'main', title: '文档详情' }
   },
   {
+    path: '/chat',
+    name: 'chat',
+    component: () => import('../views/ChatView.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: 'AI 对话' }
+  },
+  {
     path: '/home',
     name: 'home',
     redirect: () => '/dashboard'
