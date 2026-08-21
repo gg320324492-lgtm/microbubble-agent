@@ -19,6 +19,7 @@ import type {
   ChatMessageOut,
   ChatMessageRole,
   StreamingMessage,
+  ToolCallSnapshot,
   StreamEvent,
   StreamContext,
   StreamCitationEntry
@@ -171,7 +172,8 @@ export const useChatStore = defineStore('chat', () => {
       content: '',
       thinking: null,
       rich_blocks: [],
-      tool_trace: [],
+      /** Phase 5-A: tool 调用快照 (按 tool_use_id dedup) */
+      tool_calls: [],
       /** Phase 3-C1: citation 累加数组 */
       citations: [],
       started_at: new Date().toISOString(),
@@ -274,7 +276,45 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'tool_use':
       case 'tool_result':
+        // Phase 5-A: 累积工具调用快照.
+        //   - tool_use: 新建 'call_only' ToolCallSnapshot
+        //   - tool_result: 找到之前的 tool_use_id, update status + result
+        // 失败 / 缺字段: 静默 ack (不污染流)
+        if (!event.tool_use_id) break
+        if (event.type === 'tool_use') {
+          const snap: ToolCallSnapshot = {
+            tool_use_id: event.tool_use_id,
+            name: event.tool_name ?? 'unknown',
+            input: event.tool_input ?? {},
+            started_at: new Date().toISOString(),
+            finished_at: null,
+            status: 'call_only',
+            output: null,
+            error: null,
+            duration_ms: null
+          }
+          // 按 tool_use_id dedup; 已有则替换
+          appendToolCall(snap)
+        } else {
+          // tool_result
+          const existing = streamingMessage.value.tool_calls.find(
+            (t) => t.tool_use_id === event.tool_use_id
+          )
+          if (existing) {
+            existing.finished_at = new Date().toISOString()
+            existing.duration_ms = event.tool_duration_ms ?? null
+            existing.output = event.tool_output ?? null
+            existing.error = event.tool_error ?? null
+            existing.status = event.tool_error ? 'error' : 'success'
+          }
+        }
+        break
       case 'rich_block':
+        // Phase 5-A: 累积 rich_block (Phase 3-B0 frozen SchemaStreamRichBlock)
+        if (event.block) {
+          streamingMessage.value.rich_blocks.push(event.block)
+        }
+        break
       case 'intent_detected':
       case 'plan_step':
       case 'synthesis_start':
@@ -284,10 +324,7 @@ export const useChatStore = defineStore('chat', () => {
       case 'brief':
       case 'detail':
       case 'tool_compressed':
-        // Phase 3+ 接 agent tool / rich_block / intent 等. Phase 3-C1 只接 citation.
-        if (event.type === 'rich_block' && event.block) {
-          streamingMessage.value.rich_blocks.push(event.block as Record<string, unknown>)
-        }
+        // Phase 3+ 接 agent tool / intent 等. Phase 5-A 仅接 tool_use / tool_result / rich_block.
         break
       case 'citation':
       case 'refs':
@@ -328,7 +365,7 @@ export const useChatStore = defineStore('chat', () => {
       role: 'assistant' as ChatMessageRole,
       content: streamingMessage.value.content,
       rich_blocks: streamingMessage.value.rich_blocks,
-      tool_trace: streamingMessage.value.tool_trace,
+      tool_trace: streamingMessage.value.tool_calls as unknown as Record<string, unknown>[],
       message_metadata: {
         started_at: streamingMessage.value.started_at,
         finished_at: finishedAt,
@@ -390,6 +427,22 @@ export const useChatStore = defineStore('chat', () => {
       return true
     }
     return false
+  }
+
+  /**
+   * 内部: 累加 ToolCallSnapshot, 按 tool_use_id dedup.
+   * Phase 5-A: append only; 同 id 二次 append 替换 (覆盖 from SSE 重传).
+   */
+  function appendToolCall(snap: ToolCallSnapshot): void {
+    if (!streamingMessage.value) return
+    const idx = streamingMessage.value.tool_calls.findIndex(
+      (t) => t.tool_use_id === snap.tool_use_id
+    )
+    if (idx >= 0) {
+      streamingMessage.value.tool_calls[idx] = snap
+    } else {
+      streamingMessage.value.tool_calls.push(snap)
+    }
   }
 
   /**

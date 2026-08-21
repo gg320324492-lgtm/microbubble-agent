@@ -12,13 +12,15 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import { Loading, EmptyState, ErrorState, MarkdownViewer, Button } from '../components/ui'
-import { CitationList } from '../components/chat'
+import { CitationList, ToolCallCard, ToolResultCard, RichBlockRenderer } from '../components/chat'
 import {
   formatMessageTime,
   roleIcon,
   roleLabel,
   shouldRenderAsMarkdown,
-  type StreamCitationEntry
+  type StreamCitationEntry,
+  type ToolCallSnapshot,
+  type StreamRichBlock
 } from '@shared/chat-types'
 import { safeKnowledgePush } from '../utils/knowledge-route'
 
@@ -67,6 +69,26 @@ function extractMessageCitations(msg: { message_metadata?: Record<string, unknow
   const md = msg.message_metadata
   if (!md || !Array.isArray(md.citations)) return []
   return md.citations as StreamCitationEntry[]
+}
+
+/**
+ * Phase 5-A: 从 message.tool_trace 提取为 ToolCallSnapshot[].
+ * 完成后端 ChatMessageOut.tool_trace 字段 (Phase 5-A type 修正).
+ * 输入兼容: 元素可能是 ToolCallSnapshot 或 plain Record, 内部 cast.
+ */
+function extractMessageToolCalls(msg: { tool_trace?: unknown }): ToolCallSnapshot[] {
+  const raw = msg.tool_trace
+  if (!Array.isArray(raw)) return []
+  return raw as ToolCallSnapshot[]
+}
+
+/**
+ * Phase 5-A: 从 message.rich_blocks (Record<string, unknown> array) 提取 as StreamRichBlock.
+ * Phase 5-A tightened rich_blocks type to StreamRichBlock[].
+ */
+function extractMessageRichBlocks(msg: { rich_blocks?: StreamRichBlock[] }): StreamRichBlock[] {
+  if (!msg.rich_blocks || !Array.isArray(msg.rich_blocks)) return []
+  return msg.rich_blocks
 }
 
 async function onSend(): Promise<void> {
@@ -236,6 +258,27 @@ watch(
                   :get-cached-hint="store.getCachedHint"
                   @knowledge-open="onCitationKnowledgeOpen"
                 />
+
+                <!-- Phase 5-A: 工具调用快照 (tool_use) + 结果 (tool_result) -->
+                <template v-if="msg.role === 'assistant'">
+                  <ToolCallCard
+                    v-for="t in extractMessageToolCalls(msg)"
+                    :key="`toolcall-${msg.id}-${t.tool_use_id}`"
+                    :tool="t"
+                  />
+                  <ToolResultCard
+                    v-for="t in extractMessageToolCalls(msg).filter((tt) => tt.status !== 'call_only')"
+                    :key="`toolresult-${msg.id}-${t.tool_use_id}`"
+                    :tool="t"
+                  />
+                </template>
+
+                <!-- Phase 5-A: rich_block 渲染 -->
+                <RichBlockRenderer
+                  v-for="(b, i) in extractMessageRichBlocks(msg)"
+                  :key="`rb-${msg.id}-${i}`"
+                  :block="b"
+                />
                 <div v-if="msg.attached_knowledge_ids && msg.attached_knowledge_ids.length > 0" class="chat-message__attachments">
                   <span class="muted">📎 引用 {{ msg.attached_knowledge_ids.length }} 条知识</span>
                 </div>
@@ -282,6 +325,25 @@ watch(
                   :citations="store.streamingMessage.citations"
                   :get-cached-hint="store.getCachedHint"
                   @knowledge-open="onCitationKnowledgeOpen"
+                />
+
+                <!-- Phase 5-A: 流中 tool_use / tool_result / rich_block 实时呈现 -->
+                <template v-if="store.streamingMessage.tool_calls && store.streamingMessage.tool_calls.length > 0">
+                  <ToolCallCard
+                    v-for="t in store.streamingMessage.tool_calls"
+                    :key="`stoolcall-${t.tool_use_id}`"
+                    :tool="t"
+                  />
+                  <ToolResultCard
+                    v-for="t in store.streamingMessage.tool_calls.filter((tt) => tt.status !== 'call_only')"
+                    :key="`stoolresult-${t.tool_use_id}`"
+                    :tool="t"
+                  />
+                </template>
+                <RichBlockRenderer
+                  v-for="(b, i) in store.streamingMessage.rich_blocks"
+                  :key="`srb-${i}`"
+                  :block="b"
                 />
 
                 <div class="chat-message__streaming-footer">

@@ -60,7 +60,19 @@ export interface ChatMessageOut {
   session_id: string
   role: ChatMessageRole
   content: string
-  rich_blocks: Record<string, unknown>[]
+  /**
+   * Phase 3-B0 frozen: rich_blocks 数组. Phase 5-A 收紧为 StreamRichBlock[].
+   * StreamRichBlock 定义见 `interface StreamRichBlock` (上方).
+   * 后端 SSE event.citation 不直接写 rich_blocks (走 metadata);
+   * 流式累积的 rich_block 事件直接 push 到 streamingMessage.
+   */
+  rich_blocks: StreamRichBlock[]
+  /**
+   * Phase 5-A NEW: tool trace 数组.
+   * 后端 SSE event.tool_result 累积. 数组顺序 = 工具调用顺序.
+   * 后端 schema tool_trace 不必是 array (Phase 3-B0 文档未定),
+   * 暂以本字段为 desktop 端扩展. 推 v1+ 后端 schema 同步.
+   */
   tool_trace: Record<string, unknown>[]
   message_metadata: Record<string, unknown>
   is_partial: boolean
@@ -293,14 +305,47 @@ export type StreamErrorIpcPayload = [StreamContext, StreamErrorPayload]
 
 // ============ Renderer Streaming Message ============
 
+/**
+ * Phase 5-A NEW: 工具调用快照 (flow 中).
+ * tool_use / tool_result 事件累积; status 派生: call_only / success / error.
+ */
+export type ToolCallStatus = 'call_only' | 'success' | 'error'
+
+export interface ToolCallSnapshot {
+  /** 后端 SSE event.tool_use_id (key) */
+  tool_use_id: string
+  name: string
+  /** 工具输入 (e.g. { query: '...' }) */
+  input: Record<string, unknown>
+  /** ISO 8601 时间. tool_result 到达时填 result 字段 */
+  started_at: string
+  finished_at: string | null
+  /** call_only: 仅 tool_use; success: tool_result 成功; error: tool_result.error */
+  status: ToolCallStatus
+  /** 工具结果 (tool_result.tool_output) */
+  output: Record<string, unknown> | null
+  /** 错误信息 (tool_result.tool_error) */
+  error: string | null
+  /** 耗时毫秒 (tool_result.tool_duration_ms) */
+  duration_ms: number | null
+}
+
 export interface StreamingMessage {
   id: number
   session_id: string
   role: ChatMessageRole
   content: string
   thinking: string | null
-  rich_blocks: Record<string, unknown>[]
-  tool_trace: Record<string, unknown>[]
+  /**
+   * Phase 5-A tighten: rich_blocks 改为 StreamRichBlock[] (Phase 3-B0 frozen 已有).
+   * SSE event.citation 不直接写; 流式 rich_block 事件 push.
+   */
+  rich_blocks: StreamRichBlock[]
+  /**
+   * Phase 5-A NEW: tool 调用快照序列.
+   * 按 tool_use_id dedup (Phase 5-A 简化: append only, last wins).
+   */
+  tool_calls: ToolCallSnapshot[]
   /** Phase 3-C1: 流式 SSE citation event 累加 (含 Phase 3-B0 frozen refs 兼容) */
   citations: StreamCitationEntry[]
   started_at: string
