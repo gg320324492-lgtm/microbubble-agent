@@ -112,12 +112,15 @@ export interface DesktopSessionApi {
 }
 
 /**
- * Chat SSE Streaming API (Phase 2-Impl-3B)。
+ * Chat SSE Streaming API (Phase 2-Impl-3B + Phase 3-A reliability).
  *
  * 流程:
  *   renderer.startStream({ message, session_id }) → streamId
- *   main → renderer: 多次 push chunk / end / error
- *   renderer 监听 onChunk / onEnd / onError 处理
+ *   main → renderer: push chunk / end / error 携带 StreamContext (streamId + sessionId)
+ *   renderer 监听 onChunk / onEnd / onError
+ *
+ * Phase 3-A: StreamContext 用于 renderer 端校验 session 隔离
+ *   (用户切换 session 时, stale stream 的 chunk 被 ignore)
  *
  * 安全:
  *   - 不暴露 ipcRenderer 实例
@@ -127,9 +130,24 @@ export interface DesktopSessionApi {
 export interface DesktopChatStreamApi {
   startStream: (payload: import('./chat-types').ChatStreamRequest) => Promise<string>
   cancelStream: (streamId: string) => Promise<{ ok: true } | { ok: false; error: string }>
-  onChunk: (cb: (streamId: string, event: import('./chat-types').StreamEvent) => void) => () => void
-  onEnd: (cb: (streamId: string, payload: import('./chat-types').StreamEndPayload) => void) => () => void
-  onError: (cb: (streamId: string, error: import('./chat-types').StreamErrorPayload) => void) => () => void
+  onChunk: (
+    cb: (
+      ctx: import('./chat-types').StreamContext,
+      event: import('./chat-types').StreamEvent
+    ) => void
+  ) => () => void
+  onEnd: (
+    cb: (
+      ctx: import('./chat-types').StreamContext,
+      payload: import('./chat-types').StreamEndPayload
+    ) => void
+  ) => () => void
+  onError: (
+    cb: (
+      ctx: import('./chat-types').StreamContext,
+      error: import('./chat-types').StreamErrorPayload
+    ) => void
+  ) => () => void
 }
 
 export interface DesktopApi extends DesktopPingApi {

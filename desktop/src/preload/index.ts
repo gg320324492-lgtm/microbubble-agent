@@ -14,7 +14,8 @@ import type {
   ChatStreamRequest,
   StreamEvent,
   StreamEndPayload,
-  StreamErrorPayload
+  StreamErrorPayload,
+  StreamContext
 } from '@shared/chat-types'
 import type { ApiRequestPayload } from '@shared/preload-api'
 
@@ -28,7 +29,7 @@ import type { ApiRequestPayload } from '@shared/preload-api'
  * 3. sandbox: true —— preload 之外所有进程沙箱化
  * 4. 不暴露 ipcRenderer 给 renderer 任何形式
  * 5. 不暴露 ipcRenderer.send —— 全部走 ipcRenderer.invoke（request/response）；
- *    例外: ipcRenderer.on 只能用于 main→renderer broadcast (Phase 2-Impl-1+ session:expired, Phase 2-Impl-3B+ chat:stream-chunk/end/error)
+ *    例外: ipcRenderer.on 只能用于 main→renderer broadcast
  *    仍不暴露 ipcRenderer 实例，封装为专门 typed event handler onXxx(cb)
  * 6. 所有鉴权业务请求必须经 window.api.api.request (统一 Bearer + refresh)
  *    禁止 renderer 直接 axios 调鉴权 endpoint
@@ -62,34 +63,32 @@ const sessionApi: DesktopSessionApi = {
   }
 }
 
-// ============ Chat SSE Streaming (Phase 2-Impl-3B) ============
-// 内部 listener 注册 (load 时一次性注册)
-const chunkListeners = new Set<(streamId: string, event: StreamEvent) => void>()
-const endListeners = new Set<(streamId: string, payload: StreamEndPayload) => void>()
-const errorListeners = new Set<(streamId: string, error: StreamErrorPayload) => void>()
+// ============ Chat SSE Streaming (Phase 3-A: StreamContext carried) ============
+const chunkListeners = new Set<(ctx: StreamContext, event: StreamEvent) => void>()
+const endListeners = new Set<(ctx: StreamContext, payload: StreamEndPayload) => void>()
+const errorListeners = new Set<(ctx: StreamContext, error: StreamErrorPayload) => void>()
 
-function safeNotify<T>(set: Set<(streamId: string, p: T) => void>, args: [string, T]): void {
+function safeNotify<T>(set: Set<(ctx: StreamContext, p: T) => void>, ctx: StreamContext, payload: T): void {
   for (const cb of set) {
-    try {
-      cb(args[0], args[1])
-    } catch (err) {
+    try { cb(ctx, payload) }
+    catch (err) {
       // eslint-disable-next-line no-console
       console.error('[preload] stream listener threw:', err)
     }
   }
 }
 
-ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_CHUNK, (_e, streamId: string, event: StreamEvent) => {
-  safeNotify(chunkListeners, [streamId, event])
+ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_CHUNK, (_e, ctx: StreamContext, event: StreamEvent) => {
+  safeNotify(chunkListeners, ctx, event)
 })
-ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_END, (_e, streamId: string, payload: StreamEndPayload) => {
-  safeNotify(endListeners, [streamId, payload])
+ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_END, (_e, ctx: StreamContext, payload: StreamEndPayload) => {
+  safeNotify(endListeners, ctx, payload)
 })
-ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_ERROR, (_e, streamId: string, error: StreamErrorPayload) => {
-  safeNotify(errorListeners, [streamId, error])
+ipcRenderer.on(IPC_CHANNELS.CHAT_STREAM_ERROR, (_e, ctx: StreamContext, error: StreamErrorPayload) => {
+  safeNotify(errorListeners, ctx, error)
 })
 
-function subscribe<T>(set: Set<(streamId: string, p: T) => void>, cb: (streamId: string, p: T) => void): () => void {
+function subscribe<T>(set: Set<(ctx: StreamContext, p: T) => void>, cb: (ctx: StreamContext, p: T) => void): () => void {
   set.add(cb)
   return () => set.delete(cb)
 }

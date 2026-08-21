@@ -9,14 +9,10 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
-// router 必须在 pinia 之后（router.beforeEach 里要 useAuthStore）
 app.use(router)
 
 app.mount('#app')
 
-/**
- * main → renderer broadcast: session expired (Phase 2-Impl-1)。
- */
 const authStore = useAuthStore()
 window.api.session.onSessionExpired(() => {
   // eslint-disable-next-line no-console
@@ -26,24 +22,21 @@ window.api.session.onSessionExpired(() => {
 })
 
 /**
- * Chat SSE stream listeners (Phase 2-Impl-3B).
+ * Chat SSE stream listeners (Phase 3-A: StreamContext 携带 sessionId).
  *
- * 全局注册一次 (App 单例):
- *   chunk / end / error 三个事件由 ChatView 触发渲染.
- *   这里只把事件分发给 Pinia store, 让组件保持 dumb.
+ * 全局注册一次 (App 单例).
  */
 const chatStore = useChatStore()
-window.api.chat.onChunk((streamId, event) => {
-  chatStore.handleStreamChunk(streamId, event)
-  // 100ms 防抖触发 MarkdownViewer 重渲染
+window.api.chat.onChunk((ctx, event) => {
+  chatStore.handleStreamChunk(ctx, event)
   chatStore.scheduleStreamingContentRender()
 })
-window.api.chat.onEnd((_streamId, payload) => {
+window.api.chat.onEnd((ctx, payload) => {
   if (payload && payload.ok) {
-    chatStore.handleStreamEnd(_streamId)
+    chatStore.handleStreamEnd(ctx)
   }
 })
-window.api.chat.onError((streamId, error) => {
-  void streamId
-  chatStore.handleStreamError(error.code ?? 'STREAM_ERROR', error.message ?? '未知错误')
+window.api.chat.onError((ctx, error) => {
+  void ctx
+  chatStore.handleStreamError(ctx, error.code ?? 'STREAM_ERROR', error.message ?? '未知错误')
 })

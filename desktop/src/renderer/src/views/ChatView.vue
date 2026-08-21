@@ -1,25 +1,16 @@
 <script setup lang="ts">
 /**
- * Chat View (Phase 2-Impl-3B: SSE Streaming)。
+ * Chat View (Phase 3-A: Reliability Hardened).
  *
- * Phase 2-Impl-3A 改 sendUserMessage → sendUserMessageStream (SSE).
- * Assistant 渲染:
- *   - streaming 中 (isStreaming=true): 显示 raw markdown 文本 (避免 MarkdownViewer 每 token 重解析)
- *   - 流结束 (isStreaming=false): 渲染 MarkdownViewer (Phase 2-Impl-2B 复用)
- *
- * 数据流 (全部 IPC → main → 后端):
- *   - POST /chat/stream (SSE)  → main fetch + parse → push chunks via webContents.send
- *   - chat:stream-chunk IPC  → ChatView subscribe → store.handleStreamChunk
- *   - chat:stream-end    IPC → store.handleStreamEnd (推 messages)
- *
- * 范围 (Phase 2-Impl-3B):
- *   ✅ SSE transport + IPC streaming
- *   ✅ 占位 assistant + 100ms debounce markdown render
- *   ❌ Agent tool call / RAG / multimodal / function calling (Phase 3+)
+ * Phase 3-A 新增:
+ *   - 停止 button (流中显示, 点击调 cancelActiveStream)
+ *   - 重试 button (lastError 时显示, 调 retryLastMessage)
+ *   - 复制 button (assistant message 每条带, 调 copyAssistantMessage)
+ *   - session 切换时, store.selectSession() 自动 abort 活跃流 (Phase 3-A 简化)
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '../stores/chat'
-import { Loading, EmptyState, ErrorState, MarkdownViewer } from '../components/ui'
+import { Loading, EmptyState, ErrorState, MarkdownViewer, Button } from '../components/ui'
 import {
   formatMessageTime,
   roleIcon,
@@ -31,6 +22,8 @@ const store = useChatStore()
 
 const inputDraft = ref('')
 const listEl = ref<HTMLElement | null>(null)
+const copyToast = ref<string | null>(null)
+let copyToastTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasMessages = computed(() => store.visibleMessages.length > 0)
 const hasStreaming = computed(() => store.isStreaming && !!store.streamingMessage)
@@ -39,15 +32,36 @@ async function onSend(): Promise<void> {
   const text = inputDraft.value.trim()
   if (text.length === 0 || store.sending) return
   inputDraft.value = ''
-  // Phase 2-Impl-3B: 走 SSE 流式
   const ok = await store.sendUserMessageStream(text)
   if (ok) {
     await nextTick()
     scrollToBottom()
   } else {
-    // 启动失败时还原输入 (Phase 2-Impl-3A 兼容)
     inputDraft.value = text
   }
+}
+
+async function onCancel(): Promise<void> {
+  await store.cancelActiveStream()
+  // store.handleStreamError / handleStreamEnd 会清 streamingMessage
+  await nextTick()
+}
+
+async function onRetry(): Promise<void> {
+  await store.retryLastMessage()
+  await nextTick()
+  scrollToBottom()
+}
+
+async function onCopyMessage(msgId: number): Promise<void> {
+  const ok = await store.copyAssistantMessage(msgId)
+  showCopyToast(ok ? '已复制到剪贴板' : '复制失败, 请手动 Ctrl+C')
+}
+
+function showCopyToast(text: string): void {
+  copyToast.value = text
+  if (copyToastTimer) clearTimeout(copyToastTimer)
+  copyToastTimer = setTimeout(() => { copyToast.value = null }, 2000)
 }
 
 function onSessionClick(sessionId: string): void {
@@ -67,7 +81,6 @@ onMounted(async () => {
   scrollToBottom()
 })
 
-// 流式 content 变更时, 自动滚到底部
 watch(
   () => store.streamingContentRender,
   () => nextTick(() => scrollToBottom())
@@ -87,14 +100,13 @@ watch(
       </div>
       <div class="chat-header__right">
         <span class="chat-header__hint">
-          Phase 2-Impl-3B · SSE 流式
+          Phase 3-A · Reliability Hardened
         </span>
       </div>
     </header>
 
     <!-- Body: 左栏 + 主区 -->
     <div class="chat-body">
-      <!-- 左栏: Session List -->
       <aside class="chat-sessions">
         <div class="chat-section-title">
           <span>会话列表</span>
@@ -127,16 +139,22 @@ watch(
         </ul>
       </aside>
 
-      <!-- 主区: Messages + Input -->
       <section class="chat-main">
-        <!-- Error 全局条 -->
-        <ErrorState
-          v-if="store.lastError && !hasStreaming"
-          :message="store.lastError.message"
-          @retry="store.clearError"
-        />
+        <div v-if="store.lastError" class="chat-error-row">
+          <ErrorState
+            :message="store.lastError.message"
+            @retry="store.clearError"
+          />
+          <Button
+            v-if="store.lastSentText && !store.isStreaming && !store.sending"
+            variant="primary"
+            size="small"
+            @click="onRetry"
+          >
+            🔁 重试
+          </Button>
+        </div>
 
-        <!-- Messages list -->
         <div ref="listEl" class="chat-messages">
           <Loading
             v-if="store.messagesLoading && !hasMessages && !hasStreaming"
@@ -174,10 +192,14 @@ watch(
                 <div v-if="msg.attached_knowledge_ids && msg.attached_knowledge_ids.length > 0" class="chat-message__attachments">
                   <span class="muted">📎 引用 {{ msg.attached_knowledge_ids.length }} 条知识</span>
                 </div>
+                <div v-if="msg.role === 'assistant'" class="chat-message__actions">
+                  <button type="button" class="chat-msg-btn" @click="onCopyMessage(msg.id)" title="复制 assistant 内容">
+                    📋 复制
+                  </button>
+                </div>
               </div>
             </div>
 
-            <!-- 流式 assistant 占位 (Phase 2-Impl-3B) -->
             <div
               v-if="hasStreaming && store.streamingMessage"
               class="chat-message chat-message--assistant chat-message--streaming"
@@ -190,7 +212,6 @@ watch(
                   <span class="chat-message__pulse">●●●</span>
                 </div>
 
-                <!-- thinking label -->
                 <div
                   v-if="store.streamingMessage.thinking"
                   class="chat-message__thinking-label"
@@ -198,11 +219,6 @@ watch(
                   💭 {{ store.streamingMessage.thinking }}
                 </div>
 
-                <!--
-                  流中 raw 文本 (避免 MarkdownViewer 每 token 重解析)
-                  关键: streamingContentRender 是 100ms debounce 触发的 computed,
-                  重渲染 MarkdownViewer 应只在 chunk 间隔较大时发生.
-                -->
                 <div v-if="store.streamingMessage.content" class="chat-message__content">
                   <MarkdownViewer
                     :source="store.streamingContentRender"
@@ -215,7 +231,7 @@ watch(
 
                 <div class="chat-message__streaming-footer">
                   <span class="muted">
-                    {{ store.streamingMessage.content.length }} chars received
+                    {{ store.streamingMessage.content.length }} chars
                   </span>
                 </div>
               </div>
@@ -223,7 +239,6 @@ watch(
           </template>
         </div>
 
-        <!-- Input -->
         <form class="chat-input" @submit.prevent="onSend">
           <textarea
             v-model="inputDraft"
@@ -233,17 +248,33 @@ watch(
             rows="3"
             @keydown.enter.exact.prevent="onSend"
           />
-          <button
-            type="submit"
-            class="chat-input__send"
-            :disabled="store.sending || hasStreaming || inputDraft.trim().length === 0"
-          >
-            <span v-if="store.sending || hasStreaming" class="chat-input__spinner" />
-            {{ hasStreaming ? '生成中…' : '发送 ⏎' }}
-          </button>
+          <div class="chat-input__buttons">
+            <Button
+              v-if="hasStreaming"
+              variant="danger"
+              size="medium"
+              @click="onCancel"
+            >
+              ⏹ 停止生成
+            </Button>
+            <button
+              v-else
+              type="submit"
+              class="chat-input__send"
+              :disabled="store.sending || hasStreaming || inputDraft.trim().length === 0"
+            >
+              <span v-if="store.sending" class="chat-input__spinner" />
+              发送 ⏎
+            </button>
+          </div>
         </form>
       </section>
     </div>
+
+    <!-- 复制 toast -->
+    <Transition name="toast">
+      <div v-if="copyToast" class="chat-toast">{{ copyToast }}</div>
+    </Transition>
   </div>
 </template>
 
@@ -275,14 +306,8 @@ watch(
   font-size: 0.75rem;
   color: #94a3b8;
 }
-.chat-header__stream {
-  color: #fbbf24;
-  margin-left: 0.3rem;
-}
-.chat-header__hint {
-  font-size: 0.75rem;
-  color: #64748b;
-}
+.chat-header__stream { color: #fbbf24; margin-left: 0.3rem; }
+.chat-header__hint { font-size: 0.75rem; color: #64748b; }
 
 .chat-body {
   flex: 1;
@@ -329,34 +354,24 @@ watch(
   cursor: pointer;
   font-family: inherit;
 }
-.chat-session-item:hover {
-  background: rgba(148, 163, 184, 0.06);
-}
+.chat-session-item:hover { background: rgba(148, 163, 184, 0.06); }
 .chat-session-item.is-active {
   background: rgba(249, 115, 22, 0.12);
   color: #f97316;
   border-color: rgba(249, 115, 22, 0.3);
 }
 .chat-session-item__title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 0.85rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chat-session-item__preview {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 0.75rem; color: #94a3b8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .chat-session-item__meta {
   margin-top: 0.3rem;
-  font-size: 0.7rem;
-  color: #64748b;
-  display: flex;
-  gap: 0.4rem;
+  font-size: 0.7rem; color: #64748b;
+  display: flex; gap: 0.4rem;
 }
 .pin-badge { color: #fbbf24; }
 .archived-badge { color: #64748b; font-style: italic; }
@@ -368,6 +383,13 @@ watch(
   min-width: 0;
   padding: 1rem 1.5rem;
   overflow: hidden;
+}
+
+.chat-error-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
 }
 
 .chat-messages {
@@ -393,8 +415,7 @@ watch(
   background: rgba(249, 115, 22, 0.05);
   border: 1px solid rgba(249, 115, 22, 0.18);
 }
-.chat-message--system,
-.chat-message--tool {
+.chat-message--system, .chat-message--tool {
   background: rgba(148, 163, 184, 0.06);
   border: 1px solid rgba(148, 163, 184, 0.18);
 }
@@ -408,34 +429,17 @@ watch(
   50% { background: rgba(249, 115, 22, 0.12); }
 }
 .chat-message__avatar {
-  font-size: 1.3rem;
-  width: 2rem;
-  text-align: center;
-  flex-shrink: 0;
+  font-size: 1.3rem; width: 2rem; text-align: center; flex-shrink: 0;
 }
-.chat-message__body {
-  flex: 1;
-  min-width: 0;
-}
+.chat-message__body { flex: 1; min-width: 0; }
 .chat-message__head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
-  font-size: 0.8rem;
+  display: flex; align-items: center; gap: 0.6rem;
+  margin-bottom: 0.4rem; font-size: 0.8rem;
 }
-.chat-message__role {
-  font-weight: 600;
-  color: #f1f5f9;
-}
-.chat-message__time {
-  color: #64748b;
-  font-size: 0.75rem;
-}
+.chat-message__role { font-weight: 600; color: #f1f5f9; }
+.chat-message__time { color: #64748b; font-size: 0.75rem; }
 .chat-message__pulse {
-  color: #fbbf24;
-  font-weight: bold;
-  letter-spacing: 0.2em;
+  color: #fbbf24; font-weight: bold; letter-spacing: 0.2em;
   animation: dot-flashing 1.4s infinite linear;
 }
 @keyframes dot-flashing {
@@ -451,18 +455,33 @@ watch(
   color: #fbbf24;
   border-radius: 2px;
 }
-.chat-message__content {
-  font-size: 0.92rem;
-}
+.chat-message__content { font-size: 0.92rem; }
 .chat-message__text {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #e2e8f0;
+  margin: 0; white-space: pre-wrap; word-break: break-word; color: #e2e8f0;
 }
-.chat-message__attachments {
+.chat-message__attachments { margin-top: 0.4rem; font-size: 0.75rem; }
+.chat-message__streaming-footer {
+  margin-top: 0.4rem; font-size: 0.7rem; color: #64748b;
+}
+.chat-message__actions {
   margin-top: 0.4rem;
-  font-size: 0.75rem;
+  display: flex;
+  gap: 0.4rem;
+}
+.chat-msg-btn {
+  background: transparent;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.chat-msg-btn:hover {
+  border-color: #f97316;
+  color: #f97316;
 }
 .chat-message__cursor-line {
   display: flex;
@@ -478,11 +497,6 @@ watch(
 @keyframes cursor-blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
-}
-.chat-message__streaming-footer {
-  margin-top: 0.4rem;
-  font-size: 0.7rem;
-  color: #64748b;
 }
 
 .chat-input {
@@ -507,12 +521,13 @@ watch(
   font-size: 0.92rem;
   line-height: 1.5;
 }
-.chat-input__textarea:focus {
-  outline: none;
-  border-color: #f97316;
-}
-.chat-input__textarea:disabled {
-  opacity: 0.5;
+.chat-input__textarea:focus { outline: none; border-color: #f97316; }
+.chat-input__textarea:disabled { opacity: 0.5; }
+.chat-input__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: stretch;
 }
 .chat-input__send {
   background: #f97316;
@@ -527,32 +542,39 @@ watch(
   align-items: center;
   gap: 0.3rem;
 }
-.chat-input__send:hover:not(:disabled) {
-  background: #ea580c;
-}
-.chat-input__send:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.chat-input__send:hover:not(:disabled) { background: #ea580c; }
+.chat-input__send:disabled { opacity: 0.4; cursor: not-allowed; }
 .chat-input__spinner {
-  width: 12px;
-  height: 12px;
+  width: 12px; height: 12px;
   border: 2px solid #fff;
   border-right-color: transparent;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.chat-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  border: 1px solid #334155;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+}
+.toast-enter-active, .toast-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+.toast-enter-from, .toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 8px);
 }
 
-:deep(.chat-md) {
-  color: #e2e8f0;
-}
-:deep(.chat-md .md-p) {
-  color: #cbd5e1;
-}
-:deep(.chat-md-streaming) {
-  /* 流式中浅边框区分 */
-}
+:deep(.chat-md) { color: #e2e8f0; }
+:deep(.chat-md .md-p) { color: #cbd5e1; }
 </style>
