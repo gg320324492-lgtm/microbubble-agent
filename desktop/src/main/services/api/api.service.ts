@@ -26,13 +26,33 @@
 //             ├─ 成功 → 更新 token, resolve waiters, 重试原 request
 //             └─ 失败 → 强制清场, reject waiters, 原 request 返回 NO_ACTIVE_SESSION
 
+import { BrowserWindow } from 'electron'
 import { APP_CONFIG } from '@shared/config'
 import { AUTH_ERROR_CODES } from '@shared/auth-types'
+import { IPC_CHANNELS } from '@shared/ipc-types'
 import type { ApiError, ApiRequestPayload, ApiResult } from '@shared/preload-api'
 import { authService } from '../auth.service'
 import { vaultLoadRefreshToken } from '../token-vault'
 
 const DEFAULT_TIMEOUT_MS = 15000
+
+/**
+ * 主进程 → renderer broadcast: session 失效。
+ * 任何 webContents (含 future 多个窗口) 都推一次。
+ * 不抛异常 —— 即便无窗口也安全。
+ */
+export function broadcastSessionExpired(): void {
+  try {
+    const wins = BrowserWindow.getAllWindows()
+    for (const w of wins) {
+      if (!w.isDestroyed()) {
+        w.webContents.send(IPC_CHANNELS.AUTH_SESSION_EXPIRED)
+      }
+    }
+  } catch (_err) {
+    // ipc 通道异常时不抛 (e.g. app quitting 期间)
+  }
+}
 
 function buildApiError(code: ApiError['code'], message: string, status?: number): ApiError {
   const err: ApiError = { code, message }
@@ -191,6 +211,7 @@ async function request<T = unknown>(payload: ApiRequestPayload): Promise<ApiResu
   // 401 → 单飞 refresh 后重试一次
   const refreshed = await singleFlightRefresh()
   if (!refreshed) {
+    broadcastSessionExpired()
     return {
       ok: false,
       error: buildApiError(AUTH_ERROR_CODES.NO_ACTIVE_SESSION, '会话已过期，请重新登录')
@@ -202,6 +223,7 @@ async function request<T = unknown>(payload: ApiRequestPayload): Promise<ApiResu
   if (second.response.status === 401) {
     // refresh 后仍 401 → 强制清场
     authService.forceClearOnRefreshFail()
+    broadcastSessionExpired()
     return {
       ok: false,
       error: buildApiError(AUTH_ERROR_CODES.NO_ACTIVE_SESSION, '会话已过期，请重新登录')
@@ -237,5 +259,6 @@ function finalizeResponse<T>(
 
 export const apiService = {
   request,
-  singleFlightRefresh  // 导出供测试
+  singleFlightRefresh,
+  broadcastSessionExpired
 }
