@@ -98,9 +98,23 @@ export interface DesktopApiGatewayApi {
   request: <T = unknown>(payload: ApiRequestPayload) => Promise<ApiResult<T>>
 }
 
+/**
+ * Session 失效广播 (Phase 2-Impl-1)。
+ * main 进程在以下情况向所有 renderer 广播:
+ *   - 单飞 refresh 全部失败 → 强制清场 → 推 auth:session-expired
+ *   - 用户禁用 / token 主动 revoke
+ *
+ * renderer 通过 window.api.onSessionExpired(cb) 订阅。
+ * cb 内典型操作: authStore.onSessionExpired() + router.push('/login')
+ */
+export interface DesktopSessionApi {
+  onSessionExpired: (cb: () => void) => void
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
+  session: DesktopSessionApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 

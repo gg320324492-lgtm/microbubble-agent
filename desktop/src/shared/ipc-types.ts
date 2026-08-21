@@ -10,7 +10,9 @@ export const IPC_CHANNELS = {
   AUTH_RESTORE: 'app:auth:restore',
   AUTH_GET_BACKEND_URL: 'app:auth:getBackendUrl',
   // Phase 1-Impl-2: API gateway
-  API_REQUEST: 'app:api:request'
+  API_REQUEST: 'app:api:request',
+  // Phase 2-Impl-1: main → renderer broadcast
+  AUTH_SESSION_EXPIRED: 'auth:session-expired'
 } as const
 
 export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
