@@ -12,7 +12,14 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import { Loading, EmptyState, ErrorState, MarkdownViewer, Button } from '../components/ui'
-import { CitationList, ToolCallCard, ToolResultCard, RichBlockRenderer } from '../components/chat'
+import {
+  CitationList,
+  ToolCallCard,
+  ToolResultCard,
+  RichBlockRenderer,
+  TraceTimeline
+} from '../components/chat'
+import { buildTrace, buildTraceFromMessage } from '../utils/chat-trace'
 import {
   formatMessageTime,
   roleIcon,
@@ -279,6 +286,12 @@ watch(
                   :key="`rb-${msg.id}-${i}`"
                   :block="b"
                 />
+
+                <!-- Phase 5-B: 统一 Trace 视图 (默认 collapsed) -->
+                <TraceTimeline
+                  :items="buildTraceFromMessage(msg)"
+                  :default-collapsed="true"
+                />
                 <div v-if="msg.attached_knowledge_ids && msg.attached_knowledge_ids.length > 0" class="chat-message__attachments">
                   <span class="muted">📎 引用 {{ msg.attached_knowledge_ids.length }} 条知识</span>
                 </div>
@@ -344,6 +357,19 @@ watch(
                   v-for="(b, i) in store.streamingMessage.rich_blocks"
                   :key="`srb-${i}`"
                   :block="b"
+                />
+
+                <!-- Phase 5-B: 流中 trace 实时展开 (活跃流时默认 expanded) -->
+                <TraceTimeline
+                  :items="buildTrace({
+                    thinking: store.streamingMessage.thinking,
+                    toolCalls: store.streamingMessage.tool_calls,
+                    citations: store.streamingMessage.citations,
+                    richBlocks: store.streamingMessage.rich_blocks,
+                    answer: '',
+                    answerPartial: false
+                  })"
+                  :default-collapsed="false"
                 />
 
                 <div class="chat-message__streaming-footer">
