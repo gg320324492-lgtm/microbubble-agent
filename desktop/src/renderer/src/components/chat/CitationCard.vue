@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * CitationCard (Phase 3-C2: Score UI Enhance + Knowledge callback).
+ * CitationCard (Phase 3-C2 + Phase 4-C: Knowledge Hot Path Enhancement).
  *
  * 单条 RAG 引用的展示卡.
  * - 严禁 v-html (snippet/title 走 Vue 文本插值自动 escape)
@@ -10,19 +10,21 @@
  *   - knowledgeId 优先 -> emit('knowledge-open', id) (Phase 4+ 接 knowledge 路由, 当前无 listener)
  *   - 都无: 卡片 disabled (无 click)
  *
- * Phase 3-C2:
- *   - 加 emit('knowledge-open', knowledgeId)
- *   - 视觉升级: score 百分比 + 0.25-1.0 alpha (高分更高对比)
+ * Phase 4-C: cachedHint 可选 prop (来自 knowledgeService cache).
+ *   - 命中 -> 显示 category (从 KnowledgeResponse 拉)
+ *   - 未命中 -> 维持 Phase 3-C1 形态 (citation 自身 title/snippet)
  */
 import { computed } from 'vue'
 import { hasValidScore, toPercent } from '../../utils/citation'
 import type { StreamCitationEntry } from '@shared/chat-types'
+import type { KnowledgeResponse } from '@shared/knowledge-types'
 
 interface Props {
   citation: StreamCitationEntry
   index?: number
+  cachedHint?: KnowledgeResponse | null
 }
-const props = withDefaults(defineProps<Props>(), { index: 0 })
+const props = withDefaults(defineProps<Props>(), { index: 0, cachedHint: null })
 
 const emit = defineEmits<{
   /** Phase 4+ 接 knowledge 路由时, ChatView 监听 + router.push */
@@ -55,6 +57,8 @@ const scoreAlpha = computed(() => {
   const s = props.citation.score as number
   return s >= 0.7 ? 1 : 0.85
 })
+/** Phase 4-C: 是否命中 knowledgeService cache. */
+const hasCachedHint = computed(() => props.cachedHint != null)
 
 function onClick(): void {
   if (url.value) {
@@ -73,7 +77,7 @@ function onClick(): void {
 <template>
   <button
     type="button"
-    :class="['citation-card', `citation-card--${kind}`]"
+    :class="['citation-card', `citation-card--${kind}`, { 'citation-card--cached': hasCachedHint }]"
     :disabled="kind === 'none'"
     :style="{ opacity: scoreAlpha }"
     @click="onClick"
@@ -88,6 +92,7 @@ function onClick(): void {
     <div v-if="snippet" class="citation-card__snippet">{{ snippet }}</div>
     <div class="citation-card__meta">
       <span class="citation-card__source">📁 {{ sourceLabel }}</span>
+      <span v-if="cachedHint?.category" class="citation-card__category">{{ cachedHint.category }}</span>
       <span class="citation-card__jump" :data-kind="kind">
         {{ kind === 'url' ? '↗ 打开' : kind === 'kb' ? '→ 详情' : '🔒' }}
       </span>
@@ -125,6 +130,11 @@ function onClick(): void {
 .citation-card--none {
   background: rgba(148, 163, 184, 0.04);
   border-color: rgba(148, 163, 184, 0.18);
+}
+.citation-card--cached {
+  /* Phase 4-C: 缓存命中时给个更亮边框, 区分未缓存状态 */
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.04);
 }
 
 .citation-card__head {
@@ -193,4 +203,12 @@ function onClick(): void {
 .citation-card__jump[data-kind='url'] { color: #f97316; }
 .citation-card__jump[data-kind='kb'] { color: #94a3b8; }
 .citation-card__jump[data-kind='none'] { color: #475569; }
+.citation-card__category {
+  background: rgba(16, 185, 129, 0.15);
+  color: #5eead4;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  /* Phase 4-C: cache 命中的小标签 */
+}
 </style>

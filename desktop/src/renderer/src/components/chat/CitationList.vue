@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * CitationList (Phase 3-C2: sort + knowledge-open relay).
+ * CitationList (Phase 3-C2 + Phase 4-C: Knowledge Hot Path sort + hint relay).
  *
  * 渲染一组 citation 卡:
  *   - 0 citations: 渲染 nothing (DOM 干净)
@@ -9,18 +9,25 @@
  * 与 MarkdownViewer 互补: 正文 markdown 由 MarkdownViewer 负责,
  * 引用列表单独渲染, 不嵌入 markdown 主体.
  *
- * Phase 3-C2: 通过 emit('knowledge-open', id) 把 knowledgeId 回调给上层
- * (ChatView 可选监听), Phase 4+ 接 router.
+ * Phase 4-C: 通过可选 prop `getCachedHint` 回调查询 cache 命中状态,
+ *   命中时 CitationCard 渲染 category (来自 KnowledgeResponse).
+ *   回调查询而非 store 直接依赖, 保持 CitationList 与 chat store 解耦.
  */
 import { computed } from 'vue'
 import CitationCard from './CitationCard.vue'
 import { sortCitations } from '../../utils/citation'
 import type { StreamCitationEntry } from '@shared/chat-types'
+import type { KnowledgeResponse } from '@shared/knowledge-types'
 
 interface Props {
   citations: StreamCitationEntry[]
+  /**
+   * Phase 4-C: 查 cache 命中. 由 ChatView 注入 (store.getCachedHint 包装).
+   * 不传 -> CitationCard 维持 Phase 3-C1 形态 (无 cache 增强 UI).
+   */
+  getCachedHint?: (knowledgeId: number) => KnowledgeResponse | null
 }
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { getCachedHint: undefined })
 
 const emit = defineEmits<{
   'knowledge-open': [knowledgeId: number]
@@ -41,6 +48,7 @@ const sorted = computed(() => sortCitations(props.citations))
         :key="`cit-${c.knowledgeId}-${i}`"
         :citation="c"
         :index="i"
+        :cached-hint="props.getCachedHint ? props.getCachedHint(c.knowledgeId) : null"
         @knowledge-open="(id) => emit('knowledge-open', id)"
       />
     </div>

@@ -233,6 +233,7 @@ watch(
                 <CitationList
                   v-if="msg.role === 'assistant'"
                   :citations="extractMessageCitations(msg)"
+                  :get-cached-hint="store.getCachedHint"
                   @knowledge-open="onCitationKnowledgeOpen"
                 />
                 <div v-if="msg.attached_knowledge_ids && msg.attached_knowledge_ids.length > 0" class="chat-message__attachments">
@@ -279,6 +280,7 @@ watch(
                 <CitationList
                   v-if="store.streamingMessage.citations && store.streamingMessage.citations.length > 0"
                   :citations="store.streamingMessage.citations"
+                  :get-cached-hint="store.getCachedHint"
                   @knowledge-open="onCitationKnowledgeOpen"
                 />
 

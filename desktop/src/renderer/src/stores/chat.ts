@@ -23,7 +23,9 @@ import type {
   StreamContext,
   StreamCitationEntry
 } from '@shared/chat-types'
+import type { KnowledgeResponse } from '@shared/knowledge-types'
 import { generateClientMsgId } from '@shared/chat-types'
+import { knowledgeService } from '../services/knowledge.service'
 import { dedupCitations } from '../utils/citation'
 import type { ApiError } from '@shared/preload-api'
 
@@ -64,6 +66,13 @@ export const useChatStore = defineStore('chat', () => {
   const lastSentText = ref<string | null>(null)
   const lastSentClientMsgId = ref<string | null>(null)
 
+  // ============ Phase 4-C: Citation Hot Path (cache hits) ============
+  /** knowledgeId -> KnowledgeResponse. 异步 prefetch 解析后写入. */
+  const cachedHintsMap = new Map<number, KnowledgeResponse>()
+  const cachedHints = ref<Map<number, KnowledgeResponse>>(cachedHintsMap)
+  /** 当前活跃 prefetch (按 knowledgeId). 避免重复 fire + 关闭时取消. */
+  const inflightPrefetches = new Map<number, Promise<void>>()
+
   // ============ 派生 ============
   const visibleMessages = computed<ChatMessageOut[]>(() =>
     messages.value.filter((m) => !m.is_deleted)
@@ -102,6 +111,8 @@ export const useChatStore = defineStore('chat', () => {
     streamingMessage.value = null
     isStreaming.value = false
     streamingContentRender.value = ''
+    // Phase 4-C: session 切换 -> 清 cachedHints + in-flight prefetch (session 隔离)
+    clearCachedHints()
     return await loadMessages(sessionId)
   }
 
@@ -283,9 +294,15 @@ export const useChatStore = defineStore('chat', () => {
         // Phase 3-C1: RAG 引用. 单条或数组皆累加, 渲染时去重 + 按 knowledgeId 排序.
         // Phase 3-C2: dedupCitations 提取到 utils, 让 store 只负责累加, dedup 在引用时
         //   (or 一次性) 由组件层 sortCitations + dedupCitations 完成.
-        appendCitations(streamingMessage.value.citations, event.citation)
+        // Phase 4-C: 收到 citation/refs 立即触发 knowledgeService.prefetchKnowledgeForCitations,
+        //   异步写入 cache + cachedHints (session 匹配 + 流 active 才写).
+        if (event.citation) {
+          appendCitations(streamingMessage.value.citations, event.citation)
+          triggerPrefetch(Array.isArray(event.citation) ? event.citation : [event.citation])
+        }
         if (event.refs) {
           appendCitations(streamingMessage.value.citations, event.refs)
+          triggerPrefetch(event.refs)
         }
         break
       case 'done':
@@ -355,6 +372,9 @@ export const useChatStore = defineStore('chat', () => {
     streamingMessage.value = null
     streamingContentRender.value = ''
     lastError.value = { code, message, status: undefined }
+    // Phase 4-C: 流结束 (cancel / error) -> 清 cachedHints, 防止 stale UI hint
+    // 注: in-flight prefetch 走其自身 .finally 清理; 这里仅清 UI 视图
+    cachedHints.value = new Map()
   }
 
   /**
@@ -395,6 +415,79 @@ export const useChatStore = defineStore('chat', () => {
     // Phase 3-C2: dedup 与 sort 在 CitationList 渲染层做 (utils/citation.ts),
     // 这里仅保 SSE chunk 顺序, 不丢任何中间 event.
     void dedupCitations // 显式引用保 lint 通过; 实际 dedup 在 normalizeCitations 调用链
+  }
+
+  /**
+   * Phase 4-C: 触发 citation prefetch (异步, 失败静默, session 隔离).
+   *
+   * 流程:
+   *   1. 过滤 invalid id (knowledgeId 缺失 / 负 / NaN)
+   *   2. dedup by knowledgeId (已在 inflightPrefetches 跳过)
+   *   3. 捕获当前 sessionId (快照)
+   *   4. knowledgeService.prefetchKnowledgeForCitations(...)
+   *   5. 解析后断言:
+   *      - 仍同 session (currentSessionId 未变)
+   *      - 流仍 active (activeStreamId === ctx.streamId)
+   *      - 成功 -> 写 cachedHints (Vue reactive Map)
+   *   6. 失败 / 上述条件失效 -> 丢弃结果 (cache 仍写, UI 不更新)
+   *
+   * 注: cache 写不撤销 (KnowledgeService 自身 LRU 处理), 仅控制 UI 渲染时
+   * 是否展示 hint. 用户切到新 session 后, cachedHints 被 selectSession 清.
+   */
+  function triggerPrefetch(citations: StreamCitationEntry[]): void {
+    if (!Array.isArray(citations) || citations.length === 0) return
+    const startSessionId = currentSessionId.value
+    const startStreamId = activeStreamId.value
+    if (!startStreamId) return  // 没有 flow 在跑, 跳过
+
+    for (const c of citations) {
+      if (!c || typeof c.knowledgeId !== 'number' || !Number.isFinite(c.knowledgeId)) continue
+      const id = c.knowledgeId
+      if (id <= 0) continue
+      if (inflightPrefetches.has(id)) continue  // Phase 4-C: dedup by id
+
+      const promise = knowledgeService
+        .prefetchKnowledgeForCitations([c])
+        .then((result) => {
+          // 异步结果: 仅当 session + 流状态匹配时更新 UI hint
+          if (currentSessionId.value !== startSessionId) return
+          if (activeStreamId.value !== startStreamId) return
+          if (!result.ok) return  // 失败静默 (cache 已由 service 写成功的部分)
+          // result.data 是 KnowledgeResponse[] (批量); 当前 prefetch [c] 单条, 拿 [0]
+          const r = result.data[0]
+          if (!r) return
+          const next = new Map(cachedHints.value)
+          next.set(id, r)
+          cachedHints.value = next
+        })
+        .catch(() => {
+          // 失败 -> 不污染 cachedHints
+        })
+        .finally(() => {
+          if (inflightPrefetches.get(id) === promise) {
+            inflightPrefetches.delete(id)
+          }
+        })
+
+      inflightPrefetches.set(id, promise)
+    }
+  }
+
+  /**
+   * Cache 命中查询 (read-only, 不触发 prefetch).
+   * 暴露给组件: 在 CitationCard 等位置直接读 cache 不走 IPC.
+   */
+  function getCachedHint(knowledgeId: number): KnowledgeResponse | null {
+    return knowledgeService.cacheLookup(knowledgeId)
+  }
+
+  /**
+   * 清空 session-scoped UI hints (Phase 4-C Lifecycle).
+   * cache 本身 (LRU) 不动 (Phase 4+: 跨 session 复用).
+   */
+  function clearCachedHints(): void {
+    inflightPrefetches.clear()
+    cachedHints.value = new Map()
   }
 
   /**
@@ -447,6 +540,7 @@ export const useChatStore = defineStore('chat', () => {
     streamingContentRender,
     lastSentText,
     lastSentClientMsgId,
+    cachedHints,
     // derived
     visibleMessages,
     // actions
@@ -461,6 +555,8 @@ export const useChatStore = defineStore('chat', () => {
     handleStreamEnd,
     handleStreamError,
     scheduleStreamingContentRender,
+    getCachedHint,
+    clearCachedHints,
     clearError
   }
 })
