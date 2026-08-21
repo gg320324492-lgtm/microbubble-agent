@@ -9,6 +9,7 @@
  *   - session 切换时, store.selectSession() 自动 abort 活跃流 (Phase 3-A 简化)
  */
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChatStore } from '../stores/chat'
 import { Loading, EmptyState, ErrorState, MarkdownViewer, Button } from '../components/ui'
 import { CitationList } from '../components/chat'
@@ -19,18 +20,27 @@ import {
   shouldRenderAsMarkdown,
   type StreamCitationEntry
 } from '@shared/chat-types'
+import { safeKnowledgePush } from '../utils/knowledge-route'
 
 /**
- * Phase 3-C2: 当 CitationCard 用户点 knowledgeId (无 url) 时回调.
- * 当前阶段留口: console.info (Phase 4+ 接 router.push('/knowledge/detail?id=...'))
+ * Phase 3-D: Citation click -> KnowledgeDetail 路由闭环.
+ *
+ * - 校验 knowledgeId (number + positive integer). 非法不跳转.
+ * - 推到 /knowledge/detail?id=N&from=chat (back 按钮识别)
+ * - render 层: Phase 4+ 接 router.push (Knowledge 是 SPA 内 router, 不是真 link)
+ * - ChatView context 通过 Pinia store 全局保持 (sessionId / messages / scroll 状态)
+ *
+ * Spec: Phase 3-D 严格禁止 Retriever / RAG / Backend schema 修改.
  */
 function onCitationKnowledgeOpen(knowledgeId: number): void {
-  // eslint-disable-next-line no-console
-  console.info(
-    '[ChatView] citation knowledge-open requested. knowledgeId=',
-    knowledgeId,
-    '(router 接入 Phase 4+)'
-  )
+  const target = safeKnowledgePush(knowledgeId, { source: 'chat' })
+  if (!target) {
+    // 非法 id (Phase 3-D 不发生, ChatView 不会传非法值, 兜底提示)
+    // eslint-disable-next-line no-console
+    console.warn('[ChatView] invalid knowledgeId ignored:', knowledgeId)
+    return
+  }
+  void router.push(target)
 }
 
 const store = useChatStore()
@@ -42,6 +52,12 @@ let copyToastTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasMessages = computed(() => store.visibleMessages.length > 0)
 const hasStreaming = computed(() => store.isStreaming && !!store.streamingMessage)
+
+/**
+ * Phase 3-D: Chat → Knowledge 路由.
+ * useRouter() 在 setup() 内通过注入拿到 router 实例.
+ */
+const router = useRouter()
 
 /**
  * 派生: 从 message.message_metadata (含 citations) 取出 StreamCitationEntry[].

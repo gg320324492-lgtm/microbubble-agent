@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Knowledge Detail Pro View (Phase 2-Impl-2B)。
+ * Knowledge Detail Pro View (Phase 2-Impl-2B) + Phase 3-D Back Nav.
  *
  * 3 栏布局:
  *   ┌──────────────────────────────────────────┬──────────────┐
@@ -12,17 +12,21 @@
  *
  * 数据源: window.api.api.request → main api.service → FastAPI GET /knowledge/{id}
  *
- * 范围 (Phase 2-Impl-2B):
- *   - ✅ Markdown 安全渲染 (自写 parser + AST, 严禁 v-html)
- *   - ✅ 元信息 / 标签 / 时间
- *   - ✅ Summary / Content 完整呈现
- *   - ✅ Citation UI 占位 (Phase 3+)
- *   - ❌ RAG streaming / AI chat / 编辑
+ * Phase 3-D: back navigation 智能返回 (citation 来源 -> 返回 Chat, 否则 -> 知识库列表).
+ * - 从 ChatView 的 citation 点击进入: query ?from=chat -> back 走 router.back() 保留 ChatView 状态
+ *   (Pinia store 全局保持 sessions/messages; ChatView 重新 mount 即可)
+ * - 从 KnowledgeView 列表进入: 默认走知识库列表
+ *
+ * 范围 (Phase 3-D 严格):
+ *   - ✅ Citation click -> router.push('/knowledge/detail?id=N&from=chat') 闭环
+ *   - ✅ KnowledgeDetailView back nav 区分来源
+ *   - ❌ RAG / Retriever / Knowledge API / Agent Tool / Backend schema
  */
 import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { Card, Loading, ErrorState, MarkdownViewer } from '../components/ui'
+import { cameFromChat, validateKnowledgeIdFromQuery } from '../utils/knowledge-route'
 import {
   statusLabel,
   statusVariant,
@@ -36,10 +40,15 @@ const store = useKnowledgeStore()
 
 const detailId = computed(() => {
   const raw = route.query['id']
-  if (typeof raw === 'string') return Number(raw)
-  if (typeof raw === 'number') return raw
-  return NaN
+  return validateKnowledgeIdFromQuery(raw)
 })
+
+/**
+ * Phase 3-D: 来源标记 (从 citation click 进入 vs 从 knowledge 列表直接进入).
+ * - from=chat -> router.back() (history; ChatView 保留)
+ * - 其它 -> 知识库列表 (与 Phase 2-Impl-2B 行为一致)
+ */
+const fromChat = computed(() => cameFromChat(route.query))
 
 const detail = computed(() => store.currentDetail)
 const metaJson = computed(() => {
@@ -55,11 +64,25 @@ const hasKeyConcepts = computed(() => !!(detail.value?.key_concepts && detail.va
 const hasRelatedTopics = computed(() => !!(detail.value?.related_topics && detail.value.related_topics.length > 0))
 
 async function load(): Promise<void> {
-  if (!Number.isFinite(detailId.value) || detailId.value <= 0) return
-  await store.loadDetail(detailId.value)
+  // Phase 3-D: detailId 已通过 validateKnowledgeIdFromQuery 严格校验 (positive integer).
+  // 这里再 double-check (类型; future-proof).
+  const id = detailId.value
+  if (id === null) return
+  await store.loadDetail(id)
 }
 
 async function goBack(): Promise<void> {
+  // Phase 3-D: 来源 chat -> history back (Pinia 状态天然保持).
+  // 其它 -> 知识库列表 (Phase 2-Impl-2B 行为).
+  if (fromChat.value) {
+    if (window.history.length > 1) {
+      router.back()
+      return
+    }
+    // 边界: history 空 (e.g. 直接深链接进入 ChatView -> 点击, 也兜底到 chat)
+    await router.push({ name: 'chat' })
+    return
+  }
   await router.push({ name: 'knowledge' })
 }
 
@@ -82,7 +105,9 @@ watch(detailId, load)
 
 <template>
   <div class="knowledge-detail">
-    <button type="button" class="back-btn" @click="goBack">← 返回知识库</button>
+    <button type="button" class="back-btn" @click="goBack">
+      ← {{ fromChat ? '返回 Chat' : '返回知识库' }}
+    </button>
 
     <Loading
       v-if="store.detailLoading && !detail"
