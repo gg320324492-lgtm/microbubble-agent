@@ -473,7 +473,7 @@ class MeetingAnalysisService:
                         ),
                     }],
                     system="你是课题组会议分析专家。只输出 JSON，不要其他内容。",
-                    max_tokens=4096,
+                    max_tokens=8192,
                     thinking={"type": "disabled"},
                 )
                 text = extract_text_from_response(response)
