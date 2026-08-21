@@ -661,6 +661,153 @@ console.info('[ChatView] citation knowledge-open requested. knowledgeId=', N)
 
 ---
 
+## 14. Citation → Knowledge Route Lifecycle (Phase 3-D)
+
+> Phase 3-D 关闭 Citation → KnowledgeDetailView 路由闭环。
+> **严格范围**: 仅 Desktop SPA 内部 router, 不接 RAG / Retriever / Backend 修改 / Agent Tool / LLM pipeline。
+
+### 14.1 链路 (Phase 3-D)
+
+```
+ChatView 消息气泡中
+   │  Assistant 消息下 CitationList -> [1]🔗[2]🔗[3]🔗
+   │  用户点击无 url 的 citation (Phase 3-D knowledgeId only)
+   ▼
+CitationCard.onClick()
+   │  emit('knowledge-open', knowledgeId)
+   │
+CitationList @knowledge-open="..."
+   │  emit 透传
+   ▼
+ChatView.onCitationKnowledgeOpen(knowledgeId)
+   │  safeKnowledgePush(knowledgeId, { source: 'chat' })
+   │      ↓  校验 (validateKnowledgeId): number + positive int (失败 -> null)
+   │      ↓  构造 (buildKnowledgePath): { name: 'knowledge-detail', query: { id, from: 'chat' } }
+   │  router.push(target)
+   ▼
+KnowledgeDetailView (URL: /knowledge/detail?id=N&from=chat)
+   │  detailId = validateKnowledgeIdFromQuery(route.query.id)
+   │  ─ null -> 不发请求
+   │  ─ number -> store.loadDetail(id)
+   │  渲染: 3 栏 (header / body / sidebar) (Phase 2-Impl-2B)
+   ▼
+用户点 back 按钮
+   │  goBack()
+   │  if (fromChat.value):
+   │    if (window.history.length > 1) router.back()
+   │    else router.push({ name: 'chat' })    ← 兜底
+   │  else:
+   │    router.push({ name: 'knowledge' })     ← 知识库列表 (Phase 2-Impl-2B 行为)
+   ▼
+ChatView (Pinia state: sessions / messages / streamingMessage 全局保持, 见 §14.3)
+```
+
+### 14.2 模块结构 (Phase 3-D NEW)
+
+```
+desktop/src/renderer/src/
+├── utils/
+│   └── knowledge-route.ts         # 🆕 Phase 3-D 纯函数 helpers
+│       ├─ validateKnowledgeId(raw): number | null
+│       │   - typeof === 'number'
+│       │   - Number.isFinite
+│       │   - Number.isInteger (整数)
+│       │   - > 0 (DB id 起点 1)
+│       ├─ validateKnowledgeIdFromQuery(raw): number | null
+│       │   - string -> Number(raw) -> validate
+│       │   - 用于 router query (URL 边界)
+│       ├─ buildKnowledgePath(id, origin): RouteLocationRaw
+│       │   - { name: 'knowledge-detail', query: { id, from?: 'chat' } }
+│       ├─ cameFromChat(query): boolean
+│       │   - query.from === 'chat' 校验
+│       └─ safeKnowledgePush(rawId, origin): RouteLocationRaw | null
+│           - 校验 + 构造 一步, 调用方 if-return 决定是否 router.push
+│
+├── views/
+│   ├── KnowledgeDetailView.vue    # Phase 2-Impl-2B + Phase 3-D
+│   │   - detailId 改用 validateKnowledgeIdFromQuery (类型: number | null)
+│   │   - load() 处理 null 边界 (no fetch)
+│   │   - goBack() 来源分支
+│   │     - fromChat -> router.back() (history 优先, 兜底 -> chat)
+│   │     - 其它 -> /knowledge 列表 (Phase 2 行为)
+│   │   - back-btn 文本:
+│   │     - fromChat -> "← 返回 Chat"
+│   │     - 其它   -> "← 返回知识库" (Phase 2 行为)
+│   └── ChatView.vue               # Phase 3-C2 + Phase 3-D
+│       - useRouter() 注入
+│       - onCitationKnowledgeOpen: safeKnowledgePush + router.push (替换 console.info)
+│
+tests/unit/
+├── citation.test.ts (Phase 3-C2, 19 cases)
+└── knowledge-route.test.ts        # 🆕 Phase 3-D (21 cases / 5 describe)
+```
+
+### 14.3 Chat 上下文不丢失保证 (spec §4)
+
+| 维度 | 持久策略 |
+|------|---------|
+| 消息列表 (messages) | Pinia store module-level singleton, SPA 路由切换不销毁 |
+| 活跃 session (currentSessionId / currentSessionTitle) | 同上 |
+| 流式状态 (streamingMessage / isStreaming) | 同上 (跨页 unmount 时由 Pinia 保留) |
+| 滚动位置 (scrollTop) | ❌ Phase 3-D 不维护; ChatView 重新 mount 时 scrollToBottom 复位到底部 (有流则滚流, 没流滚历史末尾) |
+| 草稿输入 (inputDraft) | ❌ Phase 3-D 不维护; 文本存在 ChatView 组件内, 路由切换会丢 (未来 Phase 4+ 加 keep-alive) |
+| Citation 中间状态 (streaming pending) | 同 messages (Pinia 持久) |
+
+**Phase 3-D 决策**: scroll / inputDraft 不强行 keep-alive (会引入挂载层级复杂度 + 内存增长); Phase 4+ 加 route-level keep-alive。
+
+### 14.4 安全约束 (Phase 3-D §3)
+
+- ❌ **不允许** router.push 非校验 id (`safeKnowledgePush` 统一入口)
+- ❌ **不允许** router.query.id 直接信任 (KnowledgeDetailView 用 validateKnowledgeIdFromQuery 二次校验)
+- ✅ URL 边界: ?id=0 / ?id=-1 / ?id=1.5 / ?id=abc / 无 id 全部不触发 fetch
+- ✅ 合法范围: 1 ≤ id ≤ Number.MAX_SAFE_INTEGER, integer only
+
+### 14.5 单元测试 (Phase 3-D)
+
+`tests/unit/knowledge-route.test.ts` — vitest 21 cases / 5 describe:
+
+| describe | cases | 关键场景 |
+|----------|------|----------|
+| `validateKnowledgeId` | 4 | valid (1/42/999999) / invalid (0/负/0.1/1.5/NaN/Infinity) / 非 number |
+| `validateKnowledgeIdFromQuery` | 4 | string -> 校验 / number 透传 / null/undefined / URL 边界 "42" |
+| `buildKnowledgePath` | 4 | 默认 other / source=chat 加 from / source=other 不加 / id 是 number |
+| `cameFromChat` | 4 | from=chat true / 其它值 false / 无字段 false / null 防御 |
+| `safeKnowledgePush` | 5 | valid 整数 / 字符串拒绝 / invalid 返回 null / id=1 边界 / default origin = other |
+
+总计: **40 个单元测试 PASSED** (Phase 3-C2 + Phase 3-D 合并运行)。
+
+### 14.6 已知偏差 (Phase 3-D)
+
+| 项 | 当前 | 后续 |
+|----|------|------|
+| Knowledge 数据获取 | 已经走 window.api.api.request → /knowledge/{id} (Phase 2-Impl-2A) | — |
+| Knowledge 渲染完整度 | Phase 2-Impl-2B Pro view (markdown / metadata / citation 占位) | — |
+| history 空 fallback | `router.back()` 失败时兜底 push 到 chat | Phase 5+ 改深链接处理 |
+| Knowledge Detail 接 Knowledge Service 缓存 | 不接 (Phase 3+ RAG) | Phase 3+ |
+| ChatView scroll / inputDraft keep-alive | 不维护 | Phase 4+ 加 keep-alive |
+| 浏览器 URL 上直接 /knowledge/detail?id=N 直接访问 | Phase 3-D 支持 (validate 后 fetch); back 按钮显示 "← 返回知识库" (正确) | — |
+
+---
+
+## Status (2026-08-21 Phase 3-D)
+
+- ✅ Citation → KnowledgeDetail 路由闭环 落地
+- ✅ 安全校验 (validateKnowledgeId / validateKnowledgeIdFromQuery) 落地
+- ✅ Back navigation 智能分支 (from=chat vs 其它)
+- ✅ 单元测试 21 cases 全过 (总计 40 cases citation + knowledge-route)
+- ✅ Doc §14 Citation → Knowledge Route Lifecycle 增补
+- ❌ Phase 3+ RAG / Retriever / Backend schema / Agent Tool / Knowledge API 未触碰
+
+---
+
+📌 **维护规则 (Phase 3-D 起)**:
+- 新增路由 helper 必须保持**纯函数** + **不修改入参**
+- 新增 `?from=chat` 之类的来源 query 必须在 §14.1 链路图 + §14.6 已知偏差同步
+- 修改 KnowledgeDetailView.goBack() 必须保持 history-first 行为 (除非 deep-link case)
+- 任何新增跨页面 state (Phase 4+ keep-alive / 滚动保持) 必须 update §14.3 表
+
+---
+
 ## Status (2026-08-21 Phase 3-C2 frozen)
 
 - ✅ Citation 排序 (score desc stable) 落地
