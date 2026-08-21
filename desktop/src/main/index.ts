@@ -1,5 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
+import { bootstrap } from './bootstrap'
 import { registerIpcHandlers } from './ipc'
 import { APP_CONFIG } from '@shared/config'
 
@@ -24,14 +25,11 @@ function createMainWindow(): BrowserWindow {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      // 拒绝对渲染进程暴露额外能力；只通过 preload contextBridge。
       preload: join(__dirname, '../preload/index.js')
     }
   })
 
-  // 关闭 remote 模块（已被 Electron 12+ 废弃，但显式声明以固化安全姿态）
   win.webContents.on('will-navigate', (event) => {
-    // 默认所有外链走系统浏览器，禁止 renderer 内导航
     event.preventDefault()
   })
 
@@ -40,7 +38,6 @@ function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
-  // DevTools 仅在开发模式暴露；生产禁用（详见 security.md）
   if (isDev) {
     win.webContents.openDevTools({ mode: 'detach' })
   }
@@ -55,9 +52,6 @@ function createMainWindow(): BrowserWindow {
     }
   })
 
-  // 加载 renderer:
-  // - dev 由 electron-vite 提供 http://localhost:5173
-  // - prod 走 file:// out/renderer/index.html
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (isDev && devUrl) {
     void win.loadURL(devUrl)
@@ -68,14 +62,19 @@ function createMainWindow(): BrowserWindow {
   return win
 }
 
-function bootstrapApp(): void {
+async function bootstrapApp(): Promise<void> {
+  // 1. 初始化 storage + auth (无 token 时 restore 自然失败，无影响)
+  await bootstrap()
+
+  // 2. 注册 IPC handlers
   registerIpcHandlers()
 
+  // 3. 创建窗口
   mainWindow = createMainWindow()
 }
 
 app.whenReady().then(() => {
-  bootstrapApp()
+  void bootstrapApp()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
