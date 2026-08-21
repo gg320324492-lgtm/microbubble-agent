@@ -1,0 +1,44 @@
+appId: com.microbubble.desktop
+productName: MicroBubble Desktop
+directories:
+  output: release/${version}
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+  - '!**/.DS_Store'
+  - '!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}'
+  - '!**/node_modules/.cache'
+asar: true
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+publish:
+  - provider: generic
+    url: https://releases.mnb-lab.cn/desktop
+  - provider: github
+    owner: microbubble-lab
+    repo: microbubble-agent
