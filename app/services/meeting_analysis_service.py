@@ -591,7 +591,7 @@ class MeetingAnalysisService:
                 response = await self.llm.complete(
                     messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题（20字以内）："}],
                     system="根据会议全文生成一个精炼的中文标题（20字以内）。标题应概括会议核心内容和主题，不要编号列表。",
-                    max_tokens=512,
+                    max_tokens=2048,
                     temperature=0.3,
                     thinking={"type": "disabled"},
                 )
@@ -627,6 +627,38 @@ class MeetingAnalysisService:
                 title = re.sub(r'^#+\s*', '', title)  # 去掉 # 标题前缀
                 title = title.split('\n')[0].strip()
                 title = title.strip('"').strip("'").strip("《》").strip()
+                # 2026-08-21 #Step14.7: qwen3.5 thinking mode 把答案埋到 reasoning 末尾.
+                # raw = reasoning 全文. 优先从结尾的 "Final decision" / "Final choice" /
+                # "Final title" 块取最终答案, 否则回退到首行. 兼容性: 旧 content-only 路径不受影响.
+                decision_match = re.search(
+                    r'(?:Final decision|Final answer|Final choice|Final title|最终决策|最终标题)\s*[:：]?\s*(.{4,30}?)(?:\s*\(|\s*（|\n|$)',
+                    raw,
+                    re.IGNORECASE,
+                )
+                if decision_match:
+                    candidate = decision_match.group(1).strip()
+                    candidate = re.sub(r'^[\s:：\-*\d\.\)]+', '', candidate)
+                    candidate = candidate.strip('"').strip("'").strip("《》").strip("。,")
+                    if 4 <= len(candidate) <= 30 and re.search(r'[一-鿿]', candidate):
+                        title = candidate
+                # 2026-08-21 #Step14.8: qwen3.5 thinking 模式会陷入字符计数死循环.
+                # 当首行不是有效标题 (Thinking Process / 等等) 时, 扫描全文
+                # 抓所有 4-30 字的纯中文短语, 挑出现最多的 (model 反复在 reasoning 中
+                # 投票最终标题), 作为兜底.
+                if not re.search(r'[一-鿿]', title) or title.startswith("Thinking"):
+                    candidates = re.findall(
+                        r'(?:Draft\s*\d+\s*[:：]\s*|Title\s*[:：]\s*|^\s*)([一-鿿][一-鿿A-Za-z0-9·\s]{3,29}?)(?=\s*[\(（]\d|\s*$|\n)',
+                        raw,
+                        re.MULTILINE,
+                    )
+                    candidates = [
+                        c.strip() for c in candidates
+                        if 4 <= len(c.strip()) <= 30
+                    ]
+                    if candidates:
+                        # Pick the most-frequent title (model voting)
+                        from collections import Counter
+                        title = Counter(candidates).most_common(1)[0][0]
                 if 2 <= len(title) <= 30:
                     logger.info(f"标题生成成功（第{attempt+1}次）: {title}")
                     return title

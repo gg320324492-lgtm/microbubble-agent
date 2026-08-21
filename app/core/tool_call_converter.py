@@ -257,12 +257,21 @@ def openai_response_to_anthropic_message(
 
     choice = _get(openai_response, "choices", [{}])[0]
     msg = _get(choice, "message", {}) or {}
-    raw_msg = msg if isinstance(msg, dict) else (vars(msg) if not isinstance(msg, dict) else msg)
+    # 2026-08-21 #Step14.6: 不再 vars(msg) (Pydantic model 动态属性不见于 __dict__).
+    # 直接用 msg 对象本身, _getattr 同时支持 dict + 对象属性访问.
+    raw_msg = msg
     usage = _get(openai_response, "usage", {}) or {}
 
     # 拼装 Anthropic-style content blocks
     content_blocks = []
-    text_content = raw_msg.get("content") if isinstance(raw_msg, dict) else getattr(raw_msg, "content", "") or ""
+    # 2026-08-21 #Step14.5: 兼容 Pydantic model 字段未在 vars() 中的情况 (OpenAI SDK ChatCompletionMessage)
+    # Pydantic 模型 get('reasoning') 从 vars(msg) 拿不到 (vars 只见 model_fields, 动态属性用 getattr)
+    # 修法: 同时走 dict + getattr, 优先 dict (OpenAI 显式字段), 回退 getattr (qwen3.5 动态字段)
+    def _getattr(obj, key, default=""):
+        if isinstance(obj, dict):
+            return obj.get(key, default) or getattr(obj, key, default)
+        return getattr(obj, key, default)
+    text_content = _getattr(raw_msg, "content", "") or ""
     if text_content:
         content_blocks.append({
             "type": "text",
@@ -277,12 +286,8 @@ def openai_response_to_anthropic_message(
     # 2026-08-21 #Step14: 兼容 Ollama OpenAI 兼容协议返回的 `reasoning` 字段
     # (qwen3.5 系列 thinking mode 把答案用 reasoning 字段, 原 content 留空)
     # 兼容多源: reasoning_content (mimo) / reasoning (ollama qwen3.5)
-    reasoning_content = (
-        raw_msg.get("reasoning_content") if isinstance(raw_msg, dict)
-        else getattr(raw_msg, "reasoning_content", "")
-    ) or (
-        raw_msg.get("reasoning") if isinstance(raw_msg, dict)
-        else getattr(raw_msg, "reasoning", "")
+    reasoning_content = _getattr(raw_msg, "reasoning_content", "") or _getattr(
+        raw_msg, "reasoning", ""
     ) or ""
     if reasoning_content:
         content_blocks.append({

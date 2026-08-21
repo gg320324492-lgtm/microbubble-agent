@@ -150,7 +150,7 @@ class MeetingReprocessingService:
             meeting_id=req.meeting_id, run_id=run.id, reused=False,
             snapshot_path=f"meeting_processing_runs.metrics[{run.id}].snapshot",
         )
-        order = ["title", "polish", "speaker_assignment", "analysis", "transcription", "quality"]
+        order = ["polish", "title", "speaker_assignment", "analysis", "transcription", "quality"]
         for stage in order:
             if stage not in req.requested_stages:
                 continue
