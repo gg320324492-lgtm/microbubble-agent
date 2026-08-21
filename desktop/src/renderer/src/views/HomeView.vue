@@ -4,15 +4,18 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useUserStore } from '../stores/user'
 import { useAppStore } from '../stores/app'
+import { isAdminRole } from '@shared/auth-types'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const appStore = useAppStore()
 
-const username = computed(() => userStore.profile?.username ?? '?')
-const fullName = computed(() => userStore.profile?.full_name ?? '')
-const isAdmin = computed(() => userStore.profile?.is_admin === true)
+const displayName = computed(() => userStore.profile?.name ?? '?')
+const username = computed(() => userStore.profile?.email ?? userStore.profile?.phone ?? 'no-contact')
+const isAdmin = computed(() => isAdminRole(userStore.profile?.role))
+const grade = computed(() => userStore.profile?.grade ?? '未知')
+const researchArea = computed(() => userStore.profile?.research_area ?? '未填写')
 
 async function onLogout(): Promise<void> {
   await authStore.logout()
@@ -23,22 +26,34 @@ async function onLogout(): Promise<void> {
 <template>
   <main class="home-root">
     <header>
-      <h1>欢迎，{{ username }}</h1>
+      <h1>欢迎，{{ displayName }}</h1>
       <button class="logout" @click="onLogout">登出</button>
     </header>
 
     <section class="info-card">
-      <h2>Phase 1 自检</h2>
+      <h2>Phase 1-Impl-2 自检</h2>
       <ul>
         <li>
           <strong>登录状态：</strong>
           <span :class="authStore.isAuthenticated ? 'ok' : 'ng'">
-            {{ authStore.isAuthenticated ? '已登录' : '未登录' }}
+            {{ authStore.isAuthenticated ? '已登录（access_token 主进程内存）' : '未登录' }}
           </span>
         </li>
         <li>
           <strong>用户：</strong>
-          <span>{{ username }}<span v-if="fullName">（{{ fullName }}）</span><span v-if="isAdmin"> · admin</span></span>
+          <span>
+            {{ displayName }}<span v-if="isAdmin"> · admin ({{ userStore.profile?.role }})</span>
+          </span>
+        </li>
+        <li>
+          <strong>Email / Phone：</strong>
+          <span>{{ username }}</span>
+        </li>
+        <li>
+          <strong>级别：</strong> <span>{{ grade }}</span>
+        </li>
+        <li>
+          <strong>研究方向：</strong> <span>{{ researchArea }}</span>
         </li>
         <li>
           <strong>后端：</strong>
@@ -47,12 +62,14 @@ async function onLogout(): Promise<void> {
       </ul>
 
       <div class="security-info">
-        <strong>安全基线：</strong>
+        <strong>Phase 1-Impl-2 安全姿态：</strong>
         <ul>
-          <li>access_token 仅活内存</li>
+          <li>access_token 仅活主进程内存（currentAccessToken），不暴露 renderer</li>
           <li>refresh_token 由 safeStorage 加密存于 OS Keychain</li>
-          <li>localStorage / sessionStorage 永不含 token</li>
-          <li>preload contextBridge 仅暴露白名单 window.api.auth.*</li>
+          <li>expiresAt 从 JWT `exp` claim 解析计算（不在客户端硬编码）</li>
+          <li>单飞 refresh: 多请求并发 401 → 只 1 个 refresh → 排队重试</li>
+          <li>window.api.api.request 统一鉴权入口，业务模块禁止直连 axios</li>
+          <li>localStorage / sessionStorage / IndexedDB 永不含 token</li>
         </ul>
       </div>
 
@@ -101,7 +118,7 @@ h1 {
   border: 1px solid #334155;
   border-radius: 8px;
   padding: 1.5rem;
-  max-width: 640px;
+  max-width: 720px;
 }
 .info-card h2 {
   margin: 0 0 1rem;

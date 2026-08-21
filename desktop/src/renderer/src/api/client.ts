@@ -1,14 +1,16 @@
-// renderer axios 客户端（Phase 2+ 业务模块直连后端使用）。
+// renderer axios 客户端（Phase 2+ 业务模块直连后端非鉴权 endpoint 使用）。
 //
-// 设计原则：
-// - baseURL 从 @shared/config 读（与 main 进程一致）
-// - 401 拦截器占位（Phase 2 接入 refresh 单飞逻辑）
-// - access_token 不直接持有；通过 IPC 从 main 拿（main 才是 token vault 真主）
-// - Phase 1 主要用于测试基础 axios 配置，auth 流程仍走 IPC
+// Phase 1-Impl-2 设计（详见 docs/desktop-conversion/security.md §API Gateway）：
+// - renderer 永不在 axios 客户端持有 token（access 或 refresh 都无）
+// - 所有鉴权 endpoint 必须经 window.api.api.request 走主进程 API Gateway
+// - 本 client 仅供 renderer 调非鉴权 endpoint（如公开元数据、健康检查）
 //
-// 严禁把 refresh_token / access_token 写到 localStorage / sessionStorage。
+// 严禁：
+// - ❌ 在任何拦截器注入 Authorization header
+// - ❌ 直接调需要鉴权的后端 endpoint
+// - ❌ 同步 access_token / refresh_token 到 renderer 任何层
 
-import axios, { type AxiosInstance, type AxiosError } from 'axios'
+import axios, { type AxiosInstance } from 'axios'
 import { APP_CONFIG } from '@shared/config'
 
 const client: AxiosInstance = axios.create({
@@ -20,27 +22,7 @@ const client: AxiosInstance = axios.create({
   }
 })
 
-// ---------- 请求拦截器：注入 JWT header ----------
-// Phase 2+ 业务模块启用：每次请求通过 IPC 拿 access_token（永远不落 renderer 内存）
-// 当前 Phase 1 留接口，不实际调用（auth 仍走 IPC 路径，避免 token 漂移到 renderer 内存）
-client.interceptors.request.use(
-  async (config) => {
-    // 占位：Phase 2+ 实际从 window.api.auth.getAccessToken() 拿
-    // const accessToken = await window.api.auth.getAccessToken?.()
-    // if (accessToken) config.headers.set('Authorization', `Bearer ${accessToken}`)
-    return config
-  },
-  (error) => Promise.reject(error)
-)
-
-// ---------- 响应拦截器：401 占位 ----------
-client.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    // 占位：Phase 2+ 接入 refresh 单飞 (复用 web/src/utils/authRefresh.js 逻辑)
-    // if (error.response?.status === 401 && !error.config.__isRetry) { ... }
-    return Promise.reject(error)
-  }
-)
+// 不加任何 token 注入拦截器。
+// 401 → 归一化为 HttpError（api.service 仍在主进程处理 refresh）。
 
 export default client

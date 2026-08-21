@@ -1,13 +1,16 @@
-// 统一请求封装：get / post / patch / delete。
+// 统一请求封装（仅非鉴权 endpoint 用）。
 //
-// 业务模块统一从这里调，而不是直接 axios。
-// 所有 401/429/5xx 错误归一化为普通 Error，message 由错误码转换。
+// 鉴权 endpoint 必须走 window.api.api.request（主进程 API Gateway）。
+// 本文件保留给 renderer 调公开 endpoint 时的便利方法。
+//
+// 严禁：
+// - 在任何地方写入 / 读取 Authorization header
+// - 持有 access_token / refresh_token
 
 import client from '../api/client'
 import { AxiosError } from 'axios'
 import type { AxiosResponse } from 'axios'
 
-/** HTTP 错误归一化（与 main auth.service.ts 的 AuthErrorPayload 形状对齐）。 */
 export class HttpError extends Error {
   readonly code: string
   readonly status: number

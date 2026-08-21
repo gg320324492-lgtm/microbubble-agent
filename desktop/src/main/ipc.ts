@@ -2,7 +2,9 @@ import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-types'
 import type { PingRequest, PongResponse } from '@shared/preload-api'
 import type { LoginRequest } from '@shared/auth-types'
+import type { ApiRequestPayload, ApiResult } from '@shared/preload-api'
 import { authService } from './services/auth.service'
+import { apiService } from './services/api/api.service'
 
 /**
  * 主进程 IPC 注册入口。
@@ -27,7 +29,7 @@ export function registerIpcHandlers(): void {
     }
   )
 
-  // ---------- Phase 1: auth ----------
+  // ---------- Phase 1-Impl-1: auth lifecycle ----------
   ipcMain.handle(
     IPC_CHANNELS.AUTH_LOGIN,
     async (_event, payload: LoginRequest) => {
@@ -46,4 +48,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.AUTH_GET_BACKEND_URL, async () => {
     return authService.getBackendUrl()
   })
+
+  // ---------- Phase 1-Impl-2: API gateway ----------
+  // 业务模块调用后端鉴权 endpoint 的统一入口。
+  // main: api.service 自动注入 Bearer + 单飞 refresh。
+  // renderer: window.api.api.request({ method, path, body? })
+  ipcMain.handle(
+    IPC_CHANNELS.API_REQUEST,
+    async (_event, payload: ApiRequestPayload): Promise<ApiResult<unknown>> => {
+      return apiService.request(payload)
+    }
+  )
 }

@@ -1,14 +1,14 @@
 // user Pinia store —— 当前用户档案。
-// 与 auth store 关注分离：auth 关心 token，user 关心 profile。
+// 与 auth store 关注分离：auth 关心 token，user 关心档案。
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { UserProfile } from '@shared/auth-types'
+import type { UserInfo } from '@shared/auth-types'
 
 export const useUserStore = defineStore('user', () => {
-  const profile = ref<UserProfile | null>(null)
+  const profile = ref<UserInfo | null>(null)
 
-  function setProfile(p: UserProfile): void {
+  function setProfile(p: UserInfo): void {
     profile.value = p
   }
 

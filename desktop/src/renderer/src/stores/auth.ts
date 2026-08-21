@@ -1,52 +1,60 @@
 // auth Pinia store —— 唯一活 access_token 内存 + 调用入口。
 //
 // 设计原则：
-// - access_token 仅活内存（refresh 后或 close app 后清空，Phase 1 restore 重生）
-// - 所有 login/logout/restore 通过 IPC 委托 main
-// - profile 单独存 user store（关注分离）
-// - isAuthenticated getter 简单基于 token 是否存在 + 未过期
+// - access_token 永不入 renderer 持久化层（仅主进程内存）
+//   renderer store 只保存 expiresAt 时间戳 + isAuthenticated boolean (UI 用)
+// - 所有 login/logout/restore 通过 IPC 委托主进程
+// - user 单独存 user store
+// - isAuthenticated getter 同时考虑 user 与 expiresAt
 //
-// 不直接持有 refresh_token（主进程持有 vault，永不进 renderer）。
+// 不直接持有 refresh_token / access_token。
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { login as apiLogin, logout as apiLogout, restore as apiRestore } from '../api/auth'
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  restore as apiRestore
+} from '../api/auth'
 import { useUserStore } from './user'
-import type { AuthRestoreResult } from '@shared/auth-types'
+import type { AuthRestoreResult, UserInfo, AuthErrorPayload } from '@shared/auth-types'
 
 export const useAuthStore = defineStore('auth', () => {
-  // 是否有 token + profile 都 ok
   const hasSession = ref(false)
-  // access_token 过期 epoch ms（仅用于 UI 提示，不参与业务校验）
   const expiresAt = ref(0)
-  // 启动时是否尝试过 restore（防止 LoginView 在 restore 失败前重复跳）
   const restoreAttempted = ref(false)
 
-  const isAuthenticated = computed(() => hasSession.value)
+  /**
+   * 计算属性：现在是否仍在有效期内（未过期）。
+   * 用于 UI 显示"会话即将到期"提示。
+   */
+  const isAuthenticated = computed(() => {
+    if (!hasSession.value) return false
+    if (expiresAt.value <= 0) return false
+    return Date.now() < expiresAt.value
+  })
 
-  function applyRestore(result: AuthRestoreResult): void {
-    const userStore = useUserStore()
+  function setSessionFromAuth(expiresAtMs: number, user: UserInfo): void {
     hasSession.value = true
-    expiresAt.value = Date.now() + result.tokenPair.expires_in * 1000
-    userStore.setProfile(result.profile)
+    expiresAt.value = expiresAtMs
+    // user store 关注分离 —— 同时 set profile
+    const userStore = useUserStore()
+    userStore.setProfile(user)
   }
 
   function clearSession(): void {
-    const userStore = useUserStore()
     hasSession.value = false
     expiresAt.value = 0
+    const userStore = useUserStore()
     userStore.clearProfile()
   }
 
   async function login(username: string, password: string): Promise<
-    { success: true } | { success: false; error: { code: string; message: string; status?: number } }
+    { success: true } | { success: false; error: AuthErrorPayload }
   > {
     const result = await apiLogin({ username, password })
     if (result.success) {
-      const userStore = useUserStore()
-      hasSession.value = true
-      expiresAt.value = Date.now() + result.data.expiresIn * 1000
-      userStore.setProfile(result.data.profile)
+      setSessionFromAuth(result.data.expiresAt, result.data.user)
       return { success: true }
     }
     return result
@@ -62,18 +70,28 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function attemptRestore(): Promise<boolean> {
     restoreAttempted.value = true
+    let result: AuthRestoreResult | null = null
     try {
-      const result = await apiRestore()
-      if (result) {
-        applyRestore(result)
-        return true
-      }
-      clearSession()
-      return false
+      result = await apiRestore()
     } catch (_err) {
+      result = null
+    }
+    if (!result) {
       clearSession()
       return false
     }
+    hasSession.value = true
+    expiresAt.value = result.expiresAt
+    const userStore = useUserStore()
+    userStore.setProfile(result.user)
+    return true
+  }
+
+  /**
+   * 主进程强制清场回调（refresh 失败 / 服务端禁用）—— 调用此清空 state。
+   */
+  function onSessionExpired(): void {
+    clearSession()
   }
 
   return {
@@ -84,6 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     attemptRestore,
-    clearSession
+    clearSession,
+    onSessionExpired
   }
 })
