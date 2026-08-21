@@ -27,8 +27,13 @@ import type {
 import type { KnowledgeResponse } from '@shared/knowledge-types'
 import { generateClientMsgId } from '@shared/chat-types'
 import { knowledgeService } from '../services/knowledge.service'
-import { dedupCitations } from '../utils/citation'
 import { deriveAgentStateHint, type AgentStateHint } from '../utils/agent-state'
+import {
+  type PlanStep,
+  parsePlanStepEvent,
+  appendPlanStep,
+  planStepsToAgentState
+} from '../utils/agent-plan'
 import type { ApiError } from '@shared/preload-api'
 
 // 增量 ID 用于 UI (Phase 3-A 仍存在; 客户端消息通过 client_msg_id 标识)
@@ -75,6 +80,10 @@ export const useChatStore = defineStore('chat', () => {
   /** 当前活跃 prefetch (按 knowledgeId). 避免重复 fire + 关闭时取消. */
   const inflightPrefetches = new Map<number, Promise<void>>()
 
+  // ============ Phase 5-D: Plan Steps (agent planning) ============
+  /** 流中 SSE plan_step 事件累加 (按 step.id dedup). */
+  const planSteps = ref<PlanStep[]>([])
+
   // ============ 派生 ============
   const visibleMessages = computed<ChatMessageOut[]>(() =>
     messages.value.filter((m) => !m.is_deleted)
@@ -86,13 +95,32 @@ export const useChatStore = defineStore('chat', () => {
    * session 隔离: 是 Pinia module-level singleton; streamingMessage 切换 session 时
    *   由 selectSession 同步清 (Phase 4-C), 因此 deriveAgentState 也自动随 session 切换.
    */
-  const agentStateHint = computed<AgentStateHint>(() =>
-    deriveAgentStateHint({
+  /**
+   * Phase 5-D: Agent State 联动 plan_steps.
+   * 若 plan step 推导为 'planning' / 'failed' / 'completed', 优先返回;
+   * 否则回退到 deriveAgentStateHint (Phase 5-C).
+   */
+  const agentStateHint = computed<AgentStateHint>(() => {
+    const planState = planStepsToAgentState(planSteps.value)
+    if (planState) {
+      const base = deriveAgentStateHint({
+        streamingMessage: streamingMessage.value,
+        isStreaming: isStreaming.value,
+        lastError: lastError.value
+      })
+      return {
+        state: planState,
+        label: base.label,
+        icon: base.icon,
+        visible: isStreaming.value || planState === 'failed'
+      }
+    }
+    return deriveAgentStateHint({
       streamingMessage: streamingMessage.value,
       isStreaming: isStreaming.value,
       lastError: lastError.value
     })
-  )
+  })
 
   // ============ Actions: Session ============
   async function loadSessions(): Promise<boolean> {
@@ -196,6 +224,7 @@ export const useChatStore = defineStore('chat', () => {
       persisted_message_id: null,
       client_msg_id: assistantClientMsgId
     }
+    planSteps.value = []  // Phase 5-D: 清 plan steps
     streamingContentRender.value = ''
     isStreaming.value = true
     sending.value = true
@@ -331,7 +360,27 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'intent_detected':
+        // Phase 5-B 留口: 意图分类 (仅 ack, Phase 5-D 不渲染)
+        break
       case 'plan_step':
+        // Phase 5-D: 累积 plan step
+        //   event.step: { id, title, tool, status: pending|running|done|failed }
+        //   按 id dedup; 解析失败 -> 跳过
+        // Phase 3-B0 frozen schema 未直接定义 step 字段; 通过 unknown cast 安全访问.
+        const stepData = (event as unknown as { step?: { id?: string; title?: string; tool?: string; status?: string } }).step
+        if (!stepData || typeof stepData !== 'object') break
+        if (!stepData.id) break
+        const parsed = parsePlanStepEvent(
+          { id: stepData.id, title: stepData.title, tool: stepData.tool, status: stepData.status },
+          planSteps.value.length
+        )
+        if (!parsed) break
+        planSteps.value = appendPlanStep(planSteps.value, parsed)
+        // 同步 streamingMessage.plan_steps (ChatView 直接读)
+        if (streamingMessage.value) {
+          streamingMessage.value.plan_steps = planSteps.value
+        }
+        break
       case 'synthesis_start':
       case 'critique':
       case 'retry':
@@ -482,7 +531,6 @@ export const useChatStore = defineStore('chat', () => {
     }
     // Phase 3-C2: dedup 与 sort 在 CitationList 渲染层做 (utils/citation.ts),
     // 这里仅保 SSE chunk 顺序, 不丢任何中间 event.
-    void dedupCitations // 显式引用保 lint 通过; 实际 dedup 在 normalizeCitations 调用链
   }
 
   /**

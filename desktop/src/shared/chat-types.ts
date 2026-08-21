@@ -306,6 +306,23 @@ export type StreamErrorIpcPayload = [StreamContext, StreamErrorPayload]
 // ============ Renderer Streaming Message ============
 
 /**
+ * Phase 5-D: Plan Step (流式, Phase 3-B0 frozen schema 之外的 renderer 累积类型).
+ *
+ * 实际定义在 utils/agent-plan.ts (renderer 端); chat-types.ts 内 inline 镜像仅
+ * 为 StreamingMessage.plan_steps 提供类型锚点 (shared 边界 0 依赖).
+ */
+export interface PlanStep {
+  id: string
+  title: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  order: number
+  tool?: string
+  started_at?: string | null
+  finished_at?: string | null
+  error?: string | null
+}
+
+/**
  * Phase 5-A NEW: 工具调用快照 (flow 中).
  * tool_use / tool_result 事件累积; status 派生: call_only / success / error.
  */
@@ -348,6 +365,12 @@ export interface StreamingMessage {
   tool_calls: ToolCallSnapshot[]
   /** Phase 3-C1: 流式 SSE citation event 累加 (含 Phase 3-B0 frozen refs 兼容) */
   citations: StreamCitationEntry[]
+  /**
+   * Phase 5-D NEW: agent plan 步骤序列.
+   * SSE event 'plan_step' 累积 (按 step.id dedup).
+   * 流结束 -> 不写入 ChatMessageOut (历史消息无 plan_steps 字段, 仅流中可见).
+   */
+  plan_steps?: PlanStep[]
   started_at: string
   finished_at: string | null
   /** Phase 3-A 服务端同步后填 */
