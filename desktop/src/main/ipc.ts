@@ -3,8 +3,13 @@ import { IPC_CHANNELS } from '@shared/ipc-types'
 import type { PingRequest, PongResponse } from '@shared/preload-api'
 import type { LoginRequest } from '@shared/auth-types'
 import type { ApiRequestPayload, ApiResult } from '@shared/preload-api'
+import type { ChatStreamRequest } from '@shared/chat-types'
 import { authService } from './services/auth.service'
 import { apiService } from './services/api/api.service'
+import {
+  startChatStream,
+  cancelChatStream
+} from './services/chat/chat-stream.service'
 
 /**
  * 主进程 IPC 注册入口。
@@ -58,5 +63,20 @@ export function registerIpcHandlers(): void {
     async (_event, payload: ApiRequestPayload): Promise<ApiResult<unknown>> => {
       return apiService.request(payload)
     }
+  )
+
+  // ---------- Phase 2-Impl-3B: Chat SSE Streaming ----------
+  // Renderer 启动一次流: 立刻拿到 streamId, 后续 chunk/end/error 通过
+  // webContents.send broadcast.
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_STREAM_START,
+    async (_event, payload: ChatStreamRequest): Promise<string> => {
+      return startChatStream(payload)
+    }
+  )
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_STREAM_CANCEL,
+    async (_event, streamId: string) => cancelChatStream(streamId)
   )
 }

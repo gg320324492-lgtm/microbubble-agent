@@ -1,31 +1,23 @@
 <script setup lang="ts">
 /**
- * Chat View (Phase 2-Impl-3A 基础模块)。
+ * Chat View (Phase 2-Impl-3B: SSE Streaming)。
  *
- * 三段式布局:
- *   ┌────────────────────────────────────────────────────┐
- *   │  Header: session.title + 消息数                        │
- *   ├──────────────┬──────────────────────────────────────┤
- *   │  左侧:       │  右侧: 消息列表 + 输入框                │
- *   │  sessions    │                                       │
- *   └──────────────┴──────────────────────────────────────┘
+ * Phase 2-Impl-3A 改 sendUserMessage → sendUserMessageStream (SSE).
+ * Assistant 渲染:
+ *   - streaming 中 (isStreaming=true): 显示 raw markdown 文本 (避免 MarkdownViewer 每 token 重解析)
+ *   - 流结束 (isStreaming=false): 渲染 MarkdownViewer (Phase 2-Impl-2B 复用)
  *
- * 数据流 (全部 IPC → main api.service → 后端):
- *   GET /chat/sessions                 → sessions list (左栏)
- *   GET /chat/sessions/{id}            → loadMessages
- *   GET /chat/sessions/{id}/messages   → messages list (中右)
- *   POST /chat                         → sendUserMessage (Phase 2 同步)
+ * 数据流 (全部 IPC → main → 后端):
+ *   - POST /chat/stream (SSE)  → main fetch + parse → push chunks via webContents.send
+ *   - chat:stream-chunk IPC  → ChatView subscribe → store.handleStreamChunk
+ *   - chat:stream-end    IPC → store.handleStreamEnd (推 messages)
  *
- * 范围外:
- *   - ❌ Streaming (Phase 3+ 接 /chat/stream SSE)
- *   - ❌ RAG / 知识库引用 / 多模态 (Phase 3+)
- *   - ❌ 编辑 / 重发 / 反馈 (Phase 3+)
- *
- * Markdown 渲染:
- *   - Assistant 消息复用 MarkdownViewer (Phase 2-Impl-2B), 安全 (无 v-html)
- *   - User 消息纯文本 (white-space: pre-wrap), 不解析 markdown
+ * 范围 (Phase 2-Impl-3B):
+ *   ✅ SSE transport + IPC streaming
+ *   ✅ 占位 assistant + 100ms debounce markdown render
+ *   ❌ Agent tool call / RAG / multimodal / function calling (Phase 3+)
  */
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '../stores/chat'
 import { Loading, EmptyState, ErrorState, MarkdownViewer } from '../components/ui'
 import {
@@ -41,17 +33,19 @@ const inputDraft = ref('')
 const listEl = ref<HTMLElement | null>(null)
 
 const hasMessages = computed(() => store.visibleMessages.length > 0)
+const hasStreaming = computed(() => store.isStreaming && !!store.streamingMessage)
 
 async function onSend(): Promise<void> {
   const text = inputDraft.value.trim()
   if (text.length === 0 || store.sending) return
   inputDraft.value = ''
-  const ok = await store.sendUserMessage(text)
+  // Phase 2-Impl-3B: 走 SSE 流式
+  const ok = await store.sendUserMessageStream(text)
   if (ok) {
     await nextTick()
     scrollToBottom()
   } else {
-    // 失败: 还原输入
+    // 启动失败时还原输入 (Phase 2-Impl-3A 兼容)
     inputDraft.value = text
   }
 }
@@ -68,11 +62,16 @@ function scrollToBottom(): void {
 
 onMounted(async () => {
   await store.loadSessions()
-  // 拉默认 session 的消息
   await store.selectSession(store.currentSessionId)
   await nextTick()
   scrollToBottom()
 })
+
+// 流式 content 变更时, 自动滚到底部
+watch(
+  () => store.streamingContentRender,
+  () => nextTick(() => scrollToBottom())
+)
 </script>
 
 <template>
@@ -83,11 +82,12 @@ onMounted(async () => {
         <h2 class="chat-header__title">💬 {{ store.currentSessionTitle }}</h2>
         <span class="chat-header__badge">
           消息 {{ store.visibleMessages.length }} 条
+          <span v-if="hasStreaming" class="chat-header__stream">· 流式中</span>
         </span>
       </div>
       <div class="chat-header__right">
         <span class="chat-header__hint">
-          Phase 2-Impl-3A · 同步模式
+          Phase 2-Impl-3B · SSE 流式
         </span>
       </div>
     </header>
@@ -131,7 +131,7 @@ onMounted(async () => {
       <section class="chat-main">
         <!-- Error 全局条 -->
         <ErrorState
-          v-if="store.lastError"
+          v-if="store.lastError && !hasStreaming"
           :message="store.lastError.message"
           @retry="store.clearError"
         />
@@ -139,13 +139,13 @@ onMounted(async () => {
         <!-- Messages list -->
         <div ref="listEl" class="chat-messages">
           <Loading
-            v-if="store.messagesLoading && !hasMessages"
+            v-if="store.messagesLoading && !hasMessages && !hasStreaming"
             variant="spinner"
             text="加载消息中..."
           />
 
           <EmptyState
-            v-else-if="!hasMessages && !store.messagesLoading"
+            v-else-if="!hasMessages && !store.messagesLoading && !hasStreaming"
             icon="✨"
             title="开始对话吧"
             description="在下方输入框中发送消息"
@@ -162,7 +162,6 @@ onMounted(async () => {
                 <div class="chat-message__head">
                   <span class="chat-message__role">{{ roleLabel(msg.role) }}</span>
                   <span class="chat-message__time">{{ formatMessageTime(msg.created_at) }}</span>
-                  <span v-if="msg.is_partial" class="chat-message__partial">流式中...</span>
                 </div>
                 <div class="chat-message__content">
                   <MarkdownViewer
@@ -177,23 +176,51 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
-          </template>
 
-          <!-- 发送中 placeholder -->
-          <div v-if="store.sending" class="chat-message chat-message--assistant chat-message--pending">
-            <div class="chat-message__avatar">🧠</div>
-            <div class="chat-message__body">
-              <div class="chat-message__head">
-                <span class="chat-message__role">小气</span>
-                <span class="chat-message__time">thinking...</span>
-              </div>
-              <div class="chat-message__content">
-                <div class="chat-message__thinking">
-                  <span class="dot-flashing">●●●</span> 思考中...
+            <!-- 流式 assistant 占位 (Phase 2-Impl-3B) -->
+            <div
+              v-if="hasStreaming && store.streamingMessage"
+              class="chat-message chat-message--assistant chat-message--streaming"
+            >
+              <div class="chat-message__avatar">🧠</div>
+              <div class="chat-message__body">
+                <div class="chat-message__head">
+                  <span class="chat-message__role">小气</span>
+                  <span class="chat-message__time">流式中...</span>
+                  <span class="chat-message__pulse">●●●</span>
+                </div>
+
+                <!-- thinking label -->
+                <div
+                  v-if="store.streamingMessage.thinking"
+                  class="chat-message__thinking-label"
+                >
+                  💭 {{ store.streamingMessage.thinking }}
+                </div>
+
+                <!--
+                  流中 raw 文本 (避免 MarkdownViewer 每 token 重解析)
+                  关键: streamingContentRender 是 100ms debounce 触发的 computed,
+                  重渲染 MarkdownViewer 应只在 chunk 间隔较大时发生.
+                -->
+                <div v-if="store.streamingMessage.content" class="chat-message__content">
+                  <MarkdownViewer
+                    :source="store.streamingContentRender"
+                    body-class="chat-md chat-md-streaming"
+                  />
+                </div>
+                <div v-else class="chat-message__cursor-line">
+                  <span class="chat-cursor">▍</span>
+                </div>
+
+                <div class="chat-message__streaming-footer">
+                  <span class="muted">
+                    {{ store.streamingMessage.content.length }} chars received
+                  </span>
                 </div>
               </div>
             </div>
-          </div>
+          </template>
         </div>
 
         <!-- Input -->
@@ -202,17 +229,17 @@ onMounted(async () => {
             v-model="inputDraft"
             class="chat-input__textarea"
             placeholder="向小气提问 (Shift+Enter 换行, Enter 发送)"
-            :disabled="store.sending"
+            :disabled="store.sending || hasStreaming"
             rows="3"
             @keydown.enter.exact.prevent="onSend"
           />
           <button
             type="submit"
             class="chat-input__send"
-            :disabled="store.sending || inputDraft.trim().length === 0"
+            :disabled="store.sending || hasStreaming || inputDraft.trim().length === 0"
           >
-            <span v-if="store.sending" class="chat-input__spinner" />
-            {{ store.sending ? '发送中…' : '发送 ⏎' }}
+            <span v-if="store.sending || hasStreaming" class="chat-input__spinner" />
+            {{ hasStreaming ? '生成中…' : '发送 ⏎' }}
           </button>
         </form>
       </section>
@@ -247,6 +274,10 @@ onMounted(async () => {
   margin-left: 0.6rem;
   font-size: 0.75rem;
   color: #94a3b8;
+}
+.chat-header__stream {
+  color: #fbbf24;
+  margin-left: 0.3rem;
 }
 .chat-header__hint {
   font-size: 0.75rem;
@@ -367,8 +398,14 @@ onMounted(async () => {
   background: rgba(148, 163, 184, 0.06);
   border: 1px solid rgba(148, 163, 184, 0.18);
 }
-.chat-message--pending {
-  opacity: 0.85;
+.chat-message--streaming {
+  border-style: dashed;
+  border-color: rgba(249, 115, 22, 0.3);
+  animation: streaming-pulse 2s ease-in-out infinite;
+}
+@keyframes streaming-pulse {
+  0%, 100% { background: rgba(249, 115, 22, 0.05); }
+  50% { background: rgba(249, 115, 22, 0.12); }
 }
 .chat-message__avatar {
   font-size: 1.3rem;
@@ -395,9 +432,24 @@ onMounted(async () => {
   color: #64748b;
   font-size: 0.75rem;
 }
-.chat-message__partial {
+.chat-message__pulse {
   color: #fbbf24;
-  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.2em;
+  animation: dot-flashing 1.4s infinite linear;
+}
+@keyframes dot-flashing {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+.chat-message__thinking-label {
+  background: rgba(251, 191, 36, 0.08);
+  border-left: 3px solid #fbbf24;
+  padding: 0.3rem 0.6rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  color: #fbbf24;
+  border-radius: 2px;
 }
 .chat-message__content {
   font-size: 0.92rem;
@@ -412,23 +464,25 @@ onMounted(async () => {
   margin-top: 0.4rem;
   font-size: 0.75rem;
 }
-.chat-message__thinking {
+.chat-message__cursor-line {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  color: #fbbf24;
-  font-size: 0.85rem;
+  height: 1.5rem;
 }
-.dot-flashing {
+.chat-cursor {
   display: inline-block;
-  animation: dot-flashing 1.4s infinite linear;
+  color: #f97316;
   font-weight: bold;
-  letter-spacing: 0.2em;
+  animation: cursor-blink 1.1s infinite;
 }
-@keyframes dot-flashing {
-  0% { opacity: 0.2; }
-  50% { opacity: 1; }
-  100% { opacity: 0.2; }
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.chat-message__streaming-footer {
+  margin-top: 0.4rem;
+  font-size: 0.7rem;
+  color: #64748b;
 }
 
 .chat-input {
@@ -497,5 +551,8 @@ onMounted(async () => {
 }
 :deep(.chat-md .md-p) {
   color: #cbd5e1;
+}
+:deep(.chat-md-streaming) {
+  /* 流式中浅边框区分 */
 }
 </style>

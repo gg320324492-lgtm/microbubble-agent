@@ -12,7 +12,13 @@ export const IPC_CHANNELS = {
   // Phase 1-Impl-2: API gateway
   API_REQUEST: 'app:api:request',
   // Phase 2-Impl-1: main → renderer broadcast
-  AUTH_SESSION_EXPIRED: 'auth:session-expired'
+  AUTH_SESSION_EXPIRED: 'auth:session-expired',
+  // Phase 2-Impl-3B: SSE chat streaming
+  CHAT_STREAM_START: 'chat:start-stream',
+  CHAT_STREAM_CANCEL: 'chat:cancel-stream',
+  CHAT_STREAM_CHUNK: 'chat:stream-chunk',
+  CHAT_STREAM_END: 'chat:stream-end',
+  CHAT_STREAM_ERROR: 'chat:stream-error'
 } as const
 
 export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
