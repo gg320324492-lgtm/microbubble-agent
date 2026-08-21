@@ -301,6 +301,8 @@ export interface StreamingMessage {
   thinking: string | null
   rich_blocks: Record<string, unknown>[]
   tool_trace: Record<string, unknown>[]
+  /** Phase 3-C1: 流式 SSE citation event 累加 (含 Phase 3-B0 frozen refs 兼容) */
+  citations: StreamCitationEntry[]
   started_at: string
   finished_at: string | null
   /** Phase 3-A 服务端同步后填 */

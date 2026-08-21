@@ -11,11 +11,13 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useChatStore } from '../stores/chat'
 import { Loading, EmptyState, ErrorState, MarkdownViewer, Button } from '../components/ui'
+import { CitationList } from '../components/chat'
 import {
   formatMessageTime,
   roleIcon,
   roleLabel,
-  shouldRenderAsMarkdown
+  shouldRenderAsMarkdown,
+  type StreamCitationEntry
 } from '@shared/chat-types'
 
 const store = useChatStore()
@@ -27,6 +29,16 @@ let copyToastTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasMessages = computed(() => store.visibleMessages.length > 0)
 const hasStreaming = computed(() => store.isStreaming && !!store.streamingMessage)
+
+/**
+ * 派生: 从 message.message_metadata (含 citations) 取出 StreamCitationEntry[].
+ * Phase 3-C1: 后端 ChatMessageOut 没有顶层 citations, 持久化在 message_metadata 里.
+ */
+function extractMessageCitations(msg: { message_metadata?: Record<string, unknown> }): StreamCitationEntry[] {
+  const md = msg.message_metadata
+  if (!md || !Array.isArray(md.citations)) return []
+  return md.citations as StreamCitationEntry[]
+}
 
 async function onSend(): Promise<void> {
   const text = inputDraft.value.trim()
@@ -189,6 +201,10 @@ watch(
                   />
                   <pre v-else class="chat-message__text">{{ msg.content }}</pre>
                 </div>
+                <CitationList
+                  v-if="msg.role === 'assistant'"
+                  :citations="extractMessageCitations(msg)"
+                />
                 <div v-if="msg.attached_knowledge_ids && msg.attached_knowledge_ids.length > 0" class="chat-message__attachments">
                   <span class="muted">📎 引用 {{ msg.attached_knowledge_ids.length }} 条知识</span>
                 </div>
@@ -228,6 +244,12 @@ watch(
                 <div v-else class="chat-message__cursor-line">
                   <span class="chat-cursor">▍</span>
                 </div>
+
+                <!-- Phase 3-C1: 流中 citation 累加, 实时呈现 -->
+                <CitationList
+                  v-if="store.streamingMessage.citations && store.streamingMessage.citations.length > 0"
+                  :citations="store.streamingMessage.citations"
+                />
 
                 <div class="chat-message__streaming-footer">
                   <span class="muted">

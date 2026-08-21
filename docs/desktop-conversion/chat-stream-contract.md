@@ -406,6 +406,123 @@ renderer: handleStreamError 清 streamingMessage + 写 lastError='ABORTED'
 
 ---
 
+## 12. Desktop Citation Rendering Lifecycle (Phase 3-C1)
+
+> Phase 3-C1 在协议层 frozen 的基础上 (Phase 3-B0 `citation` event schema),
+> 落地 **Desktop 客户端的 citation 渲染**. **不接 RAG / Retriever / 后端调用**。
+> 仅消费流式 SSE `citation` event, 渲染到 ChatView.
+
+### 12.1 数据流 (Phase 3-C1)
+
+```
+[Backend (Phase 3+ RAG 启用时)]
+  │  data: {"type":"citation", "citation": {knowledgeId, title, snippet, score, url, source}}
+  ↓
+[Main: chat-stream.service.runStream]
+  │ 解析 SSE frame → pushChunk(ctx, StreamEvent)
+  ↓
+[Preload: chunkListeners fanout]
+  ↓
+[Renderer store: handleStreamChunk(ctx, event)]
+  ├─ streamStaleCheck(ctx) (Phase 3-A 沿用)
+  ├─ case 'citation' | 'refs':
+  │    appendCitations(streamingMessage.citations, event.citation)
+  │    (dedup by knowledgeId)
+  └─ content 累加照旧 (Phase 3-A)
+↓
+[StreamingMessage.citations (Render 触发)]
+  ↓
+[ChatView template]
+  ├─ MarkdownViewer (Phase 2-Impl-2B 安全)
+  └─ <CitationList :citations="streamingMessage.citations" />
+        └─ for each: <CitationCard :citation="c" />
+                      ├─ title (Vue text escape)
+                      ├─ snippet (Vue text escape, 3-line clamp)
+                      ├─ source label
+                      └─ score % (optional)
+↓
+[handleStreamEnd]
+  └─ ChatMessageOut.message_metadata.citations 持久化
+        (历史消息 listMessages 加载时无 citations, UI 不渲染)
+```
+
+### 12.2 组件结构 (Phase 3-C1 新增)
+
+```
+desktop/src/renderer/src/components/chat/
+├── CitationCard.vue   # 单条引用展示 + click jump
+├── CitationList.vue    # 容器: `📚 引用 N 条` + 列表
+└── index.ts             # barrel
+```
+
+### 12.3 渲染规则
+
+| 场景 | 渲染 |
+|------|------|
+| 流中 assistant 内容 > 0 | MarkdownViewer + (有 citation 时) CitationList |
+| 流中 assistant 无内容 | cursor + (有 citation 时) CitationList |
+| 完成 assistant (无 citation) | 仅 MarkdownViewer (UI 不变, Phase 3-C1 与原状兼容) |
+| 完成 assistant (有 citation) | MarkdownViewer + CitationList (从 metadata 提取) |
+| 用户消息 / 系统消息 / 工具消息 | 不渲染 citation |
+
+**关键不变量**: 普通聊天无 citation 时, ChatView DOM 与 Phase 3-A 完全一致 (v-if 短路, 0 节点)。
+
+### 12.4 安全
+
+- ❌ **0 v-html** (title / snippet 全 Vue text 插值, 自动 escape)
+- ❌ URL 仅允许 `http(s)://` / `mailto:` / 相对路径 (Phase 2-Impl-2B MarkdownViewer 已 freeze);
+  citation.url 后端可信度假设: Phase 3+ RAG 服务端需验证
+- ✅ 点击 → `window.open(url, '_blank', 'noopener,noreferrer')` → main `setWindowOpenHandler` → `shell.openExternal`
+- ✅ 不暴露 ipcRenderer / channel 给 renderer
+
+### 12.5 Source Jump
+
+| 字段 | 行为 (Phase 3-C1) |
+|------|---------------------|
+| `citation.url` 存在 | window.open → shell.openExternal |
+| `citation.knowledgeId` 存在 (无 url) | console.info 占位 (Phase 4+ 接 knowledge 路由) |
+| 都无 | 卡片 disabled (无 click) |
+
+**Phase 3-C1 不实现 knowledge 路由跳转** (留 Phase 4+ 接入知识库 DeserializedReferenceRelation)。
+**Phase 3-C1 也不实现真实 RAG** (后端必须先扩展 stream event 后才能 emit citation; Phase 3+ 待 RAG 服务接入)。
+
+### 12.6 类型契约增量
+
+```ts
+// shared/chat-types.ts
+interface StreamingMessage {
+  // ... Phase 3-A fields
+  citations: StreamCitationEntry[]   // 🆕 Phase 3-C1 必填
+}
+
+// ChatMessageOut: 不修改, citations 走 message_metadata.citations (后端 ChatMessageOut schema 不含顶层 citations,
+// 临时透传 metadata; Phase 3+ backend 升级为在 schema 添加独立字段, 持久化层补 listMessages 反序列化)
+```
+
+### 12.7 调试 / Mock
+
+Phase 3-C1 不引 mock SSE server (Phase 4+ 可选)。手工触发方法:
+
+```ts
+// renderer dev console, after main window open:
+// 1. 打开 ChatView 触发 main fetch (默认 'default' session 需先 login)
+// 2. Phase 3-C1 验证步骤:
+//    - 编译后手动在 store 注入 citation 事件 (developer-only path):
+//      store.handleStreamChunk(streamCtx, { type: 'citation', citation: { knowledgeId: 12, title: '测试', snippet: '...', score: 0.85 } })
+//    - 检查 UI 显示 CitationCard
+// Phase 4+ 引 vitest unit tests 覆盖 CitationCard / CitationList 渲染
+```
+
+### 12.8 非范围 (Phase 3-C1 明确排除)
+
+- ❌ RAG / Retriever / 后端 embedding 调用
+- ❌ 知识库详情跳转 (`router.push(/knowledge/detail?id=...)` 留 Phase 4+)
+- ❌ Citation 排序 / 评分 / highlight
+- ❌ 单元测试 (Phase 4+ 加 vitest + Phase 3+ 后端真接)
+- ❌ 后端 `client_msg_id` 协议层启用 (Phase 3+ backend chat.py ChatRequest 升级)
+
+---
+
 ## Status (2026-08-21 Phase 3-B0 frozen)
 
 - ✅ 17 type streamEvent schema 冻结

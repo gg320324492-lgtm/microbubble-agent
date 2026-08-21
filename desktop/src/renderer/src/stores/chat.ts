@@ -20,7 +20,8 @@ import type {
   ChatMessageRole,
   StreamingMessage,
   StreamEvent,
-  StreamContext
+  StreamContext,
+  StreamCitationEntry
 } from '@shared/chat-types'
 import { generateClientMsgId } from '@shared/chat-types'
 import type { ApiError } from '@shared/preload-api'
@@ -159,6 +160,8 @@ export const useChatStore = defineStore('chat', () => {
       thinking: null,
       rich_blocks: [],
       tool_trace: [],
+      /** Phase 3-C1: citation 累加数组 */
+      citations: [],
       started_at: new Date().toISOString(),
       finished_at: null,
       persisted_message_id: null,
@@ -265,13 +268,21 @@ export const useChatStore = defineStore('chat', () => {
       case 'synthesis_start':
       case 'critique':
       case 'retry':
-      case 'refs':
       case 'suggestions':
       case 'brief':
       case 'detail':
       case 'tool_compressed':
+        // Phase 3+ 接 agent tool / rich_block / intent 等. Phase 3-C1 只接 citation.
         if (event.type === 'rich_block' && event.block) {
           streamingMessage.value.rich_blocks.push(event.block as Record<string, unknown>)
+        }
+        break
+      case 'citation':
+      case 'refs':
+        // Phase 3-C1: RAG 引用. 单条或数组皆累加, 渲染时去重 + 按 knowledgeId 排序.
+        appendCitations(streamingMessage.value.citations, event.citation)
+        if (event.refs) {
+          appendCitations(streamingMessage.value.citations, event.refs)
         }
         break
       case 'done':
@@ -303,7 +314,10 @@ export const useChatStore = defineStore('chat', () => {
         finished_at: finishedAt,
         thinking: streamingMessage.value.thinking,
         client_msg_id: streamingMessage.value.client_msg_id,
-        optimistic: false
+        optimistic: false,
+        // Phase 3-C1: 持久化 citations (后端 ChatMessageOut schema 不含 citations,
+        // 通过 message_metadata 透传, 后续 listMessages 加载时反序列化)
+        citations: streamingMessage.value.citations
       },
       is_partial: false,
       is_deleted: false,
@@ -353,6 +367,30 @@ export const useChatStore = defineStore('chat', () => {
       return true
     }
     return false
+  }
+
+  /**
+   * 内部: 把 stream event.citation 累加到 streamingMessage.citations.
+   * - 接受 StreamCitationEntry | StreamCitationEntry[] | undefined
+   * - 已存在 knowledgeId 的 entry 跳过 (Phase 3-C1 dedup)
+   * - 引诱知识库 source 字段标准化
+   *
+   * Phase 3-C1: 仅做 dedup, 不做排序; Phase 4+ 可按 score 排序或重排.
+   */
+  function appendCitations(
+    target: StreamCitationEntry[],
+    incoming: StreamCitationEntry | StreamCitationEntry[] | undefined
+  ): void {
+    if (!incoming) return
+    const list = Array.isArray(incoming) ? incoming : [incoming]
+    if (list.length === 0) return
+    const existingIds = new Set(target.map((c) => c.knowledgeId))
+    for (const c of list) {
+      if (!c || typeof c.knowledgeId !== 'number') continue
+      if (existingIds.has(c.knowledgeId)) continue
+      target.push(c)
+      existingIds.add(c.knowledgeId)
+    }
   }
 
   /**
