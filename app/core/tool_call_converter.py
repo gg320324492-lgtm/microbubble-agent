@@ -273,7 +273,17 @@ def openai_response_to_anthropic_message(
     # mimo OpenAI 协议把思考过程放 reasoning_content 而非 content, 之前 wrapper 只查 content
     # 导致 thinking-only 响应 (mimo 思考多 content 少) → 12 caller 都拿不到 text → fallback 失效
     # 修法: 加 thinking block (Anthropic SDK 标准), caller 走 extract_text_from_response 可识别
-    reasoning_content = raw_msg.get("reasoning_content") if isinstance(raw_msg, dict) else getattr(raw_msg, "reasoning_content", "") or ""
+    #
+    # 2026-08-21 #Step14: 兼容 Ollama OpenAI 兼容协议返回的 `reasoning` 字段
+    # (qwen3.5 系列 thinking mode 把答案用 reasoning 字段, 原 content 留空)
+    # 兼容多源: reasoning_content (mimo) / reasoning (ollama qwen3.5)
+    reasoning_content = (
+        raw_msg.get("reasoning_content") if isinstance(raw_msg, dict)
+        else getattr(raw_msg, "reasoning_content", "")
+    ) or (
+        raw_msg.get("reasoning") if isinstance(raw_msg, dict)
+        else getattr(raw_msg, "reasoning", "")
+    ) or ""
     if reasoning_content:
         content_blocks.append({
             "type": "thinking",
