@@ -17,7 +17,8 @@ import {
   ToolCallCard,
   ToolResultCard,
   RichBlockRenderer,
-  TraceTimeline
+  TraceTimeline,
+  AgentStatusBadge
 } from '../components/chat'
 import { buildTrace, buildTraceFromMessage } from '../utils/chat-trace'
 import {
@@ -249,6 +250,7 @@ watch(
               <div class="chat-message__body">
                 <div class="chat-message__head">
                   <span class="chat-message__role">{{ roleLabel(msg.role) }}</span>
+                  <AgentStatusBadge v-if="msg.role === 'assistant'" :hint="store.agentStateHint" />
                   <span class="chat-message__time">{{ formatMessageTime(msg.created_at) }}</span>
                 </div>
                 <div class="chat-message__content">
@@ -311,6 +313,7 @@ watch(
               <div class="chat-message__body">
                 <div class="chat-message__head">
                   <span class="chat-message__role">小气</span>
+                  <AgentStatusBadge :hint="store.agentStateHint" />
                   <span class="chat-message__time">流式中...</span>
                   <span class="chat-message__pulse">●●●</span>
                 </div>

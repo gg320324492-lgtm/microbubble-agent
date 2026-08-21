@@ -28,6 +28,7 @@ import type { KnowledgeResponse } from '@shared/knowledge-types'
 import { generateClientMsgId } from '@shared/chat-types'
 import { knowledgeService } from '../services/knowledge.service'
 import { dedupCitations } from '../utils/citation'
+import { deriveAgentStateHint, type AgentStateHint } from '../utils/agent-state'
 import type { ApiError } from '@shared/preload-api'
 
 // 增量 ID 用于 UI (Phase 3-A 仍存在; 客户端消息通过 client_msg_id 标识)
@@ -77,6 +78,20 @@ export const useChatStore = defineStore('chat', () => {
   // ============ 派生 ============
   const visibleMessages = computed<ChatMessageOut[]>(() =>
     messages.value.filter((m) => !m.is_deleted)
+  )
+
+  /**
+   * Phase 5-C: Agent State Model.
+   * 纯响应式 derive: 任何 streamingMessage / isStreaming / lastError 变化触发重算.
+   * session 隔离: 是 Pinia module-level singleton; streamingMessage 切换 session 时
+   *   由 selectSession 同步清 (Phase 4-C), 因此 deriveAgentState 也自动随 session 切换.
+   */
+  const agentStateHint = computed<AgentStateHint>(() =>
+    deriveAgentStateHint({
+      streamingMessage: streamingMessage.value,
+      isStreaming: isStreaming.value,
+      lastError: lastError.value
+    })
   )
 
   // ============ Actions: Session ============
@@ -596,6 +611,7 @@ export const useChatStore = defineStore('chat', () => {
     cachedHints,
     // derived
     visibleMessages,
+    agentStateHint,
     // actions
     loadSessions,
     selectSession,
