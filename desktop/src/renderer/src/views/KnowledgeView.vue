@@ -24,7 +24,8 @@ import {
   Card,
   Loading,
   EmptyState,
-  ErrorState
+  ErrorState,
+  Pagination
 } from '../components/ui'
 import { statusLabel, statusVariant, formatDateTime } from '@shared/knowledge-types'
 import type { KnowledgeListItem } from '@shared/knowledge-types'
@@ -53,6 +54,10 @@ async function onCardClick(item: KnowledgeListItem): Promise<void> {
   if (ok) {
     await router.push({ name: 'knowledge-detail', query: { id: item.id } })
   }
+}
+
+function onPageChange(p: number): void {
+  void store.goToPage(p)
 }
 
 const statusClassMap: Record<'ok' | 'warn' | 'error' | 'mute', string> = {
@@ -187,6 +192,14 @@ onMounted(() => {
             </Card>
           </li>
         </ul>
+
+        <!-- 分页器 (Phase 2-Impl-2B) -->
+        <Pagination
+          v-if="store.items.length > 0 && store.pageInfo.totalPages > 1"
+          :info="store.pageInfo"
+          :loading="store.loading"
+          @page-change="onPageChange"
+        />
       </div>
     </section>
   </div>
