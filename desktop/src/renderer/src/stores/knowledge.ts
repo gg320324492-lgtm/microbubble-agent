@@ -1,14 +1,13 @@
 // Knowledge Pinia store —— 分类 + 文档列表 (分页) + 当前详情 + 搜索 query。
 //
 // 拉数据全部走 IPC 委托 main api.service。renderer 不持久化任何数据。
+//
+// Phase 4-A: store 不再直接调 api/knowledge, 走 knowledgeService (业务层).
+// 架构: View -> Store -> Service -> API (IPC) -> main api.service -> FastAPI.
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import {
-  getCategories,
-  listKnowledge,
-  getKnowledge
-} from '../api/knowledge'
+import { knowledgeService } from '../services/knowledge.service'
 import {
   derivePageInfo,
   type DynamicCategory,
@@ -51,7 +50,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
 
   // ============ Actions ============
   async function loadCategories(): Promise<boolean> {
-    const r = await getCategories()
+    const r = await knowledgeService.getCategories()
     if (r.ok) {
       categories.value = r.data
       return true
@@ -63,7 +62,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   async function loadList(): Promise<boolean> {
     loading.value = true
     try {
-      const r = await listKnowledge({
+      const r = await knowledgeService.listKnowledge({
         category: selectedCategory.value === 'all' ? null : selectedCategory.value,
         keyword: keyword.value,
         page: page.value,
@@ -103,7 +102,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   async function loadDetail(id: number): Promise<boolean> {
     detailLoading.value = true
     try {
-      const r = await getKnowledge(id)
+      const r = await knowledgeService.getKnowledge(id)
       if (r.ok) {
         currentDetail.value = r.data
         return true
