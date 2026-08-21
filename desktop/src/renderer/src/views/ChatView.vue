@@ -18,7 +18,8 @@ import {
   ToolResultCard,
   RichBlockRenderer,
   TraceTimeline,
-  AgentStatusBadge
+  AgentStatusBadge,
+  PlanTimeline
 } from '../components/chat'
 import { buildTrace, buildTraceFromMessage } from '../utils/chat-trace'
 import {
@@ -62,6 +63,9 @@ let copyToastTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasMessages = computed(() => store.visibleMessages.length > 0)
 const hasStreaming = computed(() => store.isStreaming && !!store.streamingMessage)
+
+/** Phase 5-D: 流中 plan_steps 实时呈现 (chat store 派生). */
+const planSteps = computed(() => store.streamingMessage?.plan_steps ?? [])
 
 /**
  * Phase 3-D: Chat → Knowledge 路由.
@@ -360,6 +364,12 @@ watch(
                   v-for="(b, i) in store.streamingMessage.rich_blocks"
                   :key="`srb-${i}`"
                   :block="b"
+                />
+
+                <!-- Phase 5-D: 流中 plan_steps 实时呈现 -->
+                <PlanTimeline
+                  v-if="planSteps && planSteps.length > 0"
+                  :steps="planSteps"
                 />
 
                 <!-- Phase 5-B: 流中 trace 实时展开 (活跃流时默认 expanded) -->
