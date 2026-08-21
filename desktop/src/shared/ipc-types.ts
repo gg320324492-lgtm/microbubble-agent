@@ -1,9 +1,14 @@
-// IPC channel 名集中管理 + ping/pong 类型契约（preload / main / renderer 共享）。
-// 仅跨进程的安全可序列化数据形状，不定义跨进程 API surface（见 preload-api.ts）。
+// IPC channel 名集中管理（preload / main 共享）。
+// 任何 channel 新增 / 重命名必须仅改本文件。
 
 export const IPC_CHANNELS = {
-  PING: 'app:ping'
+  // Phase 0
+  PING: 'app:ping',
+  // Phase 1: auth
+  AUTH_LOGIN: 'app:auth:login',
+  AUTH_LOGOUT: 'app:auth:logout',
+  AUTH_RESTORE: 'app:auth:restore',
+  AUTH_GET_BACKEND_URL: 'app:auth:getBackendUrl'
 } as const
 
-// IPC_CHANNELS 值的字面量类型
 export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
