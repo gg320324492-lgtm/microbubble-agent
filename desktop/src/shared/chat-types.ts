@@ -108,16 +108,52 @@ export interface ChatResponse {
   critique: Record<string, unknown> | null
 }
 
-// ============ Stream Event Types (Phase 2-Impl-3B) ============
+// ============ Stream Event Types (Phase 2-Impl-3B, Phase 3-B0 frozen) ============
 
+/**
+ * 后端 StreamEvent type 全集 (Pydantic Literal 镜像, Phase 3-B0 frozen).
+ *
+ * Phase 3-B0 协议冻结:
+ *   - 8 核心 type (Phase 3-A 显示接入): text_delta / thinking / tool_use /
+ *     tool_result / citation / rich_block / done / error
+ *   - 9 拓展 type (Phase 2 兼容 + Phase 3+ 接入): brief / detail /
+ *     intent_detected / plan_step / tool_compressed / synthesis_start /
+ *     critique / retry / message_persisted / sync_required / refs /
+ *     suggestions
+ *
+ * Phase 3+ (RAG/Citation 接入) 必接:
+ *   - 'citation': RAG 引用的结构化字段
+ *   - 'tool_use' / 'tool_result': 工具调用场景 (Phase 3-B0+ 渲染)
+ *
+ * 任何新增 event type 必须: ① 后端 StreamEvent Literal 加同名字段
+ *   ② shared/chat-types.ts StreamEventType 同步
+ *   ③ 本类型扩展 interface 加对应字段
+ *   ④ chat-stream-contract.md §3 同步表格
+ */
 export type StreamEventType =
-  | 'text_delta' | 'tool_use' | 'tool_result' | 'rich_block'
-  | 'thinking' | 'brief' | 'detail' | 'error' | 'done'
-  | 'intent_detected' | 'plan_step' | 'tool_compressed'
-  | 'synthesis_start' | 'critique' | 'retry'
-  | 'message_persisted' | 'sync_required'
-  | 'refs' | 'suggestions'
-  | string
+  // === 8 核心 ===
+  | 'text_delta'
+  | 'thinking'
+  | 'tool_use'
+  | 'tool_result'
+  | 'citation'
+  | 'rich_block'
+  | 'done'
+  | 'error'
+  // === 9 拓展 (后端已实现 / Phase 3+ 渐进接入) ===
+  | 'brief'               // DEPRECATED - v1 客户端兼容 (Phase 1 简答)
+  | 'detail'              // DEPRECATED - v1 客户端兼容
+  | 'intent_detected'     // 意图分类 (方案 C)
+  | 'plan_step'           // 工具规划单步
+  | 'tool_compressed'     // Haiku 压缩工具结果
+  | 'synthesis_start'     // 综合阶段开始
+  | 'critique'            // 自评结果
+  | 'retry'               // critique 低分触发重试
+  | 'message_persisted'   // #043 持久化成功
+  | 'sync_required'       // #043 中断提示前端重新拉历史
+  | 'refs'                // #CHAT-P0-A 知识引用 (后端旧名, Phase 3+ 兼容)
+  | 'suggestions'         // #CHAT-P0-A 追问 chips
+  | string  // 兜底 (新 event type 出现时不会被 TS 编译拦截)
 
 export interface StreamRichBlock {
   type: string
@@ -126,19 +162,50 @@ export interface StreamRichBlock {
   [k: string]: unknown
 }
 
+/**
+ * Citation 留口 (Phase 3+ 接 RAG).
+ *
+ * 后端 StreamEvent.citation 是 list[dict] (每个引用一条); 当前 Phase 3-A 不接,
+ * Phase 3-B0 冻结 schema 准备 Phase 3+ 接入.
+ */
+export interface StreamCitationEntry {
+  knowledgeId: number
+  title: string
+  snippet?: string
+  url?: string
+  score?: number                         // 0..1
+  source?: 'kb' | 'memory' | 'auto_research' | string
+  [k: string]: unknown                   // 后续 RAG 字段扩展
+}
+
 export interface StreamEvent {
   type: StreamEventType
+
+  // text_delta / brief / detail
   delta?: string
+
+  // === tool ===
   tool_name?: string
   tool_input?: Record<string, unknown>
   tool_use_id?: string
   tool_output?: Record<string, unknown>
   tool_duration_ms?: number
   tool_error?: string
+
+  // === citation (Phase 3+ 接入 RAG) ===
+  citation?: StreamCitationEntry | StreamCitationEntry[]
+
+  // === rich_block ===
   block?: StreamRichBlock
+
+  // thinking / plan_step
   label?: string
+
+  // error
   code?: string
   message?: string
+
+  // done
   usage?: {
     input_tokens?: number
     output_tokens?: number
@@ -147,11 +214,21 @@ export interface StreamEvent {
   }
   duration_ms?: number
   session_id?: string
+
+  // #043 message_persisted
   message_id?: number
   role?: string
   client_msg_id?: string
   is_partial?: boolean
+
+  // #043 sync_required
   reason?: 'aborted' | 'error' | string
+
+  // #CHAT-P0-A refs (deprecated alias, Phase 3+ 用 citation)
+  refs?: StreamCitationEntry[]
+
+  // suggestions 追问 chips (Phase 3+ 启用)
+  suggestions?: unknown[]
 }
 
 export interface ChatStreamRequest {
