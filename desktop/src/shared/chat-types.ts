@@ -1,11 +1,10 @@
-// Chat 模块共享类型契约（Phase 2-Impl-3B 接 SSE streaming）。
+// Chat 模块共享类型契约（Phase 3-A: Reliability & UX Hardening）。
 // 任何后端字段改动必须先改 docs/desktop-conversion/chat-stream-contract.md 再改本文件。
 
 // ============ 枚举与角色 ============
 
 /**
  * 消息角色。后端约定 + 兼容兜底。
- * user / assistant 必支持; system / tool Phase 3+ 启用 (工具调用 / RAG)。
  */
 export type ChatMessageRole = 'user' | 'assistant' | 'system' | 'tool' | string
 
@@ -111,10 +110,6 @@ export interface ChatResponse {
 
 // ============ Stream Event Types (Phase 2-Impl-3B) ============
 
-/**
- * 后端 17 种 StreamEvent type 全集 (Pydantic Literal 镜像)。
- * 任何新 type 上线时同步扩展。
- */
 export type StreamEventType =
   | 'text_delta' | 'tool_use' | 'tool_result' | 'rich_block'
   | 'thinking' | 'brief' | 'detail' | 'error' | 'done'
@@ -122,12 +117,8 @@ export type StreamEventType =
   | 'synthesis_start' | 'critique' | 'retry'
   | 'message_persisted' | 'sync_required'
   | 'refs' | 'suggestions'
-  | string  // 兜底
+  | string
 
-/**
- * RichBlock 简化形状 (实际后端用 RichBlock pydantic model)。
- * Phase 2 不渲染, Phase 3 接。
- */
 export interface StreamRichBlock {
   type: string
   data?: unknown
@@ -135,36 +126,19 @@ export interface StreamRichBlock {
   [k: string]: unknown
 }
 
-/**
- * 后端 StreamEvent 形状 (Pydantic model_dump_json 反序列化的镜像)。
- */
 export interface StreamEvent {
   type: StreamEventType
-
-  // text_delta / brief / detail
   delta?: string
-
-  // tool_use
   tool_name?: string
   tool_input?: Record<string, unknown>
   tool_use_id?: string
-
-  // tool_result
   tool_output?: Record<string, unknown>
   tool_duration_ms?: number
   tool_error?: string
-
-  // rich_block
   block?: StreamRichBlock
-
-  // thinking / plan_step
   label?: string
-
-  // error
   code?: string
   message?: string
-
-  // done
   usage?: {
     input_tokens?: number
     output_tokens?: number
@@ -173,20 +147,13 @@ export interface StreamEvent {
   }
   duration_ms?: number
   session_id?: string
-
-  // #043 message_persisted
   message_id?: number
   role?: string
   client_msg_id?: string
   is_partial?: boolean
-
-  // #043 sync_required
   reason?: 'aborted' | 'error' | string
 }
 
-/**
- * StreamingRequest —— 与 ChatRequest 同形 (Phase 2 简化, 仅 message + session_id)。
- */
 export interface ChatStreamRequest {
   message: string
   session_id: string
@@ -194,43 +161,75 @@ export interface ChatStreamRequest {
   thinking_mode?: 'fast' | 'balanced' | 'deep' | null
 }
 
-/**
- * Stream done payload (Phase 2 简化, 后端 done event 已携带 usage/duration_ms/session_id)。
- * 主进程仅作为结束信号 (ok=true)。
- */
 export interface StreamEndPayload {
   ok: true
 }
 
-/**
- * Stream error payload (Phase 2 统一规整)。
- */
 export interface StreamErrorPayload {
-  code: string                  // 业务 code (NETWORK_ERROR / STREAM_ERROR / ...)
+  code: string
   message: string
 }
 
-/**
- * 主进程 → renderer 推 chunk 时, 用 discriminated union。
- * Phase 2 简化: 直接发原始 StreamEvent payload; message_id / role (persisted) 字段也走这里。
- */
 export type ChunkPayload = StreamEvent
 
+// ============ Phase 3-A: Reliability & UX Hardening ============
+
 /**
- * Renderer 端维护 streamingMessage 形态 (in-memory, 不持久化)。
+ * Stream context —— IPC push 时携带, renderer 校验 session 匹配.
+ *
+ * 流式 chunk / end / error 总是带 StreamContext.
+ * renderer 端如果 currentSessionId !== ctx.sessionId → ignore (用户已切换会话).
  */
+export interface StreamContext {
+  streamId: string
+  sessionId: string
+}
+
+/**
+ * MessageIdentity —— 客户端 msg_id (UUID) + 服务端 msg_id 同步.
+ *
+ * 流程:
+ *   renderer 生成 clientMsgId (UUID v4) for optimistic msg
+ *   POST /chat/stream { message, session_id, client_msg_id (Phase 2-Impl-3A backend 已支持 #043 client_msg_id 幂等键, 但本 Phase 不传 - 留 Phase 3+ backend 升级时启用) }
+ *   backend message_persisted event: { message_id, client_msg_id }
+ *   renderer 替换 optimistic 的 clientMsgId 对应 msg 的 id 为服务端 message_id
+ *
+ * Phase 3-A: clientMsgId 用于内部追踪 + 重试去重。server message_id 同步
+ * 走 message_persisted event. (Phase 2-Impl-3A backend 支持 #043 client_msg_id 字段;
+ * Phase 3-A 不主动传 client_msg_id 给 backend, 仅作消息内部映射)
+ */
+export interface MessageIdentity {
+  clientMsgId: string                       // UUID v4
+  serverMessageId: number | null           // null 直到 message_persisted 事件到达
+}
+
+/**
+ * 流式 chunk IPC payload (Phase 3-A 重塑):
+ *   [StreamContext, StreamEvent]
+ *   renderer 按 context.sessionId 匹配才处理.
+ *
+ * Phase 2-Impl-3B 用 [streamId, event] —— Phase 3-A 升为 context + 携带 sessionId.
+ */
+export type StreamChunkIpcPayload = [StreamContext, StreamEvent]
+export type StreamEndIpcPayload = [StreamContext, StreamEndPayload]
+export type StreamErrorIpcPayload = [StreamContext, StreamErrorPayload]
+
+// ============ Renderer Streaming Message ============
+
 export interface StreamingMessage {
-  id: number                              // 临时 ID (Date.now())
+  id: number
   session_id: string
   role: ChatMessageRole
-  content: string                         // 累加中的 markdown 文本
-  thinking: string | null                 // 最新 thinking label
+  content: string
+  thinking: string | null
   rich_blocks: Record<string, unknown>[]
   tool_trace: Record<string, unknown>[]
-  started_at: string                      // ISO
+  started_at: string
   finished_at: string | null
-  /** Phase 3+ 持久化消息 ID (#043) */
+  /** Phase 3-A 服务端同步后填 */
   persisted_message_id: number | null
+  /** Phase 3-A 内部 clientMsgId, 用来在 messages array 中 find-and-replace 服务端 messageId */
+  client_msg_id: string
 }
 
 // ============ UI 派生 ============
@@ -262,9 +261,16 @@ export function roleIcon(role: ChatMessageRole): string {
   }
 }
 
-/**
- * 派生：assistant / system 消息用 MarkdownViewer 渲染; user / tool 纯文本。
- */
 export function shouldRenderAsMarkdown(role: ChatMessageRole): boolean {
   return role === 'assistant' || role === 'system'
+}
+
+/**
+ * 生成 clientMsgId (UUID v4-ish, 主进程兼容). Phase 3-A 不依赖外部 uuid 包.
+ */
+export function generateClientMsgId(): string {
+  // 18 char base36 随机 + epoch ms
+  const r = Math.random().toString(36).slice(2, 12)
+  const t = Date.now().toString(36)
+  return `cm_${t}_${r}`
 }
