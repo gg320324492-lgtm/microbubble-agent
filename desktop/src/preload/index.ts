@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-types'
-import type { DesktopApi, PingRequest, PongResponse } from '@shared/preload-api'
+import type {
+  DesktopApi,
+  PingRequest,
+  PongResponse,
+  DesktopAuthApi
+} from '@shared/preload-api'
+import type { LoginRequest } from '@shared/auth-types'
 
 /**
  * preload 是 Electron 唯一可在 sandbox 环境访问 ipcRenderer 的层。
@@ -13,9 +19,18 @@ import type { DesktopApi, PingRequest, PongResponse } from '@shared/preload-api'
  * 4. 不暴露 ipcRenderer 给 renderer 任何形式
  * 5. 不暴露 ipcRenderer.send —— 全部走 ipcRenderer.invoke（request/response）
  */
+
+const authApi: DesktopAuthApi = {
+  login: (payload: LoginRequest) => ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOGIN, payload),
+  logout: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOGOUT),
+  restore: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_RESTORE),
+  getBackendUrl: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_GET_BACKEND_URL)
+}
+
 const api: DesktopApi = {
   ping: (payload?: PingRequest): Promise<PongResponse> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PING, payload ?? {})
+    ipcRenderer.invoke(IPC_CHANNELS.PING, payload ?? {}),
+  auth: authApi
 }
 
 try {
