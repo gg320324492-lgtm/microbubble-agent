@@ -20,6 +20,19 @@ import {
   type StreamCitationEntry
 } from '@shared/chat-types'
 
+/**
+ * Phase 3-C2: 当 CitationCard 用户点 knowledgeId (无 url) 时回调.
+ * 当前阶段留口: console.info (Phase 4+ 接 router.push('/knowledge/detail?id=...'))
+ */
+function onCitationKnowledgeOpen(knowledgeId: number): void {
+  // eslint-disable-next-line no-console
+  console.info(
+    '[ChatView] citation knowledge-open requested. knowledgeId=',
+    knowledgeId,
+    '(router 接入 Phase 4+)'
+  )
+}
+
 const store = useChatStore()
 
 const inputDraft = ref('')
@@ -204,6 +217,7 @@ watch(
                 <CitationList
                   v-if="msg.role === 'assistant'"
                   :citations="extractMessageCitations(msg)"
+                  @knowledge-open="onCitationKnowledgeOpen"
                 />
                 <div v-if="msg.attached_knowledge_ids && msg.attached_knowledge_ids.length > 0" class="chat-message__attachments">
                   <span class="muted">📎 引用 {{ msg.attached_knowledge_ids.length }} 条知识</span>
@@ -249,6 +263,7 @@ watch(
                 <CitationList
                   v-if="store.streamingMessage.citations && store.streamingMessage.citations.length > 0"
                   :citations="store.streamingMessage.citations"
+                  @knowledge-open="onCitationKnowledgeOpen"
                 />
 
                 <div class="chat-message__streaming-footer">

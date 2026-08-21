@@ -523,6 +523,163 @@ Phase 3-C1 不引 mock SSE server (Phase 4+ 可选)。手工触发方法:
 
 ---
 
+## 13. Citation Interaction Lifecycle (Phase 3-C2)
+
+> Phase 3-C2 在 Phase 3-C1 (UI 渲染) 基础上,
+> 增强交互层: 排序 / score UI / knowledge 回调接口 / 单元测试。
+> **Phase 3-C2 仍不是 RAG** — 不接 Retriever / Knowledge API / 后端 embedding。
+
+### 13.1 渲染管线 (Phase 3-C2)
+
+```
+streamingMessage.citations
+       │
+       ↓  (SSE chunk arrived, store.appendCitations 累加)
+       │
+CitationList.vue onRender
+       │
+       ├─ sortCitations(citations)      ← utils/citation.ts
+       │   ├─ 有 score: desc (high→low)
+       │   ├─ 无 score: 保原序 (ES2019 stable sort)
+       │   └─ 不修改入参
+       │
+       ├─ dedupCitations(citations)     ← utils/citation.ts
+       │   └─ by knowledgeId, 首次保, 后续丢
+       │
+       ↓  sortedUnique: StreamCitationEntry[]
+       │
+v-for over CitationCard
+       │
+       ├─ toPercent(score): "N%" / null
+       │   - null → 卡片无 score pill (隐藏)
+       │   - <0 or >1 → null (校验)
+       │
+       ↓  卡片渲染
+       │
+click 行为 (Phase 3-C2)
+       │
+       ├─ kind === 'url'  → window.open(url, '_blank', 'noopener,noreferrer')
+       │                   → main setWindowOpenHandler → shell.openExternal
+       │
+       ├─ kind === 'kb'   → emit('knowledge-open', knowledgeId)
+       │                   → ChatView.onCitationKnowledgeOpen
+       │                   → Phase 3-C2: console.info 占位 (Phase 4+ router.push)
+       │
+       └─ kind === 'none' → 卡片 disabled, 无 click
+```
+
+### 13.2 模块结构 (Phase 3-C2 NEW)
+
+```
+desktop/src/renderer/src/
+├── utils/
+│   └── citation.ts              # 🆕 Phase 3-C2 纯函数 helpers
+│       ├─ sortCitations()
+│       ├─ dedupCitations()
+│       ├─ normalizeCitations() = sort + dedup
+│       ├─ toPercent() 0..1 -> "N%"
+│       └─ hasValidScore()
+│
+├── components/chat/
+│   ├── CitationCard.vue          # +emit('knowledge-open', knowledgeId)
+│   │                              # +toPercent(score) score pill UI
+│   │                              # +alpha 强调高分 (>=0.7 alpha=1.0)
+│   └── CitationList.vue          # +sortCitations(citations) computed
+│                                  # +emit('knowledge-open', id) 透传
+│
+tests/unit/
+└── citation.test.ts              # 🆕 vitest 单元测试 19 cases
+```
+
+### 13.3 排序规则 (Phase 3-C2)
+
+| 优先级 | 规则 |
+|--------|------|
+| P0 | 有 score 的 citation 排前, 按 score 降序 (1.0 → 0.0) |
+| P1 | 无 score 的 citation 保原顺序 (ES2019 stable sort) |
+| P2 | 同一 score 多个: 保原顺序 (stable) |
+| P3 | dedup 在 sort 前: dedup 与 sort 解耦, normalizeCitations = dedup + sort |
+
+**关键不变量**: sort + dedup 都不修改入参 (纯函数)。
+
+### 13.4 Score UI (Phase 3-C2)
+
+```
+[1]  微纳米气泡机理研究综述      [82%]   ← score pill
+     微纳米气泡是指直径小于 1 微米...
+     📁 知识库                                  ↗ 打开
+```
+
+- `toPercent(score)` → `"82%"` 或 `null`
+- 显示条件: `scorePercent` 非空 (即 score ∈ [0, 1] 有效区间)
+- 视觉强调: score ≥ 0.7 → opacity 1.0; 0.5-0.7 → opacity 0.85
+- Pill 颜色: 暖色 (琥珀黄 #fbbf24) — 与 "KB 卡片" 紫主色区分
+
+### 13.5 Knowledge 跳转接口 (Phase 3-C2 留口)
+
+```
+CitationCard.onClick()
+  ├─ if url → window.open
+  └─ if knowledgeId (no url)
+       └─ emit('knowledge-open', knowledgeId)
+              ↓
+CitationList.vue 透传
+       ↓
+ChatView.vue @knowledge-open="onCitationKnowledgeOpen"
+       ↓ (Phase 3-C2 实现)
+console.info('[ChatView] citation knowledge-open requested. knowledgeId=', N)
+       ↓ (Phase 4+ 接 router.push('/knowledge/detail?id=N'))
+```
+
+**Phase 3-C2 不实现**:
+- ❌ 真实路由跳转 (router.push 不存在 'knowledge-detail' 名称 + 详情组件在 Phase 4+)
+- ❌ Knowledge API 调用 (Phase 4+ 接 Knowledge Service)
+- ❌ Knowledge 模态打开 (Phase 4+)
+
+### 13.6 单元测试覆盖 (Phase 3-C2)
+
+`tests/unit/citation.test.ts` — vitest 19 cases / 5 describe 块:
+
+| 块 | 场景 |
+|----|------|
+| `toPercent` | 空值 / 边界 0..1 / 越界 |
+| `hasValidScore` | valid / invalid (missing / NaN / -0.1 / 1.1) |
+| `sortCitations` | 空 / 单条 / 多条降序 / 相同 score 保序 / 全无 score 保序 / 不修改入参 |
+| `dedupCitations` | 空 / 单条 / 重复 knowledgeId 第一次保留 / 非法 knowledgeId 跳过 / 不修改入参 |
+| `normalizeCitations` | dedup + sort 组合 + 边界 |
+
+测试工具: vitest 2.1.9 + node environment (无需 DOM)。
+脚本: `npm run test:unit`。
+
+### 13.7 已知偏差 (Phase 3-C2)
+
+| 项 | 当前 | 后续 |
+|----|------|------|
+| Score 来源 | Phase 3-C2 仅消费, 不计算 | Phase 3+ RAG 服务端产出 |
+| 单元测试范围 | 纯 helpers; 组件 (CitationCard.vue / CitationList.vue) 未测 | Phase 4+ 加 happy-dom + @vue/test-utils 测组件 |
+| Mock SSE citation | 当前无 mock, Phase 4+ 加 fixtures | Vitest mock → chunks → 触发渲染 |
+
+---
+
+## Status (2026-08-21 Phase 3-C2 frozen)
+
+- ✅ Citation 排序 (score desc stable) 落地
+- ✅ Score UI (toPercent pill + alpha 强调) 落地
+- ✅ Knowledge 跳转接口 (emit + console.info 占位) 落地
+- ✅ 单元测试 19 cases 全过
+- ✅ Doc §13 Citation Interaction Lifecycle 增补
+- ⏳ Phase 3+ RAG / Retriever / Knowledge API 接入
+- ⏳ Phase 4+ router 接入 + 组件测试 + 真实 RAG
+
+---
+
+📌 **维护规则 (Phase 3-C2 起)**:
+- 修改 `sortCitations` / `dedupCitations` 必须保持**纯函数** + **stable** + **不修改入参**
+- 增加 score 字段 (Phase 3+ RAG) → update `StreamCitationEntry` + `hasValidScore`
+- 任何新 event 字段接入 → 先 update §4 表 + 同步 utils 测试
+
+---
+
 ## Status (2026-08-21 Phase 3-B0 frozen)
 
 - ✅ 17 type streamEvent schema 冻结
