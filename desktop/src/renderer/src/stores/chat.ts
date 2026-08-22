@@ -42,6 +42,7 @@ import {
   mergeUserActions
 } from '../utils/agent-interaction'
 import type { ApiError } from '@shared/preload-api'
+import { useModelSelectorStore } from './model-selector'
 
 // 增量 ID 用于 UI (Phase 3-A 仍存在; 客户端消息通过 client_msg_id 标识)
 let lastTempId = 0
@@ -247,9 +248,14 @@ export const useChatStore = defineStore('chat', () => {
     lastSentClientMsgId.value = userClientMsgId
 
     try {
+      // Phase 6-B: read model selection (per-session override -> global selection).
+      // ConversationModelContext is non-secret; main process owns the apiKey.
+      const modelSelector = useModelSelectorStore()
+      const modelContext = modelSelector.resolveForSession(currentSessionId.value) ?? undefined
       const streamId = await window.api.chat.startStream({
         message: text,
-        session_id: currentSessionId.value
+        session_id: currentSessionId.value,
+        ...(modelContext ? { modelContext } : {})
       })
       activeStreamId.value = streamId
       activeStreamSessionId.value = currentSessionId.value

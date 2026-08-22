@@ -1,17 +1,25 @@
 <script setup lang="ts">
 /**
- * AgentStatusBadge (Phase 5-C: Agent State Model UI).
+ * AgentStatusBadge (Phase 5-C: Agent State Model UI; Phase 6-B: Active Model).
  *
  * 流中显示当前 Agent 状态 (thinking / tool_running / waiting_user / planning).
  * 普通消息 (idle / completed) 不显示.
  *
  * 严格 spec §5: 仅做状态指示, 不接 tool execution / Agent backend / RAG.
+ *
+ * Phase 6-B: 当传 currentModel 时, 显示当前活动模型 — 例: "🧠 Qwen-Max 思考中"
+ *            currentModel 来自 model-selector store, 非密 metadata.
  */
 import { computed } from 'vue'
 import type { AgentStateHint } from '../../utils/agent-state'
 
 interface Props {
   hint: AgentStateHint
+  /**
+   * Phase 6-B: optional current model display name (provider displayName + model).
+   * NEVER contains apiKey.
+   */
+  currentModel?: string | null
 }
 const props = defineProps<Props>()
 
@@ -31,12 +39,17 @@ const isAnimating = computed(() => {
   const s = props.hint.state
   return s === 'thinking' || s === 'tool_running' || s === 'planning'
 })
+
+const displayLabel = computed(() => {
+  if (!props.currentModel) return props.hint.label
+  return `${props.currentModel} · ${props.hint.label}`
+})
 </script>
 
 <template>
   <span v-if="visible" :class="['agent-status', `agent-status--${variant}`, { 'is-animating': isAnimating }]">
     <span class="agent-status__icon">{{ hint.icon }}</span>
-    <span class="agent-status__label">{{ hint.label }}</span>
+    <span class="agent-status__label">{{ displayLabel }}</span>
   </span>
 </template>
 
