@@ -28,7 +28,9 @@ export const IPC_CHANNELS = {
   MODEL_LIST_CONFIGS: 'model:list-configs',
   MODEL_SAVE_CONFIG: 'model:save-config',
   MODEL_DELETE_CONFIG: 'model:delete-config',
-  MODEL_TEST_PROVIDER: 'model:test-provider'
+  MODEL_TEST_PROVIDER: 'model:test-provider',
+  // Phase 6-C3: capability-driven task routing
+  MODEL_ROUTE_TASK: 'model:route-task'
 } as const
 
 export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]

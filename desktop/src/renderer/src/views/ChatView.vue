@@ -20,7 +20,9 @@ import {
   TraceTimeline,
   AgentStatusBadge,
   PlanTimeline,
-  AgentActionCard
+  AgentActionCard,
+  ModelSelector,
+  TaskSelector
 } from '../components/chat'
 import { buildTrace, buildTraceFromMessage } from '../utils/chat-trace'
 import {
@@ -196,7 +198,11 @@ watch(
           <span v-if="hasStreaming" class="chat-header__stream">· 流式中</span>
         </span>
       </div>
+      <div class="chat-header__center">
+        <TaskSelector />
+      </div>
       <div class="chat-header__right">
+        <ModelSelector />
         <span class="chat-header__hint">
           Phase 3-A · Reliability Hardened
         </span>

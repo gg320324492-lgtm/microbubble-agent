@@ -12,7 +12,8 @@ export const MODEL_IPC_CHANNELS = {
   MODEL_LIST_CONFIGS: 'model:list-configs',
   MODEL_SAVE_CONFIG: 'model:save-config',
   MODEL_DELETE_CONFIG: 'model:delete-config',
-  MODEL_TEST_PROVIDER: 'model:test-provider'
+  MODEL_TEST_PROVIDER: 'model:test-provider',
+  MODEL_ROUTE_TASK: 'model:route-task'
 } as const
 
 export type ModelIpcChannelName =
