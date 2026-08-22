@@ -9,12 +9,13 @@
 //   - resetToolRegistry()     -> clears ToolRegistry
 //   - getAdapterRegistry()    -> singleton AdapterRegistry (Phase 7-T5-B)
 //   - resetAdapterRegistry()  -> clears AdapterRegistry (Phase 7-T5-B)
-//   - initializeToolAdapters()-> reserved for Phase 7-T+ (no builtin adapters yet)
+//   - initializeScientificAdapters() -> registers Phase 7-T6 scientific adapters
 //   - bootToolLayer()         -> lifecycle entry point
 
 import { ToolRegistry } from './tool-registry'
 import { AdapterRegistry } from './adapter-registry'
 import { BUILTIN_TOOLS } from '@shared/tools/builtin-tools'
+import { SCIENTIFIC_ADAPTERS } from './adapters'
 
 let _registry: ToolRegistry | null = null
 let _adapterRegistry: AdapterRegistry | null = null
@@ -69,15 +70,20 @@ export function getAdapterRegistry(): AdapterRegistry {
 }
 
 /**
- * Phase 7-T5-B: register Phase 7-T+ tool adapters.
+ * Phase 7-T6: register all Phase 7-T6 scientific adapters.
  *
- * Phase 7-T5-B strict: NO builtin adapters yet. Phase 7-T+ adds the real
- * scientific adapters (kinetic-analysis, data-visualization, dataset-export).
- *
- * Currently a no-op; reserved for forward compatibility.
+ * Idempotent: if an adapter is already registered, the registration is
+ * skipped. Phase 7-T6 strict: NO existing function modifications;
+ * adapters are self-contained scientific functions (kinetic fitting,
+ * dataset statistics, figure metadata).
  */
-export function initializeToolAdapters(): void {
-  // Phase 7-T5-B: no-op. Phase 7-T+ populates with real adapters.
+export function initializeScientificAdapters(): void {
+  const registry = getAdapterRegistry()
+  for (const adapter of SCIENTIFIC_ADAPTERS) {
+    if (!registry.has(adapter.toolId)) {
+      registry.register(adapter)
+    }
+  }
 }
 
 /**
@@ -93,19 +99,19 @@ export function resetAdapterRegistry(): void {
 // ============ Lifecycle entry point ============
 
 /**
- * Phase 7-T1 / 7-T5-B: lifecycle entry point. Main process boot can call once.
+ * Phase 7-T1 / 7-T5-B / 7-T6: lifecycle entry point. Main process boot can call once.
  *
  * Sequence:
- *   1. getToolRegistry()        -> creates ToolRegistry singleton
- *   2. initializeBuiltinTools() -> registers Phase 7-T1 built-in tools
- *   3. getAdapterRegistry()     -> creates AdapterRegistry singleton
- *   4. initializeToolAdapters() -> no-op (Phase 7-T+)
+ *   1. getToolRegistry()                -> creates ToolRegistry singleton
+ *   2. initializeBuiltinTools()         -> registers Phase 7-T1 built-in tools
+ *   3. getAdapterRegistry()             -> creates AdapterRegistry singleton
+ *   4. initializeScientificAdapters()   -> registers Phase 7-T6 scientific adapters
  */
 export function bootToolLayer(): void {
   getToolRegistry()
   initializeBuiltinTools()
   getAdapterRegistry()
-  initializeToolAdapters()
+  initializeScientificAdapters()
 }
 
 export { ToolRegistry, AdapterRegistry }
