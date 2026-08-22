@@ -40,6 +40,12 @@ export interface ProviderRegistryMeta {
   capabilities: ModelProvider['capabilities']
   displayName: string
   defaultModel: string
+  /**
+   * Phase 6-C1: optional research capability profile.
+   * Backward-compatible additive field — providers without this field
+   * continue to work (resolver falls back to capabilities-only).
+   */
+  researchProfile?: import('@shared/model/research-capability').ModelResearchProfile
 }
 
 const REGISTRY = new Map<string, RegistryEntry>()
@@ -74,6 +80,8 @@ export function registerProvider(
   if (meta.type !== 'cloud' && meta.type !== 'local' && meta.type !== 'openai-compatible') {
     throw new Error(`ProviderRegistry.registerProvider: invalid type '${String(meta.type)}'.`)
   }
+  // Phase 6-C1: optional researchProfile is validated lazily
+  // (isValidModelResearchProfile is checked when the resolver reads it).
   REGISTRY.set(providerId, { factory, meta: { ...meta, providerId } })
 }
 

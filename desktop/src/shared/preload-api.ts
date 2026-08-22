@@ -185,6 +185,31 @@ export interface ModelKeyExistsResult {
  * Phase 6-A4: non-secret provider config (endpoint, defaultModel, displayName).
  * Renderer NEVER sees API keys via these channels.
  */
+/**
+ * Phase 6-C1: research capability tags attached to a model profile.
+ * Mirrors ModelResearchProfile in './model/research-capability'.
+ */
+export type ResearchCapability =
+  | 'chat'
+  | 'coding'
+  | 'math'
+  | 'matlab'
+  | 'python'
+  | 'cfd'
+  | 'literature'
+  | 'paper-writing'
+  | 'image-analysis'
+  | 'data-analysis'
+
+export interface ModelResearchProfile {
+  providerId: string
+  model: string
+  capabilities: ResearchCapability[]
+  maxContext?: number
+  strengths?: string[]
+  limitations?: string[]
+}
+
 export interface ModelProviderConfig {
   providerId: string
   type: 'cloud' | 'local' | 'openai-compatible'
@@ -193,6 +218,11 @@ export interface ModelProviderConfig {
   displayName: string
   capabilities: string[]
   updatedAt: number
+  /**
+   * Phase 6-C1: optional research capability profile.
+   * Renderer reads it for capability chips / task matching.
+   */
+  researchProfile?: ModelResearchProfile
 }
 
 export interface ModelListConfigsResult {

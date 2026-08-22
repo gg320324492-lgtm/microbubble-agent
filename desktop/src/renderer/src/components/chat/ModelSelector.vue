@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
- * ModelSelector.vue (Phase 6-B: Active Model Integration).
+ * ModelSelector.vue (Phase 6-B: Active Model Integration;
+ *                      Phase 6-C1: research capability chips).
  *
  * Chat-header widget for selecting the active model provider + model.
  * Reads from `useModelSelectorStore` (Phase 6-B); never holds apiKey.
@@ -9,12 +10,22 @@
  *   - NEVER display API key plaintext
  *   - NEVER store key in component state
  *   - All actions route through Pinia store (no direct IPC)
+ *
+ * Phase 6-C1 extension:
+ *   - Each provider row shows its ResearchCapability chips
+ *   - Selected row shows its capability badges in the trigger label
  */
 import { computed, onMounted } from 'vue'
+import { useModelSelectorStore } from '../../stores/model-selector'
 import {
-  useModelSelectorStore
-} from '../../stores/model-selector'
-import { capabilityLabel } from '@shared/model/conversation-model'
+  capabilityLabel,
+  type ModelCapability
+} from '@shared/model/conversation-model'
+import {
+  researchCapabilityLabel,
+  researchCapabilityGlyph,
+  type ResearchCapability
+} from '@shared/model/research-capability'
 
 const store = useModelSelectorStore()
 
@@ -25,6 +36,18 @@ const selectedLabel = computed(() => {
   return `${name} · ${store.selected.model}`
 })
 const capabilities = computed(() => store.capabilityList())
+const selectedResearchCaps = computed<ResearchCapability[]>(() => {
+  const cfg = store.available.find((p) => p.providerId === store.selectedId)
+  const rp = (cfg as unknown as { researchProfile?: { capabilities?: ResearchCapability[] } } | undefined)?.researchProfile
+  return rp?.capabilities ?? []
+})
+
+function researchCapsFor(providerId: string): ResearchCapability[] {
+  const cfg = store.available.find((p) => p.providerId === providerId) as unknown as
+    | { researchProfile?: { capabilities?: ResearchCapability[] } }
+    | undefined
+  return cfg?.researchProfile?.capabilities ?? []
+}
 
 onMounted(async () => {
   if (store.available.length === 0) {
@@ -69,6 +92,14 @@ function onClear(): void {
         <span :class="['model-selector__key', p.hasKey ? 'is-ok' : 'is-warn']">
           {{ p.hasKey ? '🔑' : '⚠ no key' }}
         </span>
+        <span
+          v-for="r in researchCapsFor(p.providerId)"
+          :key="`${p.providerId}-${r}`"
+          class="model-selector__chip is-research is-tiny"
+          :data-testid="`research-${p.providerId}-${r}`"
+        >
+          {{ researchCapabilityGlyph(r) }} {{ researchCapabilityLabel(r) }}
+        </span>
       </button>
       <button
         class="model-selector__clear"
@@ -78,10 +109,13 @@ function onClear(): void {
       >
         Use default (legacy)
       </button>
-      <div v-if="capabilities.length > 0" class="model-selector__caps">
+      <div v-if="capabilities.length > 0 || selectedResearchCaps.length > 0" class="model-selector__caps">
         <span class="model-selector__section-title">Capabilities</span>
         <span v-for="c in capabilities" :key="c" class="model-selector__chip">
-          {{ capabilityLabel(c) }}
+          {{ capabilityLabel(c as ModelCapability) }}
+        </span>
+        <span v-for="r in selectedResearchCaps" :key="r" class="model-selector__chip is-research">
+          {{ researchCapabilityGlyph(r) }} {{ researchCapabilityLabel(r) }}
         </span>
       </div>
     </div>
