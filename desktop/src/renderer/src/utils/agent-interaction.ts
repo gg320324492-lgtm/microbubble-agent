@@ -101,3 +101,14 @@ export function summarizeUserActions(items: ReadonlyArray<UserAction>): UserActi
   }
   return s
 }
+
+export type AgentActionHandler = (
+  action: UserAction
+) => void | Promise<void>
+
+export interface AgentActionHandlers {
+  retry: AgentActionHandler
+  cancel: AgentActionHandler
+  sync: AgentActionHandler
+  action: AgentActionHandler
+}
