@@ -6,6 +6,7 @@ import type {
   DesktopApiGatewayApi,
   DesktopSessionApi,
   DesktopChatStreamApi,
+  DesktopModelApi,
   PingRequest,
   PongResponse
 } from '@shared/preload-api'
@@ -105,13 +106,39 @@ const chatStreamApi: DesktopChatStreamApi = {
   onError: (cb) => subscribe(errorListeners, cb)
 }
 
+// ============ Phase 6-A2: Model SecretStore ============
+// Renderer ONLY sees provider ids + booleans. Raw API keys NEVER traverse this bridge.
+const modelApi: DesktopModelApi = {
+  listProviders: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODEL_LIST_PROVIDERS) as Promise<{
+      providerIds: string[]
+    }>,
+  saveKey: (providerId, apiKey) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.MODEL_SAVE_KEY,
+      providerId,
+      apiKey
+    ) as Promise<{ ok: true; exists: boolean }>,
+  deleteKey: (providerId) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.MODEL_DELETE_KEY,
+      providerId
+    ) as Promise<{ ok: true; exists: boolean }>,
+  keyExists: (providerId) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.MODEL_KEY_EXISTS,
+      providerId
+    ) as Promise<{ exists: boolean }>
+}
+
 const api: DesktopApi = {
   ping: (payload?: PingRequest): Promise<PongResponse> =>
     ipcRenderer.invoke(IPC_CHANNELS.PING, payload ?? {}),
   auth: authApi,
   api: apiGateway,
   session: sessionApi,
-  chat: chatStreamApi
+  chat: chatStreamApi,
+  model: modelApi
 }
 
 try {
