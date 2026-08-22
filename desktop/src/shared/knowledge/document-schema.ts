@@ -70,11 +70,15 @@ export interface DocumentChunk {
 /**
  * Phase 8-C0: points back to the exact retrieved unit so the research agent
  * can cite its sources. `confidence` is 0..1 (normalized retrieval score).
+ *
+ * Phase 8-C1 adds `page` (1-based, optional) so PDF-pipeline citations can
+ * point at the exact source page.
  */
 export interface CitationReference {
   documentId: string
   chunkId: string
   confidence: number
+  page?: number
 }
 
 // ============ Validators ============
@@ -129,6 +133,8 @@ export function isValidCitationReference(r: unknown): r is CitationReference {
   if (typeof r.documentId !== 'string' || r.documentId.length === 0) return false
   if (typeof r.chunkId !== 'string' || r.chunkId.length === 0) return false
   if (typeof r.confidence !== 'number' || !Number.isFinite(r.confidence) || r.confidence < 0 || r.confidence > 1) return false
+  if (r.page !== undefined
+      && (typeof r.page !== 'number' || !Number.isInteger(r.page) || r.page < 1)) return false
   assertNoSecret(r, 'CitationReference')
   return true
 }
