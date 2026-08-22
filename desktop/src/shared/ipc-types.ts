@@ -23,7 +23,12 @@ export const IPC_CHANNELS = {
   MODEL_LIST_PROVIDERS: 'model:list-providers',
   MODEL_SAVE_KEY: 'model:save-key',
   MODEL_DELETE_KEY: 'model:delete-key',
-  MODEL_KEY_EXISTS: 'model:key-exists'
+  MODEL_KEY_EXISTS: 'model:key-exists',
+  // Phase 6-A4: non-secret provider config + connectivity test
+  MODEL_LIST_CONFIGS: 'model:list-configs',
+  MODEL_SAVE_CONFIG: 'model:save-config',
+  MODEL_DELETE_CONFIG: 'model:delete-config',
+  MODEL_TEST_PROVIDER: 'model:test-provider'
 } as const
 
 export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]

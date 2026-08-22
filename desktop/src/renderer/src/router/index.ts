@@ -46,6 +46,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'main', title: 'AI 对话' }
   },
   {
+    path: '/settings/models',
+    name: 'settings-models',
+    component: () => import('../views/settings/ModelSettingsView.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '模型设置' }
+  },
+  {
     path: '/home',
     name: 'home',
     redirect: () => '/dashboard'

@@ -10,7 +10,8 @@ import {
   startChatStream,
   cancelChatStream
 } from './services/chat/chat-stream.service'
-import { registerModelIpcHandlers } from './services/model-provider/model-ipc'
+import { registerModelIpcHandlers, setProviderPingFn } from './services/model-provider/model-ipc'
+import { getProvider } from './services/model-provider/registry'
 
 /**
  * 主进程 IPC 注册入口。
@@ -83,5 +84,13 @@ export function registerIpcHandlers(): void {
 
   // ---------- Phase 6-A2: Model SecretStore IPC ----------
   // Returns ONLY provider ids / booleans — raw API keys NEVER leave main process.
+  // Phase 6-A4: also wires non-secret config + connectivity test.
+  setProviderPingFn(async (providerId, cfg) => {
+    // Phase 6-A4: ping uses a fake apiKey (test endpoint reachability, NOT key validity).
+    // Phase 6-A5 wiring will swap to SecretStore.get(providerId).
+    const provider = getProvider(providerId, cfg)
+    if (!provider) return { ok: false, error: `no factory registered for providerId '${providerId}' (Phase 6-A4)` }
+    return provider.ping(cfg)
+  })
   registerModelIpcHandlers()
 }
