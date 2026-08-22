@@ -119,7 +119,7 @@ export interface ToolResult {
 const FORBIDDEN = ['sk-', 'apiKey', 'cipher', 'Bearer ', 'token', 'authorization',
                    'providerId', 'modelId']
 
-function assertNoSecret(value: unknown, ctx: string): void {
+export function assertNoSecret(value: unknown, ctx: string): void {
   const dump = JSON.stringify(value)
   for (const bad of FORBIDDEN) {
     if (dump.includes(bad)) {
