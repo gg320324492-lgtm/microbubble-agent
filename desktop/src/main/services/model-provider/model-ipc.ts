@@ -19,6 +19,8 @@ import {
   hasConfig,
   type ProviderConfig
 } from './provider-config-store'
+import { routeResearchTask } from './capability-router'
+import type { ResearchTaskProfile } from '@shared/model/research-task'
 
 /**
  * Phase 6-A2: result types for IPC (renderer only sees these shapes).
@@ -68,6 +70,24 @@ export interface ModelTestProviderResult {
   ok: boolean
   latencyMs?: number
   error?: string
+}
+
+/**
+ * Phase 6-C3: result of a task routing decision.
+ *
+ * Renderer-visible (NO apiKey). When router picks nothing, decision=null
+ * and reason explains why (e.g. 'no candidate for task').
+ */
+export interface ModelRouteTaskResult {
+  decision: {
+    providerId: string
+    model: string
+    source: 'capability-match' | 'active-provider' | 'no-match'
+    reason: string
+    capabilities: import('@shared/model/research-capability').ResearchCapability[]
+  } | null
+  route: 'task-routed' | 'active-fallback' | 'no-route'
+  reason: string
 }
 
 /**
@@ -244,6 +264,30 @@ export function registerModelIpcHandlers(): void {
         throw new Error('ModelTestProvider: invalid providerId.')
       }
       return testProviderConnectivity(providerId, _pingFn)
+    }
+  )
+
+  // ============ Phase 6-C3: capability-driven task routing ============
+
+  ipcMain.handle(
+    IPC_CHANNELS.MODEL_ROUTE_TASK,
+    async (_event, profile: unknown): Promise<ModelRouteTaskResult> => {
+      const decision = routeResearchTask(profile as ResearchTaskProfile | null)
+      if (!decision) {
+        return { decision: null, route: 'no-route', reason: 'no provider + no active (Phase 6-C3)' }
+      }
+      const route = decision.source === 'capability-match' ? 'task-routed' : 'active-fallback'
+      return {
+        decision: {
+          providerId: decision.providerId,
+          model: decision.model,
+          source: decision.source,
+          reason: decision.reason,
+          capabilities: [...decision.profile.capabilities]
+        },
+        route,
+        reason: decision.reason
+      }
     }
   )
 }

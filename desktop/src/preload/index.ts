@@ -158,7 +158,23 @@ const modelApi: DesktopModelApi = {
     ipcRenderer.invoke(
       IPC_CHANNELS.MODEL_TEST_PROVIDER,
       providerId
-    ) as Promise<{ ok: boolean; latencyMs?: number; error?: string }>
+    ) as Promise<{ ok: boolean; latencyMs?: number; error?: string }>,
+  // ============ Phase 6-C3: capability-driven task routing ============
+  routeTask: (profile) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.MODEL_ROUTE_TASK,
+      profile
+    ) as Promise<{
+      decision: {
+        providerId: string
+        model: string
+        source: 'capability-match' | 'active-provider' | 'no-match'
+        reason: string
+        capabilities: Array<'chat' | 'coding' | 'math' | 'matlab' | 'python' | 'cfd' | 'literature' | 'paper-writing' | 'image-analysis' | 'data-analysis'>
+      } | null
+      route: 'task-routed' | 'active-fallback' | 'no-route'
+      reason: string
+    }>
 }
 
 const api: DesktopApi = {

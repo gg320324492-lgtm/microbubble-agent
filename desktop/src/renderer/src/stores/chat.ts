@@ -43,6 +43,7 @@ import {
 } from '../utils/agent-interaction'
 import type { ApiError } from '@shared/preload-api'
 import { useModelSelectorStore } from './model-selector'
+import { useTaskSelectorStore } from './task-selector'
 
 // 增量 ID 用于 UI (Phase 3-A 仍存在; 客户端消息通过 client_msg_id 标识)
 let lastTempId = 0
@@ -248,10 +249,23 @@ export const useChatStore = defineStore('chat', () => {
     lastSentClientMsgId.value = userClientMsgId
 
     try {
-      // Phase 6-B: read model selection (per-session override -> global selection).
-      // ConversationModelContext is non-secret; main process owns the apiKey.
+      // Phase 6-C3: task-aware model selection.
+      //   - auto mode: use the latest router decision (Phase 6-C2)
+      //   - manual mode: use Phase 6-B ModelSelector resolution
+      // Phase 6-C3 strict: never construct modelContext from any secret
+      // field — the only fields are providerId/model/displayName/capabilities.
+      const taskSelector = useTaskSelectorStore()
       const modelSelector = useModelSelectorStore()
-      const modelContext = modelSelector.resolveForSession(currentSessionId.value) ?? undefined
+      let modelContext = taskSelector.isAuto && taskSelector.lastDecision?.decision
+        ? {
+            providerId: taskSelector.lastDecision.decision.providerId,
+            model: taskSelector.lastDecision.decision.model
+          }
+        : modelSelector.resolveForSession(currentSessionId.value) ?? undefined
+      if (!modelContext && taskSelector.isAuto && taskSelector.lastDecision?.decision === null) {
+        // auto mode but no route -> still send the user's manual pick if any
+        modelContext = modelSelector.resolveForSession(currentSessionId.value) ?? undefined
+      }
       const streamId = await window.api.chat.startStream({
         message: text,
         session_id: currentSessionId.value,

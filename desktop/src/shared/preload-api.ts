@@ -251,6 +251,36 @@ export interface ModelTestProviderResult {
   error?: string
 }
 
+/**
+ * Phase 6-C3: capability-driven task routing result.
+ * Renderer-visible (NEVER contains apiKey).
+ */
+export type ResearchCapabilityString =
+  | 'chat'
+  | 'coding'
+  | 'math'
+  | 'matlab'
+  | 'python'
+  | 'cfd'
+  | 'literature'
+  | 'paper-writing'
+  | 'image-analysis'
+  | 'data-analysis'
+
+export interface ModelRouteTaskDecision {
+  providerId: string
+  model: string
+  source: 'capability-match' | 'active-provider' | 'no-match'
+  reason: string
+  capabilities: ResearchCapabilityString[]
+}
+
+export interface ModelRouteTaskResult {
+  decision: ModelRouteTaskDecision | null
+  route: 'task-routed' | 'active-fallback' | 'no-route'
+  reason: string
+}
+
 export interface DesktopModelApi {
   /**
    * List providerIds that have a key stored. Returns IDs only — never keys.
@@ -305,6 +335,19 @@ export interface DesktopModelApi {
    * ping does not require a real key; Phase 6-A5 wiring swaps in real key).
    */
   testProvider: (providerId: string) => Promise<ModelTestProviderResult>
+
+  /**
+   * Phase 6-C3: capability-driven task routing.
+   * Main process runs capability-router (Phase 6-C2) and returns a
+   * non-secret decision (providerId / model / reason / capabilities).
+   * NO apiKey is included in any field.
+   */
+  routeTask: (profile: {
+    taskType: string
+    requiredCapabilities: string[]
+    optionalCapabilities?: string[]
+    priority?: number
+  } | null) => Promise<ModelRouteTaskResult>
 }
 
 export interface DesktopApi extends DesktopPingApi {
