@@ -79,11 +79,36 @@ export const DATA_VISUALIZATION_TOOL: ToolDefinition = {
 }
 
 /**
+ * Phase 7-T6: dataset-analysis tool declaration (statistical summary).
+ */
+export const DATASET_ANALYSIS_TOOL: ToolDefinition = {
+  id: 'tool:dataset-analysis',
+  name: 'Dataset Analysis',
+  description: 'Compute basic statistics (count / mean / std / min / max) for a numeric series',
+  category: 'analysis',
+  version: '1.0.0',
+  inputSchema: {
+    fields: [
+      { name: 'values', type: t('array'), required: true,
+        description: 'Numeric series (numbers only)' }
+    ],
+    required: ['values'],
+    validationRules: ['values must contain only finite numbers (Phase 7-T6 strict)']
+  },
+  outputSchema: {
+    description: 'DatasetStats { count, mean, std, min, max }',
+    fields: ['count', 'mean', 'std', 'min', 'max']
+  },
+  executionTarget: 'local-service',
+  permission: 'public',
+  tags: ['statistics', 'analysis', 'dataset']
+}
+
+/**
  * Phase 7-T1: example dataset-export tool declaration.
  */
 export const DATASET_EXPORT_TOOL: ToolDefinition = {
-  id: 'tool:dataset-export',
-  name: 'Dataset Export',
+  id: 'tool:dataset-export',  name: 'Dataset Export',
   description: 'Export a Dataset entity to CSV / JSON / Parquet',
   category: 'export',
   version: '1.0.0',
@@ -115,5 +140,6 @@ export const DATASET_EXPORT_TOOL: ToolDefinition = {
 export const BUILTIN_TOOLS: readonly ToolDefinition[] = Object.freeze([
   KINETIC_ANALYSIS_TOOL,
   DATA_VISUALIZATION_TOOL,
+  DATASET_ANALYSIS_TOOL,
   DATASET_EXPORT_TOOL
 ])

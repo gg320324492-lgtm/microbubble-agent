@@ -24,9 +24,10 @@ import {
   __testHelpers
 } from '../../src/main/services/tools/adapter-registry'
 import {
+  getToolRegistry,
   getAdapterRegistry,
   resetAdapterRegistry,
-  initializeToolAdapters,
+  initializeScientificAdapters,
   bootToolLayer
 } from '../../src/main/services/tools/index'
 import { ToolExecutor } from '../../src/main/services/tools/tool-executor'
@@ -416,13 +417,14 @@ describe('Phase 7-T5-B AdapterRegistry singleton lifecycle', () => {
     const b = getAdapterRegistry()
     expect(a).not.toBe(b)
   })
-  it('initializeToolAdapters is a no-op (Phase 7-T5-B strict)', () => {
-    expect(() => initializeToolAdapters()).not.toThrow()
-    expect(getAdapterRegistry().size()).toBe(0)
+  it('initializeScientificAdapters is a no-op when called twice (Phase 7-T6 strict)', () => {
+    initializeScientificAdapters()
+    expect(() => initializeScientificAdapters()).not.toThrow()
   })
-  it('bootToolLayer initializes AdapterRegistry', () => {
+  it('bootToolLayer initializes ToolRegistry + AdapterRegistry', () => {
     bootToolLayer()
-    expect(getAdapterRegistry().size()).toBe(0)  // Phase 7-T5-B: no builtin adapters
+    expect(getToolRegistry().size()).toBeGreaterThanOrEqual(3)
+    expect(getAdapterRegistry().size()).toBe(3)
     expect(() => getAdapterRegistry()).not.toThrow()
   })
 })

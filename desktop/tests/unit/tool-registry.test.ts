@@ -280,8 +280,8 @@ describe('Phase 7-T1 ToolRegistry — snapshot', () => {
 // ============ builtin tools ============
 
 describe('Phase 7-T1 builtin tools catalog', () => {
-  it('BUILTIN_TOOLS has 3 declared tools', () => {
-    expect(BUILTIN_TOOLS).toHaveLength(3)
+  it('BUILTIN_TOOLS has 4 declared tools', () => {
+    expect(BUILTIN_TOOLS).toHaveLength(4)
   })
   it('KINETIC_ANALYSIS_TOOL is correctly typed', () => {
     expect(KINETIC_ANALYSIS_TOOL.id).toBe('tool:kinetic-analysis')
@@ -306,10 +306,10 @@ describe('Phase 7-T1 singleton lifecycle', () => {
     const b = getToolRegistry()
     expect(a).toBe(b)
   })
-  it('initializeBuiltinTools registers all 3 built-in tools', () => {
+  it('initializeBuiltinTools registers all 4 built-in tools', () => {
     const r = getToolRegistry()
     initializeBuiltinTools()
-    expect(r.size()).toBe(3)
+    expect(r.size()).toBe(4)
     expect(r.has('tool:kinetic-analysis')).toBe(true)
     expect(r.has('tool:data-visualization')).toBe(true)
     expect(r.has('tool:dataset-export')).toBe(true)
@@ -317,18 +317,18 @@ describe('Phase 7-T1 singleton lifecycle', () => {
   it('initializeBuiltinTools is idempotent', () => {
     initializeBuiltinTools()
     initializeBuiltinTools()
-    expect(getToolRegistry().size()).toBe(3)
+    expect(getToolRegistry().size()).toBe(4)
   })
   it('resetToolRegistry clears singleton state', () => {
     initializeBuiltinTools()
-    expect(getToolRegistry().size()).toBe(3)
+    expect(getToolRegistry().size()).toBe(4)
     resetToolRegistry()
     expect(getToolRegistry().size()).toBe(0)
   })
   it('bootToolLayer initializes registry + builtins', () => {
     bootToolLayer()
     const r = getToolRegistry()
-    expect(r.size()).toBe(3)
+    expect(r.size()).toBe(4)
     expect(r.has('tool:kinetic-analysis')).toBe(true)
   })
 })
