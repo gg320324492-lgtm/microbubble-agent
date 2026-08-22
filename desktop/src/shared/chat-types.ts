@@ -37,6 +37,8 @@ export interface ChatSessionListResponse {
   page_size: number
 }
 
+import type { ConversationModelContext } from './model/conversation-model'
+
 export interface ChatSessionOut {
   id: string
   user_id: number
@@ -51,6 +53,17 @@ export interface ChatSessionOut {
   updated_at: string
   deleted_at: string | null
   messages: ChatMessageOut[] | null
+  /**
+   * Phase 6-B: optional per-session model binding (non-secret metadata).
+   * When set, all chat streams in this session route to the configured
+   * provider runtime via runtime-router. When omitted, session uses the
+   * user's active provider or falls back to legacy FastAPI.
+   *
+   * Phase 6-B strict: never contains apiKey / token / cipher.
+   * Backward-compatible additive field — older sessions without this
+   * field continue to work.
+   */
+  modelContext?: ConversationModelContext
 }
 
 // ============ Message Schema ============
@@ -249,18 +262,20 @@ export interface ChatStreamRequest {
   model?: string
   thinking_mode?: 'fast' | 'balanced' | 'deep' | null
   /**
-   * Phase 6-A5: optional model runtime context.
+   * Phase 6-A5 + Phase 6-B: optional model runtime context.
+   *
    * When set, chat-stream.service.ts routes the request to the local
    * ModelProvider runtime instead of the legacy FastAPI path.
    * When omitted, the runtime uses the user's active provider (Phase 6-A4).
    *
-   * Phase 6-A5 strict: legacy requests that omit this field continue to
+   * Phase 6-B unification: shape matches ConversationModelContext in
+   * './model/conversation-model' so a session-level binding can be
+   * passed straight through to the request without remapping.
+   *
+   * Phase 6-A5/B strict: legacy requests that omit this field continue to
    * work unchanged (backward-compatible additive change).
    */
-  modelContext?: {
-    providerId?: string
-    model?: string
-  }
+  modelContext?: ConversationModelContext
 }
 
 export interface StreamEndPayload {
