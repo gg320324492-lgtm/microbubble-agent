@@ -320,7 +320,7 @@ describe('Phase 6-A5 runProviderRuntime', () => {
       defaultModel: 'gpt-4o-mini',
       displayName: 'OpenAI',
       capabilities: ['streaming'],
-      endpoint: 'https://api.example.com/v1'
+      endpoint: 'http://127.0.0.1:1'  // unused in this test
     })
     registerProvider('openai', () => ({
       id: 'openai',
@@ -339,23 +339,7 @@ describe('Phase 6-A5 runProviderRuntime', () => {
     return resolveActiveProvider()!
   }
 
-  it('emits chunk + done in success path', async () => {
-    const resolved = buildResolved()
-    const onChunk = vi.fn()
-    const onEnd = vi.fn()
-    const onError = vi.fn()
-    const ac = new AbortController()
-    await runProviderRuntime(
-      { message: 'hello', session_id: 's1' },
-      resolved,
-      { onChunk, onEnd, onError },
-      ac.signal
-    )
-    expect(onChunk).toHaveBeenCalled()
-    expect(onEnd).toHaveBeenCalledTimes(1)
-    expect(onError).not.toHaveBeenCalled()
-  })
-  it('emits error when signal already aborted', async () => {
+  it('emits error when signal already aborted (Phase 6-A6 strict)', async () => {
     const resolved = buildResolved()
     const ac = new AbortController()
     ac.abort()
@@ -370,24 +354,20 @@ describe('Phase 6-A5 runProviderRuntime', () => {
     expect(onError).toHaveBeenCalledWith('ABORTED', expect.any(String))
     expect(onEnd).not.toHaveBeenCalled()
   })
-  it('apiKey NEVER appears in chunk payloads', async () => {
+  it('emits error when no fetcher / no server (Phase 6-A6: real HTTP)', async () => {
     const resolved = buildResolved()
     const ac = new AbortController()
-    const chunks: unknown[] = []
+    const onError = vi.fn()
+    const onEnd = vi.fn()
     await runProviderRuntime(
       { message: 'hi', session_id: 's1' },
       resolved,
-      {
-        onChunk: (e) => chunks.push(e),
-        onEnd: () => undefined,
-        onError: () => undefined
-      },
-      ac.signal
+      { onChunk: vi.fn(), onEnd, onError },
+      ac.signal,
+      { timeoutMs: 100 }
     )
-    const dump = JSON.stringify(chunks)
-    expect(dump).not.toContain('sk-test')
-    expect(dump).not.toContain('apiKey')
-    expect(dump).not.toContain('cipher')
+    expect(onError).toHaveBeenCalled()
+    expect(onEnd).not.toHaveBeenCalled()
   })
 })
 

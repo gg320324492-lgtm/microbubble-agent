@@ -202,29 +202,20 @@ export function routeChatRequest(modelContext?: ModelRuntimeContext | null): Rou
 }
 
 /**
- * Phase 6-A5: provider runtime entry — called from chat-stream.service.ts when
- * RouteDecision.mode === 'provider'. Does NOT touch FastAPI.
- *
- * Phase 6-A5: this function is the boundary between chat-stream.service.ts
- * (legacy path) and the provider runtime. It receives a chat request, calls
- * provider.buildRequest, drives provider.parseChunk over each SSE/NDJSON chunk,
- * and pushes Phase 3-B0 StreamEvent through the provided callback.
- *
- * Phase 6-A5 explicit forbids:
- *   - NEVER include apiKey in any callback payload
- *   - NEVER call fetch to FastAPI
+ * Phase 6-A6: real HTTP fetch + SSE/NDJSON streaming.
+ * Replaces the Phase 6-A5 stub.
  *
  * @param request — minimal chat input (Phase 6-A5: only `message` + `session_id`)
  * @param resolved — the ResolvedProvider from routeChatRequest
- * @param onChunk — push Phase 3-B0 StreamEvent to renderer (chat-stream.service.ts owns the webContents.send)
- * @param onEnd — push end
- * @param onError — push error (does NOT include apiKey)
+ * @param callbacks — push Phase 3-B0 StreamEvent to renderer
  * @param signal — AbortSignal for cancellation
+ * @param options — optional fetcher (for tests) + timeout
  *
- * Phase 6-A5 strict: this function makes NO real network calls by default.
- * Tests inject a fake fetcher. Production runtime streaming is wired in Phase 6-A6.
- * For Phase 6-A5, this function emits a single text_delta + done to prove the
- * path works end-to-end without touching a real vendor API.
+ * Phase 6-A6 strict:
+ *   - apiKey NEVER in any callback payload
+ *   - apiKey goes ONLY into the Authorization header (Bearer)
+ *   - chat:* IPC payloads remain Phase 3-B0 StreamEvent (no schema change)
+ *   - abort signal honored: AbortError -> onError('ABORTED')
  */
 export interface ChatRequestMinimal {
   message: string
@@ -237,15 +228,81 @@ export interface ProviderRuntimeCallbacks {
   onError(code: string, message: string): void
 }
 
+export interface ProviderRuntimeOptions {
+  /** Phase 6-A6: injected fetcher (defaults to global fetch). */
+  fetcher?: typeof fetch
+  /** Phase 6-A6: total timeout in ms (default 30000). 0 = no timeout. */
+  timeoutMs?: number
+}
+
 import type { CanonicalRequest, CanonicalMessage } from '@shared/model/provider-types'
+
+/**
+ * Phase 6-A6: build the chat endpoint URL for the resolved provider.
+ *   - openai-compatible / cloud -> {endpoint}/v1/chat/completions
+ *   - local (Ollama)             -> {endpoint}/api/chat
+ */
+function chatEndpointUrl(endpoint: string, type: ModelConfig['type']): string {
+  const base = endpoint.replace(/\/$/, '')
+  if (type === 'local') return `${base}/api/chat`
+  return `${base}/v1/chat/completions`
+}
+
+/**
+ * Phase 6-A6: build the HTTP headers for the chat request.
+ * OpenAI-compatible uses Bearer; Ollama uses no Authorization.
+ */
+function chatHeaders(type: ModelConfig['type'], apiKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: type === 'local' ? 'application/x-ndjson' : 'text/event-stream',
+    'Cache-Control': 'no-cache'
+  }
+  if (type !== 'local' && apiKey.length > 0) {
+    headers['Authorization'] = `Bearer ${apiKey}`
+  }
+  return headers
+}
+
+/**
+ * Phase 6-A6: split buffer into chunks based on provider type.
+ *   - openai-compatible: SSE -> split on `\n\n`
+ *   - local (Ollama): NDJSON -> split on `\n`
+ */
+function splitBuffer(
+  buffer: string,
+  type: ModelConfig['type']
+): { chunks: string[]; remainder: string } {
+  if (type === 'local') {
+    const parts = buffer.split('\n')
+    const remainder = parts.pop() ?? ''
+    return { chunks: parts.filter((p) => p.trim().length > 0), remainder }
+  }
+  const parts = buffer.split('\n\n')
+  const remainder = parts.pop() ?? ''
+  return { chunks: parts.filter((p) => p.trim().length > 0), remainder }
+}
+
+/**
+ * Phase 6-A6: HTTP status -> StreamErrorPayload code.
+ */
+function mapHttpToErrorCode(status: number): string {
+  if (status === 401) return 'UNAUTHORIZED'
+  if (status === 403) return 'FORBIDDEN'
+  if (status === 404) return 'NOT_FOUND'
+  if (status === 429) return 'RATE_LIMITED'
+  if (status >= 500) return 'SERVER_ERROR'
+  return 'INVALID_RESPONSE'
+}
 
 export async function runProviderRuntime(
   request: ChatRequestMinimal,
   resolved: ResolvedProvider,
   callbacks: ProviderRuntimeCallbacks,
-  signal: AbortSignal
+  signal: AbortSignal,
+  options?: ProviderRuntimeOptions
 ): Promise<void> {
-  // Phase 6-A5: build canonical request from chat request
+  // Phase 6-A6: build canonical request
   const messages: CanonicalMessage[] = [
     { role: 'user', content: request.message }
   ]
@@ -254,28 +311,97 @@ export async function runProviderRuntime(
     messages,
     stream: true
   }
-  // Build the vendor-native payload — proves the contract works.
-  // Phase 6-A5 strict: we DO NOT send the apiKey over IPC.
-  // Phase 6-A6 will wire the actual HTTP fetch (currently no real network).
-  void resolved.provider.buildRequest(canonical, resolved.cfg)
+  const payload = resolved.provider.buildRequest(canonical, resolved.cfg)
+  const endpoint = resolved.cfg.endpoint ?? ''
+  const url = chatEndpointUrl(endpoint, resolved.cfg.type)
+  const headers = chatHeaders(resolved.cfg.type, resolved.apiKey)
+  const fetcher = options?.fetcher ?? fetch
+  const timeoutMs = options?.timeoutMs ?? 30000
 
-  // Phase 6-A5: prove parseChunk round-trip works.
-  // Emit a synthetic "hello" event through parseChunk to confirm shape.
+  // Phase 6-A6: compose timeout + abort signals
+  const timeoutController = new AbortController()
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+  if (timeoutMs > 0) {
+    timeoutHandle = setTimeout(() => timeoutController.abort(), timeoutMs)
+  }
+  // Combine user signal + timeout signal (AbortSignal.any is Node 20+)
+  type AbortSignalAny = (signals: AbortSignal[]) => AbortSignal
+  const anyFn = (AbortSignal as unknown as { any?: AbortSignalAny }).any
+  const composed = anyFn
+    ? anyFn([signal, timeoutController.signal])
+    : signal
+
   try {
     if (signal.aborted) {
       callbacks.onError('ABORTED', 'stream cancelled before provider runtime started')
       return
     }
-    // Phase 6-A5: emit a confirmation chunk then done (does NOT touch network).
-    callbacks.onChunk({ type: 'text_delta', delta: '' })
-    callbacks.onChunk({
-      type: 'text_delta',
-      delta: `[Phase 6-A5: provider runtime reached for providerId='${resolved.providerId}' model='${resolved.model}' — Phase 6-A6 wires real network.]`
+    const response = await fetcher(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal: composed
     })
-    callbacks.onEnd()
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+    if (!response.ok) {
+      callbacks.onError(mapHttpToErrorCode(response.status), `HTTP ${response.status}`)
+      return
+    }
+    if (!response.body) {
+      callbacks.onError('INVALID_RESPONSE', 'no response body')
+      return
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const { chunks, remainder } = splitBuffer(buffer, resolved.cfg.type)
+        buffer = remainder
+        for (const raw of chunks) {
+          // Phase 6-A6: strip SSE "data:" prefix if present
+          const cleaned = raw.replace(/^data:\s*/, '').trim()
+          if (cleaned.length === 0) continue
+          const ev = resolved.provider.parseChunk(cleaned)
+          if (ev) callbacks.onChunk(ev)
+        }
+      }
+      // Drain final buffer
+      if (buffer.trim().length > 0) {
+        const cleaned = buffer.replace(/^data:\s*/, '').trim()
+        if (cleaned.length > 0) {
+          const ev = resolved.provider.parseChunk(cleaned)
+          if (ev) callbacks.onChunk(ev)
+        }
+      }
+      callbacks.onEnd()
+    } catch (e) {
+      const name = (e as { name?: string }).name
+      if (name === 'AbortError') {
+        callbacks.onError('ABORTED', 'stream cancelled mid-read')
+      } else {
+        callbacks.onError(
+          'PROVIDER_RUNTIME_ERROR',
+          e instanceof Error ? e.message : String(e)
+        )
+      }
+    }
   } catch (e) {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+    const name = (e as { name?: string }).name
+    if (name === 'AbortError') {
+      if (timeoutController.signal.aborted && !signal.aborted) {
+        callbacks.onError('TIMEOUT', `provider did not respond within ${timeoutMs}ms`)
+      } else {
+        callbacks.onError('ABORTED', 'stream cancelled before/during fetch')
+      }
+      return
+    }
     callbacks.onError(
-      'PROVIDER_RUNTIME_ERROR',
+      'NETWORK_ERROR',
       e instanceof Error ? e.message : String(e)
     )
   }
