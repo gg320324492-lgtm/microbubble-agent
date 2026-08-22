@@ -34,6 +34,13 @@ import {
   appendPlanStep,
   planStepsToAgentState
 } from '../utils/agent-plan'
+import {
+  type UserAction,
+  parseSuggestions,
+  retryAction,
+  syncAction,
+  mergeUserActions
+} from '../utils/agent-interaction'
 import type { ApiError } from '@shared/preload-api'
 
 // 增量 ID 用于 UI (Phase 3-A 仍存在; 客户端消息通过 client_msg_id 标识)
@@ -83,6 +90,13 @@ export const useChatStore = defineStore('chat', () => {
   // ============ Phase 5-D: Plan Steps (agent planning) ============
   /** 流中 SSE plan_step 事件累加 (按 step.id dedup). */
   const planSteps = ref<PlanStep[]>([])
+
+  // ============ Phase 5-E: Pending User Actions (agent interaction) ============
+  /** 流中累积 SSE suggestions / retry / sync_required 解析的 UserAction 列表.
+  * 流开始 / 结束 / cancel / session 切换 均清空 (Phase 5-E 严格 session 隔离).
+  * 渲染 (Phase 5-E2 ChatView) 置于 Markdown / Trace / Plan / Citations 之后.
+  */
+  const pendingActions = ref<UserAction[]>([])
 
   // ============ 派生 ============
   const visibleMessages = computed<ChatMessageOut[]>(() =>
@@ -157,6 +171,7 @@ export const useChatStore = defineStore('chat', () => {
     streamingContentRender.value = ''
     // Phase 4-C: session 切换 -> 清 cachedHints + in-flight prefetch (session 隔离)
     clearCachedHints()
+    pendingActions.value = []
     return await loadMessages(sessionId)
   }
 
@@ -259,6 +274,8 @@ export const useChatStore = defineStore('chat', () => {
       // 忽略 cancel 失败 (main 已经 streamed 到 [DONE] 或 abort)
       void err
     }
+    // Phase 5-E: clear pendingActions on cancel (session isolation)
+    pendingActions.value = []
   }
 
   /**
@@ -317,6 +334,10 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'sync_required':
         handleStreamError(ctx, 'SYNC_REQUIRED', event.reason ?? 'aborted')
+        // Phase 5-E: sync_required suggests backend reload -> add sync action hint
+        pendingActions.value = mergeUserActions(pendingActions.value, [
+          syncAction(`sync_${Date.now()}`)
+        ])
         break
       case 'tool_use':
       case 'tool_result':
@@ -383,12 +404,23 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'synthesis_start':
       case 'critique':
-      case 'retry':
-      case 'suggestions':
       case 'brief':
       case 'detail':
       case 'tool_compressed':
         // Phase 3+ 接 agent tool / intent 等. Phase 5-A 仅接 tool_use / tool_result / rich_block.
+        break
+      case 'suggestions':
+        // Phase 5-E: 后端 emit 追问 chips -> 解析为 suggestion action 累加 (按 id dedup)
+        pendingActions.value = mergeUserActions(
+          pendingActions.value,
+          parseSuggestions((event as { suggestions?: unknown }).suggestions)
+        )
+        break
+      case 'retry':
+        // Phase 5-E: 后端 emit retry -> 派生 retry action, 用户可点击重发
+        pendingActions.value = mergeUserActions(pendingActions.value, [
+          retryAction(`retry_${Date.now()}`)
+        ])
         break
       case 'citation':
       case 'refs':
@@ -476,6 +508,9 @@ export const useChatStore = defineStore('chat', () => {
     // Phase 4-C: 流结束 (cancel / error) -> 清 cachedHints, 防止 stale UI hint
     // 注: in-flight prefetch 走其自身 .finally 清理; 这里仅清 UI 视图
     cachedHints.value = new Map()
+    // Phase 5-E: stream end (cancel/error) -> clear pendingActions, prevent stale UI
+    pendingActions.value = []
+    planSteps.value = []
   }
 
   /**
@@ -604,6 +639,9 @@ export const useChatStore = defineStore('chat', () => {
   function clearCachedHints(): void {
     inflightPrefetches.clear()
     cachedHints.value = new Map()
+    // Phase 5-E: stream end (cancel/error) -> clear pendingActions, prevent stale UI
+    pendingActions.value = []
+    planSteps.value = []
   }
 
   /**
@@ -660,6 +698,7 @@ export const useChatStore = defineStore('chat', () => {
     // derived
     visibleMessages,
     agentStateHint,
+    pendingActions,
     // actions
     loadSessions,
     selectSession,

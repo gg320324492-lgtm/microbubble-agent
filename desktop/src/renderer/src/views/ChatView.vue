@@ -19,7 +19,8 @@ import {
   RichBlockRenderer,
   TraceTimeline,
   AgentStatusBadge,
-  PlanTimeline
+  PlanTimeline,
+  AgentActionCard
 } from '../components/chat'
 import { buildTrace, buildTraceFromMessage } from '../utils/chat-trace'
 import {
@@ -54,6 +55,25 @@ function onCitationKnowledgeOpen(knowledgeId: number): void {
   void router.push(target)
 }
 
+/**
+ * Phase 5-E2: User Action handlers (bind Phase 3-A retry/cancel existing paths).
+ */
+function onAgentAction(payload: { action: { type: string; id: string; label?: string } }): void {
+  const t = payload?.action?.type
+  if (t === 'suggestion' || t === 'confirm') {
+    console.info('[ChatView] suggestion/confirm action:', payload.action.label)
+  }
+}
+function onAgentRetry(): void {
+  void store.retryLastMessage()
+}
+function onAgentCancel(): void {
+  void store.cancelActiveStream()
+}
+function onAgentSync(): void {
+  void store.selectSession(store.currentSessionId)
+}
+
 const store = useChatStore()
 
 const inputDraft = ref('')
@@ -63,6 +83,9 @@ let copyToastTimer: ReturnType<typeof setTimeout> | null = null
 
 const hasMessages = computed(() => store.visibleMessages.length > 0)
 const hasStreaming = computed(() => store.isStreaming && !!store.streamingMessage)
+
+/** Phase 5-E2: 流中 agent actions. */
+const streamingActions = computed(() => store.pendingActions ?? [])
 
 /** Phase 5-D: 流中 plan_steps 实时呈现 (chat store 派生). */
 const planSteps = computed(() => store.streamingMessage?.plan_steps ?? [])
@@ -371,6 +394,19 @@ watch(
                   v-if="planSteps && planSteps.length > 0"
                   :steps="planSteps"
                 />
+
+                <!-- Phase 5-E2: 流中 user actions -->
+                <div v-if="streamingActions.length > 0" class="streaming-actions">
+                  <AgentActionCard
+                    v-for="a in streamingActions"
+                    :key="`stream-action-${a.id}`"
+                    :action="a"
+                    @action="onAgentAction"
+                    @retry="onAgentRetry"
+                    @cancel="onAgentCancel"
+                    @sync="onAgentSync"
+                  />
+                </div>
 
                 <!-- Phase 5-B: 流中 trace 实时展开 (活跃流时默认 expanded) -->
                 <TraceTimeline
