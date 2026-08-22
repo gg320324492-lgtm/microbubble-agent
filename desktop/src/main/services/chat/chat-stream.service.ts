@@ -25,6 +25,11 @@ import type {
 } from '@shared/chat-types'
 import { authService } from '../auth.service'
 import { vaultLoadRefreshToken } from '../token-vault'
+import {
+  routeChatRequest,
+  runProviderRuntime,
+  type ModelRuntimeContext
+} from '../model-provider/runtime-router'
 
 interface ActiveStream {
   controller: AbortController
@@ -64,11 +69,48 @@ export async function startChatStream(
   const streamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const context: StreamContext = { streamId, sessionId: req.session_id }
   const controller = new AbortController()
+
+  // Phase 6-A5: route decision. If provider mode AND a resolvable provider
+  // is available, run the local runtime. Otherwise fall back to legacy.
+  const decision = routeChatRequest(req.modelContext as ModelRuntimeContext | undefined)
+  if (decision.mode === 'provider') {
+    activeStreams.set(streamId, { controller, context, request: req, attempt: 1 })
+    void runProviderRuntimeStream(streamId, req, decision.resolvedProvider, controller.signal)
+    return streamId
+  }
+
   activeStreams.set(streamId, { controller, context, request: req, attempt: 1 })
-
   void runStream(streamId, req, controller.signal, 1)
-
   return streamId
+}
+
+/**
+ * Phase 6-A5: provider runtime stream (no FastAPI fetch).
+ * Pushes Phase 3-B0 StreamEvent through the same webContents.send channels.
+ */
+async function runProviderRuntimeStream(
+  streamId: string,
+  req: ChatStreamRequest,
+  resolved: import('../model-provider/runtime-router').ResolvedProvider,
+  signal: AbortSignal
+): Promise<void> {
+  const context: StreamContext = { streamId, sessionId: req.session_id }
+  await runProviderRuntime(
+    { message: req.message, session_id: req.session_id },
+    resolved,
+    {
+      onChunk: (event) => pushChunk(context, event as StreamEvent),
+      onEnd: () => {
+        pushEnd(context)
+        activeStreams.delete(streamId)
+      },
+      onError: (code: string, message: string) => {
+        pushError(context, code, message)
+        activeStreams.delete(streamId)
+      }
+    },
+    signal
+  )
 }
 
 /**

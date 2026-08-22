@@ -248,6 +248,19 @@ export interface ChatStreamRequest {
   session_id: string
   model?: string
   thinking_mode?: 'fast' | 'balanced' | 'deep' | null
+  /**
+   * Phase 6-A5: optional model runtime context.
+   * When set, chat-stream.service.ts routes the request to the local
+   * ModelProvider runtime instead of the legacy FastAPI path.
+   * When omitted, the runtime uses the user's active provider (Phase 6-A4).
+   *
+   * Phase 6-A5 strict: legacy requests that omit this field continue to
+   * work unchanged (backward-compatible additive change).
+   */
+  modelContext?: {
+    providerId?: string
+    model?: string
+  }
 }
 
 export interface StreamEndPayload {
