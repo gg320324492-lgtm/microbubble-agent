@@ -48,7 +48,7 @@ const ENTITY_FOR_TASK: Readonly<Record<PlannerTaskType, string>> = Object.freeze
 // ============ Deterministic helpers ============
 
 /** djb2 — deterministic content hash for stable plan ids (no randomness). */
-function hashStr(s: string): string {
+export function hashStr(s: string): string {
   let h = 5381
   for (let i = 0; i < s.length; i++) {
     h = ((h * 33) ^ s.charCodeAt(i)) >>> 0
