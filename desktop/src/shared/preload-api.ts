@@ -150,11 +150,70 @@ export interface DesktopChatStreamApi {
   ) => () => void
 }
 
+/**
+ * Phase 6-A2: Model Provider SecretStore API.
+ *
+ * Renderer ONLY sees provider ids and booleans — raw API keys NEVER leave the main process.
+ * Renderer never sees ciphertext either (Phase 6-A2: ciphertext only inside main).
+ *
+ * Workflow (Phase 6-A4 Settings UI):
+ *   1. user enters API key in Settings panel
+ *   2. renderer calls saveKey(providerId, key)  → key dispatched to main via IPC
+ *   3. main: safeStorage.encryptString(key) + electron-store.set(prefix + id, cipherB64)
+ *   4. renderer asks keyExists(providerId) to decide whether to render "configured"
+ *   5. renderer asks listProviders() to populate provider list dropdown
+ */
+export interface ModelListProvidersResult {
+  providerIds: string[]
+}
+
+export interface ModelSaveKeyResult {
+  ok: true
+  exists: boolean
+}
+
+export interface ModelDeleteKeyResult {
+  ok: true
+  exists: boolean
+}
+
+export interface ModelKeyExistsResult {
+  exists: boolean
+}
+
+export interface DesktopModelApi {
+  /**
+   * List providerIds that have a key stored. Returns IDs only — never keys.
+   * Returns array of strings (empty if none configured).
+   */
+  listProviders: () => Promise<ModelListProvidersResult>
+
+  /**
+   * Save / overwrite API key for a providerId.
+   * Renderer passes the plaintext key once; main encrypts via safeStorage and persists.
+   * Returns { ok: true, exists: true } on success — the key itself is NEVER echoed back.
+   * @throws Error if providerId invalid, key empty, or safeStorage unavailable.
+   */
+  saveKey: (providerId: string, apiKey: string) => Promise<ModelSaveKeyResult>
+
+  /**
+   * Delete a stored key. Idempotent — missing keys return { ok: true, exists: false }.
+   * @throws Error if providerId invalid.
+   */
+  deleteKey: (providerId: string) => Promise<ModelDeleteKeyResult>
+
+  /**
+   * Existence check — returns boolean. NEVER returns the key itself.
+   */
+  keyExists: (providerId: string) => Promise<ModelKeyExistsResult>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
   session: DesktopSessionApi
   chat: DesktopChatStreamApi
+  model: DesktopModelApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 

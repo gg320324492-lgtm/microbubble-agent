@@ -18,7 +18,12 @@ export const IPC_CHANNELS = {
   CHAT_STREAM_CANCEL: 'chat:cancel-stream',
   CHAT_STREAM_CHUNK: 'chat:stream-chunk',
   CHAT_STREAM_END: 'chat:stream-end',
-  CHAT_STREAM_ERROR: 'chat:stream-error'
+  CHAT_STREAM_ERROR: 'chat:stream-error',
+  // Phase 6-A2: model provider secret store IPC (NEVER returns raw API key)
+  MODEL_LIST_PROVIDERS: 'model:list-providers',
+  MODEL_SAVE_KEY: 'model:save-key',
+  MODEL_DELETE_KEY: 'model:delete-key',
+  MODEL_KEY_EXISTS: 'model:key-exists'
 } as const
 
 export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]

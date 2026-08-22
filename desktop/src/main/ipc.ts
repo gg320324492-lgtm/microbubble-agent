@@ -10,6 +10,7 @@ import {
   startChatStream,
   cancelChatStream
 } from './services/chat/chat-stream.service'
+import { registerModelIpcHandlers } from './services/model-provider/model-ipc'
 
 /**
  * 主进程 IPC 注册入口。
@@ -79,4 +80,8 @@ export function registerIpcHandlers(): void {
     IPC_CHANNELS.CHAT_STREAM_CANCEL,
     async (_event, streamId: string) => cancelChatStream(streamId)
   )
+
+  // ---------- Phase 6-A2: Model SecretStore IPC ----------
+  // Returns ONLY provider ids / booleans — raw API keys NEVER leave main process.
+  registerModelIpcHandlers()
 }
