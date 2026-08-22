@@ -29,6 +29,15 @@ interface ProviderConfigBlob {
   defaultModel: string
   displayName: string
   capabilities: string[]
+  /** Phase 6-C1: optional research capability profile. */
+  researchProfile?: {
+    providerId: string
+    model: string
+    capabilities: string[]
+    maxContext?: number
+    strengths?: string[]
+    limitations?: string[]
+  }
   updatedAt: number
 }
 
@@ -52,6 +61,8 @@ function keyFor(providerId: string): string {
 /**
  * Phase 6-A4: Provider config (non-secret metadata).
  * Renderer-visible shape — NEVER contains API key.
+ *
+ * Phase 6-C1: optional researchProfile field.
  */
 export interface ProviderConfig {
   providerId: string
@@ -60,6 +71,14 @@ export interface ProviderConfig {
   defaultModel: string
   displayName: string
   capabilities: string[]
+  researchProfile?: {
+    providerId: string
+    model: string
+    capabilities: string[]
+    maxContext?: number
+    strengths?: string[]
+    limitations?: string[]
+  }
   updatedAt: number
 }
 
@@ -113,6 +132,22 @@ export function saveConfig(
       : {}),
     updatedAt: Date.now()
   }
+  if (config.researchProfile) {
+    blob.researchProfile = {
+      providerId: config.researchProfile.providerId,
+      model: config.researchProfile.model,
+      capabilities: [...config.researchProfile.capabilities],
+      ...(typeof config.researchProfile.maxContext === 'number'
+        ? { maxContext: config.researchProfile.maxContext }
+        : {}),
+      ...(Array.isArray(config.researchProfile.strengths)
+        ? { strengths: [...config.researchProfile.strengths] }
+        : {}),
+      ...(Array.isArray(config.researchProfile.limitations)
+        ? { limitations: [...config.researchProfile.limitations] }
+        : {})
+    }
+  }
   store.set(keyFor(providerId), blob)
 }
 
@@ -131,7 +166,7 @@ export function getConfig(providerId: string): ProviderConfig | null {
   if (!isValidProviderId(providerId)) return null
   const blob = store.get(keyFor(providerId))
   if (!blob) return null
-  return {
+  const out: ProviderConfig = {
     providerId: blob.providerId,
     type: blob.type,
     defaultModel: blob.defaultModel,
@@ -140,6 +175,18 @@ export function getConfig(providerId: string): ProviderConfig | null {
     ...(typeof blob.endpoint === 'string' ? { endpoint: blob.endpoint } : {}),
     updatedAt: blob.updatedAt
   }
+  if (blob.researchProfile) {
+    const rp = blob.researchProfile
+    out.researchProfile = {
+      providerId: rp.providerId,
+      model: rp.model,
+      capabilities: [...rp.capabilities],
+      ...(typeof rp.maxContext === 'number' ? { maxContext: rp.maxContext } : {}),
+      ...(Array.isArray(rp.strengths) ? { strengths: [...rp.strengths] } : {}),
+      ...(Array.isArray(rp.limitations) ? { limitations: [...rp.limitations] } : {})
+    }
+  }
+  return out
 }
 
 /**
