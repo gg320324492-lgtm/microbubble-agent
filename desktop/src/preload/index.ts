@@ -128,7 +128,37 @@ const modelApi: DesktopModelApi = {
     ipcRenderer.invoke(
       IPC_CHANNELS.MODEL_KEY_EXISTS,
       providerId
-    ) as Promise<{ exists: boolean }>
+    ) as Promise<{ exists: boolean }>,
+  // ============ Phase 6-A4: non-secret config + connectivity ============
+  listConfigs: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.MODEL_LIST_CONFIGS) as Promise<{
+      configs: Array<{
+        providerId: string
+        type: 'cloud' | 'local' | 'openai-compatible'
+        endpoint?: string
+        defaultModel: string
+        displayName: string
+        capabilities: string[]
+        updatedAt: number
+      }>
+      hasKey: boolean[]
+    }>,
+  saveConfig: (providerId, config) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.MODEL_SAVE_CONFIG,
+      providerId,
+      config
+    ) as Promise<{ ok: true; exists: boolean }>,
+  deleteConfig: (providerId) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.MODEL_DELETE_CONFIG,
+      providerId
+    ) as Promise<{ ok: true; exists: boolean }>,
+  testProvider: (providerId) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.MODEL_TEST_PROVIDER,
+      providerId
+    ) as Promise<{ ok: boolean; latencyMs?: number; error?: string }>
 }
 
 const api: DesktopApi = {

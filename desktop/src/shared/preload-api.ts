@@ -181,6 +181,46 @@ export interface ModelKeyExistsResult {
   exists: boolean
 }
 
+/**
+ * Phase 6-A4: non-secret provider config (endpoint, defaultModel, displayName).
+ * Renderer NEVER sees API keys via these channels.
+ */
+export interface ModelProviderConfig {
+  providerId: string
+  type: 'cloud' | 'local' | 'openai-compatible'
+  endpoint?: string
+  defaultModel: string
+  displayName: string
+  capabilities: string[]
+  updatedAt: number
+}
+
+export interface ModelListConfigsResult {
+  configs: ModelProviderConfig[]
+  /**
+   * Parallel array aligned with configs[i].providerId — true iff the
+   * providerId has an API key stored in SecretStore. Renderer uses this
+   * to render "needs key" / "configured" UI state.
+   */
+  hasKey: boolean[]
+}
+
+export interface ModelSaveConfigResult {
+  ok: true
+  exists: boolean
+}
+
+export interface ModelDeleteConfigResult {
+  ok: true
+  exists: boolean
+}
+
+export interface ModelTestProviderResult {
+  ok: boolean
+  latencyMs?: number
+  error?: string
+}
+
 export interface DesktopModelApi {
   /**
    * List providerIds that have a key stored. Returns IDs only — never keys.
@@ -206,6 +246,35 @@ export interface DesktopModelApi {
    * Existence check — returns boolean. NEVER returns the key itself.
    */
   keyExists: (providerId: string) => Promise<ModelKeyExistsResult>
+
+  /**
+   * Phase 6-A4: list all provider configs (non-secret metadata).
+   * `hasKey[i]` tells whether provider configs[i].providerId has a key.
+   */
+  listConfigs: () => Promise<ModelListConfigsResult>
+
+  /**
+   * Phase 6-A4: save non-secret provider config (endpoint, defaultModel,
+   * displayName, capabilities, type). Does NOT touch the API key.
+   * @throws Error if providerId invalid or config shape invalid.
+   */
+  saveConfig: (
+    providerId: string,
+    config: Omit<ModelProviderConfig, 'providerId' | 'updatedAt'>
+  ) => Promise<ModelSaveConfigResult>
+
+  /**
+   * Phase 6-A4: delete a provider config (idempotent).
+   * Does NOT delete the API key — call deleteKey separately if needed.
+   */
+  deleteConfig: (providerId: string) => Promise<ModelDeleteConfigResult>
+
+  /**
+   * Phase 6-A4: test provider connectivity (Phase 6-A3 ping via registry).
+   * Tests endpoint reachability, NOT key validity (Phase 6-A4 strict:
+   * ping does not require a real key; Phase 6-A5 wiring swaps in real key).
+   */
+  testProvider: (providerId: string) => Promise<ModelTestProviderResult>
 }
 
 export interface DesktopApi extends DesktopPingApi {
