@@ -1,14 +1,37 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import type { Component } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AgentCard from '@/components/research/AgentCard.vue'
+import CitationCard from '@/components/research/CitationCard.vue'
 import AgentCenter from '@/pages/research/AgentCenter.vue'
 import Assistant from '@/pages/research/Assistant.vue'
+import Experiment from '@/pages/research/Experiment.vue'
+import Literature from '@/pages/research/Literature.vue'
 import { useAgentStore } from '@/stores/research/agent.store'
+import { useExperimentStore } from '@/stores/research/experiment.store'
+import { useKnowledgeStore } from '@/stores/research/knowledge.store'
 import { useWorkflowStore } from '@/stores/research/workflow.store'
+import {
+  experimentService,
+  type ExperimentAdapter,
+  type ExperimentDesign
+} from '@/services/research/experiment.service'
+import {
+  knowledgeService,
+  type DocumentItem,
+  type KnowledgeAdapter,
+  type KnowledgeFolder
+} from '@/services/research/knowledge.service'
+import {
+  literatureService,
+  type LiteratureAdapter,
+  type PaperAssessment
+} from '@/services/research/literature.service'
 import type {
   AgentEvent,
   AgentMessage,
@@ -30,6 +53,105 @@ interface MountedResearchPage {
 
 const TIMESTAMP = new Date('2026-08-24T09:30:00+08:00').getTime()
 const mountedPageWrappers: VueWrapper[] = []
+
+const literatureDocuments: DocumentItem[] = [
+  {
+    id: 'd1',
+    title: '臭氧微纳米气泡降解四环素的动力学研究',
+    authors: '李小红、张伟',
+    journal: '环境科学学报',
+    year: 2024,
+    type: 'paper',
+    tags: ['臭氧', '动力学'],
+    credibility: 0.83,
+    citations: 18,
+    relevance: 0.94
+  },
+  {
+    id: 'd2',
+    title: '纳米气泡传质机制综述',
+    authors: '王宇',
+    journal: '化工进展',
+    year: 2023,
+    type: 'paper',
+    tags: ['传质'],
+    credibility: 0.72,
+    citations: 9,
+    relevance: 0.81
+  }
+]
+
+const literatureFolders: KnowledgeFolder[] = [
+  { id: 'folder-1', name: '四环素降解', count: 2 }
+]
+
+const literatureAssessments: PaperAssessment[] = [
+  {
+    documentId: 'd1',
+    reliabilityScore: 0.82,
+    evidenceScore: 0.78,
+    methodologyScore: 0.65,
+    limitations: ['样本量仍需扩大'],
+    concerns: ['缺少长期稳定性验证']
+  }
+]
+
+const experimentDesign: ExperimentDesign = {
+  id: 'exp-real',
+  title: '臭氧微纳米气泡参数优化',
+  question: '如何提高四环素降解过程的臭氧利用率？',
+  hypotheses: [{ statement: '减小气泡粒径可提高气液传质效率', confidence: 0.82 }],
+  variables: [
+    { name: '气泡粒径', type: 'independent', range: '80–300', unit: 'nm' },
+    { name: '四环素去除率', type: 'dependent', range: '0–100', unit: '%' }
+  ],
+  groups: [
+    { name: '对照组', condition: '常规曝气', purpose: '建立基线' },
+    { name: '实验组', condition: '微纳米气泡曝气', purpose: '检验传质增益' }
+  ],
+  metrics: ['去除率', '动力学常数'],
+  model: { name: '伪一级动力学', confidence: 0.88 },
+  status: 'designing'
+}
+
+let knowledgeAdapter: KnowledgeAdapter
+let literatureAdapter: LiteratureAdapter
+let experimentAdapter: ExperimentAdapter
+
+function installResearchAdapters(options: {
+  documents?: DocumentItem[]
+  assessments?: PaperAssessment[]
+  design?: ExperimentDesign | null
+} = {}) {
+  const documents = options.documents ?? literatureDocuments
+  const assessments = options.assessments ?? literatureAssessments
+  const design = options.design === undefined ? experimentDesign : options.design
+  knowledgeAdapter = {
+    getDocuments: vi.fn().mockResolvedValue(documents),
+    getDocument: vi.fn(async id => documents.find(document => document.id === id)),
+    searchDocuments: vi.fn().mockResolvedValue([]),
+    getFolders: vi.fn().mockResolvedValue(literatureFolders),
+    getDocumentCount: vi.fn().mockResolvedValue(documents.length),
+    importDocument: vi.fn().mockResolvedValue(null)
+  }
+  literatureAdapter = {
+    assessPaper: vi.fn(async id => assessments.find(item => item.documentId === id) ?? null),
+    extractEvidence: vi.fn().mockResolvedValue([]),
+    getDocumentAssessments: vi.fn().mockResolvedValue(assessments),
+    summarizePaper: vi.fn().mockResolvedValue('AI 摘要：实验结果支持传质强化机制。')
+  }
+  experimentAdapter = {
+    getDesign: vi.fn().mockResolvedValue(design as ExperimentDesign),
+    getDesignStatus: vi.fn().mockResolvedValue(design?.status ?? 'designing'),
+    generateHypotheses: vi.fn().mockResolvedValue([
+      { statement: '提高气液界面积可增强臭氧利用率', confidence: 0.76 }
+    ]),
+    updateDesign: vi.fn().mockResolvedValue(undefined)
+  }
+  knowledgeService.setAdapter(knowledgeAdapter)
+  literatureService.setAdapter(literatureAdapter)
+  experimentService.setAdapter(experimentAdapter)
+}
 
 const completedPlannerEvent: AgentEvent = {
   type: 'planner',
@@ -69,6 +191,7 @@ function mountPage(
 beforeEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
+  installResearchAdapters()
 })
 
 afterEach(() => {
@@ -82,7 +205,7 @@ describe('Agent 中心思考阶段（5）', () => {
     [2, '分析降解机制'],
     [3, '设计实验参数'],
     [4, '生成科研报告']
-  ] as const)('阶段 %i 显示“%s”并以真实等待态初始化', (index, label) => {
+  ] as const)('阶段 %i 使用真实标签并以真实等待态初始化', (index, label) => {
     const { wrapper } = mountPage(AgentCenter)
     const stage = wrapper.get(`[data-stage="${index}"]`)
     expect(stage.text()).toContain(label)
@@ -98,7 +221,7 @@ describe('Agent 中心智能体矩阵（5）', () => {
     ['experiment', '实验智能体'],
     ['analysis', '分析智能体'],
     ['manuscript', '写作智能体']
-  ] as const)('%s 使用“%s”中文名称且空任务不伪造结果', (kind, label) => {
+  ] as const)('%s 使用中文名称且空任务不伪造结果', (kind, label) => {
     const { wrapper } = mountPage(AgentCenter)
     const agent = wrapper.get(`[data-agent-kind="${kind}"]`)
     expect(agent.text()).toContain(label)
@@ -413,5 +536,524 @@ describe('科研助手真实三栏与交互（3）', () => {
     const live = wrapper.get('[data-testid="assistant-analyzing"]')
     expect(live.text()).toBe('AI 正在分析...')
     expect(live.attributes()).toMatchObject({ role: 'status', 'aria-live': 'polite' })
+  })
+})
+
+async function mountLiteratureReady() {
+  const mounted = mountPage(Literature)
+  const store = useKnowledgeStore()
+  await flushPromises()
+  return { ...mounted, store }
+}
+
+async function selectFirstLiterature(wrapper: VueWrapper) {
+  await wrapper.get('[data-document-id="d1"] .citation-card__select').trigger('click')
+  await wrapper.vm.$nextTick()
+}
+
+describe('文献证据工作区（22）', () => {
+  it('以文件夹、稳定详情和论文证据列表组成真实三栏', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    expect(wrapper.get('[data-testid="literature-library"]').attributes('aria-label')).toBe('文献文件夹与搜索')
+    expect(wrapper.get('[data-testid="literature-detail"]').attributes('aria-label')).toBe('选中文献详情')
+    expect(wrapper.get('[data-testid="literature-evidence"]').attributes('aria-label')).toBe('论文证据与 AI 摘要')
+    expect(wrapper.text()).toContain('文献证据工作区')
+  })
+
+  it('选择论文后在稳定详情区展示真实题名', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    await selectFirstLiterature(wrapper)
+    expect(wrapper.get('[data-testid="literature-detail"]').text()).toContain(literatureDocuments[0].title)
+  })
+
+  it('详情展示真实作者而不创建匿名占位', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    await selectFirstLiterature(wrapper)
+    expect(wrapper.get('[data-testid="literature-detail"]').text()).toContain('李小红、张伟')
+  })
+
+  it('详情展示真实发表年份', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    await selectFirstLiterature(wrapper)
+    expect(wrapper.get('[data-testid="literature-detail"]').text()).toContain('2024')
+  })
+
+  it('论文卡按真实相关度降序排列并格式化同一字段', async () => {
+    installResearchAdapters({ documents: [literatureDocuments[1], literatureDocuments[0]] })
+    const { wrapper } = await mountLiteratureReady()
+    const cards = wrapper.findAll('[data-document-id]')
+    expect(cards.map(card => card.attributes('data-document-id'))).toEqual(['d1', 'd2'])
+    expect(cards[0].text()).toContain('相关度 94%')
+    expect(cards[1].text()).toContain('相关度 81%')
+  })
+
+  it('证据等级严格由三项 PaperAssessment 得分平均后换算', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    expect(wrapper.get('[data-document-id="d1"]').text()).toContain('证据等级 4/5')
+  })
+
+  it('接口没有页码时引用位置只显示待提取', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    const card = wrapper.get('[data-document-id="d1"]')
+    expect(card.text()).toContain('引用位置 原文定位待提取')
+    expect(card.text()).not.toMatch(/第\s*\d+\s*页|图\s*\d+/)
+  })
+
+  it('搜索输入通过现有 setSearch 过滤论文卡', async () => {
+    const { wrapper, store } = await mountLiteratureReady()
+    const setSearch = vi.spyOn(store, 'setSearch')
+    const input = wrapper.get('[data-testid="literature-search"]')
+    await input.setValue('传质')
+    expect(setSearch).toHaveBeenCalledWith('传质')
+    expect(wrapper.find('[data-document-id="d1"]').exists()).toBe(false)
+    expect(wrapper.get('[data-document-id="d2"]').text()).toContain('纳米气泡传质机制综述')
+  })
+
+  it('点击论文卡调用现有 selectDocument action', async () => {
+    const { wrapper, store } = await mountLiteratureReady()
+    const select = vi.spyOn(store, 'selectDocument')
+    await wrapper.get('[data-document-id="d1"] .citation-card__select').trigger('click')
+    expect(select).toHaveBeenCalledOnce()
+    expect(select).toHaveBeenCalledWith('d1')
+  })
+
+  it('外层 Enter 只选择论文，内层定位按钮 Enter/Space 只打开定位', async () => {
+    const wrapper = mount(CitationCard, {
+      props: {
+        index: 1,
+        documentId: 'd1',
+        authors: '李小红、张伟',
+        title: '真实论文',
+        journal: '环境科学学报',
+        year: 2024,
+        location: '原文定位待提取',
+        selectable: true
+      }
+    })
+    const listItem = wrapper.get('.citation-card')
+    const select = wrapper.get('.citation-card__select')
+    const location = wrapper.get('[data-testid="citation-location-d1"]')
+    expect(select.element.parentElement).toBe(listItem.element)
+    expect(location.element.parentElement).toBe(listItem.element)
+
+    await select.trigger('click')
+    await select.trigger('keydown', { key: 'Enter' })
+    await select.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('select')).toEqual([['d1'], ['d1'], ['d1']])
+
+    await location.trigger('click')
+    await location.trigger('keydown', { key: 'Enter' })
+    await location.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('openLocation')).toEqual([['d1'], ['d1'], ['d1']])
+    expect(wrapper.emitted('select')).toEqual([['d1'], ['d1'], ['d1']])
+
+    const displayOnly = mount(CitationCard, {
+      props: { index: 2, authors: '作者', title: '展示论文', journal: '期刊', year: 2023 }
+    })
+    expect(displayOnly.get('.citation-card__select').element.tagName).toBe('DIV')
+    expect(displayOnly.find('button').exists()).toBe(false)
+    await displayOnly.get('.citation-card__select').trigger('click')
+    expect(displayOnly.emitted('select')).toBeUndefined()
+  })
+
+  it('论文卡按空格调用同一 selectDocument action', async () => {
+    const { wrapper, store } = await mountLiteratureReady()
+    const select = vi.spyOn(store, 'selectDocument')
+    await wrapper.get('[data-document-id="d1"] .citation-card__select').trigger('keydown', { key: ' ' })
+    expect(select).toHaveBeenCalledWith('d1')
+  })
+
+  it('摘要请求按文献隔离，交错完成不会清除或覆盖当前文献状态', async () => {
+    let resolveD1!: (summary: string) => void
+    let resolveD2!: (summary: string) => void
+    vi.mocked(literatureAdapter.summarizePaper).mockImplementation(documentId => new Promise(resolve => {
+      if (documentId === 'd1') resolveD1 = resolve
+      if (documentId === 'd2') resolveD2 = resolve
+    }))
+    const { wrapper } = await mountLiteratureReady()
+
+    await selectFirstLiterature(wrapper)
+    await wrapper.get('[data-testid="summarize-paper"]').trigger('click')
+    await wrapper.get('[data-document-id="d2"] .citation-card__select').trigger('click')
+    await wrapper.get('[data-testid="summarize-paper"]').trigger('click')
+    expect(literatureAdapter.summarizePaper).toHaveBeenNthCalledWith(1, 'd1')
+    expect(literatureAdapter.summarizePaper).toHaveBeenNthCalledWith(2, 'd2')
+
+    resolveD1('d1 专属摘要')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('d1 专属摘要')
+    expect(wrapper.get('[data-testid="summarize-paper"]').attributes('aria-busy')).toBe('true')
+
+    resolveD2('d2 专属摘要')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="literature-summary"]').text()).toContain('d2 专属摘要')
+    await wrapper.get('[data-document-id="d1"] .citation-card__select').trigger('click')
+    expect(wrapper.get('[data-testid="literature-summary"]').text()).toContain('d1 专属摘要')
+  })
+
+  it('摘要生成中显示标准分析态并禁用重复调用', async () => {
+    let resolveSummary!: (summary: string) => void
+    vi.mocked(literatureAdapter.summarizePaper).mockImplementation(() => new Promise(resolve => { resolveSummary = resolve }))
+    const { wrapper } = await mountLiteratureReady()
+    await selectFirstLiterature(wrapper)
+    const button = wrapper.get('[data-testid="summarize-paper"]')
+    await button.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.attributes('aria-busy')).toBe('true')
+    expect(wrapper.text()).toContain('AI 正在分析...')
+    await button.trigger('click')
+    expect(literatureAdapter.summarizePaper).toHaveBeenCalledOnce()
+    resolveSummary('已完成摘要')
+    await flushPromises()
+  })
+
+  it('摘要失败显示标准中文错误、隐藏原始异常并可重试', async () => {
+    vi.mocked(literatureAdapter.summarizePaper)
+      .mockRejectedValueOnce(new Error('RAW_LITERATURE_SUMMARY_FAILURE'))
+      .mockResolvedValueOnce('重试后的真实摘要')
+    const { wrapper } = await mountLiteratureReady()
+    await selectFirstLiterature(wrapper)
+    await wrapper.get('[data-testid="summarize-paper"]').trigger('click')
+    await flushPromises()
+    const error = wrapper.get('[data-testid="literature-summary-state"]')
+    expect(error.text()).toContain('分析失败，请重试')
+    expect(wrapper.text()).not.toContain('RAW_LITERATURE_SUMMARY_FAILURE')
+    await error.get('.research-state__retry').trigger('click')
+    await flushPromises()
+    expect(literatureAdapter.summarizePaper).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('重试后的真实摘要')
+  })
+
+  it('文献加载期间呈现三条论文专用骨架与可读状态', async () => {
+    vi.mocked(knowledgeAdapter.getDocuments).mockImplementation(() => new Promise(() => undefined))
+    const { wrapper } = mountPage(Literature)
+    await wrapper.vm.$nextTick()
+    const skeleton = wrapper.get('[data-testid="literature-loading-skeleton"]')
+    expect(skeleton.attributes()).toMatchObject({ role: 'status', 'aria-busy': 'true' })
+    expect(skeleton.findAll('.literature__skeleton-paper')).toHaveLength(3)
+    expect(skeleton.get('.literature__visually-hidden').text()).toContain('AI 正在分析文献')
+  })
+
+  it('文献库为空时呈现标准空状态和下一步说明', async () => {
+    installResearchAdapters({ documents: [] })
+    const { wrapper } = await mountLiteratureReady()
+    const state = wrapper.get('[data-testid="literature-page-state"]')
+    expect(state.text()).toContain('暂无科研数据')
+    expect(state.text()).toContain('导入或检索文献')
+  })
+
+  it('初始加载失败隐藏原始异常并通过同一 load action 重试', async () => {
+    vi.mocked(knowledgeAdapter.getDocuments)
+      .mockRejectedValueOnce(new Error('RAW_LITERATURE_LOAD_FAILURE'))
+      .mockResolvedValueOnce(literatureDocuments)
+    const { wrapper } = mountPage(Literature)
+    const store = useKnowledgeStore()
+    const load = vi.spyOn(store, 'loadDocuments')
+    await flushPromises()
+    const state = wrapper.get('[data-testid="literature-page-state"]')
+    expect(state.text()).toContain('分析失败，请重试')
+    expect(wrapper.text()).not.toContain('RAW_LITERATURE_LOAD_FAILURE')
+    await state.get('.research-state__retry').trigger('click')
+    await flushPromises()
+    expect(load).toHaveBeenCalledOnce()
+    expect(knowledgeAdapter.getDocuments).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="literature-page-state"]').exists()).toBe(false)
+  })
+
+  it('引用弹层隔离背景、首焦点并双向循环焦点', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    await wrapper.get('[data-testid="citation-location-d1"]').trigger('click')
+    const dialog = wrapper.get('[data-testid="citation-dialog"]')
+    const content = wrapper.get('[data-testid="literature-content"]')
+    expect(dialog.attributes()).toMatchObject({ role: 'dialog', 'aria-modal': 'true', 'aria-label': '引用位置' })
+    expect(dialog.text()).toContain('原文定位待提取')
+    expect(dialog.element.parentElement).toBe(content.element.parentElement)
+    expect(content.attributes('inert')).toBeDefined()
+    expect(content.attributes('aria-hidden')).toBe('true')
+
+    const first = dialog.get('[data-testid="close-citation-dialog"]')
+    const last = dialog.get('[data-testid="confirm-citation-dialog"]')
+    expect(document.activeElement).toBe(first.element)
+    ;(last.element as HTMLButtonElement).focus()
+    await dialog.trigger('keydown', { key: 'Tab' })
+    expect(document.activeElement).toBe(first.element)
+    ;(first.element as HTMLButtonElement).focus()
+    await dialog.trigger('keydown', { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(last.element)
+  })
+
+  it('引用弹层可由 document 或弹层 Escape 关闭并恢复触发按钮焦点', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    const trigger = wrapper.get('[data-testid="citation-location-d1"]')
+    ;(trigger.element as HTMLButtonElement).focus()
+    await trigger.trigger('click')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="citation-dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+
+    await trigger.trigger('click')
+    await wrapper.get('[data-testid="citation-dialog"]').trigger('keydown', { key: 'Escape' })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="citation-dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+  })
+
+  it('论文列表与卡片使用 list/listitem 语义且选择按钮可聚焦展开', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    const list = wrapper.get('[data-testid="literature-document-list"]')
+    expect(list.attributes()).toMatchObject({ role: 'list', 'aria-label': '按相关度排序的论文证据列表' })
+    const card = wrapper.get('[data-document-id="d1"]')
+    expect(card.attributes('role')).toBe('listitem')
+    expect(card.attributes('aria-label')).toContain(literatureDocuments[0].title)
+    const select = card.get('.citation-card__select')
+    expect(select.element.tagName).toBe('BUTTON')
+    expect(select.attributes('aria-pressed')).toBe('false')
+    const secondary = card.get('.citation-card__secondary')
+    expect(secondary.text()).toContain('李小红、张伟')
+    expect(card.get('[data-testid="citation-location-d1"]').text()).toContain('原文定位待提取')
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/components/research/CitationCard.vue'), 'utf8')
+    expect(source).toMatch(/\.citation-card:hover\s+\.citation-card__secondary\s*\{/)
+    expect(source).toMatch(/\.citation-card:focus-within\s+\.citation-card__secondary\s*\{/)
+    await select.trigger('click')
+    expect(select.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('文件夹展示真实名称与数量', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    const folder = wrapper.get('[data-folder-id="folder-1"]')
+    expect(folder.text()).toContain('四环素降解')
+    expect(folder.text()).toContain('2')
+  })
+
+  it('详情评分读取 reliabilityScore、evidenceScore 与 methodologyScore', async () => {
+    const { wrapper } = await mountLiteratureReady()
+    await selectFirstLiterature(wrapper)
+    const scores = wrapper.get('[data-testid="paper-assessment"]')
+    expect(scores.text()).toContain('可靠性 82%')
+    expect(scores.text()).toContain('证据 78%')
+    expect(scores.text()).toContain('方法论 65%')
+  })
+
+})
+
+async function mountExperimentReady() {
+  const mounted = mountPage(Experiment)
+  const store = useExperimentStore()
+  await flushPromises()
+  return { ...mounted, store }
+}
+
+describe('实验设计工作区（22）', () => {
+  it.each(['研究假设', '实验变量', 'AI 实验建议'])('实验三栏显示“%s”且具有可读区域标签', async label => {
+    const { wrapper } = await mountExperimentReady()
+    const region = wrapper.get(`[aria-label="${label}"]`)
+    expect(region.text()).toContain(label)
+    expect(region.element.tagName).toMatch(/ASIDE|SECTION/)
+  })
+
+  it('展示真实研究问题而不生成示例问题', async () => {
+    const { wrapper } = await mountExperimentReady()
+    expect(wrapper.get('[data-testid="experiment-question"]').text()).toContain(experimentDesign.question)
+  })
+
+  it('展示 Store 中已有的真实研究假设与置信度', async () => {
+    const { wrapper } = await mountExperimentReady()
+    const hypothesis = wrapper.get('[data-testid="design-hypothesis-0"]')
+    expect(hypothesis.text()).toContain('减小气泡粒径可提高气液传质效率')
+    expect(hypothesis.text()).toContain('置信度 82%')
+  })
+
+  it('变量区展示真实名称、范围和单位', async () => {
+    const { wrapper } = await mountExperimentReady()
+    const variable = wrapper.get('[data-variable-index="0"]')
+    expect(variable.text()).toContain('气泡粒径')
+    expect((variable.get('input').element as HTMLInputElement).value).toBe('80–300')
+    expect(variable.text()).toContain('nm')
+  })
+
+  it('变量输入具有包含名称与单位的中文可读标签', async () => {
+    const { wrapper } = await mountExperimentReady()
+    expect(wrapper.get('[data-variable-index="0"] input').attributes('aria-label')).toBe('气泡粒径范围（nm）')
+    expect(wrapper.get('[data-variable-index="1"] input').attributes('aria-label')).toBe('四环素去除率范围（%）')
+  })
+
+  it('实验分组展示真实条件与目的', async () => {
+    const { wrapper } = await mountExperimentReady()
+    const group = wrapper.get('[data-group-index="1"]')
+    expect(group.text()).toContain('实验组')
+    expect(group.text()).toContain('微纳米气泡曝气')
+    expect(group.text()).toContain('检验传质增益')
+  })
+
+  it('评价指标作为真实实验结果指标展示', async () => {
+    const { wrapper } = await mountExperimentReady()
+    const outcomes = wrapper.get('[data-testid="experiment-outcomes"]')
+    expect(outcomes.text()).toContain('去除率')
+    expect(outcomes.text()).toContain('动力学常数')
+  })
+
+  it('AI 建议区展示真实推荐模型与置信度', async () => {
+    const { wrapper } = await mountExperimentReady()
+    const advice = wrapper.get('[aria-label="AI 实验建议"]')
+    expect(advice.text()).toContain('伪一级动力学')
+    expect(advice.text()).toContain('88%')
+  })
+
+  it('点击生成通过既有 generateHypotheses 传入真实问题', async () => {
+    const { wrapper } = await mountExperimentReady()
+    await wrapper.get('[data-testid="generate-hypotheses"]').trigger('click')
+    await flushPromises()
+    expect(experimentAdapter.generateHypotheses).toHaveBeenCalledOnce()
+    expect(experimentAdapter.generateHypotheses).toHaveBeenCalledWith(experimentDesign.question)
+  })
+
+  it('AI 生成结果以建议卡展示真实语句与置信度', async () => {
+    const { wrapper } = await mountExperimentReady()
+    await wrapper.get('[data-testid="generate-hypotheses"]').trigger('click')
+    await flushPromises()
+    const suggestion = wrapper.get('[data-testid="ai-suggestion-0"]')
+    expect(suggestion.text()).toContain('提高气液界面积可增强臭氧利用率')
+    expect(suggestion.text()).toContain('置信度 76%')
+  })
+
+  it('AI 生成期间按钮禁用、标记 busy 且防止重复调用', async () => {
+    let resolveGeneration!: (value: Array<{ statement: string; confidence: number }>) => void
+    vi.mocked(experimentAdapter.generateHypotheses).mockImplementation(() => new Promise(resolve => { resolveGeneration = resolve }))
+    const { wrapper } = await mountExperimentReady()
+    const button = wrapper.get('[data-testid="generate-hypotheses"]')
+    await button.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.attributes('aria-busy')).toBe('true')
+    expect(button.text()).toContain('AI 正在分析...')
+    await button.trigger('click')
+    expect(experimentAdapter.generateHypotheses).toHaveBeenCalledOnce()
+    resolveGeneration([])
+    await flushPromises()
+    const empty = wrapper.get('[data-testid="ai-suggestion-empty"]')
+    expect(empty.text()).toContain('暂无 AI 实验建议')
+    expect(empty.text()).toContain('本次未生成可用建议')
+    expect(empty.text()).not.toContain('建议只在用户主动生成后显示')
+  })
+
+  it('编辑只在确认时写 Service，保存期间禁用全部草稿输入并固定提交快照', async () => {
+    let resolveSave!: () => void
+    vi.mocked(experimentAdapter.updateDesign).mockImplementation(() => new Promise(resolve => { resolveSave = resolve }))
+    const { wrapper } = await mountExperimentReady()
+    const input = wrapper.get('[data-variable-index="0"] input')
+    await input.setValue('60–240')
+    expect(experimentAdapter.updateDesign).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="save-experiment"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(experimentAdapter.updateDesign).toHaveBeenCalledOnce()
+    expect(experimentAdapter.updateDesign).toHaveBeenCalledWith(expect.objectContaining({
+      variables: expect.arrayContaining([expect.objectContaining({ name: '气泡粒径', range: '60–240', unit: 'nm' })])
+    }))
+    expect(wrapper.findAll('.experiment__variable input').every(field => field.attributes('disabled') !== undefined)).toBe(true)
+    expect(wrapper.get('[data-testid="save-experiment"]').attributes('disabled')).toBeDefined()
+    expect((input.element as HTMLInputElement).value).toBe('60–240')
+    resolveSave()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="experiment-save-status"]').text()).toContain('实验设计已保存')
+  })
+
+  it('保存成功显示静止的中文已保存反馈', async () => {
+    const { wrapper } = await mountExperimentReady()
+    await wrapper.get('[data-testid="save-experiment"]').trigger('click')
+    await flushPromises()
+    const status = wrapper.get('[data-testid="experiment-save-status"]')
+    expect(status.text()).toContain('实验设计已保存')
+    expect(status.attributes()).toMatchObject({ role: 'status', 'aria-live': 'polite' })
+  })
+
+  it('保存失败显示标准错误、隐藏原始异常并可重试', async () => {
+    vi.mocked(experimentAdapter.updateDesign)
+      .mockRejectedValueOnce(new Error('RAW_EXPERIMENT_SAVE_FAILURE'))
+      .mockResolvedValueOnce(undefined)
+    const { wrapper } = await mountExperimentReady()
+    await wrapper.get('[data-testid="save-experiment"]').trigger('click')
+    await flushPromises()
+    const error = wrapper.get('[data-testid="experiment-save-error"]')
+    expect(error.text()).toContain('分析失败，请重试')
+    expect(wrapper.text()).not.toContain('RAW_EXPERIMENT_SAVE_FAILURE')
+    await error.get('.research-state__retry').trigger('click')
+    await flushPromises()
+    expect(experimentAdapter.updateDesign).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('实验设计已保存')
+  })
+
+  it('运行态同时使用文字与状态属性表达', async () => {
+    installResearchAdapters({ design: { ...experimentDesign, status: 'running' } })
+    const { wrapper } = await mountExperimentReady()
+    const status = wrapper.get('[data-testid="experiment-status"]')
+    expect(status.text()).toContain('运行中')
+    expect(status.attributes('data-status')).toBe('running')
+  })
+
+  it('运行中的实验禁用变量输入和保存按钮', async () => {
+    installResearchAdapters({ design: { ...experimentDesign, status: 'running' } })
+    const { wrapper } = await mountExperimentReady()
+    expect(wrapper.get('[data-variable-index="0"] input').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="save-experiment"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="generate-hypotheses"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="save-experiment"]').trigger('click')
+    expect(experimentAdapter.updateDesign).not.toHaveBeenCalled()
+  })
+
+  it('实验设计加载期间显示标准中文加载态', async () => {
+    vi.mocked(experimentAdapter.getDesign).mockImplementation(() => new Promise(() => undefined))
+    const { wrapper } = mountPage(Experiment)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-testid="experiment-page-state"]').text()).toContain('AI 正在分析...')
+  })
+
+  it('服务返回空设计时显示标准空状态', async () => {
+    installResearchAdapters({ design: null })
+    const { wrapper } = await mountExperimentReady()
+    expect(wrapper.get('[data-testid="experiment-page-state"]').text()).toContain('暂无科研数据')
+  })
+
+  it('实验加载失败隐藏原始异常并通过同一 loadDesign 重试', async () => {
+    vi.mocked(experimentAdapter.getDesign)
+      .mockRejectedValueOnce(new Error('RAW_EXPERIMENT_LOAD_FAILURE'))
+      .mockResolvedValueOnce(experimentDesign)
+    const { wrapper } = mountPage(Experiment)
+    const store = useExperimentStore()
+    const load = vi.spyOn(store, 'loadDesign')
+    await flushPromises()
+    const state = wrapper.get('[data-testid="experiment-page-state"]')
+    expect(state.text()).toContain('分析失败，请重试')
+    expect(wrapper.text()).not.toContain('RAW_EXPERIMENT_LOAD_FAILURE')
+    await state.get('.research-state__retry').trigger('click')
+    await flushPromises()
+    expect(load).toHaveBeenCalledOnce()
+    expect(experimentAdapter.getDesign).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="experiment-page-state"]').exists()).toBe(false)
+  })
+
+  it('1440 工作站三栏具备可收缩网格、列溢出控制和响应式合约', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 })
+    window.dispatchEvent(new Event('resize'))
+    const experiment = await mountExperimentReady()
+    const literature = await mountLiteratureReady()
+    expect(experiment.wrapper.get('[data-testid="experiment-workspace"]').element.children).toHaveLength(3)
+    expect(literature.wrapper.get('.literature__workspace').element.children).toHaveLength(3)
+    for (const label of ['研究假设', '实验变量', 'AI 实验建议']) {
+      const region = experiment.wrapper.get(`[aria-label="${label}"]`)
+      expect(region.attributes('style') ?? '').not.toMatch(/width\s*:/)
+    }
+    for (const file of ['Experiment.vue', 'Literature.vue']) {
+      const source = readFileSync(resolve(process.cwd(), `src/renderer/src/pages/research/${file}`), 'utf8')
+      const className = file === 'Experiment.vue' ? 'experiment__workspace' : 'literature__workspace'
+      const baseGrid = source.match(new RegExp(`\\.${className}\\s*\\{[^}]*grid-template-columns:\\s*([^;]+);`, 's'))
+      expect(baseGrid?.[1].match(/minmax\(0,/g)).toHaveLength(3)
+      expect(source).toContain('@media (max-width: 1480px)')
+      expect(source).toContain('@media (min-width: 1720px)')
+      expect(source).toMatch(/min-width:\s*0;/)
+      expect(source).toMatch(/overflow:\s*(?:hidden|auto);/)
+      expect(source).not.toContain('color: var(--research-text-muted)')
+    }
   })
 })
