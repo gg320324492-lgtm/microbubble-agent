@@ -1,26 +1,30 @@
 <script setup lang="ts">
 /**
- * 首页 — 科研项目总览 Dashboard。
+ * 首页 — 科研项目总览 Dashboard (Pinia store 驱动)。
  */
+import { onMounted } from 'vue'
+import { useProjectStore } from '../../stores/research/project.store'
+import { useKnowledgeStore } from '../../stores/research/knowledge.store'
+import { useDatasetStore } from '../../stores/research/dataset.store'
+import { useManuscriptStore } from '../../stores/research/manuscript.store'
 import ProjectCard from '../../components/research/ProjectCard.vue'
 import InsightCard from '../../components/research/InsightCard.vue'
 import ScientificMetric from '../../components/research/ScientificMetric.vue'
 import Timeline from '../../components/research/Timeline.vue'
 import StatusBadge from '../../components/research/StatusBadge.vue'
 
-const project = {
-  name: 'O3-MNBs 强化四环素降解研究',
-  description: '探索微纳米气泡臭氧技术对四环素类抗生素的降解效率与机理',
-  progress: 0.68,
-  status: 'active' as const,
-}
+const projectStore = useProjectStore()
+const knowledgeStore = useKnowledgeStore()
+const datasetStore = useDatasetStore()
+const manuscriptStore = useManuscriptStore()
 
-const stats = [
-  { label: '实验总数', value: '28', unit: '次', trend: 'up' as const, trendText: '+4 本周' },
-  { label: '数据集', value: '12', unit: '个', trend: 'up' as const, trendText: '+2 本周' },
-  { label: '文献管理', value: '156', unit: '篇', trend: 'up' as const, trendText: '+8 本周' },
-  { label: '论文进度', value: '45', unit: '%', trend: 'up' as const, trendText: '进行中' },
-]
+onMounted(async () => {
+  await Promise.all([
+    knowledgeStore.loadDocuments(),
+    datasetStore.loadReport(),
+    manuscriptStore.loadManuscript()
+  ])
+})
 
 const insights = [
   { finding: '动力学模型选择可能不足', suggestion: '补充自由基验证实验，增加 ESR 检测', severity: 'warning' as const },
@@ -43,41 +47,58 @@ const warnings = [
 
 <template>
   <div class="dashboard">
-    <!-- 项目标题 -->
     <div class="dashboard__hero">
       <div>
-        <h1 class="dashboard__title">{{ project.name }}</h1>
-        <p class="dashboard__subtitle">欢迎回来，以下是项目最新概览</p>
+        <h1 class="dashboard__title">{{ projectStore.projectName }}</h1>
+        <p class="dashboard__subtitle">{{ projectStore.currentProject.description }}</p>
       </div>
     </div>
 
-    <!-- 统计卡片 -->
     <div class="dashboard__stats">
-      <ScientificMetric v-for="s in stats" :key="s.label" v-bind="s" />
+      <ScientificMetric label="实验总数" :value="String(projectStore.currentProject.stats.experiments)" unit="次" trend="up" trendText="+4 本周" />
+      <ScientificMetric label="数据集" :value="String(projectStore.currentProject.stats.datasets)" unit="个" trend="up" trendText="+2 本周" />
+      <ScientificMetric label="文献管理" :value="String(projectStore.currentProject.stats.documents)" unit="篇" trend="up" trendText="+8 本周" />
+      <ScientificMetric label="论文进度" value="45" unit="%" trend="up" trendText="进行中" />
     </div>
 
-    <!-- 中部：里程碑 + 任务 -->
     <div class="dashboard__middle">
       <div class="dashboard__card">
         <h3 class="dashboard__card-title">项目里程碑</h3>
         <Timeline :steps="milestones" />
       </div>
       <div class="dashboard__card">
-        <h3 class="dashboard__card-title">本周任务</h3>
-        <div class="dashboard__task-list">
-          <div class="dashboard__task" v-for="(task, i) in ['分析 TC 微纳米气泡降解动力学数据', '拟合不同浓度下的降解模型', '更新实验记录与数据集', '撰写动力学分析报告']" :key="i">
-            <StatusBadge :status="i < 3 ? 'success' : 'neutral'" :label="i < 3 ? '已完成' : '进行中'" />
-            <span>{{ task }}</span>
-          </div>
-        </div>
+        <h3 class="dashboard__card-title">AI 科研洞察</h3>
+        <InsightCard v-for="(ins, i) in insights" :key="i" v-bind="ins" />
       </div>
     </div>
 
-    <!-- 底部：AI 洞察 + 警告 -->
     <div class="dashboard__bottom">
       <div class="dashboard__card">
-        <h3 class="dashboard__card-title">AI 科研洞察</h3>
-        <InsightCard v-for="(ins, i) in insights" :key="i" v-bind="ins" />
+        <h3 class="dashboard__card-title">数据概览</h3>
+        <div class="dashboard__data-row" v-if="datasetStore.quality">
+          <span>数据完整度</span>
+          <div class="dashboard__bar"><div class="dashboard__bar-fill" :style="{ width: (datasetStore.quality.completeness * 100) + '%' }" /></div>
+          <span>{{ (datasetStore.quality.completeness * 100).toFixed(0) }}%</span>
+        </div>
+        <div class="dashboard__data-row">
+          <span>模型拟合</span>
+          <span class="dashboard__mono">{{ datasetStore.models[0]?.model ?? '—' }} (R²={{ datasetStore.models[0]?.rSquared?.toFixed(3) ?? '—' }})</span>
+        </div>
+      </div>
+      <div class="dashboard__card">
+        <h3 class="dashboard__card-title">论文状态</h3>
+        <div class="dashboard__data-row">
+          <span>字数</span>
+          <span>{{ manuscriptStore.wordCount.toLocaleString() }} 字</span>
+        </div>
+        <div class="dashboard__data-row">
+          <span>写作问题</span>
+          <StatusBadge :status="manuscriptStore.issueCount > 0 ? 'warning' : 'success'" :label="manuscriptStore.issueCount + ' 项待改进'" />
+        </div>
+        <div class="dashboard__data-row">
+          <span>文献数量</span>
+          <span>{{ knowledgeStore.totalDocuments }} 篇</span>
+        </div>
       </div>
       <div class="dashboard__card">
         <h3 class="dashboard__card-title">研究提醒</h3>
@@ -97,10 +118,12 @@ const warnings = [
 .dashboard__subtitle { margin: 0; font-size: 13px; color: #64748b; }
 .dashboard__stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
 .dashboard__middle { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-.dashboard__bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.dashboard__bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 .dashboard__card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; }
 .dashboard__card-title { margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #0f172a; }
-.dashboard__task-list { display: flex; flex-direction: column; gap: 10px; }
-.dashboard__task { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #334155; }
-.dashboard__warning { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #334155; margin-bottom: 10px; }
+.dashboard__data-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 6px 0; border-bottom: 1px solid #f1f5f9; color: #475569; }
+.dashboard__bar { flex: 1; height: 6px; background: #f1f5f9; border-radius: 3px; margin: 0 8px; }
+.dashboard__bar-fill { height: 100%; background: #10b981; border-radius: 3px; }
+.dashboard__mono { font-family: monospace; font-size: 12px; }
+.dashboard__warning { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: #334155; margin-bottom: 8px; }
 </style>

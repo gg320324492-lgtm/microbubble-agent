@@ -56,7 +56,13 @@ const routes: RouteRecordRaw[] = [
     name: 'home',
     redirect: () => '/dashboard'
   },
-  // ── Phase 8-I1: 科研工作台路由 ──
+  // ── Phase 8-I1/I2: 科研工作台路由 ──
+  {
+    path: '/research/project',
+    name: 'research-project',
+    component: () => import('../pages/research/ProjectWorkspace.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '项目空间' }
+  },
   {
     path: '/research/dashboard',
     name: 'research-dashboard',
