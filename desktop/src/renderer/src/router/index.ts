@@ -4,7 +4,7 @@
 //   - 不需 auth: /login, /debug/ping
 //   - 需 auth + MainLayout: /dashboard, /knowledge, /knowledge/detail?id=N, /home, /tasks(soon), /meeting(soon)
 //
-// Phase 2 起步: /dashboard + /knowledge (含详情) + /home 重定向.
+// 默认入口 / 与 /home 进入科研首页；/dashboard 作为旧视图兼容入口保留。
 // Phase 2 后续批次填 tasks / meeting / knowledge graph 等.
 
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
@@ -13,7 +13,7 @@ import { useAuthStore } from '../stores/auth'
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: () => '/dashboard'
+    redirect: { name: 'research-dashboard' }
   },
   {
     path: '/login',
@@ -54,7 +54,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/home',
     name: 'home',
-    redirect: () => '/dashboard'
+    redirect: { name: 'research-dashboard' }
   },
   // ── Phase 8-I1/I2: 科研工作台路由 ──
   {
@@ -67,7 +67,7 @@ const routes: RouteRecordRaw[] = [
     path: '/research/dashboard',
     name: 'research-dashboard',
     component: () => import('../pages/research/Dashboard.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: '首页' }
+    meta: { requiresAuth: true, layout: 'main', title: '科研首页' }
   },
   {
     path: '/research/assistant',
@@ -132,7 +132,7 @@ export const router = createRouter({
   routes
 })
 
-// 全局前置守卫：未登录跳 /login；已登录访问 /login 跳 /dashboard
+// 全局前置守卫：未登录跳 /login；已登录访问 /login 跳科研首页。
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
   if (!auth.restoreAttempted) {
@@ -143,7 +143,7 @@ router.beforeEach(async (to) => {
     return { name: 'login' }
   }
   if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: 'dashboard' }
+    return { name: 'research-dashboard' }
   }
   return true
 })
