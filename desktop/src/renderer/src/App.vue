@@ -21,19 +21,15 @@ const layout = computed(() => {
 
 <template>
   <MainLayout v-if="layout === 'main'">
-    <router-view />
+    <RouterView v-slot="{ Component }">
+      <Transition name="research-page" mode="out-in">
+        <component :is="Component" :key="route.fullPath" />
+      </Transition>
+    </RouterView>
   </MainLayout>
-  <router-view v-else />
+  <RouterView v-else v-slot="{ Component }">
+    <Transition name="research-page" mode="out-in">
+      <component :is="Component" :key="route.fullPath" />
+    </Transition>
+  </RouterView>
 </template>
-
-<style>
-:root {
-  color-scheme: dark light;
-}
-body {
-  margin: 0;
-  background: #020617;
-  color: #e2e8f0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-</style>

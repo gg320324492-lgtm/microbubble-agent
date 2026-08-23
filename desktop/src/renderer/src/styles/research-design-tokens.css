@@ -1,0 +1,142 @@
+/*
+ * Scientific Research OS design foundations.
+ *
+ * Keep semantic meaning at the call site: scientific structure uses primary,
+ * AI activity uses ai, research quality uses success, and risk states use the
+ * warning/danger families. Components must not recreate these values locally.
+ */
+:root {
+  color-scheme: light;
+
+  /* Scientific blue */
+  --research-primary-50: #eef3ff;
+  --research-primary-100: #dce5ff;
+  --research-primary-200: #bdccff;
+  --research-primary-300: #94aaf8;
+  --research-primary-400: #6983ec;
+  --research-primary-500: #4263df;
+  --research-primary-600: #3152c9;
+  --research-primary-700: #2944a7;
+  --research-primary-800: #263c85;
+
+  /* AI purple */
+  --research-ai-50: #f3efff;
+  --research-ai-100: #e6ddff;
+  --research-ai-200: #d2c2ff;
+  --research-ai-300: #b79cf5;
+  --research-ai-400: #9675e6;
+  --research-ai-500: #7654d8;
+  --research-ai-600: #6544c5;
+  --research-ai-700: #5437a4;
+  --research-ai-glow-base: rgb(118 84 216 / 30%);
+  --research-ai-glow-soft: rgb(118 84 216 / 24%);
+  --research-ai-glow-transparent: rgb(118 84 216 / 0%);
+
+  /* Research green */
+  --research-success-50: #edf9f4;
+  --research-success-100: #d4f1e6;
+  --research-success-500: #1a9b72;
+  --research-success-600: #137f5d;
+  --research-success-700: #12664e;
+
+  /* Review and risk states */
+  --research-warning-50: #fff7ea;
+  --research-warning-100: #ffebc8;
+  --research-warning-500: #d98925;
+  --research-warning-600: #b86d18;
+  --research-danger-50: #fff1f2;
+  --research-danger-100: #ffe0e4;
+  --research-danger-500: #d84f63;
+  --research-danger-600: #b93b50;
+
+  /* Neutral work surfaces */
+  --research-bg-main: #f5f7fb;
+  --research-bg-card: #ffffff;
+  --research-bg-panel: #fafbfe;
+  --research-bg-elevated: #ffffff;
+  --research-bg-hover: #f0f4fb;
+  --research-text-primary: #17223b;
+  --research-text-secondary: #66748d;
+  --research-text-muted: #8d98aa;
+  --research-text-inverse: #ffffff;
+  --research-border-subtle: #e4e9f1;
+  --research-border-strong: #cbd4e2;
+  --research-divider: #edf0f5;
+  --research-overlay: rgb(23 34 59 / 38%);
+
+  /* Type system: optimized for Chinese scientific reading */
+  --research-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --research-font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif;
+  --research-font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --research-text-xs: 11px;
+  --research-text-sm: 12px;
+  --research-text-body: 14px;
+  --research-text-card-title: 15px;
+  --research-text-section-title: 18px;
+  --research-text-page-title: 24px;
+  --research-line-height-tight: 1.3;
+  --research-line-height-body: 1.65;
+  --research-line-height-reading: 1.85;
+  --research-font-weight-regular: 400;
+  --research-font-weight-medium: 500;
+  --research-font-weight-semibold: 600;
+  --research-font-weight-bold: 700;
+  --research-letter-spacing-title: -0.015em;
+
+  /* Four-pixel spacing grid */
+  --research-space-1: 4px;
+  --research-space-2: 8px;
+  --research-space-3: 12px;
+  --research-space-4: 16px;
+  --research-space-5: 20px;
+  --research-space-6: 24px;
+  --research-space-7: 28px;
+  --research-space-8: 32px;
+  --research-space-10: 40px;
+  --research-space-12: 48px;
+
+  /* Shape hierarchy */
+  --research-radius-input: 9px;
+  --research-radius-button: 10px;
+  --research-radius-card: 14px;
+  --research-radius-panel: 18px;
+  --research-radius-large: 24px;
+  --research-radius-pill: 999px;
+
+  /* Depth: border-first surfaces with deliberate elevation */
+  --research-shadow-soft: 0 4px 16px rgb(33 52 86 / 5%);
+  --research-shadow-medium: 0 12px 30px rgb(33 52 86 / 10%);
+  --research-shadow-floating: 0 22px 54px rgb(33 52 86 / 15%);
+  --research-shadow-focus-primary: 0 0 0 3px rgb(66 99 223 / 22%);
+  --research-shadow-focus-ai: 0 0 0 3px rgb(118 84 216 / 20%);
+  --research-shadow-inset: inset 0 1px 0 rgb(255 255 255 / 72%);
+
+  /* Balanced 1440 desktop workstation density */
+  --research-sidebar-width: 232px;
+  --research-sidebar-collapsed-width: 76px;
+  --research-header-height: 64px;
+  --research-page-gutter: 24px;
+  --research-grid-gap: 16px;
+  --research-content-max-width: 1680px;
+  --research-z-base: 0;
+  --research-z-header: 30;
+  --research-z-popover: 60;
+  --research-z-modal: 90;
+  --research-z-toast: 120;
+
+  /* Motion language */
+  --research-duration-fast: 160ms;
+  --research-duration-normal: 240ms;
+  --research-duration-slow: 320ms;
+  --research-ease-standard: cubic-bezier(.2,.8,.2,1);
+  --research-ease-emphasized: cubic-bezier(.16,1,.3,1);
+  --research-ease-linear: linear;
+}
+
+/* More breathing room on large scientific workstations without scaling type. */
+@media (min-width: 1720px) {
+  :root {
+    --research-page-gutter: 32px;
+    --research-grid-gap: 20px;
+  }
+}
