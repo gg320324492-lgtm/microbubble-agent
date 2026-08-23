@@ -2,6 +2,11 @@
 // Target: ≥250 tests (3550 base → ≥3850 total).
 
 import { describe, it, expect } from 'vitest'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __testDir = dirname(fileURLToPath(import.meta.url))
+const srcRoot = resolve(__testDir, '..', '..', 'src')
 
 import {
   isValidResearchDomain,
@@ -663,48 +668,48 @@ describe('Phase 8-H0 determinism', () => {
 describe('Phase 8-H0 security', () => {
   it('schema has no backend imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/shared/science/research-design-schema.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'shared/science/research-design-schema.ts'), 'utf8')
     expect(content).not.toMatch(/from 'app\//)
     expect(content).not.toMatch(/from "app\//)
   })
 
   it('problem analyzer has no auth imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/problem-analyzer.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/problem-analyzer.ts'), 'utf8')
     expect(content).not.toMatch(/import.*auth/)
     expect(content).not.toContain('login')
   })
 
   it('hypothesis generator has no SDK imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/hypothesis-generator.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/hypothesis-generator.ts'), 'utf8')
     expect(content).not.toContain('anthropic')
     expect(content).not.toContain('openai')
   })
 
   it('experiment designer has no model-provider imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/experiment-designer.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/experiment-designer.ts'), 'utf8')
     expect(content).not.toMatch(/import.*ModelProvider/)
   })
 
   it('model recommender has no backend imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/model-recommender.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/model-recommender.ts'), 'utf8')
     expect(content).not.toMatch(/from 'app\//)
     expect(content).not.toContain('fastapi')
   })
 
   it('design agent facade has no auth imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/research-design-agent.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/research-design-agent.ts'), 'utf8')
     expect(content).not.toMatch(/import.*auth/)
     expect(content).not.toMatch(/import.*token/)
   })
 
   it('schema has no provider imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/shared/science/research-design-schema.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'shared/science/research-design-schema.ts'), 'utf8')
     expect(content).not.toMatch(/import.*ModelProvider/)
     expect(content).not.toMatch(/import.*SecretStore/)
   })
