@@ -1,165 +1,358 @@
 <script setup lang="ts">
-/**
- * 实验设计 — 升级版：AI假设生成 + 设计卡 + 分组展示。
- */
-import { onMounted, ref } from 'vue'
-import { useExperimentStore } from '../../stores/research/experiment.store'
-import { experimentService } from '../../services/research/experiment.service'
-import Timeline from '../../components/research/Timeline.vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import ResearchIcon from '../../components/icons/ResearchIcon.vue'
+import ResearchState from '../../components/research/ResearchState.vue'
 import StatusBadge from '../../components/research/StatusBadge.vue'
+import { experimentService } from '../../services/research/experiment.service'
+import { useExperimentStore } from '../../stores/research/experiment.store'
+
+type PageState = 'loading' | 'empty' | 'error' | null
+type OperationState = 'idle' | 'loading' | 'success' | 'error'
 
 const store = useExperimentStore()
+const pageState = ref<PageState>('loading')
 const generatedHypotheses = ref<Array<{ statement: string; confidence: number }>>([])
-const isGenerating = ref(false)
-onMounted(() => store.loadDesign())
+const generationState = ref<OperationState>('idle')
+const saveState = ref<OperationState>('idle')
+const variableRanges = ref<string[]>([])
 
-const steps = [
-  { label: '研究问题定义', status: 'done' as const },
-  { label: '科学假设生成', status: 'done' as const },
-  { label: '变量与分组设计', status: 'done' as const },
-  { label: '评价指标确定', status: 'current' as const },
-  { label: '推荐分析模型', status: 'pending' as const },
-]
+const isReadOnly = computed(() => store.design?.status === 'running' || store.design?.status === 'completed')
+const statusLabel = computed(() => {
+  if (store.design?.status === 'running') return '运行中'
+  if (store.design?.status === 'completed') return '已完成'
+  return '设计阶段'
+})
+const statusTone = computed<'success' | 'info' | 'neutral'>(() =>
+  store.design?.status === 'running' ? 'info' : store.design?.status === 'completed' ? 'success' : 'neutral'
+)
 
-async function genHypotheses() {
-  if (!store.design || isGenerating.value) return
-  isGenerating.value = true
-  try { generatedHypotheses.value = await experimentService.generateHypotheses(store.design.question) }
-  finally { isGenerating.value = false }
+watch(
+  () => store.design,
+  design => { variableRanges.value = design?.variables.map(variable => variable.range) ?? [] },
+  { immediate: true }
+)
+
+async function loadDesign() {
+  pageState.value = 'loading'
+  try {
+    await store.loadDesign()
+    pageState.value = store.design ? null : 'empty'
+  } catch {
+    pageState.value = 'error'
+  }
 }
 
-function varLabel(type: string) { return type === 'independent' ? '自变量' : type === 'dependent' ? '因变量' : '控制变量' }
-function varStatus(type: string): 'success' | 'info' | 'neutral' { return type === 'dependent' ? 'info' : type === 'control' ? 'neutral' : 'success' }
+async function generateHypotheses() {
+  if (!store.design || generationState.value === 'loading') return
+  generationState.value = 'loading'
+  try {
+    generatedHypotheses.value = await experimentService.generateHypotheses(store.design.question)
+    generationState.value = 'success'
+  } catch {
+    generationState.value = 'error'
+  }
+}
+
+function markDraftChanged() {
+  if (saveState.value !== 'loading') saveState.value = 'idle'
+}
+
+async function saveDesign() {
+  if (!store.design || saveState.value === 'loading' || isReadOnly.value) return
+  saveState.value = 'loading'
+  const variables = store.design.variables.map((variable, index) => ({
+    ...variable,
+    range: variableRanges.value[index] ?? variable.range
+  }))
+  try {
+    await experimentService.updateDesign({ variables })
+    saveState.value = 'success'
+  } catch {
+    saveState.value = 'error'
+  }
+}
+
+function variableType(type: 'independent' | 'dependent' | 'control') {
+  return type === 'independent' ? '自变量' : type === 'dependent' ? '因变量' : '控制变量'
+}
+
+function variableTone(type: 'independent' | 'dependent' | 'control'): 'success' | 'info' | 'neutral' {
+  return type === 'independent' ? 'success' : type === 'dependent' ? 'info' : 'neutral'
+}
+
+function variableLabel(name: string, unit: string) {
+  return `${name}范围${unit ? `（${unit}）` : ''}`
+}
+
+onMounted(loadDesign)
 </script>
 
 <template>
-  <div class="experiment" v-if="store.design">
-    <div class="experiment__header">
-      <h1 class="experiment__title">实验设计</h1>
-      <StatusBadge :status="store.design.status === 'running' ? 'info' : 'success'" :label="store.design.status === 'running' ? '运行中' : '设计阶段'" />
-    </div>
-
-    <div class="experiment__body">
-      <div class="experiment__workflow">
-        <h3>设计流程</h3>
-        <Timeline :steps="steps" />
+  <section class="experiment" aria-labelledby="experiment-title">
+    <header class="experiment__header">
+      <div>
+        <p class="experiment__eyebrow">实验方案工作台</p>
+        <h1 id="experiment-title">实验设计</h1>
+        <p v-if="store.design" data-testid="experiment-question">{{ store.design.question }}</p>
+        <p v-else>构建可验证假设、变量、分组与评价指标。</p>
       </div>
+      <div v-if="store.design" class="experiment__header-actions">
+        <StatusBadge
+          data-testid="experiment-status"
+          :data-status="store.design.status"
+          :status="statusTone"
+          :label="statusLabel"
+        />
+        <button
+          class="experiment__save"
+          data-testid="save-experiment"
+          type="button"
+          :disabled="isReadOnly || saveState === 'loading'"
+          :aria-busy="saveState === 'loading'"
+          @click="saveDesign"
+        >
+          <ResearchIcon :name="saveState === 'success' ? 'check' : 'document'" :size="15" />
+          {{ saveState === 'loading' ? '正在保存...' : '确认保存' }}
+        </button>
+      </div>
+    </header>
 
-      <div class="experiment__content">
-        <!-- 研究问题 -->
-        <div class="experiment__section">
-          <h3>研究问题</h3>
-          <div class="experiment__question">{{ store.design.question }}</div>
-        </div>
+    <ResearchState
+      v-if="pageState"
+      class="experiment__empty"
+      data-testid="experiment-page-state"
+      :state="pageState"
+      :description="pageState === 'empty' ? '创建研究问题后，可在这里构建实验方案。' : undefined"
+      @retry="loadDesign"
+    />
 
-        <!-- AI 假设生成 -->
-        <div class="experiment__section">
-          <div class="experiment__section-header">
-            <h3>科学假设</h3>
-            <button class="experiment__gen-btn" @click="genHypotheses" :disabled="isGenerating">
-              {{ isGenerating ? '生成中...' : 'AI 生成假设' }}
-            </button>
+    <template v-else-if="store.design">
+      <div v-if="saveState === 'success'" class="experiment__saved" data-testid="experiment-save-status" role="status" aria-live="polite">
+        <ResearchIcon name="check" :size="15" />实验设计已保存
+      </div>
+      <ResearchState
+        v-else-if="saveState === 'error'"
+        class="experiment__operation-state"
+        data-testid="experiment-save-error"
+        state="error"
+        title="分析失败，请重试"
+        description="实验设计未保存，当前编辑内容仍保留。"
+        @retry="saveDesign"
+      />
+
+      <div class="experiment__workspace" data-testid="experiment-workspace">
+        <aside class="experiment__hypotheses" aria-label="研究假设">
+          <div class="experiment__panel-heading">
+            <div class="experiment__panel-icon experiment__panel-icon--primary"><ResearchIcon name="experiment" :size="17" /></div>
+            <div><p>科学推断</p><h2>研究假设</h2></div>
           </div>
-          <div class="experiment__hypothesis" v-for="(h, i) in store.design.hypotheses" :key="i">
-            <span class="experiment__hypothesis-label">H{{ i + 1 }}</span>
-            <div>
-              <div>{{ h.statement }}</div>
-              <div class="experiment__confidence">置信度 {{ (h.confidence * 100).toFixed(0) }}%</div>
+          <div class="experiment__hypothesis-list">
+            <article
+              v-for="(hypothesis, index) in store.design.hypotheses"
+              :key="`${hypothesis.statement}-${index}`"
+              class="experiment__hypothesis"
+              :data-testid="`design-hypothesis-${index}`"
+            >
+              <span>H{{ index + 1 }}</span>
+              <p>{{ hypothesis.statement }}</p>
+              <strong>置信度 {{ Math.round(hypothesis.confidence * 100) }}%</strong>
+            </article>
+          </div>
+          <p class="experiment__column-note">假设来源于当前实验设计，不自动覆盖已确认方案。</p>
+        </aside>
+
+        <section class="experiment__variables" aria-label="实验变量">
+          <div class="experiment__panel-heading">
+            <div class="experiment__panel-icon experiment__panel-icon--success"><ResearchIcon name="data" :size="17" /></div>
+            <div><p>参数与分组</p><h2>实验变量</h2></div>
+          </div>
+
+          <div class="experiment__variable-list" aria-label="变量编辑列表">
+            <label
+              v-for="(variable, index) in store.design.variables"
+              :key="`${variable.name}-${index}`"
+              class="experiment__variable"
+              :data-variable-index="index"
+            >
+              <span class="experiment__variable-name">{{ variable.name }}</span>
+              <StatusBadge :status="variableTone(variable.type)" :label="variableType(variable.type)" />
+              <span class="experiment__input-wrap">
+                <input
+                  v-model="variableRanges[index]"
+                  type="text"
+                  :disabled="isReadOnly || saveState === 'loading'"
+                  :aria-label="variableLabel(variable.name, variable.unit)"
+                  @input="markDraftChanged"
+                />
+                <em>{{ variable.unit || '无单位' }}</em>
+              </span>
+            </label>
+          </div>
+
+          <section class="experiment__groups" aria-labelledby="experiment-groups-title">
+            <div class="experiment__subheading">
+              <h3 id="experiment-groups-title">实验分组</h3><span>{{ store.design.groups.length }} 组</span>
             </div>
-          </div>
-          <div v-if="generatedHypotheses.length" class="experiment__gen-results">
-            <div class="experiment__gen-label">AI 生成的新假设：</div>
-            <div class="experiment__hypothesis" v-for="(h, i) in generatedHypotheses" :key="'gen-'+i">
-              <span class="experiment__hypothesis-label">H{{ store.design.hypotheses.length + i + 1 }}</span>
-              <div>
-                <div>{{ h.statement }}</div>
-                <div class="experiment__confidence">置信度 {{ (h.confidence * 100).toFixed(0) }}%</div>
-              </div>
-            </div>
-          </div>
-        </div>
+            <article
+              v-for="(group, index) in store.design.groups"
+              :key="`${group.name}-${index}`"
+              class="experiment__group"
+              :data-group-index="index"
+            >
+              <strong>{{ group.name }}</strong>
+              <p>{{ group.condition }}</p>
+              <span>{{ group.purpose ?? '目的待确认' }}</span>
+            </article>
+          </section>
 
-        <!-- 变量设计 -->
-        <div class="experiment__section">
-          <h3>变量设计</h3>
-          <table class="experiment__table">
-            <thead><tr><th>变量名</th><th>类型</th><th>范围</th></tr></thead>
-            <tbody>
-              <tr v-for="v in store.design.variables" :key="v.name">
-                <td>{{ v.name }}</td>
-                <td><StatusBadge :status="varStatus(v.type)" :label="varLabel(v.type)" /></td>
-                <td>{{ v.range }} {{ v.unit }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          <section class="experiment__outcomes" data-testid="experiment-outcomes" aria-labelledby="experiment-outcomes-title">
+            <div class="experiment__subheading"><h3 id="experiment-outcomes-title">评价指标</h3><span>结果观测</span></div>
+            <div><span v-for="metric in store.design.metrics" :key="metric">{{ metric }}</span></div>
+          </section>
+        </section>
 
-        <!-- 实验组 -->
-        <div class="experiment__section">
-          <h3>实验分组</h3>
-          <table class="experiment__table">
-            <thead><tr><th>组别</th><th>条件</th><th>目的</th></tr></thead>
-            <tbody>
-              <tr v-for="g in store.design.groups" :key="g.name">
-                <td><strong>{{ g.name }}</strong></td>
-                <td>{{ g.condition }}</td>
-                <td>{{ g.purpose ?? '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- 评价指标 -->
-        <div class="experiment__section">
-          <h3>评价指标</h3>
-          <div class="experiment__metrics">
-            <span class="experiment__metric" v-for="m in store.design.metrics" :key="m">{{ m }}</span>
+        <aside class="experiment__advice" aria-label="AI 实验建议">
+          <div class="experiment__panel-heading">
+            <div class="experiment__panel-icon experiment__panel-icon--ai"><ResearchIcon name="sparkles" :size="17" /></div>
+            <div><p>辅助推理</p><h2>AI 实验建议</h2></div>
           </div>
-        </div>
+
+          <article class="experiment__model">
+            <span>推荐分析模型</span>
+            <strong>{{ store.design.model.name }}</strong>
+            <p>模型匹配度 {{ Math.round(store.design.model.confidence * 100) }}%</p>
+          </article>
+
+          <button
+            class="experiment__generate"
+            data-testid="generate-hypotheses"
+            type="button"
+            :disabled="generationState === 'loading'"
+            :aria-busy="generationState === 'loading'"
+            @click="generateHypotheses"
+          >
+            <ResearchIcon name="sparkles" :size="15" />
+            {{ generationState === 'loading' ? 'AI 正在分析...' : '生成实验建议' }}
+          </button>
+
+          <ResearchState
+            v-if="generationState === 'error'"
+            class="experiment__advice-state"
+            state="error"
+            @retry="generateHypotheses"
+          />
+          <div v-else-if="generatedHypotheses.length" class="experiment__suggestions" aria-live="polite">
+            <article
+              v-for="(hypothesis, index) in generatedHypotheses"
+              :key="`${hypothesis.statement}-${index}`"
+              :data-testid="`ai-suggestion-${index}`"
+            >
+              <span>AI 建议 {{ index + 1 }}</span>
+              <p>{{ hypothesis.statement }}</p>
+              <strong>置信度 {{ Math.round(hypothesis.confidence * 100) }}%</strong>
+            </article>
+          </div>
+          <p
+            v-else-if="generationState === 'success'"
+            class="experiment__advice-empty"
+            data-testid="ai-suggestion-empty"
+            role="status"
+            aria-live="polite"
+          ><strong>暂无 AI 实验建议</strong><span>本次未生成可用建议</span></p>
+          <p v-else class="experiment__advice-empty">建议只在用户主动生成后显示，不写回实验设计。</p>
+        </aside>
       </div>
-
-      <div class="experiment__right">
-        <h3>推荐分析模型</h3>
-        <div class="experiment__model-card">
-          <div class="experiment__model-name">{{ store.design.model.name }}</div>
-          <div class="experiment__model-conf">置信度 {{ (store.design.model.confidence * 100).toFixed(0) }}%</div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div v-else class="experiment__empty">正在加载实验设计...</div>
+    </template>
+  </section>
 </template>
 
 <style scoped>
-.experiment { padding: 24px 28px; }
-.experiment__empty { padding: 40px; text-align: center; color: #94a3b8; }
-.experiment__header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-.experiment__title { margin: 0; font-size: 20px; font-weight: 700; color: #0f172a; }
-.experiment__body { display: grid; grid-template-columns: 180px 1fr 220px; gap: 20px; }
-.experiment__workflow { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
-.experiment__workflow h3 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: #0f172a; }
-.experiment__content { display: flex; flex-direction: column; gap: 16px; }
-.experiment__section { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
-.experiment__section h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: #0f172a; }
-.experiment__section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.experiment__section-header h3 { margin: 0; }
-.experiment__gen-btn { padding: 6px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 12px; color: #2563eb; cursor: pointer; }
-.experiment__gen-btn:hover { background: #dbeafe; }
-.experiment__gen-btn:disabled { opacity: .5; cursor: not-allowed; }
-.experiment__gen-results { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb; }
-.experiment__gen-label { font-size: 12px; color: #3b82f6; font-weight: 500; margin-bottom: 8px; }
-.experiment__question { font-size: 15px; font-weight: 600; color: #1e293b; }
-.experiment__hypothesis { display: flex; gap: 10px; margin-bottom: 10px; font-size: 13px; color: #334155; }
-.experiment__hypothesis-label { font-weight: 700; color: #3b82f6; flex-shrink: 0; }
-.experiment__confidence { font-size: 12px; color: #10b981; margin-top: 2px; }
-.experiment__table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.experiment__table th { text-align: left; padding: 8px; color: #64748b; border-bottom: 1px solid #e5e7eb; font-weight: 500; }
-.experiment__table td { padding: 8px; border-bottom: 1px solid #f1f5f9; }
-.experiment__metrics { display: flex; flex-wrap: wrap; gap: 8px; }
-.experiment__metric { font-size: 12px; padding: 4px 10px; background: #f0fdf4; color: #166534; border-radius: 4px; }
-.experiment__right { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
-.experiment__right h3 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: #0f172a; }
-.experiment__model-card { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 14px; }
-.experiment__model-name { font-size: 14px; font-weight: 600; color: #1e293b; font-family: monospace; }
-.experiment__model-conf { font-size: 12px; color: #10b981; margin: 4px 0; }
+.experiment { min-width: 0; padding: var(--research-page-gutter); color: var(--research-text-primary); }
+.experiment__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--research-space-5); margin-bottom: var(--research-space-5); }
+.experiment__eyebrow,
+.experiment__header h1,
+.experiment__header p,
+.experiment__panel-heading p,
+.experiment__panel-heading h2,
+.experiment__hypothesis p,
+.experiment__column-note,
+.experiment__subheading h3,
+.experiment__group p,
+.experiment__model p,
+.experiment__suggestions p,
+.experiment__advice-empty { margin: 0; }
+.experiment__eyebrow { color: var(--research-primary-600); font-size: var(--research-text-xs); font-weight: var(--research-font-weight-bold); letter-spacing: .08em; text-transform: uppercase; }
+.experiment__header h1 { margin-top: var(--research-space-1); font-size: var(--research-text-page-title); letter-spacing: var(--research-letter-spacing-title); }
+.experiment__header > div > p:last-child { max-width: 720px; margin-top: var(--research-space-2); color: var(--research-text-secondary); font-size: var(--research-text-body); line-height: var(--research-line-height-body); }
+.experiment__header-actions { display: flex; align-items: center; gap: var(--research-space-3); }
+.experiment__save,
+.experiment__generate { display: inline-flex; align-items: center; justify-content: center; gap: var(--research-space-2); min-height: 38px; padding: var(--research-space-2) var(--research-space-4); border-radius: var(--research-radius-button); font: inherit; font-size: var(--research-text-sm); font-weight: var(--research-font-weight-semibold); cursor: pointer; }
+.experiment__save { border: 1px solid var(--research-primary-500); background: var(--research-primary-500); color: var(--research-text-inverse); }
+.experiment__generate { width: 100%; margin-top: var(--research-space-4); border: 1px solid var(--research-ai-500); background: var(--research-ai-500); color: var(--research-text-inverse); }
+.experiment__save:focus-visible { outline: none; box-shadow: var(--research-shadow-focus-primary); }
+.experiment__generate:focus-visible { outline: none; box-shadow: var(--research-shadow-focus-ai); }
+.experiment__save:disabled,
+.experiment__generate:disabled { border-color: var(--research-border-strong); background: var(--research-bg-hover); color: var(--research-text-secondary); cursor: not-allowed; }
+.experiment__saved { display: flex; align-items: center; gap: var(--research-space-2); margin-bottom: var(--research-space-4); padding: var(--research-space-3) var(--research-space-4); border: 1px solid var(--research-success-100); border-radius: var(--research-radius-card); background: var(--research-success-50); color: var(--research-success-700); font-size: var(--research-text-sm); font-weight: var(--research-font-weight-semibold); }
+.experiment__operation-state { min-height: 138px; margin-bottom: var(--research-space-4); }
+.experiment__workspace { display: grid; min-width: 0; grid-template-columns: minmax(0, 260px) minmax(0, 1fr) minmax(0, 300px); gap: var(--research-grid-gap); align-items: start; }
+.experiment__hypotheses,
+.experiment__variables,
+.experiment__advice { min-width: 0; overflow: hidden; padding: var(--research-space-5); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-panel); background: var(--research-bg-card); box-shadow: var(--research-shadow-soft); }
+.experiment__panel-heading { display: flex; align-items: center; gap: var(--research-space-3); margin-bottom: var(--research-space-4); }
+.experiment__panel-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: var(--research-radius-button); }
+.experiment__panel-icon--primary { background: var(--research-primary-50); color: var(--research-primary-600); }
+.experiment__panel-icon--success { background: var(--research-success-50); color: var(--research-success-700); }
+.experiment__panel-icon--ai { background: var(--research-ai-50); color: var(--research-ai-700); }
+.experiment__panel-heading p { color: var(--research-text-secondary); font-size: var(--research-text-xs); }
+.experiment__panel-heading h2 { margin-top: var(--research-space-1); font-size: var(--research-text-card-title); }
+.experiment__hypothesis-list { display: grid; gap: var(--research-space-3); }
+.experiment__hypothesis { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--research-space-2) var(--research-space-3); padding: var(--research-space-4); border: 1px solid var(--research-primary-100); border-radius: var(--research-radius-card); background: var(--research-primary-50); }
+.experiment__hypothesis > span { grid-row: 1 / 3; color: var(--research-primary-700); font-size: var(--research-text-sm); font-weight: var(--research-font-weight-bold); }
+.experiment__hypothesis p { color: var(--research-text-primary); font-size: var(--research-text-sm); line-height: var(--research-line-height-body); }
+.experiment__hypothesis strong { color: var(--research-success-700); font-size: var(--research-text-xs); font-weight: var(--research-font-weight-semibold); }
+.experiment__column-note { margin-top: var(--research-space-4); color: var(--research-text-secondary); font-size: var(--research-text-xs); line-height: var(--research-line-height-body); }
+.experiment__variable-list { display: grid; gap: var(--research-space-2); }
+.experiment__variable { display: grid; grid-template-columns: minmax(110px, .8fr) auto minmax(160px, 1fr); align-items: center; gap: var(--research-space-3); padding: var(--research-space-3); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-card); background: var(--research-bg-panel); }
+.experiment__variable-name { font-size: var(--research-text-sm); font-weight: var(--research-font-weight-semibold); }
+.experiment__input-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; overflow: hidden; border: 1px solid var(--research-border-strong); border-radius: var(--research-radius-input); background: var(--research-bg-card); }
+.experiment__input-wrap:focus-within { border-color: var(--research-primary-500); box-shadow: var(--research-shadow-focus-primary); }
+.experiment__input-wrap input { width: 100%; min-width: 0; height: 36px; padding-inline: var(--research-space-3); border: 0; outline: 0; background: transparent; color: var(--research-text-primary); font: inherit; font-size: var(--research-text-sm); }
+.experiment__input-wrap input:disabled { background: var(--research-bg-hover); color: var(--research-text-secondary); cursor: not-allowed; }
+.experiment__input-wrap em { padding-inline: var(--research-space-3); color: var(--research-text-secondary); font-size: var(--research-text-xs); font-style: normal; }
+.experiment__groups,
+.experiment__outcomes { margin-top: var(--research-space-5); padding-top: var(--research-space-5); border-top: 1px solid var(--research-divider); }
+.experiment__subheading { display: flex; align-items: center; justify-content: space-between; gap: var(--research-space-3); margin-bottom: var(--research-space-3); }
+.experiment__subheading h3 { font-size: var(--research-text-card-title); }
+.experiment__subheading > span { color: var(--research-text-secondary); font-size: var(--research-text-xs); }
+.experiment__group { display: grid; grid-template-columns: minmax(72px, .45fr) minmax(0, 1fr) minmax(84px, .55fr); gap: var(--research-space-3); padding: var(--research-space-3) 0; border-bottom: 1px solid var(--research-divider); font-size: var(--research-text-sm); }
+.experiment__group:last-child { border-bottom: 0; }
+.experiment__group p { color: var(--research-text-secondary); }
+.experiment__group span { color: var(--research-text-secondary); }
+.experiment__outcomes > div:last-child { display: flex; flex-wrap: wrap; gap: var(--research-space-2); }
+.experiment__outcomes > div:last-child span { padding: var(--research-space-1) var(--research-space-3); border-radius: var(--research-radius-pill); background: var(--research-success-50); color: var(--research-success-700); font-size: var(--research-text-xs); }
+.experiment__model { padding: var(--research-space-4); border: 1px solid var(--research-ai-100); border-radius: var(--research-radius-card); background: var(--research-ai-50); }
+.experiment__model > span { display: block; color: var(--research-ai-700); font-size: var(--research-text-xs); }
+.experiment__model strong { display: block; margin-top: var(--research-space-2); font-size: var(--research-text-card-title); }
+.experiment__model p { margin-top: var(--research-space-2); color: var(--research-success-700); font-size: var(--research-text-xs); font-weight: var(--research-font-weight-semibold); }
+.experiment__suggestions { display: grid; gap: var(--research-space-3); margin-top: var(--research-space-4); }
+.experiment__suggestions article { padding: var(--research-space-4); border: 1px solid var(--research-ai-100); border-radius: var(--research-radius-card); background: var(--research-ai-50); }
+.experiment__suggestions span { color: var(--research-ai-700); font-size: var(--research-text-xs); font-weight: var(--research-font-weight-semibold); }
+.experiment__suggestions p { margin-top: var(--research-space-2); font-size: var(--research-text-sm); line-height: var(--research-line-height-body); }
+.experiment__suggestions strong { display: block; margin-top: var(--research-space-2); color: var(--research-success-700); font-size: var(--research-text-xs); }
+.experiment__advice-empty { display: grid; gap: var(--research-space-1); margin-top: var(--research-space-4); color: var(--research-text-secondary); font-size: var(--research-text-xs); line-height: var(--research-line-height-body); }
+.experiment__advice-empty strong { color: var(--research-text-primary); font-size: var(--research-text-sm); }
+.experiment__advice-state { min-height: 190px; margin-top: var(--research-space-4); padding: var(--research-space-4); }
+
+@media (max-width: 1480px) {
+  .experiment__workspace { grid-template-columns: minmax(0, 224px) minmax(0, 1fr) minmax(0, 260px); gap: var(--research-space-3); }
+  .experiment__hypotheses,
+  .experiment__variables,
+  .experiment__advice { padding: var(--research-space-4); }
+  .experiment__variable { grid-template-columns: minmax(92px, .65fr) auto minmax(142px, 1fr); gap: var(--research-space-2); }
+}
+
+@media (min-width: 1720px) {
+  .experiment__workspace { grid-template-columns: minmax(0, 286px) minmax(0, 1fr) minmax(0, 326px); }
+}
 </style>

@@ -16,17 +16,24 @@ const confidenceTone = computed(() => confidencePercent.value > 70 ? 'high' : co
 </script>
 
 <template>
-  <div class="evidence-card">
+  <article class="evidence-card" :aria-label="`${label}证据`">
     <div class="evidence-card__label"><ResearchIcon name="evidence" :size="13" />{{ label }}</div>
     <div class="evidence-card__value">{{ value }}</div>
     <div v-if="source" class="evidence-card__source">来源：{{ source }}</div>
     <div v-if="confidence !== undefined" class="evidence-card__bar">
-      <div class="evidence-card__track">
+      <div
+        class="evidence-card__track"
+        role="progressbar"
+        :aria-label="`${label}置信度`"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="confidencePercent"
+      >
         <div :class="['evidence-card__fill', `evidence-card__fill--${confidenceTone}`]" :style="{ width: confidencePercent + '%' }" />
       </div>
       <span class="evidence-card__pct">{{ confidencePercent }}%</span>
     </div>
-  </div>
+  </article>
 </template>
 
 <style scoped>
