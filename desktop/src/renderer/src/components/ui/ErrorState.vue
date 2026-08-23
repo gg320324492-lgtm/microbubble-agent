@@ -3,28 +3,28 @@
  * 错误状态占位 —— API 失败 / 异常时展示。
  * 严禁引 Element Plus el-alert。
  */
-import { computed } from 'vue'
 import Button from './Button.vue'
+import ResearchIcon from '../icons/ResearchIcon.vue'
 
 interface Props {
   title?: string
-  message: string
+  message?: string
   retryable?: boolean
 }
 const props = withDefaults(defineProps<Props>(), {
-  title: '出错了',
+  title: '分析失败，请重试',
+  message: '已有内容不会丢失，可以重新发起本次分析。',
   retryable: true
 })
 
 const emit = defineEmits<{ retry: [] }>()
 
-const finalTitle = computed(() => props.title)
 </script>
 
 <template>
   <div class="ui-error">
-    <div class="ui-error__icon">⚠️</div>
-    <h4 class="ui-error__title">{{ finalTitle }}</h4>
+    <div class="ui-error__icon"><ResearchIcon name="error" :size="28" /></div>
+    <h4 class="ui-error__title">{{ props.title }}</h4>
     <p class="ui-error__message">{{ message }}</p>
     <div v-if="retryable" class="ui-error__action">
       <Button variant="secondary" size="small" @click="emit('retry')">重试</Button>
@@ -35,28 +35,28 @@ const finalTitle = computed(() => props.title)
 <style scoped>
 .ui-error {
   text-align: center;
-  padding: 2rem 1rem;
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  color: #fecaca;
+  padding: var(--research-space-8) var(--research-space-4);
+  background: var(--research-danger-50);
+  border: 1px solid var(--research-danger-100);
+  border-radius: var(--research-radius-card);
+  color: var(--research-danger-600);
 }
 .ui-error__icon {
-  font-size: 2.4rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--research-space-2);
 }
 .ui-error__title {
-  margin: 0 0 0.4rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f87171;
+  margin: 0 0 var(--research-space-2);
+  font-size: var(--research-text-card-title);
+  font-weight: var(--research-font-weight-semibold);
+  color: var(--research-danger-600);
 }
 .ui-error__message {
   margin: 0;
-  font-size: 0.85rem;
-  color: #fca5a5;
+  font-size: var(--research-text-sm);
+  color: var(--research-text-secondary);
+  line-height: var(--research-line-height-body);
 }
 .ui-error__action {
-  margin-top: 1rem;
+  margin-top: var(--research-space-4);
 }
 </style>

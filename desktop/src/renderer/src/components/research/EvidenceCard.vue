@@ -2,33 +2,43 @@
 /**
  * 证据卡片 — 显示证据条目及来源。
  */
-defineProps<{
+import { computed } from 'vue'
+import ResearchIcon from '../icons/ResearchIcon.vue'
+
+const props = defineProps<{
   label: string
   value: string
   source?: string
   confidence?: number
 }>()
+const confidencePercent = computed(() => Math.round(Math.min(1, Math.max(0, props.confidence ?? 0)) * 100))
+const confidenceTone = computed(() => confidencePercent.value > 70 ? 'high' : confidencePercent.value > 40 ? 'medium' : 'low')
 </script>
 
 <template>
   <div class="evidence-card">
-    <div class="evidence-card__label">{{ label }}</div>
+    <div class="evidence-card__label"><ResearchIcon name="evidence" :size="13" />{{ label }}</div>
     <div class="evidence-card__value">{{ value }}</div>
-    <div v-if="source" class="evidence-card__source">来源: {{ source }}</div>
+    <div v-if="source" class="evidence-card__source">来源：{{ source }}</div>
     <div v-if="confidence !== undefined" class="evidence-card__bar">
-      <div class="evidence-card__fill" :style="{ width: Math.round(confidence * 100) + '%', background: confidence > 0.7 ? '#10B981' : confidence > 0.4 ? '#F59E0B' : '#EF4444' }" />
-      <span class="evidence-card__pct">{{ Math.round(confidence * 100) }}%</span>
+      <div class="evidence-card__track">
+        <div :class="['evidence-card__fill', `evidence-card__fill--${confidenceTone}`]" :style="{ width: confidencePercent + '%' }" />
+      </div>
+      <span class="evidence-card__pct">{{ confidencePercent }}%</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-.evidence-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; }
-.evidence-card__label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
-.evidence-card__value { font-size: 14px; font-weight: 500; color: #1e293b; }
-.evidence-card__source { font-size: 11px; color: #64748b; margin-top: 6px; }
-.evidence-card__bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.evidence-card__bar > div:first-child { flex: 1; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; }
-.evidence-card__bar > div:first-child > div { height: 100%; border-radius: 2px; }
-.evidence-card__pct { font-size: 11px; font-weight: 600; color: #64748b; min-width: 28px; }
+.evidence-card { background: var(--research-bg-panel); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-card); padding: var(--research-space-3) var(--research-space-4); }
+.evidence-card__label { display: flex; align-items: center; gap: var(--research-space-1); font-size: var(--research-text-xs); color: var(--research-text-secondary); letter-spacing: .03em; margin-bottom: var(--research-space-1); }
+.evidence-card__value { font-size: var(--research-text-body); font-weight: var(--research-font-weight-medium); color: var(--research-text-primary); line-height: var(--research-line-height-body); }
+.evidence-card__source { font-size: var(--research-text-xs); color: var(--research-text-secondary); margin-top: var(--research-space-2); }
+.evidence-card__bar { display: flex; align-items: center; gap: var(--research-space-2); margin-top: var(--research-space-2); }
+.evidence-card__track { flex: 1; height: 5px; background: var(--research-border-subtle); border-radius: var(--research-radius-pill); overflow: hidden; }
+.evidence-card__fill { height: 100%; border-radius: var(--research-radius-pill); }
+.evidence-card__fill--high { background: var(--research-success-500); }
+.evidence-card__fill--medium { background: var(--research-warning-500); }
+.evidence-card__fill--low { background: var(--research-danger-500); }
+.evidence-card__pct { font-size: var(--research-text-xs); font-weight: var(--research-font-weight-semibold); color: var(--research-text-secondary); min-width: 30px; font-variant-numeric: tabular-nums; }
 </style>

@@ -2,13 +2,13 @@
 /**
  * 基础 Button 组件。
  *
- * 主题: 珊瑚橙 (与 web 端 design token 同色: --color-primary)。
+ * 主题：Scientific Research OS 语义令牌。
  * 严禁引 Element Plus。
  *
  * variant:
- *   - primary  (默认): 橘色填充, 用于主要操作
+ *   - primary  (默认): 科学蓝填充，用于主要操作
  *   - secondary: 透明边框, 用于次要操作
- *   - danger   : 红色, 用于 destructive 操作
+ *   - danger   : 风险色，用于破坏性操作
  *   - ghost    : 无边框无背景, hover 浅边框
  *
  * size: small / medium / large
@@ -16,6 +16,7 @@
  * 状态: disabled / loading
  */
 import { computed } from 'vue'
+import ResearchIcon from '../icons/ResearchIcon.vue'
 
 interface Props {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
@@ -50,8 +51,14 @@ function onClick(e: MouseEvent): void {
 </script>
 
 <template>
-  <button :class="classes" :type="type" :disabled="disabled || loading" @click="onClick">
-    <span v-if="loading" class="ui-btn__spinner" />
+  <button
+    :class="classes"
+    :type="type"
+    :disabled="disabled || loading"
+    :aria-busy="loading ? 'true' : undefined"
+    @click="onClick"
+  >
+    <ResearchIcon v-if="loading" class="ui-btn__spinner" name="running" :size="14" />
     <slot />
   </button>
 </template>
@@ -61,52 +68,56 @@ function onClick(e: MouseEvent): void {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: var(--research-space-2);
   border: 1px solid transparent;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: 500;
+  border-radius: var(--research-radius-button);
+  font-size: var(--research-text-body);
+  font-weight: var(--research-font-weight-medium);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background var(--research-duration-fast) var(--research-ease-standard),
+    color var(--research-duration-fast) var(--research-ease-standard),
+    border-color var(--research-duration-fast) var(--research-ease-standard),
+    box-shadow var(--research-duration-fast) var(--research-ease-standard);
   font-family: inherit;
 }
-.ui-btn--small { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
-.ui-btn--medium { padding: 0.5rem 1rem; font-size: 0.9rem; }
-.ui-btn--large { padding: 0.6rem 1.4rem; font-size: 1rem; }
+.ui-btn--small { min-height: 30px; padding: var(--research-space-1) var(--research-space-3); font-size: var(--research-text-sm); }
+.ui-btn--medium { min-height: 38px; padding: var(--research-space-2) var(--research-space-4); }
+.ui-btn--large { min-height: 44px; padding: var(--research-space-3) var(--research-space-5); font-size: var(--research-text-card-title); }
 
 .ui-btn--primary {
-  background: #f97316;
-  color: #fff;
+  background: var(--research-primary-600);
+  color: var(--research-text-inverse);
 }
-.ui-btn--primary:hover:not(:disabled) { background: #ea580c; }
+.ui-btn--primary:hover:not(:disabled) { background: var(--research-primary-700); }
 
 .ui-btn--secondary {
   background: transparent;
-  border-color: #475569;
-  color: #e2e8f0;
+  border-color: var(--research-border-strong);
+  color: var(--research-text-primary);
 }
 .ui-btn--secondary:hover:not(:disabled) {
-  border-color: #f97316;
-  color: #f97316;
+  border-color: var(--research-primary-400);
+  color: var(--research-primary-700);
 }
 
 .ui-btn--danger {
   background: transparent;
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: var(--research-danger-500);
+  color: var(--research-danger-600);
 }
 .ui-btn--danger:hover:not(:disabled) {
-  background: #ef4444;
-  color: #fff;
+  background: var(--research-danger-500);
+  color: var(--research-text-inverse);
 }
 
 .ui-btn--ghost {
   background: transparent;
-  color: #94a3b8;
+  color: var(--research-text-secondary);
 }
 .ui-btn--ghost:hover:not(:disabled) {
-  background: rgba(148, 163, 184, 0.1);
-  color: #f1f5f9;
+  background: var(--research-bg-hover);
+  color: var(--research-primary-700);
 }
 
 .ui-btn:disabled {
@@ -114,13 +125,13 @@ function onClick(e: MouseEvent): void {
   cursor: not-allowed;
 }
 
+.ui-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--research-shadow-focus-primary);
+}
+
 .ui-btn__spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: ui-btn-spin 0.6s linear infinite;
+  animation: ui-btn-spin var(--research-duration-slow) var(--research-ease-linear) infinite;
 }
 @keyframes ui-btn-spin {
   to { transform: rotate(360deg); }
