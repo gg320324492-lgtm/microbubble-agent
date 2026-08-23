@@ -2,6 +2,8 @@
 /**
  * 科研指标卡片 — 单个数值指标展示。
  */
+import ResearchIcon from '../icons/ResearchIcon.vue'
+
 defineProps<{
   label: string
   value: string
@@ -10,8 +12,6 @@ defineProps<{
   trendText?: string
 }>()
 
-const TREND_ICON: Record<string, string> = { up: '↑', down: '↓', stable: '→' }
-const TREND_COLOR: Record<string, string> = { up: '#10B981', down: '#EF4444', stable: '#94A3B8' }
 </script>
 
 <template>
@@ -20,16 +20,27 @@ const TREND_COLOR: Record<string, string> = { up: '#10B981', down: '#EF4444', st
     <div class="metric-card__value">
       {{ value }}<span v-if="unit" class="metric-card__unit">{{ unit }}</span>
     </div>
-    <div v-if="trend" class="metric-card__trend" :style="{ color: TREND_COLOR[trend] }">
-      {{ TREND_ICON[trend] }} {{ trendText }}
+    <div v-if="trend" :class="['metric-card__trend', `metric-card__trend--${trend}`]">
+      <ResearchIcon
+        name="progress"
+        :size="13"
+        :class="['metric-card__trend-icon', `metric-card__trend-icon--${trend}`]"
+      />
+      {{ trendText }}
     </div>
   </div>
 </template>
 
 <style scoped>
-.metric-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
-.metric-card__label { font-size: 12px; color: #64748b; margin-bottom: 6px; }
-.metric-card__value { font-size: 22px; font-weight: 700; color: #1e293b; }
-.metric-card__unit { font-size: 13px; font-weight: 400; color: #64748b; margin-left: 4px; }
-.metric-card__trend { font-size: 12px; font-weight: 500; margin-top: 4px; }
+.metric-card { background: var(--research-bg-card); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-card); padding: var(--research-space-4); box-shadow: var(--research-shadow-soft); }
+.metric-card__label { font-size: var(--research-text-sm); color: var(--research-text-secondary); margin-bottom: var(--research-space-2); }
+.metric-card__value { font-size: 22px; font-weight: var(--research-font-weight-bold); color: var(--research-text-primary); font-variant-numeric: tabular-nums; }
+.metric-card__unit { font-size: var(--research-text-body); font-weight: var(--research-font-weight-regular); color: var(--research-text-secondary); margin-left: var(--research-space-1); }
+.metric-card__trend { display: flex; align-items: center; gap: var(--research-space-1); font-size: var(--research-text-sm); font-weight: var(--research-font-weight-medium); margin-top: var(--research-space-1); color: var(--research-text-secondary); }
+.metric-card__trend--up { color: var(--research-success-700); }
+.metric-card__trend--down { color: var(--research-danger-600); }
+.metric-card__trend-icon { flex-shrink: 0; }
+.metric-card__trend-icon--up { transform: rotate(-90deg); }
+.metric-card__trend-icon--down { transform: rotate(90deg); }
+.metric-card__trend-icon--stable { transform: rotate(0deg); }
 </style>

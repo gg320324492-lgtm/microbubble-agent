@@ -30,38 +30,40 @@ withDefaults(defineProps<Props>(), { padding: 'md' })
 
 <style scoped>
 .ui-card {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
+  background: var(--research-bg-card);
+  border: 1px solid var(--research-border-subtle);
+  border-radius: var(--research-radius-card);
   display: flex;
   flex-direction: column;
+  box-shadow: var(--research-shadow-soft);
 }
-.ui-card--sm { padding: 0.75rem 1rem; }
-.ui-card--md { padding: 1rem 1.25rem; }
-.ui-card--lg { padding: 1.5rem 1.75rem; }
+.ui-card--sm { padding: var(--research-space-3) var(--research-space-4); }
+.ui-card--md { padding: var(--research-space-4) var(--research-space-5); }
+.ui-card--lg { padding: var(--research-space-6) var(--research-space-7); }
 
 .ui-card__header {
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #334155;
+  margin-bottom: var(--research-space-3);
+  padding-bottom: var(--research-space-3);
+  border-bottom: 1px solid var(--research-divider);
 }
 .ui-card__title {
   margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f1f5f9;
+  font-size: var(--research-text-card-title);
+  font-weight: var(--research-font-weight-semibold);
+  color: var(--research-text-primary);
 }
 .ui-card__subtitle {
-  margin: 0.3rem 0 0;
-  font-size: 0.8rem;
-  color: #94a3b8;
+  margin: var(--research-space-1) 0 0;
+  font-size: var(--research-text-sm);
+  color: var(--research-text-secondary);
+  line-height: var(--research-line-height-body);
 }
 .ui-card__body {
   flex: 1;
 }
 .ui-card__footer {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #334155;
+  margin-top: var(--research-space-3);
+  padding-top: var(--research-space-3);
+  border-top: 1px solid var(--research-divider);
 }
 </style>
