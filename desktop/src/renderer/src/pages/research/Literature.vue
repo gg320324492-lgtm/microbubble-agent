@@ -1,71 +1,66 @@
 <script setup lang="ts">
 /**
- * 文献智能库 — 论文管理与可信度评分。
+ * 文献智能库 — Pinia store 驱动。
  */
+import { onMounted } from 'vue'
+import { useKnowledgeStore } from '../../stores/research/knowledge.store'
 import CitationCard from '../../components/research/CitationCard.vue'
 import StatusBadge from '../../components/research/StatusBadge.vue'
 
-const papers = [
-  { id: 1, title: '臭氧微纳米气泡降解四环素的动力学与机理研究', authors: '李小红, 张伟, 陈晨', journal: '环境科学学报', year: 2021, stars: 4, reliability: 0.82, risks: ['统计方法不充分', '样本量偏小'], tags: ['O₃-MNBs', 'TC', '降解动力学'] },
-  { id: 2, title: 'Nanobubble characterization methods and applications', authors: 'Li, X., et al.', journal: 'Ultrasonics', year: 2023, stars: 3, reliability: 0.65, risks: ['机制证据薄弱'], tags: ['纳米气泡', '表征'] },
-  { id: 3, title: 'Ozone mass transfer in microbubble systems', authors: 'Wang, Y., et al.', journal: 'Water Research', year: 2023, stars: 5, reliability: 0.90, risks: [], tags: ['传质', '臭氧'] },
-]
+const store = useKnowledgeStore()
+onMounted(async () => {
+  await store.loadDocuments()
+  await store.loadAssessments()
+})
 
-const selected = papers[0]
-const folders = ['O₃-MNBs TC 降解研究', '臭氧-微纳米气泡基础', '催化与活化', '气泡表征与仪器', '跨学科参考']
+function selectDoc(id: string) { store.selectDocument(id) }
+function assessment(docId: string) { return store.assessments.find(a => a.documentId === docId) }
 </script>
 
 <template>
   <div class="literature">
-    <!-- 左侧文件夹 -->
     <aside class="literature__sidebar">
-      <h3 class="literature__section-title">我的文献库</h3>
-      <div class="literature__folder" v-for="f in folders" :key="f">
-        <span>📁</span> {{ f }}
+      <h3 class="literature__section-title">文献库 ({{ store.totalDocuments }})</h3>
+      <input class="literature__search" type="text" placeholder="搜索文献…" :value="store.searchQuery" @input="store.setSearch(($event.target as HTMLInputElement).value)" />
+      <div class="literature__folder" v-for="f in store.folders" :key="f.id">
+        <span>📁</span> {{ f.name }} <span class="literature__count">{{ f.count }}</span>
       </div>
-      <h3 class="literature__section-title" style="margin-top: 16px;">文献类型</h3>
-      <div class="literature__filter"><input type="checkbox" checked /> 期刊论文</div>
-      <div class="literature__filter"><input type="checkbox" checked /> 会议论文</div>
-      <div class="literature__filter"><input type="checkbox" /> 综述</div>
     </aside>
 
-    <!-- 中部：论文详情 -->
     <main class="literature__main">
-      <h2 class="literature__paper-title">{{ selected.title }}</h2>
-      <div class="literature__paper-meta">{{ selected.authors }} · {{ selected.journal }}, {{ selected.year }}</div>
-      <div class="literature__paper-tags">
-        <span v-for="t in selected.tags" :key="t" class="literature__tag">{{ t }}</span>
-      </div>
-
-      <!-- 可信度评分 -->
-      <div class="literature__scores">
-        <div class="literature__score-item">
-          <span class="literature__score-label">可靠性</span>
-          <div class="literature__score-bar"><div class="literature__score-fill" :style="{ width: selected.reliability * 100 + '%' }" /></div>
-          <span class="literature__score-value">{{ (selected.reliability * 100).toFixed(0) }}%</span>
+      <template v-if="store.selectedDocument">
+        <h2 class="literature__paper-title">{{ store.selectedDocument.title }}</h2>
+        <div class="literature__paper-meta">{{ store.selectedDocument.authors }} · {{ store.selectedDocument.journal }}, {{ store.selectedDocument.year }}</div>
+        <div class="literature__paper-tags">
+          <span v-for="t in store.selectedDocument.tags" :key="t" class="literature__tag">{{ t }}</span>
         </div>
-      </div>
-
-      <!-- 摘要 -->
-      <div class="literature__section">
-        <h3>摘要</h3>
-        <p>本研究系统考察了臭氧微纳米气泡（O₃-MNBs）体系对四环素（TC）的降解性能及其影响因素。结果表明：在 pH=7、O₃ 投加量 20 mg·L⁻¹、温度 25 ℃ 条件下，TC 在 60 min 内去除率可达 98.6%，降解过程符合准一级动力学模型。</p>
-      </div>
-
-      <!-- 风险提示 -->
-      <div class="literature__section" v-if="selected.risks.length">
-        <h3>风险提示</h3>
-        <div class="literature__risk" v-for="r in selected.risks" :key="r">
-          <StatusBadge status="warning" label="注意" /> {{ r }}
+        <div class="literature__scores" v-if="assessment(store.selectedDocument.id)">
+          <div class="literature__score-item" v-for="(label, key) in { reliability: '可靠性', evidence: '证据', methodology: '方法论' }" :key="key">
+            <span class="literature__score-label">{{ label }}</span>
+            <div class="literature__score-bar"><div class="literature__score-fill" :style="{ width: ((assessment(store.selectedDocument.id) as any)[key] * 100) + '%' }" /></div>
+            <span class="literature__score-value">{{ ((assessment(store.selectedDocument.id) as any)[key] * 100).toFixed(0) }}%</span>
+          </div>
         </div>
-      </div>
+        <div v-if="assessment(store.selectedDocument.id)?.limitations?.length" class="literature__section">
+          <h3>风险提示</h3>
+          <div class="literature__risk" v-for="r in assessment(store.selectedDocument.id)!.limitations" :key="r">
+            <StatusBadge status="warning" label="注意" /> {{ r }}
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <div class="literature__empty">选择左侧文献查看详情</div>
+      </template>
     </main>
 
-    <!-- 右侧引用 -->
     <aside class="literature__right">
-      <h3 class="literature__section-title">引用文献 (3)</h3>
-      <CitationCard :index="1" authors="Li, X., et al." title="Activation mechanism of ozone microbubbles" journal="Chem. Eng. J., 430" :year="2022" :cited-by="36" style="margin-bottom: 8px;" />
-      <CitationCard :index="2" authors="Wang, T., et al." title="Ozone micro/nano-bubbles enhanced degradation" journal="J.Hazard.Mater., 402" :year="2021" :cited-by="29" />
+      <h3 class="literature__section-title">全部文献 ({{ store.filteredDocuments.length }})</h3>
+      <div class="literature__doc-card" v-for="d in store.filteredDocuments" :key="d.id"
+           :class="{ 'literature__doc-card--active': store.selectedDocumentId === d.id }" @click="selectDoc(d.id)">
+        <div class="literature__doc-title">{{ d.title }}</div>
+        <div class="literature__doc-meta">{{ d.authors }} · {{ d.year }}</div>
+        <div class="literature__doc-cred">可信度 {{ (d.credibility * 100).toFixed(0) }}%</div>
+      </div>
     </aside>
   </div>
 </template>
@@ -76,21 +71,29 @@ const folders = ['O₃-MNBs TC 降解研究', '臭氧-微纳米气泡基础', '�
 .literature__main { flex: 1; padding: 20px 28px; overflow-y: auto; }
 .literature__right { width: 260px; border-left: 1px solid #e5e7eb; padding: 16px; overflow-y: auto; background: #fafbfc; }
 .literature__section-title { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: #0f172a; }
+.literature__search { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; margin-bottom: 12px; outline: none; }
+.literature__search:focus { border-color: #3b82f6; }
 .literature__folder { font-size: 13px; color: #475569; padding: 6px 8px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 .literature__folder:hover { background: #f1f5f9; }
-.literature__filter { font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.literature__count { color: #94a3b8; font-size: 11px; margin-left: auto; }
 .literature__paper-title { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: #0f172a; }
 .literature__paper-meta { font-size: 13px; color: #64748b; margin-bottom: 8px; }
 .literature__paper-tags { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
 .literature__tag { font-size: 12px; padding: 3px 10px; background: #eff6ff; color: #2563eb; border-radius: 4px; }
 .literature__scores { margin-bottom: 20px; }
-.literature__score-item { display: flex; align-items: center; gap: 10px; }
+.literature__score-item { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .literature__score-label { font-size: 13px; color: #64748b; min-width: 48px; }
 .literature__score-bar { flex: 1; height: 8px; background: #f1f5f9; border-radius: 4px; overflow: hidden; max-width: 200px; }
 .literature__score-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); border-radius: 4px; }
 .literature__score-value { font-size: 13px; font-weight: 600; color: #3b82f6; }
-.literature__section { margin-bottom: 20px; }
-.literature__section h3 { font-size: 14px; font-weight: 600; color: #0f172a; margin: 0 0 8px; }
-.literature__section p { font-size: 13px; color: #475569; line-height: 1.7; margin: 0; }
+.literature__section { margin-bottom: 16px; }
+.literature__section h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
 .literature__risk { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #92400e; margin-bottom: 6px; }
+.literature__empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8; font-size: 14px; }
+.literature__doc-card { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 6px; cursor: pointer; font-size: 12px; }
+.literature__doc-card:hover { background: #f8fafc; }
+.literature__doc-card--active { border-color: #3b82f6; background: #eff6ff; }
+.literature__doc-title { font-weight: 500; color: #1e293b; margin-bottom: 2px; }
+.literature__doc-meta { color: #94a3b8; }
+.literature__doc-cred { color: #10b981; font-weight: 500; margin-top: 4px; }
 </style>

@@ -15,7 +15,7 @@ interface NavItem {
 
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { name: 'assistant',       label: '科研助手',     icon: '💬', routeName: 'research-assistant' },
-  { name: 'dashboard',       label: '项目空间',     icon: '📁', routeName: 'research-dashboard' },
+  { name: 'project',       label: '项目空间',     icon: '📁', routeName: 'research-project' },
   { name: 'literature',      label: '文献智能库',   icon: '📚', routeName: 'research-literature' },
   { name: 'experiment',      label: '实验设计',     icon: '🧪', routeName: 'research-experiment' },
   { name: 'data-analysis',   label: '数据分析',     icon: '📊', routeName: 'research-data-analysis' },
