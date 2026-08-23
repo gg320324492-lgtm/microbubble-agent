@@ -1,14 +1,7 @@
 <script setup lang="ts">
 /**
- * 左侧导航 Sidebar。
- *
- * 职责:
- * - 主导航（占位，Phase 2+ 业务模块填充）
- * - 当前页路由高亮
- * - 折叠/展开（Phase 5+ 增强）
- *
- * Phase 2-Impl-1: 仅 dashboard / tasks / knowledge / meeting 4 个占位链接
- *   真实模块路由 Phase 2 后续批次加入。
+ * 科研操作系统侧边导航栏。
+ * 10 个模块，全部中文标签。
  */
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
@@ -18,15 +11,18 @@ interface NavItem {
   label: string
   icon: string
   routeName: string
-  badge?: 'wip' | 'soon'
 }
 
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
-  { name: 'dashboard', label: '仪表盘', icon: '🏠', routeName: 'dashboard', badge: 'wip' },
-  { name: 'knowledge', label: '知识库', icon: '📚', routeName: 'knowledge', badge: 'wip' },
-  { name: 'chat', label: 'AI 对话', icon: '💬', routeName: 'chat', badge: 'wip' },
-  { name: 'tasks', label: '任务', icon: '📋', routeName: 'tasks', badge: 'soon' },
-  { name: 'meeting', label: '会议', icon: '🎙️', routeName: 'meeting', badge: 'soon' }
+  { name: 'assistant',       label: '科研助手',     icon: '💬', routeName: 'research-assistant' },
+  { name: 'dashboard',       label: '项目空间',     icon: '📁', routeName: 'research-dashboard' },
+  { name: 'literature',      label: '文献智能库',   icon: '📚', routeName: 'research-literature' },
+  { name: 'experiment',      label: '实验设计',     icon: '🧪', routeName: 'research-experiment' },
+  { name: 'data-analysis',   label: '数据分析',     icon: '📊', routeName: 'research-data-analysis' },
+  { name: 'manuscript',      label: '论文助手',     icon: '📝', routeName: 'research-manuscript' },
+  { name: 'knowledge-graph', label: '知识图谱',     icon: '🔗', routeName: 'research-knowledge-graph' },
+  { name: 'agent-center',    label: '智能体中心',   icon: '🤖', routeName: 'research-agent-center' },
+  { name: 'settings',        label: '系统设置',     icon: '⚙️', routeName: 'research-settings' },
 ]
 
 const route = useRoute()
@@ -37,7 +33,10 @@ const activeName = computed(() => (typeof route.name === 'string' ? route.name :
   <aside class="sidebar">
     <div class="sidebar__brand">
       <span class="sidebar__brand-icon">🔬</span>
-      <span class="sidebar__brand-text">MicroBubble</span>
+      <div class="sidebar__brand-text">
+        <span class="sidebar__brand-name">MicroBubble</span>
+        <span class="sidebar__brand-sub">Research OS</span>
+      </div>
     </div>
 
     <nav class="sidebar__nav">
@@ -49,14 +48,15 @@ const activeName = computed(() => (typeof route.name === 'string' ? route.name :
       >
         <span class="sidebar__link-icon">{{ item.icon }}</span>
         <span class="sidebar__link-label">{{ item.label }}</span>
-        <span v-if="item.badge" :class="['sidebar__link-badge', `sidebar__link-badge--${item.badge}`]">
-          {{ item.badge === 'wip' ? '建设中' : '待开工' }}
-        </span>
       </RouterLink>
     </nav>
 
     <div class="sidebar__footer">
-      <span class="sidebar__version">v0.1.0</span>
+      <div class="sidebar__user">
+        <div class="sidebar__avatar">王</div>
+        <span class="sidebar__username">王天志</span>
+      </div>
+      <span class="sidebar__version">v1.0.0</span>
     </div>
   </aside>
 </template>
@@ -76,73 +76,59 @@ const activeName = computed(() => (typeof route.name === 'string' ? route.name :
 .sidebar__brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 1.2rem 1rem;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #f97316;
+  gap: 10px;
+  padding: 18px 16px 14px;
   border-bottom: 1px solid #1e293b;
 }
-.sidebar__brand-icon {
-  font-size: 1.4rem;
-}
-.sidebar__brand-text {
-  letter-spacing: 0.02em;
-}
+.sidebar__brand-icon { font-size: 22px; }
+.sidebar__brand-name { font-size: 15px; font-weight: 700; color: #f97316; display: block; }
+.sidebar__brand-sub { font-size: 10px; color: #64748b; letter-spacing: .05em; text-transform: uppercase; }
 
 .sidebar__nav {
   flex: 1;
-  padding: 1rem 0.6rem;
+  padding: 10px 8px;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 2px;
+  overflow-y: auto;
 }
 .sidebar__link {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 6px;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
   color: #94a3b8;
   text-decoration: none;
-  font-size: 0.9rem;
-  transition: background 0.12s, color 0.12s;
+  font-size: 13px;
+  transition: background .12s, color .12s;
 }
 .sidebar__link:hover {
-  background: rgba(148, 163, 184, 0.06);
-  color: #f1f5f9;
+  background: rgba(148, 163, 184, 0.08);
+  color: #e2e8f0;
 }
 .sidebar__link.is-active {
-  background: rgba(249, 115, 22, 0.12);
+  background: rgba(249, 115, 22, 0.14);
   color: #f97316;
   font-weight: 600;
 }
-.sidebar__link-icon {
-  font-size: 1.05rem;
-  width: 1.4rem;
-  text-align: center;
-}
-.sidebar__link-label {
-  flex: 1;
-}
-.sidebar__link-badge {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.4rem;
-  border-radius: 3px;
-}
-.sidebar__link-badge--wip {
-  background: #92400e;
-  color: #fde68a;
-}
-.sidebar__link-badge--soon {
-  background: #1e293b;
-  color: #64748b;
-}
+.sidebar__link-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+.sidebar__link-label { flex: 1; }
 
 .sidebar__footer {
-  padding: 0.8rem 1rem;
+  padding: 12px 16px;
   border-top: 1px solid #1e293b;
-  font-size: 0.75rem;
-  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
+.sidebar__user { display: flex; align-items: center; gap: 8px; }
+.sidebar__avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, #f97316, #fbbf24);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+}
+.sidebar__username { font-size: 12px; color: #94a3b8; }
+.sidebar__version { font-size: 10px; color: #475569; }
 </style>

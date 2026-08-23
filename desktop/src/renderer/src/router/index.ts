@@ -56,6 +56,61 @@ const routes: RouteRecordRaw[] = [
     name: 'home',
     redirect: () => '/dashboard'
   },
+  // ── Phase 8-I1: 科研工作台路由 ──
+  {
+    path: '/research/dashboard',
+    name: 'research-dashboard',
+    component: () => import('../pages/research/Dashboard.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '首页' }
+  },
+  {
+    path: '/research/assistant',
+    name: 'research-assistant',
+    component: () => import('../pages/research/Assistant.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: 'AI 科研助手' }
+  },
+  {
+    path: '/research/literature',
+    name: 'research-literature',
+    component: () => import('../pages/research/Literature.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '文献智能库' }
+  },
+  {
+    path: '/research/experiment',
+    name: 'research-experiment',
+    component: () => import('../pages/research/Experiment.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '实验设计' }
+  },
+  {
+    path: '/research/data-analysis',
+    name: 'research-data-analysis',
+    component: () => import('../pages/research/DataAnalysis.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '数据分析' }
+  },
+  {
+    path: '/research/manuscript',
+    name: 'research-manuscript',
+    component: () => import('../pages/research/Manuscript.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '论文助手' }
+  },
+  {
+    path: '/research/knowledge-graph',
+    name: 'research-knowledge-graph',
+    component: () => import('../pages/research/KnowledgeGraph.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '知识图谱' }
+  },
+  {
+    path: '/research/agent-center',
+    name: 'research-agent-center',
+    component: () => import('../pages/research/AgentCenter.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '智能体中心' }
+  },
+  {
+    path: '/research/settings',
+    name: 'research-settings',
+    component: () => import('../pages/research/Settings.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '系统设置' }
+  },
   // Phase 0 调试组件（保留入口）
   {
     path: '/debug/ping',
