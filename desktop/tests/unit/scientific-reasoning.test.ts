@@ -2,6 +2,11 @@
 // Target: ≥250 tests (3300 base → ≥3550 total).
 
 import { describe, it, expect } from 'vitest'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __testDir = dirname(fileURLToPath(import.meta.url))
+const srcRoot = resolve(__testDir, '..', '..', 'src')
 
 import {
   isValidClaimCategory,
@@ -838,14 +843,14 @@ describe('Phase 8-G0 determinism', () => {
 describe('Phase 8-G0 security', () => {
   it('schema file contains no backend imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/shared/science/scientific-reasoning-schema.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'shared/science/scientific-reasoning-schema.ts'), 'utf8')
     expect(content).not.toContain("from 'app/")
     expect(content).not.toContain('from "app/')
   })
 
   it('literature critic has no auth imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/literature-critic.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/literature-critic.ts'), 'utf8')
     // Check for actual import statements, not substring matches in comments
     expect(content).not.toMatch(/import.*auth/)
     expect(content).not.toMatch(/require.*auth/)
@@ -854,7 +859,7 @@ describe('Phase 8-G0 security', () => {
 
   it('claim extractor has no SDK imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/claim-extractor.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/claim-extractor.ts'), 'utf8')
     expect(content).not.toContain('anthropic')
     expect(content).not.toContain('openai')
     expect(content).not.toContain('ollama')
@@ -862,21 +867,21 @@ describe('Phase 8-G0 security', () => {
 
   it('conflict analyzer has no model-provider imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/conflict-analyzer.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/conflict-analyzer.ts'), 'utf8')
     expect(content).not.toContain('ModelProvider')
     expect(content).not.toContain('model-provider')
   })
 
   it('method selector has no backend imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/method-selector.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/method-selector.ts'), 'utf8')
     expect(content).not.toContain("from 'app/")
     expect(content).not.toContain('fastapi')
   })
 
   it('reasoner facade has no auth imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/scientific-reasoner.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/scientific-reasoner.ts'), 'utf8')
     expect(content).not.toMatch(/import.*auth/)
     expect(content).not.toMatch(/require.*auth/)
     expect(content).not.toMatch(/import.*token/)
@@ -1196,21 +1201,21 @@ describe('Phase 8-G0 extended determinism', () => {
 describe('Phase 8-G0 extended security', () => {
   it('claim extractor has no model-provider imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/claim-extractor.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/claim-extractor.ts'), 'utf8')
     expect(content).not.toMatch(/import.*ModelProvider/)
     expect(content).not.toMatch(/import.*model-provider/)
   })
 
   it('method selector has no SDK imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/method-selector.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/method-selector.ts'), 'utf8')
     expect(content).not.toContain('anthropic')
     expect(content).not.toContain('openai')
   })
 
   it('scientific reasoner has no SDK imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/main/services/science/scientific-reasoner.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'main/services/science/scientific-reasoner.ts'), 'utf8')
     expect(content).not.toMatch(/import.*anthropic/)
     expect(content).not.toMatch(/import.*openai/)
     expect(content).not.toMatch(/import.*ollama/)
@@ -1218,7 +1223,7 @@ describe('Phase 8-G0 extended security', () => {
 
   it('schema file has no provider imports', async () => {
     const fs = await import('fs')
-    const content = fs.readFileSync('src/shared/science/scientific-reasoning-schema.ts', 'utf8')
+    const content = fs.readFileSync(resolve(srcRoot, 'shared/science/scientific-reasoning-schema.ts'), 'utf8')
     expect(content).not.toMatch(/import.*ModelProvider/)
     expect(content).not.toMatch(/import.*SecretStore/)
   })
