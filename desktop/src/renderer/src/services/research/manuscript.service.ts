@@ -1,40 +1,20 @@
-// Manuscript Service — 论文助手服务层。
-// 封装 Phase 8-H3 论文生成能力。
+// Manuscript Service — 论文助手服务层（带适配器模式）。
 
-export interface ManuscriptSection {
-  sectionType: 'introduction' | 'methods' | 'results' | 'discussion' | 'conclusion'
-  title: string
-  content: string
-  citations: string[]
-}
+export interface ManuscriptSection { sectionType: string; title: string; content: string; citations: string[] }
+export interface FigureCaption { figureId: string; caption: string; description: string }
+export interface WritingIssue { type: string; location: string; description: string; severity: 'low' | 'medium' | 'high'; suggestion: string }
+export interface Manuscript { manuscriptId: string; title: string; abstract: string; sections: ManuscriptSection[]; figures: FigureCaption[]; highlights: string[]; wordCount: number }
 
-export interface FigureCaption {
-  figureId: string
-  caption: string
-  description: string
-}
-
-export interface WritingIssue {
-  type: string
-  location: string
-  description: string
-  severity: 'low' | 'medium' | 'high'
-  suggestion: string
-}
-
-export interface Manuscript {
-  manuscriptId: string
-  title: string
-  abstract: string
-  sections: ManuscriptSection[]
-  figures: FigureCaption[]
-  highlights: string[]
-  wordCount: number
+export interface ManuscriptAdapter {
+  getManuscript(): Promise<Manuscript>
+  getWritingIssues(): Promise<WritingIssue[]>
+  getSections(): Promise<ManuscriptSection[]>
+  generateSection(sectionType: string, outline: string): Promise<string>
+  reviewSection(sectionType: string, content: string): Promise<WritingIssue[]>
 }
 
 const MOCK_MANUSCRIPT: Manuscript = {
-  manuscriptId: 'ms-1',
-  title: '臭氧微纳米气泡降解四环素的效率与机理研究',
+  manuscriptId: 'ms-1', title: '臭氧微纳米气泡降解四环素的效率与机理研究',
   abstract: '本研究系统探讨了臭氧微纳米气泡（O₃-MNBs）对四环素（TC）的降解性能及其作用机理。结果表明，在最优条件下，O₃-MNBs 对 TC 的去除率高达 98.6%，主要活性物种为 ·OH 与 ¹O₂。降解过程符合准一级动力学模型，表观速率常数为 0.0243 min⁻¹。',
   sections: [
     { sectionType: 'introduction', title: '1 引言', content: '四环素（TC）是一种广谱抗生素，广泛用于人类疾病治疗和动物养殖，其在水体中的残留会对生态环境和人类健康造成潜在风险。臭氧微纳米气泡技术通过界面效应提高臭氧利用效率，增强传质与反应速率。', citations: ['[1]', '[2]', '[3]'] },
@@ -57,24 +37,30 @@ const MOCK_ISSUES: WritingIssue[] = [
   { type: 'weak_citation', location: '参考文献', description: '参考文献中近三年文献占比偏低', severity: 'low', suggestion: '补充最新文献引用' },
 ]
 
+const mockAdapter: ManuscriptAdapter = {
+  async getManuscript() { return { ...MOCK_MANUSCRIPT } },
+  async getWritingIssues() { return [...MOCK_ISSUES] },
+  async getSections() { return [...MOCK_MANUSCRIPT.sections] },
+  async generateSection(type, _outline) {
+    const defaults: Record<string, string> = {
+      introduction: '科学研究需要系统性调查来解决知识空白。本研究旨在探讨...',
+      methods: '实验采用标准化流程，材料与试剂信息如下...',
+      results: '实验数据表明...',
+      discussion: '上述结果表明...',
+      conclusion: '本研究的主要贡献如下...',
+    }
+    return defaults[type] ?? '内容生成中...'
+  },
+  async reviewSection() { return [] },
+}
+
+let currentAdapter: ManuscriptAdapter = mockAdapter
+
 export const manuscriptService = {
-  async getManuscript(): Promise<Manuscript> {
-    return { ...MOCK_MANUSCRIPT }
-  },
-
-  async getWritingIssues(): Promise<WritingIssue[]> {
-    return [...MOCK_ISSUES]
-  },
-
-  async getSections(): Promise<ManuscriptSection[]> {
-    return [...MOCK_MANUSCRIPT.sections]
-  },
-
-  async getFigureCaptions(): Promise<FigureCaption[]> {
-    return [...MOCK_MANUSCRIPT.figures]
-  },
-
-  async getHighlights(): Promise<string[]> {
-    return [...MOCK_MANUSCRIPT.highlights]
-  },
+  setAdapter(a: ManuscriptAdapter) { currentAdapter = a },
+  getManuscript: () => currentAdapter.getManuscript(),
+  getWritingIssues: () => currentAdapter.getWritingIssues(),
+  getSections: () => currentAdapter.getSections(),
+  generateSection: (t: string, o: string) => currentAdapter.generateSection(t, o),
+  reviewSection: (t: string, c: string) => currentAdapter.reviewSection(t, c),
 }
