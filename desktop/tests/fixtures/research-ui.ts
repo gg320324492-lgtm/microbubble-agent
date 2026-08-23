@@ -1,0 +1,31 @@
+export const RESEARCH_NAV = [
+  ['科研首页', 'research-dashboard', 'home'],
+  ['科研助手', 'research-assistant', 'assistant'],
+  ['项目空间', 'research-project', 'project'],
+  ['文献研究', 'research-literature', 'literature'],
+  ['实验设计', 'research-experiment', 'experiment'],
+  ['数据分析', 'research-data-analysis', 'data'],
+  ['论文生成', 'research-manuscript', 'manuscript'],
+  ['知识图谱', 'research-knowledge-graph', 'graph'],
+  ['Agent 中心', 'research-agent-center', 'agent'],
+  ['系统设置', 'research-settings', 'settings']
+] as const
+
+export const RESEARCH_STATES = [
+  ['loading', 'AI 正在分析...'],
+  ['empty', '暂无科研数据'],
+  ['error', '分析失败，请重试']
+] as const
+
+export const RESEARCH_PAGES = [
+  ['Dashboard', ['当前科研项目', 'AI 研究活动', '研究洞察']],
+  ['Assistant', ['研究会话', '研究轨迹', '引用文献']],
+  ['ProjectWorkspace', ['项目概览', '文献', '实验', '数据', '模型', '论文']],
+  ['Literature', ['文献证据工作区', '相关度', '证据等级', '引用位置']],
+  ['Experiment', ['研究假设', '实验变量', 'AI 实验建议']],
+  ['DataAnalysis', ['数据质量', '模型拟合', 'AI 解释']],
+  ['Manuscript', ['论文结构', '正文草稿', 'SCI 审阅']],
+  ['KnowledgeGraph', ['实体列表', '关系详情']],
+  ['AgentCenter', ['AI 思考时间线', '智能体协作矩阵', '工具执行可视化']],
+  ['Settings', ['模型配置', '知识库管理', '用户研究方向', 'API 设置']]
+] as const
