@@ -6,16 +6,37 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import type { Component } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('echarts/core', () => ({
+  use: vi.fn(),
+  init: vi.fn(() => ({ setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() }))
+}))
+vi.mock('echarts/charts', () => ({ LineChart: { name: 'LineChart' } }))
+vi.mock('echarts/components', () => ({
+  GridComponent: { name: 'GridComponent' },
+  LegendComponent: { name: 'LegendComponent' },
+  TooltipComponent: { name: 'TooltipComponent' },
+  AriaComponent: { name: 'AriaComponent' }
+}))
+vi.mock('echarts/renderers', () => ({ CanvasRenderer: { name: 'CanvasRenderer' } }))
+
 import AgentCard from '@/components/research/AgentCard.vue'
 import CitationCard from '@/components/research/CitationCard.vue'
 import AgentCenter from '@/pages/research/AgentCenter.vue'
 import Assistant from '@/pages/research/Assistant.vue'
+import DataAnalysis from '@/pages/research/DataAnalysis.vue'
 import Experiment from '@/pages/research/Experiment.vue'
 import Literature from '@/pages/research/Literature.vue'
 import { useAgentStore } from '@/stores/research/agent.store'
+import { useDatasetStore } from '@/stores/research/dataset.store'
 import { useExperimentStore } from '@/stores/research/experiment.store'
 import { useKnowledgeStore } from '@/stores/research/knowledge.store'
 import { useWorkflowStore } from '@/stores/research/workflow.store'
+import {
+  dataAnalysisService,
+  type AnalysisReport,
+  type DataAnalysisAdapter,
+  type VariableImportance
+} from '@/services/research/data-analysis.service'
 import {
   experimentService,
   type ExperimentAdapter,
@@ -114,14 +135,56 @@ const experimentDesign: ExperimentDesign = {
   status: 'designing'
 }
 
+const analysisReport: AnalysisReport = {
+  quality: {
+    completeness: 0.96,
+    missingValues: { pH: 2, temperature: 1 },
+    outliers: { ozone: 3 },
+    warnings: ['pH 存在两个缺失值', '臭氧浓度存在离群点']
+  },
+  statistics: [
+    { metric: '平均臭氧浓度', value: 4.75, interpretation: '反映总体氧化剂水平' },
+    { metric: '浓度标准差', value: 2.31, interpretation: '反映实验批次波动' },
+    { metric: '降解相关系数', value: -0.987, interpretation: '时间与归一化浓度强负相关' }
+  ],
+  models: [
+    { model: 'first-order', parameters: { k: 0.0243 }, rSquared: 0.9887, residualError: 0.0211 },
+    { model: 'zero-order', parameters: { k: 0.158 }, rSquared: 0.892, residualError: -0.085 },
+    { model: 'r2-negative', parameters: { k: 0.1 }, rSquared: -0.1, residualError: 0.02 },
+    { model: 'r2-overflow', parameters: { k: 0.1 }, rSquared: 1.2, residualError: 0.02 },
+    { model: 'r2-nan', parameters: { k: 0.1 }, rSquared: Number.NaN, residualError: 0.02 },
+    { model: 'r2-infinite', parameters: { k: 0.1 }, rSquared: Number.POSITIVE_INFINITY, residualError: 0.02 }
+  ],
+  figures: [
+    { type: 'line', title: '臭氧浓度时间曲线', xVariable: '时间', yVariable: '浓度' },
+    { type: 'scatter+fit', title: '一级动力学拟合图', xVariable: '时间', yVariable: 'C/C₀' }
+  ],
+  conclusions: [
+    { observation: '降解过程符合一级动力学特征', interpretation: '拟合结果支持浓度依赖机制', confidence: 0.9 },
+    { observation: '可信度负值', interpretation: '非法边界样本', confidence: -0.1 },
+    { observation: '可信度溢出', interpretation: '非法边界样本', confidence: 1.2 },
+    { observation: '可信度非数值', interpretation: '非法边界样本', confidence: Number.NaN },
+    { observation: '可信度无穷', interpretation: '非法边界样本', confidence: Number.POSITIVE_INFINITY }
+  ]
+}
+
+const analysisImportance: VariableImportance[] = [
+  { variable: '真实曝气量', importance: 0.42, contribution: '强正效应', confidence: 0.85 },
+  { variable: '真实初始 pH', importance: 0.21, contribution: '负相关', confidence: 0.72 },
+  { variable: '真实气泡粒径', importance: 0.11, contribution: '弱负效应', confidence: 0.55 }
+]
+
 let knowledgeAdapter: KnowledgeAdapter
 let literatureAdapter: LiteratureAdapter
 let experimentAdapter: ExperimentAdapter
+let dataAnalysisAdapter: DataAnalysisAdapter
 
 function installResearchAdapters(options: {
   documents?: DocumentItem[]
   assessments?: PaperAssessment[]
   design?: ExperimentDesign | null
+  report?: AnalysisReport | null
+  importance?: VariableImportance[]
 } = {}) {
   const documents = options.documents ?? literatureDocuments
   const assessments = options.assessments ?? literatureAssessments
@@ -148,9 +211,18 @@ function installResearchAdapters(options: {
     ]),
     updateDesign: vi.fn().mockResolvedValue(undefined)
   }
+  const report = options.report === undefined ? analysisReport : options.report
+  const importance = options.importance ?? analysisImportance
+  dataAnalysisAdapter = {
+    getAnalysisReport: vi.fn().mockResolvedValue(report as AnalysisReport),
+    getVariableImportance: vi.fn().mockResolvedValue(importance),
+    fitModels: vi.fn().mockResolvedValue(report?.models ?? []),
+    interpretResults: vi.fn().mockResolvedValue(report?.conclusions ?? [])
+  }
   knowledgeService.setAdapter(knowledgeAdapter)
   literatureService.setAdapter(literatureAdapter)
   experimentService.setAdapter(experimentAdapter)
+  dataAnalysisService.setAdapter(dataAnalysisAdapter)
 }
 
 const completedPlannerEvent: AgentEvent = {
@@ -1055,5 +1127,195 @@ describe('实验设计工作区（22）', () => {
       expect(source).toMatch(/overflow:\s*(?:hidden|auto);/)
       expect(source).not.toContain('color: var(--research-text-muted)')
     }
+  })
+})
+
+async function mountDataAnalysisReady() {
+  const mounted = mountPage(DataAnalysis)
+  const store = useDatasetStore()
+  await flushPromises()
+  return { ...mounted, store }
+}
+
+describe('数据分析工作区（18）', () => {
+  it('使用中文标题构成只读科研工作区', async () => {
+    const { wrapper } = await mountDataAnalysisReady()
+    const workspace = wrapper.get('[data-testid="data-analysis-workspace"]')
+    expect(wrapper.text()).toContain('数据分析工作区')
+    expect(workspace.find('input').exists()).toBe(false)
+  })
+
+  it.each([
+    ['数据完整度', '96%'],
+    ['缺失值', '3'],
+    ['离群值', '3'],
+    ['质量警告', '2']
+  ])('质量指标“%s”读取真实报告值 %s', async (label, value) => {
+    const { wrapper } = await mountDataAnalysisReady()
+    const quality = wrapper.get('[data-testid="analysis-quality"]')
+    expect(quality.text()).toContain(label)
+    expect(quality.text()).toContain(value)
+    if (label === '质量警告') {
+      expect(wrapper.get('.quality-warning').text()).toContain('pH 存在两个缺失值')
+      const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/DataAnalysis.vue'), 'utf8')
+      expect(source).toMatch(/\.quality-warning\s*\{[^}]*color:\s*var\(--research-text-primary\)/s)
+    }
+  })
+
+  it.each(analysisReport.statistics)('统计量“$metric”展示真实数值与解释', async statistic => {
+    const { wrapper } = await mountDataAnalysisReady()
+    const row = wrapper.get(`[data-statistic="${statistic.metric}"]`)
+    expect(row.text()).toContain(String(statistic.value))
+    expect(row.text()).toContain(statistic.interpretation)
+  })
+
+  it.each(analysisImportance)('变量“$variable”消费 Store 重要性、贡献和置信度', async importance => {
+    const { wrapper } = await mountDataAnalysisReady()
+    const row = wrapper.get(`[data-importance="${importance.variable}"]`)
+    expect(row.text()).toContain(importance.importance.toFixed(2))
+    expect(row.text()).toContain(importance.contribution)
+    expect(row.text()).toContain(`${Math.round(importance.confidence * 100)}%`)
+  })
+
+  it.each([
+    ['first-order', '一级动力学', '0.989'],
+    ['zero-order', '零级动力学', '0.892']
+  ])('模型 %s 使用中文名并标记拟合可信度 %s', async (model, label, score) => {
+    const { wrapper } = await mountDataAnalysisReady()
+    const card = wrapper.get(`[data-model="${model}"]`)
+    expect(card.text()).toContain(label)
+    expect(card.text()).toContain('拟合可信度')
+    expect(card.text()).toContain(score)
+    expect(card.text()).toContain('残差范围')
+    if (model === 'zero-order') {
+      expect(card.text()).toContain('残差范围待评估')
+      expect(card.text()).not.toMatch(/±-?0\.0850/)
+      for (const invalidModel of ['r2-negative', 'r2-overflow', 'r2-nan', 'r2-infinite']) {
+        const invalidCard = wrapper.get(`[data-model="${invalidModel}"]`)
+        expect(invalidCard.text()).toContain('拟合可信度 R²待评估')
+        expect(invalidCard.text()).not.toMatch(/NaN|Infinity/)
+      }
+    }
+  })
+
+  it('图表与科学解读逐项呈现 Store 的真实结果', async () => {
+    const { wrapper } = await mountDataAnalysisReady()
+    const figures = wrapper.get('[data-testid="analysis-figures"]')
+    expect(figures.text()).toContain('臭氧浓度时间曲线')
+    expect(figures.text()).toContain('一级动力学拟合图')
+    expect(figures.findAll('[data-testid="scientific-chart"]')).toHaveLength(1)
+    const conclusion = wrapper.get('[data-conclusion="0"]')
+    expect(conclusion.text()).toContain('降解过程符合一级动力学特征')
+    expect(conclusion.text()).toContain('拟合结果支持浓度依赖机制')
+    expect(conclusion.text()).toContain('90%')
+    for (const index of [1, 2, 3, 4]) {
+      expect(wrapper.get(`[data-conclusion="${index}"]`).text()).toContain('待评估')
+    }
+  })
+
+  it('报告加载期间显示统一中文 ResearchState', async () => {
+    vi.mocked(dataAnalysisAdapter.getAnalysisReport).mockImplementation(() => new Promise(() => undefined))
+    const { wrapper } = mountPage(DataAnalysis)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-testid="data-analysis-state"]').text()).toContain('AI 正在分析...')
+  })
+
+  it('服务返回空报告时显示统一空态与下一步指引', async () => {
+    installResearchAdapters({ report: null, importance: [] })
+    const { wrapper } = await mountDataAnalysisReady()
+    const state = wrapper.get('[data-testid="data-analysis-state"]')
+    expect(state.text()).toContain('暂无科研数据')
+    expect(state.text()).toContain('导入实验数据')
+  })
+
+  it('加载失败隐藏原始异常并通过同一 loadReport 重试', async () => {
+    vi.mocked(dataAnalysisAdapter.getAnalysisReport)
+      .mockRejectedValueOnce(new Error('RAW_ANALYSIS_LOAD_FAILURE'))
+      .mockResolvedValueOnce(analysisReport)
+    const { wrapper } = mountPage(DataAnalysis)
+    const store = useDatasetStore()
+    const load = vi.spyOn(store, 'loadReport')
+    await flushPromises()
+    const state = wrapper.get('[data-testid="data-analysis-state"]')
+    expect(state.text()).toContain('分析失败，请重试')
+    expect(wrapper.text()).not.toContain('RAW_ANALYSIS_LOAD_FAILURE')
+    await state.get('.research-state__retry').trigger('click')
+    await flushPromises()
+    expect(load).toHaveBeenCalledOnce()
+    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="data-analysis-state"]').exists()).toBe(false)
+  })
+
+  it('跨卸载双触发复用单轮加载，失败隐藏旧重要性且双重重试不混合结果', async () => {
+    const deferred = <T>() => {
+      let resolve!: (value: T) => void
+      let reject!: (reason: unknown) => void
+      const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
+      return { promise, resolve, reject }
+    }
+    const firstReport = deferred<AnalysisReport>()
+    const firstImportance = deferred<VariableImportance[]>()
+    const retryReport = deferred<AnalysisReport>()
+    const retryImportance = deferred<VariableImportance[]>()
+    const reportAfterFirst = {
+      ...analysisReport,
+      conclusions: [{ observation: '第一轮新报告', interpretation: '等待重要性', confidence: 0.8 }]
+    }
+    const reportAfterRetry = {
+      ...analysisReport,
+      conclusions: [{ observation: '重试后的报告', interpretation: '完整成功', confidence: 0.88 }]
+    }
+    const oldImportance = [{ variable: '旧变量不得显示', importance: 0.9, contribution: '旧结果', confidence: 0.9 }]
+    const newImportance = [{ variable: '重试新变量', importance: 0.6, contribution: '新结果', confidence: 0.86 }]
+    vi.mocked(dataAnalysisAdapter.getAnalysisReport)
+      .mockImplementationOnce(() => firstReport.promise)
+      .mockImplementationOnce(() => retryReport.promise)
+    vi.mocked(dataAnalysisAdapter.getVariableImportance)
+      .mockImplementationOnce(() => firstImportance.promise)
+      .mockImplementationOnce(() => retryImportance.promise)
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useDatasetStore()
+    store.report = analysisReport
+    store.importance = oldImportance
+    const load = vi.spyOn(store, 'loadReport')
+
+    const firstWrapper = mount(DataAnalysis, { attachTo: document.body, global: { plugins: [pinia] } })
+    firstWrapper.unmount()
+    const wrapper = mount(DataAnalysis, { attachTo: document.body, global: { plugins: [pinia] } })
+    mountedPageWrappers.push(wrapper)
+    expect(load).toHaveBeenCalledOnce()
+    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledOnce()
+
+    firstReport.resolve(reportAfterFirst)
+    await flushPromises()
+    expect(wrapper.text()).toContain('第一轮新报告')
+    expect(wrapper.text()).not.toContain('旧变量不得显示')
+    firstImportance.reject(new Error('RAW_IMPORTANCE_LOAD_FAILURE'))
+    await flushPromises()
+    const error = wrapper.get('[data-testid="data-analysis-retained-error"]')
+    expect(error.text()).toContain('分析失败，请重试')
+    expect(error.text()).toContain('已保留成功读取的分析报告')
+    expect(wrapper.text()).not.toContain('RAW_IMPORTANCE_LOAD_FAILURE')
+
+    const retry = error.get('.research-state__retry').element as HTMLButtonElement
+    retry.click()
+    retry.click()
+    await wrapper.vm.$nextTick()
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledTimes(2)
+
+    retryReport.resolve(reportAfterRetry)
+    await flushPromises()
+    expect(wrapper.text()).toContain('重试后的报告')
+    expect(wrapper.text()).not.toContain('旧变量不得显示')
+    retryImportance.resolve(newImportance)
+    await flushPromises()
+    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledTimes(2)
+    expect(dataAnalysisAdapter.getVariableImportance).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="data-analysis-retained-error"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('重试新变量')
+    expect(wrapper.text()).not.toContain('旧变量不得显示')
   })
 })
