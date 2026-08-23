@@ -1,0 +1,92 @@
+/* Page changes stay quiet enough for long-running research sessions. */
+.research-page-enter-active,
+.research-page-leave-active {
+  transition:
+    opacity var(--research-duration-normal) var(--research-ease-standard),
+    transform var(--research-duration-normal) var(--research-ease-standard);
+  will-change: opacity, transform;
+}
+
+.research-page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.research-page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.research-card-interactive {
+  transition:
+    border-color var(--research-duration-fast) var(--research-ease-standard),
+    box-shadow var(--research-duration-normal) var(--research-ease-standard),
+    transform var(--research-duration-normal) var(--research-ease-standard);
+}
+
+.research-card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--research-shadow-medium);
+}
+
+.research-card-interactive:focus-within {
+  border-color: var(--research-primary-300);
+  box-shadow: var(--research-shadow-focus-primary), var(--research-shadow-soft);
+}
+
+.research-progress-animated {
+  transition: width var(--research-duration-slow) var(--research-ease-emphasized);
+}
+
+.research-agent-running {
+  position: relative;
+}
+
+.research-agent-running::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: var(--research-space-2);
+  vertical-align: middle;
+  flex: 0 0 8px;
+  border-radius: var(--research-radius-pill);
+  background: var(--research-ai-500);
+  box-shadow: 0 0 0 0 var(--research-ai-glow-base);
+  content: '';
+  animation: research-agent-breathe 1.8s var(--research-ease-standard) infinite;
+}
+
+@keyframes research-agent-breathe {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 var(--research-ai-glow-soft);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 7px var(--research-ai-glow-transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-delay: 0ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .research-page-enter-from,
+  .research-page-leave-to,
+  .research-card-interactive:hover,
+  .research-agent-running::before {
+    transform: none !important;
+  }
+}

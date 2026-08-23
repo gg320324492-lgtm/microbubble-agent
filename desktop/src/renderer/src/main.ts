@@ -4,6 +4,9 @@ import App from './App.vue'
 import { router } from './router'
 import { useAuthStore } from './stores/auth'
 import { useChatStore } from './stores/chat'
+import './styles/research-design-tokens.css'
+import './styles/research-global.css'
+import './styles/research-motion.css'
 
 const app = createApp(App)
 const pinia = createPinia()

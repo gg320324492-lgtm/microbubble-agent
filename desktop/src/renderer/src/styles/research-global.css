@@ -1,0 +1,119 @@
+/* Document-level defaults for the light scientific workstation. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+html {
+  background: var(--research-bg-main);
+  color: var(--research-text-primary);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-width: 1024px;
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--research-bg-main);
+  color: var(--research-text-primary);
+  font-family: var(--research-font-sans);
+  font-size: var(--research-text-body);
+  line-height: var(--research-line-height-body);
+  scrollbar-color: var(--research-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+button,
+input,
+textarea,
+select {
+  color: inherit;
+  font: inherit;
+}
+
+button,
+[role='button'],
+a,
+input,
+textarea,
+select,
+[tabindex] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: var(--research-primary-600);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--research-primary-500);
+  outline-offset: 2px;
+  border-radius: max(2px, var(--research-radius-input));
+}
+
+::selection {
+  background: var(--research-primary-100);
+  color: var(--research-text-primary);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--research-border-strong);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: var(--research-radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--research-text-muted);
+  background-clip: padding-box;
+}
+
+img,
+svg,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+[aria-disabled='true'],
+:disabled {
+  cursor: not-allowed;
+}
+
+.research-tabular-number {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.research-reading-copy {
+  font-family: var(--research-font-serif);
+  line-height: var(--research-line-height-reading);
+}
