@@ -1,45 +1,18 @@
-// Data Analysis Service — 数据分析服务层。
-// 封装 Phase 8-H2 科学数据分析能力。
+// Data Analysis Service — 数据分析服务层（带适配器模式）。
 
-export interface DataQualityReport {
-  completeness: number
-  missingValues: Record<string, number>
-  outliers: Record<string, number>
-  warnings: string[]
-}
+export interface DataQualityReport { completeness: number; missingValues: Record<string, number>; outliers: Record<string, number>; warnings: string[] }
+export interface StatisticalResult { metric: string; value: number; interpretation: string }
+export interface ModelFitResult { model: string; parameters: Record<string, number>; rSquared: number; residualError: number }
+export interface FigureRecommendation { type: string; title: string; xVariable: string; yVariable: string }
+export interface ScientificConclusion { observation: string; interpretation: string; confidence: number }
+export interface AnalysisReport { quality: DataQualityReport; statistics: StatisticalResult[]; models: ModelFitResult[]; figures: FigureRecommendation[]; conclusions: ScientificConclusion[] }
+export interface VariableImportance { variable: string; importance: number; contribution: string; confidence: number }
 
-export interface StatisticalResult {
-  metric: string
-  value: number
-  interpretation: string
-}
-
-export interface ModelFitResult {
-  model: string
-  parameters: Record<string, number>
-  rSquared: number
-  residualError: number
-}
-
-export interface FigureRecommendation {
-  type: string
-  title: string
-  xVariable: string
-  yVariable: string
-}
-
-export interface ScientificConclusion {
-  observation: string
-  interpretation: string
-  confidence: number
-}
-
-export interface AnalysisReport {
-  quality: DataQualityReport
-  statistics: StatisticalResult[]
-  models: ModelFitResult[]
-  figures: FigureRecommendation[]
-  conclusions: ScientificConclusion[]
+export interface DataAnalysisAdapter {
+  getAnalysisReport(): Promise<AnalysisReport>
+  getVariableImportance(): Promise<VariableImportance[]>
+  fitModels(dataId: string, x: string, y: string): Promise<ModelFitResult[]>
+  interpretResults(report: AnalysisReport): Promise<ScientificConclusion[]>
 }
 
 const MOCK_REPORT: AnalysisReport = {
@@ -64,24 +37,31 @@ const MOCK_REPORT: AnalysisReport = {
   ],
 }
 
+const MOCK_IMPORTANCE: VariableImportance[] = [
+  { variable: '曝气量', importance: 0.42, contribution: '强正效应', confidence: 0.85 },
+  { variable: '初始pH', importance: 0.21, contribution: '负相关', confidence: 0.72 },
+  { variable: '初始TC浓度', importance: 0.17, contribution: '正效应', confidence: 0.68 },
+  { variable: '气泡粒径', importance: 0.11, contribution: '弱负效应', confidence: 0.55 },
+]
+
+const mockAdapter: DataAnalysisAdapter = {
+  async getAnalysisReport() { return { ...MOCK_REPORT } },
+  async getVariableImportance() { return [...MOCK_IMPORTANCE] },
+  async fitModels() {
+    return [
+      { model: 'first-order', parameters: { k: 0.0243 }, rSquared: 0.9887, residualError: 0.0211 },
+      { model: 'zero-order', parameters: { k: 0.158 }, rSquared: 0.892, residualError: 0.085 },
+    ]
+  },
+  async interpretResults(r) { return r.conclusions },
+}
+
+let currentAdapter: DataAnalysisAdapter = mockAdapter
+
 export const dataAnalysisService = {
-  async getAnalysisReport(): Promise<AnalysisReport> {
-    return { ...MOCK_REPORT }
-  },
-
-  async getQualityReport(): Promise<DataQualityReport> {
-    return { ...MOCK_REPORT.quality }
-  },
-
-  async getStatistics(): Promise<StatisticalResult[]> {
-    return [...MOCK_REPORT.statistics]
-  },
-
-  async getModelFits(): Promise<ModelFitResult[]> {
-    return [...MOCK_REPORT.models]
-  },
-
-  async getConclusions(): Promise<ScientificConclusion[]> {
-    return [...MOCK_REPORT.conclusions]
-  },
+  setAdapter(a: DataAnalysisAdapter) { currentAdapter = a },
+  getAnalysisReport: () => currentAdapter.getAnalysisReport(),
+  getVariableImportance: () => currentAdapter.getVariableImportance(),
+  fitModels: (d: string, x: string, y: string) => currentAdapter.fitModels(d, x, y),
+  interpretResults: (r: AnalysisReport) => currentAdapter.interpretResults(r),
 }

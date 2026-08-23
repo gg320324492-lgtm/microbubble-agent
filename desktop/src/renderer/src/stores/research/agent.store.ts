@@ -1,7 +1,7 @@
-// Agent Store — AI 智能体执行状态管理。
+// Agent Store — AI 智能体执行状态管理（升级版）。
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { researchAgentService, type AgentMessage, type AgentEvent, type ResearchSession, type CitationItem, type EvidenceItem } from '../../services/research/research-agent.service'
+import { researchAgentService, type AgentMessage, type AgentEvent, type ResearchSession, type CitationItem, type EvidenceItem, type ResearchDesignResult } from '../../services/research/research-agent.service'
 
 export const useAgentStore = defineStore('research-agent', () => {
   const sessions = ref<ResearchSession[]>([])
@@ -12,6 +12,7 @@ export const useAgentStore = defineStore('research-agent', () => {
   const evidence = ref<EvidenceItem[]>([])
   const isLoading = ref(false)
   const isSending = ref(false)
+  const designResult = ref<ResearchDesignResult | null>(null)
 
   const activeSession = computed(() => sessions.value.find(s => s.id === activeSessionId.value))
 
@@ -42,5 +43,15 @@ export const useAgentStore = defineStore('research-agent', () => {
     } finally { isSending.value = false }
   }
 
-  return { sessions, activeSessionId, activeSession, messages, events, citations, evidence, isLoading, isSending, loadSessions, selectSession, sendMessage }
+  async function runResearch(problem: string) {
+    isLoading.value = true
+    try { designResult.value = await researchAgentService.runResearch(problem) }
+    finally { isLoading.value = false }
+  }
+
+  async function cancelTask(taskId: string) {
+    await researchAgentService.cancelTask(taskId)
+  }
+
+  return { sessions, activeSessionId, activeSession, messages, events, citations, evidence, isLoading, isSending, designResult, loadSessions, selectSession, sendMessage, runResearch, cancelTask }
 })
