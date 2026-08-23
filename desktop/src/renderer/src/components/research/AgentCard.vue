@@ -11,6 +11,7 @@ const props = defineProps<{
   name: string
   status: 'running' | 'completed' | 'idle' | 'error'
   task?: string
+  result?: string
   duration?: string
 }>()
 
@@ -35,16 +36,17 @@ const resolvedIcon = computed<ResearchIconName>(() =>
 </script>
 
 <template>
-  <div class="agent-card" :class="`agent-card--${status}`">
+  <article class="agent-card" :class="`agent-card--${status}`" :aria-label="`${name}：${STATUS[status].label}`">
     <div class="agent-card__icon"><ResearchIcon :name="resolvedIcon" :size="26" /></div>
     <div class="agent-card__name">{{ name }}</div>
-    <div :class="['agent-card__status', { 'research-agent-running': status === 'running' }]">
+    <div role="status" aria-live="polite" :class="['agent-card__status', { 'research-agent-running': status === 'running' }]">
       <ResearchIcon :name="STATUS[status].icon" :size="13" />
       {{ STATUS[status].label }}
     </div>
     <div v-if="task" class="agent-card__task">{{ task }}</div>
-    <div v-if="duration" class="agent-card__duration"><ResearchIcon name="clock" :size="12" />{{ duration }}</div>
-  </div>
+    <div v-if="result" class="agent-card__result">{{ result }}</div>
+    <div v-if="duration !== undefined" class="agent-card__duration"><ResearchIcon name="clock" :size="12" />{{ duration }}</div>
+  </article>
 </template>
 
 <style scoped>
@@ -60,5 +62,6 @@ const resolvedIcon = computed<ResearchIconName>(() =>
 .agent-card--completed .agent-card__status { color: var(--research-success-700); }
 .agent-card--error .agent-card__status { color: var(--research-danger-600); }
 .agent-card__task { font-size: var(--research-text-xs); color: var(--research-text-secondary); margin-top: var(--research-space-2); line-height: var(--research-line-height-body); }
+.agent-card__result { margin-top: var(--research-space-2); padding-top: var(--research-space-2); border-top: 1px solid var(--research-divider); color: var(--research-text-primary); font-size: var(--research-text-xs); line-height: var(--research-line-height-body); }
 .agent-card__duration { display: flex; align-items: center; justify-content: center; gap: var(--research-space-1); margin-top: var(--research-space-2); color: var(--research-text-secondary); font-size: var(--research-text-xs); font-variant-numeric: tabular-nums; }
 </style>
