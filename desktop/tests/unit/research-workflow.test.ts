@@ -252,19 +252,36 @@ describe('Phase 8-I3-A manuscript', () => {
 describe('Phase 8-I3-A dashboard', () => {
   const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8')
   it('has AI research activities', () => { expect(c).toContain('AI 研究活动') })
-  it('derives activity status from stores', () => { expect(c).toContain('researchActivities') })
-  it('has evidence activity labels', () => { expect(c).toContain('文献证据整理') })
-  it('has research insights', () => { expect(c).toContain('研究洞察') })
-  it('has data quality overview', () => { expect(c).toContain('数据质量') })
+  it('passes the approved empty activity timeline instead of mock activities', () => {
+    expect(c).toContain('const researchTimeline = computed<ResearchTimelineItem[]>(() => [])')
+    expect(c).toContain('<ResearchTimeline :items="researchTimeline"')
+  })
+  it('does not hard-code evidence activity labels without a backend source', () => {
+    expect(c).not.toContain('文献证据整理')
+    expect(c).not.toContain('数据模型分析')
+    expect(c).not.toContain('论文质量审阅')
+  })
+  it('has recent scientific insights', () => { expect(c).toContain('近期科学洞见') })
+  it('has store-derived data model overview', () => {
+    expect(c).toContain('数据模型')
+    expect(c).toContain('datasetStore.models.length')
+  })
   it('has paper status', () => { expect(c).toContain('论文状态') })
-  it('does not generate unsupported insights', () => { expect(c).toContain('不生成无证据判断') })
+  it('passes store-derived conclusions into the evidence panel', () => {
+    expect(c).toContain('datasetStore.conclusions')
+    expect(c).toContain('<EvidencePanel :evidence="recentEvidence"')
+  })
   it('uses projectStore', () => { expect(c).toContain('useProjectStore') })
   it('uses knowledgeStore', () => { expect(c).toContain('useKnowledgeStore') })
   it('uses datasetStore', () => { expect(c).toContain('useDatasetStore') })
   it('uses manuscriptStore', () => { expect(c).toContain('useManuscriptStore') })
-  it('has shared research panels', () => { expect(c).toContain('ResearchPanel') })
-  it('has ScientificMetric', () => { expect(c).toContain('ScientificMetric') })
-  it('has StatusBadge', () => { expect(c).toContain('StatusBadge') })
+  it('composes approved B1 shared research panels', () => {
+    for (const component of ['ResearchMetricPanel', 'ResearchTimeline', 'AgentStatusPanel', 'EvidencePanel', 'DeviceStatusPanel']) {
+      expect(c).toContain(component)
+    }
+  })
+  it('has ResearchMetricPanel', () => { expect(c).toContain('ResearchMetricPanel') })
+  it('has AgentStatusPanel', () => { expect(c).toContain('AgentStatusPanel') })
 })
 
 // ============ Chinese Labels ============
@@ -303,7 +320,7 @@ describe('Phase 8-I3-A Chinese labels', () => {
   it('dashboard has Chinese labels', () => {
     const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8')
     expect(c).toContain('AI 研究活动')
-    expect(c).toContain('研究洞察')
+    expect(c).toContain('近期科学洞见')
   })
 })
 
@@ -709,18 +726,18 @@ describe('Phase 8-I3-A extended coverage', () => {
 
     // Dashboard extended (15): no fixed demo activity, all status comes from Stores.
     it('D1', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('AI 研究活动') })
-    it('D2', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('researchActivities') })
-    it('D3', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('文献证据整理') })
-    it('D4', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('数据模型分析') })
-    it('D5', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('论文质量审阅') })
+    it('D2', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('const researchTimeline = computed<ResearchTimelineItem[]>(() => [])') })
+    it('D3', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('<ResearchTimeline :items="researchTimeline"') })
+    it('D4', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('数据模型') })
+    it('D5', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('manuscriptStore.manuscript') })
     it('D6', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('datasetStore.models.length') })
-    it('D7', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('研究洞察') })
-    it('D8', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('数据质量') })
+    it('D7', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('近期科学洞见') })
+    it('D8', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain("value: datasetStore.report ? '已载入分析' : '暂无实验数据'") })
     it('D9', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('论文状态') })
-    it('D10', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('不生成无证据判断') })
-    it('D11', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('ResearchPanel') })
-    it('D12', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('ScientificMetric') })
-    it('D13', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('StatusBadge') })
+    it('D10', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('datasetStore.conclusions') })
+    it('D11', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('EvidencePanel') })
+    it('D12', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('ResearchMetricPanel') })
+    it('D13', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('AgentStatusPanel') })
     it('D14', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('useProjectStore') })
     it('D15', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('useKnowledgeStore') })
 

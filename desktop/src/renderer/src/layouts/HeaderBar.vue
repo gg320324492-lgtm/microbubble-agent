@@ -4,14 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 import ResearchIcon from '../components/icons/ResearchIcon.vue'
 import { useAuthStore } from '../stores/auth'
 import { useProjectStore } from '../stores/research/project.store'
-import { useWorkflowStore } from '../stores/research/workflow.store'
 import { useUserStore } from '../stores/user'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const projectStore = useProjectStore()
-const workflowStore = useWorkflowStore()
 const userStore = useUserStore()
 const userMenuOpen = ref(false)
 const notificationOpen = ref(false)
@@ -35,13 +33,11 @@ const pageTitle = computed(() => {
 const displayName = computed(() => userStore.profile?.name ?? '未登录')
 const avatarUrl = computed(() => userStore.profile?.avatar ?? '')
 const aiStatus = computed(() => {
-  if (workflowStore.errors.length > 0) {
-    return { tone: 'error', label: `${workflowStore.errors.length} 项异常`, icon: 'error' as const }
+  return {
+    task: '尚未接入实时任务数据',
+    state: '占位状态',
+    context: projectStore.currentProject.name
   }
-  if (workflowStore.runningTasks.length > 0) {
-    return { tone: 'running', label: `${workflowStore.runningTasks.length} 项任务运行中`, icon: 'running' as const }
-  }
-  return { tone: 'ready', label: 'AI 已就绪', icon: 'check' as const }
 })
 
 async function toggleUserMenu(): Promise<void> {
@@ -174,17 +170,21 @@ async function onLogout(): Promise<void> {
         </div>
       </div>
 
-      <div class="header-bar__system-status" role="status" aria-live="polite" aria-label="系统状态：在线"><span aria-hidden="true" />系统状态：在线</div>
+      <div class="header-ai-status__system" role="status" aria-live="polite" aria-label="系统状态：待连接"><span aria-hidden="true" />系统状态：待连接</div>
 
       <div
         data-testid="header-ai-status"
-        :class="['header-bar__ai', 'header-bar__ai-status', `is-${aiStatus.tone}`]"
+        class="header-bar__ai header-bar__ai-status"
         role="status"
         aria-live="polite"
         aria-label="全局 AI 状态"
       >
-        <ResearchIcon :name="aiStatus.icon" :size="16" />
-        <span>{{ aiStatus.label }}</span>
+        <ResearchIcon name="running" :size="16" aria-hidden="true" />
+        <dl class="header-bar__ai-details">
+          <div><dt>当前 AI 任务</dt><dd>{{ aiStatus.task }}</dd></div>
+          <div><dt>状态</dt><dd>{{ aiStatus.state }}</dd></div>
+          <div><dt>项目上下文</dt><dd>{{ aiStatus.context }}</dd></div>
+        </dl>
       </div>
 
       <div ref="commandRegion" class="header-bar__command">
@@ -298,11 +298,15 @@ async function onLogout(): Promise<void> {
 .header-bar__project-listbox [aria-selected='true'] { background: var(--research-primary-50); color: var(--research-primary-700); }
 .header-bar__project-listbox strong { color: var(--research-text-primary); font-size: var(--research-text-sm); }
 .header-bar__project-listbox span { font-size: var(--research-text-xs); }
-.header-bar__system-status { display: inline-flex; align-items: center; gap: var(--research-space-2); color: var(--research-success-700); font-size: var(--research-text-xs); white-space: nowrap; }
-.header-bar__system-status > span { width: 7px; height: 7px; border-radius: var(--research-radius-pill); background: currentColor; box-shadow: 0 0 0 4px var(--research-success-50); }
+.header-ai-status__system { display: inline-flex; align-items: center; gap: var(--research-space-2); color: var(--research-warning-600); font-size: var(--research-text-xs); white-space: nowrap; }
+.header-ai-status__system > span { width: 7px; height: 7px; border-radius: var(--research-radius-pill); background: currentColor; box-shadow: 0 0 0 4px var(--research-warning-50); }
 .header-bar__ai { display: inline-flex; align-items: center; gap: var(--research-space-2); padding: var(--research-space-2) var(--research-space-3); border: 1px solid var(--research-success-100); border-radius: var(--research-radius-pill); background: var(--research-success-50); color: var(--research-success-700); font-size: var(--research-text-sm); font-weight: var(--research-font-weight-medium); white-space: nowrap; }
-.header-bar__ai.is-running { border-color: var(--research-ai-100); background: var(--research-ai-50); color: var(--research-ai-700); }
-.header-bar__ai.is-error { border-color: var(--research-danger-100); background: var(--research-danger-50); color: var(--research-danger-600); }
+.header-bar__ai { max-width: min(560px, 38vw); border-color: var(--research-ai-100); background: var(--research-ai-50); color: var(--research-ai-700); }
+.header-bar__ai-details { display: flex; min-width: 0; gap: var(--research-space-2); margin: 0; }
+.header-bar__ai-details div { display: grid; min-width: 0; gap: 1px; }
+.header-bar__ai-details div + div { padding-inline-start: var(--research-space-2); border-inline-start: 1px solid var(--research-ai-200); }
+.header-bar__ai-details dt { color: var(--research-text-secondary); font-size: var(--research-text-xs); font-weight: var(--research-font-weight-regular); }
+.header-bar__ai-details dd { max-width: 150px; overflow: hidden; margin: 0; color: inherit; font-size: var(--research-text-xs); font-weight: var(--research-font-weight-medium); text-overflow: ellipsis; white-space: nowrap; }
 .header-bar__icon-button, .header-bar__user-button, .header-bar__menu button, .header-bar__notification-popover button, .header-bar__command-trigger { border: 0; font: inherit; cursor: pointer; }
 .header-bar__command-trigger { display: inline-flex; min-height: 34px; align-items: center; gap: var(--research-space-2); padding: var(--research-space-2) var(--research-space-3); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-sm); background: var(--research-bg-panel); color: var(--research-text-secondary); }
 .header-bar__command-trigger:hover { border-color: var(--research-primary-200); color: var(--research-primary-700); }
@@ -337,6 +341,7 @@ async function onLogout(): Promise<void> {
 
 @media (max-width: 1480px) {
   .header-bar__project-trigger { max-width: 220px; }
-  .header-bar__project-copy > span, .header-bar__user-name, .header-bar__system-status, .header-bar__command-trigger span, .header-bar__command-trigger kbd { display: none; }
+  .header-bar__project-copy > span, .header-bar__user-name, .header-ai-status__system, .header-bar__command-trigger span, .header-bar__command-trigger kbd { display: none; }
+  .header-bar__ai-details div:nth-child(1), .header-bar__ai-details div:nth-child(2) { display: none; }
 }
 </style>

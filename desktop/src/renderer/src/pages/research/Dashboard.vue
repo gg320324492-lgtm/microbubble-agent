@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import ResearchIcon from '../../components/icons/ResearchIcon.vue'
-import type { ResearchIconName } from '../../components/icons/research-icons'
-import ResearchPageShell from '../../components/research/ResearchPageShell.vue'
-import ResearchPanel from '../../components/research/ResearchPanel.vue'
+import AgentStatusPanel from '../../components/research/AgentStatusPanel.vue'
+import DeviceStatusPanel from '../../components/research/DeviceStatusPanel.vue'
+import EvidencePanel from '../../components/research/EvidencePanel.vue'
+import ResearchMetricPanel from '../../components/research/ResearchMetricPanel.vue'
+import ResearchPageHeader from '../../components/research/ResearchPageHeader.vue'
 import ResearchState from '../../components/research/ResearchState.vue'
-import ScientificMetric from '../../components/research/ScientificMetric.vue'
-import StatusBadge from '../../components/research/StatusBadge.vue'
+import ResearchTimeline from '../../components/research/ResearchTimeline.vue'
+import type { ResearchAgentStatusItem } from '../../components/research/AgentStatusPanel.vue'
+import type { CitationItem, EvidenceItem } from '../../components/research/EvidencePanel.vue'
+import type { ResearchMetricItem } from '../../components/research/ResearchMetricPanel.vue'
+import type { ResearchTimelineItem } from '../../components/research/ResearchTimeline.vue'
 import { useDatasetStore } from '../../stores/research/dataset.store'
 import { useKnowledgeStore } from '../../stores/research/knowledge.store'
 import { useManuscriptStore } from '../../stores/research/manuscript.store'
@@ -25,39 +29,43 @@ const projectStatus = computed(() => {
   const labels = { active: '进行中', planning: '规划中', completed: '已完成', paused: '已暂停' } as const
   return labels[projectStore.currentProject.status]
 })
-const aiCurrentTask = computed(() => {
-  if (isLoading.value) return '正在同步项目证据与分析结果'
-  if (loadError.value) return '数据同步需要重试'
-  return hasResearchData.value ? '研究数据已完成同步' : '等待导入科研数据'
-})
 
-interface ResearchActivity {
-  label: string
-  detail: string
-  icon: ResearchIconName
-  ready: boolean
-}
-
-const researchActivities = computed<ResearchActivity[]>(() => [
+const researchMetrics = computed<ResearchMetricItem[]>(() => [
   {
-    label: '文献证据整理',
-    detail: knowledgeStore.totalDocuments > 0 ? `已汇总 ${knowledgeStore.totalDocuments} 篇文献` : '尚无可整理的文献',
-    icon: 'literature',
-    ready: knowledgeStore.totalDocuments > 0
+    label: '证据覆盖',
+    value: knowledgeStore.totalDocuments,
+    unit: '篇',
+    status: knowledgeStore.totalDocuments > 0 ? 'success' : 'neutral'
   },
   {
-    label: '数据模型分析',
-    detail: datasetStore.models.length > 0 ? `已获得 ${datasetStore.models.length} 个拟合模型` : '尚无模型分析结果',
-    icon: 'data',
-    ready: datasetStore.models.length > 0
+    label: '实验状态',
+    value: datasetStore.report ? '已载入分析' : '暂无实验数据',
+    status: datasetStore.report ? 'success' : 'neutral'
   },
   {
-    label: '论文质量审阅',
-    detail: manuscriptStore.manuscript ? `当前有 ${manuscriptStore.issueCount} 项写作问题` : '尚无论文草稿',
-    icon: 'manuscript',
-    ready: manuscriptStore.manuscript !== null
+    label: '数据模型',
+    value: datasetStore.models.length,
+    unit: '个',
+    status: datasetStore.models.length > 0 ? 'success' : 'neutral'
+  },
+  {
+    label: '论文状态',
+    value: manuscriptStore.manuscript ? '已载入草稿' : '暂无草稿',
+    status: manuscriptStore.manuscript ? 'success' : 'neutral'
   }
 ])
+
+const researchTimeline = computed<ResearchTimelineItem[]>(() => [])
+const agentStatuses = computed<ResearchAgentStatusItem[]>(() => [])
+
+const recentEvidence = computed<EvidenceItem[]>(() => datasetStore.conclusions.map((conclusion, index) => ({
+  id: `${conclusion.observation}-${index}`,
+  title: conclusion.observation,
+  description: conclusion.interpretation,
+  confidence: conclusion.confidence,
+  source: '数据分析结论'
+})))
+const insightCitations = computed<CitationItem[]>(() => [])
 
 async function loadDashboard(): Promise<void> {
   loadError.value = ''
@@ -68,7 +76,7 @@ async function loadDashboard(): Promise<void> {
       manuscriptStore.loadManuscript()
     ])
   } catch (error) {
-    console.error('[科研首页] 科研数据加载失败', error)
+    console.error('[科研驾驶舱] 科研数据加载失败', error)
     loadError.value = '科研数据分析失败，请重试。'
   }
 }
@@ -77,111 +85,179 @@ onMounted(loadDashboard)
 </script>
 
 <template>
-  <ResearchPageShell
-    eyebrow="当前科研项目"
-    title="科研首页"
-    description="聚合项目证据、分析质量与写作进展，帮助你把握下一步研究重点。"
-    :status="projectStatus"
-  >
-    <section class="dashboard__hero" aria-labelledby="dashboard-project-title">
-      <div class="dashboard__hero-main">
-        <span class="dashboard__hero-icon" aria-hidden="true"><ResearchIcon name="project" :size="22" /></span>
-        <div>
-          <p>当前科研项目</p>
-          <h2 id="dashboard-project-title">{{ projectStore.currentProject.name }}</h2>
-          <span>{{ projectStore.currentProject.description }}</span>
-        </div>
+  <section class="dashboard" aria-label="科研驾驶舱">
+    <ResearchPageHeader
+      eyebrow="当前科研项目"
+      title="科研驾驶舱"
+      description="聚合当前项目、研究证据和已接入的分析状态。"
+      :status="projectStatus"
+    />
+
+    <section class="dashboard__focus" aria-labelledby="dashboard-focus-title">
+      <div class="dashboard__focus-heading">
+        <p class="dashboard__eyebrow">项目上下文</p>
+        <h2 id="dashboard-focus-title">科研焦点</h2>
       </div>
-      <dl class="dashboard__hero-meta">
-        <div><dt>研究方向</dt><dd>{{ projectStore.currentProject.domain }}</dd></div>
-        <div><dt>AI 当前任务</dt><dd>{{ aiCurrentTask }}</dd></div>
+      <dl class="dashboard__focus-details">
+        <div><dt>项目名称</dt><dd>{{ projectStore.currentProject.name }}</dd></div>
+        <div><dt>研究领域</dt><dd>{{ projectStore.currentProject.domain }}</dd></div>
+        <div><dt>研究目标</dt><dd>{{ projectStore.currentProject.description }}</dd></div>
+        <div><dt>阶段</dt><dd>{{ projectStatus }}</dd></div>
+        <div class="dashboard__focus-progress"><dt>进度</dt><dd>{{ projectProgress }}%</dd></div>
       </dl>
-      <div class="dashboard__progress-row">
-        <span>项目进度</span>
-        <strong>{{ projectProgress }}%</strong>
-        <div role="progressbar" aria-label="项目进度" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="projectProgress">
-          <span :style="{ width: `${projectProgress}%` }" />
-        </div>
+      <div class="dashboard__progress" role="progressbar" aria-label="项目进度" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="projectProgress">
+        <span class="dashboard__progress-fill" :style="{ width: `${projectProgress}%` }" />
       </div>
     </section>
 
-    <section class="dashboard__metrics" aria-label="科研关键指标">
-      <ScientificMetric label="文献证据" :value="String(knowledgeStore.totalDocuments)" unit="篇" trend="stable" :trend-text="knowledgeStore.totalDocuments > 0 ? '已纳入证据库' : '等待导入'" />
-      <ScientificMetric label="实验进展" :value="String(projectStore.currentProject.stats.experiments)" unit="次" trend="stable" :trend-text="projectStatus" />
-      <ScientificMetric label="数据质量" :value="datasetStore.quality ? `${Math.round(datasetStore.quality.completeness * 100)}` : '—'" unit="%" trend="stable" :trend-text="datasetStore.quality ? `${datasetStore.quality.warnings.length} 项质量提醒` : '暂无分析'" />
-      <ScientificMetric label="论文状态" :value="projectStore.currentProject.stats.manuscriptStatus" trend="stable" :trend-text="manuscriptStore.manuscript ? `${manuscriptStore.issueCount} 项待改进` : '暂无草稿'" />
-    </section>
+    <ResearchMetricPanel :items="researchMetrics" aria-label="科研关键指标" />
 
     <ResearchState v-if="isLoading && !hasResearchData" state="loading" />
     <ResearchState v-else-if="loadError && !hasResearchData" state="error" :description="loadError" @retry="loadDashboard" />
     <ResearchState v-else-if="!hasResearchData" state="empty" />
     <ResearchState v-if="loadError && hasResearchData" state="error" title="科研数据刷新失败，请重试" :description="loadError" @retry="loadDashboard" />
 
-    <div v-if="hasResearchData" class="dashboard__workspace">
-      <ResearchPanel title="AI 研究活动" subtitle="只呈现当前状态数据已确认的工作结果" tone="ai">
-        <div class="dashboard__activity-list">
-          <article v-for="activity in researchActivities" :key="activity.label" class="dashboard__activity">
-            <span class="dashboard__activity-icon" aria-hidden="true"><ResearchIcon :name="activity.icon" :size="18" /></span>
-            <div><strong>{{ activity.label }}</strong><p>{{ activity.detail }}</p></div>
-            <StatusBadge :status="activity.ready ? 'success' : 'neutral'" :label="activity.ready ? '已同步' : '待数据'" />
-          </article>
-        </div>
-      </ResearchPanel>
+    <div class="dashboard__command-grid">
+      <section class="dashboard__activity-column" aria-label="AI 研究活动">
+        <ResearchTimeline :items="researchTimeline" aria-label="AI 研究活动时间线" />
+        <AgentStatusPanel :agents="agentStatuses" aria-label="AI 研究活动状态" />
+      </section>
 
-      <ResearchPanel title="研究洞察" subtitle="基于当前数据分析结论，不生成无证据判断" tone="primary">
-        <div v-if="datasetStore.conclusions.length" class="dashboard__insights">
-          <article v-for="insight in datasetStore.conclusions" :key="insight.observation" class="dashboard__insight">
-            <div class="dashboard__insight-heading">
-              <ResearchIcon name="evidence" :size="17" />
-              <strong>{{ insight.observation }}</strong>
-              <span>{{ Math.round(insight.confidence * 100) }}% 置信度</span>
-            </div>
-            <p>{{ insight.interpretation }}</p>
-          </article>
-        </div>
-        <ResearchState v-else state="empty" title="暂无研究洞察" description="完成数据分析后，这里会呈现有依据的科研结论。" />
-      </ResearchPanel>
+      <aside class="dashboard__insight-column">
+        <section class="dashboard__panel-section" aria-labelledby="dashboard-device-health">
+          <h2 id="dashboard-device-health">设备健康</h2>
+          <DeviceStatusPanel :devices="[]" variant="research" />
+        </section>
+        <section class="dashboard__panel-section" aria-labelledby="dashboard-recent-insights">
+          <h2 id="dashboard-recent-insights">近期科学洞见</h2>
+          <EvidencePanel :evidence="recentEvidence" :citations="insightCitations" aria-label="近期科学洞见与引用" />
+        </section>
+      </aside>
     </div>
-  </ResearchPageShell>
+  </section>
 </template>
 
 <style scoped>
-.dashboard__hero { min-width: 0; margin-block-end: var(--research-space-5); padding: var(--research-space-6); border: 1px solid var(--research-primary-100); border-radius: var(--research-radius-panel); background: var(--research-bg-card); box-shadow: var(--research-shadow-soft); }
-.dashboard__hero-main { display: flex; align-items: flex-start; gap: var(--research-space-4); }
-.dashboard__hero-icon { display: grid; width: 44px; height: 44px; flex: 0 0 44px; place-items: center; border-radius: var(--research-radius-card); background: var(--research-primary-50); color: var(--research-primary-600); }
-.dashboard__hero-main p { margin: 0 0 var(--research-space-1); color: var(--research-primary-600); font-size: var(--research-text-xs); font-weight: var(--research-font-weight-semibold); }
-.dashboard__hero-main h2 { margin: 0; color: var(--research-text-primary); font-size: var(--research-text-page-title); line-height: var(--research-line-height-tight); }
-.dashboard__hero-main div > span { display: block; margin-block-start: var(--research-space-2); color: var(--research-text-secondary); font-size: var(--research-text-body); line-height: var(--research-line-height-body); }
-.dashboard__hero-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--research-space-4); margin-block: var(--research-space-5); }
-.dashboard__hero-meta div { padding: var(--research-space-3) var(--research-space-4); border-radius: var(--research-radius-button); background: var(--research-bg-panel); }
-.dashboard__hero-meta dt { color: var(--research-text-secondary); font-size: var(--research-text-xs); }
-.dashboard__hero-meta dd { margin: var(--research-space-1) 0 0; color: var(--research-text-primary); font-size: 13px; font-weight: var(--research-font-weight-medium); }
-.dashboard__progress-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: center; gap: var(--research-space-3); color: var(--research-text-secondary); font-size: var(--research-text-sm); }
-.dashboard__progress-row strong { color: var(--research-primary-700); font-family: var(--research-font-mono); }
-.dashboard__progress-row > div { height: 7px; overflow: hidden; border-radius: var(--research-radius-pill); background: var(--research-primary-100); }
-.dashboard__progress-row > div span { display: block; height: 100%; border-radius: inherit; background: var(--research-primary-600); transition: width var(--research-duration-slow) var(--research-ease-emphasized); }
-.dashboard__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--research-grid-gap); margin-block-end: var(--research-space-5); }
-.dashboard__workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: var(--research-grid-gap); min-width: 0; }
-.dashboard__activity-list, .dashboard__insights { display: grid; gap: var(--research-space-3); }
-.dashboard__activity { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--research-space-3); padding-block-end: var(--research-space-3); border-block-end: 1px solid var(--research-divider); }
-.dashboard__activity:last-child { padding-block-end: 0; border: 0; }
-.dashboard__activity-icon { display: grid; width: 34px; height: 34px; place-items: center; border-radius: var(--research-radius-button); background: var(--research-ai-50); color: var(--research-ai-600); }
-.dashboard__activity strong { color: var(--research-text-primary); font-size: 13px; }
-.dashboard__activity p { margin: var(--research-space-1) 0 0; color: var(--research-text-secondary); font-size: var(--research-text-sm); }
-.dashboard__insight { padding: var(--research-space-4); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-card); background: var(--research-bg-panel); }
-.dashboard__insight-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--research-space-2); color: var(--research-primary-600); }
-.dashboard__insight-heading strong { color: var(--research-text-primary); font-size: 13px; }
-.dashboard__insight-heading span { color: var(--research-success-700); font-family: var(--research-font-mono); font-size: var(--research-text-xs); }
-.dashboard__insight p { margin: var(--research-space-2) 0 0; color: var(--research-text-secondary); font-size: var(--research-text-sm); line-height: var(--research-line-height-body); }
+.dashboard {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--research-content-max-width);
+  margin-inline: auto;
+  padding: var(--research-page-gutter);
+  overflow-x: clip;
+}
+
+.dashboard__focus,
+.dashboard__activity-column,
+.dashboard__insight-column,
+.dashboard__panel-section {
+  min-width: 0;
+}
+
+.dashboard__focus {
+  display: grid;
+  gap: var(--research-space-4);
+  margin-block-end: var(--research-space-5);
+  padding: var(--research-space-5);
+  border: 1px solid var(--research-border-subtle);
+  border-radius: var(--research-radius-panel);
+  background: var(--research-bg-card);
+  box-shadow: var(--research-shadow-soft);
+}
+
+.dashboard__eyebrow {
+  margin: 0 0 var(--research-space-1);
+  color: var(--research-coral-500);
+  font-size: var(--research-text-xs);
+  font-weight: var(--research-font-weight-semibold);
+  letter-spacing: .08em;
+}
+
+.dashboard__focus-heading h2,
+.dashboard__panel-section > h2 {
+  margin: 0;
+  color: var(--research-text-primary);
+  font-size: var(--research-text-section-title);
+  font-weight: var(--research-font-weight-semibold);
+  line-height: var(--research-line-height-tight);
+}
+
+.dashboard__focus-details {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--research-space-3);
+  margin: 0;
+}
+
+.dashboard__focus-details > div {
+  min-width: 0;
+  padding: var(--research-space-3);
+  border-radius: var(--research-radius-card);
+  background: var(--research-bg-panel);
+}
+
+.dashboard__focus-details dt {
+  color: var(--research-text-secondary);
+  font-size: var(--research-text-xs);
+}
+
+.dashboard__focus-details dd {
+  margin: var(--research-space-1) 0 0;
+  color: var(--research-text-primary);
+  font-size: var(--research-text-sm);
+  font-weight: var(--research-font-weight-medium);
+  line-height: var(--research-line-height-body);
+  overflow-wrap: anywhere;
+}
+
+.dashboard__focus-details > div:nth-child(3) { grid-column: span 2; }
+.dashboard__focus-progress dd { color: var(--research-primary-700); font-family: var(--research-font-scientific); }
+
+.dashboard__progress {
+  height: var(--research-space-2);
+  overflow: hidden;
+  border-radius: var(--research-radius-pill);
+  background: var(--research-primary-100);
+}
+
+.dashboard__progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--research-primary-600);
+  transition: width var(--research-duration-slow) var(--research-ease-emphasized);
+}
+
+.dashboard__command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .9fr);
+  min-width: 0;
+  gap: var(--research-grid-gap);
+  margin-block-start: var(--research-space-5);
+  overflow-x: clip;
+}
+
+.dashboard__activity-column,
+.dashboard__insight-column { display: grid; align-content: start; gap: var(--research-grid-gap); }
+.dashboard__panel-section { display: grid; gap: var(--research-space-3); }
 
 @media (max-width: 1480px) {
-  .dashboard__metrics { gap: var(--research-space-3); }
-  .dashboard__workspace { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .dashboard__focus-details { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dashboard__focus-details > div:nth-child(3) { grid-column: span 1; }
+  .dashboard__command-grid { grid-template-columns: 1fr; }
 }
+
+@media (max-width: 900px) {
+  .dashboard { padding: var(--research-space-4); }
+  .dashboard__focus-details { grid-template-columns: 1fr; }
+}
+
 @media (min-width: 1720px) {
-  .dashboard__hero { padding: var(--research-space-7); }
+  .dashboard__command-grid { grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); }
+  .dashboard__focus { padding: var(--research-space-6); }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .dashboard__progress-row > div span { transition: none; }
+  .dashboard__progress-fill { transition: none; }
 }
 </style>

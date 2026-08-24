@@ -19,7 +19,7 @@ export const RESEARCH_STATES = [
 ] as const
 
 export const RESEARCH_PAGES = [
-  ['Dashboard', ['当前科研项目', 'AI 研究活动', '研究洞察']],
+  ['Dashboard', ['当前科研项目', 'AI 研究活动', '近期科学洞见']],
   ['Assistant', ['研究会话', '研究轨迹', '引用文献']],
   ['ProjectWorkspace', ['项目概览', '文献', '实验', '数据', '模型', '论文']],
   ['Literature', ['文献证据工作区', '相关度', '证据等级', '引用位置']],

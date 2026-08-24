@@ -2870,7 +2870,6 @@ describe('1440 与 1920 科研工作区静态响应式契约（17）', () => {
   })
 
   it.each([
-    ['pages/research/Dashboard.vue', '.dashboard__workspace'],
     ['pages/research/DataAnalysis.vue', '.analysis-overview'],
     ['pages/research/Experiment.vue', '.experiment__workspace'],
     ['pages/research/KnowledgeGraph.vue', '.kg__workspace']
@@ -2883,6 +2882,13 @@ describe('1440 与 1920 科研工作区静态响应式契约（17）', () => {
       expect(hasZeroBasedGridTrack(block)).toBe(true)
       expect(hasUnsafeFixedGridTrack(block)).toBe(false)
     }
+  })
+
+  it('Dashboard 的 command-grid 使用批准的 B1 基准、1440 收束与 1920 宽屏轨道', () => {
+    const styles = readVueParts('pages/research/Dashboard.vue').styles
+    expect(styles).toMatch(/\.dashboard__command-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(280px,\s*\.9fr\)/s)
+    expect(styles).toMatch(/@media\s*\(max-width:\s*1480px\)\s*\{[\s\S]*?\.dashboard__command-grid\s*\{[^}]*grid-template-columns:\s*1fr/s)
+    expect(styles).toMatch(/@media\s*\(min-width:\s*1720px\)\s*\{[\s\S]*?\.dashboard__command-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.25fr\)\s+minmax\(320px,\s*\.75fr\)/s)
   })
 
   it('共享宽屏令牌与紧凑页面规则覆盖 1920 和 1440 断点', () => {
