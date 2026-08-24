@@ -24,4 +24,16 @@ describe('Electron main-process bundle', () => {
     expect(external).not.toContain('electron-store')
     expect(external.some((entry) => entry instanceof RegExp && entry.test('electron-store/index.js'))).toBe(false)
   })
+
+  it('wraps CommonJS dependencies deterministically instead of using auto cycle detection', () => {
+    const config = electronViteConfig as {
+      main?: {
+        build?: {
+          commonjsOptions?: { strictRequires?: boolean | string }
+        }
+      }
+    }
+
+    expect(config.main?.build?.commonjsOptions?.strictRequires).toBe(true)
+  })
 })
