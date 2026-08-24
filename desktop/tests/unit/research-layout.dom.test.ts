@@ -16,7 +16,6 @@ import { useExperimentStore } from '@/stores/research/experiment.store'
 import { useKnowledgeStore } from '@/stores/research/knowledge.store'
 import { useManuscriptStore } from '@/stores/research/manuscript.store'
 import { useProjectStore } from '@/stores/research/project.store'
-import { useWorkflowStore } from '@/stores/research/workflow.store'
 import { useUserStore } from '@/stores/user'
 import { router as applicationRouter } from '@/router'
 import { RESEARCH_NAV } from '../fixtures/research-ui'
@@ -170,18 +169,17 @@ describe('顶部栏区域（5）', () => {
     expect(wrapper.get('[data-testid="header-project"]').text()).toContain(useProjectStore().currentProject.name)
   })
 
-  it('从 runningTasks 派生 AI 运行状态', async () => {
+  it('无后端任务源时显示明确 AI 占位状态', async () => {
     const { wrapper } = await mountHeader()
-    useWorkflowStore().addTask({ id: 'analysis-1', type: 'analysis', label: '拟合模型', status: 'running' })
-    await wrapper.vm.$nextTick()
-    expect(wrapper.get('[data-testid="header-ai-status"]').text()).toContain('1 项任务运行中')
+    const aiStatus = wrapper.get('[data-testid="header-ai-status"]').text()
+    expect(aiStatus).toContain('尚未接入实时任务数据')
+    expect(aiStatus).toContain('占位状态')
   })
 
-  it('从 errors 派生 AI 异常状态而不伪造数量', async () => {
+  it('无后端错误源时显示待连接系统状态而不伪造异常数量', async () => {
     const { wrapper } = await mountHeader()
-    useWorkflowStore().addError('模型服务不可用')
-    await wrapper.vm.$nextTick()
-    expect(wrapper.get('[data-testid="header-ai-status"]').text()).toContain('1 项异常')
+    expect(wrapper.get('.header-ai-status__system').text()).toContain('系统状态：待连接')
+    expect(wrapper.get('[data-testid="header-ai-status"]').text()).not.toContain('项异常')
   })
 
   it('通知空态可切换、Escape 与关闭按钮可关闭，并保留真实退出动作', async () => {
@@ -289,8 +287,8 @@ describe('1440 与 1920 桌面契约（9）', () => {
     const source = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8')
     expect(source).toContain('minmax(0, 1fr)')
     expect(source).toContain('@media (max-width: 1480px)')
-    expect(source).toMatch(/\.dashboard__hero-meta dt\s*\{[^}]*color:\s*var\(--research-text-secondary\)/s)
-    expect(source).not.toMatch(/\.dashboard__hero-meta dt\s*\{[^}]*color:\s*var\(--research-text-muted\)/s)
+    expect(source).toMatch(/\.dashboard__focus-details dt\s*\{[^}]*color:\s*var\(--research-text-secondary\)/s)
+    expect(source).not.toMatch(/\.dashboard__focus-details dt\s*\{[^}]*color:\s*var\(--research-text-muted\)/s)
     const pinia = createPinia()
     setActivePinia(pinia)
     const knowledgeLoad = vi.spyOn(useKnowledgeStore(), 'loadDocuments').mockRejectedValue(new Error('ECONNRESET'))
@@ -305,7 +303,7 @@ describe('1440 与 1920 桌面契约（9）', () => {
     expect(knowledgeLoad).toHaveBeenCalledTimes(2)
   })
 
-  it('科研首页刷新失败保留已加载的研究洞察与工作区', async () => {
+  it('科研首页刷新失败保留驾驶舱工作区与批准的空态', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const pinia = createPinia()
     setActivePinia(pinia)
@@ -319,9 +317,10 @@ describe('1440 与 1920 桌面契约（9）', () => {
     vi.spyOn(useManuscriptStore(), 'loadManuscript').mockResolvedValue()
     const wrapper = mount(Dashboard, { global: { plugins: [pinia] } })
     await flushPromises()
-    expect(wrapper.get('.dashboard__workspace').text()).toContain('AI 研究活动')
+    expect(wrapper.get('.dashboard__command-grid').text()).toContain('AI 研究活动')
     expect(wrapper.text()).toContain('科研数据分析失败，请重试。')
-    expect(wrapper.text()).toContain('已汇总 1 篇文献')
+    expect(wrapper.text()).toContain('暂无研究活动')
+    expect(wrapper.text()).toContain('暂无智能体活动')
   })
 
   it('项目空间响应式契约下拒绝英文异常并提供中文重试', async () => {
