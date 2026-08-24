@@ -11,6 +11,7 @@ import { useExperimentStore } from '../../stores/research/experiment.store'
 import { useKnowledgeStore } from '../../stores/research/knowledge.store'
 import { useManuscriptStore } from '../../stores/research/manuscript.store'
 import { useProjectStore } from '../../stores/research/project.store'
+import { kineticModelLabel } from '../../utils/scientific-chart'
 
 const projectStore = useProjectStore()
 const knowledgeStore = useKnowledgeStore()
@@ -33,6 +34,7 @@ type TabId = (typeof tabs)[number]['id']
 
 const projectProgress = computed(() => Math.round(projectStore.currentProject.progress * 100))
 const isLoading = computed(() => knowledgeStore.isLoading || datasetStore.isLoading || manuscriptStore.isLoading || experimentStore.isLoading)
+const hasWorkspaceData = computed(() => knowledgeStore.totalDocuments > 0 || datasetStore.report !== null || manuscriptStore.manuscript !== null || experimentStore.design !== null)
 const projectStatus = computed(() => {
   const labels = { active: '进行中', planning: '规划中', completed: '已完成', paused: '已暂停' } as const
   return labels[projectStore.currentProject.status]
@@ -121,7 +123,7 @@ onMounted(loadWorkspace)
     <ResearchState v-if="loadError" state="error" :description="loadError" @retry="loadWorkspace" />
 
     <section
-      v-else
+      v-if="!loadError || hasWorkspaceData"
       :id="`workspace-panel-${activeTab}`"
       class="workspace__panel"
       role="tabpanel"
@@ -139,7 +141,7 @@ onMounted(loadWorkspace)
           <dl class="workspace__overview-list">
             <div><dt>研究方向</dt><dd>{{ projectStore.currentProject.domain }}</dd></div>
             <div><dt>项目状态</dt><dd>{{ projectStatus }}</dd></div>
-            <div><dt>最佳模型</dt><dd>{{ datasetStore.models[0]?.model ?? '暂无模型' }}</dd></div>
+            <div><dt>最佳模型</dt><dd>{{ datasetStore.models[0] ? kineticModelLabel(datasetStore.models[0].model) : '暂无模型' }}</dd></div>
             <div><dt>论文问题</dt><dd>{{ manuscriptStore.issueCount }} 项</dd></div>
           </dl>
         </ResearchPanel>
@@ -193,7 +195,7 @@ onMounted(loadWorkspace)
         <ResearchPanel v-else title="模型拟合" subtitle="来自当前数据分析结果" tone="success">
           <div class="workspace__model-list">
             <article v-for="model in datasetStore.models" :key="model.model">
-              <div><strong>{{ model.model }}</strong><span>残差 {{ model.residualError }}</span></div>
+              <div><strong>{{ kineticModelLabel(model.model) }}</strong><span>残差 {{ model.residualError }}</span></div>
               <span>R² = {{ model.rSquared.toFixed(4) }}</span>
               <StatusBadge :status="model.rSquared >= 0.9 ? 'success' : 'warning'" :label="model.rSquared >= 0.9 ? '拟合良好' : '需要复核'" />
             </article>

@@ -624,7 +624,27 @@ describe('Agent 中心真实状态与交互（9）', () => {
   })
 })
 
-describe('科研助手真实三栏与交互（3）', () => {
+describe('科研助手真实三栏与交互（4）', () => {
+  it('把适配器英文阶段枚举映射为中文科研轨迹', async () => {
+    const session: ResearchSession = {
+      id: 'session-labels', name: '轨迹翻译验证', createdAt: TIMESTAMP, status: 'active', messages: [], events: []
+    }
+    const labels = ['Planner', 'Retrieval', 'Tool Call', 'Analysis', 'Model Response']
+    const types: AgentEvent['type'][] = ['planner', 'retrieval', 'tool_call', 'analysis', 'response']
+    const { wrapper } = mountPage(Assistant, agent => {
+      agent.sessions = [session]
+      agent.activeSessionId = session.id
+      agent.events = types.map((type, index) => ({
+        type, label: labels[index], detail: `阶段 ${index + 1}`, timestamp: TIMESTAMP + index, status: 'completed'
+      }))
+    })
+    await flushPromises()
+    for (const label of ['研究规划', '证据检索', '工具调用', '科研分析', '模型响应']) {
+      expect(wrapper.get('.assistant__trace').text()).toContain(label)
+    }
+    for (const label of labels) expect(wrapper.get('.assistant__trace').text()).not.toContain(label)
+  })
+
   it('无选中会话保留三栏，初始会话加载失败显示可重试中文错误', async () => {
     const { wrapper } = mountPage(Assistant)
     await flushPromises()
@@ -775,7 +795,26 @@ async function selectFirstLiterature(wrapper: VueWrapper) {
   await wrapper.vm.$nextTick()
 }
 
-describe('文献证据工作区（22）', () => {
+describe('文献证据工作区（23）', () => {
+  it('刷新失败保留已加载文献工作区并提供同一入口重试', async () => {
+    vi.mocked(knowledgeAdapter.getDocuments).mockRejectedValue(new Error('RAW_REFRESH_FAILURE'))
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useKnowledgeStore()
+    store.documents = [...literatureDocuments]
+    store.folders = [...literatureFolders]
+    store.assessments = [...literatureAssessments]
+    store.selectDocument('d1')
+    const wrapper = mount(Literature, { attachTo: document.body, global: { plugins: [pinia] } })
+    mountedPageWrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="literature-library"]').text()).toContain('研究文件夹')
+    expect(wrapper.get('[data-testid="literature-detail"]').text()).toContain(literatureDocuments[0].title)
+    const state = wrapper.get('[data-testid="literature-page-state"]')
+    expect(state.text()).toContain('文献刷新失败，请重试')
+    expect(wrapper.text()).not.toContain('RAW_REFRESH_FAILURE')
+  })
+
   it('以文件夹、稳定详情和论文证据列表组成真实三栏', async () => {
     const { wrapper } = await mountLiteratureReady()
     expect(wrapper.get('[data-testid="literature-library"]').attributes('aria-label')).toBe('文献文件夹与搜索')
@@ -1162,10 +1201,10 @@ describe('实验设计工作区（22）', () => {
     expect(empty.text()).not.toContain('建议只在用户主动生成后显示')
   })
 
-  it('编辑只在确认时写 Service，保存期间禁用全部草稿输入并固定提交快照', async () => {
+  it('编辑只在确认时写 Service，保存后 Store 与重挂载消费同一提交快照', async () => {
     let resolveSave!: () => void
     vi.mocked(experimentAdapter.updateDesign).mockImplementation(() => new Promise(resolve => { resolveSave = resolve }))
-    const { wrapper } = await mountExperimentReady()
+    const { wrapper, pinia, store } = await mountExperimentReady()
     const input = wrapper.get('[data-variable-index="0"] input')
     await input.setValue('60–240')
     expect(experimentAdapter.updateDesign).not.toHaveBeenCalled()
@@ -1181,6 +1220,12 @@ describe('实验设计工作区（22）', () => {
     resolveSave()
     await flushPromises()
     expect(wrapper.get('[data-testid="experiment-save-status"]').text()).toContain('实验设计已保存')
+    expect(store.design?.variables[0].range).toBe('60–240')
+    wrapper.unmount()
+    const remounted = mount(Experiment, { attachTo: document.body, global: { plugins: [pinia] } })
+    mountedPageWrappers.push(remounted)
+    await flushPromises()
+    expect((remounted.get('[data-variable-index="0"] input').element as HTMLInputElement).value).toBe('60–240')
   })
 
   it('保存成功显示静止的中文已保存反馈', async () => {

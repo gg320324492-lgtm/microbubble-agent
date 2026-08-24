@@ -29,6 +29,18 @@ const TOOL_STATUS = {
   error: { tone: 'error', label: '错误' }
 } as const satisfies Record<ToolCallResult['status'], { tone: 'info' | 'success' | 'error'; label: string }>
 
+const EVENT_TYPE_LABELS = {
+  planner: '研究规划',
+  retrieval: '证据检索',
+  tool_call: '工具调用',
+  analysis: '科研分析',
+  response: '模型响应'
+} as const satisfies Record<AgentEvent['type'], string>
+
+function eventLabel(event: AgentEvent): string {
+  return /[\u3400-\u9fff]/u.test(event.label) ? event.label : EVENT_TYPE_LABELS[event.type]
+}
+
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
@@ -199,7 +211,7 @@ onMounted(() => { void loadSessionsSafely() })
                 <ResearchIcon :name="EVENT_STATUS[event.status].icon" :size="14" />
               </span>
               <div>
-                <strong>{{ event.label }}</strong>
+                <strong>{{ eventLabel(event) }}</strong>
                 <p>{{ event.detail }}</p>
               </div>
               <div class="assistant__trace-meta">

@@ -112,11 +112,12 @@ onMounted(loadDashboard)
       <ScientificMetric label="论文状态" :value="projectStore.currentProject.stats.manuscriptStatus" trend="stable" :trend-text="manuscriptStore.manuscript ? `${manuscriptStore.issueCount} 项待改进` : '暂无草稿'" />
     </section>
 
-    <ResearchState v-if="isLoading" state="loading" />
-    <ResearchState v-else-if="loadError" state="error" :description="loadError" @retry="loadDashboard" />
+    <ResearchState v-if="isLoading && !hasResearchData" state="loading" />
+    <ResearchState v-else-if="loadError && !hasResearchData" state="error" :description="loadError" @retry="loadDashboard" />
     <ResearchState v-else-if="!hasResearchData" state="empty" />
+    <ResearchState v-if="loadError && hasResearchData" state="error" title="科研数据刷新失败，请重试" :description="loadError" @retry="loadDashboard" />
 
-    <div v-else class="dashboard__workspace">
+    <div v-if="hasResearchData" class="dashboard__workspace">
       <ResearchPanel title="AI 研究活动" subtitle="只呈现当前状态数据已确认的工作结果" tone="ai">
         <div class="dashboard__activity-list">
           <article v-for="activity in researchActivities" :key="activity.label" class="dashboard__activity">

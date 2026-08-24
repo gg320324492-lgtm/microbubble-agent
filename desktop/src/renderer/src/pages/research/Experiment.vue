@@ -33,6 +33,10 @@ watch(
 )
 
 async function loadDesign() {
+  if (store.design) {
+    pageState.value = null
+    return
+  }
   pageState.value = 'loading'
   try {
     await store.loadDesign()
@@ -65,7 +69,7 @@ async function saveDesign() {
     range: variableRanges.value[index] ?? variable.range
   }))
   try {
-    await experimentService.updateDesign({ variables })
+    await store.updateDesign({ variables })
     saveState.value = 'success'
   } catch {
     saveState.value = 'error'
