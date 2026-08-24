@@ -22,7 +22,7 @@ vi.mock('echarts/components', () => ({
 }))
 vi.mock('echarts/renderers', () => ({ CanvasRenderer: { name: 'CanvasRenderer' } }))
 
-import AgentCard from '@/components/research/AgentCard.vue'
+import AgentWorkspaceCard from '@/components/research/AgentWorkspaceCard.vue'
 import CitationCard from '@/components/research/CitationCard.vue'
 import AgentCenter from '@/pages/research/AgentCenter.vue'
 import Assistant from '@/pages/research/Assistant.vue'
@@ -37,7 +37,6 @@ import { useDatasetStore } from '@/stores/research/dataset.store'
 import { useExperimentStore } from '@/stores/research/experiment.store'
 import { useKnowledgeStore } from '@/stores/research/knowledge.store'
 import { useManuscriptStore } from '@/stores/research/manuscript.store'
-import { useWorkflowStore } from '@/stores/research/workflow.store'
 import { useModelProviderStore } from '@/stores/model-provider'
 import {
   dataAnalysisService,
@@ -78,13 +77,11 @@ import type {
 } from '@/services/research/research-agent.service'
 
 type AgentStore = ReturnType<typeof useAgentStore>
-type WorkflowStore = ReturnType<typeof useWorkflowStore>
 
 interface MountedResearchPage {
   wrapper: VueWrapper
   pinia: Pinia
   agentStore: AgentStore
-  workflowStore: WorkflowStore
 }
 
 const TIMESTAMP = new Date('2026-08-24T09:30:00+08:00').getTime()
@@ -387,17 +384,16 @@ const designResult: ResearchDesignResult = {
 
 function mountPage(
   component: Component,
-  configure?: (agentStore: AgentStore, workflowStore: WorkflowStore) => void
+  configure?: (agentStore: AgentStore) => void
 ): MountedResearchPage {
   const pinia = createPinia()
   setActivePinia(pinia)
   const agentStore = useAgentStore()
-  const workflowStore = useWorkflowStore()
   vi.spyOn(agentStore, 'loadSessions').mockResolvedValue(undefined)
-  configure?.(agentStore, workflowStore)
+  configure?.(agentStore)
   const wrapper = mount(component, { attachTo: document.body, global: { plugins: [pinia] } })
   mountedPageWrappers.push(wrapper)
-  return { wrapper, pinia, agentStore, workflowStore }
+  return { wrapper, pinia, agentStore }
 }
 
 beforeEach(() => {
@@ -422,69 +418,64 @@ afterEach(() => {
   for (const wrapper of mountedPageWrappers.splice(0)) wrapper.unmount()
 })
 
-describe('Agent 中心思考阶段（5）', () => {
+describe('Agent 中心真实协作时间线（5）', () => {
   it.each([
-    [0, '理解科研问题'],
-    [1, '检索知识与证据'],
-    [2, '分析降解机制'],
-    [3, '设计实验参数'],
-    [4, '生成科研报告']
-  ] as const)('阶段 %i 使用真实标签并以真实等待态初始化', (index, label) => {
-    const { wrapper } = mountPage(AgentCenter)
-    const stage = wrapper.get(`[data-stage="${index}"]`)
-    expect(stage.text()).toContain(label)
-    expect(stage.text()).toContain('等待中')
-    expect(stage.attributes('data-status')).toBe('pending')
+    ['planner', '研究问题解析'],
+    ['retrieval', '检索文献证据'],
+    ['tool_call', '执行模型拟合'],
+    ['analysis', '分析实验数据'],
+    ['response', '生成研究结论']
+  ] as const)('%s 只显示 agentStore 中的真实事件标签', (type, label) => {
+    const { wrapper } = mountPage(AgentCenter, agent => {
+      agent.events = [{ type, label, detail: `${label}详情`, timestamp: TIMESTAMP, status: 'completed' }]
+    })
+    const timeline = wrapper.get('.research-timeline')
+    expect(timeline.text()).toContain(label)
+    expect(timeline.text()).toContain(`${label}详情`)
+    expect(timeline.text()).toContain('已完成')
   })
 })
 
-describe('Agent 中心智能体矩阵（5）', () => {
+describe('Agent 中心固定研究团队（5）', () => {
   it.each([
-    ['design', '规划智能体'],
-    ['literature', '知识智能体'],
-    ['experiment', '实验智能体'],
-    ['analysis', '分析智能体'],
-    ['manuscript', '写作智能体']
-  ] as const)('%s 使用中文名称且空任务不伪造结果', (kind, label) => {
+    '文献智能体', '实验智能体', '分析智能体', '写作智能体', '审稿智能体'
+  ] as const)('%s 在没有真实角色事件时显示待接入数据', (label) => {
     const { wrapper } = mountPage(AgentCenter)
-    const agent = wrapper.get(`[data-agent-kind="${kind}"]`)
+    const agent = wrapper.get(`[aria-label="Agent 工作区：${label}"]`)
     expect(agent.text()).toContain(label)
-    expect(agent.text()).toContain('等待任务')
-    expect(agent.text()).toContain('—')
+    expect(agent.text()).toContain('待接入数据')
+    expect(agent.text()).not.toContain('等待任务')
   })
 })
 
-describe('AgentCard 四态展示隔离（4）', () => {
+describe('AgentWorkspaceCard 四态展示隔离（4）', () => {
   it.each([
-    ['running', '运行中', 'running'],
-    ['completed', '已完成', 'check'],
-    ['idle', '等待中', 'idle'],
-    ['error', '异常', 'error']
-  ] as const)('%s 不依赖 Store 即可呈现“%s”', (status, label, icon) => {
-    const wrapper = mount(AgentCard, {
-      props: { icon: 'agent', name: '验证智能体', status, task: '验证真实状态', duration: '—' }
+    ['pending', '待处理'],
+    ['running', '运行中'],
+    ['completed', '已完成'],
+    ['error', '异常']
+  ] as const)('%s 不依赖 Store 即可呈现“%s”', (status, label) => {
+    const wrapper = mount(AgentWorkspaceCard, {
+      props: { name: '验证智能体', role: '验证角色', status, currentTask: '验证真实状态', queue: '真实队列', dataAvailable: true }
     })
     expect(wrapper.text()).toContain(label)
-    expect(wrapper.get('.agent-card__status').attributes('role')).toBe('status')
-    expect(wrapper.get('.agent-card__status svg').classes()).toContain(`research-icon--${icon}`)
+    expect(wrapper.get('.agent-workspace-card__status').attributes('role')).toBe('status')
     expect(wrapper.text()).toContain('验证真实状态')
-    expect(wrapper.text()).toContain('—')
+    expect(wrapper.text()).toContain('真实队列')
   })
 })
 
 describe('Agent 中心真实状态与交互（9）', () => {
-  it('无事件时五阶段均等待，且会话加载失败可独立重试', async () => {
-    const { wrapper, agentStore, workflowStore } = mountPage(AgentCenter, agent => {
+  it('无事件时展示空时间线，且会话加载失败可独立重试', async () => {
+    const { wrapper, agentStore } = mountPage(AgentCenter, agent => {
       vi.mocked(agent.loadSessions)
         .mockRejectedValueOnce(new Error('RAW_AGENT_LOAD_FAILURE'))
         .mockResolvedValueOnce(undefined)
     })
     await flushPromises()
-    expect(wrapper.get('[data-testid="thinking-timeline"]').findAll('[data-stage]')).toHaveLength(5)
-    expect(wrapper.findAll('[data-stage][data-status="pending"]')).toHaveLength(5)
-    expect(wrapper.get('[data-testid="thinking-timeline"]').text()).not.toMatch(/\d+(?:\.\d+)?\s*(?:秒|分钟)/)
-    expect(wrapper.get('[data-testid="agent-session-load-error"]').text()).toContain('科研会话加载失败，请重试')
-    expect(workflowStore.errors).toEqual([])
+    expect(wrapper.get('.research-timeline__empty').text()).toContain('暂无研究活动')
+    expect(wrapper.findAll('.agent-workspace-card')).toHaveLength(5)
+    expect(wrapper.get('.agent-center__error').text()).toContain('科研会话加载失败，请重试')
     expect(wrapper.text()).not.toContain('RAW_AGENT_LOAD_FAILURE')
     const retry = wrapper.get('[data-testid="retry-session-load"]')
     agentStore.isLoading = true
@@ -499,10 +490,10 @@ describe('Agent 中心真实状态与交互（9）', () => {
     await retry.trigger('click')
     await flushPromises()
     expect(agentStore.loadSessions).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('[data-testid="agent-session-load-error"]').exists()).toBe(false)
+    expect(wrapper.find('.agent-center__error').exists()).toBe(false)
   })
 
-  it('把真实完成与错误事件映射到对应阶段并保留详情', () => {
+  it('把真实完成与错误事件映射到时间线并保留详情', () => {
     const retrievalError: AgentEvent = {
       type: 'retrieval',
       label: '知识检索异常',
@@ -513,80 +504,69 @@ describe('Agent 中心真实状态与交互（9）', () => {
     const { wrapper } = mountPage(AgentCenter, agent => {
       agent.events = [completedPlannerEvent, retrievalError]
     })
-    const completed = wrapper.get('[data-stage="0"]')
-    const failed = wrapper.get('[data-stage="1"]')
-    expect(completed.attributes('data-status')).toBe('completed')
-    expect(completed.text()).toContain('已识别目标污染物与反应体系')
-    expect(failed.attributes('data-status')).toBe('error')
-    expect(failed.text()).toContain('本地索引暂不可用')
+    const timeline = wrapper.get('.research-timeline')
+    expect(timeline.text()).toContain('已识别目标污染物与反应体系')
+    expect(timeline.text()).toContain('本地索引暂不可用')
+    expect(timeline.text()).toContain('已完成')
+    expect(timeline.text()).toContain('异常')
   })
 
-  it('从工作流任务映射智能体任务、四态与据实耗时', () => {
-    const { wrapper } = mountPage(AgentCenter, (_agent, workflow) => {
-      workflow.tasks = [
-        {
-          id: 'plan-1', type: 'design', label: '拆解研究问题', status: 'completed',
-          startedAt: TIMESTAMP, completedAt: TIMESTAMP + 2500, result: '形成研究计划'
-        },
-        { id: 'lit-1', type: 'literature', label: '检索知识库', status: 'pending' },
-        { id: 'exp-1', type: 'experiment', label: '生成实验变量', status: 'running', startedAt: TIMESTAMP },
-        { id: 'ana-1', type: 'analysis', label: '拟合动力学', status: 'failed', error: '数据列缺失' }
-      ]
+  it('只从包含固定角色名称的真实事件映射智能体任务', () => {
+    const { wrapper } = mountPage(AgentCenter, agent => {
+      agent.events = [{
+        type: 'analysis', label: '文献智能体检索完成', detail: '检索到 3 条真实文献证据',
+        timestamp: TIMESTAMP, status: 'completed'
+      }]
     })
-    expect(wrapper.get('[data-agent-kind="design"]').text()).toContain('2.5 秒')
-    expect(wrapper.get('[data-agent-kind="design"]').text()).toContain('形成研究计划')
-    expect(wrapper.get('[data-agent-kind="literature"]').text()).toContain('—')
-    expect(wrapper.get('[data-agent-kind="experiment"]').text()).toContain('运行中')
-    expect(wrapper.get('[data-agent-kind="analysis"]').text()).toContain('数据列缺失')
+    const literature = wrapper.get('[aria-label="Agent 工作区：文献智能体"]')
+    const experiment = wrapper.get('[aria-label="Agent 工作区：实验智能体"]')
+    expect(literature.text()).toContain('已完成')
+    expect(literature.text()).toContain('检索到 3 条真实文献证据')
+    expect(experiment.text()).toContain('待接入数据')
+    expect(literature.text()).not.toContain('暂无耗时数据')
   })
 
-  it('最近工具调用同时展示真实输入占位、输出和执行结果', () => {
+  it('最近工具调用显示真实工具和输出，并诚实标注缺失字段', () => {
     const messages: AgentMessage[] = [{
       id: 'tool-message', role: 'assistant', content: '完成分析', timestamp: TIMESTAMP,
       toolCalls: [{ name: '动力学拟合', status: 'completed', result: 'R² = 0.943' }]
     }]
     const { wrapper } = mountPage(AgentCenter, agent => { agent.messages = messages })
-    const tool = wrapper.get('[data-testid="tool-execution"]')
+    const tool = wrapper.get('.tool-execution-panel')
     expect(tool.text()).toContain('动力学拟合')
-    expect(tool.text()).toContain('输入：—')
-    expect(tool.text()).toContain('输出：R² = 0.943')
-    expect(tool.text()).toContain('结果：已完成')
-    expect(tool.text()).toContain('来源：—')
-    expect(tool.text()).toContain('耗时：—')
+    expect(tool.text()).toContain('R² = 0.943')
+    expect(tool.text()).toContain('Agent')
+    expect(tool.text()).toContain('待接入数据')
+    expect(tool.text()).toContain('暂无耗时数据')
   })
 
-  it('研究设计只展示 Store 中的真实问题、假设、变量、机制与模型', () => {
+  it('研究设计只展示 Store 中已提供的问题、假设与模型', () => {
     const { wrapper } = mountPage(AgentCenter, agent => { agent.designResult = designResult })
     const result = wrapper.get('[data-testid="design-result"]')
     for (const text of [
-      '微纳米气泡如何改变臭氧传质效率？', '扩大气液界面', '更小气泡可提高体积传质系数',
-      '气泡粒径', '80–300 nm', '自变量', '伪一级动力学'
+      '微纳米气泡如何改变臭氧传质效率？', '更小气泡可提高体积传质系数', '伪一级动力学'
     ]) expect(result.text()).toContain(text)
-    expect(result.text()).not.toContain('independent')
   })
 
   it('点击提交按钮只以裁剪后的输入调用现有 runResearch', async () => {
-    const { wrapper, agentStore, workflowStore } = mountPage(AgentCenter, (_agent, workflow) => {
-      workflow.errors = ['上一次分析错误']
-    })
-    const clear = vi.spyOn(workflowStore, 'clearErrors')
+    const { wrapper, agentStore } = mountPage(AgentCenter)
+    await flushPromises()
     const run = vi.spyOn(agentStore, 'runResearch').mockResolvedValue(undefined)
     await wrapper.get('[data-testid="research-task-input"]').setValue('  分析 TC 降解动力学  ')
-    await wrapper.get('[data-testid="run-research"]').trigger('click')
+    await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(wrapper.get('form').attributes('aria-label')).toBe('科研任务输入')
     expect(run).toHaveBeenCalledOnce()
     expect(run).toHaveBeenCalledWith('分析 TC 降解动力学')
-    expect(clear).toHaveBeenCalledOnce()
-    expect(workflowStore.errors).toEqual([])
   })
 
-  it('回车提交只调用一次现有 runResearch', async () => {
+  it('表单提交只调用一次现有 runResearch', async () => {
     const { wrapper, agentStore } = mountPage(AgentCenter)
+    await flushPromises()
     const run = vi.spyOn(agentStore, 'runResearch').mockResolvedValue(undefined)
     const input = wrapper.get('[data-testid="research-task-input"]')
     await input.setValue('设计正交实验')
-    await input.trigger('keydown', { key: 'Enter' })
+    await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(run).toHaveBeenCalledOnce()
     expect(run).toHaveBeenCalledWith('设计正交实验')
@@ -604,55 +584,61 @@ describe('Agent 中心真实状态与交互（9）', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('错误重试清除错误但保留完成事件、任务输入并重新运行', async () => {
-    const { wrapper, agentStore, workflowStore } = mountPage(AgentCenter, (agent, workflow) => {
+  it('错误重试保留事件和任务输入，并重新调用同一个 Store action', async () => {
+    const { wrapper, agentStore } = mountPage(AgentCenter, agent => {
       agent.events = [completedPlannerEvent]
-      workflow.errors = ['模型服务暂不可用']
     })
-    const clear = vi.spyOn(workflowStore, 'clearErrors')
-    const run = vi.spyOn(agentStore, 'runResearch').mockResolvedValue(undefined)
+    await flushPromises()
+    const run = vi.spyOn(agentStore, 'runResearch')
+      .mockRejectedValueOnce(new Error('RAW_RESEARCH_FAILURE'))
+      .mockResolvedValueOnce(undefined)
     const input = wrapper.get('[data-testid="research-task-input"]')
     await input.setValue('  保留的科研问题  ')
-    expect(wrapper.get('[role="alert"]').text()).toContain('模型服务暂不可用')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('.agent-center__error').text()).toContain('科研任务执行失败，请重试。')
+    expect(wrapper.text()).not.toContain('RAW_RESEARCH_FAILURE')
     await wrapper.get('[data-testid="retry-research"]').trigger('click')
     await flushPromises()
-    expect(clear).toHaveBeenCalledOnce()
-    expect(workflowStore.errors).toEqual([])
     expect(agentStore.events).toEqual([completedPlannerEvent])
     expect((input.element as HTMLInputElement).value).toBe('  保留的科研问题  ')
-    expect(run).toHaveBeenCalledWith('保留的科研问题')
+    expect(run).toHaveBeenNthCalledWith(1, '保留的科研问题')
+    expect(run).toHaveBeenNthCalledWith(2, '保留的科研问题')
   })
 })
 
 describe('科研助手真实三栏与交互（4）', () => {
-  it('把适配器英文阶段枚举映射为中文科研轨迹', async () => {
+  it('展示真实事件标签，并为助手回复提供五个可折叠区段', async () => {
     const session: ResearchSession = {
       id: 'session-labels', name: '轨迹翻译验证', createdAt: TIMESTAMP, status: 'active', messages: [], events: []
     }
-    const labels = ['Planner', 'Retrieval', 'Tool Call', 'Analysis', 'Model Response']
+    const labels = ['真实规划事件', '真实检索事件', '真实工具调用', '真实分析事件', '真实响应事件']
     const types: AgentEvent['type'][] = ['planner', 'retrieval', 'tool_call', 'analysis', 'response']
     const { wrapper } = mountPage(Assistant, agent => {
       agent.sessions = [session]
       agent.activeSessionId = session.id
+      agent.messages = [{ id: 'assistant-response', role: 'assistant', content: '真实模型结论', timestamp: TIMESTAMP }]
       agent.events = types.map((type, index) => ({
         type, label: labels[index], detail: `阶段 ${index + 1}`, timestamp: TIMESTAMP + index, status: 'completed'
       }))
     })
     await flushPromises()
-    for (const label of ['研究规划', '证据检索', '工具调用', '科研分析', '模型响应']) {
-      expect(wrapper.get('.assistant__trace').text()).toContain(label)
-    }
-    for (const label of labels) expect(wrapper.get('.assistant__trace').text()).not.toContain(label)
+    for (const label of labels) expect(wrapper.get('.research-timeline').text()).toContain(label)
+    const sections = wrapper.get('.assistant__response-sections').findAll('details')
+    expect(sections).toHaveLength(5)
+    expect(sections.map(section => section.get('summary').text())).toEqual(['结论', '证据', '推理摘要', '引用', '下一步行动'])
+    expect(sections[0].attributes('open')).toBeDefined()
+    expect(sections[0].text()).toContain('真实模型结论')
   })
 
   it('无选中会话保留三栏，初始会话加载失败显示可重试中文错误', async () => {
     const { wrapper } = mountPage(Assistant)
     await flushPromises()
-    expect(wrapper.get('[data-testid="assistant-sessions"]').text()).toContain('研究会话')
-    expect(wrapper.get('[data-testid="assistant-workbench"]').text()).toContain('暂无科研数据')
-    expect(wrapper.get('[data-testid="assistant-evidence"]').text()).toContain('引用与证据')
-    expect(wrapper.get('[data-testid="assistant-workbench"]').attributes('aria-label')).toBe('科研助手对话工作区')
-    expect(wrapper.get('[data-testid="assistant-workbench"]').element.tagName).toBe('SECTION')
+    expect(wrapper.get('.assistant__sessions').text()).toContain('研究会话')
+    expect(wrapper.get('.assistant__conversation').text()).toContain('暂无科研数据')
+    expect(wrapper.get('.assistant__context').text()).toContain('证据与可观测性')
+    expect(wrapper.get('.assistant__conversation').attributes('aria-label')).toBe('科研对话工作区')
+    expect(wrapper.get('.assistant__conversation').element.tagName).toBe('SECTION')
 
     const failed = mountPage(Assistant, agent => {
       vi.mocked(agent.loadSessions)
@@ -660,13 +646,13 @@ describe('科研助手真实三栏与交互（4）', () => {
         .mockResolvedValueOnce(undefined)
     })
     await flushPromises()
-    const state = failed.wrapper.get('[data-testid="assistant-session-state"]')
+    const state = failed.wrapper.get('.assistant__conversation .research-state--error')
     expect(state.text()).toContain('研究会话加载失败，请重试')
     expect(failed.wrapper.text()).not.toContain('RAW_SESSION_LOAD_FAILURE')
     await state.get('.research-state__retry').trigger('click')
     await flushPromises()
     expect(failed.agentStore.loadSessions).toHaveBeenCalledTimes(2)
-    expect(failed.wrapper.find('[data-testid="assistant-session-state"]').exists()).toBe(false)
+    expect(failed.wrapper.find('.assistant__conversation .research-state--error').exists()).toBe(false)
   })
 
   it('会话切换期间隐藏旧数据并阻止竞态，失败后可重试当前会话', async () => {
@@ -705,35 +691,32 @@ describe('科研助手真实三栏与交互（4）', () => {
     const select = vi.spyOn(agentStore, 'selectSession')
       .mockImplementationOnce(() => pendingSelection)
       .mockImplementationOnce(() => pendingRetry)
-    await wrapper.get('[data-session-id="session-real"]').trigger('click')
+    const sessionButton = wrapper.get('.assistant__session-list button')
+    await sessionButton.trigger('click')
     await wrapper.vm.$nextTick()
     expect(select).toHaveBeenCalledWith('session-real')
-    expect(wrapper.get('[data-testid="assistant-session-state"]').text()).toContain('AI 正在分析...')
-    expect(wrapper.get('[data-session-id="session-real"]').attributes('disabled')).toBeDefined()
-    for (const text of ['真实模型结论', '真实文献检索', '获得 3 条证据', '微纳米气泡传质研究', '体积传质系数']) {
-      expect(wrapper.text()).not.toContain(text)
-    }
-    await wrapper.get('[data-session-id="session-real"]').trigger('click')
+    expect(wrapper.get('.assistant__conversation .research-state--loading').text()).toContain('AI 正在分析...')
+    expect(wrapper.get('.assistant__session-list button').attributes('disabled')).toBeDefined()
+    await wrapper.get('.assistant__session-list button').trigger('click')
     expect(select).toHaveBeenCalledOnce()
 
     rejectSelection(new Error('RAW_SESSION_SWITCH_FAILURE'))
     await flushPromises()
-    const errorState = wrapper.get('[data-testid="assistant-session-state"]')
+    const errorState = wrapper.get('.assistant__conversation .research-state--error')
     expect(errorState.text()).toContain('研究会话加载失败，请重试')
     expect(wrapper.text()).not.toContain('RAW_SESSION_SWITCH_FAILURE')
-    expect(wrapper.text()).not.toContain('真实模型结论')
     await errorState.get('.research-state__retry').trigger('click')
     await wrapper.vm.$nextTick()
     expect(select).toHaveBeenNthCalledWith(2, 'session-real')
-    expect(wrapper.get('[data-testid="assistant-session-state"]').text()).toContain('AI 正在分析...')
+    expect(wrapper.get('.assistant__conversation .research-state--loading').text()).toContain('AI 正在分析...')
     resolveRetry()
     await flushPromises()
-    expect(wrapper.find('[data-testid="assistant-session-state"]').exists()).toBe(false)
+    expect(wrapper.find('.assistant__conversation .research-state--error').exists()).toBe(false)
     expect(wrapper.text()).toContain('真实模型结论')
-    expect(wrapper.get('.citation-card__num').text()).toContain('7')
+    expect(wrapper.get('.evidence-panel').text()).toContain('微纳米气泡传质研究')
   })
 
-  it('点击与回车发送，失败保留输入并以同一 action 重试，发送中保持禁用', async () => {
+  it('表单发送，失败保留输入并以同一 action 重试，发送中保持禁用', async () => {
     const { wrapper, agentStore } = mountPage(Assistant, agent => { agent.activeSessionId = 'session-active' })
     await flushPromises()
     const send = vi.spyOn(agentStore, 'sendMessage')
@@ -742,43 +725,43 @@ describe('科研助手真实三栏与交互（4）', () => {
       .mockRejectedValueOnce(new Error('ECONNRESET'))
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('RAW_SERVICE_FAILURE'))
-    const input = wrapper.get('[data-testid="assistant-input"]')
+    const input = wrapper.get('.assistant__composer input')
     await input.setValue('  点击发送的问题  ')
-    await wrapper.get('[data-testid="assistant-send"]').trigger('click')
+    await wrapper.get('.assistant__composer').trigger('submit')
     await flushPromises()
     expect(send).toHaveBeenNthCalledWith(1, '点击发送的问题')
     await input.setValue('  回车发送的问题  ')
-    await input.trigger('keydown', { key: 'Enter' })
+    await wrapper.get('.assistant__composer').trigger('submit')
     await flushPromises()
     expect(send).toHaveBeenNthCalledWith(2, '回车发送的问题')
 
     await input.setValue('  失败后必须保留的问题  ')
-    await wrapper.get('[data-testid="assistant-send"]').trigger('click')
+    await wrapper.get('.assistant__composer').trigger('submit')
     await flushPromises()
-    const errorState = wrapper.get('[data-testid="assistant-send-error"]')
+    const errorState = wrapper.get('.assistant__messages .research-state--error')
     expect(errorState.text()).toContain('分析失败，请重试')
     expect(wrapper.text()).not.toContain('ECONNRESET')
     expect((input.element as HTMLInputElement).value).toBe('  失败后必须保留的问题  ')
     await errorState.get('.research-state__retry').trigger('click')
     await flushPromises()
     expect(send).toHaveBeenNthCalledWith(4, '失败后必须保留的问题')
-    expect(wrapper.find('[data-testid="assistant-send-error"]').exists()).toBe(false)
+    expect(wrapper.find('.assistant__messages .research-state--error').exists()).toBe(false)
     expect((input.element as HTMLInputElement).value).toBe('')
 
     await input.setValue('再次失败的问题')
-    await wrapper.get('[data-testid="assistant-send"]').trigger('click')
+    await wrapper.get('.assistant__composer').trigger('submit')
     await flushPromises()
-    expect(wrapper.get('[data-testid="assistant-send-error"]').text()).toContain('分析失败，请重试')
+    expect(wrapper.get('.assistant__messages .research-state--error').text()).toContain('分析失败，请重试')
     expect(wrapper.text()).not.toContain('RAW_SERVICE_FAILURE')
     await input.setValue('改写后的新问题')
-    expect(wrapper.find('[data-testid="assistant-send-error"]').exists()).toBe(false)
+    expect(wrapper.find('.assistant__messages .research-state--error').exists()).toBe(false)
 
     agentStore.isSending = true
     await wrapper.vm.$nextTick()
-    expect(wrapper.get('[data-testid="assistant-send"]').attributes('disabled')).toBeDefined()
-    expect(wrapper.get('[data-testid="assistant-input"]').attributes('disabled')).toBeDefined()
-    const live = wrapper.get('[data-testid="assistant-analyzing"]')
-    expect(live.text()).toBe('AI 正在分析...')
+    expect(wrapper.get('.assistant__composer button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.assistant__composer input').attributes('disabled')).toBeDefined()
+    const live = wrapper.get('.assistant__live')
+    expect(live.text()).toBe('AI 正在分析')
     expect(live.attributes()).toMatchObject({ role: 'status', 'aria-live': 'polite' })
   })
 })

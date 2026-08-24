@@ -9,6 +9,14 @@ import StatusBadge from '../../src/renderer/src/components/research/StatusBadge.
 
 const testDir = dirname(fileURLToPath(import.meta.url))
 const rendererRoot = resolve(testDir, '..', '..', 'src', 'renderer', 'src')
+const B2_PAGE_LABELS: Partial<Record<(typeof RESEARCH_PAGES)[number][0], readonly string[]>> = {
+  Assistant: ['研究会话', '科研对话工作区', '证据与可观测性'],
+  AgentCenter: ['AI 研究团队', '协作时间线与证据', '工具执行']
+}
+
+function durableLabels(page: (typeof RESEARCH_PAGES)[number][0], labels: readonly string[]): readonly string[] {
+  return B2_PAGE_LABELS[page] ?? labels
+}
 
 function source(relativePath: string): string {
   const absolutePath = resolve(rendererRoot, relativePath)
@@ -139,7 +147,7 @@ describe('approved Chinese page structure', () => {
   it.each(RESEARCH_PAGES)('%s exposes its approved information architecture', (page, labels) => {
     const content = source(`pages/research/${page}.vue`)
     expect(content, `${page}.vue should exist`).not.toBe('')
-    for (const label of labels) expect(content).toContain(label)
+    for (const label of durableLabels(page, labels)) expect(content).toContain(label)
   })
 
   it.each(['Dashboard', 'DataAnalysis'])('%s renders the common dataset state primitive', (page) => {

@@ -125,10 +125,10 @@ const componentTypeContractCases: readonly [ComponentContract, string, SourcePre
   ],
   [
     COMPONENTS[2],
-    '队列接受 number，并以 queue ?? 0 显示默认值',
+    '队列接受 number，缺失时如实显示待接入数据',
     (source) =>
       /\bqueue\s*\??\s*:\s*(?:number\b|number\s*\|\s*string|string\s*\|\s*number)/.test(source)
-      && source.includes('queue ?? 0')
+      && source.includes("queue ?? '待接入数据'")
   ]
 ]
 
