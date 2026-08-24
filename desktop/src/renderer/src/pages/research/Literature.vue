@@ -405,7 +405,7 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
 .literature__total { display: flex; align-items: baseline; gap: var(--research-space-2); padding: var(--research-space-3) var(--research-space-4); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-card); background: var(--research-bg-card); color: var(--research-text-secondary); }
 .literature__total svg { align-self: center; color: var(--research-primary-600); }
 .literature__total strong { color: var(--research-text-primary); font-size: var(--research-text-section-title); font-variant-numeric: tabular-nums; }
-.literature__workspace { display: grid; min-width: 0; grid-template-columns: minmax(0, 228px) minmax(0, 1fr) minmax(0, 360px); gap: var(--research-grid-gap); align-items: start; }
+.literature__workspace { display: grid; min-width: 0; grid-template-columns: minmax(0,var(--research-rail-standard)) minmax(0,1fr) minmax(0,var(--research-rail-wide)); gap: var(--research-grid-gap); align-items: start; }
 .literature__library,
 .literature__detail,
 .literature__evidence { min-width: 0; overflow: hidden; border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-panel); background: var(--research-bg-card); box-shadow: var(--research-shadow-soft); }
@@ -478,13 +478,13 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
 .literature__visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 
 @media (max-width: 1480px) {
-  .literature__workspace { grid-template-columns: minmax(0, 208px) minmax(0, 1fr) minmax(0, 320px); gap: var(--research-space-3); }
+  .literature__workspace { grid-template-columns: minmax(0,var(--research-rail-compact)) minmax(0,1fr) minmax(0,var(--research-rail-wide)); gap: var(--research-space-3); }
   .literature__detail { padding: var(--research-space-5); }
   .literature__review-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (min-width: 1720px) {
-  .literature__workspace { grid-template-columns: minmax(0, 248px) minmax(0, 1fr) minmax(0, 390px); }
+  .literature__workspace { grid-template-columns: minmax(0,var(--research-rail-standard)) minmax(0,1fr) minmax(0,var(--research-rail-wide)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

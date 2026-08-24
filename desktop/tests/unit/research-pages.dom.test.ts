@@ -86,6 +86,7 @@ interface MountedResearchPage {
 
 const TIMESTAMP = new Date('2026-08-24T09:30:00+08:00').getTime()
 const mountedPageWrappers: VueWrapper[] = []
+const rendererRoot = resolve(process.cwd(), 'src/renderer/src')
 
 const literatureDocuments: DocumentItem[] = [
   {
@@ -2166,5 +2167,32 @@ describe('Task8 设置工作区（8）', () => {
     await wrapper.get('[data-settings-tab="api"]').trigger('click')
     await wrapper.get('[data-action="remove-provider-lab-cloud"]').trigger('click')
     expect(wrapper.get('[data-testid="settings-danger-zone"]').text()).toContain('再次点击确认删除')
+  })
+})
+
+describe('科研三栏辅助区宽度令牌（4）', () => {
+  const tokens = readFileSync(resolve(rendererRoot, 'styles/research-design-tokens.css'), 'utf8')
+
+  it('定义紧凑、标准与宽幅三档科研辅助栏令牌', () => {
+    expect(tokens).toMatch(/--research-rail-compact:\s*clamp\(/)
+    expect(tokens).toMatch(/--research-rail-standard:\s*clamp\(/)
+    expect(tokens).toMatch(/--research-rail-wide:\s*clamp\(/)
+  })
+
+  it.each([
+    ['Literature.vue', '.literature__workspace'],
+    ['Experiment.vue', '.experiment__workspace'],
+    ['Manuscript.vue', '.manuscript']
+  ])('%s 的 %s 所有三栏声明只使用统一 rail token', (file, selector) => {
+    const content = readFileSync(resolve(rendererRoot, 'pages/research', file), 'utf8')
+    const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const declarations = [...content.matchAll(new RegExp(`${escapedSelector}\\s*\\{[^}]*grid-template-columns\\s*:\\s*([^;}]+)`, 'g'))]
+      .map(match => match[1])
+    expect(declarations.length).toBeGreaterThan(0)
+    for (const columns of declarations) {
+      expect(columns).toMatch(/var\(--research-rail-(?:compact|standard|wide)\)/)
+      expect(columns).toContain('minmax(0,1fr)')
+      expect(columns).not.toMatch(/\b\d+(?:\.\d+)?px\b/)
+    }
   })
 })

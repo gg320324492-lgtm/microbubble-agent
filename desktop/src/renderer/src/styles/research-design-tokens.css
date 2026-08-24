@@ -118,6 +118,10 @@
   --research-page-gutter: 24px;
   --research-grid-gap: 16px;
   --research-content-max-width: 1680px;
+  /* Responsive auxiliary rails. Keep the scientific task column dominant. */
+  --research-rail-compact: clamp(176px, 13vw, 220px);
+  --research-rail-standard: clamp(220px, 16.5vw, 290px);
+  --research-rail-wide: clamp(300px, 22vw, 390px);
   --research-z-base: 0;
   --research-z-header: 30;
   --research-z-popover: 60;

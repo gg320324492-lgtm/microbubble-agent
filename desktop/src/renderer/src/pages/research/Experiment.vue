@@ -295,7 +295,7 @@ onMounted(loadDesign)
 .experiment__generate:disabled { border-color: var(--research-border-strong); background: var(--research-bg-hover); color: var(--research-text-secondary); cursor: not-allowed; }
 .experiment__saved { display: flex; align-items: center; gap: var(--research-space-2); margin-bottom: var(--research-space-4); padding: var(--research-space-3) var(--research-space-4); border: 1px solid var(--research-success-100); border-radius: var(--research-radius-card); background: var(--research-success-50); color: var(--research-success-700); font-size: var(--research-text-sm); font-weight: var(--research-font-weight-semibold); }
 .experiment__operation-state { min-height: 138px; margin-bottom: var(--research-space-4); }
-.experiment__workspace { display: grid; min-width: 0; grid-template-columns: minmax(0, 260px) minmax(0, 1fr) minmax(0, 300px); gap: var(--research-grid-gap); align-items: start; }
+.experiment__workspace { display: grid; min-width: 0; grid-template-columns: minmax(0,var(--research-rail-standard)) minmax(0,1fr) minmax(0,var(--research-rail-standard)); gap: var(--research-grid-gap); align-items: start; }
 .experiment__hypotheses,
 .experiment__variables,
 .experiment__advice { min-width: 0; overflow: hidden; padding: var(--research-space-5); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-panel); background: var(--research-bg-card); box-shadow: var(--research-shadow-soft); }
@@ -345,7 +345,7 @@ onMounted(loadDesign)
 .experiment__advice-state { min-height: 190px; margin-top: var(--research-space-4); padding: var(--research-space-4); }
 
 @media (max-width: 1480px) {
-  .experiment__workspace { grid-template-columns: minmax(0, 224px) minmax(0, 1fr) minmax(0, 260px); gap: var(--research-space-3); }
+  .experiment__workspace { grid-template-columns: minmax(0,var(--research-rail-compact)) minmax(0,1fr) minmax(0,var(--research-rail-standard)); gap: var(--research-space-3); }
   .experiment__hypotheses,
   .experiment__variables,
   .experiment__advice { padding: var(--research-space-4); }
@@ -353,6 +353,6 @@ onMounted(loadDesign)
 }
 
 @media (min-width: 1720px) {
-  .experiment__workspace { grid-template-columns: minmax(0, 286px) minmax(0, 1fr) minmax(0, 326px); }
+  .experiment__workspace { grid-template-columns: minmax(0,var(--research-rail-standard)) minmax(0,1fr) minmax(0,var(--research-rail-wide)); }
 }
 </style>
