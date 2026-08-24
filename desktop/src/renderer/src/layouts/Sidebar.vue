@@ -120,6 +120,7 @@ function toggleCollapsed(): void {
 .sidebar {
   position: relative;
   display: flex;
+  flex-direction: column;
   flex: 0 0 var(--research-sidebar-width);
   width: var(--research-sidebar-width);
   min-width: var(--research-sidebar-width);

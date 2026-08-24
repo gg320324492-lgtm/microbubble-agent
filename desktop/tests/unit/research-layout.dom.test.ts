@@ -251,7 +251,12 @@ describe('默认与旧路由兼容（6）', () => {
   })
 })
 
-describe('1440 与 1920 桌面契约（5）', () => {
+describe('1440 与 1920 桌面契约（6）', () => {
+  it('展开侧栏按纵向组织品牌、导航与研究状态', () => {
+    const source = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8')
+    expect(source).toMatch(/\.sidebar\s*\{[^}]*flex-direction:\s*column/s)
+  })
+
   it('侧栏消费 232 与 76 像素设计令牌', () => {
     const source = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8')
     expect(source).toContain('var(--research-sidebar-width)')
