@@ -25,12 +25,17 @@ import AgentCenter from '@/pages/research/AgentCenter.vue'
 import Assistant from '@/pages/research/Assistant.vue'
 import DataAnalysis from '@/pages/research/DataAnalysis.vue'
 import Experiment from '@/pages/research/Experiment.vue'
+import KnowledgeGraph from '@/pages/research/KnowledgeGraph.vue'
 import Literature from '@/pages/research/Literature.vue'
+import Manuscript from '@/pages/research/Manuscript.vue'
+import Settings from '@/pages/research/Settings.vue'
 import { useAgentStore } from '@/stores/research/agent.store'
 import { useDatasetStore } from '@/stores/research/dataset.store'
 import { useExperimentStore } from '@/stores/research/experiment.store'
 import { useKnowledgeStore } from '@/stores/research/knowledge.store'
+import { useManuscriptStore } from '@/stores/research/manuscript.store'
 import { useWorkflowStore } from '@/stores/research/workflow.store'
+import { useModelProviderStore } from '@/stores/model-provider'
 import {
   dataAnalysisService,
   type AnalysisReport,
@@ -53,6 +58,13 @@ import {
   type LiteratureAdapter,
   type PaperAssessment
 } from '@/services/research/literature.service'
+import {
+  manuscriptService,
+  type Manuscript,
+  type ManuscriptAdapter,
+  type WritingIssue
+} from '@/services/research/manuscript.service'
+import type { ModelProviderConfig } from '@shared/preload-api'
 import type {
   AgentEvent,
   AgentMessage,
@@ -117,6 +129,26 @@ const literatureAssessments: PaperAssessment[] = [
   }
 ]
 
+const graphDocuments: DocumentItem[] = [
+  literatureDocuments[0],
+  {
+    id: 'graph-experiment', title: '真实传质对照实验', authors: '课题组实验团队', journal: '实验记录',
+    year: 2026, type: 'experiment', tags: ['传质'], credibility: 0.87, citations: 0
+  },
+  {
+    id: 'graph-dataset', title: '真实臭氧衰减数据集', authors: '数据分析团队', journal: '实验数据仓',
+    year: 2026, type: 'dataset', tags: ['动力学'], credibility: 0.91, citations: 0
+  },
+  {
+    id: 'graph-report', title: '真实阶段研究报告', authors: '项目团队', journal: '项目档案',
+    year: 2026, type: 'report', tags: ['阶段结论'], credibility: 0.8, citations: 2
+  },
+  {
+    id: 'graph-unknown', title: '真实未知类型归档', authors: '归档团队', journal: '待分类资料',
+    year: 2026, type: 'legacy-archive', tags: ['待分类'], credibility: 0.7, citations: 0
+  } as unknown as DocumentItem
+]
+
 const experimentDesign: ExperimentDesign = {
   id: 'exp-real',
   title: '臭氧微纳米气泡参数优化',
@@ -174,10 +206,106 @@ const analysisImportance: VariableImportance[] = [
   { variable: '真实气泡粒径', importance: 0.11, contribution: '弱负效应', confidence: 0.55 }
 ]
 
+const manuscriptFixture: Manuscript = {
+  manuscriptId: 'ms-real',
+  title: '真实微纳米气泡传质论文',
+  abstract: '摘要正文',
+  sections: [
+    {
+      sectionType: 'introduction',
+      title: '1 引言',
+      content: '引言真实正文：界面效应改变气液传质。',
+      citations: ['[1]', '[2]']
+    },
+    {
+      sectionType: 'methods',
+      title: '2 材料与方法',
+      content: '方法真实正文：采用三组平行实验。',
+      citations: []
+    },
+    {
+      sectionType: 'results',
+      title: '3 结果',
+      content: '结果真实正文：体积传质系数提高。',
+      citations: ['[3]']
+    }
+  ],
+  figures: [],
+  highlights: ['真实高亮结论：传质系数提高'],
+  wordCount: 3210
+}
+
+const manuscriptFixtureB: Manuscript = {
+  manuscriptId: 'ms-second',
+  title: '刷新后的第二版论文',
+  abstract: '第二版摘要',
+  sections: [{ sectionType: 'discussion', title: '4 新讨论', content: '第二版完整正文。', citations: ['[9]'] }],
+  figures: [],
+  highlights: ['第二版完整高亮'],
+  wordCount: 4200
+}
+
+const manuscriptIssuesB: WritingIssue[] = [{
+  type: 'logic', location: '新讨论第 1 段', description: '第二版逻辑问题', severity: 'medium', suggestion: '补充第二版论证'
+}]
+
+const manuscriptIssues: WritingIssue[] = [
+  {
+    type: 'language',
+    location: '引言第 2 段',
+    description: '句式过长',
+    severity: 'low',
+    suggestion: '拆分为两个短句'
+  },
+  {
+    type: 'repetition',
+    location: '结果第 1 段',
+    description: '论证重复',
+    severity: 'medium',
+    suggestion: '合并重复论述'
+  },
+  {
+    type: 'weak_citation',
+    location: '讨论第 3 段',
+    description: '引用支持不足',
+    severity: 'high',
+    suggestion: '补充近三年研究'
+  }
+]
+
+const providerConfigs: ModelProviderConfig[] = [
+  {
+    providerId: 'lab-cloud',
+    type: 'cloud',
+    defaultModel: 'research-pro',
+    displayName: '课题组云模型',
+    capabilities: ['streaming', 'tools'],
+    updatedAt: TIMESTAMP
+  },
+  {
+    providerId: 'lab-local',
+    type: 'local',
+    endpoint: 'http://127.0.0.1:11434',
+    defaultModel: 'qwen3:8b',
+    displayName: '本地科研模型',
+    capabilities: ['streaming'],
+    updatedAt: TIMESTAMP
+  }
+]
+
 let knowledgeAdapter: KnowledgeAdapter
 let literatureAdapter: LiteratureAdapter
 let experimentAdapter: ExperimentAdapter
 let dataAnalysisAdapter: DataAnalysisAdapter
+let manuscriptAdapter: ManuscriptAdapter
+let modelApi: {
+  listConfigs: ReturnType<typeof vi.fn>
+  saveConfig: ReturnType<typeof vi.fn>
+  deleteConfig: ReturnType<typeof vi.fn>
+  testProvider: ReturnType<typeof vi.fn>
+  saveKey: ReturnType<typeof vi.fn>
+  deleteKey: ReturnType<typeof vi.fn>
+}
 
 function installResearchAdapters(options: {
   documents?: DocumentItem[]
@@ -223,6 +351,14 @@ function installResearchAdapters(options: {
   literatureService.setAdapter(literatureAdapter)
   experimentService.setAdapter(experimentAdapter)
   dataAnalysisService.setAdapter(dataAnalysisAdapter)
+  manuscriptAdapter = {
+    getManuscript: vi.fn().mockResolvedValue(manuscriptFixture),
+    getWritingIssues: vi.fn().mockResolvedValue(manuscriptIssues),
+    getSections: vi.fn().mockResolvedValue(manuscriptFixture.sections),
+    generateSection: vi.fn().mockResolvedValue('AI 新生成的真实预览正文'),
+    reviewSection: vi.fn().mockResolvedValue([])
+  }
+  manuscriptService.setAdapter(manuscriptAdapter)
 }
 
 const completedPlannerEvent: AgentEvent = {
@@ -264,6 +400,18 @@ beforeEach(() => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
   installResearchAdapters()
+  modelApi = {
+    listConfigs: vi.fn().mockResolvedValue({ configs: providerConfigs, hasKey: [true, false] }),
+    saveConfig: vi.fn().mockResolvedValue({ ok: true, exists: true }),
+    deleteConfig: vi.fn().mockResolvedValue({ ok: true, exists: true }),
+    testProvider: vi.fn().mockResolvedValue({ ok: true, latencyMs: 28 }),
+    saveKey: vi.fn().mockResolvedValue({ ok: true }),
+    deleteKey: vi.fn().mockResolvedValue({ ok: true })
+  }
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { model: modelApi }
+  })
 })
 
 afterEach(() => {
@@ -1317,5 +1465,706 @@ describe('数据分析工作区（18）', () => {
     expect(wrapper.find('[data-testid="data-analysis-retained-error"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('重试新变量')
     expect(wrapper.text()).not.toContain('旧变量不得显示')
+  })
+})
+
+async function mountManuscriptReady() {
+  const mounted = mountPage(Manuscript)
+  const store = useManuscriptStore()
+  await flushPromises()
+  return { ...mounted, store }
+}
+
+describe('Task8 论文工作区（14）', () => {
+  it('以结构树、活动正文与 SCI 审阅组成真实三栏', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    expect(wrapper.get('[data-testid="manuscript-outline"]').attributes('aria-label')).toBe('论文结构树')
+    expect(wrapper.get('[data-testid="manuscript-editor"]').attributes('aria-label')).toBe('活动章节正文')
+    expect(wrapper.get('[data-testid="manuscript-review"]').attributes('aria-label')).toBe('SCI 审阅')
+    expect(wrapper.findAll('main')).toHaveLength(0)
+  })
+
+  it('结构树使用按钮并以 aria-current 标明活动章节', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    const buttons = wrapper.get('[data-testid="manuscript-outline"]').findAll('button[data-section-type]')
+    expect(buttons).toHaveLength(3)
+    expect(buttons[0].attributes('aria-current')).toBe('true')
+    expect(buttons[1].attributes('aria-current')).toBeUndefined()
+  })
+
+  it('点击章节调用现有 setActiveSection 并切换真实正文', async () => {
+    const { wrapper, store } = await mountManuscriptReady()
+    const select = vi.spyOn(store, 'setActiveSection')
+    await wrapper.get('[data-section-type="methods"]').trigger('click')
+    expect(select).toHaveBeenCalledWith('methods')
+    expect(wrapper.get('[data-testid="active-section-content"]').text()).toContain('方法真实正文')
+    expect(wrapper.text()).not.toContain('引言真实正文')
+  })
+
+  it('正文标题与总字数完全读取 Store', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    const editor = wrapper.get('[data-testid="manuscript-editor"]')
+    expect(editor.text()).toContain('真实微纳米气泡传质论文')
+    expect(editor.text()).toContain('3,210 字')
+    expect(editor.text()).toContain('1 引言')
+  })
+
+  it('活动节引用与有引用章节数均由真实 sections 聚合', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    expect(wrapper.get('[data-testid="active-citations"]').text()).toContain('[1]')
+    expect(wrapper.get('[data-testid="active-citations"]').text()).toContain('[2]')
+    expect(wrapper.get('[data-review-dimension="引用"]').text()).toContain('2 / 3 个章节有引用')
+  })
+
+  it('语言审阅按真实语言类问题给出可解释计数', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    const dimension = wrapper.get('[data-review-dimension="语言"]')
+    expect(dimension.text()).toContain('语言')
+    expect(dimension.text()).toContain('1 个问题')
+    expect(dimension.text()).toContain('检查句式与术语')
+  })
+
+  it('逻辑审阅按真实重复与论证类问题给出可解释计数', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    const dimension = wrapper.get('[data-review-dimension="逻辑"]')
+    expect(dimension.text()).toContain('逻辑')
+    expect(dimension.text()).toContain('1 个问题')
+    expect(dimension.text()).toContain('检查论证衔接')
+  })
+
+  it('创新审阅不伪造评分并明确待进一步评估', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    const dimension = wrapper.get('[data-review-dimension="创新"]')
+    expect(dimension.text()).toContain('待进一步评估')
+    expect(dimension.text()).not.toMatch(/\d+%/)
+  })
+
+  it('引用审阅显示真实覆盖和引用类问题而非硬编码百分比', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    const dimension = wrapper.get('[data-review-dimension="引用"]')
+    expect(dimension.text()).toContain('2 / 3 个章节有引用')
+    expect(dimension.text()).toContain('1 个引用问题')
+    expect(dimension.text()).not.toMatch(/75%|85%|82%|78%/)
+  })
+
+  it('问题列表逐项显示真实位置、描述、严重度与建议', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    const issue = wrapper.get('[data-issue-index="2"]')
+    expect(issue.text()).toContain('讨论第 3 段')
+    expect(issue.text()).toContain('引用支持不足')
+    expect(issue.text()).toContain('高风险')
+    expect(issue.text()).toContain('补充近三年研究')
+  })
+
+  it('高亮总结只呈现 Store 中的真实 highlights', async () => {
+    const { wrapper } = await mountManuscriptReady()
+    expect(wrapper.get('[data-testid="manuscript-highlights"]').text()).toContain('真实高亮结论：传质系数提高')
+    expect(wrapper.text()).not.toContain('最优条件：粒径 ~150nm')
+  })
+
+  it('生成按论文与章节隔离，刷新乱序不串稿且空结果诚实', async () => {
+    let resolveGenerate!: (value: string) => void
+    const pending = new Promise<string>(resolve => { resolveGenerate = resolve })
+    vi.mocked(manuscriptAdapter.generateSection).mockReturnValueOnce(pending).mockResolvedValueOnce('')
+    const { wrapper } = await mountManuscriptReady()
+    const button = wrapper.get('[data-testid="generate-section"]')
+    await button.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.attributes('aria-busy')).toBe('true')
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/Manuscript.vue'), 'utf8')
+    expect(source).toMatch(/\.manuscript__generate:disabled[^}]*opacity:\s*1/s)
+    expect(source).toMatch(/\.manuscript__generate:disabled[^}]*background:\s*var\(--research-bg-hover\)/s)
+    expect(source).toMatch(/\.manuscript__generate:disabled[^}]*color:\s*var\(--research-text-secondary\)/s)
+    await button.trigger('click')
+    expect(manuscriptAdapter.generateSection).toHaveBeenCalledOnce()
+
+    vi.mocked(manuscriptAdapter.getManuscript).mockResolvedValueOnce(manuscriptFixtureB)
+    vi.mocked(manuscriptAdapter.getWritingIssues).mockResolvedValueOnce(manuscriptIssuesB)
+    await wrapper.get('[data-testid="refresh-manuscript"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('刷新后的第二版论文')
+    expect(wrapper.get('[data-section-type="discussion"]').attributes('aria-current')).toBe('true')
+    resolveGenerate('第一版引言预览不得串到第二版')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('第一版引言预览不得串到第二版')
+
+    await wrapper.get('[data-testid="generate-section"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="generated-preview"]').text()).toContain('本次未生成可用正文')
+    expect(manuscriptAdapter.generateSection).toHaveBeenNthCalledWith(2, 'discussion', '刷新后的第二版论文')
+
+    vi.mocked(manuscriptAdapter.getManuscript).mockResolvedValueOnce(manuscriptFixture)
+    vi.mocked(manuscriptAdapter.getWritingIssues).mockResolvedValueOnce(manuscriptIssues)
+    await wrapper.get('[data-testid="refresh-manuscript"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="generated-preview"]').text()).toContain('第一版引言预览不得串到第二版')
+  })
+
+  it('生成失败隐藏原始异常、保留正文并可用同一入口重试', async () => {
+    vi.mocked(manuscriptAdapter.generateSection)
+      .mockRejectedValueOnce(new Error('RAW_MANUSCRIPT_GENERATION_FAILURE'))
+      .mockResolvedValueOnce('重试生成的章节预览')
+    const { wrapper } = await mountManuscriptReady()
+    await wrapper.get('[data-testid="generate-section"]').trigger('click')
+    await flushPromises()
+    const state = wrapper.get('[data-testid="manuscript-generate-error"]')
+    expect(state.text()).toContain('生成失败，请重试')
+    expect(wrapper.text()).toContain('引言真实正文')
+    expect(wrapper.text()).not.toContain('RAW_MANUSCRIPT_GENERATION_FAILURE')
+    await state.get('button').trigger('click')
+    await flushPromises()
+    expect(manuscriptAdapter.generateSection).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="generated-preview"]').text()).toContain('重试生成的章节预览')
+  })
+
+  it('论文加载、空数据、首次错误与保留正文刷新错误均可重试', async () => {
+    let resolveLoad!: (value: Manuscript) => void
+    vi.mocked(manuscriptAdapter.getManuscript).mockReturnValue(new Promise(resolve => { resolveLoad = resolve }))
+    const loading = mountPage(Manuscript)
+    await loading.wrapper.vm.$nextTick()
+    expect(loading.wrapper.get('[data-testid="manuscript-state"]').text()).toContain('AI 正在分析...')
+    resolveLoad(manuscriptFixture)
+    await flushPromises()
+
+    vi.mocked(manuscriptAdapter.getManuscript).mockResolvedValueOnce({ ...manuscriptFixture, sections: [] })
+    const empty = mountPage(Manuscript)
+    await flushPromises()
+    expect(empty.wrapper.get('[data-testid="manuscript-state"]').text()).toContain('暂无论文章节')
+
+    vi.mocked(manuscriptAdapter.getManuscript)
+      .mockRejectedValueOnce(new Error('RAW_MANUSCRIPT_LOAD_FAILURE'))
+      .mockResolvedValueOnce(manuscriptFixture)
+    const failed = mountPage(Manuscript)
+    await flushPromises()
+    const error = failed.wrapper.get('[data-testid="manuscript-state"]')
+    expect(error.text()).toContain('论文加载失败，请重试')
+    expect(failed.wrapper.text()).not.toContain('RAW_MANUSCRIPT_LOAD_FAILURE')
+    await error.get('button').trigger('click')
+    await flushPromises()
+    expect(manuscriptAdapter.getManuscript).toHaveBeenCalledTimes(4)
+    expect(failed.wrapper.find('[data-testid="manuscript-state"]').exists()).toBe(false)
+
+    manuscriptAdapter.getManuscript = vi.fn().mockResolvedValue(manuscriptFixture)
+    manuscriptAdapter.getWritingIssues = vi.fn().mockResolvedValue(manuscriptIssues)
+    manuscriptService.setAdapter(manuscriptAdapter)
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const initial = mount(Manuscript, { attachTo: document.body, global: { plugins: [pinia] } })
+    await flushPromises()
+    expect(initial.text()).toContain('引言真实正文')
+    initial.unmount()
+    let resolveRetainedIssues!: (value: WritingIssue[]) => void
+    const retainedIssuesRetry = new Promise<WritingIssue[]>(resolve => { resolveRetainedIssues = resolve })
+    vi.mocked(manuscriptAdapter.getManuscript).mockResolvedValue(manuscriptFixtureB)
+    vi.mocked(manuscriptAdapter.getWritingIssues)
+      .mockRejectedValueOnce(new Error('RAW_RETAINED_MANUSCRIPT_FAILURE'))
+      .mockReturnValueOnce(retainedIssuesRetry)
+    const retainedStore = useManuscriptStore()
+    const reload = vi.spyOn(retainedStore, 'loadManuscript')
+    const retained = mount(Manuscript, { attachTo: document.body, global: { plugins: [pinia] } })
+    mountedPageWrappers.push(retained)
+    await flushPromises()
+    expect(retained.text()).toContain('引言真实正文')
+    expect(retained.text()).toContain('句式过长')
+    expect(retained.text()).not.toContain('刷新后的第二版论文')
+    expect(retained.text()).not.toContain('第二版逻辑问题')
+    const retainedError = retained.get('[data-testid="manuscript-retained-error"]')
+    expect(retainedError.attributes('role')).toBe('alert')
+    expect(retainedError.text()).toContain('论文刷新失败，请重试')
+    expect(retained.text()).not.toContain('RAW_RETAINED_MANUSCRIPT_FAILURE')
+    const retainedRetry = retainedError.get('button')
+    await retainedRetry.trigger('click')
+    await retained.vm.$nextTick()
+    expect(retainedRetry.attributes('disabled')).toBeDefined()
+    const retainedSource = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/Manuscript.vue'), 'utf8')
+    expect(retainedSource).toMatch(/\.manuscript__retained-error button:disabled[^}]*opacity:\s*1[^}]*cursor:\s*not-allowed/s)
+    expect(retainedSource).toMatch(/\.manuscript__retained-error button:disabled[^}]*background:\s*var\(--research-bg-hover\)[^}]*border-color:\s*var\(--research-border-strong\)[^}]*color:\s*var\(--research-text-secondary\)/s)
+    resolveRetainedIssues(manuscriptIssuesB)
+    await flushPromises()
+    expect(reload).toHaveBeenCalledTimes(2)
+    expect(retained.find('[data-testid="manuscript-retained-error"]').exists()).toBe(false)
+    expect(retained.text()).toContain('刷新后的第二版论文')
+    expect(retained.text()).toContain('第二版逻辑问题')
+    expect(retained.text()).not.toContain('句式过长')
+    expect(retained.get('[data-section-type="discussion"]').attributes('aria-current')).toBe('true')
+  })
+})
+
+async function mountKnowledgeGraphReady(documents: DocumentItem[] = graphDocuments) {
+  installResearchAdapters({ documents })
+  const mounted = mountPage(KnowledgeGraph)
+  const store = useKnowledgeStore()
+  await flushPromises()
+  return { ...mounted, store }
+}
+
+describe('Task8 知识图谱工作区（8）', () => {
+  it('实体节点只消费 knowledge Store 的真实文献且旧假节点消失', async () => {
+    const { wrapper } = await mountKnowledgeGraphReady()
+    expect(wrapper.findAll('main')).toHaveLength(0)
+    expect(wrapper.findAll('[data-graph-entity]')).toHaveLength(5)
+    expect(wrapper.text()).toContain('臭氧微纳米气泡降解四环素的动力学研究')
+    expect(wrapper.text()).toContain('真实传质对照实验')
+    expect(wrapper.text()).toContain('真实臭氧衰减数据集')
+    expect(wrapper.text()).toContain('真实阶段研究报告')
+    expect(wrapper.text()).not.toContain('自由基')
+
+    const largeDocuments = Array.from({ length: 105 }, (_, index): DocumentItem => ({
+      ...literatureDocuments[0],
+      id: `large-${index + 1}`,
+      title: `真实批量文献 ${index + 1}`
+    }))
+    const large = await mountKnowledgeGraphReady(largeDocuments)
+    const visibleNodes = large.wrapper.findAll('[data-graph-entity]')
+    expect(visibleNodes.length).toBeLessThanOrEqual(24)
+    expect(visibleNodes.filter(node => node.attributes('tabindex') === '0')).toHaveLength(1)
+    expect(large.wrapper.get('[data-testid="graph-page-range"]').text()).toContain('当前显示 1–24，共 105')
+    expect(large.wrapper.findAll('[data-testid="graph-entity-list"] [role="listitem"]')).toHaveLength(24)
+    expect(large.wrapper.find('[data-testid="graph-entity-list"] button').exists()).toBe(false)
+    expect(Number(large.wrapper.get('[data-testid="knowledge-graph-svg"]').attributes('data-canvas-height'))).toBeLessThanOrEqual(620)
+    await large.wrapper.get('[data-action="graph-next-page"]').trigger('click')
+    expect(large.wrapper.get('[data-testid="graph-page-range"]').text()).toContain('当前显示 25–48，共 105')
+    const pageTwoFirst = large.wrapper.get('[data-entity-id="large-25"]')
+    const pageTwoSecond = large.wrapper.get('[data-entity-id="large-26"]')
+    ;(pageTwoFirst.element as SVGElement).focus()
+    await pageTwoFirst.trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(pageTwoSecond.element)
+    expect(pageTwoFirst.attributes('tabindex')).toBe('-1')
+    expect(pageTwoSecond.attributes('tabindex')).toBe('0')
+  })
+
+  it('SVG 使用中文可访问标题与说明并解释当前关系数据边界', async () => {
+    const { wrapper } = await mountKnowledgeGraphReady()
+    const svg = wrapper.get('[data-testid="knowledge-graph-svg"]')
+    expect(svg.attributes('role')).toBe('group')
+    expect(svg.get('title').text()).toBe('科研知识实体图')
+    expect(svg.get('desc').text()).toContain('当前仅展示真实文献实体')
+    expect(svg.get('desc').text()).toContain('暂无关系数据')
+    expect(wrapper.text()).not.toMatch(/Enter|Pinia|IPC/)
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    for (const selector of ['kg__node text', 'kg__node-meta', 'kg__node-selected']) {
+      expect(source).toMatch(new RegExp(`\\.${selector.replace(' ', '\\s+')}[^}]*font-size:\\s*var\\(--research-text-xs\\)`, 's'))
+    }
+    expect(source).not.toMatch(/\.kg__node(?:-meta|-selected|\s+text)[^}]*font-size:\s*(?:8|10)px/s)
+  })
+
+  it('已知与未知实体在节点及列表同步使用安全语义色且不输出 Emoji', async () => {
+    const { wrapper } = await mountKnowledgeGraphReady()
+    expect(wrapper.findAll('.research-icon').length).toBeGreaterThan(0)
+    expect(wrapper.text()).not.toMatch(/[🔬⚙️📊📄🧪⚡]/u)
+    for (const type of ['paper', 'experiment', 'dataset', 'report']) {
+      const node = wrapper.get(`[data-entity-type="${type}"]`)
+      expect(node.classes()).toContain(`kg__node--${type}`)
+      expect(wrapper.get(`[data-entity-list-type="${type}"]`).classes()).toContain(`kg__entity--${type}`)
+    }
+    expect(wrapper.get('[data-graph-entity="graph-unknown"]').attributes('data-entity-type')).toBe('other')
+    expect(wrapper.get('[data-graph-entity="graph-unknown"]').classes()).toContain('kg__node--other')
+    expect(wrapper.get('[data-entity-list-id="graph-unknown"]').classes()).toContain('kg__entity--other')
+    expect(wrapper.get('[data-entity-list-id="graph-unknown"]').text()).toContain('其他')
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(source).toMatch(/\.kg__node--paper rect[^}]*var\(--research-primary-50\)[^}]*var\(--research-primary-500\)/s)
+    expect(source).toMatch(/\.kg__node--experiment rect[^}]*var\(--research-warning-50\)[^}]*var\(--research-warning-500\)/s)
+    expect(source).toMatch(/\.kg__node--dataset rect[^}]*var\(--research-success-50\)[^}]*var\(--research-success-500\)/s)
+    expect(source).toMatch(/\.kg__node--report rect[^}]*var\(--research-bg-hover\)[^}]*var\(--research-border-strong\)/s)
+    expect(source).toMatch(/\.kg__node--other rect[^}]*var\(--research-bg-hover\)[^}]*var\(--research-border-strong\)/s)
+    expect(source).not.toContain('kg__node--${node.document.type}')
+  })
+
+  it('SVG 节点使用单一漫游焦点并可用方向键、回车键与空格键选择', async () => {
+    const { wrapper, store } = await mountKnowledgeGraphReady()
+    const select = vi.spyOn(store, 'selectDocument')
+    const first = wrapper.get('[data-graph-entity="d1"]')
+    const node = wrapper.get('[data-graph-entity="graph-experiment"]')
+    expect(first.attributes()).toMatchObject({ role: 'button', tabindex: '0' })
+    expect(node.attributes('tabindex')).toBe('-1')
+    ;(first.element as SVGElement).focus()
+    expect(document.activeElement).toBe(first.element)
+    await first.trigger('keydown', { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(node.element)
+    expect(first.attributes('tabindex')).toBe('-1')
+    expect(node.attributes('tabindex')).toBe('0')
+    await node.trigger('keydown', { key: 'Enter' })
+    expect(select).toHaveBeenCalledWith('graph-experiment')
+    expect(node.attributes('aria-pressed')).toBe('true')
+    expect(node.text()).toContain('已选中')
+    await node.trigger('keydown', { key: ' ' })
+    expect(select).toHaveBeenCalledTimes(2)
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(source).toMatch(/registerGraphNode\(node\.document\.id,\s*element\)/)
+    expect(source).toMatch(/graphNodeElements\.get\(targetId\)\?\.focus\(\)/)
+    expect(source).not.toContain('ref="graphNodes"')
+  })
+
+  it('选择节点后详情面板呈现真实实体字段', async () => {
+    const { wrapper } = await mountKnowledgeGraphReady()
+    await wrapper.get('[data-graph-entity="d1"]').trigger('click')
+    const panel = wrapper.get('[data-testid="selected-entity"]')
+    expect(panel.text()).toContain('李小红、张伟')
+    expect(panel.text()).toContain('环境科学学报')
+    expect(panel.text()).toContain('2024')
+    expect(panel.text()).toContain('臭氧')
+  })
+
+  it('右侧关系详情面板诚实显示空态且不渲染虚构边', async () => {
+    const { wrapper } = await mountKnowledgeGraphReady()
+    const panel = wrapper.get('[data-testid="graph-relations-panel"]')
+    expect(panel.get('h2').text()).toBe('关系详情')
+    expect(panel.get('[data-testid="graph-relations-state"]').text()).toContain('当前数据源暂未提供实体关系')
+    expect(wrapper.find('[data-graph-relation]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('促进')
+    expect(wrapper.text()).not.toContain('决定')
+  })
+
+  it('加载期间显示统一中文状态且不残留假节点', async () => {
+    installResearchAdapters({ documents: graphDocuments })
+    vi.mocked(knowledgeAdapter.getDocuments).mockImplementation(() => new Promise(() => undefined))
+    const { wrapper } = mountPage(KnowledgeGraph)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[data-testid="knowledge-graph-state"]').text()).toContain('AI 正在分析...')
+    expect(wrapper.find('[data-graph-entity]').exists()).toBe(false)
+  })
+
+  it('空实体、首次错误与保留实体刷新错误分别诚实降级并可重试', async () => {
+    const empty = await mountKnowledgeGraphReady([])
+    expect(empty.wrapper.get('[data-testid="knowledge-graph-state"]').text()).toContain('暂无科研数据')
+
+    vi.mocked(knowledgeAdapter.getDocuments).mockClear()
+    vi.mocked(knowledgeAdapter.getDocuments)
+      .mockRejectedValueOnce(new Error('RAW_GRAPH_LOAD_FAILURE'))
+      .mockResolvedValueOnce(graphDocuments)
+    const failed = mountPage(KnowledgeGraph)
+    const store = useKnowledgeStore()
+    const load = vi.spyOn(store, 'loadDocuments')
+    await flushPromises()
+    const state = failed.wrapper.get('[data-testid="knowledge-graph-state"]')
+    expect(state.text()).toContain('知识图谱加载失败，请重试')
+    expect(failed.wrapper.text()).not.toContain('RAW_GRAPH_LOAD_FAILURE')
+    await state.get('button').trigger('click')
+    await flushPromises()
+    expect(load).toHaveBeenCalledOnce()
+    expect(knowledgeAdapter.getDocuments).toHaveBeenCalledTimes(2)
+    expect(failed.wrapper.find('[data-testid="knowledge-graph-state"]').exists()).toBe(false)
+
+    installResearchAdapters({ documents: graphDocuments })
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const initial = mount(KnowledgeGraph, { attachTo: document.body, global: { plugins: [pinia] } })
+    await flushPromises()
+    expect(initial.text()).toContain('真实传质对照实验')
+    initial.unmount()
+    let resolveRetainedGraph!: (value: DocumentItem[]) => void
+    const retainedGraphRetry = new Promise<DocumentItem[]>(resolve => { resolveRetainedGraph = resolve })
+    vi.mocked(knowledgeAdapter.getDocuments)
+      .mockRejectedValueOnce(new Error('RAW_RETAINED_GRAPH_FAILURE'))
+      .mockReturnValueOnce(retainedGraphRetry)
+    const retainedStore = useKnowledgeStore()
+    const reload = vi.spyOn(retainedStore, 'loadDocuments')
+    const retained = mount(KnowledgeGraph, { attachTo: document.body, global: { plugins: [pinia] } })
+    mountedPageWrappers.push(retained)
+    await flushPromises()
+    expect(retained.text()).toContain('真实传质对照实验')
+    const retainedError = retained.get('[data-testid="knowledge-graph-retained-error"]')
+    expect(retainedError.attributes('role')).toBe('alert')
+    expect(retainedError.text()).toContain('知识图谱刷新失败，请重试')
+    expect(retained.text()).not.toContain('RAW_RETAINED_GRAPH_FAILURE')
+    const retainedRetry = retainedError.get('button')
+    await retainedRetry.trigger('click')
+    await retained.vm.$nextTick()
+    expect(retainedRetry.attributes('disabled')).toBeDefined()
+    const retainedSource = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(retainedSource).toMatch(/\.kg__retained-error button:disabled[^}]*opacity:\s*1[^}]*cursor:\s*not-allowed/s)
+    expect(retainedSource).toMatch(/\.kg__retained-error button:disabled[^}]*background:\s*var\(--research-bg-hover\)[^}]*border-color:\s*var\(--research-border-strong\)[^}]*color:\s*var\(--research-text-secondary\)/s)
+    resolveRetainedGraph(graphDocuments)
+    await flushPromises()
+    expect(reload).toHaveBeenCalledTimes(2)
+    expect(retained.find('[data-testid="knowledge-graph-retained-error"]').exists()).toBe(false)
+  })
+})
+
+async function mountSettingsReady() {
+  const mounted = mountPage(Settings)
+  const store = useModelProviderStore()
+  await flushPromises()
+  return { ...mounted, store }
+}
+
+describe('Task8 设置工作区（8）', () => {
+  it('左侧导航以可访问 tab 呈现四个真实中文分组', async () => {
+    const { wrapper } = await mountSettingsReady()
+    expect(wrapper.findAll('main')).toHaveLength(0)
+    const tabs = wrapper.get('[role="tablist"]').findAll('[role="tab"]')
+    expect(tabs).toHaveLength(4)
+    expect(tabs.map(tab => tab.text())).toEqual(['模型配置', '知识库管理', '研究者信息', 'API 与密钥'])
+    expect(tabs[0].attributes('aria-selected')).toBe('true')
+  })
+
+  it('分组导航支持 Enter 和空格并同步可访问活动面板', async () => {
+    const { wrapper } = await mountSettingsReady()
+    const knowledge = wrapper.get('[data-settings-tab="knowledge"]')
+    await knowledge.trigger('keydown', { key: 'Enter' })
+    expect(knowledge.attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[role="tabpanel"]').text()).toContain('知识库管理')
+    const profile = wrapper.get('[data-settings-tab="profile"]')
+    await profile.trigger('keydown', { key: ' ' })
+    expect(wrapper.get('[role="tabpanel"]').text()).toContain('研究者信息')
+    await profile.trigger('keydown', { key: 'ArrowDown' })
+    const api = wrapper.get('[data-settings-tab="api"]')
+    expect(api.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(api.element)
+  })
+
+  it('模型与 API 分组共享首次错误和空态，其他分组不泄漏无关错误', async () => {
+    modelApi.listConfigs.mockRejectedValueOnce(new Error('RAW_SETTINGS_FIRST_LOAD_FAILURE'))
+    const failed = mountPage(Settings)
+    await flushPromises()
+    expect(failed.wrapper.get('[data-testid="settings-provider-state"]').text()).toContain('模型配置加载失败，请重试')
+    await failed.wrapper.get('[data-settings-tab="api"]').trigger('click')
+    expect(failed.wrapper.get('[data-testid="settings-provider-state"]').text()).toContain('模型配置加载失败，请重试')
+    await failed.wrapper.get('[data-settings-tab="knowledge"]').trigger('click')
+    expect(failed.wrapper.find('[data-testid="settings-provider-state"]').exists()).toBe(false)
+    expect(failed.wrapper.text()).not.toContain('RAW_SETTINGS_FIRST_LOAD_FAILURE')
+
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: [], hasKey: [] })
+    const empty = mountPage(Settings)
+    await flushPromises()
+    expect(empty.wrapper.get('[data-testid="settings-provider-state"]').text()).toContain('暂无模型提供商')
+    await empty.wrapper.get('[data-settings-tab="api"]').trigger('click')
+    expect(empty.wrapper.get('[data-testid="settings-provider-state"]').text()).toContain('暂无模型提供商')
+
+    modelApi.listConfigs.mockClear().mockResolvedValueOnce({ configs: providerConfigs, hasKey: [true, false] })
+    const { wrapper } = await mountSettingsReady()
+    expect(wrapper.findAll('[data-provider-id]')).toHaveLength(2)
+    expect(wrapper.text()).toContain('课题组云模型')
+    expect(wrapper.text()).toContain('research-pro')
+    expect(wrapper.text()).toContain('本地科研模型')
+    expect(wrapper.text()).not.toContain('MIMO')
+    expect(modelApi.listConfigs).toHaveBeenCalledOnce()
+  })
+
+  it('提供商状态真实且刷新失败保留配置并以同一 action 重试', async () => {
+    const { wrapper, pinia, store } = await mountSettingsReady()
+    const cloud = wrapper.get('[data-provider-id="lab-cloud"]')
+    const local = wrapper.get('[data-provider-id="lab-local"]')
+    expect(cloud.text()).toContain('密钥已配置')
+    expect(cloud.text()).toContain('连接状态未检测')
+    expect(local.text()).toContain('未配置密钥')
+    expect(local.text()).not.toContain('已连接')
+    await cloud.get('[data-action="test-provider"]').trigger('click')
+    await flushPromises()
+    expect(modelApi.testProvider).toHaveBeenCalledWith('lab-cloud')
+    expect(cloud.text()).toContain('已连接 · 28 毫秒')
+    wrapper.unmount()
+    modelApi.listConfigs
+      .mockRejectedValueOnce(new Error('RAW_RETAINED_SETTINGS_FAILURE'))
+      .mockResolvedValueOnce({ configs: providerConfigs, hasKey: [true, false] })
+    setActivePinia(pinia)
+    const reload = vi.spyOn(store, 'loadProviders')
+    const retained = mount(Settings, { attachTo: document.body, global: { plugins: [pinia] } })
+    mountedPageWrappers.push(retained)
+    await flushPromises()
+    expect(retained.text()).toContain('课题组云模型')
+    const error = retained.get('[data-testid="settings-provider-retained-error"]')
+    expect(error.attributes('role')).toBe('alert')
+    expect(error.text()).toContain('模型配置刷新失败，请重试')
+    expect(retained.text()).not.toContain('RAW_RETAINED_SETTINGS_FAILURE')
+    await error.get('button').trigger('click')
+    await flushPromises()
+    expect(reload).toHaveBeenCalledTimes(2)
+    expect(retained.find('[data-testid="settings-provider-retained-error"]').exists()).toBe(false)
+  })
+
+  it('配置表单可真实聚焦并按脏状态同步刷新、保存与再次编辑', async () => {
+    const { wrapper } = await mountSettingsReady()
+    const provider = wrapper.get('[data-provider-id="lab-cloud"]')
+    const label = provider.get('label[for="provider-lab-cloud-display-name"]')
+    const input = provider.get('#provider-lab-cloud-display-name')
+    expect(label.text()).toBe('显示名称')
+    expect((input.element as HTMLInputElement).value).toBe('课题组云模型')
+    ;(input.element as HTMLInputElement).focus()
+    expect(document.activeElement).toBe(input.element)
+
+    const serverUpdated = providerConfigs.map(config => config.providerId === 'lab-cloud'
+      ? { ...config, displayName: '服务端新名称', updatedAt: TIMESTAMP + 1 }
+      : config)
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: serverUpdated, hasKey: [true, false] })
+    await wrapper.get('[data-action="refresh-providers"]').trigger('click')
+    await flushPromises()
+    expect((input.element as HTMLInputElement).value).toBe('服务端新名称')
+
+    await input.setValue('用户未保存名称')
+    const serverNewer = serverUpdated.map(config => config.providerId === 'lab-cloud'
+      ? { ...config, displayName: '服务端更晚名称', updatedAt: TIMESTAMP + 2 }
+      : config)
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: serverNewer, hasKey: [true, false] })
+    await wrapper.get('[data-action="refresh-providers"]').trigger('click')
+    await flushPromises()
+    expect((input.element as HTMLInputElement).value).toBe('用户未保存名称')
+
+    const canonical = serverNewer.map(config => config.providerId === 'lab-cloud'
+      ? { ...config, displayName: '保存后的规范名称', updatedAt: TIMESTAMP + 3 }
+      : config)
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: canonical, hasKey: [true, false] })
+    await provider.get('[data-action="save-provider"]').trigger('click')
+    await flushPromises()
+    expect((input.element as HTMLInputElement).value).toBe('保存后的规范名称')
+    expect(provider.text()).toContain('配置已保存')
+    await input.setValue('再次编辑')
+    expect(provider.text()).not.toContain('配置已保存')
+  })
+
+  it('跨分组统一互斥保存操作，失败保留输入且完成后才允许新操作', async () => {
+    let rejectSave!: (reason: unknown) => void
+    modelApi.saveConfig.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectSave = reject }))
+    const { wrapper } = await mountSettingsReady()
+    const provider = wrapper.get('[data-provider-id="lab-cloud"]')
+    const input = provider.get('#provider-lab-cloud-display-name')
+    await input.setValue('保留的模型名称')
+    const save = provider.get('[data-action="save-provider"]')
+    await save.trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(save.attributes('disabled')).toBeDefined()
+    expect(save.attributes('aria-busy')).toBe('true')
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/Settings.vue'), 'utf8')
+    expect(source).toMatch(/\.settings button:disabled[^}]*opacity:\s*1/s)
+    expect(source).toMatch(/\.settings button:disabled[^}]*background:\s*var\(--research-bg-hover\)/s)
+    expect(source).toMatch(/\.settings button:disabled[^}]*color:\s*var\(--research-text-secondary\)/s)
+    await save.trigger('click')
+    expect(modelApi.saveConfig).toHaveBeenCalledOnce()
+    await wrapper.get('[data-settings-tab="api"]').trigger('click')
+    const key = wrapper.get('[data-testid="api-key-lab-local"]')
+    expect(key.attributes('disabled')).toBeDefined()
+    const saveKey = wrapper.get('[data-action="save-key-lab-local"]')
+    expect(saveKey.attributes('disabled')).toBeDefined()
+    const remove = wrapper.get('[data-action="remove-provider-lab-cloud"]')
+    expect(remove.attributes('disabled')).toBeDefined()
+    await key.setValue('sk-blocked')
+    await saveKey.trigger('click')
+    await remove.trigger('click')
+    await remove.trigger('click')
+    expect(modelApi.saveKey).not.toHaveBeenCalled()
+    expect(modelApi.deleteConfig).not.toHaveBeenCalled()
+    rejectSave(new Error('RAW_PROVIDER_SAVE_FAILURE'))
+    await flushPromises()
+    await wrapper.get('[data-settings-tab="model"]').trigger('click')
+    const error = wrapper.get('[data-provider-id="lab-cloud"] [data-testid="provider-save-error"]')
+    expect(error.text()).toContain('保存失败，请重试')
+    expect(wrapper.text()).not.toContain('RAW_PROVIDER_SAVE_FAILURE')
+    expect((input.element as HTMLInputElement).value).toBe('保留的模型名称')
+    modelApi.saveConfig.mockResolvedValueOnce({ ok: true, exists: true })
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: providerConfigs, hasKey: [true, false] })
+    await error.get('button').trigger('click')
+    await flushPromises()
+    expect(modelApi.saveConfig).toHaveBeenCalledTimes(2)
+    await wrapper.get('[data-settings-tab="api"]').trigger('click')
+    const allowedKey = wrapper.get('[data-testid="api-key-lab-local"]')
+    await allowedKey.setValue('sk-allowed')
+    await wrapper.get('[data-action="save-key-lab-local"]').trigger('click')
+    await flushPromises()
+    expect(modelApi.saveKey).toHaveBeenCalledWith('lab-local', 'sk-allowed')
+  })
+
+  it('API 密钥只经现有 saveKey IPC 保存且提交后清空输入', async () => {
+    const { wrapper } = await mountSettingsReady()
+    await wrapper.get('[data-settings-tab="api"]').trigger('click')
+    const input = wrapper.get('[data-testid="api-key-lab-local"]')
+    expect(input.attributes('type')).toBe('password')
+    expect((input.element as HTMLInputElement).value).toBe('')
+    await input.setValue('sk-secret-value')
+    await wrapper.get('[data-action="save-key-lab-local"]').trigger('click')
+    await flushPromises()
+    expect(modelApi.saveKey).toHaveBeenCalledWith('lab-local', 'sk-secret-value')
+    expect((input.element as HTMLInputElement).value).toBe('')
+    expect(JSON.stringify(useModelProviderStore().$state)).not.toContain('sk-secret-value')
+    expect(wrapper.text()).not.toMatch(/Enter|Pinia|IPC/)
+    expect(wrapper.text()).toContain('密钥不会写入业务数据仓库，保存后不会读回明文')
+    expect(wrapper.text()).not.toContain('密钥不会写入页面状态')
+
+    const removeCloud = wrapper.get('[data-action="remove-provider-lab-cloud"]')
+    await removeCloud.trigger('click')
+    expect(removeCloud.text()).toContain('再次点击确认删除')
+    const cloudKey = wrapper.get('[data-testid="api-key-lab-cloud"]')
+    await cloudKey.setValue('sk-stale-must-prune')
+    expect(removeCloud.text()).toContain('删除配置')
+    modelApi.saveKey.mockRejectedValueOnce(new Error('RAW_STALE_KEY_FAILURE'))
+    await wrapper.get('[data-action="save-key-lab-cloud"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('密钥保存失败，请重试')
+
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: [providerConfigs[1]], hasKey: [false] })
+    await wrapper.get('[data-action="refresh-providers"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="api-key-lab-cloud"]').exists()).toBe(false)
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: providerConfigs, hasKey: [true, false] })
+    await wrapper.get('[data-action="refresh-providers"]').trigger('click')
+    await flushPromises()
+    expect((wrapper.get('[data-testid="api-key-lab-cloud"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.text()).not.toContain('sk-stale-must-prune')
+    expect(wrapper.text()).not.toContain('密钥保存失败，请重试')
+    expect(wrapper.get('[data-action="remove-provider-lab-cloud"]').text()).toContain('删除配置')
+  })
+
+  it('危险操作二次确认在切页重置，删除后刷新失败进入待确认状态', async () => {
+    const { wrapper } = await mountSettingsReady()
+    await wrapper.get('[data-settings-tab="api"]').trigger('click')
+    let danger = wrapper.get('[data-testid="settings-danger-zone"]')
+    expect(danger.attributes('aria-label')).toBe('危险操作')
+    expect(danger.text()).toContain('删除模型配置')
+    const remove = danger.get('[data-action="remove-provider-lab-cloud"]')
+    await remove.trigger('click')
+    expect(modelApi.deleteConfig).not.toHaveBeenCalled()
+    expect(danger.text()).toContain('再次点击确认删除')
+    await wrapper.get('[data-settings-tab="api"]').trigger('click')
+    expect(remove.text()).toContain('删除配置')
+    await remove.trigger('click')
+    expect(modelApi.deleteConfig).not.toHaveBeenCalled()
+    expect(remove.text()).toContain('再次点击确认删除')
+    await wrapper.get('[data-settings-tab="model"]').trigger('click')
+    await wrapper.get('[data-settings-tab="api"]').trigger('click')
+    danger = wrapper.get('[data-testid="settings-danger-zone"]')
+    expect(danger.get('[data-action="remove-provider-lab-cloud"]').text()).toContain('删除配置')
+
+    const key = wrapper.get('[data-testid="api-key-lab-cloud"]')
+    await key.setValue('sk-must-clear')
+    const removeAgain = danger.get('[data-action="remove-provider-lab-cloud"]')
+    await removeAgain.trigger('click')
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: providerConfigs, hasKey: [true, false] })
+    await wrapper.get('[data-action="refresh-providers"]').trigger('click')
+    await flushPromises()
+    await removeAgain.trigger('click')
+    expect(modelApi.deleteConfig).not.toHaveBeenCalled()
+    expect(removeAgain.text()).toContain('再次点击确认删除')
+    modelApi.listConfigs.mockRejectedValueOnce(new Error('RELOAD_AFTER_DELETE_FAILED'))
+    await removeAgain.trigger('click')
+    await flushPromises()
+    expect(modelApi.deleteConfig).toHaveBeenCalledWith('lab-cloud')
+    let uncertain = wrapper.get('[data-testid="provider-state-uncertain"]')
+    expect(uncertain.attributes('role')).toBe('alert')
+    expect(uncertain.text()).toContain('删除请求可能已执行，但刷新失败，请重新加载确认')
+    expect(wrapper.findAll('[data-action="reload-after-uncertain"]')).toHaveLength(1)
+    expect((key.element as HTMLInputElement).value).toBe('')
+    expect(danger.get('[data-action="remove-provider-lab-cloud"]').text()).toContain('删除配置')
+
+    await wrapper.get('[data-settings-tab="model"]').trigger('click')
+    uncertain = wrapper.get('[data-testid="provider-state-uncertain"]')
+    expect(uncertain.text()).toContain('删除请求可能已执行')
+    expect(wrapper.get('[data-action="save-provider"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-action="test-provider"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-action="refresh-providers"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-settings-tab="knowledge"]').trigger('click')
+    expect(wrapper.get('[data-testid="provider-state-uncertain"]').text()).toContain('删除请求可能已执行')
+    modelApi.listConfigs.mockRejectedValueOnce(new Error('RELOAD_CONFIRMATION_FAILED'))
+    await wrapper.get('[data-action="reload-after-uncertain"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="provider-state-uncertain"]').text()).toContain('删除请求可能已执行')
+
+    modelApi.listConfigs.mockResolvedValueOnce({ configs: providerConfigs, hasKey: [true, false] })
+    await wrapper.get('[data-action="reload-after-uncertain"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="provider-state-uncertain"]').exists()).toBe(false)
+    await wrapper.get('[data-settings-tab="api"]').trigger('click')
+    await wrapper.get('[data-action="remove-provider-lab-cloud"]').trigger('click')
+    expect(wrapper.get('[data-testid="settings-danger-zone"]').text()).toContain('再次点击确认删除')
   })
 })
