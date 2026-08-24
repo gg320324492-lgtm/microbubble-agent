@@ -121,7 +121,10 @@ function onClick(e: MouseEvent): void {
 }
 
 .ui-btn:disabled {
-  opacity: 0.5;
+  background: var(--research-bg-panel);
+  border-color: var(--research-border-strong);
+  color: var(--research-text-muted);
+  box-shadow: none;
   cursor: not-allowed;
 }
 

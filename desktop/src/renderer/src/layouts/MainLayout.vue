@@ -10,7 +10,7 @@ import HeaderBar from './HeaderBar.vue'
     <div class="main-layout__body">
       <HeaderBar />
       <main class="main-layout__content">
-        <router-view />
+        <slot />
       </main>
     </div>
   </div>

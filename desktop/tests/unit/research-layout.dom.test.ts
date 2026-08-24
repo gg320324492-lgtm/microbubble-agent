@@ -6,6 +6,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter, type Router, type RouteRecordRaw } from 'vue-router'
 import HeaderBar from '@/layouts/HeaderBar.vue'
+import MainLayout from '@/layouts/MainLayout.vue'
 import Sidebar from '@/layouts/Sidebar.vue'
 import Dashboard from '@/pages/research/Dashboard.vue'
 import ProjectWorkspace from '@/pages/research/ProjectWorkspace.vue'
@@ -251,7 +252,15 @@ describe('默认与旧路由兼容（6）', () => {
   })
 })
 
-describe('1440 与 1920 桌面契约（6）', () => {
+describe('1440 与 1920 桌面契约（7）', () => {
+  it('主布局在内容滚动区渲染 App 提供的过渡页面插槽', () => {
+    const wrapper = mount(MainLayout, {
+      slots: { default: '<article data-testid="transition-page">科研页面</article>' },
+      global: { stubs: { Sidebar: true, HeaderBar: true } }
+    })
+    expect(wrapper.get('.main-layout__content [data-testid="transition-page"]').text()).toBe('科研页面')
+  })
+
   it('展开侧栏按纵向组织品牌、导航与研究状态', () => {
     const source = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8')
     expect(source).toMatch(/\.sidebar\s*\{[^}]*flex-direction:\s*column/s)
