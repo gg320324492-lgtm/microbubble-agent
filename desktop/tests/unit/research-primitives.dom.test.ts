@@ -16,6 +16,7 @@ import InsightCard from '@/components/research/InsightCard.vue'
 import ScientificMetric from '@/components/research/ScientificMetric.vue'
 import StatusBadge from '@/components/research/StatusBadge.vue'
 import Timeline from '@/components/research/Timeline.vue'
+import { RESEARCH_STATES } from '../fixtures/research-ui'
 
 const componentRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'renderer', 'src', 'components')
 const componentSource = (relativePath: string) => readFileSync(resolve(componentRoot, relativePath), 'utf8')
@@ -72,11 +73,7 @@ describe('ResearchState（18）', () => {
   const state = (value: 'loading' | 'empty' | 'error', props: Record<string, unknown> = {}) =>
     mountRequired(ResearchState, { props: { state: value, ...props } })
 
-  it.each([
-    ['loading', 'AI 正在分析...'],
-    ['empty', '暂无科研数据'],
-    ['error', '分析失败，请重试']
-  ] as const)('%s 显示标准中文标题', (value, label) => expect(state(value).text()).toContain(label))
+  it.each(RESEARCH_STATES)('%s 显示标准中文标题', (value, label) => expect(state(value).text()).toContain(label))
 
   it.each([
     ['loading', '正在整理科研数据与证据，请稍候。'],

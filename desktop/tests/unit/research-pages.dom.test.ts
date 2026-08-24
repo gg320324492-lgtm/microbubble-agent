@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { baseParse, NodeTypes } from '@vue/compiler-dom'
+import { parse as parseSfc } from '@vue/compiler-sfc'
+import * as ts from 'typescript'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import type { Component } from 'vue'
@@ -2170,8 +2173,381 @@ describe('Task8 设置工作区（8）', () => {
   })
 })
 
-describe('科研三栏辅助区宽度令牌（4）', () => {
+interface ParsedVueParts {
+  template: string
+  styles: string
+  script: string
+}
+
+interface ParsedCssRule {
+  selectors: string[]
+  body: string
+}
+
+interface ParsedCssAtRule {
+  name: 'media' | 'supports' | 'layer'
+  prelude: string
+  body: string
+}
+
+function vueParts(source: string, filename = 'fixture.vue'): ParsedVueParts {
+  const parsed = parseSfc(source, { filename })
+  if (parsed.errors.length > 0) throw new Error(`SFC parse failed: ${parsed.errors.join(', ')}`)
+  return {
+    template: parsed.descriptor.template?.content ?? '',
+    styles: parsed.descriptor.styles.map(style => style.content).join('\n'),
+    script: [parsed.descriptor.script?.content, parsed.descriptor.scriptSetup?.content]
+      .filter((content): content is string => Boolean(content))
+      .join('\n')
+  }
+}
+
+function readVueParts(relativePath: string): ParsedVueParts {
+  const absolutePath = resolve(rendererRoot, relativePath)
+  return vueParts(readFileSync(absolutePath, 'utf8'), absolutePath)
+}
+
+function maskRanges(source: string, ranges: Array<readonly [number, number]>): string {
+  const characters = source.split('')
+  for (const [start, end] of ranges) {
+    for (let index = start; index < end; index += 1) {
+      if (characters[index] !== '\n' && characters[index] !== '\r') characters[index] = ' '
+    }
+  }
+  return characters.join('')
+}
+
+function maskCssCommentsAndStrings(source: string): string {
+  const ranges: Array<readonly [number, number]> = []
+  let index = 0
+  while (index < source.length) {
+    if (source[index] === '/' && source[index + 1] === '*') {
+      const start = index
+      index += 2
+      while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) index += 1
+      index = Math.min(source.length, index + 2)
+      ranges.push([start, index])
+      continue
+    }
+    if (source[index] === "'" || source[index] === '"') {
+      const quote = source[index]
+      const start = index
+      index += 1
+      while (index < source.length) {
+        if (source[index] === '\\') {
+          index += 2
+          continue
+        }
+        if (source[index] === quote) {
+          index += 1
+          break
+        }
+        index += 1
+      }
+      ranges.push([start, Math.min(index, source.length)])
+      continue
+    }
+    index += 1
+  }
+  return maskRanges(source, ranges)
+}
+
+function maskHtmlComments(source: string): string {
+  const ranges: Array<readonly [number, number]> = []
+  for (const match of source.matchAll(/<!--[\s\S]*?-->/g)) {
+    ranges.push([match.index, match.index + match[0].length])
+  }
+  return maskRanges(source, ranges)
+}
+
+function splitTopLevelSelectors(header: string): string[] {
+  const selectors: string[] = []
+  let start = 0
+  let roundDepth = 0
+  let squareDepth = 0
+  for (let index = 0; index <= header.length; index += 1) {
+    const character = header[index]
+    if (character === '(') roundDepth += 1
+    if (character === ')') roundDepth = Math.max(0, roundDepth - 1)
+    if (character === '[') squareDepth += 1
+    if (character === ']') squareDepth = Math.max(0, squareDepth - 1)
+    if ((character === ',' && roundDepth === 0 && squareDepth === 0) || index === header.length) {
+      const selector = header.slice(start, index).trim().replace(/\s+/g, ' ')
+      if (selector) selectors.push(selector)
+      start = index + 1
+    }
+  }
+  return selectors
+}
+
+function scanCss(source: string): { rules: ParsedCssRule[]; atRules: ParsedCssAtRule[] } {
+  const masked = maskCssCommentsAndStrings(source)
+  const rules: ParsedCssRule[] = []
+  const atRules: ParsedCssAtRule[] = []
+
+  function matchingBrace(openingBrace: number, end: number): number {
+    let depth = 1
+    for (let index = openingBrace + 1; index < end; index += 1) {
+      if (masked[index] === '{') depth += 1
+      if (masked[index] === '}') depth -= 1
+      if (depth === 0) return index
+    }
+    return -1
+  }
+
+  function walk(start: number, end: number): void {
+    let cursor = start
+    while (cursor < end) {
+      while (cursor < end && /[\s;]/.test(masked[cursor])) cursor += 1
+      const openingBrace = masked.indexOf('{', cursor)
+      if (openingBrace < 0 || openingBrace >= end) return
+      const closingBrace = matchingBrace(openingBrace, end)
+      if (closingBrace < 0) return
+      const header = masked.slice(cursor, openingBrace).trim()
+      const body = source.slice(openingBrace + 1, closingBrace)
+      const recursiveAtRule = header.match(/^@(media|supports|layer)\b([\s\S]*)$/i)
+      if (recursiveAtRule) {
+        atRules.push({
+          name: recursiveAtRule[1].toLowerCase() as ParsedCssAtRule['name'],
+          prelude: recursiveAtRule[2].trim().replace(/\s+/g, ' '),
+          body
+        })
+        walk(openingBrace + 1, closingBrace)
+      } else if (!header.startsWith('@')) {
+        rules.push({ selectors: splitTopLevelSelectors(header), body })
+      }
+      cursor = closingBrace + 1
+    }
+  }
+
+  walk(0, source.length)
+  return { rules, atRules }
+}
+
+function selectorBlocks(source: string, selector: string): string[] {
+  return scanCss(source).rules
+    .filter(rule => rule.selectors.includes(selector))
+    .map(rule => rule.body)
+}
+
+function cssPropertyValues(block: string, property: string): string[] {
+  const masked = maskCssCommentsAndStrings(block)
+  const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return [...masked.matchAll(new RegExp(`(?:^|;)\\s*${escaped}\\s*:\\s*([^;}]*)`, 'g'))]
+    .map(match => match[1].trim())
+}
+
+const hasFixedRootWidth = (block: string): boolean =>
+  ['width', 'min-width', 'max-width'].some(property =>
+    cssPropertyValues(block, property).some(value => /\b\d{4,}(?:\.\d+)?px\b/.test(value)))
+const hasGridColumns = (block: string): boolean => cssPropertyValues(block, 'grid-template-columns').length > 0
+const hasZeroBasedGridTrack = (block: string): boolean =>
+  cssPropertyValues(block, 'grid-template-columns').every(value => /minmax\(\s*0\s*,/i.test(value))
+const hasUnsafeFixedGridTrack = (block: string): boolean =>
+  cssPropertyValues(block, 'grid-template-columns').some(value => /\b\d{4,}(?:\.\d+)?px\b/i.test(value))
+
+function atRuleBlocks(source: string, name: ParsedCssAtRule['name'], prelude: RegExp): string[] {
+  return scanCss(source).atRules
+    .filter(rule => rule.name === name && prelude.test(rule.prelude))
+    .map(rule => rule.body)
+}
+
+function splitCssArguments(value: string): string[] {
+  const arguments_: string[] = []
+  let start = 0
+  let depth = 0
+  for (let index = 0; index <= value.length; index += 1) {
+    if (value[index] === '(') depth += 1
+    if (value[index] === ')') depth = Math.max(0, depth - 1)
+    if ((value[index] === ',' && depth === 0) || index === value.length) {
+      arguments_.push(value.slice(start, index).trim())
+      start = index + 1
+    }
+  }
+  return arguments_
+}
+
+function cssLengthPx(value: string, viewport: number): number {
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)(px|vw)$/)
+  if (!match) throw new Error(`Unsupported CSS length: ${value}`)
+  const numeric = Number(match[1])
+  return match[2] === 'vw' ? numeric * viewport / 100 : numeric
+}
+
+function evaluateClamp(value: string, viewport: number): { min: number; preferred: number; max: number; computed: number } {
+  const match = value.trim().match(/^clamp\(([\s\S]*)\)$/)
+  if (!match) throw new Error(`Expected clamp(): ${value}`)
+  const arguments_ = splitCssArguments(match[1])
+  if (arguments_.length !== 3) throw new Error(`Expected three clamp arguments: ${value}`)
+  const [min, preferred, max] = arguments_.map(argument => cssLengthPx(argument, viewport))
+  return { min, preferred, max, computed: Math.min(max, Math.max(min, preferred)) }
+}
+
+interface DirectoryEntryLike {
+  name: string
+  isFile(): boolean
+  isDirectory(): boolean
+}
+
+type ReadDirectory = (relativeDirectory: string) => readonly DirectoryEntryLike[]
+
+function discoverVueFiles(
+  relativeDirectory: string,
+  readDirectory: ReadDirectory = directory => readdirSync(resolve(rendererRoot, directory), { withFileTypes: true })
+): string[] {
+  const files: string[] = []
+  const normalize = (path: string): string => path.replace(/\\/g, '/').replace(/\/{2,}/g, '/').replace(/^\.\//, '')
+  const walk = (directory: string): void => {
+    const normalizedDirectory = normalize(directory)
+    const entries = [...readDirectory(normalizedDirectory)].sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      const relativePath = normalize(`${normalizedDirectory}/${entry.name}`)
+      if (entry.isDirectory()) walk(relativePath)
+      if (entry.isFile() && entry.name.endsWith('.vue')) files.push(relativePath)
+    }
+  }
+  walk(relativeDirectory)
+  return [...new Set(files)].sort()
+}
+
+function modulePathFromExpression(node: ts.Expression | ts.TypeNode): string | undefined {
+  if (ts.isStringLiteralLike(node)) return node.text
+  if (ts.isLiteralTypeNode(node) && ts.isStringLiteralLike(node.literal)) return node.literal.text
+  return undefined
+}
+
+function scriptBoundaryViolations(script: string): string[] {
+  const sourceFile = ts.createSourceFile('component.ts', script, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const violations: string[] = []
+  const inspectModulePath = (path: string | undefined): void => {
+    if (!path) return
+    const segments = path.split(/[\\/]/).filter(Boolean)
+    if (segments.some(segment => segment === 'stores' || segment === 'services')) violations.push(`module:${path}`)
+  }
+  const isWindow = (node: ts.Expression): boolean => ts.isIdentifier(node) && node.text === 'window'
+
+  function visit(node: ts.Node): void {
+    if (ts.isImportDeclaration(node)) inspectModulePath(modulePathFromExpression(node.moduleSpecifier))
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
+      inspectModulePath(modulePathFromExpression(node.moduleSpecifier))
+    }
+    if (ts.isImportTypeNode(node)) inspectModulePath(modulePathFromExpression(node.argument))
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      inspectModulePath(node.arguments[0] ? modulePathFromExpression(node.arguments[0]) : undefined)
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require') {
+      inspectModulePath(node.arguments[0] ? modulePathFromExpression(node.arguments[0]) : undefined)
+    }
+    if (ts.isPropertyAccessExpression(node) && isWindow(node.expression) && node.name.text === 'api') {
+      violations.push('window.api')
+    }
+    if (ts.isElementAccessExpression(node) && isWindow(node.expression) && node.argumentExpression) {
+      const property = modulePathFromExpression(node.argumentExpression)
+      if (property === 'api') violations.push("window['api']")
+    }
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+  return violations
+}
+
+function templateBoundaryViolations(template: string): string[] {
+  interface TemplateAstNode {
+    type: number
+    content?: string | { content?: string }
+    children?: TemplateAstNode[]
+    props?: Array<{
+      type: number
+      exp?: { content?: string }
+      arg?: { content?: string; isStatic?: boolean }
+    }>
+  }
+  const expressions: string[] = []
+  const visit = (node: TemplateAstNode): void => {
+    if (node.type === NodeTypes.INTERPOLATION && typeof node.content === 'object' && node.content.content) {
+      expressions.push(node.content.content)
+    }
+    if (node.type === NodeTypes.ELEMENT) {
+      for (const property of node.props ?? []) {
+        if (property.type !== NodeTypes.DIRECTIVE) continue
+        if (property.exp?.content) expressions.push(property.exp.content)
+        if (property.arg?.isStatic === false && property.arg.content) expressions.push(property.arg.content)
+      }
+    }
+    for (const child of node.children ?? []) visit(child)
+  }
+  visit(baseParse(maskHtmlComments(template)) as unknown as TemplateAstNode)
+  return expressions.flatMap(expression =>
+    scriptBoundaryViolations(expression).filter(violation => violation.startsWith('window')))
+}
+
+function stringLiteralsInVariable(script: string, variableName: string): string[] {
+  const sourceFile = ts.createSourceFile('navigation.ts', script, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const literals: string[] = []
+  let initializer: ts.Expression | undefined
+  sourceFile.forEachChild(node => {
+    if (!ts.isVariableStatement(node)) return
+    for (const declaration of node.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === variableName) initializer = declaration.initializer
+    }
+  })
+  if (!initializer) return literals
+  const visit = (node: ts.Node): void => {
+    if (ts.isStringLiteralLike(node)) literals.push(node.text)
+    ts.forEachChild(node, visit)
+  }
+  visit(initializer)
+  return literals
+}
+
+const legacyUiColorPattern = /#(?:f97316|0f172a|020617)(?:[0-9a-f]{2})?(?![0-9a-f])/gi
+const navigationEmojiPattern = /(?:💬|📁|📚|🧪|📊|📝|🔗|🤖|⚙️?|🔬|⚡)/gu
+
+function legacyUiColors(parts: ParsedVueParts): string[] {
+  const uiSource = `${maskHtmlComments(parts.template)}\n${maskCssCommentsAndStrings(parts.styles)}`
+  return [...uiSource.matchAll(legacyUiColorPattern)].map(match => match[0])
+}
+
+function templateNavigationEmojis(parts: ParsedVueParts): string[] {
+  return [...maskHtmlComments(parts.template).matchAll(navigationEmojiPattern)].map(match => match[0])
+}
+
+function stringNavigationEmojis(strings: string[]): string[] {
+  return strings.flatMap(value => [...value.matchAll(navigationEmojiPattern)].map(match => match[0]))
+}
+
+const uiPrimitiveVueFiles = [
+  'components/ui/Button.vue',
+  'components/ui/Card.vue',
+  'components/ui/EmptyState.vue',
+  'components/ui/ErrorState.vue',
+  'components/ui/Loading.vue'
+] as const
+const discoveredResearchComponents = discoverVueFiles('components/research')
+const discoveredResearchPages = discoverVueFiles('pages/research')
+const presentationalManualExtras = ['components/icons/ResearchIcon.vue'] as const
+const presentationalTargets = [...new Set([
+  ...discoveredResearchComponents,
+  ...uiPrimitiveVueFiles,
+  ...presentationalManualExtras
+])].sort()
+const visualTargets = [...new Set([
+  'App.vue',
+  'components/icons/ResearchIcon.vue',
+  ...uiPrimitiveVueFiles,
+  ...discoveredResearchComponents,
+  'layouts/HeaderBar.vue',
+  'layouts/MainLayout.vue',
+  'layouts/Sidebar.vue',
+  ...discoveredResearchPages
+])].sort()
+
+describe('科研三栏辅助区宽度令牌（10）', () => {
   const tokens = readFileSync(resolve(rendererRoot, 'styles/research-design-tokens.css'), 'utf8')
+  const baseRoot = selectorBlocks(tokens, ':root')[0] ?? ''
+  const wideRoot = selectorBlocks(atRuleBlocks(tokens, 'media', /\(min-width:\s*1720px\)/)[0] ?? '', ':root')[0] ?? ''
+  const tokenValue = (name: string): string => cssPropertyValues(baseRoot, name)[0] ?? ''
 
   it('定义紧凑、标准与宽幅三档科研辅助栏令牌', () => {
     expect(tokens).toMatch(/--research-rail-compact:\s*clamp\(/)
@@ -2184,15 +2560,292 @@ describe('科研三栏辅助区宽度令牌（4）', () => {
     ['Experiment.vue', '.experiment__workspace'],
     ['Manuscript.vue', '.manuscript']
   ])('%s 的 %s 所有三栏声明只使用统一 rail token', (file, selector) => {
-    const content = readFileSync(resolve(rendererRoot, 'pages/research', file), 'utf8')
-    const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const declarations = [...content.matchAll(new RegExp(`${escapedSelector}\\s*\\{[^}]*grid-template-columns\\s*:\\s*([^;}]+)`, 'g'))]
-      .map(match => match[1])
+    const styles = readVueParts(`pages/research/${file}`).styles
+    const declarations = selectorBlocks(styles, selector)
+      .flatMap(block => cssPropertyValues(block, 'grid-template-columns'))
     expect(declarations.length).toBeGreaterThan(0)
     for (const columns of declarations) {
       expect(columns).toMatch(/var\(--research-rail-(?:compact|standard|wide)\)/)
-      expect(columns).toContain('minmax(0,1fr)')
+      expect(columns).toMatch(/minmax\(\s*0\s*,\s*1fr\s*\)/)
       expect(columns).not.toMatch(/\b\d+(?:\.\d+)?px\b/)
     }
+  })
+
+  it.each([
+    '--research-rail-compact',
+    '--research-rail-standard',
+    '--research-rail-wide'
+  ])('%s 的三参数 clamp 在 1440 与 1920 都保持 min ≤ computed ≤ max', name => {
+    const value = tokenValue(name)
+    for (const viewport of [1440, 1920]) {
+      const result = evaluateClamp(value, viewport)
+      expect(result.min).toBeLessThanOrEqual(result.max)
+      expect(result.computed).toBeGreaterThanOrEqual(result.min)
+      expect(result.computed).toBeLessThanOrEqual(result.max)
+    }
+  })
+
+  it.each([
+    ['Literature.vue', '.literature__workspace'],
+    ['Experiment.vue', '.experiment__workspace'],
+    ['Manuscript.vue', '.manuscript']
+  ])('%s 的 %s 辅助栏令牌预算小于 1440 与 1920 可用内容宽', (file, selector) => {
+    const declarations = selectorBlocks(readVueParts(`pages/research/${file}`).styles, selector)
+      .flatMap(block => cssPropertyValues(block, 'grid-template-columns'))
+    expect(declarations.length).toBeGreaterThan(0)
+    const sidebar = cssLengthPx(tokenValue('--research-sidebar-width'), 1440)
+    for (const viewport of [1440, 1920]) {
+      const gutterSource = viewport >= 1720 ? wideRoot : baseRoot
+      const gutter = cssLengthPx(cssPropertyValues(gutterSource, '--research-page-gutter')[0] ?? '', viewport)
+      const gridGap = cssLengthPx(cssPropertyValues(gutterSource, '--research-grid-gap')[0] ?? '', viewport)
+      const budgets = declarations.map(columns => {
+        const railNames = [...columns.matchAll(/var\((--research-rail-(?:compact|standard|wide))\)/g)]
+          .map(match => match[1])
+        expect(railNames).toHaveLength(2)
+        return railNames.reduce((sum, name) => sum + evaluateClamp(tokenValue(name), viewport).computed, 0) + 2 * gridGap
+      })
+      const availableContentWidth = viewport - sidebar - 2 * gutter
+      expect(Math.max(...budgets)).toBeLessThan(availableContentWidth)
+    }
+  })
+})
+
+describe(`科研展示组件 AST 架构隔离（${presentationalTargets.length + 6}）`, () => {
+  it('自动发现的科研组件与展示守卫集合完全一致', () => {
+    expect(new Set(presentationalTargets).size).toBe(presentationalTargets.length)
+    expect(presentationalTargets.filter(file => file.startsWith('components/research/')))
+      .toEqual(discoveredResearchComponents)
+    expect(presentationalTargets.filter(file => file.startsWith('components/ui/')))
+      .toEqual([...uiPrimitiveVueFiles].sort())
+    expect(presentationalTargets.filter(file => file.startsWith('components/icons/')))
+      .toEqual([...presentationalManualExtras])
+  })
+
+  it('AST 捕获别名、相对、barrel、type、dynamic import 与 window API 变体', () => {
+    const fixture = `
+      import store from '@/stores/research/store'
+      import type { Service } from '../../services/research/service'
+      import '@/services/research/setup'
+      export { store } from '@/stores/research/barrel'
+      export * from '../services/research/exported'
+      type StoreType = import('@/stores').StoreType
+      const lazyService = import('../services/research/lazy')
+      const commonJsStore = require('../../stores/research/commonjs')
+      window.api.call()
+      window?.api.call()
+      window['api'].call()
+      window?.['api'].call()
+    `
+    expect(scriptBoundaryViolations(fixture)).toEqual(expect.arrayContaining([
+      'module:@/stores/research/store',
+      'module:../../services/research/service',
+      'module:@/services/research/setup',
+      'module:@/stores/research/barrel',
+      'module:../services/research/exported',
+      'module:@/stores',
+      'module:../services/research/lazy',
+      'module:../../stores/research/commonjs',
+      'window.api',
+      "window['api']"
+    ]))
+    expect(scriptBoundaryViolations(fixture).filter(item => item === 'window.api')).toHaveLength(2)
+    expect(scriptBoundaryViolations(fixture).filter(item => item === "window['api']")).toHaveLength(2)
+  })
+
+  it('AST 不把注释和普通字符串中的架构字样判为真实依赖', () => {
+    const fixture = `
+      // import store from '@/stores/research/store'
+      const note = "window.api and ../services/research are documentation"
+      const apiLabel = 'api'
+    `
+    expect(scriptBoundaryViolations(fixture)).toEqual([])
+  })
+
+  it('模板表达式守卫捕获 window API 点号、可选链与元素访问', () => {
+    const template = `
+      <button @click="window.api.run()">运行</button>
+      <output>{{ window?.api.status }}</output>
+      <span :title="window['api'].label">状态</span>
+      <div :[window.api.key]="value">动态属性</div>
+    `
+    const violations = templateBoundaryViolations(template)
+    expect(violations).toEqual(expect.arrayContaining([
+      'window.api',
+      "window['api']"
+    ]))
+    expect(violations.filter(item => item === 'window.api')).toHaveLength(3)
+    expect(violations.filter(item => item === "window['api']")).toHaveLength(1)
+  })
+
+  it('模板守卫忽略普通文本、静态属性与 HTML comment 中的 window API 字样', () => {
+    const template = `
+      <!-- {{ window.api.hidden }} -->
+      <p title="window.api is documentation">window?.api 与 window['api'] 仅为说明</p>
+    `
+    expect(templateBoundaryViolations(template)).toEqual([])
+  })
+
+  it('自动发现器递归覆盖内存目录树、规范化路径并稳定去重排序', () => {
+    const entry = (name: string, kind: 'file' | 'directory'): DirectoryEntryLike => ({
+      name,
+      isFile: () => kind === 'file',
+      isDirectory: () => kind === 'directory'
+    })
+    const tree: Record<string, readonly DirectoryEntryLike[]> = {
+      'pages/research': [entry('Top.vue', 'file'), entry('nested', 'directory'), entry('Top.vue', 'file')],
+      'pages/research/nested': [entry('Deep.vue', 'file'), entry('deeper', 'directory')],
+      'pages/research/nested/deeper': [entry('Leaf.vue', 'file'), entry('ignore.ts', 'file')]
+    }
+    expect(discoverVueFiles('pages\\research', directory => tree[directory.replace(/\\/g, '/')] ?? [])).toEqual([
+      'pages/research/Top.vue',
+      'pages/research/nested/Deep.vue',
+      'pages/research/nested/deeper/Leaf.vue'
+    ])
+  })
+
+  it.each(presentationalTargets)('%s 的 script AST 不连接 Store、Service 或 preload API', file => {
+    const parts = readVueParts(file)
+    expect(scriptBoundaryViolations(parts.script)).toEqual([])
+    expect(templateBoundaryViolations(parts.template)).toEqual([])
+  })
+})
+
+describe(`科研生产界面 SFC 语境视觉隔离（${visualTargets.length + 5}）`, () => {
+  it('自动发现的科研页面与组件完整进入视觉守卫集合', () => {
+    expect(new Set(visualTargets).size).toBe(visualTargets.length)
+    expect(visualTargets.filter(file => file.startsWith('pages/research/'))).toEqual(discoveredResearchPages)
+    expect(visualTargets.filter(file => file.startsWith('components/research/'))).toEqual(discoveredResearchComponents)
+  })
+
+  it('SFC UI 语境精确捕获旧色六位与八位 alpha 写法', () => {
+    const parts = vueParts(`
+      <template><div style="color:#f97316">科研</div></template>
+      <script setup>const nonUi = '#f97316'</script>
+      <style>.panel { color: #0f172aff; background: #02061780; }</style>
+    `)
+    expect(legacyUiColors(parts)).toEqual(expect.arrayContaining(['#f97316', '#0f172aff', '#02061780']))
+  })
+
+  it('SFC UI 语境忽略评论、普通 script 字符串与更长十六进制片段', () => {
+    const parts = vueParts(`
+      <template><!-- #f97316 📚 --><div>科研</div></template>
+      <script setup>const nonUi = '#0f172a'</script>
+      <style>/* #020617 */ .panel::before { content: '#f97316'; } .safe { color: #f97316abc; }</style>
+    `)
+    expect(legacyUiColors(parts)).toEqual([])
+    expect(templateNavigationEmojis(parts)).toEqual([])
+  })
+
+  it('模板与 NAV_ITEMS 字符串的 Emoji 反例都能被识别', () => {
+    const parts = vueParts('<template><nav>📚 文献</nav></template>')
+    const navigation = "const NAV_ITEMS = [{ label: '🧪 实验' }, { icon: '⚙️' }]"
+    expect(templateNavigationEmojis(parts)).toEqual(['📚'])
+    expect(stringNavigationEmojis(stringLiteralsInVariable(navigation, 'NAV_ITEMS'))).toEqual(['🧪', '⚙️'])
+  })
+
+  it('MainLayout 实际渲染的 Sidebar NAV_ITEMS 不含 Emoji 导航符号', () => {
+    const mainLayout = readVueParts('layouts/MainLayout.vue')
+    const navigationStrings = stringLiteralsInVariable(readVueParts('layouts/Sidebar.vue').script, 'NAV_ITEMS')
+    expect(mainLayout.script).toMatch(/import\s+Sidebar\s+from\s+['"]\.\/Sidebar\.vue['"]/)
+    expect(mainLayout.template).toMatch(/<Sidebar\s*\/>/)
+    expect(navigationStrings.length).toBeGreaterThan(0)
+    expect(stringNavigationEmojis(navigationStrings)).toEqual([])
+  })
+
+  it.each(visualTargets)('%s 的 template/style 不回退旧色且模板不使用 Emoji 导航符号', file => {
+    const parts = readVueParts(file)
+    expect(legacyUiColors(parts)).toEqual([])
+    expect(templateNavigationEmojis(parts)).toEqual([])
+  })
+})
+
+describe('1440 与 1920 科研工作区静态响应式契约（17）', () => {
+  const shrinkableRoots = [
+    ['components/research/ResearchPageShell.vue', '.research-page-shell'],
+    ['layouts/MainLayout.vue', '.main-layout__content'],
+    ['pages/research/Assistant.vue', '.assistant'],
+    ['pages/research/Experiment.vue', '.experiment'],
+    ['pages/research/KnowledgeGraph.vue', '.kg'],
+    ['pages/research/Literature.vue', '.literature'],
+    ['pages/research/Manuscript.vue', '.manuscript'],
+    ['pages/research/Settings.vue', '.settings']
+  ] as const
+
+  it('选择器收集器覆盖媒体块内的第二个同名声明并暴露违规', () => {
+    const fixture = `
+      .fixture { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+      @media (max-width: 1480px) {
+        .fixture { width: 1200px; grid-template-columns: 240px 1fr; }
+      }
+    `
+    const blocks = selectorBlocks(fixture, '.fixture')
+    expect(blocks).toHaveLength(2)
+    expect(blocks.some(hasFixedRootWidth)).toBe(true)
+    expect(blocks.filter(hasGridColumns).every(hasZeroBasedGridTrack)).toBe(false)
+  })
+
+  it('选择器收集器精确处理组合选择器、注释、字符串花括号与后代选择器', () => {
+    const fixture = `
+      .fixture, .peer { content: '}'; min-width: 0; }
+      @media (max-width: 1480px) {
+        .fixture /* selector comment */ { color: blue; /* body } comment */ width: 1200px; }
+        .wrapper .fixture { width: 1600px; }
+      }
+      @supports (display: grid) {
+        @layer research {
+          .fixture { max-width: 1300px; }
+        }
+      }
+      .fixture:is(.primary, .secondary), .peer { color: green; }
+    `
+    const blocks = selectorBlocks(fixture, '.fixture')
+    expect(blocks).toHaveLength(3)
+    expect(blocks[0]).toContain("content: '}'")
+    expect(blocks[1]).toContain('width: 1200px')
+    expect(blocks[2]).toContain('max-width: 1300px')
+    expect(blocks.join('\n')).not.toContain('width: 1600px')
+    expect(selectorBlocks(fixture, '.fixture:is(.primary, .secondary)')).toHaveLength(1)
+  })
+
+  it.each([
+    'grid-template-columns: 1200px minmax(0, 1fr);',
+    'grid-template-columns: minmax(1200px, 2fr) minmax(0, 1fr);'
+  ])('固定四位像素轨道“%s”被标记为不安全', block => {
+    expect(hasUnsafeFixedGridTrack(block)).toBe(true)
+  })
+
+  it.each(shrinkableRoots)('%s 的 %s 根内容允许收缩且不锁死宽度', (file, selector) => {
+    const styles = readVueParts(file).styles
+    const blocks = selectorBlocks(styles, selector)
+    expect(blocks.length).toBeGreaterThan(0)
+    expect(blocks.some(block => /min-width:\s*0\b/.test(block))).toBe(true)
+    for (const block of blocks) {
+      expect(hasFixedRootWidth(block)).toBe(false)
+    }
+  })
+
+  it.each([
+    ['pages/research/Dashboard.vue', '.dashboard__workspace'],
+    ['pages/research/DataAnalysis.vue', '.analysis-overview'],
+    ['pages/research/Experiment.vue', '.experiment__workspace'],
+    ['pages/research/KnowledgeGraph.vue', '.kg__workspace']
+  ] as const)('%s 的 %s 主网格使用零基准弹性轨道', (file, selector) => {
+    const styles = readVueParts(file).styles
+    const gridBlocks = selectorBlocks(styles, selector)
+      .filter(hasGridColumns)
+    expect(gridBlocks.length).toBeGreaterThan(0)
+    for (const block of gridBlocks) {
+      expect(hasZeroBasedGridTrack(block)).toBe(true)
+      expect(hasUnsafeFixedGridTrack(block)).toBe(false)
+    }
+  })
+
+  it('共享宽屏令牌与紧凑页面规则覆盖 1920 和 1440 断点', () => {
+    const tokens = readFileSync(resolve(rendererRoot, 'styles/research-design-tokens.css'), 'utf8')
+    const headerStyles = readVueParts('layouts/HeaderBar.vue').styles
+    const wideWorkstation = atRuleBlocks(tokens, 'media', /\(min-width:\s*1720px\)/)[0] ?? ''
+    const compactWorkstation = atRuleBlocks(headerStyles, 'media', /\(max-width:\s*1480px\)/)[0] ?? ''
+    expect(wideWorkstation).toMatch(/--research-page-gutter:\s*32px/)
+    expect(compactWorkstation).toMatch(/\.header-bar__project span,\s*\.header-bar__user-name\s*\{[^}]*display:\s*none/)
   })
 })
