@@ -131,7 +131,7 @@ describe('ResearchState（18）', () => {
   it('允许覆盖标准说明', () => expect(state('error', { description: '请检查数据文件格式。' }).text()).toContain('请检查数据文件格式。'))
 })
 
-describe('Button 与 Card（12）', () => {
+describe('Button 与 Card（13）', () => {
   it('Button 默认使用 primary、medium 与 button 类型', () => {
     const button = mount(Button, { slots: { default: '开始分析' } }).get('button')
     expect(button.classes()).toEqual(expect.arrayContaining(['ui-btn--primary', 'ui-btn--medium']))
@@ -153,6 +153,15 @@ describe('Button 与 Card（12）', () => {
     const wrapper = mount(Button, { props: { disabled: true } })
     await wrapper.get('button').trigger('click')
     expect(wrapper.emitted('click')).toBeUndefined()
+  })
+
+  it('Button 禁用态使用背景、边框与文字语义而非只降低透明度', () => {
+    const source = componentSource('ui/Button.vue')
+    const disabledRule = source.match(/\.ui-btn:disabled\s*\{([^}]*)\}/s)?.[1] ?? ''
+    expect(disabledRule).toContain('background:')
+    expect(disabledRule).toContain('border-color:')
+    expect(disabledRule).toContain('color:')
+    expect(disabledRule).not.toMatch(/opacity:\s*(?:0(?:\.\d+)?|\.\d+)/)
   })
 
   it('Button 可用时发出 click 事件', async () => {

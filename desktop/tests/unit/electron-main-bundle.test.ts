@@ -15,7 +15,8 @@ describe('Electron main-process bundle', () => {
     )
     const resolved: Record<string, unknown> = {}
 
-    externalizePlugin?.config?.(resolved)
+    expect(externalizePlugin, 'main build must keep the externalize-deps plugin').toBeDefined()
+    externalizePlugin!.config!(resolved)
 
     const external = (
       resolved.build as { rollupOptions?: { external?: Array<string | RegExp> } } | undefined
