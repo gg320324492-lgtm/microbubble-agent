@@ -7,6 +7,11 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: ['electron-store'] })],
     build: {
       outDir: 'out/main',
+      commonjsOptions: {
+        // `auto` detects cycles while modules load and can change the bundle graph
+        // between cold and warm builds. Wrap every CommonJS module deterministically.
+        strictRequires: true
+      },
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/main/index.ts')
