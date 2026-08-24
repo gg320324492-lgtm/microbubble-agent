@@ -1,7 +1,7 @@
 // Manuscript Store — 论文助手状态管理。
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { manuscriptService, type Manuscript, type ManuscriptSection, type WritingIssue } from '../../services/research/manuscript.service'
+import { manuscriptService, type Manuscript, type WritingIssue } from '../../services/research/manuscript.service'
 
 export const useManuscriptStore = defineStore('research-manuscript', () => {
   const manuscript = ref<Manuscript | null>(null)
