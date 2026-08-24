@@ -64,7 +64,7 @@ function evidenceStars(documentId: string): number {
 }
 
 async function loadPage() {
-  pageState.value = 'loading'
+  pageState.value = store.totalDocuments > 0 ? null : 'loading'
   try {
     await Promise.all([store.loadDocuments(), store.loadAssessments()])
     pageState.value = store.totalDocuments === 0 ? 'empty' : null
@@ -199,7 +199,7 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
     </section>
 
     <ResearchState
-      v-else-if="pageState"
+      v-else-if="pageState && store.totalDocuments === 0"
       class="literature__empty"
       data-testid="literature-page-state"
       :state="pageState"
@@ -207,7 +207,18 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
       @retry="loadPage"
     />
 
-    <div v-else class="literature__workspace">
+    <template v-else>
+    <ResearchState
+      v-if="pageState === 'error'"
+      class="literature__empty"
+      data-testid="literature-page-state"
+      state="error"
+      title="文献刷新失败，请重试"
+      description="已加载的文献内容仍然保留，可以重新发起刷新。"
+      @retry="loadPage"
+    />
+
+    <div class="literature__workspace">
       <aside class="literature__library" data-testid="literature-library" aria-label="文献文件夹与搜索">
         <div class="literature__panel-heading">
           <ResearchIcon name="folder" :size="17" />
@@ -351,6 +362,7 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
         </div>
       </aside>
     </div>
+    </template>
     </div>
 
     <section

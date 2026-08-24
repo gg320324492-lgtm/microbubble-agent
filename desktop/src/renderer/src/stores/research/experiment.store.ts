@@ -13,5 +13,10 @@ export const useExperimentStore = defineStore('research-experiment', () => {
     finally { isLoading.value = false }
   }
 
-  return { design, isLoading, loadDesign }
+  async function updateDesign(patch: Partial<ExperimentDesign>) {
+    await experimentService.updateDesign(patch)
+    if (design.value) design.value = { ...design.value, ...patch }
+  }
+
+  return { design, isLoading, loadDesign, updateDesign }
 })

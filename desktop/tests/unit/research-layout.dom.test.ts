@@ -252,7 +252,7 @@ describe('默认与旧路由兼容（6）', () => {
   })
 })
 
-describe('1440 与 1920 桌面契约（7）', () => {
+describe('1440 与 1920 桌面契约（9）', () => {
   it('主布局在内容滚动区渲染 App 提供的过渡页面插槽', () => {
     const wrapper = mount(MainLayout, {
       slots: { default: '<article data-testid="transition-page">科研页面</article>' },
@@ -304,6 +304,25 @@ describe('1440 与 1920 桌面契约（7）', () => {
     expect(knowledgeLoad).toHaveBeenCalledTimes(2)
   })
 
+  it('科研首页刷新失败保留已加载的研究洞察与工作区', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const knowledgeStore = useKnowledgeStore()
+    knowledgeStore.documents = [{
+      id: 'retained-paper', title: '已保留的传质证据', authors: '课题组', journal: '实验记录',
+      year: 2026, type: 'paper', tags: ['传质'], credibility: 0.9, citations: 1
+    }]
+    vi.spyOn(knowledgeStore, 'loadDocuments').mockRejectedValue(new Error('REFRESH_FAILED'))
+    vi.spyOn(useDatasetStore(), 'loadReport').mockResolvedValue()
+    vi.spyOn(useManuscriptStore(), 'loadManuscript').mockResolvedValue()
+    const wrapper = mount(Dashboard, { global: { plugins: [pinia] } })
+    await flushPromises()
+    expect(wrapper.get('.dashboard__workspace').text()).toContain('AI 研究活动')
+    expect(wrapper.text()).toContain('科研数据分析失败，请重试。')
+    expect(wrapper.text()).toContain('已汇总 1 篇文献')
+  })
+
   it('项目空间响应式契约下拒绝英文异常并提供中文重试', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const source = readFileSync(resolve(rendererRoot, 'pages/research/ProjectWorkspace.vue'), 'utf8')
@@ -323,6 +342,29 @@ describe('1440 与 1920 桌面契约（7）', () => {
     await wrapper.get('.research-state__retry').trigger('click')
     await flushPromises()
     expect(knowledgeLoad).toHaveBeenCalledTimes(2)
+  })
+
+  it('项目空间刷新失败保留已有面板且已知模型只显示中文名', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const knowledgeStore = useKnowledgeStore()
+    knowledgeStore.documents = [{
+      id: 'retained-paper', title: '已保留的项目证据', authors: '课题组', journal: '实验记录',
+      year: 2026, type: 'paper', tags: ['传质'], credibility: 0.9, citations: 1
+    }]
+    const datasetStore = useDatasetStore()
+    await datasetStore.loadReport()
+    vi.spyOn(knowledgeStore, 'loadDocuments').mockRejectedValue(new Error('REFRESH_FAILED'))
+    vi.spyOn(datasetStore, 'loadReport').mockResolvedValue()
+    vi.spyOn(useManuscriptStore(), 'loadManuscript').mockResolvedValue()
+    vi.spyOn(useExperimentStore(), 'loadDesign').mockResolvedValue()
+    const wrapper = mount(ProjectWorkspace, { global: { plugins: [pinia] } })
+    await flushPromises()
+    expect(wrapper.get('.workspace__panel').text()).toContain('项目概览')
+    expect(wrapper.text()).toContain('项目数据加载失败，请重试。')
+    expect(wrapper.text()).toContain('一级动力学')
+    expect(wrapper.text()).not.toContain('first-order')
   })
 })
 
