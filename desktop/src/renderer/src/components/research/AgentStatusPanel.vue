@@ -1,11 +1,11 @@
 <script lang="ts">
-export type ResearchAgentStatus = 'idle' | 'running' | 'completed' | 'error'
+export type ResearchAgentStatus = 'idle' | 'pending' | 'running' | 'completed' | 'error'
 
 /** 由科研页面传入的智能体运行状态。 */
 export interface ResearchAgentStatusItem {
   name: string
   role: string
-  status: ResearchAgentStatus
+  status?: ResearchAgentStatus
   queue?: number | string
   action?: string
 }
@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
 
 const statusLabels: Record<ResearchAgentStatus, string> = {
   idle: '等待中',
+  pending: '待开始',
   running: '运行中',
   completed: '已完成',
   error: '异常'
@@ -41,15 +42,18 @@ const statusLabels: Record<ResearchAgentStatus, string> = {
             <h3 class="agent-status-panel__name">{{ agent.name }}</h3>
             <p class="agent-status-panel__role">{{ agent.role }}</p>
           </div>
-          <span :class="['agent-status-panel__status', `is-${agent.status}`]" role="status">
+          <span
+            :class="['agent-status-panel__status', agent.status ? `is-${agent.status}` : 'is-unavailable']"
+            role="status"
+          >
             <span class="agent-status-panel__indicator" aria-hidden="true" />
-            {{ statusLabels[agent.status] }}
+            {{ agent.status ? statusLabels[agent.status] : '待接入数据' }}
           </span>
         </header>
         <dl class="agent-status-panel__details">
           <div>
             <dt>队列</dt>
-            <dd>{{ agent.queue ?? 0 }}</dd>
+            <dd>{{ agent.queue ?? '待接入数据' }}</dd>
           </div>
           <div>
             <dt>当前动作</dt>
@@ -136,6 +140,7 @@ const statusLabels: Record<ResearchAgentStatus, string> = {
 }
 
 .agent-status-panel__status.is-running { color: var(--research-ai-700); }
+.agent-status-panel__status.is-pending { color: var(--research-warning-600); }
 .agent-status-panel__status.is-running .agent-status-panel__indicator {
   animation: agent-status-pulse var(--research-duration-slow) var(--research-ease-standard) infinite;
 }

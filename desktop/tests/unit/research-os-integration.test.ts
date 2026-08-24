@@ -54,6 +54,14 @@ const PRESENTATIONAL_COMPONENTS = [
 
 const STORE_PAGES = ['Dashboard', 'Assistant', 'ProjectWorkspace', 'Literature', 'Experiment', 'DataAnalysis', 'Manuscript', 'AgentCenter'] as const
 const ASYNC_STATE_PAGES = ['Dashboard', 'DataAnalysis'] as const
+const B2_PAGE_LABELS: Partial<Record<(typeof RESEARCH_PAGES)[number][0], readonly string[]>> = {
+  Assistant: ['研究会话', '科研对话工作区', '证据与可观测性'],
+  AgentCenter: ['AI 研究团队', '协作时间线与证据', '工具执行']
+}
+
+function durableLabels(page: (typeof RESEARCH_PAGES)[number][0], labels: readonly string[]): readonly string[] {
+  return B2_PAGE_LABELS[page] ?? labels
+}
 
 describe('research route integration', () => {
   const routerContent = source('router/index.ts')
@@ -188,7 +196,7 @@ describe('preserved router and architecture contracts', () => {
 describe('fixture-driven information architecture', () => {
   it.each(RESEARCH_PAGES)('%s contains durable labels instead of fixed mock values', (page, labels) => {
     const content = source(`pages/research/${page}.vue`)
-    for (const label of labels) expect(content).toContain(label)
+    for (const label of durableLabels(page, labels)) expect(content).toContain(label)
   })
 
   it('does not encode the legacy demo dataset in UI contracts', () => {
