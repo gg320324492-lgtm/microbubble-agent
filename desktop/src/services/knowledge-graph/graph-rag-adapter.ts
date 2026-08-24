@@ -1,7 +1,13 @@
 // Graph-Enhanced RAG Adapter — 混合检索 + 图扩展 + 上下文融合。
-import type { RAGContext, SearchResult, CitationReference, ContextChunk } from '../../shared/knowledge/context-schema'
-import type { HybridRetriever } from '../../shared/knowledge/retriever-schema'
+import type { RAGContext, ContextChunk } from '../../shared/knowledge/context-schema'
+import type { CitationReference, DocumentChunk } from '../../shared/knowledge/document-schema'
+import type { SearchResult } from '../../shared/knowledge/retriever-schema'
 import { GraphRetriever, type GraphContext } from './graph-retriever'
+
+/** Lightweight read-only adapter accepted by the graph-enhanced retrieval path. */
+export interface HybridRetriever {
+  retrieve(query: string, topK: number): Promise<SearchResult[]>
+}
 
 export class GraphRAGAdapter {
   constructor(
@@ -26,30 +32,37 @@ export class GraphRAGAdapter {
 
   private mergeResults(hybrid: SearchResult[], graph: GraphContext): SearchResult[] {
     const result = [...hybrid]
-    const seen = new Set<string>(hybrid.map(r => r.chunk.chunkId))
+    const seen = new Set<string>(hybrid.map(r => r.chunk.id))
 
     // Add graph-derived search results
     for (const entity of graph.entities.slice(0, 3)) {
       const chunkId = entity.sourceDocuments[0] ?? entity.id
       if (seen.has(chunkId)) continue
       seen.add(chunkId)
-      result.push(this.entityToSearchResult(entity, chunkId, graph))
+      result.push(this.entityToSearchResult(entity, chunkId))
     }
     return result
   }
 
-  private entityToSearchResult(entity: import('../../shared/knowledge-graph/knowledge-graph-schema').ScientificEntity, chunkId: string, graph: GraphContext): SearchResult {
+  private entityToSearchResult(entity: import('../../shared/knowledge-graph/knowledge-graph-schema').ScientificEntity, chunkId: string): SearchResult {
     const citation: CitationReference = {
       documentId: entity.id,
       chunkId: chunkId,
       confidence: entity.confidence
     }
-    const chunk: ContextChunk = {
-      chunkId: chunkId,
+    const contextChunk: ContextChunk = {
+      chunkId,
       content: `${entity.type}: ${entity.name} — ${entity.description}`,
       score: entity.confidence,
       citation
     }
-    return { chunk, score: entity.confidence }
+    const chunk: DocumentChunk = {
+      id: contextChunk.chunkId,
+      documentId: citation.documentId,
+      content: contextChunk.content,
+      position: 0,
+      metadata: { entityId: entity.id, entityType: entity.type }
+    }
+    return { chunk, score: entity.confidence, citation }
   }
 }

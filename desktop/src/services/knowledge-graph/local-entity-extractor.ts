@@ -94,7 +94,7 @@ function inferRelations(entities: ScientificEntity[], chunkId: string): Knowledg
     for (const p of parameters) {
       relations.push({
         id: `rel-${m.id}-${p.id}`, sourceEntityId: m.id, targetEntityId: p.id,
-        relationType: 'measured_by', confidence: 0.70,
+        relationType: 'measured_by' as RelationType, confidence: 0.70,
         evidence: `Material ${m.name} measured by parameter ${p.name} in ${chunkId}`
       })
     }
@@ -103,7 +103,7 @@ function inferRelations(entities: ScientificEntity[], chunkId: string): Knowledg
     for (const res of results) {
       relations.push({
         id: `rel-${mech.id}-${res.id}`, sourceEntityId: mech.id, targetEntityId: res.id,
-        relationType: 'causes', confidence: 0.72,
+        relationType: 'causes' as RelationType, confidence: 0.72,
         evidence: `Mechanism ${mech.name} causes result ${res.name} in ${chunkId}`
       })
     }
@@ -112,7 +112,7 @@ function inferRelations(entities: ScientificEntity[], chunkId: string): Knowledg
     for (const mech of mechanisms) {
       relations.push({
         id: `rel-${mat.id}-${mech.id}`, sourceEntityId: mat.id, targetEntityId: mech.id,
-        relationType: 'uses', confidence: 0.68,
+        relationType: 'uses' as RelationType, confidence: 0.68,
         evidence: `Material ${mat.name} uses mechanism ${mech.name}`
       })
     }
@@ -126,12 +126,12 @@ export const localEntityExtractor = {
   async extractEntities(chunk: DocumentChunk): Promise<EntityExtractionResult> {
     const text = chunk.content
     const entities: ScientificEntity[] = [
-      ...detectPatterns(text, MATERIAL_PATTERNS, 'Material', chunk.chunkId, 0.85),
-      ...detectPatterns(text, PARAMETER_PATTERNS, 'Parameter', chunk.chunkId, 0.80),
-      ...detectPatterns(text, MECHANISM_PATTERNS, 'Mechanism', chunk.chunkId, 0.78),
-      ...detectPatterns(text, RESULT_PATTERNS, 'Result', chunk.chunkId, 0.82),
-      ...detectPatterns(text, METHOD_PATTERNS, 'Method', chunk.chunkId, 0.75),
-      ...detectParameters(text, chunk.chunkId)
+      ...detectPatterns(text, MATERIAL_PATTERNS, 'Material', chunk.id, 0.85),
+      ...detectPatterns(text, PARAMETER_PATTERNS, 'Parameter', chunk.id, 0.80),
+      ...detectPatterns(text, MECHANISM_PATTERNS, 'Mechanism', chunk.id, 0.78),
+      ...detectPatterns(text, RESULT_PATTERNS, 'Result', chunk.id, 0.82),
+      ...detectPatterns(text, METHOD_PATTERNS, 'Method', chunk.id, 0.75),
+      ...detectParameters(text, chunk.id)
     ]
     // Deduplicate by name
     const seen = new Set<string>()
@@ -145,7 +145,7 @@ export const localEntityExtractor = {
   },
 
   async extractRelations(chunk: DocumentChunk, entities: ScientificEntity[]): Promise<EntityExtractionResult> {
-    const relations = inferRelations(entities, chunk.chunkId)
+    const relations = inferRelations(entities, chunk.id)
     return { entities, relations, confidence: 0.72 }
   }
 }

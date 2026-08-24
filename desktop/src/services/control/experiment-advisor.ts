@@ -25,10 +25,10 @@ export const DEFAULT_RULES: readonly AdvisorRule[] = Object.freeze([
     id: 'optimize-ozone-flow',
     matchMetric: 'ozone_dose',
     condition: (v: number) => v < 3,
-    buildRecommendation: (ctx) => ({
+    buildRecommendation: (ctx: AdvisorContext) => ({
       kind: 'optimize',
       title: '提升臭氧流量',
-      rationale: `当前臭氧剂量 ${ctx.metrics.find((m) => m.metric === 'ozone_dose')?.value ?? '?'} mg/L 偏低, 建议提升到 5-7 mg/L 范围`,
+      rationale: `当前臭氧剂量 ${ctx.metrics.find((m: RealtimeMetric) => m.metric === 'ozone_dose')?.value ?? '?'} mg/L 偏低, 建议提升到 5-7 mg/L 范围`,
       confidence: 0.8
     })
   }),
@@ -36,10 +36,10 @@ export const DEFAULT_RULES: readonly AdvisorRule[] = Object.freeze([
     id: 'adjust-pressure',
     matchMetric: 'pressure',
     condition: (v: number) => v > 1.5 || v < 0.5,
-    buildRecommendation: (ctx) => ({
+    buildRecommendation: (ctx: AdvisorContext) => ({
       kind: 'adjust',
       title: '调整压力',
-      rationale: `当前压力 ${ctx.metrics.find((m) => m.metric === 'pressure')?.value ?? '?'} bar 偏离工作区间, 建议调整到 0.8-1.2 bar`,
+      rationale: `当前压力 ${ctx.metrics.find((m: RealtimeMetric) => m.metric === 'pressure')?.value ?? '?'} bar 偏离工作区间, 建议调整到 0.8-1.2 bar`,
       confidence: 0.75
     })
   }),

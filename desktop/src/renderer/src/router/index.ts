@@ -61,13 +61,13 @@ const routes: RouteRecordRaw[] = [
     path: '/research/project',
     name: 'research-project',
     component: () => import('../pages/research/ProjectWorkspace.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: '项目空间' }
+    meta: { requiresAuth: true, layout: 'main', title: '研究工作区' }
   },
   {
     path: '/research/dashboard',
     name: 'research-dashboard',
     component: () => import('../pages/research/Dashboard.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: '科研首页' }
+    meta: { requiresAuth: true, layout: 'main', title: '科研驾驶舱' }
   },
   {
     path: '/research/assistant',
@@ -97,7 +97,7 @@ const routes: RouteRecordRaw[] = [
     path: '/research/manuscript',
     name: 'research-manuscript',
     component: () => import('../pages/research/Manuscript.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: '论文助手' }
+    meta: { requiresAuth: true, layout: 'main', title: 'SCI写作' }
   },
   {
     path: '/research/knowledge-graph',
@@ -109,7 +109,13 @@ const routes: RouteRecordRaw[] = [
     path: '/research/agent-center',
     name: 'research-agent-center',
     component: () => import('../pages/research/AgentCenter.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: '智能体中心' }
+    meta: { requiresAuth: true, layout: 'main', title: 'AI研究团队' }
+  },
+  {
+    path: '/research/experiment-control',
+    name: 'research-experiment-control',
+    component: () => import('../pages/research/ExperimentControlCenter.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '实验控制中心', theme: 'scada' }
   },
   {
     path: '/research/settings',

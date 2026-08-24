@@ -8,7 +8,7 @@
 //   5. 收集结果
 
 import type { ExperimentPlan } from '../../shared/science/research-design-schema'
-import type { Experiment, ExperimentRecord, ExperimentResult } from '../../shared/experiment/experiment-schema'
+import type { ExperimentRecord, ExperimentResult } from '../../shared/experiment/experiment-schema'
 import { ExperimentManager } from './experiment-manager'
 
 export interface ExperimentExecutionStep {
@@ -104,7 +104,6 @@ export class ExperimentEngine {
       errors.push(`plan ${plan.planId} finished with failures`)
     }
 
-    const finalExp = this.manager.getExperiment(exp.id)
     return {
       experimentId: exp.id,
       planId: plan.planId,

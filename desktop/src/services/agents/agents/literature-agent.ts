@@ -1,5 +1,5 @@
 // Literature Agent — 文献智能体（纯函数）。
-import type { AgentTask } from '../../shared/agents/agent-schema'
+import type { AgentTask } from '../../../shared/agents/agent-schema'
 
 export interface LiteratureOutput {
   papers: Array<{ id: string; title: string; relevance: number }>
@@ -10,7 +10,7 @@ export interface LiteratureOutput {
 
 export function executeLiteratureAgent(task: AgentTask): LiteratureOutput {
   const query = task.input.toLowerCase()
-  const keywords = query.split(/\s+/).filter(w => w.length > 1)
+  const keywords = query.split(/\s+/).filter((w: string) => w.length > 1)
 
   const paperTemplates = [
     { id: 'p1', title: 'Ozonation with micro-nano bubbles for tetracycline degradation', baseRelevance: 0.92 },
@@ -24,7 +24,7 @@ export function executeLiteratureAgent(task: AgentTask): LiteratureOutput {
     .map(p => ({
       id: p.id,
       title: p.title,
-      relevance: p.baseRelevance * (0.85 + 0.15 * (keywords.filter(k => p.title.toLowerCase().includes(k)).length / Math.max(keywords.length, 1)))
+      relevance: p.baseRelevance * (0.85 + 0.15 * (keywords.filter((k: string) => p.title.toLowerCase().includes(k)).length / Math.max(keywords.length, 1)))
     }))
     .filter(p => p.relevance > 0.5)
     .sort((a, b) => b.relevance - a.relevance)

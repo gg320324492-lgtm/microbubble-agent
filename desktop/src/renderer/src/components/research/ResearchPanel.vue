@@ -1,18 +1,22 @@
 <script setup lang="ts">
+import { useId } from 'vue'
+
 withDefaults(defineProps<{
   title: string
   subtitle?: string
-  tone?: 'default' | 'primary' | 'ai' | 'success' | 'warning' | 'danger'
+  tone?: 'default' | 'primary' | 'ai' | 'success' | 'warning' | 'danger' | 'scada'
 }>(), {
   tone: 'default'
 })
+
+const panelTitleId = useId()
 </script>
 
 <template>
-  <section :class="['research-panel', `research-panel--${tone}`]">
+  <section :class="['research-panel', `research-panel--${tone}`]" :aria-labelledby="panelTitleId">
     <header class="research-panel__header">
       <div class="research-panel__heading">
-        <h2 class="research-panel__title">{{ title }}</h2>
+        <h2 :id="panelTitleId" class="research-panel__title">{{ title }}</h2>
         <p v-if="subtitle" class="research-panel__subtitle">{{ subtitle }}</p>
       </div>
       <div v-if="$slots.actions" class="research-panel__actions">
@@ -41,6 +45,9 @@ withDefaults(defineProps<{
 .research-panel--success { --research-panel-accent: var(--research-success-500); }
 .research-panel--warning { --research-panel-accent: var(--research-warning-500); }
 .research-panel--danger { --research-panel-accent: var(--research-danger-500); }
+.research-panel--scada { --research-panel-accent: var(--research-signal-green); border-color: var(--research-instrument-line); background: var(--research-instrument-900); color: var(--research-instrument-text); }
+.research-panel--scada .research-panel__title { color: var(--research-instrument-text); }
+.research-panel--scada .research-panel__subtitle { color: var(--research-instrument-muted); }
 .research-panel__header {
   display: flex;
   align-items: flex-start;

@@ -13,15 +13,16 @@ interface NavItem {
 
 const COLLAPSE_KEY = 'research-sidebar-collapsed'
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
-  { label: '科研首页', icon: 'home', routeName: 'research-dashboard' },
+  { label: '科研驾驶舱', icon: 'home', routeName: 'research-dashboard' },
   { label: '科研助手', icon: 'assistant', routeName: 'research-assistant' },
-  { label: '项目空间', icon: 'project', routeName: 'research-project' },
+  { label: '研究工作区', icon: 'project', routeName: 'research-project' },
   { label: '文献研究', icon: 'literature', routeName: 'research-literature' },
   { label: '实验设计', icon: 'experiment', routeName: 'research-experiment' },
   { label: '数据分析', icon: 'data', routeName: 'research-data-analysis' },
-  { label: '论文生成', icon: 'manuscript', routeName: 'research-manuscript' },
+  { label: 'SCI写作', icon: 'manuscript', routeName: 'research-manuscript' },
   { label: '知识图谱', icon: 'graph', routeName: 'research-knowledge-graph' },
-  { label: 'Agent 中心', icon: 'agent', routeName: 'research-agent-center' },
+  { label: 'AI研究团队', icon: 'agent', routeName: 'research-agent-center' },
+  { label: '实验控制中心', icon: 'experiment', routeName: 'research-experiment-control' },
   { label: '系统设置', icon: 'settings', routeName: 'research-settings' }
 ]
 
@@ -62,6 +63,7 @@ function toggleCollapsed(): void {
         :data-nav="item.routeName"
         :class="['sidebar__link', { 'is-active': activeName === item.routeName }]"
         :aria-label="item.label"
+        :aria-current="activeName === item.routeName ? 'page' : undefined"
         :title="item.label"
       >
         <span class="sidebar__link-icon" aria-hidden="true">

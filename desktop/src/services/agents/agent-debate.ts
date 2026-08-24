@@ -63,7 +63,7 @@ export function conductDebate(
   return { rounds, finalVerdict, confidence }
 }
 
-function generateCritique(claim: string, agent: AgentRole, round: number): { critique: string; verdict: 'accept' | 'revise' } {
+function generateCritique(claim: string, _agent: AgentRole, round: number): { critique: string; verdict: 'accept' | 'revise' } {
   const lower = claim.toLowerCase()
 
   if (round === 0) {

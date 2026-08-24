@@ -1,5 +1,5 @@
 // Writing Agent — 论文写作智能体（纯函数）。
-import type { AgentTask } from '../../shared/agents/agent-schema'
+import type { AgentTask } from '../../../shared/agents/agent-schema'
 
 export interface WritingOutput {
   sectionDrafts: Array<{ sectionType: string; title: string; paragraphs: string[] }>
@@ -7,7 +7,7 @@ export interface WritingOutput {
   confidence: number
 }
 
-export function executeWritingAgent(task: AgentTask): WritingOutput {
+export function executeWritingAgent(_task: AgentTask): WritingOutput {
   const sectionDrafts = [
     {
       sectionType: 'introduction',

@@ -23,7 +23,6 @@ export type EventListener = (event: ResearchEvent) => void
 
 export class ResearchEventBus {
   private listeners: Map<ResearchEventType, Set<EventListener>> = new Map()
-  private allListeners: Set<EventListener> = new Map() as never
   private history: ResearchEvent[] = []
 
   emit(type: ResearchEventType, payload: Record<string, unknown> = {}): ResearchEvent {

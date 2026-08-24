@@ -736,13 +736,13 @@ describe('Phase 8-I3-A extended coverage', () => {
 
     // Sidebar (10)
     it('N1', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('科研助手') })
-    it('N2', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('项目空间') })
+    it('N2', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('研究工作区') })
     it('N3', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('文献研究') })
     it('N4', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('实验设计') })
     it('N5', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('数据分析') })
-    it('N6', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('论文生成') })
+    it('N6', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('SCI写作') })
     it('N7', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('知识图谱') })
-    it('N8', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('Agent 中心') })
+    it('N8', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('AI研究团队') })
     it('N9', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('系统设置') })
     it('N10', () => { const c = readFileSync(resolve(rendererRoot, 'layouts/Sidebar.vue'), 'utf8'); expect(c).toContain('research-project') })
 
