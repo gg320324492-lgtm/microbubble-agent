@@ -2,7 +2,7 @@
 //
 // 提供 comparePrediction / calculateError / updateParameters 三函数。
 
-import type { TwinParameter, TwinPrediction } from '../../shared/digital-twin/digital-twin-schema'
+import type { TwinParameter } from '../../shared/digital-twin/digital-twin-schema'
 import type { PredictionSpec } from './digital-twin-engine'
 import { predict } from './digital-twin-engine'
 

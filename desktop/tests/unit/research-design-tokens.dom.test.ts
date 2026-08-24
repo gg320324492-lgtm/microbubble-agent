@@ -19,34 +19,34 @@ const expectDeclaration = (source: string, name: string, value: string): void =>
 }
 
 const COLOR_TOKENS = [
-  ['--research-primary-50', '#eef3ff'],
-  ['--research-primary-100', '#dce5ff'],
-  ['--research-primary-500', '#4263df'],
-  ['--research-primary-600', '#3152c9'],
-  ['--research-ai-50', '#f3efff'],
-  ['--research-ai-100', '#e6ddff'],
-  ['--research-ai-500', '#7654d8'],
-  ['--research-ai-600', '#6544c5'],
-  ['--research-success-50', '#edf9f4'],
-  ['--research-success-500', '#1a9b72'],
-  ['--research-warning-50', '#fff7ea'],
-  ['--research-warning-500', '#d98925'],
-  ['--research-danger-50', '#fff1f2'],
-  ['--research-danger-500', '#d84f63'],
-  ['--research-bg-main', '#f5f7fb'],
-  ['--research-bg-card', '#ffffff'],
-  ['--research-bg-panel', '#fafbfe'],
-  ['--research-text-primary', '#17223b'],
-  ['--research-text-secondary', '#66748d'],
-  ['--research-text-muted', '#8d98aa'],
-  ['--research-border-subtle', '#e4e9f1'],
-  ['--research-border-strong', '#cbd4e2']
+  ['--research-primary-50', 'var(--research-teal-50)'],
+  ['--research-primary-100', 'var(--research-teal-100)'],
+  ['--research-primary-500', 'var(--research-teal-700)'],
+  ['--research-primary-600', '#0c665f'],
+  ['--research-ai-50', 'var(--research-coral-50)'],
+  ['--research-ai-100', 'var(--research-coral-100)'],
+  ['--research-ai-500', 'var(--research-coral-500)'],
+  ['--research-ai-600', '#d95d46'],
+  ['--research-success-50', 'var(--research-teal-50)'],
+  ['--research-success-500', 'var(--research-teal-700)'],
+  ['--research-warning-50', 'var(--research-amber-50)'],
+  ['--research-warning-500', 'var(--research-amber-500)'],
+  ['--research-danger-50', 'var(--research-red-50)'],
+  ['--research-danger-500', 'var(--research-red-600)'],
+  ['--research-bg-main', 'var(--research-mist-50)'],
+  ['--research-bg-card', 'var(--research-paper-0)'],
+  ['--research-bg-panel', 'var(--research-mist-100)'],
+  ['--research-text-primary', 'var(--research-graphite-950)'],
+  ['--research-text-secondary', '#66757b'],
+  ['--research-text-muted', '#849197'],
+  ['--research-border-subtle', '#dce5e1'],
+  ['--research-border-strong', '#b9c9c5']
 ] as const
 
 const TYPOGRAPHY_TOKENS = [
-  ['--research-font-sans', "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"],
-  ['--research-font-serif', "'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif"],
-  ['--research-font-mono', "'SFMono-Regular', Consolas, 'Liberation Mono', monospace"],
+  ['--research-font-sans', 'var(--research-font-ui)'],
+  ['--research-font-serif', 'var(--research-font-paper)'],
+  ['--research-font-mono', 'var(--research-font-scientific)'],
   ['--research-text-xs', '11px'],
   ['--research-text-sm', '12px'],
   ['--research-text-body', '14px'],
@@ -70,20 +70,20 @@ const SPACING_TOKENS = [
 ] as const
 
 const RADIUS_TOKENS = [
-  ['--research-radius-input', '9px'],
-  ['--research-radius-button', '10px'],
-  ['--research-radius-card', '14px'],
-  ['--research-radius-panel', '18px'],
+  ['--research-radius-input', 'var(--research-radius-sm)'],
+  ['--research-radius-button', 'var(--research-radius-sm)'],
+  ['--research-radius-card', 'var(--research-radius-md)'],
+  ['--research-radius-panel', 'var(--research-radius-lg)'],
   ['--research-radius-large', '24px'],
   ['--research-radius-pill', '999px']
 ] as const
 
 const SHADOW_TOKENS = [
-  ['--research-shadow-soft', '0 4px 16px rgb(33 52 86 / 5%)'],
-  ['--research-shadow-medium', '0 12px 30px rgb(33 52 86 / 10%)'],
-  ['--research-shadow-floating', '0 22px 54px rgb(33 52 86 / 15%)'],
-  ['--research-shadow-focus-primary', '0 0 0 3px rgb(66 99 223 / 22%)'],
-  ['--research-shadow-focus-ai', '0 0 0 3px rgb(118 84 216 / 20%)'],
+  ['--research-shadow-soft', 'var(--research-shadow-surface)'],
+  ['--research-shadow-medium', '0 12px 30px rgb(23 33 41 / 10%)'],
+  ['--research-shadow-floating', '0 20px 48px rgb(23 33 41 / 14%)'],
+  ['--research-shadow-focus-primary', '0 0 0 3px rgb(14 118 110 / 25%)'],
+  ['--research-shadow-focus-ai', '0 0 0 3px rgb(239 114 86 / 25%)'],
   ['--research-shadow-inset', 'inset 0 1px 0 rgb(255 255 255 / 72%)']
 ] as const
 

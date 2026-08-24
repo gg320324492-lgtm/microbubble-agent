@@ -4,7 +4,7 @@ import type { SensorReading } from '../../shared/device/device-schema'
 import type { TwinPrediction } from '../../shared/digital-twin/digital-twin-schema'
 import type { DigitalTwinModel } from '../../shared/digital-twin/digital-twin-schema'
 import { extractFeatures, normalize } from '../digital-twin/feature-engineer'
-import { predict, predictAndRecord, paramsToLinear } from '../digital-twin/digital-twin-engine'
+import { predictAndRecord, paramsToLinear } from '../digital-twin/digital-twin-engine'
 
 export interface DeviceToTwinInput {
   deviceId: string

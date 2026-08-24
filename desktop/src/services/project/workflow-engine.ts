@@ -1,6 +1,5 @@
 // Workflow Engine — 科研工作流执行器。
-import type { ScientificWorkflow, WorkflowStep, WorkflowStatus } from '../../shared/project/workflow-schema'
-import type { ProjectTask } from '../../shared/project/project-schema'
+import type { ScientificWorkflow, WorkflowStatus } from '../../shared/project/workflow-schema'
 import { coordinate } from '../agents/agent-coordinator'
 import type { AgentTask } from '../../shared/agents/agent-schema'
 

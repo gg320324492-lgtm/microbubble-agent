@@ -32,6 +32,7 @@ const routeTargets = {
   'research-manuscript': '/research/manuscript',
   'research-knowledge-graph': '/research/knowledge-graph',
   'research-agent-center': '/research/agent-center',
+  'research-experiment-control': '/research/experiment-control',
   'research-settings': '/research/settings'
 } as const
 
@@ -59,7 +60,7 @@ async function mountHeader(): Promise<{ wrapper: VueWrapper; router: Router }> {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/research/dashboard', name: 'research-dashboard', component: dummy, meta: { title: '科研首页' } },
+      { path: '/research/dashboard', name: 'research-dashboard', component: dummy, meta: { title: '科研驾驶舱' } },
       { path: '/login', name: 'login', component: dummy }
     ]
   })
@@ -161,7 +162,7 @@ describe('顶部栏区域（5）', () => {
   it('显示当前页面层级和中文标题', async () => {
     const { wrapper } = await mountHeader()
     expect(wrapper.get('[data-testid="header-context"]').text()).toContain('科研工作台')
-    expect(wrapper.get('h2').text()).toBe('科研首页')
+    expect(wrapper.get('h2').text()).toBe('科研驾驶舱')
   })
 
   it('显示 Store 中的当前项目', async () => {

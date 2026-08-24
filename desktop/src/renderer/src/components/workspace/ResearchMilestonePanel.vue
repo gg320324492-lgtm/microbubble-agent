@@ -9,7 +9,7 @@ interface Milestone {
   dueDate?: string
 }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   progress: ResearchProgress | null
   milestones?: Milestone[]
 }>(), {

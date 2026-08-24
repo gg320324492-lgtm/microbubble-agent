@@ -1,5 +1,5 @@
 // Mechanism Agent — 机理推理智能体（纯函数）。
-import type { AgentTask } from '../../shared/agents/agent-schema'
+import type { AgentTask } from '../../../shared/agents/agent-schema'
 
 export interface MechanismOutput {
   mechanisms: Array<{ name: string; description: string; confidence: number }>

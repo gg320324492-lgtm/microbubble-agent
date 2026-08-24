@@ -56,6 +56,26 @@
   animation: research-agent-breathe 1.8s var(--research-ease-standard) infinite;
 }
 
+.research-scada-running {
+  position: relative;
+}
+
+.research-scada-running::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: var(--research-space-2);
+  border-radius: var(--research-radius-pill);
+  background: var(--research-signal-green);
+  box-shadow: 0 0 0 0 rgb(126 214 173 / 34%);
+  content: '';
+  animation: research-scada-pulse 1.8s var(--research-ease-standard) infinite;
+}
+
+@keyframes research-scada-pulse {
+  50% { box-shadow: 0 0 0 7px rgb(126 214 173 / 0%); }
+}
+
 @keyframes research-agent-breathe {
   0%,
   100% {
@@ -86,7 +106,8 @@
   .research-page-enter-from,
   .research-page-leave-to,
   .research-card-interactive:hover,
-  .research-agent-running::before {
+  .research-agent-running::before,
+  .research-scada-running::before {
     transform: none !important;
   }
 }

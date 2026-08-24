@@ -3,7 +3,7 @@
 // 提供 3 种预测: linear / polynomial / kinetic
 // 全部纯函数,无 ML 依赖,完全确定性。
 
-import type { PredictionKind, TwinPrediction, TwinParameter } from '../../shared/digital-twin/digital-twin-schema'
+import type { TwinPrediction, TwinParameter } from '../../shared/digital-twin/digital-twin-schema'
 
 export interface LinearSpec {
   kind: 'linear'

@@ -1,5 +1,5 @@
 // Experiment Agent — 实验设计智能体（纯函数）。
-import type { AgentTask } from '../../shared/agents/agent-schema'
+import type { AgentTask } from '../../../shared/agents/agent-schema'
 
 export interface ExperimentOutput {
   variables: Array<{ name: string; type: 'independent' | 'dependent' | 'control'; range: string; unit: string }>

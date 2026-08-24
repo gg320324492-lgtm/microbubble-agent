@@ -1,13 +1,14 @@
 export const RESEARCH_NAV = [
-  ['科研首页', 'research-dashboard', 'home'],
+  ['科研驾驶舱', 'research-dashboard', 'home'],
   ['科研助手', 'research-assistant', 'assistant'],
-  ['项目空间', 'research-project', 'project'],
+  ['研究工作区', 'research-project', 'project'],
   ['文献研究', 'research-literature', 'literature'],
   ['实验设计', 'research-experiment', 'experiment'],
   ['数据分析', 'research-data-analysis', 'data'],
-  ['论文生成', 'research-manuscript', 'manuscript'],
+  ['SCI写作', 'research-manuscript', 'manuscript'],
   ['知识图谱', 'research-knowledge-graph', 'graph'],
-  ['Agent 中心', 'research-agent-center', 'agent'],
+  ['AI研究团队', 'research-agent-center', 'agent'],
+  ['实验控制中心', 'research-experiment-control', 'experiment'],
   ['系统设置', 'research-settings', 'settings']
 ] as const
 

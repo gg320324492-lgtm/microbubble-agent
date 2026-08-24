@@ -1,5 +1,5 @@
 // Reviewer Agent — 审稿智能体（纯函数）。
-import type { AgentTask } from '../../shared/agents/agent-schema'
+import type { AgentTask } from '../../../shared/agents/agent-schema'
 
 export interface ReviewerOutput {
   comments: Array<{ severity: 'low' | 'medium' | 'high'; location: string; comment: string; suggestion: string }>

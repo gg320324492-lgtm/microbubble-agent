@@ -5,7 +5,7 @@
 
 import type { Experiment, ExperimentResult } from '../../shared/experiment/experiment-schema'
 import type { DigitalTwinModel, TwinParameter, TwinPrediction } from '../../shared/digital-twin/digital-twin-schema'
-import { predict, predictAndRecord, paramsToLinear } from './digital-twin-engine'
+import { predictAndRecord, paramsToLinear } from './digital-twin-engine'
 import { runCalibration, comparePrediction, type CalibrationResult } from './model-calibrator'
 
 export interface TwinModelSpec {
@@ -52,7 +52,7 @@ export interface CalibrationReport {
  * - 计算误差, 更新 accuracy
  */
 export function calibrateFromExperiment(input: ExperimentToModelInput): CalibrationReport {
-  const { experiment, result, twinModel } = input
+  const { result, twinModel } = input
   const metricNames = Object.keys(result.metrics)
   const values = Object.values(result.metrics)
   const dataset = {

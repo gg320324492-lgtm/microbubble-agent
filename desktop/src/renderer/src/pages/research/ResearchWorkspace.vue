@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useResearchWorkspaceStore } from '../../../../stores/research-workspace.store'
 import { ResearchWorkspaceService } from '../../../../services/workspace/research-workspace.service'
 import ResearchProgressCard from '../../components/workspace/ResearchProgressCard.vue'

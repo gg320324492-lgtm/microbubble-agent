@@ -79,8 +79,8 @@ export class KnowledgeReasoningService {
     if (matches.length === 0) return []
     const related = new Set<string>()
     for (const m of matches) {
-      const { out, inn } = this.store.neighbors(m.id)
-      for (const n of [...out, ...inn]) if (n.type === 'Method') related.add(n.id)
+      const { out, in: incoming } = this.store.neighbors(m.id)
+      for (const n of [...out, ...incoming]) if (n.type === 'Method') related.add(n.id)
     }
     const result: ScientificEntity[] = []
     for (const id of related) {
@@ -96,8 +96,8 @@ export class KnowledgeReasoningService {
     while (queue.length > 0) {
       const { id, path } = queue.shift()!
       if (path.length > maxLength) continue
-      const { out, inn } = this.store.neighbors(id)
-      for (const n of [...out, ...inn]) {
+      const { out, in: incoming } = this.store.neighbors(id)
+      for (const n of [...out, ...incoming]) {
         if (visited.has(n.id)) continue
         const newPath = [...path, n.id]
         if (n.id === end) return newPath

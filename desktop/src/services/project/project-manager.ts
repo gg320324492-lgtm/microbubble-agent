@@ -1,7 +1,7 @@
 // Project Manager — 科研项目管理器（确定性 + 防御性拷贝）。
 import type {
   ResearchProject, ResearchMilestone, ProjectTask,
-  ProjectStatus, TaskStatus, MilestoneStatus
+  ProjectStatus, TaskStatus
 } from '../../shared/project/project-schema'
 
 export class ProjectManager {

@@ -2891,6 +2891,6 @@ describe('1440 与 1920 科研工作区静态响应式契约（17）', () => {
     const wideWorkstation = atRuleBlocks(tokens, 'media', /\(min-width:\s*1720px\)/)[0] ?? ''
     const compactWorkstation = atRuleBlocks(headerStyles, 'media', /\(max-width:\s*1480px\)/)[0] ?? ''
     expect(wideWorkstation).toMatch(/--research-page-gutter:\s*32px/)
-    expect(compactWorkstation).toMatch(/\.header-bar__project span,\s*\.header-bar__user-name\s*\{[^}]*display:\s*none/)
+    expect(compactWorkstation).toMatch(/\.header-bar__project-copy > span,\s*\.header-bar__user-name[\s\S]*display:\s*none/)
   })
 })

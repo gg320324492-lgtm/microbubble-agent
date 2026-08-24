@@ -33,8 +33,8 @@ export class GraphRetriever {
     while (queue.length > 0 && collectedEntities.length < maxEntities) {
       const { id, depth } = queue.shift()!
       if (depth >= maxDepth) continue
-      const { out, inn } = this.store.neighbors(id)
-      const neighbors = [...out, ...inn]
+      const { out, in: incoming } = this.store.neighbors(id)
+      const neighbors = [...out, ...incoming]
       for (const n of neighbors) {
         if (!visitedEntities.has(n.id) && collectedEntities.length < maxEntities) {
           visitedEntities.add(n.id)

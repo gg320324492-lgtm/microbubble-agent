@@ -113,7 +113,35 @@ canvas {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+.research-scientific-number {
+  font-family: var(--research-font-scientific);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
 .research-reading-copy {
   font-family: var(--research-font-serif);
   line-height: var(--research-line-height-reading);
+}
+
+.research-paper-text {
+  font-family: var(--research-font-paper);
+  line-height: var(--research-line-height-reading);
+}
+
+.research-page-layout {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--research-content-max-width);
+  margin-inline: auto;
+  padding: var(--research-page-gutter);
+}
+
+[data-research-theme='scada'] {
+  background: var(--research-bg-main);
+  color: var(--research-text-primary);
+}
+
+[data-research-theme='scada'] ::selection {
+  background: rgb(126 214 173 / 28%);
+  color: var(--research-instrument-text);
 }
