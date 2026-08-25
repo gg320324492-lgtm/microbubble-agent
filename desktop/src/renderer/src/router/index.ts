@@ -161,6 +161,37 @@ const routes: RouteRecordRaw[] = [
     name: 'system-first-launch',
     component: () => import('../pages/system/FirstLaunch.vue'),
     meta: { requiresAuth: false, layout: 'plain', title: '首次启动' }
+  },
+  // ---------- R5: 迁移中心 + 本地历史资料工作区 ----------
+  {
+    path: '/migration',
+    name: 'migration-center',
+    component: () => import('../pages/migration/MigrationCenter.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '迁移中心', icon: 'upload' }
+  },
+  {
+    path: '/workspace/work-items',
+    name: 'workspace-work-items',
+    component: () => import('../pages/workspace/WorkItemsWorkspace.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '工作项工作区', icon: 'progress' }
+  },
+  {
+    path: '/workspace/meetings',
+    name: 'workspace-meetings',
+    component: () => import('../pages/workspace/MeetingArchiveWorkspace.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '会议档案工作区', icon: 'citation' }
+  },
+  {
+    path: '/workspace/files',
+    name: 'workspace-files',
+    component: () => import('../pages/workspace/FileLibraryWorkspace.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '文件库工作区', icon: 'folder' }
+  },
+  {
+    path: '/workspace/conversations',
+    name: 'workspace-conversations',
+    component: () => import('../pages/workspace/ConversationArchiveWorkspace.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '对话归档工作区', icon: 'assistant' }
   }
 ]
 
