@@ -35,7 +35,7 @@
 
 ### 实验控制中心
 
-页面只使用既有 `useExperimentControlStore()`：`devices`、`metrics`、`timeline`、`recommendations`、`alerts`、`dashboards`、`actions` 及其现有 getters。B3 不扩展 Store、不调用服务、不在 `onMounted` 写入告警，亦不传入硬编码空预测数组。
+页面只使用 `useExperimentControlStore()`：`devices`、`metrics`、`timeline`、`recommendations`、`alerts`、`dashboards`、`actions` 及 B3 在同一 Store 中声明的 `predictions`。B3 不调用服务、不在 `onMounted` 写入告警，亦不传入硬编码空预测数组。
 
 | 展示区域 | 允许来源 | 无数据行为 |
 | --- | --- | --- |
@@ -45,9 +45,9 @@
 | 设备状态与拓扑 | `devices` | “暂无设备接入数据” |
 | 报警 | `alerts` | “暂无报警” |
 | AI 建议 | `recommendations` | “暂无 AI 建议” |
-| 数字孪生预测 | 仅从既有 Store 暴露的真实预测字段（当前未暴露） | “暂无数字孪生预测” |
+| 数字孪生预测 | `predictions: TwinPrediction[]` | “暂无数字孪生预测” |
 
-现有 `experiment-control.store` 未提供 `TwinPrediction[]`。因此 B3 的预测面板固定接收一个页面派生的空数组，明确显示“暂无数字孪生预测”；不新增 Store 字段、服务调用或任何预测数值。该数组是“数据源当前不存在”的表示，不是伪造业务数据。
+现有 `experiment-control.store` 未提供 `TwinPrediction[]`。B3 为该 Store 增加空的 `predictions` 集合、`setPredictions()` 与 `addPrediction()`，使数字孪生层可写入真实预测记录而页面只读 Store。初始空集合只表达“尚未接入预测”，不生成任何预测数值。
 
 ## 页面架构
 
