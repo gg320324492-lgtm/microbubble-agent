@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-08-25T17:51:32.056Z",
+  "capturedBy": "R0 baseline",
+  "capturedCommit": "a245126adb075a406f389a176c8d76169eab14b4",
+  "protectedPaths": {
+    "app": "6fe513fa75fa7f3448e6d2d08ecc3900dc82612d",
+    "web": "14738a1b1cf5552b892c2090d4226e8fca3d438a",
+    "alembic": "68d70c2ec5a4aa5689a4a1643b54cc7f9e949fa2",
+    "nginx": "c9fe4303f90941baecc4e710d235152be43db9c5",
+    "docker-compose.yml": "45e54a5be0fc2c59d2e75ee0951a0725198f3fc7",
+    "docker-compose.dev.yml": "03140543197f9bfc17b951252439aa03dfd538fd",
+    "docker-compose.test.yml": "b9f157a03eced44c1dba4a88dd825576a58d311d",
+    ".env": "e99069d960f8bb9a078e63408738c5dfebed21f2"
+  }
+}

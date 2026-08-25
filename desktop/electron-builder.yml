@@ -15,7 +15,6 @@ artifactName: ScientificResearchOS-${version}-${arch}.${ext}
 directories:
   output: release/${version}
   buildResources: resources
-  outputResources: resources
 
 # 包含文件: 仅 build 产物 + package.json + resources/
 files:
@@ -65,6 +64,9 @@ win:
   publisherName: MicroBubble Lab
   verifyUpdateCodeSignature: false
   icon: resources/icon.ico
+  signAndEditExecutable: false
+  signtoolOptions:
+    sign: null
 
 nsis:
   oneClick: false
@@ -143,3 +145,11 @@ publish:
     owner: microbubble-lab
     repo: microbubble-agent
     releaseType: release
+
+# Release hardening (R0)
+release:
+  releaseNotesFile: null
+  artifactName: ScientificResearchOS-${version}-${arch}.${ext}
+
+buildMetadata:
+  output: resources/build-metadata.json
