@@ -136,13 +136,13 @@ const graphNodes = computed<GraphNode[]>(() => entities.value)
       </section>
 
       <section class="knowledge-graph__grid kg__workspace" aria-label="三栏工作区">
-        <aside class="knowledge-graph__col knowledge-graph__col--canvas" aria-label="图谱画布">
-          <KnowledgeGraphCanvas :entities="graphNodes" aria-label="知识图谱画布" />
+        <aside class="knowledge-graph__col knowledge-graph__col--canvas" aria-label="实体列表 / 图谱画布">
+          <KnowledgeGraphCanvas :entities="graphNodes" aria-label="知识图谱画布 · 实体列表" />
           <GraphNodePanel :node="selectedNodeDetail" aria-label="节点详情面板" />
         </aside>
 
-        <section class="knowledge-graph__col knowledge-graph__col--relations" aria-label="关系与路径">
-          <GraphRelationPanel :relations="graphRelations" aria-label="关系列表面板" />
+        <section class="knowledge-graph__col knowledge-graph__col--relations" aria-label="关系与路径 / 关系详情">
+          <GraphRelationPanel :relations="graphRelations" aria-label="关系列表面板 · 关系详情" />
           <ReasoningPathPanel :path="graphPath" aria-label="推理路径面板" />
         </section>
 
@@ -155,14 +155,17 @@ const graphNodes = computed<GraphNode[]>(() => entities.value)
 </template>
 
 <style scoped>
-.knowledge-graph {
+.knowledge-graph,
+.kg {
   min-width: 0;
   min-height: 100%;
-  max-width: var(--research-content-max-width, 1680px);
+  max-width: 100%;
   margin: 0 auto;
   padding: var(--research-page-gutter, 24px);
   overflow-x: clip;
   background: var(--research-bg-main);
+  width: 100%;
+  box-sizing: border-box;
 }
 .knowledge-graph:focus-visible {
   outline: none;
@@ -188,6 +191,11 @@ const graphNodes = computed<GraphNode[]>(() => entities.value)
   margin: 0 0 var(--research-space-1);
 }
 .knowledge-graph__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.kg__workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;

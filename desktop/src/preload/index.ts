@@ -184,7 +184,20 @@ const api: DesktopApi = {
   api: apiGateway,
   session: sessionApi,
   chat: chatStreamApi,
-  model: modelApi
+  model: modelApi,
+  app: {
+    getConfig: () => ipcRenderer.invoke('app:get-config') as Promise<unknown>,
+    persistenceSave: (namespace: string, key: string, value: unknown) =>
+      ipcRenderer.invoke('persistence:save', { namespace, key, value }) as Promise<{ ok: true }>,
+    persistenceLoad: (namespace: string, key: string) =>
+      ipcRenderer.invoke('persistence:load', { namespace, key }) as Promise<unknown>,
+    persistenceRemove: (namespace: string, key: string) =>
+      ipcRenderer.invoke('persistence:remove', { namespace, key }) as Promise<{ ok: true }>,
+    logWrite: (level: string, module: string, message: string, metadata?: unknown) =>
+      ipcRenderer.invoke('logger:write', { level, module, message, metadata }) as Promise<{ ok: true }>,
+    logTail: (lines: number = 100) =>
+      ipcRenderer.invoke('logger:tail', { lines }) as Promise<Array<{ timestamp: string; level: string; module: string; message: string; metadata?: unknown }>>
+  }
 }
 
 try {

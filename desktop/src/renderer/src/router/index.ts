@@ -135,6 +135,25 @@ const routes: RouteRecordRaw[] = [
     name: 'debug-ping',
     component: () => import('../components/PingTest.vue'),
     meta: { requiresAuth: false, layout: 'plain', title: 'IPC 调试' }
+  },
+  // ---------- Phase 8-M0-H0 产品化路由 ----------
+  {
+    path: '/splash',
+    name: 'splash',
+    component: () => import('../views/SplashScreen.vue'),
+    meta: { requiresAuth: false, layout: 'plain', title: '启动' }
+  },
+  {
+    path: '/about',
+    name: 'about',
+    component: () => import('../views/AboutView.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '关于' }
+  },
+  {
+    path: '/system-status',
+    name: 'system-status',
+    component: () => import('../views/SystemStatusView.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '系统状态' }
   }
 ]
 

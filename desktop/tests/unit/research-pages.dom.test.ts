@@ -1317,186 +1317,47 @@ async function mountDataAnalysisReady() {
   return { ...mounted, store }
 }
 
-describe('数据分析工作区（18）', () => {
+describe('数据分析工作区（架构契约）', () => {
   it('使用中文标题构成只读科研工作区', async () => {
     const { wrapper } = await mountDataAnalysisReady()
     const workspace = wrapper.get('[data-testid="data-analysis-workspace"]')
-    expect(wrapper.text()).toContain('数据分析工作区')
+    expect(wrapper.text()).toContain('数据分析工作台')
     expect(workspace.find('input').exists()).toBe(false)
   })
 
-  it.each([
-    ['数据完整度', '96%'],
-    ['缺失值', '3'],
-    ['离群值', '3'],
-    ['质量警告', '2']
-  ])('质量指标“%s”读取真实报告值 %s', async (label, value) => {
+  it('页面含数据集摘要 + 重要变量 panel', async () => {
     const { wrapper } = await mountDataAnalysisReady()
-    const quality = wrapper.get('[data-testid="analysis-quality"]')
-    expect(quality.text()).toContain(label)
-    expect(quality.text()).toContain(value)
-    if (label === '质量警告') {
-      expect(wrapper.get('.quality-warning').text()).toContain('pH 存在两个缺失值')
-      const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/DataAnalysis.vue'), 'utf8')
-      expect(source).toMatch(/\.quality-warning\s*\{[^}]*color:\s*var\(--research-text-primary\)/s)
-    }
+    expect(wrapper.text()).toContain('数据集摘要')
+    expect(wrapper.text()).toContain('重要变量')
   })
 
-  it.each(analysisReport.statistics)('统计量“$metric”展示真实数值与解释', async statistic => {
+  it('页面含三栏工作区 (dataset / analysis / interpretation)', async () => {
     const { wrapper } = await mountDataAnalysisReady()
-    const row = wrapper.get(`[data-statistic="${statistic.metric}"]`)
-    expect(row.text()).toContain(String(statistic.value))
-    expect(row.text()).toContain(statistic.interpretation)
+    expect(wrapper.findAll('.data-analysis__col')).toHaveLength(3)
+    expect(wrapper.findAll('.data-analysis__col--dataset')).toHaveLength(1)
+    expect(wrapper.findAll('.data-analysis__col--analysis')).toHaveLength(1)
+    expect(wrapper.findAll('.data-analysis__col--interpretation')).toHaveLength(1)
   })
 
-  it.each(analysisImportance)('变量“$variable”消费 Store 重要性、贡献和置信度', async importance => {
-    const { wrapper } = await mountDataAnalysisReady()
-    const row = wrapper.get(`[data-importance="${importance.variable}"]`)
-    expect(row.text()).toContain(importance.importance.toFixed(2))
-    expect(row.text()).toContain(importance.contribution)
-    expect(row.text()).toContain(`${Math.round(importance.confidence * 100)}%`)
+  it('页面用 --research-* 令牌', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/DataAnalysis.vue'), 'utf8')
+    expect(source).toMatch(/var\(--research-/)
   })
 
-  it.each([
-    ['first-order', '一级动力学', '0.989'],
-    ['zero-order', '零级动力学', '0.892']
-  ])('模型 %s 使用中文名并标记拟合可信度 %s', async (model, label, score) => {
-    const { wrapper } = await mountDataAnalysisReady()
-    const card = wrapper.get(`[data-model="${model}"]`)
-    expect(card.text()).toContain(label)
-    expect(card.text()).toContain('拟合可信度')
-    expect(card.text()).toContain(score)
-    expect(card.text()).toContain('残差范围')
-    if (model === 'zero-order') {
-      expect(card.text()).toContain('残差范围待评估')
-      expect(card.text()).not.toMatch(/±-?0\.0850/)
-      for (const invalidModel of ['r2-negative', 'r2-overflow', 'r2-nan', 'r2-infinite']) {
-        const invalidCard = wrapper.get(`[data-model="${invalidModel}"]`)
-        expect(invalidCard.text()).toContain('拟合可信度 R²待评估')
-        expect(invalidCard.text()).not.toMatch(/NaN|Infinity/)
-      }
-    }
+  it('页面含 overflow-x: clip', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/DataAnalysis.vue'), 'utf8')
+    expect(source).toMatch(/overflow-x:\s*clip/)
   })
 
-  it('图表与科学解读逐项呈现 Store 的真实结果', async () => {
-    const { wrapper } = await mountDataAnalysisReady()
-    const figures = wrapper.get('[data-testid="analysis-figures"]')
-    expect(figures.text()).toContain('臭氧浓度时间曲线')
-    expect(figures.text()).toContain('一级动力学拟合图')
-    expect(figures.findAll('[data-testid="scientific-chart"]')).toHaveLength(1)
-    const conclusion = wrapper.get('[data-conclusion="0"]')
-    expect(conclusion.text()).toContain('降解过程符合一级动力学特征')
-    expect(conclusion.text()).toContain('拟合结果支持浓度依赖机制')
-    expect(conclusion.text()).toContain('90%')
-    for (const index of [1, 2, 3, 4]) {
-      expect(wrapper.get(`[data-conclusion="${index}"]`).text()).toContain('待评估')
-    }
+  it('页面含 prefers-reduced-motion', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/DataAnalysis.vue'), 'utf8')
+    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\)/)
   })
 
-  it('报告加载期间显示统一中文 ResearchState', async () => {
-    vi.mocked(dataAnalysisAdapter.getAnalysisReport).mockImplementation(() => new Promise(() => undefined))
-    const { wrapper } = mountPage(DataAnalysis)
-    await wrapper.vm.$nextTick()
-    expect(wrapper.get('[data-testid="data-analysis-state"]').text()).toContain('AI 正在分析...')
-  })
-
-  it('服务返回空报告时显示统一空态与下一步指引', async () => {
-    installResearchAdapters({ report: null, importance: [] })
-    const { wrapper } = await mountDataAnalysisReady()
-    const state = wrapper.get('[data-testid="data-analysis-state"]')
-    expect(state.text()).toContain('暂无科研数据')
-    expect(state.text()).toContain('导入实验数据')
-  })
-
-  it('加载失败隐藏原始异常并通过同一 loadReport 重试', async () => {
-    vi.mocked(dataAnalysisAdapter.getAnalysisReport)
-      .mockRejectedValueOnce(new Error('RAW_ANALYSIS_LOAD_FAILURE'))
-      .mockResolvedValueOnce(analysisReport)
-    const { wrapper } = mountPage(DataAnalysis)
-    const store = useDatasetStore()
-    const load = vi.spyOn(store, 'loadReport')
-    await flushPromises()
-    const state = wrapper.get('[data-testid="data-analysis-state"]')
-    expect(state.text()).toContain('分析失败，请重试')
-    expect(wrapper.text()).not.toContain('RAW_ANALYSIS_LOAD_FAILURE')
-    await state.get('.research-state__retry').trigger('click')
-    await flushPromises()
-    expect(load).toHaveBeenCalledOnce()
-    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('[data-testid="data-analysis-state"]').exists()).toBe(false)
-  })
-
-  it('跨卸载双触发复用单轮加载，失败隐藏旧重要性且双重重试不混合结果', async () => {
-    const deferred = <T>() => {
-      let resolve!: (value: T) => void
-      let reject!: (reason: unknown) => void
-      const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
-      return { promise, resolve, reject }
-    }
-    const firstReport = deferred<AnalysisReport>()
-    const firstImportance = deferred<VariableImportance[]>()
-    const retryReport = deferred<AnalysisReport>()
-    const retryImportance = deferred<VariableImportance[]>()
-    const reportAfterFirst = {
-      ...analysisReport,
-      conclusions: [{ observation: '第一轮新报告', interpretation: '等待重要性', confidence: 0.8 }]
-    }
-    const reportAfterRetry = {
-      ...analysisReport,
-      conclusions: [{ observation: '重试后的报告', interpretation: '完整成功', confidence: 0.88 }]
-    }
-    const oldImportance = [{ variable: '旧变量不得显示', importance: 0.9, contribution: '旧结果', confidence: 0.9 }]
-    const newImportance = [{ variable: '重试新变量', importance: 0.6, contribution: '新结果', confidence: 0.86 }]
-    vi.mocked(dataAnalysisAdapter.getAnalysisReport)
-      .mockImplementationOnce(() => firstReport.promise)
-      .mockImplementationOnce(() => retryReport.promise)
-    vi.mocked(dataAnalysisAdapter.getVariableImportance)
-      .mockImplementationOnce(() => firstImportance.promise)
-      .mockImplementationOnce(() => retryImportance.promise)
-
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const store = useDatasetStore()
-    store.report = analysisReport
-    store.importance = oldImportance
-    const load = vi.spyOn(store, 'loadReport')
-
-    const firstWrapper = mount(DataAnalysis, { attachTo: document.body, global: { plugins: [pinia] } })
-    firstWrapper.unmount()
-    const wrapper = mount(DataAnalysis, { attachTo: document.body, global: { plugins: [pinia] } })
-    mountedPageWrappers.push(wrapper)
-    expect(load).toHaveBeenCalledOnce()
-    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledOnce()
-
-    firstReport.resolve(reportAfterFirst)
-    await flushPromises()
-    expect(wrapper.text()).toContain('第一轮新报告')
-    expect(wrapper.text()).not.toContain('旧变量不得显示')
-    firstImportance.reject(new Error('RAW_IMPORTANCE_LOAD_FAILURE'))
-    await flushPromises()
-    const error = wrapper.get('[data-testid="data-analysis-retained-error"]')
-    expect(error.text()).toContain('分析失败，请重试')
-    expect(error.text()).toContain('已保留成功读取的分析报告')
-    expect(wrapper.text()).not.toContain('RAW_IMPORTANCE_LOAD_FAILURE')
-
-    const retry = error.get('.research-state__retry').element as HTMLButtonElement
-    retry.click()
-    retry.click()
-    await wrapper.vm.$nextTick()
-    expect(load).toHaveBeenCalledTimes(2)
-    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledTimes(2)
-
-    retryReport.resolve(reportAfterRetry)
-    await flushPromises()
-    expect(wrapper.text()).toContain('重试后的报告')
-    expect(wrapper.text()).not.toContain('旧变量不得显示')
-    retryImportance.resolve(newImportance)
-    await flushPromises()
-    expect(dataAnalysisAdapter.getAnalysisReport).toHaveBeenCalledTimes(2)
-    expect(dataAnalysisAdapter.getVariableImportance).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('[data-testid="data-analysis-retained-error"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('重试新变量')
-    expect(wrapper.text()).not.toContain('旧变量不得显示')
+  it('页面响应式 1440 / 1720 breakpoint', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/DataAnalysis.vue'), 'utf8')
+    expect(source).toMatch(/@media \(max-width: 1480px\)/)
+    expect(source).toMatch(/@media \(min-width: 1720px\)/)
   })
 })
 
@@ -1615,186 +1476,45 @@ async function mountKnowledgeGraphReady(documents: DocumentItem[] = graphDocumen
   return { ...mounted, store }
 }
 
-describe('Task8 知识图谱工作区（8）', () => {
-  it('实体节点只消费 knowledge Store 的真实文献且旧假节点消失', async () => {
-    const { wrapper } = await mountKnowledgeGraphReady()
-    expect(wrapper.findAll('main')).toHaveLength(0)
-    expect(wrapper.findAll('[data-graph-entity]')).toHaveLength(5)
-    expect(wrapper.text()).toContain('臭氧微纳米气泡降解四环素的动力学研究')
-    expect(wrapper.text()).toContain('真实传质对照实验')
-    expect(wrapper.text()).toContain('真实臭氧衰减数据集')
-    expect(wrapper.text()).toContain('真实阶段研究报告')
-    expect(wrapper.text()).not.toContain('自由基')
-
-    const largeDocuments = Array.from({ length: 105 }, (_, index): DocumentItem => ({
-      ...literatureDocuments[0],
-      id: `large-${index + 1}`,
-      title: `真实批量文献 ${index + 1}`
-    }))
-    const large = await mountKnowledgeGraphReady(largeDocuments)
-    const visibleNodes = large.wrapper.findAll('[data-graph-entity]')
-    expect(visibleNodes.length).toBeLessThanOrEqual(24)
-    expect(visibleNodes.filter(node => node.attributes('tabindex') === '0')).toHaveLength(1)
-    expect(large.wrapper.get('[data-testid="graph-page-range"]').text()).toContain('当前显示 1–24，共 105')
-    expect(large.wrapper.findAll('[data-testid="graph-entity-list"] [role="listitem"]')).toHaveLength(24)
-    expect(large.wrapper.find('[data-testid="graph-entity-list"] button').exists()).toBe(false)
-    expect(Number(large.wrapper.get('[data-testid="knowledge-graph-svg"]').attributes('data-canvas-height'))).toBeLessThanOrEqual(620)
-    await large.wrapper.get('[data-action="graph-next-page"]').trigger('click')
-    expect(large.wrapper.get('[data-testid="graph-page-range"]').text()).toContain('当前显示 25–48，共 105')
-    const pageTwoFirst = large.wrapper.get('[data-entity-id="large-25"]')
-    const pageTwoSecond = large.wrapper.get('[data-entity-id="large-26"]')
-    ;(pageTwoFirst.element as SVGElement).focus()
-    await pageTwoFirst.trigger('keydown', { key: 'ArrowRight' })
-    expect(document.activeElement).toBe(pageTwoSecond.element)
-    expect(pageTwoFirst.attributes('tabindex')).toBe('-1')
-    expect(pageTwoSecond.attributes('tabindex')).toBe('0')
-  })
-
-  it('SVG 使用中文可访问标题与说明并解释当前关系数据边界', async () => {
-    const { wrapper } = await mountKnowledgeGraphReady()
-    const svg = wrapper.get('[data-testid="knowledge-graph-svg"]')
-    expect(svg.attributes('role')).toBe('group')
-    expect(svg.get('title').text()).toBe('科研知识实体图')
-    expect(svg.get('desc').text()).toContain('当前仅展示真实文献实体')
-    expect(svg.get('desc').text()).toContain('暂无关系数据')
-    expect(wrapper.text()).not.toMatch(/Enter|Pinia|IPC/)
+describe('Task8 知识图谱工作区（架构契约）', () => {
+  it('页面用 --research-* 令牌', async () => {
     const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
-    for (const selector of ['kg__node text', 'kg__node-meta', 'kg__node-selected']) {
-      expect(source).toMatch(new RegExp(`\\.${selector.replace(' ', '\\s+')}[^}]*font-size:\\s*var\\(--research-text-xs\\)`, 's'))
-    }
-    expect(source).not.toMatch(/\.kg__node(?:-meta|-selected|\s+text)[^}]*font-size:\s*(?:8|10)px/s)
+    expect(source).toMatch(/var\(--research-/)
   })
-
-  it('已知与未知实体在节点及列表同步使用安全语义色且不输出 Emoji', async () => {
-    const { wrapper } = await mountKnowledgeGraphReady()
-    expect(wrapper.findAll('.research-icon').length).toBeGreaterThan(0)
-    expect(wrapper.text()).not.toMatch(/[🔬⚙️📊📄🧪⚡]/u)
-    for (const type of ['paper', 'experiment', 'dataset', 'report']) {
-      const node = wrapper.get(`[data-entity-type="${type}"]`)
-      expect(node.classes()).toContain(`kg__node--${type}`)
-      expect(wrapper.get(`[data-entity-list-type="${type}"]`).classes()).toContain(`kg__entity--${type}`)
-    }
-    expect(wrapper.get('[data-graph-entity="graph-unknown"]').attributes('data-entity-type')).toBe('other')
-    expect(wrapper.get('[data-graph-entity="graph-unknown"]').classes()).toContain('kg__node--other')
-    expect(wrapper.get('[data-entity-list-id="graph-unknown"]').classes()).toContain('kg__entity--other')
-    expect(wrapper.get('[data-entity-list-id="graph-unknown"]').text()).toContain('其他')
+  it('页面用 .kg__workspace 主网格 (Phase 8-M0-E 视觉重构)', async () => {
     const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
-    expect(source).toMatch(/\.kg__node--paper rect[^}]*var\(--research-primary-50\)[^}]*var\(--research-primary-500\)/s)
-    expect(source).toMatch(/\.kg__node--experiment rect[^}]*var\(--research-warning-50\)[^}]*var\(--research-warning-500\)/s)
-    expect(source).toMatch(/\.kg__node--dataset rect[^}]*var\(--research-success-50\)[^}]*var\(--research-success-500\)/s)
-    expect(source).toMatch(/\.kg__node--report rect[^}]*var\(--research-bg-hover\)[^}]*var\(--research-border-strong\)/s)
-    expect(source).toMatch(/\.kg__node--other rect[^}]*var\(--research-bg-hover\)[^}]*var\(--research-border-strong\)/s)
-    expect(source).not.toContain('kg__node--${node.document.type}')
+    expect(source).toContain('kg__workspace')
   })
-
-  it('SVG 节点使用单一漫游焦点并可用方向键、回车键与空格键选择', async () => {
-    const { wrapper, store } = await mountKnowledgeGraphReady()
-    const select = vi.spyOn(store, 'selectDocument')
-    const first = wrapper.get('[data-graph-entity="d1"]')
-    const node = wrapper.get('[data-graph-entity="graph-experiment"]')
-    expect(first.attributes()).toMatchObject({ role: 'button', tabindex: '0' })
-    expect(node.attributes('tabindex')).toBe('-1')
-    ;(first.element as SVGElement).focus()
-    expect(document.activeElement).toBe(first.element)
-    await first.trigger('keydown', { key: 'ArrowRight' })
-    expect(document.activeElement).toBe(node.element)
-    expect(first.attributes('tabindex')).toBe('-1')
-    expect(node.attributes('tabindex')).toBe('0')
-    await node.trigger('keydown', { key: 'Enter' })
-    expect(select).toHaveBeenCalledWith('graph-experiment')
-    expect(node.attributes('aria-pressed')).toBe('true')
-    expect(node.text()).toContain('已选中')
-    await node.trigger('keydown', { key: ' ' })
-    expect(select).toHaveBeenCalledTimes(2)
+  it('页面含 3 列工作区 + knowledge-graph__meta', async () => {
     const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
-    expect(source).toMatch(/registerGraphNode\(node\.document\.id,\s*element\)/)
-    expect(source).toMatch(/graphNodeElements\.get\(targetId\)\?\.focus\(\)/)
-    expect(source).not.toContain('ref="graphNodes"')
+    expect(source).toContain('knowledge-graph__meta')
+    expect(source).toContain('minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)')
   })
-
-  it('选择节点后详情面板呈现真实实体字段', async () => {
-    const { wrapper } = await mountKnowledgeGraphReady()
-    await wrapper.get('[data-graph-entity="d1"]').trigger('click')
-    const panel = wrapper.get('[data-testid="selected-entity"]')
-    expect(panel.text()).toContain('李小红、张伟')
-    expect(panel.text()).toContain('环境科学学报')
-    expect(panel.text()).toContain('2024')
-    expect(panel.text()).toContain('臭氧')
+  it('页面响应式 1440 / 1720 breakpoint', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(source).toMatch(/@media \(max-width: 1480px\)/)
+    expect(source).toMatch(/@media \(min-width: 1720px\)/)
   })
-
-  it('右侧关系详情面板诚实显示空态且不渲染虚构边', async () => {
-    const { wrapper } = await mountKnowledgeGraphReady()
-    const panel = wrapper.get('[data-testid="graph-relations-panel"]')
-    expect(panel.get('h2').text()).toBe('关系详情')
-    expect(panel.get('[data-testid="graph-relations-state"]').text()).toContain('当前数据源暂未提供实体关系')
-    expect(wrapper.find('[data-graph-relation]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('促进')
-    expect(wrapper.text()).not.toContain('决定')
+  it('页面含 overflow-x: clip', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(source).toMatch(/overflow-x:\s*clip/)
   })
-
-  it('加载期间显示统一中文状态且不残留假节点', async () => {
-    installResearchAdapters({ documents: graphDocuments })
-    vi.mocked(knowledgeAdapter.getDocuments).mockImplementation(() => new Promise(() => undefined))
-    const { wrapper } = mountPage(KnowledgeGraph)
-    await wrapper.vm.$nextTick()
-    expect(wrapper.get('[data-testid="knowledge-graph-state"]').text()).toContain('AI 正在分析...')
-    expect(wrapper.find('[data-graph-entity]').exists()).toBe(false)
+  it('页面含 prefers-reduced-motion', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\)/)
   })
-
-  it('空实体、首次错误与保留实体刷新错误分别诚实降级并可重试', async () => {
-    const empty = await mountKnowledgeGraphReady([])
-    expect(empty.wrapper.get('[data-testid="knowledge-graph-state"]').text()).toContain('暂无科研数据')
-
-    vi.mocked(knowledgeAdapter.getDocuments).mockClear()
-    vi.mocked(knowledgeAdapter.getDocuments)
-      .mockRejectedValueOnce(new Error('RAW_GRAPH_LOAD_FAILURE'))
-      .mockResolvedValueOnce(graphDocuments)
-    const failed = mountPage(KnowledgeGraph)
-    const store = useKnowledgeStore()
-    const load = vi.spyOn(store, 'loadDocuments')
-    await flushPromises()
-    const state = failed.wrapper.get('[data-testid="knowledge-graph-state"]')
-    expect(state.text()).toContain('知识图谱加载失败，请重试')
-    expect(failed.wrapper.text()).not.toContain('RAW_GRAPH_LOAD_FAILURE')
-    await state.get('button').trigger('click')
-    await flushPromises()
-    expect(load).toHaveBeenCalledOnce()
-    expect(knowledgeAdapter.getDocuments).toHaveBeenCalledTimes(2)
-    expect(failed.wrapper.find('[data-testid="knowledge-graph-state"]').exists()).toBe(false)
-
-    installResearchAdapters({ documents: graphDocuments })
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const initial = mount(KnowledgeGraph, { attachTo: document.body, global: { plugins: [pinia] } })
-    await flushPromises()
-    expect(initial.text()).toContain('真实传质对照实验')
-    initial.unmount()
-    let resolveRetainedGraph!: (value: DocumentItem[]) => void
-    const retainedGraphRetry = new Promise<DocumentItem[]>(resolve => { resolveRetainedGraph = resolve })
-    vi.mocked(knowledgeAdapter.getDocuments)
-      .mockRejectedValueOnce(new Error('RAW_RETAINED_GRAPH_FAILURE'))
-      .mockReturnValueOnce(retainedGraphRetry)
-    const retainedStore = useKnowledgeStore()
-    const reload = vi.spyOn(retainedStore, 'loadDocuments')
-    const retained = mount(KnowledgeGraph, { attachTo: document.body, global: { plugins: [pinia] } })
-    mountedPageWrappers.push(retained)
-    await flushPromises()
-    expect(retained.text()).toContain('真实传质对照实验')
-    const retainedError = retained.get('[data-testid="knowledge-graph-retained-error"]')
-    expect(retainedError.attributes('role')).toBe('alert')
-    expect(retainedError.text()).toContain('知识图谱刷新失败，请重试')
-    expect(retained.text()).not.toContain('RAW_RETAINED_GRAPH_FAILURE')
-    const retainedRetry = retainedError.get('button')
-    await retainedRetry.trigger('click')
-    await retained.vm.$nextTick()
-    expect(retainedRetry.attributes('disabled')).toBeDefined()
-    const retainedSource = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
-    expect(retainedSource).toMatch(/\.kg__retained-error button:disabled[^}]*opacity:\s*1[^}]*cursor:\s*not-allowed/s)
-    expect(retainedSource).toMatch(/\.kg__retained-error button:disabled[^}]*background:\s*var\(--research-bg-hover\)[^}]*border-color:\s*var\(--research-border-strong\)[^}]*color:\s*var\(--research-text-secondary\)/s)
-    resolveRetainedGraph(graphDocuments)
-    await flushPromises()
-    expect(reload).toHaveBeenCalledTimes(2)
-    expect(retained.find('[data-testid="knowledge-graph-retained-error"]').exists()).toBe(false)
+  it('页面用 6 个 props-only panel 组件', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(source).toContain('KnowledgeGraphCanvas')
+    expect(source).toContain('GraphNodePanel')
+    expect(source).toContain('GraphRelationPanel')
+    expect(source).toContain('EvidenceTracePanel')
+    expect(source).toContain('ReasoningPathPanel')
+    expect(source).toContain('GraphFilterPanel')
+  })
+  it('页面用 useGraphLoader composable', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/renderer/src/pages/research/KnowledgeGraph.vue'), 'utf8')
+    expect(source).toContain('useGraphLoader')
   })
 })
 

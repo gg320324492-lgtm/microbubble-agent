@@ -4,6 +4,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import Sidebar from './Sidebar.vue'
 import HeaderBar from './HeaderBar.vue'
+import DemoWarningBanner from '../components/shell/DemoWarningBanner.vue'
 
 const route = useRoute()
 const theme = computed(() => (route?.meta as { theme?: string } | undefined)?.theme ?? 'research')
@@ -14,6 +15,7 @@ const theme = computed(() => (route?.meta as { theme?: string } | undefined)?.th
     <Sidebar />
     <div class="main-layout__body">
       <HeaderBar />
+      <DemoWarningBanner />
       <main class="main-layout__content" aria-label="科研工作区主内容">
         <slot />
       </main>

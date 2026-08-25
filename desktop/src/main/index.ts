@@ -1,8 +1,8 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { bootstrap } from './bootstrap'
-import { registerIpcHandlers } from './ipc'
-import { APP_CONFIG } from '@shared/config'
+import { registerIpcHandlers, setAppConfig } from './ipc'
+import { APP_CONFIG, resolveAppConfig } from '@shared/config'
 
 const isDev = !app.isPackaged
 
@@ -12,8 +12,8 @@ function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
-    minWidth: 1024,
-    minHeight: 640,
+    minWidth: APP_CONFIG.windowMinWidth,
+    minHeight: APP_CONFIG.windowMinHeight,
     show: false,
     autoHideMenuBar: true,
     title: APP_CONFIG.appName,
@@ -63,6 +63,10 @@ function createMainWindow(): BrowserWindow {
 }
 
 async function bootstrapApp(): Promise<void> {
+  // 0. 解析应用配置 (含 dataDir / logDir / cacheDir), 注入 IPC 供 renderer 读取
+  const appConfig = resolveAppConfig()
+  setAppConfig(appConfig)
+
   // 1. 初始化 storage + auth (无 token 时 restore 自然失败，无影响)
   await bootstrap()
 

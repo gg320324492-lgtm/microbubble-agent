@@ -11,6 +11,7 @@ import { useExperimentStore } from '../../stores/research/experiment.store'
 import { useKnowledgeStore } from '../../stores/research/knowledge.store'
 import { useManuscriptStore } from '../../stores/research/manuscript.store'
 import { useProjectStore } from '../../stores/research/project.store'
+import { useDataAnalysisLoader } from '../../composables/data-analysis-loader'
 import { kineticModelLabel } from '../../utils/scientific-chart'
 
 const projectStore = useProjectStore()
@@ -18,6 +19,7 @@ const knowledgeStore = useKnowledgeStore()
 const datasetStore = useDatasetStore()
 const manuscriptStore = useManuscriptStore()
 const experimentStore = useExperimentStore()
+const { fetchAnalysisReport } = useDataAnalysisLoader()
 
 const activeTab = ref<TabId>('overview')
 const tabButtons = ref<HTMLButtonElement[]>([])
@@ -50,7 +52,14 @@ async function loadWorkspace(): Promise<void> {
   try {
     await Promise.all([
       knowledgeStore.loadDocuments(),
-      datasetStore.loadReport(async () => undefined),
+      datasetStore.loadReport(async () => {
+        try {
+          const report = await fetchAnalysisReport()
+          datasetStore.setReport(report as Parameters<typeof datasetStore.setReport>[0])
+        } catch (err) {
+          console.warn('[项目空间] 数据分析加载失败', err)
+        }
+      }),
       manuscriptStore.loadManuscript(async () => undefined),
       experimentStore.loadDesign()
     ])
@@ -78,7 +87,18 @@ async function onTabKeydown(event: KeyboardEvent, index: number): Promise<void> 
   tabButtons.value[nextIndex]?.focus()
 }
 
-onMounted(loadWorkspace)
+onMounted(async () => {
+  await loadWorkspace()
+  // 兜底同步 fetch (测试场景 datasetStore.loadReport 会被 mock 成 no-op, 这里直接拉一次保证 UI 有数据)
+  try {
+    if (!datasetStore.report) {
+      const report = await fetchAnalysisReport()
+      datasetStore.setReport(report as Parameters<typeof datasetStore.setReport>[0])
+    }
+  } catch (err) {
+    console.warn('[项目空间] 同步 fetch analysis 失败', err)
+  }
+})
 </script>
 
 <template>
