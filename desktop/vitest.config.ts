@@ -17,7 +17,8 @@ export default defineConfig({
     environment: 'node',
     environmentMatchGlobs: [
       ['tests/unit/research-os-frontend.test.ts', 'happy-dom'],
-      ['tests/unit/research-os-integration.test.ts', 'happy-dom']
+      ['tests/unit/research-os-integration.test.ts', 'happy-dom'],
+      ['tests/unit/login-view.dom.test.ts', 'happy-dom']
     ],
     globals: false  // 显式 import { test, expect } from 'vitest'
   },
