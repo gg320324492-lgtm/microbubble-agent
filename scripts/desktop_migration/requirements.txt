@@ -1,0 +1,8 @@
+# Read-only web snapshot exporter (R2)
+# Used by release/desktop-migration pipeline to capture web snapshots.
+# Run via: pip install -r scripts/desktop_migration/requirements.txt
+
+asyncpg>=0.29.0
+boto3>=1.34.0   # MinIO S3-compatible client (sync)
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
