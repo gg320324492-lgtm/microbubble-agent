@@ -358,6 +358,101 @@ export function registerIpcHandlers(): void {
     return getDeviceService()?.status() ?? []
   })
 
+  // ---------- Phase 8-M1-G: Product IPC (auth / config / backup / export / audit) ----------
+  ipcMain.handle('app:user.login', async (_e, payload: { username: string; password: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { ok: false, message: '数据库未就绪' }
+    try {
+      const result = svc.product.auth.login(payload.username, payload.password)
+      return { ok: true, user: result.user, session: result.session, token: result.token }
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : '登录失败' }
+    }
+  })
+  ipcMain.handle('app:user.logout', async (_e, payload: { token: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return false
+    return svc.product.auth.logout(payload.token)
+  })
+  ipcMain.handle('app:user.list', async () => {
+    const { getDatabaseService } = await import('./services/database.service')
+    return getDatabaseService()?.product.auth.listUsers() ?? []
+  })
+  ipcMain.handle('app:user.create', async (_e, payload: { username: string; password: string; displayName?: string; role?: 'admin' | 'researcher' | 'viewer' | 'operator' }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    try {
+      return svc.product.auth.createUser(payload)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : '创建失败' }
+    }
+  })
+  ipcMain.handle('app:config.get', async (_e, payload: { scope: 'system' | 'user' | 'project'; key: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    return getDatabaseService()?.product.config.get(payload.scope, payload.key) ?? null
+  })
+  ipcMain.handle('app:config.set', async (_e, payload: { scope: 'system' | 'user' | 'project'; key: string; value: unknown; valueType?: 'string' | 'number' | 'boolean' | 'json'; isSensitive?: boolean }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    getDatabaseService()?.product.config.set(payload.scope, payload.key, payload.value, {
+      valueType: payload.valueType,
+      isSensitive: payload.isSensitive
+    })
+    return { ok: true }
+  })
+  ipcMain.handle('app:config.list', async (_e, payload: { scope?: 'system' | 'user' | 'project' }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    return getDatabaseService()?.product.config.list(payload.scope) ?? []
+  })
+  ipcMain.handle('backup:create', async (_e, payload: { createdBy?: string; note?: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    try {
+      return svc.product.backup.create(payload)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : '备份失败' }
+    }
+  })
+  ipcMain.handle('backup:list', async () => {
+    const { getDatabaseService } = await import('./services/database.service')
+    return getDatabaseService()?.product.backup.list() ?? []
+  })
+  ipcMain.handle('backup:restore', async (_e, payload: { backupId: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    return getDatabaseService()?.product.backup.restore(payload.backupId) ?? false
+  })
+  ipcMain.handle('export:csv', async (_e, payload: { table: string; where?: string; limit?: number; outputPath: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    try {
+      return svc.product.exporter.export({ ...payload, format: 'csv' })
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : '导出失败' }
+    }
+  })
+  ipcMain.handle('export:json', async (_e, payload: { table: string; where?: string; limit?: number; outputPath: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    try {
+      return svc.product.exporter.export({ ...payload, format: 'json' })
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : '导出失败' }
+    }
+  })
+  ipcMain.handle('audit:list', async (_e, payload: { limit?: number }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    return getDatabaseService()?.product.audit.list(payload?.limit) ?? []
+  })
+  ipcMain.handle('audit:verify', async () => {
+    const { getDatabaseService } = await import('./services/database.service')
+    return getDatabaseService()?.product.audit.verifyChain() ?? { ok: true, firstTamperedId: null, checked: 0 }
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {
