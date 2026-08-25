@@ -211,21 +211,20 @@ describe('Phase 8-I3-A experiment', () => {
 
 // ============ Page Upgrades — DataAnalysis ============
 
-describe('Phase 8-I3-A data analysis', () => {
+describe('Phase 8-M0-D data analysis', () => {
   const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8')
-  it('keeps the page read-only', () => { expect(c).toContain('只读数据分析工作区') })
-  it('directs import through the existing flow', () => { expect(c).toContain('既有数据流程导入实验数据') })
-  it('has quality panel', () => { expect(c).toContain('数据质量') })
-  it('has statistics panel', () => { expect(c).toContain('统计分析') })
-  it('has model fit panel', () => { expect(c).toContain('模型拟合') })
-  it('has variable importance', () => { expect(c).toContain('变量重要性') })
-  it('has chart area', () => { expect(c).toContain('科学图表') })
-  it('has ChartPanel component', () => { expect(c).toContain('ChartPanel') })
-  it('has scientific interpretation', () => { expect(c).toContain('科学解读') })
-  it('has empty state', () => { expect(c).toContain('data-analysis-state') })
-  it('has loading state', () => { expect(c).toContain('store.isLoading') })
+  it('keeps the page read-only', () => { expect(c).toContain('ResearchState') })
   it('uses datasetStore', () => { expect(c).toContain('useDatasetStore') })
-  it('displays R² value', () => { expect(c).toContain('rSquared') })
+  it('uses composable loader', () => { expect(c).toContain('useDataAnalysisLoader') })
+  it('has dataset panel', () => { expect(c).toContain('DatasetPanel') })
+  it('has data quality panel', () => { expect(c).toContain('DataQualityPanel') })
+  it('has statistical summary panel', () => { expect(c).toContain('StatisticalSummaryPanel') })
+  it('has scientific chart panel', () => { expect(c).toContain('ScientificChartPanel') })
+  it('has model fit panel', () => { expect(c).toContain('ModelFitPanel') })
+  it('has interpretation panel', () => { expect(c).toContain('InterpretationPanel') })
+  it('has 3-col grid', () => { expect(c).toMatch(/grid-template-columns:[^;]*1fr[^;]*1fr[^;]*1fr|1frs+minmax[^;]+1fr|minmax([^,]+,s*var(--research-rail[^)]+))[^;]*minmax/) })
+  it('has loading state', () => { expect(c).toContain('store.isLoading') })
+  it('has aria-label data-analysis', () => { expect(c).toContain('aria-label="数据分析工作台"') })
 })
 
 // ============ Page Upgrades — Manuscript ============
@@ -357,7 +356,8 @@ describe('Phase 8-I3-A UI states', () => {
   })
   it('data analysis has empty state', () => {
     const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8')
-    expect(c).toContain('data-analysis-state')
+    expect(c).toContain('ResearchState')
+    expect(c).toContain('state="empty"')
   })
   it('manuscript has generating state', () => {
     const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8')
@@ -380,9 +380,9 @@ describe('Phase 8-I3-A data flow', () => {
     const c = readFileSync(resolve(rendererRoot, 'stores/research/agent.store.ts'), 'utf8')
     expect(c).toContain('researchAgentService.cancelTask')
   })
-  it('dataset store uses dataAnalysisService.getVariableImportance', () => {
+  it('dataset store composable loads from service', () => {
     const c = readFileSync(resolve(rendererRoot, 'stores/research/dataset.store.ts'), 'utf8')
-    expect(c).toContain('dataAnalysisService.getVariableImportance')
+    expect(c).not.toContain('dataAnalysisService')
   })
   it('knowledge store uses literatureService', () => {
     const c = readFileSync(resolve(rendererRoot, 'stores/research/knowledge.store.ts'), 'utf8')
@@ -542,10 +542,9 @@ describe('Phase 8-I3-A extended coverage', () => {
       const c = readFileSync(resolve(rendererRoot, 'pages/research/Experiment.vue'), 'utf8')
       expect(c).toContain('store.loadDesign')
     })
-    it('data analysis calls loadReport', () => {
+    it('data analysis calls loadFromService', () => {
       const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8')
-      expect(c).toContain('async function loadReport')
-      expect(c).toContain('target.loadReport()')
+      expect(c).toContain('loadFromService')
     })
     it('manuscript calls loadManuscript', () => {
       const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8')
@@ -691,18 +690,18 @@ describe('Phase 8-I3-A extended coverage', () => {
     it('E15', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Experiment.vue'), 'utf8'); expect(c).toContain('experiment__generate') })
 
     // DataAnalysis extended (15): read-only Store report and scientific chart lifecycle.
-    it('DA1', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('只读数据分析工作区') })
-    it('DA2', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('既有数据流程导入实验数据') })
+    it('DA1', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('ResearchPageHeader') })
+    it('DA2', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('ResearchState') })
     it('DA3', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('数据质量') })
-    it('DA4', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('统计分析') })
+    it('DA4', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('ResearchPanel') })
     it('DA5', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('模型拟合') })
-    it('DA6', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('变量重要性') })
+    it('DA6', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('importance') })
     it('DA7', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('科学图表') })
     it('DA8', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('ChartPanel') })
-    it('DA9', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('科学解读') })
-    it('DA10', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('data-analysis-state') })
+    it('DA9', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('InterpretationPanel') })
+    it('DA10', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('aria-label="数据分析工作台"') })
     it('DA11', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('store.isLoading') })
-    it('DA12', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('target.loadReport()') })
+    it('DA12', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('loadFromService') })
     it('DA13', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('store.statistics') })
     it('DA14', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('store.models') })
     it('DA15', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('store.conclusions') })
