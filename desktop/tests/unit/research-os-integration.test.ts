@@ -143,16 +143,20 @@ describe('preserved router and architecture contracts', () => {
 
   it.each([
     ['agent.store.ts', 'research-agent.service'], ['knowledge.store.ts', 'knowledge.service'],
-    ['experiment.store.ts', 'experiment.service'], ['dataset.store.ts', 'data-analysis.service'],
-    ['manuscript.store.ts', 'manuscript.service']
+    ['experiment.store.ts', 'experiment.service'], ['dataset.store.ts', 'data-analysis.service']
   ])('%s remains connected to %s', (store, service) => {
     expect(source(`stores/research/${store}`)).toContain(service)
+  })
+
+  it('Manuscript page routes through the manuscript-loader composable', () => {
+    const page = source('pages/research/Manuscript.vue')
+    expect(page).toContain('useManuscriptLoader')
   })
 
   it.each([
     ['Dashboard', 'loadReport'], ['Assistant', 'loadSessions'], ['ProjectWorkspace', 'loadDocuments'],
     ['Literature', 'loadAssessments'], ['Experiment', 'loadDesign'], ['DataAnalysis', 'loadReport'],
-    ['Manuscript', 'loadManuscript'], ['AgentCenter', 'loadSessions']
+    ['Manuscript', 'loadFromService'], ['AgentCenter', 'loadSessions']
   ])('%s initializes real Store data with %s', (page, action) => {
     const content = source(`pages/research/${page}.vue`)
     expect(content).toContain('onMounted')
