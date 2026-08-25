@@ -62,11 +62,28 @@ win:
         - x64
   artifactName: ScientificResearchOS-${version}-${arch}.${ext}
   publisherName: MicroBubble Lab
-  verifyUpdateCodeSignature: false
+  # R6 hardening: 稳定版构建必须由 CI 注入 Windows 证书, 不能再用 sign: null.
+  #
+  # CI 必须设置以下环境变量 (CI 脚本负责加载加密的 PFX):
+  #   CSC_LINK              base64-encoded PFX file contents (electron-builder 自动解码)
+  #   CSC_KEY_PASSWORD      PFX 解锁密码
+  #   GH_TOKEN              GitHub PAT (publish.github provider 必需)
+  #
+  # 本地 dev 构建 (无 CSC_LINK) 时, electron-builder 自动跳过签名,
+  # signAndEditExecutable 仍为 false 表示本地构建不重新签名 EXE.
+  #
+  # verifyUpdateCodeSignature 在稳定版必须为 true, 这样 autoUpdater 会在
+  # 拉取更新时校验服务器端的签名, 防止中间人替换 installer.
   icon: resources/icon.ico
   signAndEditExecutable: false
+  verifyUpdateCodeSignature: true
   signtoolOptions:
-    sign: null
+    # 不在 yaml 中 hard-code sign: null (plan R6 要求).
+    # electron-builder 在 CI 检测到 CSC_LINK 时会自动填充 sign 命令.
+    # 本地 dev 构建 (无 CSC_LINK) 时, sign 字段保持未设置,
+    # electron-builder 会跳过签名步骤.
+    signingHashAlgorithms:
+      - sha256
 
 nsis:
   oneClick: false

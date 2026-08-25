@@ -83,11 +83,11 @@ class ConfigServiceImpl implements ConfigService {
       `INSERT INTO config (scope, key, value, value_type, is_sensitive, updated_at, updated_by)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(scope, key) DO UPDATE SET
-         value = excludedCLUDed.value,
-         value_type = excludedCLUDed.value_type,
-         is_sensitive = excludedCLUDed.is_sensitive,
-         updated_at = excludedCLUDed.updated_at,
-         updated_by = excludedCLUDed.updated_by`,
+         value = excluded.value,
+         value_type = excluded.value_type,
+         is_sensitive = excluded.is_sensitive,
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by`,
       [scope, key, encrypted, valueType, isSensitive ? 1 : 0, Date.now(), opts.updatedBy ?? null]
     )
   }

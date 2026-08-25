@@ -1,6 +1,10 @@
 // UpdateService — Phase 8-M1-A
-// 本地占位更新服务. Phase 8-M1-A 不连接真实服务器, 仅返回 { available: false, currentVersion, message }.
-// 未来 Phase: 接入 GitHub Releases / 自建 releases.mnb-lab.cn (electron-updater).
+// 本地占位更新服务. R6 hardening: 稳定版不应伪造下载成功.
+//
+// 历史 (Phase 8-M1-A): downloadUpdate() 总是返回 { ok: true, progress: 100 },
+// 用户看到一个虚假的"已下载"提示, 但实际从未从任何 manifest 拉取字节.
+// R6 把行为收敛到 MANUAL_UPDATE_REQUIRED, 直到真实 publish 配置 + electron-updater
+// 落地. 同时 installUpdate() 也变为手动提示.
 
 import { resolveApplicationInfo, type ApplicationInfo } from '../application-info'
 
@@ -11,10 +15,21 @@ export interface UpdateCheckResult {
   message?: string
 }
 
+export interface UpdateDownloadResult {
+  ok: boolean
+  reason?: string
+  progress?: number
+}
+
+export interface UpdateInstallResult {
+  ok: boolean
+  reason?: string
+}
+
 export interface UpdateService {
   checkUpdate(): Promise<UpdateCheckResult>
-  downloadUpdate(): Promise<{ ok: true; progress?: number }>
-  installUpdate(): Promise<{ ok: true }>
+  downloadUpdate(): Promise<UpdateDownloadResult>
+  installUpdate(): Promise<UpdateInstallResult>
   getCurrentVersion(): Promise<string>
 }
 
@@ -64,14 +79,24 @@ class LocalUpdateService implements UpdateService {
     }
   }
 
-  async downloadUpdate(): Promise<{ ok: true; progress?: number }> {
-    // Phase 8-M1-A placeholder: 无真实下载, 立即返回 ok
-    return { ok: true, progress: 100 }
+  /**
+   * R6: 稳定版不再伪造下载成功.
+   *
+   * 当前 Phase 8-M1-A 没有真实的发布通道 (electron-updater 尚未接入),
+   * 因此 downloadUpdate 始终返回 MANUAL_UPDATE_REQUIRED, UI 应引导用户前往
+   * releases.mnb-lab.cn/desktop 手动下载. 一旦 R7 接入 electron-updater,
+   * 这里应改为调用 autoUpdater.download() 并把进度回流到 result.progress.
+   */
+  async downloadUpdate(): Promise<UpdateDownloadResult> {
+    return { ok: false, reason: 'MANUAL_UPDATE_REQUIRED', progress: 0 }
   }
 
-  async installUpdate(): Promise<{ ok: true }> {
-    // Phase 8-M1-A placeholder: 无真实安装, 立即返回 ok
-    return { ok: true }
+  /**
+   * R6: 配套 downloadUpdate — 在没有真实下载产物的阶段, installUpdate 也必须
+   * 拒绝执行, 避免用户被误导.
+   */
+  async installUpdate(): Promise<UpdateInstallResult> {
+    return { ok: false, reason: 'MANUAL_UPDATE_REQUIRED' }
   }
 
   async getCurrentVersion(): Promise<string> {
