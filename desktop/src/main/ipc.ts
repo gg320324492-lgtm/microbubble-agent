@@ -229,6 +229,46 @@ export function registerIpcHandlers(): void {
     return svc.figures.listByAnalysis(analysisId) as unknown as Record<string, unknown>[]
   })
 
+  // ---------- Phase 8-M1-D: Scientific Analysis Engine IPC Bridge ----------
+  ipcMain.handle('analysis:run.kinetic', async (_e, payload: { experimentId: string; model: 'first-order' | 'zero-order' | 'pseudo-second-order'; metric: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return ''
+    const id = svc.analysisEngine.runKinetic(payload.experimentId, payload.model, payload.metric)
+    svc.audit.record({ action: 'analysis.kinetic', module: 'analysis', metadata: { id, model: payload.model, metric: payload.metric } })
+    return id
+  })
+  ipcMain.handle('analysis:run.regression', async (_e, payload: { experimentId: string; xMetric: string; yMetric: string; degree: 1 | 2 | 3 | 4 }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return ''
+    return svc.analysisEngine.runRegression(payload.experimentId, payload.xMetric, payload.yMetric, payload.degree)
+  })
+  ipcMain.handle('analysis:run.correlation', async (_e, payload: { experimentId: string; xMetric: string; yMetric: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return ''
+    return svc.analysisEngine.runCorrelation(payload.experimentId, payload.xMetric, payload.yMetric)
+  })
+  ipcMain.handle('analysis:run.curve', async (_e, payload: { experimentId: string; family: 'exponential-decay' | 'logarithmic' | 'power-law' | 'gaussian'; metric: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return ''
+    return svc.analysisEngine.runCurve(payload.experimentId, payload.family, payload.metric)
+  })
+  ipcMain.handle('analysis:list', async (_e, experimentId: string) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.analysisEngine.listByExperiment(experimentId)
+  })
+  ipcMain.handle('analysis:statistics', async (_e, payload: { experimentId: string; metric: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { summary: { metric: payload.metric, count: 0, missingRate: 1, mean: null, std: null, median: null, min: null, max: null, p25: null, p75: null, outliers: 0, interpretation: 'no data' }, n: 0 }
+    return svc.analysisEngine.statistics(payload.experimentId, payload.metric)
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {

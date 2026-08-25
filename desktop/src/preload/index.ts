@@ -232,6 +232,14 @@ const api: DesktopApi = {
     figureCreate: (figure) => ipcRenderer.invoke('data:figure.create', figure) as Promise<Record<string, unknown>>,
     figureListByExperiment: (experimentId) => ipcRenderer.invoke('data:figure.listByExperiment', experimentId) as Promise<Record<string, unknown>[]>,
     figureListByAnalysis: (analysisId) => ipcRenderer.invoke('data:figure.listByAnalysis', analysisId) as Promise<Record<string, unknown>[]>
+  },
+  analysis: {
+    runKinetic: (experimentId, model, metric) => ipcRenderer.invoke('analysis:run.kinetic', { experimentId, model, metric }) as Promise<string>,
+    runRegression: (experimentId, xMetric, yMetric, degree) => ipcRenderer.invoke('analysis:run.regression', { experimentId, xMetric, yMetric, degree }) as Promise<string>,
+    runCorrelation: (experimentId, xMetric, yMetric) => ipcRenderer.invoke('analysis:run.correlation', { experimentId, xMetric, yMetric }) as Promise<string>,
+    runCurve: (experimentId, family, metric) => ipcRenderer.invoke('analysis:run.curve', { experimentId, family, metric }) as Promise<string>,
+    listByExperiment: (experimentId) => ipcRenderer.invoke('analysis:list', experimentId) as Promise<Array<{ id: string; runType: string; status: string | null; model: string | null; startedAt: number; finishedAt: number | null; summary: string | null; confidence: number | null; parameters: Array<{ name: string; value: number; unit: string | null; stdError: number | null; pValue: number | null }> }>>,
+    statistics: (experimentId, metric) => ipcRenderer.invoke('analysis:statistics', { experimentId, metric }) as Promise<{ summary: { metric: string; count: number; missingRate: number; mean: number | null; std: number | null; median: number | null; min: number | null; max: number | null; p25: number | null; p75: number | null; outliers: number; interpretation: string }; n: number }>
   }
 }
 

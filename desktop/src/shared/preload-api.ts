@@ -410,6 +410,22 @@ export interface DesktopDataEngineApi {
   figureListByAnalysis: (analysisId: string) => Promise<Record<string, unknown>[]>
 }
 
+export interface DesktopAnalysisApi {
+  runKinetic: (experimentId: string, model: 'first-order' | 'zero-order' | 'pseudo-second-order', metric: string) => Promise<string>
+  runRegression: (experimentId: string, xMetric: string, yMetric: string, degree: 1 | 2 | 3 | 4) => Promise<string>
+  runCorrelation: (experimentId: string, xMetric: string, yMetric: string) => Promise<string>
+  runCurve: (experimentId: string, family: 'exponential-decay' | 'logarithmic' | 'power-law' | 'gaussian', metric: string) => Promise<string>
+  listByExperiment: (experimentId: string) => Promise<Array<{
+    id: string; runType: string; status: string | null; model: string | null
+    startedAt: number; finishedAt: number | null; summary: string | null; confidence: number | null
+    parameters: Array<{ name: string; value: number; unit: string | null; stdError: number | null; pValue: number | null }>
+  }>>
+  statistics: (experimentId: string, metric: string) => Promise<{
+    summary: { metric: string; count: number; missingRate: number; mean: number | null; std: number | null; median: number | null; min: number | null; max: number | null; p25: number | null; p75: number | null; outliers: number; interpretation: string }
+    n: number
+  }>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
@@ -419,6 +435,7 @@ export interface DesktopApi extends DesktopPingApi {
   app: DesktopAppApi
   database: DesktopDatabaseApi
   dataEngine: DesktopDataEngineApi
+  analysis: DesktopAnalysisApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 
