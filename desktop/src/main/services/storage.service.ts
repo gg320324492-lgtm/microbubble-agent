@@ -198,6 +198,9 @@ class ScientificLogger {
   experiment(module: string, message: string, metadata?: unknown): void { this.write('info', `experiment.${module}`, message, metadata) }
   device(module: string, message: string, metadata?: unknown): void { this.write('info', `device.${module}`, message, metadata) }
   error(module: string, message: string, metadata?: unknown): void { this.write('error', `error.${module}`, message, metadata) }
+  info(module: string, message: string, metadata?: unknown): void { this.write('info', module, message, metadata) }
+  warn(module: string, message: string, metadata?: unknown): void { this.write('warn', module, message, metadata) }
+  debug(module: string, message: string, metadata?: unknown): void { this.write('debug', module, message, metadata) }
 }
 
 export const logger = new ScientificLogger()
