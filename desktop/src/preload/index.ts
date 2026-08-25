@@ -220,6 +220,18 @@ const api: DesktopApi = {
       ipcRenderer.invoke('db:update', { table, id, patch }) as Promise<T | null>,
     delete: (table: string, id: string | number) =>
       ipcRenderer.invoke('db:delete', { table, id }) as Promise<{ deleted: boolean }>
+  },
+  dataEngine: {
+    sampleCreate: (sample) => ipcRenderer.invoke('data:sample.create', sample) as Promise<Record<string, unknown>>,
+    sampleListByExperiment: (experimentId) => ipcRenderer.invoke('data:sample.list', experimentId) as Promise<Record<string, unknown>[]>,
+    sampleDelete: (sampleId) => ipcRenderer.invoke('data:sample.delete', sampleId) as Promise<{ deleted: boolean }>,
+    analysisCreate: (result) => ipcRenderer.invoke('data:analysis.create', result) as Promise<Record<string, unknown>>,
+    analysisListByExperiment: (experimentId) => ipcRenderer.invoke('data:analysis.list', experimentId) as Promise<Record<string, unknown>[]>,
+    analysisAddModelParam: (param) => ipcRenderer.invoke('data:analysis.param', param) as Promise<Record<string, unknown>>,
+    analysisListModelParams: (analysisId) => ipcRenderer.invoke('data:analysis.params', analysisId) as Promise<Record<string, unknown>[]>,
+    figureCreate: (figure) => ipcRenderer.invoke('data:figure.create', figure) as Promise<Record<string, unknown>>,
+    figureListByExperiment: (experimentId) => ipcRenderer.invoke('data:figure.listByExperiment', experimentId) as Promise<Record<string, unknown>[]>,
+    figureListByAnalysis: (analysisId) => ipcRenderer.invoke('data:figure.listByAnalysis', analysisId) as Promise<Record<string, unknown>[]>
   }
 }
 

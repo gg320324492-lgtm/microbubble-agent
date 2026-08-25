@@ -1,7 +1,10 @@
-// Repositories index — Phase 8-M1-B
+// Repositories index — Phase 8-M1-C
 export { createProjectRepository, type ProjectRepository, type Project } from './project-repository'
 export { createExperimentRepository, type ExperimentRepository, type Experiment } from './experiment-repository'
 export { createMeasurementRepository, type MeasurementRepository, type Measurement, type MeasurementAggregate, SUPPORTED_METRICS, type MetricName } from './measurement-repository'
 export { createDeviceRepository, type DeviceRepository, type DeviceRecord } from './device-repository'
 export { createManuscriptRepository, type ManuscriptRepository, type Manuscript } from './manuscript-repository'
 export { createAgentHistoryRepository, type AgentHistoryRepository, type AgentHistoryEntry } from './agent-history-repository'
+export { createSampleRepository, type SampleRepository, type Sample } from './sample-repository'
+export { createAnalysisResultRepository, type AnalysisResultRepository, type AnalysisResult, type ModelParam } from './analysis-result-repository'
+export { createFigureRepository, type FigureRepository, type Figure, type FigureType } from './figure-repository'
