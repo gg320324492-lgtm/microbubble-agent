@@ -2,6 +2,7 @@
 // 3 个 canonical cases: O3 24h 降解 / pH 标定 / AI 文献综述.
 
 import type { WorkflowStep } from '../workflow/types'
+import { CASE_101_DEFINITION } from './case-101-definition'
 
 export interface CaseDefinition {
   id: string
@@ -13,6 +14,8 @@ export interface CaseDefinition {
   templateSteps: WorkflowStep[]
   /** 默认 parameters (Phase 10 replay 使用) */
   defaultParameters: Record<string, unknown>
+  /** 元数据 (pollutant / technology / reactorVolume / initialTC / ozoneFlow / temperature 等) */
+  metadata?: Record<string, unknown>
   /** 内置样例数据文件 (相对路径, 主进程读取) */
   sampleDataPath: string | null
 }
@@ -90,7 +93,8 @@ export const CASE_DEFINITIONS: CaseDefinition[] = [
       content: '## Introduction\n\nThis study investigates O3-based degradation using micro-nano bubble technology.\n\n### Background\n\nMicro-nano bubbles enhance mass transfer efficiency.'
     },
     sampleDataPath: null
-  }
+  },
+  CASE_101_DEFINITION
 ]
 
 export function getCaseDefinition(id: string): CaseDefinition | null {
