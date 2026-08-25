@@ -23,6 +23,7 @@ import { RESEARCH_NAV } from '../fixtures/research-ui'
 const rendererRoot = resolve(process.cwd(), 'src/renderer/src')
 const routeTargets = {
   'research-dashboard': '/research/dashboard',
+  'research-demo': '/research/demo',
   'research-assistant': '/research/assistant',
   'research-project': '/research/project',
   'research-literature': '/research/literature',

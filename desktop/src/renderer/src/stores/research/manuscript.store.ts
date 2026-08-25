@@ -34,9 +34,14 @@ export const useManuscriptStore = defineStore('research-manuscript', () => {
   function setError(message: string) {
     errorMessage.value = message
   }
-  function loadManuscript(_loader: () => Promise<void>) {
+  function loadManuscript(_loader?: () => Promise<void>) {
     isLoading.value = true
-    void _loader().finally(() => { isLoading.value = false })
+    const safeLoader = typeof _loader === 'function' ? _loader : null
+    if (safeLoader) {
+      void safeLoader().finally(() => { isLoading.value = false })
+    } else {
+      isLoading.value = false
+    }
   }
   function reset() {
     manuscript.value = null
