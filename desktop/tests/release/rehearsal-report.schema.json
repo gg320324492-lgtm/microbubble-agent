@@ -1,0 +1,264 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Release Rehearsal Report",
+  "description": "Structured JSON report emitted by desktop/scripts/release/run-release-rehearsal.ps1 (R7).",
+  "type": "object",
+  "required": [
+    "sourceSnapshot",
+    "mbrpVerification",
+    "importResult",
+    "offlineChecks",
+    "backupRestore",
+    "installer",
+    "webUntouched",
+    "signedBy",
+    "releaseCommit"
+  ],
+  "properties": {
+    "sourceSnapshot": {
+      "type": "object",
+      "required": [
+        "snapshotId",
+        "capturedAt",
+        "tableCounts",
+        "objectCount",
+        "passed"
+      ],
+      "properties": {
+        "snapshotId": {
+          "type": "string"
+        },
+        "capturedAt": {
+          "type": "string"
+        },
+        "tableCounts": {
+          "type": "object"
+        },
+        "objectCount": {
+          "type": "integer"
+        },
+        "manifestSha256": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "mbrpVerification": {
+      "type": "object",
+      "required": [
+        "packagePath",
+        "passed"
+      ],
+      "properties": {
+        "packagePath": {
+          "type": "string"
+        },
+        "packageSha256": {
+          "type": "string"
+        },
+        "filesVerified": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "importResult": {
+      "type": "object",
+      "required": [
+        "dataDir",
+        "passed"
+      ],
+      "properties": {
+        "dataDir": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "filesWritten": {
+          "type": "integer"
+        },
+        "warningCount": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "offlineChecks": {
+      "type": "object",
+      "required": [
+        "networkDisconnected",
+        "itemsOpened"
+      ],
+      "properties": {
+        "networkDisconnected": {
+          "type": "boolean"
+        },
+        "itemsOpened": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "type",
+              "id",
+              "passed"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "task",
+                  "meeting",
+                  "file",
+                  "conversation"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "passed": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "backupRestore": {
+      "type": "object",
+      "required": [
+        "passed"
+      ],
+      "properties": {
+        "backupId": {
+          "type": "string"
+        },
+        "backupSha256": {
+          "type": "string"
+        },
+        "restoredSha256": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "installer": {
+      "type": "object",
+      "required": [
+        "installerPath",
+        "passed"
+      ],
+      "properties": {
+        "installerPath": {
+          "type": "string"
+        },
+        "installerSha256": {
+          "type": "string"
+        },
+        "installPath": {
+          "type": "string"
+        },
+        "smokeLaunchPassed": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "webUntouched": {
+      "type": "object",
+      "required": [
+        "passed",
+        "offendingPaths"
+      ],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "offendingPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "signedBy": {
+      "type": "object",
+      "required": [
+        "signed"
+      ],
+      "properties": {
+        "signed": {
+          "type": "boolean"
+        },
+        "certificateSubject": {
+          "type": "string"
+        },
+        "certificateThumbprint": {
+          "type": "string"
+        },
+        "signatureTimestamp": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "releaseCommit": {
+      "type": "object",
+      "required": [
+        "sha",
+        "passed"
+      ],
+      "properties": {
+        "sha": {
+          "type": "string"
+        },
+        "shortSha": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
