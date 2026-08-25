@@ -1664,19 +1664,20 @@ describe('Phase 8-L0 final smoke', () => {
     expect(existsSync(join(__dirname, '../../docs/workspace/scientific-workspace.md'))).toBe(true)
     expect(existsSync(join(__dirname, '../../docs/workspace/research-project-dashboard.md'))).toBe(true)
   })
-  it('page file imports 5 components', () => {
+  it('page file references 5 panels (B3 command center)', () => {
     const page = readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ResearchWorkspace.vue'), 'utf8')
-    expect(page).toContain('ResearchProgressCard')
-    expect(page).toContain('ModuleStatusCard')
-    expect(page).toContain('ActivityTimeline')
-    expect(page).toContain('ProjectSummaryPanel')
-    expect(page).toContain('ResearchMilestonePanel')
+    expect(page).toContain('ResearchPanel')
+    expect(page).toContain('ResearchMetricPanel')
+    expect(page).toContain('ResearchTimeline')
+    expect(page).toContain('ResearchState')
+    expect(page).toContain('ResearchPageHeader')
   })
   it('page uses store', () => {
     expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ResearchWorkspace.vue'), 'utf8')).toContain('useResearchWorkspaceStore')
   })
-  it('page uses service', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ResearchWorkspace.vue'), 'utf8')).toContain('ResearchWorkspaceService')
+  it('page does not import ResearchWorkspaceService (B3 contract)', () => {
+    const page = readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ResearchWorkspace.vue'), 'utf8')
+    expect(page).not.toContain('ResearchWorkspaceService')
   })
   it('page has 科研工作区 title', () => {
     expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ResearchWorkspace.vue'), 'utf8')).toContain('科研工作区')

@@ -5,6 +5,7 @@ import type {
   ControlDashboard, DeviceStatusPanel, RealtimeMetric,
   ExperimentTimelineEntry, AIRecommendation, ControlAction
 } from '../shared/control/experiment-control-schema'
+import type { TwinPrediction } from '../shared/digital-twin/digital-twin-schema'
 
 export const useExperimentControlStore = defineStore('experiment-control', {
   state: () => ({
@@ -14,7 +15,8 @@ export const useExperimentControlStore = defineStore('experiment-control', {
     recommendations: [] as AIRecommendation[],
     alerts: [] as { id: string; severity: 'info' | 'warning' | 'critical'; message: string; timestamp: number }[],
     dashboards: [] as ControlDashboard[],
-    actions: [] as ControlAction[]
+    actions: [] as ControlAction[],
+    predictions: [] as TwinPrediction[]
   }),
 
   getters: {
@@ -71,6 +73,9 @@ export const useExperimentControlStore = defineStore('experiment-control', {
     recordAction(a: ControlAction) { this.actions.push(a) },
     actionCount(): number { return this.actions.length },
 
+    setPredictions(predictions: TwinPrediction[]) { this.predictions = [...predictions] },
+    addPrediction(prediction: TwinPrediction) { this.predictions.push(prediction) },
+
     reset() {
       this.devices = []
       this.metrics = []
@@ -79,6 +84,7 @@ export const useExperimentControlStore = defineStore('experiment-control', {
       this.alerts = []
       this.dashboards = []
       this.actions = []
+      this.predictions = []
     }
   }
 })

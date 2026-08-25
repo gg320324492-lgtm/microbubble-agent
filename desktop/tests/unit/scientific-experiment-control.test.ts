@@ -1491,38 +1491,32 @@ describe('Phase 8-K3 50 more tests', () => {
   it('store has getter criticalAlertCount', () => {
     expect(readFileSync(join(__dirname, '../../src/stores/experiment-control.store.ts'), 'utf8')).toContain('criticalAlertCount')
   })
-  it('page file imports DeviceCard', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('DeviceCard')
+  it('page file imports SCADA components (B3 contract)', () => {
+    const page = readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')
+    expect(page).toContain('SCADADeviceTopology')
+    expect(page).toContain('SCADAMetricGrid')
+    expect(page).toContain('SCADAAlertPanel')
   })
-  it('page file imports RealtimeChart', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('RealtimeChart')
-  })
-  it('page file imports ExperimentTimeline', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('ExperimentTimeline')
-  })
-  it('page file imports PredictionPanel', () => {
+  it('page file imports prediction panel from research', () => {
     expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('PredictionPanel')
   })
-  it('page file imports AIAdviceCard', () => {
+  it('page file imports AI advice card', () => {
     expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('AIAdviceCard')
   })
-  it('page has 控制中心 title', () => {
+  it('page has 实验控制中心 title', () => {
     expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('实验控制中心')
   })
-  it('page has 设备仪表盘', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('设备仪表盘')
+  it('page has SCADA 主题', () => {
+    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('data-research-theme="scada"')
   })
-  it('page has 实时图表', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('实时图表')
+  it('page has 实验状态 label', () => {
+    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('实验状态')
   })
-  it('page has 实验时间线', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('实验时间线')
+  it('page has Run 状态 label', () => {
+    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('Run 状态')
   })
-  it('page has 数字孪生预测', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('数字孪生预测')
-  })
-  it('page has AI 推荐', () => {
-    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('AI 推荐')
+  it('page has 数字孪生预测 empty state', () => {
+    expect(readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')).toContain('暂无数字孪生预测')
   })
   it('monitor + advisor + dashboard all integrated', () => {
     const mon = new ExperimentMonitor()
@@ -1894,11 +1888,11 @@ describe('Phase 8-K3 final 30', () => {
     expect(validators.length).toBe(8)
     for (const v of validators) expect(typeof v).toBe('function')
   })
-  it('Component imports page', () => {
+  it('Component imports page (B3 contract)', () => {
     const page = readFileSync(join(__dirname, '../../src/renderer/src/pages/research/ExperimentControlCenter.vue'), 'utf8')
-    expect(page).toContain('DeviceCard')
-    expect(page).toContain('RealtimeChart')
-    expect(page).toContain('ExperimentTimeline')
+    expect(page).toContain('SCADADeviceTopology')
+    expect(page).toContain('SCADAMetricGrid')
+    expect(page).toContain('SCADAAlertPanel')
     expect(page).toContain('PredictionPanel')
     expect(page).toContain('AIAdviceCard')
   })
