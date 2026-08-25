@@ -19,6 +19,7 @@ import { bootstrapAgentService, type AgentService } from './agent/agent.service'
 import { bootstrapProductService, type ProductService } from './product.service'
 import { bootstrapImportService, type ImportService } from './import.service'
 import { bootstrapDeviceService, type DeviceService } from './device/device.service'
+import { bootstrapELNProductService, type ELNProductService } from './eln.service'
 
 export interface DatabaseService {
   db: SQLiteDatabase
@@ -39,6 +40,7 @@ export interface DatabaseService {
   product: ProductService
   importSvc: ImportService
   deviceSvc: DeviceService
+  elnProduct: ELNProductService
   status(): { open: boolean; path: string; version: number; environment: string }
   close(): void
 }
@@ -78,6 +80,7 @@ export function bootstrapDatabase(): DatabaseService {
     product: bootstrapProductService(() => service),
     importSvc: bootstrapImportService(() => service),
     deviceSvc: bootstrapDeviceService(() => service),
+    elnProduct: bootstrapELNProductService(() => service),
     status() {
       return {
         open: db.isOpen(),
