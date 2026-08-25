@@ -3,6 +3,9 @@
 // 严禁渲染进程直接访问; 所有操作必须经 IPC bridge (db:*).
 
 import { resolveDatabaseConfig, createSQLiteDatabase, createMigrationManager, type SQLiteDatabase, type MigrationManager } from '../database'
+// R4: inline-import the 010-migration-workspace schema so callers (mbrp-importer) can
+// re-apply it after a manual restore from a database backup.
+import SCHEMA_010_MIGRATION_WORKSPACE from '../database/schema/010-migration-workspace.sql?raw'
 import {
   createProjectRepository, createExperimentRepository, createMeasurementRepository,
   createDeviceRepository, createManuscriptRepository, createAgentHistoryRepository,
@@ -110,3 +113,19 @@ export function resetDatabaseService(): void {
   }
   service = null
 }
+
+/**
+ * R4 — apply an inline-loaded SQL schema against an open SQLiteDatabase.
+ * Used by the mbrp-importer to ensure the migration_runs / source_id_map /
+ * workspace_documents tables exist after a fresh install or a manual
+ * restore from database-*.db backup.
+ *
+ * Idempotent (CREATE IF NOT EXISTS), no transaction wrapper needed.
+ */
+export function applyMigrationSchema(db: SQLiteDatabase, schemaSql: string): void {
+  if (!db.isOpen()) throw new Error('applyMigrationSchema: database not open')
+  db.execute(schemaSql)
+}
+
+/** R4 — the 010-migration-workspace SQL, inlined at build time (vite ?raw). */
+export const MIGRATION_SCHEMA_010 = SCHEMA_010_MIGRATION_WORKSPACE

@@ -370,6 +370,9 @@ export interface UpdateCheckResult {
 export interface DesktopAppApi {
   getConfig: () => Promise<unknown>
   getStatus: () => Promise<unknown>
+  /** Phase 10.6 hotfix: 代理 fetch 远程 avatar → 返回 base64 dataURL,
+   *  避免 renderer <img src=remote> 在沙箱 Electron 被 webSecurity/CSP 阻止 */
+  fetchAvatar: (url: string) => Promise<{ ok: boolean; dataUrl: string | null; error?: string }>
   getInfo: () => Promise<ApplicationInfo>
   checkUpdate: () => Promise<UpdateCheckResult>
   downloadUpdate: () => Promise<{ ok: true; progress?: number }>
@@ -514,6 +517,35 @@ export interface DesktopDeviceApi {
   status: () => Promise<DeviceStatus[]>
 }
 
+/**
+ * R4: Migration API surface — mbrp package import into staging workspace.
+ *
+ * - preflight: verify a .mbrp without importing
+ * - import:    run a verified import through the staging→rename pipeline
+ * - runs:      list migration_runs history (R4 stub returns []; wired in a follow-up)
+ */
+export interface MigrationPreflightResult {
+  ok: boolean
+  code?: string
+  message?: string
+}
+
+export interface MigrationImportResult {
+  ok: boolean
+  runId?: string
+  code?: string
+  message?: string
+  filesWritten?: number
+  warningCount?: number
+  workspacePath?: string
+}
+
+export interface DesktopMigrationApi {
+  preflight: (packagePath: string) => Promise<MigrationPreflightResult>
+  import: (packagePath: string, snapshotId: string) => Promise<MigrationImportResult>
+  runs: () => Promise<unknown[]>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
@@ -526,6 +558,7 @@ export interface DesktopApi extends DesktopPingApi {
   analysis: DesktopAnalysisApi
   agent: DesktopAgentApi
   device: DesktopDeviceApi
+  migration: DesktopMigrationApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 
