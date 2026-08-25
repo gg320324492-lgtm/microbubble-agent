@@ -6,8 +6,10 @@ import { resolveDatabaseConfig, createSQLiteDatabase, createMigrationManager, ty
 import {
   createProjectRepository, createExperimentRepository, createMeasurementRepository,
   createDeviceRepository, createManuscriptRepository, createAgentHistoryRepository,
+  createSampleRepository, createAnalysisResultRepository, createFigureRepository,
   type ProjectRepository, type ExperimentRepository, type MeasurementRepository,
-  type DeviceRepository, type ManuscriptRepository, type AgentHistoryRepository
+  type DeviceRepository, type ManuscriptRepository, type AgentHistoryRepository,
+  type SampleRepository, type AnalysisResultRepository, type FigureRepository
 } from '../repositories'
 import { createDatabaseAuditLogger, type DatabaseAuditLogger } from '../database/database-audit-logger'
 import { logger } from './storage.service'
@@ -22,6 +24,9 @@ export interface DatabaseService {
   devices: DeviceRepository
   manuscripts: ManuscriptRepository
   agents: AgentHistoryRepository
+  samples: SampleRepository
+  analysisResults: AnalysisResultRepository
+  figures: FigureRepository
   status(): { open: boolean; path: string; version: number; environment: string }
   close(): void
 }
@@ -49,8 +54,12 @@ export function bootstrapDatabase(): DatabaseService {
   const devices = createDeviceRepository(db)
   const manuscripts = createManuscriptRepository(db)
   const agents = createAgentHistoryRepository(db)
+  const samples = createSampleRepository(db)
+  const analysisResults = createAnalysisResultRepository(db)
+  const figures = createFigureRepository(db)
   service = {
     db, migrations, audit, projects, experiments, measurements, devices, manuscripts, agents,
+    samples, analysisResults, figures,
     status() {
       return {
         open: db.isOpen(),

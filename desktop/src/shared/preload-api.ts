@@ -397,6 +397,19 @@ export interface DesktopDatabaseApi {
   delete: (table: string, id: string | number) => Promise<{ deleted: boolean }>
 }
 
+export interface DesktopDataEngineApi {
+  sampleCreate: (sample: Record<string, unknown>) => Promise<Record<string, unknown>>
+  sampleListByExperiment: (experimentId: string) => Promise<Record<string, unknown>[]>
+  sampleDelete: (sampleId: string) => Promise<{ deleted: boolean }>
+  analysisCreate: (result: Record<string, unknown>) => Promise<Record<string, unknown>>
+  analysisListByExperiment: (experimentId: string) => Promise<Record<string, unknown>[]>
+  analysisAddModelParam: (param: Record<string, unknown>) => Promise<Record<string, unknown>>
+  analysisListModelParams: (analysisId: string) => Promise<Record<string, unknown>[]>
+  figureCreate: (figure: Record<string, unknown>) => Promise<Record<string, unknown>>
+  figureListByExperiment: (experimentId: string) => Promise<Record<string, unknown>[]>
+  figureListByAnalysis: (analysisId: string) => Promise<Record<string, unknown>[]>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
@@ -405,6 +418,7 @@ export interface DesktopApi extends DesktopPingApi {
   model: DesktopModelApi
   app: DesktopAppApi
   database: DesktopDatabaseApi
+  dataEngine: DesktopDataEngineApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 

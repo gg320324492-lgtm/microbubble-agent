@@ -45,6 +45,21 @@ function listMigrations(schemaDir: string): Array<{ version: number; filename: s
   })
 }
 
+/**
+ * 拆分 SQL 文件为单条 statement. 跳过空行 + 行注释 (-- 开头).
+ * 简易拆分器: 不支持 PL/pgSQL 函数体, 我们的 migrations 都是单条 DDL.
+ */
+function splitSqlStatements(sql: string): string[] {
+  return sql
+    .split('\n')
+    .map((l) => l.replace(/^\s*--.*$/, '').trimEnd())
+    .filter((l) => l.length > 0)
+    .join('\n')
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
 function simpleChecksum(text: string): string {
   let hash = 0
   for (let i = 0; i < text.length; i++) {
@@ -96,9 +111,20 @@ class MigrationManagerImpl implements MigrationManager {
     for (const m of this.appliedMigrations()) applied.set(m.version, m)
     for (const mig of all) {
       if (applied.has(mig.version)) continue
-      // better-sqlite3 transaction 自动 ROLLBACK on throw
       this.db.transaction(() => {
-        this.db.execute(mig.sql)
+        // ALTER TABLE duplicate-column errors are tolerated (idempotent augment)
+        for (const stmt of splitSqlStatements(mig.sql)) {
+          try {
+            this.db.execute(stmt)
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            // 忽略 ALTER 重复列错误; 其他错误向上抛
+            if (stmt.trim().toUpperCase().startsWith('ALTER TABLE') && /duplicate column|already exists/i.test(msg)) {
+              continue
+            }
+            throw err
+          }
+        }
         this.db.execute(
           'INSERT INTO schema_version (version, filename, applied_at, checksum) VALUES (?, ?, ?, ?)',
           [mig.version, mig.filename, Date.now(), mig.checksum]

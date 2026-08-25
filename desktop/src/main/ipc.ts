@@ -161,6 +161,74 @@ export function registerIpcHandlers(): void {
     return { deleted: result.changes > 0 }
   })
 
+  // ---------- Phase 8-M1-C: Scientific Data Engine IPC Bridge ----------
+  ipcMain.handle('data:sample.create', async (_e, sample: Record<string, unknown>) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    const created = svc.samples.create(sample as never)
+    svc.audit.record({ action: 'sample.create', module: 'dataEngine', metadata: { id: created.id, experimentId: created.experimentId } })
+    return created as unknown as Record<string, unknown>
+  })
+  ipcMain.handle('data:sample.list', async (_e, experimentId: string) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.samples.listByExperiment(experimentId) as unknown as Record<string, unknown>[]
+  })
+  ipcMain.handle('data:sample.delete', async (_e, sampleId: string) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { deleted: false }
+    const result = svc.samples.delete(sampleId)
+    svc.audit.record({ action: 'sample.delete', module: 'dataEngine', metadata: { id: sampleId, deleted: result } })
+    return { deleted: result }
+  })
+  ipcMain.handle('data:analysis.create', async (_e, result: Record<string, unknown>) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    const created = svc.analysisResults.create(result as never)
+    svc.audit.record({ action: 'analysis.create', module: 'dataEngine', metadata: { id: created.id, runType: created.runType } })
+    return created as unknown as Record<string, unknown>
+  })
+  ipcMain.handle('data:analysis.list', async (_e, experimentId: string) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.analysisResults.listByExperiment(experimentId) as unknown as Record<string, unknown>[]
+  })
+  ipcMain.handle('data:analysis.param', async (_e, param: Record<string, unknown>) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    return svc.analysisResults.addModelParam(param as never) as unknown as Record<string, unknown>
+  })
+  ipcMain.handle('data:analysis.params', async (_e, analysisId: string) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.analysisResults.listModelParams(analysisId) as unknown as Record<string, unknown>[]
+  })
+  ipcMain.handle('data:figure.create', async (_e, figure: Record<string, unknown>) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    return svc.figures.create(figure as never) as unknown as Record<string, unknown>
+  })
+  ipcMain.handle('data:figure.listByExperiment', async (_e, experimentId: string) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.figures.listByExperiment(experimentId) as unknown as Record<string, unknown>[]
+  })
+  ipcMain.handle('data:figure.listByAnalysis', async (_e, analysisId: string) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.figures.listByAnalysis(analysisId) as unknown as Record<string, unknown>[]
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {
