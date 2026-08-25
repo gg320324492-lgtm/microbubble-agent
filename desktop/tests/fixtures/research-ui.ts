@@ -25,7 +25,7 @@ export const RESEARCH_PAGES = [
   ['Literature', ['文献证据工作区', '相关度', '证据等级', '引用位置']],
   ['Experiment', ['研究假设', '实验变量', 'AI 实验建议']],
   ['DataAnalysis', ['数据分析工作区', '数据质量', '模型拟合', '科学解读']],
-  ['Manuscript', ['论文结构', '连续论文草稿', 'SCI 审阅']],
+  ['Manuscript', ['SCI 论文工作台', '章节结构', '暂无 Reviewer 意见']],
   ['KnowledgeGraph', ['实体列表', '关系详情']],
   ['AgentCenter', ['AI 思考时间线', '智能体协作矩阵', '工具执行可视化']],
   ['Settings', ['模型配置', '知识库管理', '研究者信息', 'API 与密钥']]

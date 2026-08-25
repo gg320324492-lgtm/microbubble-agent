@@ -230,21 +230,21 @@ describe('Phase 8-I3-A data analysis', () => {
 
 // ============ Page Upgrades — Manuscript ============
 
-describe('Phase 8-I3-A manuscript', () => {
+describe('Phase 8-M0-C manuscript', () => {
   const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8')
-  it('has structure tree', () => { expect(c).toContain('论文结构') })
-  it('has AI writing button', () => { expect(c).toContain('AI 生成') })
-  it('has SCI review panel', () => { expect(c).toContain('SCI 审阅') })
-  it('has language review', () => { expect(c).toContain("label: '语言'") })
-  it('has logic review', () => { expect(c).toContain("label: '逻辑'") })
-  it('has review scores for innovation', () => { expect(c).toContain('创新性') })
-  it('has citation review', () => { expect(c).toContain("label: '引用'") })
-  it('has writing issues', () => { expect(c).toContain('待改进建议') })
-  it('has generate button', () => { expect(c).toContain('generateContent') })
-  it('has generating state', () => { expect(c).toContain('generatingKey') })
-  it('has word count', () => { expect(c).toContain('wordCount') })
-  it('has section citations', () => { expect(c).toContain('citations') })
+  it('has chapter outline structure', () => { expect(c).toContain('ManuscriptOutlinePanel') })
+  it('has scientific editor panel', () => { expect(c).toContain('ScientificEditorPanel') })
+  it('has Reviewer insight panel', () => { expect(c).toContain('ReviewerInsightPanel') })
+  it('has citation location panel', () => { expect(c).toContain('CitationLocationPanel') })
+  it('has figure manager panel', () => { expect(c).toContain('FigureManagerPanel') })
+  it('uses 3 column layout', () => { expect(c).toMatch(/grid-template-columns:[^;]*1fr[^;]*1fr[^;]*1fr|1fr\s+minmax[^;]+1fr|minmax\([^,]+,\s*var\(--research-rail[^)]+\)\)[^;]*minmax/) })
+  it('has ResearchPageHeader', () => { expect(c).toContain('ResearchPageHeader') })
+  it('has ResearchState for loading/empty/error', () => { expect(c).toContain('ResearchState') })
+  it('shows section word count', () => { expect(c).toContain('wordCount') })
+  it('shows section citations', () => { expect(c).toContain('citations') })
   it('uses manuscriptStore', () => { expect(c).toContain('useManuscriptStore') })
+  it('uses composable for service loading', () => { expect(c).toContain('useManuscriptLoader') })
+  it('has prefers-reduced-motion support', () => { expect(c).toContain('prefers-reduced-motion') })
 })
 
 // ============ Page Upgrades — Dashboard ============
@@ -314,8 +314,8 @@ describe('Phase 8-I3-A Chinese labels', () => {
   })
   it('manuscript has Chinese labels', () => {
     const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8')
-    expect(c).toContain('连续论文草稿')
-    expect(c).toContain('SCI 审阅')
+    expect(c).toContain('SCI 论文工作台')
+    expect(c).toContain('章节结构')
   })
   it('dashboard has Chinese labels', () => {
     const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8')
@@ -361,7 +361,7 @@ describe('Phase 8-I3-A UI states', () => {
   })
   it('manuscript has generating state', () => {
     const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8')
-    expect(c).toContain('generatingKey')
+    expect(c).toContain('isLoading')
   })
 })
 
@@ -549,7 +549,7 @@ describe('Phase 8-I3-A extended coverage', () => {
     })
     it('manuscript calls loadManuscript', () => {
       const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8')
-      expect(c).toContain('store.loadManuscript')
+      expect(c).toContain('loadFromService')
     })
     it('dashboard calls all loads', () => {
       const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8')
@@ -707,22 +707,22 @@ describe('Phase 8-I3-A extended coverage', () => {
     it('DA14', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('store.models') })
     it('DA15', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/DataAnalysis.vue'), 'utf8'); expect(c).toContain('store.conclusions') })
 
-    // Manuscript extended (15): continuous draft and truthful four-dimensional review.
-    it('M1', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('论文结构') })
-    it('M2', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('AI 生成') })
-    it('M3', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('SCI 审阅') })
-    it('M4', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain("label: '语言'") })
-    it('M5', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain("label: '逻辑'") })
-    it('M6', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain("label: '创新'") })
-    it('M7', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain("label: '引用'") })
-    it('M8', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('待改进建议') })
-    it('M9', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('generateContent') })
-    it('M10', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('generatingKey') })
-    it('M11', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('manuscript__generate') })
-    it('M12', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('manuscript__dimensions') })
-    it('M13', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('manuscript__issue') })
-    it('M14', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('manuscript__citations') })
-    it('M15', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('store.loadManuscript') })
+    // Manuscript extended (15): three-column workspace with five props-only panels.
+    it('M1', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('ManuscriptOutlinePanel') })
+    it('M2', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('ScientificEditorPanel') })
+    it('M3', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('ReviewerInsightPanel') })
+    it('M4', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('CitationLocationPanel') })
+    it('M5', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('FigureManagerPanel') })
+    it('M6', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('useManuscriptLoader') })
+    it('M7', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('data-research-theme') })
+    it('M8', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('暂无 Reviewer 意见') })
+    it('M9', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('ResearchState') })
+    it('M10', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('loadFromService') })
+    it('M11', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('manuscript__grid') })
+    it('M12', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('manuscript__grid') })
+    it('M13', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('store.activeSection') })
+    it('M14', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('store.highlights') })
+    it('M15', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Manuscript.vue'), 'utf8'); expect(c).toContain('prefers-reduced-motion') })
 
     // Dashboard extended (15): no fixed demo activity, all status comes from Stores.
     it('D1', () => { const c = readFileSync(resolve(rendererRoot, 'pages/research/Dashboard.vue'), 'utf8'); expect(c).toContain('AI 研究活动') })
