@@ -12,6 +12,18 @@ import {
 } from './services/chat/chat-stream.service'
 import { registerModelIpcHandlers, setProviderPingFn } from './services/model-provider/model-ipc'
 import { getProvider } from './services/model-provider/registry'
+import type { AppConfigShape } from '@shared/config'
+
+// 注入 AppConfig (在 bootstrapApp 中通过 resolveAppConfig() 计算)
+let appConfigSnapshot: AppConfigShape | null = null
+
+export function setAppConfig(cfg: AppConfigShape): void {
+  appConfigSnapshot = cfg
+}
+
+export function getAppConfigSnapshot(): AppConfigShape | null {
+  return appConfigSnapshot
+}
 
 /**
  * 主进程 IPC 注册入口。
@@ -93,4 +105,30 @@ export function registerIpcHandlers(): void {
     return provider.ping(cfg)
   })
   registerModelIpcHandlers()
+
+  // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
+  ipcMain.handle('app:get-config', async () => appConfigSnapshot)
+  ipcMain.handle('persistence:save', async (_e, payload: { namespace: string; key: string; value: unknown }) => {
+    const { persistence } = await import('./services/storage.service')
+    await persistence.save(payload.namespace, payload.key, payload.value)
+    return { ok: true }
+  })
+  ipcMain.handle('persistence:load', async (_e, payload: { namespace: string; key: string }) => {
+    const { persistence } = await import('./services/storage.service')
+    return persistence.load(payload.namespace, payload.key)
+  })
+  ipcMain.handle('persistence:remove', async (_e, payload: { namespace: string; key: string }) => {
+    const { persistence } = await import('./services/storage.service')
+    await persistence.remove(payload.namespace, payload.key)
+    return { ok: true }
+  })
+  ipcMain.handle('logger:write', async (_e, payload: { level: string; module: string; message: string; metadata?: unknown }) => {
+    const { logger } = await import('./services/storage.service')
+    logger.write(payload.level as 'info' | 'warn' | 'error' | 'debug', payload.module, payload.message, payload.metadata)
+    return { ok: true }
+  })
+  ipcMain.handle('logger:tail', async (_e, payload: { lines?: number }) => {
+    const { logger } = await import('./services/storage.service')
+    return logger.tail(payload?.lines ?? 100)
+  })
 }

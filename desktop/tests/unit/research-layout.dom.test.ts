@@ -38,11 +38,14 @@ const routeTargets = {
 
 const dummy = { template: '<div />' }
 const researchRoutes: RouteRecordRaw[] = RESEARCH_NAV.map(([, name]) => ({
-  path: routeTargets[name],
+  path: routeTargets[name as keyof typeof routeTargets],
   name,
   component: dummy,
   meta: { title: '科研页面' }
-}))
+})).concat([
+  { path: '/system-status', name: 'system-status', component: dummy, meta: { title: '系统状态' } },
+  { path: '/about', name: 'about', component: dummy, meta: { title: '关于' } }
+] as RouteRecordRaw[])
 
 async function mountSidebar(initialPath = '/research/dashboard'): Promise<{ wrapper: VueWrapper; router: Router }> {
   const pinia = createPinia()

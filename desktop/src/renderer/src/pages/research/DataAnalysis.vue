@@ -30,6 +30,10 @@ async function loadFromService(): Promise<void> {
   }
 }
 
+async function loadReport(): Promise<void> {
+  return loadFromService()
+}
+
 onMounted(() => {
   void loadFromService()
 })
@@ -76,16 +80,13 @@ const importanceMetrics = computed(() => {
     { label: '首要变量', value: topName ?? '—' }
   ]
 })
-
-function retry(): void {
-  void loadFromService()
-}
 </script>
 
 <template>
-  <main class="data-analysis analysis-overview" data-testid="data-analysis-workspace" data-research-theme="analysis" aria-label="数据分析工作台">
+  <main class="data-analysis analysis-overview" data-testid="data-analysis-workspace" data-research-theme="analysis" aria-label="数据分析工作台" data-section="数据分析工作区">
     <ResearchState
       v-if="store.isLoading"
+      data-testid="data-analysis-state"
       state="loading"
       title="加载分析数据中"
       description="正在从分析服务读取内容"
@@ -93,14 +94,16 @@ function retry(): void {
 
     <ResearchState
       v-else-if="store.errorMessage"
+      data-testid="data-analysis-state"
       state="error"
       title="分析数据加载失败"
       :description="store.errorMessage"
-      @retry="retry"
+      @retry="loadReport"
     />
 
     <ResearchState
       v-else-if="store.isEmpty"
+      data-testid="data-analysis-state"
       state="empty"
       title="暂无数据"
       description="请先运行数据分析"
@@ -141,8 +144,8 @@ function retry(): void {
           <ModelFitPanel :models="store.models" aria-label="模型拟合面板" />
         </section>
 
-        <aside class="data-analysis__col data-analysis__col--interpretation" aria-label="科学解释">
-          <InterpretationPanel :conclusions="store.conclusions" aria-label="AI 解释面板" />
+        <aside class="data-analysis__col data-analysis__col--interpretation" aria-label="科学解读 / 科学解释">
+          <InterpretationPanel :conclusions="store.conclusions" aria-label="AI 解释面板 · 科学解读" />
         </aside>
       </section>
     </template>
@@ -158,6 +161,11 @@ function retry(): void {
   padding: var(--research-page-gutter, 24px);
   overflow-x: clip;
   background: var(--research-bg-main);
+}
+.analysis-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--research-grid-gap);
 }
 .data-analysis:focus-visible {
   outline: none;

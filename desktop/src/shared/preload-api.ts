@@ -350,12 +350,22 @@ export interface DesktopModelApi {
   } | null) => Promise<ModelRouteTaskResult>
 }
 
+export interface DesktopAppApi {
+  getConfig: () => Promise<unknown>
+  persistenceSave: (namespace: string, key: string, value: unknown) => Promise<{ ok: true }>
+  persistenceLoad: (namespace: string, key: string) => Promise<unknown>
+  persistenceRemove: (namespace: string, key: string) => Promise<{ ok: true }>
+  logWrite: (level: string, module: string, message: string, metadata?: unknown) => Promise<{ ok: true }>
+  logTail: (lines?: number) => Promise<Array<{ timestamp: string; level: string; module: string; message: string; metadata?: unknown }>>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
   session: DesktopSessionApi
   chat: DesktopChatStreamApi
   model: DesktopModelApi
+  app: DesktopAppApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 
