@@ -269,6 +269,47 @@ export function registerIpcHandlers(): void {
     return svc.analysisEngine.statistics(payload.experimentId, payload.metric)
   })
 
+  // ---------- Phase 8-M1-E: Agent IPC Bridge ----------
+  ipcMain.handle('agent:tool.list', async () => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.agent.listTools()
+  })
+  ipcMain.handle('agent:tool.invoke', async (_e, payload: { name: string; params: Record<string, unknown> }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) throw new Error('数据库未就绪')
+    const result = await svc.agent.invokeTool(payload.name, payload.params)
+    svc.audit.record({ action: 'tool.invoke', module: 'agent', metadata: { name: payload.name, ok: true } })
+    return result
+  })
+  ipcMain.handle('agent:chat.send', async (_e, payload: { sessionId: string; role: 'user' | 'assistant'; content: string; toolName?: string; toolResult?: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { ok: false }
+    svc.agent.recordMessage(payload.sessionId, payload.role, payload.content, payload.toolName, payload.toolResult)
+    return { ok: true }
+  })
+  ipcMain.handle('agent:chat.history', async (_e, payload: { sessionId: string; limit?: number }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.agent.getHistory(payload.sessionId, payload.limit)
+  })
+  ipcMain.handle('agent:chat.search', async (_e, payload: { query: string; limit?: number }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.agent.searchMemory(payload.query, payload.limit)
+  })
+  ipcMain.handle('agent:chat.clear', async (_e, payload: { sessionId: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return 0
+    return svc.agent.clearMemory(payload.sessionId)
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {

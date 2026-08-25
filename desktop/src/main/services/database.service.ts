@@ -15,6 +15,7 @@ import { createDatabaseAuditLogger, type DatabaseAuditLogger } from '../database
 import { logger } from './storage.service'
 import { createAnalysisEngine, type AnalysisEngine } from './analysis/analysis-engine'
 import { createLocalAnalysisEngineAdapter, type AnalysisEngineAdapter } from './analysis/adapter'
+import { bootstrapAgentService, type AgentService } from './agent/agent.service'
 
 export interface DatabaseService {
   db: SQLiteDatabase
@@ -31,6 +32,7 @@ export interface DatabaseService {
   figures: FigureRepository
   analysisEngine: AnalysisEngine
   analysisAdapter: AnalysisEngineAdapter
+  agent: AgentService
   status(): { open: boolean; path: string; version: number; environment: string }
   close(): void
 }
@@ -66,6 +68,7 @@ export function bootstrapDatabase(): DatabaseService {
     samples, analysisResults, figures,
     analysisEngine: createAnalysisEngine(db, analysisResults),
     analysisAdapter: createLocalAnalysisEngineAdapter(createAnalysisEngine(db, analysisResults)),
+    agent: bootstrapAgentService(() => service),
     status() {
       return {
         open: db.isOpen(),
