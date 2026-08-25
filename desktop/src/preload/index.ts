@@ -240,6 +240,14 @@ const api: DesktopApi = {
     runCurve: (experimentId, family, metric) => ipcRenderer.invoke('analysis:run.curve', { experimentId, family, metric }) as Promise<string>,
     listByExperiment: (experimentId) => ipcRenderer.invoke('analysis:list', experimentId) as Promise<Array<{ id: string; runType: string; status: string | null; model: string | null; startedAt: number; finishedAt: number | null; summary: string | null; confidence: number | null; parameters: Array<{ name: string; value: number; unit: string | null; stdError: number | null; pValue: number | null }> }>>,
     statistics: (experimentId, metric) => ipcRenderer.invoke('analysis:statistics', { experimentId, metric }) as Promise<{ summary: { metric: string; count: number; missingRate: number; mean: number | null; std: number | null; median: number | null; min: number | null; max: number | null; p25: number | null; p75: number | null; outliers: number; interpretation: string }; n: number }>
+  },
+  agent: {
+    listTools: () => ipcRenderer.invoke('agent:tool.list') as Promise<Array<{ name: string; description: string; parametersJson: string }>>,
+    invokeTool: (name, params) => ipcRenderer.invoke('agent:tool.invoke', { name, params }) as Promise<unknown>,
+    sendMessage: (sessionId, role, content, toolName, toolResult) => ipcRenderer.invoke('agent:chat.send', { sessionId, role, content, toolName, toolResult }) as Promise<{ ok: boolean }>,
+    getHistory: (sessionId, limit) => ipcRenderer.invoke('agent:chat.history', { sessionId, limit }) as Promise<Array<{ id: number; agent: string; role: 'user' | 'assistant' | 'tool'; content: string; timestamp: number; toolName?: string; toolResult?: string }>>,
+    searchMemory: (query, limit) => ipcRenderer.invoke('agent:chat.search', { query, limit }) as Promise<Array<{ id: number; agent: string; role: 'user' | 'assistant' | 'tool'; content: string; timestamp: number; toolName?: string; toolResult?: string }>>,
+    clearMemory: (sessionId) => ipcRenderer.invoke('agent:chat.clear', { sessionId }) as Promise<number>
   }
 }
 

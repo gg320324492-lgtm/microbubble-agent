@@ -426,6 +426,25 @@ export interface DesktopAnalysisApi {
   }>
 }
 
+export interface AgentChatMessage {
+  id: number
+  agent: string
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  timestamp: number
+  toolName?: string
+  toolResult?: string
+}
+
+export interface DesktopAgentApi {
+  listTools: () => Promise<Array<{ name: string; description: string; parametersJson: string }>>
+  invokeTool: (name: string, params: Record<string, unknown>) => Promise<unknown>
+  sendMessage: (sessionId: string, role: 'user' | 'assistant', content: string, toolName?: string, toolResult?: string) => Promise<{ ok: boolean }>
+  getHistory: (sessionId: string, limit?: number) => Promise<AgentChatMessage[]>
+  searchMemory: (query: string, limit?: number) => Promise<AgentChatMessage[]>
+  clearMemory: (sessionId: string) => Promise<number>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
@@ -436,6 +455,7 @@ export interface DesktopApi extends DesktopPingApi {
   database: DesktopDatabaseApi
   dataEngine: DesktopDataEngineApi
   analysis: DesktopAnalysisApi
+  agent: DesktopAgentApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 
