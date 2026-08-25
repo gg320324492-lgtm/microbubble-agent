@@ -504,6 +504,46 @@ export function registerIpcHandlers(): void {
     return svc.importSvc.engine.listDatasets(payload?.projectId)
   })
 
+  // ---------- Phase 9-B: Workflow IPC Bridge ----------
+  ipcMain.handle('workflow:templates.list', async () => {
+    const { getWorkflowService, bootstrapWorkflowService } = await import('./services/workflow.service')
+    const { getDatabaseService } = await import('./services/database.service')
+    const ds = getDatabaseService()
+    if (!ds) return []
+    return (getWorkflowService() ?? bootstrapWorkflowService(() => ds)).listTemplates()
+  })
+  ipcMain.handle('workflow:run.start', async (_e, payload: { templateId: string; parameters: Record<string, unknown>; startedBy?: string }) => {
+    const { getWorkflowService, bootstrapWorkflowService } = await import('./services/workflow.service')
+    const { getDatabaseService } = await import('./services/database.service')
+    const ds = getDatabaseService()
+    if (!ds) return null
+    try {
+      const run = await (getWorkflowService() ?? bootstrapWorkflowService(() => ds)).startRun(payload)
+      return run
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : '启动失败' }
+    }
+  })
+  ipcMain.handle('workflow:run.status', async (_e, payload: { runId: string }) => {
+    const { getWorkflowService } = await import('./services/workflow.service')
+    return getWorkflowService()?.getRun(payload.runId) ?? null
+  })
+  ipcMain.handle('workflow:run.list', async (_e, payload: { limit?: number }) => {
+    const { getWorkflowService, bootstrapWorkflowService } = await import('./services/workflow.service')
+    const { getDatabaseService } = await import('./services/database.service')
+    const ds = getDatabaseService()
+    if (!ds) return []
+    return (getWorkflowService() ?? bootstrapWorkflowService(() => ds)).listRuns(payload?.limit)
+  })
+  ipcMain.handle('workflow:run.cancel', async (_e, payload: { runId: string }) => {
+    const { getWorkflowService } = await import('./services/workflow.service')
+    return getWorkflowService()?.cancelRun(payload.runId) ?? false
+  })
+  ipcMain.handle('workflow:run.approve', async (_e, payload: { runId: string; stepId: string; approvedBy: string }) => {
+    const { getWorkflowService } = await import('./services/workflow.service')
+    return getWorkflowService()?.approveStep(payload.runId, payload.stepId, payload.approvedBy) ?? false
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {
