@@ -112,6 +112,10 @@ export function registerIpcHandlers(): void {
     const { getBootstrapResult } = await import('./bootstrap')
     return getBootstrapResult()
   })
+  ipcMain.handle('app:get-info', async () => {
+    const { resolveApplicationInfo } = await import('./application-info')
+    return resolveApplicationInfo()
+  })
   ipcMain.handle('app:restart', async () => {
     const { app } = await import('electron')
     app.relaunch()
@@ -122,6 +126,22 @@ export function registerIpcHandlers(): void {
     const { app } = await import('electron')
     app.quit()
     return { ok: true }
+  })
+  ipcMain.handle('app:check-update', async () => {
+    const { updateService } = await import('./services/update-service')
+    return updateService.checkUpdate()
+  })
+  ipcMain.handle('app:download-update', async () => {
+    const { updateService } = await import('./services/update-service')
+    return updateService.downloadUpdate()
+  })
+  ipcMain.handle('app:install-update', async () => {
+    const { updateService } = await import('./services/update-service')
+    return updateService.installUpdate()
+  })
+  ipcMain.handle('app:get-current-version', async () => {
+    const { updateService } = await import('./services/update-service')
+    return updateService.getCurrentVersion()
   })
   ipcMain.handle('persistence:save', async (_e, payload: { namespace: string; key: string; value: unknown }) => {
     const { persistence } = await import('./services/storage.service')

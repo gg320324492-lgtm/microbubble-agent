@@ -1,44 +1,145 @@
-appId: com.microbubble.desktop
-productName: MicroBubble Desktop
+# Phase 8-M1-A: Electron Release Package Configuration
+#
+# 多平台分发配置:
+#   - Windows: NSIS 安装包 (x64)
+#   - macOS:   dmg 镜像 (x64 + arm64)
+#   - Linux:   AppImage (x64)
+#
+# 严禁包含 backend/ 资源 (MicroBubble Agent 后端服务不在 Electron 包内).
+
+appId: com.scientific.research.os
+productName: Scientific Research OS
+copyright: Copyright (c) 2026 MicroBubble Lab
+artifactName: ScientificResearchOS-${version}-${arch}.${ext}
+
 directories:
   output: release/${version}
   buildResources: resources
+  outputResources: resources
+
+# 包含文件: 仅 build 产物 + package.json + resources/
 files:
   - out/**/*
   - package.json
+  - resources/**/*
   - '!**/.DS_Store'
-  - '!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}'
+  - '!**/Thumbs.db'
+  - '!**/.git/**'
+  - '!**/.idea/**'
+  - '!**/.vscode/**'
+  - '!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme,*.map}'
   - '!**/node_modules/.cache'
+  - '!**/node_modules/.bin'
+  - '!**/test/**'
+  - '!**/tests/**'
+  # 严禁把后端服务打进去
+  - '!**/backend/**'
+  - '!**/web/**'
+  - '!**/app/**'
+  # 文档 / CI 配置不进安装包
+  - '!**/.github/**'
+  - '!**/.gitlab-ci.yml'
+  - '!**/docs/**'
+
+# 额外资源: 协议头 / 原生模块 / 图标
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - '**/*'
+
 asar: true
 asarUnpack:
   - resources/**
+
+# 压缩: maximum (平衡体积与启动时间, NSIS 安装包体积敏感)
+compression: maximum
+
+# ---------- Windows ----------
 win:
   target:
     - target: nsis
       arch:
         - x64
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ScientificResearchOS-${version}-${arch}.${ext}
+  publisherName: MicroBubble Lab
+  verifyUpdateCodeSignature: false
+  icon: resources/icon.ico
+
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  allowElevation: true
   deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Scientific Research OS
+  installerLanguages:
+    - zh_CN
+    - en_US
+  language: '2052'
+
+# ---------- macOS ----------
 mac:
   target:
     - target: dmg
       arch:
         - x64
         - arm64
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ScientificResearchOS-${version}-${arch}.${ext}
+  category: public.app-category.productivity
+  icon: resources/icon.icns
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  darkModeSupport: true
+  extendInfo:
+    NSHumanReadableCopyright: Copyright (c) 2026 MicroBubble Lab
+    LSApplicationCategoryType: public.app-category.productivity
+
+dmg:
+  sign: false
+  title: Scientific Research OS ${version}
+  icon: resources/icon.icns
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# ---------- Linux ----------
 linux:
   target:
     - target: AppImage
       arch:
         - x64
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ScientificResearchOS-${version}-${arch}.${ext}
+  category: Science
+  icon: resources/icon.png
+  synopsis: Scientific Research OS
+  description: |
+    Scientific Research OS — MicroBubble Lab 内部科研工作台.
+    基于 Electron + Vue 3 的桌面客户端, 对接 MicroBubble Agent 后端 API.
+  desktop:
+    entry:
+      Name: Scientific Research OS
+      Comment: Scientific Research OS
+      Categories: Science;Education;
+      Keywords: research;science;microbubble;
+      StartupNotify: true
+      StartupWMClass: scientific-research-os
+  mimeTypes: []
+
+# ---------- 发布 (Phase 8-M1-A placeholder) ----------
+# 真实发布阶段会替换为具体 provider (GitHub Releases / 自建 releases.mnb-lab.cn).
+# 当前保持占位, 不影响本地 build.
 publish:
   - provider: generic
     url: https://releases.mnb-lab.cn/desktop
+    channel: latest
   - provider: github
     owner: microbubble-lab
     repo: microbubble-agent
+    releaseType: release

@@ -154,6 +154,13 @@ const routes: RouteRecordRaw[] = [
     name: 'system-status',
     component: () => import('../views/SystemStatusView.vue'),
     meta: { requiresAuth: true, layout: 'main', title: '系统状态' }
+  },
+  // ---------- Phase 8-M1-A: First launch ----------
+  {
+    path: '/system/first-launch',
+    name: 'system-first-launch',
+    component: () => import('../pages/system/FirstLaunch.vue'),
+    meta: { requiresAuth: false, layout: 'plain', title: '首次启动' }
   }
 ]
 
