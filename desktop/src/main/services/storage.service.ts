@@ -136,6 +136,29 @@ class LocalPersistenceAdapter {
 export const persistence = new LocalPersistenceAdapter()
 
 /**
+ * 工厂: 根据 APP_STORAGE_DRIVER 环境变量返回 JSON / SQLite 适配器.
+ * 开发默认 json, 生产默认 sqlite. 适配器切换不影响 store (接口一致).
+ */
+import type { PersistenceAdapter } from '../storage/sqlite-persistence-adapter'
+
+export function getActivePersistence(): PersistenceAdapter {
+  const driver = (typeof process !== 'undefined' && process.env?.['APP_STORAGE_DRIVER']) || ''
+  if (driver === 'sqlite') {
+    // 延迟 require: 避免在测试环境触发 better-sqlite3 native 加载
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getDatabaseService } = require('./database.service') as typeof import('./database.service')
+      const { createSQLitePersistenceAdapter } = require('../storage/sqlite-persistence-adapter') as typeof import('../storage/sqlite-persistence-adapter')
+      const svc = getDatabaseService()
+      if (svc) return createSQLitePersistenceAdapter(svc.db)
+    } catch {
+      // fallback
+    }
+  }
+  return persistence
+}
+
+/**
  * 结构化科研日志. 输出到 logDir/<date>.log (每日 rotate).
  * 格式: { timestamp, level, module, message, metadata? }
  *

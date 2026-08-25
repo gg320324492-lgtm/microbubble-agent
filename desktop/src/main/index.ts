@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { bootstrap } from './bootstrap'
 import { registerIpcHandlers, setAppConfig } from './ipc'
 import { APP_CONFIG, resolveAppConfig } from '@shared/config'
+import { bootstrapDatabase } from './services/database.service'
 
 const isDev = !app.isPackaged
 
@@ -71,10 +72,13 @@ async function bootstrapApp(): Promise<void> {
     // 1. 初始化 storage + auth (无 token 时 restore 自然失败，无影响)
     await bootstrap()
 
-    // 2. 注册 IPC handlers
+    // 2. 初始化 SQLite 数据库 (Phase 8-M1-B), 自动迁移 + audit logger
+    bootstrapDatabase()
+
+    // 3. 注册 IPC handlers
     registerIpcHandlers()
 
-    // 3. 创建窗口
+    // 4. 创建窗口
     mainWindow = createMainWindow()
   } catch (err) {
     // 启动阶段 fatal 错误: 标记 failed, 写日志, 创建窗口并展示 RecoveryCard

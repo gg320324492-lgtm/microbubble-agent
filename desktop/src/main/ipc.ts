@@ -106,6 +106,61 @@ export function registerIpcHandlers(): void {
   })
   registerModelIpcHandlers()
 
+  // ---------- Phase 8-M1-B: SQLite Database IPC Bridge ----------
+  ipcMain.handle('db:status', async () => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { open: false, path: '', version: 0 }
+    return svc.status()
+  })
+  ipcMain.handle('db:query', async (_e, payload: { sql: string; params?: unknown[] }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { rows: [], changes: 0 }
+    try {
+      const params = (payload.params ?? []) as Array<string | number | bigint | Buffer | null>
+      const rows = svc.db.query<unknown>(payload.sql, params)
+      svc.audit.record({ action: 'db.query', module: 'database', metadata: { sql: payload.sql, count: rows.length } })
+      return { rows, changes: 0 }
+    } catch (err) {
+      svc.audit.record({ action: 'db.query.error', module: 'database', metadata: { sql: payload.sql, error: String(err) } })
+      return { rows: [], changes: 0 }
+    }
+  })
+  ipcMain.handle('db:insert', async (_e, payload: { table: string; data: Record<string, unknown> }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    const cols = Object.keys(payload.data)
+    const placeholders = cols.map(() => '?').join(', ')
+    const values = cols.map((c) => payload.data[c] as string | number | bigint | Buffer | null)
+    const sql = `INSERT INTO ${payload.table} (${cols.join(', ')}) VALUES (${placeholders})`
+    const result = svc.db.execute(sql, values)
+    svc.audit.record({ action: `${payload.table}.create`, module: 'database', metadata: { lastInsertRowid: Number(result.lastInsertRowid) } })
+    return { ...payload.data, id: Number(result.lastInsertRowid) }
+  })
+  ipcMain.handle('db:update', async (_e, payload: { table: string; id: string | number; patch: Record<string, unknown> }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    const cols = Object.keys(payload.patch)
+    const setClause = cols.map((c) => `${c} = ?`).join(', ')
+    const values = cols.map((c) => payload.patch[c] as string | number | bigint | Buffer | null)
+    values.push(payload.id)
+    const sql = `UPDATE ${payload.table} SET ${setClause} WHERE id = ?`
+    const result = svc.db.execute(sql, values)
+    svc.audit.record({ action: `${payload.table}.update`, module: 'database', metadata: { id: payload.id, changes: result.changes } })
+    return result.changes > 0 ? { ...payload.patch, id: payload.id } : null
+  })
+  ipcMain.handle('db:delete', async (_e, payload: { table: string; id: string | number }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { deleted: false }
+    const result = svc.db.execute(`DELETE FROM ${payload.table} WHERE id = ?`, [payload.id])
+    svc.audit.record({ action: `${payload.table}.delete`, module: 'database', metadata: { id: payload.id, changes: result.changes } })
+    return { deleted: result.changes > 0 }
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {
