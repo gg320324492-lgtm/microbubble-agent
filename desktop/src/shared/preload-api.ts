@@ -384,6 +384,19 @@ export interface DesktopAppApi {
   logTail: (lines?: number) => Promise<Array<{ timestamp: string; level: string; module: string; message: string; metadata?: unknown }>>
 }
 
+export interface DatabaseQueryResult<T = unknown> {
+  rows: T[]
+  changes: number
+}
+
+export interface DesktopDatabaseApi {
+  status: () => Promise<{ open: boolean; path: string; version: number }>
+  query: <T = unknown>(sql: string, params?: unknown[]) => Promise<DatabaseQueryResult<T>>
+  insert: <T = unknown>(table: string, data: Record<string, unknown>) => Promise<T>
+  update: <T = unknown>(table: string, id: string | number, patch: Record<string, unknown>) => Promise<T | null>
+  delete: (table: string, id: string | number) => Promise<{ deleted: boolean }>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
@@ -391,6 +404,7 @@ export interface DesktopApi extends DesktopPingApi {
   chat: DesktopChatStreamApi
   model: DesktopModelApi
   app: DesktopAppApi
+  database: DesktopDatabaseApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 

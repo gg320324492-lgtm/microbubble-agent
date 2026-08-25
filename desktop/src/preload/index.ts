@@ -209,6 +209,17 @@ const api: DesktopApi = {
       ipcRenderer.invoke('logger:write', { level, module, message, metadata }) as Promise<{ ok: true }>,
     logTail: (lines: number = 100) =>
       ipcRenderer.invoke('logger:tail', { lines }) as Promise<Array<{ timestamp: string; level: string; module: string; message: string; metadata?: unknown }>>
+  },
+  database: {
+    status: () => ipcRenderer.invoke('db:status') as Promise<{ open: boolean; path: string; version: number }>,
+    query: <T = unknown>(sql: string, params?: unknown[]) =>
+      ipcRenderer.invoke('db:query', { sql, params }) as Promise<{ rows: T[]; changes: number }>,
+    insert: <T = unknown>(table: string, data: Record<string, unknown>) =>
+      ipcRenderer.invoke('db:insert', { table, data }) as Promise<T>,
+    update: <T = unknown>(table: string, id: string | number, patch: Record<string, unknown>) =>
+      ipcRenderer.invoke('db:update', { table, id, patch }) as Promise<T | null>,
+    delete: (table: string, id: string | number) =>
+      ipcRenderer.invoke('db:delete', { table, id }) as Promise<{ deleted: boolean }>
   }
 }
 
