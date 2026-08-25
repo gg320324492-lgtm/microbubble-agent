@@ -72,8 +72,8 @@ async function loadDashboard(): Promise<void> {
   try {
     await Promise.all([
       knowledgeStore.loadDocuments(),
-      datasetStore.loadReport(),
-      manuscriptStore.loadManuscript()
+      datasetStore.loadReport(async () => undefined),
+      manuscriptStore.loadManuscript(async () => undefined)
     ])
   } catch (error) {
     console.error('[科研驾驶舱] 科研数据加载失败', error)

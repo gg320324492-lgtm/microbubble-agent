@@ -107,18 +107,18 @@ const NAVIGATION_CASES = [
 ] as const
 
 const HEADER_CASES = [
-  'header-bar__project-trigger',
-  '当前项目选择器',
-  'role="listbox"',
+  'ShellCommandPalette',
+  'ShellProjectSelector',
+  'aria-keyshortcuts="Control+K"',
+  'header-bar__command-trigger',
+  '打开命令与搜索',
+  '@keydown.esc.stop',
   'header-ai-status__system',
   '系统状态：待连接',
   'header-bar__ai-status',
   '全局 AI 状态',
-  'header-bar__command-trigger',
-  '打开命令与搜索',
-  'aria-keyshortcuts="Control+K"',
-  'header-command-popover',
-  '@keydown.esc.stop',
+  '查看科研通知',
+  'header-bar__icon-button',
 ] as const
 
 const PRIMITIVE_CASES = [
@@ -150,7 +150,7 @@ const PANEL_CASES = [
 const A11Y_CASES = [
   ['Sidebar current page', sidebar, 'aria-current'],
   ['Sidebar Chinese navigation label', sidebar, 'aria-label="科研工作台导航"'],
-  ['Header project accessible expansion', header, ':aria-expanded="projectSelectorOpen"'],
+  ['Header project accessible expansion', readSource('components/shell/ShellProjectSelector.vue'), 'aria-haspopup="listbox"'],
   ['Header command accessible expansion', header, ':aria-expanded="commandOpen"'],
   ['Header system live status', header, 'aria-live="polite"'],
   ['Header notification label', header, 'aria-label="查看科研通知"'],

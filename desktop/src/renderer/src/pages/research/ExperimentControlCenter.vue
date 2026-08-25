@@ -118,23 +118,26 @@ const statusItems = computed(() => [
   min-height: 100%;
   padding: var(--research-page-gutter);
   overflow-x: clip;
-  background: var(--research-bg-main, #f8fafc);
+  background: var(--research-bg-main);
 }
 [data-research-theme='scada'] .experiment-control-center {
-  background: var(--research-bg-scada-deep, #0a1118);
-  color: var(--research-scada-text, #d6e4ee);
+  background: var(--research-scada-bg-deep);
+  color: var(--research-scada-text);
 }
 .experiment-control-center:focus-visible {
   outline: none;
 }
 .experiment-control-center__section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--research-scada-text, #d6e4ee);
-  margin: 0 0 12px;
+  font-size: var(--research-text-card-title);
+  font-weight: var(--research-font-weight-semibold);
+  color: var(--research-text-primary);
+  margin: 0 0 var(--research-space-3);
+}
+[data-research-theme='scada'] .experiment-control-center__section-title {
+  color: var(--research-scada-text);
 }
 .experiment-control-center__status {
-  margin-bottom: 24px;
+  margin-bottom: var(--research-space-6);
   min-width: 0;
 }
 .experiment-control-center__status-grid {
@@ -143,23 +146,32 @@ const statusItems = computed(() => [
   gap: var(--research-grid-gap);
 }
 .experiment-control-center__status-label {
-  font-size: 12px;
-  color: var(--research-scada-muted, #94a3b8);
-  margin: 0 0 4px;
+  font-size: var(--research-text-xs);
+  color: var(--research-text-muted);
+  margin: 0 0 var(--research-space-1);
+}
+[data-research-theme='scada'] .experiment-control-center__status-label {
+  color: var(--research-scada-muted);
 }
 .experiment-control-center__status-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--research-scada-text, #d6e4ee);
+  font-size: var(--research-text-body);
+  font-weight: var(--research-font-weight-semibold);
+  color: var(--research-text-primary);
   margin: 0;
+}
+[data-research-theme='scada'] .experiment-control-center__status-value {
+  color: var(--research-scada-text);
 }
 .experiment-control-center__status-empty {
-  font-size: 13px;
-  color: var(--research-scada-muted, #94a3b8);
+  font-size: var(--research-text-sm);
+  color: var(--research-text-muted);
   margin: 0;
 }
+[data-research-theme='scada'] .experiment-control-center__status-empty {
+  color: var(--research-scada-muted);
+}
 .experiment-control-center__twin {
-  margin-bottom: 24px;
+  margin-bottom: var(--research-space-6);
   min-width: 0;
 }
 .experiment-control-center__twin-grid {
@@ -168,7 +180,7 @@ const statusItems = computed(() => [
   gap: var(--research-grid-gap);
 }
 .experiment-control-center__observability {
-  margin-bottom: 24px;
+  margin-bottom: var(--research-space-6);
   min-width: 0;
 }
 .experiment-control-center__observability-grid {
@@ -179,12 +191,15 @@ const statusItems = computed(() => [
 .experiment-control-center__devices {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 12px;
+  gap: var(--research-space-3);
 }
 .experiment-control-center__empty {
-  font-size: 13px;
-  color: var(--research-scada-muted, #94a3b8);
-  margin: 8px 0 0;
+  font-size: var(--research-text-sm);
+  color: var(--research-text-muted);
+  margin: var(--research-space-2) 0 0;
+}
+[data-research-theme='scada'] .experiment-control-center__empty {
+  color: var(--research-scada-muted);
 }
 @media (max-width: 1480px) {
   .experiment-control-center__twin-grid,
