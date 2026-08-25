@@ -28,9 +28,14 @@ export const useDatasetStore = defineStore('research-dataset', () => {
   function setError(message: string) {
     errorMessage.value = message
   }
-  async function loadReport(_loader: () => Promise<void>) {
+  async function loadReport(_loader?: () => Promise<void>) {
     isLoading.value = true
-    void _loader().finally(() => { isLoading.value = false })
+    const safeLoader = typeof _loader === 'function' ? _loader : null
+    if (safeLoader) {
+      void safeLoader().finally(() => { isLoading.value = false })
+    } else {
+      isLoading.value = false
+    }
   }
   function reset() {
     report.value = null

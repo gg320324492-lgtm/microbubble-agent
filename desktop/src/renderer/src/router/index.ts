@@ -88,6 +88,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'main', title: '实验设计' }
   },
   {
+    path: '/research/demo',
+    name: 'research-demo',
+    component: () => import('../pages/research/Demo.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '演示场景 · O₃-MNBs' }
+  },
+  {
     path: '/research/data-analysis',
     name: 'research-data-analysis',
     component: () => import('../pages/research/DataAnalysis.vue'),

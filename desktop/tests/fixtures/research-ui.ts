@@ -1,5 +1,6 @@
 export const RESEARCH_NAV = [
   ['科研驾驶舱', 'research-dashboard', 'home'],
+  ['演示场景', 'research-demo', 'sparkles'],
   ['科研助手', 'research-assistant', 'assistant'],
   ['研究工作区', 'research-project', 'project'],
   ['文献研究', 'research-literature', 'literature'],

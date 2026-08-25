@@ -14,6 +14,7 @@ interface NavItem {
 const COLLAPSE_KEY = 'research-sidebar-collapsed'
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { label: '科研驾驶舱', icon: 'home', routeName: 'research-dashboard' },
+  { label: '演示场景', icon: 'sparkles', routeName: 'research-demo' },
   { label: '科研助手', icon: 'assistant', routeName: 'research-assistant' },
   { label: '研究工作区', icon: 'project', routeName: 'research-project' },
   { label: '文献研究', icon: 'literature', routeName: 'research-literature' },
