@@ -310,6 +310,54 @@ export function registerIpcHandlers(): void {
     return svc.agent.clearMemory(payload.sessionId)
   })
 
+  // ---------- Phase 8-M1-F: Device Control IPC Bridge ----------
+  ipcMain.handle('device:list', async () => {
+    const { getDeviceService } = await import('./services/device/device.service')
+    return getDeviceService()?.status() ?? []
+  })
+  ipcMain.handle('device:connect', async (_e, payload: {
+    deviceId: string; deviceType: 'ozone-generator' | 'pump' | 'reactor' | 'sensor' | 'ph-meter' | 'do-meter' | 'orp-meter' | 'flow-meter' | 'power-meter'
+    endpoint: string; pollIntervalMs?: number; calibrationAt?: number; alarmLow?: number | null; alarmHigh?: number | null
+  }) => {
+    const { getDeviceService, bootstrapDeviceService } = await import('./services/device/device.service')
+    const { getDatabaseService } = await import('./services/database.service')
+    const ds = getDeviceService() ?? bootstrapDeviceService(() => getDatabaseService())
+    await ds.connect(payload as never)
+    return { ok: true }
+  })
+  ipcMain.handle('device:disconnect', async (_e, payload: { deviceId: string }) => {
+    const { getDeviceService } = await import('./services/device/device.service')
+    await getDeviceService()?.disconnect(payload.deviceId)
+    return { ok: true }
+  })
+  ipcMain.handle('device:telemetry', async (_e, payload: { deviceId: string; sinceMs?: number }) => {
+    const { getDeviceService } = await import('./services/device/device.service')
+    return getDeviceService()?.telemetry(payload.deviceId, payload.sinceMs) ?? []
+  })
+  ipcMain.handle('device:alarm.list', async (_e, payload: { deviceId?: string }) => {
+    const { getDeviceService } = await import('./services/device/device.service')
+    return getDeviceService()?.alarms(payload.deviceId) ?? []
+  })
+  ipcMain.handle('device:command', async (_e, payload: {
+    deviceId: string
+    deviceType: 'ozone-generator' | 'pump' | 'reactor' | 'sensor' | 'ph-meter' | 'do-meter' | 'orp-meter' | 'flow-meter' | 'power-meter'
+    endpoint: string
+    kind: 'set-setpoint' | 'start' | 'stop' | 'calibrate' | 'reset-alarm'
+    metric?: string; value?: number; reason?: string; operator?: string
+  }) => {
+    const { getDeviceService } = await import('./services/device/device.service')
+    const ds = getDeviceService()
+    if (!ds) throw new Error('DeviceService 未启动')
+    return ds.command(
+      { deviceId: payload.deviceId, deviceType: payload.deviceType, endpoint: payload.endpoint } as never,
+      { kind: payload.kind, metric: payload.metric, value: payload.value, reason: payload.reason, operator: payload.operator }
+    )
+  })
+  ipcMain.handle('device:status', async () => {
+    const { getDeviceService } = await import('./services/device/device.service')
+    return getDeviceService()?.status() ?? []
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {

@@ -248,6 +248,15 @@ const api: DesktopApi = {
     getHistory: (sessionId, limit) => ipcRenderer.invoke('agent:chat.history', { sessionId, limit }) as Promise<Array<{ id: number; agent: string; role: 'user' | 'assistant' | 'tool'; content: string; timestamp: number; toolName?: string; toolResult?: string }>>,
     searchMemory: (query, limit) => ipcRenderer.invoke('agent:chat.search', { query, limit }) as Promise<Array<{ id: number; agent: string; role: 'user' | 'assistant' | 'tool'; content: string; timestamp: number; toolName?: string; toolResult?: string }>>,
     clearMemory: (sessionId) => ipcRenderer.invoke('agent:chat.clear', { sessionId }) as Promise<number>
+  },
+  device: {
+    list: () => ipcRenderer.invoke('device:list') as Promise<import('../shared/preload-api').DeviceStatus[]>,
+    connect: (config) => ipcRenderer.invoke('device:connect', config) as Promise<{ ok: boolean }>,
+    disconnect: (deviceId) => ipcRenderer.invoke('device:disconnect', { deviceId }) as Promise<{ ok: boolean }>,
+    telemetry: (deviceId, sinceMs) => ipcRenderer.invoke('device:telemetry', { deviceId, sinceMs }) as Promise<import('../shared/preload-api').TelemetrySample[]>,
+    alarms: (deviceId) => ipcRenderer.invoke('device:alarm.list', { deviceId }) as Promise<import('../shared/preload-api').AlarmEvent[]>,
+    command: (params) => ipcRenderer.invoke('device:command', params) as Promise<import('../shared/preload-api').CommandAck>,
+    status: () => ipcRenderer.invoke('device:status') as Promise<import('../shared/preload-api').DeviceStatus[]>
   }
 }
 
