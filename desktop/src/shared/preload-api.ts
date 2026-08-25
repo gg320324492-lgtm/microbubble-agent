@@ -350,9 +350,31 @@ export interface DesktopModelApi {
   } | null) => Promise<ModelRouteTaskResult>
 }
 
+export interface ApplicationInfo {
+  name: string
+  version: string
+  buildNumber: string
+  commitHash: string
+  buildTime: string
+  channel: 'stable' | 'beta' | 'dev'
+  environment: 'production' | 'development'
+}
+
+export interface UpdateCheckResult {
+  available: boolean
+  currentVersion: string
+  message?: string
+  latestVersion?: string
+}
+
 export interface DesktopAppApi {
   getConfig: () => Promise<unknown>
   getStatus: () => Promise<unknown>
+  getInfo: () => Promise<ApplicationInfo>
+  checkUpdate: () => Promise<UpdateCheckResult>
+  downloadUpdate: () => Promise<{ ok: true; progress?: number }>
+  installUpdate: () => Promise<{ ok: true }>
+  getCurrentVersion: () => Promise<string>
   restart: () => Promise<{ ok: true }>
   quit: () => Promise<{ ok: true }>
   persistenceSave: (namespace: string, key: string, value: unknown) => Promise<{ ok: true }>

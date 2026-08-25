@@ -188,6 +188,15 @@ const api: DesktopApi = {
   app: {
     getConfig: () => ipcRenderer.invoke('app:get-config') as Promise<unknown>,
     getStatus: () => ipcRenderer.invoke('app:get-status') as Promise<unknown>,
+    getInfo: () => ipcRenderer.invoke('app:get-info') as Promise<{
+      name: string; version: string; buildNumber: string; commitHash: string
+      buildTime: string; channel: 'stable' | 'beta' | 'dev'
+      environment: 'production' | 'development'
+    }>,
+    checkUpdate: () => ipcRenderer.invoke('app:check-update') as Promise<{ available: boolean; currentVersion: string; message?: string; latestVersion?: string }>,
+    downloadUpdate: () => ipcRenderer.invoke('app:download-update') as Promise<{ ok: true; progress?: number }>,
+    installUpdate: () => ipcRenderer.invoke('app:install-update') as Promise<{ ok: true }>,
+    getCurrentVersion: () => ipcRenderer.invoke('app:get-current-version') as Promise<string>,
     restart: () => ipcRenderer.invoke('app:restart') as Promise<{ ok: true }>,
     quit: () => ipcRenderer.invoke('app:quit') as Promise<{ ok: true }>,
     persistenceSave: (namespace: string, key: string, value: unknown) =>

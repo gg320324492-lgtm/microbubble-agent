@@ -1,21 +1,57 @@
 <script setup lang="ts">
 /**
- * AboutPage — Phase 8-M0-H0 关于页
- * 展示应用版本 / 环境 / 数据目录 / 日志目录 / 许可 / 致谢.
+ * AboutPage — Phase 8-M1-A
+ * 显示真实的应用元信息 (从 IPC 拉取, 无硬编码版本字符串).
  */
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAppConfig } from '../composables/use-app-config'
 
-const { config, appVersion, environment, dataDir, logDir } = useAppConfig()
+const { appVersion, environment, dataDir, logDir } = useAppConfig()
+
+interface ApplicationInfo {
+  name: string
+  version: string
+  buildNumber: string
+  commitHash: string
+  buildTime: string
+  channel: 'stable' | 'beta' | 'dev'
+  environment: 'production' | 'development'
+}
+
+const appInfo = ref<ApplicationInfo | null>(null)
+
+onMounted(async () => {
+  try {
+    const api = (window as unknown as { api?: { app?: { getInfo?: () => Promise<ApplicationInfo | null> } } }).api
+    if (api?.app?.getInfo) appInfo.value = await api.app.getInfo()
+  } catch {
+    // 静默失败, fallback 到 useAppConfig
+  }
+})
+
+const productName = computed(() => appInfo.value?.name ?? 'Scientific Research OS')
+const version = computed(() => appInfo.value?.version ?? appVersion.value)
+const buildNumber = computed(() => appInfo.value?.buildNumber ?? 'unknown')
+const commitHash = computed(() => appInfo.value?.commitHash ?? 'unknown')
+const buildTime = computed(() => appInfo.value?.buildTime ?? 'unknown')
+const channel = computed(() => appInfo.value?.channel ?? 'dev')
+const envLabel = computed(() => appInfo.value?.environment ?? environment.value)
+const channelLabel = computed(() => {
+  const map = { stable: '稳定版', beta: 'Beta 通道', dev: '开发版' } as const
+  return map[channel.value]
+})
 
 const sections = computed(() => [
   {
     title: '应用信息',
     items: [
-      { label: '应用名', value: config.value.appName },
-      { label: '版本号', value: `v${appVersion.value}` },
-      { label: '环境', value: environment.value },
-      { label: '后端地址', value: config.value.backendUrl }
+      { label: '产品名', value: productName.value },
+      { label: '版本号', value: `v${version.value}` },
+      { label: '构建号', value: buildNumber.value },
+      { label: '提交哈希', value: commitHash.value },
+      { label: '构建时间', value: buildTime.value },
+      { label: '发布通道', value: `${channelLabel.value} (${channel.value})` },
+      { label: '运行环境', value: envLabel.value }
     ]
   },
   {
@@ -30,6 +66,7 @@ const sections = computed(() => [
     items: [
       { label: '运行时', value: 'Electron 32 + Vue 3.5 + TypeScript 5.6' },
       { label: '打包工具', value: 'electron-vite + electron-builder' },
+      { label: '分发平台', value: 'Windows (NSIS) · macOS (dmg) · Linux (AppImage)' },
       { label: '许可证', value: 'UNLICENSED (内部科研使用)' }
     ]
   }
@@ -39,8 +76,8 @@ const sections = computed(() => [
 <template>
   <main class="about" aria-label="关于">
     <header class="about__hero">
-      <h1 class="about__title">关于 {{ config.appName }}</h1>
-      <p class="about__subtitle">Scientific Research OS · 微纳米气泡课题组内部科研工作台</p>
+      <h1 class="about__title">关于 {{ productName }}</h1>
+      <p class="about__subtitle">Scientific Research OS · 微纳米气泡课题组内部科研工作台 · v{{ version }} · {{ buildNumber }}</p>
     </header>
 
     <section v-for="section in sections" :key="section.title" class="about__section" :aria-label="section.title">
