@@ -26,7 +26,13 @@ const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { label: '实验控制中心', icon: 'experiment', routeName: 'research-experiment-control' },
   { label: '系统状态', icon: 'idle', routeName: 'system-status' },
   { label: '关于', icon: 'settings', routeName: 'about' },
-  { label: '系统设置', icon: 'settings', routeName: 'research-settings' }
+  { label: '系统设置', icon: 'settings', routeName: 'research-settings' },
+  // ---------- R5: 迁移中心 + 本地历史资料工作区 ----------
+  { label: '迁移中心', icon: 'upload', routeName: 'migration-center' },
+  { label: '工作项工作区', icon: 'progress', routeName: 'workspace-work-items' },
+  { label: '会议档案工作区', icon: 'citation', routeName: 'workspace-meetings' },
+  { label: '文件库工作区', icon: 'folder', routeName: 'workspace-files' },
+  { label: '对话归档工作区', icon: 'assistant', routeName: 'workspace-conversations' }
 ]
 
 const route = useRoute()
