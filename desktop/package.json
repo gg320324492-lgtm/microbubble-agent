@@ -13,7 +13,11 @@
     "start": "electron-vite preview",
     "test:unit": "vitest run --config vitest.config.ts",
     "build:win": "electron-vite build && electron-builder --win --config electron-builder.yml",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "release:guard": "node scripts/release/verify-web-unchanged.mjs",
+    "release:baseline": "node scripts/release/verify-web-unchanged.mjs --refresh-baseline",
+    "build:metadata": "node scripts/release/write-build-metadata.mjs",
+    "build:release-win": "electron-vite build && npm run build:metadata && electron-builder --win --config electron-builder.yml"
   },
   "dependencies": {
     "axios": "^1.7.7",
