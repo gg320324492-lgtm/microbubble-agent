@@ -1,0 +1,62 @@
+{
+  "snapshot_id": "snap-minimal-001",
+  "formatVersion": 1,
+  "startedAt": "2026-08-26T00:00:00Z",
+  "endedAt": "2026-08-26T00:00:01Z",
+  "durationSeconds": 1,
+  "counts": {
+    "members": 1,
+    "projects": 1,
+    "milestones": 0,
+    "tasks": 1,
+    "meetings": 1,
+    "knowledge": 1,
+    "drive": 0,
+    "chat": 1,
+    "audit": 0
+  },
+  "objectCount": 0,
+  "files": [
+    {
+      "name": "members.ndjson",
+      "sha256": "PLACEHOLDER",
+      "size": 0,
+      "rows": 1
+    },
+    {
+      "name": "projects.ndjson",
+      "sha256": "PLACEHOLDER",
+      "size": 0,
+      "rows": 1
+    },
+    {
+      "name": "tasks.ndjson",
+      "sha256": "PLACEHOLDER",
+      "size": 0,
+      "rows": 1
+    },
+    {
+      "name": "meetings.ndjson",
+      "sha256": "PLACEHOLDER",
+      "size": 0,
+      "rows": 1
+    },
+    {
+      "name": "knowledge.ndjson",
+      "sha256": "PLACEHOLDER",
+      "size": 0,
+      "rows": 1
+    },
+    {
+      "name": "chat.ndjson",
+      "sha256": "PLACEHOLDER",
+      "size": 0,
+      "rows": 2
+    }
+  ],
+  "safety": {
+    "readOnly": true,
+    "forbiddenFieldsStripped": true,
+    "snapshotSchemaVersion": 1
+  }
+}

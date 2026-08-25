@@ -18,3 +18,11 @@ export type {
 
 export { createMbrp, openMbrp, verifyMbrp, MbrpArchiveError } from './mbrp-archive';
 export { buildManifest, validateManifestShape } from './mbrp-manifest';
+
+// R3: semantic snapshot → .mbrp conversion entry points.
+export {
+  convertSnapshotToMbrp,
+  loadSnapshotFromDir,
+  type SnapshotPayload,
+  type ConvertOptions,
+} from './semantic-converter';
