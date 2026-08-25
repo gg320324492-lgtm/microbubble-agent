@@ -445,6 +445,75 @@ export interface DesktopAgentApi {
   clearMemory: (sessionId: string) => Promise<number>
 }
 
+export type DeviceKind = 'ozone-generator' | 'pump' | 'reactor' | 'sensor' | 'ph-meter' | 'do-meter' | 'orp-meter' | 'flow-meter' | 'power-meter'
+export type DeviceConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error' | 'offline'
+
+export interface DeviceConfig {
+  deviceId: string
+  deviceType: DeviceKind
+  endpoint: string
+  pollIntervalMs?: number
+  calibrationAt?: number
+  alarmLow?: number | null
+  alarmHigh?: number | null
+}
+
+export interface TelemetrySample {
+  deviceId: string
+  deviceType: DeviceKind
+  metric: string
+  value: number
+  unit: string
+  timestamp: number
+  quality: 'good' | 'questionable' | 'bad'
+}
+
+export interface DeviceStatus {
+  deviceId: string
+  deviceType: DeviceKind
+  state: DeviceConnectionState
+  endpoint: string
+  lastSampleAt: number | null
+  calibrationAt: number | null
+  alarmLow: number | null
+  alarmHigh: number | null
+  pendingAlarmCount: number
+}
+
+export interface AlarmEvent {
+  id: number
+  deviceId: string
+  metric: string
+  level: 'low' | 'high' | 'offline'
+  value: number
+  threshold: number
+  triggeredAt: number
+  acknowledgedAt: number | null
+  acknowledgedBy: string | null
+  reason: string | null
+}
+
+export interface CommandAck {
+  commandId: string
+  status: 'ok' | 'failed' | 'timeout' | 'rejected'
+  message: string
+  appliedValue?: number
+  timestamp: number
+}
+
+export interface DesktopDeviceApi {
+  list: () => Promise<DeviceStatus[]>
+  connect: (config: DeviceConfig) => Promise<{ ok: boolean }>
+  disconnect: (deviceId: string) => Promise<{ ok: boolean }>
+  telemetry: (deviceId: string, sinceMs?: number) => Promise<TelemetrySample[]>
+  alarms: (deviceId?: string) => Promise<AlarmEvent[]>
+  command: (params: DeviceConfig & {
+    kind: 'set-setpoint' | 'start' | 'stop' | 'calibrate' | 'reset-alarm'
+    metric?: string; value?: number; reason?: string; operator?: string
+  }) => Promise<CommandAck>
+  status: () => Promise<DeviceStatus[]>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
@@ -456,6 +525,7 @@ export interface DesktopApi extends DesktopPingApi {
   dataEngine: DesktopDataEngineApi
   analysis: DesktopAnalysisApi
   agent: DesktopAgentApi
+  device: DesktopDeviceApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 
