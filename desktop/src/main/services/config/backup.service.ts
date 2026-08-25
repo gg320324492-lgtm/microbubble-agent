@@ -2,9 +2,10 @@
 // SQLite 在线备份 (better-sqlite3 backup API) + 清单 + 恢复 (atomic swap).
 
 import { copyFileSync, existsSync, statSync, unlinkSync, readFileSync, mkdirSync, renameSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
 import { createHash } from 'node:crypto'
 import type { DatabaseService } from '../database.service'
+import { resolveDatabaseConfig } from '../../database/database-config'
 
 export interface BackupEntry {
   id: string
@@ -22,7 +23,7 @@ export interface BackupEntry {
 }
 
 export interface BackupService {
-  create(opts?: { createdBy?: string; note?: string }): BackupEntry
+  create(opts?: { createdBy?: string; note?: string }): Promise<BackupEntry>
   list(): BackupEntry[]
   restore(backupId: string): boolean
   delete(backupId: string): boolean
@@ -33,12 +34,14 @@ class BackupServiceImpl implements BackupService {
   constructor(private readonly getService: () => DatabaseService | null) {}
 
   private backupDir(): string {
-    // dataDir 解析通过 DatabaseService 内 cfg (调用 resolveDatabaseConfig)
-    // 此处 fallback: 相对路径 <cwd>/.microbubble-data
-    return join(process.cwd(), '.microbubble-data', 'ScientificResearchOS', 'backups')
+    // R6: derive from resolveDatabaseConfig().path so backups live next to
+    // the live DB under the same dataDir (was: process.cwd()/.microbubble-data/...).
+    const cfg = resolveDatabaseConfig()
+    const appDir = join(dirname(cfg.path), '..')
+    return join(appDir, 'backups')
   }
 
-  create(opts: { createdBy?: string; note?: string } = {}): BackupEntry {
+  async create(opts: { createdBy?: string; note?: string } = {}): Promise<BackupEntry> {
     const svc = this.getService()
     if (!svc) throw new Error('数据库未就绪')
     const dir = this.backupDir()
@@ -47,9 +50,13 @@ class BackupServiceImpl implements BackupService {
     const id = `bk-${ts}-${Math.random().toString(36).slice(2, 8)}`
     const filename = `${id}.db`
     const filepath = join(dir, filename)
-    // better-sqlite3 backup API: 调用 .backup() 生成一致副本
-    const raw = svc.db.raw() as unknown as { backup?: (p: string) => void }
-    raw.backup?.(filepath)
+    // better-sqlite3 backup API: 返回 Promise, 必须 await 才能拿到完整副本.
+    // 旧实现把 Promise 丢掉, statSync 紧跟着读不到文件.
+    const raw = svc.db.raw() as unknown as { backup?: (p: string) => Promise<unknown> | void }
+    const result = raw.backup?.(filepath)
+    if (result && typeof (result as Promise<unknown>).then === 'function') {
+      await (result as Promise<unknown>)
+    }
     const stat = statSync(filepath)
     const checksum = createHash('sha256').update(readFileSync(filepath)).digest('hex')
     const versionRow = svc.db.queryOne<{ v: number }>('SELECT COALESCE(MAX(version), 0) AS v FROM schema_version')
@@ -76,12 +83,24 @@ class BackupServiceImpl implements BackupService {
   restore(backupId: string): boolean {
     const svc = this.getService()
     if (!svc) return false
-    const row = svc.db.queryOne<{ filename: string }>('SELECT filename FROM backup_manifest WHERE id = ?', [backupId])
+    const row = svc.db.queryOne<{ filename: string; checksum: string }>('SELECT filename, checksum FROM backup_manifest WHERE id = ?', [backupId])
     if (!row) return false
     const filepath = join(this.backupDir(), String(row.filename))
     if (!existsSync(filepath)) return false
-    // 备份文件已知路径; renameSync 在 Windows 上若 dbFile 已存在会失败
-    // 用 copy + unlink 模式保证安全
+
+    // R6 hardening: refuse to restore a tampered backup. Without this check
+    // a corrupted file could silently overwrite the live database.
+    const expected = String(row.checksum)
+    const actual = createHash('sha256').update(readFileSync(filepath)).digest('hex')
+    if (actual !== expected) {
+      svc.audit.record({
+        action: 'backup.restore.tamper',
+        module: 'config',
+        metadata: { backupId, expected, actual }
+      })
+      return false
+    }
+
     try {
       const dbRaw = svc.db.raw() as unknown as { close?: () => void }
       try { dbRaw.close?.() } catch { /* noop */ }
@@ -125,8 +144,8 @@ class BackupServiceImpl implements BackupService {
   }
 
   private findCurrentDb(): string | null {
-    // Phase 8-M1-G: 通过 DatabaseService config 提供; 此处 fallback
-    return null
+    // R6: drive restore() from the same config resolver used by backupDir().
+    return resolveDatabaseConfig().path
   }
 
   private mapRow(r: Record<string, unknown>): BackupEntry {
