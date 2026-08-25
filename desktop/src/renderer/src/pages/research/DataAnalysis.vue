@@ -83,7 +83,7 @@ function retry(): void {
 </script>
 
 <template>
-  <main class="data-analysis" data-research-theme="analysis" aria-label="数据分析工作台">
+  <main class="data-analysis analysis-overview" data-testid="data-analysis-workspace" data-research-theme="analysis" aria-label="数据分析工作台">
     <ResearchState
       v-if="store.isLoading"
       state="loading"
@@ -157,39 +157,39 @@ function retry(): void {
   margin: 0 auto;
   padding: var(--research-page-gutter, 24px);
   overflow-x: clip;
-  background: var(--research-bg-main, #f8fafc);
+  background: var(--research-bg-main);
 }
 .data-analysis:focus-visible {
   outline: none;
 }
 .data-analysis__meta {
-  margin-bottom: 24px;
+  margin-bottom: var(--research-space-6);
   min-width: 0;
 }
 .data-analysis__meta-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 12px;
+  font-size: var(--research-text-card-title);
+  font-weight: var(--research-font-weight-semibold);
+  color: var(--research-text-primary);
+  margin: 0 0 var(--research-space-3);
 }
 .data-analysis__meta-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--research-grid-gap);
 }
 .data-analysis__meta-label {
-  font-size: 11px;
-  color: #94a3b8;
-  margin: 0 0 4px;
+  font-size: var(--research-text-xs);
+  color: var(--research-text-muted);
+  margin: 0 0 var(--research-space-1);
 }
 .data-analysis__meta-value {
-  font-size: 14px;
-  color: #1e293b;
-  margin: 0 0 12px;
+  font-size: var(--research-text-body);
+  color: var(--research-text-primary);
+  margin: 0 0 var(--research-space-3);
 }
 .data-analysis__empty-inline {
-  font-size: 13px;
-  color: #94a3b8;
+  font-size: var(--research-text-sm);
+  color: var(--research-text-muted);
   margin: 0;
 }
 .data-analysis__grid {

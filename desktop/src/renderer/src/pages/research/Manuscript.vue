@@ -235,65 +235,65 @@ function retry(): void {
 .manuscript {
   min-width: 0;
   min-height: 100%;
-  padding: var(--research-page-gutter, 24px);
+  padding: var(--research-page-gutter);
   overflow-x: clip;
-  background: var(--research-bg-main, #f8fafc);
+  background: var(--research-bg-main);
   display: grid;
   grid-template-columns: var(--research-rail-compact) var(--research-rail-standard) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--research-grid-gap);
 }
 .manuscript:focus-visible {
   outline: none;
 }
 .manuscript__meta {
-  margin-bottom: 24px;
+  margin-bottom: var(--research-space-6);
   min-width: 0;
 }
 .manuscript__meta-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 12px;
+  font-size: var(--research-text-card-title);
+  font-weight: var(--research-font-weight-semibold);
+  color: var(--research-text-primary);
+  margin: 0 0 var(--research-space-3);
 }
 .manuscript__meta-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--research-grid-gap);
 }
 .manuscript__meta-label {
-  font-size: 11px;
-  color: #94a3b8;
-  margin: 0 0 4px;
+  font-size: var(--research-text-xs);
+  color: var(--research-text-muted);
+  margin: 0 0 var(--research-space-1);
 }
 .manuscript__meta-value {
-  font-size: 14px;
-  color: #1e293b;
-  margin: 0 0 12px;
+  font-size: var(--research-text-body);
+  color: var(--research-text-primary);
+  margin: 0 0 var(--research-space-3);
 }
 .manuscript__meta-value--abstract {
-  font-size: 12px;
-  line-height: 1.6;
-  max-height: 96px;
+  font-size: var(--research-text-sm);
+  line-height: var(--research-line-height-reading);
+  max-height: calc(var(--research-space-6) * 4);
   overflow: hidden;
-  font-family: 'Source Han Serif SC', 'Songti SC', serif;
+  font-family: var(--research-font-serif);
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
 }
 .manuscript__highlights {
   list-style: disc;
-  padding-left: 20px;
+  padding-left: var(--research-space-5);
   margin: 0;
 }
 .manuscript__highlight {
-  font-size: 12px;
-  color: #1e293b;
-  margin-bottom: 4px;
-  line-height: 1.5;
+  font-size: var(--research-text-sm);
+  color: var(--research-text-primary);
+  margin-bottom: var(--research-space-1);
+  line-height: var(--research-line-height-body);
 }
 .manuscript__empty-inline {
-  font-size: 13px;
-  color: #94a3b8;
+  font-size: var(--research-text-sm);
+  color: var(--research-text-muted);
   margin: 0;
 }
 .manuscript__grid {

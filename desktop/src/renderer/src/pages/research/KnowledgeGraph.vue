@@ -135,7 +135,7 @@ const graphNodes = computed<GraphNode[]>(() => entities.value)
         </div>
       </section>
 
-      <section class="knowledge-graph__grid" aria-label="三栏工作区">
+      <section class="knowledge-graph__grid kg__workspace" aria-label="三栏工作区">
         <aside class="knowledge-graph__col knowledge-graph__col--canvas" aria-label="图谱画布">
           <KnowledgeGraphCanvas :entities="graphNodes" aria-label="知识图谱画布" />
           <GraphNodePanel :node="selectedNodeDetail" aria-label="节点详情面板" />
@@ -162,30 +162,30 @@ const graphNodes = computed<GraphNode[]>(() => entities.value)
   margin: 0 auto;
   padding: var(--research-page-gutter, 24px);
   overflow-x: clip;
-  background: var(--research-bg-main, #f8fafc);
+  background: var(--research-bg-main);
 }
 .knowledge-graph:focus-visible {
   outline: none;
 }
 .knowledge-graph__meta {
-  margin-bottom: 24px;
+  margin-bottom: var(--research-space-6);
   min-width: 0;
 }
 .knowledge-graph__meta-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 12px;
+  font-size: var(--research-text-card-title);
+  font-weight: var(--research-font-weight-semibold);
+  color: var(--research-text-primary);
+  margin: 0 0 var(--research-space-3);
 }
 .knowledge-graph__meta-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--research-grid-gap);
 }
 .knowledge-graph__meta-label {
-  font-size: 11px;
-  color: #94a3b8;
-  margin: 0 0 4px;
+  font-size: var(--research-text-xs);
+  color: var(--research-text-muted);
+  margin: 0 0 var(--research-space-1);
 }
 .knowledge-graph__grid {
   display: grid;

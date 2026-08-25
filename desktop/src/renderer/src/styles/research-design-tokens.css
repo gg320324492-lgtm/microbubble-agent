@@ -74,14 +74,46 @@
   --research-bg-panel: var(--research-mist-100);
   --research-bg-elevated: var(--research-paper-0);
   --research-bg-hover: #e8f1ef;
+  --research-bg-surface: var(--research-paper-0);
+  --research-bg-overlay: rgb(23 33 41 / 42%);
   --research-text-primary: var(--research-graphite-950);
   --research-text-secondary: #66757b;
   --research-text-muted: #849197;
+  --research-text-tertiary: #97a3a8;
   --research-text-inverse: #ffffff;
+  --research-text-on-ai: var(--research-ai-700);
   --research-border-subtle: #dce5e1;
   --research-border-strong: #b9c9c5;
   --research-divider: #e2e8e5;
+  --research-divider-soft: rgb(15 23 42 / 4%);
+  --research-divider-medium: rgb(15 23 42 / 8%);
   --research-overlay: rgb(23 33 41 / 42%);
+
+  /* SCADA 主题（深色仪器底色） */
+  --research-scada-bg-deep: var(--research-instrument-950);
+  --research-scada-text: var(--research-instrument-text);
+  --research-scada-muted: var(--research-instrument-muted);
+
+  /* 状态色：hover / focus / selected 等互动态 */
+  --research-state-hover-bg: var(--research-bg-hover);
+  --research-state-active-bg: var(--research-primary-50);
+  --research-state-disabled-opacity: 0.5;
+  --research-state-success: var(--research-success-500);
+  --research-state-warning: var(--research-warning-500);
+  --research-state-danger: var(--research-danger-500);
+  --research-state-info: var(--research-primary-500);
+
+  /* 进度条/梯度填充：与品牌主色一致 */
+  --research-progress-track: var(--research-primary-100);
+  --research-progress-fill-start: var(--research-primary-500);
+  --research-progress-fill-end: var(--research-ai-500);
+
+  /* 透明遮罩 */
+  --research-shadow-color-rgb: 23 33 41;
+  --research-scada-glow-rgb: 126 214 173;
+  --research-ai-glow-base: rgb(239 114 86 / 36%);
+  --research-ai-glow-soft: rgb(239 114 86 / 28%);
+  --research-ai-glow-transparent: rgb(239 114 86 / 0%);
 
   /* Chinese UI、科学数字与长文写作。 */
   --research-font-ui: 'PingFang SC', 'Microsoft YaHei', Inter, -apple-system, BlinkMacSystemFont, sans-serif;

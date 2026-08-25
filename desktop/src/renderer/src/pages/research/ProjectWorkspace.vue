@@ -50,8 +50,8 @@ async function loadWorkspace(): Promise<void> {
   try {
     await Promise.all([
       knowledgeStore.loadDocuments(),
-      datasetStore.loadReport(),
-      manuscriptStore.loadManuscript(),
+      datasetStore.loadReport(async () => undefined),
+      manuscriptStore.loadManuscript(async () => undefined),
       experimentStore.loadDesign()
     ])
   } catch (error) {

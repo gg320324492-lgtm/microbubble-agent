@@ -2,9 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ResearchIcon from '../components/icons/ResearchIcon.vue'
+import ShellCommandPalette from '../components/shell/ShellCommandPalette.vue'
+import ShellProjectSelector from '../components/shell/ShellProjectSelector.vue'
 import { useAuthStore } from '../stores/auth'
 import { useProjectStore } from '../stores/research/project.store'
 import { useUserStore } from '../stores/user'
+import type { ResearchProject } from '../stores/research/project.store'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,8 +24,6 @@ const userMenu = ref<HTMLElement | null>(null)
 const logoutButton = ref<HTMLButtonElement | null>(null)
 const notificationRegion = ref<HTMLElement | null>(null)
 const notificationTrigger = ref<HTMLButtonElement | null>(null)
-const projectSelectorRegion = ref<HTMLElement | null>(null)
-const projectSelectorTrigger = ref<HTMLButtonElement | null>(null)
 const commandRegion = ref<HTMLElement | null>(null)
 const commandTrigger = ref<HTMLButtonElement | null>(null)
 
@@ -80,7 +81,7 @@ async function closeProjectSelector(restoreFocus = false): Promise<void> {
   projectSelectorOpen.value = false
   if (restoreFocus) {
     await nextTick()
-    projectSelectorTrigger.value?.focus()
+    commandTrigger.value?.focus()
   }
 }
 
@@ -111,7 +112,6 @@ function onDocumentPointerDown(event: PointerEvent): void {
   if (!(target instanceof Node)) return
   if (userMenuOpen.value && !userRegion.value?.contains(target)) void closeUserMenu()
   if (notificationOpen.value && !notificationRegion.value?.contains(target)) void closeNotification()
-  if (projectSelectorOpen.value && !projectSelectorRegion.value?.contains(target)) void closeProjectSelector()
   if (commandOpen.value && !commandRegion.value?.contains(target)) void closeCommand()
 }
 
@@ -136,6 +136,11 @@ async function onLogout(): Promise<void> {
   await authStore.logout()
   await router.push({ name: 'login' })
 }
+
+function onSelectProject(project: ResearchProject): void {
+  projectStore.currentProject = project
+  void closeProjectSelector(true)
+}
 </script>
 
 <template>
@@ -146,29 +151,14 @@ async function onLogout(): Promise<void> {
     </div>
 
     <div class="header-bar__right">
-      <div ref="projectSelectorRegion" class="header-bar__project-region">
-        <button
-          ref="projectSelectorTrigger"
-          data-testid="header-project"
-          class="header-bar__project-trigger"
-          type="button"
-          aria-label="当前项目选择器"
-          aria-controls="header-project-listbox"
-          :aria-expanded="projectSelectorOpen"
-          aria-haspopup="listbox"
-          @click="toggleProjectSelector"
-          @keydown.esc.stop="closeProjectSelector(true)"
-        >
-          <ResearchIcon name="project" :size="17" />
-          <span class="header-bar__project-copy"><span>当前项目</span><strong>{{ projectStore.currentProject.name }}</strong></span>
-          <ResearchIcon name="expand" :size="14" aria-hidden="true" />
-        </button>
-        <div v-if="projectSelectorOpen" id="header-project-listbox" class="header-bar__project-listbox" role="listbox" aria-label="当前项目选择器" @keydown.esc.stop="closeProjectSelector(true)">
-          <div v-for="project in projectStore.projectList" :key="project.id" role="option" :aria-selected="project.id === projectStore.currentProject.id">
-            <strong>{{ project.name }}</strong><span>{{ project.domain }} · {{ Math.round(project.progress * 100) }}%</span>
-          </div>
-        </div>
-      </div>
+      <ShellProjectSelector
+        :open="projectSelectorOpen"
+        :current="projectStore.currentProject"
+        :projects="projectStore.projectList"
+        @toggle="toggleProjectSelector"
+        @close="closeProjectSelector"
+        @select="onSelectProject"
+      />
 
       <div class="header-ai-status__system" role="status" aria-live="polite" aria-label="系统状态：待连接"><span aria-hidden="true" />系统状态：待连接</div>
 
@@ -188,13 +178,12 @@ async function onLogout(): Promise<void> {
       </div>
 
       <div ref="commandRegion" class="header-bar__command">
-        <button ref="commandTrigger" class="header-bar__command-trigger" type="button" aria-label="打开命令与搜索" aria-controls="header-command-popover" :aria-expanded="commandOpen" aria-keyshortcuts="Control+K" @click="toggleCommand" @keydown.esc.stop="closeCommand(true)">
+        <button ref="commandTrigger" class="header-bar__command-trigger" type="button" aria-label="打开命令与搜索" :aria-expanded="commandOpen" aria-keyshortcuts="Control+K" @click="toggleCommand" @keydown.esc.stop="closeCommand(true)">
           <ResearchIcon name="search" :size="17" /><span>搜索或命令</span><kbd>Ctrl K</kbd>
         </button>
-        <section v-if="commandOpen" id="header-command-popover" class="header-command-popover" role="dialog" aria-label="命令与搜索" @keydown.esc.stop="closeCommand(true)">
-          <strong>命令与搜索</strong><p>全局科研搜索将在后续阶段接入。</p>
-        </section>
       </div>
+
+      <ShellCommandPalette :open="commandOpen" @close="closeCommand" />
 
       <div ref="notificationRegion" class="header-bar__notification">
         <button
@@ -287,17 +276,6 @@ async function onLogout(): Promise<void> {
 .header-bar__title { margin: 0; color: var(--research-text-primary); font-size: var(--research-text-section-title); font-weight: var(--research-font-weight-semibold); line-height: var(--research-line-height-tight); }
 .header-bar__right { display: flex; min-width: 0; align-items: center; gap: var(--research-space-3); }
 .header-bar__project-region, .header-bar__command, .header-bar__notification { position: relative; }
-.header-bar__project-trigger { display: flex; max-width: 290px; min-width: 0; align-items: center; gap: var(--research-space-2); padding: var(--research-space-1) var(--research-space-4) var(--research-space-1) 0; border: 0; border-inline-end: 1px solid var(--research-divider); background: transparent; color: var(--research-primary-600); font: inherit; cursor: pointer; text-align: start; }
-.header-bar__project-copy { min-width: 0; }
-.header-bar__project-copy span, .header-bar__project-copy strong { display: block; }
-.header-bar__project-copy span { color: var(--research-text-secondary); font-size: var(--research-text-xs); }
-.header-bar__project-copy strong { overflow: hidden; color: var(--research-text-primary); font-size: var(--research-text-sm); font-weight: var(--research-font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
-.header-bar__project-listbox, .header-command-popover { position: absolute; z-index: var(--research-z-popover); inset-block-start: calc(100% + var(--research-space-2)); min-width: 260px; padding: var(--research-space-2); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-md); background: var(--research-bg-elevated); box-shadow: var(--research-shadow-floating); }
-.header-bar__project-listbox { inset-inline-start: 0; }
-.header-bar__project-listbox [role='option'] { display: grid; gap: var(--research-space-1); padding: var(--research-space-3); border-radius: var(--research-radius-sm); color: var(--research-text-secondary); }
-.header-bar__project-listbox [aria-selected='true'] { background: var(--research-primary-50); color: var(--research-primary-700); }
-.header-bar__project-listbox strong { color: var(--research-text-primary); font-size: var(--research-text-sm); }
-.header-bar__project-listbox span { font-size: var(--research-text-xs); }
 .header-ai-status__system { display: inline-flex; align-items: center; gap: var(--research-space-2); color: var(--research-warning-600); font-size: var(--research-text-xs); white-space: nowrap; }
 .header-ai-status__system > span { width: 7px; height: 7px; border-radius: var(--research-radius-pill); background: currentColor; box-shadow: 0 0 0 4px var(--research-warning-50); }
 .header-bar__ai { display: inline-flex; align-items: center; gap: var(--research-space-2); padding: var(--research-space-2) var(--research-space-3); border: 1px solid var(--research-success-100); border-radius: var(--research-radius-pill); background: var(--research-success-50); color: var(--research-success-700); font-size: var(--research-text-sm); font-weight: var(--research-font-weight-medium); white-space: nowrap; }
@@ -311,10 +289,6 @@ async function onLogout(): Promise<void> {
 .header-bar__command-trigger { display: inline-flex; min-height: 34px; align-items: center; gap: var(--research-space-2); padding: var(--research-space-2) var(--research-space-3); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-sm); background: var(--research-bg-panel); color: var(--research-text-secondary); }
 .header-bar__command-trigger:hover { border-color: var(--research-primary-200); color: var(--research-primary-700); }
 .header-bar__command-trigger kbd { padding: 1px var(--research-space-1); border: 1px solid var(--research-border-subtle); border-radius: 4px; color: var(--research-text-muted); font-family: var(--research-font-scientific); font-size: var(--research-text-xs); }
-.header-command-popover { inset-inline-end: 0; color: var(--research-text-secondary); }
-.header-command-popover strong, .header-command-popover p { display: block; margin: 0; }
-.header-command-popover strong { color: var(--research-text-primary); }
-.header-command-popover p { margin-block-start: var(--research-space-2); font-size: var(--research-text-sm); }
 .header-bar__icon-button { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-button); background: var(--research-bg-panel); color: var(--research-text-secondary); }
 .header-bar__icon-button:hover { border-color: var(--research-primary-200); background: var(--research-primary-50); color: var(--research-primary-700); }
 .header-bar__notification-popover { position: absolute; inset-block-start: calc(100% + var(--research-space-2)); inset-inline-end: 0; display: grid; width: 260px; min-height: 150px; place-items: center; padding: var(--research-space-4); border: 1px solid var(--research-border-subtle); border-radius: var(--research-radius-card); background: var(--research-bg-elevated); color: var(--research-text-secondary); box-shadow: var(--research-shadow-floating); }
@@ -337,10 +311,9 @@ async function onLogout(): Promise<void> {
 .header-bar__menu-profile span { margin-block-start: var(--research-space-1); color: var(--research-text-secondary); font-size: var(--research-text-xs); }
 .header-bar__menu button { display: flex; width: 100%; align-items: center; gap: var(--research-space-2); padding: var(--research-space-3) var(--research-space-4); background: transparent; color: var(--research-danger-600); text-align: start; }
 .header-bar__menu button:hover { background: var(--research-danger-50); }
-.header-bar__icon-button:focus-visible, .header-bar__user-button:focus-visible, .header-bar__menu button:focus-visible, .header-bar__notification-popover button:focus-visible, .header-bar__project-trigger:focus-visible, .header-bar__command-trigger:focus-visible { outline: none; box-shadow: var(--research-shadow-focus-primary); }
+.header-bar__icon-button:focus-visible, .header-bar__user-button:focus-visible, .header-bar__menu button:focus-visible, .header-bar__notification-popover button:focus-visible, .header-bar__command-trigger:focus-visible { outline: none; box-shadow: var(--research-shadow-focus-primary); }
 
 @media (max-width: 1480px) {
-  .header-bar__project-trigger { max-width: 220px; }
   .header-bar__project-copy > span, .header-bar__user-name, .header-ai-status__system, .header-bar__command-trigger span, .header-bar__command-trigger kbd { display: none; }
   .header-bar__ai-details div:nth-child(1), .header-bar__ai-details div:nth-child(2) { display: none; }
 }
