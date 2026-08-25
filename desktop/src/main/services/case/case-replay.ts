@@ -29,8 +29,9 @@ class CaseReplayServiceImpl implements CaseReplayService {
   constructor(private readonly getService: () => DatabaseService | null) {}
 
   listCases(): CaseDefinition[] {
-    const { CASE_DEFINITIONS } = require('./case-definitions') as typeof import('./case-definitions')
-    return CASE_DEFINITIONS
+    const baseMod = require('./case-definitions') as { CASE_DEFINITIONS: CaseDefinition[]; getCaseDefinition: (id: string) => CaseDefinition | null }
+    const c101 = (require('./case-101-definition') as { CASE_101_DEFINITION: CaseDefinition }).CASE_101_DEFINITION
+    return [...baseMod.CASE_DEFINITIONS, c101]
   }
 
   loadSampleData(caseId: string): { rows: Array<Record<string, string>>; columns: string[] } | null {
