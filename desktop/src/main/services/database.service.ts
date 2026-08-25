@@ -18,6 +18,7 @@ import { createLocalAnalysisEngineAdapter, type AnalysisEngineAdapter } from './
 import { bootstrapAgentService, type AgentService } from './agent/agent.service'
 import { bootstrapProductService, type ProductService } from './product.service'
 import { bootstrapImportService, type ImportService } from './import.service'
+import { bootstrapDeviceService, type DeviceService } from './device/device.service'
 
 export interface DatabaseService {
   db: SQLiteDatabase
@@ -37,6 +38,7 @@ export interface DatabaseService {
   agent: AgentService
   product: ProductService
   importSvc: ImportService
+  deviceSvc: DeviceService
   status(): { open: boolean; path: string; version: number; environment: string }
   close(): void
 }
@@ -75,6 +77,7 @@ export function bootstrapDatabase(): DatabaseService {
     agent: bootstrapAgentService(() => service),
     product: bootstrapProductService(() => service),
     importSvc: bootstrapImportService(() => service),
+    deviceSvc: bootstrapDeviceService(() => service),
     status() {
       return {
         open: db.isOpen(),
