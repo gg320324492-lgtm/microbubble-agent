@@ -20,6 +20,7 @@
     "build:release-win": "electron-vite build && npm run build:metadata && electron-builder --win --config electron-builder.yml"
   },
   "dependencies": {
+    "adm-zip": "^0.5.18",
     "axios": "^1.7.7",
     "better-sqlite3": "^12.11.1",
     "echarts": "^5.6.0",
@@ -29,6 +30,7 @@
     "vue-router": "^4.4.5"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.0",
     "@vitejs/plugin-vue": "^5.2.1",

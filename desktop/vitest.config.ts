@@ -9,6 +9,9 @@ import vue from '@vitejs/plugin-vue'
  * 因为测试要 import 渲染端模块 (chat.ts), 其内部使用 @shared/... 别名.
  *
  * 默认保持 node 环境；科研 UI 契约使用 happy-dom 做真实 Vue 挂载。
+ *
+ * R1 扩展: 加 @main 路径别名, 让迁移/打包相关测试 (例如 mbrp-archive)
+ * 能直接 import '@main/migration/index' 这样的物理位置.
  */
 export default defineConfig({
   plugins: [vue()],
@@ -24,6 +27,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@main': resolve(__dirname, 'src/main'),
       '@shared': resolve(__dirname, 'src/shared'),
       '@': resolve(__dirname, 'src/renderer/src')
     }
