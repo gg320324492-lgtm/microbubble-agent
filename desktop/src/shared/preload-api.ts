@@ -352,6 +352,9 @@ export interface DesktopModelApi {
 
 export interface DesktopAppApi {
   getConfig: () => Promise<unknown>
+  getStatus: () => Promise<unknown>
+  restart: () => Promise<{ ok: true }>
+  quit: () => Promise<{ ok: true }>
   persistenceSave: (namespace: string, key: string, value: unknown) => Promise<{ ok: true }>
   persistenceLoad: (namespace: string, key: string) => Promise<unknown>
   persistenceRemove: (namespace: string, key: string) => Promise<{ ok: true }>

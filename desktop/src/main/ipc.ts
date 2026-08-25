@@ -108,6 +108,21 @@ export function registerIpcHandlers(): void {
 
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
+  ipcMain.handle('app:get-status', async () => {
+    const { getBootstrapResult } = await import('./bootstrap')
+    return getBootstrapResult()
+  })
+  ipcMain.handle('app:restart', async () => {
+    const { app } = await import('electron')
+    app.relaunch()
+    app.exit(0)
+    return { ok: true }
+  })
+  ipcMain.handle('app:quit', async () => {
+    const { app } = await import('electron')
+    app.quit()
+    return { ok: true }
+  })
   ipcMain.handle('persistence:save', async (_e, payload: { namespace: string; key: string; value: unknown }) => {
     const { persistence } = await import('./services/storage.service')
     await persistence.save(payload.namespace, payload.key, payload.value)

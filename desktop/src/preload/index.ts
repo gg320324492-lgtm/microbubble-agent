@@ -187,6 +187,9 @@ const api: DesktopApi = {
   model: modelApi,
   app: {
     getConfig: () => ipcRenderer.invoke('app:get-config') as Promise<unknown>,
+    getStatus: () => ipcRenderer.invoke('app:get-status') as Promise<unknown>,
+    restart: () => ipcRenderer.invoke('app:restart') as Promise<{ ok: true }>,
+    quit: () => ipcRenderer.invoke('app:quit') as Promise<{ ok: true }>,
     persistenceSave: (namespace: string, key: string, value: unknown) =>
       ipcRenderer.invoke('persistence:save', { namespace, key, value }) as Promise<{ ok: true }>,
     persistenceLoad: (namespace: string, key: string) =>

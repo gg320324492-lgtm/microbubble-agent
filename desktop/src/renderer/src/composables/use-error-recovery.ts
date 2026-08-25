@@ -1,11 +1,11 @@
 // ErrorRecovery Composable — Phase 8-M0-H0
-// 统一错误恢复: 覆盖 AI 失败 / 设备断开 / 数据加载失败 / 论文保存失败.
+// 统一错误恢复: 覆盖 AI 失败 / 设备断开 / 数据加载失败 / 论文保存失败 / 网络失败 / 文件损坏.
 // 保留已有状态 + 提供重试入口 + 自动上报到 ScientificLogger.
 
 import { computed, ref } from 'vue'
 import type { Ref } from 'vue'
 
-export type ErrorDomain = 'ai' | 'device' | 'data' | 'manuscript' | 'system'
+export type ErrorDomain = 'ai' | 'device' | 'data' | 'manuscript' | 'network' | 'file-corrupt' | 'system'
 
 export interface ErrorRecord {
   id: string
@@ -20,7 +20,13 @@ export interface ErrorRecord {
 
 interface ErrorRecoveryBus {
   errors: Ref<ErrorRecord[]>
-  recordError: (input: { domain: ErrorDomain; message: string; cause?: unknown; retryable?: boolean; preservedState?: Record<string, unknown> }) => ErrorRecord
+  recordError: (input: {
+    domain: ErrorDomain
+    message: string
+    cause?: unknown
+    retryable?: boolean
+    preservedState?: Record<string, unknown>
+  }) => ErrorRecord
   retry: (id: string) => Promise<boolean>
   retryAll: () => Promise<number>
   clear: (id?: string) => void
@@ -127,3 +133,4 @@ async function writeLog(record: ErrorRecord): Promise<void> {
     // 日志上报失败不阻塞业务
   }
 }
+

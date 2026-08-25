@@ -190,8 +190,8 @@ describe('Phase 8-M0-H0：源码真实内容（visibility）', () => {
     expect(storageSvc()).toMatch(/appendFileSync[\s\S]*?catch\s*\{[\s\S]*?\}/)
   })
 
-  it('useErrorRecovery 覆盖 5 个 domain', () => {
-    expect(useErrorRecovery()).toMatch(/'ai' \| 'device' \| 'data' \| 'manuscript' \| 'system'/)
+  it('useErrorRecovery 覆盖 7 个 domain', () => {
+    expect(useErrorRecovery()).toMatch(/'ai' \| 'device' \| 'data' \| 'manuscript' \| 'network' \| 'file-corrupt' \| 'system'/)
   })
   it('useErrorRecovery 提供 retry / retryAll / clear', () => {
     expect(useErrorRecovery()).toContain('retry')

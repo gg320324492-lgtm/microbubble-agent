@@ -10,17 +10,35 @@
 // - restore 是 async 但不阻塞窗口创建 —— 窗口内 AuthGuard.beforeEach 会等 restore
 // - 任何初始化异常都吞掉 + 记 console.error, 不阻塞启动
 //
+// Phase 8-M0-H1: BootstrapStatus 跟踪 loading/ready/failed 三态, 异常启动上报到 logger
+//
 // 调用方: main/index.ts → await bootstrap() → createWindow → registerIpcHandlers
 
 import { getStorePath } from './services/storage.service'
 import { authService } from './services/auth.service'
 import { isVaultAvailable } from './services/token-vault'
+import { logger } from './services/storage.service'
+
+export type BootstrapStatus = 'loading' | 'ready' | 'failed'
 
 export interface BootstrapResult {
   storePath: string
   vaultAvailable: boolean
   sessionRestored: boolean
   startedAt: string
+  status: BootstrapStatus
+  error?: string
+}
+
+let currentStatus: BootstrapStatus = 'loading'
+let lastResult: BootstrapResult | null = null
+
+export function getBootstrapStatus(): BootstrapStatus {
+  return currentStatus
+}
+
+export function getBootstrapResult(): BootstrapResult | null {
+  return lastResult
 }
 
 /**
@@ -42,6 +60,7 @@ export async function bootstrap(): Promise<BootstrapResult> {
       // 主进程 init 阶段吞错 —— 启动不应被 restore 失败阻塞
       // eslint-disable-next-line no-console
       console.warn('[bootstrap] auth.restore failed during init:', err)
+      logger.warn('bootstrap', 'auth.restore failed during init', { cause: err instanceof Error ? err.message : String(err) })
       sessionRestored = false
     }
   }
@@ -50,11 +69,37 @@ export async function bootstrap(): Promise<BootstrapResult> {
   console.info(
     `[bootstrap] started at ${startedAt}, store=${storePath}, vault=${vaultAvailable}, session=${sessionRestored}`
   )
+  logger.info('bootstrap', 'app started', { storePath, vaultAvailable, sessionRestored, startedAt })
 
-  return {
+  lastResult = {
     storePath,
     vaultAvailable,
     sessionRestored,
-    startedAt
+    startedAt,
+    status: 'ready'
+  }
+  currentStatus = 'ready'
+  return lastResult
+}
+
+/**
+ * 上报启动失败, 用于 app.whenReady 之外的早期异常 (renderer crash, fatal ipc error).
+ */
+export function reportBootstrapFailure(error: Error | string): void {
+  currentStatus = 'failed'
+  const message = error instanceof Error ? error.message : error
+  logger.error('bootstrap', 'bootstrap failed', { message })
+  if (lastResult) {
+    lastResult = { ...lastResult, status: 'failed', error: message }
+  } else {
+    lastResult = {
+      storePath: '',
+      vaultAvailable: false,
+      sessionRestored: false,
+      startedAt: new Date().toISOString(),
+      status: 'failed',
+      error: message
+    }
   }
 }
+

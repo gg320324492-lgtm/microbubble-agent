@@ -63,18 +63,25 @@ function createMainWindow(): BrowserWindow {
 }
 
 async function bootstrapApp(): Promise<void> {
-  // 0. 解析应用配置 (含 dataDir / logDir / cacheDir), 注入 IPC 供 renderer 读取
-  const appConfig = resolveAppConfig()
-  setAppConfig(appConfig)
+  try {
+    // 0. 解析应用配置 (含 dataDir / logDir / cacheDir), 注入 IPC 供 renderer 读取
+    const appConfig = resolveAppConfig()
+    setAppConfig(appConfig)
 
-  // 1. 初始化 storage + auth (无 token 时 restore 自然失败，无影响)
-  await bootstrap()
+    // 1. 初始化 storage + auth (无 token 时 restore 自然失败，无影响)
+    await bootstrap()
 
-  // 2. 注册 IPC handlers
-  registerIpcHandlers()
+    // 2. 注册 IPC handlers
+    registerIpcHandlers()
 
-  // 3. 创建窗口
-  mainWindow = createMainWindow()
+    // 3. 创建窗口
+    mainWindow = createMainWindow()
+  } catch (err) {
+    // 启动阶段 fatal 错误: 标记 failed, 写日志, 创建窗口并展示 RecoveryCard
+    const { reportBootstrapFailure } = await import('./bootstrap')
+    reportBootstrapFailure(err instanceof Error ? err : new Error(String(err)))
+    mainWindow = createMainWindow()
+  }
 }
 
 app.whenReady().then(() => {
