@@ -453,6 +453,57 @@ export function registerIpcHandlers(): void {
     return getDatabaseService()?.product.audit.verifyChain() ?? { ok: true, firstTamperedId: null, checked: 0 }
   })
 
+  // ---------- Phase 9-A: Data Import IPC Bridge ----------
+  ipcMain.handle('data:import.formats', async () => {
+    const { SUPPORTED_FORMATS } = await import('./services/import')
+    return SUPPORTED_FORMATS
+  })
+  ipcMain.handle('data:import.parse', async (_e, payload: { filePath: string; format?: 'csv' | 'xlsx' | 'json' }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    try {
+      return await svc.importSvc.engine.parseFile(payload.filePath, payload.format)
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : '解析失败' }
+    }
+  })
+  ipcMain.handle('data:import.suggest', async (_e, payload: { raw: { columns: string[]; rows: Array<Record<string, string>> } }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    return svc.importSvc.engine.suggestMapping(payload.raw as never)
+  })
+  ipcMain.handle('data:import.validate', async (_e, payload: { raw: { columns: string[]; rows: Array<Record<string, string>> }; mapping: Record<string, 'timestamp' | 'metric' | 'value' | 'unit' | 'sample_batch' | 'replicate' | 'operator' | 'notes' | 'ignore'> }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    return svc.importSvc.engine.validate(payload.raw as never, payload.mapping)
+  })
+  ipcMain.handle('data:import.commit', async (_e, payload: { projectId: string; experimentName: string; mapping: Record<string, 'timestamp' | 'metric' | 'value' | 'unit' | 'sample_batch' | 'replicate' | 'operator' | 'notes' | 'ignore'>; raw: { columns: string[]; rows: Array<Record<string, string>>; sourceHash: string }; importedBy?: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return null
+    try {
+      return await svc.importSvc.engine.commit({
+        projectId: payload.projectId,
+        experimentName: payload.experimentName,
+        mapping: payload.mapping,
+        raw: payload.raw as never,
+        fileHash: payload.raw.sourceHash,
+        importedBy: payload.importedBy
+      })
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : '提交失败' }
+    }
+  })
+  ipcMain.handle('data:import.datasets', async (_e, payload: { projectId?: string }) => {
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return svc.importSvc.engine.listDatasets(payload?.projectId)
+  })
+
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {
