@@ -188,6 +188,12 @@ const api: DesktopApi = {
   app: {
     getConfig: () => ipcRenderer.invoke('app:get-config') as Promise<unknown>,
     getStatus: () => ipcRenderer.invoke('app:get-status') as Promise<unknown>,
+    fetchAvatar: (url: string) =>
+      ipcRenderer.invoke('app:avatar.fetch', { url }) as Promise<{
+        ok: boolean
+        dataUrl: string | null
+        error?: string
+      }>,
     getInfo: () => ipcRenderer.invoke('app:get-info') as Promise<{
       name: string; version: string; buildNumber: string; commitHash: string
       buildTime: string; channel: 'stable' | 'beta' | 'dev'
@@ -257,6 +263,11 @@ const api: DesktopApi = {
     alarms: (deviceId) => ipcRenderer.invoke('device:alarm.list', { deviceId }) as Promise<import('../shared/preload-api').AlarmEvent[]>,
     command: (params) => ipcRenderer.invoke('device:command', params) as Promise<import('../shared/preload-api').CommandAck>,
     status: () => ipcRenderer.invoke('device:status') as Promise<import('../shared/preload-api').DeviceStatus[]>
+  }
+  migration: {
+    preflight: (packagePath: string) => ipcRenderer.invoke('migration:preflight', { packagePath }) as Promise<{ ok: boolean; code?: string; message?: string }>,
+    import: (packagePath: string, snapshotId: string) => ipcRenderer.invoke('migration:import', { packagePath, snapshotId }) as Promise<{ ok: boolean; runId?: string; code?: string; message?: string; filesWritten?: number; warningCount?: number; workspacePath?: string }>,
+    runs: () => ipcRenderer.invoke('migration:runs') as Promise<unknown[]>
   }
 }
 

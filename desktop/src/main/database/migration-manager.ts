@@ -1,11 +1,40 @@
 // MigrationManager — Phase 8-M1-B
 // 顺序执行 src/main/database/schema/*.sql, 用 schema_version 表追踪.
 // 失败回滚 (better-sqlite3 transaction 自动 ROLLBACK); 任何失败抛错, 启动失败.
+//
+// Phase 10.6 hotfix: schema 通过 vite ?raw import 内嵌到 bundle,
+// 不再依赖 fs readdirSync (production 环境下 asar 路径不可靠).
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { SQLiteDatabase } from './sqlite-database'
+
+// Phase 10.6 hotfix: 用 vite ?raw import 把 8 个 schema 文件 inline 进 bundle.
+// 这样在 asar production 环境也能工作, 不依赖 fs 路径.
+import SCHEMA_001 from './schema/001-initial.sql?raw'
+import SCHEMA_002 from './schema/002-device.sql?raw'
+import SCHEMA_003 from './schema/003-agent.sql?raw'
+import SCHEMA_004 from './schema/004-scientific-data-engine.sql?raw'
+import SCHEMA_005 from './schema/005-augment-tables.sql?raw'
+import SCHEMA_006 from './schema/006-user-config.sql?raw'
+import SCHEMA_007 from './schema/007-eln-workflow.sql?raw'
+import SCHEMA_008 from './schema/008-standardization.sql?raw'
+import SCHEMA_009 from './schema/009-user-avatar.sql?raw'
+import SCHEMA_010 from './schema/010-migration-workspace.sql?raw'
+
+const INLINE_SCHEMAS: Array<{ filename: string; sql: string }> = [
+  { filename: '001-initial.sql', sql: SCHEMA_001 },
+  { filename: '002-device.sql', sql: SCHEMA_002 },
+  { filename: '003-agent.sql', sql: SCHEMA_003 },
+  { filename: '004-scientific-data-engine.sql', sql: SCHEMA_004 },
+  { filename: '005-augment-tables.sql', sql: SCHEMA_005 },
+  { filename: '006-user-config.sql', sql: SCHEMA_006 },
+  { filename: '007-eln-workflow.sql', sql: SCHEMA_007 },
+  { filename: '008-standardization.sql', sql: SCHEMA_008 },
+  { filename: '009-user-avatar.sql', sql: SCHEMA_009 },
+  { filename: '010-migration-workspace.sql', sql: SCHEMA_010 }
+]
 
 export interface MigrationRecord {
   version: number
@@ -32,12 +61,26 @@ CREATE TABLE IF NOT EXISTS schema_version (
   checksum TEXT
 );`
 
-function listMigrations(schemaDir: string): Array<{ version: number; filename: string; sql: string; checksum: string }> {
-  const files = readdirSync(schemaDir)
+function listMigrations(_schemaDir?: string): Array<{ version: number; filename: string; sql: string; checksum: string }> {
+  // Phase 10.6 hotfix: 优先用 INLINE_SCHEMAS (vite ?raw import, production 可靠).
+  // 保留 schemaDir 参数兼容老调用 (tests/dev 环境可能仍走 fs).
+  if (INLINE_SCHEMAS.length > 0 && INLINE_SCHEMAS[0].sql && INLINE_SCHEMAS[0].sql.length > 0) {
+    return INLINE_SCHEMAS
+      .map((entry) => {
+        const versionMatch = entry.filename.match(/^0*(\d+)/)
+        const version = versionMatch ? Number.parseInt(versionMatch[1], 10) : 0
+        const checksum = simpleChecksum(entry.sql)
+        return { version, filename: entry.filename, sql: entry.sql, checksum }
+      })
+      .sort((a, b) => a.version - b.version)
+  }
+  // Fallback: dev 模式没 ?raw 编译 (e.g. vitest) 时用 fs 读
+  if (!_schemaDir) return []
+  const files = readdirSync(_schemaDir)
     .filter((f) => f.endsWith('.sql'))
     .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))
   return files.map((filename) => {
-    const sql = readFileSync(join(schemaDir, filename), 'utf8')
+    const sql = readFileSync(join(_schemaDir, filename), 'utf8')
     const versionMatch = filename.match(/^0*(\d+)/)
     const version = versionMatch ? Number.parseInt(versionMatch[1], 10) : 0
     const checksum = simpleChecksum(sql)

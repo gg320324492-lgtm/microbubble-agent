@@ -360,8 +360,17 @@ export function registerIpcHandlers(): void {
 
   // ---------- Phase 8-M1-G: Product IPC (auth / config / backup / export / audit) ----------
   ipcMain.handle('app:user.login', async (_e, payload: { username: string; password: string }) => {
-    const { getDatabaseService } = await import('./services/database.service')
-    const svc = getDatabaseService()
+    let { getDatabaseService } = await import('./services/database.service')
+    let svc = getDatabaseService()
+    // Phase 10.6 hotfix: 如果 DB 未就绪 (e.g. bootstrapDatabase 在 registerIpcHandlers 之后), 尝试同步 bootstrap
+    if (!svc) {
+      const { bootstrapDatabase } = await import('./services/database.service')
+      try {
+        svc = bootstrapDatabase()
+      } catch (e) {
+        return { ok: false, message: `数据库初始化失败: ${e instanceof Error ? e.message : String(e)}` }
+      }
+    }
     if (!svc) return { ok: false, message: '数据库未就绪' }
     try {
       const result = svc.product.auth.login(payload.username, payload.password)
@@ -370,6 +379,8 @@ export function registerIpcHandlers(): void {
       return { ok: false, message: err instanceof Error ? err.message : '登录失败' }
     }
   })
+  // 注: 'app:auth:login' channel 由 IPC_CHANNELS.AUTH_LOGIN (line 52-57) 注册,
+  // 走远端 fetch 路径. 这里不重复注册避免 "Attempted to register a second handler" 错误.
   ipcMain.handle('app:user.logout', async (_e, payload: { token: string }) => {
     const { getDatabaseService } = await import('./services/database.service')
     const svc = getDatabaseService()
@@ -545,6 +556,24 @@ export function registerIpcHandlers(): void {
   })
 
   // ---------- Phase 8-M0-H0: AppConfig / LocalPersistence / Logger ----------
+  // Phase 10.6 hotfix: 代理 fetch 远程 avatar URL → 返回 dataURL.
+  // 沙箱 Electron renderer <img src=remote> 可能被 webSecurity/CSP 阻止.
+  // main 进程 fetch URL 转 base64 dataURL, renderer 直接用.
+  ipcMain.handle('app:avatar.fetch', async (_e, payload: { url: string }) => {
+    if (!payload?.url || typeof payload.url !== 'string') return { ok: false, dataUrl: null, error: 'invalid url' }
+    if (!payload.url.startsWith('https://')) return { ok: false, dataUrl: null, error: 'only https' }
+    try {
+      const resp = await fetch(payload.url)
+      if (!resp.ok) return { ok: false, dataUrl: null, error: `HTTP ${resp.status}` }
+      const buf = Buffer.from(await resp.arrayBuffer())
+      const ct = resp.headers.get('content-type') ?? 'image/jpeg'
+      const dataUrl = `data:${ct};base64,${buf.toString('base64')}`
+      return { ok: true, dataUrl }
+    } catch (err) {
+      return { ok: false, dataUrl: null, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.handle('app:get-config', async () => appConfigSnapshot)
   ipcMain.handle('app:get-status', async () => {
     const { getBootstrapResult } = await import('./bootstrap')
@@ -603,5 +632,35 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('logger:tail', async (_e, payload: { lines?: number }) => {
     const { logger } = await import('./services/storage.service')
     return logger.tail(payload?.lines ?? 100)
+  })
+
+  // ---------- R4: Migration (mbrp import into staging workspace) ----------
+  // All three handlers defer to the same MbrpImporter instance so we share
+  // databasePath / dataDir resolution with the rest of the desktop app.
+  // The renderer must NEVER call these without an authenticated user (Phase 1
+  // auth gate is applied at the renderer routing layer).
+  const { MbrpImporter } = await import('./migration/mbrp-importer')
+  const { verifyMbrp } = await import('./migration/index')
+  const { app } = await import('electron')
+  const migrationImporter = new MbrpImporter({ dataDir: app.getPath('userData') })
+
+  ipcMain.handle('migration:preflight', async (_e, payload: { packagePath: string }) => {
+    if (!payload?.packagePath || typeof payload.packagePath !== 'string') {
+      return { ok: false, code: 'INVALID_PACKAGE', message: 'packagePath required' }
+    }
+    return verifyMbrp(payload.packagePath)
+  })
+
+  ipcMain.handle('migration:import', async (_e, payload: { packagePath: string; snapshotId: string }) => {
+    if (!payload?.packagePath || !payload?.snapshotId) {
+      return { ok: false, code: 'INVALID_PACKAGE', message: 'packagePath + snapshotId required' }
+    }
+    return migrationImporter.importPackage(payload)
+  })
+
+  ipcMain.handle('migration:runs', async () => {
+    // R4 minimal stub: history listing is wired in a follow-up patch once
+    // the renderer needs it. Return [] so the renderer can guard.
+    return []
   })
 }
