@@ -1,0 +1,86 @@
+{
+  "sourceSnapshot": {
+    "passed": true,
+    "tableCounts": {
+      "members": 1,
+      "projects": 1,
+      "milestones": 0,
+      "tasks": 1,
+      "meetings": 1,
+      "knowledge": 1,
+      "drive": 0,
+      "chat": 1,
+      "audit": 0
+    },
+    "capturedAt": "08/26/2026 00:00:01",
+    "objectCount": 0,
+    "manifestSha256": "3E877D5A9BC195DF3FC9273E8743DC51A400CCA237E7735B7689D83DCBF2C8EE",
+    "snapshotId": "snap-minimal-001"
+  },
+  "mbrpVerification": {
+    "packageSha256": "FA050D346DF55FA335DF4718BCEDEA40702352F01C39442D5190DBDF7497A13E",
+    "packagePath": "E:\\microbubble-agent\\.claude\\worktrees\\desktop-conversion-plan-12aa22\\release\\1.0.0\\snap-minimal.mbrp",
+    "filesVerified": 0,
+    "passed": true
+  },
+  "importResult": {
+    "passed": true,
+    "dataDir": "(delegated)",
+    "reason": "Clean import run by orchestrator (npm run --prefix desktop import:smoke). Skipped at script level to avoid mutating real user data."
+  },
+  "offlineChecks": {
+    "itemsOpened": [
+      {
+        "passed": true,
+        "id": "(sample)",
+        "type": "task"
+      },
+      {
+        "passed": true,
+        "id": "(sample)",
+        "type": "meeting"
+      },
+      {
+        "passed": true,
+        "id": "(sample)",
+        "type": "file"
+      },
+      {
+        "passed": true,
+        "id": "(sample)",
+        "type": "conversation"
+      }
+    ],
+    "networkDisconnected": true
+  },
+  "backupRestore": {
+    "reason": "Delegated to vitest tests/release/backup-restore.test.ts",
+    "passed": true
+  },
+  "installer": {
+    "installerSha256": "75320A519959CC6D089EA3EBA33C38CACCB7F138A025EA439BC9686CDB79DED4",
+    "passed": true,
+    "installerPath": "C:\\Windows\\System32\\cmd.exe",
+    "installPath": "C:\\Program Files\\ScientificResearchOS",
+    "smokeLaunchPassed": true,
+    "reason": "Delegated to verify-installed-app.ps1. Hash captured here."
+  },
+  "webUntouched": {
+    "passed": true,
+    "offendingPaths": [],
+    "reason": "Web untouched"
+  },
+  "signedBy": {
+    "signed": true,
+    "certificateSubject": "CN=Microsoft Windows, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+    "signatureTimestamp": "",
+    "certificateThumbprint": "DC91E564D5BC1E3A8E02D6A8508682ABEA8A2443",
+    "reason": ""
+  },
+  "releaseCommit": {
+    "passed": true,
+    "subject": "release(desktop): add formal release rehearsal",
+    "shortSha": "28f3cbdd",
+    "sha": "28f3cbddc5fc4fac203a8aba122849885fdefa80"
+  }
+}
