@@ -18,6 +18,17 @@ from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
 from app.models.voiceprint_history import VoiceprintHistory
 from app.models.agent_trace import AgentTrace  # 2026-06-12 可观测性
+from app.models.chat_session_attached_document import ChatSessionAttachedDocument  # Phase 14: P5 (W-N-G+): 聊天附加文档
+from app.models.drive_document import DriveDocument
+from app.models.drive_file_version import DriveFileVersion
+from app.models.drive_share import DriveFolderShare as DriveShare
+from app.models.drive_version_tag import DriveVersionTag
+from app.models.drive_chunked_upload import DriveChunkedUpload
+from app.models.drive_comment import DriveComment
+from app.models.drive_reaction import DriveReaction
+from app.models.drive_notification_dedup import DriveNotificationDedup
+# Phase 14 (2026-08-26 sandbox): 之前 create_all 漏了部分子包 models, 显式 import 全部 14 个子包避免类似 500 错
+
 from app.models.search_log import SearchLog  # v31 检索质量埋点
 from app.models.chat_history import ChatSession, ChatMessage, ChatShare  # #043 账号持久化
 from app.models.drive_share import DriveFolderShare, DriveFolderMember  # v2 PR7 文件夹分享/成员

@@ -41,7 +41,28 @@ def upgrade() -> None:
         ['parent_id'], ['id'],
     )
 
-    # Add columns to knowledge_formulas
+    # Phase 14 (2026-08-26 sandbox): 009 之前 ALTER knowledge_formulas 但 CREATE 缺失.
+    # 若 knowledge_formulas 不存在, ALTER 失败. 显式 IF NOT EXISTS 兜底.
+    # 不在 CREATE 中列 source_type/category_id/is_active (这些列由后面 ALTER 加).
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS knowledge_formulas (
+            id INTEGER PRIMARY KEY,
+            knowledge_id INTEGER,
+            name VARCHAR(200) NOT NULL,
+            formula_latex TEXT,
+            formula_python TEXT NOT NULL,
+            variables JSONB DEFAULT '{}'::jsonb,
+            result_unit VARCHAR(50),
+            conditions TEXT,
+            domain VARCHAR(100),
+            confidence FLOAT DEFAULT 0.5,
+            created_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            FOREIGN KEY (knowledge_id) REFERENCES knowledge(id) ON DELETE CASCADE
+        )
+    """)
+
+    # Add columns to knowledge_formulas (ALTER TABLE 在 IF NOT EXISTS 之后安全)
     op.add_column('knowledge_formulas', sa.Column('source_type', sa.String(20),
                    server_default='extracted'))
     op.add_column('knowledge_formulas', sa.Column('category_id', sa.Integer(), nullable=True))

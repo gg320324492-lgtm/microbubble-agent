@@ -62,7 +62,8 @@ class Meeting(Base, TimestampMixin):
     processing_status = Column(String(16), nullable=True)
     quality_status = Column(String(16), nullable=True)
     media_duration_seconds = Column(Integer, nullable=True)
-    last_processing_run_id = Column(BigInteger, ForeignKey("meeting_processing_runs.id", ondelete="SET NULL"), nullable=True)
+    # Phase 14 (2026-08-26 sandbox): use_alter=True 不生效, 改在 097 migration 用 op.create_foreign_key 显式加 FK
+    last_processing_run_id = Column(BigInteger, nullable=True)
 
     # 2026-07-16 +060: 落库 User-Agent, 便于事后排查兼容性失败 (HarmonyOS ArkWeb / iOS Safari / 企业微信 X5)
     user_agent = Column(String(500), nullable=True)
