@@ -263,11 +263,16 @@ const api: DesktopApi = {
     alarms: (deviceId) => ipcRenderer.invoke('device:alarm.list', { deviceId }) as Promise<import('../shared/preload-api').AlarmEvent[]>,
     command: (params) => ipcRenderer.invoke('device:command', params) as Promise<import('../shared/preload-api').CommandAck>,
     status: () => ipcRenderer.invoke('device:status') as Promise<import('../shared/preload-api').DeviceStatus[]>
-  }
+  },
   migration: {
     preflight: (packagePath: string) => ipcRenderer.invoke('migration:preflight', { packagePath }) as Promise<{ ok: boolean; code?: string; message?: string }>,
     import: (packagePath: string, snapshotId: string) => ipcRenderer.invoke('migration:import', { packagePath, snapshotId }) as Promise<{ ok: boolean; runId?: string; code?: string; message?: string; filesWritten?: number; warningCount?: number; workspacePath?: string }>,
     runs: () => ipcRenderer.invoke('migration:runs') as Promise<unknown[]>
+  },
+  pgSnapshot: {
+    preflight: () => ipcRenderer.invoke('pg:snapshot.preflight') as Promise<{ ok: boolean; container?: string; database?: string; pgVersion?: string; message?: string }>,
+    history: (limit?: number) => ipcRenderer.invoke('pg:snapshot.history', { limit }) as Promise<Array<{ snapshot_id: string; started_at: string; ended_at: string | null; rows_total: number; tables_done: number; tables_total: number; status: string; error_message: string | null }>>,
+    run: () => ipcRenderer.invoke('pg:snapshot.run', { tasks: [] }) as Promise<{ ok: boolean; snapshotId?: string; tasksTotal?: number; rowsTotal?: number; errors?: string[] }>
   }
 }
 

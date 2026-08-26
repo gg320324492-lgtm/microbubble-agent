@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ResearchIcon from '../components/icons/ResearchIcon.vue'
 import ShellCommandPalette from '../components/shell/ShellCommandPalette.vue'
@@ -32,7 +32,22 @@ const pageTitle = computed(() => {
   return meta.title ?? '科研工作台'
 })
 const displayName = computed(() => userStore.profile?.name ?? '未登录')
-const avatarUrl = computed(() => userStore.profile?.avatar ?? '')
+const remoteAvatar = computed(() => userStore.profile?.avatar ?? '')
+// Phase 10.6 hotfix: 通过 IPC 代理 fetch remote avatar → dataURL (避免 sandbox <img src=remote> 阻塞)
+const avatarUrl = ref('')
+async function refreshAvatarDataUrl(): Promise<void> {
+  if (!remoteAvatar.value || !remoteAvatar.value.startsWith('https://')) {
+    avatarUrl.value = remoteAvatar.value
+    return
+  }
+  try {
+    const res = await window.api.app.fetchAvatar(remoteAvatar.value)
+    avatarUrl.value = res.ok && res.dataUrl ? res.dataUrl : ''
+  } catch {
+    avatarUrl.value = ''
+  }
+}
+watch(remoteAvatar, refreshAvatarDataUrl, { immediate: true })
 const aiStatus = computed(() => {
   return {
     task: '尚未接入实时任务数据',

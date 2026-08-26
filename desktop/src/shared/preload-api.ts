@@ -546,6 +546,39 @@ export interface DesktopMigrationApi {
   runs: () => Promise<unknown[]>
 }
 
+export interface PgSnapshotPreflightResult {
+  ok: boolean
+  container?: string
+  database?: string
+  pgVersion?: string
+  message?: string
+}
+
+export interface PgSnapshotMeta {
+  snapshot_id: string
+  started_at: string
+  ended_at: string | null
+  rows_total: number
+  tables_done: number
+  tables_total: number
+  status: string
+  error_message: string | null
+}
+
+export interface PgSnapshotRunResult {
+  ok: boolean
+  snapshotId?: string
+  tasksTotal?: number
+  rowsTotal?: number
+  errors?: string[]
+}
+
+export interface DesktopPgSnapshotApi {
+  preflight: () => Promise<PgSnapshotPreflightResult>
+  history: (limit?: number) => Promise<PgSnapshotMeta[]>
+  run: () => Promise<PgSnapshotRunResult>
+}
+
 export interface DesktopApi extends DesktopPingApi {
   auth: DesktopAuthApi
   api: DesktopApiGatewayApi
@@ -559,6 +592,8 @@ export interface DesktopApi extends DesktopPingApi {
   agent: DesktopAgentApi
   device: DesktopDeviceApi
   migration: DesktopMigrationApi
+  // Phase 11: PG snapshot (单向 web → desktop 数据迁移)
+  pgSnapshot: DesktopPgSnapshotApi
   // Phase 2+ expand here (task / knowledge / meeting / ...)
 }
 
