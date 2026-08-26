@@ -639,6 +639,8 @@ export function registerIpcHandlers(): void {
   // databasePath / dataDir resolution with the rest of the desktop app.
   // The renderer must NEVER call these without an authenticated user (Phase 1
   // auth gate is applied at the renderer routing layer).
+  // Phase 10.6 hotfix: wrap top-level await in IIFE (registerIpcHandlers is non-async).
+  void (async () => {
   const { MbrpImporter } = await import('./migration/mbrp-importer')
   const { verifyMbrp } = await import('./migration/index')
   const { app } = await import('electron')
@@ -662,5 +664,59 @@ export function registerIpcHandlers(): void {
     // R4 minimal stub: history listing is wired in a follow-up patch once
     // the renderer needs it. Return [] so the renderer can guard.
     return []
+  })
+  })()  // end IIFE (Phase 10.6 hotfix: wrap mbrp top-level await)
+
+  // ---------- Phase 11: PG Snapshot (单向 web → desktop 数据迁移) ----------
+  // 触发器: 仅由 renderer 通过 IPC trigger, 凭据不暴露.
+  ipcMain.handle('pg:snapshot.preflight', async () => {
+    const { pgPreflight } = await import('./migration/pg-snapshot/pg-connector')
+    return pgPreflight()
+  })
+
+  ipcMain.handle('pg:snapshot.history', async (_e, payload: { limit?: number }) => {
+    const { listSnapshots } = await import('./migration/pg-snapshot/import-runner')
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return []
+    return listSnapshots(svc, payload?.limit ?? 20)
+  })
+
+  ipcMain.handle('pg:snapshot.run', async (_e, payload: { tasks?: Array<{ pgTable: string; desktopTable: string; selectSql: string; transformerMap: Record<string, 'pgTimestampToEpochMs' | 'pgJsonToJsonString' | 'pgTextArrayToJsonString' | 'pgUuidString' | 'pgVectorDrop' | 'pgHalfVectorDrop' | 'truncateText' | 'passthrough'> }> }) => {
+    // Phase 11 P11-1+: 接受 renderer 传来的 transformer spec, 动态 import transformers.
+    const tasks = payload?.tasks ?? []
+    if (tasks.length === 0) {
+      // Stage 0 占位: 空任务 = sanity check
+      const { runSnapshot } = await import('./migration/pg-snapshot/import-runner')
+      const { getDatabaseService } = await import('./services/database.service')
+      const svc = getDatabaseService()
+      if (!svc) return { ok: false, error: '数据库未就绪' }
+      return runSnapshot(svc, { tasks: [] })
+    }
+    // 动态 import transformers/<table>.ts, 解析 string → 函数
+    const { runSnapshot } = await import('./migration/pg-snapshot/import-runner')
+    const pipeline = await import('./migration/pg-snapshot/transform-pipeline')
+    const transformerFns: Record<string, (v: unknown) => unknown> = {
+      pgTimestampToEpochMs: pipeline.pgTimestampToEpochMs,
+      pgJsonToJsonString: pipeline.pgJsonToJsonString,
+      pgTextArrayToJsonString: pipeline.pgTextArrayToJsonString,
+      pgUuidString: pipeline.pgUuidString,
+      pgVectorDrop: pipeline.pgVectorDrop,
+      pgHalfVectorDrop: pipeline.pgHalfVectorDrop,
+      truncateText: pipeline.truncateText,
+      passthrough: (v: unknown) => v
+    }
+    const resolvedTasks = tasks.map((t) => ({
+      pgTable: t.pgTable,
+      desktopTable: t.desktopTable,
+      selectSql: t.selectSql,
+      transformerMap: Object.fromEntries(
+        Object.entries(t.transformerMap).map(([col, fnName]) => [col, transformerFns[fnName] ?? ((v: unknown) => v)])
+      )
+    }))
+    const { getDatabaseService } = await import('./services/database.service')
+    const svc = getDatabaseService()
+    if (!svc) return { ok: false, error: '数据库未就绪' }
+    return runSnapshot(svc, { tasks: resolvedTasks })
   })
 }

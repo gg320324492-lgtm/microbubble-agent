@@ -69,14 +69,31 @@ async function bootstrapApp(): Promise<void> {
     const appConfig = resolveAppConfig()
     setAppConfig(appConfig)
 
+    // 0.5 Phase 10.6 hotfix: 注册 IPC handlers 提前到 bootstrap 之前.
+    //  即使后续 bootstrap / bootstrapDatabase 抛错, IPC 仍可用, renderer 不会再见 "No handler registered"
+    registerIpcHandlers()
+
     // 1. 初始化 storage + auth (无 token 时 restore 自然失败，无影响)
     await bootstrap()
 
-    // 2. 初始化 SQLite 数据库 (Phase 8-M1-B), 自动迁移 + audit logger
-    bootstrapDatabase()
+    // 2. 初始化 SQLite 数据库 (Phase 8-M1-B), 自动迁移 + audit logger.
+    // Phase 10.6 hotfix: 用 try/catch 包裹, DB 初始化失败不阻塞 IPC 注册与窗口创建.
+    try {
+      bootstrapDatabase()
+    } catch (dbErr) {
+      console.error('[bootstrap] bootstrapDatabase failed (continuing without DB):', dbErr)
+    }
 
-    // 3. 注册 IPC handlers
-    registerIpcHandlers()
+    // 2.5 Phase 12 (2026-08-26 主拍决策): 启动时若 user 未配 provider, 注入默认云端 provider (MiMo).
+    //   用户已配 active provider 时尊重用户选择, 不覆盖. 主拍决策 3: 云端模型 + 用户配 API Key.
+    try {
+      const { ensureDefaultCloudProvider } = await import('./services/model-provider/bootstrap')
+      ensureDefaultCloudProvider()
+    } catch (provErr) {
+      console.error('[bootstrap] ensureDefaultCloudProvider failed:', provErr)
+    }
+
+    // 3. (Phase 10.6 hotfix: registerIpcHandlers 已上移到 step 0.5)
 
     // 4. 创建窗口
     mainWindow = createMainWindow()
