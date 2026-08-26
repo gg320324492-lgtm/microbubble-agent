@@ -935,8 +935,11 @@ function handleSearchKeydown(e: KeyboardEvent) {
       </button>
       <!-- P0-#2 (2026-07-12): 加"跳到最早"按钮 - 用户报"41条仍然看不全"实际原因
            autoStick 滚到底无顶部按钮,用户被卡在底部看不到前 35 条历史. 修复: -->
+      <!-- 2026-08-26: 加 messages.length > 0 gate — 空对话 (0 条消息) 时不应显示,
+           scroll 事件触发容器 padding 撑出 scrollHeight > clientHeight, scrollToBottom()
+           误把 showJumpToTop.value 设 true, 出现"无消息却有跳到最早按钮"的逻辑错误. -->
       <button
-        v-if="showJumpToTop"
+        v-if="showJumpToTop && messages.length > 0"
         id="chat-jump-to-top"
         class="jump-to-top"
         type="button"
