@@ -256,6 +256,46 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
         print("数据库表创建完成")
 
+        # 类 20.188 (2026-08-27): sequence 漂移自动修复
+        # 原因: TRUNCATE / DELETE / RESTART IDENTITY / pg_restore 不推进 sequence
+        # 现象: 用户首条 INSERT 报 UniqueViolation 500 (chat_messages_id_seq=6333, max=6339)
+        # 同步所有 public.* 表的 *_id_seq 到 max(id), 防下次 INSERT 失败
+        try:
+            from sqlalchemy import text as _text
+            async with engine.begin() as conn:
+                # 用 dynamic SQL 动态查每张表 max(id)
+                # 过滤: 1) data_type integer/bigint 2) 对应 *_id_seq 存在
+                tbl_rows = await conn.execute(_text("""
+                    SELECT t.table_name::text AS tbl
+                    FROM information_schema.tables t
+                    JOIN information_schema.columns c
+                      ON c.table_name = t.table_name AND c.table_schema = t.table_schema
+                         AND c.column_name = 'id'
+                    JOIN pg_sequences seq
+                      ON seq.schemaname = 'public' AND seq.sequencename = t.table_name || '_id_seq'
+                    WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+                      AND c.data_type IN ('integer', 'bigint')
+                """))
+                tables = [r[0] for r in tbl_rows.fetchall()]
+                drifts = []
+                for tbl in tables:
+                    seq_row = await conn.execute(_text(
+                        "SELECT COALESCE(last_value, 0) FROM pg_sequences "
+                        "WHERE schemaname='public' AND sequencename=:n"
+                    ), {"n": f"{tbl}_id_seq"})
+                    seq_val = seq_row.scalar() or 0
+                    max_row = await conn.execute(_text(f"SELECT COALESCE(MAX(id), 0) FROM public.{tbl}"))
+                    max_id = max_row.scalar() or 0
+                    if max_id > seq_val:
+                        await conn.execute(_text(f"SELECT setval('{tbl}_id_seq', :v)"), {"v": max_id})
+                        drifts.append((tbl, seq_val, max_id))
+                if drifts:
+                    print(f"[seq-sync] 修复 {len(drifts)} 个 sequence 漂移: " + ", ".join(f"{r[0]}({r[1]}→{r[2]})" for r in drifts))
+                else:
+                    print("[seq-sync] 所有 sequence 已对齐")
+        except Exception as e:
+            print(f"[seq-sync] 漂移检测失败（不影响启动）: {e}")
+
         # 初始化内置公式库（幂等）
         try:
             from app.core.database import async_session
