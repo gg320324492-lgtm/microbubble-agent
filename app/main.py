@@ -59,6 +59,7 @@ from app.core.request_context import (
 def _import_application_routers():
     """在线程中导入重型业务路由，并返回原注册顺序的 include 参数。"""
     from app.api.v1 import (
+        health,  # 类 20.198 /api/v1/health
         admin,
         admin_audit,
         admin_kb_monitor,  # qa-bench v3.1 D5: KB 自动入库监控
@@ -115,6 +116,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
 
     # 顺序必须保持不变：meeting_recording 要在 meeting 的动态参数路由之前。
     return [
+        (health.router, {"prefix": "/api/v1", "tags": ["健康检查"]}),  # 类 20.198
         (auth.router, {"prefix": "/api/v1", "tags": ["认证"]}),
         (chat.router, {"prefix": "/api/v1", "tags": ["对话"]}),
         (chat_attachments.router, {"prefix": "/api/v1", "tags": ["对话附加文档"]}),  # #P5
