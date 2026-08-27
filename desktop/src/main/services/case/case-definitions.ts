@@ -1,5 +1,10 @@
 // Case Definitions — Phase 10
 // 3 个 canonical cases: O3 24h 降解 / pH 标定 / AI 文献综述.
+//
+// [类 20.191] 2026-08-27: 删所有 hardcoded 'demo-project' / 'demo-ph-meter' / 'demo-o3-24h' /
+// 'demo-experiment' / 'mock://demo' / 'mock://localhost' 假 ID.
+// 这些 ID 实际不存在于 members / projects / devices 表, 任何 case run 若没显式覆盖
+// 都会 silently fail. 改为: 标记为 'MUST_BE_PROVIDED' 或干脆删除, 由 case launcher 显式注入.
 
 import type { WorkflowStep } from '../workflow/types'
 import { CASE_101_DEFINITION } from './case-101-definition'
@@ -12,13 +17,16 @@ export interface CaseDefinition {
   estimatedDurationMin: number
   templateId: string
   templateSteps: WorkflowStep[]
-  /** 默认 parameters (Phase 10 replay 使用) */
+  /** 默认 parameters (Phase 10 replay 使用). 真实值由 case launcher 显式注入. */
   defaultParameters: Record<string, unknown>
   /** 元数据 (pollutant / technology / reactorVolume / initialTC / ozoneFlow / temperature 等) */
   metadata?: Record<string, unknown>
-  /** 内置样例数据文件 (相对路径, 主进程读取) */
+  /** 内置样例数据文件 (相对路径, 主进程读取). null 表示 case 启动时必须选真实数据. */
   sampleDataPath: string | null
 }
+
+/** [类 20.191] case 启动时必须显式提供的参数 marker. */
+const MUST_BE_PROVIDED = '__MUST_BE_PROVIDED__'
 
 function buildO3DegradationSteps(): WorkflowStep[] {
   return [
@@ -47,20 +55,21 @@ export const CASE_DEFINITIONS: CaseDefinition[] = [
   {
     id: 'case-001-o3-degradation',
     name: 'O3 24 小时降解实验',
-    description: '24 小时臭氧降解实验: 启动 O3 发生器 → 导入 288 行 8 指标测量数据 → 一级动力学拟合 (R² > 0.9) → ELN 记录',
+    description: '24 小时臭氧降解实验: 启动 O3 发生器 → 导入测量数据 → 一级动力学拟合 (R² > 0.9) → ELN 记录',
     category: 'experiment',
     estimatedDurationMin: 30,
     templateId: 'case-001-o3-degradation',
     templateSteps: buildO3DegradationSteps(),
     defaultParameters: {
-      projectId: 'demo-project',
+      // [类 20.191] 删 'demo-project' / 'demo-o3-24h' 假 ID. case launcher 必须显式提供 projectId + fileHash.
+      projectId: MUST_BE_PROVIDED,
       mapping: { timestamp: 'timestamp', metric: 'metric', value: 'value', unit: 'unit' },
-      experimentName: 'O3 24h degradation case-001',
-      fileHash: 'demo-o3-24h',
+      experimentName: '',
+      fileHash: MUST_BE_PROVIDED,
       model: 'first-order',
       metric: 'O3'
     },
-    sampleDataPath: 'o3_24h_sample.csv'
+    sampleDataPath: null
   },
   {
     id: 'case-002-ph-calibration',
@@ -71,10 +80,11 @@ export const CASE_DEFINITIONS: CaseDefinition[] = [
     templateId: 'case-002-ph-calibration',
     templateSteps: buildPhCalibrationSteps(),
     defaultParameters: {
-      projectId: 'demo-project',
-      deviceId: 'demo-ph-meter',
+      // [类 20.191] 删 'demo-project' / 'demo-ph-meter' / 'mock://demo'. case launcher 显式注入.
+      projectId: MUST_BE_PROVIDED,
+      deviceId: MUST_BE_PROVIDED,
       deviceType: 'ph-meter',
-      endpoint: 'mock://demo'
+      endpoint: MUST_BE_PROVIDED
     },
     sampleDataPath: null
   },
@@ -87,10 +97,11 @@ export const CASE_DEFINITIONS: CaseDefinition[] = [
     templateId: 'case-003-ai-literature',
     templateSteps: buildAiLiteratureSteps(),
     defaultParameters: {
-      projectId: 'demo-project',
-      experimentId: 'demo-experiment',
+      // [类 20.191] 删 'demo-project' / 'demo-experiment'. case launcher 显式注入.
+      projectId: MUST_BE_PROVIDED,
+      experimentId: MUST_BE_PROVIDED,
       section: 'introduction',
-      content: '## Introduction\n\nThis study investigates O3-based degradation using micro-nano bubble technology.\n\n### Background\n\nMicro-nano bubbles enhance mass transfer efficiency.'
+      content: ''
     },
     sampleDataPath: null
   },
@@ -99,4 +110,20 @@ export const CASE_DEFINITIONS: CaseDefinition[] = [
 
 export function getCaseDefinition(id: string): CaseDefinition | null {
   return CASE_DEFINITIONS.find((c) => c.id === id) ?? null
+}
+
+/** [类 20.191] 检查 case 启动参数是否齐全. 若有 MUST_BE_PROVIDED 占位符, 报错. */
+export function validateCaseParameters(caseId: string, params: Record<string, unknown>): { ok: true } | { ok: false; missing: string[] } {
+  const def = getCaseDefinition(caseId)
+  if (!def) return { ok: false, missing: ['case-not-found'] }
+  const missing: string[] = []
+  for (const [key, value] of Object.entries(def.defaultParameters)) {
+    if (value === MUST_BE_PROVIDED) {
+      // 启动时这个字段必须有真实值 (不能是 placeholder)
+      if (params[key] === undefined || params[key] === null || params[key] === '') {
+        missing.push(key)
+      }
+    }
+  }
+  return missing.length === 0 ? { ok: true } : { ok: false, missing }
 }

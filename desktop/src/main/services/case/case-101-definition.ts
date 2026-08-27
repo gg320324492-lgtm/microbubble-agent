@@ -1,5 +1,8 @@
 // Case-101 Definition — Phase 10.5
 // O3-MNB tetracycline degradation (real research data validation)
+//
+// [类 20.191] 2026-08-27: 删 'demo-project' 假 projectId. case launcher 必须显式提供.
+// fileHash: 'case-101-real' 也是 placeholder (看起来像真但其实不存在), 同样改成 MUST_BE_PROVIDED.
 
 import type { WorkflowStep } from '../workflow/types'
 import type { CaseDefinition } from './case-definitions'
@@ -13,6 +16,9 @@ function buildCase101Steps(): WorkflowStep[] {
   ]
 }
 
+// 复用 case-definitions.ts 的 MUST_BE_PROVIDED 常量 (避免重复定义)
+const MUST_BE_PROVIDED = '__MUST_BE_PROVIDED__'
+
 export const CASE_101_DEFINITION: CaseDefinition = {
   id: 'case-101-o3-mnb-tetracycline',
   name: 'O3-MNB tetracycline degradation',
@@ -22,9 +28,9 @@ export const CASE_101_DEFINITION: CaseDefinition = {
   templateId: 'case-101-o3-mnb-tetracycline',
   templateSteps: buildCase101Steps(),
   defaultParameters: {
-    projectId: 'demo-project',
+    projectId: MUST_BE_PROVIDED,
     experimentName: 'O3-MNB tetracycline degradation case-101',
-    fileHash: 'case-101-real',
+    fileHash: MUST_BE_PROVIDED,
     model: 'first-order',
     metric: 'TC',
     mapping: { timestamp: 'timestamp', metric: 'metric', value: 'value', unit: 'unit' }
