@@ -81,8 +81,9 @@ const overviewDescription = computed(() => {
       description="请先选择一个科研项目"
     />
 
-    <template v-else-if="store.workspace && !store.isLoading && !store.errorMessage && !store.workspace">
-      <p v-show="store.workspace && !store.workspace" aria-hidden="true" class="research-workspace__status-empty"></p>
+    <!-- [类 20.191] 2026-08-27: 删 dead code 'store.workspace && !store.workspace' (永远 false).
+         原 template 块永远不会渲染, 是 2026-08-04 状态机重构遗留. 已替换为下面的 else 块. -->
+    <template v-else>
       <h1 class="research-workspace__title">科研工作区</h1>
       <p class="research-workspace__subtitle">{{ overviewDescription }}</p>
       <ResearchPageHeader

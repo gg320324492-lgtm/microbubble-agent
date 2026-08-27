@@ -2,7 +2,7 @@
 // 配置: 路径 + 版本 + 环境. 严禁硬编码用户路径 (走 resolveAppConfig 的 dataDir).
 
 import { join } from 'node:path'
-import { resolveAppConfig } from '../../shared/config-resolver'
+import { resolveAppConfig } from '@shared/config'
 
 export interface DatabaseConfig {
   /** 数据库文件绝对路径 */

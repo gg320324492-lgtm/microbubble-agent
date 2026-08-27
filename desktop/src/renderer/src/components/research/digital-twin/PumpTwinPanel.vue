@@ -33,16 +33,18 @@ const recentReadings = computed(() => props.device?.recentReadings ?? 0)
     </header>
     <div v-if="device" class="pump-twin-panel__body">
       <div class="pump-twin-panel__name">{{ device.name }}</div>
-      <div class="" aria-hidden="true">
+      <div class="pump-twin-panel__row">
         <span class="pump-twin-panel__metric-label">类型</span>
         <span class="pump-twin-panel__metric-value">泵</span>
       </div>
-      <div class="" aria-hidden="true">
+      <div class="pump-twin-panel__row">
         <span class="pump-twin-panel__metric-label">近期读数</span>
         <span class="pump-twin-panel__metric-value">{{ recentReadings }}</span>
       </div>
     </div>
-    <div v-else class="" role="status"><button type="button" class="twin-empty-button" @keydown.enter.prevent><span aria-hidden="true">·</span></button>暂无泵设备</div>
+    <div v-else class="pump-twin-panel__empty" role="status">
+      <span>暂无泵设备</span>
+    </div>
   </section>
 </template>
 
