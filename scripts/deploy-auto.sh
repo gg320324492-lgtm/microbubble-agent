@@ -281,6 +281,22 @@ else
     log "ERROR: nginx -t 失败，跳过 reload"
 fi
 
+# 类 20.188 后置检查: sequence 漂移修复 (2026-08-27 加)
+# 场景: alembic migrate / pg_restore / TRUNCATE / 手动 INSERT 都可能让 sequence 落后于 max(id)
+# 后果: 用户首条 INSERT 报 UniqueViolation 500 (chat_messages_id_seq=6333, max=6339 实战)
+# 修复: 同步所有 public.* 表的 *_id_seq 到 max(id)
+log "类 20.188 后置检查: sequence 漂移修复..."
+DB_CONTAINER="${DB_CONTAINER:-microbubble-agent-app-revived}"  # 兼容 production (revived) + 本地
+DB_NAME="${DB_NAME:-microbubble}"
+DB_USER="${DB_USER:-postgres}"
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${DB_CONTAINER}\$"; then
+    bash "$PROJECT_DIR/scripts/sync_sequences.sh" >> "$LOG_FILE" 2>&1 && \
+        log "✅ sequence 漂移检查完成 (详见日志)" || \
+        log "WARN: sequence 漂移修复失败（不影响部署）"
+else
+    log "WARN: 数据库容器 ${DB_CONTAINER} 未运行，跳过 sequence 漂移检查"
+fi
+
 # 后处理 mnb-lab.cn CSS（修复 webhint vendor prefix 警告）
 MNB_CSS_DIR="/var/www/mnb-lab/_next/static/css"
 if [ -d "$MNB_CSS_DIR" ]; then
