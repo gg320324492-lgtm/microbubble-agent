@@ -1,4 +1,8 @@
 // Literature Service — 文献智能库服务层（带适配器模式）。
+//
+// [类 20.191] 2026-08-27: 删 MOCK_ASSESSMENTS / 假 evidence / 假 "去除率98.6%" 摘要.
+// 这些假数据被 Literature 页面渲染为"文献评估" + "证据链".
+// 改为: 默认 adapter 抛 NotWiredError.
 
 export interface PaperAssessment {
   documentId: string
@@ -23,28 +27,30 @@ export interface LiteratureAdapter {
   summarizePaper(documentId: string): Promise<string>
 }
 
-const MOCK_ASSESSMENTS: Record<string, PaperAssessment> = {
-  d1: { documentId: 'd1', reliabilityScore: 0.82, evidenceScore: 0.78, methodologyScore: 0.65, limitations: ['统计方法不充分', '样本量偏小'], concerns: ['缺少重复实验验证'] },
-  d2: { documentId: 'd2', reliabilityScore: 0.65, evidenceScore: 0.60, methodologyScore: 0.55, limitations: ['机制证据薄弱'], concerns: ['表征方法单一'] },
-  d3: { documentId: 'd3', reliabilityScore: 0.90, evidenceScore: 0.88, methodologyScore: 0.82, limitations: [], concerns: [] },
+export class LiteratureNotWiredError extends Error {
+  constructor() {
+    super(
+      '[LiteratureService] No real adapter wired. ' +
+      'Mock data was removed in [类 20.191] 2026-08-27 — was previously returning fake "去除率98.6%" summary and paper assessments. ' +
+      'Real data path: 1) local desktop_documents + manual assessment records, 2) FastAPI /api/v1/literature/* with RAG extraction ' +
+      'Call literatureService.setAdapter(realAdapter) after wiring.'
+    )
+    this.name = 'LiteratureNotWiredError'
+  }
 }
 
-const mockAdapter: LiteratureAdapter = {
-  async assessPaper(id) { return MOCK_ASSESSMENTS[id] ?? null },
-  async extractEvidence() {
-    return [
-      { evidenceId: 'e1', type: 'experiment', description: 'kLa 测量方法', strength: 0.85 },
-      { evidenceId: 'e2', type: 'statistical', description: '去除效率数据统计', strength: 0.78 },
-    ]
-  },
-  async getDocumentAssessments() { return Object.values(MOCK_ASSESSMENTS) },
-  async summarizePaper() { return '本文研究了微纳米气泡臭氧技术对四环素的降解效果，结果表明在最优条件下去除率可达98.6%。' },
+const notWiredAdapter: LiteratureAdapter = {
+  async assessPaper() { throw new LiteratureNotWiredError() },
+  async extractEvidence() { throw new LiteratureNotWiredError() },
+  async getDocumentAssessments() { throw new LiteratureNotWiredError() },
+  async summarizePaper() { throw new LiteratureNotWiredError() },
 }
 
-let currentAdapter: LiteratureAdapter = mockAdapter
+let currentAdapter: LiteratureAdapter = notWiredAdapter
 
 export const literatureService = {
   setAdapter(a: LiteratureAdapter) { currentAdapter = a },
+  isWired(): boolean { return currentAdapter !== notWiredAdapter },
   assessPaper: (id: string) => currentAdapter.assessPaper(id),
   extractEvidence: (id: string) => currentAdapter.extractEvidence(id),
   getDocumentAssessments: () => currentAdapter.getDocumentAssessments(),

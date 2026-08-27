@@ -18,24 +18,30 @@ export interface ResearchProject {
 }
 
 export const useProjectStore = defineStore('research-project', () => {
-  const currentProject = ref<ResearchProject>({
-    id: 'p1',
-    name: 'O₃-MNBs 强化四环素降解研究',
-    description: '探索微纳米气泡臭氧技术对四环素类抗生素的降解效率与机理',
-    domain: '环境科学',
-    progress: 0.68,
-    status: 'active',
-    stats: { experiments: 28, datasets: 12, documents: 156, manuscriptStatus: '撰写中' }
-  })
+  // [类 20.191] 2026-08-27: 删硬编码默认 project (id 'p1', fake stats 28/12/156).
+  // 改为: currentProject 初始 null, projectList 初始 [].
+  // 真实数据来源: 1) 真实后端 /api/v1/projects (待实现), 2) 本地 desktop_projects 表
+  // 调 loadProjects() 主动拉取; 在没拉到数据前, UI 显示空态.
+  const currentProject = ref<ResearchProject | null>(null)
+  const projectList = ref<ResearchProject[]>([])
 
-  const projectList = ref<ResearchProject[]>([currentProject.value])
-  const projectName = computed(() => currentProject.value.name)
-  const projectDomain = computed(() => currentProject.value.domain)
+  const projectName = computed(() => currentProject.value?.name ?? null)
+  const projectDomain = computed(() => currentProject.value?.domain ?? null)
 
-  function updateProgress(p: number) { currentProject.value.progress = Math.max(0, Math.min(1, p)) }
+  function setCurrentProject(project: ResearchProject | null) {
+    currentProject.value = project
+  }
+  function setProjectList(list: ResearchProject[]) {
+    projectList.value = list
+  }
+  function updateProgress(p: number) {
+    if (!currentProject.value) return
+    currentProject.value.progress = Math.max(0, Math.min(1, p))
+  }
   function updateStats(stats: Partial<ResearchProject['stats']>) {
+    if (!currentProject.value) return
     Object.assign(currentProject.value.stats, stats)
   }
 
-  return { currentProject, projectList, projectName, projectDomain, updateProgress, updateStats }
+  return { currentProject, projectList, projectName, projectDomain, setCurrentProject, setProjectList, updateProgress, updateStats }
 })
