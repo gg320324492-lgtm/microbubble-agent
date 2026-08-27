@@ -394,10 +394,13 @@ export interface DatabaseQueryResult<T = unknown> {
 
 export interface DesktopDatabaseApi {
   status: () => Promise<{ open: boolean; path: string; version: number }>
-  query: <T = unknown>(sql: string, params?: unknown[]) => Promise<DatabaseQueryResult<T>>
-  insert: <T = unknown>(table: string, data: Record<string, unknown>) => Promise<T>
-  update: <T = unknown>(table: string, id: string | number, patch: Record<string, unknown>) => Promise<T | null>
-  delete: (table: string, id: string | number) => Promise<{ deleted: boolean }>
+  // [类 20.195] 2026-08-27 修: query/insert/update 签名原本是 (sql: string, params?: unknown[]) 位置参数,
+  // 但 renderer 代码全部用对象 { sql, params } 调用. preload 把 {sql, params} 当成 'sql' (对象) 传给 better-sqlite3
+  // prepare() 方法 → 所有查询返回空 (rows=[]). 改为统一对象签名, 与 IPC handler 一致.
+  query: <T = unknown>(payload: { sql: string; params?: unknown[] }) => Promise<DatabaseQueryResult<T>>
+  insert: <T = unknown>(payload: { table: string; data: Record<string, unknown> }) => Promise<T>
+  update: <T = unknown>(payload: { table: string; id: string | number; patch: Record<string, unknown> }) => Promise<T | null>
+  delete: (payload: { table: string; id: string | number }) => Promise<{ deleted: boolean }>
 }
 
 export interface DesktopDataEngineApi {

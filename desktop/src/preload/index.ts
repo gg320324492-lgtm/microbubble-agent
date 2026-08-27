@@ -218,14 +218,15 @@ const api: DesktopApi = {
   },
   database: {
     status: () => ipcRenderer.invoke('db:status') as Promise<{ open: boolean; path: string; version: number }>,
-    query: <T = unknown>(sql: string, params?: unknown[]) =>
-      ipcRenderer.invoke('db:query', { sql, params }) as Promise<{ rows: T[]; changes: number }>,
-    insert: <T = unknown>(table: string, data: Record<string, unknown>) =>
-      ipcRenderer.invoke('db:insert', { table, data }) as Promise<T>,
-    update: <T = unknown>(table: string, id: string | number, patch: Record<string, unknown>) =>
-      ipcRenderer.invoke('db:update', { table, id, patch }) as Promise<T | null>,
-    delete: (table: string, id: string | number) =>
-      ipcRenderer.invoke('db:delete', { table, id }) as Promise<{ deleted: boolean }>
+    // [类 20.195] 2026-08-27 改: query/insert/update/delete 全部改对象参数签名 (renderer 一直这样调用).
+    query: <T = unknown>(payload: { sql: string; params?: unknown[] }) =>
+      ipcRenderer.invoke('db:query', payload) as Promise<{ rows: T[]; changes: number }>,
+    insert: <T = unknown>(payload: { table: string; data: Record<string, unknown> }) =>
+      ipcRenderer.invoke('db:insert', payload) as Promise<T>,
+    update: <T = unknown>(payload: { table: string; id: string | number; patch: Record<string, unknown> }) =>
+      ipcRenderer.invoke('db:update', payload) as Promise<T | null>,
+    delete: (payload: { table: string; id: string | number }) =>
+      ipcRenderer.invoke('db:delete', payload) as Promise<{ deleted: boolean }>
   },
   dataEngine: {
     sampleCreate: (sample) => ipcRenderer.invoke('data:sample.create', sample) as Promise<Record<string, unknown>>,

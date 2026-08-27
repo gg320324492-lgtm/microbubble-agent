@@ -16,6 +16,7 @@ import { useRoute } from 'vue-router'
 import MainLayout from './layouts/MainLayout.vue'
 import BootstrapRecoveryCard from './components/shell/BootstrapRecoveryCard.vue'
 import { useAppConfig } from './composables/use-app-config'
+import { useProjectStore } from './stores/research/project.store'
 
 const route = useRoute()
 const { bootstrapStatus, bootstrapError, dataDir, logDir, load, retryBootstrap, quitApp } = useAppConfig()
@@ -25,7 +26,13 @@ const layout = computed(() => {
 })
 const isBootstrapFailed = computed(() => bootstrapStatus.value === 'failed')
 
-onMounted(() => { void load() })
+onMounted(() => {
+  void load()
+  // [类 20.194] 2026-08-27: App 启动时调 loadProjects (之前 HeaderBar 调用但只一次,
+  // 直接路由到 ProjectWorkspace 不走 HeaderBar 的话 currentProject 一直 null).
+  // 改: 移到 App.vue 根 onMounted, 保证所有页面首次访问时 currentProject 都有值.
+  void useProjectStore().loadProjects()
+})
 </script>
 
 <template>
