@@ -39,13 +39,15 @@ onMounted(() => {
 })
 
 const datasetInfo = computed<DatasetInfo | null>(() => {
-  const report = store.report as unknown as { variables?: string[] } | null
+  const report = store.report as unknown as { variables?: string[]; rows?: number } | null
   if (!report) return null
   const variables = report.variables
+  // [类 20.208] 2026-08-28: 之前硬编码 rows: 120, UI 永远显示 "120 × 0". 改为真实 report.rows, 0 = 真 0.
+  const rows = report.rows ?? 0
   return {
     name: '科研数据集',
     description: '当前分析的数据集摘要',
-    rows: 120,
+    rows,
     columns: variables?.length ?? 0,
     variables: variables ?? []
   }

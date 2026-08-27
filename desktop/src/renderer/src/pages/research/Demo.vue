@@ -11,7 +11,7 @@
  *   6. 论文撰写 (Manuscript)
  *   7. AI 助手 (Assistant)
  */
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ResearchIcon from '../../components/icons/ResearchIcon.vue'
 import type { ResearchIconName } from '../../components/icons/research-icons'
@@ -22,7 +22,7 @@ import { useDemoMode } from '../../composables/use-demo-mode'
 import { DEMO_PROJECT } from '../../services/demo/demo-project'
 
 const router = useRouter()
-const { isDemoMode, enableDemoMode } = useDemoMode()
+const { isDemoMode, enableDemoMode, disableDemoMode } = useDemoMode()
 
 interface WorkflowStep {
   id: string
@@ -50,6 +50,12 @@ function goToStep(step: WorkflowStep): void {
 
 onMounted(() => {
   enableDemoMode()
+})
+
+// [类 20.201] 2026-08-28: 离开 Demo 页时自动 disable, 防止 demo 状态泄漏到其他页.
+//   之前 demo 模式是 session singleton, 用户一旦进过 demo 页就一直 demo 数据, banner 永远显示.
+onUnmounted(() => {
+  disableDemoMode()
 })
 </script>
 

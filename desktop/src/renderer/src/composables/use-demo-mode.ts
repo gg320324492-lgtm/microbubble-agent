@@ -1,6 +1,9 @@
 // Demo Mode Toggle — Phase 8-M0-G
 // 演示模式开关, 注入到现有 service.setAdapter() 替换 mock.
 // 严禁污染真实业务 Store; 仅替换服务层 adapter.
+//
+// [类 20.201] 2026-08-28: 修复 disableDemoMode 不还原真实 adapter (banner 消失但服务仍用 demo 数据).
+//   改为: disable 时重新注册真实 adapter (new SqliteXxxAdapter), 与默认 currentAdapter 一致.
 
 import { computed, ref } from 'vue'
 import { dataAnalysisService } from '../services/research/data-analysis.service'
@@ -12,6 +15,10 @@ import {
   demoKnowledgeAdapter, demoLiteratureAdapter,
   DEMO_ADAPTER_INFO
 } from '../services/demo/demo-adapters'
+import { realDataAnalysisAdapter } from '../services/research/data-analysis.service'
+import { realManuscriptAdapter } from '../services/research/manuscript.service'
+import { realKnowledgeAdapter } from '../services/research/knowledge.service'
+import { realLiteratureAdapter } from '../services/research/literature.service'
 
 const isDemoMode = ref(false)
 
@@ -30,10 +37,15 @@ function enableDemoMode(): void {
 }
 
 /**
- * 关闭 Demo 模式: 调用方需要自行重置 adapter 为 mock 或生产实现.
- * 为避免破坏现有 mock 链路, 此处不调用 setAdapter, 仅翻转开关.
+ * 关闭 Demo 模式: 还原 service 的真实 SQLite adapter.
+ * 之前只翻 isDemoMode = false 但不恢复 adapter → banner 消失但所有数据仍 demo.
+ * 修复: 显式 setAdapter(realXxxAdapter), 与默认一致.
  */
 function disableDemoMode(): void {
+  dataAnalysisService.setAdapter(realDataAnalysisAdapter)
+  manuscriptService.setAdapter(realManuscriptAdapter)
+  knowledgeService.setAdapter(realKnowledgeAdapter)
+  literatureService.setAdapter(realLiteratureAdapter)
   isDemoMode.value = false
   DEMO_ADAPTER_INFO.applied = false
 }
