@@ -61,8 +61,11 @@ class SqliteProjectsAdapter implements ProjectsAdapter {
     })
     const { rows: [expCounts] } = await api.database.query<ExperimentRow>({ sql: 'SELECT COUNT(*) AS count FROM experiments' })
     const { rows: [sampleCounts] } = await api.database.query<SampleRow>({ sql: 'SELECT COUNT(*) AS count FROM samples' })
+    // [类 20.200] 2026-08-28: desktop_knowledge 表没有 deleted_at 列 (schema 确认),
+    //   老 query 报 "no such column: deleted_at", 计数永远 0, project.stats.documents 永远 0.
+    //   删 WHERE deleted_at IS NULL (PG web schema 残留, desktop schema 是 deleted_at_epoch).
     const { rows: [knowledgeCounts] } = await api.database.query<KnowledgeRow>({
-      sql: "SELECT COUNT(*) AS count FROM desktop_knowledge WHERE deleted_at IS NULL"
+      sql: 'SELECT COUNT(*) AS count FROM desktop_knowledge'
     })
     return projectRows.map((p) => this.mapRow(p, expCounts?.count ?? 0, sampleCounts?.count ?? 0, knowledgeCounts?.count ?? 0))
   }
@@ -76,9 +79,7 @@ class SqliteProjectsAdapter implements ProjectsAdapter {
     if (rows.length === 0) return null
     const [{ count: experimentCount = 0 } = { count: 0 }] = await api.database.query<{ count: number }>({ sql: 'SELECT COUNT(*) AS count FROM experiments' })
     const [{ count: sampleCount = 0 } = { count: 0 }] = await api.database.query<{ count: number }>({ sql: 'SELECT COUNT(*) AS count FROM samples' })
-    const [{ count: knowledgeCount = 0 } = { count: 0 }] = await api.database.query<{ count: number }>({
-      sql: "SELECT COUNT(*) AS count FROM desktop_knowledge WHERE deleted_at IS NULL"
-    })
+    const [{ count: knowledgeCount = 0 } = { count: 0 }] = await api.database.query<{ count: number }>({ sql: 'SELECT COUNT(*) AS count FROM desktop_knowledge' })
     return this.mapRow(rows[0], experimentCount, sampleCount, knowledgeCount)
   }
   private mapRow(p: ProjectRow, experimentCount: number, sampleCount: number, knowledgeCount: number): ResearchProject {
