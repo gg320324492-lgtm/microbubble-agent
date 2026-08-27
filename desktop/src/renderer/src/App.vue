@@ -47,13 +47,15 @@ onMounted(() => {
   />
   <MainLayout v-else-if="layout === 'main'">
     <RouterView v-slot="{ Component }">
-      <Transition name="research-page" mode="out-in">
+      <!-- [类 20.216] 2026-08-28: 加 :duration="240" 避免 CSS transitionend 不触发时
+           Vue 永远卡在 leave 阶段, 新组件永远进不来. 设 240ms 兜底超时. -->
+      <Transition name="research-page" mode="out-in" :duration="240">
         <component :is="Component" :key="route.fullPath" />
       </Transition>
     </RouterView>
   </MainLayout>
   <RouterView v-else v-slot="{ Component }">
-    <Transition name="research-page" mode="out-in">
+    <Transition name="research-page" mode="out-in" :duration="240">
       <component :is="Component" :key="route.fullPath" />
     </Transition>
   </RouterView>
