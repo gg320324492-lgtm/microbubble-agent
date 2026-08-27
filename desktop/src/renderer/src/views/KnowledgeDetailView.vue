@@ -155,19 +155,10 @@ watch(detailId, load)
           <p v-else class="muted">（无正文内容）</p>
         </Card>
 
-        <!-- Citations 占位 (Phase 3+ 启用 RAG) -->
-        <Card title="📚 引用与关联" subtitle="Citations & References" padding="md" class="kd-citation-card">
-          <div class="citation-placeholder">
-            <p>🔍 RAG 引用与关联知识（Phase 3+ 集成）</p>
-            <p class="muted">
-              来源后端：<code>GET /api/v1/knowledge/{id}/related</code> →
-              <code>RelatedKnowledge[]</code>
-            </p>
-            <p class="muted">
-              数据流：knowledge-detail-contract.md §5 已 freeze 接口与 UI 占位
-            </p>
-          </div>
-        </Card>
+        <!-- [类 20.191] 2026-08-27: 完全移除 Citations placeholder Card.
+             后端无 /api/v1/knowledge/{id}/related 端点 (citations 系统是 chat 流式 RAG 用, 不挂在 knowledge 上).
+             真实数据: detail.message_metadata?.citations (chat 进来的 metadata 才有), 由 ChatView 自渲染.
+             在 KnowledgeDetailView 这里只显示 detail 自带的正文 + metadata. -->
       </main>
 
       <!-- Sidebar sticky -->

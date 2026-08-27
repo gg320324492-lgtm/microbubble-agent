@@ -4,10 +4,12 @@
 // 主拍决策 6: API Key 用 Windows safeStorage 加密 (Phase 6-A2 已实现)
 //
 // 设计:
-// 1. 启动时调用 ensureMimoDefaultProvider() (from index.ts after database bootstrap)
+// 1. 启动时调用 ensureDefaultCloudProvider() (from index.ts after database bootstrap)
 // 2. 若 user 已有 active provider 配置 → 不动 (用户优先)
-// 3. 若无 → 注入 xiaomi-mimo provider + 设为 active
-// 4. key 从 env 注入 (主拍可在 .env 设 MICROBUBBLE_MIMO_KEY) 或用 hardcoded (Phase 12 临时)
+// 3. 若无 + env 提供 key → 注入 xiaomi-mimo provider + 设为 active
+// 4. 若无 env key → 跳过注入, 用户在 settings 页面手动配置
+// [类 20.190] 2026-08-27 移除 hardcoded production token (Phase 12 临时 token 已撤回),
+//    强制要求用户通过 MICROBUBBLE_MIMO_KEY env 或 settings UI 显式配置.
 
 import { save as saveKey, exists as keyExists, get as getKey } from './model-secret-store'
 import { saveConfig, getConfig } from './provider-config-store'
@@ -93,9 +95,18 @@ export function ensureDefaultCloudProvider(): void {
     return
   }
 
-  // 3. 注入 MiMo provider (用 env 或 hardcoded default)
-  const apiKey = process.env['MIMO_API_KEY'] || 'tp-c2dh4lwgx2519tsuoffa8npxfcqofbiyaew94pwt4bc5yjlq'
-  if (!apiKey) return
+  // 3. 注入 MiMo provider (仅当 env 显式提供 API key 时).
+//    [类 20.190] 不再 hardcode production token (Phase 12 临时 token 已撤回).
+//    用户必须通过 MICROBUBBLE_MIMO_KEY env 或 settings 页面手动配置 key.
+const envKey = process.env['MIMO_API_KEY']?.trim() ?? process.env['MICROBUBBLE_MIMO_KEY']?.trim()
+if (!envKey) {
+  logger.info(
+    'provider.bootstrap',
+    '跳过默认 MiMo provider 自动注入 (env MIMO_API_KEY 未设置). 用户需在 settings 页面手动配置 API key.'
+  )
+  return
+}
+const apiKey = envKey
 
   // 4. 保存非敏感配置
   if (!getConfig(MIMO_PROVIDER_ID)) {

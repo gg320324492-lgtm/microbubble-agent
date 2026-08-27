@@ -48,11 +48,14 @@ async function refreshAvatarDataUrl(): Promise<void> {
   }
 }
 watch(remoteAvatar, refreshAvatarDataUrl, { immediate: true })
+
+// [类 20.191] 2026-08-27: 删 aiStatus 占位数据 ('尚未接入实时任务数据' / '占位状态').
+// 替换为按 store 真实状态渲染: 有 active project → 显示项目名;
+// 否则显示 "未选择项目" 状态; 不再伪装 "AI 在跑".
 const aiStatus = computed(() => {
+  const projectName = projectStore.currentProject?.name?.trim()
   return {
-    task: '尚未接入实时任务数据',
-    state: '占位状态',
-    context: projectStore.currentProject.name
+    context: projectName && projectName.length > 0 ? projectName : '未选择项目'
   }
 })
 
@@ -175,19 +178,19 @@ function onSelectProject(project: ResearchProject): void {
         @select="onSelectProject"
       />
 
-      <div class="header-ai-status__system" role="status" aria-live="polite" aria-label="系统状态：待连接"><span aria-hidden="true" />系统状态：待连接</div>
+      <!-- [类 20.191] 2026-08-27: 删 "系统状态：待连接" 占位 chip (无真实连接源, 硬写 '待连接' 误导用户).
+           改为: 只在已配置 active project 时显示项目上下文, 否则不渲染. -->
 
       <div
+        v-if="aiStatus.context !== '未选择项目'"
         data-testid="header-ai-status"
         class="header-bar__ai header-bar__ai-status"
         role="status"
         aria-live="polite"
-        aria-label="全局 AI 状态"
+        :aria-label="`当前项目：${aiStatus.context}`"
       >
         <ResearchIcon name="running" :size="16" aria-hidden="true" />
         <dl class="header-bar__ai-details">
-          <div><dt>当前 AI 任务</dt><dd>{{ aiStatus.task }}</dd></div>
-          <div><dt>状态</dt><dd>{{ aiStatus.state }}</dd></div>
           <div><dt>项目上下文</dt><dd>{{ aiStatus.context }}</dd></div>
         </dl>
       </div>
