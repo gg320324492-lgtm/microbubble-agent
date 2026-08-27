@@ -34,11 +34,12 @@ const tabs = [
 ] as const
 type TabId = (typeof tabs)[number]['id']
 
-const projectProgress = computed(() => Math.round(projectStore.currentProject.progress * 100))
+const projectProgress = computed(() => Math.round((projectStore.currentProject?.progress ?? 0) * 100))
 const isLoading = computed(() => knowledgeStore.isLoading || datasetStore.isLoading || manuscriptStore.isLoading || experimentStore.isLoading)
 const hasWorkspaceData = computed(() => knowledgeStore.totalDocuments > 0 || datasetStore.report !== null || manuscriptStore.manuscript !== null || experimentStore.design !== null)
 const projectStatus = computed(() => {
   const labels = { active: '进行中', planning: '规划中', completed: '已完成', paused: '已暂停' } as const
+  if (!projectStore.currentProject) return '未选择'
   return labels[projectStore.currentProject.status]
 })
 const workspaceAiStatus = computed(() => {
@@ -107,8 +108,8 @@ onMounted(async () => {
       <div class="workspace__identity">
         <span aria-hidden="true"><ResearchIcon name="project" :size="22" /></span>
         <div>
-          <p>{{ projectStore.currentProject.domain }}</p>
-          <h2 id="workspace-project-title">{{ projectStore.currentProject.name }}</h2>
+          <p>{{ projectStore.currentProject?.domain ?? '' }}</p>
+          <h2 id="workspace-project-title">{{ projectStore.currentProject?.name ?? '未选择项目' }}</h2>
           <strong>{{ projectStatus }} · {{ workspaceAiStatus }}</strong>
         </div>
       </div>
@@ -153,13 +154,13 @@ onMounted(async () => {
       <template v-if="activeTab === 'overview'">
         <div class="workspace__stats">
           <ScientificMetric label="文献" :value="String(knowledgeStore.totalDocuments)" unit="篇" trend="stable" trend-text="当前证据库" />
-          <ScientificMetric label="数据集" :value="String(projectStore.currentProject.stats.datasets)" unit="个" trend="stable" trend-text="项目记录" />
-          <ScientificMetric label="实验" :value="String(projectStore.currentProject.stats.experiments)" unit="次" trend="stable" trend-text="项目记录" />
-          <ScientificMetric label="论文" :value="projectStore.currentProject.stats.manuscriptStatus" trend="stable" :trend-text="`${manuscriptStore.issueCount} 项待改进`" />
+          <ScientificMetric label="数据集" :value="String(projectStore.currentProject?.stats.datasets ?? 0)" unit="个" trend="stable" trend-text="项目记录" />
+          <ScientificMetric label="实验" :value="String(projectStore.currentProject?.stats.experiments ?? 0)" unit="次" trend="stable" trend-text="项目记录" />
+          <ScientificMetric label="论文" :value="projectStore.currentProject?.stats.manuscriptStatus ?? '无'" trend="stable" :trend-text="`${manuscriptStore.issueCount} 项待改进`" />
         </div>
         <ResearchPanel title="项目概览" subtitle="当前项目的真实状态数据" tone="primary">
           <dl class="workspace__overview-list">
-            <div><dt>研究方向</dt><dd>{{ projectStore.currentProject.domain }}</dd></div>
+            <div><dt>研究方向</dt><dd>{{ projectStore.currentProject?.domain ?? '' }}</dd></div>
             <div><dt>项目状态</dt><dd>{{ projectStatus }}</dd></div>
             <div><dt>最佳模型</dt><dd>{{ datasetStore.models[0] ? kineticModelLabel(datasetStore.models[0].model) : '暂无模型' }}</dd></div>
             <div><dt>论文问题</dt><dd>{{ manuscriptStore.issueCount }} 项</dd></div>
