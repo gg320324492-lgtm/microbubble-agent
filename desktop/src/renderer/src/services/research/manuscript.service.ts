@@ -76,7 +76,7 @@ class SqliteManuscriptAdapter implements ManuscriptAdapter {
   }
   async generateSection(_sectionType: string, _outline: string): Promise<string> {
     // TODO: 接 LLM 后替换
-    return '[类 20.196] 当前未接 LLM, 无法生成章节内容. 待 R6 接入.'
+    return '当前未配置 LLM，无法生成章节内容。请先在 设置 → 模型 中配置 provider'
   }
   async reviewSection(_sectionType: string, _content: string): Promise<WritingIssue[]> {
     return []

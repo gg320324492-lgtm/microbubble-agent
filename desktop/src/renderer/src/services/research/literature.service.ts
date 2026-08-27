@@ -63,7 +63,7 @@ class SqliteLiteratureAdapter {
   }
   async summarizePaper(_documentId: string): Promise<string> {
     // TODO: 接 LLM
-    return '[类 20.196] 当前未接 LLM. 待 R6 接入后, 此处将用真实文献评估模型生成摘要.'
+    return '当前未配置文献评估模型，请先在 设置 → 模型 中选择并配置 LLM provider'
   }
 }
 

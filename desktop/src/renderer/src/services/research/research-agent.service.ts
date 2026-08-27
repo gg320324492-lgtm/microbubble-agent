@@ -86,7 +86,7 @@ class SqliteResearchAgentAdapter implements ResearchAgentAdapter {
     return {
       id: `m-${Date.now()}`,
       role: 'assistant',
-      content: '[类 20.196] 当前未接 LLM. 待 R6 hardening 接入真实模型后, 此处将调用 MiMo / OpenAI / Anthropic 等 provider.',
+      content: '当前为离线回显模式（未配置 LLM）。请在 设置 → 模型 中配置 provider 后即可获得真实 AI 回复',
       timestamp: Date.now()
     }
   }
