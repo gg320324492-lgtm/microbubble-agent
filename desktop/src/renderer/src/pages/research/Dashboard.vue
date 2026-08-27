@@ -22,10 +22,15 @@ const datasetStore = useDatasetStore()
 const manuscriptStore = useManuscriptStore()
 const loadError = ref('')
 
-const projectProgress = computed(() => Math.round(projectStore.currentProject.progress * 100))
+// [类 20.193] 2026-08-27: currentProject 可能为 null (用户首次启动 / 未迁移数据).
+// 之前 Dashboard 直接 .name/.domain/.description 抛 TypeError → 整个 dashboard 渲染空白.
+// 改: 包装 v-if, 没项目时显示空态. 同步初始化 loadProjects() 拉数据.
+const hasProject = computed(() => projectStore.currentProject !== null)
+const projectProgress = computed(() => projectStore.currentProject ? Math.round(projectStore.currentProject.progress * 100) : 0)
 const isLoading = computed(() => knowledgeStore.isLoading || datasetStore.isLoading || manuscriptStore.isLoading)
 const hasResearchData = computed(() => knowledgeStore.totalDocuments > 0 || datasetStore.report !== null || manuscriptStore.manuscript !== null)
 const projectStatus = computed(() => {
+  if (!projectStore.currentProject) return '未选择'
   const labels = { active: '进行中', planning: '规划中', completed: '已完成', paused: '已暂停' } as const
   return labels[projectStore.currentProject.status]
 })
@@ -70,6 +75,8 @@ const insightCitations = computed<CitationItem[]>(() => [])
 async function loadDashboard(): Promise<void> {
   loadError.value = ''
   try {
+    // [类 20.193] 先 loadProjects 拉当前项目 (其他数据都依赖 project context)
+    await projectStore.loadProjects()
     await Promise.all([
       knowledgeStore.loadDocuments(),
       datasetStore.loadReport(async () => undefined),
@@ -98,42 +105,57 @@ onMounted(loadDashboard)
         <p class="dashboard__eyebrow">项目上下文</p>
         <h2 id="dashboard-focus-title">科研焦点</h2>
       </div>
-      <dl class="dashboard__focus-details">
+      <dl v-if="hasProject" class="dashboard__focus-details">
         <div><dt>项目名称</dt><dd>{{ projectStore.currentProject.name }}</dd></div>
         <div><dt>研究领域</dt><dd>{{ projectStore.currentProject.domain }}</dd></div>
         <div><dt>研究目标</dt><dd>{{ projectStore.currentProject.description }}</dd></div>
         <div><dt>阶段</dt><dd>{{ projectStatus }}</dd></div>
         <div class="dashboard__focus-progress"><dt>进度</dt><dd>{{ projectProgress }}%</dd></div>
       </dl>
-      <div class="dashboard__progress" role="progressbar" aria-label="项目进度" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="projectProgress">
+      <div v-else class="dashboard__focus-empty">
+        <ResearchState
+          state="empty"
+          title="未选择项目"
+          description="本地 SQLite projects 表为空, 或 loadProjects() 尚未返回. 请在 header 项目选择器中选择, 或迁移 PG 数据后刷新."
+        />
+      </div>
+      <div v-if="hasProject" class="dashboard__progress" role="progressbar" aria-label="项目进度" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="projectProgress">
         <span class="dashboard__progress-fill" :style="{ width: `${projectProgress}%` }" />
       </div>
     </section>
 
-    <ResearchMetricPanel :items="researchMetrics" aria-label="科研关键指标" />
+    <template v-if="hasProject">
+      <ResearchMetricPanel :items="researchMetrics" aria-label="科研关键指标" />
 
-    <ResearchState v-if="isLoading && !hasResearchData" state="loading" />
-    <ResearchState v-else-if="loadError && !hasResearchData" state="error" :description="loadError" @retry="loadDashboard" />
-    <ResearchState v-else-if="!hasResearchData" state="empty" />
-    <ResearchState v-if="loadError && hasResearchData" state="error" title="科研数据刷新失败，请重试" :description="loadError" @retry="loadDashboard" />
+      <ResearchState v-if="isLoading && !hasResearchData" state="loading" />
+      <ResearchState v-else-if="loadError && !hasResearchData" state="error" :description="loadError" @retry="loadDashboard" />
+      <ResearchState v-else-if="!hasResearchData" state="empty" />
+      <ResearchState v-if="loadError && hasResearchData" state="error" title="科研数据刷新失败，请重试" :description="loadError" @retry="loadDashboard" />
 
-    <div class="dashboard__command-grid">
-      <section class="dashboard__activity-column" aria-label="AI 研究活动">
-        <ResearchTimeline :items="researchTimeline" aria-label="AI 研究活动时间线" />
-        <AgentStatusPanel :agents="agentStatuses" aria-label="AI 研究活动状态" />
-      </section>
-
-      <aside class="dashboard__insight-column">
-        <section class="dashboard__panel-section" aria-labelledby="dashboard-device-health">
-          <h2 id="dashboard-device-health">设备健康</h2>
-          <DeviceStatusPanel :devices="[]" variant="research" />
+      <div class="dashboard__command-grid">
+        <section class="dashboard__activity-column" aria-label="AI 研究活动">
+          <ResearchTimeline :items="researchTimeline" aria-label="AI 研究活动时间线" />
+          <AgentStatusPanel :agents="agentStatuses" aria-label="AI 研究活动状态" />
         </section>
-        <section class="dashboard__panel-section" aria-labelledby="dashboard-recent-insights">
-          <h2 id="dashboard-recent-insights">近期科学洞见</h2>
-          <EvidencePanel :evidence="recentEvidence" :citations="insightCitations" aria-label="近期科学洞见与引用" />
-        </section>
-      </aside>
-    </div>
+
+        <aside class="dashboard__insight-column">
+          <section class="dashboard__panel-section" aria-labelledby="dashboard-device-health">
+            <h2 id="dashboard-device-health">设备健康</h2>
+            <DeviceStatusPanel :devices="[]" variant="research" />
+          </section>
+          <section class="dashboard__panel-section" aria-labelledby="dashboard-recent-insights">
+            <h2 id="dashboard-recent-insights">近期科学洞见</h2>
+            <EvidencePanel :evidence="recentEvidence" :citations="insightCitations" aria-label="近期科学洞见与引用" />
+          </section>
+        </aside>
+      </div>
+    </template>
+    <ResearchState
+      v-else
+      state="empty"
+      title="未选择项目"
+      description="请在 header 项目选择器中选择, 或运行 Phase 11 数据迁移."
+    />
   </section>
 </template>
 
