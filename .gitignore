@@ -169,3 +169,14 @@ tests/perf/test_sse_first_byte.py
 # - 真凭据 location 仅在 memory/w86-1st-batch-a1-gitleaks-scan-2026-07-29.md 摘要
 logs/gitleaks-report.json
 logs/gitleaks-report.sarif
+
+# 项目元数据 (不是源码)
+.agents/
+.pnpm-store/
+.superpowers/
+*.local/
+
+# 临时进度文件 (Claude code session 残留)
+_r*-progress.md
+_r*-commit.txt
+_r*-guard.txt

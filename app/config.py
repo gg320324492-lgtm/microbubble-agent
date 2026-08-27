@@ -251,7 +251,7 @@ class Settings(BaseSettings):
     AGENT_INTENT_MODEL: str = "claude-haiku-4-5-20251001"  # 意图分类（闭集 6 选 1）
     AGENT_REFLECTION_MODEL: str = "claude-sonnet-4-6"  # 自评（accuracy critical）
     # 2026-08-16: 切回 qwen2.5vl:7b — gemma3:12b 误识别中文为日文, qwen2.5-vl 中文 OCR 表现更好
-    AGENT_SYNTHESIS_MODEL: str = "qwen2.5vl:7b"  # 综合主模型 (默认)
+    AGENT_SYNTHESIS_MODEL: str = "mimo-v2.5"  # 综合主模型 (默认)
     # 流程控制
     AGENT_MAX_TOOL_ROUNDS: int = 5  # agentic loop 最多轮数
     AGENT_MAX_SYNTHESIS_TOKENS: int = 4000  # 综合阶段 max_tokens

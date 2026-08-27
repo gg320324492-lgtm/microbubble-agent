@@ -52,6 +52,19 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, layout: 'main', title: '模型设置' }
   },
   {
+    // Phase 11: Web → Desktop 数据快照入口
+    path: '/data-snapshot',
+    name: 'data-snapshot',
+    component: () => import('../views/settings/DataSnapshotView.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: '数据快照' }
+  },
+  {
+    path: '/web-history',
+    name: 'web-history',
+    component: () => import('../views/WebHistoryView.vue'),
+    meta: { requiresAuth: true, layout: 'main', title: 'Web 历史' }
+  },
+  {
     path: '/home',
     name: 'home',
     redirect: { name: 'research-dashboard' }
@@ -117,11 +130,15 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../pages/research/AgentCenter.vue'),
     meta: { requiresAuth: true, layout: 'main', title: 'AI研究团队' }
   },
+  // Phase 12 (2026-08-26 主拍决策): 1.0 不接正式设备, 实验控制中心从正式导航移除.
+  //   模拟驱动仅在 dev/演示模式可见 (Phase 8-M1-F). 不计入发布验收.
+  //   待用户提供真实设备型号/协议/安全联锁后, 独立版本接入.
+  //   路由 + 组件 + IPC 保留代码, 路由 meta.devOnly=true 阻止 HeaderBar 渲染.
   {
     path: '/research/experiment-control',
     name: 'research-experiment-control',
     component: () => import('../pages/research/ExperimentControlCenter.vue'),
-    meta: { requiresAuth: true, layout: 'main', title: '实验控制中心', theme: 'scada' }
+    meta: { requiresAuth: true, layout: 'main', title: '实验控制中心', theme: 'scada', devOnly: true }
   },
   {
     path: '/research/settings',
@@ -212,6 +229,12 @@ router.beforeEach(async (to) => {
     return { name: 'login' }
   }
   if (to.name === 'login' && auth.isAuthenticated) {
+    return { name: 'research-dashboard' }
+  }
+  // Phase 12 (2026-08-26 主拍决策): 1.0 不接正式设备, devOnly 路由仅在开发/演示模式可访问
+  //   - production build (default): 跳转回 research-dashboard
+  //   - dev mode (import.meta.env.DEV): 允许访问
+  if (to.meta?.devOnly === true && !import.meta.env.DEV) {
     return { name: 'research-dashboard' }
   }
   return true

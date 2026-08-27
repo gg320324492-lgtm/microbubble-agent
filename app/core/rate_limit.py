@@ -215,6 +215,7 @@ _rate_limiters = {
     "chunked_upload": AsyncRedisRateLimiter(max_attempts=60, window_seconds=60),  # 2026-07-02: 听会边录边传 60次/分钟 (1秒1片 = 60秒录音)
     "drive_upload": AsyncRedisRateLimiter(max_attempts=50, window_seconds=60),  # PR2.10: drive 上传 50次/分 (批量友好)
     "drive_list": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # PR2.10: drive 列表 300次/分 (高频浏览)
+    "chat_session_delete": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # 2026-08-26 主拍决策放宽: 批量删除 chat session 不应受 30/min write 限流; 给 300/min (5 ops/秒) 满足正常批量清理
 }
 
 # /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流
@@ -298,6 +299,16 @@ def _get_rate_limit_type(request: Request) -> str:
     # /auth/me 等高频只读端点 → 不限流（JWT 鉴权已防滥用）
     if path in _AUTH_UNLIMITED_PATHS:
         return "unlimited"
+
+    # 2026-08-26 主拍决策放宽: 批量删除 chat session 不应被 write tier 30/min 卡住
+    # DELETE /api/v1/chat/sessions/{id}?hard=true → chat_session_delete tier 300/min (5 ops/秒)
+    # DELETE /api/v1/chat/sessions (批量) 同样放宽
+    # 单独 tier 而非放宽 write: 避免影响其他写端点 (create / patch 等)
+    if method == "DELETE" and (
+        re.match(r"^/api/v1/chat/sessions/[^/]+$", path) is not None
+        or path == "/api/v1/chat/sessions" or path.startswith("/api/v1/chat/sessions?")
+    ):
+        return "chat_session_delete"
 
     # v31.2.3: SSE 长连接 (text/event-stream) 独立 tier
     # SSE 一次连接占用几秒到几分钟 (流式 chat), 按 read tier 200/min 算只能

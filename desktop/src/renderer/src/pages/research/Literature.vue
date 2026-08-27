@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import ResearchIcon from '../../components/icons/ResearchIcon.vue'
 import CitationCard from '../../components/research/CitationCard.vue'
 import EvidenceCard from '../../components/research/EvidenceCard.vue'
@@ -17,9 +17,6 @@ const pageState = ref<PageState>('loading')
 const summaryStates = reactive<Record<string, SummaryState>>({})
 const summaries = reactive<Record<string, string>>({})
 const summaryRequestSequences = reactive<Record<string, number>>({})
-const citationDocumentId = ref<string | null>(null)
-const citationDialog = ref<HTMLElement | null>(null)
-let citationTrigger: HTMLElement | null = null
 
 const summaryState = computed<SummaryState>(() =>
   store.selectedDocumentId ? summaryStates[store.selectedDocumentId] ?? null : null
@@ -95,71 +92,13 @@ async function analyzePaper() {
   }
 }
 
-function citationFocusableElements(): HTMLElement[] {
-  if (!citationDialog.value) return []
-  return Array.from(citationDialog.value.querySelectorAll<HTMLElement>(
-    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  ))
-}
-
-async function openCitation(documentId?: string) {
-  if (!documentId) return
-  const activeElement = document.activeElement
-  citationTrigger = activeElement instanceof HTMLElement && activeElement.matches('[data-testid^="citation-location-"]')
-    ? activeElement
-    : document.querySelector(`[data-testid="citation-location-${documentId}"]`)
-  citationDocumentId.value = documentId
-  await nextTick()
-  const firstFocusable = citationFocusableElements()[0]
-  if (firstFocusable) firstFocusable.focus()
-  else citationDialog.value?.focus()
-}
-
-async function closeCitation() {
-  if (!citationDocumentId.value) return
-  const trigger = citationTrigger
-  citationDocumentId.value = null
-  await nextTick()
-  trigger?.focus()
-}
-
-function onCitationKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopPropagation()
-    void closeCitation()
-    return
-  }
-  if (event.key !== 'Tab') return
-  const focusable = citationFocusableElements()
-  if (!focusable.length) {
-    event.preventDefault()
-    citationDialog.value?.focus()
-    return
-  }
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-function onDocumentKeydown(event: KeyboardEvent) {
-  if (citationDocumentId.value && event.key === 'Escape') {
-    event.preventDefault()
-    void closeCitation()
-  }
-}
+// [类 20.191] 2026-08-27: 完全移除假 dialog (含"原文定位待提取"/"当前文献接口尚未提供" 假文字).
+// 真实实现: 后端 /api/v1/literature/{id}/location 接口暂无.
+// CitationCard 已 inline 显示完整文献信息, 不需要额外 dialog.
 
 onMounted(() => {
-  document.addEventListener('keydown', onDocumentKeydown)
   void loadPage()
 })
-onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
 </script>
 
 <template>
@@ -167,8 +106,7 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
     <div
       class="literature__content"
       data-testid="literature-content"
-      :inert="citationDocumentId ? true : undefined"
-      :aria-hidden="citationDocumentId ? 'true' : undefined"
+      :inert="false"
     >
     <header class="literature__header">
       <div>
@@ -355,9 +293,8 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
             :cited-by="document.citations"
             :relevance="documentRelevance(document)"
             :evidence-level="evidenceStars(document.id)"
-            location="原文定位待提取"
+            :location="document.location"
             @select="selectDocument"
-            @open-location="openCitation"
           />
         </div>
       </aside>
@@ -365,33 +302,8 @@ onUnmounted(() => document.removeEventListener('keydown', onDocumentKeydown))
     </template>
     </div>
 
-    <section
-      v-if="citationDocumentId"
-      ref="citationDialog"
-      class="literature__dialog-backdrop"
-      data-testid="citation-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-label="引用位置"
-      tabindex="-1"
-      @click.self="closeCitation"
-      @keydown="onCitationKeydown"
-    >
-      <div
-        class="literature__dialog"
-      >
-        <div class="literature__dialog-heading">
-          <div><p>引用定位</p><h2>原文定位待提取</h2></div>
-          <button data-testid="close-citation-dialog" type="button" aria-label="关闭引用位置" @click="closeCitation">
-            <ResearchIcon name="error" :size="18" />
-          </button>
-        </div>
-        <p>当前文献接口尚未提供页码、图表或段落定位。完成证据提取后将在此据实显示。</p>
-        <div class="literature__dialog-actions">
-          <button data-testid="confirm-citation-dialog" type="button" @click="closeCitation">返回文献证据</button>
-        </div>
-      </div>
-    </section>
+    <!-- [类 20.191] 2026-08-27: 删假 dialog block (整个 <section v-if="citationDocumentId"> 段).
+         真实 citation location 接口尚未实现. CitationCard 主区已显示完整文献信息. -->
   </section>
 </template>
 

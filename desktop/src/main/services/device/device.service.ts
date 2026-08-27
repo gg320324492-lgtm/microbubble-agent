@@ -44,17 +44,28 @@ interface ManagedDevice {
 }
 
 class DeviceServiceImpl implements DeviceService {
-  private readonly devices = new Map<string, ManagedDevice>()
-  private readonly listeners = new Set<DeviceEventListener>()
-  private readonly pipeline: TelemetryPipeline
-  private readonly alarm: AlarmEngine
-  private readonly cmdPipeline: CommandPipeline
+  private readonly devices: Map<string, ManagedDevice>
+  private readonly listeners: Set<DeviceEventListener>
+  private _pipeline?: TelemetryPipeline
+  private _alarm?: AlarmEngine
+  private _cmdPipeline?: CommandPipeline
 
   constructor(private readonly getService: () => DatabaseService | null) {
+    // Phase 10.6 hotfix: 延迟 requireDb() — 构造时 service 还未注入, 立即调用必抛 '数据库未就绪'
+    // 把 telemetry/alarm/cmd pipeline 初始化延迟到第一次方法调用
+    this.devices = new Map()
+    this.listeners = new Set()
+  }
+
+  /** Phase 10.6 hotfix: 懒加载 service, 第一次调用时初始化 pipeline */
+  private getOrInit(): { pipeline: TelemetryPipeline; alarm: AlarmEngine; cmdPipeline: CommandPipeline } {
     const db = this.requireDb()
-    this.pipeline = createTelemetryPipeline(db)
-    this.alarm = createAlarmEngine(getService)
-    this.cmdPipeline = createCommandPipeline(getService)
+    if (!this._pipeline) {
+      this._pipeline = createTelemetryPipeline(db)
+      this._alarm = createAlarmEngine(this.getService)
+      this._cmdPipeline = createCommandPipeline(this.getService)
+    }
+    return { pipeline: this._pipeline, alarm: this._alarm!, cmdPipeline: this._cmdPipeline! }
   }
 
   private requireDb(): SQLiteDatabase {
@@ -131,7 +142,7 @@ class DeviceServiceImpl implements DeviceService {
   }
 
   alarms(deviceId?: string): AlarmEvent[] {
-    return this.alarm.list(deviceId)
+    return this.getOrInit().alarm.list(deviceId)
   }
 
   async command(config: DeviceConfig, cmd: {
@@ -142,7 +153,7 @@ class DeviceServiceImpl implements DeviceService {
     if (!managed) {
       return { commandId: `cmd-${Date.now()}`, status: 'rejected', message: '设备未注册', timestamp: Date.now() }
     }
-    return this.cmdPipeline.execute(
+    return this.getOrInit().cmdPipeline.execute(
       { ...cmd, deviceId: config.deviceId, timestamp: Date.now() } as never,
       managed.driver,
       managed.config
@@ -160,18 +171,19 @@ class DeviceServiceImpl implements DeviceService {
       void m.driver.disconnect()
     }
     this.devices.clear()
-    this.pipeline.stop()
+    if (this._pipeline) this._pipeline.stop()
     this.listeners.clear()
   }
 
   private handleSample(sample: TelemetrySample, config: DeviceConfig): void {
     const managed = this.devices.get(config.deviceId)
     if (managed) managed.lastSampleAt = sample.timestamp
-    this.pipeline.enqueue(sample)
-    const alarm = this.alarm.check(sample, config)
-    if (alarm) {
+    const { pipeline, alarm } = this.getOrInit()
+    pipeline.enqueue(sample)
+    const a = alarm.check(sample, config)
+    if (a) {
       if (managed) managed.pendingAlarmCount += 1
-      this.emit({ type: 'alarm', payload: alarm })
+      this.emit({ type: 'alarm', payload: a })
     }
     this.emit({ type: 'telemetry', payload: sample })
   }

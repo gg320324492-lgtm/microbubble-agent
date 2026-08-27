@@ -23,13 +23,26 @@ export const useKnowledgeStore = defineStore('research-knowledge', () => {
   async function loadDocuments() {
     isLoading.value = true
     try {
-      documents.value = await knowledgeService.getDocuments()
-      folders.value = await knowledgeService.getFolders()
+      // [类 20.191] 真实数据接入. 失败时保持空数组, UI 显示空态.
+      try {
+        documents.value = await knowledgeService.getDocuments()
+        folders.value = await knowledgeService.getFolders()
+      } catch (e) {
+        console.warn('[knowledge.store] loadDocuments failed:', e instanceof Error ? e.message : String(e))
+        documents.value = []
+        folders.value = []
+      }
     } finally { isLoading.value = false }
   }
 
   async function loadAssessments() {
-    assessments.value = await literatureService.getDocumentAssessments()
+    // [类 20.191] literature service 暂未接真实 adapter, 失败时保持空数组.
+    try {
+      assessments.value = await literatureService.getDocumentAssessments()
+    } catch (e) {
+      // silently ignore - service 未 wire 抛 NotWiredError
+      assessments.value = []
+    }
   }
 
   function selectDocument(id: string) { selectedDocumentId.value = id }

@@ -1,4 +1,12 @@
 // Data Analysis Service — 数据分析服务层（带适配器模式）。
+//
+// [类 20.191] 2026-08-27: 删 hardcoded MOCK_REPORT / MOCK_IMPORTANCE / 假 fitModels
+// 这些假数据曾被 UI 渲染为"真实分析结果" (k=0.0243, R²=0.9887, "传质是限速步骤" 等).
+// 改为: 默认 adapter 抛 NotImplemented, 强制要求 wire 真实数据源.
+// 真实实现路径:
+//   1. local: 通过 IPC `analysis:*` 调用 main process SQLite 查询 desktop_analysis_results 表
+//   2. remote: 通过 IPC `data:analysis.*` 调 FastAPI `/api/v1/analysis/*` 后端
+// 任一路径接入后, 调 dataAnalysisService.setAdapter(realAdapter) 即生效.
 
 export interface DataQualityReport { completeness: number; missingValues: Record<string, number>; outliers: Record<string, number>; warnings: string[] }
 export interface StatisticalResult { metric: string; value: number; interpretation: string }
@@ -15,51 +23,32 @@ export interface DataAnalysisAdapter {
   interpretResults(report: AnalysisReport): Promise<ScientificConclusion[]>
 }
 
-const MOCK_REPORT: AnalysisReport = {
-  quality: { completeness: 1.0, missingValues: {}, outliers: {}, warnings: [] },
-  statistics: [
-    { metric: 'concentration_mean', value: 4.75, interpretation: '平均 O₃ 浓度为 4.75 mg/L' },
-    { metric: 'concentration_std', value: 2.31, interpretation: '标准差反映浓度波动范围' },
-    { metric: 'correlation_a_b', value: -0.987, interpretation: '强负相关：浓度↓去除率↑' },
-  ],
-  models: [
-    { model: 'first-order', parameters: { k: 0.0243 }, rSquared: 0.9887, residualError: 0.0211 },
-    { model: 'zero-order', parameters: { k: 0.158 }, rSquared: 0.892, residualError: 0.085 },
-  ],
-  figures: [
-    { type: 'line', title: 'O₃ 浓度-时间曲线', xVariable: '时间', yVariable: '浓度' },
-    { type: 'scatter+fit', title: '模型拟合图', xVariable: '时间', yVariable: 'C/C₀' },
-  ],
-  conclusions: [
-    { observation: '降解过程符合一级动力学特征', interpretation: '浓度依赖行为，拟合优度高', confidence: 0.90 },
-    { observation: '曝气量对降解率影响最大', interpretation: '传质过程是主要限速步骤', confidence: 0.85 },
-    { observation: 'pH 与降解率呈显著负相关', interpretation: '碱性条件有利于 TC 降解', confidence: 0.82 },
-  ],
+/** Error thrown when no real adapter has been wired. */
+export class DataAnalysisNotWiredError extends Error {
+  constructor() {
+    super(
+      '[DataAnalysisService] No real adapter wired. ' +
+      'Mock data was removed in [类 20.191] 2026-08-27 — was previously returning fake k=0.0243 R²=0.9887. ' +
+      'Real data path: 1) local SQLite via main IPC analysis:* channels, or 2) FastAPI /api/v1/analysis/* via api.service. ' +
+      'Call dataAnalysisService.setAdapter(realAdapter) after wiring.'
+    )
+    this.name = 'DataAnalysisNotWiredError'
+  }
 }
 
-const MOCK_IMPORTANCE: VariableImportance[] = [
-  { variable: '曝气量', importance: 0.42, contribution: '强正效应', confidence: 0.85 },
-  { variable: '初始pH', importance: 0.21, contribution: '负相关', confidence: 0.72 },
-  { variable: '初始TC浓度', importance: 0.17, contribution: '正效应', confidence: 0.68 },
-  { variable: '气泡粒径', importance: 0.11, contribution: '弱负效应', confidence: 0.55 },
-]
-
-const mockAdapter: DataAnalysisAdapter = {
-  async getAnalysisReport() { return { ...MOCK_REPORT } },
-  async getVariableImportance() { return [...MOCK_IMPORTANCE] },
-  async fitModels() {
-    return [
-      { model: 'first-order', parameters: { k: 0.0243 }, rSquared: 0.9887, residualError: 0.0211 },
-      { model: 'zero-order', parameters: { k: 0.158 }, rSquared: 0.892, residualError: 0.085 },
-    ]
-  },
-  async interpretResults(r) { return r.conclusions },
+const notWiredAdapter: DataAnalysisAdapter = {
+  async getAnalysisReport() { throw new DataAnalysisNotWiredError() },
+  async getVariableImportance() { throw new DataAnalysisNotWiredError() },
+  async fitModels() { throw new DataAnalysisNotWiredError() },
+  async interpretResults() { throw new DataAnalysisNotWiredError() },
 }
 
-let currentAdapter: DataAnalysisAdapter = mockAdapter
+let currentAdapter: DataAnalysisAdapter = notWiredAdapter
 
 export const dataAnalysisService = {
   setAdapter(a: DataAnalysisAdapter) { currentAdapter = a },
+  /** True iff a real adapter is wired (setAdapter called at least once). */
+  isWired(): boolean { return currentAdapter !== notWiredAdapter },
   getAnalysisReport: () => currentAdapter.getAnalysisReport(),
   getVariableImportance: () => currentAdapter.getVariableImportance(),
   fitModels: (d: string, x: string, y: string) => currentAdapter.fitModels(d, x, y),

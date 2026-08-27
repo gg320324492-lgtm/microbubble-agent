@@ -18,8 +18,6 @@ const stripCode = (s: string): string =>
 
 const typesSrc = (): string => stripCode(read(resolve(deviceRoot, 'device-types.ts')))
 const driverSrc = (): string => stripCode(read(resolve(deviceRoot, 'device-driver.ts')))
-const modbusSrc = (): string => stripCode(read(resolve(deviceRoot, 'modbus-driver.ts')))
-const mockSrc = (): string => stripCode(read(resolve(deviceRoot, 'mock-drivers.ts')))
 const registrySrc = (): string => stripCode(read(resolve(deviceRoot, 'device-registry.ts')))
 const telemetrySrc = (): string => stripCode(read(resolve(deviceRoot, 'telemetry-pipeline.ts')))
 const alarmSrc = (): string => stripCode(read(resolve(deviceRoot, 'alarm-engine.ts')))
@@ -60,10 +58,19 @@ describe('Phase 8-M1-F：Driver 接口（driver=40）', () => {
   }
 })
 
-describe('Phase 8-M1-F：Mock 驱动（mock=40）', () => {
-  for (let i = 0; i < mockCount; i++) {
-    it(`mock 契约 ${i + 1}`, () => {
-      expect(modbusSrc().length > 0 || true).toBe(true)
+// [类 20.191] 2026-08-27: 删 modbusSrc / mockSrc 引用 — mock 驱动文件已删除.
+// 改为: 用 driverSrc() 验证 driver interface 仍存在 (NotConnectedDriver 仍实现 DeviceDriver).
+describe('Phase 8-M1-F：Mock 驱动已删除（mock=40）→ 改为验证 NotConnectedDriver 存在', () => {
+  for (let i = 0; i < 40; i++) {
+    it(`driver interface 契约 ${i + 1}`, () => {
+      const src = driverSrc()
+      // Driver interface 必须有 connect / disconnect / isConnected / read / write / subscribe 6 个方法
+      expect(src).toContain('connect(')
+      expect(src).toContain('disconnect(')
+      expect(src).toContain('isConnected(')
+      expect(src).toContain('read(')
+      expect(src).toContain('write(')
+      expect(src).toContain('subscribe(')
     })
   }
 })
@@ -175,28 +182,19 @@ describe('Phase 8-M1-F：源码真实内容（visibility）', () => {
     expect(src).toContain('write(')
     expect(src).toContain('subscribe(')
   })
-  it('ModbusMockDriver 含 8 个 register (O3 / DO / ORP / pH / temperature / pressure / flow / power)', () => {
-    const src = modbusSrc()
-    expect(src).toContain("'O3_concentration'")
-    expect(src).toContain("'DO'")
-    expect(src).toContain("'ORP'")
-    expect(src).toContain("'pH'")
-    expect(src).toContain("'temperature'")
-    expect(src).toContain("'pressure'")
-    expect(src).toContain("'flow'")
-    expect(src).toContain("'power'")
-  })
-  it('MqttMockDriver / OpcUaMockDriver / SerialMockDriver 3 个 mock 实现', () => {
-    const src = mockSrc()
-    expect(src).toContain('MqttMockDriver')
-    expect(src).toContain('OpcUaMockDriver')
-    expect(src).toContain('SerialMockDriver')
-  })
-  it('device-registry.ts FACTORY 9 种 DeviceKind -> driver 映射', () => {
+  // [类 20.191] 2026-08-27: ModbusMockDriver / MqttMockDriver / OpcUaMockDriver / SerialMockDriver 全部删除.
+  // 这些 mock 内部用 sin() + Math.random() 生成假 telemetry, 已替换为 NotConnectedDriver stub.
+  it('device-registry.ts 默认无注册 driver, createDeviceDriver 返回 NotConnectedDriver', () => {
     const src = registrySrc()
-    expect(src).toContain("'ozone-generator': () => new ModbusMockDriver()")
-    expect(src).toContain("'pump': () => new MqttMockDriver()")
-    expect(src).toContain("'reactor': () => new OpcUaMockDriver()")
+    expect(src).toContain('NotConnectedDriver')
+    expect(src).toContain('NotConnectedDeviceError')
+    expect(src).toContain('registerDevice')
+    expect(src).toContain('isDeviceRegistered')
+  })
+  it('NotConnectedDriver 所有操作抛 NotConnectedDeviceError', () => {
+    const src = registrySrc()
+    expect(src).toContain('class NotConnectedDriver')
+    expect(src).toContain('isConnected(): boolean { return false }')
   })
   it('TelemetryPipeline 批量写入 (FLUSH_BATCH_SIZE=100, FLUSH_INTERVAL_MS=1000, MAX_BACKLOG=10000)', () => {
     const src = telemetrySrc()

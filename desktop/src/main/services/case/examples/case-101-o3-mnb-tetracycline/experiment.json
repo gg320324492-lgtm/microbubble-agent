@@ -1,0 +1,32 @@
+{
+  "caseId": "case-101-o3-mnb-tetracycline",
+  "name": "O3-MNB tetracycline degradation",
+  "category": "advanced oxidation process",
+  "pollutant": "Tetracycline",
+  "initialConcentration": {
+    "value": 20,
+    "unit": "mg/L"
+  },
+  "reactorVolume": {
+    "value": 5,
+    "unit": "L"
+  },
+  "technology": "ozone micro-nano bubbles",
+  "ozoneFlow": {
+    "value": 1.5,
+    "unit": "L/min"
+  },
+  "temperature": 25,
+  "pH": 7,
+  "samplingTimes": [
+    0,
+    5,
+    10,
+    20,
+    30,
+    45,
+    60,
+    90,
+    120
+  ]
+}
