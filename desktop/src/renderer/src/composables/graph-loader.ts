@@ -100,3 +100,9 @@ export const graphLoader = {
   isWired(): boolean { return true },
   retrieveContext: (query: string, topK: number = 5) => currentAdapter.retrieveContext(query, topK),
 }
+
+// [类 20.196] 兼容性 shim: 旧版导出 useGraphLoader() 返回 { retrieveContext }.
+// 保留为同名函数, 让旧组件 (KnowledgeGraph.vue) 继续可用.
+export function useGraphLoader() {
+  return graphLoader
+}
