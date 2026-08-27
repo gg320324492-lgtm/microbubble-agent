@@ -32,7 +32,7 @@ class SqliteDataAnalysisAdapter {
     })
     if (rows.length === 0) {
       return {
-        quality: { completeness: 0, missingValues: {}, outliers: {}, warnings: ['[类 20.196] 本地 SQLite analysis_results 表空, 等 sample import 导入真实数据'] },
+        quality: { completeness: 0, missingValues: {}, outliers: {}, warnings: ['暂无样本数据，导入样本后可生成分析报告'] },
         statistics: [],
         models: [],
         figures: [],
@@ -74,7 +74,7 @@ export const dataAnalysisService = {
   getAnalysisReport: () => currentAdapter.getAnalysisReport(),
   getVariableImportance: () => currentAdapter.getVariableImportance(),
   fitModels: (_d: string, _x: string, _y: string) => {
-    throw new Error('[类 20.196] fitModels 待接真实分析引擎 (当前 analysis_results 表空)')
+    throw new Error('暂无可用分析引擎（请先导入样本数据生成分析结果）')
   },
   interpretResults: (r: AnalysisReport) => currentAdapter.getAnalysisReport().then(() => r.conclusions)
 }
