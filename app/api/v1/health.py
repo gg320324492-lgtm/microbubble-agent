@@ -15,7 +15,7 @@ from app.config import settings  # noqa: PLC0415
 from app.core.database import get_db  # noqa: PLC0415
 
 
-router = APIRouter(prefix="/api/v1", tags=["健康检查"])
+router = APIRouter(tags=["健康检查"])  # 类 20.198 prefix 由 main.py include_router 加
 
 
 @router.get("/health")
