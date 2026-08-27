@@ -143,6 +143,8 @@ function onGlobalKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   document.addEventListener('pointerdown', onDocumentPointerDown)
   document.addEventListener('keydown', onGlobalKeydown)
+  // [类 20.191] 2026-08-27: 启动时拉真实项目列表 (之前 currentProject 永远 null, header 显示 '未选择项目')
+  void projectStore.loadProjects()
 })
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown)
