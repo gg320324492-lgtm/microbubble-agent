@@ -39,9 +39,10 @@ const route = useRoute()
 const projectStore = useProjectStore()
 const collapsed = ref(localStorage.getItem(COLLAPSE_KEY) === '1')
 const activeName = computed(() => typeof route.name === 'string' ? route.name : '')
-const projectProgress = computed(() => Math.round(projectStore.currentProject.progress * 100))
+const projectProgress = computed(() => Math.round((projectStore.currentProject?.progress ?? 0) * 100))
 const projectStatus = computed(() => {
   const labels = { active: '进行中', planning: '规划中', completed: '已完成', paused: '已暂停' } as const
+  if (!projectStore.currentProject) return '未选择'
   return labels[projectStore.currentProject.status]
 })
 
@@ -93,7 +94,7 @@ function toggleCollapsed(): void {
           <ResearchIcon name="project" :size="15" />
           <span>当前研究</span>
         </div>
-        <strong class="sidebar__research-name">{{ projectStore.currentProject.name }}</strong>
+        <strong class="sidebar__research-name">{{ projectStore.currentProject?.name ?? '未选择项目' }}</strong>
         <div class="sidebar__research-meta">
           <span>{{ projectStatus }}</span>
           <span>{{ projectProgress }}%</span>
