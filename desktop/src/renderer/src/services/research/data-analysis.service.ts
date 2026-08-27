@@ -66,6 +66,7 @@ class SqliteDataAnalysisAdapter {
 
 const realAdapter = new SqliteDataAnalysisAdapter()
 let currentAdapter = realAdapter
+export const realDataAnalysisAdapter = realAdapter
 
 export const dataAnalysisService = {
   setAdapter(a: typeof realAdapter) { currentAdapter = a },

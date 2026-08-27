@@ -45,7 +45,9 @@ class SqliteGraphAdapter implements GraphRagAdapter {
     const api = window.api
     if (!api?.database) throw new Error('window.api.database 不可用')
     // 1. entities 模糊搜 (LIKE on entity_name)
-    const entityRows = await api.database.query<EntityRow>({
+    // [类 20.202] 2026-08-28: 修 query 返回值是 {rows: T[]} 包装, 不是 T[] 直接.
+    //   老代码 entityRows.map(...) 报 "entityRows.map is not a function".
+    const entityResult = await api.database.query<EntityRow>({
       sql: `SELECT id, web_id, knowledge_web_id, entity_name, entity_type, confidence, mention_count, context_json
             FROM desktop_knowledge_entities
             WHERE entity_name LIKE ? OR entity_type LIKE ?
@@ -53,6 +55,7 @@ class SqliteGraphAdapter implements GraphRagAdapter {
             LIMIT ?`,
       params: [`%${query}%`, `%${query}%`, topK]
     })
+    const entityRows = entityResult.rows
     // 2. relations 引用上面 entity id
     const entityIds = entityRows.map((r) => r.id)
     let relationRows: RelationRow[] = []

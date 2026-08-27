@@ -3,7 +3,7 @@
     <header class="conversation-archive__header">
       <h1>对话归档工作区</h1>
       <p class="conversation-archive__hint">
-        对所有导入的对话按关键词搜索（不区分大小写）。
+        按关键词搜索已同步的对话会话（标题或预览）。本地副本，不会回传到网页。
       </p>
     </header>
 
@@ -16,60 +16,71 @@
         @input="search"
       />
       <span data-testid="result-count" class="conversation-archive__count">
-        {{ query ? results.length + ' 条结果' : allMessages.length + ' 条消息' }}
+        {{ query ? results.length + ' 条结果' : allSessions.length + ' 条对话' }}
       </span>
     </div>
 
     <ul data-testid="search-results">
-      <li v-for="m in results" :key="m.id" class="conversation-archive__row">
-        <strong class="conversation-archive__role">{{ m.role }}:</strong>
-        <span class="conversation-archive__content">{{ m.content }}</span>
+      <li v-for="s in results" :key="s.id" class="conversation-archive__row">
+        <strong class="conversation-archive__title">{{ s.title }}</strong>
+        <span class="conversation-archive__meta">
+          {{ s.owner_username || '匿名' }}
+          · {{ s.message_count }} 条消息
+          <span v-if="s.last_message_at_epoch"> · {{ formatDate(s.last_message_at_epoch) }}</span>
+        </span>
+        <p v-if="s.preview" class="conversation-archive__preview">{{ s.preview }}</p>
       </li>
       <li v-if="query && !results.length" class="conversation-archive__empty">
         未找到结果。
+      </li>
+      <li v-if="!query && !allSessions.length" class="conversation-archive__empty">
+        暂无对话。
       </li>
     </ul>
   </div>
 </template>
 
 <script setup lang="ts">
+// [类 20.206] 2026-08-28: ConversationArchiveWorkspace 真实数据接入.
+//   之前用 window.workspace.listConversations() (不存在, 永远空).
+//   改为: 直接读 desktop_chat_sessions (225 行真实会话), 按 title/preview/owner 搜索.
 import { onMounted, ref } from 'vue'
 
-interface ConversationMessage {
+interface Session {
   id: string
-  role: string
-  content: string
-}
-
-interface Conversation {
-  id: string
-  messages?: ConversationMessage[]
-}
-
-interface WindowWorkspace {
-  listConversations?: () => Promise<Conversation[]>
-}
-
-interface Bridge {
-  workspace?: WindowWorkspace
+  title: string
+  preview: string
+  owner_username: string | null
+  message_count: number
+  last_message_at_epoch: number | null
 }
 
 const query = ref<string>('')
-const results = ref<ConversationMessage[]>([])
-const allMessages = ref<ConversationMessage[]>([])
+const results = ref<Session[]>([])
+const allSessions = ref<Session[]>([])
+
+function formatDate(epoch: number): string {
+  return new Date(epoch).toLocaleString('zh-CN', { hour12: false })
+}
+
+type Api = { database: { query: <T>(p: { sql: string; params?: unknown[] }) => Promise<{ rows: T[] }> } }
+const bridge = (): Api | undefined =>
+  (globalThis as unknown as { window?: { api?: Api } }).window?.api
 
 async function loadAll(): Promise<void> {
-  const w = (globalThis as unknown as Bridge).window?.workspace
-  if (!w?.listConversations) return
+  const api = bridge()
+  if (!api?.database) return
   try {
-    const convs = await w.listConversations()
-    const list: ConversationMessage[] = []
-    for (const c of convs) {
-      if (Array.isArray(c.messages)) list.push(...c.messages)
-    }
-    allMessages.value = list
+    const { rows } = await api.database.query<Session>({
+      sql: `SELECT id, title, preview, owner_username, message_count, last_message_at_epoch
+            FROM desktop_chat_sessions
+            WHERE deleted_at_epoch IS NULL
+            ORDER BY last_message_at_epoch DESC NULLS LAST
+            LIMIT 500`
+    })
+    allSessions.value = rows
   } catch (err) {
-    console.error('[conversation-archive] failed to load conversations', err)
+    console.error('[conversation-archive] load failed', err)
   }
 }
 
@@ -79,14 +90,15 @@ function search(): void {
     results.value = []
     return
   }
-  results.value = allMessages.value.filter((m) =>
-    String(m.content).toLowerCase().includes(q),
+  results.value = allSessions.value.filter((s) =>
+    s.title.toLowerCase().includes(q) ||
+    s.preview.toLowerCase().includes(q) ||
+    (s.owner_username ?? '').toLowerCase().includes(q)
   )
 }
 
 onMounted(loadAll)
-
-defineExpose({ query, results, allMessages, search, loadAll })
+defineExpose({ query, results, allSessions, search, loadAll })
 </script>
 
 <style scoped>
@@ -97,9 +109,10 @@ defineExpose({ query, results, allMessages, search, loadAll })
 input[type="search"] { flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; }
 .conversation-archive__count { padding: 0.2rem 0.6rem; background: #eef2ff; color: #4338ca; border-radius: 999px; font-size: 0.8rem; }
 ul { list-style: none; padding: 0; margin: 0; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; }
-.conversation-archive__row { padding: 0.6rem 0.9rem; border-bottom: 1px solid #e5e7eb; }
+.conversation-archive__row { padding: 0.6rem 0.9rem; border-bottom: 1px solid #e5e7eb; display: flex; flex-direction: column; gap: 0.2rem; }
 .conversation-archive__row:last-child { border-bottom: 0; }
-.conversation-archive__role { color: #2563eb; margin-right: 0.4rem; }
-.conversation-archive__content { color: #1f2937; }
+.conversation-archive__title { color: #111827; }
+.conversation-archive__meta { color: #6b7280; font-size: 0.8rem; }
+.conversation-archive__preview { color: #4b5563; font-size: 0.85rem; margin: 0.2rem 0 0; }
 .conversation-archive__empty { padding: 1rem; color: #6b7280; }
 </style>
