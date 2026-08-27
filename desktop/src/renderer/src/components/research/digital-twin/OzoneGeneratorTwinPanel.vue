@@ -33,16 +33,18 @@ const recentReadings = computed(() => props.device?.recentReadings ?? 0)
     </header>
     <div v-if="device" class="ozone-twin-panel__body">
       <div class="ozone-twin-panel__name">{{ device.name }}</div>
-      <div class="" aria-hidden="true">
+      <div class="ozone-twin-panel__row">
         <span class="ozone-twin-panel__metric-label">类型</span>
         <span class="ozone-twin-panel__metric-value">臭氧发生器</span>
       </div>
-      <div class="" aria-hidden="true">
+      <div class="ozone-twin-panel__row">
         <span class="ozone-twin-panel__metric-label">近期读数</span>
         <span class="ozone-twin-panel__metric-value">{{ recentReadings }}</span>
       </div>
     </div>
-    <div v-else class="" role="status"><button type="button" class="twin-empty-button" @keydown.enter.prevent><span aria-hidden="true">·</span></button>暂无臭氧发生器设备</div>
+    <div v-else class="ozone-twin-panel__empty" role="status">
+      <span>暂无臭氧发生器设备</span>
+    </div>
   </section>
 </template>
 
