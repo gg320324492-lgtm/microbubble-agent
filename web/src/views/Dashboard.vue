@@ -432,7 +432,9 @@ const completionRate = computed(() => {
 
 const fetchDashboardStats = async () => {
   try {
-    const res = await axios.get('/api/v1/dashboard/stats')
+    // [类 20.213] 2026-08-28: 修正 /api/v1/dashboard/stats → /api/v1/dashboard/summary
+    //   老路径 404, dashboardData.value 永远 undefined, "逾期 7 项" 显示不出来.
+    const res = await axios.get('/api/v1/dashboard/summary')
     dashboardData.value = res.data
   } catch (e) { console.error('获取仪表盘数据失败:', e) }
   loadingStats.value = false
