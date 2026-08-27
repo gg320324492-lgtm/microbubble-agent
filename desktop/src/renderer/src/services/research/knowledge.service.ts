@@ -1,4 +1,8 @@
 // Knowledge Service — 文献/知识库服务层（带适配器模式）。
+//
+// [类 20.191] 2026-08-27: 删 MOCK_DOCUMENTS (5 个假文献/李小红 张伟 陈晨 不存在作者)
+// + MOCK_FOLDERS (假目录计数 128/236/189).
+// 改为: 默认 adapter 抛 NotWiredError, 强制 wire 真实数据源.
 
 export interface DocumentItem {
   id: string
@@ -11,6 +15,8 @@ export interface DocumentItem {
   credibility: number
   citations: number
   relevance?: number
+  location?: string
+  summary?: string
 }
 
 export interface SearchResult { documentId: string; score: number; excerpt: string }
@@ -25,37 +31,32 @@ export interface KnowledgeAdapter {
   importDocument(file: File): Promise<DocumentItem | null>
 }
 
-const MOCK_DOCUMENTS: DocumentItem[] = [
-  { id: 'd1', title: '臭氧微纳米气泡降解四环素的动力学与机理研究', authors: '李小红, 张伟, 陈晨', journal: '环境科学学报', year: 2021, type: 'paper', tags: ['O₃-MNBs', 'TC', '降解动力学'], credibility: 0.82, citations: 48, relevance: 0.94 },
-  { id: 'd2', title: 'Nanobubble characterization methods and applications', authors: 'Li, X., et al.', journal: 'Ultrasonics', year: 2023, type: 'paper', tags: ['纳米气泡', '表征'], credibility: 0.65, citations: 32, relevance: 0.88 },
-  { id: 'd3', title: 'Ozone mass transfer in microbubble systems', authors: 'Wang, Y., et al.', journal: 'Water Research', year: 2023, type: 'paper', tags: ['传质', '臭氧'], credibility: 0.90, citations: 56, relevance: 0.91 },
-  { id: 'd4', title: '四环素在水体中的降解行为与机理研究', authors: '李某, 等', journal: '化学工程学报', year: 2021, type: 'paper', tags: ['TC', '动力学', '机理'], credibility: 0.72, citations: 24, relevance: 0.85 },
-  { id: 'd5', title: 'CFD模拟微纳米气泡流动特性', authors: 'Chen X., et al.', journal: 'Chem. Eng. J.', year: 2019, type: 'paper', tags: ['CFD', '模拟', '气泡'], credibility: 0.78, citations: 18, relevance: 0.79 },
-]
-
-const MOCK_FOLDERS: KnowledgeFolder[] = [
-  { id: 'f1', name: 'O₃-MNBs TC 降解研究', count: 128, children: [
-    { id: 'f1-1', name: '机理研究', count: 46 },
-    { id: 'f1-2', name: '反应动力学', count: 28 },
-    { id: 'f1-3', name: '影响因素', count: 24 },
-  ]},
-  { id: 'f2', name: '臭氧-微纳米气泡基础', count: 236 },
-  { id: 'f3', name: '催化与活化', count: 189 },
-]
-
-const mockAdapter: KnowledgeAdapter = {
-  async getDocuments() { return [...MOCK_DOCUMENTS] },
-  async getDocument(id) { return MOCK_DOCUMENTS.find(d => d.id === id) },
-  async searchDocuments(q) { return MOCK_DOCUMENTS.filter(d => d.title.toLowerCase().includes(q.toLowerCase()) || d.tags.some(t => t.includes(q))).map(d => ({ documentId: d.id, score: d.credibility, excerpt: d.title })) },
-  async getFolders() { return [...MOCK_FOLDERS] },
-  async getDocumentCount() { return MOCK_DOCUMENTS.length },
-  async importDocument() { return null },
+export class KnowledgeNotWiredError extends Error {
+  constructor() {
+    super(
+      '[KnowledgeService] No real adapter wired. ' +
+      'Mock data was removed in [类 20.191] 2026-08-27 — was previously returning 5 fake papers (李小红/张伟/陈晨 etc.) and 3 fake folders with hardcoded counts 128/236/189. ' +
+      'Real data path: 1) local desktop_knowledge table (017-memories-knowledge.sql), 2) FastAPI /api/v1/knowledge/* with RAG. ' +
+      'Call knowledgeService.setAdapter(realAdapter) after wiring.'
+    )
+    this.name = 'KnowledgeNotWiredError'
+  }
 }
 
-let currentAdapter: KnowledgeAdapter = mockAdapter
+const notWiredAdapter: KnowledgeAdapter = {
+  async getDocuments() { throw new KnowledgeNotWiredError() },
+  async getDocument() { throw new KnowledgeNotWiredError() },
+  async searchDocuments() { throw new KnowledgeNotWiredError() },
+  async getFolders() { throw new KnowledgeNotWiredError() },
+  async getDocumentCount() { throw new KnowledgeNotWiredError() },
+  async importDocument() { throw new KnowledgeNotWiredError() },
+}
+
+let currentAdapter: KnowledgeAdapter = notWiredAdapter
 
 export const knowledgeService = {
   setAdapter(a: KnowledgeAdapter) { currentAdapter = a },
+  isWired(): boolean { return currentAdapter !== notWiredAdapter },
   getDocuments: () => currentAdapter.getDocuments(),
   getDocument: (id: string) => currentAdapter.getDocument(id),
   searchDocuments: (q: string) => currentAdapter.searchDocuments(q),
