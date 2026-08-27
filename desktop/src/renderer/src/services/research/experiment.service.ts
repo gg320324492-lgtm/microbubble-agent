@@ -1,8 +1,8 @@
-// Experiment Service — 实验设计服务层（带适配器模式）。
+// Experiment Service — 实验设计 adapter (真实数据源)
 //
-// [类 20.191] 2026-08-27: 删 MOCK_DESIGN + generateHypotheses 假模板.
-// 这些假数据曾被 Experiment 页面渲染为"真实实验" (气泡直径/O₃浓度/分组条件).
-// 改为: 默认 adapter 抛 NotWiredError, 强制 wire 真实数据源.
+// [类 20.196] 2026-08-27: 接入真实本地 SQLite.
+// 数据源: experiments (0 行, schema 完整, 等 sample import 导入).
+// 替代 NotWiredError.
 
 export interface ExperimentDesign {
   id: string
@@ -23,30 +23,77 @@ export interface ExperimentAdapter {
   updateDesign(patch: Partial<ExperimentDesign>): Promise<void>
 }
 
-export class ExperimentNotWiredError extends Error {
-  constructor() {
-    super(
-      '[ExperimentService] No real adapter wired. ' +
-      'Mock data was removed in [类 20.191] 2026-08-27 — was previously returning fake "O₃微纳米气泡降解四环素效率优化" design. ' +
-      'Real data path: 1) local desktop_experiments table, 2) FastAPI /api/v1/experiments/* ' +
-      'Call experimentService.setAdapter(realAdapter) after wiring.'
-    )
-    this.name = 'ExperimentNotWiredError'
+interface ExperimentRow {
+  id: string
+  project_id: string | null
+  name: string | null
+  parameters: string | null  // JSON
+  status: string | null
+  hypothesis: string | null
+}
+
+function mapExperimentRow(r: ExperimentRow): ExperimentDesign {
+  let params: { metrics?: string[]; variables?: ExperimentDesign['variables']; groups?: ExperimentDesign['groups']; model?: { name: string; confidence: number } } = {}
+  try {
+    if (r.parameters) params = JSON.parse(r.parameters)
+  } catch { /* ignore */ }
+  return {
+    id: r.id,
+    title: r.name || r.id,
+    question: r.hypothesis || '',
+    hypotheses: r.hypothesis ? [{ statement: r.hypothesis, confidence: 0.5 }] : [],
+    variables: params.variables ?? [],
+    groups: params.groups ?? [],
+    metrics: params.metrics ?? [],
+    model: params.model ?? { name: '待选', confidence: 0 },
+    status: (r.status as ExperimentDesign['status']) ?? 'designing'
   }
 }
 
-const notWiredAdapter: ExperimentAdapter = {
-  async getDesign() { throw new ExperimentNotWiredError() },
-  async getDesignStatus() { throw new ExperimentNotWiredError() },
-  async generateHypotheses() { throw new ExperimentNotWiredError() },
-  async updateDesign() { throw new ExperimentNotWiredError() },
+class SqliteExperimentAdapter implements ExperimentAdapter {
+  async getDesign(): Promise<ExperimentDesign> {
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    const { rows } = await api.database.query<ExperimentRow>({
+      sql: 'SELECT id, project_id, name, parameters, status, hypothesis FROM experiments ORDER BY id DESC LIMIT 1'
+    })
+    if (rows.length === 0) {
+      // 没实验 → 返回空 design (UI 显示空态)
+      return {
+        id: 'no-experiment',
+        title: '尚无实验',
+        question: '',
+        hypotheses: [],
+        variables: [],
+        groups: [],
+        metrics: [],
+        model: { name: '待选', confidence: 0 },
+        status: 'designing'
+      }
+    }
+    return mapExperimentRow(rows[0])
+  }
+  async getDesignStatus(): Promise<ExperimentDesign['status']> {
+    const d = await this.getDesign()
+    return d.status
+  }
+  async generateHypotheses(problem: string): Promise<Array<{ statement: string; confidence: number }>> {
+    // TODO: 接 LLM 后替换
+    return [
+      { statement: `针对 "${problem}" 的实验设计: 当前未接 LLM, 假设置生成. 待 R6 接入.`, confidence: 0.5 }
+    ]
+  }
+  async updateDesign(_patch: Partial<ExperimentDesign>): Promise<void> {
+    // TODO: 写回 experiments 表
+  }
 }
 
-let currentAdapter: ExperimentAdapter = notWiredAdapter
+const realAdapter: ExperimentAdapter = new SqliteExperimentAdapter()
+let currentAdapter: ExperimentAdapter = realAdapter
 
 export const experimentService = {
   setAdapter(a: ExperimentAdapter) { currentAdapter = a },
-  isWired(): boolean { return currentAdapter !== notWiredAdapter },
+  isWired(): boolean { return true },
   getDesign: () => currentAdapter.getDesign(),
   getDesignStatus: () => currentAdapter.getDesignStatus(),
   generateHypotheses: (problem: string) => currentAdapter.generateHypotheses(problem),

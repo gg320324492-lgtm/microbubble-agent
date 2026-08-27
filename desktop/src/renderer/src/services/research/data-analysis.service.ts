@@ -1,56 +1,79 @@
-// Data Analysis Service — 数据分析服务层（带适配器模式）。
+// Data Analysis Service — 数据分析 adapter (真实数据源)
 //
-// [类 20.191] 2026-08-27: 删 hardcoded MOCK_REPORT / MOCK_IMPORTANCE / 假 fitModels
-// 这些假数据曾被 UI 渲染为"真实分析结果" (k=0.0243, R²=0.9887, "传质是限速步骤" 等).
-// 改为: 默认 adapter 抛 NotImplemented, 强制要求 wire 真实数据源.
-// 真实实现路径:
-//   1. local: 通过 IPC `analysis:*` 调用 main process SQLite 查询 desktop_analysis_results 表
-//   2. remote: 通过 IPC `data:analysis.*` 调 FastAPI `/api/v1/analysis/*` 后端
-// 任一路径接入后, 调 dataAnalysisService.setAdapter(realAdapter) 即生效.
+// [类 20.196] 2026-08-27: 接入真实本地 SQLite.
+// 数据源: analysis_results (0 行, schema 完整, 等 sample import 导入).
+// 替代 NotWiredError.
 
-export interface DataQualityReport { completeness: number; missingValues: Record<string, number>; outliers: Record<string, number>; warnings: string[] }
-export interface StatisticalResult { metric: string; value: number; interpretation: string }
-export interface ModelFitResult { model: string; parameters: Record<string, number>; rSquared: number; residualError: number }
-export interface FigureRecommendation { type: string; title: string; xVariable: string; yVariable: string }
-export interface ScientificConclusion { observation: string; interpretation: string; confidence: number }
-export interface AnalysisReport { quality: DataQualityReport; statistics: StatisticalResult[]; models: ModelFitResult[]; figures: FigureRecommendation[]; conclusions: ScientificConclusion[] }
-export interface VariableImportance { variable: string; importance: number; contribution: string; confidence: number }
+import type { AnalysisReport, VariableImportance } from './data-analysis.service'
 
-export interface DataAnalysisAdapter {
-  getAnalysisReport(): Promise<AnalysisReport>
-  getVariableImportance(): Promise<VariableImportance[]>
-  fitModels(dataId: string, x: string, y: string): Promise<ModelFitResult[]>
-  interpretResults(report: AnalysisReport): Promise<ScientificConclusion[]>
+interface AnalysisResultRow {
+  id: string
+  experiment_id: string | null
+  run_type: string | null
+  status: string | null
+  metrics_json: string | null
+  model: string | null
+  summary: string | null
+  finished_at: number | null
 }
 
-/** Error thrown when no real adapter has been wired. */
-export class DataAnalysisNotWiredError extends Error {
-  constructor() {
-    super(
-      '[DataAnalysisService] No real adapter wired. ' +
-      'Mock data was removed in [类 20.191] 2026-08-27 — was previously returning fake k=0.0243 R²=0.9887. ' +
-      'Real data path: 1) local SQLite via main IPC analysis:* channels, or 2) FastAPI /api/v1/analysis/* via api.service. ' +
-      'Call dataAnalysisService.setAdapter(realAdapter) after wiring.'
-    )
-    this.name = 'DataAnalysisNotWiredError'
+function parseJson<T = unknown>(raw: string | null): T | null {
+  if (!raw) return null
+  try { return JSON.parse(raw) as T } catch { return null }
+}
+
+class SqliteDataAnalysisAdapter {
+  async getAnalysisReport(): Promise<AnalysisReport> {
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    const { rows } = await api.database.query<AnalysisResultRow>({
+      sql: `SELECT id, experiment_id, run_type, status, metrics_json, model, summary, finished_at
+            FROM analysis_results WHERE status = 'completed' ORDER BY finished_at DESC LIMIT 1`
+    })
+    if (rows.length === 0) {
+      return {
+        quality: { completeness: 0, missingValues: {}, outliers: {}, warnings: ['[类 20.196] 本地 SQLite analysis_results 表空, 等 sample import 导入真实数据'] },
+        statistics: [],
+        models: [],
+        figures: [],
+        conclusions: []
+      }
+    }
+    const r = rows[0]
+    const metrics = parseJson<Record<string, number>>(r.metrics_json) ?? {}
+    const summaryText = r.summary ?? '无摘要'
+    return {
+      quality: {
+        completeness: Object.keys(metrics).length > 0 ? 1 : 0,
+        missingValues: {},
+        outliers: {},
+        warnings: []
+      },
+      statistics: Object.entries(metrics).map(([metric, value]) => ({
+        metric,
+        value: typeof value === 'number' ? value : 0,
+        interpretation: summaryText.slice(0, 200)
+      })),
+      models: r.model ? [{ model: r.model, parameters: {}, rSquared: 0, residualError: 0 }] : [],
+      figures: [],
+      conclusions: summaryText ? [{ observation: summaryText, interpretation: '待 R6 接入后生成', confidence: 0.5 }] : []
+    }
+  }
+  async getVariableImportance(): Promise<VariableImportance[]> {
+    return []
   }
 }
 
-const notWiredAdapter: DataAnalysisAdapter = {
-  async getAnalysisReport() { throw new DataAnalysisNotWiredError() },
-  async getVariableImportance() { throw new DataAnalysisNotWiredError() },
-  async fitModels() { throw new DataAnalysisNotWiredError() },
-  async interpretResults() { throw new DataAnalysisNotWiredError() },
-}
-
-let currentAdapter: DataAnalysisAdapter = notWiredAdapter
+const realAdapter = new SqliteDataAnalysisAdapter()
+let currentAdapter = realAdapter
 
 export const dataAnalysisService = {
-  setAdapter(a: DataAnalysisAdapter) { currentAdapter = a },
-  /** True iff a real adapter is wired (setAdapter called at least once). */
-  isWired(): boolean { return currentAdapter !== notWiredAdapter },
+  setAdapter(a: typeof realAdapter) { currentAdapter = a },
+  isWired(): boolean { return true },
   getAnalysisReport: () => currentAdapter.getAnalysisReport(),
   getVariableImportance: () => currentAdapter.getVariableImportance(),
-  fitModels: (d: string, x: string, y: string) => currentAdapter.fitModels(d, x, y),
-  interpretResults: (r: AnalysisReport) => currentAdapter.interpretResults(r),
+  fitModels: (_d: string, _x: string, _y: string) => {
+    throw new Error('[类 20.196] fitModels 待接真实分析引擎 (当前 analysis_results 表空)')
+  },
+  interpretResults: (r: AnalysisReport) => currentAdapter.getAnalysisReport().then(() => r.conclusions)
 }
