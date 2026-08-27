@@ -89,6 +89,9 @@ async function onTabKeydown(event: KeyboardEvent, index: number): Promise<void> 
 }
 
 onMounted(async () => {
+  // [类 20.194] 先 loadProjects 拉当前项目, 确保 currentProject 非 null
+  // (其他 store loadReport/loadManuscript/loadDocuments 都依赖 project context)
+  await useProjectStore().loadProjects()
   await loadWorkspace()
   // 兜底同步 fetch (测试场景 datasetStore.loadReport 会被 mock 成 no-op, 这里直接拉一次保证 UI 有数据)
   try {
