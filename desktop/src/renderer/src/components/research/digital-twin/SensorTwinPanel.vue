@@ -40,7 +40,9 @@ const statusLabel = computed(() => {
         </li>
       </ul>
     </div>
-    <div v-else class="" role="status"><button type="button" class="twin-empty-button" @keydown.enter.prevent><span aria-hidden="true">·</span></button>暂无传感器设备</div>
+    <div v-else class="sensor-twin-panel__empty" role="status">
+      <span>暂无传感器设备</span>
+    </div>
   </section>
 </template>
 

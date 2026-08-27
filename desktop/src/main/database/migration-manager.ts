@@ -22,6 +22,15 @@ import SCHEMA_007 from './schema/007-eln-workflow.sql?raw'
 import SCHEMA_008 from './schema/008-standardization.sql?raw'
 import SCHEMA_009 from './schema/009-user-avatar.sql?raw'
 import SCHEMA_010 from './schema/010-migration-workspace.sql?raw'
+import SCHEMA_011 from './schema/011-pg-snapshot-meta.sql?raw'
+import SCHEMA_012 from './schema/012-desktop-tasks.sql?raw'
+import SCHEMA_013 from './schema/013-meetings.sql?raw'
+import SCHEMA_014 from './schema/014-desktop-reminders.sql?raw'
+import SCHEMA_015 from './schema/015-projects-merge.sql?raw'
+import SCHEMA_016 from './schema/016-desktop-chat-history.sql?raw'
+import SCHEMA_017 from './schema/017-memories-knowledge.sql?raw'
+import SCHEMA_018 from './schema/018-agent-traces.sql?raw'
+import SCHEMA_019 from './schema/019-audit-search-logs.sql?raw'
 
 const INLINE_SCHEMAS: Array<{ filename: string; sql: string }> = [
   { filename: '001-initial.sql', sql: SCHEMA_001 },
@@ -33,7 +42,16 @@ const INLINE_SCHEMAS: Array<{ filename: string; sql: string }> = [
   { filename: '007-eln-workflow.sql', sql: SCHEMA_007 },
   { filename: '008-standardization.sql', sql: SCHEMA_008 },
   { filename: '009-user-avatar.sql', sql: SCHEMA_009 },
-  { filename: '010-migration-workspace.sql', sql: SCHEMA_010 }
+  { filename: '010-migration-workspace.sql', sql: SCHEMA_010 },
+  { filename: '011-pg-snapshot-meta.sql', sql: SCHEMA_011 },
+  { filename: '012-desktop-tasks.sql', sql: SCHEMA_012 },
+  { filename: '013-meetings.sql', sql: SCHEMA_013 },
+  { filename: '014-desktop-reminders.sql', sql: SCHEMA_014 },
+  { filename: '015-projects-merge.sql', sql: SCHEMA_015 },
+  { filename: '016-desktop-chat-history.sql', sql: SCHEMA_016 },
+  { filename: '017-memories-knowledge.sql', sql: SCHEMA_017 },
+  { filename: '018-agent-traces.sql', sql: SCHEMA_018 },
+  { filename: '019-audit-search-logs.sql', sql: SCHEMA_019 }
 ]
 
 export interface MigrationRecord {

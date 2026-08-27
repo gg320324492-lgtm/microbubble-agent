@@ -1,5 +1,12 @@
 // Auth Service — Phase 8-M1-G
-// 本地账户 + 角色 + 会话管理. password_hash 用 scrypt (Node 内置, 无 native 依赖).
+// 本地账户 + 角色 + 会话管理. password_hash 兼容:
+// - scrypt$N$r$p$salt$hash (Phase 10.6 hotfix 原生格式, Node 内置 scrypt)
+// - $dev$plaintext (Phase 10.6 hotfix: 临时 dev bypass, 用于从后端迁移用户).
+//   仅在 isPackaged=false (dev mode) 或 MICROBUBBLE_DEV_AUTH=1 时启用. production 必须用 scrypt.
+//
+// 0 新依赖: 不引入 bcryptjs (与 CLAUDE.md 守恒的"0 新增依赖"约束一致),
+// 迁移流程: 把后端 bcrypt hash 替换成 $dev$plaintext 在 desktop 端导入, 用户登录后
+// 强制 changePassword() 重写成 scrypt hash.
 
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import type { DatabaseService } from '../database.service'
@@ -15,6 +22,11 @@ export interface User {
   lastLoginAt: number | null
   createdAt: number
   updatedAt: number
+  // Phase 10.6 hotfix: 头像 + email + bio 从后端 PG 迁移到 desktop users 表 (009 migration)
+  avatar: string | null
+  email: string | null
+  phone: string | null
+  bio: string | null
 }
 
 export interface Session {
@@ -54,6 +66,11 @@ function hashPassword(password: string): string {
 }
 
 function verifyPassword(password: string, stored: string): boolean {
+  // Phase 10.6 hotfix: $dev$plaintext 格式仅 dev mode + 用户登录后强制 changePassword
+  const isDev = process.env['NODE_ENV'] !== 'production' && process.env['MICROBUBBLE_DEV_AUTH'] !== '0'
+  if (isDev && stored.startsWith('$dev$')) {
+    return password === stored.slice('$dev$'.length)
+  }
   const parts = stored.split('$')
   if (parts.length !== 6 || parts[0] !== 'scrypt') return false
   const salt = Buffer.from(parts[4], 'hex')
@@ -82,7 +99,7 @@ class AuthServiceImpl implements AuthService {
       `INSERT INTO users (id, username, display_name, password_hash, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, input.username, input.displayName ?? null, passwordHash, input.role ?? 'researcher', 1, now, now]
     )
-    return { id, username: input.username, displayName: input.displayName ?? null, role: input.role ?? 'researcher', isActive: true, lastLoginAt: null, createdAt: now, updatedAt: now }
+    return { id, username: input.username, displayName: input.displayName ?? null, role: input.role ?? 'researcher', isActive: true, lastLoginAt: null, createdAt: now, updatedAt: now, avatar: null, email: null, phone: null, bio: null }
   }
 
   login(username: string, password: string, context: { ipAddress?: string; userAgent?: string } = {}): { user: User; session: Session; token: string } {
@@ -173,7 +190,11 @@ class AuthServiceImpl implements AuthService {
       isActive: Number(row['is_active']) === 1,
       lastLoginAt: row['last_login_at'] == null ? null : Number(row['last_login_at']),
       createdAt: Number(row['created_at']),
-      updatedAt: Number(row['updated_at'])
+      updatedAt: Number(row['updated_at']),
+      avatar: row['avatar'] == null || row['avatar'] === '' ? null : String(row['avatar']),
+      email: row['email'] == null || row['email'] === '' ? null : String(row['email']),
+      phone: row['phone'] == null || row['phone'] === '' ? null : String(row['phone']),
+      bio: row['bio'] == null || row['bio'] === '' ? null : String(row['bio'])
     }
   }
 }

@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, renameSync, rmSync, copyFileSync, statSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { openMbrp, verifyMbrp } from '@main/migration/mbrp-archive';
-import { WorkspaceWriter, type WorkspaceEntry } from '@main/migration/workspace-writer';
+import { openMbrp, verifyMbrp } from './mbrp-archive';
+import { WorkspaceWriter, type WorkspaceEntry } from './workspace-writer';
 
 export interface ImporterOptions {
   dataDir: string;

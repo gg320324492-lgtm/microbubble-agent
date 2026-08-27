@@ -101,14 +101,17 @@ function countWords(text: string): number {
 function parseCitations(raw: string[] | string): CitationItem[] {
   const list = Array.isArray(raw) ? raw : (typeof raw === 'string' ? [raw] : [])
   if (list.length === 0) return []
+  // [类 20.191] 2026-08-27: 删 '作者信息待补充' / '文献标题信息待补充' / '期刊' 等 demo 假填充.
+  // 这些字符串会被前端渲染为"真实引用", 欺骗用户. 改为: 只返 refId,
+  // 字段让 CitationLocationPanel 空态显示 ("无作者元数据, 需后端解析").
   return list.map((entry, index) => {
     const id = typeof entry === 'string' ? entry.replace(/[\[\]]/g, '').trim() : `ref-${index + 1}`
     return {
       refId: id || `ref-${index + 1}`,
-      authors: '作者信息待补充',
-      title: '文献标题信息待补充',
-      journal: '期刊',
-      year: new Date().getFullYear(),
+      authors: undefined,
+      title: undefined,
+      journal: undefined,
+      year: undefined,
       doi: undefined
     }
   })

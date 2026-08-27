@@ -164,9 +164,6 @@ publish:
     releaseType: release
 
 # Release hardening (R0)
-release:
+extraMetadata:
   releaseNotesFile: null
   artifactName: ScientificResearchOS-${version}-${arch}.${ext}
-
-buildMetadata:
-  output: resources/build-metadata.json

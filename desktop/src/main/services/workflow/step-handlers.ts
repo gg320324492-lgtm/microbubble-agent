@@ -94,9 +94,12 @@ export const stepHandlers: Record<string, StepHandlerFn> = {
     const config = {
       deviceId: String(input.deviceId ?? ''),
       deviceType: input.deviceType as 'ozone-generator' | 'pump' | 'reactor' | 'sensor' | 'ph-meter' | 'do-meter' | 'orp-meter' | 'flow-meter' | 'power-meter',
-      endpoint: String(input.endpoint ?? 'mock://localhost')
+      // [类 20.191] 2026-08-27: 删 'mock://localhost' 假 endpoint fallback. 若 input 没传 endpoint,
+      // 直接报错要求提供 (而不是悄悄走 mock driver). 真实协议 driver 会拒绝 mock:// scheme.
+      endpoint: String(input.endpoint ?? '')
     }
     if (!config.deviceId) return { ok: false, error: 'deviceId 缺失' }
+    if (!config.endpoint) return { ok: false, error: 'endpoint 缺失 (case launcher 必须显式提供真实设备协议 URL, e.g. modbus://192.168.1.10:502)' }
     try {
       const result = await svc.deviceSvc.command(config as never, {
         kind: input.kind as 'set-setpoint' | 'start' | 'stop' | 'calibrate' | 'reset-alarm',

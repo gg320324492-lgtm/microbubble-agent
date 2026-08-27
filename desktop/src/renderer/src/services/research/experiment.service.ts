@@ -1,4 +1,8 @@
 // Experiment Service — 实验设计服务层（带适配器模式）。
+//
+// [类 20.191] 2026-08-27: 删 MOCK_DESIGN + generateHypotheses 假模板.
+// 这些假数据曾被 Experiment 页面渲染为"真实实验" (气泡直径/O₃浓度/分组条件).
+// 改为: 默认 adapter 抛 NotWiredError, 强制 wire 真实数据源.
 
 export interface ExperimentDesign {
   id: string
@@ -19,47 +23,30 @@ export interface ExperimentAdapter {
   updateDesign(patch: Partial<ExperimentDesign>): Promise<void>
 }
 
-const MOCK_DESIGN: ExperimentDesign = {
-  id: 'exp-1',
-  title: 'O₃微纳米气泡降解四环素效率优化',
-  question: '如何优化微纳米气泡臭氧技术对四环素的降解效率？',
-  hypotheses: [
-    { statement: '更小气泡直径增加气液界面面积，提高臭氧传质效率', confidence: 0.80 },
-    { statement: '自由基（·OH）途径是 TC 降解的主要活性机制', confidence: 0.65 },
-  ],
-  variables: [
-    { name: '气泡直径', type: 'independent', range: '50 – 500 nm', unit: 'nm' },
-    { name: '臭氧浓度', type: 'independent', range: '5 – 25 mg/L', unit: 'mg/L' },
-    { name: 'pH', type: 'control', range: '5.0 – 9.0', unit: '' },
-    { name: 'TC 去除率', type: 'dependent', range: '0 – 100%', unit: '%' },
-  ],
-  groups: [
-    { name: '对照组', condition: '常规曝气（无微纳米气泡）', purpose: '基线对比' },
-    { name: '实验组 1', condition: '200 nm 微纳米气泡 + 10 mg/L O₃', purpose: '中等条件' },
-    { name: '实验组 2', condition: '100 nm 微纳米气泡 + 15 mg/L O₃', purpose: '较高条件' },
-    { name: '实验组 3', condition: '50 nm 微纳米气泡 + 20 mg/L O₃', purpose: '最优条件' },
-  ],
-  metrics: ['TC 去除率 (%)', 'TOC 去除率 (%)', '动力学常数 k (min⁻¹)', '半衰期 t₁/₂ (min)'],
-  model: { name: '伪一级动力学', confidence: 0.85 },
-  status: 'running',
+export class ExperimentNotWiredError extends Error {
+  constructor() {
+    super(
+      '[ExperimentService] No real adapter wired. ' +
+      'Mock data was removed in [类 20.191] 2026-08-27 — was previously returning fake "O₃微纳米气泡降解四环素效率优化" design. ' +
+      'Real data path: 1) local desktop_experiments table, 2) FastAPI /api/v1/experiments/* ' +
+      'Call experimentService.setAdapter(realAdapter) after wiring.'
+    )
+    this.name = 'ExperimentNotWiredError'
+  }
 }
 
-const mockAdapter: ExperimentAdapter = {
-  async getDesign() { return { ...MOCK_DESIGN } },
-  async getDesignStatus() { return MOCK_DESIGN.status },
-  async generateHypotheses(problem) {
-    return [
-      { statement: `基于「${problem}」的分析，提高气液传质效率可增强反应物利用率`, confidence: 0.75 },
-      { statement: '优化工艺参数可显著提升降解效率', confidence: 0.70 },
-    ]
-  },
-  async updateDesign() {},
+const notWiredAdapter: ExperimentAdapter = {
+  async getDesign() { throw new ExperimentNotWiredError() },
+  async getDesignStatus() { throw new ExperimentNotWiredError() },
+  async generateHypotheses() { throw new ExperimentNotWiredError() },
+  async updateDesign() { throw new ExperimentNotWiredError() },
 }
 
-let currentAdapter: ExperimentAdapter = mockAdapter
+let currentAdapter: ExperimentAdapter = notWiredAdapter
 
 export const experimentService = {
   setAdapter(a: ExperimentAdapter) { currentAdapter = a },
+  isWired(): boolean { return currentAdapter !== notWiredAdapter },
   getDesign: () => currentAdapter.getDesign(),
   getDesignStatus: () => currentAdapter.getDesignStatus(),
   generateHypotheses: (problem: string) => currentAdapter.generateHypotheses(problem),

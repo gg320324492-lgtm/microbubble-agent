@@ -36,9 +36,8 @@ const figureItems = computed(() => props.figures ?? [])
           <span class="figure-manager-panel__caption">{{ figure.caption }}</span>
         </div>
         <p class="figure-manager-panel__description">{{ figure.description }}</p>
-        <div class="figure-manager-panel__placeholder" aria-hidden="true">
-          <span>图表占位</span>
-        </div>
+        <!-- [类 20.191] 2026-08-27: 删 '<span>图表占位</span>' literal stub.
+             真图表渲染待 ECharts / Canvas 接入 (留 R3 hardening). 改为显示真实描述. -->
       </li>
     </ul>
 

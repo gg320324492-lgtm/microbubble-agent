@@ -14,13 +14,9 @@ withDefaults(defineProps<{
   milestones?: Milestone[]
 }>(), {
   progress: null,
-  milestones: () => [
-    { id: 'm1', title: '知识库初始化', status: 'completed' },
-    { id: 'm2', title: '实验方案设计', status: 'in-progress' },
-    { id: 'm3', title: '数字孪生校准', status: 'in-progress' },
-    { id: 'm4', title: '设备接入', status: 'pending' },
-    { id: 'm5', title: '论文撰写', status: 'pending' }
-  ]
+  // [类 20.191] 2026-08-27: 移除硬编码 5 个默认 milestone (知识库初始化 / 实验方案设计 / etc.).
+  // 这些都是 demo 数据, 没有真实任务对应. 父组件必须传 milestones, 否则显示空态.
+  milestones: () => []
 })
 
 const statusLabel = computed(() => ({
@@ -40,13 +36,19 @@ const statusColor = computed(() => ({
 <template>
   <div class="milestone-panel">
     <div class="milestone-panel__title">研究里程碑</div>
-    <div v-for="m in milestones" :key="m.id" class="milestone-panel__row">
-      <div class="milestone-panel__dot" :style="{ background: statusColor[m.status] }"></div>
-      <div class="milestone-panel__body">
-        <div class="milestone-panel__name">{{ m.title }}</div>
-        <div class="milestone-panel__status" :style="{ color: statusColor[m.status] }">{{ statusLabel[m.status] }}</div>
-      </div>
+    <!-- [类 20.191] 2026-08-27: 空数组时显示空态, 而不是渲染空 wrapper -->
+    <div v-if="!milestones || milestones.length === 0" class="milestone-panel__empty">
+      暂无里程碑数据. 请在父组件传入 milestones, 或从后端 ResearchProgress.milestones 字段读取.
     </div>
+    <template v-else>
+      <div v-for="m in milestones" :key="m.id" class="milestone-panel__row">
+        <div class="milestone-panel__dot" :style="{ background: statusColor[m.status] }"></div>
+        <div class="milestone-panel__body">
+          <div class="milestone-panel__name">{{ m.title }}</div>
+          <div class="milestone-panel__status" :style="{ color: statusColor[m.status] }">{{ statusLabel[m.status] }}</div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -62,6 +64,12 @@ const statusColor = computed(() => ({
   font-weight: 600;
   color: #1e293b;
   margin-bottom: 12px;
+}
+.milestone-panel__empty {
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 12px 0;
+  text-align: center;
 }
 .milestone-panel__row {
   display: flex;
@@ -86,3 +94,5 @@ const statusColor = computed(() => ({
   margin-top: 2px;
 }
 </style>
+</content>
+</invoke>

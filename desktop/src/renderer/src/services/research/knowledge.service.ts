@@ -1,22 +1,76 @@
-// Knowledge Service — 文献/知识库服务层（带适配器模式）。
+// Knowledge Service — 真实文献/知识库 adapter.
+//
+// [类 20.191] 2026-08-27: 接入本地 SQLite desktop_knowledge 表.
+// 数据源: desktop_knowledge (含 4 个子表 chunks/relations/entities/formulas,
+// 这里只读主表, 详细子表按需后续接入).
+// 真实字段 (desktop_knowledge): id / web_id / title / content / category /
+// topic / tags_json / key_concepts_json / related_topics_json / knowledge_type /
+// summary / entities (jsonb) / file_path / file_name / file_type /
+// auto_researched / needs_review / analysis_status / quality_score / created_at_epoch.
+//
+// 适配到前端 DocumentItem shape:
+//   id, title, authors, journal, year, type, tags, credibility, citations, relevance
 
-export interface DocumentItem {
-  id: string
+import type { DocumentItem, SearchResult, KnowledgeFolder } from './knowledge.service'
+
+interface KnowledgeRow {
+  id: number
   title: string
-  authors: string
-  journal: string
-  year: number
-  type: 'paper' | 'experiment' | 'dataset' | 'report'
-  tags: string[]
-  credibility: number
-  citations: number
-  relevance?: number
+  category: string | null
+  topic: string | null
+  tags_json: string | null  // JSON array string
+  key_concepts_json: string | null
+  knowledge_type: string | null
+  summary: string | null
+  entities_json: string | null  // JSON object string (注意是 entities_json, 不是 entities)
+  quality_score: number | null
+  file_path: string | null
+  file_name: string | null
+  file_type: string | null
+  created_at_epoch: number | null
 }
 
-export interface SearchResult { documentId: string; score: number; excerpt: string }
-export interface KnowledgeFolder { id: string; name: string; count: number; children?: KnowledgeFolder[] }
+function parseJsonArray<T = string>(raw: string | null): T[] {
+  if (!raw) return []
+  try {
+    const v = JSON.parse(raw)
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
 
-export interface KnowledgeAdapter {
+function mapType(local: string | null): DocumentItem['type'] {
+  switch (local) {
+    case 'experiment': return 'experiment'
+    case 'dataset': return 'dataset'
+    case 'report': return 'report'
+    case 'paper':
+    default: return 'paper'
+  }
+}
+
+function mapRowToDocument(r: KnowledgeRow): DocumentItem {
+  const tags = parseJsonArray<string>(r.tags_json)
+  const credibility = typeof r.quality_score === 'number' ? Math.min(1, Math.max(0, r.quality_score)) : 0.5
+  // authors: desktop_knowledge 没有此字段 (Phase 11 阶段).
+  // 真实 authors 在 web PG 端. 留 TODO: P11 Stage 3 拉 PG 后补全.
+  // 暂用 topic + 类型 作 placeholder (空字符串不行, 折中用类型标签).
+  return {
+    id: String(r.id),
+    title: r.title,
+    authors: '', // TODO: 从 PG web_id 关联拉 authors
+    journal: r.file_name ?? r.category ?? '',
+    year: r.created_at_epoch ? new Date(r.created_at_epoch * 1000).getFullYear() : new Date().getFullYear(),
+    type: mapType(r.knowledge_type),
+    tags,
+    credibility,
+    citations: 0, // TODO: PG 拉真实引用计数
+    relevance: credibility
+  }
+}
+
+interface KnowledgeAdapter {
   getDocuments(): Promise<DocumentItem[]>
   getDocument(id: string): Promise<DocumentItem | undefined>
   searchDocuments(query: string): Promise<SearchResult[]>
@@ -25,37 +79,89 @@ export interface KnowledgeAdapter {
   importDocument(file: File): Promise<DocumentItem | null>
 }
 
-const MOCK_DOCUMENTS: DocumentItem[] = [
-  { id: 'd1', title: '臭氧微纳米气泡降解四环素的动力学与机理研究', authors: '李小红, 张伟, 陈晨', journal: '环境科学学报', year: 2021, type: 'paper', tags: ['O₃-MNBs', 'TC', '降解动力学'], credibility: 0.82, citations: 48, relevance: 0.94 },
-  { id: 'd2', title: 'Nanobubble characterization methods and applications', authors: 'Li, X., et al.', journal: 'Ultrasonics', year: 2023, type: 'paper', tags: ['纳米气泡', '表征'], credibility: 0.65, citations: 32, relevance: 0.88 },
-  { id: 'd3', title: 'Ozone mass transfer in microbubble systems', authors: 'Wang, Y., et al.', journal: 'Water Research', year: 2023, type: 'paper', tags: ['传质', '臭氧'], credibility: 0.90, citations: 56, relevance: 0.91 },
-  { id: 'd4', title: '四环素在水体中的降解行为与机理研究', authors: '李某, 等', journal: '化学工程学报', year: 2021, type: 'paper', tags: ['TC', '动力学', '机理'], credibility: 0.72, citations: 24, relevance: 0.85 },
-  { id: 'd5', title: 'CFD模拟微纳米气泡流动特性', authors: 'Chen X., et al.', journal: 'Chem. Eng. J.', year: 2019, type: 'paper', tags: ['CFD', '模拟', '气泡'], credibility: 0.78, citations: 18, relevance: 0.79 },
-]
-
-const MOCK_FOLDERS: KnowledgeFolder[] = [
-  { id: 'f1', name: 'O₃-MNBs TC 降解研究', count: 128, children: [
-    { id: 'f1-1', name: '机理研究', count: 46 },
-    { id: 'f1-2', name: '反应动力学', count: 28 },
-    { id: 'f1-3', name: '影响因素', count: 24 },
-  ]},
-  { id: 'f2', name: '臭氧-微纳米气泡基础', count: 236 },
-  { id: 'f3', name: '催化与活化', count: 189 },
-]
-
-const mockAdapter: KnowledgeAdapter = {
-  async getDocuments() { return [...MOCK_DOCUMENTS] },
-  async getDocument(id) { return MOCK_DOCUMENTS.find(d => d.id === id) },
-  async searchDocuments(q) { return MOCK_DOCUMENTS.filter(d => d.title.toLowerCase().includes(q.toLowerCase()) || d.tags.some(t => t.includes(q))).map(d => ({ documentId: d.id, score: d.credibility, excerpt: d.title })) },
-  async getFolders() { return [...MOCK_FOLDERS] },
-  async getDocumentCount() { return MOCK_DOCUMENTS.length },
-  async importDocument() { return null },
+class SqliteKnowledgeAdapter implements KnowledgeAdapter {
+  async getDocuments(): Promise<DocumentItem[]> {
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    const { rows } = await api.database.query<KnowledgeRow>({
+      sql: `SELECT id, title, category, topic, tags_json, key_concepts_json, knowledge_type,
+                   summary, entities_json, quality_score, file_path, file_name, file_type, created_at_epoch
+            FROM desktop_knowledge
+            ORDER BY created_at_epoch DESC
+            LIMIT 500`
+    })
+    return rows.map(mapRowToDocument)
+  }
+  async getDocument(id: string): Promise<DocumentItem | undefined> {
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    const { rows } = await api.database.query<KnowledgeRow>({
+      sql: `SELECT id, title, category, topic, tags_json, key_concepts_json, knowledge_type,
+                   summary, entities_json, quality_score, file_path, file_name, file_type, created_at_epoch
+            FROM desktop_knowledge
+            WHERE id = ? `,
+      params: [Number(id)]
+    })
+    if (rows.length === 0) return undefined
+    return mapRowToDocument(rows[0])
+  }
+  async searchDocuments(query: string): Promise<SearchResult[]> {
+    if (!query.trim()) return []
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    const like = `%${query.replace(/[%_]/g, '\\$&')}%`
+    const { rows } = await api.database.query<KnowledgeRow>({
+      sql: `SELECT id, title, category, topic, tags_json, key_concepts_json, knowledge_type,
+                   summary, entities_json, quality_score, file_path, file_name, file_type, created_at_epoch
+            FROM desktop_knowledge
+           
+              AND (title LIKE ? OR category LIKE ? OR topic LIKE ? OR tags_json LIKE ?)
+            ORDER BY quality_score DESC NULLS LAST, created_at_epoch DESC
+            LIMIT 100`,
+      params: [like, like, like, like]
+    })
+    return rows.map((r) => {
+      const d = mapRowToDocument(r)
+      return { documentId: d.id, score: d.credibility, excerpt: d.title }
+    })
+  }
+  async getFolders(): Promise<KnowledgeFolder[]> {
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    // desktop_knowledge 没 folder 表. 简化: 按 category 聚合, 算 count.
+    const { rows } = await api.database.query<{ category: string; count: number }>({
+      sql: `SELECT COALESCE(category, '未分类') AS category, COUNT(*) AS count
+            FROM desktop_knowledge
+            GROUP BY category
+            ORDER BY count DESC`
+    })
+    return rows.map((r, i) => ({
+      id: `cat-${i}-${r.category}`,
+      name: r.category,
+      count: r.count
+    }))
+  }
+  async getDocumentCount(): Promise<number> {
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    const { rows: [row] } = await api.database.query<{ count: number }>({
+      sql: 'SELECT COUNT(*) AS count FROM desktop_knowledge'
+    })
+    return row?.count ?? 0
+  }
+  async importDocument(_file: File): Promise<DocumentItem | null> {
+    // TODO: 走 IPC data:import.commit 上传 CSV
+    return null
+  }
 }
 
-let currentAdapter: KnowledgeAdapter = mockAdapter
+const realAdapter: KnowledgeAdapter = new SqliteKnowledgeAdapter()
+
+let currentAdapter: KnowledgeAdapter = realAdapter
 
 export const knowledgeService = {
   setAdapter(a: KnowledgeAdapter) { currentAdapter = a },
+  isWired(): boolean { return true },
   getDocuments: () => currentAdapter.getDocuments(),
   getDocument: (id: string) => currentAdapter.getDocument(id),
   searchDocuments: (q: string) => currentAdapter.searchDocuments(q),
