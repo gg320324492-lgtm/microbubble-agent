@@ -69,6 +69,7 @@ class SqliteLiteratureAdapter {
 
 const realAdapter = new SqliteLiteratureAdapter()
 let currentAdapter = realAdapter
+export const realLiteratureAdapter = realAdapter
 
 export const literatureService = {
   setAdapter(a: typeof realAdapter) { currentAdapter = a },

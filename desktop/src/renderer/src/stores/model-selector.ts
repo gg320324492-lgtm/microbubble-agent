@@ -93,6 +93,22 @@ export const useModelSelectorStore = defineStore('model-selector', () => {
         })
       }
       available.value = next
+      // [类 20.207] 2026-08-28: loadAvailable 后, 如果还没有 selected 且有可用 provider (含 key),
+      //   自动选第一个. 之前 selected 永远 null, chat 顶部永远 "Default (no provider selected)".
+      if (!selected.value) {
+        const firstReady = next.find((p) => p.hasKey) ?? next[0]
+        if (firstReady) {
+          // 直接赋 ConversationModelContext, 不走 select() 避免循环
+          selected.value = {
+            providerId: firstReady.providerId,
+            displayName: firstReady.displayName,
+            type: firstReady.type,
+            model: firstReady.defaultModel,
+            capabilities: firstReady.capabilities,
+            hasKey: firstReady.hasKey
+          }
+        }
+      }
     } catch (e) {
       lastError.value = e instanceof Error ? e.message : String(e)
       throw e

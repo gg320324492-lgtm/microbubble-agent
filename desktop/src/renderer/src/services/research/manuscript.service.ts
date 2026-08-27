@@ -85,6 +85,7 @@ class SqliteManuscriptAdapter implements ManuscriptAdapter {
 
 const realAdapter: ManuscriptAdapter = new SqliteManuscriptAdapter()
 let currentAdapter: ManuscriptAdapter = realAdapter
+export const realManuscriptAdapter = realAdapter
 
 export const manuscriptService = {
   setAdapter(a: ManuscriptAdapter) { currentAdapter = a },
