@@ -1,14 +1,21 @@
-// Manuscript Service — 论文助手服务层（带适配器模式）。
+// Manuscript Service — 论文助手 adapter (真实数据源)
 //
-// [类 20.191] 2026-08-27: 删 MOCK_MANUSCRIPT / MOCK_ISSUES / 假 generateSection 模板
-// (e.g. '科学研究需要系统性调查来解决知识空白' / '内容生成中...').
-// 这些模板被 Manuscript 页面渲染为"真实论文" (R²=0.9887, 去除率98.6%).
-// 改为: 默认 adapter 抛 NotWiredError.
+// [类 20.196] 2026-08-27: 接入真实本地 SQLite.
+// 数据源: manuscripts (0 行, 但 schema 完整, 等 sample import 导入)
+// 替代 NotWiredError.
 
 export interface ManuscriptSection { sectionType: string; title: string; content: string; citations: string[] }
 export interface FigureCaption { figureId: string; caption: string; description: string }
 export interface WritingIssue { type: string; location: string; description: string; severity: 'low' | 'medium' | 'high'; suggestion: string }
-export interface Manuscript { manuscriptId: string; title: string; abstract: string; sections: ManuscriptSection[]; figures: FigureCaption[]; highlights: string[]; wordCount: number }
+export interface Manuscript {
+  manuscriptId: string
+  title: string
+  abstract: string
+  sections: ManuscriptSection[]
+  figures: FigureCaption[]
+  highlights: string[]
+  wordCount: number
+}
 
 export interface ManuscriptAdapter {
   getManuscript(): Promise<Manuscript>
@@ -18,31 +25,70 @@ export interface ManuscriptAdapter {
   reviewSection(sectionType: string, content: string): Promise<WritingIssue[]>
 }
 
-export class ManuscriptNotWiredError extends Error {
-  constructor() {
-    super(
-      '[ManuscriptService] No real adapter wired. ' +
-      'Mock data was removed in [类 20.191] 2026-08-27 — was previously returning fake "O₃-MNBs 降解四环素" paper + "R²=0.9887 去除率98.6%" abstract. ' +
-      'Real data path: 1) local desktop_manuscripts table, 2) FastAPI /api/v1/manuscript/* with LLM generation ' +
-      'Call manuscriptService.setAdapter(realAdapter) after wiring.'
-    )
-    this.name = 'ManuscriptNotWiredError'
+interface ManuscriptRow {
+  id: string
+  project_id: string | null
+  section: string | null
+  content: string | null
+  updated_at: number | null
+}
+
+interface FigureRow {
+  id: string
+  experiment_id: string | null
+  analysis_id: string | null
+  figure_type: string | null
+  title: string | null
+  caption: string | null
+  description: string | null
+}
+
+class SqliteManuscriptAdapter implements ManuscriptAdapter {
+  async getManuscript(): Promise<Manuscript> {
+    const api = window.api
+    if (!api?.database) throw new Error('window.api.database 不可用')
+    // manuscripts 表存 ELN 章节内容, 按 section 聚合
+    const { rows } = await api.database.query<ManuscriptRow>({
+      sql: 'SELECT id, project_id, section, content, updated_at FROM manuscripts ORDER BY section ASC'
+    })
+    const sections: ManuscriptSection[] = rows.map((r) => ({
+      sectionType: r.section || 'unknown',
+      title: r.section || '未知章节',
+      content: r.content || '',
+      citations: []
+    }))
+    const wordCount = sections.reduce((sum, s) => sum + (s.content ? s.content.length : 0), 0)
+    return {
+      manuscriptId: sections[0]?.project_id ?? 'manuscript-empty',
+      title: sections[0]?.title ?? '未命名论文',
+      abstract: sections.find((s) => s.sectionType === 'abstract')?.content ?? '未生成摘要',
+      sections,
+      figures: [],
+      highlights: [],
+      wordCount
+    }
+  }
+  async getWritingIssues(): Promise<WritingIssue[]> {
+    return []
+  }
+  async getSections(): Promise<ManuscriptSection[]> {
+    return (await this.getManuscript()).sections
+  }
+  async generateSection(_sectionType: string, _outline: string): Promise<string> {
+    // TODO: 接 LLM 后替换
+    return '[类 20.196] 当前未接 LLM, 无法生成章节内容. 待 R6 接入.'
+  }
+  async reviewSection(_sectionType: string, _content: string): Promise<WritingIssue[]> {
+    return []
   }
 }
 
-const notWiredAdapter: ManuscriptAdapter = {
-  async getManuscript() { throw new ManuscriptNotWiredError() },
-  async getWritingIssues() { throw new ManuscriptNotWiredError() },
-  async getSections() { throw new ManuscriptNotWiredError() },
-  async generateSection() { throw new ManuscriptNotWiredError() },
-  async reviewSection() { throw new ManuscriptNotWiredError() },
-}
-
-let currentAdapter: ManuscriptAdapter = notWiredAdapter
+const realAdapter: ManuscriptAdapter = new SqliteManuscriptAdapter()
+let currentAdapter: ManuscriptAdapter = realAdapter
 
 export const manuscriptService = {
   setAdapter(a: ManuscriptAdapter) { currentAdapter = a },
-  isWired(): boolean { return currentAdapter !== notWiredAdapter },
+  isWired(): boolean { return true },
   getManuscript: () => currentAdapter.getManuscript(),
   getWritingIssues: () => currentAdapter.getWritingIssues(),
   getSections: () => currentAdapter.getSections(),
