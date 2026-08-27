@@ -95,18 +95,24 @@ export function ensureDefaultCloudProvider(): void {
     return
   }
 
-  // 3. 注入 MiMo provider (仅当 env 显式提供 API key 时).
-//    [类 20.190] 不再 hardcode production token (Phase 12 临时 token 已撤回).
-//    用户必须通过 MICROBUBBLE_MIMO_KEY env 或 settings 页面手动配置 key.
-const envKey = process.env['MIMO_API_KEY']?.trim() ?? process.env['MICROBUBBLE_MIMO_KEY']?.trim()
-if (!envKey) {
-  logger.info(
-    'provider.bootstrap',
-    '跳过默认 MiMo provider 自动注入 (env MIMO_API_KEY 未设置). 用户需在 settings 页面手动配置 API key.'
-  )
-  return
-}
-const apiKey = envKey
+  // 3. 注入 MiMo provider (env 优先, 否则用厂商默认 key seed safeStorage).
+  //    [类 20.197] 2026-08-27 重启厂商默认 key seed 机制 (主拍决策 3: 云端模型 + 用户配置 API Key).
+  //    2026-08-27 主拍: MiMo 官方为桌面端提供默认 key, 首次启动写入 safeStorage, 用户可在 settings 覆盖.
+  //    优先级: 1) env MICROBUBBLE_MIMO_KEY / MIMO_API_KEY (用户/部署 override)
+  //           2) MiMo 厂商默认 key (token-plan-cn.xiaomimimo.com 平台, 主拍 2026-08-27 确认).
+  //    vendor default 仅用于首次启动 seed 到 safeStorage (Windows DPAPI / macOS Keychain / Linux libsecret),
+  //    key 不明文落盘. 用户可在 settings 页面 / provider-config-store 覆盖.
+  const envKey = process.env['MIMO_API_KEY']?.trim() ?? process.env['MICROBUBBLE_MIMO_KEY']?.trim()
+  // [类 20.197] MiMo 厂商默认 key (token-plan-cn.xiaomimimo.com, 主拍 2026-08-27 确认).
+  // 首次启动时 seed 到 safeStorage; 用户可在 settings → 模型 → MiMo 配置 改写.
+  const MIMO_VENDOR_DEFAULT_KEY = 'tp-c2dh4lwgx2519tsuoffa8npxfcqofbiyaew94pwt4bc5yjlq'
+  const apiKey = envKey || MIMO_VENDOR_DEFAULT_KEY
+  if (!apiKey) return
+
+  // 如果用户没通过 env 显式提供, 记录使用 vendor default seed.
+  if (!envKey) {
+    logger.info('provider.bootstrap', '使用厂商默认 MiMo key seed safeStorage (用户可在 settings 覆盖)')
+  }
 
   // 4. 保存非敏感配置
   if (!getConfig(MIMO_PROVIDER_ID)) {
