@@ -31,7 +31,8 @@ const store = useModelSelectorStore()
 
 const showDropdown = computed(() => store.available.length > 0)
 const selectedLabel = computed(() => {
-  if (!store.selected) return 'Default (no provider selected)'
+  // [类 20.215] 2026-08-28: 默认文本中英混用改为纯中文, 符合整体 UI 文案.
+  if (!store.selected) return '默认（请在 设置 中选择模型）'
   const name = store.selected.displayName ?? store.selected.providerId
   return `${name} · ${store.selected.model}`
 })
