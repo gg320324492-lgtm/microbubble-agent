@@ -180,3 +180,9 @@ logs/gitleaks-report.sarif
 _r*-progress.md
 _r*-commit.txt
 _r*-guard.txt
+
+# Windows-illegal-name dirs (msys2 path translation accidents, e.g. ";C" / ";H")
+*;C/
+*;H/
+*.tmp
+*.bak
