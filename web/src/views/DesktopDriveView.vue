@@ -128,7 +128,7 @@
         </div>
       </transition>
       <aside class="drive-sidebar">
-        <div class="drive-sidebar-header">我的网盘</div>
+        <div class="drive-sidebar-header">课题组网盘</div>
         <!-- PR3.2 + v2 PR2: FolderTree 加 specialView 双向绑定 -->
         <!-- v2.29 (2026-07-12) 接通 create-sub-folder emit (右键菜单"新建子文件夹"触发) -->
         <FolderTree
@@ -151,13 +151,11 @@
       <main class="drive-content">
         <div class="drive-breadcrumb">
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/drive' }">我的网盘</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="specialView === 'starred'">⭐ 我的收藏</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'team'">🌐 团队共享盘</el-breadcrumb-item>
+            <el-breadcrumb-item>课题组网盘</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="specialView === 'team'">🌐 团队共享盘</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="specialView === 'trash'">🗑️ 回收站</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'requests'">📢 文件请求</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="selectedFolderId">
-              文件夹 #{{ selectedFolderId }}
+            <el-breadcrumb-item v-for="f in folderBreadcrumb" :key="'bc-' + f.id">
+              📂 {{ f.name }}
             </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
@@ -186,6 +184,8 @@
           <FileGrid
             v-else
             :files="driveFiles"
+            :folders="currentSubFolders"
+            @folder-click="handleFolderClick"
             :total="total"
             :current-page="currentPage"
             :page-size="pageSize"
@@ -411,9 +411,48 @@ const viewMode = ref(localStorage.getItem(VIEW_MODE_KEY) || 'grid')  // grid | d
 watch(viewMode, (v) => {
   try { localStorage.setItem(VIEW_MODE_KEY, v) } catch { /* 隐身模式等存储失败静默 */ }
 })
+
+// === 2026-08-30: 团队共享盘子文件夹 (大图标卡片) ===
+// 当前层的子文件夹: team 顶层 = is_team_default 根 (组会PPT); 进入子层 = 该节点 children
+const currentSubFolders = computed(() => {
+  if (specialView.value !== 'team') return []
+  if (selectedFolderId.value === null) {
+    return (folderTree.value || []).filter(f => f.is_team_default)
+  }
+  const node = findFolderById(selectedFolderId.value)
+  return node?.children || []
+})
+
+// 面包屑: 团队共享盘 → 组会PPT → 人名
+const folderBreadcrumb = computed(() => {
+  if (specialView.value !== 'team' || selectedFolderId.value === null) return []
+  const chain = []
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (n.id === selectedFolderId.value) { chain.push(n); return true }
+      if (n.children?.length) {
+        chain.push(n)
+        if (walk(n.children)) return true
+        chain.pop()
+      }
+    }
+    return false
+  }
+  walk(folderTree.value || [])
+  return chain
+})
+
+function handleFolderClick(folder) {
+  // 与 FolderTree 选中行为一致: 更新 selectedFolderId → watch 自动拉取该层文件
+  selectedFolderId.value = folder.id
+  if (!expandedFolderIds.value.includes(folder.id)) {
+    expandedFolderIds.value = [...expandedFolderIds.value, folder.id]
+  }
+}
 const searchQuery = ref('')
 // v2 PR2: 特殊视图 (null | 'starred' | 'trash')
-const specialView = ref(null)
+// 2026-08-30: 默认直接进团队共享盘 (个人网盘入口按需求移除)
+const specialView = ref('team')
 
 // v2.0 (2026-07-09) Drive 美化: chip 化的 sort/type 选项数组 (替代 SORT_LABELS dropdown)
 // 与 drive-view.css .drive-chip 配合, aria-pressed=true 时 is-active class
@@ -691,8 +730,8 @@ function onFilesUploaded({ count, folderId }) {
 
 // === 生命周期 ===
 onMounted(async () => {
-  fetchFolderTree()
-  fetchDriveFiles({ folder_id: null })
+  fetchFolderTree('team')  // 2026-08-30: 树 scope 跟随默认团队视图
+  fetchDriveFiles({ folder_id: null, view: 'team' })
   // PR3.5: 等 DOM ready 后绑定主区域为 drop zone
   await nextTick()
   if (driveMainRef.value) {
@@ -756,8 +795,8 @@ watch(specialView, async (newView) => {
 
 // === 生命周期 ===
 onMounted(() => {
-  fetchFolderTree()
-  fetchDriveFiles({ folder_id: null })  // 顶级目录
+  fetchFolderTree('team')  // 2026-08-30: 树 scope 跟随默认团队视图
+  fetchDriveFiles({ folder_id: null, view: 'team' })  // 顶级目录
 })
 
 // === 文件操作 handlers (PR3.3 接入, 部分留给 PR3.4-3.7 完善 dialog) ===
