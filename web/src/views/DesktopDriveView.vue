@@ -404,7 +404,13 @@ const {
 } = driveFilesStore
 
 // === 状态 ===
-const viewMode = ref('detail')  // v2.16 默认 detail (横向 long bar) | grid | list
+// 2026-08-30: 默认 grid (大文件夹图标, 类资源管理器"大图标"视图) — 用户要求进
+// 网盘/团队共享盘第一眼就直观看到内容; 用户手动切换后 localStorage 记忆偏好
+const VIEW_MODE_KEY = 'drive-view-mode'
+const viewMode = ref(localStorage.getItem(VIEW_MODE_KEY) || 'grid')  // grid | detail | list
+watch(viewMode, (v) => {
+  try { localStorage.setItem(VIEW_MODE_KEY, v) } catch { /* 隐身模式等存储失败静默 */ }
+})
 const searchQuery = ref('')
 // v2 PR2: 特殊视图 (null | 'starred' | 'trash')
 const specialView = ref(null)
