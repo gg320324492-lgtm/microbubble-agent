@@ -55,6 +55,9 @@ services:
       - SCISOFTWARE_BASE=/app
       - SCISOFTWARE_WORKFLOWS=/app/workflows
       - WSL_DISTRO=Ubuntu-24.04
+      # 2026-08-30 DFT 计算外置 E:\dft-service: 容器内 127.0.0.1 不是宿主,
+      # 必须走 host.docker.internal; 服务未启动时工具返回 unavailable 不阻塞聊天
+      - DFT_SERVICE_URL=${DFT_SERVICE_URL:-http://host.docker.internal:8620}
       - EMBEDDING_DEVICE=${EMBEDDING_DEVICE:-auto}
       - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-64}
       # 2026-07-01 BGE m3 reranker (#001): 取代 Self-RAG #009 的 judge 路径
@@ -290,6 +293,9 @@ services:
       - SCISOFTWARE_BASE=/app
       - SCISOFTWARE_WORKFLOWS=/app/workflows
       - WSL_DISTRO=Ubuntu-24.04
+      # 2026-08-30 DFT 计算外置 E:\dft-service: 容器内 127.0.0.1 不是宿主,
+      # 必须走 host.docker.internal; 服务未启动时工具返回 unavailable 不阻塞聊天
+      - DFT_SERVICE_URL=${DFT_SERVICE_URL:-http://host.docker.internal:8620}
       - EMBEDDING_DEVICE=${EMBEDDING_DEVICE:-auto}
       - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-64}
       # 2026-07-01 BGE m3 reranker (#001): 取代 Self-RAG #009 的 judge 路径
