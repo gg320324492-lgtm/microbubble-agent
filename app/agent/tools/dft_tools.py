@@ -30,8 +30,10 @@ class RunGaussianInput(BaseModel):
     job: str = Field("opt", description="任务类型 (opt / sp / freq)")
     solvent: str = Field(
         "none", description="SMD 隐式溶剂 (water / ethanol / dmso / ...; none=气相)")
-    charge: int = Field(0, ge=-10, le=10, description="体系总电荷 (离子必填)")
-    multiplicity: int = Field(1, ge=1, le=10, description="自旋多重度 (1=单重态, 2=双重态)")
+    charge: Optional[int] = Field(
+        None, ge=-10, le=10, description="体系总电荷; 缺省从 SMILES 自动推断")
+    multiplicity: Optional[int] = Field(
+        None, ge=1, le=10, description="自旋多重度; 缺省从 SMILES 自动推断")
     timeout_s: float = Field(7200.0, ge=10.0, le=86400.0,
                               description="超时秒 (默认 2 小时)")
 

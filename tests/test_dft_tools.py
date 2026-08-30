@@ -75,10 +75,13 @@ def test_tool_schemas_valid():
 
 
 def test_gaussian_schema_has_charge_multiplicity():
-    """缺口 #2 回归: gaussian 工具暴露 charge/multiplicity; solvent 默认气相"""
+    """缺口 #2 回归: gaussian 工具暴露 charge/multiplicity 且默认 None (服务端
+    自动推断); solvent 默认气相"""
     from app.agent.tools.dft_tools import RunGaussianInput
     fields = RunGaussianInput.model_fields
     assert "charge" in fields and "multiplicity" in fields
+    assert fields["charge"].default is None
+    assert fields["multiplicity"].default is None
     assert fields["solvent"].default == "none"
 
 
