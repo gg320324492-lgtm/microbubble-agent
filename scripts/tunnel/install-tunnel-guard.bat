@@ -1,0 +1,4 @@
+@echo off
+rem 注册隧道守护计划任务 (每 5 分钟; StartWhenAvailable=开机错过补跑; 当前用户免管理员)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$a = New-ScheduledTaskAction -Execute 'E:\microbubble-agent\scripts	unnel\guard-ssh-tunnel.bat'; $t = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650); $s = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 4); Register-ScheduledTask -TaskName 'MicroBubble-SSH-Tunnel-Guard' -Action $a -Trigger $t -Settings $s -Description 'SSH reverse tunnel guardian (cloud 8000/9000/2222 -> local app/minio/sshd)' -Force"
+if %errorlevel%==0 (echo [tunnel-guard] scheduled task registered) else (echo [tunnel-guard] register FAILED)
