@@ -9,7 +9,9 @@ r"""DFT/MD 域工具 — 2026-08-30 起走 HTTP 调独立 dft-service (E:\dft-se
 工具名与 schema 保持外置前兼容 (LLM prompt 不受影响); 计算结果由
 dft_service.submit_and_wait 提交 + 轮询到终态后返回, 语义同旧版同步工具。
 """
+import asyncio
 import logging
+import time
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -281,4 +283,137 @@ async def list_available_dft_tools(input: ListDFTToolsInput, ctx: ToolContext) -
     """DFT/MD 工具健康检查 (经 dft-service /dft/tools)"""
     result = await dft_client.dft_get("/dft/tools")
     result.setdefault("rich_block_type", "dft_tools")
+    return result
+
+
+# =============================================================
+# 6. run_psi4_calculation (2026-08-30 随服务端 Psi4 后端补齐)
+# =============================================================
+class RunPsi4Input(BaseModel):
+    smiles: str = Field(..., min_length=1, description="分子 SMILES")
+    method: str = Field("B3LYP", description="DFT 方法 (B3LYP / PBE / M06-2X / ...)")
+    basis: str = Field("6-31G*", description="基组")
+    operation: str = Field(
+        "energy", description="energy / optimize / properties (偶极+HOMO-LUMO)")
+    charge: Optional[int] = Field(None, ge=-10, le=10, description="总电荷; 缺省从 SMILES 推断")
+    multiplicity: Optional[int] = Field(None, ge=1, le=10, description="自旋多重度; 缺省推断")
+    timeout_s: float = Field(3600.0, ge=10.0, le=86400.0, description="超时秒")
+
+
+class Psi4Result(BaseModel):
+    status: str
+    smiles: str
+    method: str
+    basis: str
+    operation: str
+    energy_hartree: Optional[float] = None
+    dipole_debye: Optional[float] = None
+    homo_lumo_gap_eV: Optional[float] = None
+    work_dir: Optional[str] = None
+    elapsed_s: Optional[float] = None
+    error_msg: Optional[str] = None
+    rich_block_type: str = "dft_psi4"
+
+
+@tool(
+    name="run_psi4_calculation",
+    description=(
+        "用 Psi4 跑 DFT (开源) — 唯一支持 properties 任务的后端: "
+        "偶极矩 / HOMO-LUMO 轨道能量差。也支持 energy/optimize。"
+    ),
+    input_model=RunPsi4Input,
+    output_model=Psi4Result,
+    requires_db=False,
+)
+async def run_psi4_calculation(input: RunPsi4Input, ctx: ToolContext) -> dict:
+    """Psi4 DFT (经 dft-service)"""
+    result = await dft_client.submit_and_wait("psi4", {
+        "smiles": input.smiles,
+        "method": input.method,
+        "basis": input.basis,
+        "operation": input.operation,
+        "charge": input.charge,
+        "multiplicity": input.multiplicity,
+        "timeout_s": input.timeout_s,
+    }, timeout_s=input.timeout_s + 60)
+    result["rich_block_type"] = "dft_psi4"
+    return result
+
+
+# =============================================================
+# 7. run_dft_auto (智能选路 — 不确定用哪个后端时让服务挑)
+# =============================================================
+class RunDftAutoInput(BaseModel):
+    smiles: str = Field(..., min_length=1, description="分子 SMILES")
+    task: str = Field(
+        "energy", description="energy / optimize / freq / properties / md")
+    quality: str = Field(
+        "auto", description="fast (MACE 秒级) / accurate (量子化学) / auto")
+    xc: str = Field("B3LYP", description="泛函 (accurate 路径用)")
+    basis: str = Field("6-31G*", description="基组 (accurate 路径用)")
+    solvent: str = Field("none", description="溶剂 (仅 gaussian/pyscf 支持)")
+    timeout_s: Optional[float] = Field(None, description="超时秒; 缺省按后端定")
+
+
+class DftAutoResult(BaseModel):
+    status: str
+    backend: Optional[str] = None
+    reason: Optional[str] = None
+    warnings: list[str] = Field(default_factory=list)
+    smiles: str
+    energy_hartree: Optional[float] = None
+    work_dir: Optional[str] = None
+    elapsed_s: Optional[float] = None
+    error_msg: Optional[str] = None
+    rich_block_type: str = "dft_auto"
+
+
+@tool(
+    name="run_dft_auto",
+    description=(
+        "DFT 智能选路 — 不确定该用哪个计算后端时调用。服务端按 task+quality "
+        "自动择一: fast→MACE (秒级), accurate→Gaussian/Psi4/PySCF 择优, "
+        "md→GROMACS。返回所选 backend 和理由; 不支持的参数会在 warnings 里说明。"
+    ),
+    input_model=RunDftAutoInput,
+    output_model=DftAutoResult,
+    requires_db=False,
+)
+async def run_dft_auto(input: RunDftAutoInput, ctx: ToolContext) -> dict:
+    """DFT 智能选路 (经 dft-service /dft/auto)"""
+    payload: dict = {
+        "smiles": input.smiles,
+        "task": input.task,
+        "quality": input.quality,
+        "xc": input.xc,
+        "basis": input.basis,
+        "solvent": input.solvent,
+    }
+    if input.timeout_s is not None:
+        payload["timeout_s"] = input.timeout_s
+    submit_resp = await dft_client.dft_post("/dft/auto", payload)
+    if submit_resp.get("status") == "unavailable":
+        submit_resp["rich_block_type"] = "dft_auto"
+        return submit_resp
+    task_id = submit_resp.get("task_id")
+    timeout_s = input.timeout_s or 7200.0
+    # auto 已在 submit 时派发; 轮询 task_id 到终态 (不重复提交)
+    deadline = time.monotonic() + timeout_s + 60
+    result: dict = {}
+    while True:
+        rec = await dft_client.dft_get(f"/dft/result/{task_id}")
+        if rec.get("status") not in ("queued", "running", None):
+            result = rec.get("result") or {}
+            break
+        if time.monotonic() > deadline:
+            result = {"status": "timeout", "task_id": task_id,
+                      "error_msg": f"等待 {timeout_s:.0f}s 未完成, 稍后查 "
+                                   f"/dft/result/{task_id}"}
+            break
+        await asyncio.sleep(3)
+    result.setdefault("task_id", task_id)
+    result["backend"] = submit_resp.get("backend")
+    result["reason"] = submit_resp.get("reason")
+    result["warnings"] = submit_resp.get("warnings", [])
+    result["rich_block_type"] = "dft_auto"
     return result

@@ -48,6 +48,8 @@ def test_import_5_tools():
         submit_gromacs_md,
         mace_relax_structure,
         run_pyscf_calculation,
+        run_psi4_calculation,
+        run_dft_auto,
         list_available_dft_tools,
     )
     from app.agent.tool_registry import TOOL_REGISTRY
@@ -56,6 +58,8 @@ def test_import_5_tools():
         "submit_gromacs_md",
         "mace_relax_structure",
         "run_pyscf_calculation",
+        "run_psi4_calculation",
+        "run_dft_auto",
         "list_available_dft_tools",
     ]
     for name in expected:
@@ -67,9 +71,10 @@ def test_tool_schemas_valid():
     from app.agent.tool_registry import TOOL_REGISTRY, get_all_tool_schemas
     schemas = get_all_tool_schemas()
     dft_schemas = [s for s in schemas if any(
-        kw in s["name"] for kw in ("gaussian", "gromacs", "mace", "pyscf", "dft")
+        kw in s["name"] for kw in ("gaussian", "gromacs", "mace", "pyscf",
+                                   "psi4", "dft")
     )]
-    assert len(dft_schemas) >= 5
+    assert len(dft_schemas) >= 7
     for s in dft_schemas:
         assert "parameters" in s or "input_schema" in s
 
