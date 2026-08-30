@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     VISION_MCP_BASE_URL: str = "http://vision-mcp:8001"
     VISION_MODEL: str = "mimo-v2.5"  # 视觉服务仍使用多模态模型
 
+    # 2026-08-30 DFT 服务外置 (E:\dft-service 独立部署, 本项目走 HTTP 调用)
+    DFT_SERVICE_URL: str = "http://127.0.0.1:8620"
+    DFT_SERVICE_API_KEY: str = ""  # 未设置 = 服务侧鉴权关闭 (本机内网模式)
+
     # 多模态知识库 OCR（Phase 7）
     # 后端选择：llm_vision（默认，走 vision_service）/ tesseract（本地备选，需 pytesseract + apt-get install tesseract-ocr）
     MULTIMODAL_OCR_BACKEND: str = "llm_vision"
