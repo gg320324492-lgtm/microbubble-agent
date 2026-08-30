@@ -446,9 +446,10 @@ const folderBreadcrumb = computed(() => {
 
 function handleFolderClick(folder) {
   // 与 FolderTree 选中行为一致: 更新 selectedFolderId → watch 自动拉取该层文件
+  // expandedFolderIds 是 Set (类 20.189): 用 .has/.add, 不是数组 .includes
   selectedFolderId.value = folder.id
-  if (!expandedFolderIds.value.includes(folder.id)) {
-    expandedFolderIds.value = [...expandedFolderIds.value, folder.id]
+  if (!expandedFolderIds.value.has(folder.id)) {
+    expandedFolderIds.value.add(folder.id)
   }
 }
 const searchQuery = ref('')
