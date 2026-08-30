@@ -417,7 +417,9 @@ watch(viewMode, (v) => {
 const currentSubFolders = computed(() => {
   if (specialView.value !== 'team') return []
   if (selectedFolderId.value === null) {
-    return (folderTree.value || []).filter(f => f.is_team_default)
+    // 2026-08-30: 跳过"组会PPT"层级 — 团队共享盘直接展示人名文件夹
+    const teamRoots = (folderTree.value || []).filter(f => f.is_team_default)
+    return teamRoots.flatMap(r => r.children || [])
   }
   const node = findFolderById(selectedFolderId.value)
   return node?.children || []
