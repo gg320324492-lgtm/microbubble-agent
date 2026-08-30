@@ -538,13 +538,13 @@
   text-align: center;
 }
 
-.desktop-drive-view[data-v-13c9d1fc] {
+.desktop-drive-view[data-v-c0d4e841] {
   display: flex;
   flex-direction: column;
   height: 100%;
   background: var(--color-bg-page, #fafbfc);
 }
-.drive-toolbar[data-v-13c9d1fc] {
+.drive-toolbar[data-v-c0d4e841] {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -553,34 +553,34 @@
   background: var(--color-bg-card, #fff);
   gap: 16px;
 }
-.drive-title[data-v-13c9d1fc] {
+.drive-title[data-v-c0d4e841] {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
   color: var(--color-text-primary, #303133);
   flex-shrink: 0;
 }
-.drive-toolbar-actions[data-v-13c9d1fc] {
+.drive-toolbar-actions[data-v-c0d4e841] {
   display: flex;
   align-items: center;
   gap: 12px;
   flex: 1;
   justify-content: flex-end;
 }
-.drive-search-input[data-v-13c9d1fc] {
+.drive-search-input[data-v-c0d4e841] {
   width: 240px;
 }
-.drive-view-toggle[data-v-13c9d1fc] {
+.drive-view-toggle[data-v-c0d4e841] {
   margin-left: 8px;
 }
-.drive-main[data-v-13c9d1fc] {
+.drive-main[data-v-c0d4e841] {
   display: flex;
   flex: 1;
   min-height: 0;
   transition: background 0.2s;
   position: relative;
 }
-.drive-main.is-drag-over[data-v-13c9d1fc]::before {
+.drive-main.is-drag-over[data-v-c0d4e841]::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -596,7 +596,7 @@
  * v77 P2.6-G.3 拖拽 hero — 替代旧 ::after 占位文案 "松开上传文件 (PR3.6 接入上传逻辑)".
  * 走 drive 美化 token (珊瑚橙 primary), 不再硬编码 EP 默认蓝 #409eff.
  */
-.drive-drop-hero[data-v-13c9d1fc] {
+.drive-drop-hero[data-v-c0d4e841] {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -613,7 +613,7 @@
   pointer-events: none;
   text-align: center;
 }
-.drive-drop-hero-icon[data-v-13c9d1fc] {
+.drive-drop-hero-icon[data-v-c0d4e841] {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -624,28 +624,28 @@
   color: var(--el-color-white);
   box-shadow: var(--shadow-glow);
 }
-.drive-drop-hero-title[data-v-13c9d1fc] {
+.drive-drop-hero-title[data-v-c0d4e841] {
   margin: 0;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
 }
-.drive-drop-hero-hint[data-v-13c9d1fc] {
+.drive-drop-hero-hint[data-v-c0d4e841] {
   margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
-.drive-drop-hero-fade-enter-active[data-v-13c9d1fc],
-.drive-drop-hero-fade-leave-active[data-v-13c9d1fc] {
+.drive-drop-hero-fade-enter-active[data-v-c0d4e841],
+.drive-drop-hero-fade-leave-active[data-v-c0d4e841] {
   transition: opacity var(--duration-normal) var(--ease-out),
               transform var(--duration-normal) var(--ease-out);
 }
-.drive-drop-hero-fade-enter-from[data-v-13c9d1fc],
-.drive-drop-hero-fade-leave-to[data-v-13c9d1fc] {
+.drive-drop-hero-fade-enter-from[data-v-c0d4e841],
+.drive-drop-hero-fade-leave-to[data-v-c0d4e841] {
   opacity: 0;
   transform: translate(-50%, -46%) scale(0.96);
 }
-.drive-sidebar[data-v-13c9d1fc] {
+.drive-sidebar[data-v-c0d4e841] {
   width: 240px;
   border-right: 1px solid var(--color-border-light, #ebeef5);
   background: var(--color-bg-card, #fff);
@@ -653,15 +653,15 @@
   flex-direction: column;
   flex-shrink: 0;
 }
-.drive-sidebar-header[data-v-13c9d1fc] {
+.drive-sidebar-header[data-v-c0d4e841] {
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 600;
   color: var(--color-text-secondary, #606266);
   border-bottom: 1px solid var(--color-border-light);
 }
-.drive-sidebar-placeholder[data-v-13c9d1fc],
-.drive-file-area-placeholder[data-v-13c9d1fc] {
+.drive-sidebar-placeholder[data-v-c0d4e841],
+.drive-file-area-placeholder[data-v-c0d4e841] {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -670,38 +670,38 @@
   color: var(--color-text-placeholder, #909399);
   padding: 40px 20px;
 }
-.placeholder-icon[data-v-13c9d1fc] {
+.placeholder-icon[data-v-c0d4e841] {
   font-size: 48px;
   margin-bottom: 12px;
   color: var(--color-text-disabled, #c0c4cc);
 }
-.placeholder-text[data-v-13c9d1fc] {
+.placeholder-text[data-v-c0d4e841] {
   font-size: 14px;
   margin: 0 0 4px 0;
   font-weight: 500;
 }
-.placeholder-hint[data-v-13c9d1fc] {
+.placeholder-hint[data-v-c0d4e841] {
   font-size: 12px;
   margin: 0;
   color: var(--color-text-placeholder, #909399);
 }
-.drive-content[data-v-13c9d1fc] {
+.drive-content[data-v-c0d4e841] {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.drive-breadcrumb[data-v-13c9d1fc] {
+.drive-breadcrumb[data-v-c0d4e841] {
   padding: 12px 24px;
   border-bottom: 1px solid var(--color-border-light);
   background: var(--color-bg-card, #fff);
 }
-.drive-file-area[data-v-13c9d1fc] {
+.drive-file-area[data-v-c0d4e841] {
   flex: 1;
   padding: 24px;
   overflow: auto;
 }
-.drive-statusbar[data-v-13c9d1fc] {
+.drive-statusbar[data-v-c0d4e841] {
   padding: 8px 24px;
   border-top: 1px solid var(--color-border-light);
   background: var(--color-bg-card, #fff);
@@ -713,49 +713,49 @@
 }
 
 /* v2 PR1: extract-to-kb dialog styles */
-.extract-intro[data-v-13c9d1fc] {
+.extract-intro[data-v-c0d4e841] {
   font-size: 13px;
   color: var(--color-text-secondary, #606266);
   line-height: 1.6;
   margin: 0 0 16px;
 }
-.extract-field[data-v-13c9d1fc] {
+.extract-field[data-v-c0d4e841] {
   margin-top: 12px;
 }
-.extract-field-label[data-v-13c9d1fc] {
+.extract-field-label[data-v-c0d4e841] {
   display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text-primary, #303133);
   margin-bottom: 8px;
 }
-.extract-field[data-v-13c9d1fc] .el-radio {
+.extract-field[data-v-c0d4e841] .el-radio {
   display: flex;
   margin-right: 0;
   margin-bottom: 8px;
 }
-.extract-field[data-v-13c9d1fc] .el-radio + .el-radio {
+.extract-field[data-v-c0d4e841] .el-radio + .el-radio {
   margin-left: 0;
 }
-.extract-hint[data-v-13c9d1fc] {
+.extract-hint[data-v-c0d4e841] {
   font-size: 11px;
   color: var(--color-text-placeholder, #909399);
   margin: 4px 0 0;
 }
 
 /* v2 PR2: 排序 + 类型过滤 bar */
-.drive-filter-bar[data-v-13c9d1fc] {
+.drive-filter-bar[data-v-c0d4e841] {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 0 12px;
   gap: 12px;
 }
-.drive-filter-bar-left[data-v-13c9d1fc] {
+.drive-filter-bar-left[data-v-c0d4e841] {
   display: flex;
   gap: 8px;
 }
-.filter-stat[data-v-13c9d1fc] {
+.filter-stat[data-v-c0d4e841] {
   font-size: 13px;
   color: var(--color-text-secondary, #606266);
 }
