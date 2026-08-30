@@ -8,6 +8,13 @@
 runbook 见 `docs/ssh-tunnel-runbook.md`。②minio 补 `127.0.0.1:9000:9000` 回环映射
 (commit c40457057) — 修 8/28 以来 /minio 头像 502。③生产容器已从 app-revived 救急态
 迁回正规 compose 栈 (app-revived 退役, desktop-conversion-plan 残留栈已清)。
+**8/28 事故数据丢失补恢复 (2026-08-30 晚)**: 8/28 事故恢复误用已损的 8/28 凌晨备份
+(97 行) 而非 8/26 完整备份 (530 行), 导致 knowledge/folders/knowledge_relations/
+chat 等丢失 ~1500 行 2 天未察觉。今日从 backups/microbubble_20260826 备份经临时库
+--column-inserts + ON CONFLICT(id) 全量补插恢复 (minio 5.4GB 二进制始终完好)。
+恢复表: knowledge 531 / folders 321 / members 37 / chat 588+231 / knowledge_relations
+212 / formulas 36 / images 17 / extractions 24 / entity_co_occurrence 234 / file_comments 46。
+**DFT 计算系统整体外置
 **DFT 计算系统整体外置 `E:\dft-service`** (独立 git repo, 5 后端真算闭环, MCP 已注册
 user 作用域), 本仓库只剩 HTTP 代理 + agent 工具 (7 个) — 详见 dft-service/CLAUDE.md。
 
