@@ -1,6 +1,26 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-08-30 DFT 系统外置 E:\dft-service — 8 缺口修复 + GROMACS 链路 6 真 bug, 4 后端真算验证)
+
+DFT/MD 计算系统整体迁出为独立服务 `E:\dft-service\` (git repo, 2 commits, v1.0.0)。本仓库只剩 HTTP 编排层, 0 计算代码。
+
+### 新架构 (3 层)
+- **E:\dft-service** (独立): FastAPI:8620 + SQLite 任务持久化 (重启可查) + API key 鉴权 + 5 后端 driver (Gaussian/GROMACS/MACE/PySCF/**Psi4 新增**) + `/dft/auto` 智能选路。service 本体**零科学计算依赖**, 化学计算全部经 `E:\sci-software\conda-envs\scichem\python.exe` 子进程 (PySCF 缺包时 WSL python3 回退, 实测 WSL 有 pyscf 无 rdkit → 两段式: scichem 出几何 + WSL 算能量)
+- **app/services/dft_client.py** (新): submit_and_wait (提交+轮询, 保持旧 @tool 同步语义) / 服务不可达返回 unavailable 不抛异常
+- **app/agent/tools/dft_tools.py** (重写): 同名 5 @tool, schema 兼容; **app/api/v1/dft.py** (重写): 薄代理, 前端 DftView 无感。`app/services/dft/` 已删除; PG `dft_jobs` 表 (alembic 099) 保留不写
+
+### 修复的 8 缺口 (旧 in-process 版)
+①Gaussian solvent 只拼 title 不生效 → SCRF=(SMD,Solvent=X) 真进路由关键字, 默认 none 气相 ②charge/multiplicity/nproc/mem 未透出 → 全链路暴露 ③PySCF 把 SMILES 原塞 gto.M 必报错 → RDKit 3D + UKS 开壳层 + C-PCM + scf_converged ④MACE converged 硬编码 True/n_steps 造假 → relax_trajectory 真值 (mace 0.3.16 需 mace_mp() 工厂 shim) ⑤/status 重启 404 → SQLite 回退 ⑥无任务列表 → GET /dft/jobs ⑦提交无鉴权 → X-API-Key ⑧"multimodal 统一接口"只有名字 → auto 选路 (fast→MACE / accurate→Gaussian→Psi4→PySCF / md→GROMACS)
+
+### E:\sci-software\workflows 顺手修的 6 个真 bug (GROMACS 链路从 8/5 部署起从未跑通)
+①pybel.write 传 bytes → TypeError ②_copy_to_wsl shutil 拷到 Windows 侧假 /tmp (E:\tmp), 文件从未进 WSL ③_copy_from_wsl 静默返回不存在路径 ④mdp `steepest`→`steep` ⑤run_md nsteps 公式差 1000 倍 (1ns 写成 1ps) + 缺 pcoupltype/compressibility ⑥nstxout 写 .trr 不是 .xtc (要 nstxout-compressed) + prep_system .gro 原子数声明≠写入。**另修 _wsl_run GBK 解码 wsl.exe UTF-16 banner → UnicodeDecodeError (中文 Windows 必须 encoding='utf-8', errors='replace')**
+
+### 验证
+- dft-service: 14/14 pytest + **4 后端真算端到端** (PySCF H2O -75.3154 Ha 走 WSL / Psi4 -75.3158 Ha 交叉一致 + 偶极/HOMO-LUMO / MACE 乙醇收敛 n_steps=14 GPU / GROMACS 20 水 EM+MD+xtc)
+- microbubble: 9/9 pytest (mock httpx) + 跨系统真联调 (dft_client → 真服务 → 真算, 能量重现性一致)
+- 配置: `DFT_SERVICE_URL` (默认 http://127.0.0.1:8620) + `DFT_SERVICE_API_KEY`; 服务没起 → 工具返回 unavailable 不阻塞聊天
+
 ## 当前状态 (2026-08-21 E 盘整理 + sidebar fix 全修收口 — 3 commits 主拍放行, 0 业务代码改动, 释放 ~362 MB)
 
 本次跨 2026-08-20 → 2026-08-21, 主拍全权委托本地 PC 整理 + 修复会话列表重叠 / 批量管理不响应 bug。3 commits 全部线下 verify + push 远程 `git fetch` 拉取 + 远程 nginx 服务新 dist。

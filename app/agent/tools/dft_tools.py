@@ -1,10 +1,13 @@
-"""DFT/MD 域工具（Phase 5 集成）— 注册 5 个 @tool
+r"""DFT/MD 域工具 — 2026-08-30 起走 HTTP 调独立 dft-service (E:\dft-service)
 
-- run_gaussian_calculation: Gaussian 16W DFT
+- run_gaussian_calculation: Gaussian 16W DFT (SCRF 溶剂真实生效)
 - submit_gromacs_md: GROMACS MD (WSL)
 - mace_relax_structure: MACE-MP 快速几何优化 (GPU)
-- run_pyscf_calculation: PySCF (WSL) 纯开源 BSD
-- list_available_dft_tools: 健康检查
+- run_pyscf_calculation: PySCF (scichem / WSL 回退, RDKit 3D)
+- list_available_dft_tools: 健康检查 (含 Psi4)
+
+工具名与 schema 保持外置前兼容 (LLM prompt 不受影响); 计算结果由
+dft_service.submit_and_wait 提交 + 轮询到终态后返回, 语义同旧版同步工具。
 """
 import logging
 from typing import Optional
@@ -12,6 +15,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.agent.tool_registry import ToolContext, tool
+from app.services import dft_client
 
 logger = logging.getLogger("microbubble.agent.tools.dft")
 
@@ -22,9 +26,12 @@ logger = logging.getLogger("microbubble.agent.tools.dft")
 class RunGaussianInput(BaseModel):
     smiles: str = Field(..., min_length=1, description="分子 SMILES (如 'CCO' = 乙醇)")
     xc: str = Field("B3LYP", description="泛函 (B3LYP / M06-2X / wB97X-D / ...)")
-    basis: str = Field("6-31G(d)", description="基组 (6-31G(d) / cc-pVTZ / ...)")
+    basis: str = Field("6-31G(d)", description="基组 (6-31G(d) / def2-TZVP / ...)")
     job: str = Field("opt", description="任务类型 (opt / sp / freq)")
-    solvent: str = Field("water", description="隐式溶剂标签 (写进 .gjf 标题)")
+    solvent: str = Field(
+        "none", description="SMD 隐式溶剂 (water / ethanol / dmso / ...; none=气相)")
+    charge: int = Field(0, ge=-10, le=10, description="体系总电荷 (离子必填)")
+    multiplicity: int = Field(1, ge=1, le=10, description="自旋多重度 (1=单重态, 2=双重态)")
     timeout_s: float = Field(7200.0, ge=10.0, le=86400.0,
                               description="超时秒 (默认 2 小时)")
 
@@ -51,23 +58,27 @@ class GaussianResult(BaseModel):
 @tool(
     name="run_gaussian_calculation",
     description=(
-        "跑 Gaussian 16W DFT 计算 (B3LYP/6-31G(d) opt 默认)。"
+        "跑 Gaussian 16W DFT 计算 (B3LYP/6-31G(d) opt 默认, SCRF/SMD 溶剂可选)。"
         "用户给 SMILES 想算分子能量 / 优化几何 / 频率时调用。"
-        "同步阻塞 (可能 30s-数小时), 适合单分子小体系。"
+        "离子/自由基务必给 charge 和 multiplicity。"
+        "阻塞等待结果 (可能 30s-数小时), 适合单分子小体系。"
     ),
     input_model=RunGaussianInput,
     output_model=GaussianResult,
     requires_db=False,
 )
 async def run_gaussian_calculation(input: RunGaussianInput, ctx: ToolContext) -> dict:
-    """Gaussian 16W DFT 计算"""
-    from app.services.dft.gaussian_runner import run_gaussian_async
-    result = await run_gaussian_async(
-        smiles=input.smiles,
-        xc=input.xc, basis=input.basis,
-        job=input.job, solvent=input.solvent,
-        timeout_s=input.timeout_s,
-    )
+    """Gaussian 16W DFT 计算 (经 dft-service)"""
+    result = await dft_client.submit_and_wait("gaussian", {
+        "smiles": input.smiles,
+        "xc": input.xc,
+        "basis": input.basis,
+        "job": input.job,
+        "solvent": input.solvent,
+        "charge": input.charge,
+        "multiplicity": input.multiplicity,
+        "timeout_s": input.timeout_s,
+    }, timeout_s=input.timeout_s + 60)
     result["rich_block_type"] = "dft_gaussian"
     return result
 
@@ -101,8 +112,8 @@ class GromacsResult(BaseModel):
 @tool(
     name="submit_gromacs_md",
     description=(
-        "跑 GROMACS 经典 MD 模拟 (WSL Ubuntu + gmx)。"
-        "包含: prep_system → energy_minimize → run_md 完整流程。"
+        "跑 GROMACS 经典 MD 模拟 (WSL Ubuntu-24.04 + gmx)。"
+        "包含: prep_system → energy_minimize → run_md 完整流程, 输出 .xtc 轨迹。"
         "大体系 / 长时模拟建议拆小批量。"
     ),
     input_model=SubmitGromacsInput,
@@ -110,15 +121,16 @@ class GromacsResult(BaseModel):
     requires_db=False,
 )
 async def submit_gromacs_md(input: SubmitGromacsInput, ctx: ToolContext) -> dict:
-    """GROMACS MD 模拟"""
-    from app.services.dft.gromacs_runner import submit_gromacs_async
-    result = await submit_gromacs_async(
-        smiles=input.smiles,
-        n_molecules=input.n_molecules,
-        box_nm=input.box_nm,
-        time_ns=input.time_ns,
-        temperature_K=input.temperature_K,
-    )
+    """GROMACS MD 模拟 (经 dft-service)"""
+    timeout_s = max(600.0, input.time_ns * 600.0 + 600.0)
+    result = await dft_client.submit_and_wait("gromacs", {
+        "smiles": input.smiles,
+        "n_molecules": input.n_molecules,
+        "box_nm": input.box_nm,
+        "time_ns": input.time_ns,
+        "temperature_K": input.temperature_K,
+        "timeout_s": timeout_s,
+    }, timeout_s=timeout_s + 60)
     result["rich_block_type"] = "dft_gromacs"
     return result
 
@@ -131,7 +143,7 @@ class MaceRelaxInput(BaseModel):
     fmax_ev_A: float = Field(0.05, gt=0.0, le=1.0, description="力收敛阈值 (eV/Å)")
     max_steps: int = Field(200, ge=1, le=5000, description="最大优化步数")
     model: str = Field("medium", description="MACE 模型: small/medium/large")
-    save_trajectory: bool = Field(False, description="是否保存每帧轨迹")
+    device: str = Field("auto", description="cuda / cpu / auto")
 
 
 class MaceRelaxResult(BaseModel):
@@ -153,7 +165,7 @@ class MaceRelaxResult(BaseModel):
 @tool(
     name="mace_relax_structure",
     description=(
-        "用 MACE-MP-0 机器学习力场快速优化分子结构 (GPU 加速秒级)。"
+        "用 MACE-MP 机器学习力场快速优化分子结构 (GPU 加速秒级)。"
         "比 Gaussian 快 100-1000x, 但精度略低 — 适合初猜优化 / 大量筛选。"
     ),
     input_model=MaceRelaxInput,
@@ -161,15 +173,16 @@ class MaceRelaxResult(BaseModel):
     requires_db=False,
 )
 async def mace_relax_structure(input: MaceRelaxInput, ctx: ToolContext) -> dict:
-    """MACE-MP 快速结构优化"""
-    from app.services.dft.mace_runner import mace_relax_async
-    result = await mace_relax_async(
-        smiles=input.smiles,
-        fmax_ev_A=input.fmax_ev_A,
-        max_steps=input.max_steps,
-        model=input.model,
-        save_trajectory=input.save_trajectory,
-    )
+    """MACE-MP 快速结构优化 (经 dft-service)"""
+    timeout_s = 900.0
+    result = await dft_client.submit_and_wait("mace", {
+        "smiles": input.smiles,
+        "fmax_ev_A": input.fmax_ev_A,
+        "max_steps": input.max_steps,
+        "model": input.model,
+        "device": input.device,
+        "timeout_s": timeout_s,
+    }, timeout_s=timeout_s + 60)
     result["rich_block_type"] = "dft_mace"
     return result
 
@@ -182,8 +195,10 @@ class RunPySCFInput(BaseModel):
     method: str = Field("B3LYP", description="DFT 方法 (B3LYP / PBE / M06-2X / ...)")
     basis: str = Field("6-31G*", description="基组")
     operation: str = Field("energy", description="操作: energy / optimize")
+    solvent: str = Field(
+        "none", description="C-PCM 隐式溶剂 (water / ethanol / ...; none=气相)")
     charge: int = Field(0, ge=-10, le=10, description="总电荷")
-    spin: int = Field(0, ge=0, le=10, description="自旋 2S (0=单重态)")
+    spin: int = Field(0, ge=0, le=10, description="未配对电子数 2S (0=闭壳层, >0 自动 UKS)")
 
 
 class PySCFResult(BaseModel):
@@ -193,17 +208,18 @@ class PySCFResult(BaseModel):
     basis: str
     operation: str
     energy_hartree: Optional[float] = None
+    scf_converged: Optional[bool] = None
     work_dir: Optional[str] = None
     elapsed_s: Optional[float] = None
     error_msg: Optional[str] = None
-    raw_log_tail: Optional[str] = None
     rich_block_type: str = "dft_pyscf"
 
 
 @tool(
     name="run_pyscf_calculation",
     description=(
-        "用 PySCF 跑 DFT (WSL Ubuntu) — 纯开源 BSD 许可, 无商业授权。"
+        "用 PySCF 跑 DFT — 纯开源 BSD 许可, 无商业授权 "
+        "(scichem 环境或 WSL 回退自动择一)。支持 C-PCM 溶剂与开壳层 UKS。"
         "适合不想依赖 Gaussian 16W 的场景。"
     ),
     input_model=RunPySCFInput,
@@ -211,14 +227,19 @@ class PySCFResult(BaseModel):
     requires_db=False,
 )
 async def run_pyscf_calculation(input: RunPySCFInput, ctx: ToolContext) -> dict:
-    """PySCF (WSL) DFT"""
-    from app.services.dft.multimodel_runner import run_pyscf_async
-    result = await run_pyscf_async(
-        smiles=input.smiles,
-        method=input.method, basis=input.basis,
-        operation=input.operation,
-        charge=input.charge, spin=input.spin,
-    )
+    """PySCF DFT (经 dft-service)"""
+    timeout_s = 1800.0
+    result = await dft_client.submit_and_wait("pyscf", {
+        "smiles": input.smiles,
+        "method": input.method,
+        "basis": input.basis,
+        "operation": input.operation,
+        "solvent": input.solvent,
+        "charge": input.charge,
+        # 服务端语义是自旋多重度 (2S+1); 工具层沿用 2S 入参
+        "multiplicity": input.spin + 1,
+        "timeout_s": timeout_s,
+    }, timeout_s=timeout_s + 60)
     result["rich_block_type"] = "dft_pyscf"
     return result
 
@@ -247,7 +268,7 @@ class ListDFTToolsOutput(BaseModel):
 @tool(
     name="list_available_dft_tools",
     description=(
-        "列出所有可用的 DFT/MD 工具 (Gaussian / GROMACS / MACE / PySCF) "
+        "列出所有可用的 DFT/MD 工具 (Gaussian / GROMACS / MACE / PySCF / Psi4) "
         "和它们的健康状态 — 用户问「我有哪些计算工具」时调用。"
     ),
     input_model=ListDFTToolsInput,
@@ -255,6 +276,7 @@ class ListDFTToolsOutput(BaseModel):
     requires_db=False,
 )
 async def list_available_dft_tools(input: ListDFTToolsInput, ctx: ToolContext) -> dict:
-    """DFT/MD 工具健康检查"""
-    from app.services.dft.tool_definitions import list_available_dft_tools as _lst
-    return _lst()
+    """DFT/MD 工具健康检查 (经 dft-service /dft/tools)"""
+    result = await dft_client.dft_get("/dft/tools")
+    result.setdefault("rich_block_type", "dft_tools")
+    return result
