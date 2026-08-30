@@ -1,6 +1,27 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-08-30 SSH 隧道守护 + /minio 502 修复 — 类 20.212-214, DFT 系统外置 E:\dft-service)
+
+**生产链路关键变更**: ①SSH 反向隧道 (8000/9000/2222 三条 -R) 加了守护计划任务
+`MicroBubble-SSH-Tunnel-Guard` (每 5 分钟判活补拉, StartWhenAvailable 补开机错跑),
+runbook 见 `docs/ssh-tunnel-runbook.md`。②minio 补 `127.0.0.1:9000:9000` 回环映射
+(commit c40457057) — 修 8/28 以来 /minio 头像 502。③生产容器已从 app-revived 救急态
+迁回正规 compose 栈 (app-revived 退役, desktop-conversion-plan 残留栈已清)。
+**DFT 计算系统整体外置 `E:\dft-service`** (独立 git repo, 5 后端真算闭环, MCP 已注册
+user 作用域), 本仓库只剩 HTTP 代理 + agent 工具 (7 个) — 详见 dft-service/CLAUDE.md。
+
+### 类 20 新增 (永久铁律)
+- **类 20.212**: 清理"残留"容器/compose 栈前必须 `docker inspect` 查 mounts + 生产
+  端口依赖 —— desktop-conversion-plan 栈和 app-revived 看着像残留实为 8/28 救急生产
+  接线, 按"名字+年龄"判残留误删会断生产。判据 = 是否被生产链路引用, 不是名字。
+- **类 20.213**: `docker compose up -d` 后的验证必须全链路: 每个重建容器 `docker
+  network inspect` 查网络归属 (类 20.140 漏网偶发) + nginx health 必须等到 healthy
+  + **生产路径 curl** (云端域名), 只 curl 本机端口的自己服务不够 — minio 漏网 +
+  9000 断线两层问题在切换当时都已存在, 只验 DFT 代理全绿照样漏过。
+- **类 20.214**: 生产依赖的裸进程单点 (ssh.exe 反向隧道) 必须有判活守护 + runbook;
+  隧道 -R 端口与容器发布端口的对应关系 (9000↔minio) 必须文档化, 否则换端口/重建即静默断线。
+
 ## 当前状态 (2026-08-30 DFT 系统外置 E:\dft-service — 8 缺口修复 + GROMACS 链路 6 真 bug, 4 后端真算验证)
 
 DFT/MD 计算系统整体迁出为独立服务 `E:\dft-service\` (git repo, 2 commits, v1.0.0)。本仓库只剩 HTTP 编排层, 0 计算代码。
