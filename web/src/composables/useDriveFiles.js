@@ -69,16 +69,9 @@ export function useDriveFiles() {
         ...(fileType.value ? { file_type: fileType.value } : {}),
         ...params
       }
-      // v2.21 (2026-07-11): 🌐 团队共享盘顶级 view 自动 include_subfolders=true
-      // 让 FileGrid 列出整个团队空间的 PPT (root + 23 sub folder),
-      // 而不是只看 root folder 的 2 个 PPT (v2 PR3 folder_id IS NULL 副作用)
-      // 条件: view=team/all + folder_id 未传 (null/undefined) + 也没显式传 include_subfolders
-      const isTeamView = queryParams.view === 'team' || queryParams.view === 'all'
-      const hasFolderId = 'folder_id' in params && params.folder_id !== null && params.folder_id !== undefined
-      const hasIncludeSubfolders = 'include_subfolders' in params
-      if (isTeamView && !hasFolderId && !hasIncludeSubfolders) {
-        queryParams.include_subfolders = 'true'
-      }
+      // 2026-08-30: 移除 v2.21 的 team 顶级自动 include_subfolders=true 递归平铺 —
+      // 恢复标准网盘行为: 顶级只显示当前层文件, 子文件夹由 FileGrid 大图标卡片
+      // 分层进入 (类资源管理器)
       // 删 None / 空字符串 params (避免污染 URL)
       Object.keys(queryParams).forEach(k => {
         if (queryParams[k] === null || queryParams[k] === '' || queryParams[k] === undefined) {

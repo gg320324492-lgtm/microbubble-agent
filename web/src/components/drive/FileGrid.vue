@@ -39,7 +39,7 @@
 
     <!-- empty: 渐变 hero + 主色 CTA (顶级) / 子文件夹差异文案 / 搜索无结果差异 -->
     <div
-      v-else-if="files.length === 0"
+      v-else-if="files.length === 0 && folders.length === 0"
       class="drive-grid-empty"
       :data-state="emptyState"
     >
@@ -60,8 +60,26 @@
       </el-button>
     </div>
 
-    <!-- data: detail 模式 (v2.16 默认, 像 macOS Finder 列表) -->
-    <div v-else-if="viewMode === 'detail'" class="drive-file-detail">
+    <template v-else>
+      <!-- 2026-08-30: 子文件夹大图标卡片 — 类资源管理器, 显示在文件卡片上方 -->
+      <div v-if="folders.length" class="drive-folder-grid">
+      <div
+        v-for="f in folders"
+        :key="'folder-' + f.id"
+        class="drive-folder-card"
+        @click="$emit('folder-click', f)"
+      >
+        <el-icon :size="54" class="drive-folder-card-icon"><Folder /></el-icon>
+        <div class="drive-folder-card-name">{{ f.name }}</div>
+        <div class="drive-folder-card-sub">
+          {{ f.children?.length ? f.children.length + ' 项' : '文件夹' }}
+        </div>
+      </div>
+    </div>
+
+
+      <!-- data: detail 模式 -->
+      <div v-if="viewMode === 'detail' && files.length" class="drive-file-detail">
       <FileCard
         v-for="file in files"
         :key="file.id"
@@ -84,8 +102,8 @@
       />
     </div>
 
-    <!-- data: grid 模式 -->
-    <div v-else-if="viewMode === 'grid'" class="drive-file-grid">
+      <!-- data: grid 模式 -->
+      <div v-else-if="viewMode === 'grid' && files.length" class="drive-file-grid">
       <FileCard
         v-for="file in files"
         :key="file.id"
@@ -108,8 +126,8 @@
       />
     </div>
 
-    <!-- data: list 模式 -->
-    <div v-else class="drive-grid-list drive-file-grid-list">
+      <!-- data: list 模式 -->
+      <div v-else-if="files.length" class="drive-grid-list drive-file-grid-list">
       <FileCard
         v-for="file in files"
         :key="file.id"
@@ -131,6 +149,8 @@
         @view-comments="(f) => $emit('file-view-comments', f)"
       />
     </div>
+
+    </template>
 
     <!-- v2.0: 分页走 .drive-grid-pagination + 加 sizes 选择器 -->
     <el-pagination
@@ -159,6 +179,7 @@ import FileCard from './FileCard.vue'
 
 const props = defineProps({
   files: { type: Array, default: () => [] },
+  folders: { type: Array, default: () => [] },
   total: { type: Number, default: 0 },
   currentPage: { type: Number, default: 1 },
   pageSize: { type: Number, default: 20 },
@@ -171,7 +192,7 @@ const props = defineProps({
   searchKeyword: { type: String, default: '' }   // v2.0: 用于 "未找到与 X 相关" 文案
 })
 
-defineEmits(['retry', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-to-kb', 'file-share-link', 'file-view-comments', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
+defineEmits(['retry', 'folder-click', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-to-kb', 'file-share-link', 'file-view-comments', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
 
 // === v2.0: 空态多态 (top-level / folder / search) ===
 const emptyState = computed(() => {
@@ -221,3 +242,50 @@ const loadErrorTitle = computed(() => {
   v60-v67 教训: dark mode 跨组件覆盖必须放非 scoped <style> 块
   本组件 PR3.7 统一审计时再加 dark 块
 -->
+
+<style scoped>
+/* 2026-08-30: 子文件夹大图标网格 - 类资源管理器大图标视图 */
+.drive-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.drive-folder-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 10px 14px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff7f2 0%, #ffffff 100%);
+  border: 1px solid #f5e3d8;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.drive-folder-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(255, 122, 92, 0.18);
+  border-color: #ff7a5c;
+}
+.drive-folder-card-icon {
+  color: #ff7a5c;
+  background: #ffe8de;
+  border-radius: 14px;
+  padding: 14px;
+}
+.drive-folder-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a3b33;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drive-folder-card-sub {
+  font-size: 12px;
+  color: #b09a8d;
+}
+</style>

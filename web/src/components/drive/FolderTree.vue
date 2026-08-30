@@ -19,30 +19,6 @@
   <!-- v2.0 (2026-07-09) Drive 美化: .drive-folder-tree 走共享 CSS (玻璃态侧栏 + 多色 special) -->
   <!-- v2.8 (2026-07-10) 右键菜单: 5 个根项 + 3 个 sub (FolderTreeNode 内) 全部用 FolderContextMenu 包裹 -->
   <div class="folder-tree drive-folder-tree" tabindex="0" aria-label="文件夹树">
-    <!-- 顶级固定节点: 我的网盘 (渐变激活) -->
-    <FolderContextMenu :items="rootMenuItems" placement="right-start" @command="(cmd) => onRootContext(cmd)">
-      <div
-        class="folder-tree-root-item drive-folder-tree-root-item"
-        :class="{ 'is-active': selectedFolderId === null && specialView === null }"
-        @click="handleRootClick"
-      >
-        <el-icon><FolderOpened v-if="selectedFolderId === null && specialView === null" /><Folder v-else /></el-icon>
-        <span class="folder-tree-root-label">📁 我的网盘</span>
-      </div>
-    </FolderContextMenu>
-
-    <!-- 收藏 (PR2 新增) -->
-    <FolderContextMenu :items="favoritesMenuItems" placement="right-start" @command="(cmd) => onFavoritesContext(cmd)">
-      <div
-        class="folder-tree-special-item drive-folder-tree-special-item"
-        :class="{ 'is-active': specialView === 'starred' }"
-        @click="$emit('update:specialView', 'starred')"
-      >
-        <el-icon><Star v-if="specialView === 'starred'" /><StarFilled v-else /></el-icon>
-        <span>⭐ 我的收藏</span>
-      </div>
-    </FolderContextMenu>
-
     <!-- v2.28 (2026-07-12) 三态玻璃态: 复用 .drive-grid-* 设计语言 (hero 渐变 + glass CTA)
          sidebar 紧凑 adapter (48px mini hero + 二级 helper + 紧凑圆形 CTA)
          loading 旋转 + 进度文案, error 红字 + 重试, empty 大号 icon + 二级文案 + 快捷按钮 -->
@@ -133,17 +109,6 @@
       @toggle="$emit('toggle-expanded', $event)"
       @context-command="onSubContext"
     />
-
-    <FolderContextMenu :items="requestsMenuItems" placement="right-start" @command="(cmd) => onRequestsContext(cmd)">
-      <div
-        class="folder-tree-special-item drive-folder-tree-special-item is-requests"
-        :class="{ 'is-active': specialView === 'requests' }"
-        @click="$emit('update:specialView', 'requests')"
-      >
-        <el-icon><Promotion /></el-icon>
-        <span>📢 文件请求</span>
-      </div>
-    </FolderContextMenu>
 
     <!-- 回收站 (PR2 真实接入) (红) -->
     <FolderContextMenu :items="trashMenuItems" placement="right-start" @command="(cmd) => onTrashContext(cmd)">
