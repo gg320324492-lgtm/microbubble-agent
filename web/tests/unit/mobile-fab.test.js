@@ -3,7 +3,9 @@ import { mount } from '@vue/test-utils'
 import MobileFab from '@/components/mobile/MobileFab.vue'
 
 const LongPressStub = {
-  template: '<div @longpress="$emit(\'longpress\')"><slot /></div>',
+  // 2026-08-31: 补 class="long-press-wrapper" — 本文件 L32/L38 用 wrapper.get('.long-press-wrapper')
+  // 查询, 而 stub 根节点此前无该 class, get() 必抛 (既有测试自身笔误, 非实现 bug)
+  template: '<div class="long-press-wrapper" @longpress="$emit(\'longpress\')"><slot /></div>',
   emits: ['longpress'],
 }
 

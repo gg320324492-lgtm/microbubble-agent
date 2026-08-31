@@ -25,6 +25,28 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import MobileFileCommentsView from '@/views/mobile/MobileFileCommentsView.vue'
+// 2026-08-31: MobileCommentInput 内部是 el-input, 未注册时渲染成裸自定义元素
+// (没有真实 textarea), 场景 2 选择器全部落空 → 挂上 ElementPlus
+import ElementPlus from 'element-plus'
+import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
+
+// 2026-08-31: 类 20.181 修复 — setupAxiosMock 只赋值 global.axios, 但
+// useNotifications.js 是 `import axios from 'axios'` 顶层绑定, global 替换拦不住
+// → store.fetchComments 打真 axios → 评论永远空 → 4 断言全红 (自 8/1 起)。
+// 这里把模块 'axios' mock 成调用时动态转发到 global.axios 的代理,
+// beforeEach / 场景内替换 global.axios 均即时生效, mock.calls 断言照常可用。
+vi.mock('axios', () => {
+  const delegate = new Proxy({}, {
+    get: (_t, method) => (...args) => {
+      const impl = global.axios && global.axios[method]
+      if (typeof impl !== 'function') {
+        return Promise.reject(new Error(`mobile_drive_comments spec: global.axios.${String(method)} 未配置`))
+      }
+      return impl(...args)
+    },
+  })
+  return { default: delegate }
+})
 
 // mock fetch 全局 (兜底 — view 内部用 raw fetch, store 用 axios)
 const originalFetch = global.fetch
@@ -156,8 +178,15 @@ beforeEach(() => {
   setupFetchMock()
   setupAxiosMock()
   // mock localStorage
+  // 2026-08-31: 必须为 user_info 返回合法 JSON — 原来一律返回 'fake-token',
+  // userStore 解析失败 → 视图处于未登录态 (发送键禁用 / 长按菜单 items 为空)
   global.localStorage = {
-    getItem: vi.fn(() => 'fake-token'),
+    getItem: vi.fn((key) => {
+      if (key === 'user_info') {
+        return JSON.stringify({ id: 1, username: 'admin', wechat_id: 'admin', name: '管理员', role: 'admin' })
+      }
+      return 'fake-token'
+    }),
     setItem: vi.fn(),
     removeItem: vi.fn(),
   }
@@ -165,6 +194,9 @@ beforeEach(() => {
   if (!global.navigator.vibrate) {
     global.navigator.vibrate = vi.fn()
   }
+  // 2026-08-31: 生产由 App.vue 启动时调 loadFromStorage(); 测试 mount 视图不够,
+  // 需显式恢复登录态, 否则 currentUserId=null → 长按菜单 items 空 → 早退不弹菜单
+  import('@/stores/user').then(({ useUserStore }) => useUserStore().loadFromStorage())
 })
 
 afterEach(() => {
@@ -181,7 +213,18 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 99 },
-      global: { plugins: [router] },
+      global: {
+        plugins: [router, ElementPlus],
+        // setup.js 全局把 el-input stub 成 <input/> (无内部 textarea) —
+        // per-mount 覆盖为透传 v-model 的 textarea stub (保留 .mci-textarea textarea 选择器)
+        stubs: {
+          'el-input': {
+            props: ['modelValue', 'type', 'placeholder', 'maxlength', 'autosize', 'rows', 'showWordLimit'],
+            emits: ['update:modelValue'],
+            template: `<div class="el-input"><textarea :value="modelValue" :placeholder="placeholder" @input="$emit('update:modelValue', $event.target.value)"></textarea></div>`,
+          },
+        },
+      },
     })
     await flushPromises()
 
@@ -207,7 +250,18 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 99 },
-      global: { plugins: [router] },
+      global: {
+        plugins: [router, ElementPlus],
+        // setup.js 全局把 el-input stub 成 <input/> (无内部 textarea) —
+        // per-mount 覆盖为透传 v-model 的 textarea stub (保留 .mci-textarea textarea 选择器)
+        stubs: {
+          'el-input': {
+            props: ['modelValue', 'type', 'placeholder', 'maxlength', 'autosize', 'rows', 'showWordLimit'],
+            emits: ['update:modelValue'],
+            template: `<div class="el-input"><textarea :value="modelValue" :placeholder="placeholder" @input="$emit('update:modelValue', $event.target.value)"></textarea></div>`,
+          },
+        },
+      },
     })
     await flushPromises()
 
@@ -240,24 +294,38 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 99 },
-      global: { plugins: [router] },
+      global: {
+        plugins: [router, ElementPlus],
+        // setup.js 全局把 el-input stub 成 <input/> (无内部 textarea) —
+        // per-mount 覆盖为透传 v-model 的 textarea stub (保留 .mci-textarea textarea 选择器)
+        stubs: {
+          'el-input': {
+            props: ['modelValue', 'type', 'placeholder', 'maxlength', 'autosize', 'rows', 'showWordLimit'],
+            emits: ['update:modelValue'],
+            template: `<div class="el-input"><textarea :value="modelValue" :placeholder="placeholder" @input="$emit('update:modelValue', $event.target.value)"></textarea></div>`,
+          },
+        },
+      },
     })
     await flushPromises()
 
-    // 长按顶层评论
-    const longPressWrapper = wrapper.find('.long-press-wrapper')
-    expect(longPressWrapper.exists()).toBe(true)
-    await longPressWrapper.trigger('long-press', { clientX: 100, clientY: 200 })
+    // 长按顶层评论 — LongPressWrapper 内部是 600ms 定时器手势, DOM 无法模拟;
+    // 直接 findComponent 并 emit 组件真实事件名 'longpress' (非 'long-press')
+    const lp = wrapper.findComponent(LongPressWrapper)
+    expect(lp.exists()).toBe(true)
+    await lp.vm.$emit('longpress', { clientX: 100, clientY: 200 })
+    await flushPromises()
+    await new Promise((r) => setTimeout(r, 50))
     await flushPromises()
 
     // vibrate 被调用 (CLAUDE.md 2026-06-27 教训)
     expect(global.navigator.vibrate).toHaveBeenCalledWith(10)
 
-    // MobileContextMenu 渲染 (Teleport 后挂 body)
-    const ctxMenu = wrapper.find('.mobile-context-menu')
-    expect(ctxMenu.exists()).toBe(true)
+    // MobileContextMenu 渲染 (Teleport to=body — 不在 wrapper DOM 树内, 必须查 document)
+    const ctxMenu = document.querySelector('.mobile-context-menu')
+    expect(ctxMenu).toBeTruthy()
     // 含 mark resolved / delete 菜单项
-    const menuItems = wrapper.findAll('.menu-item')
+    const menuItems = document.querySelectorAll('.mobile-context-menu .menu-item, .mobile-context-menu [class*="menu-item"]')
     expect(menuItems.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -282,7 +350,18 @@ describe('MobileFileCommentsView (W68 路线 F-3)', () => {
 
     const wrapper = mount(MobileFileCommentsView, {
       props: { fileId: 999 },
-      global: { plugins: [router] },
+      global: {
+        plugins: [router, ElementPlus],
+        // setup.js 全局把 el-input stub 成 <input/> (无内部 textarea) —
+        // per-mount 覆盖为透传 v-model 的 textarea stub (保留 .mci-textarea textarea 选择器)
+        stubs: {
+          'el-input': {
+            props: ['modelValue', 'type', 'placeholder', 'maxlength', 'autosize', 'rows', 'showWordLimit'],
+            emits: ['update:modelValue'],
+            template: `<div class="el-input"><textarea :value="modelValue" :placeholder="placeholder" @input="$emit('update:modelValue', $event.target.value)"></textarea></div>`,
+          },
+        },
+      },
     })
     await flushPromises()
 

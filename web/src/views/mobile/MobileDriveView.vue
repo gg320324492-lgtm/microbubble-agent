@@ -97,7 +97,8 @@
       @touchstart.passive="onTouchStart"
       @touchmove.passive="onTouchMove"
       @touchend.passive="onTouchEnd">
-      <LongPressWrapper v-for="file in filteredFiles" :key="file.id" :duration="600" @long-press="onLongPressFile(file)">
+      <!-- 2026-08-31: emits 是 'longpress' 无连字符 — 原 @long-press 永不触发 (线上长按菜单从未生效); duration prop 不存在, 实为 delay -->
+      <LongPressWrapper v-for="file in filteredFiles" :key="file.id" :delay="600" @longpress="onLongPressFile(file)">
         <article class="drive-file-card mg-glass" :data-type="getFileTypeKey(file)"
           :class="{ 'is-private': file.visibility === 'private', 'is-starred': file.is_starred }"
           @click="onFileClick(file)">

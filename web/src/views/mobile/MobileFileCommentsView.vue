@@ -61,7 +61,7 @@
     <ul v-else class="mfcc-list">
       <li v-for="top in treeTop" :key="top.id" class="mfcc-top">
         <div class="mfcc-item-wrap">
-          <LongPressWrapper :duration="600" @long-press="onCommentLongPress(top, $event)">
+          <LongPressWrapper :delay="600" @longpress="onCommentLongPress(top, $event)">
             <MobileCommentThread
               :comment="top"
               :depth="0"
@@ -121,7 +121,8 @@ const router = useRouter()
 const store = useNotificationsStore()
 const userStore = useUserStore()
 const { buildCommentTree } = useCommentTree()
-const keyboard = useMobileKeyboard()
+// 2026-08-31: 删除未 import 的 useMobileKeyboard() 调用 (ReferenceError 使本视图
+// 加载即白屏; 键盘避让实际由子组件 MobileCommentInput 内部处理, 此处变量从未被用)
 // 安全区在 CSS 中通过 env(safe-area-inset-bottom) 读取, 此处调一次 composable
 // 让 safe-area-init listener 注册 (iOS Safari viewport resize 时更新 CSS var)
 useMobileSafeArea()
