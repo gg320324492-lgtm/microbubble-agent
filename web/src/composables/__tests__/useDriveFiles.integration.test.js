@@ -99,7 +99,10 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
       expect(loading.value).toBe(false)
     })
 
-    it('view=team + folderId 未传: 自动注入 include_subfolders=true (v2.21 行为)', async () => {
+    // 2026-08-30 commit 6801687a6「团队共享盘化」有意移除 v2.21 的
+    // team 顶级自动 include_subfolders=true 递归平铺 → 恢复标准分层浏览。
+    // 本测试同步为新行为断言 (旧断言在 8/31 逐屏审查中确认为 stale, 非实现 bug)。
+    it('view=team + folderId 未传: 不注入 include_subfolders (2026-08-30 分层导航行为)', async () => {
       const { useDriveFiles } = await import('@/composables/useDriveFiles')
       const { fetchFiles, viewMode } = useDriveFiles()
 
@@ -108,7 +111,7 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
 
       const u = new URL(fetchCalls[0].url, 'http://localhost')
       expect(u.searchParams.get('view')).toBe('team')
-      expect(u.searchParams.get('include_subfolders')).toBe('true')
+      expect(u.searchParams.has('include_subfolders')).toBe(false)
     })
 
     it('view=team + 显式传 folder_id: 不再自动加 include_subfolders (调用方决定)', async () => {
