@@ -222,7 +222,12 @@ function formatField(item, field) {
     return field.value(item) ?? ''
   }
   if (typeof field.value === 'string') {
-    return item[field.value] ?? ''
+    // 双语义: item 里存在该 key 时按键取真实值 (老消费者);
+    // 不存在时视为 fieldConfig 已算好的字面文本 (MobileKnowledgeView 传 getCategoryLabel 结果)
+    // 修复前一律 item[field.value] 导致「分类/来源」渲染成空值 (2026-08-31 逐屏检查)
+    const v = item[field.value]
+    if (v !== undefined && v !== null) return v
+    return field.value
   }
   return ''
 }

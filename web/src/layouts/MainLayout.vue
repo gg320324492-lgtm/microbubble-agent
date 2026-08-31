@@ -73,8 +73,9 @@
 
     <!-- 主内容区 -->
     <el-container>
-      <!-- 顶部栏 -->
-      <el-header class="header">
+      <!-- 顶部栏 — 移动端隐藏 (各移动视图自带 PageHeader/MobileHeader;
+           主题切换/退出在「我的」设置页, 网盘通知在 Drive 页顶徽标) -->
+      <el-header v-if="!isMobile" class="header">
         <div class="header-left">
           <!-- 2026-06-25: 移动端不显示折叠按钮（避免与 MobileHeader 的 ≡ 重复，且 TabBar 已替代主导航） -->
           <el-icon v-if="!isMobile" :class="['collapse-btn', { 'collapse-btn-mobile': isMobile }]" @click="toggleSidebar">
