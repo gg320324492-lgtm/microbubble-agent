@@ -3,8 +3,17 @@
     class="mobile-task-view mg-page"
     :class="{ 'done-mode': activeTab === 'done', 'overdue-mode': route.query.overdue === 'true' }"
   >
-    <PageHeader title="任务管理" show-back @back="$router.back()">
+    <!-- 2026-08-31 UI 审查: /tasks 是 TabBar 根页, 移除误导性返回按钮;
+         操作按钮: 回收站 / 刷新 / 筛选 / 新建 -->
+    <PageHeader title="任务管理">
       <template #right>
+        <button
+          type="button"
+          class="header-action"
+          aria-label="刷新列表"
+          title="刷新列表"
+          @click="fetchTasks()"
+        >↻</button>
         <button
           type="button"
           class="header-action"
@@ -125,7 +134,6 @@
       </div>
     </main>
 
-    <MobileFab :actions="fabActions" />
 
     <!-- 筛选 Sheet -->
     <MobileSearchSheet
@@ -171,7 +179,6 @@ import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileTaskCreateForm from '@/components/mobile/MobileTaskCreateForm.vue'
 import MemberAvatar from '@/components/mobile/MemberAvatar.vue'  // 2026-06-26: 按负责人分组的组头头像
 import { groupTasksByAssignee } from '@/utils/taskGroup'  // 2026-06-26: 从 TaskView 抽出共用
-import MobileFab from '@/components/mobile/MobileFab.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -221,12 +228,8 @@ const searchFilters = computed(() => [
   },
 ])
 
-const fabActions = [
-  { name: 'create', label: 'New task', icon: '＋', handler: () => { editingTask.value = null; showCreate.value = true } },
-  { name: 'search', label: 'Filter tasks', icon: '🔍', handler: () => { showFilter.value = true } },
-  { name: 'trash', label: 'Task trash', icon: '🗑', handler: () => router.push('/tasks/trash') },
-  { name: 'refresh', label: 'Refresh list', icon: '↻', handler: () => fetchTasks() },
-]
+// 2026-08-31 UI 审查: 移除 MobileFab — 其 4 项动作与 header 按钮全部重叠,
+// 双「+」冗余。header 现有 ↻ 刷新 / 🗑 回收站 / 🔍 筛选 / ＋ 新建 覆盖全部。
 
 // 过滤后的任务
 const filteredTasks = computed(() => {

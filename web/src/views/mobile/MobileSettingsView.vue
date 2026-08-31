@@ -61,41 +61,7 @@
           <span class="item-arrow">›</span>
         </button>
 
-        <button
-          type="button"
-          class="settings-item"
-          @click="showNotifSheet = true"
-        >
-          <div class="item-icon" style="background: var(--color-info-bg, #ecf5ff)">🔔</div>
-          <div class="item-info">
-            <div class="item-title">通知偏好</div>
-            <div class="item-desc">
-              每日 {{ notifPrefs?.digest_time || '11:00' }} 统一推送
-              <span v-if="notifPrefs?.snoozed_until" class="snoozed-badge">已推迟</span>
-            </div>
-          </div>
-          <span class="item-arrow">›</span>
-        </button>
-
-        <!-- W68 路线 5 第 3 批: Mobile UX v3.2 PWA 推送开关 -->
-        <button
-          type="button"
-          class="settings-item"
-          data-testid="push-toggle-item"
-          @click="onTogglePushClick"
-        >
-          <div class="item-icon" style="background: var(--color-warning-bg, #fdf6ec)">📲</div>
-          <div class="item-info">
-            <div class="item-title">推送通知</div>
-            <div class="item-desc">
-              <span v-if="pushEnabled" class="push-status-on">已开启</span>
-              <span v-else-if="pushDenied" class="push-status-denied">已拒绝</span>
-              <span v-else class="push-status-off">未开启</span>
-              <span class="push-status-meta">{{ pushStatusMeta }}</span>
-            </div>
-          </div>
-          <span class="item-arrow">›</span>
-        </button>
+        <!-- 2026-08-31: 通知偏好 / 推送通知 两项按需求移除 (每日 digest 走后端固定 11:00 窗口) -->
 
         <button
           type="button"
@@ -110,42 +76,7 @@
           <span class="item-arrow">›</span>
         </button>
 
-        <!-- 2026-07-13 #P1 三档推理模式 (fast/balanced/deep) -->
-        <section class="settings-section">
-          <h3 class="section-title">思考模式</h3>
-          <van-radio-group
-            :model-value="uiStore.thinkingMode"
-            @update:model-value="onModeChange"
-            direction="horizontal"
-          >
-            <van-cell-group inset>
-              <van-cell clickable @click="onModeChange('fast')">
-                <template #title>
-                  <van-icon name="flash-o" /> 快速 (Qwen3-8B · 跳过深度推理)
-                </template>
-                <template #right-icon>
-                  <van-radio name="fast" />
-                </template>
-              </van-cell>
-              <van-cell clickable @click="onModeChange('balanced')">
-                <template #title>
-                  <van-icon name="cpu" /> 平衡 (Qwen3-8B · 默认 Self-RAG)
-                </template>
-                <template #right-icon>
-                  <van-radio name="balanced" />
-                </template>
-              </van-cell>
-              <van-cell clickable @click="onModeChange('deep')">
-                <template #title>
-                  <van-icon name="magic-stick-o" /> 深度 (DeepSeek-R1 + thinking + 重检索)
-                </template>
-                <template #right-icon>
-                  <van-radio name="deep" />
-                </template>
-              </van-cell>
-            </van-cell-group>
-          </van-radio-group>
-        </section>
+        <!-- 2026-08-31: 思考模式选择器迁至对话页输入区 (MobileInputBar), 此处不再重复 -->
       </section>
 
       <!-- 只读信息 -->
@@ -206,26 +137,6 @@
       @select="onAvatarAction"
     />
 
-    <!-- 通知偏好 Sheet（v2 11AM 单一窗口） -->
-    <MobileFormSheet
-      v-model="showNotifSheet"
-      title="通知偏好"
-      :fields="notifFields"
-      v-model:form="notifForm"
-      submit-text="保存"
-      :submitting="notifSaving"
-      @submit="onSaveNotif"
-    />
-
-    <!-- W68 路线 5 第 3 批: 推送权限申请弹窗 -->
-    <MobilePushPermissionDialog
-      v-model="showPushDialog"
-      :digest-time="notifPrefs?.digest_time || '11:00'"
-      @allow="onPushAllow"
-      @dismiss="onPushDismiss"
-      @error="onPushError"
-    />
-
     <input
       ref="avatarInputRef"
       type="file"
@@ -255,116 +166,24 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/useThemeStore'
-import { useUiStore } from '@/stores/useUiStore'  // 2026-06-30 #009 Self-RAG 深度思考 toggle
-import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
-import { useMobilePushNotification } from '@/composables/useMobilePushNotification'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MemberAvatar from '@/components/mobile/MemberAvatar.vue'
-import MobilePushPermissionDialog from '@/components/mobile/MobilePushPermissionDialog.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
-const uiStore = useUiStore()  // 2026-06-30 #009 Self-RAG
-// 2026-07-13 #P1: 三档模式 (fast/balanced/deep) 兼容老 boolean API
-const useDeepThinking = computed(() => uiStore.useDeepThinking)
-const toggleDeepThinking = () => uiStore.toggleDeepThinking()
-const onModeChange = (v) => {
-  if (v) uiStore.setThinkingMode(v)
-}
 
 const userInfo = computed(() => userStore.userInfo)
 
 const showProfileSheet = ref(false)
 const showPasswordSheet = ref(false)
 const showAvatarSheet = ref(false)
-const showNotifSheet = ref(false)
 const avatarInputRef = ref(null)
 
 const savingProfile = ref(false)
 const savingPassword = ref(false)
-
-// 通知偏好（v2 11AM 单一窗口）
-const { prefs: notifPrefs, loading: notifLoading, fetchPrefs: fetchNotifPrefs, savePrefs: saveNotifPrefs } = useNotificationPrefs()
-const notifSaving = ref(false)
-
-// W68 路线 5 第 3 批: PWA 推送 (复用 useMobilePushNotification composable)
-const push = useMobilePushNotification()
-const showPushDialog = ref(false)
-const pushEnabled = computed(() => push.isSubscribed.value && push.permission.value === 'granted')
-const pushDenied = computed(() => push.permission.value === 'denied')
-const pushStatusMeta = computed(() => {
-  if (!push.canPush.value) {
-    return push.isIOS.value
-      ? '· iOS Safari 需添加到主屏'
-      : '· 当前浏览器不支持'
-  }
-  if (pushEnabled.value) return '· 实时推送'
-  if (pushDenied.value) return '· 已拒绝 (可在浏览器设置开启)'
-  if (push.isDismissed.value) return '· 7 天内不再询问'
-  return '· 点击开启'
-})
-
-function onTogglePushClick() {
-  // 已开启 → 直接取消订阅 (无需弹窗)
-  if (pushEnabled.value) {
-    push.unsubscribe()
-    ElMessage.success('推送已关闭')
-    return
-  }
-  // 其它状态 (default / denied / dismissed) → 弹窗申请
-  showPushDialog.value = true
-}
-
-function onPushAllow() {
-  ElMessage.success('推送通知已开启')
-}
-
-function onPushDismiss() {
-  // 用户主动关闭 / 拒绝 — 7 天冷却由 composable 内部维护
-  // 不弹 ElMessage (避免骚扰)
-}
-
-function onPushError(e) {
-  ElMessage.error(`推送申请失败: ${e?.message || '未知错误'}`)
-}
-const notifForm = reactive({
-  enabled: true,
-  digest_time: '11:00',
-})
-const notifFields = computed(() => [
-  {
-    key: 'enabled',
-    label: '启用提醒',
-    type: 'switch',
-  },
-  {
-    key: 'digest_time',
-    label: '每日提醒时间 (HH:MM)',
-    type: 'input',
-    placeholder: '11:00',
-    rules: [
-      (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v) || '格式错误，应为 HH:MM (00:00-23:59)',
-    ],
-  },
-])
-
-async function onSaveNotif(form) {
-  notifSaving.value = true
-  try {
-    await saveNotifPrefs({
-      enabled: form.enabled,
-      digest_time: form.digest_time,
-    })
-    showNotifSheet.value = false
-  } catch (e) {
-    // 错误已由 composable 内部 ElMessage 处理
-  } finally {
-    notifSaving.value = false
-  }
-}
 
 const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
 const roleLabel = computed(() => roleMap[userInfo.value?.role] || '成员')
@@ -511,18 +330,12 @@ function handleLogout() {
   router.push('/login')
 }
 
-onMounted(async () => {
+onMounted(() => {
   // 同步最新用户信息
   profileForm.name = userInfo.value?.name || ''
   profileForm.email = userInfo.value?.email || ''
   profileForm.phone = userInfo.value?.phone || ''
   profileForm.bio = userInfo.value?.bio || ''
-  // 加载通知偏好
-  await fetchNotifPrefs()
-  if (notifPrefs.value) {
-    notifForm.enabled = notifPrefs.value.enabled
-    notifForm.digest_time = notifPrefs.value.digest_time
-  }
 })
 </script>
 
@@ -734,44 +547,7 @@ onMounted(async () => {
   -webkit-tap-highlight-color: transparent;
 }
 .logout-btn:active { transform: scale(0.97); opacity: 0.8; }
-.snoozed-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  background: var(--mg-warning-soft);
-  color: var(--mg-warning);
-  border-radius: var(--mg-radius-pill);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-/* W68 路线 5 第 3 批: 推送状态徽标 (语义色 token 化) */
-.push-status-on,
-.push-status-off,
-.push-status-denied {
-  display: inline-block;
-  margin-right: 4px;
-  padding: 1px 6px;
-  border-radius: var(--mg-radius-pill);
-  font-size: 10px;
-  font-weight: 700;
-}
-.push-status-on {
-  background: var(--mg-success-soft);
-  color: var(--mg-success);
-}
-.push-status-off {
-  background: var(--mg-info-soft);
-  color: var(--mg-info);
-}
-.push-status-denied {
-  background: var(--mg-danger-soft);
-  color: var(--mg-danger);
-}
-.push-status-meta {
-  font-size: 11px;
-  color: var(--mg-text-soft);
-}
+/* 2026-08-31: snoozed-badge / push-status-* 样式随「通知偏好 / 推送通知」两项移除 */
 </style>
 
 <!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped）
@@ -791,22 +567,5 @@ onMounted(async () => {
 [data-theme="dark"] .mobile-settings-view .theme-swatch.active {
   border-color: var(--color-primary);
 }
-
-/* Vant 思考模式三档 cell 玻璃化 (scoped 命中不到 van-* 内部元素, 放非 scoped + 根 class 前缀) */
-.mobile-settings-view .van-cell-group,
-.mobile-settings-view .van-cell-group--inset,
-.mobile-settings-view .van-cell {
-  background: transparent;
-}
-.mobile-settings-view .van-cell {
-  color: var(--mg-text);
-}
-.mobile-settings-view .van-cell::after {
-  border-color: rgba(124, 107, 216, 0.12);
-}
-.mobile-settings-view .van-radio__icon--checked .van-icon {
-  background: var(--mg-primary);
-  border-color: var(--mg-primary);
-  color: var(--mg-on-primary);
-}
+/* 2026-08-31: 思考模式 mode-* 样式迁至 MobileChatView (选择器移入对话输入区) */
 </style>

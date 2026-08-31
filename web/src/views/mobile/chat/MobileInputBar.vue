@@ -17,6 +17,22 @@
       </span>
     </div>
 
+    <!-- 思考模式选择 (2026-08-31 自设置页迁入对话界面) -->
+    <div class="mode-strip">
+      <button
+        type="button"
+        class="mode-chip"
+        :aria-expanded="showModePicker ? 'true' : 'false'"
+        aria-label="切换思考模式"
+        title="思考模式"
+        @click="showModePicker = !showModePicker"
+      >
+        <span class="mode-chip-icon">{{ currentMode.icon }}</span>
+        <span class="mode-chip-name">{{ currentMode.name }}</span>
+        <span class="mode-chip-caret" aria-hidden="true">▾</span>
+      </button>
+    </div>
+
     <div class="input-row">
       <button
         id="mobile-input-image"
@@ -96,6 +112,38 @@
       <span class="rec-dot" />
       正在录音... 松开发送
     </div>
+
+    <!-- 思考模式选择面板 (Teleport 到 body 防止被 footer 圆角裁剪) -->
+    <Teleport to="body">
+      <Transition name="mode-pop">
+        <div
+          v-if="showModePicker"
+          class="mode-picker-backdrop"
+          @click.self="showModePicker = false"
+        >
+          <div class="mode-picker" role="radiogroup" aria-label="思考模式">
+            <div class="mode-picker-title">🧠 思考模式</div>
+            <button
+              v-for="m in thinkingModes"
+              :key="m.value"
+              type="button"
+              class="mode-option"
+              role="radio"
+              :aria-checked="uiStore.thinkingMode === m.value ? 'true' : 'false'"
+              :class="{ active: uiStore.thinkingMode === m.value }"
+              @click="pickMode(m.value)"
+            >
+              <span class="mode-icon">{{ m.icon }}</span>
+              <span class="mode-text">
+                <span class="mode-name">{{ m.name }}</span>
+                <span class="mode-desc">{{ m.desc }}</span>
+              </span>
+              <span class="mode-check" aria-hidden="true">{{ uiStore.thinkingMode === m.value ? '✓' : '' }}</span>
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </footer>
 </template>
 
@@ -111,9 +159,26 @@
  * - 输入框 textarea 自适应高度
  */
 
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Picture, Paperclip, Promotion, VideoPause } from '@element-plus/icons-vue'
 import MobileVoiceInputButton from '@/components/mobile/MobileVoiceInputButton.vue'
+import { useUiStore } from '@/stores/useUiStore'
+
+// 2026-08-31: 思考模式三档选择自设置页迁入 (原 van-radio 模板因项目无 Vant 从未渲染成功)
+const uiStore = useUiStore()
+const showModePicker = ref(false)
+const thinkingModes = [
+  { value: 'fast', icon: '⚡', name: '快速', desc: 'Qwen3-8B · 跳过深度推理' },
+  { value: 'balanced', icon: '⚖️', name: '平衡', desc: 'Qwen3-8B · 同款模型 · 默认 Self-RAG' },
+  { value: 'deep', icon: '🧠', name: '深度', desc: 'DeepSeek-R1 · thinking + 重检索' },
+]
+const currentMode = computed(() =>
+  thinkingModes.find((m) => m.value === uiStore.thinkingMode) || thinkingModes[1]
+)
+function pickMode(v) {
+  uiStore.setThinkingMode(v)
+  showModePicker.value = false
+}
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -359,4 +424,110 @@ watch(
   background: var(--mg-danger);
   animation: pulse 1s infinite;
 }
+
+/* ===== 思考模式选择 (2026-08-31 自设置页迁入) ===== */
+.mode-strip {
+  display: flex;
+  padding: 0 4px 6px;
+}
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--mg-radius-pill, 999px);
+  border: 1.5px solid var(--mg-glass-border, rgba(124, 107, 216, 0.18));
+  background: var(--mg-glass-bg, rgba(255, 255, 255, 0.55));
+  color: var(--mg-text, #322940);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+.mode-chip:active { transform: scale(0.96); }
+.mode-chip-icon { font-size: 13px; line-height: 1; }
+.mode-chip-caret { font-size: 9px; opacity: 0.6; }
+
+/* Teleport 到 body 的面板仍携带本组件 scoped 属性, 选择器照常生效 */
+.mode-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  background: rgba(20, 12, 40, 0.32);
+  display: flex;
+  align-items: flex-end;
+  padding: 0 14px calc(env(safe-area-inset-bottom, 0px) + 96px);
+}
+.mode-picker-backdrop .mode-picker {
+  width: 100%;
+  border-radius: 22px;
+  padding: 16px 14px 14px;
+  background: var(--mg-glass-bg-strong, rgba(255, 255, 255, 0.92));
+  border: 1.5px solid var(--mg-glass-border, rgba(124, 107, 216, 0.2));
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+  box-shadow: 0 18px 50px rgba(50, 30, 90, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mode-picker-backdrop .mode-picker-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--mg-text, #322940);
+  padding: 0 2px 2px;
+}
+.mode-picker-backdrop .mode-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--mg-radius-md, 14px);
+  border: 1.5px solid var(--mg-glass-border, rgba(124, 107, 216, 0.16));
+  background: var(--mg-glass-bg, rgba(255, 255, 255, 0.55));
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.mode-picker-backdrop .mode-option:active { transform: scale(0.98); }
+.mode-picker-backdrop .mode-option.active {
+  border-color: transparent;
+  background: var(--mg-gradient-soft, linear-gradient(135deg, rgba(124, 107, 216, 0.14), rgba(240, 138, 192, 0.14)));
+  box-shadow: 0 0 0 1.5px var(--mg-primary, #7C6BD8);
+}
+.mode-picker-backdrop .mode-icon { font-size: 20px; flex-shrink: 0; }
+.mode-picker-backdrop .mode-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mode-picker-backdrop .mode-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mg-text, #322940);
+}
+.mode-picker-backdrop .mode-desc {
+  font-size: 11.5px;
+  color: var(--mg-text-soft, #8A7BA8);
+}
+.mode-picker-backdrop .mode-check {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--mg-on-primary, #fff);
+  background: var(--mg-gradient-btn, linear-gradient(135deg, #7C6BD8, #F08AC0));
+  flex-shrink: 0;
+}
+.mode-picker-backdrop .mode-check:empty { background: transparent; }
+
+/* 进出场 */
+.mode-pop-enter-active, .mode-pop-leave-active { transition: opacity 200ms ease; }
+.mode-pop-enter-active .mode-picker, .mode-pop-leave-active .mode-picker { transition: transform 200ms ease; }
+.mode-pop-enter-from, .mode-pop-leave-to { opacity: 0; }
+.mode-pop-enter-from .mode-picker, .mode-pop-leave-to .mode-picker { transform: translateY(40px); }
 </style>

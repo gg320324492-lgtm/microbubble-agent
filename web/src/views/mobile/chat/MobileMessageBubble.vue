@@ -307,14 +307,20 @@ function onFollowUpClick(suggestion) {
 
 /* ===== W99 +15 typing-bubble CSS 删除（已被 ThinkingCapsule 取代） ===== */
 
-/* 完成态 */
+/* 完成态 meta 行: token/时长/TTS/操作组/反馈组全部子项。
+   窄屏下允许整行换行, 但每个按钮/文字内部禁换行 (修复真机 CJK 竖排挤压) */
 .msg-meta {
   font-size: 11px;
   color: var(--mg-text-soft);
   margin-top: 6px;
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   align-items: center;
+}
+.msg-meta > * {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tts-btn {
   background: transparent;

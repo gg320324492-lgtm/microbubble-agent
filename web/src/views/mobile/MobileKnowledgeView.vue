@@ -176,7 +176,7 @@
       </div>
     </main>
 
-    <MobileFab :actions="fabActions" />
+    <!-- 浮动 MobileFab 与 header「+」动作表重复 (2026-08-31 UI 审查移除)；header「+」已含手动/上传/研究/入网盘 -->
 
     <!-- 搜索 Sheet -->
     <MobileSearchSheet
@@ -276,7 +276,7 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
-import MobileFab from '@/components/mobile/MobileFab.vue'
+// 2026-08-31 UI 审查: 移除重复的 MobileFab (header「+」createActions 已覆盖 手动/上传/研究/入网盘)
 // W68 G-2 (2026-07-24): 下拉刷新 composable
 import { usePullToRefresh } from '@/composables/usePullToRefresh'
 // W99 N-6 改进 (2): 移动端埋点接通 (复用桌面 store 协议)
@@ -435,12 +435,9 @@ const formulaFieldConfig = computed(() => ({
   badge: (f) => ({ label: f.category || '公式', type: 'info' }),
 }))
 
-const fabActions = [
-  { name: 'manual', label: 'Add knowledge', icon: '✏️', handler: () => { showManualSheet.value = true } },
-  { name: 'upload', label: 'Upload file', icon: '📚', handler: () => uploadInputRef.value?.click() },
-  { name: 'research', label: 'AI research', icon: '🤖', handler: () => { showResearchSheet.value = true } },
-  { name: 'drive', label: 'Archive to drive', icon: '📁', handler: () => driveUploadInputRef.value?.click() },
-]
+// fabActions 已随 MobileFab 移除; uploadInputRef/driveUploadInputRef/showManualSheet/
+// showResearchSheet 由 header「+」的 createActions → onCreateAction handler 复用 (18 处引用)
+
 
 const createActions = [
   // PR4.3: 1 个新增 ("📁 入网盘") + 现有 3 个保留 (向后兼容)
@@ -823,10 +820,11 @@ onMounted(() => {
   box-shadow: var(--mg-primary-shadow);
 }
 
-/* CardList slot */
+/* CardList slot — 操作按钮右对齐紧凑排布 (修复 flex:1 撑成两条全宽巨块) */
 .item-actions {
   display: flex;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 8px;
   margin-top: 6px;
 }
 
@@ -849,12 +847,15 @@ onMounted(() => {
 .item-top-result .top-result-glyph { font-size: 10.5px; line-height: 1; }
 .item-top-result .top-result-text { line-height: 1; }
 .item-btn {
-  flex: 1;
-  min-height: 44px;
-  padding: 8px 6px;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--mg-radius-md);
   border: 1.5px solid var(--mg-glass-border);
-  font-size: 12px;
+  font-size: 16px;
   cursor: pointer;
   background: var(--mg-glass-bg-strong);
   color: var(--mg-primary);

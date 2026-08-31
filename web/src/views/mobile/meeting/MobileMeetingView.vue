@@ -1,6 +1,7 @@
 <template>
   <div class="mobile-meeting-view mg-page">
-    <PageHeader title="会议管理" show-back @back="$router.back()">
+    <!-- /meetings 是 TabBar「听会」根页, 移除误导性返回按钮 (2026-08-31 UI 审查) -->
+    <PageHeader title="会议管理">
       <template #right>
         <button
           type="button"
@@ -102,7 +103,8 @@
       </div>
     </main>
 
-    <MobileFab :actions="fabActions" />
+    <!-- 操作入口统一收敛到 PageHeader 右上角 + (5 项完整菜单);
+         原浮动 MobileFab 与 header + 功能重复 (4/5 项), 2026-08-31 细致检查移除 -->
 
     <!-- 操作菜单（替代桌面 4 个按钮） -->
     <Teleport to="body">
@@ -230,7 +232,6 @@ import MeetingCreateDialog from '@/views/meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
 import VoiceprintEnrollFlow from '@/components/mobile/VoiceprintEnrollFlow.vue'
-import MobileFab from '@/components/mobile/MobileFab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -305,12 +306,7 @@ function getStatusLabel(s) {
   return { scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s
 }
 
-const fabActions = [
-  { name: 'create', label: 'Create meeting', icon: '＋', handler: handleCreateMeeting },
-  { name: 'paste', label: 'Analyze transcript', icon: '📋', handler: handlePasteAnalyze },
-  { name: 'live', label: 'Start recording', icon: '🎤', handler: handleStartLive },
-  { name: 'voice', label: 'Voiceprint test', icon: '🎙', handler: handleVoiceTest },
-]
+// 操作入口统一走 PageHeader "+" (action overlay), 原 MobileFab fabActions 已移除
 
 // 操作菜单处理
 function handleCreateMeeting() {
