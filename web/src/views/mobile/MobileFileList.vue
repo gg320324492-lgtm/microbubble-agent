@@ -23,7 +23,7 @@
 <template>
   <div class="mobile-file-list">
     <!-- 顶部 folder 选择器 (紧凑面包屑 + 切换) -->
-    <div class="file-list-header">
+    <div class="file-list-header mg-glass">
       <button
         type="button"
         class="folder-selector"
@@ -46,20 +46,20 @@
     </div>
 
     <!-- 错误态 -->
-    <div v-if="loadError" class="file-list-error">
+    <div v-if="loadError" class="file-list-error mg-glass">
       <p>⚠️ 加载失败</p>
       <el-button size="small" @click="refresh">重试</el-button>
     </div>
 
     <!-- 空态 -->
-    <div v-else-if="isEmpty" class="file-list-empty">
+    <div v-else-if="isEmpty" class="file-list-empty mg-glass">
       <p class="empty-icon">📂</p>
       <p class="empty-text">当前文件夹暂无文件</p>
       <p class="empty-hint">点击右下角 + 按钮上传</p>
     </div>
 
     <!-- 加载态 -->
-    <div v-else-if="loading && driveFiles.length === 0" class="file-list-loading">
+    <div v-else-if="loading && driveFiles.length === 0" class="file-list-loading mg-glass">
       <p>加载中...</p>
     </div>
 
@@ -72,7 +72,7 @@
         @long-press="onLongPressFile(file)"
       >
         <li
-          class="file-item"
+          class="file-item mg-glass"
           :class="{ 'is-private': file.visibility === 'private' }"
           @click="onFileClick(file)"
         >
@@ -307,23 +307,29 @@ defineExpose({
 </script>
 
 <style scoped>
+/* ============================================================
+   液态毛玻璃 (Liquid Glass) 升级 — 2026-08-31
+   本组件嵌在 MobileKnowledgeView tab 内 (非独立页面根),
+   页面级 mg-page 背景由宿主视图负责, 这里只做玻璃卡片行.
+   颜色一律 var(--mg-*) token (dark 随 [data-theme] 自动翻转)
+   ============================================================ */
 .mobile-file-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px;
   min-height: 200px;
+  color: var(--mg-text);
 }
 
-/* Header: folder selector + refresh */
+/* Header: folder selector + refresh — 玻璃路径头 (mg-glass 提供 surface) */
 .file-list-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  background: var(--color-bg-card);
-  border-radius: 8px;
-  box-shadow: var(--shadow-sm);
+  padding: 10px 14px;
+  border-radius: var(--mg-radius-md);
+  box-shadow: var(--mg-shadow-sm);
 }
 
 .folder-selector {
@@ -334,12 +340,14 @@ defineExpose({
   background: none;
   border: none;
   padding: 4px 0;
+  min-height: 44px;
   text-align: left;
   font-size: 15px;
-  font-weight: 500;
-  color: var(--color-text-primary);
+  font-weight: 800;
+  color: var(--mg-text-strong);
   cursor: pointer;
   min-width: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .folder-icon {
@@ -357,71 +365,82 @@ defineExpose({
 .folder-arrow {
   flex-shrink: 0;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-faint);
 }
 
 .header-refresh {
   flex-shrink: 0;
+  width: 44px;
+  height: 44px;
   background: none;
   border: none;
   font-size: 20px;
-  color: var(--color-text-secondary);
+  color: var(--mg-primary);
   cursor: pointer;
-  padding: 4px 8px;
+  border-radius: var(--mg-radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.header-refresh:active {
+  transform: scale(0.92);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .header-refresh.is-spinning {
   animation: spin 1s linear infinite;
-  color: var(--color-primary);
+  color: var(--mg-primary);
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* Items list */
+/* Items list — 行卡片玻璃化 (mg-glass surface + radius-md + margin-bottom 10px) */
 .file-list-items {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
 .file-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
-  background: var(--color-bg-card);
-  border-radius: 8px;
-  box-shadow: var(--shadow-sm);
+  padding: 13px 14px;
+  margin-bottom: 10px;
+  border-radius: var(--mg-radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
   border-left: 3px solid transparent;
 }
 
 .file-item:active {
-  transform: scale(0.98);
-  background: var(--color-primary-bg);
+  transform: scale(0.97);
 }
 
 .file-item.is-private {
-  border-left-color: var(--color-danger, #f56c6c);
+  border-left-color: var(--mg-danger);
 }
 
+/* 文件类型图标: 柔渐变块底 (对齐样稿 d-task .em: 34px 圆角 12px) */
 .file-item-icon {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-primary-light-9);
-  border-radius: 8px;
-  color: var(--color-primary);
+  background: var(--mg-gradient-soft);
+  border-radius: 12px;
+  color: var(--mg-primary);
 }
 
 .file-item-info {
@@ -431,8 +450,8 @@ defineExpose({
 
 .file-item-name {
   font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-primary);
+  font-weight: 700;
+  color: var(--mg-text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -444,7 +463,7 @@ defineExpose({
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   flex-wrap: wrap;
 }
 
@@ -452,29 +471,30 @@ defineExpose({
   flex-shrink: 0;
 }
 
+/* 徽标 → mg-chip 同款胶囊 */
 .file-item-badge {
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 2px 8px;
+  border-radius: var(--mg-radius-pill);
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .badge-drive {
-  background: var(--color-primary-light-9);
-  color: var(--color-primary);
+  background: rgba(124, 107, 216, 0.12);
+  color: var(--mg-primary);
 }
 
 .badge-kb {
-  background: var(--color-success-light-9, #f0f9eb);
-  color: var(--color-success, #67c23a);
+  background: var(--mg-success-soft);
+  color: var(--mg-success);
 }
 
 .badge-private {
-  background: var(--color-danger-light-9, #fef0f0);
-  color: var(--color-danger, #f56c6c);
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
 }
 
-/* States */
+/* 三态: 玻璃卡居中提示 (mg-glass surface) */
 .file-list-empty,
 .file-list-error,
 .file-list-loading {
@@ -482,9 +502,9 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 48px 20px;
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
 .empty-icon {
@@ -495,18 +515,19 @@ defineExpose({
 
 .empty-text {
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 700;
   margin: 0 0 4px 0;
+  color: var(--mg-text-strong);
 }
 
 .empty-hint {
   font-size: 12px;
-  color: var(--color-text-placeholder);
+  color: var(--mg-text-faint);
   margin: 0;
 }
 
 .file-list-error p {
-  color: var(--color-danger);
+  color: var(--mg-danger);
   margin: 0 0 12px 0;
 }
 

@@ -312,14 +312,16 @@ watch(
   font-weight: var(--font-weight-medium, 500);
 }
 
-/* 批量操作条 */
+/* 批量操作条 — 玻璃吸顶条 */
 .batch-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px var(--mobile-padding-x, 16px);
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  background: var(--mg-glass-bg-strong, var(--color-primary-bg));
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  color: var(--mg-primary, var(--color-primary));
   position: sticky;
   top: 0;
   z-index: 5;
@@ -357,43 +359,46 @@ watch(
   color: var(--color-text-secondary);
 }
 
-/* 列表项 */
+/* 列表项 — 2026-08-31 液态毛玻璃: 玻璃行卡 */
 .list-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 0 var(--mobile-padding-x, 16px);
 }
 .list-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  padding: 13px 14px;
+  background: var(--mg-glass-bg, var(--color-bg-card));
+  border: 1.5px solid var(--mg-glass-border, var(--color-border-light));
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur, 0));
+  backdrop-filter: blur(var(--mg-glass-blur, 0));
+  border-radius: var(--mg-radius-md, var(--radius-md));
+  box-shadow: var(--mg-shadow-sm, none);
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, border-color 0.15s;
+  transition: transform 0.15s ease, border-color 0.15s;
 }
 .list-item:active {
-  background: var(--color-bg-hover);
+  transform: scale(0.98);
 }
 .list-item.no-select {
   user-select: none;
 }
 .list-item.selected {
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary);
+  background: var(--mg-tint, var(--color-primary-bg));
+  border-color: var(--mg-primary, var(--color-primary));
 }
 
 [data-theme="dark"] .list-item {
-  border-color: var(--color-border-base);
+  border-color: var(--mg-glass-border);
 }
 [data-theme="dark"] .list-item.selected {
-  background: rgba(var(--color-primary-rgb), 0.15);
-  border-color: var(--color-primary);
+  background: var(--mg-tint-strong);
+  border-color: var(--mg-primary);
 }
 
 /* Checkbox */

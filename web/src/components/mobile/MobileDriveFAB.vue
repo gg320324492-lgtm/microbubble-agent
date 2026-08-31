@@ -278,11 +278,13 @@ defineExpose({ openQrScan, closeQrScan })
   width: 40px;
   height: 40px;
   padding: 0;
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--mg-glass-border, var(--color-border));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border-radius: 50%;
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-sm, 0 2px 8px rgba(28, 25, 23, .1));
+  background: var(--mg-glass-bg-strong, var(--color-bg-card));
+  color: var(--mg-primary, var(--color-text-primary));
+  box-shadow: var(--mg-shadow-sm, var(--shadow-sm, 0 2px 8px rgba(28, 25, 23, .1)));
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
@@ -327,13 +329,17 @@ defineExpose({ openQrScan, closeQrScan })
 }
 .qr-scan-panel {
   width: 100%;
-  background: var(--color-bg-card);
-  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
+  background: var(--mg-glass-bg-strong, var(--color-bg-card));
+  border: 1.5px solid var(--mg-glass-border, transparent);
+  border-bottom: none;
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--mg-shadow-lg, none);
+  border-radius: var(--sheet-radius, 28px) var(--sheet-radius, 28px) 0 0;
   padding: 8px 16px 16px;
   max-height: 70vh;
   overflow-y: auto;
 }
-[data-theme="dark"] .qr-scan-panel { background: var(--color-bg-card); }
 .qr-scan-handle {
   width: 36px;
   height: 4px;

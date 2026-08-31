@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-knowledge-view">
+  <div class="mobile-knowledge-view mg-page">
     <PageHeader title="知识库" show-back @back="$router.back()">
       <template #right>
         <button
@@ -48,7 +48,7 @@
       </div>
 
       <!-- Tab: 知识库 -->
-      <div v-if="activeTab === 'knowledge'">
+      <div v-if="activeTab === 'knowledge'" class="mg-rise mg-stagger-1">
         <CardList
           :items="knowledgeList"
           :field-config="knowledgeFieldConfig"
@@ -73,20 +73,20 @@
       </div>
 
       <!-- Tab: 实体图谱 -->
-      <div v-else-if="activeTab === 'entities'" class="info-pane">
+      <div v-else-if="activeTab === 'entities'" class="info-pane mg-rise mg-stagger-1">
         <div class="info-icon">🔗</div>
         <h3>实体关系图谱</h3>
         <p class="info-hint">复杂的力导向图建议在桌面端查看</p>
         <p class="info-hint">点击下方按钮切换到桌面版</p>
         <button
           type="button"
-          class="action-btn"
+          class="action-btn mg-btn-glass"
           @click="$router.push('/knowledge?desktop=true')"
         >在桌面查看</button>
       </div>
 
       <!-- Tab: 假设 -->
-      <div v-else-if="activeTab === 'hypotheses'">
+      <div v-else-if="activeTab === 'hypotheses'" class="mg-rise mg-stagger-1">
         <CardList
           :items="hypotheses"
           :field-config="hypothesisFieldConfig"
@@ -98,7 +98,7 @@
       </div>
 
       <!-- Tab: 公式 -->
-      <div v-else-if="activeTab === 'formulas'">
+      <div v-else-if="activeTab === 'formulas'" class="mg-rise mg-stagger-1">
         <CardList
           :items="formulas"
           :field-config="formulaFieldConfig"
@@ -111,7 +111,7 @@
 
       <!-- Tab: 健康度 -->
       <div v-else-if="activeTab === 'health'">
-        <div class="info-pane">
+        <div class="info-pane mg-rise mg-stagger-1">
           <div class="info-icon">💚</div>
           <h3>知识库健康度</h3>
           <p class="info-hint">检测过期、重复、矛盾的条目</p>
@@ -120,7 +120,7 @@
       </div>
 
       <!-- Tab: 我的长期记忆 (v28 step 68) -->
-      <div v-else-if="activeTab === 'memory'">
+      <div v-else-if="activeTab === 'memory'" class="mg-rise mg-stagger-1">
         <div class="memory-mobile-toolbar">
           <input
             v-model="memorySearch.keyword"
@@ -152,9 +152,9 @@
         </div>
 
         <div v-else class="memory-mobile-list">
-          <article v-for="item in memoryList" :key="item.id" class="memory-mobile-card">
+          <article v-for="item in memoryList" :key="item.id" class="memory-mobile-card mg-glass">
             <div class="memory-mobile-header">
-              <span class="memory-mobile-type" :class="`type-${item.memory_type}`">
+              <span class="memory-mobile-type mg-chip" :class="`type-${item.memory_type}`">
                 {{ memoryTypeNameMap[item.memory_type] || item.memory_type }}
               </span>
               <span class="memory-mobile-imp">⭐ {{ Math.round((item.importance || 0) * 100) }}%</span>
@@ -751,9 +751,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 2026-08-31 液态毛玻璃升级: 颜色/圆角/阴影全部走 --mg-* token (mobile-glass.css),
+   页面极光背景由根节点 .mg-page 提供, 此处不再设 background */
 .mobile-knowledge-view {
   min-height: 100vh;
-  background: var(--color-bg-page);
   display: flex;
   flex-direction: column;
 }
@@ -770,12 +771,12 @@ onMounted(() => {
   justify-content: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--color-text-secondary, #666);
+  color: var(--mg-text-soft);
   transition: height 100ms ease;
   overflow: hidden;
 }
 .knowledge-pull-indicator.is-active {
-  color: var(--color-primary, #FF7A5C);
+  color: var(--mg-primary);
 }
 .pull-glyph {
   font-size: 18px;
@@ -790,30 +791,36 @@ onMounted(() => {
   to { transform: rotate(360deg); }
 }
 
-/* TabStrip 容器（铁律 31: 替代原 .tab-bar 自定义） */
+/* TabStrip 容器（铁律 31: 替代原 .tab-bar 自定义）— 玻璃化见非 scoped 块 */
 .tab-bar-wrapper {
   margin-bottom: 12px;
 }
 
-/* Header action */
+/* Header action — 玻璃胶囊 (搜索/新建) */
 .header-action {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: transparent;
-  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--mg-shadow-sm);
   font-size: 18px;
-  color: var(--color-text-regular);
+  color: var(--mg-text);
   cursor: pointer;
-  margin-left: 4px;
+  margin-left: 6px;
+  transition: transform 150ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.header-action:active { background: var(--color-primary-bg); }
+.header-action:active { transform: scale(0.94); }
 .header-action.primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  font-weight: 600;
+  background: var(--mg-gradient-btn);
+  border-color: transparent;
+  color: var(--mg-on-primary);
+  font-weight: 800;
   font-size: 22px;
+  box-shadow: var(--mg-primary-shadow);
 }
 
 /* CardList slot */
@@ -823,46 +830,55 @@ onMounted(() => {
   margin-top: 6px;
 }
 
-/* W99 N-6 改进 (3): 移动端 top-1 推荐徽章 */
+/* W99 N-6 改进 (3): 移动端 top-1 推荐徽章 — 渐变紫胶囊 */
 .item-top-result {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   align-self: flex-start;
   margin-bottom: 6px;
-  padding: 2px 8px 2px 6px;
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: #fff;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.4px;
-  box-shadow: 0 2px 6px rgba(255, 122, 92, 0.28);
+  box-shadow: var(--mg-primary-shadow);
 }
 .item-top-result .top-result-glyph { font-size: 10.5px; line-height: 1; }
 .item-top-result .top-result-text { line-height: 1; }
 .item-btn {
   flex: 1;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  border: none;
+  min-height: 44px;
+  padding: 8px 6px;
+  border-radius: var(--mg-radius-md);
+  border: 1.5px solid var(--mg-glass-border);
   font-size: 12px;
   cursor: pointer;
-  background: var(--color-bg-page);
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-primary);
+  font-weight: 700;
+  transition: transform 150ms ease, opacity 150ms ease;
   -webkit-tap-highlight-color: transparent;
 }
-.item-btn:active { opacity: 0.6; }
+.item-btn:active { transform: scale(0.97); opacity: 0.8; }
 .item-btn.danger {
-  background: var(--color-danger-bg);
-  color: var(--color-danger, #F56C6C);
+  background: var(--mg-danger-soft);
+  border-color: transparent;
+  color: var(--mg-danger);
 }
 
-/* Info Pane（实体图谱 / 健康度） */
+/* Info Pane（实体图谱 / 健康度）— 玻璃卡 */
 .info-pane {
   text-align: center;
   padding: 60px 20px;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow);
 }
 .info-icon {
   font-size: 48px;
@@ -870,27 +886,23 @@ onMounted(() => {
 }
 .info-pane h3 {
   font-size: 16px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-weight: 800;
+  color: var(--mg-text-strong);
   margin: 0 0 12px;
 }
 .info-hint {
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   margin: 4px 0;
 }
+/* 视觉由 mg-btn-glass 提供, 此处仅几何尺寸 (触摸目标 ≥44px) */
 .action-btn {
   margin-top: 16px;
+  min-height: 44px;
   padding: 10px 24px;
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
   font-size: 14px;
   cursor: pointer;
 }
-.action-btn:active { opacity: 0.8; }
 
 /* v28 step 68: 长期记忆 Tab 移动端样式 */
 .memory-mobile-toolbar {
@@ -901,19 +913,34 @@ onMounted(() => {
 }
 .memory-mobile-search {
   flex: 1;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg-card);
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: var(--mg-text);
   font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.memory-mobile-search::placeholder { color: var(--mg-text-faint); }
+.memory-mobile-search:focus {
+  border-color: var(--mg-primary);
+  box-shadow: var(--mg-shadow-sm);
 }
 .memory-mobile-select {
-  height: 36px;
-  padding: 0 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg-card);
+  height: 44px;
+  padding: 0 10px;
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: var(--mg-text);
   font-size: 13px;
 }
 
@@ -928,11 +955,10 @@ onMounted(() => {
   padding: 0 4px;
 }
 
+/* 玻璃底/描边/blur 由模板上的 .mg-glass 提供, 此处只覆写圆角与内边距 */
 .memory-mobile-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: 10px;
-  padding: 12px 14px;
+  border-radius: var(--mg-radius-md);
+  padding: 13px 14px;
 }
 
 .memory-mobile-header {
@@ -942,34 +968,25 @@ onMounted(() => {
   margin-bottom: 6px;
 }
 
-.memory-mobile-type {
-  display: inline-flex;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 500;
-}
-.memory-mobile-type.type-preference { background: var(--color-primary-bg); color: var(--color-primary); }
-.memory-mobile-type.type-user_fact { background: var(--color-success-bg); color: var(--color-success); }
-.memory-mobile-type.type-task_ctx { background: var(--color-warning-bg); color: var(--color-warning); }
-.memory-mobile-type.type-summary { background: var(--color-primary-bg); color: var(--color-primary); }
-.memory-mobile-type.type-entity { background: var(--color-primary-bg); color: var(--color-primary); }
+/* 基础芯片形状由模板上的 .mg-chip 提供 (默认紫 = 偏好/摘要/实体) */
+.memory-mobile-type.type-user_fact { color: var(--mg-success); background: var(--mg-success-soft); }
+.memory-mobile-type.type-task_ctx { color: var(--mg-warning); background: var(--mg-warning-soft); }
 
 .memory-mobile-imp {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
 .memory-mobile-key {
   font-size: 11px;
-  color: var(--color-primary);
+  color: var(--mg-primary);
   margin-bottom: 4px;
 }
 
 .memory-mobile-content {
   font-size: 13px;
   line-height: 1.6;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   margin: 0 0 8px;
 }
 
@@ -978,24 +995,36 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
 .memory-mobile-forget {
   border: none;
   background: transparent;
-  color: var(--color-danger);
+  color: var(--mg-danger);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  min-height: 44px;
+  padding: 10px 8px;
+  -webkit-tap-highlight-color: transparent;
 }
+.memory-mobile-forget:active { opacity: 0.6; }
 
+/* 空态 — 玻璃卡 (规范: emoji + --mg-text-soft 文案放 mg-glass 卡里) */
 .empty-state-mobile {
   text-align: center;
   padding: 40px 16px;
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow-sm);
 }
 .empty-icon { font-size: 48px; opacity: 0.5; margin-bottom: 12px; }
-.empty-title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
-.empty-hint { font-size: 13px; color: var(--color-text-secondary); margin-top: 6px; }
+.empty-title { font-size: 16px; font-weight: 800; color: var(--mg-text-strong); }
+.empty-hint { font-size: 13px; color: var(--mg-text-soft); margin-top: 6px; }
 
 .pagination-mobile {
   display: flex;
@@ -1005,20 +1034,109 @@ onMounted(() => {
   padding: 16px;
 }
 .page-btn {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg-card);
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--mg-primary);
+  font-weight: 700;
   font-size: 13px;
+  box-shadow: var(--mg-shadow-sm);
   cursor: pointer;
+  transition: transform 150ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.page-info { font-size: 13px; color: var(--color-text-secondary); }
+.page-btn:active:not(:disabled) { transform: scale(0.97); }
+.page-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.page-info { font-size: 13px; color: var(--mg-text-soft); }
 </style>
 
 <!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一（v60-v67 教训：必须非 scoped） -->
 <style>
+/* 2026-08-31 液态毛玻璃: 共享组件 (CardList / TabStrip) 内部元素玻璃化.
+   非 scoped + 视图根 class 前缀 (规范 §视觉细节约定: 作用域前缀必须带视图根 class);
+   .mobile-knowledge-view .knowledge-main 前缀 (0-4-0) 稳定压过组件 scoped 规则 (0-3-0 含属性选择器).
+   mg token 自带 dark 变体, 无需额外 [data-theme="dark"] 覆盖. */
+.mobile-knowledge-view .knowledge-main .tab-strip {
+  background: var(--mg-glass-bg);
+  border-color: var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  box-shadow: var(--mg-shadow-sm);
+}
+.mobile-knowledge-view .knowledge-main .tab-strip__item {
+  color: var(--mg-text-soft);
+}
+.mobile-knowledge-view .knowledge-main .tab-strip__item.is-active {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 800;
+  box-shadow: var(--mg-primary-shadow);
+}
+
+/* 条目卡 = mg-glass 列表卡 (规范: radius-md + padding 13px 14px) */
+.mobile-knowledge-view .knowledge-main .list-item {
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-md);
+  box-shadow: var(--mg-shadow-sm);
+  padding: 13px 14px;
+  transition: transform 150ms ease, background 150ms ease;
+}
+.mobile-knowledge-view .knowledge-main .list-item:active {
+  background: var(--mg-glass-bg-strong);
+  transform: scale(0.97);
+}
+.mobile-knowledge-view .knowledge-main .item-title {
+  color: var(--mg-text-strong);
+}
+.mobile-knowledge-view .knowledge-main .item-subtitle,
+.mobile-knowledge-view .knowledge-main .field-key,
+.mobile-knowledge-view .knowledge-main .item-meta {
+  color: var(--mg-text-soft);
+}
+.mobile-knowledge-view .knowledge-main .field-value {
+  color: var(--mg-text);
+}
+.mobile-knowledge-view .knowledge-main .item-arrow {
+  color: var(--mg-text-faint);
+}
+/* 分类/来源等次要信息 badge → 胶囊化 (颜色仍走 badge--* 语义 class, 保留原色语义) */
+.mobile-knowledge-view .knowledge-main .badge-tag {
+  border-radius: var(--mg-radius-pill);
+}
+
+/* CardList 空态 / 底部加载 玻璃化 */
+.mobile-knowledge-view .knowledge-main .empty-state {
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow-sm);
+}
+.mobile-knowledge-view .knowledge-main .empty-state .empty-title {
+  color: var(--mg-text);
+}
+.mobile-knowledge-view .knowledge-main .empty-state .empty-hint {
+  color: var(--mg-text-soft);
+}
+.mobile-knowledge-view .knowledge-main .load-more {
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  color: var(--mg-primary);
+  font-weight: 700;
+}
+.mobile-knowledge-view .knowledge-main .end-hint {
+  color: var(--mg-text-faint);
+}
+
 /* 知识库 tab / 卡片 / 搜索 / 分页 / 上传 dialog / action item / 空态在 dark 模式适配 */
 /* 铁律 26: 旧 .tab-bar / .tab-item 已迁移到 TabStrip, dark mode 由 TabStrip 组件自身处理 */
 [data-theme="dark"] .search-input {

@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-meeting-view">
+  <div class="mobile-meeting-view mg-page">
     <PageHeader title="会议管理" show-back @back="$router.back()">
       <template #right>
         <button
@@ -19,7 +19,7 @@
       </template>
     </PageHeader>
 
-    <main class="meeting-main" :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }">
+    <main class="meeting-main" :style="{ paddingBottom: 'calc(var(--tabbar-height, 76px) + var(--sab, 0px))' }">
       <!-- 日期范围快速筛选 -->
       <div class="quick-filters">
         <button
@@ -41,7 +41,7 @@
         </div>
       </div>
 
-      <div v-else-if="meetings.length === 0" class="empty-state">
+      <div v-else-if="meetings.length === 0" class="empty-state mg-glass">
         <div class="empty-icon">📅</div>
         <div class="empty-title">暂无会议记录</div>
         <div class="empty-hint">点击右上角 + 创建</div>
@@ -52,7 +52,7 @@
           v-for="meeting in meetings"
           :key="meeting.id"
           type="button"
-          class="meeting-card"
+          class="meeting-card mg-glass mg-rise"
           @click="$router.push(`/meetings/${meeting.id}`)"
         >
           <div class="card-time-block">
@@ -108,7 +108,7 @@
     <Teleport to="body">
       <Transition name="action-sheet">
         <div v-if="showActionSheet" class="action-overlay" @click.self="showActionSheet = false">
-          <div class="action-panel">
+          <div class="action-panel mg-glass-strong">
             <div class="action-title">会议操作</div>
             <button type="button" class="action-item" @click="handleCreateMeeting">
               <span class="action-icon" style="background: var(--color-primary)">+</span>
@@ -164,7 +164,7 @@
     <Teleport to="body">
       <Transition name="search-sheet">
         <div v-if="showSearch" class="search-overlay" @click.self="showSearch = false">
-          <div class="search-panel">
+          <div class="search-panel mg-glass-strong">
             <div class="search-header">
               <h3>搜索会议</h3>
               <button type="button" @click="showSearch = false">✕</button>
@@ -393,7 +393,6 @@ onMounted(() => {
 <style scoped>
 .mobile-meeting-view {
   min-height: 100vh;
-  background: var(--color-bg-page);
   display: flex;
   flex-direction: column;
 }
@@ -415,23 +414,31 @@ onMounted(() => {
 .quick-filters::-webkit-scrollbar { display: none; }
 .filter-chip {
   flex-shrink: 0;
-  padding: 6px 14px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
+  min-height: 44px;
+  padding: 6px 16px;
+  display: inline-flex;
+  align-items: center;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: var(--mg-radius-pill);
   font-size: 13px;
-  color: var(--color-text-regular);
+  font-weight: 600;
+  color: var(--mg-text-soft);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
 }
+.filter-chip:active { transform: scale(0.97); }
 .filter-chip.active {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  border-color: var(--color-primary);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border-color: transparent;
+  box-shadow: var(--mg-primary-shadow);
 }
 
-/* 会议卡片 */
+/* 会议卡片 — 玻璃配方由 .mg-glass 全局类提供, 此处只管布局/局部覆盖 */
 .meeting-list {
   display: flex;
   flex-direction: column;
@@ -439,46 +446,42 @@ onMounted(() => {
 }
 .meeting-card {
   display: flex;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  padding: 12px;
+  width: 100%;
+  border-radius: var(--mg-radius-md);
+  padding: 13px 14px;
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   gap: 12px;
   align-items: flex-start;
+  transition: transform 150ms ease;
 }
 .meeting-card:active {
-  background: var(--color-bg-hover);
-}
-
-[data-theme="dark"] .meeting-card {
-  border-color: var(--color-border-base);
+  transform: scale(0.97);
 }
 
 .card-time-block {
   flex-shrink: 0;
   width: 60px;
   text-align: center;
-  background: linear-gradient(135deg, var(--color-primary-bg), var(--color-accent-bg));
-  border-radius: var(--radius-md);
+  background: var(--mg-gradient-soft);
+  border-radius: 12px;
   padding: 8px 4px;
 }
 .time-month {
   font-size: 11px;
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
   margin-bottom: 2px;
 }
 .time-day {
   font-size: 22px;
-  font-weight: var(--font-weight-bold, 700);
-  color: var(--color-primary);
+  font-weight: 800;
+  color: var(--mg-primary);
   line-height: 1;
 }
 .time-hour {
   font-size: 10px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-faint);
   margin-top: 4px;
 }
 
@@ -495,8 +498,8 @@ onMounted(() => {
 }
 .card-title {
   font-size: 15px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-weight: 700;
+  color: var(--mg-text-strong);
   flex: 1;
   line-height: 1.3;
   display: -webkit-box;
@@ -511,34 +514,45 @@ onMounted(() => {
   flex-shrink: 0;
   margin-top: 6px;
 }
-.status-dot.status-scheduled { background: var(--color-info); }
-.status-dot.status-recording { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
-.status-dot.status-processing { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
-.status-dot.status-completed { background: var(--color-success, #67C23A); }
-.status-dot.status-cancelled { background: var(--color-info, #909399); }
-.status-dot.status-error { background: var(--color-danger, #F56C6C); }
+.status-dot.status-scheduled { background: var(--mg-info); }
+/* 录制中 = 危险红语义 + 光晕强调 */
+.status-dot.status-recording {
+  background: var(--mg-danger);
+  box-shadow: 0 0 0 4px var(--mg-danger-soft);
+  animation: pulse-dot 1s infinite;
+}
+.status-dot.status-processing { background: var(--mg-warning); animation: pulse-dot 1s infinite; }
+.status-dot.status-completed { background: var(--mg-success); }
+.status-dot.status-cancelled { background: var(--mg-text-faint); }
+.status-dot.status-error { background: var(--mg-danger); }
 .card-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   margin-bottom: 6px;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
+/* 状态标签 = mg-chip 语义变体配色 (processing→warn / completed→ok / error→dgr) */
 .status-tag {
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  background: var(--color-bg-page);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--mg-radius-pill);
+  font-size: 11px;
+  font-weight: 600;
 }
-.tag-scheduled { background: var(--color-info-bg); color: var(--color-info); }
-.tag-recording, .tag-processing { background: var(--color-warning-bg); color: var(--color-warning); }
-.tag-completed { background: var(--color-success-bg); color: var(--color-success); }
-.tag-cancelled { background: var(--color-bg-page); color: var(--color-text-secondary); }
-.tag-error { background: var(--color-danger-bg); color: var(--color-danger); }
+.tag-scheduled { background: var(--mg-info-soft); color: var(--mg-info); }
+.tag-recording { background: var(--mg-danger-soft); color: var(--mg-danger); }
+.tag-processing { background: var(--mg-warning-soft); color: var(--mg-warning); }
+.tag-completed { background: var(--mg-success-soft); color: var(--mg-success); }
+.tag-cancelled { background: var(--mg-glass-bg-strong); color: var(--mg-text-faint); }
+.tag-error { background: var(--mg-danger-soft); color: var(--mg-danger); }
 
-.meta-location { color: var(--color-text-secondary); }
-.meta-audio { color: var(--color-primary); }
+.meta-location { color: var(--mg-text-soft); }
+.meta-audio { color: var(--mg-primary); }
 
 .card-participants { margin-bottom: 4px; }
 .participants-avatars {
@@ -549,27 +563,26 @@ onMounted(() => {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  /* stylelint-disable-next-line color-named */
-  color: white;
+  background: var(--mg-gradient);
+  color: var(--mg-on-primary);
   font-size: 10px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-left: -6px;
-  border: 2px solid var(--color-bg-card);
+  border: 2px solid var(--mg-glass-border);
 }
 .mini-avatar:first-child { margin-left: 0; }
 .mini-avatar.more {
-  background: var(--color-bg-page);
-  color: var(--color-text-secondary);
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-text-faint);
   font-size: 9px;
 }
 
 .card-summary {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -578,12 +591,12 @@ onMounted(() => {
 }
 
 /* 加载 / 空 */
-.loading-state, .empty-state {
+.loading-state {
   padding: 20px 0;
 }
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
+  padding: 48px 20px;
 }
 .empty-icon {
   font-size: 48px;
@@ -591,24 +604,26 @@ onMounted(() => {
 }
 .empty-title {
   font-size: 15px;
-  color: var(--color-text-regular);
+  font-weight: 700;
+  color: var(--mg-text);
   margin-bottom: 4px;
 }
 .empty-hint {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
 .skeleton-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
   padding: 16px;
   margin-bottom: 10px;
 }
 .skeleton-line {
   height: 12px;
-  background: var(--color-border);
-  border-radius: var(--radius-sm);
+  background: var(--mg-track);
+  border-radius: var(--mg-radius-pill);
   margin-bottom: 8px;
   position: relative;
   overflow: hidden;
@@ -617,7 +632,7 @@ onMounted(() => {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, var(--color-bg-warm), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
   animation: shimmer 1.5s infinite;
 }
 .skeleton-line.w-60 { width: 60%; }
@@ -627,37 +642,40 @@ onMounted(() => {
 .pagination-info {
   text-align: center;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-faint);
   padding: 12px 0;
 }
 
 /* Header action */
 .header-action {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: transparent;
   border: none;
   font-size: 18px;
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-}
-.header-action:active { background: var(--color-primary-bg); }
-.header-action.primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  font-weight: 600;
-  font-size: 22px;
-  width: 36px;
-  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.header-action:active { background: var(--mg-glass-bg-strong); }
+.header-action.primary {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 800;
+  font-size: 22px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--mg-primary-shadow);
+}
 
-/* ActionSheet */
+/* ActionSheet — 玻璃底由 .mg-glass-strong 提供, 此处只覆盖顶部圆角/占位 */
 .action-overlay {
   position: fixed;
   inset: 0;
@@ -669,14 +687,13 @@ onMounted(() => {
 }
 .action-panel {
   width: 100%;
-  background: var(--color-bg-card);
-  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
-  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 56px));
+  border-radius: var(--mg-radius-xl) var(--mg-radius-xl) 0 0;
+  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 76px));
 }
 .action-title {
   text-align: center;
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   margin-bottom: 12px;
 }
 .action-item {
@@ -684,25 +701,29 @@ onMounted(() => {
   align-items: center;
   gap: 14px;
   width: 100%;
+  min-height: 48px;
   padding: 14px;
   margin-bottom: 6px;
-  background: var(--color-bg-page);
-  border: none;
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
   font-size: 15px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   text-align: left;
+  transition: transform 150ms ease, background 150ms ease;
 }
-.action-item:active { background: var(--color-bg-hover); }
+.action-item:active { background: var(--mg-glass-bg-strong); transform: scale(0.99); }
 .action-item.cancel {
-  background: var(--color-bg-card);
-  border-top: 1px solid var(--color-border);
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--mg-glass-border);
   border-radius: 0;
   justify-content: center;
   margin-top: 4px;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--mg-text-soft);
 }
 .action-icon {
   width: 32px;
@@ -711,8 +732,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* stylelint-disable-next-line color-named */
-  color: white;
+  color: var(--mg-on-primary);
   font-size: 16px;
   font-weight: 600;
   flex-shrink: 0;
@@ -729,7 +749,7 @@ onMounted(() => {
   transform: translateY(100%);
 }
 
-/* 搜索 Sheet */
+/* 搜索 Sheet — 玻璃底由 .mg-glass-strong 提供 */
 .search-overlay {
   position: fixed;
   inset: 0;
@@ -740,9 +760,8 @@ onMounted(() => {
 }
 .search-panel {
   width: 100%;
-  background: var(--color-bg-card);
-  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
-  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 56px));
+  border-radius: var(--mg-radius-xl) var(--mg-radius-xl) 0 0;
+  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 76px));
 }
 .search-header {
   display: flex;
@@ -753,29 +772,39 @@ onMounted(() => {
 .search-header h3 {
   margin: 0;
   font-size: 16px;
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: 800;
+  color: var(--mg-text-strong);
 }
 .search-header button {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: transparent;
   border: none;
   font-size: 18px;
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
   cursor: pointer;
 }
+.search-header button:active { background: var(--mg-glass-bg-strong); }
 .search-input {
   width: 100%;
   padding: 12px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-page);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   font-size: 15px;
   outline: none;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
+  font-family: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
-.search-input:focus { border-color: var(--color-primary); }
+.search-input::placeholder { color: var(--mg-text-faint); }
+.search-input:focus {
+  border-color: var(--mg-primary);
+  box-shadow: 0 0 0 3px var(--mg-tint-strong);
+}
 .search-actions {
   display: flex;
   gap: 8px;
@@ -783,20 +812,26 @@ onMounted(() => {
 }
 .btn-secondary, .btn-primary {
   flex: 1;
+  min-height: 44px;
   padding: 10px;
-  border-radius: var(--radius-md);
+  border-radius: var(--mg-radius-md);
   border: none;
   font-size: 14px;
   cursor: pointer;
+  transition: transform 150ms ease;
 }
+.btn-secondary:active, .btn-primary:active { transform: scale(0.97); }
 .btn-secondary {
-  background: var(--color-bg-page);
-  color: var(--color-text-regular);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  color: var(--mg-primary);
+  font-weight: 700;
 }
 .btn-primary {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 800;
+  box-shadow: var(--mg-primary-shadow);
 }
 
 .search-sheet-enter-active, .search-sheet-leave-active {
@@ -811,99 +846,11 @@ onMounted(() => {
 }
 </style>
 
-<!-- W68 第 14 批 C-2: Mobile UX v3.3 dark mode 跨组件统一 (v60-v67 教训: 非 scoped) -->
+<!-- 液态毛玻璃升级 (2026-08-31): dark mode 主色由 --mg-* token 层 ([data-theme="dark"]) 自动适配,
+     原非 scoped dark 覆盖块已移除, 避免不透明色覆盖玻璃配方。
+     保留本最小块: hairline 兜底 + mobile_dark_v33.spec [C] 守卫 (非 scoped dark 块必须存在且含 var(--color-*)) -->
 <style>
-/* meeting card / 时间块 / 状态徽章 / 状态点 / 参与人 / 摘要 / 空态 在 dark 适配 */
-[data-theme="dark"] .meeting-card {
-  background: var(--color-bg-card);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .card-time-block {
-  background: var(--color-bg-page);
-  border: 1px solid var(--color-border);
-}
-[data-theme="dark"] .time-month,
-[data-theme="dark"] .time-day,
-[data-theme="dark"] .time-weekday {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .card-title {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .card-meta {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .meta-location { color: var(--color-text-secondary); }
-[data-theme="dark"] .meta-audio { color: var(--color-primary); }
-[data-theme="dark"] .card-summary {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .tag-scheduled { background: var(--color-info-bg); color: var(--color-info); }
-[data-theme="dark"] .tag-recording,
-[data-theme="dark"] .tag-processing { background: var(--color-warning-bg); color: var(--color-warning); }
-[data-theme="dark"] .tag-completed { background: var(--color-success-bg); color: var(--color-success); }
-[data-theme="dark"] .tag-cancelled { background: var(--color-bg-page); color: var(--color-text-secondary); }
-[data-theme="dark"] .tag-error { background: var(--color-danger-bg); color: var(--color-danger); }
-[data-theme="dark"] .status-tag {
-  background: var(--color-bg-page);
-}
-[data-theme="dark"] .mini-avatar {
-  border-color: var(--color-bg-card);
-}
-[data-theme="dark"] .mini-avatar.more {
-  background: var(--color-bg-page);
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .empty-state,
-[data-theme="dark"] .loading-state {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .empty-title {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .skeleton-card {
-  background: var(--color-bg-card);
-}
-[data-theme="dark"] .skeleton-line {
-  background: var(--color-border-light);
-}
-[data-theme="dark"] .skeleton-line::after {
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
-}
-[data-theme="dark"] .search-input {
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .btn-secondary {
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .btn-primary {
-  background: var(--color-primary);
-  color: var(--color-bg-card);
-}
-[data-theme="dark"] .search-header button {
-  color: var(--color-text-regular);
-}
-[data-theme="dark"] .filter-chip {
-  background: var(--color-bg-card);
-  color: var(--color-text-regular);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .filter-chip.active {
-  background: var(--color-primary);
-  color: var(--color-bg-card);
-  border-color: var(--color-primary);
-}
-[data-theme="dark"] .action-item {
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .action-item:active {
-  background: var(--color-bg-hover);
-}
-[data-theme="dark"] .action-item.cancel {
-  background: var(--color-bg-card);
+[data-theme="dark"] .mobile-meeting-view .filter-chip {
+  border-color: var(--color-border-light);
 }
 </style>

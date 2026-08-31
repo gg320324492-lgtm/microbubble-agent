@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-meeting-room">
+  <div class="mobile-meeting-room mg-page">
     <PageHeader
       :title="pageTitle"
       show-back
@@ -17,7 +17,7 @@
     </PageHeader>
 
     <!-- 录音器（复用桌面端 AudioRecorder，模式：录完一次性上传 → 后台离线分析） -->
-    <main class="room-main">
+    <main class="room-main mg-glass-strong mg-rise">
       <AudioRecorder
         ref="recorderRef"
         @recording-start="onRecordingStart"
@@ -37,7 +37,7 @@
     <Teleport to="body">
       <Transition name="help-sheet">
         <div v-if="showHelp" class="help-overlay" @click.self="showHelp = false">
-          <div class="help-panel">
+          <div class="help-panel mg-glass-strong">
             <div class="help-header">
               <h3>使用说明</h3>
               <button type="button" aria-label="关闭" @click="showHelp = false">✕</button>
@@ -252,42 +252,47 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 液态毛玻璃重皮肤 (2026-08-31): 仅视觉层, 录音/上传/轮询逻辑与
+   AudioRecorder / ProcessingSheet 组件接口零改动 */
 .mobile-meeting-room {
   min-height: 100vh;
-  background: var(--color-bg-page);
   display: flex;
   flex-direction: column;
 }
 
+/* 录音器容器 = 悬浮玻璃卡 (玻璃配方由 .mg-glass-strong 提供) */
 .room-main {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  padding-bottom: calc(16px + var(--sab, 0px));
+  margin: 16px;
+  padding: 20px;
+  padding-bottom: calc(20px + var(--sab, 0px));
   -webkit-overflow-scrolling: touch;
 }
 
 /* 顶栏右侧按钮 */
 .header-action {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: transparent;
   font-size: 18px;
+  color: var(--mg-text-soft);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   transition: background 0.2s;
+  -webkit-tap-highlight-color: transparent;
 }
 .header-action:active {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--mg-glass-bg-strong);
 }
 
-/* 帮助 Sheet */
+/* 帮助 Sheet — 玻璃底由 .mg-glass-strong 提供, 此处只覆盖顶部圆角 */
 .help-overlay {
   position: fixed;
   inset: 0;
@@ -302,8 +307,7 @@ onMounted(async () => {
 }
 .help-panel {
   width: 100%;
-  background: var(--color-bg-card, #fff);
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--mg-radius-xl) var(--mg-radius-xl) 0 0;
   padding: 16px;
   padding-bottom: calc(16px + var(--sab, 0px));
   max-height: 80vh;
@@ -314,22 +318,26 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border-light, #eee);
+  border-bottom: 1px solid var(--mg-divider);
   margin-bottom: 16px;
 }
 .help-header h3 {
   margin: 0;
   font-size: 16px;
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: 800;
+  color: var(--mg-text-strong);
 }
 .help-header button {
   background: none;
   border: none;
   font-size: 20px;
   cursor: pointer;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--mg-text-soft);
 }
+.help-header button:active { background: var(--mg-glass-bg-strong); }
 .help-content {
   display: flex;
   flex-direction: column;
@@ -343,25 +351,26 @@ onMounted(async () => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-warning));
-  color: var(--color-bg-card);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: var(--font-weight-bold, 700);
+  font-weight: 800;
   font-size: 14px;
   flex-shrink: 0;
+  box-shadow: var(--mg-primary-shadow);
 }
 .help-text strong {
   display: block;
   font-size: 14px;
   margin-bottom: 4px;
-  color: var(--color-text-primary);
+  color: var(--mg-text-strong);
 }
 .help-text p {
   margin: 0;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   line-height: 1.5;
 }
 
@@ -384,12 +393,11 @@ onMounted(async () => {
 }
 </style>
 
-<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped）
+     2026-08-31 液态毛玻璃升级: .mobile-meeting-room / .help-panel 的 dark 覆盖已移除 —
+     它们会用不透明色盖掉 mg-page / mg-glass-strong 玻璃配方, dark 由 --mg-* token 层自动适配.
+     以下规则针对 AudioRecorder 子组件的全局 class, 保留不动. -->
 <style>
-/* 全屏听会底色 + 头像 + 波形条 + 状态徽章在 dark 模式适配 */
-[data-theme="dark"] .mobile-meeting-room {
-  background: var(--color-bg-page);
-}
 [data-theme="dark"] .room-toolbar {
   background: var(--color-bg-card);
   border-bottom: 1px solid var(--color-border-light);
@@ -406,9 +414,5 @@ onMounted(async () => {
 }
 [data-theme="dark"] .speaker-name {
   color: var(--color-text-primary);
-}
-[data-theme="dark"] .help-panel {
-  background: var(--color-bg-card);
-  color: var(--color-text-regular);
 }
 </style>

@@ -90,24 +90,26 @@ function handleAction(action) {
   min-height: 40px;
   max-width: 180px;
   padding: 7px 12px 7px 8px;
-  border: 1px solid var(--color-border-light);
+  border: 1.5px solid var(--mg-glass-border, var(--color-border-light));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
   border-radius: 22px;
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-md, 0 6px 18px rgba(28, 25, 23, .15));
+  background: var(--mg-glass-bg-strong, var(--color-bg-card));
+  color: var(--mg-text, var(--color-text-primary));
+  box-shadow: var(--mg-shadow, var(--shadow-md, 0 6px 18px rgba(28, 25, 23, .15)));
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
   animation-delay: calc(var(--fab-index) * 45ms);
 }
-.mobile-fab-action.danger { color: var(--color-danger, #f56c6c); }
+.mobile-fab-action.danger { color: var(--mg-danger, var(--color-danger, #f56c6c)); }
 .mobile-fab-action-icon {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--color-primary-bg);
+  background: var(--mg-gradient-soft, var(--color-primary-bg));
   font-size: 15px;
 }
 .mobile-fab-action-label { overflow: hidden; text-overflow: ellipsis; }
@@ -119,9 +121,9 @@ function handleAction(action) {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  background: var(--mg-gradient-btn, linear-gradient(135deg, var(--color-primary), var(--color-accent)));
   color: var(--el-color-white, #fff);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--mg-primary-shadow, var(--shadow-lg));
   font-size: 30px;
   line-height: 1;
   cursor: pointer;
@@ -141,9 +143,9 @@ function handleAction(action) {
 <!-- Dark mode must cross the component boundary. Keep this block unscoped. -->
 <style>
 [data-theme="dark"] .mobile-fab-action {
-  background: var(--color-bg-card);
-  border-color: var(--color-border);
-  color: var(--color-text-primary);
+  background: var(--mg-glass-bg-strong);
+  border-color: var(--mg-glass-border);
+  color: var(--mg-text);
 }
-[data-theme="dark"] .mobile-fab-action-icon { background: var(--color-primary-bg); }
+[data-theme="dark"] .mobile-fab-action-icon { background: var(--mg-tint); }
 </style>

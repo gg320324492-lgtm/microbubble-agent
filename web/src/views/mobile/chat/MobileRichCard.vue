@@ -37,6 +37,13 @@ const resolved = computed(() => RichContent)
 .mobile-rich-card {
   font-size: 13px;
 }
+/* 液态玻璃: 挂在 .mobile-rich-card 前缀内, 不污染桌面 RichContent */
+.mobile-rich-card .rich-card {
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+  box-shadow: var(--mg-shadow-sm);
+}
 .mobile-rich-card .el-table {
   font-size: 12px;
 }
@@ -51,13 +58,13 @@ const resolved = computed(() => RichContent)
 <style>
 /* MobileRichCard 是 RichContent 包装；内嵌 10 个 Rich Block 已有 dark 块（v77 P2.6-A 验证） */
 [data-theme="dark"] .mobile-rich-card .rich-card {
-  background: var(--color-bg-card);
-  color: var(--color-text-regular);
-  border: 1px solid var(--color-border-light);
+  background: var(--mg-glass-bg);
+  color: var(--mg-text);
+  border: 1.5px solid var(--mg-glass-border);
 }
 [data-theme="dark"] .mobile-rich-card pre,
 [data-theme="dark"] .mobile-rich-card code {
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-text);
 }
 </style>

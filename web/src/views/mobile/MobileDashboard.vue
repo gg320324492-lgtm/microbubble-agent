@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-dashboard">
+  <div class="mobile-dashboard mg-page">
     <PageHeader title="首页" />
 
     <main
@@ -7,16 +7,16 @@
       :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
     >
       <!-- 欢迎卡片 -->
-      <section class="welcome-card">
+      <section class="welcome-card mg-rise">
         <div class="welcome-content">
           <div class="greeting">{{ greeting }}，{{ username }}！</div>
           <div class="date">{{ currentDate }}</div>
         </div>
-        <div class="welcome-emoji">💬</div>
+        <div class="welcome-emoji">🫧</div>
       </section>
 
       <!-- 快捷入口 -->
-      <section class="quick-grid">
+      <section class="quick-grid mg-rise mg-stagger-1">
         <button
           v-for="action in quickActions"
           :key="action.path"
@@ -32,7 +32,7 @@
       </section>
 
       <!-- 数据统计 -->
-      <section v-if="!loading && summary" class="stats-section">
+      <section v-if="!loading && summary" class="stats-section mg-rise mg-stagger-2">
         <h3 class="section-title">📊 团队动态</h3>
         <div class="stats-grid">
           <button
@@ -72,7 +72,7 @@
       </section>
 
       <!-- 待办任务（最近 5 条） -->
-      <section v-if="recentTasks.length > 0" class="recent-section">
+      <section v-if="recentTasks.length > 0" class="recent-section mg-rise mg-stagger-3">
         <div class="section-header">
           <h3 class="section-title">🚀 待办任务</h3>
           <button type="button" class="view-all-btn" @click="$router.push('/tasks')">
@@ -103,7 +103,7 @@
         </div>
       </section>
 
-      <section v-else class="empty-section">
+      <section v-else class="empty-section mg-rise">
         <div class="empty-icon">🎉</div>
         <div class="empty-title">今日任务已完成！</div>
       </section>
@@ -116,6 +116,11 @@
  * MobileDashboard.vue — 移动端仪表盘
  *
  * PR #8a: 简化版（不用桌面兔子/云朵装饰）
+ * 2026-08-31 液态毛玻璃升级 (风格 D):
+ * - 页面根 .mg-page 极光背景
+ * - 渐变紫 hero 欢迎卡 + 玻璃快捷盘 + 玻璃统计/任务行
+ * - 数据获取/路由逻辑零改动
+ *
  * - 欢迎卡片 + 问候语
  * - 5 个快捷入口（聊/任务/会议/知识/我的）
  * - 3 个数据统计卡片
@@ -211,30 +216,28 @@ onMounted(() => {
 <style scoped>
 .mobile-dashboard {
   min-height: 100vh;
-  background: var(--color-bg-page);
 }
 
 .dashboard-main {
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
 }
 
-/* 欢迎卡片 */
+/* 欢迎卡 — 品牌渐变 hero */
 .welcome-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 16px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  border-radius: var(--radius-lg);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.2);
+  padding: 20px 18px;
+  background: var(--mg-gradient-btn);
+  border-radius: var(--mg-radius-lg);
+  color: var(--mg-on-primary);
+  margin-bottom: 14px;
+  box-shadow: var(--mg-primary-shadow);
 }
 .welcome-content { flex: 1; }
 .greeting {
   font-size: 18px;
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: 800;
   margin-bottom: 4px;
 }
 .date {
@@ -242,19 +245,23 @@ onMounted(() => {
   opacity: 0.9;
 }
 .welcome-emoji {
-  font-size: 48px;
-  opacity: 0.85;
+  font-size: 46px;
+  opacity: 0.9;
 }
 
-/* 快捷入口 */
+/* 快捷入口 — 玻璃盘 */
 .quick-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 8px;
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow);
 }
 .quick-item {
   display: flex;
@@ -265,28 +272,33 @@ onMounted(() => {
   border: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  padding: 4px;
+  padding: 8px 4px;
+  min-height: var(--touch-target-min, 44px);
 }
-.quick-item:active { opacity: 0.6; }
+.quick-item:active { transform: scale(0.94); }
 .quick-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  box-shadow: var(--mg-shadow-sm);
 }
 .quick-label {
   font-size: 11px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
+  font-weight: 600;
 }
 
-/* 数据统计 */
+/* 统计 */
 .section-title {
-  font-size: 14px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
   margin: 0 0 10px;
 }
 .section-header {
@@ -300,7 +312,8 @@ onMounted(() => {
   background: transparent;
   border: none;
   font-size: 13px;
-  color: var(--color-primary);
+  color: var(--mg-primary);
+  font-weight: 600;
   cursor: pointer;
   padding: 4px 8px;
 }
@@ -308,19 +321,23 @@ onMounted(() => {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 16px;
 }
 .stat-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
-  padding: 14px 8px;
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-md);
+  padding: 15px 8px;
   text-align: center;
-  border: none;
   cursor: pointer;
+  box-shadow: var(--mg-shadow-sm);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
 }
-.stat-card:active { opacity: 0.7; }
+.stat-card:active { transform: scale(0.97); }
 
 /* v77 P2: PAINT-free pulse-bg - 用 opacity overlay 替代 background: 切换
    background 切换触发 paint (整个元素背景重绘), opacity 仅 composite.
@@ -332,8 +349,8 @@ onMounted(() => {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-danger-bg);
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-danger-soft);
   opacity: 0;
   animation: pulse-bg-opacity 1.5s ease infinite;
   pointer-events: none;
@@ -343,57 +360,62 @@ onMounted(() => {
   50% { opacity: 1; }
 }
 .stat-num {
-  font-size: 24px;
-  font-weight: var(--font-weight-bold, 700);
+  font-size: 26px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--color-text-primary);
+  color: var(--mg-text-strong);
   margin-bottom: 2px;
 }
-.stat-warning .stat-num { color: var(--color-primary); }
-.stat-success .stat-num { color: var(--color-success, #67C23A); }
-.stat-danger .stat-num { color: var(--color-danger, #F56C6C); }
+.stat-warning .stat-num { color: var(--mg-primary); }
+.stat-success .stat-num { color: var(--mg-success); }
+.stat-danger .stat-num { color: var(--mg-danger); }
 .stat-label {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
-/* 待办任务 */
+/* 待办任务 — 玻璃行 */
 .recent-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 .task-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
-  border: none;
+  padding: 13px 14px;
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-md);
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--mg-shadow-sm);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
+  min-height: var(--touch-target-min, 44px);
 }
-.task-item:active { background: var(--color-bg-hover); }
+.task-item:active { transform: scale(0.98); }
 .task-priority {
   width: 4px;
   height: 32px;
   border-radius: 2px;
-  background: var(--color-primary);
+  background: var(--mg-primary);
   flex-shrink: 0;
 }
-.task-priority.priority-high { background: var(--color-danger, #F56C6C); }
-.task-priority.priority-medium { background: var(--color-warning, #E6A23C); }
-.task-priority.priority-low { background: var(--color-success, #67C23A); }
+.task-priority.priority-high { background: var(--mg-danger); }
+.task-priority.priority-medium { background: var(--mg-warning); }
+.task-priority.priority-low { background: var(--mg-success); }
 .task-info {
   flex: 1;
   min-width: 0;
 }
 .task-title {
   font-size: 14px;
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-primary);
+  font-weight: 600;
+  color: var(--mg-text);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -404,15 +426,15 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 .task-due.overdue {
-  color: var(--color-danger, #F56C6C);
-  font-weight: var(--font-weight-medium, 500);
+  color: var(--mg-danger);
+  font-weight: 600;
 }
 .task-arrow {
   font-size: 20px;
-  color: var(--color-text-placeholder);
+  color: var(--mg-text-faint);
 }
 
 /* 空态 */
@@ -426,23 +448,24 @@ onMounted(() => {
 }
 .empty-title {
   font-size: 14px;
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
 }
 
-/* 加载 */
+/* 加载骨架 */
 .loading-section {
   margin-bottom: 16px;
 }
 .skeleton-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
   padding: 16px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .skeleton-line {
   height: 12px;
-  background: var(--color-border);
-  border-radius: var(--radius-sm);
+  background: var(--mg-track);
+  border-radius: var(--mg-radius-pill);
   margin-bottom: 8px;
   position: relative;
   overflow: hidden;
@@ -451,19 +474,24 @@ onMounted(() => {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, var(--color-bg-warm), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
   animation: shimmer 1.5s infinite;
 }
 .skeleton-line.w-60 { width: 60%; }
 .skeleton-line.w-90 { width: 90%; }
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
 </style>
 
-<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一（v60-v67 教训：必须非 scoped） -->
+<!-- dark 跨组件规则保留非 scoped (v60-v67 教训)。
+     mg-* token 自带 dark 变体, 这里仅保留: welcome 渐变压暗 +
+     全局同名 class (quick-action 被 MobileChatView/MobileMessageList 复用) 兜底 -->
 <style>
-/* welcome-card / skeleton / 统计 / 待办任务 / quick action / 标题 在 dark 适配 */
 [data-theme="dark"] .welcome-card {
-  /* welcome-card 用主题色渐变背景，dark 模式压暗一档避免过曝 */
-  filter: brightness(0.9) saturate(0.95);
+  /* 渐变 hero 在 dark 压暗一档避免过曝 */
+  filter: brightness(0.88) saturate(0.95);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 [data-theme="dark"] .skeleton-line {
@@ -472,40 +500,10 @@ onMounted(() => {
 [data-theme="dark"] .skeleton-line::after {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
 }
-/* W68 第 14 批 C-2: 统计 / 待办任务卡 / quick action / 标题在 dark 适配 */
-[data-theme="dark"] .stat-card {
-  background: var(--color-bg-card);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .stat-num {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .stat-label {
-  color: var(--color-text-secondary);
-}
 [data-theme="dark"] .stat-warning .stat-num { color: var(--color-primary); }
 [data-theme="dark"] .stat-success .stat-num { color: var(--color-success); }
 [data-theme="dark"] .stat-danger .stat-num { color: var(--color-danger); }
-[data-theme="dark"] .section-title {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .task-item {
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .task-item:active {
-  background: var(--color-bg-hover);
-}
-[data-theme="dark"] .task-title {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .task-meta {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .task-priority.priority-high { background: var(--color-danger); }
-[data-theme="dark"] .task-priority.priority-medium { background: var(--color-warning); }
-[data-theme="dark"] .task-priority.priority-low { background: var(--color-success); }
+/* 同名 class 全局兜底: 快捷动作 (MobileChatView 等复用 quick-action 命名) */
 [data-theme="dark"] .quick-action {
   background: var(--color-bg-card);
   color: var(--color-text-primary);

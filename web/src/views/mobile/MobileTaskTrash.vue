@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-task-trash">
+  <div class="mobile-task-trash mg-page">
     <PageHeader title="回收站" show-back @back="$router.back()">
       <template #right>
         <button
@@ -26,13 +26,14 @@
       :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
     >
       <!-- 顶部提示 -->
-      <div class="trash-hint">
+      <div class="trash-hint mg-glass mg-rise">
         <span class="hint-icon">ℹ️</span>
         <span>回收站任务将在 3 天后自动永久删除</span>
       </div>
 
       <!-- CardList 列表（支持多选） -->
       <CardList
+        class="trash-list mg-rise mg-stagger-1"
         :items="trashTasks"
         :selectable="editMode"
         v-model:selected="selectedRows"
@@ -260,9 +261,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 液态毛玻璃 (Liquid Glass) — 2026-08-31 升级
+   背景/文字色由全局 .mg-page 提供, 本块不重复设根 background */
 .mobile-task-trash {
   min-height: 100vh;
-  background: var(--color-bg-page);
   display: flex;
   flex-direction: column;
 }
@@ -272,74 +274,164 @@ onMounted(() => {
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
 }
 
+/* PageHeader 玻璃化 */
+:deep(.mobile-page-header) {
+  background: var(--mg-glass-bg);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--mg-glass-border);
+}
+:deep(.header-title) {
+  color: var(--mg-text-strong);
+}
+:deep(.header-back) {
+  color: var(--mg-text);
+}
+:deep(.header-back:active) {
+  background: var(--mg-gradient-soft);
+  color: var(--mg-primary);
+}
+
+/* 顶部提示 — mg-glass 卡 (模板已加), 文案色保持高可读 (v92 X-2 a11y 教训: 警示色文字对比度不足) */
 .trash-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: var(--color-warning-bg);
-  border-radius: var(--radius-md);
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--mg-radius-md);
+  box-shadow: var(--mg-shadow-sm);
   font-size: 12px;
-  /* v92 X-2 a11y: 警示文字 token (on #fdf6ec = 5.89, AA) — 原 --color-warning (#E6A23C) 仅 2.03 */
-  color: var(--color-warning-text);
+  font-weight: 600;
+  color: var(--mg-text);
   margin-bottom: 12px;
 }
+.hint-icon { flex-shrink: 0; }
 
 .header-action {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: transparent;
   border: none;
   font-size: 18px;
-  color: var(--color-text-regular);
+  color: var(--mg-text);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.header-action:active { background: var(--color-primary-bg); }
+.header-action:active { background: var(--mg-gradient-soft); }
+
+/* 任务行 = mg-glass 列表卡 (radius-md / padding 13px 14px / 行间距 10px) */
+.trash-list :deep(.list-body) {
+  gap: 10px;
+}
+.trash-list :deep(.list-item) {
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+  padding: 13px 14px;
+  box-shadow: var(--mg-shadow-sm);
+  transition: transform 150ms ease;
+}
+.trash-list :deep(.list-item:active) { transform: scale(0.99); }
+.trash-list :deep(.list-item.selected) {
+  background: var(--mg-gradient-soft);
+  border-color: var(--mg-primary);
+}
+.trash-list :deep(.list-item.selected .checkbox) {
+  background: var(--mg-primary);
+  border-color: var(--mg-primary);
+}
+.trash-list :deep(.check-mark) { color: var(--mg-on-primary); }
+.trash-list :deep(.item-title) { color: var(--mg-text-strong); }
+.trash-list :deep(.item-subtitle) { color: var(--mg-text-soft); }
+.trash-list :deep(.field-key) { color: var(--mg-text-soft); }
+.trash-list :deep(.field-value) { color: var(--mg-text); }
+.trash-list :deep(.empty-title) { color: var(--mg-text-soft); }
+.trash-list :deep(.empty-hint) { color: var(--mg-text-faint); }
+
+/* 批量操作条 */
+.trash-list :deep(.batch-bar) {
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+  box-shadow: var(--mg-shadow-sm);
+  color: var(--mg-text);
+  margin-bottom: 10px;
+}
+
+/* 倒计时/优先级芯片: danger/warning/info 语义 (CardList badge--* class) */
+:deep(.badge-tag) {
+  border-radius: var(--mg-radius-pill);
+  padding: 3px 10px;
+  font-weight: 600;
+  background: var(--mg-info-soft);
+  color: var(--mg-info);
+}
+:deep(.badge--danger) { background: var(--mg-danger-soft); color: var(--mg-danger); }
+:deep(.badge--warning) { background: var(--mg-warning-soft); color: var(--mg-warning); }
+:deep(.badge--info)    { background: var(--mg-info-soft);    color: var(--mg-info); }
+:deep(.badge--success) { background: var(--mg-success-soft); color: var(--mg-success); }
+:deep(.badge--primary) { background: var(--mg-gradient-soft); color: var(--mg-primary); }
 
 /* CardList slot */
 .item-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 8px;
 }
 .item-btn {
   flex: 1;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  border: none;
+  min-height: 44px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1.5px solid var(--mg-glass-border);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-text);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease, opacity 150ms ease;
 }
+.item-btn:active { transform: scale(0.97); opacity: 0.85; }
 .item-btn.restore {
-  background: var(--color-success-bg);
-  color: var(--color-success, #67C23A);
+  background: var(--mg-success-soft);
+  color: var(--mg-success);
+  border-color: transparent;
 }
 .item-btn.danger {
-  background: var(--color-danger-bg);
-  color: var(--color-danger, #F56C6C);
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
+  border-color: transparent;
 }
 .no-permission {
   font-size: 11px;
-  color: var(--color-text-placeholder);
+  color: var(--mg-text-faint);
   padding: 6px;
 }
 
 /* Batch */
 .batch-btn {
   flex: 1;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  border: none;
+  min-height: 44px;
+  padding: 10px 8px;
+  border-radius: 14px;
+  border: 1.5px solid var(--mg-glass-border);
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-text);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease, opacity 150ms ease;
 }
+.batch-btn:active { transform: scale(0.97); opacity: 0.85; }
 .batch-btn.danger {
-  background: var(--color-danger-bg);
-  color: var(--color-danger, #F56C6C);
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
+  border-color: transparent;
 }
 
 /* 分页 */
@@ -347,35 +439,47 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  padding: 12px 16px;
   margin-top: 12px;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-md);
+  box-shadow: var(--mg-shadow-sm);
 }
 .page-info {
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 .page-actions {
   display: flex;
   gap: 8px;
 }
 .page-actions button {
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-page);
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--mg-radius-pill);
+  border: 1.5px solid var(--mg-glass-border);
+  background: var(--mg-glass-bg-strong);
   font-size: 12px;
-  color: var(--color-text-regular);
+  font-weight: 600;
+  color: var(--mg-text);
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
 }
+.page-actions button:active:not(:disabled) { transform: scale(0.97); }
 .page-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 </style>
 
-<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped）
+     2026-08-31 液态毛玻璃升级: --mg-* token 自带 dark 变体, 玻璃卡无需再覆盖;
+     保留的老 class 名 (trash-item / countdown-*) 可能被其他历史渲染命中, 不删防回归.
+     page-actions button 的 dark 覆盖已改为 --mg-* 玻璃值 (原 --color-bg-card 实色会盖掉玻璃). -->
 <style>
 [data-theme="dark"] .trash-item {
   background: var(--color-bg-card);
@@ -396,9 +500,12 @@ onMounted(() => {
   background: var(--color-primary-bg);
   color: var(--color-primary);
 }
+[data-theme="dark"] .header-action {
+  color: var(--mg-text);
+}
 [data-theme="dark"] .page-actions button {
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-light);
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-text);
+  border: 1.5px solid var(--mg-glass-border);
 }
 </style>

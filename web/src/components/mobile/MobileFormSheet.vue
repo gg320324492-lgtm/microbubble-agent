@@ -381,14 +381,17 @@ watch(
 }
 .sheet-panel {
   width: 100%;
-  background: var(--color-bg-card);
-  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
+  /* 2026-08-31 液态毛玻璃: 深玻璃底部面板 */
+  background: var(--mg-glass-bg-strong, var(--color-bg-card));
+  border: 1.5px solid var(--mg-glass-border, transparent);
+  border-bottom: none;
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--mg-shadow-lg, 0 -8px 30px rgba(0, 0, 0, 0.2));
+  border-radius: var(--sheet-radius, 28px) var(--sheet-radius, 28px) 0 0;
   padding: 8px 20px;
   max-height: 90vh;
   overflow-y: auto;
-}
-[data-theme="dark"] .sheet-panel {
-  background: var(--color-bg-card);
 }
 
 .sheet-handle {

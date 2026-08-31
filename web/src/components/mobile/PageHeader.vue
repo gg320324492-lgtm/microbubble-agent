@@ -1,5 +1,5 @@
 <template>
-  <header class="mobile-page-header glass glass-lg" :style="headerStyle">
+  <header class="mobile-page-header mg-page-header" :style="headerStyle">
     <div class="header-inner" :style="innerStyle">
       <!-- 左侧：返回按钮（slot 也可覆盖） -->
       <div class="header-left">
@@ -86,8 +86,7 @@ function onBack() {
   left: 0;
   right: 0;
   z-index: 100;
-  /* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 */
-  border-bottom: 1px solid var(--color-border);
+  /* 2026-08-31 液态毛玻璃: 玻璃配方由 .mg-page-header 提供 (mobile-glass.css) */
 }
 
 .header-inner {

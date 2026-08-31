@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-knowledge-detail">
+  <div class="mobile-knowledge-detail mg-page">
     <PageHeader :title="knowledge?.title || '知识详情'" show-back @back="$router.back()">
       <template #right>
         <button
@@ -29,7 +29,9 @@
 
       <!-- 元信息 -->
       <div class="detail-meta">
-        <span class="category-badge">{{ getCategoryLabel(knowledge.category) }}</span>
+        <span class="category-badge" :class="knowledge.category ? `knowledge-color-${knowledge.category}` : ''">
+          <span class="category-dot" aria-hidden="true" />{{ getCategoryLabel(knowledge.category) }}
+        </span>
         <span v-if="knowledge.knowledge_type" class="type-badge">
           {{ knowledge.knowledge_type }}
         </span>
@@ -38,11 +40,11 @@
 
       <!-- 标签 -->
       <div v-if="knowledge.tags?.length" class="detail-tags">
-        <span v-for="tag in knowledge.tags" :key="tag" class="tag-chip">#{{ tag }}</span>
+        <span v-for="tag in knowledge.tags" :key="tag" class="tag-chip mg-chip">#{{ tag }}</span>
       </div>
 
       <!-- 核心概念 -->
-      <section v-if="knowledge.key_concepts?.length" class="content-section">
+      <section v-if="knowledge.key_concepts?.length" class="content-section mg-rise mg-stagger-1">
         <h3 class="section-title">💡 核心概念</h3>
         <div class="concept-list">
           <span v-for="c in knowledge.key_concepts" :key="c" class="concept-chip">
@@ -52,7 +54,7 @@
       </section>
 
       <!-- 关联主题 -->
-      <section v-if="knowledge.related_topics?.length" class="content-section">
+      <section v-if="knowledge.related_topics?.length" class="content-section mg-rise mg-stagger-2">
         <h3 class="section-title">🔗 关联主题</h3>
         <div class="concept-list">
           <span v-for="t in knowledge.related_topics" :key="t" class="topic-chip">
@@ -62,7 +64,7 @@
       </section>
 
       <!-- 知识三元组 -->
-      <section v-if="knowledge.entities?.length" class="content-section">
+      <section v-if="knowledge.entities?.length" class="content-section mg-rise mg-stagger-3">
         <h3 class="section-title">🔺 三元组</h3>
         <div class="triple-list">
           <div
@@ -84,19 +86,19 @@
       </section>
 
       <!-- AI 摘要 -->
-      <section v-if="knowledge.summary" class="content-section">
+      <section v-if="knowledge.summary" class="content-section content-section--main mg-rise mg-stagger-4">
         <h3 class="section-title">📝 AI 摘要</h3>
         <div class="summary-text">{{ knowledge.summary }}</div>
       </section>
 
       <!-- 完整内容 -->
-      <section v-if="knowledge.content" class="content-section">
+      <section v-if="knowledge.content" class="content-section content-section--main mg-rise mg-stagger-5">
         <h3 class="section-title">📄 完整内容</h3>
         <div class="content-text" v-html="formatContent(knowledge.content)" />
       </section>
 
       <!-- 来源 -->
-      <section v-if="knowledge.source" class="content-section">
+      <section v-if="knowledge.source" class="content-section mg-rise mg-stagger-5">
         <h3 class="section-title">🔗 来源</h3>
         <div class="source-text">{{ knowledge.source }}</div>
       </section>
@@ -232,7 +234,8 @@ onMounted(() => {
 <style scoped>
 .mobile-knowledge-detail {
   min-height: 100vh;
-  background: var(--color-bg-page);
+  /* 2026-08-31 液态毛玻璃升级: 颜色/圆角/阴影全部走 --mg-* token,
+     极光背景由根节点 .mg-page 提供. 详情页可读性优先: 正文卡背景提到 --mg-glass-bg-strong. */
   display: flex;
   flex-direction: column;
 }
@@ -245,8 +248,8 @@ onMounted(() => {
 /* 标题 */
 .detail-title {
   font-size: 20px;
-  font-weight: var(--font-weight-bold, 700);
-  color: var(--color-text-primary);
+  font-weight: 800;
+  color: var(--mg-text-strong);
   line-height: 1.4;
   margin: 0 0 12px;
 }
@@ -259,23 +262,36 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 12px;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 .category-badge, .type-badge {
-  padding: 2px 8px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  color: var(--mg-primary);
+  border-radius: var(--mg-radius-pill);
+  font-weight: 600;
+}
+/* 分类色点: 沿用全局 .knowledge-color-* 的 --accent 原色语义, 无分类时回落主色 */
+.category-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, var(--mg-primary));
+  flex-shrink: 0;
 }
 .type-badge {
-  background: var(--color-bg-page);
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
 }
 .detail-date {
   font-size: 11px;
+  color: var(--mg-text-soft);
 }
 
-/* 标签 */
+/* 标签 (基础胶囊形状/色由模板上的 .mg-chip 提供) */
 .detail-tags {
   display: flex;
   flex-wrap: wrap;
@@ -283,27 +299,31 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 .tag-chip {
-  padding: 4px 10px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  border-radius: var(--radius-full);
   font-size: 11px;
 }
 
-/* 内容区 */
+/* 内容区: 玻璃卡; --main (摘要/完整内容) 背景提高保证可读性 */
 .content-section {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow-sm);
   padding: 16px;
   margin-bottom: 12px;
 }
+.content-section--main {
+  background: var(--mg-glass-bg-strong);
+  box-shadow: var(--mg-shadow);
+}
 .section-title {
   font-size: 14px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-weight: 800;
+  color: var(--mg-text-strong);
   margin: 0 0 12px;
   padding-left: 8px;
-  border-left: 3px solid var(--color-primary);
+  border-left: 3px solid var(--mg-primary);
 }
 
 /* 概念 / 主题 */
@@ -313,15 +333,19 @@ onMounted(() => {
   gap: 6px;
 }
 .concept-chip, .topic-chip {
+  display: inline-flex;
+  align-items: center;
   padding: 4px 10px;
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
-  border-radius: var(--radius-sm);
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  color: var(--mg-text);
+  border-radius: var(--mg-radius-pill);
   font-size: 12px;
 }
 .topic-chip {
-  background: var(--color-warning-bg);
-  color: var(--color-warning, #E6A23C);
+  background: var(--mg-warning-soft);
+  border-color: transparent;
+  color: var(--mg-warning);
 }
 
 /* 三元组 */
@@ -332,8 +356,9 @@ onMounted(() => {
 }
 .triple-card {
   padding: 10px 12px;
-  background: var(--color-bg-page);
-  border-radius: var(--radius-sm);
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
 }
 .triple-row {
   display: flex;
@@ -343,40 +368,40 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 .triple-subject, .triple-object {
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-primary);
+  font-weight: 700;
+  color: var(--mg-primary);
 }
 .triple-predicate {
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   font-size: 12px;
 }
 .triple-condition {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   margin-top: 4px;
 }
 .triple-confidence {
   margin-top: 6px;
   height: 3px;
-  background: var(--color-border);
+  background: var(--mg-glass-border);
   border-radius: 2px;
   overflow: hidden;
 }
 .conf-bar {
   height: 100%;
-  background: var(--color-primary);
+  background: var(--mg-gradient-btn);
 }
 
 /* 摘要 + 内容 */
 .summary-text, .content-text, .source-text {
   font-size: 14px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .source-text {
-  color: var(--color-primary);
+  color: var(--mg-primary);
   text-decoration: underline;
 }
 
@@ -388,29 +413,35 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 12px;
+  color: var(--mg-text-soft);
 }
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
+  border: 3px solid var(--mg-glass-border);
+  border-top-color: var(--mg-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-/* Header */
+/* Header — 玻璃胶囊 (与列表页一致, 触摸目标 44px) */
 .header-action {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: transparent;
-  border: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--mg-shadow-sm);
   font-size: 18px;
-  color: var(--color-text-regular);
+  color: var(--mg-text);
   cursor: pointer;
+  transition: transform 150ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.header-action:active { background: var(--color-primary-bg); }
+.header-action:active { transform: scale(0.94); }
 
-/* 目录 Sheet */
+/* 目录 Sheet — 悬浮强玻璃面板 (mg token 自带 dark 变体) */
 .toc-overlay {
   position: fixed;
   inset: 0;
@@ -422,20 +453,23 @@ onMounted(() => {
 .toc-panel {
   width: 80%;
   max-width: 320px;
-  background: var(--color-bg-card);
-  border-radius: 0 var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--mg-shadow-lg);
+  border-radius: 0 var(--mg-radius-lg) var(--mg-radius-lg) 0;
   padding: 8px 16px;
   height: 100%;
   overflow-y: auto;
 }
-[data-theme="dark"] .toc-panel { background: var(--color-bg-card); }
 .toc-handle {
   display: none;
 }
 .toc-title {
   font-size: 16px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-weight: 800;
+  color: var(--mg-text-strong);
   margin: 12px 0 16px;
 }
 .toc-list {
@@ -444,17 +478,18 @@ onMounted(() => {
   gap: 4px;
 }
 .toc-item {
+  min-height: 44px;
   padding: 12px;
   background: transparent;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--mg-radius-md);
   font-size: 14px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.toc-item:active { background: var(--color-primary-bg); color: var(--color-primary); }
+.toc-item:active { background: var(--mg-glass-bg); color: var(--mg-primary); }
 
 .toc-sheet-enter-active, .toc-sheet-leave-active {
   transition: opacity 0.25s ease;
