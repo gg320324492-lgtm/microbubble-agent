@@ -114,22 +114,32 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
       // 404 表示 session 尚未注册: 阻塞创建后只重试一次。
       // 401 是认证失败, 绝不能通过重建 session 掩盖或形成重试噪音; 403 同理。
       if (status === 404) {
+        // 2026-08-31 修复 (chatHistory.test "不死循环" 契约):
+        // 原实现走 createServerSession, 任何失败都被吞成 null → else 分支对
+        // 「真失败」也盲目 200ms 重试 (无意义二次写)。这里直接调 API 区分三种结果:
+        //   create 成功      → 补记账号 → 重试 append 一次
+        //   create 409 冲突  → 会话已被别处注册 → 重试 append 一次 (保留 #P5+ 竞态缓解)
+        //   create 其他失败  → 直接返回 null, 不再 append (避免重试噪音/死循环)
+        let recoverable = false
         try {
-          const created = await createServerSession({
-            clientSessionId: sid,
-            firstMessage: msg?.content,
+          const created = await chatHistoryApi.createSession({
+            client_session_id: sid,
+            ...(msg?.content ? { first_message: msg.content } : {}),
           })
           if (created) {
-            return await chatHistoryApi.appendMessage(sid, msg)
-          } else {
-            // #P5+: createServerSession 返 null (可能 409 冲突或 server 错误)
-            // 等待 200ms 再试一次 (等 server session 注册生效)
-            await new Promise(r => setTimeout(r, 200))
-            return await chatHistoryApi.appendMessage(sid, msg)
+            if (!syncedSessionIds.value.has(created.id)) {
+              serverSessions.value.unshift(created)
+              syncedSessionIds.value.add(created.id)
+            }
+            recoverable = true
           }
-        } catch {
-          // createServerSession 自身失败 → 走原错误路径
+        } catch (ce: any) {
+          recoverable = ce?.response?.status === 409
         }
+        if (recoverable) {
+          return await chatHistoryApi.appendMessage(sid, msg)
+        }
+        return null
       }
       // best-effort: 失败不阻塞流式。认证失败由全局鉴权流程处理，避免重复 console 噪音。
       // CLAUDE.md 2026-06-12 "持久化失败必须 best-effort" 铁律

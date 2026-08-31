@@ -288,7 +288,8 @@ describe('desktop_emoji_lazy 评论级 popover (W68 第 12 批 C-3)', () => {
 
     // 强制让 picker 显示: 通过 wrapper.vm 或者 data 属性
     // 简单做法: 直接访问 component instance
-    const vm: any = wrapper.vm as any
+    // 2026-08-31 fix: 原写 `const vm: any =` TS 注解在 .js 文件中 → rollup 解析必炸
+    const vm = wrapper.vm
     if (vm && typeof vm === 'object') {
       vm.showEmojiPicker = true
     }

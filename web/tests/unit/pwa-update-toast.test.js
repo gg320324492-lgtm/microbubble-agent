@@ -42,13 +42,17 @@ describe('PwaUpdateToast — Service Worker 更新提示', () => {
   })
 
   it('点击点此刷新会调用 window.location.reload', async () => {
-    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {})
+    // 2026-08-31: 新版 jsdom 中 window.location.reload 属性不可重定义,
+    // vi.spyOn(window.location, 'reload') 直接 TypeError → 改 stubGlobal 整个 location
+    const reload = vi.fn()
+    vi.stubGlobal('location', { href: 'http://localhost/', reload })
     const wrapper = mount(PwaUpdateToast)
     serviceWorker.emit('message', { data: { type: 'SW_UPDATED', version: 'v81' } })
     await nextTick()
 
     await wrapper.find('[data-testid="pwa-update-toast-refresh"]').trigger('click')
     expect(reload).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
     wrapper.unmount()
   })
 

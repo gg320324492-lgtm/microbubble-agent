@@ -148,8 +148,12 @@ describe('assistantPhase — W99 +12', () => {
       expect(advancePhase('generating', 'generating')).toBe('generating')
     })
 
-    it('lower rank 后退被拒绝（queued 收 retrieving → 保持 queued）', () => {
-      expect(advancePhase('queued', 'retrieving')).toBe('queued')
+    // 2026-08-31 修正: 原断言 (queued 收 retrieving → 保持 queued) 与模块自身
+    // 「只许前进」语义矛盾 — 前向跳级 rank 更高应放行 (后端缺 thinking 事件时
+    // 胶囊才能跟上真实阶段, 禁跳级会卡死在「正在理解问题」)。
+    // 真正要防的「后退拒绝」已由上方 generating 收 retrieving 用例覆盖。
+    it('前向跳级被允许（queued 收 retrieving → retrieving, 只许前进语义）', () => {
+      expect(advancePhase('queued', 'retrieving')).toBe('retrieving')
     })
   })
 

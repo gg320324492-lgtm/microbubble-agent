@@ -71,11 +71,11 @@ export const isRetrievalTool = (n?: string): boolean =>
   !!n && (RETRIEVAL_TOOLS as readonly string[]).includes(n)
 
 /**
- * 单调递进 + 显式重置守卫
- * - 终态 next 是显式重置指令（abort/done/error 互不复活）
- * - 终态 cur 不可被任何非终态覆盖
- * - refining 是显式重置（后端已清空 content）
- * - refining → generating 允许（重试后再次生成）
+ * 单调递进 + 首个终态冻结守卫
+ * - 终态 cur 一旦落下即冻结: abort/done/error 互不覆盖 (防御 abort 后残余 done 翻 UI)
+ * - 非终态 → 终态 next: 允许 (case 7, 正常收敛)
+ * - 从 error/aborted 恢复不靠 advancePhase 复活, 靠用户重发创建全新 message (phase 从 queued 起)
+ * - refining 是显式重置（后端已清空 content）; refining → generating 允许（重试后再生成）
  * - 其余严格按 PHASE_RANK 比较，只许前进
  */
 export function advancePhase(
@@ -83,8 +83,11 @@ export function advancePhase(
   next: AssistantPhase,
 ): AssistantPhase {
   const cur = current ?? 'queued'
-  if (isTerminalPhase(next)) return next
+  // 终态冻结必须最先判 (2026-08-31 修复): 原顺序 next-terminal 先 return next,
+  // 导致 done/aborted 之间互相覆盖 — abort 后残余 done 事件会把 UI 从
+  // 「已中断」翻成「已完成」, 违反本模块文档「终态不可复活」。
   if (isTerminalPhase(cur)) return cur
+  if (isTerminalPhase(next)) return next
   if (next === 'refining') return 'refining'
   if (cur === 'refining' && next === 'generating') return 'generating'
   return PHASE_RANK[next] > PHASE_RANK[cur] ? next : cur
