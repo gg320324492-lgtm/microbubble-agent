@@ -68,8 +68,8 @@
       <LongPressWrapper
         v-for="file in driveFiles"
         :key="file.id"
-        :duration="600"
-        @long-press="onLongPressFile(file)"
+        :delay="600"
+        @longpress="onLongPressFile(file)"
       >
         <li
           class="file-item mg-glass"
