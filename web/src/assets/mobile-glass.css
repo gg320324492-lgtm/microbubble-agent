@@ -1,0 +1,315 @@
+/* ============================================================
+   mobile-glass.css — 移动端「液态毛玻璃 (Liquid Glass)」设计系统
+   (2026-08-31 移动端 UI 全面升级 · 风格 D 选定方案)
+
+   设计语言:
+   - 极光渐变背景 (3 组径向渐变色团, 零 blur 性能成本)
+   - 全透明毛玻璃卡片 (.mg-glass)
+   - 紫→粉渐变主操作色 (--mg-gradient)
+   - 大圆角 + 柔和紫调阴影 + 悬浮玻璃胶囊 TabBar
+
+   作用域纪律:
+   - 仅移动视图使用 (类 20.188 桌面/移动双栈物理隔离), 桌面端不引用 mg-* 类
+   - 不覆盖 --color-* 全局 token, 老视图零影响, 可逐视图迁移
+   - dark 变体: 深紫极光 + 降透明度玻璃, 跟随 [data-theme="dark"]
+   ============================================================ */
+
+:root {
+  /* ----- 极光色团 (light) ----- */
+  --mg-aurora-1: rgba(255, 201, 184, 0.9);  /* 蜜桃 */
+  --mg-aurora-2: rgba(205, 189, 245, 0.95); /* 薰衣草 */
+  --mg-aurora-3: rgba(189, 235, 217, 0.9);  /* 薄荷 */
+  --mg-page-bg: #F4EFFB;
+
+  /* ----- 文字 ----- */
+  --mg-text: #322940;
+  --mg-text-strong: #3B2E52;
+  --mg-text-soft: #8A7BA8;
+  --mg-text-faint: #A396BC;
+
+  /* ----- 玻璃卡片配方 ----- */
+  --mg-glass-bg: rgba(255, 255, 255, 0.5);
+  --mg-glass-bg-strong: rgba(255, 255, 255, 0.66);
+  --mg-glass-border: rgba(255, 255, 255, 0.92);
+  --mg-glass-blur: 18px;
+  --mg-shadow: 0 14px 34px rgba(120, 90, 180, 0.14);
+  --mg-shadow-sm: 0 8px 20px rgba(120, 90, 180, 0.1);
+  --mg-shadow-lg: 0 18px 40px rgba(120, 90, 180, 0.24);
+
+  /* ----- 品牌渐变 (紫→品红→粉) ----- */
+  --mg-primary: #7C6BD8;
+  --mg-primary-2: #C66BD8;
+  --mg-primary-3: #F08AC0;
+  --mg-gradient: linear-gradient(135deg, #7C6BD8 0%, #C66BD8 55%, #F08AC0 100%);
+  --mg-gradient-btn: linear-gradient(135deg, #7C6BD8 0%, #B66BD8 60%, #F08AC0 100%);
+  --mg-gradient-soft: linear-gradient(135deg, #EFE9FF 0%, #FFE9F3 100%);
+  --mg-on-primary: #FFFFFF;
+  --mg-primary-shadow: 0 8px 22px rgba(124, 107, 216, 0.38);
+
+  /* ----- 语义色 (与玻璃调协调) ----- */
+  --mg-success: #34B785;
+  --mg-success-soft: #E3F6ED;
+  --mg-warning: #E9A23B;
+  --mg-warning-soft: #FCF1DE;
+  --mg-danger: #E26A6A;
+  --mg-danger-soft: #FBE9E9;
+  --mg-info: #6B9CD8;
+  --mg-info-soft: #E8F0FB;
+
+  /* ----- 半透明点缀 (视图内禁裸写 rgba 彩色, mobile_dark_v33 lint [D]; 一律引用这些 token) ----- */
+  --mg-tint: rgba(124, 107, 216, 0.12);        /* 品牌色淡底: 高亮块/进度轨道/分隔 */
+  --mg-tint-strong: rgba(124, 107, 216, 0.2);
+  --mg-track: rgba(124, 107, 216, 0.15);       /* conic 进度轨道 */
+  --mg-divider: rgba(124, 107, 216, 0.12);     /* 列表分隔线 */
+
+  /* ----- 圆角 ----- */
+  --mg-radius-md: 16px;
+  --mg-radius-lg: 22px;
+  --mg-radius-xl: 28px;
+  --mg-radius-pill: 999px;
+
+  /* ----- 悬浮胶囊 TabBar 尺寸 (占位用, 页面底部 padding 需 ≥ 此值 + sab) ----- */
+  --mg-tabbar-h: 58px;
+  --mg-tabbar-float: 14px;
+  --tabbar-height: calc(var(--mg-tabbar-h) + var(--mg-tabbar-float) + 8px);
+
+  /* ----- 底部 Sheet 大圆角 (消费者均为移动组件) ----- */
+  --sheet-radius: 28px;
+}
+
+/* ----- dark: 深紫极光 ----- */
+[data-theme="dark"] {
+  --mg-aurora-1: rgba(120, 78, 160, 0.5);
+  --mg-aurora-2: rgba(72, 62, 150, 0.55);
+  --mg-aurora-3: rgba(52, 120, 110, 0.4);
+  --mg-page-bg: #16131F;
+
+  --mg-text: #EAE6F5;
+  --mg-text-strong: #F4F1FB;
+  --mg-text-soft: #A79CC4;
+  --mg-text-faint: #7E749B;
+
+  --mg-glass-bg: rgba(58, 50, 86, 0.5);
+  --mg-glass-bg-strong: rgba(64, 55, 94, 0.66);
+  --mg-glass-border: rgba(168, 150, 224, 0.22);
+  --mg-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+  --mg-shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.28);
+  --mg-shadow-lg: 0 18px 40px rgba(0, 0, 0, 0.45);
+
+  --mg-gradient-soft: linear-gradient(135deg, rgba(124, 107, 216, 0.22), rgba(240, 138, 192, 0.14));
+  --mg-primary-shadow: 0 8px 22px rgba(124, 107, 216, 0.3);
+
+  --mg-success-soft: rgba(52, 183, 133, 0.16);
+  --mg-warning-soft: rgba(233, 162, 59, 0.16);
+  --mg-danger-soft: rgba(226, 106, 106, 0.16);
+  --mg-info-soft: rgba(107, 156, 216, 0.16);
+}
+
+/* ============================================================
+   1. 页面根 (.mg-page) — 极光背景 + 文字色
+   用法: <div class="mobile-xxx mg-page">  加在各视图根节点
+   background-attachment: fixed 让色团在长滚动页面中保持位置,
+   iOS Safari 不支持 fixed attachment → 退化为跟随内容滚动, 视觉可接受
+   ============================================================ */
+.mg-page {
+  min-height: 100%;
+  background:
+    radial-gradient(420px 420px at -10% -6%, var(--mg-aurora-1) 0%, transparent 62%),
+    radial-gradient(400px 400px at 112% 30%, var(--mg-aurora-2) 0%, transparent 62%),
+    radial-gradient(400px 400px at -14% 104%, var(--mg-aurora-3) 0%, transparent 62%),
+    var(--mg-page-bg);
+  color: var(--mg-text);
+}
+@supports (background-attachment: fixed) {
+  @media (min-width: 1024px) {
+    .mg-page { background-attachment: fixed; }
+  }
+}
+
+/* ============================================================
+   2. 玻璃卡片 (.mg-glass)
+   ============================================================ */
+.mg-glass {
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow);
+}
+.mg-glass-strong {
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow-lg);
+}
+
+/* ============================================================
+   3. 主按钮 / 玻璃按钮 / 小芯片
+   ============================================================ */
+.mg-btn-primary {
+  border: none;
+  border-radius: 18px;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 800;
+  box-shadow: var(--mg-primary-shadow);
+  transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.mg-btn-primary:active:not(:disabled) { transform: scale(0.97); }
+.mg-btn-primary:disabled { opacity: 0.55; }
+
+.mg-btn-glass {
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: 14px;
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--mg-primary);
+  font-weight: 700;
+  box-shadow: var(--mg-shadow-sm);
+  transition: transform 150ms ease;
+}
+.mg-btn-glass:active { transform: scale(0.97); }
+
+.mg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mg-primary);
+  background: rgba(124, 107, 216, 0.12);
+  border-radius: var(--mg-radius-pill);
+  padding: 3px 10px;
+}
+[data-theme="dark"] .mg-chip { color: #B9ADF0; }
+
+/* 语义 chip 变体 */
+.mg-chip.ok    { color: var(--mg-success); background: var(--mg-success-soft); }
+.mg-chip.warn  { color: var(--mg-warning); background: var(--mg-warning-soft); }
+.mg-chip.dgr   { color: var(--mg-danger);  background: var(--mg-danger-soft); }
+.mg-chip.info  { color: var(--mg-info);    background: var(--mg-info-soft); }
+
+/* ============================================================
+   4. 玻璃输入框
+   ============================================================ */
+.mg-input {
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: var(--mg-text);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.mg-input::placeholder { color: var(--mg-text-faint); }
+.mg-input:focus {
+  border-color: rgba(124, 107, 216, 0.55);
+  box-shadow: 0 0 0 3px rgba(124, 107, 216, 0.18);
+}
+
+/* ============================================================
+   5. 移动端页面头 (PageHeader.vue 共享) + 悬浮玻璃胶囊 TabBar
+   ============================================================ */
+.mg-page-header {
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--mg-divider);
+}
+
+.mobile-tabbar.mg-tabbar {
+  left: var(--mg-tabbar-float);
+  right: var(--mg-tabbar-float);
+  bottom: calc(var(--mg-tabbar-float) - 4px + var(--sab, 0px));
+  left: calc(var(--mg-tabbar-float) + var(--sal, 0px));
+  right: calc(var(--mg-tabbar-float) + var(--sar, 0px));
+  height: var(--mg-tabbar-h);
+  border-radius: calc(var(--mg-tabbar-h) / 2);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--mg-shadow-lg);
+  overflow: hidden;
+  transition: bottom 200ms ease;
+}
+.mg-tabbar .nut-tabbar {
+  background: transparent !important;
+  border: none !important;
+  height: 100%;
+}
+.mg-tabbar .nut-tabbar-item {
+  color: var(--mg-text-faint);
+}
+.mg-tabbar .nut-tabbar-item__icon--unactive {
+  color: var(--mg-text-faint);
+}
+.mg-tabbar .nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) {
+  color: var(--mg-primary);
+  background: transparent;
+}
+.mg-tabbar .nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) .tabbar-dot {
+  opacity: 1;
+  transform: scale(1);
+}
+.mg-tabbar .tabbar-dot {
+  display: block;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--mg-primary);
+  margin: 2px auto 0;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+[data-theme="dark"] .mobile-tabbar.mg-tabbar {
+  background: rgba(56, 48, 84, 0.72);
+  border-color: rgba(168, 150, 224, 0.24);
+}
+[data-theme="dark"] .mg-tabbar .nut-tabbar {
+  background: transparent !important;
+}
+[data-theme="dark"] .mg-tabbar .nut-tabbar-item {
+  color: var(--mg-text-faint);
+}
+[data-theme="dark"] .mg-tabbar .nut-tabbar-item__icon--unactive {
+  color: var(--mg-text-faint);
+}
+[data-theme="dark"] .mg-tabbar .nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) {
+  color: #B9ADF0;
+}
+[data-theme="dark"] .mg-tabbar .tabbar-dot {
+  background: #B9ADF0;
+}
+
+/* 录音悬浮条等旧 fixed 元素避让胶囊 TabBar 由各自 bottom 处理 */
+
+/* ============================================================
+   6. 入场动画 (轻量, 遵循 CLAUDE.md 动画规范时长)
+   ============================================================ */
+@keyframes mg-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mg-pop {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.mg-rise { animation: mg-rise 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mg-stagger-1 { animation-delay: 40ms; }
+.mg-stagger-2 { animation-delay: 90ms; }
+.mg-stagger-3 { animation-delay: 140ms; }
+.mg-stagger-4 { animation-delay: 190ms; }
+.mg-stagger-5 { animation-delay: 240ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mg-rise, [class*="mg-stagger"] { animation: none; }
+  .mg-btn-primary, .mg-btn-glass { transition: none; }
+}

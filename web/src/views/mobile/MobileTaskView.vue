@@ -1,5 +1,8 @@
 <template>
-  <div class="mobile-task-view">
+  <div
+    class="mobile-task-view mg-page"
+    :class="{ 'done-mode': activeTab === 'done', 'overdue-mode': route.query.overdue === 'true' }"
+  >
     <PageHeader title="任务管理" show-back @back="$router.back()">
       <template #right>
         <button
@@ -31,7 +34,7 @@
       :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
     >
       <!-- Tabs -->
-      <div class="tab-bar">
+      <div class="tab-bar mg-glass">
         <button
           v-for="t in tabs"
           :key="t.value"
@@ -45,12 +48,12 @@
       </div>
 
       <!-- 列表：2026-06-26 按负责人分组（一人一头像，下方罗列任务） -->
-      <div v-if="loading && groupedTasks.length === 0" class="loading-state">
+      <div v-if="loading && groupedTasks.length === 0" class="loading-state mg-glass">
         <div class="empty-icon">⏳</div>
         <div class="empty-hint">加载中...</div>
       </div>
 
-      <div v-else-if="groupedTasks.length === 0" class="empty-state">
+      <div v-else-if="groupedTasks.length === 0" class="empty-state mg-glass">
         <div class="empty-icon">📋</div>
         <div class="empty-title">暂无任务</div>
         <div class="empty-hint">点击右上角 + 创建任务</div>
@@ -60,7 +63,8 @@
         <section
           v-for="(group, gIdx) in groupedTasks"
           :key="group.assignee_id"
-          class="task-group fade-slide-up"
+          class="task-group fade-slide-up mg-rise"
+          :class="'mg-stagger-' + ((gIdx % 5) + 1)"
           :style="{ animationDelay: `${gIdx * 0.05}s` }"
         >
           <!-- 组头：带头像 + 名字 + 任务数 + 折叠箭头 -->
@@ -72,7 +76,7 @@
               class="group-avatar"
             />
             <span class="group-name">{{ getGroupName(group.assignee_id) }}</span>
-            <span class="group-count">{{ group.tasks.length }}项</span>
+            <span class="group-count mg-chip">{{ group.tasks.length }}项</span>
             <span
               class="collapse-icon"
               :class="{ collapsed: collapsedGroups[group.assignee_id] }"
@@ -393,9 +397,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 液态毛玻璃 (Liquid Glass) — 2026-08-31 升级
+   背景/文字色由全局 .mg-page 提供 (极光渐变 + --mg-text), 本块严禁再设 background/color 根属性覆盖玻璃配方 */
 .mobile-task-view {
   min-height: 100vh;
-  background: var(--color-bg-page);
   display: flex;
   flex-direction: column;
 }
@@ -405,107 +410,136 @@ onMounted(() => {
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
 }
 
-/* Tab bar */
+/* PageHeader 玻璃化 (子组件经 :deep 命中; safe-area 顶部由 PageHeader 自身 --sat 处理) */
+:deep(.mobile-page-header) {
+  background: var(--mg-glass-bg);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--mg-glass-border);
+}
+:deep(.header-title) {
+  color: var(--mg-text-strong);
+}
+:deep(.header-back) {
+  color: var(--mg-text);
+}
+:deep(.header-back:active) {
+  background: var(--mg-gradient-soft);
+  color: var(--mg-primary);
+}
+
+/* Tab bar — mg-glass 胶囊 (mg-glass 提供底/描边/blur/阴影, 此处仅改圆角为 pill) */
 .tab-bar {
   display: flex;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
   padding: 4px;
   margin-bottom: 12px;
+  border-radius: var(--mg-radius-pill);
+  box-shadow: var(--mg-shadow-sm);
 }
 .tab-item {
   flex: 1;
-  padding: 8px;
+  min-height: 44px;
+  padding: 10px 8px;
   border: none;
   background: transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--mg-radius-pill);
   font-size: 13px;
-  color: var(--color-text-regular);
+  font-weight: 600;
+  color: var(--mg-text-soft);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
 }
+.tab-item:active { transform: scale(0.97); }
 .tab-item.active {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  font-weight: var(--font-weight-medium, 500);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 800;
+  box-shadow: var(--mg-primary-shadow);
 }
 
 /* 分页信息 */
 .pagination-info {
   text-align: center;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-faint);
   padding: 12px 0;
 }
 
 /* Header action */
 .header-action {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: transparent;
   border: none;
   font-size: 18px;
-  color: var(--color-text-regular);
+  color: var(--mg-text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   margin-left: 4px;
 }
-.header-action:active { background: var(--color-primary-bg); }
+.header-action:active { background: var(--mg-gradient-soft); }
 .header-action.primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  /* stylelint-disable-next-line color-named */
-  color: white;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
   font-weight: 600;
   font-size: 22px;
+  box-shadow: var(--mg-primary-shadow);
 }
 
 /* 任务操作按钮（CardList slot） */
 .task-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 8px;
 }
 .action-btn {
   flex: 1;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  border: none;
-  font-size: 14px;
+  min-height: 44px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1.5px solid var(--mg-glass-border);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  background: var(--color-bg-page);
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-text);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease, opacity 150ms ease;
 }
-.action-btn:active { opacity: 0.6; }
+.action-btn:active { transform: scale(0.97); opacity: 0.85; }
 .action-btn.danger {
-  background: var(--color-danger-bg);
-  color: var(--color-danger, #F56C6C);
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
+  border-color: transparent;
 }
-/* 2026-06-25: 完成按钮（primary 状态）+ 取消完成（success 状态） */
+/* 完成按钮（primary 状态）+ 取消完成（success 状态） */
 .action-btn.primary {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  border: 1px solid var(--color-primary);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border: none;
 }
 .action-btn.success {
-  background: var(--color-success-bg, #f0f9eb);
-  color: var(--color-success, #67c23a);
-  border: 1px solid var(--color-success, #67c23a);
+  background: var(--mg-success-soft);
+  color: var(--mg-success);
+  border: 1px solid var(--mg-success);
 }
 
-/* 2026-06-26: 按负责人分组 UI（一组一人一头像 + 任务罗列） */
+/* 按负责人分组（一组一人一头像 + 任务罗列）— 组卡 = 玻璃卡 */
 .task-groups {
   display: flex;
   flex-direction: column;
-  gap: var(--mobile-section-gap, 16px);
+  gap: 14px;
 }
 .task-group {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow);
   overflow: hidden;
-  border: 1px solid var(--color-border-light);
 }
 .task-group-header {
   display: flex;
@@ -514,46 +548,104 @@ onMounted(() => {
   padding: 12px 16px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  background: var(--color-bg-card);
+  background: transparent;
 }
-.task-group-header:active { background: var(--color-bg-hover); }
+.task-group-header:active { background: var(--mg-gradient-soft); }
 .group-avatar { flex-shrink: 0; }
 .group-name {
   flex: 1;
-  font-size: var(--font-size-md, 15px);
-  font-weight: 600;
-  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
 }
-.group-count {
-  font-size: var(--font-size-xs, 12px);
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
-  padding: 2px 8px;
-  border-radius: var(--radius-full, 9999px);
-}
+/* 计数芯片配色由全局 .mg-chip 提供 (模板已加), 此处只保留布局 */
+.group-count { flex-shrink: 0; }
 .collapse-icon {
   font-size: 18px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-faint);
   transition: transform 0.2s;
   display: inline-block;
 }
 .collapse-icon.collapsed { transform: rotate(-90deg); }
 .task-group-list { padding: 0 0 12px; }
-/* 组内 CardList 视觉调整：扁平任务条，去外层圆角 */
+
+/* 组内 CardList 任务行 = mg-glass 列表卡 (radius-md / padding 13px 14px / 行间距 10px) */
 .task-group-list :deep(.list-body) {
   padding: 0 12px;
-  gap: 8px;
+  gap: 10px;
 }
 .task-group-list :deep(.list-item) {
-  background: var(--color-bg-page);
-  border: 1px solid var(--color-border-light);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+  padding: 13px 14px;
+  box-shadow: var(--mg-shadow-sm);
+  transition: transform 150ms ease;
 }
-/* 加载中态 / 空态 */
+.task-group-list :deep(.list-item:active) { transform: scale(0.99); }
+.task-group-list :deep(.item-title) {
+  color: var(--mg-text-strong);
+}
+.task-group-list :deep(.item-subtitle) {
+  color: var(--mg-text-soft);
+}
+.task-group-list :deep(.field-key) { color: var(--mg-text-soft); }
+.task-group-list :deep(.field-value) { color: var(--mg-text); }
+.task-group-list :deep(.item-arrow) { color: var(--mg-text-faint); }
+
+/* 优先级/状态芯片: 高=--mg-danger 中=--mg-warning 低=--mg-info
+   (CardList badge type 已由 fieldConfig 映射 danger/warning/info) */
+:deep(.badge-tag) {
+  border-radius: var(--mg-radius-pill);
+  padding: 3px 10px;
+  font-weight: 600;
+  background: var(--mg-info-soft);
+  color: var(--mg-info);
+}
+:deep(.badge--danger) { background: var(--mg-danger-soft); color: var(--mg-danger); }
+:deep(.badge--warning) { background: var(--mg-warning-soft); color: var(--mg-warning); }
+:deep(.badge--info)    { background: var(--mg-info-soft);    color: var(--mg-info); }
+:deep(.badge--success) { background: var(--mg-success-soft); color: var(--mg-success); }
+:deep(.badge--primary) { background: var(--mg-gradient-soft); color: var(--mg-primary); }
+
+/* 逾期筛选视图 (route.query.overdue=true, 根节点动态 class): 副标题里日期文字标红 */
+.overdue-mode :deep(.item-subtitle) {
+  color: var(--mg-danger);
+  font-weight: 600;
+}
+
+/* 已完成 tab: 整行降透明度 + 标题删除线 (桌面端同款语义) */
+.done-mode :deep(.list-item) { opacity: 0.6; }
+.done-mode :deep(.item-title) {
+  text-decoration: line-through;
+  color: var(--mg-text-faint);
+}
+
+/* FAB (MobileFab 子组件): 56px 渐变圆 + 玻璃动作条 */
+:deep(.mobile-fab-trigger) {
+  background: var(--mg-gradient-btn);
+  box-shadow: var(--mg-primary-shadow);
+}
+:deep(.mobile-fab-action) {
+  background: var(--mg-glass-bg-strong);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  color: var(--mg-text);
+  box-shadow: var(--mg-shadow);
+}
+:deep(.mobile-fab-action.danger) { color: var(--mg-danger); }
+:deep(.mobile-fab-action-icon) { background: var(--mg-gradient-soft); }
+
+/* 加载中态 / 空态 (模板已加 mg-glass, 卡片配方来自全局) */
 .loading-state,
 .empty-state {
   text-align: center;
-  padding: 60px 16px;
-  color: var(--color-text-secondary);
+  padding: 48px 20px;
+  margin-top: 8px;
+  border-radius: var(--mg-radius-lg);
+  color: var(--mg-text-soft);
 }
 .loading-state .empty-icon,
 .empty-state .empty-icon {
@@ -561,31 +653,37 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 .empty-state .empty-title {
-  font-size: var(--font-size-lg, 18px);
-  font-weight: 600;
-  color: var(--color-text-primary);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
   margin-bottom: 8px;
 }
 .empty-state .empty-hint {
-  font-size: var(--font-size-sm, 13px);
-  color: var(--color-text-secondary);
+  font-size: 13px;
+  color: var(--mg-text-soft);
 }
 </style>
 
-<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一（v60-v67 教训：必须非 scoped） -->
+<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一（v60-v67 教训：必须非 scoped）
+     2026-08-31 液态毛玻璃升级: --mg-* token 自带 [data-theme="dark"] 变体, 原 task-group / action-btn /
+     group-* 的 dark 覆盖已删除 (否则 --color-bg-card 实色会盖掉玻璃配方);
+     非 scoped 块里 :deep() 是死选择器 (原 .task-group-list :deep(.list-item) dark 规则从未生效), 一并移除. -->
 <style>
-/* filter sheet / 状态徽章 / 任务卡 / 任务组 / 行动按钮 在 dark 模式适配 */
+/* header 主操作按钮在 dark 保持渐变 */
 [data-theme="dark"] .header-action.primary {
-  background: var(--color-primary);
-  color: var(--color-bg-card);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
 }
 [data-theme="dark"] .header-action.primary:active {
-  background: var(--color-primary);
+  background: var(--mg-gradient-btn);
   opacity: 0.85;
 }
 [data-theme="dark"] .header-action {
-  color: var(--color-text-primary);
+  color: var(--mg-text);
 }
+
+/* 以下为老 class 名遗留的 dark 规则 (status-badge / priority-pill / task-card),
+   可能命中其他视图渲染的同名全局 class, 保留不动防回归 */
 [data-theme="dark"] .status-badge.status-todo,
 [data-theme="dark"] .status-badge.status-in_progress {
   background: var(--color-primary-bg);
@@ -609,52 +707,5 @@ onMounted(() => {
 }
 [data-theme="dark"] .task-card:active {
   background: var(--color-bg-hover);
-}
-/* W68 第 14 批 C-2: 任务组 / 完成按钮 / 完成态按钮 / 折叠态在 dark 适配 */
-[data-theme="dark"] .task-group {
-  background: var(--color-bg-card);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .task-group-header {
-  background: var(--color-bg-card);
-}
-[data-theme="dark"] .task-group-header:active {
-  background: var(--color-bg-hover);
-}
-[data-theme="dark"] .group-name {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .group-count {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-[data-theme="dark"] .task-group-list :deep(.list-item) {
-  background: var(--color-bg-page);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .action-btn {
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .action-btn.primary {
-  background: var(--color-primary);
-  color: var(--color-bg-card);
-  border-color: var(--color-primary);
-}
-[data-theme="dark"] .action-btn.danger {
-  background: var(--color-danger-bg);
-  color: var(--color-danger);
-}
-[data-theme="dark"] .action-btn.success {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-  border-color: var(--color-success);
-}
-[data-theme="dark"] .empty-state,
-[data-theme="dark"] .loading-state {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .empty-state .empty-title {
-  color: var(--color-text-primary);
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <footer
-    class="mobile-input-bar glass glass-lg"
+    class="mobile-input-bar glass glass-lg mg-glass-strong"
     :style="{ paddingBottom: inputPaddingBottom }"
   >
     <!-- 选中预览 -->
@@ -210,32 +210,36 @@ watch(
 <style scoped>
 .mobile-input-bar {
   position: fixed;
-  left: 0;
-  right: 0;
-  /* 浮在 TabBar 上方（TabBar 高度 = var(--tabbar-height, 56px)）
-     这样两个组件都在底部，input 不覆盖 TabBar */
-  bottom: var(--tabbar-height, 56px);
+  /* 悬浮玻璃胶囊: 左右让位与 TabBar 胶囊对齐, bottom 避开 TabBar */
+  left: var(--mg-tabbar-float, 14px);
+  right: var(--mg-tabbar-float, 14px);
+  bottom: var(--tabbar-height, 76px);
   z-index: 1100; /* 高于 TabBar 内容（TabBar 容器 z=2500，input bar 视觉在上层） */
-  /* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 */
-  border-top: 1px solid var(--color-border);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--mg-shadow-lg);
   /* 底部 padding 由 inputPaddingBottom prop 动态控制（键盘高度 + safe-area） */
-  padding-top: 8px;
+  padding-top: 6px;
 }
 
 .attachment-preview {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 0 var(--mobile-padding-x, 16px) 6px;
+  padding: 0 10px 6px;
 }
 .attachment-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px 4px 10px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  border-radius: var(--radius-full);
+  background: var(--mg-glass-bg-strong);
+  color: var(--mg-primary);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
   font-size: 12px;
   max-width: 180px;
   overflow: hidden;
@@ -245,7 +249,7 @@ watch(
 .attachment-tag button {
   background: transparent;
   border: none;
-  color: var(--color-primary);
+  color: var(--mg-primary);
   cursor: pointer;
   font-size: 14px;
   padding: 0;
@@ -256,7 +260,7 @@ watch(
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  padding: 0 var(--mobile-padding-x, 16px) 8px;
+  padding: 0 8px 6px;
 }
 
 .action-btn {
@@ -267,13 +271,15 @@ watch(
   border: none;
   font-size: 20px;
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
+  transition: transform 150ms ease;
 }
 .action-btn:active {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  background: var(--mg-gradient-soft);
+  color: var(--mg-primary);
+  transform: scale(0.97);
 }
 
 .input-textarea {
@@ -281,10 +287,10 @@ watch(
   min-height: 40px;
   max-height: 100px;
   padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 20px;
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-glass-bg);
+  color: var(--mg-text);
   font-size: 15px;
   line-height: 1.4;
   resize: none;
@@ -293,23 +299,24 @@ watch(
   /* iOS Safari 不自动缩放（必须 ≥ 16px） */
 }
 
-[data-theme="dark"] .input-textarea {
-  background: var(--color-bg-page);
-  border-color: var(--color-border-base);
+.input-textarea::placeholder {
+  color: var(--mg-text-faint);
 }
 
 .input-textarea:focus {
-  border-color: var(--color-primary);
+  border-color: var(--mg-primary);
+  box-shadow: 0 0 0 3px var(--mg-glass-bg-strong);
 }
 
 .send-btn,
+.stop-btn,
 .voice-btn {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  background: var(--mg-gradient-btn);
   /* stylelint-disable-next-line color-named */
-  color: white;
+  color: var(--mg-on-primary);
   border: none;
   font-size: 20px;
   cursor: pointer;
@@ -319,8 +326,11 @@ watch(
   justify-content: center;
   -webkit-tap-highlight-color: transparent;
   font-weight: bold;
+  box-shadow: var(--mg-primary-shadow);
+  transition: transform 150ms ease;
 }
 .send-btn:active,
+.stop-btn:active,
 .voice-btn:active {
   transform: scale(0.95);
 }
@@ -330,10 +340,13 @@ watch(
   top: -40px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--color-text-primary);
-  color: var(--color-bg-card);
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--mg-text);
   padding: 6px 14px;
-  border-radius: var(--radius-full);
+  border-radius: var(--mg-radius-pill);
   font-size: 12px;
   display: flex;
   align-items: center;
@@ -343,7 +356,7 @@ watch(
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--color-danger, #F56C6C);
+  background: var(--mg-danger);
   animation: pulse 1s infinite;
 }
 </style>

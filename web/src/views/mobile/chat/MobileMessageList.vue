@@ -143,7 +143,7 @@ defineExpose({ scrollToBottom })
 .time-divider {
   text-align: center;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   margin: 8px 0;
   position: relative;
 }
@@ -154,7 +154,7 @@ defineExpose({ scrollToBottom })
   top: 50%;
   width: 30%;
   height: 1px;
-  background: var(--color-border-light);
+  background: var(--mg-glass-border);
 }
 .time-divider::before { left: 5%; }
 .time-divider::after { right: 5%; }
@@ -177,12 +177,13 @@ defineExpose({ scrollToBottom })
   width: 80px;
   height: 80px;
   margin: 0 auto 16px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  border-radius: var(--radius-full);
+  background: var(--mg-gradient);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-primary);
+  box-shadow: var(--mg-shadow);
 }
 .hero-icon {
   font-size: 36px;
@@ -191,10 +192,10 @@ defineExpose({ scrollToBottom })
   font-size: 20px;
   font-weight: var(--font-weight-semibold, 600);
   margin: 0 0 6px;
-  color: var(--color-text-primary);
+  color: var(--mg-text-strong);
 }
 .welcome-hero p {
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   font-size: 13px;
   margin: 0 0 24px;
 }
@@ -208,18 +209,22 @@ defineExpose({ scrollToBottom })
   align-items: center;
   gap: 6px;
   padding: 12px 14px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  box-shadow: var(--mg-shadow-sm);
   cursor: pointer;
   font-size: 13px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   -webkit-tap-highlight-color: transparent;
-  transition: all var(--transition-all-fast);
+  transition: transform var(--transition-all-fast);
 }
 .quick-btn:active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
+  border-color: var(--mg-primary);
+  color: var(--mg-primary);
+  transform: scale(0.97);
 }
 .qa-icon {
   font-size: 18px;

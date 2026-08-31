@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-meeting-detail">
+  <div class="mobile-meeting-detail mg-page">
     <PageHeader :title="meeting?.title || '会议详情'" show-back @back="$router.back()">
       <template #right>
         <button
@@ -17,10 +17,10 @@
     <main
       v-if="meeting"
       class="detail-main"
-      :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
+      :style="{ paddingBottom: 'calc(24px + var(--sab, 0px))' }"
     >
       <!-- Hero 卡片 -->
-      <div class="hero-card">
+      <div class="hero-card mg-glass-strong mg-rise">
         <div class="hero-title">{{ meeting.title }}</div>
         <div class="hero-meta">
           <div class="hero-time">
@@ -67,12 +67,12 @@
       <div class="tab-content">
         <!-- 会议纪要 -->
         <div v-if="activeTab === 'minutes'" class="minutes-tab">
-          <section v-if="meeting.summary" class="content-section">
+          <section v-if="meeting.summary" class="content-section mg-glass mg-rise mg-stagger-1">
             <h3 class="section-title">会议摘要</h3>
             <p class="section-text">{{ meeting.summary }}</p>
           </section>
 
-          <section v-if="meeting.key_points?.length" class="content-section">
+          <section v-if="meeting.key_points?.length" class="content-section mg-glass mg-rise mg-stagger-2">
             <h3 class="section-title">讨论要点</h3>
             <ul class="point-list">
               <li v-for="(point, i) in meeting.key_points" :key="i" class="point-item">
@@ -82,7 +82,7 @@
             </ul>
           </section>
 
-          <section v-if="meeting.decisions?.length" class="content-section">
+          <section v-if="meeting.decisions?.length" class="content-section mg-glass mg-rise mg-stagger-3">
             <h3 class="section-title">决议事项</h3>
             <ul class="decision-list">
               <li v-for="(decision, i) in meeting.decisions" :key="i" class="decision-item">
@@ -92,7 +92,7 @@
             </ul>
           </section>
 
-          <div v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length" class="empty-tab">
+          <div v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length" class="empty-tab mg-glass">
             <div class="empty-icon">📝</div>
             <div class="empty-title">暂无会议纪要</div>
             <div v-if="meeting.audio_url" class="empty-hint">录音上传后自动生成</div>
@@ -104,7 +104,7 @@
           <!-- 2026-08-04 P0: 桌面端优先 transcript_polished, 移动端之前只读 transcript,
                导致后端已生成润色版但前端显示 "暂无转录内容". 改用同一份 composable
                选择 polished || raw. -->
-          <div v-if="displaySegments.length" class="transcript-list">
+          <div v-if="displaySegments.length" class="transcript-list mg-glass mg-rise">
             <div
               v-for="(seg, i) in displaySegments"
               :key="i"
@@ -128,7 +128,7 @@
               展开剩余 {{ totalSegments - visibleSegmentCount }} 段
             </button>
           </div>
-          <div v-else class="empty-tab">
+          <div v-else class="empty-tab mg-glass">
             <div class="empty-icon">🎙️</div>
             <div class="empty-title">暂无转录内容</div>
             <div v-if="meeting.error_reason" class="empty-hint error">{{ meeting.error_reason }}</div>
@@ -137,7 +137,7 @@
 
         <!-- 发言统计 -->
         <div v-if="activeTab === 'stats'" class="stats-tab">
-          <div v-if="speakerStats?.length" class="stats-list">
+          <div v-if="speakerStats?.length" class="stats-list mg-glass mg-rise">
             <div
               v-for="(stat, i) in speakerStats"
               :key="i"
@@ -159,7 +159,7 @@
               </div>
             </div>
           </div>
-          <div v-else class="empty-tab">
+          <div v-else class="empty-tab mg-glass">
             <div class="empty-icon">📊</div>
             <div class="empty-title">暂无发言统计</div>
           </div>
@@ -322,7 +322,6 @@ watch(() => route.params.id, fetchMeeting)
 <style scoped>
 .mobile-meeting-detail {
   min-height: 100vh;
-  background: var(--color-bg-page);
   display: flex;
   flex-direction: column;
 }
@@ -332,20 +331,15 @@ watch(() => route.params.id, fetchMeeting)
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
 }
 
-/* Hero 卡片 */
+/* Hero 卡片 — 玻璃配方由 .mg-glass-strong 提供 */
 .hero-card {
-  background: linear-gradient(135deg, var(--color-primary-bg) 0%, var(--color-accent-bg) 100%);
-  border-radius: var(--radius-md);
   padding: 16px;
   margin-bottom: 12px;
 }
-[data-theme="dark"] .hero-card {
-  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.12), rgba(var(--color-accent-rgb), 0.08));
-}
 .hero-title {
-  font-size: 17px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
   line-height: 1.4;
   margin-bottom: 10px;
   display: -webkit-box;
@@ -358,7 +352,7 @@ watch(() => route.params.id, fetchMeeting)
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
   margin-bottom: 8px;
 }
 .meta-icon { margin-right: 4px; }
@@ -367,47 +361,69 @@ watch(() => route.params.id, fetchMeeting)
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--color-text-regular);
+}
+.status-text {
+  padding: 3px 10px;
+  border-radius: var(--mg-radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mg-primary);
+  background: var(--mg-tint);
 }
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
-.status-dot.status-scheduled { background: var(--color-info); }
-.status-dot.status-recording,
-.status-dot.status-processing { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
-.status-dot.status-completed { background: var(--color-success, #67C23A); }
-.status-dot.status-cancelled { background: var(--color-info, #909399); }
-.status-dot.status-error { background: var(--color-danger, #F56C6C); }
-/* Tab bar */
+.status-dot.status-scheduled { background: var(--mg-info); }
+/* 录制中 = 危险红语义 + 光晕强调 */
+.status-dot.status-recording {
+  background: var(--mg-danger);
+  box-shadow: 0 0 0 4px var(--mg-danger-soft);
+  animation: pulse-dot 1s infinite;
+}
+.status-dot.status-processing { background: var(--mg-warning); animation: pulse-dot 1s infinite; }
+.status-dot.status-completed,
+.status-dot.status-completed_with_warnings { background: var(--mg-success); }
+.status-dot.status-cancelled { background: var(--mg-text-faint); }
+.status-dot.status-error { background: var(--mg-danger); }
+
+/* Tab bar — 玻璃胶囊分段控件 */
 .tab-bar {
   display: flex;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-pill);
   padding: 4px;
   margin-bottom: 12px;
+  box-shadow: var(--mg-shadow-sm);
 }
 .tab-item {
   flex: 1;
+  min-height: 44px;
   padding: 10px;
   border: none;
   background: transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--mg-radius-pill);
   font-size: 13px;
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
+  font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  transition: transform 150ms ease;
 }
+.tab-item:active { transform: scale(0.97); }
 .tab-item.active {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  font-weight: 500;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 700;
+  box-shadow: var(--mg-primary-shadow);
 }
 .tab-badge {
   font-size: 11px;
@@ -416,31 +432,31 @@ watch(() => route.params.id, fetchMeeting)
   border-radius: 8px;
 }
 .tab-item:not(.active) .tab-badge {
-  background: var(--color-bg-page);
+  background: var(--mg-tint);
+  color: var(--mg-primary);
 }
 
-/* Tab content */
+/* Tab content — 不再是整块卡片, 各 section 独立玻璃卡分组 */
 .tab-content {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
-  padding: 16px;
   min-height: 200px;
 }
 
 .content-section {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: var(--mg-radius-md);
 }
 .section-title {
-  font-size: 14px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
   margin: 0 0 8px;
   padding-left: 8px;
-  border-left: 3px solid var(--color-primary);
+  border-left: 3px solid var(--mg-primary);
 }
 .section-text {
   font-size: 14px;
-  color: var(--color-text-regular);
+  color: var(--mg-text);
   line-height: 1.7;
   white-space: pre-wrap;
 }
@@ -451,17 +467,29 @@ watch(() => route.params.id, fetchMeeting)
   padding: 0;
   margin: 0;
 }
-.point-item,
+/* 讨论要点 = 【发言人】高亮块, 紫调局部底色 */
+.point-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--mg-tint);
+  border-radius: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--mg-text);
+  line-height: 1.6;
+}
 .decision-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--color-bg-page);
-  border-radius: var(--radius-sm);
+  background: var(--mg-success-soft);
+  border-radius: 12px;
   margin-bottom: 6px;
   font-size: 13px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   line-height: 1.6;
 }
 .point-index {
@@ -469,25 +497,27 @@ watch(() => route.params.id, fetchMeeting)
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .decision-icon {
   flex-shrink: 0;
-  color: var(--color-success, #67C23A);
-  font-weight: 600;
+  color: var(--mg-success);
+  font-weight: 700;
 }
 
-/* 转录 */
+/* 转录 — 玻璃卡由 .mg-glass 提供 */
+.transcript-list {
+  padding: 4px 16px 16px;
+}
 .transcript-segment {
   padding: 12px 0;
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid var(--mg-divider);
 }
 .transcript-segment:last-child { border-bottom: none; }
 .seg-meta {
@@ -498,33 +528,36 @@ watch(() => route.params.id, fetchMeeting)
 }
 .seg-speaker {
   font-size: 12px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-primary);
+  font-weight: 700;
+  color: var(--mg-primary);
 }
 .seg-time {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-faint);
 }
 .seg-text {
   font-size: 14px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   line-height: 1.6;
 }
 
-/* 统计 */
+/* 统计 — 玻璃卡由 .mg-glass 提供 */
+.stats-list {
+  padding: 16px;
+}
 .stat-item {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: var(--color-bg-page);
-  border-radius: var(--radius-sm);
+  background: var(--mg-tint);
+  border-radius: 12px;
   margin-bottom: 8px;
 }
 .stat-rank {
   font-size: 14px;
-  font-weight: var(--font-weight-bold, 700);
-  color: var(--color-primary);
+  font-weight: 800;
+  color: var(--mg-primary);
   min-width: 30px;
 }
 .stat-info {
@@ -533,20 +566,20 @@ watch(() => route.params.id, fetchMeeting)
 }
 .stat-name {
   font-size: 14px;
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-primary);
+  font-weight: 600;
+  color: var(--mg-text-strong);
   margin-bottom: 6px;
 }
 .stat-bar-wrap {
   height: 6px;
-  background: var(--color-border);
+  background: var(--mg-track);
   border-radius: 3px;
   overflow: hidden;
   margin-bottom: 4px;
 }
 .stat-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
+  background: var(--mg-gradient-btn);
   border-radius: 3px;
   transition: width 0.5s;
 }
@@ -554,13 +587,13 @@ watch(() => route.params.id, fetchMeeting)
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
 /* Empty */
 .empty-tab {
   text-align: center;
-  padding: 60px 20px;
+  padding: 48px 20px;
 }
 .empty-icon {
   font-size: 40px;
@@ -568,29 +601,34 @@ watch(() => route.params.id, fetchMeeting)
 }
 .empty-title {
   font-size: 14px;
-  color: var(--color-text-regular);
+  font-weight: 700;
+  color: var(--mg-text);
   margin-bottom: 4px;
 }
 .empty-hint {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 .empty-hint.error {
-  color: var(--color-danger, #F56C6C);
+  color: var(--mg-danger);
 }
 
 .load-more {
   display: block;
   margin: 12px auto 0;
-  padding: 8px 16px;
-  background: var(--color-bg-page);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-regular);
+  padding: 10px 18px;
+  min-height: 44px;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  color: var(--mg-primary);
+  font-weight: 700;
   font-size: 13px;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
 }
-.load-more:active { background: var(--color-bg-hover); }
+.load-more:active { transform: scale(0.97); }
 
 .loading-state {
   flex: 1;
@@ -599,39 +637,41 @@ watch(() => route.params.id, fetchMeeting)
   align-items: center;
   justify-content: center;
   gap: 12px;
+  color: var(--mg-text-soft);
 }
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
+  border: 3px solid var(--mg-track);
+  border-top-color: var(--mg-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
 /* Header action */
 .header-action {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: transparent;
   border: none;
   font-size: 18px;
-  color: var(--color-text-regular);
+  color: var(--mg-text-soft);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.header-action:active { background: var(--color-primary-bg); }
-/* 2026-06-25: 删除会议按钮样式 (红色明显) */
+.header-action:active { background: var(--mg-glass-bg-strong); }
+/* 删除会议按钮: 危险语义 */
 .header-action.danger {
-  color: var(--color-danger, #F56C6C);
+  color: var(--mg-danger);
 }
 .header-action.danger:active {
-  background: var(--color-danger-bg);
+  background: var(--mg-danger-soft);
 }
 
-/* 2026-06-25: hero-card 操作区 (从 Sheet 迁移) */
+/* hero-card 操作区 (从 Sheet 迁移) */
 .hero-actions {
   display: flex;
   flex-direction: column;
@@ -639,26 +679,25 @@ watch(() => route.params.id, fetchMeeting)
   margin-top: 12px;
 }
 .action-btn {
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-card);
+  padding: 12px;
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1.5px solid var(--mg-glass-border);
+  background: var(--mg-glass-bg-strong);
   font-size: 13px;
-  color: var(--color-text-primary);
+  font-weight: 600;
+  color: var(--mg-text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   text-align: left;
+  transition: transform 150ms ease;
 }
-.action-btn:active { background: var(--color-bg-hover); }
+.action-btn:active { transform: scale(0.97); }
 .action-btn.primary {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  border-color: var(--color-primary);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border: none;
+  font-weight: 800;
+  box-shadow: var(--mg-primary-shadow);
 }
-.action-btn.primary:active {
-  background: var(--color-primary-light);
-}
-
-/* 2026-06-25: Info Sheet CSS 已删除 (相关功能已迁移到 PageHeader + hero-card) */
 </style>

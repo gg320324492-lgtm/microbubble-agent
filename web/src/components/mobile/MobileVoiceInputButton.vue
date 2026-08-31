@@ -251,11 +251,12 @@ defineExpose({
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(
+  background: var(--mg-gradient-btn, linear-gradient(
     135deg,
     var(--color-primary) 0%,
     var(--color-primary-light) 100%
-  );
+  ));
+  box-shadow: var(--mg-primary-shadow, none);
   color: var(--el-color-white);
   border: none;
   font-size: 20px;
@@ -291,15 +292,18 @@ defineExpose({
 }
 
 .mvi-panel {
-  background: var(--color-bg-card);
-  border-radius: 20px;
+  background: var(--mg-glass-bg-strong, var(--color-bg-card));
+  border: 1.5px solid var(--mg-glass-border, transparent);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-radius: var(--mg-radius-xl, 20px);
   padding: 24px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
   min-width: 220px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--mg-shadow-lg, var(--shadow-lg));
 }
 
 .mvi-row {
@@ -316,11 +320,11 @@ defineExpose({
 .mvi-bar {
   display: inline-block;
   width: 6px;
-  background: linear-gradient(
+  background: var(--mg-gradient-btn, linear-gradient(
     180deg,
     var(--color-primary) 0%,
     var(--color-primary-light) 100%
-  );
+  ));
   border-radius: 3px;
   transition: height 100ms ease-out;
 }

@@ -316,12 +316,23 @@ const onBatchDelete = () => {
   transition: opacity 0.25s ease;
 }
 .session-drawer-body {
+  /* 视图局部深玻璃 token (mobile-glass.css 无深紫变量, 禁止新增全局 token, 故局部定义;
+     深紫底色经 var() fallback 携带, 其余为黑白遮罩豁免) */
+  --mgsd-fg: var(--mg-on-primary);
+  --mgsd-fg-soft: rgba(255, 255, 255, 0.64);
+  --mgsd-fg-faint: rgba(255, 255, 255, 0.42);
+  --mgsd-border: rgba(255, 255, 255, 0.14);
+  --mgsd-item-active: rgba(255, 255, 255, 0.12);
   position: relative;
   width: 80vw;
   max-width: 320px;
   height: 100%;
-  background: var(--color-bg-card);
-  box-shadow: var(--shadow-sidebar);
+  background: var(--mgsd-panel, rgba(36, 30, 55, 0.82));
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  color: var(--mgsd-fg);
+  border-right: 1.5px solid var(--mgsd-border);
+  box-shadow: var(--mg-shadow-lg);
   display: flex;
   flex-direction: column;
   pointer-events: auto;
@@ -339,24 +350,30 @@ const onBatchDelete = () => {
 }
 .archive-tab {
   flex: 1;
+  min-height: 44px;
   padding: 6px 8px;
   font-size: 13px;
   background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: 4px;
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-pill);
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--mgsd-fg-soft);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
+}
+.archive-tab:active {
+  transform: scale(0.97);
 }
 .archive-tab.active {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border-color: transparent;
 }
 
 [data-theme="dark"] .session-drawer-body {
-  background: var(--color-bg-card);
-  border-right: 1px solid var(--color-border-base);
+  /* dark 下纯黑遮罩再压深一档 (黑白遮罩豁免 lint) */
+  background: rgba(0, 0, 0, 0.55);
+  border-right: 1.5px solid var(--mgsd-border);
 }
 
 /* 抽屉打开 */
@@ -390,28 +407,28 @@ const onBatchDelete = () => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--mgsd-border);
 }
 
 .drawer-header h3 {
   font-size: var(--font-size-md, 15px);
   font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  color: var(--mgsd-fg);
   margin: 0;
 }
 
 .close-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: transparent;
   border: none;
-  color: var(--color-text-regular);
+  color: var(--mgsd-fg-soft);
   font-size: 18px;
   cursor: pointer;
 }
 .close-btn:active {
-  background: var(--color-bg-hover);
+  background: var(--mgsd-item-active);
 }
 
 .new-session-btn {
@@ -419,17 +436,22 @@ const onBatchDelete = () => {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  min-height: 44px;
   margin: 12px 16px 8px;
   padding: 12px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-gradient-btn);
   /* stylelint-disable-next-line color-named */
-  color: white;
+  color: var(--mg-on-primary);
   border: none;
   font-size: var(--font-size-base, 14px);
   font-weight: var(--font-weight-medium, 500);
   cursor: pointer;
-  box-shadow: var(--shadow-primary);
+  box-shadow: var(--mg-primary-shadow);
+  transition: transform 150ms ease;
+}
+.new-session-btn:active {
+  transform: scale(0.97);
 }
 .plus-icon {
   font-size: 20px;
@@ -439,19 +461,20 @@ const onBatchDelete = () => {
 /* #043 Phase 6: 搜索 trigger */
 .search-trigger {
   display: flex; align-items: center; gap: 8px;
+  min-height: 44px;
   margin: 0 16px 8px;
   padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-warm);
-  border: 1px solid var(--color-border-light);
-  color: var(--color-text-secondary);
+  border-radius: var(--mg-radius-pill);
+  background: var(--mgsd-item-active);
+  border: 1px solid var(--mgsd-border);
+  color: var(--mgsd-fg-soft);
   font-size: 13px;
   cursor: pointer;
   text-align: left;
   -webkit-tap-highlight-color: transparent;
 }
 .search-icon { font-size: 16px; }
-.search-trigger:active { background: var(--color-bg-hover); }
+.search-trigger:active { background: var(--mgsd-item-active); transform: scale(0.97); }
 
 .session-list {
   flex: 1;
@@ -465,16 +488,16 @@ const onBatchDelete = () => {
   background: transparent;
   border: none;
   padding: 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--mg-radius-md);
   cursor: pointer;
-  color: var(--color-text-regular);
+  color: var(--mgsd-fg);
   margin-bottom: 4px;
   -webkit-tap-highlight-color: transparent;
 }
 .session-item:active,
 .session-item.active {
-  background: var(--color-primary-bg);
-  color: var(--color-text-primary);
+  background: var(--mgsd-item-active);
+  color: var(--mgsd-fg);
 }
 
 .session-title {
@@ -491,7 +514,7 @@ const onBatchDelete = () => {
 
 .session-preview {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mgsd-fg-soft);
   /* ★ 修复: preview 数据含 \n 时旧 nowrap 渲染出多行导致卡片看起来重叠.
      用 -webkit-line-clamp 强制 2 行截断 */
   display: -webkit-box;
@@ -511,20 +534,20 @@ const onBatchDelete = () => {
 .tag-chip {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  border-radius: var(--mg-radius-pill);
+  background: var(--mgsd-item-active);
+  color: var(--mgsd-fg-soft);
 }
 .tag-more {
   font-size: 10px;
-  color: var(--color-text-secondary);
+  color: var(--mgsd-fg-faint);
   align-self: center;
 }
 
 .empty {
   padding: 20px 16px;
   text-align: center;
-  color: var(--color-text-secondary);
+  color: var(--mgsd-fg-faint);
   font-size: 12px;
 }
 
@@ -536,28 +559,30 @@ const onBatchDelete = () => {
   padding: 0 16px 8px;
 }
 .batch-toggle-btn {
+  min-height: 44px;
   padding: 6px 12px;
   font-size: 13px;
   background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: 4px;
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-pill);
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--mgsd-fg-soft);
   -webkit-tap-highlight-color: transparent;
 }
 .batch-toggle-btn.active {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border-color: transparent;
 }
 .batch-mini-btn {
+  min-height: 44px;
   padding: 6px 12px;
   font-size: 13px;
   background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: 4px;
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-pill);
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--mgsd-fg-soft);
   -webkit-tap-highlight-color: transparent;
 }
 .batch-mini-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -583,10 +608,10 @@ const onBatchDelete = () => {
   padding: 4px 0;
 }
 .session-item-wrapper.active {
-  background: var(--color-primary-bg);
+  background: var(--mgsd-item-active);
 }
 .session-item-wrapper.selected {
-  background: rgba(64, 158, 255, 0.08);
+  background: var(--mgsd-item-active);
 }
 .session-item-wrapper.batch-mode {
   padding: 0 4px;
@@ -619,15 +644,15 @@ const onBatchDelete = () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-top: 1px solid var(--color-border-light);
-  background: var(--color-bg-card);
+  border-top: 1px solid var(--mgsd-border);
+  background: transparent;
   gap: 8px;
   /* iOS 底部安全区 */
   padding-bottom: calc(10px + var(--sab, 0px));
 }
 .batch-count {
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--mgsd-fg-soft);
   white-space: nowrap;
 }
 .batch-actions {
@@ -637,14 +662,14 @@ const onBatchDelete = () => {
 .batch-action-btn {
   padding: 8px 16px;
   font-size: 13px;
-  background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  background: var(--mgsd-item-active);
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-md);
   cursor: pointer;
-  color: var(--color-text-primary);
+  color: var(--mgsd-fg);
   -webkit-tap-highlight-color: transparent;
   min-height: 44px;
 }
 .batch-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.batch-action-btn.danger { color: var(--color-danger); border-color: var(--el-color-danger-light-5); }
+.batch-action-btn.danger { color: var(--mg-danger); border-color: var(--mg-danger); }
 </style>

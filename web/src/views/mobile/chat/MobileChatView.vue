@@ -7,7 +7,7 @@
     :threshold="50"
     aria-label="会话左右滑切换"
   >
-  <div class="mobile-chat-root">
+  <div class="mobile-chat-root mg-page">
     <MobileHeader
       :title="currentTitle"
       :is-active="isCurrentSessionSending"
@@ -705,11 +705,8 @@ onMounted(() => {
   flex-direction: column;
   height: 100vh;
   height: var(--vh, 100vh);
-  background: var(--color-bg-page);
-}
-
-[data-theme="dark"] .mobile-chat-root {
-  background: var(--color-bg-page);
+  /* 背景由全局 .mg-page 极光渐变提供 (light/dark 自动跟随 token 切换),
+     此处不得再声明 background — scoped 属性选择器特异性高于 .mg-page, 会盖掉极光 */
 }
 
 .chat-main {
@@ -717,10 +714,11 @@ onMounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* 不声明 background, 让 mg-page 极光透出 */
   /* paddingBottom 由 messagesPaddingBottom 动态控制（输入栏 + 键盘 + safe-area） */
 }
 
-/* ActionSheet */
+/* ActionSheet — 深玻璃面板 (视图局部变量, 不新增全局 token) */
 .action-sheet-overlay {
   position: fixed;
   inset: 0;
@@ -731,36 +729,46 @@ onMounted(() => {
   justify-content: center;
 }
 .action-sheet-panel {
-  width: 100%;
-  background: var(--color-bg-card);
-  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
+  --mgs-item-bg: var(--mg-glass-bg);
+  --mgs-item-bg-active: var(--mg-gradient-soft);
+  width: calc(100% - 2 * var(--mg-tabbar-float, 14px));
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-bottom: none;
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  color: var(--mg-text);
+  border-radius: var(--mg-radius-xl) var(--mg-radius-xl) 0 0;
   padding: 8px 16px calc(16px + var(--sab, 0px));
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: calc(var(--tabbar-height, 56px));
+  margin-bottom: calc(var(--tabbar-height, 76px));
+  box-shadow: var(--mg-shadow-lg);
 }
 .action-item {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 44px;
   padding: 16px;
-  background: var(--color-bg-page);
+  background: var(--mgs-item-bg);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--mg-radius-md);
   font-size: 15px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 .action-item:active {
-  background: var(--color-bg-hover);
+  background: var(--mgs-item-bg-active);
+  transform: scale(0.97);
 }
 .action-item.danger {
-  color: var(--color-danger, #F56C6C);
+  color: var(--mg-danger);
 }
 .action-item.cancel {
-  background: var(--color-bg-card);
+  background: var(--mg-glass-bg-strong);
   font-weight: 500;
   margin-top: 4px;
 }
@@ -785,29 +793,13 @@ onMounted(() => {
 
 <!-- W68 第 14 批 C-2: Mobile UX v3.3 dark mode 跨组件统一 (v60-v67 教训: 非 scoped) -->
 <style>
-/* MobileChatView action sheet / 输入栏 / 消息列表 / 加载态 在 dark 适配 */
-[data-theme="dark"] .mobile-chat-root {
-  background: var(--color-bg-page);
-}
+/* 液态玻璃升级后: 面板/条目颜色由 --mg-* token 在 [data-theme="dark"] 下自动切换,
+   此处不得再用 --color-bg-* 覆盖 .mobile-chat-root / .action-sheet-panel 背景
+   (会盖掉 .mg-page 极光与玻璃配方, 且特异性同级+文档序更后必赢) */
 [data-theme="dark"] .action-sheet-overlay {
   background: rgba(0, 0, 0, 0.6);
 }
 [data-theme="dark"] .action-sheet-panel {
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .action-item {
-  background: var(--color-bg-page);
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .action-item:active {
-  background: var(--color-bg-hover);
-}
-[data-theme="dark"] .action-item.danger {
-  color: var(--color-danger);
-}
-[data-theme="dark"] .action-item.cancel {
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
 }
 </style>

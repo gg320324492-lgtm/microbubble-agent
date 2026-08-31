@@ -76,17 +76,17 @@ defineEmits(['open-menu', 'toggle-theme', 'search', 'open-context'])
   position: sticky;
   top: 0;
   z-index: 50;
-  background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  /* 玻璃头部: 半透明 + blur18, 让 mg-page 极光透出 */
+  background: var(--mg-glass-bg-strong);
+  border-bottom: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
   /* iOS 顶部安全区 */
   padding-top: var(--sat);
 }
 
 [data-theme="dark"] .mobile-chat-header {
-  background: rgba(42, 45, 53, 0.92);
-  border-bottom-color: var(--color-border-base);
+  border-bottom-color: var(--mg-glass-border);
 }
 
 .header-inner {
@@ -107,7 +107,7 @@ defineEmits(['open-menu', 'toggle-theme', 'search', 'open-context'])
   border-radius: 50%;
   background: transparent;
   border: none;
-  color: var(--color-text-regular);
+  color: var(--mg-text);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   font-size: 22px;
@@ -115,8 +115,8 @@ defineEmits(['open-menu', 'toggle-theme', 'search', 'open-context'])
 }
 
 .icon-btn:active {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  background: var(--mg-gradient-soft);
+  color: var(--mg-primary);
 }
 
 .header-title {
@@ -128,12 +128,12 @@ defineEmits(['open-menu', 'toggle-theme', 'search', 'open-context'])
 .title-text {
   font-size: var(--font-size-md, 15px);
   font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  color: var(--mg-text-strong);
 }
 
 .status-text {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -162,6 +162,6 @@ defineEmits(['open-menu', 'toggle-theme', 'search', 'open-context'])
 
 <!-- v78 + v77 教训 (v60-v67): dark mode 必须非 scoped 块 -->
 <style>
-[data-theme="dark"] .title-text { color: var(--color-text-primary); }
-[data-theme="dark"] .status-text { color: var(--color-text-secondary); }
+[data-theme="dark"] .mobile-chat-header .title-text { color: var(--mg-text-strong); }
+[data-theme="dark"] .mobile-chat-header .status-text { color: var(--mg-text-soft); }
 </style>

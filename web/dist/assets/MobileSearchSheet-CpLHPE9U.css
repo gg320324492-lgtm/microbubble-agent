@@ -1,0 +1,172 @@
+
+.sheet-overlay[data-v-8d1e74ab] {
+  position: fixed;
+  inset: 0;
+  z-index: 4500;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet-panel[data-v-8d1e74ab] {
+  width: 100%;
+  /* 2026-08-31 液态毛玻璃: 深玻璃底部面板 */
+  background: var(--mg-glass-bg-strong, var(--color-bg-card));
+  border: 1.5px solid var(--mg-glass-border, transparent);
+  border-bottom: none;
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--mg-shadow-lg, 0 -8px 30px rgba(0, 0, 0, 0.2));
+  border-radius: var(--sheet-radius, 28px) var(--sheet-radius, 28px) 0 0;
+  padding: 8px 16px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.sheet-handle[data-v-8d1e74ab] {
+  width: var(--sheet-handle-w, 36px);
+  height: var(--sheet-handle-h, 4px);
+  background: var(--color-border);
+  border-radius: 2px;
+  margin: 0 auto 12px;
+}
+.search-header[data-v-8d1e74ab] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.search-title[data-v-8d1e74ab] {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+.close-btn[data-v-8d1e74ab] {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+}
+.close-btn[data-v-8d1e74ab]:active { background: var(--color-bg-hover);
+}
+
+/* 搜索框 */
+.search-input-wrap[data-v-8d1e74ab] {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg-page);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+.search-icon[data-v-8d1e74ab] {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+}
+.search-input[data-v-8d1e74ab] {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--color-text-primary);
+  outline: none;
+  font-family: inherit;
+}
+.search-input[data-v-8d1e74ab]::placeholder {
+  color: var(--color-text-placeholder);
+}
+.clear-btn[data-v-8d1e74ab] {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-border);
+  border: none;
+  font-size: 12px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.clear-btn[data-v-8d1e74ab]:active { opacity: 0.6;
+}
+
+/* 筛选器 */
+.filters[data-v-8d1e74ab] {
+  margin-bottom: 16px;
+}
+.filter-group[data-v-8d1e74ab] {
+  margin-bottom: 12px;
+}
+.filter-label[data-v-8d1e74ab] {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+.filter-options[data-v-8d1e74ab] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.filter-option[data-v-8d1e74ab] {
+  padding: 6px 12px;
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-option.active[data-v-8d1e74ab] {
+  background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
+  color: white;
+  border-color: var(--color-primary);
+}
+
+/* 操作按钮 */
+.search-actions[data-v-8d1e74ab] {
+  display: flex;
+  gap: 8px;
+}
+.btn-secondary[data-v-8d1e74ab], .btn-primary[data-v-8d1e74ab] {
+  flex: 1;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: none;
+  font-size: 14px;
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-secondary[data-v-8d1e74ab] {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+.btn-primary[data-v-8d1e74ab] {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
+  color: white;
+}
+
+/* 进出动画 */
+.search-sheet-enter-active[data-v-8d1e74ab], .search-sheet-leave-active[data-v-8d1e74ab] {
+  transition: opacity 0.25s ease;
+}
+.search-sheet-enter-active .sheet-panel[data-v-8d1e74ab],
+.search-sheet-leave-active .sheet-panel[data-v-8d1e74ab] {
+  transition: transform 0.3s ease;
+}
+.search-sheet-enter-from[data-v-8d1e74ab], .search-sheet-leave-to[data-v-8d1e74ab] { opacity: 0;
+}
+.search-sheet-enter-from .sheet-panel[data-v-8d1e74ab],
+.search-sheet-leave-to .sheet-panel[data-v-8d1e74ab] {
+  transform: translateY(100%);
+}

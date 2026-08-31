@@ -1,22 +1,23 @@
 <template>
-  <div class="mobile-login">
-    <!-- 装饰背景 -->
-    <div class="bg-decoration">
-      <div class="bg-circle circle-1" />
-      <div class="bg-circle circle-2" />
-      <div class="bg-circle circle-3" />
+  <div class="mobile-login mg-page">
+    <!-- 装饰气泡 (品牌意象: 微纳米气泡上浮) -->
+    <div class="bg-decoration" aria-hidden="true">
+      <span class="deco-bubble b1" />
+      <span class="deco-bubble b2" />
+      <span class="deco-bubble b3" />
+      <span class="deco-bubble b4" />
     </div>
 
     <main class="login-main" :style="{ paddingTop: 'calc(60px + var(--sat))' }">
-      <div class="logo-section">
-        <div class="logo-circle glass-lg">
-          <span class="logo-icon">💬</span>
+      <div class="logo-section mg-rise">
+        <div class="logo-circle">
+          <span class="logo-icon">🫧</span>
         </div>
         <h1 class="logo-title">小气助手</h1>
-        <p class="logo-subtitle">微纳米气泡课题组智能 Agent</p>
+        <p class="logo-subtitle">微纳米气泡课题组的 AI 拍档</p>
       </div>
 
-      <form class="login-form glass-lg" @submit.prevent="handleLogin">
+      <form class="login-form mg-glass-strong mg-rise mg-stagger-2" @submit.prevent="handleLogin">
         <div class="form-field">
           <span class="field-icon">👤</span>
           <input
@@ -59,7 +60,7 @@
 
         <button
           type="submit"
-          class="login-btn"
+          class="login-btn mg-btn-primary"
           :disabled="loading"
         >
           <span v-if="loading" class="loading-spinner" />
@@ -67,9 +68,13 @@
         </button>
 
         <div class="login-hint">
-          <p>请联系管理员获取账号密码</p>
+          <p>账号由课题组管理员统一签发</p>
         </div>
       </form>
+
+      <footer class="login-foot">
+        MICROBUBBLE LAB · AGENT
+      </footer>
     </main>
   </div>
 </template>
@@ -79,10 +84,11 @@
  * MobileLoginView.vue — 移动端登录页
  *
  * PR #8a: 全屏表单（不用 el-dialog + CSS 全屏 hack）
- * - 大 logo + 装饰背景
- * - 用户名/密码字段（明文切换）
- * - 错误提示
- * - 复用 /api/v1/auth/login 接口
+ * 2026-08-31 液态毛玻璃升级 (风格 D):
+ * - 极光渐变背景 (.mg-page) + 品牌气泡上浮装饰
+ * - 圆角玻璃 logo 磁贴 + 深玻璃表单卡 (.mg-glass-strong)
+ * - 紫粉渐变主按钮 (.mg-btn-primary)
+ * - 登录逻辑零改动 (仍复用 /api/v1/auth/login)
  */
 
 import { ref, reactive, onMounted, nextTick } from 'vue'
@@ -150,114 +156,118 @@ onMounted(() => {
 .mobile-login {
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
   overflow: hidden;
   z-index: 1000;
 }
 
-/* 装饰背景圆 */
+/* ----- 装饰气泡: 玻璃小球缓浮 (品牌=微纳米气泡) ----- */
 .bg-decoration {
   position: absolute;
   inset: 0;
   pointer-events: none;
   overflow: hidden;
 }
-.bg-circle {
+.deco-bubble {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.18) 45%, rgba(255, 255, 255, 0.05) 70%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 24px rgba(120, 90, 180, 0.12);
+  animation: bubble-float 9s ease-in-out infinite;
 }
-.circle-1 {
-  width: 300px;
-  height: 300px;
-  top: -100px;
-  right: -100px;
+[data-theme="dark"] .deco-bubble {
+  background:
+    radial-gradient(circle at 32% 28%, rgba(200, 180, 255, 0.35), rgba(140, 110, 220, 0.1) 45%, rgba(140, 110, 220, 0.04) 70%);
+  border-color: rgba(168, 150, 224, 0.3);
 }
-.circle-2 {
-  width: 200px;
-  height: 200px;
-  bottom: -50px;
-  left: -50px;
+.b1 { width: 110px; height: 110px; top: 9%; right: -28px; animation-delay: 0s; }
+.b2 { width: 56px; height: 56px; top: 26%; left: -14px; animation-delay: 1.6s; }
+.b3 { width: 30px; height: 30px; bottom: 22%; right: 16%; animation-delay: 3.2s; }
+.b4 { width: 74px; height: 74px; bottom: -18px; left: 12%; animation-delay: 4.6s; }
+@keyframes bubble-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-14px) scale(1.04); }
 }
-.circle-3 {
-  width: 150px;
-  height: 150px;
-  top: 40%;
-  right: -75px;
+@media (prefers-reduced-motion: reduce) {
+  .deco-bubble { animation: none; }
 }
 
-/* 主区 */
+/* ----- 主区 ----- */
 .login-main {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  min-height: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 40px var(--mobile-padding-x, 16px) 40px;
+  padding: 40px var(--mobile-padding-x, 20px) calc(40px + var(--sab));
 }
 
-/* Logo */
+/* ----- Logo ----- */
 .logo-section {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 30px;
 }
 .logo-circle {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  /* v77 P2.5.2: backdrop-filter + 半透 background 由 .glass-lg 工具类提供 (assets/glass.css)
-     删硬编码 rgba(255,255,255,0.95)，dark mode 不再撕裂白，6 主题自动跟随 */
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 18px;
+  border-radius: 30px;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--mg-shadow-lg);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
-  box-shadow: var(--shadow-lg);
 }
 .logo-icon {
-  font-size: 40px;
+  font-size: 44px;
 }
 .logo-title {
-  font-size: 28px;
-  font-weight: var(--font-weight-bold, 700);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  margin: 0 0 4px;
-  letter-spacing: 1px;
+  font-size: 27px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  margin: 0 0 6px;
+  letter-spacing: 2px;
 }
 .logo-subtitle {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 12.5px;
+  color: var(--mg-text-soft);
   margin: 0;
+  letter-spacing: 1px;
 }
 
-/* 表单 */
+/* ----- 表单 (玻璃配方由 .mg-glass-strong 提供) ----- */
 .login-form {
-  /* v77 P2.5.2: backdrop-filter + 半透 background 由 .glass-lg 工具类提供 (assets/glass.css)
-     删硬编码 rgba(255,255,255,0.95) + blur(8px)，dark mode 不再撕裂白 */
-  border-radius: var(--radius-xl, 16px);
-  padding: 24px;
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--mg-radius-xl);
+  padding: 24px 20px;
 }
 
 .form-field {
   position: relative;
   display: flex;
   align-items: center;
-  background: var(--color-bg-page);
-  border-radius: var(--radius-md);
+  gap: 4px;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
   padding: 0 14px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .form-field:focus-within {
-  background: var(--color-bg-card);
-  box-shadow: 0 0 0 2px var(--color-primary-bg);
+  border-color: var(--mg-primary);
+  box-shadow: 0 0 0 3px var(--mg-tint);
 }
 
 .field-icon {
-  font-size: 18px;
-  margin-right: 10px;
-  color: var(--color-text-secondary);
+  font-size: 17px;
+  margin-right: 8px;
+  color: var(--mg-text-soft);
   flex-shrink: 0;
 }
 
@@ -267,51 +277,44 @@ onMounted(() => {
   background: transparent;
   padding: 14px 0;
   font-size: 16px;
-  color: var(--color-text-primary);
+  color: var(--mg-text);
   outline: none;
   font-family: inherit;
   min-width: 0;
 }
 .field-input::placeholder {
-  color: var(--color-text-placeholder);
+  color: var(--mg-text-faint);
 }
 
 .toggle-password {
   background: transparent;
   border: none;
-  font-size: 18px;
+  font-size: 17px;
   padding: 8px;
   cursor: pointer;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
 .error-message {
-  padding: 8px 12px;
+  padding: 9px 12px;
   margin-bottom: 12px;
-  background: var(--color-danger-bg);
-  color: var(--color-danger, #F56C6C);
-  border-radius: var(--radius-sm);
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
+  border-radius: 12px;
   font-size: 13px;
   text-align: center;
+  font-weight: 600;
 }
 
 .login-btn {
   width: 100%;
-  padding: 14px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-  /* stylelint-disable-next-line color-named */
-  color: white;
+  padding: 15px;
   font-size: 16px;
-  font-weight: var(--font-weight-medium, 500);
-  letter-spacing: 2px;
-  cursor: pointer;
+  letter-spacing: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.3);
   margin-top: 8px;
   -webkit-tap-highlight-color: transparent;
 }
@@ -319,55 +322,32 @@ onMounted(() => {
   opacity: 0.7;
   cursor: not-allowed;
 }
-.login-btn:active:not(:disabled) {
-  transform: scale(0.98);
-}
 
 .loading-spinner {
   width: 16px;
   height: 16px;
-  /* stylelint-disable-next-line color-named */
-  border: 2px solid white;
+  border: 2px solid var(--mg-on-primary);
   border-top-color: transparent;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .login-hint {
   text-align: center;
   margin-top: 16px;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 .login-hint p { margin: 0; }
-</style>
 
-<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
-<style>
-/* 登录页背景渐变 + 表单卡片 + input 在 dark 模式适配 */
-[data-theme="dark"] .login-page {
-  background: var(--color-bg-page);
-}
-[data-theme="dark"] .login-bg-decor::before,
-[data-theme="dark"] .login-bg-decor::after {
-  /* dark 模式装饰渐变压暗 */
-  opacity: 0.5;
-}
-[data-theme="dark"] .login-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-}
-[data-theme="dark"] .login-title {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .login-subtitle {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .login-input :deep(.el-input__wrapper) {
-  background: var(--color-bg-page);
-  box-shadow: 0 0 0 1px var(--color-border-light) inset;
-}
-[data-theme="dark"] .login-input :deep(.el-input__inner) {
-  color: var(--color-text-primary);
+.login-foot {
+  margin-top: 34px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--mg-text-faint);
 }
 </style>

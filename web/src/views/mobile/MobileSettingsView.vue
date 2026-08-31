@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-settings-view">
+  <div class="mobile-settings-view mg-page">
     <PageHeader title="个人设置" />
 
     <main
@@ -7,7 +7,7 @@
       :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
     >
       <!-- 头像卡片 -->
-      <section class="avatar-card">
+      <section class="avatar-card mg-glass mg-rise">
         <div class="avatar-wrap">
           <MemberAvatar
             :member-id="userInfo?.id"
@@ -25,7 +25,7 @@
         <div class="user-info">
           <div class="user-name">{{ userInfo?.name || '未登录' }}</div>
           <div class="user-role">
-            <span class="role-tag" :class="`role-${userInfo?.role}`">
+            <span class="role-tag mg-chip" :class="`role-${userInfo?.role}`">
               {{ roleLabel }}
             </span>
             <span v-if="userInfo?.email" class="user-email">{{ userInfo.email }}</span>
@@ -34,7 +34,7 @@
       </section>
 
       <!-- 设置项列表 -->
-      <section class="settings-section">
+      <section class="settings-section mg-glass mg-rise mg-stagger-1">
         <button
           type="button"
           class="settings-item"
@@ -149,7 +149,7 @@
       </section>
 
       <!-- 只读信息 -->
-      <section class="readonly-section">
+      <section class="readonly-section mg-glass mg-rise mg-stagger-2">
         <h3 class="section-title">账号信息</h3>
         <div class="readonly-list">
           <div class="readonly-item">
@@ -168,6 +168,7 @@
       </section>
 
       <!-- 退出登录 -->
+      <!-- 注: 不加 mg-rise (animation fill:both 会永久盖掉 :active 的 scale/opacity 反馈) -->
       <button
         type="button"
         class="logout-btn"
@@ -526,36 +527,52 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ============================================================
+   液态毛玻璃 (Liquid Glass) 升级 — 2026-08-31
+   分组 section = mg-glass 卡 (template 挂类, scoped 定尺寸);
+   行分隔 1px rgba(124,107,216,.12); 头像圈渐变描边;
+   危险操作 (退出登录) 走 --mg-danger; 颜色一律 --mg-* token
+   ============================================================ */
 .mobile-settings-view {
   min-height: 100vh;
-  background: var(--color-bg-page);
+  /* background 交给全局 .mg-page (本视图无同名全局竞争类, 单类即可命中) */
 }
 
 .settings-main {
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
 }
 
-/* 头像卡片 */
+/* 头像卡片 (mg-glass surface) */
 .avatar-card {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  margin-bottom: 16px;
+  padding: 18px 16px;
+  margin-bottom: 14px;
 }
 .avatar-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+/* 头像圈渐变描边: gradient 作 padding 露出 3px 圆环 */
+.avatar-wrap :deep(.el-avatar) {
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 800;
+  box-shadow: var(--mg-shadow-sm);
+}
+.avatar-wrap :deep(.el-avatar > img) {
+  border-radius: 50%;
 }
 .avatar-circle {
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  background: var(--mg-gradient-btn);
   /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 28px;
@@ -565,13 +582,18 @@ onMounted(async () => {
   justify-content: center;
 }
 .avatar-upload-btn {
-  background: transparent;
-  border: none;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
   font-size: 11px;
-  color: var(--color-primary);
+  font-weight: 700;
+  color: var(--mg-primary);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 8px 14px;
+  min-height: 44px;
+  border-radius: var(--mg-radius-pill);
+  transition: transform 150ms ease;
 }
+.avatar-upload-btn:active { transform: scale(0.95); }
 
 .user-info {
   flex: 1;
@@ -579,8 +601,8 @@ onMounted(async () => {
 }
 .user-name {
   font-size: 18px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
+  font-weight: 800;
+  color: var(--mg-text-strong);
   margin-bottom: 6px;
 }
 .user-role {
@@ -589,46 +611,60 @@ onMounted(async () => {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* role-tag: 底色/文字由 mg-chip 全局类提供 (紫 tint), 此处只留尺寸与语义变体 */
 .role-tag {
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
   font-size: 11px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
 }
-.role-admin { background: var(--color-danger-bg); color: var(--color-danger, #F56C6C); }
-.role-leader { background: var(--color-warning-bg); color: var(--color-warning, #E6A23C); }
+.role-admin { background: var(--mg-danger-soft); color: var(--mg-danger); }
+.role-leader { background: var(--mg-warning-soft); color: var(--mg-warning); }
 .user-email {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 
-/* 设置项 */
+/* 设置项分组卡 (mg-glass surface) */
 .settings-section {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   overflow: hidden;
+}
+/* 嵌套的 "思考模式" 分组不重复起卡, 融入外层玻璃卡 */
+.settings-section .settings-section {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  margin-bottom: 0;
+  padding: 4px 0 10px;
 }
 .settings-item {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 14px;
+  min-height: 48px;
+  padding: 12px 14px;
   background: transparent;
   border: none;
-  border-bottom: 1px solid var(--color-border-light);
+  border-bottom: 1px solid rgba(124, 107, 216, 0.12);
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: background 150ms ease;
 }
 .settings-item:last-child { border-bottom: none; }
-.settings-item:active { background: var(--color-bg-hover); }
+.settings-item:active {
+  background: rgba(124, 107, 216, 0.08);
+}
+/* 行尾嵌套分组前的最后一行按钮去掉分隔线 */
+.settings-item + .settings-section { border-top: 1px solid rgba(124, 107, 216, 0.12); }
+/* 图标块: 柔渐变底 (对齐样稿 d-task .em: 34px 圆角 12px;
+   inline style 的旧 --color-* tint 用 !important 覆盖) */
 .item-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--mg-gradient-soft) !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -638,31 +674,29 @@ onMounted(async () => {
 .item-info { flex: 1; min-width: 0; }
 .item-title {
   font-size: 14px;
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-primary);
+  font-weight: 700;
+  color: var(--mg-text-strong);
   margin-bottom: 2px;
 }
 .item-desc {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 .item-arrow {
   font-size: 20px;
-  color: var(--color-text-placeholder);
+  color: var(--mg-text-faint);
 }
 
-/* 只读信息 */
+/* 只读信息 (mg-glass surface) */
 .readonly-section {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
   padding: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .section-title {
-  font-size: 13px;
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-secondary);
-  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  margin: 6px 2px 12px;
 }
 .readonly-list {
   display: flex;
@@ -675,93 +709,104 @@ onMounted(async () => {
 }
 .readonly-label {
   flex: 0 0 70px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
 }
 .readonly-value {
   flex: 1;
-  color: var(--color-text-primary);
+  color: var(--mg-text-strong);
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-/* 退出 */
+/* 退出登录 — 危险操作用 --mg-danger */
 .logout-btn {
   width: 100%;
   padding: 14px;
-  margin-top: 12px;
-  background: var(--color-danger-bg);
-  color: var(--color-danger, #F56C6C);
-  border: 1px solid var(--color-danger, #F56C6C);
-  border-radius: var(--radius-md);
+  margin-top: 4px;
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
+  border: 1.5px solid var(--mg-danger);
+  border-radius: var(--mg-radius-md);
   font-size: 14px;
-  font-weight: var(--font-weight-medium, 500);
+  font-weight: 800;
   cursor: pointer;
+  transition: transform 150ms ease, opacity 150ms ease;
   -webkit-tap-highlight-color: transparent;
 }
-.logout-btn:active { opacity: 0.7; }
+.logout-btn:active { transform: scale(0.97); opacity: 0.8; }
 .snoozed-badge {
   display: inline-block;
   margin-left: 6px;
   padding: 1px 6px;
-  background: var(--color-warning-bg, #fdf6ec);
-  color: var(--color-warning, #E6A23C);
-  border-radius: 8px;
+  background: var(--mg-warning-soft);
+  color: var(--mg-warning);
+  border-radius: var(--mg-radius-pill);
   font-size: 10px;
+  font-weight: 700;
 }
 
-/* W68 路线 5 第 3 批: 推送状态徽标 (与 snoozed-badge 同款) */
+/* W68 路线 5 第 3 批: 推送状态徽标 (语义色 token 化) */
 .push-status-on,
 .push-status-off,
 .push-status-denied {
   display: inline-block;
   margin-right: 4px;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: var(--mg-radius-pill);
   font-size: 10px;
-  font-weight: var(--font-weight-medium, 500);
+  font-weight: 700;
 }
 .push-status-on {
-  background: var(--color-success-bg, #f0f9eb);
-  color: var(--color-success, #67C23A);
+  background: var(--mg-success-soft);
+  color: var(--mg-success);
 }
 .push-status-off {
-  background: var(--color-info-bg, #ecf5ff);
-  color: var(--color-info, #909399);
+  background: var(--mg-info-soft);
+  color: var(--mg-info);
 }
 .push-status-denied {
-  background: var(--color-danger-bg, #fef0f0);
-  color: var(--color-danger, #F56C6C);
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
 }
 .push-status-meta {
   font-size: 11px;
-  color: var(--color-text-secondary, #909399);
+  color: var(--mg-text-soft);
 }
 </style>
 
-<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped）
+     2026-08-31 液态毛玻璃: --mg-* token 在 [data-theme="dark"] 下自动翻转,
+     本块保留 --color-* 兜底 + vant/third-party 组件玻璃化覆盖 (视图根 class 锁范围) -->
 <style>
-[data-theme="dark"] .settings-group {
+[data-theme="dark"] .mobile-settings-view .settings-group {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
 }
-[data-theme="dark"] .settings-item {
-  border-bottom: 1px solid var(--color-border-light);
+[data-theme="dark"] .mobile-settings-view .settings-item .item-label {
   color: var(--color-text-primary);
 }
-[data-theme="dark"] .settings-item .item-label {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .settings-item .item-desc {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .theme-swatch {
+[data-theme="dark"] .mobile-settings-view .theme-swatch {
   border: 2px solid var(--color-border-light);
 }
-[data-theme="dark"] .theme-swatch.active {
+[data-theme="dark"] .mobile-settings-view .theme-swatch.active {
   border-color: var(--color-primary);
 }
-[data-theme="dark"] .logout-btn {
-  background: var(--color-danger-bg);
-  color: var(--color-danger);
-  border: 1px solid var(--color-danger);
+
+/* Vant 思考模式三档 cell 玻璃化 (scoped 命中不到 van-* 内部元素, 放非 scoped + 根 class 前缀) */
+.mobile-settings-view .van-cell-group,
+.mobile-settings-view .van-cell-group--inset,
+.mobile-settings-view .van-cell {
+  background: transparent;
+}
+.mobile-settings-view .van-cell {
+  color: var(--mg-text);
+}
+.mobile-settings-view .van-cell::after {
+  border-color: rgba(124, 107, 216, 0.12);
+}
+.mobile-settings-view .van-radio__icon--checked .van-icon {
+  background: var(--mg-primary);
+  border-color: var(--mg-primary);
+  color: var(--mg-on-primary);
 }
 </style>

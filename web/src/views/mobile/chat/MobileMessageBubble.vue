@@ -193,7 +193,9 @@ function onFollowUpClick(suggestion) {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  background: var(--mg-gradient);
+  border: 1.5px solid var(--mg-glass-border);
+  box-shadow: var(--mg-shadow-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -222,22 +224,20 @@ function onFollowUpClick(suggestion) {
 }
 
 .bubble-user {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  background: var(--mg-gradient-btn);
   /* stylelint-disable-next-line color-named */
-  color: white;
-  border-bottom-right-radius: 4px;
+  color: var(--mg-on-primary);
+  border-radius: 18px 18px 6px 18px;
+  box-shadow: var(--mg-primary-shadow);
 }
 .bubble-assistant {
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-light);
-  border-bottom-left-radius: 4px;
-  box-shadow: var(--shadow-xs);
-}
-
-[data-theme="dark"] .bubble-assistant {
-  background: var(--color-bg-card);
-  border-color: var(--color-border-base);
+  background: var(--mg-glass-bg);
+  color: var(--mg-text);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: 18px 18px 18px 6px;
+  box-shadow: var(--mg-shadow-sm);
 }
 
 /* Markdown 内容样式 */
@@ -271,21 +271,21 @@ function onFollowUpClick(suggestion) {
   padding: 6px 10px;
   background: rgba(0, 0, 0, 0.03);
   border-radius: 8px;
-  border-left: 2px solid var(--color-primary);
+  border-left: 2px solid var(--mg-primary);
   font-size: 12px;
 }
 [data-theme="dark"] .tool-trace {
   background: rgba(255, 255, 255, 0.04);
 }
 .trace-item {
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   padding: 2px 0;
 }
 .trace-item.running {
-  color: var(--color-primary);
+  color: var(--mg-primary);
 }
 .trace-item .duration {
-  color: var(--color-text-placeholder);
+  color: var(--mg-text-faint);
   font-size: 11px;
   margin-left: 4px;
 }
@@ -300,7 +300,7 @@ function onFollowUpClick(suggestion) {
 
 /* 错误 */
 .msg-error {
-  color: var(--color-danger);
+  color: var(--mg-danger);
   font-size: 12px;
   margin-top: 6px;
 }
@@ -310,7 +310,7 @@ function onFollowUpClick(suggestion) {
 /* 完成态 */
 .msg-meta {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   margin-top: 6px;
   display: flex;
   gap: 10px;
@@ -319,7 +319,7 @@ function onFollowUpClick(suggestion) {
 .tts-btn {
   background: transparent;
   border: none;
-  color: var(--color-text-secondary);
+  color: var(--mg-text-soft);
   font-size: 14px;
   padding: 2px 6px;
   cursor: pointer;
@@ -329,7 +329,8 @@ function onFollowUpClick(suggestion) {
   justify-content: center;
 }
 .tts-btn:active {
-  background: var(--color-primary-bg);
+  background: var(--mg-gradient-soft);
+  color: var(--mg-primary);
 }
 .tts-btn :deep(.el-icon) {
   font-size: 18px;

@@ -19,7 +19,7 @@
     :threshold="50"
     aria-label="网盘左右滑切换 tab"
   >
-    <div ref="driveRootRef" class="mobile-drive-view drive-page">
+    <div ref="driveRootRef" class="mobile-drive-view drive-page mg-page">
     <PageHeader title="网盘" :show-back="false">
       <template #right>
         <span v-if="notificationUnreadCount > 0" class="notification-badge" :aria-label="`${notificationUnreadCount} 条未读通知`">
@@ -57,7 +57,7 @@
       </div>
     </div>
 
-    <nav class="drive-tabs" role="tablist">
+    <nav class="drive-tabs mg-glass mg-rise" role="tablist">
       <button v-for="t in tabs" :key="t.name" type="button" role="tab"
         :aria-selected="activeTab === t.name"
         :class="{ active: activeTab === t.name }"
@@ -67,7 +67,7 @@
       </button>
     </nav>
 
-    <div v-if="activeTab === 'files'" class="folder-chip-row">
+    <div v-if="activeTab === 'files'" class="folder-chip-row mg-rise mg-stagger-1">
       <button type="button" class="folder-chip" :class="{ active: currentFolderId === null }"
         @click="selectFolder(null)" aria-label="顶级">🏠 我的网盘</button>
       <button v-for="f in folderChips" :key="f.id" type="button" class="folder-chip"
@@ -75,30 +75,30 @@
         @click="selectFolder(f.id)" :aria-label="`切换到 ${f.name}`">📁 {{ f.name }}</button>
     </div>
 
-    <div v-if="loadError" class="drive-error"><p>⚠️ 加载失败</p>
+    <div v-if="loadError" class="drive-error mg-glass"><p>⚠️ 加载失败</p>
       <el-button size="small" @click="refresh">重试</el-button>
     </div>
 
-    <div v-else-if="isEmpty" class="drive-empty">
+    <div v-else-if="isEmpty" class="drive-empty mg-glass">
       <p class="empty-icon">{{ emptyState.icon }}</p>
       <p class="empty-text">{{ emptyState.text }}</p>
       <p class="empty-hint">{{ emptyState.hint }}</p>
     </div>
 
-    <div v-else-if="loading && driveFiles.length === 0" class="drive-loading"><p>加载中...</p></div>
+    <div v-else-if="loading && driveFiles.length === 0" class="drive-loading mg-glass"><p>加载中...</p></div>
 
-    <div v-else-if="filteredFiles.length === 0" class="drive-empty">
+    <div v-else-if="filteredFiles.length === 0" class="drive-empty mg-glass">
       <p class="empty-icon">🔍</p>
       <p class="empty-text">没有匹配 "{{ quickSearch }}" 的文件</p>
       <p class="empty-hint">试试清除关键词或切换 tab</p>
     </div>
 
-    <div v-else class="drive-grid" :style="{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }"
+    <div v-else class="drive-grid mg-rise mg-stagger-2" :style="{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }"
       @touchstart.passive="onTouchStart"
       @touchmove.passive="onTouchMove"
       @touchend.passive="onTouchEnd">
       <LongPressWrapper v-for="file in filteredFiles" :key="file.id" :duration="600" @long-press="onLongPressFile(file)">
-        <article class="drive-file-card" :data-type="getFileTypeKey(file)"
+        <article class="drive-file-card mg-glass" :data-type="getFileTypeKey(file)"
           :class="{ 'is-private': file.visibility === 'private', 'is-starred': file.is_starred }"
           @click="onFileClick(file)">
           <button type="button" class="drive-file-menu" aria-label="更多操作"
@@ -655,115 +655,214 @@ watch(() => route.query.tab, (newTab) => {
 </script>
 
 <style scoped>
-.mobile-drive-view { padding-top: 0; padding-bottom: 80px; min-height: 100vh; }
+/* ============================================================
+   液态毛玻璃 (Liquid Glass) 升级 — 2026-08-31
+   铁律: 只重写 CSS + template 加 class; 颜色一律 var(--mg-*) token
+   (禁裸 hex / 彩色 rgba; 黑/白半透明遮罩除外)
+   ============================================================ */
+
+/* 根容器: mg-page 全局类 + scoped 兜底 (drive-view.css .drive-page 的实色
+   background 会盖住 mg-page, scoped 属性选择器 0-2-0 稳定压过, token 配方一致) */
+.mobile-drive-view {
+  padding-top: 0;
+  padding-bottom: calc(var(--tabbar-height, 76px) + var(--sab, 0px));
+  min-height: 100vh;
+  background:
+    radial-gradient(420px 420px at -10% -6%, var(--mg-aurora-1) 0%, transparent 62%),
+    radial-gradient(400px 400px at 112% 30%, var(--mg-aurora-2) 0%, transparent 62%),
+    radial-gradient(400px 400px at -14% 104%, var(--mg-aurora-3) 0%, transparent 62%),
+    var(--mg-page-bg);
+  color: var(--mg-text);
+}
 .drive-header { position: sticky; top: 0; z-index: 100; }
-.drive-tabs { display: flex; gap: 4px; padding: 8px 12px; background: var(--color-bg-card); border-bottom: 1px solid var(--color-border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.drive-tab-btn { flex: 1; min-width: 64px; padding: 8px 6px; background: transparent; border: none; border-radius: 8px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
-.drive-tab-btn.active { background: var(--color-primary-bg); color: var(--color-primary-text); font-weight: 600; }
+
+/* 4 tab 导航: 玻璃胶囊分段控件
+   (surface 属性在 scoped 显式重述 — 全局 drive-view.css / mobile-glass.css
+    同为单类选择器, bundle 顺序不确定, scoped 0-2-0 保证确定性) */
+.drive-tabs {
+  display: flex; gap: 4px; padding: 6px; margin: 8px 12px 0;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  box-shadow: var(--mg-shadow-sm);
+  border-radius: var(--mg-radius-pill);
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.drive-tab-btn {
+  flex: 1; min-width: 64px; padding: 8px 6px;
+  background: transparent; border: none; border-radius: var(--mg-radius-pill);
+  font-size: 13px; color: var(--mg-text-soft); cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.drive-tab-btn.active {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 700;
+  box-shadow: var(--mg-shadow-sm);
+}
+.drive-tab-btn:active { transform: scale(0.97); }
 .drive-tab-icon { display: block; font-size: 18px; margin-bottom: 2px; }
-.folder-chip-row { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; background: var(--color-bg-card); border-bottom: 1px solid var(--color-border-light); -webkit-overflow-scrolling: touch; }
-.folder-chip { flex-shrink: 0; padding: 6px 12px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; color: var(--color-text-regular); cursor: pointer; white-space: nowrap; }
-.folder-chip.active { background: var(--color-primary-strong); color: var(--el-color-white); border-color: var(--color-primary-strong); }
-.drive-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; touch-action: pan-y; }
-.drive-file-card { position: relative; display: flex; flex-direction: column; align-items: center; padding: 16px 8px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 8px; cursor: pointer; transition: transform 0.2s ease; }
+
+/* 文件夹 chip 行 */
+.folder-chip-row {
+  display: flex; gap: 8px; padding: 10px 12px 2px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  background: transparent; border-bottom: none;
+}
+.folder-chip {
+  flex-shrink: 0; display: inline-flex; align-items: center;
+  padding: 8px 14px; min-height: 44px;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  font-size: 12px; color: var(--mg-text); cursor: pointer; white-space: nowrap;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+.folder-chip:active { transform: scale(0.97); }
+.folder-chip.active {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border-color: transparent;
+}
+
+/* 三态: 玻璃卡内的居中提示 */
+.drive-error, .drive-empty, .drive-loading {
+  text-align: center; padding: 48px 20px; margin: 12px;
+  color: var(--mg-text-soft);
+  border-radius: var(--mg-radius-lg);
+}
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-text { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: var(--mg-text-strong); }
+.empty-hint { font-size: 12px; color: var(--mg-text-faint); }
+
+/* 文件网格: 卡片玻璃化 (.drive-file-card 已挂 mg-glass;
+   surface 在 scoped 重述, 防全局 drive-view.css 单类规则盖住玻璃) */
+.drive-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 12px; padding: 12px; touch-action: pan-y;
+  background: transparent;
+}
+.drive-file-card {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  padding: 16px 8px;
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  box-shadow: var(--mg-shadow-sm);
+  border-radius: var(--mg-radius-md);
+  cursor: pointer; transition: transform 0.2s ease;
+}
 .drive-file-card:active { transform: scale(0.97); }
-.drive-file-card.is-starred { border-color: var(--color-warning); }
+/* 全局 drive-view.css 的 hover 抬升 + 橙色阴影不适合移动端玻璃卡, 中性化 */
+.drive-grid .drive-file-card:hover {
+  transform: none;
+  box-shadow: var(--mg-shadow-sm);
+  border-color: var(--mg-glass-border);
+}
+.drive-file-card.is-starred { border-color: var(--mg-warning); }
 .drive-file-card.is-private { opacity: 0.75; }
 .drive-file-menu {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  color: var(--color-text-secondary);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
+  position: absolute; top: 4px; right: 4px;
+  width: 30px; height: 30px; padding: 0;
+  background: transparent; border: none; border-radius: 50%;
+  color: var(--mg-text-soft); font-size: 16px; line-height: 1; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.drive-file-menu:active { background: var(--color-bg-hover); }
-.drive-file-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--color-primary); margin-bottom: 8px; }
+.drive-file-menu::before { content: ''; position: absolute; inset: -7px; }
+.drive-file-menu:active { background: rgba(255, 255, 255, 0.35); }
+/* 文件类型图标: 柔渐变块底 (对齐样稿 d-task .em 范式, grid 卡内放大到 48px) */
+.drive-file-icon {
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--mg-gradient-soft);
+  border-radius: 12px;
+  color: var(--mg-primary);
+  margin-bottom: 8px;
+}
 .drive-file-info { width: 100%; text-align: center; }
-.drive-file-name { font-size: 13px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.drive-file-meta { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px; font-size: 11px; color: var(--color-text-secondary); }
-.drive-error, .drive-empty, .drive-loading { text-align: center; padding: 60px 20px; color: var(--color-text-secondary); }
-.empty-icon { font-size: 48px; margin-bottom: 12px; }
-.empty-text { font-size: 15px; margin-bottom: 4px; color: var(--color-text-primary); }
-.header-btn { width: 36px; height: 36px; background: transparent; border: none; font-size: 18px; color: var(--color-text-regular); cursor: pointer; border-radius: 6px; }
-.notification-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--color-warning); color: var(--el-color-white); border-radius: 12px; font-size: 11px; font-weight: 600; }
+.drive-file-name {
+  font-size: 13px; font-weight: 600; color: var(--mg-text-strong);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.drive-file-meta {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 4px; font-size: 11px; color: var(--mg-text-soft);
+}
+
+/* 顶栏按钮 / 通知徽标 */
+.header-btn {
+  width: 44px; height: 44px; background: transparent; border: none;
+  font-size: 18px; color: var(--mg-text); cursor: pointer;
+  border-radius: var(--mg-radius-pill);
+}
+.header-btn:active { background: rgba(255, 255, 255, 0.35); }
+.notification-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px;
+  background: var(--mg-warning-soft); color: var(--mg-warning);
+  border-radius: var(--mg-radius-pill); font-size: 11px; font-weight: 600;
+}
 .notification-badge-count { font-variant-numeric: tabular-nums; }
 
-/* v3.0 (W68 Agent 4) PR8 R4: sticky 搜索栏 (始终可见, 不随滚动消失) */
+/* v3.0 (W68 Agent 4) PR8 R4: sticky 搜索栏 → 悬浮玻璃胶囊 */
 .drive-sticky-search {
-  position: sticky;
-  top: 0;
-  z-index: 90;
+  position: sticky; top: 0; z-index: 90;
   padding: 8px 12px;
-  background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border-light);
+  background: transparent;
+  border-bottom: none;
 }
 .drive-sticky-search-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--color-bg-page);
-  border-radius: var(--radius-md, 8px);
-  padding: 8px 10px;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-pill);
+  box-shadow: var(--mg-shadow-sm);
+  padding: 9px 14px;
 }
-.drive-sticky-search-icon { font-size: 14px; color: var(--color-text-secondary); }
+.drive-sticky-search-icon { font-size: 14px; color: var(--mg-text-soft); }
 .drive-sticky-search-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--color-text-primary);
-  outline: none;
-  font-family: inherit;
-  min-width: 0;
+  flex: 1; border: none; background: transparent;
+  font-size: 14px; color: var(--mg-text-strong); outline: none;
+  font-family: inherit; min-width: 0;
 }
-.drive-sticky-search-input::placeholder { color: var(--color-text-placeholder); }
+.drive-sticky-search-input::placeholder { color: var(--mg-text-faint); }
 .drive-sticky-search-clear {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--color-border);
-  border: none;
-  font-size: 11px;
-  color: var(--color-text-regular);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  border: none; font-size: 11px; color: var(--mg-text);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent;
 }
+/* 22px 视觉小圆点 → 隐形扩到 44px 触摸热区 (铁律 8) */
+.drive-sticky-search-clear::before { content: ''; position: absolute; inset: -11px; }
 .drive-sticky-search-grid {
-  flex-shrink: 0;
-  padding: 4px 8px;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
-  font-size: 12px;
-  color: var(--color-text-regular);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0; padding: 5px 10px;
+  background: var(--mg-glass-bg);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  font-size: 12px; color: var(--mg-primary); font-weight: 600;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.drive-sticky-search-grid:active { background: var(--color-bg-hover); }
+.drive-sticky-search-grid:active { transform: scale(0.95); }
 </style>
 
-<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一 (v60-v67 教训: 非 scoped) -->
+<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一 (v60-v67 教训: 非 scoped)
+     2026-08-31 液态毛玻璃升级: --mg-* token 自带 [data-theme="dark"] 变体自动翻转,
+     本块保留文字色兜底 (--color-* 仍被 variables.css 主题翻转驱动),
+     玻璃 surface 不再用实色 --color-bg-card 覆盖 (否则暗色下丢失毛玻璃) -->
 <style>
-[data-theme="dark"] .drive-file-card { background: var(--color-bg-card); border-color: var(--color-border); }
-[data-theme="dark"] .folder-chip { background: var(--color-bg-page); color: var(--color-text-regular); }
-[data-theme="dark"] .folder-chip.active { background: var(--color-primary-strong); color: var(--el-color-white); }
-[data-theme="dark"] .drive-sticky-search { background: var(--color-bg-card); border-color: var(--color-border); }
-[data-theme="dark"] .drive-sticky-search-input-wrap { background: var(--color-bg-page); }
-[data-theme="dark"] .drive-sticky-search-grid { background: var(--color-bg-card); border-color: var(--color-border); color: var(--color-text-regular); }
+[data-theme="dark"] .drive-file-card { border-color: var(--mg-glass-border); }
+[data-theme="dark"] .folder-chip { background: var(--mg-glass-bg-strong); color: var(--mg-text); }
+[data-theme="dark"] .folder-chip.active { background: var(--mg-gradient-btn); color: var(--mg-on-primary); }
+[data-theme="dark"] .drive-sticky-search { background: transparent; border-color: var(--color-border); }
+[data-theme="dark"] .drive-sticky-search-input-wrap { background: var(--mg-glass-bg-strong); }
+[data-theme="dark"] .drive-sticky-search-grid { background: var(--mg-glass-bg); border-color: var(--mg-glass-border); color: var(--mg-primary); }
 [data-theme="dark"] .drive-file-menu { color: var(--color-text-secondary); }
-/* W68 第 14 批 C-2: 列表 / 网格视图 / 空态 / 文件名 / 文件类型色在 dark 适配 */
+/* W68 第 14 批 C-2: 列表 / 网格视图 / 三态 / 文件名 / 元信息文字在 dark 适配 */
 [data-theme="dark"] .drive-file-name {
   color: var(--color-text-primary);
 }
@@ -777,11 +876,15 @@ watch(() => route.query.tab, (newTab) => {
   color: var(--color-text-secondary);
 }
 [data-theme="dark"] .drive-tabs {
-  background: var(--color-bg-card);
-  border-bottom-color: var(--color-border);
+  background: var(--mg-glass-bg-strong);
+  border-color: var(--color-border);
 }
 [data-theme="dark"] .drive-tab-btn {
   color: var(--color-text-regular);
+}
+[data-theme="dark"] .drive-tab-btn.active {
+  color: var(--mg-on-primary);
+  background: var(--mg-gradient-btn);
 }
 [data-theme="dark"] .drive-tab-btn.is-active {
   color: var(--color-primary);
@@ -789,10 +892,9 @@ watch(() => route.query.tab, (newTab) => {
 }
 [data-theme="dark"] .drive-file-card:active,
 [data-theme="dark"] .drive-file-card.is-selected {
-  background: var(--color-bg-hover);
   border-color: var(--color-primary);
 }
 [data-theme="dark"] .drive-grid {
-  background: var(--color-bg-page);
+  background: transparent;
 }
 </style>

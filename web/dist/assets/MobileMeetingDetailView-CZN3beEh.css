@@ -1,0 +1,387 @@
+
+.mobile-meeting-detail[data-v-c1db2a33] {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.detail-main[data-v-c1db2a33] {
+  flex: 1;
+  padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+}
+
+/* Hero 卡片 — 玻璃配方由 .mg-glass-strong 提供 */
+.hero-card[data-v-c1db2a33] {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.hero-title[data-v-c1db2a33] {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  line-height: 1.4;
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.hero-meta[data-v-c1db2a33] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--mg-text-soft);
+  margin-bottom: 8px;
+}
+.meta-icon[data-v-c1db2a33] { margin-right: 4px;
+}
+.hero-status[data-v-c1db2a33] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.status-text[data-v-c1db2a33] {
+  padding: 3px 10px;
+  border-radius: var(--mg-radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mg-primary);
+  background: var(--mg-tint);
+}
+.status-dot[data-v-c1db2a33] {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-dot.status-scheduled[data-v-c1db2a33] { background: var(--mg-info);
+}
+/* 录制中 = 危险红语义 + 光晕强调 */
+.status-dot.status-recording[data-v-c1db2a33] {
+  background: var(--mg-danger);
+  box-shadow: 0 0 0 4px var(--mg-danger-soft);
+  animation: pulse-dot 1s infinite;
+}
+.status-dot.status-processing[data-v-c1db2a33] { background: var(--mg-warning); animation: pulse-dot 1s infinite;
+}
+.status-dot.status-completed[data-v-c1db2a33],
+.status-dot.status-completed_with_warnings[data-v-c1db2a33] { background: var(--mg-success);
+}
+.status-dot.status-cancelled[data-v-c1db2a33] { background: var(--mg-text-faint);
+}
+.status-dot.status-error[data-v-c1db2a33] { background: var(--mg-danger);
+}
+
+/* Tab bar — 玻璃胶囊分段控件 */
+.tab-bar[data-v-c1db2a33] {
+  display: flex;
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-pill);
+  padding: 4px;
+  margin-bottom: 12px;
+  box-shadow: var(--mg-shadow-sm);
+}
+.tab-item[data-v-c1db2a33] {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--mg-radius-pill);
+  font-size: 13px;
+  color: var(--mg-text-soft);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: transform 150ms ease;
+}
+.tab-item[data-v-c1db2a33]:active { transform: scale(0.97);
+}
+.tab-item.active[data-v-c1db2a33] {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 700;
+  box-shadow: var(--mg-primary-shadow);
+}
+.tab-badge[data-v-c1db2a33] {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.3);
+  padding: 0 5px;
+  border-radius: 8px;
+}
+.tab-item:not(.active) .tab-badge[data-v-c1db2a33] {
+  background: var(--mg-tint);
+  color: var(--mg-primary);
+}
+
+/* Tab content — 不再是整块卡片, 各 section 独立玻璃卡分组 */
+.tab-content[data-v-c1db2a33] {
+  min-height: 200px;
+}
+.content-section[data-v-c1db2a33] {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: var(--mg-radius-md);
+}
+.section-title[data-v-c1db2a33] {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  margin: 0 0 8px;
+  padding-left: 8px;
+  border-left: 3px solid var(--mg-primary);
+}
+.section-text[data-v-c1db2a33] {
+  font-size: 14px;
+  color: var(--mg-text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.point-list[data-v-c1db2a33],
+.decision-list[data-v-c1db2a33] {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+/* 讨论要点 = 【发言人】高亮块, 紫调局部底色 */
+.point-item[data-v-c1db2a33] {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--mg-tint);
+  border-radius: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--mg-text);
+  line-height: 1.6;
+}
+.decision-item[data-v-c1db2a33] {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--mg-success-soft);
+  border-radius: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--mg-text);
+  line-height: 1.6;
+}
+.point-index[data-v-c1db2a33] {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.decision-icon[data-v-c1db2a33] {
+  flex-shrink: 0;
+  color: var(--mg-success);
+  font-weight: 700;
+}
+
+/* 转录 — 玻璃卡由 .mg-glass 提供 */
+.transcript-list[data-v-c1db2a33] {
+  padding: 4px 16px 16px;
+}
+.transcript-segment[data-v-c1db2a33] {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--mg-divider);
+}
+.transcript-segment[data-v-c1db2a33]:last-child { border-bottom: none;
+}
+.seg-meta[data-v-c1db2a33] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.seg-speaker[data-v-c1db2a33] {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mg-primary);
+}
+.seg-time[data-v-c1db2a33] {
+  font-size: 11px;
+  color: var(--mg-text-faint);
+}
+.seg-text[data-v-c1db2a33] {
+  font-size: 14px;
+  color: var(--mg-text);
+  line-height: 1.6;
+}
+
+/* 统计 — 玻璃卡由 .mg-glass 提供 */
+.stats-list[data-v-c1db2a33] {
+  padding: 16px;
+}
+.stat-item[data-v-c1db2a33] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--mg-tint);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.stat-rank[data-v-c1db2a33] {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--mg-primary);
+  min-width: 30px;
+}
+.stat-info[data-v-c1db2a33] {
+  flex: 1;
+  min-width: 0;
+}
+.stat-name[data-v-c1db2a33] {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mg-text-strong);
+  margin-bottom: 6px;
+}
+.stat-bar-wrap[data-v-c1db2a33] {
+  height: 6px;
+  background: var(--mg-track);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.stat-bar[data-v-c1db2a33] {
+  height: 100%;
+  background: var(--mg-gradient-btn);
+  border-radius: 3px;
+  transition: width 0.5s;
+}
+.stat-detail[data-v-c1db2a33] {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--mg-text-soft);
+}
+
+/* Empty */
+.empty-tab[data-v-c1db2a33] {
+  text-align: center;
+  padding: 48px 20px;
+}
+.empty-icon[data-v-c1db2a33] {
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+.empty-title[data-v-c1db2a33] {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mg-text);
+  margin-bottom: 4px;
+}
+.empty-hint[data-v-c1db2a33] {
+  font-size: 12px;
+  color: var(--mg-text-soft);
+}
+.empty-hint.error[data-v-c1db2a33] {
+  color: var(--mg-danger);
+}
+.load-more[data-v-c1db2a33] {
+  display: block;
+  margin: 12px auto 0;
+  padding: 10px 18px;
+  min-height: 44px;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-pill);
+  color: var(--mg-primary);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
+}
+.load-more[data-v-c1db2a33]:active { transform: scale(0.97);
+}
+.loading-state[data-v-c1db2a33] {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--mg-text-soft);
+}
+.loading-spinner[data-v-c1db2a33] {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--mg-track);
+  border-top-color: var(--mg-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Header action */
+.header-action[data-v-c1db2a33] {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--mg-text-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.header-action[data-v-c1db2a33]:active { background: var(--mg-glass-bg-strong);
+}
+/* 删除会议按钮: 危险语义 */
+.header-action.danger[data-v-c1db2a33] {
+  color: var(--mg-danger);
+}
+.header-action.danger[data-v-c1db2a33]:active {
+  background: var(--mg-danger-soft);
+}
+
+/* hero-card 操作区 (从 Sheet 迁移) */
+.hero-actions[data-v-c1db2a33] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.action-btn[data-v-c1db2a33] {
+  padding: 12px;
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1.5px solid var(--mg-glass-border);
+  background: var(--mg-glass-bg-strong);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mg-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+  transition: transform 150ms ease;
+}
+.action-btn[data-v-c1db2a33]:active { transform: scale(0.97);
+}
+.action-btn.primary[data-v-c1db2a33] {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border: none;
+  font-weight: 800;
+  box-shadow: var(--mg-primary-shadow);
+}
