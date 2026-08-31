@@ -1,6 +1,21 @@
 <template>
   <div class="mobile-dashboard mg-page">
-    <PageHeader title="首页" />
+    <PageHeader title="首页">
+      <template #right>
+        <button
+          type="button"
+          class="notif-bell"
+          :aria-label="unreadCount > 0 ? `通知 ${unreadCount} 条未读` : '通知'"
+          title="通知"
+          @click="onBellClick"
+        >
+          🔔
+          <span v-if="unreadCount > 0" class="notif-badge">
+            {{ unreadCount > 99 ? '99+' : unreadCount }}
+          </span>
+        </button>
+      </template>
+    </PageHeader>
 
     <main
       class="dashboard-main"
@@ -133,11 +148,19 @@ import dayjs from 'dayjs'
 import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
+import { useNotificationsStore } from '@/composables/useNotifications'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const memberStore = useMemberStore()
+const notifyStore = useNotificationsStore()
+
+const unreadCount = computed(() => notifyStore.unreadCount)
+
+function onBellClick() {
+  router.push('/drive?tab=team')
+}
 
 const loading = ref(true)
 const summary = ref(null)
@@ -210,6 +233,10 @@ function formatDue(due) {
 
 onMounted(() => {
   loadDashboard()
+  // 首页铃铛: 拉一次未读数 + 30s 轮询 (startPolling 自带防重入, 离开页面不清 —
+  // pinia store 单例, 其他页面/WS 增量继续复用同一份 unreadCount)
+  notifyStore.fetchUnreadCount()
+  notifyStore.startPolling(30000)
 })
 </script>
 
@@ -479,9 +506,40 @@ onMounted(() => {
 }
 .skeleton-line.w-60 { width: 60%; }
 .skeleton-line.w-90 { width: 90%; }
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+
+/* 首页铃铛 (PageHeader #right slot) — 液态玻璃 + danger badge */
+.notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  box-shadow: var(--mg-shadow-sm);
+  font-size: 17px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
+}
+.notif-bell:active { transform: scale(0.92); }
+.notif-badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--mg-danger);
+  color: #fff;
+  border-radius: var(--mg-radius-pill);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 </style>
 

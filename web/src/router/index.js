@@ -153,11 +153,14 @@ const routes = [
         // W68 路线 F-3 + F-4: 文件评论独立路由页
         // 移动端: MobileFileCommentsView (长按 + 触觉反馈)
         // 桌面端: DesktopFileCommentsView (el-popover hover + inline edit)
+        // props 必须用函数映射 — params key 是 :id 而两个视图声明的 prop 是 fileId,
+        // props:true 传 { id } → fileId 永远 undefined → fetch /drive/files/undefined
+        // (自 F-3/F-4 上线起评论独立页一直空态, 2026-09-01 实测定位)
         path: 'drive/file/:id/comments',
         name: 'DriveFileComments',
         component: resolveMobileComponent('desktop/DesktopFileCommentsView', 'MobileFileCommentsView'),
         meta: { title: '文件评论' },
-        props: true,
+        props: (route) => ({ fileId: route.params.id }),
       },
       {
         // W68 第 4 批: 文件版本历史桌面端独立路由 (desktop-only)
