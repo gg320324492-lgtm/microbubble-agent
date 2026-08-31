@@ -198,46 +198,55 @@ async def ws_notifications(
 
     # 4) 双向心跳 + 接收 loop
     # W68 PR8d: 5s 主动 ping, 30s pong 超时
-    try:
-        last_pong_ts = asyncio.get_event_loop().time()
-        last_ping_ts = last_pong_ts
-        while True:
-            try:
-                # 接收 (timeout 30s 等 ping/pong, W68 PR8d: 30s 改严)
-                msg = await asyncio.wait_for(
-                    websocket.receive_text(),
-                    timeout=HEARTBEAT_PONG_TIMEOUT,
-                )
-                try:
-                    data = json.loads(msg)
-                    if data.get("type") == "pong":
-                        last_pong_ts = asyncio.get_event_loop().time()
-                    elif data.get("type") == "ping":
-                        # 客户端主动 ping, 响应 pong
-                        await websocket.send_text(json.dumps({"type": "pong", "ts": datetime.utcnow().isoformat()}))
-                        last_pong_ts = asyncio.get_event_loop().time()
-                except json.JSONDecodeError:
-                    pass  # 忽略非 JSON
-            except asyncio.TimeoutError:
-                # W68 PR8d: 30s 没收到任何消息 → 关闭 (原 60s)
-                logger.info(f"[WS] pong timeout user_id={user_id}, close 1011")
-                await websocket.close(code=1011, reason="pong timeout")
-                break
+    # 2026-09-01 重构: 旧实现 `wait_for(receive, 30s)` 阻塞在 receive, ping 只在
+    # receive 返回后才发 → 客户端静默时服务端永远不发 ping, 30s 后 receive 超时
+    # close 1011; 且 wait_for 超时会取消 starlette 的 receive 协程, uvicorn 侧
+    # 后到的 pong 帧被污染丢弃 → 浏览器每 27s 掉线重连 (production 实测 log:
+    # connect → 27s pong timeout → connect 循环)。改为 ping 独立协程 + receive
+    # 无 wait_for, 超时判定用时间戳比较, 断开靠 WebSocketDisconnect 自然抛出。
+    async def _ping_loop():
+        try:
+            while True:
+                await asyncio.sleep(HEARTBEAT_PING_INTERVAL)
+                await websocket.send_text(json.dumps({"type": "ping", "ts": datetime.utcnow().isoformat()}))
+        except Exception:
+            return  # 连接关闭/客户端断开 → 协程自然退出
 
-            # W68 PR8d: 5s 主动 ping (独立协程逻辑嵌主循环, 简化实现)
-            now_ts = asyncio.get_event_loop().time()
-            if (now_ts - last_ping_ts) >= HEARTBEAT_PING_INTERVAL:
-                try:
-                    await websocket.send_text(json.dumps({"type": "ping", "ts": datetime.utcnow().isoformat()}))
-                    last_ping_ts = now_ts
-                except Exception:
-                    break
+    async def _pong_watchdog():
+        try:
+            while True:
+                await asyncio.sleep(5)
+                if asyncio.get_event_loop().time() - last_pong_ts > HEARTBEAT_PONG_TIMEOUT:
+                    logger.info(f"[WS] pong timeout user_id={user_id}, close 1011")
+                    await websocket.close(code=1011, reason="pong timeout")
+                    return
+        except Exception:
+            return
+
+    last_pong_ts = asyncio.get_event_loop().time()
+    ping_task = asyncio.create_task(_ping_loop())
+    watchdog_task = asyncio.create_task(_pong_watchdog())
+    try:
+        while True:
+            msg = await websocket.receive_text()
+            try:
+                data = json.loads(msg)
+                if data.get("type") == "pong":
+                    last_pong_ts = asyncio.get_event_loop().time()
+                elif data.get("type") == "ping":
+                    # 客户端主动 ping, 响应 pong
+                    await websocket.send_text(json.dumps({"type": "pong", "ts": datetime.utcnow().isoformat()}))
+                    last_pong_ts = asyncio.get_event_loop().time()
+            except json.JSONDecodeError:
+                pass  # 忽略非 JSON
 
     except WebSocketDisconnect:
         pass
     except Exception as e:
         logger.warning(f"[WS] loop 异常 user_id={user_id}: {e}", exc_info=True)
     finally:
+        ping_task.cancel()
+        watchdog_task.cancel()
         await notification_manager.disconnect(user_id, websocket)
         try:
             await websocket.close()
