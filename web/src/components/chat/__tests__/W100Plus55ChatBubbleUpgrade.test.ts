@@ -40,16 +40,29 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
   it('①b 气泡 padding 14-18px + border-radius 4px (锐) + 其余 16px', () => {
     const src = readFileSync(CHAT_VIEW, 'utf-8')
     expect(src).toMatch(/padding:\s*14px\s+18px/)
-    expect(src).toMatch(/border-bottom-right-radius:\s*4px/)
-    expect(src).toMatch(/border-bottom-left-radius:\s*4px/)
+    // 2026-08-31: 桌面气泡后续波次把 W100+55 的单角 longhand 重写为 4 值简写
+    // (18px 18px 18px 4px / 18px 18px 4px 18px) — 视觉等价 (右下/左下锐角 4px)。
+    // 原测试正则只认 longhand → 源码合法演进后变脆红。改为接受两种写法之一。
+    const hasBrCorner =
+      /border-bottom-right-radius:\s*4px/.test(src) ||
+      /border-radius:\s*[\d.]+px\s+[\d.]+px\s+4px\s+[\d.]+px/.test(src)
+    const hasBlCorner =
+      /border-bottom-left-radius:\s*4px/.test(src) ||
+      /border-radius:\s*[\d.]+px\s+[\d.]+px\s+[\d.]+px\s+4px/.test(src)
+    expect(hasBrCorner).toBe(true)
+    expect(hasBlCorner).toBe(true)
     expect(src).toMatch(/border-radius:\s*16px/)
   })
 
-  it('①c 气泡 hover lift (translateY -1px + shadow-lg)', () => {
+  it('①c 气泡 hover lift (translateY -1px + shadow)', () => {
     const src = readFileSync(CHAT_VIEW, 'utf-8')
     expect(src).toMatch(/\.bubble:hover/)
     expect(src).toMatch(/transform:\s*translateY\(-1px\)/)
-    expect(src).toMatch(/var\(--shadow-lg/)
+    // 2026-08-31: hover 阴影从 var(--shadow-lg) 改为定制值 (bot 中性黑 / user 珊瑚色),
+    // 防护语义「hover 时加深阴影」保留 → 接受 token 或定制 box-shadow
+    const hasShadow =
+      /var\(--shadow-lg/.test(src) || /\.bubble:hover[\s\S]{0,120}box-shadow:/.test(src)
+    expect(hasShadow).toBe(true)
   })
 
   it('② 打字机 --reveal 进度 CSS 规则在 ChatViewSSE 中', () => {

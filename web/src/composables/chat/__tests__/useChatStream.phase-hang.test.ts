@@ -76,28 +76,28 @@ describe('phase hang 防御 — W100 +50d', () => {
       expect(advancePhase('queued', 'done')).toBe('done')
     })
 
-    it('case 8: 终态 next 是显式重置 (next=done 总是返回 done, 即使 cur 是 error/aborted)', () => {
-      // done 是显式重置指令: next=done 时, advancePhase 总是返回 done
-      // (用户主动重置操作,允许从 error/aborted 状态恢复)
+    // 2026-08-31 仲裁 (W99+12 vs W100+50d 冲突收口): 原 case 8/9 断言
+    // 「next=done 总覆盖 aborted/error」与 (a) 本模块核心防御「abort/done/error
+    // 互不复活」(b) useChatStream.ts:689 finally 守卫 if(!isTerminalPhase) 自相矛盾,
+    // 且 SSE 残余 done 会真把「已中断」翻成「已完成」(即本测试要防的 hang)。
+    // 正解 = 首个终态冻结; 从 error 恢复靠「用户重发新建 message」(新 phase),
+    // 不靠 advancePhase 复活终态。assistantPhase.test.ts 已钉此语义 (47/47)。
+    it('case 8: 首个终态冻结 (abort/done/error 互不复活)', () => {
       expect(advancePhase('done', 'done')).toBe('done')
-      expect(advancePhase('aborted', 'done')).toBe('done')
-      expect(advancePhase('error', 'done')).toBe('done')
+      expect(advancePhase('aborted', 'done')).toBe('aborted')
+      expect(advancePhase('error', 'done')).toBe('error')
+      expect(advancePhase('done', 'aborted')).toBe('done')
       // 非 done 终态: next=generating + cur=aborted → 返回 cur (终态不可被非终态覆盖)
       expect(advancePhase('aborted', 'generating')).toBe('aborted')
       expect(advancePhase('error', 'generating')).toBe('error')
     })
 
-    it('case 9: catch 路径显式 phase=error 后, finally 调 advancePhase(error, done) 返回 done (用户后续重发场景)', () => {
-      // 模拟 catch 显式 set phase='error'
-      const cur = 'generating'
-      const afterCatch = 'error'
-      // finally 调 advancePhase 兜底
-      const finalPhase = advancePhase(afterCatch, 'done')
-      // advancePhase 规则: next=done 是显式重置, 返回 done
-      // (这里语义是: 即使 catch 落 error, 用户后续重新发问时, 新一轮 send 会 reset)
-      // 实际 finally 守卫 if(!isTerminalPhase(...)) 不调 advancePhase,
-      //   因此 case 9 测试 advancePhase 算法本身, 而不是实际 finally 行为
-      expect(finalPhase).toBe('done')
+    it('case 9: catch 落 error 后终态冻结; 恢复走重发新建 message', () => {
+      // finally 守卫 if(!isTerminalPhase) → 不会调 advancePhase 复活 error
+      // 若被误调, error 必须保持 error (终态冻结), 而非被 done 翻成 done
+      expect(advancePhase('error', 'done')).toBe('error')
+      // 用户重发是全新 assistant message (phase 从 queued 起), 与旧 message 终态无关
+      expect(advancePhase(undefined, 'done')).toBe('done')
     })
   })
 

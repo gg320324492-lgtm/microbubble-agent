@@ -20,19 +20,20 @@ describe('ThinkingCapsule 集成 e2e — W99 +16', () => {
     const wrapper = mount(ThinkingCapsule, {
       props: { phase: 'queued', startedAt: Date.now() },
     })
+    // capsule-label 包在 <Transition mode="out-in">: 文本切换需等 leave 动画结束,
+    // fake timers 下必须 advance 才能 flush (2026-08-31 修复: 原测试只 nextTick,
+    // 读到的永远是旧 label)
+    const setPhase = async (phase) => {
+      await wrapper.setProps({ phase })
+      vi.advanceTimersByTime(50)
+      await nextTick()
+      trace.push(wrapper.find('[data-testid="capsule-label"]').text())
+    }
     trace.push(wrapper.find('[data-testid="capsule-label"]').text())
-    wrapper.setProps({ phase: 'retrieving' })
-    await nextTick()
-    trace.push(wrapper.find('[data-testid="capsule-label"]').text())
-    wrapper.setProps({ phase: 'synthesizing' })
-    await nextTick()
-    trace.push(wrapper.find('[data-testid="capsule-label"]').text())
-    wrapper.setProps({ phase: 'generating' })
-    await nextTick()
-    trace.push(wrapper.find('[data-testid="capsule-label"]').text())
-    wrapper.setProps({ phase: 'done' })
-    await nextTick()
-    trace.push(wrapper.find('[data-testid="capsule-label"]').text())
+    await setPhase('retrieving')
+    await setPhase('synthesizing')
+    await setPhase('generating')
+    await setPhase('done')
     expect(trace).toEqual([
       '正在理解问题',
       '正在检索',
@@ -93,10 +94,12 @@ describe('ThinkingCapsule 集成 e2e — W99 +16', () => {
   it('⑥ capsule spinner 切换：retrieving → refining → found（spinner 三态切换）', async () => {
     const wrapper = mount(ThinkingCapsule, { props: { phase: 'retrieving' } })
     expect(wrapper.find('.spinner').exists()).toBe(true)
-    wrapper.setProps({ phase: 'refining' })
+    await wrapper.setProps({ phase: 'refining' })
+    vi.advanceTimersByTime(50)
     await nextTick()
     expect(wrapper.find('.spinner').exists()).toBe(true)
-    wrapper.setProps({ phase: 'found', foundCount: 5 })
+    await wrapper.setProps({ phase: 'found', foundCount: 5 })
+    vi.advanceTimersByTime(50)
     await nextTick()
     expect(wrapper.find('.glyph').exists()).toBe(true)
     expect(wrapper.find('.glyph').text()).toBe('📚')

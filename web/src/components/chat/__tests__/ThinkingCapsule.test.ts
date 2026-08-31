@@ -33,10 +33,11 @@ describe('ThinkingCapsule — W99 +14', () => {
     })
   })
 
-  it('② data-phase 随 prop 变化', () => {
+  it('② data-phase 随 prop 变化', async () => {
     const wrapper = mount(ThinkingCapsule, { props: { phase: 'thinking' } })
     expect(wrapper.find('[data-testid="thinking-capsule"]').attributes('data-phase')).toBe('thinking')
-    wrapper.setProps({ phase: 'retrieving' })
+    // setProps 返回 Promise (DOM 要等 nextTick), 原测试漏 await → 读到旧值 (2026-08-31)
+    await wrapper.setProps({ phase: 'retrieving' })
     expect(wrapper.find('[data-testid="thinking-capsule"]').attributes('data-phase')).toBe('retrieving')
   })
 

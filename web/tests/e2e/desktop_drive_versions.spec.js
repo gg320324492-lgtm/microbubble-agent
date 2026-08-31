@@ -27,6 +27,55 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import DesktopFileVersionsView from '@/views/desktop/DesktopFileVersionsView.vue'
 import DesktopDriveView from '@/views/DesktopDriveView.vue'
 
+// 2026-08-31 修复 (与 mobile_drive_comments 同族根因):
+// ① 类 20.181 — 原 vi.doMock('axios') 在 beforeEach 注册, 但视图/composable 顶部
+//    静态 import 早已捕获真 axios → listVersions 打真实网络 → 数据永远空。
+//    改为顶层 hoisted vi.mock, 调用时动态转发 global.axios。
+// ② setup.js 全局匿名 stub 让 findAllComponents({name:'ElButton'}) 永远 0 命中、
+//    el-empty 渲染成空 div 使 'el-empty'/description 断言必假 → per-mount 具名 stub。
+vi.mock('axios', () => {
+  const delegate = new Proxy({}, {
+    get: (_t, method) => (...args) => {
+      const impl = global.axios && global.axios[method]
+      if (typeof impl !== 'function') {
+        return Promise.reject(new Error(`desktop_drive_versions spec: global.axios.${String(method)} 未配置`))
+      }
+      return impl(...args)
+    },
+  })
+  return { default: delegate }
+})
+
+const ElButtonStub = {
+  name: 'ElButton',
+  props: ['type', 'size', 'icon', 'loading', 'disabled', 'plain'],
+  emits: ['click'],
+  template: `<button class="el-button" :disabled="disabled" @click="$emit('click')"><slot /></button>`,
+}
+const ElEmptyStub = {
+  name: 'ElEmpty',
+  props: ['description'],
+  template: '<div class="el-empty"><span class="el-empty__description">{{ description }}</span><slot /></div>',
+}
+const ElPopconfirmStub = {
+  name: 'ElPopconfirm',
+  props: ['title', 'confirmButtonText', 'cancelButtonText'],
+  template: '<div class="el-popconfirm"><slot name="reference" /><slot /></div>',
+}
+const ElUploadStub = {
+  name: 'ElUpload',
+  props: ['httpRequest', 'beforeUpload', 'accept', 'showFileList'],
+  template: '<div class="el-upload"><slot /></div>',
+}
+const VIEW_STUBS = {
+  'el-button': ElButtonStub,
+  'el-empty': ElEmptyStub,
+  'el-popconfirm': ElPopconfirmStub,
+  'el-upload': ElUploadStub,
+}
+const VIEW_DIRECTIVES = { loading: {} }
+
+
 // mock fetch 全局 (view 内部 raw fetch, store 用 axios — 统一兜底)
 const originalFetch = global.fetch
 
@@ -106,18 +155,18 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
       return Promise.reject(new Error(`unmocked URL: ${url}`))
     })
 
-    // mock axios: GET versions 走 fixture
-    vi.doMock('axios', () => ({
-      default: {
-        get: vi.fn((url) => {
-          if (String(url).includes('/files/') && String(url).includes('/versions')) {
-            return Promise.resolve({ data: fixtures.versionsResponse })
-          }
-          return Promise.reject(new Error(`unmocked GET: ${url}`))
-        }),
-        post: vi.fn(),
-      },
-    }))
+    // mock global.axios (顶部 hoisted vi.mock 的 axios 模块在调用时转发到这里)
+    global.axios = {
+      get: vi.fn(async (url) => {
+        if (String(url).includes('/files/') && String(url).includes('/versions')) {
+          return { data: fixtures.versionsResponse }
+        }
+        throw new Error(`unmocked GET: ${url}`)
+      }),
+      post: vi.fn(async () => ({ data: {} })),
+      put: vi.fn(async () => ({ data: {} })),
+      delete: vi.fn(async () => ({ data: {} })),
+    }
   })
 
   afterEach(() => {
@@ -130,7 +179,7 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: { plugins: [pinia, router], stubs: VIEW_STUBS, directives: VIEW_DIRECTIVES },
       props: { id: '99' },
     })
 
@@ -162,7 +211,7 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: { plugins: [pinia, router], stubs: VIEW_STUBS, directives: VIEW_DIRECTIVES },
       props: { id: '99' },
     })
 
@@ -181,7 +230,8 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
   })
 
   it('场景3: 空版本列表时显示 el-empty (首次上传文件)', async () => {
-    // 改 mock 返空
+    // 改 mock 返空 (listVersions 走 axios — 覆盖 global.axios.get; fetch 一并保留兜底)
+    global.axios.get = vi.fn(async () => ({ data: fixtures.emptyVersionsResponse }))
     global.fetch = vi.fn(() =>
       Promise.resolve({ ok: true, json: () => Promise.resolve(fixtures.emptyVersionsResponse) })
     )
@@ -190,7 +240,7 @@ describe('DesktopFileVersionsView — 桌面端版本视图 (W68 第 4 批)', ()
     await router.isReady()
 
     const wrapper = mount(DesktopFileVersionsView, {
-      global: { plugins: [pinia, router] },
+      global: { plugins: [pinia, router], stubs: VIEW_STUBS, directives: VIEW_DIRECTIVES },
       props: { id: '100' },
     })
 
