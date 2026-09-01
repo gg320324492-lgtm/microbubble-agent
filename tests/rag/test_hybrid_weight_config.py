@@ -31,9 +31,12 @@ class TestHybridWeightsDataclass:
         assert abs(total - 1.0) < 1e-6, f"权重 sum != 1.0, 实际 {total}"
 
     def test_to_dict_returns_all_four_keys(self) -> None:
-        """to_dict 必须含全部 7 个 key (4 路 + image + temporal + chunk, 2026-09-01 WP1.7)"""
+        """to_dict 必须含全部 9 个 key (4 路 + image/temporal/chunk/meetings/drive)"""
         d = HybridWeights().to_dict()
-        assert set(d.keys()) == {"vector", "bm25", "graph", "rerank", "image", "temporal", "chunk"}
+        assert set(d.keys()) == {
+            "vector", "bm25", "graph", "rerank", "image", "temporal",
+            "chunk", "meetings", "drive",
+        }
 
     def test_from_dict_with_all_keys(self) -> None:
         """from_dict 全键构造"""
