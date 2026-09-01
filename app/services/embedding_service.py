@@ -390,10 +390,14 @@ QUERY_EMBEDDING_CACHE_TTL_SECONDS = 86400  # 24h
 
 
 def _query_cache_key(query: str) -> str:
-    """生成 query embedding 缓存 key (sha256[:16])"""
+    """生成 query embedding 缓存 key (sha256[:16])
+
+    2026-09-01 WP4.1: 键中拼入 EMBEDDING_BACKEND — 模型/后端切换后旧缓存
+    自动失配 (向量空间不同), 老键走 TTL 自然过期, 不会污染新模型检索。
+    """
     import hashlib
     digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
-    return f"{QUERY_EMBEDDING_CACHE_PREFIX}{digest}"
+    return f"{QUERY_EMBEDDING_CACHE_PREFIX}{EMBEDDING_BACKEND_NAME}:{digest}"
 
 
 async def get_or_compute_query_embedding(

@@ -142,6 +142,8 @@ async def _run_analyze_and_embed(
                     # PR3 (W89 +6): BM25 增量索引 hook (O(M) 非 O(N))
                     # 复用 BM25 service 既有 _tokenize 切词路径 (派工 v10 §13 铁律 6)
                     # 仅 title + content 必填, 其他字段透传
+                    # 2026-09-01 可见性守卫: 仅 kb + team/public 入检索语料
+                    # (防 private/drive 文档泄入 BM25, 与检索侧冷启动过滤对齐)
                     try:
                         from app.services.bm25_service import _incremental_add_document
                         async with session_factory() as db:
@@ -149,7 +151,7 @@ async def _run_analyze_and_embed(
                                 select(Knowledge).where(Knowledge.id == knowledge_id)
                             )
                             knowledge = result.scalar_one_or_none()
-                            if knowledge:
+                            if knowledge and knowledge.storage_mode == "kb" and knowledge.visibility in ("team", "public"):
                                 _incremental_add_document({
                                     "id": knowledge.id,
                                     "title": knowledge.title or "",
@@ -157,6 +159,7 @@ async def _run_analyze_and_embed(
                                     "category": knowledge.category,
                                     "tags": knowledge.tags,
                                     "source": knowledge.source,
+                                    "created_at": knowledge.created_at,
                                 })
                     except Exception as bm25_err:
                         logger.warning(
@@ -540,6 +543,12 @@ class KnowledgeService:
         self.db.add(knowledge)
         await self.db.commit()
         await self.db.refresh(knowledge)
+        # 知识库版本 INCR — RAG query cache 键拼版本, 旧缓存失配 (WP4.3, best-effort)
+        try:
+            from app.services.base_semantic_cache import bump_kb_version
+            await bump_kb_version()
+        except Exception as e:
+            logger.debug(f"bump_kb_version skip: {e}")
         # 后台：生成嵌入 + LLM 分析 + 关联（Celery 任务，2026-06-29 修复 #257）
         try:
             analyze_knowledge_task.delay(knowledge.id, title, content)
@@ -822,19 +831,101 @@ class KnowledgeService:
 
         await self.db.commit()
         await self.db.refresh(knowledge)
-        # 内容变更时重新生成嵌入
+        # 知识库版本 INCR — RAG query cache 键拼版本, 旧缓存失配 (WP4.3, best-effort)
+        try:
+            from app.services.base_semantic_cache import bump_kb_version
+            await bump_kb_version()
+        except Exception as e:
+            logger.debug(f"bump_kb_version skip: {e}")
+        # 内容变更时重新生成嵌入 + 同步各索引 (2026-09-01 索引一致性)
         if content_changed:
             await self._generate_embedding(knowledge, knowledge.content)
+            try:
+                # 重新切 chunk (write_chunks_for_knowledge 先 DELETE 再 INSERT, 幂等)
+                # + chunk embedding 批量补写 (WP2.1)
+                from app.core.database import async_session as _root_session
+                from sqlalchemy.ext.asyncio import async_sessionmaker as _mk, AsyncSession as _AS
+                factory = _mk(_root_session().bind, class_=_AS, expire_on_commit=False)
+                from app.services.chunking_service import write_chunks_for_knowledge
+                await write_chunks_for_knowledge(
+                    knowledge_id=knowledge_id,
+                    content=knowledge.content,
+                    session_factory=factory,
+                )
+            except Exception as e:
+                logger.warning(f"chunk 重建失败(knowledge_id={knowledge_id}): {e}")
+            try:
+                # tsvector search_text 重写 (PG 生成列自动更新 content_tsvector)
+                from app.services.text_splitter import split_for_tsvector
+                knowledge.search_text = split_for_tsvector(knowledge.content)
+                await self.db.commit()
+            except Exception as e:
+                logger.warning(f"search_text 重写失败(knowledge_id={knowledge_id}): {e}")
+            try:
+                # BM25 增量索引幂等更新 (add 内部先 remove 旧版本)
+                from app.services.bm25_service import _incremental_add_document
+                if knowledge.storage_mode == "kb" and knowledge.visibility in ("team", "public"):
+                    _incremental_add_document({
+                        "id": knowledge.id,
+                        "title": knowledge.title or "",
+                        "content": knowledge.content or "",
+                        "category": knowledge.category,
+                        "tags": knowledge.tags,
+                        "source": knowledge.source,
+                        "created_at": knowledge.created_at,
+                    })
+            except Exception as e:
+                logger.warning(f"BM25 增量更新失败(knowledge_id={knowledge_id}): {e}")
         return knowledge
 
     async def delete_knowledge(self, knowledge_id: int) -> bool:
-        """删除知识条目"""
+        """删除知识条目
+
+        2026-09-01 索引一致性: 硬删除时同步清理各检索索引 (全部 best-effort):
+        - BM25 增量索引 remove
+        - kg_entities 行 (knowledge_id == id)
+        - Neo4j 实体 knowledge_ids 数组清引用
+        (knowledge_chunks 由 FK ON DELETE CASCADE 自动清理)
+        """
         knowledge = await self.get_knowledge(knowledge_id)
         if not knowledge:
             return False
 
         await self.db.delete(knowledge)
         await self.db.commit()
+
+        # 知识库版本 INCR — RAG query cache 键拼版本, 旧缓存失配 (WP4.3, best-effort)
+        try:
+            from app.services.base_semantic_cache import bump_kb_version
+            await bump_kb_version()
+        except Exception as e:
+            logger.debug(f"bump_kb_version skip: {e}")
+
+        # --- 索引清理 (best-effort, 失败只 warning) ---
+        try:
+            from app.services.bm25_service import _incremental_remove_document
+            _incremental_remove_document(knowledge_id)
+        except Exception as e:
+            logger.warning(f"BM25 增量索引 remove 失败(knowledge_id={knowledge_id}): {e}")
+
+        try:
+            from app.models.kg_entity import KGEntity
+            from sqlalchemy import delete as sa_delete
+            result = await self.db.execute(
+                sa_delete(KGEntity).where(KGEntity.knowledge_id == knowledge_id)
+            )
+            await self.db.commit()
+            if result.rowcount:
+                logger.info(f"kg_entities 清理(knowledge_id={knowledge_id}): {result.rowcount} 行")
+        except Exception as e:
+            logger.warning(f"kg_entities 清理失败(knowledge_id={knowledge_id}): {e}")
+
+        try:
+            from app.services.neo4j_service import get_neo4j_service
+            get_neo4j_service().remove_knowledge_ref(knowledge_id)
+        except Exception as e:
+            logger.warning(f"Neo4j 引用清理失败(knowledge_id={knowledge_id}): {e}")
+
         return True
 
     async def create_from_file(
@@ -899,6 +990,12 @@ class KnowledgeService:
         self.db.add(knowledge)
         await self.db.commit()
         await self.db.refresh(knowledge)
+        # 知识库版本 INCR — RAG query cache 键拼版本, 旧缓存失配 (WP4.3, best-effort)
+        try:
+            from app.services.base_semantic_cache import bump_kb_version
+            await bump_kb_version()
+        except Exception as e:
+            logger.debug(f"bump_kb_version skip: {e}")
         # 后台生成嵌入（如果未提供分类则由 LLM 分析，Celery 任务，2026-06-29 修复 #257）
         try:
             analyze_knowledge_task.delay(knowledge.id, title, content)
@@ -951,6 +1048,7 @@ class KnowledgeService:
                     "category": row.Knowledge.category,
                     "tags": row.Knowledge.tags,
                     "source": row.Knowledge.source,
+                    "created_at": row.Knowledge.created_at,
                     "score": round(1.0 - row.distance, 4)
                 }
                 for row in rows
@@ -987,6 +1085,7 @@ class KnowledgeService:
                 "category": r.category,
                 "tags": r.tags,
                 "source": r.source,
+                "created_at": r.created_at,
                 "score": 0.5
             }
             for r in rows

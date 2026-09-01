@@ -24,6 +24,8 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from sqlalchemy import select
+
 logger = logging.getLogger("microbubble.chunking")
 
 
@@ -248,6 +250,7 @@ async def write_chunks_for_knowledge(
         return 0
 
     inserted = 0
+    chunk_row_ids: list[int] = []
     try:
         async with session_factory() as db:
             # 1. 清旧 chunk (重跑幂等, 防 stale drift)
@@ -271,6 +274,17 @@ async def write_chunks_for_knowledge(
                 db.add(row)
                 inserted += 1
             await db.commit()
+            # 收集新 chunk id (flush 后主键可用) 供 embedding 回填
+            chunk_row_ids = [
+                r.id
+                for r in (
+                    await db.execute(
+                        select(KnowledgeChunk.id).where(
+                            KnowledgeChunk.knowledge_id == knowledge_id
+                        )
+                    )
+                ).fetchall()
+            ]
         logger.info(
             f"chunk 写入完成(knowledge_id={knowledge_id}): {inserted} rows"
         )
@@ -280,4 +294,44 @@ async def write_chunks_for_knowledge(
             exc_info=True,
         )
         raise
+
+    # 3. chunk embedding 批量回填 (2026-09-01 WP2.1: 此前全库无写入方,
+    #    chunk 级向量召回对新文档永远失效)。失败 warning 不阻塞 (chunk 行已落库,
+    #    可由 embedding_recalc / 回填脚本补)。
+    if chunk_row_ids:
+        try:
+            from app.services.embedding_service import generate_embeddings
+            from app.services.embedding_truncation_policy import truncate_for_embedding
+
+            texts = [truncate_for_embedding(c.content) for c in chunks]
+            embeddings = await generate_embeddings(texts)
+            if embeddings and len(embeddings) == len(chunk_row_ids):
+                async with session_factory() as db:
+                    rows = (
+                        await db.execute(
+                            select(KnowledgeChunk).where(
+                                KnowledgeChunk.knowledge_id == knowledge_id
+                            )
+                        )
+                    ).scalars().all()
+                    by_index = {r.chunk_index: r for r in rows}
+                    # enumerate 而非 chunks.index(c): 重复内容 chunk 时
+                    # .index() 永远返回首个下标, 会把 embedding 写错行
+                    for idx, (c, emb) in enumerate(zip(chunks, embeddings)):
+                        target = by_index.get(idx)
+                        if target is not None and emb is not None:
+                            target.embedding = emb
+                    await db.commit()
+                logger.info(
+                    f"chunk embedding 回填完成(knowledge_id={knowledge_id}): {len(chunk_row_ids)} rows"
+                )
+            else:
+                logger.warning(
+                    f"chunk embedding 批量生成失败(knowledge_id={knowledge_id}), "
+                    f"chunks 已落库待重算"
+                )
+        except Exception as emb_err:
+            logger.warning(
+                f"chunk embedding 回填失败(knowledge_id={knowledge_id}): {emb_err}"
+            )
     return inserted

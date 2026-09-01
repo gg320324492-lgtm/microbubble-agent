@@ -48,12 +48,14 @@ def _import_model_class(table: str):
     from app.models.memory import Memory
     from app.models.meeting import Meeting
     from app.models.knowledge_entity import KnowledgeEntity
+    from app.models.knowledge_chunk import KnowledgeChunk
 
     return {
         "knowledge": Knowledge,
         "memories": Memory,
         "meetings": Meeting,
         "knowledge_entities": KnowledgeEntity,
+        "knowledge_chunks": KnowledgeChunk,
     }[table]
 
 

@@ -65,6 +65,11 @@ class BaseSemanticCache:
         - value_schema_post_load(value): 读后转换 (默认 passthrough)
     """
 
+    # 知识库版本失效 (2026-09-01 WP4.3): create/update/delete 时 INCR 此键,
+    # 缓存键拼入版本号 → 知识库变更后旧缓存整体失配, 修 24h TTL 内
+    # 新文档不可见的 staleness
+    KB_VERSION_REDIS_KEY = "rag:kb:version"
+
     def __init__(
         self,
         prefix: str,
@@ -80,6 +85,7 @@ class BaseSemanticCache:
         self.nn_probe = nn_probe
         self.name = name  # 仅用于 log, e.g. "RAGQueryCache"
         self.enabled = enabled
+        self._kb_version: int = 0
 
     # ============================================================
     # 公共 API
@@ -107,6 +113,9 @@ class BaseSemanticCache:
             return None
         if not query:
             return None
+
+        # 0. 刷新知识库版本快照 (best-effort, 读不到走 instance 缓存值)
+        await self._refresh_kb_version()
 
         # 1. 精确匹配优先
         key = self._exact_cache_key(query, user_id, tenant_id)
@@ -162,6 +171,8 @@ class BaseSemanticCache:
         if not self.value_schema_pre_check(result):
             return False
 
+        # 刷新知识库版本 (写入侧与新文档对齐)
+        await self._refresh_kb_version()
         effective_ttl = ttl if ttl is not None else self.ttl
         key = self._exact_cache_key(query, user_id, tenant_id)
 
@@ -229,10 +240,16 @@ class BaseSemanticCache:
     ) -> Optional[Dict[str, Any]]:
         """语义相似扫描 (类 20.122 多租户隔离)
 
-        1. 拿 user+tenant 索引 (sorted set, 按 timestamp 排)
-        2. 取最近 N 条 (NN_PROBE)
-        3. 逐条算 cosine similarity
-        4. 命中 (≥ sim_threshold) 返最相似一条
+        1. 计算 query embedding (失败降级返 None)
+        2. 拿 user+tenant 索引 (sorted set, 按 timestamp 排)
+        3. 取最近 N 条 (NN_PROBE)
+        4. 逐条拉缓存的 query embedding → cosine similarity
+        5. 命中 (≥ sim_threshold) 返最相似一条
+
+        2026-09-01 WP4.2 实装: 原实现 for 循环首轮 return None (TODO 死分支),
+        sim_threshold 配置对应的语义命中功能从未生效。现在 set() 会把 query
+        embedding 存到 {prefix}emb:{sha8} 独立键, 索引 member 改为
+        "{exact_key}|{emb_key}" 双段格式, 本方法逐 member 反查 embedding 算余弦。
 
         Returns:
             命中: dict (与 get() 同 schema)
@@ -256,7 +273,6 @@ class BaseSemanticCache:
         # 拿 user+tenant 索引
         idx_key = self._user_tenant_index_key(user_id, tenant_id)
         try:
-            # get_redis now module-level (Plan v2 #6 fix)
             redis = await get_redis()
             members = await redis.zrevrange(idx_key, 0, self.nn_probe - 1)
         except Exception as e:
@@ -266,28 +282,44 @@ class BaseSemanticCache:
         if not members:
             return None
 
-        # 逐条比对
+        # 逐条比对: member 格式 "{exact_key}|{emb_key}" (老格式单段 → 跳过)
         best_sim = 0.0
-        best_value = None
+        best_value: Optional[Dict[str, Any]] = None
         for member in members:
-            # 索引 member 格式: "{exact_key}:{embedding_hash}"
+            member_str = member.decode("utf-8") if isinstance(member, bytes) else member
+            if "|" not in member_str:
+                continue  # 老格式 (无 embedding 键), 无法算语义相似
+            exact_key, emb_key = member_str.split("|", 1)
             try:
-                cached_raw = await redis.get(member.split(":", 1)[0])
-            except Exception:
-                continue
-            if not cached_raw:
-                continue
-            try:
-                cached_value = json.loads(cached_raw)
+                emb_raw = await redis.get(emb_key)
+                if not emb_raw:
+                    continue
+                import json as _json
+                cached_emb = _json.loads(emb_raw)
             except Exception:
                 continue
 
-            # 算 cosine similarity (需要从 cache value 反推 embedding)
-            # 简化: 当前实现仅精确匹配, 无 embedding 反推
-            # 这里返回 None, 留子类扩展
-            # (W99-RAG-1 实际是用外部 embedding 服务比对, 不在 cache 内部)
-            return None  # TODO: 上层 semantic lookup 已在调用方做
+            sim = self._cosine_similarity(query_embedding, cached_emb)
+            if sim < self.sim_threshold:
+                continue
+            try:
+                cached_raw = await redis.get(exact_key)
+                if not cached_raw:
+                    continue
+                import json as _json
+                cached_value = _json.loads(cached_raw)
+            except Exception:
+                continue
+            if sim > best_sim:
+                best_sim = sim
+                best_value = cached_value
 
+        if best_value is not None:
+            logger.debug(
+                f"[{self.name}.find_similar] semantic HIT sim={best_sim:.4f} "
+                f"threshold={self.sim_threshold}"
+            )
+            return self.value_schema_post_load(best_value)
         return None
 
     # ============================================================
@@ -309,12 +341,31 @@ class BaseSemanticCache:
     def _exact_cache_key(self, query: str, user_id: Optional[int], tenant_id: Optional[int]) -> str:
         """精确查询缓存 key (sha256[:16])
 
-        Key 格式: {prefix}{sha256(f"{user_id}:{tenant_id}:{query}")[:16]}
+        Key 格式: {prefix}{sha256(f"v{kb_version}:{user_id}:{tenant_id}:{query}")[:16]}
         类 20.122: 必须含 user_id+tenant_id 隔离多租户
+        2026-09-01 WP4.3: 拼入知识库版本号 (读不到 = 0) — 知识库变更后旧键整体失配
         """
-        raw = f"{user_id or 'anon'}:{tenant_id or 'default'}:{query}"
+        raw = f"v{self._kb_version_snapshot()}:{user_id or 'anon'}:{tenant_id or 'default'}:{query}"
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
         return f"{self.prefix}{digest}"
+
+    def _kb_version_snapshot(self) -> int:
+        """知识库版本快照 (sync, 从 instance 缓存读 — 异步刷新由 bump_kb_version 触发)
+
+        为什么 sync: _exact_cache_key 在同步上下文 (测试断言) 与异步上下文都会调,
+        不做 IO。版本号由 bump_kb_version (异步) 写 instance 缓存, 进程内即时生效;
+        跨进程通过 Redis INCR + 进程启动首次读对齐。
+        """
+        return self._kb_version
+
+    async def _refresh_kb_version(self) -> None:
+        """从 Redis 读当前知识库版本到 instance 缓存 (best-effort)"""
+        try:
+            redis = await get_redis()
+            raw = await redis.get(self.KB_VERSION_REDIS_KEY)
+            self._kb_version = int(raw) if raw else 0
+        except Exception:
+            self._kb_version = 0
 
     def _user_tenant_index_key(self, user_id: Optional[int], tenant_id: Optional[int]) -> str:
         """user+tenant 维度的查询索引 key (用于 find_similar 扫描)
@@ -336,6 +387,10 @@ class BaseSemanticCache:
     ) -> None:
         """写 user+tenant 索引 (sorted set, ttl 用 unset)
 
+        2026-09-01 WP4.2: 同时持久化 query embedding 到独立键 ({prefix}emb:{sha8}),
+        索引 member 改为 "{exact_key}|{emb_key}" 双段格式 — find_similar 反查
+        embedding 算余弦用。embedding 键与主缓存同 TTL。
+
         上层 (caller) 通过 redis 二次 expire 索引键来限 TTL——
         这里仅 zadd 不设 expire, 由调用方在 set 主缓存时同步 expire 索引键.
         """
@@ -343,9 +398,25 @@ class BaseSemanticCache:
             return
         idx_key = self._user_tenant_index_key(user_id, tenant_id)
         try:
-            # get_redis now module-level (Plan v2 #6 fix)
             redis = await get_redis()
-            await redis.zadd(idx_key, {cache_key: time.time()})
+
+            # 1) 持久化 query embedding (best-effort)
+            emb_key: Optional[str] = None
+            try:
+                from app.services.embedding_service import get_or_compute_query_embedding
+                emb = await get_or_compute_query_embedding(query)
+                if emb:
+                    import hashlib
+                    import json as _json
+                    digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:8]
+                    emb_key = f"{self.prefix}emb:{digest}"
+                    await redis.setex(emb_key, ttl, _json.dumps(emb))
+            except Exception as e:
+                logger.debug(f"[{self.name}._index_for_similar] embed persist skip: {e}")
+
+            # 2) zadd 索引 (member = exact_key|emb_key; emb 缺失时单段, find_similar 跳过)
+            member = f"{cache_key}|{emb_key}" if emb_key else cache_key
+            await redis.zadd(idx_key, {member: time.time()})
             await redis.expire(idx_key, ttl)
         except Exception as e:
             logger.debug(f"[{self.name}._index_for_similar] fail: {e}")
@@ -361,3 +432,18 @@ class BaseSemanticCache:
         if norm_a == 0 or norm_b == 0:
             return 0.0
         return dot / (norm_a * norm_b)
+
+
+async def bump_kb_version() -> bool:
+    """知识库变更 → 版本号 INCR (2026-09-01 WP4.3)
+
+    调用方: knowledge_service create/update/delete (best-effort, Redis 不可用忽略)
+    效果: 所有 BaseSemanticCache 子类的 _exact_cache_key 拼版本号 → 旧缓存整体失配
+    """
+    try:
+        redis = await get_redis()
+        await redis.incr(BaseSemanticCache.KB_VERSION_REDIS_KEY)
+        return True
+    except Exception as e:
+        logger.debug(f"[BaseSemanticCache] bump_kb_version skip: {e}")
+        return False
