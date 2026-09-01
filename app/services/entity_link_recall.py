@@ -389,14 +389,23 @@ class EntityLinkRecall:
     async def _load_knowledge(
         self, knowledge_ids: Sequence[int]
     ) -> List[Dict[str, Any]]:
-        """按 id 批量取知识条目 — 格式与 hybrid_retriever 各路一致"""
+        """按 id 批量取知识条目 — 格式与 hybrid_retriever 各路一致
+
+        2026-09-01 可见性硬边界 (与 search_semantic 同款):
+        软删除 / drive / private 文档不可经实体链路召回
+        """
         if not knowledge_ids:
             return []
         from sqlalchemy import select
 
         from app.models.knowledge import Knowledge
 
-        stmt = select(Knowledge).where(Knowledge.id.in_(list(knowledge_ids)))
+        stmt = select(Knowledge).where(
+            Knowledge.id.in_(list(knowledge_ids)),
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "kb",
+            Knowledge.visibility.in_(["team", "public"]),
+        )
         result = await self.db.execute(stmt)
         return [
             {
@@ -406,6 +415,7 @@ class EntityLinkRecall:
                 "category": r.category,
                 "tags": r.tags,
                 "source": r.source,
+                "created_at": r.created_at,
             }
             for r in result.scalars().all()
         ]

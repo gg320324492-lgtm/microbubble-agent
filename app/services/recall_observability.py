@@ -108,6 +108,14 @@ class RecallTrace:
     chunk_late_recall_error: Optional[str] = None  # 失败时的异常类型 + message
     # ==================== W-N-OBS 扩展字段结束 ====================
 
+    # ==================== WP7 (2026-09-01) SearchLog 落库扩展 ====================
+    # 修 grafana 断链: 此前 observer 只打日志, search_logs 扩展列 8432 行全空。
+    # original_query 截断 500; top_ids 最终结果 id (ctr/click 关联); top_k_actual 实际返回数
+    original_query: str = ""
+    top_k_actual: Optional[int] = None
+    top_ids: List[int] = field(default_factory=list)
+    # ==================== WP7 扩展字段结束 ====================
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -182,6 +190,7 @@ class RecallObserver:
             has_query_prompt=has_query_prompt,
             original_len=len(original_query),
             truncated_len=len(original_query[:6000]),
+            original_query=(original_query or "")[:500],  # WP7: 落库用
         )
         start = time.perf_counter()
         try:
@@ -218,6 +227,15 @@ class RecallObserver:
                 P99_LATENCY_THRESHOLD_MS,
                 json.dumps(trace.per_path_latency_ms),
             )
+
+        # WP7 (2026-09-01): fire-and-forget SearchLog 落库 (埋点失败不阻塞检索)
+        if trace.original_query:
+            try:
+                task = asyncio.create_task(_persist_trace_to_search_log(trace))
+                _PENDING_PERSIST_TASKS.add(task)
+                task.add_done_callback(_PENDING_PERSIST_TASKS.discard)
+            except Exception as e:
+                logger.debug(f"recall trace persist spawn skip: {e}")
 
     # ============================================================
     # 统计查询 (供 grafana / health check 使用)
@@ -436,6 +454,75 @@ def aggregate_per_path(
             trace.graph_score = score
         elif path == "rerank":
             trace.rerank_score = score
+
+
+# ============================================================
+# WP7 (2026-09-01): trace → search_logs 落库
+# ============================================================
+
+# 持有 fire-and-forget task 引用防 GC (asyncio.create_task 弱引用陷阱)
+_PENDING_PERSIST_TASKS: set = set()
+
+
+async def _persist_trace_to_search_log(trace: RecallTrace) -> None:
+    """单条 trace 落库 search_logs (fire-and-forget, 全程静默失败)
+
+    修 grafana 断链: 此前 RecallObserver 只打日志, search_logs 扩展列
+    (latency_ms / per_path_* / candidate_k ...) 8432 行全空, 7 面板永远空白。
+    列已在生产库存在 (W93 PR7 model 已定义), 无迁移。
+    独立 session (app.core.database.async_session), 失败只 debug 不抛。
+    """
+    try:
+        import os
+
+        from app.core.database import async_session
+        from app.models.base import utcnow
+        from app.models.search_log import SearchLog
+
+        row = SearchLog(
+            query=trace.original_query[:500],
+            top_ids=[int(i) for i in (trace.top_ids or [])[:20] if i is not None],
+            embedding_model=os.getenv("EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"),
+            # 后端行独立 source (前端 agent_chat/knowledge_search 行不混入,
+            # 防同一查询双行稀释 CTR; grafana CTR 面板按前端 source 过滤)
+            source="hybrid_retriever",
+            caller_path=(trace.caller_path or "hybrid_retriever")[:100],
+            retrieval_method=(trace.retrieval_method or "hybrid")[:50],
+            latency_ms=trace.latency_ms,
+            candidate_k=trace.candidate_k,
+            top_k_actual=trace.top_k_actual,
+            for_query=1 if trace.for_query else 0,
+            has_query_prompt=1 if trace.has_query_prompt else 0,
+            original_len=trace.original_len,
+            truncated_len=trace.truncated_len,
+            vector_score=trace.vector_score,
+            bm25_score=trace.bm25_score,
+            graph_score=trace.graph_score,
+            rerank_score=trace.rerank_score,
+            per_path_latency_ms=dict(trace.per_path_latency_ms) or None,
+            per_path_count=dict(trace.per_path_count) or None,
+            per_path_error=dict(trace.per_path_error) or None,
+            slow_query=1 if trace.slow_query else 0,
+            error_count=trace.error_count,
+            error_msg=(trace.error_msg[:500] if trace.error_msg else None),
+            cache_hit=1 if trace.cache_hit else 0,
+            cache_similarity=trace.cache_similarity,
+            citation_count=trace.citation_count or None,
+            image_score=trace.image_score,
+            created_at=utcnow(),
+        )
+        async with async_session() as db:
+            db.add(row)
+            await db.commit()
+        logger.debug(
+            "recall trace persisted: query=%r latency_ms=%.1f paths=%s",
+            trace.original_query[:30],
+            trace.latency_ms,
+            json.dumps(trace.per_path_latency_ms),
+        )
+    except Exception as e:
+        # 埋点失败静默 (best-effort, 不影响检索主流程)
+        logger.debug(f"recall trace persist skip: {e}")
 
 
 __all__ = [

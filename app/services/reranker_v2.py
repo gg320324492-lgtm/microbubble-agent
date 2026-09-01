@@ -321,7 +321,11 @@ class RerankerV2:
 
             try:
                 reranked = await self.rerank(query, candidates, top_k=1)
-                # 取 rerank 后 top-1 的原始索引 (通过 candidate_id 匹配)
+                # 取 rerank 后 top-1 的原始索引
+                # 2026-09-01 修复: 原实现 top1.get("original_index", expected_index)
+                # 在 candidates 无 original_index 时 fallback 到 expected_index 自己
+                # → gate 永远 100% 通过 (形同虚设)。现在: 优先 original_index,
+                # 缺失时按 candidate id 在 candidates 中查真实下标, 查不到记 failure。
                 top1 = reranked[0] if reranked else None
                 if top1 is None:
                     failures.append(
@@ -333,7 +337,24 @@ class RerankerV2:
                     )
                     continue
 
-                top1_index = top1.get("original_index", expected_index)
+                if "original_index" in top1:
+                    top1_index = top1["original_index"]
+                else:
+                    top1_id = top1.get("id")
+                    top1_index = next(
+                        (idx for idx, c in enumerate(candidates) if c.get("id") == top1_id),
+                        None,
+                    )
+                if top1_index is None:
+                    failures.append(
+                        {
+                            "index": i,
+                            "reason": "cannot resolve top1 original index",
+                            "query": query[:50],
+                        }
+                    )
+                    continue
+
                 if top1_index == expected_index:
                     num_correct += 1
                 else:

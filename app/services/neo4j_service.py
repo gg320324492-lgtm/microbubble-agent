@@ -439,6 +439,39 @@ class Neo4jService:
             logger.error(f"删除实体失败: {name}: {e}")
         return False
 
+    def remove_knowledge_ref(self, knowledge_id: int) -> int:
+        """从所有实体的 knowledge_ids 数组中移除指定知识条目 (2026-09-01)
+
+        删除知识条目时清理图谱引用, 防止已删文档被图谱路持续召回。
+        只清数组元素不删节点 (实体可能仍关联其他知识)。
+
+        Returns:
+            清理的节点数 (driver 不可用返回 0, best-effort)
+        """
+        driver = self._get_driver()
+        if driver is None:
+            return 0
+
+        try:
+            with driver.session() as session:
+                result = session.run(
+                    """
+                    MATCH (e)
+                    WHERE $kid IN e.knowledge_ids
+                    SET e.knowledge_ids = [x IN e.knowledge_ids WHERE x <> $kid]
+                    RETURN count(e) AS n
+                    """,
+                    kid=knowledge_id,
+                )
+                record = result.single()
+                n = int(record["n"]) if record else 0
+                if n:
+                    logger.debug(f"图谱引用清理: knowledge_id={knowledge_id} 影响 {n} 节点")
+                return n
+        except Exception as e:
+            logger.warning(f"图谱引用清理失败 (knowledge_id={knowledge_id}): {e}")
+        return 0
+
 
 # 全局单例
 _neo4j_service: Optional[Neo4jService] = None

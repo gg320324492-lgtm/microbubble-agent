@@ -89,6 +89,7 @@ class HybridWeights:
         bm25: BM25 关键词检索 (rank_bm25 + jieba)
         graph: 知识图谱实体链检索 (Neo4j)
         rerank: Cross-encoder 重排序 (BGE m3)
+        chunk: chunk 级向量召回 (parent-child, 2026-09-01 WP1.7 RRF 第 4 路)
     """
 
     vector: float = 0.4
@@ -99,10 +100,12 @@ class HybridWeights:
     image: float = 0.15
     # W100-RAG-6: 时间衰减 — 不作为 RRF 路权重 (temporal=0), 仅作最终乘子
     temporal: float = 0.0
+    # 2026-09-01 WP1.7: chunk 级向量召回 (retrieve_per_method "chunk" 路)
+    chunk: float = 0.2
 
     def __post_init__(self) -> None:
         # 防御性: 负权重 / NaN 守护；第 5/6 路必须同步加入白名单
-        for field_name in ("vector", "bm25", "graph", "rerank", "image", "temporal"):
+        for field_name in ("vector", "bm25", "graph", "rerank", "image", "temporal", "chunk"):
             v = getattr(self, field_name)
             if not isinstance(v, (int, float)):
                 raise ValueError(
@@ -120,10 +123,10 @@ class HybridWeights:
         """从 dict 创建 (用于 yaml / DB 反序列化)
 
         Args:
-            data: 含 vector/bm25/graph/rerank/image/temporal 键的 dict, 缺键走默认
+            data: 含 vector/bm25/graph/rerank/image/temporal/chunk 键的 dict, 缺键走默认
         """
         kwargs: Dict[str, float] = {}
-        for k in ("vector", "bm25", "graph", "rerank", "image", "temporal"):
+        for k in ("vector", "bm25", "graph", "rerank", "image", "temporal", "chunk"):
             if k in data:
                 kwargs[k] = float(data[k])
         return cls(**kwargs)
@@ -328,6 +331,7 @@ def apply_weights(
         "rerank": weights.rerank,
         "image": weights.image,
         "temporal": weights.temporal,
+        "chunk": weights.chunk,
     }
 
     rrf_totals: Dict[Any, float] = {}

@@ -9,11 +9,68 @@
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("microbubble.hybrid_retriever")
+
+
+def _backfill_normalized_scores(results: List[dict]) -> None:
+    """WP8 (2026-09-01): rerank 后把 rerank_score (cross-encoder logits, 无界)
+    min-max 归一化回填 normalized_score, 供 temporal 乘子与 QA 置信度阈值分级
+    使用统一 [0,1] 语义。无 rerank_score 时退回原 score。原地修改。
+    """
+    if not results:
+        return
+    scores = [
+        float(r["rerank_score"]) if r.get("rerank_score") is not None
+        else float(r.get("score") or 0.0)
+        for r in results
+    ]
+    mx = max(scores)
+    mn = min(scores)
+    rng = (mx - mn) or 1.0
+    for r, s in zip(results, scores):
+        r["normalized_score"] = round((s - mn) / rng, 4)
+
+
+async def _timed_path(obs_trace: Any, name: str, coro) -> Any:
+    """WP7 (2026-09-01): 单路召回计时埋点 — 耗时/命中数/异常写 trace,
+    供 search_logs.per_path_* 落库 + grafana 按路面板。obs_trace 为
+    None 或 _NullTrace 时行为不变 (写入被吞/跳过), 只多一次 perf_counter。
+    """
+    if obs_trace is None:
+        return await coro
+    t0 = time.perf_counter()
+    try:
+        out = await coro
+    except Exception as e:
+        try:
+            obs_trace.per_path_latency_ms[name] = round((time.perf_counter() - t0) * 1000, 3)
+            obs_trace.per_path_error[name] = obs_trace.per_path_error.get(name, 0) + 1
+        except Exception:
+            pass
+        raise
+    try:
+        obs_trace.per_path_latency_ms[name] = round((time.perf_counter() - t0) * 1000, 3)
+        obs_trace.per_path_count[name] = len(out) if isinstance(out, list) else 0
+    except Exception:
+        pass
+    return out
+
+
+def _finalize_obs_trace(obs_trace: Any, results: List[dict]) -> None:
+    """WP7: 终态埋点 — 实际返回数 + top_ids (ctr/click 关联用)"""
+    try:
+        obs_trace.top_k_actual = len(results)
+        obs_trace.top_ids = [
+            r.get("id") for r in (results or [])
+            if isinstance(r, dict) and r.get("id") is not None
+        ][:20]
+    except Exception:
+        pass
 
 
 class HybridRetriever:
@@ -56,6 +113,13 @@ class HybridRetriever:
         # 理由: cross-encoder 对更大候选集更稳定, GPU 推理 30ms 可忽略
         candidate_k = top_k * 5 if enable_rerank else top_k
 
+        # WP7: 候选数埋点
+        try:
+            obs_trace.candidate_k = candidate_k
+            obs_trace.top_k = top_k
+        except Exception:
+            pass
+
         # W99 P2 性能优化 (commit +5): 预计算 query embedding 并行化
         # 原行为: _vector_search 内串行 await generate_embedding (CPU/IO bound)
         # 优化: 把 embedding 计算提到 gather 之前, 与 BM25 并发执行
@@ -70,22 +134,25 @@ class HybridRetriever:
             except Exception as e:
                 logger.debug(f"[W99 P2] precompute embedding skip: {e}")
 
-        # 并发执行三路检索
+        # 并发执行三路检索 (WP7: 每路计时埋点)
         tasks = []
         task_names = []
         if enable_vector:
-            tasks.append(self._vector_search(query, candidate_k, category))
+            tasks.append(_timed_path(obs_trace, "vector", self._vector_search(query, candidate_k, category)))
             task_names.append("vector")
         if enable_bm25:
-            tasks.append(self._bm25_search(query, candidate_k, category))
+            tasks.append(_timed_path(obs_trace, "bm25", self._bm25_search(query, candidate_k, category)))
             task_names.append("bm25")
         if enable_graph:
-            tasks.append(self._graph_search(query, candidate_k))
+            tasks.append(_timed_path(obs_trace, "graph", self._graph_search(query, candidate_k)))
             task_names.append("graph")
 
         if not tasks:
             return []
 
+        # chunk 路结果容器 (1.1 修复: 先初始化, 防异常路径 UnboundLocal;
+        # 原实现在 try 块后无条件重置 → _chunk_late_recall 结果永远被丢弃)
+        chunk_results: List[dict] = []
         results_list = await asyncio.gather(*tasks, return_exceptions=True)
 
         # W99 P2: 消费预计算的 embedding task (若有), 不影响主流程
@@ -100,7 +167,6 @@ class HybridRetriever:
                 logger.debug(f"[late-chunking] embedding consume skip: {e}")
 
         vector_results = []
-        chunk_results = []
         bm25_results = []
         graph_results = []
         for i, (result, name) in enumerate(zip(results_list, task_names)):
@@ -129,12 +195,25 @@ class HybridRetriever:
         if enable_rerank and len(normalized) > 1:
             from app.services.reranker_service import get_reranker_service
             reranker = get_reranker_service()
+            _t0 = time.perf_counter()
             reranked = await reranker.rerank_async(query, normalized, top_k=top_k)
+            try:
+                obs_trace.per_path_latency_ms["rerank"] = round((time.perf_counter() - _t0) * 1000, 3)
+                if reranked:
+                    obs_trace.rerank_score = reranked[0].get("rerank_score")
+            except Exception:
+                pass
+            # WP8: rerank 后按 rerank_score 重算归一化分 (原 normalized_score
+            # 基于混合尺度的 pre-rerank 分数, 对 rerank 后顺序已失真)
+            _backfill_normalized_scores(reranked)
+            _finalize_obs_trace(obs_trace, reranked)
             return reranked
 
         # 不重排序时按归一化分数排序
         normalized.sort(key=lambda x: x.get("normalized_score", 0), reverse=True)
-        return normalized[:top_k]
+        _final = normalized[:top_k]
+        _finalize_obs_trace(obs_trace, _final)
+        return _final
 
     async def _vector_search(
         self, query: str, top_k: int, category: Optional[str]
@@ -152,28 +231,215 @@ class HybridRetriever:
             return []
 
     async def _bm25_search(
-        self, query: str, top_k: int, category: Optional[str]
+        self, query: str, top_k: int, category: Optional[str] = None
     ) -> List[dict]:
-        """BM25 关键词检索"""
+        """BM25 关键词检索
+
+        2026-09-01 重构: 改用 BM25IncrementalIndex (O(M) 增量), 修复两个生产 bug:
+        1. legacy BM25Service 单例只在首次查询时建索引 → 之后新增/更新文档不可见
+        2. legacy 按 category 建索引 → 语料被首次查询的 category 污染
+        现在索引为空时全量 build (kb + 未删除 + team/public), 之后由写入侧
+        _incremental_add_document 增量同步 (knowledge_service Step-1 hook)。
+        """
         try:
-            from app.services.bm25_service import get_bm25_service
+            from app.services.bm25_incremental import get_bm25_incremental_index
 
-            bm25 = get_bm25_service()
+            idx = get_bm25_incremental_index()
+            if len(idx) == 0:
+                await self._refresh_bm25_incremental_index(idx, category)
 
-            # 如果索引为空，从数据库加载
-            if bm25._corpus_size == 0:
-                await self._refresh_bm25_index(bm25, category)
-
-            results = bm25.search(query, top_k=top_k)
+            results = idx.search(query, top_k=top_k, category=category)
             return results
         except Exception as e:
             logger.warning(f"BM25 检索失败: {e}")
             return []
 
+    async def _refresh_bm25_incremental_index(
+        self, idx, category: Optional[str] = None
+    ) -> None:
+        """从数据库全量构建 BM25 增量索引 (冷启动)"""
+        from sqlalchemy import select
+        from app.models.knowledge import Knowledge
+
+        # 与 search_semantic 同款可见性硬边界:
+        # kb 模式 + 未软删除 + team/public (private/drive 不入检索语料)
+        stmt = select(Knowledge).where(
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "kb",
+            Knowledge.visibility.in_(["team", "public"]),
+        )
+        if category:
+            # 冷启动只带 category 过滤会污染全局语料 — 全量构建,
+            # category 过滤交给 search() 运行时后过滤
+            logger.debug("[bm25] 冷启动忽略 category 过滤, 全量构建 (运行时后过滤)")
+        result = await self.db.execute(stmt)
+        rows = result.scalars().all()
+
+        documents = [
+            {
+                "id": r.id,
+                "title": r.title or "",
+                "content": r.content or "",
+                "category": r.category,
+                "tags": r.tags,
+                "source": r.source,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ]
+        idx.build_from_docs(documents)
+        logger.info(f"BM25 增量索引冷启动完成: {len(documents)} 条")
+
+    async def retrieve_per_method(
+        self,
+        query: str,
+        candidate_k: int = 25,
+        category: Optional[str] = None,
+        enable_vector: bool = True,
+        enable_bm25: bool = True,
+        enable_graph: bool = True,
+    ) -> Dict[str, List[dict]]:
+        """按检索路分组的并发召回 (WP1.7: 供 retrieve_with_weights 做 RRF 合并)
+
+        WP7: observability hook 包裹原逻辑, 原 body 字面照搬到
+        _retrieve_per_method_impl (与 retrieve()/_retrieve_impl 同模式)。
+        """
+        from app.services.recall_observability import RecallObserver
+        observer = RecallObserver.get()
+        async with observer.observe(
+            caller_path="hybrid_retriever.per_method",
+            for_query=True,
+            has_query_prompt=True,
+            original_query=query,
+        ) as obs_trace:
+            return await self._retrieve_per_method_impl(
+                query=query,
+                candidate_k=candidate_k,
+                category=category,
+                enable_vector=enable_vector,
+                enable_bm25=enable_bm25,
+                enable_graph=enable_graph,
+                obs_trace=obs_trace,
+            )
+
+    async def _retrieve_per_method_impl(
+        self,
+        query: str,
+        candidate_k: int = 25,
+        category: Optional[str] = None,
+        enable_vector: bool = True,
+        enable_bm25: bool = True,
+        enable_graph: bool = True,
+        obs_trace: Any = None,
+    ) -> Dict[str, List[dict]]:
+        """原 retrieve_per_method body — WP7 拆分点, 不改任何逻辑"""
+        try:
+            obs_trace.candidate_k = candidate_k
+        except Exception:
+            pass
+
+        tasks: List = []
+        names: List[str] = []
+        if enable_vector:
+            tasks.append(_timed_path(obs_trace, "vector", self._vector_search(query, candidate_k, category)))
+            names.append("vector")
+        if enable_bm25:
+            tasks.append(_timed_path(obs_trace, "bm25", self._bm25_search(query, candidate_k, category)))
+            names.append("bm25")
+        if enable_graph:
+            tasks.append(_timed_path(obs_trace, "graph", self._graph_search(query, candidate_k)))
+            names.append("graph")
+
+        out: Dict[str, List[dict]] = {}
+        if not tasks:
+            return out
+
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        for result, name in zip(results_list, names):
+            if isinstance(result, Exception):
+                logger.warning(f"retrieve_per_method 路 {name} 失败: {result}")
+                out[name] = []
+            else:
+                out[name] = result
+
+        # chunk 向量路 (RRF 第 4 路): 复用预计算 embedding
+        if enable_vector:
+            _t_chunk = time.perf_counter()
+            try:
+                from app.services.embedding_service import get_or_compute_query_embedding
+                from sqlalchemy import select as _sel
+                from app.models.knowledge import Knowledge as _K
+
+                query_embedding = await get_or_compute_query_embedding(
+                    query, has_query_prompt=True
+                )
+                if query_embedding is not None:
+                    chunk_hits = await retrieve_chunks_by_vector(
+                        db=self.db,
+                        query_embedding=query_embedding,
+                        top_k=candidate_k,
+                    )
+                    # chunk-only 命中补父文档字段 (title/content/created_at)
+                    parent_ids = {h["knowledge_id"] for h in chunk_hits}
+                    parents: Dict[int, dict] = {}
+                    if parent_ids:
+                        rows = (
+                            await self.db.execute(
+                                _sel(_K).where(_K.id.in_(list(parent_ids)))
+                            )
+                        ).scalars().all()
+                        for r in rows:
+                            parents[r.id] = r
+                    enriched: List[dict] = []
+                    for h in chunk_hits:
+                        p = parents.get(h["knowledge_id"])
+                        if p is None:
+                            # 父文档已被删除/不可见 → retrieve_chunks_by_vector 已过滤,
+                            # 这里防御跳过
+                            continue
+                        enriched.append({
+                            "id": h["knowledge_id"],
+                            "title": p.title or "",
+                            "content": h["content"],
+                            "category": p.category,
+                            "tags": p.tags,
+                            "source": p.source,
+                            "created_at": p.created_at,
+                            "score": h["similarity"],
+                            "chunk_id": h["chunk_id"],
+                            "char_start": h["char_start"],
+                            "char_end": h["char_end"],
+                            "chunk_content": h["content"],
+                            "retrieval_method": "chunk_vector",
+                        })
+                    out["chunk"] = enriched
+            except Exception as e:
+                logger.warning(f"retrieve_per_method chunk 路失败: {e}")
+                out["chunk"] = []
+            try:
+                obs_trace.per_path_latency_ms["chunk"] = round((time.perf_counter() - _t_chunk) * 1000, 3)
+                obs_trace.per_path_count["chunk"] = len(out.get("chunk") or [])
+            except Exception:
+                pass
+
+        # WP7: 终态埋点 — top_ids 取各路 union (vector 优先), 供 search_logs
+        try:
+            _union_ids: List[int] = []
+            for _m in ("vector", "bm25", "graph", "chunk"):
+                for _r in out.get(_m) or []:
+                    _rid = _r.get("id")
+                    if _rid is not None and _rid not in _union_ids:
+                        _union_ids.append(_rid)
+            obs_trace.top_ids = _union_ids[:20]
+            obs_trace.top_k_actual = len(_union_ids[:20])
+        except Exception:
+            pass
+        return out
+
     async def _refresh_bm25_index(
         self, bm25_service, category: Optional[str] = None
     ) -> None:
-        """从数据库刷新 BM25 索引"""
+        """从数据库刷新 BM25 legacy 索引 (保留: agent_retriever._bm25_only 兜底用)"""
         from sqlalchemy import select
         from app.models.knowledge import Knowledge
 
@@ -273,7 +539,18 @@ class HybridRetriever:
                 return []
 
             # 从数据库获取知识条目
-            stmt = select(Knowledge).where(Knowledge.id.in_(list(graph_knowledge_ids)))
+            # 2026-09-01 可见性硬边界 (与 search_semantic 同款):
+            # 软删除 / drive / private 文档不可经图谱路召回
+            stmt = (
+                select(Knowledge)
+                .where(
+                    Knowledge.id.in_(list(graph_knowledge_ids)),
+                    Knowledge.deleted_at.is_(None),
+                    Knowledge.storage_mode == "kb",
+                    Knowledge.visibility.in_(["team", "public"]),
+                )
+                .limit(top_k)
+            )
             result = await self.db.execute(stmt)
             rows = result.scalars().all()
 
@@ -285,10 +562,11 @@ class HybridRetriever:
                     "category": r.category,
                     "tags": r.tags,
                     "source": r.source,
+                    "created_at": r.created_at,
                     "score": 0.7,  # 图谱匹配给固定分数
                     "retrieval_method": "graph",
                 }
-                for r in rows[:top_k]
+                for r in rows
             ]
         except Exception as e:
             logger.warning(f"图谱检索失败: {e}")
@@ -501,6 +779,7 @@ async def retrieve_chunks_by_vector(
     """
     from sqlalchemy import select
 
+    from app.models.knowledge import Knowledge
     from app.models.knowledge_chunk import KnowledgeChunk
 
     stmt = select(
@@ -513,10 +792,20 @@ async def retrieve_chunks_by_vector(
         KnowledgeChunk.char_count,
         KnowledgeChunk.strategy,
         KnowledgeChunk.embedding.cosine_distance(query_embedding).label("distance"),
+    ).join(
+        Knowledge, Knowledge.id == KnowledgeChunk.knowledge_id
     )
 
     # chunk 必须有 embedding (召回前)
     stmt = stmt.where(KnowledgeChunk.embedding.is_not(None))
+
+    # 2026-09-01 可见性硬边界 (与 search_semantic 同款过滤):
+    # 软删除 / drive 模式 / private 文档的 chunk 不可召回
+    stmt = stmt.where(
+        Knowledge.deleted_at.is_(None),
+        Knowledge.storage_mode == "kb",
+        Knowledge.visibility.in_(["team", "public"]),
+    )
 
     if knowledge_id is not None:
         stmt = stmt.where(KnowledgeChunk.knowledge_id == knowledge_id)
@@ -545,6 +834,7 @@ async def retrieve_chunks_by_vector(
             "char_count": row.char_count,
             "strategy": row.strategy,
             "similarity": float(1.0 - row.distance),  # 距离 → 相似度
+            "score": float(1.0 - row.distance),
             "retrieval_method": "chunk_vector",
         })
     return out
@@ -639,44 +929,70 @@ async def retrieve_with_weights(
 ) -> List[dict]:
     """PR4 (W90 +5): 带权重 + 同义词扩展的检索入口 (新 API, 不动原 retrieve)
 
+    WP7 (2026-09-01): observability hook 包裹原逻辑, 原 body 字面照搬到
+    _retrieve_with_weights_impl (与 retrieve()/_retrieve_impl 同模式)。
+    search_knowledge 工具的 RRF 主检索路径由此获得 search_logs 落库。
+    """
+    from app.services.recall_observability import RecallObserver
+    observer = RecallObserver.get()
+    async with observer.observe(
+        caller_path="retrieve_with_weights",
+        for_query=True,
+        has_query_prompt=True,
+        original_query=query,
+    ) as obs_trace:
+        return await _retrieve_with_weights_impl(
+            db=db,
+            query=query,
+            top_k=top_k,
+            category=category,
+            weights=weights,
+            enable_synonym_expansion=enable_synonym_expansion,
+            enable_vector=enable_vector,
+            enable_bm25=enable_bm25,
+            enable_graph=enable_graph,
+            enable_rerank=enable_rerank,
+            obs_trace=obs_trace,
+        )
+
+
+async def _retrieve_with_weights_impl(
+    db: AsyncSession,
+    query: str,
+    top_k: int = 5,
+    category: Optional[str] = None,
+    weights: Optional["object"] = None,
+    enable_synonym_expansion: bool = True,
+    enable_vector: bool = True,
+    enable_bm25: bool = True,
+    enable_graph: bool = True,
+    enable_rerank: bool = True,
+    obs_trace: Any = None,
+) -> List[dict]:
+    """原 retrieve_with_weights body — WP7 拆分点, 不改任何逻辑
+
     与 HybridRetriever.retrieve 区别:
         1. 支持 synonym 改写 (enable_synonym_expansion=True 默认)
-        2. 支持权重配置 (weights=HybridWeights(...))
-        3. 内部用 _apply_synonyms + HybridRetriever.retrieve 串联
-        4. 委托给原 retrieve (不破坏既有行为)
+        2. 支持权重配置 (weights=HybridWeights(...)), intent 推断的权重真实参与 RRF 合并
+        3. 2026-09-01 完整 RRF 实现 (此前 step 3 直接返回原 retrieve 结果, weights 无消费):
+           cache lookup → intent (miss 才调) → per-method 并发检索 → RRF 合并 →
+           multimodal 折算 → 单次 rerank → rerank_score 归一化 → temporal 乘子 →
+           citation 提取 + final attach → cache 写最终结果
 
     Args:
         db: AsyncSession
         query: 查询字符串
         top_k: 返回条数
         category: 分类过滤
-        weights: HybridWeights, None 走默认
+        weights: HybridWeights, None 走默认/intent 推断
         enable_synonym_expansion: 是否启用同义词改写
         enable_vector/bm25/graph/rerank: 各路开关
 
     Returns:
-        检索结果列表 (按 rrf_score 降序)
+        检索结果列表 (按 rerank/temporal 调整后分数降序)
     """
-    # -1) W100-RAG-3: Intent hook (件 4 门控 B 守恒 - 仅追加, 不改原签名)
-    # 推断 query 意图 → 决定 HybridWeights (vector/bm25/graph/rerank 4 路权重)
-    # 失败 best-effort 静默降级到默认 weights (类 20.125 + 类 20.126)
-    # 注意: Intent hook 在 Cache hook 之前 (W99-RAG-1 cache 命中就跳过整个 retrieve
-    # 含 intent 推断, 节省 LLM 调用)
-    # weights 参数已存在 (W90 PR4 留口), 这里在 weights=None 时用 intent 推断填充,
-    # 未来 PR 可接 _retrieve_impl 做 per-intent 调参 (本任务只埋点)
-    try:
-        from app.rag.config import INTENT_CLASSIFIER_ENABLED as _IC_ENABLED
-        if _IC_ENABLED and weights is None:
-            from app.rag.intent_router import get_intent_router
-            _router = get_intent_router()
-            weights = await _router.route(query)
-            logger.debug(f"[W100-RAG-3] intent-inferred weights attached: {weights}")
-    except Exception as _e:
-        logger.debug(f"[W100-RAG-3] intent hook skip: {_e}")
-
-    # 0) W99-RAG-1: Query Cache hook (件 4 门控 B 守恒 - 仅追加, 不改原签名)
-    # 缓存键含 user_id + tenant_id 隔离多租户 (类 20.122)
-    # Redis 不可用 best-effort silently 降级 (类 20.121, 沿用 embedding_service:243 模式)
+    # 0) W99-RAG-1: Query Cache hook — 提到最前 (2026-09-01: 原顺序 intent→cache
+    # 导致每次 cache 命中仍白付一次 LLM intent 调用)。命中直接返回最终结果 (含 citations)。
     user_id: Optional[int] = None
     tenant_id: Optional[int] = None
     try:
@@ -684,17 +1000,26 @@ async def retrieve_with_weights(
         from app.services.rag_query_cache import get_rag_query_cache
         if _CFG_ENABLED:
             _cache = get_rag_query_cache()
-            # 先查精确匹配
             _cached = await _cache.get(query, user_id=user_id, tenant_id=tenant_id)
             if _cached is not None and _cached.get("results"):
                 logger.debug(f"[W99-RAG-1] query cache HIT (exact) for query={query[:30]}")
-                return _cached["results"]
+                _cached_results = _cached["results"]
+                try:
+                    obs_trace.cache_hit = True
+                    obs_trace.cache_similarity = _cached.get("cache_similarity")
+                except Exception:
+                    pass
+                _finalize_obs_trace(obs_trace, _cached_results)
+                if _cached.get("citations"):
+                    try:
+                        _cached_results.citations = _cached["citations"]
+                    except AttributeError:
+                        pass
+                return _cached_results
     except Exception as _e:
         logger.debug(f"[W99-RAG-1] query cache lookup skip: {_e}")
 
-    # 0b) 2026-08-03 [W100 +33] qa-bench v3.1 D3: retrieval_cache 5min TTL 短期路径
-    # qa-bench 模式启用条件: LLM_QA_BENCH_ROUNDS>=1 + LLM_TEMPERATURE_QA_BENCH=0.0
-    # 件 4 门控 B 守恒: 仅 body 追加, 不改原签名.
+    # 0b) qa-bench v3.1 D3: retrieval_cache 5min TTL 短期路径
     try:
         from app.config import settings as _cfg
         from app.services.retrieval_cache import get_retrieval_cache as _get_rc
@@ -707,117 +1032,56 @@ async def retrieve_with_weights(
     except Exception as _e:
         logger.debug(f"[W100-D3] retrieval_cache lookup skip: {_e}")
 
+    # -1) W100-RAG-3: Intent hook — cache miss 才调 (2026-09-01 顺序修正 + 1.8 超时)
+    # 推断 query 意图 → 决定 HybridWeights, 真实参与 RRF 合并
+    if weights is None:
+        try:
+            from app.rag.config import INTENT_CLASSIFIER_ENABLED as _IC_ENABLED
+            if _IC_ENABLED:
+                from app.rag.intent_router import get_intent_router
+                _router = get_intent_router()
+                weights = await asyncio.wait_for(_router.route(query), timeout=3.0)
+                logger.debug(f"[W100-RAG-3] intent-inferred weights attached: {weights}")
+        except asyncio.TimeoutError:
+            logger.debug("[W100-RAG-3] intent hook timeout (3s), 走默认 weights")
+        except Exception as _e:
+            logger.debug(f"[W100-RAG-3] intent hook skip: {_e}")
+
     # 1) 同义词改写
     expanded_query = await _apply_synonyms(query) if enable_synonym_expansion else query
 
-    # 2) 调原 retrieve (不动原签名)
+    # 2) per-method 并发检索 + RRF 合并 (2026-09-01 完整实现)
     retriever = HybridRetriever(db)
-    raw_results = await retriever.retrieve(
+    results_by_method = await retriever.retrieve_per_method(
         query=expanded_query,
-        top_k=top_k,
+        candidate_k=top_k * 5,
         category=category,
         enable_vector=enable_vector,
         enable_bm25=enable_bm25,
         enable_graph=enable_graph,
-        enable_rerank=enable_rerank,
     )
 
-    # 3) 当前简化路径: 直接返回原 retrieve 的结果
-    # CrossEncoder rerank 已保证 top_k 顺序, RRF 权重合并作为可选增强
-    # 未来 PR 可在此处补 results_by_method 重组 + RRF 重排 (PR5/7 扩展点)
+    from app.services.hybrid_weight_config import HybridWeights, apply_weights
+    if not isinstance(weights, HybridWeights):
+        weights = HybridWeights()
+    raw_results = apply_weights(results_by_method, weights, top_k=max(top_k * 2, 10))
 
-    # 4) W99-RAG-1: 写缓存 (best-effort, 失败不影响主流程)
-    if raw_results:
-        try:
-            from app.rag.config import RAG_QUERY_CACHE_ENABLED as _CFG_ENABLED
-            from app.services.rag_query_cache import get_rag_query_cache
-            if _CFG_ENABLED:
-                _cache = get_rag_query_cache()
-                _top_score = float(raw_results[0].get("score", 0.0)) if raw_results else 0.0
-                _retrieval_method = raw_results[0].get("retrieval_method", "hybrid") if raw_results else "hybrid"
-                await _cache.set(
-                    query=query,
-                    user_id=user_id,
-                    tenant_id=tenant_id,
-                    result={
-                        "results": raw_results,
-                        "citations": [],  # W99-RAG-1 不存 citations (retriever 不返回), 留口
-                        "retrieval_method": _retrieval_method,
-                        "score": _top_score,
-                        "top_k": top_k,
-                    },
-                )
-        except Exception as _e:
-            logger.debug(f"[W99-RAG-1] query cache set skip: {_e}")
-
-    # 5) W99-RAG-2: Citation hook (件 4 门控 B 守恒 - 仅在 body 追加, 不改签名 / 不改返回类型)
-    # 段落级溯源: 从 raw_results 的 chunk_id 批量查 knowledge_chunks → char_start/char_end
-    # 返回类型保持 List[dict] (与原 retrieve_with_weights 一致), 调用方通过 attribute 获取 citations
-    # W100-BUGFIX (类 20.123 据实上报): hooks 在 W99-RAG-2 之后被 rerank/multimodal/temporal
-    # 多次 reassign raw_results, 导致挂在原 list 的 .citations 属性丢失. 改为"延迟挂载":
-    # 先把 _citations 缓存到本地变量, 在函数返回前再 attach 到 FINAL raw_results.
-    _cached_citations: List[Dict[str, Any]] = []
+    # WP7: 候选数埋点 (rerank 前各路 union)
     try:
-        from app.rag.config import CITATION_ENABLED as _CIT_ENABLED
-        from app.rag.config import CITATION_MAX_PER_RESULT as _CIT_MAX
-        if _CIT_ENABLED and raw_results:
-            from app.services.citation_extractor import CitationExtractor
+        obs_trace.candidate_k = sum(len(v) for v in results_by_method.values())
+    except Exception:
+        pass
 
-            extractor = CitationExtractor(db)
-            _cached_citations = await extractor.extract_citations(
-                query=query,
-                results=raw_results,
-                max_per_result=_CIT_MAX,
-            )
-            # 不在 hook 阶段挂载 (rerank/multimodal/temporal hooks 会 reassign 丢失)
-            # 改为函数返回前 final attach (类 20.133 bugfix)
-    except Exception as _e:
-        logger.debug(f"[W99-RAG-2] citation hook skip: {_e}")
-
-    # 6) W100-RAG-4: Reranker v2 hook (件 4 门控 B 守恒 - 仅在 body 追加, 不改签名)
-    # 沿用 W99-RAG-1 cache + W99-RAG-2 citation + W100-RAG-3 intent 模式
-    # 顺序: intent → cache → rerank → citation (Reranker 在 cache 写入之后、
-    # citation 提取之前, 避免 cache 写入被 rerank 截断的 candidates 影响)
-    # 失败 best-effort 静默降级 (类 20.127), 默认 backend = CrossEncoder (类 20.128)
-    try:
-        from app.rag.config import RERANKER_BACKEND as _RR_BACKEND
-        from app.rag.config import RERANKER_MODEL as _RR_MODEL
-        from app.rag.config import RERANKER_API_KEY as _RR_KEY
-        from app.services.reranker_v2 import get_reranker_v2_instance
-
-        _reranker = get_reranker_v2_instance(
-            backend=_RR_BACKEND, model=_RR_MODEL, api_key=_RR_KEY
-        )
-        if raw_results and _reranker is not None:
-            # 给 candidates 标 original_index (rerank 后回溯 ground truth 用)
-            for _idx, _c in enumerate(raw_results):
-                _c["original_index"] = _idx
-            # rerank top_k 与函数参数 top_k 对齐
-            _reranked = await _reranker.rerank(
-                query=query, candidates=raw_results, top_k=top_k
-            )
-            # 把 rerank_score 挂回原 results (与 W75 行为一致)
-            if _reranked:
-                raw_results = _reranked
-                logger.debug(
-                    f"[W100-RAG-4] reranker hook applied: backend={_RR_BACKEND}"
-                )
-    except Exception as _e:
-        logger.debug(f"[W100-RAG-4] reranker hook skip: {_e}")
-
-    # 7) W100-RAG-5: Multimodal Retriever 第 5 路 image
-    # query 向量复用 embedding cache；candidate 向量由 completed OCR 文本批量实时生成。
-    # 只在 body 追加，不改任何既有 def 签名；失败时保留原四路结果。
+    # 3) W100-RAG-5: Multimodal Retriever 第 5 路 — rerank 前折算进 score
+    # 注意: 在空判断之前执行 — 文本四路全空但图片命中时, standalone 图片结果仍应返回
     try:
         from app.rag import config as _rag_config
 
         if _rag_config.MULTIMODAL_RETRIEVER_ENABLED:
-            from app.services.hybrid_weight_config import HybridWeights
             from app.services.multimodal_retriever import MultimodalRetriever
 
-            _effective_weights = weights if isinstance(weights, HybridWeights) else HybridWeights()
             _image_weight = float(
-                getattr(_effective_weights, "image", _rag_config.MULTIMODAL_RETRIEVER_WEIGHT)
+                getattr(weights, "image", _rag_config.MULTIMODAL_RETRIEVER_WEIGHT)
             )
             if _image_weight > 0:
                 _image_results = await MultimodalRetriever(db).search_images(
@@ -825,6 +1089,12 @@ async def retrieve_with_weights(
                     top_k=top_k,
                 )
                 if _image_results:
+                    try:
+                        obs_trace.image_score = max(
+                            float(_i.get("similarity") or 0.0) for _i in _image_results
+                        )
+                    except Exception:
+                        pass
                     _merged_by_id = {
                         item.get("id"): dict(item)
                         for item in raw_results
@@ -851,7 +1121,7 @@ async def retrieve_with_weights(
                         _merged_by_id.values(),
                         key=lambda item: float(item.get("score") or 0.0),
                         reverse=True,
-                    )[:top_k]
+                    )[: max(top_k * 2, 10)]
                     logger.debug(
                         "[W100-RAG-5] multimodal hook applied: images=%d weight=%.3f",
                         len(_image_results),
@@ -860,12 +1130,45 @@ async def retrieve_with_weights(
     except Exception as _e:
         logger.debug(f"[W100-RAG-5] multimodal hook skip: {_e}")
 
-    # 8) W100-RAG-6: Temporal Retriever 时间衰减 (件 4 门控 B 守恒 - 仅在 body 追加)
-    # 沿用 W99-RAG-1 cache + W99-RAG-2 citation + W100-RAG-3 intent + W100-RAG-4 rerank
-    # + W100-RAG-5 multimodal 同模式 (类 20.115 S-series 同 worktree 模式)
-    # 顺序: multimodal → temporal (temporal 作为最终乘子, 在 multimodal 合并之后应用)
-    # 类 20.132: temporal 因子不影响 RRF score 结构, 仅作最终 score 乘子
-    # 失败 best-effort 静默降级 (类 20.121, 沿用 cache/citation/rerank 模式)
+    if not raw_results:
+        return []
+
+    # 4) W100-RAG-4: Reranker v2 hook — 单次精排 (2026-09-01 去双跑)
+    _did_rerank = False
+    if enable_rerank:
+        try:
+            from app.rag.config import RERANKER_BACKEND as _RR_BACKEND
+            from app.rag.config import RERANKER_MODEL as _RR_MODEL
+            from app.rag.config import RERANKER_API_KEY as _RR_KEY
+            from app.services.reranker_v2 import get_reranker_v2_instance
+
+            _reranker = get_reranker_v2_instance(
+                backend=_RR_BACKEND, model=_RR_MODEL, api_key=_RR_KEY
+            )
+            if _reranker is not None:
+                for _idx, _c in enumerate(raw_results):
+                    _c["original_index"] = _idx
+                _reranked = await _reranker.rerank(
+                    query=query, candidates=raw_results, top_k=top_k
+                )
+                if _reranked:
+                    raw_results = _reranked
+                    _did_rerank = True
+                    logger.debug(f"[W100-RAG-4] reranker hook applied: backend={_RR_BACKEND}")
+        except Exception as _e:
+            logger.debug(f"[W100-RAG-4] reranker hook skip: {_e}")
+
+    if not _did_rerank:
+        # 未精排: 截断到 top_k (rerank 路径已截)
+        raw_results = raw_results[:top_k]
+
+    # 4a) WP8 (2026-09-01): rerank_score → normalized_score min-max 归一化回填
+    # (cross-encoder logits 无界; RRF score 尺度 ~0.006 也与 [0,1] 阈值语义不符)
+    _backfill_normalized_scores(raw_results)
+
+    # 4b) W100-RAG-6: Temporal Retriever 时间衰减 — 最终乘子 (类 20.132 语义)
+    # 2026-09-01: 各路结果已带 created_at (WP1.5), 衰减真实生效;
+    # rerank 后改乘 normalized_score (WP8: rerank_score logits 无界)
     try:
         from app.rag.config import (
             TEMPORAL_DECAY_ENABLED as _T_ENABLED,
@@ -880,17 +1183,13 @@ async def retrieve_with_weights(
             _temporal = TemporalRetriever()
             from app.models.base import utcnow as _utcnow
             _now = _utcnow()
-            _temporal_factor: dict = {}
             for _r in raw_results:
                 _kid = _r.get("id")
-                if _kid is None:
-                    continue
                 _created = _r.get("created_at")
-                if _created is None:
-                    # 防御: 结果没带 created_at → 给中性权重 1.0 (不影响排序)
-                    _temporal_factor[_kid] = 1.0
+                if _kid is None or _created is None:
+                    _r["temporal_weight"] = 1.0
                     continue
-                _temporal_factor[_kid] = _temporal.compute_temporal_weight(
+                _t = _temporal.compute_temporal_weight(
                     created_at=_created,
                     now=_now,
                     boost_years=_T_BOOST_YEARS,
@@ -898,42 +1197,71 @@ async def retrieve_with_weights(
                     decay_years=_T_DECAY_YEARS,
                     decay_factor=_T_DECAY_FACTOR,
                 )
-            # 应用 temporal 乘子: score *= temporal_weight, 重排取 top_k
-            for _r in raw_results:
-                _kid = _r.get("id")
-                if _kid is not None and _kid in _temporal_factor:
-                    _r["temporal_weight"] = round(_temporal_factor[_kid], 4)
-                    _r["score"] = round(
-                        float(_r.get("score", 0.0)) * _temporal_factor[_kid],
-                        6,
-                    )
+                _r["temporal_weight"] = round(_t, 4)
+                _base = float(_r.get("normalized_score") or _r.get("score") or 0.0)
+                _r["score"] = round(_base * _t, 6)
             raw_results = sorted(
                 raw_results,
                 key=lambda item: float(item.get("score", 0.0)),
                 reverse=True,
             )[:top_k]
-            logger.debug(
-                "[W100-RAG-6] temporal hook applied: %d results",
-                len(raw_results),
-            )
+            logger.debug("[W100-RAG-6] temporal hook applied: %d results", len(raw_results))
     except Exception as _e:
         logger.debug(f"[W100-RAG-6] temporal hook skip: {_e}")
 
-    # W100-BUGFIX (类 20.133): citation 最终挂载到 FINAL raw_results
-    # rerank/multimodal/temporal hooks 可能 reassign raw_results 多次, 在每个 hook 中挂
-    # .citations 都会被随后的 reassign 丢弃. 在函数 return 之前 final attach 才稳.
+    # 5) W99-RAG-2: Citation hook — 在 rerank 之后 (结果已带 chunk_id, WP1.2)
+    _cached_citations: List[Dict[str, Any]] = []
+    try:
+        from app.rag.config import CITATION_ENABLED as _CIT_ENABLED
+        from app.rag.config import CITATION_MAX_PER_RESULT as _CIT_MAX
+        if _CIT_ENABLED and raw_results:
+            from app.services.citation_extractor import CitationExtractor
+
+            extractor = CitationExtractor(db)
+            _cached_citations = await extractor.extract_citations(
+                query=query,
+                results=raw_results,
+                max_per_result=_CIT_MAX,
+            )
+            try:
+                obs_trace.citation_count = len(_cached_citations)
+            except Exception:
+                pass
+    except Exception as _e:
+        logger.debug(f"[W99-RAG-2] citation hook skip: {_e}")
+
+    # 6) W99-RAG-1: 写缓存 — post-rerank + 含 citations (2026-09-01: 原写 pre-rerank 结果)
+    if raw_results:
+        try:
+            from app.rag.config import RAG_QUERY_CACHE_ENABLED as _CFG_ENABLED
+            from app.services.rag_query_cache import get_rag_query_cache
+            if _CFG_ENABLED:
+                _cache = get_rag_query_cache()
+                _top_score = float(raw_results[0].get("score", 0.0)) if raw_results else 0.0
+                _retrieval_method = raw_results[0].get("retrieval_method", "hybrid") if raw_results else "hybrid"
+                await _cache.set(
+                    query=query,
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    result={
+                        "results": raw_results,
+                        "citations": _cached_citations,
+                        "retrieval_method": _retrieval_method,
+                        "score": _top_score,
+                        "top_k": top_k,
+                    },
+                )
+        except Exception as _e:
+            logger.debug(f"[W99-RAG-1] query cache set skip: {_e}")
+
+    # 7) citation final attach (类 20.133 机制保留)
     if _cached_citations:
         try:
             raw_results.citations = _cached_citations  # type: ignore[attr-defined]
-            logger.debug(
-                f"[W100-BUGFIX] citation final attach: "
-                f"len={len(_cached_citations)}"
-            )
         except AttributeError:
-            # raw_results 不是 list 派生. 兜底: 写到第一个 dict 的 _citations_for_frontend 字段
-            # 极少数边界 case, 不抛, 静默降级
             logger.debug("[W100-BUGFIX] citation final attach skip: raw_results not list-derived")
 
+    _finalize_obs_trace(obs_trace, raw_results)
     return raw_results
 
 
