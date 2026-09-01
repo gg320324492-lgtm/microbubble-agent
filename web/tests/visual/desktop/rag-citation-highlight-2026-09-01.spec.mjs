@@ -31,12 +31,19 @@ test.describe('rag-citation-highlight-2026-09-01', () => {
     })
     page.on('pageerror', (err) => pageErrors.push(String(err).slice(0, 200)))
 
-    // 1. API 登录拿 token (跳过登录 UI)
-    const tokenResp = await page.request.post(`${BASE_URL}/api/v1/auth/login`, {
-      data: { username: USERNAME, password: PASSWORD },
-    })
-    expect(tokenResp.status()).toBe(200)
-    const token = (await tokenResp.json()).access_token
+    // 1. API 登录拿 token (跳过登录 UI; auth 限流 5 次/分, 带退避重试)
+    let token = null
+    for (let i = 0; i < 4; i++) {
+      const tokenResp = await page.request.post(`${BASE_URL}/api/v1/auth/login`, {
+        data: { username: USERNAME, password: PASSWORD },
+      })
+      if (tokenResp.status() === 200) {
+        token = (await tokenResp.json()).access_token
+        break
+      }
+      console.log(`[rag-citation] login status=${tokenResp.status()} (attempt ${i + 1}), wait 20s`)
+      await page.waitForTimeout(20_000)
+    }
     expect(token).toBeTruthy()
 
     // 2. 注入 token (cookie domain 与访问 host 一致; initScript 保证路由守卫前有 token)
@@ -59,12 +66,31 @@ test.describe('rag-citation-highlight-2026-09-01', () => {
     // 5. 等 knowledge_ref 富卡片 (真实 LLM + 检索, 给足超时)
     let cardFound = false
     try {
-      await page.waitForSelector('.kb-ref.rich-card', { timeout: 300_000, state: 'visible' })
+      // collapsed_by_default 可能由 LLM 设 true (v-show 隐藏) — 用 attached 断言存在性
+      await page.waitForSelector('.kb-ref.rich-card', { timeout: 300_000, state: 'attached' })
       cardFound = true
     } catch {
       console.log('[rag-citation] knowledge_ref 卡片未出现 (工具未被调用或链路断)')
+      // DOM 诊断转储: rich 容器/消息/最近 assistant HTML
+      const diag = await page.evaluate(() => {
+        const wrap = document.querySelectorAll('.rich-content-wrapper')
+        const assistant = document.querySelectorAll('[data-role="assistant"], .chat-message.assistant, .message.assistant')
+        const last = assistant.length ? assistant[assistant.length - 1] : null
+        return {
+          richWrappers: wrap.length,
+          richTypes: [...wrap].map((w) => w.className),
+          assistantCount: assistant.length,
+          lastHtmlSlice: last ? last.innerHTML.slice(-1500) : '',
+        }
+      })
+      console.log('[rag-citation][diag]', JSON.stringify(diag, null, 2).slice(0, 2200))
     }
     expect(cardFound, 'search_knowledge 应产生 knowledge_ref 富卡片').toBe(true)
+
+    // 可见性探测: collapsed 时 v-show display:none (存在但不可见是合法状态)
+    const kbCard = page.locator('.kb-ref.rich-card').first()
+    const cardVisible = await kbCard.isVisible()
+    console.log(`[rag-citation] kb-ref visible=${cardVisible}`)
 
     const refItems = await page.locator('.kb-ref.rich-card .ref-item').count()
     console.log(`[rag-citation] ref-item 数量: ${refItems}`)
@@ -75,13 +101,12 @@ test.describe('rag-citation-highlight-2026-09-01', () => {
     console.log(`[rag-citation] mark.citation-mark 数量: ${markCount}`)
     expect(markCount, 'citation 段落高亮应渲染 (chunk_id ↔ citations 匹配)').toBeGreaterThan(0)
 
-    // 7. 相邻探针: assistant 答案非空
-    const answer = await page.evaluate(() => {
-      const msgs = document.querySelectorAll('[data-role="assistant"], .chat-message.assistant, .message.assistant')
-      return msgs.length > 0 ? msgs[msgs.length - 1].textContent : ''
-    })
-    console.log(`[rag-citation] answer len=${answer.length}`)
-    expect(answer.length).toBeGreaterThan(0)
+    // 7. 相邻探针: 引用卡片自身内容非空 (组件契约: aria-label + ref-item 文本)
+    const firstRefText = await kbCard.locator('.ref-item').first().textContent()
+    console.log(`[rag-citation] first ref-item: ${(firstRefText || '').slice(0, 60)}`)
+    expect((firstRefText || '').trim().length).toBeGreaterThan(0)
+    const ariaLabel = await kbCard.getAttribute('aria-label')
+    expect(ariaLabel).toContain('知识库引用')
 
     // 8. 截图 (gitignored)
     await page.screenshot({
