@@ -457,6 +457,13 @@ class DriveService:
         self.db.add(knowledge)
         await self.db.commit()
         await self.db.refresh(knowledge)
+        # WP2 (2026-09-02): drive 内容索引 — 解析原文→分块→embedding 入
+        # knowledge_chunks (异步, 失败可由 backfill_drive_content 补)
+        try:
+            from app.services.drive_index_service import index_drive_content_task
+            index_drive_content_task.delay(knowledge.id)
+        except Exception as e:
+            logger.warning(f"[wp2] drive 内容索引 dispatch 失败 (id={knowledge.id}): {e}")
         logger.info(
             f"[DriveService.create_file] id={knowledge.id} file_name={file_name} "
             f"visibility={visibility} folder_id={folder_id} "
