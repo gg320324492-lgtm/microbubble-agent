@@ -196,8 +196,10 @@ function statusGlyph(s: PlanStep['status']): string {
       >
         <span class="plan-step-num" aria-hidden="true">{{ stepNum(s) }}</span>
         <span class="plan-step-name" :data-testid="`plan-step-${i}-name`">{{ s.step }}</span>
+        <!-- 2026-09-02: 后端 plan 行 step=tool_name, 右侧再渲染 tool 标签 → 同名重复显示。
+             仅当 step 是人话描述 (≠ tool 名) 时才标注工具名 -->
         <span
-          v-if="s.tool"
+          v-if="s.tool && s.tool !== s.step"
           class="plan-step-tool"
           :data-testid="`plan-step-${i}-tool`"
           >{{ s.tool }}</span
@@ -233,8 +235,9 @@ function statusGlyph(s: PlanStep['status']): string {
         >
           <span class="plan-step-num" aria-hidden="true">{{ stepNum(s) }}</span>
           <span class="plan-step-name" :data-testid="`plan-step-${i}-name`">{{ s.step }}</span>
+          <!-- 2026-09-02: 同名去重 (与上方 desktop 行同修) -->
           <span
-            v-if="s.tool"
+            v-if="s.tool && s.tool !== s.step"
             class="plan-step-tool"
             :data-testid="`plan-step-${i}-tool`"
             >{{ s.tool }}</span
