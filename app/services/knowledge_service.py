@@ -1,6 +1,6 @@
 from sqlalchemy import select, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import Dict, List, Optional
 import hashlib
 import logging
 import re
@@ -11,6 +11,79 @@ from app.models.knowledge import Knowledge
 from app.services.name_aliases import clean_text as clean_person_names
 
 logger = logging.getLogger("microbubble.knowledge")
+
+
+async def resync_content_indexes(
+    knowledge_id: int,
+    content: str,
+    session_factory,
+) -> Dict[str, bool]:
+    """WP3 (2026-09-02): content 变更后重刷全套内容索引
+
+    覆盖: chunk 重切+embedding 回填 / 父 embedding / tsvector search_text /
+    BM25 增量。update_knowledge 与多模态 inline 后共用此入口 (单一来源)。
+    全部 best-effort: 单项失败 warning 不阻塞, 返回各项成功标记。
+    """
+    results: Dict[str, bool] = {
+        "chunks": False, "embedding": False, "search_text": False, "bm25": False,
+    }
+
+    # 1) chunk 重切 + embedding 回填 (write_chunks_for_knowledge 幂等, WP2.1 起含 embedding)
+    try:
+        from app.services.chunking_service import write_chunks_for_knowledge
+        await write_chunks_for_knowledge(
+            knowledge_id=knowledge_id,
+            content=content,
+            session_factory=session_factory,
+        )
+        results["chunks"] = True
+    except Exception as e:
+        logger.warning(f"[wp3] chunk 重切失败(knowledge_id={knowledge_id}): {e}")
+
+    async with session_factory() as db:
+        result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+        k = result.scalar_one_or_none()
+        if k is None:
+            return results
+
+        # 2) 父 embedding
+        try:
+            from app.services.embedding_service import generate_embedding
+            emb = await generate_embedding(content)
+            if emb is not None:
+                k.embedding = emb
+                await db.commit()
+                results["embedding"] = True
+        except Exception as e:
+            logger.warning(f"[wp3] 父 embedding 重算失败(knowledge_id={knowledge_id}): {e}")
+
+        # 3) tsvector search_text (PG 生成列自动更新 content_tsvector)
+        try:
+            from app.services.text_splitter import split_for_tsvector
+            k.search_text = split_for_tsvector(content)
+            await db.commit()
+            results["search_text"] = True
+        except Exception as e:
+            logger.warning(f"[wp3] search_text 重写失败(knowledge_id={knowledge_id}): {e}")
+
+        # 4) BM25 增量索引 (add 内部先 remove 幂等; 仅 kb + team/public)
+        try:
+            if k.storage_mode == "kb" and k.visibility in ("team", "public"):
+                from app.services.bm25_service import _incremental_add_document
+                _incremental_add_document({
+                    "id": k.id,
+                    "title": k.title or "",
+                    "content": content,
+                    "category": k.category,
+                    "tags": k.tags,
+                    "source": k.source,
+                    "created_at": k.created_at,
+                })
+                results["bm25"] = True
+        except Exception as e:
+            logger.warning(f"[wp3] BM25 增量更新失败(knowledge_id={knowledge_id}): {e}")
+
+    return results
 
 
 # ============================================================
@@ -366,6 +439,24 @@ async def _run_analyze_and_embed(
                 f"matches={inline_result.get('matches_total', 0)}, "
                 f"unmatched={inline_result.get('unmatched_total', 0)}"
             )
+            # WP3 (2026-09-02): inline 已改写 content → 重刷全套内容索引。
+            # 旧时序缺陷: Step 1 (embedding/chunks/BM25) 先于 Step 7/7b 执行,
+            # 提取出的 OCR/表格文字进 content 后从未进任何索引 (无重刷动作)。
+            try:
+                async with session_factory() as db:
+                    result = await db.execute(
+                        select(Knowledge).where(Knowledge.id == knowledge_id)
+                    )
+                    k = result.scalar_one_or_none()
+                if k is not None and k.content:
+                    await resync_content_indexes(
+                        knowledge_id, k.content, session_factory
+                    )
+                    logger.info(f"[wp3] inline 后索引重刷完成(knowledge_id={knowledge_id})")
+            except Exception as rs_err:
+                logger.warning(
+                    f"[wp3] inline 后索引重刷失败(knowledge_id={knowledge_id}): {rs_err}"
+                )
     except Exception as e:
         logger.warning(f"多模态 inline 失败(knowledge_id={knowledge_id}): {e}", exc_info=True)
 
@@ -837,45 +928,12 @@ class KnowledgeService:
             await bump_kb_version()
         except Exception as e:
             logger.debug(f"bump_kb_version skip: {e}")
-        # 内容变更时重新生成嵌入 + 同步各索引 (2026-09-01 索引一致性)
+        # 内容变更 → 重刷全套内容索引 (WP3: 收敛到 resync_content_indexes 单一来源)
         if content_changed:
-            await self._generate_embedding(knowledge, knowledge.content)
-            try:
-                # 重新切 chunk (write_chunks_for_knowledge 先 DELETE 再 INSERT, 幂等)
-                # + chunk embedding 批量补写 (WP2.1)
-                from app.core.database import async_session as _root_session
-                from sqlalchemy.ext.asyncio import async_sessionmaker as _mk, AsyncSession as _AS
-                factory = _mk(_root_session().bind, class_=_AS, expire_on_commit=False)
-                from app.services.chunking_service import write_chunks_for_knowledge
-                await write_chunks_for_knowledge(
-                    knowledge_id=knowledge_id,
-                    content=knowledge.content,
-                    session_factory=factory,
-                )
-            except Exception as e:
-                logger.warning(f"chunk 重建失败(knowledge_id={knowledge_id}): {e}")
-            try:
-                # tsvector search_text 重写 (PG 生成列自动更新 content_tsvector)
-                from app.services.text_splitter import split_for_tsvector
-                knowledge.search_text = split_for_tsvector(knowledge.content)
-                await self.db.commit()
-            except Exception as e:
-                logger.warning(f"search_text 重写失败(knowledge_id={knowledge_id}): {e}")
-            try:
-                # BM25 增量索引幂等更新 (add 内部先 remove 旧版本)
-                from app.services.bm25_service import _incremental_add_document
-                if knowledge.storage_mode == "kb" and knowledge.visibility in ("team", "public"):
-                    _incremental_add_document({
-                        "id": knowledge.id,
-                        "title": knowledge.title or "",
-                        "content": knowledge.content or "",
-                        "category": knowledge.category,
-                        "tags": knowledge.tags,
-                        "source": knowledge.source,
-                        "created_at": knowledge.created_at,
-                    })
-            except Exception as e:
-                logger.warning(f"BM25 增量更新失败(knowledge_id={knowledge_id}): {e}")
+            from app.core.database import async_session as _root_session
+            from sqlalchemy.ext.asyncio import async_sessionmaker as _mk, AsyncSession as _AS
+            factory = _mk(_root_session().bind, class_=_AS, expire_on_commit=False)
+            await resync_content_indexes(knowledge_id, knowledge.content or "", factory)
         return knowledge
 
     async def delete_knowledge(self, knowledge_id: int) -> bool:
