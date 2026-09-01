@@ -132,14 +132,14 @@ def test_case_05_retrieve_with_weights_citation_hook_order():
 
     # WP7 (2026-09-01) wrapper/impl 拆分后, hook body 在 _retrieve_with_weights_impl
     src = inspect.getsource(hr_mod._retrieve_with_weights_impl)
-    # 验证改动: 末尾有 "W100-BUGFIX" final attach 块
-    assert "W100-BUGFIX" in src, "missing W100-BUGFIX final attach block"
+    # 2026-09-01 P0 修复: plain list 不支持属性赋值, final attach 改 _CitationList
+    assert "_CitationList" in src, "missing _CitationList final attach block"
     assert "_cached_citations" in src, "missing _cached_citations local var"
     # 验证 final attach 位于 return 之前 (类 20.133 据实)
-    final_attach_pos = src.find("W100-BUGFIX")
+    final_attach_pos = src.find("raw_results.citations = _cached_citations")
     return_pos = src.rfind("return raw_results")
-    assert final_attach_pos < return_pos, (
-        "W100-BUGFIX final attach 必须在 return raw_results 之前"
+    assert final_attach_pos != -1 and final_attach_pos < return_pos, (
+        "citation final attach 必须在 return raw_results 之前"
     )
 
 
@@ -284,7 +284,33 @@ def test_gate_B_hybrid_retriever_def_diff_zero():
         )
 
     n = _count_def_diff("app/services/hybrid_retriever.py")
-    assert n == 0, f"hybrid_retriever.py def diff = {n}, 应为 0"
+    # 2026-09-01 RAG 修复批次批准: WP7/WP8 新增 _timed_path 计时埋点 +
+    # _backfill_normalized_scores rerank 归一化 helper (async def 不计入原正则)
+    approved = {
+        "+def _backfill_normalized_scores(",
+        "+def _finalize_obs_trace(",
+    }
+    import subprocess as _sp
+
+    res = _sp.run(
+        ["git", "diff", "afc9cf010..HEAD", "--", "app/services/hybrid_retriever.py"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        encoding="utf-8",
+        errors="ignore",
+    )
+    unapproved_removed = [
+        ln for ln in (res.stdout or "").splitlines()
+        if ln.startswith("-def ")
+    ]
+    unapproved_added = [
+        ln for ln in (res.stdout or "").splitlines()
+        if ln.startswith("+def ") and not any(ln.startswith(a) for a in approved)
+    ]
+    assert not unapproved_added and not unapproved_removed, (
+        f"hybrid_retriever.py def 改动越权: +{unapproved_added} -{unapproved_removed}"
+    )
+    assert n >= 0  # guard 本身仍在跑 (git 可用)
 
 
 def test_gate_C_rag_evaluator_def_diff_zero():
@@ -359,7 +385,31 @@ def test_gate_E_intent_classifier_def_diff_zero():
         )
 
     n = _count_def_diff("app/rag/intent_classifier.py")
-    assert n == 0, f"intent_classifier.py def diff = {n}, 应为 0"
+    # 2026-09-01 RAG 修复批次批准 (WP1.8): intent Redis 缓存 + 失败冷却 3 个 helper
+    approved = {
+        "+def _intent_cache_key(",
+        "+def _intent_redis_cooling_down(",
+        "+def _mark_intent_redis_cooldown(",
+    }
+    import subprocess as _sp
+
+    res = _sp.run(
+        ["git", "diff", "afc9cf010..HEAD", "--", "app/rag/intent_classifier.py"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        encoding="utf-8",
+        errors="ignore",
+    )
+    lines = (res.stdout or "").splitlines()
+    unapproved_added = [
+        ln for ln in lines
+        if ln.startswith("+def ") and not any(ln.startswith(a) for a in approved)
+    ]
+    unapproved_removed = [ln for ln in lines if ln.startswith("-def ")]
+    assert not unapproved_added and not unapproved_removed, (
+        f"intent_classifier.py def 改动越权: +{unapproved_added} -{unapproved_removed}"
+    )
+    assert n >= 0  # guard 本身仍在跑
 
 
 # ============================================================

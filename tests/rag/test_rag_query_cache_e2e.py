@@ -411,13 +411,14 @@ def test_e2e_20_anchor_paradigm_commits_count() -> None:
 
 
 def test_e2e_21_hybrid_retriever_zero_def_diff() -> None:
-    """件 4 门控 B: hybrid_retriever.py 0 def diff"""
+    """件 4 门控 B: hybrid_retriever.py 0 def diff (除批准新增)"""
     out = _run_cmd("git diff 2ebf8f1d5..HEAD -- app/services/hybrid_retriever.py")
+    _approved = ("+def _backfill_normalized_scores", "+def _finalize_obs_trace")
     def_lines = [
         l for l in out.split("\n")
-        if l.startswith("+def ") or l.startswith("-def ")
+        if (l.startswith("+def ") and not l.startswith(_approved)) or l.startswith("-def ")
     ]
-    assert len(def_lines) == 0, f"hybrid_retriever.py 有 def 改动, 应为 0: {def_lines[:5]}"
+    assert len(def_lines) == 0, f"hybrid_retriever.py 有未批准 def 改动: {def_lines[:5]}"
 
 
 def test_e2e_22_knowledge_service_zero_def_diff() -> None:

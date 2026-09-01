@@ -25,29 +25,30 @@ def test_get_col_spec_without_dim():
     assert t.get_col_spec() == "HALFVEC"
 
 
-def test_float32_array_converted_to_float16_list():
-    """numpy float32 array 落库前自动 cast 为 float16, 输出 list[float]"""
+def test_float32_array_converted_to_float16_literal():
+    """numpy float32 array 落库前自动 cast 为 float16, 输出 '[f1,...]' 字面量"""
     t = HalfVector(1024)
     arr = np.random.rand(1024).astype(np.float32)
     proc = t.bind_processor(dialect=None)
     out = proc(arr)
-    assert isinstance(out, list)
-    assert len(out) == 1024
-    # half 精度损失在 ~1e-3 量级, 但 round-trip through float 可能有微小 diff
-    assert math.isfinite(out[0])
+    # 2026-09-01 P0 修复: asyncpg halfvec 参数必须是字符串字面量
+    assert isinstance(out, str)
+    assert out.startswith("[") and out.endswith("]")
+    parts = out[1:-1].split(",")
+    assert len(parts) == 1024
     # 数值一致 (np.float16 -> float 后)
     expected = float(arr[0].astype(np.float16))
-    assert abs(out[0] - expected) < 1e-5
+    assert abs(float(parts[0]) - expected) < 1e-5
 
 
-def test_float16_array_passthrough():
-    """numpy float16 array 已是目标类型, 不重复 cast"""
+def test_float16_array_passthrough_literal():
+    """numpy float16 array 已是目标类型, 不重复 cast, 输出字面量"""
     t = HalfVector(1024)
     arr = np.random.rand(1024).astype(np.float16)
     proc = t.bind_processor(dialect=None)
     out = proc(arr)
-    assert isinstance(out, list)
-    assert len(out) == 1024
+    assert isinstance(out, str)
+    assert len(out[1:-1].split(",")) == 1024
 
 
 def test_none_passthrough():
@@ -57,13 +58,15 @@ def test_none_passthrough():
     assert proc(None) is None
 
 
-def test_list_input_passthrough():
-    """上游已传 list[float], 直接返回"""
+def test_list_input_becomes_literal():
+    """上游传 list[float] → '[...]' 字面量 (2026-09-01 P0 修复契约)"""
     t = HalfVector(1024)
-    raw = [0.1, 0.2, 0.3]
+    raw = [0.1, 0.2, 0.3] + [0.0] * 1021
     proc = t.bind_processor(dialect=None)
     out = proc(raw)
-    assert out == raw
+    assert isinstance(out, str)
+    assert out.startswith("[0.1,0.2,0.3,")
+    assert out.endswith("]")
 
 
 def test_unsupported_type_raises():

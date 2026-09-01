@@ -81,12 +81,85 @@ async def main() -> int:
                     logger.info("  [dry-run] 待回填 knowledge_id=%s (%s)", kid, (title or "")[:30])
                 return 0
 
+        from app.services.kg_embedding import generate_kg_entity_embedding
         from app.services.knowledge_graph_service import _add_entity_links
+
+        def _jsonb_candidates(entities_jsonb) -> list:
+            """entities JSONB ({name,type,...}) → kg_entities 候选 (JSONB 兜底派生)"""
+            from app.models.kg_entity import coerce_entity_type, normalize_entity_name
+
+            out = []
+            if not isinstance(entities_jsonb, list):
+                return out
+            for ent in entities_jsonb:
+                if not isinstance(ent, dict):
+                    continue
+                name = normalize_entity_name(str(ent.get("name") or ""))
+                if not name:
+                    continue
+                out.append({
+                    "entity_name": name,
+                    "entity_type": coerce_entity_type(str(ent.get("type") or "OTHER")),
+                    "mention_count": 1,
+                })
+            return out
+
+        async def _upsert_jsonb_entities(kid: int) -> dict:
+            """SPO 派生为 0 时, 从 knowledge.entities JSONB 直接 upsert
+            (与 _add_entity_links 同款幂等语义: 同 (name,type,doc) 只累计 mention_count)"""
+            from sqlalchemy import and_, select as sa_select
+
+            from app.models.kg_entity import KGEntity
+
+            local_stats = {"created": 0, "updated": 0}
+            async with Session() as wdb:
+                krow = (
+                    await wdb.execute(sa_select(Knowledge).where(Knowledge.id == kid))
+                ).scalar_one_or_none()
+                if krow is None:
+                    return local_stats
+                candidates = _jsonb_candidates(krow.entities)
+                candidates = candidates[:40]  # 单文档上限, 控制回填成本
+                for cand in candidates:
+                    name = cand["entity_name"]
+                    etype = cand["entity_type"]
+                    existing = (
+                        await wdb.execute(
+                            sa_select(KGEntity).where(
+                                and_(
+                                    KGEntity.entity_name == name,
+                                    KGEntity.entity_type == etype,
+                                    KGEntity.knowledge_id == kid,
+                                )
+                            )
+                        )
+                    ).scalar_one_or_none()
+                    if existing is not None:
+                        existing.mention_count = (existing.mention_count or 1) + 1
+                        local_stats["updated"] += 1
+                        continue
+                    entity = KGEntity(
+                        entity_name=name,
+                        entity_type=etype,
+                        knowledge_id=kid,
+                        mention_count=cand["mention_count"],
+                    )
+                    emb = await generate_kg_entity_embedding(name, etype)
+                    if emb:
+                        entity.embedding = emb
+                    wdb.add(entity)
+                    local_stats["created"] += 1
+                await wdb.commit()
+            return local_stats
 
         for i, (kid, title) in enumerate(todo, 1):
             try:
                 async with Session() as wdb:
                     kg_stats = await _add_entity_links(wdb, kid)
+                if kg_stats.get("total", 0) == 0:
+                    # SPO 表无三元组 → entities JSONB 兜底派生 (95/99 篇属此类)
+                    kg_stats = await _upsert_jsonb_entities(kid)
+                    kg_stats["via"] = "entities_jsonb"
                 stats["linked"] += 1
                 logger.info("[%d/%d] knowledge_id=%s → %s", i, len(todo), kid, kg_stats)
             except Exception as e:
