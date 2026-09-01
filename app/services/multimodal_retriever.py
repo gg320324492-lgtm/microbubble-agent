@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.knowledge import Knowledge
 from app.models.knowledge_multimodal import KnowledgeImage
 
 logger = logging.getLogger("microbubble.multimodal_retriever")
@@ -34,10 +35,14 @@ class MultimodalRetriever:
     ) -> List[dict]:
         """Return the images whose completed OCR text best matches ``query``.
 
-        Candidate embeddings are intentionally computed at query time because
-        the Phase 7 image table has no embedding column.  Batch generation
-        avoids one model invocation per image.  Invalid inputs or embedding
-        failures degrade to an empty fifth path without affecting text RAG.
+        2026-09-01 WP5 重构:
+        1. embedding 持久化 — knowledge_images.embedding (迁移 129) 有值直接用,
+           NULL 才实时算并回填 (此前每次 query 全量重算, 图多了拖垮检索)
+        2. 可见性硬边界 — join knowledge 加 kb + deleted_at IS NULL +
+           team/public 过滤 (此前 private drive 文档 OCR 会漏出)
+
+        Invalid inputs or embedding failures degrade to an empty fifth path
+        without affecting text RAG.
         """
         normalized_query = (query or "").strip()
         if not normalized_query or top_k <= 0:
@@ -56,17 +61,26 @@ class MultimodalRetriever:
         if not query_embedding:
             return []
 
-        texts = [str(row["ocr_text"]) for row in candidates]
-        candidate_embeddings = await generate_embeddings(
-            texts,
-            for_query=False,
-        )
-        if not candidate_embeddings or len(candidate_embeddings) != len(candidates):
-            return []
+        # embedding 分派: 已持久化的直接用, 缺失的批量算 + 回填
+        missing_idx = [i for i, row in enumerate(candidates) if not row.get("embedding")]
+        if missing_idx:
+            texts = [str(candidates[i]["ocr_text"]) for i in missing_idx]
+            computed = await generate_embeddings(texts, for_query=False)
+            if computed and len(computed) == len(missing_idx):
+                for i, emb in zip(missing_idx, computed):
+                    if emb is not None:
+                        candidates[i]["embedding"] = emb
+                await self._persist_embeddings(
+                    [(candidates[i]["image_id"], candidates[i]["embedding"]) for i in missing_idx if candidates[i].get("embedding")]
+                )
+            # 丢弃仍未取到 embedding 的候选
+            candidates = [row for row in candidates if row.get("embedding")]
+            if not candidates:
+                return []
 
         ranked: List[dict] = []
-        for row, candidate_embedding in zip(candidates, candidate_embeddings):
-            similarity = self._cosine_similarity(query_embedding, candidate_embedding)
+        for row in candidates:
+            similarity = self._cosine_similarity(query_embedding, row["embedding"])
             if similarity is None:
                 continue
             ranked.append(
@@ -86,6 +100,30 @@ class MultimodalRetriever:
         ranked.sort(key=lambda item: item["similarity"], reverse=True)
         return ranked[:top_k]
 
+    async def _persist_embeddings(self, pairs) -> None:
+        """回填 knowledge_images.embedding (best-effort, 失败不阻塞检索)"""
+        if not pairs:
+            return
+        try:
+            from sqlalchemy import update
+
+            from app.models.knowledge_multimodal import KnowledgeImage
+
+            for image_id, emb in pairs:
+                await self.db.execute(
+                    update(KnowledgeImage)
+                    .where(KnowledgeImage.id == image_id)
+                    .values(embedding=emb)
+                )
+            await self.db.commit()
+            logger.debug("多模态 embedding 回填: %d rows", len(pairs))
+        except Exception as exc:
+            logger.warning("多模态 embedding 回填失败 (best-effort): %s", exc)
+            try:
+                await self.db.rollback()
+            except Exception:
+                pass
+
     async def _load_candidates(self, ocr_status: str) -> List[Dict[str, Any]]:
         stmt = (
             select(
@@ -94,11 +132,17 @@ class MultimodalRetriever:
                 KnowledgeImage.image_url,
                 KnowledgeImage.ocr_text,
                 KnowledgeImage.page_number,
+                KnowledgeImage.embedding,
             )
+            .join(Knowledge, Knowledge.id == KnowledgeImage.knowledge_id)
             .where(
                 KnowledgeImage.ocr_status == ocr_status,
                 KnowledgeImage.ocr_text.is_not(None),
                 KnowledgeImage.ocr_text != "",
+                # 可见性硬边界 (与 search_semantic 同款)
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "kb",
+                Knowledge.visibility.in_(["team", "public"]),
             )
             .order_by(KnowledgeImage.id)
         )
@@ -116,6 +160,7 @@ class MultimodalRetriever:
                 "image_url": row.image_url,
                 "ocr_text": row.ocr_text,
                 "page_number": row.page_number,
+                "embedding": row.embedding,
             }
             for row in rows
         ]

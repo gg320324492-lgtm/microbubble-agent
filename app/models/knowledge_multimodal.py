@@ -15,6 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -62,6 +63,9 @@ class KnowledgeImage(Base, TimestampMixin):
     ocr_error = Column(Text, nullable=True)
     ocr_model = Column(String(100), nullable=True)  # 使用的模型名（llm-vision / tesseract / paddleocr）
     ocr_at = Column(DateTime, nullable=True)
+    # 2026-09-01 WP5: OCR 文本 embedding (第 5 路多模态召回持久化)
+    # 此前每次 query 实时重算全部候选 → 图多了拖垮检索; 迁移 129 加列 + HNSW
+    embedding = Column(Vector(1024), nullable=True)
 
     # ── v28 step 2: vision 模型输出的结构化字段（替代前端 paperAdapter 正则推断）
     # 图号与类型
