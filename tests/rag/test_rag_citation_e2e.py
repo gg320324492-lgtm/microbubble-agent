@@ -66,14 +66,17 @@ def _asyncio_run(coro):
 
 
 def test_e2e_01_alembic_single_head_095() -> None:
-    """件 1: python -m alembic heads → 1 head (096_add_rag_multimodal_metrics)
+    """件 1: python -m alembic heads → 恰好 1 个 head
 
-    W100-RAG-5 加 096 迁移后, head 推进到 096. 测试期望从 095 调整为 096.
+    2026-09-01 修订: 原硬编码 096_add_rag_multimodal_metrics 已随链推进
+    (现 128_research_workspace), 改为动态断言单 head, 不再随迁移改名腐化。
     """
     out = _run_cmd("python -m alembic heads")
     assert "head" in out.lower(), f"alembic heads 输出异常: {out}"
     assert "Multiple" not in out, f"alembic 多 head, 不应: {out}"
-    assert "096_add_rag_multimodal_metrics" in out, f"期望 096 在 heads 中, 实测: {out}"
+    import re
+    heads = re.findall(r"^([0-9a-zA-Z_]+) \(head\)", out, re.MULTILINE)
+    assert len(heads) == 1, f"alembic 应恰好 1 个 head, 实测 {heads}: {out}"
 
 
 # =====================================================================

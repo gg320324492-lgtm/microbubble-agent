@@ -109,14 +109,19 @@ def _run_cmd(cmd: str) -> str:
 
 
 def test_qa_bench_routing_alembic_single_head() -> None:
-    """件 1: alembic 1 head 守恒 (W100-QA-BENCH 不动 schema)."""
-    out = _run_cmd("python -m alembic heads 2>&1 | grep -oE '[0-9]{3}_[a-z_]+' | head -1")
-    head = out.strip()
-    assert head != "", f"alembic heads 应返回有效 head, 实测 {head!r}"
-    # 沿用 W100 +58 meeting persistence 收口, 派工 brief 估 096 实测 097
-    assert head == "097_meeting_processing_persistence", (
-        f"alembic head 应 = 097_meeting_processing_persistence, 实测 {head}"
-    )
+    """件 1: alembic 1 head 守恒 (W100-QA-BENCH 不动 schema).
+
+    2026-09-01 修订: head 硬编码 097 已随链推进过期 (现 128_research_workspace),
+    改为动态断言: 恰好 1 个 head。TODO: 后续迁移推进时无需再改本测试。
+    """
+    out = _run_cmd("python -m alembic heads 2>&1")
+    assert "Multiple" not in out, f"alembic 多 head, 不应: {out}"
+    # 解析 head 行 (格式: "abc123 (head)" 或 "<rev> (head)")
+    import re
+    heads = re.findall(r"^([0-9a-zA-Z_]+) \(head\)", out, re.MULTILINE)
+    assert len(heads) == 1, f"alembic 应恰好 1 个 head, 实测 {heads}: {out}"
+    # head 必须是有序 revision 格式 (NNN_name)
+    assert re.match(r"^\d{3}_[a-z_]+$", heads[0]), f"head 格式异常: {heads[0]}"
 
 
 # ============================================================

@@ -108,12 +108,15 @@ def _make_mock_llm_queue(responses: list) -> AsyncMock:
 
 
 def test_e2e_01_alembic_single_head() -> None:
-    """件 1: python -m alembic heads → 1 head (096)
-    W100-RAG-5 加 096 迁移, head 推进到 096 (W100-RAG-3 不动 schema 但 W100-RAG-5 推进了 1 步).
+    """件 1: python -m alembic heads → 恰好 1 个 head
+
+    2026-09-01 修订: 原硬编码 096 已随链推进, 改为动态断言单 head。
     """
     out = _run_cmd("python -m alembic heads")
-    assert "096" in out, f"096 应在 alembic heads 中: {out}"
     assert "Multiple" not in out, f"alembic 多 head 不应: {out}"
+    import re
+    heads = re.findall(r"^([0-9a-zA-Z_]+) \(head\)", out, re.MULTILINE)
+    assert len(heads) == 1, f"alembic 应恰好 1 个 head, 实测 {heads}: {out}"
 
 
 # ============================================================

@@ -91,13 +91,16 @@ def mock_embedding() -> Any:
 
 
 def test_unit_01_exact_cache_key_format() -> None:
-    """缓存键含 user_id + tenant_id (类 20.122)"""
+    """缓存键含 user_id + tenant_id (类 20.122)
+
+    2026-09-01 WP4.3: key 原文拼入知识库版本前缀 v{N}: (默认 0)。
+    """
     k = _exact_cache_key("微气泡的 zeta 电位", user_id=42, tenant_id=7)
     assert k.startswith(RAG_QUERY_CACHE_PREFIX)
     digest = k[len(RAG_QUERY_CACHE_PREFIX):]
     assert len(digest) == 16
-    # 验 sha256 实际计算
-    raw = f"42:7:微气泡的 zeta 电位"
+    # 验 sha256 实际计算 (v0 = 默认知识库版本)
+    raw = f"v0:42:7:微气泡的 zeta 电位"
     expected = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     assert digest == expected
 

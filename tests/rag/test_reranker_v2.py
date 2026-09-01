@@ -155,18 +155,23 @@ async def test_bge_v2_delegates_to_cross_encoder():
 
 @pytest.mark.asyncio
 async def test_3_backends_all_reachable():
-    """3 backend 都可被 RerankerV2 路由."""
+    """3 backend 都可被 RerankerV2 路由.
+
+    2026-09-01 修订: 原用例传空 candidates → CrossEncoderBackend 在
+    `if not candidates` 处 early-return, 永远不会触达 get_reranker_service。
+    改传非空 candidates 验证真实路由。
+    """
 
     # cross_encoder
     with patch(
         "app.services.reranker_service.get_reranker_service"
     ) as mock_svc:
         mock_instance = AsyncMock()
-        mock_instance.rerank_async.return_value = []
+        mock_instance.rerank_async.return_value = [{"id": 1, "title": "d", "content": "c"}]
         mock_svc.return_value = mock_instance
 
         rv_ce = RerankerV2(backend="cross_encoder")
-        await rv_ce.rerank("test", [], top_k=5)
+        await rv_ce.rerank("test", [{"id": 1, "title": "d", "content": "c"}], top_k=5)
         assert mock_instance.rerank_async.called
 
 

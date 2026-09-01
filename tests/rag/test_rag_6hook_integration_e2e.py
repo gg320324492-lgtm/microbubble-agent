@@ -32,7 +32,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.hybrid_retriever import retrieve_with_weights
+from app.services.hybrid_retriever import _retrieve_with_weights_impl, retrieve_with_weights
 
 WORKTREE_ROOT = Path(__file__).parent.parent.parent
 
@@ -69,10 +69,10 @@ def _asyncio_run(coro):
 def test_e2e_01_6hook_order_in_source_code() -> None:
     """6 hook 在 retrieve_with_weights 源码中的顺序锁
 
-    W100-RAG-6 沉淀 (派工 v6 §13.3 假设禁令实测):
-      intent → cache → citation → rerank → multimodal → temporal
+    2026-09-01 WP1.7 顺序修正 (原顺序 intent→cache 导致 cache 命中仍白付 LLM 调用):
+      cache → intent → multimodal → rerank → temporal → citation → cache write
     """
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
 
     intent_idx = source.find("W100-RAG-3: Intent hook")
     cache_lookup_idx = source.find("W99-RAG-1: Query Cache hook")
@@ -91,63 +91,75 @@ def test_e2e_01_6hook_order_in_source_code() -> None:
     assert multimodal_idx > 0, f"W100-RAG-5 multimodal marker missing"
     assert temporal_idx > 0, f"W100-RAG-6 temporal marker missing"
 
-    # 顺序断言: intent < cache_lookup < cache_write < citation < rerank < multimodal < temporal
-    assert intent_idx < cache_lookup_idx, (
-        f"intent ({intent_idx}) 必须在 cache lookup ({cache_lookup_idx}) 之前"
+    # 顺序断言 (2026-09-01 修正后):
+    # cache_lookup < intent < multimodal < rerank < temporal < citation < cache_write
+    assert cache_lookup_idx < intent_idx, (
+        f"cache lookup ({cache_lookup_idx}) 必须在 intent ({intent_idx}) 之前 (命中跳过 LLM 调用)"
     )
-    assert cache_lookup_idx < cache_write_idx, (
-        f"cache lookup ({cache_lookup_idx}) 必须在 cache write ({cache_write_idx}) 之前"
+    assert intent_idx < multimodal_idx, (
+        f"intent ({intent_idx}) 必须在 multimodal ({multimodal_idx}) 之前"
     )
-    assert cache_write_idx < citation_idx, (
-        f"cache write ({cache_write_idx}) 必须在 citation ({citation_idx}) 之前"
+    assert multimodal_idx < rerank_idx, (
+        f"multimodal ({multimodal_idx}) 必须在 rerank ({rerank_idx}) 之前"
     )
-    assert citation_idx < rerank_idx, (
-        f"citation ({citation_idx}) 必须在 rerank ({rerank_idx}) 之前"
+    assert rerank_idx < temporal_idx, (
+        f"rerank ({rerank_idx}) 必须在 temporal ({temporal_idx}) 之前"
     )
-    assert rerank_idx < multimodal_idx, (
-        f"rerank ({rerank_idx}) 必须在 multimodal ({multimodal_idx}) 之前"
+    assert temporal_idx < citation_idx, (
+        f"temporal ({temporal_idx}) 必须在 citation ({citation_idx}) 之前"
     )
-    assert multimodal_idx < temporal_idx, (
-        f"multimodal ({multimodal_idx}) 必须在 temporal ({temporal_idx}) 之前"
+    assert citation_idx < cache_write_idx, (
+        f"citation ({citation_idx}) 必须在 cache write ({cache_write_idx}) 之前 (缓存最终结果)"
     )
 
 
-def test_e2e_02_intent_runs_before_cache() -> None:
-    """intent 在 cache 之前 — cache 命中可跳过 intent 推断 (W100-RAG-3 注释约束)"""
-    source = inspect.getsource(retrieve_with_weights)
-    intent_idx = source.find("Intent hook 在 Cache hook 之前")
+def test_e2e_02_intent_runs_after_cache() -> None:
+    """intent 在 cache lookup 之后 — cache 命中跳过 intent LLM 调用 (2026-09-01 WP1.7)"""
+    source = inspect.getsource(_retrieve_with_weights_impl)
+    intent_idx = source.find("cache miss 才调")
     assert intent_idx > 0, (
-        "intent 在 cache 之前的注释应保留 (W100-RAG-3 沉淀): cache 命中跳过 intent 推断"
+        "intent 在 cache 之后的注释应保留 (2026-09-01 沉淀): cache 命中跳过 intent 推断"
     )
 
 
 def test_e2e_03_cache_before_rerank() -> None:
-    """cache 写 在 rerank 之前 — 避免 cache 写入被 rerank 截断的 candidates 影响"""
-    source = inspect.getsource(retrieve_with_weights)
-    cache_write_idx = source.find("W99-RAG-1: 写缓存")
+    """cache lookup 在 rerank 之前 — 命中直接返回, 不做任何重检索 (2026-09-01)"""
+    source = inspect.getsource(_retrieve_with_weights_impl)
+    cache_write_idx = source.find("W99-RAG-1: Query Cache hook")
     rerank_idx = source.find("W100-RAG-4: Reranker v2 hook")
     assert 0 < cache_write_idx < rerank_idx, (
-        f"cache write ({cache_write_idx}) 必须在 rerank ({rerank_idx}) 之前"
+        f"cache lookup ({cache_write_idx}) 必须在 rerank ({rerank_idx}) 之前"
     )
 
 
 def test_e2e_04_rerank_before_multimodal() -> None:
-    """rerank 在 multimodal 之前 — rerank 精选 top candidates 再加 image"""
-    source = inspect.getsource(retrieve_with_weights)
+    """rerank 在 multimodal 之后 (2026-09-01: multimodal 折算进候选分数, 再单次精排)"""
+    source = inspect.getsource(_retrieve_with_weights_impl)
     rerank_idx = source.find("W100-RAG-4: Reranker v2 hook")
     multimodal_idx = source.find("W100-RAG-5: Multimodal Retriever 第 5 路")
-    assert 0 < rerank_idx < multimodal_idx, (
-        f"rerank ({rerank_idx}) 必须在 multimodal ({multimodal_idx}) 之前"
+    assert 0 < rerank_idx and 0 < multimodal_idx and multimodal_idx < rerank_idx, (
+        f"multimodal ({multimodal_idx}) 必须在 rerank ({rerank_idx}) 之前"
     )
 
 
 def test_e2e_05_multimodal_before_temporal() -> None:
     """multimodal 在 temporal 之前 — temporal 作为最终 score 乘子 (W100-RAG-6 沉淀)"""
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
     multimodal_idx = source.find("W100-RAG-5: Multimodal Retriever 第 5 路")
     temporal_idx = source.find("W100-RAG-6: Temporal Retriever 时间衰减")
     assert 0 < multimodal_idx < temporal_idx, (
         f"multimodal ({multimodal_idx}) 必须在 temporal ({temporal_idx}) 之前"
+    )
+
+
+def test_e2e_05b_cache_write_after_citation() -> None:
+    """cache 写在 citation 提取之后 — 缓存最终结果 (2026-09-01: 原写 pre-rerank)"""
+    source = inspect.getsource(_retrieve_with_weights_impl)
+    cache_write_idx = source.find("W99-RAG-1: 写缓存")
+    citation_idx = source.find("W99-RAG-2: Citation hook")
+    temporal_idx = source.find("W100-RAG-6: Temporal Retriever 时间衰减")
+    assert 0 < temporal_idx < citation_idx < cache_write_idx, (
+        f"temporal({temporal_idx}) < citation({citation_idx}) < cache_write({cache_write_idx}) 顺序错误"
     )
 
 
@@ -215,7 +227,7 @@ def test_e2e_10_multimodal_temporal_importable() -> None:
 
 def test_e2e_11_cache_hook_silent_on_error() -> None:
     """cache hook 失败 → best-effort 静默降级 (W99-RAG-1 类 20.121)"""
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
     # 查 "query cache lookup skip" / "query cache set skip" 兜底
     assert "query cache lookup skip" in source, "cache lookup 失败兜底日志缺失"
     assert "query cache set skip" in source, "cache set 失败兜底日志缺失"
@@ -223,13 +235,13 @@ def test_e2e_11_cache_hook_silent_on_error() -> None:
 
 def test_e2e_12_rerank_hook_silent_on_error() -> None:
     """rerank hook 失败 → best-effort 静默降级 (W100-RAG-4 类 20.127)"""
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
     assert "reranker hook skip" in source, "rerank 失败兜底日志缺失"
 
 
 def test_e2e_13_multimodal_temporal_silent_on_error() -> None:
     """multimodal + temporal hook 失败 → best-effort 静默降级"""
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
     assert "multimodal hook skip" in source, "multimodal 失败兜底日志缺失"
     assert "temporal hook skip" in source, "temporal 失败兜底日志缺失"
 
@@ -241,19 +253,23 @@ def test_e2e_13_multimodal_temporal_silent_on_error() -> None:
 
 def test_e2e_14_intent_to_weights_handoff() -> None:
     """intent → weights: get_intent_router().route() 返 HybridWeights"""
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
     # intent hook body 必含 _router.route(query) → weights
     assert "_router.route(query)" in source, "intent → weights 传递链缺失"
-    # weights 用于下游 multimodal _image_weight
-    assert "_effective_weights = weights" in source, "weights → multimodal 传递链缺失"
+    # weights 真实用于 RRF 合并 (2026-09-01 WP1.7: apply_weights(results_by_method, weights))
+    assert "apply_weights(results_by_method, weights" in source, (
+        "weights → RRF 合并传递链缺失 (此前 intent 推断结果无消费)"
+    )
 
 
 def test_e2e_15_cache_payload_structure() -> None:
     """cache payload 必含 results + citations + retrieval_method + score + top_k"""
-    source = inspect.getsource(retrieve_with_weights)
-    # 查 cache.set 入参 (line 630-641)
+    source = inspect.getsource(_retrieve_with_weights_impl)
+    # 查 cache.set 入参
     assert '"results": raw_results' in source, "cache payload 缺 results"
-    assert '"citations": []' in source, "cache payload 缺 citations (W99-RAG-1 留口)"
+    assert '"citations": _cached_citations' in source, (
+        "cache payload 缺 citations (2026-09-01: 缓存最终 citations, 非空 list 留口)"
+    )
     assert '"retrieval_method":' in source, "cache payload 缺 retrieval_method"
     assert '"score": _top_score' in source, "cache payload 缺 score"
     assert '"top_k": top_k' in source, "cache payload 缺 top_k"
@@ -261,10 +277,10 @@ def test_e2e_15_cache_payload_structure() -> None:
 
 def test_e2e_16_temporal_field_added_to_results() -> None:
     """temporal hook: 给 results 添 temporal_weight 字段 (W100-RAG-6)"""
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
     assert '"temporal_weight"' in source, "temporal_weight 字段挂载缺失"
     # 应用为 score 乘子
-    assert "temporal_factor[_kid]" in source, "temporal factor 乘子缺失"
+    assert "compute_temporal_weight" in source, "temporal factor 乘子缺失"
 
 
 # =====================================================================
@@ -331,7 +347,7 @@ def test_e2e_20_three_gates_zero_diff() -> None:
 
 def test_e2e_21_6hook_markers_in_source() -> None:
     """6 hook 接入点 marker 完整 (W99-RAG-1..W100-RAG-6 全 6 段)"""
-    source = inspect.getsource(retrieve_with_weights)
+    source = inspect.getsource(_retrieve_with_weights_impl)
     expected_markers = [
         "W100-RAG-3: Intent hook",
         "W99-RAG-1: Query Cache hook",

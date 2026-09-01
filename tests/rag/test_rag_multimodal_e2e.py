@@ -14,12 +14,14 @@ from app.services.recall_observability import RecallTrace
 
 
 def _image(image_id=1, knowledge_id=10, text="oxygen transfer chart", url="https://img/1"):
+    # embedding 对齐迁移 129 后的 ORM 行形状 (None = 未回填, 走实时计算路径)
     return SimpleNamespace(
         image_id=image_id,
         knowledge_id=knowledge_id,
         image_url=url,
         ocr_text=text,
         page_number=1,
+        embedding=None,
     )
 
 
@@ -28,6 +30,8 @@ def _db(rows):
     result = MagicMock()
     result.all.return_value = rows
     db.execute = AsyncMock(return_value=result)
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
     return db
 
 
@@ -78,12 +82,20 @@ async def test_basic_retrieval_honours_top_k():
     assert len(out) == 2
 
 
+class _StubHybrid:
+    """2026-09-01 RRF 重构后 retrieve_with_weights 走 retrieve_per_method()"""
+
+    def __init__(self, db):
+        pass
+
+    async def retrieve_per_method(self, **kwargs):
+        return {"vector": list(self.results), "bm25": [], "graph": []}
+
+
 @pytest.mark.asyncio
 async def test_hook_merges_image_into_text_result():
-    class Base:
-        def __init__(self, db): pass
-        async def retrieve(self, **kwargs):
-            return [{"id": 10, "score": 0.5, "retrieval_methods": ["vector"]}]
+    class Base(_StubHybrid):
+        results = [{"id": 10, "score": 0.5, "retrieval_methods": ["vector"]}]
 
     with patch("app.services.hybrid_retriever.HybridRetriever", Base), patch(
         "app.services.hybrid_retriever.MultimodalRetriever", create=True
@@ -101,9 +113,8 @@ async def test_hook_merges_image_into_text_result():
 
 @pytest.mark.asyncio
 async def test_hook_adds_standalone_image_result():
-    class Base:
-        def __init__(self, db): pass
-        async def retrieve(self, **kwargs): return []
+    class Base(_StubHybrid):
+        results = []
 
     with patch("app.services.hybrid_retriever.HybridRetriever", Base), patch(
         "app.services.multimodal_retriever.MultimodalRetriever.search_images", AsyncMock(return_value=[
@@ -119,9 +130,8 @@ async def test_hook_adds_standalone_image_result():
 
 @pytest.mark.asyncio
 async def test_hook_failure_preserves_base_results():
-    class Base:
-        def __init__(self, db): pass
-        async def retrieve(self, **kwargs): return [{"id": 1, "score": 0.5}]
+    class Base(_StubHybrid):
+        results = [{"id": 1, "score": 0.5}]
 
     with patch("app.services.hybrid_retriever.HybridRetriever", Base), patch(
         "app.services.multimodal_retriever.MultimodalRetriever.search_images", AsyncMock(side_effect=RuntimeError("down"))

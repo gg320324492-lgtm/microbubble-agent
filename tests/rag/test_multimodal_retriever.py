@@ -15,13 +15,16 @@ def _row(
     text: str = "microbubble oxygen transfer chart",
     image_url: str = "https://minio/image-1.png",
     page_number: int = 2,
+    embedding: list | None = None,
 ):
+    # embedding 对齐迁移 129 后的 ORM 行形状 (None = 未回填, 走实时计算路径)
     return SimpleNamespace(
         image_id=image_id,
         knowledge_id=knowledge_id,
         image_url=image_url,
         ocr_text=text,
         page_number=page_number,
+        embedding=embedding,
     )
 
 
@@ -30,6 +33,8 @@ def _db(rows):
     result = MagicMock()
     result.all.return_value = rows
     db.execute = AsyncMock(return_value=result)
+    db.commit = AsyncMock()
+    db.rollback = AsyncMock()
     return db
 
 
