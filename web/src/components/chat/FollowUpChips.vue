@@ -111,7 +111,9 @@ function cleanSuggestion(s: string): string {
     .trim()
   const m = cleaned.match(/^[^。！？；;!?]+[。！？;!?]/)
   if (m) cleaned = m[0]
-  if (cleaned.length > 28) cleaned = cleaned.slice(0, 28) + '…'
+  /* 2026-09-01: 28 字硬切 + CSS 单行省略 → 完整问句显示不全 (用户反馈)。
+     chip 改两行 line-clamp, 硬切上限放宽到 40 (两行容量 ≈ 42 字) */
+  if (cleaned.length > 40) cleaned = cleaned.slice(0, 40) + '…'
   return cleaned
 }
 </script>
@@ -157,23 +159,27 @@ function cleanSuggestion(s: string): string {
   margin-right: 6px;
   flex-shrink: 0;
 }
-/* 2026-08-16 #85: ChatGPT 风格 — 浅灰背景 + 短问句 + 紧凑 padding + 单行截断.
-   旧样式: 橙边 + 大块 padding + 多行 (撑爆成气泡) */
+/* 2026-08-16 #85: ChatGPT 风格 — 浅灰背景 + 短问句 + 紧凑 padding.
+   旧样式: 橙边 + 大块 padding + 多行 (撑爆成气泡)
+   2026-09-01: 单行 280px ellipsis → 两行 line-clamp — 完整问句显示不全 (用户反馈) */
 .chip {
   display: inline-block;
   padding: 6px 14px;
   font-size: 13px;
   line-height: 1.4;
-  max-width: 280px;
+  max-width: 320px;
   background: rgba(0, 0, 0, 0.04);
   color: var(--color-text-primary);
   border: 1px solid transparent;
-  border-radius: 18px;
+  border-radius: 14px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   -webkit-tap-highlight-color: transparent;
 }
 .chip:hover {
