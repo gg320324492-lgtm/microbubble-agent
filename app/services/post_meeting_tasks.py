@@ -916,6 +916,23 @@ def post_meeting_process(self, meeting_id: int):
                     status=final_status,
                     redis_override=redis_client,
                 )
+
+                # ===== WP1 (2026-09-02): 会议内容入 RAG =====
+                # 1) 摘要 embedding — compute_and_store_embedding 此前零调用方 (从未接线)
+                try:
+                    from app.services.meeting_service import compute_and_store_embedding
+                    await compute_and_store_embedding(db, meeting_id)
+                    logger.info(f"[wp1] meeting 摘要 embedding 已写入 (meeting_id={meeting_id})")
+                except Exception as emb_e:
+                    logger.warning(f"[wp1] meeting 摘要 embedding 失败 (meeting_id={meeting_id}): {emb_e}")
+                # 2) 转录 chunk 索引 (Celery 异步, 失败可由回填脚本补)
+                try:
+                    from app.services.meeting_chunk_service import index_meeting_chunks_task
+                    index_meeting_chunks_task.delay(meeting_id)
+                    logger.info(f"[wp1] meeting 转录索引任务已派发 (meeting_id={meeting_id})")
+                except Exception as idx_e:
+                    logger.warning(f"[wp1] meeting 转录索引 dispatch 失败 (meeting_id={meeting_id}): {idx_e}")
+
                 logger.info(
                     f"后处理完成: meeting_id={meeting_id}, 转写{len(transcript_segments)}段, "
                     f"标题={meeting.title}, status={final_status}, "

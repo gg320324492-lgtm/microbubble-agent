@@ -55,6 +55,8 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "rerank": 0.2,
     "image": 0.15,
     "temporal": 0.0,
+    "chunk": 0.2,
+    "meetings": 0.35,
 }
 
 # 默认 A/B 灰度 — A 组 = 全开, B 组 = 强化 bm25 (实验性)
@@ -102,10 +104,12 @@ class HybridWeights:
     temporal: float = 0.0
     # 2026-09-01 WP1.7: chunk 级向量召回 (retrieve_per_method "chunk" 路)
     chunk: float = 0.2
+    # WP1 (2026-09-02): 会议转录 chunk 召回 (meeting_chunks, 第 6 路)
+    meetings: float = 0.35
 
     def __post_init__(self) -> None:
-        # 防御性: 负权重 / NaN 守护；第 5/6 路必须同步加入白名单
-        for field_name in ("vector", "bm25", "graph", "rerank", "image", "temporal", "chunk"):
+        # 防御性: 负权重 / NaN 守护；新增加入白名单
+        for field_name in ("vector", "bm25", "graph", "rerank", "image", "temporal", "chunk", "meetings"):
             v = getattr(self, field_name)
             if not isinstance(v, (int, float)):
                 raise ValueError(
@@ -123,10 +127,10 @@ class HybridWeights:
         """从 dict 创建 (用于 yaml / DB 反序列化)
 
         Args:
-            data: 含 vector/bm25/graph/rerank/image/temporal/chunk 键的 dict, 缺键走默认
+            data: 含 vector/bm25/graph/rerank/image/temporal/chunk/meetings 键的 dict, 缺键走默认
         """
         kwargs: Dict[str, float] = {}
-        for k in ("vector", "bm25", "graph", "rerank", "image", "temporal", "chunk"):
+        for k in ("vector", "bm25", "graph", "rerank", "image", "temporal", "chunk", "meetings"):
             if k in data:
                 kwargs[k] = float(data[k])
         return cls(**kwargs)
@@ -332,6 +336,7 @@ def apply_weights(
         "image": weights.image,
         "temporal": weights.temporal,
         "chunk": weights.chunk,
+        "meetings": weights.meetings,
     }
 
     rrf_totals: Dict[Any, float] = {}

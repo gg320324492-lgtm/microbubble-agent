@@ -16,6 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("microbubble.hybrid_retriever")
 
+# WP1 (2026-09-02): 会议 id 命名空间偏移 — meetings 与 knowledge 是不同表的
+# 自增 id, 直接用作 RRF/前端引用 id 会互撞 (meeting 5 vs knowledge 5)。
+# 会议路结果 id = MEETING_ID_NS + meeting_id, 原始 meeting_id 单独携带。
+MEETING_ID_NS = 10_000_000
+
 
 def _backfill_normalized_scores(results: List[dict]) -> None:
     """WP8 (2026-09-01): rerank 后把 rerank_score (cross-encoder logits, 无界)
@@ -433,10 +438,67 @@ class HybridRetriever:
             except Exception:
                 pass
 
+        # WP1 (2026-09-02): 会议转录第 5 路 — meeting_chunks 向量召回
+        _t_meet = time.perf_counter()
+        try:
+            from sqlalchemy import select as _msel
+
+            from app.models.meeting import Meeting as _M
+            from app.models.meeting_chunk import MeetingChunk as _MC
+            from app.services.embedding_service import get_or_compute_query_embedding as _gocqe
+
+            query_embedding = await _gocqe(query, has_query_prompt=True)
+            if query_embedding is not None:
+                distance = _MC.embedding.cosine_distance(query_embedding).label("distance")
+                mstmt = (
+                    select(
+                        _MC.meeting_id,
+                        _M.title.label("title"),
+                        _MC.content,
+                        _MC.start_sec,
+                        _MC.end_sec,
+                        _MC.speakers,
+                        distance,
+                    )
+                    .join(_M, _M.id == _MC.meeting_id)
+                    .where(_MC.embedding.isnot(None))
+                    .order_by(distance)
+                    .limit(candidate_k)
+                )
+                mrows = (await self.db.execute(mstmt)).all()
+                # WP1 id 命名空间: 会议与知识表 id 空间不同, 加 10_000_000 偏移
+                # 防止 RRF 按 id 误合并; meeting_id 原值单独携带供引用跳转
+                meet_entries = [
+                    {
+                        "id": MEETING_ID_NS + r.meeting_id,
+                        "meeting_id": r.meeting_id,
+                        "title": r.title or "",
+                        "content": r.content,
+                        "created_at": None,
+                        "score": float(1.0 - r.distance),
+                        "start_sec": r.start_sec,
+                        "end_sec": r.end_sec,
+                        "speakers": r.speakers,
+                        "retrieval_method": "meeting",
+                    }
+                    for r in mrows
+                ]
+                out["meetings"] = meet_entries
+            else:
+                out["meetings"] = []
+        except Exception as e:
+            logger.warning(f"retrieve_per_method meetings 路失败: {e}")
+            out["meetings"] = []
+        try:
+            obs_trace.per_path_latency_ms["meetings"] = round((time.perf_counter() - _t_meet) * 1000, 3)
+            obs_trace.per_path_count["meetings"] = len(out.get("meetings") or [])
+        except Exception:
+            pass
+
         # WP7: 终态埋点 — top_ids 取各路 union (vector 优先), 供 search_logs
         try:
             _union_ids: List[int] = []
-            for _m in ("vector", "bm25", "graph", "chunk"):
+            for _m in ("vector", "bm25", "graph", "chunk", "meetings"):
                 for _r in out.get(_m) or []:
                     _rid = _r.get("id")
                     if _rid is not None and _rid not in _union_ids:
