@@ -2198,4 +2198,68 @@ function handleSearchKeydown(e: KeyboardEvent) {
   color: var(--color-bg-card);
 }
 [data-theme="dark"] .msg-content :deep(a) { color: var(--color-primary-light); }
+
+/* ===== 2026-09-02 消息排版升级 · 方案 C 白气泡成对 (用户选定) =====
+   文本回答进白底轻阴影气泡, 与用户橙色气泡成对; 工具卡片/富块保持各自样式。
+   放全局块: scoped :deep 链在孙组件 (ContentBriefDetail) 内不可靠。 */
+.chat-message-row.bot .msg-content {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(48, 49, 51, 0.05);
+  padding: 14px 18px 12px;
+  line-height: 1.75;
+  font-size: 14.5px;
+  color: var(--color-text-primary);
+}
+.chat-message-row.bot .msg-content p { margin: 0 0 10px; }
+.chat-message-row.bot .msg-content p:last-child { margin-bottom: 0; }
+.chat-message-row.bot .msg-content strong { font-weight: 650; }
+/* 节标题 — 珊瑚色, 层级间距 */
+.chat-message-row.bot .msg-content h1,
+.chat-message-row.bot .msg-content h2,
+.chat-message-row.bot .msg-content h3,
+.chat-message-row.bot .msg-content h4 {
+  margin: 20px 0 10px;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.4;
+}
+.chat-message-row.bot .msg-content h1:first-child,
+.chat-message-row.bot .msg-content h2:first-child,
+.chat-message-row.bot .msg-content h3:first-child,
+.chat-message-row.bot .msg-content h4:first-child { margin-top: 0; }
+/* 列表 — 序号/标记珊瑚色 + 呼吸感 */
+.chat-message-row.bot .msg-content ol,
+.chat-message-row.bot .msg-content ul { margin: 0 0 12px; padding-left: 22px; }
+.chat-message-row.bot .msg-content li { margin: 0 0 8px; line-height: 1.75; }
+.chat-message-row.bot .msg-content li:last-child { margin-bottom: 0; }
+.chat-message-row.bot .msg-content li::marker { color: var(--color-primary); font-weight: 600; }
+/* hr 柔化成渐隐线 */
+.chat-message-row.bot .msg-content hr {
+  border: none;
+  height: 1px;
+  margin: 14px 0;
+  background: linear-gradient(90deg, transparent, var(--color-border-light) 15%, var(--color-border-light) 85%, transparent);
+}
+/* 引用块 — 珊瑚左条 + 暖底 */
+.chat-message-row.bot .msg-content blockquote {
+  margin: 10px 0;
+  padding: 10px 14px;
+  border-left: 3px solid rgba(255, 122, 92, 0.5);
+  background: var(--color-primary-bg);
+  border-radius: 0 8px 8px 0;
+  color: var(--color-text-regular);
+}
+.chat-message-row.bot .msg-content blockquote p:last-child { margin-bottom: 0; }
+/* 表格 */
+.chat-message-row.bot .msg-content table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 10px 0; }
+.chat-message-row.bot .msg-content th,
+.chat-message-row.bot .msg-content td { border: 1px solid var(--color-border-light); padding: 8px 12px; text-align: left; }
+.chat-message-row.bot .msg-content th { background: var(--color-bg-warm); font-weight: 600; }
+/* dark mode: 气泡阴影加深, 其余走 token 自适应 */
+[data-theme="dark"] .chat-message-row.bot .msg-content {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
 </style>
