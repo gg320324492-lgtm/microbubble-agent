@@ -56,6 +56,18 @@ from app.services.session_context import (
 logger = logging.getLogger("microbubble.agent")
 
 
+def _is_questionish(s: str) -> bool:
+    """追问 chip 出口校验辅助 — 无问号但含疑问词也算问句形态 (2026-09-01)"""
+    import re as _re_q
+    return bool(
+        _re_q.search(
+            r"(什么|怎么|如何|哪些|多少|为什么|吗|呢|能不能|可不可以|"
+            r"详细|原理|标准|范围|案例|方向|操作|步骤|介绍|比较)",
+            s or "",
+        )
+    )
+
+
 # ============================================================================
 # 2026-07-31 #CHAT-P0-A: 会话上下文闭环 — PG 回填 Redis（"失忆客服"根因修复）
 # ============================================================================
@@ -1077,6 +1089,12 @@ class MicroBubbleAgent:
                     unique.append(s)
                 if len(unique) >= 3:
                     break
+            # 2026-09-01 修复: 出口必须校验问句形态 — 此前『{topic}』模板包装
+            # 陈述性 topic 时产出非问句垃圾 chips (截图实证)
+            unique = [
+                s for s in unique
+                if ("？" in s or "?" in s or _is_questionish(s))
+            ]
             return unique[:3]
         except Exception:
             return []
@@ -1142,12 +1160,23 @@ class MicroBubbleAgent:
 
         import re as _re
 
+        # 2026-09-01 修复: 排除寒暄/礼仪/元话语/时间戳句 — 此前"今天是2026年9月1日
+        # 23:08,希望您有个愉快的夜晚"这类收尾句因含数字被当 topic, 模板包装后产出
+        # "和『今天是...』相关的还有哪些?" 垃圾追问 chips
+        _SMALLTALK = _re.compile(
+            r"(您好|你好|谢谢|感谢|高兴|欢迎|请随时|请告诉我|希望您|希望这|"
+            r"今天是|晚安|再见|乐意|感兴趣|祝您|请注意|请描述|我是|有什么可以帮)"
+        )
+
         # 按中英文标点切分完整句子
         sentences = _re.split(r'[。！？\n]+', assistant_text)
         scored = []
         for s in sentences:
             s = s.strip()
             if not s or len(s) < 5 or len(s) > 80:
+                continue
+            # 寒暄/礼仪/元话语句 → 直接跳过 (含时间戳收尾句)
+            if _SMALLTALK.search(s):
                 continue
 
             score = 0
@@ -1315,7 +1344,12 @@ class MicroBubbleAgent:
 直接输出 JSON，不要其他文字。"""
 
             backend = getattr(_settings, "LLM_BACKEND", "anthropic") or "anthropic"
-            model_name = "qwen3:8b" if backend == "ollama" else get_default_model()
+            # 2026-09-01 修复: 硬编码 "qwen3:8b" 已从 ollama 移除 → 404 → 空响应 →
+            # JSON 解析失败 → 永远落到启发式 (产出回答片段垃圾 chips)。
+            # 改用 AGENT_INTENT_MODEL (与意图分类同源, 轻任务, 已验证存在)。
+            model_name = (
+                getattr(_settings, "AGENT_INTENT_MODEL", "") or "qwen3.5:9b-q4_K_M"
+            ) if backend == "ollama" else get_default_model()
 
             # 优先走 ollama 本地（避免 Claude API 模型名限制）
             if backend == "ollama":
@@ -1337,9 +1371,15 @@ class MicroBubbleAgent:
                             "model": model_name,
                             "messages": [{"role": "user", "content": prompt}],
                             "stream": False,
+                            # qwen3 系思考型模型: 显式关闭思考, 保证 content 为纯答案
+                            "think": False,
                         }) as resp:
                             data = await resp.json()
-                            text = data.get("message", {}).get("content", "").strip()
+                            text = (data.get("message") or {}).get("content", "").strip()
+                            # 兜底剥离思考标签 (旧版 ollama 把思考混入 content)
+                            import re as _re_think
+                            text = _re_think.sub(r"<think>[\s\S]*?</think>", "", text).strip()
+
             else:
                 # Claude API 路径
                 client = get_anthropic_client()
@@ -1353,7 +1393,7 @@ class MicroBubbleAgent:
                 )
                 text = extract_text_from_response(response).strip()
 
-            parsed = parse_llm_json(text) if 'parsed' in dir() else __import__('json').loads(text)
+            parsed = parse_llm_json(text)
             questions = parsed.get("questions") or []
             valid = [q for q in questions if isinstance(q, str) and q.strip() and 5 <= len(q) <= 50]
             return valid[:3]
