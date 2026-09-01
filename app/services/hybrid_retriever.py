@@ -314,6 +314,7 @@ class HybridRetriever:
         enable_vector: bool = True,
         enable_bm25: bool = True,
         enable_graph: bool = True,
+        user_id: Optional[int] = None,
     ) -> Dict[str, List[dict]]:
         """按检索路分组的并发召回 (WP1.7: 供 retrieve_with_weights 做 RRF 合并)
 
@@ -335,6 +336,7 @@ class HybridRetriever:
                 enable_vector=enable_vector,
                 enable_bm25=enable_bm25,
                 enable_graph=enable_graph,
+                user_id=user_id,
                 obs_trace=obs_trace,
             )
 
@@ -346,6 +348,7 @@ class HybridRetriever:
         enable_vector: bool = True,
         enable_bm25: bool = True,
         enable_graph: bool = True,
+        user_id: Optional[int] = None,
         obs_trace: Any = None,
     ) -> Dict[str, List[dict]]:
         """原 retrieve_per_method body — WP7 拆分点, 不改任何逻辑"""
@@ -495,10 +498,70 @@ class HybridRetriever:
         except Exception:
             pass
 
+        # WP2 (2026-09-02): drive 文件内容第 7 路 — knowledge_chunks drive 语料域
+        # 可见性: private 仅 owner (user_id=None 时仅 team/public)
+        _t_drive = time.perf_counter()
+        try:
+            from sqlalchemy import or_ as _or
+
+            from app.models.knowledge import Knowledge as _KD
+            from app.models.knowledge_chunk import KnowledgeChunk as _KC
+            from app.services.embedding_service import get_or_compute_query_embedding as _gocqe
+
+            drive_emb = await _gocqe(query, has_query_prompt=True)
+            if drive_emb is not None:
+                vis_cond = (
+                    _or(_KD.visibility != "private", _KD.created_by == user_id)
+                    if user_id is not None
+                    else (_KD.visibility != "private")
+                )
+                dstmt = (
+                    select(
+                        _KC.knowledge_id,
+                        _KD.title.label("title"),
+                        _KC.content,
+                        _KC.char_start,
+                        _KC.char_end,
+                        _KC.embedding.cosine_distance(drive_emb).label("distance"),
+                    )
+                    .join(_KD, _KD.id == _KC.knowledge_id)
+                    .where(
+                        _KC.embedding.isnot(None),
+                        _KD.deleted_at.is_(None),
+                        _KD.storage_mode == "drive",
+                        vis_cond,
+                    )
+                    .order_by(distance)
+                    .limit(candidate_k)
+                )
+                drows = (await self.db.execute(dstmt)).all()
+                out["drive"] = [
+                    {
+                        "id": r.knowledge_id,
+                        "title": r.title or "",
+                        "content": r.content,
+                        "score": float(1.0 - r.distance),
+                        "char_start": r.char_start,
+                        "char_end": r.char_end,
+                        "retrieval_method": "drive",
+                    }
+                    for r in drows
+                ]
+            else:
+                out["drive"] = []
+        except Exception as e:
+            logger.warning(f"retrieve_per_method drive 路失败: {e}")
+            out["drive"] = []
+        try:
+            obs_trace.per_path_latency_ms["drive"] = round((time.perf_counter() - _t_drive) * 1000, 3)
+            obs_trace.per_path_count["drive"] = len(out.get("drive") or [])
+        except Exception:
+            pass
+
         # WP7: 终态埋点 — top_ids 取各路 union (vector 优先), 供 search_logs
         try:
             _union_ids: List[int] = []
-            for _m in ("vector", "bm25", "graph", "chunk", "meetings"):
+            for _m in ("vector", "bm25", "graph", "chunk", "meetings", "drive"):
                 for _r in out.get(_m) or []:
                     _rid = _r.get("id")
                     if _rid is not None and _rid not in _union_ids:
@@ -999,6 +1062,7 @@ async def retrieve_with_weights(
     enable_bm25: bool = True,
     enable_graph: bool = True,
     enable_rerank: bool = True,
+    user_id: Optional[int] = None,
 ) -> List[dict]:
     """PR4 (W90 +5): 带权重 + 同义词扩展的检索入口 (新 API, 不动原 retrieve)
 
@@ -1025,6 +1089,7 @@ async def retrieve_with_weights(
             enable_bm25=enable_bm25,
             enable_graph=enable_graph,
             enable_rerank=enable_rerank,
+            user_id=user_id,
             obs_trace=obs_trace,
         )
 
@@ -1040,6 +1105,7 @@ async def _retrieve_with_weights_impl(
     enable_bm25: bool = True,
     enable_graph: bool = True,
     enable_rerank: bool = True,
+    user_id: Optional[int] = None,
     obs_trace: Any = None,
 ) -> List[dict]:
     """原 retrieve_with_weights body — WP7 拆分点, 不改任何逻辑
@@ -1066,7 +1132,7 @@ async def _retrieve_with_weights_impl(
     """
     # 0) W99-RAG-1: Query Cache hook — 提到最前 (2026-09-01: 原顺序 intent→cache
     # 导致每次 cache 命中仍白付一次 LLM intent 调用)。命中直接返回最终结果 (含 citations)。
-    user_id: Optional[int] = None
+    # user_id 来自调用方入参 (2026-09-02: 原本地 None 声明曾覆盖入参)
     tenant_id: Optional[int] = None
     try:
         from app.rag.config import RAG_QUERY_CACHE_ENABLED as _CFG_ENABLED
@@ -1128,6 +1194,7 @@ async def _retrieve_with_weights_impl(
         enable_vector=enable_vector,
         enable_bm25=enable_bm25,
         enable_graph=enable_graph,
+        user_id=user_id,
     )
 
     from app.services.hybrid_weight_config import HybridWeights, apply_weights

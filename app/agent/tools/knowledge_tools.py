@@ -71,10 +71,12 @@ async def search_knowledge(input: SearchKnowledgeInput, ctx: ToolContext) -> dic
     from app.services.hybrid_retriever import retrieve_with_weights
 
     # 调 retrieve_with_weights (W90 PR4 + W99-RAG-1/2 + W100-RAG-3/4/5/6 全 hook 入口)
+    # WP2 (2026-09-02): 透传 user_id — drive 内容按 owner/可见性过滤
     raw_results = await retrieve_with_weights(
         ctx.db,
         query=input.query,
         top_k=input.top_k,
+        user_id=ctx.user_id,
     )
     # 2026-07-02 Round 5b: 过滤内部字段，避免 LLM 模仿 tool_use 协议输出 fake XML
     filtered = [_filter_result_for_llm(r) for r in raw_results]
