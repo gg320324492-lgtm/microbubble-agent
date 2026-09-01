@@ -59,6 +59,17 @@ class KnowledgeQAService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _relevance_of(r: dict) -> float:
+        """WP8 (2026-09-01): 阈值分级用归一化分 — 原 score 是混合尺度
+        (向量 0-1 / BM25 无界 / graph 固定 0.7), 直接比阈值会失真。
+        优先 normalized_score (rerank 后 min-max 归一), 缺失退回 score。
+        """
+        v = r.get("normalized_score")
+        if v is None:
+            v = r.get("score") or 0.0
+        return float(v)
+
     async def answer_question(
         self,
         question: str,
@@ -77,10 +88,10 @@ class KnowledgeQAService:
         # Step 1: 检索知识库
         search_results = await self._search_knowledge_base(question, top_k)
 
-        # Step 2: 按阈值分类
-        high_quality = [r for r in search_results if r.get("score", 0) >= self.HIGH_CONFIDENCE_THRESHOLD]
-        medium_quality = [r for r in search_results if self.MEDIUM_CONFIDENCE_THRESHOLD <= r.get("score", 0) < self.HIGH_CONFIDENCE_THRESHOLD]
-        low_quality = [r for r in search_results if r.get("score", 0) < self.MEDIUM_CONFIDENCE_THRESHOLD]
+        # Step 2: 按阈值分类 (WP8: 用归一化相关性分)
+        high_quality = [r for r in search_results if self._relevance_of(r) >= self.HIGH_CONFIDENCE_THRESHOLD]
+        medium_quality = [r for r in search_results if self.MEDIUM_CONFIDENCE_THRESHOLD <= self._relevance_of(r) < self.HIGH_CONFIDENCE_THRESHOLD]
+        low_quality = [r for r in search_results if self._relevance_of(r) < self.MEDIUM_CONFIDENCE_THRESHOLD]
 
         # Step 3: 判定是否需要研究
         need_research = auto_research and len(high_quality) < 2
@@ -93,15 +104,16 @@ class KnowledgeQAService:
         # Step 4: 构建 RAG prompt 并合成答案
         context_parts = []
         for i, r in enumerate(search_results, 1):
-            label = "【高相关】" if r.get("score", 0) >= self.HIGH_CONFIDENCE_THRESHOLD else \
-                    "【中相关】" if r.get("score", 0) >= self.MEDIUM_CONFIDENCE_THRESHOLD else \
+            _rel = self._relevance_of(r)
+            label = "【高相关】" if _rel >= self.HIGH_CONFIDENCE_THRESHOLD else \
+                    "【中相关】" if _rel >= self.MEDIUM_CONFIDENCE_THRESHOLD else \
                     "【低相关】"
             context_parts.append(
                 f"{i}. {label}\n"
                 f"   标题: {r['title']}\n"
                 f"   摘要: {r.get('summary') or r['content'][:200]}\n"
                 f"   分类: {r.get('category', '未分类')}\n"
-                f"   相关性: {r.get('score', 0):.2%}\n"
+                f"   相关性: {_rel:.2%}\n"
             )
         context_str = "\n---\n".join(context_parts) if context_parts else "知识库中暂无相关内容。"
 
@@ -265,7 +277,7 @@ class KnowledgeQAService:
     async def get_related_knowledge_ids(self, question: str, limit: int = 5) -> List[int]:
         """获取与问题相关的知识条目 ID（用于推荐阅读）"""
         results = await self._search_knowledge_base(question, limit)
-        return [r["id"] for r in results if r.get("score", 0) >= self.MEDIUM_CONFIDENCE_THRESHOLD]
+        return [r["id"] for r in results if self._relevance_of(r) >= self.MEDIUM_CONFIDENCE_THRESHOLD]
 
     async def reason(self, question: str, max_hops: int = 2, top_k: int = 6) -> dict:
         """多跳推理问答 — 遍历知识图谱关联链，LLM 合成推理路径

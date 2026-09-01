@@ -60,8 +60,15 @@ class GraphRetriever:
                 return []
 
             # 从数据库获取知识条目
+            # 2026-09-01 可见性硬边界 (与 search_semantic 同款):
+            # 软删除 / drive / private 文档不可经图谱路召回
             async with async_session() as db:
-                stmt = select(Knowledge).where(Knowledge.id.in_(list(knowledge_ids)))
+                stmt = select(Knowledge).where(
+                    Knowledge.id.in_(list(knowledge_ids)),
+                    Knowledge.deleted_at.is_(None),
+                    Knowledge.storage_mode == "kb",
+                    Knowledge.visibility.in_(["team", "public"]),
+                )
                 result = await db.execute(stmt)
                 rows = result.scalars().all()
 
@@ -73,6 +80,7 @@ class GraphRetriever:
                         "category": r.category,
                         "tags": r.tags,
                         "source": r.source,
+                        "created_at": r.created_at,
                         "score": 0.8,  # 图谱匹配给较高分数
                         "retrieval_method": "graph_entity",
                     }
@@ -162,7 +170,12 @@ class GraphRetriever:
                 return entity
 
             async with async_session() as db:
-                stmt = select(Knowledge).where(Knowledge.id.in_(knowledge_ids))
+                stmt = select(Knowledge).where(
+                    Knowledge.id.in_(knowledge_ids),
+                    Knowledge.deleted_at.is_(None),
+                    Knowledge.storage_mode == "kb",
+                    Knowledge.visibility.in_(["team", "public"]),
+                )
                 result = await db.execute(stmt)
                 rows = result.scalars().all()
                 entity["knowledge_items"] = [

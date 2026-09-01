@@ -229,12 +229,14 @@ class BM25IncrementalIndex:
                     break
         return out
 
-    def search(self, query: str, top_k: int = 5) -> List[dict]:
+    def search(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
         """BM25L 搜索 (PR3 W89 +3)
 
         Args:
             query: 查询文本
             top_k: 返回条数
+            category: 可选类别过滤 (2026-09-01: 全语料打分后按 doc.category 过滤,
+                修复 legacy 按类别建索引导致的语料污染问题; None = 不过滤)
 
         Returns:
             按 BM25L 分数排序的结果列表 [{id, title, content, score, retrieval_method='bm25'}]
@@ -251,6 +253,14 @@ class BM25IncrementalIndex:
                 candidates.add(did)
         if not candidates:
             return []
+        # 1b. 类别过滤 (2026-09-01): 先剪枝再打分
+        if category is not None:
+            candidates = {
+                did for did in candidates
+                if self._docs.get(did, {}).get("category") == category
+            }
+            if not candidates:
+                return []
         # 2. 计算各候选的 BM25L 得分
         scored: List[Tuple[int, float]] = []
         for doc_id in candidates:
@@ -273,6 +283,7 @@ class BM25IncrementalIndex:
                 "category": doc.get("category"),
                 "tags": doc.get("tags"),
                 "source": doc.get("source"),
+                "created_at": doc.get("created_at"),
                 "score": round(score, 4),
                 "retrieval_method": "bm25",
             })

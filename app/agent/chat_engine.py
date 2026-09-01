@@ -390,6 +390,19 @@ class ChatEngine:
                         f"self_rag triggered: reason={self_rag_assessment.get('reason')} "
                         f"retry_chunks={len(new_chunks)}"
                     )
+                    # WP6 (2026-09-01): 重检索到新资料 → 追加一次 LLM 修正调用,
+                    # 用修订版答案替换 content (失败/无新资料保持原答案, 不降级)
+                    if new_chunks:
+                        revised = await self._self_rag_revise_answer(
+                            question=question,
+                            original_answer=content,
+                            chunks=new_chunks,
+                            synthesis_model_override=synthesis_model_override,
+                        )
+                        if revised:
+                            content = revised
+                            self_rag_assessment["revised"] = True
+                            logger.info("self_rag answer revised with refreshed chunks")
             except Exception as e:
                 logger.warning(f"self_rag assessment failed: {e}")
 
@@ -409,10 +422,81 @@ class ChatEngine:
             "self_rag_assessment": self_rag_assessment,
         }
 
+    async def _self_rag_revise_answer(
+        self,
+        *,
+        question: str,
+        original_answer: str,
+        chunks: List[Dict[str, Any]],
+        synthesis_model_override: Optional[str] = None,
+    ) -> str:
+        """WP6 (2026-09-01): Self-RAG 修正调用 — 原答案 + 重检索 chunks → 修订版答案
+
+        单轮 complete (thinking 关闭, 与 knowledge_qa_service._llm_synthesize 同模式),
+        不发 tool_use。失败/无有效资料返回 "" (调用方保持原答案, 不降级)。
+        """
+        try:
+            from app.core.llm import (
+                extract_text_from_response,
+                get_anthropic_client,
+                get_default_model,
+            )
+
+            chunk_texts: List[str] = []
+            for i, c in enumerate(chunks[:5], 1):
+                if not isinstance(c, dict):
+                    continue
+                title = str(c.get("title") or "").strip()
+                text = str(c.get("content") or c.get("chunk_content") or "").strip()
+                if not text:
+                    continue
+                chunk_texts.append(f"[{i}] {title}\n{text[:500]}")
+            if not chunk_texts:
+                return ""
+
+            prompt = SELF_RAG_REVISE_PROMPT.format(
+                original_answer=original_answer[:3000],
+                chunks="\n\n".join(chunk_texts),
+                question=question,
+            )
+            client = get_anthropic_client()
+            response = await client.messages.create(
+                model=synthesis_model_override or get_default_model(),
+                max_tokens=1500,
+                timeout=30,
+                thinking={"type": "disabled"},
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return (extract_text_from_response(response) or "").strip()
+        except Exception as e:
+            logger.warning(f"self_rag revise answer failed (保持原答案): {e}")
+            return ""
+
 
 # ============================================================================
 # 辅助函数（独立工具函数，供 chat_engine 各方法使用）
 # ============================================================================
+
+# WP6 (2026-09-01): Self-RAG 修正 prompt — 原答案 + 重检索 chunks → 修订版答案
+SELF_RAG_REVISE_PROMPT = """你是一个严谨的知识库问答助手。系统检测到先前的回答可信度不足，并已重新检索到以下补充资料。请基于补充资料修订原回答。
+
+## 原回答
+
+{original_answer}
+
+## 重新检索到的资料
+
+{chunks}
+
+## 用户问题
+
+{question}
+
+## 修订要求
+
+1. 优先采用补充资料中与问题相关的信息修正或充实原回答
+2. 补充资料不足的部分保留原回答内容，不要编造
+3. 直接输出修订后的完整回答，不要输出修订说明"""
 
 
 def _last_user_text(messages: List[Dict]) -> str:

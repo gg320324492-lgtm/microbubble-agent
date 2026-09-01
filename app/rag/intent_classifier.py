@@ -24,6 +24,7 @@ W100-RAG-3 用法:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -152,6 +153,34 @@ def _parse_intent_json(text: str) -> Optional[str]:
     return None
 
 
+# ===== Intent cache key (2026-09-01 WP1.8, 镜像 app/agent/intent_classifier.py) =====
+
+def _intent_cache_key(query: str) -> str:
+    """query → Redis 缓存 key (sha256[:16])"""
+    import hashlib
+    digest = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
+    return f"rag:intent:{digest}"
+
+
+# Redis 失败冷却 (2026-09-01): Redis 不可达时 (e.g. 非 compose 环境解析 'redis'
+# 主机名每次都付 DNS 超时), 冷却期内直接跳过缓存读写, 不让缓存层拖慢分类链路
+_INTENT_REDIS_COOLDOWN_SECONDS: float = 30.0
+_intent_redis_cooldown_until: float = 0.0
+
+
+def _intent_redis_cooling_down() -> bool:
+    import time
+    return time.monotonic() < _intent_redis_cooldown_until
+
+
+def _mark_intent_redis_cooldown() -> None:
+    import time
+    global _intent_redis_cooldown_until
+    _intent_redis_cooldown_until = (
+        time.monotonic() + _INTENT_REDIS_COOLDOWN_SECONDS
+    )
+
+
 # ===== IntentClassifier 类 =====
 
 class IntentClassifier:
@@ -178,13 +207,20 @@ class IntentClassifier:
         return LLMClient()
 
     async def _call_llm(self, prompt: str) -> str:
-        """统一 LLM 调用: 失败抛异常, 由 classify 兜底"""
+        """统一 LLM 调用: 失败抛异常, 由 classify 兜底
+
+        2026-09-01 WP1.8: 包 asyncio.wait_for(3s) 超时 — ollama 冷加载时
+        intent LLM 调用曾无上限阻塞检索链
+        """
         llm = self._get_llm()
-        response = await llm.complete(
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
-            temperature=0.1,  # 低温度保证分类稳定
-            thinking={"type": "disabled"},
+        response = await asyncio.wait_for(
+            llm.complete(
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.1,  # 低温度保证分类稳定
+                thinking={"type": "disabled"},
+            ),
+            timeout=3.0,
         )
         return _extract_text(response)
 
@@ -200,17 +236,43 @@ class IntentClassifier:
             失败回退: self.fallback (默认 INTENT_FACTUAL)
 
         类 20.125 铁律: 必 5 类之一 + 失败回退 INTENT_FALLBACK
+        2026-09-01 WP1.8: 加 Redis 缓存 (镜像 app/agent/intent_classifier.py 模式,
+        TTL 24h) — 同 query 不重复调 LLM
         """
         query = (query or "").strip()
         if not query:
             # 空 query: 直接 fallback (不调 LLM 浪费)
             return self.fallback
 
+        # 0) Redis 缓存 (best-effort, 失败静默走 LLM; 冷却期内跳过防 DNS/连接超时拖累)
+        cache_key = _intent_cache_key(query)
+        if not _intent_redis_cooling_down():
+            try:
+                from app.core.redis import get_redis
+                redis = await get_redis()
+                cached_raw = await redis.get(cache_key)
+                if cached_raw:
+                    cached = json.loads(cached_raw)
+                    if cached in VALID_INTENTS:
+                        return cached
+            except Exception as e:
+                _mark_intent_redis_cooldown()
+                logger.debug(f"[W100-RAG-3] intent cache lookup skip: {e}")
+
         try:
             prompt = INTENT_CLASSIFY_PROMPT.format(query=query)
             text = await self._call_llm(prompt)
             intent = _parse_intent_json(text)
             if intent is not None:
+                # 写缓存 (best-effort; 冷却期内跳过)
+                if not _intent_redis_cooling_down():
+                    try:
+                        from app.core.redis import get_redis
+                        redis = await get_redis()
+                        await redis.setex(cache_key, 86400, json.dumps(intent))
+                    except Exception as e:
+                        _mark_intent_redis_cooldown()
+                        logger.debug(f"[W100-RAG-3] intent cache write skip: {e}")
                 return intent
             # 解析失败 (LLM 输出格式异常): log + fallback
             logger.debug(
