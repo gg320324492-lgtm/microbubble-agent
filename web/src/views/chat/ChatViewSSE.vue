@@ -72,8 +72,17 @@ import { formatTimeDivider } from '@/utils/timeDivider'
 // 模块常量 (Plan v1 Step 6 重做: 集中 magic 值, 后续重构 + 测试容易)
 // ============================================================================
 
-/** 虚拟滚动阈值 (消息数 > VIRTUAL_THRESHOLD 启用 absolute positioning 渲染) */
-const VIRTUAL_THRESHOLD = 50
+/**
+ * 虚拟滚动阈值 (消息数 > VIRTUAL_THRESHOLD 启用 absolute positioning 渲染)
+ *
+ * 2026-09-01 修复 (用户截图实证): 50 条即启用的虚拟定位以固定估高
+ * VIRTUAL_ITEM_HEIGHT=120px 绝对定位消息, 而聊天消息实际高度 80~2000px+
+ * (工具卡片/长文/markdown 列表), 长对话全部叠罗汉。聊天消息高度差异 20 倍,
+ * 固定估高虚拟化根本不适用 (类 20.187 sidebar 同病灶)。
+ * 处置: 阈值提到 1000 — 实际等于禁用虚拟定位, 走正常流式布局 (永不错位);
+ * 真超长会话 (>1000 条) 的极端兜底场景估高同步修正为 360。
+ */
+const VIRTUAL_THRESHOLD = 1000
 
 // ============================================================================
 // W72 B-3: 顶栏 3-zone 类型 (派工 v6 段 5 反馈 #3 实战: SubAgent 编排 type hint 必含)
@@ -344,11 +353,11 @@ const STICK_THRESHOLD_PX = 80  // 距底 < 80px 算"贴底"
 const USER_SCROLL_UP_THRESHOLD = 120  // 距底 > 120px 视为"用户主动上滚"
 const TOP_THRESHOLD_PX = 100  // P0-#2: 距顶 < 100px 算"贴顶"
 
-// ===== W100 +45 P3-VIRTUAL RETRY: 虚拟滚动 (messages > 50 时启用) =====
+// ===== W100 +45 P3-VIRTUAL RETRY: 虚拟滚动 (仅 > VIRTUAL_THRESHOLD 的极端长会话) =====
 // 单一 composable 实例, items 用 readonly messages, 容器挂在 messagesRef
-// itemHeight 经验值 (用户消息 ~80px, 助手消息 ~120-300px, 折中 120)
-// VIRTUAL_THRESHOLD 已在顶部模块常量定义 (Plan v1 Step 6 重做)
-const VIRTUAL_ITEM_HEIGHT = 120
+// 2026-09-01: 估高 120 → 360 — 长会话兜底场景下含富内容的消息平均高度更接近此值;
+// 聊天消息高度天然不可预估, 虚拟化仅作为 >1000 条的极端降级, 常态走流式布局
+const VIRTUAL_ITEM_HEIGHT = 360
 const virtualList = useVirtualList({
   containerRef: messagesRef,
   items: messages as unknown as Ref<readonly ChatMessage[]>,
