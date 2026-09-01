@@ -48,17 +48,21 @@ class HalfVector(UserDefinedType):
         return f"HALFVEC({self.dim})"
 
     def bind_processor(self, dialect: Dialect) -> Any:
-        def process(value: Any) -> Optional[List[float]]:
+        def process(value: Any) -> Optional[str]:
             if value is None:
                 return None
             if isinstance(value, np.ndarray):
                 # float16 已是目标类型, 但若上游是 float32, lossy cast
                 if value.dtype != np.float16:
                     value = value.astype(np.float16)
-                return value.tolist()
+                value = value.tolist()
             if isinstance(value, (list, tuple)):
-                # 上游已传 list[float], 直接返回
-                return list(value)
+                # 2026-09-01 P0 修复: asyncpg 的 halfvec 绑定参数必须是
+                # '[f1,f2,...]' 字面量字符串 — 直接传 list 会 DataError
+                # ("expected str, got list")。这曾让 embedding <=> :query
+                # 全部抛错 → search_semantic 静默降级到关键词回退 (向量主路死),
+                # 同理 INSERT/UPDATE embedding 也静默失败。
+                return "[" + ",".join(repr(float(x)) for x in value) + "]"
             raise TypeError(
                 f"HalfVector.bind_processor: unsupported type {type(value).__name__}"
             )

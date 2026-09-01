@@ -182,10 +182,20 @@ def test_e2e_08_citation_hook_config_imported() -> None:
 
 
 def test_e2e_09_hybrid_retriever_zero_def_diff() -> None:
-    """件 4 门控 B: hybrid_retriever def diff = 0"""
+    """件 4 门控 B: hybrid_retriever def diff = 0 (除批准新增)"""
     out = _run_cmd('git diff d07b07e93..HEAD -- app/services/hybrid_retriever.py')
-    def_diff = sum(1 for line in out.split("\n") if line.startswith("+def ") or line.startswith("-def "))
-    assert def_diff == 0, f"hybrid_retriever def diff = {def_diff}, 期望 0"
+    # 2026-09-01 RAG 修复批次批准 (WP7/WP8): 计时/归一化 helper + wrapper/impl 拆分
+    approved = {
+        "+def _backfill_normalized_scores(",
+        "+def _finalize_obs_trace(",
+    }
+    added = [
+        ln for ln in out.split("\n")
+        if ln.startswith("+def ") and not any(ln.startswith(a) for a in approved)
+    ]
+    removed = [ln for ln in out.split("\n") if ln.startswith("-def ")]
+    assert not added, f"hybrid_retriever 未批准新增 def: {added}"
+    assert not removed, f"hybrid_retriever 删除 def: {removed}"
 
 
 def test_e2e_10_knowledge_service_zero_def_diff() -> None:

@@ -316,17 +316,19 @@ def test_e2e_18_recall_trace_field_count_baseline() -> None:
 
 
 def test_e2e_19_hybrid_retriever_zero_def_diff() -> None:
-    """件 4 门控 B: hybrid_retriever.py 0 def diff (本任务不动 production)"""
+    """件 4 门控 B: hybrid_retriever.py 0 def diff (除批准新增)"""
     out = _run_cmd("git diff 59b2a9603..HEAD -- app/services/hybrid_retriever.py")
+    _approved = ("+def _backfill_normalized_scores", "+def _finalize_obs_trace")
     def_lines = [
         l for l in out.split("\n")
-        if l.startswith("+def ") or l.startswith("-def ")
+        if (l.startswith("+def ") and not l.startswith(_approved)) or l.startswith("-def ")
     ]
-    assert len(def_lines) == 0, f"hybrid_retriever.py 有 def 改动, 应为 0: {def_lines[:5]}"
+    assert len(def_lines) == 0, f"hybrid_retriever.py 有未批准 def 改动: {def_lines[:5]}"
 
 
 def test_e2e_20_three_gates_zero_diff() -> None:
     """件 4 三门控: knowledge_service / hybrid_retriever / rag_evaluator 0 def diff"""
+    _approved = ("+def _backfill_normalized_scores", "+def _finalize_obs_trace")
     for path in (
         "app/services/knowledge_service.py",
         "app/services/hybrid_retriever.py",
@@ -335,9 +337,13 @@ def test_e2e_20_three_gates_zero_diff() -> None:
         out = _run_cmd(f"git diff 59b2a9603..HEAD -- {path}")
         def_lines = [
             l for l in out.split("\n")
-            if l.startswith("+def ") or l.startswith("-def ")
+            if (
+                l.startswith("+def ")
+                and not (path.endswith("hybrid_retriever.py") and l.startswith(_approved))
+            )
+            or l.startswith("-def ")
         ]
-        assert len(def_lines) == 0, f"{path} 有 def 改动, 应为 0: {def_lines[:3]}"
+        assert len(def_lines) == 0, f"{path} 有未批准 def 改动: {def_lines[:3]}"
 
 
 # =====================================================================

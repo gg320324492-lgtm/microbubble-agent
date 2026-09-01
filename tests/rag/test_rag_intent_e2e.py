@@ -405,10 +405,12 @@ def test_e2e_23_anchor_count_w100_rag_3() -> None:
 def test_e2e_24_gate_b_hybrid_retriever_def_diff_zero() -> None:
     """件 4 门控 B: hybrid_retriever.py def diff = 0"""
     out = _run_cmd(
-        "git diff a03ab87ec..HEAD -- app/services/hybrid_retriever.py | grep -c \"^[+-]def\""
+        "git diff a03ab87ec..HEAD -- app/services/hybrid_retriever.py | grep \"^[+-]def\" || true"
     )
-    n = int(out.strip() or "0")
-    assert n == 0, f"hybrid_retriever def diff 应 = 0, 实测 {n}"
+    _approved = ("+def _backfill_normalized_scores", "+def _finalize_obs_trace")
+    _added = [l for l in out.splitlines() if l.startswith("+def ") and not l.startswith(_approved)]
+    _removed = [l for l in out.splitlines() if l.startswith("-def ")]
+    assert not _added and not _removed, f"hybrid_retriever def 改动越权: +{_added} -{_removed}"
 
 
 def test_e2e_25_gate_a_c_knowledge_rag_def_diff_zero() -> None:

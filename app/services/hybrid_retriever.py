@@ -61,6 +61,17 @@ async def _timed_path(obs_trace: Any, name: str, coro) -> Any:
     return out
 
 
+class _CitationList(list):
+    """list 子类 — 携带 .citations 附件 (WP3, 2026-09-01)
+
+    plain list 不支持属性赋值 (AttributeError), 类 20.133 的 "final attach"
+    曾因此在生产静默失败 (citation 永远为空)。调用方通过
+    getattr(results, "citations", []) 读取, 契约不变。
+    """
+
+    citations: List[Dict[str, Any]] = []
+
+
 def _finalize_obs_trace(obs_trace: Any, results: List[dict]) -> None:
     """WP7: 终态埋点 — 实际返回数 + top_ids (ctr/click 关联用)"""
     try:
@@ -1003,18 +1014,14 @@ async def _retrieve_with_weights_impl(
             _cached = await _cache.get(query, user_id=user_id, tenant_id=tenant_id)
             if _cached is not None and _cached.get("results"):
                 logger.debug(f"[W99-RAG-1] query cache HIT (exact) for query={query[:30]}")
-                _cached_results = _cached["results"]
+                _cached_results = _CitationList(_cached["results"])
                 try:
                     obs_trace.cache_hit = True
                     obs_trace.cache_similarity = _cached.get("cache_similarity")
                 except Exception:
                     pass
                 _finalize_obs_trace(obs_trace, _cached_results)
-                if _cached.get("citations"):
-                    try:
-                        _cached_results.citations = _cached["citations"]
-                    except AttributeError:
-                        pass
+                _cached_results.citations = _cached.get("citations") or []
                 return _cached_results
     except Exception as _e:
         logger.debug(f"[W99-RAG-1] query cache lookup skip: {_e}")
@@ -1025,7 +1032,7 @@ async def _retrieve_with_weights_impl(
         from app.services.retrieval_cache import get_retrieval_cache as _get_rc
         if getattr(_cfg, "LLM_QA_BENCH_ROUNDS", 0) >= 1 and getattr(_cfg, "LLM_TEMPERATURE_QA_BENCH", 0.0) == 0.0:
             _rc = _get_rc()
-            _cached_rc = _rc.get(query=query, user_id=user_id, tenant_id=tenant_id)
+            _cached_rc = await _rc.get(query=query, user_id=user_id, tenant_id=tenant_id)
             if _cached_rc is not None and _cached_rc.get("results"):
                 logger.debug(f"[W100-D3] retrieval_cache HIT (qa-bench, 5min TTL) for query={query[:30]}")
                 return _cached_rc["results"]
@@ -1210,6 +1217,21 @@ async def _retrieve_with_weights_impl(
         logger.debug(f"[W100-RAG-6] temporal hook skip: {_e}")
 
     # 5) W99-RAG-2: Citation hook — 在 rerank 之后 (结果已带 chunk_id, WP1.2)
+    # 2026-09-01 增强: doc 级命中 (vector/bm25 路无 chunk_id) 从 chunk 路候选
+    # 补挂最佳 chunk — citation 覆盖不再依赖 chunk 路进 final top-k, 0 额外查询
+    _chunk_best: Dict[Any, dict] = {}
+    for _c in (results_by_method.get("chunk") or []):
+        _kid = _c.get("id")
+        if _kid is not None and _kid not in _chunk_best:
+            _chunk_best[_kid] = _c  # chunk 路候选已按相似度降序
+    for _r in raw_results:
+        if _r.get("chunk_id") is None:
+            _c = _chunk_best.get(_r.get("id"))
+            if _c is not None:
+                _r["chunk_id"] = _c.get("chunk_id")
+                _r["char_start"] = _c.get("char_start")
+                _r["char_end"] = _c.get("char_end")
+
     _cached_citations: List[Dict[str, Any]] = []
     try:
         from app.rag.config import CITATION_ENABLED as _CIT_ENABLED
@@ -1255,11 +1277,11 @@ async def _retrieve_with_weights_impl(
             logger.debug(f"[W99-RAG-1] query cache set skip: {_e}")
 
     # 7) citation final attach (类 20.133 机制保留)
-    if _cached_citations:
-        try:
-            raw_results.citations = _cached_citations  # type: ignore[attr-defined]
-        except AttributeError:
-            logger.debug("[W100-BUGFIX] citation final attach skip: raw_results not list-derived")
+    # 2026-09-01 P0 修复: plain list 不支持属性赋值, 原 attach 在生产静默
+    # 失败 (AttributeError → debug log)。改用 _CitationList 子类承载。
+    if not isinstance(raw_results, _CitationList):
+        raw_results = _CitationList(raw_results)
+    raw_results.citations = _cached_citations or []
 
     _finalize_obs_trace(obs_trace, raw_results)
     return raw_results
