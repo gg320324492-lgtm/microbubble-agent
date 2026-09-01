@@ -14,7 +14,7 @@ const USERNAME = 'xiaoqi_testbot'
 const PASSWORD = 'testbot_pass_2026'
 
 test('长对话消息行 inline 流式布局且互不重叠', async ({ page }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(600_000)
 
   let token = null
   for (let i = 0; i < 4; i++) {
@@ -33,7 +33,52 @@ test('长对话消息行 inline 流式布局且互不重叠', async ({ page }) =
   await page.waitForTimeout(1500) // 历史渲染 + 图片/富块稳定
 
   const rows = page.locator('.chat-message-row')
-  const count = await rows.count()
+
+  // 灌到 >50 条消息, 精确复现用户场景 (旧阈值 50 即触发虚拟定位重叠)
+  const have = await rows.count()
+  if (have < 60) {
+    const sessionsResp = await page.request.get(`${BASE_URL}/api/v1/chat/sessions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const sessionsJson = await sessionsResp.json()
+    const sessions = Array.isArray(sessionsJson) ? sessionsJson : (sessionsJson.items || [])
+    const target = sessions.length ? sessions[0] : null
+    const sessionId = target?.id
+    if (sessionId) {
+      const need = 60 - have
+      for (let i = 0; i < need; i++) {
+        // write 限流 30/min → 2.2s 间隔 + 429 退避
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const r = await page.request.post(`${BASE_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
+            headers: { Authorization: `Bearer ${token}` },
+            data: {
+              role: i % 2 === 0 ? 'user' : 'assistant',
+              content: i % 2 === 0
+                ? `测试问题 ${i}: 微纳米气泡在水质处理中的应用机制是什么？包括溶解氧供给、接触面积、促进微生物活性与抑制有害生物四个方面。`
+                : `测试回答 ${i}: 微纳米气泡通过形成大量细小气泡提供溶解氧, 增大气液接触面积, 促进微生物代谢活性, 并在一定条件下抑制有害病原菌, 从而改善水质。\n\n1. 溶解氧供给: 气泡提供充足氧气。\n2. 接触面积: 界面接触显著增大。\n3. 微生物活性: 代谢速率提升。\n4. 抑制有害生物: 减少病原菌数量。`,
+              client_msg_id: `overlap-seed-${Date.now()}-${i}`,
+            },
+          })
+          if (r.status() === 201) break
+          if (r.status() === 429) {
+            console.log(`[overlap] seed 429, wait 30s (i=${i})`)
+            await page.waitForTimeout(30_000)
+            continue
+          }
+          break
+        }
+        await page.waitForTimeout(2200)
+      }
+    }
+    // 重载会话历史
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.chat-message-row', { timeout: 30_000 })
+    await page.waitForTimeout(2500)
+  }
+  const rowCount = await rows.count()
+  console.log(`[overlap] 灌入后消息行数: ${rowCount}`)
+
+  const count = rowCount
   console.log(`[overlap] 消息行数: ${count}`)
   expect(count).toBeGreaterThan(0)
 
