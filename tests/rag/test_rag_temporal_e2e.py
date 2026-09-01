@@ -68,6 +68,7 @@ async def test_hook_chains_after_multimodal():
     class Base:
         def __init__(self, db): pass
         async def retrieve(self, **kwargs): return []
+        async def retrieve_per_method(self, **kwargs): return {}
 
     now = utcnow()
     with patch("app.services.hybrid_retriever.HybridRetriever", Base), patch(
@@ -89,6 +90,8 @@ async def test_hook_silent_fail_on_temporal_import_error():
         def __init__(self, db): pass
         async def retrieve(self, **kwargs):
             return [{"id": 1, "score": 1.0, "created_at": utcnow()}]
+        async def retrieve_per_method(self, **kwargs): return {
+            "vector": [{"id": 1, "score": 1.0, "created_at": utcnow()}]}
 
     with patch("app.services.hybrid_retriever.HybridRetriever", Base), patch(
         "app.services.multimodal_retriever.MultimodalRetriever.search_images", AsyncMock(return_value=[])
@@ -113,6 +116,8 @@ async def test_hook_disabled_returns_original():
         def __init__(self, db): pass
         async def retrieve(self, **kwargs):
             return [{"id": 1, "score": 1.0, "created_at": utcnow() - timedelta(days=365 * 10)}]
+        async def retrieve_per_method(self, **kwargs): return {
+            "vector": [{"id": 1, "score": 1.0, "created_at": utcnow() - timedelta(days=365 * 10)}]}
 
     with patch("app.services.hybrid_retriever.HybridRetriever", Base), patch(
         "app.services.multimodal_retriever.MultimodalRetriever.search_images", AsyncMock(return_value=[])
@@ -271,6 +276,8 @@ async def test_hook_handles_missing_created_at():
         def __init__(self, db): pass
         async def retrieve(self, **kwargs):
             return [{"id": 1, "score": 1.0}]  # 无 created_at
+        async def retrieve_per_method(self, **kwargs): return {
+            "vector": [{"id": 1, "score": 1.0}]}  # 无 created_at
 
     with patch("app.services.hybrid_retriever.HybridRetriever", Base), patch(
         "app.services.multimodal_retriever.MultimodalRetriever.search_images", AsyncMock(return_value=[])

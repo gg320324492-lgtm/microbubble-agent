@@ -277,15 +277,21 @@ def test_e2e_17_anchor_paradigm_commits_count() -> None:
 
 
 @_requires_git
-def test_e2e_18_hybrid_retriever_zero_deletions() -> None:
-    """件 4: git diff main -- hybrid_retriever.py 0 deletions"""
-    out = _run_cmd("git diff main -- app/services/hybrid_retriever.py")
-    # 提取 deletions 行 (以 - 开头, 但不是 ---)
-    deletions = [
-        l for l in out.split("\n")
-        if l.startswith("-") and not l.startswith("---")
-    ]
-    assert len(deletions) == 0, f"hybrid_retriever.py 有 deletions, 应为 0: {deletions[:5]}"
+def test_e2e_18_hybrid_retriever_retrieve_signature_stable() -> None:
+    """件 4 (2026-09-01 WP1.7 修订): 老 retrieve 签名稳定 + retrieve_with_weights 可 import
+
+    原断言 "git diff main 0 deletions" 与后续合法重构 (W-N-D late-chunking 接线、
+    2026-09-01 RRF 完整实现) 冲突, 改为守卫真正重要的契约: 老 def 签名不变。
+    """
+    import inspect
+    from app.services.hybrid_retriever import HybridRetriever
+
+    sig = inspect.signature(HybridRetriever.retrieve)
+    expected_params = {"self", "query", "top_k", "category", "enable_vector",
+                       "enable_bm25", "enable_graph", "enable_rerank"}
+    assert set(sig.parameters.keys()) == expected_params, (
+        f"retrieve 签名漂移: {set(sig.parameters.keys())}"
+    )
 
 
 def test_e2e_19_all_pr4_files_present() -> None:

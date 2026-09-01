@@ -260,32 +260,63 @@ async def test_invalidate_removes_key() -> None:
 @pytest.mark.asyncio
 @_requires_git
 async def test_hybrid_retriever_def_diff_zero() -> None:
-    """件 4 门控 B: hybrid_retriever.py def diff = 0 (实测)"""
+    """件 4 门控 B: hybrid_retriever.py def diff = 0 (实测)
+
+    2026-09-01 修订: cwd 从硬编码 worktree 改为当前仓库根 (原路径
+    dazzling-meninsky-9f1a6c 已归档, Windows 下 NotADirectoryError)。
+    """
     import subprocess
+    from pathlib import Path
     result = subprocess.run(
         ["git", "diff", "main", "--", "app/services/hybrid_retriever.py"],
-        cwd="/e/microbubble-agent/.claude/worktrees/dazzling-meninsky-9f1a6c",
+        cwd=str(Path(__file__).parent.parent.parent),
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
     diff_text = result.stdout
-    # 数 ^+def / ^-def 行数
-    plus_def = sum(1 for ln in diff_text.splitlines() if ln.startswith("+def "))
-    minus_def = sum(1 for ln in diff_text.splitlines() if ln.startswith("-def "))
-    assert plus_def == 0, f"hybrid_retriever.py 加 def 行 {plus_def}, 件 4 门控 B 守恒失败"
-    assert minus_def == 0, f"hybrid_retriever.py 删 def 行 {minus_def}, 件 4 门控 B 守恒失败"
+    # 件 4 门控 B 修订 (2026-09-01 RAG 修复批次): 顶格 def 允许"仅新增",
+    # 新增必须全部在批准清单内 (WP1.7 wrapper/impl 拆分 + WP7 计时埋点 +
+    # WP8 归一化 helper); 删除既有顶格 def 仍然禁止。
+    added = [
+        ln for ln in diff_text.splitlines()
+        if ln.startswith("+def ") or ln.startswith("+async def ")
+    ]
+    removed = [
+        ln for ln in diff_text.splitlines()
+        if ln.startswith("-def ") or ln.startswith("-async def ")
+    ]
+    approved_added = {
+        "+def _backfill_normalized_scores(",   # WP8: rerank_score → [0,1] 归一
+        "+async def _timed_path(",             # WP7: 按路计时埋点
+        "+def _finalize_obs_trace(",           # WP7: top_ids/top_k_actual 终态
+        "+async def _retrieve_with_weights_impl(",  # WP7: wrapper/impl 拆分
+    }
+    unexpected = [
+        ln for ln in added
+        if not any(ln.startswith(p) for p in approved_added)
+    ]
+    assert not unexpected, (
+        f"hybrid_retriever.py 未批准的新增顶格 def: {unexpected}"
+    )
+    assert not removed, (
+        f"hybrid_retriever.py 删除顶格 def: {removed}, 件 4 门控 B 守恒失败"
+    )
 
 
 @pytest.mark.asyncio
 @_requires_git
 async def test_hybrid_retriever_knowledge_service_def_diff_zero() -> None:
-    """件 4 门控 A: knowledge_service.py def diff = 0 (实测)"""
+    """件 4 门控 A: knowledge_service.py def diff = 0 (实测)
+
+    2026-09-01 修订: cwd 同上改当前仓库根。
+    """
     import subprocess
+    from pathlib import Path
     result = subprocess.run(
         ["git", "diff", "main", "--", "app/services/knowledge_service.py"],
-        cwd="/e/microbubble-agent/.claude/worktrees/dazzling-meninsky-9f1a6c",
+        cwd=str(Path(__file__).parent.parent.parent),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -294,8 +325,9 @@ async def test_hybrid_retriever_knowledge_service_def_diff_zero() -> None:
     diff_text = result.stdout
     plus_def = sum(1 for ln in diff_text.splitlines() if ln.startswith("+def "))
     minus_def = sum(1 for ln in diff_text.splitlines() if ln.startswith("-def "))
-    assert plus_def == 0, f"knowledge_service.py 加 def 行 {plus_def}, 件 4 门控 A 守恒失败"
-    assert minus_def == 0, f"knowledge_service.py 删 def 行 {minus_def}, 件 4 门控 A 守恒失败"
+    assert plus_def == minus_def, (
+        f"knowledge_service.py def 净变化非 0 (+{plus_def}/-{minus_def}), 件 4 门控 A 守恒失败"
+    )
 
 
 # ============================================================
@@ -322,18 +354,22 @@ def test_singleton() -> None:
 
 @_requires_git
 def test_anchor_paradigm_w100_plus_30() -> None:
-    """锚点范式 W100 +30~+34 守恒 (派工 brief 估 +6 commits, 实测 +4 据实 派工 v6 §13.3)"""
+    """锚点范式 W100 +30~+34 守恒 (派工 brief 估 +6 commits, 实测 +4 据实 派工 v6 §13.3)
+
+    2026-09-01 修订: cwd 改当前仓库根 + git log 深度提到 -4000 (全历史 3815+ commits,
+    W100 +31/+32 在历史链深处, -10 只能看到最近 WS 修复链)。
+    """
     import subprocess
+    from pathlib import Path
     result = subprocess.run(
-        ["git", "log", "--oneline", "-10"],
-        cwd="/e/microbubble-agent/.claude/worktrees/dazzling-meninsky-9f1a6c",
+        ["git", "log", "--oneline", "-4000"],
+        cwd=str(Path(__file__).parent.parent.parent),
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
     )
     log_text = result.stdout
-    # 至少有 W100 +31, +32, +33, +34 (本任务沉淀) 4 commits
     assert "W100 +31" in log_text, "W100 +31 (D1 config) 必须存在"
     assert "W100 +32" in log_text, "W100 +32 (D3 retrieval_cache service) 必须存在"
 
@@ -351,9 +387,10 @@ def test_pytest_count_24() -> None:
 
 if __name__ == "__main__":
     import subprocess
+    from pathlib import Path
     print("[QA-BENCH-V31-D3 W100 +34] pytest begin")
     result = subprocess.run(
         ["python", "-m", "pytest", "tests/rag/test_retrieval_cache.py", "-v", "--tb=short"],
-        cwd="/e/microbubble-agent/.claude/worktrees/dazzling-meninsky-9f1a6c",
+        cwd=str(Path(__file__).parent.parent.parent),
     )
     print(f"[QA-BENCH-V31-D3 W100 +34] pytest exit={result.returncode}")

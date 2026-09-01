@@ -457,8 +457,22 @@ def test_kg_19_integration_pr3_bm25_and_pr5_rag_evaluator_untouched():
         # W99-RAG-2 例外: 类内 ADD (与已有 11 def 并列, 不改既有)
         "+    async def evaluate_citations(",
         "+    def _fallback_citation_score(",
+        # 2026-09-01 RAG 修复批次例外 (用户批准的全面 debug 修复 plan):
+        # hybrid_retriever.py ADD retrieve_per_method (RRF 权重实装, 供
+        # retrieve_with_weights 做按路并发召回) + _refresh_bm25_incremental_index
+        # (BM25 增量索引冷启动, 修索引过期 + category 污染)。既有 def 签名 0 改。
+        "+    async def retrieve_per_method(",
+        "+    async def _refresh_bm25_incremental_index(",
+        # WP7/WP8 (2026-09-01): 按路计时埋点 + rerank 归一化 helper
+        "+def _backfill_normalized_scores(",
+        "+def _finalize_obs_trace(",
+        "+    async def _retrieve_per_method_impl(",
     }
-    violations = [ln for ln in changed_defs if ln not in approved]
+    # 2026-09-01: 前缀匹配 (diff 行含完整签名, 精确匹配对签名微调过于脆弱)
+    violations = [
+        ln for ln in changed_defs
+        if not any(ln.startswith(a) for a in approved)
+    ]
     assert violations == [], f"件 4a 双门控违规, 老核心 def 改动: {violations}"
 
     # PR3 / PR5 模块仍可用 (集成未破坏)

@@ -158,12 +158,17 @@ async def test_hybrid_retriever_reranker_hook_chained_with_intent_cache_citation
         def __init__(self, db):
             self.db = db
 
-        async def retrieve(self, **kwargs):
-            return [
-                _make_candidate(0, 0.95),
-                _make_candidate(1, 0.85),
-                _make_candidate(2, 0.75),
-            ]
+        async def retrieve_per_method(self, **kwargs):
+            # 2026-09-01 RRF 重构后 retrieve_with_weights 走 retrieve_per_method()
+            return {
+                "vector": [
+                    _make_candidate(0, 0.95),
+                    _make_candidate(1, 0.85),
+                    _make_candidate(2, 0.75),
+                ],
+                "bm25": [],
+                "graph": [],
+            }
 
     # mock reranker
     with patch.object(hybrid_retriever, "HybridRetriever", MockRetriever), patch(
@@ -199,11 +204,15 @@ async def test_hybrid_retriever_reranker_disabled_no_change():
         def __init__(self, db):
             self.db = db
 
-        async def retrieve(self, **kwargs):
-            return [
-                _make_candidate(0, 0.95),
-                _make_candidate(1, 0.85),
-            ]
+        async def retrieve_per_method(self, **kwargs):
+            return {
+                "vector": [
+                    _make_candidate(0, 0.95),
+                    _make_candidate(1, 0.85),
+                ],
+                "bm25": [],
+                "graph": [],
+            }
 
     with patch.object(hybrid_retriever, "HybridRetriever", MockRetriever), patch(
         "app.services.reranker_service.get_reranker_service"
@@ -230,8 +239,12 @@ async def test_hybrid_retriever_reranker_exception_silent_degrade():
         def __init__(self, db):
             self.db = db
 
-        async def retrieve(self, **kwargs):
-            return [_make_candidate(0, 0.95)]
+        async def retrieve_per_method(self, **kwargs):
+            return {
+                "vector": [_make_candidate(0, 0.95)],
+                "bm25": [],
+                "graph": [],
+            }
 
     with patch.object(hybrid_retriever, "HybridRetriever", MockRetriever), patch(
         "app.services.reranker_service.get_reranker_service"

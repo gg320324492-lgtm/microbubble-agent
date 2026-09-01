@@ -130,7 +130,8 @@ def test_case_05_retrieve_with_weights_citation_hook_order():
     import inspect
     from app.services import hybrid_retriever as hr_mod
 
-    src = inspect.getsource(hr_mod.retrieve_with_weights)
+    # WP7 (2026-09-01) wrapper/impl 拆分后, hook body 在 _retrieve_with_weights_impl
+    src = inspect.getsource(hr_mod._retrieve_with_weights_impl)
     # 验证改动: 末尾有 "W100-BUGFIX" final attach 块
     assert "W100-BUGFIX" in src, "missing W100-BUGFIX final attach block"
     assert "_cached_citations" in src, "missing _cached_citations local var"

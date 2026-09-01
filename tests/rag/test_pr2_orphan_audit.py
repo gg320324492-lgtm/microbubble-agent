@@ -113,15 +113,14 @@ def test_orphan_task_31_script_exists_or_skipped():
 
 
 def test_orphan_task_32_dry_run_via_subprocess():
-    """干跑: python -m alembic heads (验证 chain 1 head)"""
+    """干跑: python -m alembic heads (验证 chain 1 head)
+
+    2026-09-01 修订: head 硬编码 088 已随链推进过期, 改为动态断言单 head。
+    """
     result = subprocess.run(
         ["python", "-m", "alembic", "heads"],
         capture_output=True, text=True, cwd=".",
     )
     output = result.stdout.strip()
-    # 088 已落 script_location, 期望 088 (或 087 if 088 not detected)
-    assert "088_add_knowledge_chunk" in output or "087_add_knowledge_original_parent_id" in output, \
-        f"unexpected alembic heads: {output!r}"
-    # 只 1 head (派工 v11 段 7 E01)
-    lines = [l for l in output.splitlines() if "(" in l]
-    assert len(lines) <= 1, f"multiple heads: {output!r}"
+    head_lines = [l for l in output.splitlines() if "(head)" in l]
+    assert len(head_lines) == 1, f"expected exactly 1 head, got: {output!r}"

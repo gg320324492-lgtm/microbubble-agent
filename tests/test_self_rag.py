@@ -200,3 +200,117 @@ async def test_e2e_unreliable_answer_auto_retry():
     details = assessment["details"]
     assert details["top1_score"] == 0.2  # < 0.5 阈值
     assert "top1_score_low" in assessment["reason"]
+
+# ============================================================================
+# 5. WP6 (2026-09-01): 修订接线 — should_retry + 新 chunks → content 被替换
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_chat_engine_revises_answer_on_retry(monkeypatch):
+    """case 9: should_retry 且重检索非空 → 修订 LLM 调用发生且 content 替换"""
+    import types as _types
+
+    from app.agent.chat_engine import ChatEngine
+
+    engine = ChatEngine()
+
+    async def fake_stream(**kwargs):
+        yield _types.SimpleNamespace(type="text_delta", delta="原始不可靠回答", tool_name=None)
+        yield _types.SimpleNamespace(
+            type="tool_result",
+            tool_name="search_knowledge",
+            tool_use_id="t1",
+            tool_input={},
+            tool_output={"results": [{"id": 1, "score": 0.2, "content": "无关"}]},
+            block=None,
+        )
+        yield _types.SimpleNamespace(type="done", usage=None, duration_ms=1, intent=None, critique=None)
+
+    monkeypatch.setattr(engine, "synthesize_stream", fake_stream)
+
+    class _FakeSelfRAG:
+        def __init__(self, db=None):
+            pass
+
+        async def assess_answer(self, *, question, answer, retrieved_chunks=None):
+            return {"reliable": False, "should_retry": True, "reason": "top1_score_low", "confidence": 0.33}
+
+        async def retry_with_reformulation(self, *, question, original_chunks=None):
+            return [{"id": 9, "title": "新资料", "score": 0.9, "content": "补充资料内容"}]
+
+    monkeypatch.setattr("app.services.self_rag_service.SelfRAGService", _FakeSelfRAG)
+
+    class _FakeMsg:
+        content = [_types.SimpleNamespace(text="修订后的可靠回答")]
+
+    class _FakeClient:
+        class messages:
+            @staticmethod
+            async def create(**kwargs):
+                assert "修订" in kwargs["messages"][0]["content"] or "原回答" in kwargs["messages"][0]["content"]
+                return _FakeMsg()
+
+    monkeypatch.setattr("app.core.llm.get_anthropic_client", lambda: _FakeClient())
+
+    result = await engine.chat_with_brief_and_detail(
+        messages=[{"role": "user", "content": "问题"}],
+        system="sys",
+    )
+
+    assert result["content"] == "修订后的可靠回答"
+    assert result["self_rag_assessment"]["revised"] is True
+    assert result["self_rag_assessment"]["retry_chunks_returned"] == 1
+
+
+@pytest.mark.asyncio
+async def test_chat_engine_keeps_answer_when_no_new_chunks(monkeypatch):
+    """case 10: 重检索为空 → 不调修正 LLM, 保持原答案"""
+    import types as _types
+
+    from app.agent.chat_engine import ChatEngine
+
+    engine = ChatEngine()
+
+    async def fake_stream(**kwargs):
+        yield _types.SimpleNamespace(type="text_delta", delta="原答案保持不变", tool_name=None)
+        yield _types.SimpleNamespace(
+            type="tool_result",
+            tool_name="search_knowledge",
+            tool_use_id="t1",
+            tool_input={},
+            tool_output={"results": [{"id": 1, "score": 0.2, "content": "无关"}]},
+            block=None,
+        )
+        yield _types.SimpleNamespace(type="done", usage=None, duration_ms=1, intent=None, critique=None)
+
+    monkeypatch.setattr(engine, "synthesize_stream", fake_stream)
+
+    class _FakeSelfRAG:
+        def __init__(self, db=None):
+            pass
+
+        async def assess_answer(self, *, question, answer, retrieved_chunks=None):
+            return {"reliable": False, "should_retry": True, "reason": "top1_score_low", "confidence": 0.33}
+
+        async def retry_with_reformulation(self, *, question, original_chunks=None):
+            return []
+
+    monkeypatch.setattr("app.services.self_rag_service.SelfRAGService", _FakeSelfRAG)
+
+    called = {"n": 0}
+
+    def _boom():
+        called["n"] += 1
+        raise AssertionError("revise LLM must not be called when no new chunks")
+
+    monkeypatch.setattr("app.core.llm.get_anthropic_client", _boom)
+
+    result = await engine.chat_with_brief_and_detail(
+        messages=[{"role": "user", "content": "问题"}],
+        system="sys",
+    )
+
+    assert result["content"] == "原答案保持不变"
+    assert result["self_rag_assessment"].get("revised") is None
+    assert called["n"] == 0
