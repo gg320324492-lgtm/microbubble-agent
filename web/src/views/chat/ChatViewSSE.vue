@@ -39,7 +39,7 @@ import { useRouter } from 'vue-router'
 
 // ===== 2. Element Plus + Icons =====
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, VideoPause, MagicStick, Cpu, Moon, Sunny, View, Notebook, Close, Document } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, VideoPause, MagicStick, Cpu, Moon, Sunny, View, Close, Document } from '@element-plus/icons-vue'
 
 // ===== 3. 项目内组件 =====
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
@@ -159,8 +159,7 @@ const voiceMode = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const sidebarCollapsed = ref(false)
-// 2026-09-03 三栏默认展开: 引用与来源面板常驻 (右上按钮/面板 ✕ 可收起)
-const showContextPanel = ref(true)
+// 引用与来源面板已常驻 (2026-09-03 三栏常驻, 勿在窄屏外隐藏)
 const loading = ref(false)
 
 // 网络状态
@@ -882,19 +881,6 @@ function handleSearchKeydown(e: KeyboardEvent) {
               <el-icon><Search /></el-icon>
             </el-button>
             <el-button
-              id="chat-header-context-toggle"
-              name="chat-header-context-toggle"
-              text
-              size="small"
-              :class="{ 'header-context-toggle': true, 'is-active': showContextPanel }"
-              aria-label="引用与来源"
-              title="引用与来源：聊天历史 / 知识引用 / 工具调用"
-              @click="showContextPanel = !showContextPanel"
-            >
-              <el-icon><Notebook /></el-icon>
-              <span class="btn-label">引用</span>
-            </el-button>
-            <el-button
               id="chat-header-new-session"
               name="chat-header-new-session"
               type="primary"
@@ -1212,17 +1198,14 @@ function handleSearchKeydown(e: KeyboardEvent) {
     </footer>
       </div>
 
-      <!-- 引用与来源 docked 面板 (三栏研究台): ContextPanel inline 模式, 复用 showContextPanel 状态 -->
-      <transition name="cites-slide">
-        <aside v-if="showContextPanel" class="cites-panel" role="complementary" aria-label="引用与来源">
-          <div class="cites-head">
-            <span class="cites-title">引用与来源</span>
-            <span class="cites-sub">CITATIONS</span>
-            <button type="button" class="cites-close" @click="showContextPanel = false" aria-label="收起引用面板" title="收起">✕</button>
-          </div>
-          <ContextPanel :messages="messages" />
-        </aside>
-      </transition>
+      <!-- 引用与来源 docked 面板 (三栏研究台): 常驻第三栏, ContextPanel inline 模式 -->
+      <aside class="cites-panel" role="complementary" aria-label="引用与来源">
+        <div class="cites-head">
+          <span class="cites-title">引用与来源</span>
+          <span class="cites-sub">CITATIONS</span>
+        </div>
+        <ContextPanel :messages="messages" />
+      </aside>
     </div>
 
     <!-- #043 Phase 6: 全局搜索 / 分享 / 导出 / 标签编辑 dialog -->
@@ -1323,12 +1306,6 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 .cites-title { font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif; font-size: 15px; font-weight: 900; letter-spacing: 0.04em; }
 .cites-sub { font-family: Consolas, monospace; font-size: 9px; letter-spacing: 0.24em; color: var(--color-text-secondary); }
-.cites-close {
-  margin-left: auto; border: 0; background: transparent;
-  color: var(--color-text-secondary); font-size: 14px; cursor: pointer;
-  line-height: 1; padding: 4px;
-}
-.cites-close:hover { color: var(--color-text-primary); }
 /* ContextPanel inline 模式: 去掉自身卡片边框, 融入右栏 */
 .cites-panel :deep(.context-panel) {
   border: 0; background: transparent; height: auto;
@@ -1337,11 +1314,8 @@ function handleSearchKeydown(e: KeyboardEvent) {
 @media (max-width: 1100px) {
   .cites-panel { display: none; }
 }
-.cites-slide-enter-active, .cites-slide-leave-active { transition: opacity 180ms ease, transform 180ms ease; }
-.cites-slide-enter-from, .cites-slide-leave-to { opacity: 0; transform: translateX(16px); }
 @media (prefers-reduced-motion: reduce) {
-  .cites-slide-enter-active, .cites-slide-leave-active { transition: none; }
-}
+  }
 
 /* ── 档案语言 chrome (只动表皮: 头部/输入区; 0,2,0 特异性压过原 0,1,0 规则) ── */
 .chat-immersive .chat-header {
@@ -1407,25 +1381,6 @@ function handleSearchKeydown(e: KeyboardEvent) {
 .header-text { line-height: 1.2; }
 
 /* W100 +51b: 头部上下文按钮 - icon + 文字标签 */
-.header-context-toggle :deep(.el-icon) {
-  font-size: 16px;
-  margin-right: 4px;
-  vertical-align: middle;
-}
-.header-context-toggle .btn-label {
-  font-size: 13px;
-  line-height: 1;
-}
-/* W100 +61 polish: Notebook 按钮 hover/focus 态 (W100 +55b 漏写) */
-.header-context-toggle:hover,
-.header-context-toggle:focus-visible {
-  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
-  color: var(--color-primary);
-}
-.header-context-toggle:focus-visible {
-  outline: var(--focus-outline-width, 2px) solid var(--focus-outline-color, var(--color-primary));
-  outline-offset: var(--focus-outline-offset, 2px);
-}
 .bot-name { font-weight: 600; font-size: 15px; }
 .bot-status { font-size: 12px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
@@ -2218,12 +2173,6 @@ function handleSearchKeydown(e: KeyboardEvent) {
   --reveal-end: rgba(232, 234, 237, 0);
   mask-image: linear-gradient(90deg, var(--reveal-start) 0%, var(--reveal-start) var(--reveal), var(--reveal-end) var(--reveal));
   -webkit-mask-image: linear-gradient(90deg, var(--reveal-start) 0%, var(--reveal-start) var(--reveal), var(--reveal-end) var(--reveal));
-}
-/* W100 +61 polish: Notebook 按钮 dark mode hover/focus */
-[data-theme="dark"] .header-context-toggle:hover,
-[data-theme="dark"] .header-context-toggle:focus-visible {
-  background-color: color-mix(in srgb, var(--color-primary) 18%, transparent);
-  color: var(--color-primary-light);
 }
 [data-theme="dark"] .msg-content :deep(pre),
 [data-theme="dark"] .msg-content :deep(code) {
