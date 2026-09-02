@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D · 剖面 — 气泡科学图解海报</title>
+<style>
+  :root {
+    --paper: #f4f6f4;
+    --ink: #16232a;
+    --teal: #0e766e;
+    --teal-soft: #198e83;
+    --coral: #ef7256;
+    --line: #cdd8d4;
+    --muted: #5f6f6b;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', Inter, sans-serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+    --font-serif: 'Noto Serif SC', 'Songti SC', serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    display: grid;
+    grid-template-columns: 1.35fr 0.65fr;
+    overflow: hidden;
+  }
+
+  /* ── left canvas: the bubble poster ───────────────────── */
+  .poster { position: relative; overflow: hidden; }
+  .poster__rule { position: absolute; left: 64px; top: 64px; bottom: 64px; width: 1px; background: var(--line); }
+  .poster__head {
+    position: absolute; left: 84px; top: 56px; right: 64px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.2em; color: var(--muted);
+  }
+  .poster__head b { font-family: var(--font-serif); font-size: 15px; font-weight: 900; letter-spacing: 0.06em; color: var(--ink); }
+
+  .poster__title {
+    position: absolute; left: 84px; bottom: 120px; z-index: 3;
+    font-family: var(--font-serif);
+    font-size: clamp(44px, 4.6vw, 64px);
+    font-weight: 900; line-height: 1.25; letter-spacing: 0.015em;
+  }
+  .poster__title small {
+    display: block; margin-top: 18px;
+    font-family: var(--font-mono);
+    font-size: 12.5px; font-weight: 400; letter-spacing: 0.16em; color: var(--teal);
+  }
+
+  .poster__foot {
+    position: absolute; left: 84px; right: 64px; bottom: 44px;
+    display: flex; justify-content: space-between;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em; color: var(--muted);
+  }
+  .poster__foot .coral { color: var(--coral); }
+
+  /* hero bubble */
+  .bubble-stage { position: absolute; inset: 0; display: grid; place-items: center; }
+  .bubble {
+    position: relative;
+    width: min(46vh, 480px); height: min(46vh, 480px);
+    margin: 0 0 16vh 4vw;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.35) 34%, rgba(204, 235, 229, 0.25) 55%, rgba(14, 118, 110, 0.10) 78%),
+      radial-gradient(circle at 68% 74%, rgba(25, 142, 131, 0.16), transparent 50%);
+    border: 1.5px solid rgba(14, 118, 110, 0.45);
+    box-shadow:
+      inset 0 0 46px rgba(14, 118, 110, 0.10),
+      inset -18px -26px 60px rgba(14, 118, 110, 0.08),
+      0 30px 70px rgba(22, 35, 42, 0.10);
+    animation: breathe 7s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    50% { transform: scale(1.018) translateY(-4px); }
+  }
+  .bubble::after {
+    content: '';
+    position: absolute; inset: 12%;
+    border-radius: 50%;
+    border: 1px dashed rgba(14, 118, 110, 0.30);
+  }
+  .bubble .nano {
+    position: absolute; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(14, 118, 110, 0.35);
+  }
+  .bubble .n1 { width: 11%; height: 11%; left: 24%; top: 58%; }
+  .bubble .n2 { width: 6%;  height: 6%;  left: 46%; top: 70%; }
+  .bubble .n3 { width: 8%;  height: 8%;  left: 62%; top: 52%; }
+  .bubble .n4 { width: 4%;  height: 4%;  left: 36%; top: 40%; }
+
+  /* annotations — leader lines with labels */
+  .anno {
+    position: absolute; z-index: 4;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    color: var(--teal);
+    white-space: nowrap;
+  }
+  .anno b { display: block; font-family: var(--font-ui); font-size: 12.5px; font-weight: 700; color: var(--ink); margin-bottom: 2px; letter-spacing: 0.02em; }
+  .anno::after { content: ''; position: absolute; background: rgba(14, 118, 110, 0.4); height: 1px; }
+  .anno--shell { left: 4%; top: 16%; }
+  .anno--shell::after { width: 9vw; left: 100%; margin-left: 12px; top: 14px; transform: rotate(16deg); transform-origin: left; }
+  .anno--charge { right: 4%; top: 34%; text-align: right; }
+  .anno--charge b { color: var(--coral); }
+  .anno--charge::after { width: 7vw; right: 100%; margin-right: 12px; top: 14px; transform: rotate(14deg); transform-origin: right; }
+  .anno--lifespan { left: 8%; bottom: 34%; }
+  .anno--lifespan::after { width: 8vw; left: 100%; margin-left: 12px; top: 10px; transform: rotate(-18deg); transform-origin: left; }
+
+  /* ── right column: the form ───────────────────────────── */
+  .gate {
+    border-left: 1px solid var(--line);
+    background: #fbfcfb;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 clamp(36px, 3.4vw, 56px);
+    position: relative;
+  }
+  .gate__no {
+    position: absolute; top: 56px; left: clamp(36px, 3.4vw, 56px);
+    writing-mode: vertical-rl;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.4em; color: var(--line);
+  }
+  .gate h2 {
+    font-family: var(--font-serif); font-size: 26px; font-weight: 900; letter-spacing: 0.02em;
+  }
+  .gate__lede { margin-top: 10px; font-size: 13px; line-height: 1.9; color: var(--muted); }
+
+  form { margin-top: 36px; }
+  .f { margin-bottom: 24px; }
+  .f label {
+    display: flex; justify-content: space-between;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink);
+    margin-bottom: 9px;
+  }
+  .f label span { font-family: var(--font-mono); font-weight: 400; font-size: 10px; letter-spacing: 0.14em; color: var(--muted); }
+  .f input {
+    width: 100%; height: 47px;
+    border: 0; border-bottom: 1.5px solid var(--ink);
+    background: transparent;
+    font: inherit; font-size: 15px; color: var(--ink);
+    padding: 0 2px;
+    transition: border-color 160ms ease;
+  }
+  .f input::placeholder { color: #adbab6; font-size: 13.5px; }
+  .f input:focus { outline: 0; border-bottom-color: var(--teal-soft); }
+  button {
+    width: 100%; height: 52px; margin-top: 10px;
+    border: 1.5px solid var(--ink); border-radius: 999px;
+    background: var(--ink); color: #fbfcfb;
+    font: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0.12em;
+    cursor: pointer;
+    display: grid; place-items: center;
+    transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  }
+  button:hover { background: var(--teal); border-color: var(--teal); transform: translateY(-2px); box-shadow: 0 12px 26px rgba(14, 118, 110, 0.28); }
+  button:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
+  .gate__note {
+    margin-top: 30px; padding-top: 18px; border-top: 1px dashed var(--line);
+    font-size: 11.5px; line-height: 1.9; color: var(--muted);
+  }
+  .gate__note::before { content: '◉ '; color: var(--teal); }
+
+  @media (max-width: 980px) {
+    body { grid-template-columns: 1fr; overflow: auto; }
+    .poster { min-height: 56vh; }
+    .bubble { width: 46vw; height: 46vw; margin-bottom: 24vh; }
+    .gate { border-left: 0; border-top: 1px solid var(--line); padding: 56px 32px; }
+    .gate__no { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bubble { animation: none; }
+    button { transition: none; }
+  }
+</style>
+</head>
+<body>
+  <section class="poster">
+    <div class="poster__rule"></div>
+    <header class="poster__head">
+      <b>MicroBubble Lab</b>
+      <span>PL. 01 — SINGLE CAVITATION BUBBLE — SCALE ×24,000</span>
+    </header>
+
+    <div class="bubble-stage" aria-hidden="true">
+      <div class="bubble">
+        <span class="nano n1"></span><span class="nano n2"></span><span class="nano n3"></span><span class="nano n4"></span>
+      </div>
+    </div>
+
+    <div class="anno anno--shell"><b>气体壳层</b>PAGE 面 · 厚度 ~2 nm</div>
+    <div class="anno anno--charge"><b>ζ 电位</b>· 负电表面阻止聚并 ·</div>
+    <div class="anno anno--lifespan"><b>超长存续</b>上升速度 &lt; 1 mm/s</div>
+
+    <h1 class="poster__title">小气泡，<br>大世界。</h1>
+    <p class="poster__foot">
+      <span>EST. 2004 · 微纳米气泡课题组</span>
+      <span class="coral">ENTER YOUR ACCOUNT →</span>
+    </p>
+  </section>
+
+  <aside class="gate">
+    <span class="gate__no">RESEARCH OS / 2026</span>
+    <h2>登录工作台</h2>
+    <p class="gate__lede">如同一颗微泡稳定地悬浮于水中，你的数据稳定地留在这台机器上。</p>
+
+    <form onsubmit="return false" autocomplete="username">
+      <div class="f">
+        <label for="u">用户名 <span>USERNAME</span></label>
+        <input id="u" type="text" placeholder="researcher_01" autocomplete="username">
+      </div>
+      <div class="f">
+        <label for="p">密码 <span>PASSWORD</span></label>
+        <input id="p" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button type="submit">进入工作台</button>
+    </form>
+
+    <p class="gate__note">数据仅存本机，离线可用；账号由系统管理员创建。</p>
+  </aside>
+</body>
+</html>
