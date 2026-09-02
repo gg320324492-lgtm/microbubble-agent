@@ -173,7 +173,6 @@ const showTagsEditor = ref(false)
 const dialogSession = ref<any>(null)
 
 // W-N 周期: 对话内搜索栏
-const showChatSearch = ref(false)
 const searchQuery = ref('')
 const searchMatches = ref<HTMLElement[]>([])
 const searchIndex = ref(-1)
@@ -243,12 +242,19 @@ function onQuote(payload: any) {
 
 // W-N 周期: 对话内搜索逻辑
 function toggleChatSearch() {
-  showChatSearch.value = !showChatSearch.value
-  if (!showChatSearch.value) {
-    clearSearchHighlights()
-  } else {
-    nextTick(() => searchInputRef.value?.focus())
-  }
+  nextTick(() => {
+    searchInputRef.value?.focus()
+    searchInputRef.value?.select()
+  })
+}
+function onHeaderSearchInput(e: Event) {
+  searchQuery.value = (e.target as HTMLInputElement).value
+  doSearch(searchQuery.value)
+}
+function onHeaderSearchClear() {
+  searchQuery.value = ''
+  clearSearchHighlights()
+  searchInputRef.value?.focus()
 }
 function clearSearchHighlights() {
   document.querySelectorAll('.search-highlight').forEach(el => {
@@ -257,7 +263,8 @@ function clearSearchHighlights() {
   })
   searchMatches.value = []
   searchIndex.value = -1
-  searchQuery.value = ''
+  // 2026-09-03: 不再清 searchQuery — 旧逻辑在 doSearch 开头清词导致
+  // 头部搜索胶囊每敲一键就被清空 (用户消息重复修复同轮发现)
 }
 function doSearch(query: string) {
   clearSearchHighlights()
@@ -869,17 +876,24 @@ function handleSearchKeydown(e: KeyboardEvent) {
             <ChatBreadcrumb :status="isCurrentSessionSending ? 'generating' : 'idle'" />
           </div>
           <div class="header-right">
-            <el-button
-              id="chat-header-search-toggle"
-              text
-              size="small"
-              :class="{ 'is-active': showChatSearch }"
-              aria-label="搜索当前对话"
-              title="搜索当前对话 (Ctrl+F)"
-              @click="toggleChatSearch"
-            >
-              <el-icon><Search /></el-icon>
-            </el-button>
+            <div class="header-search-pill">
+              <span class="hsp-ico"><el-icon><Search /></el-icon></span>
+              <input
+                ref="searchInputRef"
+                :value="searchQuery"
+                @input="onHeaderSearchInput($event)"
+                @keydown.esc.prevent="onHeaderSearchClear"
+                @keydown.enter.prevent="searchNav(1)"
+                type="text"
+                placeholder="搜索本对话内容"
+                aria-label="搜索当前对话"
+              />
+              <span v-if="searchMatches.length" class="hsp-count">{{ searchIndex + 1 }}/{{ searchMatches.length }}</span>
+              <button v-if="searchMatches.length > 1" type="button" class="hsp-nav" @click="searchNav(-1)" title="上一个" aria-label="上一个匹配"><el-icon><ArrowUp /></el-icon></button>
+              <button v-if="searchMatches.length > 1" type="button" class="hsp-nav" @click="searchNav(1)" title="下一个" aria-label="下一个匹配"><el-icon><ArrowDown /></el-icon></button>
+              <button v-if="searchQuery" type="button" class="hsp-clear" @click="onHeaderSearchClear" title="清除搜索" aria-label="清除搜索">✕</button>
+              <span v-else class="hsp-kbd">Ctrl F</span>
+            </div>
             <el-button
               id="chat-header-new-session"
               name="chat-header-new-session"
@@ -897,23 +911,6 @@ function handleSearchKeydown(e: KeyboardEvent) {
         </header>
 
         <!-- 对话内搜索栏 (W-N 周期) -->
-        <div class="chat-search-bar" :class="{ active: showChatSearch }">
-          <span class="csb-icon"><el-icon><Search /></el-icon></span>
-          <input
-            ref="searchInputRef"
-            :value="searchQuery"
-            @input="searchQuery = ($event.target as HTMLInputElement).value; doSearch(searchQuery)"
-            type="text"
-            placeholder="搜索当前对话..."
-            aria-label="搜索当前对话"
-          />
-          <span class="csb-count">{{ searchMatches.length > 0 ? `${searchIndex+1}/${searchMatches.length}` : '' }}</span>
-          <div class="csb-nav">
-            <button :disabled="searchMatches.length <= 1" @click="searchNav(-1)" title="上一个" aria-label="上一个匹配"><el-icon><ArrowUp /></el-icon></button>
-            <button :disabled="searchMatches.length <= 1" @click="searchNav(1)" title="下一个" aria-label="下一个匹配"><el-icon><ArrowDown /></el-icon></button>
-          </div>
-          <button class="csb-close" @click="toggleChatSearch()" title="关闭搜索" aria-label="关闭搜索">✕</button>
-        </div>
 
     <!-- 消息区 -->
     <div ref="messagesRef" class="messages" @scroll="onMessagesScroll">
@@ -2426,6 +2423,75 @@ function handleSearchKeydown(e: KeyboardEvent) {
   color: #35c2a4;
   background: rgba(53, 194, 164, 0.08);
 }
+
+/* 头部搜索胶囊 (描边胶囊 · 用户选定样式 2) */
+.chat-immersive .header-search-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  background: var(--dossier-card, #fdfefc);
+  border: 1.5px solid var(--dossier-line);
+  border-radius: 999px;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.chat-immersive .header-search-pill:focus-within {
+  border-color: #0e766e;
+  background: #fff;
+}
+[data-theme="dark"] .chat-immersive .header-search-pill:focus-within {
+  border-color: #35c2a4;
+  background: var(--color-bg-card);
+}
+.chat-immersive .header-search-pill .hsp-ico {
+  display: inline-flex;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+.chat-immersive .header-search-pill:focus-within .hsp-ico { color: #198e83; }
+[data-theme="dark"] .chat-immersive .header-search-pill:focus-within .hsp-ico { color: #35c2a4; }
+.chat-immersive .header-search-pill input {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  width: 150px;
+}
+.chat-immersive .header-search-pill input::placeholder { color: var(--color-text-secondary); opacity: 0.75; }
+.chat-immersive .header-search-pill input:focus { outline: 0; }
+.chat-immersive .header-search-pill .hsp-count {
+  font-family: Consolas, monospace;
+  font-size: 10px;
+  color: #0e766e;
+  white-space: nowrap;
+}
+.chat-immersive .header-search-pill .hsp-nav {
+  width: 24px; height: 24px;
+  border: 1px solid var(--dossier-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.chat-immersive .header-search-pill .hsp-nav:hover { border-color: #0e766e; color: #0e766e; }
+.chat-immersive .header-search-pill .hsp-clear {
+  border: 0; background: transparent; color: var(--color-text-secondary);
+  cursor: pointer; font-size: 12px; line-height: 1; padding: 2px;
+}
+.chat-immersive .header-search-pill .hsp-clear:hover { color: #ef7256; }
+.chat-immersive .header-search-pill .hsp-kbd {
+  font-family: Consolas, monospace;
+  font-size: 9px;
+  border: 1px solid var(--dossier-line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+[data-theme="dark"] .chat-immersive .header-search-pill .hsp-kbd { border-color: rgba(226,236,234,0.3); }
 .chat-immersive .input-core {
   background: #fdfefc;
   border: 1.5px solid #16232a;
