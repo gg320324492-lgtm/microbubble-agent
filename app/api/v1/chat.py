@@ -62,6 +62,9 @@ class ChatRequest(BaseModel):
     # 附加后, 这些文档的完整内容会注入本轮对话的 system prompt 作为优先参考来源
     # 约束: 最多 8 个, 顺序保持, 后端静默跳过不存在/已删除的 ID (best-effort)
     attached_knowledge_ids: Optional[List[int]] = None
+    # 2026-09-03 用户消息重复修复: 前端幂等键透传 (stream 持久化与
+    # chat_history append 共用, 防止同一句用户消息落两行)
+    client_msg_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -372,6 +375,8 @@ async def chat_stream_route(
                 thinking_mode=request.thinking_mode,
                 # #P5: 知识库手动附加文档 (显式传优先, 否则查用户全局)
                 attached_knowledge_ids=effective_attached_ids,
+                # 2026-09-03: 前端幂等键透传 (用户消息防双写)
+                client_msg_id=request.client_msg_id,
             ):
                 yield event.to_sse()
         except Exception as e:

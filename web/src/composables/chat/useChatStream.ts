@@ -463,7 +463,32 @@ export function useChatStream() {
         // server 真实 0 条消息 → 保留空数组 (用户可看到欢迎 hero)
         return
       }
-      messagesBySession.value[id] = items.map(serverToClient).map(sanitizeRestored)
+      // 2026-09-03 用户消息重复修复 (存量数据兜底): 旧版后端 stream 持久化会用
+      // stream_user_* 键再写一份带 [当前时间: ...] 前缀的副本, 刷新后两条都渲染.
+      // 规范化 (剥时间前缀) 后内容相同 + 时间差 <5min 的 stream_user_* 行视为重复丢弃.
+      const normalize = (t: string) => t.replace(/^\[当前时间:\s*[^\]]+\]\s*/, '')
+      const all = items.map(serverToClient).map(sanitizeRestored)
+      const seenPlainUser = new Set<string>()
+      const deduped = all.filter((m) => {
+        if (m.role !== 'user') return true
+        const norm = normalize(m.content)
+        if (seenPlainUser.has(norm)) return false
+        // 记录明文键; stream_user_* 副本与明文内容相同时在此被后续判定拦截
+        seenPlainUser.add(norm)
+        return true
+      })
+      // stream_user_* 副本带前缀, 规范化后与已有明文相同 → 需在明文已入集合后剔除.
+      // 上面 filter 只挡完全相同内容, 这里二次过滤带前缀副本:
+      const finalItems = deduped.filter((m, i) => {
+        if (m.role !== 'user') return true
+        if (!/^\[当前时间:\s*[^\]]+\]\s*/.test(m.content)) return true
+        const norm = normalize(m.content)
+        const hasPlainTwin = all.some((o, j) =>
+          j !== i && o.role === 'user' && !/^\[当前时间:/.test(o.content) && normalize(o.content) === norm
+        )
+        return !hasPlainTwin
+      })
+      messagesBySession.value[id] = finalItems
       // 持久化同步（防 localStorage 反序列化再次读到 zombie phase）
       persistSessionSync(id, { updateActivity: false })
       // 写回 localStorage: 下次启动直接 cache hit,不用再 server fetch
@@ -729,6 +754,9 @@ export function useChatStream() {
         message: content,
         session_id: targetSessionId,
         thinking_mode: thinkingMode,  // 2026-07-13 #P1 三档模式 (fast/balanced/deep)
+        // 2026-09-03 用户消息重复修复: 透传幂等键, 后端 stream 持久化与上面的
+        // appendMessageAsync 共用同一键 → append_message 幂等去重不再双写
+        client_msg_id: userMsg.client_msg_id,
         // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
         // attached_knowledge_ids 不传: 后端自动从 chat_session_attached_documents 查全局
       }

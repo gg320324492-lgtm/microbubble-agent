@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>B · 三栏研究台</title>
+<style>
+  :root {
+    --bg: #f7f6f3; --card: #fff; --ink: #2b2f33; --sub: #6b7280; --faint: #9aa3ab;
+    --line: #e8e6e1; --coral: #FF7A5C; --coral-deep: #e05a3b; --teal: #0e766e;
+    --mono: Consolas, monospace; --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 14px; height: 100vh; display: grid; grid-template-columns: 248px 1fr 296px; overflow: hidden; }
+
+  /* ── 左栏: 会话 ───────────────────────── */
+  .rail { border-right: 1px solid var(--line); background: #fbfaf8; padding: 18px 14px; display: flex; flex-direction: column; }
+  .new {
+    height: 44px; border: 0; border-radius: 12px; cursor: pointer;
+    background: linear-gradient(120deg, #FF7A5C, #FFB347); color: #fff;
+    font: inherit; font-size: 14px; font-weight: 700; transition: filter 150ms ease, transform 150ms ease;
+  }
+  .new:hover { filter: brightness(1.05); transform: translateY(-1px); }
+  .search { margin-top: 12px; height: 40px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 0 12px; font: inherit; font-size: 13px; }
+  .search:focus { outline: 0; border-color: var(--coral); box-shadow: 0 0 0 3px rgba(255,122,92,.12); }
+  .label { margin-top: 18px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.22em; color: var(--faint); }
+  .list { margin-top: 8px; overflow-y: auto; flex: 1; }
+  .item { padding: 12px 12px; border-radius: 10px; cursor: pointer; transition: background 140ms ease; }
+  .item:hover { background: #f1efeb; }
+  .item.on { background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .item.on b::before { content: '●'; color: var(--coral); font-size: 8px; margin-right: 6px; vertical-align: 2px; }
+  .item b { font-size: 13.5px; font-weight: 600; display: block; }
+  .item small { display: flex; gap: 8px; margin-top: 3px; color: var(--faint); font-size: 11px; }
+
+  /* ── 中栏: 对话 ───────────────────────── */
+  .chat { display: flex; flex-direction: column; overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .head b { font-size: 15px; }
+  .head .on { width: 7px; height: 7px; border-radius: 50%; background: #2e9e7b; box-shadow: 0 0 6px #2e9e7b; }
+  .head small { color: var(--faint); font-size: 11.5px; }
+  .head .tools { margin-left: auto; display: flex; gap: 8px; }
+  .tool { height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--sub); font-size: 12px; cursor: pointer; }
+  .tool:hover { border-color: var(--coral); color: var(--coral-deep); }
+
+  .scroll { flex: 1; overflow-y: auto; padding: 26px 28px; }
+  .msgs { max-width: 720px; margin: 0 auto; }
+  .q { display: flex; justify-content: flex-end; margin-bottom: 22px; }
+  .q .b {
+    max-width: 76%; background: linear-gradient(120deg, #FF7A5C, #FF9A5C); color: #fff;
+    padding: 12px 18px; border-radius: 16px 16px 4px 16px; font-size: 14.5px; font-weight: 500;
+    box-shadow: 0 6px 18px rgba(255, 122, 92, 0.28);
+  }
+  .a { margin-bottom: 26px; }
+  .a .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 24px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  }
+  .a .who { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .a .ava { width: 28px; height: 28px; border-radius: 9px; background: var(--teal); color: #fff; display: grid; place-items: center; font-size: 13px; }
+  .a .who b { font-size: 13px; }
+  .a .who small { color: var(--faint); font-size: 10.5px; font-family: var(--mono); letter-spacing: .08em; }
+  .a .bd { font-size: 14px; line-height: 1.9; }
+  .a .bd h4 { font-size: 14px; margin: 14px 0 6px; }
+  .a .bd h4 i { font-style: normal; color: var(--coral-deep); margin-right: 6px; }
+  .a .bd p { margin: 6px 0; }
+  .a .bd ul { margin: 8px 0 4px 4px; list-style: none; }
+  .a .bd ul li { padding: 4px 0 4px 16px; position: relative; }
+  .a .bd ul li::before { content: '◦'; position: absolute; left: 2px; color: var(--coral); }
+  .a .meta { display: flex; gap: 14px; margin-top: 14px; font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: var(--faint); }
+  .a .meta .cites { color: var(--teal); border: 1px solid rgba(14,118,110,.35); border-radius: 999px; padding: 1px 9px; cursor: pointer; }
+  .a .meta .fb { margin-left: auto; }
+  .a .meta .fb u { text-decoration: none; cursor: pointer; margin-left: 10px; }
+  .a .meta .fb u:hover { color: var(--coral-deep); }
+
+  .composer { padding: 0 28px 22px; }
+  .dock {
+    max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid var(--line); border-radius: 16px;
+    padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.07);
+  }
+  .dock input { width: 100%; border: 0; font: inherit; font-size: 14.5px; }
+  .dock input::placeholder { color: var(--faint); }
+  .dock input:focus { outline: 0; }
+  .bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .chip { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 12px; color: var(--sub); cursor: pointer; }
+  .chip.on { border-color: var(--coral); color: var(--coral-deep); background: #fff7f4; }
+  .send {
+    margin-left: auto; height: 40px; padding: 0 24px; border: 0; border-radius: 11px; cursor: pointer;
+    background: var(--coral); color: #fff; font: inherit; font-size: 13.5px; font-weight: 700;
+    transition: background 150ms ease;
+  }
+  .send:hover { background: var(--coral-deep); }
+  .icon-btn { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--line); background: #fff; color: var(--sub); cursor: pointer; }
+
+  /* ── 右栏: 引用与来源 ─────────────────── */
+  .cite { border-left: 1px solid var(--line); background: #fbfaf8; padding: 18px 16px; overflow-y: auto; }
+  .cite h3 { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.24em; color: var(--faint); padding-bottom: 10px; border-bottom: 1px solid var(--line); display:flex; justify-content: space-between; }
+  .c-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; margin-top: 12px; }
+  .c-card .tag { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.16em; padding: 2px 8px; border-radius: 999px; }
+  .c-card .tag.meet { color: #0e766e; border: 1px solid rgba(14,118,110,.35); }
+  .c-card .tag.tool { color: var(--coral-deep); border: 1px solid rgba(255,122,92,.4); }
+  .c-card b { display: block; font-size: 13px; margin-top: 7px; }
+  .c-card small { display: block; color: var(--faint); font-size: 11px; margin-top: 3px; }
+  .c-card p { font-size: 12px; color: var(--sub); margin-top: 6px; line-height: 1.7; }
+  .cite-foot { margin-top: 14px; font-size: 11px; color: var(--faint); line-height: 1.7; border-top: 1px dashed var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+  <aside class="rail">
+    <button class="new">✎ 新对话</button>
+    <input class="search" placeholder="过滤会话标题或标签">
+    <div class="label">RECENT · 最近</div>
+    <div class="list">
+      <div class="item on"><b>你好</b><small><span>17 小时前</span><span>78 条</span></small></div>
+      <div class="item"><b>微纳米气泡强化工艺讨论</b><small><span>2 天前</span><span>23 条</span></small></div>
+      <div class="item"><b>水质分析数据整理</b><small><span>5 天前</span><span>12 条</span></small></div>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <div class="head">
+      <b>你好</b><span class="on"></span><small>在线 · 78 条对话</small>
+      <div class="tools"><button class="tool">⌕ 搜索</button><button class="tool">▤ 上下文</button></div>
+    </div>
+    <div class="scroll">
+      <div class="msgs">
+        <div class="q"><div class="b">查一下最近的会议</div></div>
+        <div class="a">
+          <div class="card">
+            <div class="who">
+              <span class="ava">气</span>
+              <b>小气助手</b>
+              <small>TOOLS · query_meetings ✓</small>
+            </div>
+            <div class="bd">
+              <p>好的，微纳米气泡在水产养殖中的应用及其机制是目前研究的一个热点。以下是您提出的问题的回答：</p>
+              <h4><i>1.</i>微纳米气泡对水产养殖中病原菌的具体抑制机制是什么？</h4>
+              <p>微纳米气泡能够产生大量的活性氧（ROS），具有较强的杀菌能力，可有效杀灭水体中的病原菌；其快速溶解特性也能提升溶氧，增强鱼虾对有害微生物的抵抗力。</p>
+              <h4><i>2.</i>微纳米气泡如何影响养殖水体的其他微生物？</h4>
+              <p>微纳米气泡能够改善水体环境，促进有益菌生长繁殖——提供充足溶解氧与营养，助力硝化、反硝化细菌活动，调节微生物群落结构。</p>
+              <h4><i>4.</i>促进硝化细菌生长对水质改善的具体作用？</h4>
+              <p>硝化细菌将氨氮转化为亚硝酸盐、硝酸盐（硝化反应），降低氨氮含量、改善水质，减少有害物质积累。</p>
+              <p>关于最近的会议，我已调用 query_meetings 工具：</p>
+              <ul>
+                <li>2026-08-15 · 远紫外学术研讨会 · 北京</li>
+                <li>2026-08-20 · 微纳米气泡技术论坛 · 上海</li>
+                <li>2026-08-23 · 水质分析与处理技术研讨会 · 广州</li>
+              </ul>
+              <p>这些会议涵盖了微纳米气泡相关的前沿技术和应用研究。如需更多信息，可以继续提问！</p>
+            </div>
+            <div class="meta">
+              <span class="cites">◦ 引用 3</span>
+              <span>⏱ 19.6s</span>
+              <span>✓ 自评 4/10</span>
+              <span class="fb"><u>👍</u><u>👎</u><u>⟳</u><u>⧉</u></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="dock">
+        <input placeholder="问问小气…">
+        <div class="bar">
+          <button class="icon-btn">＋</button>
+          <span class="chip">快速</span><span class="chip on">平衡</span><span class="chip">深度</span>
+          <button class="icon-btn">🎙</button>
+          <button class="send">发送 ⏎</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="cite">
+    <h3><span>引用与来源</span><span>03</span></h3>
+    <div class="c-card">
+      <span class="tag tool">TOOL</span>
+      <b>query_meetings</b>
+      <small>2026-09-02 19:41 · 参数: 最近 3 条</small>
+      <p>返回 3 条最近会议记录, 已按时间排序。</p>
+    </div>
+    <div class="c-card">
+      <span class="tag meet">MEETING</span>
+      <b>微纳米气泡技术论坛</b>
+      <small>2026-08-20 · 上海</small>
+      <p>前沿技术与应用研究, 与当前问题相关度 0.82。</p>
+    </div>
+    <div class="c-card">
+      <span class="tag meet">MEETING</span>
+      <b>水质分析与处理技术研讨会</b>
+      <small>2026-08-23 · 广州</small>
+      <p>水质分析方法与处理工艺研讨记录。</p>
+    </div>
+    <div class="c-card">
+      <span class="tag meet">MEETING</span>
+      <b>远紫外学术研讨会</b>
+      <small>2026-08-15 · 北京</small>
+      <p>跨学科学术会议记录。</p>
+    </div>
+    <p class="cite-foot">引用面板实时展示本次回答的来源: 工具调用 / 会议 / 知识库条目。点击可跳转原文。</p>
+  </aside>
+</body>
+</html>

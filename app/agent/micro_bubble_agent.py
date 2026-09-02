@@ -614,6 +614,9 @@ class MicroBubbleAgent:
         thinking_mode: Optional[str] = None,
         # 2026-08-15 #P4: 用户手动附加的知识库文档 ID 列表, 注入 system prompt
         attached_knowledge_ids: Optional[List[int]] = None,
+        # 2026-09-03 用户消息重复修复: 透传前端幂等键, 与前端 appendMessageAsync
+        # 共用同一 client_msg_id → append_message 幂等去重, 不再产生第二行
+        client_msg_id: Optional[str] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式对话接口
 
@@ -697,7 +700,10 @@ class MicroBubbleAgent:
         # 关键：所有持久化操作都用 try/except 兜底，绝不阻塞流式
         # 幂等键：同一 stream 重试时（网络断开重连）不会重复落库
         stream_ts = int(time.time() * 1000)  # 毫秒精度
-        user_client_msg_id = f"stream_{session_id}_user_{stream_ts}"
+        # 2026-09-03 修复: 前端已在 sendMessage 时用 chat_user_* 键 append 过明文
+        # user 消息; 这里必须复用同一幂等键, 否则 append_message 会再写一行
+        # (带 [当前时间] 前缀的副本), 刷新后两条都渲染.
+        user_client_msg_id = client_msg_id or f"stream_{session_id}_user_{stream_ts}"
         assistant_client_msg_id = f"stream_{session_id}_assistant_{stream_ts}"
         user_msg_id = None
         assistant_msg_id = None
@@ -714,7 +720,9 @@ class MicroBubbleAgent:
                 user_msg = await chat_svc.append_message(
                     db, user_id, session_id,
                     role="user",
-                    content=content if isinstance(content, str) else message,
+                    # 2026-09-03 修复: 落库用明文 (与前端回显一致); 时间前缀只进
+                    # LLM payload (_build_user_content), system prompt 已有全局时间.
+                    content=message if isinstance(message, str) else message,
                     message_metadata={
                         "source": "chat_stream",
                         "ts": stream_ts,

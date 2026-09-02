@@ -1069,4 +1069,15 @@ onUpdated(() => {
 [data-theme="dark"] .batch-action-btn:hover:not(:disabled) { background: var(--color-bg-hover); }
 [data-theme="dark"] .batch-action-btn.danger { color: var(--color-danger); }
 [data-theme="dark"] .session-item.selected { background: rgba(64, 158, 255, 0.15); }
+
+/* ═══ 档案语言 (2026-09, A 方案): 虚线分隔 + mono 元数据 ═══ */
+.session-item {
+  border-radius: 0;
+  border-bottom: 1px dashed var(--color-border-light, #dcdfe6);
+}
+.session-meta {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
 </style>
