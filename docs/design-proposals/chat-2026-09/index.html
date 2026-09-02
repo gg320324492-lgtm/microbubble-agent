@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>智能对话重设计 · 4 方案总览</title>
+<style>
+  :root {
+    --bg: #10171b; --card: #18232a; --line: #27363e;
+    --text: #dfe9e6; --muted: #8ba0a0; --teal: #35c2a4;
+    --mono: Consolas, monospace; --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--ui); padding: 48px clamp(24px, 5vw, 72px) 80px; }
+  header h1 { font-size: 26px; }
+  header h1 em { font-style: normal; color: var(--teal); }
+  header p { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.8; max-width: 780px; }
+  header .meta { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 14px; }
+  .grid { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 26px; }
+  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: transform 160ms ease, border-color 160ms ease; }
+  .shot:hover { transform: translateY(-4px); border-color: var(--teal); }
+  .thumb { position: relative; height: 240px; overflow: hidden; border-bottom: 1px solid var(--line); background: #fff; }
+  .thumb iframe { width: 1440px; height: 1020px; border: 0; transform-origin: 0 0; transform: scale(0.236); pointer-events: none; position: absolute; top: 0; left: 0; }
+  .thumb .tag { position: absolute; z-index: 2; top: 10px; left: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; background: rgba(9, 14, 17, 0.78); color: var(--teal); border: 1px solid rgba(53, 194, 164, 0.4); border-radius: 999px; padding: 4px 10px; backdrop-filter: blur(3px); }
+  .info { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .info h2 { font-size: 16.5px; }
+  .info h2 small { font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: 0.16em; color: var(--muted); margin-left: 8px; }
+  .info p { font-size: 12.5px; line-height: 1.75; color: var(--muted); flex: 1; }
+  .info a { color: var(--teal); font-size: 13px; font-weight: 600; text-decoration: none; }
+  .info a:hover { text-decoration: underline; }
+  footer { margin-top: 44px; color: var(--muted); font-size: 12px; line-height: 1.9; border-top: 1px solid var(--line); padding-top: 18px; }
+  footer b { color: var(--text); }
+</style>
+</head>
+<body>
+  <header>
+    <p class="meta">MICROBUBBLE LAB · CHAT REDESIGN · 2026-09</p>
+    <h1>智能对话页重设计 — <em>4 个布局</em>，选一个（可混搭）</h1>
+    <p>同一份真实对话内容，四种布局结构：信息密度、会话管理方式、引用呈现都不同。缩略图实时渲染，点标题看全屏交互版。</p>
+  </header>
+
+  <div class="grid">
+    <article class="shot">
+      <div class="thumb"><span class="tag">A</span><iframe src="A-dossier.html" loading="lazy" title="A 预览"></iframe></div>
+      <div class="info">
+        <h2>档案对话 <small>DOSSIER</small></h2>
+        <p>保留「左会话栏 + 右对话区」结构，整体换成登录/设置页同款卷宗语言：问条带日期戳、答条按 § 编号成档、mono 元数据行。四稿中与现有产品家族最一致。</p>
+        <a href="A-dossier.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">B</span><iframe src="B-bench.html" loading="lazy" title="B 预览"></iframe></div>
+      <div class="info">
+        <h2>三栏研究台 <small>BENCH</small></h2>
+        <p>信息架构升级：新增右栏「引用与来源」面板，把工具调用（query_meetings）、引用的会议/知识条目实时摆出来可跳转。适合重度使用工具与知识库检索的场景。</p>
+        <a href="B-bench.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">C</span><iframe src="C-immersive.html" loading="lazy" title="C 预览"></iframe></div>
+      <div class="info">
+        <h2>全宽沉浸 <small>IMMERSIVE</small></h2>
+        <p>会话栏收进悬浮抽屉，对话区 840px 居中全宽聚焦，浮动胶囊输入器。信息密度最低、最像主流 AI 对话产品，长回答阅读体验最好。</p>
+        <a href="C-immersive.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">D</span><iframe src="D-deck.html" loading="lazy" title="D 预览"></iframe></div>
+      <div class="info">
+        <h2>暗色研究台 <small>LAB DECK</small></h2>
+        <p>深墨绿操作台语言：LED 会话状态、mono 界面语汇、荧光青控件。与登录页 A / 设置页暗色形态同一族，常开深色模式最搭。</p>
+        <a href="D-deck.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+  </div>
+
+  <footer>
+    <b>怎么选：</b>回复字母即可（如「对话页用 B」）；也可以混搭（如「B 的三栏 + C 的浮动输入器」「A 的卷宗语言 + B 的引用面板」）。选定后落到真实 ChatViewSSE.vue（约 2000 行，逻辑零改动只换布局与皮肤，分阶段交付）。
+  </footer>
+</body>
+</html>

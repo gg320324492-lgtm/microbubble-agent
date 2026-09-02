@@ -885,13 +885,13 @@ function handleSearchKeydown(e: KeyboardEvent) {
               name="chat-header-context-toggle"
               text
               size="small"
-              class="header-context-toggle"
-              aria-label="AI 上下文"
-              title="AI 上下文：聊天历史 / 知识引用 / 工具调用"
-              @click="showContextPanel = true"
+              :class="{ 'header-context-toggle': true, 'is-active': showContextPanel }"
+              aria-label="引用与来源"
+              title="引用与来源：聊天历史 / 知识引用 / 工具调用"
+              @click="showContextPanel = !showContextPanel"
             >
               <el-icon><Notebook /></el-icon>
-              <span class="btn-label">上下文</span>
+              <span class="btn-label">引用</span>
             </el-button>
             <el-button
               id="chat-header-new-session"
@@ -1210,6 +1210,18 @@ function handleSearchKeydown(e: KeyboardEvent) {
       <div class="input-hint">Enter 发送 · Shift+Enter 换行</div>
     </footer>
       </div>
+
+      <!-- 引用与来源 docked 面板 (三栏研究台): ContextPanel inline 模式, 复用 showContextPanel 状态 -->
+      <transition name="cites-slide">
+        <aside v-if="showContextPanel" class="cites-panel" role="complementary" aria-label="引用与来源">
+          <div class="cites-head">
+            <span class="cites-title">引用与来源</span>
+            <span class="cites-sub">CITATIONS</span>
+            <button type="button" class="cites-close" @click="showContextPanel = false" aria-label="收起引用面板" title="收起">✕</button>
+          </div>
+          <ContextPanel :messages="messages" />
+        </aside>
+      </transition>
     </div>
 
     <!-- #043 Phase 6: 全局搜索 / 分享 / 导出 / 标签编辑 dialog -->
@@ -1232,16 +1244,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
       v-model="showTagsEditor"
       :session="dialogSession"
     />
-    <!-- W100 +29 上下文可见性面板 -->
-    <el-drawer
-      v-model="showContextPanel"
-      title="AI 记住了什么"
-      direction="rtl"
-      size="380px"
-      :destroy-on-close="true"
-    >
-      <ContextPanel :messages="messages" />
-    </el-drawer>
+    <!-- W100 +29 上下文可见性面板 → 已改为 .chat-layout 内 docked 右栏 (三栏研究台) -->
 
     <!-- 图片灯箱 (W-N 周期) -->
     <Teleport to="body">
@@ -1292,6 +1295,65 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 .chat-layout { display: flex; flex: 1; overflow: hidden; }
 .chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ═══ 引用与来源 docked 右栏 (三栏研究台 · 档案语言 2026-09) ═══ */
+.chat-immersive {
+  --dossier-line: rgba(22, 35, 42, 0.55);
+  --dossier-card: #fdfefc;
+  --dossier-paper: #f4f6f4;
+}
+[data-theme="dark"] .chat-immersive {
+  --dossier-line: rgba(226, 236, 234, 0.45);
+  --dossier-card: var(--color-bg-card);
+  --dossier-paper: #12191d;
+}
+.cites-panel {
+  flex: none; width: 316px;
+  border-left: 1px solid var(--dossier-line);
+  background: var(--dossier-paper);
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.cites-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 14px 16px 12px;
+  border-bottom: 1.5px solid var(--dossier-line);
+  position: sticky; top: 0; background: var(--dossier-paper); z-index: 1;
+}
+.cites-title { font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif; font-size: 15px; font-weight: 900; letter-spacing: 0.04em; }
+.cites-sub { font-family: Consolas, monospace; font-size: 9px; letter-spacing: 0.24em; color: var(--color-text-secondary); }
+.cites-close {
+  margin-left: auto; border: 0; background: transparent;
+  color: var(--color-text-secondary); font-size: 14px; cursor: pointer;
+  line-height: 1; padding: 4px;
+}
+.cites-close:hover { color: var(--color-text-primary); }
+/* ContextPanel inline 模式: 去掉自身卡片边框, 融入右栏 */
+.cites-panel :deep(.context-panel) {
+  border: 0; background: transparent; height: auto;
+}
+/* 窄屏自动隐藏 (无空间放第三栏) */
+@media (max-width: 1100px) {
+  .cites-panel { display: none; }
+}
+.cites-slide-enter-active, .cites-slide-leave-active { transition: opacity 180ms ease, transform 180ms ease; }
+.cites-slide-enter-from, .cites-slide-leave-to { opacity: 0; transform: translateX(16px); }
+@media (prefers-reduced-motion: reduce) {
+  .cites-slide-enter-active, .cites-slide-leave-active { transition: none; }
+}
+
+/* ── 档案语言 chrome (只动表皮: 头部/输入区; 0,2,0 特异性压过原 0,1,0 规则) ── */
+.chat-immersive .chat-header {
+  border-bottom: 1.5px solid var(--dossier-line);
+  background: rgba(253, 254, 252, 0.78);
+}
+[data-theme="dark"] .chat-immersive .chat-header {
+  background: rgba(23, 33, 38, 0.85);
+}
+.chat-immersive .input-bar {
+  border-top: 1.5px solid var(--dossier-line);
+  background: var(--dossier-card);
+}
 .network-banner {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 16px;
@@ -2261,5 +2323,132 @@ function handleSearchKeydown(e: KeyboardEvent) {
 /* dark mode: 气泡阴影加深, 其余走 token 自适应 */
 [data-theme="dark"] .chat-message-row.bot .msg-content {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* ═══ 研究档案配色 (2026-09 用户选定 A 风格): 纸面/墨色/墨青, 仅作用于对话页 ═══ */
+.chat-immersive {
+  background: linear-gradient(180deg, #f4f6f4 0%, #eef2f1 100%) !important;
+}
+/* 头像/主视觉: 橙渐变 → 墨青实底 */
+.chat-immersive .bot-avatar,
+.chat-immersive .bot-msg-avatar,
+.chat-immersive .hero-avatar {
+  background: #0e766e !important;
+  background-image: none !important;
+}
+[data-theme="dark"] .chat-immersive .bot-avatar,
+[data-theme="dark"] .chat-immersive .bot-msg-avatar,
+[data-theme="dark"] .chat-immersive .hero-avatar {
+  background: #35c2a4 !important;
+}
+/* 深色主题恢复暗色容器底 (上面浅色纸面覆盖带了 !important, 必须同样 !important 压回) */
+[data-theme="dark"] .chat-immersive {
+  background: linear-gradient(180deg, #1a1d23 0%, #0e1015 100%) !important;
+}
+/* 欢迎区标题: 宋体 */
+.chat-immersive .welcome-hero h2 {
+  font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+/* 用户气泡: 问条 — 纸卡 + 珊瑚描边 (原橙渐变改纸卡) */
+.chat-immersive .user-bubble {
+  background-image: none !important;
+  background-color: #fdfefc !important;
+  border: 1.5px solid #ef7256 !important;
+  color: #16232a !important;
+  border-radius: 12px 3px 12px 12px !important;
+  box-shadow: 3px 3px 0 rgba(239, 114, 86, 0.14) !important;
+}
+[data-theme="dark"] .chat-immersive .user-bubble {
+  background-color: #172126 !important;
+  border-color: rgba(255, 138, 107, 0.55) !important;
+  color: #e2ecea !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35) !important;
+}
+/* 发送按钮: 橙渐变 → 墨色药丸, hover 墨青 */
+.chat-immersive .send-btn {
+  background-image: none !important;
+  background-color: #16232a !important;
+  color: #fbfcfb !important;
+}
+.chat-immersive .send-btn:hover:not(:disabled) {
+  background-color: #0e766e !important;
+}
+/* 头部/侧栏 新对话按钮: 墨色实底 */
+.chat-immersive .header-new-session.el-button--primary,
+.chat-immersive .session-sidebar .sidebar-header .new-btn {
+  background-color: #16232a !important;
+  background-image: none !important;
+  border-color: #16232a !important;
+  color: #fbfcfb !important;
+}
+.chat-immersive .session-sidebar .sidebar-header .new-btn:hover {
+  background-color: #0e766e !important;
+  border-color: #0e766e !important;
+  color: #fbfcfb !important;
+}
+[data-theme="dark"] .chat-immersive .header-new-session.el-button--primary,
+[data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn {
+  background-color: #e2ecea !important;
+  border-color: #e2ecea !important;
+  color: #12191d !important;
+}
+/* 归档 tab 选中: 橙 → 墨 (child scoped 同特异性会赢注入序, 这里加链条 + !important) */
+.chat-immersive .session-sidebar .archive-tab.active {
+  background: #16232a !important;
+  border-color: #16232a !important;
+  color: #fbfcfb !important;
+}
+[data-theme="dark"] .chat-immersive .session-sidebar .archive-tab.active {
+  background: #e2ecea !important;
+  border-color: #e2ecea !important;
+  color: #12191d !important;
+}
+/* 模式切换 (快速/平衡/深度): 橙 → 墨青 */
+.chat-immersive .depth-toggle.active {
+  color: #0e766e !important;
+  background: rgba(14, 118, 110, 0.10) !important;
+}
+.chat-immersive .thinking-mode-switch .mode-option.active,
+.chat-immersive .mode-option.active {
+  background: #0e766e !important;
+  background-image: none !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .chat-immersive .depth-toggle.active {
+  color: #35c2a4 !important;
+  background: rgba(53, 194, 164, 0.14) !important;
+}
+[data-theme="dark"] .chat-immersive .mode-option.active {
+  background: #35c2a4 !important;
+  color: #0b1512 !important;
+}
+/* 检索徽标: 主色 → 墨青 */
+.chat-immersive .retrieval-badge {
+  color: #0e766e;
+  background: rgba(14, 118, 110, 0.08);
+}
+[data-theme="dark"] .chat-immersive .retrieval-badge {
+  color: #35c2a4;
+  background: rgba(53, 194, 164, 0.10);
+}
+
+/* 输入器: 档案卡 (墨线 + 硬阴影), 输入区容器转纸面 */
+.chat-immersive .input-bar {
+  background: transparent;
+  border-top: none;
+  padding-top: 8px;
+}
+.chat-immersive .input-core {
+  background: #fdfefc;
+  border: 1.5px solid #16232a;
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 rgba(22, 35, 42, 0.12);
+}
+[data-theme="dark"] .chat-immersive .input-core {
+  background: var(--color-bg-card);
+  border-color: rgba(226, 236, 234, 0.45);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
 }
 </style>

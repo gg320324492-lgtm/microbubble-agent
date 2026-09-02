@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>A · 档案对话 — 双栏卷宗</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --mono: Consolas, 'SFMono-Regular', monospace;
+    --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--ui); font-size: 14px; display: grid; grid-template-columns: 264px 1fr; overflow: hidden; }
+
+  /* ── 左: 会话卷宗柜 ─────────────────────── */
+  .rail {
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    padding: 20px 16px 16px;
+    background: var(--paper);
+  }
+  .new-btn {
+    height: 46px; border-radius: 999px; border: 1.5px solid var(--ink);
+    background: var(--ink); color: var(--paper);
+    font: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.08em;
+    cursor: pointer; transition: background 150ms ease, border-color 150ms ease;
+  }
+  .new-btn:hover { background: var(--teal); border-color: var(--teal); }
+  .search {
+    margin-top: 14px; height: 38px; border: 0; border-bottom: 1.5px solid var(--line-dash);
+    background: transparent; font: inherit; font-size: 13px; color: var(--ink); padding: 0 2px;
+  }
+  .search::placeholder { color: #9fb0ab; }
+  .search:focus { outline: 0; border-bottom-color: var(--teal-soft); }
+  .tabs { display: flex; gap: 4px; margin-top: 12px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; }
+  .tabs span { padding: 5px 10px; border-radius: 999px; color: var(--muted); cursor: pointer; }
+  .tabs .on { background: var(--ink); color: var(--paper); }
+  .rail-label {
+    margin-top: 22px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.24em; color: var(--muted);
+    display: flex; justify-content: space-between;
+  }
+  .sessions { margin-top: 8px; overflow-y: auto; flex: 1; }
+  .session {
+    padding: 12px 10px; border-bottom: 1px dashed var(--line-dash); cursor: pointer;
+    transition: background 140ms ease;
+  }
+  .session:hover { background: rgba(14, 118, 110, 0.05); }
+  .session.on { background: var(--card); border-left: 3px solid var(--teal); padding-left: 7px; }
+  .session b { font-size: 13.5px; display: flex; justify-content: space-between; align-items: center; }
+  .session b i { font-style: normal; font-family: var(--mono); font-size: 9px; color: var(--teal); }
+  .session small { display: flex; gap: 10px; margin-top: 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
+
+  /* ── 右: 对话卷宗 ────────────────────────── */
+  .chat { display: flex; flex-direction: column; overflow: hidden; }
+  .chat-head {
+    display: flex; align-items: baseline; gap: 14px;
+    padding: 18px clamp(24px, 4vw, 56px) 14px;
+    border-bottom: 1.5px solid var(--ink);
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.18em; color: var(--muted);
+  }
+  .chat-head b { font-family: var(--serif); font-size: 18px; font-weight: 900; letter-spacing: 0.04em; color: var(--ink); }
+  .chat-head .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 6px var(--teal); align-self: center; }
+  .chat-head .right { margin-left: auto; }
+  .chat-head .right u { text-decoration: none; border-bottom: 1px dotted var(--teal); color: var(--teal); cursor: pointer; margin-left: 16px; }
+
+  .scroll { flex: 1; overflow-y: auto; padding: 26px clamp(24px, 4vw, 56px) 30px; }
+
+  /* 用户条目: 右对齐问条 */
+  .q-row { display: flex; justify-content: flex-end; margin-bottom: 26px; }
+  .q-entry {
+    max-width: 70%; background: var(--card);
+    border: 1px solid var(--coral); border-radius: 12px 2px 12px 12px;
+    padding: 12px 18px; position: relative;
+    box-shadow: 3px 3px 0 rgba(239, 114, 86, 0.14);
+  }
+  .q-entry::before {
+    content: 'Q · 2026-09-02 19:41';
+    position: absolute; top: -8px; right: 14px;
+    background: var(--paper); padding: 0 6px;
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.2em; color: var(--coral);
+  }
+  .q-entry p { font-size: 14.5px; font-weight: 600; }
+
+  /* 助手条目: 文档式 */
+  .a-entry { max-width: 860px; }
+  .a-head {
+    display: flex; align-items: baseline; gap: 12px;
+    border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 16px;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.2em; color: var(--muted);
+  }
+  .a-head .no { color: var(--teal); font-size: 11px; }
+  .a-head .right { margin-left: auto; }
+  .a-body { font-size: 14.5px; line-height: 1.95; }
+  .a-body h3 { font-family: var(--serif); font-size: 16.5px; font-weight: 900; margin: 22px 0 10px; }
+  .a-body h3 em { font-style: normal; color: var(--teal); font-family: var(--mono); font-size: 12px; margin-right: 8px; }
+  .a-body p { margin: 8px 0; }
+  .a-body ol { margin: 10px 0 10px 22px; }
+  .a-body ol li { margin: 12px 0; }
+  .a-body ol li b { display: inline; }
+  .a-body ul { margin: 10px 0 10px 6px; list-style: none; }
+  .a-body ul li { padding: 5px 0 5px 18px; position: relative; font-size: 14px; }
+  .a-body ul li::before { content: '◦'; position: absolute; left: 2px; color: var(--coral); }
+  .a-body .note { margin-top: 18px; padding: 12px 16px; border: 1px dashed var(--line-dash); border-radius: 8px; font-size: 13px; color: var(--muted); }
+  .a-meta {
+    display: flex; align-items: center; gap: 16px;
+    margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--line-dash);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--muted);
+  }
+  .a-meta .score { color: var(--teal); border: 1px solid var(--teal); border-radius: 999px; padding: 1px 8px; }
+  .a-meta .fb { margin-left: auto; }
+  .a-meta .fb u { text-decoration: none; border-bottom: 1px dotted var(--muted); cursor: pointer; margin-left: 12px; }
+  .a-meta .fb u:hover { color: var(--teal); border-color: var(--teal); }
+
+  /* ── 输入区: 纸上浮条 ───────────────────── */
+  .composer-wrap { padding: 0 clamp(24px, 4vw, 56px) 22px; }
+  .composer {
+    background: var(--card); border: 1.5px solid var(--ink); border-radius: 14px;
+    box-shadow: 4px 4px 0 rgba(22, 35, 42, 0.12);
+    padding: 12px 16px;
+  }
+  .composer .input {
+    width: 100%; border: 0; background: transparent; font: inherit; font-size: 14.5px; color: var(--ink);
+  }
+  .composer .input::placeholder { color: #9fb0ab; }
+  .composer .input:focus { outline: 0; }
+  .composer-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .add {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px dashed var(--line-dash);
+    background: transparent; color: var(--muted); font-size: 16px; cursor: pointer;
+  }
+  .modes { display: flex; gap: 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; }
+  .modes span { padding: 5px 12px; border-radius: 999px; color: var(--muted); border: 1px solid transparent; cursor: pointer; }
+  .modes .on { border-color: var(--ink); color: var(--ink); background: var(--paper); }
+  .send {
+    margin-left: auto; height: 40px; padding: 0 26px; border-radius: 999px;
+    border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper);
+    font: inherit; font-size: 13.5px; font-weight: 700; letter-spacing: 0.1em; cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease;
+  }
+  .send:hover { background: var(--teal); border-color: var(--teal); }
+  .mic { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-dash); background: transparent; color: var(--muted); cursor: pointer; }
+</style>
+</head>
+<body>
+  <aside class="rail">
+    <button class="new-btn">✎ 新对话</button>
+    <input class="search" placeholder="过滤会话标题或标签">
+    <div class="tabs"><span class="on">全部</span><span>未归档</span><span>已归档</span></div>
+    <div class="rail-label"><span>最近 / RECENT</span><span>03</span></div>
+    <div class="sessions">
+      <div class="session on">
+        <b>你好 <i>↩</i></b>
+        <small><span>17 小时前</span><span>78 条</span></small>
+      </div>
+      <div class="session">
+        <b>微纳米气泡强化工艺讨论</b>
+        <small><span>2 天前</span><span>23 条</span></small>
+      </div>
+      <div class="session">
+        <b>水质分析数据整理</b>
+        <small><span>5 天前</span><span>12 条</span></small>
+      </div>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <header class="chat-head">
+      <b>你好</b>
+      <span class="dot"></span>
+      <span>在线 · ACTIVE</span>
+      <span class="right"><u>搜索</u><u>上下文</u></span>
+    </header>
+
+    <div class="scroll">
+      <div class="q-row">
+        <div class="q-entry"><p>查一下最近的会议</p></div>
+      </div>
+
+      <article class="a-entry">
+        <div class="a-head">
+          <span class="no">§ 12</span>
+          <span>小气助手 · REPLY</span>
+          <span class="right">TOOLS: query_meetings ✓</span>
+        </div>
+        <div class="a-body">
+          <p>好的，微纳米气泡在水产养殖中的应用及其机制是目前研究的一个热点。以下是您提出的问题的回答：</p>
+
+          <h3><em>1.</em>微纳米气泡对水产养殖中病原菌的具体抑制机制是什么？</h3>
+          <p>微纳米气泡能够产生大量的活性氧（ROS），这些活性氧具有较强的杀菌能力，可以有效杀灭水体中的病原菌。此外，微纳米气泡的快速溶解特性也能促进水体中的溶氧增加，从而提高鱼虾等水产动物对有害微生物的抵抗力。</p>
+
+          <h3><em>2.</em>微纳米气泡如何影响养殖水体的其他微生物？</h3>
+          <p>微纳米气泡能够改善水体环境，促进有益菌的生长繁殖。具体来说，它可以提供充足的溶解氧和营养物质，有助于硝化细菌、反硝化细菌等有益菌群的活动，从而调节水体中的微生物群落结构。</p>
+
+          <h3><em>3.</em>促进硝化细菌生长对水质改善的具体作用是什么？</h3>
+          <p>硝化细菌在水处理过程中起着关键作用。它们能够将氨氮转化为亚硝酸盐和硝酸盐，进一步转化为硝酸盐，这一过程称为硝化反应。通过促进硝化细菌的生长，可以有效降低水体中的氨氮含量，从而改善水质。</p>
+
+          <p>关于最近的会议，我已调用 query_meetings 工具获取了相关信息：</p>
+          <ul>
+            <li>2026年8月15日 - 远紫外学术研讨会 - 北京</li>
+            <li>2026年8月20日 - 微纳米气泡技术论坛 - 上海</li>
+            <li>2026年8月23日 - 水质分析与处理技术研讨会 - 广州</li>
+          </ul>
+
+          <p class="note">这些会议涵盖了微纳米气泡相关的前沿技术和应用研究。如果您需要更多信息，可以继续提问！</p>
+        </div>
+        <div class="a-meta">
+          <span>⏱ 19.6s</span>
+          <span class="score">✓ 自评 4/10</span>
+          <span class="fb"><u>👍 回答有帮助</u><u>👎 需要改进</u><u>⟳ 重新生成</u><u>⧉ 复制</u></span>
+        </div>
+      </article>
+    </div>
+
+    <div class="composer-wrap">
+      <div class="composer">
+        <input class="input" placeholder="问问小气…">
+        <div class="composer-bar">
+          <button class="add">＋</button>
+          <div class="modes"><span>快速</span><span class="on">平衡</span><span>深度</span></div>
+          <button class="mic">🎙</button>
+          <button class="send">发送 ⏎</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D · 暗色研究台</title>
+<style>
+  :root {
+    --deck: #12191d; --panel: #172126; --panel-hi: #1c2a31; --stroke: #263740;
+    --text: #e2ecea; --sub: #8ba4a0; --faint: #5f7573;
+    --teal: #35c2a4; --teal-dim: rgba(53,194,164,.14); --coral: #ff8a6b;
+    --mono: Consolas, monospace; --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--deck); color: var(--text); font-family: var(--ui); font-size: 14px; height: 100vh; display: grid; grid-template-columns: 256px 1fr; overflow: hidden; }
+
+  .rail { border-right: 1px solid var(--stroke); background: #10171b; padding: 18px 14px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .brand .mk { width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(53,194,164,.45); color: var(--teal); display: grid; place-items: center; background: var(--teal-dim); }
+  .brand b { font-size: 13.5px; }
+  .new {
+    height: 44px; border: 1px solid var(--teal); border-radius: 11px; cursor: pointer;
+    background: var(--teal-dim); color: var(--teal);
+    font: inherit; font-size: 13.5px; font-weight: 700;
+    transition: background 150ms ease;
+  }
+  .new:hover { background: rgba(53,194,164,.22); }
+  .search {
+    margin-top: 12px; height: 40px; border: 1px solid var(--stroke); border-radius: 10px;
+    background: #0e1519; color: var(--text); padding: 0 12px; font: inherit; font-size: 13px;
+  }
+  .search:focus { outline: 0; border-color: var(--teal); box-shadow: 0 0 0 3px rgba(53,194,164,.12); }
+  .label { margin-top: 18px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.24em; color: var(--faint); }
+  .list { margin-top: 8px; overflow-y: auto; flex: 1; }
+  .item { padding: 12px 12px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+  .item:hover { border-color: var(--stroke); }
+  .item.on { border-color: var(--teal); background: var(--teal-dim); }
+  .item b { font-size: 13px; display: block; font-weight: 600; }
+  .item small { display: flex; gap: 8px; margin-top: 3px; font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; color: var(--faint); }
+
+  .chat { display: flex; flex-direction: column; overflow: hidden; }
+  .head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px clamp(20px, 3.5vw, 44px); border-bottom: 1px solid var(--stroke);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; color: var(--faint);
+  }
+  .head b { font-family: var(--ui); font-size: 16px; letter-spacing: 0; color: var(--text); }
+  .head .led { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+  .head .right { margin-left: auto; display: flex; gap: 8px; }
+  .hbtn { height: 32px; padding: 0 14px; border: 1px solid var(--stroke); border-radius: 8px; background: transparent; color: var(--sub); font-family: var(--mono); font-size: 10px; letter-spacing: .1em; cursor: pointer; }
+  .hbtn:hover { border-color: var(--teal); color: var(--teal); }
+
+  .scroll { flex: 1; overflow-y: auto; padding: 26px clamp(20px, 3.5vw, 44px); }
+  .msgs { max-width: 820px; margin: 0 auto; }
+  .q { display: flex; justify-content: flex-end; margin-bottom: 26px; }
+  .q .b {
+    max-width: 72%; padding: 12px 18px;
+    background: rgba(255, 138, 107, 0.10); border: 1px solid rgba(255, 138, 107, 0.45);
+    color: var(--coral); border-radius: 12px 3px 12px 12px; font-size: 14.5px;
+  }
+  .a { margin-bottom: 30px; }
+  .a-head {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.2em; color: var(--faint);
+  }
+  .a-head .led { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+  .a-head .right { margin-left: auto; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px; padding: 20px 24px;
+  }
+  .bd { font-size: 14px; line-height: 1.9; }
+  .bd h4 { font-size: 14px; margin: 14px 0 6px; color: var(--teal); }
+  .bd h4 i { font-style: normal; color: var(--coral); margin-right: 8px; }
+  .bd p { margin: 6px 0; }
+  .bd ul { margin: 8px 0 4px 4px; list-style: none; }
+  .bd ul li { padding: 4px 0 4px 16px; position: relative; }
+  .bd ul li::before { content: '▸'; position: absolute; left: 2px; color: var(--teal); font-size: 10px; }
+  .meta {
+    display: flex; align-items: center; gap: 14px; margin-top: 16px;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em; color: var(--faint);
+  }
+  .meta .score { color: var(--teal); border: 1px solid rgba(53,194,164,.4); border-radius: 999px; padding: 1px 9px; }
+  .meta .fb { margin-left: auto; display: flex; gap: 6px; }
+  .meta .fb span { border: 1px solid var(--stroke); border-radius: 7px; padding: 3px 9px; cursor: pointer; }
+  .meta .fb span:hover { border-color: var(--teal); color: var(--teal); }
+
+  .composer { padding: 0 clamp(20px, 3.5vw, 44px) 20px; }
+  .dock {
+    background: var(--panel); border: 1px solid var(--stroke); border-radius: 14px; padding: 12px 16px;
+  }
+  .dock input {
+    width: 100%; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 14.5px;
+  }
+  .dock input::placeholder { color: var(--faint); }
+  .dock input:focus { outline: 0; }
+  .bar { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .chip { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--stroke); background: transparent; color: var(--sub); font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; cursor: pointer; }
+  .chip.on { border-color: var(--teal); color: var(--teal); background: var(--teal-dim); }
+  .send {
+    margin-left: auto; height: 40px; padding: 0 24px; border: 1px solid transparent; border-radius: 10px; cursor: pointer;
+    background: var(--teal); color: #0b1512; font: inherit; font-size: 13px; font-weight: 800;
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+  .send:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(53,194,164,.28); }
+  .icon { width: 36px; height: 36px; border-radius: 9px; border: 1px solid var(--stroke); background: transparent; color: var(--sub); cursor: pointer; }
+</style>
+</head>
+<body>
+  <aside class="rail">
+    <div class="brand"><span class="mk">∿</span><b>小气助手</b></div>
+    <button class="new">✎ 新对话</button>
+    <input class="search" placeholder="过滤会话标题或标签">
+    <div class="label">RECENT · 最近</div>
+    <div class="list">
+      <div class="item on"><b>你好</b><small><span>17h ago</span><span>78 msgs</span></small></div>
+      <div class="item"><b>微纳米气泡强化工艺讨论</b><small><span>2d ago</span><span>23 msgs</span></small></div>
+      <div class="item"><b>水质分析数据整理</b><small><span>5d ago</span><span>12 msgs</span></small></div>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <div class="head">
+      <span class="led"></span>
+      <b>你好</b>
+      <span>SESSION ACTIVE · 78 MSGS</span>
+      <div class="right"><button class="hbtn">⌕ 搜索</button><button class="hbtn">▤ 上下文</button></div>
+    </div>
+
+    <div class="scroll">
+      <div class="msgs">
+        <div class="q"><div class="b">查一下最近的会议</div></div>
+        <div class="a">
+          <div class="a-head"><span class="led"></span><span>小气助手 · REPLY</span><span class="right">TOOLS: query_meetings ✓</span></div>
+          <div class="panel">
+            <div class="bd">
+              <p>好的，微纳米气泡在水产养殖中的应用及其机制是目前研究的一个热点。以下是您提出的问题的回答：</p>
+              <h4><i>1.</i>微纳米气泡对水产养殖中病原菌的具体抑制机制是什么？</h4>
+              <p>微纳米气泡能够产生大量的活性氧（ROS），这些活性氧具有较强的杀菌能力，可以有效杀灭水体中的病原菌。此外，微纳米气泡的快速溶解特性也能促进水体中的溶氧增加，从而提高鱼虾等水产动物对有害微生物的抵抗力。</p>
+              <h4><i>2.</i>微纳米气泡如何影响养殖水体的其他微生物？</h4>
+              <p>微纳米气泡能够改善水体环境，促进有益菌的生长繁殖。具体来说，它可以提供充足的溶解氧和营养物质，有助于硝化细菌、反硝化细菌等有益菌群的活动，从而调节水体中的微生物群落结构。</p>
+              <h4><i>3.</i>促进硝化细菌生长对水质改善的具体作用是什么？</h4>
+              <p>硝化细菌在水处理过程中起着关键作用。它们能够将氨氮转化为亚硝酸盐和硝酸盐，进一步转化为硝酸盐，这一过程称为硝化反应。通过促进硝化细菌的生长，可以有效降低水体中的氨氮含量，从而改善水质。</p>
+              <p>关于最近的会议，我已调用 query_meetings 工具获取了相关信息：</p>
+              <ul>
+                <li>2026年8月15日 - 远紫外学术研讨会 - 北京</li>
+                <li>2026年8月20日 - 微纳米气泡技术论坛 - 上海</li>
+                <li>2026年8月23日 - 水质分析与处理技术研讨会 - 广州</li>
+              </ul>
+              <p>这些会议涵盖了微纳米气泡相关的前沿技术和应用研究。如果您需要更多信息，可以继续提问！</p>
+            </div>
+          </div>
+          <div class="meta">
+            <span>⏱ 19.6s</span>
+            <span class="score">✓ 自评 4/10</span>
+            <span class="fb"><span>👍</span><span>👎</span><span>⟳</span><span>⧉</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="dock">
+        <input placeholder="问问小气…">
+        <div class="bar">
+          <button class="icon">＋</button>
+          <span class="chip">快速</span><span class="chip on">平衡</span><span class="chip">深度</span>
+          <button class="icon">🎙</button>
+          <button class="send">发送 ⏎</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

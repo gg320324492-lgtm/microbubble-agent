@@ -85,6 +85,25 @@ const hasTimeDivider = computed(() => {
   return new Date(props.msg.timestamp).getTime() - new Date(props.prevTimestamp).getTime() > 5 * 60 * 1000
 })
 
+// 2026-09-03 档案语言 (A 方案): 条目序号 / 问条时间 / 工具名汇总
+const displayIndex = computed(() => {
+  if (!props.allMessages) return 0
+  return props.allMessages.findIndex((m) => m.id === props.msg.id) + 1
+})
+const userTime = computed(() => {
+  try {
+    return new Date(props.msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  } catch {
+    return ''
+  }
+})
+const dossierToolNames = computed(() => {
+  const names = (props.msg.toolTrace || [])
+    .map((t: any) => t?.name || t?.label)
+    .filter((n: any): n is string => !!n)
+  return [...new Set(names)].join(' / ')
+})
+
 const timeDividerText = computed(() => {
   if (!hasTimeDivider.value || !props.prevTimestamp) return ''
   // W-N 2026-08-14: 同一天不重复显示（避免"今天 02:07"在每条消息前都出现）
@@ -223,7 +242,7 @@ function onEditKeydown(e: KeyboardEvent) {
         </div>
       </div>
       <div v-else class="msg-row user">
-        <div class="bubble user-bubble">
+        <div class="bubble user-bubble" :data-time="userTime">
             <div v-html="renderMarkdown(msg.content)" />
             <div v-if="msg.imageUrl" class="msg-image">
               <ImageWithFallback
@@ -261,6 +280,11 @@ function onEditKeydown(e: KeyboardEvent) {
       <div class="msg-row bot-row">
         <img src="/lab-logo.png" class="bot-msg-avatar" alt="小气助手" title="小气助手" />
         <div class="bot-content">
+          <div class="dossier-entry-head">
+            <span class="de-no">§ {{ displayIndex }}</span>
+            <span class="de-name">小气助手 · REPLY</span>
+            <span v-if="dossierToolNames" class="de-tools">TOOLS: {{ dossierToolNames }} ✓</span>
+          </div>
           <ThinkingCapsule
             v-if="msg.role === 'assistant' && msg.phase"
             :phase="msg.phase"
@@ -487,21 +511,56 @@ function onEditKeydown(e: KeyboardEvent) {
   transition: transform .2s ease, box-shadow .2s ease;
 }
 .bot-bubble {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: 18px 18px 18px 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03), 0 1px 2px rgba(0,0,0,0.02);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
+/* 档案条目头: § 序号 + REPLY + 工具名 (mono) */
+.dossier-entry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: var(--color-text-secondary, #909399);
+  border-bottom: 1px solid var(--color-border-light, #dcdfe6);
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+}
+.dossier-entry-head .de-no { color: #0e766e; font-size: 11px; }
+[data-theme="dark"] .dossier-entry-head .de-no { color: #35c2a4; }
 .bot-bubble:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.02);
 }
 .user-bubble {
-  border-radius: 18px 18px 4px 18px;
-  background: linear-gradient(135deg, #FF7A5C, #E85A3A);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 4px 14px rgba(255,122,92,0.18), 0 1px 3px rgba(255,122,92,0.08);
+  border-radius: 12px 3px 12px 12px;
+  background: #fdfefc;
+  color: #16232a;
+  border: 1.5px solid #ef7256;
+  box-shadow: 3px 3px 0 rgba(239, 122, 86, 0.14);
+}
+/* 档案问条: 右上角 Q · 时间 戳 (纸面底色挖孔) */
+.user-bubble::before {
+  content: 'Q · ' attr(data-time);
+  position: absolute;
+  top: -9px;
+  right: 12px;
+  background: #f4f6f4;
+  padding: 0 6px;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  color: #ef7256;
+}
+[data-theme="dark"] .user-bubble::before { background: #12191d; }
+[data-theme="dark"] .user-bubble {
+  background: #172126;
+  border-color: rgba(255, 138, 107, 0.55);
+  color: #e2ecea;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
 }
 .user-bubble:hover {
   transform: translateY(-1px);
