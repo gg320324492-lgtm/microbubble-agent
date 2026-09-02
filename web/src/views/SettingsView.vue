@@ -111,6 +111,25 @@
             <el-button type="primary" :loading="savingPassword" @click="changePassword">修改密码</el-button>
           </el-form-item>
         </el-form>
+
+        <el-divider />
+
+        <!-- 密码恢复码 (2026-09-02): 登录页自助重置密码的凭据 -->
+        <div class="recovery-block">
+          <div class="recovery-head">
+            <span class="recovery-title">密码恢复码</span>
+            <span class="recovery-status" :class="{ 'is-ok': recoveryHasCode }">
+              {{ recoveryHasCode ? '已生成' : '未生成' }}
+            </span>
+          </div>
+          <div class="form-help">
+            忘记密码时，在登录页输入「用户名 + 恢复码 + 新密码」即可自助重置，无需联系管理员。
+            恢复码只在生成时显示一次，请立即保存到个人微信收藏等安全位置；重置成功后即失效，需重新生成。
+          </div>
+          <el-button :loading="generatingCode" @click="onGenerateRecoveryCode">
+            {{ recoveryHasCode ? '重新生成恢复码' : '生成恢复码' }}
+          </el-button>
+        </div>
       </el-card>
 
       <!-- 通知偏好卡片（v68 加 glass-card） -->
@@ -231,12 +250,38 @@
         </el-form>
       </el-card>
     </div>
+
+    <!-- 密码恢复码对话框 — 明文仅显示一次 (2026-09-02) -->
+    <el-dialog
+      v-model="recoveryDialogVisible"
+      title="这是你的密码恢复码"
+      width="440px"
+      :close-on-click-modal="false"
+      class="recovery-dialog"
+    >
+      <div class="recovery-dialog-body">
+        <p class="recovery-warn">
+          恢复码只显示这一次。请立即复制或截图，保存到个人微信收藏等安全位置；
+          关闭本窗口后将无法再次查看。
+        </p>
+        <div class="recovery-code-row">
+          <code class="recovery-code">{{ recoveryCode }}</code>
+          <el-button size="small" type="primary" plain @click="copyRecoveryCode">复制</el-button>
+        </div>
+        <p class="recovery-hint">
+          使用方法：登录页点击「忘记密码？」→ 输入用户名 + 本恢复码 + 新密码，即可自助重置。
+        </p>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="recoveryDialogVisible = false">我已保存好</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { User, Lock, Camera, Bell, Edit, Brush, Check } from '@element-plus/icons-vue'
 // v68 (2026-06-26): 主题切换接入 useThemeStore（之前桌面 SettingsView 没有主题入口）
@@ -518,6 +563,60 @@ const changePassword = async () => {
   }
 }
 
+// === 密码恢复码 (2026-09-02): 生成/轮换 + 一次性展示 ===
+const recoveryHasCode = ref(false)
+const recoveryGeneratedAt = ref('')
+const generatingCode = ref(false)
+const recoveryDialogVisible = ref(false)
+const recoveryCode = ref('')
+
+const fetchRecoveryStatus = async () => {
+  try {
+    const resp = await axios.get('/api/v1/auth/recovery-code/status')
+    recoveryHasCode.value = resp.data.has_code
+    recoveryGeneratedAt.value = resp.data.generated_at || ''
+  } catch (err) {
+    console.warn('[recovery] status fetch failed:', err)
+  }
+}
+
+const copyRecoveryCode = async () => {
+  try {
+    await navigator.clipboard.writeText(recoveryCode.value)
+    ElMessage.success('已复制到剪贴板')
+  } catch {
+    ElMessage.warning('复制失败，请手动选中复制')
+  }
+}
+
+const onGenerateRecoveryCode = async () => {
+  if (recoveryHasCode.value) {
+    try {
+      await ElMessageBox.confirm(
+        '重新生成会使旧恢复码立即失效。如果你的其他设备/记录里存的是旧码，将无法再用于重置。确定重新生成？',
+        '重新生成恢复码',
+        { confirmButtonText: '重新生成', cancelButtonText: '取消', type: 'warning' }
+      )
+    } catch {
+      return
+    }
+  }
+
+  generatingCode.value = true
+  try {
+    const resp = await axios.post('/api/v1/auth/recovery-code')
+    recoveryCode.value = resp.data.code
+    recoveryDialogVisible.value = true
+    recoveryHasCode.value = true
+    recoveryGeneratedAt.value = new Date().toISOString()
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.response?.data?.detail || '生成失败，请重试'
+    ElMessage.error(msg)
+  } finally {
+    generatingCode.value = false
+  }
+}
+
 // === 2026-06-15 v2 通知偏好（11AM 单一窗口）===
 const { prefs, loading: prefsLoading, fetchPrefs, savePrefs, unsnooze } = useNotificationPrefs()
 const prefsSaving = ref(false)
@@ -534,6 +633,7 @@ onMounted(async () => {
     prefsForm.digest_time = prefs.value.digest_time
     prefsForm.digestTimeObj = prefs.value.digest_time
   }
+  fetchRecoveryStatus()
 })
 
 function onDigestTimeChange(val) {
@@ -892,5 +992,55 @@ function formatDateTime(iso) {
 [data-theme="dark"] .theme-swatch.is-active {
   border-color: rgba(255, 255, 255, 0.95);
   box-shadow: 0 4px 20px rgba(255, 255, 255, 0.18), var(--shadow-primary);
+}
+
+/* ==================== 密码恢复码 (2026-09-02) ==================== */
+.recovery-block { margin-top: 4px; }
+.recovery-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.recovery-title {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary, #303133);
+}
+.recovery-status {
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+}
+.recovery-status.is-ok { color: var(--el-color-success, #67c23a); }
+.recovery-block .el-button { margin-top: 4px; }
+
+.recovery-dialog-body { padding: 0 4px; }
+.recovery-warn {
+  color: var(--el-color-danger, #f56c6c);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0 0 14px;
+}
+.recovery-code-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-bg-secondary, #f5f7fa);
+  border: 1px dashed var(--border-color, #dcdfe6);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.recovery-code {
+  flex: 1;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-text-primary, #303133);
+}
+.recovery-hint {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--color-text-secondary, #909399);
 }
 </style>

@@ -33,8 +33,9 @@
     <!-- ══ 右 1/3：登录表单 ══ -->
     <aside class="gate">
       <span class="gate__no">RESEARCH OS / 2026</span>
-      <h2>登录工作台</h2>
-      <p class="gate__lede">如同一颗微泡稳定地悬浮于水中，你的数据稳定地留在这台机器上。</p>
+        <div v-if="mode === 'login'" key="login" class="gate__inner">
+          <h2>登录工作台</h2>
+          <p class="gate__lede">如同一颗微泡稳定地悬浮于水中，你的数据稳定地留在这台机器上。</p>
 
       <el-form
         ref="loginFormRef"
@@ -83,7 +84,96 @@
         </el-button>
       </el-form>
 
-      <p class="gate__note">账号与初始密码请联系课题组管理员获取；登录后请及时修改密码。</p>
+      <div class="gate__aux">
+        <a href="#" class="gate__forgot" @click.prevent="switchMode('reset')">忘记密码？</a>
+      </div>
+        </div>
+        <div v-else key="reset" class="gate__inner">
+          <h2>重置密码</h2>
+          <p class="gate__lede">输入用户名与恢复码，直接设置新密码，全程自助。</p>
+
+          <el-form
+            ref="resetFormRef"
+            :model="resetForm"
+            :rules="resetRules"
+            label-position="top"
+            class="gate__form"
+            @keyup.enter="handleReset"
+          >
+            <el-form-item prop="username">
+              <template #label>
+                <span class="f-label">用户名 <i>USERNAME</i></span>
+              </template>
+              <el-input
+                v-model="resetForm.username"
+                name="reset-username"
+                placeholder="请输入用户名"
+                size="large"
+                autocomplete="username"
+              />
+            </el-form-item>
+
+            <el-form-item prop="recovery_code">
+              <template #label>
+                <span class="f-label">恢复码 <i>RECOVERY CODE</i></span>
+              </template>
+              <el-input
+                v-model="resetForm.recovery_code"
+                name="reset-recovery-code"
+                placeholder="abcd-efgh-jkmn"
+                size="large"
+              />
+            </el-form-item>
+
+            <el-form-item prop="new_password">
+              <template #label>
+                <span class="f-label">新密码 <i>NEW PASSWORD</i></span>
+              </template>
+              <el-input
+                v-model="resetForm.new_password"
+                name="reset-new-password"
+                type="password"
+                placeholder="至少 6 位"
+                size="large"
+                show-password
+                autocomplete="new-password"
+              />
+            </el-form-item>
+
+            <el-form-item prop="confirm_password">
+              <template #label>
+                <span class="f-label">确认新密码 <i>CONFIRM</i></span>
+              </template>
+              <el-input
+                v-model="resetForm.confirm_password"
+                name="reset-confirm-password"
+                type="password"
+                placeholder="再次输入新密码"
+                size="large"
+                show-password
+                autocomplete="new-password"
+              />
+            </el-form-item>
+
+            <el-button
+              type="primary"
+              size="large"
+              class="gate__button"
+              :loading="resetting"
+              @click="handleReset"
+            >
+              {{ resetting ? '重置中…' : '重置密码' }}
+            </el-button>
+          </el-form>
+
+          <div class="gate__aux">
+            <a href="#" class="gate__forgot" @click.prevent="switchMode('login')">← 返回登录</a>
+          </div>
+          <p class="gate__note">
+            没有恢复码？能正常登录时在【设置 → 账号安全 → 密码恢复码】生成并保存到个人微信收藏；
+            重置成功后恢复码即失效，需重新生成。
+          </p>
+        </div>
     </aside>
   </div>
 </template>
@@ -98,10 +188,33 @@ const router = useRouter()
 const loginFormRef = ref(null)
 const loading = ref(false)
 
+// 登录 / 自助重置 双模式 (2026-09-02 恢复码)
+const mode = ref('login')
+const resetFormRef = ref(null)
+const resetting = ref(false)
+
 const loginForm = reactive({
   username: '',
   password: ''
 })
+
+const resetForm = reactive({
+  username: '',
+  recovery_code: '',
+  new_password: '',
+  confirm_password: ''
+})
+
+// 统一错误提取: 新统一异常格式 {"error":{"message":...}} 优先, 兼容旧 {"detail":...}
+const apiErrMsg = (err, fallback) =>
+  err?.response?.data?.error?.message || err?.response?.data?.detail || fallback
+
+const switchMode = (target) => {
+  mode.value = target
+  if (target === 'reset') {
+    resetForm.username = loginForm.username
+  }
+}
 
 const loginRules = {
   username: [
@@ -110,6 +223,32 @@ const loginRules = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+  ]
+}
+
+const resetRules = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' }
+  ],
+  recovery_code: [
+    { required: true, message: '请输入恢复码', trigger: 'blur' }
+  ],
+  new_password: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+  ],
+  confirm_password: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (value !== resetForm.new_password) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
@@ -153,10 +292,44 @@ const handleLogin = async () => {
     ElMessage.success('登录成功')
     router.push('/')
   } catch (error) {
-    const message = error.response?.data?.detail || '登录失败，请重试'
+    const message = apiErrMsg(error, '登录失败，请重试')
     ElMessage.error(message)
   } finally {
     loading.value = false
+  }
+}
+
+const handleReset = async () => {
+  if (!resetFormRef.value) return
+
+  let isValid = false
+  resetting.value = true
+  try {
+    isValid = await resetFormRef.value.validate()
+  } catch {
+    isValid = false
+  }
+
+  if (!isValid) {
+    resetting.value = false
+    return
+  }
+
+  try {
+    await axios.post('/api/v1/auth/reset-password-self', {
+      username: resetForm.username,
+      recovery_code: resetForm.recovery_code,
+      new_password: resetForm.new_password
+    })
+
+    ElMessage.success('密码重置成功，请使用新密码登录')
+    loginForm.username = resetForm.username
+    loginForm.password = ''
+    mode.value = 'login'
+  } catch (error) {
+    ElMessage.error(apiErrMsg(error, '重置失败，请检查用户名和恢复码'))
+  } finally {
+    resetting.value = false
   }
 }
 </script>
@@ -349,6 +522,22 @@ const handleLogin = async () => {
   box-shadow: 0 12px 26px rgba(14, 118, 110, 0.28);
 }
 .login-shell .gate .el-button--primary.gate__button:active { transform: translateY(0); }
+
+.gate__aux {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.gate__forgot {
+  font-size: 12.5px;
+  color: var(--teal);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--teal);
+  padding-bottom: 1px;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.gate__forgot:hover { color: var(--teal-soft); border-bottom-style: solid; }
+.gate__forgot:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-bottom-style: solid; }
 
 .gate__note {
   margin-top: 30px; padding-top: 18px; border-top: 1px dashed var(--line);

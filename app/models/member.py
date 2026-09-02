@@ -65,6 +65,11 @@ class Member(Base, TimestampMixin):
     drive_quota_updated_at = Column(DateTime, nullable=True)
     # ==================== /v2 PR5 ====================
 
+    # 自助重置密码恢复码 (2026-09-02, alembic 131):
+    # 只存 SHA-256 哈希, 明文仅在生成响应里出现一次; 单次使用后置 NULL (需重新生成)
+    recovery_code_hash = Column(String(255), nullable=True)
+    recovery_code_generated_at = Column(DateTime, nullable=True)
+
     # 关系
     assigned_tasks = relationship("Task", back_populates="assignee", foreign_keys="Task.assignee_id")
     created_tasks = relationship("Task", back_populates="creator", foreign_keys="Task.created_by")

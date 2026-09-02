@@ -28,7 +28,7 @@ let _refreshCooldownUntil = 0
 let _logoutInProgress = false
 
 const REFRESH_URL = '/api/v1/auth/refresh'
-const PUBLIC_ENDPOINT_MARKERS = ['/auth/login', '/auth/refresh']
+const PUBLIC_ENDPOINT_MARKERS = ['/auth/login', '/auth/refresh', '/auth/reset-password-self']
 
 /**
  * 检查当前是否在 cooldown (避免网络请求)

@@ -1,5 +1,7 @@
 """认证相关API"""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -14,7 +16,7 @@ from app.core.security import (
     get_current_user,
     get_current_admin_user,
 )
-from app.core.rate_limit import login_limiter, get_client_ip
+from app.core.rate_limit import login_limiter, pwreset_limiter, get_client_ip
 from app.core.exceptions import AuthException, ValidationException, NotFoundException, ForbiddenException
 from app.models.member import Member
 from app.schemas.auth import (
@@ -26,10 +28,16 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     ResetPasswordRequest,
     ProfileUpdateRequest,
+    RecoveryCodeResponse,
+    RecoveryCodeStatusResponse,
+    SelfResetPasswordRequest,
 )
 
 from app.config import settings
 from app.services.file_service import file_service
+from app.services import recovery_code_service
+
+logger = logging.getLogger("microbubble.api.auth")
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -334,3 +342,79 @@ async def init_password(
     await db.commit()
 
     return {"message": "密码设置成功"}
+
+
+# ==================== 用户自助重置密码 (恢复码, 2026-09-02) ====================
+# 背景: agent 曾静默改掉用户密码, 用户被锁死只能找管理员。恢复码让重置全程自助:
+# 能登录时在设置页生成 (明文仅显示一次) → 锁定后在登录页 用户名+恢复码+新密码 重置。
+# 明文永不落库; DB 只存 SHA-256; 单次使用; pwreset_limiter 5次/15分钟 防爆破。
+
+
+@router.get("/recovery-code/status", response_model=RecoveryCodeStatusResponse)
+async def get_recovery_code_status(
+    current_user: Member = Depends(get_current_user),
+):
+    """查询当前用户恢复码状态 (设置页展示"已生成/未生成 + 时间")"""
+    has_code = bool(current_user.recovery_code_hash)
+    generated_at = None
+    if has_code and current_user.recovery_code_generated_at:
+        generated_at = current_user.recovery_code_generated_at.isoformat()
+    return RecoveryCodeStatusResponse(has_code=has_code, generated_at=generated_at)
+
+
+@router.post("/recovery-code", response_model=RecoveryCodeResponse)
+async def generate_recovery_code(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """生成/轮换当前用户恢复码 — 明文仅在本响应出现一次, 必须立即保存"""
+    code = recovery_code_service.rotate_member_recovery_code(current_user)
+    await db.commit()
+    logger.info(f"recovery code rotated: user={current_user.username}")
+    return RecoveryCodeResponse(
+        code=code,
+        message="恢复码仅显示这一次，请立即保存到个人微信收藏等安全位置",
+    )
+
+
+@router.post("/reset-password-self")
+async def reset_password_self(
+    request: SelfResetPasswordRequest,
+    req: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """登录页自助重置密码 (无登录态): 用户名 + 恢复码 + 新密码, 不经过管理员
+
+    - 用户名/码任一错误 → 同一文案 (防用户名枚举)
+    - 成功后恢复码立即失效 (单次使用), 用户可登录后重新生成
+    - 限流 5 次/15 分钟 per ip+username (pwreset_limiter, Redis ZSET)
+    - JWT 无状态无法吊销旧 token, 但攻击者持有旧密码+恢复码的场景已消除
+    """
+    client_ip = get_client_ip(req)
+    limiter_key = f"pwreset:{client_ip}:{request.username.lower()}"
+    await pwreset_limiter.check(limiter_key)
+
+    result = await db.execute(
+        select(Member).where(Member.username == request.username)
+    )
+    user = result.scalar_one_or_none()
+
+    if (
+        not user
+        or not user.is_active
+        or not user.recovery_code_hash
+        or not recovery_code_service.verify_recovery_code(
+            request.recovery_code, user.recovery_code_hash
+        )
+    ):
+        await pwreset_limiter.record(limiter_key)
+        logger.warning(
+            f"self password reset FAILED: username={request.username!r} ip={client_ip}"
+        )
+        raise AuthException("用户名或恢复码错误")
+
+    user.password_hash = get_password_hash(request.new_password)
+    recovery_code_service.clear_member_recovery_code(user)
+    await db.commit()
+    logger.info(f"self password reset OK: user={user.username} ip={client_ip}")
+    return {"message": "密码重置成功，请使用新密码登录"}

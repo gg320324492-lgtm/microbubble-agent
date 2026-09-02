@@ -544,6 +544,12 @@ async def rate_limit_middleware(request: Request, call_next):
 login_limiter = AsyncRedisRateLimiter(max_attempts=5, window_seconds=300)
 
 
+# 自助密码重置 (登录页无登录态, 用户名+恢复码+新密码) — 恢复码爆破防护:
+# 5 次/15 分钟 per ip+username (key 带 username 防换 IP 绕过; 码 60bit 熵, 在线爆破不可行).
+# 调用方 auth.py 用 "pwreset:" 前缀 → Redis key rl:pwreset:{ip}:{username}.
+pwreset_limiter = AsyncRedisRateLimiter(max_attempts=5, window_seconds=900)
+
+
 def get_client_ip(request: Request) -> str:
     """获取真实客户端 IP（按 XFF 优先级回退，v31.2.1 修复空 IP 兜底）
 
