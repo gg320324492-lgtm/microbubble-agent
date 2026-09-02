@@ -226,6 +226,16 @@ const renderDetailMessage = (result) => {
 const hasKnowledgeId = (result) => result?.id !== undefined && result?.id !== null && result.id !== ''
 
 const navigateToKnowledge = (result) => {
+  // WP1 (2026-09-02): 会议来源命中 — 跳会议详情页而非知识库
+  if (result?.retrieval_method === 'meeting' && result?.meeting_id) {
+    router.push(`/meetings/${result.meeting_id}`)
+    return
+  }
+  // WP2 (2026-09-02): drive 来源命中 — 跳网盘
+  if (result?.retrieval_method === 'drive') {
+    router.push('/drive')
+    return
+  }
   if (!hasKnowledgeId(result)) return
   router.push(`/knowledge/${encodeURIComponent(String(result.id))}`)
 }
