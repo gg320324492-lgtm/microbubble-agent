@@ -159,7 +159,8 @@ const voiceMode = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const sidebarCollapsed = ref(false)
-const showContextPanel = ref(false)  // W100 +29 上下文可见性面板
+// 2026-09-03 三栏默认展开: 引用与来源面板常驻 (右上按钮/面板 ✕ 可收起)
+const showContextPanel = ref(true)
 const loading = ref(false)
 
 // 网络状态
