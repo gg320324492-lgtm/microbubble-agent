@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>A · 研究档案 — 个人设置</title>
+<style>
+  :root {
+    --paper: #f4f6f4;
+    --card: #fdfefc;
+    --ink: #16232a;
+    --teal: #0e766e;
+    --teal-soft: #198e83;
+    --coral: #ef7256;
+    --line: #cdd8d4;
+    --line-dash: #b9c9c5;
+    --muted: #5f6f6b;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', Inter, sans-serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .sheet { max-width: 1120px; margin: 0 auto; padding: 48px clamp(20px, 4vw, 56px) 96px; }
+
+  /* ── 卷宗头 ─────────────────────────────── */
+  .dossier-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; color: var(--muted);
+    border-bottom: 1.5px solid var(--ink); padding-bottom: 14px;
+  }
+  .dossier-head b { font-family: var(--font-serif); font-size: 15px; letter-spacing: 0.06em; color: var(--ink); }
+  .dossier-title {
+    font-family: var(--font-serif); font-size: clamp(30px, 3.2vw, 40px); font-weight: 900;
+    letter-spacing: 0.02em; margin: 30px 0 6px;
+  }
+  .dossier-sub { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em; color: var(--teal); }
+
+  /* ── 主体双栏 ────────────────────────────── */
+  .cols { display: grid; grid-template-columns: 300px 1fr; gap: clamp(28px, 4vw, 56px); margin-top: 40px; }
+
+  /* 左: 标本标签式档案卡 */
+  .specimen { position: sticky; top: 32px; align-self: start; }
+  .specimen-card {
+    background: var(--card);
+    border: 1px solid var(--ink);
+    box-shadow: 4px 4px 0 rgba(22, 35, 42, 0.12);
+    padding: 26px 24px 22px;
+    position: relative;
+  }
+  .specimen-card::before {
+    content: 'MEMBER SPECIMEN';
+    position: absolute; top: -9px; left: 20px;
+    background: var(--paper); padding: 0 8px;
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.28em; color: var(--muted);
+  }
+  .avatar-wrap { display: grid; place-items: center; margin-bottom: 16px; position: relative; }
+  .avatar {
+    width: 108px; height: 108px; border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, #ffffff, #dbe8e4 60%, #b9d3cc);
+    border: 1.5px solid rgba(14, 118, 110, 0.45);
+    display: grid; place-items: center;
+    font-size: 34px; color: var(--teal); font-family: var(--font-serif);
+  }
+  .avatar-ring { position: absolute; width: 128px; height: 128px; border-radius: 50%; border: 1px dashed var(--line-dash); }
+  .specimen-name { font-family: var(--font-serif); font-size: 24px; font-weight: 900; text-align: center; }
+  .specimen-tags {
+    display: flex; justify-content: center; gap: 8px; margin-top: 8px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+  }
+  .specimen-tags span { border: 1px solid var(--teal); color: var(--teal); padding: 2px 8px; border-radius: 999px; }
+  .specimen-tags .admin { border-color: var(--coral); color: var(--coral); }
+
+  .meta-list { margin-top: 18px; border-top: 1px dashed var(--line-dash); padding-top: 6px; }
+  .meta-list div {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 7px 0; border-bottom: 1px dashed var(--line-dash);
+    font-size: 12.5px;
+  }
+  .meta-list dt { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; color: var(--muted); }
+  .meta-list dd { color: var(--ink); text-align: right; }
+
+  .avatar-btn {
+    display: block; width: 100%; margin-top: 16px;
+    background: none; border: 1px dashed var(--line-dash); border-radius: 8px;
+    padding: 8px; font: inherit; font-size: 12px; color: var(--muted);
+    cursor: pointer; transition: border-color 150ms ease, color 150ms ease;
+  }
+  .avatar-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+  /* 右: 章节 */
+  .section { margin-bottom: 52px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  .sec-no { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.2em; color: var(--coral); }
+  .sec-head h2 { font-family: var(--font-serif); font-size: 21px; font-weight: 900; letter-spacing: 0.03em; }
+  .sec-head .en { margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.22em; color: var(--muted); }
+
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; margin-top: 22px; }
+  .field.full { grid-column: 1 / -1; }
+  .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .field label i { font-style: normal; font-family: var(--font-mono); font-weight: 400; font-size: 9.5px; letter-spacing: 0.16em; color: var(--muted); }
+  .field input, .field textarea {
+    width: 100%; border: 0; border-bottom: 1.5px solid var(--ink);
+    background: transparent; font: inherit; font-size: 14.5px; color: var(--ink);
+    padding: 6px 2px; transition: border-color 150ms ease;
+  }
+  .field textarea { resize: vertical; min-height: 64px; line-height: 1.7; }
+  .field input:focus, .field textarea:focus { outline: 0; border-bottom-color: var(--teal-soft); }
+  .field input::placeholder, .field textarea::placeholder { color: #adbab6; font-size: 13px; }
+
+  .btn-row { display: flex; gap: 12px; margin-top: 26px; }
+  .btn {
+    height: 46px; padding: 0 30px; border-radius: 999px; cursor: pointer;
+    font: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.08em;
+    transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  }
+  .btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .btn-ink { background: var(--ink); color: #fbfcfb; border: 1.5px solid var(--ink); }
+  .btn-ink:hover { background: var(--teal); border-color: var(--teal); transform: translateY(-1px); box-shadow: 0 10px 22px rgba(14, 118, 110, 0.26); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--line-dash); }
+  .btn-ghost:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* 账号安全 */
+  .sec-body { margin-top: 22px; }
+  .security-note { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  /* 恢复码 */
+  .recover {
+    margin-top: 26px; border: 1px dashed var(--line-dash); border-radius: 12px;
+    padding: 18px 20px; display: flex; gap: 20px; align-items: center; justify-content: space-between;
+  }
+  .recover-info h3 { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .recover-info h3 .st { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; color: var(--coral); border: 1px solid var(--coral); border-radius: 999px; padding: 1px 8px; }
+  .recover-info p { font-size: 12px; color: var(--muted); margin-top: 5px; max-width: 460px; line-height: 1.8; }
+
+  /* 通知: 仪表行 */
+  .notif-row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 2px; border-bottom: 1px dashed var(--line-dash);
+  }
+  .notif-row:last-child { border-bottom: 0; }
+  .notif-row .name { font-size: 13.5px; font-weight: 700; min-width: 96px; }
+  .notif-row .desc { font-size: 12px; color: var(--muted); flex: 1; }
+  /* 仪器拨杆 */
+  .lever { position: relative; width: 52px; height: 26px; flex: none; }
+  .lever input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .lever .track {
+    position: absolute; inset: 0; border: 1.5px solid var(--ink); border-radius: 999px;
+    background: var(--card); transition: background 160ms ease;
+  }
+  .lever .track::after {
+    content: ''; position: absolute; top: 3px; left: 4px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--ink); transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lever input:checked + .track { background: rgba(14, 118, 110, 0.14); border-color: var(--teal); }
+  .lever input:checked + .track::after { transform: translateX(24px); background: var(--teal); }
+  .lever input:focus-visible + .track { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .time-input {
+    border: 0; border-bottom: 1.5px solid var(--ink); background: transparent;
+    font-family: var(--font-mono); font-size: 14px; color: var(--ink); padding: 4px 2px; width: 90px;
+  }
+  .time-input:focus { outline: 0; border-bottom-color: var(--teal-soft); }
+
+  /* 外观 */
+  .theme-row { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+  .swatch {
+    width: 132px; border: 1px solid var(--line-dash); border-radius: 12px; padding: 14px;
+    cursor: pointer; background: var(--card); text-align: left; font: inherit;
+    transition: border-color 150ms ease, transform 150ms ease;
+    position: relative;
+  }
+  .swatch:hover { border-color: var(--ink); transform: translateY(-2px); }
+  .swatch .dot { width: 100%; height: 34px; border-radius: 7px; margin-bottom: 10px; }
+  .swatch b { font-size: 12.5px; }
+  .swatch small { display: block; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); margin-top: 2px; }
+  .swatch.on { border: 1.5px solid var(--ink); }
+  .swatch.on::after { content: '✓'; position: absolute; top: 8px; right: 10px; color: var(--ink); font-weight: 700; }
+
+  @media (max-width: 900px) {
+    .cols { grid-template-columns: 1fr; }
+    .specimen { position: static; }
+    .field-grid { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header class="dossier-head">
+    <b>微纳米气泡课题组 · 科研工作台</b>
+    <span>MEMBER FILE N°07 · OPENED 2026-09</span>
+  </header>
+  <h1 class="dossier-title">个人设置</h1>
+  <p class="dossier-sub">PERSONAL RECORD — 4 SECTIONS · KEEP THIS FILE UP TO DATE</p>
+
+  <div class="cols">
+    <!-- 左: 档案卡 -->
+    <aside class="specimen">
+      <div class="specimen-card">
+        <div class="avatar-wrap">
+          <span class="avatar-ring"></span>
+          <div class="avatar">杜</div>
+        </div>
+        <div class="specimen-name">杜同贺</div>
+        <div class="specimen-tags"><span class="admin">管理员</span><span>研一</span></div>
+        <dl class="meta-list">
+          <div><dt>研究方向</dt><dd>污染控制与水质提升</dd></div>
+          <div><dt>EMAIL</dt><dd>320324492@qq.com</dd></div>
+          <div><dt>地位</dt><dd>课题组 24 席之一</dd></div>
+        </dl>
+        <button class="avatar-btn">⇪ 更换头像 (JPG/PNG ≤ 50MB)</button>
+      </div>
+    </aside>
+
+    <!-- 右: 四章 -->
+    <main>
+      <section class="section">
+        <div class="sec-head">
+          <span class="sec-no">§1</span><h2>个人资料</h2><span class="en">PROFILE</span>
+        </div>
+        <div class="field-grid">
+          <div class="field"><label>姓名 <i>NAME</i></label><input value="杜同贺"></div>
+          <div class="field"><label>邮箱 <i>EMAIL</i></label><input value="320324492@qq.com"></div>
+          <div class="field"><label>电话 <i>PHONE</i></label><input value="18031816670"></div>
+          <div class="field"><label>研究方向 <i>FIELD</i></label><input value="污染控制与水质提升"></div>
+          <div class="field full"><label>个人简介 <i>BIO</i></label><textarea>围绕污染控制与水质提升，开展微纳米气泡强化工艺研究与数据分析</textarea></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ink">保存资料</button>
+          <button class="btn btn-ghost">重置</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="sec-head">
+          <span class="sec-no">§2</span><h2>账号安全</h2><span class="en">SECURITY</span>
+        </div>
+        <div class="field-grid sec-body">
+          <div class="field"><label>旧密码 <i>OLD</i></label><input type="password" placeholder="请输入旧密码"></div>
+          <div class="field"><label>新密码 <i>NEW</i></label><input type="password" placeholder="至少 6 位"></div>
+          <div class="field full"><label>确认新密码 <i>CONFIRM</i></label><input type="password" placeholder="再次输入新密码"></div>
+        </div>
+        <div class="btn-row"><button class="btn btn-ink">修改密码</button></div>
+        <div class="recover">
+          <div class="recover-info">
+            <h3>密码恢复码 <span class="st">未生成</span></h3>
+            <p>忘记密码时，在登录页输入「用户名 + 恢复码 + 新密码」即可自助重置，无需联系管理员。恢复码只在生成时显示一次，请立即保存到个人微信收藏；重置成功后即失效。</p>
+          </div>
+          <button class="btn btn-ghost" style="flex:none">生成恢复码</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="sec-head">
+          <span class="sec-no">§3</span><h2>通知偏好</h2><span class="en">NOTIFICATIONS</span>
+        </div>
+        <div class="sec-body">
+          <div class="notif-row">
+            <span class="name">每日提醒</span>
+            <span class="desc">每天固定时间推送一次待办事项汇总</span>
+            <label class="lever"><input type="checkbox" checked><span class="track"></span></label>
+          </div>
+          <div class="notif-row">
+            <span class="name">推送时间</span>
+            <span class="desc">北京时间，每日 11:00 统一推送</span>
+            <input class="time-input" value="11:00" aria-label="每日提醒时间">
+          </div>
+        </div>
+      </section>
+
+      <section class="section" style="margin-bottom:0">
+        <div class="sec-head">
+          <span class="sec-no">§4</span><h2>外观主题</h2><span class="en">APPEARANCE</span>
+        </div>
+        <div class="sec-body">
+          <div class="notif-row">
+            <span class="name">深色模式</span>
+            <span class="desc">也可在顶栏右侧 ☀️ / 🌙 快速切换</span>
+            <label class="lever"><input type="checkbox"><span class="track"></span></label>
+          </div>
+          <div class="theme-row">
+            <button class="swatch on"><span class="dot" style="background:linear-gradient(120deg,#FF7A5C,#FFB347)"></span><b>活力橙</b><small>DEFAULT</small></button>
+            <button class="swatch"><span class="dot" style="background:linear-gradient(120deg,#4A90E2,#6BABFF)"></span><b>海蓝</b><small>OCEAN</small></button>
+            <button class="swatch"><span class="dot" style="background:linear-gradient(120deg,#4CAF50,#66BB6A)"></span><b>森林绿</b><small>FOREST</small></button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</body>
+</html>

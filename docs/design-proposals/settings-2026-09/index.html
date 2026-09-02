@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>个人设置重设计 · 4 方案总览</title>
+<style>
+  :root {
+    --bg: #10171b; --card: #18232a; --line: #27363e;
+    --text: #dfe9e6; --muted: #8ba0a0; --teal: #35c2a4;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font-mono: Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); padding: 48px clamp(24px, 5vw, 72px) 80px; }
+  header h1 { font-size: 26px; }
+  header h1 em { font-style: normal; color: var(--teal); }
+  header p { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.8; max-width: 760px; }
+  header .meta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 14px; }
+  .grid { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 26px; }
+  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: transform 160ms ease, border-color 160ms ease; }
+  .shot:hover { transform: translateY(-4px); border-color: var(--teal); }
+  .thumb { position: relative; height: 236px; overflow: hidden; border-bottom: 1px solid var(--line); background: #fff; }
+  .thumb iframe { width: 1440px; height: 980px; border: 0; transform-origin: 0 0; transform: scale(0.236); pointer-events: none; position: absolute; top: 0; left: 0; }
+  .thumb .tag { position: absolute; z-index: 2; top: 10px; left: 10px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; background: rgba(9, 14, 17, 0.78); color: var(--teal); border: 1px solid rgba(53, 194, 164, 0.4); border-radius: 999px; padding: 4px 10px; backdrop-filter: blur(3px); }
+  .info { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .info h2 { font-size: 16.5px; }
+  .info h2 small { font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: 0.16em; color: var(--muted); margin-left: 8px; }
+  .info p { font-size: 12.5px; line-height: 1.75; color: var(--muted); flex: 1; }
+  .info a { color: var(--teal); font-size: 13px; font-weight: 600; text-decoration: none; }
+  .info a:hover { text-decoration: underline; }
+  footer { margin-top: 44px; color: var(--muted); font-size: 12px; line-height: 1.9; border-top: 1px solid var(--line); padding-top: 18px; }
+  footer b { color: var(--text); }
+</style>
+</head>
+<body>
+  <header>
+    <p class="meta">MICROBUBBLE LAB · SETTINGS REDESIGN · 2026-09</p>
+    <h1>个人设置页重设计 — <em>4 个方向</em>，选一个（可混搭）</h1>
+    <p>同样的四个区块（个人资料 / 账号安全 / 通知偏好 / 外观主题）与真实数据，四种完全不同的性格。缩略图实时渲染，点标题看全屏版。</p>
+  </header>
+
+  <div class="grid">
+    <article class="shot">
+      <div class="thumb"><span class="tag">A</span><iframe src="A-dossier.html" loading="lazy" title="A 预览"></iframe></div>
+      <div class="info">
+        <h2>研究档案 <small>DOSSIER</small></h2>
+        <p>延续登录页 D「剖面海报」同款语言：纸面 + 墨色 + 宋体章节 + 下划线输入框。左侧「标本标签」档案卡 + 右侧 §1-§4 章节。与登录页是同一产品家族。</p>
+        <a href="A-dossier.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">B</span><iframe src="B-bench.html" loading="lazy" title="B 预览"></iframe></div>
+      <div class="info">
+        <h2>实验台 <small>BENCH</small></h2>
+        <p>方格纸上的仪器模块面板：顶部操作员铭牌，四个 MOD 模块各带状态 LED 与模块编号，行式表单 + 仪器拨杆。最像「本地专业软件」。</p>
+        <a href="B-bench.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">C</span><iframe src="C-studio.html" loading="lazy" title="C 预览"></iframe></div>
+      <div class="info">
+        <h2>安静工作台 <small>STUDIO</small></h2>
+        <p>左侧锚点导航 + 大留白软卡片，贴主站珊瑚橙 token。信息密度最低、最现代，最接近主流 SaaS 的设置页，但更安静克制。</p>
+        <a href="C-studio.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">D</span><iframe src="D-deck.html" loading="lazy" title="D 预览"></iframe></div>
+      <div class="info">
+        <h2>暗色控制台 <small>LAB DECK</small></h2>
+        <p>深墨绿操作台：操作员铭牌 + 扫描光条动画，四个仪表面板，荧光青控件与拨杆开关。适合常开深色模式的人。</p>
+        <a href="D-deck.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+  </div>
+
+  <footer>
+    <b>怎么选：</b>回复字母即可（如「设置页用 A」）；也可以混搭（如「A 的档案卡 + C 的左导航」）。选定后我把它落到真实 SettingsView.vue，逻辑零改动。
+  </footer>
+</body>
+</html>

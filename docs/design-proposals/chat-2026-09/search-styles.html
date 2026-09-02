@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>头部搜索框 · 4 种样式对比</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --mono: Consolas, 'SFMono-Regular', monospace;
+    --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8ecea; color: var(--ink); font-family: var(--ui); font-size: 14px; padding: 40px clamp(20px, 5vw, 64px) 80px; }
+
+  h1 { font-family: 'Noto Serif SC', 'Songti SC', serif; font-size: 24px; font-weight: 900; margin-bottom: 6px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 34px; }
+
+  .variant { margin-bottom: 44px; }
+  .v-label { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-label b { font-size: 15px; }
+  .v-label small { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.2em; color: var(--muted); }
+  .v-desc { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+
+  /* 头部语境条 */
+  .head-strip {
+    background: var(--card);
+    border: 1.5px solid var(--ink);
+    border-radius: 10px 10px 0 0;
+    border-bottom: 0;
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 22px;
+  }
+  .head-strip .crumb { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; color: var(--muted); }
+  .head-strip .title { font-family: var(--serif, 'Songti SC', serif); font-weight: 900; font-size: 15px; margin-left: auto; }
+  .body-strip {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-top: 0;
+    border-radius: 0 0 10px 10px;
+    padding: 18px 22px;
+    font-size: 12px; color: var(--muted);
+  }
+
+  /* ── 通用输入基座 ── */
+  .s { display: flex; align-items: center; gap: 8px; height: 38px; font: inherit; font-size: 13px; color: var(--ink); transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease; }
+  .s .ico { color: var(--muted); font-size: 13px; }
+  .s input { border: 0; background: transparent; font: inherit; color: var(--ink); width: 150px; }
+  .s input::placeholder { color: #9fb0ab; }
+  .s input:focus { outline: 0; }
+  .s:focus-within .ico { color: var(--teal-soft); }
+
+  /* A 下划线 */
+  .s.underline { border-bottom: 1.5px solid var(--line-dash); padding: 0 4px; }
+  .s.underline:focus-within { border-bottom-color: var(--teal-soft); }
+
+  /* B 描边胶囊 */
+  .s.pill { border: 1.5px solid var(--line-dash); border-radius: 999px; padding: 0 14px; background: var(--card); }
+  .s.pill:focus-within { border-color: var(--teal-soft); background: #fff; }
+
+  /* C 档案卡硬阴影 */
+  .s.card { border: 1.5px solid var(--ink); border-radius: 8px; padding: 0 12px; background: var(--card); box-shadow: 3px 3px 0 rgba(22, 35, 42, 0.14); }
+  .s.card:focus-within { border-color: var(--teal); }
+
+  /* D 墨底反白 */
+  .s.inkwell { border: 1px solid var(--ink); border-radius: 9px; padding: 0 12px; background: var(--ink); }
+  .s.inkwell input { color: #f4f6f4; }
+  .s.inkwell input::placeholder { color: rgba(244, 246, 244, 0.55); }
+  .s.inkwell .ico { color: rgba(244, 246, 244, 0.55); }
+  .s.inkwell:focus-within { box-shadow: 0 0 0 3px rgba(14, 118, 110, 0.25); }
+
+  /* 键 */
+  .kbd { font-family: var(--mono); font-size: 9px; border: 1px solid var(--line-dash); border-radius: 4px; padding: 1px 6px; color: var(--muted); }
+
+  .spec { margin-top: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; color: var(--muted); }
+</style>
+</head>
+<body>
+  <h1>头部搜索框 · 样式对比</h1>
+  <p class="sub">同一位置、同一功能（搜索当前对话消息），四种皮肤。点击各输入框可试聚焦态。选一个编号即可。</p>
+
+  <div class="variant">
+    <div class="v-label"><b>1 · 下划线式</b><small>UNDERLINE</small></div>
+    <p class="v-desc">与全站表单同款语言：透明底 + 墨线，聚焦转墨青。最安静，和页面浑然一体。</p>
+    <div class="head-strip">
+      <span class="crumb">首页 / 智能对话</span>
+      <span class="title">你好</span>
+      <div class="s underline"><span class="ico">⌕</span><input placeholder="搜索本对话内容"></div>
+    </div>
+    <div class="body-strip">消息区 …</div>
+    <p class="spec">聚焦态: 底线转墨青 + 图标变青 · 宽 220px</p>
+  </div>
+
+  <div class="variant">
+    <div class="v-label"><b>2 · 描边胶囊</b><small>PILL</small></div>
+    <p class="v-desc">圆润胶囊，搜索意图最直观，鼠标可命中范围大。与右栏圆角卡片呼应。</p>
+    <div class="head-strip">
+      <span class="crumb">首页 / 智能对话</span>
+      <span class="title">你好</span>
+      <div class="s pill"><span class="ico">⌕</span><input placeholder="搜索本对话内容"><span class="kbd">Ctrl F</span></div>
+    </div>
+    <div class="body-strip">消息区 …</div>
+    <p class="spec">聚焦态: 边线转墨青 + 底色变纯白 · 附快捷键提示</p>
+  </div>
+
+  <div class="variant">
+    <div class="v-label"><b>3 · 档案卡硬阴影</b><small>CARD</small></div>
+    <p class="v-desc">与输入器/标本标签同款：墨线 + 3px 硬阴影，存在感最强，「档案工具」气质最足。</p>
+    <div class="head-strip">
+      <span class="crumb">首页 / 智能对话</span>
+      <span class="title">你好</span>
+      <div class="s card"><span class="ico">⌕</span><input placeholder="搜索本对话内容"></div>
+    </div>
+    <div class="body-strip">消息区 …</div>
+    <p class="spec">聚焦态: 边线转墨青 · 阴影常驻</p>
+  </div>
+
+  <div class="variant">
+    <div class="v-label"><b>4 · 墨底反白</b><small>INKWELL</small></div>
+    <p class="v-desc">深墨底 + 浅字，像终端命令框，对比最强；深色模式下与背景融为一体的设计。</p>
+    <div class="head-strip">
+      <span class="crumb">首页 / 智能对话</span>
+      <span class="title">你好</span>
+      <div class="s inkwell"><span class="ico">⌕</span><input placeholder="搜索本对话内容"></div>
+    </div>
+    <div class="body-strip">消息区 …</div>
+    <p class="spec">聚焦态: 外圈墨青光环 · 深色主题下自动换成深底浅字</p>
+  </div>
+</body>
+</html>

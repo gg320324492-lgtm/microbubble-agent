@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D · 暗色控制台 — 个人设置</title>
+<link rel="stylesheet" href="d-deck.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="plate">
+    <span class="plate__mark">∿</span>
+    <div class="plate__id">
+      <b>杜同贺 · 管理员</b>
+      <small>OPERATOR BADGE · 科研工作台</small>
+    </div>
+    <div class="plate__meta">SESSION<b>ACTIVE · 2026-09-02</b></div>
+  </header>
+
+  <div class="grid">
+    <section class="panel panel--wide">
+      <div class="p-head"><h2>个人资料</h2><small>PROFILE</small><span class="led">READY</span></div>
+      <div class="row"><label>姓名</label><input class="io" value="杜同贺"></div>
+      <div class="row"><label>邮箱</label><input class="io" value="320324492@qq.com"></div>
+      <div class="row"><label>研究方向</label><input class="io" value="污染控制与水质提升"></div>
+      <div class="row"><label>个人简介</label><textarea class="io">围绕污染控制与水质提升，开展微纳米气泡强化工艺研究与数据分析</textarea></div>
+      <div class="btn-row">
+        <button class="btn">保存资料</button>
+        <button class="btn btn-ghost">重置</button>
+        <button class="btn btn-ghost" style="margin-left:auto">更换头像</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="p-head"><h2>账号安全</h2><small>SECURITY</small><span class="led">READY</span></div>
+      <div class="row"><label>旧密码</label><input class="io" type="password" placeholder="请输入旧密码"></div>
+      <div class="row"><label>新密码</label><input class="io" type="password" placeholder="至少 6 位"></div>
+      <div class="row"><label>确认密码</label><input class="io" type="password" placeholder="再次输入新密码"></div>
+      <div class="btn-row"><button class="btn">修改密码</button></div>
+      <div class="recover">
+        <div>
+          <b>密码恢复码 <span class="st">未生成</span></b>
+          <p>忘记密码时，在登录页输入「用户名 + 恢复码 + 新密码」即可自助重置。恢复码只在生成时显示一次，请立即保存到微信收藏；重置成功后即失效。</p>
+        </div>
+        <button class="btn-ghost btn">生成</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="p-head"><h2>通知偏好</h2><small>NOTIFY</small><span class="led">READY</span></div>
+      <div class="tog-row"><b>每日提醒</b><span class="d">关闭后不再推送任何提醒</span><label class="tog"><input type="checkbox" checked><span class="tr"></span></label></div>
+      <div class="tog-row"><b>推送时间</b><span class="d">北京时间 · 每日一次</span><input class="time" value="11:00"></div>
+    </section>
+
+    <section class="panel">
+      <div class="p-head"><h2>外观主题</h2><small>APPEARANCE</small><span class="led">READY</span></div>
+      <div class="tog-row"><b>深色模式</b><span class="d">也可在顶栏 ☀️ / 🌙 切换</span><label class="tog"><input type="checkbox"><span class="tr"></span></label></div>
+      <div class="tog-row"><b>主题色</b><span class="d">工作台主色</span>
+        <div class="themes">
+          <button class="th on"><span class="bar" style="background:linear-gradient(120deg,#FF7A5C,#FFB347)"></span><b>活力橙</b><small>DEFAULT</small></button>
+          <button class="th"><span class="bar" style="background:linear-gradient(120deg,#4A90E2,#6BABFF)"></span><b>海蓝</b><small>OCEAN</small></button>
+          <button class="th"><span class="bar" style="background:linear-gradient(120deg,#4CAF50,#66BB6A)"></span><b>森林绿</b><small>FOREST</small></button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>
