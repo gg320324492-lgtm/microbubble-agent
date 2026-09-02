@@ -787,20 +787,88 @@ onMounted(() => {
   color: var(--ink); font-weight: 700;
 }
 
-/* 恢复码对话框 (内容同样用档案语言) */
-.recovery-warn {
-  color: #c45656; font-size: 13px; line-height: 1.7; margin: 0 0 14px;
+/* ── 恢复码对话框 — 档案语言同款 (标本标签 + 墨线 + 硬阴影) ── */
+.settings-dossier :deep(.el-dialog.recovery-dialog) {
+  background: var(--card);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 6px 6px 0 var(--shadow-ink);
+  position: relative;
 }
-.recovery-code-row {
+/* 顶部标本标签 (遮住边框线, 同 .specimen-card::before 手法) */
+.settings-dossier :deep(.el-dialog.recovery-dialog)::before {
+  content: 'MEMBER FILE · RECOVERY CODE';
+  position: absolute; top: -9px; left: 22px;
+  background: var(--card); padding: 0 8px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.28em; color: var(--teal);
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__header) {
+  padding: 24px 28px 14px;
+  margin-right: 0;
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__title) {
+  font-family: var(--font-serif);
+  font-size: 19px; font-weight: 900; letter-spacing: 0.02em; color: var(--ink);
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__headerbtn) {
+  top: 22px; right: 22px; width: auto; height: auto;
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__close) {
+  color: var(--muted); font-size: 17px;
+  transition: color 150ms ease;
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__headerbtn:hover .el-dialog__close) {
+  color: var(--ink);
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__body) {
+  padding: 0 28px 6px;
+  color: var(--ink);
+}
+/* 警示改为珊瑚虚线「印章」框 */
+.settings-dossier :deep(.el-dialog.recovery-dialog .recovery-warn) {
+  color: var(--coral);
+  border: 1px dashed var(--coral);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12.5px; line-height: 1.75;
+  margin: 0 0 16px;
+  opacity: 0.92;
+}
+/* 恢复码展示条: 墨线 + 硬阴影 */
+.settings-dossier :deep(.el-dialog.recovery-dialog .recovery-code-row) {
   display: flex; align-items: center; gap: 12px;
-  background: var(--paper); border: 1px dashed var(--line-dash); border-radius: 8px;
-  padding: 14px 16px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 3px 3px 0 var(--shadow-ink);
+  padding: 16px 18px;
 }
-.recovery-code {
+.settings-dossier :deep(.el-dialog.recovery-dialog .recovery-code) {
   flex: 1; font-family: var(--font-mono);
-  font-size: 20px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink);
+  font-size: 22px; font-weight: 700; letter-spacing: 0.12em; color: var(--ink);
+  user-select: all;
 }
-.recovery-hint { margin: 14px 0 0; font-size: 12.5px; line-height: 1.8; color: var(--muted); }
+.settings-dossier :deep(.el-dialog.recovery-dialog .recovery-hint) {
+  margin: 16px 0 0; font-size: 12.5px; line-height: 1.8; color: var(--muted);
+}
+/* 弹窗内按钮 (复制 / 我已保存好): 墨线药丸, hover 转 teal
+   特异性 0,5,0 压过全局 :root .el-button--primary:not(...) (0,4,0) 的橙色 */
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-button--primary) {
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  color: var(--ink);
+  font-weight: 700;
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-button--primary:hover:not(.is-disabled)) {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fbfcfb;
+}
+.settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__footer) {
+  padding: 14px 28px 24px;
+}
+
 
 /* ── 响应式 ─────────────────────────────── */
 @media (max-width: 900px) {
