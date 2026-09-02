@@ -29,7 +29,11 @@ class MeetingService:
         """获取单个会议（含参与者）"""
         result = await self.db.execute(
             select(Meeting)
-            .options(selectinload(Meeting.participants))
+            .options(
+                selectinload(Meeting.participants).selectinload(MeetingParticipant.member),
+                # 2026-09-02 P0: 同 get_meetings — asyncio 下 lazy 访问必 MissingGreenlet
+                selectinload(Meeting.tasks),
+            )
             .where(Meeting.id == meeting_id)
         )
         return result.scalar_one_or_none()
@@ -41,7 +45,13 @@ class MeetingService:
         keyword: Optional[str] = None
     ) -> List[Meeting]:
         """查询会议列表"""
-        query = select(Meeting).options(selectinload(Meeting.participants))
+        # 2026-09-02 P0: tasks 必须 selectinload — relationship lazy="select" 在 asyncio
+        # 下属性访问必 MissingGreenlet (query_meetings 工具 task_count 曾 100% 炸,
+        # agent trace: 36 次 error=MissingGreenlet, 工具失败 → 模型幻觉兜底编会议列表)
+        query = select(Meeting).options(
+            selectinload(Meeting.participants).selectinload(MeetingParticipant.member),
+            selectinload(Meeting.tasks),
+        )
         filters = []
 
         if date_from:
