@@ -1,0 +1,519 @@
+
+/* ═══ A · 研究档案 DOSSIER — 与登录页 D「剖面海报」同产品家族 (2026-09) ═══ */
+.settings-dossier[data-v-2b5c4d66] {
+  --paper: #f4f6f4;
+  --card: #fdfefc;
+  --ink: #16232a;
+  --teal: #0e766e;
+  --teal-soft: #198e83;
+  --coral: #ef7256;
+  --line: #cdd8d4;
+  --line-dash: #b9c9c5;
+  --muted: #5f6f6b;
+  --shadow-ink: rgba(22, 35, 42, 0.12);
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* 深色主题: 同一设计语言换墨盘 (对应 D-deck 配色) */
+[data-theme="dark"] .settings-dossier[data-v-2b5c4d66] {
+  --paper: #12191d;
+  --card: #172126;
+  --ink: #e2ecea;
+  --teal: #35c2a4;
+  --teal-soft: #4ad0b4;
+  --coral: #ff8a6b;
+  --line: #263740;
+  --line-dash: #31454f;
+  --muted: #8ba4a0;
+  --shadow-ink: rgba(0, 0, 0, 0.45);
+}
+.sheet[data-v-2b5c4d66] { max-width: 1120px; margin: 0 auto; padding: 40px clamp(20px, 4vw, 56px) 96px;
+}
+
+/* ── 卷宗头 ─────────────────────────────── */
+.dossier-head[data-v-2b5c4d66] {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; color: var(--muted);
+  border-bottom: 1.5px solid var(--ink); padding-bottom: 14px;
+}
+.dossier-head b[data-v-2b5c4d66] { font-family: var(--font-serif); font-size: 15px; letter-spacing: 0.06em; color: var(--ink);
+}
+.dossier-title[data-v-2b5c4d66] {
+  font-family: var(--font-serif);
+  font-size: clamp(30px, 3.2vw, 40px); font-weight: 900;
+  letter-spacing: 0.02em; margin: 28px 0 6px;
+}
+.dossier-sub[data-v-2b5c4d66] { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em; color: var(--teal);
+}
+
+/* ── 主体双栏 ────────────────────────────── */
+.cols[data-v-2b5c4d66] { display: grid; grid-template-columns: 300px 1fr; gap: clamp(28px, 4vw, 56px); margin-top: 36px;
+}
+
+/* 左: 标本标签式档案卡 */
+.specimen[data-v-2b5c4d66] { position: sticky; top: 24px; align-self: start;
+}
+.specimen-card[data-v-2b5c4d66] {
+  background: var(--card);
+  border: 1px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--shadow-ink);
+  padding: 26px 24px 22px;
+  position: relative;
+}
+.specimen-card[data-v-2b5c4d66]::before {
+  content: 'MEMBER SPECIMEN';
+  position: absolute; top: -9px; left: 20px;
+  background: var(--paper); padding: 0 8px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.28em; color: var(--muted);
+}
+.avatar-wrap[data-v-2b5c4d66] { display: grid; place-items: center; margin-bottom: 16px; position: relative;
+}
+.avatar[data-v-2b5c4d66] {
+  width: 108px; height: 108px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, var(--card), #dbe8e4 60%, #b9d3cc);
+  border: 1.5px solid rgba(14, 118, 110, 0.45);
+  display: grid; place-items: center;
+  font-size: 34px; color: var(--teal); font-family: var(--font-serif);
+  overflow: hidden;
+}
+[data-theme="dark"] .avatar[data-v-2b5c4d66] { background: radial-gradient(circle at 32% 28%, #1c2a31, #1f3038 60%, #274049);
+}
+.avatar-img[data-v-2b5c4d66] { width: 100%; height: 100%; object-fit: cover;
+}
+.avatar-ring[data-v-2b5c4d66] {
+  position: absolute; width: 128px; height: 128px; border-radius: 50%;
+  border: 1px dashed var(--line-dash);
+}
+.specimen-name[data-v-2b5c4d66] { font-family: var(--font-serif); font-size: 24px; font-weight: 900; text-align: center;
+}
+.specimen-tags[data-v-2b5c4d66] {
+  display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+}
+.specimen-tags span[data-v-2b5c4d66] { border: 1px solid var(--teal); color: var(--teal); padding: 2px 8px; border-radius: 999px;
+}
+.specimen-tags span.admin[data-v-2b5c4d66] { border-color: var(--coral); color: var(--coral);
+}
+.meta-list[data-v-2b5c4d66] { margin-top: 18px; border-top: 1px dashed var(--line-dash); padding-top: 6px;
+}
+.meta-list div[data-v-2b5c4d66] {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 0; border-bottom: 1px dashed var(--line-dash);
+  font-size: 12.5px;
+}
+.meta-list dt[data-v-2b5c4d66] { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; color: var(--muted);
+}
+.meta-list dd[data-v-2b5c4d66] { color: var(--ink); text-align: right; word-break: break-all;
+}
+.avatar-btn[data-v-2b5c4d66] {
+  display: block; width: 100%; margin-top: 16px;
+  border: 1px dashed var(--line-dash); border-radius: 8px;
+  padding: 8px; font: inherit; font-size: 12px; color: var(--muted);
+  cursor: pointer; text-align: center;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.avatar-btn[data-v-2b5c4d66]:hover { border-color: var(--teal); color: var(--teal);
+}
+
+/* ── 章节 ───────────────────────────────── */
+.section[data-v-2b5c4d66] { margin-bottom: 48px;
+}
+.sec-head[data-v-2b5c4d66] {
+  display: flex; align-items: baseline; gap: 14px;
+  border-bottom: 1px solid var(--line); padding-bottom: 10px;
+}
+.sec-no[data-v-2b5c4d66] { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.2em; color: var(--coral);
+}
+.sec-head h2[data-v-2b5c4d66] { font-family: var(--font-serif); font-size: 21px; font-weight: 900; letter-spacing: 0.03em; margin: 0;
+}
+.sec-head .en[data-v-2b5c4d66] { margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.22em; color: var(--muted);
+}
+
+/* 表单区: 双列下划线字段 */
+.field-grid[data-v-2b5c4d66] { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; margin-top: 20px;
+}
+.field[data-v-2b5c4d66] { display: flex; flex-direction: column;
+}
+.field.full[data-v-2b5c4d66] { grid-column: 1 / -1;
+}
+.field > label[data-v-2b5c4d66] {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 2px;
+}
+.field > label i[data-v-2b5c4d66] {
+  font-style: normal; font-family: var(--font-mono);
+  font-weight: 400; font-size: 9.5px; letter-spacing: 0.16em; color: var(--muted);
+}
+/* el-input 重塑为下划线输入框 (与登录页同款) */
+.section[data-v-2b5c4d66] .el-input__wrapper,
+.field[data-v-2b5c4d66] .el-input__wrapper {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  border-bottom: 1.5px solid var(--ink);
+  padding: 0 2px;
+  transition: border-color 150ms ease;
+}
+.section[data-v-2b5c4d66] .el-input__wrapper:hover,
+.field[data-v-2b5c4d66] .el-input__wrapper:hover { box-shadow: none;
+}
+.section[data-v-2b5c4d66] .el-input__wrapper.is-focus,
+.field[data-v-2b5c4d66] .el-input__wrapper.is-focus { box-shadow: none; border-bottom-color: var(--teal-soft);
+}
+.section[data-v-2b5c4d66] .el-input__inner,
+.field[data-v-2b5c4d66] .el-input__inner {
+  height: 42px; line-height: 42px;
+  font-size: 14.5px; color: var(--ink);
+  caret-color: var(--teal);
+}
+.section[data-v-2b5c4d66] .el-textarea__inner,
+.field[data-v-2b5c4d66] .el-textarea__inner {
+  background: transparent;
+  border: 0; border-bottom: 1.5px solid var(--ink); border-radius: 0;
+  box-shadow: none;
+  font-size: 14.5px; color: var(--ink); line-height: 1.7;
+  padding: 8px 2px;
+  transition: border-color 150ms ease;
+}
+.section[data-v-2b5c4d66] .el-textarea__inner:focus,
+.field[data-v-2b5c4d66] .el-textarea__inner:focus { border-bottom-color: var(--teal-soft);
+}
+.field[data-v-2b5c4d66] .el-input__inner::placeholder,
+.field[data-v-2b5c4d66] .el-textarea__inner::placeholder,
+.section[data-v-2b5c4d66] .el-input__inner::placeholder { color: #9fb0ab;
+}
+[data-theme="dark"] .section[data-v-2b5c4d66] .el-input__inner::placeholder,
+[data-theme="dark"] .field[data-v-2b5c4d66] .el-input__inner::placeholder,
+[data-theme="dark"] .field[data-v-2b5c4d66] .el-textarea__inner::placeholder { color: #52706b;
+}
+.section[data-v-2b5c4d66] .el-input__suffix { color: var(--muted);
+}
+.section[data-v-2b5c4d66] .el-form-item.is-error .el-input__wrapper,
+.field[data-v-2b5c4d66] .el-form-item.is-error .el-input__wrapper {
+  border-bottom-color: #c45656;
+  box-shadow: none;
+}
+.section[data-v-2b5c4d66] .el-form-item__error { padding-top: 4px; font-size: 11.5px;
+}
+.section[data-v-2b5c4d66] .el-form-item { margin-bottom: 0;
+}
+.dossier-form .field-grid[data-v-2b5c4d66] { margin-top: 20px;
+}
+.dossier-form .f-label[data-v-2b5c4d66] {
+  display: flex; justify-content: space-between; align-items: baseline; width: 100%;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink);
+}
+.dossier-form .f-label i[data-v-2b5c4d66] {
+  font-style: normal; font-family: var(--font-mono);
+  font-weight: 400; font-size: 9.5px; letter-spacing: 0.16em; color: var(--muted);
+}
+/* Chrome 自动填充白底修正 */
+.dossier-form[data-v-2b5c4d66] .el-input__inner:-webkit-autofill,
+.field[data-v-2b5c4d66] .el-input__inner:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+  -webkit-text-fill-color: var(--ink);
+  transition: background-color 99999s ease-in-out 0s;
+}
+
+/* 按钮: 墨色药丸 / 虚线幽灵 */
+.btn-row[data-v-2b5c4d66] { display: flex; gap: 12px; margin-top: 24px;
+}
+.btn[data-v-2b5c4d66] {
+  height: 46px; padding: 0 30px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.08em;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.btn[data-v-2b5c4d66]:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px;
+}
+.btn[data-v-2b5c4d66]:disabled { opacity: 0.6; cursor: default; transform: none !important; box-shadow: none !important;
+}
+.btn-ink[data-v-2b5c4d66] { background: var(--ink); color: var(--paper); border: 1.5px solid var(--ink);
+}
+.btn-ink[data-v-2b5c4d66]:hover:not(:disabled) {
+  background: var(--teal); border-color: var(--teal); color: #fbfcfb;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(14, 118, 110, 0.26);
+}
+.btn-ghost[data-v-2b5c4d66] { background: transparent; color: var(--muted); border: 1px solid var(--line-dash);
+}
+.btn-ghost[data-v-2b5c4d66]:hover:not(:disabled) { color: var(--ink); border-color: var(--ink);
+}
+
+/* 恢复码 */
+.recover[data-v-2b5c4d66] {
+  margin-top: 26px; border: 1px dashed var(--line-dash); border-radius: 12px;
+  padding: 18px 20px; display: flex; gap: 20px; align-items: center; justify-content: space-between;
+}
+.recover-info h3[data-v-2b5c4d66] { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 0;
+}
+.recover-info .st[data-v-2b5c4d66] {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+  color: var(--coral); border: 1px solid var(--coral); border-radius: 999px; padding: 1px 8px;
+}
+.recover-info .st.is-ok[data-v-2b5c4d66] { color: var(--teal); border-color: var(--teal);
+}
+.recover-info p[data-v-2b5c4d66] { font-size: 12px; color: var(--muted); margin: 6px 0 0; max-width: 480px; line-height: 1.8;
+}
+.recover-btn[data-v-2b5c4d66] { flex: none; height: 42px; padding: 0 22px; font-size: 12.5px;
+}
+
+/* 外观: 仪表行 + 色板 */
+.lever-row[data-v-2b5c4d66] {
+  display: flex; align-items: center; gap: 16px;
+  padding: 15px 2px; border-bottom: 1px dashed var(--line-dash);
+}
+.lever-row[data-v-2b5c4d66]:first-of-type { margin-top: 8px;
+}
+.lever-name[data-v-2b5c4d66] { font-size: 13.5px; font-weight: 700; min-width: 96px;
+}
+.lever-desc[data-v-2b5c4d66] { font-size: 12px; color: var(--muted); flex: 1;
+}
+.lever-row > span[data-v-2b5c4d66]:last-child:not(.lever-desc) { width: 52px;
+}
+
+/* el-switch 重塑为仪器拨杆 */
+.dossier-switch[data-v-2b5c4d66] .el-switch__core {
+  min-width: 52px; height: 26px; border-radius: 999px;
+  background: var(--line-dash); border: 1.5px solid var(--ink);
+  transition: background 170ms ease, border-color 170ms ease;
+}
+.dossier-switch.is-checked[data-v-2b5c4d66] .el-switch__core {
+  background: rgba(14, 118, 110, 0.14); border-color: var(--teal);
+}
+.dossier-switch[data-v-2b5c4d66] .el-switch__action {
+  background: var(--ink); border: none;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dossier-switch.is-checked[data-v-2b5c4d66] .el-switch__action { background: var(--teal); color: #fff;
+}
+.theme-row[data-v-2b5c4d66] { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap;
+}
+.swatch[data-v-2b5c4d66] {
+  width: 132px; border: 1px solid var(--line-dash); border-radius: 12px;
+  padding: 14px; cursor: pointer; background: var(--card);
+  text-align: left; font: inherit; color: var(--ink);
+  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  position: relative;
+}
+.swatch[data-v-2b5c4d66]:hover { border-color: var(--ink); transform: translateY(-2px);
+}
+.swatch[data-v-2b5c4d66]:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px;
+}
+.swatch .dot[data-v-2b5c4d66] { display: block; width: 100%; height: 34px; border-radius: 7px; margin-bottom: 10px;
+}
+.swatch b[data-v-2b5c4d66] { font-size: 12.5px;
+}
+.swatch small[data-v-2b5c4d66] {
+  display: block; font-family: var(--font-mono);
+  font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); margin-top: 2px;
+}
+.swatch.is-on[data-v-2b5c4d66] { border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 var(--shadow-ink);
+}
+.swatch.is-on[data-v-2b5c4d66]::after {
+  content: '✓'; position: absolute; top: 8px; right: 10px;
+  color: var(--ink); font-weight: 700;
+}
+
+/* ── 恢复码对话框 — 档案语言同款 (标本标签 + 墨线 + 硬阴影) ── */
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog {
+  background: var(--card);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 6px 6px 0 var(--shadow-ink);
+  position: relative;
+}
+/* 顶部标本标签 (遮住边框线, 同 .specimen-card::before 手法) */
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog::before {
+  content: 'MEMBER FILE · RECOVERY CODE';
+  position: absolute; top: -9px; left: 22px;
+  background: var(--card); padding: 0 8px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.28em; color: var(--teal);
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-dialog__header {
+  padding: 24px 28px 14px;
+  margin-right: 0;
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-dialog__title {
+  font-family: var(--font-serif);
+  font-size: 19px; font-weight: 900; letter-spacing: 0.02em; color: var(--ink);
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-dialog__headerbtn {
+  top: 22px; right: 22px; width: auto; height: auto;
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-dialog__close {
+  color: var(--muted); font-size: 17px;
+  transition: color 150ms ease;
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: var(--ink);
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-dialog__body {
+  padding: 0 28px 6px;
+  color: var(--ink);
+}
+/* 警示改为珊瑚虚线「印章」框 */
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .recovery-warn {
+  color: var(--coral);
+  border: 1px dashed var(--coral);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 12.5px; line-height: 1.75;
+  margin: 0 0 16px;
+  opacity: 0.92;
+}
+/* 恢复码展示条: 墨线 + 硬阴影 */
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .recovery-code-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  box-shadow: 3px 3px 0 var(--shadow-ink);
+  padding: 16px 18px;
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .recovery-code {
+  flex: 1; font-family: var(--font-mono);
+  font-size: 22px; font-weight: 700; letter-spacing: 0.12em; color: var(--ink);
+  user-select: all;
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .recovery-hint {
+  margin: 16px 0 0; font-size: 12.5px; line-height: 1.8; color: var(--muted);
+}
+/* 弹窗内按钮 (复制 / 我已保存好): 墨线药丸, hover 转 teal
+   特异性 0,5,0 压过全局 :root .el-button--primary:not(...) (0,4,0) 的橙色 */
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-button--primary {
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  color: var(--ink);
+  font-weight: 700;
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-button--primary:hover:not(.is-disabled) {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fbfcfb;
+}
+.settings-dossier[data-v-2b5c4d66] .el-dialog.recovery-dialog .el-dialog__footer {
+  padding: 14px 28px 24px;
+}
+
+
+/* ── 响应式 ─────────────────────────────── */
+@media (max-width: 900px) {
+.cols[data-v-2b5c4d66] { grid-template-columns: 1fr;
+}
+.specimen[data-v-2b5c4d66] { position: static;
+}
+.field-grid[data-v-2b5c4d66] { grid-template-columns: 1fr;
+}
+.dossier-head[data-v-2b5c4d66] { flex-direction: column; gap: 4px;
+}
+.recover[data-v-2b5c4d66] { flex-direction: column; align-items: stretch;
+}
+.recover-btn[data-v-2b5c4d66] { width: 100%;
+}
+}
+@media (prefers-reduced-motion: reduce) {
+.btn[data-v-2b5c4d66], .swatch[data-v-2b5c4d66], .avatar-btn[data-v-2b5c4d66] { transition: none !important;
+}
+}
+
+/* 变量自带深色覆盖 — MessageBox 在 body 下, 复用 data-theme 属性选择器 */
+.el-message-box.dossier-messagebox {
+  --dp-paper: #f4f6f4; --dp-card: #fdfefc; --dp-ink: #16232a;
+  --dp-teal: #0e766e; --dp-coral: #ef7256; --dp-mut: #5f6f6b;
+  --dp-line: #cdd8d4; --dp-shadow: rgba(22, 35, 42, 0.12);
+}
+[data-theme="dark"] .el-message-box.dossier-messagebox {
+  --dp-paper: #12191d; --dp-card: #172126; --dp-ink: #e2ecea;
+  --dp-teal: #35c2a4; --dp-coral: #ff8a6b; --dp-mut: #8ba4a0;
+  --dp-line: #31454f; --dp-shadow: rgba(0, 0, 0, 0.45);
+}
+.el-message-box.dossier-messagebox {
+  background: var(--dp-card);
+  border: 1px solid var(--dp-ink);
+  border-radius: 6px;
+  box-shadow: 6px 6px 0 var(--dp-shadow);
+  position: relative;
+  padding: 0;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+}
+/* 顶部标本标签压边框线 (同恢复码弹窗手法) */
+.el-message-box.dossier-messagebox::before {
+  content: 'MEMBER FILE · CONFIRM';
+  position: absolute; top: -9px; left: 22px;
+  background: var(--dp-card); padding: 0 8px;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 9.5px; letter-spacing: 0.28em; color: var(--dp-teal);
+}
+.el-message-box.dossier-messagebox .el-message-box__header {
+  padding: 22px 26px 6px;
+}
+.el-message-box.dossier-messagebox .el-message-box__title {
+  font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  font-size: 18px; font-weight: 900; letter-spacing: 0.02em; color: var(--dp-ink);
+}
+.el-message-box.dossier-messagebox .el-message-box__headerbtn {
+  top: 20px; right: 20px;
+}
+.el-message-box.dossier-messagebox .el-message-box__headerbtn .el-message-box__close {
+  color: var(--dp-mut); font-size: 17px;
+  transition: color 150ms ease;
+}
+.el-message-box.dossier-messagebox .el-message-box__headerbtn:hover .el-message-box__close,
+.el-message-box.dossier-messagebox .el-message-box__headerbtn:focus .el-message-box__close {
+  color: var(--dp-ink);
+}
+.el-message-box.dossier-messagebox .el-message-box__content {
+  color: var(--dp-ink);
+  font-size: 13.5px; line-height: 1.8;
+  padding: 10px 26px 8px;
+}
+/* 警示图标染珊瑚色 */
+.el-message-box.dossier-messagebox .el-message-box__status svg {
+  color: var(--dp-coral);
+}
+.el-message-box.dossier-messagebox .el-message-box__btns {
+  padding: 10px 26px 20px;
+}
+/* 按钮: 取消=墨线幽灵 / 确认=墨线药丸 hover 转 teal
+   特异性 0,5,0 压过全局 :root .el-button--primary:not(...) (0,4,0) 的 #B84523 橙 */
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button--primary {
+  background: transparent;
+  border: 1.5px solid var(--dp-ink);
+  border-radius: 999px;
+  color: var(--dp-ink);
+  font-weight: 700;
+  padding: 9px 22px;
+}
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button--primary:hover,
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button--primary:focus {
+  background: var(--dp-teal);
+  border-color: var(--dp-teal);
+  color: #fbfcfb;
+}
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button:not(.el-button--primary) {
+  background: transparent;
+  border: 1px solid var(--dp-line);
+  border-radius: 999px;
+  color: var(--dp-mut);
+  padding: 9px 22px;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button:not(.el-button--primary):hover {
+  color: var(--dp-ink);
+  border-color: var(--dp-ink);
+  background: transparent;
+}
+@media (max-width: 480px) {
+.el-message-box.dossier-messagebox .el-message-box__btns .el-button {
+    padding: 9px 16px;
+}
+}

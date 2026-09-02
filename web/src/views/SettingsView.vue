@@ -485,7 +485,7 @@ const onGenerateRecoveryCode = async () => {
       await ElMessageBox.confirm(
         '重新生成会使旧恢复码立即失效。如果你的其他设备/记录里存的是旧码，将无法再用于重置。确定重新生成？',
         '重新生成恢复码',
-        { confirmButtonText: '重新生成', cancelButtonText: '取消', type: 'warning' }
+        { confirmButtonText: '重新生成', cancelButtonText: '取消', type: 'warning', customClass: 'dossier-messagebox' }
       )
     } catch {
       return
@@ -882,5 +882,102 @@ onMounted(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .btn, .swatch, .avatar-btn { transition: none !important; }
+}
+</style>
+
+<!-- ElMessageBox 全局确认框 (teleport 到 body, scoped 够不到) — 档案语言同款 -->
+<style>
+/* 变量自带深色覆盖 — MessageBox 在 body 下, 复用 data-theme 属性选择器 */
+.el-message-box.dossier-messagebox {
+  --dp-paper: #f4f6f4; --dp-card: #fdfefc; --dp-ink: #16232a;
+  --dp-teal: #0e766e; --dp-coral: #ef7256; --dp-mut: #5f6f6b;
+  --dp-line: #cdd8d4; --dp-shadow: rgba(22, 35, 42, 0.12);
+}
+[data-theme="dark"] .el-message-box.dossier-messagebox {
+  --dp-paper: #12191d; --dp-card: #172126; --dp-ink: #e2ecea;
+  --dp-teal: #35c2a4; --dp-coral: #ff8a6b; --dp-mut: #8ba4a0;
+  --dp-line: #31454f; --dp-shadow: rgba(0, 0, 0, 0.45);
+}
+.el-message-box.dossier-messagebox {
+  background: var(--dp-card);
+  border: 1px solid var(--dp-ink);
+  border-radius: 6px;
+  box-shadow: 6px 6px 0 var(--dp-shadow);
+  position: relative;
+  padding: 0;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+}
+/* 顶部标本标签压边框线 (同恢复码弹窗手法) */
+.el-message-box.dossier-messagebox::before {
+  content: 'MEMBER FILE · CONFIRM';
+  position: absolute; top: -9px; left: 22px;
+  background: var(--dp-card); padding: 0 8px;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 9.5px; letter-spacing: 0.28em; color: var(--dp-teal);
+}
+.el-message-box.dossier-messagebox .el-message-box__header {
+  padding: 22px 26px 6px;
+}
+.el-message-box.dossier-messagebox .el-message-box__title {
+  font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  font-size: 18px; font-weight: 900; letter-spacing: 0.02em; color: var(--dp-ink);
+}
+.el-message-box.dossier-messagebox .el-message-box__headerbtn {
+  top: 20px; right: 20px;
+}
+.el-message-box.dossier-messagebox .el-message-box__headerbtn .el-message-box__close {
+  color: var(--dp-mut); font-size: 17px;
+  transition: color 150ms ease;
+}
+.el-message-box.dossier-messagebox .el-message-box__headerbtn:hover .el-message-box__close,
+.el-message-box.dossier-messagebox .el-message-box__headerbtn:focus .el-message-box__close {
+  color: var(--dp-ink);
+}
+.el-message-box.dossier-messagebox .el-message-box__content {
+  color: var(--dp-ink);
+  font-size: 13.5px; line-height: 1.8;
+  padding: 10px 26px 8px;
+}
+/* 警示图标染珊瑚色 */
+.el-message-box.dossier-messagebox .el-message-box__status svg {
+  color: var(--dp-coral);
+}
+.el-message-box.dossier-messagebox .el-message-box__btns {
+  padding: 10px 26px 20px;
+}
+/* 按钮: 取消=墨线幽灵 / 确认=墨线药丸 hover 转 teal
+   特异性 0,5,0 压过全局 :root .el-button--primary:not(...) (0,4,0) 的 #B84523 橙 */
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button--primary {
+  background: transparent;
+  border: 1.5px solid var(--dp-ink);
+  border-radius: 999px;
+  color: var(--dp-ink);
+  font-weight: 700;
+  padding: 9px 22px;
+}
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button--primary:hover,
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button--primary:focus {
+  background: var(--dp-teal);
+  border-color: var(--dp-teal);
+  color: #fbfcfb;
+}
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button:not(.el-button--primary) {
+  background: transparent;
+  border: 1px solid var(--dp-line);
+  border-radius: 999px;
+  color: var(--dp-mut);
+  padding: 9px 22px;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button:not(.el-button--primary):hover {
+  color: var(--dp-ink);
+  border-color: var(--dp-ink);
+  background: transparent;
+}
+@media (max-width: 480px) {
+  .el-message-box.dossier-messagebox .el-message-box__btns .el-button {
+    padding: 9px 16px;
+  }
 }
 </style>
