@@ -1042,6 +1042,7 @@ class AgenticLoop:
                 )
 
             # ===== Phase 1: 工具循环 =====
+            tool_loop_failed = False  # 2026-09-02 P0: LLM 层炸 (如模型无 tools capability) 时置位, synthesis 据此注入反谎报声明
             for round_idx in range(max_rounds):
                 try:
                     # #P5: 用户手动附加文档时屏蔽 RAG 类工具, 强制 LLM 只基于附加文档回答
@@ -1076,6 +1077,7 @@ class AgenticLoop:
                     )
                 except Exception as e:
                     logger.error(f"LLM tool decision round {round_idx} failed: {e}", exc_info=True)
+                    tool_loop_failed = True
                     break
 
                 # 提取 tool_use
@@ -1195,6 +1197,30 @@ class AgenticLoop:
 
             # ===== Phase 1.5: 悬空 tool_use 防御 =====
             _sanitize_pending_tool_uses(messages, reason="max_rounds_reached")
+
+            # ===== 2026-09-02 P0 反谎报防线 =====
+            # Phase 1 LLM 层炸掉 (如模型无 tools capability) 或 0 轮工具时, 上下文里没有任何
+            # 工具结果, 但 system prompt 里"必须先调 X 工具"的字面要求会诱导 synthesis 谎称
+            # "已调用 X" + 编造结果 (trace 5539 实战: 编造 3 场不存在的会议). 注入确定性声明,
+            # 让退化路径变成"明说查不了"而不是幻觉.
+            if (tool_loop_failed or not tool_calls) and intent is not None and getattr(intent, "category", None) in {
+                IntentCategory.DATA_QUERY,
+                IntentCategory.EXECUTE_ACTION,
+                IntentCategory.TEAM_OVERVIEW,
+            }:
+                guard = (
+                    "\n\n## ⚠️ 本轮工具调用失败告知 (CRITICAL — 确定性注入, 非建议)\n"
+                    "本轮没有任何工具被实际执行, 你手上没有任务/会议/项目/成员等任何系统数据。\n"
+                    "1. 严禁声称'已调用 query_meetings / query_projects 等工具'或'已获取相关信息'\n"
+                    "2. 严禁编造任何会议标题、日期、地点、任务、人名、数字列表\n"
+                    "3. 如实告知用户: '工具调用暂时失败, 暂时无法查询到实时数据, 请稍后重试'\n"
+                    "4. 可以基于通用知识回答概念性问题, 但涉及系统内数据的部分必须明确标'无法核实'\n"
+                )
+                system = system + guard
+                logger.warning(
+                    "[anti-hallucination-guard] tool_loop_failed=%s tool_calls=%d intent=%s → 注入反谎报声明",
+                    tool_loop_failed, len(tool_calls), getattr(intent, "category", None),
+                )
 
             # ===== Phase 2: Synthesis（流式综合输出） =====
             # [snapshot] synthesis_start
