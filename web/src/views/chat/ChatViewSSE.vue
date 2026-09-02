@@ -2390,6 +2390,42 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-top: none;
   padding-top: 8px;
 }
+
+/* 头部图标按钮 (侧栏开关 / 搜索): 描边 chip, hover/激活转墨青 */
+.chat-immersive #chat-header-sidebar-toggle,
+.chat-immersive #chat-header-search-toggle {
+  background: #fdfefc;
+  border: 1px solid var(--dossier-line);
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: var(--color-text-secondary);
+}
+.chat-immersive #chat-header-sidebar-toggle:hover,
+.chat-immersive #chat-header-sidebar-toggle:focus-visible,
+.chat-immersive #chat-header-search-toggle:hover,
+.chat-immersive #chat-header-search-toggle:focus-visible {
+  border-color: #0e766e;
+  color: #0e766e;
+  background: rgba(14, 118, 110, 0.06);
+}
+.chat-immersive #chat-header-search-toggle.is-active {
+  border-color: #0e766e;
+  color: #0e766e;
+  background: rgba(14, 118, 110, 0.10);
+}
+[data-theme="dark"] .chat-immersive #chat-header-sidebar-toggle,
+[data-theme="dark"] .chat-immersive #chat-header-search-toggle {
+  background: var(--color-bg-card);
+  border-color: rgba(226, 236, 234, 0.35);
+}
+[data-theme="dark"] .chat-immersive #chat-header-sidebar-toggle:hover,
+[data-theme="dark"] .chat-immersive #chat-header-sidebar-toggle:focus-visible,
+[data-theme="dark"] .chat-immersive #chat-header-search-toggle:hover,
+[data-theme="dark"] .chat-immersive #chat-header-search-toggle:focus-visible {
+  border-color: #35c2a4;
+  color: #35c2a4;
+  background: rgba(53, 194, 164, 0.08);
+}
 .chat-immersive .input-core {
   background: #fdfefc;
   border: 1.5px solid #16232a;
