@@ -452,20 +452,20 @@ class HybridRetriever:
 
             query_embedding = await _gocqe(query, has_query_prompt=True)
             if query_embedding is not None:
-                distance = _MC.embedding.cosine_distance(query_embedding).label("distance")
+                _mdist = _MC.embedding.cosine_distance(query_embedding).label("distance")
                 mstmt = (
-                    select(
+                    _msel(
                         _MC.meeting_id,
                         _M.title.label("title"),
                         _MC.content,
                         _MC.start_sec,
                         _MC.end_sec,
                         _MC.speakers,
-                        distance,
+                        _mdist,
                     )
                     .join(_M, _M.id == _MC.meeting_id)
                     .where(_MC.embedding.isnot(None))
-                    .order_by(distance)
+                    .order_by(_mdist)
                     .limit(candidate_k)
                 )
                 mrows = (await self.db.execute(mstmt)).all()
@@ -503,6 +503,7 @@ class HybridRetriever:
         _t_drive = time.perf_counter()
         try:
             from sqlalchemy import or_ as _or
+            from sqlalchemy import select as _dsel
 
             from app.models.knowledge import Knowledge as _KD
             from app.models.knowledge_chunk import KnowledgeChunk as _KC
@@ -515,14 +516,15 @@ class HybridRetriever:
                     if user_id is not None
                     else (_KD.visibility != "private")
                 )
+                _ddist = _KC.embedding.cosine_distance(drive_emb).label("distance")
                 dstmt = (
-                    select(
+                    _dsel(
                         _KC.knowledge_id,
                         _KD.title.label("title"),
                         _KC.content,
                         _KC.char_start,
                         _KC.char_end,
-                        _KC.embedding.cosine_distance(drive_emb).label("distance"),
+                        _ddist,
                     )
                     .join(_KD, _KD.id == _KC.knowledge_id)
                     .where(
@@ -531,7 +533,7 @@ class HybridRetriever:
                         _KD.storage_mode == "drive",
                         vis_cond,
                     )
-                    .order_by(distance)
+                    .order_by(_ddist)
                     .limit(candidate_k)
                 )
                 drows = (await self.db.execute(dstmt)).all()

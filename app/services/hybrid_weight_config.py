@@ -56,8 +56,8 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "image": 0.15,
     "temporal": 0.0,
     "chunk": 0.2,
-    "meetings": 0.35,
-    "drive": 0.3,
+    "meetings": 0.8,
+    "drive": 0.7,
 }
 
 # 默认 A/B 灰度 — A 组 = 全开, B 组 = 强化 bm25 (实验性)
@@ -106,9 +106,9 @@ class HybridWeights:
     # 2026-09-01 WP1.7: chunk 级向量召回 (retrieve_per_method "chunk" 路)
     chunk: float = 0.2
     # WP1 (2026-09-02): 会议转录 chunk 召回 (meeting_chunks, 第 6 路)
-    meetings: float = 0.35
+    meetings: float = 0.8
     # WP2 (2026-09-02): drive 文件内容召回 (knowledge_chunks drive 语料域, 第 7 路)
-    drive: float = 0.3
+    drive: float = 0.7
 
     def __post_init__(self) -> None:
         # 防御性: 负权重 / NaN 守护；新增加入白名单
@@ -340,6 +340,7 @@ def apply_weights(
         "temporal": weights.temporal,
         "chunk": weights.chunk,
         "meetings": weights.meetings,
+        "drive": weights.drive,
     }
 
     rrf_totals: Dict[Any, float] = {}
