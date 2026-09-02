@@ -1,0 +1,267 @@
+
+/* ═══ D · 剖面海报 — 气泡科学图解 (docs/design-proposals/login-2026-09/D-poster.html) ═══ */
+.login-shell[data-v-a53351c7] {
+  --paper: #f4f6f4;
+  --ink: #16232a;
+  --teal: #0e766e;
+  --teal-soft: #198e83;
+  --coral: #ef7256;
+  --line: #cdd8d4;
+  --muted: #5f6f6b;
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.35fr 0.65fr;
+  background: var(--paper);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+/* ── 左：海报画布 ─────────────────────────────── */
+.poster[data-v-a53351c7] { position: relative; overflow: hidden;
+}
+.poster__rule[data-v-a53351c7] { position: absolute; left: 64px; top: 64px; bottom: 64px; width: 1px; background: var(--line);
+}
+.poster__head[data-v-a53351c7] {
+  position: absolute; left: 84px; top: 56px; right: 64px;
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.2em; color: var(--muted);
+}
+.poster__brand[data-v-a53351c7] {
+  font-family: var(--font-serif);
+  font-size: 15px; font-weight: 900; letter-spacing: 0.06em; color: var(--ink);
+  display: inline-flex; align-items: center; gap: 9px;
+}
+.poster__logo[data-v-a53351c7] { width: 22px; height: 22px; object-fit: contain;
+}
+.poster__title[data-v-a53351c7] {
+  position: absolute; left: 84px; bottom: 120px; z-index: 3;
+  font-family: var(--font-serif);
+  font-size: clamp(44px, 4.6vw, 64px);
+  font-weight: 900; line-height: 1.25; letter-spacing: 0.015em;
+  margin: 0;
+}
+.poster__foot[data-v-a53351c7] {
+  position: absolute; left: 84px; right: 64px; bottom: 44px;
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.16em; color: var(--muted);
+}
+.poster__foot .coral[data-v-a53351c7] { color: var(--coral);
+}
+
+/* 主角气泡 */
+.bubble-stage[data-v-a53351c7] { position: absolute; inset: 0; display: grid; place-items: center;
+}
+.bubble[data-v-a53351c7] {
+  position: relative;
+  width: min(46vh, 480px); height: min(46vh, 480px);
+  margin: 0 0 16vh 4vw;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.35) 34%, rgba(204, 235, 229, 0.25) 55%, rgba(14, 118, 110, 0.10) 78%),
+    radial-gradient(circle at 68% 74%, rgba(25, 142, 131, 0.16), transparent 50%);
+  border: 1.5px solid rgba(14, 118, 110, 0.45);
+  box-shadow:
+    inset 0 0 46px rgba(14, 118, 110, 0.10),
+    inset -18px -26px 60px rgba(14, 118, 110, 0.08),
+    0 30px 70px rgba(22, 35, 42, 0.10);
+  animation: bubble-breathe-a53351c7 7s ease-in-out infinite;
+}
+@keyframes bubble-breathe-a53351c7 {
+50% { transform: scale(1.018) translateY(-4px);
+}
+}
+.bubble[data-v-a53351c7]::after {
+  content: '';
+  position: absolute; inset: 12%;
+  border-radius: 50%;
+  border: 1px dashed rgba(14, 118, 110, 0.30);
+}
+.bubble .nano[data-v-a53351c7] {
+  position: absolute; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(14, 118, 110, 0.35);
+}
+.bubble .n1[data-v-a53351c7] { width: 11%; height: 11%; left: 24%; top: 58%;
+}
+.bubble .n2[data-v-a53351c7] { width: 6%;  height: 6%;  left: 46%; top: 70%;
+}
+.bubble .n3[data-v-a53351c7] { width: 8%;  height: 8%;  left: 62%; top: 52%;
+}
+.bubble .n4[data-v-a53351c7] { width: 4%;  height: 4%;  left: 36%; top: 40%;
+}
+
+/* 标注引线 */
+.anno[data-v-a53351c7] {
+  position: absolute; z-index: 4;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+  color: var(--teal);
+  white-space: nowrap;
+}
+.anno b[data-v-a53351c7] {
+  display: block; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 12.5px; font-weight: 700; color: var(--ink); margin-bottom: 2px; letter-spacing: 0.02em;
+}
+.anno[data-v-a53351c7]::after { content: ''; position: absolute; background: rgba(14, 118, 110, 0.4); height: 1px;
+}
+.anno--shell[data-v-a53351c7] { left: 4%; top: 16%;
+}
+.anno--shell[data-v-a53351c7]::after { width: 9vw; left: 100%; margin-left: 12px; top: 14px; transform: rotate(16deg); transform-origin: left;
+}
+.anno--charge[data-v-a53351c7] { right: 4%; top: 34%; text-align: right;
+}
+.anno--charge b[data-v-a53351c7] { color: var(--coral);
+}
+.anno--charge[data-v-a53351c7]::after { width: 7vw; right: 100%; margin-right: 12px; top: 14px; transform: rotate(14deg); transform-origin: right;
+}
+.anno--lifespan[data-v-a53351c7] { left: 8%; bottom: 34%;
+}
+.anno--lifespan[data-v-a53351c7]::after { width: 8vw; left: 100%; margin-left: 12px; top: 10px; transform: rotate(-18deg); transform-origin: left;
+}
+
+/* ── 右：登录栏 ───────────────────────────────── */
+.gate[data-v-a53351c7] {
+  border-left: 1px solid var(--line);
+  background: #fbfcfb;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 clamp(36px, 3.4vw, 56px);
+  position: relative;
+  animation: fadeSlideUp var(--duration-slow, 300ms) var(--ease-out, ease-out) both;
+}
+.gate__no[data-v-a53351c7] {
+  position: absolute; top: 56px; left: clamp(36px, 3.4vw, 56px);
+  writing-mode: vertical-rl;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.4em; color: var(--line);
+}
+.gate h2[data-v-a53351c7] {
+  font-family: var(--font-serif); font-size: 26px; font-weight: 900; letter-spacing: 0.02em;
+  margin: 0;
+}
+.gate__lede[data-v-a53351c7] { margin-top: 10px; font-size: 13px; line-height: 1.9; color: var(--muted);
+}
+.gate__form[data-v-a53351c7] { margin-top: 30px;
+}
+.gate__form[data-v-a53351c7] .el-form-item { margin-bottom: 22px;
+}
+.f-label[data-v-a53351c7] {
+  display: flex; justify-content: space-between; align-items: baseline; width: 100%;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink);
+}
+.f-label i[data-v-a53351c7] {
+  font-style: normal; font-family: var(--font-mono);
+  font-weight: 400; font-size: 10px; letter-spacing: 0.14em; color: var(--muted);
+}
+
+/* el-input 重塑为下划线输入框 */
+.gate__form[data-v-a53351c7] .el-input__wrapper {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  border-bottom: 1.5px solid var(--ink);
+  padding: 0 2px;
+  transition: border-color 160ms ease;
+}
+.gate__form[data-v-a53351c7] .el-input__wrapper:hover { box-shadow: none;
+}
+.gate__form[data-v-a53351c7] .el-input__wrapper.is-focus {
+  box-shadow: none;
+  border-bottom-color: var(--teal-soft);
+}
+.gate__form[data-v-a53351c7] .el-input__inner {
+  height: 47px; line-height: 47px;
+  font-size: 15px; color: var(--ink);
+  caret-color: var(--teal);
+}
+.gate__form[data-v-a53351c7] .el-input__inner::placeholder { color: #adbab6; font-size: 13.5px;
+}
+.gate__form[data-v-a53351c7] .el-input__suffix { color: #97a5a1;
+}
+.gate__form[data-v-a53351c7] .el-form-item.is-error .el-input__wrapper {
+  border-bottom-color: #c45656;
+  box-shadow: none;
+}
+.gate__form[data-v-a53351c7] .el-form-item__error { padding-top: 5px; font-size: 11.5px;
+}
+/* Chrome 自动填充白底覆盖透明输入框 */
+.gate__form[data-v-a53351c7] .el-input__inner:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #fbfcfb inset;
+  -webkit-text-fill-color: var(--ink);
+  transition: background-color 99999s ease-in-out 0s;
+}
+
+/* 全局 variables.css 的 `:root .el-button--primary:not(.is-text):not(.is-link)` (0,4,0)
+   把所有实心主色按钮压成 #B84523 — 这里用更高特异性选择器赢回海报的墨色按钮 */
+.login-shell .gate .el-button--primary.gate__button[data-v-a53351c7] {
+  width: 100%; height: 52px; margin-top: 12px;
+  background: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px;
+  color: #fbfcfb;
+  font-size: 15px; font-weight: 700; letter-spacing: 0.12em;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+.login-shell .gate .el-button--primary.gate__button[data-v-a53351c7]:hover,
+.login-shell .gate .el-button--primary.gate__button[data-v-a53351c7]:focus {
+  background: var(--teal); border-color: var(--teal); color: #fbfcfb;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(14, 118, 110, 0.28);
+}
+.login-shell .gate .el-button--primary.gate__button[data-v-a53351c7]:active { transform: translateY(0);
+}
+.gate__aux[data-v-a53351c7] {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.gate__forgot[data-v-a53351c7] {
+  font-size: 12.5px;
+  color: var(--teal);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--teal);
+  padding-bottom: 1px;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+.gate__forgot[data-v-a53351c7]:hover { color: var(--teal-soft); border-bottom-style: solid;
+}
+.gate__forgot[data-v-a53351c7]:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-bottom-style: solid;
+}
+.gate__note[data-v-a53351c7] {
+  margin-top: 30px; padding-top: 18px; border-top: 1px dashed var(--line);
+  font-size: 11.5px; line-height: 1.9; color: var(--muted);
+}
+.gate__note[data-v-a53351c7]::before { content: '◉ '; color: var(--teal);
+}
+
+/* ── 响应式：窄屏海报折叠到上方 ───────────────── */
+@media (max-width: 980px) {
+.login-shell[data-v-a53351c7] { grid-template-columns: 1fr; overflow: auto;
+}
+.poster[data-v-a53351c7] { min-height: 56vh;
+}
+.bubble[data-v-a53351c7] { width: 46vw; height: 46vw; margin-bottom: 24vh;
+}
+.gate[data-v-a53351c7] { border-left: 0; border-top: 1px solid var(--line); padding: 56px 32px;
+}
+.gate__no[data-v-a53351c7] { display: none;
+}
+}
+@media (max-width: 768px) {
+.poster__head[data-v-a53351c7] { left: 32px; right: 24px;
+}
+.poster__head span[data-v-a53351c7] { display: none;
+}
+.poster__title[data-v-a53351c7] { left: 32px; bottom: 90px; font-size: 40px;
+}
+.poster__foot[data-v-a53351c7] { left: 32px; right: 24px;
+}
+.anno--charge[data-v-a53351c7] { display: none;
+}
+}
+@media (prefers-reduced-motion: reduce) {
+.bubble[data-v-a53351c7] { animation: none;
+}
+.gate[data-v-a53351c7] { animation: none;
+}
+.gate__button[data-v-a53351c7] { transition: none;
+}
+}
