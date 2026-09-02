@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>B · 学报 — 纸质编辑部登录</title>
+<style>
+  :root {
+    --paper: #f7f8f6;
+    --ink: #1c2a2e;
+    --ink-soft: #5d6f72;
+    --ink-faint: #93a2a4;
+    --rule: #dde4e0;
+    --teal: #0e766e;
+    --teal-deep: #0a574f;
+    --coral: #ef7256;
+    --font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', Inter, sans-serif;
+    --font-mono: Consolas, 'SFMono-Regular', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui);
+  }
+  .sheet {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 460px;
+  }
+
+  /* ── left: the journal page ───────────────────────────── */
+  .page {
+    padding: clamp(40px, 6vw, 88px);
+    display: flex; flex-direction: column;
+    max-width: 900px;
+  }
+  .running-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 14px; border-bottom: 1px solid var(--ink);
+    font-family: var(--font-serif);
+  }
+  .running-head .vol { font-size: 12px; letter-spacing: 0.08em; color: var(--ink-soft); font-family: var(--font-mono); }
+  .running-head .name { font-size: 14px; font-weight: 700; letter-spacing: 0.06em; }
+
+  .hero { margin-top: clamp(48px, 9vh, 96px); }
+  .hero .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.30em;
+    color: var(--teal); margin-bottom: 22px;
+  }
+  .hero h1 {
+    font-family: var(--font-serif);
+    font-size: clamp(38px, 4.6vw, 58px);
+    font-weight: 900; line-height: 1.22; letter-spacing: 0.01em;
+  }
+  .hero h1 .dot { color: var(--coral); }
+  .hero .sub {
+    margin-top: 20px;
+    font-family: var(--font-serif);
+    font-size: 16px; line-height: 2; color: var(--ink-soft);
+    max-width: 520px;
+  }
+  .hero .sign {
+    margin-top: 18px; display: inline-flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--ink-faint);
+  }
+  .hero .sign::before { content: ''; width: 34px; height: 1px; background: var(--coral); }
+
+  /* ── signature: bubble size distribution figure ──────── */
+  .figure { margin-top: auto; padding-top: 48px; }
+  .figure svg { display: block; width: 100%; max-width: 560px; height: auto; }
+  .figure figcaption {
+    margin-top: 10px;
+    font-size: 11.5px; color: var(--ink-faint);
+    font-family: var(--font-mono); letter-spacing: 0.04em;
+  }
+  .figure figcaption b { color: var(--teal); font-weight: 600; }
+
+  /* ── right: the form margin ───────────────────────────── */
+  .margin {
+    border-left: 1px solid var(--rule);
+    background:
+      linear-gradient(180deg, rgba(14, 118, 110, 0.035), transparent 220px),
+      #fcfcfa;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 56px 52px;
+    position: relative;
+  }
+  /* hairline "page edge" rules of a print sheet */
+  .margin::before, .margin::after {
+    content: ''; position: absolute; top: 0; bottom: 0; width: 1px; background: var(--rule);
+  }
+  .margin::before { left: 20px; }
+  .margin::after { right: 20px; }
+
+  .form-head { margin-bottom: 40px; }
+  .form-head .no {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.22em;
+    color: var(--coral); margin-bottom: 12px;
+  }
+  .form-head h2 {
+    font-family: var(--font-serif); font-size: 27px; font-weight: 900; letter-spacing: 0.02em;
+  }
+  .form-head p { margin-top: 8px; font-size: 13px; color: var(--ink-soft); line-height: 1.8; }
+
+  .field { margin-bottom: 28px; }
+  .field label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.10em; color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+  .field label .lat { font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); letter-spacing: 0.14em; }
+  .field input {
+    width: 100%; border: 0; border-bottom: 1.5px solid var(--ink);
+    background: transparent; padding: 10px 2px;
+    font: inherit; font-size: 15px; color: var(--ink);
+    transition: border-color 160ms ease;
+  }
+  .field input::placeholder { color: #b9c4c3; font-size: 14px; }
+  .field input:focus { outline: 0; border-bottom-color: var(--teal); }
+
+  .actions { margin-top: 38px; }
+  button {
+    width: 100%; height: 52px; border: 0; cursor: pointer;
+    background: var(--ink); color: #f7f8f6;
+    font: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0.22em;
+    display: inline-flex; align-items: center; justify-content: center; gap: 14px;
+    transition: background 160ms ease;
+    position: relative;
+  }
+  button::after { content: '→'; font-family: var(--font-mono); letter-spacing: 0; font-weight: 400; }
+  button:hover { background: var(--teal-deep); }
+  button:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
+
+  .colophon {
+    margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--rule);
+    font-size: 11.5px; line-height: 1.9; color: var(--ink-faint);
+  }
+  .colophon .mark { color: var(--teal); }
+  .colophon b { color: var(--ink-soft); font-weight: 600; }
+
+  @media (max-width: 1020px) {
+    .sheet { grid-template-columns: 1fr; }
+    .page { max-width: none; }
+    .figure { display: none; }
+    .margin { border-left: 0; border-top: 1px solid var(--rule); padding: 44px 32px; }
+    .margin::before, .margin::after { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <section class="page">
+      <header class="running-head">
+        <span class="name">MicroBubble Lab · 科研工作台</span>
+        <span class="vol">VOL. IX — MMXXVI — LOCAL EDITION</span>
+      </header>
+
+      <div class="hero">
+        <p class="eyebrow">SCIENTIFIC RESEARCH OS</p>
+        <h1>把每一次空化<span class="dot">，</span><br>都写成课题组<span class="dot">的</span>下一页<span class="dot">。</span></h1>
+        <p class="sub">设备数据、实验记录、会议纪要与公式推导，按学报的规矩装订在同一卷里——离线可查，只属于这个课题组。</p>
+        <p class="sign">微纳米气泡课题组 · 成立于 2004</p>
+      </div>
+
+      <figure class="figure" aria-label="气泡粒径分布示意">
+        <svg viewBox="0 0 560 120">
+          <!-- baseline axis: log µm scale -->
+          <line x1="10" y1="96" x2="550" y2="96" stroke="#1c2a2e" stroke-width="1"/>
+          <g font-family="Consolas, monospace" font-size="9.5" fill="#93a2a4">
+            <text x="40" y="112">0.1 µm</text><line x1="52" y1="92" x2="52" y2="100" stroke="#93a2a4"/>
+            <text x="160" y="112">1 µm</text><line x1="172" y1="92" x2="172" y2="100" stroke="#93a2a4"/>
+            <text x="300" y="112">10 µm</text><line x1="316" y1="92" x2="316" y2="100" stroke="#93a2a4"/>
+            <text x="450" y="112">100 µm</text><line x1="470" y1="92" x2="470" y2="100" stroke="#93a2a4"/>
+          </g>
+          <!-- rising bubbles, size on scale -->
+          <g fill="none" stroke="#0e766e">
+            <circle cx="52" cy="34" r="3"  stroke-width="1" opacity=".9"/>
+            <circle cx="76" cy="52" r="4.5" stroke-width="1" opacity=".8"/>
+            <circle cx="104" cy="26" r="6" stroke-width="1.1" opacity=".85"/>
+            <circle cx="140" cy="48" r="9" stroke-width="1.1" opacity=".75"/>
+            <circle cx="184" cy="30" r="13" stroke-width="1.2" opacity=".7"/>
+            <circle cx="240" cy="52" r="18" stroke-width="1.2" opacity=".6"/>
+            <circle cx="308" cy="40" r="25" stroke-width="1.3" opacity=".5"/>
+          </g>
+          <g fill="none" stroke="#ef7256" opacity=".85">
+            <circle cx="380" cy="46" r="33" stroke-width="1.3" stroke-dasharray="3 4"/>
+            <circle cx="468" cy="50" r="42" stroke-width="1.2" stroke-dasharray="2 6"/>
+          </g>
+          <!-- highlight: the micro-nano regime -->
+          <rect x="36" y="14" width="290" height="76" rx="10" fill="rgba(14,118,110,0.05)"/>
+          <text x="44" y="26" font-family="Consolas, monospace" font-size="9.5" fill="#0e766e" letter-spacing="2">本课题组关注区 · MICRO–NANO</text>
+        </svg>
+        <figcaption><b>图 1</b> — 气泡粒径分布（对数尺度）。虚线区为常规泡，实线区进入微纳米尺度后性质完全不同。</figcaption>
+      </figure>
+    </section>
+
+    <aside class="margin">
+      <div class="form-head">
+        <p class="no">§ 登录 · SIGN IN</p>
+        <h2>翻到属于你的一页</h2>
+        <p>使用课题组发放的本地账号登录。你的实验记录只写入这台机器。</p>
+      </div>
+
+      <form onsubmit="return false" autocomplete="username">
+        <div class="field">
+          <label for="u">用户名 <span class="lat">USERNAME</span></label>
+          <input id="u" type="text" placeholder="如 wangtianzhi" autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="p">密码 <span class="lat">PASSWORD</span></label>
+          <input id="p" type="password" placeholder="输入密码" autocomplete="current-password">
+        </div>
+        <div class="actions">
+          <button type="submit">安全登录</button>
+        </div>
+      </form>
+
+      <footer class="colophon">
+        <span class="mark">▣</span> 本志由课题组自行编辑印制，<b>全部内容存储于本机</b>，不依赖外网。<br>
+        首次使用请联系系统管理员办理账号。
+      </footer>
+    </aside>
+  </div>
+</body>
+</html>

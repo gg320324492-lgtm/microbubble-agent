@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>登录页设计提案 · 5 方案总览 — MicroBubble Lab</title>
+<style>
+  :root {
+    --bg: #10171b; --card: #18232a; --line: #27363e;
+    --text: #dfe9e6; --muted: #8ba0a0; --teal: #35c2a4; --coral: #ef7256;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', Inter, sans-serif;
+    --font-mono: Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); padding: 48px clamp(24px, 5vw, 72px) 80px; }
+  header h1 { font-size: 26px; letter-spacing: -0.01em; }
+  header h1 em { font-style: normal; color: var(--teal); }
+  header p { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.8; max-width: 720px; }
+  header .meta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 14px; }
+  .grid { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 26px; }
+  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: transform 160ms ease, border-color 160ms ease; }
+  .shot:hover { transform: translateY(-4px); border-color: var(--teal); }
+  .thumb { position: relative; height: 224px; overflow: hidden; border-bottom: 1px solid var(--line); background: #fff; }
+  .thumb iframe { width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(0.2472); pointer-events: none; position: absolute; top: 0; left: 0; }
+  .thumb .tag { position: absolute; z-index: 2; top: 10px; left: 10px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; background: rgba(9, 14, 17, 0.78); color: var(--teal); border: 1px solid rgba(53, 194, 164, 0.4); border-radius: 999px; padding: 4px 10px; backdrop-filter: blur(3px); }
+  .info { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .info h2 { font-size: 16.5px; }
+  .info h2 small { font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: 0.16em; color: var(--muted); margin-left: 8px; }
+  .info p { font-size: 12.5px; line-height: 1.75; color: var(--muted); flex: 1; }
+  .info a { color: var(--teal); font-size: 13px; font-weight: 600; text-decoration: none; }
+  .info a:hover { text-decoration: underline; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 12px; line-height: 1.9; border-top: 1px solid var(--line); padding-top: 20px; }
+  footer b { color: var(--text); }
+</style>
+</head>
+<body>
+  <header>
+    <p class="meta">MICROBUBBLE LAB · LOGIN REDESIGN · 2026-09</p>
+    <h1>桌面端登录页升级 — <em>5 个方向</em>，选一个（或组合）</h1>
+    <p>同一套品牌基因（墨青 #0e766e / 珊瑚橙点缀 / 微气泡主题），五种完全不同的性格。缩略图为实时渲染，点击标题打开全屏交互版（含动画）。</p>
+  </header>
+
+  <div class="grid">
+    <article class="shot">
+      <div class="thumb"><span class="tag">A</span><iframe src="a-cavitation.html" loading="lazy" title="A 预览"></iframe></div>
+      <div class="info">
+        <h2>空化暗场 <small>CAVITATION DARK</small></h2>
+        <p>深墨绿全屏沉浸 + 底部气泡群缓升 + 心电式声波线。左文右卡的经典权威布局，适合想要「专业仪器」气质的方案。</p>
+        <a href="a-cavitation.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">B</span><iframe src="b-journal.html" loading="lazy" title="B 预览"></iframe></div>
+      <div class="info">
+        <h2>纸面学报 <small>PRINT JOURNAL</small></h2>
+        <p>米白纸面 + 大号宋体标题 + 底部气泡尺寸标尺插图，编辑部/学术出版气质。右栏窄表单，下划线输入框。</p>
+        <a href="b-journal.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">C</span><iframe src="C-chamber.html" loading="lazy" title="C 预览"></iframe></div>
+      <div class="info">
+        <h2>观察窗 <small>CHAMBER CARD</small></h2>
+        <p>浅色雾面背景 + 居中卡片，卡片顶部是一扇「活体气泡观察窗」：气泡上浮、液面微泡聚集。最克制、产品化的一版。</p>
+        <a href="C-chamber.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">D</span><iframe src="D-poster.html" loading="lazy" title="D 预览"></iframe></div>
+      <div class="info">
+        <h2>剖面海报 <small>SCIENTIFIC POSTER</small></h2>
+        <p>一颗带标注引线的巨型气泡科学图解占据 2/3 画面（壳层 / ζ 电位 / 存续时间），宋体大标语「小气泡，大世界」。视觉冲击最强。</p>
+        <a href="D-poster.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">E</span><iframe src="E-console.html" loading="lazy" title="E 预览"></iframe></div>
+      <div class="info">
+        <h2>启动自检 <small>BOOT CONSOLE</small></h2>
+        <p>左栏暗色控制台逐行打出本地服务自检清单（数据库 ✓ 向量索引 ✓ GPU ✓），右栏方格纸表单。最贴合「本地单机软件」的叙事。</p>
+        <a href="E-console.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+  </div>
+
+  <footer>
+    <b>怎么选：</b>回复字母即可（如「用 C」）；也可以组合，例如「D 的插画 + C 的居中卡片」「E 的自检动效放进 A」。选定后我会把它落到真实登录路由（Vue 组件 + 现有 auth API），静态稿只是视觉提案，不含真实逻辑。
+  </footer>
+</body>
+</html>

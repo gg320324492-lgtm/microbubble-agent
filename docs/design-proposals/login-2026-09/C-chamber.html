@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>C · 观察窗 — 居中卡片登录</title>
+<style>
+  :root {
+    --bg: #eef2f1;
+    --card: #ffffff;
+    --ink: #172129;
+    --ink-soft: #5d6f74;
+    --ink-faint: #97a3a8;
+    --line: #dce5e1;
+    --line-strong: #b9c9c5;
+    --teal: #0e766e;
+    --teal-hi: #198e83;
+    --water-top: #14262a;
+    --water-deep: #0a1618;
+    --glow: #7ed6ad;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', Inter, sans-serif;
+    --font-mono: Consolas, 'SFMono-Regular', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(720px 480px at 85% -10%, rgba(25, 142, 131, 0.12), transparent 60%),
+      radial-gradient(560px 420px at 6% 106%, rgba(239, 114, 86, 0.07), transparent 55%),
+      var(--bg);
+    font-family: var(--font-ui);
+    color: var(--ink);
+    display: grid;
+    place-items: center;
+  }
+
+  .card {
+    width: 430px;
+    max-width: calc(100vw - 40px);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    box-shadow: 0 32px 72px rgba(10, 22, 26, 0.18), 0 2px 8px rgba(10, 22, 26, 0.05);
+    padding: 18px 18px 30px;
+    animation: settle 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes settle { from { transform: translateY(14px); opacity: 0; } }
+
+  /* ── signature: bubble observation chamber ─────────────── */
+  .chamber {
+    position: relative;
+    height: 168px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--water-top), var(--water-deep) 88%);
+  }
+  .chamber__beam {
+    position: absolute; inset: 0;
+    background: radial-gradient(340px 120px at 50% 118%, rgba(126, 214, 173, 0.20), transparent 70%);
+  }
+  .chamber__surface {
+    position: absolute; top: 0; left: 0; right: 0; height: 26px;
+    background: linear-gradient(180deg, rgba(232, 241, 239, 0.14), transparent);
+  }
+  /* foam: micro-bubbles accumulate at the surface — the microbubble signature */
+  .foam { position: absolute; top: 3px; left: 0; right: 0; height: 20px; }
+  .foam i {
+    position: absolute; top: 4px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95), rgba(186,226,216,0.5) 62%, rgba(186,226,216,0.12) 76%);
+    box-shadow: 0 0 6px rgba(200, 240, 226, 0.35);
+    animation: bob 5s ease-in-out infinite alternate;
+  }
+  @keyframes bob { to { transform: translateY(2.5px); } }
+  .foam i:nth-child(1) { left: 4%;  width: 9px;  height: 9px; }
+  .foam i:nth-child(2) { left: 10%; width: 5px;  height: 5px;  top: 9px; animation-delay: -1s; }
+  .foam i:nth-child(3) { left: 15%; width: 12px; height: 12px; top: 5px; animation-delay: -2s; }
+  .foam i:nth-child(4) { left: 23%; width: 6px;  height: 6px;  top: 10px; animation-delay: -.5s; }
+  .foam i:nth-child(5) { left: 28%; width: 10px; height: 10px; top: 4px; animation-delay: -3s; }
+  .foam i:nth-child(6) { left: 36%; width: 5px;  height: 5px;  top: 9px; }
+  .foam i:nth-child(7) { left: 41%; width: 13px; height: 13px; top: 3px; animation-delay: -1.6s; }
+  .foam i:nth-child(8) { left: 50%; width: 7px;  height: 7px;  top: 8px; animation-delay: -2.4s; }
+  .foam i:nth-child(9) { left: 55%; width: 11px; height: 11px; top: 4px; animation-delay: -.8s; }
+  .foam i:nth-child(10){ left: 63%; width: 5px;  height: 5px;  top: 10px; animation-delay: -3.2s; }
+  .foam i:nth-child(11){ left: 67%; width: 10px; height: 10px; top: 3px; animation-delay: -1.2s; }
+  .foam i:nth-child(12){ left: 75%; width: 6px;  height: 6px;  top: 9px; animation-delay: -2.8s; }
+  .foam i:nth-child(13){ left: 80%; width: 12px; height: 12px; top: 4px; animation-delay: -.4s; }
+  .foam i:nth-child(14){ left: 88%; width: 5px;  height: 5px;  top: 10px; animation-delay: -3.6s; }
+  .foam i:nth-child(15){ left: 92%; width: 9px;  height: 9px;  top: 4px; animation-delay: -1.8s; }
+
+  /* rising stream */
+  .chamber .b {
+    position: absolute; bottom: -6%;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, rgba(255,255,255,0.85), rgba(126,214,173,0.28) 60%, rgba(126,214,173,0.04) 75%);
+    border: 1px solid rgba(210, 240, 230, 0.25);
+    animation: rise linear infinite;
+    opacity: 0;
+  }
+  @keyframes rise {
+    0%   { transform: translate3d(0,0,0); opacity: 0; }
+    12%  { opacity: .95; }
+    60%  { transform: translate3d(8px,-58%,0); }
+    96%  { opacity: .8; }
+    100% { transform: translate3d(-2px,-88%,0); opacity: 0; }
+  }
+  .chamber .b:nth-child(1) { left: 18%; width: 5px;  height: 5px;  animation-duration: 7s;   animation-delay: -1s; }
+  .chamber .b:nth-child(2) { left: 30%; width: 8px;  height: 8px;  animation-duration: 9s;   animation-delay: -4s; }
+  .chamber .b:nth-child(3) { left: 34%; width: 3px;  height: 3px;  animation-duration: 6s;   animation-delay: -2s; }
+  .chamber .b:nth-child(4) { left: 49%; width: 11px; height: 11px; animation-duration: 11s;  animation-delay: -6s; filter: blur(.3px); }
+  .chamber .b:nth-child(5) { left: 52%; width: 4px;  height: 4px;  animation-duration: 6.5s; animation-delay: -3s; }
+  .chamber .b:nth-child(6) { left: 66%; width: 6px;  height: 6px;  animation-duration: 8s;   animation-delay: -5s; }
+  .chamber .b:nth-child(7) { left: 78%; width: 9px;  height: 9px;  animation-duration: 10s;  animation-delay: -8s; }
+  .chamber .b:nth-child(8) { left: 84%; width: 3px;  height: 3px;  animation-duration: 5.5s; animation-delay: -1.5s; }
+
+  .chamber__label {
+    position: absolute; right: 10px; bottom: 10px;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+    color: rgba(232, 241, 239, 0.82);
+    background: rgba(10, 22, 24, 0.55);
+    border: 1px solid rgba(126, 214, 173, 0.28);
+    border-radius: 999px; padding: 5px 11px;
+    backdrop-filter: blur(4px);
+  }
+  .chamber__label i { width: 5px; height: 5px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 7px var(--glow); animation: blink 2.2s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: 0.35; } }
+  .chamber__logo {
+    position: absolute; left: 12px; top: 30px;
+    font-size: 13px; line-height: 1; color: rgba(232, 241, 239, 0.5);
+  }
+
+  /* ── form ──────────────────────────────────────────────── */
+  .head { padding: 26px 22px 0; }
+  .head h1 { font-size: 22px; letter-spacing: -0.01em; }
+  .head p { margin-top: 6px; font-size: 13.5px; color: var(--ink-soft); }
+
+  form { padding: 0 22px; margin-top: 24px; }
+  .grp { margin-bottom: 18px; }
+  .grp label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 7px; }
+  .grp input {
+    width: 100%; height: 46px;
+    border: 1px solid var(--line-strong); border-radius: 11px;
+    padding: 0 14px; font: inherit; font-size: 14.5px; color: var(--ink);
+    background: #fbfcfb;
+    transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  }
+  .grp input::placeholder { color: var(--ink-faint); }
+  .grp input:hover { border-color: #9db4b0; }
+  .grp input:focus {
+    outline: 0; background: #fff;
+    border-color: var(--teal);
+    box-shadow: 0 0 0 3.5px rgba(14, 118, 110, 0.14);
+  }
+  button {
+    width: 100%; height: 50px; margin-top: 8px;
+    border: 0; border-radius: 12px; cursor: pointer;
+    font: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0.03em;
+    color: #fff;
+    background: linear-gradient(180deg, var(--teal-hi), var(--teal));
+    box-shadow: 0 10px 22px rgba(14, 118, 110, 0.28), inset 0 1px 0 rgba(255,255,255,0.22);
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+  button:hover { transform: translateY(-1px); box-shadow: 0 14px 26px rgba(14, 118, 110, 0.34), inset 0 1px 0 rgba(255,255,255,0.22); }
+  button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+
+  .note {
+    display: flex; gap: 8px; align-items: flex-start;
+    margin: 20px 22px 0; padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: 12px; line-height: 1.7; color: var(--ink-faint);
+  }
+  .note svg { flex: none; margin-top: 1px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card { animation: none; }
+    .chamber .b, .foam i, .chamber__label i { animation: none; }
+    .chamber .b { opacity: 0.8; }
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <figure class="chamber" aria-label="微纳米气泡观察窗（装饰动画）">
+      <span class="chamber__beam"></span>
+      <span class="chamber__surface"></span>
+      <span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span>
+      <span class="b"></span><span class="b"></span><span class="b"></span><span class="b"></span>
+      <span class="foam"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="chamber__logo">∿</span>
+      <figcaption class="chamber__label"><i></i>观察窗 · 超声 20 kHz</figcaption>
+    </figure>
+
+    <div class="head">
+      <h1>欢迎回到科研工作台</h1>
+      <p>MicroBubble Lab · 使用本地账号继续你的研究</p>
+    </div>
+
+    <form onsubmit="return false" autocomplete="username">
+      <div class="grp">
+        <label for="u">用户名</label>
+        <input id="u" type="text" placeholder="例如：researcher_01" autocomplete="username">
+      </div>
+      <div class="grp">
+        <label for="p">密码</label>
+        <input id="p" type="password" placeholder="输入密码" autocomplete="current-password">
+      </div>
+      <button type="submit">安全登录</button>
+    </form>
+
+    <p class="note">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+        <rect x="1.5" y="5" width="10" height="7" rx="1.6" stroke="#0e766e" stroke-width="1.2"/>
+        <path d="M4 5V3.8a2.5 2.5 0 0 1 5 0V5" stroke="#0e766e" stroke-width="1.2"/>
+      </svg>
+      账号与实验数据仅保存在本机。首次使用请联系系统管理员创建本地账号。
+    </p>
+  </main>
+</body>
+</html>
