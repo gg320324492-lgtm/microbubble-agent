@@ -1,44 +1,35 @@
 <template>
-  <div class="settings-view fade-slide-up">
-    <div class="settings-grid">
-      <!-- v68 (2026-06-26) Hero 卡片（全宽渐变）：头像 + 姓名 + 角色 + 邮箱 + 编辑按钮 -->
-      <section class="hero-card">
-        <div class="hero-bg" />
-        <div class="hero-content">
-          <el-avatar
-            :size="88"
-            :key="previewAvatarUrl"
-            :src="previewAvatarUrl || userStore.userInfo?.avatar"
-            :alt="`${userStore.userInfo?.name || '用户'}的头像`"
-            icon="UserFilled"
-            class="hero-avatar"
-          />
-          <div class="hero-info">
-            <h2 class="hero-name">{{ form.name || '未设置姓名' }}</h2>
-            <div class="hero-meta">
-              <el-tag :type="roleTagType" size="small" effect="dark">{{ form.roleLabel }}</el-tag>
-              <span v-if="form.email" class="hero-email">{{ form.email }}</span>
+  <div class="settings-dossier">
+    <div class="sheet">
+      <header class="dossier-head">
+        <b>微纳米气泡课题组 · 科研工作台</b>
+        <span>MEMBER FILE N°07 · OPENED 2026-09</span>
+      </header>
+      <h1 class="dossier-title">个人设置</h1>
+      <p class="dossier-sub">PERSONAL RECORD — 3 SECTIONS · KEEP THIS FILE UP TO DATE</p>
+
+      <div class="cols">
+        <!-- 左: 标本标签式档案卡 -->
+        <aside class="specimen">
+          <div class="specimen-card">
+            <div class="avatar-wrap">
+              <span class="avatar-ring" aria-hidden="true"></span>
+              <div class="avatar">
+                <img v-if="previewAvatarUrl" :src="previewAvatarUrl" alt="头像" class="avatar-img">
+                <span v-else>{{ (form.name || '杜').charAt(0) }}</span>
+              </div>
             </div>
-          </div>
-          <el-button type="primary" plain round class="hero-edit-btn" @click="scrollToProfile">
-            <el-icon><Edit /></el-icon>
-            <span>编辑资料</span>
-          </el-button>
-        </div>
-      </section>
-
-      <!-- 个人资料卡片（v68 加 glass-card class） -->
-      <el-card class="settings-card glass glass-lg" id="profile-card">
-        <template #header>
-          <div class="card-header">
-            <el-icon><User /></el-icon>
-            <span>个人资料</span>
-          </div>
-        </template>
-
-        <div class="avatar-section">
-          <el-avatar :size="80" :key="previewAvatarUrl" :src="previewAvatarUrl || userStore.userInfo?.avatar" :alt="`${userStore.userInfo?.name || '用户'}的头像`" icon="UserFilled" class="settings-avatar" />
-          <label class="avatar-upload-btn">
+            <div class="specimen-name">{{ form.name || '未设置姓名' }}</div>
+            <div class="specimen-tags">
+              <span :class="{ admin: userInfo?.role === 'admin' }">{{ roleLabel }}</span>
+              <span v-if="form.grade">{{ form.grade }}</span>
+            </div>
+            <dl class="meta-list">
+              <div><dt>研究方向</dt><dd>{{ form.research_area || '未填写' }}</dd></div>
+              <div><dt>EMAIL</dt><dd>{{ form.email || '未填写' }}</dd></div>
+              <div><dt>电话</dt><dd>{{ form.phone || '未填写' }}</dd></div>
+            </dl>
+            <label class="avatar-btn" for="settings-avatar-upload">⇪ 更换头像 (JPG/PNG ≤ 50MB)</label>
             <input
               id="settings-avatar-upload"
               name="settings-avatar-upload"
@@ -48,210 +39,122 @@
               title="更换头像"
               hidden
               @change="handleAvatarUpload"
-            />
-            <el-icon><Camera /></el-icon>
-            <span>更换头像</span>
-          </label>
-        </div>
-
-        <el-form :model="form" label-width="80px" class="settings-form">
-          <el-form-item label="姓名">
-            <el-input v-model="form.name" name="form-name" placeholder="请输入姓名" />
-          </el-form-item>
-          <el-form-item label="邮箱">
-            <el-input v-model="form.email" name="form-email" placeholder="请输入邮箱" />
-          </el-form-item>
-          <el-form-item label="电话">
-            <el-input v-model="form.phone" name="form-phone" placeholder="请输入手机号" />
-          </el-form-item>
-          <el-form-item label="个人简介">
-            <el-input v-model="form.bio" name="form-bio" type="textarea" :rows="3" placeholder="介绍一下自己" />
-          </el-form-item>
-
-          <!-- 只读信息 -->
-          <el-divider />
-          <el-form-item label="角色">
-            <el-tag :type="roleTagType" class="role-tag">{{ form.roleLabel }}</el-tag>
-          </el-form-item>
-          <el-form-item label="年级">
-            <span class="readonly-text">{{ form.grade || '未填写' }}</span>
-          </el-form-item>
-          <el-form-item label="研究方向">
-            <span class="readonly-text">{{ form.research_area || '未填写' }}</span>
-          </el-form-item>
-
-          <el-form-item>
-            <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存资料</el-button>
-            <el-button @click="resetProfile">重置</el-button>
-          </el-form-item>
-        </el-form>
-      </el-card>
-
-      <!-- 修改密码卡片（v68 改名为"账号安全" + glass-card） -->
-      <el-card class="settings-card glass glass-lg">
-        <template #header>
-          <div class="card-header">
-            <el-icon><Lock /></el-icon>
-            <span>账号安全</span>
-          </div>
-        </template>
-
-        <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="80px">
-          <el-form-item label="旧密码" prop="old_password">
-            <el-input v-model="passwordForm.old_password" name="passwordForm-old_password" type="password" show-password placeholder="请输入旧密码" />
-          </el-form-item>
-          <el-form-item label="新密码" prop="new_password">
-            <el-input v-model="passwordForm.new_password" name="passwordForm-new_password" type="password" show-password placeholder="请输入新密码" />
-          </el-form-item>
-          <el-form-item label="确认密码" prop="confirm_password">
-            <el-input v-model="passwordForm.confirm_password" name="passwordForm-confirm_password" type="password" show-password placeholder="请再次输入新密码" />
-          </el-form-item>
-
-          <el-form-item>
-            <el-button type="primary" :loading="savingPassword" @click="changePassword">修改密码</el-button>
-          </el-form-item>
-        </el-form>
-
-        <el-divider />
-
-        <!-- 密码恢复码 (2026-09-02): 登录页自助重置密码的凭据 -->
-        <div class="recovery-block">
-          <div class="recovery-head">
-            <span class="recovery-title">密码恢复码</span>
-            <span class="recovery-status" :class="{ 'is-ok': recoveryHasCode }">
-              {{ recoveryHasCode ? '已生成' : '未生成' }}
-            </span>
-          </div>
-          <div class="form-help">
-            忘记密码时，在登录页输入「用户名 + 恢复码 + 新密码」即可自助重置，无需联系管理员。
-            恢复码只在生成时显示一次，请立即保存到个人微信收藏等安全位置；重置成功后即失效，需重新生成。
-          </div>
-          <el-button :loading="generatingCode" @click="onGenerateRecoveryCode">
-            {{ recoveryHasCode ? '重新生成恢复码' : '生成恢复码' }}
-          </el-button>
-        </div>
-      </el-card>
-
-      <!-- 通知偏好卡片（v68 加 glass-card） -->
-      <el-card class="settings-card glass glass-lg" v-loading="prefsLoading">
-        <template #header>
-          <div class="card-header">
-            <el-icon><Bell /></el-icon>
-            <span>通知偏好</span>
-          </div>
-        </template>
-
-        <el-form :model="prefsForm" label-width="100px">
-          <el-form-item label="启用提醒">
-            <el-switch
-              v-model="prefsForm.enabled"
-              name="prefs-enabled"
-              active-text="启用"
-              inactive-text="关闭"
-            />
-            <div class="form-help">关闭后将不再推送任何微信提醒</div>
-          </el-form-item>
-
-          <el-form-item label="每日提醒时间">
-            <el-time-picker
-              v-model="prefsForm.digestTimeObj"
-              format="HH:mm"
-              value-format="HH:mm"
-              placeholder="选择时间（北京时间）"
-              :disabled="!prefsForm.enabled"
-              name="prefs-digest-time"
-              aria-label="每日提醒时间"
-              title="每日提醒时间"
-              @change="onDigestTimeChange"
-            />
-            <div class="form-help">
-              每日 {{ prefsForm.digest_time || '11:00' }} (北京时间) 统一推送待办提醒
-            </div>
-          </el-form-item>
-
-          <el-form-item label="当前状态">
-            <el-tag v-if="prefs?.in_digest_window" type="success">正处于提醒窗口内</el-tag>
-            <el-tag v-else type="info">
-              下次推送：{{ formatDateTime(prefs?.next_digest_at) }}
-            </el-tag>
-          </el-form-item>
-
-          <el-form-item v-if="prefs?.snoozed_until" label="已推迟">
-            <el-alert
-              :title="`已推迟到 ${formatDateTime(prefs.snoozed_until)}`"
-              type="warning"
-              :closable="false"
-              show-icon
             >
-              <template #default>
-                <el-button size="small" @click="onUnsnooze">立即解除</el-button>
-              </template>
-            </el-alert>
-          </el-form-item>
-
-          <el-form-item>
-            <el-button
-              type="primary"
-              :loading="prefsSaving"
-              @click="onSavePrefs"
-            >
-              保存
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </el-card>
-
-      <!-- v68 (2026-06-26) 外观主题卡片（新） -->
-      <el-card class="settings-card glass glass-lg theme-card">
-        <template #header>
-          <div class="card-header">
-            <el-icon><Brush /></el-icon>
-            <span>外观主题</span>
           </div>
-        </template>
+        </aside>
 
-        <el-form label-width="100px">
-          <el-form-item label="深色模式">
-            <el-switch
-              v-model="isDark"
-              active-text="深色"
-              inactive-text="浅色"
-              name="prefs-dark-mode"
-              aria-label="深色模式"
-              title="深色模式"
-            />
-            <div class="form-help">
-              当前主题：<strong>{{ themeModeLabel }}</strong> · 也可在顶栏右侧 ☀️/🌙 快速切换
+        <!-- 右: 三个章节 -->
+        <main>
+          <!-- §1 个人资料 -->
+          <section class="section">
+            <div class="sec-head">
+              <span class="sec-no">§1</span><h2>个人资料</h2><span class="en">PROFILE</span>
             </div>
-          </el-form-item>
+            <div class="field-grid">
+              <div class="field"><label>姓名 <i>NAME</i></label><el-input v-model="form.name" name="form-name" placeholder="请输入姓名"></el-input></div>
+              <div class="field"><label>邮箱 <i>EMAIL</i></label><el-input v-model="form.email" name="form-email" placeholder="请输入邮箱"></el-input></div>
+              <div class="field"><label>电话 <i>PHONE</i></label><el-input v-model="form.phone" name="form-phone" placeholder="请输入手机号"></el-input></div>
+              <div class="field"><label>研究方向 <i>FIELD</i></label><el-input v-model="form.research_area" name="form-research-area" placeholder="请输入研究方向"></el-input></div>
+              <div class="field full"><label>个人简介 <i>BIO</i></label><el-input v-model="form.bio" name="form-bio" type="textarea" :rows="3" placeholder="介绍一下自己"></el-input></div>
+            </div>
+            <div class="btn-row">
+              <button type="button" class="btn btn-ink" :disabled="savingProfile" @click="saveProfile">
+                {{ savingProfile ? '保存中…' : '保存资料' }}
+              </button>
+              <button type="button" class="btn btn-ghost" @click="resetProfile">重置</button>
+            </div>
+          </section>
 
-          <el-form-item label="主题色">
-            <div class="theme-swatches" role="radiogroup" aria-label="主题色">
+          <!-- §2 账号安全 -->
+          <section class="section">
+            <div class="sec-head">
+              <span class="sec-no">§2</span><h2>账号安全</h2><span class="en">SECURITY</span>
+            </div>
+            <el-form
+              ref="passwordFormRef"
+              :model="passwordForm"
+              :rules="passwordRules"
+              label-position="top"
+              class="dossier-form"
+              @keyup.enter="changePassword"
+            >
+              <div class="field-grid">
+                <el-form-item prop="old_password">
+                  <template #label><span class="f-label">旧密码 <i>OLD</i></span></template>
+                  <el-input v-model="passwordForm.old_password" name="passwordForm-old_password" type="password" show-password placeholder="请输入旧密码"></el-input>
+                </el-form-item>
+                <el-form-item prop="new_password">
+                  <template #label><span class="f-label">新密码 <i>NEW</i></span></template>
+                  <el-input v-model="passwordForm.new_password" name="passwordForm-new_password" type="password" show-password placeholder="至少 6 位"></el-input>
+                </el-form-item>
+                <el-form-item prop="confirm_password">
+                  <template #label><span class="f-label">确认新密码 <i>CONFIRM</i></span></template>
+                  <el-input v-model="passwordForm.confirm_password" name="passwordForm-confirm_password" type="password" show-password placeholder="再次输入新密码"></el-input>
+                </el-form-item>
+              </div>
+            </el-form>
+            <div class="btn-row">
+              <button type="button" class="btn btn-ink" :disabled="savingPassword" @click="changePassword">
+                {{ savingPassword ? '修改中…' : '修改密码' }}
+              </button>
+            </div>
+
+            <div class="recover">
+              <div class="recover-info">
+                <h3>
+                  密码恢复码
+                  <span class="st" :class="{ 'is-ok': recoveryHasCode }">
+                    {{ recoveryHasCode ? '已生成' : '未生成' }}
+                  </span>
+                </h3>
+                <p>
+                  忘记密码时，在登录页输入「用户名 + 恢复码 + 新密码」即可自助重置，无需联系管理员。
+                  恢复码只在生成时显示一次，请立即保存到个人微信收藏；重置成功后即失效，需重新生成。
+                </p>
+              </div>
+              <button type="button" class="btn btn-ghost recover-btn" :disabled="generatingCode" @click="onGenerateRecoveryCode">
+                {{ generatingCode ? '生成中…' : (recoveryHasCode ? '重新生成' : '生成恢复码') }}
+              </button>
+            </div>
+          </section>
+
+          <!-- §3 外观主题 -->
+          <section class="section" style="margin-bottom: 0;">
+            <div class="sec-head">
+              <span class="sec-no">§3</span><h2>外观主题</h2><span class="en">APPEARANCE</span>
+            </div>
+            <div class="lever-row">
+              <span class="lever-name">深色模式</span>
+              <span class="lever-desc">当前：{{ themeModeLabel }} · 也可在顶栏右侧 ☀️ / 🌙 快速切换</span>
+              <el-switch v-model="isDark" class="dossier-switch" aria-label="深色模式"></el-switch>
+            </div>
+            <div class="lever-row">
+              <span class="lever-name">主题色</span>
+              <span class="lever-desc">当前主色：{{ activeAccentLabel }}</span>
+              <span></span>
+            </div>
+            <div class="theme-row">
               <button
                 v-for="opt in accentOptions"
                 :key="opt.value"
                 type="button"
-                role="radio"
-                :aria-checked="themeStore.accent === opt.value"
+                class="swatch"
+                :class="{ 'is-on': themeStore.accent === opt.value }"
+                :aria-pressed="themeStore.accent === opt.value"
                 :aria-label="opt.label"
-                :title="opt.label"
-                class="theme-swatch"
-                :class="[opt.previewClass, { 'is-active': themeStore.accent === opt.value }]"
                 @click="themeStore.setAccent(opt.value)"
               >
-                <el-icon v-if="themeStore.accent === opt.value" class="theme-swatch-check"><Check /></el-icon>
-                <span class="theme-swatch-name">{{ opt.label }}</span>
+                <span class="dot" :class="opt.previewClass"></span>
+                <b>{{ opt.label }}</b>
+                <small>{{ opt.value.toUpperCase() }}</small>
               </button>
             </div>
-            <div class="form-help">
-              当前主色：<strong>{{ activeAccentLabel }}</strong> · 支持 6 种组合（3 主色 × 明暗）
-            </div>
-          </el-form-item>
-        </el-form>
-      </el-card>
+          </section>
+        </main>
+      </div>
     </div>
 
-    <!-- 密码恢复码对话框 — 明文仅显示一次 (2026-09-02) -->
+    <!-- 密码恢复码对话框 — 明文仅显示一次 -->
     <el-dialog
       v-model="recoveryDialogVisible"
       title="这是你的密码恢复码"
@@ -283,11 +186,9 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { User, Lock, Camera, Bell, Edit, Brush, Check } from '@element-plus/icons-vue'
 // v68 (2026-06-26): 主题切换接入 useThemeStore（之前桌面 SettingsView 没有主题入口）
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUserStore } from '@/stores/user'
-import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
 
 const userStore = useUserStore()
 const themeStore = useThemeStore()
@@ -299,7 +200,6 @@ const isDark = computed({
   set: (v) => themeStore.set(v ? 'dark' : 'light'),
 })
 const themeModeLabel = computed(() => (isDark.value ? '深色' : '浅色'))
-// 主题色占位（未来扩展，预留 UI）
 // v69 P1: 3 套主色 picker，调用 themeStore.setAccent 切换
 // v77 P2.6-E.1: 收敛 preview → previewClass（_runtime-style-tokens.scss .theme-preview--*）
 const accentOptions = [
@@ -311,16 +211,8 @@ const activeAccentLabel = computed(
   () => accentOptions.find((o) => o.value === themeStore.accent)?.label || '活力橙'
 )
 
-// v68: Hero "编辑资料" 按钮 → 平滑滚动到下方 profile-card
-function scrollToProfile() {
-  document.getElementById('profile-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
 const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
-const roleTagMap = { admin: 'danger', leader: 'warning', member: '' }
-
 const roleLabel = computed(() => roleMap[userInfo.value?.role] || '成员')
-const roleTagType = computed(() => roleTagMap[userInfo.value?.role] || '')
 
 const savingProfile = ref(false)
 const savingPassword = ref(false)
@@ -342,7 +234,6 @@ watch(() => userStore.userInfo, (newInfo) => {
   form.bio = newInfo.bio || ''
   form.grade = newInfo.grade || ''
   form.research_area = newInfo.research_area || ''
-  form.roleLabel = roleMap[newInfo.role] || '成员'
 })
 
 const initForm = () => ({
@@ -352,8 +243,7 @@ const initForm = () => ({
   bio: userInfo.value?.bio || '',
   avatar: userInfo.value?.avatar || '',
   grade: userInfo.value?.grade || '',
-  research_area: userInfo.value?.research_area || '',
-  roleLabel: roleLabel.value
+  research_area: userInfo.value?.research_area || ''
 })
 
 const form = reactive(initForm())
@@ -617,430 +507,312 @@ const onGenerateRecoveryCode = async () => {
   }
 }
 
-// === 2026-06-15 v2 通知偏好（11AM 单一窗口）===
-const { prefs, loading: prefsLoading, fetchPrefs, savePrefs, unsnooze } = useNotificationPrefs()
-const prefsSaving = ref(false)
-const prefsForm = reactive({
-  enabled: true,
-  digest_time: '11:00',
-  digestTimeObj: '11:00',
-})
-
-onMounted(async () => {
-  await fetchPrefs()
-  if (prefs.value) {
-    prefsForm.enabled = prefs.value.enabled
-    prefsForm.digest_time = prefs.value.digest_time
-    prefsForm.digestTimeObj = prefs.value.digest_time
-  }
+onMounted(() => {
   fetchRecoveryStatus()
 })
-
-function onDigestTimeChange(val) {
-  if (typeof val === 'string' && /^\d{2}:\d{2}$/.test(val)) {
-    prefsForm.digest_time = val
-  } else if (val instanceof Date) {
-    const hh = String(val.getHours()).padStart(2, '0')
-    const mm = String(val.getMinutes()).padStart(2, '0')
-    prefsForm.digest_time = `${hh}:${mm}`
-  }
-}
-
-async function onSavePrefs() {
-  prefsSaving.value = true
-  try {
-    await savePrefs({
-      enabled: prefsForm.enabled,
-      digest_time: prefsForm.digest_time,
-    })
-  } catch (e) {
-    // 错误已由 composable 内部 ElMessage 处理
-  } finally {
-    prefsSaving.value = false
-  }
-}
-
-async function onUnsnooze() {
-  prefsSaving.value = true
-  try {
-    await unsnooze()
-    ElMessage.success('已解除推迟')
-  } finally {
-    prefsSaving.value = false
-  }
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '-'
-  try {
-    return new Date(iso).toLocaleString('zh-CN', { hour12: false })
-  } catch {
-    return iso
-  }
-}
 </script>
 
 <style scoped>
-/* ============================================================
-   v68 (2026-06-26) SettingsView 全面视觉升级
-   - 玻璃态卡片（backdrop-filter blur + 半透明白色）
-   - 顶部 Hero 渐变卡（avatar + 姓名 + 角色 + 邮箱 + 编辑）
-   - 卡片 hover translateY(-2px) 浮起
-   - Dark mode 用 :global([data-theme="dark"]) 避开 scoped [data-theme] specificity 坑
-   - 参考 MainLayout.vue:317-320 (.aside 玻璃) + MobileHeader.vue:60-69 (dark glass)
-     + Dashboard.vue:782-790 (渐变 hero) 范式统一
-   ============================================================ */
-.settings-view {
-  padding: 28px;
-  max-width: 1080px;
-  margin: 0 auto;
+/* ═══ A · 研究档案 DOSSIER — 与登录页 D「剖面海报」同产品家族 (2026-09) ═══ */
+.settings-dossier {
+  --paper: #f4f6f4;
+  --card: #fdfefc;
+  --ink: #16232a;
+  --teal: #0e766e;
+  --teal-soft: #198e83;
+  --coral: #ef7256;
+  --line: #cdd8d4;
+  --line-dash: #b9c9c5;
+  --muted: #5f6f6b;
+  --shadow-ink: rgba(22, 35, 42, 0.12);
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+/* 深色主题: 同一设计语言换墨盘 (对应 D-deck 配色) */
+[data-theme="dark"] .settings-dossier {
+  --paper: #12191d;
+  --card: #172126;
+  --ink: #e2ecea;
+  --teal: #35c2a4;
+  --teal-soft: #4ad0b4;
+  --coral: #ff8a6b;
+  --line: #263740;
+  --line-dash: #31454f;
+  --muted: #8ba4a0;
+  --shadow-ink: rgba(0, 0, 0, 0.45);
 }
 
-/* ===== Hero 卡片（全宽渐变） ===== */
-.hero-card {
-  grid-column: 1 / -1;
+.sheet { max-width: 1120px; margin: 0 auto; padding: 40px clamp(20px, 4vw, 56px) 96px; }
+
+/* ── 卷宗头 ─────────────────────────────── */
+.dossier-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; color: var(--muted);
+  border-bottom: 1.5px solid var(--ink); padding-bottom: 14px;
+}
+.dossier-head b { font-family: var(--font-serif); font-size: 15px; letter-spacing: 0.06em; color: var(--ink); }
+.dossier-title {
+  font-family: var(--font-serif);
+  font-size: clamp(30px, 3.2vw, 40px); font-weight: 900;
+  letter-spacing: 0.02em; margin: 28px 0 6px;
+}
+.dossier-sub { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.14em; color: var(--teal); }
+
+/* ── 主体双栏 ────────────────────────────── */
+.cols { display: grid; grid-template-columns: 300px 1fr; gap: clamp(28px, 4vw, 56px); margin-top: 36px; }
+
+/* 左: 标本标签式档案卡 */
+.specimen { position: sticky; top: 24px; align-self: start; }
+.specimen-card {
+  background: var(--card);
+  border: 1px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--shadow-ink);
+  padding: 26px 24px 22px;
   position: relative;
+}
+.specimen-card::before {
+  content: 'MEMBER SPECIMEN';
+  position: absolute; top: -9px; left: 20px;
+  background: var(--paper); padding: 0 8px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.28em; color: var(--muted);
+}
+.avatar-wrap { display: grid; place-items: center; margin-bottom: 16px; position: relative; }
+.avatar {
+  width: 108px; height: 108px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, var(--card), #dbe8e4 60%, #b9d3cc);
+  border: 1.5px solid rgba(14, 118, 110, 0.45);
+  display: grid; place-items: center;
+  font-size: 34px; color: var(--teal); font-family: var(--font-serif);
   overflow: hidden;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  min-height: 140px;
 }
-.hero-bg {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.4) 0%, transparent 50%),
-    var(--gradient-welcome-hero);
+[data-theme="dark"] .avatar { background: radial-gradient(circle at 32% 28%, #1c2a31, #1f3038 60%, #274049); }
+.avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-ring {
+  position: absolute; width: 128px; height: 128px; border-radius: 50%;
+  border: 1px dashed var(--line-dash);
 }
-.hero-content {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 24px 28px;
-  color: var(--color-bg-card);
+.specimen-name { font-family: var(--font-serif); font-size: 24px; font-weight: 900; text-align: center; }
+.specimen-tags {
+  display: flex; justify-content: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
 }
-.hero-avatar {
-  border: 4px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.2);  /* fallback when avatar missing */
-}
-.hero-info {
-  flex: 1;
-  min-width: 0;
-}
-.hero-name {
-  margin: 0 0 6px;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--color-bg-card);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-.hero-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.hero-email {
-  font-size: 13px;
-  opacity: 0.92;
-  color: var(--color-bg-card);
-}
-.hero-edit-btn {
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.5);
-  color: var(--color-bg-card);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-.hero-edit-btn:hover {
-  background: rgba(255, 255, 255, 0.35);
-  border-color: rgba(255, 255, 255, 0.8);
-  color: var(--color-bg-card);
-}
-.hero-card :deep(.el-tag) {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: var(--color-bg-card);
-}
+.specimen-tags span { border: 1px solid var(--teal); color: var(--teal); padding: 2px 8px; border-radius: 999px; }
+.specimen-tags span.admin { border-color: var(--coral); color: var(--coral); }
 
-/* ===== 玻璃态卡片 ===== */
-/* v77 P2.5: backdrop-filter / 半透 background / border 由 .glass 工具类提供 (assets/glass.css)
-   保留 hover 上浮 + EP 子组件穿透（:deep） */
-.settings-card.glass {
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+.meta-list { margin-top: 18px; border-top: 1px dashed var(--line-dash); padding-top: 6px; }
+.meta-list div {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 7px 0; border-bottom: 1px dashed var(--line-dash);
+  font-size: 12.5px;
 }
-.settings-card.glass:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+.meta-list dt { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; color: var(--muted); }
+.meta-list dd { color: var(--ink); text-align: right; word-break: break-all; }
+
+.avatar-btn {
+  display: block; width: 100%; margin-top: 16px;
+  border: 1px dashed var(--line-dash); border-radius: 8px;
+  padding: 8px; font: inherit; font-size: 12px; color: var(--muted);
+  cursor: pointer; text-align: center;
+  transition: border-color 150ms ease, color 150ms ease;
 }
-.settings-card.glass :deep(.el-card__header) {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+.avatar-btn:hover { border-color: var(--teal); color: var(--teal); }
+
+/* ── 章节 ───────────────────────────────── */
+.section { margin-bottom: 48px; }
+.sec-head {
+  display: flex; align-items: baseline; gap: 14px;
+  border-bottom: 1px solid var(--line); padding-bottom: 10px;
+}
+.sec-no { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.2em; color: var(--coral); }
+.sec-head h2 { font-family: var(--font-serif); font-size: 21px; font-weight: 900; letter-spacing: 0.03em; margin: 0; }
+.sec-head .en { margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.22em; color: var(--muted); }
+
+/* 表单区: 双列下划线字段 */
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; margin-top: 20px; }
+.field { display: flex; flex-direction: column; }
+.field.full { grid-column: 1 / -1; }
+.field > label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 2px;
+}
+.field > label i {
+  font-style: normal; font-family: var(--font-mono);
+  font-weight: 400; font-size: 9.5px; letter-spacing: 0.16em; color: var(--muted);
+}
+/* el-input 重塑为下划线输入框 (与登录页同款) */
+.section :deep(.el-input__wrapper),
+.field :deep(.el-input__wrapper) {
   background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  border-bottom: 1.5px solid var(--ink);
+  padding: 0 2px;
+  transition: border-color 150ms ease;
 }
-.settings-card.glass :deep(.el-card__body) {
+.section :deep(.el-input__wrapper:hover),
+.field :deep(.el-input__wrapper:hover) { box-shadow: none; }
+.section :deep(.el-input__wrapper.is-focus),
+.field :deep(.el-input__wrapper.is-focus) { box-shadow: none; border-bottom-color: var(--teal-soft); }
+.section :deep(.el-input__inner),
+.field :deep(.el-input__inner) {
+  height: 42px; line-height: 42px;
+  font-size: 14.5px; color: var(--ink);
+  caret-color: var(--teal);
+}
+.section :deep(.el-textarea__inner),
+.field :deep(.el-textarea__inner) {
   background: transparent;
+  border: 0; border-bottom: 1.5px solid var(--ink); border-radius: 0;
+  box-shadow: none;
+  font-size: 14.5px; color: var(--ink); line-height: 1.7;
+  padding: 8px 2px;
+  transition: border-color 150ms ease;
+}
+.section :deep(.el-textarea__inner:focus),
+.field :deep(.el-textarea__inner:focus) { border-bottom-color: var(--teal-soft); }
+.field :deep(.el-input__inner::placeholder),
+.field :deep(.el-textarea__inner::placeholder),
+.section :deep(.el-input__inner::placeholder) { color: #9fb0ab; }
+[data-theme="dark"] .section :deep(.el-input__inner::placeholder),
+[data-theme="dark"] .field :deep(.el-input__inner::placeholder),
+[data-theme="dark"] .field :deep(.el-textarea__inner::placeholder) { color: #52706b; }
+.section :deep(.el-input__suffix) { color: var(--muted); }
+.section :deep(.el-form-item.is-error .el-input__wrapper),
+.field :deep(.el-form-item.is-error .el-input__wrapper) {
+  border-bottom-color: #c45656;
+  box-shadow: none;
+}
+.section :deep(.el-form-item__error) { padding-top: 4px; font-size: 11.5px; }
+.section :deep(.el-form-item) { margin-bottom: 0; }
+.dossier-form .field-grid { margin-top: 20px; }
+.dossier-form .f-label {
+  display: flex; justify-content: space-between; align-items: baseline; width: 100%;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink);
+}
+.dossier-form .f-label i {
+  font-style: normal; font-family: var(--font-mono);
+  font-weight: 400; font-size: 9.5px; letter-spacing: 0.16em; color: var(--muted);
+}
+/* Chrome 自动填充白底修正 */
+.dossier-form :deep(.el-input__inner:-webkit-autofill),
+.field :deep(.el-input__inner:-webkit-autofill) {
+  -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+  -webkit-text-fill-color: var(--ink);
+  transition: background-color 99999s ease-in-out 0s;
 }
 
-.settings-card {
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
+/* 按钮: 墨色药丸 / 虚线幽灵 */
+.btn-row { display: flex; gap: 12px; margin-top: 24px; }
+.btn {
+  height: 46px; padding: 0 30px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.08em;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, color 140ms ease, border-color 140ms ease;
 }
+.btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.btn:disabled { opacity: 0.6; cursor: default; transform: none !important; box-shadow: none !important; }
+.btn-ink { background: var(--ink); color: var(--paper); border: 1.5px solid var(--ink); }
+.btn-ink:hover:not(:disabled) {
+  background: var(--teal); border-color: var(--teal); color: #fbfcfb;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(14, 118, 110, 0.26);
+}
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--line-dash); }
+.btn-ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--ink); }
 
-.settings-card :deep(.el-card__header) {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+/* 恢复码 */
+.recover {
+  margin-top: 26px; border: 1px dashed var(--line-dash); border-radius: 12px;
+  padding: 18px 20px; display: flex; gap: 20px; align-items: center; justify-content: space-between;
 }
+.recover-info h3 { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 0; }
+.recover-info .st {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
+  color: var(--coral); border: 1px solid var(--coral); border-radius: 999px; padding: 1px 8px;
+}
+.recover-info .st.is-ok { color: var(--teal); border-color: var(--teal); }
+.recover-info p { font-size: 12px; color: var(--muted); margin: 6px 0 0; max-width: 480px; line-height: 1.8; }
+.recover-btn { flex: none; height: 42px; padding: 0 22px; font-size: 12.5px; }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-primary);
+/* 外观: 仪表行 + 色板 */
+.lever-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 15px 2px; border-bottom: 1px dashed var(--line-dash);
 }
+.lever-row:first-of-type { margin-top: 8px; }
+.lever-name { font-size: 13.5px; font-weight: 700; min-width: 96px; }
+.lever-desc { font-size: 12px; color: var(--muted); flex: 1; }
+.lever-row > span:last-child:not(.lever-desc) { width: 52px; }
 
-.avatar-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+/* el-switch 重塑为仪器拨杆 */
+.dossier-switch :deep(.el-switch__core) {
+  min-width: 52px; height: 26px; border-radius: 999px;
+  background: var(--line-dash); border: 1.5px solid var(--ink);
+  transition: background 170ms ease, border-color 170ms ease;
 }
+.dossier-switch.is-checked :deep(.el-switch__core) {
+  background: rgba(14, 118, 110, 0.14); border-color: var(--teal);
+}
+.dossier-switch :deep(.el-switch__action) {
+  background: var(--ink); border: none;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dossier-switch.is-checked :deep(.el-switch__action) { background: var(--teal); color: #fff; }
 
-.settings-avatar {
-  border: 3px solid var(--color-primary-bg);
-  box-shadow: var(--shadow-primary);
-}
-
-.avatar-upload-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--color-primary);
-  cursor: pointer;
-  padding: 4px 12px;
-  border: 1px dashed var(--color-primary);
-  border-radius: var(--radius-md);
-  transition: all var(--duration-fast);
-}
-
-.avatar-upload-btn:hover {
-  background: var(--color-primary-bg);
-  color: var(--color-primary-dark);
-}
-
-.settings-form {
-  padding: 0 8px;
-}
-
-.readonly-text {
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
-}
-
-/* ===== 主题卡片特有样式 ===== */
-.theme-card :deep(.el-form-item__content) {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-/* v69 P1: 主题色 swatches（3 个色块，active 有白圈+Check） */
-.theme-swatches {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.theme-swatch {
+.theme-row { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+.swatch {
+  width: 132px; border: 1px solid var(--line-dash); border-radius: 12px;
+  padding: 14px; cursor: pointer; background: var(--card);
+  text-align: left; font: inherit; color: var(--ink);
+  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   position: relative;
-  width: 84px;
-  height: 64px;
-  border-radius: var(--radius-lg);
-  border: 2px solid transparent;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-bg-card);
-  font-size: 12px;
-  font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--duration-fast) var(--ease-out),
-              box-shadow var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out);
-  outline: none;
-  padding: 0;
 }
-.theme-swatch:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+.swatch:hover { border-color: var(--ink); transform: translateY(-2px); }
+.swatch:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+.swatch .dot { display: block; width: 100%; height: 34px; border-radius: 7px; margin-bottom: 10px; }
+.swatch b { font-size: 12.5px; }
+.swatch small {
+  display: block; font-family: var(--font-mono);
+  font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); margin-top: 2px;
 }
-.theme-swatch:focus-visible {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-bg);
-}
-.theme-swatch.is-active {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-primary);
-}
-.theme-swatch-check {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--color-primary);
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-}
-.theme-swatch-name {
-  position: relative;
-  z-index: 1;
+.swatch.is-on { border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 var(--shadow-ink); }
+.swatch.is-on::after {
+  content: '✓'; position: absolute; top: 8px; right: 10px;
+  color: var(--ink); font-weight: 700;
 }
 
-.form-help {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.4;
-}
-
-/* Dark mode 规则移到非 scoped 块（见下方 \3c style> 块）—
-   v68 首次部署尝试 :global([data-theme="dark"]) .glass-card 在 scoped 块里，
-   Vue 编译器把 :global() + 后代选择器处理错：编译产物变成
-   [data-theme=dark]{...} 单独的规则，剥掉了 .glass-card，作用到 <html> 而不是卡片
-   （与 sw.js v61 教训同款）。 */
-
-@media (max-width: 768px) {
-  .settings-view {
-    padding: 12px;
-  }
-
-  .settings-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .settings-form :deep(.el-form-item__label) {
-    width: 64px !important;
-  }
-
-  .hero-card {
-    min-height: auto;
-  }
-
-  .hero-content {
-    padding: 16px;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .hero-name {
-    font-size: 18px;
-  }
-
-  .hero-edit-btn {
-    margin-left: auto;
-  }
-}
-</style>
-
-<!-- v68 dark mode 规则必须放非 scoped 块（继承 sw.js v61/v62 教训）：
-     scoped 块里 :global([data-theme="dark"]) .xxx 的 :global() + 后代选择器组合
-     会被 Vue 编译器处理错（剥掉后代选择器、产物变成 [data-theme=dark]{...} 单独规则
-     作用到 <html> 而不是目标元素）。非 scoped 块彻底绕过 Vue scoped 编译。 -->
-<style>
-/* v77 P2.5: .glass 工具类自带 dark mode 适配, 无需手动覆盖 */
-[data-theme="dark"] .hero-bg {
-  background:
-    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
-    var(--gradient-welcome-hero);
-}
-[data-theme="dark"] .hero-edit-btn {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: var(--color-bg-card);
-}
-[data-theme="dark"] .hero-edit-btn:hover {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.6);
-}
-/* v69 P1: theme-swatch dark 模式强调边框（用高亮白边框 + 阴影增强 active 感） */
-[data-theme="dark"] .theme-swatch.is-active {
-  border-color: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.18), var(--shadow-primary);
-}
-
-/* ==================== 密码恢复码 (2026-09-02) ==================== */
-.recovery-block { margin-top: 4px; }
-.recovery-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.recovery-title {
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary, #303133);
-}
-.recovery-status {
-  font-size: 12px;
-  color: var(--color-text-secondary, #909399);
-}
-.recovery-status.is-ok { color: var(--el-color-success, #67c23a); }
-.recovery-block .el-button { margin-top: 4px; }
-
-.recovery-dialog-body { padding: 0 4px; }
+/* 恢复码对话框 (内容同样用档案语言) */
 .recovery-warn {
-  color: var(--el-color-danger, #f56c6c);
-  font-size: 13px;
-  line-height: 1.7;
-  margin: 0 0 14px;
+  color: #c45656; font-size: 13px; line-height: 1.7; margin: 0 0 14px;
 }
 .recovery-code-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: var(--color-bg-secondary, #f5f7fa);
-  border: 1px dashed var(--border-color, #dcdfe6);
-  border-radius: 8px;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--paper); border: 1px dashed var(--line-dash); border-radius: 8px;
   padding: 14px 16px;
 }
 .recovery-code {
-  flex: 1;
-  font-family: Consolas, 'SFMono-Regular', monospace;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--color-text-primary, #303133);
+  flex: 1; font-family: var(--font-mono);
+  font-size: 20px; font-weight: 700; letter-spacing: 0.08em; color: var(--ink);
 }
-.recovery-hint {
-  margin: 14px 0 0;
-  font-size: 12.5px;
-  line-height: 1.8;
-  color: var(--color-text-secondary, #909399);
+.recovery-hint { margin: 14px 0 0; font-size: 12.5px; line-height: 1.8; color: var(--muted); }
+
+/* ── 响应式 ─────────────────────────────── */
+@media (max-width: 900px) {
+  .cols { grid-template-columns: 1fr; }
+  .specimen { position: static; }
+  .field-grid { grid-template-columns: 1fr; }
+  .dossier-head { flex-direction: column; gap: 4px; }
+  .recover { flex-direction: column; align-items: stretch; }
+  .recover-btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .swatch, .avatar-btn { transition: none !important; }
 }
 </style>
