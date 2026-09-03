@@ -62,7 +62,8 @@
             <!-- v28 step 64: section 解析失败时 fallback 显示原始 markdown
                  v28 step 77: 但 raw.content 里也含 metadata 块（如 PDF header/cite/法律声明），
                  也要先跑 cleanContent 剥除 -->
-            <pre class="raw-content-pre">{{ cleanRawContent }}</pre>
+            <!-- 2026-09-03: 兜底内容 (WeChat FAQ 等非论文知识) 为 markdown 文本, 改渲染而非裸 pre -->
+            <div class="raw-content-md" v-html="renderMarkdown(cleanRawContent)"></div>
           </div>
           <div v-else-if="!hasAnyContent" class="paper-no-content">
             <el-empty description="该条目暂无正文内容" :image-size="60" />
@@ -189,6 +190,7 @@ import { Share, CircleClose, Download } from '@element-plus/icons-vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
+import { renderMarkdown } from '@/utils/markdown'
 import PaperHeader from '@/components/paper/PaperHeader.vue'
 import AbstractCard from '@/components/paper/AbstractCard.vue'
 import PaperSectionRenderer from '@/components/paper/PaperSectionRenderer.vue'
@@ -1151,6 +1153,26 @@ onUnmounted(() => {
   color: var(--color-text-primary);
   margin: 0;
 }
+
+.raw-content-md {
+  font-size: 14px;
+  line-height: 1.9;
+  color: var(--color-text-regular, #606266);
+  word-break: break-word;
+}
+.raw-content-md :deep(h1),
+.raw-content-md :deep(h2),
+.raw-content-md :deep(h3) {
+  font-weight: 700;
+  margin: 18px 0 8px;
+}
+.raw-content-md :deep(p) { margin: 8px 0; }
+.raw-content-md :deep(ul),
+.raw-content-md :deep(ol) { margin: 8px 0 8px 22px; }
+.raw-content-md :deep(table) { border-collapse: collapse; margin: 10px 0; }
+.raw-content-md :deep(th),
+.raw-content-md :deep(td) { border: 1px solid var(--color-border-light, #dcdfe6); padding: 6px 12px; font-size: 13px; }
+
 
 /* 来源信息 */
 .paper-source {
