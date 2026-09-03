@@ -860,17 +860,18 @@ function handleSearchKeydown(e: KeyboardEvent) {
           aria-label="Chat 顶栏 3-zone 容器"
         >
           <div class="header-left">
-            <el-button
+            <button
               id="chat-header-sidebar-toggle"
               name="chat-header-sidebar-toggle"
-              text
-              size="small"
+              type="button"
+              class="rail-toggle-btn"
               @click="sidebarCollapsed = !sidebarCollapsed"
-              aria-label="切换侧栏"
-              title="切换侧栏"
+              :aria-label="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
+              :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'"
             >
-              <el-icon><component :is="sidebarCollapsed ? 'Expand' : 'Fold'" /></el-icon>
-            </el-button>
+              <el-icon :size="15"><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
+              <span class="rail-toggle-text">{{ sidebarCollapsed ? '展开' : '会话' }}</span>
+            </button>
           </div>
           <div class="header-center">
             <ChatBreadcrumb :status="isCurrentSessionSending ? 'generating' : 'idle'" />
@@ -2389,36 +2390,59 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 
 /* 头部图标按钮 (侧栏开关 / 搜索): 描边 chip, hover/激活转墨青 */
-.chat-immersive #chat-header-sidebar-toggle,
 .chat-immersive #chat-header-search-toggle {
-  background: #fdfefc;
+  background: var(--dossier-card, #fdfefc);
   border: 1px solid var(--dossier-line);
   border-radius: 9px;
   padding: 8px 10px;
   color: var(--color-text-secondary);
 }
-.chat-immersive #chat-header-sidebar-toggle:hover,
-.chat-immersive #chat-header-sidebar-toggle:focus-visible,
 .chat-immersive #chat-header-search-toggle:hover,
 .chat-immersive #chat-header-search-toggle:focus-visible {
   border-color: #0e766e;
   color: #0e766e;
   background: rgba(14, 118, 110, 0.06);
 }
-.chat-immersive #chat-header-search-toggle.is-active {
-  border-color: #0e766e;
-  color: #0e766e;
-  background: rgba(14, 118, 110, 0.10);
-}
-[data-theme="dark"] .chat-immersive #chat-header-sidebar-toggle,
 [data-theme="dark"] .chat-immersive #chat-header-search-toggle {
   background: var(--color-bg-card);
   border-color: rgba(226, 236, 234, 0.35);
 }
-[data-theme="dark"] .chat-immersive #chat-header-sidebar-toggle:hover,
-[data-theme="dark"] .chat-immersive #chat-header-sidebar-toggle:focus-visible,
 [data-theme="dark"] .chat-immersive #chat-header-search-toggle:hover,
 [data-theme="dark"] .chat-immersive #chat-header-search-toggle:focus-visible {
+  border-color: #35c2a4;
+  color: #35c2a4;
+  background: rgba(53, 194, 164, 0.08);
+}
+/* 侧栏折叠按钮: 图标 + 「会话」文字 chip (用户选定样式 2) */
+.chat-immersive .rail-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--dossier-line);
+  border-radius: 9px;
+  background: var(--dossier-card, #fdfefc);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+}
+.chat-immersive .rail-toggle-btn:hover,
+.chat-immersive .rail-toggle-btn:focus-visible {
+  border-color: #0e766e;
+  color: #0e766e;
+  background: rgba(14, 118, 110, 0.06);
+}
+.chat-immersive .rail-toggle-btn .rail-toggle-text { line-height: 1; }
+[data-theme="dark"] .chat-immersive .rail-toggle-btn {
+  background: var(--color-bg-card);
+  border-color: rgba(226, 236, 234, 0.35);
+}
+[data-theme="dark"] .chat-immersive .rail-toggle-btn:hover,
+[data-theme="dark"] .chat-immersive .rail-toggle-btn:focus-visible {
   border-color: #35c2a4;
   color: #35c2a4;
   background: rgba(53, 194, 164, 0.08);
