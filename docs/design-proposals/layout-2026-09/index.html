@@ -29,20 +29,31 @@
   .shot h2 a:hover { color: var(--teal); }
   .shot p.desc { font-size: 12.5px; color: var(--muted); line-height: 1.7; padding: 8px 18px 14px; border-bottom: 1px dashed var(--line); }
   .canvas { padding: 14px; }
-  .canvas img { width: 100%; border-radius: 10px; display: block; border: 1px solid var(--line); }
+  .canvas img { width: 100%; border-radius: 10px; display: block; border: 1px solid var(--line); cursor: zoom-in; }
   ul.feats { list-style: none; padding: 0 18px 18px; font-size: 12px; color: var(--muted); line-height: 1.9; }
   ul.feats li::before { content: '· '; color: var(--teal); }
   .cost { padding: 0 18px 16px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); }
   .cost b { color: var(--teal); }
   footer { margin-top: 44px; font-size: 12px; color: var(--muted); line-height: 2; border-top: 1px dashed var(--line); padding-top: 18px; max-width: 860px; }
   footer code { font-family: var(--font-mono); color: var(--teal); font-size: 11px; }
+  /* lightbox 放大查看 */
+  #lb { position: fixed; inset: 0; z-index: 60; background: rgba(8,12,14,.94); display: none; flex-direction: column; }
+  #lb.open { display: flex; }
+  #lb .bar { display: flex; align-items: center; gap: 14px; padding: 10px 18px; color: var(--muted); font-size: 12px; font-family: var(--font-mono); letter-spacing: .08em; }
+  #lb .bar .title { color: var(--teal); }
+  #lb .bar .spacer { flex: 1; }
+  #lb .bar button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; font: inherit; cursor: pointer; }
+  #lb .bar button:hover { border-color: var(--teal); color: var(--teal); }
+  #lb .stage { flex: 1; overflow: hidden; position: relative; cursor: grab; }
+  #lb .stage img { position: absolute; top: 0; left: 0; max-width: none; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+  #lb .stage.grabbing { cursor: grabbing; }
 </style>
 </head>
 <body>
 <header>
   <div class="meta">GLOBAL LAYOUT REDESIGN · 2026-09 · 4 PROPOSALS · F/G/H/I</div>
   <h1>全局框架(MainLayout)UI 升级 · <em>4 方案</em></h1>
-  <p>侧栏 9 个 menuRoutes + 底部「项目动态」+ 顶栏五件套(折叠/面包屑/铃铛/主题/用户)+ 听会胶囊,统一延续「研究档案」设计语言。四稿共用同一套 <b>16px SVG 图标 sprite</b>(文件夹/相机/铃铛等圆角矩形 + 整数锚点重画,16px 下发糊问题已解决),每稿内置 ☾ 夜览按钮可预览深色模式,点开文件名看大图。</p>
+  <p>侧栏 9 个 menuRoutes + 底部「项目动态」+ 顶栏五件套(折叠/面包屑/铃铛/主题/用户)+ 听会胶囊,统一延续「研究档案」设计语言。四稿共用同一套 <b>16px SVG 图标 sprite</b>(文件夹/相机/铃铛等圆角矩形 + 整数锚点重画,16px 下发糊问题已解决),每稿内置 ☾ 夜览按钮可预览深色模式,<b>点击截图即可放大</b>(滚轮缩放 / 拖拽平移 / 双击 1:1 / Esc 关闭)。</p>
   <div class="fixnote"><b>顺手修复的真实缺陷</b> — <code>web/src/layouts/MainLayout.vue</code> 的 <code>iconMap</code> 缺 <code>Odometer</code> 与 <code>Cpu</code>:W86 mini batch 1 删 KB 监控入口时误删了仍被 <code>/dashboard</code> meta.icon 引用的 Odometer(并非"不再走侧栏"),Cpu 则从注册以来就漏了。侧栏「仪表盘」「DFT/MD 计算」两项图标一直空白。已补回并留注释:删别名前必须 grep router meta.icon。</div>
 </header>
 
@@ -105,5 +116,77 @@
   菜单文案与顺序取自 <code>router/index.js</code> 真实 meta.title;图标取自 <code>@element-plus/icons-vue</code> 对应字形的 16px 重画版。
   选一个方案(或指定杂交,如 G 的侧栏 + I 的上下文面板),再做真实实现。
 </footer>
+<div id="lb" aria-hidden="true">
+  <div class="bar">
+    <span class="title" id="lb-title"></span>
+    <span id="lb-zoom">100%</span>
+    <span class="hint">滚轮缩放 · 拖拽平移 · 双击 1:1 · Esc 关闭</span>
+    <span class="spacer"></span>
+    <button id="lb-fit" type="button">适应窗口</button>
+    <button id="lb-close" type="button">✕ 关闭</button>
+  </div>
+  <div class="stage" id="lb-stage"><img id="lb-img" alt=""></div>
+</div>
+<script>
+(function () {
+  const lb = document.getElementById('lb'),
+        stage = document.getElementById('lb-stage'),
+        img = document.getElementById('lb-img'),
+        title = document.getElementById('lb-title'),
+        zoomLabel = document.getElementById('lb-zoom');
+  let scale = 1, tx = 0, ty = 0, natW = 0, natH = 0, dragging = false, sx = 0, sy = 0;
+
+  function apply() {
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    zoomLabel.textContent = Math.round(scale * 100) + '%';
+  }
+  function fit() {
+    const r = stage.getBoundingClientRect();
+    scale = Math.min((r.width - 32) / natW, (r.height - 32) / natH, 2);
+    tx = (r.width - natW * scale) / 2;
+    ty = (r.height - natH * scale) / 2;
+    apply();
+  }
+  function zoomAt(factor, cx, cy) {
+    const ns = Math.min(8, Math.max(0.2, scale * factor));
+    tx = cx - (cx - tx) * (ns / scale);
+    ty = cy - (cy - ty) * (ns / scale);
+    scale = ns;
+    apply();
+  }
+  document.querySelectorAll('.canvas img').forEach(el => {
+    el.addEventListener('click', () => {
+      natW = el.naturalWidth; natH = el.naturalHeight;
+      img.src = el.src;
+      title.textContent = (el.closest('.shot').querySelector('h2') || {}).textContent || '';
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      img.onload = () => { natW = img.naturalWidth; natH = img.naturalHeight; fit(); };
+    });
+  });
+  stage.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  stage.addEventListener('pointerdown', e => {
+    dragging = true; sx = e.clientX - tx; sy = e.clientY - ty;
+    stage.classList.add('grabbing'); stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    tx = e.clientX - sx; ty = e.clientY - sy; apply();
+  });
+  stage.addEventListener('pointerup', () => { dragging = false; stage.classList.remove('grabbing'); });
+  stage.addEventListener('dblclick', e => {
+    const r = stage.getBoundingClientRect();
+    if (Math.abs(scale - 1) < 0.01) { fit(); } else { zoomAt(1 / scale, e.clientX - r.left, e.clientY - r.top); scale = 1; apply(); }
+  });
+  function close() { lb.classList.remove('open'); document.body.style.overflow = ''; }
+  document.getElementById('lb-close').addEventListener('click', close);
+  document.getElementById('lb-fit').addEventListener('click', fit);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+})();
+</script>
 </body>
 </html>
