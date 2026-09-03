@@ -11,6 +11,7 @@
  * 不依赖后端 API，仅消费 messages prop。
  */
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 interface ToolTraceItem {
   type: 'thinking' | 'tool'
@@ -39,6 +40,8 @@ const props = defineProps<{
 // ============================================================================
 const activeTab = ref<'history' | 'knowledge' | 'tools'>('history')
 
+const router = useRouter()
+
 // ============================================================================
 // 对话历史：user+assistant 消息对，最近 20 轮
 // ============================================================================
@@ -60,7 +63,7 @@ const chatHistory = computed(() => {
 // 知识引用：扫描所有 messages 的 richBlocks，提取 knowledge_ref
 // ============================================================================
 const knowledgeRefs = computed(() => {
-  const refs: Array<{ title: string; score?: number; msgId: string }> = []
+  const refs: Array<{ title: string; score?: number; msgId: string; knowledgeId?: string }> = []
   for (const msg of props.messages) {
     if (!msg.richBlocks) continue
     for (const block of msg.richBlocks) {
@@ -71,12 +74,33 @@ const knowledgeRefs = computed(() => {
           title: r.title || '(无标题)',
           score: r.score,
           msgId: msg.id,
+          // 2026-09-03: 带上知识条目 id → 面板条目可点击跳转知识详情
+          knowledgeId: r.id != null ? String(r.id) : undefined,
         })
       }
     }
   }
-  return refs
+  // 按 id/标题去重 (同一文档被多轮引用只显示一次, 保留最高分)
+  const deduped: typeof refs = []
+  for (const ref of refs) {
+    const twin = deduped.find(d =>
+      (d.knowledgeId && d.knowledgeId === ref.knowledgeId) ||
+      (!d.knowledgeId && !ref.knowledgeId && d.title === ref.title)
+    )
+    if (twin) {
+      if (ref.score != null && (twin.score == null || ref.score > twin.score)) twin.score = ref.score
+    } else {
+      deduped.push(ref)
+    }
+  }
+  return deduped
 })
+
+function goKnowledge(entry: { knowledgeId?: string }) {
+  if (entry.knowledgeId) {
+    router.push(`/knowledge/${encodeURIComponent(entry.knowledgeId)}`)
+  }
+}
 
 // ============================================================================
 // 工具调用：扫描所有 messages 的 toolTrace，提取 type='tool'
@@ -207,7 +231,10 @@ function formatDuration(ms?: number): string {
             v-for="(ref, idx) in knowledgeRefs"
             :key="`${ref.msgId}-${idx}`"
             class="cp-knowledge-item"
+            :class="{ clickable: !!ref.knowledgeId }"
             :data-testid="`cp-knowledge-${idx}`"
+            :title="ref.knowledgeId ? '点击查看知识详情' : ''"
+            @click="goKnowledge(ref)"
           >
             <span class="cp-knowledge-title">{{ ref.title }}</span>
             <span v-if="ref.score != null" class="cp-knowledge-score">
@@ -359,6 +386,21 @@ function formatDuration(ms?: number): string {
   gap: 8px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--color-border-lighter, #f2f6fc);
+}
+.cp-knowledge-item.clickable {
+  cursor: pointer;
+}
+.cp-knowledge-item.clickable .cp-knowledge-title::after {
+  content: '↗';
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.6;
+}
+.cp-knowledge-item.clickable:hover {
+  background: rgba(14, 118, 110, 0.06);
+}
+.cp-knowledge-item.clickable:hover .cp-knowledge-title {
+  color: #0e766e;
 }
 .cp-knowledge-title {
   flex: 1;
