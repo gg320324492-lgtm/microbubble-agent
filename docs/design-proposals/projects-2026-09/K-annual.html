@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>K · 研究年报 · 刊面排版 — 项目页稿</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --chrome: #eaece7; --card: #fdfefc;
+    --ink: #16232a; --steel: #5a6b6a; --fog: #8ba0a0; --hair: #c9d2ca;
+    --teal: #0e766e; --teal-soft: #dcece5; --coral: #ef7256; --green: #3d7a3d; --amber: #c07f2e;
+    --serif: Georgia, "Songti SC", "SimSun", serif;
+    --sans: "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: Consolas, "Courier New", monospace;
+  }
+  .frame[data-dark] {
+    --paper: #10171b; --chrome: #0c1215; --card: #18232a;
+    --ink: #dfe9e6; --steel: #9ab0ae; --fog: #6b8286; --hair: #27363e;
+    --teal: #35c2a4; --teal-soft: #12312b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #10171b; font-family: var(--sans); color: #dfe9e6; padding: 36px 24px 64px; }
+  .page { max-width: 1460px; margin: 0 auto; }
+  .meta { font-family: var(--mono); font-size: 10.5px; letter-spacing: .22em; color: #35c2a4; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .meta h1 { font-family: var(--sans); font-size: 17px; letter-spacing: 0; color: #dfe9e6; font-weight: 600; }
+  .darkbtn { font-family: var(--mono); font-size: 11px; color: #dfe9e6; background: #18232a; border: 1px solid #27363e; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .darkbtn:hover { border-color: #35c2a4; color: #35c2a4; }
+
+  /* ===== 应用壳 ===== */
+  .frame { position: relative; margin-top: 18px; width: 100%; height: 880px; background: var(--paper); color: var(--ink); border: 1px solid #27363e; border-radius: 14px; overflow: hidden; display: grid; grid-template-columns: 240px 1fr; }
+  svg.s { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+
+  .side { background: var(--chrome); border-right: 1px solid var(--hair); display: flex; flex-direction: column; }
+  .brand { height: 60px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px dashed var(--hair); }
+  .brand .tile { width: 32px; height: 32px; border: 1.5px solid var(--ink); border-radius: 7px; display: grid; place-items: center; background: var(--card); box-shadow: 2px 2px 0 rgba(22,35,42,.16); }
+  .brand .tile svg.s { width: 18px; height: 18px; }
+  .brand b { font-size: 15px; letter-spacing: .04em; }
+  .brand .ver { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--fog); }
+  nav.menu { flex: 1; overflow-y: auto; padding: 10px 10px 4px; }
+  .taglabel { font-family: var(--mono); font-size: 9px; letter-spacing: .24em; color: var(--fog); padding: 10px 8px 6px; display: flex; align-items: center; gap: 8px; }
+  .taglabel::after { content: ''; flex: 1; border-top: 1px dashed var(--hair); }
+  .mitem { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 9px; padding: 9px 9px; border-radius: 7px; font-size: 13.5px; color: var(--steel); cursor: pointer; text-decoration: none; position: relative; }
+  .mitem .no { position: absolute; left: 34px; top: 3px; font-family: var(--mono); font-size: 8px; color: var(--fog); opacity: 0; }
+  .mitem span.lab { grid-column: 2; }
+  .mitem .cnt { grid-column: 3; font-family: var(--mono); font-size: 10.5px; color: var(--fog); }
+  .mitem .cnt.hot { color: var(--coral); font-weight: 700; }
+  .mitem:hover { background: rgba(14,118,110,.07); color: var(--ink); }
+  .mitem.active { background: var(--card); color: var(--ink); font-weight: 600; border: 1px solid var(--hair); box-shadow: 2px 2px 0 rgba(22,35,42,.1); }
+  .mitem.active svg.s { color: var(--teal); }
+  .mitem.active::before { content: ''; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; background: var(--teal); border-radius: 0 2px 2px 0; }
+  .sidefoot { border-top: 1px solid var(--hair); padding: 10px; }
+  .stamp { border: 1.5px dashed var(--ink); border-radius: 8px; padding: 9px 10px; display: flex; gap: 9px; align-items: center; cursor: pointer; background: transparent; }
+  .stamp:hover { background: var(--card); }
+  .stamp .t1 { font-size: 13px; font-weight: 600; }
+  .stamp .t2 { font-family: var(--mono); font-size: 9px; color: var(--fog); letter-spacing: .08em; }
+  .stamp svg.s { width: 17px; height: 17px; color: var(--teal); }
+
+  .right { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: 60px; flex-shrink: 0; background: var(--card); border-bottom: 1px solid var(--hair); display: flex; align-items: center; gap: 14px; padding: 0 18px; }
+  .fold { color: var(--steel); cursor: pointer; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; }
+  .fold:hover { background: var(--teal-soft); color: var(--teal); }
+  .fold svg.s { width: 17px; height: 17px; }
+  .crumbs { font-size: 12.5px; color: var(--fog); }
+  .crumbs b { color: var(--ink); font-weight: 600; }
+  .topbar .spacer { flex: 1; }
+  .chip { font-family: var(--mono); font-size: 10px; color: var(--steel); border: 1px solid var(--hair); border-radius: 5px; padding: 4px 8px; letter-spacing: .06em; }
+  .util { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 7px; color: var(--steel); cursor: pointer; position: relative; }
+  .util:hover { background: var(--teal-soft); color: var(--teal); }
+  .util .dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); border: 1.5px solid var(--card); }
+  .uchip { display: flex; align-items: center; gap: 9px; padding: 5px 10px 5px 5px; border: 1px solid var(--hair); border-radius: 8px; cursor: pointer; }
+  .uchip:hover { background: var(--paper); }
+  .av { width: 28px; height: 28px; border-radius: 6px; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .uchip .un { font-size: 12.5px; font-weight: 600; line-height: 1.15; }
+  .uchip .ur { font-family: var(--mono); font-size: 9px; color: var(--fog); letter-spacing: .1em; }
+
+  .content { flex: 1; overflow-y: auto; padding: 30px 26px 90px; }
+  .brief { position: relative; background: var(--card); border: 1.5px solid var(--ink); border-radius: 10px; padding: 26px 24px 20px; box-shadow: 3px 3px 0 rgba(22,35,42,.14); display: flex; align-items: flex-end; gap: 22px; }
+  .brief .tag { position: absolute; top: -11px; left: 20px; background: var(--card); border: 1px solid var(--teal); color: var(--teal); font-family: var(--mono); font-size: 9.5px; letter-spacing: .22em; padding: 3px 10px; border-radius: 3px; }
+  .brief h2 { font-family: var(--serif); font-size: 27px; font-weight: 600; letter-spacing: .01em; }
+  .brief .date { font-family: var(--mono); font-size: 11px; color: var(--steel); padding-bottom: 4px; }
+  .brief .date em { display: block; font-style: normal; color: var(--teal); margin-top: 4px; }
+  .brief .bunny { margin-left: auto; color: var(--fog); }
+  .brief .bunny svg.s { width: 34px; height: 34px; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+  .stat { background: var(--card); border: 1px solid var(--hair); border-radius: 9px; padding: 15px 17px 13px; position: relative; }
+  .stat::after { content: ''; position: absolute; inset: 0; border: 1px dashed var(--hair); border-radius: 9px; margin: 4px; pointer-events: none; }
+  .stat .lab { font-size: 12px; color: var(--steel); }
+  .stat .num { font-family: var(--mono); font-size: 38px; font-weight: 700; line-height: 1.15; }
+  .stat .sub { font-family: var(--mono); font-size: 10px; color: var(--fog); letter-spacing: .12em; }
+  .stat.t .num { color: var(--teal); } .stat.g .num { color: var(--green); } .stat.c .num { color: var(--coral); }
+  .stat .trend { position: absolute; right: 14px; bottom: 12px; width: 64px; height: 26px; }
+  .stat .seal { position: absolute; right: 12px; top: 12px; border: 1.5px solid var(--coral); color: var(--coral); font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 4px; transform: rotate(6deg); letter-spacing: .1em; }
+
+  .sec { margin-top: 24px; background: var(--card); border: 1px solid var(--hair); border-radius: 10px; overflow: hidden; }
+  .sec .head { display: flex; align-items: center; gap: 12px; padding: 13px 18px 12px; border-bottom: 1px dashed var(--hair); }
+  .sec .head b { font-size: 14px; } .sec .head b::before { content: '§ '; color: var(--teal); }
+  .sec .head .n { font-family: var(--mono); font-size: 10px; color: var(--fog); letter-spacing: .14em; }
+  .sec .head a { margin-left: auto; font-size: 12px; color: var(--teal); text-decoration: none; display: flex; align-items: center; gap: 2px; }
+  .row { display: grid; grid-template-columns: 30px 1fr 120px 100px 74px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--paper); }
+  .row:last-child { border-bottom: none; }
+  .row:hover { background: var(--paper); }
+  .row .who { width: 28px; height: 28px; border-radius: 50%; background: var(--teal-soft); color: var(--teal); border: 1px solid var(--teal); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .row .tt { font-size: 13.5px; font-weight: 500; }
+  .row .pr { font-family: var(--mono); font-size: 10px; }
+  .row .pr.hi { color: var(--coral); } .row .pr.md { color: var(--amber); } .row .pr.lo { color: var(--fog); }
+  .row .due { font-size: 11.5px; color: var(--steel); } .row .due.late { color: var(--coral); font-weight: 600; }
+  .row .done { justify-self: end; font-size: 11.5px; color: var(--teal); border: 1px solid var(--teal); background: transparent; border-radius: 12px; padding: 4px 11px; cursor: pointer; }
+  .row .done:hover { background: var(--teal-soft); }
+
+  .capsule { position: absolute; right: 24px; bottom: 22px; display: flex; align-items: center; gap: 10px; background: var(--ink); color: var(--paper); border-radius: 999px; padding: 11px 18px 11px 15px; font-size: 13px; font-weight: 600; box-shadow: 0 6px 22px rgba(22,35,42,.35); cursor: pointer; }
+  .frame[data-dark] .capsule { background: var(--coral); color: #fff; box-shadow: 0 6px 22px rgba(239,114,86,.4); }
+  .capsule .rd { width: 9px; height: 9px; border-radius: 50%; background: var(--coral); animation: pulse 1.4s infinite; }
+  .frame[data-dark] .capsule .rd { background: #fff; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .capsule .mt { font-family: var(--mono); font-size: 10px; opacity: .75; border-left: 1px solid rgba(255,255,255,.25); padding-left: 10px; }
+  .capsule svg.s { width: 14px; height: 14px; }
+
+  .notes { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 26px; font-size: 12.5px; color: #8ba0a0; line-height: 1.8; }
+  .notes li { list-style: none; padding-left: 16px; position: relative; }
+  .notes li::before { content: '·'; position: absolute; left: 2px; color: #35c2a4; }
+  .notes code { font-family: var(--mono); font-size: 11px; color: #35c2a4; }
+
+  .ws-tabs { display:flex; gap:4px; border-bottom:1px solid var(--hair); margin-bottom:22px; }
+  .wt { font-size:13.5px; color:var(--steel); padding:9px 14px; cursor:pointer; position:relative; }
+  .wt em { font-family:var(--mono); font-style:normal; font-size:9.5px; color:var(--fog); margin:0 6px 0 2px; letter-spacing:.08em; }
+  .wt.on { color:var(--ink); font-weight:600; }
+  .wt.on::after { content:''; position:absolute; left:10px; right:10px; bottom:-1px; height:2px; background:var(--coral); border-radius:2px; }
+  .hstamp { font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; color:var(--coral); border:1.5px dashed var(--coral); border-radius:6px; padding:4px 9px; transform:rotate(-2deg); display:inline-block; }
+  .hstamp.ok { color:var(--teal); border-color:var(--teal); }
+
+  .masthead { border-top:3px solid var(--ink); border-bottom:1px solid var(--ink); padding:18px 2px 14px; margin-bottom:26px; display:flex; align-items:flex-end; gap:18px; }
+  .masthead h2 { font-family:var(--serif); font-size:34px; letter-spacing:.06em; }
+  .masthead .yr { font-family:var(--serif); font-size:17px; color:var(--steel); padding-bottom:5px; }
+  .masthead .mo { margin-left:auto; font-family:var(--mono); font-size:9.5px; letter-spacing:.2em; color:var(--fog); text-align:right; line-height:1.9; padding-bottom:3px; }
+  .report { display:grid; grid-template-columns:206px 1fr; gap:34px; }
+  .toc { border-left:1px solid var(--hair); padding-left:16px; align-self:start; position:sticky; top:0; }
+  .toc h3 { font-family:var(--mono); font-size:9.5px; letter-spacing:.24em; color:var(--fog); margin-bottom:12px; }
+  .toc a { display:block; font-size:12.5px; color:var(--steel); text-decoration:none; line-height:1.5; margin-bottom:11px; }
+  .toc a b { font-family:var(--serif); color:var(--ink); margin-right:6px; }
+  .toc a .pg { float:right; font-family:var(--mono); font-size:10.5px; color:var(--teal); }
+  .toc .lead { border-bottom:1px dotted var(--hair); }
+  .tocstats { margin-top:20px; border-top:1px solid var(--ink); padding-top:12px; }
+  .tocstats div { display:flex; justify-content:space-between; font-size:11.5px; color:var(--steel); padding:4px 0; }
+  .tocstats b { font-family:var(--mono); color:var(--ink); }
+  .tocstats b.c { color:var(--coral); }
+  .chap { padding-bottom:30px; margin-bottom:26px; border-bottom:1px dashed var(--hair); }
+  .chap:last-child { border-bottom:0; }
+  .chap .kno { font-family:var(--serif); font-size:30px; color:var(--teal); float:left; margin:2px 14px 0 0; line-height:1; }
+  .chap h3 { font-family:var(--serif); font-size:20px; line-height:1.4; padding-top:2px; }
+  .chap .span { font-family:var(--mono); font-size:10px; letter-spacing:.12em; color:var(--fog); }
+  .chap p.lead { font-size:13px; color:var(--steel); line-height:1.9; margin-top:9px; }
+  .chap p.lead::first-letter { font-family:var(--serif); font-size:20px; color:var(--ink); font-weight:700; }
+  .rulebar { position:relative; height:26px; margin-top:12px; }
+  .rulebar .track { position:absolute; left:0; right:0; top:12px; border-top:1.5px solid var(--ink); }
+  .rulebar .seg { position:absolute; top:10px; height:5px; background:var(--teal); border-radius:2px; }
+  .rulebar .cap { position:absolute; top:2px; width:0; height:0; border:5px solid transparent; border-bottom-color:var(--coral); border-top:0; }
+  .rulebar .lab { position:absolute; top:16px; font-family:var(--mono); font-size:8.5px; color:var(--fog); }
+  .mnotes { display:block; margin-top:14px; font-size:12px; color:var(--steel); line-height:1.95; }
+  .mnotes sup { font-family:var(--mono); color:var(--teal); margin-right:5px; }
+  .mnotes .dt { font-family:var(--mono); font-size:10px; color:var(--fog); margin:0 6px; }
+  .mnotes .late, .mnotes .dt.late { color:var(--coral); font-weight:600; }
+
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-gauge" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.3a5.5 5.5 0 1 1 10 0"/><path d="M8 9.1 10.7 6.5"/><circle cx="8" cy="9.1" r=".9" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-chat" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="12" height="9" rx="2"/><path d="M5.6 11.5 4.6 14.4 8.4 11.5"/><circle cx="6" cy="7" r=".85" fill="currentColor" stroke="none"/><circle cx="10" cy="7" r=".85" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-list" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h7.5M6 8h7.5M6 12h7.5"/><circle cx="2.9" cy="4" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="8" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="12" r=".95" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-camera" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="9.5" height="8" rx="1.5"/><path d="M11.5 7 14.6 4.9v6.2L11.5 9"/></symbol>
+<symbol id="i-files" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="1.5" width="9" height="11" rx="1.8"/><path d="M5.4 14.5H11a2 2 0 0 0 2-2V6.6"/></symbol>
+<symbol id="i-doc" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 1.8H4.3a1.5 1.5 0 0 0-1.5 1.5v9.4a1.5 1.5 0 0 0 1.5 1.5h7.4a1.5 1.5 0 0 0 1.5-1.5V5.6L9.2 1.8Z"/><path d="M9.2 1.8v3.8h4"/><path d="M5.6 8.8h4.8M5.6 11.2h3.4"/></symbol>
+<symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 3.9a1.6 1.6 0 0 1 1.6-1.6h3.1c.5 0 1 .2 1.3.6l1 1.2h3.8a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H3.4a1.6 1.6 0 0 1-1.6-1.6V3.9Z"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h7M12.5 4.5h1.5M2 11.5h1.5M7 11.5h7"/><circle cx="10.7" cy="4.5" r="1.7"/><circle cx="4.8" cy="11.5" r="1.7"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/><rect x="6.4" y="6.4" width="3.2" height="3.2" rx=".5"/><path d="M6 1.6v1.9M10 1.6v1.9M6 12.5v1.9M10 12.5v1.9M1.6 6h1.9M1.6 10h1.9M12.5 6h1.9M12.5 10h1.9"/></symbol>
+<symbol id="i-board" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 2.4v11h11"/><path d="M6 12.2V9M8.8 12.2V5.6M11.6 12.2V7.6"/></symbol>
+<symbol id="i-bell" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.9a4.2 4.2 0 0 0-4.2 4.2c0 3.2-1 4.4-1.5 5.1-.2.4.1.9.6.9h10.2c.5 0 .8-.5.6-.9-.5-.7-1.5-1.9-1.5-5.1A4.2 4.2 0 0 0 8 1.9Z"/><path d="M6.4 14.2a1.7 1.7 0 0 0 3.2 0"/></symbol>
+<symbol id="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2a4.4 4.4 0 0 0 6 6A6 6 0 1 1 8 2Z"/></symbol>
+<symbol id="i-fold" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6"/><path d="M6 2.8v10.4M11.4 6.4 9.6 8l1.8 1.6"/></symbol>
+<symbol id="i-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.9" cy="6.9" r="4.4"/><path d="m10.2 10.2 3.9 3.9"/></symbol>
+<symbol id="i-user" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.4" r="2.9"/><path d="M2.8 14.2c.6-2.9 2.7-4.4 5.2-4.4s4.6 1.5 5.2 4.4"/></symbol>
+<symbol id="i-bunny" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="6.1" cy="4.6" rx="1.3" ry="3"/><ellipse cx="9.9" cy="4.6" rx="1.3" ry="3"/><circle cx="8" cy="10.6" r="3.4"/></symbol>
+<symbol id="i-aim" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3.6 4.4 4.4L6 12.4"/></symbol>
+<symbol id="i-clock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8l2.4 1.6"/></symbol>
+<symbol id="i-tag" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2h5.2l6.6 6.6-5.2 5.2L2 7.4Z"/><circle cx="4.7" cy="4.7" r=".9" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h11M10 4l4 4-4 4"/></symbol>
+</defs></svg>
+<div class="page">
+  <div class="meta">
+    <span>PROJECTS PAGE PROPOSAL K · ANNUAL REPORT · 2026-09</span>
+    <h1>K 稿 · 研究年报 · 刊面排版</h1>
+    <button class="darkbtn" onclick="document.querySelector('.frame').toggleAttribute('data-dark')">☾ 夜览</button>
+  </div>
+
+  <div class="frame">
+    <aside class="side">
+      <div class="brand">
+        <div class="tile"><svg class="s"><use href="#i-aim"/></svg></div>
+        <b>小气助手</b><span class="ver">v26.09</span>
+      </div>
+      <nav class="menu">
+        <div class="taglabel">FRONT MATTER · 卷首</div>
+        <a class="mitem"><svg class="s"><use href="#i-gauge"/></svg><span class="lab">仪表盘</span><span class="cnt">19</span></a>
+        <div class="taglabel">RESEARCH · 研究</div>
+        <a class="mitem"><svg class="s"><use href="#i-list"/></svg><span class="lab">任务管理</span><span class="cnt">20/75</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-camera"/></svg><span class="lab">会议管理</span><span class="cnt hot">●REC</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-doc"/></svg><span class="lab">知识库</span><span class="cnt">531</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-cpu"/></svg><span class="lab">DFT/MD 计算</span></a>
+        <div class="taglabel">COLLAB · 协作</div>
+        <a class="mitem"><svg class="s"><use href="#i-chat"/></svg><span class="lab">智能对话</span></a>
+        <a class="mitem active"><svg class="s"><use href="#i-files"/></svg><span class="lab">团队协作</span><span class="cnt">4</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-folder"/></svg><span class="lab">课题组网盘</span></a>
+        <div class="taglabel">SYSTEM · 系统</div>
+        <a class="mitem"><svg class="s"><use href="#i-sliders"/></svg><span class="lab">个人设置</span></a>
+      </nav>
+      <div class="sidefoot">
+        <div class="stamp">
+          <svg class="s"><use href="#i-board"/></svg>
+          <div><div class="t1">项目动态</div><div class="t2">PROJECT STATS · WK36</div></div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="right">
+      <header class="topbar">
+        <span class="fold"><svg class="s"><use href="#i-fold"/></svg></span>
+        <div class="crumbs">首页 <span style="opacity:.5">/</span> <b>团队协作</b></div>
+        <span class="chip">READ · 09-04 WK36</span>
+        <span class="spacer"></span>
+        <span class="util"><svg class="s"><use href="#i-bell"/></svg><span class="dot"></span></span>
+        <span class="util"><svg class="s"><use href="#i-moon"/></svg></span>
+        <div class="uchip">
+          <span class="av">杜</span>
+          <div><div class="un">杜同贺</div><div class="ur">ADMIN</div></div>
+          <svg class="s" style="width:12px;color:var(--fog)"><use href="#i-chevron"/></svg>
+        </div>
+      </header>
+      <main class="content">
+<div class="masthead"><h2>项 目 卷 宗</h2><span class="yr">二〇二六年度 · 第三季度刊</span><span class="mo">MICROBUBBLE LAB · RESEARCH REPORT<br>ISSUE 2026-03 · WK36 · 数据截至 09-04</span></div><div class="report"><aside class="toc"><h3>目录 · CONTENTS</h3><a class="lead"><b>§01</b>黑臭水体无药剂低能耗治…<span class="pg">71</span></a><a class="lead"><b>§02</b>饮用水水质提升与安全保…<span class="pg">100</span></a><a class="lead"><b>§03</b>水产高密度无抗养殖与品…<span class="pg">89</span></a><a class="lead"><b>§04</b>气泡成核过程调控与设备…<span class="pg">92</span></a><div class="tocstats"><div>在研项目 <b>4</b></div><div>成员人次 <b>26</b></div><div>里程碑 <b>7</b></div><div>逾期未闭 <b class="c">5</b></div><div>本年结题 <b>0</b></div></div></aside><div><div class="chap"><div class="kno">§01</div><h3>黑臭水体无药剂低能耗治理</h3><span class="span">2024-09-01 — 2027-06-30 · 成员 6</span><p class="lead">研究臭氧微纳米气泡对黑臭水体底泥及上覆水中污染物去除、底泥污染物释放抑制、界面氧化转化机制。</p><div class="rulebar"><div class="track"></div><span class="seg" style="width:71%"></span><span class="cap" style="left:71%;margin-left:-4px"></span><span class="lab" style="left:0">2024-09</span><span class="lab" style="right:0">时间 71%</span></div><div class="mnotes"><div><sup>①</sup>文献调研完成<span class="dt">26/04/17 ✓</span></div><div><sup>②</sup>预实验完成<span class="dt late">26/05/31</span></div><div><sup>③</sup>正式实验完成<span class="dt late">26/08/15</span></div></div></div><div class="chap"><div class="kno">§02</div><h3>饮用水水质提升与安全保障</h3><span class="span">2023-09-01 — 2026-06-30 · 成员 8</span><p class="lead">研究微纳米气泡在饮用水处理中的应用,包括消毒抑菌、生物稳定性提升等。周期已尽而两项里程碑未闭,建议本年度内明确结题或展期。</p><div class="rulebar"><div class="track"></div><span class="seg" style="width:100%"></span><span class="cap" style="right:2px"></span><span class="lab" style="left:0">2023-09</span><span class="lab" style="right:0">已到期 · 未结题</span></div><div class="mnotes"><div><sup>①</sup>消杀机理研究完成<span class="dt late">26/06/16</span></div><div><sup>②</sup>论文投稿<span class="dt">26/09/14</span></div></div></div><div class="chap"><div class="kno">§03</div><h3>水产高密度无抗养殖与品质改善</h3><span class="span">2024-03-01 — 2026-12-31 · 成员 5</span><p class="lead">探索微纳米气泡在水产高密度无抗养殖中的应用,提升养殖水质和鱼产品品质。</p><div class="rulebar"><div class="track"></div><span class="seg" style="width:89%"></span><span class="cap" style="left:89%;margin-left:-4px"></span><span class="lab" style="left:0">2024-03</span><span class="lab" style="right:0">时间 89%</span></div><div class="mnotes"><div><sup>◎</sup>本年度未立里程碑 — 建议补录</div></div></div><div class="chap"><div class="kno">§04</div><h3>气泡成核过程调控与设备研发</h3><span class="span">2023-01-01 — 2026-12-31 · 成员 7</span><p class="lead">研究气泡成核机理、发生器结构优化,开发高效微纳米气泡发生设备。</p><div class="rulebar"><div class="track"></div><span class="seg" style="width:92%"></span><span class="cap" style="left:92%;margin-left:-4px"></span><span class="lab" style="left:0">2023-01</span><span class="lab" style="right:0">时间 92%</span></div><div class="mnotes"><div><sup>①</sup>发生器样机完成<span class="dt late">26/06/06</span></div><div><sup>②</sup>系统集成测试<span class="dt late">26/07/01</span></div></div></div></div></div>
+      </main>
+    </div>
+  </div>
+</div>
+</body>
+</html>
