@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>H · 刊头 — 全局布局稿</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --chrome: #eaece7; --card: #fdfefc;
+    --ink: #16232a; --steel: #5a6b6a; --fog: #8ba0a0; --hair: #c9d2ca;
+    --teal: #0e766e; --teal-soft: #dcece5; --coral: #ef7256; --green: #3d7a3d; --amber: #c07f2e;
+    --serif: Georgia, "Songti SC", "SimSun", serif;
+    --sans: "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: Consolas, "Courier New", monospace;
+  }
+  .frame[data-dark] {
+    --paper: #10171b; --chrome: #0c1215; --card: #18232a;
+    --ink: #dfe9e6; --steel: #9ab0ae; --fog: #6b8286; --hair: #27363e;
+    --teal: #35c2a4; --teal-soft: #12312b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #10171b; font-family: var(--sans); color: #dfe9e6; padding: 36px 24px 64px; }
+  .page { max-width: 1460px; margin: 0 auto; }
+  .meta { font-family: var(--mono); font-size: 10.5px; letter-spacing: .22em; color: #35c2a4; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .meta h1 { font-family: var(--sans); font-size: 17px; letter-spacing: 0; color: #dfe9e6; font-weight: 600; }
+  .darkbtn { font-family: var(--mono); font-size: 11px; color: #dfe9e6; background: #18232a; border: 1px solid #27363e; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .darkbtn:hover { border-color: #35c2a4; color: #35c2a4; }
+
+  .frame { position: relative; margin-top: 18px; width: 100%; height: 880px; background: var(--paper); color: var(--ink); border: 1px solid #27363e; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  svg.s { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+
+  /* ===== 刊头 ===== */
+  .masthead { flex-shrink: 0; background: var(--card); border-bottom: 1px solid var(--hair); padding: 0 28px; height: 86px; display: flex; align-items: center; gap: 20px; position: relative; }
+  .masthead::after { content: ''; position: absolute; left: 28px; right: 28px; bottom: 5px; border-bottom: 1px solid var(--hair); }
+  .mh-brand { display: flex; align-items: center; gap: 12px; }
+  .mh-brand .tile { width: 40px; height: 40px; background: var(--ink); color: var(--paper); border-radius: 9px; display: grid; place-items: center; }
+  .mh-brand .tile svg.s { width: 22px; height: 22px; }
+  .mh-brand .wm b { font-family: var(--serif); font-size: 22px; letter-spacing: .1em; display: block; line-height: 1.1; }
+  .mh-brand .wm i { font-family: var(--mono); font-style: normal; font-size: 9px; letter-spacing: .3em; color: var(--fog); }
+  .mh-rule { width: 1px; height: 46px; background: var(--hair); }
+  .mh-issue { font-family: var(--mono); font-size: 10px; color: var(--steel); line-height: 1.9; letter-spacing: .1em; }
+  .mh-issue .hot { color: var(--coral); }
+  .masthead .spacer { flex: 1; }
+  .mh-tools { display: flex; align-items: center; gap: 12px; }
+  .sbtn { display: flex; align-items: center; gap: 7px; border: 1px solid var(--hair); border-radius: 6px; color: var(--fog); font-size: 12px; padding: 7px 12px; cursor: pointer; background: var(--paper); }
+  .sbtn kbd { font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--hair); border-radius: 3px; padding: 1px 4px; }
+  .util { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; color: var(--steel); cursor: pointer; position: relative; border: 1px solid transparent; }
+  .util:hover { border-color: var(--hair); background: var(--paper); color: var(--teal); }
+  .util .dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); border: 1.5px solid var(--card); }
+  .uchip { display: flex; align-items: center; gap: 9px; border: 1px solid var(--hair); border-radius: 8px; padding: 4px 10px 4px 4px; cursor: pointer; }
+  .uchip:hover { background: var(--paper); }
+  .av { width: 28px; height: 28px; border-radius: 6px; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .uchip .un { font-size: 12.5px; font-weight: 600; }
+  .uchip .ur { font-family: var(--mono); font-size: 9px; color: var(--fog); }
+
+  /* ===== 导航条 ===== */
+  .navbar { flex-shrink: 0; height: 48px; background: var(--chrome); border-bottom: 1.5px solid var(--ink); display: flex; align-items: center; padding: 0 22px; gap: 2px; }
+  .nitem { display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 13px; font-size: 13px; color: var(--steel); cursor: pointer; text-decoration: none; border-bottom: 3px solid transparent; position: relative; }
+  .nitem .no { font-family: var(--mono); font-size: 8.5px; color: var(--fog); }
+  .nitem:hover { color: var(--ink); background: rgba(14,118,110,.06); }
+  .nitem.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--coral); background: var(--paper); }
+  .nitem .cnt { font-family: var(--mono); font-size: 9.5px; color: var(--teal); }
+  .nitem .cnt.hot { color: var(--coral); font-weight: 700; }
+  .navbar .nrule { width: 1px; height: 20px; background: var(--hair); margin: 0 8px; }
+  .navbar .right { margin-left: auto; display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 9.5px; color: var(--fog); letter-spacing: .12em; }
+  .navbar .right .bunny { color: var(--steel); } .navbar .right .bunny svg.s { width: 15px; height: 15px; }
+
+  .content { flex: 1; overflow-y: auto; padding: 26px 46px 92px; }
+  .folio { display: flex; align-items: baseline; gap: 16px; border-bottom: 3px double var(--ink); padding-bottom: 14px; }
+  .folio h2 { font-family: var(--serif); font-size: 28px; font-weight: 600; letter-spacing: .02em; }
+  .folio .date { font-family: var(--mono); font-size: 11px; color: var(--steel); }
+  .folio .n { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--fog); letter-spacing: .18em; }
+  .cols { display: grid; grid-template-columns: 1fr 320px; gap: 30px; margin-top: 22px; }
+  .lead { font-size: 13.5px; color: var(--steel); line-height: 2; text-align: justify; }
+  .lead b.t { color: var(--teal); } .lead b.c { color: var(--coral); }
+  .dropcap::first-letter { font-family: var(--serif); font-size: 42px; float: left; line-height: 1; padding: 4px 8px 0 0; color: var(--ink); }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+  .stat { background: var(--card); border: 1px solid var(--hair); border-radius: 8px; padding: 13px 15px; position: relative; }
+  .stat .lab { font-size: 12px; color: var(--steel); }
+  .stat .num { font-family: var(--mono); font-size: 34px; font-weight: 700; line-height: 1.2; }
+  .stat .sub { font-family: var(--mono); font-size: 9.5px; color: var(--fog); letter-spacing: .1em; }
+  .stat.t .num { color: var(--teal); } .stat.g .num { color: var(--green); } .stat.c .num { color: var(--coral); }
+
+  .art { margin-top: 24px; }
+  .art .head { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--ink); padding-bottom: 7px; margin-bottom: 3px; }
+  .art .head b { font-family: var(--serif); font-size: 15.5px; }
+  .art .head .n { font-family: var(--mono); font-size: 9.5px; color: var(--fog); letter-spacing: .12em; }
+  .art .head a { margin-left: auto; font-size: 12px; color: var(--teal); text-decoration: none; }
+  .prow { display: grid; grid-template-columns: 26px 1fr 130px 100px; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px dashed var(--hair); font-size: 13.5px; }
+  .prow .who { width: 25px; height: 25px; border-radius: 50%; background: var(--teal-soft); color: var(--teal); border: 1px solid var(--teal); display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+  .prow .pp { font-family: var(--mono); font-size: 10px; }
+  .prow .pp.hi { color: var(--coral); } .prow .pp.md { color: var(--amber); } .prow .pp.lo { color: var(--fog); }
+  .prow .due { font-size: 11.5px; color: var(--steel); } .prow .due.late { color: var(--coral); font-weight: 600; }
+
+  .aside-col { border-left: 1px dashed var(--hair); padding-left: 26px; }
+  .colbox { margin-bottom: 24px; }
+  .colbox h3 { font-family: var(--mono); font-size: 10px; letter-spacing: .2em; color: var(--teal); border-top: 2px solid var(--ink); padding-top: 8px; margin-bottom: 10px; }
+  .kb { display: flex; gap: 10px; align-items: center; padding: 7px 0; font-size: 12.5px; color: var(--steel); border-bottom: 1px dotted var(--hair); }
+  .kb svg.s { width: 14px; height: 14px; color: var(--fog); }
+  .kb b { color: var(--ink); font-weight: 600; }
+  .kb .n2 { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--teal); }
+  .rec { border: 1.5px solid var(--coral); border-radius: 8px; padding: 12px 14px; background: var(--card); }
+  .rec .t { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--coral); }
+  .rec .rd { width: 8px; height: 8px; border-radius: 50%; background: var(--coral); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .rec .m { font-family: var(--mono); font-size: 10px; color: var(--fog); margin-top: 5px; }
+  .wave { display: flex; align-items: flex-end; gap: 3px; height: 26px; margin-top: 9px; }
+  .wave i { width: 3px; background: var(--coral); border-radius: 2px; opacity: .8; }
+
+  .capsule { position: absolute; right: 28px; bottom: 24px; display: flex; align-items: center; gap: 10px; background: var(--ink); color: var(--paper); border-radius: 999px; padding: 11px 18px 11px 15px; font-size: 13px; font-weight: 600; box-shadow: 0 6px 22px rgba(22,35,42,.35); cursor: pointer; }
+  .frame[data-dark] .capsule { background: var(--coral); }
+  .capsule .rd { width: 9px; height: 9px; border-radius: 50%; background: var(--coral); animation: pulse 1.4s infinite; }
+  .frame[data-dark] .capsule .rd { background: #fff; }
+  .capsule .mt { font-family: var(--mono); font-size: 10px; opacity: .75; border-left: 1px solid rgba(255,255,255,.25); padding-left: 10px; }
+  .capsule svg.s { width: 14px; height: 14px; }
+
+  .notes { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 26px; font-size: 12.5px; color: #8ba0a0; line-height: 1.8; }
+  .notes li { list-style: none; padding-left: 16px; position: relative; }
+  .notes li::before { content: '·'; position: absolute; left: 2px; color: #35c2a4; }
+  .notes code { font-family: var(--mono); font-size: 11px; color: #35c2a4; }
+</style>
+</head>
+<body>
+
+<!-- ===== 统一图标 sprite (与其余三稿同源, viewBox 0 0 16 16, stroke 1.5) ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-gauge" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.3a5.5 5.5 0 1 1 10 0"/><path d="M8 9.1 10.7 6.5"/><circle cx="8" cy="9.1" r=".9" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-chat" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="12" height="9" rx="2"/><path d="M5.6 11.5 4.6 14.4 8.4 11.5"/><circle cx="6" cy="7" r=".85" fill="currentColor" stroke="none"/><circle cx="10" cy="7" r=".85" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-list" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h7.5M6 8h7.5M6 12h7.5"/><circle cx="2.9" cy="4" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="8" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="12" r=".95" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-camera" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="9.5" height="8" rx="1.5"/><path d="M11.5 7 14.6 4.9v6.2L11.5 9"/></symbol>
+<symbol id="i-files" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="1.5" width="9" height="11" rx="1.8"/><path d="M5.4 14.5H11a2 2 0 0 0 2-2V6.6"/></symbol>
+<symbol id="i-doc" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 1.8H4.3a1.5 1.5 0 0 0-1.5 1.5v9.4a1.5 1.5 0 0 0 1.5 1.5h7.4a1.5 1.5 0 0 0 1.5-1.5V5.6L9.2 1.8Z"/><path d="M9.2 1.8v3.8h4"/><path d="M5.6 8.8h4.8M5.6 11.2h3.4"/></symbol>
+<symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 3.9a1.6 1.6 0 0 1 1.6-1.6h3.1c.5 0 1 .2 1.3.6l1 1.2h3.8a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H3.4a1.6 1.6 0 0 1-1.6-1.6V3.9Z"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h7M12.5 4.5h1.5M2 11.5h1.5M7 11.5h7"/><circle cx="10.7" cy="4.5" r="1.7"/><circle cx="4.8" cy="11.5" r="1.7"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/><rect x="6.4" y="6.4" width="3.2" height="3.2" rx=".5"/><path d="M6 1.6v1.9M10 1.6v1.9M6 12.5v1.9M10 12.5v1.9M1.6 6h1.9M1.6 10h1.9M12.5 6h1.9M12.5 10h1.9"/></symbol>
+<symbol id="i-board" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 2.4v11h11"/><path d="M6 12.2V9M8.8 12.2V5.6M11.6 12.2V7.6"/></symbol>
+<symbol id="i-bell" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.9a4.2 4.2 0 0 0-4.2 4.2c0 3.2-1 4.4-1.5 5.1-.2.4.1.9.6.9h10.2c.5 0 .8-.5.6-.9-.5-.7-1.5-1.9-1.5-5.1A4.2 4.2 0 0 0 8 1.9Z"/><path d="M6.4 14.2a1.7 1.7 0 0 0 3.2 0"/></symbol>
+<symbol id="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2a4.4 4.4 0 0 0 6 6A6 6 0 1 1 8 2Z"/></symbol>
+<symbol id="i-fold" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6"/><path d="M6 2.8v10.4M11.4 6.4 9.6 8l1.8 1.6"/></symbol>
+<symbol id="i-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.9" cy="6.9" r="4.4"/><path d="m10.2 10.2 3.9 3.9"/></symbol>
+<symbol id="i-user" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.4" r="2.9"/><path d="M2.8 14.2c.6-2.9 2.7-4.4 5.2-4.4s4.6 1.5 5.2 4.4"/></symbol>
+<symbol id="i-bunny" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="6.1" cy="4.6" rx="1.3" ry="3"/><ellipse cx="9.9" cy="4.6" rx="1.3" ry="3"/><circle cx="8" cy="10.6" r="3.4"/></symbol>
+<symbol id="i-aim" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3.6 4.4 4.4L6 12.4"/></symbol>
+<symbol id="i-clock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8l2.4 1.6"/></symbol>
+<symbol id="i-tag" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2h5.2l6.6 6.6-5.2 5.2L2 7.4Z"/><circle cx="4.7" cy="4.7" r=".9" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h11M10 4l4 4-4 4"/></symbol>
+</defs></svg>
+
+<div class="page">
+  <div class="meta">
+    <span>LAYOUT PROPOSAL H · MASTHEAD · 2026-09</span>
+    <h1>H 稿 · 刊头(去侧栏 · 横排版面)</h1>
+    <button class="darkbtn" onclick="document.querySelector('.frame').toggleAttribute('data-dark')">☾ 夜览</button>
+  </div>
+
+  <div class="frame">
+    <header class="masthead">
+      <div class="mh-brand">
+        <div class="tile"><svg class="s"><use href="#i-aim"/></svg></div>
+        <div class="wm"><b>小气助手</b><i>XIAOQI · LAB GAZETTE</i></div>
+      </div>
+      <div class="mh-rule"></div>
+      <div class="mh-issue">VOL.26 · NO.09 · THU<br/>成员 20 · <span class="hot">逾期 7</span></div>
+      <div class="spacer"></div>
+      <div class="mh-tools">
+        <span class="sbtn"><svg class="s"><use href="#i-search"/></svg>搜任务 / 会议 / 知识 <kbd>⌘K</kbd></span>
+        <span class="util"><svg class="s"><use href="#i-bell"/></svg><span class="dot"></span></span>
+        <span class="util"><svg class="s"><use href="#i-moon"/></svg></span>
+        <div class="uchip"><span class="av">杜</span><div><div class="un">杜同贺</div><div class="ur">ADMIN</div></div><svg class="s" style="width:12px;color:var(--fog)"><use href="#i-chevron"/></svg></div>
+      </div>
+    </header>
+
+    <nav class="navbar">
+      <a class="nitem active"><span class="no">01</span><svg class="s"><use href="#i-gauge"/></svg>仪表盘</a>
+      <a class="nitem"><span class="no">02</span><svg class="s"><use href="#i-chat"/></svg>智能对话</a>
+      <a class="nitem"><span class="no">03</span><svg class="s"><use href="#i-list"/></svg>任务<span class="cnt">19</span></a>
+      <a class="nitem"><span class="no">04</span><svg class="s"><use href="#i-camera"/></svg>会议<span class="cnt hot">●REC</span></a>
+      <a class="nitem"><span class="no">05</span><svg class="s"><use href="#i-files"/></svg>协作</a>
+      <a class="nitem"><span class="no">06</span><svg class="s"><use href="#i-doc"/></svg>知识库<span class="cnt">531</span></a>
+      <a class="nitem"><span class="no">07</span><svg class="s"><use href="#i-folder"/></svg>网盘</a>
+      <a class="nitem"><span class="no">08</span><svg class="s"><use href="#i-board"/></svg>动态</a>
+      <div class="nrule"></div>
+      <a class="nitem"><span class="no">09</span><svg class="s"><use href="#i-cpu"/></svg>DFT/MD</a>
+      <a class="nitem"><svg class="s"><use href="#i-sliders"/></svg>设置</a>
+      <div class="right"><span class="bunny"><svg class="s"><use href="#i-bunny"/></svg></span>EST. 2024 · MICROBUBBLE LAB</div>
+    </nav>
+
+    <main class="content">
+      <div class="folio">
+        <h2>晚间简报</h2>
+        <span class="date">2026-09-03 · 18:48</span>
+        <span class="n">DAILY BRIEF / FRONT PAGE</span>
+      </div>
+      <div class="cols">
+        <div>
+          <p class="lead dropcap">今日课题组共 <b class="t">19</b> 项任务推进中, 较昨日 +3;<b class="c">7</b> 项已逾期, 最久 75 天, 建议在今晚组会前完成批红。本周归档任务 12 项, 知识库新增 2 条, 声纹库新增 1 段样本。例行例会 #254 正在听会中, 转录将自动入库并建立关联。</p>
+          <div class="stats">
+            <div class="stat t"><div class="lab">进行中</div><div class="num">19</div><div class="sub">IN_PROGRESS</div></div>
+            <div class="stat g"><div class="lab">已完成</div><div class="num">75</div><div class="sub">DONE · WK +12</div></div>
+            <div class="stat c"><div class="lab">已逾期</div><div class="num">7</div><div class="sub">OVERDUE · 最久 75d</div></div>
+          </div>
+          <div class="art">
+            <div class="head"><b>进行中 · 按负责人</b><span class="n">TABLE 1 · 20 ROWS</span><a>全部 →</a></div>
+            <div class="prow"><span class="who">胡</span><div>正式实验</div><div class="pp hi">P-高 · 胡小琪</div><div class="due late">明天到期</div></div>
+            <div class="prow"><span class="who">陈</span><div>文献调研:微纳米气泡稳定性</div><div class="pp md">P-中 · 陈天祥</div><div class="due late">05/31 已逾期</div></div>
+            <div class="prow"><span class="who">李</span><div>12#棚水质微生物测试</div><div class="pp md">P-中 · 李胜景</div><div class="due">09/20</div></div>
+            <div class="prow"><span class="who">蒋</span><div>看文献</div><div class="pp lo">P-低 · 蒋芦笛</div><div class="due">09/30</div></div>
+            <div class="prow"><span class="who">韩</span><div>搭建多种产泡系统</div><div class="pp md">P-中 · 韩重阳</div><div class="due">10/12</div></div>
+          </div>
+        </div>
+        <div class="aside-col">
+          <div class="colbox">
+            <h3>ON AIR · 正在发生</h3>
+            <div class="rec">
+              <div class="t"><span class="rd"></span>正在听会 · 例行例会 #254</div>
+              <div class="m">REC 00:34:12 · 5 人在线</div>
+              <div class="wave"><i style="height:8px"></i><i style="height:18px"></i><i style="height:12px"></i><i style="height:24px"></i><i style="height:10px"></i><i style="height:20px"></i><i style="height:14px"></i><i style="height:26px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:11px"></i></div>
+            </div>
+          </div>
+          <div class="colbox">
+            <h3>IN THE ARCHIVE · 馆藏</h3>
+            <div class="kb"><svg class="s"><use href="#i-doc"/></svg><b>知识库条目</b><span class="n2">531</span></div>
+            <div class="kb"><svg class="s"><use href="#i-camera"/></svg><b>会议记录</b><span class="n2">254</span></div>
+            <div class="kb"><svg class="s"><use href="#i-folder"/></svg><b>网盘文件</b><span class="n2">1,208</span></div>
+            <div class="kb"><svg class="s"><use href="#i-cpu"/></svg><b>DFT 计算任务</b><span class="n2">36</span></div>
+          </div>
+          <div class="colbox">
+            <h3>DEPT. · 栏目直达</h3>
+            <div class="kb"><svg class="s"><use href="#i-board"/></svg><b>项目动态</b><span class="n2">WK36</span></div>
+            <div class="kb"><svg class="s"><use href="#i-tag"/></svg><b>逾期批红榜</b><span class="n2" style="color:var(--coral)">7</span></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="capsule"><span class="rd"></span>正在听会<span class="mt">例行例会 #254</span><svg class="s"><use href="#i-arrow"/></svg></div>
+  </div>
+
+  <ul class="notes">
+    <li>整页改报纸双栏:刊头(报头 + 工具)+ 横排导航条(9+2 项,mono 编号 + 珊瑚色 active 底线)+ 正文/侧栏双栏。内容宽全部让给正文。</li>
+    <li>「正在发生」在右栏升为常驻栏目卡(含波形),浮动胶囊可省 —— 但为保持四稿一致仍保留,实现时二选一。</li>
+    <li>11 个导航项在 1440px 下各约 105px,可行;更窄断点需把 设置/DFT 收进「更多」下拉。</li>
+    <li>改动最大:<code>MainLayout.vue</code> 模板重排 + 各页面 max-width 策略复核;面包屑并入 folio 行,折叠键退役为 ⌘K。</li>
+    <li>适合大屏读者;笔记本 1280px 下导航会拥挤,需要 label-only 降级。</li>
+  </ul>
+</div>
+</body>
+</html>
