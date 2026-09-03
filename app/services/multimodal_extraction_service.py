@@ -1210,6 +1210,41 @@ class MultimodalExtractionService:
             "new_content_length": len(new_content),
         }
 
+    # alt 内视为泄漏的标记 (OCR 原文含任一即从该处截断): 提示词指令 / JSON 残渣 / markdown 语法
+    _ALT_LEAK_MARKERS = (
+        '"category"', 'category":', "JSON格式", "JSON 格式", "```", "ThinkingBlock(",
+        '"text"', '"latex"', "我需要", "让我先", "用户问的是",
+    )
+    # 开头即命中的元话语标记 → 整段丢弃 (段首版 _clean_ocr_text 漏网的长提示词)
+    _ALT_META_MARKERS = ("我需要", "让我先", "用户问的是", "JSON格式", "json格式")
+
+    @classmethod
+    def _clean_alt_text(cls, ocr: str) -> str:
+        """OCR 原文 → 安全的图片 alt 文本
+
+        历史教训 (2026-09-03 二轮数据巡检): 论文导入时视觉模型把 JSON 提示词/
+        自言自语写进 ocr_text, 截 100 字直拼 alt 后整段进正文
+        (如 `![图（P4，{ "category": ...我需要按指定的JSON格式输出...）](url)`)。
+        _clean_ocr_text 只剥段首元话语, 段中泄漏漏网, 必须在这里兜底。
+        """
+        s = (ocr or "").strip().replace("\n", " ")
+        lower = s.lower()
+        for m in cls._ALT_META_MARKERS:
+            if lower.startswith(m):
+                return ""
+        cut = len(s)
+        for m in cls._ALT_LEAK_MARKERS:
+            p = lower.find(m.lower())
+            if p > 0 and p < cut:  # p==0 交给 _ALT_META_MARKERS / 括号清理兜底
+                cut = p
+        s = s[:cut].strip().rstrip("，。；、,-:：(")
+        # alt 在 markdown 里以 [ ] 包裹, 残留的 ] ) 会截断图片语法; ( 会在 alt 里悬挂
+        s = re.sub(r"[\[\]()（）{}]", "", s)
+        s = re.sub(r"\s{2,}", " ", s).strip()
+        if len(s) < 4:
+            return ""  # 截完只剩残渣 → 无 alt, 上层回退 "图（Pn）"
+        return s[:100]
+
     def _format_inline_markdown(self, kind: str, item) -> Optional[str]:
         """把图片 / 公式 / 表格 / 图表 格式化成 inline markdown 片段
 
@@ -1219,8 +1254,11 @@ class MultimodalExtractionService:
             # 图片：![caption](url)
             img = item
             page = img.page_number
-            ocr = (img.ocr_text or "").strip().replace("\n", " ")[:100]
-            cap = f"图（P{page}，{ocr}...）" if page else f"图（{ocr}...）"
+            ocr = self._clean_alt_text(img.ocr_text or "")
+            if ocr:
+                cap = f"图（P{page}，{ocr}...）" if page else f"图（{ocr}...）"
+            else:
+                cap = f"图（P{page}）" if page else "图"
             return f"![{cap}]({img.image_url})"
         elif kind == "extraction":
             e = item
