@@ -18,99 +18,133 @@
       <VoiceprintsPanel />
     </div>
 
-    <!-- 项目详情 dialog (ProjectsPanel emit 'open-detail' 触发) -->
+    <!-- 项目详情 dialog (ProjectsPanel emit 'open-detail' 触发) — J 稿卷宗开卷语言 -->
     <el-dialog
       v-model="projectDetailVisible"
-      title="项目详情"
-      :width="'700px'"
+      :width="'720px'"
       top="5vh"
+      class="dossier-dialog"
     >
-      <div v-if="detailProject" class="project-detail">
-        <h2>{{ detailProject.name }}</h2>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="状态">
-            <el-tag :type="getStatusType(detailProject.status)">
-              {{ getStatusLabel(detailProject.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="研究方向">{{ detailProject.research_area || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="开始日期">{{ formatDate(detailProject.start_date) }}</el-descriptions-item>
-          <el-descriptions-item label="结束日期">{{ formatDate(detailProject.end_date) }}</el-descriptions-item>
-          <el-descriptions-item label="项目描述" :span="2">{{ cleanDescriptionForDisplay(detailProject.description) || '-' }}</el-descriptions-item>
-        </el-descriptions>
-
-        <h4 class="detail-section-title">项目成员</h4>
-        <div class="member-tags">
-          <el-tag
-            v-for="memberId in detailProject.members"
-            :key="memberId"
-            class="member-tag-item"
-          >
-            {{ getMemberName(memberId) }}
-          </el-tag>
+      <template #header>
+        <div class="dlg-fhead">
+          <div class="dlg-fhead-l">
+            <div class="dlg-fno">MB-LAB · PROJECT FILE · 卷宗 NO.{{ padId(detailProject?.id) }}</div>
+            <div class="dlg-title">{{ detailProject?.name }}</div>
+          </div>
+          <span class="hstamp" :class="projectStamp.cls">{{ projectStamp.text }}</span>
+        </div>
+      </template>
+      <div v-if="detailProject" class="dossier-body">
+        <div class="arow">
+          <span class="ak">研究方向</span>
+          <span class="av">{{ detailProject.research_area || '未登记' }}</span>
+        </div>
+        <div class="arow">
+          <span class="ak">周期</span>
+          <span class="av mono">{{ periodOf(detailProject) }}</span>
+        </div>
+        <div class="arow">
+          <span class="ak">项目描述</span>
+          <span class="av desc">{{ cleanDescriptionForDisplay(detailProject.description) || '暂无描述' }}</span>
         </div>
 
-        <h4 class="detail-section-title">里程碑</h4>
-        <el-timeline v-if="detailMilestones.length">
-          <el-timeline-item
-            v-for="milestone in detailMilestones"
-            :key="milestone.id"
-            :timestamp="formatDate(milestone.due_date)"
-            placement="top"
+        <h4 class="sec-title">项目成员<span class="sec-n">{{ (detailProject.members || []).length }} PERSONS</span></h4>
+        <div class="labtag-row">
+          <span
+            v-for="memberId in detailProject.members"
+            :key="memberId"
+            class="labtag"
+            :class="{ ghost: !memberExists(memberId) }"
+          >{{ detailMemberName(memberId) }}</span>
+          <span v-if="!(detailProject.members || []).length" class="labtag ghost">未指派</span>
+        </div>
+
+        <h4 class="sec-title">里程碑<span class="sec-n">{{ detailMilestones.length }} ITEMS<template v-if="detailLateCount"> · {{ detailLateCount }} LATE</template></span></h4>
+        <div v-if="detailMilestones.length" class="ms-ledger">
+          <div
+            v-for="m in sortedDetailMilestones"
+            :key="m.id"
+            class="msrow"
+            :class="msState(m).cls"
           >
-            <el-card class="milestone-item">
-              <h4 class="milestone-title">{{ milestone.name }}</h4>
-              <p class="milestone-desc">{{ milestone.description }}</p>
-            </el-card>
-          </el-timeline-item>
-        </el-timeline>
-        <p v-else class="empty-hint">暂无里程碑</p>
+            <span class="msd">{{ fmtMs(m.completed_at || m.due_date) }}</span>
+            <div class="msc">
+              <span class="msn">{{ m.name }}</span>
+              <span v-if="m.description" class="msdesc">{{ m.description }}</span>
+            </div>
+            <span class="mss">{{ msState(m).label }}</span>
+          </div>
+        </div>
+        <p v-else class="empty-hint">○ 未立里程碑 · 卷内空白</p>
       </div>
     </el-dialog>
 
-    <!-- 成员详情 dialog (MembersPanel emit 'open-detail' 触发) -->
+    <!-- 成员详情 dialog (MembersPanel emit 'open-detail' 触发) — 成员档案开卷 -->
     <el-dialog
       v-model="memberDetailVisible"
-      :title="detailMember?.name || '成员详情'"
       :width="'600px'"
       top="5vh"
+      class="dossier-dialog"
     >
-      <div v-if="detailMember" class="member-detail">
-        <div class="detail-hero">
-          <div class="hero-avatar">
-            <el-avatar :size="72" :src="detailMember.avatar">
-              {{ detailMember.name?.charAt(0) }}
-            </el-avatar>
+      <template #header>
+        <div class="dlg-fhead">
+          <div class="dlg-fhead-l">
+            <div class="dlg-fno">MB-LAB · MEMBER FILE · 档案 NO.{{ padId(detailMember?.id) }}</div>
+            <div class="dlg-title">{{ detailMember?.name }}</div>
           </div>
-          <h2>{{ detailMember.name }}</h2>
-          <div class="hero-tags">
-            <el-tag size="small" :type="getRoleType(detailMember.role)">{{ getRoleLabel(detailMember.role) }}</el-tag>
-            <el-tag v-if="detailMember.grade" size="small" type="info" class="grade-tag">{{ detailMember.grade }}</el-tag>
-            <el-tag v-if="detailMember.voice_enrolled_at" size="small" type="success">🎤 已录入声纹</el-tag>
-            <el-tag v-else size="small" type="warning">未录入声纹</el-tag>
+          <span class="hstamp" :class="roleStamp.cls">{{ roleStamp.text }}</span>
+        </div>
+      </template>
+      <div v-if="detailMember" class="dossier-body">
+        <div class="dlg-hero">
+          <div class="dlg-avatar">
+            <img v-if="detailMember.avatar" :src="detailMember.avatar" :alt="detailMember.name">
+            <template v-else>{{ detailMember.name?.charAt(0) }}</template>
+          </div>
+          <div class="dlg-hero-tags">
+            <span v-if="detailMember.grade" class="labtag">届别 {{ detailMember.grade }}</span>
+            <span class="labtag" :class="detailMember.voice_enrolled_at ? 'ok' : 'ghost'">
+              {{ detailMember.voice_enrolled_at ? '🎤 已录入声纹' : '未录入声纹' }}
+            </span>
           </div>
         </div>
 
-        <h4 class="detail-section-title">基本信息</h4>
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="研究方向">{{ detailMember.research_area || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="邮箱">{{ detailMember.email || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="手机">{{ detailMember.phone || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="个人简介">{{ detailMember.bio || '-' }}</el-descriptions-item>
-        </el-descriptions>
-
-        <h4 v-if="detailMember.skills?.length" class="detail-section-title">技能</h4>
-        <div v-if="detailMember.skills?.length" class="member-tags">
-          <el-tag v-for="skill in detailMember.skills" :key="skill" size="small" type="info" class="member-tag-item">
-            {{ skill }}
-          </el-tag>
+        <h4 class="sec-title">基本信息<span class="sec-n">PERSONAL DATA</span></h4>
+        <div class="arow">
+          <span class="ak">研究方向</span>
+          <span class="av">{{ detailMember.research_area || '未登记' }}</span>
+        </div>
+        <div class="arow">
+          <span class="ak">邮箱</span>
+          <span class="av mono">{{ detailMember.email || '—' }}</span>
+        </div>
+        <div class="arow">
+          <span class="ak">手机</span>
+          <span class="av mono">{{ detailMember.phone || '—' }}</span>
+        </div>
+        <div class="arow">
+          <span class="ak">个人简介</span>
+          <span class="av desc">{{ detailMember.bio || '未填写' }}</span>
         </div>
 
-        <h4 v-if="detailMember.voice_enrolled_at" class="detail-section-title">声纹</h4>
-        <el-descriptions v-if="detailMember.voice_enrolled_at" :column="1" border>
-          <el-descriptions-item label="录入时间">{{ formatDate(detailMember.voice_enrolled_at) }}</el-descriptions-item>
-          <el-descriptions-item label="采样次数">{{ detailMember.voice_sample_count || 1 }} 次</el-descriptions-item>
-        </el-descriptions>
+        <template v-if="detailMember.skills?.length">
+          <h4 class="sec-title">技能<span class="sec-n">{{ detailMember.skills.length }} TAGS</span></h4>
+          <div class="labtag-row">
+            <span v-for="skill in detailMember.skills" :key="skill" class="labtag">{{ skill }}</span>
+          </div>
+        </template>
+
+        <template v-if="detailMember.voice_enrolled_at">
+          <h4 class="sec-title">声纹<span class="sec-n">VOICEPRINT</span></h4>
+          <div class="arow">
+            <span class="ak">录入时间</span>
+            <span class="av mono">{{ fmtMs(detailMember.voice_enrolled_at) }}</span>
+          </div>
+          <div class="arow">
+            <span class="ak">采样次数</span>
+            <span class="av mono">{{ detailMember.voice_sample_count || 1 }} 次</span>
+          </div>
+        </template>
       </div>
     </el-dialog>
   </div>
@@ -127,15 +161,19 @@
  * - 移动端通过 resolveMobileComponent 切换到 MobileWorkspaceView
  *
  * 2026-07-03: 模板管理删除后, WorkspaceView 只剩项目 / 成员 / 声纹 3 个 tab
+ *
+ * 2026-09-04 J 稿「卷宗」语言收口:
+ * - 两个详情 dialog 重写为档案开卷 (mono 卷宗号 + 衬线题名 + 骑缝章 + 表格行 + 里程碑台账),
+ *   el-descriptions/el-tag/el-timeline 全部移除; 数据拉取逻辑零改动
+ * - TabStrip 同步换标本签皮肤 (共享组件, 全站生效)
+ * - 幽灵成员 id (不在成员列表) 与卡片口径统一: 显示「用户不存在」
  */
 
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { Folder, User, Microphone } from '@element-plus/icons-vue'
-import { formatDate } from '@/utils/format'
 import { useMemberStore } from '@/stores/member'
 import { cleanDescriptionForDisplay } from '@/utils/textSanitize'
 import TabStrip from '@/components/common/TabStrip.vue'
@@ -202,29 +240,54 @@ async function openMemberDetail(member) {
   memberDetailVisible.value = true
 }
 
-// ====== 辅助函数 ======
-function getMemberName(id) {
-  return memberStore.getMemberName?.(id) || `成员 #${id}`
+// ====== 卷宗派生 (口径与 ProjectsPanel 卡片一致) ======
+const padId = (id) => (id == null ? '—' : String(id).padStart(3, '0'))
+const fmtMs = (d) => (d ? dayjs(d).format('YY/MM/DD') : '未定')
+
+const periodOf = (p) => {
+  if (!p.start_date && !p.end_date) return '起止未录'
+  const f = (d) => (d ? dayjs(d).format('YYYY-MM-DD') : '?')
+  return `${f(p.start_date)} → ${f(p.end_date)}`
 }
 
-function getStatusType(status) {
-  const map = { active: 'success', paused: 'warning', completed: 'info', archived: 'info' }
-  return map[status] || 'info'
+const isMsDone = (m) => m.status === 'completed' || !!m.completed_at
+const isMsLate = (m) => !isMsDone(m) && m.due_date && dayjs(m.due_date).isBefore(dayjs(), 'day')
+
+function msState(m) {
+  if (isMsDone(m)) return { cls: 'done', label: '✓ 已完成' }
+  if (isMsLate(m)) return { cls: 'late', label: '逾期未闭' }
+  if (m.due_date) return { cls: 'soon', label: `剩 ${dayjs(m.due_date).diff(dayjs(), 'day')} 天` }
+  return { cls: '', label: '未定期' }
 }
 
-function getStatusLabel(status) {
-  const map = { active: '进行中', paused: '已暂停', completed: '已完成', archived: '已归档' }
-  return map[status] || status
-}
+const sortedDetailMilestones = computed(() =>
+  [...detailMilestones.value].sort((a, b) =>
+    String(a.due_date || '9999').localeCompare(String(b.due_date || '9999'))))
 
-function getRoleType(role) {
-  const map = { admin: 'danger', leader: 'warning', member: 'info' }
-  return map[role] || 'info'
-}
+const detailLateCount = computed(() => detailMilestones.value.filter(isMsLate).length)
 
-function getRoleLabel(role) {
-  const map = { admin: '管理员', leader: '组长', member: '成员' }
-  return map[role] || role || '成员'
+const projectStamp = computed(() => {
+  const s = detailProject.value?.status
+  if (s === 'completed') return { text: '已结案', cls: 'ok' }
+  if (s === 'archived') return { text: '已归档', cls: 'ok' }
+  if (s === 'paused') return { text: '已暂停', cls: '' }
+  if (detailLateCount.value > 0) return { text: `逾期未闭 ×${detailLateCount.value}`, cls: '' }
+  return { text: '在研', cls: 'ok' }
+})
+
+const ROLE_LABELS = { admin: '管理员', leader: '组长', member: '成员' }
+const roleStamp = computed(() => {
+  const role = detailMember.value?.role || 'member'
+  return { text: ROLE_LABELS[role] || role, cls: role === 'admin' ? '' : 'ok' }
+})
+
+// 幽灵成员 id (成员 API 过滤缺员) 与卡片同口径: 明说「用户不存在」
+function memberExists(id) {
+  return !!memberStore.members.find(m => m.id == id)  // eslint-disable-line eqeqeq
+}
+function detailMemberName(id) {
+  const m = memberStore.members.find(x => x.id == id)  // eslint-disable-line eqeqeq
+  return m?.name || '用户不存在'
 }
 
 onMounted(async () => {
@@ -262,87 +325,100 @@ onMounted(async () => {
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
 }
 
-.detail-section-title {
-  margin-top: 20px;
-  margin-bottom: var(--space-3);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
-.member-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
-
-.member-tags .el-tag {
-  border-radius: var(--radius-full);
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.member-tags .el-tag:hover {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-
-.milestone-item {
-  background: var(--color-bg-page);
-  border-color: var(--color-border-base);
-}
-
-.milestone-title {
-  color: var(--color-text-primary);
-}
-
-.milestone-desc {
-  color: var(--color-text-secondary);
-}
-
 .empty-hint {
-  color: var(--color-text-secondary);
+  color: var(--ws-fog, #8ba0a0);
   padding: 12px 0;
-}
-
-/* ===== 成员详情 dialog ===== */
-.detail-hero {
-  text-align: center;
-  padding: 16px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  border-radius: var(--radius-lg);
-  color: var(--el-color-white);
-  margin-bottom: var(--space-4);
-}
-
-.detail-hero h2 {
-  color: var(--el-color-white);
-  margin: var(--space-3) 0;
-}
-
-.hero-avatar :deep(.el-avatar) {
-  border: 2px solid rgba(255, 255, 255, 0.4);
-}
-
-.hero-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
+  font-size: 12.5px;
 }
 </style>
 
 <!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
+<!-- =====================================================================
+     J 稿「卷宗开卷」dialog 皮肤 (2026-09-04)
+     el-dialog teleport 场景 → 骨架规则必须非 scoped + customClass 收窄;
+     tokens 定义在 .dossier-dialog 根上自包含, 不依赖组件树继承
+     ===================================================================== -->
 <style>
-/* 铁律 26: dark mode 覆盖必须非 scoped, scoped 块 data-v-xxx 干扰后代选择器 */
-/* TabStrip 自身的 dark 模式由组件处理, 此处只覆盖 panel 内容 */
-[data-theme="dark"] .tab-panel {
-  background: var(--color-bg-card);
+.dossier-dialog {
+  --ws-card: #fdfefc; --ws-ink: #16232a; --ws-steel: #5a6b6a; --ws-fog: #8ba0a0;
+  --ws-hair: #c9d2ca; --ws-teal: #0e766e; --ws-teal-soft: #dcece5;
+  --ws-coral: #ef7256; --ws-paper: #f4f6f4; --ws-shadow: rgba(22, 35, 42, 0.14);
+  --ws-mono: Consolas, 'Courier New', monospace;
+  --ws-serif: Georgia, 'Songti SC', 'SimSun', serif;
+  background: var(--ws-card);
+  border: 1.5px solid var(--ws-ink);
+  border-radius: 10px;
+  box-shadow: 4px 4px 0 var(--ws-shadow), 0 12px 40px rgba(0, 0, 0, 0.12);
 }
-[data-theme="dark"] .detail-section-title {
-  color: var(--color-text-primary);
+.dossier-dialog .el-dialog__header {
+  border-bottom: 1px dashed var(--ws-hair);
+  padding: 18px 22px 12px;
+  margin-right: 0;
 }
-[data-theme="dark"] .milestone-item {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-base);
+.dossier-dialog .el-dialog__body { padding: 16px 22px 22px; }
+.dossier-dialog .el-dialog__headerbtn { top: 10px; right: 12px; }
+
+/* --- 卷首行: mono 卷宗号 + 衬线题名 + 骑缝章 --- */
+.dossier-dialog .dlg-fhead { display: flex; align-items: flex-start; gap: 14px; padding-right: 30px; }
+.dossier-dialog .dlg-fhead-l { flex: 1; min-width: 0; }
+.dossier-dialog .dlg-fno { font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .16em; color: var(--ws-teal); margin-bottom: 4px; }
+.dossier-dialog .dlg-title { font-family: var(--ws-serif); font-size: 21px; font-weight: 600; color: var(--ws-ink); line-height: 1.3; }
+.dossier-dialog .hstamp {
+  font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .14em;
+  color: var(--ws-coral); border: 1.5px dashed var(--ws-coral); border-radius: 6px;
+  padding: 4px 9px; transform: rotate(-2deg); display: inline-block; flex-shrink: 0; margin-top: 12px; background: none;
 }
+.dossier-dialog .hstamp.ok { color: var(--ws-teal); border-color: var(--ws-teal); }
+
+/* --- 表格行 (替 el-descriptions) --- */
+.dossier-dialog .arow { display: flex; gap: 12px; padding: 9px 2px; border-bottom: 1px dotted var(--ws-hair); font-size: 13px; }
+.dossier-dialog .arow:last-of-type { border-bottom: none; }
+.dossier-dialog .ak { font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .14em; color: var(--ws-fog); width: 64px; flex-shrink: 0; padding-top: 3px; }
+.dossier-dialog .av { color: var(--ws-ink); flex: 1; min-width: 0; }
+.dossier-dialog .av.mono { font-family: var(--ws-mono); font-size: 12px; }
+.dossier-dialog .av.desc { color: var(--ws-steel); line-height: 1.75; }
+
+/* --- § 分节标本签 --- */
+.dossier-dialog .sec-title { margin: 18px 0 10px; font-size: 14px; font-weight: 600; color: var(--ws-ink); display: flex; align-items: baseline; gap: 10px; }
+.dossier-dialog .sec-title::before { content: '§ '; color: var(--ws-teal); }
+.dossier-dialog .sec-n { font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .14em; color: var(--ws-fog); font-weight: 400; }
+
+/* --- labtag 族 (替 el-tag) --- */
+.dossier-dialog .labtag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.dossier-dialog .labtag { font-family: var(--ws-mono); font-size: 10px; color: var(--ws-steel); background: var(--ws-paper); border: 1px solid var(--ws-hair); border-radius: 3px; padding: 3px 8px 3px 9px; }
+.dossier-dialog .labtag.ok { color: var(--ws-teal); border-color: var(--ws-teal); background: var(--ws-teal-soft); }
+.dossier-dialog .labtag.ghost { color: var(--ws-fog); border-style: dashed; }
+
+/* --- 里程碑台账 (替 el-timeline) --- */
+.dossier-dialog .ms-ledger { border: 1px solid var(--ws-hair); border-radius: 8px; overflow: hidden; }
+.dossier-dialog .msrow { display: grid; grid-template-columns: 66px 1fr auto; gap: 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--ws-paper); font-size: 13px; }
+.dossier-dialog .msrow:last-child { border-bottom: none; }
+.dossier-dialog .msrow:hover { background: var(--ws-paper); }
+.dossier-dialog .msd { font-family: var(--ws-mono); font-size: 10.5px; color: var(--ws-fog); }
+.dossier-dialog .msc { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dossier-dialog .msn { color: var(--ws-ink); font-weight: 500; }
+.dossier-dialog .msdesc { font-size: 11.5px; color: var(--ws-steel); }
+.dossier-dialog .mss { font-family: var(--ws-mono); font-size: 10px; letter-spacing: .08em; color: var(--ws-fog); }
+.dossier-dialog .msrow.done .msn { color: var(--ws-fog); text-decoration: line-through; }
+.dossier-dialog .msrow.done .mss { color: var(--ws-teal); }
+.dossier-dialog .msrow.late { background: rgba(239, 114, 86, 0.06); }
+.dossier-dialog .msrow.late .msd { color: var(--ws-coral); font-weight: 700; }
+.dossier-dialog .msrow.late .mss { color: var(--ws-coral); font-weight: 700; }
+
+/* --- 成员档案标本牌 (替渐变 hero) --- */
+.dossier-dialog .dlg-hero { display: flex; align-items: center; gap: 14px; padding: 4px 2px 12px; border-bottom: 1px dashed var(--ws-hair); margin-bottom: 4px; }
+.dossier-dialog .dlg-avatar { width: 56px; height: 56px; border: 1.5px solid var(--ws-ink); border-radius: 8px; background: var(--ws-paper); display: grid; place-items: center; font-family: var(--ws-serif); font-size: 22px; color: var(--ws-ink); overflow: hidden; flex-shrink: 0; }
+.dossier-dialog .dlg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.dossier-dialog .dlg-hero-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* --- dark (铁律 26: 非 scoped; 对齐 J 稿 data-dark 夜览态) --- */
+[data-theme="dark"] .dossier-dialog {
+  --ws-card: #18232a; --ws-ink: #dfe9e6; --ws-steel: #9ab0ae; --ws-fog: #6b8286;
+  --ws-hair: #27363e; --ws-teal: #35c2a4; --ws-teal-soft: #12312b;
+  --ws-coral: #ef7256; --ws-paper: #10171b; --ws-shadow: rgba(0, 0, 0, 0.5);
+  /* 显式重复声明: 全局 [data-theme=dark] .el-dialog 的 bg/border 同特异性, 只改变量会被它压住 */
+  background: var(--ws-card);
+  border-color: var(--ws-ink);
+}
+[data-theme="dark"] .dossier-dialog .el-dialog__headerbtn .el-dialog__close { color: var(--ws-fog); }
 </style>
