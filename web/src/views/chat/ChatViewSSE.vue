@@ -2572,4 +2572,95 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-color: rgba(226, 236, 234, 0.45);
   box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.35);
 }
+
+/* ═══ 会话侧栏 + 引用面板 档案化 (2026-09-03, 与工具面板同轮) ═══ */
+/* 侧栏: 纸面底 + 搜索下划线化 + 会话条目虚线分隔 */
+.chat-immersive .session-sidebar {
+  background: #f4f6f4;
+  border-right: 1px solid rgba(22, 35, 42, 0.35);
+}
+[data-theme="dark"] .chat-immersive .session-sidebar {
+  background: #10171b;
+  border-right-color: rgba(226, 236, 234, 0.25);
+}
+.chat-immersive .session-sidebar .sidebar-search .el-input__wrapper,
+.chat-immersive .session-sidebar .sidebar-search input {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  border-bottom: 1.5px solid rgba(22, 35, 42, 0.4);
+}
+.chat-immersive .session-sidebar .sidebar-search .el-input__wrapper.is-focus {
+  box-shadow: none;
+  border-bottom-color: #198e83;
+}
+.chat-immersive .session-sidebar .batch-action-btn {
+  background: transparent;
+  border: 1px dashed rgba(22, 35, 42, 0.3);
+  border-radius: 9px;
+  color: var(--color-text-secondary);
+}
+.chat-immersive .session-sidebar .batch-action-btn:hover {
+  border-color: #0e766e;
+  color: #0e766e;
+}
+.chat-immersive .session-group-header {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  color: var(--color-text-secondary);
+  border-bottom: 1px dashed rgba(22, 35, 42, 0.2);
+  padding-bottom: 6px;
+}
+/* 会话条目: 透明 + 虚线分隔; 选中 = 纸卡 + 墨青左线 */
+.chat-immersive .session-sidebar .session-item {
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px dashed rgba(22, 35, 42, 0.18);
+}
+[data-theme="dark"] .chat-immersive .session-sidebar .session-item {
+  border-bottom-color: rgba(226, 236, 234, 0.18);
+}
+.chat-immersive .session-sidebar .session-item.active,
+.chat-immersive .session-sidebar .session-item.selected {
+  background: #fdfefc;
+  border-left: 3px solid #0e766e;
+}
+[data-theme="dark"] .chat-immersive .session-sidebar .session-item.active,
+[data-theme="dark"] .chat-immersive .session-sidebar .session-item.selected {
+  background: rgba(53, 194, 164, 0.08);
+  border-left-color: #35c2a4;
+}
+/* 引用面板: 摘要 teal 印章条 + tab 墨青 + 角色徽章 (我=珊瑚 / AI=墨青) */
+.chat-immersive .cites-panel .cp-summary {
+  background: rgba(14, 118, 110, 0.06);
+  border: 1px dashed rgba(14, 118, 110, 0.4);
+  border-radius: 8px;
+  color: #0e766e;
+}
+[data-theme="dark"] .chat-immersive .cites-panel .cp-summary {
+  background: rgba(53, 194, 164, 0.08);
+  border-color: rgba(53, 194, 164, 0.4);
+  color: #35c2a4;
+}
+.chat-immersive .cites-panel .cp-tab.active {
+  color: #0e766e;
+  border-bottom-color: #0e766e;
+}
+[data-theme="dark"] .chat-immersive .cites-panel .cp-tab.active {
+  color: #35c2a4;
+  border-bottom-color: #35c2a4;
+}
+.chat-immersive .cites-panel .cp-role-badge {
+  background: #0e766e;
+}
+.chat-immersive .cites-panel .cp-role-user .cp-role-badge {
+  background: #ef7256;
+}
+[data-theme="dark"] .chat-immersive .cites-panel .cp-role-badge {
+  background: #35c2a4;
+}
+[data-theme="dark"] .chat-immersive .cites-panel .cp-role-user .cp-role-badge {
+  background: #ff8a6b;
+}
 </style>

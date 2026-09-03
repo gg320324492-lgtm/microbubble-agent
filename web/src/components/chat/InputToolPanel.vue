@@ -54,7 +54,7 @@ const emit = defineEmits<{
 const TOOLS: ToolItem[] = [
   {
     id: 'photo',
-    icon: '📎',
+    icon: '⇪',
     label: '添加照片和文件',
     subtitle: '从电脑上上传图片、PDF、文档',
     status: 'available',
@@ -62,7 +62,7 @@ const TOOLS: ToolItem[] = [
   },
   {
     id: 'library',
-    icon: '📚',
+    icon: '❏',
     label: '从资料库添加',
     subtitle: '浏览和选择项目内的知识库文档',
     status: 'available',
@@ -70,7 +70,7 @@ const TOOLS: ToolItem[] = [
   },
   {
     id: 'web-search',
-    icon: '🌐',
+    icon: '⌕',
     label: '网页搜索',
     subtitle: '开启后回答会先联网查询实时信息',
     status: 'available',
@@ -78,7 +78,7 @@ const TOOLS: ToolItem[] = [
   },
   {
     id: 'deep-research',
-    icon: '🔭',
+    icon: '✦',
     label: '深度研究',
     subtitle: '切换到深度模式，获取更详尽的报告',
     status: 'available',
@@ -177,24 +177,49 @@ onBeforeUnmount(() => {
   width: min(560px, calc(100vw - 32px));
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-base);
-  border-radius: 18px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+  background: #fdfefc;
+  border: 1.5px solid #16232a;
+  border-radius: 10px;
+  box-shadow: 5px 5px 0 rgba(22, 35, 42, 0.14);
   z-index: 1000;
   padding: 8px;
   font-size: 14px;
-  color: var(--color-text-primary);
+  color: #16232a;
+}
+/* 档案语言: 顶部标本标签 (压边框线) */
+.input-tool-panel::before {
+  content: 'TOOLS · PLUGINS';
+  position: absolute;
+  top: -9px;
+  left: 20px;
+  background: #fdfefc;
+  padding: 0 8px;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  color: #0e766e;
+}
+[data-theme="dark"] .input-tool-panel {
+  background: #172126;
+  border-color: rgba(226, 236, 234, 0.45);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.4);
+}
+[data-theme="dark"] .input-tool-panel::before {
+  background: #172126;
+  color: #35c2a4;
 }
 
 .itp-header {
-  padding: 10px 14px 6px;
-  border-bottom: 1px solid var(--color-border-light);
+  padding: 10px 14px 8px;
+  border-bottom: 1px dashed rgba(22, 35, 42, 0.25);
   margin-bottom: 4px;
 }
 .itp-hint {
   font-size: 12px;
   color: var(--color-text-secondary);
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
 }
 
 .itp-list {
@@ -226,7 +251,7 @@ onBeforeUnmount(() => {
 }
 
 .itp-icon {
-  font-size: 22px;
+  font-size: 17px;
   width: 32px;
   height: 32px;
   display: inline-flex;
@@ -234,7 +259,14 @@ onBeforeUnmount(() => {
   justify-content: center;
   flex-shrink: 0;
   border-radius: 8px;
-  background: var(--color-bg-warm);
+  border: 1px dashed rgba(14, 118, 110, 0.4);
+  color: #0e766e;
+  background: transparent;
+  font-family: Consolas, 'SFMono-Regular', monospace;
+}
+[data-theme="dark"] .itp-icon {
+  border-color: rgba(53, 194, 164, 0.4);
+  color: #35c2a4;
 }
 
 .itp-text {
@@ -271,15 +303,7 @@ onBeforeUnmount(() => {
   border-color: rgba(53, 194, 164, 0.4);
 }
 
-/* dark mode 适配 */
-[data-theme="dark"] .input-tool-panel {
-  background: var(--color-bg-card);
-  border-color: var(--color-border-base);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-[data-theme="dark"] .itp-icon {
-  background: var(--color-bg-warm);
-}
+
 
 /* 弹起 / 收起动画 */
 .tool-panel-enter-active,
