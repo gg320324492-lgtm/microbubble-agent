@@ -163,13 +163,16 @@ import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 // v2 PR6: 网盘协作通知 (@ 提醒 + 评论) + WS 推送
 import NotificationBell from '@/components/common/NotificationBell.vue'
 // 2026-07-12: 删除 Bell icon import (旧任务到期提醒铃铛已删除，统一走 NotificationBell)
-import { ArrowRight, DataBoard, Aim, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard, Aim, Odometer, Cpu, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
 // v78: 删除 mic 别名 (声纹已合并到 /workspace 走 Files 图标)
 // W86 mini batch 1: 删除 Odometer 别名 (KB 监控入口已合入项目动态 TabStrip, 不再走侧栏)
+// 2026-09-03: W86 误删 Odometer — /dashboard meta.icon 仍是 Odometer, 侧栏图标空白;
+//             同时补 Cpu (/dft meta.icon, 从未注册过). 删别名前必须 grep router meta.icon
 const iconMap = {
+  Odometer, Cpu,
   ChatDotRound, List, VideoCamera, Folder,
   User, Document, Memo, Setting, Files,
 }
