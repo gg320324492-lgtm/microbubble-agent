@@ -617,6 +617,8 @@ class MicroBubbleAgent:
         # 2026-09-03 用户消息重复修复: 透传前端幂等键, 与前端 appendMessageAsync
         # 共用同一 client_msg_id → append_message 幂等去重, 不再产生第二行
         client_msg_id: Optional[str] = None,
+        # 2026-09-03 网页搜索模式 (工具面板开关)
+        web_search: Optional[bool] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式对话接口
 
@@ -759,6 +761,14 @@ class MicroBubbleAgent:
         # 关键设计：ChatEngine.chat_stream() 透传 synthesize_stream() 的 events，
         # 我们在 micro_bubble_agent 这一层用 for-await 拦截并累积；意图在此入口
         # 预分类一次后透传给 engine，避免闲聊快路径重复调用分类 LLM。
+        # 2026-09-03 网页搜索模式: 面板开关开启时注入联网优先 directive
+        if web_search:
+            system = system + (
+                "\n\n【联网搜索模式已开启】用户要求获取实时/最新信息。"
+                "回答前优先调用 web_search 工具联网查询; 引用网络结果时注明来源网站与日期; "
+                "若搜索失败或无结果, 如实告知用户, 不要编造。"
+            )
+
         stream_iter = self.engine.chat_stream(
             messages=messages,
             system=system,

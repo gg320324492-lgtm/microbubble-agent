@@ -39,6 +39,7 @@ interface ToolItem {
 
 const props = defineProps<{
   visible: boolean
+  webSearchOn: boolean
 }>()
 
 const emit = defineEmits<{
@@ -46,7 +47,8 @@ const emit = defineEmits<{
   (e: 'pick-image'): void
   (e: 'pick-file'): void
   (e: 'pick-from-drive'): void
-  (e: 'feature-not-ready', name: string): void
+  (e: 'toggle-web-search'): void
+  (e: 'set-deep-research'): void
 }>()
 
 const TOOLS: ToolItem[] = [
@@ -54,9 +56,9 @@ const TOOLS: ToolItem[] = [
     id: 'photo',
     icon: '📎',
     label: '添加照片和文件',
-    subtitle: '从电脑上上传',
+    subtitle: '从电脑上上传图片、PDF、文档',
     status: 'available',
-    action: 'pick-image',
+    action: 'pick-file',
   },
   {
     id: 'library',
@@ -67,25 +69,20 @@ const TOOLS: ToolItem[] = [
     action: 'pick-from-drive',
   },
   {
-    id: 'create-image',
-    icon: '🎨',
-    label: '创建图片',
-    subtitle: '可视化呈现任何内容',
-    status: 'pending',
-  },
-  {
     id: 'web-search',
     icon: '🌐',
     label: '网页搜索',
-    subtitle: '查找实时新闻和信息',
-    status: 'pending',
+    subtitle: '开启后回答会先联网查询实时信息',
+    status: 'available',
+    action: 'toggle-web-search',
   },
   {
     id: 'deep-research',
     icon: '🔭',
     label: '深度研究',
-    subtitle: '获取详细报告',
-    status: 'pending',
+    subtitle: '切换到深度模式，获取更详尽的报告',
+    status: 'available',
+    action: 'set-deep-research',
   },
 ]
 
@@ -95,17 +92,20 @@ const isOpen = computed({
 })
 
 function handleToolClick(tool: ToolItem) {
-  if (tool.status === 'pending') {
-    emit('feature-not-ready', tool.label)
-    emit('update:visible', false)
-    return
-  }
   if (tool.action === 'pick-image') {
     emit('pick-image')
-  } else if (tool.action === 'pick-from-drive') {
-    emit('pick-from-drive')
   } else if (tool.action === 'pick-file') {
     emit('pick-file')
+  } else if (tool.action === 'pick-from-drive') {
+    emit('pick-from-drive')
+  } else if (tool.action === 'toggle-web-search') {
+    emit('toggle-web-search')
+    emit('update:visible', false)  // 开关型: 关面板让用户看到状态徽标
+    return
+  } else if (tool.action === 'set-deep-research') {
+    emit('set-deep-research')
+    emit('update:visible', false)
+    return
   }
   emit('update:visible', false)
 }
@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
               <div class="itp-label">{{ tool.label }}</div>
               <div class="itp-subtitle">{{ tool.subtitle }}</div>
             </div>
-            <span v-if="tool.status === 'pending'" class="itp-action">建立连接</span>
+            <span v-if="tool.id === 'web-search' && webSearchOn" class="itp-action itp-on">开启中</span>
           </li>
         </ul>
       </div>
@@ -258,14 +258,17 @@ onBeforeUnmount(() => {
 
 .itp-action {
   font-size: 12px;
-  color: var(--color-primary);
+  color: #0e766e;
   flex-shrink: 0;
   padding: 4px 10px;
   border-radius: 8px;
-  transition: background 0.12s ease;
+  border: 1px solid rgba(14, 118, 110, 0.35);
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  letter-spacing: 0.08em;
 }
-.itp-item:hover .itp-action {
-  background: var(--color-primary-bg);
+[data-theme="dark"] .itp-action {
+  color: #35c2a4;
+  border-color: rgba(53, 194, 164, 0.4);
 }
 
 /* dark mode 适配 */

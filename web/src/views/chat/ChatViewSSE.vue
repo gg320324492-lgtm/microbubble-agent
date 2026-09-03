@@ -180,6 +180,8 @@ const searchInputRef = ref<HTMLInputElement | null>(null)
 
 // ChatGPT 风格 "+" 工具面板开关
 const toolPanelOpen = ref(false)
+// 2026-09-03 网页搜索模式 (工具面板开关): 开启后本条消息发送会带 web_search 标记
+const webSearchOn = ref(false)
 
 // W-N 周期: 图片灯箱
 const lightboxUrl = ref('')
@@ -524,6 +526,8 @@ async function sendMessage(text?: string) {
       image: img,
       // #P5+: 传 imageUrl (MinIO 永久 URL, 刷新后仍有效)
       imageUrl: uploadedImageUrl,
+      // 2026-09-03 网页搜索模式 (工具面板开关)
+      webSearchOn: webSearchOn.value,
     })
     // #P5+: **立即**清空附加文档 (不等 sendMessageCore 完成, 否则用户看到 AI 回复期间顶部块还显示)
     // 顶部块立即消失, 后端 chat_session_attached_documents 仍存 (供 AI 引用)
@@ -631,8 +635,13 @@ function onPickFromKnowledge() {
 }
 
 // InputToolPanel 触发但未实现的功能 (placeholder 提示)
-function onFeatureNotReady(name: string) {
-  ElMessage.info(`${name} 功能开发中，敬请期待`)
+function onToggleWebSearch() {
+  webSearchOn.value = !webSearchOn.value
+  ElMessage.success(webSearchOn.value ? '🌐 网页搜索已开启' : '🌐 网页搜索已关闭')
+}
+function onSetDeepResearch() {
+  uiStore.setThinkingMode('deep')
+  ElMessage.success('🔭 已切换到深度研究模式')
 }
 
 function onRecordStart() {
@@ -1082,7 +1091,9 @@ function handleSearchKeydown(e: KeyboardEvent) {
           @pick-image="triggerImageUpload"
           @pick-file="triggerFileUpload"
           @pick-from-drive="onPickFromKnowledge"
-          @feature-not-ready="onFeatureNotReady"
+          :web-search-on="webSearchOn"
+          @toggle-web-search="onToggleWebSearch"
+          @set-deep-research="onSetDeepResearch"
         />
         <!-- 2026-08-16 #P5+: 已选图片/文件预览 (ChatGPT 风格缩略图) -->
         <div v-if="selectedImage || selectedFile" class="input-attachment-preview" role="region" aria-label="已选附件预览">
@@ -1192,6 +1203,10 @@ function handleSearchKeydown(e: KeyboardEvent) {
         title="上传文件"
         @change="handleFileSelect"
       />
+      <div v-if="webSearchOn" class="websearch-flag">
+        <span>🌐 网页搜索已开启 · 回答将联网查询实时信息</span>
+        <button type="button" class="wsf-off" @click="webSearchOn = false" aria-label="关闭网页搜索">关闭</button>
+      </div>
       <div class="input-hint">Enter 发送 · Shift+Enter 换行</div>
     </footer>
       </div>
@@ -2387,6 +2402,36 @@ function handleSearchKeydown(e: KeyboardEvent) {
   background: transparent;
   border-top: none;
   padding-top: 8px;
+}
+
+/* 网页搜索开启徽标 (工具面板开关状态提示) */
+.chat-immersive .websearch-flag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 20px 4px;
+  padding: 7px 14px;
+  border: 1px dashed rgba(14, 118, 110, 0.45);
+  border-radius: 9px;
+  background: rgba(14, 118, 110, 0.06);
+  font-size: 12px;
+  color: #0e766e;
+}
+[data-theme="dark"] .chat-immersive .websearch-flag {
+  border-color: rgba(53, 194, 164, 0.4);
+  background: rgba(53, 194, 164, 0.08);
+  color: #35c2a4;
+}
+.chat-immersive .websearch-flag .wsf-off {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* 头部图标按钮 (侧栏开关 / 搜索): 描边 chip, hover/激活转墨青 */
