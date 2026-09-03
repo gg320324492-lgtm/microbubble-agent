@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>G · 分组清单 + 上下文副栏</title>
+<style>
+  :root {
+    --bg: #f3f1ed; --paper: #fff; --ink: #2d2d2d; --sub: #606266; --faint: #909399;
+    --line: #ebeef5; --coral: #FF7A5C; --coral-deep: #e85a3a; --coral-bg: #fff0ed;
+    --teal: #0e766e; --amber: #e6a23c; --danger: #f56c6c; --green: #67c23a;
+    --mono: Consolas, monospace; --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 14px; height: 900px; display: grid; grid-template-columns: 244px 232px 1fr; overflow: hidden; }
+  svg.i { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── 主侧栏: 现有 9 项 + 项目动态, 分 3 段带计数 ───── */
+  .nav { background: rgba(255,245,240,.92); border-right: 1px solid var(--line); padding: 14px 10px 12px; display: flex; flex-direction: column; overflow: hidden; }
+  .logo { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; }
+  .logo .lg { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--coral), #FFB347); display: grid; place-items: center; color: #fff; }
+  .logo b { font-size: 15px; letter-spacing: .01em; }
+  .logo em { margin-left: auto; font-style: normal; font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--faint); }
+  .sec { font-family: var(--mono); font-size: 9px; letter-spacing: .2em; color: var(--faint); padding: 14px 10px 6px; display: flex; align-items: center; gap: 8px; }
+  .sec::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .it { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 10px; font-size: 13.5px; color: var(--sub); cursor: pointer; position: relative; transition: background 140ms ease; }
+  .it:hover { background: rgba(255,122,92,.08); color: var(--ink); }
+  .it.on { background: var(--coral-bg); color: var(--coral-deep); font-weight: 600; }
+  .it.on::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--coral); }
+  .it .n { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--faint); }
+  .it .n.hot { color: var(--danger); }
+  .it .sq { margin-left: auto; width: 16px; height: 16px; border-radius: 5px; border: 1px solid var(--line); display: grid; place-items: center; font-size: 11px; color: var(--faint); background: #fff; }
+  .nav .foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; color: var(--faint); font-size: 11px; }
+  .nav .foot .k { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; background: #fff; }
+
+  /* ── 上下文副栏: 随当前页切换 (网盘 → 目录树 + 隐藏路由入口) ───── */
+  .ctx { background: var(--paper); border-right: 1px solid var(--line); padding: 16px 14px; display: flex; flex-direction: column; overflow: hidden; }
+  .ctx .hd { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  .ctx .hd em { font-style: normal; margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--faint); }
+  .ctx .srch { margin-top: 12px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: #fafafa; display: flex; align-items: center; gap: 7px; padding: 0 10px; color: var(--faint); font-size: 12px; }
+  .tree { margin-top: 14px; overflow: hidden; }
+  .nd { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border-radius: 7px; font-size: 12.5px; color: var(--sub); cursor: pointer; }
+  .nd:hover { background: #f7f8fa; }
+  .nd.on { background: var(--coral-bg); color: var(--coral-deep); font-weight: 600; }
+  .nd svg { width: 15px; height: 15px; flex: none; }
+  .nd .c { margin-left: auto; font-family: var(--mono); font-size: 9.5px; color: var(--faint); }
+  .nd.ind { padding-left: 26px; }
+  .ctx .grp { margin-top: 16px; font-family: var(--mono); font-size: 9px; letter-spacing: .18em; color: var(--faint); padding: 0 8px 6px; }
+  .ctx .card { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fdfaf8; }
+  .ctx .card b { font-size: 12.5px; display: block; }
+  .ctx .card p { font-size: 11.5px; color: var(--sub); margin-top: 4px; line-height: 1.6; }
+  .ctx .card .go { margin-top: 9px; font-size: 11.5px; color: var(--coral-deep); font-weight: 600; cursor: pointer; }
+  .ctx .card .go:hover { text-decoration: underline; }
+
+  /* ── 顶栏 + 内容 ───── */
+  main { display: flex; flex-direction: column; overflow: hidden; }
+  .top { height: 56px; background: #fff; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; padding: 0 22px; }
+  .fold { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--sub); cursor: pointer; }
+  .fold:hover { background: #f4f6f8; }
+  .crumb { font-size: 13px; color: var(--faint); }
+  .crumb b { color: var(--ink); font-weight: 500; }
+  .top .rt { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .ib { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--sub); cursor: pointer; position: relative; }
+  .ib:hover { background: #f4f6f8; color: var(--ink); }
+  .ib .b { position: absolute; top: 0; right: 0; background: var(--danger); color: #fff; font-family: var(--mono); font-size: 8.5px; border-radius: 999px; padding: 0 4px; }
+  .who { display: flex; align-items: center; gap: 9px; padding-left: 12px; border-left: 1px solid var(--line); }
+  .who .av { width: 30px; height: 30px; border-radius: 50%; background: var(--coral); color: #fff; display: grid; place-items: center; font-size: 12px; }
+  .who b { display: block; font-size: 13px; }
+  .who small { font-size: 10px; color: var(--faint); }
+
+  .body { flex: 1; overflow: hidden; padding: 20px 22px; }
+  .phead { display: flex; align-items: center; gap: 10px; }
+  .phead h1 { font-size: 19px; font-weight: 600; }
+  .phead .sz { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+  .phead .rt { margin-left: auto; display: flex; gap: 8px; }
+  .btn { height: 32px; padding: 0 13px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font: inherit; font-size: 12.5px; color: var(--sub); cursor: pointer; }
+  .btn:hover { border-color: var(--coral); color: var(--coral-deep); }
+  .btn.p { background: var(--coral); border-color: var(--coral); color: #fff; font-weight: 600; }
+  .tabs { margin-top: 16px; display: flex; gap: 22px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--sub); }
+  .tabs span { padding-bottom: 9px; cursor: pointer; }
+  .tabs span.on { color: var(--coral-deep); font-weight: 600; border-bottom: 2px solid var(--coral); }
+  .tabs span .n { font-family: var(--mono); font-size: 10px; color: var(--faint); }
+
+  .grid { margin-top: 16px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .f { border: 1px solid var(--line); border-radius: 11px; background: #fff; padding: 14px; cursor: pointer; transition: box-shadow 150ms ease, transform 150ms ease, border-color 150ms ease; }
+  .f:hover { transform: translateY(-2px); border-color: var(--coral); box-shadow: 0 8px 20px rgba(255,122,92,.12); }
+  .f .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--coral-bg); color: var(--coral-deep); display: grid; place-items: center; }
+  .f b { display: block; margin-top: 10px; font-size: 13px; font-weight: 600; }
+  .f small { display: block; margin-top: 3px; font-family: var(--mono); font-size: 10px; color: var(--faint); }
+
+  table { margin-top: 16px; width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; font-size: 12.5px; }
+  th { text-align: left; padding: 10px 14px; background: #fafafa; color: var(--faint); font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; font-weight: 400; border-bottom: 1px solid var(--line); }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--line); color: var(--sub); }
+  tr:last-child td { border-bottom: 0; }
+  tr:hover td { background: #fffaf8; }
+  td b { color: var(--ink); font-weight: 500; }
+  .ft { display: inline-flex; align-items: center; gap: 6px; }
+  .ft i { width: 6px; height: 6px; border-radius: 50%; background: var(--coral); }
+  .ft.doc i { background: #0d6efd; } .ft.xls i { background: #198754; } .ft.zip i { background: #6f42c1; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 1px 7px; border-radius: 999px; background: #f4f4f5; color: var(--faint); }
+  .duo { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+  .mini { background: #fff; border: 1px solid var(--line); border-radius: 11px; padding: 4px 16px 12px; }
+  .mini h3 { font-size: 13px; font-weight: 600; color: var(--ink); padding: 13px 0 9px; border-bottom: 1px solid var(--line); display: flex; align-items: center; }
+  .mini h3 em { font-style: normal; margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; color: var(--coral-deep); }
+  .ci { display: flex; gap: 10px; padding: 11px 0; border-bottom: 1px dashed var(--line); }
+  .ci:last-child { border-bottom: 0; }
+  .ci .mv { width: 24px; height: 24px; border-radius: 50%; background: var(--coral); color: #fff; display: grid; place-items: center; font-size: 11px; flex: none; }
+  .ci b { display: block; font-size: 12.5px; font-weight: 500; color: var(--ink); }
+  .ci p { margin: 3px 0 0; font-size: 12px; color: var(--sub); line-height: 1.7; }
+  .ci .mt { display: inline-block; margin-top: 5px; font-family: var(--mono); font-size: 10px; color: var(--faint); }
+
+  .float { position: fixed; right: 24px; bottom: 22px; display: flex; align-items: center; gap: 9px; background: var(--ink); color: #fff; border-radius: 999px; padding: 10px 16px; font-size: 12.5px; box-shadow: 0 8px 26px rgba(45,45,45,.24); }
+  .float i { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 4px rgba(245,108,108,.22); }
+</style>
+</head>
+<body>
+
+<svg style="display:none"><defs>
+  <g id="i-today"><rect x="3" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8"/></g>
+  <g id="i-chat"><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8.5 21l3-4"/></g>
+  <g id="i-task"><path d="M4 6.5h16M4 12h16M4 17.5h10"/></g>
+  <g id="i-cam"><rect x="2.5" y="6" width="12.5" height="12" rx="2.5"/><path d="M15 10.5l6.5-3.5v10l-6.5-3.5z"/></g>
+  <g id="i-people"><circle cx="8.5" cy="7.5" r="3"/><path d="M2.5 20c0-3.4 2.7-5.5 6-5.5s6 2.1 6 5.5"/><path d="M16 7h5.5M16 11.5h5.5M16 16h4"/></g>
+  <g id="i-doc"><rect x="5.5" y="2.5" width="13" height="19" rx="2"/><path d="M9 7.5h6M9 11.5h6M9 15.5h4"/></g>
+  <g id="i-folder"><path d="M3 9V6a2 2 0 012-2h3.6l2 2.6H19a2 2 0 012 2V9"/><rect x="3" y="9" width="18" height="11.5" rx="2.2"/></g>
+  <g id="i-chart"><path d="M4 20.5V10M10 20.5V3.5M16 20.5v-7M22 20.5H2"/></g>
+  <g id="i-lab"><rect x="5" y="5" width="14" height="14" rx="2.2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9.5 2v3M14.5 2v3M9.5 19v3M14.5 19v3M2 9.5h3M2 14.5h3M19 9.5h3M19 14.5h3"/></g>
+  <g id="i-gear"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.2 5.2l1.9 1.9M16.9 16.9l1.9 1.9M18.8 5.2l-1.9 1.9M7.1 16.9l-1.9 1.9"/></g>
+  <g id="i-bell"><path d="M6.5 16.5v-5a5.5 5.5 0 1111 0v5l1.6 2.6H4.9z"/><path d="M10 20.6a2.2 2.2 0 004 0"/></g>
+  <g id="i-moon"><path d="M20.2 14A8.4 8.4 0 119.6 3.4 6.9 6.9 0 0020.2 14z"/></g>
+  <g id="i-aim"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.6"/><path d="M12 1.6v3.2M12 19.2v3.2M1.6 12h3.2M19.2 12h3.2"/></g>
+  <g id="i-search"><circle cx="11" cy="11" r="7"/><path d="M16.2 16.2L21 21"/></g>
+  <g id="i-trash"><path d="M4.5 7h15M9.5 7V4h5v3M6.5 7l1 14h9l1-14M10.5 11v6M13.5 11v6"/></g>
+  <g id="i-promo"><path d="M3.2 11.2l18-7.4-7.2 18-2.4-8.2z"/><path d="M11.6 13.6L21.2 3.8"/></g>
+  <g id="i-file"><path d="M6.5 2.5h7l4.5 4.5v14.5h-11.5z"/><path d="M13.5 2.5V7H18"/><path d="M9.5 12h5.5M9.5 15.5h5.5"/></g>
+  <g id="i-fold"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/><path d="M16.5 9.5L13.5 12l3 2.5"/></g>
+  <g id="i-plus"><path d="M12 5.5v13M5.5 12h13"/></g>
+  <g id="i-rec"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></g>
+  <g id="i-mic"><rect x="9.2" y="2.5" width="5.6" height="11.5" rx="2.8"/><path d="M5 11.5a7 7 0 0014 0M12 18.5v3M8.5 21.5h7"/></g>
+  <g id="i-star"><path d="M12 3.5l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1-5.4-3-5.4 3 1.1-6.1L3.2 9.9l6.1-.8z"/></g>
+</defs></svg>
+
+<aside class="nav">
+  <div class="logo"><div class="lg"><svg class="i" style="stroke:#fff"><use href="#i-aim"/></svg></div><b>小气助手</b><em>20 人</em></div>
+
+  <div class="sec">WORKSPACE</div>
+  <div class="it"><svg class="i"><use href="#i-today"/></svg>仪表盘<span class="n">今日 2</span></div>
+  <div class="it"><svg class="i"><use href="#i-chat"/></svg>智能对话<span class="n">今日 4</span></div>
+  <div class="it"><svg class="i"><use href="#i-lab"/></svg>DFT / MD 计算<span class="n">4 jobs</span></div>
+
+  <div class="sec">研究管理</div>
+  <div class="it"><svg class="i"><use href="#i-task"/></svg>任务管理<span class="n hot">19 · 逾 7</span></div>
+  <div class="it"><svg class="i"><use href="#i-cam"/></svg>会议管理<span class="n">待校 6</span></div>
+  <div class="it on"><svg class="i"><use href="#i-folder"/></svg>课题组网盘<span class="sq" title="收起上下文副栏">‹</span></div>
+  <div class="it"><svg class="i"><use href="#i-doc"/></svg>知识库<span class="n">531</span></div>
+
+  <div class="sec">组务</div>
+  <div class="it"><svg class="i"><use href="#i-people"/></svg>团队协作</div>
+  <div class="it"><svg class="i"><use href="#i-chart"/></svg>项目动态</div>
+  <div class="it"><svg class="i"><use href="#i-gear"/></svg>个人设置</div>
+
+  <div class="foot"><span class="k">⌘</span><span class="k">B</span>折叠侧栏 · 副栏变图标</div>
+</aside>
+
+<!-- 上下文副栏: 只在当前页有二级结构时出现 (网盘=目录树, 知识库=分类, 会议=时间) -->
+<aside class="ctx">
+  <div class="hd"><svg class="i"><use href="#i-folder"/></svg>课题组网盘<em>DRIVE</em></div>
+  <div class="srch"><svg class="i" style="width:14px;height:14px"><use href="#i-search"/></svg>在 321 个文件夹内搜索</div>
+
+  <div class="tree">
+    <div class="nd"><svg class="i"><use href="#i-folder"/></svg>全组公开<span class="c">48</span></div>
+    <div class="nd on"><svg class="i"><use href="#i-folder"/></svg>实验数据<span class="c">126</span></div>
+    <div class="nd ind"><svg class="i"><use href="#i-folder"/></svg>SEM 照片<span class="c">31</span></div>
+    <div class="nd ind"><svg class="i"><use href="#i-folder"/></svg>粒径扫描<span class="c">22</span></div>
+    <div class="nd ind"><svg class="i"><use href="#i-file"/></svg>0902 记录.xlsx<span class="c">2</span></div>
+    <div class="nd"><svg class="i"><use href="#i-folder"/></svg>成员私人<span class="c">147</span></div>
+    <div class="nd"><svg class="i"><use href="#i-folder"/></svg>共享给我<span class="c">14</span></div>
+  </div>
+
+  <div class="grp">网盘内工具 (原隐藏路由)</div>
+  <div class="nd"><svg class="i"><use href="#i-promo"/></svg>文件请求<span class="c">2 待收</span></div>
+  <div class="nd"><svg class="i"><use href="#i-trash"/></svg>回收站<span class="c">9</span></div>
+
+  <div class="card">
+    <b>王天志 请求你交作业</b>
+    <p>「9 月例会材料」· 截止 09-05 18:00 · 已交 6/9 人</p>
+    <div class="go">上传 →</div>
+  </div>
+</aside>
+
+<main>
+  <div class="top">
+    <div class="fold"><svg class="i"><use href="#i-fold"/></svg></div>
+    <div class="crumb">首页 / 课题组网盘 / <b>实验数据</b></div>
+    <div class="rt">
+      <div class="ib"><span class="b">3</span><svg class="i"><use href="#i-bell"/></svg></div>
+      <div class="ib"><svg class="i"><use href="#i-moon"/></svg></div>
+      <div class="who"><div class="av">杜</div><div><b>杜同贺</b><small>成员 · 研一</small></div></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="phead">
+      <h1>实验数据</h1><span class="sz">126 项 · 8.4 GB · 最近更新 12 分钟前</span>
+      <div class="rt"><button class="btn">新建文件夹</button><button class="btn">上传</button><button class="btn p">＋ 发起文件请求</button></div>
+    </div>
+
+    <div class="tabs">
+      <span class="on">全部 <span class="n">126</span></span>
+      <span>最近 <span class="n">18</span></span>
+      <span>与我共享 <span class="n">14</span></span>
+      <span>星标注释 <span class="n">46</span></span>
+      <span>版本 <span class="n">36</span></span>
+    </div>
+
+    <div class="grid">
+      <div class="f"><div class="ic"><svg class="i"><use href="#i-folder"/></svg></div><b>SEM 照片</b><small>31 项 · 2.1 GB</small></div>
+      <div class="f"><div class="ic"><svg class="i"><use href="#i-folder"/></svg></div><b>粒径扫描</b><small>22 项 · 640 MB</small></div>
+      <div class="f"><div class="ic"><svg class="i"><use href="#i-folder"/></svg></div><b>气浮装置图纸</b><small>12 项 · 380 MB</small></div>
+      <div class="f"><div class="ic"><svg class="i"><use href="#i-folder"/></svg></div><b>原始记录 2026</b><small>61 项 · 5.2 GB</small></div>
+    </div>
+
+    <table>
+      <tr><th style="width:44%">名称</th><th>类型</th><th>大小</th><th>版本</th><th>更新</th><th>共享</th></tr>
+      <tr><td><span class="ft xls"><i></i>0902 粒径重复测量.xlsx</span></td><td><span class="badge">XLSX</span></td><td>2.4 MB</td><td>v3</td><td>12 分钟前</td><td>全组公开</td></tr>
+      <tr><td><span class="ft doc"><i></i>微纳米气泡稳定性方案.docx</span></td><td><span class="badge">DOCX</span></td><td>1.1 MB</td><td>v7</td><td>昨天 21:04</td><td>4 人</td></tr>
+      <tr><td><span class="ft zip"><i></i>SEM-0901 原图.zip</span></td><td><span class="badge">ZIP</span></td><td>742 MB</td><td>v1</td><td>09-01</td><td>实验数据</td></tr>
+      <tr><td><span class="ft"><i></i>例会材料.pptx</span></td><td><span class="badge">PPTX</span></td><td>18 MB</td><td>v2</td><td>08-30</td><td>王天志 请求</td></tr>
+      <tr><td><span class="ft doc"><i></i>气浮装置改装说明.docx</span></td><td><span class="badge">DOCX</span></td><td>3.2 MB</td><td>v2</td><td>08-28</td><td>4 人</td></tr>
+    </table>
+
+    <div class="duo">
+      <div class="mini">
+        <h3>评论里 @ 了我 <em>4 NEW</em></h3>
+        <div class="ci"><div class="mv">王</div><div><b>0902 粒径重复测量.xlsx · 第 3 版</b><p>「这组重复测量的 D10 和昨天差了 40 nm，把电解液浓度也标上。」</p><span class="mt">18:31 · 回复 →</span></div></div>
+        <div class="ci"><div class="mv" style="background:var(--amber)">李</div><div><b>SEM-0901 原图.zip</b><p>「第 12 张标尺没拍进去，补一张再入库。」</p><span class="mt">昨天 22:04 · 回复 →</span></div></div>
+      </div>
+      <div class="mini">
+        <h3>版本与访问动态 <em>ACTIVITY</em></h3>
+        <div class="ci"><div class="mv" style="background:var(--teal)">陈</div><div><b>微纳米气泡稳定性方案.docx → v7</b><p>新增「界面改性」小节，正文 +1,842 字。</p><span class="mt">昨天 21:04 · 对比版本 →</span></div></div>
+        <div class="ci"><div class="mv" style="background:var(--faint)">胡</div><div><b>0902 粒径重复测量.xlsx → v3</b><p>替换 Malvern 导出数据，公式未变。</p><span class="mt">12 分钟前 · 回滚 →</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="float"><i></i>正在听会 · 组会 09/03 · 返回房间</div>
+</main>
+
+</body>
+</html>
