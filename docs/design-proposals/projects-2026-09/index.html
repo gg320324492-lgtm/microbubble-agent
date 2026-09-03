@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>项目页重设计 · 4 方案总览 · 2026-09</title>
+<style>
+  :root {
+    --bg: #10171b; --card: #18232a; --line: #27363e;
+    --text: #dfe9e6; --muted: #8ba0a0; --teal: #35c2a4; --coral: #ef7256;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font-mono: Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); padding: 48px clamp(24px, 5vw, 72px) 80px; }
+  header h1 { font-size: 26px; }
+  header h1 em { font-style: normal; color: var(--teal); }
+  header p { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.8; max-width: 860px; }
+  header .meta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 14px; }
+  .grid { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 26px; }
+  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: transform 160ms ease, border-color 160ms ease; }
+  .shot:hover { transform: translateY(-4px); border-color: var(--teal); }
+  .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.25em; color: var(--teal); padding: 14px 18px 0; }
+  .tag.best { color: var(--coral); }
+  .shot h2 { font-size: 17px; padding: 6px 18px 0; }
+  .shot h2 a { color: inherit; text-decoration: none; }
+  .shot h2 a:hover { color: var(--teal); }
+  .shot p.desc { font-size: 12.5px; color: var(--muted); line-height: 1.7; padding: 8px 18px 14px; border-bottom: 1px dashed var(--line); }
+  .canvas { padding: 14px; }
+  .canvas img { width: 100%; border-radius: 10px; display: block; border: 1px solid var(--line); cursor: zoom-in; }
+  ul.feats { list-style: none; padding: 0 18px 18px; font-size: 12px; color: var(--muted); line-height: 1.9; }
+  ul.feats li::before { content: '· '; color: var(--teal); }
+  .cost { padding: 0 18px 16px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); }
+  .cost b { color: var(--teal); }
+  footer { margin-top: 44px; font-size: 12px; color: var(--muted); line-height: 2; border-top: 1px dashed var(--line); padding-top: 18px; max-width: 900px; }
+  footer code { font-family: var(--font-mono); color: var(--teal); font-size: 11px; }
+  /* lightbox 放大查看 */
+  #lb { position: fixed; inset: 0; z-index: 60; background: rgba(8,12,14,.94); display: none; flex-direction: column; }
+  #lb.open { display: flex; }
+  #lb .bar { display: flex; align-items: center; gap: 14px; padding: 10px 18px; color: var(--muted); font-size: 12px; font-family: var(--font-mono); letter-spacing: .08em; }
+  #lb .bar .title { color: var(--teal); }
+  #lb .bar .spacer { flex: 1; }
+  #lb .bar button { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; font: inherit; cursor: pointer; }
+  #lb .bar button:hover { border-color: var(--teal); color: var(--teal); }
+  #lb .stage { flex: 1; overflow: hidden; position: relative; cursor: grab; }
+  #lb .stage img { position: absolute; top: 0; left: 0; max-width: none; transform-origin: 0 0; user-select: none; -webkit-user-drag: none; border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+  #lb .stage.grabbing { cursor: grabbing; }
+</style>
+</head>
+<body>
+<header>
+  <div class="meta">PROJECTS PAGE REDESIGN · 2026-09 · 4 PROPOSALS · J/K/L/M</div>
+  <h1>项目页(团队协作 · 项目 tab)重设计 · <em>4 方案</em></h1>
+  <p>延续已上线的「研究档案」语言(知识库档案室 / 网盘档案柜 / 会议档案 / 任务 G 稿控制台)。四稿共用现网 G 皮肤外壳(侧栏+顶栏不动),只有内容区换脸;数据全为真实盘点值(在研 4 / 成员 26 人次 / 里程碑 7 · 逾期未闭 5 / P-02 已到期未结题)。<b>点击截图放大</b>(滚轮缩放 / 拖拽平移 / 双击 1:1 / Esc 关闭),每稿页面里还有 ☾ 夜览按钮预览深色。</p>
+</header>
+
+<div class="grid">
+  <div class="shot">
+    <div class="tag">J · PROJECT FILES — ★ 推荐·最顺家族</div>
+    <h2><a href="J-files.html">卷宗吊篮 · 档案卡 2×2</a></h2>
+    <p class="desc">每个项目一本悬挂式卷宗:顶部吊签(NO.001)、左侧装订孔、骑缝章状态戳。摘要/周期/成员标本签/刻度尺进度(今日红指针)/里程碑逾期标红,一张卡讲完一个项目。</p>
+    <div class="canvas"><img src="shot-J.png" alt="J 稿截图"></div>
+    <ul class="feats">
+      <li>现网卡片网格 → 卷宗皮肤,结构一一对应,改样式为主(类 G 稿路子)</li>
+      <li>刻度尺 + 今日指针把「周期」画出来,替代 DB 里不存在的 progress 字段</li>
+      <li>逾期信息上卡片(状态戳 + 里程碑标红),不再藏进详情弹窗</li>
+    </ul>
+    <div class="cost">EFFORT <b>M</b> · RISK <b>S</b> · 迁移 1-2 天</div>
+  </div>
+
+  <div class="shot">
+    <div class="tag">K · ANNUAL REPORT — 最杂志</div>
+    <h2><a href="K-annual.html">研究年报 · 刊面排版</a></h2>
+    <p class="desc">整页做成实验室年度公报:双线刊头 + 左侧目录(点线引导到百分比)+ §01-§04 章节正文 + 尾注式里程碑。文字密度最高、最「出版物」,适合给评审/汇报场景加分。</p>
+    <div class="canvas"><img src="shot-K.png" alt="K 稿截图"></div>
+    <ul class="feats">
+      <li>目录 = 项目速查表,统计栏(在研/人次/逾期)常驻左轨</li>
+      <li>里程碑变尾注编号,逾期珊瑚红,论文投稿带「剩 N 天」</li>
+      <li>卡片操作(编辑/暂停/完成)需要另想落点,交互改动最大</li>
+    </ul>
+    <div class="cost">EFFORT <b>L</b> · RISK <b>M</b> · 迁移 3 天</div>
+  </div>
+
+  <div class="shot">
+    <div class="tag">L · LEDGER — 最高密度</div>
+    <h2><a href="L-ledger.html">实验台账 · 格线记录簿</a></h2>
+    <p class="desc">一页台账纸:编号/项目/周期/成员/里程碑/时间进度(10 格墨点)/状态戳/行内操作,合计行收底。26 人 7 里程碑 5 逾期一眼扫完,是「管项目」而不是「看项目」。</p>
+    <div class="canvas"><img src="shot-L.png" alt="L 稿截图"></div>
+    <ul class="feats">
+      <li>表格化 = 项目数量增长后仍不膨胀(4 页变 40 行也成立)</li>
+      <li>行 hover 出操作,纸面上永远安静;墨点格比进度条更「台账」</li>
+      <li>需要新增表格组件(现网 ProjectsPanel 是卡片网格),中等重写量</li>
+    </ul>
+    <div class="cost">EFFORT <b>M-L</b> · RISK <b>S</b> · 迁移 2-3 天</div>
+  </div>
+
+  <div class="shot">
+    <div class="tag">M · SPECIMEN RACK — 最学科招牌</div>
+    <h2><a href="M-rack.html">样品架 · 周期液位</a></h2>
+    <p class="desc">项目=架上样品管:液位是周期标尺(时间过到哪),管内上升气泡呼应「微纳米气泡」本行;到期项目红纹警示。下方年份轴拉通四个项目周期,TODAY 红虚线一刀切开。</p>
+    <div class="canvas"><img src="shot-M.png" alt="M 稿截图"></div>
+    <ul class="feats">
+      <li>唯一把「全组项目时间线」画在一张图上的方案(年份轴)</li>
+      <li>隐喻最贴课题组身份,截图发出去最有记忆点</li>
+      <li>液位≠项目完成度,需配 legend 防误读;CSS 手绘量最大</li>
+    </ul>
+    <div class="cost">EFFORT <b>L</b> · RISK <b>M</b> · 迁移 3-4 天</div>
+  </div>
+</div>
+
+<footer>
+  四稿均为 <code>1460×880</code> 视口内的静态视觉稿(非实现),外壳为已上线的 G「控制台档案」皮肤,<b>团队协作</b>置为 active。数据取自本地库真实盘点:4 个项目(全部在研)、成员 6/8/5/7 人、里程碑 7 项(文献调研 ✓;预实验/正式实验/消杀机理/发生器样机/系统集成 5 项逾期未闭;论文投稿 09-14 剩 10 天);P-02 周期 2026-06-30 已到期未结题。
+  注意:DB 的 projects 表<b>没有 progress 字段</b>,现网进度条恒为 0% —— 四稿统一改用「时间标尺」(周期已过百分比)代替,这个假进度条建议在实现时一并处置。
+  选一个方案(或指定杂交,如 L 的台账 + J 的卷宗戳),回复字母即可,选定后落到真实 WorkspaceView/ProjectsPanel,数据逻辑零改动。
+</footer>
+
+<div id="lb" aria-hidden="true">
+  <div class="bar">
+    <span class="title" id="lb-title"></span>
+    <span id="lb-zoom">100%</span>
+    <span class="hint">滚轮缩放 · 拖拽平移 · 双击 1:1 · Esc 关闭</span>
+    <span class="spacer"></span>
+    <button id="lb-fit" type="button">适应窗口</button>
+    <button id="lb-close" type="button">✕ 关闭</button>
+  </div>
+  <div class="stage" id="lb-stage"><img id="lb-img" alt=""></div>
+</div>
+<script>
+(function () {
+  const lb = document.getElementById('lb'),
+        stage = document.getElementById('lb-stage'),
+        img = document.getElementById('lb-img'),
+        title = document.getElementById('lb-title'),
+        zoomLabel = document.getElementById('lb-zoom');
+  let scale = 1, tx = 0, ty = 0, natW = 0, natH = 0, dragging = false, sx = 0, sy = 0;
+
+  function apply() {
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    zoomLabel.textContent = Math.round(scale * 100) + '%';
+  }
+  function fit() {
+    const r = stage.getBoundingClientRect();
+    scale = Math.min((r.width - 32) / natW, (r.height - 32) / natH, 2);
+    tx = (r.width - natW * scale) / 2;
+    ty = (r.height - natH * scale) / 2;
+    apply();
+  }
+  function zoomAt(factor, cx, cy) {
+    const ns = Math.min(8, Math.max(0.2, scale * factor));
+    tx = cx - (cx - tx) * (ns / scale);
+    ty = cy - (cy - ty) * (ns / scale);
+    scale = ns;
+    apply();
+  }
+  document.querySelectorAll('.canvas img').forEach(el => {
+    el.addEventListener('click', () => {
+      natW = el.naturalWidth; natH = el.naturalHeight;
+      img.src = el.src;
+      title.textContent = (el.closest('.shot').querySelector('h2') || {}).textContent || '';
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      img.onload = () => { natW = img.naturalWidth; natH = img.naturalHeight; fit(); };
+    });
+  });
+  stage.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    zoomAt(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  stage.addEventListener('pointerdown', e => {
+    dragging = true; sx = e.clientX - tx; sy = e.clientY - ty;
+    stage.classList.add('grabbing'); stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    tx = e.clientX - sx; ty = e.clientY - sy; apply();
+  });
+  stage.addEventListener('pointerup', () => { dragging = false; stage.classList.remove('grabbing'); });
+  stage.addEventListener('dblclick', e => {
+    const r = stage.getBoundingClientRect();
+    if (Math.abs(scale - 1) < 0.01) { fit(); } else { zoomAt(1 / scale, e.clientX - r.left, e.clientY - r.top); scale = 1; apply(); }
+  });
+  function close() { lb.classList.remove('open'); document.body.style.overflow = ''; }
+  document.getElementById('lb-close').addEventListener('click', close);
+  document.getElementById('lb-fit').addEventListener('click', fit);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+})();
+</script>
+</body>
+</html>
