@@ -6,7 +6,7 @@
     :aria-label="ariaLabel"
   >
     <button
-      v-for="item in items"
+      v-for="(item, idx) in items"
       :key="item.key"
       type="button"
       role="tab"
@@ -17,6 +17,7 @@
       :class="{ 'is-active': modelValue === item.key }"
       @click="onPick(item.key)"
     >
+      <span class="tab-strip__no">{{ String(idx + 1).padStart(2, '0') }}</span>
       <span v-if="item.icon" class="tab-strip__icon">
         <el-icon :size="14"><component :is="item.icon" /></el-icon>
       </span>
@@ -65,14 +66,22 @@ const onPick = (key) => {
 </script>
 
 <style scoped>
+/* =====================================================================
+   2026-09-04 档案「标本签」皮肤 (G/J 稿语言, docs/design-proposals):
+   胶囊 pill → 底部 hair 线 + mono 编号签 + coral active bar
+   ===================================================================== */
 .tab-strip {
+  --ts-ink: #16232a; --ts-steel: #5a6b6a; --ts-fog: #8ba0a0;
+  --ts-hair: #c9d2ca; --ts-teal: #0e766e; --ts-coral: #ef7256;
+  --ts-mono: Consolas, 'Courier New', monospace;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--radius-full, 9999px);
-  background: var(--color-bg-warm, #f5f7fa);
-  border: 1px solid var(--color-border-light, #ebeef5);
+  gap: 4px;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--ts-hair);
+  border-radius: 0;
   transition: var(--transition-all-fast, all 0.15s ease);
   animation: fadeSlideUp var(--duration-slow, 300ms) var(--ease-out, cubic-bezier(0, 0, 0.2, 1)) both;
 }
@@ -80,35 +89,58 @@ const onPick = (key) => {
 .tab-strip__item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 14px;
+  gap: 6px;
+  padding: 9px 14px;
   background: transparent;
   border: none;
-  border-radius: var(--radius-full, 9999px);
+  border-radius: 7px 7px 0 0;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
-  color: var(--color-text-secondary, #909399);
+  color: var(--ts-steel);
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
   transition: var(--transition-all-fast, all 0.15s ease);
+  position: relative;
+}
+
+.tab-strip__no {
+  font-family: var(--ts-mono);
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--ts-fog);
+  margin-right: 2px;
+  letter-spacing: .08em;
 }
 
 .tab-strip__item:hover {
-  color: var(--color-text-primary, #303133);
+  color: var(--ts-ink);
+  background: rgba(14, 118, 110, 0.06);
 }
 
 .tab-strip__item:focus-visible {
-  outline: 2px solid var(--color-primary, #FF7A5C);
+  outline: 2px solid var(--ts-teal);
   outline-offset: 1px;
 }
 
 .tab-strip__item.is-active {
-  background: var(--color-bg-card, #ffffff);
-  color: var(--color-primary, #FF7A5C);
+  background: transparent;
+  color: var(--ts-ink);
   font-weight: 600;
-  box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.06));
-  transform: translateY(-1px);
+  box-shadow: none;
+  transform: none;
+}
+.tab-strip__item.is-active .tab-strip__no { color: var(--ts-teal); }
+.tab-strip__item.is-active .tab-strip__icon { color: var(--ts-teal); }
+.tab-strip__item.is-active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--ts-coral);
+  border-radius: 2px;
 }
 
 .tab-strip__icon {
@@ -140,42 +172,34 @@ const onPick = (key) => {
   flex-shrink: 0;
 }
 
-/* underline 变体预留 */
+/* underline 变体: 现与默认皮肤同构 (标本签即 underline 语言) */
 .tab-strip--underline {
   background: transparent;
   border: none;
-  padding: 0;
-  gap: 0;
-  border-radius: 0;
+  border-bottom: 1px solid var(--ts-hair);
+  padding: 0 2px;
+  gap: 4px;
 }
 
 .tab-strip--underline .tab-strip__item {
-  border-radius: 0;
+  border-radius: 7px 7px 0 0;
 }
 
 .tab-strip--underline .tab-strip__item.is-active {
   background: transparent;
   box-shadow: none;
   transform: none;
-  border-bottom: 2px solid var(--color-primary, #FF7A5C);
+  border-bottom: none;
 }
 </style>
 
 <!-- 铁律 26（v60-v67 第 9 次强化）：dark mode 覆盖必须用非 scoped 块 -->
 <style>
 [data-theme="dark"] .tab-strip {
-  background: var(--color-bg-warm);
-  border-color: var(--color-border-light);
-}
-[data-theme="dark"] .tab-strip__item {
-  color: var(--color-text-secondary);
+  --ts-ink: #dfe9e6; --ts-steel: #9ab0ae; --ts-fog: #6b8286;
+  --ts-hair: #27363e; --ts-teal: #35c2a4; --ts-coral: #ef7256;
 }
 [data-theme="dark"] .tab-strip__item:hover {
-  color: var(--color-text-primary);
-}
-[data-theme="dark"] .tab-strip__item.is-active {
-  background: var(--color-bg-card);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-xs);
+  background: rgba(53, 194, 164, 0.08);
 }
 </style>
