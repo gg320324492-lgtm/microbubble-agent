@@ -1,5 +1,19 @@
 <template>
   <div class="task-view">
+    <!-- 卷首档案头 (G 稿语言: 衬线标题 + mono 元信息 + 硬阴影边框卡) -->
+    <div class="dossier-head fade-slide-up stagger-1">
+      <span class="dh-tag">TASK DOSSIER · 任务卷宗</span>
+      <h1 class="dh-title">任务管理</h1>
+      <div class="dh-meta">
+        <span class="dh-count"><b>{{ activeTasks.length }}</b> 进行中</span>
+        <span class="dh-sep">·</span>
+        <span class="dh-count"><b class="ok">{{ doneTasks.length }}</b> 已完成</span>
+        <span class="dh-sep">·</span>
+        <span class="dh-count"><b>{{ total }}</b> 总计</span>
+        <span class="dh-date">{{ dossierDate }}</span>
+      </div>
+    </div>
+
     <!-- Tab 切换：任务列表 / 垃圾桶 -->
     <el-tabs v-model="activeTab" class="task-tabs">
       <el-tab-pane label="任务列表" name="tasks" lazy>
@@ -44,12 +58,13 @@
           <!-- 总表头 -->
           <div class="paired-header">
             <div class="paired-header-left">
-              <span class="section-title">📋 进行中</span>
-              <el-badge :value="activeTasks.length" type="warning" />
+              <span class="section-title">§ 进行中 <em>IN PROGRESS</em></span>
+              <span class="head-cnt">{{ activeTasks.length }}</span>
+              <span v-if="overdueCount > 0" class="overdue-seal">需处理 · {{ overdueCount }}</span>
             </div>
             <div class="paired-header-right">
-              <span class="section-title">✅ 已完成</span>
-              <el-badge :value="doneTasks.length" type="success" />
+              <span class="section-title">§ 已完成 <em>DONE</em></span>
+              <span class="head-cnt ok">{{ doneTasks.length }}</span>
               <template v-if="doneTasks.length > 0">
                 <el-button v-if="!doneEditMode" size="small" text class="edit-mode-btn" @click="enterDoneEditMode">
                   <el-icon><Edit /></el-icon> 编辑
@@ -85,7 +100,7 @@
                   {{ memberStore.getMemberName(pair.assignee_id).charAt(0) }}
                 </el-avatar>
                 <span class="group-name">{{ memberStore.getMemberName(pair.assignee_id) }}</span>
-                <el-tag size="small" type="info">{{ pair.activeTasks.length + pair.doneTasks.length }}项</el-tag>
+                <span class="group-cnt">{{ pair.activeTasks.length + pair.doneTasks.length }} ITEMS</span>
                 <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[pair.assignee_id] }"><ArrowDown /></el-icon>
               </div>
             </div>
@@ -106,9 +121,9 @@
                   <div class="task-content">
                     <div class="task-title">{{ task.title }}</div>
                     <div class="task-meta">
-                      <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">{{ getPriorityLabel(task.priority) }}</el-tag>
-                      <el-tag v-if="task.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
-                      <el-tag v-else-if="task.status === 'blocked'" size="small" type="danger">阻塞</el-tag>
+                      <span class="chip" :class="prClass(task.priority)">P-{{ getPriorityLabel(task.priority) }}</span>
+                      <span v-if="task.status === 'in_progress'" class="chip st">进行中</span>
+                      <span v-else-if="task.status === 'blocked'" class="chip bl">阻塞</span>
                     </div>
                   </div>
                   <div class="task-due" :class="{ overdue: isOverdue(task) }">
@@ -144,7 +159,7 @@
                   <div class="task-content">
                     <div class="task-title task-done">{{ task.title }}</div>
                     <div class="task-meta">
-                      <el-tag size="small" type="success">已完成</el-tag>
+                      <span class="chip dn">已完成</span>
                     </div>
                   </div>
                   <div class="task-due">-</div>
@@ -205,7 +220,7 @@ import { ArrowDown, Check, Edit, Delete, Plus, Warning } from '@element-plus/ico
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatDate } from '@/utils/format'
-import { getStatusType, getPriorityType, getStatusLabel, getPriorityLabel } from '@/utils/task'
+import { getPriorityLabel } from '@/utils/task'
 import { groupTasksByAssignee } from '@/utils/taskGroup'  // 2026-06-26: 从本文件抽出，移动端按人分组视图复用
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
@@ -233,6 +248,11 @@ const {
 } = useTask()
 
 const isMobile = ref(window.innerWidth <= 768)
+
+// G 稿档案皮肤: 优先级 chip 色 class + 卷首 mono 日期行
+const prClass = (p) => ({ high: 'hi', medium: 'md', low: 'lo' }[p] || 'lo')
+const dossierDate = dayjs().format('YYYY-MM-DD · HH:mm')
+const overdueCount = computed(() => activeTasks.value.filter(isOverdue).length)
 const activeTab = ref('tasks')
 const showCreateDialog = ref(false)
 const editingTask = ref(null)
@@ -845,6 +865,158 @@ onMounted(() => {
     justify-content: flex-end;
   }
 }
+
+/* =====================================================================
+   G 稿「控制台档案」皮肤叠加层 (2026-09-04)
+   视觉源 docs/design-proposals/layout-2026-09/G-console.html;
+   只叠加不重写: 上面老规则保留, 本层用后置级联覆盖, 整段可摘除回滚
+   ===================================================================== */
+.task-view {
+  --dg-card: #fdfefc; --dg-ink: #16232a; --dg-steel: #5a6b6a; --dg-fog: #8ba0a0;
+  --dg-hair: #c9d2ca; --dg-teal: #0e766e; --dg-teal-soft: #dcece5;
+  --dg-coral: #ef7256; --dg-green: #3d7a3d; --dg-amber: #c07f2e;
+  --dg-paper: #f4f6f4; --dg-shadow: rgba(22, 35, 42, 0.14);
+  --dg-mono: Consolas, 'Courier New', monospace;
+  background: var(--dg-paper);
+  border-radius: 14px;
+  padding: 4px;
+}
+
+/* --- 卷首档案头 --- */
+.dossier-head {
+  position: relative;
+  background: var(--dg-card);
+  border: 1.5px solid var(--dg-ink);
+  border-radius: 10px;
+  box-shadow: 3px 3px 0 var(--dg-shadow);
+  padding: 22px 24px 16px;
+  margin: 2px;
+}
+.dh-tag {
+  position: absolute; top: -11px; left: 20px;
+  background: var(--dg-card); border: 1px solid var(--dg-teal); color: var(--dg-teal);
+  font-family: var(--dg-mono); font-size: 9.5px; letter-spacing: 0.22em;
+  padding: 3px 10px; border-radius: 3px;
+}
+.dh-title {
+  font-family: Georgia, 'Songti SC', 'SimSun', serif;
+  font-size: 26px; font-weight: 600; letter-spacing: 0.01em;
+  color: var(--dg-ink); margin: 0;
+}
+.dh-meta {
+  margin-top: 8px; display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; color: var(--dg-steel);
+}
+.dh-count b { font-family: var(--dg-mono); font-size: 16px; color: var(--dg-teal); }
+.dh-count b.ok { color: var(--dg-green); }
+.dh-sep { color: var(--dg-fog); }
+.dh-date {
+  margin-left: auto; font-family: var(--dg-mono); font-size: 10.5px;
+  letter-spacing: 0.12em; color: var(--dg-fog);
+}
+
+/* --- tabs 标本签化 --- */
+.task-tabs :deep(.el-tabs__item) {
+  font-family: var(--dg-mono); font-size: 12px; letter-spacing: 0.14em;
+  color: var(--dg-fog);
+}
+.task-tabs :deep(.el-tabs__item.is-active),
+.task-tabs :deep(.el-tabs__item:hover) { color: var(--dg-teal); }
+.task-tabs :deep(.el-tabs__active-bar) { background: var(--dg-teal); }
+.task-tabs :deep(.el-tabs__nav-wrap::after) { background: var(--dg-hair); }
+
+/* --- 卡片: hair 边框 + 硬阴影 --- */
+.filter-card, .task-list-card {
+  background: var(--dg-card) !important;
+  border: 1px solid var(--dg-hair) !important;
+  border-radius: 10px !important;
+  box-shadow: 3px 3px 0 var(--dg-shadow) !important;
+}
+.filter-card :deep(.el-button--primary) {
+  background: var(--dg-card); color: var(--dg-ink);
+  border: 1.5px solid var(--dg-ink); border-radius: 8px;
+  box-shadow: 2px 2px 0 var(--dg-shadow);
+  font-weight: 600; transition: transform 120ms ease;
+}
+.filter-card :deep(.el-button--primary:hover) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--dg-shadow);
+  color: var(--dg-teal); border-color: var(--dg-teal); background: var(--dg-card);
+}
+
+/* --- 配对表头 mono 化 --- */
+.section-title { font-size: 14px; font-weight: 600; color: var(--dg-ink); }
+.section-title em {
+  font-style: normal; font-family: var(--dg-mono); font-size: 9.5px;
+  letter-spacing: 0.18em; color: var(--dg-fog); margin-left: 6px;
+}
+.head-cnt {
+  font-family: var(--dg-mono); font-size: 15px; font-weight: 700;
+  color: var(--dg-teal); background: var(--dg-teal-soft);
+  border-radius: 6px; padding: 1px 9px;
+}
+.head-cnt.ok { color: var(--dg-green); background: rgba(61, 122, 61, 0.12); }
+.paired-header { border-bottom: 1px dashed var(--dg-hair); }
+
+/* --- 负责人档案袋 --- */
+.group-header { gap: 10px; }
+.group-header :deep(.el-avatar) { border-radius: 8px !important; border: 1px solid var(--dg-hair); }
+.group-name { color: var(--dg-ink); font-weight: 600; }
+.group-cnt {
+  font-family: var(--dg-mono); font-size: 9.5px; letter-spacing: 0.14em;
+  color: var(--dg-fog); border: 1px solid var(--dg-hair);
+  border-radius: 4px; padding: 2px 7px;
+}
+.paired-row { border-bottom: 1px solid var(--dg-hair); }
+.paired-content { border-top: 1px dashed var(--dg-hair); padding-top: 6px; }
+.paired-col-left { border-right: 1px dashed var(--dg-hair); }
+.empty-col, .empty-section {
+  font-family: var(--dg-mono); font-size: 11px; letter-spacing: 0.1em;
+  color: var(--dg-fog);
+}
+
+/* --- 任务行 --- */
+.task-row { padding: 10px 6px; }
+.task-row:hover { background: var(--dg-paper); }
+.task-row.overdue { background: rgba(239, 114, 86, 0.06); }
+.task-title { color: var(--dg-ink); font-weight: 500; }
+.task-due { font-family: var(--dg-mono); font-size: 11.5px; color: var(--dg-steel); }
+.task-due.overdue { color: var(--dg-coral); font-weight: 700; }
+
+/* --- mono 印章 chip (替 el-tag) --- */
+.chip {
+  font-family: var(--dg-mono); font-size: 10px; letter-spacing: 0.08em;
+  border: 1px solid currentColor; border-radius: 4px; padding: 1px 7px;
+  color: var(--dg-fog); white-space: nowrap;
+}
+.chip.hi { color: var(--dg-coral); font-weight: 700; }
+.chip.md { color: var(--dg-amber); }
+.chip.st { color: var(--dg-teal); }
+.chip.bl { color: var(--dg-coral); background: rgba(239, 114, 86, 0.08); }
+.chip.dn { color: var(--dg-green); }
+
+/* --- 完成/操作按钮: teal 描边圆 --- */
+.complete-btn--outline {
+  border: 1px solid var(--dg-teal) !important; color: var(--dg-teal) !important;
+  background: transparent !important;
+}
+.complete-btn--outline:hover { background: var(--dg-teal-soft) !important; }
+.complete-btn--done {
+  background: var(--dg-teal) !important; border-color: var(--dg-teal) !important;
+  color: #fff !important;
+}
+.task-action-btn { color: var(--dg-fog) !important; }
+.task-action-btn:hover { color: var(--dg-teal) !important; background: var(--dg-teal-soft) !important; }
+.task-action-btn--delete:hover { color: var(--dg-coral) !important; background: rgba(239, 114, 86, 0.08) !important; }
+
+/* --- 逾期批注印章 (paired-header 右侧, 有逾期任务时) --- */
+.overdue-seal {
+  font-family: var(--dg-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  color: var(--dg-coral); border: 1.5px solid var(--dg-coral);
+  border-radius: 4px; padding: 2px 8px; transform: rotate(3deg);
+  margin-left: 4px;
+}
+
 </style>
 
 <style>
@@ -916,4 +1088,18 @@ onMounted(() => {
 [data-theme="dark"] .trash-tab-label:hover {
   background: rgba(144, 147, 153, 0.14);
 }
+
+  /* === G 稿档案皮肤 dark (2026-09-04, 对齐 shot-G 夜览态) === */
+  [data-theme="dark"] .task-view {
+    --dg-card: #18232a; --dg-ink: #dfe9e6; --dg-steel: #9ab0ae; --dg-fog: #6b8286;
+    --dg-hair: #27363e; --dg-teal: #35c2a4; --dg-teal-soft: #12312b;
+    --dg-coral: #ef7256; --dg-green: #6fbf6f; --dg-amber: #d9a257;
+    --dg-paper: #10171b; --dg-shadow: rgba(0, 0, 0, 0.5);
+    background: #0c1215;
+  }
+  [data-theme="dark"] .task-view .filter-card .el-button--primary {
+    background: var(--dg-card); color: var(--dg-ink);
+  }
+  [data-theme="dark"] .task-view .head-cnt { color: var(--dg-teal); }
+  [data-theme="dark"] .task-view .complete-btn--done { color: #0c1215 !important; }
 </style>
