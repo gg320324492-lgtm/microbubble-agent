@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>仪表盘重设计 · 4 方案总览</title>
+<style>
+  :root {
+    --bg: #10171b; --card: #18232a; --line: #27363e;
+    --text: #dfe9e6; --muted: #8ba0a0; --teal: #35c2a4;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font-mono: Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); padding: 48px clamp(24px, 5vw, 72px) 80px; }
+  header h1 { font-size: 26px; }
+  header h1 em { font-style: normal; color: var(--teal); }
+  header p { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.8; max-width: 780px; }
+  header .meta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 14px; }
+  .grid { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 26px; }
+  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: transform 160ms ease, border-color 160ms ease; }
+  .shot:hover { transform: translateY(-4px); border-color: var(--teal); }
+  .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.25em; color: var(--teal); padding: 14px 18px 0; }
+  .shot h2 { font-size: 17px; padding: 6px 18px 0; }
+  .shot p.desc { font-size: 12.5px; color: var(--muted); line-height: 1.7; padding: 8px 18px 14px; border-bottom: 1px dashed var(--line); }
+  .canvas { padding: 18px; flex: 1; }
+  canvas { width: 100%; border-radius: 10px; display: block; }
+  ul.feats { list-style: none; padding: 0 18px 18px; font-size: 12px; color: var(--muted); line-height: 1.9; }
+  ul.feats li::before { content: '· '; color: var(--teal); }
+</style>
+</head>
+<body>
+<header>
+  <div class="meta">DASHBOARD REDESIGN · 2026-09 · 4 PROPOSALS</div>
+  <h1>仪表盘 UI 全面升级 · <em>4 方案</em></h1>
+  <p>统一延续「研究档案」设计语言的前提下给出四种不同的信息组织与视觉密度。所有方案均包含:统计卡数据修复(19 进行中 / 75 已完成 / 7 已逾期)、宠物兔子保留方式说明。点击放大细看,选一个我再做完整实现。</p>
+</header>
+
+<div class="grid">
+  <!-- A -->
+  <div class="shot" id="a">
+    <div class="tag">A · ARCHIVE</div>
+    <h2>档案页首 · 研究档案延续</h2>
+    <p class="desc">与设置页/对话页完全同族的档案皮肤:纸质底、钢青强调、标本标签抬头。欢迎区从"游乐园"收敛为"卷首语",兔子缩小为角落姿态。</p>
+    <div class="canvas"><canvas id="c-a" width="760" height="520"></canvas></div>
+    <ul class="feats">
+      <li>纸质卡片 #fdfefc + 硬阴影 + 虚线分隔,与全站一致</li>
+      <li>问候区改为「卷首 · DAILY BRIEF」标本标签 + 衬线大字</li>
+      <li>统计三卡横排,mono 大数字,逾期珊瑚色印章式标注</li>
+      <li>兔子缩为 40px 站在草地条右端,可点但不再抢视觉</li>
+    </ul>
+  </div>
+
+  <!-- B -->
+  <div class="shot" id="b">
+    <div class="tag">B · BRIEFING</div>
+    <h2>晨报式 · 竖排快报</h2>
+    <p class="desc">把仪表盘做成每天打开的"组内晨报":左侧是问候+日期的竖排报头,右侧整列是数据行。信息密度最高,适合每天扫一眼。</p>
+    <div class="canvas"><canvas id="c-b" width="760" height="520"></canvas></div>
+    <ul class="feats">
+      <li>报头 + 正文双栏,报头深色底反白,仪式感强</li>
+      <li>数据用"行式清单"呈现:名称 + mono 数字 + 迷你趋势</li>
+      <li>逾期行用红色下划波浪线强调,像批改作业</li>
+      <li>兔子在报头右侧探头,只露上半身(耳朵+眼睛)</li>
+    </ul>
+  </div>
+
+  <!-- C -->
+  <div class="shot" id="c">
+    <div class="tag">C · CONSOLE</div>
+    <h2>驾驶舱 · 数据面板</h2>
+    <p class="desc">工程感最强的方案:深色仪表台、表盘式统计、状态灯。适合喜欢"控制台"感觉的人,信息全部平铺一屏不滚动。</p>
+    <div class="canvas"><canvas id="c-c" width="760" height="520"></canvas></div>
+    <ul class="feats">
+      <li>深色底 + 发光刻度环,三个大表盘 + 状态灯</li>
+      <li>任务分组折叠列表带进度条,紧凑双列</li>
+      <li>顶部 mono 系统状态行(时间/在线/逾期告警)</li>
+      <li>兔子变成 ASCII 风格 (^._.^) 常驻状态行末尾</li>
+    </ul>
+  </div>
+
+  <!-- D -->
+  <div class="shot" id="d">
+    <div class="tag">D · DENSER</div>
+    <h2>暖纸工作台 · 宠物保留派</h2>
+    <p class="desc">保留现在"欢迎区+兔子乐园"的空间结构,但把皮肤换成暖纸档案色系,统计卡改为印章风,兔子乐园原样保留并修复越界 bug。</p>
+    <div class="canvas"><canvas id="c-d" width="760" height="520"></canvas></div>
+    <ul class="feats">
+      <li>结构不变、只换配色:渐变橙→暖纸米黄+钢青</li>
+      <li>统计卡改「档案印章」风:虚线边框+mono 数字</li>
+      <li>兔子乐园保留:草地/云朵/两只兔+走路动画</li>
+      <li>顺带修兔子越界碰撞,加边界约束不压文字</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+
+function baseA(ctx) {
+  ctx.fillStyle = '#f4f6f4'; ctx.fillRect(0, 0, 760, 520);
+}
+function cardA(ctx, x, y, w, h) {
+  ctx.fillStyle = '#fdfefc'; ctx.strokeStyle = '#16232a'; ctx.lineWidth = 1.5;
+  rr(ctx, x, y, w, h, 8); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.shadowColor = 'rgba(22,35,42,.14)'; ctx.shadowBlur = 0; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+  rr(ctx, x, y, w, h, 8); ctx.restore();
+}
+
+/* ===== A ===== */
+(function drawA() {
+  const c = document.getElementById('c-a'), ctx = c.getContext('2d');
+  ctx.roundRect = ctx.roundRect || function(x,y,w,h,r){ this.beginPath(); this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); };
+  baseA(ctx);
+  // hero
+  cardA(ctx, 20, 20, 720, 120);
+  // specimen label
+  ctx.fillStyle = '#fdfefc'; ctx.strokeStyle = '#0e766e'; ctx.lineWidth = 1;
+  rr(ctx, 40, 12, 130, 18, 3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#0e766e'; ctx.font = '9px Consolas'; ctx.textAlign = 'center';
+  ctx.fillText('D A I L Y   B R I E F', 105, 24.5);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#16232a'; ctx.font = '600 26px "Noto Serif SC", serif';
+  ctx.fillText('晚上好，杜同贺', 42, 72);
+  ctx.font = '12px Consolas'; ctx.fillStyle = '#5a6b6a';
+  ctx.fillText('2026-09-03 THU · 18:48:28', 42, 94);
+  ctx.fillStyle = '#0e766e'; ctx.font = '11px "PingFang SC"';
+  ctx.fillText('🎯 团队共有 19 项任务进行中', 42, 116);
+  // small bunny
+  ctx.fillStyle = '#F5E0D0'; ctx.beginPath(); ctx.ellipse(690, 112, 14, 16, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(684, 88, 4, 12, -0.2, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(694, 88, 4, 12, 0.2, 0, 7); ctx.fill();
+  ctx.fillStyle = '#16232a'; ctx.beginPath(); ctx.arc(686, 108, 2, 0, 7); ctx.arc(694, 108, 2, 0, 7); ctx.fill();
+  // stats row
+  const data = [['进行中', '19', '#0e766e'], ['已完成', '75', '#3d7a3d'], ['已逾期', '7', '#ef7256']];
+  data.forEach((d, i) => {
+    const x = 20 + i * 244;
+    cardA(ctx, x, 160, 224, 110);
+    ctx.strokeStyle = '#16232a'; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x + 20, 205); ctx.lineTo(x + 90, 205); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = '11px "PingFang SC"'; ctx.fillStyle = '#5a6b6a';
+    ctx.fillText(d[0], x + 20, 190);
+    ctx.font = '700 44px Consolas'; ctx.fillStyle = d[2];
+    ctx.fillText(d[1], x + 20, 250);
+    ctx.font = '9px Consolas'; ctx.fillStyle = '#8ba0a0';
+    ctx.fillText(['IN_PROGRESS','DONE','OVERDUE'][i], x + 20, 262);
+    if (i === 2) { // stamp
+      ctx.strokeStyle = '#ef7256'; ctx.lineWidth = 2;
+      rr(ctx, x + 130, 205, 70, 34, 4); ctx.stroke();
+      ctx.fillStyle = '#ef7256'; ctx.font = '700 12px "PingFang SC"'; ctx.textAlign = 'center';
+      ctx.fillText('需处理', x + 165, 227); ctx.textAlign = 'left';
+    }
+  });
+  // task group card
+  cardA(ctx, 20, 292, 720, 208);
+  ctx.fillStyle = '#16232a'; ctx.font = '600 14px "PingFang SC"';
+  ctx.fillText('§ 进行中任务', 42, 322);
+  ctx.font = '10px Consolas'; ctx.fillStyle = '#0e766e';
+  ctx.fillText('20 TOTAL · BY ASSIGNEE', 150, 322);
+  ctx.strokeStyle = '#16232a'; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(20, 336); ctx.lineTo(740, 336); ctx.stroke(); ctx.setLineDash([]);
+  const rows = [['陈天祥', '文献调研：微纳米气泡稳定性', '中 · 05/31', '#ef7256'],
+                ['胡小琪', '正式实验', '高 · 明天', '#ef7256'],
+                ['蒋芦笛', '看文献', '低 · 09/30', '#5a6b6a']];
+  rows.forEach((r, i) => {
+    const y = 356 + i * 44;
+    ctx.fillStyle = '#0e766e'; ctx.beginPath(); ctx.arc(48, y + 4, 11, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fdfefc'; ctx.font = '10px "PingFang SC"'; ctx.textAlign = 'center';
+    ctx.fillText(r[0][0], 48, y + 8); ctx.textAlign = 'left';
+    ctx.fillStyle = '#16232a'; ctx.font = '500 13px "PingFang SC"';
+    ctx.fillText(r[1], 72, y + 4);
+    ctx.font = '11px "PingFang SC"'; ctx.fillStyle = r[3];
+    ctx.fillText(r[2], 72, y + 20);
+    ctx.strokeStyle = '#16232a'; ctx.lineWidth = 1;
+    rr(ctx, 620, y - 6, 90, 24, 12); ctx.stroke();
+    ctx.fillStyle = '#0e766e'; ctx.font = '11px "PingFang SC"'; ctx.textAlign = 'center';
+    ctx.fillText('完成', 665, y + 9); ctx.textAlign = 'left';
+  });
+})();
+
+/* ===== B ===== */
+(function drawB() {
+  const c = document.getElementById('c-b'), ctx = c.getContext('2d');
+  ctx.roundRect = ctx.roundRect || function(x,y,w,h,r){ this.beginPath(); this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); };
+  ctx.fillStyle = '#f4f6f4'; ctx.fillRect(0, 0, 760, 520);
+  // masthead
+  ctx.fillStyle = '#16232a'; ctx.fillRect(20, 20, 200, 480);
+  ctx.fillStyle = '#35c2a4'; ctx.font = '9px Consolas';
+  ctx.fillText('M O R N I N G   P O S T', 38, 48);
+  ctx.fillStyle = '#fdfefc'; ctx.font = '600 30px "Noto Serif SC", serif';
+  ctx.fillText('晚间', 38, 96);
+  ctx.fillText('简报', 38, 136);
+  ctx.font = '12px Consolas'; ctx.fillStyle = '#8ba0a0';
+  ctx.fillText('2026-09-03', 38, 170);
+  ctx.fillText('THU 18:48', 38, 190);
+  // bunny peeking
+  ctx.fillStyle = '#F5E0D0';
+  ctx.beginPath(); ctx.ellipse(160, 440, 26, 20, 0, Math.PI, 0); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(148, 402, 6, 18, -0.25, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(170, 402, 6, 18, 0.25, 0, 7); ctx.fill();
+  ctx.fillStyle = '#16232a';
+  ctx.beginPath(); ctx.arc(150, 442, 3, 0, 7); ctx.arc(170, 442, 3, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#ef7256'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(158, 452, 3, 0.2, Math.PI - 0.2); ctx.stroke();
+  // body rows
+  const rows = [
+    ['进行中任务', '19', '较昨日 +3', '#16232a', false],
+    ['已完成任务', '75', '本周 +12', '#16232a', false],
+    ['已逾期任务', '7', '最久 75 天', '#ef7256', true],
+    ['今日会议', '0', '无安排', '#5a6b6a', false],
+    ['知识库新增', '2', '本周 +9', '#16232a', false],
+  ];
+  rows.forEach((r, i) => {
+    const y = 48 + i * 88;
+    ctx.fillStyle = '#fdfefc'; ctx.strokeStyle = '#27363e'; ctx.lineWidth = 1;
+    rr(ctx, 240, y, 500, 72, 8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5a6b6a'; ctx.font = '13px "PingFang SC"';
+    ctx.fillText(r[0], 264, y + 30);
+    ctx.fillStyle = r[3]; ctx.font = '700 34px Consolas';
+    ctx.fillText(r[1], 264, y + 60);
+    ctx.font = '11px "PingFang SC"'; ctx.fillStyle = '#8ba0a0';
+    ctx.fillText(r[2], 360, y + 56);
+    // mini trend
+    ctx.strokeStyle = i === 2 ? '#ef7256' : '#0e766e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    const bx = 620, base = y + 44;
+    const pts = [[0,0],[12,-6],[24,-4],[36,-12],[48,-8],[60,-16]];
+    ctx.moveTo(bx, base);
+    pts.forEach(p => ctx.lineTo(bx + p[0], base + p[1]));
+    ctx.stroke();
+    if (r[4]) { // red wavy underline on title
+      ctx.strokeStyle = '#ef7256'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(264, y + 34);
+      for (let x = 264; x < 340; x += 8) ctx.lineTo(x + 4, y + 34 + (Math.floor(x/8)%2 ? 3 : -3));
+      ctx.stroke();
+    }
+  });
+})();
+
+/* ===== C ===== */
+(function drawC() {
+  const c = document.getElementById('c-c'), ctx = c.getContext('2d');
+  ctx.roundRect = ctx.roundRect || function(x,y,w,h,r){ this.beginPath(); this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); };
+  ctx.fillStyle = '#0d1417'; ctx.fillRect(0, 0, 760, 520);
+  // status line
+  ctx.fillStyle = '#35c2a4'; ctx.font = '11px Consolas';
+  ctx.fillText('> SYSTEM OK · 2026-09-03 18:48:28 · MEMBERS 20 · OVERDUE_ALERT=7', 24, 32);
+  ctx.fillText('(^._.^)ﾉ  bunny.online', 24, 50);
+  // gauges
+  const gauges = [['进行中', 19, '#35c2a4', 0.19], ['已完成', 75, '#7ac07a', 0.75], ['已逾期', 7, '#ff8a6b', 0.07]];
+  gauges.forEach((g, i) => {
+    const cx = 130 + i * 250, cy = 170, R = 62;
+    ctx.strokeStyle = '#1d2a30'; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+    ctx.strokeStyle = g[2]; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx, cy, R, -Math.PI/2, -Math.PI/2 + g[3] * 2 * Math.PI); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.fillStyle = '#dfe9e6'; ctx.font = '700 30px Consolas'; ctx.textAlign = 'center';
+    ctx.fillText(g[1], cx, cy + 6);
+    ctx.font = '11px "PingFang SC"'; ctx.fillStyle = '#6b8286';
+    ctx.fillText(g[0], cx, cy + 30);
+    // status dot
+    ctx.fillStyle = g[3] > 0 && i === 2 ? '#ff8a6b' : '#35c2a4';
+    ctx.beginPath(); ctx.arc(cx + 52, cy - 48, 4, 0, 7); ctx.fill();
+    ctx.textAlign = 'left';
+  });
+  // task list panel
+  ctx.fillStyle = '#121c21'; ctx.strokeStyle = '#1d2a30'; ctx.lineWidth = 1;
+  rr(ctx, 20, 270, 720, 230, 10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#35c2a4'; ctx.font = '11px Consolas';
+  ctx.fillText('TASK_QUEUE', 40, 296);
+  const tasks = [['文献调研：微纳米气泡稳定性', '陈天祥', 0.6, '#ff8a6b'],
+                 ['正式实验', '胡小琪', 0.4, '#ff8a6b'],
+                 ['12棚水质微生物测试', '李胜景', 0.7, '#35c2a4'],
+                 ['搭建多种产泡系统', '韩重阳', 0.3, '#35c2a4']];
+  tasks.forEach((t, i) => {
+    const y = 322 + i * 42;
+    ctx.fillStyle = '#dfe9e6'; ctx.font = '13px "PingFang SC"';
+    ctx.fillText(t[0], 40, y + 14);
+    ctx.fillStyle = '#6b8286'; ctx.font = '11px Consolas';
+    ctx.fillText(t[1], 400, y + 14);
+    ctx.fillStyle = '#1d2a30'; ctx.fillRect(500, y + 6, 210, 8);
+    ctx.fillStyle = t[3]; ctx.fillRect(500, y + 6, 210 * t[2], 8);
+  });
+})();
+
+/* ===== D ===== */
+(function drawD() {
+  const c = document.getElementById('c-d'), ctx = c.getContext('2d');
+  ctx.roundRect = ctx.roundRect || function(x,y,w,h,r){ this.beginPath(); this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); };
+  ctx.fillStyle = '#f4f6f4'; ctx.fillRect(0, 0, 760, 520);
+  // hero kept structure, new palette
+  const grad = ctx.createLinearGradient(20, 20, 740, 170);
+  grad.addColorStop(0, '#fdf6ef'); grad.addColorStop(1, '#f7e8d8');
+  ctx.fillStyle = grad; ctx.strokeStyle = '#16232a'; ctx.lineWidth = 1.5;
+  rr(ctx, 20, 20, 720, 150, 10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#16232a'; ctx.font = '600 24px "Noto Serif SC", serif';
+  ctx.fillText('晚上好，杜同贺', 42, 70);
+  ctx.font = '12px Consolas'; ctx.fillStyle = '#5a6b6a';
+  ctx.fillText('2026-09-03 THU | 18:48', 42, 94);
+  ctx.fillStyle = '#0e766e'; ctx.font = '11px "PingFang SC"';
+  ctx.fillText('🎯 团队共有 19 项任务进行中', 42, 118);
+  // bunny park kept
+  ctx.fillStyle = '#E8DCC8'; ctx.fillRect(20, 150, 720, 20);
+  ctx.fillStyle = '#F5E0D0';
+  [[380, 92], [560, 88]].forEach(p => {
+    ctx.beginPath(); ctx.ellipse(p[0], p[1] + 30, 18, 20, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(p[0] - 8, p[1] - 2, 5, 14, -0.2, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(p[0] + 6, p[1] - 2, 5, 14, 0.2, 0, 7); ctx.fill();
+    ctx.fillStyle = '#16232a';
+    ctx.beginPath(); ctx.arc(p[0] - 6, p[1] + 28, 2.5, 0, 7); ctx.arc(p[0] + 4, p[1] + 28, 2.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#F5E0D0';
+  });
+  ctx.fillStyle = '#8ba0a0'; ctx.font = '9px Consolas';
+  ctx.fillText('grass · cloud · walk anim retained', 42, 164);
+  // stamp stat cards
+  const data = [['进行中', '19', '#0e766e'], ['已完成', '75', '#3d7a3d'], ['已逾期', '7', '#ef7256']];
+  data.forEach((d, i) => {
+    const x = 20 + i * 244;
+    ctx.fillStyle = '#fdfefc'; ctx.strokeStyle = '#16232a'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+    rr(ctx, x, 190, 224, 96, 6); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = '11px "PingFang SC"'; ctx.fillStyle = '#5a6b6a';
+    ctx.fillText(d[0], x + 20, 220);
+    ctx.font = '700 40px Consolas'; ctx.fillStyle = d[2];
+    ctx.fillText(d[1], x + 20, 268);
+  });
+  // task list
+  ctx.fillStyle = '#fdfefc'; ctx.strokeStyle = '#16232a'; ctx.lineWidth = 1.5;
+  rr(ctx, 20, 306, 720, 194, 10); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#16232a'; ctx.font = '600 14px "PingFang SC"';
+  ctx.fillText('进行中任务', 42, 336);
+  ctx.font = '10px Consolas'; ctx.fillStyle = '#0e766e';
+  ctx.fillText('20', 686, 336);
+  ctx.strokeStyle = '#16232a'; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(20, 352); ctx.lineTo(740, 352); ctx.stroke(); ctx.setLineDash([]);
+  const rows = [['陈天祥', '文献调研：微纳米气泡稳定性', '05/31 已逾期'],
+                ['胡小琪', '正式实验', '明天到期'],
+                ['蒋芦笛', '看文献', '09/30']];
+  rows.forEach((r, i) => {
+    const y = 372 + i * 42;
+    ctx.fillStyle = '#ef7256'; ctx.beginPath(); ctx.arc(50, y, 10, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '10px "PingFang SC"'; ctx.textAlign = 'center';
+    ctx.fillText(r[0][0], 50, y + 3.5); ctx.textAlign = 'left';
+    ctx.fillStyle = '#16232a'; ctx.font = '500 13px "PingFang SC"';
+    ctx.fillText(r[1], 74, y + 4);
+    ctx.fillStyle = r[2].includes('逾期') ? '#ef7256' : '#5a6b6a'; ctx.font = '11px "PingFang SC"';
+    ctx.fillText(r[2], 620, y + 4);
+  });
+})();
+</script>
+</body>
+</html>
