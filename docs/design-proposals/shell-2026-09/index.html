@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>顶栏 / 侧栏导航重设计 · 4 方案总览</title>
+<style>
+  :root {
+    --bg: #10171b; --card: #18232a; --line: #27363e;
+    --text: #dfe9e6; --muted: #8ba0a0; --teal: #35c2a4; --coral: #ff8a6b;
+    --mono: Consolas, monospace; --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--ui); padding: 48px clamp(24px, 5vw, 72px) 80px; }
+  header .meta { font-family: var(--mono); font-size: 10.5px; letter-spacing: .2em; color: var(--muted); margin-bottom: 14px; }
+  header h1 { font-size: 26px; }
+  header h1 em { font-style: normal; color: var(--teal); }
+  header p { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.85; max-width: 860px; }
+
+  section.inv { margin-top: 30px; display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: 22px; }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px 20px; }
+  .box h2 { font-size: 14px; display: flex; align-items: center; gap: 9px; }
+  .box h2 span { font-family: var(--mono); font-size: 9px; letter-spacing: .18em; color: var(--teal); }
+  .box ul { list-style: none; margin-top: 12px; font-size: 12.5px; color: var(--muted); line-height: 2; }
+  .box ul li code { font-family: var(--mono); font-size: 11px; color: var(--text); background: #0d1417; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .box ul li b { color: var(--text); font-weight: 600; }
+  .warn { margin-top: 12px; border-left: 2px solid var(--coral); background: rgba(255,138,107,.07); padding: 10px 12px; font-size: 12px; color: var(--muted); line-height: 1.8; }
+  .warn b { color: var(--coral); }
+
+  .grid { margin-top: 34px; display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 26px; }
+  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: transform 160ms ease, border-color 160ms ease; }
+  .shot:hover { transform: translateY(-4px); border-color: var(--teal); }
+  .thumb { position: relative; height: 261px; overflow: hidden; border-bottom: 1px solid var(--line); background: #fff; }
+  .thumb iframe { width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(0.29); pointer-events: none; position: absolute; top: 0; left: 0; }
+  .thumb .tag { position: absolute; z-index: 2; top: 10px; right: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: .14em; background: rgba(9,14,17,.82); color: var(--teal); border: 1px solid rgba(53,194,164,.4); border-radius: 999px; padding: 4px 10px; }
+  .info { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .info h3 { font-size: 16.5px; }
+  .info h3 small { font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: .16em; color: var(--muted); margin-left: 8px; }
+  .info p { font-size: 12.5px; line-height: 1.78; color: var(--muted); }
+  .info ul { list-style: none; font-size: 12px; line-height: 1.95; color: var(--muted); }
+  .info ul li::before { content: '· '; color: var(--teal); }
+  .info a { color: var(--teal); font-size: 13px; font-weight: 600; text-decoration: none; margin-top: 2px; }
+  .info a:hover { text-decoration: underline; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12.5px; line-height: 2; border-top: 1px solid var(--line); padding-top: 20px; max-width: 980px; }
+  footer b { color: var(--text); }
+  footer code { font-family: var(--mono); font-size: 11.5px; color: var(--teal); }
+</style>
+</head>
+<body>
+  <header>
+    <p class="meta">MICROBUBBLE LAB · APP SHELL / NAV REDESIGN · 2026-09</p>
+    <h1>顶栏与侧栏重设计 — <em>4 种导航架构</em>，选一个（可混搭）</h1>
+    <p>先按 <code style="font-family:var(--mono);font-size:11.5px;color:var(--teal)">web/src/layouts/MainLayout.vue</code> + <code style="font-family:var(--mono);font-size:11.5px;color:var(--teal)">web/src/router/index.js</code> 把真实导航项数清，再据此出稿。四稿共用同一批真实数据（19 进行中 / 75 已完成 / 7 已逾期、会议 #252、网盘「实验数据」），均为纯 HTML/CSS 无 JS，1440×900。</p>
+
+    <section class="inv">
+      <div class="box">
+        <h2>真实导航清单 <span>AS BUILT</span></h2>
+        <ul>
+          <li><b>侧栏 menuRoutes</b>（meta.icon 且未隐藏，9 项）：<code>/dashboard</code> 仪表盘 · <code>/chat</code> 智能对话 · <code>/tasks</code> 任务管理 · <code>/meetings</code> 会议管理 · <code>/workspace</code> 团队协作 · <code>/knowledge</code> 知识库 · <code>/drive</code> 课题组网盘 · <code>/settings</code> 个人设置 · <code>/dft</code> DFT/MD 计算</li>
+          <li><b>侧栏底部硬编码</b>：<code>/project-stats</code> 项目动态（无 meta.icon，走 sidebar-bottom）</li>
+          <li><b>已从侧栏隐藏、路由仍在</b>：<code>/drive/trash</code> 回收站、<code>/drive/requests</code> 文件请求（HIDDEN_PATHS，进 Drive 内部）、<code>/knowledge/graph</code>、<code>/admin/*</code> 深链</li>
+          <li><b>详情页路由</b>（侧栏不可见、跳进去只能浏览器返回）：<code>/meetings/:id</code> · <code>/knowledge/:id</code> · <code>/drive/file/:id</code>（+ comments / versions）· <code>/meetings/room</code></li>
+          <li><b>顶栏</b>：折叠键 Fold/Expand → 面包屑「首页 / 当前页」 → 右：NotificationBell（网盘 @ + 评论）、ThemeToggleButton、头像+用户名+角色（个人设置 / 退出登录）；侧栏 260px ⇄ 64px；另有全局「正在听会」浮动胶囊</li>
+        </ul>
+        <div class="warn"><b>顺手发现的真 bug</b>：<code>iconMap</code> 只登记了 9 个图标，缺 <code>Odometer</code>（仪表盘）与 <code>Cpu</code>（DFT/MD）→ 这两项在侧栏渲染成空白图标（<code>&lt;component :is="undefined"&gt;</code>）。任何一稿落地时一并修。</div>
+      </div>
+
+      <div class="box">
+        <h2>四稿共同解决的 3 个问题 <span>WHY</span></h2>
+        <ul>
+          <li><b>10 项平铺无分组</b>：仪表盘/DFT 这类「一级页面」和网盘/知识库这类「资料库」混在同一层，随功能增加只会更长（今天 10 项，v78 合并前是 13 项）。</li>
+          <li><b>详情页无处安放</b>：会议详情、知识详情、文件详情都没有返回锚点，多份资料对比只能靠浏览器前进后退。</li>
+          <li><b>侧栏与内容抢宽度</b>：网盘文件表、Agent Trace 等 19 张 el-table 页面在 260px 侧栏 + 24px padding 下横向空间吃紧。</li>
+        </ul>
+        <div class="warn" style="border-color:var(--teal)"><b style="color:var(--teal)">移动端不动</b>：TabBar 5 项（首页/听会/对话/任务/我的）已稳定，四稿均只改桌面 chrome。</div>
+      </div>
+    </section>
+  </header>
+
+  <div class="grid">
+    <article class="shot">
+      <div class="thumb"><span class="tag">E</span><iframe src="E-index.html" title="E 预览"></iframe></div>
+      <div class="info">
+        <h3>索引带双层导航 <small>INDEX RAIL</small></h3>
+        <p>76px 深色图标带只放 <b>5 个组</b>（今日 / 问答 / 研究 / 资料 / 账户），旁边常驻一列「当前组的完整清单」，带路由路径与计数。</p>
+        <ul>
+          <li>10 项压成 5 组，二级列随组切换且永不重叠</li>
+          <li>隐藏路由（回收站 / 文件请求 / 听会房间）在二级列里有归属</li>
+          <li>折叠 = 隐藏二级列 → 全站只剩 76px，比今天 64px 更省</li>
+          <li>代价：内容横向 −320px，宽表页需要副栏可关</li>
+        </ul>
+        <a href="E-index.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">F</span><iframe src="F-folders.html" title="F 预览"></iframe></div>
+      <div class="info">
+        <h3>档案夹双横排 <small>FOLDERS</small></h3>
+        <p><b>彻底取消侧栏</b>：第一排是全站 10 入口（分 3 段），第二排是「已打开的卷宗标签」—— 详情页像文件签一样可开可关、可横向对比。</p>
+        <ul>
+          <li>内容区满宽 1440px，19 张 el-table 页面受益最大</li>
+          <li>会议/知识/文件详情终于有了返回锚点与多开能力</li>
+          <li>与「研究档案」语言最贴：文件签 = 卷宗袋</li>
+          <li>代价：10 项横排到 1280px 以下会溢出，需要「…」收纳；改造面最大</li>
+        </ul>
+        <a href="F-folders.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">G</span><iframe src="G-split.html" title="G 预览"></iframe></div>
+      <div class="info">
+        <h3>分组清单 + 上下文副栏 <small>SPLIT</small></h3>
+        <p>最保守的一稿：侧栏还是那 10 项，但加 <b>3 个段落标题</b>和计数徽标；当前页有二级结构时右边多一列上下文（网盘=目录树、知识库=分类、会议=时间轴）。</p>
+        <ul>
+          <li>顶栏原样保留，用户零学习成本；主侧栏宽度 260→244px</li>
+          <li>回收站/文件请求作为「网盘内工具」回到视野，不违背 v2 PR7 决策</li>
+          <li>副栏可复用各视图已有的内部导航（Drive FolderTree 直接搬出来）</li>
+          <li>代价：平铺问题的根本解法只有分组，视觉层级仍偏传统</li>
+        </ul>
+        <a href="G-split.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+
+    <article class="shot">
+      <div class="thumb"><span class="tag">H</span><iframe src="H-command.html" title="H 预览"></iframe></div>
+      <div class="info">
+        <h3>暗色操作台 + 命令面板 <small>COMMAND</small></h3>
+        <p>常驻 chrome 只有一条 52px 顶栏 + 4 个组（hover 出清单），其余交给 <b>Ctrl K 命令面板</b>：跳转、检索全站、直接执行动作（生成纪要 / 跑 Gaussian / 问小气）三合一。</p>
+        <ul>
+          <li>内容区最宽，纵向也省 52px；深色与登录页/设置页暗形态同族</li>
+          <li>把「找页面」和「让 agent 干活」合并成一个入口，契合 AI 助手定位</li>
+          <li>⌘1-4 切组 + ⌘B 钉住侧栏 = 新旧两种习惯都保住</li>
+          <li>代价：新手发现性最差，需要首次进入的引导；纯键盘方案对 20 人组里非技术成员有门槛</li>
+        </ul>
+        <a href="H-command.html" target="_blank">打开全屏 →</a>
+      </div>
+    </article>
+  </div>
+
+  <footer>
+    <b>怎么选：</b>回复字母即可（如「导航用 G」），也可以混搭（如「E 的 5 组分组 + G 的上下文副栏」「G 的分组 + F 的卷宗标签」）。<br>
+    <b>落地范围：</b>选定后改 <code>web/src/layouts/MainLayout.vue</code>（904 行，模板 + CSS 为主）与 <code>web/src/assets/variables.css</code>（新增分组 token），<b>0 视图业务代码改动</b>；分组关系用 <code>router/index.js</code> 的 <code>meta.group</code> 声明而不是硬编码数组，避免下次合并路由又漂移。顺带修 <code>iconMap</code> 缺 Odometer/Cpu。移动端 TabBar 与 12 个 mobile 视图不动。
+  </footer>
+</body>
+</html>

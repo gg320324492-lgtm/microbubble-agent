@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>M · 维度分工 · 项目透镜 — 仪表盘/任务页去重方案</title>
+<style>
+  :root { --bg:#10171b; --card:#18232a; --line:#27363e; --text:#dfe9e6; --muted:#8ba0a0; --teal:#35c2a4; --coral:#ef7256;
+    --paper:#f4f6f4; --chrome:#eaece7; --cardw:#fdfefc; --ink:#16232a; --steel:#5a6b6a; --fog:#8ba0a0; --hair:#c9d2ca;
+    --dteal:#0e766e; --dteal-soft:#dcece5; --green:#3d7a3d; --amber:#c07f2e; --shadow:rgba(22,35,42,.14);
+    --serif:Georgia,"Songti SC","SimSun",serif; --sans:"PingFang SC","Microsoft YaHei",sans-serif; --mono:Consolas,"Courier New",monospace; }
+  .frame[data-dark] { --paper:#10171b; --chrome:#0c1215; --cardw:#18232a; --ink:#dfe9e6; --steel:#9ab0ae; --fog:#6b8286; --hair:#27363e; --dteal:#35c2a4; --dteal-soft:#12312b; --shadow:rgba(0,0,0,.5); }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);padding:36px 24px 64px}
+  .page{max-width:1500px;margin:0 auto}
+  .meta{font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;color:var(--teal);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+  .meta h1{font-family:var(--sans);font-size:17px;letter-spacing:0;color:var(--text);font-weight:600}
+  .darkbtn{font-family:var(--mono);font-size:11px;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer}
+  .darkbtn:hover{border-color:var(--teal);color:var(--teal)}
+  svg.s{width:16px;height:16px;flex-shrink:0;display:block}
+  h2.sec{font-size:12px;font-family:var(--mono);letter-spacing:.2em;color:var(--muted);margin:30px 0 12px;display:flex;align-items:center;gap:10px}
+  h2.sec::after{content:'';flex:1;border-top:1px dashed var(--line)}
+  .lede{margin-top:10px;font-size:12.5px;color:var(--muted);line-height:1.8;max-width:1100px}
+  .frame{background:var(--paper);color:var(--ink);border:1px solid var(--line);border-radius:14px;overflow:hidden;padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .frame.one{grid-template-columns:1fr}
+  .pg{border:1px solid var(--hair);border-radius:10px;background:var(--chrome);box-shadow:3px 3px 0 var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+  .pg-bar{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--hair);font-size:11px;color:var(--steel);background:var(--cardw)}
+  .pg-bar .t{font-family:var(--mono);letter-spacing:.12em;font-size:9px;color:var(--fog);margin-left:auto}
+  .pg-body{padding:12px;display:flex;flex-direction:column;gap:9px}
+  .blk{border:1px solid var(--hair);border-radius:7px;padding:9px 11px;position:relative;background:var(--cardw)}
+  .blk .bt{font-size:11.5px;font-weight:600}
+  .blk .bs{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--fog);margin-top:3px;line-height:1.6}
+  .blk.dup{border:1.5px dashed var(--coral);background:repeating-linear-gradient(135deg,transparent 0 8px,rgba(239,114,86,.09) 8px 16px)}
+  .blk.new{border:1.5px solid var(--dteal);box-shadow:2px 2px 0 rgba(14,118,110,.18)}
+  .blk.ghost{opacity:.45}
+  .blk.ghost .bt{text-decoration:line-through}
+  .tagpin{position:absolute;top:-8px;right:8px;background:var(--cardw);border:1px solid var(--dteal);color:var(--dteal);font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;padding:1px 7px;border-radius:3px}
+  .tagpin.red{border-color:var(--coral);color:var(--coral)}
+  .nrow{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--hair);font-size:11px}
+  .nrow:last-child{border-bottom:none}
+  .nrow .who{width:20px;height:20px;border-radius:50%;border:1px solid var(--dteal);color:var(--dteal);display:grid;place-items:center;font-size:9.5px;font-weight:700;background:transparent}
+  .chip{font-family:var(--mono);font-size:8.5px;border:1px solid currentColor;border-radius:3px;padding:0 5px;letter-spacing:.06em}
+  .c-hi{color:var(--coral)} .c-md{color:var(--amber)} .c-st{color:var(--dteal)} .c-dn{color:var(--green)}
+  .due{font-family:var(--mono);font-size:9.5px;color:var(--steel)} .due.late{color:var(--coral);font-weight:700}
+  .stats3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .st{border:1px solid var(--hair);border-radius:7px;padding:8px 10px;position:relative;background:var(--cardw)}
+  .st::after{content:'';position:absolute;inset:0;border:1px dashed var(--hair);border-radius:7px;margin:3px;pointer-events:none}
+  .st .n{font-family:var(--mono);font-size:21px;font-weight:700}
+  .st .l{font-size:10px;color:var(--steel)}
+  .st.t .n{color:var(--dteal)} .st.g .n{color:var(--green)} .st.c .n{color:var(--coral)}
+  .brief{border:1.5px solid var(--ink);border-radius:8px;padding:11px 13px;position:relative;background:var(--cardw)}
+  .brief .tag{position:absolute;top:-8px;left:12px;background:var(--cardw);border:1px solid var(--dteal);color:var(--dteal);font-family:var(--mono);font-size:8px;letter-spacing:.18em;padding:1px 8px;border-radius:3px}
+  .brief h3{font-family:var(--serif);font-size:16px;font-weight:600}
+  .feed3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .meter{height:6px;border:1px solid var(--hair);border-radius:3px;overflow:hidden;background:var(--cardw);margin-top:5px}
+  .meter i{display:block;height:100%;background:var(--dteal)}
+  .notes{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px 26px;font-size:12.5px;color:var(--muted);line-height:1.8}
+  .notes li{list-style:none;padding-left:16px;position:relative}
+  .notes li::before{content:'·';position:absolute;left:2px;color:var(--teal)}
+  .notes code{font-family:var(--mono);font-size:11px;color:var(--teal)}
+  .notes b{color:var(--text)}
+  .verdict{margin-top:22px;display:flex;gap:14px;align-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.12em}
+  .verdict b{border:1.5px solid var(--teal);color:var(--teal);border-radius:6px;padding:6px 14px}
+  .verdict .risk-b{border-color:var(--coral);color:var(--coral)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-gauge" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.3a5.5 5.5 0 1 1 10 0"/><path d="M8 9.1 10.7 6.5"/><circle cx="8" cy="9.1" r=".9" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-chat" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="12" height="9" rx="2"/><path d="M5.6 11.5 4.6 14.4 8.4 11.5"/><circle cx="6" cy="7" r=".85" fill="currentColor" stroke="none"/><circle cx="10" cy="7" r=".85" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-list" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h7.5M6 8h7.5M6 12h7.5"/><circle cx="2.9" cy="4" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="8" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="12" r=".95" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-camera" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="9.5" height="8" rx="1.5"/><path d="M11.5 7 14.6 4.9v6.2L11.5 9"/></symbol>
+<symbol id="i-files" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="1.5" width="9" height="11" rx="1.8"/><path d="M5.4 14.5H11a2 2 0 0 0 2-2V6.6"/></symbol>
+<symbol id="i-doc" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 1.8H4.3a1.5 1.5 0 0 0-1.5 1.5v9.4a1.5 1.5 0 0 0 1.5 1.5h7.4a1.5 1.5 0 0 0 1.5-1.5V5.6L9.2 1.8Z"/><path d="M9.2 1.8v3.8h4"/><path d="M5.6 8.8h4.8M5.6 11.2h3.4"/></symbol>
+<symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 3.9a1.6 1.6 0 0 1 1.6-1.6h3.1c.5 0 1 .2 1.3.6l1 1.2h3.8a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H3.4a1.6 1.6 0 0 1-1.6-1.6V3.9Z"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h7M12.5 4.5h1.5M2 11.5h1.5M7 11.5h7"/><circle cx="10.7" cy="4.5" r="1.7"/><circle cx="4.8" cy="11.5" r="1.7"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/><rect x="6.4" y="6.4" width="3.2" height="3.2" rx=".5"/><path d="M6 1.6v1.9M10 1.6v1.9M6 12.5v1.9M10 12.5v1.9M1.6 6h1.9M1.6 10h1.9M12.5 6h1.9M12.5 10h1.9"/></symbol>
+<symbol id="i-board" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 2.4v11h11"/><path d="M6 12.2V9M8.8 12.2V5.6M11.6 12.2V7.6"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h11M10 4l4 4-4 4"/></symbol>
+<symbol id="i-clock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8l2.4 1.6"/></symbol>
+<symbol id="i-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="m5.4 8.2 1.8 1.8 3.4-4"/></symbol>
+<symbol id="i-aim" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2"/></symbol>
+</defs></svg>
+
+<div class="page">
+  <div class="meta">
+    <span>TASKS/DASH DEDUP PROPOSAL M · 2026-09</span>
+    <h1>M 稿 · 维度分工 · 项目透镜</h1>
+    <button class="darkbtn" onclick="document.querySelectorAll('.frame').forEach(f=>f.toggleAttribute('data-dark'))">☾ 夜览</button>
+  </div>
+  <h2 class="sec">BEFORE · 现状重叠面</h2>
+  <div class="frame">
+    <div class="pg">
+      <div class="pg-bar"><svg class="s"><use href="#i-gauge"/></svg> 仪表盘 /dashboard<span class="t">DAILY BRIEF</span></div>
+      <div class="pg-body">
+        <div class="blk keep"><div class="bt">卷首 DAILY BRIEF</div><div class="bs">问候 + 团队快照 · 保留</div></div>
+        <div class="blk keep"><div class="bt">统计三卡 19 / 75 / 7</div><div class="bs">趋势 sparkline · 保留</div></div>
+        <div class="blk dup"><span class="tagpin red">DUP</span><div class="bt">进行中任务 · 按负责人分组 (20 行, 带完成按钮)</div><div class="bs">≈ /tasks 主列表的只读+写子集</div></div>
+      </div>
+    </div>
+    <div class="pg">
+      <div class="pg-bar"><svg class="s"><use href="#i-list"/></svg> 任务管理 /tasks<span class="t">TASK DOSSIER</span></div>
+      <div class="pg-body">
+        <div class="blk keep"><div class="bt">卷首计数行 20·75·95</div><div class="bs">与三卡/侧栏徽标数字同源</div></div>
+        <div class="blk dup"><span class="tagpin red">DUP</span><div class="bt">负责人配对卷宗 (左进行中/右已完成) + 筛选 + 垃圾桶</div><div class="bs">完成/编辑/删除/批量 · 全功能</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="lede">两块红斜纹是同一份数据的两份视图: 仪表盘的分组列表 ⊂ /tasks 配对卷宗, 且都带「完成」写按钮。19/75/7 同时在仪表盘三卡、/tasks 卷首行、侧栏徽标出现三处。</p>
+  <h2 class="sec">AFTER · M 方案版面</h2>
+  
+  <div class="frame">
+    <div class="pg">
+      <div class="pg-bar"><svg class="s"><use href="#i-gauge"/></svg> 仪表盘 · 升维到项目/里程碑周报<span class="t">PROJECT LENS</span></div>
+      <div class="pg-body">
+        <div class="brief"><span class="tag">WEEKLY BRIEF · WK36</span><h3>本周组里在推什么</h3><div class="bs">3 项目 · 里程碑 M3 09/15 到期 · 速率 12/wk</div></div>
+        <div class="blk new"><span class="tagpin">NEW · 项目维度</span><div class="bt">微纳气泡稳定性研究 ▸ M3 中期评审 09/15</div><div class="bs">关联任务 9 · 逾期 2 · 本周完成 4</div><div class="meter"><i style="width:68%"></i></div></div>
+        <div class="blk"><div class="bt">产泡装置工程化 ▸ M1 选型</div><div class="bs">任务 6 · 逾期 3 · 完成 2</div><div class="meter"><i style="width:40%"></i></div></div>
+        <div class="blk"><div class="bt">大棚水质监测 ▸ M2 部署</div><div class="bs">任务 5 · 逾期 2 · 完成 6</div><div class="meter"><i style="width:85%"></i></div></div>
+        <div class="blk"><div class="bt">未立项 · 23 件</div><div class="bs">兜底组 (无 project_id 任务) → /tasks</div></div>
+      </div>
+    </div>
+    <div class="pg">
+      <div class="pg-bar"><svg class="s"><use href="#i-list"/></svg> 任务管理 · 人/状态维度 (原样)<span class="t">PEOPLE LENS</span></div>
+      <div class="pg-body">
+        <div class="blk keep"><div class="bt">负责人配对卷宗 + 筛选 + 垃圾桶</div><div class="bs">任务=人的动词; 项目=事的进度 — 维度正交后两页结构上不可能再重复</div></div>
+        <div class="blk new"><span class="tagpin">小补</span><div class="bt">/tasks?project_id=X 筛选</div><div class="bs">项目行点击跳卷宗按项目过滤 (TaskView filters.project_id 后端已支持则零改)</div></div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes"><li>釜底抽薪: 重复的根源是两页用<b>同一维度</b> (都按人列任务); 仪表盘换项目/里程碑透镜后天然正交</li>
+<li>信息增益最大: 现仪表盘看不到任何项目进度, 而这才是组长/PI 晨读最想要的</li>
+<li>数据现成: projects + milestones + task.project_id 均在库; 需一个小聚合端点 <code>/dashboard/project-weekly</code></li>
+<li>注意 未立项任务兜底组 (23 件, 占 24%), 否则周报数字对不上</li>
+<li>改动面: Dashboard.vue 版式重写 + 1 新 API; 后端有件但都是只读聚合</li></ul>
+  <div class="verdict"><b>EFFORT M</b><b class="">RISK M</b></div>
+</div>
+</body>
+</html>

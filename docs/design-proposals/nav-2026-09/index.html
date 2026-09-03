@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>导航壳层重设计 · 四版方案 · 2026-09</title>
+<style>
+  :root{
+    --paper:#FAF6EE; --ink:#2A2620; --ink2:#6B6257; --line:#D8CFBF;
+    --brand:#FF7A5C; --brand-deep:#C24A2E; --gold:#B98A2F; --teal:#2E7D6B;
+    --serif:"Noto Serif SC","Source Han Serif SC","Songti SC",SimSun,serif;
+    --sans:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#EDE7DB;font-family:var(--sans);color:var(--ink);padding:48px 0 80px}
+  .card{width:1080px;margin:0 auto 56px;background:#fff;border:1px solid #E2DACB;
+        border-radius:18px;padding:44px 48px 40px;position:relative;
+        box-shadow:0 24px 60px rgba(60,45,25,.10)}
+  .badge{position:absolute;top:0;right:0;background:var(--brand);color:#fff;
+         font:600 13px/1 var(--sans);letter-spacing:.12em;padding:10px 18px;border-radius:0 18px 0 14px}
+  .badge.reco{background:var(--brand-deep)}
+  .kicker{font:500 12px/1 var(--mono);letter-spacing:.42em;color:var(--teal);margin-bottom:14px}
+  h1{font:700 30px/1.25 var(--serif);letter-spacing:.04em;margin-bottom:10px}
+  .pitch{font:400 15px/1.75 var(--sans);color:#4A4238;max-width:860px;margin-bottom:28px}
+  .pitch b{color:var(--brand-deep)}
+  .notes{margin-top:26px;display:flex;flex-direction:column;gap:9px}
+  .notes li{list-style:none;font:400 13.5px/1.7 var(--sans);color:#4A4238;padding-left:16px;position:relative}
+  .notes li::before{content:"›";position:absolute;left:0;color:var(--brand);font-weight:700}
+  .notes b{color:var(--brand-deep)}
+  .stage{background:#F2EDE2;border:1.5px dashed #CFC4AE;border-radius:12px;padding:22px}
+  .caption{font:500 11px/1 var(--mono);letter-spacing:.18em;color:#9A8F7C;margin:8px 2px 12px;text-transform:uppercase}
+
+  /* ============ 通用壳层几何 ============ */
+  .shell{display:grid;grid-template-columns:236px 1fr;grid-template-rows:52px 1fr;
+         height:420px;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,.14)}
+  .side{grid-row:1/3;overflow:hidden;position:relative}
+  .head{display:flex;align-items:center;padding:0 16px;gap:12px;position:relative}
+  .crumb{font:500 13px/1 var(--sans)}
+  .head-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .main{position:relative;overflow:hidden}
+  .peek{position:absolute;inset:14px 0 0 18px;width:64%}
+  .peek .ph{border-radius:8px;background:#fff;border:1px solid var(--line);padding:12px 14px;margin-bottom:10px;
+            box-shadow:0 2px 6px rgba(60,45,25,.05)}
+  .peek .l{height:8px;border-radius:4px;background:#EAE3D4;margin-bottom:7px}
+  .peek .l.w40{width:40%}.peek .l.w70{width:70%}.peek .l.w55{width:55%}
+  .peek .big{font:700 26px/1 var(--serif);color:var(--teal)}
+
+  .samples{display:flex;gap:18px;margin-top:18px;align-items:flex-start}
+  .sample{flex:1;background:#fff;border:1px solid #E4DCCB;border-radius:10px;padding:12px;position:relative}
+  .sample .tag{font:500 10px/1 var(--mono);letter-spacing:.14em;color:#A39880;margin-bottom:8px;text-transform:uppercase}
+
+  /* =====================================================
+     A · 课题组年鉴 (ALMANAC BINDING)
+     ===================================================== */
+  #card-a .shell{background:var(--paper);border-color:#C9BDA4;
+                 box-shadow:inset 0 0 0 1px #fff}
+  #card-a .side{background:#FBF8F1;border-right:1px solid #D9CFBB;
+                box-shadow:3px 0 0 -1px #FBF8F1,4px 0 0 -1px #E4DCC8}
+  #card-a .logo{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;border-bottom:3px double #C9BDA4}
+  #card-a .logo .seal{width:34px;height:34px;border-radius:50%;border:1.5px solid var(--brand-deep);color:var(--brand-deep);
+                      display:grid;place-items:center;font:700 16px/1 var(--serif)}
+  #card-a .logo .t{font:700 17px/1.15 var(--serif);letter-spacing:.18em}
+  #card-a .logo .s{font:400 9px/1 var(--mono);letter-spacing:.28em;color:#9A8F7C;margin-top:3px}
+  #card-a .idx-label{font:500 10px/1 var(--mono);letter-spacing:.34em;color:#A39880;padding:14px 18px 8px}
+  #card-a nav a{display:flex;align-items:baseline;gap:6px;padding:9px 18px;
+                font:500 14.5px/1.3 var(--serif);letter-spacing:.1em;color:var(--ink);text-decoration:none}
+  #card-a nav a .dotl{flex:1;border-bottom:1.5px dotted #C9BDA4;transform:translateY(-3px)}
+  #card-a nav a .no{font:500 11px/1 var(--mono);color:#9A8F7C}
+  #card-a nav a.on{color:var(--brand-deep);font-weight:700}
+  #card-a nav a.on .dotl{border-bottom-color:var(--brand-deep)}
+  #card-a nav a.on .no{color:var(--brand-deep)}
+  #card-a nav a.hov{background:#F3ECDD;border-left:3px solid var(--gold);padding-left:15px;font-style:italic}
+  #card-a .ribbon{position:absolute;right:26px;width:16px;height:34px;background:var(--brand);
+                  clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);box-shadow:0 2px 4px rgba(0,0,0,.18)}
+  #card-a .foot{position:absolute;left:0;right:0;bottom:0;border-top:3px double #C9BDA4;padding:10px 18px;
+                font:500 12.5px/1 var(--serif);letter-spacing:.14em;color:#6B6257;display:flex;justify-content:space-between}
+  #card-a .foot .no{font:500 10px/1 var(--mono);color:#A39880}
+  #card-a .head{background:#FBF8F1;border-bottom:1px solid #D9CFBB;
+                box-shadow:0 3px 0 -2px #D9CFBB}
+  #card-a .head .runhead{font:500 11px/1 var(--mono);letter-spacing:.3em;color:#6B6257;text-transform:uppercase}
+  #card-a .head .folio{font:500 11px/1 var(--mono);color:#9A8F7C;letter-spacing:.08em}
+  #card-a .head .who{display:flex;align-items:center;gap:8px}
+  #card-a .head .ini{width:26px;height:26px;border-radius:50%;background:#2A2620;color:#FBF8F1;
+                     display:grid;place-items:center;font:700 12px/1 var(--serif)}
+  #card-a .head .nm{font:600 12.5px/1.2 var(--serif);letter-spacing:.06em}
+  #card-a .head .role{display:block;font:400 9px/1.4 var(--mono);letter-spacing:.2em;color:#9A8F7C}
+  #card-a .main{background:var(--paper)}
+  /* rail 版 = 书脊 */
+  #card-a .spine{height:150px;width:64px;background:#2A2620;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  #card-a .spine .vt{writing-mode:vertical-rl;font:700 13px/1 var(--serif);letter-spacing:.3em;color:#E8DFC8}
+  #card-a .spine::before,#card-a .spine::after{content:"";position:absolute;left:6px;right:6px;height:2px;background:#B98A2F}
+  #card-a .spine::before{top:10px}#card-a .spine::after{bottom:10px}
+  #card-a .marks{display:flex;flex-direction:column;gap:8px}
+  #card-a .marks i{width:8px;height:22px;border-radius:2px;background:var(--brand);display:block}
+  #card-a .marks i:nth-child(2){background:var(--gold)}#card-a .marks i:nth-child(3){background:var(--teal)}
+
+  /* =====================================================
+     B · 标本卡片目录 (CARD CATALOG)
+     ===================================================== */
+  #card-b .shell{background:#EFE9DC;border-color:#B9AE94}
+  #card-b .side{background:#E9E2D1;border-right:2px solid #C6B999;padding-top:0}
+  #card-b .logo{display:flex;align-items:center;gap:10px;padding:14px 16px;
+                background:#DED4BB;border-bottom:2px solid #C6B999}
+  #card-b .logo .plate{width:34px;height:34px;border-radius:6px;background:linear-gradient(160deg,#D8B96A,#A67C2E);
+                       display:grid;place-items:center;color:#fff;font:700 15px/1 var(--serif);
+                       box-shadow:inset 0 1px 2px rgba(255,255,255,.6),0 1px 2px rgba(0,0,0,.25)}
+  #card-b .logo .t{font:700 15px/1.2 var(--sans);letter-spacing:.08em}
+  #card-b .logo .s{font:500 9px/1 var(--mono);letter-spacing:.22em;color:#8A7C58}
+  #card-b nav{padding:12px 12px 0}
+  #card-b .drawer{display:flex;align-items:center;gap:9px;padding:7px 9px;margin-bottom:9px;
+                  background:#F7F2E4;border:1px solid #C6B999;border-radius:5px;
+                  box-shadow:0 2px 0 #D5C8A6,0 4px 8px rgba(90,70,30,.10);position:relative;
+                  font:500 13.5px/1.3 var(--sans);letter-spacing:.06em}
+  #card-b .drawer .cn{font:600 10px/1 var(--mono);color:var(--teal);background:#E4EFE9;
+                      border:1px solid #BCD4C8;border-radius:3px;padding:4px 5px;letter-spacing:.04em}
+  #card-b .drawer .knob{width:22px;height:7px;border-radius:4px;background:linear-gradient(#D8B96A,#9E7629);margin-left:auto;flex:none}
+  #card-b .drawer.on{background:#FFFDF4;transform:translateX(6px);
+                     border-color:#A67C2E;box-shadow:0 2px 0 #C6B999,6px 8px 14px rgba(90,70,30,.22)}
+  #card-b .drawer.on::after{content:"当前柜位";position:absolute;top:-8px;left:34px;
+                            font:500 8.5px/1 var(--mono);letter-spacing:.2em;color:#fff;background:#A67C2E;
+                            padding:3px 7px;border-radius:3px}
+  #card-b .drawer.hov{transform:translateX(2px);box-shadow:0 2px 0 #D5C8A6,3px 5px 9px rgba(90,70,30,.15)}
+  #card-b .foot{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;border-top:2px solid #C6B999;
+                background:#DED4BB;font:600 12px/1 var(--sans);letter-spacing:.1em;color:#5E5335;display:flex;gap:8px;align-items:center}
+  #card-b .foot .cn{font:600 10px/1 var(--mono);color:var(--teal)}
+  #card-b .head{background:#D9CEB2;border-bottom:2px solid #B9AE94}
+  #card-b .head .stamper{font:700 12px/1 var(--mono);letter-spacing:.22em;color:#fff;background:#8A4A32;
+                         padding:7px 10px;border-radius:4px;transform:rotate(-2deg);
+                         box-shadow:1px 2px 0 rgba(0,0,0,.15);text-transform:uppercase}
+  #card-b .head .crumb{color:#5E5335}
+  #card-b .plate-who{display:flex;align-items:center;gap:8px;background:linear-gradient(160deg,#F2E3B8,#CDA74E);
+                     border:1px solid #9E7629;border-radius:16px;padding:4px 12px 4px 4px;position:relative}
+  #card-b .plate-who::before,#card-b .plate-who::after{content:"";position:absolute;width:4px;height:4px;border-radius:50%;
+                     background:radial-gradient(circle at 35% 35%,#fff,#7A5B1E);top:50%;transform:translateY(-50%)}
+  #card-b .plate-who::before{left:6px}#card-b .plate-who::after{right:6px}
+  #card-b .plate-who .ini{width:24px;height:24px;margin-left:10px;border-radius:50%;background:#5E5335;color:#F2E3B8;
+                          display:grid;place-items:center;font:700 11px/1 var(--serif)}
+  #card-b .plate-who .nm{font:700 11.5px/1.15 var(--sans);letter-spacing:.08em;color:#4A3F22}
+  #card-b .plate-who .role{font:500 8px/1.3 var(--mono);letter-spacing:.18em;color:#7A5B1E}
+  #card-b .main{background:#F4EFE2}
+  #card-b .tray{background:#F7F2E4;border:1px solid #C6B999;border-radius:5px;padding:9px 10px;font:500 12px/1.5 var(--sans);color:#5E5335}
+  #card-b .tray .cn{font:600 10px/1 var(--mono);color:var(--teal);display:block;margin-bottom:3px}
+
+  /* =====================================================
+     C · 仪器机架 (INSTRUMENT RACK)
+     ===================================================== */
+  #card-c .shell{background:#1E2126;border-color:#000}
+  #card-c .side{background:#22262C;border-right:1px solid #000}
+  #card-c .logo{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #101216;
+                box-shadow:0 1px 0 #333941}
+  #card-c .logo .led{width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#FFD9A8,var(--brand));
+                     box-shadow:0 0 8px rgba(255,122,92,.9)}
+  #card-c .logo .t{font:600 13px/1 var(--mono);letter-spacing:.24em;color:#E8E4DA}
+  #card-c .unit{padding:12px 14px 4px;font:500 9px/1 var(--mono);letter-spacing:.3em;color:#5D6570}
+  #card-c .chan{display:flex;align-items:center;gap:10px;padding:11px 14px;margin:0 10px 6px;
+                border:1px solid #2E333A;border-radius:4px;background:linear-gradient(#282D34,#22262C);
+                font:500 12px/1 var(--mono);letter-spacing:.16em;color:#B8BEC8;position:relative}
+  #card-c .chan .led{width:7px;height:7px;border-radius:50%;background:#3A4048;flex:none}
+  #card-c .chan .ch{margin-left:auto;font-size:9px;letter-spacing:.14em;color:#5D6570}
+  #card-c .chan.on{border-color:var(--brand);background:linear-gradient(#2E2A26,#25252A);color:#FFD9C9;
+                   box-shadow:inset 0 0 14px rgba(255,122,92,.14)}
+  #card-c .chan.on .led{background:radial-gradient(circle at 35% 35%,#FFD9A8,var(--brand));box-shadow:0 0 7px rgba(255,122,92,.9)}
+  #card-c .chan.on .ch{color:var(--brand)}
+  #card-c .chan.hov{border-color:#4A525C;color:#DDE2E8}
+  #card-c .chan.hov .led{background:#7FA88F}
+  #card-c .foot{position:absolute;left:0;right:0;bottom:0;border-top:1px solid #101216;background:#1B1E23;
+                padding:10px 16px;display:flex;justify-content:space-between;
+                font:500 10px/1 var(--mono);letter-spacing:.22em;color:#8B93A0}
+  #card-c .head{background:#22262C;border-bottom:1px solid #000;box-shadow:0 1px 0 #333941}
+  #card-c .lcd{font:600 11px/1 var(--mono);letter-spacing:.2em;color:#9FE8B6;background:#14181A;
+               border:1px solid #2E333A;border-radius:3px;padding:7px 10px;text-shadow:0 0 6px rgba(159,232,182,.55)}
+  #card-c .lamps{display:flex;gap:12px;align-items:center}
+  #card-c .lamps .lamp{display:flex;gap:5px;align-items:center;font:500 8.5px/1 var(--mono);letter-spacing:.18em;color:#5D6570}
+  #card-c .lamps .lamp i{width:6px;height:6px;border-radius:50%;background:#3A4048;display:block}
+  #card-c .lamps .lamp.ok i{background:#7FBF8F;box-shadow:0 0 5px rgba(127,191,143,.8)}
+  #card-c .lamps .lamp.rec i{background:#E2483D;box-shadow:0 0 5px rgba(226,72,61,.9);animation:none}
+  #card-c .badge-who{display:flex;align-items:center;gap:8px;background:#282D34;border:1px solid #2E333A;
+                     border-radius:3px;padding:4px 10px 4px 4px}
+  #card-c .badge-who .ini{width:24px;height:24px;border-radius:2px;background:#E8E4DA;color:#22262C;
+                          display:grid;place-items:center;font:700 11px/1 var(--mono)}
+  #card-c .badge-who .nm{font:600 10.5px/1.3 var(--mono);letter-spacing:.12em;color:#DDE2E8}
+  #card-c .badge-who .role{font:500 8px/1.3 var(--mono);letter-spacing:.2em;color:#5D6570}
+  #card-c .main{background:#F2EFE8}
+  #card-c .bezel{height:190px;border-radius:6px;background:linear-gradient(#2A2F36,#22262C);border:1px solid #101216;
+                 display:grid;place-items:center;margin:22px 0 0 24px;width:62%;position:relative}
+  #card-c .bezel .scr{width:78%;height:64%;border-radius:4px;background:#14181A;border:1px solid #000;
+                      display:grid;place-items:center;box-shadow:inset 0 0 22px rgba(159,232,182,.06)}
+  #card-c .bezel .scr span{font:600 10px/1.8 var(--mono);letter-spacing:.22em;color:#9FE8B6;text-align:center}
+  #card-c .knurls{display:flex;gap:4px;position:absolute;right:10px;top:50%;transform:translateY(-50%)}
+  #card-c .knurls i{width:5px;height:34px;border-radius:2px;display:block;
+                    background:repeating-linear-gradient(#3A4048 0 2px,#22262C 2px 4px)}
+  #card-c .sample{background:#22262C;border-color:#101216}
+  #card-c .sample .tag{color:#5D6570}
+  #card-c .rail{height:150px;width:56px;background:#22262C;border:1px solid #000;border-radius:6px;padding:8px 6px;display:flex;flex-direction:column;gap:7px;align-items:center}
+  #card-c .rail i{width:7px;height:7px;border-radius:50%;background:#3A4048;display:block}
+  #card-c .rail i.on{background:var(--brand);box-shadow:0 0 7px rgba(255,122,92,.9)}
+  #card-c .rail i.hov{background:#7FA88F}
+  #card-c .strip{display:flex;gap:10px;align-items:center;background:#2E2622;border:1px solid #6B3B2E;border-radius:4px;
+                 padding:8px 12px;font:500 10px/1.6 var(--mono);letter-spacing:.14em;color:#FFD9C9}
+  #card-c .strip .rec{width:8px;height:8px;border-radius:50%;background:#E2483D;box-shadow:0 0 6px rgba(226,72,61,.9)}
+
+  /* =====================================================
+     D · 田野手账 (FIELD NOTEBOOK)
+     ===================================================== */
+  #card-d .shell{background:#FBFAF4;border-color:#C9C2AE;
+                 box-shadow:inset 0 0 0 1px #fff}
+  #card-d .side{width:236px;background:
+      linear-gradient(#F3F6FA 0 0) 0 0/100% 24px no-repeat,
+      repeating-linear-gradient(#FDFDF8 0 47px,#DCE6F0 47px 48px),
+      repeating-linear-gradient(90deg,#FDFDF8 0 47px,#F2F4EC 47px 48px);
+      border-right:2px solid #C9C2AE;position:relative}
+  #card-d .logo{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:2px solid #C9C2AE;
+                background:#FBFAF4}
+  #card-d .logo .stamp{width:34px;height:34px;border-radius:8px;border:2px solid var(--brand);color:var(--brand-deep);
+                       display:grid;place-items:center;font:800 15px/1 var(--sans);transform:rotate(-6deg)}
+  #card-d .logo .t{font:800 16px/1.2 var(--sans);letter-spacing:.06em}
+  #card-d .logo .s{font:600 9.5px/1 var(--mono);letter-spacing:.16em;color:#8F9B7A}
+  #card-d nav{padding:16px 0 0;position:relative;z-index:2}
+  #card-d .tabrow{position:relative;margin:0 0 10px}
+  #card-d .tabrow a{display:flex;align-items:center;gap:9px;margin-right:26px;padding:9px 12px 9px 14px;
+                    background:#fff;border:1.5px solid #C9C2AE;border-right:none;border-radius:8px 0 0 8px;
+                    font:700 13.5px/1.2 var(--sans);letter-spacing:.08em;color:#4A4A3C;text-decoration:none;
+                    box-shadow:0 1px 0 rgba(0,0,0,.04)}
+  #card-d .tabrow .chk{width:14px;height:14px;border:1.8px solid #8A9A7B;border-radius:3px;flex:none;position:relative}
+  #card-d .tabrow.done .chk::after{content:"✓";position:absolute;inset:-4px 0 0 1px;color:#5E8C4F;font:800 14px/1 var(--sans)}
+  #card-d .tabrow .lip{position:absolute;right:0;top:-2px;bottom:-2px;width:26px;border-radius:0 12px 12px 0;
+                       display:grid;place-items:center;color:#fff;font:800 10px/1 var(--mono)}
+  #card-d .t1 .lip{background:#8FAC86}#card-d .t2 .lip{background:#E9A184}#card-d .t3 .lip{background:#C8B45E}
+  #card-d .t4 .lip{background:#86A2B8}#card-d .t5 .lip{background:#B090BF}#card-d .t6 .lip{background:#D98A6A}
+  #card-d .tabrow.on a{background:#FFF;border-bottom-width:3px;border-color:#C9C2AE;font-weight:800;
+                       transform:translateX(4px);margin-right:22px}
+  #card-d .tabrow.on .lip{width:30px;top:-5px;bottom:-5px}
+  #card-d .tabrow.hov a{background:#FFFDF2;border-color:#A8B48F}
+  #card-d .foot{position:absolute;left:0;right:0;bottom:0;z-index:3;background:#FBFAF4;border-top:2px dashed #C9C2AE;
+                padding:12px 16px;display:flex;align-items:center;gap:10px;
+                font:700 12.5px/1 var(--sans);letter-spacing:.1em;color:#6B6B55}
+  #card-d .foot .sticky{width:20px;height:20px;background:#F7D94A;transform:rotate(6deg);border-radius:2px;
+                        box-shadow:1px 2px 3px rgba(0,0,0,.15);display:grid;place-items:center;font:800 11px/1 var(--sans);color:#6B5A00}
+  #card-d .head{background:#FBFAF4;border-bottom:2px solid #C9C2AE;position:relative}
+  #card-d .tape{position:relative;background:rgba(222,230,214,.85);border-left:1px dashed #A8B48F;border-right:1px dashed #A8B48F;
+                padding:5px 16px;font:700 12px/1 var(--sans);letter-spacing:.14em;color:#4A5A3C;transform:rotate(-.6deg)}
+  #card-d .sticker{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px dashed #C9A28F;border-radius:999px;
+                   padding:3px 12px 3px 3px;box-shadow:1px 2px 0 rgba(0,0,0,.06)}
+  #card-d .sticker .ini{width:26px;height:26px;border-radius:50%;background:#F2B88A;color:#7A4A22;
+                        display:grid;place-items:center;font:800 12px/1 var(--sans)}
+  #card-d .sticker .nm{font:800 12px/1.1 var(--sans)}
+  #card-d .sticker .role{font:600 8.5px/1.3 var(--mono);letter-spacing:.16em;color:#B98A6B}
+  #card-d .pen{font:400 16px/1 var(--sans);color:#8A9A7B}
+  #card-d .main{background:
+      repeating-linear-gradient(#FDFDF8 0 47px,#EFF2E8 47px 48px)}
+  #card-d .note{position:absolute;top:18px;left:20px;width:56%;background:#FFF;
+                border:1.5px solid #C9C2AE;border-radius:4px;padding:14px 16px;
+                box-shadow:3px 4px 0 rgba(0,0,0,.05);transform:rotate(.4deg)}
+  #card-d .note .h{font:800 14px/1.4 var(--sans);letter-spacing:.08em;margin-bottom:8px}
+  #card-d .note .h em{font-style:normal;background:linear-gradient(transparent 62%,#F7D94A80 62%)}
+  #card-d .note .l{height:9px;border-radius:2px;background:#E9ECDF;margin-bottom:8px}
+  #card-d .note .l.w60{width:60%}#card-d .note .l.w80{width:80%}
+  #card-d .mini{background:#fff;border:1.5px solid #C9C2AE;border-radius:8px;padding:8px 8px 8px 12px;display:flex;gap:8px;align-items:center;
+                font:700 12px/1 var(--sans);color:#4A4A3C;position:relative;margin-right:22px}
+  #card-d .mini .lip{position:absolute;right:-14px;top:-3px;bottom:-3px;width:16px;border-radius:0 8px 8px 0;background:#E9A184;display:grid;place-items:center;color:#fff;font:800 9px/1 var(--mono)}
+  #card-d .mini.half{opacity:.85;margin-right:34px;transform:translateX(-6px)}
+  #card-d .mini.half .lip{background:#C8B45E}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ A · 课题组年鉴 ═══════════════ -->
+<section class="card" id="card-a">
+  <div class="badge reco">A · 推荐</div>
+  <div class="kicker">CONCEPT A · ALMANAC BINDING</div>
+  <h1>课题组年鉴</h1>
+  <p class="pitch">整个应用合订成一本<b>年鉴</b>：侧栏是目录页，每个导航项用「条目 + 点线 + 卷次编号」的书籍目录排法；顶栏是<b>书眉</b>（running head + 页码 folio）。当前页用一条<b>红丝带书签</b>标记。沉稳、正式、有机构感，和已上线的档案化对话页/仪表盘同一血脉。</p>
+  <div class="stage">
+    <div class="caption">完整壳层 · 知识库悬停 + 仪表盘当前页</div>
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><div class="seal">气</div><div><div class="t">小气助手</div><div class="s">MICROBUBBLE ALMANAC</div></div></div>
+        <div class="idx-label">INDEX · 目录</div>
+        <nav>
+          <a class="on" href="#">仪表盘<span class="dotl"></span><span class="no">01</span></a>
+          <a href="#">智能对话<span class="dotl"></span><span class="no">02</span></a>
+          <a href="#">任务管理<span class="dotl"></span><span class="no">03</span></a>
+          <a href="#">会议管理<span class="dotl"></span><span class="no">04</span></a>
+          <a href="#">团队协作<span class="dotl"></span><span class="no">05</span></a>
+          <a class="hov" href="#">知识库<span class="dotl"></span><span class="no">06</span></a>
+          <a href="#">课题组网盘<span class="dotl"></span><span class="no">07</span></a>
+          <a href="#">个人设置<span class="dotl"></span><span class="no">08</span></a>
+          <a href="#">DFT/MD 计算<span class="dotl"></span><span class="no">09</span></a>
+        </nav>
+        <div class="ribbon" style="top:78px"></div>
+        <div class="foot"><span>项目动态</span><span class="no">APX</span></div>
+      </aside>
+      <header class="head">
+        <span style="font:600 14px/1 var(--serif);color:#8A8172">☰</span>
+        <span class="runhead">首页 · 仪表盘</span>
+        <div class="head-right">
+          <span class="folio">2026·09 No.47</span><span class="folio">☾</span><span class="folio">◔ 12</span>
+          <div class="who"><div class="ini">杜</div><div><span class="nm">杜同贺</span><span class="role">ADMIN</span></div></div>
+        </div>
+      </header>
+      <main class="main"><div class="peek">
+        <div class="ph"><div class="l w40"></div><div class="l w70"></div><div class="l w55"></div></div>
+        <div class="ph"><div class="l w40"></div><div class="big">17</div></div>
+      </div></main>
+    </div>
+    <div class="samples">
+      <div class="sample"><div class="tag">折叠态 · 书脊模式</div>
+        <div style="display:flex;gap:12px"><div class="spine"><span class="vt">小气助手 · 课题组年鉴</span></div>
+        <div class="marks" style="padding-top:6px"><i></i><i></i><i></i></div></div>
+      </div>
+      <div class="sample"><div class="tag">书签跟随当前页</div>
+        <div style="position:relative;padding:4px 8px">
+          <div style="font:500 14px/1.3 var(--serif);display:flex;align-items:baseline;gap:6px;border-left:3px solid var(--brand-deep);padding-left:8px">会议管理<span style="flex:1;border-bottom:1.5px dotted #C9BDA4;transform:translateY(-3px)"></span><span style="font:500 11px/1 var(--mono);color:var(--brand-deep)">04</span></div>
+          <div class="ribbon" style="position:absolute;right:18px;top:0"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>目录页导航</b>：点线 + 两位编号（01–09）天然建立顺序记忆，键盘党可用编号直达</li>
+    <li><b>红丝带书签</b>标记当前页，滚动时丝带可留在原位形成「读到哪」的隐喻</li>
+    <li>顶栏书眉显示栏目名 + 卷期页码（日期 + 当日访问序），右侧用户为朱印圆章</li>
+    <li>折叠态 = <b>书脊</b>：竖排书名 + 金线，悬停展开目录（沿用现有 style-2 chip 折叠按钮）</li>
+    <li>成本最低：纯字体/排版层改造，图标可直接退役，无新交互状态</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ B · 卡片目录柜 ═══════════════ -->
+<section class="card" id="card-b">
+  <div class="badge">B</div>
+  <div class="kicker">CONCEPT B · CARD CATALOG</div>
+  <h1>标本卡片目录柜</h1>
+  <p class="pitch">老图书馆的<b>目录柜</b>：每个导航项是一枚带索号的卡片抽屉（MB·01–MB·09），悬停时抽屉<b>微微抽出</b>，当前页抽屉整个拉出并挂上<b>铜牌「当前柜位」</b>。顶栏右侧用户是一枚带铆钉的<b>铜铭牌</b>，面包屑盖一枚斜放的收文<b>日戳</b>。博物学机构味最浓。</p>
+  <div class="stage">
+    <div class="caption">完整壳层 · 会议管理悬停 + 知识库当前柜位</div>
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><div class="plate">档</div><div><div class="t">小气助手</div><div class="s">CATALOG CABINET</div></div></div>
+        <nav>
+          <div class="drawer"><span class="cn">MB·01</span>仪表盘<span class="knob"></span></div>
+          <div class="drawer"><span class="cn">MB·02</span>智能对话<span class="knob"></span></div>
+          <div class="drawer hov"><span class="cn">MB·04</span>会议管理<span class="knob"></span></div>
+          <div class="drawer on"><span class="cn">MB·06</span>知识库<span class="knob"></span></div>
+          <div class="drawer"><span class="cn">MB·07</span>课题组网盘<span class="knob"></span></div>
+        </nav>
+        <div class="foot"><span class="cn">APX</span>项目动态 · 取览台</div>
+      </aside>
+      <header class="head">
+        <span style="font:600 14px/1 var(--sans);color:#8A7C58">☰</span>
+        <span class="stamper">HOME / KNOWLEDGE</span>
+        <div class="head-right">
+          <span style="font:600 10px/1 var(--mono);letter-spacing:.16em;color:#7A6A45">◔ 12</span>
+          <div class="plate-who"><div class="ini">杜</div><div><div class="nm">杜同贺</div><div class="role">CURATOR · 管理员</div></div></div>
+        </div>
+      </header>
+      <main class="main">
+        <div style="margin:18px 0 0 22px;width:60%">
+          <div class="tray"><span class="cn">MB·06-0471</span>微纳米气泡界面稳定性研究 · 本柜 531 份标本，最近入柜 2 天前</div>
+          <div class="tray" style="margin-top:10px"><span class="cn">MB·06-0472</span>空化产额测算笔记 · 关联柜位 MB·09</div>
+        </div>
+      </main>
+    </div>
+    <div class="samples">
+      <div class="sample"><div class="tag">抽屉三态</div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div class="drawer" style="margin:0"><span class="cn">MB·03</span>任务管理 · 合入<span class="knob"></span></div>
+          <div class="drawer hov" style="margin:0"><span class="cn">MB·03</span>任务管理 · 悬停抽出<span class="knob"></span></div>
+          <div class="drawer on" style="margin:0"><span class="cn">MB·03</span>任务管理 · 当前柜位<span class="knob"></span></div>
+        </div>
+      </div>
+      <div class="sample"><div class="tag">折叠态 · 柜门铜签</div>
+        <div style="display:flex;gap:8px;align-items:center;background:#DED4BB;border:1px solid #B9AE94;border-radius:6px;padding:10px">
+          <span style="font:600 10px/1 var(--mono);color:#5E5335;background:#F7F2E4;border:1px solid #C6B999;border-radius:3px;padding:5px 4px">MB·01</span>
+          <span style="font:600 10px/1 var(--mono);color:#fff;background:#A67C2E;border-radius:3px;padding:5px 4px">MB·06</span>
+          <span style="font:600 10px/1 var(--mono);color:#5E5335;background:#F7F2E4;border:1px solid #C6B999;border-radius:3px;padding:5px 4px">MB·07</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>索号 MB·XX</b> 成为全站引用惯例：通知/搜索结果/面包屑都能写「MB·06-0471」直达条目</li>
+    <li>悬停=半抽出、当前=全抽出+铜牌，<b>物理反馈强</b>，最讨「喜欢小机关」的用户</li>
+    <li>管理员显示为 <b>CURATOR（馆员）</b>，用户角色体系可顺势改名（研究员/馆员/见习）</li>
+    <li>折叠态只显示索号铜签；「项目动态」= 取览台（阅览台上正在翻阅的公示）</li>
+    <li>成本中等：抽屉阴影/位移需几组过渡动画，抽屉数与导航数联动</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ C · 仪器机架 ═══════════════ -->
+<section class="card" id="card-c">
+  <div class="badge">C</div>
+  <div class="kicker">CONCEPT C · INSTRUMENT RACK</div>
+  <h1>实验仪器机架</h1>
+  <p class="pitch">把壳层做成实验室里的<b>仪器机架</b>：深色金属面板、每个导航是一个<b>通道（CH）</b>带独立 LED——当前通道橙灯点亮，其他通道熄灯。顶栏是<b>读数条</b>：LCD 绿字面包屑 + 一排状态指示灯（网络/录制/夜间）。内容区保持纸色，形成「仪器外壳 + 记录纸」的冷暖对比。极客味最强。</p>
+  <div class="stage">
+    <div class="caption">完整壳层 · CH06 知识库运行中 + CH04 悬停</div>
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="led"></span><span class="t">MB-OS 2.6</span></div>
+        <div class="unit">CHANNELS · 通道</div>
+        <nav>
+          <div class="chan"><span class="led"></span>仪表盘<span class="ch">CH01</span></div>
+          <div class="chan"><span class="led"></span>智能对话<span class="ch">CH02</span></div>
+          <div class="chan hov"><span class="led"></span>会议管理<span class="ch">CH04</span></div>
+          <div class="chan on"><span class="led"></span>知识库<span class="ch">CH06</span></div>
+          <div class="chan"><span class="led"></span>DFT/MD<span class="ch">CH09</span></div>
+        </nav>
+        <div class="foot"><span>FEED · 项目动态</span><span>2026-09-03</span></div>
+      </aside>
+      <header class="head">
+        <span class="lcd">HOME › KNOWLEDGE</span>
+        <div class="head-right">
+          <div class="lamps">
+            <span class="lamp ok"><i></i>LINK</span>
+            <span class="lamp rec"><i></i>REC</span>
+            <span class="lamp"><i></i>DARK</span>
+          </div>
+          <div class="badge-who"><div class="ini">杜</div><div><div class="nm">DU·TONGHE</div><div class="role">OPERATOR / ADMIN</div></div></div>
+        </div>
+      </header>
+      <main class="main">
+        <div class="bezel"><div class="knurls"><i></i><i></i></div>
+          <div class="scr"><span>KNOWLEDGE BASE ONLINE<br>531 SPECIMENS · 12 QUERY/DAY</span></div>
+        </div>
+      </main>
+    </div>
+    <div class="samples">
+      <div class="sample"><div class="tag">折叠态 · 灯阵导轨</div>
+        <div class="rail"><i class="on"></i><i></i><i class="hov"></i><i></i><i></i></div>
+      </div>
+      <div class="sample"><div class="tag">「正在听会」横幅 · 面板告警条</div>
+        <div class="strip"><span class="rec"></span>REC · MEETING 254 · TAP TO RETURN ▸</div>
+      </div>
+      <div class="sample"><div class="tag">暗色主题 · 夜航模式</div>
+        <div style="background:#14181A;border-radius:6px;padding:10px;display:flex;gap:10px;align-items:center">
+          <span class="lamp ok" style="display:flex;gap:5px;align-items:center;font:500 8.5px/1 var(--mono);letter-spacing:.18em;color:#5D6570"><i style="width:6px;height:6px;border-radius:50%;background:#7FBF8F;box-shadow:0 0 5px rgba(127,191,143,.8)"></i>DARK</span>
+          <span style="font:600 10px/1 var(--mono);letter-spacing:.2em;color:#9FE8B6">LCD · NIGHT WATCH</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>LED 语义可数据化</b>：有未读=绿灯闪、后台任务运行=橙灯亮、出错=红灯——侧栏变成全站状态总览面板</li>
+    <li>顶栏灯组 LINK/REC/DARK 直接映射真实状态（隧道连通 / 正在录音 / 暗色模式），呼应「正在听会」浮动条</li>
+    <li>管理员= <b>OPERATOR（操作员）</b>；用户名转大写拉丁铭牌，仪式感强</li>
+    <li>折叠态只剩一列灯阵，看一眼就知道哪个系统在跑——<b>信息密度最高</b>但与其他档案化页面风格反差最大</li>
+    <li>成本最高：深色金属边框需处理与内容区浅色页面的接缝、暗色主题下整机反转</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ D · 田野手账 ═══════════════ -->
+<section class="card" id="card-d">
+  <div class="badge">D</div>
+  <div class="kicker">CONCEPT D · FIELD NOTEBOOK</div>
+  <h1>田野笔记手账</h1>
+  <p class="pitch">侧栏是一本<b>方格纸田野笔记本</b>：导航项从右侧伸出<b>彩色分格线标签</b>（index tab），按业务分色——任务绿/对话橙/知识黄……当前标签整个抽出并加宽，完成过的栏目打<b>✓ 复写框</b>。顶栏用一小段<b>和纸胶带</b>写面包屑，用户是虚线裁切的<b>贴纸</b>。最年轻、最有手作温度，兔子宠物的最佳栖身处。</p>
+  <div class="stage">
+    <div class="caption">完整壳层 · 知识库当前页抽出 + 任务管理悬停</div>
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><div class="stamp">野</div><div><div class="t">小气助手</div><div class="s">FIELD NOTES 2026</div></div></div>
+        <nav>
+          <div class="tabrow t1 done"><a href="#"><span class="chk"></span>仪表盘</a><span class="lip">01</span></div>
+          <div class="tabrow t2 done"><a href="#"><span class="chk"></span>智能对话</a><span class="lip">02</span></div>
+          <div class="tabrow t3 hov"><a href="#"><span class="chk"></span>任务管理</a><span class="lip">03</span></div>
+          <div class="tabrow t6 on"><a href="#"><span class="chk"></span>知识库</a><span class="lip">06</span></div>
+          <div class="tabrow t4"><a href="#"><span class="chk"></span>课题组网盘</a><span class="lip">07</span></div>
+        </nav>
+        <div class="foot"><span class="sticky">钉</span>项目动态 · 今日 3 条</div>
+      </aside>
+      <header class="head">
+        <span style="font:800 14px/1 var(--sans);color:#8A9A7B">☰</span>
+        <span class="tape">首页 ✂ 知识库 · SEP 03</span>
+        <div class="head-right">
+          <span class="pen">◔</span><span class="pen">☾</span>
+          <div class="sticker"><div class="ini">杜</div><div><div class="nm">杜同贺</div><div class="role">RESEARCHER · 管理员</div></div></div>
+        </div>
+      </header>
+      <main class="main">
+        <div class="note"><div class="h">本周记录 · <em>界面稳定性专题</em></div><div class="l"></div><div class="l w80"></div><div class="l w60"></div></div>
+      </main>
+    </div>
+    <div class="samples">
+      <div class="sample"><div class="tag">标签抽出一格（当前页）+ 半掩（其余）</div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div class="mini"><span class="chk" style="width:13px;height:13px;border:1.6px solid #8A9A7B;border-radius:3px;position:relative"></span>智能对话<span class="lip" style="background:#E9A184">02</span></div>
+          <div class="mini half" style="font-weight:800;border-bottom-width:3px">知识库<span class="lip" style="background:#C8B45E">06</span></div>
+        </div>
+      </div>
+      <div class="sample"><div class="tag">便利贴徽标 · 未读/提醒</div>
+        <div style="display:flex;gap:14px;align-items:center">
+          <div class="mini" style="margin:0">会议管理<span class="lip" style="background:#D98A6A">04</span></div>
+          <div style="width:44px;height:44px;background:#F7D94A;transform:rotate(-4deg);border-radius:2px;display:grid;place-items:center;font:800 10px/1.3 var(--sans);color:#6B5A00;box-shadow:2px 3px 4px rgba(0,0,0,.15);text-align:center;flex:none">未读<br>×12</div>
+        </div>
+      </div>
+      <div class="sample"><div class="tag">折叠态 · 只剩伸出的标签耳</div>
+        <div style="display:flex;flex-direction:column;gap:9px;padding-left:0">
+          <span style="width:22px;height:30px;border-radius:0 8px 8px 0;background:#8FAC86"></span>
+          <span style="width:22px;height:30px;border-radius:0 8px 8px 0;background:#E9A184"></span>
+          <span style="width:26px;height:34px;border-radius:0 10px 10px 0;background:#C8B45E;display:grid;place-items:center;color:#fff;font:800 9px/1 var(--mono)">06</span>
+          <span style="width:22px;height:30px;border-radius:0 8px 8px 0;background:#86A2B8"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li><b>色彩分区天然成立</b>：9 个栏目分 6 组色，肌肉记忆「拉黄色标签=进知识库」</li>
+    <li>✓ 复写框可做<b>「今日已访问」</b>轻成就，替代旧宠物的部分留存职能；与未部署的宠物重设计兼容</li>
+    <li>便利贴承载未读徽标/提醒，比红点更有温度；胶带面包屑、贴纸用户是全站最软的视觉</li>
+    <li>折叠态只留<b>标签耳</b>，当前页标签耳伸出更长并显示索号</li>
+    <li>成本中等：方格纸/胶带/贴纸纯 CSS 可做；但要防「幼稚化」，纸笔元素克制使用</li>
+  </ul>
+</section>
+
+</body>
+</html>

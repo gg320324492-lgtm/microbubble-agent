@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>H · 暗色操作台 + 命令面板</title>
+<style>
+  :root {
+    --bg: #0d1417; --panel: #121c21; --line: #1e2d34; --ink: #dfe9e6; --sub: #8ba0a0; --faint: #5f757a;
+    --teal: #35c2a4; --coral: #ff8a6b; --amber: #f0c060; --green: #7ac07a;
+    --mono: Consolas, 'SF Mono', monospace; --ui: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 14px; height: 900px; overflow: hidden; }
+  svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ── 唯一常驻chrome: 52px 顶条 ───── */
+  .bar { height: 52px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 6px; padding: 0 18px; background: #0b1114; }
+  .lg { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, var(--coral), var(--amber)); display: grid; place-items: center; color: #170d08; }
+  .bar b.nm { font-family: var(--mono); font-size: 11.5px; letter-spacing: .2em; color: var(--teal); margin: 0 12px 0 8px; }
+  .gp { height: 30px; padding: 0 11px; border-radius: 8px; display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--sub); cursor: pointer; }
+  .gp:hover { background: var(--panel); color: var(--ink); }
+  .gp.on { color: var(--teal); background: rgba(53,194,164,.12); box-shadow: inset 0 -2px 0 var(--teal); }
+  .bar .rt { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .ktrig { height: 30px; width: 250px; border: 1px solid var(--line); border-radius: 8px; background: #0f1a1e; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--faint); font-size: 12px; }
+  .ktrig em { font-style: normal; margin-left: auto; font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--sub); }
+  .ib { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--sub); cursor: pointer; position: relative; }
+  .ib:hover { background: var(--panel); color: var(--ink); }
+  .ib .b { position: absolute; top: 0; right: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 6px var(--coral); }
+  .av { width: 28px; height: 28px; border-radius: 50%; background: var(--teal); color: #06231e; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; }
+
+
+  /* ── 背景内容 (仪表盘 · 暗色操作台) ───── */
+  .body { padding: 22px 26px; filter: blur(.4px) saturate(.92); opacity: .68; }
+  .led { font-family: var(--mono); font-size: 10.5px; color: var(--teal); letter-spacing: .04em; }
+  .h1 { font-size: 24px; font-weight: 600; margin-top: 10px; }
+  .row3 { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .gt { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 16px 18px; display: flex; align-items: center; gap: 16px; }
+  .gt .ring { width: 54px; height: 54px; border-radius: 50%; background: conic-gradient(var(--teal) 0 22%, #1b2a30 22% 100%); display: grid; place-items: center; flex: none; }
+  .gt .ring i { width: 42px; height: 42px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--ink); font-style: normal; }
+  .gt label { font-size: 12px; color: var(--sub); display: block; }
+  .gt b { font-family: var(--mono); font-size: 24px; }
+  .list { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 6px 0; }
+  .lr { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid #16232a; font-size: 13px; }
+  .lr:last-child { border-bottom: 0; }
+  .lr .who { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); color: #06231e; display: grid; place-items: center; font-size: 10.5px; flex: none; }
+  .lr .bar2 { margin-left: auto; width: 120px; height: 6px; border-radius: 3px; background: #1b2a30; overflow: hidden; }
+  .lr .bar2 i { display: block; height: 100%; background: var(--teal); }
+  .lr .due { font-family: var(--mono); font-size: 10.5px; color: var(--sub); width: 92px; text-align: right; }
+  .lr .due.hot { color: var(--coral); }
+
+  /* ── 命令面板 ───── */
+  .veil { position: fixed; inset: 0; background: rgba(5,9,11,.68); backdrop-filter: blur(2px); display: flex; justify-content: center; align-items: center; }
+  .pal { width: 680px; max-height: 660px; background: #0f1a1e; border: 1px solid #263a42; border-radius: 14px; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; align-self: flex-start; }
+  .in { display: flex; align-items: center; gap: 11px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .in svg { width: 18px; height: 18px; color: var(--teal); }
+  .in .txt { font-size: 16px; letter-spacing: .01em; }
+  .in .caret { width: 2px; height: 19px; background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+  .in .mode { margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; color: var(--faint); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; }
+  .sect { font-family: var(--mono); font-size: 9px; letter-spacing: .2em; color: var(--faint); padding: 12px 18px 6px; }
+  .res { display: flex; align-items: center; gap: 11px; padding: 9px 18px; font-size: 13.5px; cursor: pointer; }
+  .res svg { width: 15px; height: 15px; color: var(--sub); flex: none; }
+  .res .p { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-left: auto; }
+  .res .kbd { font-family: var(--mono); font-size: 9.5px; color: var(--sub); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; margin-left: 8px; }
+  .res.on { background: rgba(53,194,164,.12); box-shadow: inset 3px 0 0 var(--teal); }
+  .res.on svg { color: var(--teal); }
+  .res mark { background: transparent; color: var(--teal); font-weight: 700; }
+  .res .tag { font-size: 9.5px; font-family: var(--mono); letter-spacing: .1em; color: #06231e; background: var(--teal); border-radius: 4px; padding: 1px 5px; }
+  .res .tag.c { background: var(--coral); color: #200d06; }
+  .foot { display: flex; align-items: center; gap: 16px; padding: 11px 18px; border-top: 1px solid var(--line); background: #0b1114; font-size: 11px; color: var(--faint); }
+  .foot span { display: flex; align-items: center; gap: 5px; }
+  .foot .k { font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--sub); }
+  .legend { position: fixed; z-index: 5; left: 22px; bottom: 22px; width: 296px; background: #0f1a1e; border: 1px solid #263a42; border-radius: 12px; padding: 13px 15px; display: flex; flex-direction: column; gap: 7px; box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .legend b { font-family: var(--mono); font-size: 9px; letter-spacing: .18em; color: var(--teal); }
+  .legend span { font-size: 11.5px; color: var(--sub); line-height: 1.7; display: flex; align-items: center; gap: 5px; }
+  .legend .k { font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<svg style="display:none"><defs>
+  <g id="i-today"><rect x="3" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.8"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.8"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.8"/></g>
+  <g id="i-chat"><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8.5 21l3-4"/></g>
+  <g id="i-task"><path d="M4 6.5h16M4 12h16M4 17.5h10"/></g>
+  <g id="i-cam"><rect x="2.5" y="6" width="12.5" height="12" rx="2.5"/><path d="M15 10.5l6.5-3.5v10l-6.5-3.5z"/></g>
+  <g id="i-people"><circle cx="8.5" cy="7.5" r="3"/><path d="M2.5 20c0-3.4 2.7-5.5 6-5.5s6 2.1 6 5.5"/><path d="M16 7h5.5M16 11.5h5.5M16 16h4"/></g>
+  <g id="i-doc"><rect x="5.5" y="2.5" width="13" height="19" rx="2"/><path d="M9 7.5h6M9 11.5h6M9 15.5h4"/></g>
+  <g id="i-folder"><path d="M3 9V6a2 2 0 012-2h3.6l2 2.6H19a2 2 0 012 2V9"/><rect x="3" y="9" width="18" height="11.5" rx="2.2"/></g>
+  <g id="i-chart"><path d="M4 20.5V10M10 20.5V3.5M16 20.5v-7M22 20.5H2"/></g>
+  <g id="i-lab"><rect x="5" y="5" width="14" height="14" rx="2.2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9.5 2v3M14.5 2v3M9.5 19v3M14.5 19v3M2 9.5h3M2 14.5h3M19 9.5h3M19 14.5h3"/></g>
+  <g id="i-gear"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.2 5.2l1.9 1.9M16.9 16.9l1.9 1.9M18.8 5.2l-1.9 1.9M7.1 16.9l-1.9 1.9"/></g>
+  <g id="i-bell"><path d="M6.5 16.5v-5a5.5 5.5 0 1111 0v5l1.6 2.6H4.9z"/><path d="M10 20.6a2.2 2.2 0 004 0"/></g>
+  <g id="i-moon"><path d="M20.2 14A8.4 8.4 0 119.6 3.4 6.9 6.9 0 0020.2 14z"/></g>
+  <g id="i-aim"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="3.6"/><path d="M12 1.6v3.2M12 19.2v3.2M1.6 12h3.2M19.2 12h3.2"/></g>
+  <g id="i-search"><circle cx="11" cy="11" r="7"/><path d="M16.2 16.2L21 21"/></g>
+  <g id="i-trash"><path d="M4.5 7h15M9.5 7V4h5v3M6.5 7l1 14h9l1-14M10.5 11v6M13.5 11v6"/></g>
+  <g id="i-promo"><path d="M3.2 11.2l18-7.4-7.2 18-2.4-8.2z"/><path d="M11.6 13.6L21.2 3.8"/></g>
+  <g id="i-file"><path d="M6.5 2.5h7l4.5 4.5v14.5h-11.5z"/><path d="M13.5 2.5V7H18"/><path d="M9.5 12h5.5M9.5 15.5h5.5"/></g>
+  <g id="i-fold"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9.5 4v16"/><path d="M16.5 9.5L13.5 12l3 2.5"/></g>
+  <g id="i-plus"><path d="M12 5.5v13M5.5 12h13"/></g>
+  <g id="i-rec"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></g>
+  <g id="i-mic"><rect x="9.2" y="2.5" width="5.6" height="11.5" rx="2.8"/><path d="M5 11.5a7 7 0 0014 0M12 18.5v3M8.5 21.5h7"/></g>
+  <g id="i-star"><path d="M12 3.5l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1-5.4-3-5.4 3 1.1-6.1L3.2 9.9l6.1-.8z"/></g>
+</defs></svg>
+
+<header class="bar">
+  <div class="lg"><svg class="i" style="stroke:#170d08"><use href="#i-aim"/></svg></div>
+  <b class="nm">XIAOQI · LAB OS</b>
+  <div class="gp on"><svg class="i"><use href="#i-today"/></svg>今日</div>
+  <div class="gp"><svg class="i"><use href="#i-task"/></svg>研究</div>
+  <div class="gp"><svg class="i"><use href="#i-doc"/></svg>资料</div>
+  <div class="gp"><svg class="i"><use href="#i-chart"/></svg>组务</div>
+  <div class="rt">
+    <div class="ktrig"><svg class="i"><use href="#i-search"/></svg>跳转 / 提问 / 执行<em>Ctrl K</em></div>
+    <div class="ib"><span class="b"></span><svg class="i"><use href="#i-bell"/></svg></div>
+    <div class="ib"><svg class="i"><use href="#i-moon"/></svg></div>
+    <div class="av">杜</div>
+  </div>
+</header>
+
+<main class="body">
+  <div class="led">&gt; SYSTEM OK · 2026-09-03 18:48 · MEMBERS 20 · OVERDUE_ALERT 7 &nbsp;(^._.^)ﾉ bunny.online</div>
+  <div class="h1">晚上好，杜同贺</div>
+  <div class="row3">
+    <div class="gt"><div class="ring"><i>19</i></div><div><label>进行中任务</label><b>19</b></div></div>
+    <div class="gt"><div class="ring" style="background:conic-gradient(var(--green) 0 76%, #1b2a30 76%)"><i>75</i></div><div><label>已完成任务</label><b>75</b></div></div>
+    <div class="gt"><div class="ring" style="background:conic-gradient(var(--coral) 0 8%, #1b2a30 8%)"><i>7</i></div><div><label>已逾期任务</label><b style="color:var(--coral)">7</b></div></div>
+  </div>
+  <div class="list">
+    <div class="lr"><div class="who">胡</div>正式实验<span class="due hot">明天</span><div class="bar2"><i style="width:40%"></i></div></div>
+    <div class="lr"><div class="who" style="background:var(--amber)">陈</div>文献调研：微纳米气泡稳定性<span class="due hot">逾期 95d</span><div class="bar2"><i style="width:60%;background:var(--amber)"></i></div></div>
+    <div class="lr"><div class="who" style="background:var(--green)">李</div>12 棚水质微生物测试<span class="due">9 天</span><div class="bar2"><i style="width:70%;background:var(--green)"></i></div></div>
+    <div class="lr"><div class="who">蒋</div>看文献<span class="due">27 天</span><div class="bar2"><i style="width:25%"></i></div></div>
+  </div>
+</main>
+
+<!-- 命令面板: 跳转 + 检索 + 执行 三合一 -->
+<div class="veil">
+  <div class="pal">
+    <div class="in">
+      <svg class="i"><use href="#i-search"/></svg>
+      <span class="txt">meet</span><span class="caret"></span>
+      <span class="mode">Ctrl K · ALL</span>
+    </div>
+
+    <div class="sect">页面 PAGES</div>
+    <div class="res on"><svg class="i"><use href="#i-cam"/></svg><span><mark>Meet</mark>ing · 会议管理</span><span class="p">/meetings · 7 待校</span><span class="kbd">↵</span></div>
+    <div class="res"><svg class="i"><use href="#i-plus"/></svg><span>开始听会（新建录音房间）</span><span class="p">/meetings/room</span><span class="kbd">⌘⇧R</span></div>
+
+    <div class="sect">记录 RECORDS</div>
+    <div class="res"><svg class="i"><use href="#i-rec"/></svg><span>2026.9.3 例行例会 <span class="tag c">听会中</span></span><span class="p">MTG/252 · 01:12:44</span></div>
+    <div class="res"><svg class="i"><use href="#i-doc"/></svg><span>2026.8.27 例行例会 · 纪要</span><span class="p">MTG/251 · 83,351 字</span></div>
+    <div class="res"><svg class="i"><use href="#i-folder"/></svg><span>会议纪要模板 <span class="tag">网盘</span></span><span class="p">DRV/9f2a · v4</span></div>
+
+    <div class="sect">动作 ACTIONS</div>
+    <div class="res"><svg class="i"><use href="#i-mic"/></svg><span>用本次会议生成纪要</span><span class="p">agent · summarize_meeting</span></div>
+    <div class="res"><svg class="i"><use href="#i-lab"/></svg><span>算一个分子的 Surface Energy</span><span class="p">agent · run_gaussian</span></div>
+    <div class="res"><svg class="i"><use href="#i-chat"/></svg><span>问小气：气泡稳定性主要看哪几个参数</span><span class="p">/chat</span></div>
+
+    <div class="foot">
+      <span><i class="k">↑↓</i>选择</span><span><i class="k">↵</i>打开</span><span><i class="k">⇧↵</i>新标签</span>
+      <span><i class="k">⌘1-4</i>切组</span><span><i class="k">Esc</i>关闭</span>
+      <span style="margin-left:auto">最近: 仪表盘 · 会议 #252 · 知识库/界面能</span>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <b>常驻 chrome 只有一条 52px 顶栏</b>
+  <span>顶栏 4 个组 hover 展开该组完整清单（含 /drive/trash、/meetings/room 等隐藏路由）</span>
+  <span><i class="k">⌘B</i> 把清单钉住 = 退回今天的 260px 侧栏</span>
+  <span><i class="k">Ctrl K</i> 全局跳转 + 检索 + 执行 agent 动作</span>
+</div>
+
+</body>
+</html>
