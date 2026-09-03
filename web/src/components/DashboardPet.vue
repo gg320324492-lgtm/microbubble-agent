@@ -119,6 +119,9 @@ const props = defineProps({
   totalTasks: { type: Number, default: 0 },
   groupXp: { type: Number, default: 0 },
   groupLevel: { type: Number, default: 1 },
+  // 角落模式: 限定兔子纵向活动区间 (百分比), 让兔子站在草地上、气泡不飞到顶部按钮区
+  yMin: { type: Number, default: 3 },
+  yMax: { type: Number, default: 92 },
 })
 
 const emit = defineEmits(['xp-gained'])
@@ -126,7 +129,7 @@ const emit = defineEmits(['xp-gained'])
 // ===== Refs =====
 const containerRef = ref(null)
 const bunnyRef = ref(null)
-const position = reactive({ x: 40 + Math.random() * 20, y: 40 + Math.random() * 40 })
+const position = reactive({ x: 40 + Math.random() * 20, y: props.yMin + Math.random() * (props.yMax - props.yMin) })
 const target = reactive({ x: position.x, y: position.y })
 const state = ref('idle')
 const facing = ref(1) // 1=right, -1=left
@@ -227,10 +230,10 @@ function gameLoop(timestamp) {
     state.value = 'idle'
   }
 
-  // Clamp to container bounds (留 3% 边距)
+  // Clamp to container bounds (留 3% 边距; 纵向用 props 区间支持角落模式)
   if (containerRef.value) {
     position.x = Math.max(3, Math.min(95, position.x))
-    position.y = Math.max(3, Math.min(92, position.y))
+    position.y = Math.max(props.yMin, Math.min(props.yMax, position.y))
   }
 
   // Sleep timer
@@ -257,19 +260,20 @@ function pickNearbyTarget() {
   let tx = position.x + (Math.random() - 0.5) * range * 2
   let ty = position.y + (Math.random() - 0.5) * range * 2
   tx = Math.max(3, Math.min(95, tx))
-  ty = Math.max(3, Math.min(90, ty))
+  ty = Math.max(props.yMin, Math.min(props.yMax, ty))
   target.x = tx
   target.y = ty
 }
 
 function pickFarTarget() {
   target.x = 5 + Math.random() * 90
-  // 偶尔走到趴靠点
-  if (Math.random() < 0.3) {
+  // 角落模式 (props.yMin 被抬高) 时, PERCH_ZONES 会跳出纵向区间, 退化为普通游走
+  const corner = props.yMin > 5 || props.yMax < 90
+  if (!corner && Math.random() < 0.3) {
     const zone = PERCH_ZONES[Math.floor(Math.random() * PERCH_ZONES.length)]
-    target.y = zone.y + (Math.random() - 0.5) * 8
+    target.y = Math.max(props.yMin, Math.min(props.yMax, zone.y + (Math.random() - 0.5) * 8))
   } else {
-    target.y = 5 + Math.random() * 85
+    target.y = Math.max(props.yMin, Math.min(props.yMax, 5 + Math.random() * 85))
   }
 }
 
@@ -320,7 +324,7 @@ function onClick() {
 function onDblClick() {
   // 瞬移到远处（受惊逃跑）
   position.x = Math.max(8, Math.min(88, position.x + (Math.random() - 0.5) * 50))
-  position.y = Math.max(20, Math.min(78, position.y + (Math.random() - 0.5) * 40))
+  position.y = Math.max(props.yMin, Math.min(props.yMax, position.y + (Math.random() - 0.5) * 40))
   pickNearbyTarget()
   state.value = 'idle'
   stateTimer = 0
