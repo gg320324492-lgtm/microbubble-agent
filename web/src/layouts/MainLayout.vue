@@ -26,48 +26,58 @@
   </Transition>
 
   <el-container class="layout-container">
-    <!-- 桌面端侧边栏 — 移动端完全不渲染 -->
+    <!-- 桌面端侧边栏 — G 稿「控制台档案」皮肤 (docs/design-proposals/layout-2026-09/G-console.html)
+         移动端完全不渲染; 换皮不换骨: 路由/折叠/录音状态全部沿用原有响应式, 可整段回到 el-menu 版 -->
     <el-aside
       v-if="!isMobile"
       :width="sidebarWidth"
-      class="aside glass glass-lg"
+      class="aside"
+      :class="{ 'is-collapsed': isCollapse }"
     >
-      <div class="logo">
-        <div class="logo-icon">
-          <el-icon size="24"><Aim /></el-icon>
-        </div>
-        <span v-show="!isCollapse" class="title">小气助手</span>
+      <div class="brand">
+        <div class="tile"><svg class="s"><use href="#i-aim" /></svg></div>
+        <b v-show="!isCollapse" class="brand-name">小气助手</b>
+        <span v-show="!isCollapse" class="ver">v26.09</span>
       </div>
 
-      <el-menu
-        :default-active="currentRoute"
-        :collapse="isCollapse"
-        router
-        class="sidebar-menu"
-      >
-        <el-menu-item
-          v-for="route in menuRoutes"
-          :key="route.path"
-          :index="'/' + route.path"
-          class="menu-item"
-        >
-          <el-icon><component :is="iconMap[route.meta.icon]" /></el-icon>
-          <template #title><span style="color:inherit">{{ route.meta.title }}</span></template>
-        </el-menu-item>
-      </el-menu>
+      <nav class="menu">
+        <template v-for="(group, gi) in menuGroups" :key="group.label">
+          <div v-show="!isCollapse" class="taglabel">{{ group.label }}</div>
+          <div v-show="isCollapse" v-if="gi > 0" class="gsep" aria-hidden="true"></div>
+          <router-link
+            v-for="item in group.items"
+            :key="item.path"
+            :to="'/' + item.path"
+            class="mitem"
+            :class="{ active: isActive(item.path) }"
+            :title="isCollapse ? item.meta.title : undefined"
+          >
+            <svg class="s"><use :href="'#' + (iconId[item.meta.icon] || 'i-tag')" /></svg>
+            <span v-show="!isCollapse" class="lab">{{ item.meta.title }}</span>
+            <span
+              v-if="!isCollapse && badgeOf(item.path)"
+              class="cnt"
+              :class="{ hot: item.path === 'meetings' }"
+            >{{ badgeOf(item.path) }}</span>
+          </router-link>
+        </template>
+      </nav>
 
-      <!-- 侧边栏底部 - 项目动态 (v31 检索质量已合并到此页 tab) -->
-      <div class="sidebar-bottom">
-        <div
-          class="sidebar-bottom-item"
+      <!-- 侧边栏底部 - 项目动态: 档案印章卡 (G 稿升格, 原 .sidebar-bottom-item 平替)
+           v31 检索质量已合并到此页 tab; W86 KB 监控合入其 TabStrip 第 3 tab -->
+      <div class="sidefoot">
+        <button
+          type="button"
+          class="stamp"
           :class="{ active: currentRoute === '/project-stats' }"
           @click="router.push('/project-stats')"
         >
-          <el-icon><DataBoard /></el-icon>
-          <span v-show="!isCollapse">项目动态</span>
-        </div>
-        <!-- W86 mini batch 1: KB 监控入口从侧栏底部移除, 合入项目动态 TabStrip 第 3 个 tab (admin only).
-             路由 /admin/kb-monitor 保留作 fallback 兼容老链接 (见 router/index.js L201-207) -->
+          <svg class="s"><use href="#i-board" /></svg>
+          <span v-show="!isCollapse" class="stamp-txt">
+            <span class="t1">项目动态</span>
+            <span class="t2">PROJECT STATS · {{ isoWeek }}</span>
+          </span>
+        </button>
       </div>
     </el-aside>
 
@@ -145,6 +155,9 @@
   <!-- 移动端底部导航 TabBar（PR #2 新增：基于 NutUI nut-tabbar）
        /chat 路由也显示 TabBar（在 input 框下方），用户偏好 persistent nav -->
   <MobileTabBar v-if="isMobile" />
+
+  <!-- G 稿 16px 图标精灵: 全 app 挂载一次, <use href="#i-xxx"> 引用 -->
+  <LayoutIconSprite />
 </template>
 
 <script setup>
@@ -158,12 +171,15 @@ import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useIsMobile } from '@/composables/useIsMobile'
 import MobileTabBar from '@/components/mobile/TabBar.vue'
+// G 稿「控制台档案」16px 图标精灵 (MainLayout 挂载一次, 桌面侧栏 <use> 引用)
+import LayoutIconSprite from '@/components/LayoutIconSprite.vue'
 // v68 (2026-06-26): 桌面端顶栏主题切换按钮（与移动端 MobileHeader 风格一致）
 import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 // v2 PR6: 网盘协作通知 (@ 提醒 + 评论) + WS 推送
 import NotificationBell from '@/components/common/NotificationBell.vue'
 // 2026-07-12: 删除 Bell icon import (旧任务到期提醒铃铛已删除，统一走 NotificationBell)
-import { ArrowRight, DataBoard, Aim, Odometer, Cpu, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
+// 2026-09-04 G 稿: 删除 DataBoard import (项目动态升格为档案印章, 桌面侧栏改走 LayoutIconSprite #i-board)
+import { ArrowRight, Aim, Odometer, Cpu, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
@@ -201,7 +217,8 @@ const isChatRoute = computed(() => route.path.startsWith('/chat'))
 
 const sidebarWidth = computed(() => {
   if (isMobile.value) return '0px'
-  return isCollapse.value ? '64px' : '260px'
+  // G 稿: 260 → 240 (标本签分组后 9 项一屏尽收)
+  return isCollapse.value ? '64px' : '240px'
 })
 
 const currentRoute = computed(() => route.path)
@@ -218,6 +235,62 @@ const menuRoutes = computed(() => {
   const HIDDEN_PATHS = new Set(['drive/trash', 'drive/requests'])
   return (mainRoute?.children || []).filter(r => r.meta?.icon && !HIDDEN_PATHS.has(r.path))
 })
+
+// ===== G 稿「控制台档案」: 分组 / sprite 图标 / 计数徽标 =====
+// 分组前端硬编码 (G 稿 notes 既定策略), 后续需要再提 route meta.group
+const MENU_GROUPS = [
+  { label: 'FRONT MATTER · 卷首', paths: ['dashboard'] },
+  { label: 'RESEARCH · 研究', paths: ['tasks', 'meetings', 'knowledge', 'dft'] },
+  { label: 'COLLAB · 协作', paths: ['chat', 'workspace', 'drive'] },
+  { label: 'SYSTEM · 系统', paths: ['settings'] },
+]
+// meta.icon (EP 组件名字符串) → LayoutIconSprite symbol id
+const iconId = {
+  Odometer: 'i-gauge', ChatDotRound: 'i-chat', List: 'i-list',
+  VideoCamera: 'i-camera', Files: 'i-files', Document: 'i-doc',
+  Folder: 'i-folder', Setting: 'i-sliders', Cpu: 'i-cpu',
+}
+// 侧栏计数徽标 (轻量只读, 拉取失败静默不显示; 勿与 /dashboard/stats 页内数据混用)
+const counts = ref({ tasksInProgress: null, knowledgeTotal: null })
+
+const menuGroups = computed(() => {
+  const routes = menuRoutes.value
+  const used = new Set()
+  const groups = MENU_GROUPS.map(g => ({
+    label: g.label,
+    items: g.paths.map(p => routes.find(r => r.path === p)).filter(Boolean)
+      .filter(r => !used.has(r.path) && used.add(r.path)),
+  }))
+  // 未来新增带 icon 的路由兜底进末组 (SYSTEM), 不会从侧栏消失
+  const rest = routes.filter(r => !used.has(r.path))
+  if (rest.length) groups[groups.length - 1].items.push(...rest)
+  return groups.filter(g => g.items.length)
+})
+
+const isActive = (path) => {
+  const base = '/' + path
+  return currentRoute.value === base || currentRoute.value.startsWith(base + '/')
+}
+
+const badgeOf = (path) => {
+  if (path === 'dashboard') {
+    return counts.value.tasksInProgress == null ? null : String(counts.value.tasksInProgress)
+  }
+  if (path === 'meetings') return recordingMeetingId.value ? '●REC' : null
+  if (path === 'knowledge') {
+    return counts.value.knowledgeTotal == null ? null : String(counts.value.knowledgeTotal)
+  }
+  return null
+}
+
+// 档案印章副标 WK36 — ISO 周号, 壳层每次加载算一次
+const isoWeek = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3)
+  const firstThu = new Date(d.getFullYear(), 0, 4)
+  firstThu.setDate(firstThu.getDate() - ((firstThu.getDay() + 6) % 7) + 3)
+  return 'WK' + (1 + Math.round((d - firstThu) / 604800000))
+})()
 
 // PR #2: isMobile 改用 useIsMobile composable（matchMedia + 防抖）
 // 不再需要本地 onResize + window resize 监听
@@ -253,6 +326,15 @@ onMounted(async () => {
   memberStore.fetchMembers()
   checkActiveRecording()
 
+  // G 稿侧栏计数徽标: 任务进行中 + 知识库条目 (只读统计, allSettled 静默降级)
+  Promise.allSettled([
+    axios.get('/api/v1/tasks/stats/overview'),
+    axios.get('/api/v1/knowledge/stats'),
+  ]).then(([t, k]) => {
+    if (t.status === 'fulfilled') counts.value.tasksInProgress = t.value.data?.in_progress ?? null
+    if (k.status === 'fulfilled') counts.value.knowledgeTotal = k.value.data?.total ?? null
+  })
+
   // 刷新用户信息，获取新鲜头像 URL
   try {
     const res = await axios.get('/api/v1/auth/me')
@@ -278,144 +360,228 @@ const handleLogout = () => {
   height: 100vh;
 }
 
-/* ===== 桌面端侧边栏 ===== */
+/* ===== 桌面端侧边栏 — G 稿「控制台档案」皮肤 =====
+   视觉源 docs/design-proposals/layout-2026-09/G-console.html;
+   皮肤 token 局部化在 .aside 上, dark 覆盖在文件底部非 scoped 块 (v60-v67 教训) */
 .aside {
-  /* v77 P2.5: backdrop-filter 由 .glass 工具类提供 (assets/glass.css)
-     保留 --color-bg-sidebar 专属 token 风格（不与 .glass 默认 --color-bg-card 冲突） */
-  background: var(--color-bg-sidebar);
-  border-right: 1px solid var(--color-sidebar-border);
-  box-shadow: var(--shadow-sidebar);
+  --dg-chrome: #eaece7;
+  --dg-card: #fdfefc;
+  --dg-ink: #16232a;
+  --dg-steel: #5a6b6a;
+  --dg-fog: #8ba0a0;
+  --dg-hair: #c9d2ca;
+  --dg-teal: #0e766e;
+  --dg-teal-soft: #dcece5;
+  --dg-coral: #ef7256;
+  --dg-shadow: rgba(22, 35, 42, 0.14);
+  --dg-hover: rgba(14, 118, 110, 0.07);
+  --dg-mono: Consolas, 'Courier New', monospace;
+  background: var(--dg-chrome);
+  border-right: 1px solid var(--dg-hair);
+  display: flex;
+  flex-direction: column;
   transition: width 0.3s;
   overflow: hidden;
-  position: relative;
 }
 
-.logo {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--color-sidebar-border);
-  padding: 0 16px;
-}
-
-.logo-icon {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-bg-card);
+.aside .s {
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
-  box-shadow: var(--shadow-primary);
+  display: block;
 }
 
-.logo .title {
+.brand {
+  height: 60px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px dashed var(--dg-hair);
+}
+
+.brand .tile {
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--dg-ink);
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: var(--dg-card);
+  box-shadow: 2px 2px 0 var(--dg-shadow);
+  color: var(--dg-ink);
+  flex-shrink: 0;
+}
+
+.brand .tile .s { width: 18px; height: 18px; }
+
+.brand-name {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: var(--dg-ink);
   white-space: nowrap;
-  font-size: 17px;
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
 }
 
-.sidebar-menu {
-  background: transparent !important;
-  border-right: none;
-  padding: 8px;
+.brand .ver {
+  margin-left: auto;
+  font-family: var(--dg-mono);
+  font-size: 9px;
+  color: var(--dg-fog);
 }
 
-.sidebar-menu .el-menu-item {
-  height: 48px;
-  line-height: 48px;
-  margin: 4px 0;
-  border-radius: var(--radius-lg);
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-base);
-  transition: all var(--transition-all-normal) var(--ease-out);
+nav.menu {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 10px 4px;
+}
+
+.taglabel {
+  font-family: var(--dg-mono);
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  color: var(--dg-fog);
+  padding: 10px 8px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.taglabel::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--dg-hair);
+}
+
+/* 折叠态分组分隔 (标本签隐藏) */
+.gsep {
+  border-top: 1px dashed var(--dg-hair);
+  margin: 8px 12px;
+}
+
+.mitem {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  margin-bottom: 2px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  color: var(--dg-steel);
+  cursor: pointer;
   position: relative;
-  overflow: hidden;
+  text-decoration: none;
 }
 
-.sidebar-menu .el-menu-item::before {
+.mitem .lab {
+  grid-column: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mitem .cnt {
+  grid-column: 3;
+  font-family: var(--dg-mono);
+  font-size: 10.5px;
+  color: var(--dg-fog);
+}
+
+.mitem .cnt.hot {
+  color: var(--dg-coral);
+  font-weight: 700;
+}
+
+.mitem:hover {
+  background: var(--dg-hover);
+  color: var(--dg-ink);
+}
+
+.mitem.active {
+  background: var(--dg-card);
+  border-color: var(--dg-hair);
+  color: var(--dg-ink);
+  font-weight: 600;
+  box-shadow: 2px 2px 0 var(--dg-shadow);
+}
+
+.mitem.active .s { color: var(--dg-teal); }
+
+.mitem.active::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  background: var(--color-primary);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  transition: all var(--transition-all-normal) var(--ease-out);
+  left: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: var(--dg-teal);
+  border-radius: 0 2px 2px 0;
 }
 
-.sidebar-menu .el-menu-item:hover {
-  background: rgba(var(--color-primary-rgb), 0.12) !important;
-  color: var(--color-primary);
+/* 折叠态: 图标居中, 悬停出原生 title 提示 */
+.el-aside.is-collapsed .mitem {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 11px 0;
 }
 
-.sidebar-menu .el-menu-item:hover::before {
-  width: 4px;
-  height: 24px;
+.el-aside.is-collapsed .mitem.active::before { left: -10px; }
+
+/* ===== 侧边栏底部 — 项目动态档案印章 ===== */
+.sidefoot {
+  flex-shrink: 0;
+  border-top: 1px solid var(--dg-hair);
+  padding: 10px;
 }
 
-.sidebar-menu .el-menu-item.is-active {
-  /* W93: 主色实底 2.56 → 5.37 (白字 AA) */
-  background: var(--color-primary-strong) !important;
-  color: var(--color-bg-card) !important;
-  font-weight: var(--font-weight-bold);
-}
-
-.sidebar-menu .el-menu-item.is-active::before {
-  width: 4px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.sidebar-menu .el-menu-item .el-icon {
-  font-size: 18px;
-}
-
-.el-menu--collapse .sidebar-menu .el-menu-item {
-  justify-content: center;
-  padding: 0 12px;
-}
-
-/* ===== 侧边栏底部 ===== */
-.sidebar-bottom {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 8px;
-  border-top: 1px solid var(--color-border);
-}
-
-.sidebar-bottom-item {
+.stamp {
   display: flex;
+  gap: 9px;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
+  width: 100%;
+  text-align: left;
+  border: 1.5px dashed var(--dg-ink);
+  border-radius: 8px;
+  padding: 9px 10px;
   cursor: pointer;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  transition: all var(--duration-fast) var(--ease-out);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
 }
 
-.sidebar-bottom-item:hover {
-  background: rgba(var(--color-primary-rgb), 0.1);
-  color: var(--color-primary);
+.el-aside.is-collapsed .stamp {
+  justify-content: center;
+  padding: 9px 0;
 }
 
-.sidebar-bottom-item.active {
-  /* W93: 主色实底 2.56 → 5.37 (白字 AA) */
-  background: var(--color-primary-strong);
-  color: var(--color-bg-card);
-  font-weight: var(--font-weight-bold);
+.stamp:hover { background: var(--dg-card); }
+
+.stamp.active {
+  border-style: solid;
+  border-color: var(--dg-teal);
+  background: var(--dg-card);
+}
+
+.stamp .s { width: 17px; height: 17px; color: var(--dg-teal); }
+
+.stamp-txt { display: flex; flex-direction: column; min-width: 0; }
+
+.stamp .t1 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dg-ink);
+  white-space: nowrap;
+}
+
+.stamp .t2 {
+  font-family: var(--dg-mono);
+  font-size: 9px;
+  color: var(--dg-fog);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
 /* ===== 顶部栏 ===== */
@@ -792,7 +958,7 @@ const handleLogout = () => {
     max-width: 120px;
   }
 
-  .logo .title {
+  .brand-name {
     font-size: 18px;
   }
 
@@ -817,63 +983,27 @@ const handleLogout = () => {
 
 <!-- v69 P0: MainLayout dark mode 覆盖（v60-v67 教训：dark 跨组件规则必须放非 scoped 块） -->
 <style>
-  /* === 侧边栏 === */
+  /* === 侧边栏 (G 稿 dossier skin dark 覆盖, 对齐 shot-G 夜览态) === */
   [data-theme="dark"] .aside {
-    background: var(--color-bg-sidebar);
-    border-right-color: var(--color-sidebar-border);
-    box-shadow: var(--shadow-sidebar);
+    --dg-chrome: #0c1215;
+    --dg-card: #18232a;
+    --dg-ink: #dfe9e6;
+    --dg-steel: #9ab0ae;
+    --dg-fog: #6b8286;
+    --dg-hair: #27363e;
+    --dg-teal: #35c2a4;
+    --dg-teal-soft: #12312b;
+    --dg-shadow: rgba(0, 0, 0, 0.5);
+    --dg-hover: rgba(53, 194, 164, 0.08);
+    background: var(--dg-chrome);
+    border-right-color: var(--dg-hair);
+    box-shadow: none;
   }
-  [data-theme="dark"] .sidebar-logo {
-    background: transparent;
-    color: var(--color-text-primary);
-    border-bottom: 1px solid var(--color-border-light);
-  }
-  [data-theme="dark"] .sidebar-menu .el-menu-item,
-  [data-theme="dark"] .sidebar-menu .el-sub-menu__title {
-    color: var(--color-text-regular);
-  }
-  [data-theme="dark"] .sidebar-menu .el-menu-item:hover,
-  [data-theme="dark"] .sidebar-menu .el-sub-menu__title:hover {
-    background-color: rgba(var(--color-primary-rgb), 0.08) !important;
-    color: var(--color-primary) !important;
-  }
-  [data-theme="dark"] .sidebar-menu .el-menu-item.is-active {
-    /* v77 P2.6-rev3: dark 模式选中态 — 实测 rgba(primary, 0.55) 在 #1a1d23 背景上呈
-       粉橙 rgb(255,157,133), 与未选中项反差过大、视觉像"hover 高亮"而非"激活".
-       改为: 低饱和深灰底 (rgba 255,255,255,0.08) + 主色文字 + 加粗
-       → 与 light 模式 (深棕红底 + 白字) 视觉权重对称, 但 dark 下不抢眼 */
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: var(--color-primary) !important;
-    font-weight: var(--font-weight-bold);
-  }
-  /* v77 P2.6-rev3: dark 模式选中态左侧竖条 — 默认 light 模式 .is-active::before 是
-     白色 rgba(255,255,255,0.9), 在 dark 背景上呈"实心方块"视觉突兀, 与未选中项
-     (主色 4px 细竖条) 视觉权重不一致. 改为主色珊瑚橙 + 加长 32px + 加粗 4px. */
-  [data-theme="dark"] .sidebar-menu .el-menu-item.is-active::before {
-    background: var(--color-primary) !important;
-    width: 4px !important;
-    height: 32px !important;
-  }
-  /* v77 P2.6-rev4: variables.css line 1901-1907 全局规则
-     :root .el-menu-item.is-active > span { background: var(--color-primary-strong); color: #fff }
-     在 dark 模式下给 .is-active > span 强制设深棕红实底, 用户感知"文字外有橙色色块".
-     必须覆盖: 文字背景透明 + 文字用主色. */
-  [data-theme="dark"] .sidebar-menu .el-menu-item.is-active > span {
-    background-color: transparent !important;
-    color: var(--color-primary) !important;
-    font-weight: var(--font-weight-bold);
-  }
-  [data-theme="dark"] .sidebar-bottom {
-    border-top: 1px solid var(--color-border-light);
-    background: transparent;
-  }
-  [data-theme="dark"] .sidebar-bottom-item {
-    color: var(--color-text-secondary);
-  }
-  [data-theme="dark"] .sidebar-bottom-item:hover {
-    background: var(--color-bg-hover);
-    color: var(--color-text-primary);
-  }
+  [data-theme="dark"] .brand .tile { color: var(--dg-ink); }
+  [data-theme="dark"] .mitem.active { background: var(--dg-card); color: var(--dg-ink); }
+  [data-theme="dark"] .stamp:hover,
+  [data-theme="dark"] .stamp.active { background: var(--dg-card); }
+  [data-theme="dark"] .stamp .t1 { color: var(--dg-ink); }
 
   /* === 顶栏 === */
   [data-theme="dark"] .header {
