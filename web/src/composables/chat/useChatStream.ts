@@ -206,6 +206,8 @@ export interface SendOptions {
   image?: File | null
   // #P5+: 消息气泡显示图片缩略图 (blob URL, 由调用方生成)
   imageUrl?: string | null
+  // 2026-09-03 网页搜索模式 (工具面板开关)
+  webSearchOn?: boolean
 }
 
 // ============================================================================
@@ -679,7 +681,10 @@ export function useChatStream() {
       if (file || img) {
         await sendNonStream(content, file, img, assistantMsg, targetSessionId)
       } else {
-        await sendSSE(content, assistantMsg, targetSessionId, controller.signal)
+        await sendSSE(content, assistantMsg, targetSessionId, controller.signal, {
+          clientMsgId: userMsg.client_msg_id,
+          webSearchOn: opts.webSearchOn,
+        })
       }
       persistSessionDebounced(targetSessionId)
     } catch (e: any) {
@@ -727,7 +732,8 @@ export function useChatStream() {
     content: string,
     assistantMsg: ChatMessage,
     targetSessionId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    sendOpts?: { clientMsgId?: string; webSearchOn?: boolean }
   ) {
     // v31 埋点: Agent 调用 search_knowledge 时暂存 query, tool_result 时连同 top_ids 一起 POST
     let pendingAgentSearchQuery: string | null = null
@@ -756,7 +762,9 @@ export function useChatStream() {
         thinking_mode: thinkingMode,  // 2026-07-13 #P1 三档模式 (fast/balanced/deep)
         // 2026-09-03 用户消息重复修复: 透传幂等键, 后端 stream 持久化与上面的
         // appendMessageAsync 共用同一键 → append_message 幂等去重不再双写
-        client_msg_id: userMsg.client_msg_id,
+        client_msg_id: sendOpts?.clientMsgId,
+        // 2026-09-03 网页搜索模式 (工具面板开关)
+        web_search: sendOpts?.webSearchOn || undefined,
         // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
         // attached_knowledge_ids 不传: 后端自动从 chat_session_attached_documents 查全局
       }

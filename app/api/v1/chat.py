@@ -65,6 +65,8 @@ class ChatRequest(BaseModel):
     # 2026-09-03 用户消息重复修复: 前端幂等键透传 (stream 持久化与
     # chat_history append 共用, 防止同一句用户消息落两行)
     client_msg_id: Optional[str] = None
+    # 2026-09-03 网页搜索模式: 前端工具面板开关, 开启后注入联网优先 directive
+    web_search: Optional[bool] = None
 
 
 class ChatResponse(BaseModel):
@@ -377,6 +379,8 @@ async def chat_stream_route(
                 attached_knowledge_ids=effective_attached_ids,
                 # 2026-09-03: 前端幂等键透传 (用户消息防双写)
                 client_msg_id=request.client_msg_id,
+                # 2026-09-03: 网页搜索模式透传
+                web_search=request.web_search,
             ):
                 yield event.to_sse()
         except Exception as e:
