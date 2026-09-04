@@ -163,16 +163,34 @@ class TestCreateFileNotificationTrigger:
 # ============================================================================
 
 class TestToggleStarFileNotificationTrigger:
-    """drive_service.toggle_star_file() 触发 notification_service.create_mention(context='star')"""
+    """drive_service.toggle_star_file() 触发 notification_service.create_mention(context='star')
+
+    批次① 收藏个人化 (alembic 134) 契约更新:
+    - toggle 不再写 Knowledge.is_starred, 改对 drive_file_stars 增删;
+      返回 (Knowledge, starred_now, starred_at_now) 三元组 (None = 文件不存在)。
+    - 内部 SELECT 顺序: ① Knowledge 行 ② 本人 DriveFileStar 行 (mock 按序 side_effect)。
+    """
+
+    @staticmethod
+    def _mock_db_with_star_lookup(*, knowledge, existing_star):
+        """toggle_star_file 新流程专用 mock: 两次 execute 分别返 Knowledge / DriveFileStar 行"""
+        db = _make_mock_db(knowledge=knowledge)
+        res_knowledge = db.execute.return_value
+        res_star = MagicMock()
+        res_star.scalar_one_or_none.return_value = existing_star
+        db.execute = AsyncMock(side_effect=[res_knowledge, res_star])
+        db.delete = AsyncMock()  # 服务代码 await db.delete(...) — 必须 AsyncMock
+        return db
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_star_self_notification_skipped(self):
-        """toggle star: created_by == current_user_id (自通知 skip)"""
+        """toggle star: created_by == current_user_id (自通知 skip) + 无既有 star 行 → INSERT"""
         from app.services.drive_service import DriveService
         from app.services.notification_service import NotificationService
 
         fake_file = _make_fake_knowledge(id=100, created_by=1)
-        db = _make_mock_db(knowledge=fake_file)
+        # existing_star=None → 本方法走 INSERT star 分支
+        db = self._mock_db_with_star_lookup(knowledge=fake_file, existing_star=None)
 
         with patch.object(NotificationService, "create_mention", new=AsyncMock()) as mock_create_mention:
             svc = DriveService(db)
@@ -180,7 +198,12 @@ class TestToggleStarFileNotificationTrigger:
 
             # 自通知 skip
             mock_create_mention.assert_not_called()
-            assert result.is_starred is True  # star 成功
+            assert result is not None
+            f, starred_now, starred_at_now = result
+            assert starred_now is True  # star 成功 (本人视角)
+            assert starred_at_now is not None
+            # 类 20 回归锁: 收藏个人化后绝不回写 Knowledge 全局限列
+            assert fake_file.is_starred is False  # mock 对象未被赋值 True
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_star_other_user_triggers_notification(self):
@@ -203,12 +226,13 @@ class TestToggleStarFileNotificationTrigger:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_unstar_does_not_trigger_notification(self):
-        """unstar 不通知 (避免噪音)"""
+        """unstar 不通知 (避免噪音): 存在本人 star 行 → DELETE 分支"""
         from app.services.drive_service import DriveService
         from app.services.notification_service import NotificationService
 
-        fake_file = _make_fake_knowledge(id=100, created_by=1, is_starred=True)
-        db = _make_mock_db(knowledge=fake_file)
+        fake_file = _make_fake_knowledge(id=100, created_by=1)
+        existing_star_row = MagicMock()  # drive_file_stars 命中本人行
+        db = self._mock_db_with_star_lookup(knowledge=fake_file, existing_star=existing_star_row)
 
         with patch.object(NotificationService, "create_mention", new=AsyncMock()) as mock_create_mention:
             svc = DriveService(db)
@@ -216,7 +240,10 @@ class TestToggleStarFileNotificationTrigger:
 
             # unstar 不通知
             mock_create_mention.assert_not_called()
-            assert result.is_starred is False
+            assert result is not None
+            f, starred_now, starred_at_now = result
+            assert starred_now is False
+            assert starred_at_now is None
 
 
 # ============================================================================

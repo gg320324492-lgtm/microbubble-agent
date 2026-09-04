@@ -34,6 +34,7 @@ from app.models.chat_history import ChatSession, ChatMessage, ChatShare  # #043 
 from app.models.drive_share import DriveFolderShare, DriveFolderMember  # v2 PR7 文件夹分享/成员
 from app.models.drive_comment import DriveComment  # v2 PR9 评论 thread
 from app.models.drive_file_version import DriveFileVersion  # v2 PR9 文件版本历史
+from app.models.drive_file_star import DriveFileStar  # 批次① 收藏个人化 alembic 134
 from app.models.drive_version_tag import DriveVersionTag  # v2 PR15 文件版本标签 (W68 第 12 批 B-2)
 from app.models.push_subscription import PushSubscription, PushTopic, PushTopicSubscription  # v3.2 PWA Push
 from app.models.team_folder import TeamFolder, TeamFolderAuditLog  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
@@ -72,6 +73,7 @@ __all__ = [
     "DriveFolderMember",     # v2 PR7 文件夹邀请成员
     "DriveComment",          # v2 PR9 评论 thread
     "DriveFileVersion",      # v2 PR9 文件版本历史
+    "DriveFileStar",         # 批次① 收藏个人化 (alembic 134)
     "DriveVersionTag",       # v2 PR15 文件版本标签 (W68 第 12 批 B-2)
     "PushSubscription",      # v3.2 PWA 推送订阅
     "PushTopic",             # v3.2 PWA 推送主题

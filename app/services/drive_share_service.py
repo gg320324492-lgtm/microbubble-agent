@@ -103,6 +103,21 @@ async def _check_folder_share_authority(
     if folder.owner_id == user_id:
         return folder, "admin"
 
+    # 批次① B5: 2026-09-05 角色扁平化 + 单一团队空间 — 任何在世成员隐含 admin。
+    # 对齐 file 级先例 (drive_files.py create_share_link: owner 门禁已删全员可分享)
+    # 与 alembic 132 (Member.role 归一) 口径; DriveFolderMember permission 列降级为
+    # 记录机制 (与 folder 协作者名单扁平化决策一致), 不再构成分享操作的上限。
+    # 在世判定: Member 无 deleted_at 列, 用 is_active (与 get_current_user 禁号口径
+    # 一致) — 已禁/已删号成员不享受隐含 admin, 继续走 member 行 / 403 老路径。
+    alive = (await db.execute(
+        select(Member.id).where(
+            Member.id == user_id,
+            Member.is_active.is_(True),
+        )
+    )).scalar_one_or_none()
+    if alive is not None:
+        return folder, "admin"
+
     # 检查 DriveFolderMember
     member_row = (await db.execute(
         select(DriveFolderMember).where(

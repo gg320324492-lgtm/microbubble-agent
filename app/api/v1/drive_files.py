@@ -25,6 +25,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1._drive_error_helper import (
@@ -37,6 +38,7 @@ from app.api.v1._drive_error_helper import (
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.knowledge import Knowledge
+from app.models.folder import Folder
 from app.models.member import Member
 from app.services.drive_service import (
     DriveService,
@@ -82,6 +84,9 @@ class DriveFileItem(BaseModel):
     # v2 PR2: 收藏字段
     is_starred: bool = False
     starred_at: Optional[str] = None
+    # 批次① B6 搜索结果配套: 所属文件夹名 (列表端点批量 SELECT, 搜索态必带; 前端
+    # FileCard/三栏工作台"位置"列消费)。folder_id 为 None (顶级) 时也返回 None。
+    folder_name: Optional[str] = None
     # v2 PR4: 秒传 + 版本历史
     file_hash: Optional[str] = None
     is_latest: bool = True
@@ -213,13 +218,33 @@ class PreviewResponse(BaseModel):
     first_page_url: Optional[str] = None  # pdf 公开读 (CDN/预签名)
 
 
-def _to_item(k: Knowledge, owner_lookup: Optional[dict] = None) -> DriveFileItem:
+async def _folder_name_map(db: AsyncSession, items) -> dict:
+    """批量查本页文件所属 folder {id: name} — B6 搜索结果 / 三栏工作台"位置"列, 防 N+1。"""
+    fids = {x.folder_id for x in items if x.folder_id is not None}
+    if not fids:
+        return {}
+    rows = (await db.execute(
+        select(Folder.id, Folder.name).where(Folder.id.in_(fids))
+    )).all()
+    return {r[0]: r[1] for r in rows}
+
+
+def _to_item(
+    k: Knowledge,
+    owner_lookup: Optional[dict] = None,
+    starred_ids: Optional[set] = None,
+    folder_map: Optional[dict] = None,
+) -> DriveFileItem:
     """Build DriveFileItem.
 
     v2.16 (2026-07-11): 可选 owner_lookup 传 {member_id: Member} 字典,
     一次 JOIN 查所有 owner 后批量 attach (避免 N+1 query).
     老 callsite 不传 owner_lookup 时, owner_name/owner_username 字段为 None,
     前端 fallback 到 "#<created_by>" 显示 (CLAUDE.md 兼容原则).
+
+    批次① 收藏个人化 (alembic 134): 可选 starred_ids 传"当前成员收藏过"的
+    {file_id} 集合 (列表端点先批量 SELECT), **响应字段名 is_starred 不变**但语义
+    升级为 per-user 视图; 不传时 fallback legacy 列 (详情/老 callsite 兼容)。
     """
     owner_name = None
     owner_username = None
@@ -227,6 +252,10 @@ def _to_item(k: Knowledge, owner_lookup: Optional[dict] = None) -> DriveFileItem
         m = owner_lookup[k.created_by]
         owner_name = m.name if m.name else None
         owner_username = m.username if m.username else None
+
+    folder_name = None
+    if folder_map and k.folder_id is not None:
+        folder_name = folder_map.get(k.folder_id)
 
     remaining_days = None
     auto_delete_at = None
@@ -263,8 +292,11 @@ def _to_item(k: Knowledge, owner_lookup: Optional[dict] = None) -> DriveFileItem
         download_count=k.download_count or 0,
         share_token=k.share_token,
         share_expires_at=str(k.share_expires_at) if k.share_expires_at else None,
-        is_starred=bool(k.is_starred),
+        # 收藏个人化: 传了 starred_ids 即 per-user 视图; legacy starred_at 仅在
+        # 无 per-user 覆盖时透出 (前端主要消费 is_starred)
+        is_starred=(k.id in starred_ids) if starred_ids is not None else bool(k.is_starred),
         starred_at=str(k.starred_at) if k.starred_at else None,
+        folder_name=folder_name,
         file_hash=k.file_hash,        # PR4
         is_latest=bool(k.is_latest),  # PR4
         version_number=k.version_number or 1,  # PR4
@@ -420,6 +452,12 @@ async def list_drive_files(
         False,
         description="v2.21: folder_id=None 时是否包含 sub folder PPT (🌐 团队共享盘顶级 view 用)",
     ),
+    # 批次① B6 (2026-09-05): 文件名/标题中缀搜索 (转义 % _ 字面量; 空/不传 = 行为与老版完全一致)
+    search: Optional[str] = Query(
+        None,
+        max_length=100,
+        description="按文件名/标题模糊搜索 (全盘跨文件夹, 搜索态忽略 folder 约束)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
@@ -429,6 +467,10 @@ async def list_drive_files(
     v2 PR6-P19: view 参数隔离个人/团队共享盘. **已退役**: personal/team/all 均返回
       全量团队文件 (is_team_shared_filter 恒 None), 老客户端不炸。
     v2.21: include_subfolders 继续接受; 单一空间下不再按 view 屏蔽。
+    批次① B6: search 非空时 folder 约束失效 (folder_id 置 None + include_subfolders
+      置 True → 不加 folder filter, 全盘跨夹命中; 文件名中缀走 134 的 trgm GIN 索引)。
+    批次① 收藏个人化: is_starred 响应字段升级为**当前成员**视角 (批量 SELECT 本页
+      drive_file_stars, 无 N+1)。
     """
     # 参数合法性照旧校验 (老客户端可能传非法值)
     if view not in ("personal", "team", "all"):
@@ -438,6 +480,12 @@ async def list_drive_files(
         )
     # v2 PR6-P19 收口: 恒 None = 不按 is_team_shared 过滤 (数据迁移 133 全部回填 true)
     is_team_shared_filter = None
+
+    # B6 搜索态: 忽略 folder 约束 (全盘搜), 空 search 走原路径 0 行为变化
+    searching = bool(search and search.strip())
+    if searching:
+        folder_id = None
+        include_subfolders = True
 
     svc = DriveService(db)
     try:
@@ -455,11 +503,16 @@ async def list_drive_files(
             file_type=file_type,
             is_team_shared=is_team_shared_filter,
             include_subfolders=include_subfolders,
+            search=search,
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
+    # 收藏个人化: 一次批量 SELECT 本页 ids 的本人 star 集合, attach 到 is_starred
+    starred_ids = await svc.get_starred_ids([x.id for x in items], current_user.id)
+    # B6 搜索态: 结果跨夹, 批量带出所属文件夹名 (非搜索态同样填充, 前端选择消费)
+    folder_map = await _folder_name_map(db, items)
     return DriveFileListResponse(
-        items=[_to_item(x) for x in items],
+        items=[_to_item(x, starred_ids=starred_ids, folder_map=folder_map) for x in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -792,7 +845,38 @@ class BatchOperationResponse(BaseModel):
     skipped_reasons: Optional[dict] = None  # {file_id: "越权/folder不兼容/不在trash/..."}
 
 
+class BatchStarRequest(BaseModel):
+    """批次①: 批量收藏请求体 (per-user 视角, 幂等)"""
+    file_ids: List[int]
+    starred: bool = True  # True=收藏, False=取消收藏
+
+
+class BatchStarResponse(BaseModel):
+    """批次①: 批量收藏响应 (updated = 命中目标状态的本人在册 drive 文件数)"""
+    updated: int
+
+
 # ---------- 收藏 ----------
+
+@router.post("/files/batch-star")
+async def batch_star_files(
+    payload: BatchStarRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """批量收藏/取消收藏 (批次① 收藏个人化, 仅影响**当前成员**自己的收藏夹).
+
+    幂等: 重复收藏同批 id 不产生重复行 (ON CONFLICT DO NOTHING), 取消未收藏的 id
+    也不报错; kb 行/不存在 id 静默跳过。返回 {updated: n}。
+    """
+    svc = DriveService(db)
+    updated = await svc.batch_star_files(
+        payload.file_ids,
+        current_user.id,
+        starred=payload.starred,
+    )
+    return BatchStarResponse(updated=updated)
+
 
 @router.post("/files/{file_id}/toggle-star", response_model=ToggleStarResponse)
 async def toggle_file_star(
@@ -800,15 +884,16 @@ async def toggle_file_star(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """切换文件收藏状态 (2026-09 单一团队空间: 任何成员可 star; is_starred 全局限列对全员生效). 404 仅在文件不存在."""
+    """切换文件收藏状态 (批次① 收藏个人化: 仅影响当前成员自己的收藏夹). 404 仅在文件不存在."""
     svc = DriveService(db)
-    f = await svc.toggle_star_file(file_id, current_user_id=current_user.id)
-    if f is None:
+    result = await svc.toggle_star_file(file_id, current_user_id=current_user.id)
+    if result is None:
         raise HTTPException(status_code=404, detail="file 不存在")
+    f, starred_now, starred_at_now = result
     return ToggleStarResponse(
         file_id=f.id,
-        is_starred=bool(f.is_starred),
-        starred_at=str(f.starred_at) if f.starred_at else None,
+        is_starred=starred_now,
+        starred_at=str(starred_at_now) if starred_at_now else None,
     )
 
 
@@ -823,7 +908,8 @@ async def list_starred_files(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """列我收藏的文件 (仅 created_by == me)."""
+    """列**仅当前成员的个人收藏** (批次① N2 修正 docstring: 134 起 drive_file_stars
+    per-user 关系, A 的收藏不出现在 B 的列表; 旧文案"仅 created_by == me"与实现均不符)."""
     svc = DriveService(db)
     items, total = await svc.list_starred(
         current_user_id=current_user.id,
@@ -832,8 +918,11 @@ async def list_starred_files(
         sort_by=sort_by or "starred_at",
         sort_order=sort_order or "desc",
     )
+    # 列表本身已按本人 star 过滤, is_starred 恒 True, 但仍走同一 attach 路径保证语义单一
+    starred_ids = await svc.get_starred_ids([x.id for x in items], current_user.id)
+    folder_map = await _folder_name_map(db, items)
     return StarredListResponse(
-        items=[_to_item(x) for x in items],
+        items=[_to_item(x, starred_ids=starred_ids, folder_map=folder_map) for x in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -2164,7 +2253,8 @@ async def get_mobile_feed(
             current_user_id=user.id, sort_by="updated_at", sort_order="desc",
             page=1, page_size=limit,
         )
-        feed.recent = [_drive_file_to_dict(f, user.id) for f in items]
+        sids = await svc.get_starred_ids([x.id for x in items], user.id)
+        feed.recent = [_drive_file_to_dict(f, user.id, sids) for f in items]
     except Exception as e:
         logger.warning(f"[MobileFeed] recent failed: {e}")
 
@@ -2174,7 +2264,8 @@ async def get_mobile_feed(
             current_user_id=user.id, sort_by="starred_at", sort_order="desc",
             page=1, page_size=limit, starred_only=True,
         )
-        feed.starred = [_drive_file_to_dict(f, user.id) for f in items]
+        sids = {x.id for x in items}  # starred_only=True 已按本人过滤
+        feed.starred = [_drive_file_to_dict(f, user.id, sids) for f in items]
     except Exception as e:
         logger.warning(f"[MobileFeed] starred failed: {e}")
 
@@ -2184,7 +2275,8 @@ async def get_mobile_feed(
             current_user_id=user.id, sort_by="updated_at", sort_order="desc",
             page=1, page_size=limit, visibility_filter="team",
         )
-        feed.team = [_drive_file_to_dict(f, user.id) for f in items]
+        sids = await svc.get_starred_ids([x.id for x in items], user.id)
+        feed.team = [_drive_file_to_dict(f, user.id, sids) for f in items]
     except Exception as e:
         logger.warning(f"[MobileFeed] team failed: {e}")
 
@@ -2216,11 +2308,18 @@ async def get_mobile_feed(
     return feed
 
 
-def _drive_file_to_dict(file: Knowledge, user_id: int) -> dict:
+def _drive_file_to_dict(file: Knowledge, user_id: int, starred_ids=None) -> dict:
     """PR8.5 helper: Knowledge → mobile feed dict
 
     复用 drive_service 已有 _to_dict 模式 (如果有), 这里独立实现避免循环 import
+
+    批次① 收藏个人化: starred_ids (本人 star 集合) 给定时 per-user 覆盖
+    is_starred 字段; 未给定时退回 legacy 列 (仅供无 db 上下文的兜底路径)。
     """
+    if starred_ids is not None:
+        starred_flag = file.id in starred_ids
+    else:
+        starred_flag = bool(getattr(file, "is_starred", False))
     return {
         "id": file.id,
         "title": file.title,
@@ -2228,7 +2327,7 @@ def _drive_file_to_dict(file: Knowledge, user_id: int) -> dict:
         "file_type": file.file_type,
         "file_size": file.file_size,
         "visibility": file.visibility,
-        "is_starred": bool(getattr(file, "is_starred", False)),
+        "is_starred": starred_flag,
         "updated_at": file.updated_at.isoformat() if file.updated_at else None,
         "folder_id": getattr(file, "folder_id", None),
     }

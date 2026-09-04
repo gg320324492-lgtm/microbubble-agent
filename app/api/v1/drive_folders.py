@@ -559,18 +559,25 @@ async def restore_folder(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """恢复软删 folder (3 天保留期内, owner 或 admin)
+    """恢复软删 folder (3 天保留期内, 任何成员; 2026-09-05 角色扁平化)
 
-    v2.13 (2026-07-10): admin 越权支持 (与 soft_delete_folder 对齐)
+    批次① B1: restore 与 recursive soft_delete 对称 — 级联删进回收站的整棵子树
+    (同批时间戳判据) 一次恢复全部复活; 单独早删的子夹不复活。计数见日志。
+    response_model 保持 FolderItem (取 result["folder"], 前端契约不变)。
     """
     svc = FolderService(db)
-    f = await svc.restore_folder(
+    result = await svc.restore_folder(
         folder_id,
         current_user_id=current_user.id,
         is_admin=True,  # 2026-09-05 角色扁平化: 任何成员可恢复任意 folder
     )
-    if f is None:
+    if result is None:
         raise NotFoundException(resource="Folder", resource_id=folder_id)
+    f = result["folder"]
+    logger.info(
+        f"[drive_folders.restore] id={folder_id} "
+        f"restored_folders={result['restored_folders']} restored_files={result['restored_files']}"
+    )
     return _to_item(f)
 
 

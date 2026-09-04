@@ -589,12 +589,16 @@ async def test_soft_delete_and_restore(alice_bob):
         items, _ = await svc.list_folders(current_user_id=alice.id)
         assert fid not in [x.id for x in items]
 
-    # restore
+    # restore — 批次① B1: restore_folder 返回契约升级为 dict
+    # {"folder": Folder, "restored_folders": int, "restored_files": int}
     async with factory() as session:
         svc = FolderService(session)
-        f = await svc.restore_folder(fid, current_user_id=alice.id)
-        assert f is not None
+        result = await svc.restore_folder(fid, current_user_id=alice.id)
+        assert result is not None
+        f = result["folder"]
         assert f.deleted_at is None
+        assert result["restored_folders"] == 1  # 空夹单独删的单行批
+        assert result["restored_files"] == 0
         await session.commit()
 
 
