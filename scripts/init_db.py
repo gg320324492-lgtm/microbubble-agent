@@ -88,19 +88,6 @@ async def seed_data():
                 bio="副教授，课题组负责人，长期从事微纳米气泡技术研究与应用开发"
             ),
 
-            # 老师
-            Member(
-                username="yangxue",
-                password_hash=default_password_hash,
-                name="杨雪",
-                grade="老师",
-                research_area="",
-                skills=[],
-                role="member",
-                personal_wechat_id="YY",
-                bio=""
-            ),
-
             # 博士生
             Member(
                 username="zhaohangjia",
@@ -311,16 +298,6 @@ async def seed_data():
                 skills=["表面去除", "文献调研", "实验辅助"],
                 role="member",
                 bio="参与表面污染去除实验与数据整理，支持文献调研与材料准备"
-            ),
-            Member(
-                username="dengguoxiang",
-                password_hash=default_password_hash,
-                name="邓国祥",
-                grade="大三",
-                research_area="自由基研究",
-                skills=["实验辅助", "数据分析", "自由基"],
-                role="member",
-                bio="参与溃灭与自由基相关实验辅助与基础数据分析"
             ),
 
             # 已毕业

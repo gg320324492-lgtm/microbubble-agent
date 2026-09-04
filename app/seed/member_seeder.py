@@ -1,4 +1,4 @@
-"""默认成员 seed 服务 — 启动时幂等初始化 24 个课题组成员
+"""默认成员 seed 服务 — 启动时幂等初始化 22 个课题组成员
 
 W2 +N 2026-08-04: 修复 init_db.py 永跳 bug + 接入 lifespan
 - 按 username 检测 (不是 count > 0)
@@ -22,7 +22,8 @@ from app.models.member import Member
 logger = logging.getLogger("microbubble.member_seeder")
 
 
-# 24 个默认成员数据 (从 scripts/init_db.py 抽取, 字段对齐 Member model)
+# 22 个默认成员数据 (从 scripts/init_db.py 抽取, 字段对齐 Member model;
+# 2026-09-05: 杨雪/邓国祥 账号已删除, 移出 seed 名单)
 DEFAULT_MEMBERS: list[dict[str, Any]] = [
     # 副教授/PI
     {
@@ -32,17 +33,6 @@ DEFAULT_MEMBERS: list[dict[str, Any]] = [
         "research_area": "微纳米气泡技术与应用",
         "skills": ["项目管理", "气泡生成", "水处理", "技术产业化"],
         "bio": "副教授，课题组负责人，长期从事微纳米气泡技术研究与应用开发",
-        "is_active": True,
-    },
-    # 老师
-    {
-        "username": "yangxue",
-        "name": "杨雪",
-        "grade": "老师",
-        "research_area": "",
-        "skills": [],
-        "personal_wechat_id": "YY",
-        "bio": "",
         "is_active": True,
     },
     # 博士生
@@ -230,15 +220,6 @@ DEFAULT_MEMBERS: list[dict[str, Any]] = [
         "research_area": "表面污染去除",
         "skills": ["表面去除", "文献调研", "实验辅助"],
         "bio": "参与表面污染去除实验与数据整理，支持文献调研与材料准备",
-        "is_active": True,
-    },
-    {
-        "username": "dengguoxiang",
-        "name": "邓国祥",
-        "grade": "大三",
-        "research_area": "自由基研究",
-        "skills": ["实验辅助", "数据分析", "自由基"],
-        "bio": "参与溃灭与自由基相关实验辅助与基础数据分析",
         "is_active": True,
     },
     # 已毕业
