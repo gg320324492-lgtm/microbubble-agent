@@ -40,6 +40,9 @@ const theme = useThemeStore()
   position: relative;
   width: 46px;
   height: 22px;
+  /* mobile-base.css 全局 button{min-height:44px} 触控保险会撑方轨道, 显式压回 */
+  min-height: 22px;
+  align-self: center;
   padding: 0;
   border-radius: 12px;
   border: 1px solid #c9d2ca;

@@ -637,10 +637,14 @@ nav.menu {
   font-size: 17px;
 }
 .fold:hover { background: var(--dg-teal-soft); color: var(--dg-teal); }
+.fold:focus { outline: none; }
+.fold:focus-visible { outline: 2px solid var(--dg-teal); outline-offset: 1px; }
 
 .crumbs { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--dg-fog); }
 .crumbs .home { cursor: pointer; }
 .crumbs .home:hover { color: var(--dg-teal); }
+.crumbs .home:focus { outline: none; }
+.crumbs .home:focus-visible { outline: 2px solid var(--dg-teal); outline-offset: 2px; border-radius: 4px; }
 .crumbs .sep { opacity: 0.5; }
 .crumbs b { color: var(--dg-ink); font-weight: 600; }
 
@@ -667,6 +671,8 @@ nav.menu {
   place-items: center;
   width: 32px;
   height: 32px;
+  min-height: 32px;
+  align-self: center;
   padding: 0;
   border: none;
   background: transparent;
@@ -708,6 +714,10 @@ nav.menu {
 .uchip .ur { font-family: var(--dg-mono); font-size: 9px; color: var(--dg-fog); letter-spacing: 0.1em; }
 .uchip .s { width: 12px; height: 12px; }
 .uchip .chev { color: var(--dg-fog); }
+/* div[role=button] 点击后 Chrome 也会判 focus-visible → 全局珊瑚环;
+   收成家族色 teal, 鼠标点击不留残环 */
+.uchip:focus { outline: none; }
+.uchip:focus-visible { outline: 2px solid var(--dg-teal); outline-offset: 2px; border-radius: 8px; }
 
 .main {
   background-color: var(--color-bg-page);
