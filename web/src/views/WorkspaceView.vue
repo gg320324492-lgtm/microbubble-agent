@@ -1,31 +1,28 @@
 <template>
   <div class="workspace-view">
-    <!-- 铁律 31: 全项目 tab 统一用 <TabStrip> -->
-    <div class="tab-strip-wrapper">
-      <TabStrip v-model="activeTab" :items="tabItems" aria-label="团队协作视图切换" />
-    </div>
-
-    <div v-show="activeTab === 'dossier'" role="tabpanel"
-      :aria-labelledby="`tab-strip-dossier`" class="tab-panel">
+    <!-- 2026-09-04 主拍: 团队协作页 = V 稿「卷宗」单一综合界面;
+         项目/成员/声纹三个重复 tab 降级为管理抽屉 (CRUD/录入基建 0 损失, 老 ?tab= 深链自动开抽屉) -->
+    <div class="tab-panel">
       <DossierPanel
-        :active="activeTab === 'dossier'"
+        ref="dossierRef"
         @open-project="openProjectDetail"
         @open-member="openMemberDetail"
-        @goto-projects="activeTab = 'projects'"
-      />
+        @goto-projects="openManage('projects')"
+      >
+        <template #actions>
+          <span class="mgmt-btn" role="button" tabindex="0" @click="openManage('projects')">项目管理</span>
+          <span class="mgmt-btn" role="button" tabindex="0" @click="openManage('members')">成员管理</span>
+          <span class="mgmt-btn" role="button" tabindex="0" @click="openManage('voiceprint')">声纹管理</span>
+        </template>
+      </DossierPanel>
     </div>
-    <div v-show="activeTab === 'projects'" role="tabpanel"
-      :aria-labelledby="`tab-strip-projects`" class="tab-panel">
-      <ProjectsPanel @open-detail="openProjectDetail" />
-    </div>
-    <div v-show="activeTab === 'members'" role="tabpanel"
-      :aria-labelledby="`tab-strip-members`" class="tab-panel">
-      <MembersPanel @open-detail="openMemberDetail" />
-    </div>
-    <div v-show="activeTab === 'voiceprint'" role="tabpanel"
-      :aria-labelledby="`tab-strip-voiceprint`" class="tab-panel">
-      <VoiceprintsPanel />
-    </div>
+
+    <!-- 管理抽屉: 原三个 Panel 原样复用 (自带创建/编辑/删除 dialog 与声纹录入基建) -->
+    <el-drawer v-model="manageVisible" :size="'78%'" :title="manageTitle" class="manage-drawer" @closed="onDrawerClosed">
+      <ProjectsPanel v-if="manageDrawer === 'projects'" @open-detail="openProjectDetail" />
+      <MembersPanel v-else-if="manageDrawer === 'members'" @open-detail="openMemberDetail" />
+      <VoiceprintsPanel v-else-if="manageDrawer === 'voiceprint'" />
+    </el-drawer>
 
     <!-- 项目详情 dialog (ProjectsPanel emit 'open-detail' 触发) — J 稿卷宗开卷语言 -->
     <el-dialog
@@ -176,16 +173,20 @@
  *   el-descriptions/el-tag/el-timeline 全部移除; 数据拉取逻辑零改动
  * - TabStrip 同步换标本签皮肤 (共享组件, 全站生效)
  * - 幽灵成员 id (不在成员列表) 与卡片口径统一: 显示「用户不存在」
+ *
+ * 2026-09-04 V 稿综合界面收口 (主拍: 只保留卷宗一屏):
+ * - TabStrip 三签移除, DossierPanel 为唯一主视图
+ * - 项目/成员/声纹 Panel 原样降级进 el-drawer「管理台」(创建/编辑/删除/声纹录入基建 0 损失)
+ * - 老 ?tab=projects|members|voiceprint 深链 → 自动弹对应抽屉 (兼容书签/历史消息链接)
+ * - 抽屉关闭后 dossierRef.fetchProjects() 回刷, 编辑即时反映到卷宗账
  */
 
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { Folder, User, Microphone, Collection } from '@element-plus/icons-vue'
 import { useMemberStore } from '@/stores/member'
 import { cleanDescriptionForDisplay } from '@/utils/textSanitize'
-import TabStrip from '@/components/common/TabStrip.vue'
 import DossierPanel from './workspace/DossierPanel.vue'
 import ProjectsPanel from './workspace/ProjectsPanel.vue'
 import MembersPanel from './workspace/MembersPanel.vue'
@@ -195,34 +196,33 @@ const route = useRoute()
 const router = useRouter()
 const memberStore = useMemberStore()
 
-// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-// 2026-09-04 V 稿「卷宗」实装: dossier 放第一签为默认落地 (卷为纲人为目), 老 ?tab=projects 链接不失效
-const VALID_TABS = ['dossier', 'projects', 'members', 'voiceprint']
-const activeTab = ref(
-  route.query.tab && VALID_TABS.includes(String(route.query.tab))
-    ? String(route.query.tab)
-    : 'dossier'
-)
+// ====== 管理抽屉 (原三 tab 降级收纳) ======
+// URL 即状态: ?tab=projects|members|voiceprint = 对应抽屉打开 (深链 0 特殊路径);
+// 抽屉关闭才清 query。App.vue router-view :key=route.fullPath — query 变化会重挂载组件,
+// 因此绝不能在「开抽屉前」replace 清 query (旧实例连抽屉一起被卸), 只在 close 后清。
+const MANAGE_TITLES = { projects: '项目卷册 · 管理', members: '成员名册 · 管理', voiceprint: '声纹档案 · 管理' }
+const MANAGE_KEYS = Object.keys(MANAGE_TITLES)
+const manageDrawer = ref('')
+const manageTitle = ref('')
+const manageVisible = ref(false)
+const dossierRef = ref(null)
 
-// 铁律 30: EP 图标 named import + 通过 props 传入
-const tabItems = [
-  { key: 'dossier',    label: '卷宗', icon: Collection },
-  { key: 'projects',   label: '项目', icon: Folder },
-  { key: 'members',    label: '成员', icon: User },
-  { key: 'voiceprint', label: '声纹', icon: Microphone },
-]
+function openManage(key) {
+  if (!MANAGE_KEYS.includes(key)) return
+  manageDrawer.value = key
+  manageTitle.value = MANAGE_TITLES[key]
+  manageVisible.value = true
+}
 
-// 铁律 29: tab → URL 同步
-watch(activeTab, (tab) => {
-  router.replace({ path: '/workspace', query: { ...route.query, tab } })
-})
-
-// 铁律 29: URL → tab 反向同步（已有, 强化）
-watch(() => route.query.tab, (t) => {
-  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
-    activeTab.value = String(t)
+function onDrawerClosed() {
+  // 编辑可能改了项目/成员, 关抽屉回刷卷宗账
+  manageDrawer.value = ''
+  dossierRef.value?.fetchProjects?.()
+  memberStore.fetchMembers?.().catch?.(() => {})
+  if (MANAGE_KEYS.includes(String(route.query.tab || '')) || route.query.tab) {
+    router.replace({ path: '/workspace' })
   }
-})
+}
 
 // ====== 项目详情 dialog (从 ProjectsPanel 接收 open-detail) ======
 const projectDetailVisible = ref(false)
@@ -302,8 +302,9 @@ function detailMemberName(id) {
   return m?.name || '用户不存在'
 }
 
+// 深链: 首挂载时 ?tab= 即抽屉状态, 直接开 (不 replace → 不触发 :key=fullPath 重挂载)
 onMounted(async () => {
-  // 主动 fetch 一次成员数据 (避免 3 个 Panel 各自重复请求)
+  // 主动 fetch 一次成员数据 (避免卷宗 + Panel 各自重复请求)
   if (memberStore.members.length === 0) {
     try {
       await memberStore.fetchMembers()
@@ -311,9 +312,11 @@ onMounted(async () => {
       console.warn('fetchMembers 失败:', e)
     }
   }
-  // 默认 tab 同步到 URL
-  if (!route.query.tab) {
-    router.replace({ path: '/workspace', query: { tab: 'dossier' } })
+  const t = String(route.query.tab || '')
+  if (MANAGE_KEYS.includes(t)) {
+    openManage(t)
+  } else if (t === 'dossier') {
+    router.replace({ path: '/workspace' })
   }
 })
 </script>
@@ -325,10 +328,18 @@ onMounted(async () => {
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
-/* TabStrip 容器 + TabPanel 容器（铁律 31: 替代 el-tabs border-card） */
-.tab-strip-wrapper {
-  margin-bottom: var(--space-4);
+/* V 稿综合界面: 管理台入口按钮 (J 卷宗语言, slot 进 DossierPanel 卷首) */
+.mgmt-btn {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 10px; letter-spacing: .1em;
+  color: var(--ws-steel, #5a6b6a);
+  border: 1px solid var(--ws-hair, #c9d2ca);
+  border-radius: 5px; padding: 4px 10px; margin-right: 6px;
+  cursor: pointer; background: transparent; user-select: none;
 }
+.mgmt-btn:hover { color: var(--ws-teal, #0e766e); border-color: var(--ws-teal, #0e766e); }
+.mgmt-btn:focus-visible { outline: 2px solid var(--ws-teal, #0e766e); outline-offset: 1px; }
+
 .tab-panel {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
