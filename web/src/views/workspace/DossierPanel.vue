@@ -5,6 +5,7 @@
       <h2>团队 · 卷为纲，人为目</h2>
       <span class="sub">{{ headCount }}</span>
       <span class="grow"></span>
+      <slot name="actions"></slot>
       <span class="hstamp ok">名册挂卷下 · 单页总览</span>
     </div>
 
@@ -178,6 +179,7 @@ async function fetchProjects() {
 onMounted(fetchProjects)
 // tab 切回卷宗时刷新, 保证项目/成员编辑后账目不 stale
 watch(() => props.active, (v) => { if (v) fetchProjects() })
+defineExpose({ fetchProjects })
 
 // ---------------------------------------------------------------- 派生
 
