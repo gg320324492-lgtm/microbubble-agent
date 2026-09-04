@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 D · 科研档案台账风 — 课题组网盘</title>
+<style>
+:root {
+  --primary: #0E766E;  --primary-dark: #0B5D56;
+  --accent: #B07C24;
+  --primary-rgb: 14,118,110;
+  --pdf: #B3392F;  --doc: #2F5D8A;  --excel: #3E7A52;  --image: #7C4E96;
+  --ppt: #B07C24;  --video: #A84B6F;  --audio: #B07C24;  --md: #3E7A70;
+  --text: #22302C;  --text-2: #52615C;  --text-3: #8B968F;  --text-4: #B9BFB6;
+  --paper: #F2F0EB;  --card: #FFFFFF;  --line: #E5E1D8;  --line-dark: rgba(45,58,53,.62);
+  --seal: #C7502E;
+  --serif: 'Noto Serif SC','Source Han Serif SC','Songti SC',SimSun,serif;
+  --sans: 'PingFang SC','Microsoft YaHei',Inter,sans-serif;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --r: 3px;
+  --dur: 200ms;
+}
+[data-theme="dark"] {
+  --text: #E9E8E2;  --text-2: #B9C0B9;  --text-3: #8B938C;  --text-4: #5E665F;
+  --paper: #121513;  --card: #1A1E1B;  --line: #2E342F;  --line-dark: rgba(160,175,162,.5);
+  --primary: #35C2A4;  --primary-dark: #5AD0B5;
+  --seal: #E0754F;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--paper); color: var(--text); font-size: 14px; }
+/* 纸张纹理 */
+body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgba(120,100,70,.03) 27px 28px); }
+[data-theme="dark"] body::before { background-image: repeating-linear-gradient(0deg, transparent 0 27px, rgba(255,240,210,.025) 27px 28px); }
+button, a { font-family: inherit; cursor: pointer; color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.sheet { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 40px 32px 90px; min-width: 900px; }
+
+/* ── 题头 ── */
+.masthead { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 18px; border-bottom: 3px double var(--line-dark); }
+.masthead .t .pl { font-family: var(--mono); font-size: 10px; letter-spacing: .3em; color: var(--text-3); margin-bottom: 10px; }
+.masthead .t h1 { font-family: var(--serif); font-size: 34px; font-weight: 900; letter-spacing: .06em; line-height: 1.15; }
+.masthead .t h1 span { color: var(--primary-dark); }
+.masthead .t .en { font-family: var(--mono); font-size: 10.5px; letter-spacing: .22em; color: var(--text-3); margin-top: 8px; }
+.masthead .ops { display: flex; gap: 8px; padding-bottom: 4px; }
+.op { font-size: 12.5px; border: 1px solid var(--line-dark); background: var(--card); border-radius: var(--r); padding: 8px 14px; color: var(--text-2); transition: all var(--dur); white-space: nowrap; }
+.op:hover { border-color: var(--primary-dark); color: var(--primary-dark); }
+.op.solid { background: var(--text); color: var(--paper); border-color: var(--text); }
+.op.solid:hover { background: var(--primary-dark); border-color: var(--primary-dark); color: #fff; }
+
+/* 检索条 */
+.finder { margin-top: 14px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); background: var(--card); border-radius: var(--r); padding: 10px 14px; }
+.finder svg { width: 14px; height: 14px; stroke: var(--text-3); fill: none; stroke-width: 2; }
+.finder input { flex: 1; border: none; outline: none; background: none; font: inherit; font-size: 13px; color: var(--text); }
+.finder input::placeholder { color: var(--text-4); }
+.finder .mode { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--text-3); border-left: 1px solid var(--line); padding-left: 12px; white-space: nowrap; }
+
+/* ── 章节号 ── */
+.sect-h { margin: 34px 0 4px; display: flex; align-items: baseline; gap: 12px; }
+.sect-h .no { font-family: var(--serif); font-size: 15px; font-weight: 700; color: var(--primary-dark); }
+.sect-h h2 { font-family: var(--serif); font-size: 21px; font-weight: 900; letter-spacing: .04em; }
+.sect-h .en { font-family: var(--mono); font-size: 9.5px; letter-spacing: .2em; color: var(--text-4); }
+.sect-h .rule { flex: 1; border-bottom: 1px solid var(--line-dark); transform: translateY(-5px); }
+.sect-h .act { font-size: 11.5px; color: var(--text-3); text-decoration: none; }
+
+/* ── §1 标本卡 ── */
+.specimens { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 14px; }
+.spec { position: relative; background: var(--card); border: 1px solid var(--line-dark); outline: 1px solid var(--line); outline-offset: 3px; padding: 14px 16px 12px; transition: all var(--dur); }
+.spec:hover { outline-color: var(--primary); transform: translateY(-2px); }
+.spec .pl { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; color: var(--text-3); }
+.spec .pl .code { color: var(--primary-dark); font-weight: 700; }
+.spec h3 { font-family: var(--serif); font-size: 18.5px; font-weight: 900; margin: 9px 0 2px; letter-spacing: .03em; }
+.spec .kind { font-size: 11px; color: var(--text-3); }
+.spec .stat { margin-top: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 11px; color: var(--text-2); }
+.spec .stat div { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--line-dark); padding-bottom: 3px; }
+.spec .stat b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+.spec .mix { margin-top: 11px; display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--line); }
+.spec .mix i { display: block; }
+.spec .mixlab { margin-top: 5px; font-family: var(--mono); font-size: 9.5px; color: var(--text-3); display: flex; gap: 9px; }
+.spec .mixlab span { display: inline-flex; align-items: center; gap: 4px; }
+.spec .mixlab em { width: 6px; height: 6px; border-radius: 1.5px; }
+.spec .upd { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10px; color: var(--text-4); display: flex; justify-content: space-between; }
+.spec .upd a { color: var(--primary-dark); text-decoration: none; font-weight: 700; }
+.spec.star::after { content: '藏'; position: absolute; top: -1px; right: -1px; width: 30px; height: 30px; border: 1.5px solid var(--seal); color: var(--seal); border-radius: 50%; display: grid; place-items: center; font-family: var(--serif); font-size: 13px; font-weight: 700; transform: rotate(-12deg); opacity: .85; background: radial-gradient(circle, color-mix(in srgb, var(--seal) 8%, transparent), transparent 70%); }
+.spec.member { padding: 11px 14px; display: flex; align-items: center; gap: 10px; }
+.spec.member .av { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-dark); display: grid; place-items: center; font-family: var(--serif); font-weight: 900; font-size: 15px; color: var(--primary-dark); background: color-mix(in srgb, var(--primary) 8%, var(--card)); flex: none; }
+.spec.member .n { font-family: var(--serif); font-size: 16.5px; font-weight: 900; }
+.spec.member .g { font-family: var(--mono); font-size: 9.5px; color: var(--text-3); letter-spacing: .08em; margin-top: 1px; }
+.spec.member .c { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.spec.member .c small { font-size: 9px; color: var(--text-4); }
+.spec.add { display: grid; place-items: center; border-style: dashed; color: var(--text-3); font-size: 13px; outline: none; }
+.spec.add:hover { color: var(--primary-dark); }
+
+/* ── §2 台账 ── */
+.ledger-wrap { margin-top: 14px; background: var(--card); border: 1px solid var(--line-dark); }
+.filters { display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12px; flex-wrap: wrap; }
+.filters .lab { font-family: var(--mono); font-size: 9.5px; letter-spacing: .16em; color: var(--text-4); margin-right: 4px; }
+.f { border: 1px solid var(--line); background: none; font-size: 11.5px; padding: 4px 11px; border-radius: var(--r); color: var(--text-2); }
+.f .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+.f:hover { border-color: var(--line-dark); }
+.f.on { background: var(--text); color: var(--paper); border-color: var(--text); }
+.filters .right { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+table.ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ledger thead th { font-family: var(--mono); font-weight: 600; font-size: 9.5px; letter-spacing: .18em; color: var(--text-3); text-align: left; padding: 10px 14px 8px; border-bottom: 3px double var(--line-dark); white-space: nowrap; }
+.ledger thead th.num { text-align: right; }
+.ledger tbody td { padding: 9.5px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ledger tbody tr:nth-child(even) { background: color-mix(in srgb, var(--line) 18%, var(--card)); }
+.ledger tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, var(--card)); }
+.ledger tbody tr:hover .go { opacity: 1; transform: none; }
+td.num { text-align: right; font-family: var(--mono); font-size: 11.5px; color: var(--text-2); }
+td.no { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); width: 64px; }
+.nmcell { display: flex; align-items: center; gap: 9px; min-width: 300px; }
+.badge { font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; color: #fff; padding: 2.5px 6px 2px; border-radius: 2px; flex: none; }
+.nmcell .n { font-weight: 600; color: var(--text); }
+.nmcell .sub { font-size: 10.5px; color: var(--text-3); margin-top: 1px; font-family: var(--mono); }
+.ledger .who { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.ledger .who .g { color: var(--text-4); font-size: 10px; margin-left: 4px; }
+.star { font-size: 14px; color: var(--line-dark); background: none; border: none; padding: 2px; line-height: 1; }
+.star.on { color: var(--seal); text-shadow: 0 0 0.5px var(--seal); }
+.star:hover { color: var(--seal); }
+.go { opacity: 0; transform: translateX(-4px); transition: all var(--dur); font-family: var(--mono); color: var(--primary-dark); font-size: 11px; }
+.ledger .ops-td { white-space: nowrap; }
+.mini { border: 1px solid var(--line); background: var(--card); font-size: 10.5px; font-family: var(--mono); color: var(--text-3); border-radius: var(--r); padding: 3px 8px; margin-left: 4px; }
+.mini:hover { color: var(--primary-dark); border-color: var(--primary); }
+.pgbar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+.pgbar .sp { flex: 1; }
+.pg { border: 1px solid var(--line); border-radius: var(--r); background: none; font: inherit; padding: 3px 9px; color: var(--text-2); }
+.pg.on { background: var(--text); color: var(--paper); border-color: var(--text); }
+
+/* 批注浮层示意 */
+.note-demo { position: absolute; right: 8px; top: 560px; width: 216px; background: var(--card); border: 1px solid var(--line-dark); box-shadow: 0 14px 30px -10px rgba(70,50,30,.3); padding: 7px; font-size: 12.5px; z-index: 5; }
+.note-demo .h { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--text-4); padding: 4px 8px 6px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.note-demo .it { padding: 6.5px 8px; border-radius: var(--r); display: flex; gap: 9px; align-items: center; color: var(--text-2); }
+.note-demo .it:hover { background: color-mix(in srgb, var(--primary) 8%, var(--card)); color: var(--text); }
+.note-demo .it .k { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--text-4); }
+.note-demo .warn { color: var(--pdf); }
+
+/* ── §3 归档/统计 ── */
+.dual { margin-top: 16px; display: grid; grid-template-columns: 1.35fr .8fr; gap: 18px; }
+.panel { background: var(--card); border: 1px solid var(--line-dark); }
+.panel .ph { font-family: var(--mono); font-size: 9.5px; letter-spacing: .18em; color: var(--text-3); padding: 10px 14px 8px; border-bottom: 3px double var(--line-dark); display: flex; justify-content: space-between; }
+.panel .ph a { color: var(--primary-dark); text-decoration: none; }
+.dlist { font-size: 12.5px; }
+.dlist .r { display: flex; align-items: center; gap: 10px; padding: 9.5px 14px; border-bottom: 1px solid var(--line); }
+.dlist .r:last-child { border-bottom: none; }
+.dlist .r .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlist .r .d { font-family: var(--mono); font-size: 10px; color: var(--text-4); }
+.dlist .r .x { color: var(--pdf); font-size: 11px; border: 1px solid var(--line); background: none; border-radius: var(--r); padding: 2px 7px; font-family: var(--mono); }
+.dlist .r .x:hover { color: var(--pdf); border-color: var(--pdf); }
+.dlist .r .restore { color: var(--primary-dark); border-color: color-mix(in srgb, var(--primary) 45%, var(--line)); }
+.stats { padding: 14px; display: flex; flex-direction: column; gap: 9px; }
+.st { display: flex; align-items: baseline; gap: 10px; font-size: 12px; color: var(--text-2); }
+.st .lab { width: 58px; flex: none; }
+.st .bar { flex: 1; height: 8px; background: color-mix(in srgb, var(--line) 60%, var(--card)); border: 1px solid var(--line); display: flex; }
+.st .bar i { height: 100%; }
+.st .v { font-family: var(--mono); font-size: 11px; color: var(--text-3); width: 64px; text-align: right; flex: none; }
+.cap-note { margin-top: 12px; padding: 11px 14px; background: color-mix(in srgb, var(--primary) 6%, var(--card)); border: 1px dashed var(--primary); font-size: 12px; color: var(--text-2); line-height: 1.7; }
+.cap-note b { color: var(--primary-dark); }
+
+.foot { margin-top: 44px; padding-top: 14px; border-top: 3px double var(--line-dark); display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; color: var(--text-4); }
+
+.prop-bar { position: fixed; left: 16px; bottom: 14px; z-index: 99; display: flex; gap: 8px; }
+.prop-bar a { font-size: 12px; padding: 6px 12px; border-radius: 4px; background: var(--card); border: 1px solid var(--line-dark); color: var(--text-2); text-decoration: none; }
+.prop-bar a.on { background: var(--text); color: var(--paper); border-color: var(--text); }
+.prop-bar button { font-size: 12px; padding: 6px 12px; border-radius: 4px; background: var(--card); border: 1px solid var(--line-dark); color: var(--text-2); }
+</style>
+</head>
+<body data-page="d">
+<div class="sheet" style="position:relative">
+
+  <header class="masthead">
+    <div class="t">
+      <p class="pl">MICROBUBBLE LAB · ARCHIVE PL.00 · 2026-09</p>
+      <h1>课题组网盘 <span>·</span> 档案台账</h1>
+      <p class="en">RESEARCH ARCHIVE &nbsp;/&nbsp; 团队共享盘 · 全员等权 · 单一空间</p>
+    </div>
+    <div class="ops">
+      <button class="op">＋ 立卷 (新建文件夹)</button>
+      <button class="op">入档 (上传文件夹)</button>
+      <button class="op solid">归档文件 (上传) ↑</button>
+    </div>
+  </header>
+
+  <div class="finder">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>
+    <input placeholder="按档名检索全库 — 中文 / 英文 / 日期串, 如「组会 0825」">
+    <span class="mode">FULL-TEXT · 全盘</span>
+  </div>
+
+  <!-- §1 -->
+  <div class="sect-h"><span class="no">§1</span><h2>卷宗总览</h2><span class="en">FONDS &amp; FILES</span><span class="rule"></span><a class="act" href="#" data-expand-members>展开成员卷 25 宗 ›</a></div>
+  <div class="specimens">
+    <div class="spec star">
+      <div class="pl"><span class="code">PL.01 / DR-PPT</span><span>DIR</span></div>
+      <h3>组会 PPT</h3>
+      <div class="kind">例行例会 · 学术轮报 · 2024 起连续归档</div>
+      <div class="stat"><div>条目 <b>23</b></div><div>容量 <b>342 MB</b></div><div>密级 <b>组内</b></div><div>入库 <b>已 RAG</b></div></div>
+      <div class="mix"><i style="width:56%;background:var(--ppt)"></i><i style="width:22%;background:var(--pdf)"></i><i style="width:13%;background:var(--audio)"></i><i style="width:9%;background:var(--md)"></i></div>
+      <div class="mixlab"><span><em style="background:var(--ppt)"></em>PPT×13</span><span><em style="background:var(--pdf)"></em>PDF×5</span><span><em style="background:var(--audio)"></em>录音×3</span><span><em style="background:var(--md)"></em>纪要×2</span></div>
+      <div class="upd"><span>UPD 2026-09-04 · 冯懿鑫</span><a>开卷 ›</a></div>
+    </div>
+    <div class="spec">
+      <div class="pl"><span class="code">PL.02 / DR-REF</span><span>DIR</span></div>
+      <h3>文献库</h3>
+      <div class="kind">综述 · 原文 · 精读笔记</div>
+      <div class="stat"><div>条目 <b>41</b></div><div>容量 <b>1.9 GB</b></div><div>密级 <b>组内</b></div><div>入库 <b>已 RAG</b></div></div>
+      <div class="mix"><i style="width:88%;background:var(--pdf)"></i><i style="width:12%;background:var(--doc)"></i></div>
+      <div class="mixlab"><span><em style="background:var(--pdf)"></em>PDF×36</span><span><em style="background:var(--doc)"></em>笔记×5</span></div>
+      <div class="upd"><span>UPD 2026-08-28 · 关小未</span><a>开卷 ›</a></div>
+    </div>
+    <div class="spec">
+      <div class="pl"><span class="code">PL.03 / DR-DATA</span><span>DIR</span></div>
+      <h3>实验数据</h3>
+      <div class="kind">原始记录 · 处理表 · 图谱</div>
+      <div class="stat"><div>条目 <b>17</b></div><div>容量 <b>4.7 GB</b></div><div>密级 <b>组内</b></div><div>入库 <b>部分</b></div></div>
+      <div class="mix"><i style="width:47%;background:var(--excel)"></i><i style="width:30%;background:var(--image)"></i><i style="width:23%;background:var(--video)"></i></div>
+      <div class="mixlab"><span><em style="background:var(--excel)"></em>表×8</span><span><em style="background:var(--image)"></em>图×5</span><span><em style="background:var(--video)"></em>视频×4</span></div>
+      <div class="upd"><span>UPD 2026-08-30 · 宋洋</span><a>开卷 ›</a></div>
+    </div>
+    <div class="spec member"><span class="av">冯</span><span><div class="n">冯懿鑫</div><div class="g">PHD-2 · DR-MEMBER</div></span><span class="c">34<small> 项</small></span></div>
+    <div class="spec member"><span class="av">关</span><span><div class="n">关小未</div><div class="g">MASTER-3 · DR-MEMBER</div></span><span class="c">21<small> 项</small></span></div>
+    <div class="spec member"><span class="av">王</span><span><div class="n">王天志</div><div class="g">导师 · DR-PI</div></span><span class="c">48<small> 项</small></span></div>
+    <div class="spec member"><span class="av">宋</span><span><div class="n">宋洋</div><div class="g">MASTER-2 · DR-MEMBER</div></span><span class="c">15<small> 项</small></span></div>
+    <div class="spec add">＋ 新建卷宗</div>
+  </div>
+
+  <!-- §2 -->
+  <div class="sect-h"><span class="no">§2</span><h2>归档台账 · 组会 PPT</h2><span class="en">LEDGER OF RECORDS</span><span class="rule"></span><a class="act" href="#">导出本卷清单 CSV ›</a></div>
+  <div class="ledger-wrap">
+    <div class="filters">
+      <span class="lab">SEQ</span>
+      <button class="f on">最新归档 ↓</button><button class="f">最早归档 ↑</button><button class="f">最近修订 ↓</button>
+      <span class="lab" style="margin-left:12px">TYPE</span>
+      <button class="f on">全部</button><button class="f"><span class="dot" style="background:var(--ppt)"></span>PPT</button><button class="f"><span class="dot" style="background:var(--pdf)"></span>PDF</button><button class="f"><span class="dot" style="background:var(--doc)"></span>Word</button><button class="f"><span class="dot" style="background:var(--image)"></span>图片</button><button class="f"><span class="dot" style="background:var(--audio)"></span>音频</button>
+      <span class="right">共 23 条 · 显示 1–8 · 3 页</span>
+    </div>
+    <table class="ledger">
+      <thead><tr>
+        <th>NO.</th><th>档名 — TITLE / 路径</th><th class="num">容量</th><th>归档人</th><th>归档日</th><th>修订</th><th style="width:36px">藏</th><th style="width:120px"></th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="no">0904-01</td><td><span class="nmcell"><span class="badge" style="background:var(--ppt)">PPTX</span><span><span class="n">2026.09.01 例行例会 · 冯懿鑫.pptx</span><div class="sub">组会PPT / 2026秋 · v3 · 24 页</div></span></span></td><td class="num">24.3 MB</td><td><span class="who">冯懿鑫<span class="g">博二</span></span></td><td class="num">09-04 16:22</td><td class="num">09-01</td><td><button class="star on" title="收藏 (仅本人可见)">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+        <tr><td class="no">0831-02</td><td><span class="nmcell"><span class="badge" style="background:var(--pdf)">PDF</span><span><span class="n">声学聚焦实验方案 (组会版).pdf</span><div class="sub">组会PPT · 3 页 · 已入知识库</div></span></span></td><td class="num">3.2 MB</td><td><span class="who">王天志<span class="g">导师</span></span></td><td class="num">08-30 15:41</td><td class="num">08-30</td><td><button class="star">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+        <tr><td class="no">0829-03</td><td><span class="nmcell"><span class="badge" style="background:var(--image)">PNG</span><span><span class="n">SEM 泡径分布 0829.png</span><div class="sub">组会PPT / 插图 · 4096×3072</div></span></span></td><td class="num">4.6 MB</td><td><span class="who">宋洋<span class="g">硕二</span></span></td><td class="num">08-29 20:18</td><td class="num">—</td><td><button class="star on">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+        <tr><td class="no">0825-04</td><td><span class="nmcell"><span class="badge" style="background:var(--ppt)">PPTX</span><span><span class="n">2026.08.25 例行例会 · 王天志.pptx</span><div class="sub">组会PPT · v1 · 31 页</div></span></span></td><td class="num">18.7 MB</td><td><span class="who">王天志<span class="g">导师</span></span></td><td class="num">08-25 21:02</td><td class="num">08-25</td><td><button class="star">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+        <tr><td class="no">0825-05</td><td><span class="nmcell"><span class="badge" style="background:var(--md)">MD</span><span><span class="n">组会纪要 0825.md</span><div class="sub">组会PPT / 纪要 · 决议 6 项</div></span></span></td><td class="num">12 KB</td><td><span class="who">张懿<span class="g">硕一</span></span></td><td class="num">08-25 09:44</td><td class="num">08-26</td><td><button class="star">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+        <tr><td class="no">0824-06</td><td><span class="nmcell"><span class="badge" style="background:var(--audio)">M4A</span><span><span class="n">8-25 例会录音.m4a</span><div class="sub">组会PPT / 录音 · 94 min · 已转写</div></span></span></td><td class="num">36.2 MB</td><td><span class="who">蒋芦笛<span class="g">博一</span></span></td><td class="num">08-25 09:12</td><td class="num">—</td><td><button class="star">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+        <tr><td class="no">0818-07</td><td><span class="nmcell"><span class="badge" style="background:var(--doc)">DOCX</span><span><span class="n">空化阈值文献综述 · 关小未.docx</span><div class="sub">组会PPT · v2 · 引 17 篇</div></span></span></td><td class="num">1.1 MB</td><td><span class="who">关小未<span class="g">硕三</span></span></td><td class="num">08-18 16:47</td><td class="num">08-21</td><td><button class="star">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+        <tr><td class="no">0817-08</td><td><span class="nmcell"><span class="badge" style="background:var(--excel)">CSV</span><span><span class="n">超声频率-粒径矩阵.csv</span><div class="sub">组会PPT / 附图数据 · 812 行</div></span></span></td><td class="num">28 KB</td><td><span class="who">杜同贺<span class="g">硕二</span></span></td><td class="num">08-17 11:21</td><td class="num">—</td><td><button class="star">★</button></td><td class="ops-td"><span class="go">开卷›</span><button class="mini">下载</button></td></tr>
+      </tbody>
+    </table>
+    <div class="pgbar"><span>PAGE <b style="color:var(--text)">1</b> / 3 · SEQ NO.0904-01 ⟶ NO.0612-31</span><span class="sp"></span><button class="pg on">1</button><button class="pg">2</button><button class="pg">3</button><button class="pg">下一步 ›</button></div>
+  </div>
+
+  <!-- 右键/行内菜单示意 -->
+  <div class="note-demo" id="rowmenu">
+    <div class="h">行 · 全部动作 (右键行任意处)</div>
+    <div class="it">开卷预览<span class="k">␣</span></div>
+    <div class="it">下载存档<span class="k">⌘S</span></div>
+    <div class="it">改档名 / 移动卷宗<span class="k">F2</span></div>
+    <div class="it">生成分享口令<span class="k">⇧⌘C</span></div>
+    <div class="it">送交知识库 (RAG)</div>
+    <div class="it">版本沿革 · 3<span class="k">diff</span></div>
+    <div class="it warn">投入待销毁 (回收站)<span class="k">DEL</span></div>
+  </div>
+
+  <!-- §3 -->
+  <div class="sect-h"><span class="no">§3</span><h2>待销毁站 与 馆藏统计</h2><span class="en">DISPOSAL &amp; HOLDINGS</span><span class="rule"></span></div>
+  <div class="dual">
+    <div class="panel">
+      <div class="ph"><span>待销毁 · 30 日期限自动除名</span><a>全部清空</a></div>
+      <div class="dlist">
+        <div class="r"><span class="badge" style="background:var(--ppt)">PPTX</span><span class="n">2026.06.10 中期考核 · 旧稿.pptx</span><span class="d">销毁倒计时 21 天 · 原卷 组会PPT</span><button class="mini restore">归卷</button><button class="x">除名</button></div>
+        <div class="r"><span class="badge" style="background:var(--doc)">DOCX</span><span class="n">综述草稿 v0 (重复).docx</span><span class="d">26 天 · 原卷 文献库</span><button class="mini restore">归卷</button><button class="x">除名</button></div>
+        <div class="r"><span class="badge" style="background:var(--excel)">XLSX</span><span class="n">Zeta 记录 · 废批次 0712.xlsx</span><span class="d">9 天 · 原卷 实验数据</span><button class="mini restore">归卷</button><button class="x">除名</button></div>
+        <div class="r"><span class="badge" style="background:var(--pdf)">PDF</span><span class="n">查重报告 · 已过期.pdf</span><span class="d">2 天 ⚠ 即将除名</span><button class="mini restore">归卷</button><button class="x">除名</button></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span>馆藏构成 · 471 件 / 12.6 GB</span><a>配额说明</a></div>
+      <div class="stats">
+        <div class="st"><span class="lab">文档</span><span class="bar"><i style="width:44%;background:var(--pdf)"></i><i style="width:16%;background:var(--doc)"></i></span><span class="v">189 件</span></div>
+        <div class="st"><span class="lab">演示</span><span class="bar"><i style="width:21%;background:var(--ppt)"></i></span><span class="v">72 件</span></div>
+        <div class="st"><span class="lab">图像</span><span class="bar"><i style="width:18%;background:var(--image)"></i></span><span class="v">96 件</span></div>
+        <div class="st"><span class="lab">表格</span><span class="bar"><i style="width:9%;background:var(--excel)"></i></span><span class="v">61 件</span></div>
+        <div class="st"><span class="lab">音视频</span><span class="bar"><i style="width:7%;background:var(--audio)"></i><i style="width:5%;background:var(--video)"></i></span><span class="v">53 件</span></div>
+        <div class="st"><span class="lab">容量</span><span class="bar"><i style="width:43%;background:linear-gradient(90deg,var(--primary),var(--accent))"></i></span><span class="v">12.6/30 GB</span></div>
+      </div>
+      <div style="padding:0 14px 14px"><div class="cap-note"><b>单一团队空间</b>：全员等权立卷、改档、销毁；「藏」记号仅登记人自己可见。<b>最近修订</b>列由版本历史驱动，销毁站条目归卷时<b style="color:var(--primary-dark)">整卷递归归位</b>。</div></div>
+    </div>
+  </div>
+
+  <div class="foot"><span>MICROBUBBLE LAB — RESEARCH ARCHIVE</span><span>SET 2026-09-05 · STYLE D / 4</span><span>COMPILED BY 课题组网盘</span></div>
+</div>
+
+<nav class="prop-bar">
+  <a href="style-a.html">A 暖橙精修</a>
+  <a href="style-b.html">B 三栏工作台</a>
+  <a href="style-c.html">C 沉浸封面流</a>
+  <a class="on" href="style-d.html">D 档案台账</a>
+  <a href="index.html">总览</a>
+  <button data-theme-btn>☾ 深色</button>
+</nav>
+<script src="drive-demo.js"></script>
+</body>
+</html>
