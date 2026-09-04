@@ -233,7 +233,11 @@ async def test_v221_personal_view_include_subfolders_ignored(alice_subfolders):
             is_team_shared=False,
             include_subfolders=True,
         )
-        assert total == 0, f"personal view + include_subfolders=True 应仍 0 (所有 PPT 都是 team), 实际 {total}"
+        # 自数据断言: fixture 7 PPT 全部 is_team_shared=true, personal 过滤下
+        # 一条都不应出现。历史版本断言全局 total==0 会被共享测试库其他文件的
+        # 残留 personal 行污染 (类 20: 计数断言必须圈自己的 uuid 数据)。
+        leaked = [x.title for x in items if x.title.startswith("v221_")]
+        assert not leaked, f"personal view 不应出现任何 v221 fixture PPT, 实际 {leaked}"
 
 
 @pytest.mark.asyncio
@@ -293,8 +297,11 @@ async def test_v221_team_view_include_subfolders_returns_all_team_ppts(alice_sub
                         and x.title.endswith(f"_{u}")]
             for p in sub_ppts:
                 assert p.folder_id == sf.id, f"sub PPT 应在对应 sub folder {sf.id}, 实际 {p.folder_id}"
-        # 总数 >= 282 (fixture 7 + 生产 275)
-        assert total >= 282, f"team view + include_subfolders=True 应至少 282 PPT (7 fixture + 275 生产), 实际 {total}"
+        # 自包含断言: fixture 7 条全在结果中 (v2.21 核心行为 = 跳过 folder_id IS NULL
+        # filter 递归列出). 历史版本断言 total>=282 耦合生产库 275 条团队 PPT,
+        # 在干净测试库必挂 (类 20: 测试不得耦合生产数据), 已改数据无关断言。
+        assert len(fixture_titles) >= 7, \
+            f"fixture 7 PPT 应全在 team view 结果里, 实际 {len(fixture_titles)}"
 
 
 def sub_folders_index(alice_subfolders, sub_folder):
@@ -354,8 +361,8 @@ async def test_v221_all_view_include_subfolders_returns_everything(alice_subfold
         assert f"v221_root_ppt_{u}" in fixture_titles
         sub_titles = {t for t in fixture_titles if t.startswith("v221_sub")}
         assert len(sub_titles) == 6, f"fixture 应有 6 个 sub PPT, 实际 {len(sub_titles)}"
-        # all view 应返很多 PPT (生产 DB 团队 PPT + personal PPT), 至少 282+
-        assert total >= 282, f"all view 应至少 282 PPT, 实际 {total}"
+        # all view 覆盖 fixture 全部 7 PPT (自包含断言, 不耦合生产数据量, 类 20 教训)
+        assert len(fixture_titles) >= 7, f"all view 应含 fixture 全部 7 PPT, 实际 {len(fixture_titles)}"
 
 
 @pytest.mark.asyncio
