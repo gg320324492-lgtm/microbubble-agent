@@ -35,8 +35,12 @@
 pytest **必须同时** `-e DATABASE_URL=<test库> -e TEST_DATABASE_URL=<test库>` 且
 microbubble_test 先建 extension(vector/pg_trgm)+create_all; 跑后必查生产 count 守恒。
 
-**未部署**: 本 worktree 改动待主拍合并后: alembic upgrade head + 重启 app/celery +
-前端 dist 上线 + 生产 `.env` 可选加 `DRIVE_WORKSPACE_ANCHOR_ID`。
+**已部署 (2026-09-05 当晚收口)**: 4 commits ff-merge main → origin/main `cb0176d43` →
+本机 `alembic upgrade head` (DB=133) + restart app/celery/meeting-worker → 云端
+deploy-auto.sh + nginx; 端到端验证全绿 (cloud /=入口 hash `index-CGj5euuq.js` 与本仓 dist
+一致 + 新 drive chunk 200 + /health 200 穿隧道 + folders/tree 401 到鉴权)。生产终态:
+32 members / 471 knowledge / 57 folders (含 1 冒烟夹已软删进垃圾桶), 全库 0 非 team folder、
+0 非 team drive 文件。`.env` 未加 DRIVE_WORKSPACE_ANCHOR_ID, 走代码默认 1 (王天志)。
 
 ## 当前状态 (2026-09-05 成员角色扁平化 — 废除管理员/组长等级, 全员等权 + 年级身份称谓)
 
