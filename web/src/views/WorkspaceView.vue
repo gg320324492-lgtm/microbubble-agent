@@ -5,6 +5,15 @@
       <TabStrip v-model="activeTab" :items="tabItems" aria-label="团队协作视图切换" />
     </div>
 
+    <div v-show="activeTab === 'dossier'" role="tabpanel"
+      :aria-labelledby="`tab-strip-dossier`" class="tab-panel">
+      <DossierPanel
+        :active="activeTab === 'dossier'"
+        @open-project="openProjectDetail"
+        @open-member="openMemberDetail"
+        @goto-projects="activeTab = 'projects'"
+      />
+    </div>
     <div v-show="activeTab === 'projects'" role="tabpanel"
       :aria-labelledby="`tab-strip-projects`" class="tab-panel">
       <ProjectsPanel @open-detail="openProjectDetail" />
@@ -173,10 +182,11 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { Folder, User, Microphone } from '@element-plus/icons-vue'
+import { Folder, User, Microphone, Collection } from '@element-plus/icons-vue'
 import { useMemberStore } from '@/stores/member'
 import { cleanDescriptionForDisplay } from '@/utils/textSanitize'
 import TabStrip from '@/components/common/TabStrip.vue'
+import DossierPanel from './workspace/DossierPanel.vue'
 import ProjectsPanel from './workspace/ProjectsPanel.vue'
 import MembersPanel from './workspace/MembersPanel.vue'
 import VoiceprintsPanel from './workspace/VoiceprintsPanel.vue'
@@ -186,15 +196,17 @@ const router = useRouter()
 const memberStore = useMemberStore()
 
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-const VALID_TABS = ['projects', 'members', 'voiceprint']
+// 2026-09-04 V 稿「卷宗」实装: dossier 放第一签为默认落地 (卷为纲人为目), 老 ?tab=projects 链接不失效
+const VALID_TABS = ['dossier', 'projects', 'members', 'voiceprint']
 const activeTab = ref(
   route.query.tab && VALID_TABS.includes(String(route.query.tab))
     ? String(route.query.tab)
-    : 'projects'
+    : 'dossier'
 )
 
 // 铁律 30: EP 图标 named import + 通过 props 传入
 const tabItems = [
+  { key: 'dossier',    label: '卷宗', icon: Collection },
   { key: 'projects',   label: '项目', icon: Folder },
   { key: 'members',    label: '成员', icon: User },
   { key: 'voiceprint', label: '声纹', icon: Microphone },
@@ -301,7 +313,7 @@ onMounted(async () => {
   }
   // 默认 tab 同步到 URL
   if (!route.query.tab) {
-    router.replace({ path: '/workspace', query: { tab: 'projects' } })
+    router.replace({ path: '/workspace', query: { tab: 'dossier' } })
   }
 })
 </script>
