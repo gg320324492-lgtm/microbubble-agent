@@ -20,104 +20,37 @@
   详见 web/src/views/drive/drive-view.css + C:\Users\pc\.claude\plans\ui-shiny-hearth.md
 -->
 <template>
-  <div class="desktop-drive-view drive-page">
-    <!-- 工具栏 (PR3.4 接入: 启用按钮 + 接入 dialog) -->
-    <div class="drive-toolbar">
-      <h2 class="drive-title">
-        <span class="drive-title-icon">📁</span>
-        课题组网盘
-      </h2>
-      <div class="drive-toolbar-actions">
-        <el-input
+  <!--
+    批次③ (2026-09-05): 用户拍板 B「三栏工作台」版式 —
+    左结构树 | 中密集行表 (DriveFileTable: 虚拟滚动/列排序/键盘导航/拖拽源) | 右常驻详情栏 (DriveDetailRail)。
+    旧 FileGrid 卡片网格被表格替代 (grid/detail/list 三态退役, 密度改为 comfortable/compact);
+    specialView (回收站/文件请求) 保留内嵌面板, 此时隐藏右栏与批量 dock。
+    所有业务 handler 与 dialog 集群沿用既有实现, 0 后端契约变更。
+  -->
+  <div class="desktop-drive-view drive-page drive-workbench">
+    <!-- 顶栏: 品牌 + 全局搜索 + 三个主操作 -->
+    <header class="wb-top">
+      <span class="wb-brand">
+        <span class="wb-brand-ico">📁</span>课题组网盘
+      </span>
+      <span class="wb-vr"></span>
+      <label class="wb-search">
+        <el-icon class="wb-search-ico"><Search /></el-icon>
+        <input
           v-model="searchQuery"
-          placeholder="搜索文件名..."
-          clearable
-          class="drive-search-input"
-        >
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
-        <el-button-group>
-          <el-button class="drive-upload-btn" :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
-          <!--
-            v2.16.1 (2026-07-11) 暗色主题适配: 上传文件夹 / 新建文件夹 加 .drive-toolbar-btn
-            走 var() token 双主题自适应 (light=白底深字, dark=深底浅字 + 主色 hover)
-          -->
-          <el-button class="drive-toolbar-btn" :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
-          <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
-        </el-button-group>
-        <!--
-          v2.16 (2026-07-11) 三种视图切换:
-          - detail (默认): 横向 long bar (macOS Finder 列表), 信息密度高, 适合大量文件
-          - grid: 卡片网格, 适合缩略图场景
-          - list: 单列紧凑 (保留兼容, 老用户习惯)
-        -->
-        <el-button-group class="drive-view-toggle">
-          <el-button
-            :type="viewMode === 'detail' ? 'primary' : 'default'"
-            :title="'详情列表视图'"
-            @click="viewMode = 'detail'"
-          >
-            <el-icon><Tickets /></el-icon>
-          </el-button>
-          <el-button
-            :type="viewMode === 'grid' ? 'primary' : 'default'"
-            :title="'网格视图'"
-            @click="viewMode = 'grid'"
-          >
-            <el-icon><Grid /></el-icon>
-          </el-button>
-          <el-button
-            :type="viewMode === 'list' ? 'primary' : 'default'"
-            :title="'紧凑列表视图'"
-            @click="viewMode = 'list'"
-          >
-            <el-icon><List /></el-icon>
-          </el-button>
-        </el-button-group>
-      </div>
-    </div>
+          placeholder="搜索全组文件名 (支持中文, 输入即搜)"
+          aria-label="搜索全组文件名"
+        />
+      </label>
+      <span class="wb-sp"></span>
+      <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
+      <el-button class="drive-toolbar-btn" :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
+      <el-button class="wb-cta" :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
+    </header>
 
-    <!-- v2.0 (2026-07-09) Drive 美化: 排序 + 类型过滤 chip 行 (替换 2 个 el-dropdown) -->
-    <!-- 6 个排序 chip + 6 个类型 chip, 走 .drive-chip class + aria-pressed 语义 -->
-    <div class="drive-filter-bar">
-      <div class="drive-filter-bar-left">
-        <span class="drive-filter-bar-label">排序</span>
-        <button
-          v-for="opt in SORT_OPTIONS"
-          :key="opt.value"
-          type="button"
-          class="drive-chip"
-          :aria-pressed="sortKey === opt.value"
-          :class="{ 'is-active': sortKey === opt.value }"
-          @click="handleSortChange(opt.value)"
-        >
-          {{ opt.label }}
-        </button>
-        <span class="drive-filter-bar-label" style="margin-left: var(--space-3);">类型</span>
-        <button
-          v-for="opt in FILE_TYPE_OPTIONS"
-          :key="opt.value || 'all'"
-          type="button"
-          class="drive-chip"
-          :data-type="opt.type || null"
-          :aria-pressed="fileType === opt.value || (!fileType && opt.value === null)"
-          :class="{ 'is-active': fileType === opt.value || (!fileType && opt.value === null) }"
-          @click="handleFileTypeChange(opt.value)"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
-      <div class="drive-filter-bar-right">
-        <span class="drive-filter-stat">
-          共 <span class="drive-filter-stat-num">{{ total }}</span> 项
-        </span>
-      </div>
-    </div>
-
-    <!-- 主体布局: 左侧 FolderTree + 右侧 FileGrid (PR3.5 接入拖拽) -->
-    <!-- 2026-07-02: DriveSubSidebar 已删除 (与 FolderTree 重复), 不再嵌入子侧边栏 -->
-    <div class="drive-main" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
-      <!-- v77 P2.6-G.3 空态/拖拽 hero: 拖拽文件到主区时显示大 hero (替代旧 PR3.6 占位文案) -->
+    <!-- 三栏 body -->
+    <div class="wb-body" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
+      <!-- 外部文件拖入 hero (F3 真接入: drop -> DriveUploadDialog initialFiles) -->
       <transition name="drive-drop-hero-fade">
         <div v-if="isDragging" class="drive-drop-hero">
           <div class="drive-drop-hero-icon">
@@ -127,11 +60,12 @@
           <p class="drive-drop-hero-hint">松开鼠标即可上传到当前网盘</p>
         </div>
       </transition>
-      <aside class="drive-sidebar">
-        <div class="drive-sidebar-header">课题组网盘</div>
-        <!-- PR3.2 + v2 PR2: FolderTree 加 specialView 双向绑定 -->
-        <!-- v2.29 (2026-07-12) 接通 create-sub-folder emit (右键菜单"新建子文件夹"触发) -->
+
+      <!-- 左: 结构树 + 快捷 (FolderTree 含 special 项 + 树节点拖放落点) -->
+      <aside class="wb-rail">
+        <div class="wb-rail-cap">结构</div>
         <FolderTree
+          class="wb-tree"
           :folder-tree="folderTree"
           :selected-folder-id="selectedFolderId"
           :expanded-folder-ids="expandedFolderIds"
@@ -145,108 +79,145 @@
           @request-new-folder="onCreateSubFolder(null)"
           @create-sub-folder="onCreateSubFolder"
           @share-folder="onShareFolder"
+          @drop-files="onMoveDrop"
         />
+        <div class="wb-rail-foot">
+          <StorageQuotaBadge v-if="quotaInfo" :quota-info="quotaInfo" />
+        </div>
       </aside>
 
-      <main class="drive-content">
-        <div class="drive-breadcrumb">
+      <!-- 中: 面包屑 + 筛选 chips + 行表/内嵌面板 + 批量 dock -->
+      <section class="wb-center">
+        <div class="wb-crumbs">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item>课题组网盘</el-breadcrumb-item>
             <el-breadcrumb-item v-if="specialView === 'team'">🌐 团队共享盘</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'starred'">⭐ 我的收藏</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="specialView === 'trash'">🗑️ 回收站</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'requests'">📥 文件请求</el-breadcrumb-item>
             <el-breadcrumb-item v-for="f in folderBreadcrumb" :key="'bc-' + f.id">
               📂 {{ f.name }}
             </el-breadcrumb-item>
           </el-breadcrumb>
+          <span class="wb-crumb-search" v-if="isSearching">🔍 「{{ searchQuery.trim() }}」全盘结果 · {{ total }} 项</span>
+          <span class="wb-sp"></span>
+          <span class="wb-total">{{ isSearching ? ('匹配 ' + total + ' 项') : ('共 ' + total + ' 项') }}</span>
+          <button
+            type="button" class="wb-density"
+            :title="density === 'comfortable' ? '行密度: 舒适 (点击切紧凑)' : '行密度: 紧凑 (点击切舒适)'"
+            @click="toggleDensity"
+          >{{ density === 'comfortable' ? '☰ 舒适' : '≡ 紧凑' }}</button>
         </div>
 
-        <!-- v2 PR2: 多选批量 toolbar (sticky 在 grid 上方) -->
-        <BatchActionToolbar
-          v-if="!['trash', 'requests'].includes(specialView)"
-          :selected-count="selectedFileIds.length"
-          :total-count="driveFiles.length"
-          context="files"
-          @select-all="selectAll"
-          @clear="clearSelection"
-          @batch-delete="handleBatchDelete"
-          @batch-move="handleBatchMove"
-          @batch-share="handleBatchShare"
-          @batch-download="handleBatchDownload"
-          @batch-update-visibility="handleBatchUpdateVisibility"
-          @batch-toggle-star="handleBatchToggleStar"
-        />
+        <div v-if="isTableMode" class="wb-ctools">
+          <span class="wb-lab">排序</span>
+          <button
+            v-for="opt in SORT_OPTIONS" :key="opt.value" type="button"
+            class="drive-chip" :aria-pressed="sortKey === opt.value"
+            :class="{ 'is-active': sortKey === opt.value }"
+            @click="handleSortChange(opt.value)"
+          >{{ opt.label }}</button>
+          <span class="wb-lab wb-lab--gap">类型</span>
+          <button
+            v-for="opt in FILE_TYPE_OPTIONS" :key="opt.value || 'all'" type="button"
+            class="drive-chip" :data-type="opt.type || null"
+            :aria-pressed="fileType === opt.value || (!fileType && opt.value === null)"
+            :class="{ 'is-active': fileType === opt.value || (!fileType && opt.value === null) }"
+            @click="handleFileTypeChange(opt.value)"
+          >{{ opt.label }}</button>
+          <span class="wb-kbd-hint">↑↓ 移动 · 空格预览 · Enter 详情 · Del 回收站 · 拖行到左栏夹=移动</span>
+        </div>
 
-        <div class="drive-file-area" @contextmenu.prevent="onDriveFileAreaContextMenu">
-          <!-- 2026-07-02 inline 化: specialView inline 渲染 (保留 FolderTree 上下文, 不离开 /drive) -->
+        <div class="wb-listarea">
+          <!-- specialView 内嵌面板 (右栏/表格/dock 隐藏) -->
           <FileRequestListPanel v-if="specialView === 'requests'" />
           <DriveTrashPanel v-else-if="specialView === 'trash'" />
-          <!-- v2.0 (2026-07-09) Drive 美化: 加 is-search / search-keyword 让 FileGrid 区分空态 -->
-          <FileGrid
+          <DriveFileTable
             v-else
+            ref="tableRef"
             :files="driveFiles"
-            :folders="currentSubFolders"
-            @folder-click="handleFolderClick"
+            :folders="isSearching ? [] : currentSubFolders"
+            :loading="filesLoading"
+            :load-error="filesLoadError"
+            :selected-ids="selectedFileIds"
+            :active-key="activeKey"
+            :sort-by="sortBy"
+            :sort-order="sortOrder"
+            :show-path="isSearching"
+            :density="density"
             :total="total"
             :current-page="currentPage"
             :page-size="pageSize"
-            :selected-file-ids="selectedFileIds"
-            :loading="filesLoading"
-            :load-error="filesLoadError"
-            :view-mode="viewMode"
-            :is-top-level="selectedFolderId === null && specialView === null"
-            :is-search="!!searchQuery.trim()"
-            :search-keyword="searchQuery.trim()"
+            @row-activate="onRowActivate"
+            @row-open="(row) => row.kind === 'folder' && enterFolder(row.data)"
+            @row-open-detail="openDetailPage"
+            @row-preview="handleFilePreview"
+            @row-delete="handleFileDelete"
+            @row-contextmenu="onRowContextmenu"
+            @sort-change="onColumnSort"
+            @select-toggle="toggleFileSelect"
+            @select-all="onSelectAll"
+            @select-range="onSelectRange"
+            @toggle-star="handleFileToggleStar"
             @retry="fetchDriveFiles({ folder_id: selectedFolderId })"
-            @empty-cta-click="showUploadDialog = true"
-            @file-click="handleFileClick"
-            @file-preview="handleFilePreview"
-            @file-rename="handleFileRename"
-            @file-move="handleFileMove"
-            @file-update-visibility="handleFileUpdateVisibility"
-            @file-extract-to-kb="handleFileExtractToKb"
-            @file-to-kb="handleFileToKb"
-            @file-share-link="handleFileShareLink"
-            @file-view-comments="handleFileViewComments"
-            @file-delete="handleFileDelete"
-            @toggle-select="toggleFileSelect"
-            @file-toggle-star="handleFileToggleStar"
             @page-change="onPageChange"
             @size-change="onPageSizeChange"
-          />
-
-          <!--
-            W68 第 4 批: 文件右键菜单 (查看评论 + 文件版本历史)
-            - 走 FolderContextMenu (复用 v2.9 既有固定定位菜单, 鼠标位置弹出)
-            - 文件检测: 走 DOM 走查找到 .file-card 祖先 → 同 parent 子节点 index → driveFiles[index]
-            - 不动 FileGrid 保持 mobile/desktop 解耦, 桌面端独占此菜单
-          -->
-          <FolderContextMenu
-            v-if="contextMenuItems.length > 0"
-            ref="contextMenuRef"
-            :items="contextMenuItems"
-            :placement="'auto'"
-            @command="onContextMenuCommand"
-            @close="onContextMenuClose"
+            @drop-into-folder="onMoveDrop"
           />
         </div>
-      </main>
+
+        <!-- 批量 dock -->
+        <div v-if="isTableMode" class="wb-dock">
+          <BatchActionToolbar
+            :selected-count="selectedFileIds.length"
+            :total-count="driveFiles.length"
+            context="files"
+            @select-all="selectAll"
+            @clear="clearSelection"
+            @batch-delete="handleBatchDelete"
+            @batch-move="handleBatchMove"
+            @batch-share="handleBatchShare"
+            @batch-download="handleBatchDownload"
+            @batch-update-visibility="handleBatchUpdateVisibility"
+            @batch-toggle-star="handleBatchToggleStar"
+          />
+        </div>
+      </section>
+
+      <!-- 右: 常驻详情栏 -->
+      <DriveDetailRail
+        v-if="isTableMode && activeFile"
+        class="wb-railright"
+        :file="activeFile"
+        @preview="handleFilePreview"
+        @download="handleFileDownload"
+        @share="handleFileShareLink"
+        @toggle-star="handleFileToggleStar"
+        @rename="handleFileRename"
+        @move="handleFileMove"
+        @delete="handleFileDelete"
+        @ingest-kb="handleFileToKb"
+        @open-detail="openDetailPage"
+        @goto-folder="gotoFolder"
+        @open-versions-dialog="openVersionsDialog"
+        @refresh="onRailRefresh"
+      />
+
+      <!--
+        右键菜单 (批次③ 扩容): 文件全动作 / 文件夹动作, 全部接既有 handler。
+        复用 FolderContextMenu (固定定位 + 边界检测 + open(event))。
+      -->
+      <FolderContextMenu
+        v-if="contextMenuItems.length > 0"
+        ref="contextMenuRef"
+        :items="contextMenuItems"
+        :placement="'auto'"
+        @command="onContextMenuCommand"
+        @close="onContextMenuClose"
+      />
     </div>
 
-    <!-- 底部状态条: 显示当前路径 + 容量 -->
-    <div class="drive-statusbar">
-      <span class="drive-status-path">{{ currentPathDisplay }}</span>
-      <span class="drive-status-storage">容量统计 (PR3.7 接入)</span>
-    </div>
-
-    <!-- PR3.4 dialogs -->
-    <!--
-      v2.29 (2026-07-12) parent-id 数据流改造:
-      旧实现 hardcode :parent-id="selectedFolderId", 工具栏"新建文件夹"按钮 OK,
-      但右键 FolderTree emit('create-sub-folder', folderId) parent_id 是 folderId,
-      跟 selectedFolderId 不同 (用户可能在 A 文件夹下, 右键 B 创建 B 的子文件夹).
-      新增 createSubFolderParentId ref 暂存右键触发的 parent_id,
-      currentCreateFolderParentId computed 取右键值优先, 否则 fallback selectedFolderId.
-    -->
+    <!-- dialogs 集群 (沿用既有, 新增 VersionHistoryDialog) -->
     <CreateFolderDialog
       v-model="showCreateFolderDialog"
       :parent-id="currentCreateFolderParentId"
@@ -265,64 +236,39 @@
       :file-id="moveTargetFileId"
       @move="onMoveFile"
     />
-
-    <!-- PR3.6 DriveUploadDialog (含文件夹拖拽 + storage_mode drive) -->
     <DriveUploadDialog
       v-model="showUploadDialog"
       :default-folder-id="selectedFolderId"
       :is-team-shared="specialView === 'team'"
+      :initial-files="droppedFiles"
       @uploaded="onFilesUploaded"
+      @update:model-value="v => { if (!v) droppedFiles = [] }"
     />
-
-    <!-- PR4.6 FilePreviewDialog (图片/视频/音频/PDF 4 种) -->
     <FilePreviewDialog v-model="showPreviewDialog" :file="previewFile" />
-
-    <!-- v2 PR1 ShareDialog -->
     <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
-
-    <!-- W72 第 2 批 B-1: folder share link dialog (PR7 增强 + 密码 + 次数限制 + 审计) -->
     <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" />
-
-    <!-- v2.0 (2026-07-09) Drive 美化: 加 class="drive-dialog" 让 Extract dialog 玻璃态生效 -->
-    <el-dialog
-      v-model="showExtractDialog"
-      class="drive-dialog"
-      title="📚 加入公共知识库"
-      width="420px"
-      top="20vh"
-      :close-on-press-escape="true"
-    >
-      <p class="extract-intro">
-        把文件 "{{ extractDialogFile?.file_name }}" 的内容升级为知识库条目, 团队其他成员的
-        AI 助手可检索使用. 升级后原 drive 文件保留, 但不推荐再编辑.
-      </p>
-      <div class="extract-field">
-        <label class="extract-field-label">目标可见性</label>
-        <el-radio-group v-model="extractTargetVisibility">
-          <el-radio value="team">team - 全组可见</el-radio>
-          <el-radio value="public">public - 任何人可见</el-radio>
-        </el-radio-group>
-        <p class="extract-hint">private 文件不能升级为 private (必须升可见性)</p>
-      </div>
-      <template #footer>
-        <el-button @click="showExtractDialog = false">取消</el-button>
-        <el-button type="primary" @click="doConfirmExtract">
-          升级到知识库
-        </el-button>
-      </template>
-    </el-dialog>
+    <!-- 批次③: 右键/右栏「版本沿革」直接开 dialog (含恢复 + 两版本对比 diff), 不强制跳 /versions 整页 -->
+    <VersionHistoryDialog
+      v-model:visible="showVersionsDialog"
+      :file="versionsDialogFile"
+      @restored="onRailRefresh"
+    />
   </div>
 </template>
 
 <script setup>
 // v2.0 (2026-07-09) Drive 美化 — 引入 drive-view.css 共享样式 (见下方 import 与 .drive-* class)
 import '@/views/drive/drive-view.css'
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, triggerRef, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, UploadFilled, Folder, Plus, Grid, List, Files, Sort, Filter, ArrowDown, Tickets } from '@element-plus/icons-vue'
+import axios from 'axios'
+import { Search, UploadFilled, Folder, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
-import FileGrid from '@/components/drive/FileGrid.vue'
+import DriveFileTable from '@/components/drive/DriveFileTable.vue'
+import DriveDetailRail from '@/components/drive/DriveDetailRail.vue'
+import StorageQuotaBadge from '@/components/drive/StorageQuotaBadge.vue'
+import VersionHistoryDialog from '@/components/drive/VersionHistoryDialog.vue'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
 // 2026-07-02: DriveSubSidebar 已删除 (PR7 反转), 此处不再 import
 // 2026-07-02 inline 化: specialView 内嵌面板 (从 DesktopXxxView 抽取)
@@ -340,6 +286,7 @@ import FolderContextMenu from '@/components/drive/FolderContextMenu.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
+import { debounce } from '@/utils/debounce'  // ②-5 搜索接线
 
 const router = useRouter()  // v2 PR2: 回收站路由跳转
 
@@ -365,6 +312,8 @@ const {
   toggleExpanded: toggleExpandedFolder,
   createFolder: doCreateFolder,
   renameFolder: doRenameFolder,
+  deleteFolder: deleteFolderNode,
+  getChildrenStats,
   findFolderById
 } = folderTreeStore
 
@@ -389,11 +338,12 @@ const {
   renameFile,
   moveFile,
   updateVisibility: doUpdateVisibility,
-  extractToKb: doExtractToKb,
+  // F5 修复 (批次②): extractToKb 已删除, 入库知识库单入口走 ingestToKb (/to-kb 新管线)
   ingestToKb: doIngestToKb, // W98: 网盘入库 RAG (drive → kb)
   createShareLink,
   revokeShareLink,
   toggleStar,
+  batchStar,
   batchSoftDelete,
   batchMove: doBatchMove,
   batchUpdateVisibility: doBatchUpdateVisibility,
@@ -404,13 +354,14 @@ const {
 } = driveFilesStore
 
 // === 状态 ===
-// 2026-08-30: 默认 grid (大文件夹图标, 类资源管理器"大图标"视图) — 用户要求进
-// 网盘/团队共享盘第一眼就直观看到内容; 用户手动切换后 localStorage 记忆偏好
-const VIEW_MODE_KEY = 'drive-view-mode'
-const viewMode = ref(localStorage.getItem(VIEW_MODE_KEY) || 'grid')  // grid | detail | list
-watch(viewMode, (v) => {
-  try { localStorage.setItem(VIEW_MODE_KEY, v) } catch { /* 隐身模式等存储失败静默 */ }
+// 批次③ (2026-09-05 B 三栏工作台): FileGrid 三态 (grid/detail/list) 退役为
+// 表格双密度 — comfortable(40px)/compact(32px), localStorage 记忆偏好。
+const DENSITY_KEY = 'drive-density'
+const density = ref(localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'comfortable')
+watch(density, (v) => {
+  try { localStorage.setItem(DENSITY_KEY, v) } catch { /* 隐身模式等存储失败静默 */ }
 })
+function toggleDensity() { density.value = density.value === 'comfortable' ? 'compact' : 'comfortable' }
 
 // === 2026-08-30: 团队共享盘子文件夹 (大图标卡片) ===
 // 当前层的子文件夹: team 顶层 = is_team_default 根 (组会PPT); 进入子层 = 该节点 children
@@ -453,9 +404,30 @@ function handleFolderClick(folder) {
   }
 }
 const searchQuery = ref('')
+// ②-5 搜索接线 (批次②): 输入 300ms debounce → fetchFiles 透传 search (后端 B6:
+// search 非空时忽略 folder 约束 = 全盘结果; 后端参数由批次① ①-5 落地, 前端先行,
+// 老后端无该参数时会被忽略, 不报错)。清空 → 回当前 folder/视图列表。
+// 留口: 搜索结果行的"所属文件夹"小字依赖后端响应含 folder_name (当前 DriveFileItem
+// 无此字段, FileCard 已做 f.folder_name 存在即显示的兼容渲染)。
+function runSearchOrReload() {
+  const q = searchQuery.value.trim()
+  currentPage.value = 1
+  if (q) {
+    starredOnly.value = false
+    fetchDriveFiles({ search: q, folder_id: null, view: 'team' })
+  } else {
+    reloadCurrentView()
+  }
+}
+const debouncedSearch = debounce(runSearchOrReload, 300)
+watch(searchQuery, () => debouncedSearch())
 // v2 PR2: 特殊视图 (null | 'starred' | 'trash')
 // 2026-08-30: 默认直接进团队共享盘 (个人网盘入口按需求移除)
 const specialView = ref('team')
+
+// 批次③ B 工作台: 搜索态与表格态判定 (trash/requests 走内嵌面板, 隐藏右栏/批量 dock)
+const isSearching = computed(() => !!searchQuery.value.trim())
+const isTableMode = computed(() => !['trash', 'requests'].includes(specialView.value))
 
 // v2.0 (2026-07-09) Drive 美化: chip 化的 sort/type 选项数组 (替代 SORT_LABELS dropdown)
 // 与 drive-view.css .drive-chip 配合, aria-pressed=true 时 is-active class
@@ -628,23 +600,33 @@ async function handleBatchUpdateVisibility(visibility) {
 
 async function handleBatchToggleStar() {
   if (!selectedFileIds.value.length) return
-  // 全部切换为 is_starred=true (简化 UX, 第二次点击取消)
+  const ids = [...selectedFileIds.value]
+  // F10 修复 (批次②): 旧实现 for-toggleStar 会把已收藏项反向取消 (且 N 次请求)。
+  // 改为一次 POST /files/batch-star {file_ids, starred:true} 幂等置标 (后端批次① 落地,
+  // 前端先行; 该端点不存在/失败时 fallback 逐个 toggle, 但只处理未收藏项不再反向取消)。
+  try {
+    const resp = await batchStar(ids, true)
+    ElMessage.success(`已收藏 ${resp?.updated ?? ids.length} 个文件`)
+    return
+  } catch (e) {
+    console.warn('[DesktopDriveView] batch-star 失败, 回退逐个收藏:', e?.message || e)
+  }
   let success = 0, fail = 0
-  for (const id of selectedFileIds.value) {
+  for (const id of ids) {
+    const target = driveFiles.value.find(f => f.id === id)
+    if (target?.is_starred) continue  // 已收藏跳过, 不再 toggle 反向取消
     try {
-      const target = driveFiles.value.find(f => f.id === id)
-      if (target && !target.is_starred) {
-        await toggleStar(id)
-        success++
-      } else if (target && target.is_starred) {
-        await toggleStar(id)
-        success++
-      }
+      await toggleStar(id)
+      success++
     } catch (e) {
       fail++
     }
   }
-  ElMessage.success(`已切换 ${success} 个文件收藏状态${fail ? `, 失败 ${fail}` : ''}`)
+  if (success || !fail) {
+    ElMessage.success(`已收藏 ${success} 个文件${fail ? `, 失败 ${fail}` : ''}`)
+  } else {
+    ElMessage.error('批量收藏失败')
+  }
 }
 
 async function handleFileToggleStar(file) {
@@ -657,18 +639,15 @@ async function handleFileToggleStar(file) {
 
 // === PR3.5 文件夹拖拽 (主区域作为 drop zone) ===
 const driveMainRef = ref(null)
+// F3 修复 (批次②): 拖拽落盘文件 → 打开 DriveUploadDialog 并通过 initialFiles 注入真实上传。
+// 旧 stub 的 console.log + process.env.NODE_ENV 引用一并删除
+// (Vite 浏览器端无 process 全局, 生产 build 命中该行会 ReferenceError)。
+const droppedFiles = ref([])
 const { isDragging, bind: bindDropZone, unbind: unbindDropZone } = useFolderDropZone({
-  onFilesDropped: ({ entries, source }) => {
-    // PR3.5 仅显示拖拽信息, 实际上传逻辑留给 PR3.6 dialog
-    const fileCount = entries.length
-    const folderCount = new Set(entries.map(e => e.relativePath.split('/').slice(0, -1).join('/'))).size
-    ElMessage.info(
-      `检测到 ${fileCount} 个文件 (${folderCount} 个文件夹), 来源=${source}.\n上传功能待 PR3.6 接入`
-    )
-    // 临时打印相对路径 (调试)
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[DropZone] entries:', entries.map(e => e.relativePath).slice(0, 5))
-    }
+  onFilesDropped: ({ entries }) => {
+    if (!entries?.length) return
+    droppedFiles.value = entries
+    showUploadDialog.value = true
   }
 })
 
@@ -705,13 +684,12 @@ const currentCreateFolderParentFolder = computed(() => {
 // === v2 PR1 dialog 状态 ===
 const showShareDialog = ref(false)
 const shareDialogFile = ref(null)
-const showExtractDialog = ref(false)
-const extractDialogFile = ref(null)
+// F5 修复 (批次②): showExtractDialog/extractDialogFile/extractTargetVisibility 随
+// extract-to-kb 老管线入口一并删除
 
 // === W72 第 2 批 B-1: folder share link dialog 状态 ===
 const showShareLinkDialog = ref(false)
 const shareLinkDialogFolder = ref(null)
-const extractTargetVisibility = ref('team')
 
 // === PR3.6 上传 dialog 状态 ===
 const showUploadDialog = ref(false)
@@ -736,6 +714,10 @@ onMounted(async () => {
   // 2026-09 单一团队工作区: 网盘已合并为课题组单盘, 树/文件统一 team scope
   fetchFolderTree('team')
   fetchDriveFiles({ folder_id: null, view: 'team' })
+  // 批次③: 左栏配额条 (GET /drive/storage-quota, 失败静默不阻塞主数据)
+  axios.get('/api/v1/drive/storage-quota')
+    .then((r) => { quotaInfo.value = r.data })
+    .catch(() => { /* 配额缺失只是少一条进度条 */ })
   // PR3.5: 等 DOM ready 后绑定主区域为 drop zone
   await nextTick()
   if (driveMainRef.value) {
@@ -746,6 +728,7 @@ onMounted(async () => {
 // 切换路由时清理 (避免内存泄漏)
 onBeforeUnmount(() => {
   unbindDropZone()
+  debouncedSearch.cancel()  // ②-5: 取消未触发的搜索 debounce, 防卸载后 fetch
 })
 
 // === 监听 selectedFolderId 变化 → 重新拉文件列表 ===
@@ -806,16 +789,6 @@ function onPageSizeChange(size) {
   pageSize.value = size
   currentPage.value = 1
   fetchDriveFiles({ folder_id: selectedFolderId.value })
-}
-
-function handleFileClick(file, event) {
-  // v2 PR6-P2: 默认单击跳详情页 (符合主流网盘 UX, 用户找详情/评论)
-  // 按住 Ctrl/Cmd 多选 (保持多选能力)
-  if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) {
-    toggleFileSelect(file.id)
-  } else {
-    router.push(`/drive/file/${file.id}`)
-  }
 }
 
 function handleFilePreview(file) {
@@ -889,12 +862,8 @@ async function handleFileUpdateVisibility(file) {
   }
 }
 
-function handleFileExtractToKb(file) {
-  // v2 PR1 实现: 弹 ExtractDialog 选 target visibility
-  extractDialogFile.value = file
-  extractTargetVisibility.value = 'team'
-  showExtractDialog.value = true
-}
+// F5 修复 (批次②): handleFileExtractToKb / doConfirmExtract (extract-to-kb 老管线) 已删除,
+// 入库知识库唯一入口 = handleFileToKb → ingestToKb (/drive/{id}/to-kb 新管线)。
 
 async function handleFileToKb(file) {
   // W98: 网盘入库 RAG — drive 文件一键"加入知识库"
@@ -911,22 +880,7 @@ async function handleFileToKb(file) {
   }
 }
 
-async function doConfirmExtract() {
-  if (!extractDialogFile.value) return
-  const file = extractDialogFile.value
-  try {
-    await doExtractToKb(file.id, extractTargetVisibility.value)
-    ElMessage.success(`已加入公共知识库 (visibility=${extractTargetVisibility.value})`)
-    showExtractDialog.value = false
-    extractDialogFile.value = null
-    // 刷新列表 (文件已转到 kb 不应在 drive 列表)
-    await fetchDriveFiles({ folder_id: selectedFolderId.value })
-  } catch (e) {
-    ElMessage.error(e.message || '升级失败')
-  }
-}
-
-function handleFileShareLink(file) {
+async function handleFileShareLink(file) {
   // v2 PR1 实现: 打开 ShareDialog
   shareDialogFile.value = file
   showShareDialog.value = true
@@ -954,6 +908,7 @@ async function handleFileDelete(file) {
       { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
     )
     await deleteFile(file.id)
+    if (activeKey.value === file.id) activeKey.value = null  // 批次③: 右栏跟随
     ElMessage.success('已删除')
   } catch (e) {
     if (e !== 'cancel') {
@@ -997,59 +952,206 @@ const currentPathDisplay = computed(() => {
     : '我的网盘 / 顶级目录'
 })
 
-// === W68 第 4 批: 文件右键菜单 (查看评论 + 文件版本历史) ===
-// FolderContextMenu 自身已 bind @contextmenu.prevent, 这里只需通过 contextMenuRef.open(event) 触发
-const contextMenuRef = ref(null)
-const contextMenuFile = ref(null)
+// ============================================================
+// 批次③ B 三栏工作台 — 视图状态与接线 (2026-09-05)
+// 全部动作接真实既有 handler/composable, 0 stub。
+// ============================================================
+const quotaInfo = ref(null)
+const tableRef = ref(null)
 
-// 菜单项动态生成 (跟当前右击文件挂钩)
+// 活动行 (右栏详情对象; folder 行 key='f-<id>' 不触发展示)
+const activeKey = ref(null)
+const activeFile = computed(() => {
+  const k = activeKey.value
+  if (typeof k !== 'number') return null
+  return driveFiles.value.find((f) => f.id === k) || null
+})
+// 切目录/换视图时清活动行 (右栏不残留上一目录的文件)
+watch([selectedFolderId, specialView], () => { activeKey.value = null })
+
+function onRowActivate(row, opts = {}) {
+  if (!row) { activeKey.value = null; return }
+  activeKey.value = row.key
+  if (row.kind === 'folder' && opts.keyboard) enterFolder(row.data)
+  tableRef.value?.focus?.()
+}
+
+function enterFolder(folder) {
+  // 与 FolderTree 选中一致: 更新 selectedFolderId → watch 拉该层文件
+  selectedFolderId.value = folder.id
+  if (!expandedFolderIds.value.has(folder.id)) expandedFolderIds.value.add(folder.id)
+}
+
+function openDetailPage(file) {
+  router.push(`/drive/file/${file.id}`)
+}
+function gotoFolder(folderId) {
+  selectedFolderId.value = folderId
+}
+
+// 下载 (与 FileCard 同路: 原生下载 URL)
+function handleFileDownload(file) {
+  window.open(`/api/v1/drive/files/${file.id}/download?disposition=attachment`, '_blank')
+}
+
+// 版本 dialog (右键/右栏「版本与对比」入口; VersionHistoryDialog 含恢复 + 两版 diff)
+const showVersionsDialog = ref(false)
+const versionsDialogFile = ref(null)
+function openVersionsDialog(file) {
+  versionsDialogFile.value = file
+  showVersionsDialog.value = true
+}
+function onRailRefresh() {
+  reloadCurrentView()
+  fetchFolderTree('team')
+}
+
+// ---- 选择 ----
+function onSelectAll(v) {
+  if (v) selectAll()
+  else clearSelection()
+}
+function onSelectRange(ids) {
+  // Shift 连选: 与既有选择并集
+  const merged = new Set([...selectedFileIds.value, ...ids])
+  selectedFileIds.value = [...merged]
+  triggerRef(selectedFileIds)
+}
+
+// ---- 列头排序 (file_name / file_size / created_at; 同列翻转) ----
+function onColumnSort(prop) {
+  if (sortBy.value === prop) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = prop
+    sortOrder.value = prop === 'file_name' ? 'asc' : 'desc'
+  }
+  currentPage.value = 1
+  reloadCurrentView()
+}
+
+// ---- 拖拽移动落点统一入口 (左树节点 / 表格文件夹行) ----
+async function onMoveDrop({ folderId, ids }) {
+  if (!ids || !ids.length) return
+  if (specialView.value === 'starred') {
+    // 收藏视图内 driveFiles 来自 /starred, 移动后本地剔除即可, 但语义上提示回团队盘操作
+    ElMessage.info('在「我的收藏」内移动: 将同时移出收藏视图, 属正常')
+  }
+  const target = findFolderById(folderId)
+  try {
+    if (ids.length === 1) {
+      await moveFile(ids[0], folderId)
+    } else {
+      await doBatchMove(ids, folderId)
+    }
+    ElMessage.success(`已移动 ${ids.length} 个文件到「${target?.name || '目标文件夹'}」`)
+    clearSelection()
+    if (searchQuery.value.trim()) {
+      runSearchOrReload()
+    } else {
+      reloadCurrentView()
+    }
+    fetchFolderTree('team')
+  } catch (e) {
+    ElMessage.error(e.message || '移动失败')
+  }
+}
+
+// ============================================================
+// 文件/文件夹 右键菜单 (批次③ 扩容: 由旧 2 项 → 全套, 数据源改表格 row-contextmenu)
+// ============================================================
+const contextMenuRef = ref(null)
+const contextMenuRow = ref(null)  // {kind:'file'|'folder', data}
+
 const contextMenuItems = computed(() => {
-  if (!contextMenuFile.value) return []
+  const row = contextMenuRow.value
+  if (!row) return []
+  if (row.kind === 'folder') {
+    return [
+      { command: 'f-open', label: '📂 打开' },
+      { command: 'f-create-sub', label: '➕ 新建子文件夹' },
+      { command: 'f-rename', label: '✏️ 重命名' },
+      { command: 'f-share', label: '🔗 分享', divided: true },
+      { command: 'f-delete', label: '🗑 删除' },
+    ]
+  }
+  const f = row.data
   return [
-    { command: 'view-comments',  label: '💬 查看评论' },
-    { command: 'view-versions',  label: '🕘 文件版本历史', divided: true },
+    { command: 'ctx-preview', label: '▣ 预览' },
+    { command: 'ctx-download', label: '⬇ 下载' },
+    { command: 'ctx-detail', label: '🔗 打开完整详情页', divided: true },
+    { command: 'ctx-rename', label: '✏️ 重命名' },
+    { command: 'ctx-move', label: '📂 移动到…' },
+    { command: 'ctx-share', label: '◈ 分享链接' },
+    { command: 'ctx-star', label: f.is_starred ? '★ 取消收藏' : '☆ 收藏 (仅自己)' },
+    { command: 'ctx-tokb', label: '📚 加入知识库', divided: true },
+    { command: 'ctx-versions', label: '🕘 版本与对比…' },
+    { command: 'ctx-comments', label: '💬 查看评论' },
+    { command: 'ctx-delete', label: '🗑 移入回收站', divided: true },
   ]
 })
 
-/**
- * 桌面端 drive-file-area 右键捕获.
- *
- * 文件识别策略:
- * - 不动 FileGrid (保持 mobile/desktop 解耦, 不污染其他用 FileGrid 的页面)
- * - DOM 走查: 从 event.target 向上找 .file-card 祖先 (FileCard.vue 顶层 class)
- * - 拿该 card 在 parent (FileCard 列表容器) 的 index → driveFiles[index] 即为目标文件
- * - 防御: 走查失败 / 索引越界 → 静默忽略 (右键空白区域不应该弹菜单)
- */
-function onDriveFileAreaContextMenu(event) {
-  const cardEl = event.target?.closest?.('.file-card')
-  if (!cardEl) return  // 右键空白区域, 不弹菜单 (跟主流网盘 UX 一致)
-  // 拿 card 在父容器中的索引
-  const siblings = Array.from(cardEl.parentElement?.children || [])
-  const idx = siblings.indexOf(cardEl)
-  if (idx < 0 || idx >= driveFiles.value.length) return
-  const file = driveFiles.value[idx]
-  contextMenuFile.value = file
-  // 触发 FolderContextMenu.open (通过 nextTick 等 DOM 更新完菜单项)
-  nextTick(() => {
-    contextMenuRef.value?.open?.(event)
-  })
+function onRowContextmenu(row, event) {
+  contextMenuRow.value = row
+  nextTick(() => contextMenuRef.value?.open?.(event))
 }
 
-function onContextMenuCommand(cmd) {
-  const file = contextMenuFile.value
-  if (!file) return
-  if (cmd === 'view-comments') {
-    // 桌面端独立评论页未建 (本批第 3 agent 仍在建), fallback 走 FileDetailView 详情页 (评论嵌内)
-    // W68 第 4 批纪律: 不碰评论 UI agent 的文件, 故评论功能暂跳详情页
-    router.push(`/drive/file/${file.id}`)
-    ElMessage.info('桌面端独立评论页待评论 agent 收官后切换, 当前跳详情页')
-  } else if (cmd === 'view-versions') {
-    router.push(`/drive/file/${file.id}/versions`)
+async function confirmDeleteFolderNode(folder) {
+  // 与 FolderTree 树节点删除同规则: 有子项 → 级联 confirm (后端 recursive)
+  let folderCount = 0, fileCount = 0
+  try {
+    const stats = await getChildrenStats(folder.id)
+    folderCount = stats?.folder_count ?? 0
+    fileCount = stats?.file_count ?? 0
+  } catch { /* 计数失败按无子项走 */ }
+  const hasChildren = folderCount > 0 || fileCount > 0
+  const msg = hasChildren
+    ? `文件夹 "${folder.name}" 下还有 ${folderCount} 个子文件夹 + ${fileCount} 个文件, 将连同子项一起移入回收站, 30 天内可整体恢复。`
+    : `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复。`
+  try {
+    await ElMessageBox.confirm(msg, hasChildren ? '删除文件夹 + 子项 (级联)' : '删除文件夹',
+      { type: 'warning', confirmButtonText: hasChildren ? '全部移入回收站' : '删除', cancelButtonText: '取消' })
+  } catch { return }
+  try {
+    await deleteFolderNode(folder.id, { recursive: hasChildren })
+    ElMessage.success(hasChildren ? '文件夹与子项已全部移入回收站' : '文件夹已移入回收站')
+    if (activeKey.value === 'f-' + folder.id) activeKey.value = null
+    fetchFolderTree('team')
+    reloadCurrentView()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || e.message || '删除失败')
+  }
+}
+
+async function onContextMenuCommand(cmd) {
+  const row = contextMenuRow.value
+  if (!row) return
+  const obj = row.data
+  if (row.kind === 'folder') {
+    if (cmd === 'f-open') enterFolder(obj)
+    else if (cmd === 'f-create-sub') onCreateSubFolder(obj.id)
+    else if (cmd === 'f-rename') { renameTarget.value = obj; renameTargetType.value = 'folder'; showRenameDialog.value = true }
+    else if (cmd === 'f-share') onShareFolder(obj)
+    else if (cmd === 'f-delete') await confirmDeleteFolderNode(obj)
+    return
+  }
+  switch (cmd) {
+    case 'ctx-preview': handleFilePreview(obj); break
+    case 'ctx-download': handleFileDownload(obj); break
+    case 'ctx-detail': openDetailPage(obj); break
+    case 'ctx-rename': handleFileRename(obj); break
+    case 'ctx-move': handleFileMove(obj); break
+    case 'ctx-share': handleFileShareLink(obj); break
+    case 'ctx-star': handleFileToggleStar(obj); break
+    case 'ctx-tokb': handleFileToKb(obj); break
+    case 'ctx-versions': openVersionsDialog(obj); break
+    case 'ctx-comments': router.push(`/drive/file/${obj.id}/comments`); break
+    case 'ctx-delete': handleFileDelete(obj); break
   }
 }
 
 function onContextMenuClose() {
-  contextMenuFile.value = null
+  contextMenuRow.value = null
 }
 </script>
 
@@ -1249,41 +1351,7 @@ function onContextMenuClose() {
   color: var(--color-text-secondary, #606266);
 }
 
-/* v2 PR1: extract-to-kb dialog styles */
-.extract-intro {
-  font-size: 13px;
-  color: var(--color-text-secondary, #606266);
-  line-height: 1.6;
-  margin: 0 0 16px;
-}
-
-.extract-field {
-  margin-top: 12px;
-}
-
-.extract-field-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary, #303133);
-  margin-bottom: 8px;
-}
-
-.extract-field :deep(.el-radio) {
-  display: flex;
-  margin-right: 0;
-  margin-bottom: 8px;
-}
-
-.extract-field :deep(.el-radio + .el-radio) {
-  margin-left: 0;
-}
-
-.extract-hint {
-  font-size: 11px;
-  color: var(--color-text-placeholder, #909399);
-  margin: 4px 0 0;
-}
+/* F5 修复 (批次②): v2 PR1 extract-to-kb dialog styles (.extract-*) 随 dialog 一并删除 */
 
 /* v2 PR2: 排序 + 类型过滤 bar */
 .drive-filter-bar {
@@ -1301,6 +1369,122 @@ function onContextMenuClose() {
   font-size: 13px;
   color: var(--color-text-secondary, #606266);
 }
+
+/* ============================================================
+ * 批次③ B 三栏工作台样式 (2026-09-05) — 全走 variables.css token,
+ * 暗色/6 主题自动跟随; 不依赖 drive-view.css 新增规则 (移动端共用文件零影响)。
+ * ============================================================ */
+.drive-workbench {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-bg-page);
+}
+
+/* 顶栏 */
+.wb-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 56px;
+  padding: 0 var(--space-5);
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
+}
+.wb-brand { display: inline-flex; align-items: center; gap: 9px; font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); white-space: nowrap; }
+.wb-brand-ico { font-size: 18px; }
+.wb-vr { width: 1px; height: 22px; background: var(--color-border); }
+.wb-search {
+  display: inline-flex; align-items: center; gap: 8px;
+  width: min(420px, 34vw);
+  background: var(--color-bg-page);
+  border: 1px solid transparent; border-radius: var(--radius-full);
+  padding: 8px 16px;
+  transition: border-color var(--duration-normal), box-shadow var(--duration-normal), background var(--duration-normal);
+}
+.wb-search:focus-within { background: var(--color-bg-card); border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), .12); }
+.wb-search-ico { color: var(--color-text-secondary); flex: none; }
+.wb-search input { flex: 1; border: none; outline: none; background: none; font: inherit; font-size: var(--font-size-sm); color: var(--color-text-primary); }
+.wb-search input::placeholder { color: var(--color-text-placeholder); }
+.wb-sp { flex: 1; }
+.wb-cta {
+  background: var(--gradient-cta-button) !important;
+  border: none !important; color: #fff !important; font-weight: var(--font-weight-semibold);
+  box-shadow: 0 3px 12px rgba(var(--color-primary-rgb), .35);
+  transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal);
+}
+.wb-cta:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); }
+
+/* 三栏 */
+.wb-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+  gap: 0;
+}
+.wb-rail {
+  width: 236px; flex: none;
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--color-bg-card);
+  border-right: 1px solid var(--color-border);
+  padding: 10px 8px 0;
+}
+.wb-rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 4px 10px 6px; }
+.wb-tree { flex: 1; min-height: 0; overflow-y: auto; }
+.wb-rail-foot { flex: none; padding: 8px 2px 12px; }
+
+.wb-center {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; min-height: 0;
+  padding: 10px 14px 12px;
+  gap: 8px;
+}
+.wb-crumbs { flex: none; display: flex; align-items: center; gap: 10px; font-size: var(--font-size-sm); }
+.wb-crumbs :deep(.el-breadcrumb) { font-size: var(--font-size-sm); }
+.wb-crumb-search { color: var(--color-primary-dark); font-size: var(--font-size-xs); }
+.wb-total { font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
+.wb-density {
+  border: 1px solid var(--color-border); background: var(--color-bg-card);
+  border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-regular);
+  padding: 4px 10px; white-space: nowrap;
+}
+.wb-density:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); }
+
+.wb-ctools { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wb-lab { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.wb-lab--gap { margin-left: 6px; }
+.wb-kbd-hint { margin-left: auto; font-size: 10.5px; color: var(--color-text-placeholder); white-space: nowrap; }
+@media (max-width: 1400px) { .wb-kbd-hint { display: none; } }
+
+.wb-listarea { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.wb-listarea > * { flex: 1; min-height: 0; }
+
+.wb-dock { flex: none; display: flex; flex-direction: column; }
+.wb-dock :deep(.drive-batch-toolbar) { border: 1px solid var(--color-border); border-top: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-sm); background: var(--color-bg-card); }
+
+.wb-railright { width: 340px; flex: none; border-radius: 0; }
+
+/* 拖拽悬停整区提示 */
+.wb-body.is-drag-over::before {
+  content: '';
+  position: absolute; inset: 0;
+  border: 2.5px dashed var(--color-primary);
+  background: rgba(var(--color-primary-rgb), .05);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+  z-index: 12;
+}
+
+/* 窄屏兜底: 右栏可横向滚 (workbench 面向 ≥1280 桌面) */
+@media (max-width: 1180px) {
+  .wb-railright { width: 292px; }
+}
+
+/* 旧 drive-drop-hero 沿用 (scoped 块里已有定义), 此处仅调层级到三栏之上 */
+.drive-drop-hero { z-index: 20; }
 </style>
 
 <!--

@@ -160,6 +160,10 @@ const props = defineProps({
   defaultFolderId: { type: [Number, null], default: null },
   // v2 PR6-P19: 团队共享盘标识 (DesktopDriveView 切到 team 视图时上传传 true)
   isTeamShared: { type: Boolean, default: false },
+  // F3 修复 (批次②): 主区域拖拽进来的文件 ({file, relativePath}[]) —
+  // dialog 打开时自动 addFiles 注入, 用户确认目标夹/可见性后点"开始上传"。
+  // 调用方负责在 dialog 关闭后清空该 prop (resetForm 已清内部列表, 防二次注入)。
+  initialFiles: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:modelValue', 'uploaded'])
@@ -226,6 +230,8 @@ watch(visible, async (newVal) => {
     await nextTick()
     if (dropZoneRef.value) bindDropZone(dropZoneRef.value)
     await fetchTree()
+    // F3 修复 (批次②): 主区域拖拽 → open dialog 时注入 dropped files (entries 形状一致)
+    if (props.initialFiles?.length) addFiles(props.initialFiles)
   } else {
     unbindDropZone()
   }

@@ -84,6 +84,12 @@
     <!-- 文件名 -->
     <div class="file-card-name" :title="file.title || file.file_name">
       {{ file.title || file.file_name }}
+      <!--
+        ②-5 搜索接线: 结果行内联显示所属文件夹小字 (放 name cell 内, 避免 detail 横向
+        flex 列被额外兄弟节点撑乱)。留口: 后端 DriveFileItem 目前无 folder_name 字段,
+        响应带上后自动显示, 前端 0 再改。
+      -->
+      <span v-if="file.folder_name" class="file-card-folder-hint">· 📂 {{ file.folder_name }}</span>
     </div>
 
     <!-- 网格视图: 大小 + 日期 + 徽章 -->
@@ -143,9 +149,7 @@
             <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
             <el-dropdown-item command="move">移动</el-dropdown-item>
             <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
-            <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
-              📚 加入公共知识库
-            </el-dropdown-item>
+            <!-- F5 修复 (批次②): "加入公共知识库" (extract-to-kb 老管线) 菜单项已删除 -->
             <!-- W98: 网盘入库 RAG (drive → kb 完整管线, 原 drive 行保留) -->
             <el-dropdown-item v-if="file.storage_mode === 'drive'" command="to-kb">
               📚 加入知识库
@@ -243,9 +247,7 @@
               <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
               <el-dropdown-item command="move">移动</el-dropdown-item>
               <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
-              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
-                📚 加入公共知识库
-              </el-dropdown-item>
+              <!-- F5 修复 (批次②): extract-to-kb 老管线菜单项已删除 (detail 视图) -->
               <!-- W98: 网盘入库 RAG (drive → kb 完整管线, 原 drive 行保留) -->
               <el-dropdown-item v-if="file.storage_mode === 'drive'" command="to-kb">
                 📚 加入知识库
@@ -292,7 +294,8 @@ const props = defineProps({
   viewMode: { type: String, default: 'detail' }  // detail | grid | list (v2.16 detail 默认)
 })
 
-defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'to-kb', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
+// F5 修复 (批次②): 'extract-to-kb' emit 随老管线菜单项删除
+defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'to-kb', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
 
 // === v2.0 (2026-07-09) Drive 美化: 按 file_type 提取 type key 用于 data-type ===
 // 与 drive-view.css 中的 .drive-file-card[data-type="pdf|doc|ppt|excel|image|video|audio|text"] 配套
@@ -494,6 +497,15 @@ onMounted(() => {
  *
  * v2.0 已 token 化, 移除硬编码 EP 默认蓝色与色值 fallback
  */
+
+/* ②-5 搜索接线: 结果行所属文件夹小字 (folder_name 存在才渲染) */
+.file-card-folder-hint {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-text-placeholder, #909399);
+  white-space: nowrap;
+}
 
 .file-card {
   /* 颜色 / 边框 / 阴影 / hover lift 全部走 .drive-file-card (共享 CSS) */

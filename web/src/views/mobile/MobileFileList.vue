@@ -150,7 +150,8 @@ import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 
-const emit = defineEmits(['file-preview', 'file-download', 'file-rename', 'file-update-visibility', 'file-extract-to-kb', 'file-delete'])
+// F5 修复 (批次②): 'file-extract-to-kb' emit 随老管线删除
+const emit = defineEmits(['file-preview', 'file-download', 'file-rename', 'file-update-visibility', 'file-delete'])
 
 const router = useRouter()
 
@@ -211,9 +212,7 @@ const fileActions = computed(() => {
     { name: 'preview', label: '👁 预览' },
     { name: 'download', label: '⬇️ 下载' }
   ]
-  if (f.storage_mode === 'drive') {
-    actions.push({ name: 'extract-to-kb', label: '📚 加入公共知识库' })
-  }
+  // F5 修复 (批次②): extract-to-kb (加入公共知识库老管线) 菜单项删除, 单入口在 KB 上传
   actions.push({ name: 'rename', label: '✏️ 重命名' })
   actions.push({ name: 'update-visibility', label: '🔒 改可见性' })
   actions.push({ name: 'delete', label: '🗑️ 删除', danger: true })
@@ -293,8 +292,6 @@ function onFileAction(action) {
       emit('file-rename', file); break
     case 'update-visibility':
       emit('file-update-visibility', file); break
-    case 'extract-to-kb':
-      emit('file-extract-to-kb', file); break
     case 'delete':
       emit('file-delete', file); break
   }

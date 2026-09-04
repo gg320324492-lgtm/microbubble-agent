@@ -58,6 +58,7 @@
         @select="handleFolderSelect"
         @toggle="$emit('toggle-expanded', $event)"
         @context-command="onSubContext"
+        @drop-files="$emit('drop-files', $event)"
       />
     </template>
 
@@ -91,6 +92,7 @@
       @select="handleFolderSelect"
       @toggle="$emit('toggle-expanded', $event)"
       @context-command="onSubContext"
+      @drop-files="$emit('drop-files', $event)"
     />
 
     <!-- v2 PR18 (2026-07-24, W68 第 14 批 B-2) 团队共享盘 Team Folder
@@ -108,7 +110,24 @@
       @select="(id) => onSelectTeamFolder(team, id)"
       @toggle="$emit('toggle-expanded', $event)"
       @context-command="onSubContext"
+      @drop-files="$emit('drop-files', $event)"
     />
+
+    <!-- 收藏入口补回 (批次②): 头部注释一直声明 "⭐ 我的收藏" special 项,
+         但模板区实际只有 team/trash (历史上丢失)。DesktopDriveView 的
+         specialView='starred' watch 分支早已支持, 此处接上。
+         收藏 per-user 化 (后端批次① alembic 134): 仅自己可见。 -->
+    <FolderContextMenu :items="favoritesMenuItems" placement="right-start" @command="(cmd) => onFavoritesContext(cmd)">
+      <div
+        class="folder-tree-special-item drive-folder-tree-special-item is-starred"
+        :class="{ 'is-active': specialView === 'starred' }"
+        title="个人收藏夹, 仅自己可见"
+        @click="$emit('update:specialView', 'starred')"
+      >
+        <el-icon><StarFilled /></el-icon>
+        <span>⭐ 我的收藏</span>
+      </div>
+    </FolderContextMenu>
 
     <!-- 回收站 (PR2 真实接入) (红) -->
     <FolderContextMenu :items="trashMenuItems" placement="right-start" @command="(cmd) => onTrashContext(cmd)">
@@ -170,6 +189,8 @@ const emit = defineEmits([
   'share-folder',       // (folder)   → parent 弹 ShareLinkDialog
   // v2.28 (2026-07-12): 空态 CTA "新建文件夹" — 无 parent_id 顶层创建
   'request-new-folder', // () → parent 弹 CreateFolderDialog
+  // 批次③ B: 拖拽移动落点 (子节点冒泡) → parent 调 move/batchMove
+  'drop-files',         // ({folderId, ids})
 ])
 
 const { fetchTree, deleteFolder, getChildrenStats } = useFolderTree()
