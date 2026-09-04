@@ -14,8 +14,10 @@ services:
     depends_on:
       - app
     # 2026-08-17 #Step1: 加 healthcheck (沿用 frontend SPA check 模式)
+    # 2026-09-04 修正: alpine wget localhost 解析 ::1 而 nginx 只听 IPv4 → 永远假 unhealthy;
+    # 用 127.0.0.1 字面量, /health 走 nginx→app 反代 = 真端到端探针
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ >/dev/null && wget -qO- http://localhost:80/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null && wget -qO- http://127.0.0.1/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -79,15 +81,18 @@ services:
 #             - driver: nvidia
 #               count: 1
 #               capabilities: [gpu]
-#     healthcheck:
-#       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
-#       start_period: 15s
-#     # 2026-08-17 #Step1: 加 mem_limit (5 容器共享 GPU, 显式限内存避免 host OOM 不可控)
-#     mem_limit: 6g
-#     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    # 2026-08-17 #Step1: 加 mem_limit (5 容器共享 GPU, 显式限内存避免 host OOM 不可控)
+    # 2026-09-04 保持注释: app 常驻 embedding+reranker, 6g 上限有 OOM 风险, 单独评估
+    # mem_limit: 6g
+    # 2026-09-04 重启事故: app 无 restart 策略, 重启后 Exited(255) 永不拉起,
+    # nginx 因 upstream 消失崩溃循环 (类 20.154 盲点扩展)
+    restart: unless-stopped
 
   # PostgreSQL数据库
   db:
