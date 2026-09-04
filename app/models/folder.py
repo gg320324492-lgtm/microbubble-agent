@@ -5,11 +5,14 @@
 - 自引用 parent_id (self-FK ON DELETE SET NULL) 支持任意嵌套
 - path 字段 '/1/4/7/' 形式存储, 便于 O(子项数) 列出子节点
 - depth 字段限制 max=5 (5 层嵌套, 防止 UI 渲染崩溃)
-- visibility 字段 (private/team/public) 是文件夹内文件的硬上限
-  - folder=private → 文件只能是 private
-  - folder=team    → 文件可以是 private/team/public
-  - folder=public  → 文件只能是 public
-- owner_id FK members (ondelete='RESTRICT'), 不能 cascade (删成员不删文件夹)
+- visibility 字段 (private/team/public):
+  2026-09 单一团队空间后保留列仅为兼容历史数据, 新内容一律 'team'
+  (create/update 收口点强制改写 private→team, 存量由 alembic 133 回填);
+  历史上"文件夹内文件的硬上限"语义保留成无害校验 (全 team 后恒过)
+- owner_id FK members (ondelete='RESTRICT'): **创建人溯源, 不是权限门**。
+  任何登录成员可在任意 folder 下建子夹/改名/移动/删除 (2026-09 单一团队空间)。
+  列保持 NOT NULL FK (不搞 nullable/sentinel, 避免 FK 破裂 + schema 连锁改动);
+  删成员前用 app/services/drive_ownership.reassign_member_rows 转给锚点成员。
 - 软删除 deleted_at (Celery beat 定期物理清除, 与 Knowledge 同步)
 """
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, Boolean
@@ -25,6 +28,7 @@ class Folder(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
+    # 创建人溯源 (谁建的), **非权限归属** — 2026-09 单一团队空间, 见模块 docstring
     owner_id = Column(
         Integer,
         ForeignKey("members.id", ondelete="RESTRICT"),

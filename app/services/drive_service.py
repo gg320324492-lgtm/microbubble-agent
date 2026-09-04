@@ -14,7 +14,11 @@
 # 当前: 全部 facade 调用由 drive_files.py 路由直接 svc.method() 触发 (主拍决策前不强行改路由).
 
 核心边界:
+- 2026-09 单一团队空间: owner (created_by) 降级为纯溯源, 所有 owner 相等权限门禁已删;
+  visibility='private' 概念退役 — create_file/create_instant_upload 收口点强制改写 'team',
+  存量由 alembic 133 回填, is_team_shared 服务端恒 True。
 - visibility='private' 文件: 仅 created_by (owner) 可见，其他人**完全看不到** (不是 403)
+  ↑ 历史语义; 新数据不再产生 private, 该过滤仅存兜底
 - visibility='team': 当前活跃成员可见
 - visibility='public': 含团队外部分享链接 (本服务暂不展开 share_token, 留 PR2.7)
 - 文件 visibility >= 所在文件夹 visibility (文件夹硬上限, plan 决策 2026-07-01)
@@ -246,9 +250,13 @@ def _build_list_files_query(
         if ext_predicate is not None:
             filters.append(ext_predicate)
     if is_team_shared_filter is not None:
+        # 2026-09 单一团队空间: API 层已恒传 None (view 参数只回显不再过滤);
+        # 保留代码路径给内部调用方, 迁移 133 回填后所有行 is_team_shared=true, 语义收敛。
         filters.append(Knowledge.is_team_shared == is_team_shared_filter)
 
     # 核心隐私边界: private 文件仅 owner 可见
+    # 2026-09 单一团队空间: create_file 收口点已禁止新 private drive 行 + 迁移 133
+    # 把存量翻成 team, 该条件实际恒真 (保留防脏数据兜底)。
     visibility_see_cond = or_(
         Knowledge.created_by == current_user_id,
         Knowledge.visibility != "private",
@@ -420,6 +428,18 @@ class DriveService:
         if storage_mode == "drive":
             assert visibility in ("private", "team", "public"), f"invalid visibility: {visibility}"
 
+        # 2026-09 单一团队空间: drive 文件 private 概念退役 — 本方法是无网盘 upload/
+        # create_file 的统一收口点, incoming 'private' 一律强制改写为 'team' (log warning)。
+        # 同时 is_team_shared 服务端恒置 True (迁移 133 回填后该字段退役)。
+        if storage_mode == "drive":
+            if visibility == "private":
+                logger.warning(
+                    "[DriveService.create_file] visibility='private' 已退役, 强制改写为 "
+                    f"'team' (file_name={file_name}, created_by={created_by or owner_id})"
+                )
+                visibility = "team"
+            is_team_shared = True
+
         # 配额校验
         if file_size > MAX_DRIVE_FILE_SIZE_BYTES:
             raise DriveServiceError(
@@ -432,9 +452,7 @@ class DriveService:
             folder = await self.get_folder(folder_id)
             if folder is None:
                 raise DriveServiceError(f"文件夹 id={folder_id} 不存在", status_code=400)
-            # 跨用户校验（防越权操作别人 folder）
-            if folder.owner_id != owner_id:
-                raise DriveServiceError(f"无权在该文件夹中创建文件", status_code=403)
+            # 2026-09 单一团队空间: 不再校验 folder.owner_id == owner_id (owner 仅溯源)
             self._validate_visibility_inherits(visibility, folder.visibility)
 
         knowledge = Knowledge(
@@ -492,6 +510,8 @@ class DriveService:
         # 设计: 自通知 skip (owner_id == current_user_id 时不触发, 避免噪音)
         # 未来扩展: "upload to other user's folder" 时自动通知 folder owner
         # best-effort 不阻塞, 失败只 logger.debug
+        # 2026-09 单一团队空间: 实际上所有调用方都传 owner_id == created_by (上传者即"owner"),
+        # 该分支已 effectively dead (仅保留功能代码, 不删)。
         try:
             owner_id_for_notify = owner_id
             uploader_id = created_by or owner_id
@@ -719,10 +739,10 @@ class DriveService:
         visibility: Optional[str] = None,
         folder_id: Optional[int] = None,
     ) -> Optional[Knowledge]:
-        """更新 drive 文件 (owner only)
+        """更新 drive 文件 (2026-09 单一团队空间: 任何成员可改)
 
-        Returns: 更新后的 Knowledge, None = 文件不存在或非 owner
-        Raises: DriveServiceError 若越权或文件夹 visibility 不兼容
+        Returns: 更新后的 Knowledge, None = 文件不存在
+        Raises: DriveServiceError 若文件夹 visibility 不兼容
         """
         file = await self.db.execute(
             select(Knowledge).where(
@@ -733,9 +753,7 @@ class DriveService:
         file = file.scalar_one_or_none()
         if file is None:
             return None
-        if file.created_by != current_user_id:
-            # 不是 owner，隐身
-            return None
+        # 2026-09 单一团队空间: 删除 created_by != current_user_id 门禁 (溯源非权限)
 
         # visibility 上限
         if visibility is not None:
@@ -753,12 +771,10 @@ class DriveService:
             file.file_name = file_name
 
         if folder_id is not None and folder_id != file.folder_id:
-            # 校验目标文件夹存在 + ownership
+            # 校验目标文件夹存在 (2026-09 单一团队空间: 不再校验 target folder owner)
             target_folder = await self.get_folder(folder_id)
             if target_folder is None:
                 raise DriveServiceError(f"目标文件夹 id={folder_id} 不存在", status_code=400)
-            if target_folder.owner_id != file.created_by:
-                raise DriveServiceError(f"无权移动到该文件夹", status_code=403)
             self._validate_visibility_inherits(file.visibility, target_folder.visibility)
             file.folder_id = folder_id
 
@@ -798,10 +814,10 @@ class DriveService:
         file_id: int,
         current_user_id: int,
     ) -> bool:
-        """软删除 drive 文件 (owner only)
+        """软删除 drive 文件 (2026-09 单一团队空间: 任何成员可删)
 
         设置 deleted_at = NOW(), 30 天后由 Celery beat 物理清除 (W72 B-3)
-        Returns: True = 成功, False = 文件不存在或非 owner
+        Returns: True = 成功, False = 文件不存在
         """
         file = await self.db.execute(
             select(Knowledge).where(
@@ -810,7 +826,7 @@ class DriveService:
             )
         )
         file = file.scalar_one_or_none()
-        if file is None or file.created_by != current_user_id:
+        if file is None:
             return False
 
         # 快照原目录与物化路径；软删本身仍保留 folder_id，快照用于父目录在
@@ -843,11 +859,13 @@ class DriveService:
         """Restore a trashed file to its snapshotted folder, or safely fall back to root."""
         target_parent_id = file.original_parent_id
         if target_parent_id is not None:
+            # 2026-09 单一团队空间修复: 旧实现要求 Folder.owner_id == file.created_by,
+            # 跨成员文件恢复时目标 folder 判空 → 静默掉到根目录 (真 bug)。owner 仅溯源,
+            # 该谓词删除。
             target = (
                 await self.db.execute(
                     select(Folder).where(
                         Folder.id == target_parent_id,
-                        Folder.owner_id == file.created_by,
                         Folder.deleted_at.is_(None),
                     )
                 )
@@ -876,7 +894,7 @@ class DriveService:
         current_user_id: int,
         is_admin: bool = False,
     ) -> Optional[Knowledge]:
-        """恢复被软删的 drive 文件 (owner/admin, 30 天保留期内有效)."""
+        """恢复被软删的 drive 文件 (2026-09 单一团队空间: 任何成员可恢复, 30 天保留期内有效)."""
         file = await self.db.execute(
             select(Knowledge).where(
                 Knowledge.id == file_id,
@@ -885,7 +903,7 @@ class DriveService:
             )
         )
         file = file.scalar_one_or_none()
-        if file is None or (file.created_by != current_user_id and not is_admin):
+        if file is None:
             return None
         await self._restore_original_location(file)
         file.deleted_at = None
@@ -944,12 +962,13 @@ class DriveService:
             )
         )
         file = file.scalar_one_or_none()
-        if file is None or file.created_by != current_user_id:
+        if file is None:
             return None
 
         # visibility 必须升 (private → team/public)
         # team → public 合法
         # 已是 team/public 再"升级"无意义但允许 (幂等)
+        # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可 extract)
         before = file.visibility
         file.visibility = target_visibility
         file.storage_mode = "kb"
@@ -1046,7 +1065,7 @@ class DriveService:
         expires_hours: Optional[int] = None,
         password: Optional[str] = None,
     ) -> Optional[Knowledge]:
-        """生成公开分享 token (owner only)
+        """生成公开分享 token (2026-09 单一团队空间: 任何成员可分享)
 
         v2 PR1 升级:
         - expires_hours 新参数 (细粒度, 1-8760)
@@ -1055,7 +1074,7 @@ class DriveService:
 
         Args:
             file_id: drive 文件 id
-            current_user_id: 当前用户 (必须 = file.created_by)
+            current_user_id: 当前用户 (操作者溯源, 不再要求 = file.created_by)
             expires_in_days: 保留旧 API, 1-365 (向后兼容)
             expires_hours: 新 API, 1-8760; 0=None=默认 7 天; -1=永久
             password: 4-8 位数字, None = 公开分享
@@ -1100,8 +1119,9 @@ class DriveService:
             )
         )
         f = f.scalar_one_or_none()
-        if f is None or f.created_by != current_user_id:
+        if f is None:
             return None
+        # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可生成分享链接)
 
         # 32 字符 token (44 字符 url-safe base64)
         token = secrets.token_urlsafe(24)[:32]
@@ -1154,7 +1174,7 @@ class DriveService:
         file_id: int,
         current_user_id: int,
     ) -> bool:
-        """撤销分享链接 (清 token + expires + password)"""
+        """撤销分享链接 (清 token + expires + password) — 2026-09: 任何成员可撤销"""
         f = await self.db.execute(
             select(Knowledge).where(
                 Knowledge.id == file_id,
@@ -1163,7 +1183,7 @@ class DriveService:
             )
         )
         f = f.scalar_one_or_none()
-        if f is None or f.created_by != current_user_id:
+        if f is None:
             return False
         f.share_token = None
         f.share_expires_at = None
@@ -1262,8 +1282,9 @@ class DriveService:
             )
         )
         f = f.scalar_one_or_none()
-        if f is None or f.created_by != current_user_id:
+        if f is None:
             return None
+        # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可改 visibility)
 
         # visibility 上限 (private 不能往公开升级除非 folder 允许)
         if f.folder_id is not None:
@@ -1290,9 +1311,11 @@ class DriveService:
     # ============================================================
 
     async def toggle_star_file(self, file_id: int, current_user_id: int) -> Optional[Knowledge]:
-        """切换文件收藏状态 (owner only, 360° 翻转 is_starred).
+        """切换文件收藏状态 (2026-09 单一团队空间: 任何成员可 star, 360° 翻转 is_starred).
 
-        Returns: 更新后的 Knowledge, None = 文件不存在或非 owner.
+        Returns: 更新后的 Knowledge, None = 文件不存在.
+
+        注意 (发布说明): is_starred 是全局限列 (无 per-user 表), 任何成员星标对全员生效。
 
         v2 网盘 PR6-P12+ 增量: star 触发 notification_service (create_mention context='star'),
         通知 file owner (跳过自通知, 防止噪音).
@@ -1304,8 +1327,8 @@ class DriveService:
             )
         )
         f = f.scalar_one_or_none()
-        if f is None or f.created_by != current_user_id:
-            return None  # 隐身
+        if f is None:
+            return None
         if f.is_starred:
             f.is_starred = False
             f.starred_at = None
@@ -1347,11 +1370,11 @@ class DriveService:
     ) -> Tuple[List[Knowledge], int]:
         """v2 PR2: 列回收站文件 (软删的 drive 文件).
 
-        - 仅返回 created_by == current_user_id 的 (owner 隔离)
+        2026-09 单一团队空间: 全组共享垃圾桶 — 实际实现从未按 created_by 过滤,
+        只有 visibility_see_cond (存量 private 由迁移 133 翻 team 后全员可见)。
         - deleted_at 必然非空
         - 排序默认 deleted_at desc (最近删除在前)
-        - 注意: 这里**不**走 _list_files_impl, 因为要排除 storage_mode filter
-          (回收站也是 drive 文件, storage_mode='drive' 一致, 但 include_deleted=True 即可)
+        - 注意: 这里**不**走 _list_files_impl 的 folder 语义 (回收站跨 folder 看)
         """
         return await self._list_files_impl(
             current_user_id=current_user_id,
@@ -1401,7 +1424,7 @@ class DriveService:
         file_ids: List[int],
         current_user_id: int,
     ) -> Tuple[int, List[int]]:
-        """v2 PR2: 批量软删 (owner only, 非 owner 的 id 静默跳过).
+        """v2 PR2: 批量软删 (2026-09 单一团队空间: 任何成员可批量删, 不存在/已删的 id 入 skipped).
 
         Returns: (deleted_count, skipped_ids)
         """
@@ -1419,9 +1442,7 @@ class DriveService:
         skipped = []
         deleted = 0
         for f in files:
-            if f.created_by != current_user_id:
-                skipped.append(f.id)
-                continue
+            # 2026-09 单一团队空间: 删除 created_by owner skip
             f.original_parent_id = f.folder_id
             if f.folder_id is None:
                 f.original_path = "/"
@@ -1463,9 +1484,8 @@ class DriveService:
         current_user_id: int,
         is_admin: bool = False,
     ) -> Tuple[int, List[int]]:
-        """v2 PR2/W72 B-3: 批量恢复到原路径 (owner/admin).
+        """v2 PR2/W72 B-3: 批量恢复到原路径 (2026-09 单一团队空间: 任何成员可批量恢复).
 
-        - 仅 restore created_by == current_user_id 的
         - 不在 trash 的 (deleted_at IS NULL) 也入 skipped
         Returns: (restored_count, skipped_ids)
         """
@@ -1482,9 +1502,7 @@ class DriveService:
         skipped = []
         restored = 0
         for f in files:
-            if f.created_by != current_user_id and not is_admin:
-                skipped.append(f.id)
-                continue
+            # 2026-09 单一团队空间: 删除 created_by/is_admin owner skip
             await self._restore_original_location(f)
             f.deleted_at = None
             restored += 1
@@ -1507,8 +1525,8 @@ class DriveService:
     ) -> Tuple[int, List[int]]:
         """v2 PR2: 批量移动到 folder (target_folder_id=None = 顶级).
 
-        - 仅 owner 可移动
-        - target_folder 必须存在 + owner 一致
+        2026-09 单一团队空间: 任何成员可移动任意文件 (owner 仅溯源)。
+        - target_folder 必须存在 (不校验 owner)
         - 移动时 file.visibility 不得超过 folder.visibility (继承规则)
         Returns: (moved_count, skipped_ids)
         """
@@ -1523,11 +1541,7 @@ class DriveService:
                     f"目标文件夹 id={target_folder_id} 不存在",
                     status_code=404,
                 )
-            if target_folder.owner_id != current_user_id:
-                raise DriveServiceError(
-                    "无权操作他人的文件夹",
-                    status_code=403,
-                )
+            # 2026-09 单一团队空间: 删除 target_folder.owner_id == current_user_id 403
         result = await self.db.execute(
             select(Knowledge).where(
                 Knowledge.id.in_(file_ids),
@@ -1539,9 +1553,7 @@ class DriveService:
         skipped = []
         moved = 0
         for f in files:
-            if f.created_by != current_user_id:
-                skipped.append(f.id)
-                continue
+            # 2026-09 单一团队空间: 删除 created_by owner skip
             if target_folder is not None:
                 self._validate_visibility_inherits(f.visibility, target_folder.visibility)
             f.folder_id = target_folder_id
@@ -1563,9 +1575,9 @@ class DriveService:
         new_visibility: str,
         current_user_id: int,
     ) -> Tuple[int, List[int]]:
-        """v2 PR2: 批量改可见性 (private | team | public).
+        """v2 PR2: 批量改可见性 (team | public).
 
-        - 仅 owner 可改
+        2026-09 单一团队空间: 任何成员可改 (owner 仅溯源)。
         - 越权 (folder 上限) 的文件入 skipped (不抛错, 让用户知道哪些被跳过)
         Returns: (updated_count, skipped_ids)
         """
@@ -1587,9 +1599,7 @@ class DriveService:
         skipped = []
         updated = 0
         for f in files:
-            if f.created_by != current_user_id:
-                skipped.append(f.id)
-                continue
+            # 2026-09 单一团队空间: 删除 created_by owner skip
             if f.folder_id is not None:
                 folder = await self.get_folder(f.folder_id)
                 if folder is not None:
@@ -1617,9 +1627,9 @@ class DriveService:
         current_user_id: int,
         is_admin: bool = False,
     ) -> bool:
-        """v2 PR2/W72 B-3: 物理删除 (owner/admin only).
+        """v2 PR2/W72 B-3: 物理删除 (2026-09 单一团队空间: 任何成员可永久删).
 
-        Returns: True=成功, False=不存在或非 owner.
+        Returns: True=成功, False=不存在 (或未软删/非 drive 行).
         """
         f = await self.db.execute(
             select(Knowledge).where(Knowledge.id == file_id)
@@ -1629,8 +1639,8 @@ class DriveService:
             f is None
             or f.deleted_at is None
             or f.storage_mode != "drive"
-            or (f.created_by != current_user_id and not is_admin)
         ):
+            # 2026-09: created_by/is_admin owner 门禁已删, current_user_id 参数保留兼容签名
             return False
         # 如果有 MinIO 对象, 删掉 (best-effort)
         if f.file_path:
@@ -1652,7 +1662,7 @@ class DriveService:
         current_user_id: int,
         is_admin: bool = False,
     ) -> Tuple[int, List[int]]:
-        """v2 PR2/W72 B-3: 批量永久删除 (owner/admin only).
+        """v2 PR2/W72 B-3: 批量永久删除 (2026-09 单一团队空间: 任何成员可批量永久删).
 
         Returns: (deleted_count, skipped_ids)
         """
@@ -1669,9 +1679,7 @@ class DriveService:
         skipped = []
         deleted = 0
         for f in files:
-            if f.created_by != current_user_id and not is_admin:
-                skipped.append(f.id)
-                continue
+            # 2026-09 单一团队空间: 删除 created_by/is_admin owner skip
             # best-effort 删 MinIO 对象
             if f.file_path:
                 try:
@@ -1786,11 +1794,18 @@ class DriveService:
                 raise DriveServiceError(
                     f"文件夹 id={folder_id} 不存在", status_code=400,
                 )
-            if folder.owner_id != owner_id:
-                raise DriveServiceError(
-                    f"无权在该文件夹中创建文件", status_code=403,
-                )
+            # 2026-09 单一团队空间: 不再校验 folder.owner_id == owner_id (owner 仅溯源)
             self._validate_visibility_inherits(visibility, folder.visibility)
+
+        # 2026-09 单一团队空间: 与 create_file 同款收口 — private 退役强制 team,
+        # is_team_shared 服务端恒 True (秒传行也是 drive 文件)
+        if visibility == "private":
+            logger.warning(
+                "[DriveService.create_instant_upload] visibility='private' 已退役, "
+                f"强制改写为 'team' (file_name={file_name})"
+            )
+            visibility = "team"
+        is_team_shared = True
 
         # 新行 + 复用同 hash
         new_k = Knowledge(
@@ -1881,7 +1896,9 @@ class DriveService:
             storage_mode="drive",
             visibility=cur.visibility,
             folder_id=cur.folder_id,
-            owner_id=cur.owner_id,
+            # BUG FIX (2026-09 单一团队空间): 原 owner_id=cur.owner_id — Knowledge 模型
+            # 无 owner_id 列, 读取 AttributeError + 构造 TypeError, 该行直接删除
+            # (溯源字段用 created_by=uploader_id, 上方已设)
         )
         self.db.add(new_k)
         await self.db.flush()  # 拿 new_k.id
@@ -2023,7 +2040,7 @@ class DriveService:
         if old_k.file_name and "." in old_k.file_name:
             ext = "." + old_k.file_name.rsplit(".", 1)[-1].lower()
         new_object = (
-            f"uploads/drive/{cur.owner_id}/"
+            f"uploads/drive/{cur.created_by}/"
             f"v{new_version_number}_{kv.file_hash[:12]}_{int(datetime.now(timezone.utc).timestamp())}"
             f"{ext}"
         )
@@ -2049,7 +2066,8 @@ class DriveService:
             storage_mode="drive",
             visibility=cur.visibility,
             folder_id=cur.folder_id,
-            owner_id=cur.owner_id,
+            # BUG FIX (2026-09 单一团队空间): 原 owner_id=cur.owner_id — 同 create_version,
+            # Knowledge 无 owner_id 列, 删除 (溯源走 created_by=uploader_id)
         )
         self.db.add(new_k)
         await self.db.flush()
@@ -2367,8 +2385,8 @@ class DriveService:
             dst_object=final_object,
         )
 
-        # v2 PR6-P19: is_team_shared 默认 False (个人), API 显式传 True (团队) 才覆盖
-        is_team_shared_resolved = bool(is_team_shared) if is_team_shared is not None else False
+        # 2026-09 单一团队空间: is_team_shared 服务端恒 True (迁移 133 回填后该字段退役)
+        is_team_shared_resolved = True
 
         # 创建 Knowledge 行 (复用 create_file 走 drive 路径)
         new_file = await self.create_file(

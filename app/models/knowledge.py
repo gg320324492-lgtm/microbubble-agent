@@ -67,12 +67,14 @@ class Knowledge(Base, TimestampMixin):
         String(32), nullable=False, server_default="qwen3-0.6b", index=True
     )
 
-    # 创建者
+    # 创建者 (2026-09 单一团队空间: 纯溯源字段, 不再参与权限判定;
+    # 删成员前经 app/services/drive_ownership.reassign_member_rows 转给锚点成员)
     created_by = Column(Integer, ForeignKey("members.id"))
 
     # ==================== 课题组网盘 (Lab Group Drive) 2026-07-01 ====================
     # storage_mode: kb (传统 KB 卡片) | drive (网盘原始文件，不入 embedding 索引)
-    # visibility: private (仅 owner 可见) | team (全员可见) | public (含外部分享)
+    # visibility: private | team | public — 2026-09 单一团队空间: drive 行 private
+    # 概念退役 (create_file 收口点强制 team + alembic 133 回填存量), 列保留兼容历史
     # folder_id: NULL = 顶级目录，指向 folders.id (Folders 表自引用 parent_id)
     # deleted_at: 软删除时间戳，NULL = 活跃，Celery beat 3 天后物理删除
     storage_mode = Column(String(16), nullable=False, server_default="kb", index=True)
@@ -105,11 +107,13 @@ class Knowledge(Base, TimestampMixin):
     # ==================== /v2 PR2 ====================
 
     # ==================== v2 PR6-P19 团队共享盘隔离 2026-07-11 ====================
-    # is_team_shared: 用户上传时所在的视图 (specialView='team' = True, 'personal' = False)
-    #   - True: 上传到「团队共享盘」, 不显示在「个人网盘」root view
-    #   - False: 上传到「个人网盘」, 不显示在「团队共享盘」team view
+    # is_team_shared: 【2026-09 单一团队空间: 退役, 服务端恒 True】
+    #   历史语义 (用户上传时所在视图 personal/team 决定 list 隔离) 已废除:
+    #   - create_file / create_instant_upload / complete_chunked_upload 恒写 True
+    #   - 存量行由 alembic 133_single_team_workspace 回填 true
+    #   - list API 的 view=personal|team|all 继续接受但不再按本列过滤
+    #   列保留 (partial 索引 ix_knowledge_team_shared 亦保留), 未来另立 PR 删列。
     # 索引: ix_knowledge_team_shared (partial WHERE deleted_at IS NULL AND is_team_shared = true, alembic 058)
-    # 历史兼容: 默认 false, 已存在的文件全部归类为「个人网盘」(用户可手动迁移留 v2.20 admin CLI)
     is_team_shared = Column(Boolean, nullable=False, server_default="false")
     # ==================== /v2 PR6-P19 ====================
 
