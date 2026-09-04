@@ -1,0 +1,94 @@
+
+.file-request-list-panel[data-v-b97e50b5] {
+  /* Panel 内由 DesktopDriveView 主区提供 padding, 此处不重复 */
+}
+.request-toolbar[data-v-b97e50b5] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+}
+.request-toolbar-spacer[data-v-b97e50b5] { flex: 1;
+}
+.request-toolbar-label[data-v-b97e50b5] {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.request-loading[data-v-b97e50b5], .request-empty[data-v-b97e50b5] {
+  padding: 40px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+.request-list[data-v-b97e50b5] {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.request-item[data-v-b97e50b5] {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.request-main[data-v-b97e50b5] { flex: 1; min-width: 0;
+}
+.request-title[data-v-b97e50b5] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.request-desc[data-v-b97e50b5] {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+.request-meta[data-v-b97e50b5] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.request-actions[data-v-b97e50b5] {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.preview-hint[data-v-b97e50b5] {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 12px;
+}
+.preview-qr[data-v-b97e50b5] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+}
+.preview-qr .preview-hint[data-v-b97e50b5] {
+  margin-top: 0;
+}
+
+[data-theme="dark"] .file-request-list-panel .request-item {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .file-request-list-panel .request-toolbar {
+  background: var(--color-bg-card);
+}
