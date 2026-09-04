@@ -303,14 +303,12 @@ async def upload_drive_file(
     if visibility not in ("private", "team", "public"):
         raise HTTPException(status_code=400, detail=f"非法 visibility: {visibility}")
 
-    # 校验 folder_id (跨用户检查)
+    # 校验 folder_id 存在 (2026-09 单一团队空间: 不再校验 folder owner, 任何成员可上传到任意 folder)
     if folder_id is not None:
         folder_svc = FolderService(db)
         folder = await folder_svc.get_folder(folder_id)
         if folder is None:
             raise HTTPException(status_code=404, detail=f"folder {folder_id} 不存在")
-        if folder.owner_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权在该 folder 中创建文件")
 
     # 读取 body
     data = await file.read()
@@ -369,7 +367,7 @@ async def upload_drive_file(
             folder_id=folder_id,
             created_by=current_user.id,
             source_type="drive",
-            is_team_shared=is_team_shared,  # v2 PR6-P19
+            is_team_shared=is_team_shared,  # v2 PR6-P19 (2026-09 单一团队空间: 入参已忽略, create_file 服务端恒置 True)
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
@@ -425,34 +423,21 @@ async def list_drive_files(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """列 drive 文件 (含越权过滤: private 仅 owner 可见)
+    """列 drive 文件 (2026-09 单一团队空间: view 参数继续接受但语义统一)
 
     v2 PR2: 支持 sort_by/sort_order/starred_only/file_type.
-    v2 PR6-P19: view 参数隔离个人/团队共享盘.
-    v2.21: include_subfolders=True 让 🌐 团队共享盘顶级 view 列出整个团队空间
-      (root + 23 sub folder), 而不是只看 root folder 的 2 个 PPT.
-    - sort_by 默认 None = 维持原 created_at desc 行为 (向后兼容)
-    - view 默认 personal = 不显示 is_team_shared=true (老调用方升级即隔离)
+    v2 PR6-P19: view 参数隔离个人/团队共享盘. **已退役**: personal/team/all 均返回
+      全量团队文件 (is_team_shared_filter 恒 None), 老客户端不炸。
+    v2.21: include_subfolders 继续接受; 单一空间下不再按 view 屏蔽。
     """
-    # v2 PR6-P19: view → is_team_shared 映射
-    if view == "personal":
-        is_team_shared_filter = False
-    elif view == "team":
-        is_team_shared_filter = True
-    elif view == "all":
-        is_team_shared_filter = None
-    else:
+    # 参数合法性照旧校验 (老客户端可能传非法值)
+    if view not in ("personal", "team", "all"):
         raise HTTPException(
             status_code=400,
             detail=f"无效 view 参数: '{view}', 必须是 personal|team|all",
         )
-
-    # v2.21: include_subfolders 仅对 team/all 顶级 view 有意义
-    # personal 顶级 view 维持 v2 PR3 行为 (folder_id IS NULL = 个人根目录)
-    if include_subfolders and view == "personal":
-        # 防御性: personal view 不应该跨 folder 显示, 即便前端传了也忽略
-        # 防止泄露其他 folder 的 PPT
-        include_subfolders = False
+    # v2 PR6-P19 收口: 恒 None = 不按 is_team_shared 过滤 (数据迁移 133 全部回填 true)
+    is_team_shared_filter = None
 
     svc = DriveService(db)
     try:
@@ -521,7 +506,7 @@ async def update_drive_file(
         # W1 T1 migration: DriveServiceError → AppException envelope (helper)
         raise_app_error(e.status_code, ERR_FILE_FORBIDDEN, str(e), file_id=file_id)
     if f is None:
-        raise_app_error(404, ERR_FILE_NOT_FOUND, "file 不存在或非 owner", file_id=file_id)
+        raise_app_error(404, ERR_FILE_NOT_FOUND, "file 不存在", file_id=file_id)
     return _to_item(f)
 
 
@@ -531,11 +516,11 @@ async def delete_drive_file(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """软删 drive 文件 (owner only)"""
+    """软删 drive 文件 (2026-09 单一团队空间: 任何成员可删)"""
     svc = DriveService(db)
     ok = await svc.soft_delete_file(file_id, current_user_id=current_user.id)
     if not ok:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise HTTPException(status_code=404, detail="file 不存在")
     return
 
 
@@ -578,7 +563,7 @@ async def extract_to_kb(
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
     if f is None:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise HTTPException(status_code=404, detail="file 不存在")
     return _to_item(f)
 
 
@@ -815,11 +800,11 @@ async def toggle_file_star(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """切换文件收藏状态 (owner only). 隐身 404 给非 owner."""
+    """切换文件收藏状态 (2026-09 单一团队空间: 任何成员可 star; is_starred 全局限列对全员生效). 404 仅在文件不存在."""
     svc = DriveService(db)
     f = await svc.toggle_star_file(file_id, current_user_id=current_user.id)
     if f is None:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise HTTPException(status_code=404, detail="file 不存在")
     return ToggleStarResponse(
         file_id=f.id,
         is_starred=bool(f.is_starred),
@@ -1040,9 +1025,12 @@ def build_content_disposition(disposition: str, filename: str) -> str:
 
 
 def _check_download_visibility(file_knowledge, current_user_id: int) -> None:
-    """下载/预览前校验: private 必须是 owner"""
-    if file_knowledge.visibility == "private" and file_knowledge.created_by != current_user_id:
-        raise HTTPException(status_code=403, detail="无权限下载该私有文件")
+    """下载/预览前校验 — 2026-09 单一团队空间: pass-through (私有下载门禁已退役)。
+
+    函数与调用点保留 (防签名破坏); 迁移 133 回填后 drive 行无 private, 即便有脏数据
+    也不再拦截。
+    """
+    return None
 
 
 @router.get("/files/{file_id}/download")
@@ -1262,12 +1250,10 @@ async def _collect_folder_files(
     from app.services.folder_service import FolderService
     folder_svc = FolderService(db)
 
-    # 1) 校验 folder 越权
+    # 1) 校验 folder 存在 (2026-09 单一团队空间: 无 private/owner 越权跳过)
     folder = await folder_svc.get_folder(folder_id)
     if folder is None:
         return [], skipped + [f"folder_id={folder_id} 不存在"]
-    if folder.visibility == "private" and folder.owner_id != current_user_id:
-        return [], skipped + [f"folder_id={folder_id} 无权访问"]
 
     # 2) 列当前 folder 的文件
     files, _ = await drive_svc.list_files(
@@ -1280,12 +1266,9 @@ async def _collect_folder_files(
     # 过滤已软删 + 真实可见
     file_records = [f for f in files if f.deleted_at is None and f.file_path]
 
-    # 3) 递归子 folder
+    # 3) 递归子 folder (2026-09 单一团队空间: 子 folder 不再按 private/owner 跳过)
     children = await folder_svc.list_children(folder_id=folder_id, include_deleted=False)
     for child in children:
-        if child.visibility == "private" and child.owner_id != current_user_id:
-            skipped.append(f"folder_id={child.id} 跳过 (无权限)")
-            continue
         sub_files, skipped = await _collect_folder_files(
             db, drive_svc, child.id, current_user_id, skipped,
         )
@@ -1328,7 +1311,7 @@ async def create_share_link(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """生成 drive 文件公开分享链接 (owner only)
+    """生成 drive 文件公开分享链接 (2026-09 单一团队空间: 任何成员可分享)
 
     返回 token + 完整 share_url + expires_at + password_required
     """
@@ -1345,7 +1328,7 @@ async def create_share_link(
         # W1 T1 migration: DriveServiceError → AppException envelope
         raise_app_error(e.status_code, ERR_FILE_FORBIDDEN, str(e), file_id=file_id)
     if f is None:
-        raise_app_error(404, ERR_SHARE_LINK_NOT_FOUND, "file 不存在或非 owner", file_id=file_id)
+        raise_app_error(404, ERR_SHARE_LINK_NOT_FOUND, "file 不存在", file_id=file_id)
 
     # share_url 用 settings.PUBLIC_BASE_URL (前端拼) - 这里用相对路径
     share_url = f"/drive/share/{f.share_token}"
@@ -1368,7 +1351,7 @@ async def revoke_share_link(
     svc = DriveService(db)
     ok = await svc.revoke_share_link(file_id, current_user_id=current_user.id)
     if not ok:
-        raise_app_error(404, ERR_SHARE_LINK_NOT_FOUND, "file 不存在或非 owner", file_id=file_id)
+        raise_app_error(404, ERR_SHARE_LINK_NOT_FOUND, "file 不存在", file_id=file_id)
     return
 
 
@@ -1429,7 +1412,7 @@ async def update_file_visibility(
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
     if f is None:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise HTTPException(status_code=404, detail="file 不存在")
     return UpdateVisibilityResponse(
         file_id=f.id,
         visibility=f.visibility,

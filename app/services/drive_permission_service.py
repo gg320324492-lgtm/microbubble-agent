@@ -3,10 +3,19 @@
 将分散在 drive_version_service / drive_comment_service 中的 folder admin
 权限检查抽出到独立 service, 供 PR9 + PR10 + 后续 PR 复用.
 
+2026-09 单一团队空间状态说明:
+- 2026-09-05 角色扁平化后 is_platform_admin() 对任何在册成员返回 True,
+  本 service 的版本/评论权限实际已全员放开, 无需改动 (保留查询接口)。
+- 2026-09 网盘单一团队空间后, folder.owner_id 降级为纯创建人溯源;
+  本 service 的 "owner 隐含 admin" 判定仅剩语义残留 (owner 检查仍通过,
+  因任何成员都过 platform-admin 门)。drive_folder_shares / drive_folder_members /
+  team_folders 三套共享表 0 行从未启用, 本 service 整体标注为 **legacy**,
+  删表/删 service 另立 PR, 不要在新代码里依赖它。
+
 核心边界 (W68 第 3 批 F-2 报告 TODO: PR10 加 folder admin permission check,
 PR9 服务端先打 logger.debug 占位):
 
-权限等级 (W67 Drive v2 PR7 已建 drive_folder_shares + drive_folder_members):
+权限等级 (W67 Drive v2 PR7 已建 drive_folder_shares + drive_folder_members; legacy):
 - owner 隐含 admin (folder.owner_id == user_id)
 - admin member (DriveFolderMember.permission == 'admin')
 - write member (DriveFolderMember.permission == 'write')

@@ -7,13 +7,15 @@
 - 可见性继承: 子文件夹 visibility 必须 ≤ 父 (同 drive_service 规则)
 - 物化路径 path='/1/4/7/' 形式自动维护, 便于 O(子项数) 列出子节点
 - 软删除: deleted_at=NOW → Celery beat 3 天后物理清除 (PR1.2 复用 drive 清理)
-- owner_id 强制 owner 校验 (防越权操作别人 folder)
+- 2026-09 单一团队空间: owner_id 仅作创建人溯源, 不再是权限门
+  (任何登录成员可在任意 folder 下建子夹/改名/移动/删除);
+  visibility='private' 已在 create/update 收口点强制改写为 'team' (私有概念退役)。
 """
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
-from sqlalchemy import and_, or_, select, func, update
+from sqlalchemy import and_, select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.folder import Folder, VISIBILITY_ORDER, MAX_FOLDER_DEPTH
@@ -91,9 +93,9 @@ class FolderService:
 
         Args:
             name: 文件夹名 (1-200 chars)
-            owner_id: 仓库所有者
+            owner_id: 创建人溯源 (非权限, 2026-09 单一团队空间)
             parent_id: 父 folder id (None = 顶级)
-            visibility: private/team/public (默认 team)
+            visibility: team/public (默认 team; private 退役 → 强制改写 team)
         Returns: Folder 对象 (path/depth 已自动维护)
         Raises: FolderServiceError on depth/visibility 违规
         """
@@ -101,6 +103,13 @@ class FolderService:
             raise FolderServiceError(f"文件夹名长度非法: '{name[:20]}...'", status_code=400)
         if visibility not in VISIBILITY_ORDER:
             raise FolderServiceError(f"非法 visibility: {visibility}", status_code=400)
+        # 2026-09 单一团队空间: private 概念退役, create 收口点强制改写为 team (不报错兼容老客户端)
+        if visibility == "private":
+            logger.warning(
+                "[FolderService.create_folder] visibility='private' 已退役, 强制改写为 'team' "
+                f"(name='{name}', owner_id={owner_id})"
+            )
+            visibility = "team"
 
         # 父 folder 校验
         parent: Optional[Folder] = None
@@ -108,12 +117,7 @@ class FolderService:
             parent = await self.get_folder(parent_id)
             if parent is None:
                 raise FolderServiceError(f"父文件夹 id={parent_id} 不存在", status_code=400)
-            # 跨用户校验（防越权）
-            if parent.owner_id != owner_id:
-                raise FolderServiceError(
-                    f"无权在别人 (id={parent.owner_id}) 文件夹下创建子文件夹",
-                    status_code=403,
-                )
+            # 2026-09 单一团队空间: 不再校验 parent.owner_id == owner_id (owner 仅溯源)
             # visibility 继承
             self._validate_visibility_inherits(visibility, parent.visibility)
 
@@ -128,6 +132,8 @@ class FolderService:
             visibility=visibility,
             path="/",  # 提交后 refresh 前不能根据 id 算 path, 先占位
             depth=depth,
+            # 2026-09 单一团队空间: 新建顶级文件夹自动归入团队默认盘
+            is_team_default=(parent_id is None),
         )
         self.db.add(folder)
         await self.db.commit()
@@ -170,10 +176,10 @@ class FolderService:
         page: int = 1,
         page_size: int = 50,
     ) -> Tuple[List[Folder], int]:
-        """列 folder (含越权防御: 仅 owner/team/public 可见)
+        """列 folder (2026-09 单一团队空间: 全部 folder 对全员可见)
 
         Args:
-            current_user_id: 当前用户 (用于 private folder 过滤)
+            current_user_id: 保留参数 (兼容老调用方签名), 已不再用于 private 过滤
             owner_id: 仅列该 owner 的 folder (None = 不过滤)
             parent_id: 仅列该 parent_id 的直接子 folder (None = 顶级)
             visibility_filter: 过滤特定 visibility
@@ -191,12 +197,8 @@ class FolderService:
         if visibility_filter:
             filters.append(Folder.visibility == visibility_filter)
 
-        # 隐私边界: private folder 仅 owner 可见
-        visibility_see_cond = or_(
-            Folder.owner_id == current_user_id,
-            Folder.visibility != "private",
-        )
-        filters.append(visibility_see_cond)
+        # 2026-09 单一团队空间: 删除 "private folder 仅 owner 可见" 隐私边界
+        # (create/update 收口点已禁止新 private folder, 存量由迁移 133 翻 team)
 
         stmt = stmt.where(and_(*filters))
         count_stmt = count_stmt.where(and_(*filters))
@@ -275,14 +277,17 @@ class FolderService:
     ) -> Optional[Folder]:
         """更新 folder (rename / move / change visibility)
 
-        - rename: 不需越权检查, owner 可改
+        2026-09 单一团队空间: 任何成员可改任意 folder (owner_id 仅溯源)。
+
+        - rename: 任意成员可改
         - move (parent_id): 需重新算 depth + path, 校验父不超深度
         - change visibility: 校验 ≤ 当前父 folder visibility + 子 folder visibility 兼容
+          (private 退役, 收口点强制改写 team)
 
-        Returns: 更新后的 Folder, None = folder 不存在或非 owner
+        Returns: 更新后的 Folder, None = folder 不存在
         """
         folder = await self.get_folder(folder_id)
-        if folder is None or folder.owner_id != current_user_id:
+        if folder is None:
             return None
 
         if name is not None:
@@ -293,6 +298,13 @@ class FolderService:
         if visibility is not None:
             if visibility not in VISIBILITY_ORDER:
                 raise FolderServiceError(f"非法 visibility: {visibility}", status_code=400)
+            # 2026-09 单一团队空间: update 收口点 private → team 强制改写
+            if visibility == "private":
+                logger.warning(
+                    "[FolderService.update_folder] visibility='private' 已退役, 强制改写为 "
+                    f"'team' (folder_id={folder_id})"
+                )
+                visibility = "team"
             # 校验: folder 自身的 visibility (down-grade 时) 必须 ≥ 祖父 folder visibility
             # 即新 visibility ≤ 父 folder visibility
             parent = None
@@ -314,11 +326,7 @@ class FolderService:
             # parent_id=0 表示顶级 (move 到根)
             if new_parent is None and parent_id != 0:
                 raise FolderServiceError(f"目标父文件夹 id={parent_id} 不存在", status_code=400)
-            if new_parent is not None and new_parent.owner_id != folder.owner_id:
-                raise FolderServiceError(
-                    f"无权移动到别人 (id={new_parent.owner_id}) 文件夹下",
-                    status_code=403,
-                )
+            # 2026-09 单一团队空间: move 不再校验 new_parent.owner_id (owner 仅溯源)
             # 不能 move 到自己的子 folder (防环)
             if new_parent is not None and self._is_descendant_of(new_parent, folder):
                 raise FolderServiceError(
@@ -417,7 +425,7 @@ class FolderService:
         is_admin: bool = False,
         recursive: bool = False,
     ) -> dict | bool:
-        """软删除 folder (owner only, admin 可越权)
+        """软删除 folder (2026-09 单一团队空间: 任何成员可删任意 folder)
 
         设 deleted_at=NOW(), 3 天后 Celery beat 物理清除
 
@@ -436,7 +444,6 @@ class FolderService:
 
         Raises:
             FolderServiceError(404): folder 真不存在
-            FolderServiceError(403): folder 存在但非 owner 且非 admin (越权)
             FolderServiceError(400, recursive=False): folder 下还有未删子 folder/file
 
         2026-07-10 v2.13: 加 is_admin 越权支持 (对齐 CLAUDE.md 任务权限模型
@@ -452,15 +459,10 @@ class FolderService:
         """
         folder = await self.get_folder(folder_id)
         if folder is None:
-            # 2026-07-10 修复: 与非 owner 区分 — 前端能看到 team folder 但不能删，
-            # 旧行为 return False → 404 「Folder不存在」误导用户，实际是 403 越权
+            # folder 真不存在 → 调用方映射 404
             return False
-        # v2.13: admin 可越权删除 (前端 canDelete 守卫同步放宽)
-        if folder.owner_id != current_user_id and not is_admin:
-            raise FolderServiceError(
-                f"无法删除非自己拥有的 folder (folder_id={folder_id}, owner_id={folder.owner_id} != current_user_id={current_user_id}, is_admin={is_admin})",
-                status_code=403,
-            )
+        # 2026-09 单一团队空间: 任何成员可软删任意 folder
+        # (is_admin 参数保留兼容签名, 不再用于 owner 门禁)
 
         now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -552,16 +554,13 @@ class FolderService:
         current_user_id: int,
         is_admin: bool = False,
     ) -> Optional[Folder]:
-        """恢复被软删的 folder (owner or admin, 3 天保留期内有效)
+        """恢复被软删的 folder (2026-09 单一团队空间: 任何成员可恢复, 3 天保留期内有效)
 
-        v2.13 (2026-07-10): 加 admin 越权支持 (与 soft_delete_folder 对齐)
+        current_user_id / is_admin 参数保留兼容签名, 不再用于 owner 门禁。
         """
         stmt = select(Folder).where(Folder.id == folder_id)
         folder = (await self.db.execute(stmt)).scalar_one_or_none()
         if folder is None:
-            return None
-        # v2.13: admin 可越权恢复 (与 soft_delete_folder 对齐)
-        if folder.owner_id != current_user_id and not is_admin:
             return None
         folder.deleted_at = None
         await self.db.commit()
@@ -580,16 +579,16 @@ class FolderService:
         page: int = 1,
         page_size: int = 50,
     ) -> Tuple[List[Folder], int]:
-        """v2 PR2: 列回收站中的 folder (deleted_at IS NOT NULL, 仅 owner).
+        """v2 PR2: 列回收站中的 folder (deleted_at IS NOT NULL, 全组共享垃圾桶).
 
-        复用 list_folders + include_deleted=True + owner_id filter, 排序用 deleted_at desc
+        2026-09 单一团队空间: 不再按 owner 过滤 (与文件回收站对齐)。
+        复用 list_folders + include_deleted=True, 排序用 deleted_at desc
         (最近删除在前, 与文件回收站一致).
         """
         stmt = select(Folder)
         count_stmt = select(func.count(Folder.id))
         filters = [
             Folder.deleted_at.isnot(None),
-            Folder.owner_id == current_user_id,
         ]
         stmt = stmt.where(and_(*filters)).order_by(Folder.deleted_at.desc())
         count_stmt = count_stmt.where(and_(*filters))

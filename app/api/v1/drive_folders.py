@@ -16,11 +16,12 @@ v2 PR7 (2026-07-23) — 文件夹分享 + 邀请成员:
   POST   /api/v1/folders/{id}/members                → 邀请成员 (owner/admin)
   DELETE /api/v1/folders/{id}/members/{member_id}    → 移除成员 (owner/admin)
 """
+import logging
 import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -42,6 +43,7 @@ from app.services.drive_share_service import (
 from app.services.folder_service import FolderService, FolderServiceError
 
 router = APIRouter(prefix="/folders", tags=["网盘文件夹"])
+logger = logging.getLogger("microbubble.drive_folders_api")
 
 
 def _reraise_folder_service_error(e: FolderServiceError) -> None:
@@ -268,7 +270,16 @@ async def remove_folder_member(
 class FolderCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     parent_id: Optional[int] = None
-    visibility: str = "team"  # private | team | public
+    visibility: str = "team"  # team | public (private 已退役, validator 强制改写 team)
+
+    @field_validator("visibility")
+    @classmethod
+    def _retire_private(cls, v: str) -> str:
+        """2026-09 单一团队空间: create 请求 visibility='private' 无报错退役 → 'team'"""
+        if v == "private":
+            logger.warning("[FolderCreate] visibility='private' 已退役, 强制改写为 'team'")
+            return "team"
+        return v
 
 
 class FolderUpdate(BaseModel):
@@ -392,10 +403,9 @@ async def get_folder_tree(
     用于 DesktopDriveView 左侧 FolderTree 组件
     返回: [{id, name, depth, children: [...]}]
 
-    v2.25 (2026-07-11) 加 scope 参数:
-    - personal (默认): 排除 is_team_default=true folder, 个人网盘视图
-    - team:           仅 is_team_default=true folder (含子层级), 团队共享盘视图
-    - all:            不过滤, 兼容老调用 + 调试用
+    2026-09 单一团队空间: scope 参数**继续接受但语义统一** —
+    personal/team/all 均返回同一棵全量团队树 (老客户端不炸), 响应含 scope 回显。
+    原 v2.25 的 is_team_default 顶层过滤与 private-owner 越权过滤已删除。
     """
     if scope not in ("personal", "team", "all"):
         raise ValidationException(message=f"scope 必须是 personal/team/all 之一, 当前={scope!r}")
@@ -403,26 +413,12 @@ async def get_folder_tree(
     svc = FolderService(db)
 
     # BFS 收集
-    # v2.25.1 (2026-07-11) 修 bug: scope 过滤只在顶层 (parent_id == root_id) 生效,
-    #   进入子层级不再过滤 is_team_default (子 folder 不需要是 team_default, 它们
-    #   跟着 team_default 父 folder 一起显示)
-    #   原实现递归过滤 → team scope 下 组会PPT (id 336, is_team_default=true) 的
-    #   子 folder (id 337-359, is_team_default=false) 全部被过滤掉 → children_count=0
     async def _build_tree(parent_id: Optional[int], current_depth: int, is_top_level: bool = True) -> list:
         if current_depth > max_depth:
             return []
         children = await svc.list_children(folder_id=parent_id, include_deleted=False)
-        # 越权过滤
-        visible = [
-            c for c in children
-            if c.visibility != "private" or c.owner_id == current_user.id
-        ]
-        # v2.25 scope 过滤: 只在顶层生效 (进入子层级全部保留)
-        if is_top_level:
-            if scope == "personal":
-                visible = [c for c in visible if not c.is_team_default]
-            elif scope == "team":
-                visible = [c for c in visible if c.is_team_default]
+        # 2026-09 单一团队空间: 无越权过滤、无 scope 差异 — 全量非删树对全员一致
+        visible = list(children)
         result = []
         for c in visible:
             result.append({
@@ -453,15 +449,13 @@ async def get_folder_children_stats(
     v2.14 (2026-07-10): 加这个 endpoint 让前端 delete confirm 弹窗可以预查,
     避免用户撞 422 「folder 下还有 N 个未删的子 folder」后才反应过来要先去清子。
 
-    越权: private 非 owner 返 403 (与 GET /folders/{id} 越权规则一致)。
+    2026-09 单一团队空间: 所有 folder 对全员可见, 无 private 越权 403。
     不存在: 返 404 (与 GET /folders/{id} 一致)。
     """
     svc = FolderService(db)
     f = await svc.get_folder(folder_id)
     if f is None:
         raise NotFoundException(resource="Folder", resource_id=folder_id)
-    if f.visibility == "private" and f.owner_id != current_user.id:
-        raise ForbiddenException(message="无权访问此 folder")
     stats = await svc.get_folder_children_stats(folder_id)
     return {
         "folder_id": folder_id,
@@ -477,14 +471,11 @@ async def get_folder(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """folder 详情 + 越权检查"""
+    """folder 详情 (2026-09 单一团队空间: 所有 folder 对全员可见)"""
     svc = FolderService(db)
     f = await svc.get_folder(folder_id, include_deleted=include_deleted)
     if f is None:
         raise NotFoundException(resource="Folder", resource_id=folder_id)
-    # 越权检查: private 非 owner 不可见
-    if f.visibility == "private" and f.owner_id != current_user.id:
-        raise ForbiddenException(message="无权访问此 folder")
     return _to_item(f)
 
 
@@ -595,7 +586,7 @@ async def list_trash_folders(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """列回收站中的 folder (deleted_at IS NOT NULL, 仅 owner)."""
+    """列回收站中的 folder (deleted_at IS NOT NULL, 全组共享垃圾桶)."""
     svc = FolderService(db)
     items, total = await svc.list_trash_folders(
         current_user_id=current_user.id,

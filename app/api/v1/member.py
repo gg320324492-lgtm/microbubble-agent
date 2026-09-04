@@ -167,6 +167,15 @@ async def update_member(
 @router.delete("/members/{member_id}", status_code=204)
 async def delete_member(
     member_id: int,
+    reassign_drive: bool = Query(
+        False,
+        description=(
+            "2026-09 单一团队空间: True = 软删前先把该成员名下网盘/知识库归属行"
+            " (folders/knowledge/knowledge_versions/drive_file_versions/file_requests/"
+            "agent_traces/chat_sessions) 转给工作区锚点成员 (DRIVE_WORKSPACE_ANCHOR_ID)。"
+            "默认 False = 纯软删停用, 不改写任何溯源。"
+        ),
+    ),
     current_user: Member = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -176,6 +185,17 @@ async def delete_member(
 
     if not member:
         raise NotFoundException("成员")
+
+    if reassign_drive:
+        # 2026-09 单一团队空间: 转移助手 (app/services/drive_ownership.py), 单事务 UPDATE
+        from app.config import settings
+        from app.services.drive_ownership import reassign_member_rows
+        try:
+            await reassign_member_rows(
+                db, member_id=member.id, anchor_id=settings.DRIVE_WORKSPACE_ANCHOR_ID
+            )
+        except ValueError as e:
+            raise ValidationException(str(e))
 
     member.is_active = False
     await db.commit()

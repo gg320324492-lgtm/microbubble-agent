@@ -150,6 +150,11 @@ class Settings(BaseSettings):
     # 可选值: 0 / 5 / 25 / 50 / 100
     KB_GRAY_SCALE_PERCENT: int = 100
 
+    # 2026-09 单一团队空间 (网盘真共享化): 网盘工作区锚点成员 ID
+    # 删除成员 (DELETE /members/{id}?reassign_drive=true 或 scripts/reassign_member_rows.py)
+    # 时, folders/knowledge 等归属行统一转给该成员。默认 1 (导师主账号)。
+    DRIVE_WORKSPACE_ANCHOR_ID: int = 1
+
     # 2026-07-16 +060: 录音 User-Agent 截断长度 (默认 500 字符)
     # 超过此长度的 UA 在 start-recording 时截断后再落库, 防止恶意/异常长 UA
     # 把 meetings.user_agent VARCHAR(500) 列撑爆或拖慢 index 查询。
