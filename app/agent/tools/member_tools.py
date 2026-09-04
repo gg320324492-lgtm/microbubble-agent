@@ -10,6 +10,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.agent.tool_registry import ToolContext, tool
+from app.core.member_identity import member_status
 
 logger = logging.getLogger("microbubble.agent.tools.member")
 
@@ -68,7 +69,8 @@ async def query_members(input: QueryMembersInput, ctx: ToolContext) -> dict:
             "grade": m.grade,
             "research_area": m.research_area,
             "email": m.email,
-            "role": m.role or "member",
+            # 2026-09-05 角色扁平化: 用年级身份称谓替代 role 等级
+            "title": member_status(m.grade),
             "skills": list(m.skills or []),
             "custom_instructions": (m.custom_instructions or "")[:200] if m.custom_instructions else None,
             "voice_enrolled": m.voice_embedding is not None,
@@ -150,7 +152,7 @@ async def get_member_profile(input: GetMemberProfileInput, ctx: ToolContext) -> 
         return {
             "status": "error", "code": "NOT_FOUND",
             "message": f"未找到成员 {input.member_name!r}，请确认姓名拼写",
-            "id": 0, "name": input.member_name, "role": "member",
+            "id": 0, "name": input.member_name, "title": "成员",
         }
 
     result = {
@@ -158,7 +160,8 @@ async def get_member_profile(input: GetMemberProfileInput, ctx: ToolContext) -> 
         "id": m.id, "name": m.name,
         "grade": m.grade, "research_area": m.research_area,
         "email": m.email, "phone": m.phone,
-        "role": m.role or "member",
+        # 2026-09-05 角色扁平化: 年级身份称谓替代 role 等级
+        "title": member_status(m.grade),
         "skills": list(m.skills or []),
         "bio": m.bio, "custom_instructions": m.custom_instructions,
         "voice_enrolled": m.voice_embedding is not None,

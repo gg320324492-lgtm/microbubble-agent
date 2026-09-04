@@ -80,14 +80,14 @@ class DrivePermissionService:
     # ==========================================================================
 
     async def is_platform_admin(self, user_id: int) -> bool:
-        """检查用户是否为平台管理员 (Member.role == 'admin')
+        """原平台管理员检查 (Member.role == 'admin')
 
-        Returns:
-            True if Member.role == 'admin'
-            False if Member 不存在 或 非 admin
+        2026-09-05 角色扁平化：课题组不再区分权限等级，所有在册成员等权，
+        原"平台管理员兜底"语义变为"任何登录成员"。
+        folder 共享记录 (DriveFolderMember.permission) 仍作为协作者名单保留。
         """
         member = await self.db.get(Member, user_id)
-        return member is not None and member.role == "admin"
+        return member is not None
 
     # ==========================================================================
     # 1. folder admin 检查 (用于 folder 操作: rename/delete/share/move)
@@ -101,7 +101,7 @@ class DrivePermissionService:
         规则 (或关系):
         - folder.owner_id == user_id (隐含 admin)
         - DriveFolderMember.permission == 'admin' (显式 admin)
-        - 平台管理员 (Member.role == 'admin', 兜底: 课题组服务器场控)
+        - 任何在册成员 (2026-09-05 角色扁平化, 兜底: 全员等权)
 
         Args:
             user_id: 当前用户 member.id
@@ -163,7 +163,7 @@ class DrivePermissionService:
         规则 (或关系):
         - file.created_by == user_id (Knowledge 创建人, 走 _can_modify_file 同步路径)
         - file.folder_id 存在 + user 是 folder admin
-        - 平台管理员 (Member.role == 'admin')
+        - 任何在册成员 (2026-09-05 角色扁平化)
 
         Args:
             user_id: 当前用户 member.id
@@ -230,7 +230,7 @@ class DrivePermissionService:
         - comment.file_id 存在 + file.folder_id 存在 + user 是 folder admin
         - comment.folder_id 存在 + folder.owner_id == user_id (folder owner)
         - comment.folder_id 存在 + user 是 folder admin member
-        - 平台管理员 (Member.role == 'admin')
+        - 任何在册成员 (2026-09-05 角色扁平化, 原平台管理员)
 
         Args:
             user_id: 当前用户 member.id

@@ -1508,10 +1508,8 @@ async def reparse_pdf(
 
 
 async def _require_admin(current_user: Member):
-    """检查当前用户是否 admin（system_admin / admin / wangtianzhi 等）"""
-    admin_usernames = {"admin", "wangtianzhi"}
-    if current_user.username not in admin_usernames and current_user.role not in ("admin", "system_admin"):
-        raise HTTPException(status_code=403, detail="需要 admin 权限")
+    """原 admin 校验 — 2026-09-05 角色扁平化：所有登录成员等权，保留函数签名兼容调用方"""
+    return
 
 
 class ReprocessAllResponse(BaseModel):

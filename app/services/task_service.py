@@ -10,6 +10,7 @@ from app.models.base import utcnow
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
 from app.models.reminder import Reminder
+from app.core.member_identity import member_status
 
 
 class TaskService:
@@ -207,7 +208,7 @@ class TaskService:
         }
 
     async def get_all_members_workload(self) -> List[dict]:
-        """获取所有成员的任務统计（按成员分组，供管理员使用）"""
+        """获取所有成员的任务统计（按成员分组，2026-09-05 角色扁平化: 任何成员可查）"""
         # 获取所有活跃成员
         result = await self.db.execute(
             select(Member).where(Member.is_active == True)
@@ -225,7 +226,8 @@ class TaskService:
             member_stats.append({
                 "member_id": member.id,
                 "member_name": member.name,
-                "role": member.role,
+                "title": member_status(member.grade),
+                "grade": member.grade,
                 "tasks": member_tasks,
                 "total": len(member_tasks),
                 "todo": m_todo,

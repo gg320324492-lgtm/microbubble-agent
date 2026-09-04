@@ -34,6 +34,7 @@ from app.agent.prompts import (
     get_system_prompt,
 )
 from app.agent.protocol import StreamEvent
+from app.core.member_identity import STATUS_ORDER, member_status
 from app.agent.session_manager import session_manager
 from app.agent.thinking_config import resolve_thinking_config
 from app.agent.tool_registry import ToolContext
@@ -343,7 +344,7 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
     课题组当前 N 位成员，主要研究方向：xxx、yyy
 
     ### 成员列表（按角色 + 年级排序）
-    - **王天志**（副教授/组长）：微纳米气泡技术与应用
+    - **王天志**（副教授/导师）：微纳米气泡技术与应用
     - **赵航佳**（博一）：黑臭水体治理, 臭氧微纳米气泡
     - ...
 
@@ -381,12 +382,11 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
         from app.models.member import Member
         from app.models.project import Project
 
-        # 成员: 排除 is_active=False，按 role 优先级 + name 排序
-        # role 顺序: admin > leader > member (admin/leader 放前面)
+        # 成员: 排除 is_active=False，按姓名排序（2026-09-05 角色扁平化: 不再按 role 优先）
         members_rows = await db.execute(
             select(Member)
             .where(Member.is_active == True)  # noqa: E712
-            .order_by(Member.role.desc(), Member.name.asc())
+            .order_by(Member.name.asc())
             .limit(max_members + 10)  # 多取 10 个, 过滤测试账号后再限 max_members
         )
         all_members = members_rows.scalars().all()
@@ -431,17 +431,20 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
 
     # 成员分布 + 主要研究方向
     if members:
-        role_count = {"admin": 0, "leader": 0, "member": 0}
+        # 2026-09-05 角色扁平化: 按年级身份称谓 (导师/博士/硕士/本科生...) 统计
+        status_count: Dict[str, int] = {}
         for m in members:
-            role = m.role or "member"
-            role_count[role] = role_count.get(role, 0) + 1
+            s = member_status(m.grade)
+            status_count[s] = status_count.get(s, 0) + 1
         all_research_areas = [m.research_area for m in members if m.research_area]
         unique_areas = list(dict.fromkeys(all_research_areas))[:8]  # 去重保序取前 8
+        _order = {s: i for i, s in enumerate(STATUS_ORDER)}
+        distribution = " / ".join(
+            f"{s} {status_count[s]}"
+            for s in sorted(status_count, key=lambda x: _order.get(x, 99))
+        )
         lines.append(
-            f"课题组当前 **{len(members)} 位活跃成员**"
-            f"（管理员 {role_count.get('admin', 0)} / "
-            f"组长 {role_count.get('leader', 0)} / "
-            f"普通成员 {role_count.get('member', 0)}）。"
+            f"课题组当前 **{len(members)} 位活跃成员**（{distribution}）。"
         )
         if unique_areas:
             lines.append(f"**主要研究方向**：{'、'.join(unique_areas)}。")
@@ -449,15 +452,21 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
 
     # 成员列表
     if members:
-        lines.append("### 成员列表（按角色 + 姓名排序）")
+        lines.append("### 成员列表（按身份 + 姓名排序）")
         lines.append("")
+        _order = {s: i for i, s in enumerate(STATUS_ORDER)}
+        members = sorted(
+            members,
+            key=lambda m: (_order.get(member_status(m.grade), 99), m.name or ""),
+        )
         for m in members:
-            role_label = {"admin": "[管理员]", "leader": "[组长]", "member": ""}.get(m.role, "")
+            status = member_status(m.grade)
+            status_label = f"[{status}] " if status != "成员" else ""
             grade = m.grade or ""
             grade_str = f"（{grade}）" if grade else ""
             ra = m.research_area or "未明确研究方向"
             # bio 不注入（太长），只留姓名 + 年级 + 研究方向
-            lines.append(f"- {role_label}**{m.name}**{grade_str}：{ra}".replace("****", "**").replace("****", "**"))
+            lines.append(f"- {status_label}**{m.name}**{grade_str}：{ra}".replace("****", "**").replace("****", "**"))
         lines.append("")
 
     # 项目列表
@@ -1479,11 +1488,10 @@ class MicroBubbleAgent:
             from app.models.member import Member
             member = await db.get(Member, user_id)
             if member:
-                role_map = {"admin": "管理员", "leader": "组长", "member": "普通成员"}
-                role_label = role_map.get(member.role, member.role)
-                parts.append(f"\n当前用户信息:\n- 姓名: {member.name}\n- 角色: {role_label}")
-                if member.role in ("admin", "leader"):
-                    parts.append("- 该用户拥有管理员权限")
+                # 2026-09-05 角色扁平化: 不再区分管理员/组长，用年级身份称谓
+                status = member_status(member.grade)
+                grade_str = f"（{member.grade}）" if member.grade and member.grade != status else ""
+                parts.append(f"\n当前用户信息:\n- 姓名: {member.name}\n- 身份: {status}{grade_str}")
                 if member.custom_instructions:
                     parts.append(f"\n用户自定义指令:\n{member.custom_instructions}")
         except Exception as e:

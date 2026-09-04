@@ -125,7 +125,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (task.router, {"prefix": "/api/v1", "tags": ["任务"]}),
         (meeting_recording.router, {"prefix": "/api/v1", "tags": ["录音会议"]}),
         (meeting.router, {"prefix": "/api/v1", "tags": ["会议"]}),
-        (admin_meetings.router, {"prefix": "/api/v1", "tags": ["会议管理(管理员)"]}),  # Batch C-2
+        (admin_meetings.router, {"prefix": "/api/v1", "tags": ["会议处理管理"]}),  # Batch C-2
         (member.router, {"prefix": "/api/v1", "tags": ["成员"]}),
         (project.router, {"prefix": "/api/v1", "tags": ["项目"]}),
         (knowledge.router, {"prefix": "/api/v1", "tags": ["知识库"]}),

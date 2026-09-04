@@ -839,16 +839,16 @@ class DriveCommentService:
         if comment.deleted_at is not None:
             return False
 
-        # 权限校验: author / file owner / 平台 admin
+        # 权限校验: author / file owner / 任何成员 (2026-09-05 角色扁平化)
         is_author = comment.author_id == user_id
         is_admin = False
         is_file_owner = False
 
-        # 查 actor 的 role (平台 admin 判断)
+        # 2026-09-05 角色扁平化：原"平台 admin (role=='admin')"改为在册成员等权
         actor = (await self.db.execute(
             select(Member).where(Member.id == user_id)
         )).scalar_one_or_none()
-        if actor is not None and getattr(actor, "role", None) == "admin":
+        if actor is not None:
             is_admin = True
 
         # file owner 判断 (仅 file_id 非 NULL)

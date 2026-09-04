@@ -113,9 +113,9 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 
 const props = defineProps({
-  /** 当前用户 ID（用于权限判断） */
+  /** 当前用户 ID（用于归属显示） */
   currentUserId: { type: [Number, String], default: null },
-  /** 是否管理员 */
+  /** 2026-09-05 角色扁平化: 语义 = 有全部操作权限 (登录成员恒真, prop 仅作父级覆盖兼容) */
   isAdmin: { type: Boolean, default: false },
 })
 
@@ -136,7 +136,8 @@ const editMode = ref(false)
 const totalPages = computed(() => Math.max(1, Math.ceil(trashTotal.value / trashPageSize.value)))
 
 const currentUserId = computed(() => props.currentUserId || userStore.userInfo?.id)
-const isAdmin = computed(() => props.isAdmin || userStore.userInfo?.role === 'admin')
+// 2026-09-05 角色扁平化: 全员等权 (userStore.isAdmin = 已登录)
+const isAdmin = computed(() => props.isAdmin || userStore.isAdmin)
 
 // CardList 配置
 const fieldConfig = computed(() => ({

@@ -1,6 +1,29 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-05 成员角色扁平化 — 废除管理员/组长等级, 全员等权 + 年级身份称谓)
+
+**用户需求**: "所有成员都不再区分管理员或者组长之类的，只带上自己的年纪名称 (导师/博士/硕士/本科生之类)，也不再区分权限限制"。
+
+**核心改造**:
+- **身份称谓**: 新增 `app/core/member_identity.py::member_status(grade)` 统一派生
+  导师/博士后/博士/硕士/本科生/校友 (grade 存细粒度年级如"研二", 称谓是收敛展示)。
+  `UserInfo.title` / `MemberResponse.title` 用 pydantic `@computed_field` 自动透出,
+  前端 `web/src/utils/memberIdentity.js` 镜像同一映射。
+- **权限扁平化**: `get_current_admin_user` (security.py) + `get_current_admin` (admin.py/ingest.py)
+  改为仅要求登录不再校验 role → 所有 admin/kb-monitor/audit/tenants/ingest/reset-password 端点全员可达。
+  `Member.role` 退役 (alembic 132 归一为 'member', 列保留不删)。
+- **任务**: task.py 9 处 owner/assignee/admin 门禁全删 → 任意成员可建/编/删/恢复/永久删任意任务、可分配他人;
+  agent 工具 query_tasks/create_task/update_task 去权限分级 (全员可查全组); query_all_member_tasks 去"仅管理员"门禁。
+- **网盘**: drive_permission_service.is_platform_admin → 任何在册成员 True (全员原 admin 越权能力);
+  文件/文件夹/版本/评论 owner 校验同步放开; folder 共享协作者名单 (DriveFolderMember.permission) 保留为记录机制。
+- **seed**: member_seeder 去 admin/leader, 王天志/陈金薪 role 归 member; grade 保留细粒度。
+- **前端**: userStore.userRole→身份称谓, isAdmin→登录即等权; 成员卡/设置页/网盘 folder 树全部去角色等级展示。
+
+**5 件套守恒**: alembic 1 head `132_flatten_member_role` 单链 / 后端 15 模块 import OK +
+身份派生 13 case 全对 / 前端 vitest 19 passed + `npm run build` PASS / 无 app 老核心逻辑破坏 (仅去门禁)。
+**未部署**: 本 worktree 改动待主拍合并后 alembic upgrade head + 重启 app/celery + 前端 dist 上线。
+
 ## 当前状态 (2026-08-30 SSH 隧道守护 + /minio 502 修复 — 类 20.212-214, DFT 系统外置 E:\dft-service)
 
 **生产链路关键变更**: ①SSH 反向隧道 (8000/9000/2222 三条 -R) 加了守护计划任务
@@ -618,7 +641,7 @@ curl http://localhost:8000/api/v1/dft/tools
 - **微信对话双消息模式** — 收到消息后 0.5 秒内先发"🤔 收到，让我思考一下..."，后台异步处理后发正式回复，解决等待无反馈问题
 - **移动端独立抽屉架构** — 移动端侧边栏使用 el-container 外部独立 div + Vue Transition，完全绕过 Element Plus aside 的全局 CSS 干扰。桌面端 `v-if="!isMobile"` 零影响
 - **通知面板** — 铃铛使用 el-popover 弹窗面板，显示每条提醒的具体内容（任务标题+提醒时间）、全部标为已读、点击跳转任务；头像读取 userStore.userInfo.avatar 真实 URL
-- **任务权限模型** — 所有成员可见全部任务（降低认知负担），仅创建人/负责人/管理员可编辑、删除、恢复、永久删除
+- **任务权限模型** — 所有成员可见全部任务（降低认知负担）；2026-09-05 角色扁平化后所有登录成员等权，任意成员可编辑/删除/恢复/永久删除
 - **状态统一** — "待办"(todo) 和 "进行中"(in_progress) 语义高度重合，已统一为"进行中"。新建任务默认 in_progress，现有 todo 任务兼容显示
 - **移动端路由级双栈架构**（2026-06-13 收官）— 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不共享 component 树。`useIsMobile.js` 监听 viewport + UA 兜底 → `router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` → 桌面端 `el-*` 与移动端 `nut-*` CSS 完全隔离。**PWA 4 策略**：manifest + service worker（workbox）预缓存 app shell + useSafeArea 读 iPhone 安全区 + 离线 IndexedDB 兜底。**视觉回归测试**：Playwright 5 viewport × 13 核心页面，CI 截图对比基线
 

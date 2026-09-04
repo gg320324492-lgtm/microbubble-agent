@@ -101,7 +101,7 @@ async def login(
 
     # 检查用户是否被禁用
     if not user.is_active:
-        raise ForbiddenException("用户已被禁用，请联系管理员")
+        raise ForbiddenException("账号已被禁用，请联系课题组处理")
 
     # 生成令牌
     access_token = create_access_token(data={"sub": str(user.id)})

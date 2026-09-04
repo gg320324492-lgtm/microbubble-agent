@@ -1,6 +1,6 @@
 """Admin 路由 — Agent Trace 监控 + 未来其他 admin 功能
 
-权限：所有端点需 Depends(get_current_admin) — 普通用户 403
+2026-09-05 角色扁平化：所有端点仅需登录（Depends(get_current_admin) 已放开 role 校验）。
 """
 
 import logging
@@ -21,12 +21,7 @@ router = APIRouter()
 
 
 async def get_current_admin(current_user: Member = Depends(get_current_user)) -> Member:
-    """仅 admin/leader 可访问"""
-    if current_user.role not in ("admin", "leader"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="需要管理员权限",
-        )
+    """原 admin/leader 门禁 — 2026-09-05 角色扁平化：所有登录成员等权，仅要求登录"""
     return current_user
 
 

@@ -75,8 +75,9 @@
           <h3 class="member-name">{{ member.name }}</h3>
           <el-tag size="small" class="grade-tag">{{ member.grade }}</el-tag>
           <div class="member-role">
-            <el-tag :type="getRoleType(member.role)" size="small">
-              {{ getRoleLabel(member.role) }}
+            <!-- 2026-09-05 角色扁平化: 显示年级身份称谓 (导师/博士/硕士/本科生...) -->
+            <el-tag :type="memberTagType(member)" size="small">
+              {{ memberTitleOf(member) }}
             </el-tag>
           </div>
         </div>
@@ -132,25 +133,25 @@
           <el-input v-model="memberForm.name" name="member-form-name" placeholder="请输入姓名" />
         </el-form-item>
         <el-form-item label="年级">
-          <el-select v-model="memberForm.grade" name="member-form-grade" placeholder="选择年级" aria-label="年级">
-            <el-option label="教授" value="教授" />
+          <el-select v-model="memberForm.grade" name="member-form-grade" placeholder="选择年级/身份" filterable allow-create aria-label="年级">
+            <el-option label="导师" value="导师" />
+            <el-option label="老师" value="老师" />
             <el-option label="博士后" value="博士后" />
             <el-option label="博一" value="博一" />
             <el-option label="博二" value="博二" />
+            <el-option label="博三" value="博三" />
             <el-option label="研一" value="研一" />
             <el-option label="研二" value="研二" />
             <el-option label="研三" value="研三" />
+            <el-option label="大一" value="大一" />
+            <el-option label="大二" value="大二" />
+            <el-option label="大三" value="大三" />
+            <el-option label="大四" value="大四" />
+            <el-option label="已毕业" value="已毕业" />
           </el-select>
         </el-form-item>
         <el-form-item label="研究方向">
           <el-input v-model="memberForm.research_area" name="member-form-research-area" placeholder="如：气泡生成、水处理" />
-        </el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="memberForm.role" name="member-form-role" aria-label="角色">
-            <el-option label="管理员" value="admin" />
-            <el-option label="组长" value="leader" />
-            <el-option label="成员" value="member" />
-          </el-select>
         </el-form-item>
         <el-form-item label="邮箱">
           <el-input v-model="memberForm.email" name="member-form-email" placeholder="请输入邮箱" />
@@ -219,6 +220,7 @@ import axios from 'axios'
 import { useMemberStore } from '@/stores/member'
 import VoiceprintEnrollDialog from '@/components/VoiceprintEnrollDialog.vue'
 import { getDisplaySkills } from '@/utils/researchAreaSkills'
+import { memberTagType, memberTitleOf } from '@/utils/memberIdentity'
 
 defineEmits(['open-detail'])
 
@@ -351,15 +353,7 @@ const getAvatarIndex = (name) => {
   return name.charCodeAt(0) % 8
 }
 
-const getRoleType = (role) => {
-  const map = { admin: 'danger', leader: 'warning', member: 'info' }
-  return map[role] || 'info'
-}
-
-const getRoleLabel = (role) => {
-  const map = { admin: '管理员', leader: '组长', member: '成员' }
-  return map[role] || role
-}
+// 2026-09-05 角色扁平化: 身份称谓 helper 见 @/utils/memberIdentity
 
 // v77 P2.6-D: 成员 skills 缺失时用 research_area 推断 fallback（最多 3 个标签）
 const displaySkills = (member) => getDisplaySkills(member)

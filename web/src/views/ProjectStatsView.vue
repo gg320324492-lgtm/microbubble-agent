@@ -284,11 +284,11 @@
       </el-card>
     </div>
 
-    <!-- Tab 4: 审计日志 (admin only, v2 PR7) — v78 合并到项目动态, admin 守卫 -->
+    <!-- Tab 4: 审计日志 (v2 PR7; 2026-09-05 角色扁平化: 全员可见, 仅需登录) -->
     <div v-show="activeTab === 'audit' && isAdmin" role="tabpanel"
       :aria-labelledby="`tab-strip-audit`" class="tab-panel">
       <AuditLogView v-if="isAdmin" />
-      <el-empty v-else description="仅管理员可查看审计日志" />
+      <el-empty v-else description="请先登录" />
     </div>
   </div>
 </template>
@@ -300,7 +300,7 @@ import axios from 'axios'
 import { Loading, Refresh, DataLine, Histogram, Folder, Document } from '@element-plus/icons-vue'
 import changelogData from '@/data/changelog.json'
 import AnalyticsView from '@/views/admin/AnalyticsView.vue'  // v31 检索质量监控
-import AuditLogView from '@/views/admin/AuditLogView.vue'  // v2 PR7 审计日志 (admin only)
+import AuditLogView from '@/views/admin/AuditLogView.vue'  // v2 PR7 审计日志 (2026-09-05 起全员可见)
 import { useKbMonitor } from '@/composables/useKbMonitor'  // W6 D5 KB 入库监控
 import { useUserStore } from '@/stores/user'  // v78 admin 守卫
 import TabStrip from '@/components/common/TabStrip.vue'

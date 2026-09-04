@@ -72,7 +72,7 @@
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-folder-tree-node-* 生效
 // v2.8 (2026-07-10) 右键菜单支持 (FolderContextMenu 包裹)
 // v2.12 (2026-07-10) owner-only 守卫: 非 owner 「删除」菜单项不渲染 (避免误删 + 后端 403 误导)
-// v2.13 (2026-07-10) admin 越权: role==='admin' 可删除任何 folder (对齐 CLAUDE.md 任务权限模型)
+// v2.13 (2026-07-10) → 2026-09-05 角色扁平化: 全员等权, 任何成员可删除任何 folder (对他人 folder 保留确认警告)
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import { Folder, FolderOpened, CaretBottom, CaretRight } from '@element-plus/icons-vue'
@@ -90,7 +90,8 @@ const emit = defineEmits(['select', 'toggle', 'context-command'])
 
 const userStore = useUserStore()
 const currentUserId = computed(() => userStore.userInfo?.id)
-const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
+// 2026-09-05 角色扁平化: 全员等权 (任何登录成员可操作任意 folder)
+const isAdmin = computed(() => userStore.isAdmin)
 
 // v2.12 + v2.13: owner 可删自己的 folder, admin 可越权删任何 folder
 // 防御性兜底: 后端 folder_service.soft_delete_folder 也会按同样规则校验

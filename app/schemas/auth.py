@@ -1,7 +1,9 @@
 """认证相关Schema"""
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, computed_field, field_validator
 from typing import Optional
+
+from app.core.member_identity import member_status
 
 
 class LoginRequest(BaseModel):
@@ -30,7 +32,11 @@ class RefreshTokenResponse(BaseModel):
 
 
 class UserInfo(BaseModel):
-    """用户信息"""
+    """用户信息
+
+    2026-09-05 角色扁平化: role 字段退役 (历史保留, 恒为 'member'),
+    成员统一用身份称谓 title (导师/博士/硕士/本科生/校友, 由 grade 派生)。
+    """
     id: int
     name: str
     role: str
@@ -44,6 +50,11 @@ class UserInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @computed_field
+    @property
+    def title(self) -> str:
+        return member_status(self.grade)
 
 
 class ChangePasswordRequest(BaseModel):

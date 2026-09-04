@@ -1,6 +1,8 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, computed_field
 from typing import Optional, List
 from datetime import datetime
+
+from app.core.member_identity import member_status
 
 
 class MemberBase(BaseModel):
@@ -72,6 +74,12 @@ class MemberResponse(MemberBase):
 
     class Config:
         from_attributes = True
+
+    @computed_field
+    @property
+    def title(self) -> str:
+        """统一身份称谓 (导师/博士/硕士/本科生/校友)，由 grade 派生 (2026-09-05 角色扁平化)"""
+        return member_status(self.grade)
 
 
 class MemberList(BaseModel):

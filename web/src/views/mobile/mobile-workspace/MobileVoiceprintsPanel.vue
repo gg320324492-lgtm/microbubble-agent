@@ -50,7 +50,7 @@
                 <div class="detail-avatar">{{ selectedMember.name?.charAt(0) }}</div>
                 <div>
                   <h3>{{ selectedMember.name }}</h3>
-                  <p class="detail-role">{{ selectedMember.role || '成员' }}</p>
+                  <p class="detail-role">{{ memberTitleOf(selectedMember) }}{{ selectedMember.grade ? ' · ' + selectedMember.grade : '' }}</p>
                 </div>
               </div>
 
@@ -96,6 +96,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import SpeakerSearchSheet from '@/components/mobile/SpeakerSearchSheet.vue'
+import { memberTitleOf } from '@/utils/memberIdentity'
 
 const router = useRouter()
 const members = ref([])

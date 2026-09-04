@@ -21,7 +21,7 @@
             </div>
             <div class="specimen-name">{{ form.name || '未设置姓名' }}</div>
             <div class="specimen-tags">
-              <span :class="{ admin: userInfo?.role === 'admin' }">{{ roleLabel }}</span>
+              <span :class="{ admin: roleLabel === '导师' }">{{ roleLabel }}</span>
               <span v-if="form.grade">{{ form.grade }}</span>
             </div>
             <dl class="meta-list">
@@ -108,7 +108,7 @@
                   </span>
                 </h3>
                 <p>
-                  忘记密码时，在登录页输入「用户名 + 恢复码 + 新密码」即可自助重置，无需联系管理员。
+                  忘记密码时，在登录页输入「用户名 + 恢复码 + 新密码」即可自助重置，全程无需人工介入。
                   恢复码只在生成时显示一次，请立即保存到个人微信收藏；重置成功后即失效，需重新生成。
                 </p>
               </div>
@@ -211,8 +211,7 @@ const activeAccentLabel = computed(
   () => accentOptions.find((o) => o.value === themeStore.accent)?.label || '活力橙'
 )
 
-const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
-const roleLabel = computed(() => roleMap[userInfo.value?.role] || '成员')
+const roleLabel = computed(() => userStore.userRole)  // 2026-09-05 角色扁平化: 年级身份称谓
 
 const savingProfile = ref(false)
 const savingPassword = ref(false)

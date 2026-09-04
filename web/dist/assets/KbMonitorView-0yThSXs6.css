@@ -1,0 +1,91 @@
+
+.kb-monitor-view[data-v-8d0afb1c] {
+  padding: 0 8px;
+}
+.page-header[data-v-8d0afb1c] {
+  margin-bottom: 16px;
+}
+.page-header h2[data-v-8d0afb1c] {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+}
+.page-header .desc[data-v-8d0afb1c] {
+  margin: 0;
+  color: var(--color-info);
+  font-size: 13px;
+}
+.filter-card[data-v-8d0afb1c] {
+  margin-bottom: 16px;
+}
+.filter-card .meta[data-v-8d0afb1c] {
+  margin-left: 16px;
+  color: var(--color-text-regular);
+  font-size: 13px;
+}
+.filter-card .meta .warn[data-v-8d0afb1c] {
+  color: var(--color-warning);
+}
+.metric-row[data-v-8d0afb1c] {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.metric-row-7d[data-v-8d0afb1c] {
+  grid-template-columns: repeat(2, 1fr);
+}
+.metric-card-7d .metric-value[data-v-8d0afb1c] {
+  color: var(--color-primary);
+}
+.metric-card-7d .metric-value.danger[data-v-8d0afb1c] {
+  color: var(--color-danger);
+}
+.metric-card[data-v-8d0afb1c] {
+  text-align: center;
+  padding: 4px 0;
+}
+.metric-label[data-v-8d0afb1c] {
+  font-size: 12px;
+  color: var(--color-info);
+  margin-bottom: 6px;
+}
+.metric-value[data-v-8d0afb1c] {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.metric-value.good[data-v-8d0afb1c] { color: var(--color-success);
+}
+.metric-value.warn[data-v-8d0afb1c] { color: var(--color-warning);
+}
+.metric-value.danger[data-v-8d0afb1c] { color: var(--color-danger);
+}
+.metric-hint[data-v-8d0afb1c] {
+  font-size: 11px;
+  color: var(--color-text-placeholder);
+  margin-top: 4px;
+}
+.chart-row[data-v-8d0afb1c] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.chart-card[data-v-8d0afb1c] {
+  min-height: 280px;
+}
+.chart-card-full[data-v-8d0afb1c] {
+  grid-column: 1 / -1;
+}
+.chart-title[data-v-8d0afb1c] {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.chart-canvas[data-v-8d0afb1c] {
+  width: 100%;
+  height: 260px;
+}
+.logs-card[data-v-8d0afb1c] {
+  margin-bottom: 16px;
+}

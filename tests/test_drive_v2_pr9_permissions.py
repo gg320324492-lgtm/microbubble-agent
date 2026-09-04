@@ -3,7 +3,7 @@
 5 核心场景 (聚焦 drive_permission_service 3 个公开方法):
 1. file owner 通过 — check_file_owner_or_folder_admin (file.created_by == user_id)
 2. folder admin 通过 — check_file_owner_or_folder_admin (DriveFolderMember.permission='admin')
-3. 普通成员拒绝 — check_file_owner_or_folder_admin (write member 返回 False)
+3. 在册成员通过 — 2026-09-05 角色扁平化 (原"普通成员拒绝"已退役, 全员等权)
 4. 文件 owner 通过 (resolve) — check_comment_resolver (file.uploader_id == user_id 路径)
 5. 删除中间版本被业务层禁止 — drive_version_service.delete_version (max_non_current 校验)
 
@@ -242,10 +242,11 @@ async def test_check_file_owner_or_folder_admin_folder_admin_passes(
 async def test_check_file_owner_or_folder_admin_write_member_denied(
     db, drive_file, invite_write, write_member_user
 ):
-    """场景 3: write member → False (无 admin/owner/platform admin 权限)
+    """场景 3 (2026-09-05 角色扁平化): write member → True (在册成员等权)
 
-    验证 check_file_owner_or_folder_admin 的拒绝路径.
-    write permission 不够 (要 admin 才能改 version).
+    原语义"write permission 不够 (要 admin)"已随权限等级废除退役:
+    is_platform_admin 兜底改为"任何在册成员", write member 直接通过。
+    非在册用户 (不存在/已注销) 才走拒绝路径 (见补充用例)。
     """
     from app.services.drive_permission_service import DrivePermissionService
 
@@ -255,7 +256,7 @@ async def test_check_file_owner_or_folder_admin_write_member_denied(
     has_perm = await perm_svc.check_file_owner_or_folder_admin(
         write_user_id, drive_file.id
     )
-    assert has_perm is False, "write member 应被拒"
+    assert has_perm is True, "成员等权, write member 应通过"
 
 
 @pytest.mark.asyncio
@@ -357,9 +358,10 @@ async def test_check_comment_resolver_folder_admin_passes(
 async def test_check_comment_resolver_write_member_denied(
     db, drive_file, invite_write, write_member_user, test_member
 ):
-    """场景 4 补充: write member 不能 resolve (folder write 权限不够)
+    """场景 4 补充 (2026-09-05 角色扁平化): write member 也能 resolve (在册成员等权)
 
-    验证 check_comment_resolver 拒绝路径.
+    原"folder write 权限不够"拒绝路径已退役 — is_platform_admin 兜底
+    对任何在册成员返回 True。
     """
     from app.services.drive_permission_service import DrivePermissionService
 
@@ -379,7 +381,7 @@ async def test_check_comment_resolver_write_member_denied(
     has_perm = await perm_svc.check_comment_resolver(
         write_member_user.id, comment
     )
-    assert has_perm is False, "write member 不能 resolve"
+    assert has_perm is True, "成员等权, write member 应能 resolve"
 
 
 # ==========================================================================

@@ -531,9 +531,8 @@ async def delete_folder(
         recursive=False: 204 No Content (旧行为, 向后兼容 v2.13)
         recursive=True: 200 + {deleted_folders, deleted_files, deleted_folder_ids}
 
-    v2.13 (2026-07-10): admin 越权支持 — 任务权限模型已有 (CLAUDE.md),
-    folder 这里也加。owner 可删自己的 folder; admin 可删任何 folder;
-    普通用户跨 owner 删除返 403。
+    v2.13 (2026-07-10): admin 越权支持 (历史)。
+    2026-09-05 角色扁平化: 不再区分管理员，任何成员可删任意 folder。
 
     v2.16 (2026-07-11): 加 recursive 级联软删除 — 用户决策"有子文件夹也可以直接删除"。
     前端 FolderTree.vue smart confirm 检测到 children 时弹 2 按钮 confirm:
@@ -547,7 +546,7 @@ async def delete_folder(
         result = await svc.soft_delete_folder(
             folder_id,
             current_user_id=current_user.id,
-            is_admin=(current_user.role == "admin"),
+            is_admin=True,  # 2026-09-05 角色扁平化: 任何成员可删任意 folder
             recursive=recursive,
         )
     except FolderServiceError as e:
@@ -577,7 +576,7 @@ async def restore_folder(
     f = await svc.restore_folder(
         folder_id,
         current_user_id=current_user.id,
-        is_admin=(current_user.role == "admin"),
+        is_admin=True,  # 2026-09-05 角色扁平化: 任何成员可恢复任意 folder
     )
     if f is None:
         raise NotFoundException(resource="Folder", resource_id=folder_id)

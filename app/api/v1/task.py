@@ -8,7 +8,7 @@ from app.config import settings
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException
+from app.core.exceptions import NotFoundException, ValidationException
 from app.schemas.pagination import PaginatedResponse
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
@@ -28,12 +28,7 @@ async def create_task(
     db: AsyncSession = Depends(get_db)
 ):
     """创建任务"""
-    is_admin = current_user.role in ("admin", "leader")
-
-    # 权限：普通成员只能给自己创建任务
-    if not is_admin:
-        if task_data.assignee_id and task_data.assignee_id != current_user.id:
-            raise ForbiddenException("普通成员只能给自己创建任务")
+    # 2026-09-05 角色扁平化：任何成员可创建任务并分配给他人
 
     task_svc = TaskService(db)
 
@@ -155,9 +150,8 @@ async def sync_wechat_ids(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """从企业微信API同步成员userid（仅管理员）"""
-    if current_user.role not in ("admin", "leader"):
-        raise ForbiddenException("仅管理员可操作")
+    """从企业微信API同步成员userid"""
+    # 2026-09-05 角色扁平化：原"仅管理员"门禁已放开为所有登录成员
 
     from app.wechat.bot import wechat_bot
     import logging
@@ -219,8 +213,6 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db)
 ):
     """查询任务列表（默认排除已删除任务）"""
-    is_admin = current_user.role in ("admin", "leader")
-
     query = select(Task)
     filters = []
 
@@ -288,11 +280,8 @@ async def get_task(
     if not task:
         raise NotFoundException("任务")
 
-    # 已删除的任务不返回（除非是管理员查看垃圾桶）
+    # 已删除的任务不返回（垃圾桶视图通过 include_deleted 查询）
     if task.deleted_at is not None:
-        is_admin = current_user.role in ("admin", "leader")
-        if not is_admin:
-            raise NotFoundException("任务")
         # 计算自动删除时间
         task.auto_delete_at = task.deleted_at + timedelta(days=settings.TRASH_RETENTION_DAYS)
 
@@ -317,14 +306,7 @@ async def update_task(
     if task.deleted_at is not None:
         raise ValidationException("任务已删除，无法编辑")
 
-    # 权限：管理员可编辑任意任务，普通成员只能编辑自己创建或被分配的任务
-    is_admin = current_user.role in ("admin", "leader")
-    if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise ForbiddenException("只能编辑自己创建或被分配的任务")
-        # 不能把任务分配给其他人
-        if task_data.assignee_id is not None and task_data.assignee_id != current_user.id:
-            raise ForbiddenException("普通成员不能将任务分配给其他人")
+    # 2026-09-05 角色扁平化：任何成员可编辑任意任务、可改分配人
 
     # 更新字段
     update_data = task_data.model_dump(exclude_unset=True)
@@ -358,11 +340,7 @@ async def delete_task(
     if task.deleted_at is not None:
         raise ValidationException("任务已在垃圾桶中")
 
-    # 权限：普通成员只能删除自己创建或被分配的任务
-    is_admin = current_user.role in ("admin", "leader")
-    if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise ForbiddenException("只能删除自己创建或被分配的任务")
+    # 2026-09-05 角色扁平化：任何成员可删除任意任务
 
     # 软删除：设置 deleted_at
     task.deleted_at = utcnow()
@@ -385,11 +363,7 @@ async def restore_task(
     if task.deleted_at is None:
         raise ValidationException("任务未删除，无需恢复")
 
-    # 权限：管理员可恢复任意任务，普通成员只能恢复自己创建或被分配的任务
-    is_admin = current_user.role in ("admin", "leader")
-    if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise ForbiddenException("只能恢复自己创建或被分配的任务")
+    # 2026-09-05 角色扁平化：任何成员可恢复任意任务
 
     task.deleted_at = None
     await db.commit()
@@ -413,11 +387,7 @@ async def permanent_delete_task(
     if task.deleted_at is None:
         raise ValidationException("请先删除任务再永久删除")
 
-    # 权限：普通成员只能永久删除自己创建或被分配的任务
-    is_admin = current_user.role in ("admin", "leader")
-    if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise ForbiddenException("只能永久删除自己创建或被分配的任务")
+    # 2026-09-05 角色扁平化：任何成员可永久删除任意任务
 
     await db.delete(task)
     await db.commit()
@@ -437,14 +407,11 @@ async def batch_permanent_delete(
     result = await db.execute(select(Task).where(Task.id.in_(ids)))
     tasks = result.scalars().all()
 
-    is_admin = current_user.role in ("admin", "leader")
+    # 2026-09-05 角色扁平化：任何成员可批量永久删除任意任务
     deleted = 0
     for task in tasks:
         if task.deleted_at is None:
             continue
-        if not is_admin:
-            if task.created_by != current_user.id and task.assignee_id != current_user.id:
-                continue
         await db.delete(task)
         deleted += 1
 
@@ -499,7 +466,6 @@ async def get_dashboard_stats(
 ):
     """获取仪表盘统计数据"""
     now = utcnow()
-    is_admin = current_user.role in ("admin", "leader")
 
     # 所有成员可查看全部任务，仅排除已删除
     task_filter = Task.deleted_at.is_(None)

@@ -224,7 +224,7 @@ const username = computed(() => userStore.username)
 const userRole = computed(() => userStore.userRole)
 const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
-// 2026-09-04 G 稿顶栏: mono 时刻牌 (NOW · HH:MM · WED, 20s tick) + 标本牌角色角标
+// 2026-09-04 G 稿顶栏: mono 时刻牌 (NOW · HH:MM · WED, 20s tick) + 标本牌身份角标
 const now = ref(new Date())
 let _clockTimer = null
 const _WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -232,11 +232,15 @@ const clockChip = computed(() => {
   const d = now.value
   return 'NOW · ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' · ' + _WD[d.getDay()]
 })
-const roleChip = computed(() => ({ '管理员': 'ADMIN', '负责人': 'LEADER', '成员': 'MEMBER' }[userRole.value] || String(userRole.value || '').toUpperCase() || 'USER'))
+// 2026-09-05 角色扁平化: 顶栏角标 = 年级身份称谓 (原 admin/leader 等级已废除)
+const roleChip = computed(() => (
+  { 导师: 'ADVISOR', 博士后: 'POSTDOC', 博士: 'PHD', 硕士: 'MASTER', 本科生: 'UGRAD', 校友: 'ALUMNI', 成员: 'MEMBER' }[userRole.value]
+  || String(userRole.value || '').toUpperCase() || 'MEMBER'
+))
 onMounted(() => { _clockTimer = setInterval(() => { now.value = new Date() }, 20000) })
 onBeforeUnmount(() => { if (_clockTimer) clearInterval(_clockTimer) })
-// qa-bench v3.1 D5: KB 监控入口仅 admin/leader 可见 (raw role, 非展示名)
-const isAdmin = computed(() => ['admin', 'leader'].includes(userStore.userInfo?.role))
+// 2026-09-05 角色扁平化: 全员等权, KB 监控等管理入口不再按角色隐藏 (登录即可见)
+const isAdmin = computed(() => userStore.isAdmin)
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
