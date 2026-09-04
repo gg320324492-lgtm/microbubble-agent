@@ -87,35 +87,32 @@
            主题切换/退出在「我的」设置页, 网盘通知在 Drive 页顶徽标) -->
       <el-header v-if="!isMobile" class="header">
         <div class="header-left">
-          <!-- 2026-06-25: 移动端不显示折叠按钮（避免与 MobileHeader 的 ≡ 重复，且 TabBar 已替代主导航） -->
-          <el-icon v-if="!isMobile" :class="['collapse-btn', { 'collapse-btn-mobile': isMobile }]" @click="toggleSidebar">
-            <Fold v-if="!isCollapse" />
-            <Expand v-else />
-          </el-icon>
-          <el-breadcrumb v-if="!isMobile" separator="/">
-            <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
-            <el-breadcrumb-item>{{ currentTitle }}</el-breadcrumb-item>
-          </el-breadcrumb>
+          <!-- 2026-09-04 G 稿收口: 顶栏换「控制台档案」皮肤 (折叠把手/面包屑/mono 时刻牌/用户标本牌);
+               移动端本 el-header 不渲染 (v-if), 各移动视图自带 MobileHeader, 未动 -->
+          <span class="fold" role="button" tabindex="0" :title="isCollapse ? '展开导航' : '折叠导航'" @click="toggleSidebar">
+            <el-icon><Fold v-if="!isCollapse" /><Expand v-else /></el-icon>
+          </span>
+          <div class="crumbs">
+            <span class="home" role="button" tabindex="0" @click="router.push('/')">首页</span>
+            <span class="sep">/</span>
+            <b>{{ currentTitle }}</b>
+          </div>
+          <span class="tchip">{{ clockChip }}</span>
         </div>
 
         <div class="header-right">
-          <!-- v2 PR6: 网盘协作通知铃铛 (@ 提醒 + 评论) + WS 推送
-               2026-07-12: 删除并存旧版"任务到期提醒" el-popover。
-               任务到期提醒主路径走 Celery beat → WeChat 11AM digest window
-               (app/services/reminder_policy.py)，用户可在 /tasks 页面查看。
-               NotificationBell 仅承担 v2 网盘协作通知语义，单一入口避免视觉重复。 -->
           <NotificationBell />
-
-          <!-- v68 (2026-06-26): 主题切换按钮（铃铛之后、用户 dropdown 之前） -->
           <ThemeToggleButton />
 
           <el-dropdown>
-            <div class="user-info" role="button" tabindex="0" aria-label="用户菜单" :aria-expanded="false" aria-haspopup="menu">
-              <el-avatar :size="32" :src="userAvatar" :alt="username" icon="UserFilled" />
-              <div v-if="!isMobile" class="user-detail">
-                <span class="username">{{ username }}</span>
-                <span class="user-role">{{ userRole }}</span>
+            <div class="uchip" role="button" tabindex="0" aria-label="用户菜单" :aria-expanded="false" aria-haspopup="menu">
+              <img v-if="userAvatar" class="av img" :src="userAvatar" :alt="username" />
+              <span v-else class="av">{{ username?.[0] || '?' }}</span>
+              <div class="ud">
+                <div class="un">{{ username }}</div>
+                <div class="ur">{{ roleChip }}</div>
               </div>
+              <svg class="s chev" aria-hidden="true"><use href="#i-chevron"/></svg>
             </div>
             <template #dropdown>
               <el-dropdown-menu>
@@ -226,6 +223,18 @@ const currentTitle = computed(() => route.meta?.title || '首页')
 const username = computed(() => userStore.username)
 const userRole = computed(() => userStore.userRole)
 const userAvatar = computed(() => userStore.userInfo?.avatar || '')
+
+// 2026-09-04 G 稿顶栏: mono 时刻牌 (NOW · HH:MM · WED, 20s tick) + 标本牌角色角标
+const now = ref(new Date())
+let _clockTimer = null
+const _WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+const clockChip = computed(() => {
+  const d = now.value
+  return 'NOW · ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' · ' + _WD[d.getDay()]
+})
+const roleChip = computed(() => ({ '管理员': 'ADMIN', '负责人': 'LEADER', '成员': 'MEMBER' }[userRole.value] || String(userRole.value || '').toUpperCase() || 'USER'))
+onMounted(() => { _clockTimer = setInterval(() => { now.value = new Date() }, 20000) })
+onBeforeUnmount(() => { if (_clockTimer) clearInterval(_clockTimer) })
 // qa-bench v3.1 D5: KB 监控入口仅 admin/leader 可见 (raw role, 非展示名)
 const isAdmin = computed(() => ['admin', 'leader'].includes(userStore.userInfo?.role))
 
@@ -589,93 +598,118 @@ nav.menu {
   border-radius: var(--radius-lg);
 }
 
+/* ===== 桌面端顶栏 — G 稿「控制台档案」皮肤 =====
+   视觉源 docs/design-proposals/layout-2026-09/G-console.html .topbar;
+   --dg-* token 在 .aside 上不外泄, 此处 .header 局部重定义; dark 翻转走文件底部非 scoped 块 */
 .header {
-  background: var(--color-bg-card);
+  --dg-card: #fdfefc;
+  --dg-ink: #16232a;
+  --dg-steel: #5a6b6a;
+  --dg-fog: #8ba0a0;
+  --dg-hair: #c9d2ca;
+  --dg-teal: #0e766e;
+  --dg-teal-soft: #dcece5;
+  --dg-coral: #ef7256;
+  --dg-mono: Consolas, 'Courier New', monospace;
+  height: 60px;
+  background: var(--dg-card);
+  border-bottom: 1px solid var(--dg-hair);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: var(--shadow-sm);
-  padding: 0 20px;
-  border-bottom: 1px solid var(--color-border);
+  padding: 0 18px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
 }
 
-.collapse-btn {
+.fold {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--dg-steel);
   cursor: pointer;
-  font-size: 20px;
-  color: var(--color-text-secondary);
-  transition: color 200ms var(--ease-out);
-  padding: 6px;
-  border-radius: var(--radius-md);
+  font-size: 17px;
 }
+.fold:hover { background: var(--dg-teal-soft); color: var(--dg-teal); }
 
-.collapse-btn:hover {
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
+.crumbs { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--dg-fog); }
+.crumbs .home { cursor: pointer; }
+.crumbs .home:hover { color: var(--dg-teal); }
+.crumbs .sep { opacity: 0.5; }
+.crumbs b { color: var(--dg-ink); font-weight: 600; }
 
-.collapse-btn-mobile {
-  font-size: 24px !important;
-  padding: 10px !important;
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  border-radius: var(--radius-lg);
-}
-
-.collapse-btn-mobile:hover {
-  background: rgba(var(--color-primary-rgb), 0.2);
+.tchip {
+  font-family: var(--dg-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--dg-steel);
+  border: 1px solid var(--dg-hair);
+  border-radius: 5px;
+  padding: 4px 8px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 8px;
 }
 
-.badge {
+/* 铃铛 / 主题切换 → 32px util 方阵 (父 deep 覆盖子 scoped 样式) */
+.header-right :deep(.notification-bell-btn),
+.header-right :deep(.theme-toggle-btn) {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--dg-steel);
   cursor: pointer;
+  position: relative;
+  transition: background 150ms ease, color 150ms ease;
 }
+.header-right :deep(.notification-bell-btn:hover),
+.header-right :deep(.theme-toggle-btn:hover) { background: var(--dg-teal-soft); color: var(--dg-teal); }
+.header-right :deep(.theme-toggle-btn) { font-size: 14px; }
 
-.user-info {
+/* 用户标本牌 */
+.uchip {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
+  padding: 5px 10px 5px 5px;
+  margin-left: 4px;
+  border: 1px solid var(--dg-hair);
+  border-radius: 8px;
   cursor: pointer;
-  padding: 6px 10px;
-  border-radius: var(--radius-lg);
-  transition: background 200ms var(--ease-out);
+  color: var(--dg-ink);
 }
-
-.user-info:hover {
-  background: var(--color-bg-warm);
-}
-
-.user-detail {
-  display: flex;
-  flex-direction: column;
-}
-
-.username {
-  font-size: 14px;
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
-  line-height: 1.2;
-}
-
-.user-role {
+.uchip:hover { background: var(--dg-teal-soft); }
+.uchip .av {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--dg-ink);
+  color: var(--dg-card);
+  display: grid;
+  place-items: center;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  font-weight: 700;
+  object-fit: cover;
 }
+.uchip .ud { text-align: left; }
+.uchip .un { font-size: 12.5px; font-weight: 600; line-height: 1.15; }
+.uchip .ur { font-family: var(--dg-mono); font-size: 9px; color: var(--dg-fog); letter-spacing: 0.1em; }
+.uchip .s { width: 12px; height: 12px; }
+.uchip .chev { color: var(--dg-fog); }
 
 .main {
   background-color: var(--color-bg-page);
@@ -970,14 +1004,6 @@ nav.menu {
     gap: 8px;
   }
 
-  .user-info {
-    padding: 4px 8px;
-  }
-
-  .user-info :deep(.el-avatar) {
-    width: 36px !important;
-    height: 36px !important;
-  }
 }
 </style>
 
@@ -1005,24 +1031,21 @@ nav.menu {
   [data-theme="dark"] .stamp.active { background: var(--dg-card); }
   [data-theme="dark"] .stamp .t1 { color: var(--dg-ink); }
 
-  /* === 顶栏 === */
+  /* === 顶栏 (G 稿 dark 翻转, 与 .aside 色板同源; 后置声明压过 scoped 同名 token) === */
   [data-theme="dark"] .header {
-    background: var(--color-bg-card);
-    border-bottom: 1px solid var(--color-border-light);
+    --dg-card: #18232a;
+    --dg-ink: #dfe9e6;
+    --dg-steel: #9ab0ae;
+    --dg-fog: #6b8286;
+    --dg-hair: #27363e;
+    --dg-teal: #35c2a4;
+    --dg-teal-soft: #12312b;
+    background: var(--dg-card);
+    border-bottom-color: var(--dg-hair);
   }
-  /* 2026-07-12: 删除 .bell-icon 选择器（旧任务提醒铃铛已废弃，统一走 NotificationBell 组件） */
-  [data-theme="dark"] .collapse-btn,
-  [data-theme="dark"] .breadcrumb-text {
-    color: var(--color-text-regular);
-  }
-  [data-theme="dark"] .collapse-btn:hover,
-  [data-theme="dark"] .breadcrumb-text:hover {
-    background: var(--color-bg-hover);
-  }
-  [data-theme="dark"] .user-info { color: var(--color-text-primary); }
-  [data-theme="dark"] .user-info:hover { background: var(--color-bg-warm); }
-  [data-theme="dark"] .user-name { color: var(--color-text-primary); }
-  [data-theme="dark"] .user-role { color: var(--color-text-secondary); }
+  [data-theme="dark"] .header .fold { color: var(--dg-steel); }
+  [data-theme="dark"] .header .crumbs b { color: var(--dg-ink); }
+  [data-theme="dark"] .header .uchip { color: var(--dg-ink); }
 
   /* === 录音 banner + 浮动胶囊 === */
   [data-theme="dark"] .recording-banner,
