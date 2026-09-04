@@ -158,23 +158,11 @@ async def get_current_user(
 async def get_current_admin_user(
     current_user: Member = Depends(get_current_user)
 ) -> Member:
+    """获取当前用户（原管理员门禁）
+
+    2026-09-05 角色扁平化：课题组不再区分管理员/组长/成员的权限等级，
+    所有登录成员等权。本函数保留为兼容依赖名，仅要求登录，不再校验 role。
     """
-    获取当前管理员用户
-
-    Args:
-        current_user: 当前用户
-
-    Returns:
-        管理员用户对象
-
-    Raises:
-        HTTPException: 权限不足
-    """
-    if current_user.role not in ["admin", "leader"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="权限不足，需要管理员权限"
-        )
     return current_user
 
 

@@ -545,12 +545,12 @@ async def restore_drive_file(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """恢复软删 drive 文件 (30 天保留期内, owner/admin)."""
+    """恢复软删 drive 文件 (30 天保留期内; 2026-09-05 角色扁平化: 任何成员可恢复)."""
     svc = DriveService(db)
     f = await svc.restore_file(
         file_id,
         current_user_id=current_user.id,
-        is_admin=current_user.role in ("admin", "leader"),
+        is_admin=True,
     )
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在或无恢复权限")
@@ -889,12 +889,12 @@ async def permanent_delete_files(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """批量物理删除回收站中的文件 (owner/admin only, 不可逆)."""
+    """批量物理删除回收站中的文件 (不可逆; 2026-09-05 角色扁平化: 任何成员可操作)."""
     svc = DriveService(db)
     deleted, skipped = await svc.permanent_delete_batch(
         payload.file_ids,
         current_user_id=current_user.id,
-        is_admin=current_user.role in ("admin", "leader"),
+        is_admin=True,
     )
     return BatchOperationResponse(
         succeeded_count=deleted,
@@ -929,12 +929,12 @@ async def batch_restore_files(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """批量从回收站恢复."""
+    """批量从回收站恢复 (2026-09-05 角色扁平化: 任何成员可操作)."""
     svc = DriveService(db)
     restored, skipped = await svc.batch_restore(
         payload.file_ids,
         current_user_id=current_user.id,
-        is_admin=current_user.role in ("admin", "leader"),
+        is_admin=True,
     )
     return BatchOperationResponse(
         succeeded_count=restored,

@@ -483,19 +483,19 @@ async def test_scenario_3_nested_reply_resolve_menu(e2e_env):
 
 @pytest.mark.asyncio
 async def test_scenario_4_folder_admin_permission(e2e_env):
-    """场景 4: 普通成员(2) 无权上传新版本 → 403; 授予 folder admin 后 → 通过"""
+    """场景 4 (2026-09-05 角色扁平化): 任何成员可上传新版本; folder admin 共享记录仍生效"""
     from app.models.drive_share import DriveFolderMember
 
     try:
-        # 普通成员(2) 尝试上传新版本 → 403 (非 created_by, 非 folder admin)
+        # 普通成员(2) 上传新版本 → 等权直接通过 (原"非 admin 403"断言已退役)
         async with _client(_user(2)) as client:
             r = await client.post(
                 f"/api/v1/versions/files/{e2e_env.file_id}/versions",
                 files={"file": ("report.txt", b"member edit", "text/plain")},
             )
-            assert r.status_code == 403, f"普通成员应 403, got {r.status_code}: {r.text}"
+            assert r.status_code == 201, f"成员等权应 201, got {r.status_code}: {r.text}"
 
-        # 授予 member(2) folder admin
+        # 授予 member(2) folder admin (共享协作者名单机制保留)
         async with _SESSION() as db:
             db.add(DriveFolderMember(
                 folder_id=e2e_env.folder_id, member_id=2, permission="admin", invited_by=1,
@@ -509,7 +509,7 @@ async def test_scenario_4_folder_admin_permission(e2e_env):
                 files={"file": ("report.txt", b"member edit v2", "text/plain")},
             )
             assert r2.status_code == 201, f"folder admin 应通过, got {r2.status_code}: {r2.text}"
-        print("[scenario 4] member 403 → folder admin 201 PASS")
+        print("[scenario 4] member 201 → folder admin 201 PASS")
     finally:
         _clear_overrides()
 

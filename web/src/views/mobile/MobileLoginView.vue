@@ -68,7 +68,7 @@
         </button>
 
         <div class="login-hint">
-          <p>账号由课题组管理员统一签发</p>
+          <p>账号由课题组统一签发</p>
         </div>
       </form>
 

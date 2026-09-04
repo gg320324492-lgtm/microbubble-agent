@@ -65,17 +65,7 @@ async def query_tasks(input: QueryTasksInput, ctx: ToolContext) -> dict:
     from app.models.member import Member
     from app.models.project import Project
 
-    # 权限检查：研究生/特殊成员可见组内，普通成员只看自己
-    is_admin = False
-    is_graduate = False
-    if ctx.user_id:
-        member_svc = MemberService(ctx.db)
-        current = await member_svc.get_member(ctx.user_id)
-        is_admin = current and current.role in ("admin", "leader")
-        if current:
-            graduate_grades = ("研一", "研二", "研三", "博一", "博二")
-            special_names = ("贾琦", "周之超")
-            is_graduate = current.grade in graduate_grades or current.name in special_names
+    # 2026-09-05 角色扁平化：所有成员等权，可查看全组任务（原 admin/研究生可见性分级废除）
 
     # 解析 assignee_name → assignee_id
     assignee_id = None
@@ -94,10 +84,6 @@ async def query_tasks(input: QueryTasksInput, ctx: ToolContext) -> dict:
             if p.name == input.project_name:
                 project_id = p.id
                 break
-
-    # 权限：非管理员不指定 assignee 时只查自己
-    if not is_admin and not assignee_id and not is_graduate and ctx.user_id:
-        assignee_id = ctx.user_id
 
     # 查询
     task_svc = TaskService(ctx.db)
@@ -177,7 +163,7 @@ class CreateTaskOutput(BaseModel):
     output_model=CreateTaskOutput,
 )
 async def create_task(input: CreateTaskInput, ctx: ToolContext) -> dict:
-    """创建任务（含权限检查 + 微信通知）"""
+    """创建任务（含微信通知）"""
     from app.services.task_service import TaskService
     from app.services.member_service import MemberService
     from app.services.project_service import ProjectService
@@ -185,12 +171,6 @@ async def create_task(input: CreateTaskInput, ctx: ToolContext) -> dict:
     from datetime import datetime, timezone
 
     member_svc = MemberService(ctx.db)
-
-    # 权限检查
-    is_admin = False
-    if ctx.user_id:
-        current = await member_svc.get_member(ctx.user_id)
-        is_admin = current and current.role in ("admin", "leader")
 
     # 解析 assignee
     assignee_id = None
@@ -202,9 +182,7 @@ async def create_task(input: CreateTaskInput, ctx: ToolContext) -> dict:
     elif ctx.user_id:
         assignee_id = ctx.user_id  # 默认分配给自己
 
-    # 权限：普通成员只能给自己创建
-    if not is_admin and assignee_id and ctx.user_id and assignee_id != ctx.user_id:
-        return {"status": "error", "message": "普通成员只能给自己创建任务"}
+    # 2026-09-05 角色扁平化：任何成员可给他人创建任务（原"普通成员只能给自己创建"废除）
 
     # 解析 project
     project_id = None
@@ -306,9 +284,8 @@ class UpdateTaskOutput(BaseModel):
     output_model=UpdateTaskOutput,
 )
 async def update_task(input: UpdateTaskInput, ctx: ToolContext) -> dict:
-    """更新任务（状态/进度/截止日期 + 权限检查）"""
+    """更新任务（状态/进度/截止日期）"""
     from app.services.task_service import TaskService
-    from app.services.member_service import MemberService
     from app.models.base import BEIJING_TZ
     from datetime import datetime, timezone
 
@@ -317,13 +294,7 @@ async def update_task(input: UpdateTaskInput, ctx: ToolContext) -> dict:
     if not task:
         return {"status": "error", "message": f"任务 {input.task_id} 不存在"}
 
-    # 权限：仅创建者/被分配者/admin
-    if ctx.user_id:
-        member_svc = MemberService(ctx.db)
-        current = await member_svc.get_member(ctx.user_id)
-        is_admin = current and current.role in ("admin", "leader")
-        if not is_admin and task.created_by != ctx.user_id and task.assignee_id != ctx.user_id:
-            return {"status": "error", "message": "只能编辑自己创建或被分配的任务"}
+    # 2026-09-05 角色扁平化：任何成员可更新任意任务（原创建者/被分配者/admin 限制废除）
 
     updated = await task_svc.update_task_status(
         task_id=input.task_id,

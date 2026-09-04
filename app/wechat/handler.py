@@ -19,6 +19,7 @@ from app.wechat.analyzer import analyzer
 from app.services.vision_service import vision_service
 from app.services.reminder_service import ReminderService
 from app.services.session_context import ensure_session_context
+from app.core.member_identity import member_status
 from app.core.redis import get_redis
 
 logger = logging.getLogger("microbubble.wechat")
@@ -485,7 +486,7 @@ class MessageHandler:
                                          chat_id: str) -> None:
         """异步处理群聊 agent 对话"""
         try:
-            enriched_msg = f"[群聊, 用户: {member.name}, 角色: {member.role}] {content}"
+            enriched_msg = f"[群聊, 用户: {member.name}, 身份: {member_status(member.grade)}] {content}"
             # W98 P2-F: 微信同步 — 会话上下文预加载 (PG 回填 Redis, 防失忆客服)
             await ensure_session_context(db, member.id, session_id)
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id, channel_user_id=user_id)
@@ -1103,7 +1104,7 @@ class MessageHandler:
         """异步处理 agent 对话"""
         user_id = msg.get("_resolved_user_id") or msg.get("FromUserName", "")
         try:
-            enriched_msg = f"[用户: {member.name}, 角色: {member.role}] {content}"
+            enriched_msg = f"[用户: {member.name}, 身份: {member_status(member.grade)}] {content}"
             # W98 P2-F: 微信同步 — 会话上下文预加载 (PG 回填 Redis, 防失忆客服)
             await ensure_session_context(db, member.id, session_id)
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id, channel_user_id=user_id)
@@ -1216,7 +1217,7 @@ class MessageHandler:
             # W98 P2-F: 微信同步 — 会话上下文预加载 (PG 回填 Redis, 防失忆客服)
             await ensure_session_context(db, member.id, session_id)
             result = await agent.chat(
-                message=f"[用户: {member.name}, 角色: {member.role}] {content}",
+                message=f"[用户: {member.name}, 身份: {member_status(member.grade)}] {content}",
                 session_id=session_id,
                 db=db,
                 user_id=member.id,

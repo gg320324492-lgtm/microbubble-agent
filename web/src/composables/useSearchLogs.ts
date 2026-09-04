@@ -179,7 +179,7 @@ export function useSearchLogs() {
       error.value = null
     } catch (e: any) {
       if (e?.response?.status === 403) {
-        error.value = '需要管理员权限'
+        error.value = '无权访问该数据'  // 2026-09-05 角色扁平化: 端点对全员开放, 403 罕见
       } else {
         error.value = e?.response?.data?.detail || e?.message || '加载失败'
       }

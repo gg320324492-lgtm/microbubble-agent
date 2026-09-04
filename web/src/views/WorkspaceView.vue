@@ -176,6 +176,7 @@ import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
 import { cleanDescriptionForDisplay } from '@/utils/textSanitize'
 import DossierPanel from './workspace/DossierPanel.vue'
+import { memberTitleOf } from '@/utils/memberIdentity'
 
 const route = useRoute()
 const router = useRouter()
@@ -246,10 +247,10 @@ const projectStamp = computed(() => {
   return { text: '在研', cls: 'ok' }
 })
 
-const ROLE_LABELS = { admin: '管理员', leader: '组长', member: '成员' }
+// 2026-09-05 角色扁平化: 成员卷宗章 = 年级身份称谓 (原 admin/leader/member 等级章退役)
 const roleStamp = computed(() => {
-  const role = detailMember.value?.role || 'member'
-  return { text: ROLE_LABELS[role] || role, cls: role === 'admin' ? '' : 'ok' }
+  const t = memberTitleOf(detailMember.value)
+  return { text: t, cls: t === '导师' ? '' : 'ok' }
 })
 
 // 幽灵成员 id (成员 API 过滤缺员) 与卡片同口径: 明说「用户不存在」

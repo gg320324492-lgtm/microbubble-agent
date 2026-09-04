@@ -25,7 +25,7 @@
         <div class="user-info">
           <div class="user-name">{{ userInfo?.name || '未登录' }}</div>
           <div class="user-role">
-            <span class="role-tag mg-chip" :class="`role-${userInfo?.role}`">
+            <span class="role-tag mg-chip" :class="`role-${roleTagClass}`">
               {{ roleLabel }}
             </span>
             <span v-if="userInfo?.email" class="user-email">{{ userInfo.email }}</span>
@@ -185,8 +185,12 @@ const avatarInputRef = ref(null)
 const savingProfile = ref(false)
 const savingPassword = ref(false)
 
-const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
-const roleLabel = computed(() => roleMap[userInfo.value?.role] || '成员')
+// 2026-09-05 角色扁平化: 展示年级身份称谓 (导师/博士/硕士/本科生...)
+const roleLabel = computed(() => userStore.userRole)
+const roleTagClass = computed(() => ({
+  导师: 'advisor', 博士后: 'postdoc', 博士: 'phd', 硕士: 'master',
+  本科生: 'undergrad', 校友: 'alumni',
+}[roleLabel.value] || 'member'))
 const isDark = computed(() => themeStore.isDark)
 
 // 个人资料表单
@@ -428,8 +432,10 @@ onMounted(() => {
 .role-tag {
   font-size: 11px;
 }
-.role-admin { background: var(--mg-danger-soft); color: var(--mg-danger); }
-.role-leader { background: var(--mg-warning-soft); color: var(--mg-warning); }
+/* 身份称谓配色 (2026-09-05 角色扁平化): 导师=暖红 / 博字辈=金 / 硕士=主色 / 本科生=绿 */
+.role-advisor { background: var(--mg-danger-soft); color: var(--mg-danger); }
+.role-postdoc, .role-phd { background: var(--mg-warning-soft); color: var(--mg-warning); }
+.role-undergrad { background: var(--mg-success-soft, var(--mg-primary-soft)); color: var(--mg-success, var(--mg-primary)); }
 .user-email {
   font-size: 12px;
   color: var(--mg-text-soft);

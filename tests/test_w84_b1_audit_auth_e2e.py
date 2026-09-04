@@ -29,11 +29,13 @@ def test_admin_audit_router_endpoints_depend_on_get_current_admin():
 
 
 def test_get_current_admin_in_admin_module_rejects_non_admin():
-    """P1-6: app/api/v1/admin.py:get_current_admin 必须校验 role."""
+    """2026-09-05 角色扁平化: get_current_admin 不再校验 role, 仅要求登录.
+
+    原断言 (admin/leader 白名单 + 403) 已随权限等级废除而退役 —
+    所有登录成员等权, 未登录仍走 get_current_user 的 401。
+    """
     from app.api.v1.admin import get_current_admin
     import inspect
     src = inspect.getsource(get_current_admin)
-    assert "admin" in src and "leader" in src, "get_current_admin 缺少 role 白名单"
-    assert "403" in src or "HTTP_403_FORBIDDEN" in src or "forbidden" in src.lower(), (
-        "get_current_admin 缺 403 校验"
-    )
+    assert "get_current_user" in src, "get_current_admin 必须仍依赖登录态 (get_current_user)"
+    assert "current_user.role" not in src, "角色扁平化后不得再按 role 拒绝成员"

@@ -65,7 +65,8 @@
                 <div class="hero-avatar">{{ detailMember.name?.charAt(0) }}</div>
                 <h2 class="hero-name">{{ detailMember.name }}</h2>
                 <div class="hero-tags">
-                  <el-tag size="small" :type="getRoleType(detailMember.role)">{{ getRoleLabel(detailMember.role) }}</el-tag>
+                  <!-- 2026-09-05 角色扁平化: 显示年级身份称谓 -->
+                  <el-tag size="small" :type="memberTagType(detailMember)">{{ memberTitleOf(detailMember) }}</el-tag>
                   <el-tag v-if="detailMember.grade" size="small" type="info">{{ detailMember.grade }}</el-tag>
                   <el-tag v-if="detailMember.voice_enrolled_at" size="small" type="success">🎤 已录入声纹</el-tag>
                   <el-tag v-else size="small" type="warning">未录入声纹</el-tag>
@@ -123,6 +124,7 @@ import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import VoiceprintEnrollFlow from '@/components/mobile/VoiceprintEnrollFlow.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
+import { memberTagType, memberTitleOf } from '@/utils/memberIdentity'
 
 const members = ref([])
 const loading = ref(false)
@@ -155,7 +157,7 @@ const searchFilters = computed(() => [
 
 const memberFieldConfig = computed(() => ({
   title: (m) => m.name,
-  subtitle: (m) => `${m.role || ''} · ${m.grade || ''}`,
+  subtitle: (m) => `${memberTitleOf(m)} · ${m.grade || ''}`,
   badge: (m) => ({
     label: m.voice_enrolled_at ? '✓ 声纹' : '未录入',
     type: m.voice_enrolled_at ? 'success' : 'info',
@@ -232,28 +234,25 @@ const createFields = computed(() => [
     type: 'select',
     options: [
       { value: '', label: '请选择' },
+      { value: '导师', label: '导师' },
       { value: '教授', label: '教授' },
       { value: '副教授', label: '副教授' },
+      { value: '老师', label: '老师' },
       { value: '博士后', label: '博士后' },
       { value: '博一', label: '博一' },
       { value: '博二', label: '博二' },
+      { value: '博三', label: '博三' },
       { value: '研一', label: '研一' },
       { value: '研二', label: '研二' },
       { value: '研三', label: '研三' },
+      { value: '大一', label: '大一' },
+      { value: '大二', label: '大二' },
+      { value: '大三', label: '大三' },
+      { value: '大四', label: '大四' },
+      { value: '已毕业', label: '已毕业' },
     ],
   },
   { key: 'research_area', label: '研究方向', type: 'input', placeholder: '如：气泡生成、水处理' },
-  {
-    key: 'role',
-    label: '角色',
-    type: 'radio',
-    required: true,
-    options: [
-      { value: 'admin', label: '管理员' },
-      { value: 'leader', label: '组长' },
-      { value: 'member', label: '成员' },
-    ],
-  },
   { key: 'email', label: '邮箱', type: 'input', placeholder: 'example@mnb-lab.cn' },
 ])
 
@@ -276,15 +275,7 @@ async function onCreateSubmit(form) {
   }
 }
 
-function getRoleType(role) {
-  const map = { admin: 'danger', leader: 'warning', member: 'info' }
-  return map[role] || 'info'
-}
-
-function getRoleLabel(role) {
-  const map = { admin: '管理员', leader: '组长', member: '成员' }
-  return map[role] || role || '成员'
-}
+// getRoleType/getRoleLabel 已随 2026-09-05 角色扁平化退役 → @/utils/memberIdentity
 
 function formatDate(t) {
   if (!t) return ''

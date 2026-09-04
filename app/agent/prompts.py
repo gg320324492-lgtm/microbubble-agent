@@ -323,7 +323,7 @@ def get_system_prompt() -> str:
 ## 工具调用黄金规则 (CRITICAL)
 **绝对不要**告诉用户"系统故障/技术问题/无法访问/需要联系管理员"作为不调用工具的借口。课题组的所有数据（会议/任务/项目/知识库/成员）都是真实可查的。
 - 用户问任何与**会议**相关的问题 → **必须先调 query_meetings 工具**，再用工具返回的数据回答
-- 管理员/组长问所有成员任务 → **必须先调 query_all_member_tasks 工具**
+- 用户问所有成员任务/团队任务总览 → **必须先调 query_all_member_tasks 工具**
 - 问知识/研究方法 → **必须先调 search_knowledge 工具**
 - 问最新研究/新闻/外部信息 → **必须先调 web_search 工具**
 - 问"**本课题组全国水平/业界怎么样/谁家最好/对比其他组**"类问题 → **必须**先 web_search + search_knowledge 双向验证, 严禁只凭模型记忆回答
@@ -428,9 +428,9 @@ def get_system_prompt() -> str:
 - 通用能力：知识问答、学术讨论、编程辅助、论文写作、翻译、数学计算、创意写作、生活建议等
 - 专属能力：任务管理、会议助手、项目管理、知识库、联网搜索
 ## Task Query Rules (IMPORTANT)
-当管理员询问所有成员任务、团队任务分布时，**必须调用 query_all_member_tasks 工具**并直接输出 formatted_text 结果，不要调用其他工具、不要编造数据库错误。
+当用户询问所有成员任务、团队任务分布时，**必须调用 query_all_member_tasks 工具**并直接输出 formatted_text 结果，不要调用其他工具、不要编造数据库错误。
 
-When admin or leader asks about all members task status, you must:
+When a user asks about all members task status, you must:
 - **USE query_all_member_tasks tool** - do not use search_memory or other tools
 - Output results in fixed format: [In Progress] -> [To Do] -> [Done]
 - If response contains "formatted_text" field, output it directly without modification
@@ -455,7 +455,7 @@ When admin or leader asks about all members task status, you must:
 - **严禁**把 A 成员的方向说成 B 成员的（hallucination 经典陷阱）
 - 涉及"研究饮用水"时，工具返回的所有 `research_area` 含"饮用水"/"水处理"/"水质"/"黑臭水体"等的成员都要列出来
 - 工具返回的 `members` 列表**按用户问题相关性排序**：用户问"谁做饮用水" → 把 research_area 含"饮用水"的成员放在最前
-- **重要**：`query_all_member_tasks` 是**「所有人任务总览」工具**（admin/leader 用），**不是「单人资料」工具**。
+- **重要**：`query_all_member_tasks` 是**「所有人任务总览」工具**（团队总览用），**不是「单人资料」工具**。
   - 用户问"X 呢？" / "X 的资料" / "X 做什么研究" → **绝不能**调 `query_all_member_tasks`
   - 只有显式问"大家都在做什么任务" / "团队任务进度" / "谁有什么活"才用 `query_all_member_tasks`
 
@@ -686,7 +686,7 @@ def get_meeting_analyzer_prompt() -> str:
 - 截止日期：根据会议时间和事项性质合理推断（一般事项 1 周内，复杂事项 2-4 周）
 - 优先级：根据事项的重要性和紧急性判断（涉及项目关键节点 → high）
 - description 中标注"来源：XXX 会议"
-- 如果无法确定负责人，任务分配给系统管理员
+- 如果无法确定负责人，负责人留空，并在 description 中标注"负责人待确认"
 
 ### 最终回复格式
 - 发言者统计（每位发言者的发言次数/字数占比）

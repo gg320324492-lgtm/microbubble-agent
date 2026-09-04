@@ -2,17 +2,13 @@
 /**
  * MemberCardBlock.vue — 成员卡
  *
- * 接收 block.data = {members: [{id, name, grade, research_area, email, role, skills, voice_enrolled, bio}]}
+ * 接收 block.data = {members: [{id, name, grade, title, research_area, email, skills, voice_enrolled, bio}]}
+ * 2026-09-05 角色扁平化: 不再显示 管理员/组长/成员 等级, 显示年级身份称谓。
  */
+import { memberTitleOf } from '@/utils/memberIdentity'
+
 const props = defineProps({ block: { type: Object, required: true } })
 const members = (props.block.data || {}).members || []
-
-const roleLabel = (r) => ({ admin: '管理员', leader: '组长', member: '成员' }[r] || r || '成员')
-// v77 P2.6-E.1: 收敛 roleColor 改成 class 拼接（_runtime-style-tokens.scss .role--*）
-const roleClass = (r) => {
-  const valid = ['admin', 'leader', 'member']
-  return valid.includes(r) ? r : 'member'
-}
 </script>
 
 <template>
@@ -28,7 +24,7 @@ const roleClass = (r) => {
       <div class="member-info">
         <div class="member-row1">
           <span class="member-name">{{ m.name }}</span>
-          <span class="role" :class="`role--${roleClass(m.role)}`">{{ roleLabel(m.role) }}</span>
+          <span class="role">{{ memberTitleOf(m) }}</span>
           <span v-if="m.voice_enrolled" class="voice-badge">🎙️</span>
         </div>
         <div class="member-row2">

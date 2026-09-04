@@ -39,12 +39,7 @@ router = APIRouter(
 
 
 async def get_current_admin(current_user: Member = Depends(get_current_user)) -> Member:
-    """admin/leader-only guard (mirrors app/api/v1/admin.py pattern)."""
-    if current_user.role not in ("admin", "leader"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="需要管理员权限",
-        )
+    """原 admin/leader-only guard — 2026-09-05 角色扁平化：所有登录成员等权"""
     return current_user
 
 

@@ -1,19 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
+import { memberTitleOf } from '@/utils/memberIdentity'
 
 export const useUserStore = defineStore('user', () => {
   const userInfo = ref(null)
 
   const username = computed(() => userInfo.value?.name || '用户')
-  const userRole = computed(() => {
-    const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
-    return roleMap[userInfo.value?.role] || '成员'
-  })
-  // W86 mini-9: isAdmin getter 缺失 → ProjectStatsView admin 专属 tab (kb_monitor / audit) 不可见
-  // 派工 v6 §1.2 真验证: userStore 没暴露 isAdmin, ProjectStatsView:311 取 undefined → items.push 永不执行
-  // 对齐 MainLayout.vue:209 写法, admin/leader 都算 admin
-  const isAdmin = computed(() => ['admin', 'leader'].includes(userInfo.value?.role))
+  // 2026-09-05 角色扁平化: 不再区分管理员/组长，展示年级身份称谓 (导师/博士/硕士/本科生...)
+  const userRole = computed(() => memberTitleOf(userInfo.value))
+  // 角色扁平化: 所有登录成员等权 (原 admin/leader 门禁已废除)。
+  // 保留 isAdmin 名称兼容既有模板, 语义 = 已登录。
+  const isAdmin = computed(() => !!userInfo.value)
 
   function loadFromStorage() {
     const info = localStorage.getItem('user_info')

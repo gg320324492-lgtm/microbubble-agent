@@ -39,7 +39,10 @@ class Member(Base, TimestampMixin):
     avatar = Column(String(500))
     bio = Column(Text)  # 个人简介
     is_active = Column(Boolean, default=True)
-    role = Column(String(20), default="member")  # admin/leader/member
+    # 2026-09-05 角色扁平化 (alembic 132): 不再区分 admin/leader/member,
+    # 全员等权, 本列仅作历史保留 (恒为 'member'), 不得用于任何权限判断。
+    # 成员对外展示统一身份称谓, 由 grade 派生: app/core/member_identity.member_status
+    role = Column(String(20), default="member")
     custom_instructions = Column(Text)  # 用户自定义指令
     notification_preferences = Column(JSON, nullable=True)  # 通知偏好（2026-06-15 v2）：
     # {"enabled": True, "digest_time": "11:00", "channels": ["wechat"],

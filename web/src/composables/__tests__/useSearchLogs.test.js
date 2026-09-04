@@ -177,11 +177,11 @@ describe('useSearchLogs (RAG PR6 W92 检索日志 7 维)', () => {
     expect(rows.value).toHaveLength(1) // 旧数据仍在
   })
 
-  it('11. 403 给管理员权限专用文案', async () => {
+  it('11. 403 给无权访问专用文案 (2026-09-05 角色扁平化)', async () => {
     mockAxiosGet.mockRejectedValue({ response: { status: 403 } })
     const { refresh, error } = useSearchLogs()
     await refresh()
-    expect(error.value).toBe('需要管理员权限')
+    expect(error.value).toBe('无权访问该数据')
   })
 
   it('12. applyFilters 把筛选写进 params 并回到第 1 页', async () => {

@@ -1,7 +1,7 @@
 """任务域扩展工具（v3 迁移）
 
 迁移自 core.py._execute_tool：
-- query_all_member_tasks (line 692) — admin/leader 专用
+- query_all_member_tasks (line 692) — 全员任务总览 (2026-09-05 角色扁平化: 任何成员可用)
 - get_task_stats (line 789)
 """
 
@@ -18,7 +18,7 @@ logger = logging.getLogger("microbubble.agent.tools.extra_task")
 
 
 # ============================================================================
-# 1. query_all_member_tasks（admin/leader 专用）
+# 1. query_all_member_tasks（全员任务总览）
 # ============================================================================
 
 
@@ -44,31 +44,13 @@ class QueryAllMemberTasksOutput(BaseModel):
 
 @tool(
     name="query_all_member_tasks",
-    description="查询所有成员的任务状况，按状态分组显示（进行中/待办/已完成）。仅管理员或组长可用。当管理员或组长询问所有人的任务进度、团队任务分布时使用。",
+    description="查询所有成员的任务状况，按状态分组显示（进行中/待办/已完成）。当用户询问所有人的任务进度、团队任务分布时使用。",
     input_model=QueryAllMemberTasksInput,
     output_model=QueryAllMemberTasksOutput,
 )
 async def query_all_member_tasks(input: QueryAllMemberTasksInput, ctx: ToolContext) -> dict:
-    """查询所有成员任务（admin/leader 权限）"""
+    """查询所有成员任务（2026-09-05 角色扁平化：所有成员等权可用）"""
     from app.services.task_service import TaskService
-    from app.services.member_service import MemberService
-
-    # 权限检查
-    is_admin = False
-    if ctx.user_id:
-        member_svc = MemberService(ctx.db)
-        current = await member_svc.get_member(ctx.user_id)
-        is_admin = current and current.role in ("admin", "leader")
-
-    if not is_admin:
-        return {
-            "status": "error",
-            "message": "仅管理员或组长可以查看所有成员的任务状况",
-            "formatted_text": "",
-            "in_progress_count": 0,
-            "done_count": 0,
-            "total_count": 0,
-        }
 
     task_svc = TaskService(ctx.db)
     all_member_stats = await task_svc.get_all_members_workload()

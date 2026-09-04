@@ -232,10 +232,8 @@ const route = useRoute()
 const userStore = useUserStore()
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
-const isAdmin = computed(() => {
-  const role = userStore.userInfo?.role
-  return role === 'admin' || role === 'leader'
-})
+// 2026-09-05 角色扁平化: 全员等权 (userStore.isAdmin = 已登录), 任务操作不再按角色/创建人过滤
+const isAdmin = computed(() => userStore.isAdmin)
 const currentUserId = computed(() => userStore.userInfo?.id)
 
 // 使用 composable

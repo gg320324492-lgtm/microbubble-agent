@@ -300,10 +300,10 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
       const childWarn = hasChildren
         ? `\n\n⚠️ 该 folder 下还有 ${folderCount} 个未删子 folder, ${fileCount} 个未删文件.\n确认后将连同子项一起移入回收站 (级联软删), 30 天内可整体恢复.`
         : ''
-      confirmMsg = `⚠️ 管理员越权删除: 文件夹 "${folder.name}" (owner=其他成员) 将进入回收站, 30 天内可恢复.\n建议先与 owner 沟通, 确认后再删除.${childWarn}`
-      confirmTitle = '⚠️ 管理员越权操作'
+      confirmMsg = `⚠️ 该文件夹由其他成员拥有: "${folder.name}" 将进入回收站, 30 天内可恢复.\n建议先与 owner 沟通, 确认后再删除.${childWarn}`
+      confirmTitle = '⚠️ 删除他人拥有的文件夹'
       confirmType = 'error'
-      confirmBtnText = hasChildren ? '我已确认, 全部移入回收站' : '我已确认, 越权删除'
+      confirmBtnText = hasChildren ? '我已确认, 全部移入回收站' : '我已确认, 继续删除'
       doRecursive = hasChildren
     } else if (hasChildren) {
       // v2.16: 有子 folder / 文件 → 2 按钮 confirm 走 cascade
@@ -347,7 +347,7 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
           )
         } else {
           const successMsg = isAdminOverride
-            ? `[admin 越权] 文件夹 "${folder.name}" 已移入回收站`
+            ? `文件夹 "${folder.name}" (他人拥有) 已移入回收站`
             : `文件夹 "${folder.name}" 已移入回收站`
           ElMessage.success(successMsg)
         }

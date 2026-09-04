@@ -48,7 +48,7 @@ const fetchTraces = async () => {
     total.value = r.data.total || 0
   } catch (e) {
     if (e.response?.status === 403) {
-      ElMessage.error('需要管理员权限')
+      ElMessage.error('无权访问该数据')
     } else {
       ElMessage.error(e.response?.data?.detail || '加载失败')
     }

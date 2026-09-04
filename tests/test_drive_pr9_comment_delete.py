@@ -316,7 +316,7 @@ async def test_platform_admin_can_delete_others_comment(
 
 
 # ==========================================================================
-# 场景 4: 普通成员删别人评论 → 403
+# 场景 4: 任何成员删别人评论 → 204 (2026-09-05 角色扁平化)
 # ==========================================================================
 
 
@@ -324,27 +324,28 @@ async def test_platform_admin_can_delete_others_comment(
 async def test_regular_member_cannot_delete_others_comment(
     client, author_headers, second_headers, drive_file
 ):
-    """场景 4: second_member (普通成员) 删 author_member 的评论 → 403
+    """场景 4: second_member 删 author_member 的评论 → 204
 
-    关键: second_member 不是 author, 不是 file owner (file.created_by != second),
-    不是平台 admin (role=member) → 应被拒
+    2026-09-05 角色扁平化: 不再区分权限等级，任何在册成员
+    拥有原"平台 admin"的同等能力 (author / file owner / admin 三路合并为全员等权)。
+    原 403 断言已退役。
     """
     # author_member 创建评论
     r1 = await client.post(
         "/api/v1/drive/comments",
         headers=author_headers,
-        json={"file_id": drive_file.id, "content": "author 评论 (second 不能删)"},
+        json={"file_id": drive_file.id, "content": "author 评论 (second 也可删)"},
     )
     assert r1.status_code == 201
     cid = r1.json()["id"]
 
-    # second_member 试图删 → 应 403
+    # second_member 删除 → 等权通过
     r2 = await client.delete(
         f"/api/v1/drive/comments/{cid}",
         headers=second_headers,
     )
-    assert r2.status_code == 403, (
-        f"普通成员删应被拒, 实际 {r2.status_code}: {r2.text}"
+    assert r2.status_code == 204, (
+        f"成员等权应可删, 实际 {r2.status_code}: {r2.text}"
     )
 
 
