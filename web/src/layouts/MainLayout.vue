@@ -660,9 +660,9 @@ nav.menu {
   gap: 8px;
 }
 
-/* 铃铛 / 主题切换 → 32px util 方阵 (父 deep 覆盖子 scoped 样式) */
-.header-right :deep(.notification-bell-btn),
-.header-right :deep(.theme-toggle-btn) {
+/* 铃铛 → 32px util 方阵 (父 deep 覆盖子 scoped 样式);
+   主题切换 2026-09-04 起为 E 案「昼夜滑轨」, 自持样式不再方阵化 */
+.header-right :deep(.notification-bell-btn) {
   display: grid;
   place-items: center;
   width: 32px;
@@ -676,9 +676,7 @@ nav.menu {
   position: relative;
   transition: background 150ms ease, color 150ms ease;
 }
-.header-right :deep(.notification-bell-btn:hover),
-.header-right :deep(.theme-toggle-btn:hover) { background: var(--dg-teal-soft); color: var(--dg-teal); }
-.header-right :deep(.theme-toggle-btn) { font-size: 14px; }
+.header-right :deep(.notification-bell-btn:hover) { background: var(--dg-teal-soft); color: var(--dg-teal); }
 
 /* 用户标本牌 */
 .uchip {
