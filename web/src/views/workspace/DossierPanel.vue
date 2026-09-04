@@ -87,7 +87,7 @@
             <span class="op" @click="$emit('open-member', m)">详情</span>
           </div>
         </div>
-        <p v-if="!d.persons_list.length" class="empty-hint">○ 此卷未编入成员 · 到「成员」卷册或开卷指派</p>
+        <p v-if="!d.persons_list.length" class="empty-hint">○ 此卷未编入成员 · 名册变更后自动入卷</p>
       </div>
     </section>
 
@@ -96,12 +96,9 @@
       <div class="dhead">
         <span class="dno warn">缺口</span>
         <div class="dt">未入卷成员
-          <div class="dsub">编入卷宗后自动出现在对应卷下</div>
+          <div class="dsub">成员名册变更后自动挂到对应卷下</div>
         </div>
         <span class="grow"></span>
-        <span class="dops">
-          <span class="op add" @click="$emit('goto-projects')">＋ 编入卷宗</span>
-        </span>
       </div>
       <div class="dbody">
         <div v-for="m in unfiled" :key="m.id" class="frow dim">
@@ -123,7 +120,7 @@
             <span v-else class="vp no">未录入</span>
           </div>
           <div class="fop" @click.stop>
-            <span class="op cta" @click="$emit('open-member', m)">编入 →</span>
+            <span class="op cta" @click="$emit('open-member', m)">详情</span>
           </div>
         </div>
         <p v-if="!unfiled.length" class="empty-hint">✓ 全员已入卷</p>
@@ -151,13 +148,12 @@
  * - 排序: 导师→博→硕→本科→未分类→已毕业 (GORD)
  * - tokens 自包含在 .dossier-panel 根 (防跨组件继承断链); dark 翻转非 scoped 块 (v60-v67 教训)
  */
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
 
-const props = defineProps({ active: { type: Boolean, default: false } })
-defineEmits(['open-project', 'open-member', 'goto-projects'])
+defineEmits(['open-project', 'open-member'])
 
 const memberStore = useMemberStore()
 const projects = ref([])
@@ -177,8 +173,6 @@ async function fetchProjects() {
 }
 
 onMounted(fetchProjects)
-// tab 切回卷宗时刷新, 保证项目/成员编辑后账目不 stale
-watch(() => props.active, (v) => { if (v) fetchProjects() })
 defineExpose({ fetchProjects })
 
 // ---------------------------------------------------------------- 派生
