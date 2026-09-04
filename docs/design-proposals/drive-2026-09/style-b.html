@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 B · 三栏工作台 — 课题组网盘</title>
+<style>
+:root {
+  --primary: #0E766E;  --primary-light: #2A9D8F;  --primary-dark: #0B5D56;
+  --primary-bg: rgba(14,118,110,.09);  --primary-border: rgba(14,118,110,.35);
+  --accent: #C77A2E;  --accent-bg: rgba(199,122,46,.1);
+  --primary-rgb: 14,118,110;  --accent-rgb: 199,122,46;
+  --pdf: #B3392F;  --doc: #2F5D8A;  --excel: #3E7A52;  --image: #7C4E96;
+  --ppt: #B07C24;  --video: #A84B6F;  --audio: #B07C24;  --text-file: #6B6152;  --md: #3E7A70;
+  --text: #22302C;  --text-2: #52615C;  --text-3: #8B968F;  --text-4: #B9BFB6;
+  --bg: #F2F0EB;  --card: #FFFFFF;  --warm: #FBFAF6;  --line: #E5E1D8;
+  --line-ink: rgba(45,58,53,.5);
+  --line-2: #D5D0C3;  --bg-hover: #EEEBE3;
+  --danger: #D94F2B;  --success: #3E7A52;
+  --shadow-xs: 0 1px 2px rgba(20,40,35,.05);  --shadow-sm: 0 2px 8px rgba(20,40,35,.07);
+  --shadow-md: 0 4px 16px rgba(20,40,35,.09);  --shadow-lg: 0 8px 32px rgba(20,40,35,.13);
+  --shadow-primary: 0 4px 20px rgba(14,118,110,.24);
+  --r-sm: 4px;  --r-md: 8px;  --r-lg: 12px;  --r-full: 9999px;
+  --grad-cta: linear-gradient(135deg, #0E766E, #12897C);
+  --dur: 180ms;  --ease: cubic-bezier(0,0,.2,1);
+  --font: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+[data-theme="dark"] {
+  --text: #E9E8E2;  --text-2: #B9C0B9;  --text-3: #8B938C;  --text-4: #5E665F;
+  --bg: #121513;  --card: #1A1E1B;  --warm: #1E2320;  --line: #2E342F;  --line-2: #3A413A;
+  --line-ink: rgba(160,175,162,.4);
+  --bg-hover: #242A25;
+  --primary: #35C2A4;  --primary-light: #2A9D8F;  --primary-dark: #5AD0B5;  --primary-bg: rgba(53,194,164,.12);
+  --primary-rgb: 53,194,164;
+  --accent: #E0A45C;
+  --shadow-primary: 0 4px 20px rgba(53,194,164,.16);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13.5px; }
+button, a { font-family: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+svg.i { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; flex: none; }
+.prop-bar { position: fixed; left: 16px; bottom: 14px; z-index: 99; display: flex; gap: 8px; }
+.prop-bar a { font-size: 12px; padding: 6px 12px; border-radius: var(--r-full); background: var(--card); border: 1px solid var(--line); color: var(--text-2); text-decoration: none; box-shadow: var(--shadow-sm); }
+.prop-bar a.on { background: var(--grad-cta); color: #fff; border-color: transparent; }
+.prop-bar button { font-size: 12px; padding: 6px 12px; border-radius: var(--r-full); background: var(--card); border: 1px solid var(--line); color: var(--text-2); box-shadow: var(--shadow-sm); }
+
+.app { display: flex; flex-direction: column; height: 100vh; min-width: 1240px; }
+
+/* ── 全局顶栏 ── */
+.top { flex: none; height: 52px; display: flex; align-items: center; gap: 14px; padding: 0 18px; background: var(--card); border-bottom: 1px solid var(--line); }
+.top .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 14.5px; }
+.top .brand .lg { width: 26px; height: 26px; border-radius: 7px; background: var(--grad-cta); display: grid; place-items: center; }
+.top .brand .lg svg { width: 15px; height: 15px; fill: #fff; }
+.top .divider { width: 1px; height: 22px; background: var(--line); }
+.gsearch { display: flex; align-items: center; gap: 8px; width: 380px; background: var(--bg); border: 1px solid transparent; border-radius: var(--r-md); padding: 7px 12px; transition: all var(--dur); }
+.gsearch:focus-within { background: var(--card); border-color: var(--primary); box-shadow: 0 0 0 3px rgba(var(--primary-rgb),.10); }
+.gsearch input { border: none; outline: none; background: none; font: inherit; color: var(--text); flex: 1; }
+.gsearch input::placeholder { color: var(--text-4); }
+.gsearch kbd { font-family: var(--mono); font-size: 10px; color: var(--text-3); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--card); }
+.top .sp { flex: 1; }
+.tbtn { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; padding: 7px 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); transition: all var(--dur); white-space: nowrap; }
+.tbtn:hover { border-color: var(--primary-border); color: var(--primary-dark); }
+.tbtn.pri { background: var(--grad-cta); color: #fff; border: none; font-weight: 600; box-shadow: 0 2px 8px rgba(var(--primary-rgb),.3); }
+.tbtn.pri:hover { color: #fff; transform: translateY(-1px); box-shadow: var(--shadow-primary); }
+.me { width: 28px; height: 28px; border-radius: 50%; background: var(--grad-cta); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+
+/* ── 三栏 ── */
+.body { flex: 1; display: flex; min-height: 0; }
+
+/* 左栏 */
+.rail { width: 232px; flex: none; background: var(--card); border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow-y: auto; padding: 14px 10px; }
+.rail .cap { font-size: 10.5px; letter-spacing: .12em; color: var(--text-3); padding: 8px 10px 5px; display: flex; align-items: center; justify-content: space-between; }
+.rail .cap button { border: none; background: none; color: var(--text-3); padding: 2px; border-radius: 4px; display: grid; place-items: center; }
+.rail .cap button:hover { background: var(--bg-hover); color: var(--primary-dark); }
+.tree { list-style: none; }
+.tree li { position: relative; }
+.tnode { display: flex; align-items: center; gap: 7px; padding: 6.5px 8px; border-radius: 7px; color: var(--text-2); font-size: 13px; border: none; background: none; width: 100%; text-align: left; }
+.tnode .tw { width: 13px; height: 13px; display: grid; place-items: center; color: var(--text-4); transition: transform var(--dur); }
+.tnode .tw.open { transform: rotate(90deg); }
+.tnode .ficon { width: 15px; height: 15px; stroke: var(--primary); fill: none; stroke-width: 1.7; }
+.tnode .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tnode .c { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.tnode:hover { background: var(--bg-hover); color: var(--text); }
+.tnode.on { background: var(--primary-bg); color: var(--primary-dark); font-weight: 600; }
+[data-theme="dark"] .tnode.on { color: var(--primary); }
+.tnode.drop-target { background: var(--primary-bg); box-shadow: inset 0 0 0 1.5px var(--primary); color: var(--primary-dark); }
+.tnode.drop-target::after { content: '放到此处'; font-size: 10px; margin-left: auto; color: var(--primary-dark); }
+.tree .nest { list-style: none; margin-left: 19px; border-left: 1px dashed var(--line-2); padding-left: 4px; }
+.rail .snav { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 7px; color: var(--text-2); border: none; background: none; width: 100%; font-size: 13px; text-align: left; }
+.rail .snav svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.rail .snav .c { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.rail .snav:hover { background: var(--bg-hover); }
+.qbox { margin: 12px 8px 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg); }
+.qbox .l { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); margin-bottom: 7px; }
+.qbox .l b { color: var(--text); font-weight: 600; }
+.qbar { height: 5px; background: var(--line-2); border-radius: 3px; overflow: hidden; }
+.qbar i { display: block; height: 100%; width: 43%; background: var(--grad-cta); border-radius: 3px; }
+
+/* 中栏 */
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+.crumbs { flex: none; display: flex; align-items: center; gap: 4px; padding: 12px 18px 0; font-size: 12.5px; color: var(--text-3); }
+.crumbs button { border: none; background: none; color: var(--text-3); font-size: 12.5px; padding: 3px 6px; border-radius: 5px; }
+.crumbs button:hover { background: var(--card); color: var(--primary-dark); }
+.crumbs .cur { color: var(--text); font-weight: 600; }
+.crumbs .sz { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-4); }
+.ctools { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 18px 10px; }
+.fchip { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; padding: 5px 11px; border-radius: var(--r-full); border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); }
+.fchip .dot { width: 5.5px; height: 5.5px; border-radius: 50%; }
+.fchip.on { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); font-weight: 600; }
+.ctools .hint { margin-left: auto; font-size: 11.5px; color: var(--text-4); display: flex; gap: 12px; align-items: center; }
+.ctools .hint kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--card); color: var(--text-3); }
+
+/* 表格 */
+.tablewrap { flex: 1; overflow-y: auto; margin: 0 12px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg) var(--r-lg) 0 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { position: sticky; top: 0; z-index: 5; }
+th { background: var(--card); text-align: left; font-size: 11px; font-weight: 500; letter-spacing: .06em; color: var(--text-3); padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; white-space: nowrap; }
+th:hover { color: var(--primary-dark); }
+th .arr { display: inline-block; transform: rotate(90deg); color: var(--primary); font-size: 9px; margin-left: 3px; }
+th.num, td.num { text-align: right; font-family: var(--mono); font-size: 11.5px; }
+th.ck, td.ck { width: 34px; }
+input[type=checkbox] { accent-color: var(--primary); width: 14px; height: 14px; cursor: pointer; }
+tr.row { border-bottom: 1px solid var(--line); cursor: default; }
+tr.row td { padding: 8px 12px; height: 38px; vertical-align: middle; color: var(--text-2); }
+tr.row:hover td { background: var(--bg-hover); }
+tr.row.sel td { background: var(--primary-bg); }
+tr.row.kbd td { box-shadow: inset 0 0 0 1.5px var(--primary); }
+tr.row.kbd.sel td { box-shadow: inset 0 0 0 1.5px var(--primary-dark); }
+.nm { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 500; }
+.nm .ic { width: 17px; height: 17px; display: grid; place-items: center; }
+.nm .ic svg { width: 16px; height: 16px; stroke: var(--cc, var(--text-3)); fill: none; stroke-width: 1.6; }
+.nm .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cc, var(--text-4)); flex: none; }
+.nm .path { font-size: 10.5px; color: var(--text-4); font-weight: 400; margin-left: 4px; }
+td .owner { display: inline-flex; align-items: center; gap: 6px; }
+td .av { width: 17px; height: 17px; border-radius: 50%; background: var(--grad-cta); color: #fff; font-size: 9px; display: grid; place-items: center; font-weight: 600; }
+.stararrow { color: var(--accent); }
+.stararrow svg { width: 13px; height: 13px; fill: currentColor; stroke: none; }
+tr.frow td { color: var(--text-2); }
+tr.frow .nm svg { stroke: var(--primary); }
+.dragging { opacity: .45; }
+.vscroll-tag { position: absolute; }
+
+/* 底部批量 dock */
+.dock { flex: none; margin: 0 12px 12px; background: var(--card); border: 1px solid var(--line); border-top: none; border-radius: 0 0 var(--r-lg) var(--r-lg); padding: 10px 14px; display: flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm); }
+.dock .cnt { font-size: 12.5px; color: var(--text-2); margin-right: 8px; }
+.dock .cnt b { color: var(--primary-dark); font-family: var(--mono); }
+.dock button { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 6.5px 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); white-space: nowrap; flex: none; }
+.dock button:hover { border-color: var(--primary-border); color: var(--primary-dark); background: var(--primary-bg); }
+.dock .danger:hover { border-color: rgba(245,108,108,.5); color: var(--danger); background: #FEF0F0; }
+[data-theme="dark"] .dock .danger:hover { background: rgba(245,108,108,.12); }
+.dock .sp { flex: 1; }
+.dock .note { font-size: 11px; color: var(--text-4); display: flex; align-items: center; gap: 5px; }
+
+/* 右栏 */
+.detail { width: 336px; flex: none; background: var(--card); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow-y: auto; }
+.d-hero { padding: 18px; border-bottom: 1px solid var(--line); }
+.d-cover { position: relative; height: 188px; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); background: linear-gradient(165deg, #fff 0%, #FFF6EF 55%, #FFEBE2 100%); display: flex; flex-direction: column; padding: 16px; gap: 8px; }
+[data-theme="dark"] .d-cover { background: linear-gradient(165deg, #2c303a 0%, #33302e 100%); }
+.d-cover .sl-t { font-size: 11.5px; font-weight: 700; color: var(--text); }
+.d-cover .sl-l { height: 5px; border-radius: 3px; background: #F1D9CF; }
+.d-cover .sl-l.a { width: 78%; } .d-cover .sl-l.b { width: 60%; } .d-cover .sl-l.c { width: 68%; }
+.d-cover .sl-bars { display: flex; gap: 7px; align-items: flex-end; margin-top: auto; height: 74px; }
+.d-cover .sl-bars i { flex: 1; border-radius: 3px 3px 0 0; background: #F3C8B4; }
+.d-cover .sl-bars i.hl { background: var(--grad-cta); }
+.d-cover .page { position: absolute; right: 10px; bottom: 10px; font-family: var(--mono); font-size: 10px; color: var(--text-3); background: color-mix(in srgb, var(--card) 82%, transparent); padding: 2px 7px; border-radius: var(--r-full); }
+.d-name { font-size: 14.5px; font-weight: 600; line-height: 1.45; margin-bottom: 10px; word-break: break-all; }
+.d-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.d-act { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); padding: 9px 0 8px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: none; transition: all var(--dur); }
+.d-act:hover { border-color: var(--primary-border); color: var(--primary-dark); background: var(--primary-bg); }
+.d-act.pri { color: #fff; background: var(--grad-cta); border-color: transparent; font-weight: 600; }
+.d-act.pri:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); color: #fff; }
+.d-act svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.d-meta { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.d-meta dl { display: grid; grid-template-columns: 64px 1fr; gap: 7px 10px; font-size: 12px; }
+.d-meta dt { color: var(--text-3); }
+.d-meta dd { color: var(--text-2); }
+.d-meta dd .mono { font-family: var(--mono); font-size: 11.5px; }
+.d-meta dd a { color: var(--primary-dark); text-decoration: none; }
+.d-tabs { display: flex; gap: 2px; padding: 12px 18px 0; }
+.d-tab { border: none; background: none; font-size: 12.5px; color: var(--text-3); padding: 8px 13px; border-radius: 8px 8px 0 0; border-bottom: 2px solid transparent; }
+.d-tab.on { color: var(--primary-dark); font-weight: 600; border-bottom-color: var(--primary); background: var(--primary-bg); }
+.d-pane { padding: 14px 18px 20px; font-size: 12.5px; color: var(--text-2); }
+.cmt { display: flex; gap: 9px; padding: 9px 0; border-bottom: 1px dashed var(--line); }
+.cmt .av { width: 22px; height: 22px; border-radius: 50%; background: var(--grad-cta); color: #fff; font-size: 10px; display: grid; place-items: center; flex: none; font-weight: 600; }
+.cmt .t { font-size: 12px; line-height: 1.6; }
+.cmt .t b { color: var(--text); font-weight: 600; margin-right: 6px; }
+.cmt .t time { display: block; font-family: var(--mono); font-size: 10px; color: var(--text-4); margin-top: 3px; }
+.ver { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 12px; }
+.ver .v { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); border: 1px solid var(--line-2); border-radius: var(--r-full); padding: 1px 8px; height: fit-content; white-space: nowrap; }
+.ver .cur .v, .ver .cur { color: var(--primary-dark); font-weight: 600; }
+.ver button { margin-left: auto; border: none; background: none; font-size: 11.5px; color: var(--primary-dark); text-decoration: underline; }
+kbd.k2 { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--bg); color: var(--text-3); }
+.spec,.ledger-wrap,.panel,.quota,.ctx,.tablewrap,.dock{border-color:var(--line-ink)}
+</style>
+</head>
+<body data-page="b">
+<div class="app">
+  <header class="top">
+    <span class="brand"><span class="lg"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>课题组网盘</span>
+    <span class="divider"></span>
+    <label class="gsearch"><svg class="i" style="color:var(--text-3)" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input placeholder="搜索全组文件名 (回车即搜, 支持中文)"><kbd>⌘K</kbd></label>
+    <span class="sp"></span>
+    <button class="tbtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>新建文件夹</button>
+    <button class="tbtn"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 17v-6m0 0-2.2 2.2M12 11l2.2 2.2"/></svg>上传文件夹</button>
+    <button class="tbtn pri"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>上传文件</button>
+    <span class="me">王</span>
+  </header>
+
+  <div class="body">
+    <!-- 左: 结构树 -->
+    <aside class="rail">
+      <div class="cap">结构 <button title="新建文件夹"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
+      <ul class="tree">
+        <li><button class="tnode"><span class="tw open"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8"/></svg><span class="n">团队共享盘</span><span class="c">471</span></button>
+          <ul class="tree nest">
+            <li><button class="tnode on"><span class="tw open"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">组会 PPT</span><span class="c">23</span></button>
+              <ul class="tree nest">
+                <li><button class="tnode"><span class="tw"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">2026 秋</span><span class="c">9</span></button></li>
+                <li><button class="tnode"><span class="tw"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">2026 春</span><span class="c">14</span></button></li>
+              </ul>
+            </li>
+            <li><button class="tnode"><span class="tw"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">文献库</span><span class="c">41</span></button></li>
+            <li><button class="tnode"><span class="tw"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">实验数据</span><span class="c">17</span></button></li>
+            <li><button class="tnode drop-target"><span class="tw"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">仪器设备</span><span class="c">9</span></button></li>
+            <li><button class="tnode"><span class="tw"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">冯懿鑫</span><span class="c">34</span></button></li>
+            <li><button class="tnode"><span class="tw"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M9 6l6 6-6 6"/></svg></span><svg class="ficon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">关小未</span><span class="c">21</span></button></li>
+            <li style="padding:5px 8px 0 30px;color:var(--text-4);font-size:11.5px">+ 21 个文件夹…</li>
+          </ul>
+        </li>
+      </ul>
+      <div class="cap">快捷</div>
+      <button class="snav"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg>我的收藏<span class="c">12</span></button>
+      <button class="snav"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>最近上传</button>
+      <button class="snav"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 12.5h9L18 7M10 11v6m4-6v6"/></svg>回收站<span class="c">8</span></button>
+      <div style="flex:1"></div>
+      <div class="qbox">
+        <div class="l"><span>全组已用</span><b>12.6 / 30 GB</b></div>
+        <div class="qbar"><i></i></div>
+      </div>
+    </aside>
+
+    <!-- 中: 文件列表 -->
+    <section class="center">
+      <div class="crumbs">
+        <button>团队共享盘</button><span>/</span><button>组会 PPT</button><span>/</span><span class="cur">2026 秋</span>
+        <span class="sz">1,284 项 · 虚拟滚动 · 已加载 40</span>
+      </div>
+      <div class="ctools">
+        <button class="fchip on">全部</button>
+        <button class="fchip"><span class="dot" style="background:var(--pdf)"></span>PDF</button>
+        <button class="fchip"><span class="dot" style="background:var(--ppt)"></span>PPT</button>
+        <button class="fchip"><span class="dot" style="background:var(--doc)"></span>Word</button>
+        <button class="fchip"><span class="dot" style="background:var(--excel)"></span>Excel</button>
+        <button class="fchip"><span class="dot" style="background:var(--image)"></span>图片</button>
+        <span class="hint"><span><kbd class="k2">↑</kbd><kbd class="k2">↓</kbd> 移动</span><span><kbd class="k2">␣</kbd> 预览</span><span><kbd class="k2">Del</kbd> 回收站</span><span><kbd class="k2">拖拽</kbd> 移到左栏夹</span></span>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th class="ck"><input type="checkbox"></th>
+            <th style="width:44%">名称 <span class="arr">▸</span></th>
+            <th class="num">大小</th>
+            <th>上传者</th>
+            <th>上传时间 <span class="arr" style="color:var(--text-4)">▸</span></th>
+            <th style="width:66px">收藏</th>
+          </tr></thead>
+          <tbody>
+            <tr class="row frow"><td class="ck"></td><td><span class="nm"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>08-历史例会归档</span></td><td class="num">—</td><td>—</td><td>7 月</td><td></td></tr>
+            <tr class="row sel kbd"><td class="ck"><input type="checkbox" checked></td><td><span class="nm" style="--cc:var(--ppt)"><span class="dot"></span>2026.09.01 例行例会 · 冯懿鑫.pptx</span></td><td class="num">24.3 MB</td><td><span class="owner"><span class="av">冯</span>冯懿鑫</span></td><td>昨天 16:22</td><td><span class="stararrow"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg></span></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--doc)"><span class="dot"></span>空化阈值文献综述 · 关小未.docx</span></td><td class="num">1.1 MB</td><td><span class="owner"><span class="av">关</span>关小未</span></td><td>昨天 11:03</td><td></td></tr>
+            <tr class="row sel"><td class="ck"><input type="checkbox" checked></td><td><span class="nm" style="--cc:var(--pdf)"><span class="dot"></span>声学聚焦实验方案 (组会版).pdf</span></td><td class="num">3.2 MB</td><td><span class="owner"><span class="av">王</span>王天志</span></td><td>08-30 15:41</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--image)"><span class="dot"></span>SEM 泡径分布 0829.png</span></td><td class="num">4.6 MB</td><td><span class="owner"><span class="av">宋</span>宋洋</span></td><td>08-29 20:18</td><td><span class="stararrow"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg></span></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--excel)"><span class="dot"></span>超声频率-粒径矩阵.csv</span></td><td class="num">28 KB</td><td><span class="owner"><span class="av">杜</span>杜同贺</span></td><td>08-29 09:12</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--ppt)"><span class="dot"></span>开题答辩 · 三稿 · 关小未.pptx</span></td><td class="num">9.4 MB</td><td><span class="owner"><span class="av">关</span>关小未</span></td><td>08-28 17:26</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--video)"><span class="dot"></span>驻波管泡径测量演示.mp4</span></td><td class="num">86.1 MB</td><td><span class="owner"><span class="av">艾</span>艾琳朔</span></td><td>08-27 14:55</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--md)"><span class="dot"></span>组会纪要 0825.md</span></td><td class="num">12 KB</td><td><span class="owner"><span class="av">张</span>张懿</span></td><td>08-25 21:07</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--pdf)"><span class="dot"></span>Acoustic microbubble review (2025).pdf</span></td><td class="num">5.8 MB</td><td><span class="owner"><span class="av">吴</span>吴孟铨</span></td><td>08-25 10:02</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--audio)"><span class="dot"></span>会议录音 0825.m4a</span></td><td class="num">36.2 MB</td><td><span class="owner"><span class="av">蒋</span>蒋芦笛</span></td><td>08-25 09:44</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--doc)"><span class="dot"></span>微纳米气泡稳定性表征流程.docx</span></td><td class="num">2.4 MB</td><td><span class="owner"><span class="av">贾</span>贾琦</span></td><td>08-24 16:30</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--ppt)"><span class="dot"></span>2026.08.18 例行例会 · 王书馨.pptx</span></td><td class="num">21.9 MB</td><td><span class="owner"><span class="av">王</span>王书馨</span></td><td>08-18 16:47</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--excel)"><span class="dot"></span>Zeta 电位批次记录表.xlsx</span></td><td class="num">144 KB</td><td><span class="owner"><span class="av">耿</span>耿嘉栋</span></td><td>08-17 11:21</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--pdf)"><span class="dot"></span>Cavitation 阈值仿真报告 v2.pdf</span></td><td class="num">2.1 MB</td><td><span class="owner"><span class="av">胡</span>胡小琪</span></td><td>08-16 15:03</td><td></td></tr>
+            <tr class="row"><td class="ck"><input type="checkbox"></td><td><span class="nm" style="--cc:var(--image)"><span class="dot"></span>泡径分布散点 0815.tiff</span></td><td class="num">18.3 MB</td><td><span class="owner"><span class="av">李</span>李锐远</span></td><td>08-15 19:36</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="dock">
+        <span class="cnt">已选 <b data-sel-count>2</b> 项 · 27.5 MB</span>
+        <button><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>下载 ZIP</button>
+        <button><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>移动到</button>
+        <button><svg class="i" viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg>收藏</button>
+        <button><svg class="i" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>入库知识库</button>
+        <button class="danger"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 12.5h9L18 7"/></svg>删除</button>
+        <span class="sp"></span>
+        <span class="note">↑ 拖选中的行到左栏树即可移动 · Shift 连选 · ⌘A 全选</span>
+      </div>
+    </section>
+
+    <!-- 右: 常驻详情 -->
+    <aside class="detail">
+      <div class="d-hero">
+        <div class="d-cover">
+          <span class="sl-t">2026.09.01 例行例会</span>
+          <span class="sl-l a"></span><span class="sl-l b"></span><span class="sl-l c"></span>
+          <span class="sl-bars"><i style="height:34%"></i><i style="height:56%"></i><i class="hl" style="height:78%"></i><i style="height:48%"></i><i style="height:64%"></i><i style="height:30%"></i></span>
+          <span class="page">第 1 / 24 页 · 封面渲染</span>
+        </div>
+        <div style="height:12px"></div>
+        <div class="d-name">2026.09.01 例行例会 · 冯懿鑫.pptx</div>
+        <div class="d-actions">
+          <button class="d-act pri"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>预览</button>
+          <button class="d-act"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>下载</button>
+          <button class="d-act"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="M8.3 10.9 15.2 7.2M8.3 13.1l6.9 3.7"/></svg>分享</button>
+          <button class="d-act"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg>收藏</button>
+        </div>
+      </div>
+      <div class="d-meta">
+        <dl>
+          <dt>位置</dt><dd><a>组会 PPT</a> / <a>2026 秋</a></dd>
+          <dt>大小</dt><dd class="mono">25,480,321 B (24.3 MB)</dd>
+          <dt>类型</dt><dd>application/vnd.ms-powerpoint</dd>
+          <dt>上传者</dt><dd>冯懿鑫 · 博士 2 年级</dd>
+          <dt>上传于</dt><dd class="mono">2026-09-04 16:22</dd>
+          <dt>修改于</dt><dd class="mono">2026-09-01 21:40 · 3 个版本</dd>
+          <dt>知识库</dt><dd>已入库 · <a>RAG 可检索</a></dd>
+        </dl>
+      </div>
+      <div class="d-tabs">
+        <button class="d-tab on">评论 3</button>
+        <button class="d-tab">版本 3</button>
+      </div>
+      <div class="d-pane">
+        <div class="cmt"><span class="av">王</span><span class="t"><b>王天志</b>第 12 页的泡径分布图，横轴换成 kHz 再对一遍。
+          <time>昨天 21:04</time></span></div>
+        <div class="cmt"><span class="av">冯</span><span class="t"><b>冯懿鑫</b>收到，明天组会前更新上传 v3。
+          <time>今天 08:31 · 回复 王天志</time></span></div>
+        <div class="cmt"><span class="av">关</span><span class="t"><b>关小未</b>参考文献 [7] 的 DOI 我核过了，没问题。
+          <time>今天 09:15</time></span></div>
+        <div class="ver"><span class="cur"><span class="v">v3</span></span><span>今天 16:22 · 冯懿鑫<br><span style="color:var(--text-3)">更新 12/17 页</span></span></div>
+        <div class="ver"><span class="v">v2</span><span>08-31 · 冯懿鑫<br><span style="color:var(--text-3)">补实验数据</span></span><button>与 v3 对比</button></div>
+        <div class="ver"><span class="v">v1</span><span>08-30 · 冯懿鑫<br><span style="color:var(--text-3)">初稿</span></span><button>与 v3 对比</button></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<nav class="prop-bar">
+  <a href="style-a.html">A 暖橙精修</a>
+  <a class="on" href="style-b.html">B 三栏工作台</a>
+  <a href="style-c.html">C 沉浸封面流</a>
+  <a href="style-d.html">D 档案台账</a>
+  <a href="index.html">总览</a>
+  <button data-theme-btn>☾ 深色</button>
+</nav>
+<script src="drive-demo.js"></script>
+</body>
+</html>

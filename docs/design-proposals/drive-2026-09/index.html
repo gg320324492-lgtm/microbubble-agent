@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>课题组网盘 UI 提案 · 4 方案总览 — MicroBubble Lab</title>
+<style>
+  :root {
+    --bg: #10171b; --card: #18232a; --line: #27363e;
+    --text: #dfe9e6; --muted: #8ba0a0; --teal: #35c2a4; --coral: #ef7256;
+    --font-ui: 'PingFang SC', 'Microsoft YaHei', Inter, sans-serif;
+    --font-mono: Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-ui); padding: 48px clamp(24px, 5vw, 72px) 80px; }
+  header h1 { font-size: 26px; letter-spacing: -0.01em; }
+  header h1 em { font-style: normal; color: var(--coral); }
+  header p { margin-top: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.8; max-width: 760px; }
+  header .meta { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 14px; }
+  .grid { margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 26px; }
+  .shot { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: transform 160ms ease, border-color 160ms ease; }
+  .shot:hover { transform: translateY(-4px); border-color: var(--coral); }
+  .thumb { position: relative; height: 240px; overflow: hidden; border-bottom: 1px solid var(--line); background: #fff; }
+  .thumb iframe { width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(0.25); pointer-events: none; position: absolute; top: 0; left: 0; }
+  .thumb .tag { position: absolute; z-index: 2; top: 10px; left: 10px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; background: rgba(9, 14, 17, 0.78); color: var(--teal); border: 1px solid rgba(53, 194, 164, 0.4); border-radius: 999px; padding: 4px 10px; backdrop-filter: blur(3px); }
+  .info { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .info h2 { font-size: 16.5px; }
+  .info h2 small { font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: 0.16em; color: var(--muted); margin-left: 8px; }
+  .info p { font-size: 12.5px; line-height: 1.75; color: var(--muted); flex: 1; }
+  .info .fit { font-size: 11.5px; color: var(--teal); font-family: var(--font-mono); }
+  .info a { color: var(--coral); font-size: 13px; font-weight: 600; text-decoration: none; }
+  .info a:hover { text-decoration: underline; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 12px; line-height: 1.9; border-top: 1px solid var(--line); padding-top: 20px; }
+  footer b { color: var(--text); }
+  footer ul { margin: 8px 0 0 18px; }
+</style>
+</head>
+<body>
+  <header>
+    <p class="meta">MICROBUBBLE LAB · DRIVE WORKSPACE REDESIGN · 2026-09</p>
+    <h1>课题组网盘界面升级 — <em>统一档案配色</em>，4 种版式选一个</h1>
+    <p>同一套主页同款配色（暖纸 #F2F0EB / 松墨 #22302C / 深青 #0E766E / 珊瑚只留给预警 #E85A3A），四种完全不同的版式性格。缩略图为实时渲染；打开全屏版后，右下角有风格切换条 + 深色/浅色一键对照。本次同步修掉一批底层 bug（回收站恢复不递归、MinIO 版本对象泄漏、过期清理死代码、全盘文件名搜索缺失等），4 个方案共享同一份已修好的数据层。</p>
+  </header>
+
+  <div class="grid">
+    <div class="shot">
+      <div class="thumb"><span class="tag">STYLE A · 低风险</span><iframe src="style-a.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="info">
+        <h2>A 卡片网格 · 档案版<small>PALETTE-SHIFTED CLASSIC</small></h2>
+        <p>保留你熟悉的「侧栏 + 工具栏 + 卡片网格」骨架，全面质感升级：真缩略图封面卡、类型色顶条、hover 抬升、stagger 入场；配色对齐主页深青系。FileGrid 等组件硬编码色将全部换成设计 token，暗色 / 6 主题自动跟随。</p>
+        <p class="fit">改造量 ★☆☆ · 现有骨架升级</p>
+        <a href="style-a.html">打开全屏交互版 →</a>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="thumb"><span class="tag">STYLE B · 效率型</span><iframe src="style-b.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="info">
+        <h2>B 三栏工作台 · 档案版<small>EXPLORER WORKBENCH</small></h2>
+        <p>桌面级文件管理器：左结构树 / 中密集行表（虚拟滚动，千级文件不卡）/ 右常驻详情预览栏。点文件即看封面渲染 + 元数据 + 评论 + 版本，不弹窗；整屏支持键盘导航（↑↓ / 空格 / Del），拖行到左树即移动。颜色只标类型与选中，暖纸底 + 墨线框，和仪表盘同血统。</p>
+        <p class="fit">改造量 ★★☆ · 天天处理文件的组最受益</p>
+        <a href="style-b.html">打开全屏交互版 →</a>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="thumb"><span class="tag">STYLE C · 视觉型</span><iframe src="style-c.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="info">
+        <h2>C 沉浸封面流 · 档案版<small>IMMERSIVE COVER FLOW</small></h2>
+        <p>封面即内容：毛玻璃吸顶工具条、按「最近上传 / 文件夹 / 图片速览」分组的横向封面流、文件夹用子封面拼贴马赛克、页面级暖纸青绿极光底。树收进抽屉。最像现代网盘产品（Drive / Dropbox 观感），暗色为深林绿黑。</p>
+        <p class="fit">改造量 ★★★ · 图片 / PPT 多的组最有存在感，文档检索效率弱于 B</p>
+        <a href="style-c.html">打开全屏交互版 →</a>
+      </div>
+    </div>
+    <div class="shot">
+      <div class="thumb"><span class="tag">STYLE D · 专属气质</span><iframe src="style-d.html" loading="lazy" tabindex="-1"></iframe></div>
+      <div class="info">
+        <h2>D 科研档案台账<small>RESEARCH ARCHIVE · 原版</small></h2>
+        <p>与登录页 / 设置页已定稿的「档案美学」收口成整套语言：§ 编号章节、标本卷宗卡（编号 + 类型构成条 + 馆藏统计）、双线表头台账、等宽元数据、收藏 = 琥珀印章「藏」、回收站 = 待销毁站。最有课题组辨识度，但偏杂志排版，密集浏览效率低于 A/B/C。</p>
+        <p class="fit">改造量 ★★☆ · 全站唯一性最强</p>
+        <a href="style-d.html">打开全屏交互版 →</a>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <b>怎么挑</b>：打开全屏版 → 右下角切风格、点「☾ 深色」看暗色对照 → 选定后回这里告诉我（或说组合，如「C 的封面流 + B 的右详情栏」）。
+    <ul>
+      <li>四稿均为静态视觉稿（假数据还原自真实网盘：组会 PPT 23 项 / 471 文件 / 25 成员文件夹）；生产实现时将复用已验证的 composables 数据层（useDriveFiles / useFolderTree）与全部既有弹窗（上传 / 分享 / 版本 / 评论）。</li>
+      <li>无论选哪个：搜索接通（后端 ILIKE + pg_trgm）、回收站恢复递归化、MinIO 版本对象清理、盘内拖拽移动、右键菜单全套、收藏个人化（alembic 134）、虚拟滚动、移动端回收站路由修复 —— 都已排进批次 ①②④。</li>
+      <li>移动端本次只修路由 bug，紫粉毛玻璃视觉栈不动（2026-08-31 刚定稿）。</li>
+    </ul>
+  </footer>
+</body>
+</html>
