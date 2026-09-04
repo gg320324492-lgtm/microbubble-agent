@@ -271,8 +271,9 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
 
       await fetchFiles()
 
-      // 实现侧会 throw `HTTP 500`, catch 块 catch 写 loadError
-      expect(loadError.value).toBe('HTTP 500')
+      // F4 修复 (批次②): 非 2xx 解析后端统一异常 envelope → loadError 透出真实 message
+      // (旧断言 'HTTP 500' 是裸状态码, 用户看不到原因; body 无 message 时才回落 HTTP <status>)
+      expect(loadError.value).toBe('server boom')
     })
   })
 

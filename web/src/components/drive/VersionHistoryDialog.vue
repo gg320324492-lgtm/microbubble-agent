@@ -34,8 +34,23 @@
         description="该文件还没有历史版本（首次上传）"
       />
 
-      <!-- 版本列表 -->
-      <el-table
+      <template v-else>
+        <!-- F7b 关联/批次②: 对比入口 — 接入 DesktopVersionDiffDialog
+             (照抄 DesktopFileVersionsView 接线: diffDialogVisible + v-model + file-id + versions;
+             diff dialog 自带双版本选择器, 无需逐行勾选) -->
+        <div v-if="versions.length >= 2" class="version-history-toolbar">
+          <el-button
+            size="small"
+            :icon="DocumentCopy"
+            data-testid="open-version-diff"
+            @click="diffDialogVisible = true"
+          >
+            版本对比
+          </el-button>
+        </div>
+
+        <!-- 版本列表 -->
+        <el-table
         v-else
         :data="versions"
         stripe
@@ -100,6 +115,16 @@
           </template>
         </el-table-column>
       </el-table>
+      </template>
+
+      <!-- 版本对比 dialog (append-to-body, 与版本历史 dialog 叠层无冲突) -->
+      <DesktopVersionDiffDialog
+        v-if="file"
+        v-model="diffDialogVisible"
+        :file-id="file.id"
+        :file-name="file.file_name || ''"
+        :versions="versions"
+      />
     </div>
   </el-dialog>
 </template>
@@ -109,9 +134,12 @@
 import '@/views/drive/drive-view.css'
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { DocumentCopy } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { formatDateTime } from '@/utils/format'
 import { useDriveFiles } from '@/composables/useDriveFiles'
+// 批次②: 版本对比接入 (与 DesktopFileVersionsView 同一 diff dialog)
+import DesktopVersionDiffDialog from '@/components/desktop/DesktopVersionDiffDialog.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -124,12 +152,14 @@ const { listVersions, restoreVersion: restoreApi, downloadFileUrl } = useDriveFi
 
 const versions = ref([])
 const loading = ref(false)
+const diffDialogVisible = ref(false)
 
 // 打开 dialog 时拉取
 watch(
   () => [props.visible, props.file?.id],
   async ([vis, fid]) => {
     if (vis && fid) {
+      diffDialogVisible.value = false
       await fetchVersions()
     }
   },
@@ -185,6 +215,13 @@ function formatSize(bytes) {
 <style scoped>
 .version-history-content {
   min-height: 200px;
+}
+
+/* 批次②: 版本对比工具条 */
+.version-history-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .version-file-summary {

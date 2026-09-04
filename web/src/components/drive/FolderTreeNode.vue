@@ -16,9 +16,12 @@
     <FolderContextMenu :items="folderMenuItems" placement="right-start" @command="onContextCommand">
       <div
         class="folder-tree-node-row drive-folder-tree-node-row"
-        :class="{ 'is-active': isSelected }"
+        :class="{ 'is-active': isSelected, 'is-drop-hint': dropHint }"
         :style="{ paddingLeft: `${indentPx}px` }"
         @click="$emit('select', folder.id)"
+        @dragover="onDragover"
+        @dragleave="dropHint = false"
+        @drop="onDrop"
       >
         <!-- 展开/收起箭头 -->
         <span
@@ -63,6 +66,7 @@
         :expanded-folder-ids="expandedFolderIds"
         @select="$emit('select', $event)"
         @toggle="$emit('toggle', $event)"
+        @drop-files="$emit('drop-files', $event)"
       />
     </template>
   </div>
@@ -74,10 +78,11 @@
 // v2.12 (2026-07-10) owner-only 守卫: 非 owner 「删除」菜单项不渲染 (避免误删 + 后端 403 误导)
 // v2.13 (2026-07-10) → 2026-09-05 角色扁平化: 全员等权, 任何成员可删除任何 folder (对他人 folder 保留确认警告)
 import '@/views/drive/drive-view.css'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Folder, FolderOpened, CaretBottom, CaretRight } from '@element-plus/icons-vue'
 import FolderContextMenu from './FolderContextMenu.vue'
 import { useUserStore } from '@/stores/user'
+import { isDriveMoveDragging, readDriveMovePayload } from '@/composables/useDriveDragMove'
 
 const props = defineProps({
   folder: { type: Object, required: true },
@@ -86,7 +91,24 @@ const props = defineProps({
   expandedFolderIds: { type: Set, default: () => new Set() }
 })
 
-const emit = defineEmits(['select', 'toggle', 'context-command'])
+const emit = defineEmits(['select', 'toggle', 'context-command', 'drop-files'])
+
+/* ---- 批次③ B: 拖拽移动落点 (drive 内部 MIME 判别, 与外部文件上传 drop 互斥) ---- */
+const dropHint = ref(false)
+function onDragover(ev) {
+  if (props.folder?.is_team_folder || !isDriveMoveDragging(ev)) return  // TeamFolder 伪节点 (负 id) 不作落点
+  ev.preventDefault()
+  ev.dataTransfer.dropEffect = 'move'
+  dropHint.value = true
+}
+function onDrop(ev) {
+  const ids = readDriveMovePayload(ev.dataTransfer)
+  dropHint.value = false
+  if (!ids || props.folder?.is_team_folder) return
+  ev.preventDefault()
+  ev.stopPropagation()
+  emit('drop-files', { folderId: props.folder.id, ids })
+}
 
 const userStore = useUserStore()
 const currentUserId = computed(() => userStore.userInfo?.id)
@@ -158,6 +180,13 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
   transition: all var(--duration-fast) var(--ease-out);
   min-height: 32px;
   position: relative;
+}
+
+/* 批次③ B: 拖拽悬停高亮 (dashed 主色描边 + 浅底) */
+.folder-tree-node-row.is-drop-hint {
+  background: var(--color-primary-bg);
+  box-shadow: inset 0 0 0 1.5px var(--color-primary);
+  border-radius: var(--radius-md);
 }
 
 /* v2.0: 子节点左侧缩进指示线 */

@@ -133,10 +133,10 @@ const routes = [
       },
       {
         // v2 PR7: 文件请求管理 (Dropbox 招牌"收作业"创建/关闭页)
-        // 移动端暂用 trash 占位 (PR8 独立 mobile 版)
+        // F1 修复 (批次②): mobile 占位 'MobileDriveTrashView' → 新建的 MobileFileRequestView
         path: 'drive/requests',
         name: 'DriveFileRequests',
-        component: resolveMobileComponent('desktop/FileRequestListView', 'MobileDriveTrashView'),
+        component: resolveMobileComponent('desktop/FileRequestListView', 'MobileFileRequestView'),
         meta: { title: '文件请求', icon: 'Promotion' }
       },
       {

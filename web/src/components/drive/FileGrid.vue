@@ -94,7 +94,6 @@
         @rename="(f) => $emit('file-rename', f)"
         @move="(f) => $emit('file-move', f)"
         @update-visibility="(f) => $emit('file-update-visibility', f)"
-        @extract-to-kb="(f) => $emit('file-extract-to-kb', f)"
         @to-kb="(f) => $emit('file-to-kb', f)"
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
@@ -118,7 +117,6 @@
         @rename="(f) => $emit('file-rename', f)"
         @move="(f) => $emit('file-move', f)"
         @update-visibility="(f) => $emit('file-update-visibility', f)"
-        @extract-to-kb="(f) => $emit('file-extract-to-kb', f)"
         @to-kb="(f) => $emit('file-to-kb', f)"
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
@@ -142,7 +140,6 @@
         @rename="(f) => $emit('file-rename', f)"
         @move="(f) => $emit('file-move', f)"
         @update-visibility="(f) => $emit('file-update-visibility', f)"
-        @extract-to-kb="(f) => $emit('file-extract-to-kb', f)"
         @to-kb="(f) => $emit('file-to-kb', f)"
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
@@ -192,7 +189,8 @@ const props = defineProps({
   searchKeyword: { type: String, default: '' }   // v2.0: 用于 "未找到与 X 相关" 文案
 })
 
-defineEmits(['retry', 'folder-click', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-to-kb', 'file-share-link', 'file-view-comments', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
+// F5 修复 (批次②): 'file-extract-to-kb' emit 随老管线删除, 入库单入口 = file-to-kb
+defineEmits(['retry', 'folder-click', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-to-kb', 'file-share-link', 'file-view-comments', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
 
 // === v2.0: 空态多态 (top-level / folder / search) ===
 const emptyState = computed(() => {

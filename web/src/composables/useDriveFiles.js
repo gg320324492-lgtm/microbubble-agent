@@ -84,7 +84,17 @@ export function useDriveFiles() {
       const resp = await fetch(`/api/v1/drive/files?${qs}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}` },
       })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      if (!resp.ok) {
+        // F4 修复 (批次②): 非 2xx 时解析后端统一异常 envelope
+        //   {"error": {"code": ..., "message": ...}} / FastAPI {"detail": ...},
+        //   让后端真实 message 进 loadError (之前只有裸 HTTP 状态码, 用户看不到原因)
+        let msg = null
+        try {
+          const body = await resp.json()
+          msg = body?.error?.message || body?.detail || body?.message || null
+        } catch { /* body 非 JSON, 走状态码兜底 */ }
+        throw new Error(msg || `HTTP ${resp.status}`)
+      }
       const data = await resp.json()
       driveFiles.value = data.items || []
       total.value = data.total || 0
@@ -141,18 +151,8 @@ export function useDriveFiles() {
     }
   }
 
-  const extractToKb = async (id, targetVisibility = 'team') => {
-    try {
-      await axios.post(`/api/v1/drive/files/${id}/extract-to-kb`, { target_visibility: targetVisibility })
-      const target = driveFiles.value.find(f => f.id === id)
-      if (target) {
-        target.storage_mode = 'kb'
-        target.visibility = targetVisibility
-      }
-    } catch (e) {
-      throw new Error(e.response?.data?.error?.message || '加入公共知识库失败')
-    }
-  }
+  // F5 修复 (批次②): extractToKb (POST /files/{id}/extract-to-kb 老管线) 已删除 —
+  // 入库知识库统一走 ingestToKb (/drive/{id}/to-kb 新管线, 解析/embedding/分析全流程)。
 
   // W98: 网盘文件入库 RAG (drive → kb 完整管线, 原 drive 行保留)
   const ingestToKb = async (id) => {
@@ -223,6 +223,30 @@ export function useDriveFiles() {
       return resp.data
     } catch (e) {
       throw new Error(e.response?.data?.detail || '切换收藏失败')
+    }
+  }
+
+  // F10 关联 (批次②): 批量收藏 — 一次请求置入目标状态 (幂等, per-user 视角)
+  // 后端契约: POST /api/v1/drive/files/batch-star {file_ids, starred} → {updated: n}
+  const batchStar = async (fileIds, starred = true) => {
+    try {
+      const resp = await axios.post('/api/v1/drive/files/batch-star', {
+        file_ids: fileIds,
+        starred,
+      })
+      // 局部刷新: 更新目标文件的 is_starred (starred=false 不更新 starred_at, 后端不回传)
+      for (const f of driveFiles.value) {
+        if (fileIds.includes(f.id)) f.is_starred = starred
+      }
+      // starredOnly 视图下取消收藏要从列表移除
+      if (starredOnly.value && !starred) {
+        const removed = driveFiles.value.filter(f => fileIds.includes(f.id)).length
+        driveFiles.value = driveFiles.value.filter(f => !fileIds.includes(f.id))
+        total.value = Math.max(0, total.value - removed)
+      }
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.error?.message || e.response?.data?.detail || '批量收藏失败')
     }
   }
 
@@ -473,7 +497,7 @@ export function useDriveFiles() {
     renameFile,
     moveFile,
     updateVisibility,
-    extractToKb,
+    // F5 修复: extractToKb 已删除, 入库统一 ingestToKb
     // W98: 网盘入库 RAG
     ingestToKb,
     ingestFolderToKb,
@@ -481,6 +505,7 @@ export function useDriveFiles() {
     revokeShareLink,
     // v2 PR2 新方法
     toggleStar,
+    batchStar,
     fetchStarred,
     fetchTrash,
     batchSoftDelete,
