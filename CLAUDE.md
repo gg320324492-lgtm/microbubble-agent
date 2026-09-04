@@ -29,6 +29,28 @@ user 作用域), 本仓库只剩 HTTP 代理 + agent 工具 (7 个) — 详见 d
 - **类 20.214**: 生产依赖的裸进程单点 (ssh.exe 反向隧道) 必须有判活守护 + runbook;
   隧道 -R 端口与容器发布端口的对应关系 (9000↔minio) 必须文档化, 否则换端口/重建即静默断线。
 
+## 当前状态 (2026-09-04 重启后 app 不自愈事故 — 类 20.215-217, compose 修复 + 两个计划任务路径腐坏)
+
+9/4 16:25 本机重启后: 15 容器靠 `restart: unless-stopped` 自动回, **app 独独 Exited(255) 永不拉起**
+(app 服务整块 restart/healthcheck/mem_limit 被历史实验连带注释), nginx 因 upstream 消失崩溃循环,
+云端整站靠隧道守护也连不上。手动 `compose up -d app` 恢复, 全链路 (本地/云端首页/头像/DFT 代理) 复验 200。
+
+### 类 20 新增 (本次)
+- **类 20.215**: 注释实验块必须**逐字段圈界** — app 的 `deploy/mem_limit` 实验连带把
+  `healthcheck` 和 `restart: unless-stopped` 一起注释掉, 事故潜伏整个 8 月。生产服务 compose
+  里 `restart` 策略缺失 = 重启必断; 每次改 compose 后跑 `docker compose config` 并
+  `docker inspect -f '{{.HostConfig.RestartPolicy.Name}}'` 抽验核心容器。
+- **类 20.216**: 用脚本/ps1/heredoc 写 schtasks `/TR` 或任何含反斜杠路径时, `\r` `\n` `\t`
+  会被转义吞成控制字符 (本次 2 个任务路径腐坏: `scripts\tunnel`→`scripts< TAB>unnel`、
+  `dft-service\run`→`dft-service<CR>un`), 任务永远 exit 1 且**日志一行不写** (进程根本没启动)。
+  注册后必须 `Get-ScheduledTask | % Actions[0].Execute` 回读比对长度 + 无控制字符。
+- **类 20.217**: alpine 容器里 healthcheck 用 `localhost` = 解析 `::1`, nginx 只听 IPv4 时
+  探针永远 connection refused → 假 unhealthy 长期遮蔽真状态; 探针一律 `127.0.0.1` 字面量,
+  且优先探"穿过反代到上游"的路径 (/health 经 nginx→app) 让 healthcheck 本身就是端到端验证。
+- **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务 (Winlogon 7002) LastRunTime 停在
+  8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能); glitchtip + vision-mcp 重启前即 unhealthy;
+  `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1` Exited 4 周残留并存。
+
 ## 当前状态 (2026-08-30 DFT 系统外置 E:\dft-service — 8 缺口修复 + GROMACS 链路 6 真 bug, 4 后端真算验证)
 
 DFT/MD 计算系统整体迁出为独立服务 `E:\dft-service\` (git repo, 2 commits, v1.0.0)。本仓库只剩 HTTP 编排层, 0 计算代码。
