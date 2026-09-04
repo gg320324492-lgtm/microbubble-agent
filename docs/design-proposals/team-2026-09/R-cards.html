@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>R · 双面档案卡 · 人卷联动 — 团队合并页稿</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --chrome: #eaece7; --card: #fdfefc;
+    --ink: #16232a; --steel: #5a6b6a; --fog: #8ba0a0; --hair: #c9d2ca;
+    --teal: #0e766e; --teal-soft: #dcece5; --coral: #ef7256; --green: #3d7a3d; --amber: #c07f2e;
+    --serif: Georgia, "Songti SC", "SimSun", serif;
+    --sans: "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: Consolas, "Courier New", monospace;
+  }
+  .frame[data-dark] {
+    --paper: #10171b; --chrome: #0c1215; --card: #18232a;
+    --ink: #dfe9e6; --steel: #9ab0ae; --fog: #6b8286; --hair: #27363e;
+    --teal: #35c2a4; --teal-soft: #12312b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #10171b; font-family: var(--sans); color: #dfe9e6; padding: 36px 24px 64px; }
+  .page { max-width: 1460px; margin: 0 auto; }
+  .meta { font-family: var(--mono); font-size: 10.5px; letter-spacing: .22em; color: #35c2a4; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .meta h1 { font-family: var(--sans); font-size: 17px; letter-spacing: 0; color: #dfe9e6; font-weight: 600; }
+  .darkbtn { font-family: var(--mono); font-size: 11px; color: #dfe9e6; background: #18232a; border: 1px solid #27363e; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .darkbtn:hover { border-color: #35c2a4; color: #35c2a4; }
+
+  /* ===== 应用壳 ===== */
+  .frame { position: relative; margin-top: 18px; width: 100%; height: 880px; background: var(--paper); color: var(--ink); border: 1px solid #27363e; border-radius: 14px; overflow: hidden; display: grid; grid-template-columns: 240px 1fr; }
+  svg.s { width: 16px; height: 16px; flex-shrink: 0; display: block; }
+
+  .side { background: var(--chrome); border-right: 1px solid var(--hair); display: flex; flex-direction: column; }
+  .brand { height: 60px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px dashed var(--hair); }
+  .brand .tile { width: 32px; height: 32px; border: 1.5px solid var(--ink); border-radius: 7px; display: grid; place-items: center; background: var(--card); box-shadow: 2px 2px 0 rgba(22,35,42,.16); }
+  .brand .tile svg.s { width: 18px; height: 18px; }
+  .brand b { font-size: 15px; letter-spacing: .04em; }
+  .brand .ver { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--fog); }
+  nav.menu { flex: 1; overflow-y: auto; padding: 10px 10px 4px; }
+  .taglabel { font-family: var(--mono); font-size: 9px; letter-spacing: .24em; color: var(--fog); padding: 10px 8px 6px; display: flex; align-items: center; gap: 8px; }
+  .taglabel::after { content: ''; flex: 1; border-top: 1px dashed var(--hair); }
+  .mitem { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 9px; padding: 9px 9px; border-radius: 7px; font-size: 13.5px; color: var(--steel); cursor: pointer; text-decoration: none; position: relative; }
+  .mitem .no { position: absolute; left: 34px; top: 3px; font-family: var(--mono); font-size: 8px; color: var(--fog); opacity: 0; }
+  .mitem span.lab { grid-column: 2; }
+  .mitem .cnt { grid-column: 3; font-family: var(--mono); font-size: 10.5px; color: var(--fog); }
+  .mitem .cnt.hot { color: var(--coral); font-weight: 700; }
+  .mitem:hover { background: rgba(14,118,110,.07); color: var(--ink); }
+  .mitem.active { background: var(--card); color: var(--ink); font-weight: 600; border: 1px solid var(--hair); box-shadow: 2px 2px 0 rgba(22,35,42,.1); }
+  .mitem.active svg.s { color: var(--teal); }
+  .mitem.active::before { content: ''; position: absolute; left: -10px; top: 8px; bottom: 8px; width: 3px; background: var(--teal); border-radius: 0 2px 2px 0; }
+  .sidefoot { border-top: 1px solid var(--hair); padding: 10px; }
+  .stamp { border: 1.5px dashed var(--ink); border-radius: 8px; padding: 9px 10px; display: flex; gap: 9px; align-items: center; cursor: pointer; background: transparent; }
+  .stamp:hover { background: var(--card); }
+  .stamp .t1 { font-size: 13px; font-weight: 600; }
+  .stamp .t2 { font-family: var(--mono); font-size: 9px; color: var(--fog); letter-spacing: .08em; }
+  .stamp svg.s { width: 17px; height: 17px; color: var(--teal); }
+
+  .right { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: 60px; flex-shrink: 0; background: var(--card); border-bottom: 1px solid var(--hair); display: flex; align-items: center; gap: 14px; padding: 0 18px; }
+  .fold { color: var(--steel); cursor: pointer; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; }
+  .fold:hover { background: var(--teal-soft); color: var(--teal); }
+  .fold svg.s { width: 17px; height: 17px; }
+  .crumbs { font-size: 12.5px; color: var(--fog); }
+  .crumbs b { color: var(--ink); font-weight: 600; }
+  .topbar .spacer { flex: 1; }
+  .chip { font-family: var(--mono); font-size: 10px; color: var(--steel); border: 1px solid var(--hair); border-radius: 5px; padding: 4px 8px; letter-spacing: .06em; }
+  .util { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 7px; color: var(--steel); cursor: pointer; position: relative; }
+  .util:hover { background: var(--teal-soft); color: var(--teal); }
+  .util .dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); border: 1.5px solid var(--card); }
+  .uchip { display: flex; align-items: center; gap: 9px; padding: 5px 10px 5px 5px; border: 1px solid var(--hair); border-radius: 8px; cursor: pointer; }
+  .uchip:hover { background: var(--paper); }
+  .av { width: 28px; height: 28px; border-radius: 6px; background: var(--ink); color: var(--paper); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .uchip .un { font-size: 12.5px; font-weight: 600; line-height: 1.15; }
+  .uchip .ur { font-family: var(--mono); font-size: 9px; color: var(--fog); letter-spacing: .1em; }
+
+  .content { flex: 1; overflow-y: auto; padding: 30px 26px 90px; }
+  .brief { position: relative; background: var(--card); border: 1.5px solid var(--ink); border-radius: 10px; padding: 26px 24px 20px; box-shadow: 3px 3px 0 rgba(22,35,42,.14); display: flex; align-items: flex-end; gap: 22px; }
+  .brief .tag { position: absolute; top: -11px; left: 20px; background: var(--card); border: 1px solid var(--teal); color: var(--teal); font-family: var(--mono); font-size: 9.5px; letter-spacing: .22em; padding: 3px 10px; border-radius: 3px; }
+  .brief h2 { font-family: var(--serif); font-size: 27px; font-weight: 600; letter-spacing: .01em; }
+  .brief .date { font-family: var(--mono); font-size: 11px; color: var(--steel); padding-bottom: 4px; }
+  .brief .date em { display: block; font-style: normal; color: var(--teal); margin-top: 4px; }
+  .brief .bunny { margin-left: auto; color: var(--fog); }
+  .brief .bunny svg.s { width: 34px; height: 34px; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+  .stat { background: var(--card); border: 1px solid var(--hair); border-radius: 9px; padding: 15px 17px 13px; position: relative; }
+  .stat::after { content: ''; position: absolute; inset: 0; border: 1px dashed var(--hair); border-radius: 9px; margin: 4px; pointer-events: none; }
+  .stat .lab { font-size: 12px; color: var(--steel); }
+  .stat .num { font-family: var(--mono); font-size: 38px; font-weight: 700; line-height: 1.15; }
+  .stat .sub { font-family: var(--mono); font-size: 10px; color: var(--fog); letter-spacing: .12em; }
+  .stat.t .num { color: var(--teal); } .stat.g .num { color: var(--green); } .stat.c .num { color: var(--coral); }
+  .stat .trend { position: absolute; right: 14px; bottom: 12px; width: 64px; height: 26px; }
+  .stat .seal { position: absolute; right: 12px; top: 12px; border: 1.5px solid var(--coral); color: var(--coral); font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 4px; transform: rotate(6deg); letter-spacing: .1em; }
+
+  .sec { margin-top: 24px; background: var(--card); border: 1px solid var(--hair); border-radius: 10px; overflow: hidden; }
+  .sec .head { display: flex; align-items: center; gap: 12px; padding: 13px 18px 12px; border-bottom: 1px dashed var(--hair); }
+  .sec .head b { font-size: 14px; } .sec .head b::before { content: '§ '; color: var(--teal); }
+  .sec .head .n { font-family: var(--mono); font-size: 10px; color: var(--fog); letter-spacing: .14em; }
+  .sec .head a { margin-left: auto; font-size: 12px; color: var(--teal); text-decoration: none; display: flex; align-items: center; gap: 2px; }
+  .row { display: grid; grid-template-columns: 30px 1fr 120px 100px 74px; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--paper); }
+  .row:last-child { border-bottom: none; }
+  .row:hover { background: var(--paper); }
+  .row .who { width: 28px; height: 28px; border-radius: 50%; background: var(--teal-soft); color: var(--teal); border: 1px solid var(--teal); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .row .tt { font-size: 13.5px; font-weight: 500; }
+  .row .pr { font-family: var(--mono); font-size: 10px; }
+  .row .pr.hi { color: var(--coral); } .row .pr.md { color: var(--amber); } .row .pr.lo { color: var(--fog); }
+  .row .due { font-size: 11.5px; color: var(--steel); } .row .due.late { color: var(--coral); font-weight: 600; }
+  .row .done { justify-self: end; font-size: 11.5px; color: var(--teal); border: 1px solid var(--teal); background: transparent; border-radius: 12px; padding: 4px 11px; cursor: pointer; }
+  .row .done:hover { background: var(--teal-soft); }
+
+  .capsule { position: absolute; right: 24px; bottom: 22px; display: flex; align-items: center; gap: 10px; background: var(--ink); color: var(--paper); border-radius: 999px; padding: 11px 18px 11px 15px; font-size: 13px; font-weight: 600; box-shadow: 0 6px 22px rgba(22,35,42,.35); cursor: pointer; }
+  .frame[data-dark] .capsule { background: var(--coral); color: #fff; box-shadow: 0 6px 22px rgba(239,114,86,.4); }
+  .capsule .rd { width: 9px; height: 9px; border-radius: 50%; background: var(--coral); animation: pulse 1.4s infinite; }
+  .frame[data-dark] .capsule .rd { background: #fff; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .capsule .mt { font-family: var(--mono); font-size: 10px; opacity: .75; border-left: 1px solid rgba(255,255,255,.25); padding-left: 10px; }
+  .capsule svg.s { width: 14px; height: 14px; }
+
+  .notes { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px 26px; font-size: 12.5px; color: #8ba0a0; line-height: 1.8; }
+  .notes li { list-style: none; padding-left: 16px; position: relative; }
+  .notes li::before { content: '·'; position: absolute; left: 2px; color: #35c2a4; }
+  .notes code { font-family: var(--mono); font-size: 11px; color: #35c2a4; }
+
+  .frame { height: auto; min-height: 880px; }
+  .content { overflow: visible; }
+  .phead { display:flex; align-items:flex-end; gap:16px; margin-bottom:14px; }
+  .phead h2 { font-family:var(--serif); font-size:24px; }
+  .phead .sub { font-family:var(--mono); font-size:10.5px; color:var(--fog); letter-spacing:.12em; padding-bottom:4px; }
+  .phead .grow { flex:1; }
+  .hstamp { font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; color:var(--coral); border:1.5px dashed var(--coral); border-radius:6px; padding:4px 9px; transform:rotate(-2deg); display:inline-block; }
+  .hstamp.ok { color:var(--teal); border-color:var(--teal); }
+  .fband { display:flex; align-items:center; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .fchip { font-size:12px; color:var(--steel); border:1px solid var(--hair); background:var(--card); border-radius:7px; padding:5px 11px; cursor:pointer; }
+  .fchip b { font-family:var(--mono); font-size:10.5px; color:var(--fog); margin-left:5px; }
+  .fchip.on { border-color:var(--ink); color:var(--ink); font-weight:600; box-shadow:2px 2px 0 rgba(22,35,42,.12); }
+  .fchip.on b { color:var(--teal); }
+  .fchip.late b { color:var(--coral); }
+  .fadd { margin-left:auto; background:var(--ink); color:var(--paper); border:0; border-radius:7px; padding:7px 14px; font-size:12.5px; cursor:pointer; box-shadow:2px 2px 0 rgba(22,35,42,.25); }
+  .fadd.alt { background:var(--teal); margin-left:8px; }
+  .nbadge { font-family:var(--mono); font-size:9px; color:var(--teal); border:1px solid var(--teal); border-radius:3px; padding:1px 5px; margin-right:4px; letter-spacing:.06em; }
+  .nbadge.hot { color:var(--coral); border-color:var(--coral); background:rgba(239,114,86,.06); }
+  .vp { font-family:var(--mono); font-size:9.5px; color:var(--green); }
+  .vp.no { color:var(--coral); }
+  .who-av { width:38px; height:38px; border-radius:8px; border:1.5px solid var(--ink); background:var(--chrome); display:grid; place-items:center; font-family:var(--serif); font-size:16px; font-weight:600; flex-shrink:0; box-shadow:2px 2px 0 rgba(22,35,42,.12); }
+  .ruler { flex:1; height:12px; position:relative; border-bottom:1.5px solid var(--ink); }
+  .ruler .fill { position:absolute; bottom:2px; left:0; height:4px; background:var(--teal); border-radius:2px; }
+  .ruler .now { position:absolute; bottom:0; width:0; height:0; border:4px solid transparent; border-bottom-color:var(--coral); border-top:0; }
+  .pct { font-family:var(--mono); font-size:10.5px; font-weight:700; color:var(--ink); }
+  .notes { margin-top:22px; font-size:12px; color:var(--steel); line-height:1.8; }
+  .notes h5 { font-family:var(--mono); font-size:10px; letter-spacing:.2em; color:var(--fog); margin-bottom:4px; }
+  .notes ul { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:6px 26px; }
+  .notes li { list-style:none; padding-left:14px; position:relative; }
+  .notes li::before { content:'·'; position:absolute; left:2px; color:var(--teal); }
+
+  .rs-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:26px 18px; }
+  .rs { position:relative; }
+  .rs .ftab { width:120px; height:20px; background:var(--chrome); border:1.5px solid var(--ink); border-bottom:0; border-radius:6px 6px 0 0; margin-left:12px; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:8.5px; letter-spacing:.18em; color:var(--steel); }
+  .rs:nth-child(4n+2) .ftab, .rs:nth-child(4n+3) .ftab { background:var(--teal-soft); }
+  .rs .body { position:relative; border:1.5px solid var(--ink); border-radius:0 8px 8px 8px; background:var(--card); box-shadow:3px 3px 0 rgba(22,35,42,.13); padding:13px 14px 11px; }
+  .rs .top { display:flex; gap:10px; align-items:center; padding-right:52px; }
+  .rs .nm { font-family:var(--serif); font-size:16.5px; font-weight:600; }
+  .rs .gd { font-family:var(--mono); font-size:9.5px; color:var(--fog); letter-spacing:.1em; margin-top:2px; }
+  .rs .area { font-size:11.5px; color:var(--steel); margin-top:9px; border-top:1px dashed var(--hair); padding-top:7px; min-height:24px; line-height:1.5; }
+  .rs .sk { font-family:var(--mono); font-size:9px; color:var(--steel); background:var(--paper); border:1px solid var(--hair); border-radius:3px; padding:1px 5px; margin:4px 3px 0 0; display:inline-block; }
+  .rs .ln { display:flex; align-items:center; gap:4px; border-top:1px dotted var(--hair); margin-top:7px; padding-top:6px; font-size:11px; color:var(--steel); flex-wrap:wrap; }
+  .rs .ln .k { font-family:var(--mono); font-size:8.5px; letter-spacing:.14em; color:var(--fog); width:34px; flex-shrink:0; }
+  .rs .act { display:flex; gap:6px; justify-content:flex-end; margin-top:8px; }
+  .rs .act span { font-size:10.5px; color:var(--teal); border:1px solid var(--teal); border-radius:10px; padding:2px 9px; cursor:pointer; }
+  .rs .act span.sq { color:var(--fog); border-color:var(--hair); }
+  .role-stamp { position:absolute; top:9px; right:9px; font-family:var(--mono); font-size:8.5px; letter-spacing:.1em; color:var(--coral); border:1.5px dashed var(--coral); border-radius:5px; padding:2px 6px; transform:rotate(-3deg); }
+  .role-stamp.ld { color:var(--amber); border-color:var(--amber); }
+  .rs.flip .body { border-color:var(--teal); box-shadow:3px 3px 0 var(--teal-soft); }
+  .flip-note { text-align:center; font-size:10.5px; color:var(--teal); margin-top:7px; font-family:var(--mono); letter-spacing:.08em; }
+  .ruler.lg { height:14px; }
+
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-gauge" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.3a5.5 5.5 0 1 1 10 0"/><path d="M8 9.1 10.7 6.5"/><circle cx="8" cy="9.1" r=".9" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-chat" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="12" height="9" rx="2"/><path d="M5.6 11.5 4.6 14.4 8.4 11.5"/><circle cx="6" cy="7" r=".85" fill="currentColor" stroke="none"/><circle cx="10" cy="7" r=".85" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-list" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h7.5M6 8h7.5M6 12h7.5"/><circle cx="2.9" cy="4" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="8" r=".95" fill="currentColor" stroke="none"/><circle cx="2.9" cy="12" r=".95" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-camera" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="9.5" height="8" rx="1.5"/><path d="M11.5 7 14.6 4.9v6.2L11.5 9"/></symbol>
+<symbol id="i-files" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="1.5" width="9" height="11" rx="1.8"/><path d="M5.4 14.5H11a2 2 0 0 0 2-2V6.6"/></symbol>
+<symbol id="i-doc" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.2 1.8H4.3a1.5 1.5 0 0 0-1.5 1.5v9.4a1.5 1.5 0 0 0 1.5 1.5h7.4a1.5 1.5 0 0 0 1.5-1.5V5.6L9.2 1.8Z"/><path d="M9.2 1.8v3.8h4"/><path d="M5.6 8.8h4.8M5.6 11.2h3.4"/></symbol>
+<symbol id="i-folder" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 3.9a1.6 1.6 0 0 1 1.6-1.6h3.1c.5 0 1 .2 1.3.6l1 1.2h3.8a1.6 1.6 0 0 1 1.6 1.6v5.8a1.6 1.6 0 0 1-1.6 1.6H3.4a1.6 1.6 0 0 1-1.6-1.6V3.9Z"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4.5h7M12.5 4.5h1.5M2 11.5h1.5M7 11.5h7"/><circle cx="10.7" cy="4.5" r="1.7"/><circle cx="4.8" cy="11.5" r="1.7"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/><rect x="6.4" y="6.4" width="3.2" height="3.2" rx=".5"/><path d="M6 1.6v1.9M10 1.6v1.9M6 12.5v1.9M10 12.5v1.9M1.6 6h1.9M1.6 10h1.9M12.5 6h1.9M12.5 10h1.9"/></symbol>
+<symbol id="i-board" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 2.4v11h11"/><path d="M6 12.2V9M8.8 12.2V5.6M11.6 12.2V7.6"/></symbol>
+<symbol id="i-bell" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.9a4.2 4.2 0 0 0-4.2 4.2c0 3.2-1 4.4-1.5 5.1-.2.4.1.9.6.9h10.2c.5 0 .8-.5.6-.9-.5-.7-1.5-1.9-1.5-5.1A4.2 4.2 0 0 0 8 1.9Z"/><path d="M6.4 14.2a1.7 1.7 0 0 0 3.2 0"/></symbol>
+<symbol id="i-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2a4.4 4.4 0 0 0 6 6A6 6 0 1 1 8 2Z"/></symbol>
+<symbol id="i-fold" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.6"/><path d="M6 2.8v10.4M11.4 6.4 9.6 8l1.8 1.6"/></symbol>
+<symbol id="i-search" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.9" cy="6.9" r="4.4"/><path d="m10.2 10.2 3.9 3.9"/></symbol>
+<symbol id="i-user" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.4" r="2.9"/><path d="M2.8 14.2c.6-2.9 2.7-4.4 5.2-4.4s4.6 1.5 5.2 4.4"/></symbol>
+<symbol id="i-bunny" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="6.1" cy="4.6" rx="1.3" ry="3"/><ellipse cx="9.9" cy="4.6" rx="1.3" ry="3"/><circle cx="8" cy="10.6" r="3.4"/></symbol>
+<symbol id="i-aim" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3.6 4.4 4.4L6 12.4"/></symbol>
+<symbol id="i-clock" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6"/><path d="M8 4.8V8l2.4 1.6"/></symbol>
+<symbol id="i-tag" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 2h5.2l6.6 6.6-5.2 5.2L2 7.4Z"/><circle cx="4.7" cy="4.7" r=".9" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8h11M10 4l4 4-4 4"/></symbol>
+</defs></svg>
+<div class="page">
+  <div class="meta">
+    <span>TEAM PAGE PROPOSAL R · DOUBLE-SIDED DOSSIER CARDS · 2026-09</span>
+    <h1>R 稿 · 双面档案卡 · 人卷联动</h1>
+    <button class="darkbtn" onclick="document.querySelector('.frame').toggleAttribute('data-dark')">☾ 夜览</button>
+  </div>
+
+  <div class="frame">
+    <aside class="side">
+      <div class="brand">
+        <div class="tile"><svg class="s"><use href="#i-aim"/></svg></div>
+        <b>小气助手</b><span class="ver">v26.09</span>
+      </div>
+      <nav class="menu">
+        <div class="taglabel">FRONT MATTER · 卷首</div>
+        <a class="mitem"><svg class="s"><use href="#i-gauge"/></svg><span class="lab">仪表盘</span><span class="cnt">19</span></a>
+        <div class="taglabel">RESEARCH · 研究</div>
+        <a class="mitem"><svg class="s"><use href="#i-list"/></svg><span class="lab">任务管理</span><span class="cnt">20/75</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-camera"/></svg><span class="lab">会议管理</span><span class="cnt hot">●REC</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-doc"/></svg><span class="lab">知识库</span><span class="cnt">531</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-cpu"/></svg><span class="lab">DFT/MD 计算</span></a>
+        <div class="taglabel">COLLAB · 协作</div>
+        <a class="mitem"><svg class="s"><use href="#i-chat"/></svg><span class="lab">智能对话</span></a>
+        <a class="mitem active"><svg class="s"><use href="#i-files"/></svg><span class="lab">团队协作</span><span class="cnt">28/4</span></a>
+        <a class="mitem"><svg class="s"><use href="#i-folder"/></svg><span class="lab">课题组网盘</span></a>
+        <div class="taglabel">SYSTEM · 系统</div>
+        <a class="mitem"><svg class="s"><use href="#i-sliders"/></svg><span class="lab">个人设置</span></a>
+      </nav>
+      <div class="sidefoot">
+        <div class="stamp">
+          <svg class="s"><use href="#i-board"/></svg>
+          <div><div class="t1">项目动态</div><div class="t2">PROJECT STATS · WK36</div></div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="right">
+      <header class="topbar">
+        <span class="fold"><svg class="s"><use href="#i-fold"/></svg></span>
+        <div class="crumbs">首页 <span style="opacity:.5">/</span> <b>团队协作</b></div>
+        <span class="chip">READ · 09-04 WK36</span>
+        <span class="spacer"></span>
+        <span class="util"><svg class="s"><use href="#i-bell"/></svg><span class="dot"></span></span>
+        <span class="util"><svg class="s"><use href="#i-moon"/></svg></span>
+        <div class="uchip">
+          <span class="av">杜</span>
+          <div><div class="un">杜同贺</div><div class="ur">ADMIN</div></div>
+          <svg class="s" style="width:12px;color:var(--fog)"><use href="#i-chevron"/></svg>
+        </div>
+      </header>
+      <main class="content">
+<div class="phead"><h2>团队 · 一卷一卡</h2><span class="sub">28 IN ROSTER · 4 FILES · 26 LINKED · 16 VP ON RECORD · 5 LATE</span><span class="grow"></span><span class="hstamp ok">名册与卷宗合并 · 无 tab</span></div><div class="fband"><span class="fchip on">全员<b>28</b></span><span class="fchip">导师组<b>4</b></span><span class="fchip">有卷宗<b>26</b></span><span class="fchip late">未录声纹<b>11</b></span><span class="fchip">已毕业<b>1</b></span><button class="fadd">＋ 添员</button><button class="fadd alt">＋ 建档</button></div><div class="rs-grid"><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body"><div class="role-stamp">导师组</div>
+      <div class="top"><div class="who-av">王</div><div><div class="nm">王天志</div><div class="gd">副教授 · #001</div></div></div>
+      <div class="area">微纳米气泡技术与应用</div>
+      <div><span class="sk">项目管理</span><span class="sk">气泡生成</span><span class="sk">水处理</span></div>
+      <div class="ln"><span class="k">卷宗</span><span style="font-family:var(--mono);font-size:9.5px;color:var(--fog)">未编入卷宗</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×121</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body"><div class="role-stamp">导师组</div>
+      <div class="top"><div class="who-av">赵</div><div><div class="nm">赵航佳</div><div class="gd">博一 · #002</div></div></div>
+      <div class="area">黑臭水体治理</div>
+      <div><span class="sk">臭氧MNB</span><span class="sk">底泥界面</span><span class="sk">污染物去除</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body"><div class="role-stamp">导师组</div>
+      <div class="top"><div class="who-av">杜</div><div><div class="nm">杜同贺</div><div class="gd">研一 · #003</div></div></div>
+      <div class="area">污染控制与水质提升</div>
+      <div><span class="sk">微纳米气泡</span><span class="sk">水质提升</span><span class="sk">数据分析</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×4</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs flip"><div class="ftab">NO.001 · 卷宗侧</div><div class="body">
+  <div class="top"><div><div class="nm" style="font-size:15px">黑臭水体无药剂低能耗治理</div><div class="gd">翻页预览 · MB-LAB PROJECT FILE</div></div></div>
+  <div class="ln" style="margin-top:10px"><span class="k">周期</span>2024-09 → 2027-06</div>
+  <div class="ln"><span class="k">标尺</span><div class="ruler lg"><span class="fill" style="width:71%"></span><span class="now" style="left:71%"></span></div><span class="pct">71%</span></div>
+  <div class="ln"><span class="k">成员</span><span class="nbadge">贾琦</span><span class="nbadge">周之超</span><span class="nbadge">邓国祥</span><span class="nbadge">+3</span></div>
+  <div class="ln"><span class="k">逾期</span><span style="color:var(--coral);font-size:10.5px">预实验 · 正式实验 ×2 逾期未闭</span></div>
+  <div class="act"><span>翻回人侧 ↺</span></div></div>
+  <div class="flip-note">◍ 同一张卡自动双面 · 点卷宗徽章翻面</div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">张</div><div><div class="nm">张懿</div><div class="gd">研一 · #005</div></div></div>
+      <div class="area">智能化运行</div>
+      <div><span class="sk">发生器优化</span><span class="sk">在线监测</span><span class="sk">过程控制</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.004</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">耿</div><div><div class="nm">耿嘉栋</div><div class="gd">研一 · #006</div></div></div>
+      <div class="area">装备开发</div>
+      <div><span class="sk">装备开发</span><span class="sk">系统集成</span><span class="sk">发生器优化</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.004</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body"><div class="role-stamp ld">组长</div>
+      <div class="top"><div class="who-av">陈</div><div><div class="nm">陈金薪</div><div class="gd">研二 · #007</div></div></div>
+      <div class="area">气泡成核过程调控</div>
+      <div><span class="sk">自由基</span><span class="sk">界面反应</span><span class="sk">气泡溃灭</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.004</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×38</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">董</div><div><div class="nm">董昊宇</div><div class="gd">研二 · #008</div></div></div>
+      <div class="area">农业应用</div>
+      <div><span class="sk">农业应用</span><span class="sk">水-土环境</span><span class="sk">增效应用</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">关</div><div><div class="nm">关小未</div><div class="gd">研二 · #009</div></div></div>
+      <div class="area">盐碱土改良</div>
+      <div><span class="sk">盐碱土修复</span><span class="sk">种养系统</span><span class="sk">农业应用</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×3</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">胡</div><div><div class="nm">胡小琪</div><div class="gd">研二 · #010</div></div></div>
+      <div class="area">黑臭水体</div>
+      <div></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">李</div><div><div class="nm">李胜景</div><div class="gd">研二 · #011</div></div></div>
+      <div class="area">水产养殖</div>
+      <div><span class="sk">高密度养殖</span><span class="sk">无抗鱼养殖</span><span class="sk">水产应用</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge">NO.003</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">刘</div><div><div class="nm">刘子毅</div><div class="gd">研二 · #012</div></div></div>
+      <div class="area">水质评价</div>
+      <div><span class="sk">过程评价</span><span class="sk">数据分析</span><span class="sk">水质提升</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge">NO.003</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">宋</div><div><div class="nm">宋洋</div><div class="gd">研二 · #013</div></div></div>
+      <div class="area">饮用水处理</div>
+      <div><span class="sk">生物稳定性</span><span class="sk">管网生物膜</span><span class="sk">膜耦合</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">王</div><div><div class="nm">王书馨</div><div class="gd">研二 · #014</div></div></div>
+      <div class="area">农业灌溉</div>
+      <div><span class="sk">农业应用</span><span class="sk">土壤修复</span><span class="sk">工程化应用</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge">NO.003</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">吴</div><div><div class="nm">吴孟铨</div><div class="gd">研二 · #015</div></div></div>
+      <div class="area">自由基生成</div>
+      <div><span class="sk">气泡溃灭</span><span class="sk">传质强化</span><span class="sk">分子动力学</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.004</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×8</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">韩</div><div><div class="nm">韩重阳</div><div class="gd">研三 · #016</div></div></div>
+      <div class="area">设备开发</div>
+      <div><span class="sk">装备研发</span><span class="sk">工程验证</span><span class="sk">发生器优化</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.004</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">李</div><div><div class="nm">李锐远</div><div class="gd">研三 · #017</div></div></div>
+      <div class="area">管网水质</div>
+      <div><span class="sk">生物膜控制</span><span class="sk">管网系统</span><span class="sk">水质稳定</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.004</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">杨</div><div><div class="nm">杨慈</div><div class="gd">研三 · #018</div></div></div>
+      <div class="area">饮用水安全</div>
+      <div><span class="sk">饮用水安全</span><span class="sk">蜡样芽孢杆菌</span><span class="sk">微生物消杀</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">余</div><div><div class="nm">余歆睿</div><div class="gd">研三 · #019</div></div></div>
+      <div class="area">藻华控制</div>
+      <div><span class="sk">藻华控制</span><span class="sk">水质净化</span><span class="sk">小球藻抑制</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.002</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×1</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">张</div><div><div class="nm">张宏魁</div><div class="gd">研三 · #020</div></div></div>
+      <div class="area">设施农业</div>
+      <div><span class="sk">设施农业</span><span class="sk">盐碱土修复</span><span class="sk">农业应用</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge">NO.003</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×4</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">贾</div><div><div class="nm">贾琦</div><div class="gd">大四 · #021</div></div></div>
+      <div class="area">表面清洗</div>
+      <div><span class="sk">实验辅助</span><span class="sk">数据整理</span><span class="sk">表面清洗</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.001</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×12</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">周</div><div><div class="nm">周之超</div><div class="gd">大三 · #022</div></div></div>
+      <div class="area">表面污染去除</div>
+      <div><span class="sk">表面去除</span><span class="sk">文献调研</span><span class="sk">实验辅助</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.001</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp">声纹 ×11</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">邓</div><div><div class="nm">邓国祥</div><div class="gd">大三 · #023</div></div></div>
+      <div class="area">自由基研究</div>
+      <div><span class="sk">实验辅助</span><span class="sk">数据分析</span><span class="sk">自由基</span></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.001</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">雒</div><div><div class="nm">雒培媛</div><div class="gd">已毕业 · #024</div></div></div>
+      <div class="area">微纳米气泡水处理</div>
+      <div><span class="sk">微纳米气泡</span><span class="sk">水处理</span><span class="sk">同济博士</span></div>
+      <div class="ln"><span class="k">卷宗</span><span style="font-family:var(--mono);font-size:9.5px;color:var(--fog)">未编入卷宗</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">孟</div><div><div class="nm">孟祥琪</div><div class="gd">大三 · #025</div></div></div>
+      <div class="area">研究方向未登记</div>
+      <div></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.001</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">吴</div><div><div class="nm">吴怡霏</div><div class="gd">研一 · #026</div></div></div>
+      <div class="area">研究方向未登记</div>
+      <div></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge">NO.003</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">蒋</div><div><div class="nm">蒋芦笛</div><div class="gd">研二 · #027</div></div></div>
+      <div class="area">研究方向未登记</div>
+      <div></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.001</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div><div class="rs"><div class="ftab">MB · MEMBER</div><div class="body">
+      <div class="top"><div class="who-av">刘</div><div><div class="nm">刘莫菲</div><div class="gd">研一 · #028</div></div></div>
+      <div class="area">研究方向未登记</div>
+      <div></div>
+      <div class="ln"><span class="k">卷宗</span><span class="nbadge hot">NO.001</span></div>
+      <div class="ln"><span class="k">声纹</span><span class="vp no">未录入</span></div>
+      <div class="act"><span class="sq">编辑</span><span>详情</span></div></div></div></div><div class="notes"><h5>实装要点 · R</h5><ul><li>卡片网格与现网 member-grid 一一对应, 只加「卷宗」一行徽章</li><li>徽章红 = 所编卷宗有逾期里程碑 (反向索引 projects.members, 现算 0 迁移)</li><li>「翻面」可先做成点开项目详情, 双面动画留 P2</li><li>声纹 ×N mono 直接替 el-tag 绿色胶囊, 未录入 coral 常亮</li></ul></div>
+      </main>
+    </div>
+  </div>
+</div>
+</body>
+</html>
