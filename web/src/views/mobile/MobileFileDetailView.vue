@@ -377,8 +377,9 @@ function onMove() {
 
 async function onUpdateVisibility() {
   if (!file.value) return
-  const options = ['private', 'team', 'public']
-  const labels = { private: '🔒 仅自己', team: '👥 全组', public: '🌍 公开' }
+  // 2026-09 单盘合并: 移除 private 选项 (后端将 private 强制归一为 team)
+  const options = ['team', 'public']
+  const labels = { team: '👥 全组', public: '🌍 公开' }
   try {
     const result = await ElMessageBox({
       title: '修改可见性',

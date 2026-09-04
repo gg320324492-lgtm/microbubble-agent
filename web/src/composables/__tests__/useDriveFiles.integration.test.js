@@ -72,7 +72,7 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
   })
 
   describe('场景 1: fetchFiles 真实端到端 URLSearchParams', () => {
-    it('默认 view=personal: URL 包含所有 query params + Authorization header', async () => {
+    it('默认 view=team (2026-09 单盘合并): URL 包含所有 query params + Authorization header', async () => {
       const { useDriveFiles } = await import('@/composables/useDriveFiles')
       const { fetchFiles, driveFiles, total, loading } = useDriveFiles()
 
@@ -85,7 +85,7 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
       const u = new URL(url, 'http://localhost')
 
       expect(url.startsWith('/api/v1/drive/files?')).toBe(true)
-      expect(u.searchParams.get('view')).toBe('personal')
+      expect(u.searchParams.get('view')).toBe('team')
       expect(u.searchParams.get('page')).toBe('1')
       expect(u.searchParams.get('page_size')).toBe('20')
       expect(u.searchParams.get('sort_by')).toBe('created_at')

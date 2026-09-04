@@ -5,7 +5,7 @@
   字段:
   - storage_mode: 固定 'drive' (本组件仅 drive, KB 模式走 KnowledgeUploadDialog)
   - folder_id: TreeSelect 选目标文件夹 (顶级 null)
-  - visibility: private / team / public
+  - visibility: team / public (2026-09 单盘合并移除私有选项)
   - files[]: 待上传文件 (相对路径 + 大小)
 
   功能:
@@ -123,7 +123,6 @@
       </el-form-item>
       <el-form-item label="可见性">
         <el-radio-group v-model="form.visibility">
-          <el-radio value="private">🔒 私有</el-radio>
           <el-radio value="team">👥 团队</el-radio>
           <el-radio value="public">🌐 公开</el-radio>
         </el-radio-group>

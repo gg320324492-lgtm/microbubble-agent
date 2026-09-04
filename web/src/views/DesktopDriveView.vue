@@ -524,9 +524,9 @@ async function reloadCurrentView() {
     })
   } else {
     // trash 子组件 <DriveTrashPanel> 自管 onMounted → reload() → fetchTrash()
-    // starred + team 之外的视图 (含 null) 走默认 view=personal (useDriveFiles 内置)
+    // 2026-09 单一团队工作区: team 之外的默认视图也固定 view='team'
     starredOnly.value = false
-    await fetchDriveFiles({ folder_id: selectedFolderId.value })
+    await fetchDriveFiles({ folder_id: selectedFolderId.value, view: 'team' })
   }
 }
 
@@ -733,7 +733,8 @@ function onFilesUploaded({ count, folderId }) {
 
 // === 生命周期 ===
 onMounted(async () => {
-  fetchFolderTree('team')  // 2026-08-30: 树 scope 跟随默认团队视图
+  // 2026-09 单一团队工作区: 网盘已合并为课题组单盘, 树/文件统一 team scope
+  fetchFolderTree('team')
   fetchDriveFiles({ folder_id: null, view: 'team' })
   // PR3.5: 等 DOM ready 后绑定主区域为 drop zone
   await nextTick()
@@ -751,25 +752,23 @@ onBeforeUnmount(() => {
 // v2.26 (2026-07-12) BUG D 修复: watch(selectedFolderId) 必须传 view 跟随 specialView
 //   修复前: fetchDriveFiles({ folder_id: newId }) 没传 view → useDriveFiles 默认 view=personal
 //           → 过滤掉 is_team_shared=true → 用户在团队共享盘 sub-folder 看 0 文件
-//   修复后: 跟随 specialView.value (team → view='team', 其他 → view='personal')
+//   2026-09 单一团队工作区: 网盘合并为课题组单盘, 所有层固定 view='team'
 watch(selectedFolderId, (newId, oldId) => {
   if (newId !== oldId) {
     currentPage.value = 1
-    const view = specialView.value === 'team' ? 'team' : 'personal'
+    const view = 'team'
     fetchDriveFiles({ folder_id: newId, view })
   }
 })
 
 // v2 PR2 + v2 PR6-P19: 监听 specialView (starred | team | trash | null)
+// 2026-09 单一团队工作区: 网盘已合并为课题组单盘, 切任意视图 tree 都拉 team scope,
+// 文件列表 view 固定 'team' (后端仍接受 view/scope 参数但统一返回团队盘)
 watch(specialView, async (newView) => {
-  // v2.25 (2026-07-11): 切 specialView 时重拉 tree (scope 跟随新视图)
-  //   personal 默认 → fetchTree('personal') 排除 is_team_default=true
-  //   team          → fetchTree('team') 仅 is_team_default=true folder
+  // v2.25 (2026-07-11): 切 specialView 时重拉 tree (原 scope 跟随视图; 2026-09 起统一 team)
   //   其它 (starred/trash/requests) → 不重拉, tree 不变
-  if (newView === 'team') {
+  if (newView === 'team' || newView === null) {
     await fetchFolderTree('team')
-  } else if (newView === null) {
-    await fetchFolderTree('personal')
   }
   // === 旧分支: 切视图时同步文件列表 ===
   if (newView === 'starred') {
@@ -786,20 +785,14 @@ watch(specialView, async (newView) => {
     // 2026-07-02: FileRequestListPanel onMounted 自动 fetchMy, 无需手动调
   } else if (newView !== 'trash') {
     // trash 子组件 <DriveTrashPanel> 自管 onMounted → reload() → fetchTrash()
-    // 默认走 view=personal (useDriveFiles 内置 default)
+    // 2026-09 起默认视图也走 team (单盘合并)
     starredOnly.value = false
     if (selectedFolderId.value !== null) {
-      await fetchDriveFiles({ folder_id: selectedFolderId.value })
+      await fetchDriveFiles({ folder_id: selectedFolderId.value, view: 'team' })
     } else {
-      await fetchDriveFiles({ folder_id: null })
+      await fetchDriveFiles({ folder_id: null, view: 'team' })
     }
   }
-})
-
-// === 生命周期 ===
-onMounted(() => {
-  fetchFolderTree('team')  // 2026-08-30: 树 scope 跟随默认团队视图
-  fetchDriveFiles({ folder_id: null, view: 'team' })  // 顶级目录
 })
 
 // === 文件操作 handlers (PR3.3 接入, 部分留给 PR3.4-3.7 完善 dialog) ===
@@ -874,16 +867,17 @@ async function onMoveFile(payload) {
 
 async function handleFileUpdateVisibility(file) {
   // v2 PR1 实现: 弹出 ElMessageBox.prompt 选 visibility
+  // 2026-09 单盘合并: 移除 private 选项 (后端将 private 归一为 team)
   try {
     const { value } = await ElMessageBox.prompt(
-      `为文件 "${file.file_name}" 设置可见性 (private 仅自己 / team 全组 / public 任何人):`,
+      `为文件 "${file.file_name}" 设置可见性 (team 全组 / public 任何人):`,
       '修改可见性',
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
-        inputPattern: /^(private|team|public)$/,
-        inputErrorMessage: '必须是 private/team/public 之一',
-        inputValue: file.visibility || 'team'
+        inputPattern: /^(team|public)$/,
+        inputErrorMessage: '必须是 team/public 之一',
+        inputValue: !file.visibility || file.visibility === 'private' ? 'team' : file.visibility
       }
     )
     await doUpdateVisibility(file.id, value)

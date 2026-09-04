@@ -72,7 +72,6 @@
         </el-form-item>
         <el-form-item label="可见性">
           <el-radio-group v-model="visibility">
-            <el-radio-button value="private">🔒 私有</el-radio-button>
             <el-radio-button value="team">👥 全组</el-radio-button>
             <el-radio-button value="public">🌐 公开</el-radio-button>
           </el-radio-group>

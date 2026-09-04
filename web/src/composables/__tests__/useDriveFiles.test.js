@@ -2,11 +2,11 @@
  * useDriveFiles.test.js — v2 PR6-P19 团队共享盘隔离 (is_team_shared)
  *
  * 覆盖 (5 case):
- * 1. fetchFiles 默认 view=personal (后端参数正确)
+ * 1. fetchFiles 默认 view=team (2026-09 单盘合并: 默认从 personal 改 team)
  * 2. fetchFiles 切到 view=team (后端参数 + viewMode ref 同步)
  * 3. fetchFiles 切到 view=all (不过滤)
  * 4. fetchFiles params 覆盖: DesktopDriveView 切到 team 时传 view=team 覆盖默认
- * 5. fetchFiles 切到 team 再切回 personal, 下次 fetchFiles 透传 personal
+ * 5. fetchFiles viewMode 切到 personal 再切回 team, 透传跟随 ref 变化
  *
  * 实现侧 fetchFiles 已改用 `fetch + URLSearchParams` (v2.26 BUG E 修复),
  * 因此测试用 `globalThis.fetch` mock 拦截, 直接断言 URL 中的 query 参数。
@@ -67,17 +67,17 @@ describe('useDriveFiles v2 PR6-P19 (团队共享盘隔离)', () => {
   })
 
   describe('fetchFiles view 参数', () => {
-    it('默认 viewMode=personal, fetchFiles 透传 view=personal 到后端', async () => {
+    it('默认 viewMode=team (2026-09 单盘合并), fetchFiles 透传 view=team 到后端', async () => {
       const { useDriveFiles } = await import('@/composables/useDriveFiles')
       const { fetchFiles, viewMode } = useDriveFiles()
-      expect(viewMode.value).toBe('personal')
+      expect(viewMode.value).toBe('team')
 
       await fetchFiles()
 
       expect(fetchCalls).toHaveLength(1)
       const url = fetchCalls[0].url
       expect(url.startsWith('/api/v1/drive/files?')).toBe(true)
-      expect(viewFromUrl(url)).toBe('personal')
+      expect(viewFromUrl(url)).toBe('team')
     })
 
     it('viewMode 切到 team 后, 下次 fetchFiles 透传 view=team', async () => {
@@ -151,22 +151,27 @@ describe('useDriveFiles v2 PR6-P19 (团队共享盘隔离)', () => {
     })
   })
 
-  describe('viewMode 切回 personal 同步', () => {
-    it('viewMode 切到 team 再切回 personal, 下次 fetchFiles 透传 personal', async () => {
+  describe('viewMode 切换同步 (2026-09 默认 team)', () => {
+    it('viewMode 默认 team, 可切 personal 再切回 team, fetchFiles 透传跟随 ref', async () => {
       const { useDriveFiles } = await import('@/composables/useDriveFiles')
       const { fetchFiles, viewMode } = useDriveFiles()
 
-      // 模拟用户点 🌐 团队共享盘
-      viewMode.value = 'team'
+      // 默认 team: 直接 fetch 透传 team
       await fetchFiles()
       expect(fetchCalls).toHaveLength(1)
       expect(viewFromUrl(fetchCalls[0].url)).toBe('team')
 
-      // 模拟用户点回 📁 我的网盘
+      // 2026-09 后无个人盘入口, 但 viewMode API 保留 (兼容/调试), 切 personal 仍透传
       viewMode.value = 'personal'
       await fetchFiles()
       expect(fetchCalls).toHaveLength(2)
       expect(viewFromUrl(fetchCalls[1].url)).toBe('personal')
+
+      // 切回 team
+      viewMode.value = 'team'
+      await fetchFiles()
+      expect(fetchCalls).toHaveLength(3)
+      expect(viewFromUrl(fetchCalls[2].url)).toBe('team')
     })
   })
 })

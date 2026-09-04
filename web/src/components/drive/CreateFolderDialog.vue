@@ -4,7 +4,7 @@
 
   字段:
   - name (必填, 1-200 字符)
-  - visibility (private / team / public, 默认 team)
+  - visibility (team / public, 默认 team; 2026-09 单盘合并移除私有选项)
   - parentId (从父组件传入, 顶级 null)
 
   校验:
@@ -37,9 +37,6 @@
 
       <el-form-item label="可见性" prop="visibility">
         <el-radio-group v-model="form.visibility">
-          <el-radio value="private">
-            🔒 私有 <span class="visibility-hint">(仅自己可见)</span>
-          </el-radio>
           <el-radio value="team">
             👥 团队 <span class="visibility-hint">(全员可见)</span>
           </el-radio>

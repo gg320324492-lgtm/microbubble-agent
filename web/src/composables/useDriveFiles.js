@@ -40,7 +40,9 @@ export function useDriveFiles() {
   const fileType = ref(null)            // pdf | image | video | office | text | null
   // v2 PR6-P19: 视图隔离 (personal | team | all) - personal 不显示 is_team_shared=true 文件
   // DesktopDriveView 切到 team 视图时调 setViewMode('team') 改这里
-  const viewMode = ref('personal')       // v2 PR6-P19: personal (默认) | team | all
+  // 2026-09 单一团队工作区: 默认 view 从 'personal' 改为 'team' — 后端已合并为
+  // 单一课题组网盘, 不再区分个人盘; view 参数仍被后端接受但统一返回团队盘。
+  const viewMode = ref('team')           // v2 PR6-P19: personal | team (默认) | all
 
   // === 计算属性 ===
   const isEmpty = computed(() =>
@@ -63,8 +65,8 @@ export function useDriveFiles() {
         sort_by: sortBy.value,
         sort_order: sortOrder.value,
         starred_only: starredOnly.value ? 'true' : 'false',
-        // v2 PR6-P19: 默认 view=personal (个人网盘, 不显示 is_team_shared=true)
-        // DesktopDriveView team 分支调 fetchFiles 时传 view='team' 覆盖
+        // v2 PR6-P19: view 取 viewMode (2026-09 起默认 team — 单一课题组网盘)
+        // 调用方仍可通过 params 覆盖 view
         view: viewMode.value,
         ...(fileType.value ? { file_type: fileType.value } : {}),
         ...params
