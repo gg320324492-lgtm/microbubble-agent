@@ -119,9 +119,9 @@ async def test_create_nested_depth_increments(alice_bob):
 
 @pytest.mark.asyncio
 async def test_create_folder_visibility_inherits_hard_upper_bound(alice_bob):
-    """子 folder visibility 必须 ≤ 父 folder
+    """2026-09 单一团队空间: 'private' 在 create 收口点被强制改写为 'team'
 
-    private folder (0) 下尝试建 public folder (2) → 400
+    继承上限校验器保留 (_validate_visibility_inherits): team 父下建 public 子 → 400。
     """
     factory = alice_bob["factory"]
     alice = alice_bob["alice"]
@@ -130,6 +130,8 @@ async def test_create_folder_visibility_inherits_hard_upper_bound(alice_bob):
         priv = await svc.create_folder(
             name=f"alice_priv_{alice_bob['u']}", owner_id=alice.id, visibility="private",
         )
+        # private 退役: 收口点强制 team
+        assert priv.visibility == "team", "create_folder 应把 private 强制改写为 team"
         with pytest.raises(FolderServiceError) as exc_info:
             await svc.create_folder(
                 name=f"alice_pub_child_{alice_bob['u']}",
@@ -169,14 +171,18 @@ async def test_create_folder_depth_exceeds_max(alice_bob):
 
 @pytest.mark.asyncio
 async def test_list_folders_private_invisible_to_others(alice_bob):
-    """private folder 仅 owner 可见"""
+    """2026-09 单一团队空间: 请求 visibility='private' 收口点强制改写 team → 全员可见
+
+    历史: private folder 仅 owner 可见。现在 bob 也应看到 alice 的 2 个 folder
+    (private 那个已被 create 收口点改写成 team)。
+    """
     factory = alice_bob["factory"]
     alice = alice_bob["alice"]
     bob = alice_bob["bob"]
     u = alice_bob["u"]
     async with factory() as session:
         svc = FolderService(session)
-        # alice 创建 1 private + 1 team folder
+        # alice 创建 1 "private" (强制改写 team) + 1 team folder
         await svc.create_folder(name=f"alice_priv_{u}", owner_id=alice.id, visibility="private")
         await svc.create_folder(name=f"alice_team_{u}", owner_id=alice.id, visibility="team")
         await session.commit()
@@ -188,13 +194,12 @@ async def test_list_folders_private_invisible_to_others(alice_bob):
         names = [x.name for x in items if x.name.startswith(f"alice_") and u in x.name]
         assert len(names) == 2
 
-    # bob 看应只看到 1 个 (team 那个, private 隐身)
+    # bob 看也应 2 个 (单一团队空间: 无 private 隐身)
     async with factory() as session:
         svc = FolderService(session)
         items, total = await svc.list_folders(current_user_id=bob.id)
-        names = [x.name for x in items if x.name.startswith(f"alice_") and u in x.name]
-        assert len(names) == 1
-        assert "team" in names[0]
+        names = [x.name for x in items if x.name.startswith("alice_") and u in x.name]
+        assert len(names) == 2, "private 收口改写后 bob 应看到全部 2 个 folder"
 
 
 @pytest.mark.asyncio
@@ -328,7 +333,10 @@ async def test_update_folder_move_to_own_descendant_blocked(alice_bob):
 
 @pytest.mark.asyncio
 async def test_non_owner_update_returns_none(alice_bob):
-    """非 owner 调 update 返 None (隐身)"""
+    """2026-09 单一团队空间: 非 owner (bob) 调 update → 成功改名 (原返 None 隐身已退役)
+
+    不存在路径仍返 None: 同 test 末尾保留 404 语义。
+    """
     factory = alice_bob["factory"]
     alice = alice_bob["alice"]
     bob = alice_bob["bob"]
@@ -346,7 +354,17 @@ async def test_non_owner_update_returns_none(alice_bob):
         result = await svc.update_folder(
             fid, current_user_id=bob.id, name="bob_tried",
         )
-        assert result is None
+        assert result is not None, "跨成员改名应成功 (单一团队空间)"
+        assert result.name == "bob_tried"
+        await session.commit()
+
+    # 不存在路径仍返 None (真 404 语义保留)
+    async with factory() as session:
+        svc = FolderService(session)
+        missing = await svc.update_folder(
+            999_999_999, current_user_id=bob.id, name="x",
+        )
+        assert missing is None
 
 
 @pytest.mark.asyncio
@@ -377,11 +395,10 @@ async def test_soft_delete_blocks_when_has_children(alice_bob):
 
 @pytest.mark.asyncio
 async def test_soft_delete_blocks_when_not_owner(alice_bob):
-    """非 owner 调 soft_delete → 应 raise FolderServiceError(403)
+    """2026-09 单一团队空间: 非 owner 调 soft_delete → 成功 (owner 门禁已退役)
 
-    v2.12 (2026-07-10) 修复: 旧行为非 owner 返回 False (→ endpoint 转 404),
-    误导用户「Folder不存在」(实际 folder 存在但越权)。
-    新行为: 显式 raise 403 让前端能区分「不存在」vs「无权限」。
+    历史 (v2.12, 2026-07-10): 非 owner 显式 raise 403 区分「不存在」vs「无权限」。
+    现状: owner_id 仅创建人溯源, 任何成员可软删任意 folder; 不存在仍返 False。
     """
     factory = alice_bob["factory"]
     alice = alice_bob["alice"]
@@ -392,27 +409,30 @@ async def test_soft_delete_blocks_when_not_owner(alice_bob):
         f = await svc.create_folder(
             name=f"alice_owned_by_bob_to_delete_{u}",
             owner_id=alice.id,
-            visibility="team",  # team visibility 让 bob 也能看到, 但不能删
+            visibility="team",
         )
         fid = f.id
         await session.commit()
 
     async with factory() as session:
         svc = FolderService(session)
-        with pytest.raises(FolderServiceError) as exc_info:
-            await svc.soft_delete_folder(fid, current_user_id=bob.id)
-        assert exc_info.value.status_code == 403, (
-            f"应返 403 (越权), 实际 {exc_info.value.status_code}: {exc_info.value}"
-        )
-        assert "无法删除非自己拥有" in str(exc_info.value)
+        ok = await svc.soft_delete_folder(fid, current_user_id=bob.id)
+        assert ok is True, "跨成员软删应成功 (单一团队空间)"
+        await session.commit()
+
+    # 验证真软删了
+    async with factory() as session:
+        svc = FolderService(session)
+        f = await svc.get_folder(fid, include_deleted=True)
+        assert f is not None and f.deleted_at is not None
 
 
 @pytest.mark.asyncio
 async def test_soft_delete_admin_can_bypass_owner(alice_bob):
-    """admin 越权 → 应允许删除 (与 CLAUDE.md 任务权限模型对齐)
+    """is_admin 参数向后兼容 → 删除仍成功
 
-    v2.13 (2026-07-10): 加 is_admin 越权支持。admin 调 soft_delete_folder(others_folder)
-    应返 True (成功软删), 无 FolderServiceError。
+    历史 v2.13 (2026-07-10): admin 越权支持。2026-09 单一团队空间: owner 门禁退役,
+    is_admin 参数保留但已无行为差异 (任何成员可删)。
     """
     factory = alice_bob["factory"]
     alice = alice_bob["alice"]
@@ -429,19 +449,10 @@ async def test_soft_delete_admin_can_bypass_owner(alice_bob):
         fid = f.id
         await session.commit()
 
-    # bob (非 admin) 调 → 应 403
+    # 2026-09 单一团队空间: bob (is_admin 默认 False) 调 → 也成功 (owner 门禁已退役)
     async with factory() as session:
         svc = FolderService(session)
-        with pytest.raises(FolderServiceError) as exc_info:
-            await svc.soft_delete_folder(fid, current_user_id=bob.id)
-        assert exc_info.value.status_code == 403
-
-    # bob (is_admin=True) 调 → 应成功 (bypass owner 检查)
-    async with factory() as session:
-        svc = FolderService(session)
-        ok = await svc.soft_delete_folder(
-            fid, current_user_id=bob.id, is_admin=True,  # admin bypass
-        )
+        ok = await svc.soft_delete_folder(fid, current_user_id=bob.id)
         assert ok is True
         await session.commit()
 
@@ -783,7 +794,10 @@ async def test_soft_delete_recursive_cascades_drive_files(alice_bob):
 
 @pytest.mark.asyncio
 async def test_soft_delete_recursive_owner_check_still_enforced(alice_bob):
-    """recursive=True 但非 owner (且非 admin) → 仍应 raise 403 (不能因级联而绕过权限)"""
+    """2026-09 单一团队空间: recursive=True + 非 owner (bob) → 级联删除成功
+
+    历史: owner 门禁在 recursive 路径同样强制 (403)。现 owner 仅溯源, 跨成员级联软删放行。
+    """
     factory = alice_bob["factory"]
     alice = alice_bob["alice"]
     bob = alice_bob["bob"]
@@ -800,21 +814,19 @@ async def test_soft_delete_recursive_owner_check_still_enforced(alice_bob):
         await session.commit()
         fid = f.id
 
-    # bob (非 admin) 用 recursive=True → 应 403 (不能跳过 owner 检查)
+    # bob (普通成员) 用 recursive=True → 成功 (单一团队空间)
     async with factory() as session:
         svc = FolderService(session)
-        with pytest.raises(FolderServiceError) as exc_info:
-            await svc.soft_delete_folder(
-                fid, current_user_id=bob.id, recursive=True,
-            )
-        assert exc_info.value.status_code == 403, (
-            f"应 403 越权, 实际 {exc_info.value.status_code}"
+        result = await svc.soft_delete_folder(
+            fid, current_user_id=bob.id, recursive=True,
         )
+        assert isinstance(result, dict)
+        assert result["deleted_folders"] >= 2, f"父+子应一起进回收站: {result}"
 
-    # 验证: 越权失败不应留下任何半删痕迹
+    # 验证: 整棵子树已软删
     async with factory() as session:
         items, _ = await svc.list_folders(current_user_id=alice.id)
-        assert fid in {x.id for x in items}, "被越权目标的 folder 应仍保留"
+        assert fid not in {x.id for x in items}, "级联软删后父 folder 不应出现在活跃列表"
 
 
 @pytest.mark.asyncio

@@ -222,15 +222,19 @@ async def test_visibility_inherits_hard_upper_bound(alice_bob_folders):
 
 @pytest.mark.asyncio
 async def test_list_files_private_invisible_to_others(alice_bob_folders):
-    """private 文件仅 owner 可见, 其他用户**完全看不到** (连文件名都不展示)"""
+    """2026-09 单一团队空间: create_file 收口点把 private 强制改写 team → 全员可见
+
+    历史: private 文件仅 owner 可见 (连文件名都不展示)。现在 'private' 入参已退役,
+    alice 建的 "private" 文件实际是 team, bob 也看得到。
+    """
     factory = alice_bob_folders["factory"]
     alice = alice_bob_folders["alice"]
     bob = alice_bob_folders["bob"]
 
-    # alice 创建 2 个文件: 1 private + 1 team
+    # alice 创建 2 个文件: 1 "private" (收口改写 team) + 1 team
     async with factory() as session:
         svc = DriveService(session)
-        await svc.create_file(
+        priv = await svc.create_file(
             title="drive_test_alice_private",
             file_path="drive/alice/secret.txt",
             file_name="secret.txt",
@@ -239,6 +243,7 @@ async def test_list_files_private_invisible_to_others(alice_bob_folders):
             owner_id=alice.id,
             visibility="private",
         )
+        assert priv.visibility == "team", "create_file 应把 private 强制改写为 team"
         await svc.create_file(
             title="drive_test_alice_team",
             file_path="drive/alice/public-ish.txt",
@@ -257,13 +262,12 @@ async def test_list_files_private_invisible_to_others(alice_bob_folders):
         titles = [x.title for x in items if x.title.startswith("drive_test_alice_")]
         assert len(titles) == 2
 
-    # bob 看应只看到 1 个 (team 那个, private 隐身)
+    # bob 看也应 2 个 (单一团队空间: 无 private 隐身)
     async with factory() as session:
         svc = DriveService(session)
         items, total = await svc.list_files(current_user_id=bob.id)
         alice_titles = [x.title for x in items if x.title.startswith("drive_test_alice_")]
-        assert len(alice_titles) == 1
-        assert "private" not in alice_titles[0]
+        assert len(alice_titles) == 2, "private 收口改写后 bob 应看到 alice 的全部 2 个文件"
 
 
 @pytest.mark.asyncio
@@ -360,7 +364,7 @@ async def test_extract_to_kb_upgrades_visibility(alice_bob_folders):
 
 @pytest.mark.asyncio
 async def test_non_owner_update_file_returns_none(alice_bob_folders):
-    """非 owner 调 update 应返 None (隐身)"""
+    """2026-09 单一团队空间: 非 owner (bob) 调 update_file → 成功 (owner 门禁已退役)"""
     factory = alice_bob_folders["factory"]
     alice = alice_bob_folders["alice"]
     bob = alice_bob_folders["bob"]
@@ -378,16 +382,18 @@ async def test_non_owner_update_file_returns_none(alice_bob_folders):
         file_id = f.id
         await session.commit()
 
-    # bob 尝试 update
+    # bob 尝试 update → 现在成功
     async with factory() as session:
         svc = DriveService(session)
         result = await svc.update_file(
             file_id, current_user_id=bob.id,
             title="bob_tried_to_rename",
         )
-        assert result is None
+        assert result is not None, "跨成员 update_file 应成功 (单一团队空间)"
+        assert result.title == "bob_tried_to_rename"
+        await session.commit()
 
-    # alice 应仍能 update
+    # alice 仍可 update
     async with factory() as session:
         svc = DriveService(session)
         result = await svc.update_file(
@@ -400,13 +406,17 @@ async def test_non_owner_update_file_returns_none(alice_bob_folders):
 
 @pytest.mark.asyncio
 async def test_storage_stats_basic(alice_bob_folders):
-    """storage_stats 返回 file_count + by_visibility 分布"""
+    """storage_stats 返回 file_count + by_visibility 分布
+
+    2026-09 单一团队空间: 'private' 入参在 create_file 收口点被强制改写 team,
+    本 test 的 3 个文件全部落 team, private 分组应为 0 (新数据不再产生 private)。
+    """
     factory = alice_bob_folders["factory"]
     alice = alice_bob_folders["alice"]
 
     async with factory() as session:
         svc = DriveService(session)
-        # alice 创建 3 个 (1 private + 2 team)
+        # alice 创建 3 个 (1 名义 private → 强制 team + 2 team)
         await svc.create_file(
             title="drive_test_stat_p",
             file_path="d/p.txt", file_name="p.txt", file_type=".txt", file_size=10,
@@ -424,5 +434,5 @@ async def test_storage_stats_basic(alice_bob_folders):
         svc = DriveService(session)
         stats = await svc.storage_stats(current_user_id=alice.id)
         assert stats["file_count"] >= 3
-        assert stats["by_visibility"].get("private", 0) >= 1
-        assert stats["by_visibility"].get("team", 0) >= 2
+        assert stats["by_visibility"].get("private", 0) == 0
+        assert stats["by_visibility"].get("team", 0) >= 3
