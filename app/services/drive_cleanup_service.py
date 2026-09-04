@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.folder import Folder
 from app.models.knowledge import Knowledge
 from app.services.cleanup_backup import backup_rows_to_json
+from app.services.drive_object_gc import collect_object_keys, purge_minio_keys
 from app.utils.datetime_utils import to_naive_datetime
 
 logger = logging.getLogger("microbubble.drive_cleanup_service")
@@ -41,6 +42,9 @@ logger = logging.getLogger("microbubble.drive_cleanup_service")
 
 # 2026-07-12 死代码清理: 复用 app.utils.datetime_utils.to_naive_datetime
 # (原本独立 inline, 现统一到 chat_history_service 同样的严格 astimezone(UTC) 版本)
+# 批次① (2026-09-05) 兼容别名: tests/test_drive_cleanup_service.py TestToNaiveDatetime
+# 自 7-12 起引用即失效 (HEAD 基线 3 红), 补 alias 恢复其测试意图而非删测试。
+_to_naive_datetime = to_naive_datetime
 
 
 async def clean_old_drive_files(db: AsyncSession, cutoff_date: datetime) -> dict:
@@ -80,6 +84,14 @@ async def clean_old_drive_files(db: AsyncSession, cutoff_date: datetime) -> dict
         Knowledge.deleted_at.isnot(None),
         Knowledge.deleted_at < cutoff_naive,
     )
+    # 批次① N1 真 bug 修复 (旧顺序 = 先 DELETE 后用同一 where SELECT):
+    # 旧实现 L97 先 `DELETE FROM knowledge` 再 L102 SELECT expired_files →
+    # 命中 0 行 → MinIO 清理**从未执行过**, 过期对象全量泄漏。
+    # 新顺序: SELECT 行 → backup → collect 版本 keys (必须趁版本行还活着,
+    # FK CASCADE 会在 DELETE 主表行时先消 drive_file_versions) → DELETE → commit → purge。
+    result_files = await db.execute(select(Knowledge).where(drive_files_where))
+    expired_files = list(result_files.scalars().all())
+
     # PR6-P10 backup_before_delete: 先 SELECT → JSON 备份 → caller 自己 DELETE
     # (drive 文件无"安全检查"逻辑, 直接 DELETE WHERE where_clause 全部)
     deleted_file_count, _file_backup_path = await backup_rows_to_json(
@@ -92,30 +104,19 @@ async def clean_old_drive_files(db: AsyncSession, cutoff_date: datetime) -> dict
             "strategy": "storage_mode='drive' AND deleted_at IS NOT NULL AND deleted_at < cutoff",
         },
     )
+    # 当前对象 + 全部历史版本对象 key (B2: 旧实现连版本对象从不知道要清)
+    file_object_keys = await collect_object_keys(db, expired_files)
+
     # 物理删 DB 行
     if deleted_file_count > 0:
         delete_files_stmt = delete(Knowledge).where(drive_files_where)
         await db.execute(delete_files_stmt)
 
-    # ========== 2. MinIO 物理删除 (防御性: 失败不阻塞 DB 硬删) ==========
-    # 单独 SELECT 拿 file_path (backup_rows_to_json 只返 count, 不返 rows)
-    stmt_files = select(Knowledge).where(drive_files_where)
-    result_files = await db.execute(stmt_files)
-    expired_files = result_files.scalars().all()
-
-    minio_cleanup_failures = 0
-    for f in expired_files:
-        if not f.file_path:
-            continue
-        try:
-            from app.services.file_service import file_service
-            file_service.delete_file(f.file_path)
-        except Exception as e:
-            minio_cleanup_failures += 1
-            logger.warning(
-                f"⚠️ [drive_cleanup_service] MinIO 删除失败 id={f.id} "
-                f"path={f.file_path}: {e}"
-            )
+    # MinIO 物理删除放在文件硬删 commit 之后:
+    # 类 20.181 教训: purge 只走 DB commit 后路径, 防测试 session rollback 时
+    # 误删仍在库的线上对象; 失败不阻塞 DB 硬删 (铁律 2, 计数进返回值)
+    await db.commit()
+    minio_cleanup_failures = purge_minio_keys(file_object_keys) if file_object_keys else 0
 
     # ========== 3. 孤儿 Folder (无子文件 + 无子 folder) ==========
     folders_where = and_(

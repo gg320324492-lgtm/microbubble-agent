@@ -267,10 +267,17 @@ class TestBuildListFilesQuery:
         assert "visibility = 'team'" in combined_sql
 
     def test_with_starred_only_includes_is_starred(self):
-        """starred_only=True 应加 Knowledge.is_starred."""
+        """starred_only=True 应加当前成员的个人收藏子查询.
+
+        批次① 收藏个人化 (alembic 134): 老 Knowledge.is_starred 全局限列 filter
+        退役, 契约 = drive_file_stars WHERE member_id=current_user_id 的 IN 子查询
+        (断言从 is_starred 改为 drive_file_stars + member_id 语义锚)。
+        """
         filters = self._call(starred_only=True)
         combined_sql = self._compile_filters(filters).lower()
-        assert "is_starred" in combined_sql
+        assert "drive_file_stars" in combined_sql
+        assert "member_id" in combined_sql
+        assert "is_starred" not in combined_sql
 
     def test_with_file_type_pdf_includes_ilike(self):
         """file_type='pdf' 应加 ILIKE '%.pdf'."""

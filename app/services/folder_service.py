@@ -12,7 +12,7 @@
   visibility='private' 已在 create/update 收口点强制改写为 'team' (私有概念退役)。
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 from sqlalchemy import and_, select, func, update
@@ -335,7 +335,16 @@ class FolderService:
                 )
             # 重新算 depth
             new_depth = self._compute_depth(new_parent.depth if new_parent else None)
-            self._check_depth_within_limit(new_depth)
+            # 批次① B4: 旧实现只校验被移动 folder 自身落点深度, 子树整体平移后
+            # 最深 descendant 可能穿透 MAX_FOLDER_DEPTH (5 层上限名存实亡)。
+            # 真校验 = 新落点 + 子树相对深度偏移 仍 ≤ 上限 (含自身, 覆盖老 check)。
+            subtree_max_depth = await self._subtree_max_depth(folder)
+            projected_max = new_depth + (subtree_max_depth - folder.depth)
+            if projected_max > MAX_FOLDER_DEPTH:
+                raise FolderServiceError(
+                    f"移动后子树最深将达 {projected_max} 层, 超过 {MAX_FOLDER_DEPTH} 层上限",
+                    status_code=400,
+                )
             # visibility 兼容 (新父可能 visibility 更高)
             if new_parent is not None:
                 self._validate_visibility_inherits(folder.visibility, new_parent.visibility)
@@ -395,6 +404,21 @@ class FolderService:
         if candidate.id == ancestor.id:
             return True
         return candidate.path.startswith(ancestor.path)
+
+    async def _subtree_max_depth(self, folder: Folder) -> int:
+        """folder 子树 (含自身, 排除已软删) 的最大 depth — B4 move 校验用
+
+        物化 path 前缀一把抓 (与 soft_delete_folder 级联同款遍历, O(子树行数));
+        已软删后代不计 (restore 后其深度会随 _rebuild_subtree_path 重算, 且删除中
+        的行不应阻塞移动决策)。
+        """
+        stmt = select(func.max(Folder.depth)).where(
+            Folder.path.like(f"{folder.path}%"),
+            Folder.deleted_at.is_(None),
+        )
+        max_depth = (await self.db.execute(stmt)).scalar()
+        # 兜底: 极端脏数据 (自身行不在 LIKE 结果里) 至少保证自身深度
+        return max_depth if max_depth is not None else folder.depth
 
     async def _rebuild_subtree_path(self, folder: Folder) -> None:
         """重建 folder 及其所有子 folder 的 path (move 后)"""
@@ -523,14 +547,22 @@ class FolderService:
         # 3. 级联软删所有 subtree knowledge (drive 文件)
         #   - storage_mode='drive' 才动, 'kb' 是知识库条目 (KB 不归文件夹管理)
         #   - deleted_at=now 而非 None, restore 时可恢复整棵子树
+        #   - 批次① B3: 与 drive_service.soft_delete_file (L832) 对称补快照 —
+        #     旧实现级联删的行 original_parent_id/original_path 恒 NULL, 回收站 UI
+        #     无法显示原位置, 且夹在回收期内被物理删后单文件 restore 只能掉根目录。
+        #     UPDATE...FROM folders 把各自所在 folder 的 path 一并快照。
         from app.models.knowledge import Knowledge
+        # UPDATE...FROM (PG): 目标列引用其他表列 → folders 自动进 FROM,
+        # 再显式 where 关联条件; 不用 .select_from (ORM-enabled update 生成式方法面窄)
         stmt_upd_kb = update(Knowledge).where(
             Knowledge.folder_id.in_(subtree_ids),
             Knowledge.deleted_at.is_(None),
             Knowledge.storage_mode == "drive",
         ).values(
             deleted_at=now_naive,
-        )
+            original_parent_id=Knowledge.folder_id,
+            original_path=Folder.path,
+        ).where(Folder.id == Knowledge.folder_id)
         file_result = await self.db.execute(stmt_upd_kb)
 
         await self.db.commit()
@@ -553,20 +585,88 @@ class FolderService:
         folder_id: int,
         current_user_id: int,
         is_admin: bool = False,
-    ) -> Optional[Folder]:
-        """恢复被软删的 folder (2026-09 单一团队空间: 任何成员可恢复, 3 天保留期内有效)
+    ) -> Optional[dict]:
+        """恢复被软删的 folder — 批次① B1 级联对称恢复 (2026-09 单一团队空间: 任何成员可恢复)
+
+        真 bug 背景: soft_delete_folder(recursive=True) 给整棵子树 (folder + drive
+        Knowledge) 写**同一个** now_naive 时间戳级联软删, 但旧 restore 只复活单个夹
+        → 用户从回收站恢复"组会PPT"后得到空夹, 48 个子夹 + 276 条文件"消失"在垃圾桶。
+
+        方案 (级联批时间戳对称判据):
+        - batch_ts = folder.deleted_at; 子树行 (path LIKE + deleted_at 非空) 中
+          deleted_at >= batch_ts - 5s 容差 的视为**同一次级联删**, 一并复活。
+        - 更早时间戳的行 = 单独删除的 (级联删会跳过已删行, 两者时间戳必不同批),
+          不复活 — 保持"单独删子夹先进回收站"的用户意图 (对称性: 删 A 又单独删 B,
+          restore A 只回来 A 批)。
+        - Knowledge 侧同判据 (folder_id IN 复活夹集合 + deleted_at 同批), 并清
+          B3 快照列 (folder_id 从未改过, 夹已复活 → 落点天然正确, 快照完成使命)。
+        - 5s 容差: 级联用同一 Python datetime 对象写所有行 (理论差 0), 容差只防
+          时钟抖动/未来改成分批 commit; 两次独立用户操作间隔 >> 5s。
 
         current_user_id / is_admin 参数保留兼容签名, 不再用于 owner 门禁。
+
+        Returns:
+            None = folder 真不存在 (caller 映射 404)
+            dict = {"folder": Folder, "restored_folders": int, "restored_files": int}
+                   (未删时幂等返计数 0/0)
         """
         stmt = select(Folder).where(Folder.id == folder_id)
         folder = (await self.db.execute(stmt)).scalar_one_or_none()
         if folder is None:
             return None
-        folder.deleted_at = None
+        if folder.deleted_at is None:
+            # 幂等 no-op: 未删的夹"恢复" = 什么都不做
+            return {"folder": folder, "restored_folders": 0, "restored_files": 0}
+
+        batch_ts = folder.deleted_at
+        cutoff = batch_ts - timedelta(seconds=5)
+
+        # 1. 子树 folder 中属于本次级联批的行 (含自己 — path 前缀匹配自身)
+        subtree_stmt = select(Folder.id).where(
+            Folder.path.like(f"{folder.path}%"),
+            Folder.deleted_at.isnot(None),
+            Folder.deleted_at >= cutoff,
+        )
+        subtree_ids = [row[0] for row in (await self.db.execute(subtree_stmt)).all()]
+        if folder.id not in subtree_ids:
+            # 边界: 自身 path 与行不一致的脏数据也要能把自己捞回来
+            subtree_ids.append(folder.id)
+
+        # 2. 复活 folder 批
+        stmt_upd_folder = update(Folder).where(
+            Folder.id.in_(subtree_ids),
+        ).values(deleted_at=None, updated_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        folder_result = await self.db.execute(stmt_upd_folder)
+
+        # 3. 复活同批 drive 文件 (kb 条目级联删时就没动过, 这里同样不碰)
+        from app.models.knowledge import Knowledge
+        stmt_upd_kb = update(Knowledge).where(
+            Knowledge.folder_id.in_(subtree_ids),
+            Knowledge.deleted_at.isnot(None),
+            Knowledge.deleted_at >= cutoff,
+            Knowledge.storage_mode == "drive",
+        ).values(
+            deleted_at=None,
+            original_parent_id=None,   # B3 快照清理: 夹已复活, folder_id 落点不变即正确
+            original_path=None,
+        )
+        file_result = await self.db.execute(stmt_upd_kb)
+
         await self.db.commit()
         await self.db.refresh(folder)
-        logger.info(f"[FolderService.restore_folder] id={folder.id}")
-        return folder
+
+        restored_folders = folder_result.rowcount or 0
+        restored_files = file_result.rowcount or 0
+        logger.info(
+            f"[FolderService.restore_folder] CASCADE id={folder.id} path='{folder.path}' "
+            f"restored_folders={restored_folders} restored_files={restored_files} "
+            f"batch_ts={batch_ts.isoformat()}"
+        )
+        return {
+            "folder": folder,
+            "restored_folders": restored_folders,
+            "restored_files": restored_files,
+        }
 
     # ============================================================
     # v2 PR2 回收站列表 (与文件回收站对称)

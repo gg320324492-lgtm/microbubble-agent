@@ -140,20 +140,15 @@ class TestCleanOldDriveFiles:
         mock_empty = MagicMock()
         mock_empty.scalars.return_value.all.return_value = []
 
-        # service 顺序: backup_files (call 1, mock_backup 内部 0 execute) → 返 (1, ...)
-        # → if deleted > 0: DELETE files (call 2) → mock_files_result
-        # → SELECT files (call 3) → mock_files_result (1 file)
-        # → MinIO delete_file 抛 IOError (mock patch) → minio_cleanup_failures=1
-        # → backup_folder (call 4, mock_backup 内部 0 execute) → 返 (0, None)
-        # → SELECT folder (call 5) → mock_empty (0 folders)
-        # → scalar 不调 (loop 0 次)
+        # 批次① N1 重排后的 execute 顺序 (旧断言按旧顺序写, 随修复同步更新):
+        # call 1: SELECT expired files (返 1 file, 必须在 DELETE 前 → MinIO key 收集源)
+        # call 2: SELECT drive_file_versions.minio_object_key (collect_object_keys 内部, 返 0 版本)
+        # call 3: DELETE files
+        # call 4: SELECT folders (0 folders)
         call_count = {"n": 0}
         async def execute_seq(*args, **kwargs):
             call_count["n"] += 1
-            # call 1: DELETE files (返 mock_files_result, 不需要数据)
-            # call 2: SELECT files (返 1 file → MinIO 失败路径)
-            # call 3: SELECT folder (返 0 folders)
-            if call_count["n"] in (1, 2):
+            if call_count["n"] == 1:
                 return mock_files_result
             return mock_empty
 
@@ -185,8 +180,8 @@ class TestCleanOldDriveFiles:
         assert result["deleted_files"] == 1
         assert result["minio_cleanup_failures"] == 1
         assert result["deleted_folders"] == 0
-        # commit 仍被调用 (DB 行硬删已生效)
-        db.commit.assert_called_once()
+        # 批次① N1 重排后 commit 两次: 文件硬删后立即一次 (purge 前置) + 收尾一次
+        assert db.commit.await_count == 2
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_clean_old_drive_files_skips_folders_with_children(self):

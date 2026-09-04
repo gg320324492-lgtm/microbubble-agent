@@ -38,15 +38,19 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
-from sqlalchemy import and_, or_, select, func, update
+from sqlalchemy import and_, delete, or_, select, func, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils.datetime_utils import to_naive_datetime
 
 from app.models.folder import Folder, VISIBILITY_ORDER
+from app.models.drive_file_star import DriveFileStar
 from app.models.knowledge import Knowledge, KnowledgeVersion, ChunkedUploadSession  # PR5: 断点续传
 from app.models.member import Member
 from app.services.file_service import file_service
+# 批次① B2: 永久删时统一回收 当前对象 + PR9 版本对象 (collect 必须先于 DELETE)
+from app.services.drive_object_gc import collect_object_keys, purge_minio_keys
 # PR6: activity + notification 集成
 from app.services.activity_service import activity_service
 from app.services.notification_service import notification_service
@@ -205,6 +209,15 @@ def _build_folder_filter_clause(
     return Knowledge.folder_id.is_(None)
 
 
+def _escape_ilike(term: str) -> str:
+    """批次① B6: ILIKE 通配符转义 (\\ % _) — 用户输入的 %/_ 必须按字面量匹配.
+
+    转义顺序: 先转义反斜杠本身, 再转 % _ (否则会把刚插进去的 \\ 二次转义)。
+    配合 ilike(..., escape="\\\\") 编译出 `ESCAPE '\\'`。
+    """
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _build_list_files_query(
     *,
     storage_mode: str,
@@ -217,6 +230,7 @@ def _build_list_files_query(
     deleted_only: bool,
     include_deleted: bool,
     current_user_id: int,
+    search: Optional[str] = None,
 ):
     """v2.22 (2026-07-11): 抽 list_files filter builder 到独立 helper.
 
@@ -229,6 +243,12 @@ def _build_list_files_query(
 
     Note:
         include_deleted + deleted_only 互斥 (caller 必须二选一, 这里仅按 caller 传的参数加 filter)
+
+    批次① (2026-09-05) 变化:
+    - starred_only: Knowledge.is_starred 全局限列退役 → 子查询 drive_file_stars
+      (仅当前成员本人的收藏; alembic 134 回填后创建人视角与原行为兼容)。
+    - search: 文件名/标题中缀 ILIKE (pg_trgm 部分索引 ix_knowledge_file_name_trgm 支撑;
+      通配符经 _escape_ilike 转义为字面量)。
     """
     filters = [Knowledge.storage_mode == storage_mode]
     if deleted_only:
@@ -244,11 +264,26 @@ def _build_list_files_query(
     if visibility_filter:
         filters.append(Knowledge.visibility == visibility_filter)
     if starred_only:
-        filters.append(Knowledge.is_starred.is_(True))
+        # 收藏个人化 (134): 本人 star 过的行。IN 子查询与 JOIN 行数等价 (uk 保证)
+        filters.append(
+            Knowledge.id.in_(
+                select(DriveFileStar.file_id).where(
+                    DriveFileStar.member_id == current_user_id
+                )
+            )
+        )
     if file_type:
         ext_predicate = DriveService._build_file_type_predicate(file_type)
         if ext_predicate is not None:
             filters.append(ext_predicate)
+    if search and search.strip():
+        pattern = f"%{_escape_ilike(search.strip())}%"
+        filters.append(
+            or_(
+                Knowledge.file_name.ilike(pattern, escape="\\"),
+                Knowledge.title.ilike(pattern, escape="\\"),
+            )
+        )
     if is_team_shared_filter is not None:
         # 2026-09 单一团队空间: API 层已恒传 None (view 参数只回显不再过滤);
         # 保留代码路径给内部调用方, 迁移 133 回填后所有行 is_team_shared=true, 语义收敛。
@@ -557,6 +592,8 @@ class DriveService:
         # 跳过 folder_id IS NULL filter (用于 🌐 团队共享盘顶级 view, 列出
         # 所有 team PPT, 不论 folder_id 是否 NULL). personal view 维持 v2 PR3 行为.
         include_subfolders: bool = False,
+        # 批次① B6 (2026-09-05): 文件名/标题中缀搜索 (None/空白 = 不过滤, 行为与老版一致)
+        search: Optional[str] = None,
     ) -> Tuple[List[Knowledge], int]:
         """列 drive 文件 (含列表 SQL 越权防御)
 
@@ -569,7 +606,7 @@ class DriveService:
             page, page_size: 分页
             sort_by: 排序字段 (默认 created_at)
             sort_order: asc / desc
-            starred_only: 仅 is_starred=true
+            starred_only: 仅当前成员个人收藏 (批次① 134: drive_file_stars 子查询, 老全局 is_starred 列退役)
             file_type: pdf/image/video/office/text
             is_team_shared: v2 PR6-P19, None=不过滤/True=仅 team/False=仅 personal
             include_subfolders: v2.21, True 时跳过 folder_id IS NULL filter (🌐 team view 顶级用)
@@ -591,6 +628,7 @@ class DriveService:
             file_type=file_type,
             is_team_shared_filter=is_team_shared,
             include_subfolders=include_subfolders,
+            search=search,
         )
 
     async def _list_files_impl(
@@ -610,6 +648,7 @@ class DriveService:
         deleted_only: bool = False,  # v2 PR2: trash 模式 exclusive filter
         is_team_shared_filter: Optional[bool] = None,  # v2 PR6-P19: None=both, True=仅 team, False=仅 personal
         include_subfolders: bool = False,  # v2.21 (2026-07-11): 见 list_files docstring
+        search: Optional[str] = None,  # 批次① B6: 文件名/标题中缀搜索 (见 list_files docstring)
     ) -> Tuple[List[Knowledge], int]:
         """v2 PR2: 拆出 list_files 内部实现, 支持 sort_by / sort_order / starred_only / file_type.
 
@@ -637,6 +676,7 @@ class DriveService:
             deleted_only=deleted_only,
             include_deleted=include_deleted,
             current_user_id=current_user_id,
+            search=search,
         )
 
         stmt = stmt.where(and_(*filters))
@@ -644,6 +684,19 @@ class DriveService:
 
         # 排序
         sort_column = self._resolve_sort_column(sort_by)
+        if starred_only and sort_by == "starred_at":
+            # 批次① 收藏个人化 (134): Knowledge.starred_at 全局限列不再被 toggle 维护,
+            # 收藏列表的"最近收藏在前"排序改用**当前成员**在 drive_file_stars 的时间
+            # (相关标量子查询; 能通过 starred_only 过滤的行必有本人 star 行, 不会 NULL)
+            sort_column = (
+                select(DriveFileStar.starred_at)
+                .where(
+                    DriveFileStar.file_id == Knowledge.id,
+                    DriveFileStar.member_id == current_user_id,
+                )
+                .correlate(Knowledge)
+                .scalar_subquery()
+            )
         if sort_order == "asc":
             stmt = stmt.order_by(sort_column.asc())
         else:
@@ -670,6 +723,7 @@ class DriveService:
             "created_at": Knowledge.created_at,
             "updated_at": Knowledge.updated_at,
             "file_name": Knowledge.file_name,
+            "file_size": Knowledge.file_size,  # 三栏工作台"大小"列排序 (注释 L644 早已声明支持, 实现漏了)
             "starred_at": Knowledge.starred_at,
             "deleted_at": Knowledge.updated_at,  # 回收站 fallback
         }
@@ -1310,15 +1364,21 @@ class DriveService:
     # v2 PR2 收藏 / 回收站 / 批量操作
     # ============================================================
 
-    async def toggle_star_file(self, file_id: int, current_user_id: int) -> Optional[Knowledge]:
-        """切换文件收藏状态 (2026-09 单一团队空间: 任何成员可 star, 360° 翻转 is_starred).
+    async def toggle_star_file(
+        self, file_id: int, current_user_id: int
+    ) -> Optional[Tuple[Knowledge, bool, Optional[datetime]]]:
+        """切换文件收藏状态 — 批次① 收藏个人化 (alembic 134, 2026-09-05).
 
-        Returns: 更新后的 Knowledge, None = 文件不存在.
+        旧实现写 Knowledge.is_starred 全局限列 (任何人 star 对全员生效, 是 bug 而非
+        特性); 现在对 drive_file_stars (file_id × member_id) 增删, **仅影响当前成员
+        自己的收藏夹**。Knowledge.is_starred / starred_at 两列退役为只读 legacy,
+        本方法不再写它们。
 
-        注意 (发布说明): is_starred 是全局限列 (无 per-user 表), 任何成员星标对全员生效。
+        Returns:
+            None = 文件不存在 (或非 drive 行)
+            (Knowledge, starred_now, starred_at_now) — starred_now 是**当前成员视角**
 
-        v2 网盘 PR6-P12+ 增量: star 触发 notification_service (create_mention context='star'),
-        通知 file owner (跳过自通知, 防止噪音).
+        保留 PR6-P12+ 通知逻辑: star 时通知 created_by (跳过自通知), unstar 不通知。
         """
         f = await self.db.execute(
             select(Knowledge).where(
@@ -1329,21 +1389,34 @@ class DriveService:
         f = f.scalar_one_or_none()
         if f is None:
             return None
-        if f.is_starred:
-            f.is_starred = False
-            f.starred_at = None
+        existing = (await self.db.execute(
+            select(DriveFileStar).where(
+                DriveFileStar.file_id == f.id,
+                DriveFileStar.member_id == current_user_id,
+            )
+        )).scalar_one_or_none()
+        starred_now: bool
+        starred_at_now: Optional[datetime]
+        if existing is not None:
+            await self.db.delete(existing)
+            starred_now = False
+            starred_at_now = None
             action = "unstar"
         else:
-            f.is_starred = True
-            f.starred_at = to_naive_datetime(datetime.now(timezone.utc))
+            starred_at_now = to_naive_datetime(datetime.now(timezone.utc))
+            self.db.add(DriveFileStar(
+                file_id=f.id,
+                member_id=current_user_id,
+                starred_at=starred_at_now,
+            ))
+            starred_now = True
             action = "star"
         await self.db.commit()
-        await self.db.refresh(f)
-        logger.info(f"[DriveService.toggle_star_file] id={f.id} {action}")
+        logger.info(f"[DriveService.toggle_star_file] id={f.id} user={current_user_id} {action}")
 
         # v2 网盘 PR6-P12+ 增量: star 通知 file owner (只有 star 时通知, unstar 不通知)
-        # 设计: star 总是 owner 操作 (toggle_star_file 已校验 f.created_by == current_user_id),
-        # 未来 PR3 "team member star others' files" 时, 这里会跳过自通知
+        # 设计: 单一团队空间下任何成员可 star 他人文件 → 非本人文件收藏时提醒创建人
+        # (通知失败非阻塞, try/except 兜底)。
         if action == "star":
             try:
                 if f.created_by != current_user_id:
@@ -1357,7 +1430,68 @@ class DriveService:
             except Exception as e:
                 logger.debug(f"[DriveService.toggle_star_file] notification trigger 失败 (非阻塞): {e}")
 
-        return f
+        return f, starred_now, starred_at_now
+
+    async def get_starred_ids(
+        self, file_ids: List[int], current_user_id: int
+    ) -> set:
+        """批次①: 批量反查"当前成员收藏过"的文件 id 集合 (列表端点 attach per-user is_starred 用).
+
+        单次 SELECT, 防 N+1 (同 _to_item owner_lookup 范式)。空输入直接返空集不查库。
+        """
+        if not file_ids:
+            return set()
+        stmt = select(DriveFileStar.file_id).where(
+            DriveFileStar.member_id == current_user_id,
+            DriveFileStar.file_id.in_(file_ids),
+        )
+        rows = (await self.db.execute(stmt)).scalars().all()
+        return set(rows)
+
+    async def batch_star_files(
+        self,
+        file_ids: List[int],
+        current_user_id: int,
+        *,
+        starred: bool,
+    ) -> int:
+        """批次①: 批量收藏/取消收藏 (POST /drive/files/batch-star, 对当前成员视角, 幂等).
+
+        - starred=True: INSERT...ON CONFLICT DO NOTHING (重复调不产生重复行, 不报错)
+        - starred=False: DELETE...WHERE file_id IN AND member_id=me (未收藏的 id 删 0 行, 同样幂等)
+        - 仅 storage_mode='drive' 的行有效; kb 行/不存在 id 静默跳过 (批量操作不做逐个 404)。
+
+        Returns: updated = 命中目标状态的本人在册 drive 文件数 (幂等语义: 重复调用返回同值)
+        """
+        if not file_ids:
+            return 0
+        stmt = select(Knowledge.id).where(
+            Knowledge.id.in_(file_ids),
+            Knowledge.storage_mode == "drive",
+        )
+        valid_ids = list((await self.db.execute(stmt)).scalars().all())
+        if not valid_ids:
+            return 0
+        if starred:
+            now = to_naive_datetime(datetime.now(timezone.utc))
+            ins = pg_insert(DriveFileStar).values([
+                {"file_id": vid, "member_id": current_user_id, "starred_at": now}
+                for vid in valid_ids
+            ]).on_conflict_do_nothing(index_elements=["file_id", "member_id"])
+            await self.db.execute(ins)
+        else:
+            await self.db.execute(
+                delete(DriveFileStar).where(
+                    DriveFileStar.file_id.in_(valid_ids),
+                    DriveFileStar.member_id == current_user_id,
+                )
+            )
+        await self.db.commit()
+        logger.info(
+            f"[DriveService.batch_star_files] user={current_user_id} "
+            f"requested={len(file_ids)} updated={len(valid_ids)} starred={starred}"
+        )
+        return len(valid_ids)
 
     async def list_trash(
         self,
@@ -1400,10 +1534,11 @@ class DriveService:
         sort_by: str = "starred_at",
         sort_order: str = "desc",
     ) -> Tuple[List[Knowledge], int]:
-        """v2 PR2: 列收藏文件 (is_starred=true).
+        """v2 PR2 + 批次① 收藏个人化: 列**当前成员**的个人收藏文件.
 
-        - 仅返回 created_by == current_user_id (owner 隔离, 不让看别人收藏)
-        - sort_by 默认 starred_at desc (最近收藏在前)
+        - 过滤 = drive_file_stars 含本人 star 行的文件 (134 起 per-user;
+          旧 docstring 写"owner 隔离"但实现实为全局限 is_starred, N2 一并修正)
+        - sort_by 默认 starred_at desc = 本人收藏动作时间 (相关子查询排序)
         """
         return await self._list_files_impl(
             current_user_id=current_user_id,
@@ -1642,18 +1777,19 @@ class DriveService:
         ):
             # 2026-09: created_by/is_admin owner 门禁已删, current_user_id 参数保留兼容签名
             return False
-        # 如果有 MinIO 对象, 删掉 (best-effort)
-        if f.file_path:
-            try:
-                file_service.delete_file(f.file_path)
-            except Exception as e:
-                logger.warning(
-                    f"[DriveService.permanent_delete] minio delete failed "
-                    f"id={f.id} path={f.file_path}: {e}"
-                )
+        # 批次① B2: 旧实现只删 f.file_path 当前对象, PR9 历史版本对象泄漏。
+        # collect 必须在 db.delete 前 (FK CASCADE 一删主行, 版本行即消失查不到 key);
+        # purge 在 commit 后 (MinIO 失败不回滚 DB 硬删)。
+        object_keys = await collect_object_keys(self.db, [f])
         await self.db.delete(f)
         await self.db.commit()
-        logger.info(f"[DriveService.permanent_delete] id={f.id}")
+        failures = purge_minio_keys(object_keys)
+        if failures:
+            logger.warning(
+                f"[DriveService.permanent_delete] MinIO 清理失败 {failures}/{len(object_keys)} "
+                f"key id={f.id} (DB 行已删, 对象留待孤儿巡检)"
+            )
+        logger.info(f"[DriveService.permanent_delete] id={f.id} objects_purged={len(object_keys)}")
         return True
 
     async def permanent_delete_batch(
@@ -1676,19 +1812,13 @@ class DriveService:
             )
         )
         files = list(result.scalars().all())
+        # 批次① B2: 与 permanent_delete 同款 — 全部 key 在任何 db.delete 前收集
+        # (版本行随主行 CASCADE 消失), MinIO 清理工统一挪到 commit 后。
+        object_keys = await collect_object_keys(self.db, files)
         skipped = []
         deleted = 0
         for f in files:
             # 2026-09 单一团队空间: 删除 created_by/is_admin owner skip
-            # best-effort 删 MinIO 对象
-            if f.file_path:
-                try:
-                    file_service.delete_file(f.file_path)
-                except Exception as e:
-                    logger.warning(
-                        f"[DriveService.permanent_delete_batch] minio delete failed "
-                        f"id={f.id}: {e}"
-                    )
             await self.db.delete(f)
             deleted += 1
         existing_ids = {f.id for f in files}
@@ -1696,9 +1826,15 @@ class DriveService:
             if fid not in existing_ids:
                 skipped.append(fid)
         await self.db.commit()
+        failures = purge_minio_keys(object_keys)
+        if failures:
+            logger.warning(
+                f"[DriveService.permanent_delete_batch] MinIO 清理失败 {failures}/{len(object_keys)} "
+                f"key (DB 行已删, 对象留待孤儿巡检)"
+            )
         logger.info(
             f"[DriveService.permanent_delete_batch] requested={len(file_ids)} "
-            f"deleted={deleted} skipped={len(skipped)}"
+            f"deleted={deleted} skipped={len(skipped)} objects_purged={len(object_keys)}"
         )
         return deleted, skipped
 

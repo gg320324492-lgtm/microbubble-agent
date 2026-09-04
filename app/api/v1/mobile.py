@@ -21,12 +21,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import and_, desc, or_, select
+from sqlalchemy import and_, desc, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.exceptions import ValidationException
 from app.core.security import get_current_user
+from app.models.drive_file_star import DriveFileStar
 from app.models.knowledge import ActivityEvent, Knowledge
 from app.models.member import Member
 from app.schemas.mobile import (
@@ -132,27 +133,42 @@ async def get_mobile_dashboard(
         logger.warning(f"[MobileDashboard] recent_activities failed: {e}")
 
     # ---- 2. starred_files ----
+    # 批次① 收藏个人化 (134): 改查 drive_file_stars per-user 关系。
+    # 原读 Knowledge.is_starred 全局限列 — 该列自 toggle 改造后不再被写入,
+    # 继续沿用会让移动端"收藏"停在迁移瞬间的存量集合 (主拍复核风险 #2)。
     try:
         # 隐私边界: 仅 own private + 全部 public/team 可见 (复用 drive service 逻辑)
         visibility_see = or_(
             Knowledge.created_by == user.id,
             Knowledge.visibility != "private",
         )
+        user_star_ts = (
+            select(DriveFileStar.starred_at)
+            .where(
+                DriveFileStar.file_id == Knowledge.id,
+                DriveFileStar.member_id == user.id,
+            )
+            .correlate(Knowledge)
+            .scalar_subquery()
+        )
         stmt = (
-            select(Knowledge)
+            select(Knowledge, user_star_ts.label("user_starred_at"))
             .where(
                 and_(
                     Knowledge.storage_mode == "drive",
                     Knowledge.deleted_at.is_(None),
-                    Knowledge.is_starred.is_(True),
                     visibility_see,
+                    exists().where(
+                        DriveFileStar.file_id == Knowledge.id,
+                        DriveFileStar.member_id == user.id,
+                    ),
                 )
             )
-            .order_by(desc(Knowledge.starred_at))
+            .order_by(desc("user_starred_at"))
             .limit(8)
         )
         result = await db.execute(stmt)
-        for f in result.scalars().all():
+        for f, user_starred_at in result.all():
             dashboard.starred_files.append(
                 MobileDashboardStarredFile(
                     id=f.id,
@@ -162,7 +178,7 @@ async def get_mobile_dashboard(
                     file_size=f.file_size,
                     visibility=f.visibility,
                     folder_id=f.folder_id,
-                    starred_at=f.starred_at.isoformat() if f.starred_at else None,
+                    starred_at=user_starred_at.isoformat() if user_starred_at else None,
                     updated_at=f.updated_at.isoformat() if f.updated_at else None,
                 )
             )
@@ -394,19 +410,32 @@ async def _feed_starred(
     limit: int,
     feed: MobileFeedResponse,
 ):
-    """starred feed: 用户收藏 (按 id desc 兜底, starred_at 可能 NULL)"""
+    """starred feed: 本人收藏 (批次① 收藏个人化: 查 drive_file_stars per-user 关系,
+    不再读已退役的 Knowledge.is_starred 全局限列; 按 id desc 兜底保 cursor 分页稳定)"""
     visibility_see = or_(
         Knowledge.created_by == user.id,
         Knowledge.visibility != "private",
     )
+    user_star_ts = (
+        select(DriveFileStar.starred_at)
+        .where(
+            DriveFileStar.file_id == Knowledge.id,
+            DriveFileStar.member_id == user.id,
+        )
+        .correlate(Knowledge)
+        .scalar_subquery()
+    )
     stmt = (
-        select(Knowledge)
+        select(Knowledge, user_star_ts.label("user_starred_at"))
         .where(
             and_(
                 Knowledge.storage_mode == "drive",
                 Knowledge.deleted_at.is_(None),
-                Knowledge.is_starred.is_(True),
                 visibility_see,
+                exists().where(
+                    DriveFileStar.file_id == Knowledge.id,
+                    DriveFileStar.member_id == user.id,
+                ),
             )
         )
         .order_by(desc(Knowledge.id))  # 用 id 兜底保证 cursor pagination 稳定
@@ -417,10 +446,10 @@ async def _feed_starred(
 
     try:
         result = await db.execute(stmt)
-        rows = list(result.scalars().all())
+        rows = list(result.all())
         has_more = len(rows) > limit
         rows = rows[:limit]
-        for f in rows:
+        for f, user_starred_at in rows:
             payload = {
                 "id": f.id,
                 "title": f.title or f.file_name or f"文件{f.id}",
@@ -429,19 +458,19 @@ async def _feed_starred(
                 "file_size": f.file_size,
                 "visibility": f.visibility,
                 "folder_id": f.folder_id,
-                "starred_at": f.starred_at.isoformat() if f.starred_at else None,
+                "starred_at": user_starred_at.isoformat() if user_starred_at else None,
             }
             feed.items.append(
                 MobileFeedItem(
                     type="starred",
-                    timestamp=f.starred_at.isoformat() if f.starred_at else (
+                    timestamp=user_starred_at.isoformat() if user_starred_at else (
                         f.updated_at.isoformat() if f.updated_at else ""
                     ),
                     payload=payload,
                 )
             )
         if has_more and rows:
-            feed.next_cursor = str(rows[-1].id)
+            feed.next_cursor = str(rows[-1][0].id)
         feed.has_more = has_more
     except Exception as e:
         logger.warning(f"[MobileFeed] starred failed: {e}")
