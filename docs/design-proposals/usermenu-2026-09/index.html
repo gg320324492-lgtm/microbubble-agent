@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用户下拉菜单 · 四稿可交互原型 (2026-09-05)</title>
+<style>
+  :root {
+    --bg: #eef1ec; --card: #fdfefc; --ink: #16232a; --steel: #5a6b6a; --fog: #8ba0a0;
+    --hair: #c9d2ca; --teal: #0e766e; --teal-soft: #dcece5;
+    --coral: #ef7256; --coral-soft: #fbe3dc;
+    --shadow: 0 8px 28px rgba(22,35,42,.14);
+    --mono: Consolas, 'Courier New', monospace;
+  }
+  body.dark {
+    --bg: #0a0f12; --card: #18232a; --ink: #dfe9e6; --steel: #9ab0ae; --fog: #6b8286;
+    --hair: #27363e; --teal: #35c2a4; --teal-soft: #12312b;
+    --coral: #ff8f74; --coral-soft: #3a1f1a;
+    --shadow: 0 8px 28px rgba(0,0,0,.55);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'PingFang SC','Microsoft YaHei',system-ui,sans-serif; background: var(--bg); color: var(--ink); padding: 34px 30px 90px; transition: background .25s, color .25s; }
+  header.top { display: flex; justify-content: space-between; align-items: center; max-width: 1240px; margin-bottom: 8px; }
+  h1 { font-size: 19px; }
+  .sub { font-size: 12.5px; color: var(--steel); margin-bottom: 30px; max-width: 900px; line-height: 1.7; }
+  .switch { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--steel); user-select: none; }
+  .track { width: 46px; height: 24px; border-radius: 12px; background: var(--hair); position: relative; cursor: pointer; transition: background .25s; }
+  .knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 4px rgba(0,0,0,.3); transition: left .25s; display: grid; place-items: center; font-size: 11px; }
+  body.dark .track { background: var(--teal); }
+  body.dark .knob { left: 25px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px,1fr)); gap: 40px; max-width: 1240px; }
+  .slot-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .slot-no { font-family: var(--mono); font-size: 11px; color: var(--coral); letter-spacing: .1em; }
+  .slot-title { font-size: 15px; font-weight: 700; }
+  .slot-note { font-size: 12px; color: var(--steel); margin-bottom: 16px; line-height: 1.65; }
+  .stage { position: relative; padding: 0 14px 150px; background: var(--card); border: 1px solid var(--hair); border-radius: 12px; transition: background .25s, border-color .25s; }
+  .stage.fixed-dark { background: #0c1215; border-color: #27363e; }
+  .fake-topbar { display: flex; justify-content: flex-end; align-items: center; height: 52px; border-bottom: 1px solid var(--hair); margin: 0 -14px 14px; padding: 0 16px; }
+  .stage.fixed-dark .fake-topbar { border-bottom-color: #27363e; }
+  .uchip { display: flex; align-items: center; gap: 8px; padding: 5px 9px; border-radius: 9px; cursor: pointer; }
+  .uchip:hover { background: var(--teal-soft); }
+  .uchip .av { width: 27px; height: 27px; border-radius: 50%; background: var(--teal); color: #fff; display: grid; place-items: center; font-size: 13px; }
+  .uchip .un { font-size: 12.5px; font-weight: 600; }
+  .uchip .ur { font-family: var(--mono); font-size: 9px; color: var(--fog); letter-spacing: .1em; }
+  .stage.fixed-dark .uchip .un { color: #dfe9e6; }
+  .pop { position: absolute; right: 20px; top: 62px; opacity: 0; transform: translateY(-6px) scale(.97); pointer-events: none; transition: opacity .16s ease, transform .16s ease; z-index: 5; }
+  .stage.open .pop { opacity: 1; transform: none; pointer-events: auto; }
+  .pop-arrow { position: absolute; right: 34px; top: 57px; width: 10px; height: 10px; background: var(--card); border-left: 1px solid var(--hair); border-top: 1px solid var(--hair); transform: rotate(45deg); opacity: 0; transition: opacity .16s; z-index: 6; }
+  .stage.open .pop-arrow { opacity: 1; }
+  .stage.fixed-dark .pop-arrow { background: #18232a; border-color: #27363e; }
+  .menu-wrap { width: max-content; }
+  .it { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+  .it svg { flex-shrink: 0; }
+
+  /* ===== 稿 P 档案台账 ===== */
+  .menu-P { width: 232px; background: var(--card); border: 1px solid var(--hair); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .menu-P .head { display: flex; justify-content: space-between; align-items: center; padding: 11px 14px 10px; background: linear-gradient(180deg, color-mix(in srgb, var(--teal) 5%, transparent), transparent); border-bottom: 1px dashed var(--hair); }
+  .menu-P .head .n { font-size: 13px; font-weight: 600; }
+  .menu-P .head .r { font-family: var(--mono); font-size: 9px; letter-spacing: .12em; color: var(--teal); border: 1px solid color-mix(in srgb, var(--teal) 32%, transparent); border-radius: 4px; padding: 2px 6px; }
+  .menu-P .items { padding: 5px; }
+  .menu-P .it { height: 38px; padding: 0 11px; border-radius: 7px; font-size: 13.5px; color: var(--ink); }
+  .menu-P .it svg { width: 16px; height: 16px; color: var(--fog); }
+  .menu-P .it .mono { margin-left: auto; font-family: var(--mono); font-size: 8.5px; letter-spacing: .12em; color: var(--fog); opacity: .75; }
+  .menu-P .it:hover { background: var(--teal-soft); color: var(--teal); }
+  .menu-P .it:hover svg, .menu-P .it:hover .mono { color: var(--teal); opacity: 1; }
+  .menu-P .it.danger:hover { background: var(--coral-soft); color: var(--coral); }
+  .menu-P .it.danger:hover svg, .menu-P .it.danger:hover .mono { color: var(--coral); }
+  .menu-P .sep { margin: 5px 0 0; border-top: 1px dashed var(--hair); }
+
+  /* ===== 稿 Q 极简标本 ===== */
+  .menu-Q { width: 196px; background: var(--card); border: 1px solid var(--hair); border-radius: 12px; box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 12%, transparent); padding: 6px; }
+  .menu-Q .it { height: 40px; padding: 0 12px; border-radius: 8px; font-size: 13.5px; color: var(--ink); }
+  .menu-Q .it svg { width: 15px; height: 15px; color: var(--steel); }
+  .menu-Q .it:hover { background: var(--ink); color: #fff; }
+  body.dark .menu-Q .it:hover { background: var(--teal); color: #06231f; }
+  .menu-Q .it:hover svg { color: inherit; }
+  .menu-Q .it.danger:hover { background: var(--coral); color: #fff; }
+  .menu-Q .sep { height: 1px; background: var(--hair); margin: 6px 8px; }
+  .stage .menu-Q-wrap { transition-timing-function: cubic-bezier(.2,.9,.3,1.2); }
+
+  /* ===== 稿 R 印章名片 ===== */
+  .menu-R { width: 250px; background: var(--card); border: 1.5px solid var(--ink); border-radius: 4px; box-shadow: 5px 5px 0 color-mix(in srgb, var(--ink) 88%, transparent); overflow: hidden; position: relative; }
+  .menu-R .head { display: flex; gap: 11px; align-items: center; padding: 13px 14px; border-bottom: 1.5px solid var(--ink); }
+  .menu-R .head .av2 { width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; font-size: 17px; background: var(--teal-soft); color: var(--teal); font-weight: 700; }
+  .menu-R .head .n { font-size: 14.5px; font-weight: 700; }
+  .menu-R .head .g { font-size: 11px; color: var(--steel); margin-top: 1px; }
+  .menu-R .stamp { position: absolute; right: 10px; top: 13px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: var(--coral); border: 1.4px dashed var(--coral); border-radius: 4px; padding: 3px 7px; transform: rotate(7deg); background: color-mix(in srgb, var(--card) 70%, transparent); }
+  .menu-R .it { height: 42px; padding: 0 14px; font-size: 13.5px; border-bottom: 1px dashed var(--hair); color: var(--ink); }
+  .menu-R .it:last-child { border-bottom: none; }
+  .menu-R .it .mono { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--fog); }
+  .menu-R .it:hover { background: var(--teal); color: #fff; }
+  body.dark .menu-R .it:hover { color: #06231f; }
+  .menu-R .it:hover .mono { color: rgba(255,255,255,.8); }
+  .menu-R .it.danger:hover { background: var(--coral); color: #fff; }
+  body.dark .menu-R .it.danger:hover { color: #2a0f08; }
+  .menu-R .it.danger:hover .mono { color: rgba(255,255,255,.85); }
+  .stage.open .menu-R { animation: stamp-in .22s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes stamp-in { from { opacity: 0; transform: translateY(-10px) rotate(-1.5deg) scale(.96); } to { transform: none; } }
+
+  /* ===== 稿 S 夜览控制台 (恒深) ===== */
+  .menu-S { width: 236px; background: #18232a; border: 1px solid #27363e; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.55); overflow: hidden; }
+  .menu-S .head { padding: 10px 14px; border-bottom: 1px dashed #27363e; display: flex; align-items: baseline; gap: 8px; }
+  .menu-S .head .n { font-size: 13px; font-weight: 600; color: #dfe9e6; }
+  .menu-S .head .r { font-family: var(--mono); font-size: 9px; color: #35c2a4; letter-spacing: .12em; }
+  .menu-S .grp { font-family: var(--mono); font-size: 8.5px; letter-spacing: .16em; color: #6b8286; padding: 9px 14px 3px; }
+  .menu-S .it { height: 37px; padding: 0 14px; font-size: 13.5px; color: #b8ccc9; }
+  .menu-S .it svg { width: 14px; height: 14px; color: #6b8286; }
+  .menu-S .it .k { margin-left: auto; font-family: var(--mono); font-size: 9px; color: #44585c; border: 1px solid #27363e; border-radius: 3px; padding: 1px 5px; }
+  .menu-S .it:hover { background: #12312b; color: #35c2a4; }
+  .menu-S .it:hover svg { color: #35c2a4; }
+  .menu-S .it.danger:hover { background: #3a1f1a; color: #ff8f74; }
+  .menu-S .it.danger:hover svg { color: #ff8f74; }
+
+  /* 提示 toast */
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--ink); color: var(--card); font-size: 13px; padding: 10px 18px; border-radius: 8px; opacity: 0; pointer-events: none; transition: .2s; z-index: 99; }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+</style>
+</head>
+<body>
+  <header class="top">
+    <h1>用户下拉菜单 · 四稿可交互原型</h1>
+    <div class="switch">
+      <span>明</span>
+      <div class="track" id="dmt" onclick="document.body.classList.toggle('dark')"><div class="knob">☾</div></div>
+      <span>暗</span>
+    </div>
+  </header>
+  <p class="sub">每稿都是真的：<b>点击名牌展开/收起</b>，hover 看反色，右上角切明暗（S 稿设计为恒夜览）。功能语义四稿一致：个人设置 + 退出登录。选稿后按稿实装进 MainLayout。</p>
+
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <g id="i-set" stroke="currentColor" fill="none" stroke-width="1.7"><circle cx="8" cy="8" r="2.6"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"/></g>
+    <g id="i-out" stroke="currentColor" fill="none" stroke-width="1.7"><path d="M6 13H2.5V3H6M10.5 4.8 13 8l-2.5 3.2M13 8H6.2"/></g>
+  </defs></svg>
+
+  <div class="grid">
+    <div class="slot">
+      <div class="slot-head"><span class="slot-no">P</span><span class="slot-title">已实装 · 单一项收口</span></div>
+      <p class="slot-note">主拍定稿: 去抬头、去个人设置 (入口在侧栏 SYSTEM 组)，只留退出登录。hover 珊瑚。这就是生产版本。</p>
+      <div class="stage">
+        <div class="fake-topbar"><div class="uchip" onclick="toggleMenu(event, this)"><span class="av">杜</span><div><div class="un">杜同贺</div><div class="ur">MASTER</div></div></div></div>
+        <div class="pop-arrow"></div>
+        <div class="pop"><div class="menu-P" style="min-width:186px">
+          <div class="items">
+            <div class="it danger" onclick="act('已退出登录 (演示)')"><svg width="16" height="16"><use href="#i-out"/></svg><span>退出登录</span><span class="mono">SIGN OUT</span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-head"><span class="slot-no">Q</span><span class="slot-title">极简标本 · 现代通用</span></div>
+      <p class="slot-note">无抬头两项, 大圆角柔影, hover 反色墨黑/珊瑚。开合: 弹性 scale。</p>
+      <div class="stage">
+        <div class="fake-topbar"><div class="uchip" onclick="toggleMenu(event, this)"><span class="av">杜</span><div><div class="un">杜同贺</div><div class="ur">MASTER</div></div></div></div>
+        <div class="pop-arrow"></div>
+        <div class="pop"><div class="menu-Q">
+          <div class="it" onclick="act('进入个人设置')"><svg><use href="#i-set"/></svg><span>个人设置</span></div>
+          <div class="sep"></div>
+          <div class="it danger" onclick="act('已退出登录 (演示)')"><svg><use href="#i-out"/></svg><span>退出登录</span></div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-head"><span class="slot-no">R</span><span class="slot-title">印章名片 · 硬边档案</span></div>
+      <p class="slot-note">粗描边+硬投影贴纸, 头像放大 + 斜盖印章。开合: 盖章式回弹。</p>
+      <div class="stage">
+        <div class="fake-topbar"><div class="uchip" onclick="toggleMenu(event, this)"><span class="av">杜</span><div><div class="un">杜同贺</div><div class="ur">MASTER</div></div></div></div>
+        <div class="pop-arrow"></div>
+        <div class="pop"><div class="menu-R">
+          <div class="head"><div class="av2">杜</div><div><div class="n">杜同贺</div><div class="g">研一 · 污染控制与水质提升</div></div></div>
+          <span class="stamp">MASTER · FILED</span>
+          <div class="it" onclick="act('进入个人设置')"><span>个人设置</span><span class="mono">SET UP</span></div>
+          <div class="it danger" onclick="act('已退出登录 (演示)')"><span>退出登录</span><span class="mono">BYE</span></div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="slot">
+      <div class="slot-head"><span class="slot-no">S</span><span class="slot-title">夜览控制台 · 终端感</span></div>
+      <p class="slot-note">恒深色 (不随右上角翻转 —— 这就是它的设计主张): 墨青底/松绿高亮/快捷键注。</p>
+      <div class="stage fixed-dark">
+        <div class="fake-topbar"><div class="uchip" onclick="toggleMenu(event, this)"><span class="av" style="background:#35c2a4;color:#0c1215">杜</span><div><div class="un">杜同贺</div><div class="ur" style="color:#6b8286">MASTER</div></div></div></div>
+        <div class="pop-arrow"></div>
+        <div class="pop"><div class="menu-S">
+          <div class="head"><span class="n">杜同贺</span><span class="r">MASTER</span></div>
+          <div class="grp">ACCOUNT · 账户</div>
+          <div class="it" onclick="act('进入个人设置')"><svg><use href="#i-set"/></svg><span>个人设置</span><span class="k">S</span></div>
+          <div class="it danger" onclick="act('已退出登录 (演示)')"><svg><use href="#i-out"/></svg><span>退出登录</span><span class="k">Q</span></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="tst"></div>
+<script>
+  function toggleMenu(e, el) {
+    e.stopPropagation();
+    const stage = el.closest('.stage');
+    const was = stage.classList.contains('open');
+    document.querySelectorAll('.stage.open').forEach(s => s.classList.remove('open'));
+    if (!was) stage.classList.add('open');
+  }
+  document.addEventListener('click', () => document.querySelectorAll('.stage.open').forEach(s => s.classList.remove('open')));
+  function act(msg) {
+    event.stopPropagation();
+    document.querySelectorAll('.stage.open').forEach(s => s.classList.remove('open'));
+    const t = document.getElementById('tst');
+    t.textContent = msg + ' —— 实装后即真实跳转';
+    t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+</script>
+</body>
+</html>

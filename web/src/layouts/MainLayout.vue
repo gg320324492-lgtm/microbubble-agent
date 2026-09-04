@@ -104,7 +104,7 @@
           <NotificationBell />
           <ThemeToggleButton />
 
-          <el-dropdown>
+          <el-dropdown popper-class="dg-user-menu" trigger="click">
             <div class="uchip" role="button" tabindex="0" aria-label="用户菜单" :aria-expanded="false" aria-haspopup="menu">
               <img v-if="userAvatar" class="av img" :src="userAvatar" :alt="username" />
               <span v-else class="av">{{ username?.[0] || '?' }}</span>
@@ -115,9 +115,14 @@
               <svg class="s chev" aria-hidden="true"><use href="#i-chevron"/></svg>
             </div>
             <template #dropdown>
+              <!-- G 稿「控制台档案」皮肤下拉 (P 稿收口, 主拍 2026-09-05): 单一项退出登录;
+                   抬头与个人设置已撤 — 设置入口在侧栏 SYSTEM 组。popper 挂 body, 皮肤在非 scoped 块自带色板 -->
               <el-dropdown-menu>
-                <el-dropdown-item @click="router.push('/settings')">个人设置</el-dropdown-item>
-                <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+                <el-dropdown-item class="dgum-item--danger" @click="handleLogout">
+                  <el-icon class="dgum-ico"><SwitchButton /></el-icon>
+                  <span class="dgum-lab">退出登录</span>
+                  <span class="dgum-mono">SIGN OUT</span>
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -176,7 +181,7 @@ import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 import NotificationBell from '@/components/common/NotificationBell.vue'
 // 2026-07-12: 删除 Bell icon import (旧任务到期提醒铃铛已删除，统一走 NotificationBell)
 // 2026-09-04 G 稿: 删除 DataBoard import (项目动态升格为档案印章, 桌面侧栏改走 LayoutIconSprite #i-board)
-import { ArrowRight, Aim, Odometer, Cpu, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
+import { ArrowRight, Aim, Odometer, Cpu, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files, SwitchButton } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
@@ -1021,6 +1026,93 @@ nav.menu {
 
 <!-- v69 P0: MainLayout dark mode 覆盖（v60-v67 教训：dark 跨组件规则必须放非 scoped 块） -->
 <style>
+  /* === G 稿「控制台档案」皮肤用户下拉 (P 稿收口: 单一项退出登录) ===
+     popper 挂 body 拿不到 .header 局部 token, 色板在此自带, 与顶栏逐值一致。 */
+  .dg-user-menu {
+    --dg-card: #fdfefc;
+    --dg-ink: #16232a;
+    --dg-steel: #5a6b6a;
+    --dg-fog: #8ba0a0;
+    --dg-hair: #c9d2ca;
+    --dg-teal: #0e766e;
+    --dg-teal-soft: #dcece5;
+    --dg-coral: #ef7256;
+    --dg-coral-soft: #fbe3dc;
+    --dg-mono: Consolas, 'Courier New', monospace;
+  }
+  /* popper 外层 (el-popper) 去默认内边距 + 描边换档案 hairline */
+  .el-popper.dg-user-menu {
+    background: var(--dg-card);
+    border: 1px solid var(--dg-hair);
+    border-radius: 10px;
+    padding: 0;
+    min-width: 186px;
+    box-shadow: 0 8px 28px rgba(22, 35, 42, 0.14);
+    overflow: hidden;
+  }
+  .el-popper.dg-user-menu .el-popper__arrow::before {
+    background: var(--dg-card);
+    border-color: var(--dg-hair);
+  }
+  /* 内层 el-dropdown-menu 去 EP 默认 padding */
+  .dg-user-menu .el-dropdown-menu {
+    padding: 5px;
+    background: transparent;
+    border: none;
+  }
+  .dg-user-menu .el-dropdown-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    height: 38px;
+    padding: 0 11px;
+    border-radius: 7px;
+    font-size: 13.5px;
+    color: var(--dg-ink);
+  }
+  .dg-user-menu .el-dropdown-menu__item .dgum-ico {
+    width: 16px;
+    height: 16px;
+    color: var(--dg-fog);
+    flex-shrink: 0;
+  }
+  .dg-user-menu .el-dropdown-menu__item .dgum-lab { flex: 1; }
+  .dg-user-menu .el-dropdown-menu__item .dgum-mono {
+    font-family: var(--dg-mono);
+    font-size: 8.5px;
+    letter-spacing: 0.12em;
+    color: var(--dg-fog);
+    opacity: 0.75;
+  }
+  .dg-user-menu .el-dropdown-menu__item:focus-visible {
+    outline: 2px solid var(--dg-teal);
+    outline-offset: -2px;
+  }
+  /* 退出登录 = danger 语义 (珊瑚), 唯一项直接珊瑚 hover */
+  .dg-user-menu .el-dropdown-menu__item.dgum-item--danger:hover {
+    background: var(--dg-coral-soft);
+    color: var(--dg-coral);
+  }
+  .dg-user-menu .el-dropdown-menu__item.dgum-item--danger:hover .dgum-ico,
+  .dg-user-menu .el-dropdown-menu__item.dgum-item--danger:hover .dgum-mono { color: var(--dg-coral); }
+
+  /* dark 翻转 (popper 独立于 .header token, 需自带) */
+  [data-theme="dark"] .dg-user-menu {
+    --dg-card: #18232a;
+    --dg-ink: #dfe9e6;
+    --dg-steel: #9ab0ae;
+    --dg-fog: #6b8286;
+    --dg-hair: #27363e;
+    --dg-teal: #35c2a4;
+    --dg-teal-soft: #12312b;
+    --dg-coral: #ff8f74;
+    --dg-coral-soft: #3a1f1a;
+  }
+  [data-theme="dark"] .el-popper.dg-user-menu {
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+
+
   /* === 侧边栏 (G 稿 dossier skin dark 覆盖, 对齐 shot-G 夜览态) === */
   [data-theme="dark"] .aside {
     --dg-chrome: #0c1215;
