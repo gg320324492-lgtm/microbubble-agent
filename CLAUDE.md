@@ -1,6 +1,43 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-05 网盘单一团队空间 — 去个人 owner 化 + 4 测试账号删除)
+
+**触发**: 删除邓国祥/孟祥琪/杨雪/测试小助手 (含 2 历史重复号共 6 members 行) 时暴露
+`folders.owner_id` RESTRICT FK — 全组网盘内容 (组会PPT 树 48 夹 + 276 条知识库) 历史上
+挂在测试机器人身上, 删号被迫人肉转 owner 给王天志 (备份 `backups/pre_delete_members_20260905.dump`)。
+
+**改造 (plan: piped-inventing-owl)**: 网盘只有一个团队空间, 不再有个人盘:
+- **owner 降级为纯溯源**: `folder_service.py`/`drive_service.py` 全部 owner 相等门禁删除
+  (~23 处), 任何登录成员可建/改/移/删任意 folder 与文件; `drive_permission_service`
+  9-05 已扁平化无需动; 顺带修 `cur.owner_id` AttributeError (Knowledge 无此列,
+  create_version/restore_version 3 处 → `cur.created_by`) 与跨成员 restore 掉根目录 bug。
+- **private 概念无报错退役**: create/update/upload 收口点强制改写 'team' (log warning);
+  API `scope=`/`view=` 参数继续接受但语义统一 (老客户端兼容); 前端默认值全改 'team' +
+  用户可选 private 选项删除 (含 KB 上传与批量栏两个额外发现点)。
+- **alembic 133_single_team_workspace** (纯数据): 软删 8 个 private 垃圾夹 (7 diag_ + 1
+  alice_private), folders/knowledge visibility 归一 team, 顶级夹 is_team_default=true,
+  drive 类 is_team_shared 回填 true (字段退役)。head 单链 133。
+- **删号不再被卡**: 新增 `app/services/drive_ownership.py::reassign_member_rows` (11 表
+  归属转锚点 `settings.DRIVE_WORKSPACE_ANCHOR_ID` 默认 1) + `member_cleanup.py` 只读清点器
+  + `scripts/reassign_member_rows.py` (dry-run 默认/--confirm/--delete-member) +
+  `DELETE /members/{id}?reassign_drive=true`。
+- 0 schema 变更; 三张共享表 (drive_folder_shares/drive_folder_members/team_folders) 0 行
+  成僵尸, 标 legacy 留后续 PR 清理。
+
+**5 件套实测**: alembic 1 head `133_single_team_workspace` / 后端受影响 7 测试文件
+**64 passed 6 skipped 0 failed** (一次性容器 + 干净 microbubble_test) / 前端 vitest drive
+90/90, 全量 4 个失败为既有 (dark-mode CSS 正则 ×3 + Playwright spec 收集, stash 前后一致) /
+`npm run build` exit 0 / 生产库完好 (32 members/471 knowledge/56 folders, 组会PPT 树无损)。
+
+**事故教训 (容器跑测试铁律)**: 测试夹具 default 走 `settings.DATABASE_URL` (=生产库!),
+一次性容器曾把 2 条 `file_drive_*` 写进生产 knowledge + 删过测试机器人聊天行 — 容器跑
+pytest **必须同时** `-e DATABASE_URL=<test库> -e TEST_DATABASE_URL=<test库>` 且
+microbubble_test 先建 extension(vector/pg_trgm)+create_all; 跑后必查生产 count 守恒。
+
+**未部署**: 本 worktree 改动待主拍合并后: alembic upgrade head + 重启 app/celery +
+前端 dist 上线 + 生产 `.env` 可选加 `DRIVE_WORKSPACE_ANCHOR_ID`。
+
 ## 当前状态 (2026-09-05 成员角色扁平化 — 废除管理员/组长等级, 全员等权 + 年级身份称谓)
 
 **用户需求**: "所有成员都不再区分管理员或者组长之类的，只带上自己的年纪名称 (导师/博士/硕士/本科生之类)，也不再区分权限限制"。

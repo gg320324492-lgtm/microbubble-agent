@@ -5,7 +5,7 @@
   - Sticky 在 FileGrid 顶部 (选中文件后显示)
   - 显示已选数量 + 全选/取消
   - 6 个批量动作: 删除/移动/分享/下载/改可见性/收藏
-  - 改可见性下拉弹 el-dropdown (private/team/public)
+  - 改可见性下拉弹 el-dropdown (team/public; 2026-09 单盘合并移除 private)
   - dark mode: 末尾非 scoped <style> 块 (v60-v67 教训)
 
   Props:
@@ -55,7 +55,6 @@
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="private">🔒 仅自己</el-dropdown-item>
                 <el-dropdown-item command="team">👥 团队成员</el-dropdown-item>
                 <el-dropdown-item command="public">🌐 公开</el-dropdown-item>
               </el-dropdown-menu>
