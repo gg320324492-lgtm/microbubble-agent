@@ -24,6 +24,13 @@ const routes = [
     meta: { title: '登录' }
   },
   {
+    // 批次⑩.9: 公开分享落地页 (文件 + 文件夹 token 统一入口, 无需登录)
+    path: '/drive/share/:token',
+    name: 'DriveShare',
+    component: () => import('@/views/ShareView.vue'),
+    meta: { title: '分享' }
+  },
+  {
     path: '/',
     // MainLayout 内部按 isMobile 分支（桌面：el-aside / 移动：底部 TabBar）
     // 不需要独立 MobileMainLayout
