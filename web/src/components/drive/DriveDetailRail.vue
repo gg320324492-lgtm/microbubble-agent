@@ -451,10 +451,31 @@ const stageW = computed(() => {
   const ar = d ? (d.slide_w_emu / d.slide_h_emu) : (16 / 9)
   return Math.min(vpW.value * 0.94, (vpH.value - 24) * ar)
 })
+function syncViewport() {
+  const el = pptStageRef.value
+  if (pptFull.value && el) {
+    const r = el.getBoundingClientRect()
+    vpW.value = r.width || window.innerWidth
+    vpH.value = r.height || window.innerHeight
+  } else {
+    vpW.value = window.innerWidth
+    vpH.value = window.innerHeight
+  }
+}
 function onFsChange() {
   pptFull.value = !!document.fullscreenElement
-  vpW.value = window.innerWidth
-  vpH.value = window.innerHeight
+  requestAnimationFrame(syncViewport)
+  setTimeout(syncViewport, 120)
+}
+let wheelLock = 0
+function onFsWheel(ev) {
+  if (!pptFull.value || !document.fullscreenElement) return
+  ev.preventDefault()
+  const now = Date.now()
+  if (now - wheelLock < 450) return
+  const total = pptData.value?.total || 0
+  if (ev.deltaY > 0 && pptPage.value < total) { wheelLock = now; pptPage.value++ }
+  else if (ev.deltaY < 0 && pptPage.value > 1) { wheelLock = now; pptPage.value-- }
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
@@ -465,19 +486,24 @@ function onFsKeydown(ev) {
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFsChange)
   document.addEventListener('keydown', onFsKeydown)
-  window.addEventListener('resize', onFsChange)
+  document.addEventListener('wheel', onFsWheel, { passive: false })
+  window.addEventListener('resize', syncViewport)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', onFsChange)
   document.removeEventListener('keydown', onFsKeydown)
-  window.removeEventListener('resize', onFsChange)
+  document.removeEventListener('wheel', onFsWheel)
+  window.removeEventListener('resize', syncViewport)
   if (document.fullscreenElement) document.exitFullscreen?.()
 })
 function togglePptFull() {
   const el = pptStageRef.value
   if (!el) return
   if (document.fullscreenElement) document.exitFullscreen?.()
-  else el.requestFullscreen?.()
+  else {
+    el.requestFullscreen?.()
+    setTimeout(syncViewport, 150)
+  }
 }
 
 const pptSlideW = computed(() => stageW.value)
@@ -721,7 +747,7 @@ function fmtDT(x) {
 .rf-k-ppt { background: #525659; }
 .rf-ppt { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; }
 .rf-slide-wrap { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
-.rf-slide { position: relative; box-shadow: 0 8px 26px rgba(0, 0, 0, .38); overflow: hidden; flex: none; }
+.rf-slide { position: relative; box-shadow: 0 8px 26px rgba(0, 0, 0, .38); overflow: hidden; flex: none; color: #1F2A26; }
 /* 玻璃胶囊翻页器 (悬浮舞台底部) */
 .rf-pill {
   position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
@@ -761,12 +787,12 @@ function fmtDT(x) {
 }
 .rf-slide table tr:first-child td { font-weight: 600; background: #EDF2F0; color: var(--color-text-primary); }
 /* 全屏放映态 (FIT2 沉浸基因): 舞台铺满视口, 幻灯片居中, 胶囊放大 */
-.rf-stage:fullscreen { border-radius: 0; border: none; background: #0D1210; }
-.rf-stage:fullscreen .rf-slide-wrap { padding: 0; }
-.rf-stage:fullscreen .rf-pill { bottom: 26px; padding: 6px 12px; }
-.rf-stage:fullscreen .rf-pill-btn { width: 30px; height: 30px; font-size: 14px; }
-.rf-stage:fullscreen .rf-pill-pg { font-size: 12px; }
-.rf-stage:fullscreen .rf-badge { top: 18px; right: 20px; font-size: 10px; }
+.rf-ppt:fullscreen { background: #0D1210; border: none; }
+.rf-ppt:fullscreen .rf-slide-wrap { padding: 0; }
+.rf-ppt:fullscreen .rf-pill { bottom: 26px; padding: 6px 12px; }
+.rf-ppt:fullscreen .rf-pill-btn { width: 30px; height: 30px; font-size: 14px; }
+.rf-ppt:fullscreen .rf-pill-pg { font-size: 12px; }
+.rf-ppt:fullscreen .rf-badge { top: 18px; right: 20px; font-size: 10px; }
 .rf-pill-sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .25); margin: 0 2px; }
 @media (prefers-reduced-motion: reduce) {
   .rf-stage { transition: none; }
