@@ -27,7 +27,7 @@
     :model-value="modelValue"
     @update:model-value="$emit('update:modelValue', $event)"
     class="drive-dialog share-link-dialog"
-    title="🔗 创建 Folder 共享链接"
+    title="创建文件夹共享链接"
     width="540px"
     top="12vh"
     :close-on-press-escape="!submitting"
@@ -37,7 +37,7 @@
     <div v-if="!result" class="share-link-form">
       <p class="share-link-intro">
         将创建 "<strong>{{ folder?.name }}</strong>" 的公开访问链接,
-        收到链接 + 提取码 + 在次数限额内 的人可访问 folder 下的文件.
+        收到链接 + 提取码 + 在次数限额内的人可访问该文件夹下的文件。
       </p>
 
       <!-- 过期时间 -->
@@ -92,7 +92,7 @@
           <el-radio :value="10">10 次</el-radio>
         </el-radio-group>
         <p class="share-link-hint">
-          达到上限后链接自动失效; 仅 folder 浏览不计入下载
+          达到上限后链接自动失效；仅浏览文件夹不计入下载
         </p>
       </div>
     </div>
@@ -113,7 +113,7 @@
 
       <div class="share-link-url-row">
         <el-input v-model="shareUrl" readonly class="share-link-url-input">
-          <template #prepend>🔗 URL</template>
+          <template #prepend>🔗 链接</template>
         </el-input>
         <el-button type="primary" @click="copyUrl" class="share-link-copy-btn">
           <el-icon><DocumentCopy /></el-icon>
@@ -285,7 +285,7 @@ function formatExpires(isoString) {
 
 async function createShare() {
   if (!props.folder?.id) {
-    ElMessage.error('请先选择 folder')
+    ElMessage.error('请先选择文件夹')
     return
   }
   if (usePassword.value && !/^\d{4,8}$/.test(password.value)) {
