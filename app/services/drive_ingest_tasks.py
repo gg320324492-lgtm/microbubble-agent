@@ -27,6 +27,7 @@ logger = logging.getLogger("microbubble.drive_ingest")
     name="app.services.drive_ingest_tasks.auto_ingest_drive_file_task",
     bind=True,
     max_retries=2,
+    priority=9,  # 高优先级: 上传入库不能排在 analyze 积压后面 (Redis transport 支持)
 )
 def auto_ingest_drive_file_task(self, drive_file_id: int, reingest: bool = False):
     """网盘文件 → 知识库自动入库 (上传/版本更新后异步执行)"""
