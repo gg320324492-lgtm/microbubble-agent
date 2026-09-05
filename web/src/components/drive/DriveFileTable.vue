@@ -206,7 +206,7 @@ const props = defineProps({
 const emit = defineEmits([
   'row-activate',      // (row|null, {shift}) → 父层更新 activeKey (+ shift 时 select-range)
   'row-open',          // 双击 folder / Enter: 进入文件夹
-  'row-open-detail',   // Enter file → 详情页路由
+  // (row-open-detail 已随详情页入口退役 — Enter 现为预览弹窗)
   'row-delete',        // Del → 父层 confirm + deleteFile
   'row-preview',       // Space/双击 file → FilePreviewDialog
   'row-contextmenu',   // (row, event)
@@ -359,7 +359,7 @@ function onKeydown(ev) {
   } else if (ev.key === 'Enter' && idx >= 0) {
     ev.preventDefault()
     const r = rows.value[idx]
-    r.kind === 'file' ? emit('row-open-detail', r.data) : emit('row-open', r)
+    r.kind === 'file' ? emit('row-preview', r.data) : emit('row-open', r)
   } else if ((ev.key === 'Delete' || ev.key === 'Backspace') && idx >= 0 && rows.value[idx].kind === 'file') {
     ev.preventDefault()
     emit('row-delete', rows.value[idx].data)

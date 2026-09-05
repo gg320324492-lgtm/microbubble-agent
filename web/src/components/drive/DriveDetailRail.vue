@@ -90,7 +90,7 @@
     <template v-else>
       <!-- 封面预览块 → 批次⑩.16 (用户选型 FIT 1 自适应舞台): 舞台高度随类型动画 -->
       <div class="rail-hero">
-        <div class="rf-stage" :class="'rf-k-' + previewKind" :style="{ height: stageHeight + 'px' }">
+        <div ref="rfStageRef" class="rf-stage" :class="'rf-k-' + previewKind" :style="{ height: stageHeight + 'px' }">
           <!-- 加载中 (媒体/PDF blob) -->
           <div v-if="stageLoading" class="rf-load"><span class="rf-spin"></span></div>
           <!-- 缩略图/图片真图 (缩略图管线就位后 office 自动升级) -->
@@ -156,8 +156,8 @@
         </div>
         <h3 class="rail-name" :title="name">{{ name }}</h3>
         <div class="rail-actions">
-          <button type="button" class="rail-act pri" @click="$emit('preview', file)">
-            <span>▣</span>预览
+          <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
+            <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
           </button>
           <button type="button" class="rail-act" @click="$emit('download', file)">
             <span>⬇</span>下载
@@ -203,8 +203,7 @@
           <span v-if="!file.share_token">未开启</span>
           <span v-else>已开启<template v-if="file.share_expires_at"> · 至 {{ fmtDT(file.share_expires_at) }}</template></span>
         </dd>
-        <dt>更多</dt>
-        <dd><button type="button" class="rail-link" @click="$emit('open-detail', file)">打开完整详情页 →</button></dd>
+
       </dl>
 
       <!-- tabs: 评论 / 版本 -->
@@ -277,7 +276,7 @@ const props = defineProps({
 })
 const emit = defineEmits([
   'preview', 'download', 'share', 'toggle-star', 'rename', 'move', 'delete',
-  'open-detail', 'goto-folder', 'open-versions-dialog', 'refresh',
+  'goto-folder', 'open-versions-dialog', 'refresh',
   'pick-file',
   'open-folder', 'share-folder', 'toggle-star-folder',
 ])
@@ -517,6 +516,7 @@ onBeforeUnmount(() => { stopPptPoll(); pptPollSeq++; revokePptBlobs() })
 
 // 批次⑩.19: 舞台宽随全屏自适应 (rail 态 304 / 全屏按视口等比适配, 比例取页图自然尺寸)
 const pptStageRef = ref(null)
+const rfStageRef = ref(null)
 const pptFull = ref(false)
 const vpW = ref(window.innerWidth)
 const vpH = ref(window.innerHeight)
@@ -527,7 +527,7 @@ const stageW = computed(() => {
   return Math.min(vpW.value * 0.94, (vpH.value - 24) * ar)
 })
 function syncViewport() {
-  const el = pptStageRef.value
+  const el = rfStageRef.value || pptStageRef.value
   if (pptFull.value && el) {
     const r = el.getBoundingClientRect()
     vpW.value = r.width || window.innerWidth
@@ -570,7 +570,7 @@ onBeforeUnmount(() => {
   if (document.fullscreenElement) document.exitFullscreen?.()
 })
 function togglePptFull() {
-  const el = pptStageRef.value
+  const el = rfStageRef.value || pptStageRef.value
   if (!el) return
   if (document.fullscreenElement) document.exitFullscreen?.()
   else {
@@ -816,6 +816,8 @@ function fmtDT(x) {
   background: var(--color-bg-card); transition: all var(--duration-fast) var(--ease-out, ease);
 }
 .rail-act span { font-size: 13px; line-height: 1; }
+.rf-act-fs-ico { display: inline-flex; margin-right: 4px; }
+.rf-act-fs-ico svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rail-act:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); background: var(--color-primary-bg); }
 .rail-act:active { transform: scale(.95); }
 .rail-act.pri { background: var(--gradient-cta-button, var(--color-primary)); border-color: transparent; color: #fff; font-weight: var(--font-weight-semibold); }
