@@ -50,7 +50,6 @@
       <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
       <el-button class="drive-toolbar-btn" :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
       <el-button class="wb-cta" :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
-      <span class="wb-me" :title="wbUserName">{{ wbUserName.slice(0, 1) }}</span>
     </header>
 
     <!-- 三栏 body -->
@@ -275,7 +274,6 @@ import { ref, computed, triggerRef, onMounted, onBeforeUnmount, watch, nextTick 
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { Search, UploadFilled, Folder, Plus } from '@element-plus/icons-vue'
-import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import DriveFileTable from '@/components/drive/DriveFileTable.vue'
@@ -974,8 +972,6 @@ const tableRef = ref(null)
 
 // 顶栏搜索 kbd 提示兑现: Ctrl/⌘+K 聚焦搜索框 (视觉稿 gsearch kbd 同款交互)
 const searchInputRef = ref(null)
-const userStore = useUserStore()
-const wbUserName = computed(() => userStore.userInfo?.name || userStore.userInfo?.username || '我')
 function onGlobalSearchKey(ev) {
   if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'k' || ev.key === 'K')) {
     ev.preventDefault()
@@ -1533,14 +1529,9 @@ function onContextMenuClose() {
   transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal);
 }
 .wb-cta:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); }
-/* 批次⑥: 顶栏三键缩小到视觉稿 tbtn 尺寸 + 右侧头像圈 (.top .me) */
+/* 批次⑥: 顶栏三键缩小到视觉稿 tbtn 尺寸 (头像圈 .wb-me 已删 — 与全局顶栏用户卡片重复) */
 .wb-top .drive-toolbar-btn { font-size: var(--font-size-xs); padding: 7px 12px; height: auto; color: var(--color-text-regular); }
 .wb-top .drive-toolbar-btn:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); }
-.wb-me {
-  flex: none; width: 28px; height: 28px; border-radius: 50%;
-  background: var(--gradient-cta-button); color: #fff;
-  display: grid; place-items: center; font-size: 12px; font-weight: var(--font-weight-semibold);
-}
 
 /* 三栏 */
 .wb-body {
