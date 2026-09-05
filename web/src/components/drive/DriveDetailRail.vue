@@ -113,6 +113,22 @@
           </div>
           <!-- PDF 原生查看器 (blob iframe, A4 大舞台) -->
           <iframe v-else-if="previewKind === 'pdf' && stageUrl" :src="stageUrl" class="rf-pdf" :title="name"></iframe>
+          <!-- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) -->
+          <div v-else-if="previewKind === 'ppt'" class="rf-ppt">
+            <div v-if="pptLoading" class="rf-load"><span class="rf-spin"></span></div>
+            <template v-else-if="pptData">
+              <div class="rf-slide-wrap">
+                <div class="rf-slide" :style="{ width: '304px', height: pptSlideH + 'px', background: currentSlideBg }" v-html="pptSlideHtml"></div>
+              </div>
+              <div class="rf-pgr">
+                <button type="button" :disabled="pptPage <= 1" @click="pptPage--">‹</button>
+                <span class="rf-pgn mono">{{ pptPage }} / {{ pptData.total }} 页</span>
+                <button type="button" :disabled="pptPage >= pptData.total" @click="pptPage++">›</button>
+                <span class="rf-ppttag">自研渲染</span>
+              </div>
+            </template>
+            <div v-else class="rf-note" style="color:#cbd5d0">解析失败或文件损坏</div>
+          </div>
           <!-- 文本/MD/CSV 内容渲染 (后端 /preview 1KB 截取) -->
           <pre v-else-if="previewKind === 'text'" class="rf-text">{{ textPreview || '加载中…' }}</pre>
           <!-- Office 信息卡 (无转换时) -->
@@ -355,13 +371,14 @@ const previewKind = computed(() => {
   if (['mp4', 'mov', 'webm'].includes(e)) return 'video'
   if (['mp3', 'm4a', 'wav'].includes(e)) return 'audio'
   if (e === 'pdf') return 'pdf'
+  if (e === 'pptx') return 'ppt'   // 批次⑩.17: 自研结构化渲染 (python-pptx JSON)
   if (['md', 'txt', 'csv', 'json', 'log'].includes(e)) return 'text'
   if (['ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx'].includes(e)) return 'office'
   return 'none'
 })
 // 舞台高度: 文档 470 (A4) / 视频 189 (16:9) / 音频 130 / 图片 220 / 文本 300 / Office 220
 const stageHeight = computed(() => ({
-  image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220,
+  image: 220, video: 189, audio: 130, pdf: 470, ppt: 400, text: 300, office: 220,
 }[previewKind.value] || 168))
 
 /* 媒体/PDF blob 流 (带鉴权 axios → objectURL; 换文件/卸载即 revoke) */
@@ -392,6 +409,71 @@ async function loadTextPreview() {
     textPreview.value = resp.data?.text_preview || '(空文件或无法预览)'
   } catch { textPreview.value = '(预览加载失败)' }
 }
+
+/* ---- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) ---- */
+const pptData = ref(null)
+const pptPage = ref(1)
+const pptLoading = ref(false)
+let pptSeq = 0
+watch([() => props.file?.id, previewKind], async () => {
+  if (previewKind.value !== 'ppt' || !props.file) { pptData.value = null; return }
+  const seq = ++pptSeq
+  pptLoading.value = true
+  try {
+    const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/pptx-structure`)
+    if (seq !== pptSeq) return
+    pptData.value = resp.data
+    pptPage.value = 1
+  } catch { if (seq === pptSeq) pptData.value = null }
+  finally { if (seq === pptSeq) pptLoading.value = false }
+}, { immediate: true })
+
+const escHtml = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const STAGE_W = 304  // 右栏内容区宽 (336 - 边距)
+
+const pptSlideH = computed(() => {
+  const d = pptData.value
+  if (!d?.slide_w_emu) return 171
+  return Math.round(STAGE_W * (d.slide_h_emu / d.slide_w_emu))
+})
+const currentSlideBg = computed(() => {
+  const sl = pptData.value?.slides?.[pptPage.value - 1]
+  return sl?.bg ? '#' + sl.bg : '#ffffff'
+})
+const pptSlideHtml = computed(() => {
+  const d = pptData.value
+  const slide = d?.slides?.[pptPage.value - 1]
+  if (!slide) return ''
+  const scale = STAGE_W / (d.slide_w_emu || 9144000)
+  const posStyle = (sp) => `left:${(sp.x * 100).toFixed(2)}%;top:${(sp.y * 100).toFixed(2)}%;width:${(sp.w * 100).toFixed(2)}%;height:${(sp.h * 100).toFixed(2)}%;`
+  let html = ''
+  for (const sp of slide.shapes || []) {
+    try {
+      if (sp.kind === 'text') {
+        const paras = (sp.paras || []).map((p) => {
+          const runs = (p.runs || []).map((r) => {
+            const px = Math.max(7, Math.round((r.sz || 18) * 12700 * scale))
+            const st = `font-size:${px}px;` + (r.b ? 'font-weight:700;' : '') + (r.c ? `color:#${r.c};` : '')
+            return `<span style="${st}">${escHtml(r.t)}</span>`
+          }).join('')
+          const al = p.align === 'center' ? 'center' : p.align === 'right' ? 'right' : ''
+          return `<div style="margin-bottom:2px;${al ? 'text-align:' + al : ''}">${runs || '&nbsp;'}</div>`
+        }).join('')
+        html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;">${paras}</div>`
+      } else if (sp.kind === 'image' && sp.src) {
+        html += `<img src="${sp.src}" style="position:absolute;${posStyle(sp)}object-fit:contain;" />`
+      } else if (sp.kind === 'table' && sp.rows) {
+        const trs = sp.rows.map((r) => `<tr>${r.map((c) => `<td>${escHtml(c)}</td>`).join('')}</tr>`).join('')
+        html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;background:#fff;"><table style="border-collapse:collapse;width:100%;height:100%;font-size:8px;">${trs}</table></div>`
+      } else if (sp.kind === 'chart') {
+        html += `<div style="position:absolute;${posStyle(sp)}display:grid;place-items:center;background:rgba(14,118,110,.06);color:var(--color-text-3,#8B968F);font-size:9px;">图表 (二期 ECharts 重绘)</div>`
+      } else if (sp.kind === 'shape' && sp.color) {
+        html += `<div style="position:absolute;${posStyle(sp)}background:#${sp.color};"></div>`
+      }
+    } catch { /* 单形状失败跳过 */ }
+  }
+  return html
+})
 
 const inlineUrl = computed(() =>
   props.file ? `/api/v1/drive/files/${props.file.id}/download?disposition=inline` : '')
@@ -537,6 +619,25 @@ function fmtDT(x) {
 }
 .rf-open:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14,118,110,.32); }
 .rf-tip { font-size: 9.5px; color: var(--color-text-placeholder); }
+.rf-k-ppt { background: #525659; }
+.rf-ppt { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; }
+.rf-slide-wrap { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.rf-slide { position: relative; box-shadow: 0 8px 26px rgba(0, 0, 0, .38); overflow: hidden; flex: none; }
+.rf-pgr {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 7px; background: var(--color-bg-card); border-top: 1px solid var(--color-border);
+}
+.rf-pgr button {
+  font: inherit; font-size: 11px; border: 1px solid var(--color-border);
+  background: var(--color-bg-card); color: var(--color-text-regular);
+  border-radius: 6px; padding: 3px 10px; cursor: pointer;
+}
+.rf-pgr button:disabled { opacity: .45; cursor: default; }
+.rf-pgn { font-size: 10px; color: var(--color-text-secondary); }
+.rf-ppttag {
+  font-family: var(--font-mono, monospace); font-size: 8.5px; color: var(--color-text-placeholder);
+  border: 1px dashed var(--color-border); border-radius: 4px; padding: 1px 6px;
+}
 @media (prefers-reduced-motion: reduce) { .rf-stage { transition: none; } }
 .rail-cover-img { width: 100%; height: 100%; object-fit: cover; }
 .rail-cover-ph { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px dashed; border-radius: var(--radius-md); padding: 22px 30px; background: transparent; }
