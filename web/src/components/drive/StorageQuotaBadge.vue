@@ -14,17 +14,14 @@
   - 点 → 打开 useStorageQuota 详情面板 (本期不展开)
 -->
 <template>
+  <!-- 批次⑧ 对齐视觉稿 .qbox: 「全组已用 + 粗体值」单行 + 5px 渐变进度条 (图标/百分比大字退役, 百分比进 tooltip) -->
   <div class="storage-quota-badge" :class="badgeClass" v-if="quotaInfo">
     <el-tooltip :content="tooltipText" placement="bottom" effect="light">
-      <div class="quota-content">
-        <el-icon class="quota-icon"><DataLine /></el-icon>
-        <div class="quota-text">
-          <div class="quota-percent">{{ percentDisplay }}</div>
-          <div class="quota-detail">{{ sizeDisplay }}</div>
-        </div>
+      <div class="quota-row">
+        <span class="quota-label">全组已用</span>
+        <b class="quota-val">{{ sizeDisplay }}</b>
       </div>
     </el-tooltip>
-    <!-- 批次⑥ qbox 对齐: 渐变进度条 (视觉稿 .qbar) -->
     <div class="quota-track" aria-hidden="true">
       <i :style="{ width: Math.min(100, Math.round((quotaInfo.percent || 0) * 100)) + '%' }"></i>
     </div>
@@ -33,7 +30,6 @@
 
 <script setup>
 import { computed } from 'vue'
-import { DataLine } from '@element-plus/icons-vue'
 
 const props = defineProps({
   quotaInfo: {
@@ -68,7 +64,7 @@ const tooltipText = computed(() => {
   if (!props.quotaInfo) return '配额数据加载中...'
   const { used_bytes, quota_bytes, file_count, updated_at, is_over_quota } = props.quotaInfo
   const lines = [
-    `已用: ${formatBytes(used_bytes)}`,
+    `已用: ${formatBytes(used_bytes)} (${percentDisplay.value})`,
     `总配额: ${formatBytes(quota_bytes)}`,
     `文件数: ${file_count || 0}`,
     is_over_quota ? '⚠️ 已超额' : '',
@@ -87,83 +83,44 @@ function formatBytes(bytes) {
 </script>
 
 <style scoped>
+/* 批次⑧ 对齐视觉稿 .qbox: 暖纸底圆角卡 + 单行 label/值 + 5px 渐变条 */
 .storage-quota-badge {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: stretch;
-  padding: 6px 12px;
-  border-radius: 16px;
+  gap: 7px;
+  padding: 11px 12px;
+  border-radius: var(--radius-lg, 12px);
   background: var(--color-bg-page);
-  border: 1px solid var(--color-border-light);
-  transition: all 0.2s;
+  border: 1px solid var(--color-border);
+  transition: border-color 0.2s;
   cursor: pointer;
   user-select: none;
 }
-.quota-track { height: 5px; border-radius: 3px; background: var(--color-border-light, #e4e7ed); overflow: hidden; }
+.storage-quota-badge:hover { border-color: var(--color-primary-border, var(--color-primary)); }
+
+.quota-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.quota-val {
+  font-family: var(--font-mono, Consolas, monospace);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.quota-track { height: 5px; border-radius: 3px; background: var(--color-border); overflow: hidden; }
 .quota-track i { display: block; height: 100%; border-radius: 3px; background: var(--gradient-cta-button, var(--color-primary)); transition: width 0.4s var(--ease-out, ease); }
 
-.storage-quota-badge:hover {
-  background: var(--color-bg-hover, #ecf5ff);
-  border-color: var(--color-primary, #409eff);
-}
-
-.quota-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.quota-icon {
-  font-size: 18px;
-  color: var(--color-text-secondary, #909399);
-}
-
-.quota-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  line-height: 1.2;
-}
-
-.quota-percent {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary, #303133);
-}
-
-.quota-detail {
-  font-size: 11px;
-  color: var(--color-text-secondary, #909399);
-}
-
-/* 颜色阈值 */
-.storage-quota-badge.is-success .quota-icon { color: var(--color-success, #67c23a); }
-.storage-quota-badge.is-success .quota-percent { color: var(--color-success, #67c23a); }
-
-.storage-quota-badge.is-warning {
-  background: var(--color-warning-light-9, #fdf6ec);
-  border-color: var(--color-warning-light-5, #e6a23c);
-}
-.storage-quota-badge.is-warning .quota-icon { color: var(--color-warning, #e6a23c); }
-.storage-quota-badge.is-warning .quota-percent { color: var(--color-warning, #e6a23c); }
-
-.storage-quota-badge.is-danger {
-  background: var(--color-danger-light-9, #fef0f0);
-  border-color: var(--color-danger-light-5, #f56c6c);
-}
-.storage-quota-badge.is-danger .quota-icon { color: var(--color-danger, #f56c6c); }
-.storage-quota-badge.is-danger .quota-percent { color: var(--color-danger, #f56c6c); }
-
-.storage-quota-badge.is-over {
-  background: var(--color-danger, #f56c6c);
-  border-color: var(--color-danger, #f56c6c);
-}
-.storage-quota-badge.is-over .quota-icon,
-.storage-quota-badge.is-over .quota-percent,
-.storage-quota-badge.is-over .quota-detail {
-  color: var(--el-color-white);
-}
+/* 阈值染色只作用在进度条填充上 (<80% 恒为视觉稿深青渐变) */
+.storage-quota-badge.is-warning .quota-track i { background: var(--color-warning, #e6a23c); }
+.storage-quota-badge.is-danger .quota-track i,
+.storage-quota-badge.is-over .quota-track i { background: var(--color-danger, #f56c6c); }
+.storage-quota-badge.is-over .quota-val { color: var(--color-danger, #f56c6c); }
 </style>
 
 <!--

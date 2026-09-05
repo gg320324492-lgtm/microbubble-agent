@@ -37,11 +37,10 @@
         </span>
         <span v-else class="folder-tree-node-toggle-spacer drive-folder-tree-node-toggle-spacer" />
 
-        <!-- 文件夹图标 -->
-        <el-icon :class="['folder-tree-node-icon drive-folder-tree-node-icon', isSelected ? 'active' : '']">
-          <FolderOpened v-if="isSelected" />
-          <Folder v-else />
-        </el-icon>
+        <!-- 文件夹图标 (批次⑧ 对齐视觉稿 .ficon: 主色细描边空心文件夹, 不用 el-icon 实心) -->
+        <svg class="folder-tree-node-ficon" :class="{ active: isSelected }" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </svg>
 
         <!-- 文件夹名称 -->
         <span class="folder-tree-node-name" :title="folder.name">
@@ -79,7 +78,7 @@
 // v2.13 (2026-07-10) → 2026-09-05 角色扁平化: 全员等权, 任何成员可删除任何 folder (对他人 folder 保留确认警告)
 import '@/views/drive/drive-view.css'
 import { computed, ref } from 'vue'
-import { Folder, FolderOpened, CaretBottom, CaretRight } from '@element-plus/icons-vue'
+import { CaretBottom, CaretRight } from '@element-plus/icons-vue'
 import FolderContextMenu from './FolderContextMenu.vue'
 import { useUserStore } from '@/stores/user'
 import { isDriveMoveDragging, readDriveMovePayload } from '@/composables/useDriveDragMove'
@@ -230,14 +229,14 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
   cursor: default;
 }
 
-.folder-tree-node-icon {
-  flex-shrink: 0;
-  color: var(--color-text-secondary);
+/* 批次⑧ 对齐视觉稿 .ficon: 15px 主色描边空心文件夹 (选中加深化) */
+.folder-tree-node-ficon {
+  flex-shrink: 0; width: 15px; height: 15px;
+  fill: none; stroke: var(--color-primary); stroke-width: 1.7;
+  transition: stroke var(--duration-fast) var(--ease-out);
 }
-
-.folder-tree-node-icon.active {
-  color: var(--color-primary);
-}
+.folder-tree-node-row:hover .folder-tree-node-ficon { stroke: var(--color-primary-light); }
+.folder-tree-node-ficon.active, .folder-tree-node-row.is-active .folder-tree-node-ficon { stroke: var(--color-primary-dark); }
 
 .folder-tree-node-name {
   flex: 1;
@@ -246,30 +245,17 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
   text-overflow: ellipsis;
 }
 
-/* v2.0: 计数徽章改 pill + 主色实底 */
+/* 批次⑧ 对齐视觉稿 .tnode .c: 纯 mono 灰字计数 (退役 pill 实底, active 也不染色) */
 .folder-tree-node-count {
   flex-shrink: 0;
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-tag, var(--color-info-bg));
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  line-height: 16px;
-  text-align: center;
-  font-weight: var(--font-weight-semibold);
-  transition: all var(--duration-fast) var(--ease-out);
+  font-family: var(--font-mono, Consolas, monospace);
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--color-text-placeholder);
+  font-weight: var(--font-weight-normal);
 }
 
-.folder-tree-node-row.is-active .folder-tree-node-count {
-  background: var(--gradient-cta-button);
-  color: var(--el-color-white);
-}
-
-/* 复刻视觉稿: 文件夹图标上色 (选中=主色, 悬停=主色浅, 常态=中性) */
-.folder-tree-node-icon { color: var(--color-text-secondary); transition: color var(--duration-fast) var(--ease-out); }
-.folder-tree-node-row:hover .folder-tree-node-icon { color: var(--color-primary-light); }
-.folder-tree-node-icon.active, .folder-tree-node-row.is-active .folder-tree-node-icon { color: var(--color-primary); }
+/* 旧 .folder-tree-node-icon el-icon 色彩规则随实心图标退役 (见上方 .folder-tree-node-ficon) */
 </style>
 
 <!--
