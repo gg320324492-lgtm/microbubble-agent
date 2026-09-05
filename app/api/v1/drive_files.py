@@ -1621,7 +1621,26 @@ async def get_pptx_structure(
                     ]
                     entry.update(kind="table", rows=rows)
                 elif getattr(sh, "has_chart", False) and sh.has_chart:
-                    entry.update(kind="chart")
+                    # 二期: 抽取图表数据 (前端 ECharts 重绘)
+                    ctype = "bar"
+                    try:
+                        ctype = str(sh.chart.chart_type).split(" ")[0].lower()  # BAR_CLUSTERED/LINE/PIE…
+                    except Exception:
+                        pass
+                    cats, series = [], []
+                    try:
+                        cats = [str(c) for c in sh.chart.plots[0].categories]
+                    except Exception:
+                        pass
+                    try:
+                        for sdata in sh.chart.plots[0].series:
+                            series.append({
+                                "name": str(sdata.name or ""),
+                                "values": [round(v, 2) if isinstance(v, (int, float)) else None for v in sdata.values],
+                            })
+                    except Exception:
+                        pass
+                    entry.update(kind="chart-data", chart_type=ctype, categories=cats, series=series)
                 elif sh.has_text_frame and sh.text_frame.text.strip():
                     paras = []
                     for para in sh.text_frame.paragraphs:
