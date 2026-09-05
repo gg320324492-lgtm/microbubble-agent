@@ -141,7 +141,10 @@
                 <span class="rf-pill-pg mono">{{ pptPageClamped }} / {{ pptImgTotalSafe }}</span>
                 <button type="button" class="rf-pill-btn" :disabled="pptPageClamped >= pptImgTotalSafe" @click="nextPptPage">›</button>
                 <span class="rf-pill-sep"></span>
-                <button type="button" class="rf-pill-btn" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">⛶</button>
+                <button type="button" class="rf-fs-btn" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
+                  <svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                  {{ pptFull ? '退出放映' : '全屏' }}
+                </button>
               </div>
             </template>
           </div>
@@ -777,6 +780,15 @@ function fmtDT(x) {
 .rf-ppt:fullscreen .rf-pill-pg { font-size: 12px; }
 .rf-ppt:fullscreen .rf-badge { top: 18px; right: 20px; font-size: 10px; }
 .rf-pill-sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .25); margin: 0 2px; }
+.rf-fs-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; background: none; color: #fff; cursor: pointer;
+  font: inherit; font-size: 11px; padding: 4px 11px; border-radius: 9999px;
+  white-space: nowrap;
+  transition: background var(--duration-fast);
+}
+.rf-fs-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.rf-fs-btn:hover { background: rgba(14, 118, 110, .85); }
 @media (prefers-reduced-motion: reduce) {
   .rf-stage { transition: none; }
   .rfpg-enter-active, .rfpg-leave-active { transition: none; }
