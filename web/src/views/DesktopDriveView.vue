@@ -1837,7 +1837,7 @@ function onContextMenuClose() {
 /* 前进/后退对键: 圆形 26px, 无历史置灰 */
 .wb-navbtns { display: inline-flex; gap: 6px; margin-right: 8px; }
 .wb-navbtn {
-  width: 26px; height: 26px; border-radius: 50%; padding: 0;
+  width: 26px; height: 26px; min-height: 0; border-radius: 50%; padding: 0;
   border: 1px solid var(--color-border); background: var(--color-bg-card);
   color: var(--color-text-regular); display: grid; place-items: center; cursor: pointer;
   transition: transform var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast);
@@ -1847,6 +1847,10 @@ function onContextMenuClose() {
 .wb-navbtn:active:not(:disabled) { transform: scale(.92); }
 .wb-navbtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .wb-navbtn:disabled { color: var(--color-text-placeholder); background: var(--color-bg-page); cursor: default; }
+/* mobile-base 的 button{min-height:44px} 触觉目标规则会把面包屑/密度键等小控件撑高 — 桌面端收回 */
+.wb-crumbs .wb-crumb,
+.wb-density,
+.wb-cap-add { min-height: 0; }
 .wb-crumb-search { color: var(--color-primary-dark); font-size: var(--font-size-xs); }
 /* 视觉稿 .sz: mono 11px text-4 */
 .wb-total { font-family: var(--font-mono, Consolas, monospace); font-size: 11px; color: var(--color-text-placeholder); white-space: nowrap; }
