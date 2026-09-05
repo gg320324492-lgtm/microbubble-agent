@@ -231,24 +231,24 @@ function handleFolderSelect(folderId) {
 
 // === v2.8: 5 根项 + 1 sub 右键菜单项配置 ===
 const rootMenuItems = [
-  { label: '🔄 刷新',          command: 'refresh' },
-  { label: '➕ 新建子文件夹',   command: 'create-sub' },
+  { label: '刷新',          command: 'refresh' },
+  { label: '新建子文件夹',   command: 'create-sub' },
 ]
 const favoritesMenuItems = [
-  { label: '🔄 刷新',          command: 'refresh' },
+  { label: '刷新',          command: 'refresh' },
 ]
 const teamMenuItems = [
-  { label: '🔄 刷新',          command: 'refresh' },
-  { label: '➕ 新建子文件夹',   command: 'create-sub' },
+  { label: '刷新',          command: 'refresh' },
+  { label: '新建子文件夹',   command: 'create-sub' },
 ]
 const requestsMenuItems = [
-  { label: '🔄 刷新',          command: 'refresh' },
-  { label: '➕ 新建子文件夹',   command: 'create-sub' },
+  { label: '刷新',          command: 'refresh' },
+  { label: '新建子文件夹',   command: 'create-sub' },
 ]
 const trashMenuItems = [
-  { label: '🔄 刷新',          command: 'refresh' },
-  { label: '♻️ 恢复全部',       command: 'restore-all', divided: true },
-  { label: '🗑 清空回收站',    command: 'empty-trash' },
+  { label: '刷新',          command: 'refresh' },
+  { label: '恢复全部',       command: 'restore-all', divided: true },
+  { label: '清空回收站',    command: 'empty-trash' },
 ]
 
 // === v2.8: 根项菜单 handler ===
