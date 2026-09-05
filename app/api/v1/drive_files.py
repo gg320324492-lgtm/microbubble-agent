@@ -1539,6 +1539,138 @@ async def revoke_share_link(
 
 
 
+# === 批次⑩.24 PPT → PNG 逐页图浏览 (2026-09-06, 用户拍板弃自研渲染) ===
+# LibreOffice headless 转 PDF → pdftoppm 逐页 PNG → /app/data/pptx_pages 缓存
+# 状态机: 未开始 → converting (锁) → ready; 前端轮询 pptx-pages 端点。
+import asyncio
+import hashlib
+import json
+import shutil
+import threading
+import subprocess
+from pathlib import Path as FsPath
+
+_PPTX_CONVERT_LOCKS: dict = {}
+
+
+def _pptx_cache_dir(file_id: int, key: str) -> FsPath:
+    d = FsPath("/app/data/pptx_pages") / ("%d_%s" % (file_id, key))
+    return d
+
+
+def _pptx_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
+    loop_backup = None
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        tmp = FsPath("/tmp") / ("pptx_conv_%d_%s" % (file_id, key[:8]))
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        tmp.mkdir(parents=True)
+        data = FsPath(src_path).read_bytes()
+        (tmp / "in.pptx").write_bytes(data)
+
+        subprocess.run(
+            ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(tmp), str(tmp / "in.pptx")],
+            check=True, timeout=600,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        pdf = tmp / "in.pdf"
+        subprocess.run(
+            ["pdftoppm", "-png", "-r", "110", str(pdf), str(tmp / "page")],
+            check=True, timeout=600,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        pages = sorted(tmp.glob("page-*.png"))
+        total = len(pages)
+        for i, png in enumerate(pages, 1):
+            shutil.move(str(png), str(cache_dir / ("page-%d.png" % i)))
+        (cache_dir / "ready.json").write_text(json.dumps({"total": total}))
+        logger.info("[pptx-pages] 转换完成 file=%d 页数=%d", file_id, total)
+    except Exception as e:
+        logger.error("[pptx-convert] file=%s 转换失败: %s", file_id, e)
+        try:
+            (cache_dir / "error.txt").write_text(str(e)[:500])
+        except Exception:
+            pass
+        try:
+            lock = _PPTX_CONVERT_LOCKS.get(key)
+            if lock:
+                lock.acquire(); lock.release()
+        except Exception:
+            pass
+    finally:
+        _PPTX_CONVERT_LOCKS.pop(key, None)
+
+
+@router.get("/files/{file_id}/pptx-pages")
+async def get_pptx_pages_status(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """PPT 逐页 PNG 浏览: 轮询状态端点 (ready 时返回页图 URL 列表)."""
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    if not (f.file_name or "").lower().endswith(".pptx"):
+        raise HTTPException(status_code=400, detail="仅支持 .pptx")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    cache_dir = _pptx_cache_dir(file_id, key)
+
+    if (cache_dir / "ready.json").exists():
+        try:
+            total = json.loads((cache_dir / "ready.json").read_text()).get("total", 0)
+        except Exception:
+            total = 0
+        return {"status": "ready", "total": total,
+                "pages": [f"/api/v1/drive/files/{file_id}/pptx-pages/img-{i}" for i in range(1, total + 1)]}
+    if (cache_dir / "error.txt").exists():
+        return {"status": "error", "message": (cache_dir / "error.txt").read_text()[:200]}
+
+    lock = _PPTX_CONVERT_LOCKS.get(key)
+    if lock is not None and lock.locked():
+        return {"status": "converting"}
+
+    lock = threading.Lock()
+    _PPTX_CONVERT_LOCKS[key] = lock
+    lock.acquire()
+    tmp = FsPath("/tmp") / ("pptx_conv_%d_%s" % (file_id, key[:8]))
+    src = FsPath("/tmp") / ("pptx_src_%d.pptx" % file_id)
+    if not src.exists():
+        raw = await file_service.download_file(f.file_path)
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_bytes(raw)
+    th = threading.Thread(target=_pptx_convert_worker,
+                          args=(file_id, str(src), cache_dir, key), daemon=True)
+    th.start()
+    return {"status": "converting"}
+
+
+@router.get("/files/{file_id}/pptx-pages/img-{page}")
+async def get_pptx_page_image(
+    file_id: int,
+    page: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """返回某页 PNG (从缓存目录, 无鉴权头问题 — FileResponse 直接流)."""
+    from fastapi.responses import FileResponse
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在")
+    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    cache_dir = _pptx_cache_dir(file_id, key)
+    p = cache_dir / ("page-%d.png" % page)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="页不存在")
+    return FileResponse(str(p), media_type="image/png")
+
+
 # === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
 # .pptx = zip + OOXML — python-pptx 已在容器内 (1.0.2), 解析一次缓存 JSON,
 # 第三栏渲染器 (DriveDetailRail) 按 EMU 比例绝对定位还原 文本框/图片/表格。
@@ -1992,7 +2124,7 @@ async def get_pptx_structure(
                                 if para.alignment is not None else None,
                                 "ls": round(float(ls), 2) if isinstance(ls, float) else None,
                             })
-                    entry.update(kind="text", paras=paras)
+                    entry.update(kind="text", paras=paras, fill=_fill_hex(sh, theme))
                 else:
                     entry.update(kind="shape", color=_fill_hex(sh, palette))
                 out.append(entry)
@@ -2000,23 +2132,108 @@ async def get_pptx_structure(
                 continue
         return out
 
+    def _bg_of(element, palette):
+        """读取 cSld/bg: 图片填充 → {type:image,src}; 纯色 → {type:color,color}; 无 → None"""
+        try:
+            bg_el = element.find(_qn("p:cSld")).find(_qn("p:bg"))
+            if bg_el is None:
+                return None
+            blip = bg_el.find(".//" + _qn("a:blip"))
+            if blip is not None:
+                rid = blip.get(_qn("r:embed"))
+                if rid:
+                    part = element.part.related_part(rid)
+                    blob = part.blob
+                    src = _downscale_blob(blob, "image/png") or (
+                        "data:image/png;base64," + base64.b64encode(blob).decode()
+                        if len(blob) <= 1536 * 1024 else None)
+                    if src:
+                        return {"type": "image", "src": src}
+            fill = bg_el.find(".//" + _qn("a:solidFill"))
+            if fill is not None:
+                srgb = fill.find(_qn("a:srgbClr"))
+                if srgb is not None:
+                    return {"type": "color", "color": srgb.get("val")}
+                sch = fill.find(_qn("a:schemeClr"))
+                if sch is not None:
+                    c = _scheme_hex(sch.get("val"))
+                    if c:
+                        return {"type": "color", "color": c}
+        except Exception:
+            pass
+        return None
+
     for idx, slide in enumerate(prs.slides, 1):
+        # 幻灯片是否自带 bg 元素 (p:bgPr 或 p:bgRef 都算) — 自带则不透叠版式/母版
+        try:
+            cSld = slide._element.find(_qn("p:cSld"))
+            bg_el = cSld.find(_qn("p:bg")) if cSld is not None else None
+        except Exception:
+            bg_el = None
+        has_own_bg = bg_el is not None
+
         bg = None
+        bg_img = None
         try:
             fill = slide.background.fill
             if fill.type is not None and int(fill.type) == 1:
                 bg = str(fill.fore_color.rgb)
         except Exception:
             bg = None
+        if bg is None and has_own_bg:
+            try:
+                blip = bg_el.find(".//" + _qn("a:blip"))
+                if blip is not None:
+                    rid = blip.get(_qn("r:embed"))
+                    if rid:
+                        part = slide.part.related_part(rid)
+                        src = _downscale_blob(part.blob, "image/png") or (
+                            "data:image/png;base64," + base64.b64encode(part.blob).decode()
+                            if len(part.blob) <= 1536 * 1024 else None)
+                        if src:
+                            bg_img = src
+            except Exception:
+                pass
+        # 无自带背景 → 继承链: layout bg → master bg (图片优先, 纯色兜底)
+        if not has_own_bg:
+            try:
+                inh = _bg_of(slide.slide_layout._element, theme) or _bg_of(
+                    slide.slide_layout.slide_master._element, theme)
+                if inh:
+                    if inh.get("type") == "image":
+                        bg_img = inh.get("src")
+                    elif inh.get("type") == "color":
+                        bg = inh.get("color")
+            except Exception:
+                pass
+
         lay_map = _layout_ph_map(slide, theme)
-        shapes = collect(slide.shapes, 0, 0, 1, 1, lay_map, theme, 0)
-        slides.append({"index": idx, "bg": bg, "shapes": shapes})
+        # 批次⑩.23: 模板设计图形在 layout/master 上 — 顺序 母版→版式→幻灯片;
+        # 仅当幻灯片无自带 bg 时才透叠版式/母版形状 (自带 bg 的内容页保持白底)
+        master_np, layout_np = [], []
+        if not has_own_bg:
+            try:
+                master_np = [sh for sh in slide.slide_layout.slide_master.shapes
+                             if not getattr(sh, "is_placeholder", False)]
+            except Exception:
+                master_np = []
+            try:
+                layout_np = [sh for sh in slide.slide_layout.shapes
+                             if not getattr(sh, "is_placeholder", False)]
+            except Exception:
+                layout_np = []
+        shapes = (collect(master_np, 0, 0, 1, 1, lay_map, theme, 0)
+                  + collect(layout_np, 0, 0, 1, 1, lay_map, theme, 0)
+                  + collect(slide.shapes, 0, 0, 1, 1, lay_map, theme, 0))
+        slides.append({"index": idx, "bg": bg, "shapes": shapes, "own_bg": has_own_bg})
 
     payload = {
         "file_name": f.file_name,
         "total": len(slides),
         "slide_w_emu": slide_w,
         "slide_h_emu": slide_h,
+        "bg": bg,
+        "bg_img": (bg_img or {}).get("src"),
         "slides": slides,
     }
     if len(_PPTX_STRUCTURE_CACHE) > 16:
