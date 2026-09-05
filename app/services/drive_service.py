@@ -1182,6 +1182,8 @@ class DriveService:
         f.share_token = token
         f.share_expires_at = expires_at
         f.share_password = password_hash
+        # 批次⑩.7: 可见性跟随分享 — 分享即公开, 撤销/过期回团队 (用户 2026-09-05 拍板)
+        f.visibility = "public"
         await self.db.commit()
         await self.db.refresh(f)
         logger.info(
@@ -1242,6 +1244,8 @@ class DriveService:
         f.share_token = None
         f.share_expires_at = None
         f.share_password = None
+        # 批次⑩.7: 撤销分享 → 回团队属性
+        f.visibility = "team"
         await self.db.commit()
         return True
 
@@ -1269,6 +1273,9 @@ class DriveService:
             now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
             if expires_naive < now_naive:
                 logger.info(f"[DriveService.get_by_share_token] token={token[:8]}... 已过期")
+                # 批次⑩.7: 过期懒回团队属性
+                f.visibility = "team"
+                await self.db.commit()
                 return None
         return f
 
