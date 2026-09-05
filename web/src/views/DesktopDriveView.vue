@@ -123,21 +123,30 @@
 
         <div v-if="isTableMode" class="wb-ctools">
           <span class="wb-lab">排序</span>
-          <button
-            v-for="opt in SORT_OPTIONS" :key="opt.value" type="button"
-            class="drive-chip" :aria-pressed="sortKey === opt.value"
-            :class="{ 'is-active': sortKey === opt.value }"
-            @click="handleSortChange(opt.value)"
-          >{{ opt.label }}</button>
+          <!-- 批次⑨ (用户选型 SORT 2): 分段控件 — 灰轨 + 白色浮起滑块, 无箭头 (方向由表头承担) -->
+          <div class="wb-seg" role="group" aria-label="排序方式">
+            <button
+              v-for="opt in SORT_OPTIONS" :key="opt.value" type="button"
+              class="wb-seg-btn" :class="{ 'is-active': sortKey === opt.value }"
+              :aria-pressed="sortKey === opt.value"
+              @click="handleSortChange(opt.value)"
+            >{{ opt.label }}</button>
+          </div>
           <span class="wb-lab wb-lab--gap">类型</span>
           <button
             v-for="opt in FILE_TYPE_OPTIONS" :key="opt.value || 'all'" type="button"
-            class="drive-chip" :data-type="opt.type || null"
-            :aria-pressed="fileType === opt.value || (!fileType && opt.value === null)"
+            class="drive-chip" :aria-pressed="fileType === opt.value || (!fileType && opt.value === null)"
             :class="{ 'is-active': fileType === opt.value || (!fileType && opt.value === null) }"
             @click="handleFileTypeChange(opt.value)"
-          >{{ opt.label }}</button>
-          <!-- 批次⑧ 对齐视觉稿 .hint: kbd 键帽徽章 (↑↓/␣/Del/拖拽), 不再纯文字点隔 -->
+          >
+            <svg
+              v-if="opt.type" class="wb-type-ic"
+              :style="{ stroke: TYPE_ICON_COLOR[opt.type] }"
+              viewBox="0 0 24 24" aria-hidden="true" v-html="TYPE_ICONS[opt.type]"
+            ></svg>
+            {{ opt.label }}
+          </button>
+          <!-- 批次⑧ 对齐视觉稿 .hint: kbd 键帽徽章行 (↑↓/␣/Del/拖拽), 不再纯文字点隔 -->
           <span class="wb-kbd-hint">
             <span><kbd>↑</kbd><kbd>↓</kbd> 移动</span>
             <span><kbd>␣</kbd> 预览</span>
@@ -459,9 +468,10 @@ const isTableMode = computed(() => !['trash', 'requests'].includes(specialView.v
 const SORT_OPTIONS = [
   // v2.5 (2026-07-10): 修复两 chip 视觉重复 — 「最新上传 ⬇/⬆」文字完全相同只差箭头方向,
   //   改为「最新上传 ⬇」+「最早上传 ⬆」让用户一眼区分 (latest vs earliest).
-  { value: 'created_at:desc', label: '最新上传 ⬇' },
-  { value: 'created_at:asc',  label: '最早上传 ⬆' },
-  { value: 'updated_at:desc', label: '最近修改 ⬇' },
+  // 批次⑨ (2026-09-05, 用户选型 SORT 2): 排序改分段控件, emoji 箭头退役 (方向由表头承担)
+  { value: 'created_at:desc', label: '最新上传' },
+  { value: 'created_at:asc',  label: '最早上传' },
+  { value: 'updated_at:desc', label: '最近修改' },
 ]
 
 // v2.22 (2026-07-11) 拆分 office → word/ppt/excel (用户决策 "Office 分类太粗")
@@ -474,17 +484,40 @@ const SORT_OPTIONS = [
 const FILE_TYPE_OPTIONS = [
   { value: null,    type: null,    label: '全部类型' },
   // 文档族 (Office docs 聚类)
-  { value: 'pdf',   type: 'pdf',   label: '📄 PDF' },
-  { value: 'word',  type: 'word',  label: '📝 Word' },
-  { value: 'ppt',   type: 'ppt',   label: '📊 PPT' },
-  { value: 'excel', type: 'excel', label: '📈 Excel' },
+  { value: 'pdf',   type: 'pdf',   label: 'PDF' },
+  { value: 'word',  type: 'word',  label: 'Word' },
+  { value: 'ppt',   type: 'ppt',   label: 'PPT' },
+  { value: 'excel', type: 'excel', label: 'Excel' },
   // 媒体族
-  { value: 'image', type: 'image', label: '🖼️ 图片' },
-  { value: 'video', type: 'video', label: '🎬 视频' },
-  { value: 'audio', type: 'audio', label: '🎵 音频' },
+  { value: 'image', type: 'image', label: '图片' },
+  { value: 'video', type: 'video', label: '视频' },
+  { value: 'audio', type: 'audio', label: '音频' },
   // 其他
-  { value: 'text',  type: 'text',  label: '📝 文本' },
+  { value: 'text',  type: 'text',  label: '文本' },
 ]
+
+// 批次⑨ (用户选型 B): 类型 chip 图标 = 类型色细描边 SVG (与树/表描边文件夹同语言),
+// emoji + 色点退役。路径为 lucide 风手写 24 viewBox, stroke 走 TYPE_ICON_COLOR。
+const TYPE_ICONS = {
+  pdf: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+  word: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  ppt: '<path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/>',
+  excel: '<rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/>',
+  image: '<rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/>',
+  video: '<rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/>',
+  audio: '<path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/>',
+  text: '<path d="M4 6h16M4 12h11M4 18h16"/>',
+}
+const TYPE_ICON_COLOR = {
+  pdf: 'var(--color-file-pdf)',
+  word: 'var(--color-file-doc)',
+  ppt: 'var(--color-warning)',
+  excel: 'var(--color-file-excel)',
+  image: 'var(--color-file-image)',
+  video: 'var(--color-file-video)',
+  audio: 'var(--color-warning)',
+  text: 'var(--color-file-text)',
+}
 
 const sortKey = computed(() => `${sortBy.value}:${sortOrder.value}`)
 
@@ -1473,6 +1506,9 @@ function onContextMenuClose() {
   /* 批次⑧: 边框暖纸化 (视觉稿 --line #E5E1D8) — 全局 token 偏冷灰, 作用域内重映射 */
   --color-border: #E5E1D8;
   --color-border-light: #ECE9E0;
+  /* 批次⑨ B 选型: 类型 chip 描边图标补齐 video/text 专用色 (视觉稿 --video/--textfile) */
+  --color-file-video: #A84B6F;
+  --color-file-text: #6B6152;
   /* 墨线框 (视觉稿 --line-ink) + Element Plus accent (分页/输入聚焦) */
   --wb-frame: rgba(45, 58, 53, .5);
   --el-color-primary: #0E766E;
@@ -1504,6 +1540,8 @@ function onContextMenuClose() {
   --wb-frame: rgba(160, 175, 162, .45);
   --color-border: #3a3d45;
   --color-border-light: #2a2d35;
+  --color-file-video: #D990AE;
+  --color-file-text: #A39B8B;
   --el-color-primary: #35C2A4;
   --el-color-primary-light-3: #2b8c77;
   --el-color-primary-light-5: #256e5f;
@@ -1621,10 +1659,9 @@ function onContextMenuClose() {
 .wb-ctools { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wb-lab { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .wb-lab--gap { margin-left: 6px; }
-/* 批次⑧ 对齐视觉稿 .fchip: 5px 11px / 12px 字 / 5.5px 色点; active=浅青染色深青字 (非渐变实底)。
+/* 批次⑧ 对齐视觉稿 .fchip: 5px 11px / 12px 字; active=浅青染色深青字 (非渐变实底)。
    全局 .drive-chip.is-active 带 !important, 此处同名 !important + 更高特异性压过 */
 .wb-ctools .drive-chip { padding: 4px 11px; font-size: var(--font-size-xs); gap: 5px; }
-.wb-ctools .drive-chip[data-type]::before { width: 5.5px; height: 5.5px; }
 .wb-ctools .drive-chip[aria-pressed="true"],
 .wb-ctools .drive-chip.is-active {
   background: var(--color-primary-bg) !important;
@@ -1632,6 +1669,26 @@ function onContextMenuClose() {
   color: var(--color-primary-dark) !important;
   font-weight: var(--font-weight-semibold);
   box-shadow: none;
+}
+/* 批次⑨ (用户选型 B): 类型 chip 内 14px 类型色描边图标 (emoji/色点退役) */
+.wb-type-ic { width: 14px; height: 14px; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+/* 批次⑨ (用户选型 SORT 2): 分段控件 — 灰轨 + 白色浮起滑块, 无箭头 */
+.wb-seg {
+  display: inline-flex; align-items: center; padding: 2px;
+  border-radius: var(--radius-full); border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-text-primary) 7%, transparent);
+}
+.wb-seg-btn {
+  border: none; background: none; font: inherit; font-size: var(--font-size-xs);
+  color: var(--color-text-regular); padding: 4px 13px; border-radius: var(--radius-full);
+  cursor: pointer; white-space: nowrap;
+  transition: color var(--duration-fast), background var(--duration-fast), box-shadow var(--duration-fast);
+}
+.wb-seg-btn:hover { color: var(--color-primary-dark); }
+.wb-seg-btn.is-active {
+  background: var(--color-bg-card); color: var(--color-primary-dark);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: 0 1px 3px rgba(20, 40, 35, .12);
 }
 /* 视觉稿 .hint: kbd 键帽徽章行 */
 .wb-kbd-hint { margin-left: auto; font-size: 11.5px; color: var(--color-text-placeholder); white-space: nowrap; display: flex; gap: 12px; align-items: center; }
