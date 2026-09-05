@@ -91,7 +91,7 @@
       </div>
       <div class="comment-thread-actions">
         <span class="comment-thread-hint">
-          💡 用 <code>@username</code> 提醒成员
+          用 <code>@username</code> 提醒成员
         </span>
         <el-button
           type="primary"
@@ -375,6 +375,24 @@ watch(() => props.fileId, (newId) => {
   border-radius: 3px;
   font-family: monospace;
   font-size: 11px;
+}
+
+/* 批次⑩.32 档案系一致化: 发布按钮 珊瑚 → 深青渐变 (对齐右侧栏动作钮) */
+.comment-thread-actions :deep(.el-button--primary) {
+  background: var(--gradient-cta-button, linear-gradient(135deg, #0E766E, #12897C));
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  padding: 8px 20px;
+}
+.comment-thread-actions :deep(.el-button--primary:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(14, 118, 110, .32);
+}
+.comment-thread-actions :deep(.el-button--primary.is-disabled) {
+  opacity: .5;
+  transform: none;
+  box-shadow: none;
 }
 
 .comment-thread-error {
