@@ -739,6 +739,13 @@ function fmtDT(x) {
   display: flex; align-items: center; gap: 9px;
   background: rgba(20, 40, 35, .62); border: 1px solid rgba(255, 255, 255, .14);
   border-radius: 9999px; padding: 4px 8px; backdrop-filter: blur(8px);
+  /* 批次⑩.30: 悬停预览区才浮现控件, 平时完全隐去不挡画面 */
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity var(--duration-normal) ease, visibility var(--duration-normal);
+}
+.rf-ppt:hover .rf-pill,
+.rf-ppt:focus-within .rf-pill {
+  opacity: 1; visibility: visible; pointer-events: auto;
 }
 .rf-pill-btn {
   font: inherit; font-size: 12px; border: none; background: none;
