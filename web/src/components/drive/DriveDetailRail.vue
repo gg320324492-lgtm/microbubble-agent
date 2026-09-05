@@ -131,7 +131,6 @@
                     :key="pptPageClamped"
                     :src="pptBlobCurrent || undefined"
                     class="rf-ppt-img"
-                    :style="pptFull ? { width: stageW + 'px', height: pptSlideH + 'px' } : { width: '100%' }"
                     @load="onImgLoad"
                   />
                 </Transition>
@@ -518,29 +517,8 @@ onBeforeUnmount(() => { stopPptPoll(); pptPollSeq++; revokePptBlobs() })
 const pptStageRef = ref(null)
 const rfStageRef = ref(null)
 const pptFull = ref(false)
-const vpW = ref(window.innerWidth)
-const vpH = ref(window.innerHeight)
-const stageW = computed(() => {
-  if (!pptFull.value) return 304
-  const nat = pptImgNat.value
-  const ar = nat ? nat.w / nat.h : (16 / 9)
-  return Math.min(vpW.value * 0.94, (vpH.value - 24) * ar)
-})
-function syncViewport() {
-  const el = rfStageRef.value || pptStageRef.value
-  if (pptFull.value && el) {
-    const r = el.getBoundingClientRect()
-    vpW.value = r.width || window.innerWidth
-    vpH.value = r.height || window.innerHeight
-  } else {
-    vpW.value = window.innerWidth
-    vpH.value = window.innerHeight
-  }
-}
 function onFsChange() {
   pptFull.value = !!document.fullscreenElement
-  requestAnimationFrame(syncViewport)
-  setTimeout(syncViewport, 120)
 }
 let wheelLock = 0
 function onFsWheel(ev) {
@@ -560,13 +538,11 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', onFsChange)
   document.addEventListener('keydown', onFsKeydown)
   document.addEventListener('wheel', onFsWheel, { passive: false })
-  window.addEventListener('resize', syncViewport)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', onFsChange)
   document.removeEventListener('keydown', onFsKeydown)
   document.removeEventListener('wheel', onFsWheel)
-  window.removeEventListener('resize', syncViewport)
   if (document.fullscreenElement) document.exitFullscreen?.()
 })
 function togglePptFull() {
@@ -575,7 +551,6 @@ function togglePptFull() {
   if (document.fullscreenElement) document.exitFullscreen?.()
   else {
     el.requestFullscreen?.()
-    setTimeout(syncViewport, 150)
   }
 }
 const pptSlideH = computed(() => {
@@ -780,12 +755,15 @@ function fmtDT(x) {
 .rf-slide table tr:first-child td { font-weight: 600; background: #EDF2F0; color: var(--color-text-primary); }
 /* 全屏放映态 (FIT2 沉浸基因): 舞台铺满视口, 幻灯片居中, 胶囊放大 */
 .rf-ppt-img { display: block; width: 100%; height: auto; border-radius: 4px 4px 0 0; }
-.rf-ppt:fullscreen { background: #0D1210; border: none; }
-.rf-ppt:fullscreen .rf-slide-wrap { padding: 0; }
-.rf-ppt:fullscreen .rf-pill { bottom: 26px; padding: 6px 12px; }
-.rf-ppt:fullscreen .rf-pill-btn { width: 30px; height: 30px; font-size: 14px; }
-.rf-ppt:fullscreen .rf-pill-pg { font-size: 12px; }
-.rf-ppt:fullscreen .rf-badge { top: 18px; right: 20px; font-size: 10px; }
+/* 全屏放映: 全屏根是 .rf-stage (rfStageRef, 带内联高度) 而非 .rf-ppt — 选择器必须用 :is(.rf-stage,.rf-ppt):fullscreen 才能命中 */
+:is(.rf-stage, .rf-ppt):fullscreen { background: #0D1210; border: none; }
+:is(.rf-stage, .rf-ppt):fullscreen .rf-slide-wrap { padding: 0; }
+/* contain 适配: 元素盒撑满视口 + object-fit:contain → 等比最大化居中, 任意屏幕比例不裁切不留边 */
+:is(.rf-stage, .rf-ppt):fullscreen .rf-ppt-img { width: 100%; height: 100%; object-fit: contain; border-radius: 0; }
+:is(.rf-stage, .rf-ppt):fullscreen .rf-pill { bottom: 26px; padding: 6px 12px; }
+:is(.rf-stage, .rf-ppt):fullscreen .rf-pill-btn { width: 30px; height: 30px; font-size: 14px; }
+:is(.rf-stage, .rf-ppt):fullscreen .rf-pill-pg { font-size: 12px; }
+:is(.rf-stage, .rf-ppt):fullscreen .rf-badge { top: 18px; right: 20px; font-size: 10px; }
 .rf-pill-sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .25); margin: 0 2px; }
 .rf-fs-btn {
   display: inline-flex; align-items: center; gap: 5px;
