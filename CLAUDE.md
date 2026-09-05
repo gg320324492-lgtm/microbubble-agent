@@ -34,6 +34,14 @@ live openapi 298 路由确认 batch-star/search; 云端 deploy-auto.sh + 四点�
 本地=云端 / /health 200 穿隧道 / drive 401 鉴权墙 / DesktopDriveView-DHeMC3kq.js 200);
 生产终态 members=32/knowledge=471/folders=57 守恒, alembic=134。
 
+**批次⑤⑥ 加浓收口** (用户三轮截图反馈 "太素/藏字/三处不一致"; `ad9ff07cb`+`8e10cc4e4`+`c8b643919`):
+⑤ 行 7px 点→28px 封面块 (图片=download inline 直链, ready 走 /thumbnail, 其他=类型缩写块,
+文件夹=名称哈希 8 色档案板, img error 入 coverFailed 黑名单防 watch 重拉死循环) + 右栏未选中
+显示「最近上传」兜底 + 树夹图标上色; ⑥ 表头孤字按用户指示定「收藏」二字 (先改★被打回);
+顶栏 logo chip+真 Ctrl/⌘K 聚焦接线; 左栏结构 cap 加 + 建夹钮; 配额→qbox 卡; 批量 dock 从老
+橙渐变白玻璃体系翻为稿的白卡描边小按钮 (全局 !important → .wb-dock 作用域同权重覆盖, 删除
+不再红实心)。drive 447/447 绿 ×3 轮, 云端 hash 本地一致 (终态 index-DcDCaKGq.js)。
+
 **部署纪律 (本次验证)**: 134 迁移必须先于 app 重启 (per-user 收藏子查询硬依赖表存在);
 一次性测试容器必须单实例 (并发双容器抢 microbubble_test 互 DROP SCHEMA = 之前 7f/15e 假失败根源)。
 
