@@ -22,11 +22,7 @@ RUN apt-get update && apt-get install -y --fix-missing \
     libpq-dev \
     gcc \
     pkg-config \
-    || (apt-get update && apt-get install -y --fix-missing \
-        ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
-        libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
-        libpq-dev gcc pkg-config) \
-    && rm -rf /var/lib/apt/lists/*
+    && (apt-get install -y --no-install-recommends libreoffice-impress poppler-utils fonts-noto-cjk         || (apt-get update && apt-get install -y --no-install-recommends             libreoffice-impress poppler-utils fonts-noto-cjk))     && rm -rf /var/lib/apt/lists/*
 
 # 安装Python依赖
 # PyPI 官方源（清华源/aliyun 同步 torch 2.12+ 慢，2026-06-24 ST 5.6.0 升级）

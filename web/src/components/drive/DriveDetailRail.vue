@@ -114,40 +114,36 @@
           <!-- PDF 原生查看器 (blob iframe, A4 大舞台) -->
           <iframe v-else-if="previewKind === 'pdf' && stageUrl" :src="stageUrl" class="rf-pdf" :title="name"></iframe>
           <!-- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) -->
+          <!-- 批次⑩.25 (用户拍板): PPT 逐页 PNG 图片浏览 (LibreOffice 管线), 弃自研 HTML 渲染 -->
           <div v-else-if="previewKind === 'ppt'" class="rf-ppt" ref="pptStageRef">
-            <div v-if="pptLoading" class="rf-skel">
-              <div class="rf-skel-ttl"></div>
+            <div v-if="pptImgStatus === 'loading' || pptImgStatus === 'converting'" class="rf-skel">
+              <div class="rf-conv-t">正在把 PPT 转换为图片…</div>
+              <div class="rf-conv-s">首次约 10-30 秒 · 之后打开秒出</div>
+              <div class="rf-skel-ttl" style="margin-top:18px"></div>
               <div class="rf-skel-ln" style="width:78%"></div>
               <div class="rf-skel-ln" style="width:62%"></div>
-              <div class="rf-skel-ln" style="width:70%"></div>
-              <div class="rf-skel-ln" style="width:40%"></div>
-              <div class="rf-skel-ln" style="width:66%"></div>
             </div>
-            <template v-else-if="pptData">
+            <div v-else-if="pptImgStatus === 'error'" class="rf-conv-t" style="color:var(--color-danger)">转换失败：{{ pptImgError }}</div>
+            <template v-else-if="pptImgStatus === 'ready'">
               <div class="rf-slide-wrap">
                 <Transition name="rfpg" mode="out-in">
-                  <div :key="pptPage + '-' + pptFull" class="rf-slide" :style="{ width: pptSlideW + 'px', height: pptSlideH + 'px', background: pptBgStyle }" v-html="pptSlideHtml"></div>
+                  <img
+                    :key="pptPageClamped"
+                    :src="pptBlobCurrent || undefined"
+                    class="rf-ppt-img"
+                    :style="pptFull ? { width: stageW + 'px', height: pptSlideH + 'px' } : { width: '100%' }"
+                    @load="onImgLoad"
+                  />
                 </Transition>
               </div>
               <div class="rf-pill">
-                <button type="button" class="rf-pill-btn" :disabled="pptPage <= 1" @click="pptPage > 1 && pptPage--">‹</button>
-                <span class="rf-pill-pg mono">{{ Math.max(1, Math.min(pptPage, pptData.total)) }} / {{ pptData.total }}</span>
-                <button type="button" class="rf-pill-btn" :disabled="pptPage >= pptData.total" @click="pptPage < pptData.total && pptPage++">›</button>
+                <button type="button" class="rf-pill-btn" :disabled="pptPageClamped <= 1" @click="prevPptPage">‹</button>
+                <span class="rf-pill-pg mono">{{ pptPageClamped }} / {{ pptImgTotalSafe }}</span>
+                <button type="button" class="rf-pill-btn" :disabled="pptPageClamped >= pptImgTotalSafe" @click="nextPptPage">›</button>
                 <span class="rf-pill-sep"></span>
                 <button type="button" class="rf-pill-btn" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">⛶</button>
               </div>
-              <span class="rf-badge">自研渲染 · {{ pptData.total }} 页</span>
             </template>
-            <div v-else class="rf-note" style="color:#cbd5d0">解析失败或文件损坏</div>
-          </div>
-          <!-- 文本/MD/CSV 内容渲染 (后端 /preview 1KB 截取) -->
-          <pre v-else-if="previewKind === 'text'" class="rf-text">{{ textPreview || '加载中…' }}</pre>
-          <!-- Office 信息卡 (无转换时) -->
-          <div v-else-if="previewKind === 'office'" class="rf-office">
-            <span class="rf-ext">{{ typeAbbr }}</span>
-            <span class="rf-osz mono">{{ fmtSize(file.file_size) }}</span>
-            <button type="button" class="rf-open" @click="$emit('preview', file)">打开大预览</button>
-            <span class="rf-tip">转换管线就位后自动升级为首页图</span>
           </div>
           <!-- 兜底占位 -->
           <div v-else class="rail-cover-ph" :style="{ borderColor: typeColor }">
@@ -260,7 +256,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import CommentThread from '@/components/drive/CommentThread.vue'
@@ -421,38 +417,105 @@ async function loadTextPreview() {
   } catch { textPreview.value = '(预览加载失败)' }
 }
 
-/* ---- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) ---- */
-const pptData = ref(null)
+/* ---- 批次⑩.25 (用户拍板): PPT 逐页 PNG 图片浏览 (后端 LibreOffice 管线) ---- */
+const pptImgStatus = ref('idle')   // idle | loading | converting | ready | error
+const pptImgError = ref('')
+const pptImgUrls = ref([])
+const pptImgTotal = ref(0)
 const pptPage = ref(1)
-const pptLoading = ref(false)
-const pptBgStyle = ref('#ffffff')
-let pptSeq = 0
-watch([() => props.file?.id, previewKind], async () => {
-  if (previewKind.value !== 'ppt' || !props.file) { pptData.value = null; return }
-  const seq = ++pptSeq
-  pptLoading.value = true
-  try {
-    const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/pptx-structure`)
-    if (seq !== pptSeq) return
-    pptData.value = resp.data
-    pptBgStyle.value = resp.data.bg_img
-      ? `#fff url("${resp.data.bg_img}") center/cover no-repeat`
-      : (resp.data.bg ? '#' + resp.data.bg : '#ffffff')
-    pptPage.value = 1
-  } catch { if (seq === pptSeq) pptData.value = null }
-  finally { if (seq === pptSeq) pptLoading.value = false }
-}, { immediate: true })
+const pptImgNat = ref(null)        // 首页图片原始尺寸 {w,h}
+let pptPollTimer = null
+let pptPollSeq = 0
+const pptImgTotalSafe = computed(() => Math.max(1, pptImgTotal.value))
+const pptPageClamped = computed(() => Math.min(Math.max(pptPage.value, 1), Math.max(1, pptImgTotal.value)))
+function nextPptPage() { if (pptPage.value < pptImgTotal.value) pptPage.value++ }
+function prevPptPage() { if (pptPage.value > 1) pptPage.value-- }
+function onImgLoad(ev) {
+  const img = ev.target
+  if (img?.naturalWidth) pptImgNat.value = { w: img.naturalWidth, h: img.naturalHeight }
+}
 
-const escHtml = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-// 批次⑩.19: 舞台宽随全屏自适应 (rail 态 304 / 全屏按视口等比适配)
+/* 页图带 Bearer 头经 axios 取 blob → objectURL; 预取当前±1 页 */
+const pptBlobMap = reactive({})
+const pptBlobCurrent = ref(null)
+let blobSeq = 0
+async function ensurePageBlob(fid, pageIdx) {
+  if (fid == null || pptBlobMap[pageIdx]) return
+  try {
+    const resp = await axios.get(`/api/v1/drive/files/${fid}/pptx-pages/img-${pageIdx}`, { responseType: 'blob' })
+    pptBlobMap[pageIdx] = URL.createObjectURL(resp.data)
+  } catch { /* 加载失败静默 */ }
+}
+async function refreshPptBlobs() {
+  const fid = props.file?.id
+  if (fid == null) { pptBlobCurrent.value = null; return }
+  const seq = ++blobSeq
+  const p = pptPageClamped.value
+  await ensurePageBlob(fid, p)
+  await ensurePageBlob(fid, p + 1)  // 预取下一页
+  if (seq !== blobSeq) return
+  pptBlobCurrent.value = pptBlobMap[p] || null
+}
+watch([() => props.file?.id, previewKind], ([fid]) => {
+  if (fid != null) revokePptBlobs()  // 换文件清旧 blob
+})
+watch([() => props.file?.id, previewKind, pptPageClamped], refreshPptBlobs, { immediate: true })
+
+function stopPptPoll() { if (pptPollTimer) { clearTimeout(pptPollTimer); pptPollTimer = null } }
+function startPptPoll(fid) {
+  stopPptPoll()
+  const seq = ++pptPollSeq
+  const tick = async () => {
+    if (seq !== pptPollSeq) return
+    try {
+      const resp = await axios.get(`/api/v1/drive/files/${fid}/pptx-pages`)
+      const st = resp.data?.status
+      window.__pptPoll = { status: st, total: resp.data?.total, n: (resp.data?.pages || []).length, t: Date.now() }
+      if (st === 'ready') {
+        pptImgStatus.value = 'ready'
+        pptImgUrls.value = resp.data.pages || []
+        pptImgTotal.value = resp.data.total || (resp.data.pages || []).length
+        return
+      }
+      if (st === 'error') {
+        pptImgStatus.value = 'error'
+        pptImgError.value = resp.data?.message || '转换失败'
+        return
+      }
+      pptPollTimer = setTimeout(tick, 2000)
+    } catch {
+      pptPollTimer = setTimeout(tick, 2500)
+    }
+  }
+  tick()
+}
+watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+  stopPptPoll()
+  pptPage.value = 1
+  pptImgUrls.value = []
+  pptImgNat.value = null
+  if (kind === 'ppt' && fid != null) {
+    pptImgStatus.value = 'loading'
+    startPptPoll(fid)
+  } else {
+    pptImgStatus.value = 'idle'
+  }
+}, { immediate: true })
+function revokePptBlobs() {
+  for (const k of Object.keys(pptBlobMap)) { try { URL.revokeObjectURL(pptBlobMap[k]) } catch {} delete pptBlobMap[k] }
+  pptBlobCurrent.value = null
+}
+onBeforeUnmount(() => { stopPptPoll(); pptPollSeq++; revokePptBlobs() })
+
+// 批次⑩.19: 舞台宽随全屏自适应 (rail 态 304 / 全屏按视口等比适配, 比例取页图自然尺寸)
 const pptStageRef = ref(null)
 const pptFull = ref(false)
 const vpW = ref(window.innerWidth)
 const vpH = ref(window.innerHeight)
 const stageW = computed(() => {
   if (!pptFull.value) return 304
-  const d = pptData.value
-  const ar = d ? (d.slide_w_emu / d.slide_h_emu) : (16 / 9)
+  const nat = pptImgNat.value
+  const ar = nat ? nat.w / nat.h : (16 / 9)
   return Math.min(vpW.value * 0.94, (vpH.value - 24) * ar)
 })
 function syncViewport() {
@@ -477,14 +540,12 @@ function onFsWheel(ev) {
   ev.preventDefault()
   const now = Date.now()
   if (now - wheelLock < 450) return
-  const total = pptData.value?.total || 0
-  if (ev.deltaY > 0 && pptPage.value < total) { wheelLock = now; pptPage.value++ }
+  if (ev.deltaY > 0 && pptPage.value < pptImgTotalSafe.value) { wheelLock = now; pptPage.value++ }
   else if (ev.deltaY < 0 && pptPage.value > 1) { wheelLock = now; pptPage.value-- }
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
-  const total = pptData.value?.total || 0
-  if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(ev.key)) { ev.preventDefault(); if (pptPage.value < total) pptPage.value++ }
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(ev.key)) { ev.preventDefault(); if (pptPage.value < pptImgTotalSafe.value) pptPage.value++ }
   else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(ev.key)) { ev.preventDefault(); if (pptPage.value > 1) pptPage.value-- }
 }
 onMounted(() => {
@@ -509,112 +570,12 @@ function togglePptFull() {
     setTimeout(syncViewport, 150)
   }
 }
-
-const pptSlideW = computed(() => stageW.value)
 const pptSlideH = computed(() => {
-  const d = pptData.value
-  if (!d?.slide_w_emu) return 171
-  return Math.round(stageW.value * (d.slide_h_emu / d.slide_w_emu))
+  if (!pptFull.value) return null
+  const nat = pptImgNat.value
+  if (!nat) return null
+  return Math.round(stageW.value / (nat.w / nat.h))
 })
-const currentSlideBg = computed(() => {
-  const d = pptData.value
-  if (!d?.slides?.length) return '#ffffff'
-  const page = Math.min(Math.max(pptPage.value, 1), d.slides.length)
-  const sl = d.slides[page - 1]
-  return sl?.bg ? '#' + sl.bg : '#ffffff'
-})
-const pptSlideHtml = computed(() => {
-  const d = pptData.value
-  if (!d?.slides?.length) return ''
-  const page = Math.min(Math.max(pptPage.value, 1), d.slides.length)
-  const slide = d.slides[page - 1]
-  if (!slide) return ''
-  const scale = stageW.value / (d.slide_w_emu || 9144000)
-  pptChartDefs.length = 0
-  const posStyle = (sp) => `left:${(sp.x * 100).toFixed(2)}%;top:${(sp.y * 100).toFixed(2)}%;width:${(sp.w * 100).toFixed(2)}%;height:${(sp.h * 100).toFixed(2)}%;`
-  let html = ''
-  for (const sp of slide.shapes || []) {
-    try {
-      if (sp.kind === 'text') {
-        const paras = (sp.paras || []).map((p) => {
-          const runs = (p.runs || []).map((r) => {
-            const px = Math.max(7, Math.round((r.sz || 18) * 12700 * scale))
-            const st = `font-size:${px}px;` + (r.b ? 'font-weight:700;' : '') + (r.c ? `color:#${r.c};` : '')
-            return `<span style="${st}">${escHtml(r.t)}</span>`
-          }).join('')
-          const al = p.align === 'center' ? 'center' : p.align === 'right' ? 'right' : ''
-          const lh = typeof p.ls === 'number' ? `line-height:${p.ls};` : 'line-height:1.25;'
-          return `<div style="margin-bottom:2px;${lh}${al ? 'text-align:' + al : ''}">${runs || '&nbsp;'}</div>`
-        }).join('')
-        const hasFill = !!sp.fill
-        const fillBg = sp.fill ? `background:#${sp.fill};` : ''
-        const defColor = hasFill ? '#ffffff' : ''
-        html += `<div style="position:absolute;${posStyle(sp)}${fillBg}color:${defColor};overflow:hidden;border-radius:2px;">${paras}</div>`
-      } else if (sp.kind === 'image') {
-        if (sp.src) {
-          html += `<img src="${sp.src}" style="position:absolute;${posStyle(sp)}object-fit:contain;" />`
-        } else {
-          html += `<div style="position:absolute;${posStyle(sp)}display:grid;place-items:center;background:repeating-linear-gradient(45deg,#EFF2F0,#EFF2F0 8px,#E6EBE8 8px,#E6EBE8 16px);color:var(--color-text-4,#B9BFB6);font-size:9px;">大图未加载</div>`
-        }
-      } else if (sp.kind === 'table' && sp.rows) {
-        const trs = sp.rows.map((r) => `<tr>${r.map((c) => `<td>${escHtml(c)}</td>`).join('')}</tr>`).join('')
-        html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;background:#fff;"><table style="border-collapse:collapse;width:100%;height:100%;font-size:8px;">${trs}</table></div>`
-      } else if (sp.kind === 'chart-data') {
-        html += `<div class="rf-chart" style="position:absolute;${posStyle(sp)}background:#fff;" data-ci="${pptChartDefs.length}"></div>`
-        pptChartDefs.push(sp)
-      } else if (sp.kind === 'shape' && sp.color) {
-        html += `<div style="position:absolute;${posStyle(sp)}background:#${sp.color};"></div>`
-      }
-    } catch { /* 单形状失败跳过 */ }
-  }
-  return html
-})
-
-const pptChartDefs = []
-const pptChartInstances = []
-async function mountPptCharts() {
-  await nextTick()
-  while (pptChartInstances.length) { try { pptChartInstances.pop().dispose() } catch {} }
-  const slide = pptData.value?.slides?.[pptPage.value - 1]
-  if (!slide) return
-  const defs = (slide.shapes || []).filter((sp) => sp.kind === 'chart-data')
-  if (!defs.length) return
-  try {
-    const { init } = await import('echarts')
-    await nextTick()
-    document.querySelectorAll('.rf-stage .rf-chart').forEach((dom) => {
-      const cd = defs[Number(dom.dataset.ci || 0)]
-      if (!dom.isConnected || !cd) return
-      try {
-        const inst = init(dom)
-        const ct = cd.chart_type || 'bar'
-        let option
-        if (ct.includes('pie')) {
-          const s0 = cd.series?.[0]
-          option = {
-            animation: false,
-            series: [{ type: 'pie', radius: '68%', center: ['50%', '46%'],
-              data: (cd.categories || []).map((c, i) => ({ name: c, value: s0?.values?.[i] ?? 0 })),
-              label: { fontSize: 7 }, textStyle: { fontSize: 7 } }],
-          }
-        } else {
-          option = {
-            animation: false,
-            legend: { show: (cd.series?.length || 0) > 1, top: 0, textStyle: { fontSize: 7 } },
-            grid: { left: 30, right: 8, top: (cd.series?.length || 0) > 1 ? 20 : 8, bottom: 18 },
-            xAxis: { type: 'category', data: cd.categories || [], axisLabel: { fontSize: 7, interval: 0 } },
-            yAxis: { type: 'value', axisLabel: { fontSize: 7 } },
-            series: (cd.series || []).map((sr) => ({ name: sr.name, type: ct.includes('line') ? 'line' : 'bar', data: sr.values })),
-          }
-        }
-        inst.setOption(option)
-        pptChartInstances.push(inst)
-      } catch { /* 单图表失败跳过 */ }
-    })
-  } catch { /* echarts 加载失败静默 */ }
-}
-watch([pptSlideHtml, pptPage], mountPptCharts)
-onBeforeUnmount(() => { while (pptChartInstances.length) { try { pptChartInstances.pop().dispose() } catch {} } })
 
 const inlineUrl = computed(() =>
   props.file ? `/api/v1/drive/files/${props.file.id}/download?disposition=inline` : '')
