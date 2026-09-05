@@ -315,6 +315,7 @@ function fmtDT(x) {
 }
 .rail-act span { font-size: 13px; line-height: 1; }
 .rail-act:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); background: var(--color-primary-bg); }
+.rail-act:active { transform: scale(.95); }
 .rail-act.pri { background: var(--gradient-cta-button, var(--color-primary)); border-color: transparent; color: #fff; font-weight: var(--font-weight-semibold); }
 .rail-act.pri:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); color: #fff; }
 .rail-act.starred { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-bg, transparent); }
