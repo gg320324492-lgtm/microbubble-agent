@@ -37,13 +37,13 @@
         @click="$emit('sort-change', 'file_name')"
       >名称<span v-if="sortKeyOf === 'file_name'" class="dft-arr">{{ arrow }}</span></span>
       <span
-        class="dft-c dft-c--size num sortable"
+        class="dft-c dft-c--size sortable"
         role="columnheader"
         @click="$emit('sort-change', 'file_size')"
       >大小<span v-if="sortKeyOf === 'file_size'" class="dft-arr">{{ arrow }}</span></span>
       <span class="dft-c dft-c--owner">上传者</span>
       <span
-        class="dft-c dft-c--time num sortable"
+        class="dft-c dft-c--time sortable"
         role="columnheader"
         @click="$emit('sort-change', 'created_at')"
       >上传时间<span v-if="sortKeyOf === 'created_at'" class="dft-arr">{{ arrow }}</span></span>
@@ -530,6 +530,10 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
 .dft-c--owner { display: flex; align-items: center; gap: 6px; }
 .num { text-align: right; font-family: var(--font-family-mono, monospace); font-size: var(--font-size-xs); }
 .dft-head .num { text-align: right; }
+/* 批次⑩.4 (用户选型 HEAD B): 表头全居中; 行内 大小/上传时间/上传者 居中, 名称保持左对齐 */
+.dft-head .dft-c { text-align: center; }
+.dft-row .num { text-align: center; }
+.dft-row .dft-c--owner { justify-content: center; }
 
 /* 批次⑧ 对齐视觉稿 .nm: 文件夹=teal 描边 16px, 文件=7px 类型色 dot */
 .dft-folder-ic { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--color-primary); stroke-width: 1.6; }
