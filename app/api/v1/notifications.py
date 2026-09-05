@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.config import settings
 from app.models.knowledge import FileComment, ActivityEvent, Knowledge
 from app.models.member import Member
 from app.services.notification_service import notification_service
@@ -97,6 +98,7 @@ class CommentItem(BaseModel):
     file_id: int
     user_id: Optional[int] = None
     user_name: Optional[str] = None
+    user_avatar: Optional[str] = None  # v77: 已解析的公网头像 URL (前端勿再拼 /members/{id}/avatar — 端点不存在)
     content: str
     mentions: Optional[List[int]] = None
     parent_comment_id: Optional[int] = None  # v2 PR6-P5 threading
@@ -143,7 +145,34 @@ async def _batch_user_names(db: AsyncSession, user_ids: List[int]) -> dict:
         return {}
     stmt = select(Member.id, Member.username, Member.name).where(Member.id.in_(set(user_ids)))
     rows = (await db.execute(stmt)).all()
-    return {r.id: (r.username or r.name or f"用户{r.id}") for r in rows}
+    # v77: 显示名优先 (Member.name), username 只是登录名 — 评论面板曾显示 dutonghe 而非 杜同贺
+    return {r.id: (r.name or r.username or f"用户{r.id}") for r in rows}
+
+
+def _resolve_avatar_raw(raw: Optional[str]) -> Optional[str]:
+    """Member.avatar 原始值 → 公网 URL (语义同 auth._resolve_avatar_url, 但输入是字符串)"""
+    if not raw:
+        return None
+    site_prefix = f"https://{settings.SITE_DOMAIN}/minio/"
+    if raw.startswith(site_prefix):
+        return raw
+    if raw.startswith("http"):
+        # 旧数据: presigned URL → 提取 object_name 重写
+        from urllib.parse import urlparse
+        path = urlparse(raw).path
+        parts = path.lstrip("/").split("/", 1)
+        if len(parts) == 2:
+            return f"{site_prefix}{settings.MINIO_BUCKET}/{parts[1]}"
+        return raw
+    return f"{site_prefix}{settings.MINIO_BUCKET}/{raw.lstrip('/')}"
+
+
+async def _batch_user_avatars(db: AsyncSession, user_ids: List[int]) -> dict:
+    if not user_ids:
+        return {}
+    stmt = select(Member.id, Member.avatar).where(Member.id.in_(set(user_ids)))
+    rows = (await db.execute(stmt)).all()
+    return {r.id: _resolve_avatar_raw(r.avatar) for r in rows}
 
 
 # ============================================================
@@ -307,12 +336,18 @@ async def list_file_comments(
         db, file_id=file_id, limit=limit, before_id=before_id,
     )
 
+    # v77: 批量解析头像 URL (避免 N+1)
+    avatar_map = await _batch_user_avatars(
+        db, [c.user_id for c, _, _ in rows if c.user_id],
+    )
+
     items = [
         CommentItem(
             id=c.id,
             file_id=c.file_id,
             user_id=c.user_id,
             user_name=user_name,
+            user_avatar=avatar_map.get(c.user_id),
             content=c.content,
             mentions=c.mentions,
             parent_comment_id=c.parent_comment_id,  # v2 PR6-P5
@@ -320,7 +355,7 @@ async def list_file_comments(
             reply_count=c.reply_count,               # v2 PR6-P5
             created_at=str(c.created_at) if c.created_at else None,
         )
-        for c, user_name in rows
+        for c, user_name, _avatar_raw in rows
     ]
     return CommentListResponse(items=items, total=len(items))
 
@@ -356,6 +391,7 @@ async def create_file_comment(
         raise HTTPException(status_code=422, detail=str(e))
 
     user_names = await _batch_user_names(db, [user.id])
+    user_avatars = await _batch_user_avatars(db, [user.id])
 
     return CommentCreateResponse(
         comment=CommentItem(
@@ -363,6 +399,7 @@ async def create_file_comment(
             file_id=comment.file_id,
             user_id=comment.user_id,
             user_name=user_names.get(user.id),
+            user_avatar=user_avatars.get(user.id),
             content=comment.content,
             mentions=comment.mentions,
             parent_comment_id=comment.parent_comment_id,
@@ -415,6 +452,7 @@ async def update_file_comment(
         raise HTTPException(status_code=422, detail=str(e))
 
     user_names = await _batch_user_names(db, [user.id])
+    user_avatars = await _batch_user_avatars(db, [user.id])
 
     return CommentUpdateResponse(
         comment=CommentItem(
@@ -422,6 +460,7 @@ async def update_file_comment(
             file_id=comment.file_id,
             user_id=comment.user_id,
             user_name=user_names.get(user.id),
+            user_avatar=user_avatars.get(user.id),
             content=comment.content,
             mentions=comment.mentions,
             parent_comment_id=comment.parent_comment_id,
