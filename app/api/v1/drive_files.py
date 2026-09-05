@@ -1584,7 +1584,7 @@ async def get_pptx_structure(
 
     slide_w, slide_h = prs.slide_width or 9144000, prs.slide_height or 6858000
 
-    # ── 主题色板 (theme1.xml clrScheme): scheme 颜色 → 具体色值 ──
+    # ── 主题色板 (theme1.xml clrScheme) ──
     import re as _re
     import zipfile
     theme = {}
@@ -1608,6 +1608,114 @@ async def get_pptx_structure(
              "background_1": "lt1", "text_2": "dk2", "background_2": "lt2"}.get(k, k.replace("_", ""))
         return theme.get(k)
 
+    def _scheme_hex(val):
+        k = str(val).lower()
+        k = {"tx1": "dk1", "bg1": "lt1", "tx2": "dk2", "bg2": "lt2"}.get(k, k)
+        return theme.get(k)
+
+    # ── 母版/版式 默认字号与颜色 (错版根因: 占位符文字大量无显式样式) ──
+    from pptx.oxml.ns import qn as _qn
+    from PIL import Image as PILImage
+
+    def _lst1(txbody_el):
+        """txBody 的 lvl1pPr defRPr 元素 (可能为 None)"""
+        try:
+            ls = txbody_el.find(_qn("a:lstStyle"))
+            if ls is not None:
+                return ls.find(_qn("a:lvl1pPr"))
+        except Exception:
+            pass
+        return None
+
+    def _dr_sz(dr):
+        try:
+            v = dr.get("sz")
+            return int(v) / 100.0 if v else None
+        except Exception:
+            return None
+
+    def _dr_color(dr):
+        try:
+            sf = dr.find(_qn("a:solidFill"))
+            if sf is None:
+                return None
+            srgb = sf.find(_qn("a:srgbClr"))
+            if srgb is not None:
+                return srgb.get("val")
+            sch = sf.find(_qn("a:schemeClr"))
+            if sch is not None:
+                return _scheme_hex(sch.get("val"))
+        except Exception:
+            pass
+        return None
+
+    def _lvl_defrpr_para(para):
+        try:
+            if para._pPr is not None:
+                return para._pPr.find(_qn("a:defRPr"))
+        except Exception:
+            pass
+        return None
+
+    def _lvl_defrpr(lst_el, lvl):
+        try:
+            if lst_el is None:
+                return None
+            name = "a:lvl%dpPr" % min(max(lvl, 1), 9)
+            l1 = lst_el.find(_qn(name))
+            if l1 is not None:
+                return l1.find(_qn("a:defRPr"))
+        except Exception:
+            pass
+        return None
+
+    def _tf_defaults(txbody_el):
+        dr = _lst1(txbody_el)
+        if dr is None:
+            return (None, None)
+        return (_dr_sz(dr), _dr_color(dr))
+
+    def _ph_defaults(ph, palette):
+        """版式占位符默认 (字号pt, 颜色): lstStyle lvl1 → 母版同型占位符 lstStyle → 母版 txStyles"""
+        try:
+            sz, color = _tf_defaults(ph.text_frame._txBody)
+            if sz is None or color is None:
+                ptype = str(ph.placeholder_format.type)
+                is_title = "TITLE" in ptype or "CENTER" in ptype
+                master = ph.part.slide_layout.slide_master if hasattr(ph.part, "slide_layout") else None
+                if master is None:
+                    try:
+                        master = ph.slide_layout.slide_master
+                    except Exception:
+                        master = None
+                if master is not None:
+                    if sz is None:
+                        for mph in master.placeholders:
+                            mpt = str(mph.placeholder_format.type)
+                            if ("TITLE" in mpt) == is_title and "TITLE" in mpt:
+                                s2, c2 = _tf_defaults(mph.text_frame._txBody)
+                                sz = sz or s2
+                                color = color or c2
+                                break
+                    if (sz is None or color is None) and master.element is not None:
+                        txs = master.element.find(_qn("p:txStyles"))
+                        if txs is not None:
+                            style_el = txs.find(_qn("p:titleStyle" if is_title else "p:bodyStyle"))
+                            if style_el is None and not is_title:
+                                style_el = txs.find(_qn("p:otherStyle"))
+                            if style_el is not None:
+                                l1 = style_el.find(_qn("a:lvl1pPr"))
+                                if l1 is not None:
+                                    dr = l1.find(_qn("a:defRPr"))
+                                    if dr is not None:
+                                        sz = sz or _dr_sz(dr)
+                                        color = color or _dr_color(dr)
+            if color is None:
+                color = palette.get("dk1")
+            return (sz, color)
+        except Exception:
+            return (None, None)
+
     def _fill_hex(sh, palette):
         try:
             fill = sh.fill
@@ -1626,42 +1734,145 @@ async def get_pptx_structure(
         except Exception:
             return None
 
-    def _layout_ph_map(slide):
+    def _layout_ph_map(slide, palette):
         m = {}
         try:
             for ph in slide.slide_layout.placeholders:
-                m[ph.placeholder_format.idx] = ph
+                m[ph.placeholder_format.idx] = (_ph_defaults(ph, palette), ph)
         except Exception:
             pass
         return m
 
     def _inherit_pos(sh, lay_map):
-        """占位符未显式设坐标 → 继承版式同位占位符 (错版根因之一)"""
         try:
             if sh.left is not None or not getattr(sh, "is_placeholder", False):
                 return None
-            ph = lay_map.get(sh.placeholder_format.idx)
+            entry = lay_map.get(sh.placeholder_format.idx)
+            ph = entry[1] if entry else None
             if ph is None:
-                ph = next((q for q in lay_map.values()
-                           if q.placeholder_format.type == sh.placeholder_format.type), None)
+                ptype = sh.placeholder_format.type
+                match = next((e for k, e in lay_map.items()
+                              if e[1].placeholder_format.type == ptype), None)
+                ph = match[1] if match else None
             if ph is not None and ph.left is not None:
                 return (ph.left, ph.top, ph.width or 0, ph.height or 0)
         except Exception:
             pass
         return None
 
-    def _run_size_pt(sh, lay_map, para):
-        """字号继承链: run → 段落 → 版式同位占位符 (缺省 14/标题 32)"""
+    def _run_size_pt(sh, lay_map, para, shape_default):
         if para is not None and para.font.size is not None:
             return para.font.size.pt
+        if para is not None and para._pPr is not None:
+            ps = _dr_sz(_lvl_defrpr_para(para))
+            if ps:
+                return ps
+        lvl = (para.level if para is not None and para.level else 0) + 1
+        try:
+            lst_el = sh.text_frame._txBody.find(_qn("a:lstStyle"))
+            ps = _dr_sz(_lvl_defrpr(lst_el, lvl))
+            if ps:
+                return ps
+        except Exception:
+            pass
         try:
             if getattr(sh, "is_placeholder", False):
-                ph = lay_map.get(sh.placeholder_format.idx)
-                if ph is not None:
-                    for pp in ph.text_frame.paragraphs:
-                        for rr in pp.runs:
-                            if rr.font.size is not None:
-                                return rr.font.size.pt
+                entry = lay_map.get(sh.placeholder_format.idx)
+                if entry:
+                    ph, lst_el = entry[1], entry[1].text_frame._txBody
+                    ps = _dr_sz(_lvl_defrpr(lst_el, lvl))
+                    if ps:
+                        return ps
+        except Exception:
+            pass
+        try:
+            master = slide.slide_layout.slide_master
+            txs = master.element.find(_qn("p:txStyles"))
+            if txs is not None:
+                is_title = "TITLE" in str(sh.placeholder_format.type) if getattr(sh, "is_placeholder", False) else False
+                style_el = txs.find(_qn("p:titleStyle" if is_title else "p:bodyStyle"))
+                if style_el is not None:
+                    ps = _dr_sz(_lvl_defrpr(style_el, 1 if is_title else lvl))
+                    if ps:
+                        return ps
+        except Exception:
+            pass
+        if shape_default:
+            return shape_default
+        return 14
+
+    def _para_defrpr(para):
+        try:
+            if para is not None and para._pPr is not None:
+                return para._pPr.find(_qn("a:defRPr"))
+        except Exception:
+            pass
+        return None
+
+    def _run_color(sh, lay_map, para, shape_default_color):
+        if para is not None and para.font.color is not None and para.font.color.type is not None:
+            try:
+                if "RGB" in str(para.font.color.type):
+                    return str(para.font.color.rgb)
+                return _theme_hex(str(para.font.color.theme_color))
+            except Exception:
+                pass
+        lvl = (para.level if para is not None and para.level else 0) + 1
+        dr = _para_defrpr(para)
+        if dr is not None:
+            c = _dr_color(dr)
+            if c:
+                return c
+        try:
+            lst_el = sh.text_frame._txBody.find(_qn("a:lstStyle"))
+            dr = _lvl_defrpr(lst_el, lvl)
+            if dr is not None:
+                c = _dr_color(dr)
+                if c:
+                    return c
+        except Exception:
+            pass
+        try:
+            if getattr(sh, "is_placeholder", False):
+                entry = lay_map.get(sh.placeholder_format.idx)
+                if entry:
+                    dr = _lvl_defrpr(entry[1].text_frame._txBody, lvl)
+                    if dr is not None:
+                        c = _dr_color(dr)
+                        if c:
+                            return c
+        except Exception:
+            pass
+        if shape_default_color:
+            return shape_default_color
+        try:
+            master = slide.slide_layout.slide_master
+            txs = master.element.find(_qn("p:txStyles"))
+            if txs is not None:
+                is_title = "TITLE" in str(sh.placeholder_format.type) if getattr(sh, "is_placeholder", False) else False
+                style_el = txs.find(_qn("p:titleStyle" if is_title else "p:bodyStyle"))
+                if style_el is not None:
+                    dr = _lvl_defrpr(style_el, 1 if is_title else lvl)
+                    if dr is not None:
+                        c = _dr_color(dr)
+                        if c:
+                            return c
+        except Exception:
+            pass
+        return theme.get("dk1")
+
+    def _downscale_blob(blob, content_type):
+        """大图降采样 → JPEG (修「大图跳过」缺内容错版)"""
+        try:
+            img = PILImage.open(BytesIO(blob))
+            img.thumbnail((1280, 1280))
+            buf = BytesIO()
+            if img.mode in ("RGBA", "P", "LA"):
+                img = img.convert("RGB")
+            img.save(buf, "JPEG", quality=82)
+            out = buf.getvalue()
+            if len(out) < len(blob):
+                return "data:image/jpeg;base64," + base64.b64encode(out).decode()
         except Exception:
             pass
         return None
@@ -1674,7 +1885,6 @@ async def get_pptx_structure(
             return out
         for sh in shapes:
             try:
-                # 组合形状: 递归子形状 (chOff/chExt → 父空间 变换; 错版根因之二)
                 if sh.shape_type == MSO_SHAPE_TYPE.GROUP:
                     try:
                         xfrm = sh._element.grpSpPr.xfrm
@@ -1707,13 +1917,15 @@ async def get_pptx_structure(
 
                 if sh.shape_type == MSO_SHAPE_TYPE.PICTURE:
                     blob = sh.image.blob
-                    if len(blob) > 1536 * 1024:
-                        entry.update(kind="image", skip="large")
+                    src = None
+                    if len(blob) <= 1536 * 1024:
+                        src = "data:" + (sh.image.content_type or "image/png") + ";base64," + base64.b64encode(blob).decode()
                     else:
-                        entry.update(
-                            kind="image",
-                            src=f"data:{sh.image.content_type};base64,{base64.b64encode(blob).decode()}",
-                        )
+                        src = _downscale_blob(blob, sh.image.content_type)
+                    if src:
+                        entry.update(kind="image", src=src)
+                    else:
+                        entry.update(kind="image", skip="large")
                 elif getattr(sh, "has_table", False) and sh.has_table:
                     tbl = sh.table
                     rows = [[cell.text for cell in row.cells] for row in tbl.rows]
@@ -1739,6 +1951,23 @@ async def get_pptx_structure(
                         pass
                     entry.update(kind="chart-data", chart_type=ctype, categories=cats, series=series)
                 elif sh.has_text_frame and sh.text_frame.text.strip():
+                    # 形状级默认字号/颜色: 自身 lstStyle → 版式占位符 → 母版
+                    shape_sz, shape_color = None, None
+                    try:
+                        shape_sz, shape_color = _tf_defaults(sh.text_frame._txBody)
+                    except Exception:
+                        pass
+                    try:
+                        if getattr(sh, "is_placeholder", False):
+                            entry0 = lay_map.get(sh.placeholder_format.idx)
+                            if entry0:
+                                shape_sz = shape_sz or entry0[0][0]
+                                shape_color = shape_color or entry0[0][1]
+                    except Exception:
+                        pass
+                    if shape_color is None:
+                        shape_color = palette.get("dk1") or "1F2A26"
+
                     paras = []
                     for para in sh.text_frame.paragraphs:
                         runs = []
@@ -1752,7 +1981,8 @@ async def get_pptx_structure(
                                         color = _theme_hex(str(r.font.color.theme_color))
                             except Exception:
                                 color = None
-                            sz = r.font.size.pt if r.font.size is not None else _run_size_pt(sh, lay_map, para)
+                            sz = r.font.size.pt if r.font.size is not None else _run_size_pt(sh, lay_map, para, shape_sz)
+                            color = color or _run_color(sh, lay_map, para, shape_color)
                             runs.append({"t": r.text, "sz": sz, "b": bool(r.font.bold), "c": color})
                         if runs:
                             ls = para.line_spacing
@@ -1778,7 +2008,7 @@ async def get_pptx_structure(
                 bg = str(fill.fore_color.rgb)
         except Exception:
             bg = None
-        lay_map = _layout_ph_map(slide)
+        lay_map = _layout_ph_map(slide, theme)
         shapes = collect(slide.shapes, 0, 0, 1, 1, lay_map, theme, 0)
         slides.append({"index": idx, "bg": bg, "shapes": shapes})
 
