@@ -218,6 +218,16 @@ class PreviewResponse(BaseModel):
     first_page_url: Optional[str] = None  # pdf 公开读 (CDN/预签名)
 
 
+async def _owner_lookup(db: AsyncSession, items) -> dict:
+    """批次⑦: 批量查本页文件 created_by 的 Member — 之前只 list 端点没传 owner_lookup,
+    上传者列恒 '—'。返回 {member_id: Member}, 空页短路。"""
+    uids = {x.created_by for x in items if x.created_by is not None}
+    if not uids:
+        return {}
+    rows = (await db.execute(select(Member).where(Member.id.in_(uids)))).scalars().all()
+    return {m.id: m for m in rows}
+
+
 async def _folder_name_map(db: AsyncSession, items) -> dict:
     """批量查本页文件所属 folder {id: name} — B6 搜索结果 / 三栏工作台"位置"列, 防 N+1。"""
     fids = {x.folder_id for x in items if x.folder_id is not None}
@@ -511,8 +521,9 @@ async def list_drive_files(
     starred_ids = await svc.get_starred_ids([x.id for x in items], current_user.id)
     # B6 搜索态: 结果跨夹, 批量带出所属文件夹名 (非搜索态同样填充, 前端选择消费)
     folder_map = await _folder_name_map(db, items)
+    owner_map = await _owner_lookup(db, items)
     return DriveFileListResponse(
-        items=[_to_item(x, starred_ids=starred_ids, folder_map=folder_map) for x in items],
+        items=[_to_item(x, starred_ids=starred_ids, folder_map=folder_map, owner_lookup=owner_map) for x in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -534,7 +545,7 @@ async def get_drive_file(
             status_code=404,
             detail="file 不存在或无权访问",
         )
-    return _to_item(f)
+    return _to_item(f, owner_lookup=await _owner_lookup(db, [f]))
 
 
 @router.put("/files/{file_id}", response_model=DriveFileItem)
@@ -921,8 +932,9 @@ async def list_starred_files(
     # 列表本身已按本人 star 过滤, is_starred 恒 True, 但仍走同一 attach 路径保证语义单一
     starred_ids = await svc.get_starred_ids([x.id for x in items], current_user.id)
     folder_map = await _folder_name_map(db, items)
+    owner_map = await _owner_lookup(db, items)
     return StarredListResponse(
-        items=[_to_item(x, starred_ids=starred_ids, folder_map=folder_map) for x in items],
+        items=[_to_item(x, starred_ids=starred_ids, folder_map=folder_map, owner_lookup=owner_map) for x in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -949,8 +961,9 @@ async def list_trash_files(
         sort_by=sort_by or "deleted_at",
         sort_order=sort_order or "desc",
     )
+    owner_map = await _owner_lookup(db, items)
     return TrashListResponse(
-        items=[_to_item(x) for x in items],
+        items=[_to_item(x, owner_lookup=owner_map) for x in items],
         total=total,
         page=page,
         page_size=page_size,
