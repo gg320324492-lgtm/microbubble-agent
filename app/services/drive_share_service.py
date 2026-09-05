@@ -228,6 +228,8 @@ class DriveShareService:
             download_count=0,                    # W72-B-1 差量 (server_default 兜底)
         )
         self.db.add(share)
+        # 批次⑩.7: 可见性跟随分享 — 文件夹分享即公开, 撤销/过期回团队 (用户 2026-09-05 拍板)
+        folder.visibility = "public"
         await self.db.commit()
         await self.db.refresh(share)
 
@@ -315,6 +317,11 @@ class DriveShareService:
                     f"[DriveShareService.get_folder_by_share_token] token={token[:8]}... 已过期 "
                     f"expires={expires_naive} now={now_naive}"
                 )
+                # 批次⑩.7: 过期懒回团队属性
+                folder = await self.db.get(Folder, share.folder_id)
+                if folder is not None and folder.visibility == "public":
+                    folder.visibility = "team"
+                    await self.db.commit()
                 return None
 
         # W72 第 2 批 B-1 差量: 密码校验 (SHA256 hash 比对, 与 drive_service.py 一致)
@@ -479,6 +486,10 @@ class DriveShareService:
 
         if share.revoked_at is None:
             share.revoked_at = to_naive_datetime(datetime.now(timezone.utc))
+            # 批次⑩.7: 撤销分享 → 文件夹回团队属性
+            folder = await self.db.get(Folder, share.folder_id)
+            if folder is not None and folder.visibility == "public":
+                folder.visibility = "team"
             await self.db.commit()
 
             # W72 第 2 批 B-1 差量: 审计 share_revoked

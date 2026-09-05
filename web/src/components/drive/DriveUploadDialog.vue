@@ -121,13 +121,8 @@
           </template>
         </el-select>
       </el-form-item>
-      <el-form-item label="可见性">
-        <el-radio-group v-model="form.visibility">
-          <el-radio value="team">👥 团队</el-radio>
-          <el-radio value="public">🌐 公开</el-radio>
-        </el-radio-group>
-      </el-form-item>
-    </el-form>
+      <!-- 批次⑩.8: 可见性选择删除 — 上传恒 team, 公开属性由分享行为驱动 (后端 ⑩.7) -->
+      </el-form>
 
     <template #footer>
       <el-button @click="visible = false" :disabled="uploading">取消</el-button>

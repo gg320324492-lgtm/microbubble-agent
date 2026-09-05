@@ -55,8 +55,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="share" :icon="Share">分享链接</el-dropdown-item>
-                <el-dropdown-item command="vis-team" :icon="View">设为团队可见</el-dropdown-item>
-                <el-dropdown-item command="vis-public" :icon="Share">设为公开</el-dropdown-item>
+                <!-- 批次⑩.8: 设为团队可见/设为公开 删除 — 公开属性由分享行为驱动 (后端 ⑩.7) -->
                 <el-dropdown-item command="clear" divided :icon="Close">取消选择</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -81,7 +80,7 @@
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import {
-  Delete, Download, Folder, Share, Star, View, ArrowDown, RefreshLeft, MoreFilled, Close
+  Delete, Download, Folder, Share, Star, ArrowDown, RefreshLeft, MoreFilled, Close
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
