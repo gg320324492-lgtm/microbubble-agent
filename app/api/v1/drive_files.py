@@ -70,6 +70,10 @@ class DriveFileItem(BaseModel):
     visibility: str
     folder_id: Optional[int] = None
     created_by: Optional[int] = None
+    # 批次⑩: 上传者三件套 — 之前 schema 漏声明, pydantic 静默丢弃导致上传者列恒 '—'
+    owner_name: Optional[str] = None
+    owner_username: Optional[str] = None
+    owner_avatar: Optional[str] = None
     source_type: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -258,10 +262,12 @@ def _to_item(
     """
     owner_name = None
     owner_username = None
+    owner_avatar = None
     if owner_lookup and k.created_by in owner_lookup:
         m = owner_lookup[k.created_by]
         owner_name = m.name if m.name else None
         owner_username = m.username if m.username else None
+        owner_avatar = m.avatar if m.avatar else None
 
     folder_name = None
     if folder_map and k.folder_id is not None:
@@ -291,6 +297,7 @@ def _to_item(
         created_by=k.created_by,
         owner_name=owner_name,
         owner_username=owner_username,
+        owner_avatar=owner_avatar,
         source_type=k.source_type,
         created_at=str(k.created_at) if k.created_at else None,
         updated_at=str(k.updated_at) if k.updated_at else None,
@@ -829,9 +836,12 @@ class FolderStarItem(BaseModel):
     name: str
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
+    owner_avatar: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     starred_at: Optional[str] = None
+    # 子目录下最新文件时间 (前端只取月份显示); 空夹为 None
+    latest_file_at: Optional[str] = None
     size_bytes: Optional[int] = None
     is_starred: bool = True
 
@@ -959,14 +969,20 @@ async def list_starred_files(
     folder_rows = await db.execute(
         text(
             """
-            SELECT f.id, f.name, f.owner_id, m.name AS owner_name,
+            SELECT f.id, f.name, f.owner_id, m.name AS owner_name, m.avatar AS owner_avatar,
                    f.created_at, f.updated_at, s.starred_at,
                    (SELECT COALESCE(SUM(k.file_size), 0)
                       FROM knowledge k
                       JOIN folders f2 ON k.folder_id = f2.id
                      WHERE f2.path LIKE f.path || '%'
                        AND f2.deleted_at IS NULL
-                       AND k.deleted_at IS NULL) AS size_bytes
+                       AND k.deleted_at IS NULL) AS size_bytes,
+                   (SELECT MAX(k.created_at)
+                      FROM knowledge k
+                      JOIN folders f2 ON k.folder_id = f2.id
+                     WHERE f2.path LIKE f.path || '%'
+                       AND f2.deleted_at IS NULL
+                       AND k.deleted_at IS NULL) AS latest_file_at
               FROM drive_folder_stars s
               JOIN folders f ON f.id = s.folder_id
               JOIN members m ON m.id = f.owner_id
@@ -982,9 +998,11 @@ async def list_starred_files(
             "name": r.name,
             "owner_id": r.owner_id,
             "owner_name": r.owner_name,
+            "owner_avatar": r.owner_avatar,
             "created_at": str(r.created_at) if r.created_at else None,
             "updated_at": str(r.updated_at) if r.updated_at else None,
             "starred_at": str(r.starred_at) if r.starred_at else None,
+            "latest_file_at": str(r.latest_file_at) if r.latest_file_at else None,
             "size_bytes": int(r.size_bytes or 0),
             "is_starred": True,
         }

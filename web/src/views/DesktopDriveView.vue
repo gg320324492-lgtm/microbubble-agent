@@ -168,7 +168,9 @@
             v-else
             ref="tableRef"
             :files="driveFiles"
-            :folders="isSearching ? [] : (specialView === 'starred' ? starredFolders : currentSubFolders)"
+            :folders="tableFolders"
+            :selected-folder-ids="selectedFolderIds"
+            @select-toggle-folder="onToggleFolderSelect"
             :loading="filesLoading"
             :load-error="filesLoadError"
             :selected-ids="selectedFileIds"
@@ -201,12 +203,12 @@
         <!-- 批量 dock -->
         <div v-if="isTableMode" class="wb-dock">
           <BatchActionToolbar
-            :selected-count="selectedFileIds.length"
-            :total-count="driveFiles.length"
+            :selected-count="selectedFileIds.length + selectedFolderIds.length"
+            :total-count="driveFiles.length + tableFolders.length"
             :selected-bytes="selectedBytes"
             context="files"
-            @select-all="selectAll"
-            @clear="clearSelection"
+            @select-all="onDockSelectAll"
+            @clear="onSelectAll(false)"
             @batch-delete="handleBatchDelete"
             @batch-move="handleBatchMove"
             @batch-share="handleBatchShare"
@@ -592,20 +594,42 @@ async function reloadCurrentView() {
 }
 
 async function handleBatchDelete() {
-  if (!selectedFileIds.value.length) return
+  const hasFiles = selectedFileIds.value.length > 0
+  const hasFolders = selectedFolderIds.value.length > 0
+  if (!hasFiles && !hasFolders) return
+  const parts = []
+  if (hasFiles) parts.push(`${selectedFileIds.value.length} 个文件`)
+  if (hasFolders) parts.push(`${selectedFolderIds.value.length} 个文件夹 (连同其内容)`)
   try {
     await ElMessageBox.confirm(
-      `确定要删除 ${selectedFileIds.value.length} 个文件吗?`,
+      `确定要删除 ${parts.join(' 和 ')} 吗?`,
       '批量删除',
       { type: 'warning' }
     )
-    const resp = await batchSoftDelete(selectedFileIds.value)
-    if (resp.skipped_ids?.length) {
-      ElMessage.warning(`已删除 ${resp.succeeded_count} 个, 跳过 ${resp.skipped_ids.length} 个`)
+    let succeeded = 0
+    const skipped = []
+    if (hasFiles) {
+      const resp = await batchSoftDelete(selectedFileIds.value)
+      succeeded += resp.succeeded_count || 0
+      if (resp.skipped_ids?.length) skipped.push(...resp.skipped_ids)
+    }
+    // 批次⑩.1: 勾选的文件夹走文件夹级联软删 (子项一起进回收站, 可整体恢复)
+    for (const fid of selectedFolderIds.value) {
+      try {
+        await deleteFolderNode(fid, { recursive: true })
+        succeeded += 1
+      } catch (e) {
+        skipped.push(fid)
+      }
+    }
+    if (skipped.length) {
+      ElMessage.warning(`已删除 ${succeeded} 项, 跳过 ${skipped.length} 项`)
     } else {
-      ElMessage.success(`已删除 ${resp.succeeded_count} 个文件`)
+      ElMessage.success(`已删除 ${succeeded} 项`)
     }
     refreshSideCounts()
+    await fetchFolderTree()
+    reloadCurrentView()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
@@ -978,7 +1002,11 @@ async function handleFileShareLink(file) {
 // 批次⑥ dock 对齐视觉稿: 选中体积
 const selectedBytes = computed(() => {
   const ids = new Set(selectedFileIds.value)
-  return driveFiles.value.filter((f) => ids.has(f.id)).reduce((s, f) => s + (f.file_size || 0), 0)
+  const filesSum = driveFiles.value.filter((f) => ids.has(f.id)).reduce((s, f) => s + (f.file_size || 0), 0)
+  // 批次⑩.1: 勾选的文件夹按递归大小计入
+  const fids = new Set(selectedFolderIds.value)
+  const foldersSum = tableFolders.value.filter((f) => fids.has(f.id)).reduce((s, f) => s + (f.size_bytes || 0), 0)
+  return filesSum + foldersSum
 })
 
 // W72 第 2 批 B-1: Folder 右键菜单 "🔗 分享" → 弹 ShareLinkDialog
@@ -1076,6 +1104,25 @@ async function refreshSideCounts() {
 onMounted(refreshSideCounts)
 watch(specialView, () => refreshSideCounts())
 
+// ── 批次⑩.1: 文件夹勾选 (与文件勾选分模型 — id 空间不同, 文件夹键由父层持有) ──
+const selectedFolderIds = ref([])
+// 表格当前展示的文件夹行 (team 层级树 或 收藏视图合并的文件夹)
+const tableFolders = computed(() => {
+  if (isSearching.value) return []
+  return specialView.value === 'starred' ? (starredFolders.value || []) : currentSubFolders.value
+})
+function onToggleFolderSelect(folderId) {
+  const i = selectedFolderIds.value.indexOf(folderId)
+  if (i >= 0) selectedFolderIds.value.splice(i, 1)
+  else selectedFolderIds.value.push(folderId)
+}
+function onDockSelectAll() {
+  const all = selectedFileIds.value.length === driveFiles.value.length &&
+    selectedFolderIds.value.length === tableFolders.value.length &&
+    (driveFiles.value.length + tableFolders.value.length) > 0
+  onSelectAll(!all)
+}
+
 // 顶栏搜索 kbd 提示兑现: Ctrl/⌘+K 聚焦搜索框 (视觉稿 gsearch kbd 同款交互)
 const searchInputRef = ref(null)
 function onGlobalSearchKey(ev) {
@@ -1094,8 +1141,11 @@ const activeFile = computed(() => {
   if (typeof k !== 'number') return null
   return driveFiles.value.find((f) => f.id === k) || null
 })
-// 切目录/换视图时清活动行 (右栏不残留上一目录的文件)
-watch([selectedFolderId, specialView], () => { activeKey.value = null })
+// 切目录/换视图时清活动行 + 文件夹勾选 (右栏不残留上一目录的文件)
+watch([selectedFolderId, specialView], () => {
+  activeKey.value = null
+  selectedFolderIds.value = []
+})
 
 // 批次⑦: 勾选 checkbox 也让右栏换档 (视觉稿行为 = 选中即可见详情;
 // 勾选事件在表格里 click.stop 不走 row-activate, 这里从选择集补上)
@@ -1147,8 +1197,14 @@ function onRailRefresh() {
 
 // ---- 选择 ----
 function onSelectAll(v) {
-  if (v) selectAll()
-  else clearSelection()
+  // 批次⑩.1: 表头全选覆盖 文件 + 文件夹 两套选择
+  if (v) {
+    selectAll()
+    selectedFolderIds.value = tableFolders.value.map((f) => f.id)
+  } else {
+    clearSelection()
+    selectedFolderIds.value = []
+  }
 }
 function onSelectRange(ids) {
   // Shift 连选: 与既有选择并集
