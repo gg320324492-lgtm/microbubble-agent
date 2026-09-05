@@ -69,9 +69,11 @@
           show-password
           clearable
           class="share-link-password-input"
+          :class="{ 'fx-flash': pwdFlash }"
         >
           <template #append>
-            <el-button @click="autoGeneratePassword">
+            <!-- 批次⑩.11 (用户选型 FX D): 按压回弹 + 波纹 + 边框闪光 -->
+            <el-button class="pwd-random-btn" :class="{ 'fx-spin': pwdSpinning }" @click="autoGeneratePassword($event)">
               <el-icon><Refresh /></el-icon>
               随机
             </el-button>
@@ -202,9 +204,34 @@ watch(() => props.modelValue, (open) => {
   }
 })
 
-function autoGeneratePassword() {
+// 批次⑩.11 (用户选型 FX D): 随机动效状态 — 图标旋转 + 提取码框闪光
+const pwdSpinning = ref(false)
+const pwdFlash = ref(false)
+
+function autoGeneratePassword(ev) {
   // 4 位数字密码
   password.value = String(Math.floor(1000 + Math.random() * 9000))
+  // FX D 动效: 图标 360° + 输入框青色描边闪一下 (reduced-motion 自动跳过)
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  pwdSpinning.value = true
+  pwdFlash.value = true
+  setTimeout(() => { pwdSpinning.value = false }, 450)
+  setTimeout(() => { pwdFlash.value = false }, 420)
+  // Material 波纹 (append 槽内按钮, 以点击点为圆心)
+  const btn = ev?.currentTarget?.querySelector?.('.el-icon')
+  if (btn) {
+    const rect = btn.getBoundingClientRect()
+    const size = Math.max(rect.width, rect.height) * 2
+    const rip = document.createElement('span')
+    rip.className = 'pwd-ripple'
+    rip.style.width = rip.style.height = size + 'px'
+    rip.style.left = (ev.clientX - rect.left - size / 2) + 'px'
+    rip.style.top = (ev.clientY - rect.top - size / 2) + 'px'
+    btn.style.position = 'relative'
+    btn.style.overflow = 'hidden'
+    btn.appendChild(rip)
+    setTimeout(() => rip.remove(), 550)
+  }
 }
 
 async function copyToClipboard(text) {
@@ -388,5 +415,38 @@ html[data-theme='dark'] .share-link-dialog.el-dialog {
 }
 html.ocean .share-link-dialog.el-dialog {
   background: rgba(232, 244, 250, 0.95);
+}
+
+/* ── 批次⑩.11 (FX D) 随机按钮动效 — append 槽在 EP 内部, 必须非 scoped ── */
+@keyframes pwd-ico-spin {
+  from { transform: rotate(0) }
+  to { transform: rotate(360deg) }
+}
+.pwd-random-btn.fx-spin .el-icon { animation: pwd-ico-spin .45s ease; }
+.pwd-random-btn:active .el-icon { transform: scale(.9); }
+
+@keyframes pwd-flash-ring {
+  0% { box-shadow: 0 0 0 0 rgba(14, 118, 110, 0); border-color: var(--color-border); }
+  35% { box-shadow: 0 0 0 3px rgba(14, 118, 110, .14); border-color: var(--color-primary); }
+  100% { box-shadow: 0 0 0 0 rgba(14, 118, 110, 0); }
+}
+.share-link-password-input.fx-flash .el-input__wrapper {
+  animation: pwd-flash-ring .42s ease;
+}
+
+@keyframes pwd-ripple-out {
+  from { transform: scale(0); opacity: .35; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+.pwd-ripple {
+  position: absolute; border-radius: 50%;
+  background: rgba(14, 118, 110, .3);
+  pointer-events: none;
+  animation: pwd-ripple-out .5s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pwd-random-btn.fx-spin .el-icon,
+  .share-link-password-input.fx-flash .el-input__wrapper,
+  .pwd-ripple { animation: none; }
 }
 </style>
