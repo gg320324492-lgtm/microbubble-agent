@@ -500,6 +500,12 @@ def analyze_knowledge_task(self, knowledge_id: int, title: str, content: str):
     """
     import asyncio
     from app.config import settings
+    from app.core.celery_db import create_celery_engine_and_session
+
+    # 2026-09-05 修复: 早期重构把 engine/session_factory 定义丢失, task 一执行就
+    # NameError → retry 耗尽 → knowledge 永远 pending (无 embedding, RAG 不可见)。
+    # 恢复独立 NullPool engine (celery_db 单一来源), 调用方负责 finally dispose。
+    engine, session_factory = create_celery_engine_and_session()
 
     async def _run():
         try:

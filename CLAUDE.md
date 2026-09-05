@@ -1,6 +1,45 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-05 网盘文件默认入库 RAG — 全格式自动入库 + 手动入口退役 + analyze NameError 修复, 已部署)
+
+**需求**: "所有网盘文件默认入库, 支持所有格式, 可被 RAG 检索与正常调用, 不再需要『入库知识库』按钮"。
+
+**改造 (commit `5986c2f75` + hotfix)**:
+- **上传即入库**: 新增 `app/services/drive_ingest_tasks.py::auto_ingest_drive_file_task`
+  (Celery, NullPool, 404 不重试/其余重试 2 次), 挂 3 入口 — `/drive/files/upload`、
+  chunked complete、**版本上传 (reingest=True 原地刷新 kb 行, 不新建)**。
+  应急开关 `DRIVE_AUTO_INGEST_KB` (默认 true, env 可关)。
+- **全格式分级提取** (`drive_to_kb_service.py` 重写): document (pdf/office/40+ 纯文本族) /
+  image OCR (`ocr_service.classify_and_extract`) / av ASR (`asr_service.transcribe`,
+  300MB 上限) / archive (zip/tar 内嵌文本成员, 30 成员×20MB 防 zip-bomb) /
+  **binary 元数据兜底** (文件名/类型/大小入向量, 可按文件名检索)。
+  任何提取失败降级兜底, 入库永不失败; 废除 422 拒绝语义; `meta.drive_ingest_mode` 记录分级。
+  SVG 归 document (XML 文本) 不走 OCR。
+- **file_parser_service 扩展**: 新增 csv/tsv/json/jsonl/yaml/html/xml/ipynb/代码族/srt/tex 等
+  40+ 纯文本格式 + `_decode_text` 编码探测 (utf-8/utf-8-sig/gb18030/replace);
+  旧契约守恒 (未识别二进制仍抛 ValueError, drive_to_kb 层负责兜底)。
+- **前端按钮全退役**: 批量 dock"入库知识库"/详情栏"加入知识库"/FileCard×2/右键菜单/
+  移动端动作/useDriveFiles ingestToKb+ingestFolderToKb 全删; 后端 `/to-kb` API 保留 (幂等兼容)。
+- **回填**: `scripts/backfill_drive_to_kb.py` (dry-run 默认/--confirm/--limit/--include-ingested)。
+  实测 **275/275 全部入库 0 失败** (组会 PPT 树为主, mode=document)。
+- **既有生产 bug 修复 (阻塞性, 本次发现)**: `analyze_knowledge_task` 引用不存在的
+  `engine`/`session_factory` (早期重构丢失定义) → 一执行就 NameError → retry 耗尽 →
+  **所有 knowledge 永远 pending 无 embedding, RAG 全盲**。修复 = 用 celery_db 的
+  `create_celery_engine_and_session()` 恢复独立 NullPool engine (knowledge_service.py +6 行)。
+  修复后 5 条实测条目 embedding 正常生成。**教训**: pending 状态积压 + worker 日志
+  NameError 是指纹; 上线任何建 kb 行的路径前先验证 analyze 管线真跑通。
+
+**5 件套实测**: drive_to_kb e2e 15 用例 (全格式/幂等/reingest/兜底) + parser 单测 13 +
+容器内 drive 回归 43 全绿 / vitest drive 111 绿 + build exit 0 / alembic 0 迁移 (纯复用字段) /
+生产 275 drive 文件全部有 kb 镜像。多模态 OCR 按 analyze 管线异步消化 (每图 2 次 mimo 调用,
+PPT 图多的条目要跑一阵, RAG 可见度逐步补齐 — 与手动上传 KB 同一管线同一成本)。
+
+**部署 (2026-09-05)**: commit `5986c2f75` push → 云端 webhook 部署 (首页 hash
+`index-CbsEpeTX.js` 与本地 dist 一致) → 本地 restart app/celery×3 (任务注册验证 +
+**清 `__pycache__` 后再 restart**, 首轮 restart 后 worker 仍跑旧 .pyc 报 NameError 是假象) →
+回填 275/275 → 生产守恒 (32 members/56 folders)。
+
 ## 当前状态 (2026-09-05 网盘 B 三栏工作台 + 底层 8 类 bug 修复 — 已部署 DB=134 全链路绿)
 
 **触发**: 用户要求网盘 UI 全面升级 + 底层 bug 缺口排查。视觉稿先行 (docs/design-proposals/drive-2026-09/ 4 版式全做,
