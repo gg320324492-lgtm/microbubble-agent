@@ -155,6 +155,10 @@ class Settings(BaseSettings):
     # 时, folders/knowledge 等归属行统一转给该成员。默认 1 (导师主账号)。
     DRIVE_WORKSPACE_ANCHOR_ID: int = 1
 
+    # 2026-09-05 网盘文件默认入库 RAG: 上传/版本更新后自动触发 drive → kb
+    # 完整管线 (分级提取 + embedding + RAG 检索)。False 可整体停用 (应急开关)。
+    DRIVE_AUTO_INGEST_KB: bool = True
+
     # 2026-07-16 +060: 录音 User-Agent 截断长度 (默认 500 字符)
     # 超过此长度的 UA 在 start-recording 时截断后再落库, 防止恶意/异常长 UA
     # 把 meetings.user_agent VARCHAR(500) 列撑爆或拖慢 index 查询。

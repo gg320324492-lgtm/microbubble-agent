@@ -149,11 +149,7 @@
             <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
             <el-dropdown-item command="move">移动</el-dropdown-item>
             <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
-            <!-- F5 修复 (批次②): "加入公共知识库" (extract-to-kb 老管线) 菜单项已删除 -->
-            <!-- W98: 网盘入库 RAG (drive → kb 完整管线, 原 drive 行保留) -->
-            <el-dropdown-item v-if="file.storage_mode === 'drive'" command="to-kb">
-              📚 加入知识库
-            </el-dropdown-item>
+            <!-- 2026-09-05: "加入知识库"菜单项移除 — 网盘文件已默认自动入库 RAG -->
             <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
               🔗 生成分享链接
             </el-dropdown-item>
@@ -247,11 +243,7 @@
               <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
               <el-dropdown-item command="move">移动</el-dropdown-item>
               <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
-              <!-- F5 修复 (批次②): extract-to-kb 老管线菜单项已删除 (detail 视图) -->
-              <!-- W98: 网盘入库 RAG (drive → kb 完整管线, 原 drive 行保留) -->
-              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="to-kb">
-                📚 加入知识库
-              </el-dropdown-item>
+              <!-- 2026-09-05: "加入知识库"菜单项移除 — 网盘文件已默认自动入库 RAG -->
               <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
                 🔗 生成分享链接
               </el-dropdown-item>
@@ -295,7 +287,7 @@ const props = defineProps({
 })
 
 // F5 修复 (批次②): 'extract-to-kb' emit 随老管线菜单项删除
-defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'to-kb', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
+defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
 
 // === v2.0 (2026-07-09) Drive 美化: 按 file_type 提取 type key 用于 data-type ===
 // 与 drive-view.css 中的 .drive-file-card[data-type="pdf|doc|ppt|excel|image|video|audio|text"] 配套
