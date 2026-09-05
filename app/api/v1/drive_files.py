@@ -25,7 +25,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1._drive_error_helper import (
@@ -823,12 +823,27 @@ class TrashListResponse(BaseModel):
     page_size: int
 
 
+class FolderStarItem(BaseModel):
+    """批次⑩: 收藏列表里的文件夹条目 (表格文件夹行直读)"""
+    id: int
+    name: str
+    owner_id: Optional[int] = None
+    owner_name: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    starred_at: Optional[str] = None
+    size_bytes: Optional[int] = None
+    is_starred: bool = True
+
+
 class StarredListResponse(BaseModel):
-    """v2 PR2: 收藏列表响应"""
+    """v2 PR2: 收藏列表响应 (批次⑩ 起合并带出收藏的文件夹)"""
     items: List[DriveFileItem]
     total: int
     page: int
     page_size: int
+    folders: List[FolderStarItem] = []
+    folder_total: int = 0
 
 
 class ToggleStarResponse(BaseModel):
@@ -939,11 +954,50 @@ async def list_starred_files(
     starred_ids = await svc.get_starred_ids([x.id for x in items], current_user.id)
     folder_map = await _folder_name_map(db, items)
     owner_map = await _owner_lookup(db, items)
+
+    # ── 批次⑩: 合并带出本人收藏的文件夹 (表格文件夹行直读; 大小 = path 前缀递归合计) ──
+    folder_rows = await db.execute(
+        text(
+            """
+            SELECT f.id, f.name, f.owner_id, m.name AS owner_name,
+                   f.created_at, f.updated_at, s.starred_at,
+                   (SELECT COALESCE(SUM(k.file_size), 0)
+                      FROM knowledge k
+                      JOIN folders f2 ON k.folder_id = f2.id
+                     WHERE f2.path LIKE f.path || '%'
+                       AND f2.deleted_at IS NULL
+                       AND k.deleted_at IS NULL) AS size_bytes
+              FROM drive_folder_stars s
+              JOIN folders f ON f.id = s.folder_id
+              JOIN members m ON m.id = f.owner_id
+             WHERE s.member_id = :me
+             ORDER BY s.starred_at DESC
+            """
+        ),
+        {"me": current_user.id},
+    )
+    starred_folders = [
+        {
+            "id": r.id,
+            "name": r.name,
+            "owner_id": r.owner_id,
+            "owner_name": r.owner_name,
+            "created_at": str(r.created_at) if r.created_at else None,
+            "updated_at": str(r.updated_at) if r.updated_at else None,
+            "starred_at": str(r.starred_at) if r.starred_at else None,
+            "size_bytes": int(r.size_bytes or 0),
+            "is_starred": True,
+        }
+        for r in folder_rows
+    ]
+
     return StarredListResponse(
         items=[_to_item(x, starred_ids=starred_ids, folder_map=folder_map, owner_lookup=owner_map) for x in items],
         total=total,
         page=page,
         page_size=page_size,
+        folders=starred_folders,
+        folder_total=len(starred_folders),
     )
 
 

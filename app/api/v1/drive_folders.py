@@ -18,16 +18,20 @@ v2 PR7 (2026-07-23) — 文件夹分享 + 邀请成员:
 """
 import logging
 import os
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.exceptions import ForbiddenException, NotFoundException, ValidationException
 from app.core.security import get_current_user
+from app.models.drive_folder_star import DriveFolderStar
 from app.models.folder import Folder
+from app.models.knowledge import Knowledge
 from app.models.member import Member
 from app.schemas.drive_share import (
     FolderMemberAdd,
@@ -430,12 +434,102 @@ async def get_folder_tree(
                 "is_team_default": c.is_team_default,
                 "depth": c.depth,
                 "path": c.path,
+                # 批次⑩: 文件夹行 (表格) 需要 上传者/上传时间 原始字段
+                "created_at": str(c.created_at) if c.created_at else None,
+                "updated_at": str(c.updated_at) if c.updated_at else None,
                 "children": await _build_tree(c.id, current_depth + 1, is_top_level=False),
             })
         return result
 
     tree = await _build_tree(root_id, 1 if root_id else 0)
+
+    # ── 批次⑩: 批量聚合后给每个节点补 owner_name / size_bytes(递归) / is_starred ──
+    all_ids: list = []
+    owner_ids: set = set()
+
+    def _collect(nodes: list) -> None:
+        for n in nodes:
+            all_ids.append(n["id"])
+            owner_ids.add(n["owner_id"])
+            _collect(n["children"])
+
+    _collect(tree)
+
+    if all_ids:
+        owner_rows = await db.execute(
+            select(Member.id, Member.name).where(Member.id.in_(owner_ids or {0}))
+        )
+        owner_map = {rid: rname for rid, rname in owner_rows.all()}
+
+        # 直接子文件聚合 (递归合计在 Python 侧按树自底向上累加, 避免逐层查库)
+        agg_rows = await db.execute(
+            select(
+                Knowledge.folder_id,
+                Knowledge.file_size,
+            ).where(
+                Knowledge.folder_id.in_(all_ids),
+                Knowledge.deleted_at.is_(None),
+            )
+        )
+        direct_size: dict = {}
+        for folder_id, file_size in agg_rows.all():
+            direct_size[folder_id] = direct_size.get(folder_id, 0) + (file_size or 0)
+
+        star_rows = await db.execute(
+            select(DriveFolderStar.folder_id).where(DriveFolderStar.member_id == current_user.id)
+        )
+        starred_set = {fid for (fid,) in star_rows.all()}
+
+        def _attach(nodes: list) -> None:
+            for n in nodes:
+                n["owner_name"] = owner_map.get(n["owner_id"])
+                n["is_starred"] = n["id"] in starred_set
+                n["size_bytes"] = direct_size.get(n["id"], 0) + sum(
+                    c.get("size_bytes", 0) for c in n["children"]
+                )
+                _attach(n["children"])
+
+        _attach(tree)
+
     return {"tree": tree, "max_depth": max_depth, "scope": scope}
+
+
+@router.post("/{folder_id}/toggle-star")
+async def toggle_folder_star(
+    folder_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """切换文件夹收藏 (批次⑩ per-user: 仅影响当前成员自己的收藏夹, 与 134 文件收藏同构).
+
+    404 仅在文件夹不存在/已删除; 任何成员可收藏任意文件夹 (2026-09 全员等权)。
+    """
+    folder = await db.get(Folder, folder_id)
+    if not folder or folder.deleted_at:
+        raise NotFoundException(message="文件夹不存在")
+
+    existing = await db.execute(
+        select(DriveFolderStar).where(
+            DriveFolderStar.folder_id == folder_id,
+            DriveFolderStar.member_id == current_user.id,
+        )
+    )
+    row = existing.scalar_one_or_none()
+    starred_at = None
+    if row:
+        is_starred = False
+        await db.delete(row)
+    else:
+        starred_at = datetime.utcnow()
+        db.add(DriveFolderStar(folder_id=folder_id, member_id=current_user.id, starred_at=starred_at))
+        is_starred = True
+    await db.commit()
+
+    return {
+        "folder_id": folder_id,
+        "is_starred": is_starred,
+        "starred_at": str(starred_at) if starred_at else None,
+    }
 
 
 @router.get("/{folder_id}/children-stats")
