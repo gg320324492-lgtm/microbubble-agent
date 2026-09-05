@@ -30,9 +30,8 @@
           :indeterminate="indeterminate"
           @change="$emit('select-all')"
         >
-          <span class="batch-toolbar-label">已选 <span class="drive-batch-count">{{ selectedCount }}</span> 项</span>
+          <span class="batch-toolbar-label">已选 <span class="drive-batch-count">{{ selectedCount }}</span> 项<span v-if="sizeLabel"> · {{ sizeLabel }}</span></span>
         </el-checkbox>
-        <el-button class="drive-batch-toolbar-btn" size="small" @click="$emit('clear')">取消选择</el-button>
       </div>
 
       <div class="drive-batch-toolbar-right">
@@ -45,30 +44,33 @@
           </el-button>
         </template>
         <template v-else>
-          <el-button class="drive-batch-toolbar-btn" :icon="Folder" @click="$emit('batch-move')">
-            移动
-          </el-button>
-          <el-dropdown @command="handleVisibilityCmd" trigger="click">
-            <el-button class="drive-batch-toolbar-btn" :icon="View">
-              可见性
-              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-            </el-button>
+          <!-- 批次⑥ 对齐视觉稿 dock: ZIP/移动到/收藏/入库知识库/删除, 次级动作收进 ⋯ -->
+          <el-button class="drive-batch-toolbar-btn" :icon="Download" @click="$emit('batch-download')">下载 ZIP</el-button>
+          <el-button class="drive-batch-toolbar-btn" :icon="Folder" @click="$emit('batch-move')">移动到</el-button>
+          <el-button class="drive-batch-toolbar-btn" :icon="Star" @click="$emit('batch-toggle-star')">收藏</el-button>
+          <el-button class="drive-batch-toolbar-btn" :icon="View" @click="$emit('batch-ingest-kb')">入库知识库</el-button>
+          <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-delete')">删除</el-button>
+          <el-dropdown trigger="click" @command="onOverflowCmd">
+            <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-more" :icon="MoreFilled" title="更多批量动作" />
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="team">👥 团队成员</el-dropdown-item>
-                <el-dropdown-item command="public">🌐 公开</el-dropdown-item>
+                <el-dropdown-item command="share" :icon="Share">分享链接</el-dropdown-item>
+                <el-dropdown-item command="vis-team" :icon="View">设为团队可见</el-dropdown-item>
+                <el-dropdown-item command="vis-public" :icon="Share">设为公开</el-dropdown-item>
+                <el-dropdown-item command="clear" divided :icon="Close">取消选择</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button class="drive-batch-toolbar-btn" :icon="Star" @click="$emit('batch-toggle-star')">
-            收藏
-          </el-button>
-          <el-button class="drive-batch-toolbar-btn" :icon="Share" @click="$emit('batch-share')">分享</el-button>
-          <el-button class="drive-batch-toolbar-btn" :icon="Download" @click="$emit('batch-download')">下载</el-button>
-          <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-delete')">
-            删除
-          </el-button>
+          <span class="drive-batch-note">拖选中行到左栏夹=移动 · Shift 连选 · Ctrl A 全选</span>
         </template>
+        <el-dropdown v-if="context === 'trash'" trigger="click" @command="(c) => c === 'clear' && $emit('clear')">
+          <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-more" :icon="MoreFilled" title="更多" />
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="clear" :icon="Close">取消选择</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
   </transition>
@@ -79,20 +81,22 @@
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import {
-  Delete, Download, Folder, Share, Star, View, ArrowDown, RefreshLeft
+  Delete, Download, Folder, Share, Star, View, ArrowDown, RefreshLeft, MoreFilled, Close
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
   selectedCount: { type: Number, default: 0 },
   totalCount: { type: Number, default: 0 },
-  context: { type: String, default: 'files' }  // 'files' | 'trash'
+  context: { type: String, default: 'files' },  // 'files' | 'trash'
+  /** 批次⑥ 视觉稿 dock "已选 N 项 · X MB": 父层传选中文件体积合计 (null/0 不显示) */
+  selectedBytes: { type: [Number, null], default: null },
 })
 
 const emit = defineEmits([
   'select-all', 'clear',
   'batch-delete', 'batch-move', 'batch-share', 'batch-download',
   'batch-update-visibility', 'batch-toggle-star',
-  'batch-restore', 'batch-permanent-delete'
+  'batch-restore', 'batch-permanent-delete', 'batch-ingest-kb'
 ])
 
 const allSelected = computed(() =>
@@ -101,9 +105,20 @@ const allSelected = computed(() =>
 const indeterminate = computed(() =>
   props.selectedCount > 0 && props.selectedCount < props.totalCount
 )
+const sizeLabel = computed(() => {
+  const b = props.selectedBytes || 0
+  if (b <= 0) return ''
+  return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'
+})
 
 function handleVisibilityCmd(cmd) {
   emit('batch-update-visibility', cmd)
+}
+function onOverflowCmd(cmd) {
+  if (cmd === 'share') emit('batch-share')
+  else if (cmd === 'vis-team') emit('batch-update-visibility', 'team')
+  else if (cmd === 'vis-public') emit('batch-update-visibility', 'public')
+  else if (cmd === 'clear') emit('clear')
 }
 </script>
 
