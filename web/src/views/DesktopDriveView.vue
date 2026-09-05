@@ -123,8 +123,12 @@
 
         <div v-if="isTableMode" class="wb-ctools">
           <span class="wb-lab">排序</span>
-          <!-- 批次⑨ (用户选型 SORT 2): 分段控件 — 灰轨 + 白色浮起滑块, 无箭头 (方向由表头承担) -->
-          <div class="wb-seg" role="group" aria-label="排序方式">
+          <!-- 批次⑨ (用户选型 SORT 2): 分段控件 — 灰轨 + 白色滑块跟手滑动, 无箭头 (方向由表头承担) -->
+          <div ref="segRef" class="wb-seg" role="group" aria-label="排序方式">
+            <span
+              class="wb-seg-thumb" aria-hidden="true"
+              :style="segThumb.ready ? { width: segThumb.w + 'px', transform: `translateX(${segThumb.x}px)` } : { opacity: 0 }"
+            ></span>
             <button
               v-for="opt in SORT_OPTIONS" :key="opt.value" type="button"
               class="wb-seg-btn" :class="{ 'is-active': sortKey === opt.value }"
@@ -520,6 +524,26 @@ const TYPE_ICON_COLOR = {
 }
 
 const sortKey = computed(() => `${sortBy.value}:${sortOrder.value}`)
+
+// 批次⑨ 分段控件滑块: 白色 thumb 跟随 active 段滑动 (offsetLeft/width 实测,
+// sortKey 变化 → nextTick 重测, resize 跟随; 首测前 opacity 0 避免从原点飞入)
+const segRef = ref(null)
+const segThumb = reactive({ x: 0, w: 0, ready: false })
+function measureSegThumb() {
+  const el = segRef.value
+  if (!el) return
+  const btn = el.querySelector('.wb-seg-btn.is-active')
+  if (!btn) return
+  segThumb.x = btn.offsetLeft
+  segThumb.w = btn.offsetWidth
+  segThumb.ready = true
+}
+watch(sortKey, () => nextTick(measureSegThumb))
+onMounted(() => {
+  nextTick(measureSegThumb)
+  window.addEventListener('resize', measureSegThumb)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', measureSegThumb))
 
 // v2.0: handlers 直接收 chip value
 function handleSortChange(value) {
@@ -1607,6 +1631,14 @@ function onContextMenuClose() {
 /* 批次⑥: 顶栏三键缩小到视觉稿 tbtn 尺寸 (头像圈 .wb-me 已删 — 与全局顶栏用户卡片重复) */
 .wb-top .drive-toolbar-btn { font-size: var(--font-size-xs); padding: 7px 12px; height: auto; color: var(--color-text-regular); }
 .wb-top .drive-toolbar-btn:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); }
+/* 批次⑨ 按钮微交互: 统一 hover 抬升 / 按下回弹 / 键盘焦点环 (workbench 作用域) */
+.wb-top .drive-toolbar-btn,
+.wb-cta { transition: transform var(--duration-fast) var(--ease-out, ease), box-shadow var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }
+.wb-top .drive-toolbar-btn:hover { transform: translateY(-1px); }
+.wb-top .drive-toolbar-btn:active { transform: translateY(0) scale(.97); }
+.wb-cta:active { transform: translateY(0) scale(.97); box-shadow: 0 1px 6px rgba(var(--color-primary-rgb), .25); }
+.wb-top .drive-toolbar-btn:focus-visible,
+.wb-cta:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 /* 三栏 */
 .wb-body {
@@ -1628,9 +1660,10 @@ function onContextMenuClose() {
   border: none; background: none; cursor: pointer;
   color: var(--color-text-secondary); padding: 2px 4px; border-radius: 4px;
   display: grid; place-items: center;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition: background var(--duration-fast), color var(--duration-fast), transform var(--duration-fast);
 }
 .wb-cap-add:hover { background: var(--color-bg-page); color: var(--color-primary-dark); }
+.wb-cap-add:active { transform: scale(.88); }
 .wb-tree { flex: 1; min-height: 0; overflow-y: auto; }
 .wb-rail-foot { flex: none; padding: 8px 2px 12px; }
 
@@ -1653,15 +1686,21 @@ function onContextMenuClose() {
   border: 1px solid var(--color-border); background: var(--color-bg-card);
   border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-regular);
   padding: 4px 10px; white-space: nowrap;
+  transition: transform var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
 }
-.wb-density:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); }
+.wb-density:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); transform: translateY(-1px); }
+.wb-density:active { transform: translateY(0) scale(.94); }
+.wb-density:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 .wb-ctools { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wb-lab { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .wb-lab--gap { margin-left: 6px; }
 /* 批次⑧ 对齐视觉稿 .fchip: 5px 11px / 12px 字; active=浅青染色深青字 (非渐变实底)。
    全局 .drive-chip.is-active 带 !important, 此处同名 !important + 更高特异性压过 */
-.wb-ctools .drive-chip { padding: 4px 11px; font-size: var(--font-size-xs); gap: 5px; }
+.wb-ctools .drive-chip { padding: 4px 11px; font-size: var(--font-size-xs); gap: 5px; transition: transform var(--duration-fast) var(--ease-out, ease), background var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }
+.wb-ctools .drive-chip:hover { transform: translateY(-1px); }
+.wb-ctools .drive-chip:active { transform: translateY(0) scale(.95); }
+.wb-ctools .drive-chip:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .wb-ctools .drive-chip[aria-pressed="true"],
 .wb-ctools .drive-chip.is-active {
   background: var(--color-primary-bg) !important;
@@ -1672,23 +1711,35 @@ function onContextMenuClose() {
 }
 /* 批次⑨ (用户选型 B): 类型 chip 内 14px 类型色描边图标 (emoji/色点退役) */
 .wb-type-ic { width: 14px; height: 14px; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-/* 批次⑨ (用户选型 SORT 2): 分段控件 — 灰轨 + 白色浮起滑块, 无箭头 */
+/* 批次⑨ (用户选型 SORT 2): 分段控件 — 灰轨 + 白色滑块跟手滑动, 无箭头 */
 .wb-seg {
-  display: inline-flex; align-items: center; padding: 2px;
+  position: relative;
+  display: inline-flex; align-items: stretch; padding: 2px;
   border-radius: var(--radius-full); border: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-text-primary) 7%, transparent);
 }
+.wb-seg-thumb {
+  position: absolute; top: 2px; bottom: 2px; left: 0; width: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-card);
+  box-shadow: 0 1px 3px rgba(20, 40, 35, .14), 0 0 0 1px rgba(20, 40, 35, .05);
+  transition: transform var(--duration-normal) var(--ease-out, ease), width var(--duration-normal) var(--ease-out, ease);
+  will-change: transform;
+}
 .wb-seg-btn {
+  position: relative; z-index: 1;
   border: none; background: none; font: inherit; font-size: var(--font-size-xs);
   color: var(--color-text-regular); padding: 4px 13px; border-radius: var(--radius-full);
   cursor: pointer; white-space: nowrap;
-  transition: color var(--duration-fast), background var(--duration-fast), box-shadow var(--duration-fast);
+  transition: color var(--duration-fast), transform var(--duration-fast);
 }
 .wb-seg-btn:hover { color: var(--color-primary-dark); }
-.wb-seg-btn.is-active {
-  background: var(--color-bg-card); color: var(--color-primary-dark);
-  font-weight: var(--font-weight-semibold);
-  box-shadow: 0 1px 3px rgba(20, 40, 35, .12);
+.wb-seg-btn:active { transform: scale(.94); }
+.wb-seg-btn.is-active { color: var(--color-primary-dark); font-weight: var(--font-weight-semibold); }
+.wb-seg-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .wb-seg-thumb { transition: none; }
+  .wb-seg-btn:active { transform: none; }
 }
 /* 视觉稿 .hint: kbd 键帽徽章行 */
 .wb-kbd-hint { margin-left: auto; font-size: 11.5px; color: var(--color-text-placeholder); white-space: nowrap; display: flex; gap: 12px; align-items: center; }
@@ -1748,11 +1799,12 @@ function onContextMenuClose() {
   font-size: var(--font-size-xs); height: auto; padding: 6px 12px; margin-left: 0;
   border: 1px solid var(--color-border) !important; border-radius: var(--radius-md);
   background: var(--color-bg-card) !important; color: var(--color-text-regular) !important;
-  transition: border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast) !important;
+  transition: transform var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast) !important;
 }
 .wb-dock :deep(.drive-batch-toolbar-btn:hover) {
   border-color: var(--color-primary-border) !important; color: var(--color-primary-dark) !important; background: var(--color-primary-bg) !important;
 }
+.wb-dock :deep(.drive-batch-toolbar-btn:active) { transform: scale(.96); }
 .wb-dock :deep(.drive-batch-toolbar-btn-danger) { background: var(--color-bg-card) !important; color: var(--color-text-regular) !important; }
 .wb-dock :deep(.drive-batch-toolbar-btn-danger:hover) {
   border-color: rgba(var(--color-danger-rgb, 217, 79, 43), .5) !important; color: var(--color-danger) !important;
