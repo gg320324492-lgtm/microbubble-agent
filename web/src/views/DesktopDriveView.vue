@@ -1374,6 +1374,79 @@ function onContextMenuClose() {
  * 批次③ B 三栏工作台样式 (2026-09-05) — 全走 variables.css token,
  * 暗色/6 主题自动跟随; 不依赖 drive-view.css 新增规则 (移动端共用文件零影响)。
  * ============================================================ */
+/* ============================================================
+ * 批次③ 配色收口 (2026-09-05): 作用域 token 重映射 —
+ * 生产全局 --color-primary 是珊橙, 但用户拍板的 style-b 视觉稿是"主页同款深青档案系"
+ * (Dashboard.vue --teal #0e766e 血统)。CSS 自定义属性沿 DOM 继承, 在 .drive-workbench
+ * 根上重定义即可让全部后代 (drive-view.css 全局 .drive-chip / FolderTree /
+ * DriveFileTable / DriveDetailRail / el-pagination accent) 一次换肤,
+ * 0 触碰全局 variables.css 与 drive-view.css (移动端共用文件零影响)。
+ * ============================================================ */
+.drive-workbench {
+  --color-primary: #0E766E;
+  --color-primary-light: #2A9D8F;
+  --color-primary-dark: #0B5D56;
+  --color-primary-bg: rgba(14, 118, 110, .09);
+  --color-primary-border: rgba(14, 118, 110, .35);
+  --color-primary-rgb: 14, 118, 110;
+  --gradient-cta-button: linear-gradient(135deg, #0E766E 0%, #12897C 100%);
+  --gradient-welcome-hero: linear-gradient(135deg, #0E766E 0%, #198E83 100%);
+  --shadow-primary: 0 4px 20px rgba(14, 118, 110, .24);
+  --shadow-glow: 0 4px 24px rgba(14, 118, 110, .18);
+  /* 金橙 → 琥珀印章色系 (chip ppt 点/星标/收藏高亮都吃这两个) */
+  --color-accent: #C77A2E;
+  --color-accent-bg: #F6EAD8;
+  --color-accent-rgb: 199, 122, 46;
+  /* 类型色降饱和 (视觉稿档案系: 砖红/藏蓝/苔绿/紫灰) */
+  --color-file-pdf: #B3392F;
+  --color-file-pdf-rgb: 179, 57, 47;
+  --color-file-doc: #2F5D8A;
+  --color-file-doc-rgb: 47, 93, 138;
+  --color-file-excel: #3E7A52;
+  --color-file-excel-rgb: 62, 122, 82;
+  --color-file-image: #7C4E96;
+  --color-file-image-rgb: 124, 78, 150;
+  --color-file-default: #8F877B;
+  --color-warning: #B07C24;
+  --color-danger: #C0562F;
+  /* 墨线框 (视觉稿 --line-ink) + Element Plus accent (分页/输入聚焦) */
+  --wb-frame: rgba(45, 58, 53, .5);
+  --el-color-primary: #0E766E;
+  --el-color-primary-light-3: #4d8b85;
+  --el-color-primary-light-5: #86afa9;
+  --el-color-primary-light-7: #b7d1cd;
+  --el-color-primary-light-8: #cfe1de;
+  --el-color-primary-light-9: #e4f0ee;
+  --el-color-primary-dark-2: #0b5d56;
+}
+[data-theme="dark"] .drive-workbench {
+  --color-primary: #35C2A4;
+  --color-primary-light: #2A9D8F;
+  --color-primary-dark: #5AD0B5;
+  --color-primary-bg: rgba(53, 194, 164, .12);
+  --color-primary-border: rgba(53, 194, 164, .38);
+  --color-primary-rgb: 53, 194, 164;
+  --gradient-cta-button: linear-gradient(135deg, #0F8E82 0%, #17766C 100%);
+  --gradient-welcome-hero: linear-gradient(135deg, #0F8E82 0%, #35C2A4 100%);
+  --shadow-primary: 0 4px 20px rgba(53, 194, 164, .16);
+  --color-accent: #E0A45C;
+  --color-accent-bg: rgba(224, 164, 92, .12);
+  --color-file-pdf: #D96A5F;
+  --color-file-doc: #6FA1D2;
+  --color-file-excel: #6FAF83;
+  --color-file-image: #B08CC9;
+  --color-warning: #E0A45C;
+  --color-danger: #E07A5F;
+  --wb-frame: rgba(160, 175, 162, .45);
+  --el-color-primary: #35C2A4;
+  --el-color-primary-light-3: #2b8c77;
+  --el-color-primary-light-5: #256e5f;
+  --el-color-primary-light-7: #1e5147;
+  --el-color-primary-light-8: #1a413a;
+  --el-color-primary-light-9: #16332d;
+  --el-color-primary-dark-2: #5AD0B5;
+}
+
 .drive-workbench {
   display: flex;
   flex-direction: column;
@@ -1391,7 +1464,7 @@ function onContextMenuClose() {
   height: 56px;
   padding: 0 var(--space-5);
   background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1.5px solid var(--wb-frame, var(--color-border));
 }
 .wb-brand { display: inline-flex; align-items: center; gap: 9px; font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); white-space: nowrap; }
 .wb-brand-ico { font-size: 18px; }
@@ -1429,7 +1502,7 @@ function onContextMenuClose() {
   width: 236px; flex: none;
   display: flex; flex-direction: column; min-height: 0;
   background: var(--color-bg-card);
-  border-right: 1px solid var(--color-border);
+  border-right: 1.5px solid var(--wb-frame, var(--color-border));
   padding: 10px 8px 0;
 }
 .wb-rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 4px 10px 6px; }
