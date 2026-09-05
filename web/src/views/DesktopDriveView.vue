@@ -50,6 +50,7 @@
       <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
       <el-button class="drive-toolbar-btn" :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
       <el-button class="wb-cta" :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
+      <span class="wb-me" :title="wbUserName">{{ wbUserName.slice(0, 1) }}</span>
     </header>
 
     <!-- 三栏 body -->
@@ -99,12 +100,13 @@
         <div class="wb-crumbs">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item>课题组网盘</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="specialView === 'team'">🌐 团队共享盘</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'starred'">⭐ 我的收藏</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'trash'">🗑️ 回收站</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'requests'">📥 文件请求</el-breadcrumb-item>
+            <el-breadcrumb-item v-if="specialView === 'team'">团队共享盘</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'starred'">我的收藏</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'recent'">最近上传</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'trash'">回收站</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'requests'">文件请求</el-breadcrumb-item>
             <el-breadcrumb-item v-for="f in folderBreadcrumb" :key="'bc-' + f.id">
-              📂 {{ f.name }}
+              {{ f.name }}
             </el-breadcrumb-item>
           </el-breadcrumb>
           <span class="wb-crumb-search" v-if="isSearching">🔍 「{{ searchQuery.trim() }}」全盘结果 · {{ total }} 项</span>
@@ -179,6 +181,7 @@
           <BatchActionToolbar
             :selected-count="selectedFileIds.length"
             :total-count="driveFiles.length"
+            :selected-bytes="selectedBytes"
             context="files"
             @select-all="selectAll"
             @clear="clearSelection"
@@ -188,6 +191,7 @@
             @batch-download="handleBatchDownload"
             @batch-update-visibility="handleBatchUpdateVisibility"
             @batch-toggle-star="handleBatchToggleStar"
+            @batch-ingest-kb="handleBatchIngestKb"
           />
         </div>
       </section>
@@ -273,6 +277,7 @@ import { ref, computed, triggerRef, onMounted, onBeforeUnmount, watch, nextTick 
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { Search, UploadFilled, Folder, Plus } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import DriveFileTable from '@/components/drive/DriveFileTable.vue'
@@ -497,6 +502,16 @@ async function reloadCurrentView() {
   if (specialView.value === 'starred') {
     starredOnly.value = true
     await fetchStarred()
+  } else if (specialView.value === 'recent') {
+    // 批次⑥ (视觉稿「最近上传」快捷项): 全盘跨夹按上传时间倒序
+    starredOnly.value = false
+    await fetchDriveFiles({
+      folder_id: null,
+      include_subfolders: 'true',
+      view: 'team',
+      sort_by: 'created_at',
+      sort_order: 'desc',
+    })
   } else if (specialView.value === 'team') {
     // v2 PR6-P19: 团队共享盘视图 — 后端 view='team' 过滤 is_team_shared=true 文件
     starredOnly.value = false
@@ -896,6 +911,28 @@ async function handleFileShareLink(file) {
   showShareDialog.value = true
 }
 
+// 批次⑥ dock 对齐视觉稿: 选中体积 + 批量入库知识库
+const selectedBytes = computed(() => {
+  const ids = new Set(selectedFileIds.value)
+  return driveFiles.value.filter((f) => ids.has(f.id)).reduce((s, f) => s + (f.file_size || 0), 0)
+})
+async function handleBatchIngestKb() {
+  const ids = [...selectedFileIds.value]
+  if (!ids.length) return
+  ElMessage.info(`开始入库 ${ids.length} 个文件 (解析/向量化异步进行)…`)
+  const results = await Promise.allSettled(ids.map((id) => doIngestToKb(id)))
+  const ok = results.filter((r) => r.status === 'fulfilled' && !r.value?.already_ingested).length
+  const dup = results.filter((r) => r.status === 'fulfilled' && r.value?.already_ingested).length
+  const fail = results.length - ok - dup
+  const parts = []
+  if (ok) parts.push(`新入库 ${ok}`)
+  if (dup) parts.push(`已在库 ${dup}`)
+  if (fail) parts.push(`失败 ${fail}`)
+  const msg = parts.join(' · ') || '无变化'
+  if (fail) ElMessage.warning(`入库完成: ${msg}`)
+  else ElMessage.success(`入库完成: ${msg}`)
+}
+
 // W72 第 2 批 B-1: Folder 右键菜单 "🔗 分享" → 弹 ShareLinkDialog
 function onShareFolder(folder) {
   shareLinkDialogFolder.value = folder
@@ -971,6 +1008,8 @@ const tableRef = ref(null)
 
 // 顶栏搜索 kbd 提示兑现: Ctrl/⌘+K 聚焦搜索框 (视觉稿 gsearch kbd 同款交互)
 const searchInputRef = ref(null)
+const userStore = useUserStore()
+const wbUserName = computed(() => userStore.userInfo?.name || userStore.userInfo?.username || '我')
 function onGlobalSearchKey(ev) {
   if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'k' || ev.key === 'K')) {
     ev.preventDefault()
@@ -1521,6 +1560,14 @@ function onContextMenuClose() {
   transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal);
 }
 .wb-cta:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); }
+/* 批次⑥: 顶栏三键缩小到视觉稿 tbtn 尺寸 + 右侧头像圈 (.top .me) */
+.wb-top .drive-toolbar-btn { font-size: var(--font-size-xs); padding: 7px 12px; height: auto; color: var(--color-text-regular); }
+.wb-top .drive-toolbar-btn:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); }
+.wb-me {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--gradient-cta-button); color: #fff;
+  display: grid; place-items: center; font-size: 12px; font-weight: var(--font-weight-semibold);
+}
 
 /* 三栏 */
 .wb-body {
@@ -1617,6 +1664,11 @@ function onContextMenuClose() {
 .wb-dock :deep(.drive-batch-toolbar-left),
 .wb-dock :deep(.drive-batch-toolbar-right) { display: flex; align-items: center; gap: 8px; }
 .wb-dock :deep(.drive-batch-count) { font-family: var(--font-mono, Consolas, monospace); color: var(--color-primary-dark); font-weight: 700; background: none; padding: 0; }
+/* 老组件 scoped 把 label 写死白色 (橙渐变条时代), workbench 白卡上必须翻回墨色 */
+.wb-dock :deep(.batch-toolbar-label) { color: var(--color-text-regular); }
+.wb-dock :deep(.drive-batch-note) {
+  font-size: 10.5px; color: var(--color-text-placeholder); white-space: nowrap; margin-left: 4px;
+}
 .wb-dock :deep(.drive-batch-toolbar-btn) {
   font-size: var(--font-size-xs); height: auto; padding: 6px 12px; margin-left: 0;
   border: 1px solid var(--color-border) !important; border-radius: var(--radius-md);

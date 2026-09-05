@@ -72,7 +72,7 @@
         @click="$emit('update:specialView', 'team')"
       >
         <el-icon><Share /></el-icon>
-        <span>🌐 团队共享盘</span>
+        <span>团队共享盘</span>
       </div>
     </FolderContextMenu>
 
@@ -113,10 +113,9 @@
       @drop-files="$emit('drop-files', $event)"
     />
 
-    <!-- 收藏入口补回 (批次②): 头部注释一直声明 "⭐ 我的收藏" special 项,
-         但模板区实际只有 team/trash (历史上丢失)。DesktopDriveView 的
-         specialView='starred' watch 分支早已支持, 此处接上。
-         收藏 per-user 化 (后端批次① alembic 134): 仅自己可见。 -->
+    <!-- 快捷 (批次⑥ 对齐视觉稿: 组标题 + 去 emoji, 图标只留 el-icon 一份) -->
+    <div class="folder-tree-cap folder-tree-quick-cap">快捷</div>
+
     <FolderContextMenu :items="favoritesMenuItems" placement="right-start" @command="(cmd) => onFavoritesContext(cmd)">
       <div
         class="folder-tree-special-item drive-folder-tree-special-item is-starred"
@@ -124,12 +123,24 @@
         title="个人收藏夹, 仅自己可见"
         @click="$emit('update:specialView', 'starred')"
       >
-        <el-icon><StarFilled /></el-icon>
-        <span>⭐ 我的收藏</span>
+        <el-icon><Star /></el-icon>
+        <span>我的收藏</span>
+        <span v-if="starredCount != null" class="folder-tree-special-count">{{ starredCount }}</span>
       </div>
     </FolderContextMenu>
 
-    <!-- 回收站 (PR2 真实接入) (红) -->
+    <!-- 最近上传 (批次⑥): 全盘按上传时间倒序 (视觉稿 snav 时钟项, specialView='recent' 由父层加载) -->
+    <div
+      class="folder-tree-special-item drive-folder-tree-special-item is-recent"
+      :class="{ 'is-active': specialView === 'recent' }"
+      title="全组最近上传的文件 (按上传时间)"
+      @click="$emit('update:specialView', 'recent')"
+    >
+      <el-icon><Clock /></el-icon>
+      <span>最近上传</span>
+    </div>
+
+    <!-- 回收站 (PR2 真实接入) -->
     <FolderContextMenu :items="trashMenuItems" placement="right-start" @command="(cmd) => onTrashContext(cmd)">
       <div
         class="folder-tree-special-item drive-folder-tree-special-item is-trash"
@@ -137,7 +148,8 @@
         @click="$emit('update:specialView', 'trash')"
       >
         <el-icon><Delete /></el-icon>
-        <span>🗑️ 回收站</span>
+        <span>回收站</span>
+        <span v-if="trashCount != null" class="folder-tree-special-count">{{ trashCount }}</span>
       </div>
     </FolderContextMenu>
   </div>
@@ -148,7 +160,7 @@
 // v2.8 (2026-07-10) 右键菜单支持 (5 根项 + sub 节点共用 FolderContextMenu)
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
-import { Folder, FolderOpened, FolderAdd, Delete, Loading, Warning, Star, StarFilled, Share, Promotion, Plus, Bell } from '@element-plus/icons-vue'
+import { Folder, FolderOpened, FolderAdd, Delete, Loading, Warning, Star, StarFilled, Share, Promotion, Plus, Bell, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTreeNode from './FolderTreeNode.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
@@ -160,10 +172,13 @@ const props = defineProps({
   expandedFolderIds: { type: Set, default: () => new Set() },
   loading: { type: Boolean, default: false },
   loadError: { type: [String, null], default: null },
-  specialView: { type: [String, null], default: null },  // 'starred' | 'trash' | 'requests' | null
+  specialView: { type: [String, null], default: null },  // 'starred' | 'recent' | 'trash' | 'requests' | null
   // v2 PR18 (W68 第 14 批 B-2): Team Folder 列表 (GET /api/v1/team-folders 返回)
   teamFolders: { type: Array, default: () => [] },
   selectedTeamFolderId: { type: [Number, null], default: null },
+  // 批次⑥ 视觉稿对齐: 快捷项 mono 计数 (null = 不显示, 父层按需传)
+  starredCount: { type: [Number, null], default: null },
+  trashCount: { type: [Number, null], default: null },
 })
 
 // v2.27 (2026-07-12) BUG G 修复: 把 is_team_default=true 的 folder 从 folderTree 中分离
@@ -427,6 +442,25 @@ function onSelectTeamFolder(team, _id) {
  * v2.0 (2026-07-09) Drive 美化: 全部视觉样式已迁 drive-view.css (.drive-folder-tree-* + .drive-sidebar)
  * 本 scoped 块只保留 forward-compat placeholder (后续如需 layout-flex 细节再加)
  */
+
+/* ── 批次⑥ 对齐视觉稿 style-b .rail snav ── */
+.folder-tree-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 10px 10px 4px; }
+.folder-tree-quick-cap { margin-top: 4px; }
+.folder-tree-special-item { position: relative; }
+.folder-tree-special-count {
+  margin-left: auto; font-family: var(--font-mono, Consolas, monospace);
+  font-size: 10.5px; color: var(--color-text-placeholder);
+}
+/* 老 drive-view.css 给 team(绿)/trash(红)/starred(黄) special 的激活染色全部收敛为
+   视觉稿统一深青 (workbench 与旧页面一致化, 语义色让图标承担) */
+.folder-tree-special-item.is-active,
+.drive-folder-tree-special-item.is-team.is-active,
+.drive-folder-tree-special-item.is-trash.is-active,
+.drive-folder-tree-special-item.is-starred.is-active {
+  background: var(--color-primary-bg) !important;
+  color: var(--color-primary-dark) !important;
+  font-weight: var(--font-weight-semibold);
+}
 </style>
 
 <!--

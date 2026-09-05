@@ -24,6 +24,10 @@
         </div>
       </div>
     </el-tooltip>
+    <!-- 批次⑥ qbox 对齐: 渐变进度条 (视觉稿 .qbar) -->
+    <div class="quota-track" aria-hidden="true">
+      <i :style="{ width: Math.min(100, Math.round((quotaInfo.percent || 0) * 100)) + '%' }"></i>
+    </div>
   </div>
 </template>
 
@@ -84,8 +88,10 @@ function formatBytes(bytes) {
 
 <style scoped>
 .storage-quota-badge {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
   padding: 6px 12px;
   border-radius: 16px;
   background: var(--color-bg-page);
@@ -94,6 +100,8 @@ function formatBytes(bytes) {
   cursor: pointer;
   user-select: none;
 }
+.quota-track { height: 5px; border-radius: 3px; background: var(--color-border-light, #e4e7ed); overflow: hidden; }
+.quota-track i { display: block; height: 100%; border-radius: 3px; background: var(--gradient-cta-button, var(--color-primary)); transition: width 0.4s var(--ease-out, ease); }
 
 .storage-quota-badge:hover {
   background: var(--color-bg-hover, #ecf5ff);
