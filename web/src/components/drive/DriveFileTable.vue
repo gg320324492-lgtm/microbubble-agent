@@ -119,24 +119,27 @@
               </span>
               <span v-if="item.kind === 'file' && item.data.is_latest === false" class="dft-old" title="非最新版本">旧版</span>
             </span>
-            <span class="dft-c dft-c--size num">{{ item.kind === 'file' ? fmtSize(item.data.file_size) : '—' }}</span>
+            <span class="dft-c dft-c--size num">{{
+              item.kind === 'file'
+                ? fmtSize(item.data.file_size)
+                : (item.data.size_bytes != null ? fmtSize(item.data.size_bytes) : '—')
+            }}</span>
             <span class="dft-c dft-c--owner">
-              <template v-if="item.kind === 'file' && (item.data.owner_name || item.data.owner_username)">
+              <template v-if="item.data.owner_name || item.data.owner_username">
                 <span class="dft-av">{{ (item.data.owner_name || item.data.owner_username).slice(0, 1) }}</span>
                 {{ item.data.owner_name || item.data.owner_username }}
               </template>
-              <template v-else-if="item.kind === 'file'">—</template>
+              <template v-else>—</template>
             </span>
-            <span class="dft-c dft-c--time num">{{ fmtTime(item.kind === 'file' ? item.data.created_at : item.data.updated_at) }}</span>
+            <span class="dft-c dft-c--time num">{{ fmtTime(item.kind === 'file' ? item.data.created_at : (item.data.created_at || item.data.updated_at)) }}</span>
             <span class="dft-c dft-c--star" @click.stop>
               <button
-                v-if="item.kind === 'file'"
                 type="button"
                 class="dft-star"
                 :class="{ 'on': item.data.is_starred }"
-                :aria-label="item.data.is_starred ? '取消收藏' : '收藏 (仅自己可见)'"
+                :aria-label="(item.data.is_starred ? '取消收藏' : '收藏 (仅自己可见)') + ' — ' + item.label"
                 :aria-pressed="!!item.data.is_starred"
-                @click="$emit('toggle-star', item.data)"
+                @click="$emit('toggle-star', item.data, item.kind)"
               >★</button>
             </span>
           </div>

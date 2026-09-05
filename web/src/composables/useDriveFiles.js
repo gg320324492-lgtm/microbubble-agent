@@ -37,6 +37,8 @@ export function useDriveFiles() {
   const sortBy = ref('created_at')      // created_at | updated_at | file_name | starred_at
   const sortOrder = ref('desc')         // asc | desc
   const starredOnly = ref(false)        // 仅收藏
+  // 批次⑩: 收藏列表合并的文件夹条目 (仅 fetchStarred 写入; 文件夹行直读)
+  const starredFolders = ref([])
   const fileType = ref(null)            // pdf | image | video | office | text | null
   // v2 PR6-P19: 视图隔离 (personal | team | all) - personal 不显示 is_team_shared=true 文件
   // DesktopDriveView 切到 team 视图时调 setViewMode('team') 改这里
@@ -247,11 +249,14 @@ export function useDriveFiles() {
       const resp = await axios.get('/api/v1/drive/starred', { params: queryParams })
       driveFiles.value = resp.data.items || []
       total.value = resp.data.total || 0
+      // 批次⑩: 收藏列表合并带出收藏的文件夹 (表格文件夹行)
+      starredFolders.value = resp.data.folders || []
       selectedFileIds.value = []
     } catch (e) {
       loadError.value = e.response?.data?.detail || '收藏列表加载失败'
       driveFiles.value = []
       total.value = 0
+      starredFolders.value = []
     } finally {
       loading.value = false
     }
@@ -463,6 +468,7 @@ export function useDriveFiles() {
     sortBy,
     sortOrder,
     starredOnly,
+    starredFolders,
     fileType,
     // v2 PR6-P19: 视图隔离
     viewMode,

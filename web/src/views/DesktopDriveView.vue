@@ -168,7 +168,7 @@
             v-else
             ref="tableRef"
             :files="driveFiles"
-            :folders="isSearching ? [] : currentSubFolders"
+            :folders="isSearching ? [] : (specialView === 'starred' ? starredFolders : currentSubFolders)"
             :loading="filesLoading"
             :load-error="filesLoadError"
             :selected-ids="selectedFileIds"
@@ -363,7 +363,9 @@ const {
   loadError: filesLoadError,
   selectedFileIds,
   // v2 PR2: sort/filter state (双向绑定, 切文件夹/特殊视图保留)
-  sortBy, sortOrder, starredOnly, fileType
+  sortBy, sortOrder, starredOnly, fileType,
+  // 批次⑩: 收藏视图合并的文件夹条目
+  starredFolders
 } = storeToRefs(driveFilesStore)
 const {
   fetchFiles: fetchDriveFiles,
@@ -718,9 +720,21 @@ async function handleBatchToggleStar() {
   }
 }
 
-async function handleFileToggleStar(file) {
+async function handleFileToggleStar(target, kind = 'file') {
+  // 批次⑩: 文件夹行也带收藏星 (per-user, 与文件收藏同构)
+  if (kind === 'folder') {
+    try {
+      await axios.post(`/api/v1/folders/${target.id}/toggle-star`)
+      await fetchFolderTree()      // 树节点 is_starred 刷新
+      refreshSideCounts()          // 我的收藏 计数 (文件+文件夹)
+      if (specialView.value === 'starred') await reloadCurrentView()
+    } catch (e) {
+      ElMessage.error(e.response?.data?.detail || e.message || '切换收藏失败')
+    }
+    return
+  }
   try {
-    await toggleStar(file.id)
+    await toggleStar(target.id)
     refreshSideCounts()
   } catch (e) {
     ElMessage.error(e.message || '切换收藏失败')
@@ -1052,7 +1066,10 @@ async function refreshSideCounts() {
       axios.get('/api/v1/drive/trash', { params: { page: 1, page_size: 1 } }),
     ])
     if (team.status === 'fulfilled') sideCounts.team = team.value.data?.total ?? null
-    if (starred.status === 'fulfilled') sideCounts.starred = starred.value.data?.total ?? null
+    // 批次⑩: 收藏计数 = 收藏文件 + 收藏文件夹
+    if (starred.status === 'fulfilled') {
+      sideCounts.starred = (starred.value.data?.total || 0) + (starred.value.data?.folder_total || 0) || null
+    }
     if (trash.status === 'fulfilled') sideCounts.trash = trash.value.data?.total ?? null
   } catch { /* 计数拉取失败静默 (null = 不显示) */ }
 }
@@ -1098,6 +1115,8 @@ function onRowActivate(row, opts = {}) {
 
 function enterFolder(folder) {
   // 与 FolderTree 选中一致: 更新 selectedFolderId → watch 拉该层文件
+  // 批次⑩: 从收藏视图双击进入文件夹 = 离开收藏列表, 切到该文件夹的普通视图
+  if (specialView.value === 'starred') specialView.value = null
   selectedFolderId.value = folder.id
   if (!expandedFolderIds.value.has(folder.id)) expandedFolderIds.value.add(folder.id)
 }
