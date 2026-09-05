@@ -106,6 +106,14 @@
                   @change="$emit('select-toggle', item.data.id)"
                 />
               </template>
+              <template v-else>
+                <input
+                  type="checkbox"
+                  :checked="selectedFolderSet.has(item.data.id)"
+                  :aria-label="'选择文件夹 ' + item.label"
+                  @change="$emit('select-toggle-folder', item.data.id)"
+                />
+              </template>
             </span>
             <span class="dft-c dft-c--name">
               <!-- 批次⑧ 对齐视觉稿 .nm: 文件夹=teal 描边图标, 文件=7px 类型色 dot (行内缩略图/缩写色块退役, 封面统一看右栏) -->
@@ -125,13 +133,17 @@
                 : (item.data.size_bytes != null ? fmtSize(item.data.size_bytes) : '—')
             }}</span>
             <span class="dft-c dft-c--owner">
-              <template v-if="item.data.owner_name || item.data.owner_username">
-                <span class="dft-av">{{ (item.data.owner_name || item.data.owner_username).slice(0, 1) }}</span>
+              <!-- 批次⑩.1: 上传者只对具体文件显示; 头像优先真实照片, 无则首字回退 -->
+              <template v-if="item.kind === 'file' && (item.data.owner_name || item.data.owner_username)">
+                <span class="dft-av">
+                  <img v-if="avatarUrl(item.data.owner_avatar)" :src="avatarUrl(item.data.owner_avatar)" alt="" loading="lazy" />
+                  <template v-else>{{ (item.data.owner_name || item.data.owner_username).slice(0, 1) }}</template>
+                </span>
                 {{ item.data.owner_name || item.data.owner_username }}
               </template>
               <template v-else>—</template>
             </span>
-            <span class="dft-c dft-c--time num">{{ fmtTime(item.kind === 'file' ? item.data.created_at : (item.data.created_at || item.data.updated_at)) }}</span>
+            <span class="dft-c dft-c--time num">{{ item.kind === 'file' ? fmtTime(item.data.created_at) : fmtMonth(item.data.latest_file_at) }}</span>
             <span class="dft-c dft-c--star" @click.stop>
               <button
                 type="button"
@@ -187,6 +199,8 @@ const props = defineProps({
   total: { type: Number, default: 0 },
   currentPage: { type: Number, default: 1 },
   pageSize: { type: Number, default: 20 },
+  // 批次⑩.1: 勾选的文件夹 id (与文件 id 空间不同, 父层分模型持有)
+  selectedFolderIds: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -198,6 +212,7 @@ const emit = defineEmits([
   'row-contextmenu',   // (row, event)
   'sort-change',       // (prop)
   'select-toggle',     // (id)
+  'select-toggle-folder', // (folderId) 批次⑩.1
   'select-all',        // (bool)
   'select-range',      // (ids) shift 连选增量
   'toggle-star',       // (file)
@@ -261,9 +276,23 @@ const rows = computed(() => {
 })
 
 const selectedIdSet = computed(() => new Set(props.selectedIds))
+const selectedFolderSet = computed(() => new Set(props.selectedFolderIds))
 const fileRows = computed(() => rows.value.filter((r) => r.kind === 'file'))
-const allChecked = computed(() => fileRows.value.length > 0 && fileRows.value.every((r) => selectedIdSet.value.has(r.data.id)))
-const someChecked = computed(() => !allChecked.value && fileRows.value.some((r) => selectedIdSet.value.has(r.data.id)))
+const folderRows = computed(() => rows.value.filter((r) => r.kind === 'folder'))
+// 批次⑩.1: 表头全选覆盖 文件+文件夹 (两类各自全中才亮; 空列表不算全选)
+const allChecked = computed(() => {
+  if (!rows.value.length) return false
+  const filesOk = fileRows.value.every((r) => selectedIdSet.value.has(r.data.id))
+  const foldersOk = folderRows.value.every((r) => selectedFolderSet.value.has(r.data.id))
+  return filesOk && foldersOk
+})
+const someChecked = computed(() => {
+  if (allChecked.value) return false
+  return (
+    fileRows.value.some((r) => selectedIdSet.value.has(r.data.id)) ||
+    folderRows.value.some((r) => selectedFolderSet.value.has(r.data.id))
+  )
+})
 
 const sortKeyOf = computed(() => props.sortBy)
 const arrow = computed(() => (props.sortOrder === 'asc' ? '▲' : '▼'))
@@ -392,6 +421,22 @@ function fmtTime(iso) {
     : `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
+/* 批次⑩.1: 文件夹"上传时间"列 = 子目录下最新文件的月份 (如 "9 月" / "2025 年 12 月"), 空夹 '—' */
+function fmtMonth(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return sameYear ? `${d.getMonth() + 1} 月` : `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`
+}
+
+/* 批次⑩.1: 头像地址归一 (裸路径 → MinIO 直链; 与 stores/member.js normalizeAvatarUrl 同口径) */
+function avatarUrl(avatar) {
+  if (!avatar) return ''
+  if (avatar.startsWith('http://') || avatar.startsWith('https://') || avatar.startsWith('/')) return avatar
+  return `/minio/microbubble/${avatar}`
+}
+
 const footStat = computed(() => {
   const n = props.total
   const start = (props.currentPage - 1) * props.pageSize + 1
@@ -479,7 +524,9 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   flex: none; width: 17px; height: 17px; border-radius: 50%;
   background: var(--gradient-welcome-hero, linear-gradient(135deg, #0E766E, #12897C));
   color: #fff; font-size: 9px; display: inline-grid; place-items: center; font-weight: var(--font-weight-semibold);
+  overflow: hidden;
 }
+.dft-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .dft-star { border: none; background: none; font-size: 13px; line-height: 1; color: var(--color-accent); padding: 2px; cursor: pointer; transition: color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast); }
 /* 视觉稿收藏列: 仅收藏行常显金星, 未收藏行 hover 才浮出 (可点性不丢) */
 .dft-star { opacity: 0; }

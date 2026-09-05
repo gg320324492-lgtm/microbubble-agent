@@ -457,23 +457,29 @@ async def get_folder_tree(
 
     if all_ids:
         owner_rows = await db.execute(
-            select(Member.id, Member.name).where(Member.id.in_(owner_ids or {0}))
+            select(Member.id, Member.name, Member.avatar).where(Member.id.in_(owner_ids or {0}))
         )
-        owner_map = {rid: rname for rid, rname in owner_rows.all()}
+        owner_map = {rid: (rname, ravatar) for rid, rname, ravatar in owner_rows.all()}
 
-        # 直接子文件聚合 (递归合计在 Python 侧按树自底向上累加, 避免逐层查库)
+        # 直接子文件聚合 (递归合计/最新文件时间在 Python 侧按树自底向上累加, 避免逐层查库)
         agg_rows = await db.execute(
             select(
                 Knowledge.folder_id,
                 Knowledge.file_size,
+                Knowledge.created_at,
             ).where(
                 Knowledge.folder_id.in_(all_ids),
                 Knowledge.deleted_at.is_(None),
             )
         )
         direct_size: dict = {}
-        for folder_id, file_size in agg_rows.all():
+        direct_latest: dict = {}
+        for folder_id, file_size, created_at in agg_rows.all():
             direct_size[folder_id] = direct_size.get(folder_id, 0) + (file_size or 0)
+            if created_at is not None:
+                prev = direct_latest.get(folder_id)
+                if prev is None or created_at > prev:
+                    direct_latest[folder_id] = created_at
 
         star_rows = await db.execute(
             select(DriveFolderStar.folder_id).where(DriveFolderStar.member_id == current_user.id)
@@ -482,14 +488,30 @@ async def get_folder_tree(
 
         def _attach(nodes: list) -> None:
             for n in nodes:
-                n["owner_name"] = owner_map.get(n["owner_id"])
+                owner_name, owner_avatar = owner_map.get(n["owner_id"], (None, None))
+                n["owner_name"] = owner_name
+                n["owner_avatar"] = owner_avatar
                 n["is_starred"] = n["id"] in starred_set
+                latest = direct_latest.get(n["id"])
+                for c in n["children"]:
+                    child_latest = c.get("_latest_dt")
+                    if child_latest is not None and (latest is None or child_latest > latest):
+                        latest = child_latest
+                # 内部键: datetime 用于父层比较; 输出键: ISO 字符串
+                n["_latest_dt"] = latest
+                n["latest_file_at"] = str(latest) if latest else None
                 n["size_bytes"] = direct_size.get(n["id"], 0) + sum(
                     c.get("size_bytes", 0) for c in n["children"]
                 )
                 _attach(n["children"])
 
         _attach(tree)
+        # 清理内部键 (jsonable_encoder 不认识 datetime 也无妨, 但保持响应干净)
+        def _strip(nodes: list) -> None:
+            for n in nodes:
+                n.pop("_latest_dt", None)
+                _strip(n["children"])
+        _strip(tree)
 
     return {"tree": tree, "max_depth": max_depth, "scope": scope}
 
