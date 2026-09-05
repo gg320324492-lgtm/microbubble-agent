@@ -21,7 +21,7 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -100,7 +100,8 @@ def _build_share_url(token: str) -> str:
     response_model=FolderShareResponse,
     status_code=201,
 )
-async def create_folder_share(    folder_id: int,
+async def create_folder_share(
+    folder_id: int,
     payload: FolderShareCreate,
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
@@ -154,6 +155,73 @@ async def revoke_folder_share(
     if not ok:
         raise NotFoundException(message="分享链接不存在")
     return None
+
+
+@router.get(
+    "/share/{token}/files/{file_id}/download",
+)
+async def download_folder_shared_file(
+    token: str,
+    file_id: int,
+    request: Request,
+    password: Optional[str] = Query(None, description="提取码 (分享链接有密码时必填)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """公开下载 folder 分享内的文件 (批次⑩.9, 无 JWT)
+
+    - token 校验 (存在/未撤销/未过期/提取码) + max_downloads 上限 + 原子计数
+    - file_id 必须在该 folder 直属文件内
+    - 流式复用 drive_files 的 MinIO 下载管线
+    """
+    import asyncio
+    import mimetypes
+
+    from app.api.v1.drive_files import _get_object_size, build_content_disposition
+    from app.models.knowledge import Knowledge
+    from app.services.file_service import file_service
+    from fastapi.responses import StreamingResponse
+    from fastapi import HTTPException
+
+    svc = DriveShareService(db)
+    result = await svc.get_folder_by_share_token(token, password=password)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="分享链接不存在、已撤销、已过期或提取码错误",
+        )
+    folder, share, files, subfolders = result
+    if share.max_downloads is not None and share.download_count >= share.max_downloads:
+        raise HTTPException(status_code=403, detail="下载次数已达上限, 链接已失效")
+    f_row = next((x for x in files if x["id"] == file_id), None)
+    if f_row is None:
+        raise HTTPException(status_code=404, detail="文件不在该分享范围内")
+
+    k = await db.get(Knowledge, file_id)
+    if k is None or k.deleted_at or not k.file_path:
+        raise HTTPException(status_code=404, detail="文件对象不存在")
+
+    if k.file_type and k.file_type.startswith("."):
+        guessed, _ = mimetypes.guess_type(f"a{k.file_type}")
+        content_type = guessed or "application/octet-stream"
+    else:
+        content_type = k.file_type or "application/octet-stream"
+    filename = k.file_name or k.title or f"file_{k.id}"
+
+    await svc.increment_download_count(share.id)
+
+    async def _full_stream():
+        data = await file_service.download_file(k.file_path)
+        yield data
+
+    headers = {
+        "Content-Disposition": build_content_disposition("attachment", filename),
+        "Accept-Ranges": "bytes",
+    }
+    size = await _get_object_size(k.file_path)
+    if size is not None:
+        headers["Content-Length"] = str(size)
+
+    return StreamingResponse(_full_stream(), media_type=content_type, headers=headers)
 
 
 @router.get(
