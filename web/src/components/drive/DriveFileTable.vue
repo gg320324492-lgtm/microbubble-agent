@@ -108,11 +108,19 @@
               </template>
             </span>
             <span class="dft-c dft-c--name">
-              <span
-                class="dft-dot"
-                :style="{ background: item.kind === 'folder' ? 'var(--color-primary)' : item.color }"
-                :title="item.abbr"
-              ></span>
+              <span class="dft-glyph" :style="glyphStyle(item)" :title="item.kind === 'folder' ? '文件夹' : item.abbr">
+                <img
+                  v-if="item.cover"
+                  :src="item.cover"
+                  alt=""
+                  loading="lazy"
+                  @error="onCoverError(item)"
+                />
+                <svg v-else-if="item.kind === 'folder'" viewBox="0 0 24 24" class="dft-glyph-folder" aria-hidden="true">
+                  <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.2c.7 0 1.35.3 1.8.8l.9 1.2h5.3A2.5 2.5 0 0 1 19 8.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 3 17z" />
+                </svg>
+                <span v-else class="dft-glyph-ext">{{ item.abbr.slice(0, 4) }}</span>
+              </span>
               <span class="dft-name">{{ item.label }}</span>
               <span v-if="item.kind === 'file' && showPath && item.data.folder_name" class="dft-path">
                 📂 {{ item.data.folder_name }}
@@ -164,7 +172,8 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref, reactive, watch, nextTick } from 'vue'
+import axios from 'axios'
 import VirtualList from '@/components/common/VirtualList.vue'
 import { DRIVE_MOVE_MIME, isDriveMoveDragging, readDriveMovePayload } from '@/composables/useDriveDragMove'
 
@@ -239,6 +248,49 @@ function metaOf(file) {
   return { abbr: (ext || 'FILE').toUpperCase().slice(0, 4), color: 'var(--color-text-placeholder, #C0C4CC)' }
 }
 
+/* ---- 封面块 (复刻视觉稿: 28px 色块, 图片=真缩略图, 文件夹=色块封面, 其他=类型缩写块) ---- */
+const IMG_EXT = new Set(['png', 'jpg', 'jpeg', 'gif'])
+// 文件夹封面色: 名称哈希 → 档案系固定 8 色板, 同名恒同色 (跨刷新稳定)
+const FOLDER_COLORS = ['#0E766E', '#2F5D8A', '#B07C24', '#7C4E96', '#3E7A52', '#A84B6F', '#C0562F', '#3E7A70']
+function folderGlyphColor(name) {
+  let h = 0
+  for (const ch of String(name || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0
+  return FOLDER_COLORS[h % FOLDER_COLORS.length]
+}
+const coverMap = reactive({})            // file.id -> url (null 出现即回退类型块)
+const coverPending = new Set()
+const coverFailed = new Set()            // img error 后不再重试 (防 watch(rows) 重拉造成循环)
+function extOfName(f) {
+  const n = (f.file_name || f.title || '').toLowerCase()
+  return n.slice(n.lastIndexOf('.') + 1)
+}
+function ensureCover(f) {
+  const id = f.id
+  if (coverMap[id] || coverPending.has(id) || coverFailed.has(id)) return
+  if (f.storage_mode !== 'drive') return
+  // 图片: inline download 直链 (与右栏封面同源, 0 额外请求); 其他类型仅 thumbnail ready 才拉签名 URL
+  if (IMG_EXT.has(extOfName(f))) {
+    coverMap[id] = `/api/v1/drive/files/${id}/download?disposition=inline`
+    return
+  }
+  if (f.thumbnail_status !== 'ready') return
+  coverPending.add(id)
+  axios.get(`/api/v1/drive/files/${id}/thumbnail`)
+    .then((r) => { if (r.data?.thumbnail_url) coverMap[id] = r.data.thumbnail_url })
+    .catch(() => {})
+    .finally(() => coverPending.delete(id))
+}
+function onCoverError(item) {
+  if (item.kind === 'file') {
+    coverFailed.add(item.data.id)
+    delete coverMap[item.data.id]
+  }
+}
+function glyphStyle(item) {
+  const c = item.kind === 'folder' ? item.glyph : item.color
+  return { color: c, background: `color-mix(in srgb, ${c} 12%, transparent)`, borderColor: `color-mix(in srgb, ${c} 32%, transparent)` }
+}
+
 // 统一行模型 (folder 行恒在前 — 与系统文件管理器一致)
 const rows = computed(() => {
   const fs = (props.folders || []).map((f) => ({
@@ -248,13 +300,17 @@ const rows = computed(() => {
     label: f.name,
     abbr: 'FOLDER',
     color: 'var(--color-primary)',
+    glyph: folderGlyphColor(f.name),
   }))
   const ff = (props.files || []).map((x) => {
     const m = metaOf(x)
-    return { kind: 'file', key: x.id, data: x, label: x.file_name || x.title || `文件${x.id}`, abbr: m.abbr, color: m.color }
+    return { kind: 'file', key: x.id, data: x, label: x.file_name || x.title || `文件${x.id}`, abbr: m.abbr, color: m.color, cover: coverMap[x.id] || null }
   })
   return [...fs, ...ff]
 })
+
+// 行变更 → 懒拉缩略图 (VirtualList 只挂载可见行, 挂载即触发, coverMap 幂等去重)
+watch(rows, (rs) => { for (const r of rs) if (r.kind === 'file') ensureCover(r.data) }, { immediate: true })
 
 const selectedIdSet = computed(() => new Set(props.selectedIds))
 const fileRows = computed(() => rows.value.filter((r) => r.kind === 'file'))
@@ -459,7 +515,18 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
 .num { text-align: right; font-family: var(--font-family-mono, monospace); font-size: var(--font-size-xs); }
 .dft-head .num { text-align: right; }
 
-.dft-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.dft-glyph {
+  flex: none; width: 28px; height: 28px; border-radius: 7px; overflow: hidden;
+  display: grid; place-items: center;
+  border: 1px solid var(--color-border); background: var(--color-bg-page);
+}
+.dft-glyph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dft-glyph-folder { width: 15px; height: 15px; fill: color-mix(in srgb, currentColor 20%, transparent); stroke: currentColor; stroke-width: 1.1; }
+.dft-glyph-ext { font-family: var(--font-mono, Consolas, monospace); font-size: 8.5px; font-weight: 700; letter-spacing: .02em; line-height: 1; }
+.dft--compact .dft-glyph { width: 18px; height: 18px; border-radius: 5px; }
+.dft--compact .dft-glyph-ext { font-size: 6.5px; }
+.dft--compact .dft-glyph-folder { width: 11px; height: 11px; }
+.dft-row.is-sel { box-shadow: inset 3px 0 0 var(--color-primary); }
 .dft-name { overflow: hidden; text-overflow: ellipsis; }
 .dft-path { flex: none; font-size: 11px; color: var(--color-text-secondary); max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .dft-old { flex: none; font-size: 10px; color: var(--color-warning); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); padding: 0 4px; }

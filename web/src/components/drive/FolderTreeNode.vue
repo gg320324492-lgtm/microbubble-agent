@@ -265,6 +265,11 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
   background: var(--gradient-cta-button);
   color: var(--el-color-white);
 }
+
+/* 复刻视觉稿: 文件夹图标上色 (选中=主色, 悬停=主色浅, 常态=中性) */
+.folder-tree-node-icon { color: var(--color-text-secondary); transition: color var(--duration-fast) var(--ease-out); }
+.folder-tree-node-row:hover .folder-tree-node-icon { color: var(--color-primary-light); }
+.folder-tree-node-icon.active, .folder-tree-node-row.is-active .folder-tree-node-icon { color: var(--color-primary); }
 </style>
 
 <!--

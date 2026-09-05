@@ -9,9 +9,27 @@
 <template>
   <aside class="rail" :aria-label="'文件详情'">
     <div v-if="!file" class="rail-empty">
-      <p class="rail-empty-ico">▤</p>
-      <p>选中一个文件，这里显示预览、信息、评论与版本。</p>
-      <p class="rail-empty-sub">空格预览 · Enter 打开详情页 · Del 进回收站</p>
+      <template v-if="recent.length">
+        <p class="rail-recent-cap">最近上传</p>
+        <button
+          v-for="f in recent.slice(0, 6)" :key="'rc-' + f.id"
+          type="button" class="rail-recent-item"
+          @click="$emit('pick-file', f)"
+        >
+          <span
+            class="rail-recent-glyph"
+            :style="{ color: TYPE_COLOR[extOfName(f)] || 'var(--color-text-placeholder)', background: `color-mix(in srgb, ${TYPE_COLOR[extOfName(f)] || 'var(--color-text-placeholder)'} 12%, transparent)` }"
+          >{{ (extOfName(f) || 'FILE').toUpperCase().slice(0, 4) }}</span>
+          <span class="rail-recent-name" :title="f.file_name || f.title">{{ f.file_name || f.title }}</span>
+          <span class="rail-recent-day">{{ String(f.created_at || '').slice(5, 10) }}</span>
+        </button>
+        <p class="rail-empty-sub">点中栏行或上方条目，这里显示预览、评论与版本</p>
+      </template>
+      <template v-else>
+        <p class="rail-empty-ico">▤</p>
+        <p>选中一个文件，这里显示预览、信息、评论与版本。</p>
+        <p class="rail-empty-sub">空格预览 · Enter 打开详情页 · Del 进回收站</p>
+      </template>
     </div>
     <template v-else>
       <!-- 封面预览块 -->
@@ -137,10 +155,13 @@ import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
   file: { type: Object, default: null },
+  /** 未选中文件时右栏兜底展示的本目录最近条目 (父层传当前列表前几名) */
+  recent: { type: Array, default: () => [] },
 })
 const emit = defineEmits([
   'preview', 'download', 'share', 'toggle-star', 'rename', 'move', 'delete',
   'ingest-kb', 'open-detail', 'goto-folder', 'open-versions-dialog', 'refresh',
+  'pick-file',
 ])
 
 const { listVersions, restoreVersion: restoreApi } = useDriveFiles()
@@ -163,6 +184,12 @@ const TYPE_COLOR = {
   gif: 'var(--color-file-image)', tiff: 'var(--color-file-image)',
   mp4: 'var(--color-danger)', mov: 'var(--color-danger)',
   m4a: 'var(--color-accent)', mp3: 'var(--color-accent)', wav: 'var(--color-accent)',
+}
+/** 最近条目按扩展名着色 (与 typeColor 同源映射, 纯函数供模板使用) */
+function extOfName(f) {
+  const n = (f.file_name || f.title || '').toLowerCase()
+  const i = n.lastIndexOf('.')
+  return i > 0 ? n.slice(i + 1) : ''
 }
 const extOf = computed(() => {
   const n = name.value.toLowerCase()
@@ -250,6 +277,24 @@ function fmtDT(x) {
 .rail-empty { margin: auto; text-align: center; color: var(--color-text-secondary); font-size: var(--font-size-sm); padding: 30px; }
 .rail-empty-ico { font-size: 30px; opacity: .4; margin-bottom: 10px; }
 .rail-empty-sub { margin-top: 8px; font-size: var(--font-size-xs); opacity: .8; }
+/* 未选中兜底: 最近上传 (复刻视觉稿右栏常驻感, 不留白) */
+.rail-empty:has(.rail-recent-cap) { margin: 0 auto; text-align: left; width: 100%; padding: 18px 16px; }
+.rail-recent-cap { font-size: 10.5px; letter-spacing: .14em; color: var(--color-text-secondary); margin-bottom: 10px; }
+.rail-recent-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 7px 8px; margin-bottom: 4px; border-radius: var(--radius-md);
+  border: 1px solid transparent; background: none; cursor: pointer; text-align: left;
+  color: var(--color-text-primary); font: inherit; font-size: var(--font-size-sm);
+  transition: background var(--duration-fast), border-color var(--duration-fast);
+}
+.rail-recent-item:hover { background: var(--color-primary-bg); border-color: var(--color-primary-border); }
+.rail-recent-glyph {
+  flex: none; width: 26px; height: 26px; border-radius: 6px;
+  display: grid; place-items: center;
+  font-family: var(--font-mono, Consolas, monospace); font-size: 8px; font-weight: 700;
+}
+.rail-recent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-recent-day { flex: none; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 
 .rail-hero { padding: 16px 16px 12px; border-bottom: 1px solid var(--color-border); }
 .rail-cover { height: 168px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); background: var(--gradient-thumbnail-empty, var(--color-bg-secondary, #f5f5f5)); display: grid; place-items: center; }
