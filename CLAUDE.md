@@ -1,6 +1,42 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-05 网盘 B 三栏工作台 + 底层 8 类 bug 修复 — 已部署 DB=134 全链路绿)
+
+**触发**: 用户要求网盘 UI 全面升级 + 底层 bug 缺口排查。视觉稿先行 (docs/design-proposals/drive-2026-09/ 4 版式全做,
+配色统一对齐主页: 暖纸 #F2F0EB / 松墨 #22302C / 深青 #0E766E / 珊瑚只留预警), 用户拍板 B 三栏工作台。
+
+**批次① 后端** (`d0facf500`): 探索确认 8 类真 bug 全修 —
+B1 `folder_service.restore_folder` 级联批时间戳对称恢复 (修"恢复组会PPT后子树留回收站");
+B2+N1 新 `drive_object_gc.py` (collect 当前∪版本 object key 必在 DELETE 前 + purge 在 commit 后),
+修 permanent_delete 版本对象泄漏 + **cleanup 先删后查恒空 = MinIO 清理从未生效的死代码**;
+B3 级联软删补 original_parent_id/path 快照; B4 move 校验后代深度防破 5 层;
+B5 folder 分享在世成员隐含 admin (对齐 132 扁平化); B6 GET /files search (ILIKE+转义+pg_trgm) +
+folder_name attach; 收藏个人化 alembic 134 (drive_file_stars file×member UNIQUE, 回填 created_by,
+API 字段名 is_starred 不变, 新 POST /files/batch-star) + **mobile.py starred feed 同步 per-user**
+(否则移动端收藏冻结在迁移瞬间)。容器 pytest **100 passed/2 skipped/0 failed**。
+
+**批次②③ 前端** (`b935db5b3` + dist `48cdf35fe`):
+② F1 新建 MobileDriveTrashView/MobileFileRequestView 修移动端回收站&收作业路由断链;
+F3 拖拽 stub→真上传注入 (顺清 process.env ReferenceError 地雷); F4 fetch 错误 envelope;
+F5 extract-to-kb 前端退役单入口; F7b 评论直达; F10 版本历史接 diff; FolderTree 加"我的收藏";
+搜索 300ms debounce 接线; 批量收藏 for-toggle 反向 bug→batch-star。
+③ DesktopDriveView 重写三栏: 左树 (FolderTreeNode 加拖放落点) / 中 `DriveFileTable`
+(虚拟滚动+列排序名/大小/时间+键盘 ↑↓ Space Enter Del+Shift 连选+行拖源+右键 11 项+双密度) /
+右 `DriveDetailRail` (预览+元数据+全动作+评论/版本 tab 接恢复与 diff) — 全按键真功能。
+**VirtualList.vue 首挂载即崩 (缺 computed import, Step 11 潜伏) 已修**; drive_service 排序白名单补 file_size。
+前端 442 用例绿 (useSwipeGesture 为既有 load-flaky 非本次引入, 隔离 11/11 稳定)。
+
+**已部署 (09-05 10:30-11:00)**: 迁移前即时备份 `backups/pre_deploy_134_20260905_103026.sql.gz`;
+4 commits ff-merge main → origin/main `48cdf35fe`; 清 `alembic/versions/__pycache__` 后容器
+`alembic upgrade head` (DB 133→**134**, 存量收藏 0 行回填 0 属正常); restart app+celery×3 全 healthy;
+live openapi 298 路由确认 batch-star/search; 云端 deploy-auto.sh + 四点位绿 (入口 hash `index-DXUltiUP.js`
+本地=云端 / /health 200 穿隧道 / drive 401 鉴权墙 / DesktopDriveView-DHeMC3kq.js 200);
+生产终态 members=32/knowledge=471/folders=57 守恒, alembic=134。
+
+**部署纪律 (本次验证)**: 134 迁移必须先于 app 重启 (per-user 收藏子查询硬依赖表存在);
+一次性测试容器必须单实例 (并发双容器抢 microbubble_test 互 DROP SCHEMA = 之前 7f/15e 假失败根源)。
+
 ## 当前状态 (2026-09-05 网盘单一团队空间 — 去个人 owner 化 + 4 测试账号删除)
 
 **触发**: 删除邓国祥/孟祥琪/杨雪/测试小助手 (含 2 历史重复号共 6 members 行) 时暴露
