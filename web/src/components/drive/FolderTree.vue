@@ -73,6 +73,7 @@
       >
         <el-icon><Share /></el-icon>
         <span>团队共享盘</span>
+        <span v-if="teamCount != null" class="folder-tree-special-count">{{ teamCount }}</span>
       </div>
     </FolderContextMenu>
 
@@ -179,6 +180,8 @@ const props = defineProps({
   // 批次⑥ 视觉稿对齐: 快捷项 mono 计数 (null = 不显示, 父层按需传)
   starredCount: { type: [Number, null], default: null },
   trashCount: { type: [Number, null], default: null },
+  // 批次⑧: 团队共享盘特殊项计数 (视觉稿根节点 .c "471", 父层拉 view=team total)
+  teamCount: { type: [Number, null], default: null },
 })
 
 // v2.27 (2026-07-12) BUG G 修复: 把 is_team_default=true 的 folder 从 folderTree 中分离

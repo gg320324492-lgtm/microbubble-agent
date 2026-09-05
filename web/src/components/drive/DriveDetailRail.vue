@@ -271,7 +271,7 @@ function fmtDT(x) {
   display: flex; flex-direction: column;
   width: 100%; height: 100%; min-height: 0;
   background: var(--color-bg-card);
-  border-left: 1.5px solid var(--wb-frame, var(--color-border));
+  border-left: 1px solid var(--color-border);
   overflow-y: auto;
 }
 .rail-empty { margin: auto; text-align: center; color: var(--color-text-secondary); font-size: var(--font-size-sm); padding: 30px; }
@@ -297,7 +297,8 @@ function fmtDT(x) {
 .rail-recent-day { flex: none; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 
 .rail-hero { padding: 16px 16px 12px; border-bottom: 1px solid var(--color-border); }
-.rail-cover { height: 168px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); background: var(--gradient-thumbnail-empty, var(--color-bg-secondary, #f5f5f5)); display: grid; place-items: center; }
+/* 批次⑧ 对齐视觉稿 .d-cover: 暖纸→蜜桃渐变底 (无缩略图占位也吃同一渐变) */
+.rail-cover { height: 188px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); background: linear-gradient(165deg, #ffffff 0%, #FFF6EF 55%, #FFEBE2 100%); display: grid; place-items: center; }
 .rail-cover-img { width: 100%; height: 100%; object-fit: cover; }
 .rail-cover-ph { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px dashed; border-radius: var(--radius-md); padding: 22px 30px; background: transparent; }
 .rail-cover-abbr { font-family: var(--font-family-mono, monospace); font-size: 22px; font-weight: 700; }

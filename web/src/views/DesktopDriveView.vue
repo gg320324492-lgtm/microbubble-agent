@@ -80,6 +80,9 @@
           :loading="treeLoading"
           :load-error="treeLoadError"
           :special-view="specialView"
+          :team-count="sideCounts.team"
+          :starred-count="sideCounts.starred"
+          :trash-count="sideCounts.trash"
           @update:selected-folder-id="selectedFolderId = $event"
           @update:special-view="specialView = $event"
           @toggle-expanded="toggleExpandedFolder"
@@ -134,7 +137,14 @@
             :class="{ 'is-active': fileType === opt.value || (!fileType && opt.value === null) }"
             @click="handleFileTypeChange(opt.value)"
           >{{ opt.label }}</button>
-          <span class="wb-kbd-hint">↑↓ 移动 · 空格预览 · Enter 详情 · Del 回收站 · 拖行到左栏夹=移动</span>
+          <!-- 批次⑧ 对齐视觉稿 .hint: kbd 键帽徽章 (↑↓/␣/Del/拖拽), 不再纯文字点隔 -->
+          <span class="wb-kbd-hint">
+            <span><kbd>↑</kbd><kbd>↓</kbd> 移动</span>
+            <span><kbd>␣</kbd> 预览</span>
+            <span><kbd>Enter</kbd> 详情</span>
+            <span><kbd>Del</kbd> 回收站</span>
+            <span><kbd>拖拽</kbd> 移到左栏夹</span>
+          </span>
         </div>
 
         <div class="wb-listarea">
@@ -270,7 +280,7 @@
 <script setup>
 // v2.0 (2026-07-09) Drive 美化 — 引入 drive-view.css 共享样式 (见下方 import 与 .drive-* class)
 import '@/views/drive/drive-view.css'
-import { ref, computed, triggerRef, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, reactive, triggerRef, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { Search, UploadFilled, Folder, Plus } from '@element-plus/icons-vue'
@@ -536,6 +546,7 @@ async function handleBatchDelete() {
     } else {
       ElMessage.success(`已删除 ${resp.succeeded_count} 个文件`)
     }
+    refreshSideCounts()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
@@ -627,6 +638,7 @@ async function handleBatchToggleStar() {
   try {
     const resp = await batchStar(ids, true)
     ElMessage.success(`已收藏 ${resp?.updated ?? ids.length} 个文件`)
+    refreshSideCounts()
     return
   } catch (e) {
     console.warn('[DesktopDriveView] batch-star 失败, 回退逐个收藏:', e?.message || e)
@@ -652,6 +664,7 @@ async function handleBatchToggleStar() {
 async function handleFileToggleStar(file) {
   try {
     await toggleStar(file.id)
+    refreshSideCounts()
   } catch (e) {
     ElMessage.error(e.message || '切换收藏失败')
   }
@@ -921,6 +934,7 @@ async function handleFileDelete(file) {
     await deleteFile(file.id)
     if (activeKey.value === file.id) activeKey.value = null  // 批次③: 右栏跟随
     ElMessage.success('已删除')
+    refreshSideCounts()
   } catch (e) {
     if (e !== 'cancel') {
       ElMessage.error(e.message || '删除失败')
@@ -969,6 +983,24 @@ const currentPathDisplay = computed(() => {
 // ============================================================
 const quotaInfo = ref(null)
 const tableRef = ref(null)
+
+// 批次⑧ 对齐视觉稿树计数: 团队共享盘 (view=team total) / 我的收藏 / 回收站
+// 三个 mono 计数 — page_size=1 只取 total, 挂载拉一次, 收藏/删除/恢复动作后刷新
+const sideCounts = reactive({ team: null, starred: null, trash: null })
+async function refreshSideCounts() {
+  try {
+    const [team, starred, trash] = await Promise.allSettled([
+      axios.get('/api/v1/drive/files', { params: { view: 'team', page: 1, page_size: 1 } }),
+      axios.get('/api/v1/drive/starred', { params: { page: 1, page_size: 1 } }),
+      axios.get('/api/v1/drive/trash', { params: { page: 1, page_size: 1 } }),
+    ])
+    if (team.status === 'fulfilled') sideCounts.team = team.value.data?.total ?? null
+    if (starred.status === 'fulfilled') sideCounts.starred = starred.value.data?.total ?? null
+    if (trash.status === 'fulfilled') sideCounts.trash = trash.value.data?.total ?? null
+  } catch { /* 计数拉取失败静默 (null = 不显示) */ }
+}
+onMounted(refreshSideCounts)
+watch(specialView, () => refreshSideCounts())
 
 // 顶栏搜索 kbd 提示兑现: Ctrl/⌘+K 聚焦搜索框 (视觉稿 gsearch kbd 同款交互)
 const searchInputRef = ref(null)
@@ -1438,6 +1470,9 @@ function onContextMenuClose() {
   --color-file-default: #8F877B;
   --color-warning: #B07C24;
   --color-danger: #C0562F;
+  /* 批次⑧: 边框暖纸化 (视觉稿 --line #E5E1D8) — 全局 token 偏冷灰, 作用域内重映射 */
+  --color-border: #E5E1D8;
+  --color-border-light: #ECE9E0;
   /* 墨线框 (视觉稿 --line-ink) + Element Plus accent (分页/输入聚焦) */
   --wb-frame: rgba(45, 58, 53, .5);
   --el-color-primary: #0E766E;
@@ -1467,6 +1502,8 @@ function onContextMenuClose() {
   --color-warning: #E0A45C;
   --color-danger: #E07A5F;
   --wb-frame: rgba(160, 175, 162, .45);
+  --color-border: #3a3d45;
+  --color-border-light: #2a2d35;
   --el-color-primary: #35C2A4;
   --el-color-primary-light-3: #2b8c77;
   --el-color-primary-light-5: #256e5f;
@@ -1484,18 +1521,18 @@ function onContextMenuClose() {
   background: var(--color-bg-page);
 }
 
-/* 顶栏 */
+/* 顶栏 (视觉稿 .top: 52px / 1px 亮线) */
 .wb-top {
   flex: none;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  height: 56px;
-  padding: 0 var(--space-5);
+  height: 52px;
+  padding: 0 18px;
   background: var(--color-bg-card);
-  border-bottom: 1.5px solid var(--wb-frame, var(--color-border));
+  border-bottom: 1px solid var(--color-border);
 }
-.wb-brand { display: inline-flex; align-items: center; gap: 9px; font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); white-space: nowrap; }
+.wb-brand { display: inline-flex; align-items: center; gap: 9px; font-size: 14.5px; font-weight: var(--font-weight-semibold); white-space: nowrap; }
 .wb-brand-ico {
   width: 26px; height: 26px; border-radius: 7px; flex: none;
   background: var(--gradient-cta-button); display: grid; place-items: center;
@@ -1505,10 +1542,10 @@ function onContextMenuClose() {
 .wb-vr { width: 1px; height: 22px; background: var(--color-border); }
 .wb-search {
   display: inline-flex; align-items: center; gap: 8px;
-  width: min(420px, 34vw);
+  width: 380px;
   background: var(--color-bg-page);
-  border: 1px solid transparent; border-radius: var(--radius-full);
-  padding: 8px 16px;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  padding: 7px 12px;
   transition: border-color var(--duration-normal), box-shadow var(--duration-normal), background var(--duration-normal);
 }
 .wb-search:focus-within { background: var(--color-bg-card); border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), .12); }
@@ -1542,13 +1579,13 @@ function onContextMenuClose() {
   gap: 0;
 }
 .wb-rail {
-  width: 236px; flex: none;
+  width: 232px; flex: none;
   display: flex; flex-direction: column; min-height: 0;
   background: var(--color-bg-card);
-  border-right: 1.5px solid var(--wb-frame, var(--color-border));
-  padding: 10px 8px 0;
+  border-right: 1px solid var(--color-border);
+  padding: 12px 10px 0;
 }
-.wb-rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 4px 10px 6px; display: flex; align-items: center; justify-content: space-between; }
+.wb-rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 6px 10px 5px; display: flex; align-items: center; justify-content: space-between; }
 .wb-cap-add {
   border: none; background: none; cursor: pointer;
   color: var(--color-text-secondary); padding: 2px 4px; border-radius: 4px;
@@ -1567,8 +1604,13 @@ function onContextMenuClose() {
 }
 .wb-crumbs { flex: none; display: flex; align-items: center; gap: 10px; font-size: var(--font-size-sm); }
 .wb-crumbs :deep(.el-breadcrumb) { font-size: var(--font-size-sm); }
+/* 批次⑧ 对齐视觉稿 .crumbs: 当前级墨色 600 (全局 aria-current 规则把末层染成珊瑚 --color-primary-text, 作用域内翻回),
+   上层级灰 text-3 */
+.wb-crumbs :deep(.el-breadcrumb__inner) { color: var(--color-text-secondary) !important; font-weight: var(--font-weight-normal) !important; }
+.wb-crumbs :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) { color: var(--color-text-primary) !important; font-weight: var(--font-weight-semibold) !important; }
 .wb-crumb-search { color: var(--color-primary-dark); font-size: var(--font-size-xs); }
-.wb-total { font-size: var(--font-size-xs); color: var(--color-text-secondary); white-space: nowrap; }
+/* 视觉稿 .sz: mono 11px text-4 */
+.wb-total { font-family: var(--font-mono, Consolas, monospace); font-size: 11px; color: var(--color-text-placeholder); white-space: nowrap; }
 .wb-density {
   border: 1px solid var(--color-border); background: var(--color-bg-card);
   border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-regular);
@@ -1579,7 +1621,25 @@ function onContextMenuClose() {
 .wb-ctools { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wb-lab { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .wb-lab--gap { margin-left: 6px; }
-.wb-kbd-hint { margin-left: auto; font-size: 10.5px; color: var(--color-text-placeholder); white-space: nowrap; }
+/* 批次⑧ 对齐视觉稿 .fchip: 5px 11px / 12px 字 / 5.5px 色点; active=浅青染色深青字 (非渐变实底)。
+   全局 .drive-chip.is-active 带 !important, 此处同名 !important + 更高特异性压过 */
+.wb-ctools .drive-chip { padding: 4px 11px; font-size: var(--font-size-xs); gap: 5px; }
+.wb-ctools .drive-chip[data-type]::before { width: 5.5px; height: 5.5px; }
+.wb-ctools .drive-chip[aria-pressed="true"],
+.wb-ctools .drive-chip.is-active {
+  background: var(--color-primary-bg) !important;
+  border-color: var(--color-primary-border) !important;
+  color: var(--color-primary-dark) !important;
+  font-weight: var(--font-weight-semibold);
+  box-shadow: none;
+}
+/* 视觉稿 .hint: kbd 键帽徽章行 */
+.wb-kbd-hint { margin-left: auto; font-size: 11.5px; color: var(--color-text-placeholder); white-space: nowrap; display: flex; gap: 12px; align-items: center; }
+.wb-kbd-hint kbd {
+  font-family: var(--font-mono, Consolas, monospace); font-size: 10px;
+  border: 1px solid var(--color-border); border-bottom-width: 2px; border-radius: 4px;
+  padding: 0 4px; background: var(--color-bg-card); color: var(--color-text-secondary);
+}
 @media (max-width: 1400px) { .wb-kbd-hint { display: none; } }
 
 .wb-listarea { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -1588,7 +1648,7 @@ function onContextMenuClose() {
 .wb-dock { flex: none; display: flex; flex-direction: column; }
 .wb-dock :deep(.drive-batch-toolbar) { border: 1px solid var(--color-border); border-top: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-sm); background: var(--color-bg-card); }
 
-.wb-railright { width: 340px; flex: none; border-radius: 0; }
+.wb-railright { width: 336px; flex: none; border-radius: 0; }
 
 /* 拖拽悬停整区提示 */
 .wb-body.is-drag-over::before {
@@ -1610,16 +1670,8 @@ function onContextMenuClose() {
 .drive-drop-hero { z-index: 20; }
 
 /* ── 批次⑥ 复刻视觉稿: 配额徽章 → qbox 卡 + 批量 dock → 描边小按钮 (仅 workbench 作用域, 其他视图零影响) ── */
-.wb-rail-foot { padding: 8px 8px 14px; }
-.wb-rail-foot :deep(.storage-quota-badge) {
-  width: 100%; box-sizing: border-box;
-  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
-  background: var(--color-bg-page); padding: 11px 12px;
-}
-.wb-rail-foot :deep(.quota-content) { display: flex; align-items: center; gap: 9px; }
-.wb-rail-foot :deep(.quota-icon) { color: var(--color-primary); }
-.wb-rail-foot :deep(.quota-percent) { font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
-.wb-rail-foot :deep(.quota-detail) { font-family: var(--font-mono, Consolas, monospace); font-size: 11px; color: var(--color-text-secondary); }
+.wb-rail-foot { padding: 0 2px 12px; }
+.wb-rail-foot :deep(.storage-quota-badge) { width: 100%; box-sizing: border-box; }
 
 .wb-dock :deep(.drive-batch-toolbar) {
   padding: 10px 14px; gap: 10px;
@@ -1632,7 +1684,9 @@ function onContextMenuClose() {
 .wb-dock :deep(.batch-toolbar-label) { color: var(--color-text-regular); }
 .wb-dock :deep(.drive-batch-note) {
   font-size: 10.5px; color: var(--color-text-placeholder); white-space: nowrap; margin-left: 4px;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
 }
+@media (max-width: 1500px) { .wb-dock :deep(.drive-batch-note) { display: none; } }
 .wb-dock :deep(.drive-batch-toolbar-btn) {
   font-size: var(--font-size-xs); height: auto; padding: 6px 12px; margin-left: 0;
   border: 1px solid var(--color-border) !important; border-radius: var(--radius-md);

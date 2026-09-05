@@ -108,22 +108,14 @@
               </template>
             </span>
             <span class="dft-c dft-c--name">
-              <span class="dft-glyph" :style="glyphStyle(item)" :title="item.kind === 'folder' ? '文件夹' : item.abbr">
-                <img
-                  v-if="item.cover"
-                  :src="item.cover"
-                  alt=""
-                  loading="lazy"
-                  @error="onCoverError(item)"
-                />
-                <svg v-else-if="item.kind === 'folder'" viewBox="0 0 24 24" class="dft-glyph-folder" aria-hidden="true">
-                  <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.2c.7 0 1.35.3 1.8.8l.9 1.2h5.3A2.5 2.5 0 0 1 19 8.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 3 17z" />
-                </svg>
-                <span v-else class="dft-glyph-ext">{{ item.abbr.slice(0, 4) }}</span>
-              </span>
-              <span class="dft-name">{{ item.label }}</span>
+              <!-- 批次⑧ 对齐视觉稿 .nm: 文件夹=teal 描边图标, 文件=7px 类型色 dot (行内缩略图/缩写色块退役, 封面统一看右栏) -->
+              <svg v-if="item.kind === 'folder'" viewBox="0 0 24 24" class="dft-folder-ic" aria-hidden="true">
+                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              </svg>
+              <span v-else class="dft-dot" :style="{ background: item.color }" :title="item.abbr"></span>
+              <span class="dft-name" :title="item.label">{{ item.label }}</span>
               <span v-if="item.kind === 'file' && showPath && item.data.folder_name" class="dft-path">
-                📂 {{ item.data.folder_name }}
+                {{ item.data.folder_name }}
               </span>
               <span v-if="item.kind === 'file' && item.data.is_latest === false" class="dft-old" title="非最新版本">旧版</span>
             </span>
@@ -172,8 +164,7 @@
 </template>
 
 <script setup>
-import { computed, ref, reactive, watch, nextTick } from 'vue'
-import axios from 'axios'
+import { computed, ref, nextTick } from 'vue'
 import VirtualList from '@/components/common/VirtualList.vue'
 import { DRIVE_MOVE_MIME, isDriveMoveDragging, readDriveMovePayload } from '@/composables/useDriveDragMove'
 
@@ -214,7 +205,7 @@ const emit = defineEmits([
   'drop-into-folder',  // ({folderId, ids}) 拖到表内文件夹行
 ])
 
-const rowH = computed(() => (props.density === 'compact' ? 32 : 40))
+const rowH = computed(() => (props.density === 'compact' ? 32 : 38))
 
 const TYPE_META = {
   pdf:   { abbr: 'PDF',  color: 'var(--color-file-pdf, #DC3545)' },
@@ -248,50 +239,8 @@ function metaOf(file) {
   return { abbr: (ext || 'FILE').toUpperCase().slice(0, 4), color: 'var(--color-text-placeholder, #C0C4CC)' }
 }
 
-/* ---- 封面块 (复刻视觉稿: 28px 色块, 图片=真缩略图, 文件夹=色块封面, 其他=类型缩写块) ---- */
-const IMG_EXT = new Set(['png', 'jpg', 'jpeg', 'gif'])
-// 文件夹封面色: 名称哈希 → 档案系固定 8 色板, 同名恒同色 (跨刷新稳定)
-const FOLDER_COLORS = ['#0E766E', '#2F5D8A', '#B07C24', '#7C4E96', '#3E7A52', '#A84B6F', '#C0562F', '#3E7A70']
-function folderGlyphColor(name) {
-  let h = 0
-  for (const ch of String(name || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0
-  return FOLDER_COLORS[h % FOLDER_COLORS.length]
-}
-const coverMap = reactive({})            // file.id -> url (null 出现即回退类型块)
-const coverPending = new Set()
-const coverFailed = new Set()            // img error 后不再重试 (防 watch(rows) 重拉造成循环)
-function extOfName(f) {
-  const n = (f.file_name || f.title || '').toLowerCase()
-  return n.slice(n.lastIndexOf('.') + 1)
-}
-function ensureCover(f) {
-  const id = f.id
-  if (coverMap[id] || coverPending.has(id) || coverFailed.has(id)) return
-  if (f.storage_mode !== 'drive') return
-  // 图片: inline download 直链 (与右栏封面同源, 0 额外请求); 其他类型仅 thumbnail ready 才拉签名 URL
-  if (IMG_EXT.has(extOfName(f))) {
-    coverMap[id] = `/api/v1/drive/files/${id}/download?disposition=inline`
-    return
-  }
-  if (f.thumbnail_status !== 'ready') return
-  coverPending.add(id)
-  axios.get(`/api/v1/drive/files/${id}/thumbnail`)
-    .then((r) => { if (r.data?.thumbnail_url) coverMap[id] = r.data.thumbnail_url })
-    .catch(() => {})
-    .finally(() => coverPending.delete(id))
-}
-function onCoverError(item) {
-  if (item.kind === 'file') {
-    coverFailed.add(item.data.id)
-    delete coverMap[item.data.id]
-  }
-}
-function glyphStyle(item) {
-  const c = item.kind === 'folder' ? item.glyph : item.color
-  return { color: c, background: `color-mix(in srgb, ${c} 12%, transparent)`, borderColor: `color-mix(in srgb, ${c} 32%, transparent)` }
-}
-
-// 统一行模型 (folder 行恒在前 — 与系统文件管理器一致)
+/* 批次⑧ 对齐视觉稿: 行内只留 dot / 描边图标, 缩略图懒拉逻辑随 28px 色块一并退役
+   (封面预览统一由右栏 DriveDetailRail 承担) */
 const rows = computed(() => {
   const fs = (props.folders || []).map((f) => ({
     kind: 'folder',
@@ -300,17 +249,13 @@ const rows = computed(() => {
     label: f.name,
     abbr: 'FOLDER',
     color: 'var(--color-primary)',
-    glyph: folderGlyphColor(f.name),
   }))
   const ff = (props.files || []).map((x) => {
     const m = metaOf(x)
-    return { kind: 'file', key: x.id, data: x, label: x.file_name || x.title || `文件${x.id}`, abbr: m.abbr, color: m.color, cover: coverMap[x.id] || null }
+    return { kind: 'file', key: x.id, data: x, label: x.file_name || x.title || `文件${x.id}`, abbr: m.abbr, color: m.color }
   })
   return [...fs, ...ff]
 })
-
-// 行变更 → 懒拉缩略图 (VirtualList 只挂载可见行, 挂载即触发, coverMap 幂等去重)
-watch(rows, (rs) => { for (const r of rs) if (r.kind === 'file') ensureCover(r.data) }, { immediate: true })
 
 const selectedIdSet = computed(() => new Set(props.selectedIds))
 const fileRows = computed(() => rows.value.filter((r) => r.kind === 'file'))
@@ -462,36 +407,39 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   height: 100%;
   min-height: 0;
   background: var(--color-bg-card);
-  border: 1.5px solid var(--wb-frame, var(--color-border));
+  /* 视觉稿 .tablewrap: 1px 墨线 (--line-ink), 仅上圆角, 无偏移阴影 — 底部与 dock 拼成一张卡 */
+  border: 1px solid var(--wb-frame, var(--color-border));
   border-bottom: none;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  /* 档案系硬偏移描边卡 (同主页 Dashboard 卡片语言); 无 --wb-frame 环境优雅降级 */
-  box-shadow: var(--wb-frame, none) 4px 4px 0;
   outline: none;
 }
 .dft:focus-visible { box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), .25); }
 
 .dft-head, .dft-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 86px 108px 118px 34px;
+  grid-template-columns: 34px minmax(0, 1fr) 86px 108px 118px 48px;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 12px;
 }
 .dft-head {
   flex: none;
   height: 34px;
   border-bottom: 1px solid var(--color-border);
-  font-size: var(--font-size-xs);
+  /* 视觉稿 th: 11px / 500 / letter-spacing .06em / text-3 */
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: .06em;
   color: var(--color-text-secondary);
   user-select: none;
   position: sticky; top: 0; z-index: 3;
   background: var(--color-bg-card);
 }
 .dft-head .sortable { cursor: pointer; }
-.dft-star-head { color: var(--color-text-placeholder); font-size: var(--font-size-xs); }
+.dft-star-head { color: var(--color-text-placeholder); font-size: var(--font-size-xs); letter-spacing: .06em; }
 .dft-head .sortable:hover { color: var(--color-primary-dark); }
 .dft-arr { font-size: 9px; margin-left: 3px; color: var(--color-primary); }
+.dft input[type="checkbox"] { accent-color: var(--color-primary); width: 14px; height: 14px; cursor: pointer; }
 
 .dft-body { flex: 1; min-height: 0; }
 
@@ -510,34 +458,30 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
 .dft--compact .dft-row { font-size: var(--font-size-xs); }
 
 .dft-c { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); color: var(--color-text-regular); }
-.dft-c--name { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--color-text-primary); }
+.dft-c--name { display: flex; align-items: center; gap: 9px; min-width: 0; color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .dft-c--check, .dft-c--star { display: flex; justify-content: center; }
 .dft-c--owner { display: flex; align-items: center; gap: 6px; }
 .num { text-align: right; font-family: var(--font-family-mono, monospace); font-size: var(--font-size-xs); }
 .dft-head .num { text-align: right; }
 
-.dft-glyph {
-  flex: none; width: 28px; height: 28px; border-radius: 7px; overflow: hidden;
-  display: grid; place-items: center;
-  border: 1px solid var(--color-border); background: var(--color-bg-page);
-}
-.dft-glyph img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.dft-glyph-folder { width: 15px; height: 15px; fill: color-mix(in srgb, currentColor 20%, transparent); stroke: currentColor; stroke-width: 1.1; }
-.dft-glyph-ext { font-family: var(--font-mono, Consolas, monospace); font-size: 8.5px; font-weight: 700; letter-spacing: .02em; line-height: 1; }
-.dft--compact .dft-glyph { width: 18px; height: 18px; border-radius: 5px; }
-.dft--compact .dft-glyph-ext { font-size: 6.5px; }
-.dft--compact .dft-glyph-folder { width: 11px; height: 11px; }
-.dft-row.is-sel { box-shadow: inset 3px 0 0 var(--color-primary); }
+/* 批次⑧ 对齐视觉稿 .nm: 文件夹=teal 描边 16px, 文件=7px 类型色 dot */
+.dft-folder-ic { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--color-primary); stroke-width: 1.6; }
+.dft-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.dft--compact .dft-folder-ic { width: 13px; height: 13px; }
+.dft--compact .dft-dot { width: 6px; height: 6px; }
 .dft-name { overflow: hidden; text-overflow: ellipsis; }
-.dft-path { flex: none; font-size: 11px; color: var(--color-text-secondary); max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.dft-path { flex: none; font-size: 10.5px; color: var(--color-text-placeholder); font-weight: var(--font-weight-normal); max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
 .dft-old { flex: none; font-size: 10px; color: var(--color-warning); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); padding: 0 4px; }
 .dft-av {
-  flex: none; width: 18px; height: 18px; border-radius: 50%;
-  background: var(--gradient-welcome-hero, linear-gradient(135deg, #FF7A5C, #FFB347));
-  color: #fff; font-size: 10px; display: inline-grid; place-items: center;
+  flex: none; width: 17px; height: 17px; border-radius: 50%;
+  background: var(--gradient-welcome-hero, linear-gradient(135deg, #0E766E, #12897C));
+  color: #fff; font-size: 9px; display: inline-grid; place-items: center; font-weight: var(--font-weight-semibold);
 }
-.dft-star { border: none; background: none; font-size: 14px; line-height: 1; color: var(--color-border); padding: 2px; transition: color var(--duration-fast), transform var(--duration-fast); }
-.dft-star:hover { color: var(--color-accent); transform: scale(1.15); }
+.dft-star { border: none; background: none; font-size: 13px; line-height: 1; color: var(--color-accent); padding: 2px; cursor: pointer; transition: color var(--duration-fast), transform var(--duration-fast), opacity var(--duration-fast); }
+/* 视觉稿收藏列: 仅收藏行常显金星, 未收藏行 hover 才浮出 (可点性不丢) */
+.dft-star { opacity: 0; }
+.dft-row:hover .dft-star, .dft-star.on, .dft-star:focus-visible { opacity: 1; }
+.dft-star:hover { transform: scale(1.15); }
 .dft-star.on { color: var(--color-accent); }
 
 /* 空/载/错 */
@@ -556,11 +500,10 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   flex: none;
   display: flex; align-items: center; gap: 10px;
   padding: 8px 14px;
-  border: 1.5px solid var(--wb-frame, var(--color-border));
+  border: 1px solid var(--wb-frame, var(--color-border));
   border-top: 1px solid var(--color-border);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background: var(--color-bg-card);
-  box-shadow: var(--wb-frame, none) 4px 4px 0;
 }
 .dft-foot-stat { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .dft-foot-sp { flex: 1; }
