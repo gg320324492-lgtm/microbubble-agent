@@ -100,17 +100,28 @@
       <!-- 中: 面包屑 + 筛选 chips + 行表/内嵌面板 + 批量 dock -->
       <section class="wb-center">
         <div class="wb-crumbs">
-          <el-breadcrumb separator="/">
-            <el-breadcrumb-item>课题组网盘</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="specialView === 'team'">团队共享盘</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'starred'">我的收藏</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'recent'">最近上传</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'trash'">回收站</el-breadcrumb-item>
-            <el-breadcrumb-item v-else-if="specialView === 'requests'">文件请求</el-breadcrumb-item>
-            <el-breadcrumb-item v-for="f in folderBreadcrumb" :key="'bc-' + f.id">
-              {{ f.name }}
-            </el-breadcrumb-item>
-          </el-breadcrumb>
+          <!-- 批次⑩.5 (用户选型 BACK D): 前进后退对键 (访问历史) + 面包屑祖先级可点击跳转 -->
+          <span class="wb-navbtns">
+            <button
+              type="button" class="wb-navbtn" :disabled="navIndex <= 0"
+              title="后退" aria-label="后退"
+              @click="navGo(-1)"
+            ><svg viewBox="0 0 24 24"><path d="M19 12H5m0 0 6 6m-6-6 6-6" /></svg></button>
+            <button
+              type="button" class="wb-navbtn" :disabled="navIndex >= navHistory.length - 1"
+              title="前进" aria-label="前进"
+              @click="navGo(1)"
+            ><svg viewBox="0 0 24 24"><path d="M5 12h14m0 0-6-6m6 6-6 6" /></svg></button>
+          </span>
+          <template v-for="(c, i) in crumbItems" :key="c.key">
+            <span v-if="i > 0" class="wb-crumb-sep">/</span>
+            <button
+              type="button" class="wb-crumb"
+              :class="{ 'is-cur': i === crumbItems.length - 1 }"
+              :disabled="i === crumbItems.length - 1"
+              @click="gotoCrumb(c, i)"
+            >{{ c.name }}</button>
+          </template>
           <span class="wb-crumb-search" v-if="isSearching">🔍 「{{ searchQuery.trim() }}」全盘结果 · {{ total }} 项</span>
           <span class="wb-sp"></span>
           <span class="wb-total">{{ isSearching ? ('匹配 ' + total + ' 项') : ('共 ' + total + ' 项') }}</span>
@@ -1104,6 +1115,67 @@ async function refreshSideCounts() {
 onMounted(refreshSideCounts)
 watch(specialView, () => refreshSideCounts())
 
+// ── 批次⑩.5 (用户选型 BACK D): 访问历史 + 前进/后退 ──
+// 位置 = {specialView, folderId}; 自然导航在 watch 里 push (去重连续同位),
+// navGo 恢复历史时置 navRestoring 防回写。
+const navHistory = ref([])
+const navIndex = ref(-1)
+const navRestoring = ref(false)
+function pushNav() {
+  if (navRestoring.value) return
+  const loc = { specialView: specialView.value, folderId: selectedFolderId.value }
+  const cur = navHistory.value[navIndex.value]
+  if (cur && cur.specialView === loc.specialView && cur.folderId === loc.folderId) return
+  navHistory.value = navHistory.value.slice(0, navIndex.value + 1)
+  navHistory.value.push(loc)
+  navIndex.value = navHistory.value.length - 1
+}
+async function navGo(delta) {
+  const idx = navIndex.value + delta
+  if (idx < 0 || idx >= navHistory.value.length) return
+  navRestoring.value = true
+  navIndex.value = idx
+  const loc = navHistory.value[idx]
+  specialView.value = loc.specialView
+  selectedFolderId.value = loc.folderId
+  if (loc.folderId != null && !expandedFolderIds.value.has(loc.folderId)) {
+    expandedFolderIds.value.add(loc.folderId)
+  }
+  await nextTick()
+  navRestoring.value = false
+}
+onMounted(pushNav)
+
+// ── 批次⑩.5: 面包屑可点击跳转 (祖先级直达, 当前级不可点) ──
+const crumbItems = computed(() => {
+  const items = [{ key: 'home', name: '课题组网盘', loc: { specialView: 'team', folderId: null } }]
+  if (specialView.value === 'team') {
+    items.push({ key: 'team', name: '团队共享盘', loc: { specialView: 'team', folderId: null } })
+    for (const f of folderBreadcrumb.value) {
+      items.push({ key: 'f-' + f.id, name: f.name, loc: { specialView: 'team', folderId: f.id } })
+    }
+  } else if (specialView.value === 'starred') {
+    items.push({ key: 'starred', name: '我的收藏', loc: { specialView: 'starred', folderId: null } })
+  } else if (specialView.value === 'recent') {
+    items.push({ key: 'recent', name: '最近上传', loc: { specialView: 'recent', folderId: null } })
+  } else if (specialView.value === 'trash') {
+    items.push({ key: 'trash', name: '回收站', loc: { specialView: 'trash', folderId: null } })
+  } else if (specialView.value === 'requests') {
+    items.push({ key: 'requests', name: '文件请求', loc: { specialView: 'requests', folderId: null } })
+  }
+  return items
+})
+function gotoCrumb(c, idx) {
+  specialView.value = c.loc.specialView
+  selectedFolderId.value = c.loc.folderId
+  // 树展开到该层 (沿途祖先一并展开, FolderTree 高亮同步)
+  for (const it of crumbItems.value.slice(0, idx + 1)) {
+    if (it.loc.folderId != null && !expandedFolderIds.value.has(it.loc.folderId)) {
+      expandedFolderIds.value.add(it.loc.folderId)
+    }
+  }
+}
+
 // ── 批次⑩.1: 文件夹勾选 (与文件勾选分模型 — id 空间不同, 文件夹键由父层持有) ──
 const selectedFolderIds = ref([])
 // 表格当前展示的文件夹行 (team 层级树 或 收藏视图合并的文件夹)
@@ -1145,6 +1217,7 @@ const activeFile = computed(() => {
 watch([selectedFolderId, specialView], () => {
   activeKey.value = null
   selectedFolderIds.value = []
+  pushNav()
 })
 
 // 批次⑦: 勾选 checkbox 也让右栏换档 (视觉稿行为 = 选中即可见详情;
@@ -1748,12 +1821,32 @@ function onContextMenuClose() {
   padding: 10px 14px 12px;
   gap: 8px;
 }
-.wb-crumbs { flex: none; display: flex; align-items: center; gap: 10px; font-size: var(--font-size-sm); }
-.wb-crumbs :deep(.el-breadcrumb) { font-size: var(--font-size-sm); }
-/* 批次⑧ 对齐视觉稿 .crumbs: 当前级墨色 600 (全局 aria-current 规则把末层染成珊瑚 --color-primary-text, 作用域内翻回),
-   上层级灰 text-3 */
-.wb-crumbs :deep(.el-breadcrumb__inner) { color: var(--color-text-secondary) !important; font-weight: var(--font-weight-normal) !important; }
-.wb-crumbs :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) { color: var(--color-text-primary) !important; font-weight: var(--font-weight-semibold) !important; }
+.wb-crumbs { flex: none; display: flex; align-items: center; gap: 4px; font-size: var(--font-size-sm); }
+/* 批次⑩.5 (BACK D): 手写面包屑 — 祖先级可点 (hover 浮起 + 深青), 当前级墨色加粗不可点 */
+.wb-crumb {
+  border: none; background: none; font: inherit; font-size: var(--font-size-sm);
+  color: var(--color-text-secondary); padding: 3px 6px; border-radius: 5px; cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.wb-crumb:hover { background: var(--color-bg-card); color: var(--color-primary-dark); }
+.wb-crumb.is-cur { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); cursor: default; }
+.wb-crumb.is-cur:hover { background: none; color: var(--color-text-primary); }
+.wb-crumb:disabled { cursor: default; }
+.wb-crumb-sep { color: var(--color-text-placeholder); }
+/* 前进/后退对键: 圆形 26px, 无历史置灰 */
+.wb-navbtns { display: inline-flex; gap: 6px; margin-right: 8px; }
+.wb-navbtn {
+  width: 26px; height: 26px; border-radius: 50%; padding: 0;
+  border: 1px solid var(--color-border); background: var(--color-bg-card);
+  color: var(--color-text-regular); display: grid; place-items: center; cursor: pointer;
+  transition: transform var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast);
+}
+.wb-navbtn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wb-navbtn:hover:not(:disabled) { color: var(--color-primary-dark); border-color: var(--color-primary-border); }
+.wb-navbtn:active:not(:disabled) { transform: scale(.92); }
+.wb-navbtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.wb-navbtn:disabled { color: var(--color-text-placeholder); background: var(--color-bg-page); cursor: default; }
 .wb-crumb-search { color: var(--color-primary-dark); font-size: var(--font-size-xs); }
 /* 视觉稿 .sz: mono 11px text-4 */
 .wb-total { font-family: var(--font-mono, Consolas, monospace); font-size: 11px; color: var(--color-text-placeholder); white-space: nowrap; }
