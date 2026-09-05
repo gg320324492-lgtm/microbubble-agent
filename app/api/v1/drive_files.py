@@ -1583,30 +1583,131 @@ async def get_pptx_structure(
         raise HTTPException(status_code=422, detail=f"pptx 解析失败: {e}")
 
     slide_w, slide_h = prs.slide_width or 9144000, prs.slide_height or 6858000
-    slides = []
-    for idx, slide in enumerate(prs.slides, 1):
-        bg = None
-        try:
-            fill = slide.background.fill
-            if fill.type is not None and int(fill.type) == 1:  # MSO_FILL.SOLID
-                bg = str(fill.fore_color.rgb)
-        except Exception:
-            bg = None
 
-        shapes = []
-        for sh in slide.shapes:
+    # ── 主题色板 (theme1.xml clrScheme): scheme 颜色 → 具体色值 ──
+    import re as _re
+    import zipfile
+    theme = {}
+    try:
+        with zipfile.ZipFile(BytesIO(raw)) as zf:
+            tname = next((n for n in zf.namelist() if n.startswith("ppt/theme/theme") and n.endswith(".xml")), None)
+            if tname:
+                tseg = zf.read(tname).decode("utf-8", "ignore")
+                mm = _re.search(r"<a:clrScheme.*?</a:clrScheme>", tseg, _re.S)
+                if mm:
+                    for km in _re.finditer(r"<a:(\w+)>(.*?)</a:\1>", mm.group(0), _re.S):
+                        cm = _re.search(r'val="([0-9A-Fa-f]{6})"', km.group(2)) or _re.search(r'lastClr="([0-9A-Fa-f]{6})"', km.group(2))
+                        if cm:
+                            theme[km.group(1).lower()] = cm.group(1).lower()
+    except Exception:
+        theme = {}
+
+    def _theme_hex(enum_name):
+        k = str(enum_name).split(" ")[0].lower()
+        k = {"dark_1": "dk1", "text_1": "dk1", "light_1": "lt1",
+             "background_1": "lt1", "text_2": "dk2", "background_2": "lt2"}.get(k, k.replace("_", ""))
+        return theme.get(k)
+
+    def _fill_hex(sh, palette):
+        try:
+            fill = sh.fill
+            if fill.type is None or int(fill.type) != 1:
+                return None
+            fc = fill.fore_color
             try:
-                x = (sh.left or 0) / slide_w
-                y = (sh.top or 0) / slide_h
-                w = (sh.width or 0) / slide_w
-                h = (sh.height or 0) / slide_h
+                if fc.type is not None and "RGB" in str(fc.type):
+                    return str(fc.rgb)
+            except Exception:
+                pass
+            try:
+                return _theme_hex(str(fc.theme_color))
+            except Exception:
+                return None
+        except Exception:
+            return None
+
+    def _layout_ph_map(slide):
+        m = {}
+        try:
+            for ph in slide.slide_layout.placeholders:
+                m[ph.placeholder_format.idx] = ph
+        except Exception:
+            pass
+        return m
+
+    def _inherit_pos(sh, lay_map):
+        """占位符未显式设坐标 → 继承版式同位占位符 (错版根因之一)"""
+        try:
+            if sh.left is not None or not getattr(sh, "is_placeholder", False):
+                return None
+            ph = lay_map.get(sh.placeholder_format.idx)
+            if ph is None:
+                ph = next((q for q in lay_map.values()
+                           if q.placeholder_format.type == sh.placeholder_format.type), None)
+            if ph is not None and ph.left is not None:
+                return (ph.left, ph.top, ph.width or 0, ph.height or 0)
+        except Exception:
+            pass
+        return None
+
+    def _run_size_pt(sh, lay_map, para):
+        """字号继承链: run → 段落 → 版式同位占位符 (缺省 14/标题 32)"""
+        if para is not None and para.font.size is not None:
+            return para.font.size.pt
+        try:
+            if getattr(sh, "is_placeholder", False):
+                ph = lay_map.get(sh.placeholder_format.idx)
+                if ph is not None:
+                    for pp in ph.text_frame.paragraphs:
+                        for rr in pp.runs:
+                            if rr.font.size is not None:
+                                return rr.font.size.pt
+        except Exception:
+            pass
+        return None
+
+    slides = []
+
+    def collect(shapes, fx, fy, fsx, fsy, lay_map, palette, depth):
+        out = []
+        if depth > 4:
+            return out
+        for sh in shapes:
+            try:
+                # 组合形状: 递归子形状 (chOff/chExt → 父空间 变换; 错版根因之二)
+                if sh.shape_type == MSO_SHAPE_TYPE.GROUP:
+                    try:
+                        xfrm = sh._element.grpSpPr.xfrm
+                        ox, oy = (xfrm.off.x or 0), (xfrm.off.y or 0)
+                        ecx, ecy = (xfrm.ext.cx or 1), (xfrm.ext.cy or 1)
+                        cox, coy = (xfrm.chOff.x or 0), (xfrm.chOff.y or 0)
+                        ccx = (xfrm.chExt.cx or ecx) or 1
+                        ccy = (xfrm.chExt.cy or ecy) or 1
+                        nfx = fx + fsx * (ox - cox * (ecx / ccx))
+                        nfy = fy + fsy * (oy - coy * (ecy / ccy))
+                        out += collect(sh.shapes, nfx, nfy, fsx * (ecx / ccx), fsy * (ecy / ccy),
+                                       lay_map, palette, depth + 1)
+                    except Exception:
+                        pass
+                    continue
+
+                inherit = _inherit_pos(sh, lay_map)
+                left = sh.left if sh.left is not None else (inherit[0] if inherit else 0)
+                top = sh.top if sh.top is not None else (inherit[1] if inherit else 0)
+                width = sh.width if sh.width is not None else (inherit[2] if inherit else 0)
+                height = sh.height if sh.height is not None else (inherit[3] if inherit else 0)
+
+                x = (fx + left * fsx) / slide_w
+                y = (fy + top * fsy) / slide_h
+                w = (width * fsx) / slide_w
+                h = (height * fsy) / slide_h
                 if w <= 0 or h <= 0:
                     continue
                 entry = {"x": round(x, 4), "y": round(y, 4), "w": round(w, 4), "h": round(h, 4)}
 
                 if sh.shape_type == MSO_SHAPE_TYPE.PICTURE:
                     blob = sh.image.blob
-                    if len(blob) > 1536 * 1024:  # 单图 >1.5MB 跳过 (JSON 体积保护)
+                    if len(blob) > 1536 * 1024:
                         entry.update(kind="image", skip="large")
                     else:
                         entry.update(
@@ -1615,16 +1716,12 @@ async def get_pptx_structure(
                         )
                 elif getattr(sh, "has_table", False) and sh.has_table:
                     tbl = sh.table
-                    rows = [
-                        [cell.text for cell in row.cells]
-                        for row in tbl.rows
-                    ]
-                    entry.update(kind="table", rows=rows)
+                    rows = [[cell.text for cell in row.cells] for row in tbl.rows]
+                    entry.update(kind="table", rows=rows, first_row=bool(tbl.first_row))
                 elif getattr(sh, "has_chart", False) and sh.has_chart:
-                    # 二期: 抽取图表数据 (前端 ECharts 重绘)
                     ctype = "bar"
                     try:
-                        ctype = str(sh.chart.chart_type).split(" ")[0].lower()  # BAR_CLUSTERED/LINE/PIE…
+                        ctype = str(sh.chart.chart_type).split(" ")[0].lower()
                     except Exception:
                         pass
                     cats, series = [], []
@@ -1649,35 +1746,40 @@ async def get_pptx_structure(
                             color = None
                             try:
                                 if r.font.color is not None and r.font.color.type is not None:
-                                    color = str(r.font.color.rgb)
+                                    if "RGB" in str(r.font.color.type):
+                                        color = str(r.font.color.rgb)
+                                    else:
+                                        color = _theme_hex(str(r.font.color.theme_color))
                             except Exception:
                                 color = None
-                            runs.append({
-                                "t": r.text,
-                                "sz": r.font.size.pt if r.font.size else None,
-                                "b": bool(r.font.bold),
-                                "c": color,
-                            })
+                            sz = r.font.size.pt if r.font.size is not None else _run_size_pt(sh, lay_map, para)
+                            runs.append({"t": r.text, "sz": sz, "b": bool(r.font.bold), "c": color})
                         if runs:
+                            ls = para.line_spacing
                             paras.append({
                                 "runs": runs,
                                 "align": str(para.alignment).split(" ")[0].split(":")[-1].lower()
                                 if para.alignment is not None else None,
+                                "ls": round(float(ls), 2) if isinstance(ls, float) else None,
                             })
                     entry.update(kind="text", paras=paras)
                 else:
-                    # 纯形状: 尽力取填充色 (装饰色块)
-                    fill_rgb = None
-                    try:
-                        if sh.fill.type is not None and int(sh.fill.type) == 1:
-                            fill_rgb = str(sh.fill.fore_color.rgb)
-                    except Exception:
-                        fill_rgb = None
-                    entry.update(kind="shape", color=fill_rgb)
-                shapes.append(entry)
+                    entry.update(kind="shape", color=_fill_hex(sh, palette))
+                out.append(entry)
             except Exception:
-                continue  # 单形状解析失败不影响整页
+                continue
+        return out
 
+    for idx, slide in enumerate(prs.slides, 1):
+        bg = None
+        try:
+            fill = slide.background.fill
+            if fill.type is not None and int(fill.type) == 1:
+                bg = str(fill.fore_color.rgb)
+        except Exception:
+            bg = None
+        lay_map = _layout_ph_map(slide)
+        shapes = collect(slide.shapes, 0, 0, 1, 1, lay_map, theme, 0)
         slides.append({"index": idx, "bg": bg, "shapes": shapes})
 
     payload = {
@@ -1687,7 +1789,6 @@ async def get_pptx_structure(
         "slide_h_emu": slide_h,
         "slides": slides,
     }
-    # LRU-ish: 超过 16 份丢最旧
     if len(_PPTX_STRUCTURE_CACHE) > 16:
         _PPTX_STRUCTURE_CACHE.pop(next(iter(_PPTX_STRUCTURE_CACHE)))
     _PPTX_STRUCTURE_CACHE[cache_key] = payload

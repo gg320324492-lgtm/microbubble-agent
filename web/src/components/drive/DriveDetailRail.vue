@@ -114,7 +114,7 @@
           <!-- PDF 原生查看器 (blob iframe, A4 大舞台) -->
           <iframe v-else-if="previewKind === 'pdf' && stageUrl" :src="stageUrl" class="rf-pdf" :title="name"></iframe>
           <!-- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) -->
-          <div v-else-if="previewKind === 'ppt'" class="rf-ppt">
+          <div v-else-if="previewKind === 'ppt'" class="rf-ppt" ref="pptStageRef">
             <div v-if="pptLoading" class="rf-skel">
               <div class="rf-skel-ttl"></div>
               <div class="rf-skel-ln" style="width:78%"></div>
@@ -126,13 +126,15 @@
             <template v-else-if="pptData">
               <div class="rf-slide-wrap">
                 <Transition name="rfpg" mode="out-in">
-                  <div :key="pptPage" class="rf-slide" :style="{ width: '304px', height: pptSlideH + 'px', background: currentSlideBg }" v-html="pptSlideHtml"></div>
+                  <div :key="pptPage + '-' + pptFull" class="rf-slide" :style="{ width: pptSlideW + 'px', height: pptSlideH + 'px', background: currentSlideBg }" v-html="pptSlideHtml"></div>
                 </Transition>
               </div>
               <div class="rf-pill">
                 <button type="button" class="rf-pill-btn" :disabled="pptPage <= 1" @click="pptPage--">‹</button>
                 <span class="rf-pill-pg mono">{{ pptPage }} / {{ pptData.total }}</span>
                 <button type="button" class="rf-pill-btn" :disabled="pptPage >= pptData.total" @click="pptPage++">›</button>
+                <span class="rf-pill-sep"></span>
+                <button type="button" class="rf-pill-btn" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">⛶</button>
               </div>
               <span class="rf-badge">自研渲染 · {{ pptData.total }} 页</span>
             </template>
@@ -258,7 +260,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import CommentThread from '@/components/drive/CommentThread.vue'
@@ -438,12 +440,51 @@ watch([() => props.file?.id, previewKind], async () => {
 }, { immediate: true })
 
 const escHtml = (t) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-const STAGE_W = 304  // 右栏内容区宽 (336 - 边距)
+// 批次⑩.19: 舞台宽随全屏自适应 (rail 态 304 / 全屏按视口等比适配)
+const pptStageRef = ref(null)
+const pptFull = ref(false)
+const vpW = ref(window.innerWidth)
+const vpH = ref(window.innerHeight)
+const stageW = computed(() => {
+  if (!pptFull.value) return 304
+  const d = pptData.value
+  const ar = d ? (d.slide_w_emu / d.slide_h_emu) : (16 / 9)
+  return Math.min(vpW.value * 0.94, (vpH.value - 24) * ar)
+})
+function onFsChange() {
+  pptFull.value = !!document.fullscreenElement
+  vpW.value = window.innerWidth
+  vpH.value = window.innerHeight
+}
+function onFsKeydown(ev) {
+  if (!pptFull.value) return
+  const total = pptData.value?.total || 0
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(ev.key)) { ev.preventDefault(); if (pptPage.value < total) pptPage.value++ }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(ev.key)) { ev.preventDefault(); if (pptPage.value > 1) pptPage.value-- }
+}
+onMounted(() => {
+  document.addEventListener('fullscreenchange', onFsChange)
+  document.addEventListener('keydown', onFsKeydown)
+  window.addEventListener('resize', onFsChange)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', onFsChange)
+  document.removeEventListener('keydown', onFsKeydown)
+  window.removeEventListener('resize', onFsChange)
+  if (document.fullscreenElement) document.exitFullscreen?.()
+})
+function togglePptFull() {
+  const el = pptStageRef.value
+  if (!el) return
+  if (document.fullscreenElement) document.exitFullscreen?.()
+  else el.requestFullscreen?.()
+}
 
+const pptSlideW = computed(() => stageW.value)
 const pptSlideH = computed(() => {
   const d = pptData.value
   if (!d?.slide_w_emu) return 171
-  return Math.round(STAGE_W * (d.slide_h_emu / d.slide_w_emu))
+  return Math.round(stageW.value * (d.slide_h_emu / d.slide_w_emu))
 })
 const currentSlideBg = computed(() => {
   const sl = pptData.value?.slides?.[pptPage.value - 1]
@@ -453,7 +494,7 @@ const pptSlideHtml = computed(() => {
   const d = pptData.value
   const slide = d?.slides?.[pptPage.value - 1]
   if (!slide) return ''
-  const scale = STAGE_W / (d.slide_w_emu || 9144000)
+  const scale = stageW.value / (d.slide_w_emu || 9144000)
   pptChartDefs.length = 0
   const posStyle = (sp) => `left:${(sp.x * 100).toFixed(2)}%;top:${(sp.y * 100).toFixed(2)}%;width:${(sp.w * 100).toFixed(2)}%;height:${(sp.h * 100).toFixed(2)}%;`
   let html = ''
@@ -467,7 +508,8 @@ const pptSlideHtml = computed(() => {
             return `<span style="${st}">${escHtml(r.t)}</span>`
           }).join('')
           const al = p.align === 'center' ? 'center' : p.align === 'right' ? 'right' : ''
-          return `<div style="margin-bottom:2px;${al ? 'text-align:' + al : ''}">${runs || '&nbsp;'}</div>`
+          const lh = typeof p.ls === 'number' ? `line-height:${p.ls};` : 'line-height:1.25;'
+          return `<div style="margin-bottom:2px;${lh}${al ? 'text-align:' + al : ''}">${runs || '&nbsp;'}</div>`
         }).join('')
         html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;">${paras}</div>`
       } else if (sp.kind === 'image' && sp.src) {
@@ -718,6 +760,14 @@ function fmtDT(x) {
   border: 1px solid #C9CFCC; padding: 2px 5px; color: var(--color-text-regular);
 }
 .rf-slide table tr:first-child td { font-weight: 600; background: #EDF2F0; color: var(--color-text-primary); }
+/* 全屏放映态 (FIT2 沉浸基因): 舞台铺满视口, 幻灯片居中, 胶囊放大 */
+.rf-stage:fullscreen { border-radius: 0; border: none; background: #0D1210; }
+.rf-stage:fullscreen .rf-slide-wrap { padding: 0; }
+.rf-stage:fullscreen .rf-pill { bottom: 26px; padding: 6px 12px; }
+.rf-stage:fullscreen .rf-pill-btn { width: 30px; height: 30px; font-size: 14px; }
+.rf-stage:fullscreen .rf-pill-pg { font-size: 12px; }
+.rf-stage:fullscreen .rf-badge { top: 18px; right: 20px; font-size: 10px; }
+.rf-pill-sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .25); margin: 0 2px; }
 @media (prefers-reduced-motion: reduce) {
   .rf-stage { transition: none; }
   .rfpg-enter-active, .rfpg-leave-active { transition: none; }
