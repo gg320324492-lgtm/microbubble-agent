@@ -21,7 +21,7 @@
     @keydown="onKeydown"
   >
     <!-- 列头 -->
-    <div class="dft-head" role="row">
+    <div ref="dftHeadRef" class="dft-head" role="row">
       <span class="dft-c dft-c--check">
         <input
           type="checkbox"
@@ -37,13 +37,13 @@
         @click="$emit('sort-change', 'file_name')"
       >名称<span v-if="sortKeyOf === 'file_name'" class="dft-arr">{{ arrow }}</span></span>
       <span
-        class="dft-c dft-c--size sortable"
+        class="dft-c dft-c--size num sortable"
         role="columnheader"
         @click="$emit('sort-change', 'file_size')"
       >大小<span v-if="sortKeyOf === 'file_size'" class="dft-arr">{{ arrow }}</span></span>
       <span class="dft-c dft-c--owner">上传者</span>
       <span
-        class="dft-c dft-c--time sortable"
+        class="dft-c dft-c--time num sortable"
         role="columnheader"
         @click="$emit('sort-change', 'created_at')"
       >上传时间<span v-if="sortKeyOf === 'created_at'" class="dft-arr">{{ arrow }}</span></span>
@@ -179,7 +179,7 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import VirtualList from '@/components/common/VirtualList.vue'
 import { DRIVE_MOVE_MIME, isDriveMoveDragging, readDriveMovePayload } from '@/composables/useDriveDragMove'
 
@@ -224,6 +224,23 @@ const emit = defineEmits([
 ])
 
 const rowH = computed(() => (props.density === 'compact' ? 32 : 38))
+
+/* 批次⑩.1: 表头与行网格对齐 — 行区滚动条 (virtual-list-container) 会让行比
+   滚动容器外的表头窄一个滚动条宽, 实测后给表头右侧补等宽 padding */
+const dftHeadRef = ref(null)
+function syncHeaderGutter() {
+  const head = dftHeadRef.value
+  if (!head) return
+  const scroller = head.nextElementSibling?.querySelector?.('.virtual-list-container')
+  const sb = scroller ? scroller.offsetWidth - scroller.clientWidth : 0
+  head.style.setProperty('--dft-sb', sb + 'px')
+}
+onMounted(() => {
+  syncHeaderGutter()
+  window.addEventListener('resize', syncHeaderGutter)
+})
+onBeforeUnmount(() => window.removeEventListener('resize', syncHeaderGutter))
+watch([() => props.files?.length, () => props.folders?.length, () => props.density, () => props.loading], () => nextTick(syncHeaderGutter))
 
 const TYPE_META = {
   pdf:   { abbr: 'PDF',  color: 'var(--color-file-pdf, #DC3545)' },
@@ -482,6 +499,8 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   user-select: none;
   position: sticky; top: 0; z-index: 3;
   background: var(--color-bg-card);
+  /* 批次⑩.1: 右侧补滚动条等宽 (--dft-sb 由 JS 实测写入), 列网格与行区逐像素对齐 */
+  padding-right: calc(12px + var(--dft-sb, 0px));
 }
 .dft-head .sortable { cursor: pointer; }
 .dft-star-head { color: var(--color-text-placeholder); font-size: var(--font-size-xs); letter-spacing: .06em; }
