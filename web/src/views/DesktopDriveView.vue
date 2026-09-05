@@ -31,16 +31,20 @@
     <!-- 顶栏: 品牌 + 全局搜索 + 三个主操作 -->
     <header class="wb-top">
       <span class="wb-brand">
-        <span class="wb-brand-ico">📁</span>课题组网盘
+        <span class="wb-brand-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.2c.7 0 1.35.3 1.8.8l.9 1.2h5.3A2.5 2.5 0 0 1 19 8.5V17a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 3 17z" /></svg>
+        </span>课题组网盘
       </span>
       <span class="wb-vr"></span>
       <label class="wb-search">
         <el-icon class="wb-search-ico"><Search /></el-icon>
         <input
+          ref="searchInputRef"
           v-model="searchQuery"
           placeholder="搜索全组文件名 (支持中文, 输入即搜)"
           aria-label="搜索全组文件名"
         />
+        <kbd>Ctrl K</kbd>
       </label>
       <span class="wb-sp"></span>
       <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
@@ -63,7 +67,11 @@
 
       <!-- 左: 结构树 + 快捷 (FolderTree 含 special 项 + 树节点拖放落点) -->
       <aside class="wb-rail">
-        <div class="wb-rail-cap">结构</div>
+        <div class="wb-rail-cap">结构
+          <button type="button" class="wb-cap-add" title="新建文件夹" @click="showCreateFolderDialog = true">
+            <el-icon><Plus /></el-icon>
+          </button>
+        </div>
         <FolderTree
           class="wb-tree"
           :folder-tree="folderTree"
@@ -961,6 +969,17 @@ const currentPathDisplay = computed(() => {
 const quotaInfo = ref(null)
 const tableRef = ref(null)
 
+// 顶栏搜索 kbd 提示兑现: Ctrl/⌘+K 聚焦搜索框 (视觉稿 gsearch kbd 同款交互)
+const searchInputRef = ref(null)
+function onGlobalSearchKey(ev) {
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'k' || ev.key === 'K')) {
+    ev.preventDefault()
+    searchInputRef.value?.focus?.()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onGlobalSearchKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalSearchKey))
+
 // 活动行 (右栏详情对象; folder 行 key='f-<id>' 不触发展示)
 const activeKey = ref(null)
 const activeFile = computed(() => {
@@ -1469,7 +1488,12 @@ function onContextMenuClose() {
   border-bottom: 1.5px solid var(--wb-frame, var(--color-border));
 }
 .wb-brand { display: inline-flex; align-items: center; gap: 9px; font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); white-space: nowrap; }
-.wb-brand-ico { font-size: 18px; }
+.wb-brand-ico {
+  width: 26px; height: 26px; border-radius: 7px; flex: none;
+  background: var(--gradient-cta-button); display: grid; place-items: center;
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), .3);
+}
+.wb-brand-ico svg { width: 15px; height: 15px; fill: #fff; }
 .wb-vr { width: 1px; height: 22px; background: var(--color-border); }
 .wb-search {
   display: inline-flex; align-items: center; gap: 8px;
@@ -1483,6 +1507,12 @@ function onContextMenuClose() {
 .wb-search-ico { color: var(--color-text-secondary); flex: none; }
 .wb-search input { flex: 1; border: none; outline: none; background: none; font: inherit; font-size: var(--font-size-sm); color: var(--color-text-primary); }
 .wb-search input::placeholder { color: var(--color-text-placeholder); }
+.wb-search kbd {
+  font-family: var(--font-mono, Consolas, monospace); font-size: 10px;
+  color: var(--color-text-secondary); background: var(--color-bg-card);
+  border: 1px solid var(--color-border); border-bottom-width: 2px; border-radius: 4px;
+  padding: 0 5px; white-space: nowrap;
+}
 .wb-sp { flex: 1; }
 .wb-cta {
   background: var(--gradient-cta-button) !important;
@@ -1507,7 +1537,14 @@ function onContextMenuClose() {
   border-right: 1.5px solid var(--wb-frame, var(--color-border));
   padding: 10px 8px 0;
 }
-.wb-rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 4px 10px 6px; }
+.wb-rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 4px 10px 6px; display: flex; align-items: center; justify-content: space-between; }
+.wb-cap-add {
+  border: none; background: none; cursor: pointer;
+  color: var(--color-text-secondary); padding: 2px 4px; border-radius: 4px;
+  display: grid; place-items: center;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.wb-cap-add:hover { background: var(--color-bg-page); color: var(--color-primary-dark); }
 .wb-tree { flex: 1; min-height: 0; overflow-y: auto; }
 .wb-rail-foot { flex: none; padding: 8px 2px 12px; }
 
@@ -1560,6 +1597,40 @@ function onContextMenuClose() {
 
 /* 旧 drive-drop-hero 沿用 (scoped 块里已有定义), 此处仅调层级到三栏之上 */
 .drive-drop-hero { z-index: 20; }
+
+/* ── 批次⑥ 复刻视觉稿: 配额徽章 → qbox 卡 + 批量 dock → 描边小按钮 (仅 workbench 作用域, 其他视图零影响) ── */
+.wb-rail-foot { padding: 8px 8px 14px; }
+.wb-rail-foot :deep(.storage-quota-badge) {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  background: var(--color-bg-page); padding: 11px 12px;
+}
+.wb-rail-foot :deep(.quota-content) { display: flex; align-items: center; gap: 9px; }
+.wb-rail-foot :deep(.quota-icon) { color: var(--color-primary); }
+.wb-rail-foot :deep(.quota-percent) { font-weight: var(--font-weight-semibold); color: var(--color-text-primary); }
+.wb-rail-foot :deep(.quota-detail) { font-family: var(--font-mono, Consolas, monospace); font-size: 11px; color: var(--color-text-secondary); }
+
+.wb-dock :deep(.drive-batch-toolbar) {
+  padding: 10px 14px; gap: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.wb-dock :deep(.drive-batch-toolbar-left),
+.wb-dock :deep(.drive-batch-toolbar-right) { display: flex; align-items: center; gap: 8px; }
+.wb-dock :deep(.drive-batch-count) { font-family: var(--font-mono, Consolas, monospace); color: var(--color-primary-dark); font-weight: 700; background: none; padding: 0; }
+.wb-dock :deep(.drive-batch-toolbar-btn) {
+  font-size: var(--font-size-xs); height: auto; padding: 6px 12px; margin-left: 0;
+  border: 1px solid var(--color-border) !important; border-radius: var(--radius-md);
+  background: var(--color-bg-card) !important; color: var(--color-text-regular) !important;
+  transition: border-color var(--duration-fast), color var(--duration-fast), background var(--duration-fast) !important;
+}
+.wb-dock :deep(.drive-batch-toolbar-btn:hover) {
+  border-color: var(--color-primary-border) !important; color: var(--color-primary-dark) !important; background: var(--color-primary-bg) !important;
+}
+.wb-dock :deep(.drive-batch-toolbar-btn-danger) { background: var(--color-bg-card) !important; color: var(--color-text-regular) !important; }
+.wb-dock :deep(.drive-batch-toolbar-btn-danger:hover) {
+  border-color: rgba(var(--color-danger-rgb, 217, 79, 43), .5) !important; color: var(--color-danger) !important;
+  background: rgba(var(--color-danger-rgb, 217, 79, 43), .07) !important;
+}
 </style>
 
 <!--

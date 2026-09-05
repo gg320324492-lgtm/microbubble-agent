@@ -47,7 +47,7 @@
         role="columnheader"
         @click="$emit('sort-change', 'created_at')"
       >上传时间<span v-if="sortKeyOf === 'created_at'" class="dft-arr">{{ arrow }}</span></span>
-      <span class="dft-c dft-c--star dft-star-head" title="收藏 (仅自己可见)">★</span>
+      <span class="dft-c dft-c--star dft-star-head" title="收藏 (仅自己可见)">收藏</span>
     </div>
 
     <!-- 表体 -->
@@ -489,7 +489,7 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   background: var(--color-bg-card);
 }
 .dft-head .sortable { cursor: pointer; }
-.dft-star-head { color: var(--color-text-placeholder); font-size: 12px; }
+.dft-star-head { color: var(--color-text-placeholder); font-size: var(--font-size-xs); }
 .dft-head .sortable:hover { color: var(--color-primary-dark); }
 .dft-arr { font-size: 9px; margin-left: 3px; color: var(--color-primary); }
 
