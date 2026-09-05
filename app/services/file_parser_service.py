@@ -41,7 +41,26 @@ def _find_fig_anchor(text: str, fig_idx: int) -> int:
 class FileParserService:
     """从各类文件中提取文本和图片"""
 
+    # 结构化文档 (有专用解析器)
     SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.md'}
+
+    # 纯文本族 (统一走编码探测 + 解码; 2026-09-05 网盘全格式入库扩展)
+    # 数据: csv/tsv/json/yaml; 标记: html/xml/ini; 代码与科研常见: py/sql/tex/srt...
+    TEXT_EXTENSIONS = {
+        '.txt', '.md', '.markdown', '.rst', '.log',
+        '.csv', '.tsv', '.json', '.jsonl', '.ndjson', '.yaml', '.yml', '.toml',
+        '.ini', '.cfg', '.conf', '.env', '.properties', '.sql',
+        '.html', '.htm', '.xml', '.svg', '.xhtml',
+        '.tex', '.bib', '.sty', '.cls',
+        '.srt', '.vtt', '.ass', '.ssa',
+        '.py', '.pyw', '.js', '.mjs', '.ts', '.jsx', '.tsx', '.vue',
+        '.java', '.c', '.h', '.cpp', '.hpp', '.cc', '.hh', '.cs', '.go', '.rs',
+        '.rb', '.php', '.swift', '.kt', '.kts', '.scala', '.r', '.m',
+        '.sh', '.bash', '.zsh', '.fish', '.ps1', '.psm1', '.bat', '.cmd',
+        '.css', '.scss', '.less', '.sass', '.styl',
+        '.proto', '.graphql', '.gql', '.cmake', '.mk', '.gradle', '.pl', '.lua',
+        '.ipynb', '.rmd', '.do', '.stata', '.awk', '.sed',
+    }
 
     async def extract_content(self, file_data: bytes, filename: str, content_type: str) -> dict:
         """提取文件文本+图片，返回 {text, images: {placeholder: bytes}}"""
@@ -57,10 +76,111 @@ class FileParserService:
             return {"text": await self._parse_xlsx(file_data), "images": {}}
         elif ext in ('.pptx',) or 'presentationml' in content_type:
             return {"text": await self._parse_pptx(file_data), "images": {}}
-        elif ext in ('.txt', '.md') or content_type.startswith('text/'):
-            return {"text": file_data.decode('utf-8', errors='replace'), "images": {}}
+        elif ext in ('.csv', '.tsv'):
+            return {"text": await self._parse_csv(file_data, delimiter=',' if ext == '.csv' else '\t'), "images": {}}
+        elif ext in ('.json', '.jsonl', '.ndjson'):
+            return {"text": await self._parse_json(file_data), "images": {}}
+        elif ext in ('.html', '.htm', '.xhtml', '.xml', '.svg'):
+            return {"text": await self._parse_markup(file_data), "images": {}}
+        elif ext in ('.ipynb',):
+            return {"text": await self._parse_ipynb(file_data), "images": {}}
+        elif ext in self.TEXT_EXTENSIONS or content_type.startswith('text/'):
+            return {"text": self._decode_text(file_data), "images": {}}
         else:
             raise ValueError(f"不支持的文件类型: {ext}")
+
+    @staticmethod
+    def _decode_text(data: bytes) -> str:
+        """编码探测解码: utf-8 → utf-8-sig(BOM) → gb18030(中文 Windows 常见) → 宽松兜底"""
+        for encoding in ('utf-8', 'utf-8-sig', 'gb18030'):
+            try:
+                return data.decode(encoding)
+            except (UnicodeDecodeError, ValueError):
+                continue
+        return data.decode('utf-8', errors='replace')
+
+    async def _parse_csv(self, data: bytes, delimiter: str = ',') -> str:
+        """解析 CSV/TSV — 逐行读, 单元格空格拼接 (与 _parse_xlsx 输出风格一致)"""
+        import csv as _csv
+
+        def _extract():
+            text = self._decode_text(data)
+            reader = _csv.reader(io.StringIO(text), delimiter=delimiter)
+            lines = []
+            for row in reader:
+                row_text = ' '.join(str(c).strip() for c in row if c is not None and str(c).strip())
+                if row_text:
+                    lines.append(row_text)
+            return '\n'.join(lines)
+        return await asyncio.to_thread(_extract)
+
+    async def _parse_json(self, data: bytes) -> str:
+        """解析 JSON/JSONL — 结构化 pretty-print; 失败 (截断/非法) 回退原始文本"""
+        import json as _json
+
+        def _extract():
+            text = self._decode_text(data)
+            try:
+                single = _json.loads(text)
+                if isinstance(single, list):
+                    # 大数组逐行展开, 避免单行超长
+                    return '\n'.join(
+                        _json.dumps(item, ensure_ascii=False) for item in single
+                    )
+                return _json.dumps(single, ensure_ascii=False, indent=1)
+            except (ValueError, TypeError):
+                # 顶层不是单一 JSON 值 → 尝试 NDJSON (逐行 parse); 全失败回原文
+                lines = []
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        lines.append(_json.dumps(_json.loads(line), ensure_ascii=False))
+                    except (ValueError, TypeError):
+                        return text  # 存在非 JSON 行 → 原文照录 (仍是可检索文本)
+                return '\n'.join(lines)
+        return await asyncio.to_thread(_extract)
+
+    async def _parse_markup(self, data: bytes) -> str:
+        """解析 HTML/XML/SVG — 剥标签留文本; <style>/<script> 内容剔除"""
+        import re as _re
+        from html import unescape
+
+        def _extract():
+            text = self._decode_text(data)
+            text = _re.sub(r'(?is)<(script|style)\b[^>]*>.*?</\1>', ' ', text)
+            text = _re.sub(r'(?s)<!--.*?-->', ' ', text)
+            text = _re.sub(r'(?s)<[^>]+>', '\n', text)
+            text = unescape(text)
+            # 压缩空行 + 行首尾空白
+            lines = [ln.strip() for ln in text.splitlines()]
+            return '\n'.join(ln for ln in lines if ln)
+        return await asyncio.to_thread(_extract)
+
+    async def _parse_ipynb(self, data: bytes) -> str:
+        """解析 Jupyter Notebook — 只拼 markdown 单元 + 代码单元源码 (跳过 base64 输出)"""
+        import json as _json
+
+        def _extract():
+            try:
+                nb = _json.loads(self._decode_text(data))
+            except (ValueError, TypeError):
+                return ""
+            parts = []
+            for cell in nb.get("cells", []):
+                src = cell.get("source", "")
+                if isinstance(src, list):
+                    src = "".join(src)
+                src = (src or "").strip()
+                if not src:
+                    continue
+                if cell.get("cell_type") == "markdown":
+                    parts.append(src)
+                elif cell.get("cell_type") == "code":
+                    parts.append(f"```python\n{src}\n```")
+            return '\n\n'.join(parts)
+        return await asyncio.to_thread(_extract)
 
     async def _parse_pdf(self, data: bytes) -> dict:
         """解析 PDF — 用 PyMuPDF 提取文本和嵌入图片

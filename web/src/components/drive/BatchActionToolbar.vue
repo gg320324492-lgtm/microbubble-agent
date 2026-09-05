@@ -44,11 +44,11 @@
           </el-button>
         </template>
         <template v-else>
-          <!-- 批次⑥ 对齐视觉稿 dock: ZIP/移动到/收藏/入库知识库/删除, 次级动作收进 ⋯ -->
+          <!-- 批次⑥ 对齐视觉稿 dock: ZIP/移动到/收藏/删除, 次级动作收进 ⋯ -->
+          <!-- 2026-09-05: "入库知识库"按钮移除 — 网盘文件已默认自动入库 RAG, 无需手动操作 -->
           <el-button class="drive-batch-toolbar-btn" :icon="Download" @click="$emit('batch-download')">下载 ZIP</el-button>
           <el-button class="drive-batch-toolbar-btn" :icon="Folder" @click="$emit('batch-move')">移动到</el-button>
           <el-button class="drive-batch-toolbar-btn" :icon="Star" @click="$emit('batch-toggle-star')">收藏</el-button>
-          <el-button class="drive-batch-toolbar-btn" :icon="View" @click="$emit('batch-ingest-kb')">入库知识库</el-button>
           <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-delete')">删除</el-button>
           <el-dropdown trigger="click" @command="onOverflowCmd">
             <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-more" :icon="MoreFilled" title="更多批量动作" />
@@ -96,7 +96,7 @@ const emit = defineEmits([
   'select-all', 'clear',
   'batch-delete', 'batch-move', 'batch-share', 'batch-download',
   'batch-update-visibility', 'batch-toggle-star',
-  'batch-restore', 'batch-permanent-delete', 'batch-ingest-kb'
+  'batch-restore', 'batch-permanent-delete'
 ])
 
 const allSelected = computed(() =>

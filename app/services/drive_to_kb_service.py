@@ -2,29 +2,39 @@
 
 把 storage_mode='drive' 的网盘文件转化为 storage_mode='kb' 的知识条目,
 复用完整 RAG 管线 (file_parser → content 落库 → analyze_knowledge_task:
-embedding + chunking + tsvector + BM25 + LLM 分析 + KG)。
+embedding + chunking + tsvector + BM25 + LLM 分析 + KG + 多模态)。
+
+2026-09-05 全格式默认入库改造 (废除手动"入库知识库"按钮):
+- 上传即自动入库 (drive_ingest_tasks.auto_ingest_drive_file_task 挂上传入口)
+- 不再有"不支持类型 422 拒绝": 任何格式都会产生 kb 条目, 按扩展名分级提取:
+    document  → file_parser (pdf/office + 40+ 纯文本族, 见 file_parser_service)
+    image     → ocr_service.classify_and_extract (LLM vision OCR)
+    av        → SpeechRecognizer.transcribe (SenseVoice ASR, 音视频皆可)
+    archive   → zip/tar 内嵌文本成员提取 (硬上限防爆)
+    binary    → 元数据兜底 (文件名/类型/大小入向量, 文件本体留在网盘)
+  任何提取失败都降级元数据兜底, 保证"默认入库"永不失败。
+- reingest=True 支持版本更新后原 kb 行原地刷新 (内容重提取 + 重新分析)。
 
 关键复用 (只 import 不改):
 - file_parser_service.extract_content   (app/services/file_parser_service.py)
+- ocr_service.classify_and_extract      (app/services/ocr_service.py)
+- SpeechRecognizer.transcribe           (app/voice/asr.py)
 - file_service.download_file            (app/services/file_service.py)
 - analyze_knowledge_task               (app/services/knowledge_service.py)
-- _incremental_add_document            (app/services/bm25_service.py, PR3 增量钩子)
 
 转化语义:
 - 新建一条 Knowledge 行 storage_mode='kb', 保留 original_path/original_parent_id/
   meta.drive_source_file_id 关联回网盘 (0 alembic 迁移, 复用现有字段)
 - 原 drive 行不动 (文件管理/预览/版本/评论仍走 drive 域)
-- 幂等: 同 drive file_id 重复调用返回既有 kb 行, 不重复建
-- 权限: 与 drive_service.get_file 同口径 (owner 或 visibility != private)
-
-与老 extract_to_kb 的关系 (DriveService.extract_to_kb, v2 PR1 简化版):
-- 老方法: 原地改 storage_mode drive→kb (同一行), 不解析内容, PR3 说明"异步 LLM 提取留后"。
-  该方法在 W98 派工前已被前端"📚 加入公共知识库"入口使用。
-- 本服务: 新建 kb 行 + 完整解析 + 完整 RAG 管线, 原 drive 行保留。两者互不干扰。
+- 幂等: 同 drive file_id 重复调用返回既有 kb 行, 不重复建 (reingest=True 例外)
 """
 
 import logging
-from typing import List, Optional
+import mimetypes
+import tarfile
+import zipfile
+from io import BytesIO
+from typing import Optional
 
 from sqlalchemy import select
 
@@ -32,14 +42,28 @@ from app.models.knowledge import Knowledge
 
 logger = logging.getLogger("microbubble.drive_to_kb")
 
-# 解析器不支持的扩展名 (image/video/archive 等) 直接不可入库
-UNSUPPORTED_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp",
-    ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a",
-    ".mp4", ".avi", ".mov", ".mkv", ".webm",
-    ".zip", ".rar", ".7z", ".gz", ".tar",
-    ".exe", ".dll", ".bin", ".iso",
+# ---------------------------------------------------------------------
+# 按扩展名分级的提取策略 (2026-09-05 全格式入库)
+# ---------------------------------------------------------------------
+
+# LLM vision OCR (.svg 是 XML 文本, 归 document 走文本提取, 不进 OCR)
+IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff",
 }
+# SenseVoice ASR (音频直接支持; 视频走 ffmpeg 解封装, 失败自动降级元数据)
+AV_EXTENSIONS = {
+    ".mp3", ".wav", ".flac", ".aac", ".ogg", ".oga", ".m4a", ".wma", ".opus",
+    ".mp4", ".avi", ".mov", ".mkv", ".webm", ".flv", ".wmv", ".m4v",
+}
+# 压缩包内嵌文本提取 (rar/7z 无标准库 → 元数据兜底)
+ARCHIVE_EXTENSIONS = {".zip", ".tar", ".gz", ".tgz"}
+
+# ASR 输入上限 (SenseVoice 服务端 10min 超时 + ffmpeg 转码内存; 超限元数据兜底)
+AV_MAX_BYTES = 300 * 1024 * 1024
+# 压缩包提取硬上限 (zip-bomb / 超大包防御)
+ARCHIVE_MAX_MEMBERS = 30
+ARCHIVE_MAX_MEMBER_BYTES = 20 * 1024 * 1024
+ARCHIVE_MAX_TOTAL_CHARS = 200_000
 
 
 class DriveToKBError(Exception):
@@ -61,35 +85,39 @@ class DriveToKBService:
     # 单文件入库
     # ------------------------------------------------------------------
 
-    async def ingest_drive_file(self, file_id: int, auto_research: bool = False) -> dict:
-        """单文件入库: drive 文件 → kb 条目
+    async def ingest_drive_file(
+        self, file_id: int, auto_research: bool = False, reingest: bool = False
+    ) -> dict:
+        """单文件入库: drive 文件 → kb 条目 (全格式, 失败降级元数据兜底)
 
         流程:
           1. 查 drive 行 (storage_mode='drive' + deleted_at IS NULL)
-          2. 幂等检查: 同 drive file_id 是否已转化 (meta->>'drive_source_file_id')
-          3. MinIO 下载原文件
-          4. FileParserService.extract_content 解析
-          5. 新建 Knowledge 行 storage_mode='kb' + original_path/original_parent_id 关联
-          6. analyze_knowledge_task.delay (异步: embedding + chunking + tsvector +
-             BM25 + LLM 分析 + KG + 多模态), 失败降级同步 best-effort
+          2. 幂等检查: 已转化 → reingest=False 时直接返回既有 kb 行;
+             reingest=True (版本更新) 时原地刷新既有 kb 行
+          3. 按扩展名分级提取文本 (document/image/av/archive/binary)
+          4. 新建或更新 Knowledge 行 storage_mode='kb'
+          5. analyze_knowledge_task.delay (异步: embedding + chunking +
+             tsvector + BM25 + LLM 分析 + KG), 失败降级同步 best-effort
 
         Returns:
             {
-              "knowledge_id": 新 kb 行 id,
-              "already_ingested": bool,   # True = 幂等命中, 返回既有行
+              "knowledge_id": kb 行 id,
+              "already_ingested": bool,   # True = 幂等命中 (reingest=False)
+              "reingested": bool,         # True = 版本更新刷新
+              "ingest_mode": document|image_ocr|asr|archive|metadata,
               "title": ..., "content_length": ..., "source_file_id": ...,
             }
 
         Raises:
-            DriveToKBError: 文件不存在 / 不可入库 / 解析失败
+            DriveToKBError: 文件不存在 (404); 其余提取失败一律元数据兜底不抛
         """
         drive_row = await self._get_drive_row(file_id)
         if drive_row is None:
             raise DriveToKBError("drive 文件不存在或已删除", 404)
 
-        # 幂等: 同 file_id 已转化过 → 返回既有 kb 行
+        # 幂等: 同 file_id 已转化过
         existing = await self._find_existing_kb(drive_row.id)
-        if existing is not None:
+        if existing is not None and not reingest:
             logger.info(
                 f"[drive_to_kb] 幂等命中 drive_file_id={drive_row.id} "
                 f"→ knowledge_id={existing.id}, 跳过"
@@ -97,102 +125,321 @@ class DriveToKBService:
             return {
                 "knowledge_id": existing.id,
                 "already_ingested": True,
+                "reingested": False,
+                "ingest_mode": (existing.meta or {}).get("drive_ingest_mode", "unknown"),
                 "title": existing.title,
                 "content_length": len(existing.content or ""),
                 "source_file_id": drive_row.id,
             }
 
         ext = self._extension_of(drive_row)
-        if not ext or ext in UNSUPPORTED_EXTENSIONS:
-            raise DriveToKBError(
-                f"文件类型 {ext or '未知'} 不支持入库 (仅支持 PDF/Word/Excel/PPT/文本)",
-                422,
-            )
+        text, ingest_mode = await self._extract_text(drive_row, ext)
 
-        # 1. MinIO 下载
-        try:
-            from app.services.file_service import file_service
-            raw = await file_service.download_file(drive_row.file_path)
-        except Exception as e:
-            logger.warning(
-                f"[drive_to_kb] MinIO 下载失败 file_id={drive_row.id} "
-                f"path={drive_row.file_path}: {e}"
-            )
-            raise DriveToKBError(
-                f"从网盘存储下载文件失败 (MinIO): {str(e)[:120]}", 502
-            )
-        if not raw:
-            raise DriveToKBError("下载的文件内容为空", 422)
+        if existing is not None:
+            knowledge = await self._update_kb_row(existing, drive_row, text, ingest_mode)
+            reingested = True
+        else:
+            knowledge = await self._create_kb_row(drive_row, text, ingest_mode)
+            reingested = False
 
-        # 2. 文件解析
-        try:
-            from app.services.file_parser_service import file_parser_service
-            parsed = await file_parser_service.extract_content(
-                raw, drive_row.file_name or "", drive_row.file_type or ""
-            )
-        except Exception as e:
-            logger.warning(
-                f"[drive_to_kb] 解析失败 file_id={drive_row.id} "
-                f"name={drive_row.file_name}: {e}"
-            )
-            raise DriveToKBError(
-                f"文件解析失败: {str(e)[:120]}", 422
-            )
-
-        text = (parsed or {}).get("text") or ""
-        text = text.strip()
-        # PostgreSQL text 类型拒绝 NUL 字节 (U+0000 是合法 UTF-8, errors='replace'
-        # 不会清掉它)。坏文件/二进制伪装 .txt 可能带 NUL → 插入前必清, 否则 500。
-        text = text.replace("\x00", "")
-        if not text:
-            raise DriveToKBError(
-                "解析结果为空 (文件可能是扫描件/纯图片, 无文字内容)", 422
-            )
-
-        # 3. 新建 kb 行 (原 drive 行不动)
-        # 注意: drive 侧 title/file_name 上限 500 (DriveFileUpdate schema),
-        # kb 侧 Knowledge.title String(200) + ck_knowledge_file_name_length <= 200
-        # (Agent 7 5th-wave CHECK 约束)。超长直抄会 500 → 截断到 200。
-        title = (drive_row.title or drive_row.file_name or f"网盘文件 {drive_row.id}")[:200]
-        visibility = drive_row.visibility if drive_row.visibility != "private" else "team"
-        knowledge = Knowledge(
-            title=title,
-            content=text,
-            source_type="drive_extracted",
-            source=f"drive://file/{drive_row.id}",
-            file_path=drive_row.file_path,      # 复用 MinIO 对象 (drive 行仍管理对象生命周期)
-            file_name=(drive_row.file_name or "")[:200],
-            file_type=drive_row.file_type,
-            file_size=drive_row.file_size,
-            file_hash=drive_row.file_hash,
-            created_by=drive_row.created_by,
-            storage_mode="kb",
-            visibility=visibility,
-            folder_id=None,                     # kb 条目不入 drive 目录树
-            original_parent_id=drive_row.folder_id,
-            original_path=drive_row.file_path,  # 关联回网盘 MinIO object_name
-            analysis_status="pending",
-            meta={"drive_source_file_id": drive_row.id},
-        )
-        self.db.add(knowledge)
-        await self.db.commit()
-        await self.db.refresh(knowledge)
-
-        # 4. 触发完整 RAG 管线 (Celery, 失败降级同步 best-effort)
-        self._enqueue_analysis(knowledge.id, title, text)
+        # 触发完整 RAG 管线 (Celery, 失败降级同步 best-effort)
+        title = knowledge.title or ""
+        self._enqueue_analysis(knowledge.id, title, knowledge.content or "")
 
         logger.info(
             f"[drive_to_kb] 入库完成 drive_file_id={drive_row.id} "
-            f"→ knowledge_id={knowledge.id} (content={len(text)} chars, "
-            f"visibility={visibility})"
+            f"→ knowledge_id={knowledge.id} (mode={ingest_mode}, "
+            f"content={len(knowledge.content or '')} chars, reingested={reingested})"
         )
         return {
             "knowledge_id": knowledge.id,
             "already_ingested": False,
+            "reingested": reingested,
+            "ingest_mode": ingest_mode,
             "title": title,
-            "content_length": len(text),
+            "content_length": len(knowledge.content or ""),
             "source_file_id": drive_row.id,
         }
+
+    # ------------------------------------------------------------------
+    # 分级文本提取 (任何失败都降级元数据, 不抛)
+    # ------------------------------------------------------------------
+
+    async def _extract_text(self, row: Knowledge, ext: str) -> tuple:
+        """按扩展名提取文本。
+
+        Returns:
+            (text, ingest_mode); text 可能为 "" (元数据兜底内容另行构造)
+        """
+        if ext in IMAGE_EXTENSIONS:
+            return await self._extract_image_ocr(row), "image_ocr"
+        if ext in AV_EXTENSIONS:
+            return await self._extract_av_asr(row), "asr"
+        if ext in ARCHIVE_EXTENSIONS:
+            return await self._extract_archive_text(row, ext), "archive"
+        if self._is_document(ext):
+            return await self._extract_document(row), "document"
+        # binary / 未知 → 纯元数据 (不下载文件)
+        return "", "metadata"
+
+    @staticmethod
+    def _is_document(ext: str) -> bool:
+        from app.services.file_parser_service import file_parser_service
+
+        return (
+            ext in file_parser_service.SUPPORTED_EXTENSIONS
+            or ext in file_parser_service.TEXT_EXTENSIONS
+        )
+
+    async def _download(self, row: Knowledge):
+        from app.services.file_service import file_service
+
+        return await file_service.download_file(row.file_path)
+
+    async def _extract_document(self, row: Knowledge) -> str:
+        """pdf/office/文本族 → file_parser; 失败/空返回 "" (调用方元数据兜底)"""
+        try:
+            raw = await self._download(row)
+            if not raw:
+                return ""
+            from app.services.file_parser_service import file_parser_service
+
+            parsed = await file_parser_service.extract_content(
+                raw, row.file_name or "", row.file_type or ""
+            )
+            text = ((parsed or {}).get("text") or "").strip()
+            # NUL 字节清零 (PostgreSQL text 拒绝 U+0000)
+            return text.replace("\x00", "")
+        except Exception as e:
+            logger.warning(
+                f"[drive_to_kb] 文档解析失败 file_id={row.id} "
+                f"name={row.file_name}: {e}"
+            )
+            return ""
+
+    async def _extract_image_ocr(self, row: Knowledge) -> str:
+        """图片 → LLM vision OCR (classify_and_extract); 失败返回 """""
+        try:
+            raw = await self._download(row)
+            if not raw:
+                return ""
+            from app.services.ocr_service import ocr_service
+
+            mime = (
+                mimetypes.guess_type(row.file_name or "")[0]
+                or row.file_type
+                or "image/png"
+            )
+            result = await ocr_service.classify_and_extract(raw, mime)
+            parts = []
+            ocr_text = (result.get("text") or "").strip()
+            if ocr_text:
+                parts.append(ocr_text)
+            if result.get("latex"):
+                parts.append(f"公式 LaTeX:\n{result['latex']}")
+            if result.get("table_md"):
+                parts.append(f"表格:\n{result['table_md']}")
+            if result.get("chart_description"):
+                parts.append(f"图表说明:\n{result['chart_description']}")
+            if result.get("caption"):
+                parts.append(f"图注: {result['caption']}")
+            return "\n\n".join(parts).replace("\x00", "")
+        except Exception as e:
+            logger.warning(f"[drive_to_kb] 图片 OCR 失败 file_id={row.id}: {e}")
+            return ""
+
+    async def _extract_av_asr(self, row: Knowledge) -> str:
+        """音视频 → SenseVoice ASR; 服务不可用/超限/失败返回 """""
+        try:
+            if (row.file_size or 0) > AV_MAX_BYTES:
+                logger.warning(
+                    f"[drive_to_kb] 音视频超限跳过 ASR file_id={row.id} "
+                    f"size={row.file_size}"
+                )
+                return ""
+            raw = await self._download(row)
+            if not raw:
+                return ""
+            from app.voice.asr import asr_service
+
+            result = await asr_service.transcribe(raw)
+            return ((result or {}).get("text") or "").strip().replace("\x00", "")
+        except Exception as e:
+            logger.warning(f"[drive_to_kb] 音视频 ASR 失败 file_id={row.id}: {e}")
+            return ""
+
+    async def _extract_archive_text(self, row: Knowledge, ext: str) -> str:
+        """压缩包 → 提取内嵌文本成员 (zip/tar*, 硬上限防 zip-bomb); 失败返回 """""
+        def _extract_sync(data: bytes) -> str:
+            from app.services.file_parser_service import (
+                file_parser_service as fps,
+            )
+
+            text_ok_exts = fps.TEXT_EXTENSIONS | fps.SUPPORTED_EXTENSIONS
+            parts = []
+            total_chars = 0
+
+            def _member_ok(name: str) -> bool:
+                low = (name or "").lower()
+                return any(low.endswith(e) for e in text_ok_exts)
+
+            def _add_member(name: str, data: bytes):
+                nonlocal total_chars
+                if len(parts) >= ARCHIVE_MAX_MEMBERS:
+                    return
+                if len(data) > ARCHIVE_MAX_MEMBER_BYTES:
+                    return
+                text = fps._decode_text(data)[: 400_000].replace("\x00", "")
+                if not text.strip():
+                    return
+                parts.append(f"--- {name} ---\n{text}")
+                total_chars += len(text)
+
+            if ext == ".zip":
+                with zipfile.ZipFile(BytesIO(data)) as zf:
+                    for info in zf.infolist():
+                        if info.is_dir():
+                            continue
+                        if not _member_ok(info.filename):
+                            continue
+                        _add_member(info.filename, zf.read(info))
+                        if total_chars >= ARCHIVE_MAX_TOTAL_CHARS:
+                            break
+            else:  # .tar / .gz / .tgz (tarfile r:* 自动识别 gzip)
+                with tarfile.open(fileobj=BytesIO(data), mode="r:*") as tf:
+                    for member in tf.getmembers():
+                        if not member.isfile():
+                            continue
+                        if not _member_ok(member.name):
+                            continue
+                        fobj = tf.extractfile(member)
+                        if fobj is not None:
+                            _add_member(member.name, fobj.read())
+                        if total_chars >= ARCHIVE_MAX_TOTAL_CHARS:
+                            break
+            return "\n\n".join(parts)
+
+        try:
+            raw = await self._download(row)
+            if not raw:
+                return ""
+            text = await self._to_thread(_extract_sync, raw)
+            return text[:ARCHIVE_MAX_TOTAL_CHARS]
+        except Exception as e:
+            logger.warning(
+                f"[drive_to_kb] 压缩包提取失败 file_id={row.id}: {e}"
+            )
+            return ""
+
+    @staticmethod
+    async def _to_thread(func, *args):
+        import asyncio
+
+        return await asyncio.to_thread(func, *args)
+
+    # ------------------------------------------------------------------
+    # 元数据兜底内容
+    # ------------------------------------------------------------------
+
+    def _metadata_content(self, row: Knowledge, ingest_mode: str) -> str:
+        """无文本可提取时的兜底正文 (文件元数据入向量, 可按文件名检索)"""
+        ext = self._extension_of(row) or "未知"
+        size = row.file_size or 0
+        if size >= 1024 * 1024 * 1024:
+            size_str = f"{size / 1024 / 1024 / 1024:.1f} GB"
+        elif size >= 1024 * 1024:
+            size_str = f"{size / 1024 / 1024:.1f} MB"
+        else:
+            size_str = f"{size / 1024:.1f} KB"
+
+        if ingest_mode == "image_ocr":
+            note = "图片文件 (OCR 未识别到文字内容)"
+        elif ingest_mode == "asr":
+            note = "音视频文件 (语音转写不可用或结果为空)"
+        elif ingest_mode == "archive":
+            note = "压缩包 (未提取到文本内容)"
+        elif ingest_mode == "document":
+            note = "文档 (解析结果为空, 可能是扫描件或无文字层)"
+        else:
+            note = "二进制/程序文件, 暂无可提取的文本内容"
+
+        created = ""
+        if row.created_at:
+            try:
+                created = row.created_at.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                created = str(row.created_at)
+
+        lines = [
+            "【网盘文件 · 自动归档】",
+            f"文件名: {row.file_name or row.title or ''}",
+            f"格式: {ext}",
+            f"大小: {size_str}",
+        ]
+        if created:
+            lines.append(f"入库时间: {created}")
+        lines.append(f"说明: {note}。已按文件元数据入库, 可按文件名检索; 文件本体保留在团队网盘。")
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # kb 行创建 / 更新
+    # ------------------------------------------------------------------
+
+    async def _create_kb_row(self, row: Knowledge, text: str, ingest_mode: str) -> Knowledge:
+        content = text or self._metadata_content(row, ingest_mode)
+        # drive 侧 title/file_name 上限 500, kb 侧 Knowledge.title String(200)
+        # + CHECK 约束 → 截断到 200 防直抄 500
+        title = (row.title or row.file_name or f"网盘文件 {row.id}")[:200]
+        visibility = row.visibility if row.visibility != "private" else "team"
+        knowledge = Knowledge(
+            title=title,
+            content=content,
+            source_type="drive_extracted",
+            source=f"drive://file/{row.id}",
+            file_path=row.file_path,      # 复用 MinIO 对象 (drive 行仍管理对象生命周期)
+            file_name=(row.file_name or "")[:200],
+            file_type=row.file_type,
+            file_size=row.file_size,
+            file_hash=row.file_hash,
+            created_by=row.created_by,
+            storage_mode="kb",
+            visibility=visibility,
+            folder_id=None,                     # kb 条目不入 drive 目录树
+            original_parent_id=row.folder_id,
+            original_path=row.file_path,        # 关联回网盘 MinIO object_name
+            analysis_status="pending",
+            meta={
+                "drive_source_file_id": row.id,
+                "drive_ingest_mode": ingest_mode,
+            },
+        )
+        self.db.add(knowledge)
+        await self.db.commit()
+        await self.db.refresh(knowledge)
+        return knowledge
+
+    async def _update_kb_row(self, kb: Knowledge, row: Knowledge, text: str, ingest_mode: str) -> Knowledge:
+        """版本更新 (reingest=True): 原地刷新 kb 行内容 + 元数据, 重新进分析管线"""
+        content = text or self._metadata_content(row, ingest_mode)
+        kb.title = (row.title or row.file_name or f"网盘文件 {row.id}")[:200]
+        kb.content = content
+        kb.file_path = row.file_path
+        kb.file_name = (row.file_name or "")[:200]
+        kb.file_type = row.file_type
+        kb.file_size = row.file_size
+        kb.file_hash = row.file_hash
+        kb.original_path = row.file_path
+        kb.original_parent_id = row.folder_id
+        # JSONB mutable 协议 (W66 教训): 改 dict 后必须重新赋值
+        base = dict(kb.meta or {})
+        base["drive_source_file_id"] = row.id
+        base["drive_ingest_mode"] = ingest_mode
+        base.pop("ingest_last_error", None)
+        kb.meta = base
+        kb.analysis_status = "pending"
+        await self.db.commit()
+        await self.db.refresh(kb)
+        return kb
 
     # ------------------------------------------------------------------
     # 文件夹批量入库
@@ -201,7 +448,6 @@ class DriveToKBService:
     async def ingest_folder(self, folder_id: int, dry_run: bool = False) -> dict:
         """文件夹批量入库: 该文件夹下所有 drive 文件
 
-        权限: folder 不存在或非团队可见 → 404/403。
         逐文件 best-effort (单个失败记录 error, 不中断整批)。
         """
         from app.services.folder_service import FolderService
@@ -209,8 +455,6 @@ class DriveToKBService:
         folder = await FolderService(self.db).get_folder(folder_id)
         if folder is None:
             raise DriveToKBError("文件夹不存在或已删除", 404)
-        if folder.visibility == "private":
-            raise DriveToKBError("private 文件夹不可批量入库", 403)
 
         stmt = self._iter_folder_files(folder_id)
         result = await self.db.execute(stmt)
@@ -218,7 +462,7 @@ class DriveToKBService:
         return await self._ingest_many(rows, dry_run=dry_run)
 
     # ------------------------------------------------------------------
-    # 团队可见文件批量入库
+    # 团队可见文件批量入库 (存量回填入口)
     # ------------------------------------------------------------------
 
     async def ingest_team_files(self, dry_run: bool = False) -> dict:
@@ -232,16 +476,14 @@ class DriveToKBService:
     # 可入库清单
     # ------------------------------------------------------------------
 
-    async def list_ingestable(self, folder_id: Optional[int] = None) -> List[dict]:
-        """列出可入库的 drive 文件 (未转化 + 解析器支持)"""
+    async def list_ingestable(self, folder_id: Optional[int] = None) -> list:
+        """列出未入库的 drive 文件 (全格式默认入库, ingestable 恒 True)"""
         if folder_id is not None:
             from app.services.folder_service import FolderService
 
             folder = await FolderService(self.db).get_folder(folder_id)
             if folder is None:
                 raise DriveToKBError("文件夹不存在或已删除", 404)
-            if folder.visibility == "private":
-                raise DriveToKBError("private 文件夹不可批量入库", 403)
             stmt = self._iter_folder_files(folder_id)
         else:
             stmt = self._iter_team_files()
@@ -267,8 +509,6 @@ class DriveToKBService:
         for row in rows:
             if row.id in converted_ids:
                 continue
-            ext = self._extension_of(row)
-            ingestable = bool(ext and ext not in UNSUPPORTED_EXTENSIONS)
             items.append({
                 "file_id": row.id,
                 "title": row.title,
@@ -277,7 +517,7 @@ class DriveToKBService:
                 "file_size": row.file_size,
                 "visibility": row.visibility,
                 "folder_id": row.folder_id,
-                "ingestable": ingestable,
+                "ingestable": True,  # 全格式默认入库 (2026-09-05)
             })
         return items
 
@@ -298,7 +538,7 @@ class DriveToKBService:
     async def _find_existing_kb(self, drive_file_id: int) -> Optional[Knowledge]:
         """幂等查重: 找已由该 drive 文件转化的 kb 行
 
-        主键: meta->>'drive_source_file_id' == drive_file_id (W98 新增写入)。
+        主键: meta->>'drive_source_file_id' == drive_file_id。
         兜底: original_path == drive 行 file_path 且 storage_mode='kb' 且
         source_type='drive_extracted' (兼容历史手动升级条目)。
         """

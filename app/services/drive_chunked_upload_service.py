@@ -341,9 +341,15 @@ class DriveChunkedUploadService:
         try:
             from app.services.storage_tasks import recalc_user_storage_task
             from app.services.thumbnail_tasks import generate_thumbnail_task
+            from app.config import settings
 
             recalc_user_storage_task.delay(user_id)
             generate_thumbnail_task.delay(drive_file.id)
+            # 2026-09-05 网盘文件默认入库 RAG (上传即自动 drive → kb)
+            if settings.DRIVE_AUTO_INGEST_KB:
+                from app.services.drive_ingest_tasks import auto_ingest_drive_file_task
+
+                auto_ingest_drive_file_task.delay(drive_file.id)
         except Exception as exc:
             logger.warning("Could not enqueue upload post-processing: %s", exc)
         return drive_file

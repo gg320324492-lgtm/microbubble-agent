@@ -415,11 +415,17 @@ async def upload_drive_file(
         raise HTTPException(status_code=e.status_code, detail=str(e))
 
     # PR5: Fire-and-forget 缩略图生成 + 配额重算
+    # 2026-09-05: + 网盘文件默认入库 RAG (上传即自动 drive → kb)
     try:
         from app.services.thumbnail_tasks import generate_thumbnail_task
         from app.services.storage_tasks import recalc_user_storage_task
+        from app.config import settings as _settings
+
         generate_thumbnail_task.delay(knowledge.id)
         recalc_user_storage_task.delay(current_user.id)
+        if _settings.DRIVE_AUTO_INGEST_KB:
+            from app.services.drive_ingest_tasks import auto_ingest_drive_file_task
+            auto_ingest_drive_file_task.delay(knowledge.id)
     except Exception as e:
         logger.warning(f"[drive.upload] fire Celery 失败 (非阻塞): {e}")
 

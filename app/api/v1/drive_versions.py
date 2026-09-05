@@ -12,6 +12,7 @@
 - rate limit: 自动走 drive_upload (POST/DELETE) / drive_list (GET) tier (CLAUDE.md v31.2.6)
 - 错误处理: 业务错误转 HTTPException + 状态码
 """
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -33,6 +34,9 @@ from app.services.drive_version_service import (
     DriveVersionService,
     DriveVersionServiceError,
 )
+
+logger = logging.getLogger("microbubble.drive_versions")
+
 
 router = APIRouter(tags=["网盘文件版本"])
 
@@ -109,6 +113,17 @@ async def upload_new_version(
         )
     except DriveVersionServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    # 2026-09-05 网盘文件默认入库: 新版本内容已变, 原地刷新 kb 镜像行 (reingest)
+    try:
+        from app.config import settings
+
+        if settings.DRIVE_AUTO_INGEST_KB:
+            from app.services.drive_ingest_tasks import auto_ingest_drive_file_task
+
+            auto_ingest_drive_file_task.delay(file_id, reingest=True)
+    except Exception as exc:
+        logger.warning(f"[drive.version] fire auto ingest 失败 (非阻塞): {exc}")
 
     # 重新查 cur_file 拿最新 file_size/file_name
     from app.models.knowledge import Knowledge

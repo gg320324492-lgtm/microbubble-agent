@@ -191,7 +191,6 @@
             @batch-download="handleBatchDownload"
             @batch-update-visibility="handleBatchUpdateVisibility"
             @batch-toggle-star="handleBatchToggleStar"
-            @batch-ingest-kb="handleBatchIngestKb"
           />
         </div>
       </section>
@@ -210,7 +209,6 @@
         @rename="handleFileRename"
         @move="handleFileMove"
         @delete="handleFileDelete"
-        @ingest-kb="handleFileToKb"
         @open-detail="openDetailPage"
         @goto-folder="gotoFolder"
         @open-versions-dialog="openVersionsDialog"
@@ -353,8 +351,7 @@ const {
   renameFile,
   moveFile,
   updateVisibility: doUpdateVisibility,
-  // F5 修复 (批次②): extractToKb 已删除, 入库知识库单入口走 ingestToKb (/to-kb 新管线)
-  ingestToKb: doIngestToKb, // W98: 网盘入库 RAG (drive → kb)
+  // 2026-09-05: 入库入口已全部移除 — 网盘文件上传后默认自动入库 RAG (后端 Celery)
   createShareLink,
   revokeShareLink,
   toggleStar,
@@ -887,23 +884,8 @@ async function handleFileUpdateVisibility(file) {
   }
 }
 
-// F5 修复 (批次②): handleFileExtractToKb / doConfirmExtract (extract-to-kb 老管线) 已删除,
-// 入库知识库唯一入口 = handleFileToKb → ingestToKb (/drive/{id}/to-kb 新管线)。
-
-async function handleFileToKb(file) {
-  // W98: 网盘入库 RAG — drive 文件一键"加入知识库"
-  // 新管线: 新建 kb 条目 + 完整 RAG 管线 (解析/embedding/分析), 原 drive 行保留
-  try {
-    const res = await doIngestToKb(file.id)
-    if (res?.already_ingested) {
-      ElMessage.info('该文件已加入知识库，无需重复入库')
-    } else {
-      ElMessage.success('已加入知识库，可在知识库问答中检索')
-    }
-  } catch (e) {
-    ElMessage.error(e.message || '加入知识库失败')
-  }
-}
+// 2026-09-05: handleFileToKb / handleBatchIngestKb / doIngestToKb 已删除 —
+// 网盘文件默认自动入库 (上传/版本更新触发后端 drive_ingest_tasks), 无需手动入口。
 
 async function handleFileShareLink(file) {
   // v2 PR1 实现: 打开 ShareDialog
@@ -911,27 +893,11 @@ async function handleFileShareLink(file) {
   showShareDialog.value = true
 }
 
-// 批次⑥ dock 对齐视觉稿: 选中体积 + 批量入库知识库
+// 批次⑥ dock 对齐视觉稿: 选中体积
 const selectedBytes = computed(() => {
   const ids = new Set(selectedFileIds.value)
   return driveFiles.value.filter((f) => ids.has(f.id)).reduce((s, f) => s + (f.file_size || 0), 0)
 })
-async function handleBatchIngestKb() {
-  const ids = [...selectedFileIds.value]
-  if (!ids.length) return
-  ElMessage.info(`开始入库 ${ids.length} 个文件 (解析/向量化异步进行)…`)
-  const results = await Promise.allSettled(ids.map((id) => doIngestToKb(id)))
-  const ok = results.filter((r) => r.status === 'fulfilled' && !r.value?.already_ingested).length
-  const dup = results.filter((r) => r.status === 'fulfilled' && r.value?.already_ingested).length
-  const fail = results.length - ok - dup
-  const parts = []
-  if (ok) parts.push(`新入库 ${ok}`)
-  if (dup) parts.push(`已在库 ${dup}`)
-  if (fail) parts.push(`失败 ${fail}`)
-  const msg = parts.join(' · ') || '无变化'
-  if (fail) ElMessage.warning(`入库完成: ${msg}`)
-  else ElMessage.success(`入库完成: ${msg}`)
-}
 
 // W72 第 2 批 B-1: Folder 右键菜单 "🔗 分享" → 弹 ShareLinkDialog
 function onShareFolder(folder) {
@@ -1153,7 +1119,6 @@ const contextMenuItems = computed(() => {
     { command: 'ctx-move', label: '📂 移动到…' },
     { command: 'ctx-share', label: '◈ 分享链接' },
     { command: 'ctx-star', label: f.is_starred ? '★ 取消收藏' : '☆ 收藏 (仅自己)' },
-    { command: 'ctx-tokb', label: '📚 加入知识库', divided: true },
     { command: 'ctx-versions', label: '🕘 版本与对比…' },
     { command: 'ctx-comments', label: '💬 查看评论' },
     { command: 'ctx-delete', label: '🗑 移入回收站', divided: true },
@@ -1212,7 +1177,6 @@ async function onContextMenuCommand(cmd) {
     case 'ctx-move': handleFileMove(obj); break
     case 'ctx-share': handleFileShareLink(obj); break
     case 'ctx-star': handleFileToggleStar(obj); break
-    case 'ctx-tokb': handleFileToKb(obj); break
     case 'ctx-versions': openVersionsDialog(obj); break
     case 'ctx-comments': router.push(`/drive/file/${obj.id}/comments`); break
     case 'ctx-delete': handleFileDelete(obj); break

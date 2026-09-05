@@ -65,9 +65,11 @@ describe('DriveDetailRail', () => {
     await w.findAll('.rail-act')[3].trigger('click')      // 收藏
     expect(w.emitted('toggle-star')).toBeTruthy()
     const second = w.findAll('.rail-actions--second .rail-act')
-    await second[0].trigger('click')                       // 入库
-    expect(w.emitted('ingest-kb')).toBeTruthy()
-    await second[3].trigger('click')                       // 删除
+    // 2026-09-05: "加入知识库"按钮已移除 (网盘文件默认自动入库 RAG), 剩 重命名/移动/删除
+    expect(second.length).toBe(3)
+    await second[0].trigger('click')                       // 重命名
+    expect(w.emitted('rename')).toBeTruthy()
+    await second[2].trigger('click')                       // 删除
     expect(w.emitted('delete')).toBeTruthy()
   })
 

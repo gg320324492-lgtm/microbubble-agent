@@ -268,7 +268,7 @@ const folderChips = computed(() => {
   return flat
 })
 
-const { driveFiles, total, currentPage, pageSize, loading, loadError, isEmpty, fetchFiles, ingestToKb } = useDriveFiles()
+const { driveFiles, total, currentPage, pageSize, loading, loadError, isEmpty, fetchFiles } = useDriveFiles()
 
 // v2 PR8 Agent 2: dashboard 5 sections 灌进 4 tab 的核心映射
 // - starred_files → ⭐ 收藏 tab (覆盖 fetchFiles starred_only=true)
@@ -448,10 +448,7 @@ const fileActions = computed(() => {
     { name: 'download', label: '⬇ 下载' },
     { name: 'share',    label: '🔗 分享' },
   ]
-  // W98: 网盘文件入库 RAG — 仅 drive 文件可入库 (kb 卡片已走完整管线)
-  if (f.storage_mode === 'drive') {
-    actions.push({ name: 'to-kb', label: '📚 加入知识库' })
-  }
+  // 2026-09-05: "加入知识库"动作移除 — 网盘文件已默认自动入库 RAG
   if (currentFolderId.value !== null) {
     actions.push({ name: 'share-folder', label: '📂 分享当前 folder' })
   }
@@ -489,16 +486,6 @@ async function onFileAction(action) {
           if (e?.name === 'AbortError') return
           await navigator.clipboard.writeText(shareUrl).catch(() => {})
           ElMessage.success('链接已复制')
-        }
-        break
-      }
-      // W98: 网盘文件入库 RAG (drive → kb, 原 drive 行保留, 完整 RAG 管线)
-      case 'to-kb': {
-        const res = await ingestToKb(file.id)
-        if (res?.already_ingested) {
-          ElMessage.info('该文件已加入知识库')
-        } else {
-          ElMessage.success('已加入知识库，可在知识库问答中检索')
         }
         break
       }

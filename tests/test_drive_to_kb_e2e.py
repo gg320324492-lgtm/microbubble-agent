@@ -3,9 +3,10 @@
 覆盖:
 - 单文件入库: drive 行 → kb 行, 原 drive 行保留, 关联字段正确
 - 幂等: 同 drive file_id 重复调用不重复建 kb 行
-- 解析失败容错: 坏文件 → DriveToKBError 不崩, 不落库
+- 解析失败容错: 坏文件/空解析 → 元数据兜底条目, 不崩 (2026-09-05 全格式默认入库)
 - 批量入库计数: ingest_folder / ingest_team_files (dry_run + 实际)
-- 不可入库类型: image/video 拒绝 (422)
+- 全格式分级: binary 元数据兜底 (不下载) / 图片 OCR / 音视频 ASR / 压缩包文本成员
+- 版本更新 reingest: 原地刷新既有 kb 行 (不新建)
 
 跑法 (本地, 测试栈 DB localhost:5433):
     TEST_DATABASE_URL=postgresql+asyncpg://postgres:test_password@localhost:5433/microbubble_test \
@@ -228,9 +229,9 @@ async def test_ingest_idempotent(db_factory, member, mock_analysis):
 
 
 @pytest.mark.asyncio
-async def test_ingest_parse_failure_fault_tolerant(db_factory, member, mock_analysis):
-    """解析失败: 抛 DriveToKBError, 不落任何 kb 行"""
-    from app.services.drive_to_kb_service import DriveToKBError, DriveToKBService
+async def test_ingest_parse_failure_metadata_fallback(db_factory, member, mock_analysis):
+    """解析失败: 不抛错, 元数据兜底条目落库 (2026-09-05 全格式默认入库)"""
+    from app.services.drive_to_kb_service import DriveToKBService
     from unittest.mock import patch
 
     async with db_factory() as db:
@@ -246,25 +247,27 @@ async def test_ingest_parse_failure_fault_tolerant(db_factory, member, mock_anal
             return_value=b"\x00\x01corrupted-docx",
         ):
             svc = DriveToKBService(db)
-            with pytest.raises(DriveToKBError) as exc:
-                await svc.ingest_drive_file(drive_file.id)
-            assert exc.value.status_code == 422
+            result = await svc.ingest_drive_file(drive_file.id)
+            assert result["already_ingested"] is False
+            assert result["ingest_mode"] == "document"
 
-        from sqlalchemy import func
         from app.models.knowledge import Knowledge
-        count = (await db.execute(
-            select(func.count(Knowledge.id)).where(
+        row = (await db.execute(
+            select(Knowledge).where(
                 Knowledge.storage_mode == "kb",
                 Knowledge.source_type == "drive_extracted",
             )
-        )).scalar()
-        assert count == 0
+        )).scalar_one()
+        # 元数据兜底正文: 文件名可检索
+        assert "corrupt.docx" in (row.content or "")
+        assert "自动归档" in (row.content or "")
+        assert (row.meta or {}).get("drive_ingest_mode") == "document"
 
 
 @pytest.mark.asyncio
-async def test_ingest_empty_parse_rejected(db_factory, member, mock_analysis):
-    """解析结果为空 (扫描件) → 422 拒绝"""
-    from app.services.drive_to_kb_service import DriveToKBError, DriveToKBService
+async def test_ingest_empty_parse_metadata_fallback(db_factory, member, mock_analysis):
+    """解析结果为空 (扫描件) → 元数据兜底条目, 不再 422"""
+    from app.services.drive_to_kb_service import DriveToKBService
     from unittest.mock import patch
 
     async with db_factory() as db:
@@ -276,23 +279,31 @@ async def test_ingest_empty_parse_rejected(db_factory, member, mock_analysis):
             return_value=b"   \n  ",
         ):
             svc = DriveToKBService(db)
-            with pytest.raises(DriveToKBError) as exc:
-                await svc.ingest_drive_file(drive_file.id)
-            assert exc.value.status_code == 422
-            assert "为空" in exc.value.message
+            result = await svc.ingest_drive_file(drive_file.id)
+            assert result["content_length"] > 0  # 兜底正文非空
+
+        from sqlalchemy import func
+        from app.models.knowledge import Knowledge
+        count = (await db.execute(
+            select(func.count(Knowledge.id)).where(
+                Knowledge.storage_mode == "kb",
+                Knowledge.source_type == "drive_extracted",
+            )
+        )).scalar()
+        assert count == 1
 
 
 @pytest.mark.asyncio
-async def test_ingest_unsupported_type_rejected(db_factory, member, mock_analysis):
-    """不可入库类型 (图片) → 422, 不触发 MinIO 下载"""
-    from app.services.drive_to_kb_service import DriveToKBError, DriveToKBService
+async def test_ingest_binary_metadata_only_no_download(db_factory, member, mock_analysis):
+    """二进制类型 (.exe) → 元数据兜底, 全程不触发 MinIO 下载"""
+    from app.services.drive_to_kb_service import DriveToKBService
     from unittest.mock import patch
 
     async with db_factory() as db:
         drive_file = await _make_drive_file(
             db, member=member,
-            title="photo.png", file_name="photo.png",
-            file_type=".png", file_path="drive/test/photo.png",
+            title="tool.exe", file_name="tool.exe",
+            file_type=".exe", file_path="drive/test/tool.exe",
         )
 
     async with db_factory() as db:
@@ -300,10 +311,179 @@ async def test_ingest_unsupported_type_rejected(db_factory, member, mock_analysi
             "app.services.file_service.file_service.download_file"
         ) as mock_dl:
             svc = DriveToKBService(db)
-            with pytest.raises(DriveToKBError) as exc:
-                await svc.ingest_drive_file(drive_file.id)
-            assert exc.value.status_code == 422
+            result = await svc.ingest_drive_file(drive_file.id)
+            assert result["ingest_mode"] == "metadata"
             mock_dl.assert_not_called()
+
+        from app.models.knowledge import Knowledge
+        row = (await db.execute(
+            select(Knowledge).where(Knowledge.storage_mode == "kb")
+        )).scalar_one()
+        assert "tool.exe" in (row.content or "")
+        assert (row.meta or {}).get("drive_ingest_mode") == "metadata"
+
+
+@pytest.mark.asyncio
+async def test_ingest_image_ocr(db_factory, member, mock_analysis):
+    """图片 → OCR 文本入库 (mock ocr_service)"""
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.drive_to_kb_service import DriveToKBService
+
+    async with db_factory() as db:
+        drive_file = await _make_drive_file(
+            db, member=member,
+            title="zeta 曲线.png", file_name="zeta 曲线.png",
+            file_type=".png", file_path="drive/test/zeta.png",
+        )
+
+    async with db_factory() as db:
+        with patch(
+            "app.services.file_service.file_service.download_file",
+            return_value=b"\x89PNG-fake-bytes",
+        ), patch(
+            "app.services.ocr_service.ocr_service.classify_and_extract",
+            new_callable=AsyncMock,
+            return_value={"category": "chart", "text": "Zeta 电位 -30mV",
+                          "latex": None, "table_md": None,
+                          "chart_description": "zeta 随 pH 下降", "caption": None},
+        ):
+            svc = DriveToKBService(db)
+            result = await svc.ingest_drive_file(drive_file.id)
+            assert result["ingest_mode"] == "image_ocr"
+            assert result["content_length"] > 0
+
+        from app.models.knowledge import Knowledge
+        row = (await db.execute(
+            select(Knowledge).where(Knowledge.storage_mode == "kb")
+        )).scalar_one()
+        assert "Zeta 电位 -30mV" in (row.content or "")
+        assert "zeta 随 pH 下降" in (row.content or "")
+
+
+@pytest.mark.asyncio
+async def test_ingest_audio_asr(db_factory, member, mock_analysis):
+    """音频 → ASR 转写入库 (mock asr_service)"""
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.drive_to_kb_service import DriveToKBService
+
+    async with db_factory() as db:
+        drive_file = await _make_drive_file(
+            db, member=member,
+            title="组会录音.m4a", file_name="组会录音.m4a",
+            file_type=".m4a", file_path="drive/test/rec.m4a",
+        )
+
+    async with db_factory() as db:
+        with patch(
+            "app.services.file_service.file_service.download_file",
+            return_value=b"fake-m4a-bytes",
+        ), patch(
+            "app.voice.asr.asr_service.transcribe",
+            new_callable=AsyncMock,
+            return_value={"text": "今天讨论气泡发生器频率标定"},
+        ):
+            svc = DriveToKBService(db)
+            result = await svc.ingest_drive_file(drive_file.id)
+            assert result["ingest_mode"] == "asr"
+
+        from app.models.knowledge import Knowledge
+        row = (await db.execute(
+            select(Knowledge).where(Knowledge.storage_mode == "kb")
+        )).scalar_one()
+        assert "气泡发生器频率标定" in (row.content or "")
+
+
+@pytest.mark.asyncio
+async def test_ingest_zip_archive_members(db_factory, member, mock_analysis):
+    """压缩包 → 内嵌文本成员提取入库"""
+    import io
+    import zipfile
+    from unittest.mock import patch
+
+    from app.services.drive_to_kb_service import DriveToKBService
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("notes.md", "# 实验记录\n气泡粒径 50um")
+        zf.writestr("data.csv", "size,count\n50,12")
+        zf.writestr("binary.bin", b"\x00\x01\x02")  # 非文本成员跳过
+
+    async with db_factory() as db:
+        drive_file = await _make_drive_file(
+            db, member=member,
+            title="batch.zip", file_name="batch.zip",
+            file_type=".zip", file_path="drive/test/batch.zip",
+        )
+
+    async with db_factory() as db:
+        with patch(
+            "app.services.file_service.file_service.download_file",
+            return_value=buf.getvalue(),
+        ):
+            svc = DriveToKBService(db)
+            result = await svc.ingest_drive_file(drive_file.id)
+            assert result["ingest_mode"] == "archive"
+
+        from app.models.knowledge import Knowledge
+        row = (await db.execute(
+            select(Knowledge).where(Knowledge.storage_mode == "kb")
+        )).scalar_one()
+        assert "气泡粒径 50um" in (row.content or "")
+        assert "size,count" in (row.content or "")  # 原文照录, 不做 csv 重排
+        assert "notes.md" in (row.content or "")
+        assert "binary.bin" not in (row.content or "")
+
+
+@pytest.mark.asyncio
+async def test_ingest_reingest_updates_existing_row(db_factory, member, mock_analysis):
+    """版本更新 reingest=True: 原地刷新既有 kb 行 (同 id, 内容更新), 不新建"""
+    from unittest.mock import patch
+
+    from app.services.drive_to_kb_service import DriveToKBService
+
+    async with db_factory() as db:
+        drive_file = await _make_drive_file(
+            db, member=member,
+            title="report.txt", file_name="report.txt",
+            file_path="drive/test/report.txt", file_type=".txt",
+        )
+
+    async with db_factory() as db:
+        with patch(
+            "app.services.file_service.file_service.download_file",
+            return_value="第一版内容".encode(),
+        ):
+            svc = DriveToKBService(db)
+            r1 = await svc.ingest_drive_file(drive_file.id)
+        assert r1["already_ingested"] is False
+
+        # 幂等: 不带 reingest 不动
+        r2 = await svc.ingest_drive_file(drive_file.id)
+        assert r2["already_ingested"] is True
+        assert r2["knowledge_id"] == r1["knowledge_id"]
+
+        # 版本更新: reingest=True 原地刷新
+        with patch(
+            "app.services.file_service.file_service.download_file",
+            return_value="第二版全新内容".encode(),
+        ):
+            r3 = await svc.ingest_drive_file(drive_file.id, reingest=True)
+        assert r3["reingested"] is True
+        assert r3["knowledge_id"] == r1["knowledge_id"]
+
+        from sqlalchemy import func
+        from app.models.knowledge import Knowledge
+        count = (await db.execute(
+            select(func.count(Knowledge.id)).where(Knowledge.storage_mode == "kb")
+        )).scalar()
+        assert count == 1  # 不新建行
+        row = (await db.execute(
+            select(Knowledge).where(Knowledge.id == r1["knowledge_id"])
+        )).scalar_one()
+        assert "第二版全新内容" in (row.content or "")
+        assert row.analysis_status == "pending"  # 重新进分析管线
 
 
 @pytest.mark.asyncio
@@ -439,8 +619,8 @@ async def test_ingest_team_files_skips_private(db_factory, member, mock_analysis
 
 @pytest.mark.asyncio
 async def test_ingest_folder_private_forbidden(db_factory, member, mock_analysis):
-    """private 文件夹批量入库 → 403"""
-    from app.services.drive_to_kb_service import DriveToKBError, DriveToKBService
+    """private 文件夹批量入库不再 403 (2026-09-05 private 退役 + 全格式默认入库)"""
+    from app.services.drive_to_kb_service import DriveToKBService
     from app.models.folder import Folder
 
     async with db_factory() as db:
@@ -453,9 +633,10 @@ async def test_ingest_folder_private_forbidden(db_factory, member, mock_analysis
         await db.refresh(folder)
 
         svc = DriveToKBService(db)
-        with pytest.raises(DriveToKBError) as exc:
-            await svc.ingest_folder(folder.id)
-        assert exc.value.status_code == 403
+        result = await svc.ingest_folder(folder.id)
+        # 空文件夹: total=0, 不抛 403
+        assert result["total"] == 0
+        assert result["failed"] == 0
 
 
 # === 可入库清单 ===
@@ -463,7 +644,7 @@ async def test_ingest_folder_private_forbidden(db_factory, member, mock_analysis
 
 @pytest.mark.asyncio
 async def test_list_ingestable(db_factory, member, mock_analysis):
-    """清单: txt 可入库, png 不可, 已转化条目不再出现"""
+    """清单: 全格式可入库 (png 也 True), 已转化条目不再出现, private 不在团队候选"""
     from app.services.drive_to_kb_service import DriveToKBService
     from unittest.mock import patch
 
@@ -483,7 +664,8 @@ async def test_list_ingestable(db_factory, member, mock_analysis):
         assert f_txt.id in by_id
         assert by_id[f_txt.id]["ingestable"] is True
         assert f_png.id in by_id
-        assert by_id[f_png.id]["ingestable"] is False
+        # 2026-09-05 全格式默认入库: 图片也可入库 (OCR)
+        assert by_id[f_png.id]["ingestable"] is True
         assert priv.id not in by_id  # private 不在团队候选
 
         # 转化后清单不再含该文件
