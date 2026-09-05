@@ -8,7 +8,63 @@
 -->
 <template>
   <aside class="rail" :aria-label="'文件详情'">
-    <div v-if="!file" class="rail-empty">
+    <!-- 批次⑩.14 (用户选型 RAIL A 清单式): 文件夹预览态 — 点文件夹行显示下一级内容 -->
+    <template v-if="!file && folder">
+      <div class="rf-head">
+        <span class="rf-ic">
+          <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+        </span>
+        <div class="rf-title">
+          <h3 class="rf-name" :title="folder.name">{{ folder.name }}</h3>
+          <div class="rf-stats mono">
+            {{ fmtSize(folder.size_bytes) }} · {{ rfTotal + (folderChildren?.length || 0) }} 项 · 最新 {{ fmtMonth(folder.latest_file_at) }}
+          </div>
+        </div>
+      </div>
+      <div class="rf-acts">
+        <button type="button" @click="$emit('open-folder', folder)">打开</button>
+        <button type="button" @click="$emit('share-folder', folder)">分享</button>
+        <button
+          type="button"
+          :class="{ 'is-starred': folder.is_starred }"
+          @click="$emit('toggle-star-folder', folder)"
+        >{{ folder.is_starred ? '已收藏' : '收藏' }}</button>
+      </div>
+
+      <template v-if="folderChildren?.length">
+        <div class="rf-grp"><span>子文件夹</span><span class="rf-n mono">{{ folderChildren.length }}</span></div>
+        <div
+          v-for="c in folderChildren" :key="'rfc-' + c.id"
+          class="rf-item" role="button" tabindex="0"
+          @click="$emit('open-folder', c)" @keydown.enter="$emit('open-folder', c)"
+        >
+          <svg class="rf-fic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+          <span class="rf-nm">{{ c.name }}</span>
+          <span v-if="c.children?.length" class="rf-n mono">{{ c.children.length }}</span>
+        </div>
+      </template>
+
+      <div class="rf-grp"><span>文件</span><span class="rf-n mono">{{ rfLoading ? '…' : rfTotal }}</span></div>
+      <div v-if="rfLoading" class="rf-note">正在加载下一级文件…</div>
+      <template v-else>
+        <div
+          v-for="f in rfFiles" :key="'rff-' + f.id"
+          class="rf-item" role="button" tabindex="0"
+          :title="f.file_name"
+          @click="$emit('preview', f)" @keydown.enter="$emit('preview', f)"
+        >
+          <span class="rf-dot" :style="{ background: dotColor(f.file_name) }"></span>
+          <span class="rf-nm">{{ f.file_name }}</span>
+          <span class="rf-n mono">{{ fmtSize(f.file_size) }}</span>
+        </div>
+        <div v-if="!rfFiles.length" class="rf-note">该文件夹还没有文件</div>
+        <button v-if="rfTotal > rfFiles.length" type="button" class="rf-more" @click="$emit('open-folder', folder)">
+          显示全部 {{ rfTotal }} 个文件 ↓
+        </button>
+      </template>
+    </template>
+
+    <div v-else-if="!file" class="rail-empty">
       <template v-if="recent.length">
         <p class="rail-recent-cap">最近上传</p>
         <button
@@ -157,11 +213,16 @@ const props = defineProps({
   file: { type: Object, default: null },
   /** 未选中文件时右栏兜底展示的本目录最近条目 (父层传当前列表前几名) */
   recent: { type: Array, default: () => [] },
+  // 批次⑩.14 (RAIL A): 文件夹预览态 — 点中栏文件夹行时显示下一级内容
+  folder: { type: Object, default: null },
+  /** 该文件夹的子文件夹 (父层从 folderTree 取, 已含 children 计数) */
+  folderChildren: { type: Array, default: () => [] },
 })
 const emit = defineEmits([
   'preview', 'download', 'share', 'toggle-star', 'rename', 'move', 'delete',
   'open-detail', 'goto-folder', 'open-versions-dialog', 'refresh',
   'pick-file',
+  'open-folder', 'share-folder', 'toggle-star-folder',
 ])
 
 const { listVersions, restoreVersion: restoreApi } = useDriveFiles()
@@ -174,6 +235,42 @@ const versionNumber = computed(() => props.file?.version_number || 1)
 
 const tab = ref('comments')
 watch(() => props.file?.id, () => { tab.value = 'comments' })
+
+/* ---- 批次⑩.14 (RAIL A): 文件夹下一级文件预览 (懒拉 8 条, 换夹即刷新) ---- */
+const rfFiles = ref([])
+const rfTotal = ref(0)
+const rfLoading = ref(false)
+let rfSeq = 0
+watch(() => props.folder?.id, async (fid) => {
+  rfFiles.value = []
+  rfTotal.value = 0
+  if (fid == null) return
+  const seq = ++rfSeq
+  rfLoading.value = true
+  try {
+    const resp = await axios.get('/api/v1/drive/files', {
+      params: { folder_id: fid, view: 'team', page: 1, page_size: 8, sort_by: 'created_at', sort_order: 'desc' },
+    })
+    if (seq !== rfSeq) return  // 已切到别的文件夹, 丢弃过期响应
+    rfFiles.value = resp.data.items || []
+    rfTotal.value = resp.data.total || 0
+  } catch { /* 预览拉取失败静默, 空态兜底 */ }
+  finally { if (seq === rfSeq) rfLoading.value = false }
+}, { immediate: true })
+
+const RF_DOT = { pdf: 'var(--color-file-pdf)', doc: 'var(--color-file-doc)', docx: 'var(--color-file-doc)', ppt: 'var(--color-warning)', pptx: 'var(--color-warning)', xls: 'var(--color-file-excel)', xlsx: 'var(--color-file-excel)', csv: 'var(--color-file-excel)', png: 'var(--color-file-image)', jpg: 'var(--color-file-image)', jpeg: 'var(--color-file-image)', mp4: 'var(--color-file-video)', mov: 'var(--color-file-video)', m4a: 'var(--color-warning)', mp3: 'var(--color-warning)' }
+function dotColor(name) {
+  const ext = (name || '').split('.').pop().toLowerCase()
+  return RF_DOT[ext] || 'var(--color-text-placeholder)'
+}
+function fmtMonth(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  return d.getFullYear() === new Date().getFullYear()
+    ? `${d.getMonth() + 1} 月`
+    : `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`
+}
 
 /* ---- 类型色块 ---- */
 const TYPE_COLOR = {
@@ -347,4 +444,41 @@ function fmtDT(x) {
 .rail-ver-act { flex: none; border: 1px solid var(--color-border); background: var(--color-bg-card); border-radius: var(--radius-sm); font-size: 11px; padding: 3px 8px; color: var(--color-text-regular); }
 .rail-ver-act:hover { color: var(--color-primary-dark); border-color: var(--color-primary-border); }
 .rail-ver-act.restore:hover { color: var(--color-warning); border-color: var(--color-warning); }
+
+/* ── 批次⑩.14 (RAIL A 清单式): 文件夹预览态 ── */
+.rf-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid var(--color-border); }
+.rf-ic {
+  width: 38px; height: 38px; border-radius: 9px; flex: none;
+  background: var(--gradient-cta-button); display: grid; place-items: center;
+}
+.rf-ic svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 1.7; }
+.rf-title { min-width: 0; }
+.rf-name { font-size: 14.5px; font-weight: var(--font-weight-semibold); word-break: break-all; }
+.rf-stats { font-size: 10.5px; color: var(--color-text-secondary); margin-top: 2px; }
+.rf-acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+.rf-acts button {
+  font: inherit; font-size: 11.5px; padding: 6px 0; border-radius: 7px;
+  border: 1px solid var(--color-border); background: none; color: var(--color-text-regular);
+  cursor: pointer; transition: all var(--duration-fast) var(--ease-out, ease);
+}
+.rf-acts button:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); background: var(--color-primary-bg); }
+.rf-acts button.is-starred { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-bg, transparent); }
+.rf-grp { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px 4px; font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); }
+.rf-n { font-size: 10.5px; color: var(--color-text-placeholder); letter-spacing: 0; }
+.rf-item {
+  display: flex; align-items: center; gap: 9px; padding: 8px 16px;
+  cursor: pointer; transition: background var(--duration-fast);
+}
+.rf-item:hover { background: var(--color-primary-bg); }
+.rf-item:hover .rf-nm { color: var(--color-primary-dark); }
+.rf-item .rf-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--font-weight-medium); transition: color var(--duration-fast); }
+.rf-fic { width: 15px; height: 15px; stroke: var(--color-primary); fill: none; stroke-width: 1.7; flex: none; }
+.rf-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.rf-note { padding: 10px 16px; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.rf-more {
+  display: block; width: 100%; padding: 10px; border: none; background: none;
+  font: inherit; font-size: 12px; color: var(--color-primary-dark); cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.rf-more:hover { background: var(--color-primary-bg); }
 </style>

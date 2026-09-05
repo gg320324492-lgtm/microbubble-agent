@@ -235,12 +235,17 @@
         v-if="isTableMode"
         class="wb-railright"
         :file="activeFile"
+        :folder="activeFolder"
+        :folder-children="activeFolderChildren"
         :recent="driveFiles"
         @pick-file="(f) => (activeKey = f.id)"
         @preview="handleFilePreview"
         @download="handleFileDownload"
         @share="handleFileShareLink"
         @toggle-star="handleFileToggleStar"
+        @open-folder="enterFolder"
+        @share-folder="onShareFolder"
+        @toggle-star-folder="(f) => handleFileToggleStar(f, 'folder')"
         @rename="handleFileRename"
         @move="handleFileMove"
         @delete="handleFileDelete"
@@ -1206,12 +1211,25 @@ function onGlobalSearchKey(ev) {
 onMounted(() => window.addEventListener('keydown', onGlobalSearchKey))
 onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalSearchKey))
 
-// 活动行 (右栏详情对象; folder 行 key='f-<id>' 不触发展示)
+// 活动行 (右栏详情对象; folder 行 key='f-<id>' → 文件夹预览态)
 const activeKey = ref(null)
 const activeFile = computed(() => {
   const k = activeKey.value
   if (typeof k !== 'number') return null
   return driveFiles.value.find((f) => f.id === k) || null
+})
+
+// 批次⑩.14 (用户选型 RAIL A 清单式): 文件夹预览态 — 点文件夹行时右栏显示下一级内容
+const activeFolder = computed(() => {
+  const k = activeKey.value
+  if (typeof k !== 'string' || !k.startsWith('f-')) return null
+  const fid = Number(k.slice(2))
+  return tableFolders.value.find((f) => f.id === fid) || null
+})
+const activeFolderChildren = computed(() => {
+  const f = activeFolder.value
+  if (!f) return []
+  return findFolderById(f.id)?.children || []
 })
 // 切目录/换视图时清活动行 + 文件夹勾选 (右栏不残留上一目录的文件)
 watch([selectedFolderId, specialView], () => {
