@@ -384,9 +384,14 @@ const previewKind = computed(() => {
   return 'none'
 })
 // 舞台高度: 文档 470 (A4) / 视频 189 (16:9) / 音频 130 / 图片 220 / 文本 300 / Office 220
-const stageHeight = computed(() => ({
-  image: 220, video: 189, audio: 130, pdf: 470, ppt: 400, text: 300, office: 220,
-}[previewKind.value] || 168))
+const stageHeight = computed(() => {
+  // 批次⑩.27: PPT 舞台高度跟随页图比例 (304 宽 × 16:9 ≈ 171px) — 横向长方形正好贴合
+  if (previewKind.value === 'ppt') {
+    const nat = pptImgNat.value
+    return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 9 / 16)
+  }
+  return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220 }[previewKind.value] || 168
+})
 
 /* 媒体/PDF blob 流 (带鉴权 axios → objectURL; 换文件/卸载即 revoke) */
 const stageUrl = ref(null)
@@ -764,6 +769,7 @@ function fmtDT(x) {
 }
 .rf-slide table tr:first-child td { font-weight: 600; background: #EDF2F0; color: var(--color-text-primary); }
 /* 全屏放映态 (FIT2 沉浸基因): 舞台铺满视口, 幻灯片居中, 胶囊放大 */
+.rf-ppt-img { display: block; width: 100%; height: auto; border-radius: 4px 4px 0 0; }
 .rf-ppt:fullscreen { background: #0D1210; border: none; }
 .rf-ppt:fullscreen .rf-slide-wrap { padding: 0; }
 .rf-ppt:fullscreen .rf-pill { bottom: 26px; padding: 6px 12px; }
