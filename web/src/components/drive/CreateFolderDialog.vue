@@ -68,12 +68,14 @@
       </div>
     </div>
 
-    <div class="cfd-foot">
-      <button type="button" class="cfd-btn ghost" @click="visible = false">取消</button>
-      <button type="button" class="cfd-btn pri" :disabled="submitting" @click="onSubmit">
-        {{ submitting ? '创建中…' : '创建' }}
-      </button>
-    </div>
+    <template #footer>
+      <div class="cfd-foot">
+        <button type="button" class="cfd-btn ghost" @click="visible = false">取消</button>
+        <button type="button" class="cfd-btn pri" :disabled="submitting" @click="onSubmit">
+          {{ submitting ? '创建中…' : '创建' }}
+        </button>
+      </div>
+    </template>
   </el-dialog>
 </template>
 
@@ -154,6 +156,7 @@ export default { name: 'CreateFolderDialog' }
   box-shadow: 0 24px 64px rgba(10, 20, 16, .35);
   background: var(--color-bg-card, #fff);
   padding: 0;
+  overflow: hidden;
 }
 .cfd-arch .el-dialog__header {
   padding: 18px 22px 0;
@@ -165,8 +168,13 @@ export default { name: 'CreateFolderDialog' }
   transition: background .15s;
 }
 .cfd-arch .el-dialog__headerbtn:hover { background: var(--color-bg-page, #F2F0EB); }
-.cfd-arch .el-dialog__body { padding: 4px 22px 0; }
-.cfd-arch .el-dialog__footer { padding: 0; }
+.cfd-arch .el-dialog__body { padding: 4px 22px 18px; }
+/* 页脚槽通栏: 暖纸底 + 顶部分隔线直达弹窗左右边缘 (批次⑩.8b 修 body 内嵌白边) */
+.cfd-arch .el-dialog__footer {
+  padding: 0;
+  border-top: 1px solid var(--color-border, #E5E1D8);
+  background: var(--color-bg-page, #F2F0EB);
+}
 </style>
 
 <style scoped>
@@ -226,10 +234,7 @@ export default { name: 'CreateFolderDialog' }
 
 .cfd-foot {
   display: flex; justify-content: flex-end; gap: 10px;
-  padding: 14px 22px 18px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-page);
-  border-radius: 0 0 12px 12px;
+  padding: 13px 22px;
 }
 .cfd-btn { font: inherit; font-size: 13px; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all .15s; }
 .cfd-btn.ghost { border: 1px solid var(--color-border); background: var(--color-bg-card); color: var(--color-text-regular); }
