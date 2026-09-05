@@ -1537,6 +1537,144 @@ async def revoke_share_link(
 
 # === v2 PR1 公开分享 GET 端点 (含密码验证) ===
 
+
+
+# === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
+# .pptx = zip + OOXML — python-pptx 已在容器内 (1.0.2), 解析一次缓存 JSON,
+# 第三栏渲染器 (DriveDetailRail) 按 EMU 比例绝对定位还原 文本框/图片/表格。
+_PPTX_STRUCTURE_CACHE: dict = {}  # (file_id, updated_at) -> payload (保留最近 16 份)
+
+
+@router.get("/files/{file_id}/pptx-structure")
+async def get_pptx_structure(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """自研 PPT 预览数据源: python-pptx 抽取 幻灯片结构 JSON (无 JWT 不可访问).
+
+    返回: {total, slide_w_emu, slide_h_emu, slides: [{index, bg, shapes: [...]}]}
+    shape.kind: text (runs 带 字号pt/颜色/粗体) | image (dataURL, 单张≤1.5MB) |
+                table (rows) | chart (占位, 二期 ECharts 重绘) | shape (纯色块)
+    坐标/尺寸均为 0-1 比例 (相对幻灯片宽高), 前端按舞台宽度缩放。
+    """
+    import base64
+    from io import BytesIO
+    from pptx import Presentation
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    if not (f.file_name or "").lower().endswith(".pptx"):
+        raise HTTPException(status_code=400, detail="仅支持 .pptx 文件")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    cache_key = (file_id, str(f.updated_at))
+    if cache_key in _PPTX_STRUCTURE_CACHE:
+        return _PPTX_STRUCTURE_CACHE[cache_key]
+
+    raw = await file_service.download_file(f.file_path)
+    try:
+        prs = Presentation(BytesIO(raw))
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"pptx 解析失败: {e}")
+
+    slide_w, slide_h = prs.slide_width or 9144000, prs.slide_height or 6858000
+    slides = []
+    for idx, slide in enumerate(prs.slides, 1):
+        bg = None
+        try:
+            fill = slide.background.fill
+            if fill.type is not None and int(fill.type) == 1:  # MSO_FILL.SOLID
+                bg = str(fill.fore_color.rgb)
+        except Exception:
+            bg = None
+
+        shapes = []
+        for sh in slide.shapes:
+            try:
+                x = (sh.left or 0) / slide_w
+                y = (sh.top or 0) / slide_h
+                w = (sh.width or 0) / slide_w
+                h = (sh.height or 0) / slide_h
+                if w <= 0 or h <= 0:
+                    continue
+                entry = {"x": round(x, 4), "y": round(y, 4), "w": round(w, 4), "h": round(h, 4)}
+
+                if sh.shape_type == MSO_SHAPE_TYPE.PICTURE:
+                    blob = sh.image.blob
+                    if len(blob) > 1536 * 1024:  # 单图 >1.5MB 跳过 (JSON 体积保护)
+                        entry.update(kind="image", skip="large")
+                    else:
+                        entry.update(
+                            kind="image",
+                            src=f"data:{sh.image.content_type};base64,{base64.b64encode(blob).decode()}",
+                        )
+                elif getattr(sh, "has_table", False) and sh.has_table:
+                    tbl = sh.table
+                    rows = [
+                        [cell.text for cell in row.cells]
+                        for row in tbl.rows
+                    ]
+                    entry.update(kind="table", rows=rows)
+                elif getattr(sh, "has_chart", False) and sh.has_chart:
+                    entry.update(kind="chart")
+                elif sh.has_text_frame and sh.text_frame.text.strip():
+                    paras = []
+                    for para in sh.text_frame.paragraphs:
+                        runs = []
+                        for r in para.runs:
+                            color = None
+                            try:
+                                if r.font.color is not None and r.font.color.type is not None:
+                                    color = str(r.font.color.rgb)
+                            except Exception:
+                                color = None
+                            runs.append({
+                                "t": r.text,
+                                "sz": r.font.size.pt if r.font.size else None,
+                                "b": bool(r.font.bold),
+                                "c": color,
+                            })
+                        if runs:
+                            paras.append({
+                                "runs": runs,
+                                "align": str(para.alignment).split(" ")[0].split(":")[-1].lower()
+                                if para.alignment is not None else None,
+                            })
+                    entry.update(kind="text", paras=paras)
+                else:
+                    # 纯形状: 尽力取填充色 (装饰色块)
+                    fill_rgb = None
+                    try:
+                        if sh.fill.type is not None and int(sh.fill.type) == 1:
+                            fill_rgb = str(sh.fill.fore_color.rgb)
+                    except Exception:
+                        fill_rgb = None
+                    entry.update(kind="shape", color=fill_rgb)
+                shapes.append(entry)
+            except Exception:
+                continue  # 单形状解析失败不影响整页
+
+        slides.append({"index": idx, "bg": bg, "shapes": shapes})
+
+    payload = {
+        "file_name": f.file_name,
+        "total": len(slides),
+        "slide_w_emu": slide_w,
+        "slide_h_emu": slide_h,
+        "slides": slides,
+    }
+    # LRU-ish: 超过 16 份丢最旧
+    if len(_PPTX_STRUCTURE_CACHE) > 16:
+        _PPTX_STRUCTURE_CACHE.pop(next(iter(_PPTX_STRUCTURE_CACHE)))
+    _PPTX_STRUCTURE_CACHE[cache_key] = payload
+    return payload
+
+
 class PublicShareInfoResponse(BaseModel):
     """公开分享链接的元信息 (验证密码后才返回下载链接)."""
     file_name: str
