@@ -282,12 +282,13 @@
       :target-type="renameTargetType"
       @rename="onRename"
     />
-    <MoveDialog
-      v-model="showMoveDialog"
-      :current-folder-id="selectedFolderId"
-      :file-id="moveTargetFileId"
-      @move="onMoveFile"
-    />
+      <MoveDialog
+        v-model="showMoveDialog"
+        :current-folder-id="selectedFolderId"
+        :file-id="moveTargetFileId"
+        :files="moveTargetFiles"
+        @move="onMoveFile"
+      />
     <DriveUploadDialog
       v-model="showUploadDialog"
       :default-folder-id="selectedFolderId"
@@ -802,6 +803,13 @@ const renameTarget = ref(null)
 const renameTargetType = ref('file')  // file | folder
 const showMoveDialog = ref(false)
 const moveTargetFileId = ref(null)
+// 批次⑩.15: 待移档案对象 (供 MoveDialog 文件卡展示; 单选=1项, 批量=N项)
+const moveTargetFiles = computed(() => {
+  const v = moveTargetFileId.value
+  if (v == null) return []
+  const ids = Array.isArray(v) ? v : [v]
+  return driveFiles.value.filter((f) => ids.includes(f.id))
+})
 
 // v2.29 (2026-07-12) 右键 FolderTree 菜单"新建子文件夹" 触发的临时 parent_id
 //   null = 走默认 selectedFolderId (工具栏按钮 / 空态 CTA 路径)
@@ -972,9 +980,17 @@ function handleFileMove(file) {
 
 async function onMoveFile(payload) {
   try {
-    await moveFile(payload.fileId, payload.targetFolderId)
-    showMoveDialog.value = false
-    ElMessage.success('文件已移动')
+    if (Array.isArray(payload.fileId)) {
+      // 批次⑩.15 修复: 批量移动旧代码走 moveFile(数组) → PUT /files/undefined
+      const resp = await doBatchMove(payload.fileId, payload.targetFolderId)
+      showMoveDialog.value = false
+      ElMessage.success(`已移动 ${resp?.succeeded_count ?? payload.fileId.length} 个文件`)
+    } else {
+      await moveFile(payload.fileId, payload.targetFolderId)
+      showMoveDialog.value = false
+      ElMessage.success('文件已移动')
+    }
+    refreshSideCounts()
   } catch (e) {
     ElMessage.error(e.message || '移动失败')
   }
