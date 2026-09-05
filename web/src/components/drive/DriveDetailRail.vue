@@ -538,8 +538,12 @@ const pptSlideHtml = computed(() => {
           return `<div style="margin-bottom:2px;${lh}${al ? 'text-align:' + al : ''}">${runs || '&nbsp;'}</div>`
         }).join('')
         html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;">${paras}</div>`
-      } else if (sp.kind === 'image' && sp.src) {
-        html += `<img src="${sp.src}" style="position:absolute;${posStyle(sp)}object-fit:contain;" />`
+      } else if (sp.kind === 'image') {
+        if (sp.src) {
+          html += `<img src="${sp.src}" style="position:absolute;${posStyle(sp)}object-fit:contain;" />`
+        } else {
+          html += `<div style="position:absolute;${posStyle(sp)}display:grid;place-items:center;background:repeating-linear-gradient(45deg,#EFF2F0,#EFF2F0 8px,#E6EBE8 8px,#E6EBE8 16px);color:var(--color-text-4,#B9BFB6);font-size:9px;">大图未加载</div>`
+        }
       } else if (sp.kind === 'table' && sp.rows) {
         const trs = sp.rows.map((r) => `<tr>${r.map((c) => `<td>${escHtml(c)}</td>`).join('')}</tr>`).join('')
         html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;background:#fff;"><table style="border-collapse:collapse;width:100%;height:100%;font-size:8px;">${trs}</table></div>`
