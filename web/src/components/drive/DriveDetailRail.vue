@@ -244,7 +244,7 @@ function fmtDT(x) {
   display: flex; flex-direction: column;
   width: 100%; height: 100%; min-height: 0;
   background: var(--color-bg-card);
-  border-left: 1px solid var(--color-border);
+  border-left: 1.5px solid var(--wb-frame, var(--color-border));
   overflow-y: auto;
 }
 .rail-empty { margin: auto; text-align: center; color: var(--color-text-secondary); font-size: var(--font-size-sm); padding: 30px; }

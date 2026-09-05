@@ -406,8 +406,11 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   height: 100%;
   min-height: 0;
   background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--wb-frame, var(--color-border));
+  border-bottom: none;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  /* 档案系硬偏移描边卡 (同主页 Dashboard 卡片语言); 无 --wb-frame 环境优雅降级 */
+  box-shadow: var(--wb-frame, none) 4px 4px 0;
   outline: none;
 }
 .dft:focus-visible { box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), .25); }
@@ -485,10 +488,11 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   flex: none;
   display: flex; align-items: center; gap: 10px;
   padding: 8px 14px;
-  border: 1px solid var(--color-border);
-  border-top: none;
+  border: 1.5px solid var(--wb-frame, var(--color-border));
+  border-top: 1px solid var(--color-border);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background: var(--color-bg-card);
+  box-shadow: var(--wb-frame, none) 4px 4px 0;
 }
 .dft-foot-stat { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .dft-foot-sp { flex: 1; }
