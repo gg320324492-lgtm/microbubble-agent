@@ -1029,6 +1029,15 @@ const activeFile = computed(() => {
 // 切目录/换视图时清活动行 (右栏不残留上一目录的文件)
 watch([selectedFolderId, specialView], () => { activeKey.value = null })
 
+// 批次⑦: 勾选 checkbox 也让右栏换档 (视觉稿行为 = 选中即可见详情;
+// 勾选事件在表格里 click.stop 不走 row-activate, 这里从选择集补上)
+watch(selectedFileIds, (ids, prev) => {
+  if (ids.length && ids.length > (prev?.length || 0)) {
+    const last = ids[ids.length - 1]
+    if (typeof last === 'number') activeKey.value = last
+  }
+})
+
 function onRowActivate(row, opts = {}) {
   if (!row) { activeKey.value = null; return }
   activeKey.value = row.key
