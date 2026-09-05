@@ -532,6 +532,9 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
 .dft-head .num { text-align: right; }
 /* 批次⑩.4 (用户选型 HEAD B): 表头全居中; 行内 大小/上传时间/上传者 居中, 名称保持左对齐 */
 .dft-head .dft-c { text-align: center; }
+/* 名称/上传者表头复用了数据行的 flex 样式 — flex 会忽略 text-align, 补 justify-content */
+.dft-head .dft-c--name,
+.dft-head .dft-c--owner { justify-content: center; }
 .dft-row .num { text-align: center; }
 .dft-row .dft-c--owner { justify-content: center; }
 
