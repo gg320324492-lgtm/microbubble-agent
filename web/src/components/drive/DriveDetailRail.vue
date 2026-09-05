@@ -126,13 +126,13 @@
             <template v-else-if="pptData">
               <div class="rf-slide-wrap">
                 <Transition name="rfpg" mode="out-in">
-                  <div :key="pptPage + '-' + pptFull" class="rf-slide" :style="{ width: pptSlideW + 'px', height: pptSlideH + 'px', background: currentSlideBg }" v-html="pptSlideHtml"></div>
+                  <div :key="pptPage + '-' + pptFull" class="rf-slide" :style="{ width: pptSlideW + 'px', height: pptSlideH + 'px', background: pptBgStyle }" v-html="pptSlideHtml"></div>
                 </Transition>
               </div>
               <div class="rf-pill">
-                <button type="button" class="rf-pill-btn" :disabled="pptPage <= 1" @click="pptPage--">‹</button>
-                <span class="rf-pill-pg mono">{{ pptPage }} / {{ pptData.total }}</span>
-                <button type="button" class="rf-pill-btn" :disabled="pptPage >= pptData.total" @click="pptPage++">›</button>
+                <button type="button" class="rf-pill-btn" :disabled="pptPage <= 1" @click="pptPage > 1 && pptPage--">‹</button>
+                <span class="rf-pill-pg mono">{{ Math.max(1, Math.min(pptPage, pptData.total)) }} / {{ pptData.total }}</span>
+                <button type="button" class="rf-pill-btn" :disabled="pptPage >= pptData.total" @click="pptPage < pptData.total && pptPage++">›</button>
                 <span class="rf-pill-sep"></span>
                 <button type="button" class="rf-pill-btn" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">⛶</button>
               </div>
@@ -425,6 +425,7 @@ async function loadTextPreview() {
 const pptData = ref(null)
 const pptPage = ref(1)
 const pptLoading = ref(false)
+const pptBgStyle = ref('#ffffff')
 let pptSeq = 0
 watch([() => props.file?.id, previewKind], async () => {
   if (previewKind.value !== 'ppt' || !props.file) { pptData.value = null; return }
@@ -434,6 +435,9 @@ watch([() => props.file?.id, previewKind], async () => {
     const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/pptx-structure`)
     if (seq !== pptSeq) return
     pptData.value = resp.data
+    pptBgStyle.value = resp.data.bg_img
+      ? `#fff url("${resp.data.bg_img}") center/cover no-repeat`
+      : (resp.data.bg ? '#' + resp.data.bg : '#ffffff')
     pptPage.value = 1
   } catch { if (seq === pptSeq) pptData.value = null }
   finally { if (seq === pptSeq) pptLoading.value = false }
@@ -513,12 +517,17 @@ const pptSlideH = computed(() => {
   return Math.round(stageW.value * (d.slide_h_emu / d.slide_w_emu))
 })
 const currentSlideBg = computed(() => {
-  const sl = pptData.value?.slides?.[pptPage.value - 1]
+  const d = pptData.value
+  if (!d?.slides?.length) return '#ffffff'
+  const page = Math.min(Math.max(pptPage.value, 1), d.slides.length)
+  const sl = d.slides[page - 1]
   return sl?.bg ? '#' + sl.bg : '#ffffff'
 })
 const pptSlideHtml = computed(() => {
   const d = pptData.value
-  const slide = d?.slides?.[pptPage.value - 1]
+  if (!d?.slides?.length) return ''
+  const page = Math.min(Math.max(pptPage.value, 1), d.slides.length)
+  const slide = d.slides[page - 1]
   if (!slide) return ''
   const scale = stageW.value / (d.slide_w_emu || 9144000)
   pptChartDefs.length = 0
@@ -537,7 +546,10 @@ const pptSlideHtml = computed(() => {
           const lh = typeof p.ls === 'number' ? `line-height:${p.ls};` : 'line-height:1.25;'
           return `<div style="margin-bottom:2px;${lh}${al ? 'text-align:' + al : ''}">${runs || '&nbsp;'}</div>`
         }).join('')
-        html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;">${paras}</div>`
+        const hasFill = !!sp.fill
+        const fillBg = sp.fill ? `background:#${sp.fill};` : ''
+        const defColor = hasFill ? '#ffffff' : ''
+        html += `<div style="position:absolute;${posStyle(sp)}${fillBg}color:${defColor};overflow:hidden;border-radius:2px;">${paras}</div>`
       } else if (sp.kind === 'image') {
         if (sp.src) {
           html += `<img src="${sp.src}" style="position:absolute;${posStyle(sp)}object-fit:contain;" />`
