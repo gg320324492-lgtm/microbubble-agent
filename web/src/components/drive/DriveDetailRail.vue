@@ -88,12 +88,43 @@
       </template>
     </div>
     <template v-else>
-      <!-- 封面预览块 -->
+      <!-- 封面预览块 → 批次⑩.16 (用户选型 FIT 1 自适应舞台): 舞台高度随类型动画 -->
       <div class="rail-hero">
-        <div class="rail-cover">
-          <img v-if="coverUrl" :src="coverUrl" :alt="name" class="rail-cover-img" />
+        <div class="rf-stage" :class="'rf-k-' + previewKind" :style="{ height: stageHeight + 'px' }">
+          <!-- 加载中 (媒体/PDF blob) -->
+          <div v-if="stageLoading" class="rf-load"><span class="rf-spin"></span></div>
+          <!-- 缩略图/图片真图 (缩略图管线就位后 office 自动升级) -->
+          <template v-else-if="coverUrl">
+            <img :src="coverUrl" :alt="name" class="rf-img" />
+            <span v-if="previewKind === 'office'" class="rf-auto">首页缩略图 · 自动</span>
+          </template>
+          <!-- 图片真图 -->
+          <img v-else-if="previewKind === 'image'" :src="inlineUrl" :alt="name" class="rf-img" />
+          <!-- 视频播放器 (blob 流) -->
+          <video v-else-if="previewKind === 'video' && stageUrl" :src="stageUrl" controls playsinline class="rf-media"></video>
+          <!-- 音频紧凑播放条 -->
+          <div v-else-if="previewKind === 'audio'" class="rf-audio">
+            <span class="rf-disc">♫</span>
+            <div class="rf-audio-body">
+              <div class="rf-audio-nm" :title="name">{{ name }}</div>
+              <audio v-if="stageUrl" :src="stageUrl" controls class="rf-audio-ctl"></audio>
+              <div v-else class="rf-audio-nm" style="opacity:.6">加载中…</div>
+            </div>
+          </div>
+          <!-- PDF 原生查看器 (blob iframe, A4 大舞台) -->
+          <iframe v-else-if="previewKind === 'pdf' && stageUrl" :src="stageUrl" class="rf-pdf" :title="name"></iframe>
+          <!-- 文本/MD/CSV 内容渲染 (后端 /preview 1KB 截取) -->
+          <pre v-else-if="previewKind === 'text'" class="rf-text">{{ textPreview || '加载中…' }}</pre>
+          <!-- Office 信息卡 (无转换时) -->
+          <div v-else-if="previewKind === 'office'" class="rf-office">
+            <span class="rf-ext">{{ typeAbbr }}</span>
+            <span class="rf-osz mono">{{ fmtSize(file.file_size) }}</span>
+            <button type="button" class="rf-open" @click="$emit('preview', file)">打开大预览</button>
+            <span class="rf-tip">转换管线就位后自动升级为首页图</span>
+          </div>
+          <!-- 兜底占位 -->
           <div v-else class="rail-cover-ph" :style="{ borderColor: typeColor }">
-            <span class="rail-cover-abbr" :style="{ color: typeColor }">{{ typeAbbr }}</span>
+            <span class="rail-cover-abbr">{{ typeAbbr }}</span>
             <span class="rail-cover-hint">{{ thumbnailHint }}</span>
           </div>
         </div>
@@ -202,7 +233,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import CommentThread from '@/components/drive/CommentThread.vue'
@@ -235,6 +266,8 @@ const versionNumber = computed(() => props.file?.version_number || 1)
 
 const tab = ref('comments')
 watch(() => props.file?.id, () => { tab.value = 'comments' })
+
+
 
 /* ---- 批次⑩.14 (RAIL A): 文件夹下一级文件预览 (懒拉 8 条, 换夹即刷新) ---- */
 const rfFiles = ref([])
@@ -314,6 +347,60 @@ watch(() => [props.file?.id, props.file?.thumbnail_status], async () => {
     } catch { /* 无缩略图走类型块 */ }
   }
 }, { immediate: true })
+
+/* ---- 批次⑩.16 (用户选型 FIT 1 自适应舞台): 类型分层真预览 ---- */
+const previewKind = computed(() => {
+  const e = extOf.value
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(e)) return 'image'
+  if (['mp4', 'mov', 'webm'].includes(e)) return 'video'
+  if (['mp3', 'm4a', 'wav'].includes(e)) return 'audio'
+  if (e === 'pdf') return 'pdf'
+  if (['md', 'txt', 'csv', 'json', 'log'].includes(e)) return 'text'
+  if (['ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx'].includes(e)) return 'office'
+  return 'none'
+})
+// 舞台高度: 文档 470 (A4) / 视频 189 (16:9) / 音频 130 / 图片 220 / 文本 300 / Office 220
+const stageHeight = computed(() => ({
+  image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220,
+}[previewKind.value] || 168))
+
+/* 媒体/PDF blob 流 (带鉴权 axios → objectURL; 换文件/卸载即 revoke) */
+const stageUrl = ref(null)
+const stageLoading = ref(false)
+let stageSeq = 0
+async function loadStageBlob() {
+  const seq = ++stageSeq
+  if (stageUrl.value) { URL.revokeObjectURL(stageUrl.value); stageUrl.value = null }
+  const kind = previewKind.value
+  if (!props.file || !['video', 'audio', 'pdf'].includes(kind)) { stageLoading.value = false; return }
+  stageLoading.value = true
+  try {
+    const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/download?disposition=inline`, { responseType: 'blob' })
+    if (seq !== stageSeq) return
+    stageUrl.value = URL.createObjectURL(resp.data)
+  } catch { /* 加载失败回落占位 */ }
+  finally { if (seq === stageSeq) stageLoading.value = false }
+}
+
+/* 文本类 1KB 截取渲染 (后端 /preview) */
+const textPreview = ref('')
+async function loadTextPreview() {
+  textPreview.value = ''
+  if (previewKind.value !== 'text' || !props.file) return
+  try {
+    const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/preview`)
+    textPreview.value = resp.data?.text_preview || '(空文件或无法预览)'
+  } catch { textPreview.value = '(预览加载失败)' }
+}
+
+const inlineUrl = computed(() =>
+  props.file ? `/api/v1/drive/files/${props.file.id}/download?disposition=inline` : '')
+
+watch([() => props.file?.id, previewKind], async () => {
+  loadStageBlob()
+  loadTextPreview()
+}, { immediate: true })
+onBeforeUnmount(() => { if (stageUrl.value) URL.revokeObjectURL(stageUrl.value) })
 
 /* ---- 版本 ---- */
 const versions = ref([])
@@ -396,6 +483,61 @@ function fmtDT(x) {
 .rail-hero { padding: 16px 16px 12px; border-bottom: 1px solid var(--color-border); }
 /* 批次⑧ 对齐视觉稿 .d-cover: 暖纸→蜜桃渐变底 (无缩略图占位也吃同一渐变) */
 .rail-cover { height: 188px; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); background: linear-gradient(165deg, #ffffff 0%, #FFF6EF 55%, #FFEBE2 100%); display: grid; place-items: center; }
+
+/* ── 批次⑩.16 (FIT 1 自适应舞台): 高度随类型动画 ── */
+.rf-stage {
+  border-radius: var(--radius-lg); overflow: hidden;
+  border: 1px solid var(--color-border); background: var(--color-bg-card);
+  position: relative;
+  transition: height .35s cubic-bezier(.4, 0, .2, 1);
+}
+.rf-k-pdf { background: #525659; }
+.rf-k-video { background: #101613; }
+.rf-k-audio { background: linear-gradient(165deg, #ffffff, #F1EDE4); }
+.rf-k-office { background: linear-gradient(165deg, #FFF9F2 0%, #FFEDDD 100%); }
+.rf-img, .rf-media, .rf-pdf { width: 100%; height: 100%; object-fit: cover; display: block; border: none; }
+.rf-media { object-fit: contain; }
+.rf-pdf { background: #525659; }
+.rf-load { position: absolute; inset: 0; display: grid; place-items: center; }
+.rf-spin {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 3px solid var(--color-border); border-top-color: var(--color-primary);
+  animation: rf-rotate .8s linear infinite;
+}
+@keyframes rf-rotate { to { transform: rotate(360deg) } }
+.rf-auto {
+  position: absolute; right: 8px; bottom: 8px;
+  font-family: var(--font-mono, monospace); font-size: 9px; color: var(--color-text-3, #8B968F);
+  background: rgba(255,255,255,.78); padding: 2px 7px; border-radius: 9999px;
+}
+.rf-audio { padding: 12px 16px; display: flex; align-items: center; gap: 12px; height: 100%; box-sizing: border-box; }
+.rf-disc {
+  width: 40px; height: 40px; border-radius: 50%; flex: none;
+  background: var(--gradient-cta-button); display: grid; place-items: center;
+  color: #fff; font-size: 16px; box-shadow: 0 4px 12px rgba(14,118,110,.3);
+}
+.rf-audio-body { flex: 1; min-width: 0; }
+.rf-audio-nm { font-size: 11.5px; font-weight: var(--font-weight-medium); margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-audio-ctl { width: 100%; height: 30px; }
+.rf-text {
+  margin: 0; width: 100%; height: 100%; box-sizing: border-box;
+  padding: 12px 14px; overflow: hidden; white-space: pre-wrap; word-break: break-all;
+  font-family: var(--font-mono, monospace); font-size: 10.5px; line-height: 1.65;
+  color: var(--color-text-regular); background: var(--color-bg-card);
+  -webkit-mask-image: linear-gradient(#000 72%, transparent); mask-image: linear-gradient(#000 72%, transparent);
+}
+.rf-office { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; }
+.rf-ext { font-family: var(--font-mono, monospace); font-size: 20px; font-weight: 700; letter-spacing: .08em; color: var(--color-warning); }
+.rf-osz { font-size: 10.5px; color: var(--color-text-secondary); }
+.rf-open {
+  margin-top: 3px; font: inherit; font-size: 11.5px; color: #fff;
+  background: var(--gradient-cta-button); border: none; border-radius: 9999px;
+  padding: 6px 16px; cursor: pointer; box-shadow: 0 2px 8px rgba(14,118,110,.3);
+  transition: transform var(--duration-fast), box-shadow var(--duration-fast);
+}
+.rf-open:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14,118,110,.32); }
+.rf-tip { font-size: 9.5px; color: var(--color-text-placeholder); }
+@media (prefers-reduced-motion: reduce) { .rf-stage { transition: none; } }
 .rail-cover-img { width: 100%; height: 100%; object-fit: cover; }
 .rail-cover-ph { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px dashed; border-radius: var(--radius-md); padding: 22px 30px; background: transparent; }
 .rail-cover-abbr { font-family: var(--font-family-mono, monospace); font-size: 22px; font-weight: 700; }
