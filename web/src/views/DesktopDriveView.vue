@@ -165,7 +165,7 @@
           <span class="wb-kbd-hint">
             <span><kbd>↑</kbd><kbd>↓</kbd> 移动</span>
             <span><kbd>␣</kbd> 预览</span>
-            <span><kbd>Enter</kbd> 详情</span>
+            <span><kbd>Enter</kbd> 预览</span>
             <span><kbd>Del</kbd> 回收站</span>
             <span><kbd>拖拽</kbd> 移到左栏夹</span>
           </span>
@@ -195,7 +195,6 @@
             :page-size="pageSize"
             @row-activate="onRowActivate"
             @row-open="(row) => row.kind === 'folder' && enterFolder(row.data)"
-            @row-open-detail="openDetailPage"
             @row-preview="handleFilePreview"
             @row-delete="handleFileDelete"
             @row-contextmenu="onRowContextmenu"
@@ -249,7 +248,6 @@
         @rename="handleFileRename"
         @move="handleFileMove"
         @delete="handleFileDelete"
-        @open-detail="openDetailPage"
         @goto-folder="gotoFolder"
         @open-versions-dialog="openVersionsDialog"
         @refresh="onRailRefresh"
@@ -1278,9 +1276,6 @@ function enterFolder(folder) {
   if (!expandedFolderIds.value.has(folder.id)) expandedFolderIds.value.add(folder.id)
 }
 
-function openDetailPage(file) {
-  router.push(`/drive/file/${file.id}`)
-}
 function gotoFolder(folderId) {
   selectedFolderId.value = folderId
 }
@@ -1381,7 +1376,6 @@ const contextMenuItems = computed(() => {
   return [
     { command: 'ctx-preview', label: '预览' },
     { command: 'ctx-download', label: '下载' },
-    { command: 'ctx-detail', label: '打开完整详情页', divided: true },
     { command: 'ctx-rename', label: '重命名' },
     { command: 'ctx-move', label: '移动到…' },
     { command: 'ctx-share', label: '分享链接' },
@@ -1439,7 +1433,6 @@ async function onContextMenuCommand(cmd) {
   switch (cmd) {
     case 'ctx-preview': handleFilePreview(obj); break
     case 'ctx-download': handleFileDownload(obj); break
-    case 'ctx-detail': openDetailPage(obj); break
     case 'ctx-rename': handleFileRename(obj); break
     case 'ctx-move': handleFileMove(obj); break
     case 'ctx-share': handleFileShareLink(obj); break
