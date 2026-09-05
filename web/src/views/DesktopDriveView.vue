@@ -1336,25 +1336,25 @@ const contextMenuItems = computed(() => {
   if (!row) return []
   if (row.kind === 'folder') {
     return [
-      { command: 'f-open', label: '📂 打开' },
-      { command: 'f-create-sub', label: '➕ 新建子文件夹' },
-      { command: 'f-rename', label: '✏️ 重命名' },
-      { command: 'f-share', label: '🔗 分享', divided: true },
-      { command: 'f-delete', label: '🗑 删除' },
+      { command: 'f-open', label: '打开' },
+      { command: 'f-create-sub', label: '新建子文件夹' },
+      { command: 'f-rename', label: '重命名' },
+      { command: 'f-share', label: '分享', divided: true },
+      { command: 'f-delete', label: '删除' },
     ]
   }
   const f = row.data
   return [
-    { command: 'ctx-preview', label: '▣ 预览' },
-    { command: 'ctx-download', label: '⬇ 下载' },
-    { command: 'ctx-detail', label: '🔗 打开完整详情页', divided: true },
-    { command: 'ctx-rename', label: '✏️ 重命名' },
-    { command: 'ctx-move', label: '📂 移动到…' },
-    { command: 'ctx-share', label: '◈ 分享链接' },
-    { command: 'ctx-star', label: f.is_starred ? '★ 取消收藏' : '☆ 收藏 (仅自己)' },
-    { command: 'ctx-versions', label: '🕘 版本与对比…' },
-    { command: 'ctx-comments', label: '💬 查看评论' },
-    { command: 'ctx-delete', label: '🗑 移入回收站', divided: true },
+    { command: 'ctx-preview', label: '预览' },
+    { command: 'ctx-download', label: '下载' },
+    { command: 'ctx-detail', label: '打开完整详情页', divided: true },
+    { command: 'ctx-rename', label: '重命名' },
+    { command: 'ctx-move', label: '移动到…' },
+    { command: 'ctx-share', label: '分享链接' },
+    { command: 'ctx-star', label: f.is_starred ? '取消收藏' : '收藏 (仅自己)' },
+    { command: 'ctx-versions', label: '版本与对比…' },
+    { command: 'ctx-comments', label: '查看评论' },
+    { command: 'ctx-delete', label: '移入回收站', divided: true },
   ]
 })
 

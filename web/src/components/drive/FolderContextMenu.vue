@@ -30,14 +30,16 @@
       >
         <li
           v-for="(item, idx) in items"
-          :key="item.command"
+          :key="item.command + '-' + idx"
           class="folder-context-menu-item"
           :class="{
             'is-divided': item.divided,
-            'is-disabled': item.disabled
+            'is-disabled': item.disabled,
+            'is-danger': isDanger(item)
           }"
           @click="onPick(item)"
         >
+          <svg v-if="iconOf(item)" class="fcm-ic" viewBox="0 0 24 24" v-html="iconOf(item)"></svg>
           <span class="folder-context-menu-label">{{ item.label }}</span>
         </li>
       </ul>
@@ -55,6 +57,50 @@ const props = defineProps({
 
 const emit = defineEmits(['command', 'close'])
 
+// 批次⑩.6 (用户选型 MENU A 档案线性): command → 描边图标路径 (与树/表描边文件夹同语言),
+// 危险命令 hover 珊瑚红。items 也可自带 icon 覆盖 (同 chips 的 v-html 模式)。
+const FCM_ICONS = {
+  open: '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.2 10H20a2 2 0 0 1 1.9 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v2"/>',
+  'folder-plus': '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>',
+  rename: '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 3 21l.5-4.5z"/>',
+  share: '<circle cx="6" cy="12" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="M8.3 10.9 15.2 7.2M8.3 13.1l6.9 3.7"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  trash: '<path d="M4 7h16M9 7V5h6v2M6.5 7l1 12.5h9L18 7"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
+  restore: '<path d="M3 12a9 9 0 1 0 2.8-6.4L3 8"/><path d="M3 3v5h5"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+  download: '<path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/>',
+  detail: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+  move: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  star: '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  comments: '<path d="M21 12a8.5 8.5 0 0 1-8.5 8.5c-1.5 0-3-.4-4.2-1L3 21l1.5-4.3A8.5 8.5 0 1 1 21 12z"/>',
+}
+const FCM_ICON_BY_COMMAND = {
+  open: 'open', 'f-open': 'open',
+  'create-sub': 'folder-plus', 'f-create-sub': 'folder-plus',
+  rename: 'rename', 'f-rename': 'rename', 'ctx-rename': 'rename',
+  share: 'share', 'f-share': 'share', 'ctx-share': 'share',
+  'copy-id': 'copy',
+  delete: 'trash', 'f-delete': 'trash', 'ctx-delete': 'trash', 'permanent-delete': 'trash',
+  refresh: 'refresh',
+  'restore-all': 'restore', restore: 'restore',
+  preview: 'eye', 'ctx-preview': 'eye',
+  download: 'download', 'ctx-download': 'download',
+  'ctx-detail': 'detail',
+  move: 'move', 'ctx-move': 'move',
+  'ctx-star': 'star',
+  'ctx-versions': 'clock',
+  'ctx-comments': 'comments',
+}
+const FCM_DANGERS = new Set(['delete', 'f-delete', 'ctx-delete', 'empty-trash', 'permanent-delete'])
+function iconOf(item) {
+  return item.icon || FCM_ICONS[FCM_ICON_BY_COMMAND[item.command]] || ''
+}
+function isDanger(item) {
+  return !!item.danger || FCM_DANGERS.has(item.command)
+}
+
 const visible = ref(false)
 const menuRef = ref(null)
 const menuStyle = ref({ top: '0px', left: '0px' })
@@ -71,7 +117,7 @@ function handleContextMenu(e) {
 
 function positionMenu() {
   // 估算菜单尺寸 (后续可从 DOM 拿真实尺寸)
-  const MENU_WIDTH = 180
+  const MENU_WIDTH = 216
   const MENU_HEIGHT = props.items.length * 36 + (props.items.filter(i => i.divided).length * 9) + 8
 
   // 视口边界检测 (v2.9: 智能 placement)
@@ -149,15 +195,15 @@ defineExpose({ open: handleContextMenu, close })
 .folder-context-menu {
   position: fixed;
   z-index: 3000;  /* 高于 el-dialog (2000) + el-tooltip */
-  min-width: 160px;
+  min-width: 216px;
   margin: 0;
-  padding: 4px 0;
+  padding: 5px;
   list-style: none;
   background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  font-size: var(--font-size-sm);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 32px rgba(20, 40, 35, .16);
+  font-size: 12.5px;
   font-family: inherit;
   user-select: none;
 }
@@ -165,18 +211,36 @@ defineExpose({ open: handleContextMenu, close })
 .folder-context-menu-item {
   display: flex;
   align-items: center;
-  height: 32px;
-  padding: 0 16px;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 7px;
   cursor: pointer;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
+  color: var(--color-text-regular);
+  font-size: 12.5px;
   line-height: 1;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
+/* 批次⑩.6 (MENU A): hover 整行浅青 + 文字深青; 危险项 hover 才染珊瑚 */
 .folder-context-menu-item:hover {
   background: var(--color-primary-bg);
-  color: var(--color-primary);
+  color: var(--color-primary-dark);
+}
+
+.folder-context-menu-item.is-danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 9%, transparent);
+  color: var(--color-danger);
+}
+
+.fcm-ic {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
 }
 
 .folder-context-menu-item.is-divided {
@@ -209,6 +273,11 @@ defineExpose({ open: handleContextMenu, close })
 [data-theme="dark"] .folder-context-menu-item:hover {
   background: var(--color-primary-bg);
   color: var(--color-primary);
+}
+
+[data-theme="dark"] .folder-context-menu-item.is-danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+  color: var(--color-danger);
 }
 
 [data-theme="dark"] .folder-context-menu-item.is-divided {
