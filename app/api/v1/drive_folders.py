@@ -100,8 +100,7 @@ def _build_share_url(token: str) -> str:
     response_model=FolderShareResponse,
     status_code=201,
 )
-async def create_folder_share(
-    folder_id: int,
+async def create_folder_share(    folder_id: int,
     payload: FolderShareCreate,
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
@@ -136,6 +135,25 @@ async def create_folder_share(
         share_token=share.share_token,
         share_url=_build_share_url(share.share_token),
     )
+
+
+@router.delete(
+    "/{folder_id}/share/{share_id}",
+    status_code=204,
+)
+async def revoke_folder_share(
+    folder_id: int,
+    share_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """撤销 folder 分享链接 (批次⑩.9: 之前服务层方法存在但从未暴露 API,
+    前端撤销调用 404; 撤销后文件夹回团队属性)"""
+    svc = DriveShareService(db)
+    ok = await svc.revoke_folder_share(share_id, current_user.id)
+    if not ok:
+        raise NotFoundException(message="分享链接不存在")
+    return None
 
 
 @router.get(

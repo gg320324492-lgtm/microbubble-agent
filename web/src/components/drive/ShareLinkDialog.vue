@@ -154,6 +154,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import { DocumentCopy, Refresh, CircleClose, Plus } from '@element-plus/icons-vue'
 import '@/views/drive/drive-view.css'
 
@@ -272,20 +273,9 @@ async function createShare() {
       password: usePassword.value ? password.value : null,
       max_downloads: maxDownloadsOption.value,
     }
-    const resp = await fetch(
-      `/api/v1/drive/folders/${props.folder.id}/share`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      }
-    )
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '')
-      throw new Error(errText || `HTTP ${resp.status}`)
-    }
-    const data = await resp.json()
+    // 批次⑩.9: URL 修正 (/drive/folders → /folders, 后端实际挂载点) + 改 axios 走鉴权拦截器
+    const resp = await axios.post(`/api/v1/folders/${props.folder.id}/share`, body)
+    const data = resp.data
     result.value = data
     emit('created', data)
     ElMessage.success('分享链接已创建')
@@ -299,14 +289,8 @@ async function createShare() {
 async function revokeShare() {
   if (!result.value?.id) return
   try {
-    const resp = await fetch(
-      `/api/v1/drive/folders/share/${result.value.id}`,
-      { method: 'DELETE', credentials: 'include' }
-    )
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '')
-      throw new Error(errText || `HTTP ${resp.status}`)
-    }
+    // 批次⑩.9: 撤销端点补齐 (DELETE /folders/{folder_id}/share/{share_id})
+    await axios.delete(`/api/v1/folders/${props.folder.id}/share/${result.value.id}`)
     ElMessage.success('链接已撤销')
     emit('revoked', result.value.id)
     result.value = null

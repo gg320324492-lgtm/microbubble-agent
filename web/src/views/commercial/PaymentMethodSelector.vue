@@ -32,7 +32,7 @@
           <div class="method-desc">{{ method.description }}</div>
         </div>
         <div class="method-radio">
-          <el-radio v-model="selected" :label="method.provider">
+          <el-radio v-model="selected" :value="method.provider">
             <span class="sr-only">{{ method.name }}</span>
           </el-radio>
         </div>
