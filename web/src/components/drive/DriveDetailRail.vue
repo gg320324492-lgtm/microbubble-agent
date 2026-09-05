@@ -115,17 +115,26 @@
           <iframe v-else-if="previewKind === 'pdf' && stageUrl" :src="stageUrl" class="rf-pdf" :title="name"></iframe>
           <!-- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) -->
           <div v-else-if="previewKind === 'ppt'" class="rf-ppt">
-            <div v-if="pptLoading" class="rf-load"><span class="rf-spin"></span></div>
+            <div v-if="pptLoading" class="rf-skel">
+              <div class="rf-skel-ttl"></div>
+              <div class="rf-skel-ln" style="width:78%"></div>
+              <div class="rf-skel-ln" style="width:62%"></div>
+              <div class="rf-skel-ln" style="width:70%"></div>
+              <div class="rf-skel-ln" style="width:40%"></div>
+              <div class="rf-skel-ln" style="width:66%"></div>
+            </div>
             <template v-else-if="pptData">
               <div class="rf-slide-wrap">
-                <div class="rf-slide" :style="{ width: '304px', height: pptSlideH + 'px', background: currentSlideBg }" v-html="pptSlideHtml"></div>
+                <Transition name="rfpg" mode="out-in">
+                  <div :key="pptPage" class="rf-slide" :style="{ width: '304px', height: pptSlideH + 'px', background: currentSlideBg }" v-html="pptSlideHtml"></div>
+                </Transition>
               </div>
-              <div class="rf-pgr">
-                <button type="button" :disabled="pptPage <= 1" @click="pptPage--">‹</button>
-                <span class="rf-pgn mono">{{ pptPage }} / {{ pptData.total }} 页</span>
-                <button type="button" :disabled="pptPage >= pptData.total" @click="pptPage++">›</button>
-                <span class="rf-ppttag">自研渲染</span>
+              <div class="rf-pill">
+                <button type="button" class="rf-pill-btn" :disabled="pptPage <= 1" @click="pptPage--">‹</button>
+                <span class="rf-pill-pg mono">{{ pptPage }} / {{ pptData.total }}</span>
+                <button type="button" class="rf-pill-btn" :disabled="pptPage >= pptData.total" @click="pptPage++">›</button>
               </div>
+              <span class="rf-badge">自研渲染 · {{ pptData.total }} 页</span>
             </template>
             <div v-else class="rf-note" style="color:#cbd5d0">解析失败或文件损坏</div>
           </div>
@@ -249,7 +258,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import CommentThread from '@/components/drive/CommentThread.vue'
@@ -445,6 +454,7 @@ const pptSlideHtml = computed(() => {
   const slide = d?.slides?.[pptPage.value - 1]
   if (!slide) return ''
   const scale = STAGE_W / (d.slide_w_emu || 9144000)
+  pptChartDefs.length = 0
   const posStyle = (sp) => `left:${(sp.x * 100).toFixed(2)}%;top:${(sp.y * 100).toFixed(2)}%;width:${(sp.w * 100).toFixed(2)}%;height:${(sp.h * 100).toFixed(2)}%;`
   let html = ''
   for (const sp of slide.shapes || []) {
@@ -465,8 +475,9 @@ const pptSlideHtml = computed(() => {
       } else if (sp.kind === 'table' && sp.rows) {
         const trs = sp.rows.map((r) => `<tr>${r.map((c) => `<td>${escHtml(c)}</td>`).join('')}</tr>`).join('')
         html += `<div style="position:absolute;${posStyle(sp)}overflow:hidden;background:#fff;"><table style="border-collapse:collapse;width:100%;height:100%;font-size:8px;">${trs}</table></div>`
-      } else if (sp.kind === 'chart') {
-        html += `<div style="position:absolute;${posStyle(sp)}display:grid;place-items:center;background:rgba(14,118,110,.06);color:var(--color-text-3,#8B968F);font-size:9px;">图表 (二期 ECharts 重绘)</div>`
+      } else if (sp.kind === 'chart-data') {
+        html += `<div class="rf-chart" style="position:absolute;${posStyle(sp)}background:#fff;" data-ci="${pptChartDefs.length}"></div>`
+        pptChartDefs.push(sp)
       } else if (sp.kind === 'shape' && sp.color) {
         html += `<div style="position:absolute;${posStyle(sp)}background:#${sp.color};"></div>`
       }
@@ -474,6 +485,52 @@ const pptSlideHtml = computed(() => {
   }
   return html
 })
+
+const pptChartDefs = []
+const pptChartInstances = []
+async function mountPptCharts() {
+  await nextTick()
+  while (pptChartInstances.length) { try { pptChartInstances.pop().dispose() } catch {} }
+  const slide = pptData.value?.slides?.[pptPage.value - 1]
+  if (!slide) return
+  const defs = (slide.shapes || []).filter((sp) => sp.kind === 'chart-data')
+  if (!defs.length) return
+  try {
+    const { init } = await import('echarts')
+    await nextTick()
+    document.querySelectorAll('.rf-stage .rf-chart').forEach((dom) => {
+      const cd = defs[Number(dom.dataset.ci || 0)]
+      if (!dom.isConnected || !cd) return
+      try {
+        const inst = init(dom)
+        const ct = cd.chart_type || 'bar'
+        let option
+        if (ct.includes('pie')) {
+          const s0 = cd.series?.[0]
+          option = {
+            animation: false,
+            series: [{ type: 'pie', radius: '68%', center: ['50%', '46%'],
+              data: (cd.categories || []).map((c, i) => ({ name: c, value: s0?.values?.[i] ?? 0 })),
+              label: { fontSize: 7 }, textStyle: { fontSize: 7 } }],
+          }
+        } else {
+          option = {
+            animation: false,
+            legend: { show: (cd.series?.length || 0) > 1, top: 0, textStyle: { fontSize: 7 } },
+            grid: { left: 30, right: 8, top: (cd.series?.length || 0) > 1 ? 20 : 8, bottom: 18 },
+            xAxis: { type: 'category', data: cd.categories || [], axisLabel: { fontSize: 7, interval: 0 } },
+            yAxis: { type: 'value', axisLabel: { fontSize: 7 } },
+            series: (cd.series || []).map((sr) => ({ name: sr.name, type: ct.includes('line') ? 'line' : 'bar', data: sr.values })),
+          }
+        }
+        inst.setOption(option)
+        pptChartInstances.push(inst)
+      } catch { /* 单图表失败跳过 */ }
+    })
+  } catch { /* echarts 加载失败静默 */ }
+}
+watch([pptSlideHtml, pptPage], mountPptCharts)
+onBeforeUnmount(() => { while (pptChartInstances.length) { try { pptChartInstances.pop().dispose() } catch {} } })
 
 const inlineUrl = computed(() =>
   props.file ? `/api/v1/drive/files/${props.file.id}/download?disposition=inline` : '')
@@ -623,22 +680,49 @@ function fmtDT(x) {
 .rf-ppt { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; }
 .rf-slide-wrap { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
 .rf-slide { position: relative; box-shadow: 0 8px 26px rgba(0, 0, 0, .38); overflow: hidden; flex: none; }
-.rf-pgr {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  padding: 7px; background: var(--color-bg-card); border-top: 1px solid var(--color-border);
+/* 玻璃胶囊翻页器 (悬浮舞台底部) */
+.rf-pill {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 9px;
+  background: rgba(20, 40, 35, .62); border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 9999px; padding: 4px 8px; backdrop-filter: blur(8px);
 }
-.rf-pgr button {
-  font: inherit; font-size: 11px; border: 1px solid var(--color-border);
-  background: var(--color-bg-card); color: var(--color-text-regular);
-  border-radius: 6px; padding: 3px 10px; cursor: pointer;
+.rf-pill-btn {
+  font: inherit; font-size: 12px; border: none; background: none;
+  color: #fff; width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; transition: background var(--duration-fast);
 }
-.rf-pgr button:disabled { opacity: .45; cursor: default; }
-.rf-pgn { font-size: 10px; color: var(--color-text-secondary); }
-.rf-ppttag {
-  font-family: var(--font-mono, monospace); font-size: 8.5px; color: var(--color-text-placeholder);
-  border: 1px dashed var(--color-border); border-radius: 4px; padding: 1px 6px;
+.rf-pill-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .18); }
+.rf-pill-btn:disabled { opacity: .35; cursor: default; }
+.rf-pill-pg { font-family: var(--font-mono, monospace); font-size: 10px; color: rgba(255, 255, 255, .92); letter-spacing: .05em; }
+.rf-badge {
+  position: absolute; top: 9px; right: 9px; z-index: 3;
+  font-family: var(--font-mono, monospace); font-size: 8.5px;
+  color: rgba(255, 255, 255, .85); background: rgba(20, 40, 35, .5);
+  padding: 2px 8px; border-radius: 9999px; backdrop-filter: blur(6px);
 }
-@media (prefers-reduced-motion: reduce) { .rf-stage { transition: none; } }
+/* 画布精修 */
+.rf-slide { border-radius: 3px; }
+/* 翻页过渡 */
+.rfpg-enter-active { transition: opacity .22s ease, transform .22s ease; }
+.rfpg-leave-active { transition: opacity .16s ease, transform .16s ease; }
+.rfpg-enter-from { opacity: 0; transform: translateX(12px); }
+.rfpg-leave-to { opacity: 0; transform: translateX(-12px); }
+/* 加载骨架屏 */
+.rf-skel { height: 100%; box-sizing: border-box; padding: 26px 28px; background: var(--color-bg-card); }
+.rf-skel-ttl { height: 14px; width: 55%; border-radius: 4px; background: var(--color-border); margin-bottom: 16px; animation: rf-shimmer 1.1s ease infinite alternate; }
+.rf-skel-ln { height: 7px; border-radius: 4px; background: var(--color-border); margin-bottom: 11px; animation: rf-shimmer 1.1s ease infinite alternate; }
+@keyframes rf-shimmer { from { opacity: .45 } to { opacity: 1 } }
+/* 表格美化 */
+.rf-slide table td {
+  border: 1px solid #C9CFCC; padding: 2px 5px; color: var(--color-text-regular);
+}
+.rf-slide table tr:first-child td { font-weight: 600; background: #EDF2F0; color: var(--color-text-primary); }
+@media (prefers-reduced-motion: reduce) {
+  .rf-stage { transition: none; }
+  .rfpg-enter-active, .rfpg-leave-active { transition: none; }
+  .rf-skel-ttl, .rf-skel-ln { animation: none; }
+}
 .rail-cover-img { width: 100%; height: 100%; object-fit: cover; }
 .rail-cover-ph { display: flex; flex-direction: column; align-items: center; gap: 6px; border: 2px dashed; border-radius: var(--radius-md); padding: 22px 30px; background: transparent; }
 .rail-cover-abbr { font-family: var(--font-family-mono, monospace); font-size: 22px; font-weight: 700; }
