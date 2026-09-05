@@ -179,26 +179,27 @@ const canPost = computed(() => {
   return trimmed.length > 0 && trimmed.length <= 1000 && !posting.value
 })
 
+function parseServerTime(iso) {
+  // 后端返回 UTC 裸时间串 (无时区后缀), new Date 会按本地时区解析 → 相差 8 小时
+  if (typeof iso === 'string' && !/Z|[+-]\d{2}:?\d{2}$/.test(iso)) return new Date(iso + 'Z')
+  return new Date(iso)
+}
+
 function formatTime(iso) {
   if (!iso) return ''
-  const t = new Date(iso).getTime()
+  const t = parseServerTime(iso).getTime()
   if (isNaN(t)) return ''
   const now = Date.now()
   const sec = Math.floor((now - t) / 1000)
   if (sec < 60) return '刚刚'
   if (sec < 3600) return `${Math.floor(sec / 60)} 分钟前`
   if (sec < 86400) return `${Math.floor(sec / 3600)} 小时前`
-  return new Date(iso).toLocaleDateString('zh-CN')
+  return parseServerTime(iso).toLocaleDateString('zh-CN')
 }
 
 function canDelete(comment) {
   if (!props.currentUserId) return false
   return comment.user_id === props.currentUserId || props.isFileOwner
-}
-
-function userAvatarUrl(userId) {
-  if (!userId) return ''
-  return `/api/v1/members/${userId}/avatar`
 }
 
 function usernameById(userId) {

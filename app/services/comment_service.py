@@ -215,12 +215,15 @@ class CommentService:
         file_id: int,
         limit: int = 100,
         before_id: Optional[int] = None,
-    ) -> List[Tuple[FileComment, Optional[str]]]:
+    ) -> List[Tuple[FileComment, Optional[str], Optional[str]]]:
         """列文件评论 (按时间倒序)
 
         v2 PR6-P5: 返回 flat list, 前端根据 parent_comment_id 组装 tree
+        v77: 元组第二位改为显示名 (Member.name 优先, username 兜底 — 之前返回
+            username 导致评论面板显示登录名如 dutonghe 而非 杜同贺), 第三位为
+            Member.avatar 原始值 (端点层负责解析成公网 URL)
         """
-        stmt = select(FileComment, Member.username).outerjoin(
+        stmt = select(FileComment, Member.name, Member.username, Member.avatar).outerjoin(
             Member, Member.id == FileComment.user_id
         ).where(FileComment.file_id == file_id)
 
@@ -229,7 +232,7 @@ class CommentService:
 
         stmt = stmt.order_by(FileComment.created_at.desc()).limit(limit)
         rows = (await db.execute(stmt)).all()
-        return [(row[0], row[1]) for row in rows]
+        return [(r[0], (r[1] or r[2]) if r[1] or r[2] else None, r[3]) for r in rows]
 
     @staticmethod
     async def update_comment(

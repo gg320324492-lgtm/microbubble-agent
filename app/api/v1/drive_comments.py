@@ -58,6 +58,7 @@ from app.services.drive_comment_recursive_service import (
     CommentBreadcrumbRow,
     DriveCommentRecursiveService,
 )
+from app.api.v1.auth import _resolve_avatar_url
 from app.services.drive_comment_service import (
     DriveCommentService,
     DriveCommentServiceError,
@@ -131,7 +132,7 @@ async def create_comment(
         author={
             "id": current_user.id,
             "name": current_user.name,
-            "avatar_url": getattr(current_user, "avatar_url", None),
+            "avatar_url": _resolve_avatar_url(current_user),
         },
         parent_id=comment.parent_id,
         content=comment.content,
@@ -188,7 +189,7 @@ async def list_comments(
             author={
                 "id": c.author.id if c.author else 0,
                 "name": c.author.name if c.author else "[已注销用户]",
-                "avatar_url": getattr(c.author, "avatar_url", None) if c.author else None,
+                "avatar_url": (_resolve_avatar_url(c.author) if c.author else None),
             },
             parent_id=c.parent_id,
             content=c.content,
@@ -207,7 +208,7 @@ async def list_comments(
                     author={
                         "id": r.author.id if r.author else 0,
                         "name": r.author.name if r.author else "[已注销用户]",
-                        "avatar_url": getattr(r.author, "avatar_url", None) if r.author else None,
+                        "avatar_url": (_resolve_avatar_url(r.author) if r.author else None),
                     },
                     parent_id=r.parent_id,
                     content=r.content,
@@ -448,7 +449,7 @@ async def get_comment(
                 author={
                     "id": r.author.id if r.author else 0,
                     "name": r.author.name if r.author else "[已注销用户]",
-                    "avatar_url": getattr(r.author, "avatar_url", None) if r.author else None,
+                    "avatar_url": (_resolve_avatar_url(r.author) if r.author else None),
                 },
                 parent_id=r.parent_id,
                 content=r.content,
