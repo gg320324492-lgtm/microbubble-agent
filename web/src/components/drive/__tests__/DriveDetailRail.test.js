@@ -101,3 +101,20 @@ describe('DriveDetailRail', () => {
     expect(w.emitted('goto-folder')[0]).toEqual([3])
   })
 })
+
+describe('DriveDetailRail 未选中兜底 (复刻视觉稿右栏常驻)', () => {
+  it('file=null + recent 列表 → 显示「最近上传」条目, 点击 emit pick-file', async () => {
+    const w = factory({ file: null, recent: [file, { ...file, id: 12, file_name: '综述.docx' }] })
+    expect(w.find('.rail-recent-cap').text()).toContain('最近上传')
+    const items = w.findAll('.rail-recent-item')
+    expect(items.length).toBe(2)
+    expect(items[0].text()).toContain('组会0901.pptx')
+    await items[1].trigger('click')
+    expect(w.emitted('pick-file')[0][0].id).toBe(12)
+  })
+  it('file=null 且无 recent → 回落原引导空态', () => {
+    const w = factory({ file: null, recent: [] })
+    expect(w.find('.rail-recent-item').exists()).toBe(false)
+    expect(w.find('.rail-empty-ico').exists()).toBe(true)
+  })
+})

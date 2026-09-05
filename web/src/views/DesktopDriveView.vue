@@ -186,9 +186,11 @@
 
       <!-- 右: 常驻详情栏 -->
       <DriveDetailRail
-        v-if="isTableMode && activeFile"
+        v-if="isTableMode"
         class="wb-railright"
         :file="activeFile"
+        :recent="driveFiles"
+        @pick-file="(f) => (activeKey = f.id)"
         @preview="handleFilePreview"
         @download="handleFileDownload"
         @share="handleFileShareLink"

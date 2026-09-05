@@ -3,7 +3,12 @@
  * mount-smoke + 关键交互契约: folder 行前置 / 行事件 emit / 列头排序 / 选择 checkbox 同步
  */
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
+
+vi.mock('axios', () => ({
+  default: { get: vi.fn().mockResolvedValue({ data: { thumbnail_url: 'http://minio/x/thumb.webp' } }) },
+}))
+import axios from 'axios'
 import DriveFileTable from '@/components/drive/DriveFileTable.vue'
 
 const files = [
@@ -124,5 +129,46 @@ describe('DriveFileTable', () => {
     rows[4].trigger('dragstart', { dataTransfer: { setData: (k, v) => { store2[k] = v }, types: [] } })
     expect(JSON.parse(store2[DRIVE_MOVE_MIME])).toEqual([13])
     expect(w.emitted('drag-change')[0]).toEqual([true])
+  })
+})
+
+describe('DriveFileTable 封面块 (复刻视觉稿: 真缩略图 + 类型色块)', () => {
+  const coverFiles = [
+    { id: 21, file_name: '泡径分布.png', storage_mode: 'drive', thumbnail_status: 'ready' },
+    { id: 22, file_name: '报告.pdf', storage_mode: 'drive', thumbnail_status: 'ready' },
+    { id: 23, file_name: '讲义.pptx', storage_mode: 'drive', thumbnail_status: 'none' },
+  ]
+  function coverMount(files, folders) {
+    return mount(DriveFileTable, {
+      props: { files, folders, loading: false },
+      global: { stubs: { ElPagination: true } },
+    })
+  }
+  it('图片行走 inline 直链, ready PDF 拉 thumbnail 端点, 无缩略图类型回落缩写块', async () => {
+    const w = coverMount(coverFiles, [{ id: 9, name: '实验数据' }])
+    await flushPromises()
+    const rows = w.findAll('.dft-row')
+    expect(rows[0].find('.dft-glyph-folder').exists()).toBe(true)
+    expect(rows[1].find('.dft-glyph img').attributes('src')).toContain('/api/v1/drive/files/21/download?disposition=inline')
+    expect(rows[2].find('.dft-glyph img').attributes('src')).toBe('http://minio/x/thumb.webp')
+    expect(axios.get).toHaveBeenCalledWith('/api/v1/drive/files/22/thumbnail')
+    expect(rows[3].find('.dft-glyph img').exists()).toBe(false)
+    expect(rows[3].find('.dft-glyph-ext').text()).toBe('PPTX')
+  })
+  it('缩略图加载失败 (img error) 回落类型缩写块', async () => {
+    const w = coverMount([coverFiles[1]], [])
+    await flushPromises()
+    const img = w.find('.dft-glyph img')
+    expect(img.exists()).toBe(true)
+    await img.trigger('error')
+    await flushPromises()
+    expect(w.find('.dft-glyph img').exists()).toBe(false)
+    expect(w.find('.dft-glyph-ext').text()).toBe('PDF')
+  })
+  it('文件夹封面色确定性: 同名恒同色', () => {
+    const a = coverMount([], [{ id: 1, name: '组会 PPT' }]).find('.dft-glyph').attributes('style')
+    const b = coverMount([], [{ id: 2, name: '组会 PPT' }]).find('.dft-glyph').attributes('style')
+    expect(a).toBe(b)
+    expect(a).toContain('color')
   })
 })
