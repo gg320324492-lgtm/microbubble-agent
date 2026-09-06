@@ -294,7 +294,6 @@
       @uploaded="onFilesUploaded"
       @update:model-value="v => { if (!v) droppedFiles = [] }"
     />
-    <FilePreviewDialog v-model="showPreviewDialog" :file="previewFile" />
     <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
     <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" />
     <!-- 批次③: 右键/右栏「版本沿革」直接开 dialog (含恢复 + 两版本对比 diff), 不强制跳 /versions 整页 -->
@@ -328,7 +327,6 @@ import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
 import DriveUploadDialog from '@/components/drive/DriveUploadDialog.vue'
-import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6
 import ShareDialog from '@/components/drive/ShareDialog.vue'  // v2 PR1
 import ShareLinkDialog from '@/components/drive/ShareLinkDialog.vue'  // W72-B-1 folder share link
 // W68 第 4 批: 右键菜单复用 v2.9 FolderContextMenu (固定定位 + 边界检测)
@@ -930,13 +928,10 @@ function onPageSizeChange(size) {
 }
 
 function handleFilePreview(file) {
-  // PR4.6: 接入 FilePreviewDialog
-  previewFile.value = file
-  showPreviewDialog.value = true
+  // 批次⑩.61: 双击/Enter/Space → 右栏选中预览 (旧 FilePreviewDialog 弹窗退役)
+  if (file && file.id != null) activeKey.value = file.id
+  tableRef.value?.focus?.()
 }
-
-const showPreviewDialog = ref(false)
-const previewFile = ref(null)
 
 function handleFileRename(file) {
   renameTarget.value = file

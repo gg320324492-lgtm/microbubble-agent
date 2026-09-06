@@ -206,9 +206,9 @@ const props = defineProps({
 const emit = defineEmits([
   'row-activate',      // (row|null, {shift}) → 父层更新 activeKey (+ shift 时 select-range)
   'row-open',          // 双击 folder / Enter: 进入文件夹
-  // (row-open-detail 已随详情页入口退役 — Enter 现为预览弹窗)
+  // (row-open-detail 已随详情页入口退役 — Enter/双击现为右栏选中预览, 批次⑩.61 弹窗退役)
   'row-delete',        // Del → 父层 confirm + deleteFile
-  'row-preview',       // Space/双击 file → FilePreviewDialog
+  'row-preview',       // Space/双击 file → 右栏选中预览 (批次⑩.61 弹窗退役)
   'row-contextmenu',   // (row, event)
   'sort-change',       // (prop)
   'select-toggle',     // (id)
