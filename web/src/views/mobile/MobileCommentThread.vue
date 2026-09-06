@@ -74,12 +74,12 @@
           <div
             v-for="(m, idx) in mention.rawCandidates.value"
             :key="m.id"
+            v-memo="[idx === mention.selectedIndex.value]"
             class="mct-mention-cell"
             :class="{ on: idx === mention.selectedIndex.value }"
             role="option"
             :aria-selected="idx === mention.selectedIndex.value"
             @mousedown.prevent="onMentionItemClick(idx)"
-            @mouseenter="mention.selectedIndex.value = idx"
           >
             <el-avatar :size="30" :src="m.avatar" class="mct-mention-avatar">
               {{ (m.name || '?').slice(0, 1) }}
