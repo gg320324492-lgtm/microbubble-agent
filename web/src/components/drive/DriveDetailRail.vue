@@ -215,15 +215,15 @@
         </div>
         <h3 class="rail-name" :title="name">{{ name }}<span v-if="(previewKind === 'ppt' || previewKind === 'docx') && (pptImgStatus === 'ready' || docxImgStatus === 'ready')" class="rf-page-cnt">{{ (previewKind === 'ppt' ? pptPageClamped : docxPageClamped) }} / {{ (previewKind === 'ppt' ? pptImgTotalSafe : docxImgTotalSafe) }} 页</span></h3>
         <!-- 批次⑩.37 (用户选型 B): ppt 时首排三键 上一页·全屏放映·下一页, 悬浮胶囊退役 (仅全屏态保留) -->
-        <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' }">
-          <template v-if="previewKind === 'ppt'">
-            <button type="button" class="rail-act pg pv" :disabled="pptPageClamped <= 1" title="上一页 (←)" @click="prevPptPage">
+        <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' }">
+          <template v-if="previewKind === 'ppt' || previewKind === 'docx'">
+            <button type="button" class="rail-act pg pv" :disabled="prevDisabled" title="上一页 (←)" @click="prevAnyPage">
               <span class="pg-arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg></span><span class="pg-lbl">上一页</span>
             </button>
             <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
               <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
             </button>
-            <button type="button" class="rail-act pg nx" :disabled="pptPageClamped >= pptImgTotalSafe" title="下一页 (→)" @click="nextPptPage">
+            <button type="button" class="rail-act pg nx" :disabled="nextDisabled" title="下一页 (→)" @click="nextAnyPage">
               <span class="pg-lbl">下一页</span><span class="pg-arr"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></span>
             </button>
           </template>
@@ -249,7 +249,7 @@
           </template>
         </div>
         <!-- 批次⑩.38 (选型 A): ppt 二排 3 列, 空位消失 -->
-        <div v-if="previewKind === 'ppt'" class="rail-actions rail-actions--second rail-actions--pager">
+        <div v-if="previewKind === 'ppt' || previewKind === 'docx'" class="rail-actions rail-actions--second rail-actions--pager">
           <button type="button" class="rail-act" @click="$emit('download', file)">
             <span>⬇</span>下载
           </button>
@@ -737,6 +737,11 @@ function revokeDocxBlobs() {
 }
 onBeforeUnmount(() => { stopDocxPoll(); docxPollSeq++; revokeDocxBlobs() })
 
+const prevDisabled = computed(() => previewKind.value === 'docx' ? docxPageClamped.value <= 1 : pptPageClamped.value <= 1)
+const nextDisabled = computed(() => previewKind.value === 'docx' ? docxPageClamped.value >= docxImgTotalSafe.value : pptPageClamped.value >= pptImgTotalSafe.value)
+function prevAnyPage() { if (previewKind.value === 'docx') prevDocxPage(); else prevPptPage() }
+function nextAnyPage() { if (previewKind.value === 'docx') nextDocxPage(); else nextPptPage() }
+
 const docxStageRef = ref(null)
 function toggleDocxFull() {
   const el = rfStageRef.value || docxStageRef.value
@@ -956,13 +961,9 @@ function fmtDT(x) {
   /* 批次⑩.37 (选型 B): 常态退役 — 翻页/全屏已下沉为下方矩阵按钮; 胶囊仅在全屏放映态浮现 */
   display: none;
 }
-/* 批次⑩.53: docx 预览胶囊常显 (常态即可翻页) */
-.rf-pill-docx {
-  display: flex;
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
+/* 批次⑩.53: docx 胶囊常态隐藏 (翻页走下方矩阵), 全屏放映态显示 */
+.rf-pill-docx { display: none; }
+:is(.rf-stage, .rf-ppt):fullscreen .rf-pill-docx { display: flex; }
 /* docx 全屏: 缩略图侧栏 + 主视图 */
 .docx-fs-wrap { display: flex; width: 100%; height: 100%; background: #0D1210; }
 .docx-thumbs {
