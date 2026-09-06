@@ -138,20 +138,19 @@ class NotificationService:
         db: AsyncSession,
         actor_id: Optional[int],
     ) -> Optional[str]:
-        """v2 PR6-P8: 查 actor username/name (用于 title 拼 '杜同贺 在 ...')
+        """查 actor 显示名 (用于 title 拼 '杜同贺 在 ... 提到了你')
 
-        Returns:
-            username (lowercase, like 'du_tonghe') 或 name (中文, like '杜同贺')
-            优先 username (短, 推送 token 省) → fallback name → None = '系统'
+        批次⑩.51: 优先 Member.name (显示名) — 之前优先 username 导致铃铛
+        标题显示 'dutonghe 在 ...' 而非 '杜同贺 在 ...'
         """
         if not actor_id:
             return None
         m = (await db.execute(
-            select(Member.username, Member.name).where(Member.id == actor_id)
+            select(Member.name, Member.username).where(Member.id == actor_id)
         )).first()
         if m is None:
             return None
-        return m.username or m.name
+        return m.name or m.username
 
     @staticmethod
     async def _lookup_rich_metadata(
