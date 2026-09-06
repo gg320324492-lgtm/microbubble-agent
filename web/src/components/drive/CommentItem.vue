@@ -18,7 +18,7 @@
 -->
 <template>
   <div class="comment-item-wrapper" :data-depth="comment.thread_depth || 0">
-    <div class="comment-item">
+    <div class="comment-item" :class="{ 'reply-target': replyTargetId === comment.id }">
       <el-avatar
         :size="depth === 0 ? 36 : 28"
         :src="comment.user_avatar || undefined"
@@ -66,7 +66,7 @@
             class="comment-reply-btn"
             :aria-label="`回复 ${comment.user_name || '评论'}`"
             :title="`回复 ${comment.user_name || '评论'}`"
-            @click="toggleReplyForm"
+            @click="$emit('reply', { commentId: comment.id, userName: comment.user_name })"
           >
             <el-icon><ChatDotRound /></el-icon>
             回复
@@ -96,66 +96,6 @@
               : '折叠回复' }}
           </button>
         </div>
-      </div>
-    </div>
-
-    <!-- 内联 reply 输入框 (v2 PR6-P5) -->
-    <div v-if="showReplyForm" class="comment-reply-form">
-      <el-input
-        ref="replyInputRef"
-        v-model="replyContent"
-        type="textarea"
-        :rows="2"
-        :placeholder="`回复 ${comment.user_name || '评论'}...`"
-        :maxlength="1000"
-        show-word-limit
-        resize="none"
-        class="comment-reply-input"
-        @input="onReplyInput"
-        @keydown="onReplyKeydown"
-        @blur="onReplyBlur"
-      />
-      <div
-        v-if="mention.isOpen.value && mention.rawCandidates.value.length > 0"
-        class="mention-dd"
-        role="listbox"
-      >
-        <div class="mention-dd-head">
-          <span>选择要提醒的成员</span>
-          <span class="mono">{{ mention.rawCandidates.value.length }}</span>
-        </div>
-        <div class="mention-grid">
-          <div
-            v-for="(m, idx) in mention.rawCandidates.value"
-            :key="m.id"
-            v-memo="[idx === mention.selectedIndex.value]"
-            class="mention-cell"
-            :class="{ on: idx === mention.selectedIndex.value }"
-            role="option"
-            :aria-selected="idx === mention.selectedIndex.value"
-            @mousedown.prevent="onMentionItemClick(idx)"
-          >
-            <el-avatar :size="30" :src="m.avatar" class="mention-avatar">
-              {{ (m.name || '?').slice(0, 1) }}
-            </el-avatar>
-            <div class="mention-info">
-              <div class="mention-name">{{ m.name }}</div>
-              <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="comment-reply-actions">
-        <el-button size="small" text @click="cancelReply">取消</el-button>
-        <el-button
-          size="small"
-          type="primary"
-          :disabled="!canPostReply"
-          :loading="replying"
-          @click="submitReply"
-        >
-          回复
-        </el-button>
       </div>
     </div>
 
@@ -225,7 +165,9 @@
         :is-file-owner="isFileOwner"
         :members-list="membersList"
         :username-map="usernameMap"
+        :reply-target-id="replyTargetId"
         @deleted="$emit('deleted', $event)"
+        @reply="$emit('reply', $event)"
       />
     </div>
   </div>
@@ -249,45 +191,22 @@ const props = defineProps({
   currentUserId: { type: Number, default: null },
   isFileOwner: { type: Boolean, default: false },
   membersList: { type: Array, default: () => [] },
+  replyTargetId: { type: Number, default: null },
   usernameMap: { type: Object, default: () => ({}) },
 })
 
-defineEmits(['deleted'])
+const emit = defineEmits(['deleted', 'reply'])
 
 const store = useNotificationsStore()
 const { canReply } = useCommentTree()
 
-const showReplyForm = ref(false)
-const replyContent = ref('')
-const replying = ref(false)
 const repliesCollapsed = ref(false)
-const replyInputRef = ref(null)
 
 // v2 PR6-P6: 编辑表单 state (与 reply 完全独立)
 const showEditForm = ref(false)
 const editContent = ref('')
 const editing = ref(false)
 const editInputRef = ref(null)
-
-const mention = useMentionAutocomplete({
-  textareaRef: replyInputRef,
-  members: props.membersList,
-  onSelect: (member, ctx) => {
-    if (!ctx || ctx.triggerPos < 0) return
-    const before = replyContent.value.substring(0, ctx.triggerPos)
-    const after = replyContent.value.substring(ctx.triggerPos + 1 + ctx.query.length)
-    const mentionText = `@${member.wechat_id || member.username} `
-    replyContent.value = before + mentionText + after
-    setTimeout(() => {
-      const ta = replyInputRef.value?.$el?.querySelector?.('textarea')
-      if (ta) {
-        const newPos = before.length + mentionText.length
-        ta.focus()
-        ta.setSelectionRange(newPos, newPos)
-      }
-    }, 0)
-  },
-})
 
 // v2 PR6-P6: edit 独立 mention autocomplete 实例
 const editMention = useMentionAutocomplete({
@@ -326,11 +245,6 @@ function canEdit(c) {
   const elapsed = (Date.now() - t) / 1000
   return elapsed <= COMMENT_EDIT_WINDOW_SECONDS
 }
-
-const canPostReply = computed(() => {
-  const t = replyContent.value.trim()
-  return t.length > 0 && t.length <= 1000 && !replying.value
-})
 
 function parseServerTime(iso) {
   // 后端返回 UTC 裸时间串 (无时区后缀), new Date 会按本地时区解析 → 相差 8 小时
@@ -373,82 +287,12 @@ function usernameById(userId) {
   return props.usernameMap[userId] || `用户 #${userId}`
 }
 
-function toggleReplyForm() {
-  showReplyForm.value = !showReplyForm.value
-  if (showReplyForm.value) {
-    repliesCollapsed.value = false
-    nextTick(() => {
-      const ta = replyInputRef.value?.$el?.querySelector?.('textarea')
-      ta?.focus()
-    })
-  }
-}
-
-function cancelReply() {
-  showReplyForm.value = false
-  replyContent.value = ''
-  mention.close()
-}
-
-async function submitReply() {
-  const trimmed = replyContent.value.trim()
-  if (!trimmed) return
-  replying.value = true
-  try {
-    const resp = await store.postReply(props.fileId, props.comment.id, trimmed)
-    const mc = resp.mentioned_user_ids?.length || 0
-    ElMessage.success(
-      mc > 0 ? `回复已发布, 提醒 ${mc} 人` : '回复已发布',
-    )
-    replyContent.value = ''
-    showReplyForm.value = false
-    mention.close()
-  } catch (e) {
-    const detail = e.response?.data?.detail || e.message
-    if (detail && (detail.includes('深度') || detail.includes('父评论'))) {
-      ElMessage.error(`回复失败: ${detail}`)
-    } else {
-      ElMessage.error('回复失败')
-    }
-  } finally {
-    replying.value = false
-  }
-}
-
 async function onDelete(c) {
   try {
     await store.deleteComment(props.fileId, c.id)
     ElMessage.success('评论已删除')
   } catch (e) {
     ElMessage.error(e.message || '删除失败')
-  }
-}
-
-function onReplyInput() { mention.refresh() }
-function onReplyKeydown(event) {
-  if (mention.handleKeydown(event)) return
-  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-    event.preventDefault()
-    submitReply()
-  }
-}
-function onReplyBlur() {
-  setTimeout(() => mention.close(), 150)
-}
-function onMentionItemClick(index) { mention.selectCandidate(index) }
-
-// ===== v2 PR6-P6: 编辑 handlers =====
-
-function toggleEditForm() {
-  showEditForm.value = !showEditForm.value
-  if (showEditForm.value) {
-    // 初始化为当前评论内容
-    editContent.value = props.comment.content || ''
-    showReplyForm.value = false  // 关闭 reply form 避免冲突
-    nextTick(() => {
-      const ta = editInputRef.value?.$el?.querySelector?.('textarea')
-      ta?.focus()
-    })
   }
 }
 
@@ -621,90 +465,6 @@ function onEditMentionItemClick(index) { editMention.selectCandidate(index) }
 }
 
 /* v2 PR6-P5: 内联 reply 输入框 */
-.comment-reply-form {
-  position: relative;
-  margin: 12px 0 0 calc(38px + 8px);
-  padding-top: 12px;
-  /* 批次⑩.49 (选型 A): 与顶层发布区同款分隔线 */
-  border-top: 1px solid var(--color-border-light, #e7e3da);
-}
-.comment-reply-input {
-  width: 100%;
-}
-.comment-reply-actions {
-  margin-top: 6px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.comment-reply-form .mention-dd {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  margin-bottom: 6px;
-  background: var(--color-bg-card, #fff);
-  border: 1px solid var(--color-border-light, #ebeef5);
-  border-radius: 12px;
-  box-shadow: 0 10px 32px rgba(20, 40, 35, 0.14);
-  padding: 8px;
-  z-index: 1000;
-  contain: layout paint;
-}
-.comment-reply-form .mention-dd-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--color-text-secondary, #909399);
-  padding: 0 2px 7px;
-}
-.comment-reply-form .mention-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  max-height: 180px;
-  overflow-y: auto;
-}
-.comment-reply-form .mention-cell {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  border: 1px solid var(--color-border-light, #ebeef5);
-  border-radius: 10px;
-  padding: 6px 8px;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-}
-.comment-reply-form .mention-cell.on,
-.comment-reply-form .mention-cell:hover {
-  border-color: #0E766E;
-  background: rgba(14, 118, 110, 0.08);
-}
-.comment-reply-form .mention-avatar { flex-shrink: 0; }
-.comment-reply-form .mention-avatar :deep(img) {
-  will-change: transform;
-  transform: translateZ(0);
-}
-.comment-reply-form .mention-info { flex: 1; min-width: 0; }
-.comment-reply-form .mention-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--color-text-primary, #303133);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.comment-reply-form .mention-username {
-  font-size: 10px;
-  color: var(--color-text-secondary, #909399);
-  font-family: var(--font-family-mono, monospace);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .comment-replies {
   display: flex;
@@ -727,10 +487,6 @@ function onEditMentionItemClick(index) { editMention.selectCandidate(index) }
 [data-theme="dark"] .comment-reply-btn:hover,
 [data-theme="dark"] .comment-toggle-replies-btn:hover {
   background: rgba(255, 122, 92, 0.16);
-}
-[data-theme="dark"] .comment-reply-form .mention-dropdown {
-  background: var(--color-bg-card, #2a2d35);
-  border-color: var(--color-border-light, #3a3d45);
 }
 [data-theme="dark"] .mention-item:hover,
 [data-theme="dark"] .mention-item.active {

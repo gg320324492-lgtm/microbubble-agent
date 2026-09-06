@@ -44,12 +44,19 @@
           :is-file-owner="props.isFileOwner"
           :members-list="membersList"
           :username-map="usernameMap"
+          :reply-target-id="replyTarget ? replyTarget.commentId : null"
+          @reply="onStartReply"
         />
       </li>
     </ul>
 
-    <!-- 发布输入框 (顶层评论) -->
-    <div class="comment-thread-compose">
+    <!-- 发布输入框 (顶层评论 + 批次⑩.50 合一: 回复模式复用同一框) -->
+    <div class="comment-thread-compose" :class="{ 'in-reply': !!replyTarget }">
+      <div v-if="replyTarget" class="compose-reply-head">
+        <span class="ico">↩</span>
+        <span>回复 <b>{{ replyTarget.userName }}</b></span>
+        <span class="x" role="button" tabindex="0" @click="cancelReplyMode" @keydown.enter="cancelReplyMode">✕ 取消回复</span>
+      </div>
       <el-input
         ref="inputRef"
         v-model="newContent"
@@ -125,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Loading, ChatDotRound } from '@element-plus/icons-vue'
@@ -177,8 +184,24 @@ const mention = useMentionAutocomplete({
 const comments = computed(() => store.commentsByFileId[props.fileId] || [])
 const treeTop = computed(() => buildCommentTree(comments.value).top)
 
+// 批次⑩.50 (合一): 回复目标 — 唯一输入框复用, 不再出现内联回复框
+const replyTarget = ref(null) // { commentId, userName }
+
+function onStartReply(t) {
+  replyTarget.value = t
+  nextTick(() => {
+    const ta = inputRef.value?.$el?.querySelector?.('textarea')
+    ta?.focus()
+  })
+}
+
+function cancelReplyMode() {
+  replyTarget.value = null
+}
+
 const placeholder = computed(() => {
   if (!props.currentUserId) return '请先登录后再评论'
+  if (replyTarget.value) return '回复 ' + replyTarget.value.userName + '…'
   return '写一条评论… 输入 @姓名 可提醒成员'
 })
 
@@ -282,6 +305,7 @@ async function batchResolveUsernames() {
 function onContentInput() { mention.refresh() }
 function onContentKeydown(event) {
   if (mention.handleKeydown(event)) return
+  if (event.key === 'Escape' && replyTarget.value) { cancelReplyMode(); return }
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault()
     onPost()
@@ -298,16 +322,23 @@ async function onPost() {
   posting.value = true
   errorMsg.value = null
   try {
-    const resp = await store.postComment(props.fileId, trimmed)
+    const isReply = !!replyTarget.value
+    const resp = isReply
+      ? await store.postReply(props.fileId, replyTarget.value.commentId, trimmed)
+      : await store.postComment(props.fileId, trimmed)
     newContent.value = ''
-    if (resp.mentioned_user_ids && resp.mentioned_user_ids.length > 0) {
-      ElMessage.success(`评论已发布, 提醒了 ${resp.mentioned_user_ids.length} 人`)
+    const mc = resp.mentioned_user_ids?.length || 0
+    if (mc > 0) {
+      ElMessage.success(`回复已发布, 提醒了 ${mc} 人`)
     } else {
-      ElMessage.success('评论已发布')
+      ElMessage.success(isReply ? '回复已发布' : '评论已发布')
     }
+    replyTarget.value = null
     await batchResolveUsernames()
   } catch (e) {
-    errorMsg.value = e.response?.data?.detail || e.message || '发布失败'
+    const detail = e.response?.data?.detail || e.message || '发布失败'
+    errorMsg.value = detail
+    if (detail.includes('深度') || detail.includes('父评论')) ElMessage.error('回复失败: ' + detail)
   } finally {
     posting.value = false
   }
@@ -318,7 +349,7 @@ onMounted(() => {
 })
 
 watch(() => props.fileId, (newId) => {
-  if (newId) fetchComments()
+  if (newId) { fetchComments(); replyTarget.value = null }
 })
 </script>
 
@@ -516,6 +547,36 @@ watch(() => props.fileId, (newId) => {
   background: var(--color-warning-light-9, #fdf6ec);
   color: var(--color-warning, #e6a23c);
   border-radius: 8px;
+}
+
+/* 批次⑩.50 (合一): 回复模式上下文头条 + 被回复评论高亮 */
+.compose-reply-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(14, 118, 110, 0.35);
+  border-radius: 8px;
+  background: rgba(14, 118, 110, 0.06);
+  font-size: 12px;
+  color: var(--color-text-regular, #26302c);
+}
+.compose-reply-head .ico { color: #0E766E; font-weight: 700; }
+.compose-reply-head b { color: #0E766E; font-weight: 650; }
+.compose-reply-head .x {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--color-text-secondary, #8a938e);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 6px;
+  transition: background var(--duration-fast);
+}
+.compose-reply-head .x:hover { background: #f0eee8; color: var(--color-text-primary); }
+:deep(.comment-item.reply-target) {
+  background: rgba(14, 118, 110, 0.06);
+  box-shadow: inset 3px 0 0 #0E766E;
 }
 
 /* Dark mode 非 scoped 块 (v60-v67 教训) */
