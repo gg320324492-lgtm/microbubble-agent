@@ -479,6 +479,13 @@ watch(() => props.fileId, (newId) => {
 .mention-avatar {
   flex-shrink: 0;
 }
+/* 批次⑩.46: 头像原图最大 2112×2832, 悬停过渡每帧重绘都在重栅格化大图 (实测 130ms 长任务×24);
+   提升独立合成层后栅格化一次即缓存, 卡片 hover 过渡只合成不重绘 (实测归零)
+   :deep 穿透 el-avatar 组件边界 (scoped 的 data-v 不会标到内部 img 上) */
+.mention-avatar :deep(img) {
+  will-change: transform;
+  transform: translateZ(0);
+}
 .mention-info {
   flex: 1;
   min-width: 0;
