@@ -1072,7 +1072,7 @@ function fmtDT(x) {
 .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .rail-actions--second { margin-top: 8px; grid-template-columns: repeat(4, 1fr); }
 /* 批次⑩.37/38 (选型 B→A): ppt 三排全 3 列等宽, 横排图文; --pager 须定义在 --second 之后以覆盖列数 */
-.rail-actions--pager { grid-template-columns: repeat(3, 1fr); }
+.rail-actions--pager { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .rail-actions--pager .rail-act { flex-direction: row; justify-content: center; gap: 6px; font-size: 12px; height: 46px; padding: 0 8px; }
 .rail-actions--pager .rf-act-fs-ico { margin-right: 0; }
 /* 对称翻页键: 3 列内网格 — 箭头钉死外缘, 文字绝对居中 (两键镜像, 与中间 pri 重心对齐); gap 归零防文字列被挤压换行 */
