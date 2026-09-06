@@ -265,7 +265,7 @@
             <span>★</span>{{ file.is_starred ? '已收藏' : '收藏' }}
           </button>
         </div>
-        <div class="rail-actions rail-actions--second" :class="{ 'rail-actions--pager': previewKind === 'ppt' }">
+        <div class="rail-actions rail-actions--second" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' }">
           <!-- 2026-09-05: "加入知识库"按钮移除 — 网盘文件上传后已默认自动入库 RAG -->
           <button type="button" class="rail-act wide" @click="$emit('rename', file)">✎ 重命名</button>
           <button type="button" class="rail-act wide" @click="$emit('move', file)">📂 移动</button>
