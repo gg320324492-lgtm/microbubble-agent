@@ -63,30 +63,38 @@
         @keydown="onContentKeydown"
         @blur="onContentBlur"
       />
-      <!-- @username autocomplete dropdown (v2 PR6-P4) -->
+      <!-- @成员选择框 · 批次⑩.44 (用户选型 C): 双列网格卡片 -->
       <div
         v-if="mention.isOpen.value && mention.rawCandidates.value.length > 0"
-        class="mention-dropdown"
+        class="mention-dd"
         role="listbox"
       >
-        <div
-          v-for="(m, idx) in mention.rawCandidates.value"
-          :key="m.id"
-          class="mention-item"
-          :class="{ active: idx === mention.selectedIndex.value }"
-          role="option"
-          :aria-selected="idx === mention.selectedIndex.value"
-          @mousedown.prevent="onMentionItemClick(idx)"
-          @mouseenter="mention.selectedIndex.value = idx"
-        >
-          <el-avatar :size="24" :src="m.avatar" class="mention-avatar">
-            {{ (m.name || '?').slice(0, 1) }}
-          </el-avatar>
-          <div class="mention-info">
-            <div class="mention-name">{{ m.name }}</div>
-            <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
+        <div class="mention-dd-head">
+          <span>选择要提醒的成员</span>
+          <span class="mono">{{ mention.rawCandidates.value.length }} / {{ membersList.length || mention.rawCandidates.value.length }}</span>
+        </div>
+        <div class="mention-grid">
+          <div
+            v-for="(m, idx) in mention.rawCandidates.value"
+            :key="m.id"
+            class="mention-cell"
+            :class="{ on: idx === mention.selectedIndex.value }"
+            role="option"
+            :aria-selected="idx === mention.selectedIndex.value"
+            @mousedown.prevent="onMentionItemClick(idx)"
+            @mouseenter="mention.selectedIndex.value = idx"
+          >
+            <el-avatar :size="34" :src="m.avatar" class="mention-avatar">
+              {{ (m.name || '?').slice(0, 1) }}
+            </el-avatar>
+            <div class="mention-info">
+              <div class="mention-name">
+                {{ m.name }}
+                <span v-if="m.role === 'admin'" class="mention-badge">管理员</span>
+              </div>
+              <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
+            </div>
           </div>
-          <span v-if="m.role === 'admin'" class="mention-badge">管理员</span>
         </div>
       </div>
       <div class="comment-thread-actions">
@@ -221,6 +229,23 @@ async function fetchComments() {
 }
 
 async function batchResolveUsernames() {
+  // 批次⑩.43 修复: @补全候选池 (membersList) 之前依赖"评论含 user_id"才拉取 —
+  // 暂无评论的文件 membersList 恒为空 → 输入 @ 下拉永不弹出. 改为无条件预热一次.
+  if (membersList.value.length === 0) {
+    try {
+      const resp = await axios.get('/api/v1/members', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('access_token') || ''}` },
+      })
+      membersList.value = (resp.data.items || []).map((m) => ({
+        id: m.id,
+        username: m.username,
+        wechat_id: m.wechat_id,
+        name: m.name,
+        avatar: m.avatar,
+        role: m.role,
+      }))
+    } catch { /* 成员拉取失败不影响评论主流程 */ }
+  }
   const userIds = new Set()
   for (const c of comments.value) {
     if (c.user_id) userIds.add(c.user_id)
@@ -400,32 +425,54 @@ watch(() => props.fileId, (newId) => {
   margin-top: 8px;
 }
 
-/* v2 PR6-P4: 顶层 compose 的 mention dropdown */
-.mention-dropdown {
+/* 批次⑩.44 (用户选型 C): @成员选择框 — 双列网格卡片 */
+.mention-dd {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 100%;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   background: var(--color-bg-card, #fff);
   border: 1px solid var(--color-border-light, #ebeef5);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  max-height: 240px;
-  overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(20, 40, 35, 0.14);
+  padding: 10px;
   z-index: 1000;
 }
-.mention-item {
+.mention-dd-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background 0.15s;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+  padding: 0 2px 8px;
 }
-.mention-item:hover,
-.mention-item.active {
-  background: var(--color-primary-bg, rgba(255, 122, 92, 0.08));
+.mention-dd-head .mono {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 10px;
+}
+.mention-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  max-height: 228px;
+  overflow-y: auto;
+}
+.mention-cell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.mention-cell:hover,
+.mention-cell.on {
+  border-color: var(--color-primary, #0e766e);
+  background: var(--color-primary-bg, rgba(14, 118, 110, 0.08));
 }
 .mention-avatar {
   flex-shrink: 0;
@@ -435,21 +482,28 @@ watch(() => props.fileId, (newId) => {
   min-width: 0;
 }
 .mention-name {
-  font-size: 13px;
-  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--color-text-primary, #303133);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .mention-username {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--color-text-secondary, #909399);
-  font-family: monospace;
+  font-family: var(--font-family-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mention-badge {
-  font-size: 10px;
-  padding: 1px 5px;
+  flex: none;
+  font-size: 9px;
+  padding: 1px 6px;
   background: var(--color-warning-light-9, #fdf6ec);
   color: var(--color-warning, #e6a23c);
   border-radius: 8px;
@@ -460,13 +514,17 @@ watch(() => props.fileId, (newId) => {
   border-top-color: var(--color-border-dark, rgba(255, 255, 255, 0.08));
 }
 
-[data-theme="dark"] .mention-dropdown {
+[data-theme="dark"] .mention-dd {
   background: var(--color-bg-card, #2a2d35);
   border-color: var(--color-border-light, #3a3d45);
 }
 
-[data-theme="dark"] .mention-item:hover,
-[data-theme="dark"] .mention-item.active {
+[data-theme="dark"] .mention-cell {
+  border-color: var(--color-border-light, #3a3d45);
+}
+
+[data-theme="dark"] .mention-cell:hover,
+[data-theme="dark"] .mention-cell.on {
   background: rgba(255, 122, 92, 0.16);
 }
 

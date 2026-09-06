@@ -118,7 +118,11 @@ export function useMentionAutocomplete({
    * 本次修复范围).
    */
   function filterMembers(list, q) {
-    if (!q) return list.slice(0, maxCandidates)
+    if (!q) {
+      // 批次⑩.44 修复: 空 query 也必须返回 {member} 包装 — 之前返回原始对象数组,
+      // rawCandidates.map(c => c.member) 全变 undefined → v-for 读 .id 渲染崩溃 (输入纯 @ 必现)
+      return list.slice(0, maxCandidates).map((m) => ({ member: m, score: 50, isExact: false }))
+    }
     const ql = q.toLowerCase()
     const matched = []
     for (const m of list) {
