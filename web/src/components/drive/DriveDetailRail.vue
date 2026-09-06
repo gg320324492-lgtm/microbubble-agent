@@ -157,11 +157,15 @@
         <!-- 批次⑩.37 (用户选型 B): ppt 时首排三键 上一页·全屏放映·下一页, 悬浮胶囊退役 (仅全屏态保留) -->
         <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' }">
           <template v-if="previewKind === 'ppt'">
-            <button type="button" class="rail-act" :disabled="pptPageClamped <= 1" title="上一页 (←)" @click="prevPptPage">‹ 上一页</button>
+            <button type="button" class="rail-act pg pv" :disabled="pptPageClamped <= 1" title="上一页 (←)" @click="prevPptPage">
+              <span class="pg-arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg></span><span class="pg-lbl">上一页</span>
+            </button>
             <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
               <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
             </button>
-            <button type="button" class="rail-act" :disabled="pptPageClamped >= pptImgTotalSafe" title="下一页 (→)" @click="nextPptPage">下一页 ›</button>
+            <button type="button" class="rail-act pg nx" :disabled="pptPageClamped >= pptImgTotalSafe" title="下一页 (→)" @click="nextPptPage">
+              <span class="pg-lbl">下一页</span><span class="pg-arr"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></span>
+            </button>
           </template>
           <template v-else>
             <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
@@ -184,8 +188,8 @@
             </button>
           </template>
         </div>
-        <!-- ppt 第二排: 下载/分享/收藏 + 隐形占位保持 4 列节奏 -->
-        <div v-if="previewKind === 'ppt'" class="rail-actions" style="margin-top: 8px">
+        <!-- 批次⑩.38 (选型 A): ppt 二排 3 列, 空位消失 -->
+        <div v-if="previewKind === 'ppt'" class="rail-actions rail-actions--second rail-actions--pager">
           <button type="button" class="rail-act" @click="$emit('download', file)">
             <span>⬇</span>下载
           </button>
@@ -201,9 +205,8 @@
           >
             <span>★</span>{{ file.is_starred ? '已收藏' : '收藏' }}
           </button>
-          <button type="button" class="rail-act" style="visibility: hidden" aria-hidden="true" tabindex="-1"></button>
         </div>
-        <div class="rail-actions rail-actions--second">
+        <div class="rail-actions rail-actions--second" :class="{ 'rail-actions--pager': previewKind === 'ppt' }">
           <!-- 2026-09-05: "加入知识库"按钮移除 — 网盘文件上传后已默认自动入库 RAG -->
           <button type="button" class="rail-act wide" @click="$emit('rename', file)">✎ 重命名</button>
           <button type="button" class="rail-act wide" @click="$emit('move', file)">📂 移动</button>
@@ -819,9 +822,17 @@ function fmtDT(x) {
 }
 .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .rail-actions--second { margin-top: 8px; grid-template-columns: repeat(4, 1fr); }
-/* 批次⑩.37 (选型 B): ppt 首排三键 (上一页·全屏放映·下一页), 横排图文 */
+/* 批次⑩.37/38 (选型 B→A): ppt 三排全 3 列等宽, 横排图文; --pager 须定义在 --second 之后以覆盖列数 */
 .rail-actions--pager { grid-template-columns: repeat(3, 1fr); }
-.rail-actions--pager .rail-act { flex-direction: row; gap: 6px; font-size: 12px; }
+.rail-actions--pager .rail-act { flex-direction: row; justify-content: center; gap: 6px; font-size: 12px; height: 46px; padding: 0 8px; }
+.rail-actions--pager .rf-act-fs-ico { margin-right: 0; }
+/* 对称翻页键: 3 列内网格 — 箭头钉死外缘, 文字绝对居中 (两键镜像, 与中间 pri 重心对齐); gap 归零防文字列被挤压换行 */
+.rail-act.pg { display: grid; grid-template-columns: 14px 1fr 14px; align-items: center; justify-items: center; padding: 0 10px; gap: 0; }
+.rail-act.pg .pg-lbl { grid-column: 2; grid-row: 1; white-space: nowrap; }
+.rail-act.pg .pg-arr { display: inline-flex; grid-row: 1; color: var(--color-text-secondary); }
+.rail-act.pg.pv .pg-arr { grid-column: 1; }
+.rail-act.pg.nx .pg-arr { grid-column: 3; }
+.rail-act.pg .pg-arr svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rail-act:disabled { opacity: .38; cursor: default; pointer-events: none; }
 .rail-act {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
