@@ -124,8 +124,6 @@
               <div v-else class="rf-audio-nm" style="opacity:.6">加载中…</div>
             </div>
           </div>
-          <!-- PDF 原生查看器 (blob iframe, A4 大舞台) -->
-          <iframe v-else-if="previewKind === 'pdf' && stageUrl" :src="stageUrl" class="rf-pdf" :title="name"></iframe>
           <!-- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) -->
           <!-- 批次⑩.25 (用户拍板): PPT 逐页 PNG 图片浏览 (LibreOffice 管线), 弃自研 HTML 渲染 -->
           <div v-else-if="previewKind === 'ppt'" class="rf-ppt" ref="pptStageRef">
@@ -161,9 +159,9 @@
             </template>
           </div>
           <!-- 批次⑩.53 (选型 C 改): DOCX 预览 — 常态首页竖版自适应, 全屏才出缩略图侧栏 -->
-          <div v-else-if="previewKind === 'docx'" class="rf-ppt" ref="docxStageRef">
+          <div v-else-if="previewKind === 'docx' || previewKind === 'pdf'" class="rf-ppt" ref="docxStageRef">
             <div v-if="docxImgStatus === 'loading' || docxImgStatus === 'converting'" class="rf-skel">
-              <div class="rf-conv-t">正在把 DOCX 转换为可预览格式…</div>
+              <div class="rf-conv-t">正在把 {{ previewKind === 'pdf' ? 'PDF' : 'DOCX' }} 转换为可预览格式…</div>
               <div class="rf-conv-s">首次约 10-30 秒 · 之后打开秒出</div>
               <div class="rf-skel-ttl" style="margin-top:18px"></div>
               <div class="rf-skel-ln" style="width:78%"></div>
@@ -212,10 +210,10 @@
             <span class="rail-cover-hint">{{ thumbnailHint }}</span>
           </div>
         </div>
-        <h3 class="rail-name" :title="name">{{ name }}<span v-if="(previewKind === 'ppt' || previewKind === 'docx') && (pptImgStatus === 'ready' || docxImgStatus === 'ready')" class="rf-page-cnt">{{ (previewKind === 'ppt' ? pptPageClamped : docxPageClamped) }} / {{ (previewKind === 'ppt' ? pptImgTotalSafe : docxImgTotalSafe) }} 页</span></h3>
+        <h3 class="rail-name" :title="name">{{ name }}<span v-if="(previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf') && (pptImgStatus === 'ready' || docxImgStatus === 'ready')" class="rf-page-cnt">{{ (previewKind === 'ppt' ? pptPageClamped : docxPageClamped) }} / {{ (previewKind === 'ppt' ? pptImgTotalSafe : docxImgTotalSafe) }} 页</span></h3>
         <!-- 批次⑩.37 (用户选型 B): ppt 时首排三键 上一页·全屏放映·下一页, 悬浮胶囊退役 (仅全屏态保留) -->
-        <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' }">
-          <template v-if="previewKind === 'ppt' || previewKind === 'docx'">
+        <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf' }">
+          <template v-if="previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf'">
             <button type="button" class="rail-act pg pv" :disabled="prevDisabled" title="上一页 (←)" @click="prevAnyPage">
               <span class="pg-arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg></span><span class="pg-lbl">上一页</span>
             </button>
@@ -248,7 +246,7 @@
           </template>
         </div>
         <!-- 批次⑩.38 (选型 A): ppt 二排 3 列, 空位消失 -->
-        <div v-if="previewKind === 'ppt' || previewKind === 'docx'" class="rail-actions rail-actions--second rail-actions--pager">
+        <div v-if="previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf'" class="rail-actions rail-actions--second rail-actions--pager">
           <button type="button" class="rail-act" @click="$emit('download', file)">
             <span>⬇</span>下载
           </button>
@@ -265,7 +263,7 @@
             <span>★</span>{{ file.is_starred ? '已收藏' : '收藏' }}
           </button>
         </div>
-        <div class="rail-actions rail-actions--second" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' }">
+        <div class="rail-actions rail-actions--second" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf' }">
           <!-- 2026-09-05: "加入知识库"按钮移除 — 网盘文件上传后已默认自动入库 RAG -->
           <button type="button" class="rail-act wide" @click="$emit('rename', file)">✎ 重命名</button>
           <button type="button" class="rail-act wide" @click="$emit('move', file)">📂 移动</button>
@@ -491,6 +489,7 @@ watch(() => [props.file?.id, props.file?.thumbnail_status], async () => {
   coverUrl.value = null
   const f = props.file
   if (!f) return
+  if (['doc', 'docx', 'pdf'].includes(extOf.value)) return  // 批次⑩.62: 分页预览分支接管
   if (f.thumbnail_status === 'ready') {
     try {
       const resp = await axios.get(`/api/v1/drive/files/${f.id}/thumbnail`)
@@ -519,7 +518,7 @@ const stageHeight = computed(() => {
     const nat = pptImgNat.value
     return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 9 / 16)
   }
-  if (previewKind.value === 'docx') {
+  if (previewKind.value === 'docx' || previewKind.value === 'pdf') {
     const nat = docxImgNat.value
     // 批次⑩.53: 竖版 A4 贴合 — 首页图自然比例未知前用 A4 竖比 (210:297)
     return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 297 / 210)
@@ -657,6 +656,9 @@ const docxImgNat = ref(null)
 let docxPollTimer = null
 let docxPollSeq = 0
 const docxImgTotalSafe = computed(() => Math.max(1, docxImgTotal.value))
+// 批次⑩.62: docx 与 pdf 共用同一分页预览状态机, 端点按类型切换
+const pagedKind = computed(() => (previewKind.value === 'docx' || previewKind.value === 'pdf') ? previewKind.value : null)
+const pagedEndpoint = computed(() => pagedKind.value === 'pdf' ? 'pdf-pages' : 'docx-pages')
 const docxPageClamped = computed(() => Math.min(Math.max(docxPage.value, 1), Math.max(1, docxImgTotal.value)))
 function nextDocxPage() { if (docxPage.value < docxImgTotal.value) docxPage.value++ }
 function prevDocxPage() { if (docxPage.value > 1) docxPage.value-- }
@@ -673,14 +675,14 @@ function docxThumbUrl(i) {
 async function ensureDocxBlob(fid, pageIdx) {
   if (fid == null || docxBlobMap[pageIdx]) return
   try {
-    const resp = await axios.get('/api/v1/drive/files/' + fid + '/docx-pages/img-' + pageIdx, { responseType: 'blob' })
+    const resp = await axios.get('/api/v1/drive/files/' + fid + '/' + pagedEndpoint.value + '/img-' + pageIdx, { responseType: 'blob' })
     docxBlobMap[pageIdx] = URL.createObjectURL(resp.data)
   } catch { /* 静默 */ }
 }
 async function refreshDocxBlobs() {
   const fid = props.file?.id
   // 批次⑩.56 守卫: 非 docx 或转换未就绪时绝不预取页图
-  if (fid == null || previewKind.value !== 'docx' || docxImgStatus.value !== 'ready') { docxBlobCurrent.value = null; return }
+  if (fid == null || !pagedKind.value || docxImgStatus.value !== 'ready') { docxBlobCurrent.value = null; return }
   const seq = ++docxBlobSeq
   const pg = docxPageClamped.value
   await ensureDocxBlob(fid, pg)
@@ -707,7 +709,7 @@ function startDocxPoll(fid) {
   const tick = async () => {
     if (seq !== docxPollSeq) return
     try {
-      const resp = await axios.get('/api/v1/drive/files/' + fid + '/docx-pages')
+      const resp = await axios.get('/api/v1/drive/files/' + fid + '/' + pagedEndpoint.value)
       const st = resp.data?.status
       if (st === 'ready') {
         docxImgStatus.value = 'ready'
@@ -732,7 +734,7 @@ watch([() => props.file?.id, previewKind], ([fid, kind]) => {
   docxPage.value = 1
   docxImgUrls.value = []
   docxImgNat.value = null
-  if (kind === 'docx' && fid != null) {
+  if ((kind === 'docx' || kind === 'pdf') && fid != null) {
     docxImgStatus.value = 'loading'
     startDocxPoll(fid)
   } else {
@@ -745,10 +747,10 @@ function revokeDocxBlobs() {
 }
 onBeforeUnmount(() => { stopDocxPoll(); docxPollSeq++; revokeDocxBlobs() })
 
-const prevDisabled = computed(() => previewKind.value === 'docx' ? docxPageClamped.value <= 1 : pptPageClamped.value <= 1)
-const nextDisabled = computed(() => previewKind.value === 'docx' ? docxPageClamped.value >= docxImgTotalSafe.value : pptPageClamped.value >= pptImgTotalSafe.value)
-function prevAnyPage() { if (previewKind.value === 'docx') prevDocxPage(); else prevPptPage() }
-function nextAnyPage() { if (previewKind.value === 'docx') nextDocxPage(); else nextPptPage() }
+const prevDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value <= 1 : docxPageClamped.value <= 1)
+const nextDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value >= pptImgTotalSafe.value : docxPageClamped.value >= docxImgTotalSafe.value)
+function prevAnyPage() { if (previewKind.value === 'ppt') prevPptPage(); else prevDocxPage() }
+function nextAnyPage() { if (previewKind.value === 'ppt') nextPptPage(); else nextDocxPage() }
 
 const docxThumbItems = computed(() => {
   const arr = []
@@ -781,7 +783,7 @@ function onFsWheel(ev) {
   const now = Date.now()
   if (now - wheelLock < 450) return
   // 批次⑩.53: docx 分支 — 同一套滚轮翻页逻辑
-  const isDocx = previewKind.value === 'docx'
+  const isDocx = previewKind.value === 'docx' || previewKind.value === 'pdf'
   const page = isDocx ? docxPage : pptPage
   const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
   if (ev.deltaY > 0 && page.value < total) { wheelLock = now; page.value++ }
@@ -789,7 +791,7 @@ function onFsWheel(ev) {
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
-  const isDocx = previewKind.value === 'docx'
+  const isDocx = previewKind.value === 'docx' || previewKind.value === 'pdf'
   const page = isDocx ? docxPage : pptPage
   const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
   if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(ev.key)) { ev.preventDefault(); if (page.value < total) page.value++ }
