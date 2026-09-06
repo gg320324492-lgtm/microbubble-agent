@@ -151,7 +151,7 @@ const treeTop = computed(() => buildCommentTree(comments.value).top)
 
 const placeholder = computed(() => {
   if (!props.currentUserId) return '请先登录后再评论'
-  return '写评论... @username 提醒'
+  return '写评论… 输入 @姓名 可提醒成员'
 })
 
 const canPost = computed(() => {

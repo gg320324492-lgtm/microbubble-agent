@@ -30,7 +30,7 @@
     <div v-else-if="treeTop.length === 0" class="comment-thread-empty">
       <el-icon :size="32"><ChatDotRound /></el-icon>
       <p>暂无评论</p>
-      <p class="hint">在下方输入框写下第一条评论 (支持 @username)</p>
+      <p class="hint">在下方输入框写下第一条评论 (支持 @姓名 提醒成员)</p>
     </div>
 
     <!-- v2 PR6-P5: 评论树 (顶层 + 嵌套 replies, 递归渲染) -->
@@ -86,12 +86,12 @@
             <div class="mention-name">{{ m.name }}</div>
             <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
           </div>
-          <span v-if="m.role === 'admin'" class="mention-badge">admin</span>
+          <span v-if="m.role === 'admin'" class="mention-badge">管理员</span>
         </div>
       </div>
       <div class="comment-thread-actions">
         <span class="comment-thread-hint">
-          用 <code>@username</code> 提醒成员
+          用 <code>@姓名</code> 提醒成员
         </span>
         <el-button
           type="primary"
@@ -171,7 +171,7 @@ const treeTop = computed(() => buildCommentTree(comments.value).top)
 
 const placeholder = computed(() => {
   if (!props.currentUserId) return '请先登录后再评论'
-  return '写一条评论... @username 提醒团队成员'
+  return '写一条评论… 输入 @姓名 可提醒成员'
 })
 
 const canPost = computed(() => {
