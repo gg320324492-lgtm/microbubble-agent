@@ -38,7 +38,7 @@ export function useMentionAutocomplete({
   members,               // ref 或 array of {id, username, wechat_id, name, avatar, role}
   onSelect,              // (member) => void   选中后调用 (父组件负责替换文本)
   debounceMs = 150,
-  maxCandidates = 8,
+  maxCandidates = 50,
 } = {}) {
   const isOpen = ref(false)
   const query = ref('')
