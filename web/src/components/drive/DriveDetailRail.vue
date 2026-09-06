@@ -46,24 +46,32 @@
 
       <div class="rf-grp"><span>文件</span><span class="rf-n mono">{{ rfLoading ? '…' : rfTotal }}</span></div>
       <div v-if="rfLoading" class="rf-note">正在加载下一级文件…</div>
-      <!-- 批次⑩.39 (用户选型 K1): 全量直出 + 按类型分组, 组头类型色淡底; 去掉「显示全部」折叠 -->
+      <!-- 批次⑩.39/40 (K1+折叠): 全量直出 + 按类型分组, 组头类型色淡底可点击折叠 (默认展开, 换夹重置) -->
       <template v-else>
         <template v-for="g in rfGroups" :key="'rfg-' + g.key">
-          <div class="rf-k1" :style="{ background: `color-mix(in srgb, ${g.color} 9%, transparent)`, color: g.color }">
+          <div
+            class="rf-k1" :style="{ background: `color-mix(in srgb, ${g.color} 9%, transparent)`, color: g.color }"
+            role="button" tabindex="0" :aria-expanded="!rfFolded.has(g.key)"
+            :title="rfFolded.has(g.key) ? '展开' : '折叠'"
+            @click="toggleRfGroup(g.key)" @keydown.enter="toggleRfGroup(g.key)"
+          >
+            <span class="rf-k1-chev" :class="{ fold: rfFolded.has(g.key) }"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" /></svg></span>
             <span>{{ g.label }}</span>
             <span class="rf-k1-n mono">{{ g.items.length }}</span>
             <span class="rf-k1-sub mono">{{ rfSubtotal(g.items) }}</span>
           </div>
-          <div
-            v-for="f in g.items" :key="'rff-' + f.id"
-            class="rf-item" role="button" tabindex="0"
-            :title="f.file_name"
-            @click="$emit('preview', f)" @keydown.enter="$emit('preview', f)"
-          >
-            <span class="rf-dot" :style="{ background: dotColor(f.file_name) }"></span>
-            <span class="rf-nm">{{ f.file_name }}</span>
-            <span class="rf-n mono">{{ fmtSize(f.file_size) }}</span>
-          </div>
+          <template v-if="!rfFolded.has(g.key)">
+            <div
+              v-for="f in g.items" :key="'rff-' + f.id"
+              class="rf-item" role="button" tabindex="0"
+              :title="f.file_name"
+              @click="$emit('preview', f)" @keydown.enter="$emit('preview', f)"
+            >
+              <span class="rf-dot" :style="{ background: dotColor(f.file_name) }"></span>
+              <span class="rf-nm">{{ f.file_name }}</span>
+              <span class="rf-n mono">{{ fmtSize(f.file_size) }}</span>
+            </div>
+          </template>
         </template>
         <div v-if="!rfFiles.length" class="rf-note">该文件夹还没有文件</div>
       </template>
@@ -338,6 +346,7 @@ let rfSeq = 0
 watch(() => props.folder?.id, async (fid) => {
   rfFiles.value = []
   rfTotal.value = 0
+  rfFolded.value = new Set()
   if (fid == null) return
   const seq = ++rfSeq
   rfLoading.value = true
@@ -383,6 +392,15 @@ const rfGroups = computed(() => {
 })
 function rfSubtotal(items) {
   return fmtSize(items.reduce((s, f) => s + (f.file_size || 0), 0))
+}
+
+/* 批次⑩.40: 组折叠态 (默认全展开, 换文件夹重置) */
+const rfFolded = ref(new Set())
+function toggleRfGroup(key) {
+  const s = new Set(rfFolded.value)
+  if (s.has(key)) s.delete(key)
+  else s.add(key)
+  rfFolded.value = s
 }
 function dotColor(name) {
   const ext = (name || '').split('.').pop().toLowerCase()
@@ -948,7 +966,15 @@ function fmtDT(x) {
   display: flex; align-items: center; gap: 8px;
   margin: 12px 8px 2px; padding: 8px 12px;
   border-radius: 9px; font-size: 12px; font-weight: 650;
+  cursor: pointer; user-select: none;
+  transition: filter var(--duration-fast);
 }
+.rf-k1:hover { filter: brightness(.965); }
+.rf-k1:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+/* 批次⑩.40: 折叠箭头 (folded 转 -90°) */
+.rf-k1-chev { display: inline-flex; transition: transform var(--duration-fast) var(--ease-out, ease); }
+.rf-k1-chev.fold { transform: rotate(-90deg); }
+.rf-k1-chev svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .rf-item:first-of-type { margin-top: 0; }
 .rf-k1 .rf-k1-n {
   font-size: 10px; font-weight: 500; color: var(--color-text-secondary);
