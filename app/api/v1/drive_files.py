@@ -1671,6 +1671,148 @@ async def get_pptx_page_image(
     return FileResponse(str(p), media_type="image/png")
 
 
+# === 批次⑩.53 DOCX 预览 (用户选型 C: 常态首页竖版自适应, 全屏才出缩略图侧栏) ===
+# 复用 LibreOffice 管线: docx → PDF (连页阅读) + pdftoppm PNG (首页/缩略图)。PDF 一并缓存。
+_DOCX_CONVERT_LOCKS: dict = {}
+
+
+def _docx_cache_dir(file_id: int, key: str) -> FsPath:
+    return FsPath("/app/data/docx_pages") / ("%d_%s" % (file_id, key))
+
+
+def _docx_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        tmp = FsPath("/tmp") / ("docx_conv_%d_%s" % (file_id, key[:8]))
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        tmp.mkdir(parents=True)
+        data = FsPath(src_path).read_bytes()
+        (tmp / "in.docx").write_bytes(data)
+
+        subprocess.run(
+            ["soffice", "-env:UserInstallation=file:///tmp/lo_docx_profile",
+             "--headless", "--convert-to", "pdf", "--outdir", str(tmp), str(tmp / "in.docx")],
+            check=True, timeout=600,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        pdf = tmp / "in.pdf"
+        shutil.copy(str(pdf), str(cache_dir / "doc.pdf"))  # 全屏连页阅读用
+        subprocess.run(
+            ["pdftoppm", "-png", "-r", "110", str(pdf), str(tmp / "page")],
+            check=True, timeout=600,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        pages = sorted(tmp.glob("page-*.png"))
+        total = len(pages)
+        for i, png in enumerate(pages, 1):
+            shutil.move(str(png), str(cache_dir / ("page-%d.png" % i)))
+        (cache_dir / "ready.json").write_text(json.dumps({"total": total}))
+        logger.info("[docx-pages] 转换完成 file=%d 页数=%d", file_id, total)
+    except Exception as e:
+        logger.error("[docx-convert] file=%s 转换失败: %s", file_id, e)
+        try:
+            (cache_dir / "error.txt").write_text(str(e)[:500])
+        except Exception:
+            pass
+        try:
+            lock = _DOCX_CONVERT_LOCKS.get(key)
+            if lock:
+                lock.acquire(); lock.release()
+        except Exception:
+            pass
+    finally:
+        _DOCX_CONVERT_LOCKS.pop(key, None)
+
+
+@router.get("/files/{file_id}/docx-pages")
+async def get_docx_pages_status(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """DOCX 逐页 PNG 浏览: 轮询状态端点 (ready 时返回页图 URL 列表)."""
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    if not (f.file_name or "").lower().endswith((".docx", ".doc")):
+        raise HTTPException(status_code=400, detail="仅支持 .docx/.doc")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    cache_dir = _docx_cache_dir(file_id, key)
+
+    if (cache_dir / "ready.json").exists():
+        try:
+            total = json.loads((cache_dir / "ready.json").read_text()).get("total", 0)
+        except Exception:
+            total = 0
+        return {"status": "ready", "total": total,
+                "pages": [f"/api/v1/drive/files/{file_id}/docx-pages/img-{i}" for i in range(1, total + 1)]}
+    if (cache_dir / "error.txt").exists():
+        return {"status": "error", "message": (cache_dir / "error.txt").read_text()[:200]}
+
+    lock = _DOCX_CONVERT_LOCKS.get(key)
+    if lock is not None and lock.locked():
+        return {"status": "converting"}
+
+    lock = threading.Lock()
+    _DOCX_CONVERT_LOCKS[key] = lock
+    lock.acquire()
+    tmp = FsPath("/tmp") / ("docx_conv_%d_%s" % (file_id, key[:8]))
+    src = FsPath("/tmp") / ("docx_src_%d.docx" % file_id)
+    if not src.exists():
+        raw = await file_service.download_file(f.file_path)
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_bytes(raw)
+    th = threading.Thread(target=_docx_convert_worker,
+                          args=(file_id, str(src), cache_dir, key), daemon=True)
+    th.start()
+    return {"status": "converting"}
+
+
+@router.get("/files/{file_id}/docx-pages/img-{page}")
+async def get_docx_page_image(
+    file_id: int,
+    page: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    from fastapi.responses import FileResponse
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在")
+    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    cache_dir = _docx_cache_dir(file_id, key)
+    p = cache_dir / ("page-%d.png" % page)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="页不存在")
+    return FileResponse(str(p), media_type="image/png")
+
+
+@router.get("/files/{file_id}/docx-pages/pdf")
+async def get_docx_converted_pdf(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """返回转换后的 PDF (全屏连页阅读用)."""
+    from fastapi.responses import FileResponse
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在")
+    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    cache_dir = _docx_cache_dir(file_id, key)
+    p = cache_dir / "doc.pdf"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="PDF 尚未转换")
+    return FileResponse(str(p), media_type="application/pdf")
+
+
 # === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
 # .pptx = zip + OOXML — python-pptx 已在容器内 (1.0.2), 解析一次缓存 JSON,
 # 第三栏渲染器 (DriveDetailRail) 按 EMU 比例绝对定位还原 文本框/图片/表格。
