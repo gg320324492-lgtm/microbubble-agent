@@ -60,28 +60,34 @@
         @keydown="onContentKeydown"
         @blur="onContentBlur"
       />
-      <!-- @username autocomplete dropdown (v2 PR6-P4 mobile 镜像) -->
+      <!-- @成员选择框 · 批次⑩.44 (用户选型 C) mobile 镜像: 双列网格卡片 -->
       <div
         v-if="mention.isOpen.value && mention.rawCandidates.value.length > 0"
-        class="mct-mention-dropdown"
+        class="mct-mention-dd"
         role="listbox"
       >
-        <div
-          v-for="(m, idx) in mention.rawCandidates.value"
-          :key="m.id"
-          class="mct-mention-item"
-          :class="{ active: idx === mention.selectedIndex.value }"
-          role="option"
-          :aria-selected="idx === mention.selectedIndex.value"
-          @mousedown.prevent="onMentionItemClick(idx)"
-          @mouseenter="mention.selectedIndex.value = idx"
-        >
-          <el-avatar :size="24" :src="m.avatar" class="mct-mention-avatar">
-            {{ (m.name || '?').slice(0, 1) }}
-          </el-avatar>
-          <div class="mct-mention-info">
-            <div class="mct-mention-name">{{ m.name }}</div>
-            <div class="mct-mention-username">@{{ m.wechat_id || m.username }}</div>
+        <div class="mct-mention-dd-head">
+          <span>选择要提醒的成员</span>
+          <span class="mono">{{ mention.rawCandidates.value.length }}</span>
+        </div>
+        <div class="mct-mention-grid">
+          <div
+            v-for="(m, idx) in mention.rawCandidates.value"
+            :key="m.id"
+            class="mct-mention-cell"
+            :class="{ on: idx === mention.selectedIndex.value }"
+            role="option"
+            :aria-selected="idx === mention.selectedIndex.value"
+            @mousedown.prevent="onMentionItemClick(idx)"
+            @mouseenter="mention.selectedIndex.value = idx"
+          >
+            <el-avatar :size="30" :src="m.avatar" class="mct-mention-avatar">
+              {{ (m.name || '?').slice(0, 1) }}
+            </el-avatar>
+            <div class="mct-mention-info">
+              <div class="mct-mention-name">{{ m.name }}</div>
+              <div class="mct-mention-username">@{{ m.wechat_id || m.username }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -367,31 +373,48 @@ watch(() => props.fileId, (newId) => {
 .mct-compose {
   position: relative;
 }
-.mct-mention-dropdown {
+.mct-mention-dd {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 100%;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   background: var(--color-bg-card, #fff);
   border: 1px solid var(--color-border-light, #ebeef5);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  max-height: 200px;
-  overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(20, 40, 35, 0.14);
+  padding: 8px;
   z-index: 1000;
 }
-.mct-mention-item {
+.mct-mention-dd-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.15s;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+  padding: 0 2px 7px;
 }
-.mct-mention-item.active {
-  background: var(--color-primary-bg, rgba(255, 122, 92, 0.08));
+.mct-mention-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.mct-mention-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.mct-mention-cell.on {
+  border-color: var(--color-primary, #0e766e);
+  background: var(--color-primary-bg, rgba(14, 118, 110, 0.08));
 }
 .mct-mention-avatar {
   flex-shrink: 0;
@@ -401,17 +424,20 @@ watch(() => props.fileId, (newId) => {
   min-width: 0;
 }
 .mct-mention-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--color-text-primary, #303133);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .mct-mention-username {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--color-text-secondary, #909399);
-  font-family: monospace;
+  font-family: var(--font-family-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mct-post-btn {
