@@ -135,7 +135,6 @@
           </el-avatar>
           <div class="mention-info">
             <div class="mention-name">{{ m.name }}</div>
-            <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
           </div>
         </div>
       </div>

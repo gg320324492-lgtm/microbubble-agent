@@ -86,7 +86,6 @@
             </el-avatar>
             <div class="mct-mention-info">
               <div class="mct-mention-name">{{ m.name }}</div>
-              <div class="mct-mention-username">@{{ m.wechat_id || m.username }}</div>
             </div>
           </div>
         </div>
