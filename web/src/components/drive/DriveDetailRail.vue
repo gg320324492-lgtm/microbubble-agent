@@ -112,7 +112,7 @@
             <span v-if="previewKind === 'office'" class="rf-auto">首页缩略图 · 自动</span>
           </template>
           <!-- 图片真图 -->
-          <img v-else-if="previewKind === 'image'" :src="inlineUrl" :alt="name" class="rf-img" />
+          <img v-else-if="previewKind === 'image'" :src="stageUrl" :alt="name" class="rf-img" />
           <!-- 视频播放器 (blob 流) -->
           <video v-else-if="previewKind === 'video' && stageUrl" :src="stageUrl" controls playsinline class="rf-media"></video>
           <!-- 音频紧凑播放条 -->
@@ -492,10 +492,6 @@ watch(() => [props.file?.id, props.file?.thumbnail_status], async () => {
   coverUrl.value = null
   const f = props.file
   if (!f) return
-  if (['png', 'jpg', 'jpeg', 'gif'].includes(extOf.value)) {
-    coverUrl.value = `/api/v1/drive/files/${f.id}/download?disposition=inline`
-    return
-  }
   if (f.thumbnail_status === 'ready') {
     try {
       const resp = await axios.get(`/api/v1/drive/files/${f.id}/thumbnail`)
@@ -540,7 +536,7 @@ async function loadStageBlob() {
   const seq = ++stageSeq
   if (stageUrl.value) { URL.revokeObjectURL(stageUrl.value); stageUrl.value = null }
   const kind = previewKind.value
-  if (!props.file || !['video', 'audio', 'pdf'].includes(kind)) { stageLoading.value = false; return }
+  if (!props.file || !['video', 'audio', 'pdf', 'image'].includes(kind)) { stageLoading.value = false; return }
   stageLoading.value = true
   try {
     const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/download?disposition=inline`, { responseType: 'blob' })
@@ -592,7 +588,8 @@ async function ensurePageBlob(fid, pageIdx) {
 }
 async function refreshPptBlobs() {
   const fid = props.file?.id
-  if (fid == null) { pptBlobCurrent.value = null; return }
+  // 批次⑩.56 守卫: 非 ppt 或转换未就绪时绝不预取页图 (避免 404 刷屏)
+  if (fid == null || previewKind.value !== 'ppt' || pptImgStatus.value !== 'ready') { pptBlobCurrent.value = null; return }
   const seq = ++blobSeq
   const p = pptPageClamped.value
   await ensurePageBlob(fid, p)
@@ -603,7 +600,7 @@ async function refreshPptBlobs() {
 watch([() => props.file?.id, previewKind], ([fid]) => {
   if (fid != null) revokePptBlobs()  // 换文件清旧 blob
 })
-watch([() => props.file?.id, previewKind, pptPageClamped], refreshPptBlobs, { immediate: true })
+watch([() => props.file?.id, previewKind, pptPageClamped, pptImgStatus], refreshPptBlobs, { immediate: true })
 
 function stopPptPoll() { if (pptPollTimer) { clearTimeout(pptPollTimer); pptPollTimer = null } }
 function startPptPoll(fid) {
@@ -683,7 +680,8 @@ async function ensureDocxBlob(fid, pageIdx) {
 }
 async function refreshDocxBlobs() {
   const fid = props.file?.id
-  if (fid == null) { docxBlobCurrent.value = null; return }
+  // 批次⑩.56 守卫: 非 docx 或转换未就绪时绝不预取页图
+  if (fid == null || previewKind.value !== 'docx' || docxImgStatus.value !== 'ready') { docxBlobCurrent.value = null; return }
   const seq = ++docxBlobSeq
   const pg = docxPageClamped.value
   await ensureDocxBlob(fid, pg)
@@ -691,7 +689,7 @@ async function refreshDocxBlobs() {
   if (seq !== docxBlobSeq) return
   docxBlobCurrent.value = docxBlobMap[pg] || null
 }
-watch([() => props.file?.id, previewKind, docxPageClamped], refreshDocxBlobs, { immediate: true })
+watch([() => props.file?.id, previewKind, docxPageClamped, docxImgStatus], refreshDocxBlobs, { immediate: true })
 function stopDocxPoll() { if (docxPollTimer) { clearTimeout(docxPollTimer); docxPollTimer = null } }
 function startDocxPoll(fid) {
   stopDocxPoll()
