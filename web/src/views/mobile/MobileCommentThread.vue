@@ -419,6 +419,11 @@ watch(() => props.fileId, (newId) => {
 .mct-mention-avatar {
   flex-shrink: 0;
 }
+/* 批次⑩.46: 同桌面端 — 大图栅格化一次缓存, 悬停/滚动不再逐帧重绘; :deep 穿透 el-avatar */
+.mct-mention-avatar :deep(img) {
+  will-change: transform;
+  transform: translateZ(0);
+}
 .mct-mention-info {
   flex: 1;
   min-width: 0;
