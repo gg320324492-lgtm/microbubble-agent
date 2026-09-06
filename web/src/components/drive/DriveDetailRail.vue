@@ -174,12 +174,11 @@
               <div class="docx-fs-wrap" :class="{ fs: pptFull }">
                 <div v-if="pptFull" class="docx-thumbs">
                   <img
-                    v-for="i in docxImgTotalSafe" :key="'dt' + i"
-                    :src="docxThumbUrl(i)"
+                    v-for="t in docxThumbItems" :key="'dt' + t.i"
+                    :src="t.url"
                     class="docx-thumb"
-                    :class="{ on: i === docxPageClamped }"
-                    loading="lazy"
-                    @click="docxPage = i"
+                    :class="{ on: t.i === docxPageClamped }"
+                    @click="docxPage = t.i"
                   />
                 </div>
                 <div class="docx-main">
@@ -669,7 +668,7 @@ const docxBlobMap = reactive({})
 const docxBlobCurrent = ref(null)
 let docxBlobSeq = 0
 function docxThumbUrl(i) {
-  return docxBlobMap['t' + i] || ('/api/v1/drive/files/' + (props.file?.id ?? '') + '/docx-pages/img-' + i)
+  return docxBlobMap[i] || ''
 }
 async function ensureDocxBlob(fid, pageIdx) {
   if (fid == null || docxBlobMap[pageIdx]) return
@@ -690,6 +689,17 @@ async function refreshDocxBlobs() {
   docxBlobCurrent.value = docxBlobMap[pg] || null
 }
 watch([() => props.file?.id, previewKind, docxPageClamped, docxImgStatus], refreshDocxBlobs, { immediate: true })
+
+let docxAllSeq = 0
+async function ensureAllDocxBlobs(fid) {
+  if (fid == null) return
+  const seq = ++docxAllSeq
+  for (let i = 1; i <= docxImgTotalSafe.value; i++) {
+    if (seq !== docxAllSeq) return
+    await ensureDocxBlob(fid, i)
+    await new Promise(r => setTimeout(r, 0))
+  }
+}
 function stopDocxPoll() { if (docxPollTimer) { clearTimeout(docxPollTimer); docxPollTimer = null } }
 function startDocxPoll(fid) {
   stopDocxPoll()
@@ -703,7 +713,7 @@ function startDocxPoll(fid) {
         docxImgStatus.value = 'ready'
         docxImgUrls.value = resp.data.pages || []
         docxImgTotal.value = resp.data.total || (resp.data.pages || []).length
-        return
+        ensureAllDocxBlobs(fid)
       }
       if (st === 'error') {
         docxImgStatus.value = 'error'
@@ -739,6 +749,15 @@ const prevDisabled = computed(() => previewKind.value === 'docx' ? docxPageClamp
 const nextDisabled = computed(() => previewKind.value === 'docx' ? docxPageClamped.value >= docxImgTotalSafe.value : pptPageClamped.value >= pptImgTotalSafe.value)
 function prevAnyPage() { if (previewKind.value === 'docx') prevDocxPage(); else prevPptPage() }
 function nextAnyPage() { if (previewKind.value === 'docx') nextDocxPage(); else nextPptPage() }
+
+const docxThumbItems = computed(() => {
+  const arr = []
+  for (let i = 1; i <= docxImgTotalSafe.value; i++) {
+    const url = docxBlobMap[i]
+    if (url) arr.push({ i, url })
+  }
+  return arr
+})
 
 const docxStageRef = ref(null)
 function toggleDocxFull() {
