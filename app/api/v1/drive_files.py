@@ -1813,6 +1813,109 @@ async def get_docx_converted_pdf(
     return FileResponse(str(p), media_type="application/pdf")
 
 
+# === 批次⑩.62 PDF 逐页预览 (与 DOCX 同设计; PDF 本体直接 pdftoppm, 免 soffice) ===
+_PDF_CONVERT_LOCKS: dict = {}
+
+
+def _pdf_cache_dir(file_id: int, key: str) -> FsPath:
+    return FsPath("/app/data/pdf_pages") / ("%d_%s" % (file_id, key))
+
+
+def _pdf_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["pdftoppm", "-png", "-r", "110", src_path, str(cache_dir / "page")],
+            check=True, timeout=600,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        pages = sorted(cache_dir.glob("page-*.png"))
+        total = len(pages)
+        # 统一命名 page-N.png (pdftoppm 已按序号输出)
+        (cache_dir / "ready.json").write_text(json.dumps({"total": total}))
+        logger.info("[pdf-pages] 转换完成 file=%d 页数=%d", file_id, total)
+    except Exception as e:
+        logger.error("[pdf-convert] file=%s 转换失败: %s", file_id, e)
+        try:
+            (cache_dir / "error.txt").write_text(str(e)[:500])
+        except Exception:
+            pass
+        try:
+            lock = _PDF_CONVERT_LOCKS.get(key)
+            if lock:
+                lock.acquire(); lock.release()
+        except Exception:
+            pass
+    finally:
+        _PDF_CONVERT_LOCKS.pop(key, None)
+
+
+@router.get("/files/{file_id}/pdf-pages")
+async def get_pdf_pages_status(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """PDF 逐页 PNG 浏览: 轮询状态端点."""
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    if not (f.file_name or "").lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="仅支持 .pdf")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    cache_dir = _pdf_cache_dir(file_id, key)
+
+    if (cache_dir / "ready.json").exists():
+        try:
+            total = json.loads((cache_dir / "ready.json").read_text()).get("total", 0)
+        except Exception:
+            total = 0
+        return {"status": "ready", "total": total,
+                "pages": [f"/api/v1/drive/files/{file_id}/pdf-pages/img-{i}" for i in range(1, total + 1)]}
+    if (cache_dir / "error.txt").exists():
+        return {"status": "error", "message": (cache_dir / "error.txt").read_text()[:200]}
+
+    lock = _PDF_CONVERT_LOCKS.get(key)
+    if lock is not None and lock.locked():
+        return {"status": "converting"}
+
+    lock = threading.Lock()
+    _PDF_CONVERT_LOCKS[key] = lock
+    lock.acquire()
+    src = FsPath("/tmp") / ("pdf_src_%d.pdf" % file_id)
+    if not src.exists():
+        raw = await file_service.download_file(f.file_path)
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_bytes(raw)
+    th = threading.Thread(target=_pdf_convert_worker,
+                          args=(file_id, str(src), cache_dir, key), daemon=True)
+    th.start()
+    return {"status": "converting"}
+
+
+@router.get("/files/{file_id}/pdf-pages/img-{page}")
+async def get_pdf_page_image(
+    file_id: int,
+    page: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    from fastapi.responses import FileResponse
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在")
+    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    cache_dir = _pdf_cache_dir(file_id, key)
+    p = cache_dir / ("page-%d.png" % page)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="页不存在")
+    return FileResponse(str(p), media_type="image/png")
+
+
 # === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
 # .pptx = zip + OOXML — python-pptx 已在容器内 (1.0.2), 解析一次缓存 JSON,
 # 第三栏渲染器 (DriveDetailRail) 按 EMU 比例绝对定位还原 文本框/图片/表格。
