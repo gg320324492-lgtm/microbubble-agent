@@ -216,7 +216,7 @@ const editMention = useMentionAutocomplete({
     if (!ctx || ctx.triggerPos < 0) return
     const before = editContent.value.substring(0, ctx.triggerPos)
     const after = editContent.value.substring(ctx.triggerPos + 1 + ctx.query.length)
-    const mentionText = `@${member.wechat_id || member.username} `
+    const mentionText = `@${member.name || member.wechat_id || member.username} `  // 批次⑩.51: 插入真实姓名 (后端三路匹配支持姓名精确解析)
     editContent.value = before + mentionText + after
     setTimeout(() => {
       const ta = editInputRef.value?.$el?.querySelector?.('textarea')
