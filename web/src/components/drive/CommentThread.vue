@@ -99,7 +99,6 @@
                 {{ m.name }}
                 <span v-if="m.role === 'admin'" class="mention-badge">管理员</span>
               </div>
-              <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
             </div>
           </div>
         </div>
