@@ -80,3 +80,33 @@
   );
   animation: el-skeleton-loading 1.8s var(--ease-in-out) infinite;
 }
+
+/* ============================================================
+   批次⑩.47: el-popconfirm 归档设计统一 — 确认气泡从未被主题化,
+   主按钮跟随 accent 变橙 + 默认直角小卡片, 与网盘设计体系脱节。
+   只针对含 .el-popconfirm 的气泡容器 (:has), 不影响通知铃铛等 popover。
+   ============================================================ */
+.el-popover.el-popper:has(.el-popconfirm) {
+  border-radius: 12px;
+  border-color: var(--color-border-light, #e7e3da);
+  box-shadow: 0 10px 32px rgba(20, 40, 35, 0.14);
+  padding: 14px 16px;
+  max-width: 280px;
+}
+.el-popconfirm__main {
+  font-size: 13px;
+  color: var(--color-text-primary, #26302c);
+  margin-bottom: 10px;
+}
+.el-popconfirm__action .el-button {
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 6px 14px;
+}
+[data-theme="dark"] .el-popover.el-popper:has(.el-popconfirm) {
+  background: var(--color-bg-card, #2a2d35);
+  border-color: var(--color-border-light, #3a3d45);
+}
+[data-theme="dark"] .el-popconfirm__main {
+  color: var(--color-text-primary, #e6e9ed);
+}
