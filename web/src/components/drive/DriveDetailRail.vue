@@ -593,7 +593,7 @@ async function refreshPptBlobs() {
   const seq = ++blobSeq
   const p = pptPageClamped.value
   await ensurePageBlob(fid, p)
-  await ensurePageBlob(fid, p + 1)  // 预取下一页
+  if (p < pptImgTotalSafe.value) await ensurePageBlob(fid, p + 1)  // 预取下一页 (有边界)
   if (seq !== blobSeq) return
   pptBlobCurrent.value = pptBlobMap[p] || null
 }
@@ -685,7 +685,7 @@ async function refreshDocxBlobs() {
   const seq = ++docxBlobSeq
   const pg = docxPageClamped.value
   await ensureDocxBlob(fid, pg)
-  await ensureDocxBlob(fid, pg + 1)
+  if (pg < docxImgTotalSafe.value) await ensureDocxBlob(fid, pg + 1)
   if (seq !== docxBlobSeq) return
   docxBlobCurrent.value = docxBlobMap[pg] || null
 }
