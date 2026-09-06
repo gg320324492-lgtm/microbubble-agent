@@ -117,30 +117,36 @@
       />
       <div
         v-if="mention.isOpen.value && mention.rawCandidates.value.length > 0"
-        class="mention-dropdown"
+        class="mention-dd"
         role="listbox"
       >
-        <div
-          v-for="(m, idx) in mention.rawCandidates.value"
-          :key="m.id"
-          class="mention-item"
-          :class="{ active: idx === mention.selectedIndex.value }"
-          role="option"
-          :aria-selected="idx === mention.selectedIndex.value"
-          @mousedown.prevent="onMentionItemClick(idx)"
-          @mouseenter="mention.selectedIndex.value = idx"
-        >
-          <el-avatar :size="22" :src="m.avatar" class="mention-avatar">
-            {{ (m.name || '?').slice(0, 1) }}
-          </el-avatar>
-          <div class="mention-info">
-            <div class="mention-name">{{ m.name }}</div>
-            <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
+        <div class="mention-dd-head">
+          <span>选择要提醒的成员</span>
+          <span class="mono">{{ mention.rawCandidates.value.length }}</span>
+        </div>
+        <div class="mention-grid">
+          <div
+            v-for="(m, idx) in mention.rawCandidates.value"
+            :key="m.id"
+            v-memo="[idx === mention.selectedIndex.value]"
+            class="mention-cell"
+            :class="{ on: idx === mention.selectedIndex.value }"
+            role="option"
+            :aria-selected="idx === mention.selectedIndex.value"
+            @mousedown.prevent="onMentionItemClick(idx)"
+          >
+            <el-avatar :size="30" :src="m.avatar" class="mention-avatar">
+              {{ (m.name || '?').slice(0, 1) }}
+            </el-avatar>
+            <div class="mention-info">
+              <div class="mention-name">{{ m.name }}</div>
+              <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
+            </div>
           </div>
         </div>
       </div>
       <div class="comment-reply-actions">
-        <el-button size="small" @click="cancelReply">取消</el-button>
+        <el-button size="small" text @click="cancelReply">取消</el-button>
         <el-button
           size="small"
           type="primary"
@@ -617,7 +623,10 @@ function onEditMentionItemClick(index) { editMention.selectCandidate(index) }
 /* v2 PR6-P5: 内联 reply 输入框 */
 .comment-reply-form {
   position: relative;
-  margin: 8px 0 0 calc(38px + 8px);
+  margin: 12px 0 0 calc(38px + 8px);
+  padding-top: 12px;
+  /* 批次⑩.49 (选型 A): 与顶层发布区同款分隔线 */
+  border-top: 1px solid var(--color-border-light, #e7e3da);
 }
 .comment-reply-input {
   width: 100%;
@@ -629,46 +638,72 @@ function onEditMentionItemClick(index) { editMention.selectCandidate(index) }
   gap: 6px;
 }
 
-.comment-reply-form .mention-dropdown {
+.comment-reply-form .mention-dd {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 100%;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   background: var(--color-bg-card, #fff);
   border: 1px solid var(--color-border-light, #ebeef5);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  max-height: 240px;
-  overflow-y: auto;
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(20, 40, 35, 0.14);
+  padding: 8px;
   z-index: 1000;
+  contain: layout paint;
 }
-.mention-item {
+.comment-reply-form .mention-dd-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+  padding: 0 2px 7px;
+}
+.comment-reply-form .mention-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.comment-reply-form .mention-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 10px;
+  padding: 6px 8px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: border-color 0.12s, background 0.12s;
 }
-.mention-item:hover,
-.mention-item.active {
-  background: var(--color-primary-bg, rgba(255, 122, 92, 0.08));
+.comment-reply-form .mention-cell.on,
+.comment-reply-form .mention-cell:hover {
+  border-color: #0E766E;
+  background: rgba(14, 118, 110, 0.08);
 }
-.mention-avatar { flex-shrink: 0; }
-.mention-info { flex: 1; min-width: 0; }
-.mention-name {
-  font-size: 13px;
-  font-weight: 500;
+.comment-reply-form .mention-avatar { flex-shrink: 0; }
+.comment-reply-form .mention-avatar :deep(img) {
+  will-change: transform;
+  transform: translateZ(0);
+}
+.comment-reply-form .mention-info { flex: 1; min-width: 0; }
+.comment-reply-form .mention-name {
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--color-text-primary, #303133);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mention-username {
-  font-size: 11px;
+.comment-reply-form .mention-username {
+  font-size: 10px;
   color: var(--color-text-secondary, #909399);
-  font-family: monospace;
+  font-family: var(--font-family-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .comment-replies {

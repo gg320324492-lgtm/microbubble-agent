@@ -1,0 +1,291 @@
+
+.comment-item-wrapper[data-v-6815e9dd] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.comment-item-wrapper[data-depth="1"][data-v-6815e9dd] {
+  margin-left: 24px;
+}
+.comment-item-wrapper[data-depth="2"][data-v-6815e9dd] {
+  margin-left: 48px;
+}
+/* P3-12 (2026-07-08): 预留 depth=3 缩进 (未来 MAX_COMMENT_DEPTH=3 时自动生效).
+   防御性 + 不破坏现有 depth=0/1/2. 后端 MAX_COMMENT_DEPTH 仍 = 2 (composable/useCommentTree.js),
+   这个 selector 当前不会命中, 但未来改 MAX_COMMENT_DEPTH=3 时不用再改 CSS. */
+.comment-item-wrapper[data-depth="3"][data-v-6815e9dd] {
+  margin-left: 72px;
+}
+.comment-item[data-v-6815e9dd] {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  background: var(--color-bg-page, #f5f7fa);
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+.comment-item-wrapper[data-depth="1"] .comment-item[data-v-6815e9dd],
+.comment-item-wrapper[data-depth="2"] .comment-item[data-v-6815e9dd] {
+  padding: 8px;
+  background: transparent;
+  border: 1px solid var(--color-border-light, #ebeef5);
+}
+.comment-avatar[data-v-6815e9dd] { flex-shrink: 0;
+}
+.comment-body[data-v-6815e9dd] { flex: 1; min-width: 0;
+}
+.comment-meta[data-v-6815e9dd] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.comment-author[data-v-6815e9dd] {
+  font-weight: 600;
+  color: var(--color-text-primary, #303133);
+}
+.comment-time[data-v-6815e9dd] {
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+}
+.comment-delete-btn[data-v-6815e9dd] {
+  margin-left: auto;
+  font-size: 12px;
+}
+.comment-content[data-v-6815e9dd] {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-primary, #303133);
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: pre-wrap;
+}
+.comment-content[data-v-6815e9dd] .mention {
+  color: var(--color-primary, #FF7A5C);
+  font-weight: 600;
+  background: rgba(255, 122, 92, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.comment-mentions[data-v-6815e9dd] {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mention-tag[data-v-6815e9dd] {
+  font-size: 11px;
+  padding: 2px 6px;
+  /* P2-6 fix (2026-07-08): 改用 var(--color-primary-rgb) 透明度可调, */
+  /* 之前 fallback rgba(255,122,92,0.12) / #FF7A5C 硬编码 light 暖橙, */
+  /* dark + ocean/forest 主题不切换. 6 主题全部自动跟随. */
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary);
+  border-radius: 10px;
+}
+
+/* v2 PR6-P5: 评论操作栏 */
+.comment-actions[data-v-6815e9dd] {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.comment-reply-btn[data-v-6815e9dd],
+.comment-toggle-replies-btn[data-v-6815e9dd] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.comment-reply-btn[data-v-6815e9dd]:hover,
+.comment-toggle-replies-btn[data-v-6815e9dd]:hover {
+  color: var(--color-primary, #FF7A5C);
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.08));
+}
+
+/* v2 PR6-P5: 内联 reply 输入框 */
+.comment-reply-form[data-v-6815e9dd] {
+  position: relative;
+  margin: 12px 0 0 calc(38px + 8px);
+  padding-top: 12px;
+  /* 批次⑩.49 (选型 A): 与顶层发布区同款分隔线 */
+  border-top: 1px solid var(--color-border-light, #e7e3da);
+}
+.comment-reply-input[data-v-6815e9dd] {
+  width: 100%;
+}
+.comment-reply-actions[data-v-6815e9dd] {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.comment-reply-form .mention-dd[data-v-6815e9dd] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 6px;
+  background: var(--color-bg-card, #fff);
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(20, 40, 35, 0.14);
+  padding: 8px;
+  z-index: 1000;
+  contain: layout paint;
+}
+.comment-reply-form .mention-dd-head[data-v-6815e9dd] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+  padding: 0 2px 7px;
+}
+.comment-reply-form .mention-grid[data-v-6815e9dd] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.comment-reply-form .mention-cell[data-v-6815e9dd] {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 10px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.comment-reply-form .mention-cell.on[data-v-6815e9dd],
+.comment-reply-form .mention-cell[data-v-6815e9dd]:hover {
+  border-color: #0E766E;
+  background: rgba(14, 118, 110, 0.08);
+}
+.comment-reply-form .mention-avatar[data-v-6815e9dd] { flex-shrink: 0;
+}
+.comment-reply-form .mention-avatar[data-v-6815e9dd] img {
+  will-change: transform;
+  transform: translateZ(0);
+}
+.comment-reply-form .mention-info[data-v-6815e9dd] { flex: 1; min-width: 0;
+}
+.comment-reply-form .mention-name[data-v-6815e9dd] {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary, #303133);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comment-reply-form .mention-username[data-v-6815e9dd] {
+  font-size: 10px;
+  color: var(--color-text-secondary, #909399);
+  font-family: var(--font-family-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comment-replies[data-v-6815e9dd] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Dark mode (v60-v67 教训: 非 scoped 块) */
+[data-theme="dark"] .comment-item[data-v-6815e9dd] {
+  background: var(--color-bg-page, #2a2d35);
+}
+.comment-item-wrapper[data-depth="1"] .comment-item[data-v-6815e9dd],
+.comment-item-wrapper[data-depth="2"] .comment-item[data-v-6815e9dd] {
+  background: transparent;
+  border-color: var(--color-border-dark, rgba(255, 255, 255, 0.08));
+}
+[data-theme="dark"] .comment-content[data-v-6815e9dd] .mention {
+  background: rgba(255, 122, 92, 0.16);
+}
+[data-theme="dark"] .comment-reply-btn[data-v-6815e9dd]:hover,
+[data-theme="dark"] .comment-toggle-replies-btn[data-v-6815e9dd]:hover {
+  background: rgba(255, 122, 92, 0.16);
+}
+[data-theme="dark"] .comment-reply-form .mention-dropdown[data-v-6815e9dd] {
+  background: var(--color-bg-card, #2a2d35);
+  border-color: var(--color-border-light, #3a3d45);
+}
+[data-theme="dark"] .mention-item[data-v-6815e9dd]:hover,
+[data-theme="dark"] .mention-item.active[data-v-6815e9dd] {
+  background: rgba(255, 122, 92, 0.16);
+}
+
+/* ===== v2 PR6-P6: edit form + edited tag ===== */
+.comment-edit-form[data-v-6815e9dd] {
+  margin: 8px 0 8px 38px;  /* 与 reply form 对齐缩进 */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background: var(--color-bg-page, #f5f7fa);
+  border-radius: 8px;
+}
+.comment-edit-input[data-v-6815e9dd] {
+  width: 100%;
+}
+.comment-edit-actions[data-v-6815e9dd] {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.comment-edit-btn[data-v-6815e9dd] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.comment-edit-btn[data-v-6815e9dd]:hover {
+  color: var(--color-primary, #ff7a5c);
+}
+.comment-edited-tag[data-v-6815e9dd] {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--color-text-placeholder, #c0c4cc);
+  background: var(--color-bg-page, #f5f7fa);
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+[data-theme="dark"] .comment-edit-form {
+  background: var(--color-bg-card, #1e1f24);
+}
+[data-theme="dark"] .comment-edited-tag {
+  color: var(--color-text-secondary, #a8aab0);
+  background: var(--color-bg-page, #2a2d35);
+}
+[data-theme="dark"] .comment-edit-btn {
+  color: var(--color-text-secondary, #a8aab0);
+}
+[data-theme="dark"] .comment-edit-btn:hover {
+  color: var(--color-primary, #ff7a5c);
+}
