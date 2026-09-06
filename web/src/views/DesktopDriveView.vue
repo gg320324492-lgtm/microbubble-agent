@@ -48,8 +48,7 @@
       </label>
       <span class="wb-sp"></span>
       <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
-      <el-button class="drive-toolbar-btn" :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
-      <el-button class="wb-cta" :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
+      <el-button class="wb-cta" :icon="UploadFilled" @click="showUploadDialog = true">上传</el-button>
     </header>
 
     <!-- 三栏 body -->
@@ -843,17 +842,6 @@ const shareLinkDialogFolder = ref(null)
 
 // === PR3.6 上传 dialog 状态 ===
 const showUploadDialog = ref(false)
-const folderUploadInputRef = ref(null)
-
-// === PR3.6 handlers ===
-function triggerFolderUpload() {
-  // webkitdirectory 模式: 只能选文件夹, Firefox 不支持
-  // 实际: 复用 DriveUploadDialog 的拖拽 (useFolderDropZone 已支持 webkitGetAsEntry)
-  // 这里弹 DriveUploadDialog 提示用户用拖拽
-  ElMessage.info('请在打开的对话框中拖拽文件夹到上传区 (Chrome/Edge/Safari)')
-  showUploadDialog.value = true
-}
-
 function onFilesUploaded({ count, folderId }) {
   // 上传完成后刷新当前文件夹的文件列表
   fetchDriveFiles({ folder_id: folderId ?? selectedFolderId.value })
