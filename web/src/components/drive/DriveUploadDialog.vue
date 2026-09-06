@@ -30,14 +30,6 @@
     :close-on-press-escape="!uploading"
     @closed="resetForm"
   >
-    <!-- v2 PR6-P19: 团队共享盘上传横幅 -->
-    <div
-      v-if="props.isTeamShared"
-      class="drive-upload-team-banner"
-    >
-      <el-icon><Share /></el-icon>
-      <span>此文件将上传到「团队共享盘」, <strong>不会显示在您的个人网盘</strong>。如需个人可见, 请先切换回「我的网盘」再上传。</span>
-    </div>
     <!-- 文件接收区 -->
     <div
       class="drive-upload-drop-zone"
@@ -115,7 +107,7 @@
     <el-form :model="form" label-width="100px" :disabled="uploading" class="drive-upload-form">
       <el-form-item label="目标文件夹">
         <el-select v-model="form.folderId" placeholder="选择目标文件夹 (留空=顶级)" clearable filterable>
-          <el-option label="📁 顶级目录 (我的网盘)" :value="null" />
+          <el-option label="📁 团队共享盘 · 顶级" :value="null" />
           <template v-for="f in flatFolderOptions" :key="f.id">
             <el-option :label="f.label" :value="f.id" />
           </template>
@@ -143,7 +135,7 @@
 import '@/views/drive/drive-view.css'
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { UploadFilled, Document, Share } from '@element-plus/icons-vue'
+import { UploadFilled, Document } from '@element-plus/icons-vue'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useFileHash } from '@/composables/useFileHash'   // PR4
