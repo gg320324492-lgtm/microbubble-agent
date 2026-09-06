@@ -343,6 +343,14 @@ const rfFiles = ref([])
 const rfTotal = ref(0)
 const rfLoading = ref(false)
 let rfSeq = 0
+/* 批次⑩.40: 组折叠态 — 声明必须在下方 watch 之前 (刷新恢复场景 watch 同步执行, 后置声明会 TDZ) */
+const rfFolded = ref(new Set())
+function toggleRfGroup(key) {
+  const s = new Set(rfFolded.value)
+  if (s.has(key)) s.delete(key)
+  else s.add(key)
+  rfFolded.value = s
+}
 watch(() => props.folder?.id, async (fid) => {
   rfFiles.value = []
   rfTotal.value = 0
@@ -392,15 +400,6 @@ const rfGroups = computed(() => {
 })
 function rfSubtotal(items) {
   return fmtSize(items.reduce((s, f) => s + (f.file_size || 0), 0))
-}
-
-/* 批次⑩.40: 组折叠态 (默认全展开, 换文件夹重置) */
-const rfFolded = ref(new Set())
-function toggleRfGroup(key) {
-  const s = new Set(rfFolded.value)
-  if (s.has(key)) s.delete(key)
-  else s.add(key)
-  rfFolded.value = s
 }
 function dotColor(name) {
   const ext = (name || '').split('.').pop().toLowerCase()
