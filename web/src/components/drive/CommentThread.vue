@@ -455,7 +455,7 @@ watch(() => props.fileId, (newId) => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 7px;
-  max-height: 228px;
+  max-height: 282px;
   overflow-y: auto;
 }
 .mention-cell {
