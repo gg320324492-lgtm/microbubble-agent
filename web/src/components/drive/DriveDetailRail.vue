@@ -160,13 +160,60 @@
               </div>
             </template>
           </div>
+          <!-- 批次⑩.53 (选型 C 改): DOCX 预览 — 常态首页竖版自适应, 全屏才出缩略图侧栏 -->
+          <div v-else-if="previewKind === 'docx'" class="rf-ppt" ref="docxStageRef">
+            <div v-if="docxImgStatus === 'loading' || docxImgStatus === 'converting'" class="rf-skel">
+              <div class="rf-conv-t">正在把 DOCX 转换为可预览格式…</div>
+              <div class="rf-conv-s">首次约 10-30 秒 · 之后打开秒出</div>
+              <div class="rf-skel-ttl" style="margin-top:18px"></div>
+              <div class="rf-skel-ln" style="width:78%"></div>
+              <div class="rf-skel-ln" style="width:62%"></div>
+            </div>
+            <div v-else-if="docxImgStatus === 'error'" class="rf-conv-t" style="color:var(--color-danger)">转换失败：{{ docxImgError }}</div>
+            <template v-else-if="docxImgStatus === 'ready'">
+              <div class="docx-fs-wrap" :class="{ fs: pptFull }">
+                <div v-if="pptFull" class="docx-thumbs">
+                  <img
+                    v-for="i in docxImgTotalSafe" :key="'dt' + i"
+                    :src="docxThumbUrl(i)"
+                    class="docx-thumb"
+                    :class="{ on: i === docxPageClamped }"
+                    loading="lazy"
+                    @click="docxPage = i"
+                  />
+                </div>
+                <div class="docx-main">
+                  <div class="rf-slide-wrap">
+                    <Transition name="rfpg" mode="out-in">
+                      <img
+                        :key="docxPageClamped"
+                        :src="docxBlobCurrent || undefined"
+                        class="rf-ppt-img"
+                        @load="onDocxImgLoad"
+                      />
+                    </Transition>
+                  </div>
+                  <div class="rf-pill rf-pill-docx">
+                    <button type="button" class="rf-pill-btn" :disabled="docxPageClamped <= 1" @click="prevDocxPage">‹</button>
+                    <span class="rf-pill-pg mono">{{ docxPageClamped }} / {{ docxImgTotalSafe }}</span>
+                    <button type="button" class="rf-pill-btn" :disabled="docxPageClamped >= docxImgTotalSafe" @click="nextDocxPage">›</button>
+                    <span class="rf-pill-sep"></span>
+                    <button type="button" class="rf-fs-btn" :title="pptFull ? '退出放映' : '全屏阅读'" @click="toggleDocxFull">
+                      <svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                      {{ pptFull ? '退出放映' : '全屏阅读' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
           <!-- 兜底占位 -->
           <div v-else class="rail-cover-ph" :style="{ borderColor: typeColor }">
             <span class="rail-cover-abbr">{{ typeAbbr }}</span>
             <span class="rail-cover-hint">{{ thumbnailHint }}</span>
           </div>
         </div>
-        <h3 class="rail-name" :title="name">{{ name }}<span v-if="previewKind === 'ppt' && pptImgStatus === 'ready'" class="rf-page-cnt">{{ pptPageClamped }} / {{ pptImgTotalSafe }} 页</span></h3>
+        <h3 class="rail-name" :title="name">{{ name }}<span v-if="(previewKind === 'ppt' || previewKind === 'docx') && (pptImgStatus === 'ready' || docxImgStatus === 'ready')" class="rf-page-cnt">{{ (previewKind === 'ppt' ? pptPageClamped : docxPageClamped) }} / {{ (previewKind === 'ppt' ? pptImgTotalSafe : docxImgTotalSafe) }} 页</span></h3>
         <!-- 批次⑩.37 (用户选型 B): ppt 时首排三键 上一页·全屏放映·下一页, 悬浮胶囊退役 (仅全屏态保留) -->
         <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' }">
           <template v-if="previewKind === 'ppt'">
@@ -466,7 +513,8 @@ const previewKind = computed(() => {
   if (e === 'pdf') return 'pdf'
   if (e === 'pptx') return 'ppt'   // 批次⑩.17: 自研结构化渲染 (python-pptx JSON)
   if (['md', 'txt', 'csv', 'json', 'log'].includes(e)) return 'text'
-  if (['ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx'].includes(e)) return 'office'
+  if (['doc', 'docx'].includes(e)) return 'docx'   // 批次⑩.53: LibreOffice 管线预览
+  if (['ppt', 'pptx', 'xls', 'xlsx'].includes(e)) return 'office'
   return 'none'
 })
 // 舞台高度: 文档 470 (A4) / 视频 189 (16:9) / 音频 130 / 图片 220 / 文本 300 / Office 220
@@ -475,6 +523,11 @@ const stageHeight = computed(() => {
   if (previewKind.value === 'ppt') {
     const nat = pptImgNat.value
     return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 9 / 16)
+  }
+  if (previewKind.value === 'docx') {
+    const nat = docxImgNat.value
+    // 批次⑩.53: 竖版 A4 贴合 — 首页图自然比例未知前用 A4 竖比 (210:297)
+    return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 297 / 210)
   }
   return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220 }[previewKind.value] || 168
 })
@@ -598,6 +651,100 @@ function revokePptBlobs() {
 }
 onBeforeUnmount(() => { stopPptPoll(); pptPollSeq++; revokePptBlobs() })
 
+/* ---- 批次⑩.53: DOCX 预览 (LibreOffice 管线复用, 常态首页竖版 / 全屏缩略图) ---- */
+const docxImgStatus = ref('idle')
+const docxImgError = ref('')
+const docxImgUrls = ref([])
+const docxImgTotal = ref(0)
+const docxPage = ref(1)
+const docxImgNat = ref(null)
+let docxPollTimer = null
+let docxPollSeq = 0
+const docxImgTotalSafe = computed(() => Math.max(1, docxImgTotal.value))
+const docxPageClamped = computed(() => Math.min(Math.max(docxPage.value, 1), Math.max(1, docxImgTotal.value)))
+function nextDocxPage() { if (docxPage.value < docxImgTotal.value) docxPage.value++ }
+function prevDocxPage() { if (docxPage.value > 1) docxPage.value-- }
+function onDocxImgLoad(ev) {
+  const img = ev.target
+  if (img?.naturalWidth) docxImgNat.value = { w: img.naturalWidth, h: img.naturalHeight }
+}
+const docxBlobMap = reactive({})
+const docxBlobCurrent = ref(null)
+let docxBlobSeq = 0
+function docxThumbUrl(i) {
+  return docxBlobMap['t' + i] || ('/api/v1/drive/files/' + (props.file?.id ?? '') + '/docx-pages/img-' + i)
+}
+async function ensureDocxBlob(fid, pageIdx) {
+  if (fid == null || docxBlobMap[pageIdx]) return
+  try {
+    const resp = await axios.get('/api/v1/drive/files/' + fid + '/docx-pages/img-' + pageIdx, { responseType: 'blob' })
+    docxBlobMap[pageIdx] = URL.createObjectURL(resp.data)
+  } catch { /* 静默 */ }
+}
+async function refreshDocxBlobs() {
+  const fid = props.file?.id
+  if (fid == null) { docxBlobCurrent.value = null; return }
+  const seq = ++docxBlobSeq
+  const pg = docxPageClamped.value
+  await ensureDocxBlob(fid, pg)
+  await ensureDocxBlob(fid, pg + 1)
+  if (seq !== docxBlobSeq) return
+  docxBlobCurrent.value = docxBlobMap[pg] || null
+}
+watch([() => props.file?.id, previewKind, docxPageClamped], refreshDocxBlobs, { immediate: true })
+function stopDocxPoll() { if (docxPollTimer) { clearTimeout(docxPollTimer); docxPollTimer = null } }
+function startDocxPoll(fid) {
+  stopDocxPoll()
+  const seq = ++docxPollSeq
+  const tick = async () => {
+    if (seq !== docxPollSeq) return
+    try {
+      const resp = await axios.get('/api/v1/drive/files/' + fid + '/docx-pages')
+      const st = resp.data?.status
+      if (st === 'ready') {
+        docxImgStatus.value = 'ready'
+        docxImgUrls.value = resp.data.pages || []
+        docxImgTotal.value = resp.data.total || (resp.data.pages || []).length
+        return
+      }
+      if (st === 'error') {
+        docxImgStatus.value = 'error'
+        docxImgError.value = resp.data?.message || '转换失败'
+        return
+      }
+      docxPollTimer = setTimeout(tick, 2000)
+    } catch {
+      docxPollTimer = setTimeout(tick, 2500)
+    }
+  }
+  tick()
+}
+watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+  stopDocxPoll()
+  docxPage.value = 1
+  docxImgUrls.value = []
+  docxImgNat.value = null
+  if (kind === 'docx' && fid != null) {
+    docxImgStatus.value = 'loading'
+    startDocxPoll(fid)
+  } else {
+    docxImgStatus.value = 'idle'
+  }
+}, { immediate: true })
+function revokeDocxBlobs() {
+  for (const k of Object.keys(docxBlobMap)) { try { URL.revokeObjectURL(docxBlobMap[k]) } catch {} delete docxBlobMap[k] }
+  docxBlobCurrent.value = null
+}
+onBeforeUnmount(() => { stopDocxPoll(); docxPollSeq++; revokeDocxBlobs() })
+
+const docxStageRef = ref(null)
+function toggleDocxFull() {
+  const el = rfStageRef.value || docxStageRef.value
+  if (!el) return
+  if (document.fullscreenElement) document.exitFullscreen?.()
+  else el.requestFullscreen?.()
+}
+
 // 批次⑩.19: 舞台宽随全屏自适应 (rail 态 304 / 全屏按视口等比适配, 比例取页图自然尺寸)
 const pptStageRef = ref(null)
 const rfStageRef = ref(null)
@@ -611,13 +758,20 @@ function onFsWheel(ev) {
   ev.preventDefault()
   const now = Date.now()
   if (now - wheelLock < 450) return
-  if (ev.deltaY > 0 && pptPage.value < pptImgTotalSafe.value) { wheelLock = now; pptPage.value++ }
-  else if (ev.deltaY < 0 && pptPage.value > 1) { wheelLock = now; pptPage.value-- }
+  // 批次⑩.53: docx 分支 — 同一套滚轮翻页逻辑
+  const isDocx = previewKind.value === 'docx'
+  const page = isDocx ? docxPage : pptPage
+  const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
+  if (ev.deltaY > 0 && page.value < total) { wheelLock = now; page.value++ }
+  else if (ev.deltaY < 0 && page.value > 1) { wheelLock = now; page.value-- }
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
-  if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(ev.key)) { ev.preventDefault(); if (pptPage.value < pptImgTotalSafe.value) pptPage.value++ }
-  else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(ev.key)) { ev.preventDefault(); if (pptPage.value > 1) pptPage.value-- }
+  const isDocx = previewKind.value === 'docx'
+  const page = isDocx ? docxPage : pptPage
+  const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(ev.key)) { ev.preventDefault(); if (page.value < total) page.value++ }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(ev.key)) { ev.preventDefault(); if (page.value > 1) page.value-- }
 }
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFsChange)
@@ -802,6 +956,30 @@ function fmtDT(x) {
   /* 批次⑩.37 (选型 B): 常态退役 — 翻页/全屏已下沉为下方矩阵按钮; 胶囊仅在全屏放映态浮现 */
   display: none;
 }
+/* 批次⑩.53: docx 预览胶囊常显 (常态即可翻页) */
+.rf-pill-docx {
+  display: flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+/* docx 全屏: 缩略图侧栏 + 主视图 */
+.docx-fs-wrap { display: flex; width: 100%; height: 100%; background: #0D1210; }
+.docx-thumbs {
+  width: 92px; flex: none; background: #12161A;
+  overflow-y: auto; padding: 8px 6px;
+  display: flex; flex-direction: column; gap: 6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.docx-thumb {
+  width: 100%; display: block; cursor: pointer;
+  border-radius: 2px; opacity: 0.55;
+  border: 2px solid transparent; box-sizing: border-box;
+}
+.docx-thumb:hover { opacity: 0.85; }
+.docx-thumb.on { opacity: 1; border-color: #12968B; }
+.docx-main { flex: 1; min-width: 0; position: relative; display: flex; }
+.docx-main .rf-slide-wrap { flex: 1; }
 .rf-pill-btn {
   font: inherit; font-size: 12px; border: none; background: none;
   color: #fff; width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
