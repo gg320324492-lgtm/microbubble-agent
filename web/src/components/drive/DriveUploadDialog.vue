@@ -40,7 +40,8 @@
       <el-icon :size="48" class="drive-upload-drop-icon"><UploadFilled /></el-icon>
       <p class="drive-upload-drop-title">点击或拖拽文件到此处</p>
       <p class="drive-upload-drop-hint">
-        支持文件夹拖拽 (Chrome/Edge/Safari), Firefox 仅单文件
+        支持多文件与整个文件夹 · 文档 / 图片 / 音视频 / 压缩包等常见类型<br />
+        文件夹拖拽需 Chrome/Edge/Safari, Firefox 仅单文件
       </p>
       <input
         ref="fileInputRef"
