@@ -153,11 +153,39 @@
             <span class="rail-cover-hint">{{ thumbnailHint }}</span>
           </div>
         </div>
-        <h3 class="rail-name" :title="name">{{ name }}</h3>
-        <div class="rail-actions">
-          <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
-            <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
-          </button>
+        <h3 class="rail-name" :title="name">{{ name }}<span v-if="previewKind === 'ppt' && pptImgStatus === 'ready'" class="rf-page-cnt">{{ pptPageClamped }} / {{ pptImgTotalSafe }} 页</span></h3>
+        <!-- 批次⑩.37 (用户选型 B): ppt 时首排三键 上一页·全屏放映·下一页, 悬浮胶囊退役 (仅全屏态保留) -->
+        <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' }">
+          <template v-if="previewKind === 'ppt'">
+            <button type="button" class="rail-act" :disabled="pptPageClamped <= 1" title="上一页 (←)" @click="prevPptPage">‹ 上一页</button>
+            <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
+              <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
+            </button>
+            <button type="button" class="rail-act" :disabled="pptPageClamped >= pptImgTotalSafe" title="下一页 (→)" @click="nextPptPage">下一页 ›</button>
+          </template>
+          <template v-else>
+            <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
+              <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
+            </button>
+            <button type="button" class="rail-act" @click="$emit('download', file)">
+              <span>⬇</span>下载
+            </button>
+            <button type="button" class="rail-act" @click="$emit('share', file)">
+              <span>◈</span>分享
+            </button>
+            <button
+              type="button"
+              class="rail-act"
+              :class="{ starred: file.is_starred }"
+              :aria-pressed="!!file.is_starred"
+              @click="$emit('toggle-star', file)"
+            >
+              <span>★</span>{{ file.is_starred ? '已收藏' : '收藏' }}
+            </button>
+          </template>
+        </div>
+        <!-- ppt 第二排: 下载/分享/收藏 + 隐形占位保持 4 列节奏 -->
+        <div v-if="previewKind === 'ppt'" class="rail-actions" style="margin-top: 8px">
           <button type="button" class="rail-act" @click="$emit('download', file)">
             <span>⬇</span>下载
           </button>
@@ -173,6 +201,7 @@
           >
             <span>★</span>{{ file.is_starred ? '已收藏' : '收藏' }}
           </button>
+          <button type="button" class="rail-act" style="visibility: hidden" aria-hidden="true" tabindex="-1"></button>
         </div>
         <div class="rail-actions rail-actions--second">
           <!-- 2026-09-05: "加入知识库"按钮移除 — 网盘文件上传后已默认自动入库 RAG -->
@@ -714,13 +743,8 @@ function fmtDT(x) {
   display: flex; align-items: center; gap: 9px;
   background: rgba(20, 40, 35, .62); border: 1px solid rgba(255, 255, 255, .14);
   border-radius: 9999px; padding: 4px 8px; backdrop-filter: blur(8px);
-  /* 批次⑩.30: 悬停预览区才浮现控件, 平时完全隐去不挡画面 */
-  opacity: 0; visibility: hidden; pointer-events: none;
-  transition: opacity var(--duration-normal) ease, visibility var(--duration-normal);
-}
-.rf-ppt:hover .rf-pill,
-.rf-ppt:focus-within .rf-pill {
-  opacity: 1; visibility: visible; pointer-events: auto;
+  /* 批次⑩.37 (选型 B): 常态退役 — 翻页/全屏已下沉为下方矩阵按钮; 胶囊仅在全屏放映态浮现 */
+  display: none;
 }
 .rf-pill-btn {
   font: inherit; font-size: 12px; border: none; background: none;
@@ -760,7 +784,7 @@ function fmtDT(x) {
 :is(.rf-stage, .rf-ppt):fullscreen .rf-slide-wrap { padding: 0; }
 /* contain 适配: 元素盒撑满视口 + object-fit:contain → 等比最大化居中, 任意屏幕比例不裁切不留边 */
 :is(.rf-stage, .rf-ppt):fullscreen .rf-ppt-img { width: 100%; height: 100%; object-fit: contain; border-radius: 0; }
-:is(.rf-stage, .rf-ppt):fullscreen .rf-pill { bottom: 26px; padding: 6px 12px; }
+:is(.rf-stage, .rf-ppt):fullscreen .rf-pill { display: flex; bottom: 26px; padding: 6px 12px; }
 :is(.rf-stage, .rf-ppt):fullscreen .rf-pill-btn { width: 30px; height: 30px; font-size: 14px; }
 :is(.rf-stage, .rf-ppt):fullscreen .rf-pill-pg { font-size: 12px; }
 :is(.rf-stage, .rf-ppt):fullscreen .rf-badge { top: 18px; right: 20px; font-size: 10px; }
@@ -785,8 +809,20 @@ function fmtDT(x) {
 .rail-cover-hint { font-size: 11px; color: var(--color-text-secondary); }
 
 .rail-name { margin: 12px 0 12px; font-size: var(--font-size-md); font-weight: var(--font-weight-semibold); line-height: 1.45; word-break: break-all; }
+/* 批次⑩.37 (选型 B): 页码芯片挂文件名旁 */
+.rf-page-cnt {
+  display: inline-flex; align-items: center; vertical-align: 2px;
+  margin-left: 8px; padding: 2px 9px;
+  font-family: var(--font-family-mono, monospace); font-size: 10.5px; font-weight: 500;
+  color: var(--color-text-secondary); background: var(--color-bg-page, rgba(0, 0, 0, .04));
+  border: 1px solid var(--color-border); border-radius: 9999px; white-space: nowrap;
+}
 .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .rail-actions--second { margin-top: 8px; grid-template-columns: repeat(4, 1fr); }
+/* 批次⑩.37 (选型 B): ppt 首排三键 (上一页·全屏放映·下一页), 横排图文 */
+.rail-actions--pager { grid-template-columns: repeat(3, 1fr); }
+.rail-actions--pager .rail-act { flex-direction: row; gap: 6px; font-size: 12px; }
+.rail-act:disabled { opacity: .38; cursor: default; pointer-events: none; }
 .rail-act {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   font-size: 11.5px; color: var(--color-text-regular);
