@@ -136,3 +136,14 @@
 .el-popconfirm__icon {
   color: #0E766E !important;
 }
+
+/* 批次⑩.49 (选型 A): 评论回复键归档青 — 同 popconfirm 反压 accent+AA 两层规则 */
+:root .comment-reply-actions .el-button--primary:not(.is-text):not(.is-link) {
+  background-color: #0E766E;
+  border-color: #0E766E;
+}
+:root .comment-reply-actions .el-button--primary:not(.is-text):not(.is-link):hover,
+:root .comment-reply-actions .el-button--primary:not(.is-text):not(.is-link):focus {
+  background-color: #12968B;
+  border-color: #12968B;
+}
