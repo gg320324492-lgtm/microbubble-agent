@@ -168,7 +168,7 @@ const mention = useMentionAutocomplete({
     if (!ctx || ctx.triggerPos < 0) return
     const before = newContent.value.substring(0, ctx.triggerPos)
     const after = newContent.value.substring(ctx.triggerPos + 1 + ctx.query.length)
-    const mentionText = `@${member.wechat_id || member.username} `
+    const mentionText = `@${member.name || member.wechat_id || member.username} `  // 批次⑩.51: 插入真实姓名 (后端三路匹配支持姓名精确解析)
     newContent.value = before + mentionText + after
     setTimeout(() => {
       const ta = inputRef.value?.$el?.querySelector?.('textarea')
