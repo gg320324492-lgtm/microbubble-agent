@@ -46,21 +46,26 @@
 
       <div class="rf-grp"><span>文件</span><span class="rf-n mono">{{ rfLoading ? '…' : rfTotal }}</span></div>
       <div v-if="rfLoading" class="rf-note">正在加载下一级文件…</div>
+      <!-- 批次⑩.39 (用户选型 K1): 全量直出 + 按类型分组, 组头类型色淡底; 去掉「显示全部」折叠 -->
       <template v-else>
-        <div
-          v-for="f in rfFiles" :key="'rff-' + f.id"
-          class="rf-item" role="button" tabindex="0"
-          :title="f.file_name"
-          @click="$emit('preview', f)" @keydown.enter="$emit('preview', f)"
-        >
-          <span class="rf-dot" :style="{ background: dotColor(f.file_name) }"></span>
-          <span class="rf-nm">{{ f.file_name }}</span>
-          <span class="rf-n mono">{{ fmtSize(f.file_size) }}</span>
-        </div>
+        <template v-for="g in rfGroups" :key="'rfg-' + g.key">
+          <div class="rf-k1" :style="{ background: `color-mix(in srgb, ${g.color} 9%, transparent)`, color: g.color }">
+            <span>{{ g.label }}</span>
+            <span class="rf-k1-n mono">{{ g.items.length }}</span>
+            <span class="rf-k1-sub mono">{{ rfSubtotal(g.items) }}</span>
+          </div>
+          <div
+            v-for="f in g.items" :key="'rff-' + f.id"
+            class="rf-item" role="button" tabindex="0"
+            :title="f.file_name"
+            @click="$emit('preview', f)" @keydown.enter="$emit('preview', f)"
+          >
+            <span class="rf-dot" :style="{ background: dotColor(f.file_name) }"></span>
+            <span class="rf-nm">{{ f.file_name }}</span>
+            <span class="rf-n mono">{{ fmtSize(f.file_size) }}</span>
+          </div>
+        </template>
         <div v-if="!rfFiles.length" class="rf-note">该文件夹还没有文件</div>
-        <button v-if="rfTotal > rfFiles.length" type="button" class="rf-more" @click="$emit('open-folder', folder)">
-          显示全部 {{ rfTotal }} 个文件 ↓
-        </button>
       </template>
     </template>
 
@@ -338,7 +343,7 @@ watch(() => props.folder?.id, async (fid) => {
   rfLoading.value = true
   try {
     const resp = await axios.get('/api/v1/drive/files', {
-      params: { folder_id: fid, view: 'team', page: 1, page_size: 8, sort_by: 'created_at', sort_order: 'desc' },
+      params: { folder_id: fid, view: 'team', page: 1, page_size: 100, sort_by: 'created_at', sort_order: 'desc' },
     })
     if (seq !== rfSeq) return  // 已切到别的文件夹, 丢弃过期响应
     rfFiles.value = resp.data.items || []
@@ -348,6 +353,37 @@ watch(() => props.folder?.id, async (fid) => {
 }, { immediate: true })
 
 const RF_DOT = { pdf: 'var(--color-file-pdf)', doc: 'var(--color-file-doc)', docx: 'var(--color-file-doc)', ppt: 'var(--color-warning)', pptx: 'var(--color-warning)', xls: 'var(--color-file-excel)', xlsx: 'var(--color-file-excel)', csv: 'var(--color-file-excel)', png: 'var(--color-file-image)', jpg: 'var(--color-file-image)', jpeg: 'var(--color-file-image)', mp4: 'var(--color-file-video)', mov: 'var(--color-file-video)', m4a: 'var(--color-warning)', mp3: 'var(--color-warning)' }
+
+/* 批次⑩.39 (K1): 文件夹文件按类型分组 (组序固定, 组内保持服务端时间倒序) */
+const RF_TYPE_GROUPS = [
+  { key: 'ppt', label: 'PPT 演示文稿', color: 'var(--color-warning)', exts: ['ppt', 'pptx', 'pps', 'ppsx'] },
+  { key: 'doc', label: 'Word 文档', color: 'var(--color-file-doc)', exts: ['doc', 'docx'] },
+  { key: 'xls', label: 'Excel 表格', color: 'var(--color-file-excel)', exts: ['xls', 'xlsx', 'csv'] },
+  { key: 'pdf', label: 'PDF 文档', color: 'var(--color-file-pdf)', exts: ['pdf'] },
+  { key: 'img', label: '图片', color: 'var(--color-file-image)', exts: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic'] },
+  { key: 'video', label: '视频', color: 'var(--color-file-video)', exts: ['mp4', 'mov', 'avi', 'mkv', 'webm'] },
+  { key: 'audio', label: '音频', color: 'var(--color-warning)', exts: ['mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg'] },
+]
+const rfGroups = computed(() => {
+  const buckets = new Map()
+  const other = []
+  for (const f of rfFiles.value) {
+    const ext = (f.file_name || '').split('.').pop().toLowerCase()
+    const g = RF_TYPE_GROUPS.find(t => t.exts.includes(ext))
+    if (g) {
+      if (!buckets.has(g.key)) buckets.set(g.key, { ...g, items: [] })
+      buckets.get(g.key).items.push(f)
+    } else {
+      other.push(f)
+    }
+  }
+  const list = RF_TYPE_GROUPS.filter(t => buckets.has(t.key)).map(t => buckets.get(t.key))
+  if (other.length) list.push({ key: 'other', label: '其他文件', color: 'var(--color-text-placeholder)', items: other })
+  return list
+})
+function rfSubtotal(items) {
+  return fmtSize(items.reduce((s, f) => s + (f.file_size || 0), 0))
+}
 function dotColor(name) {
   const ext = (name || '').split('.').pop().toLowerCase()
   return RF_DOT[ext] || 'var(--color-text-placeholder)'
@@ -907,10 +943,16 @@ function fmtDT(x) {
 .rf-fic { width: 15px; height: 15px; stroke: var(--color-primary); fill: none; stroke-width: 1.7; flex: none; }
 .rf-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .rf-note { padding: 10px 16px; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.rf-more {
-  display: block; width: 100%; padding: 10px; border: none; background: none;
-  font: inherit; font-size: 12px; color: var(--color-primary-dark); cursor: pointer;
-  transition: background var(--duration-fast);
+/* 批次⑩.39 (K1): 类型组头横条 — 类型色 9% 淡底 + 类型色文字, 数量胶囊 + 右侧小计 */
+.rf-k1 {
+  display: flex; align-items: center; gap: 8px;
+  margin: 12px 8px 2px; padding: 8px 12px;
+  border-radius: 9px; font-size: 12px; font-weight: 650;
 }
-.rf-more:hover { background: var(--color-primary-bg); }
+.rf-item:first-of-type { margin-top: 0; }
+.rf-k1 .rf-k1-n {
+  font-size: 10px; font-weight: 500; color: var(--color-text-secondary);
+  background: var(--color-bg-card); border-radius: 9999px; padding: 1px 8px;
+}
+.rf-k1 .rf-k1-sub { margin-left: auto; font-size: 10px; font-weight: 500; opacity: .75; }
 </style>
