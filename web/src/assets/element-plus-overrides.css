@@ -110,3 +110,29 @@
 [data-theme="dark"] .el-popconfirm__main {
   color: var(--color-text-primary, #e6e9ed);
 }
+
+/* 批次⑩.48 (用户选型 A): popconfirm 确认按钮 + 图标统一归档青 —
+   用 EP 自有按钮变量覆盖, hover/active 由 EP 接管; !important 压过 icon-color 内联样式 */
+.el-popover.el-popper .el-popconfirm__action .el-button--primary {
+  --el-button-bg-color: #0E766E;
+  --el-button-border-color: #0E766E;
+  --el-button-hover-bg-color: #12968B;
+  --el-button-hover-border-color: #12968B;
+  --el-button-active-bg-color: #0C655E;
+  --el-button-active-border-color: #0C655E;
+}
+/* :root 前缀反压 variables.css 的 AA 对比度规则 (:root .el-button--primary:not(...) 设 #B84523, (0,3,1)) —
+   本规则 (0,4,1) 更高, 确保 popconfirm 确认键归档青 */
+:root .el-popover.el-popper .el-popconfirm__action .el-button--primary:not(.is-text):not(.is-link) {
+  background-color: #0E766E;
+  border-color: #0E766E;
+}
+:root .el-popover.el-popper .el-popconfirm__action .el-button--primary:not(.is-text):not(.is-link):hover,
+:root .el-popover.el-popper .el-popconfirm__action .el-button--primary:not(.is-text):not(.is-link):focus {
+  background-color: #12968B;
+  border-color: #12968B;
+}
+.el-popconfirm__main .el-icon,
+.el-popconfirm__icon {
+  color: #0E766E !important;
+}

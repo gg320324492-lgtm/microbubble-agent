@@ -35,7 +35,6 @@
           <el-popconfirm
             v-if="canDelete(comment)"
             title="确认删除此评论?"
-            confirm-button-type="danger"
             confirm-button-text="删除"
             cancel-button-text="取消"
             @confirm="onDelete(comment)"
