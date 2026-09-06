@@ -77,12 +77,12 @@
           <div
             v-for="(m, idx) in mention.rawCandidates.value"
             :key="m.id"
+            v-memo="[idx === mention.selectedIndex.value]"
             class="mention-cell"
             :class="{ on: idx === mention.selectedIndex.value }"
             role="option"
             :aria-selected="idx === mention.selectedIndex.value"
             @mousedown.prevent="onMentionItemClick(idx)"
-            @mouseenter="mention.selectedIndex.value = idx"
           >
             <el-avatar :size="34" :src="m.avatar" class="mention-avatar">
               {{ (m.name || '?').slice(0, 1) }}
@@ -438,6 +438,8 @@ watch(() => props.fileId, (newId) => {
   box-shadow: 0 10px 32px rgba(20, 40, 35, 0.14);
   padding: 10px;
   z-index: 1000;
+  /* 批次⑩.46: 隔离重绘 — 悬停/滚动不触发外层评论区布局计算 */
+  contain: layout paint;
 }
 .mention-dd-head {
   display: flex;
