@@ -115,8 +115,8 @@
           <img v-else-if="previewKind === 'image'" :src="stageUrl" :alt="name" class="rf-img" @dblclick="onStageDblClick" />
           <!-- 视频播放器 (blob 流) -->
           <!-- 批次⑩.69 (选型 B): 视频自绘播放器 — 满铺画面 + 悬浮控件 (播放/进度/倍速/静音/全屏), 播放中自动隐匿 -->
-          <div v-else-if="previewKind === 'video' && stageUrl" class="rf-vid" :class="{ hide: vidPlaying && vidCtrlHide }"
-               @dblclick="onStageDblClick" @mousemove="vidPoke" @mouseleave="vidLeave">
+          <div v-else-if="previewKind === 'video' && stageUrl" class="rf-vid" :class="{ hide: !vidHover && !(vidPlaying && !vidCtrlHide) }"
+               @dblclick="onStageDblClick" @mouseenter="vidEnter" @mousemove="vidPoke" @mouseleave="vidLeave">
             <video ref="videoElRef" :src="stageUrl" playsinline class="rf-vid-el"
                    @click="vidToggle" @play="vidPlaying = true; vidPoke()" @pause="vidPlaying = false; vidPoke()"
                    @ended="vidPlaying = false; vidPoke()" @timeupdate="onVidTime" @loadedmetadata="onVidMeta"></video>
@@ -890,6 +890,7 @@ watch(() => props.file?.id, () => {
   vidSpeedIdx.value = 0
   vidMuted.value = false
   vidCtrlHide.value = false
+  vidHover.value = false
 })
 
 /* ---- 批次⑩.69 (选型 B): 视频自绘播放器 — 悬浮控件/倍速/静音/双击全屏 ---- */
@@ -900,6 +901,7 @@ const vidDur = ref(0)
 const vidMuted = ref(false)
 const vidSpeedIdx = ref(0)
 const vidCtrlHide = ref(false)
+const vidHover = ref(false)
 let vidHideTimer = null
 const vidSpeed = computed(() => String(AUDIO_SPEEDS[vidSpeedIdx.value]))
 const vidPct = computed(() => (vidDur.value ? Math.min(100, vidCur.value / vidDur.value * 100) : 0))
@@ -909,12 +911,16 @@ function vidToggle() {
   if (el.paused) el.play().catch(() => {})
   else el.pause()
 }
+function vidEnter() {
+  vidHover.value = true
+  vidPoke()
+}
 function vidPoke() {
   vidCtrlHide.value = false
   if (vidHideTimer) clearTimeout(vidHideTimer)
   if (vidPlaying.value) vidHideTimer = setTimeout(() => { vidCtrlHide.value = true }, 2500)
 }
-function vidLeave() { if (vidPlaying.value) vidCtrlHide.value = true }
+function vidLeave() { vidHover.value = false }
 function onVidTime() {
   const el = videoElRef.value
   if (el && !vidSeeking) vidCur.value = el.currentTime
