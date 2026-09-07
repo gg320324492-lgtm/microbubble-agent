@@ -6,10 +6,10 @@
   - 可见性字段删除 (2026-09-05 用户拍板): 默认恒 team; 分享即公开 (后端 ⑩.7
     create/revoke/expiry 三点跟随), 撤销或过期自动回团队 — 手动选择已无意义
   - 「位置」显式展示: 右键哪个文件夹就建在哪个里面
-  - 「团队共享盘展示」开关保留 (仅顶层创建时出现)
+  - is_team_default 由后端按 parent 推导 (顶层 true), 前端无开关 (⑩.85 移除无效开关)
 
   字段: name (必填, 1-200); parentId (从父组件传入, 顶级 null)
-  提交: emit('create', { name, parent_id, visibility: 'team', is_team_default })
+  提交: emit('create', { name, parent_id, visibility: 'team' })
 -->
 <template>
   <el-dialog
@@ -19,7 +19,6 @@
     :close-on-click-modal="false"
     :show-close="true"
     @closed="resetForm"
-    @open="onOpen"
   >
     <template #header>
       <div class="cfd-head">
@@ -55,17 +54,8 @@
         </div>
       </div>
 
-      <!-- 团队共享盘标识 (仅顶层创建时出现; 打勾后进团队共享盘列表) -->
-      <div v-if="!parentFolder" class="cfd-fld cfd-team">
-        <label>团队共享盘展示</label>
-        <button
-          type="button" class="cfd-switch" role="switch"
-          :aria-checked="form.is_team_default"
-          :class="{ 'is-on': form.is_team_default }"
-          @click="form.is_team_default = !form.is_team_default"
-        ><span class="cfd-knob"></span></button>
-        <span class="cfd-team-hint">开启后自动列入团队共享盘页面</span>
-      </div>
+      <!-- 批次⑩.85: 移除「团队共享盘展示」开关 — 后端按 parent 推导 is_team_default
+           (folder_service.py: 顶层创建即 true, 子层即 false), 此开关 emit 后被丢弃从未生效 -->
     </div>
 
     <template #footer>
@@ -101,8 +91,7 @@ const nameInputRef = ref(null)
 const nameError = ref('')
 const form = reactive({
   name: '',
-  visibility: 'team',
-  is_team_default: false
+  visibility: 'team'
 })
 
 watch(visible, (v) => {
@@ -112,7 +101,6 @@ watch(visible, (v) => {
 function resetForm() {
   form.name = ''
   form.visibility = 'team'
-  form.is_team_default = false
   nameError.value = ''
 }
 
@@ -132,8 +120,7 @@ async function onSubmit() {
     emit('create', {
       name,
       parent_id: props.parentId,
-      visibility: 'team',  // 批次⑩.8: 恒 team — 公开属性改由分享行为驱动 (后端 ⑩.7)
-      is_team_default: form.is_team_default
+      visibility: 'team'  // 批次⑩.8: 恒 team — 公开属性改由分享行为驱动 (后端 ⑩.7)
     })
   } finally {
     submitting.value = false
