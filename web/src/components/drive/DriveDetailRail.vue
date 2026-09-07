@@ -329,7 +329,7 @@
               </div>
               <div class="rf-zip-foot">
                 <template v-if="pptFull">全屏 · 共 {{ zipEntries.length }} 项 · 滚动查看</template>
-                <template v-else>点文件夹名进入下一级 · 共 {{ zipMeta.total_files }} 个文件</template>
+                <template v-else>本级 {{ zipChildren.dirs.length + zipChildren.files.length }} 项 · 点文件夹名进入下一级</template>
               </div>
             </template>
           </div>
