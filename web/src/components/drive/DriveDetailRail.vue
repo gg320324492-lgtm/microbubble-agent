@@ -885,7 +885,9 @@ function audioSeekStart(e) {
   trackEl.addEventListener('pointercancel', up)
 }
 /* 换文件即重置播放器状态 (audio 元素随 stageUrl 置空自动销毁停止) */
-watch(() => props.file?.id, () => {
+/* 批次⑩.76: 预览重置键 = id + updated_at — 同名重传 id 不变仅时间戳变, 只盯 id 会让预览挂在旧版本 */
+const fileStamp = computed(() => (props.file ? `${props.file.id}:${props.file.updated_at || ''}` : null))
+watch(fileStamp, () => {
   audioPlaying.value = false
   audioCur.value = 0
   audioDur.value = 0
@@ -1080,10 +1082,10 @@ async function refreshPptBlobs() {
   if (seq !== blobSeq) return
   pptBlobCurrent.value = pptBlobMap[p] || null
 }
-watch([() => props.file?.id, previewKind], ([fid]) => {
-  if (fid != null) { revokePptBlobs(); revokeDocxBlobs() }  // 换文件清旧 blob (⑩.71: docx 页图缓存也要清, 否则残留上一篇)
+watch([fileStamp, previewKind], ([stamp]) => {
+  if (stamp != null) { revokePptBlobs(); revokeDocxBlobs() }  // 换文件/重传清旧 blob (⑩.71: docx 页图缓存也要清, 否则残留上一篇)
 })
-watch([() => props.file?.id, previewKind, pptPageClamped, pptImgStatus], refreshPptBlobs, { immediate: true })
+watch([fileStamp, previewKind, pptPageClamped, pptImgStatus], refreshPptBlobs, { immediate: true })
 
 function stopPptPoll() { if (pptPollTimer) { clearTimeout(pptPollTimer); pptPollTimer = null } }
 function startPptPoll(fid) {
@@ -1113,7 +1115,8 @@ function startPptPoll(fid) {
   }
   tick()
 }
-watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+watch([fileStamp, previewKind], ([stamp, kind]) => {
+  const fid = stamp == null ? null : Number(String(stamp).split(':')[0])
   stopPptPoll()
   pptPage.value = 1
   pptImgUrls.value = []
@@ -1179,7 +1182,7 @@ async function refreshDocxBlobs() {
   if (seq !== docxBlobSeq) return
   docxBlobCurrent.value = docxBlobMap[pg] || null
 }
-watch([() => props.file?.id, previewKind, docxPageClamped, docxImgStatus], refreshDocxBlobs, { immediate: true })
+watch([fileStamp, previewKind, docxPageClamped, docxImgStatus], refreshDocxBlobs, { immediate: true })
 
 let docxAllSeq = 0
 async function ensureAllDocxBlobs(fid) {
@@ -1218,7 +1221,8 @@ function startDocxPoll(fid) {
   }
   tick()
 }
-watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+watch([fileStamp, previewKind], ([stamp, kind]) => {
+  const fid = stamp == null ? null : Number(String(stamp).split(':')[0])
   stopDocxPoll()
   docxPage.value = 1
   docxImgUrls.value = []
@@ -1279,7 +1283,8 @@ function startXlsxPoll(fid) {
   }
   tick()
 }
-watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+watch([fileStamp, previewKind], ([stamp, kind]) => {
+  const fid = stamp == null ? null : Number(String(stamp).split(':')[0])
   stopXlsxPoll()
   xlsxSheets.value = []
   xlsxActive.value = 0
@@ -1348,7 +1353,8 @@ function startZipPoll(fid) {
   }
   tick()
 }
-watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+watch([fileStamp, previewKind], ([stamp, kind]) => {
+  const fid = stamp == null ? null : Number(String(stamp).split(':')[0])
   stopZipPoll()
   zipEntries.value = []
   zipMeta.value = null
@@ -1403,7 +1409,8 @@ function startCsvPoll(fid) {
   }
   tick()
 }
-watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+watch([fileStamp, previewKind], ([stamp, kind]) => {
+  const fid = stamp == null ? null : Number(String(stamp).split(':')[0])
   stopCsvPoll()
   csvRows.value = []
   csvMeta.value = null
@@ -1519,7 +1526,7 @@ const pptSlideH = computed(() => {
 const inlineUrl = computed(() =>
   props.file ? `/api/v1/drive/files/${props.file.id}/download?disposition=inline` : '')
 
-watch([() => props.file?.id, previewKind], async () => {
+watch([fileStamp, previewKind], async () => {
   loadStageBlob()
   loadTextPreview()
 }, { immediate: true })
