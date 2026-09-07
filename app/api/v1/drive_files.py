@@ -2189,6 +2189,152 @@ async def get_zip_list(
     return {"status": "converting"}
 
 
+# === 批次⑩.67 CSV 预览 (2026-09-07 选型 A 数据网格): csv 模块解析 → 行列 JSON ===
+# 与 xlsx-preview 同构状态机。编码探测 utf-8-sig/utf-8/gb18030 (实验室 GBK csv 乱码根治),
+# 分隔符 csv.Sniffer 嗅探 (逗号/分号/制表/竖线), 单元格沿用 24 字符裁剪。
+_CSV_PREVIEW_LOCKS: dict = {}
+_CSV_PREVIEW_ROOT = FsPath("/app/data/csv_preview")
+_CSV_CACHE_ROWS = 200
+_CSV_CACHE_COLS = 60
+_CSV_CELL_MAX_CHARS = 24
+
+
+def _csv_cache_key(updated_at) -> str:
+    return hashlib.md5(("v1:" + str(updated_at)).encode()).hexdigest()[:12]
+
+
+def _csv_cache_dir(file_id: int, key: str) -> FsPath:
+    return _CSV_PREVIEW_ROOT / ("%d_%s" % (file_id, key))
+
+
+def _decode_text(data: bytes):
+    for enc in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            text = data.decode(enc)
+            # utf-8-sig 解码器兼容无 BOM 的纯 utf-8 → 无 BOM 时标签回归 utf-8
+            label = enc if (enc != "utf-8-sig" or data.startswith(b"\xef\xbb\xbf")) else "utf-8"
+            return text, label
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return data.decode("latin-1"), "latin-1"
+
+
+def _csv_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        from csv import reader as csv_reader
+        from csv import Sniffer
+        from io import StringIO
+        text, encoding = _decode_text(FsPath(src_path).read_bytes())
+        try:
+            delim = Sniffer().sniff(text[:4096], delimiters=",;\t|").delimiter
+        except Exception:
+            delim = ","
+        rows = []
+        total = 0
+        for row in csv_reader(StringIO(text), delimiter=delim):
+            total += 1
+            if len(rows) < _CSV_CACHE_ROWS:
+                rows.append([_clip_cell(c) for c in row[:_CSV_CACHE_COLS]])
+        if rows:
+            # 裁掉全空尾列 (长短不齐的行以最宽非空列为准)
+            last = 0
+            for r in rows:
+                for i in range(len(r) - 1, -1, -1):
+                    if r[i] != "":
+                        if i + 1 > last:
+                            last = i + 1
+                        break
+            if last:
+                rows = [r[:last] for r in rows]
+        payload = {
+            "rows": rows,
+            "total_rows": total,
+            "truncated": total > len(rows),
+            "encoding": encoding,
+            "delimiter": delim,
+            "cols": max((len(r) for r in rows), default=0),
+        }
+        tmp_json = cache_dir / "ready.json.tmp"
+        tmp_json.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp_json.replace(cache_dir / "ready.json")
+        logger.info("[csv-preview] 解析完成 file=%d 行=%d 列=%d 编码=%s",
+                    file_id, total, payload["cols"], encoding)
+    except Exception as e:
+        logger.error("[csv-preview] file=%s 解析失败: %s", file_id, e)
+        try:
+            (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
+        except Exception:
+            pass
+    finally:
+        _CSV_PREVIEW_LOCKS.pop(key, None)
+
+
+def _slice_csv_rows(payload: dict, max_rows: int) -> dict:
+    rows = payload.get("rows") or []
+    cut = rows[:max_rows]
+    total = payload.get("total_rows")
+    return {**payload, "rows": cut,
+            "truncated": True if total is None else (total > len(cut) and len(cut) > 0)}
+
+
+@router.get("/files/{file_id}/csv-preview")
+async def get_csv_preview_status(
+    file_id: int,
+    max_rows: int = Query(8, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """CSV 数据速览: 轮询状态端点 (ready 时返回前 max_rows 行 JSON).
+
+    编码自动探测, 分隔符嗅探; 与 xlsx-preview 同构状态机。
+    """
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    if not (f.file_name or "").lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="仅支持 .csv")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    key = _csv_cache_key(f.updated_at)
+    cache_dir = _csv_cache_dir(file_id, key)
+
+    if (cache_dir / "ready.json").exists():
+        try:
+            data = json.loads((cache_dir / "ready.json").read_text(encoding="utf-8"))
+        except Exception:
+            return {"status": "converting"}
+        return {"status": "ready", **_slice_csv_rows(data, max_rows)}
+    if (cache_dir / "error.txt").exists():
+        return {"status": "error",
+                "message": (cache_dir / "error.txt").read_text(encoding="utf-8")[:200]}
+
+    lock = _CSV_PREVIEW_LOCKS.setdefault(key, threading.Lock())
+    if not lock.acquire(blocking=False):
+        return {"status": "converting"}
+    try:
+        src = FsPath("/tmp") / ("csv_src_%d.csv" % file_id)
+        if not src.exists():
+            raw = await file_service.download_file(f.file_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            src.write_bytes(raw)
+    except Exception as e:
+        logger.error("[csv-preview] file=%d 源文件下载失败: %s", file_id, e)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
+        except Exception:
+            pass
+        _CSV_PREVIEW_LOCKS.pop(key, None)
+        return {"status": "error", "message": str(e)[:200]}
+    th = threading.Thread(target=_csv_preview_worker,
+                          args=(file_id, str(src), cache_dir, key), daemon=True)
+    th.start()
+    return {"status": "converting"}
+
+
 # === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
 # .pptx = zip + OOXML — python-pptx 已在容器内 (1.0.2), 解析一次缓存 JSON,
 # 第三栏渲染器 (DriveDetailRail) 按 EMU 比例绝对定位还原 文本框/图片/表格。
