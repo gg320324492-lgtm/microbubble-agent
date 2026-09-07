@@ -259,9 +259,9 @@
                   :title="s.name" @click="xlsxActive = i"
                 >{{ s.name }}</button>
               </div>
-              <div class="rf-xlsx-gridwrap">
+              <div ref="xlsxGridRef" class="rf-xlsx-gridwrap" tabindex="-1">
                 <div v-if="!xlsxActiveSheet.rows.length" class="rf-xlsx-empty">空工作表</div>
-                <table v-else class="rf-xlsx-grid">
+                <table v-else class="rf-xlsx-grid" :style="{ zoom: xlsxZoom / 100 }">
                   <thead><tr><th v-for="(h, ci) in xlsxView.header" :key="'xh' + ci">{{ h }}</th></tr></thead>
                   <tbody>
                     <tr v-for="(r, ri) in xlsxView.body" :key="'xr' + ri">
@@ -272,7 +272,15 @@
                 <div v-if="!pptFull" class="rf-xlsx-fade"></div>
               </div>
               <div class="rf-xlsx-foot">
-                <template v-if="pptFull">全屏 · 已加载 {{ Math.max(0, xlsxActiveSheet.rows.length - 1) }} 行</template>
+                <template v-if="pptFull">
+                  <span>全屏 · 已加载 {{ Math.max(0, xlsxActiveSheet.rows.length - 1) }} 行 · 滚轮/Ctrl+滚轮缩放</span>
+                  <span class="rf-xlsx-zoom">
+                    <button type="button" class="rf-xlsx-zbtn" :disabled="xlsxZoom <= 50" @click="adjustXlsxZoom(-10)">−</button>
+                    <span class="rf-xlsx-zpct">{{ xlsxZoom }}%</span>
+                    <button type="button" class="rf-xlsx-zbtn" :disabled="xlsxZoom >= 200" @click="adjustXlsxZoom(10)">＋</button>
+                    <button type="button" class="rf-xlsx-zbtn rf-xlsx-zreset" title="重置缩放" @click="xlsxZoom = 100">1:1</button>
+                  </span>
+                </template>
                 <template v-else>仅预览前 {{ Math.min(8, Math.max(0, xlsxActiveSheet.rows.length - 1)) }} 行<template v-if="xlsxActiveSheet.truncated"> · 全屏查看更多</template></template>
               </div>
             </template>
@@ -928,6 +936,9 @@ const xlsxSheets = ref([])
 const xlsxActive = ref(0)
 let xlsxPollTimer = null
 let xlsxPollSeq = 0
+const xlsxZoom = ref(100)
+const xlsxGridRef = ref(null)
+function adjustXlsxZoom(d) { xlsxZoom.value = Math.min(200, Math.max(50, xlsxZoom.value + d)) }
 const xlsxActiveSheet = computed(() => xlsxSheets.value[xlsxActive.value] || null)
 const xlsxView = computed(() => {
   const s = xlsxActiveSheet.value
@@ -998,11 +1009,20 @@ const rfStageRef = ref(null)
 const pptFull = ref(false)
 function onFsChange() {
   pptFull.value = !!document.fullscreenElement
+  // 批次⑩.65: excel 全屏 — 聚焦表格容器让方向键可原生滚动; 退出全屏重置缩放
+  if (previewKind.value === 'excel') {
+    if (pptFull.value) nextTick(() => xlsxGridRef.value?.focus?.())
+    else xlsxZoom.value = 100
+  }
 }
 let wheelLock = 0
 function onFsWheel(ev) {
   if (!pptFull.value || !document.fullscreenElement) return
-  if (previewKind.value === 'excel') return   // 批次⑩.65: excel 全屏走原生表格滚动, 不拦截滚轮
+  if (previewKind.value === 'excel') {
+    // 批次⑩.65: excel 全屏 — 原生表格滚动 (横/纵); Ctrl+滚轮缩放
+    if (ev.ctrlKey) { ev.preventDefault(); adjustXlsxZoom(ev.deltaY < 0 ? 10 : -10) }
+    return
+  }
   ev.preventDefault()
   const now = Date.now()
   if (now - wheelLock < 450) return
@@ -1466,8 +1486,20 @@ function fmtDT(x) {
 .rf-xlsx-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
 .rf-xlsx-empty { padding: 26px 14px; text-align: center; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .rf-xlsx-foot { flex: none; display: flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FBFBF9; }
+/* 批次⑩.65: 全屏缩放控件簇 (−/％/＋/1:1) */
+.rf-xlsx-zoom { display: inline-flex; align-items: center; gap: 5px; margin-left: 14px; }
+.rf-xlsx-zbtn {
+  min-height: 0; border: 1px solid var(--color-border); background: var(--color-bg-card);
+  color: var(--color-text-regular); border-radius: 6px; font-family: inherit;
+  font-size: 11px; padding: 1px 8px; cursor: pointer; line-height: 1.5;
+  transition: all var(--duration-fast);
+}
+.rf-xlsx-zbtn:hover:not(:disabled) { color: var(--color-file-excel); border-color: var(--color-file-excel); background: color-mix(in srgb, var(--color-file-excel) 6%, transparent); }
+.rf-xlsx-zbtn:disabled { opacity: .4; cursor: default; }
+.rf-xlsx-zpct { min-width: 40px; text-align: center; font-family: var(--font-family-mono, monospace); font-size: 10.5px; color: var(--color-text-secondary); }
+.rf-xlsx-zreset { font-family: var(--font-family-mono, monospace); }
 /* 全屏放映: 表格滚动看缓存全量, 去渐隐, 字号放大 */
-:is(.rf-stage):fullscreen .rf-xlsx-gridwrap { overflow-y: auto; }
+:is(.rf-stage):fullscreen .rf-xlsx-gridwrap { overflow: auto; }
 :is(.rf-stage):fullscreen .rf-xlsx-grid { font-size: 12.5px; }
 :is(.rf-stage):fullscreen .rf-xlsx-grid th,
 :is(.rf-stage):fullscreen .rf-xlsx-grid td { padding: 6px 12px; }
