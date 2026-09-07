@@ -174,7 +174,7 @@
 import '@/views/drive/drive-view.css'
 import { computed, reactive } from 'vue'
 import { Folder, FolderOpened, FolderAdd, Delete, Loading, Warning, Star, StarFilled, Share, Promotion, Plus, Bell, Clock } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import FolderTreeNode from './FolderTreeNode.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
 import FolderDeleteConfirmDialog from './FolderDeleteConfirmDialog.vue'
@@ -211,7 +211,6 @@ const emit = defineEmits([
   'update:specialView',
   'toggle-expanded',
   'retry',
-  'navigate-trash',
   // v2.8: 转发 sub folder 右键菜单
   'create-sub-folder',  // (parentId) → parent 弹 CreateFolderDialog
   'rename-folder',      // (folder)   → parent 弹 RenameDialog
@@ -236,27 +235,12 @@ const folderDelete = reactive({
   loading: false,
 })
 
-function handleRootClick() {
-  emit('update:selectedFolderId', null)
-  emit('update:specialView', null)
-}
-
-// v2.26 (2026-07-12) BUG F 修复: handleFolderSelect 不再 emit specialView=null
-//   修复前: 任何 sub-folder click 都会重置 specialView → 团队共享盘 view 切回 personal view
-//           → fetchDriveFiles 走 view=personal → 过滤掉 is_team_shared=true 文件
-//           → 用户在团队共享盘 sub-folder 看 0 个文件 (Bug D 表面现象, 真因在 FolderTree)
-//   修复后: 只更新 selectedFolderId, specialView 保持 (用户主动选的特殊视图不应被 folder click 覆盖)
-//           watch(selectedFolderId) 内部已经跟随 specialView 传 view 参数 (Bug D 修复)
 function handleFolderSelect(folderId) {
   emit('update:selectedFolderId', folderId)
   // 不重置 specialView — 允许在团队共享盘 / 收藏等特殊视图下钻取 sub-folder
 }
 
-// === v2.8: 5 根项 + 1 sub 右键菜单项配置 ===
-const rootMenuItems = [
-  { label: '刷新',          command: 'refresh' },
-  { label: '新建子文件夹',   command: 'create-sub' },
-]
+// === 右键菜单项配置 (rootMenuItems/requestsMenuItems + handler 已删: 模板从未引用的死代码) ===
 const favoritesMenuItems = [
   { label: '刷新',          command: 'refresh' },
 ]
@@ -264,24 +248,11 @@ const teamMenuItems = [
   { label: '刷新',          command: 'refresh' },
   { label: '新建子文件夹',   command: 'create-sub' },
 ]
-const requestsMenuItems = [
-  { label: '刷新',          command: 'refresh' },
-  { label: '新建子文件夹',   command: 'create-sub' },
-]
+// 批次⑩.85: 摘掉「恢复全部 / 清空回收站」— handler 只弹 confirm 后发假成功提示,
+// 从未真正调接口, 误导用户 (后端无对应批量端点, 需要时逐项恢复即可)
 const trashMenuItems = [
   { label: '刷新',          command: 'refresh' },
-  { label: '恢复全部',       command: 'restore-all', divided: true },
-  { label: '清空回收站',    command: 'empty-trash' },
 ]
-
-// === v2.8: 根项菜单 handler ===
-async function onRootContext(cmd) {
-  if (cmd === 'refresh') {
-    await fetchTree()
-  } else if (cmd === 'create-sub') {
-    emit('create-sub-folder', null)  // parentId=null
-  }
-}
 
 async function onFavoritesContext(cmd) {
   if (cmd === 'refresh') await fetchTree()
@@ -292,35 +263,8 @@ async function onTeamContext(cmd) {
   else if (cmd === 'create-sub') emit('create-sub-folder', null)
 }
 
-async function onRequestsContext(cmd) {
-  if (cmd === 'refresh') await fetchTree()
-  else if (cmd === 'create-sub') emit('create-sub-folder', null)
-}
-
 async function onTrashContext(cmd) {
-  if (cmd === 'refresh') {
-    await fetchTree()
-  } else if (cmd === 'restore-all') {
-    try {
-      await ElMessageBox.confirm(
-        '恢复所有已删除的文件夹? 此操作不可撤销.',
-        '恢复全部',
-        { type: 'warning', confirmButtonText: '恢复全部', cancelButtonText: '取消' }
-      )
-      // 软删的 folder 在后端需要单独 API, 此处给通用 confirm 后由后端批处理
-      // (实际批量恢复留作 follow-up, 当前仅刷新)
-      ElMessage.info('恢复全部功能: 已发送请求, 请稍后查看')
-    } catch (e) { /* user cancel */ }
-  } else if (cmd === 'empty-trash') {
-    try {
-      await ElMessageBox.confirm(
-        '永久删除回收站所有文件夹? 此操作不可撤销!',
-        '清空回收站',
-        { type: 'error', confirmButtonText: '永久删除', cancelButtonText: '取消' }
-      )
-      ElMessage.info('清空回收站功能: 已发送请求')
-    } catch (e) { /* user cancel */ }
-  }
+  if (cmd === 'refresh') await fetchTree()
 }
 
 // === v2.8: sub folder 右键菜单 handler (来自 FolderTreeNode emit) ===
@@ -369,6 +313,8 @@ async function confirmFolderDelete() {
       ElMessage.success(successMsg)
     }
     folderDelete.visible = false
+    // 批次⑩.85: 通知父层刷新侧栏计数 (级联子文件进回收站, trash 计数变化)
+    emit('delete-folder', folder)
     await fetchTree()  // 显式重建树 (useFolderTree.deleteFolder 内部已调, 双保险)
   } catch (e) {
     const status = e.response?.status

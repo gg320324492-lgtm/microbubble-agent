@@ -167,7 +167,7 @@
         v-if="total > pageSize"
         size="small"
         layout="prev, pager, next, sizes"
-        :page-sizes="[20, 50, 100, 200]"
+        :page-sizes="[20, 50, 100]"
         :total="total"
         :current-page="currentPage"
         :page-size="pageSize"

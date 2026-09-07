@@ -89,6 +89,7 @@
           @request-new-folder="onCreateSubFolder(null)"
           @create-sub-folder="onCreateSubFolder"
           @rename-folder="onRenameTreeFolder"
+          @delete-folder="refreshSideCounts"
           @share-folder="onShareFolder"
           @drop-files="onMoveDrop"
         />
@@ -700,6 +701,9 @@ async function handleBatchDelete() {
     } else {
       ElMessage.success(`已删除 ${succeeded} 项`)
     }
+    // 批次⑩.85: 清两路多选 (文件夹 ids 此前不清, dock 残留「已选 N 项」)
+    selectedFileIds.value = []
+    selectedFolderIds.value = []
     refreshSideCounts()
     await fetchFolderTree()
     reloadCurrentView()
@@ -908,8 +912,12 @@ const shareLinkDialogFolder = ref(null)
 // === PR3.6 上传 dialog 状态 ===
 const showUploadDialog = ref(false)
 function onFilesUploaded({ count, folderId }) {
-  // 上传完成后刷新当前文件夹的文件列表
-  fetchDriveFiles({ folder_id: folderId ?? selectedFolderId.value })
+  // 批次⑩.85: 只在 uploaded 落在当前浏览层时重拉 — 此前无条件下拉目标夹列表,
+  // dialog 内改过目标夹时右栏内容与 selectedFolderId/高亮错位
+  if ((folderId ?? null) === (selectedFolderId.value ?? null)) {
+    fetchDriveFiles({ folder_id: folderId ?? selectedFolderId.value })
+  }
+  refreshSideCounts()
 }
 
 // === 生命周期 ===
@@ -969,6 +977,17 @@ watch(specialView, async (newView) => {
     })
   } else if (newView === 'requests') {
     // 2026-07-02: FileRequestListPanel onMounted 自动 fetchMy, 无需手动调
+  } else if (newView === 'recent') {
+    // 批次⑩.85: 补 recent 分支 — 此前落入通用分支拉「当前文件夹」列表,
+    // 与 reloadCurrentView 的全盘 include_subfolders 语义不一致, 首次点开显示错内容
+    starredOnly.value = false
+    await fetchDriveFiles({
+      folder_id: null,
+      include_subfolders: 'true',
+      view: 'team',
+      sort_by: 'created_at',
+      sort_order: 'desc',
+    })
   } else if (newView !== 'trash') {
     // trash 子组件 <DriveTrashPanel> 自管 onMounted → reload() → fetchTrash()
     // 2026-09 起默认视图也走 team (单盘合并)
@@ -1022,6 +1041,8 @@ async function onRename(payload) {
       ElMessage.success('文件重命名成功')
     }
     showRenameDialog.value = false
+    // 批次⑩.85: 重命名后重拉当前视图 (右栏文件夹行名称/左栏树同步; 文件名 renameFile 已局部更新)
+    await reloadCurrentView()
   } catch (e) {
     ElMessage.error(e.message || '重命名失败')
   }
@@ -1044,8 +1065,13 @@ async function onMoveFile(payload) {
       showMoveDialog.value = false
       ElMessage.success('文件已移动')
     }
+    // 批次⑩.85: 移动后按当前视图重拉 (moveFile 不再内部无参 fetchFiles, 那会跳到根层;
+    // 批量路径此前也漏刷列表)
+    await reloadCurrentView()
     refreshSideCounts()
   } catch (e) {
+    // 失败也关弹窗复位 submitting (此前弹窗保持打开但确认键永久 loading)
+    showMoveDialog.value = false
     ElMessage.error(e.message || '移动失败')
   }
 }
@@ -1481,6 +1507,7 @@ async function onFolderDeleteConfirm() {
     await deleteFolderNode(folder.id, { recursive: hasChildren })
     ElMessage.success(hasChildren ? '文件夹与子项已全部移入回收站' : '文件夹已移入回收站')
     folderDelete.visible = false
+    refreshSideCounts()  // 批次⑩.85: 级联子文件进回收站, trash 计数要跟着变
     if (activeKey.value === 'f-' + folder.id) activeKey.value = null
     fetchFolderTree('team')
     reloadCurrentView()

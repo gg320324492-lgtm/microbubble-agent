@@ -224,6 +224,12 @@ function onSubmit() {
   })
 }
 
+// 批次⑩.85: 弹窗关闭时复位 submitting — 此前移动失败时父层 toast 后才关弹窗,
+// 确认键曾永久停留在 loading 态
+watch(() => props.modelValue, (v) => {
+  if (!v) submitting.value = false
+})
+
 </script>
 
 <script>

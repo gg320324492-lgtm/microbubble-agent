@@ -125,9 +125,10 @@ export function useDriveFiles() {
 
   const renameFile = async (id, newName) => {
     try {
-      await axios.put(`/api/v1/drive/files/${id}`, { title: newName })
+      // 批次⑩.85: 展示名一律 file_name 优先 (DriveFileTable/DriveDetailRail), 只改 title 界面永远显示旧名
+      await axios.put(`/api/v1/drive/files/${id}`, { title: newName, file_name: newName })
       const target = driveFiles.value.find(f => f.id === id)
-      if (target) target.title = newName
+      if (target) { target.title = newName; target.file_name = newName }
     } catch (e) {
       throw new Error(e.response?.data?.error?.message || '重命名失败')
     }
@@ -136,7 +137,8 @@ export function useDriveFiles() {
   const moveFile = async (id, targetFolderId) => {
     try {
       await axios.put(`/api/v1/drive/files/${id}`, { folder_id: targetFolderId })
-      await fetchFiles()  // 重建列表
+      // 批次⑩.85: 不再内部 fetchFiles() — 无参调用永远拉根层列表, 导致右栏跳到顶层;
+      // 刷新交给调用方 reloadCurrentView() 按当前视图/文件夹重拉
     } catch (e) {
       throw new Error(e.response?.data?.error?.message || '移动文件失败')
     }
