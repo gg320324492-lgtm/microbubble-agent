@@ -51,7 +51,7 @@
           <el-button class="drive-batch-toolbar-btn" :icon="Folder" @click="$emit('batch-move')">移动到</el-button>
           <el-button class="drive-batch-toolbar-btn" :icon="Star" @click="$emit('batch-toggle-star')">收藏</el-button>
           <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-delete')">删除</el-button>
-          <span class="drive-batch-note">拖选中行到文件夹行=移动 · Shift 连选 · Ctrl A 全选</span>
+          <span class="drive-batch-note">拖选中行到左栏夹=移动 · Shift 连选 · Ctrl A 全选</span>
         </template>
         <el-dropdown v-if="context === 'trash'" trigger="click" @command="(c) => c === 'clear' && $emit('clear')">
           <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-more" :icon="MoreFilled" title="更多" />

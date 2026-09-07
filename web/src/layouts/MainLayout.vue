@@ -60,31 +60,6 @@
               :class="{ hot: item.path === 'meetings' }"
             >{{ badgeOf(item.path) }}</span>
           </router-link>
-          <!-- 批次⑩.79 (选型 C): 网盘子导航收进全局侧边栏 — 课题组网盘激活时展开, 内层结构面板退役
-               注意: 此块在 group 外层 v-for 作用域内 (item 内层 v-for 不可达), 用 group.label 判定; drive 是 COLLAB 组末项, 位置正好跟随 -->
-          <template v-if="group.label === 'COLLAB · 协作' && showDriveSub">
-            <button
-              v-for="q in driveQuick"
-              :key="'dsub-v-' + q.view"
-              type="button"
-              class="dsub-item"
-              :class="{ on: driveSubOn(q.view, null) }"
-              @click="goDriveView(q.view)"
-            >
-              <span class="dsub-em">{{ q.em }}</span>{{ q.label }}
-            </button>
-            <button
-              v-for="f in driveSubFolders"
-              :key="'dsub-f-' + f.id"
-              type="button"
-              class="dsub-item"
-              :class="{ on: driveSubOn(null, f.id) }"
-              :title="f.name"
-              @click="goDriveFolder(f)"
-            >
-              <span class="dsub-em">📂</span><span class="dsub-nm">{{ f.name }}</span>
-            </button>
-          </template>
         </template>
       </nav>
 
@@ -271,54 +246,6 @@ onMounted(() => { _clockTimer = setInterval(() => { now.value = new Date() }, 20
 onBeforeUnmount(() => { if (_clockTimer) clearInterval(_clockTimer) })
 // 2026-09-05 角色扁平化: 全员等权, KB 监控等管理入口不再按角色隐藏 (登录即可见)
 const isAdmin = computed(() => userStore.isAdmin)
-
-// 批次⑩.79 (选型 C): 网盘子导航收进全局侧边栏 — 树数据/当前文件夹走 useFolderTree Pinia store (与网盘视图共享单例)
-import { useFolderTree } from '@/composables/useFolderTree'
-import { storeToRefs } from 'pinia'
-const folderTreeStore = useFolderTree()
-const { folderTree: driveTree, selectedFolderId: driveFolderId } = storeToRefs(folderTreeStore)
-const showDriveSub = computed(() => isActive('drive') && !isCollapse.value)
-const DRIVE_SUB_VIEWS = [
-  { label: '团队共享盘', view: null, em: '📁' },
-  { label: '我的收藏', view: 'starred', em: '⭐' },
-  { label: '回收站', view: 'trash', em: '🗑' },
-]
-const driveQuick = computed(() => {
-  // 回收站计数跟随 drive 视图的 sideCounts? 侧栏轻量只读, 不拉额外接口 — 仅标签
-  return DRIVE_SUB_VIEWS
-})
-const driveSubFolders = computed(() => {
-  // 只列「当前所在层」的子文件夹 (进哪层显示哪层), 不复刻全量树
-  const id = driveFolderId.value
-  const nodes = driveTree.value || []
-  if (id == null) return nodes.map(n => ({ id: n.id, name: n.name }))
-  const find = (list) => {
-    for (const n of list) {
-      if (n.id === id) return n.children || []
-      if (n.children?.length) {
-        const r = find(n.children)
-        if (r) return r
-      }
-    }
-    return null
-  }
-  return find(nodes) || []
-})
-const curDriveView = computed(() => (route.query.view || null))
-const curDriveFolder = computed(() => (route.query.folder != null ? Number(route.query.folder) : null))
-function driveSubOn(view, folderId = null) {
-  if (view === null) {
-    return curDriveView.value === null &&
-      (folderId != null ? curDriveFolder.value === folderId : curDriveFolder.value == null)
-  }
-  return curDriveView.value === view
-}
-function goDriveView(view) {
-  router.push({ path: '/drive', query: view ? { view } : {} })
-}
-function goDriveFolder(f) {
-  router.push({ path: '/drive', query: { folder: f.id } })
-}
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
@@ -600,20 +527,6 @@ nav.menu {
 }
 
 .mitem.active .s { color: var(--dg-teal); }
-
-/* 批次⑩.79 (选型 C): 网盘子导航 — 课题组网盘激活时缩进子项 */
-.dsub-item {
-  display: flex; align-items: center; gap: 6px;
-  width: calc(100% - 16px); margin: 1px 0 1px 16px;
-  padding: 5px 8px; border: none; border-radius: 6px;
-  background: none; cursor: pointer; text-align: left;
-  font: inherit; font-size: 11.5px; color: var(--dg-ink-soft, var(--color-text-secondary));
-  transition: background var(--duration-fast), color var(--duration-fast);
-}
-.dsub-item:hover { background: var(--dg-hover); color: var(--dg-ink); }
-.dsub-item.on { background: var(--dg-card); color: var(--dg-teal); font-weight: 600; }
-.dsub-em { flex: none; font-style: normal; font-size: 11px; }
-.dsub-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .mitem.active::before {
   content: '';
