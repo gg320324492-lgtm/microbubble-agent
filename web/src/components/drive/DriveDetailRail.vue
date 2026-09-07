@@ -120,7 +120,7 @@
             <video ref="videoElRef" :src="stageUrl" playsinline class="rf-vid-el"
                    @click="vidToggle" @play="vidPlaying = true; vidPoke()" @pause="vidPlaying = false; vidPoke()"
                    @ended="vidPlaying = false; vidPoke()" @timeupdate="onVidTime" @loadedmetadata="onVidMeta"></video>
-            <button v-if="!vidPlaying" class="rf-vid-big" title="播放" @click.stop="vidToggle">
+            <button v-if="!vidPlaying && !vidHover" class="rf-vid-big" title="播放" @click.stop="vidToggle">
               <svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg>
             </button>
             <div class="rf-vid-ctrl" @dblclick.stop>
