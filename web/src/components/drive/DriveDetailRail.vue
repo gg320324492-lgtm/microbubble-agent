@@ -108,13 +108,13 @@
           <div v-if="stageLoading" class="rf-load"><span class="rf-spin"></span></div>
           <!-- 缩略图/图片真图 (缩略图管线就位后 office 自动升级) -->
           <template v-else-if="coverUrl">
-            <img :src="coverUrl" :alt="name" class="rf-img" />
+            <img :src="coverUrl" :alt="name" class="rf-img" @dblclick="onStageDblClick" />
             <span v-if="previewKind === 'office'" class="rf-auto">首页缩略图 · 自动</span>
           </template>
           <!-- 图片真图 -->
-          <img v-else-if="previewKind === 'image'" :src="stageUrl" :alt="name" class="rf-img" />
+          <img v-else-if="previewKind === 'image'" :src="stageUrl" :alt="name" class="rf-img" @dblclick="onStageDblClick" />
           <!-- 视频播放器 (blob 流) -->
-          <video v-else-if="previewKind === 'video' && stageUrl" :src="stageUrl" controls playsinline class="rf-media"></video>
+          <video v-else-if="previewKind === 'video' && stageUrl" :src="stageUrl" controls playsinline class="rf-media" @dblclick="onStageDblClick"></video>
           <!-- 批次⑩.64 (用户选型 C1): 深青横幅自绘播放器 — 原生控件音量键无法隐藏, 全自绘 -->
           <div v-else-if="previewKind === 'audio'" class="rf-audio">
             <div class="rf-audio-head">
@@ -154,7 +154,7 @@
           </div>
           <!-- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) -->
           <!-- 批次⑩.25 (用户拍板): PPT 逐页 PNG 图片浏览 (LibreOffice 管线), 弃自研 HTML 渲染 -->
-          <div v-else-if="previewKind === 'ppt'" class="rf-ppt" ref="pptStageRef">
+          <div v-else-if="previewKind === 'ppt'" class="rf-ppt" ref="pptStageRef" @dblclick="onStageDblClick">
             <div v-if="pptImgStatus === 'loading' || pptImgStatus === 'converting'" class="rf-skel">
               <div class="rf-conv-t">正在把 PPT 转换为图片…</div>
               <div class="rf-conv-s">首次约 10-30 秒 · 之后打开秒出</div>
@@ -187,7 +187,7 @@
             </template>
           </div>
           <!-- 批次⑩.53 (选型 C 改): DOCX 预览 — 常态首页竖版自适应, 全屏才出缩略图侧栏 -->
-          <div v-else-if="previewKind === 'docx' || previewKind === 'pdf'" class="rf-ppt" ref="docxStageRef">
+          <div v-else-if="previewKind === 'docx' || previewKind === 'pdf'" class="rf-ppt" ref="docxStageRef" @dblclick="onStageDblClick">
             <div v-if="docxImgStatus === 'loading' || docxImgStatus === 'converting'" class="rf-skel">
               <div class="rf-conv-t">正在把 {{ previewKind === 'pdf' ? 'PDF' : 'DOCX' }} 转换为可预览格式…</div>
               <div class="rf-conv-s">首次约 10-30 秒 · 之后打开秒出</div>
@@ -233,7 +233,7 @@
             </template>
           </div>
           <!-- 批次⑩.65 (2026-09-07 选型 D): XLSX 预览 — 深青横幅头 + 工作表标签 + 前 8 行速览 -->
-          <div v-else-if="previewKind === 'excel'" class="rf-xlsx" @dblclick="togglePptFull">
+          <div v-else-if="previewKind === 'excel'" class="rf-xlsx" @dblclick="onStageDblClick">
             <div v-if="xlsxStatus === 'idle' || xlsxStatus === 'loading'" class="rf-skel">
               <div class="rf-conv-t">正在解析 Excel 工作表…</div>
               <div class="rf-conv-s">首次约 1-3 秒 · 之后打开秒出</div>
@@ -334,7 +334,7 @@
             </template>
           </div>
           <!-- 批次⑩.67 (2026-09-07 选型 A): CSV 预览 — 深青横幅 + 数据网格 (与 xlsx 同交互) -->
-          <div v-else-if="previewKind === 'csv'" class="rf-csv" @dblclick="togglePptFull">
+          <div v-else-if="previewKind === 'csv'" class="rf-csv" @dblclick="onStageDblClick">
             <div v-if="csvStatus === 'idle' || csvStatus === 'loading'" class="rf-skel">
               <div class="rf-conv-t">正在解析 CSV 数据…</div>
               <div class="rf-conv-s">首次约 1-3 秒 · 之后打开秒出</div>
@@ -379,7 +379,7 @@
             </template>
           </div>
           <!-- 批次⑩.68 (2026-09-07 选型 D): 文本类预览 — 按扩展名智能渲染 (md 排版/json 高亮/原文) -->
-          <div v-else-if="previewKind === 'text'" class="rf-txt" @dblclick="togglePptFull">
+          <div v-else-if="previewKind === 'text'" class="rf-txt" @dblclick="onStageDblClick">
             <div v-if="textLoading" class="rf-skel">
               <div class="rf-conv-t">正在读取文本…</div>
               <div class="rf-skel-ttl" style="margin-top:14px"></div>
@@ -1360,6 +1360,12 @@ function togglePptFull() {
   else {
     el.requestFullscreen?.()
   }
+}
+// 批次⑩.68: 舞台双击全屏 — 除音频播放器外全类型; 翻页胶囊/缩放按钮等控件上不触发
+function onStageDblClick(ev) {
+  if (previewKind.value === 'audio') return
+  if (ev.target.closest('.rf-pill, .rf-pill-docx, .rf-fs-btn, .rf-xlsx-zbtn, .rf-act')) return
+  togglePptFull()
 }
 const pptSlideH = computed(() => {
   if (!pptFull.value) return null
