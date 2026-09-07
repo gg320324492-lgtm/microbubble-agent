@@ -1615,9 +1615,9 @@ function fmtDT(x) {
 .rf-xlsx-zbtn:disabled { opacity: .4; cursor: default; }
 .rf-xlsx-zpct { min-width: 40px; text-align: center; font-family: var(--font-family-mono, monospace); font-size: 10.5px; color: var(--color-text-secondary); }
 .rf-xlsx-zreset { font-family: var(--font-family-mono, monospace); }
-/* ── 批次⑩.66 (选型 A): ZIP 预览 — 石墨横幅 + 面包屑下钻清单 ── */
+/* ── 批次⑩.66 (选型 A): ZIP 预览 — 深青横幅 (全站统一) + 面包屑下钻清单 ── */
 .rf-zip { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
-.rf-zip-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #454B52, #333940); color: #fff; padding: 8px 11px; }
+.rf-zip-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
 .rf-zip-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; flex: none; }
 .rf-zip-ico svg { width: 14px; height: 14px; fill: #fff; }
 .rf-zip-tt { flex: 1; min-width: 0; }
@@ -1636,7 +1636,7 @@ function fmtDT(x) {
 .rf-zip-item:hover .nm { color: var(--color-text-primary); }
 .rf-zip-item .glyph { flex: none; font-size: 12px; }
 .rf-zip-item .nm { flex: 1; min-width: 0; font-size: 11.5px; font-weight: var(--font-weight-medium); color: var(--color-text-regular); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--duration-fast); }
-.rf-zip-item .cnt { flex: none; font-size: 9.5px; color: #fff; background: #454B52; border-radius: 9999px; padding: 1px 7px; font-family: var(--font-family-mono, monospace); }
+.rf-zip-item .cnt { flex: none; font-size: 9.5px; color: #fff; background: #0E766E; border-radius: 9999px; padding: 1px 7px; font-family: var(--font-family-mono, monospace); }
 .rf-zip-item .sz { flex: none; font-size: 9.5px; color: var(--color-text-placeholder); font-family: var(--font-family-mono, monospace); }
 .rf-zip-item .chev { flex: none; display: inline-flex; }
 .rf-zip-item .chev svg { width: 10px; height: 10px; stroke: var(--color-text-placeholder); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
