@@ -1002,6 +1002,7 @@ function onFsChange() {
 let wheelLock = 0
 function onFsWheel(ev) {
   if (!pptFull.value || !document.fullscreenElement) return
+  if (previewKind.value === 'excel') return   // 批次⑩.65: excel 全屏走原生表格滚动, 不拦截滚轮
   ev.preventDefault()
   const now = Date.now()
   if (now - wheelLock < 450) return
@@ -1014,6 +1015,7 @@ function onFsWheel(ev) {
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
+  if (previewKind.value === 'excel') return   // 批次⑩.65: excel 全屏方向键/空格交给原生滚动
   const isDocx = previewKind.value === 'docx' || previewKind.value === 'pdf'
   const page = isDocx ? docxPage : pptPage
   const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
