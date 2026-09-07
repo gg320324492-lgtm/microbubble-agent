@@ -295,6 +295,14 @@
       @uploaded="onFilesUploaded"
       @update:model-value="v => { if (!v) droppedFiles = [] }"
     />
+    <DeleteConfirmDialog
+      v-model="deleteConfirm.visible"
+      :items="deleteConfirm.items"
+      :extra-text="deleteConfirm.extraText"
+      :title="deleteConfirm.title"
+      :loading="deleteConfirm.loading"
+      @confirm="onConfirmDelete"
+    />
     <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
     <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" />
     <!-- 批次③: 右键/右栏「版本沿革」直接开 dialog (含恢复 + 两版本对比 diff), 不强制跳 /versions 整页 -->
@@ -317,6 +325,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import DriveFileTable from '@/components/drive/DriveFileTable.vue'
 import DriveDetailRail from '@/components/drive/DriveDetailRail.vue'
+import DeleteConfirmDialog from '@/components/drive/DeleteConfirmDialog.vue'  // 批次⑩.73 选型 A 轻确认卡片
 import StorageQuotaBadge from '@/components/drive/StorageQuotaBadge.vue'
 import VersionHistoryDialog from '@/components/drive/VersionHistoryDialog.vue'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
@@ -606,19 +615,46 @@ async function reloadCurrentView() {
   }
 }
 
+// 批次⑩.73 (选型 A 轻确认卡片): 删除确认专用弹窗 (文件名列表 + 回收站说明)
+const deleteConfirm = reactive({ visible: false, items: [], extraText: '', title: '删除文件', loading: false, action: null })
+function openDeleteConfirm(items, extraText, title, action) {
+  deleteConfirm.items = items
+  deleteConfirm.extraText = extraText
+  deleteConfirm.title = title
+  deleteConfirm.action = action
+  deleteConfirm.visible = true
+}
+async function onConfirmDelete() {
+  deleteConfirm.loading = true
+  try {
+    await deleteConfirm.action?.()
+    deleteConfirm.visible = false
+  } catch (e) {
+    ElMessage.error(e?.message || '删除失败')
+  } finally {
+    deleteConfirm.loading = false
+  }
+}
+
 async function handleBatchDelete() {
   const hasFiles = selectedFileIds.value.length > 0
   const hasFolders = selectedFolderIds.value.length > 0
   if (!hasFiles && !hasFolders) return
-  const parts = []
-  if (hasFiles) parts.push(`${selectedFileIds.value.length} 个文件`)
-  if (hasFolders) parts.push(`${selectedFolderIds.value.length} 个文件夹 (连同其内容)`)
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除 ${parts.join(' 和 ')} 吗?`,
-      '批量删除',
-      { type: 'warning' }
-    )
+  const byId = new Map(driveFiles.value.map(f => [f.id, f]))
+  const items = []
+  for (const id of selectedFileIds.value) {
+    const f = byId.get(id)
+    items.push({ name: f ? (f.file_name || f.title) : `文件 ${id}`, size: f ? (Number(f.file_size) || 0) : 0 })
+  }
+  const fById = new Map(tableFolders.value.map(f => [f.id, f]))
+  for (const fid of selectedFolderIds.value) {
+    const fo = fById.get(fid)
+    items.push({ name: fo?.name || `文件夹 ${fid}`, size: 0, isFolder: true })
+  }
+  const extraText = hasFolders
+    ? `（其中 ${selectedFolderIds.value.length} 个为文件夹, 其内容将一并移入回收站）`
+    : ''
+  openDeleteConfirm(items, extraText, hasFolders ? '批量删除' : '删除文件', async () => {
     let succeeded = 0
     const skipped = []
     if (hasFiles) {
@@ -643,9 +679,7 @@ async function handleBatchDelete() {
     refreshSideCounts()
     await fetchFolderTree()
     reloadCurrentView()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
-  }
+  })
 }
 
 async function handleBatchMove() {
@@ -1044,21 +1078,16 @@ function handleFileViewComments(file) {
 }
 
 async function handleFileDelete(file) {
-  try {
-    await ElMessageBox.confirm(
-      `确定删除文件 "${file.title || file.file_name}" 吗？此操作可在 3 天内从回收站恢复。`,
-      '删除确认',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
-    )
-    await deleteFile(file.id)
-    if (activeKey.value === file.id) activeKey.value = null  // 批次③: 右栏跟随
-    ElMessage.success('已删除')
-    refreshSideCounts()
-  } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error(e.message || '删除失败')
+  openDeleteConfirm(
+    [{ name: file.file_name || file.title || `文件 ${file.id}`, size: Number(file.file_size) || 0 }],
+    '', '删除文件',
+    async () => {
+      await deleteFile(file.id)
+      if (activeKey.value === file.id) activeKey.value = null  // 批次③: 右栏跟随
+      ElMessage.success('已删除')
+      refreshSideCounts()
     }
-  }
+  )
 }
 
 // === PR3.4 handlers ===
