@@ -1947,6 +1947,7 @@ def _xlsx_truncated(total, n_rows: int) -> bool:
 
 
 def _xlsx_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
+    wb = None
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
         from openpyxl import load_workbook
@@ -1964,9 +1965,10 @@ def _xlsx_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: st
                 "truncated": _xlsx_truncated(total, len(rows)),
                 "rows": rows,
             })
-        wb.close()
-        (cache_dir / "ready.json").write_text(
-            json.dumps({"sheets": sheets}, ensure_ascii=False), encoding="utf-8")
+        # ready.json 原子写: 先写 tmp 再 os.replace, 避免并发轮询读到半写 JSON
+        tmp_json = cache_dir / "ready.json.tmp"
+        tmp_json.write_text(json.dumps({"sheets": sheets}, ensure_ascii=False), encoding="utf-8")
+        tmp_json.replace(cache_dir / "ready.json")
         logger.info("[xlsx-preview] 解析完成 file=%d 工作表=%d", file_id, len(sheets))
     except Exception as e:
         logger.error("[xlsx-preview] file=%s 解析失败: %s", file_id, e)
@@ -1975,6 +1977,11 @@ def _xlsx_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: st
         except Exception:
             pass
     finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
         _XLSX_PREVIEW_LOCKS.pop(key, None)
 
 
@@ -1991,6 +1998,66 @@ def _slice_xlsx_sheets(sheets: list, max_rows: int) -> list:
             "rows": cut,
         })
     return out
+
+
+@router.get("/files/{file_id}/xlsx-preview")
+async def get_xlsx_preview_status(
+    file_id: int,
+    max_rows: int = Query(8, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """XLSX 数据速览: 轮询状态端点 (ready 时返回各工作表前 max_rows 行 JSON).
+
+    缓存固定抽 200 行×6 列, 本端点按 max_rows 切片; .xls 老格式 v1 不支持。
+    """
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    lname = (f.file_name or "").lower()
+    if lname.endswith(".xls") and not lname.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="暂不支持 .xls 老格式，请另存为 .xlsx")
+    if not lname.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="仅支持 .xlsx")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    key = _xlsx_cache_key(f.updated_at)
+    cache_dir = _xlsx_cache_dir(file_id, key)
+
+    if (cache_dir / "ready.json").exists():
+        try:
+            data = json.loads((cache_dir / "ready.json").read_text(encoding="utf-8"))
+        except Exception:
+            return {"status": "converting"}   # 半写/损坏 (原子写后应罕见) → 下轮重读
+        return {"status": "ready", "sheets": _slice_xlsx_sheets(data.get("sheets", []), max_rows)}
+    if (cache_dir / "error.txt").exists():
+        return {"status": "error",
+                "message": (cache_dir / "error.txt").read_text(encoding="utf-8")[:200]}
+
+    lock = _XLSX_PREVIEW_LOCKS.setdefault(key, threading.Lock())
+    if not lock.acquire(blocking=False):
+        return {"status": "converting"}
+    try:
+        src = FsPath("/tmp") / ("xlsx_src_%d.xlsx" % file_id)
+        if not src.exists():
+            raw = await file_service.download_file(f.file_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            src.write_bytes(raw)
+    except Exception as e:
+        logger.error("[xlsx-preview] file=%d 源文件下载失败: %s", file_id, e)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
+        except Exception:
+            pass
+        _XLSX_PREVIEW_LOCKS.pop(key, None)
+        return {"status": "error", "message": str(e)[:200]}
+    th = threading.Thread(target=_xlsx_preview_worker,
+                          args=(file_id, str(src), cache_dir, key), daemon=True)
+    th.start()
+    return {"status": "converting"}
 
 
 # === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
