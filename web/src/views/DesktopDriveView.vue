@@ -88,6 +88,7 @@
           @retry="fetchFolderTree"
           @request-new-folder="onCreateSubFolder(null)"
           @create-sub-folder="onCreateSubFolder"
+          @rename-folder="onRenameTreeFolder"
           @share-folder="onShareFolder"
           @drop-files="onMoveDrop"
         />
@@ -1456,6 +1457,13 @@ async function confirmDeleteFolderNode(folder) {
   folderDelete.fileCount = fileCount
   folderDelete.adminWarning = !!userStore.isAdmin && cid != null && oid != null && Number(cid) !== Number(oid)
   folderDelete.visible = true
+}
+
+// 批次⑩.83: 左栏树右键「重命名」此前无人监听 (rename-folder 事件悬空) → 复用 RenameDialog
+function onRenameTreeFolder(folder) {
+  renameTarget.value = folder
+  renameTargetType.value = 'folder'
+  showRenameDialog.value = true
 }
 
 async function onFolderDeleteConfirm() {

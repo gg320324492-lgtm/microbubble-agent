@@ -41,7 +41,7 @@
 <script setup>
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-dialog 玻璃态生效
 import '@/views/drive/drive-view.css'
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -104,6 +104,12 @@ function syncFromTarget() {
       : props.target.title || props.target.file_name || ''
   }
 }
+
+// 批次⑩.83: 打开时自动预填当前名称 — 之前 syncFromTarget 只是 exposed, 父层从未调用,
+// 无论哪个入口打开弹窗输入框都是空的
+watch(() => props.modelValue, (v) => {
+  if (v) syncFromTarget()
+})
 
 defineExpose({ resetForm, syncFromTarget })
 </script>
