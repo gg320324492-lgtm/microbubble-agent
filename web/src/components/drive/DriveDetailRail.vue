@@ -465,15 +465,6 @@
             <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
               <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
             </button>
-            <button
-              v-if="previewKind === 'video'"
-              type="button"
-              class="rail-act"
-              title="播放倍速"
-              @click="vidCycleSpeed"
-            >
-              <span class="rf-act-spd mono">{{ vidSpeed }}x</span>倍速
-            </button>
             <button type="button" class="rail-act" @click="$emit('download', file)">
               <span>⬇</span>下载
             </button>
@@ -481,7 +472,6 @@
               <span>◈</span>分享
             </button>
             <button
-              v-if="previewKind !== 'video'"
               type="button"
               class="rail-act"
               :class="{ starred: file.is_starred }"
@@ -510,20 +500,11 @@
             <span>★</span>{{ file.is_starred ? '已收藏' : '收藏' }}
           </button>
         </div>
-        <div class="rail-actions rail-actions--second rail-actions--pager" :class="{ 'rail-actions--four': previewKind === 'video' }">
+        <div class="rail-actions rail-actions--second rail-actions--pager">
           <!-- 2026-09-05: "加入知识库"按钮移除 — 网盘文件上传后已默认自动入库 RAG -->
           <button type="button" class="rail-act wide" @click="$emit('rename', file)">✎ 重命名</button>
           <button type="button" class="rail-act wide" @click="$emit('move', file)">📂 移动</button>
           <button type="button" class="rail-act wide danger" @click="$emit('delete', file)">🗑 删除</button>
-          <!-- 批次⑩.69: 视频类型收藏键下沉二排, 上下各 4 列 -->
-          <button
-            v-if="previewKind === 'video'"
-            type="button"
-            class="rail-act wide"
-            :class="{ starred: file.is_starred }"
-            :aria-pressed="!!file.is_starred"
-            @click="$emit('toggle-star', file)"
-          >★ {{ file.is_starred ? '已收藏' : '收藏' }}</button>
         </div>
       </div>
 
@@ -1824,13 +1805,9 @@ defineExpose({ togglePptFull })
   border: 1px solid var(--color-border); border-radius: 9999px; white-space: nowrap;
 }
 .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-/* 批次⑩.69: 视频倍速按钮的档位小字 (按钮内图标位) */
-.rf-act-spd { font-family: var(--font-family-mono, monospace); font-size: 9.5px; font-weight: 700; color: var(--teal); }
 .rail-actions--second { margin-top: 8px; grid-template-columns: repeat(4, 1fr); }
 /* 批次⑩.37/38 (选型 B→A): ppt 三排全 3 列等宽, 横排图文; --pager 须定义在 --second 之后以覆盖列数 */
 .rail-actions--pager { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-/* 批次⑩.69: 视频二排 4 列 (重命名/移动/删除/收藏), 须在 --pager 之后覆盖 */
-.rail-actions--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .rail-actions--pager .rail-act { flex-direction: row; justify-content: center; gap: 6px; font-size: 12px; height: 46px; padding: 0 8px; }
 .rail-actions--pager .rf-act-fs-ico { margin-right: 0; }
 /* 对称翻页键: 3 列内网格 — 箭头钉死外缘, 文字绝对居中 (两键镜像, 与中间 pri 重心对齐); gap 归零防文字列被挤压换行 */
