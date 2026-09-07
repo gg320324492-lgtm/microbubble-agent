@@ -1817,9 +1817,15 @@ defineExpose({ togglePptFull })
 .rf-ppt-img { display: block; width: 100%; height: auto; border-radius: 4px 4px 0 0; }
 /* 全屏放映: 全屏根是 .rf-stage (rfStageRef, 带内联高度) 而非 .rf-ppt — 选择器必须用 :is(.rf-stage,.rf-ppt):fullscreen 才能命中 */
 :is(.rf-stage, .rf-ppt):fullscreen { background: #0D1210; border: none; }
-:is(.rf-stage, .rf-ppt):fullscreen .rf-slide-wrap { padding: 0; }
-/* contain 适配: 元素盒撑满视口 + object-fit:contain → 等比最大化居中, 任意屏幕比例不裁切不留边 */
-:is(.rf-stage, .rf-ppt):fullscreen .rf-ppt-img { width: 100%; height: 100%; object-fit: contain; border-radius: 0; }
+/* 批次⑩.71: 全屏页图改绝对定位+max 双约束 — grid 容器内 height:100% 退化为 auto, 竖版 A4 会裁半 */
+:is(.rf-stage, .rf-ppt):fullscreen .rf-slide-wrap { padding: 0; position: relative; }
+/* contain 适配: 绝对定位铺满 wrap + max 约束 + margin auto → 等比最大化居中, 任意屏幕/页型比例不裁切 */
+:is(.rf-stage, .rf-ppt):fullscreen .rf-ppt-img {
+  position: absolute; inset: 0; margin: auto;
+  width: auto; height: auto;
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; border-radius: 0;
+}
 :is(.rf-stage, .rf-ppt):fullscreen .rf-pill { display: flex; bottom: 26px; padding: 6px 12px; }
 :is(.rf-stage, .rf-ppt):fullscreen .rf-pill-btn { width: 30px; height: 30px; font-size: 14px; }
 :is(.rf-stage, .rf-ppt):fullscreen .rf-pill-pg { font-size: 12px; }
