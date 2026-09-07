@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XLSX 预览窗口 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  /* ── 项目设计令牌 (web/src/assets/variables.css 同源) ── */
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --color-text-placeholder: #C0C4CC;
+    --color-file-excel: #198754;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --teal-deep: #0A5A54;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 34px 28px 60px;
+    background: var(--color-bg-page);
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+    color: var(--color-text-primary);
+  }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; }
+  .grid {
+    max-width: 1180px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(2, minmax(380px, 1fr)); gap: 30px 34px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  /* ── 变体说明 ── */
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag {
+    flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700;
+    color: #fff; background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em;
+  }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: var(--color-file-excel); }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  /* ══ 网盘右栏详情卡 1:1 复刻 (DriveDetailRail) ══ */
+  .rail {
+    width: 336px; background: var(--color-bg-card);
+    border: 1px solid var(--color-border); border-radius: 14px;
+    box-shadow: 0 4px 18px rgba(31, 42, 38, .06); overflow: hidden;
+  }
+  .rail-hero { padding: 16px 16px 12px; }
+  .rf-stage {
+    position: relative; overflow: hidden;
+    border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+    background: var(--color-bg-card);
+  }
+  .rf-stage.dark { background: #525659; border-color: #525659; }
+  .rail-name { margin: 12px 0; font-size: 14px; font-weight: 600; line-height: 1.45; word-break: break-all; display: flex; align-items: center; }
+  .rf-page-cnt {
+    margin-left: 8px; padding: 2px 9px; font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+    color: var(--color-text-secondary); background: rgba(0,0,0,.04);
+    border: 1px solid var(--color-border); border-radius: 9999px; white-space: nowrap;
+  }
+  .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rail-actions + .rail-actions { margin-top: 8px; }
+  .rail-actions.pager3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rail-act {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    height: 46px; font-size: 11.5px; color: var(--color-text-regular);
+    border: 1px solid var(--color-border); border-radius: var(--radius-md);
+    background: var(--color-bg-card); cursor: pointer; font-family: inherit;
+    transition: all .15s ease;
+  }
+  .rail-act:hover { border-color: #B8E0DB; color: var(--teal); background: #F0F9F7; }
+  .rail-act:active { transform: scale(.95); }
+  .rail-act span.ic { font-size: 13px; line-height: 1; font-style: normal; }
+  .rail-act.pri {
+    background: linear-gradient(135deg, #0E766E, #12897C); border-color: transparent;
+    color: #fff; font-weight: 600;
+    box-shadow: 0 2px 8px rgba(14, 118, 110, .3);
+  }
+  .rail-act.pri:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14,118,110,.32); color: #fff; }
+  .rail-act.wide { flex-direction: row; gap: 6px; font-size: 12px; }
+  .rail-act.danger:hover { color: #F56C6C; border-color: #F56C6C; background: #FEF0F0; }
+  .rail-act .svg16 { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .rail-act.pg3 { display: grid; grid-template-columns: 14px 1fr 14px; align-items: center; justify-items: center; gap: 0; padding: 0 10px; }
+  .rail-act.pg3 .arr svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .rail-act.pg3.pv .arr { grid-column: 1; grid-row: 1; justify-self: start; }
+  .rail-act.pg3.nx .arr { grid-column: 3; grid-row: 1; justify-self: end; }
+  .rail-act.pg3 .lbl { grid-column: 2; grid-row: 1; white-space: nowrap; }
+  .rail-act:disabled { opacity: .38; cursor: default; pointer-events: none; }
+
+  /* ════════ 方案 A: 真数据网格 (SheetJS 前端解析) ════════ */
+  .kA { height: 262px; display: flex; flex-direction: column; }
+  .kA-tabs {
+    flex: none; display: flex; gap: 5px; padding: 7px 8px;
+    border-bottom: 1px solid var(--color-border); background: #FBFBF9;
+    overflow: hidden;
+  }
+  .kA-tab {
+    flex: none; font-size: 10.5px; padding: 3.5px 10px; border-radius: 9999px;
+    border: 1px solid transparent; background: none; cursor: pointer;
+    color: var(--color-text-secondary); font-family: inherit; white-space: nowrap;
+    transition: all .15s;
+  }
+  .kA-tab:hover { color: var(--color-file-excel); }
+  .kA-tab.on {
+    color: var(--color-file-excel); font-weight: 600;
+    background: rgba(25, 135, 84, .10); border-color: rgba(25, 135, 84, .28);
+  }
+  .kA-grid { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .kA-grid table { width: 100%; border-collapse: collapse; font-size: 10.8px; }
+  .kA-grid th {
+    position: sticky; top: 0; text-align: left; font-weight: 600;
+    color: #0F5C38; background: #E9F5EE;
+    padding: 5px 8px; border-bottom: 1px solid #CBE4D5; white-space: nowrap;
+  }
+  .kA-grid td {
+    padding: 4.5px 8px; color: var(--color-text-regular);
+    border-bottom: 1px solid #F4F5F2; white-space: nowrap; font-family: var(--mono); font-size: 10.3px;
+  }
+  .kA-grid tr:nth-child(even) td { background: #FAFBF9; }
+  .kA-grid td.num { text-align: right; }
+  .kA-fade {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 34px; pointer-events: none;
+    background: linear-gradient(rgba(255,255,255,0), #fff);
+  }
+  .kA-foot {
+    flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 5.5px 10px; font-size: 10px; color: var(--color-text-secondary);
+    border-top: 1px solid var(--color-border); background: #FBFBF9;
+  }
+  .kA-foot .mono { font-family: var(--mono); }
+  .kA-expand {
+    border: none; background: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--teal); font-family: inherit; padding: 0;
+  }
+  .kA-expand:hover { text-decoration: underline; }
+  .kA-expand svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+
+  /* ════════ 方案 B: LibreOffice 打印分页 (同 PPT/DOCX) ════════ */
+  .kB { height: 190px; display: flex; }
+  .kB-page {
+    margin: auto; width: 258px; height: 158px; background: #fff; border-radius: 3px;
+    box-shadow: 0 8px 26px rgba(0,0,0,.38); padding: 12px 14px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .kB-cap { font-size: 8.5px; color: var(--color-text-placeholder); margin-bottom: 6px; font-family: var(--mono); }
+  .kB-page table { width: 100%; border-collapse: collapse; font-size: 8.6px; }
+  .kB-page th { background: #EDF2F0; font-weight: 600; color: var(--color-text-primary); border: 1px solid #C9CFCC; padding: 2.5px 4px; text-align: left; }
+  .kB-page td { border: 1px solid #C9CFCC; padding: 2.5px 4px; color: var(--color-text-regular); font-family: var(--mono); font-size: 8.4px; }
+  .kB-badge {
+    position: absolute; top: 9px; right: 9px; z-index: 3;
+    font-family: var(--mono); font-size: 8.5px; color: rgba(255,255,255,.85);
+    background: rgba(20,40,35,.5); padding: 2px 8px; border-radius: 9999px; backdrop-filter: blur(6px);
+  }
+
+  /* ════════ 方案 C: 深青横幅摘要卡 (音频 C1 同基因) ════════ */
+  .kC {
+    height: 148px; background: linear-gradient(165deg, #0E766E, #0A5A54);
+    color: #fff; display: flex; flex-direction: column; justify-content: center; gap: 12px;
+    padding: 15px 16px;
+  }
+  .kC-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .kC-ico {
+    width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.18);
+    display: flex; align-items: center; justify-content: center; flex: none;
+  }
+  .kC-ico svg { width: 19px; height: 19px; fill: #fff; }
+  .kC-tt { flex: 1; min-width: 0; }
+  .kC-nm { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kC-meta { font-size: 10px; color: rgba(255,255,255,.72); margin-top: 2px; }
+  .kC-meta .mono { font-family: var(--mono); }
+  .kC-pills { display: flex; gap: 5px; flex-wrap: nowrap; overflow: hidden; }
+  .kC-pill {
+    flex: none; font-size: 10px; color: rgba(255,255,255,.92);
+    background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.14);
+    padding: 3px 10px; border-radius: 9999px; cursor: pointer; font-family: inherit;
+    transition: background .15s;
+  }
+  .kC-pill:hover { background: rgba(255,255,255,.3); }
+  .kC-pill.on { background: #fff; color: var(--teal); font-weight: 600; border-color: #fff; }
+
+  /* ════════ 方案 D: 横幅头 + 前 8 行速览 (后端 openpyxl JSON) ════════ */
+  .kD { height: 268px; display: flex; flex-direction: column; }
+  .kD-head {
+    flex: none; display: flex; align-items: center; gap: 9px;
+    background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px;
+  }
+  .kD-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
+  .kD-ico svg { width: 14px; height: 14px; fill: #fff; }
+  .kD-tt { flex: 1; min-width: 0; }
+  .kD-nm { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kD-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+  .kD-tabs {
+    flex: none; display: flex; gap: 4px; padding: 5.5px 8px;
+    border-bottom: 1px solid var(--color-border); background: #FBFBF9;
+  }
+  .kD-tab {
+    flex: 1; font-size: 10px; padding: 3px 4px; border-radius: 6px;
+    border: none; background: none; cursor: pointer; color: var(--color-text-secondary); font-family: inherit;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .kD-tab.on { color: var(--color-file-excel); font-weight: 600; background: rgba(25,135,84,.10); }
+  .kD-grid { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .kD-grid table { width: 100%; border-collapse: collapse; font-size: 10.6px; }
+  .kD-grid th {
+    text-align: left; font-weight: 600; color: var(--color-text-regular);
+    background: #F6F7F5; padding: 4.5px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap;
+  }
+  .kD-grid td { padding: 4px 8px; color: var(--color-text-regular); border-bottom: 1px solid #F4F5F2; white-space: nowrap; font-family: var(--mono); font-size: 10.2px; }
+  .kD-grid tr:nth-child(even) td { background: #FAFBF9; }
+  .kD-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+  .kD-foot {
+    flex: none; display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+    border-top: 1px solid var(--color-border); background: #FBFBF9;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>XLSX 预览窗口 · 四版 UI 选型</h1>
+  <p>场景：网盘右栏详情卡 · 实验数据.xlsx（3 个工作表 · 128 行 · 45.2 KB） · 2026-09-07 · 卡片为真实尺寸 336px，A/D 可点工作表切换，B 可翻页</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>真数据网格速览</h2></div>
+    <p class="v-sub">前端 SheetJS 解析 · 浏览器内直读单元格，无需后端改造</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kA">
+          <div class="kA-tabs">
+            <button class="kA-tab on" data-k="tension" onclick="kA(this)">表面张力</button>
+            <button class="kA-tab" data-k="zeta" onclick="kA(this)">Zeta 电位</button>
+            <button class="kA-tab" data-k="size" onclick="kA(this)">气泡粒径</button>
+          </div>
+          <div class="kA-grid" id="kA-grid"></div>
+          <div class="kA-foot">
+            <span class="mono" id="kA-stat">128 行 × 4 列 · 前 9 行</span>
+            <button class="kA-expand"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>全屏查看</button>
+          </div>
+        </div>
+        <h3 class="rail-name">实验数据.xlsx</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri"><span class="ic"><svg class="svg16" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>全屏放映</button>
+          <button class="rail-act"><span class="ic">⬇</span>下载</button>
+          <button class="rail-act"><span class="ic">◈</span>分享</button>
+          <button class="rail-act"><span class="ic">★</span>收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">数据是真的，科研用户一眼看到内容；切工作表零等待</li>
+      <li class="pro">后端零改动，前端加 SheetJS (~400KB 懒加载)；.xls/.csv 顺带支持</li>
+      <li class="con">大文件（10 万行级）解析 1-3s，需截断保护；合并单元格/样式还原有限</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>打印分页预览</h2></div>
+    <p class="v-sub">LibreOffice 管线复用（同 PPT/DOCX）· xlsx → PDF → 逐页 PNG</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage dark kB">
+          <span class="kB-badge">打印布局</span>
+          <div class="kB-page" id="kB-page"></div>
+        </div>
+        <h3 class="rail-name">实验数据.xlsx<span class="rf-page-cnt" id="kB-pc">1 / 4 页</span></h3>
+        <div class="rail-actions pager3">
+          <button class="rail-act pg3 pv" id="kB-prev" onclick="kBgo(-1)"><span class="arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></span><span class="lbl">上一页</span></button>
+          <button class="rail-act pri"><span class="ic"><svg class="svg16" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>全屏放映</button>
+          <button class="rail-act pg3 nx" id="kB-next" onclick="kBgo(1)"><span class="lbl">下一页</span><span class="arr"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
+        </div>
+        <div class="rail-actions pager3">
+          <button class="rail-act wide">⬇ 下载</button>
+          <button class="rail-act wide">◈ 分享</button>
+          <button class="rail-act wide">★ 收藏</button>
+        </div>
+        <div class="rail-actions pager3">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">与 PPT/DOCX/PDF 完全同管线同交互，学习成本为零；还原度 100% 含样式/合并格</li>
+      <li class="pro">后端仅加一个 xlsx→PDF worker（~60 行，照抄 docx 管线）</li>
+      <li class="con">首转 10-30s；宽表被打印分页切碎，列看不全；不可交互（不能切表/复制）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>深青横幅摘要卡</h2></div>
+    <p class="v-sub">音频播放器 C1 同基因 · 只给身份+统计，点全屏再看数据</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kC">
+          <div class="kC-head">
+            <span class="kC-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm1 4v3h5V7H5zm7 0v3h7V7h-7zM5 12v3h5v-3H5zm7 0v3h7v-3h-7zM5 17v2h5v-2H5zm7 0v2h7v-2h-7z"/></svg></span>
+            <div class="kC-tt">
+              <div class="kC-nm">实验数据.xlsx</div>
+              <div class="kC-meta">Excel 表格 · <span class="mono">45.2 KB</span></div>
+            </div>
+          </div>
+          <div class="kC-pills">
+            <button class="kC-pill on">表面张力 · 40 行</button>
+            <button class="kC-pill">Zeta 电位 · 56 行</button>
+            <button class="kC-pill">气泡粒径 · 32 行</button>
+          </div>
+        </div>
+        <h3 class="rail-name">实验数据.xlsx</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri"><span class="ic"><svg class="svg16" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>全屏放映</button>
+          <button class="rail-act"><span class="ic">⬇</span>下载</button>
+          <button class="rail-act"><span class="ic">◈</span>分享</button>
+          <button class="rail-act"><span class="ic">★</span>收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">秒开零解析（统计走后端轻接口），与音频横幅视觉语言统一</li>
+      <li class="pro">实现最轻：后端 openpyxl 读元信息 + 横幅 UI，一天内可交付</li>
+      <li class="con">不显示任何数据内容——「预览」价值最弱，全屏还得另做方案</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>横幅头 + 前 8 行速览</h2></div>
+    <p class="v-sub">后端 openpyxl 抽 JSON（前 N 行 × M 列封顶）· 前端表格渲染</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kD">
+          <div class="kD-head">
+            <span class="kD-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm1 4v3h5V7H5zm7 0v3h7V7h-7zM5 12v3h5v-3H5zm7 0v3h7v-3h-7zM5 17v2h5v-2H5zm7 0v2h7v-2h-7z"/></svg></span>
+            <div class="kD-tt">
+              <div class="kD-nm">实验数据.xlsx</div>
+              <div class="kD-meta">3 个工作表 · 128 行 · <span style="font-family:var(--mono)">45.2 KB</span></div>
+            </div>
+          </div>
+          <div class="kD-tabs">
+            <button class="kD-tab on" data-k="tension" onclick="kD(this)">表面张力</button>
+            <button class="kD-tab" data-k="zeta" onclick="kD(this)">Zeta 电位</button>
+            <button class="kD-tab" data-k="size" onclick="kD(this)">气泡粒径</button>
+          </div>
+          <div class="kD-grid" id="kD-grid"></div>
+          <div class="kD-fade"></div>
+          <div class="kD-foot">仅预览前 8 行 · 全屏查看全部 128 行</div>
+        </div>
+        <h3 class="rail-name">实验数据.xlsx</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri"><span class="ic"><svg class="svg16" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>全屏放映</button>
+          <button class="rail-act"><span class="ic">⬇</span>下载</button>
+          <button class="rail-act"><span class="ic">◈</span>分享</button>
+          <button class="rail-act"><span class="ic">★</span>收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">横幅给身份、表格给内容，信息最完整；服务端截断可控大文件成本</li>
+      <li class="pro">无新增前端依赖（openpyxl 后端现成生态），JSON 载荷仅几 KB</li>
+      <li class="con">后端要新增解析端点+缓存（工作量 A/B 之间）；单元格样式不还原</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+/* ── 模拟数据: 微纳米气泡课题组实验数据 ── */
+const SHEETS = {
+  tension: {
+    head: ['浓度 (mol/L)', '表面张力 (mN/m)', '温度 (°C)', '平行样'],
+    rows: [
+      ['0.000', '71.97', '25.0', '3'], ['0.001', '70.12', '25.0', '3'],
+      ['0.005', '66.45', '25.1', '3'], ['0.010', '62.30', '25.0', '3'],
+      ['0.020', '59.18', '24.9', '3'], ['0.050', '55.87', '25.2', '3'],
+      ['0.100', '50.24', '25.0', '3'], ['0.200', '45.61', '25.1', '3'],
+      ['0.300', '42.93', '25.0', '3'], ['0.500', '39.85', '25.2', '3'],
+    ],
+    total: 40,
+  },
+  zeta: {
+    head: ['pH', 'Zeta (mV)', '电导率 (μS/cm)', '状态'],
+    rows: [
+      ['3.0', '+18.6', '142', '偏正'], ['4.0', '+6.8', '149', '临界'],
+      ['5.0', '-6.2', '156', '稳定'], ['6.0', '-21.4', '163', '稳定'],
+      ['6.5', '-28.9', '171', '最优'], ['7.0', '-31.2', '178', '最优'],
+      ['8.0', '-24.7', '190', '稳定'], ['9.0', '-15.3', '214', '一般'],
+      ['10.0', '-9.8', '248', '聚沉'], ['11.0', '-4.1', '302', '聚沉'],
+    ],
+    total: 56,
+  },
+  size: {
+    head: ['样品', '粒径 (μm)', 'PDI', '产气量'],
+    rows: [
+      ['纯水对照', '52.3', '0.41', '118'], ['SDS 0.001%', '41.6', '0.33', '120'],
+      ['SDS 0.005%', '33.2', '0.27', '119'], ['SDS 0.010%', '28.7', '0.22', '121'],
+      ['SDS 0.050%', '19.4', '0.18', '117'], ['CTAB 0.001%', '36.8', '0.29', '122'],
+      ['Tween80 0.01%', '31.5', '0.24', '116'], ['NaCl 0.01%', '47.9', '0.38', '114'],
+      ['NaCl 0.05%', '58.2', '0.45', '112'], ['乙醇 5%', '44.1', '0.36', '115'],
+    ],
+    total: 32,
+  },
+};
+
+function tableHTML(key, cls, rows) {
+  const s = SHEETS[key];
+  let h = '<table class="' + cls + '"><thead><tr>' + s.head.map(x => '<th>' + x + '</th>').join('') + '</tr></thead><tbody>';
+  for (const r of rows) h += '<tr>' + r.map(x => '<td>' + x + '</td>').join('') + '</tr>';
+  return h + '</tbody></table>';
+}
+
+/* 方案 A */
+function kA(btn) {
+  document.querySelectorAll('.kA-tab').forEach(t => t.classList.toggle('on', t === btn));
+  const k = btn.dataset.k;
+  document.getElementById('kA-grid').innerHTML = tableHTML(k, '', SHEETS[k].rows.slice(0, 9));
+  document.getElementById('kA-stat').textContent = SHEETS[k].total + ' 行 × 4 列 · 前 9 行';
+}
+kAInit();
+function kAInit() {
+  const k = 'tension';
+  document.getElementById('kA-grid').innerHTML = tableHTML(k, '', SHEETS[k].rows.slice(0, 9));
+}
+
+/* 方案 B: 4 页, 每页 6 行 */
+let kBp = 1;
+const kB_PER = 6, kB_PAGES = 4;
+function kBgo(d) {
+  kBp = Math.min(kB_PAGES, Math.max(1, kBp + d));
+  kBRender();
+}
+function kBRender() {
+  const s = SHEETS.tension;
+  const start = (kBp - 1) * kB_PER;
+  const rows = [];
+  for (let i = start; i < Math.min(start + kB_PER, s.rows.length); i++) rows.push(s.rows[i]);
+  document.getElementById('kB-page').innerHTML =
+    '<div class="kB-cap">实验数据.xlsx — 表面张力 · 第 ' + kBp + ' 页</div>' + tableHTML('tension', '', rows);
+  document.getElementById('kB-pc').textContent = kBp + ' / ' + kB_PAGES + ' 页';
+  document.getElementById('kB-prev').disabled = kBp <= 1;
+  document.getElementById('kB-next').disabled = kBp >= kB_PAGES;
+}
+kBRender();
+
+/* 方案 D */
+function kD(btn) {
+  document.querySelectorAll('.kD-tab').forEach(t => t.classList.toggle('on', t === btn));
+  const k = btn.dataset.k;
+  document.getElementById('kD-grid').innerHTML = tableHTML(k, '', SHEETS[k].rows.slice(0, 8));
+}
+kDInit();
+function kDInit() {
+  const k = 'tension';
+  document.getElementById('kD-grid').innerHTML = tableHTML(k, '', SHEETS[k].rows.slice(0, 8));
+}
+</script>
+</body>
+</html>
