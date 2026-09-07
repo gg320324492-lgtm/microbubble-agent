@@ -54,7 +54,7 @@
 - 每个 worksheet 抽取：
   - `name`：sheet 名
   - `total_rows`：`ws.max_row`（read_only 下可能为 None → 存 `null`）
-  - `rows`：前 **200 行 × 前 60 列**（`ws.iter_rows(max_row=200, max_col=6, values_only=True)`）
+  - `rows`：前 **200 行 × 前 60 列**（`ws.iter_rows(max_row=200, max_col=60, values_only=True)`；v2 起列上限 6→60，支撑全屏横向滚动与缩放）
   - 单元格：`None → ""`，其余 `str()` 截断 **24 字符**
   - `truncated`：`total_rows` 未知（null）时一律 `true`（前端按「未读全」提示）；已知时 `total_rows > len(rows)`
 - 全部 sheets 一次抽好写入 `ready.json`；**端点按 `max_rows` 参数切片返回**（缓存只有一份 200 行版本（列封顶 60，v2 起），常态 8 行与全屏 200 行共用）
