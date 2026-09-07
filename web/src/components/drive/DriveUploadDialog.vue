@@ -40,14 +40,28 @@
       <el-icon :size="48" class="drive-upload-drop-icon"><UploadFilled /></el-icon>
       <p class="drive-upload-drop-title">点击或拖拽文件到此处</p>
       <p class="drive-upload-drop-hint">
-        支持多文件与整个文件夹 · 文档 / 图片 / 音视频 / 压缩包等常见类型<br />
-        文件夹拖拽需 Chrome/Edge/Safari, Firefox 仅单文件
+        支持多文件与整个文件夹拖拽 · 文档 / 图片 / 音视频 / 压缩包等常见类型<br />
+        <a
+          v-if="webkitDirectorySupported"
+          class="drive-upload-folder-link"
+          @click.stop="triggerFolderInput"
+        >选择整个文件夹上传（保留目录结构）</a>
+        <span v-else>文件夹拖拽需 Chrome/Edge/Safari, Firefox 仅单文件</span>
       </p>
+      <!-- 批次⑩.71 修复: 点击打开的是文件选择器 (此前误绑 webkitdirectory, 弹文件夹选择器导致文件不可选) -->
       <input
         ref="fileInputRef"
         type="file"
         multiple
-        :webkitdirectory="webkitDirectorySupported"
+        style="display: none;"
+        @change="onFileInputChange"
+      />
+      <input
+        v-if="webkitDirectorySupported"
+        ref="folderInputRef"
+        type="file"
+        multiple
+        webkitdirectory
         style="display: none;"
         @change="onFileInputChange"
       />
@@ -164,6 +178,7 @@ const visible = computed({
 // === 状态 ===
 const dropZoneRef = ref(null)
 const fileInputRef = ref(null)
+const folderInputRef = ref(null)  // 批次⑩.71: 独立文件夹选择器 (webkitdirectory)
 const fileItems = ref([])  // [{ file, relativePath, status, progress }]
 const chunkedItems = ref([])  // W72 B-3: 走 DriveChunkedUploader 的较大文件
 const chunkedRefs = ref(new Map())
@@ -228,6 +243,11 @@ watch(visible, async (newVal) => {
 // === 文件接收 ===
 function triggerFileInput() {
   fileInputRef.value?.click()
+}
+
+// 批次⑩.71: 独立文件夹选择入口 (webkitdirectory)
+function triggerFolderInput() {
+  folderInputRef.value?.click()
 }
 
 function onFileInputChange(e) {
@@ -501,6 +521,11 @@ export default { name: 'DriveUploadDialog' }
   color: var(--color-text-primary);
 }
 
+.drive-upload-folder-link {
+  color: var(--teal); cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+  font-weight: 500;
+}
+.drive-upload-folder-link:hover { color: var(--teal-2); }
 .drive-upload-drop-hint {
   font-size: 12px;
   margin: 0;
