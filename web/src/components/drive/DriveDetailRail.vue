@@ -232,6 +232,51 @@
               </div>
             </template>
           </div>
+          <!-- 批次⑩.65 (2026-09-07 选型 D): XLSX 预览 — 深青横幅头 + 工作表标签 + 前 8 行速览 -->
+          <div v-else-if="previewKind === 'excel'" class="rf-xlsx">
+            <div v-if="xlsxStatus === 'idle' || xlsxStatus === 'loading'" class="rf-skel">
+              <div class="rf-conv-t">正在解析 Excel 工作表…</div>
+              <div class="rf-conv-s">首次约 1-3 秒 · 之后打开秒出</div>
+              <div class="rf-skel-ttl" style="margin-top:18px"></div>
+              <div class="rf-skel-ln" style="width:78%"></div>
+            </div>
+            <div v-else-if="xlsxStatus === 'error' || !xlsxActiveSheet" class="rail-cover-ph" :style="{ borderColor: typeColor }">
+              <span class="rail-cover-abbr">{{ typeAbbr }}</span>
+              <span class="rail-cover-hint">无预览图</span>
+            </div>
+            <template v-else>
+              <div class="rf-xlsx-head">
+                <span class="rf-xlsx-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 4v3h5V7H5zm7 0v3h7V7h-7zM5 12v3h5v-3H5zm7 0v3h7v-3h-7zM5 17v2h5v-2H5zm7 0v2h7v-2h-7z"/></svg></span>
+                <div class="rf-xlsx-tt">
+                  <div class="rf-xlsx-nm" :title="name">{{ name }}</div>
+                  <div class="rf-xlsx-meta">{{ xlsxSheets.length }} 个工作表<template v-if="xlsxActiveSheet.total_rows"> · {{ xlsxActiveSheet.total_rows }} 行</template> · {{ fmtSize(file.file_size) }}</div>
+                </div>
+              </div>
+              <div v-if="xlsxSheets.length > 1" class="rf-xlsx-tabs">
+                <button
+                  v-for="(s, i) in xlsxSheets" :key="'xTab' + i"
+                  type="button" class="rf-xlsx-tab" :class="{ on: i === xlsxActive }"
+                  :title="s.name" @click="xlsxActive = i"
+                >{{ s.name }}</button>
+              </div>
+              <div class="rf-xlsx-gridwrap">
+                <div v-if="!xlsxActiveSheet.rows.length" class="rf-xlsx-empty">空工作表</div>
+                <table v-else class="rf-xlsx-grid">
+                  <thead><tr><th v-for="(h, ci) in xlsxView.header" :key="'xh' + ci">{{ h }}</th></tr></thead>
+                  <tbody>
+                    <tr v-for="(r, ri) in xlsxView.body" :key="'xr' + ri">
+                      <td v-for="(c, ci) in r" :key="'xc' + ci">{{ c }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div v-if="!pptFull" class="rf-xlsx-fade"></div>
+              </div>
+              <div class="rf-xlsx-foot">
+                <template v-if="pptFull">全屏 · 已加载 {{ Math.max(0, xlsxActiveSheet.rows.length - 1) }} 行</template>
+                <template v-else>仅预览前 {{ Math.min(8, Math.max(0, xlsxActiveSheet.rows.length - 1)) }} 行<template v-if="xlsxActiveSheet.truncated"> · 全屏查看更多</template></template>
+              </div>
+            </template>
+          </div>
           <!-- 兜底占位 -->
           <div v-else class="rail-cover-ph" :style="{ borderColor: typeColor }">
             <span class="rail-cover-abbr">{{ typeAbbr }}</span>
@@ -517,7 +562,7 @@ watch(() => [props.file?.id, props.file?.thumbnail_status], async () => {
   coverUrl.value = null
   const f = props.file
   if (!f) return
-  if (['doc', 'docx', 'pdf'].includes(extOf.value)) return  // 批次⑩.62: 分页预览分支接管
+  if (['doc', 'docx', 'pdf', 'xlsx'].includes(extOf.value)) return  // 批次⑩.62 分页/⑩.65 excel 预览分支接管
   if (f.thumbnail_status === 'ready') {
     try {
       const resp = await axios.get(`/api/v1/drive/files/${f.id}/thumbnail`)
@@ -536,7 +581,8 @@ const previewKind = computed(() => {
   if (e === 'pptx') return 'ppt'   // 批次⑩.17: 自研结构化渲染 (python-pptx JSON)
   if (['md', 'txt', 'csv', 'json', 'log'].includes(e)) return 'text'
   if (['doc', 'docx'].includes(e)) return 'docx'   // 批次⑩.53: LibreOffice 管线预览
-  if (['ppt', 'pptx', 'xls', 'xlsx'].includes(e)) return 'office'
+  if (e === 'xlsx') return 'excel'   // 批次⑩.65 (选型 D): openpyxl JSON 速览 (xls 留 office 占位)
+  if (['ppt', 'xls'].includes(e)) return 'office'
   return 'none'
 })
 // 舞台高度: 文档 470 (A4) / 视频 189 (16:9) / 音频 130 / 图片 220 / 文本 300 / Office 220
@@ -551,7 +597,7 @@ const stageHeight = computed(() => {
     // 批次⑩.53: 竖版 A4 贴合 — 首页图自然比例未知前用 A4 竖比 (210:297)
     return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 297 / 210)
   }
-  return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220 }[previewKind.value] || 168
+  return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220, excel: 268 }[previewKind.value] || 168
 })
 
 /* 媒体/PDF blob 流 (带鉴权 axios → objectURL; 换文件/卸载即 revoke) */
@@ -874,6 +920,55 @@ function revokeDocxBlobs() {
   docxBlobCurrent.value = null
 }
 onBeforeUnmount(() => { stopDocxPoll(); docxPollSeq++; revokeDocxBlobs() })
+
+/* ---- 批次⑩.65 (选型 D): XLSX 预览 — openpyxl JSON, 常态表头+前 8 行 / 全屏缓存全量 ---- */
+const XLSX_RAIL_ROWS = 8
+const xlsxStatus = ref('idle')   // idle | loading | ready | error
+const xlsxSheets = ref([])
+const xlsxActive = ref(0)
+let xlsxPollTimer = null
+let xlsxPollSeq = 0
+const xlsxActiveSheet = computed(() => xlsxSheets.value[xlsxActive.value] || null)
+const xlsxView = computed(() => {
+  const s = xlsxActiveSheet.value
+  if (!s || !s.rows?.length) return { header: [], body: [] }
+  return {
+    header: s.rows[0],
+    body: pptFull.value ? s.rows.slice(1) : s.rows.slice(1, 1 + XLSX_RAIL_ROWS),
+  }
+})
+function stopXlsxPoll() { if (xlsxPollTimer) { clearTimeout(xlsxPollTimer); xlsxPollTimer = null } }
+function startXlsxPoll(fid) {
+  stopXlsxPoll()
+  const seq = ++xlsxPollSeq
+  xlsxStatus.value = 'loading'
+  const tick = async () => {
+    if (seq !== xlsxPollSeq) return
+    try {
+      const resp = await axios.get(`/api/v1/drive/files/${fid}/xlsx-preview`, { params: { max_rows: 200 } })
+      const st = resp.data?.status
+      if (st === 'ready') {
+        xlsxStatus.value = 'ready'
+        xlsxSheets.value = resp.data.sheets || []
+        xlsxActive.value = 0
+        return
+      }
+      if (st === 'error') { xlsxStatus.value = 'error'; return }
+      xlsxPollTimer = setTimeout(tick, 2000)
+    } catch {
+      xlsxPollTimer = setTimeout(tick, 2500)   // 瞬时网络错误重试 (同 docx 模式)
+    }
+  }
+  tick()
+}
+watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+  stopXlsxPoll()
+  xlsxSheets.value = []
+  xlsxActive.value = 0
+  if (kind === 'excel' && fid != null) startXlsxPoll(fid)
+  else xlsxStatus.value = 'idle'
+}, { immediate: true })
+onBeforeUnmount(() => { stopXlsxPoll(); xlsxPollSeq++ })
 
 const prevDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value <= 1 : docxPageClamped.value <= 1)
 const nextDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value >= pptImgTotalSafe.value : docxPageClamped.value >= docxImgTotalSafe.value)
@@ -1337,4 +1432,41 @@ function fmtDT(x) {
   background: var(--color-bg-card); border-radius: 9999px; padding: 1px 8px;
 }
 .rf-k1 .rf-k1-sub { margin-left: auto; font-size: 10px; font-weight: 500; opacity: .75; }
+
+/* ── 批次⑩.65 (选型 D): XLSX 预览 — 深青横幅头 (音频 C1 同族) + 工作表标签 + 速览表 ── */
+.rf-xlsx { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
+.rf-xlsx-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
+.rf-xlsx-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
+.rf-xlsx-ico svg { width: 14px; height: 14px; fill: #fff; }
+.rf-xlsx-tt { flex: 1; min-width: 0; }
+.rf-xlsx-nm { font-size: 11px; font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-xlsx-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+.rf-xlsx-tabs { flex: none; display: flex; gap: 4px; padding: 5.5px 8px; border-bottom: 1px solid var(--color-border); background: #FBFBF9; overflow-x: auto; }
+.rf-xlsx-tab {
+  flex: 1 0 auto; min-width: 0; font-size: 10px; padding: 3px 8px;
+  border: none; background: none; cursor: pointer; font-family: inherit;
+  color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-radius: 6px; transition: all var(--duration-fast);
+}
+.rf-xlsx-tab:hover { color: var(--color-file-excel); }
+.rf-xlsx-tab.on { color: var(--color-file-excel); font-weight: var(--font-weight-semibold); background: color-mix(in srgb, var(--color-file-excel) 10%, transparent); }
+.rf-xlsx-gridwrap { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+.rf-xlsx-grid { width: 100%; border-collapse: collapse; font-size: 10.6px; }
+.rf-xlsx-grid th {
+  text-align: left; font-weight: var(--font-weight-semibold); color: var(--color-text-regular);
+  background: #F6F7F5; padding: 4.5px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap;
+}
+.rf-xlsx-grid td {
+  padding: 4px 8px; color: var(--color-text-regular); border-bottom: 1px solid #F4F5F2;
+  white-space: nowrap; font-family: var(--font-family-mono, monospace); font-size: 10.2px;
+}
+.rf-xlsx-grid tbody tr:nth-child(even) td { background: #FAFBF9; }
+.rf-xlsx-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+.rf-xlsx-empty { padding: 26px 14px; text-align: center; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.rf-xlsx-foot { flex: none; display: flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FBFBF9; }
+/* 全屏放映: 表格滚动看缓存全量, 去渐隐, 字号放大 */
+:is(.rf-stage):fullscreen .rf-xlsx-gridwrap { overflow-y: auto; }
+:is(.rf-stage):fullscreen .rf-xlsx-grid { font-size: 12.5px; }
+:is(.rf-stage):fullscreen .rf-xlsx-grid th,
+:is(.rf-stage):fullscreen .rf-xlsx-grid td { padding: 6px 12px; }
 </style>
