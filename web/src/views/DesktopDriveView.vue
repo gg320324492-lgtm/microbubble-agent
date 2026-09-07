@@ -689,9 +689,17 @@ async function handleBatchMove() {
 }
 
 async function handleBatchShare() {
-  // v77 留尾清理 (2026-07-20): 逐个复用 createShareLink (share_link API 已实装),
-  // 汇总所有分享 URL 后复制到剪贴板 (批量分享 = 生成 N 条链接)
+  // 批次⑩.75: 单选 → 打开 ShareDialog (与右栏「分享」同一套: 可选有效期/可见性后再生成链接)
+  // 多选 → 保留批量直链复制 (分享链接一条一文件, 弹 N 个设置窗不合理)
   if (!selectedFileIds.value.length) return
+  if (selectedFileIds.value.length === 1) {
+    const target = driveFiles.value.find(f => f.id === selectedFileIds.value[0])
+    if (target) {
+      shareDialogFile.value = target
+      showShareDialog.value = true
+      return
+    }
+  }
   const ids = [...selectedFileIds.value]
   const lines = []
   let fail = 0
