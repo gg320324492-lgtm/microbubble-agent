@@ -44,22 +44,13 @@
           </el-button>
         </template>
         <template v-else>
-          <!-- 批次⑥ 对齐视觉稿 dock: ZIP/移动到/收藏/删除, 次级动作收进 ⋯ -->
+          <!-- 批次⑥ 对齐视觉稿 dock; 批次⑩.74: 分享链接升为独立按钮, 取消选择移除 (复选框可取消) -->
           <!-- 2026-09-05: "入库知识库"按钮移除 — 网盘文件已默认自动入库 RAG, 无需手动操作 -->
+          <el-button class="drive-batch-toolbar-btn" :icon="Share" @click="$emit('batch-share')">分享链接</el-button>
           <el-button class="drive-batch-toolbar-btn" :icon="Download" @click="$emit('batch-download')">下载 ZIP</el-button>
           <el-button class="drive-batch-toolbar-btn" :icon="Folder" @click="$emit('batch-move')">移动到</el-button>
           <el-button class="drive-batch-toolbar-btn" :icon="Star" @click="$emit('batch-toggle-star')">收藏</el-button>
           <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-delete')">删除</el-button>
-          <el-dropdown trigger="click" @command="onOverflowCmd">
-            <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-more" :icon="MoreFilled" title="更多批量动作" />
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="share" :icon="Share">分享链接</el-dropdown-item>
-                <!-- 批次⑩.8: 设为团队可见/设为公开 删除 — 公开属性由分享行为驱动 (后端 ⑩.7) -->
-                <el-dropdown-item command="clear" divided :icon="Close">取消选择</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
           <span class="drive-batch-note">拖选中行到左栏夹=移动 · Shift 连选 · Ctrl A 全选</span>
         </template>
         <el-dropdown v-if="context === 'trash'" trigger="click" @command="(c) => c === 'clear' && $emit('clear')">
@@ -80,7 +71,7 @@
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import {
-  Delete, Download, Folder, Share, Star, ArrowDown, RefreshLeft, MoreFilled, Close
+  Delete, Download, Folder, Share, Star, RefreshLeft, MoreFilled, Close
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
