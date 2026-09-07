@@ -230,6 +230,9 @@ const { isDragging, bind: bindDropZone, unbind: unbindDropZone } = useFolderDrop
 
 watch(visible, async (newVal) => {
   if (newVal) {
+    // 批次⑩.72: 每次打开默认上传到"当前所在文件夹" (form.folderId 仅在 setup 初始化过,
+    // 后续 currentFolder 变化不会回流) — 打开后仍可手动更改
+    form.folderId = props.defaultFolderId ?? null
     await nextTick()
     if (dropZoneRef.value) bindDropZone(dropZoneRef.value)
     await fetchTree()
