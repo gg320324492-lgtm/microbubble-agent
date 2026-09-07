@@ -60,8 +60,9 @@
               :class="{ hot: item.path === 'meetings' }"
             >{{ badgeOf(item.path) }}</span>
           </router-link>
-          <!-- 批次⑩.79 (选型 C): 网盘子导航收进全局侧边栏 — 课题组网盘激活时展开, 内层结构面板退役 -->
-          <template v-if="item.path === 'drive' && showDriveSub">
+          <!-- 批次⑩.79 (选型 C): 网盘子导航收进全局侧边栏 — 课题组网盘激活时展开, 内层结构面板退役
+               注意: 此块在 group 外层 v-for 作用域内 (item 内层 v-for 不可达), 用 group.label 判定; drive 是 COLLAB 组末项, 位置正好跟随 -->
+          <template v-if="group.label === 'COLLAB · 协作' && showDriveSub">
             <button
               v-for="q in driveQuick"
               :key="'dsub-v-' + q.view"
