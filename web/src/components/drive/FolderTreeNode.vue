@@ -142,7 +142,6 @@ const folderMenuItems = computed(() => {
     { label: '打开',         command: 'open' },
     { label: '新建子文件夹',   command: 'create-sub' },
     { label: '重命名',         command: 'rename' },
-    { label: '复制 Folder ID', command: 'copy-id' },
     { label: '分享',         command: 'share', divided: true },  // W72-B-1
   ]
   if (canDelete.value) {

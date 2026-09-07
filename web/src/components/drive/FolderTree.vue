@@ -335,14 +335,6 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
   } else if (cmd === 'share') {
     // W72 第 2 批 B-1 差量: folder share 入口, 上层 DesktopDriveView 接 ShareLinkDialog
     emit('share-folder', folder)
-  } else if (cmd === 'copy-id') {
-    try {
-      await navigator.clipboard.writeText(String(folder.id))
-      ElMessage.success(`Folder ID ${folder.id} 已复制到剪贴板`)
-    } catch (e) {
-      // 兜底: 用 prompt 展示
-      ElMessage.info(`Folder ID: ${folder.id}`)
-    }
   } else if (cmd === 'delete') {
     // 批次⑩.81 选型 A: ElMessageBox → FolderDeleteConfirmDialog (预查子项计数供弹窗展示)
     // 删除规则不变: 有子项 → 级联 recursive; admin 越权删他人 folder → 弹窗红字警告
