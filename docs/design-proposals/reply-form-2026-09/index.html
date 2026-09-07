@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>回复输入框 · 4 版方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-hi: #12968B; --paper: #FAF9F6;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .ctx { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px; max-width: 560px; margin: 0 auto; }
+  .cmt { display: flex; gap: 10px; }
+  .cmt .av { width: 36px; height: 36px; border-radius: 9999px; background: #0E766E; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; flex: none; font-size: 14px; }
+  .cmt .meta { flex: 1; min-width: 0; }
+  .cmt .nm { font-size: 13px; font-weight: 650; }
+  .cmt .tm { font-size: 11px; color: var(--txt2); margin-left: 8px; font-weight: 400; }
+  .cmt .txt { font-size: 13.5px; margin-top: 8px; }
+  .cmt .replylink { font-size: 12px; color: var(--teal); cursor: pointer; margin-top: 14px; display: inline-flex; gap: 5px; align-items: center; }
+  .cmt .replylink:hover { text-decoration: underline; }
+
+  textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font: 13px/1.6 inherit; font-family: inherit; color: var(--txt); resize: none; outline: none; background: #fff; transition: border-color .13s; box-sizing: border-box; }
+  textarea:focus { border-color: var(--teal); }
+  .btn { font-family: inherit; font-size: 12px; border-radius: 8px; padding: 7px 18px; cursor: pointer; transition: all .13s; border: 1px solid transparent; }
+  .btn.ghost { background: none; color: var(--txt2); }
+  .btn.ghost:hover { color: var(--txt); background: #F0EEE8; }
+  .btn.teal { background: var(--teal); color: #fff; font-weight: 600; }
+  .btn.teal:hover { background: var(--teal-hi); }
+  .btn.teal:disabled { background: #A9B1AC; cursor: not-allowed; }
+
+  /* A: 发布区同款 */
+  .formA { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .formA .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  .formA .cnt { font-family: var(--mono); font-size: 10.5px; color: #B3BAB5; text-align: right; margin-top: 4px; }
+
+  /* B: 挂线缩进 */
+  .formB { margin-top: 14px; margin-left: 18px; padding-left: 16px; border-left: 2px solid rgba(14,118,110,.35); }
+  .formB .at { font-size: 11.5px; color: var(--teal); background: rgba(14,118,110,.08); border-radius: 9999px; padding: 2px 10px; display: inline-flex; margin-bottom: 8px; }
+  .formB .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+  /* C: 迷你行内条 */
+  .formC { margin-top: 14px; display: flex; align-items: flex-end; gap: 9px; }
+  .formC .mini-av { width: 28px; height: 28px; border-radius: 9999px; background: #B4823C; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex: none; }
+  .formC .bar { flex: 1; display: flex; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 9999px; padding: 5px 5px 5px 14px; transition: border-color .13s; }
+  .formC .bar:focus-within { border-color: var(--teal); }
+  .formC .bar input { border: none; outline: none; flex: 1; font: 12.5px inherit; font-family: inherit; color: var(--txt); background: none; min-width: 0; }
+  .formC .bar .ph { color: #B3BAB5; }
+  .formC .send { width: 32px; height: 32px; border-radius: 9999px; background: var(--teal); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex: none; transition: background .13s; }
+  .formC .send:hover { background: var(--teal-hi); }
+  .formC .send:disabled { background: #A9B1AC; cursor: not-allowed; }
+  .formC .send svg { width: 14px; height: 14px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .formC .tip { font-size: 10.5px; color: #B3BAB5; margin-top: 6px; margin-left: 37px; }
+
+  /* D: 气泡卡 */
+  .formD { position: relative; margin-top: 16px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 6px 20px rgba(20,40,35,.10); padding: 12px 14px 12px; }
+  .formD::before { content: ''; position: absolute; left: 26px; top: -6px; width: 10px; height: 10px; background: #fff; border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg); }
+  .formD .row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .formD .at { font-family: var(--mono); font-size: 11px; color: var(--teal); background: rgba(14,118,110,.08); border-radius: 9999px; padding: 2px 9px; }
+  .formD .cancel-x { margin-left: auto; font-size: 12px; color: var(--txt2); cursor: pointer; }
+  .formD .cancel-x:hover { color: var(--txt); }
+  .formD .row2 { display: flex; align-items: flex-end; gap: 8px; }
+  .formD .row2 textarea { flex: 1; border: none; padding: 4px 2px; min-height: 40px; background: none; }
+  .formD .row2 .side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+  .formD .cnt { font-family: var(--mono); font-size: 10px; color: #B3BAB5; }
+  .formD .btn { padding: 6px 16px; }
+
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>回复输入框 · 4 版方案 (青色统一)</h1>
+  <p class="sub">回复按钮一律<b>归档青</b>，取消一律幽灵化。差异在卡片结构与交互密度。<b>每版可试玩</b>：点「回复」展开，输入文字后按钮点亮。</p>
+
+  <!-- ═══════ A ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>发布区同款 · 青色右对齐</h2></div>
+    <p class="card-d">与顶层发布框完全同一套：虚线分隔 + textarea + 右下 取消(幽灵)/回复(青实底)。一致性最强，零新语汇。</p>
+    <div class="ctx">
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink" data-toggle="fA">💬 回复</span>
+        </div>
+      </div>
+      <div class="formA" id="fA" style="display:none">
+        <textarea rows="2" placeholder="回复 杜同贺…"></textarea>
+        <div class="cnt"><span class="n">0</span> / 1000</div>
+        <div class="acts"><button class="btn ghost" data-cancel>取消</button><button class="btn teal" data-go disabled>回复</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 与顶层发布区零差异，最统一</span><span class="con">⚠ 无回复对象的方向感</span></div>
+  </div>
+
+  <!-- ═══════ B ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>挂线缩进 · 线程方向感</h2></div>
+    <p class="card-d">左侧一条青线挂进被回复评论下方 + 「@杜同贺」前缀芯片，视觉直说"这是对楼上的回应"。回帖后缩进感延续到回复列表。</p>
+    <div class="ctx">
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink" data-toggle="fB">💬 回复</span>
+        </div>
+      </div>
+      <div class="formB" id="fB" style="display:none">
+        <span class="at">@ 杜同贺</span>
+        <textarea rows="2" placeholder="回复…"></textarea>
+        <div class="acts"><button class="btn ghost" data-cancel>取消</button><button class="btn teal" data-go disabled>回复</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 回复对象一目了然，线程叙事最好</span><span class="con">⚠ 占一行芯片位</span></div>
+  </div>
+
+  <!-- ═══════ C ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>迷你行内条 · 聊天风</h2></div>
+    <p class="card-d">单行胶囊输入条 + 圆形青色发送键，Enter 直发，取消=Esc/点外部。最轻最快，打完就走。</p>
+    <div class="ctx">
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink" data-toggle="fC">💬 回复</span>
+        </div>
+      </div>
+      <div class="formC" id="fC" style="display:none">
+        <div class="mini-av">杜</div>
+        <div class="bar">
+          <input placeholder="回复 杜同贺… Enter 发送" />
+          <button class="send" data-go disabled><svg viewBox="0 0 24 24"><path d="M12 19V5m0 0l-6 6m6-6l6 6"/></svg></button>
+        </div>
+        <div class="tip">Esc 取消</div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 最轻最快，聊天式心智</span><span class="con">⚠ 单行不利于长回复（可自动长高）</span></div>
+  </div>
+
+  <!-- ═══════ D ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>气泡卡 · 带尾巴</h2></div>
+    <p class="card-d">带小尾巴的白色气泡卡（与确认气泡同语系），头行 @芯片 + 关闭×，输入区无边框化，右下角计数 + 青色回复键。</p>
+    <div class="ctx">
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink" data-toggle="fD">💬 回复</span>
+        </div>
+      </div>
+      <div class="formD" id="fD" style="display:none">
+        <div class="row1"><span class="at">@ 杜同贺</span><span class="cancel-x" data-cancel>✕</span></div>
+        <div class="row2">
+          <textarea rows="2" placeholder="回复…"></textarea>
+          <div class="side">
+            <span class="cnt"><span class="n">0</span> / 1000</span>
+            <button class="btn teal" data-go disabled>回复</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 气泡语系与确认框呼应，层次分明</span><span class="con">⚠ 视觉略重（阴影 + 尾巴）</span></div>
+  </div>
+</div>
+
+<script>
+function wire(cardId) {
+  var card = document.querySelector('.card a#x') || document;
+  var form = document.getElementById(cardId);
+  var link = [].find.call(document.querySelectorAll('[data-toggle]'), function (l) { return l.dataset.toggle === cardId; });
+  var ta = form.querySelector('textarea') || form.querySelector('input');
+  var go = form.querySelector('[data-go]');
+  var n = form.querySelector('.n');
+  link.addEventListener('click', function () {
+    form.style.display = form.style.display === 'none' ? '' : 'none';
+    ta.focus();
+  });
+  var cancel = form.querySelector('[data-cancel]');
+  if (cancel) cancel.addEventListener('click', function () { form.style.display = 'none'; ta.value = ''; if (n) n.textContent = '0'; go.disabled = true; });
+  ta.addEventListener('input', function () {
+    if (n) n.textContent = ta.value.length;
+    go.disabled = ta.value.trim().length === 0;
+  });
+}
+['fA', 'fB', 'fC', 'fD'].forEach(wire);
+</script>
+</body>
+</html>

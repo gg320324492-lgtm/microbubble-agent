@@ -186,3 +186,6 @@ _r*-guard.txt
 *;H/
 *.tmp
 *.bak
+
+# 会话工具本地状态 (memory/model test, 2GB+)
+.workbuddy/

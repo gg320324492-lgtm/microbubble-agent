@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>返回上一级 UI 提案 — 网盘导航</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1080px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 30px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 12px; }
+.sec-desc b { color: var(--text-2); }
+
+.stage { background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 14px 18px 12px; }
+.crumbs { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-3); }
+.crumbs .cur { color: var(--text); font-weight: 600; }
+.crumbs .bc { color: var(--text-3); padding: 3px 6px; border-radius: 5px; cursor: pointer; }
+.crumbs .bc:hover { background: var(--card); color: var(--primary-dark); }
+.crumbs .sep { color: var(--text-4); }
+.crumbs .sz { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-4); }
+
+.backbtn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; color: var(--text-2); transition: all .15s; }
+.backbtn:hover { color: var(--primary-dark); border-color: var(--primary-border) !important; background: var(--primary-bg) !important; }
+.backbtn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* A 圆钮 */
+.round { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--card); margin-right: 6px; }
+/* B 胶囊键 */
+.pill { font: inherit; font-size: 12.5px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card); margin-right: 12px; }
+/* C 文字链 */
+.txtlink { font-size: 12.5px; color: var(--text-3); padding: 3px 8px 3px 0; border: none; background: none; cursor: pointer; }
+.txtlink:hover { color: var(--primary-dark); }
+.txtlink:hover .lbl { text-decoration: underline; }
+.txtlink .dv { margin-right: 10px; color: var(--line-2); }
+.divbar { width: 1px; height: 14px; background: var(--line-2); margin: 0 10px 0 2px; }
+/* D 前进后退 */
+.pair { display: inline-flex; gap: 6px; margin-right: 10px; }
+.pair .round { margin-right: 0; }
+.pair .fwd { color: var(--text-4); background: var(--bg); cursor: default; border-color: var(--line); }
+.pair .fwd:hover { color: var(--text-4); border-color: var(--line) !important; background: var(--bg) !important; }
+
+footer { margin-top: 36px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>返回上一级按钮 — 4 种 UI 提案</h1>
+  <p>共同基础（所有方案都包含）：① <b>面包屑全部改为可点击跳转</b>——点「组会PPT」直接回该层，当前级（艾琳朔）不可点；② 返回键行为 = 进入当前文件夹的上一层；③ 已在团队共享盘顶层时自动隐藏。<br>下面四版只差「返回键长什么样、放在哪」。示例路径 = 你截图里的 课题组网盘 / 团队共享盘 / 组会PPT / 艾琳朔。</p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">BACK A</span><h2>面包屑行首「←」圆钮</h2><span class="tag">最经典 · macOS Finder 风 · 推荐</span></div>
+  <div class="sec-desc">面包屑最左边一枚圆形返回键，紧挨路径起点，视线动线最顺；占位最小（26px），不挤工具条。</div>
+  <div class="stage">
+    <div class="crumbs">
+      <span class="backbtn round" title="返回上一级 (组会PPT)"><svg viewBox="0 0 24 24"><path d="M19 12H5m0 0 6 6m-6-6 6-6"/></svg></span>
+      <span class="bc">课题组网盘</span><span class="sep">/</span>
+      <span class="bc">团队共享盘</span><span class="sep">/</span>
+      <span class="bc">组会PPT</span><span class="sep">/</span>
+      <span class="cur">艾琳朔</span>
+      <span class="sz">共 1 项</span>
+    </div>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">BACK B</span><h2>工具条「返回上一级」胶囊键</h2><span class="tag">Windows 资源管理器风 · 最醒目</span></div>
+  <div class="sec-desc">带文字的胶囊键放在筛选行最左（「排序」前面），键面直接写明功能，最好找最好懂；占位最宽（约 110px），筛选行会更挤一点。</div>
+  <div class="stage">
+    <div class="crumbs">
+      <span class="bc">课题组网盘</span><span class="sep">/</span>
+      <span class="bc">团队共享盘</span><span class="sep">/</span>
+      <span class="bc">组会PPT</span><span class="sep">/</span>
+      <span class="cur">艾琳朔</span>
+      <span class="sz">共 1 项</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap">
+      <button class="backbtn pill"><svg viewBox="0 0 24 24"><path d="M19 12H5m0 0 6 6m-6-6 6-6"/></svg>返回上一级</button>
+      <span style="font-size:11px; color:var(--text-3)">排序</span>
+      <span class="pill" style="border-color:var(--primary-border); background:var(--primary-bg); color:var(--primary-dark); font-weight:600">最新上传</span>
+      <span class="pill">最早上传</span>
+      <span class="pill">最近修改</span>
+    </div>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">BACK C</span><h2>面包屑行首「返回上一级」文字链</h2><span class="tag">百度网盘风 · 零占位</span></div>
+  <div class="sec-desc">面包屑行最左一个竖线分隔的纯文字链，不占独立按钮位，与路径同属一行语义连贯；弱视觉，扫视时不如按钮显眼。</div>
+  <div class="stage">
+    <div class="crumbs">
+      <span class="backbtn txtlink"><svg viewBox="0 0 24 24"><path d="M19 12H5m0 0 6 6m-6-6 6-6"/></svg><span class="lbl">返回上一级</span></span>
+      <span class="dv"></span><span class="divbar"></span>
+      <span class="bc">课题组网盘</span><span class="sep">/</span>
+      <span class="bc">团队共享盘</span><span class="sep">/</span>
+      <span class="bc">组会PPT</span><span class="sep">/</span>
+      <span class="cur">艾琳朔</span>
+      <span class="sz">共 1 项</span>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">BACK D</span><h2>「← / →」前进后退对键</h2><span class="tag">浏览器风 · 支持前进</span></div>
+  <div class="sec-desc">面包屑行首一对圆键：← 返回上一层，→ 沿访问历史前进（无历史时置灰）。既能回上一级也能"回去"，但多一枚键、状态管理更复杂。</div>
+  <div class="stage">
+    <div class="crumbs">
+      <span class="pair">
+        <span class="backbtn round" title="返回上一级 (组会PPT)"><svg viewBox="0 0 24 24"><path d="M19 12H5m0 0 6 6m-6-6 6-6"/></svg></span>
+        <span class="backbtn round fwd" title="无前进历史"><svg viewBox="0 0 24 24"><path d="M5 12h14m0 0-6-6m6 6-6 6"/></svg></span>
+      </span>
+      <span class="bc">课题组网盘</span><span class="sep">/</span>
+      <span class="bc">团队共享盘</span><span class="sep">/</span>
+      <span class="bc">组会PPT</span><span class="sep">/</span>
+      <span class="cur">艾琳朔</span>
+      <span class="sz">共 1 项</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 无论选哪版：面包屑祖先级全部可点击直达（hover 浮起 + 深青色），当前级墨色加粗不可点；顶层自动隐藏返回键。<br>
+  · 回复字母即可（如「用 A」）。
+</footer>
+</body>
+</html>

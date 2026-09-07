@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大预览弹窗 · 四版设计 — 全类型覆盖</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24; --pdf: #B3392F; --doc: #2F5D8A; --excel: #3E7A52; --img: #7C4E96; --video: #A84B6F; --audio: #B07C24; --txt: #6B6152;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --grad: linear-gradient(135deg, #0E766E, #12897C);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1180px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 30px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-cap .work { font-size: 11px; color: var(--ppt); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 14px; }
+.sec-desc b { color: var(--text-2); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tab { font: inherit; font-size: 12px; padding: 5px 13px; border-radius: 9999px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); cursor: pointer; }
+.tab.on { background: var(--grad); border-color: transparent; color: #fff; font-weight: 600; }
+.hint { font-size: 11px; color: var(--text-4); margin-top: 8px; }
+
+/* 类型徽章色 */
+.b { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 4px; }
+
+/* ── V1 阅读器 ── */
+.v1 { transition: width .35s cubic-bezier(.4,0,.2,1); width: 760px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 24px 64px rgba(10,20,16,.35); }
+.v1-h { display: flex; align-items: center; gap: 9px; padding: 11px 16px; border-bottom: 1px solid var(--line); }
+.v1-h .nm { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v1-h .sz { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+.v1-h .x { border: none; background: none; color: var(--text-3); font-size: 14px; cursor: pointer; width: 26px; height: 26px; border-radius: 7px; }
+.v1-h .x:hover { background: var(--bg); }
+.v1-c { transition: height .35s cubic-bezier(.4,0,.2,1); height: 340px; background: #525659; display: grid; place-items: center; position: relative; overflow: hidden; }
+.v1-page { width: 300px; height: 400px; background: #fff; border-radius: 2px; box-shadow: 0 6px 22px rgba(0,0,0,.35); padding: 26px 24px; overflow: hidden; }
+.v1-page h4 { font-size: 14px; margin-bottom: 8px; }
+.v1-page .ln { height: 5px; border-radius: 3px; background: #E2DFD8; margin-bottom: 6px; }
+.v1-page .ln.hl { background: #A7CCC6; }
+.v1-f { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 9px; border-top: 1px solid var(--line); }
+.v1-f button { font: inherit; font-size: 12px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); border-radius: 7px; padding: 5px 13px; cursor: pointer; }
+.v1-f button:hover { border-color: var(--primary-border); color: var(--primary-dark); }
+.v1-f .pg { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.v1-f .zoom { font-family: var(--mono); font-size: 11px; color: var(--text-3); border-left: 1px solid var(--line); padding-left: 14px; }
+/* 媒体类在 V1 的呈现 */
+.v1-c.mdark { background: #101613; }
+
+/* ── V2 工作台 ── */
+.v2 { transition: width .35s cubic-bezier(.4,0,.2,1); width: 860px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 24px 64px rgba(10,20,16,.35); }
+.v2-main { display: flex; }
+.v2-c { flex: 1; transition: height .35s cubic-bezier(.4,0,.2,1); height: 360px; background: #525659; display: grid; place-items: center; position: relative; overflow: hidden; }
+.v2-side { width: 250px; border-left: 1px solid var(--line); padding: 14px 16px; }
+.v2-side h5 { font-size: 12.5px; margin-bottom: 10px; word-break: break-all; }
+.v2-side dl { display: grid; grid-template-columns: 52px 1fr; gap: 6px 8px; font-size: 11.5px; }
+.v2-side dt { color: var(--text-3); } .v2-side dd { color: var(--text-2); }
+.v2-side .kb { margin-top: 10px; padding: 7px 9px; border-radius: 7px; background: var(--primary-bg); font-size: 11px; color: var(--primary-dark); }
+.v2-f { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+.v2-f button { font: inherit; font-size: 12px; padding: 6px 15px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); cursor: pointer; }
+.v2-f button:hover { border-color: var(--primary-border); color: var(--primary-dark); }
+
+/* ── V3 沉浸 ── */
+.v3 { width: 860px; height: 480px; background: #101613; border-radius: 14px; position: relative; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+.v3-top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; gap: 9px; padding: 12px 18px; background: linear-gradient(rgba(0,0,0,.5), transparent); }
+.v3-top .nm { color: #fff; font-size: 13px; flex: 1; }
+.v3-top .x { border: none; background: rgba(255,255,255,.14); color: #fff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; }
+.v3-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 3; width: 40px; height: 40px; border-radius: 50%; border: none; background: rgba(255,255,255,.12); color: #fff; font-size: 16px; cursor: pointer; backdrop-filter: blur(4px); }
+.v3-arrow:hover { background: rgba(255,255,255,.24); }
+.v3-arrow.l { left: 14px; } .v3-arrow.r { right: 14px; }
+.v3-pill { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; gap: 4px; background: rgba(20,40,35,.6); border: 1px solid rgba(255,255,255,.12); border-radius: 9999px; padding: 5px; backdrop-filter: blur(8px); }
+.v3-pill button { border: none; background: none; color: rgba(255,255,255,.85); font: inherit; font-size: 11.5px; padding: 5px 13px; border-radius: 9999px; cursor: pointer; }
+.v3-pill button.on { background: rgba(255,255,255,.16); color: #fff; font-weight: 600; }
+.v3-count { position: absolute; top: 14px; right: 56px; z-index: 3; font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.7); }
+
+/* ── V4 档案卷宗 ── */
+.v4 { transition: width .35s cubic-bezier(.4,0,.2,1); width: 760px; background: linear-gradient(180deg, #FDFCF8, #F7F4EC); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; box-shadow: 0 24px 64px rgba(10,20,16,.3); }
+.v4-h { padding: 16px 22px 12px; border-bottom: 3px double var(--line-2); display: flex; align-items: baseline; gap: 12px; }
+.v4-h .no { font-family: var(--mono); font-size: 11px; color: var(--primary); }
+.v4-h .nm { font-size: 15px; font-weight: 700; flex: 1; }
+.v4-h .en { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--text-4); }
+.v4-meta { display: flex; gap: 18px; padding: 9px 22px; font-family: var(--mono); font-size: 10px; color: var(--text-3); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.v4-meta b { color: var(--text-2); font-weight: 600; }
+.v4-c { transition: height .35s cubic-bezier(.4,0,.2,1); height: 320px; background: #EDEAE1; display: grid; place-items: center; position: relative; overflow: hidden; }
+.v4-f { display: flex; align-items: center; gap: 12px; padding: 10px 22px; border-top: 3px double var(--line-2); }
+.v4-f .st { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+.v4-f .sp { flex: 1; }
+.v4-f button { font: inherit; font-size: 12px; padding: 6px 15px; border-radius: 4px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); cursor: pointer; }
+.v4-f button.pri { background: var(--grad); border: none; color: #fff; font-weight: 600; }
+
+.a4 { width: 297px; height: 420px; background: #fff; border-radius: 2px; box-shadow: 0 8px 26px rgba(0,0,0,.38); padding: 28px 26px; position: relative; overflow: hidden; }
+.a4 h4 { font-size: 13.5px; margin-bottom: 9px; }
+.a4 p { font-size: 10.5px; color: var(--text-2); line-height: 1.7; margin-bottom: 6px; }
+.a4 .ln { height: 5px; border-radius: 3px; background: #E2DFD8; margin-bottom: 7px; }
+.a4 .ln.hl { background: #A7CCC6; }
+
+/* mock 内容通用 */
+.md-page { width: 300px; height: 100%; background: #fff; padding: 24px; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.3); }
+.md-page h4 { font-size: 14px; margin-bottom: 8px; color: var(--doc); }
+.md-page p { font-size: 11px; color: var(--text-2); line-height: 1.7; margin-bottom: 6px; }
+.slide { width: 380px; aspect-ratio: 16/9; background: linear-gradient(135deg, #fff, #F4F1EA); border-radius: 4px; box-shadow: 0 6px 22px rgba(0,0,0,.35); padding: 20px 24px; position: relative; }
+.slide h4 { font-size: 15px; color: var(--text); border-left: 4px solid var(--primary); padding-left: 9px; margin-bottom: 12px; }
+.slide .bars { display: flex; align-items: flex-end; gap: 12px; height: 90px; padding: 0 10px; }
+.slide .bars i { flex: 1; background: var(--primary-light); border-radius: 3px 3px 0 0; opacity: .8; }
+.xl { width: 420px; background: #fff; box-shadow: 0 6px 22px rgba(0,0,0,.3); font-size: 10.5px; }
+.xl table { width: 100%; border-collapse: collapse; }
+.xl th { background: var(--excel); color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; }
+.xl td { padding: 5px 8px; border-bottom: 1px solid var(--line); color: var(--text-2); font-family: var(--mono); font-size: 10px; }
+.xl tr td:first-child { color: var(--text); font-family: inherit; }
+.imgmock { width: 100%; height: 100%; background: radial-gradient(120% 120% at 30% 20%, #A9CDC3, #3E7A70 55%, #1E3B35); position: relative; }
+.imgmock::after { content: 'SEM · ×24,000'; position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,.75); }
+.player { width: 100%; height: 100%; background: #101613; display: grid; place-items: center; position: relative; }
+.player .pl { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,.15); border: 1.5px solid rgba(255,255,255,.6); display: grid; place-items: center; }
+.player .pl::after { content: ''; border-left: 14px solid #fff; border-top: 9px solid transparent; border-bottom: 9px solid transparent; margin-left: 4px; }
+.player .pbar { position: absolute; bottom: 0; left: 0; right: 0; padding: 8px 12px; background: linear-gradient(transparent, rgba(0,0,0,.6)); display: flex; align-items: center; gap: 8px; }
+.player .pbar .t { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.3); position: relative; }
+.player .pbar .t i { position: absolute; inset: 0 auto 0 0; width: 32%; background: #2A9D8F; border-radius: 2px; }
+.player .pbar .tm { font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,.8); }
+.audio { width: 400px; background: linear-gradient(165deg, #fff, #F1EDE4); border-radius: 10px; padding: 18px; text-align: center; box-shadow: 0 6px 22px rgba(0,0,0,.3); }
+.audio .disc { width: 54px; height: 54px; margin: 0 auto 10px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 20px; }
+.audio .nm { font-size: 12px; font-weight: 600; margin-bottom: 10px; }
+.audio .wave { display: flex; align-items: center; gap: 2.5px; height: 30px; justify-content: center; margin-bottom: 10px; }
+.audio .wave i { width: 3px; border-radius: 2px; background: var(--primary-light); opacity: .75; }
+.audio .ctr { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.audio .ctr .t { font-family: var(--mono); font-size: 9.5px; color: var(--text-3); }
+.audio .ctr .pl2 { width: 30px; height: 30px; border-radius: 50%; background: var(--grad); position: relative; }
+.audio .ctr .pl2::after { content: ''; border-left: 10px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; position: absolute; left: 12px; top: 9px; }
+.txtmock { width: 420px; height: 100%; background: #fff; padding: 20px 22px; text-align: left; overflow: hidden; box-shadow: 0 6px 22px rgba(0,0,0,.3); }
+.txtmock h5 { font-size: 13px; color: var(--primary-dark); margin-bottom: 8px; }
+.txtmock p { font-size: 11px; color: var(--text-2); line-height: 1.7; }
+.txtmock code { font-family: var(--mono); font-size: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 1px 4px; color: var(--ppt); }
+
+
+/* ── 全视野语境: 完整页面骨架 + 压暗 + 弹窗居中 ── */
+.appbg { position: relative; width: 100%; height: 760px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line-2); background: var(--bg); display: flex; }
+.ab-side { width: 218px; flex: none; background: #FAF9F5; border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+.ab-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; padding: 4px 8px 14px; }
+.ab-brand .lg { width: 24px; height: 24px; border-radius: 7px; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 11px; }
+.ab-brand .vv { margin-left: auto; font-family: var(--mono); font-size: 8.5px; color: var(--text-4); }
+.ab-cap { font-size: 9px; letter-spacing: .14em; color: var(--text-4); padding: 10px 8px 4px; }
+.ab-it { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; font-size: 12px; color: var(--text-2); }
+.ab-it.on { background: var(--card); border: 1px solid var(--line); font-weight: 600; color: var(--text); box-shadow: 0 1px 3px rgba(20,40,35,.08); }
+.ab-it .ic { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; flex: none; opacity: .75; }
+.ab-it .n { margin-left: auto; font-family: var(--mono); font-size: 9.5px; color: var(--text-4); }
+.ab-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ab-top { height: 52px; background: var(--card); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 0 18px; }
+.ab-top .bk { width: 26px; height: 26px; border-radius: 7px; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 11px; }
+.ab-top .t { font-weight: 700; font-size: 13.5px; }
+.ab-top .srch { margin-left: 12px; flex: 0 1 300px; background: var(--bg); border-radius: 8px; padding: 6px 12px; font-size: 11px; color: var(--text-4); }
+.ab-crumbs { padding: 12px 18px 6px; font-size: 12px; color: var(--text-3); }
+.ab-crumbs b { color: var(--text); }
+.ab-tools { display: flex; gap: 6px; padding: 0 18px 10px; flex-wrap: wrap; }
+.ab-chip { font-size: 11px; padding: 4px 11px; border-radius: 9999px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); }
+.ab-chip.on { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); font-weight: 600; }
+.ab-table { flex: 1; margin: 0 18px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 10px 10px 0 0; overflow: hidden; }
+.ab-tr { display: grid; grid-template-columns: 30px 1fr 90px 100px 110px; align-items: center; gap: 6px; padding: 0 12px; height: 36px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--text-2); }
+.ab-tr.h { color: var(--text-3); font-size: 10.5px; letter-spacing: .05em; }
+.ab-tr .ck { width: 12px; height: 12px; border: 1.5px solid var(--line-2); border-radius: 3px; }
+.ab-tr .nm { display: flex; align-items: center; gap: 8px; }
+.ab-tr .nm i { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.ab-dim { position: absolute; inset: 0; background: rgba(24, 32, 28, .55); backdrop-filter: blur(1.5px); z-index: 4; display: grid; place-items: center; }
+
+footer { margin-top: 36px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>大预览弹窗 · 四版设计 — 每版全类型覆盖</h1>
+  <p>范围：点文件/封面打开的<b>大预览窗口</b>。8 个类型 (PDF / Word / PPT / Excel / 图片 / 视频 / 音频 / 文本MD) 每版都有对应预览形式，<b>点上方类型标签直接切换体验</b>。技术边界：Office 本体无法浏览器真渲染 — 各版以「转页式 mock / 内容抽取 / 信息+跳转」呈现，后端管线 (PV C) 就位后无缝升级为真首页。</p>
+</header>
+
+
+<section class="sec">
+  <div class="sec-cap"><span class="no">FULL CONTEXT</span><h2>全视野语境 · VIEW 4 卷宗式 × 完整页面</h2><span class="tag">全局侧边栏 + 网盘工作台压暗背景</span></div>
+  <div class="sec-desc">把弹窗放回真实页面视野：左侧全局导航、右侧网盘工作台（面包屑/筛选/表格）整体压暗，卷宗式预览窗居中。滚动查看。</div>
+  <div class="appbg">
+    <div class="ab-side">
+      <div class="ab-brand"><span class="lg">小</span>小气助手<span class="vv">V26.09</span></div>
+      <div class="ab-cap">FRONT MATTER · 卷首</div>
+      <div class="ab-it"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>仪表盘<span class="n">19</span></div>
+      <div class="ab-cap">RESEARCH · 研究</div>
+      <div class="ab-it"><svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>任务管理</div>
+      <div class="ab-it"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>课题组网盘</div>
+      <div class="ab-cap">SYSTEM · 系统</div>
+      <div class="ab-it"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>个人设置</div>
+    </div>
+    <div class="ab-main">
+      <div class="ab-top"><span class="bk">📁</span><span class="t">课题组网盘</span><span class="srch">搜索全组文件名 (支持中文, 输入即搜) · Ctrl K</span></div>
+      <div class="ab-crumbs">课题组网盘 / 团队共享盘 / 组会PPT / <b>杨慈</b></div>
+      <div class="ab-tools">
+        <span class="ab-chip on">全部类型</span><span class="ab-chip">PDF</span><span class="ab-chip">Word</span><span class="ab-chip">PPT</span><span class="ab-chip">Excel</span><span class="ab-chip">图片</span><span class="ab-chip">视频</span><span class="ab-chip">音频</span>
+      </div>
+      <div class="ab-table">
+        <div class="ab-tr h"><span class="ck"></span><span>名称</span><span>大小</span><span>上传者</span><span>上传时间 ▾</span></div>
+        <div class="ab-tr"><span class="ck"></span><span class="nm"><i style="background:var(--ppt)"></i>2026.4.7 研二 杨慈.pptx</span><span>60.6 MB</span><span>杨慈</span><span>07-10 21:30</span></div>
+        <div class="ab-tr" style="background:var(--primary-bg)"><span class="ck"></span><span class="nm"><i style="background:var(--ppt)"></i>2023.06.24 研一 杨慈.pptx</span><span>2.3 MB</span><span>杨慈</span><span>07-10 21:14</span></div>
+        <div class="ab-tr"><span class="ck"></span><span class="nm"><i style="background:var(--pdf)"></i>国奖答辩材料.pdf</span><span>2.1 MB</span><span>杨慈</span><span>07-10 20:58</span></div>
+        <div class="ab-tr"><span class="ck"></span><span class="nm"><i style="background:var(--ppt)"></i>2025.2.17 研二 杨慈.pptx</span><span>2.3 MB</span><span>杨慈</span><span>07-10 20:57</span></div>
+      </div>
+    </div>
+    <div class="ab-dim">
+      <div class="v4" style="width:640px">
+        <div class="v4-h"><span class="no">NO.0818-02</span><span class="nm">组会纪要 · 空化阈值讨论 0818.pdf</span><span class="en">DRIVE ARCHIVE · PL.01</span></div>
+        <div class="v4-meta"><span>容量 <b>3.2 MB</b></span><span>归档 <b>2026-09-05</b></span><span>类型 <b>PDF 文档</b></span><span>位置 <b>组会PPT / 2026 秋</b></span></div>
+        <div class="v4-c" style="height:380px">
+          <div class="a4" style="width:340px;height:480px"><h4 style="color:var(--doc)">空化阈值讨论 · 纪要</h4><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:70%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:48%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div style="position:absolute;bottom:14px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:9.5px;color:var(--text-4)">— 3 —</div></div>
+        </div>
+        <div class="v4-f"><span class="st">SET 2026-09 · MICROBUBBLE LAB ARCHIVE</span><span class="sp"></span><button>‹ 3/12 ›</button><button>下载</button><button>入知识库</button><button class="pri">开卷预览</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ V1 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">VIEW 1</span><h2>阅读器式</h2><span class="tag">顶信息条 + 中央页面 + 底部翻页/缩放 · 推荐</span></div>
+  <div class="sec-desc">最像本地阅读器的布局：文件/类型/大小一眼清，中央大页面，底部 <b>‹ 3/24 › 翻页 + 缩放</b>。文档族 (PDF/Word/PPT/Excel) 沉浸感最强。</div>
+  <div class="tabs" data-v="1"></div>
+  <div class="v1">
+    <div class="v1-h"><span class="b" id="v1-b">PPT</span><span class="nm" id="v1-nm">2026.4.7 研二 杨慈.pptx</span><span class="sz" id="v1-sz">60.6 MB</span><button class="x">✕</button></div>
+    <div class="v1-c" id="v1-c"></div>
+    <div class="v1-f" id="v1-f"></div>
+  </div>
+  <p class="hint">↑ 切类型体验 · 文档族底部翻页可用，页码为示意</p>
+</section>
+
+<!-- ═══ V2 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">VIEW 2</span><h2>工作台式</h2><span class="tag">预览 + 右侧元数据栏 · 信息最全</span></div>
+  <div class="sec-desc">预览左侧、<b>元数据侧栏</b>右侧 (大小/类型/上传者/时间 + 知识库入库状态)，底部动作条。不用关弹窗就能核对信息。</div>
+  <div class="tabs" data-v="2"></div>
+  <div class="v2">
+    <div class="v2-main">
+      <div class="v2-c" id="v2-c"></div>
+      <div class="v2-side">
+        <h5 id="v2-nm">—</h5>
+        <dl>
+          <dt>大小</dt><dd id="v2-sz">—</dd>
+          <dt>类型</dt><dd id="v2-tp">—</dd>
+          <dt>上传者</dt><dd>杨慈</dd>
+          <dt>上传于</dt><dd>2026-09-05</dd>
+          <dt>版本</dt><dd>v3 · 3 个版本</dd>
+        </dl>
+        <div class="kb">✓ 已入库 · RAG 可检索</div>
+      </div>
+    </div>
+    <div class="v2-f">
+      <button>预览缩放 ±</button><button>下载</button><button>分享</button><button>收藏</button><button>完整详情页 →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ V3 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">VIEW 3</span><h2>沉浸影院式</h2><span class="tag">全暗场 + 方向键切文件 · 视频/图片最强</span></div>
+  <div class="sec-desc">全暗场最大化内容面积：顶部悬浮信息、<b>左右悬浮箭头切上一个/下一个文件</b>、底部玻璃工具胶囊 (预览/下载/分享/收藏)。图片刷图、视频连播体验最好。</div>
+  <div class="tabs" data-v="3"></div>
+  <div class="v3">
+    <div class="v3-top"><span class="nm" id="v3-nm">—</span><span class="v3-count" id="v3-ct">3 / 27</span><button class="x">✕</button></div>
+    <button class="v3-arrow l">‹</button><button class="v3-arrow r">›</button>
+    <div style="position:absolute;inset:0;display:grid;place-items:center" id="v3-c"></div>
+    <div class="v3-pill"><button class="on">预览</button><button>下载</button><button>分享</button><button>收藏</button><button>⤢</button></div>
+  </div>
+</section>
+
+<!-- ═══ V4 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">VIEW 4</span><h2>档案卷宗式</h2><span class="tag">卷宗编号 + 台账元数据行 · 全站档案语言收口</span></div>
+  <div class="sec-desc">NO. 卷宗编号 + 双线题头 + mono 元数据行 (NO.0904-01 · 24.3 MB · 2026-09-05 归档)。米色纸底，与登录页/设置页档案美学收口成套。</div>
+  <div class="tabs" data-v="4"></div>
+  <div class="v4">
+    <div class="v4-h"><span class="no" id="v4-no">NO.0904-01</span><span class="nm" id="v4-nm">—</span><span class="en">DRIVE ARCHIVE · PL.01</span></div>
+    <div class="v4-meta"><span>容量 <b id="v4-sz">—</b></span><span>归档 <b>2026-09-05</b></span><span>类型 <b id="v4-tp">—</b></span><span>位置 <b>组会PPT / 2026 秋</b></span></div>
+    <div class="v4-c" id="v4-c"></div>
+    <div class="v4-f"><span class="st">SET 2026-09 · MICROBUBBLE LAB ARCHIVE</span><span class="sp"></span><button>下载</button><button>入知识库</button><button class="pri">开卷预览</button></div>
+  </div>
+</section>
+
+<footer>
+  · Office 说明：Word/PPT/Excel 各版以「页式排版 mock」示意 —— 本体真渲染需 PV C 后端管线 (LibreOffice 首页转图)；Excel 可先行 (前端 SheetJS 解析前 N 行真数据)。<br>
+  · 视频/音频/文本 每版都走既有 blob 管线真渲染 (mock 为样式示意)。<br>
+  · 回复编号即可（如「用 3」），或杂交（如「1 的翻页 + 3 的暗场」）。
+</footer>
+
+<script>
+const FILES = {
+  pdf:   { nm: '组会纪要 · 空化阈值讨论 0818.pdf', sz: '3.2 MB',  b: 'PDF',  bc: 'var(--pdf)',  tp: 'PDF 文档',   no: 'NO.0818-02', idx: 3 },
+  word:  { nm: '空化阈值文献综述 · 关小未.docx',   sz: '1.1 MB',  b: 'DOCX', bc: 'var(--doc)',  tp: 'Word 文档',  no: 'NO.0818-07', idx: 7 },
+  ppt:   { nm: '2026.4.7 研二 杨慈.pptx',          sz: '60.6 MB', b: 'PPTX', bc: 'var(--ppt)',  tp: 'PPT 演示',   no: 'NO.0904-01', idx: 1 },
+  excel: { nm: '超声频率-粒径矩阵.xlsx',           sz: '144 KB',  b: 'XLSX', bc: 'var(--excel)',tp: 'Excel 表格', no: 'NO.0817-08', idx: 14 },
+  image: { nm: 'SEM 泡径分布 0829.png',            sz: '4.6 MB',  b: 'PNG',  bc: 'var(--img)',  tp: 'PNG 图片',   no: 'NO.0829-03', idx: 4 },
+  video: { nm: '驻波管泡径测量演示.mp4',           sz: '86.1 MB', b: 'MP4',  bc: 'var(--video)',tp: 'MP4 视频',   no: 'NO.0827-05', idx: 8 },
+  audio: { nm: '会议录音 0825.m4a',                sz: '36.2 MB', b: 'M4A',  bc: 'var(--audio)',tp: 'M4A 音频',   no: 'NO.0824-06', idx: 11 },
+  text:  { nm: '组会纪要 0825.md',                 sz: '12 KB',   b: 'MD',   bc: 'var(--txt)',  tp: 'Markdown',   no: 'NO.0825-05', idx: 9 },
+};
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+
+function mock(type) {
+  switch (type) {
+    case 'pdf': return `<div class="a4"><h4 style="color:var(--doc)">空化阈值讨论 · 纪要</h4>${'<div class="ln"></div>'.repeat(2)}<div class="ln hl" style="width:72%"></div>${'<div class="ln"></div>'.repeat(7)}<div class="ln hl" style="width:50%"></div>${'<div class="ln"></div>'.repeat(9)}<div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:9px;color:var(--text-4)">— 3 —</div></div>`;
+    case 'word': return `<div class="a4"><h4 style="color:var(--doc)">空化阈值文献综述</h4><p>本章梳理 2018–2026 年间微纳米气泡空化阈值的代表性测量方法与临界条件…</p><p>关键词: <b>空化阈值 · 超声频率 · 临界泡径</b></p><p>1.1 研究背景 —— 在超声化学与清洗应用中, 空化发生的阈值压力与液体粘度、含气量、频率强相关…</p><p>1.2 测量方法对比 —— 悬臂法 / 光散射法 / 高速摄像法三类…</p><div style="position:absolute;bottom:12px;left:0;right:0;text-align:center;font-family:var(--mono);font-size:9px;color:var(--text-4)">— 7 —</div></div>`;
+    case 'ppt': return `<div class="slide"><h4>2026.4.7 研二 · 泡径分布新进展</h4><div class="bars"><i style="height:36%"></i><i style="height:58%"></i><i style="height:82%;background:var(--primary)"></i><i style="height:48%"></i><i style="height:64%"></i><i style="height:30%"></i></div><div style="position:absolute;right:14px;bottom:10px;font-family:var(--mono);font-size:9px;color:var(--text-4)">第 3 / 24 页</div></div>`;
+    case 'excel': return `<div class="xl"><table><tr><th>样本</th><th>频率 kHz</th><th>泡径 μm</th><th>存续 s</th></tr><tr><td>A-12</td><td>28.0</td><td>1.21</td><td>46.2</td></tr><tr><td>A-13</td><td>28.0</td><td>1.18</td><td>51.7</td></tr><tr><td>B-04</td><td>40.0</td><td>0.84</td><td>28.3</td></tr><tr><td>B-07</td><td>40.0</td><td>0.79</td><td>31.0</td></tr><tr><td>C-01</td><td>25.0</td><td>1.47</td><td>38.9</td></tr></table></div>`;
+    case 'image': return `<div class="imgmock" style="width:100%;height:100%"></div>`;
+    case 'video': return `<div class="player"><div class="pl"></div><div class="pbar"><span class="tm">01:12</span><span class="t"><i></i></span><span class="tm">03:26</span></div></div>`;
+    case 'audio': return `<div class="audio"><div class="disc">♫</div><div class="nm">会议录音 0825.m4a</div><div class="wave">${Array.from({length: 42}, (_, i) => `<i style="height:${6 + Math.abs(Math.sin(i * 1.3)) * 22}px"></i>`).join('')}</div><div class="ctr"><span class="t">40:12</span><span class="pl2"></span><span class="t">94:12</span></div></div>`;
+    case 'text': return `<div class="txtmock"><h5>组会纪要 0825</h5><p><b>决议 6 项:</b></p><p>1. 下一轮实验聚焦 <code>28 kHz</code> 组对照 (负责人: 杨慈)</p><p>2. SEM 样品送测时间提前至 <code>09-12</code></p><p>3. 文献综述框架按关小未 v2 继续推进…</p></div>`;
+  }
+}
+
+// 批次·自适应: 类型 → 窗口宽度/幕布形态 (A4 竖版 | 16:9 宽幅 | 方形 | 紧凑卡)
+const SIZE = {
+  pdf:   { w: 520, canvas: 'a4' },   // A4 竖版 翻页
+  word:  { w: 520, canvas: 'a4' },   // A4 竖版
+  ppt:   { w: 820, canvas: 'wide' }, // 16:9 宽幅
+  excel: { w: 660, canvas: 'wide' },
+  image: { w: 640, canvas: 'wide' },
+  video: { w: 820, canvas: 'wide' },
+  audio: { w: 430, canvas: 'card' },
+  text:  { w: 600, canvas: 'wide' },
+};
+function apply(v, type) {
+  const f = FILES[type];
+  const sz = SIZE[type];
+  // 窗口宽度随类型平滑过渡 (V3 沉浸式恒定全尺寸, 仅内容自适应)
+  const win = { 1: '.v1', 2: '.v2', 4: '.v4' }[v];
+  if (win) $(win).style.width = sz.w + 'px';
+  // 幕布高度: A4 态抬高
+  if (v === 1) $('#v1-c').style.height = sz.canvas === 'a4' ? '420px' : (sz.canvas === 'card' ? '300px' : '340px');
+  if (v === 2) $('#v2-c').style.height = sz.canvas === 'a4' ? '420px' : '360px';
+  if (v === 4) $('#v4-c').style.height = sz.canvas === 'a4' ? '400px' : '320px';
+  // tabs
+  $$(`.tabs[data-v="${v}"] .tab`).forEach(t => t.classList.toggle('on', t.dataset.t === type));
+  if (v === 1) {
+    $('#v1-b').textContent = f.b; $('#v1-b').style.color = f.bc; $('#v1-b').style.border = `1px solid ${f.bc}`;
+    $('#v1-nm').textContent = f.nm; $('#v1-sz').textContent = f.sz;
+    const c = $('#v1-c');
+    c.classList.toggle('mdark', type === 'video' || type === 'image' || type === 'audio');
+    c.innerHTML = mock(type);
+    const paged = ['pdf', 'word', 'ppt'].includes(type);
+    $('#v1-f').innerHTML = paged
+      ? `<button>‹</button><span class="pg">3 / 24 页</span><button>›</button><span class="zoom">适合宽度</span><button>＋</button><button>－</button>`
+      : `<button>⤢ 全屏</button><button>下载</button><button>分享</button><button>收藏</button>`;
+  }
+  if (v === 2) {
+    $('#v2-nm').textContent = f.nm; $('#v2-sz').textContent = f.sz; $('#v2-tp').textContent = f.tp;
+    $('#v2-c').innerHTML = mock(type);
+  }
+  if (v === 3) {
+    $('#v3-nm').textContent = `${f.nm}`; $('#v3-ct').textContent = `${f.idx} / 27`;
+    $('#v3-c').innerHTML = mock(type);
+  }
+  if (v === 4) {
+    $('#v4-no').textContent = f.no; $('#v4-nm').textContent = f.nm;
+    $('#v4-sz').textContent = f.sz; $('#v4-tp').textContent = f.tp;
+    $('#v4-c').innerHTML = mock(type);
+  }
+}
+
+for (const v of [1, 2, 3, 4]) {
+  const box = $(`.tabs[data-v="${v}"]`);
+  for (const t of Object.keys(FILES)) {
+    const b = document.createElement('button');
+    b.className = 'tab'; b.dataset.t = t; b.textContent = ({pdf:'PDF',word:'Word',ppt:'PPT',excel:'Excel',image:'图片',video:'视频',audio:'音频',text:'文本'})[t];
+    b.onclick = () => apply(v, t);
+    box.appendChild(b);
+  }
+  apply(v, 'ppt');
+}
+</script>
+</body>
+</html>

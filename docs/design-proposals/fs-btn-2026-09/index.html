@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全屏按钮 UI — 4 版方案</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1140px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 30px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 14px; }
+.sec-desc b { color: var(--text-2); }
+
+/* 幻灯片舞台 mock (用真实转换件第1页) */
+.stage { position: relative; width: 640px; aspect-ratio: 16/9; border-radius: 6px; overflow: hidden; background: #525659 url('slide1.png') center/cover no-repeat; }
+.glass { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 9px; background: rgba(20,40,35,.62); border: 1px solid rgba(255,255,255,.14); border-radius: 9999px; padding: 5px 10px; backdrop-filter: blur(8px); }
+.pg { font-family: var(--mono); font-size: 10.5px; color: rgba(255,255,255,.92); letter-spacing: .05em; }
+.nbtn { border: none; background: none; color: #fff; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; display: grid; place-items: center; font-size: 13px; transition: background .15s; }
+.nbtn:hover { background: rgba(255,255,255,.18); }
+.fsbtn { border: none; background: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s, transform .15s; }
+.fsbtn svg { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sep { width: 1px; height: 14px; background: rgba(255,255,255,.25); margin: 0 2px; }
+
+/* A 内联图标钮 (修复黑块, 保持位置) */
+.vA .fsbtn { width: 24px; height: 24px; border-radius: 50%; }
+.vA .fsbtn:hover { background: rgba(255,255,255,.18); }
+
+/* B 独立圆钮 (右上角) */
+.vB .corner { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(20,40,35,.55); backdrop-filter: blur(6px); color: #fff; cursor: pointer; display: grid; place-items: center; transition: background .15s, transform .15s; }
+.vB .corner:hover { background: rgba(14,118,110,.85); transform: scale(1.08); }
+.vB .fsbtn { width: 16px; height: 16px; }
+
+/* C 白字胶囊「全屏放映」 */
+.vC .fsbtn.txt { gap: 6px; font-size: 11px; padding: 5px 13px; border-radius: 9999px; background: rgba(14,118,110,.85); }
+.vC .fsbtn.txt:hover { background: var(--primary-dark); transform: translateY(-1px); }
+
+/* D 底部玻璃钮+文字 */
+.vD .fsbtn.wide { gap: 6px; font-size: 11px; padding: 5px 13px; border-radius: 9999px; }
+.vD .fsbtn.wide:hover { background: rgba(255,255,255,.18); }
+
+footer { margin-top: 34px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>全屏按钮 UI — 4 版方案</h1>
+  <p>问题根源：「⛶」是 Unicode 字符，Windows 字体下渲染成<b>实心黑块</b>——就是那个出戏的黑方块。四案全部改用<b>描边 SVG 图标</b>（与 ‹ › 白色圆钮同一线条语言），区别在按钮的形态与位置。<b>hover 可感受交互。</b></p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FS A</span><h2>胶囊内 · 四角括号图标</h2><span class="tag">与 ‹ › 同位同语言 · 推荐</span></div>
+  <div class="sec-desc">全屏钮留在胶囊里（分隔线后），图标换成<b>四角括号扩屏</b>描边 SVG——视频播放器的通用全屏符号。位置不变、不新增元素，最克制。</div>
+  <div class="stage vA">
+    <div class="glass">
+      <button class="nbtn">‹</button>
+      <span class="pg">1 / 4</span>
+      <button class="nbtn">›</button>
+      <span class="sep"></span>
+      <button class="fsbtn" title="全屏放映"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FS B</span><h2>胶囊内 · 双箭头对角图标</h2><span class="tag">更明确的"放大"语义</span></div>
+  <div class="sec-desc">与 A 同位置，图标改用<b>双向对角箭头</b>（↖↘），"扩到全屏"的指向性更强，一眼能看出是放大类操作。</div>
+  <div class="stage vB" style="position:relative;width:640px;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:#525659 url('slide1.png') center/cover no-repeat;">
+    <div class="glass">
+      <button class="nbtn">‹</button>
+      <span class="pg">1 / 4</span>
+      <button class="nbtn">›</button>
+      <span class="sep"></span>
+      <button class="fsbtn" title="全屏放映"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+    </div>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FS C</span><h2>右上角独立圆钮</h2><span class="tag">悬浮工具位 · 与翻页解耦</span></div>
+  <div class="sec-desc">全屏钮移到<b>幻灯片右上角</b>独立圆形玻璃钮（hover 变深青），翻页胶囊保持纯净的 ‹ 1/4 ›。工具分层更清晰。</div>
+  <div class="stage vB" style="position:relative;width:640px;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:#525659 url('slide1.png') center/cover no-repeat;">
+    <button class="corner fsbtn" title="全屏放映"><svg width="15" height="15" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
+    <div class="glass">
+      <button class="nbtn">‹</button>
+      <span class="pg">1 / 4</span>
+      <button class="nbtn">›</button>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FS D</span><h2>胶囊内 · 白字「全屏」钮</h2><span class="tag">文字直白 · 好懂</span></div>
+  <div class="sec-desc">不分隔线，全屏钮以「⛶ 全屏」白字胶囊收在翻页键旁——纯文字直给，长辈用户也不会误会。</div>
+  <div class="stage vC" style="position:relative;width:640px;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:#525659 url('slide1.png') center/cover no-repeat;">
+    <div class="glass">
+      <button class="nbtn">‹</button>
+      <span class="pg">1 / 4</span>
+      <button class="nbtn">›</button>
+      <span class="fsbtn txt">⛶ 全屏</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 四案共同项：弃用 Unicode ⛶ 字符，全部改描边 SVG（同 ‹ › 线条语言，Windows 下不再变黑块）；hover 反馈保留。<br>
+  · 回复字母即可（如「用 A」）。
+</footer>
+</body>
+</html>

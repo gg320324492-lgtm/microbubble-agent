@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>右栏文件夹预览态提案 — 网盘第三栏</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24; --pdf: #B3392F; --doc: #2F5D8A; --excel: #3E7A52;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.grid { display: flex; gap: 26px; flex-wrap: wrap; margin-top: 26px; }
+.sec { width: 336px; }
+.sec-cap { margin-bottom: 8px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; margin: 2px 0 3px; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12px; line-height: 1.65; margin-top: 8px; }
+.sec-desc b { color: var(--text-2); }
+
+/* 右栏面板通用 (宽 336 同线上) */
+.rail { width: 336px; height: 640px; background: var(--card); border: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 4px; overflow-y: auto; }
+.rail::-webkit-scrollbar { width: 8px; }
+.rail::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+
+/* ── A 清单式 ── */
+.a-head { padding: 16px 16px 12px; border-bottom: 1px solid var(--line); }
+.a-title { display: flex; align-items: center; gap: 10px; }
+.a-title .ic { width: 38px; height: 38px; border-radius: 9px; background: linear-gradient(135deg,#0E766E,#12897C); display: grid; place-items: center; flex: none; }
+.a-title .ic svg { width: 18px; height: 18px; stroke: #fff; fill: none; stroke-width: 1.7; }
+.a-title h3 { font-size: 14.5px; font-weight: 700; }
+.a-title .st { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); margin-top: 2px; }
+.a-acts { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-top: 12px; }
+.a-acts button { font: inherit; font-size: 11.5px; padding: 6px 0; border-radius: 7px; border: 1px solid var(--line-2); background: none; color: var(--text-2); cursor: pointer; }
+.a-acts button:hover { border-color: var(--primary-border); color: var(--primary-dark); background: var(--primary-bg); }
+.a-grp { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 4px; font-size: 10.5px; letter-spacing: .12em; color: var(--text-3); }
+.a-grp .n { font-family: var(--mono); color: var(--text-4); }
+.a-item { display: flex; align-items: center; gap: 9px; padding: 8px 16px; cursor: pointer; }
+.a-item:hover { background: var(--primary-bg); }
+.a-item .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.a-item .fic { width: 15px; height: 15px; stroke: var(--primary); fill: none; stroke-width: 1.7; flex: none; }
+.a-item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.a-item .ct { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.a-item .sz { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+.a-more { text-align: center; padding: 10px; font-size: 12px; color: var(--primary-dark); cursor: pointer; }
+.a-more:hover { background: var(--primary-bg); }
+
+/* ── B 封面拼贴 ── */
+.b-cover { margin: 16px; height: 150px; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.b-cover .tile { position: relative; display: grid; place-items: center; font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+.b-cover .tile:nth-child(1) { background: linear-gradient(150deg, #FFF3E6, #FFE8CF); color: var(--ppt); }
+.b-cover .tile:nth-child(2) { background: linear-gradient(150deg, #FDECEA, #FAD9D5); color: var(--pdf); }
+.b-cover .tile:nth-child(3) { background: linear-gradient(150deg, #EAF1F7, #DCE7F2); color: var(--doc); }
+.b-cover .tile:nth-child(4) { background: linear-gradient(150deg, #EFF5EF, #E0EDE0); color: var(--excel); }
+.b-cover .tile b { font-size: 13px; }
+.b-meta { display: flex; justify-content: space-around; padding: 2px 16px 12px; text-align: center; }
+.b-meta .v { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+.b-meta .k { font-size: 10.5px; color: var(--text-3); margin-top: 2px; }
+.b-name { padding: 0 16px 10px; font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.b-name svg { width: 16px; height: 16px; stroke: var(--primary); fill: none; stroke-width: 1.7; }
+.b-list { border-top: 1px solid var(--line); }
+.b-item { display: flex; align-items: center; gap: 9px; padding: 8px 16px; cursor: pointer; }
+.b-item:hover { background: var(--primary-bg); }
+.b-item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.b-item .sz { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+.b-item .ext { font-family: var(--mono); font-size: 8px; font-weight: 700; padding: 2px 4px; border-radius: 4px; flex: none; }
+
+/* ── C 台账统计 ── */
+.c-head { padding: 16px 16px 12px; border-bottom: 3px double var(--line-2); }
+.c-no { font-family: var(--mono); font-size: 10px; color: var(--primary); letter-spacing: .1em; }
+.c-head h3 { font-size: 14.5px; font-weight: 700; margin-top: 3px; }
+.c-head .en { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--text-4); margin-top: 2px; }
+.c-sec { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.c-cap { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.c-cap .en { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; color: var(--text-4); margin-left: 6px; font-weight: 400; }
+.c-meta { display: grid; grid-template-columns: 56px 1fr; gap: 6px 10px; font-size: 12px; }
+.c-meta dt { color: var(--text-3); }
+.c-meta dd { color: var(--text-2); font-family: var(--mono); font-size: 11.5px; }
+.c-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+.c-bar i { height: 100%; }
+.c-leg { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 11px; color: var(--text-2); }
+.c-leg .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.c-leg .n { font-family: var(--mono); color: var(--text-4); margin-left: 2px; }
+.c-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12.5px; border-bottom: 1px dashed var(--line); cursor: pointer; }
+.c-row:hover { color: var(--primary-dark); }
+.c-row .no { font-family: var(--mono); font-size: 10px; color: var(--text-4); flex: none; }
+.c-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-row .sz { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+
+/* ── D 折叠树 ── */
+.d-head { padding: 16px 16px 10px; border-bottom: 1px solid var(--line); }
+.d-head h3 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.d-head h3 svg { width: 16px; height: 16px; stroke: var(--primary); fill: none; stroke-width: 1.7; }
+.d-head .st { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); margin-top: 3px; }
+.d-tree { padding: 6px 8px; }
+.d-node { border-radius: 7px; }
+.d-node-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; cursor: pointer; border-radius: 7px; font-size: 13px; }
+.d-node-row:hover { background: var(--bg); }
+.d-node.tw { margin-left: 14px; border-left: 1px dashed var(--line-2); padding-left: 6px; }
+.d-node .tw2 { width: 12px; display: grid; place-items: center; color: var(--text-4); font-size: 9px; transition: transform .15s; }
+.d-node.open .tw2 { transform: rotate(90deg); }
+.d-node .fic { width: 15px; height: 15px; stroke: var(--primary); fill: none; stroke-width: 1.7; flex: none; }
+.d-node .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-node .ct { font-family: var(--mono); font-size: 10px; color: var(--text-4); }
+.d-file { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 40px; font-size: 12.5px; color: var(--text-2); cursor: pointer; border-radius: 7px; }
+.d-file:hover { background: var(--primary-bg); color: var(--primary-dark); }
+.d-file .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.d-file .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.d-file .sz { font-family: var(--mono); font-size: 10px; color: var(--text-4); }
+
+footer { margin-top: 34px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>右栏「文件夹预览态」— 4 种提案</h1>
+  <p>场景：点中栏<b>文件夹行</b>时，右栏从「最近上传兜底」切换为该文件夹<b>下一级内容预览</b>。共同行为（四案都有）：点预览里的文件 = 打开预览弹窗；点子文件夹 = 跳进该层；「进入文件夹」= 当前视图切进去。数据用真实的 杨慈 (190 MB) 与 组会PPT。滚动看完整面板。</p>
+</header>
+
+<div class="grid">
+<!-- A -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">RAIL A</span><h2>清单式</h2><span class="tag">分组列表 · 信息最直接 · 推荐</span></div>
+  <div class="rail">
+    <div class="a-head">
+      <div class="a-title">
+        <span class="ic"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+        <div><h3>杨慈</h3><div class="st">190 MB · 27 项 · 最新 09-05</div></div>
+      </div>
+      <div class="a-acts"><button>打开</button><button>分享</button><button>收藏</button></div>
+    </div>
+    <div class="a-grp"><span>子文件夹</span><span class="n">2</span></div>
+    <div class="a-item"><svg class="fic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">组会归档</span><span class="ct">12</span></div>
+    <div class="a-item"><svg class="fic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">开题材料</span><span class="ct">3</span></div>
+    <div class="a-grp"><span>文件</span><span class="n">25</span></div>
+    <div class="a-item"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span></div>
+    <div class="a-item"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.2.8 研三 杨慈.pptx</span><span class="sz">9.2 MB</span></div>
+    <div class="a-item"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.1.12 研三 杨慈.pptx</span><span class="sz">9.5 MB</span></div>
+    <div class="a-item"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.11.24 研三 杨慈.pptx</span><span class="sz">15.5 MB</span></div>
+    <div class="a-item"><span class="dot" style="background:var(--pdf)"></span><span class="nm">国奖答辩材料.pdf</span><span class="sz">2.1 MB</span></div>
+    <div class="a-more">显示全部 25 个文件 ↓</div>
+  </div>
+  <div class="sec-desc">题头(名称+统计+三动作) + 「子文件夹 / 文件」两组清单。与中栏表格同语言，扫视效率最高。</div>
+</div>
+
+<!-- B -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">RAIL B</span><h2>封面拼贴式</h2><span class="tag">视觉型 · 一眼看出构成</span></div>
+  <div class="rail">
+    <div class="b-cover">
+      <div class="tile"><div><b>PPT</b><br>18</div></div>
+      <div class="tile"><div><b>PDF</b><br>4</div></div>
+      <div class="tile"><div><b>DOC</b><br>3</div></div>
+      <div class="tile"><div><b>XLS</b><br>2</div></div>
+    </div>
+    <div class="b-meta">
+      <div><div class="v">190 MB</div><div class="k">总大小</div></div>
+      <div><div class="v">27</div><div class="k">文件</div></div>
+      <div><div class="v">09-05</div><div class="k">最近更新</div></div>
+    </div>
+    <div class="b-name"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>杨慈</div>
+    <div class="b-list">
+      <div class="b-item"><span class="ext" style="color:var(--ppt);background:rgba(176,124,36,.12)">PPTX</span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span></div>
+      <div class="b-item"><span class="ext" style="color:var(--ppt);background:rgba(176,124,36,.12)">PPTX</span><span class="nm">2026.2.8 研三 杨慈.pptx</span><span class="sz">9.2 MB</span></div>
+      <div class="b-item"><span class="ext" style="color:var(--pdf);background:rgba(179,57,47,.12)">PDF</span><span class="nm">国奖答辩材料.pdf</span><span class="sz">2.1 MB</span></div>
+      <div class="b-item"><span class="ext" style="color:var(--doc);background:rgba(47,93,138,.12)">DOCX</span><span class="nm">组会轮值安排.docx</span><span class="sz">28 KB</span></div>
+    </div>
+  </div>
+  <div class="sec-desc">2×2 类型封面马赛克 (格内数量) + 三格统计带 + 最近文件列表。像「文件夹的封面卡片」，构成一眼可读。</div>
+</div>
+
+<!-- C -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">RAIL C</span><h2>台账统计式</h2><span class="tag">§ 编号节 · 档案味最浓</span></div>
+  <div class="rail">
+    <div class="c-head">
+      <div class="c-no">PL.07 / 组会PPT</div>
+      <h3>杨慈</h3>
+      <div class="en">FOLDER DOSSIER · 2026-09</div>
+    </div>
+    <div class="c-sec">
+      <div class="cap">§1 概要<span class="en">OVERVIEW</span></div>
+      <dl class="c-meta">
+        <dt>条目</dt><dd>27 项 · 2 子夹</dd>
+        <dt>容量</dt><dd>190 MB</dd>
+        <dt>归属</dt><dd>杨慈</dd>
+        <dt>最近</dt><dd>2026-09-05</dd>
+      </dl>
+    </div>
+    <div class="c-sec">
+      <div class="cap">§2 类型构成<span class="en">COMPOSITION</span></div>
+      <div class="c-bar">
+        <i style="width:66%;background:var(--ppt)"></i><i style="width:15%;background:var(--pdf)"></i><i style="width:11%;background:var(--doc)"></i><i style="width:8%;background:var(--excel)"></i>
+      </div>
+      <div class="c-leg">
+        <span><span class="sw" style="background:var(--ppt)"></span>PPT<span class="n">18</span></span>
+        <span><span class="sw" style="background:var(--pdf)"></span>PDF<span class="n">4</span></span>
+        <span><span class="sw" style="background:var(--doc)"></span>DOC<span class="n">3</span></span>
+        <span><span class="sw" style="background:var(--excel)"></span>XLS<span class="n">2</span></span>
+      </div>
+    </div>
+    <div class="c-sec" style="border-bottom:none">
+      <div class="cap">§3 下一级预览<span class="en">NEXT LEVEL</span></div>
+      <div class="c-row"><span class="no">S1</span><span class="nm">组会归档</span><span class="sz">12 项</span></div>
+      <div class="c-row"><span class="no">S2</span><span class="nm">开题材料</span><span class="sz">3 项</span></div>
+      <div class="c-row"><span class="no">F1</span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span></div>
+      <div class="c-row"><span class="no">F2</span><span class="nm">2026.2.8 研三 杨慈.pptx</span><span class="sz">9.2 MB</span></div>
+      <div class="c-row"><span class="no">F3</span><span class="nm">2026.1.12 研三 杨慈.pptx</span><span class="sz">9.5 MB</span></div>
+    </div>
+  </div>
+  <div class="sec-desc">§ 编号三节: 概要元数据 → 类型构成条 → 下一级序号预览。与右键菜单 D / 弹窗 B 同一档案台账语言。</div>
+</div>
+
+<!-- D -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">RAIL D</span><h2>折叠树式</h2><span class="tag">可展开 · 与左栏呼应</span></div>
+  <div class="rail">
+    <div class="d-head">
+      <h3><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>杨慈</h3>
+      <div class="st">190 MB · 27 项 · 2 子夹 · 最新 09-05</div>
+    </div>
+    <div class="d-tree">
+      <div class="d-node open">
+        <div class="d-node-row"><span class="tw2">▸</span><svg class="fic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">组会归档</span><span class="ct">12</span></div>
+        <div class="d-node tw">
+          <div class="d-file"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.9.22 研一.pptx</span><span class="sz">6.2 MB</span></div>
+          <div class="d-file"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.6.16 研一.pptx</span><span class="sz">3.4 MB</span></div>
+        </div>
+      </div>
+      <div class="d-node">
+        <div class="d-node-row"><span class="tw2">▸</span><svg class="fic" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">开题材料</span><span class="ct">3</span></div>
+      </div>
+      <div class="d-file"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span></div>
+      <div class="d-file"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.2.8 研三 杨慈.pptx</span><span class="sz">9.2 MB</span></div>
+      <div class="d-file"><span class="dot" style="background:var(--pdf)"></span><span class="nm">国奖答辩材料.pdf</span><span class="sz">2.1 MB</span></div>
+      <div class="d-file"><span class="dot" style="background:var(--doc)"></span><span class="nm">组会轮值安排.docx</span><span class="sz">28 KB</span></div>
+    </div>
+  </div>
+  <div class="sec-desc">右栏变成一棵小型可折叠树: 子文件夹可展开看内部两三个文件，直属文件平铺。探索感最强，与左栏树视觉呼应。</div>
+</div>
+</div>
+
+<footer>
+  · 四案共同项：点文件 = 预览弹窗；点子文件夹 = 跳进该层；题头均有「打开 / 分享 / 收藏」或对应动作；预览列表最多 8 条 + 「显示全部」。<br>
+  · 回复字母即可（如「用 A」）。
+</footer>
+</body>
+</html>

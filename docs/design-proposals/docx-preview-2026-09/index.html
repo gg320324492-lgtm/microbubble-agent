@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOCX 预览 · 4 版方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-hi: #12968B; --paper: #FAF9F6; --doc: #5B8FD9;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .rail { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 14px; max-width: 560px; margin: 0 auto; }
+  .stage { background: #171B20; border-radius: 10px; overflow: hidden; position: relative; }
+
+  /* 页面纸张 mock */
+  .page { background: #fff; margin: 14px auto; width: 72%; aspect-ratio: 210/297; box-shadow: 0 2px 10px rgba(0,0,0,.4); padding: 9% 8%; position: relative; }
+  .page .t { font-size: 11px; font-weight: 700; text-align: center; color: #2c3e50; }
+  .page .st { font-size: 8px; text-align: center; color: #7f8c8d; margin-top: 4px; }
+  .page .ln { height: 4px; border-radius: 2px; background: #E3E8ED; margin-top: 7px; }
+  .page .h1ln { height: 6px; background: #C9D6E2; margin-top: 12px; width: 40%; }
+  .page .img { position: absolute; right: 8%; bottom: 12%; width: 30%; aspect-ratio: 4/3; background: linear-gradient(135deg, #BFD7A8, #7FA86B); border-radius: 3px; }
+
+  .toolbar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; background: rgba(20,40,35,.82); backdrop-filter: blur(8px); border-radius: 9999px; padding: 4px 10px; }
+  .toolbar .pg { font-family: var(--mono); font-size: 10px; color: #E6E9ED; }
+  .toolbar .tb { background: none; border: none; color: #C6CDD5; font-size: 11px; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+  .toolbar .tb:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+  .thumbrail { position: absolute; left: 0; top: 0; bottom: 0; width: 56px; background: #12161A; padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .thumbrail .th { width: 100%; aspect-ratio: 210/297; background: #fff; border-radius: 2px; opacity: .55; border: 1.5px solid transparent; }
+  .thumbrail .th.on { opacity: 1; border-color: var(--teal-hi); }
+
+  .fname { font-size: 15px; font-weight: 700; margin: 12px 2px 10px; }
+  .fname .badge { display: inline-flex; vertical-align: 2px; margin-left: 8px; padding: 2px 9px; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--txt2); background: #EFEDE6; border: 1px solid var(--line); border-radius: 9999px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .gb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 50px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: #4A5450; font-size: 11.5px; cursor: pointer; }
+  .gb.pri { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+
+  .conv { position: absolute; inset: 0; background: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+  .conv .t { font-size: 13px; font-weight: 600; color: var(--txt); }
+  .conv .s { font-size: 11px; color: var(--txt2); }
+  .sk { width: 46%; height: 8px; border-radius: 4px; background: #E6E2D9; margin-top: 4px; animation: sk 1.1s ease infinite alternate; }
+  @keyframes sk { from { opacity: .45 } to { opacity: 1 } }
+
+  /* D 文本速览 */
+  .tv { background: #fff; margin: 14px; border-radius: 6px; padding: 14px 16px; font-size: 11px; line-height: 1.9; }
+  .tv .h { font-weight: 700; font-size: 12px; margin-top: 6px; }
+  .tv p { color: #4A5450; }
+  .tv .more { color: var(--txt2); font-size: 10.5px; margin-top: 6px; }
+
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DOCX 预览 · 4 版方案</h1>
+  <p class="sub">底层统一：复用 PPT 的 <b>LibreOffice 转换管线</b>（容器已装 soffice，docx→PDF 一条命令，转换结果缓存，二次打开秒出）。四版差异在<b>呈现方式</b>。首开都有「正在转换」骨架屏（与 PPT 一致）。</p>
+
+  <!-- ═══════ A ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>PDF 连页视图 · 原生阅读器（推荐）</h2></div>
+    <p class="card-d">docx→PDF 后用浏览器原生查看器连续滚动阅读：文字可选中/搜索/Ctrl+滚轮缩放，版式 1:1 还原打印效果。顶部悬浮工具条显示页码。</p>
+    <div class="rail">
+      <div class="stage" style="height: 300px">
+        <div class="toolbar"><span class="pg">第 1 / 7 页</span><button class="tb">适应宽度</button><button class="tb">⤢</button><button class="tb">⤓</button></div>
+        <div class="page"><div class="t">开题报告</div><div class="st">—— 微纳米气泡在 agriculture 中的应用 ——</div><div class="h1ln"></div><div class="ln"></div><div class="ln" style="width:88%"></div><div class="ln" style="width:76%"></div><div class="ln" style="width:92%"></div><div class="img"></div></div>
+      </div>
+      <div class="fname">开题报告.docx <span class="badge">7 页 · PDF 预览</span></div>
+      <div class="grid">
+        <div class="gb pri">⛶ 全屏阅读</div><div class="gb">⬇ 下载</div><div class="gb">◈ 分享</div><div class="gb">★ 收藏</div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 可选中复制/搜索/缩放，还原度最高</span><span class="con">⚠ 依赖浏览器 PDF 查看器（各家略异）</span></div>
+  </div>
+
+  <!-- ═══════ B ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>逐页翻阅 · 与 PPT 同款</h2></div>
+    <p class="card-d">PDF→PNG 逐页，‹ 3/7 › 翻页 + 胶囊键，交互与 PPT 完全一致；全屏放映同样支持。图片渲染不受浏览器 PDF 差异影响，观感最可控。</p>
+    <div class="rail">
+      <div class="stage" style="height: 300px">
+        <div class="page" style="margin-top: 14px"><div class="t">开题报告</div><div class="st">—— 微纳米气泡 ——</div><div class="h1ln"></div><div class="ln"></div><div class="ln" style="width:84%"></div><div class="ln" style="width:70%"></div><div class="img"></div></div>
+        <div class="toolbar">
+          <button class="tb">‹</button><span class="pg">3 / 7</span><button class="tb">›</button>
+          <span style="width:1px;height:12px;background:rgba(255,255,255,.25)"></span>
+          <button class="tb" style="color:#fff">⛶ 全屏</button>
+        </div>
+      </div>
+      <div class="fname">开题报告.docx <span class="badge">3 / 7 页</span></div>
+      <div class="grid">
+        <div class="gb pri">⛶ 全屏放映</div><div class="gb">⬇ 下载</div><div class="gb">◈ 分享</div><div class="gb">★ 收藏</div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 与 PPT 交互统一，跨浏览器观感一致</span><span class="con">⚠ 文字不可选中；逐页 PNG 体积更大</span></div>
+  </div>
+
+  <!-- ═══════ C ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>连页 + 缩略图侧栏 · 大文档导航</h2></div>
+    <p class="card-d">A 的增强版：左侧加页缩略图条（当前页高亮，点击直达），十几页的开题报告/论文 jumping 最快。适合 10+ 页文档。</p>
+    <div class="rail">
+      <div class="stage" style="height: 300px">
+        <div class="thumbrail"><div class="th"></div><div class="th"></div><div class="th on"></div><div class="th"></div><div class="th"></div></div>
+        <div style="margin-left:56px">
+          <div class="toolbar" style="left: calc(50% + 28px)"><span class="pg">3 / 7 页</span><button class="tb">⤢</button></div>
+          <div class="page" style="width:60%"><div class="t">研究方法</div><div class="ln" style="margin-top:14px"></div><div class="ln" style="width:90%"></div><div class="ln" style="width:64%"></div><div class="ln" style="width:82%"></div><div class="ln" style="width:74%"></div><div class="ln" style="width:88%"></div></div>
+        </div>
+      </div>
+      <div class="fname">开题报告.docx <span class="badge">7 页 · 点击缩略图直达</span></div>
+      <div class="grid">
+        <div class="gb pri">⛶ 全屏阅读</div><div class="gb">⬇ 下载</div><div class="gb">◈ 分享</div><div class="gb">★ 收藏</div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 长文档跳页最快，信息架构最专业</span><span class="con">⚠ 右栏宽度下缩略图较小</span></div>
+  </div>
+
+  <!-- ═══════ D ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>文本速览 · 秒开大纲</h2></div>
+    <p class="card-d">不转 PDF：直接抽取文档文本（标题/段落结构化渲染），<b>毫秒级秒开</b>、体积最小。版式丢失，但"这文档讲了什么"一眼可知；也可作为 A/B 转换期间的即时内容。</p>
+    <div class="rail">
+      <div class="stage" style="height: 300px">
+        <div class="tv">
+          <div class="h">一、研究背景与意义</div>
+          <p>微纳米气泡因其 unique 的物理化学特性，近年来在水处理、agriculture 等领域…</p>
+          <div class="h">二、研究内容</div>
+          <p>1. 加气微咸水灌溉对枸杞幼苗生长的影响；2. 气泡粒径分布测量…</p>
+          <div class="h">三、技术路线</div>
+          <p>实验设计 → 数据采集 → Comsol 仿真 → 论文撰写…</p>
+          <div class="more">… 全文约 4,200 字 · 仅文本速览，查看版式请下载</div>
+        </div>
+      </div>
+      <div class="fname">开题报告.docx <span class="badge">文本速览 · 秒开</span></div>
+      <div class="grid">
+        <div class="gb pri">⬇ 下载查看原文件</div><div class="gb">◈ 分享</div><div class="gb">★ 收藏</div><div class="gb">✎ 转知识库</div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 零转换等待，最省资源</span><span class="con">⚠ 无版式无图，只适合内容速读</span></div>
+  </div>
+
+  <p style="color:var(--txt2);font-size:12px">补充：四版均带「正在把 DOCX 转换为可预览格式…」骨架屏（D 除外，D 恒秒开）；A/B/C 转换一次全局缓存，之后秒开。全屏放映键仅在 A/B 有意义。</p>
+</div>
+</body>
+</html>

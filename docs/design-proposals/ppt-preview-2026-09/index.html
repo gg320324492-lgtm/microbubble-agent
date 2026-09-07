@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPT 第三栏直预览 — 4 种实现方案</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24; --pdf: #B3392F;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --grad: linear-gradient(135deg, #0E766E, #12897C);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1180px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.grid { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 26px; align-items: flex-start; }
+.sec { width: 356px; }
+.sec-cap { margin-bottom: 8px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; margin: 2px 0 3px; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12px; line-height: 1.65; margin-top: 8px; }
+.sec-desc b { color: var(--text-2); }
+.badges { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 5px; }
+.bdg { font-size: 10px; padding: 3px 8px; border-radius: 9999px; border: 1px solid var(--line-2); color: var(--text-3); }
+.bdg.g { color: #3E7A52; border-color: #BCD8C4; background: #F0F7F1; }
+.bdg.y { color: var(--ppt); border-color: #E4D3AE; background: #FBF5E8; }
+.bdg.r { color: var(--pdf); border-color: #E8C4BF; background: #FBF0EE; }
+
+/* rail 通用 */
+.rail { width: 356px; background: var(--card); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.rail .nm { padding: 11px 14px 9px; font-size: 13.5px; font-weight: 700; word-break: break-all; }
+.rail .acts { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; padding: 0 14px 12px; }
+.rail .acts button { font: inherit; font-size: 11.5px; padding: 6px 0; border-radius: 7px; border: 1px solid var(--line-2); background: none; color: var(--text-2); cursor: pointer; }
+.rail .acts button:hover { border-color: var(--primary-border); color: var(--primary-dark); background: var(--primary-bg); }
+.rail .meta { border-top: 1px solid var(--line); padding: 10px 14px; }
+.rail .meta dl { display: grid; grid-template-columns: 48px 1fr; gap: 4px 8px; font-size: 11px; }
+.rail .meta dt { color: var(--text-3); }
+.rail .meta dd { color: var(--text-2); font-family: var(--mono); font-size: 10.5px; }
+
+/* 舞台 */
+.stg { position: relative; background: #525659; display: grid; place-items: center; overflow: hidden; }
+
+/* A PDF 渲染 */
+.stgA { height: 400px; }
+.pdfpg { width: 300px; aspect-ratio: 16/9; background: linear-gradient(135deg, #fff, #F4F1EA); box-shadow: 0 8px 26px rgba(0,0,0,.38); padding: 16px 20px; position: relative; }
+.pdfpg h4 { font-size: 12.5px; color: var(--text); border-left: 3.5px solid var(--primary); padding-left: 8px; margin-bottom: 10px; }
+.pdfpg .bars { display: flex; align-items: flex-end; gap: 10px; height: 74px; padding: 0 8px; }
+.pdfpg .bars i { flex: 1; background: var(--primary-light); border-radius: 3px 3px 0 0; opacity: .8; }
+.pdfpg .badge { position: absolute; right: 8px; bottom: 6px; font-family: var(--mono); font-size: 8.5px; color: var(--text-4); }
+.pgr { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 7px; background: var(--card); border-top: 1px solid var(--line); }
+.pgr button { font: inherit; font-size: 10.5px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.pgr .pg { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+.pgr .fit { font-size: 10px; color: var(--text-4); }
+
+/* B js 渲染 */
+.stgB { height: 400px; }
+.slide-js { width: 300px; aspect-ratio: 16/9; background: #fff; box-shadow: 0 8px 26px rgba(0,0,0,.38); padding: 16px 20px; position: relative; font-size: 11px; }
+.slide-js .ttl { font-size: 12.5px; font-weight: 700; margin-bottom: 8px; }
+.slide-js .li { display: flex; gap: 7px; margin-bottom: 6px; color: var(--text-2); }
+.slide-js .li i { width: 6px; height: 6px; border-radius: 50%; background: var(--primary-light); margin-top: 4px; flex: none; }
+.slide-js .imgph { position: absolute; right: 14px; bottom: 12px; width: 90px; height: 52px; border-radius: 4px; background: linear-gradient(140deg,#A9CDC3,#3E7A70); display: grid; place-items: center; color: rgba(255,255,255,.85); font-size: 8.5px; }
+.slide-js .note { position: absolute; left: 14px; bottom: 12px; font-family: var(--mono); font-size: 8.5px; color: var(--text-4); }
+.watermark { position: absolute; top: 8px; right: 10px; font-family: var(--mono); font-size: 8px; color: var(--text-4); border: 1px dashed var(--line-2); padding: 2px 6px; border-radius: 4px; }
+
+/* C 轮播 */
+.stgC { height: 400px; }
+.caro { width: 100%; }
+.caro .img { width: 356px; aspect-ratio: 16/9; background: linear-gradient(135deg, #fff, #F4F1EA); position: relative; }
+.caro .img h4 { position: absolute; left: 20px; top: 16px; font-size: 12.5px; border-left: 3.5px solid var(--primary); padding-left: 8px; }
+.caro .img .bars { display: flex; align-items: flex-end; gap: 10px; height: 70px; padding: 0 8px; margin-top: 14px; }
+.caro .img .bars i { flex: 1; background: var(--primary-light); border-radius: 3px 3px 0 0; opacity: .8; }
+.caro .img .no { position: absolute; right: 10px; bottom: 8px; font-family: var(--mono); font-size: 9px; color: var(--text-4); }
+.caro .dots { display: flex; justify-content: center; gap: 5px; padding: 9px 0 7px; }
+.caro .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
+.caro .dots i.on { background: var(--primary); width: 16px; border-radius: 3px; }
+.caro .ct { display: flex; justify-content: center; gap: 10px; padding-bottom: 8px; }
+.caro .ct button { font: inherit; font-size: 10.5px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+
+/* D 大纲 */
+.stgD { height: 400px; background: var(--bg); align-items: stretch; display: block; }
+.outline { padding: 12px 16px; height: 100%; overflow-y: auto; box-sizing: border-box; }
+.outline .sl { margin-bottom: 12px; }
+.outline .sl .t { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+.outline .sl .t .no { font-family: var(--mono); font-size: 9px; color: var(--primary); background: var(--primary-bg); border-radius: 4px; padding: 1px 6px; }
+.outline .sl ul { list-style: none; padding-left: 20px; }
+.outline .sl li { font-size: 11.5px; color: var(--text-2); line-height: 1.6; position: relative; }
+.outline .sl li::before { content: ''; position: absolute; left: -12px; top: 7px; width: 4px; height: 4px; border-radius: 50%; background: var(--line-2); }
+.outline .gen { margin: 10px 0 4px; padding: 7px 10px; border-radius: 7px; background: var(--primary-bg); font-size: 10.5px; color: var(--primary-dark); }
+
+footer { margin-top: 36px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PPT 第三栏直预览 — 4 种实现方案</h1>
+  <p>目标：点 .pptx 文件，第三栏<b>直接看到幻灯片内容</b>（不再只有信息卡）。浏览器原生不认 pptx — 四条技术路线。<b>示例数据: 2025.7.2 研一 冯懿鑫.pptx (4.4 MB)。</b>各版右栏尺寸/交互与线上一致。</p>
+</header>
+
+<div class="grid">
+<!-- A -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">PPT A</span><h2>转 PDF 管线</h2><span class="tag">LibreOffice · 保真最高 · 推荐</span>
+    <div class="badges"><span class="bdg y">后端: 镜像 + LibreOffice + 异步任务</span><span class="bdg g">覆盖: ppt/doc/xls 全类型</span><span class="bdg g">保真: 高</span></div>
+    <div class="sec-desc">上传/入库时异步 <b>pptx → PDF</b> 存 MinIO；第三栏用现成的 PDF iframe 管线渲染转换件，<b>真实版式/字体/图表</b>，滚轮翻页。Word/Excel 一并受益。改造量最大但一劳永逸。</div>
+  </div>
+  <div class="rail">
+    <div class="stg stgA">
+      <div class="pdfpg">
+        <h4>2025.7.2 研一 · 泡径分布新进展</h4>
+        <div class="bars"><i style="height:34%"></i><i style="height:56%"></i><i style="height:82%"></i><i style="height:48%"></i><i style="height:64%"></i></div>
+        <span class="badge">转换件 PDF · 保真渲染</span>
+      </div>
+    </div>
+    <div class="pgr"><button>‹</button><span class="pg">1 / 12 页</span><button>›</button><span class="fit">适合宽度</span></div>
+    <div class="nm">2025.7.2 研一 冯懿鑫.pptx</div>
+    <div class="acts"><button>预览弹窗</button><button>下载</button><button>分享</button></div>
+    <div class="meta"><dl><dt>大小</dt><dd>4.4 MB</dd><dt>转换件</dt><dd>PDF · 12 页</dd><dt>状态</dt><dd>ready</dd></dl></div>
+  </div>
+</div>
+
+<!-- B -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">PPT B</span><h2>客户端 pptx 解析</h2><span class="tag">零后端 · 即刻上线</span>
+    <div class="badges"><span class="bdg g">后端: 无改动</span><span class="bdg y">覆盖: 仅 .pptx</span><span class="bdg y">保真: 中 (近似)</span></div>
+    <div class="sec-desc">前端引 <b>pptx-preview.js</b> 解析 pptx (zip/XML) 直接画幻灯片：标题/要点/占位图。字体与复杂版式是近似渲染，且不支持 doc/xls。本次就能上。</div>
+  </div>
+  <div class="rail">
+    <div class="stg stgB">
+      <div class="slide-js">
+        <span class="watermark">JS 近似渲染</span>
+        <div class="ttl">泡径分布新进展</div>
+        <div class="li"><i></i>28 kHz 组稳定 46 min (n=12)</div>
+        <div class="li"><i></i>临界泡径下移至 0.8 μm</div>
+        <div class="li"><i></i>下一轮: 40 kHz 对照实验</div>
+        <div class="imgph">图片占位</div>
+        <div class="note">客户端解析 · 非保真</div>
+      </div>
+    </div>
+    <div class="nm">2025.7.2 研一 冯懿鑫.pptx</div>
+    <div class="acts"><button>预览弹窗</button><button>下载</button><button>分享</button></div>
+    <div class="meta"><dl><dt>大小</dt><dd>4.4 MB</dd><dt>解析</dt><dd>客户端 JS</dd><dt>状态</dt><dd>即时</dd></dl></div>
+  </div>
+</div>
+
+<!-- C -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">PPT C</span><h2>幻灯片图集轮播</h2><span class="tag">pptx→PDF→逐页 PNG · 轻渲染重后端</span>
+    <div class="badges"><span class="bdg y">后端: 同 A 管线 + 逐页转图</span><span class="bdg g">覆盖: ppt/doc 全类型</span><span class="bdg g">保真: 高 (位图)</span></div>
+    <div class="sec-desc">转换管线再进一步：PDF 逐页转 PNG，第三栏变成<b>幻灯片轮播</b>（‹ › 切页 + 进度点）。图片渲染零兼容问题，同时产出表格缩略图与封面。</div>
+  </div>
+  <div class="rail">
+    <div class="stg stgC">
+      <div class="caro">
+        <div class="img">
+          <h4>泡径分布新进展</h4>
+          <div class="bars"><i style="height:34%"></i><i style="height:56%"></i><i style="height:82%"></i><i style="height:48%"></i><i style="height:64%"></i></div>
+          <span class="no">1 / 12</span>
+        </div>
+        <div class="dots"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="ct"><button>‹ 上一页</button><button>下一页 ›</button><button>⤢ 放大</button></div>
+      </div>
+    </div>
+    <div class="nm">2025.7.2 研一 冯懿鑫.pptx</div>
+    <div class="acts"><button>预览弹窗</button><button>下载</button><button>分享</button></div>
+    <div class="meta"><dl><dt>大小</dt><dd>4.4 MB</dd><dt>页图</dt><dd>PNG × 12</dd><dt>状态</dt><dd>ready</dd></dl></div>
+  </div>
+</div>
+
+<!-- D -->
+<div class="sec">
+  <div class="sec-cap"><span class="no">PPT D</span><h2>大纲抽取（讲义模式）</h2><span class="tag">python-pptx · 最轻最快</span>
+    <div class="badges"><span class="bdg g">后端: python-pptx 轻依赖</span><span class="bdg r">覆盖: 仅内容非视觉</span><span class="bdg g">保真: 大纲级</span></div>
+    <div class="sec-desc">后端 python-pptx 抽取<b>每页标题 + 要点文本</b>，第三栏渲染"讲义模式"：看内容不看版式。秒级出结果、零重依赖，视觉还原为零。</div>
+  </div>
+  <div class="rail">
+    <div class="stg stgD">
+      <div class="outline">
+        <div class="gen">⚡ 大纲已生成 · 12 页 · 耗时 0.4s</div>
+        <div class="sl"><div class="t"><span class="no">P1</span>泡径分布新进展</div><ul><li>28 kHz 组稳定 46 min (n=12)</li><li>临界泡径下移至 0.8 μm</li></ul></div>
+        <div class="sl"><div class="t"><span class="no">P2</span>实验设置</div><ul><li>驻波管 + 高速摄像 10k fps</li><li>样本 A-12 ~ A-19</li></ul></div>
+        <div class="sl"><div class="t"><span class="no">P3</span>下一步</div><ul><li>40 kHz 对照实验</li></ul></div>
+      </div>
+    </div>
+    <div class="nm">2025.7.2 研一 冯懿鑫.pptx</div>
+    <div class="acts"><button>预览弹窗</button><button>下载</button><button>分享</button></div>
+    <div class="meta"><dl><dt>大小</dt><dd>4.4 MB</dd><dt>大纲</dt><dd>12 页已抽取</dd><dt>状态</dt><dd>ready</dd></dl></div>
+  </div>
+</div>
+</div>
+
+<footer>
+  · 组合建议：A 或 C 做后端管线后，B 的 JS 解析可弃；D 可作为任何方案的"秒开首屏"叠加 (大纲先出、渲染件后到)。<br>
+  · 现有 PDF 管线 (⑩.16) 完全复用：A 方案落地后 pptx 的第三栏渲染代码零新增，只是 src 指向转换件。<br>
+  · 回复字母即可（如「用 A」）。
+</footer>
+</body>
+</html>

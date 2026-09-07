@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>成员名册四版视觉稿 N/O/P/Q — 2026-09</title>
+<style>
+  :root {
+    --paper:#f4f6f4; --card:#fdfefc; --ink:#16232a; --steel:#5a6b6a; --fog:#8ba0a0; --hair:#c9d2ca;
+    --teal:#0e766e; --coral:#ef7256; --amber:#c07f2e;
+    --serif:Georgia,"Songti SC","SimSun",serif;
+    --mono:Consolas,"Courier New",monospace;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font-family:"PingFang SC","Microsoft YaHei",sans-serif; padding:40px 28px 80px; }
+  .wrap { max-width:1280px; margin:0 auto; }
+  .meta { font-family:var(--mono); font-size:10.5px; letter-spacing:.22em; color:var(--teal); margin-bottom:10px; }
+  h1 { font-family:var(--serif); font-size:30px; font-weight:600; margin-bottom:8px; }
+  .lead { font-size:13.5px; color:var(--steel); line-height:1.8; margin-bottom:30px; }
+  .lead b { color:var(--ink); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:26px; }
+  .prop { background:var(--card); border:1.5px solid var(--ink); border-radius:10px; box-shadow:3px 3px 0 rgba(22,35,42,.12); overflow:hidden; }
+  .prop .bar { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px dashed var(--hair); }
+  .prop .bar .ltr { font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:var(--paper); background:var(--ink); border-radius:5px; padding:3px 9px; }
+  .prop:nth-child(2) .bar .ltr { background:var(--teal); }
+  .prop:nth-child(3) .bar .ltr { background:var(--amber); }
+  .prop:nth-child(4) .bar .ltr { background:var(--coral); }
+  .prop .bar h2 { font-family:var(--serif); font-size:17px; }
+  .prop .bar .tag { margin-left:auto; font-family:var(--mono); font-size:9.5px; letter-spacing:.1em; color:var(--fog); border:1px solid var(--hair); border-radius:4px; padding:2px 8px; }
+  .shot { display:block; width:100%; cursor:zoom-in; border-bottom:1px dashed var(--hair); background:#0c1215; }
+  .shot img { display:block; width:100%; height:auto; }
+  .desc { padding:12px 16px 14px; font-size:12.5px; color:var(--steel); line-height:1.85; }
+  .desc li { list-style:none; padding-left:15px; position:relative; }
+  .desc li::before { content:'·'; position:absolute; left:2px; color:var(--teal); font-weight:700; }
+  .desc code { font-family:var(--mono); font-size:11px; color:var(--teal); }
+  .notes { margin-top:30px; background:var(--card); border:1.5px dashed var(--hair); border-radius:10px; padding:18px 22px; }
+  .notes h3 { font-family:var(--mono); font-size:10.5px; letter-spacing:.18em; color:var(--teal); margin-bottom:10px; }
+  .notes ul { font-size:13px; color:var(--steel); line-height:1.9; }
+  .notes li { list-style:none; padding-left:16px; position:relative; }
+  .notes li::before { content:'—'; position:absolute; left:0; color:var(--fog); }
+  .notes code { font-family:var(--mono); font-size:11.5px; color:var(--coral); }
+  /* 灯箱 */
+  #lb { position:fixed; inset:0; background:rgba(12,18,21,.92); display:none; z-index:99; overflow:hidden; }
+  #lb.open { display:block; }
+  #lb img { position:absolute; top:50%; left:50%; max-width:none; transform-origin:0 0; user-select:none; -webkit-user-drag:none; }
+  #lb .cap { position:fixed; left:0; right:0; bottom:14px; text-align:center; font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:#8ba0a0; }
+  #lb .x { position:fixed; top:14px; right:20px; font-family:var(--mono); font-size:13px; color:#dfe9e6; border:1px solid #27363e; border-radius:6px; padding:5px 12px; cursor:pointer; background:#18232a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="meta">MEMBERS ROSTER PROPOSALS · TEAM COLLAB TAB 02 · 2026-09</div>
+  <h1>团队协作 · 成员名册 — 四版视觉稿</h1>
+  <p class="lead">现状: <b>el-card 头像网格</b> (居中头像+橙胶囊标签+三按钮), 与已档案化的项目卷宗/任务台语言脱节。四稿同用 G 皮肤 chrome, 真实名册 23 人 (已排除 3 个「测试小助手」脏行)。核心操作全保留: <b>搜姓名 / 年级筛选 / 添加成员 / 声纹录入·更新 / 编辑 / 详情</b>。点图放大 (滚轮缩放 · 拖拽平移 · 双击 1:1 · Esc 关闭), 选定后回字母即可。</p>
+
+  <div class="grid">
+    <div class="prop">
+      <div class="bar"><span class="ltr">N</span><h2>名鉴 · 转单档案卡</h2><span class="tag">EFFORT M · RISK S</span></div>
+      <a class="shot" data-lb="shot-N.png" data-cap="N · 名鉴转单 ROSTER SLIPS"><img src="shot-N.png" alt="N 稿截图"></a>
+      <ul class="desc">
+        <li>每人一张<b>卷宗转单</b>: 顶部页签凸块 + 左侧方框相片 (虚线内衬), admin 黑底 / leader 琥珀底</li>
+        <li><code>NAMEBOOK · MB-2026-0NN</code> mono 编号 + 衬线姓名 + 年级青框章 + 身份实心章</li>
+        <li>技能 mono 标签排, 底部声纹骑缝章 + <code>录入声纹/更新 · 编辑 · 详情</code> 三链接 (替三枚按钮)</li>
+        <li>与 J 稿项目页同语言成对, 2×2 网格信息密度适中, 改动全在样式层</li>
+      </ul>
+    </div>
+    <div class="prop">
+      <div class="bar"><span class="ltr">O</span><h2>名簿 · 高密度账表</h2><span class="tag">EFFORT M · RISK M</span></div>
+      <a class="shot" data-lb="shot-O.png" data-cap="O · 名簿账表 ROSTER LEDGER"><img src="shot-O.png" alt="O 稿截图"></a>
+      <ul class="desc">
+        <li><b>花名册账簿</b>: 一人一行, 按年级分组带 (研二 · 9 人), 全组 23 人一屏扫完</li>
+        <li>列 = 相/姓名/年级/身份/方向/声纹/技能/操作, 斑马纹 + 行 hover 青色</li>
+        <li>声纹状态从角标变<b>独立列</b> (✓已录 teal 胶囊 / 未录 coral 虚线章), 催办场景最好用</li>
+        <li>卡片网格 → 表格是结构级变化 (非纯皮肤), 移动端需回退卡片或横向滚动</li>
+      </ul>
+    </div>
+    <div class="prop">
+      <div class="bar"><span class="ltr">P</span><h2>元素格瓦 · 名册墙</h2><span class="tag">EFFORT M · RISK M</span></div>
+      <a class="shot" data-lb="shot-P.png" data-cap="P · 元素格瓦 PERIODIC ROSTER"><img src="shot-P.png" alt="P 稿截图"></a>
+      <ul class="desc">
+        <li>6 列<b>元素周期表</b>瓦片: 首字母方格 + <code>成员 · 07/23</code> mono 序, 姓名衬线居中</li>
+        <li>admin 全黑瓦 / leader 琥珀描边瓦 / 副教授博一 <b>2 倍宽瓦</b> — 身份层级一眼读出</li>
+        <li>底部声纹圆点 (实心=已录 / 虚线圈=未录) + 技能数, hover 上浮</li>
+        <li>最紧凑最有"研究组墙"仪式感; 方向文字被压到 10.5px, 长方向会挤</li>
+      </ul>
+    </div>
+    <div class="prop">
+      <div class="bar"><span class="ltr">Q</span><h2>回形针索引卡墙</h2><span class="tag">EFFORT M · RISK M-LOW</span></div>
+      <a class="shot" data-lb="shot-Q.png" data-cap="Q · 索引卡墙 INDEX CARDS"><img src="shot-Q.png" alt="Q 稿截图"></a>
+      <ul class="desc">
+        <li><b>纸质索引卡</b>: 顶部回形针 + 卡身微旋 (−0.6°/+0.5°), hover 摆正浮起 — 档案语言最有温度的一版</li>
+        <li>宝丽来相框 (顶部斜纹压边) + 衬线姓名 + <code>副教 · MANAGER</code> mono 身份行</li>
+        <li>方向/技能用<b>虚线填写位</b>, 底部声纹旋转章 + mono 下划线链接操作</li>
+        <li>3 列网格; 旋转用 transform 不建 dialog containing block (按钮均文档流), 移动端归零旋转</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h3>NOTES · 实装约定 (四稿共通)</h3>
+    <ul>
+      <li>数据全部现成: <code>memberStore.members</code> 已有 name/grade/role/research_area/skills/avatar/voice_enrolled_at/voice_sample_count, 后端 <code>0</code> 改动</li>
+      <li>排序沿用现网 <code>GRADE_ORDER</code> (副教授→博→研→本科), 年级筛选 el-select → 检索带 chip (教师/博士/硕士/声纹未录), 搜索框保留</li>
+      <li><b>7 人声纹未录</b>是本页核心运营指标, 四稿分别给了 章/列/圆点/章 四种表达; 「声纹未录」chip 点击即筛选</li>
+      <li>声纹录入弹窗 <code>VoiceprintEnrollDialog</code>、编辑 dialog、详情 <code>open-detail</code> 父弹窗全保留, 只换触发器外观</li>
+      <li>头像真实照片与首字母占位并存 (现网 el-avatar): 四稿先以首字母方框示意, 实装时 <code>avatar</code> 有值走照片</li>
+      <li>「测试小助手」×3 是 members 表脏行 (无年级 admin), 与项目页幽灵成员同源, 建议另行清理 (主拍决定, 不阻塞本页)</li>
+      <li>夜览态每稿右上「☾ 夜览」按钮可切, 实装走 <code>[data-theme="dark"]</code> 非 scoped 覆盖 (v60-v67 教训)</li>
+    </ul>
+  </div>
+</div>
+
+<div id="lb"><span class="x">ESC 关闭</span><img alt=""><div class="cap"></div></div>
+<script>
+(function(){
+  var lb=document.getElementById('lb'), img=lb.querySelector('img'), cap=lb.querySelector('.cap');
+  var scale=1, tx=0, ty=0, dragging=false, sx=0, sy=0;
+  function place(){ img.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')'; }
+  function open(src,text){
+    img.src=src; cap.textContent=text+' — 滚轮缩放 · 拖拽平移 · 双击 1:1 · Esc 关闭';
+    lb.classList.add('open');
+    var vw=innerWidth, vh=innerHeight;
+    img.style.maxWidth='none'; img.style.top='0'; img.style.left='0';
+    img.onload=function(){
+      var r=img.naturalWidth/img.naturalHeight;
+      scale=Math.min(vw*0.92/img.naturalWidth, vh*0.9/img.naturalHeight, 1);
+      tx=(vw-img.naturalWidth*scale)/2; ty=(vh-img.naturalHeight*scale)/2; place();
+    };
+  }
+  document.querySelectorAll('[data-lb]').forEach(function(a){
+    a.addEventListener('click',function(e){ e.preventDefault(); open(a.getAttribute('data-lb'),a.getAttribute('data-cap')); });
+  });
+  lb.addEventListener('wheel',function(e){ e.preventDefault();
+    var f=e.deltaY<0?1.12:1/1.12, mx=e.clientX, my=e.clientY;
+    tx=mx-(mx-tx)*f; ty=my-(my-ty)*f; scale*=f; place();
+  },{passive:false});
+  img.addEventListener('dblclick',function(){ tx=(innerWidth-img.naturalWidth)/2; ty=(innerHeight-img.naturalHeight)/2; scale=1; place(); });
+  lb.addEventListener('mousedown',function(e){ dragging=true; sx=e.clientX-tx; sy=e.clientY-ty; });
+  addEventListener('mousemove',function(e){ if(dragging){ tx=e.clientX-sx; ty=e.clientY-sy; place(); } });
+  addEventListener('mouseup',function(){ dragging=false; });
+  addEventListener('keydown',function(e){ if(e.key==='Escape'){ lb.classList.remove('open'); img.src=''; } });
+  lb.addEventListener('click',function(e){ if(e.target===lb) { lb.classList.remove('open'); img.src=''; } });
+})();
+</script>
+</body>
+</html>
