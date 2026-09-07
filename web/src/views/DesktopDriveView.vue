@@ -932,8 +932,8 @@ const detailRailRef = ref(null)
 function handleFilePreview(file) {
   // 批次⑩.61: 双击/Enter/Space → 右栏选中预览 (旧 FilePreviewDialog 弹窗退役)
   if (file && file.id != null) activeKey.value = file.id
-  // 批次⑩.65/66: 列表双击 excel/zip → 选中并直接全屏放映
-  if (file && /\.(xlsx|zip)$/i.test(file.file_name || '')) {
+  // 批次⑩.65/66/67: 列表双击 excel/zip/csv → 选中并直接全屏放映
+  if (file && /\.(xlsx|zip|csv)$/i.test(file.file_name || '')) {
     nextTick(() => detailRailRef.value?.togglePptFull?.())
   }
   tableRef.value?.focus?.()
