@@ -1960,6 +1960,17 @@ def _xlsx_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: st
             for row in ws.iter_rows(max_row=_XLSX_CACHE_ROWS, max_col=_XLSX_CACHE_COLS,
                                     values_only=True):
                 rows.append([_clip_cell(c) for c in row])
+            if rows:
+                # 裁掉整列皆空的尾随列 (max_col 超过实际列数时 openpyxl 用 None 补位)
+                last = 0
+                for r in rows:
+                    for i in range(len(r) - 1, -1, -1):
+                        if r[i] != "":
+                            if i + 1 > last:
+                                last = i + 1
+                            break
+                if last:
+                    rows = [r[:last] for r in rows]
             total = ws.max_row  # read_only 下可能为 None
             sheets.append({
                 "name": ws.title,
