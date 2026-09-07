@@ -449,7 +449,7 @@
         </div>
         <h3 class="rail-name" :title="name">{{ name }}<span v-if="(previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf') && (pptImgStatus === 'ready' || docxImgStatus === 'ready')" class="rf-page-cnt">{{ (previewKind === 'ppt' ? pptPageClamped : docxPageClamped) }} / {{ (previewKind === 'ppt' ? pptImgTotalSafe : docxImgTotalSafe) }} 页</span></h3>
         <!-- 批次⑩.37 (用户选型 B): ppt 时首排三键 上一页·全屏放映·下一页, 悬浮胶囊退役 (仅全屏态保留) -->
-        <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf' }">
+        <div class="rail-actions" :class="{ 'rail-actions--pager': previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf', 'rail-actions--five': previewKind === 'video' }">
           <template v-if="previewKind === 'ppt' || previewKind === 'docx' || previewKind === 'pdf'">
             <button type="button" class="rail-act pg pv" :disabled="prevDisabled" title="上一页 (←)" @click="prevAnyPage">
               <span class="pg-arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg></span><span class="pg-lbl">上一页</span>
@@ -464,6 +464,15 @@
           <template v-else>
             <button type="button" class="rail-act pri" :title="pptFull ? '退出放映' : '全屏放映'" @click="togglePptFull">
               <span class="rf-act-fs-ico"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></span>{{ pptFull ? '退出放映' : '全屏放映' }}
+            </button>
+            <button
+              v-if="previewKind === 'video'"
+              type="button"
+              class="rail-act"
+              title="播放倍速"
+              @click="vidCycleSpeed"
+            >
+              <span class="rf-act-spd mono">{{ vidSpeed }}x</span>倍速
             </button>
             <button type="button" class="rail-act" @click="$emit('download', file)">
               <span>⬇</span>下载
@@ -1805,6 +1814,10 @@ defineExpose({ togglePptFull })
   border: 1px solid var(--color-border); border-radius: 9999px; white-space: nowrap;
 }
 .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+/* 批次⑩.69: 视频类型首排 5 列 (全屏放映/倍速/下载/分享/收藏) */
+.rail-actions--five { grid-template-columns: repeat(5, 1fr); }
+.rail-actions--five .rail-act { font-size: 11px; padding: 8px 2px 7px; }
+.rf-act-spd { font-family: var(--font-family-mono, monospace); font-size: 9.5px; font-weight: 700; color: var(--teal); }
 .rail-actions--second { margin-top: 8px; grid-template-columns: repeat(4, 1fr); }
 /* 批次⑩.37/38 (选型 B→A): ppt 三排全 3 列等宽, 横排图文; --pager 须定义在 --second 之后以覆盖列数 */
 .rail-actions--pager { grid-template-columns: repeat(3, minmax(0, 1fr)); }
