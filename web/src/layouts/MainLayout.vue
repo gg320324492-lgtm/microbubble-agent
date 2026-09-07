@@ -277,7 +277,7 @@ import { useFolderTree } from '@/composables/useFolderTree'
 import { storeToRefs } from 'pinia'
 const folderTreeStore = useFolderTree()
 const { folderTree: driveTree, selectedFolderId: driveFolderId } = storeToRefs(folderTreeStore)
-const showDriveSub = computed(() => isActive('drive') && !isCollapse)
+const showDriveSub = computed(() => isActive('drive') && !isCollapse.value)
 const DRIVE_SUB_VIEWS = [
   { label: '团队共享盘', view: null, em: '📁' },
   { label: '我的收藏', view: 'starred', em: '⭐' },
