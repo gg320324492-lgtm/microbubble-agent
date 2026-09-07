@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新建文件夹弹窗 UI 提案 — 档案系一致化</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --danger: #D94F2B;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --grad-cta: linear-gradient(135deg, #0E766E, #12897C);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1080px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 32px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 14px; }
+.sec-desc b { color: var(--text-2); }
+
+/* 舞台: 压暗背景 + 居中弹窗 */
+.stage { background: #26302c; border-radius: 12px; padding: 34px 20px; display: flex; justify-content: center; }
+
+/* ===== 弹窗通用 (档案系) ===== */
+.dlg { background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(10,20,16,.45); overflow: hidden; }
+.d-head { padding: 18px 22px 0; }
+.d-title { font-size: 15.5px; font-weight: 700; }
+.d-sub { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--text-4); margin-top: 3px; }
+.d-body { padding: 18px 22px; }
+.d-foot { padding: 14px 22px 18px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--line); background: var(--bg); }
+.fld { margin-bottom: 16px; }
+.fld label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 7px; }
+.fld label em { font-style: normal; color: var(--danger); margin-right: 4px; }
+.fld label .cnt { float: right; font-family: var(--mono); font-size: 10.5px; color: var(--text-4); font-weight: 400; }
+.inp { width: 100%; border: 1px solid var(--line-2); border-radius: 8px; padding: 9px 12px; font: inherit; font-size: 13px; color: var(--text); background: var(--card); outline: none; transition: border-color .15s, box-shadow .15s; }
+.inp:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(14,118,110,.1); }
+.loc { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.loc .sep { color: var(--text-4); }
+.loc svg { width: 13px; height: 13px; stroke: var(--primary); fill: none; stroke-width: 1.7; flex: none; }
+.seg { display: inline-flex; padding: 2px; border-radius: 9999px; border: 1px solid var(--line-2); background: var(--bg); }
+.seg button { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; font: inherit; font-size: 12.5px; color: var(--text-2); padding: 6px 14px; border-radius: 9999px; cursor: pointer; }
+.seg button svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.seg button.on { background: var(--card); color: var(--primary-dark); font-weight: 600; box-shadow: 0 1px 3px rgba(20,40,35,.12); }
+.seg button .h { font-size: 11px; color: var(--text-4); font-weight: 400; }
+.seg button.on .h { color: var(--text-3); }
+.chip2 { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; color: var(--text-2); cursor: pointer; transition: all .15s; }
+.chip2 svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.chip2.on { border-color: var(--primary-border); background: var(--primary-bg); color: var(--primary-dark); font-weight: 600; }
+.chip2 .h { font-size: 11px; color: var(--text-4); }
+.btn { font: inherit; font-size: 13px; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all .15s; }
+.btn.ghost { border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); }
+.btn.ghost:hover { border-color: var(--primary-border); color: var(--primary-dark); }
+.btn.pri { border: none; background: var(--grad-cta); color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+.btn.pri:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14,118,110,.32); }
+.hint { font-size: 11.5px; color: var(--text-4); line-height: 1.6; }
+
+/* A 墨线极简 420px */
+.vA .dlg { width: 420px; }
+/* B 档案台账 */
+.vB .dlg { width: 440px; }
+.vB .d-head { border-bottom: 3px double var(--line-2); padding-bottom: 14px; }
+.vB .d-body section { padding: 14px 0 4px; }
+.vB .d-body section + section { border-top: 1px solid var(--line); }
+.vB .cap { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+.vB .cap .no { font-family: var(--mono); font-size: 10.5px; color: var(--primary); }
+.vB .cap .t { font-size: 12.5px; font-weight: 700; }
+.vB .cap .en { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; color: var(--text-4); }
+.vB .meta { display: grid; grid-template-columns: 64px 1fr; gap: 6px 10px; font-size: 12px; }
+.vB .meta dt { color: var(--text-3); }
+.vB .meta dd { color: var(--text-2); font-family: var(--mono); font-size: 11.5px; }
+/* C 紧凑 */
+.vC .dlg { width: 380px; }
+.vC .d-head { padding: 16px 20px 0; }
+.vC .d-body { padding: 12px 20px 4px; }
+.vC .fld { margin-bottom: 10px; }
+.vC .row2 { display: flex; align-items: center; gap: 8px; }
+.vC .d-foot { padding: 12px 20px 16px; }
+/* D 抽屉 */
+.vD .stage { justify-content: flex-end; padding-right: 0; }
+.vD .dlg { width: 380px; min-height: 560px; border-radius: 12px 0 0 12px; display: flex; flex-direction: column; }
+.vD .d-body { flex: 1; }
+.vD .d-foot { margin-top: auto; }
+.vD .fld .tip { margin-top: 7px; }
+
+footer { margin-top: 40px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>「新建文件夹」弹窗一致化 — 4 种方案</h1>
+  <p>共同项（四案都有）：去掉深青渐变题头与珊瑚按钮 → <b>创建按钮改深青渐变</b>；👥🌐 emoji 换描边图标；「位置」显式展示（右键哪个文件夹就建在哪个里面，修掉"建在哪不知道"的疑惑）；输入框 focus 青色光环；文字溢出修复。可见性语义保留（团队=全员可见 / 公开=含外部分享链接）。<b>hover 可感受。</b></p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">DLG A</span><h2>墨线极简</h2><span class="tag">档案系标准弹窗 · 推荐</span></div>
+  <div class="sec-desc">白卡墨线 + mono 副标，可见性收成分段选择器，位置只读行。与网盘页语言完全同血统，信息一眼清。</div>
+  <div class="stage vA">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="d-title">新建文件夹</div>
+        <div class="d-sub">NEW FOLDER · MICROBUBBLE LAB DRIVE</div>
+      </div>
+      <div class="d-body">
+        <div class="fld">
+          <label><em>*</em>名称 <span class="cnt">0 / 200</span></label>
+          <input class="inp" placeholder="请输入文件夹名称" />
+        </div>
+        <div class="fld">
+          <label>位置</label>
+          <div class="loc"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>组会PPT <span class="sep">/</span> 艾琳朔</div>
+        </div>
+        <div class="fld" style="margin-bottom:0">
+          <label>可见性</label>
+          <div class="seg">
+            <button class="on"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg>团队 <span class="h">全员可见</span></button>
+            <button><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.8 5.2 3.8 8.5s-1.3 6.2-3.8 8.5M12 3.5C9.5 5.8 8.2 8.7 8.2 12s1.3 6.2 3.8 8.5"/></svg>公开 <span class="h">外部分享</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="d-foot">
+        <button class="btn ghost">取消</button>
+        <button class="btn pri">创建</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">DLG B</span><h2>档案台账风</h2><span class="tag">§ 编号节 + 双线题头 · 最档案</span></div>
+  <div class="sec-desc">与右键菜单 D / 登录页档案美学同款：§ 编号节题头、双线分隔、元数据等宽排。仪式感最强，弹窗也最高。</div>
+  <div class="stage vB">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="d-title">新建文件夹</div>
+        <div class="d-sub">FOLDER REGISTRY · PL.01</div>
+      </div>
+      <div class="d-body">
+        <section>
+          <div class="cap"><span class="no">§1</span><span class="t">命名</span><span class="en">NAMING</span></div>
+          <div class="fld" style="margin-bottom:0">
+            <input class="inp" placeholder="请输入文件夹名称" />
+            <div class="hint" style="margin-top:6px">0 / 200 · 中文 / 英文 / 日期串均可</div>
+          </div>
+        </section>
+        <section>
+          <div class="cap"><span class="no">§2</span><span class="t">归档位置</span><span class="en">LOCATION</span></div>
+          <div class="meta"><dt>POSITION</dt><dd>组会PPT / 艾琳朔</dd></div>
+        </section>
+        <section>
+          <div class="cap"><span class="no">§3</span><span class="t">可见性</span><span class="en">VISIBILITY</span></div>
+          <div style="display:flex; gap:8px">
+            <span class="chip2 on"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg>团队<span class="h">全员可见</span></span>
+            <span class="chip2"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.8 5.2 3.8 8.5s-1.3 6.2-3.8 8.5M12 3.5C9.5 5.8 8.2 8.7 8.2 12s1.3 6.2 3.8 8.5"/></svg>公开<span class="h">外部分享</span></span>
+          </div>
+        </section>
+      </div>
+      <div class="d-foot">
+        <button class="btn ghost">取消</button>
+        <button class="btn pri">创建</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">DLG C</span><h2>紧凑行内</h2><span class="tag">高度最小 · 高频操作最快</span></div>
+  <div class="sec-desc">名称是唯一主角，可见性收成两枚行内小胶囊，位置折行成小字。总高约 190px，回车即建。</div>
+  <div class="stage vC">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="d-title">新建文件夹</div>
+      </div>
+      <div class="d-body">
+        <div class="fld">
+          <input class="inp" placeholder="文件夹名称 (回车创建)" />
+        </div>
+        <div class="fld">
+          <div class="row2">
+            <span class="chip2 on"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg>团队可见</span>
+            <span class="chip2"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.8 5.2 3.8 8.5s-1.3 6.2-3.8 8.5M12 3.5C9.5 5.8 8.2 8.7 8.2 12s1.3 6.2 3.8 8.5"/></svg>公开</span>
+            <span class="hint" style="margin-left:auto">建在 组会PPT / 艾琳朔</span>
+          </div>
+        </div>
+      </div>
+      <div class="d-foot">
+        <button class="btn ghost">取消</button>
+        <button class="btn pri">创建</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">DLG D</span><h2>右侧滑出抽屉</h2><span class="tag">纵向宽松 · 易扩展</span></div>
+  <div class="sec-desc">从右滑出的 380px 抽屉，纵向留白大，未来加「描述 / 标签 / 权限成员」都有地方放；与弹窗相比更像"填写一张归档单"。</div>
+  <div class="stage vD">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="d-title">新建文件夹</div>
+        <div class="d-sub">NEW FOLDER</div>
+      </div>
+      <div class="d-body">
+        <div class="fld">
+          <label><em>*</em>名称 <span class="cnt">0 / 200</span></label>
+          <input class="inp" placeholder="请输入文件夹名称" />
+        </div>
+        <div class="fld">
+          <label>位置</label>
+          <div class="loc"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>组会PPT <span class="sep">/</span> 艾琳朔</div>
+        </div>
+        <div class="fld">
+          <label>可见性</label>
+          <div style="display:flex; gap:8px">
+            <span class="chip2 on"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7L6.9 19.2l1-5.7-4.1-4 5.7-.8z"/></svg>团队<span class="h">全员可见</span></span>
+            <span class="chip2"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.8 5.2 3.8 8.5s-1.3 6.2-3.8 8.5M12 3.5C9.5 5.8 8.2 8.7 8.2 12s1.3 6.2 3.8 8.5"/></svg>公开<span class="h">外部分享</span></span>
+          </div>
+          <div class="tip hint">创建后可随时在右键菜单中重命名或移动；标记「公开」后将生成外部分享链接。</div>
+        </div>
+      </div>
+      <div class="d-foot">
+        <button class="btn ghost">取消</button>
+        <button class="btn pri">创建</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 四案共同项：深青渐变「创建」按钮（珊瑚退役）；emoji → 描边图标；位置显式展示；0/200 mono 计数保留。<br>
+  · 顶层创建时的「团队共享盘展示」开关在所有方案中保留（仅无父级时出现，示例为右键子夹场景故未画出）。<br>
+  · 回复字母即可（如「用 A」）；也可以杂交（如「A 的布局 + B 的台账题头」）。
+</footer>
+</body>
+</html>

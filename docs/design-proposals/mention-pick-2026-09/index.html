@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>@ 成员选择框 · 4 版方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-soft: rgba(14,118,110,.08);
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: var(--teal-soft); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .compose-wrap { background: #FAF9F6; border: 1px solid var(--line); border-radius: 14px; padding: 16px; max-width: 460px; margin: 0 auto; position: relative; }
+  .list-space { max-width: 460px; margin: 0 auto; padding: 10px 14px 14px; }
+  .list-space .row { display: flex; gap: 9px; align-items: center; padding: 7px 0; }
+  .list-space .ln { flex: 1; height: 9px; border-radius: 4px; background: #ECE9E2; }
+  .cta { display: flex; justify-content: flex-end; gap: 10px; align-items: center; margin-top: 8px; }
+  .cta .hint { font-size: 12px; color: var(--txt2); margin-right: auto; }
+  .cta .hint code { background: #F0EEE8; border-radius: 4px; padding: 1px 6px; font-family: var(--mono); font-size: 11px; }
+  .cta button { background: var(--teal); color: #fff; border: none; border-radius: 10px; padding: 9px 22px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .cta button:hover { background: #0C8A80; }
+  textarea { width: 100%; min-height: 74px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 13px/1.6 inherit; font-family: inherit; color: var(--txt); resize: none; outline: none; background: #fff; }
+  textarea:focus { border-color: var(--teal); }
+
+  .av { border-radius: 9999px; background: var(--teal); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 600; flex: none; }
+
+  /* ══ A: 锚定紧凑列表 ══ */
+  .ddA { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 8px); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 32px rgba(20,40,35,.14); padding: 5px; z-index: 10; }
+  .ddA .it { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 8px; cursor: pointer; }
+  .ddA .it:hover, .ddA .it.on { background: var(--teal-soft); }
+  .ddA .nm { font-size: 13px; font-weight: 600; }
+  .ddA .id { font-family: var(--mono); font-size: 10.5px; color: var(--txt2); }
+  .ddA .role { margin-left: auto; font-size: 9.5px; color: #B4823C; background: rgba(180,130,60,.12); padding: 1px 7px; border-radius: 9999px; }
+  .ddA .ft { display: flex; justify-content: space-between; padding: 5px 9px 3px; font-size: 10px; color: #B3BAB5; }
+
+  /* ══ B: 搜索置顶列表 ══ */
+  .ddB { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 8px); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 32px rgba(20,40,35,.14); overflow: hidden; z-index: 10; }
+  .ddB .srch { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: #FAF9F6; }
+  .ddB .srch svg { width: 13px; height: 13px; stroke: var(--txt2); fill: none; stroke-width: 2; stroke-linecap: round; flex: none; }
+  .ddB .srch input { border: none; outline: none; background: none; font: 12.5px inherit; font-family: inherit; flex: 1; color: var(--txt); }
+  .ddB .grp { padding: 6px 12px 2px; font-size: 10px; letter-spacing: .1em; color: var(--txt2); font-weight: 700; }
+  .ddB .it { display: flex; align-items: center; gap: 9px; padding: 6px 12px; cursor: pointer; }
+  .ddB .it:hover, .ddB .it.on { background: var(--teal-soft); }
+  .ddB .nm { font-size: 13px; font-weight: 600; }
+  .ddB .id { font-family: var(--mono); font-size: 10.5px; color: var(--txt2); }
+  .ddB .role { margin-left: auto; font-size: 9.5px; color: #B4823C; background: rgba(180,130,60,.12); padding: 1px 7px; border-radius: 9999px; }
+  .ddB .ft { padding: 6px 12px; border-top: 1px solid var(--line); font-size: 10px; color: #B3BAB5; }
+
+  /* ══ C: 双列网格卡片 ══ */
+  .ddC { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 8px); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 32px rgba(20,40,35,.14); padding: 10px; z-index: 10; }
+  .ddC .ttl { font-size: 11px; color: var(--txt2); padding: 0 4px 8px; display: flex; justify-content: space-between; }
+  .ddC .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .ddC .cell { display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; cursor: pointer; transition: border-color .12s, background .12s; }
+  .ddC .cell:hover, .ddC .cell.on { border-color: var(--teal); background: var(--teal-soft); }
+  .ddC .cell .nm { font-size: 12.5px; font-weight: 600; }
+  .ddC .cell .id { font-family: var(--mono); font-size: 9.5px; color: var(--txt2); margin-top: 1px; }
+  .ddC .cell .role { font-size: 9px; color: #B4823C; background: rgba(180,130,60,.12); border-radius: 9999px; padding: 0 6px; }
+
+  /* ══ D: 底部内嵌面板 ══ */
+  .ddD { margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 10px; }
+  .ddD .ttl { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--txt2); padding: 0 2px 8px; }
+  .ddD .ttl .x { cursor: pointer; color: var(--txt2); font-size: 13px; line-height: 1; }
+  .ddD .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .ddD .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 9999px; padding: 4px 12px 4px 5px; cursor: pointer; font-size: 12px; font-weight: 550; transition: all .12s; }
+  .ddD .chip:hover { border-color: var(--teal); background: var(--teal-soft); }
+  .ddD .chip .id { font-family: var(--mono); font-size: 9.5px; color: var(--txt2); }
+  .ddD .picked { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; min-height: 4px; }
+  .ddD .picked .p { display: inline-flex; align-items: center; gap: 5px; background: var(--teal); color: #fff; border-radius: 9999px; padding: 3px 10px; font-size: 11.5px; }
+  .ddD .picked .p i { cursor: pointer; font-style: normal; opacity: .8; }
+
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .tip { color: var(--txt2); font-size: 12px; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>@ 成员选择框 · 4 版方案</h1>
+  <p class="sub">输入 <b>@</b> 即弹出成员选择（已修复空评论文件候选池为空的 bug）。四版都可<b>真实试玩</b>：在输入框打 @ 触发，继续打字过滤（姓名/拼音ID 均可），↑↓ 选择、Enter 或点击插入。触发逻辑四版一致，差别在选择框的形态。</p>
+
+  <!-- ═══════ A ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>锚定浮层 · 紧凑列表（现状改良）</h2></div>
+    <p class="card-d">从输入框上方弹出轻量浮层：头像 + 姓名 + @ID，悬停/键盘高亮，底部键位提示。最轻、最贴现有评论区气质。</p>
+    <div class="list-space"><div class="row"><span class="ln" style="max-width:60%"></span></div><div class="row"><span class="ln" style="max-width:75%"></span></div><div class="row"><span class="ln" style="max-width:45%"></span></div></div>
+    <div class="compose-wrap" data-demo="A">
+      <div class="ddA" id="ddA" style="display:none"></div>
+      <textarea placeholder="写一条评论… 输入 @ 试试"></textarea>
+      <div class="cta">
+        <span class="hint">用 <code>@姓名</code> 提醒成员</span>
+        <button type="button">发布</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 改动最小，评论区气质不变</span><span class="con">⚠ 成员多时列表长（限高 8 项滚动）</span></div>
+  </div>
+
+  <!-- ═══════ B ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>搜索置顶 · 分组列表</h2></div>
+    <p class="card-d">浮层顶部自带搜索行（@后文字自动同步进去），成员按「管理员 / 成员」分组展示，底注剩余数。找人不靠盲滚。</p>
+    <div class="list-space"><div class="row"><span class="ln" style="max-width:60%"></span></div><div class="row"><span class="ln" style="max-width:75%"></span></div><div class="row"><span class="ln" style="max-width:45%"></span></div></div>
+    <div class="compose-wrap" data-demo="B">
+      <div class="ddB" id="ddB" style="display:none"></div>
+      <textarea placeholder="写一条评论… 输入 @ 试试"></textarea>
+      <div class="cta">
+        <span class="hint">用 <code>@姓名</code> 提醒成员</span>
+        <button type="button">发布</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 搜索前置 + 分组，20 人团队定位最快</span><span class="con">⚠ 浮层稍高（多一条搜索行）</span></div>
+  </div>
+
+  <!-- ═══════ C ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>双列网格 · 成员卡片</h2></div>
+    <p class="card-d">浮层改为 2 列成员卡片（大头像 + 姓名 + ID + 角色徽标）。视觉更丰富，点选目标大、误触少。</p>
+    <div class="list-space"><div class="row"><span class="ln" style="max-width:60%"></span></div><div class="row"><span class="ln" style="max-width:75%"></span></div><div class="row"><span class="ln" style="max-width:45%"></span></div></div>
+    <div class="compose-wrap" data-demo="C">
+      <div class="ddC" id="ddC" style="display:none"></div>
+      <textarea placeholder="写一条评论… 输入 @ 试试"></textarea>
+      <div class="cta">
+        <span class="hint">用 <code>@姓名</code> 提醒成员</span>
+        <button type="button">发布</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 卡片醒目，头像辨识度最高</span><span class="con">⚠ 同屏人数少（4-6 人/屏）</span></div>
+  </div>
+
+  <!-- ═══════ D ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>底部内嵌面板 · 可多选</h2></div>
+    <p class="card-d">不做浮层：输入 @ 后输入框<b>下方展开常驻面板</b>，全员 chips 一屏尽收，点选即插入；连续 @ 多人时面板不关闭。移动端也稳（无浮层定位问题）。</p>
+    <div class="list-space"><div class="row"><span class="ln" style="max-width:60%"></span></div><div class="row"><span class="ln" style="max-width:75%"></span></div><div class="row"><span class="ln" style="max-width:45%"></span></div></div>
+    <div class="compose-wrap" data-demo="D">
+      <textarea placeholder="写一条评论… 输入 @ 试试"></textarea>
+      <div class="ddD" id="ddD" style="display:none"></div>
+      <div class="cta">
+        <span class="hint">用 <code>@姓名</code> 提醒成员</span>
+        <button type="button">发布</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 无浮层定位/裁剪问题，多选连续 @ 最顺</span><span class="con">⚠ 常驻面板占纵向空间（选完自动收起）</span></div>
+  </div>
+
+  <p class="tip">注：四版均保留既有行为 — 支持姓名/拼音ID 过滤、键盘 ↑↓ Enter Esc、插入 @微信ID（唯一性防重名误提醒）、失焦自动收起。</p>
+</div>
+
+<script>
+var MEMBERS = [
+  { name: '杜同贺', id: 'dutonghe', role: 'admin' },
+  { name: '杨慈', id: 'yangci', role: 'admin' },
+  { name: '胡小琪', id: 'huxiaoqi', role: '' },
+  { name: '冯懿鑫', id: 'fengyixin', role: '' },
+  { name: '艾琳朔', id: 'ailinshuo', role: '' },
+  { name: '李锐远', id: 'liruiyuan', role: '' },
+  { name: '韩重阳', id: 'hanchongyang', role: '' },
+  { name: '吴孟铨', id: 'wumengquan', role: '' },
+  { name: '雒培媛', id: 'luopeiyuan', role: '' },
+  { name: '贾琦', id: 'jiaqi', role: '' },
+];
+var COLORS = ['#0E766E', '#B4823C', '#5B8FD9', '#7FA86B', '#E06C5A', '#9A6FB8'];
+function avColor(n) { var s = 0; for (var i = 0; i < n.length; i++) s += n.charCodeAt(i); return COLORS[s % COLORS.length]; }
+function avHtml(n, size) { return '<span class="av" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * .42) + 'px;background:' + avColor(n) + '">' + n.slice(0, 1) + '</span>'; }
+function filter(q) {
+  if (!q) return MEMBERS.slice(0, 8);
+  var ql = q.toLowerCase();
+  return MEMBERS.filter(function (m) {
+    return m.name.indexOf(q) >= 0 || m.id.toLowerCase().indexOf(ql) === 0 || m.id.toLowerCase() === ql;
+  }).slice(0, 8);
+}
+
+document.querySelectorAll('[data-demo]').forEach(function (wrap) {
+  var kind = wrap.dataset.demo;
+  var ta = wrap.querySelector('textarea');
+  var dd = wrap.querySelector('[id^="dd"]');
+  var sel = 0, cur = [];
+  var picked = [];
+
+  function renderDd(q) {
+    cur = filter(q);
+    sel = 0;
+    if (!cur.length) { dd.style.display = 'none'; return; }
+    dd.style.display = '';
+    if (kind === 'A') {
+      dd.innerHTML = cur.map(function (m, i) {
+        return '<div class="it' + (i === sel ? ' on' : '') + '" data-i="' + i + '">' + avHtml(m.name, 26) +
+          '<div><div class="nm">' + m.name + '</div><div class="id">@' + m.id + '</div></div>' +
+          (m.role ? '<span class="role">管理员</span>' : '') + '</div>';
+      }).join('') + '<div class="ft"><span>↑↓ 选择 · Enter 确认</span><span>' + cur.length + ' / ' + MEMBERS.length + ' 人</span></div>';
+    } else if (kind === 'B') {
+      var admins = cur.filter(function (m) { return m.role; });
+      var normals = cur.filter(function (m) { return !m.role; });
+      var row = function (m, i) {
+        return '<div class="it' + (i === sel ? ' on' : '') + '" data-i="' + i + '">' + avHtml(m.name, 24) +
+          '<span class="nm">' + m.name + '</span><span class="id">@' + m.id + '</span>' +
+          (m.role ? '<span class="role">管理员</span>' : '') + '</div>';
+      };
+      var idx = 0, html = '<div class="srch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input placeholder="筛选成员 (' + (q ? '"' + q + '"' : '输入过滤') + ')" value="' + (q || '') + '"></div>';
+      if (admins.length) { html += '<div class="grp">管理员</div>'; admins.forEach(function (m) { html += row(m, idx++); }); }
+      if (normals.length) { html += '<div class="grp">成员</div>'; normals.forEach(function (m) { html += row(m, idx++); }); }
+      html += '<div class="ft">' + cur.length + ' / ' + MEMBERS.length + ' 人 · Enter 插入</div>';
+      dd.innerHTML = html;
+      var si = dd.querySelector('input');
+      si && si.addEventListener('input', function (e) {
+        var v = e.target.value;
+        var at = ta.value.lastIndexOf('@');
+        if (at >= 0) { ta.value = ta.value.substring(0, at + 1) + v; renderDd(v); }
+      });
+    } else if (kind === 'C') {
+      dd.innerHTML = '<div class="ttl"><span>选择要提醒的成员</span><span class="mono">' + cur.length + ' / ' + MEMBERS.length + '</span></div>' +
+        '<div class="grid">' + cur.map(function (m, i) {
+          return '<div class="cell' + (i === sel ? ' on' : '') + '" data-i="' + i + '">' + avHtml(m.name, 34) +
+            '<div><div class="nm">' + m.name + (m.role ? ' <span class="role">管理员</span>' : '') + '</div><div class="id">@' + m.id + '</div></div></div>';
+        }).join('') + '</div>';
+    } else if (kind === 'D') {
+      dd.innerHTML = '<div class="ttl"><span>点击选择要提醒的成员</span><span class="x" data-x>✕</span></div>' +
+        '<div class="chips">' + MEMBERS.map(function (m) {
+          return '<span class="chip" data-name="' + m.name + '" data-id="' + m.id + '">' + avHtml(m.name, 22) + m.name + ' <span class="id">@' + m.id + '</span></span>';
+        }).join('') + '</div>' +
+        '<div class="picked" id="pickedD">' + picked.map(function (p) { return '<span class="p">' + p + ' <i data-rm="' + p + '">✕</i></span>'; }).join('') + '</div>';
+      dd.querySelector('[data-x]').addEventListener('click', function () { dd.style.display = 'none'; });
+      dd.querySelectorAll('[data-rm]').forEach(function (b) {
+        b.addEventListener('click', function (e) {
+          e.stopPropagation();
+          picked = picked.filter(function (x) { return x !== b.dataset.rm; });
+          var at = ta.value.lastIndexOf('@' + b.dataset.rm);
+          if (at >= 0) ta.value = (ta.value.substring(0, at) + ta.value.substring(at + b.dataset.rm.length + 1)).replace(/\\s{2,}/g, ' ');
+          renderDd('');
+        });
+      });
+    }
+    dd.querySelectorAll('[data-i]').forEach(function (el) {
+      el.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        insert(cur[+el.dataset.i]);
+      });
+    });
+    dd.querySelectorAll('.chip').forEach(function (el) {
+      el.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        var n = el.dataset.name;
+        if (picked.indexOf(n) >= 0) return;
+        picked.push(n);
+        insert({ name: n, id: el.dataset.id });
+        renderDd('');
+      });
+    });
+  }
+
+  function insert(m) {
+    if (!m) return;
+    var at = ta.value.lastIndexOf('@');
+    if (kind === 'D') {
+      ta.value = ta.value.replace(/@$/, '') + (ta.value && !/\\s$/.test(ta.value.replace(/@$/, '')) ? ' ' : '') + '';
+    } else if (at >= 0) {
+      ta.value = ta.value.substring(0, at) + '@' + m.id + ' ' + ta.value.substring(at + 1 + (ta.value.length - at - 1));
+      ta.value = ta.value.substring(0, at) + '@' + m.id + ' ';
+    }
+    ta.focus();
+    dd.style.display = 'none';
+  }
+
+  ta.addEventListener('input', function () {
+    var v = ta.value;
+    var at = v.lastIndexOf('@');
+    if (at < 0) { dd.style.display = 'none'; if (kind === 'D') picked = []; return; }
+    var q = v.substring(at + 1);
+    if (/\\s/.test(q)) { dd.style.display = 'none'; return; }
+    renderDd(q);
+  });
+  ta.addEventListener('keydown', function (e) {
+    if (dd.style.display === 'none') return;
+    if (kind === 'D') return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = (sel + 1) % cur.length; renderDd(ta.value.substring(ta.value.lastIndexOf('@') + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = (sel - 1 + cur.length) % cur.length; renderDd(ta.value.substring(ta.value.lastIndexOf('@') + 1)); }
+    else if (e.key === 'Enter') { e.preventDefault(); insert(cur[sel]); }
+    else if (e.key === 'Escape') { dd.style.display = 'none'; }
+  });
+  ta.addEventListener('blur', function () { setTimeout(function () { if (kind !== 'D') dd.style.display = 'none'; }, 180); });
+});
+</script>
+</body>
+</html>

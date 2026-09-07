@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>右键菜单 UI 提案 — 网盘档案系</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --danger: #D94F2B;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1080px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 30px; display: flex; gap: 26px; align-items: flex-start; }
+.sec-cap { width: 330px; flex: none; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; margin: 3px 0 6px; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-top: 8px; }
+.sec-desc b { color: var(--text-2); }
+
+/* ===== 菜单面板通用 ===== */
+.menu { width: 216px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 10px 32px rgba(20,40,35,.16); padding: 5px; }
+.mi { display: flex; align-items: center; gap: 9px; width: 100%; border: none; background: none; font: inherit; font-size: 12.5px; color: var(--text-2); padding: 8px 10px; border-radius: 7px; cursor: pointer; text-align: left; }
+.mi svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.mdiv { height: 1px; background: var(--line); margin: 4px 8px; }
+.mcap { font-size: 10px; letter-spacing: .12em; color: var(--text-4); padding: 6px 10px 3px; }
+kbd.k { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--text-3); margin-left: auto; }
+
+/* A 档案线性 */
+.vA .mi:hover { background: var(--primary-bg); color: var(--primary-dark); }
+.vA .mi.danger { color: var(--text-2); }
+.vA .mi.danger:hover { background: rgba(217,79,43,.09); color: var(--danger); }
+
+/* B 纯文字 */
+.vB .mi { padding: 8px 12px; font-size: 13px; }
+.vB .mi:hover { background: var(--primary-bg); color: var(--primary-dark); }
+.vB .mi.danger:hover { background: rgba(217,79,43,.09); color: var(--danger); }
+
+/* C 墨色深面板 */
+.vC.menu { background: #22302C; border-color: rgba(45,58,53,.9); }
+.vC .mi { color: #C8D2CD; }
+.vC .mi:hover { background: rgba(255,255,255,.08); color: #fff; }
+.vC .mi.danger { color: #C8D2CD; }
+.vC .mi.danger:hover { background: rgba(232,90,58,.18); color: #FF9C8A; }
+.vC .mdiv { background: rgba(255,255,255,.12); }
+.vC .mcap { color: rgba(255,255,255,.4); }
+.vC kbd.k { background: none; color: rgba(255,255,255,.45); border-color: rgba(255,255,255,.2); }
+
+/* D 分组卡片 + 快捷键注 */
+.vD .mi:hover { background: var(--primary-bg); color: var(--primary-dark); }
+.vD .mi.danger:hover { background: rgba(217,79,43,.09); color: var(--danger); }
+
+footer { margin-top: 40px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>右键菜单 UI 一致化 — 4 种方案</h1>
+  <p>现状：emoji 图标（🔄 ➕ 📂 🗑）+ 珊瑚色文字，与档案系（深青 / 墨线 / 描边图标）脱节。四案全部<b>去 emoji</b>，面板统一为 白卡 + 墨线 + 10px 圆角 + 大阴影，分割线归一。<b>可以直接把鼠标放到菜单项上感受 hover。</b>同一套样式将同时作用于 文件夹右键 / 文件右键 / 特殊项(收藏·回收站·团队盘)右键。</p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">MENU A</span>
+    <h2>档案线性图标</h2>
+    <span class="tag">与树/表描边图标同语言 · 推荐</span>
+    <div class="sec-desc">每项一枚 14px 深青描边 SVG，hover 整行浅青染色 + 文字转深青；危险项（删除）hover 才转珊瑚红。信息密度与档案气质兼得。</div>
+  </div>
+  <div class="menu vA">
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.2 10H20a2 2 0 0 1 1.9 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v2"/></svg>打开</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/></svg>新建子文件夹</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 3 21l.5-4.5z"/></svg>重命名</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="M8.3 10.9 15.2 7.2M8.3 13.1l6.9 3.7"/></svg>分享</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制 Folder ID</button>
+    <div class="mdiv"></div>
+    <button class="mi danger"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 12.5h9L18 7"/></svg>删除</button>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">MENU B</span>
+    <h2>纯文字极简</h2>
+    <span class="tag">Notion/Linear 风 · 最克制</span>
+    <div class="sec-desc">完全去图标，只留文字。菜单更窄更安静，靠分组线与 hover 传达层级；扫视效率略低于带图标版。</div>
+  </div>
+  <div class="menu vB">
+    <button class="mi">打开</button>
+    <button class="mi">新建子文件夹</button>
+    <button class="mi">重命名</button>
+    <button class="mi">分享</button>
+    <button class="mi">复制 Folder ID</button>
+    <div class="mdiv"></div>
+    <button class="mi danger">删除</button>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">MENU C</span>
+    <h2>墨色深面板</h2>
+    <span class="tag">深青墨底 · 对比最强</span>
+    <div class="sec-desc">松墨 #22302C 深底 + 浅字，hover 白色浮起；与浅色页面形成强对比，右键菜单更有"工具感"。档案系深色模式同款语言。</div>
+  </div>
+  <div class="menu vC">
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.2 10H20a2 2 0 0 1 1.9 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v2"/></svg>打开</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/></svg>新建子文件夹</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 3 21l.5-4.5z"/></svg>重命名</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="M8.3 10.9 15.2 7.2M8.3 13.1l6.9 3.7"/></svg>分享</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制 Folder ID</button>
+    <div class="mdiv"></div>
+    <button class="mi danger"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 12.5h9L18 7"/></svg>删除</button>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">MENU D</span>
+    <h2>分组标题 + 快捷键注</h2>
+    <span class="tag">结构化 · 信息最全</span>
+    <div class="sec-desc">§ 编号分组题头（查看 / 管理 / 危险区），部分项右侧标注行为说明或快捷键（未来键盘导航可直接复用）。最"档案台账"，菜单也最高。</div>
+  </div>
+  <div class="menu vD">
+    <div class="mcap">§1 查看</div>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.2 10H20a2 2 0 0 1 1.9 2.5l-1.5 6A2 2 0 0 1 18.5 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v2"/></svg>打开<kbd class="k">Enter</kbd></button>
+    <div class="mcap">§2 管理</div>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/></svg>新建子文件夹</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 3 21l.5-4.5z"/></svg>重命名</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="17.5" cy="6" r="2.5"/><circle cx="17.5" cy="18" r="2.5"/><path d="M8.3 10.9 15.2 7.2M8.3 13.1l6.9 3.7"/></svg>分享</button>
+    <button class="mi"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制 Folder ID</button>
+    <div class="mcap">§3 危险区</div>
+    <button class="mi danger"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 12.5h9L18 7"/></svg>删除<kbd class="k">Del</kbd></button>
+  </div>
+</section>
+
+<footer>
+  · 四案共同项：去掉全部 emoji；「新建子文件夹」不再用珊瑚色常亮（hover 语义色）；分割线/圆角/阴影统一；危险项只在 hover 时染色。<br>
+  · 选定后同一套样式作用于 文件夹右键 / 文件右键 / 特殊项右键 全部菜单。回复字母即可（如「用 A」）。
+</footer>
+</body>
+</html>

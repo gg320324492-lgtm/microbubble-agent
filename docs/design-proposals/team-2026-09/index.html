@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>团队协作页合并方案 · 八稿 · 2026-09-04</title>
+<style>
+  body { margin: 0; background: #F7F4EF; font-family: "PingFang SC", "Microsoft YaHei", sans-serif; color: #2B2620; }
+  header { padding: 28px 36px 8px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p.sub { margin: 0; font-size: 13px; color: #8A7F70; }
+  h2.grp { font-size: 14px; color: #B4552D; letter-spacing: .06em; padding: 26px 36px 0; margin: 0; }
+  p.grpsub { font-size: 12px; color: #A29586; padding: 4px 36px 0; margin: 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 16px 36px 20px; }
+  a.card { display: block; background: #fff; border: 1px solid #E5DDD0; border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; box-shadow: 0 1px 3px rgba(0,0,0,.04); transition: transform .15s, box-shadow .15s; }
+  a.card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(255,122,92,.15); border-color: #FF7A5C; }
+  a.card img { width: 100%; display: block; border-bottom: 1px solid #EFE9DF; }
+  .cap { padding: 12px 16px 14px; }
+  .cap b { font-size: 15px; }
+  .cap span { display: block; margin-top: 4px; font-size: 12.5px; color: #8A7F70; line-height: 1.6; }
+  .tag { display: inline-block; margin-left: 8px; padding: 1px 8px; font-size: 11px; border-radius: 999px; background: #FFF0E9; color: #D9542B; vertical-align: 2px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>团队协作页「名册 + 卷宗」合并方案 · 八稿</h1>
+  <p class="sub">真数据：生产库 28 成员 + 4 项目卷宗（2026-09-04）· 点击卡片打开完整稿 · 甲组以人领卷 / 乙组以卷领人（拍板方向：项目下挂成员）</p>
+</header>
+<h2 class="grp">甲组 R–U · 名册为主，人挂卷</h2>
+<p class="grpsub">保留以人为中心的排布，卷宗信息挂到每个人身上。</p>
+<div class="grid">
+  <a class="card" href="R-cards.html"><img src="shot-R.png" alt="R · 一卷一卡"><div class="cap"><b>R · 一卷一卡</b><span class="tag">改动最小</span><span>保持现有 member-grid，每卡加「卷宗」徽章；卡背=卷宗副页，同卡自动双面翻牌。</span></div></a>
+  <a class="card" href="S-ledger.html"><img src="shot-S.png" alt="S · 人卷对账"><div class="cap"><b>S · 人卷对账</b><span class="tag">API 零改</span><span>成员总账 / 项目卷宗账两张表并排，徽章编号双向同序；纯前端排布，当台账核事。</span></div></a>
+  <a class="card" href="T-tree.html"><img src="shot-T.png" alt="T · 师承与卷"><div class="cap"><b>T · 师承与卷</b><span class="tag">看战线</span><span>按年级分段成树（导师→博→硕→本科→已毕业），红章=参与的卷有逾期里程碑；底部卷宗架。</span></div></a>
+  <a class="card" href="U-rail.html"><img src="shot-U.png" alt="U · 名册轨与卷宗墙"><div class="cap"><b>U · 名册轨与卷宗墙</b><span class="tag">联动最强</span><span>左列选人、右侧亮卷：选中人参与的卷高亮、其余淡出，一次盯一个关系。</span></div></a>
+</div>
+<h2 class="grp">乙组 V–Y · 卷宗为主，人挂项目下</h2>
+<p class="grpsub">一个项目下方就是它的成员，四种开法：V 全展开单页 / W 折匣收起 / X 左目录右正文 / Y 胶囊墙。</p>
+<div class="grid">
+  <a class="card" href="V-dossier.html"><img src="shot-V.png" alt="V · 卷领人归"><div class="cap"><b>V · 卷领人归</b><span class="tag">卷为纲·单页</span><span>总—分—总单页：顶部导览带，每卷一节，节下直接挂成员行；页尾常驻未入卷缺口看板。</span></div></a>
+  <a class="card" href="W-fold.html"><img src="shot-W.png" alt="W · 卷宗折匣"><div class="cap"><b>W · 卷宗折匣</b><span class="tag">收起看账</span><span>每卷一个折匣：封面只显示人数/声纹缺口/逾期账，点开匣盖才见成员 —— 首屏最净。</span></div></a>
+  <a class="card" href="X-twin.html"><img src="shot-X.png" alt="X · 左目右卷"><div class="cap"><b>X · 左目右卷</b><span class="tag">像翻一本书</span><span>左目录常驻吸顶（4 卷+缺口桶），右正文每卷一节人是行 —— 纲目关系一眼锁死。</span></div></a>
+  <a class="card" href="Y-wall.html"><img src="shot-Y.png" alt="Y · 卷下人物墙"><div class="cap"><b>Y · 卷下人物墙</b><span class="tag">全员同屏</span><span>每卷一宽卡：进度封头条+成员胶囊墙全展开，师生头像色区分 —— 密但快，零点击。</span></div></a>
+</div>
+</body>
+</html>

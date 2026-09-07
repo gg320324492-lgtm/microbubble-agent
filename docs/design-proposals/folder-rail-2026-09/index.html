@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文件夹预览 · 全量直出 + 分类 · 4 版方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-soft: rgba(14,118,110,.08);
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --ppt: #E8A23C; --doc: #5B8FD9; --pdf: #E06C5A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: var(--teal-soft); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .rail { background: #FAF9F6; border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px; max-width: 660px; margin: 0 auto; }
+  .fhead { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .fhead .ico { width: 42px; height: 42px; border-radius: 10px; background: var(--teal); display: flex; align-items: center; justify-content: center; }
+  .fhead .ico svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 1.8; }
+  .fhead .nm { font-size: 17px; font-weight: 700; }
+  .fhead .meta { font-size: 12px; color: var(--txt2); margin-top: 3px; }
+
+  .grp { display: flex; align-items: center; gap: 8px; padding: 14px 2px 6px; font-size: 11px; letter-spacing: .1em; color: var(--txt2); font-weight: 600; }
+  .grp .n { font-family: var(--mono); font-size: 10.5px; color: #A9B1AC; letter-spacing: 0; background: #F0EEE8; border-radius: 9999px; padding: 1px 8px; }
+  .grp .rule { flex: 1; height: 1px; background: var(--line); }
+  .grp.accent { color: var(--teal); }
+  .grp .dot { width: 7px; height: 7px; border-radius: 9999px; }
+
+  .it { display: flex; align-items: center; gap: 9px; padding: 8px 8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
+  .it:hover { background: var(--teal-soft); }
+  .it .nm { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .it:hover .nm { color: var(--teal); }
+  .it .sz { font-family: var(--mono); font-size: 11px; color: #B3BAB5; flex: none; }
+  .it .dot { width: 7px; height: 7px; border-radius: 9999px; flex: none; }
+  .it .glyph { flex: none; font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 3px 6px; border-radius: 5px; }
+  .it .lv { flex: none; font-size: 10.5px; color: var(--txt2); background: #F0EEE8; border-radius: 9999px; padding: 2px 8px; }
+  .it .dt { flex: none; font-family: var(--mono); font-size: 10.5px; color: #B3BAB5; }
+
+  .seg { display: inline-flex; background: #F0EEE8; border-radius: 9999px; padding: 3px; gap: 2px; }
+  .seg button { border: none; background: none; font-size: 11.5px; color: var(--txt2); padding: 4px 14px; border-radius: 9999px; cursor: pointer; font-family: inherit; }
+  .seg button.on { background: #fff; color: var(--txt); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>文件夹预览 · 全量直出 + 分类 · 4 版方案</h1>
+  <p class="sub">现状：懒拉 8 条 + 「显示全部 N 个文件 ↓」跳转按钮。四版都<b>去掉折叠按钮、一次直出全部文件（列表自身滚动）</b>，区别在分类维度。时间分组按<b>文件名里的汇报日期</b>（标题才是真实时间 — 上传时间全是 7 月归档，分不出层次）。数据用李锐远文件夹 15 项真实文件名。</p>
+
+  <!-- ═══════ A ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>按年份分组 · 汇报时间轴</h2></div>
+    <p class="card-d">从文件名解析汇报日期归入年份，新年份在上。看「这个人这学期交没交、历史积累了多少」一眼可判；墨青年份头 + 计数胶囊 + 细分隔线。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">李锐远</div><div class="meta">50.6 MB · 15 项 · 最新 7 月</div></div>
+      </div>
+      <div class="grp accent">2026 <span class="n">1 项</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.3.16 研三 李锐远.pptx</span><span class="sz">2.2 MB</span></div>
+      <div class="grp accent">2025 <span class="n">6 项</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.12.15 研三 李锐远.pptx</span><span class="sz">2.8 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.7.2 研二 李锐远.pptx</span><span class="sz">2.3 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.5.19 研二 李锐远.pptx</span><span class="sz">1.4 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.3.31 研二 李锐远.pptx</span><span class="sz">2.3 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.3.11 研二 李锐远.pptx</span><span class="sz">2.5 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.2.17 研二 李锐远.pptx</span><span class="sz">16.4 MB</span></div>
+      <div class="grp accent">2024 <span class="n">4 项</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.8.15 研一 李锐远.pptx</span><span class="sz">3.6 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.5.20 研二 李锐远.pptx</span><span class="sz">2.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.3.18 研一 李锐远.pptx</span><span class="sz">1.8 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.1.8 研一 李锐远.pptx</span><span class="sz">2.4 MB</span></div>
+      <div class="grp accent">2023 <span class="n">4 项</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.12.11 研一 李锐远.pptx</span><span class="sz">3.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.10.16 研一 李锐远.pptx</span><span class="sz">2.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.9.25 研一 李锐远.pptx</span><span class="sz">5.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.6.19 研一 李锐远.pptx</span><span class="sz">1.9 MB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 时间轴叙事最自然，组数少而稳定</span><span class="con">⚠ 文件名无日期时归入「未标注」组</span></div>
+  </div>
+
+  <!-- ═══════ B ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>按研一/研二/研三分组 · 成长线</h2></div>
+    <p class="card-d">从文件名解析「研一/研二/研三」，研三在上。导师视角最顺手：每个阶段的汇报次数、阶段跨度一屏看清。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">李锐远</div><div class="meta">50.6 MB · 15 项 · 最新 7 月</div></div>
+      </div>
+      <div class="grp"><span class="dot" style="background:var(--teal)"></span>研三 <span class="n">2 项</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.3.16 研三 李锐远.pptx</span><span class="dt">2026.3.16</span><span class="sz">2.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.12.15 研三 李锐远.pptx</span><span class="dt">2025.12.15</span><span class="sz">2.8 MB</span></div>
+      <div class="grp"><span class="dot" style="background:#7FA86B"></span>研二 <span class="n">6 项</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.7.2 研二 李锐远.pptx</span><span class="dt">2025.7.2</span><span class="sz">2.3 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.5.19 研二 李锐远.pptx</span><span class="dt">2025.5.19</span><span class="sz">1.4 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.3.31 研二 李锐远.pptx</span><span class="dt">2025.3.31</span><span class="sz">2.3 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.3.11 研二 李锐远.pptx</span><span class="dt">2025.3.11</span><span class="sz">2.5 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.2.17 研二 李锐远.pptx</span><span class="dt">2025.2.17</span><span class="sz">16.4 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.5.20 研二 李锐远.pptx</span><span class="dt">2024.5.20</span><span class="sz">2.1 MB</span></div>
+      <div class="grp"><span class="dot" style="background:#B4823C"></span>研一 <span class="n">7 项</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.8.15 研一 李锐远.pptx</span><span class="dt">2024.8.15</span><span class="sz">3.6 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.3.18 研一 李锐远.pptx</span><span class="dt">2024.3.18</span><span class="sz">1.8 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2024.1.8 研一 李锐远.pptx</span><span class="dt">2024.1.8</span><span class="sz">2.4 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.12.11 研一 李锐远.pptx</span><span class="dt">2023.12.11</span><span class="sz">3.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.10.16 研一 李锐远.pptx</span><span class="dt">2023.10.16</span><span class="sz">2.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.9.25 研一 李锐远.pptx</span><span class="dt">2023.9.25</span><span class="sz">5.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2023.6.19 研一 李锐远.pptx</span><span class="dt">2023.6.19</span><span class="sz">1.9 MB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 组内日期右列补充，成长轨迹清楚</span><span class="con">⚠ 文件名没写研级的归「未标注」；只适合组会汇报命名习惯</span></div>
+  </div>
+
+  <!-- ═══════ C ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>按文件类型分组 · 类型色块</h2></div>
+    <p class="card-d">PPT / Word / PDF / 图片 / 视频各成一组，类型用色块徽标（与中栏类型色一脉相承）。混装文件夹（汇报+数据+文献）里找类型最直接。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">李锐远</div><div class="meta">50.6 MB · 15 项 · 最新 7 月</div></div>
+      </div>
+      <div class="grp"><span class="dot" style="background:var(--ppt)"></span>PPT 演示文稿 <span class="n">14 项</span><span class="rule"></span></div>
+      <div class="it"><span class="glyph" style="color:var(--ppt);background:rgba(232,162,60,.12)">PPT</span><span class="nm">2026.3.16 研三 李锐远.pptx</span><span class="sz">2.2 MB</span></div>
+      <div class="it"><span class="glyph" style="color:var(--ppt);background:rgba(232,162,60,.12)">PPT</span><span class="nm">2025.12.15 研三 李锐远.pptx</span><span class="sz">2.8 MB</span></div>
+      <div class="it"><span class="glyph" style="color:var(--ppt);background:rgba(232,162,60,.12)">PPT</span><span class="nm">2025.7.2 研二 李锐远.pptx</span><span class="sz">2.3 MB</span></div>
+      <div class="it"><span class="glyph" style="color:var(--ppt);background:rgba(232,162,60,.12)">PPT</span><span class="nm">2025.2.17 研二 李锐远.pptx</span><span class="sz">16.4 MB</span></div>
+      <div class="it" style="color:var(--txt2);font-size:12px;padding-top:2px">… 还有 10 个 PPT</div>
+      <div class="grp"><span class="dot" style="background:var(--doc)"></span>Word 文档 <span class="n">1 项</span><span class="rule"></span></div>
+      <div class="it"><span class="glyph" style="color:var(--doc);background:rgba(91,143,217,.12)">DOC</span><span class="nm">开题报告-李锐远.docx</span><span class="sz">880 KB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 混合内容文件夹最有效，色块扫读快</span><span class="con">⚠ 单一类型文件夹（如本例 15 个全是 PPT）只出一个大组，等于白分</span></div>
+  </div>
+
+  <!-- ═══════ D ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>全量平铺 + 排序切换 · 最轻</h2></div>
+    <p class="card-d">不分组：15 个文件一次全出（去折叠按钮），列表头加「时间 / 名称」分段切换（可点试玩）。最省纵向空间，分类诉求交给排序解决。</p>
+    <div class="rail" data-sort>
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div style="flex:1"><div class="nm">李锐远</div><div class="meta">50.6 MB · 15 项 · 最新 7 月</div></div>
+        <div class="seg"><button class="on" data-k="time">时间</button><button data-k="name">名称</button></div>
+      </div>
+      <div style="margin-top:10px" class="list"></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 结构零负担，滚动一屏到底</span><span class="con">⚠ 30+ 文件的文件夹里定位还是靠眼扫</span></div>
+  </div>
+</div>
+
+<script>
+const FILES = [
+  { n: '2026.3.16 研三 李锐远.pptx', s: '2.2 MB', d: '2026.3.16', y: '2026', lv: '研三' },
+  { n: '2025.12.15 研三 李锐远.pptx', s: '2.8 MB', d: '2025.12.15', y: '2025', lv: '研三' },
+  { n: '2025.7.2 研二 李锐远.pptx', s: '2.3 MB', d: '2025.7.2', y: '2025', lv: '研二' },
+  { n: '2025.5.19 研二 李锐远.pptx', s: '1.4 MB', d: '2025.5.19', y: '2025', lv: '研二' },
+  { n: '2025.3.31 研二 李锐远.pptx', s: '2.3 MB', d: '2025.3.31', y: '2025', lv: '研二' },
+  { n: '2025.3.11 研二 李锐远.pptx', s: '2.5 MB', d: '2025.3.11', y: '2025', lv: '研二' },
+  { n: '2025.2.17 研二 李锐远.pptx', s: '16.4 MB', d: '2025.2.17', y: '2025', lv: '研二' },
+  { n: '2024.8.15 研一 李锐远.pptx', s: '3.6 MB', d: '2024.8.15', y: '2024', lv: '研一' },
+  { n: '2024.5.20 研二 李锐远.pptx', s: '2.1 MB', d: '2024.5.20', y: '2024', lv: '研二' },
+  { n: '2024.3.18 研一 李锐远.pptx', s: '1.8 MB', d: '2024.3.18', y: '2024', lv: '研一' },
+  { n: '2024.1.8 研一 李锐远.pptx', s: '2.4 MB', d: '2024.1.8', y: '2024', lv: '研一' },
+  { n: '2023.12.11 研一 李锐远.pptx', s: '3.1 MB', d: '2023.12.11', y: '2023', lv: '研一' },
+  { n: '2023.10.16 研一 李锐远.pptx', s: '2.2 MB', d: '2023.10.16', y: '2023', lv: '研一' },
+  { n: '2023.9.25 研一 李锐远.pptx', s: '5.2 MB', d: '2023.9.25', y: '2023', lv: '研一' },
+  { n: '2023.6.19 研一 李锐远.pptx', s: '1.9 MB', d: '2023.6.19', y: '2023', lv: '研一' },
+];
+const rail = document.querySelector('[data-sort]');
+const listEl = rail.querySelector('.list');
+let key = 'time';
+function render() {
+  const arr = [...FILES];
+  if (key === 'time') arr.sort((a, b) => b.d.localeCompare(a.d));
+  else arr.sort((a, b) => a.n.localeCompare(b.n, 'zh'));
+  listEl.innerHTML = arr.map(f => `<div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">${f.n}</span><span class="dt">${f.d}</span><span class="sz">${f.s}</span></div>`).join('');
+}
+rail.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  key = b.dataset.k;
+  rail.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b));
+  render();
+}));
+render();
+</script>
+</body>
+</html>

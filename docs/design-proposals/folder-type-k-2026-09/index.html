@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T1 排版变体 · 组头横条 4 版 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-soft: rgba(14,118,110,.08);
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --ppt: #E8A23C; --doc: #5B8FD9; --pdf: #E06C5A; --img: #7FA86B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: var(--teal-soft); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .rail { background: #FAF9F6; border: 1px solid var(--line); border-radius: 14px; padding: 16px; max-width: 660px; margin: 0 auto; }
+  .fhead { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .fhead .ico { width: 42px; height: 42px; border-radius: 10px; background: var(--teal); display: flex; align-items: center; justify-content: center; flex: none; }
+  .fhead .ico svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 1.8; }
+  .fhead .nm { font-size: 17px; font-weight: 700; }
+  .fhead .meta { font-size: 12px; color: var(--txt2); margin-top: 3px; }
+
+  .it { display: flex; align-items: center; gap: 9px; padding: 8px 8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
+  .it:hover { background: var(--teal-soft); }
+  .it .nm { flex: 1; min-width: 0; font-size: 13px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .it:hover .nm { color: var(--teal); }
+  .it .sz { font-family: var(--mono); font-size: 10.5px; color: #B3BAB5; flex: none; }
+  .it .dot { width: 7px; height: 7px; border-radius: 9999px; flex: none; }
+  .it .glyph { flex: none; font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 3px 6px; border-radius: 5px; }
+  .more { color: var(--txt2); font-size: 11.5px; padding: 2px 8px; }
+
+  /* ── K1 实底色组头 ── */
+  .k1 { display: flex; align-items: center; gap: 9px; margin-top: 12px; padding: 8px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 700; }
+  .k1 .n { font-family: var(--mono); font-size: 10px; font-weight: 600; background: rgba(255,255,255,.85); border-radius: 9999px; padding: 1px 8px; }
+  .k1 .sub { margin-left: auto; font-family: var(--mono); font-size: 10px; font-weight: 500; opacity: .75; }
+
+  /* ── K2 卡片分组 ── */
+  .k2 { margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; }
+  .k2 .hd { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: #F5F3EE; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 650; }
+  .k2 .hd .n { font-family: var(--mono); font-size: 10px; color: var(--txt2); background: #fff; border: 1px solid var(--line); border-radius: 9999px; padding: 1px 8px; font-weight: 500; }
+  .k2 .hd .sub { margin-left: auto; font-family: var(--mono); font-size: 10px; color: #A9B1AC; font-weight: 500; }
+  .k2 .it:hover { background: var(--teal-soft); }
+
+  /* ── K3 图标瓦片组头 ── */
+  .k3 { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .k3 .tile { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 10px; font-weight: 800; color: #fff; letter-spacing: .04em; flex: none; box-shadow: 0 2px 6px rgba(0,0,0,.10); }
+  .k3 .tt { font-size: 13px; font-weight: 700; }
+  .k3 .ts { font-size: 11px; color: var(--txt2); margin-top: 1px; }
+  .k3 .n { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--txt2); background: #F0EEE8; border-radius: 9999px; padding: 2px 9px; }
+
+  /* ── K4 色底文件行 ── */
+  .k4hd { display: flex; align-items: center; gap: 8px; padding: 14px 2px 5px; font-size: 11px; letter-spacing: .1em; color: var(--txt2); font-weight: 700; }
+  .k4hd .n { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0; color: #A9B1AC; font-weight: 500; }
+  .k4hd .rule { flex: 1; height: 1px; background: var(--line); }
+  .it.tint { border-left: 3px solid transparent; border-radius: 6px 8px 8px 6px; }
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>T1 排版 · 组头横条 4 版变体</h1>
+  <p class="sub">骨架一致：<b>从上到下按类型分排（PPT → Word → PDF → 图片），组头横条 + 计数 + 小计</b>；全量直出。变体只在组头与行的视觉处理。示例为混合内容文件夹。</p>
+
+  <!-- ═══════ K1 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">K1</span><h2>实底色组头 · 类型染色</h2></div>
+    <p class="card-d">组头横条用类型色的 8% 淡底 + 类型色文字，四组四色一眼分层；行保持中性。色彩即导航。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div class="k1" style="background:rgba(232,162,60,.1);color:#B07818">PPT 演示文稿 <span class="n">15</span><span class="sub">228.4 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.28 例行例会.pptx</span><span class="sz">4.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.14 例行例会.pptx</span><span class="sz">3.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.30 例行例会.pptx</span><span class="sz">2.8 MB</span></div>
+      <div class="more">… 还有 12 个 PPT</div>
+      <div class="k1" style="background:rgba(91,143,217,.1);color:#4472B8">Word 文档 <span class="n">2</span><span class="sub">2.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">开题报告-微纳米气泡.docx</span><span class="sz">1.6 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">毕业论文初稿.docx</span><span class="sz">520 KB</span></div>
+      <div class="k1" style="background:rgba(224,108,90,.1);color:#C04E3E">PDF 文档 <span class="n">1</span><span class="sub">840 KB</span></div>
+      <div class="it"><span class="dot" style="background:var(--pdf)"></span><span class="nm">答辩评分表.pdf</span><span class="sz">840 KB</span></div>
+      <div class="k1" style="background:rgba(127,168,107,.12);color:#5C7F4C">图片 <span class="n">2</span><span class="sub">1.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">实验装置照片.png</span><span class="sz">980 KB</span></div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">气泡高速摄像帧.png</span><span class="sz">260 KB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 四色分层扫读最快，组与组边界最清楚</span><span class="con">⚠ 色彩浓度需克制，避免花</span></div>
+  </div>
+
+  <!-- ═══════ K2 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">K2</span><h2>卡片分组 · 每类一卡</h2></div>
+    <p class="card-d">每种类型一张白卡：灰底标题条（徽标 + 类型名 + 计数 + 小计）+ 卡内文件行。物理边界最强，滚动时分类感不散。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div class="k2">
+        <div class="hd"><span class="glyph" style="color:var(--ppt);background:rgba(232,162,60,.14)">PPT</span>PPT 演示文稿 <span class="n">15</span><span class="sub">228.4 MB</span></div>
+        <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.28 例行例会.pptx</span><span class="sz">4.1 MB</span></div>
+        <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.14 例行例会.pptx</span><span class="sz">3.2 MB</span></div>
+        <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.30 例行例会.pptx</span><span class="sz">2.8 MB</span></div>
+        <div class="more">… 还有 12 个 PPT</div>
+      </div>
+      <div class="k2">
+        <div class="hd"><span class="glyph" style="color:var(--doc);background:rgba(91,143,217,.14)">DOC</span>Word 文档 <span class="n">2</span><span class="sub">2.1 MB</span></div>
+        <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">开题报告-微纳米气泡.docx</span><span class="sz">1.6 MB</span></div>
+        <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">毕业论文初稿.docx</span><span class="sz">520 KB</span></div>
+      </div>
+      <div class="k2">
+        <div class="hd"><span class="glyph" style="color:var(--pdf);background:rgba(224,108,90,.14)">PDF</span>PDF 文档 <span class="n">1</span><span class="sub">840 KB</span></div>
+        <div class="it"><span class="dot" style="background:var(--pdf)"></span><span class="nm">答辩评分表.pdf</span><span class="sz">840 KB</span></div>
+      </div>
+      <div class="k2">
+        <div class="hd"><span class="glyph" style="color:var(--img);background:rgba(127,168,107,.16)">IMG</span>图片 <span class="n">2</span><span class="sub">1.2 MB</span></div>
+        <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">实验装置照片.png</span><span class="sz">980 KB</span></div>
+        <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">气泡高速摄像帧.png</span><span class="sz">260 KB</span></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 卡片边界最明确，结构与右栏其他卡片区一致</span><span class="con">⚠ 卡片边框 + 标题条纵向开销最大</span></div>
+  </div>
+
+  <!-- ═══════ K3 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">K3</span><h2>图标瓦片组头 · 应用图标式</h2></div>
+    <p class="card-d">组头是一枚类型色实底瓦片（白字 PPT/DOC/PDF/IMG）+ 两行标题（类型名 / 数量·小计）。桌面图标的既视感，最精致。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div class="k3">
+        <div class="tile" style="background:linear-gradient(135deg,#F0B25A,#DD8F1F)">PPT</div>
+        <div><div class="tt">PPT 演示文稿</div><div class="ts">15 项 · 228.4 MB</div></div>
+        <span class="n">15</span>
+      </div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.28 例行例会.pptx</span><span class="sz">4.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.14 例行例会.pptx</span><span class="sz">3.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.30 例行例会.pptx</span><span class="sz">2.8 MB</span></div>
+      <div class="more">… 还有 12 个 PPT</div>
+      <div class="k3">
+        <div class="tile" style="background:linear-gradient(135deg,#6E9FE0,#4A7CC0)">DOC</div>
+        <div><div class="tt">Word 文档</div><div class="ts">2 项 · 2.1 MB</div></div>
+        <span class="n">2</span>
+      </div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">开题报告-微纳米气泡.docx</span><span class="sz">1.6 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">毕业论文初稿.docx</span><span class="sz">520 KB</span></div>
+      <div class="k3">
+        <div class="tile" style="background:linear-gradient(135deg,#E58373,#CE5643)">PDF</div>
+        <div><div class="tt">PDF 文档</div><div class="ts">1 项 · 840 KB</div></div>
+        <span class="n">1</span>
+      </div>
+      <div class="it"><span class="dot" style="background:var(--pdf)"></span><span class="nm">答辩评分表.pdf</span><span class="sz">840 KB</span></div>
+      <div class="k3">
+        <div class="tile" style="background:linear-gradient(135deg,#93BA7D,#6D9555)">IMG</div>
+        <div><div class="tt">图片</div><div class="ts">2 项 · 1.2 MB</div></div>
+        <span class="n">2</span>
+      </div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">实验装置照片.png</span><span class="sz">980 KB</span></div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">气泡高速摄像帧.png</span><span class="sz">260 KB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 瓦片视觉锚点最强，双行标题信息层次好</span><span class="con">⚠ 每组头 34px 瓦片偏高，组多时占空间</span></div>
+  </div>
+
+  <!-- ═══════ K4 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">K4</span><h2>色底文件行 · 颜色沉进行里</h2></div>
+    <p class="card-d">组头只剩极轻的小标签行，颜色交给文件行本体：每行左侧 3px 类型色边 + 行底 4% 类型色淡染。行即分类，密度与 T4 相当但色彩更明确。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div class="k4hd">PPT 演示文稿<span class="n">15 · 228.4 MB</span><span class="rule"></span></div>
+      <div class="it tint" style="border-left-color:var(--ppt);background:rgba(232,162,60,.05)"><span class="nm">2026.5.28 例行例会.pptx</span><span class="sz">4.1 MB</span></div>
+      <div class="it tint" style="border-left-color:var(--ppt);background:rgba(232,162,60,.05)"><span class="nm">2026.5.14 例行例会.pptx</span><span class="sz">3.2 MB</span></div>
+      <div class="it tint" style="border-left-color:var(--ppt);background:rgba(232,162,60,.05)"><span class="nm">2026.4.30 例行例会.pptx</span><span class="sz">2.8 MB</span></div>
+      <div class="more">… 还有 12 个 PPT</div>
+      <div class="k4hd">Word 文档<span class="n">2 · 2.1 MB</span><span class="rule"></span></div>
+      <div class="it tint" style="border-left-color:var(--doc);background:rgba(91,143,217,.05)"><span class="nm">开题报告-微纳米气泡.docx</span><span class="sz">1.6 MB</span></div>
+      <div class="it tint" style="border-left-color:var(--doc);background:rgba(91,143,217,.05)"><span class="nm">毕业论文初稿.docx</span><span class="sz">520 KB</span></div>
+      <div class="k4hd">PDF 文档<span class="n">1 · 840 KB</span><span class="rule"></span></div>
+      <div class="it tint" style="border-left-color:var(--pdf);background:rgba(224,108,90,.05)"><span class="nm">答辩评分表.pdf</span><span class="sz">840 KB</span></div>
+      <div class="k4hd">图片<span class="n">2 · 1.2 MB</span><span class="rule"></span></div>
+      <div class="it tint" style="border-left-color:var(--img);background:rgba(127,168,107,.06)"><span class="nm">实验装置照片.png</span><span class="sz">980 KB</span></div>
+      <div class="it tint" style="border-left-color:var(--img);background:rgba(127,168,107,.06)"><span class="nm">气泡高速摄像帧.png</span><span class="sz">260 KB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 行即分类，密度高且色彩明确，最整体</span><span class="con">⚠ 行淡染在部分屏幕可能显脏，浓度要调</span></div>
+  </div>
+</div>
+</body>
+</html>

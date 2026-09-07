@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>「随机」按钮动效提案 — 提取码生成</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --danger: #D94F2B;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --grad: linear-gradient(135deg, #0E766E, #12897C);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1020px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+.sec { margin-top: 30px; display: flex; gap: 24px; align-items: flex-start; }
+.sec-cap { width: 320px; flex: none; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; margin: 3px 0 6px; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-top: 8px; }
+.sec-desc b { color: var(--text-2); }
+.stage { flex: 1; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; padding: 22px 20px; }
+
+/* 模拟分享弹窗的提取码行 */
+.pwd-row { display: flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; width: 100%; max-width: 420px; }
+.pwd-row input { flex: 1; border: none; outline: none; padding: 10px 14px; font-family: var(--mono); font-size: 16px; letter-spacing: .3em; color: var(--text); background: var(--card); min-width: 0; }
+.rbtn { border: none; border-left: 1px solid var(--line-2); background: var(--bg); color: var(--text-2); font: inherit; font-size: 12.5px; padding: 0 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background .15s, color .15s; }
+.rbtn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rbtn:hover { background: var(--primary-bg); color: var(--primary-dark); }
+
+/* A 转圈+翻牌 */
+.vA .rbtn.spin svg { animation: a-spin .5s ease; }
+@keyframes a-spin { from { transform: rotate(0) } to { transform: rotate(360deg) } }
+.vA .pwd-row input.rolling { animation: a-flip .5s ease; }
+@keyframes a-flip { 0% { transform: rotateX(0) } 50% { transform: rotateX(90deg); opacity: .3 } 100% { transform: rotateX(0); opacity: 1 } }
+
+/* B 老虎机滚动 */
+.vB .rbtn svg { transition: transform .5s var(--ease, ease); }
+.vB .rbtn.spin svg { animation: b-spin .6s cubic-bezier(.4,0,.2,1); }
+@keyframes b-spin { 0% { transform: rotate(0) } 60% { transform: rotate(405deg) } 100% { transform: rotate(360deg) } }
+.vB .pwd-row input { transition: none; }
+.vB .pwd-row input.rolling { animation: b-shift .5s steps(6) both; }
+@keyframes b-shift { 0% { filter: blur(0) } 30% { filter: blur(2.5px) } 70% { filter: blur(2.5px) } 100% { filter: blur(0) } }
+.vB .pwd-row { position: relative; }
+.vB .pwd-row::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, transparent 30%, rgba(14,118,110,.07) 50%, transparent 70%); opacity: 0; }
+.vB .pwd-row.rolling::after { animation: b-sweep .55s ease; }
+@keyframes b-sweep { 0% { opacity: 0; transform: translateX(-60%) } 50% { opacity: 1 } 100% { opacity: 0; transform: translateX(60%) } }
+
+/* C 逐位翻字 */
+.vC .pwd-row input { letter-spacing: .3em; }
+.vC .digit { display: inline-block; animation: c-pop .3s ease both; }
+@keyframes c-pop { 0% { transform: translateY(-8px); opacity: 0 } 100% { transform: translateY(0); opacity: 1 } }
+.vC .pwd-fake { flex: 1; padding: 10px 14px; font-family: var(--mono); font-size: 16px; letter-spacing: .3em; min-height: 41px; }
+.vC .pwd-fake .ph { color: var(--text-4); }
+
+/* D 按压+波纹 */
+.vD .rbtn { position: relative; overflow: hidden; }
+.vD .rbtn:active { transform: scale(.96); }
+.vD .rbtn .ripple { position: absolute; border-radius: 50%; background: rgba(14,118,110,.25); transform: scale(0); animation: d-rip .5s ease-out forwards; pointer-events: none; }
+@keyframes d-rip { to { transform: scale(3); opacity: 0 } }
+.vD .rbtn.spin svg { animation: a-spin .45s ease; }
+.vD .pwd-row input.rolling { animation: d-blink .4s steps(3) both; }
+@keyframes d-blink { 0% { opacity: 1 } 40% { opacity: .25 } 100% { opacity: 1 } }
+.vD .pwd-row { transition: border-color .3s, box-shadow .3s; }
+.vD .pwd-row.flash { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(14,118,110,.12); }
+
+footer { margin-top: 40px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+.tip { margin-top: 10px; font-size: 11px; color: var(--text-4); }
+</style>
+</head>
+<body>
+<header>
+  <h1>「随机」按钮动效 — 4 种提案 (可点击体验)</h1>
+  <p>场景：分享弹窗「提取码」输入框右侧的随机按钮。四版都保留现在的骨架（描边图标 + 随机 字样、hover 浅青），只是点下去之后的反馈不同。<b>每版都可以直接点「随机」体验。</b></p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">FX A</span>
+    <h2>图标转一圈 + 翻牌换数</h2>
+    <span class="tag">轻快 · 推荐</span>
+    <div class="sec-desc">点按瞬间图标<b>360° 旋转</b>，提取码整体做一次 X 轴翻牌（像翻便签）。500ms 内结束，干净利落不抢戏。</div>
+  </div>
+  <div class="stage vA">
+    <div class="pwd-row">
+      <input id="a-inp" value="1234" maxlength="4" />
+      <button class="rbtn" id="a-btn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>随机</button>
+    </div>
+    <p class="tip">↑ 点击「随机」体验</p>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">FX B</span>
+    <h2>老虎机滚动 + 扫光</h2>
+    <span class="tag">最有"生成感"</span>
+    <div class="sec-desc">图标带<b>惯性过冲</b>地旋转，数字区虚化滚动 + 一道浅青扫光掠过。反馈最隆重，"随机"的仪式感拉满。</div>
+  </div>
+  <div class="stage vB">
+    <div class="pwd-row" id="b-row">
+      <input id="b-inp" value="1234" maxlength="4" />
+      <button class="rbtn" id="b-btn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>随机</button>
+    </div>
+    <p class="tip">↑ 点击「随机」体验</p>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">FX C</span>
+    <h2>逐位翻字</h2>
+    <span class="tag">数字逐个落位 · 最精致</span>
+    <div class="sec-desc">四位数字<b>从左到右依次弹跳落位</b>（80ms 间隔），图标小转。最能看清"每个数字是新生成的"，实现上要把 input 换成数字格子。</div>
+  </div>
+  <div class="stage vC">
+    <div class="pwd-row">
+      <div class="pwd-fake" id="c-fake"></div>
+      <button class="rbtn" id="c-btn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>随机</button>
+    </div>
+    <p class="tip">↑ 点击「随机」体验</p>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap">
+    <span class="no">FX D</span>
+    <h2>按压回弹 + 波纹 + 边框闪光</h2>
+    <span class="tag">物理反馈最强</span>
+    <div class="sec-desc">按下按钮<b>缩到 96%</b> + Material 波纹扩散，生成后输入框<b>青色描边闪一下</b>确认"新码已就位"。</div>
+  </div>
+  <div class="stage vD">
+    <div class="pwd-row" id="d-row">
+      <input id="d-inp" value="1234" maxlength="4" />
+      <button class="rbtn" id="d-btn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>随机</button>
+    </div>
+    <p class="tip">↑ 点击「随机」体验</p>
+  </div>
+</section>
+
+<footer>
+  · 四案共同项：图标统一用现在的双箭头 refresh 描边；生成值仍为 4 位数字；prefers-reduced-motion 自动降级。<br>
+  · 回复字母即可（如「用 B」）。
+</footer>
+
+<script>
+const rnd = () => String(Math.floor(1000 + Math.random() * 9000));
+function once(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+// A
+document.getElementById('a-btn').onclick = () => {
+  const b = document.getElementById('a-btn'), i = document.getElementById('a-inp');
+  once(b, 'spin'); once(i, 'rolling');
+  setTimeout(() => { i.value = rnd(); }, 240);
+};
+// B
+document.getElementById('b-btn').onclick = () => {
+  const b = document.getElementById('b-btn'), i = document.getElementById('b-inp'), r = document.getElementById('b-row');
+  once(b, 'spin'); once(i, 'rolling'); once(r, 'rolling');
+  setTimeout(() => { i.value = rnd(); }, 280);
+};
+// C
+const fake = document.getElementById('c-fake');
+function renderC(v, animate) {
+  fake.innerHTML = v.split('').map((d, idx) => {
+    if (!animate) return `<span class="digit" style="animation:none">${d}</span>`;
+    return `<span class="digit" style="animation-delay:${idx * 80}ms">${d}</span>`;
+  }).join('');
+}
+renderC('1234', false);
+document.getElementById('c-btn').onclick = () => {
+  once(document.getElementById('c-btn'), 'spin');
+  const v = rnd();
+  // 逐位滚动两拍再落位
+  let tick = 0;
+  const iv = setInterval(() => {
+    tick++;
+    renderC(v.split('').map((d, idx) => (idx * 2 < tick && tick < idx * 2 + 6) ? String(Math.floor(Math.random() * 10)) : (tick >= idx * 2 + 6 ? d : String(Math.floor(Math.random() * 10)))).join(''), true);
+    if (tick > 12) { clearInterval(iv); renderC(v, true); }
+  }, 60);
+};
+// D
+document.getElementById('d-btn').onclick = (ev) => {
+  const b = document.getElementById('d-btn'), i = document.getElementById('d-inp'), r = document.getElementById('d-row');
+  const rect = b.getBoundingClientRect();
+  const rip = document.createElement('span');
+  rip.className = 'ripple';
+  const size = Math.max(rect.width, rect.height);
+  rip.style.width = rip.style.height = size + 'px';
+  rip.style.left = (ev.clientX - rect.left - size / 2) + 'px';
+  rip.style.top = (ev.clientY - rect.top - size / 2) + 'px';
+  b.appendChild(rip);
+  setTimeout(() => rip.remove(), 550);
+  once(b, 'spin'); once(i, 'rolling'); once(r, 'flash');
+  setTimeout(() => { i.value = rnd(); }, 180);
+};
+</script>
+</body>
+</html>

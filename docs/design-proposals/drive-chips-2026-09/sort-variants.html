@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>排序控件变体 · 基于 B — 网盘筛选 chips 提案 2</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --pdf: #B3392F; --doc: #2F5D8A; --ppt: #B07C24; --excel: #3E7A52;
+  --image: #7C4E96; --video: #A84B6F; --audio: #B07C24; --textfile: #6B6152;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1180px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 32px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 12px; }
+.sec-desc b { color: var(--text-2); }
+
+.stage { background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 16px 18px 14px; position: relative; }
+.stage .lab { font-size: 11px; color: var(--text-3); }
+.stage .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 0; }
+.stage .row + .row { margin-top: 8px; }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 9999px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.chip.on { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); font-weight: 600; }
+.chip svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.chip .arr { width: 12px; height: 12px; stroke-width: 2; }
+kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--card); color: var(--text-3); }
+.hint { margin-left: auto; font-size: 11.5px; color: var(--text-4); display: flex; gap: 12px; align-items: center; }
+
+/* S2 分段控件 */
+.seg { display: inline-flex; align-items: center; padding: 2px; border-radius: 9999px; background: rgba(45,58,53,.08); border: 1px solid var(--line-2); }
+.seg button { border: none; background: none; font: inherit; font-size: 12px; color: var(--text-2); padding: 4px 13px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.seg button svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.seg button.on { background: var(--card); color: var(--primary-dark); font-weight: 600; box-shadow: 0 1px 3px rgba(20,40,35,.12); }
+
+/* S1/S5 下拉 mock */
+.dd-wrap { position: relative; display: inline-block; }
+.dd-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 168px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 8px 28px rgba(20,40,35,.16); padding: 5px; }
+.dd-menu button { display: flex; width: 100%; align-items: center; gap: 7px; border: none; background: none; font: inherit; font-size: 12.5px; color: var(--text-2); padding: 7px 10px; border-radius: 7px; cursor: pointer; }
+.dd-menu button:hover { background: var(--bg); }
+.dd-menu button.on { color: var(--primary-dark); font-weight: 600; background: var(--primary-bg); }
+.dd-menu button svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dd-menu .ck { margin-left: auto; }
+
+/* S3 文字 tab */
+.ttab { display: inline-flex; align-items: center; gap: 14px; }
+.ttab button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--text-2); padding: 2px 1px 5px; cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.ttab button svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ttab button.on { color: var(--primary-dark); font-weight: 600; }
+.ttab button.on::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--primary); }
+
+/* S4 移除后: mono 指示 */
+.szind { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-4); }
+/* 表头 mock */
+.thead { margin-top: 10px; display: grid; grid-template-columns: 34px minmax(0,1fr) 86px 108px 118px 48px; gap: 6px; align-items: center; height: 34px; padding: 0 12px; background: var(--card); border: 1px solid var(--line-2); border-radius: 8px; font-size: 11px; font-weight: 500; letter-spacing: .06em; color: var(--text-3); }
+.thead .sortable { cursor: pointer; }
+.thead .hot { color: var(--primary-dark); }
+.thead .arr2 { color: var(--primary); font-size: 9px; margin-left: 3px; }
+
+footer { margin-top: 36px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>排序控件变体 — 类型 chips 固定用 B（类型色描边图标）</h1>
+  <p>上一页 B 方案里的排序仍是「三枚胶囊 + active 箭头」。这一页单独把<b>排序控件</b>换成 5 种别的做法，右侧类型 chips 全部固定为 B 版式，方便你直接对比整行观感。每版都标了空间开销和取舍。</p>
+</header>
+
+<!-- S1 -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">SORT 1</span><h2>下拉收纳 · 单 chip</h2><span class="tag">最省空间 · 推荐</span></div>
+  <div class="sec-desc">三枚胶囊收进一枚 chip，点开下拉选择（右图为展开态示意）。<b>省出来的宽度能让 8 个类型 chip 一行放完</b>，不再换行；代价是排序多一次点击。</div>
+  <div class="stage" style="margin-bottom:118px">
+    <div class="row">
+      <span class="dd-wrap">
+        <span class="chip on">排序 · 最新上传 <svg class="arr" viewBox="0 0 24 24"><path d="M12 5v14m0 0-4-4m4 4 4-4"/></svg></span>
+        <span class="dd-menu">
+          <button class="on">最新上传 <svg class="ck" viewBox="0 0 24 24"><path d="m5 12 5 5 9-9"/></svg></button>
+          <button>最早上传</button>
+          <button>最近修改</button>
+        </span>
+      </span>
+      <span class="lab">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><svg style="stroke:var(--pdf)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>PDF</span>
+      <span class="chip"><svg style="stroke:var(--doc)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Word</span>
+      <span class="chip"><svg style="stroke:var(--ppt)" viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg>PPT</span>
+      <span class="chip"><svg style="stroke:var(--excel)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg>Excel</span>
+      <span class="chip"><svg style="stroke:var(--image)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg>图片</span>
+      <span class="chip"><svg style="stroke:var(--video)" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg>视频</span>
+      <span class="chip"><svg style="stroke:var(--audio)" viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg>音频</span>
+      <span class="chip"><svg style="stroke:var(--textfile)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg>文本</span>
+    </div>
+  </div>
+</section>
+
+<!-- S2 -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">SORT 2</span><h2>分段控件 · segmented</h2><span class="tag">一体化 · 无箭头</span></div>
+  <div class="sec-desc">灰轨 + 白色浮起滑块的分段控件（iOS 风），选中段白底浮起 + 深青字，不画箭头（方向由表头承担）。比三枚散 chip 更「一个控件」，视觉更整。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="lab">排序</span>
+      <span class="seg">
+        <button class="on">最新上传</button>
+        <button>最早上传</button>
+        <button>最近修改</button>
+      </span>
+      <span class="lab" style="margin-left:6px">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><svg style="stroke:var(--pdf)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>PDF</span>
+      <span class="chip"><svg style="stroke:var(--doc)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Word</span>
+      <span class="chip"><svg style="stroke:var(--ppt)" viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg>PPT</span>
+      <span class="chip"><svg style="stroke:var(--excel)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg>Excel</span>
+      <span class="chip"><svg style="stroke:var(--image)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg>图片</span>
+      <span class="chip"><svg style="stroke:var(--video)" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg>视频</span>
+      <span class="chip"><svg style="stroke:var(--audio)" viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg>音频</span>
+      <span class="chip"><svg style="stroke:var(--textfile)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg>文本</span>
+    </div>
+  </div>
+</section>
+
+<!-- S3 -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">SORT 3</span><h2>文字下划线 tab</h2><span class="tag">最轻 · 无框化</span></div>
+  <div class="sec-desc">排序完全去框：三段纯文字，选中项深青加粗 + 2px 青色下划线 + 细箭头。视觉重量最小，和面包屑/快捷区同一气质；醒目度最低。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="lab">排序</span>
+      <span class="ttab">
+        <button class="on">最新上传 <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-4-4m4 4 4-4"/></svg></button>
+        <button>最早上传</button>
+        <button>最近修改</button>
+      </span>
+      <span class="lab" style="margin-left:6px">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><svg style="stroke:var(--pdf)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>PDF</span>
+      <span class="chip"><svg style="stroke:var(--doc)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Word</span>
+      <span class="chip"><svg style="stroke:var(--ppt)" viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg>PPT</span>
+      <span class="chip"><svg style="stroke:var(--excel)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg>Excel</span>
+      <span class="chip"><svg style="stroke:var(--image)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg>图片</span>
+      <span class="chip"><svg style="stroke:var(--video)" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg>视频</span>
+      <span class="chip"><svg style="stroke:var(--audio)" viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg>音频</span>
+      <span class="chip"><svg style="stroke:var(--textfile)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg>文本</span>
+    </div>
+  </div>
+</section>
+
+<!-- S4 -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">SORT 4</span><h2>删掉排序组 · 回归视觉稿</h2><span class="tag">排序走表头 · 与 style-b 完全一致</span></div>
+  <div class="sec-desc">视觉稿 B 本来就没有排序胶囊：排序靠<b>点表头</b>（名称 / 大小 / 上传时间，已实现），当前排序以 mono 小字显示在面包屑行右端。整个筛选区只剩类型一行，与稿零偏差。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="lab">课题组网盘 / 团队共享盘</span>
+      <span class="szind">12 项 · 最新上传 ↓</span>
+    </div>
+    <div class="row">
+      <span class="lab">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><svg style="stroke:var(--pdf)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>PDF</span>
+      <span class="chip"><svg style="stroke:var(--doc)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Word</span>
+      <span class="chip"><svg style="stroke:var(--ppt)" viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg>PPT</span>
+      <span class="chip"><svg style="stroke:var(--excel)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg>Excel</span>
+      <span class="chip"><svg style="stroke:var(--image)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg>图片</span>
+      <span class="chip"><svg style="stroke:var(--video)" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg>视频</span>
+      <span class="chip"><svg style="stroke:var(--audio)" viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg>音频</span>
+      <span class="chip"><svg style="stroke:var(--textfile)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg>文本</span>
+    </div>
+    <div class="thead">
+      <span></span><span class="sortable">名称</span><span class="sortable" style="text-align:right">大小</span><span>上传者</span><span class="sortable hot">上传时间 <span class="arr2">▼</span></span><span>收藏</span>
+    </div>
+  </div>
+</section>
+
+<!-- S5 -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">SORT 5</span><h2>单 chip 循环切换</h2><span class="tag">最小占用 · 点击循环</span></div>
+  <div class="sec-desc">只留一枚 chip，点击在 最新上传 ↓ → 最早上传 ↑ → 最近修改 ↓ 之间循环。占用最小，但无法直接跳到任意一项（要连点）。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="chip on">排序 最新上传 <svg class="arr" viewBox="0 0 24 24"><path d="M12 5v14m0 0-4-4m4 4 4-4"/></svg></span>
+      <span class="lab">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><svg style="stroke:var(--pdf)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>PDF</span>
+      <span class="chip"><svg style="stroke:var(--doc)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Word</span>
+      <span class="chip"><svg style="stroke:var(--ppt)" viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg>PPT</span>
+      <span class="chip"><svg style="stroke:var(--excel)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg>Excel</span>
+      <span class="chip"><svg style="stroke:var(--image)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg>图片</span>
+      <span class="chip"><svg style="stroke:var(--video)" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg>视频</span>
+      <span class="chip"><svg style="stroke:var(--audio)" viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg>音频</span>
+      <span class="chip"><svg style="stroke:var(--textfile)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg>文本</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 类型 chips 已按你选的 B（类型色描边图标）固定，五个排序变体都在 B 的基础上对比整行效果。<br>
+  · 回复格式如「B + SORT 1」；SORT 1 落地时下拉菜单用现有 el-dropdown 实现，键盘 ↑↓ 可选。
+</footer>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>「移动到」弹窗重设计 — 档案系一致化</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24; --pdf: #B3392F;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --grad: linear-gradient(135deg, #0E766E, #12897C);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1140px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 30px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 14px; }
+.sec-desc b { color: var(--text-2); }
+.stage { background: #26302c; border-radius: 12px; padding: 32px 20px; display: flex; justify-content: center; }
+
+/* 弹窗通用 */
+.dlg { background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(10,20,16,.45); overflow: hidden; width: 480px; }
+.d-head { padding: 18px 22px 0; position: relative; }
+.d-title { font-size: 15.5px; font-weight: 700; }
+.d-sub { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--text-4); margin-top: 3px; }
+.d-x { position: absolute; right: 14px; top: 14px; width: 28px; height: 28px; border: none; background: none; color: var(--text-3); font-size: 16px; cursor: pointer; border-radius: 7px; }
+.d-x:hover { background: var(--bg); color: var(--text); }
+.d-body { padding: 16px 22px; }
+.d-foot { padding: 13px 22px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--line); background: var(--bg); }
+.btn { font: inherit; font-size: 13px; padding: 8px 18px; border-radius: 8px; cursor: pointer; transition: all .15s; }
+.btn.ghost { border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); }
+.btn.ghost:hover { border-color: var(--primary-border); color: var(--primary-dark); }
+.btn.pri { border: none; background: var(--grad); color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+.btn.pri:hover { transform: translateY(-1px); }
+
+/* 文件卡 (待移档案) */
+.fcard { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; }
+.fcard .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ppt); flex: none; }
+.fcard .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.fcard .sz { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+
+/* 搜索框 */
+.srch { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
+.srch svg { width: 13px; height: 13px; stroke: var(--text-3); fill: none; stroke-width: 1.8; }
+.srch input { flex: 1; border: none; outline: none; background: none; font: inherit; font-size: 12.5px; color: var(--text); }
+
+/* 树 */
+.tree { border: 1px solid var(--line); border-radius: 8px; padding: 6px; max-height: 260px; overflow-y: auto; background: var(--card); }
+.tree::-webkit-scrollbar { width: 8px; } .tree::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+.tn { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+.tn svg { width: 15px; height: 15px; stroke: var(--primary); fill: none; stroke-width: 1.7; flex: none; }
+.tn .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tn .c { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.tn:hover { background: var(--bg); }
+.tn.on { background: var(--primary-bg); color: var(--primary-dark); font-weight: 600; }
+.tn.on svg { stroke: var(--primary-dark); }
+.tn .tw { width: 12px; text-align: center; color: var(--text-4); font-size: 9px; flex: none; }
+.nest { margin-left: 17px; border-left: 1px dashed var(--line-2); padding-left: 6px; }
+.troot { font-size: 11px; letter-spacing: .1em; color: var(--text-3); padding: 4px 9px 6px; display: flex; align-items: center; gap: 6px; }
+.troot svg { width: 12px; height: 12px; stroke: var(--primary); fill: none; stroke-width: 1.8; }
+
+/* 选中条 */
+.selbar { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; margin-top: 10px; font-size: 12.5px; }
+.selbar .k { color: var(--text-3); flex: none; }
+.selbar .v { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.selbar svg { width: 14px; height: 14px; stroke: var(--primary); fill: none; stroke-width: 1.7; flex: none; }
+
+/* B 面包屑网格 */
+.crumbs { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--text-3); margin-bottom: 10px; flex-wrap: wrap; }
+.crumbs button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--text-3); padding: 3px 6px; border-radius: 5px; cursor: pointer; }
+.crumbs button:hover { background: var(--card); color: var(--primary-dark); }
+.crumbs .cur { color: var(--text); font-weight: 600; padding: 3px 6px; }
+.crumbs .sep { color: var(--text-4); }
+.fgrid { border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 240px; overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--card); }
+.fgrid::-webkit-scrollbar { width: 8px; } .fgrid::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+.fcell { border: 1px solid var(--line); border-radius: 8px; padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; transition: all .15s; }
+.fcell svg { width: 22px; height: 22px; stroke: var(--primary); fill: none; stroke-width: 1.6; }
+.fcell .nm { font-size: 11.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fcell .ct { font-family: var(--mono); font-size: 9.5px; color: var(--text-4); }
+.fcell:hover { border-color: var(--primary-border); background: var(--primary-bg); }
+.fcell.up { color: var(--text-3); } .fcell.up svg { stroke: var(--text-3); }
+
+/* C 快捷 chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip { font: inherit; font-size: 11.5px; padding: 5px 11px; border-radius: 9999px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); cursor: pointer; }
+.chip:hover { border-color: var(--primary-border); color: var(--primary-dark); background: var(--primary-bg); }
+.chip .k { font-family: var(--mono); font-size: 9.5px; color: var(--text-4); margin-left: 3px; }
+
+/* D 台账节 */
+.d-head .dbl { border-bottom: 3px double var(--line-2); padding-bottom: 12px; }
+.sect { padding: 12px 22px; border-bottom: 1px solid var(--line); }
+.sect:last-of-type { border-bottom: none; }
+.scap { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.scap .no { font-family: var(--mono); font-size: 10px; color: var(--primary); margin-right: 6px; }
+.scap .en { font-family: var(--mono); font-size: 9px; letter-spacing: .12em; color: var(--text-4); margin-left: 6px; font-weight: 400; }
+.sect .tree { max-height: 180px; }
+
+footer { margin-top: 34px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>「移动到」弹窗重设计 — 4 种方案</h1>
+  <p>现状问题：渐变题头旧语言、📁 emoji、「顶级目录 (我的网盘)」个人盘旧称、<b>「可见性自动升级」文案已过时</b>（公开属性改由分享驱动）、还有一个真 bug——树走个人盘过滤，单一团队空间下误显「还没有文件夹」。<br>四案共同修正：白卡墨线题头 + 待移文件卡 + 团队共享盘树 (真实数据) + 已选位置条 + 深青「移动到此」；<b>可见性文案全部移除</b>。</p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">MOVE A</span><h2>墨线树选式</h2><span class="tag">同新建文件夹弹窗语言 · 推荐</span></div>
+  <div class="sec-desc">题头带 <b>待移文件卡</b>，搜索框可按名过滤文件夹，团队共享盘完整树选目标，底部已选位置条。与 CreateFolderDialog 完全同血统。</div>
+  <div class="stage">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="d-title">移动到</div>
+        <div class="d-sub">MOVE · MICROBUBBLE LAB DRIVE</div>
+        <button class="d-x">✕</button>
+      </div>
+      <div class="d-body">
+        <div class="fcard" style="margin-bottom:12px">
+          <span class="dot"></span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span>
+        </div>
+        <div class="srch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg><input placeholder="搜索文件夹名…" /></div>
+        <div class="tree">
+          <div class="troot"><svg viewBox="0 0 24 24"><path d="M12 5.5l2 4 4.4.6-3.2 3.1.8 4.4-4-2.1-4 2.1.8-4.4-3.2-3.1 4.4-.6z"/></svg>团队共享盘</div>
+          <div class="tn"><span class="tw">▸</span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">组会PPT</span><span class="c">23</span></div>
+          <div class="nest">
+            <div class="tn"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">杨慈</span><span class="c">27</span></div>
+            <div class="tn on"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">胡小琪</span><span class="c">21</span></div>
+            <div class="tn"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">陈天祥</span><span class="c">9</span></div>
+          </div>
+          <div class="tn"><span class="tw">▸</span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">文献库</span><span class="c">41</span></div>
+          <div class="tn"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">实验数据</span><span class="c">17</span></div>
+        </div>
+        <div class="selbar"><span class="k">移动到</span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="v">团队共享盘 / 组会PPT / 胡小琪</span></div>
+      </div>
+      <div class="d-foot">
+        <button class="btn ghost">取消</button>
+        <button class="btn pri">移动到此</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">MOVE B</span><h2>面包屑导航式</h2><span class="tag">文件选择器风 · 逐层点入</span></div>
+  <div class="sec-desc">不用树：顶部面包屑定位当前层，中间 3 列<b>子文件夹网格</b>逐层点入（↑ 返回上层）。所选即所得，不用展开收起。</div>
+  <div class="stage">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="d-title">移动到</div>
+        <div class="d-sub">MOVE · MICROBUBBLE LAB DRIVE</div>
+        <button class="d-x">✕</button>
+      </div>
+      <div class="d-body">
+        <div class="fcard" style="margin-bottom:12px">
+          <span class="dot"></span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span>
+        </div>
+        <div class="crumbs">
+          <button>团队共享盘</button><span class="sep">/</span>
+          <button>组会PPT</button><span class="sep">/</span>
+          <span class="cur">2026 秋</span>
+        </div>
+        <div class="fgrid">
+          <div class="fcell up"><svg viewBox="0 0 24 24"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg><span class="nm">返回上层</span></div>
+          <div class="fcell"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">冯懿鑫</span><span class="ct">34 项</span></div>
+          <div class="fcell"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">关小未</span><span class="ct">21 项</span></div>
+          <div class="fcell"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">宋洋</span><span class="ct">15 项</span></div>
+          <div class="fcell"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">吴孟铨</span><span class="ct">25 项</span></div>
+          <div class="fcell"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="nm">张宏魁</span><span class="ct">15 项</span></div>
+        </div>
+        <div class="selbar"><span class="k">移动到</span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="v">组会PPT / 2026 秋 (当前层)</span></div>
+      </div>
+      <div class="d-foot">
+        <button class="btn ghost">取消</button>
+        <button class="btn pri">移动到此</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">MOVE C</span><h2>快捷推荐式</h2><span class="tag">一步直达 · 高频优先</span></div>
+  <div class="sec-desc">顶部一排<b>智能推荐位</b>（来源夹 / 最近移入 / 同级夹），点 chip 直达；下面仍是完整树兜底。高频移动一步完成。</div>
+  <div class="stage">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="d-title">移动到</div>
+        <div class="d-sub">MOVE · MICROBUBBLE LAB DRIVE</div>
+        <button class="d-x">✕</button>
+      </div>
+      <div class="d-body">
+        <div class="fcard" style="margin-bottom:12px">
+          <span class="dot"></span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span>
+        </div>
+        <div class="chips">
+          <button class="chip">📍 来源 组会PPT/2026 秋<span class="k">原位</span></button>
+          <button class="chip">🕘 最近移入 杨慈<span class="k">2 次</span></button>
+          <button class="chip">⭐ 我的收藏</button>
+        </div>
+        <div class="tree" style="max-height:190px">
+          <div class="troot"><svg viewBox="0 0 24 24"><path d="M12 5.5l2 4 4.4.6-3.2 3.1.8 4.4-4-2.1-4 2.1.8-4.4-3.2-3.1 4.4-.6z"/></svg>团队共享盘</div>
+          <div class="tn"><span class="tw">▸</span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">组会PPT</span><span class="c">23</span></div>
+          <div class="tn on"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">杨慈</span><span class="c">27</span></div>
+          <div class="tn"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">文献库</span><span class="c">41</span></div>
+        </div>
+        <div class="selbar"><span class="k">移动到</span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="v">团队共享盘 / 组会PPT / 杨慈</span></div>
+      </div>
+      <div class="d-foot">
+        <button class="btn ghost">取消</button>
+        <button class="btn pri">移动到此</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">MOVE D</span><h2>台账登记式</h2><span class="tag">§ 编号三节 · 档案仪式感</span></div>
+  <div class="sec-desc">§1 待移档案 → §2 目标位置 (树) → §3 底部确认条带双线。与右键菜单 D / 弹窗 B / 右栏 C 同一档案语言。</div>
+  <div class="stage">
+    <div class="dlg">
+      <div class="d-head">
+        <div class="dbl">
+          <div class="d-title">移动到</div>
+          <div class="d-sub">FOLDER TRANSFER · PL.01</div>
+        </div>
+        <button class="d-x">✕</button>
+      </div>
+      <div class="sect">
+        <div class="scap"><span class="no">§1</span>待移档案<span class="en">ITEM</span></div>
+        <div class="fcard">
+          <span class="dot"></span><span class="nm">2026.4.7 研二 杨慈.pptx</span><span class="sz">60.6 MB</span>
+        </div>
+      </div>
+      <div class="sect">
+        <div class="scap"><span class="no">§2</span>目标位置<span class="en">DESTINATION</span></div>
+        <div class="tree" style="max-height:180px">
+          <div class="troot"><svg viewBox="0 0 24 24"><path d="M12 5.5l2 4 4.4.6-3.2 3.1.8 4.4-4-2.1-4 2.1.8-4.4-3.2-3.1 4.4-.6z"/></svg>团队共享盘</div>
+          <div class="tn"><span class="tw">▸</span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">组会PPT</span><span class="c">23</span></div>
+          <div class="nest">
+            <div class="tn on"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">杨慈</span><span class="c">27</span></div>
+            <div class="tn"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">胡小琪</span><span class="c">21</span></div>
+          </div>
+          <div class="tn"><span class="tw"></span><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="n">实验数据</span><span class="c">17</span></div>
+        </div>
+      </div>
+      <div class="sect" style="display:flex; align-items:center; gap:8px; font-size:12.5px">
+        <svg style="width:14px;height:14px;stroke:var(--primary);fill:none;stroke-width:1.7" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span style="color:var(--text-3)">登记至</span><b>组会PPT / 杨慈</b>
+        <span style="margin-left:auto"></span>
+        <button class="btn ghost" style="padding:6px 14px">取消</button>
+        <button class="btn pri" style="padding:6px 14px">移动到此</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 四案共同项：修复「还没有文件夹」误报 (树改挂团队共享盘全量)；「顶级目录 (我的网盘)」→「团队共享盘 · 顶层」；可见性文案/徽章全部移除；待移文件卡置顶；深青「移动到此」。<br>
+  · 支持批量 (选中 N 项时文件卡显示「N 项 · X MB」)。<br>
+  · 回复字母即可（如「用 A」）。
+</footer>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>删除确认气泡 · 4 版方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-hi: #12968B; --paper: #FAF9F6;
+    --danger: #F56C6C;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  /* 评论行 mock (还原评论区语境) */
+  .ctx { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px; max-width: 520px; margin: 0 auto; position: relative; min-height: 190px; }
+  .cmt { display: flex; gap: 10px; }
+  .cmt .av { width: 36px; height: 36px; border-radius: 9999px; background: #0E766E; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; flex: none; }
+  .cmt .meta { flex: 1; min-width: 0; }
+  .cmt .nm { font-size: 13px; font-weight: 650; }
+  .cmt .tm { font-size: 11px; color: var(--txt2); margin-left: 8px; font-weight: 400; }
+  .cmt .del { float: right; font-size: 12px; color: var(--danger); cursor: pointer; }
+  .cmt .txt { font-size: 13.5px; margin-top: 8px; }
+  .cmt .reply { font-size: 12px; color: var(--txt2); margin-top: 14px; display: flex; gap: 5px; align-items: center; }
+
+  /* 气泡通用 */
+  .pop { position: absolute; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 32px rgba(20,40,35,.14); z-index: 5; }
+  .pop::after { content: ''; position: absolute; left: 38px; top: -6px; width: 10px; height: 10px; background: #fff; border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg); }
+  .btn { font-family: inherit; font-size: 12px; border-radius: 8px; padding: 7px 16px; cursor: pointer; transition: all .13s; border: 1px solid transparent; }
+  .btn.ghost { background: none; border-color: transparent; color: var(--txt2); }
+  .btn.ghost:hover { color: var(--txt); background: #F0EEE8; }
+  .btn.teal { background: var(--teal); color: #fff; font-weight: 600; }
+  .btn.teal:hover { background: var(--teal-hi); }
+  .btn.teal-o { background: none; border-color: var(--teal); color: var(--teal); font-weight: 600; }
+  .btn.teal-o:hover { background: rgba(14,118,110,.08); }
+  .qicon { display: inline-flex; width: 16px; height: 16px; border-radius: 9999px; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; color: #fff; flex: none; }
+  .qicon.teal { background: var(--teal); }
+
+  /* A: 紧凑 (现布局, 染青) */
+  .popA { top: 44px; left: 24px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+  .popA .q { font-size: 13px; color: var(--txt); display: flex; align-items: center; gap: 7px; }
+  .popA .acts { display: flex; gap: 6px; }
+
+  /* B: 归档确认卡 (重排版) */
+  .popB { top: 44px; left: 24px; right: 24px; padding: 16px 18px 14px; }
+  .popB::after { left: 30px; }
+  .popB .t { font-size: 13.5px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+  .popB .d { font-size: 12px; color: var(--txt2); margin-top: 6px; line-height: 1.6; }
+  .popB .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .popB .btn { padding: 7px 18px; }
+
+  /* C: 青描边低破坏 */
+  .popC { top: 44px; left: 24px; padding: 14px 16px; }
+  .popC .q { font-size: 13px; font-weight: 600; }
+  .popC .d { font-size: 11.5px; color: var(--txt2); margin-top: 4px; }
+  .popC .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  /* D: 行内确认 (无浮层) */
+  .inlineD { display: inline-flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 9999px; padding: 4px 5px 4px 12px; box-shadow: 0 4px 14px rgba(20,40,35,.10); }
+  .inlineD .q { font-size: 12px; color: var(--txt); }
+  .inlineD .yes { background: var(--teal); color: #fff; border: none; border-radius: 9999px; font-size: 11.5px; padding: 5px 13px; cursor: pointer; font-family: inherit; font-weight: 600; }
+  .inlineD .no { background: none; border: none; color: var(--txt2); font-size: 11.5px; cursor: pointer; font-family: inherit; padding: 5px 4px; }
+  .delchip { font-size: 12px; color: var(--danger); cursor: pointer; }
+  .delchip.swapped { display: none; }
+
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>删除确认气泡 · 4 版方案 (青色统一)</h1>
+  <p class="sub">确认按钮一律<b>归档青 #0E766E</b>，告别 accent 橙。方案差异在排版结构、警示强度与交互路径。A/B/C 是浮层样式变体，D 彻底去掉浮层。</p>
+
+  <!-- ═══════ A ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>青色极简 · 现布局染青</h2></div>
+    <p class="card-d">EP 默认布局不动：单行问句 + 取消/删除，只把确认按钮与 "?" 图标染青。改动最小。</p>
+    <div class="ctx">
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span><span class="del">删除</span>
+          <div class="txt">111</div>
+          <div class="reply">💬 回复</div>
+        </div>
+      </div>
+      <div class="pop popA">
+        <span class="q"><span class="qicon teal">?</span>确认删除此评论?</span>
+        <span class="acts"><button class="btn ghost">取消</button><button class="btn teal">删除</button></span>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 与线上一比一对应，只换颜色</span><span class="con">⚠ 单行排版信息量少</span></div>
+  </div>
+
+  <!-- ═══════ B ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>归档确认卡 · 重排版</h2></div>
+    <p class="card-d">重排结构：加粗问句 + 灰色后果说明（「删除后无法恢复」），按钮右对齐、取消描边化。最正式，像设计过的 Dialog 缩微版。</p>
+    <div class="ctx">
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span><span class="del">删除</span>
+          <div class="txt">111</div>
+          <div class="reply">💬 回复</div>
+        </div>
+      </div>
+      <div class="pop popB">
+        <div class="t"><span class="qicon teal">?</span>确认删除此评论？</div>
+        <div class="d">删除后评论无法恢复，被 @ 的成员将不再收到提醒。</div>
+        <div class="acts"><button class="btn ghost">取消</button><button class="btn teal">删除</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 后果说明 + 右对齐按钮，最稳重大气</span><span class="con">⚠ 气泡稍大（多一行说明）</span></div>
+  </div>
+
+  <!-- ═══════ C ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>青描边 · 低破坏感</h2></div>
+    <p class="card-d">确认键用青色描边而非实底——评论删除是低风险操作（可重新输入），弱化按钮重量，整体更轻。</p>
+    <div class="ctx">
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span><span class="del">删除</span>
+          <div class="txt">111</div>
+          <div class="reply">💬 回复</div>
+        </div>
+      </div>
+      <div class="pop popC">
+        <div class="q">确认删除此评论？</div>
+        <div class="d">删除后无法恢复</div>
+        <div class="acts"><button class="btn ghost">取消</button><button class="btn teal-o">删除</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 视觉最轻，符合低风险操作定位</span><span class="con">⚠ 描边按钮存在感弱，有人觉得不够"确定"</span></div>
+  </div>
+
+  <!-- ═══════ D ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>行内确认 · 无浮层</h2></div>
+    <p class="card-d">点「删除」后原位变成一枚「确认删除？ 是 / 否」胶囊，浮层彻底消失，交互路径最短。<b>可点击试玩</b>（点删除 → 是/否）。</p>
+    <div class="ctx" data-d>
+      <div class="cmt">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">15 小时前</span>
+          <span style="float:right"><span class="delchip del" data-del>删除</span></span>
+          <span class="inlineD" data-inline style="display:none">
+            <span class="q">确认删除？</span>
+            <button class="yes" data-yes>删除</button>
+            <button class="no" data-no>否</button>
+          </span>
+          <div class="txt">111</div>
+          <div class="reply">💬 回复</div>
+        </div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 无浮层定位/裁剪问题，误触后一键返回</span><span class="con">⚠ 行内空间有限，按钮较小</span></div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('[data-d]').forEach(function (ctx) {
+  var del = ctx.querySelector('[data-del]');
+  var inline = ctx.querySelector('[data-inline]');
+  del.addEventListener('click', function () {
+    del.classList.add('swapped');
+    inline.style.display = 'inline-flex';
+  });
+  ctx.querySelector('[data-no]').addEventListener('click', function () {
+    inline.style.display = 'none';
+    del.classList.remove('swapped');
+  });
+  ctx.querySelector('[data-yes]').addEventListener('click', function () {
+    inline.style.display = 'none';
+    del.classList.remove('swapped');
+    del.textContent = '已删除';
+    del.style.color = '#8A938E';
+    del.style.cursor = 'default';
+    setTimeout(function () { del.textContent = '删除'; del.style.color = ''; del.style.cursor = ''; }, 1600);
+  });
+});
+</script>
+</body>
+</html>

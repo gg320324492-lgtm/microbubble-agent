@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>右栏类型自适应预览 — 三栏内变形提案</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24; --pdf: #B3392F; --doc: #2F5D8A; --excel: #3E7A52; --img: #7C4E96; --video: #A84B6F;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --grad: linear-gradient(135deg, #0E766E, #12897C);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1240px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 32px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 16px; }
+.sec-desc b { color: var(--text-2); }
+.row { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+.st { text-align: center; }
+.st .lb { font-size: 11px; color: var(--text-3); margin-top: 8px; font-family: var(--mono); }
+
+/* ── 右栏通用 (宽 336; V4 宽 460 演示) ── */
+.rail { background: var(--card); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; }
+.rail.w336 { width: 336px; height: 620px; }
+.rail.w460 { width: 460px; height: 620px; transition: width .35s; }
+
+/* 舞台区 */
+.stg { position: relative; transition: height .35s cubic-bezier(.4,0,.2,1); overflow: hidden; display: grid; place-items: center; }
+.stg.a4 { height: 470px; background: #525659; }
+.stg.wide { height: 189px; background: #101613; }
+.stg.med { height: 300px; background: #525659; }
+.stg.card { height: 130px; background: linear-gradient(165deg, #fff, #F1EDE4); }
+
+.a4pg { width: 300px; height: 424px; background: #fff; box-shadow: 0 8px 26px rgba(0,0,0,.38); padding: 26px 24px; position: relative; }
+.a4pg h4 { font-size: 13px; color: var(--doc); margin-bottom: 9px; }
+.a4pg .ln { height: 5px; border-radius: 3px; background: #E2DFD8; margin-bottom: 7px; }
+.a4pg .ln.hl { background: #A7CCC6; }
+.a4pg .pno { position: absolute; bottom: 12px; left: 0; right: 0; text-align: center; font-family: var(--mono); font-size: 9.5px; color: var(--text-4); }
+.pgr { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px; background: var(--card); border-top: 1px solid var(--line); }
+.pgr button { font: inherit; font-size: 11px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.pgr .pg { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+
+.player { width: 100%; height: 100%; display: grid; place-items: center; position: relative; }
+.player .pl { width: 42px; height: 42px; border-radius: 50%; background: rgba(255,255,255,.15); border: 1.5px solid rgba(255,255,255,.6); display: grid; place-items: center; }
+.player .pl::after { content: ''; border-left: 13px solid #fff; border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 4px; }
+.player .pb { position: absolute; bottom: 0; left: 0; right: 0; padding: 7px 10px; background: linear-gradient(transparent, rgba(0,0,0,.6)); display: flex; align-items: center; gap: 8px; }
+.player .pb .t { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.3); position: relative; }
+.player .pb .t i { position: absolute; inset: 0 auto 0 0; width: 30%; background: #2A9D8F; border-radius: 2px; }
+.player .pb .tm { font-family: var(--mono); font-size: 8.5px; color: rgba(255,255,255,.8); }
+
+.aud { width: 100%; padding: 14px 18px; display: flex; flex-direction: column; gap: 9px; align-items: center; }
+.aud .disc { width: 40px; height: 40px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 15px; }
+.aud .wave { display: flex; align-items: center; gap: 2px; height: 22px; }
+.aud .wave i { width: 2.5px; border-radius: 1.5px; background: var(--primary-light); opacity: .8; }
+.aud .ctr { display: flex; align-items: center; gap: 9px; width: 100%; }
+.aud .ctr .t { font-family: var(--mono); font-size: 8.5px; color: var(--text-3); }
+.aud .ctr .t2 { flex: 1; height: 3px; border-radius: 2px; background: var(--line-2); position: relative; }
+.aud .ctr .t2 i { position: absolute; inset: 0 auto 0 0; width: 48%; background: var(--primary); border-radius: 2px; }
+.aud .ctr .pl { width: 24px; height: 24px; border-radius: 50%; background: var(--grad); position: relative; flex: none; }
+.aud .ctr .pl::after { content: ''; border-left: 8px solid #fff; border-top: 5px solid transparent; border-bottom: 5px solid transparent; position: absolute; left: 9px; top: 7px; }
+
+/* meta 区 */
+.meta { border-top: 1px solid var(--line); padding: 11px 16px; }
+.meta dl { display: grid; grid-template-columns: 52px 1fr; gap: 5px 9px; font-size: 11.5px; }
+.meta dt { color: var(--text-3); }
+.meta dd { color: var(--text-2); }
+.meta dd.mono { font-family: var(--mono); font-size: 10.5px; }
+.mtabs { display: flex; gap: 2px; padding: 9px 16px 0; border-top: 1px solid var(--line); }
+.mtab { border: none; background: none; font: inherit; font-size: 11.5px; color: var(--text-3); padding: 6px 11px; border-bottom: 2px solid transparent; cursor: pointer; }
+.mtab.on { color: var(--primary-dark); font-weight: 600; border-bottom-color: var(--primary); }
+.mpane { padding: 10px 16px; font-size: 11.5px; color: var(--text-2); }
+
+/* V2 抽屉 */
+.drawer-t { display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; border-top: 1px solid var(--line); cursor: pointer; font-size: 11.5px; color: var(--text-2); }
+.drawer-t:hover { color: var(--primary-dark); }
+
+/* V4 宽栏徽标 */
+.badge { position: absolute; top: 10px; left: 10px; z-index: 5; font-family: var(--mono); font-size: 9.5px; color: #fff; background: rgba(20,40,35,.55); padding: 3px 9px; border-radius: 9999px; backdrop-filter: blur(4px); }
+
+footer { margin-top: 36px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+.note { font-size: 11px; color: var(--text-4); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>第三栏类型自适应预览 — 4 种形态提案 (非弹窗)</h1>
+  <p>预览就在<b>右栏内部</b>变形：点文件行 → 右栏按 MIME 切换预览形态，<b>预览舞台的高度/比例随之动画</b>。文档 (PDF/Word)=竖版 A4 大页 + 翻页脚；视频=16:9 播放器；音频=紧凑播放条；文本=纸面渲染；PPT/Excel=页式/表格；Office 无转换时=信息卡。每版下方给 3 个代表态 (PDF 文档态 / 视频媒体态 / 音频紧凑态)。</p>
+</header>
+
+<!-- ═══ 1 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FIT 1</span><h2>自适应舞台</h2><span class="tag">舞台高度随类型动画 · meta 常驻 · 推荐</span></div>
+  <div class="sec-desc">预览舞台 (青色区) 高度按类型切换：<b>文档 470px A4 / 视频 189px / 音频 130px</b>，0.35s 缓动；舞台下方元数据区常驻不动。结构稳定，信息一直可见。</div>
+  <div class="row">
+    <div class="st">
+      <div class="rail w336">
+        <div class="stg a4">
+          <div class="a4pg"><h4>空化阈值讨论 · 纪要</h4><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:70%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:48%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="pno">— 3 —</div></div>
+        </div>
+        <div class="pgr"><button>‹</button><span class="pg">3 / 12 页</span><button>›</button><button style="margin-left:8px">适合宽度</button></div>
+        <div class="meta"><dl><dt>大小</dt><dd class="mono">3.2 MB</dd><dt>上传者</dt><dd>杨慈</dd><dt>上传于</dt><dd class="mono">2026-09-05</dd></dl></div>
+      </div>
+      <div class="lb">PDF/Word · 文档态 (470px)</div>
+    </div>
+    <div class="st">
+      <div class="rail w336">
+        <div class="stg wide"><div class="player"><div class="pl"></div><div class="pb"><span class="tm">01:12</span><span class="t"><i></i></span><span class="tm">03:26</span></div></div></div>
+        <div class="meta"><dl><dt>大小</dt><dd class="mono">86.1 MB</dd><dt>上传者</dt><dd>艾琳朔</dd><dt>上传于</dt><dd class="mono">2026-08-27</dd></dl></div>
+        <div class="mtabs"><button class="mtab on">评论</button><button class="mtab">版本</button></div>
+        <div class="mpane">点击文件即可在此预览，无需弹窗。</div>
+      </div>
+      <div class="lb">视频 · 媒体态 (189px 16:9)</div>
+    </div>
+    <div class="st">
+      <div class="rail w336">
+        <div class="stg card"><div class="aud"><div style="display:flex;align-items:center;gap:10px"><div class="disc">♫</div><div style="font-size:12px;font-weight:600">会议录音 0825.m4a</div></div><div class="wave"><i style="height:8px"></i><i style="height:8px"></i><i style="height:8px"></i><i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:19px"></i><i style="height:9px"></i><i style="height:15px"></i><i style="height:15px"></i><i style="height:15px"></i><i style="height:15px"></i><i style="height:15px"></i><i style="height:15px"></i><i style="height:15px"></i><i style="height:15px"></i><i style="height:7px"></i></div><div class="ctr"><span class="t">40:12</span><span class="t2"><i></i></span><span class="t">94:12</span><span class="pl"></span></div></div></div>
+        <div class="meta"><dl><dt>大小</dt><dd class="mono">36.2 MB</dd><dt>时长</dt><dd class="mono">94 分钟 · 已转写</dd></dl></div>
+      </div>
+      <div class="lb">音频 · 紧凑态 (130px)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 2 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FIT 2</span><h2>全高阅读 + 抽屉</h2><span class="tag">文档占满整栏 · meta 收成抽屉</span></div>
+  <div class="sec-desc">文档类型时 A4 页<b>占满整栏高度</b>（翻页悬浮在页面上），元数据收成底部抽屉（点开才展开）。阅读沉浸最强，适合逐页看 PDF。</div>
+  <div class="row">
+    <div class="st">
+      <div class="rail w336">
+        <div class="stg" style="height:530px;background:#525659">
+          <div class="a4pg" style="height:490px;width:320px"><h4>空化阈值讨论 · 纪要</h4><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:66%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="pno" style="bottom:18px">— 3 —</div></div>
+        </div>
+        <div style="position:absolute;margin-top:-46px;left:0;right:0;display:flex;justify-content:center;gap:8px">
+          <button style="font:inherit;font-size:11px;border:none;border-radius:9999px;padding:5px 14px;background:rgba(20,40,35,.55);color:#fff;cursor:pointer">‹ 3/12 ›</button>
+          <button style="font:inherit;font-size:11px;border:none;border-radius:9999px;padding:5px 14px;background:rgba(20,40,35,.55);color:#fff;cursor:pointer">适合宽度</button>
+        </div>
+        <div class="drawer-t"><span>ℹ 文件信息 · 大小 3.2 MB · 杨慈 · 2026-09-05</span><span>▾</span></div>
+        <div class="drawer-t"><span>💬 评论 3 · 版本 3</span><span>▸</span></div>
+      </div>
+      <div class="lb">PDF · 全高阅读态</div>
+    </div>
+    <div class="st">
+      <div class="rail w336">
+        <div class="stg wide"><div class="player"><div class="pl"></div><div class="pb"><span class="tm">01:12</span><span class="t"><i></i></span><span class="tm">03:26</span></div></div></div>
+        <div class="meta"><dl><dt>大小</dt><dd class="mono">86.1 MB</dd><dt>上传者</dt><dd>艾琳朔</dd></dl></div>
+        <div class="drawer-t"><span>💬 评论 1 · 版本 1</span><span>▾</span></div>
+        <div class="mpane">媒体类型不占全高 — 抽屉默认展开恢复信息区。</div>
+      </div>
+      <div class="lb">视频 · 媒体回落实态</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 3 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FIT 3</span><h2>双段固定</h2><span class="tag">上预览/下信息 50·50 · 最稳定可预期</span></div>
+  <div class="sec-desc">右栏固定分两段：上段预览舞台（按类型换内容、高度微调），下段信息区（tabs: 信息/评论/版本）。没有布局跳动，最稳。</div>
+  <div class="row">
+    <div class="st">
+      <div class="rail w336" style="height:620px">
+        <div class="stg med"><div class="a4pg" style="width:250px;height:340px;transform:scale(.92)"><h4>空化阈值讨论 · 纪要</h4><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:70%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="pno">— 3 —</div></div></div>
+        <div class="pgr"><button>‹</button><span class="pg">3 / 12 页</span><button>›</button></div>
+        <div class="mtabs" style="border-top:none"><button class="mtab on">信息</button><button class="mtab">评论 3</button><button class="mtab">版本 3</button></div>
+        <div class="mpane">
+          <dl style="display:grid;grid-template-columns:52px 1fr;gap:5px 9px;font-size:11.5px"><dt style="color:var(--text-3)">大小</dt><dd style="font-family:var(--mono);font-size:10.5px">3.2 MB</dd><dt style="color:var(--text-3)">上传者</dt><dd>杨慈</dd><dt style="color:var(--text-3)">位置</dt><dd style="font-size:11px">组会PPT / 2026 秋</dd></dl>
+        </div>
+      </div>
+      <div class="lb">PDF · 双段固定态</div>
+    </div>
+    <div class="st">
+      <div class="rail w336" style="height:620px">
+        <div class="stg wide"><div class="player"><div class="pl"></div><div class="pb"><span class="tm">01:12</span><span class="t"><i></i></span><span class="tm">03:26</span></div></div></div>
+        <div class="mtabs"><button class="mtab on">信息</button><button class="mtab">评论</button><button class="mtab">版本</button></div>
+        <div class="mpane">视频同样结构 — 上段换播放器，下段信息/评论/版本随时切换。</div>
+      </div>
+      <div class="lb">视频 · 同构双段</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 4 ═══ -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">FIT 4</span><h2>宽栏展开</h2><span class="tag">右栏本体加宽 336→460 · 真·改变窗口大小</span></div>
+  <div class="sec-desc">点文档/媒体文件时<b>右栏本体从 336px 动画加宽到 460px</b>（中栏表格相应收缩），A4 页按 460 宽出全尺寸；取消选中缩回。字面意义上的"窗口大小适应性改变"，代价是中栏表宽波动。</div>
+  <div class="row">
+    <div class="st">
+      <div class="rail w460">
+        <span class="badge">右栏已加宽 336 → 460 (动画)</span>
+        <div class="stg a4" style="height:520px;background:#525659">
+          <div class="a4pg" style="width:380px;height:470px"><h4>空化阈值讨论 · 纪要</h4><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:70%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln hl" style="width:48%"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="ln"></div><div class="pno" style="bottom:14px">— 3 —</div></div>
+        </div>
+        <div class="pgr"><button>‹</button><span class="pg">3 / 12 页</span><button>›</button><button style="margin-left:8px">适合宽度</button><button>收窄 ⇤</button></div>
+      </div>
+      <div class="lb">PDF · 宽栏态 (460px)</div>
+    </div>
+    <div class="st">
+      <div class="rail w336">
+        <span class="badge" style="background:rgba(20,40,35,.35)">未选中 · 默认 336px</span>
+        <div class="stg wide" style="height:189px;margin-top:34px"><div class="player"><div class="pl"></div><div class="pb"><span class="tm">01:12</span><span class="t"><i></i></span><span class="tm">03:26</span></div></div></div>
+        <div class="meta"><dl><dt>提示</dt><dd>点文件行 → 栏体加宽进入预览态</dd></dl></div>
+      </div>
+      <div class="lb">默认态 (336px)</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 共同项：全部在右栏内完成，零弹窗；PDF/Word 走 iframe 原生翻页 (A4 页即真实渲染)；视频/音频走 blob 管线真播放；prefers-reduced-motion 降级。<br>
+  · 组合欢迎（如「1 的舞台高度 + 4 的宽栏展开」）。回复编号即可。
+</footer>
+</body>
+</html>

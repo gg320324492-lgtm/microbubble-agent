@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>主题切换图标 · 五方案对比 · 2026-09-04</title>
+<style>
+  :root {
+    --dg-chrome:#eaece7; --dg-card:#fdfefc; --dg-ink:#16232a; --dg-steel:#5a6b6a;
+    --dg-fog:#8ba0a0; --dg-hair:#c9d2ca; --dg-teal:#0e766e; --dg-teal-soft:#dcece5;
+    --dg-coral:#ef7256; --dg-mono:Consolas,'Courier New',monospace;
+  }
+  body { margin:0; background:var(--dg-chrome); color:var(--dg-ink);
+    font-family:"PingFang SC","Microsoft YaHei",sans-serif; padding:28px 34px 60px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.sub { margin:0 0 26px; font-size:12.5px; color:var(--dg-steel); }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .card { border:1.5px solid var(--dg-ink); border-radius:11px; overflow:hidden;
+    box-shadow:3px 3px 0 rgba(22,35,42,.10); background:var(--dg-card); }
+  .card .cap { display:flex; align-items:baseline; gap:10px; padding:12px 16px 0; }
+  .card .cap b { font-size:14px; }
+  .card .cap span { font-family:var(--dg-mono); font-size:9px; letter-spacing:.14em; color:var(--dg-fog); }
+  .card .desc { padding:6px 16px 12px; font-size:11.5px; color:var(--dg-steel); line-height:1.65; }
+  .stage { display:flex; align-items:center; gap:22px; padding:16px 18px 18px; }
+  .stage.day { background:var(--dg-card); }
+  .stage.night { background:#18232a; border-top:1.5px dashed var(--dg-hair); }
+  .stage .lab { font-family:var(--dg-mono); font-size:9px; letter-spacing:.14em; color:var(--dg-fog); margin-left:auto; }
+  .stage.night .lab { color:#6b8286; }
+  .stage.night { --dg-ink:#dfe9e6; --dg-steel:#9ab0ae; --dg-fog:#6b8286; --dg-hair:#27363e;
+    --dg-teal:#35c2a4; --dg-teal-soft:#12312b; }
+  .hint { margin:26px 0 0; font-size:12px; color:var(--dg-steel); }
+  .hint b { color:var(--dg-coral); }
+
+  /* 通用按钮壳 (与线上 .theme-toggle-btn 覆盖层一致: 32px 方阵 / teal-soft hover) */
+  .tb { display:grid; place-items:center; width:32px; height:32px; padding:0;
+    border:none; background:transparent; border-radius:7px; cursor:pointer;
+    color:var(--dg-steel); transition:background .15s ease,color .15s ease; position:relative; }
+  .tb:hover { background:var(--dg-teal-soft); color:var(--dg-teal); }
+  .tb svg { width:16px; height:16px; overflow:visible; }
+  .tb .a-moon { display:none; }
+  .tb.nightmode .a-sun { display:none; }
+  .tb.nightmode .a-moon { display:block; }
+
+  /* ===== A · 描线日月 (sprite 线性风) ===== */
+  .a-sun circle { fill:none; stroke:currentColor; stroke-width:1.5; }
+  .a-sun path { stroke:currentColor; stroke-width:1.5; stroke-linecap:round; }
+  .a-moon path { fill:none; stroke:currentColor; stroke-width:1.5; stroke-linejoin:round; }
+
+  /* ===== B · 蚀盘变形 (实心圆 + 影月滑动) ===== */
+  .b svg { width:18px; height:18px; }
+  .b .disc { fill:currentColor; }
+  .b .mask { fill:var(--dg-card); transform:translate(-7px,-7px);
+    transition:transform .35s cubic-bezier(.5,-.4,.3,1.4); }
+  .night .b .mask { fill:#18232a; }
+  .b .rays line, .b .rays path { stroke:currentColor; stroke-width:1.5; stroke-linecap:round;
+    transform-origin:center; transition:transform .3s ease,opacity .3s ease; }
+  .b.nightmode .rays path { transform:scale(0); opacity:0; }
+  .b.nightmode .mask { transform:translate(4px,-3.5px); }
+
+  /* ===== C · 昼 / 夜 mono 字牌 ===== */
+  .c { width:auto; padding:4px 9px; border:1px solid var(--dg-hair); border-radius:5px;
+    font-family:var(--dg-mono); font-size:10px; letter-spacing:.08em; color:var(--dg-steel);
+    display:flex; gap:6px; align-items:center; background:transparent; }
+  .c i { font-style:normal; width:6px; height:6px; border-radius:50%; background:var(--dg-coral); }
+  .c.cnight i { background:#ffd280; }
+
+  /* ===== D · 骑缝印章 ===== */
+  .d { width:auto; height:auto; padding:3px 7px 4px; border:1.5px dashed var(--dg-coral);
+    border-radius:4px; color:var(--dg-coral); font-family:var(--dg-mono);
+    font-size:9.5px; letter-spacing:.12em; line-height:1.15; background:transparent;
+    transform:rotate(-2deg); text-align:center; transition:background .15s; }
+  .d small { display:block; font-size:7px; letter-spacing:.2em; opacity:.75; }
+  .d:hover { background:rgba(239,114,86,.08); transform:rotate(0deg); }
+  .night .d { border-color:#f0a186; color:#f0a186; }
+
+  /* ===== E · 昼夜滑轨 ===== */
+  .e { width:46px; height:22px; border-radius:12px; border:1px solid var(--dg-hair);
+    background:var(--dg-chrome); position:relative; padding:0; color:inherit; }
+  .e .knob { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
+    background:var(--dg-ink); color:var(--dg-card); display:grid; place-items:center;
+    transition:left .28s cubic-bezier(.6,0,.2,1); }
+  .e .knob svg { width:10px; height:10px; }
+  .e.enight { background:#12312b; border-color:#2c3d44; }
+  .e.enight .knob { left:26px; background:#35c2a4; color:#0c1215; }
+  .e .g-moon { display:none; }
+  .e.enight .g-sun { display:none; }
+  .e.enight .g-moon { display:block; }
+  .e:hover { background:var(--dg-teal-soft); }
+  .night .e:hover { background:#12312b; }
+</style>
+</head>
+<body>
+  <h1>主题切换图标 · 五方案</h1>
+  <p class="sub">挂在桌面顶栏右侧 (32px util 方阵槽位) · 每卡上下两态 = 白天态 / 夜览态 · 点击任一模子可现场切换</p>
+
+  <div class="row">
+    <div class="card"><div class="cap"><b>A · 描线日月</b><span>SPRITE LINE</span></div>
+      <div class="desc">与侧栏 16px/1.5 stroke 图标精灵同族——最「安静」的方案：白天天、夜里月，纯线性不抢戏。改动最小。</div>
+      <div class="stage day"><button class="tb"><svg class="a-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.4"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg><svg class="a-moon" viewBox="0 0 16 16"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></button>
+        <button class="tb nightmode"><svg class="a-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.4"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg><svg class="a-moon" viewBox="0 0 16 16"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></button>
+        <span class="lab">DAY · MOON</span></div>
+      <div class="stage night"><button class="tb"><svg class="a-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.4"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg><svg class="a-moon" viewBox="0 0 16 16"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></button>
+        <button class="tb nightmode"><svg class="a-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.4"/><path d="M8 .8v2M8 13.2v2M.8 8h2M13.2 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"/></svg><svg class="a-moon" viewBox="0 0 16 16"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></button>
+        <span class="lab">NIGHT BG</span></div>
+    </div>
+
+    <div class="card"><div class="cap"><b>B · 蚀盘变形</b><span>ECLIPSE MORPH</span></div>
+      <div class="desc">实心日盘 + 阴影滑过变月牙、光线缩回——点击有「日食过渡」动效。存在感强一档，仍是单色随主题翻转。</div>
+      <div class="stage day"><button class="tb b"><svg viewBox="0 0 18 18"><circle class="disc" cx="9" cy="9" r="4"/><g class="rays"><path d="M9 .6v2.1M9 15.3v2.1M.6 9h2.1M15.3 9h2.1M2.7 2.7l1.5 1.5M13.8 13.8l1.5 1.5M15.3 2.7l-1.5 1.5M4.2 13.8l-1.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g><circle class="mask" cx="6" cy="6" r="4"/></svg></button>
+        <button class="tb b nightmode"><svg viewBox="0 0 18 18"><circle class="disc" cx="9" cy="9" r="4"/><g class="rays"><path d="M9 .6v2.1M9 15.3v2.1M.6 9h2.1M15.3 9h2.1M2.7 2.7l1.5 1.5M13.8 13.8l1.5 1.5M15.3 2.7l-1.5 1.5M4.2 13.8l-1.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g><circle class="mask" cx="6" cy="6" r="4"/></svg></button>
+        <span class="lab">CLICK → CRESCENT</span></div>
+      <div class="stage night"><button class="tb b"><svg viewBox="0 0 18 18"><circle class="disc" cx="9" cy="9" r="4"/><g class="rays"><path d="M9 .6v2.1M9 15.3v2.1M.6 9h2.1M15.3 9h2.1M2.7 2.7l1.5 1.5M13.8 13.8l1.5 1.5M15.3 2.7l-1.5 1.5M4.2 13.8l-1.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g><circle class="mask" cx="6" cy="6" r="4"/></svg></button>
+        <button class="tb b nightmode"><svg viewBox="0 0 18 18"><circle class="disc" cx="9" cy="9" r="4"/><g class="rays"><path d="M9 .6v2.1M9 15.3v2.1M.6 9h2.1M15.3 9h2.1M2.7 2.7l1.5 1.5M13.8 13.8l1.5 1.5M15.3 2.7l-1.5 1.5M4.2 13.8l-1.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g><circle class="mask" cx="6" cy="6" r="4"/></svg></button>
+        <span class="lab">ON DARK BG</span></div>
+    </div>
+
+    <div class="card"><div class="cap"><b>C · 昼夜字牌</b><span>MONO CHIP</span></div>
+      <div class="desc">不用图形用文字：mono 小字牌「昼 / 夜」+ 珊瑚状态点，与顶栏时刻牌 (NOW · HH:MM) 同一家族。档案味最纯，一眼无歧义。</div>
+      <div class="stage day"><button class="tb c"><i></i>昼 · DAY</button>
+        <button class="tb c cnight"><i></i>夜 · NIGHT</button>
+        <span class="lab">TEXT LABEL</span></div>
+      <div class="stage night"><button class="tb c"><i></i>昼 · DAY</button>
+        <button class="tb c cnight"><i></i>夜 · NIGHT</button>
+        <span class="lab">NIGHT BG</span></div>
+    </div>
+
+    <div class="card"><div class="cap"><b>D · 骑缝印章</b><span>STAMP</span></div>
+      <div class="desc">珊瑚虚线 + 微旋转的「盖章」语言，呼应卷宗页逾期章/侧栏档案印章。斜 2° 静置、hover 回正。个性最强，视觉噪音也最大。</div>
+      <div class="stage day"><button class="tb d">昼<small>MODE</small></button>
+        <button class="tb d">夜<small>MODE</small></button>
+        <span class="lab">DOSSIER STAMP</span></div>
+      <div class="stage night"><button class="tb d">昼<small>MODE</small></button>
+        <button class="tb d">夜<small>MODE</small></button>
+        <span class="lab">NIGHT BG</span></div>
+    </div>
+
+    <div class="card" style="grid-column:1/-1"><div class="cap"><b>E · 昼夜滑轨</b><span>PIVOT TRACK</span></div>
+      <div class="desc">46×22 小开关：墨圆滑块内嵌日/月线性图标，点击滑到右侧换 teal。状态机最直白（滑块位置=当前主题），但和「图标方阵」形态差异最大。</div>
+      <div class="stage day" style="gap:30px"><button class="tb e"><span class="knob"><svg class="g-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9 13 13M13 3l-1.1 1.1M4.1 11.9 3 13"/></svg><svg class="g-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></span></button>
+        <button class="tb e enight"><span class="knob"><svg class="g-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9 13 13M13 3l-1.1 1.1M4.1 11.9 3 13"/></svg><svg class="g-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></span></button>
+        <span class="lab">OFF · ON</span></div>
+      <div class="stage night" style="gap:30px"><button class="tb e"><span class="knob"><svg class="g-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9 13 13M13 3l-1.1 1.1M4.1 11.9 3 13"/></svg><svg class="g-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></span></button>
+        <button class="tb e enight"><span class="knob"><svg class="g-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9 13 13M13 3l-1.1 1.1M4.1 11.9 3 13"/></svg><svg class="g-moon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M13.2 9.8A6 6 0 1 1 6.2 2.8a4.7 4.7 0 0 0 7 7Z"/></svg></span></button>
+        <span class="lab">ON DARK BG</span></div>
+    </div>
+  </div>
+
+  <p class="hint">五案都可挂进现有 32px util 方阵槽位; <b>建议</b>: 求稳选 A · 要手感选 B · 档案味选 C · 个性选 D · 直白选 E。也可组合 (如 B 动效 + C 文字)。</p>
+<script>
+document.querySelectorAll('.tb').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    btn.classList.toggle('nightmode');
+    var c = btn.querySelector('i'); // C 案: 文字随状态换
+    if (btn.classList.contains('c')) btn.innerHTML = '<i></i>' + (btn.classList.contains('nightmode') ? '夜 · NIGHT' : '昼 · DAY');
+    if (btn.classList.contains('cnight')) btn.classList.toggle('cnight');
+    if (btn.classList.contains('d')) btn.innerHTML = (btn.classList.contains('nightmode') ? '夜<small>MODE</small>' : '昼<small>MODE</small>');
+    if (btn.classList.contains('e')) btn.classList.toggle('enight', btn.classList.contains('nightmode'));
+  });
+});
+</script>
+</body>
+</html>

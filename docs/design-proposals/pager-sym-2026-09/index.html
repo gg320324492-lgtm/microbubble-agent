@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>翻页键对称 + 矩阵排布 · 4 版方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E3DFD6; --txt: #26302C; --txt2: #7A837F;
+    --teal: #0E766E; --teal-hi: #0C8A80; --paper: #F7F5F1;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 28px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 20px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.1); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .rail { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px 14px; max-width: 600px; margin: 0 auto; }
+  .ftitle { font-size: 16px; font-weight: 700; margin: 0 2px 12px; display: flex; align-items: center; gap: 8px; }
+  .ftitle .cnt { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--txt2); background: #fff; border: 1px solid var(--line); border-radius: 9999px; padding: 2px 9px; white-space: nowrap; }
+
+  .row { display: grid; gap: 8px; }
+  .r4 { grid-template-columns: repeat(4, 1fr); }
+  .r3 { grid-template-columns: repeat(3, 1fr); }
+  .r4 + .row, .r3 + .row, .bar + .row, .row + .bar { margin-top: 8px; }
+
+  .b {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: 46px; border: 1px solid var(--line); border-radius: 10px;
+    background: #fff; color: #4A5450; font-size: 12.5px; cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s, box-shadow .15s;
+    font-family: inherit; padding: 0 8px; white-space: nowrap;
+  }
+  .b:hover:not(:disabled):not(.pri) { border-color: var(--teal); color: var(--teal); }
+  .b.pri { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+  .b.pri:hover { background: var(--teal-hi); }
+  .b:disabled { opacity: .38; cursor: not-allowed; }
+  .b:disabled:hover { border-color: var(--line); color: #4A5450; }
+  .b svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ── 对称翻页键: 箭头钉在外缘, 文字绝对居中 (3 列内网格) ── */
+  .pg { display: grid; grid-template-columns: 14px 1fr 14px; align-items: center; justify-items: center; padding: 0 10px; }
+  .pg .arr { color: #98A19C; display: inline-flex; }
+  .pg .lbl { grid-column: 2; }
+  .pg.nx .arr { grid-column: 3; }
+  .pg.pv .arr { grid-column: 1; grid-row: 1; }
+  .pg.pv .lbl { grid-row: 1; }
+
+  /* ── C: 连体控制条 ── */
+  .bar { display: grid; grid-template-columns: 1fr 1.3fr 1fr; }
+  .bar .b { height: 48px; border-radius: 0; }
+  .bar .b:first-child { border-radius: 10px 0 0 10px; border-right: none; }
+  .bar .b:last-child { border-radius: 0 10px 10px 0; border-left: none; }
+  .bar .b.pv-sep { border-right: 1px solid var(--line); }
+  .bar .pri { position: relative; }
+
+  /* ── D: 方形图标键侧翼 ── */
+  .flank { display: grid; grid-template-columns: 52px 1fr 52px; gap: 8px; }
+  .flank .sq { width: 52px; height: 48px; padding: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+  .flank .sq svg { width: 17px; height: 17px; }
+
+  .ghost { visibility: hidden; }
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>翻页键对称 + 矩阵排布 · 4 版方案</h1>
+  <p class="sub">问题：`‹` 和 `›` 挤占文字空间，两个键的文字中心被推偏不对称；二排「下载/分享/收藏」留一个空位。四版都用<b>内网格对称术</b>（箭头钉死外缘、文字绝对居中），区别在整体矩阵节奏。全部可点击试玩。</p>
+
+  <!-- ═══════ A ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>3×3 整齐矩阵 · 消灭空位</h2></div>
+    <p class="card-d">三排全部 3 列等宽：翻页排 / 下载·分享·收藏 / 重命名·移动·删除。空位消失，三排左右边缘完全对齐，最工整。</p>
+    <div class="rail" data-pg>
+      <div class="ftitle">2025.7.2 研一 冯懿鑫.pptx <span class="cnt"><span class="cur">1</span> / <span class="tot">31</span> 页</span></div>
+      <div class="row r3">
+        <button class="b pg pv prev"><span class="arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></span><span class="lbl">上一页</span></button>
+        <button class="b pri"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>全屏放映</button>
+        <button class="b pg nx next"><span class="lbl">下一页</span><span class="arr"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
+      </div>
+      <div class="row r3">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>下载</button>
+        <button class="b"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>分享</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>收藏</button>
+      </div>
+      <div class="row r3">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>重命名</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="17" r="1.6"/><circle cx="17.5" cy="17" r="1.6"/></svg>移动</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/></svg>删除</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 三排九键对齐，无空位，强迫症友好</span><span class="con">⚠ 与现状差异最大（非 ppt 文件仍是 4 列排）</span></div>
+  </div>
+
+  <!-- ═══════ B ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>最小修补 · 只治对称</h2></div>
+    <p class="card-d">排布完全不动（3 + 4 含隐形占位 + 3），只把箭头钉到按键外缘、文字绝对居中 — 两键文字镜像对称，与中间「全屏放映」重心对齐。</p>
+    <div class="rail" data-pg>
+      <div class="ftitle">2025.7.2 研一 冯懿鑫.pptx <span class="cnt"><span class="cur">1</span> / <span class="tot">31</span> 页</span></div>
+      <div class="row r3">
+        <button class="b pg pv prev"><span class="arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></span><span class="lbl">上一页</span></button>
+        <button class="b pri"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>全屏放映</button>
+        <button class="b pg nx next"><span class="lbl">下一页</span><span class="arr"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
+      </div>
+      <div class="row r4">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>下载</button>
+        <button class="b"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>分享</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>收藏</button>
+        <button class="b ghost" tabindex="-1"></button>
+      </div>
+      <div class="row r4" style="grid-template-columns:repeat(3,1fr)">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>重命名</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="17" r="1.6"/><circle cx="17.5" cy="17" r="1.6"/></svg>移动</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/></svg>删除</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 改动最小，其余一律不动</span><span class="con">⚠ 二排空位仍在</span></div>
+  </div>
+
+  <!-- ═══════ C ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>连体控制条 · 首排一体化</h2></div>
+    <p class="card-d">首排三键连成一条无缝控制条（内部分隔线），全屏放映居中段稍宽。像一台播放器的走带控制，成组感最强；下面两排维持现状节奏。</p>
+    <div class="rail" data-pg>
+      <div class="ftitle">2025.7.2 研一 冯懿鑫.pptx <span class="cnt"><span class="cur">1</span> / <span class="tot">31</span> 页</span></div>
+      <div class="bar">
+        <button class="b pg pv prev pv-sep"><span class="arr"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></span><span class="lbl">上一页</span></button>
+        <button class="b pri"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>全屏放映</button>
+        <button class="b pg nx next"><span class="lbl">下一页</span><span class="arr"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button>
+      </div>
+      <div class="row r4">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>下载</button>
+        <button class="b"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>分享</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>收藏</button>
+        <button class="b ghost" tabindex="-1"></button>
+      </div>
+      <div class="row r4" style="grid-template-columns:repeat(3,1fr)">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>重命名</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="17" r="1.6"/><circle cx="17.5" cy="17" r="1.6"/></svg>移动</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/></svg>删除</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 放映控制成组一体，视觉重心稳</span><span class="con">⚠ 连体语系与下方分立按键不同调</span></div>
+  </div>
+
+  <!-- ═══════ D ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>方形图标键侧翼 · 天然对称</h2></div>
+    <p class="card-d">翻页改成两枚纯图标方键夹住全屏放映 — 没有文字就没有不对称，页码看文件名旁的芯片。最干净利落，靠悬停 tooltip 提示「上一页/下一页」。</p>
+    <div class="rail" data-pg>
+      <div class="ftitle">2025.7.2 研一 冯懿鑫.pptx <span class="cnt"><span class="cur">1</span> / <span class="tot">31</span> 页</span></div>
+      <div class="flank">
+        <button class="b sq prev" title="上一页 (←)"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <button class="b pri" style="height:48px"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>全屏放映</button>
+        <button class="b sq next" title="下一页 (→)"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      </div>
+      <div class="row r4">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>下载</button>
+        <button class="b"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>分享</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>收藏</button>
+        <button class="b ghost" tabindex="-1"></button>
+      </div>
+      <div class="row r4" style="grid-template-columns:repeat(3,1fr)">
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M17 3a2.8 2.8 0 114 4L7.5 20.5 2 22l1.5-5.5z"/></svg>重命名</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="17" r="1.6"/><circle cx="17.5" cy="17" r="1.6"/></svg>移动</button>
+        <button class="b"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0l1 14h8l1-14"/></svg>删除</button>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 结构性对称（等宽方键），首排最矮</span><span class="con">⚠ 无文字，新用户要靠 tooltip 认键</span></div>
+  </div>
+
+  <p style="color:var(--txt2);font-size:12px;margin-top:2px">注：四版箭头统一换 SVG 细线 chevron（现在的 ‹ › 字符粗细不稳）；首末页置灰、芯片页码、键盘 ←/→ 全部保留。</p>
+</div>
+
+<script>
+document.querySelectorAll('[data-pg]').forEach(rail => {
+  const cur = rail.querySelector('.cur'), tot = rail.querySelector('.tot');
+  const total = parseInt(tot.textContent, 10);
+  let page = 1;
+  const prev = rail.querySelector('.prev'), next = rail.querySelector('.next');
+  function render() {
+    cur.textContent = page;
+    prev.disabled = page <= 1;
+    next.disabled = page >= total;
+  }
+  prev.addEventListener('click', () => { if (page > 1) { page--; render(); } });
+  next.addEventListener('click', () => { if (page < total) { page++; render(); } });
+  render();
+});
+</script>
+</body>
+</html>

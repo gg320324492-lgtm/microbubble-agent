@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>合二为一 · 单输入框复用 · 4 版方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-hi: #12968B; --paper: #FAF9F6;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .ctx { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px; max-width: 560px; margin: 0 auto; }
+  .cmt { display: flex; gap: 10px; padding: 10px; border-radius: 10px; transition: background .15s, box-shadow .15s; }
+  .cmt .av { width: 34px; height: 34px; border-radius: 9999px; background: #0E766E; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; flex: none; font-size: 13px; }
+  .cmt .meta { flex: 1; min-width: 0; }
+  .cmt .nm { font-size: 12.5px; font-weight: 650; }
+  .cmt .tm { font-size: 11px; color: var(--txt2); margin-left: 8px; font-weight: 400; }
+  .cmt .txt { font-size: 13px; margin-top: 6px; }
+  .cmt .replylink { font-size: 11.5px; color: var(--teal); cursor: pointer; margin-top: 10px; display: inline-flex; gap: 4px; align-items: center; }
+  .cmt .replylink:hover { text-decoration: underline; }
+  .cmt.target { background: rgba(14,118,110,.06); box-shadow: inset 3px 0 0 var(--teal); }
+
+  /* 统一发布框 (各版共用骨架) */
+  .box { margin-top: 14px; background: #fff; border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, box-shadow .15s; }
+  .box:focus-within { border-color: var(--teal); }
+  .box .ctxhead { display: none; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px dashed var(--line); font-size: 12px; }
+  .box .ctxhead .ico { color: var(--teal); font-weight: 700; }
+  .box .ctxhead b { color: var(--txt); }
+  .box .ctxhead .x { margin-left: auto; font-size: 12px; color: var(--txt2); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+  .box .ctxhead .x:hover { background: #F0EEE8; color: var(--txt); }
+  .box .quote { display: none; padding: 8px 12px 0; font-size: 11.5px; color: var(--txt2); }
+  .box .quote .q { background: #F5F3EE; border-left: 3px solid rgba(14,118,110,.4); border-radius: 0 6px 6px 0; padding: 5px 9px; }
+  .box .quote .q b { color: var(--txt); font-weight: 600; }
+  .box .inputrow { display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 8px 12px; }
+  .box .chipzone { display: none; padding: 10px 12px 0; }
+  .box .chipzone .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.35); border-radius: 9999px; padding: 3px 10px; }
+  .box .chipzone .chip i { font-style: normal; cursor: pointer; opacity: .6; }
+  .box .chipzone .chip i:hover { opacity: 1; }
+  .box textarea { width: 100%; border: none; outline: none; resize: none; font: 13px/1.6 inherit; font-family: inherit; color: var(--txt); min-height: 44px; background: none; }
+  .box .foot { display: flex; align-items: center; justify-content: space-between; padding: 0 10px 8px 12px; }
+  .box .hint { font-size: 11px; color: #B3BAB5; }
+  .box .hint code { font-family: var(--mono); font-size: 10px; background: #F0EEE8; border-radius: 4px; padding: 1px 5px; }
+  .box .go { background: rgba(14,118,110,.45); color: #fff; border: none; border-radius: 8px; padding: 8px 22px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .13s; }
+  .box .go.ready { background: var(--teal); }
+  .box .go.ready:hover { background: var(--teal-hi); }
+  .box .anchorbar { display: none; padding: 7px 12px; font-size: 11px; color: var(--teal); background: rgba(14,118,110,.06); border-bottom: 1px dashed var(--line); cursor: pointer; }
+  .box .anchorbar:hover { background: rgba(14,118,110,.1); }
+
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .step { font-size: 11px; color: #B4823C; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>合二为一 · 单输入框复用 · 4 版方案</h1>
+  <p class="sub">评论区只保留<b>底部一个发布框</b>，点某条评论的「回复」时它就地变身回复模式（再点「×」或发布后复原）。彻底消灭重复输入框。四版差异在「变身」的表达方式。<b>全部可试玩</b>：点评论下的「回复」→ 底框变化 → 输入文字点亮发布。</p>
+
+  <!-- ═══════ A ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>上下文头条 · 框顶提示条</h2></div>
+    <p class="card-d">变身最直白：框顶插入一条青色提示条「↩ 回复 <b>杜同贺</b> ×」，占位文案同步换成「回复 杜同贺…」，被回复评论左侧亮青条。GitHub/YouTube 同款心智。</p>
+    <div class="ctx" data-demo="A">
+      <div class="cmt" data-name="杜同贺">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">17 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink">💬 回复</span>
+        </div>
+      </div>
+      <div class="box">
+        <div class="ctxhead"><span class="ico">↩</span><span>回复 <b class="who">杜同贺</b></span><span class="x">✕ 取消回复</span></div>
+        <div class="inputrow"><textarea placeholder="写一条评论… 输入 @姓名 可提醒成员" rows="2"></textarea></div>
+        <div class="foot"><span class="hint">用 <code>@姓名</code> 提醒成员</span><button class="go" data-go disabled>发布</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 实现最稳，主流产品同款</span><span class="con">⚠ 回复时框仍在底部（不跟评论走）</span></div>
+  </div>
+
+  <!-- ═══════ B ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>就地锚定 · 输入框跟手</h2></div>
+    <p class="card-d">同一个框，点「回复」时<b>物理移动</b>到该评论正下方（带「已上移 · 点此返回底部」浮条），发布/取消后回底。空间上真正的合二为一。</p>
+    <div class="ctx" data-demo="B">
+      <div class="cmt" data-name="杜同贺">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">17 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink">💬 回复</span>
+        </div>
+      </div>
+      <div class="anchorbar" style="order:99">⬇ 输入框已移至底部 · 点此返回</div>
+      <div class="box">
+        <div class="ctxhead"><span class="ico">↩</span><span>回复 <b class="who">杜同贺</b></span><span class="x">✕ 取消回复</span></div>
+        <div class="inputrow"><textarea placeholder="写一条评论…" rows="2"></textarea></div>
+        <div class="foot"><span class="hint">Enter 发送</span><button class="go" data-go disabled>发送</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 演示形态（真实实现为 DOM 移动锚定）</span><span class="con">⚠ 移动动画/滚动管理略复杂</span></div>
+  </div>
+
+  <!-- ═══════ C ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>引用草稿 · 信件式</h2></div>
+    <p class="card-d">点「回复」后在框内插入一条<b>引用块</b>（回复 杜同贺 + 原文摘要），像邮件回复一样把"我在回谁、回什么"写进草稿本身。信息最完整。</p>
+    <div class="ctx" data-demo="C">
+      <div class="cmt" data-name="杜同贺" data-quote="111">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">17 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink">💬 回复</span>
+        </div>
+      </div>
+      <div class="box">
+        <div class="quote"><div class="q">回复 <b class="who">杜同贺</b>：<span class="qtext">111</span></div></div>
+        <div class="inputrow"><textarea placeholder="写一条评论…" rows="2"></textarea></div>
+        <div class="foot"><span class="hint">引用不计入正文字数</span><button class="go" data-go disabled>发布</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 回复上下文最完整，长线程最友好</span><span class="con">⚠ 多一块引用视觉</span></div>
+  </div>
+
+  <!-- ═══════ D ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>内嵌芯片 · 最轻</h2></div>
+    <p class="card-d">框结构完全不动：点「回复」只在输入区上方塞一枚<b>「@杜同贺 ×」青色芯片</b>（正文自动带 @ 前缀），被回复评论亮青条。改动最小。</p>
+    <div class="ctx" data-demo="D">
+      <div class="cmt" data-name="杜同贺">
+        <div class="av">杜</div>
+        <div class="meta">
+          <span class="nm">杜同贺</span><span class="tm">17 小时前</span>
+          <div class="txt">111</div>
+          <span class="replylink">💬 回复</span>
+        </div>
+      </div>
+      <div class="box">
+        <div class="chipzone"><span class="chip">@杜同贺 <i data-x>✕</i></span></div>
+        <div class="inputrow"><textarea placeholder="写一条评论… 输入 @姓名 可提醒成员" rows="2"></textarea></div>
+        <div class="foot"><span class="hint">用 <code>@姓名</code> 提醒成员</span><button class="go" data-go disabled>回复</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 改动最小，芯片可点 × 随手取消</span><span class="con">⚠ 提示条方案 (A) 的语义更显眼</span></div>
+  </div>
+
+  <p style="color:var(--txt2);font-size:12px">共同规则：@ 双列补全在唯一输入框内继续可用；一次只存在一个回复目标（点另一条「回复」直接切换）；发布或 × 后框复原为发评论态。</p>
+</div>
+
+<script>
+document.querySelectorAll('[data-demo]').forEach(function (ctx) {
+  var kind = ctx.dataset.demo;
+  var box = ctx.querySelector('.box');
+  var ta = box.querySelector('textarea');
+  var go = box.querySelector('[data-go]');
+  var link = ctx.querySelector('.replylink');
+  var cmt = ctx.querySelector('.cmt');
+  var who = box.querySelector('.who');
+  var head = box.querySelector('.ctxhead');
+  var quote = box.querySelector('.quote');
+  var chipzone = box.querySelector('.chipzone');
+  var chipX = box.querySelector('.chipzone [data-x]');
+  var headX = box.querySelector('.ctxhead .x');
+  var anchorbar = box.querySelector('.anchorbar');
+
+  function setReply(on) {
+    cmt.classList.toggle('target', on);
+    go.textContent = on ? '回复' : '发布';
+    ta.placeholder = on ? '回复 ' + cmt.dataset.name + '…' : '写一条评论… 输入 @姓名 可提醒成员';
+    if (kind === 'A' || kind === 'B') head.style.display = on ? 'flex' : 'none';
+    if (kind === 'C') quote.style.display = on ? 'block' : 'none';
+    if (kind === 'D') chipzone.style.display = on ? 'block' : 'none';
+    if (kind === 'B' && anchorbar) anchorbar.style.display = on ? 'block' : 'none';
+    if (!on) { ta.value = ''; go.disabled = true; }
+  }
+  link.addEventListener('click', function () {
+    var on = cmt.classList.contains('target');
+    setReply(!on);
+    if (!on) ta.focus();
+  });
+  headX && headX.addEventListener('click', function () { setReply(false); });
+  chipX && chipX.addEventListener('click', function () { setReply(false); });
+  anchorbar && anchorbar.addEventListener('click', function () { setReply(false); });
+  ta.addEventListener('input', function () {
+    go.disabled = ta.value.trim().length === 0;
+  });
+  go.addEventListener('click', function () { setReply(false); });
+});
+</script>
+</body>
+</html>

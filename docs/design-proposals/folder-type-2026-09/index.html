@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文件夹预览 · 按类型分组 · 4 版变体 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-soft: rgba(14,118,110,.08);
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --ppt: #E8A23C; --doc: #5B8FD9; --pdf: #E06C5A; --img: #7FA86B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: var(--teal-soft); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .rail { background: #FAF9F6; border: 1px solid var(--line); border-radius: 14px; padding: 16px; max-width: 660px; margin: 0 auto; }
+  .fhead { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .fhead .ico { width: 42px; height: 42px; border-radius: 10px; background: var(--teal); display: flex; align-items: center; justify-content: center; flex: none; }
+  .fhead .ico svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 1.8; }
+  .fhead .nm { font-size: 17px; font-weight: 700; }
+  .fhead .meta { font-size: 12px; color: var(--txt2); margin-top: 3px; }
+
+  /* T1 组头横条 */
+  .g1 { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 7px 10px; background: #F1EFE9; border-radius: 8px; font-size: 12px; font-weight: 600; }
+  .g1 .glyph { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 3px 6px; border-radius: 5px; }
+  .g1 .sub { margin-left: auto; font-family: var(--mono); font-size: 10px; color: #A9B1AC; font-weight: 500; }
+  .g1 .n { font-family: var(--mono); font-size: 10px; color: var(--txt2); background: #fff; border-radius: 9999px; padding: 1px 8px; font-weight: 500; }
+
+  /* T3 可折叠组头 */
+  .g3 { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 6px 8px; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 8px; user-select: none; }
+  .g3:hover { background: var(--teal-soft); }
+  .g3 .chev { display: inline-flex; transition: transform .18s; color: var(--txt2); }
+  .g3.folded .chev { transform: rotate(-90deg); }
+  .g3 .chev svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .g3 .n { font-family: var(--mono); font-size: 10px; color: var(--txt2); background: #F0EEE8; border-radius: 9999px; padding: 1px 8px; font-weight: 500; }
+  .g3 .sub { margin-left: auto; font-family: var(--mono); font-size: 10px; color: #A9B1AC; font-weight: 500; }
+  .body3 { overflow: hidden; transition: max-height .22s ease; }
+
+  /* T4 迷你组头 + 高密度行 */
+  .g4 { display: flex; align-items: center; gap: 7px; padding: 12px 2px 3px; font-size: 10px; letter-spacing: .12em; color: var(--txt2); font-weight: 700; }
+  .g4 .dot { width: 6px; height: 6px; border-radius: 9999px; }
+  .g4 .n { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0; color: #A9B1AC; font-weight: 500; }
+  .g4 .rule { flex: 1; height: 1px; background: var(--line); }
+
+  .it { display: flex; align-items: center; gap: 9px; padding: 8px 8px; border-radius: 8px; cursor: pointer; transition: background .12s; }
+  .it:hover { background: var(--teal-soft); }
+  .it .nm { flex: 1; min-width: 0; font-size: 13px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .it:hover .nm { color: var(--teal); }
+  .it .sz { font-family: var(--mono); font-size: 10.5px; color: #B3BAB5; flex: none; }
+  .it .dot { width: 7px; height: 7px; border-radius: 9999px; flex: none; }
+  .it .glyph { flex: none; font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 3px 6px; border-radius: 5px; }
+  .dense .it { padding: 5px 8px; }
+  .dense .it .nm { font-size: 12.5px; }
+  .more { color: var(--txt2); font-size: 11.5px; padding: 2px 8px; }
+
+  /* T2 chips */
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; padding: 12px 0 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: #fff; border-radius: 9999px; padding: 5px 12px; font-size: 12px; color: var(--txt2); cursor: pointer; font-family: inherit; transition: all .13s; }
+  .chip .n { font-family: var(--mono); font-size: 10px; }
+  .chip .cdot { width: 7px; height: 7px; border-radius: 9999px; }
+  .chip:hover { border-color: var(--teal); color: var(--teal); }
+  .chip.on { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+  .chip.on .n { color: rgba(255,255,255,.8); }
+
+  .degrade { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .degrade .cap { font-size: 11px; color: var(--txt2); margin-bottom: 6px; }
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>文件夹预览 · 按类型分组 · 4 版变体</h1>
+  <p class="sub">已定方向：<b>按文件类型分组 + 全量直出</b>。四版变体在组头样式、密度、可折叠与筛选交互上分岔。示例用混合内容文件夹（15 PPT + 2 Word + 1 PDF + 2 图片）以展示分类价值；单一类型文件夹的退化处理见 T1 底部。</p>
+
+  <!-- ═══════ T1 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">T1</span><h2>组头横条 · 类型小计</h2></div>
+    <p class="card-d">每种类型一条圆角横条：色块徽标 + 类型名 + 数量胶囊 + 右侧小计大小。信息最全，分组感最强。</p>
+    <div class="rail">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div class="g1"><span class="glyph" style="color:var(--ppt);background:rgba(232,162,60,.14)">PPT</span>PPT 演示文稿 <span class="n">15</span><span class="sub">228.4 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.28 例行例会.pptx</span><span class="sz">4.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.14 例行例会.pptx</span><span class="sz">3.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.30 例行例会.pptx</span><span class="sz">2.8 MB</span></div>
+      <div class="more">… 还有 12 个 PPT</div>
+      <div class="g1"><span class="glyph" style="color:var(--doc);background:rgba(91,143,217,.14)">DOC</span>Word 文档 <span class="n">2</span><span class="sub">2.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">开题报告-微纳米气泡.docx</span><span class="sz">1.6 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">毕业论文初稿.docx</span><span class="sz">520 KB</span></div>
+      <div class="g1"><span class="glyph" style="color:var(--pdf);background:rgba(224,108,90,.14)">PDF</span>PDF 文档 <span class="n">1</span><span class="sub">840 KB</span></div>
+      <div class="it"><span class="dot" style="background:var(--pdf)"></span><span class="nm">答辩评分表.pdf</span><span class="sz">840 KB</span></div>
+      <div class="g1"><span class="glyph" style="color:var(--img);background:rgba(127,168,107,.16)">IMG</span>图片 <span class="n">2</span><span class="sub">1.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">实验装置照片.png</span><span class="sz">980 KB</span></div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">气泡高速摄像帧.png</span><span class="sz">260 KB</span></div>
+    </div>
+    <div class="degrade">
+      <div class="cap">单一类型退化（如李锐远 15 个全是 PPT）→ 组头自动隐藏，直接平铺 + 顶部一行小注：</div>
+      <div class="g1" style="margin-top:0"><span class="glyph" style="color:var(--ppt);background:rgba(232,162,60,.14)">PPT</span>PPT 演示文稿 <span class="n">15</span><span class="sub">50.6 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.3.16 研三 李锐远.pptx</span><span class="sz">2.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2025.12.15 研三 李锐远.pptx</span><span class="sz">2.8 MB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 数量+小计一眼看全，分组存在感最强</span><span class="con">⚠ 每组多占一条 32px 横条</span></div>
+  </div>
+
+  <!-- ═══════ T2 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">T2</span><h2>类型筛选 chips · 平铺不分组</h2></div>
+    <p class="card-d">列表头一排类型 chips（带计数），点击即筛。列表本身永远平铺不分节 — 零额外纵向开销，混合文件夹里「只看 PDF」最快。<b>可点击试玩。</b></p>
+    <div class="rail" data-t2>
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div style="flex:1"><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div class="chips">
+        <button class="chip on" data-t="all"><span class="cdot" style="background:var(--teal)"></span>全部 <span class="n">20</span></button>
+        <button class="chip" data-t="ppt"><span class="cdot" style="background:var(--ppt)"></span>PPT <span class="n">15</span></button>
+        <button class="chip" data-t="doc"><span class="cdot" style="background:var(--doc)"></span>Word <span class="n">2</span></button>
+        <button class="chip" data-t="pdf"><span class="cdot" style="background:var(--pdf)"></span>PDF <span class="n">1</span></button>
+        <button class="chip" data-t="img"><span class="cdot" style="background:var(--img)"></span>图片 <span class="n">2</span></button>
+      </div>
+      <div class="list" style="margin-top:6px"></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 纵向零开销，筛选直达</span><span class="con">⚠ 「分类感」弱 — 是过滤不是分组</span></div>
+  </div>
+
+  <!-- ═══════ T3 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">T3</span><h2>可折叠分组 · 默认全展开</h2></div>
+    <p class="card-d">T1 的轻量化：组头去掉横条底色，加折叠箭头，点击整组收起/展开（<b>可点击试玩</b>）。文件多时收起次要类型，画面随用随塑。</p>
+    <div class="rail" data-t3>
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div data-grp="ppt">
+        <div class="g3"><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>PPT 演示文稿 <span class="n">15</span><span class="sub">228.4 MB</span></div>
+        <div class="body3">
+          <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.28 例行例会.pptx</span><span class="sz">4.1 MB</span></div>
+          <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.14 例行例会.pptx</span><span class="sz">3.2 MB</span></div>
+          <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.30 例行例会.pptx</span><span class="sz">2.8 MB</span></div>
+          <div class="more">… 还有 12 个 PPT</div>
+        </div>
+      </div>
+      <div data-grp="doc">
+        <div class="g3"><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>Word 文档 <span class="n">2</span><span class="sub">2.1 MB</span></div>
+        <div class="body3">
+          <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">开题报告-微纳米气泡.docx</span><span class="sz">1.6 MB</span></div>
+          <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">毕业论文初稿.docx</span><span class="sz">520 KB</span></div>
+        </div>
+      </div>
+      <div data-grp="pdf">
+        <div class="g3"><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>PDF 文档 <span class="n">1</span><span class="sub">840 KB</span></div>
+        <div class="body3">
+          <div class="it"><span class="dot" style="background:var(--pdf)"></span><span class="nm">答辩评分表.pdf</span><span class="sz">840 KB</span></div>
+        </div>
+      </div>
+      <div data-grp="img">
+        <div class="g3"><span class="chev"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>图片 <span class="n">2</span><span class="sub">1.2 MB</span></div>
+        <div class="body3">
+          <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">实验装置照片.png</span><span class="sz">980 KB</span></div>
+          <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">气泡高速摄像帧.png</span><span class="sz">260 KB</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 大文件夹可收起次要类型，灵活</span><span class="con">⚠ 多一层交互状态；折叠状态要记否？(建议不记, 换夹即重置)</span></div>
+  </div>
+
+  <!-- ═══════ T4 ═══════ -->
+  <div class="card">
+    <div class="card-h"><span class="tag">T4</span><h2>迷你组头 · 高密度</h2></div>
+    <p class="card-d">组头退成一行 10px 小标签（色点 + 类型 + 计数 + 细线），文件行收紧到 26px。同样的文件夹能多看 40% 条目，分组只作轻提示。</p>
+    <div class="rail dense">
+      <div class="fhead">
+        <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div><div class="nm">杜同贺</div><div class="meta">232 MB · 20 项 · 最新 7 月</div></div>
+      </div>
+      <div class="g4"><span class="dot" style="background:var(--ppt)"></span>PPT 演示文稿<span class="n">15 · 228.4 MB</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.28 例行例会.pptx</span><span class="sz">4.1 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.5.14 例行例会.pptx</span><span class="sz">3.2 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--ppt)"></span><span class="nm">2026.4.30 例行例会.pptx</span><span class="sz">2.8 MB</span></div>
+      <div class="more">… 还有 12 个 PPT</div>
+      <div class="g4"><span class="dot" style="background:var(--doc)"></span>Word 文档<span class="n">2 · 2.1 MB</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">开题报告-微纳米气泡.docx</span><span class="sz">1.6 MB</span></div>
+      <div class="it"><span class="dot" style="background:var(--doc)"></span><span class="nm">毕业论文初稿.docx</span><span class="sz">520 KB</span></div>
+      <div class="g4"><span class="dot" style="background:var(--pdf)"></span>PDF 文档<span class="n">1 · 840 KB</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--pdf)"></span><span class="nm">答辩评分表.pdf</span><span class="sz">840 KB</span></div>
+      <div class="g4"><span class="dot" style="background:var(--img)"></span>图片<span class="n">2 · 1.2 MB</span><span class="rule"></span></div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">实验装置照片.png</span><span class="sz">980 KB</span></div>
+      <div class="it"><span class="dot" style="background:var(--img)"></span><span class="nm">气泡高速摄像帧.png</span><span class="sz">260 KB</span></div>
+    </div>
+    <div class="notes"><span class="pro">✓ 密度最高，分组存在但不抢戏</span><span class="con">⚠ 组头太轻，混装大文件夹里扫视助力一般</span></div>
+  </div>
+</div>
+
+<script>
+/* T2 交互 */
+const T2DATA = [
+  { n: '2026.5.28 例行例会.pptx', s: '4.1 MB', t: 'ppt' },
+  { n: '2026.5.14 例行例会.pptx', s: '3.2 MB', t: 'ppt' },
+  { n: '2026.4.30 例行例会.pptx', s: '2.8 MB', t: 'ppt' },
+  { n: '2026.4.16 例行例会.pptx', s: '5.4 MB', t: 'ppt' },
+  { n: '开题报告-微纳米气泡.docx', s: '1.6 MB', t: 'doc' },
+  { n: '答辩评分表.pdf', s: '840 KB', t: 'pdf' },
+  { n: '实验装置照片.png', s: '980 KB', t: 'img' },
+  { n: '毕业论文初稿.docx', s: '520 KB', t: 'doc' },
+  { n: '气泡高速摄像帧.png', s: '260 KB', t: 'img' },
+];
+const DOT = { ppt: 'var(--ppt)', doc: 'var(--doc)', pdf: 'var(--pdf)', img: 'var(--img)' };
+const t2rail = document.querySelector('[data-t2]');
+const t2list = t2rail.querySelector('.list');
+function t2render(t) {
+  const arr = t === 'all' ? T2DATA : T2DATA.filter(f => f.t === t);
+  t2list.innerHTML = arr.map(f => `<div class="it"><span class="dot" style="background:${DOT[f.t]}"></span><span class="nm">${f.n}</span><span class="sz">${f.s}</span></div>`).join('');
+}
+t2rail.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+  t2rail.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+  t2render(c.dataset.t);
+}));
+t2render('all');
+
+/* T3 交互 */
+document.querySelectorAll('[data-t3] [data-grp]').forEach(grp => {
+  const head = grp.querySelector('.g3'), body = grp.querySelector('.body3');
+  head.addEventListener('click', () => {
+    const folded = head.classList.toggle('folded');
+    body.style.maxHeight = folded ? '0px' : body.scrollHeight + 'px';
+  });
+});
+</script>
+</body>
+</html>

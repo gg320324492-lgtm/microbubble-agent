@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>表格表头对齐/字体提案 — 网盘文件表</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24; --image: #7C4E96;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1080px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+.sec { margin-top: 30px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 12px; }
+.sec-desc b { color: var(--text-2); }
+
+.table { background: var(--card); border: 1px solid rgba(45,58,53,.5); border-radius: 12px 12px 0 0; overflow: hidden; }
+.thead, .trow { display: grid; grid-template-columns: 34px minmax(0,1fr) 86px 108px 118px 48px; align-items: center; padding: 0 12px; }
+.thead { height: 34px; border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 500; letter-spacing: .06em; color: var(--text-3); user-select: none; }
+.trow { height: 38px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
+.trow:last-child { border-bottom: none; }
+.ck { display: flex; justify-content: center; }
+.ck input { width: 14px; height: 14px; accent-color: var(--primary); }
+.nm { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 500; overflow: hidden; white-space: nowrap; }
+.nm .dt { width: 7px; height: 7px; border-radius: 50%; background: var(--ppt); flex: none; }
+.size, .time { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); }
+.ow { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+.av { width: 17px; height: 17px; border-radius: 50%; background: linear-gradient(135deg,#0E766E,#12897C); color: #fff; font-size: 9px; display: inline-grid; place-items: center; font-weight: 600; flex: none; }
+.st { text-align: center; color: var(--ppt); }
+.st .off { color: var(--line-2); }
+.arr { font-size: 9px; margin-left: 3px; color: var(--primary); }
+
+/* 变体差异 */
+.vA .thead, .vA .trow { gap: 14px; }
+.vA .th-r { text-align: right; }
+.vA .size, .vA .time { text-align: right; }
+
+.vB .thead, .vB .trow { gap: 8px; }
+.vB .thead span, .vB .ck, .vB .size, .vB .time, .vB .st, .vB .ow { text-align: center; justify-content: center; }
+.vB .nm { justify-content: flex-start; }
+
+.vC .thead, .vC .trow { gap: 10px; }
+.vC .size, .vC .time { text-align: left; }
+
+.vD .thead, .vD .trow { gap: 6px; }
+.vD .th-r { text-align: right; padding-right: 12px; }
+.vD .size, .vD .time { text-align: right; }
+
+footer { margin-top: 36px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>表头对齐 / 字体提案 — 修复列错位后的收尾</h1>
+  <p>滚动条导致的 6px 整体错位已修（表头右侧补偿，四个方案都保留）。这一页只决定<b>表头文字的对齐方式与列间节奏</b>：上一版把「大小/上传时间」表头改成右对齐后与相邻表头粘连、字体也不统一了。以下四版表头字体全部统一（11px / 500 / 同色），只变对齐与列距。</p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">HEAD A</span><h2>表头随内容对齐 + 拉大列距</h2><span class="tag">视觉稿 th 逻辑 · 推荐</span></div>
+  <div class="sec-desc">大小/上传时间表头<b>右对齐</b>压在数值右缘上，列间距 6px → 14px 拉开呼吸感，与相邻表头不再粘连。数字右对齐是最标准的账目式排法。</div>
+  <div class="table vA">
+    <div class="thead">
+      <span class="ck"><input type="checkbox"></span>
+      <span>名称</span>
+      <span class="th-r">大小</span>
+      <span>上传者</span>
+      <span class="th-r">上传时间</span>
+      <span style="text-align:center">收藏</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2025.4.7 研二 杨慈.pptx</span>
+      <span class="size">60.6 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:30</span>
+      <span class="st">★</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.06.24 研一 杨慈.pptx</span>
+      <span class="size">2.3 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:14</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.02.26 研一 杨慈.pptx</span>
+      <span class="size">835 KB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 20:57</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">HEAD B</span><h2>全部居中</h2><span class="tag">对称 · 永不粘连</span></div>
+  <div class="sec-desc">大小/上传时间/收藏的表头与内容全部居中，只有名称与上传者保持左对齐。对称最稳，任何列宽都不会挤；代价是右对齐数字的"账本感"消失。</div>
+  <div class="table vB">
+    <div class="thead">
+      <span class="ck"><input type="checkbox"></span>
+      <span>名称</span>
+      <span>大小</span>
+      <span>上传者</span>
+      <span>上传时间</span>
+      <span>收藏</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2025.4.7 研二 杨慈.pptx</span>
+      <span class="size">60.6 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:30</span>
+      <span class="st">★</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.06.24 研一 杨慈.pptx</span>
+      <span class="size">2.3 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:14</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.02.26 研一 杨慈.pptx</span>
+      <span class="size">835 KB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 20:57</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">HEAD C</span><h2>全部左对齐</h2><span class="tag">Notion/Linear 风 · 最宽松</span></div>
+  <div class="sec-desc">所有表头与内容统一左对齐（数字也左对齐）。节奏最宽松、永远不挤，但大小数字右缘参差，账目感最弱。</div>
+  <div class="table vC">
+    <div class="thead">
+      <span class="ck"><input type="checkbox"></span>
+      <span>名称</span>
+      <span>大小</span>
+      <span>上传者</span>
+      <span>上传时间</span>
+      <span>收藏</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2025.4.7 研二 杨慈.pptx</span>
+      <span class="size">60.6 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:30</span>
+      <span class="st">★</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.06.24 研一 杨慈.pptx</span>
+      <span class="size">2.3 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:14</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.02.26 研一 杨慈.pptx</span>
+      <span class="size">835 KB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 20:57</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">HEAD D</span><h2>右对齐内缩</h2><span class="tag">保持 6px 列距 · 表头内缩 12px</span></div>
+  <div class="sec-desc">大小/上传时间表头仍右对齐，但整体向左内缩 12px 让开相邻表头；列距不变。数值右缘与表头不完全齐平（差 12px），折中方案。</div>
+  <div class="table vD">
+    <div class="thead">
+      <span class="ck"><input type="checkbox"></span>
+      <span>名称</span>
+      <span class="th-r">大小</span>
+      <span>上传者</span>
+      <span class="th-r">上传时间</span>
+      <span style="text-align:center">收藏</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2025.4.7 研二 杨慈.pptx</span>
+      <span class="size">60.6 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:30</span>
+      <span class="st">★</span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.06.24 研一 杨慈.pptx</span>
+      <span class="size">2.3 MB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 21:14</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+    <div class="trow">
+      <span class="ck"><input type="checkbox"></span>
+      <span class="nm"><span class="dt"></span>2023.02.26 研一 杨慈.pptx</span>
+      <span class="size">835 KB</span>
+      <span class="ow"><span class="av">杨</span>杨慈</span>
+      <span class="time">07-10 20:57</span>
+      <span class="st"><span class="off">★</span></span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 四案共同的固定项：表头字体统一（11px / 500 / 同色，去掉上一版混入的等宽字体）；滚动条 6px 补偿保留。<br>
+  · 回复字母即可（如「用 A」）。
+</footer>
+</body>
+</html>

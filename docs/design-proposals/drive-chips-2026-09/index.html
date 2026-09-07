@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>网盘筛选 chips · 图标/UI 提案 — MicroBubble Lab</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --pdf: #B3392F; --doc: #2F5D8A; --ppt: #B07C24; --excel: #3E7A52;
+  --image: #7C4E96; --video: #A84B6F; --audio: #B07C24; --textfile: #6B6152;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1180px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; letter-spacing: .01em; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+.sec { margin-top: 34px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 12px; }
+
+/* 复刻网盘工具条容器 (暖纸底) */
+.stage { background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 16px 18px 14px; }
+.stage .lab { font-size: 11px; color: var(--text-3); }
+.stage .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 0; }
+.stage .row + .row { margin-top: 8px; }
+
+/* chip 基础 (与线上一致) */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 9999px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); font-size: 12px; white-space: nowrap; }
+.chip.on { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); font-weight: 600; }
+.chip svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.dot { width: 5.5px; height: 5.5px; border-radius: 50%; flex: none; }
+
+kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--card); color: var(--text-3); }
+.hint { margin-left: auto; font-size: 11.5px; color: var(--text-4); display: flex; gap: 12px; align-items: center; }
+
+/* C 徽章 */
+.bdg { width: 18px; height: 18px; border-radius: 4.5px; display: inline-grid; place-items: center; flex: none; font-family: var(--mono); font-size: 7.5px; font-weight: 700; letter-spacing: .02em; }
+
+/* 放大对照条 */
+.zoom-strip { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; }
+.zoom-item { display: flex; align-items: center; gap: 9px; padding: 9px 13px; background: var(--card); border: 1px solid var(--line-2); border-radius: 10px; }
+.zoom-item .z-ic { display: grid; place-items: center; }
+.zoom-item .z-ic svg { width: 26px; height: 26px; stroke-width: 1.5; }
+.zoom-item b { font-size: 12px; font-weight: 600; }
+.zoom-item span { font-family: var(--mono); font-size: 10px; color: var(--text-4); display: block; margin-top: 1px; }
+.zoom-item .sw { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+
+footer { margin-top: 40px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>网盘筛选 chips — emoji 图标替换提案</h1>
+  <p>现状：类型 chip 里的彩色 emoji（📄 📊 📈 …）与档案系配色不搭、跨平台渲染不一致。以下 4 版全部沿用线上的 chip 骨架（暖纸底 / 白 chip / 深青 active），
+  只换「类型图标语言」与「排序箭头」。排序箭头在所有方案里统一改为细描边 SVG，且只在 active 项显示（去掉常驻 emoji ⬆⬇）。选定字母后我直接落到代码。</p>
+</header>
+
+<!-- 现状 -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">REF</span><h2>现状 · emoji</h2><span class="tag">留作对照, 不参与选择</span></div>
+  <div class="stage" style="opacity:.72">
+    <div class="row">
+      <span class="lab">排序</span>
+      <span class="chip on">最新上传 ⬇</span><span class="chip">最早上传 ⬆</span><span class="chip">最近修改 ⬇</span>
+      <span class="lab" style="margin-left:6px">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><span class="dot" style="background:var(--pdf)"></span>📄 PDF</span>
+      <span class="chip"><span class="dot" style="background:var(--doc)"></span>📊 Word</span>
+      <span class="chip"><span class="dot" style="background:var(--ppt)"></span>📈 PPT</span>
+      <span class="chip"><span class="dot" style="background:var(--excel)"></span>📉 Excel</span>
+      <span class="chip"><span class="dot" style="background:var(--image)"></span>🖼️ 图片</span>
+      <span class="chip"><span class="dot" style="background:var(--video)"></span>🎬 视频</span>
+      <span class="chip"><span class="dot" style="background:var(--audio)"></span>🎵 音频</span>
+      <span class="chip"><span class="dot" style="background:var(--textfile)"></span>📝 文本</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 方案模板 ============ -->
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">STYLE A</span><h2>纯色点 · 极简</h2><span class="tag">视觉稿 style-b 原生 · 改造量最小</span></div>
+  <div class="sec-desc">去掉一切图标，只留 5.5px 类型色圆点 + 文字。信息密度最低但最安静，和视觉稿 B 方案完全同源；类型识别靠颜色 + 文字。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="lab">排序</span>
+      <span class="chip on">最新上传 <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-4-4m4 4 4-4"/></svg></span>
+      <span class="chip">最早上传</span><span class="chip">最近修改</span>
+      <span class="lab" style="margin-left:6px">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><span class="dot" style="background:var(--pdf)"></span>PDF</span>
+      <span class="chip"><span class="dot" style="background:var(--doc)"></span>Word</span>
+      <span class="chip"><span class="dot" style="background:var(--ppt)"></span>PPT</span>
+      <span class="chip"><span class="dot" style="background:var(--excel)"></span>Excel</span>
+      <span class="chip"><span class="dot" style="background:var(--image)"></span>图片</span>
+      <span class="chip"><span class="dot" style="background:var(--video)"></span>视频</span>
+      <span class="chip"><span class="dot" style="background:var(--audio)"></span>音频</span>
+      <span class="chip"><span class="dot" style="background:var(--textfile)"></span>文本</span>
+    </div>
+    <div class="row">
+      <span class="hint"><span><kbd>↑</kbd><kbd>↓</kbd> 移动</span><span><kbd>␣</kbd> 预览</span><span><kbd>Del</kbd> 回收站</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">STYLE B</span><h2>类型色描边图标 · 档案线性</h2><span class="tag">与树/表内描边文件夹同语言 · 推荐</span></div>
+  <div class="sec-desc">每个类型一枚 14px 细描边 SVG（1.7 线宽），描边色 = 类型色。与批次⑧之后树内/表内的描边文件夹图标是同一套语言，图标本身承担类型识别，圆点退役。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="lab">排序</span>
+      <span class="chip on">最新上传 <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-4-4m4 4 4-4"/></svg></span>
+      <span class="chip">最早上传</span><span class="chip">最近修改</span>
+      <span class="lab" style="margin-left:6px">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><svg style="stroke:var(--pdf)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>PDF</span>
+      <span class="chip"><svg style="stroke:var(--doc)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Word</span>
+      <span class="chip"><svg style="stroke:var(--ppt)" viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg>PPT</span>
+      <span class="chip"><svg style="stroke:var(--excel)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg>Excel</span>
+      <span class="chip"><svg style="stroke:var(--image)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg>图片</span>
+      <span class="chip"><svg style="stroke:var(--video)" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg>视频</span>
+      <span class="chip"><svg style="stroke:var(--audio)" viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg>音频</span>
+      <span class="chip"><svg style="stroke:var(--textfile)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg>文本</span>
+    </div>
+    <div class="row">
+      <span class="hint"><span><kbd>↑</kbd><kbd>↓</kbd> 移动</span><span><kbd>␣</kbd> 预览</span><span><kbd>Del</kbd> 回收站</span></span>
+    </div>
+  </div>
+  <div class="zoom-strip">
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--pdf)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg></span><div><b>PDF</b><span>#B3392F</span></div></div>
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--doc)" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></span><div><b>Word</b><span>#2F5D8A</span></div></div>
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--ppt)" viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg></span><div><b>PPT</b><span>#B07C24</span></div></div>
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--excel)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg></span><div><b>Excel</b><span>#3E7A52</span></div></div>
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--image)" viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg></span><div><b>图片</b><span>#7C4E96</span></div></div>
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--video)" viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg></span><div><b>视频</b><span>#A84B6F</span></div></div>
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--audio)" viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg></span><div><b>音频</b><span>#B07C24</span></div></div>
+    <div class="zoom-item"><span class="z-ic"><svg style="stroke:var(--textfile)" viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg></span><div><b>文本</b><span>#6B6152</span></div></div>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">STYLE C</span><h2>mono 迷你徽章 · 缩写</h2><span class="tag">信息量最高 · 档案台账味</span></div>
+  <div class="sec-desc">18px 圆角小徽章，7.5px mono 缩写（PDF / DOC / PPT / XLS / IMG / VID / AUD / TXT），底色 = 类型色 12% 罩色、字 = 类型色。检索效率最高，风格偏「档案台账」，与右侧详情栏封面占位同语言。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="lab">排序</span>
+      <span class="chip on">最新上传 <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-4-4m4 4 4-4"/></svg></span>
+      <span class="chip">最早上传</span><span class="chip">最近修改</span>
+      <span class="lab" style="margin-left:6px">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><span class="bdg" style="color:var(--pdf);background:rgba(179,57,47,.12)">PDF</span>PDF</span>
+      <span class="chip"><span class="bdg" style="color:var(--doc);background:rgba(47,93,138,.12)">DOC</span>Word</span>
+      <span class="chip"><span class="bdg" style="color:var(--ppt);background:rgba(176,124,36,.12)">PPT</span>PPT</span>
+      <span class="chip"><span class="bdg" style="color:var(--excel);background:rgba(62,122,82,.12)">XLS</span>Excel</span>
+      <span class="chip"><span class="bdg" style="color:var(--image);background:rgba(124,78,150,.12)">IMG</span>图片</span>
+      <span class="chip"><span class="bdg" style="color:var(--video);background:rgba(168,75,111,.12)">VID</span>视频</span>
+      <span class="chip"><span class="bdg" style="color:var(--audio);background:rgba(176,124,36,.12)">AUD</span>音频</span>
+      <span class="chip"><span class="bdg" style="color:var(--textfile);background:rgba(107,97,82,.12)">TXT</span>文本</span>
+    </div>
+    <div class="row">
+      <span class="hint"><span><kbd>↑</kbd><kbd>↓</kbd> 移动</span><span><kbd>␣</kbd> 预览</span><span><kbd>Del</kbd> 回收站</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">STYLE D</span><h2>单色墨线图标 · 全青</h2><span class="tag">最冷静 · 类型只靠形状+文字</span></div>
+  <div class="sec-desc">与 B 同一套图标，但全部统一深青描边、不做类型染色——页面彩色只剩 active chip 一处，最接近「档案」的克制感。适合觉得 B 的彩色图标仍偏花的选择。</div>
+  <div class="stage">
+    <div class="row">
+      <span class="lab">排序</span>
+      <span class="chip on">最新上传 <svg viewBox="0 0 24 24"><path d="M12 5v14m0 0-4-4m4 4 4-4"/></svg></span>
+      <span class="chip">最早上传</span><span class="chip">最近修改</span>
+      <span class="lab" style="margin-left:6px">类型</span>
+      <span class="chip on">全部类型</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>PDF</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Word</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M3 4h18"/><path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4"/><path d="M12 15v3M8 21l4-3 4 3"/></svg>PPT</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 10h17M3.5 15h17M12 4v16"/></svg>Excel</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9.5" r="1.8"/><path d="m20.5 15.5-3.6-3.6a1.8 1.8 0 0 0-2.5 0L7 19"/></svg>图片</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/></svg>视频</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M9.5 17.5V6l10-2v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="17" cy="15.5" r="2.5"/></svg>音频</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h16"/></svg>文本</span>
+    </div>
+    <div class="row">
+      <span class="hint"><span><kbd>↑</kbd><kbd>↓</kbd> 移动</span><span><kbd>␣</kbd> 预览</span><span><kbd>Del</kbd> 回收站</span></span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  · 所有方案共同的固定改动：排序 chip 的 emoji 箭头（⬇⬆）换成细描边 SVG，且只在 active 项显示；「全部类型」active 保持浅青染色。<br>
+  · 表格行内的 7px 类型色圆点不变（行内识别仍靠圆点+颜色，这里只改顶部筛选区）。<br>
+  · 选定后回我字母即可（如「用 B」）；也可以杂交（如「B 的图标 + C 的徽章放在表格里」）。
+</footer>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>右栏预览区分层方案 — 按类型实体预览</title>
+<style>
+:root {
+  --primary: #0E766E; --primary-dark: #0B5D56; --primary-light: #2A9D8F;
+  --primary-bg: rgba(14,118,110,.09); --primary-border: rgba(14,118,110,.35);
+  --ppt: #B07C24; --pdf: #B3392F; --doc: #2F5D8A; --excel: #3E7A52; --video: #A84B6F;
+  --text: #22302C; --text-2: #52615C; --text-3: #8B968F; --text-4: #B9BFB6;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+  --grad: linear-gradient(135deg, #0E766E, #12897C);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif; background: var(--bg); color: var(--text); font-size: 13.5px; padding: 34px 30px 60px; max-width: 1140px; margin: 0 auto; }
+header h1 { font-size: 19px; font-weight: 700; }
+header p { color: var(--text-3); font-size: 12.5px; margin-top: 7px; line-height: 1.7; }
+header p b { color: var(--primary-dark); }
+.sec { margin-top: 30px; }
+.sec-cap { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sec-cap .no { font-family: var(--mono); font-size: 11px; color: var(--text-4); letter-spacing: .1em; }
+.sec-cap h2 { font-size: 15px; font-weight: 700; }
+.sec-cap .tag { font-size: 11px; color: var(--text-3); }
+.sec-cap .work { font-size: 11px; color: var(--ppt); }
+.sec-desc { color: var(--text-3); font-size: 12.5px; line-height: 1.7; margin-bottom: 14px; }
+.sec-desc b { color: var(--text-2); }
+.row { display: flex; gap: 22px; flex-wrap: wrap; }
+
+/* 右栏封面区 mock (336-32 宽) */
+.pv { width: 304px; height: 188px; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; position: relative; flex: none; }
+.pv img, .pv .fill { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pv .hover-zoom { position: absolute; right: 8px; top: 8px; background: rgba(20,40,35,.55); color: #fff; font-size: 10.5px; padding: 4px 9px; border-radius: 9999px; backdrop-filter: blur(4px); display: flex; align-items: center; gap: 4px; }
+/* 视频播放器 */
+.pv-video { position: relative; height: 100%; background: #101613; display: grid; place-items: center; }
+.pv-video .play { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.16); border: 1.5px solid rgba(255,255,255,.65); display: grid; place-items: center; }
+.pv-video .play::after { content: ''; border-left: 13px solid #fff; border-top: 8px solid transparent; border-bottom: 8px solid transparent; margin-left: 4px; }
+.pv-vbar { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px; background: linear-gradient(transparent, rgba(0,0,0,.65)); display: flex; align-items: center; gap: 8px; }
+.pv-vbar .t { height: 3px; flex: 1; border-radius: 2px; background: rgba(255,255,255,.3); position: relative; }
+.pv-vbar .t i { position: absolute; left: 0; top: 0; bottom: 0; width: 34%; background: #2A9D8F; border-radius: 2px; }
+.pv-vbar .tm { font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,.85); }
+.pv-vbar .mute { width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,.22); color: #fff; font-size: 9px; display: grid; place-items: center; }
+/* 音频条 */
+.pv-audio { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: linear-gradient(165deg, #fff, #F2EEE6); }
+.pv-audio .disc { width: 56px; height: 56px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 22px; box-shadow: 0 6px 18px rgba(14,118,110,.35); }
+.pv-audio .anm { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+.pv-abar { width: 70%; display: flex; align-items: center; gap: 8px; }
+.pv-abar .t { flex: 1; height: 4px; border-radius: 2px; background: var(--line-2); position: relative; }
+.pv-abar .t i { position: absolute; left: 0; top: 0; bottom: 0; width: 52%; background: var(--primary); border-radius: 2px; }
+.pv-abar .tm { font-family: var(--mono); font-size: 9px; color: var(--text-3); }
+.pv-abar .pl { width: 26px; height: 26px; border-radius: 50%; background: var(--grad); position: relative; flex: none; }
+.pv-abar .pl::after { content: ''; border-left: 9px solid #fff; border-top: 5.5px solid transparent; border-bottom: 5.5px solid transparent; position: absolute; left: 10px; top: 8px; }
+/* PDF */
+.pv-pdf { height: 100%; background: #525659; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.pv-pdf .page { width: 88px; height: 118px; background: #fff; border-radius: 2px; box-shadow: 0 3px 10px rgba(0,0,0,.4); padding: 10px 9px; }
+.pv-pdf .page i { display: block; height: 4px; border-radius: 2px; background: #D8D5CE; margin-bottom: 5px; }
+.pv-pdf .page i.hl { background: #9FC6C0; }
+.pv-pdf .badge { position: absolute; left: 10px; bottom: 10px; background: rgba(20,40,35,.6); color: #fff; font-family: var(--mono); font-size: 9.5px; padding: 3px 8px; border-radius: 9999px; backdrop-filter: blur(4px); }
+/* 文本/MD */
+.pv-txt { height: 100%; background: var(--card); padding: 12px 14px; font-size: 10.5px; line-height: 1.55; overflow: hidden; }
+.pv-txt h5 { font-size: 12px; margin-bottom: 5px; color: var(--primary-dark); }
+.pv-txt p { color: var(--text-2); margin-bottom: 4px; }
+.pv-txt code { font-family: var(--mono); background: var(--bg); padding: 1px 4px; border-radius: 3px; color: var(--ppt); font-size: 10px; }
+.pv-txt .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 44px; background: linear-gradient(transparent, #fff); }
+.pv-txt .tagr { position: absolute; right: 8px; top: 8px; font-family: var(--mono); font-size: 9px; color: var(--text-4); border: 1px solid var(--line-2); padding: 2px 6px; border-radius: 9999px; background: var(--card); }
+/* Office 信息卡 */
+.pv-office { height: 100%; background: linear-gradient(165deg, #FFF9F2 0%, #FFEDDD 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.pv-office .big { font-family: var(--mono); font-size: 21px; font-weight: 700; letter-spacing: .08em; color: var(--ppt); }
+.pv-office .sz { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+.pv-office .go { margin-top: 4px; font-size: 11.5px; color: #fff; background: var(--grad); padding: 6px 16px; border-radius: 9999px; box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+.pv-office .tip { font-size: 10px; color: var(--text-4); }
+/* 矩阵小格 */
+.matrix { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.mcell { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.mcell h4 { font-size: 11.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+.mcell h4 .ok { color: #3E7A52; } .mcell h4 .no { color: var(--text-4); }
+.mcell .pv { width: 100%; height: 96px; }
+/* 沉浸 */
+.big { width: 560px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 24px 64px rgba(10,20,16,.4); }
+.big .bh { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.big .bh b { font-size: 13px; } .big .bh .x { margin-left: auto; color: var(--text-3); }
+.big .bb { height: 280px; background: #101613; display: grid; place-items: center; position: relative; }
+.big .bb .play { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.16); border: 1.5px solid rgba(255,255,255,.65); display: grid; place-items: center; }
+.big .bb .play::after { content: ''; border-left: 17px solid #fff; border-top: 10px solid transparent; border-bottom: 10px solid transparent; margin-left: 5px; }
+.big .bf { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+.big .bf button { font: inherit; font-size: 12px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); cursor: pointer; }
+.big .bf button.on { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); font-weight: 600; }
+footer { margin-top: 34px; padding-top: 16px; border-top: 1px dashed var(--line-2); color: var(--text-3); font-size: 12px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>右栏预览区分层方案 — 按类型实体预览</h1>
+  <p>现状：右栏封面非图片一律「PPTX · 无预览图」占位。能力盘点：<b>图片/视频/音频/PDF/文本</b> 均可纯前端真预览（blob 流 + 浏览器原生能力，大预览弹窗已验证同管线）；<b>Office (ppt/doc/xls)</b> 无后端转换无法真渲染。以下按方案给出各类型的实际效果（mock 按真实比例）。</p>
+</header>
+
+<!-- A -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">PV A</span><h2>实体分层预览</h2><span class="tag">纯前端立即可落地 · 推荐</span>
+  </div>
+  <div class="sec-desc">封面区按 MIME 分层渲染：<b>图片=真图 · 视频=静音内嵌播放器 · 音频=播放条 · PDF=原生查看器 · 文本/MD/CSV=内容渲染</b>；Office 显示结构化信息卡（不再是无预览图）。全部复用现有 blob 管线，零后端改造。</div>
+  <div class="matrix">
+    <div class="mcell"><h4>图片 <span class="ok">●</span></h4><div class="pv"><div class="fill" style="background:linear-gradient(140deg,#8FBFB4,#3E7A70 60%,#22423C)"></div></div></div>
+    <div class="mcell"><h4>视频 <span class="ok">●</span></h4><div class="pv"><div class="pv-video"><div class="play"></div><div class="pv-vbar"><span class="mute">🔇</span><span class="t"><i></i></span><span class="tm">01:12 / 03:26</span></div></div></div></div>
+    <div class="mcell"><h4>音频 <span class="ok">●</span></h4><div class="pv"><div class="pv-audio"><div class="disc">♫</div><div class="anm">会议录音 0905.m4a</div><div class="pv-abar"><span class="tm">12:40</span><span class="t"><i></i></span><span class="tm">94:12</span><span class="pl"></span></div></div></div></div>
+    <div class="mcell"><h4>PDF <span class="ok">●</span></h4><div class="pv"><div class="pv-pdf"><div class="page"><i style="width:70%"></i><i class="hl" style="width:88%"></i><i></i><i></i><i style="width:55%"></i><i></i><i style="width:75%"></i><i class="hl"></i><i></i></div><span class="badge">第 1 / 12 页</span></div></div></div>
+    <div class="mcell"><h4>文本 / MD <span class="ok">●</span></h4><div class="pv"><div class="pv-txt"><span class="tagr">MD 渲染</span><h5>实验记录 0905</h5><p>泡径 <code>1.2 μm</code>，频率 28 kHz 下稳定 46 分钟…</p><p>下一步：对比 <code>28 kHz</code> 与 <code>40 kHz</code> 两组。</p><div class="fade"></div></div></div></div>
+    <div class="mcell"><h4>Office <span class="no">◐ 信息卡</span></h4><div class="pv"><div class="pv-office"><span class="big">PPTX</span><span class="sz">60.6 MB · 24 页(估)</span><span class="go">打开大预览</span><span class="tip">后端转换管线就位后自动升级为首页图</span></div></div></div>
+  </div>
+</section>
+
+<!-- B -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">PV B</span><h2>实体预览 + 点击沉浸放大</h2><span class="tag">A 的超集 · 联动已有大预览弹窗</span>
+    <span class="work">改造量 ★ + 弹窗小幅增强</span></div>
+  <div class="sec-desc">A 的一切 + 封面 hover 浮现「⤢ 放大」，<b>点击封面直接打开增强版大预览弹窗</b>（底部动作条：下载 / 分享 / 收藏 / 详情；方向键切换上下个文件）。右栏是缩略图，弹窗是正片。</div>
+  <div class="row" style="align-items:center">
+    <div class="pv"><div class="fill" style="background:linear-gradient(140deg,#8FBFB4,#3E7A70 60%,#22423C)"></div><span class="hover-zoom">⤢ 放大</span></div>
+    <div class="big">
+      <div class="bh"><b>2025.9.22 组会汇报.mp4</b><span style="font-family:var(--mono);font-size:10px;color:var(--text-3)">86.1 MB</span><span class="x">✕</span></div>
+      <div class="bb"><div class="play"></div></div>
+      <div class="bf"><button class="on">预览</button><button>下载</button><button>分享</button><button>收藏</button><button>详情页</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- C -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">PV C</span><h2>缩略图管线扩展</h2><span class="tag">Office/PDF 出真首页图</span>
+    <span class="work">改造量 ★★★ · 需后端</span></div>
+  <div class="sec-desc">后端装 LibreOffice (headless)：上传/入库时把 <b>PDF / PPT / DOC / XLS 首页转 PNG</b> 进现有 thumbnail 管线；前端封面优先缩略图、无则回落 A。效果最好（office 真首页），但镜像 +~700MB、需转换队列与失败重试。</div>
+  <div class="row">
+    <div class="pv"><div class="fill" style="background:linear-gradient(150deg,#FFF6EA,#FFE7C4 55%,#FFD9A8);display:grid;place-items:center;position:relative"><span style="font-family:var(--mono);font-size:12px;color:var(--ppt)">PPT 首页真图 (管线生成)</span><span style="position:absolute;left:10px;bottom:10px;font-family:var(--mono);font-size:9px;background:rgba(255,255,255,.75);padding:2px 7px;border-radius:9999px">thumbnail_status=ready</span></div></div>
+    <div class="pv"><div class="fill" style="background:linear-gradient(150deg,#F4F7FB,#E4ECF5 60%,#D5E2F0);display:grid;place-items:center;position:relative"><span style="font-family:var(--mono);font-size:12px;color:var(--doc)">DOC 首页真图 (管线生成)</span></div></div>
+  </div>
+</section>
+
+<!-- D -->
+<section class="sec">
+  <div class="sec-cap"><span class="no">PV D</span><h2>渐进混合</h2><span class="tag">A 先行 + C 里程碑</span>
+    <span class="work">改造量 ★ 先行 / ★★★ 后续</span></div>
+  <div class="sec-desc"><b>本期先落 A（+可并 B 的放大联动）</b>；Office 信息卡按 C 的管线预留字段（thumbnail_status 就位即自动切真首页图，前端零改动——现有代码已经是缩略图优先）。两条腿：立刻可用 + 效果上限。</div>
+  <div class="row">
+    <div class="mcell"><h4>本期</h4><div class="pv"><div class="pv-office"><span class="big">PPTX</span><span class="go">打开大预览</span><span class="tip">信息卡 (本期形态)</span></div></div></div>
+    <div class="mcell"><h4>C 管线就位后</h4><div class="pv"><div class="fill" style="background:linear-gradient(150deg,#FFF6EA,#FFE7C4 55%,#FFD9A8);display:grid;place-items:center"><span style="font-family:var(--mono);font-size:11px;color:var(--ppt)">PPT 首页真图 (自动切换)</span></div></div></div>
+  </div>
+</section>
+
+<footer>
+  · 说明：视频内嵌默认静音循环 (hover 出声按钮)；文本类预览复用后端 /preview 端点的 1KB 截取；CSV 额外渲染前 5 行表格。<br>
+  · 回复组合即可（如「用 B」「用 D，B 的放大也要」）。C 可作为独立后端任务排期。
+</footer>
+</body>
+</html>
