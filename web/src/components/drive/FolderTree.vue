@@ -88,6 +88,7 @@
       :key="folder.id"
       :folder="folder"
       :depth="1"
+      :expandable="false"
       :selected-folder-id="selectedFolderId"
       :expanded-folder-ids="expandedFolderIds"
       @select="handleFolderSelect"
