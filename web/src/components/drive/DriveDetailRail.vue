@@ -285,6 +285,54 @@
               </div>
             </template>
           </div>
+          <!-- 批次⑩.66 (2026-09-07 选型 A): ZIP 预览 — 石墨横幅 + 面包屑下钻清单 -->
+          <div v-else-if="previewKind === 'zip'" class="rf-zip">
+            <div v-if="zipStatus === 'idle' || zipStatus === 'loading'" class="rf-skel">
+              <div class="rf-conv-t">正在读取压缩包目录…</div>
+              <div class="rf-conv-s">首次约 1-3 秒 · 之后打开秒出</div>
+              <div class="rf-skel-ttl" style="margin-top:18px"></div>
+              <div class="rf-skel-ln" style="width:78%"></div>
+            </div>
+            <div v-else-if="zipStatus === 'error' || !zipMeta" class="rail-cover-ph" :style="{ borderColor: typeColor }">
+              <span class="rail-cover-abbr">{{ typeAbbr }}</span>
+              <span class="rail-cover-hint">无预览图</span>
+            </div>
+            <template v-else>
+              <div class="rf-zip-head">
+                <span class="rf-zip-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm5 0v7l2-1.5L13 10V3H9zm2.5 9.5L10 14l1.5 1.5L13 14l-1.5-1.5z"/></svg></span>
+                <div class="rf-zip-tt">
+                  <div class="rf-zip-nm" :title="name">{{ name }}</div>
+                  <div class="rf-zip-meta">{{ zipMeta.total_dirs }} 个文件夹 · {{ zipMeta.total_files }} 个文件 · {{ fmtSize(file.file_size) }}<template v-if="zipMeta.total_size"> → 解压 {{ fmtSize(zipMeta.total_size) }}</template></div>
+                </div>
+              </div>
+              <div class="rf-zip-crumb">
+                <button type="button" class="zc-seg" :class="{ cur: !zipPath.length }" @click="zipPath = []">{{ name }}</button>
+                <template v-for="(seg, i) in zipPath" :key="'zc' + i">
+                  <span class="zc-sep">/</span>
+                  <button type="button" class="zc-seg" :class="{ cur: i === zipPath.length - 1 }" @click="zipPath = zipPath.slice(0, i + 1)">{{ seg }}</button>
+                </template>
+              </div>
+              <div ref="zipListRef" class="rf-zip-list" tabindex="-1">
+                <div v-for="d in zipChildren.dirs" :key="'zd' + d.name" class="rf-zip-item" @click="zipPath = [...zipPath, d.name]">
+                  <span class="glyph">📁</span>
+                  <span class="nm">{{ d.name }}</span>
+                  <span class="cnt">{{ d.cnt }} 项</span>
+                  <span class="chev"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+                </div>
+                <div v-for="f in zipChildren.files" :key="'zf' + f.name" class="rf-zip-item">
+                  <span class="glyph">📄</span>
+                  <span class="nm">{{ f.name }}</span>
+                  <span class="sz">{{ fmtSize(f.size) }}</span>
+                </div>
+                <div v-if="!zipChildren.dirs.length && !zipChildren.files.length" class="rf-zip-empty">空文件夹</div>
+                <div v-if="!pptFull" class="rf-zip-fade"></div>
+              </div>
+              <div class="rf-zip-foot">
+                <template v-if="pptFull">全屏 · 共 {{ zipEntries.length }} 项 · 滚动查看</template>
+                <template v-else>点文件夹名进入下一级 · 共 {{ zipMeta.total_files }} 个文件</template>
+              </div>
+            </template>
+          </div>
           <!-- 兜底占位 -->
           <div v-else class="rail-cover-ph" :style="{ borderColor: typeColor }">
             <span class="rail-cover-abbr">{{ typeAbbr }}</span>
@@ -570,7 +618,7 @@ watch(() => [props.file?.id, props.file?.thumbnail_status], async () => {
   coverUrl.value = null
   const f = props.file
   if (!f) return
-  if (['doc', 'docx', 'pdf', 'xlsx'].includes(extOf.value)) return  // 批次⑩.62 分页/⑩.65 excel 预览分支接管
+  if (['doc', 'docx', 'pdf', 'xlsx', 'zip'].includes(extOf.value)) return  // 批次⑩.62 分页/⑩.65 excel/⑩.66 zip 预览分支接管
   if (f.thumbnail_status === 'ready') {
     try {
       const resp = await axios.get(`/api/v1/drive/files/${f.id}/thumbnail`)
@@ -590,6 +638,7 @@ const previewKind = computed(() => {
   if (['md', 'txt', 'csv', 'json', 'log'].includes(e)) return 'text'
   if (['doc', 'docx'].includes(e)) return 'docx'   // 批次⑩.53: LibreOffice 管线预览
   if (e === 'xlsx') return 'excel'   // 批次⑩.65 (选型 D): openpyxl JSON 速览 (xls 留 office 占位)
+  if (e === 'zip') return 'zip'      // 批次⑩.66 (选型 A): zip-list 清单下钻
   if (['ppt', 'xls'].includes(e)) return 'office'
   return 'none'
 })
@@ -605,7 +654,7 @@ const stageHeight = computed(() => {
     // 批次⑩.53: 竖版 A4 贴合 — 首页图自然比例未知前用 A4 竖比 (210:297)
     return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 297 / 210)
   }
-  return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220, excel: 268 }[previewKind.value] || 168
+  return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220, excel: 268, zip: 272 }[previewKind.value] || 168
 })
 
 /* 媒体/PDF blob 流 (带鉴权 axios → objectURL; 换文件/卸载即 revoke) */
@@ -981,6 +1030,71 @@ watch([() => props.file?.id, previewKind], ([fid, kind]) => {
 }, { immediate: true })
 onBeforeUnmount(() => { stopXlsxPoll(); xlsxPollSeq++ })
 
+/* ---- 批次⑩.66 (选型 A): ZIP 预览 — 全量条目 JSON + 面包屑下钻 ---- */
+const zipStatus = ref('idle')
+const zipEntries = ref([])     // [{path, dir, size}] 后端已排序
+const zipMeta = ref(null)      // {total_files, total_dirs, total_size, truncated}
+const zipPath = ref([])        // 当前层级路径段
+const zipListRef = ref(null)
+let zipPollTimer = null
+let zipPollSeq = 0
+const zipChildren = computed(() => {
+  const prefix = zipPath.value.length ? zipPath.value.join('/') + '/' : ''
+  const dirs = new Map()
+  const files = []
+  for (const e of zipEntries.value) {
+    if (e.dir || !e.path.startsWith(prefix)) continue
+    const rest = e.path.slice(prefix.length)
+    if (!rest) continue
+    const slash = rest.indexOf('/')
+    if (slash === -1) files.push({ name: rest, size: e.size })
+    else dirs.set(rest.slice(0, slash), (dirs.get(rest.slice(0, slash)) || 0) + 1)
+  }
+  return {
+    dirs: [...dirs.entries()].map(([name, cnt]) => ({ name, cnt })).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')),
+    files: files.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN')),
+  }
+})
+function stopZipPoll() { if (zipPollTimer) { clearTimeout(zipPollTimer); zipPollTimer = null } }
+function startZipPoll(fid) {
+  stopZipPoll()
+  const seq = ++zipPollSeq
+  zipStatus.value = 'loading'
+  const tick = async () => {
+    if (seq !== zipPollSeq) return
+    try {
+      const resp = await axios.get(`/api/v1/drive/files/${fid}/zip-list`)
+      const st = resp.data?.status
+      if (st === 'ready') {
+        zipStatus.value = 'ready'
+        zipEntries.value = resp.data.entries || []
+        zipMeta.value = {
+          total_files: resp.data.total_files || 0,
+          total_dirs: resp.data.total_dirs || 0,
+          total_size: resp.data.total_size || 0,
+          truncated: !!resp.data.truncated,
+        }
+        zipPath.value = []
+        return
+      }
+      if (st === 'error') { zipStatus.value = 'error'; return }
+      zipPollTimer = setTimeout(tick, 2000)
+    } catch {
+      zipPollTimer = setTimeout(tick, 2500)   // 瞬时网络错误重试 (同 xlsx 模式)
+    }
+  }
+  tick()
+}
+watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+  stopZipPoll()
+  zipEntries.value = []
+  zipMeta.value = null
+  zipPath.value = []
+  if (kind === 'zip' && fid != null) startZipPoll(fid)
+  else zipStatus.value = 'idle'
+}, { immediate: true })
+onBeforeUnmount(() => { stopZipPoll(); zipPollSeq++ })
+
 const prevDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value <= 1 : docxPageClamped.value <= 1)
 const nextDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value >= pptImgTotalSafe.value : docxPageClamped.value >= docxImgTotalSafe.value)
 function prevAnyPage() { if (previewKind.value === 'ppt') prevPptPage(); else prevDocxPage() }
@@ -1009,10 +1123,12 @@ const rfStageRef = ref(null)
 const pptFull = ref(false)
 function onFsChange() {
   pptFull.value = !!document.fullscreenElement
-  // 批次⑩.65: excel 全屏 — 聚焦表格容器让方向键可原生滚动; 退出全屏重置缩放
+  // 批次⑩.65/66: excel/zip 全屏 — 聚焦滚动容器让方向键可原生滚动; 退出全屏重置缩放
   if (previewKind.value === 'excel') {
     if (pptFull.value) nextTick(() => xlsxGridRef.value?.focus?.())
     else xlsxZoom.value = 100
+  } else if (previewKind.value === 'zip' && pptFull.value) {
+    nextTick(() => zipListRef.value?.focus?.())
   }
 }
 let wheelLock = 0
@@ -1023,6 +1139,7 @@ function onFsWheel(ev) {
     if (ev.ctrlKey) { ev.preventDefault(); adjustXlsxZoom(ev.deltaY < 0 ? 10 : -10) }
     return
   }
+  if (previewKind.value === 'zip') return   // 批次⑩.66: zip 全屏走原生清单滚动
   ev.preventDefault()
   const now = Date.now()
   if (now - wheelLock < 450) return
@@ -1035,7 +1152,7 @@ function onFsWheel(ev) {
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
-  if (previewKind.value === 'excel') return   // 批次⑩.65: excel 全屏方向键/空格交给原生滚动
+  if (previewKind.value === 'excel' || previewKind.value === 'zip') return   // 批次⑩.65/66: 方向键交给原生滚动
   const isDocx = previewKind.value === 'docx' || previewKind.value === 'pdf'
   const page = isDocx ? docxPage : pptPage
   const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
@@ -1498,6 +1615,38 @@ function fmtDT(x) {
 .rf-xlsx-zbtn:disabled { opacity: .4; cursor: default; }
 .rf-xlsx-zpct { min-width: 40px; text-align: center; font-family: var(--font-family-mono, monospace); font-size: 10.5px; color: var(--color-text-secondary); }
 .rf-xlsx-zreset { font-family: var(--font-family-mono, monospace); }
+/* ── 批次⑩.66 (选型 A): ZIP 预览 — 石墨横幅 + 面包屑下钻清单 ── */
+.rf-zip { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
+.rf-zip-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #454B52, #333940); color: #fff; padding: 8px 11px; }
+.rf-zip-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; flex: none; }
+.rf-zip-ico svg { width: 14px; height: 14px; fill: #fff; }
+.rf-zip-tt { flex: 1; min-width: 0; }
+.rf-zip-nm { font-size: 11px; font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-zip-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+.rf-zip-crumb { flex: none; display: flex; align-items: center; gap: 3px; padding: 5.5px 10px; border-bottom: 1px solid var(--color-border); background: #FAFBFC; font-size: 10px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.rf-zip-crumb::-webkit-scrollbar { display: none; }
+.rf-zip-crumb .zc-seg { border: none; background: none; cursor: pointer; font: inherit; font-size: 10px; color: #0E766E; padding: 0; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.rf-zip-crumb .zc-seg:hover { text-decoration: underline; }
+.rf-zip-crumb .zc-seg.cur { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); cursor: default; }
+.rf-zip-crumb .zc-seg.cur:hover { text-decoration: none; }
+.rf-zip-crumb .zc-sep { color: var(--color-text-placeholder); flex: none; }
+.rf-zip-list { flex: 1; min-height: 0; overflow: hidden; position: relative; outline: none; }
+.rf-zip-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; transition: background var(--duration-fast); }
+.rf-zip-item:hover { background: #F4F6F7; }
+.rf-zip-item:hover .nm { color: var(--color-text-primary); }
+.rf-zip-item .glyph { flex: none; font-size: 12px; }
+.rf-zip-item .nm { flex: 1; min-width: 0; font-size: 11.5px; font-weight: var(--font-weight-medium); color: var(--color-text-regular); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--duration-fast); }
+.rf-zip-item .cnt { flex: none; font-size: 9.5px; color: #fff; background: #454B52; border-radius: 9999px; padding: 1px 7px; font-family: var(--font-family-mono, monospace); }
+.rf-zip-item .sz { flex: none; font-size: 9.5px; color: var(--color-text-placeholder); font-family: var(--font-family-mono, monospace); }
+.rf-zip-item .chev { flex: none; display: inline-flex; }
+.rf-zip-item .chev svg { width: 10px; height: 10px; stroke: var(--color-text-placeholder); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.rf-zip-empty { padding: 26px 14px; text-align: center; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.rf-zip-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+.rf-zip-foot { flex: none; display: flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FAFBFC; }
+:is(.rf-stage):fullscreen .rf-zip-list { overflow: auto; }
+:is(.rf-stage):fullscreen .rf-zip-item { padding: 7px 16px; font-size: 13px; }
+:is(.rf-stage):fullscreen .rf-zip-item .nm { font-size: 13px; }
+:is(.rf-stage):fullscreen .rf-zip-fade { display: none; }
 /* 全屏放映: 表格滚动看缓存全量, 去渐隐, 字号放大 */
 :is(.rf-stage):fullscreen .rf-xlsx-gridwrap { overflow: auto; }
 :is(.rf-stage):fullscreen .rf-xlsx-grid { font-size: 12.5px; }
