@@ -1245,6 +1245,9 @@ function fmtDT(x) {
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
+
+// 批次⑩.65/66: 供父视图 (DesktopDriveView) 在列表双击时触发全屏放映
+defineExpose({ togglePptFull })
 </script>
 
 <style scoped>
