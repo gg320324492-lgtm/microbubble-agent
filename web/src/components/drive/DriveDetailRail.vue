@@ -378,6 +378,38 @@
               </div>
             </template>
           </div>
+          <!-- 批次⑩.68 (2026-09-07 选型 D): 文本类预览 — 按扩展名智能渲染 (md 排版/json 高亮/原文) -->
+          <div v-else-if="previewKind === 'text'" class="rf-txt" @dblclick="togglePptFull">
+            <div v-if="textLoading" class="rf-skel">
+              <div class="rf-conv-t">正在读取文本…</div>
+              <div class="rf-skel-ttl" style="margin-top:14px"></div>
+              <div class="rf-skel-ln" style="width:82%"></div>
+              <div class="rf-skel-ln" style="width:64%"></div>
+            </div>
+            <div v-else-if="!textPreview" class="rail-cover-ph" :style="{ borderColor: typeColor }">
+              <span class="rail-cover-abbr">{{ typeAbbr }}</span>
+              <span class="rail-cover-hint">空文件或无法预览</span>
+            </div>
+            <template v-else>
+              <div class="rf-txt-head">
+                <span class="rf-txt-ico"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm8 1.5V8h4.5L14 3.5zM8 12h8v1.6H8V12zm0 4h8v1.6H8V16zm0-8h5v1.6H8V8z"/></svg></span>
+                <div class="rf-txt-tt">
+                  <div class="rf-txt-nm" :title="name">{{ name }}</div>
+                  <div class="rf-txt-meta">{{ textStats }}</div>
+                </div>
+              </div>
+              <div ref="txtBodyRef" class="rf-txt-body" tabindex="-1">
+                <div v-if="textMode === 'md'" class="rf-txt-md" v-html="renderedMd"></div>
+                <pre v-else-if="textMode === 'json'" class="rf-txt-pre" v-html="renderedJson"></pre>
+                <pre v-else class="rf-txt-pre">{{ textPreview }}</pre>
+                <div v-if="!pptFull" class="rf-txt-fade"></div>
+              </div>
+              <div class="rf-txt-foot">
+                <template v-if="pptFull">全屏 · 滚动查看</template>
+                <template v-else>{{ textMode === 'md' ? 'Markdown 渲染' : textMode === 'json' ? 'JSON 格式化' : '原文' }}<template v-if="(file.file_size || 0) > 32768"> · 前 32 KB · 全屏继续看</template><template v-else> · 双击全屏</template></template>
+              </div>
+            </template>
+          </div>
           <!-- 兜底占位 -->
           <div v-else class="rail-cover-ph" :style="{ borderColor: typeColor }">
             <span class="rail-cover-abbr">{{ typeAbbr }}</span>
@@ -523,6 +555,7 @@
 import { ref, computed, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import { marked } from 'marked'
 import CommentThread from '@/components/drive/CommentThread.vue'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useUserStore } from '@/stores/user'
@@ -821,16 +854,59 @@ watch(() => props.file?.id, () => {
   audioSeeking = false
 })
 
-/* 文本类 1KB 截取渲染 (后端 /preview) */
+/* 文本类预览 (批次⑩.68 选型 D): /preview 现成通路 + 按扩展名智能渲染 */
 const textPreview = ref('')
+const textLoading = ref(false)
+const txtBodyRef = ref(null)
+let textLoadSeq = 0
 async function loadTextPreview() {
+  const seq = ++textLoadSeq
   textPreview.value = ''
-  if (previewKind.value !== 'text' || !props.file) return
+  if (previewKind.value !== 'text' || !props.file) { textLoading.value = false; return }
+  textLoading.value = true
   try {
     const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/preview`)
-    textPreview.value = resp.data?.text_preview || '(空文件或无法预览)'
-  } catch { textPreview.value = '(预览加载失败)' }
+    if (seq !== textLoadSeq) return
+    textPreview.value = resp.data?.text_preview || ''
+  } catch {
+    if (seq === textLoadSeq) textPreview.value = ''
+  } finally {
+    if (seq === textLoadSeq) textLoading.value = false
+  }
 }
+const textMode = computed(() => {
+  const e = extOf.value
+  if (e === 'md') return 'md'
+  if (e === 'json') return 'json'
+  return 'raw'
+})
+const textStats = computed(() => {
+  const t = textPreview.value || ''
+  const lines = t ? t.split('\n').length : 0
+  return `${lines} 行 · ${t.length} 字 · ${fmtSize(props.file?.file_size || 0)}`
+})
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+const renderedMd = computed(() => {
+  // 先整体转义再交给 marked — 文件内的原生 HTML 变纯文本, 杜绝 md 载体 XSS
+  try {
+    return marked.parse(escapeHtml(textPreview.value || ''), { breaks: true, gfm: true })
+  } catch {
+    return '<pre>' + escapeHtml(textPreview.value || '') + '</pre>'
+  }
+})
+const renderedJson = computed(() => {
+  try {
+    const formatted = JSON.stringify(JSON.parse(textPreview.value), null, 2)
+    const esc = escapeHtml(formatted)
+    return esc.replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="j-k">$1</span>$2')
+              .replace(/: (&quot;[^&]*?&quot;)/g, ': <span class="j-s">$1</span>')
+              .replace(/: (-?\d+(?:\.\d+)?)/g, ': <span class="j-n">$1</span>')
+  } catch {
+    return escapeHtml(textPreview.value || '')   // 非法 json → 原文展示
+  }
+})
 
 /* ---- 批次⑩.25 (用户拍板): PPT 逐页 PNG 图片浏览 (后端 LibreOffice 管线) ---- */
 const pptImgStatus = ref('idle')   // idle | loading | converting | ready | error
@@ -1232,8 +1308,8 @@ function onFsChange() {
   if (previewKind.value === 'excel') {
     if (pptFull.value) nextTick(() => xlsxGridRef.value?.focus?.())
     else xlsxZoom.value = 100
-  } else if (previewKind.value === 'zip' || previewKind.value === 'csv') {
-    if (pptFull.value) nextTick(() => (zipListRef.value || csvGridRef.value)?.focus?.())
+  } else if (previewKind.value === 'zip' || previewKind.value === 'csv' || previewKind.value === 'text') {
+    if (pptFull.value) nextTick(() => (zipListRef.value || csvGridRef.value || txtBodyRef.value)?.focus?.())
     else if (previewKind.value === 'csv') xlsxZoom.value = 100
   }
 }
@@ -1245,7 +1321,7 @@ function onFsWheel(ev) {
     if (ev.ctrlKey) { ev.preventDefault(); adjustXlsxZoom(ev.deltaY < 0 ? 10 : -10) }
     return
   }
-  if (previewKind.value === 'zip') return   // 批次⑩.66: zip 全屏走原生清单滚动
+  if (previewKind.value === 'zip' || previewKind.value === 'text') return   // 批次⑩.66/68: zip/文本 全屏走原生滚动
   ev.preventDefault()
   const now = Date.now()
   if (now - wheelLock < 450) return
@@ -1258,7 +1334,8 @@ function onFsWheel(ev) {
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
-  if (previewKind.value === 'excel' || previewKind.value === 'csv') return   // 批次⑩.65/66/67: 方向键交给原生滚动
+  if (previewKind.value === 'excel' || previewKind.value === 'csv') return   // 批次⑩.65/67: 方向键交给原生滚动
+  if (previewKind.value === 'zip' || previewKind.value === 'text') return    // 批次⑩.66/68: 同上
   const isDocx = previewKind.value === 'docx' || previewKind.value === 'pdf'
   const page = isDocx ? docxPage : pptPage
   const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
@@ -1788,4 +1865,35 @@ defineExpose({ togglePptFull })
 :is(.rf-stage):fullscreen .rf-csv-grid th,
 :is(.rf-stage):fullscreen .rf-csv-grid td { padding: 6px 12px; }
 :is(.rf-stage):fullscreen .rf-csv-fade { display: none; }
+/* ── 批次⑩.68 (选型 D): 文本类预览 — 深青横幅 + 按扩展名智能渲染 (md 排版/json 高亮/原文) ── */
+.rf-txt { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
+.rf-txt-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
+.rf-txt-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
+.rf-txt-ico svg { width: 14px; height: 14px; fill: #fff; }
+.rf-txt-tt { flex: 1; min-width: 0; }
+.rf-txt-nm { font-size: 11px; font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-txt-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+.rf-txt-body { flex: 1; min-height: 0; overflow: hidden; position: relative; outline: none; background: #FBFCFB; }
+.rf-txt-pre { margin: 0; padding: 10px 12px; font-family: var(--font-family-mono, monospace); font-size: 10.2px; line-height: 1.8; color: var(--color-text-regular); white-space: pre-wrap; word-break: break-all; }
+.rf-txt-md { padding: 10px 12px; font-size: 11.5px; line-height: 1.7; color: var(--color-text-regular); }
+.rf-txt-md :is(h1, h2, h3, h4, h5, h6) { margin: 8px 0 4px; color: var(--color-text-primary); font-size: 12px; }
+.rf-txt-md h1 { font-size: 13.5px; }
+.rf-txt-md :is(h1, h2, h3, p, ul, ol, pre, blockquote, table):first-child { margin-top: 0; }
+.rf-txt-md p { margin: 0 0 6px; }
+.rf-txt-md ul, .rf-txt-md ol { margin: 0 0 6px; padding-left: 18px; }
+.rf-txt-md code { font-family: var(--font-family-mono, monospace); font-size: 10.5px; background: #EDF1EF; border-radius: 3px; padding: 0 4px; }
+.rf-txt-md pre { background: #EDF1EF; border-radius: 6px; padding: 8px 10px; overflow-x: auto; margin: 0 0 6px; }
+.rf-txt-md pre code { background: none; padding: 0; }
+.rf-txt-md blockquote { margin: 0 0 6px; padding: 2px 10px; border-left: 3px solid #0E766E; color: var(--color-text-secondary); }
+.rf-txt-md a { color: #0E766E; }
+.rf-txt-md table { border-collapse: collapse; font-size: 10.5px; margin-bottom: 6px; }
+.rf-txt-md :is(th, td) { border: 1px solid #D9DEDA; padding: 2px 6px; }
+.j-k { color: #0F5C38; font-weight: 600; }
+.j-s { color: #8A5A00; }
+.j-n { color: #1D5FA8; }
+.rf-txt-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(251,252,251,0), #FBFCFB); pointer-events: none; }
+.rf-txt-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FBFBF9; }
+:is(.rf-stage):fullscreen .rf-txt-body { overflow: auto; }
+:is(.rf-stage):fullscreen .rf-txt-fade { display: none; }
+:is(.rf-stage):fullscreen :is(.rf-txt-pre, .rf-txt-md) { font-size: 13px; padding: 14px 18px; }
 </style>
