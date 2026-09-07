@@ -1916,6 +1916,83 @@ async def get_pdf_page_image(
     return FileResponse(str(p), media_type="image/png")
 
 
+# === 批次⑩.65 XLSX 预览 (2026-09-07 选型 D): openpyxl 抽前 200 行×6 列 JSON → 前端横幅+速览 ===
+# 与 pptx/docx-pages 同构状态机: converting(锁) → ready(ready.json) / error(error.txt)。
+# 缓存固定抽满 200 行, 端点按 max_rows 切片 (前端常态 8 行/全屏 200 行共用一份缓存)。
+_XLSX_PREVIEW_LOCKS: dict = {}
+_XLSX_PREVIEW_ROOT = FsPath("/app/data/xlsx_preview")
+_XLSX_CACHE_ROWS = 200
+_XLSX_CACHE_COLS = 6
+_XLSX_CELL_MAX_CHARS = 24
+
+
+def _xlsx_cache_key(updated_at) -> str:
+    return hashlib.md5(("v1:" + str(updated_at)).encode()).hexdigest()[:12]
+
+
+def _xlsx_cache_dir(file_id: int, key: str) -> FsPath:
+    return _XLSX_PREVIEW_ROOT / ("%d_%s" % (file_id, key))
+
+
+def _clip_cell(v) -> str:
+    if v is None:
+        return ""
+    return str(v)[:_XLSX_CELL_MAX_CHARS]
+
+
+def _xlsx_truncated(total, n_rows: int) -> bool:
+    if total is None:
+        return True   # read_only 下行数未知 → 按未读全提示
+    return total > n_rows and n_rows > 0   # 空表不算截断
+
+
+def _xlsx_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        from openpyxl import load_workbook
+        wb = load_workbook(src_path, read_only=True, data_only=True)
+        sheets = []
+        for ws in wb.worksheets:
+            rows = []
+            for row in ws.iter_rows(max_row=_XLSX_CACHE_ROWS, max_col=_XLSX_CACHE_COLS,
+                                    values_only=True):
+                rows.append([_clip_cell(c) for c in row])
+            total = ws.max_row  # read_only 下可能为 None
+            sheets.append({
+                "name": ws.title,
+                "total_rows": int(total) if total is not None else None,
+                "truncated": _xlsx_truncated(total, len(rows)),
+                "rows": rows,
+            })
+        wb.close()
+        (cache_dir / "ready.json").write_text(
+            json.dumps({"sheets": sheets}, ensure_ascii=False), encoding="utf-8")
+        logger.info("[xlsx-preview] 解析完成 file=%d 工作表=%d", file_id, len(sheets))
+    except Exception as e:
+        logger.error("[xlsx-preview] file=%s 解析失败: %s", file_id, e)
+        try:
+            (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
+        except Exception:
+            pass
+    finally:
+        _XLSX_PREVIEW_LOCKS.pop(key, None)
+
+
+def _slice_xlsx_sheets(sheets: list, max_rows: int) -> list:
+    out = []
+    for s in sheets:
+        rows = s.get("rows") or []
+        cut = rows[:max_rows]
+        total = s.get("total_rows")
+        out.append({
+            "name": s.get("name"),
+            "total_rows": total,
+            "truncated": _xlsx_truncated(total, len(cut)),
+            "rows": cut,
+        })
+    return out
+
+
 # === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
 # .pptx = zip + OOXML — python-pptx 已在容器内 (1.0.2), 解析一次缓存 JSON,
 # 第三栏渲染器 (DriveDetailRail) 按 EMU 比例绝对定位还原 文本框/图片/表格。
