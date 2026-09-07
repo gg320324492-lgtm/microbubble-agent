@@ -148,8 +148,9 @@
                   <svg v-else viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.6 1.4l-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4-2.1-2.1 2.1-2.1-1.4-1.4-2.1 2.1z"/></svg>
                 </button>
               </span>
-              <button class="vc-btn" title="全屏" @click.stop="togglePptFull">
-                <svg viewBox="0 0 24 24" class="vc-st"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              <button class="vc-btn" :title="pptFull ? '退出全屏' : '全屏'" @click.stop="togglePptFull">
+                <svg v-if="!pptFull" viewBox="0 0 24 24" class="vc-st"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                <svg v-else viewBox="0 0 24 24" class="vc-st"><path d="M4 14h6v6M20 10h-6V4M14 10l7 7M3 3l7 7"/></svg>
               </button>
             </div>
           </div>
