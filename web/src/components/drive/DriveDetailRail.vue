@@ -1356,10 +1356,14 @@ onBeforeUnmount(() => {
 function togglePptFull() {
   const el = rfStageRef.value || pptStageRef.value
   if (!el) return
-  if (document.fullscreenElement) document.exitFullscreen?.()
-  else {
-    el.requestFullscreen?.()
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {})
+    return
   }
+  // 手势资格丢失 (列表双击 nextTick 路径) 或全屏切换进行中再触发时会 reject — 静默, 用户再双击一次即可
+  try {
+    el.requestFullscreen?.()?.catch(() => {})
+  } catch { /* 同上 */ }
 }
 // 批次⑩.68: 舞台双击全屏 — 除音频播放器外全类型; 翻页胶囊/缩放按钮等控件上不触发
 function onStageDblClick(ev) {
