@@ -49,11 +49,9 @@
       <span class="wb-sp"></span>
       <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
       <el-button class="wb-cta" :icon="UploadFilled" @click="showUploadDialog = true">上传</el-button>
-      <!-- 批次⑩.79 (选型 C): 配额徽章自左结构面板迁入顶栏 (结构面板已退役, 导航收进全局侧边栏) -->
-      <StorageQuotaBadge v-if="quotaInfo" :quota-info="quotaInfo" class="wb-quota" />
     </header>
 
-    <!-- 三栏 body → 两栏 (批次⑩.79: 左结构面板退役, 导航收进全局侧边栏) -->
+    <!-- 三栏 body -->
     <div class="wb-body" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
       <!-- 外部文件拖入 hero (F3 真接入: drop -> DriveUploadDialog initialFiles) -->
       <transition name="drive-drop-hero-fade">
@@ -65,6 +63,38 @@
           <p class="drive-drop-hero-hint">松开鼠标即可上传到当前网盘</p>
         </div>
       </transition>
+
+      <!-- 左: 结构树 + 快捷 (FolderTree 含 special 项 + 树节点拖放落点) -->
+      <aside class="wb-rail">
+        <div class="wb-rail-cap">结构
+          <button type="button" class="wb-cap-add" title="新建文件夹" @click="showCreateFolderDialog = true">
+            <el-icon><Plus /></el-icon>
+          </button>
+        </div>
+        <FolderTree
+          class="wb-tree"
+          :folder-tree="folderTree"
+          :selected-folder-id="selectedFolderId"
+          :expanded-folder-ids="expandedFolderIds"
+          :loading="treeLoading"
+          :load-error="treeLoadError"
+          :special-view="specialView"
+          :team-count="sideCounts.team"
+          :starred-count="sideCounts.starred"
+          :trash-count="sideCounts.trash"
+          @update:selected-folder-id="selectedFolderId = $event"
+          @update:special-view="specialView = $event"
+          @toggle-expanded="toggleExpandedFolder"
+          @retry="fetchFolderTree"
+          @request-new-folder="onCreateSubFolder(null)"
+          @create-sub-folder="onCreateSubFolder"
+          @share-folder="onShareFolder"
+          @drop-files="onMoveDrop"
+        />
+        <div class="wb-rail-foot">
+          <StorageQuotaBadge v-if="quotaInfo" :quota-info="quotaInfo" />
+        </div>
+      </aside>
 
       <!-- 中: 面包屑 + 筛选 chips + 行表/内嵌面板 + 批量 dock -->
       <section class="wb-center">
@@ -288,11 +318,11 @@
 // v2.0 (2026-07-09) Drive 美化 — 引入 drive-view.css 共享样式 (见下方 import 与 .drive-* class)
 import '@/views/drive/drive-view.css'
 import { ref, computed, reactive, triggerRef, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { Search, UploadFilled, Folder, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-// 批次⑩.79: FolderTree 随结构面板退役 — 树数据/选中态仍走 useFolderTree store (全局侧边栏子导航共用)
+import FolderTree from '@/components/drive/FolderTree.vue'
 import DriveFileTable from '@/components/drive/DriveFileTable.vue'
 import DriveDetailRail from '@/components/drive/DriveDetailRail.vue'
 import DeleteConfirmDialog from '@/components/drive/DeleteConfirmDialog.vue'  // 批次⑩.73 选型 A 轻确认卡片
@@ -605,28 +635,6 @@ async function onConfirmDelete() {
     deleteConfirm.loading = false
   }
 }
-
-// 批次⑩.79 (选型 C): 结构面板退役 — 导航收进全局侧边栏, 视图与侧栏经路由 query 双向同步
-const route = useRoute()
-// 侧栏 → 视图: ?view=starred|recent|trash|team / ?folder=<id>
-watch(() => route.query, (q) => {
-  if (route.path !== '/drive') return
-  const view = ['starred', 'recent', 'trash', 'team'].includes(q.view) ? q.view : 'team'
-  if (specialView.value !== view) specialView.value = view
-  const fid = q.folder != null ? Number(q.folder) : null
-  if (selectedFolderId.value !== fid) {
-    selectedFolderId.value = fid
-    if (fid != null && !expandedFolderIds.value.has(fid)) expandedFolderIds.value.add(fid)
-  }
-}, { immediate: true })
-// 视图 → 侧栏: 内部导航 (点文件夹行/面包屑/快捷) 回写 query, 侧栏高亮跟随
-watch([selectedFolderId, specialView], ([fid, view]) => {
-  const q = {}
-  if (fid != null) q.folder = fid
-  if (view && view !== 'team') q.view = view
-  const cur = { ...route.query }
-  if (JSON.stringify(cur) !== JSON.stringify(q)) router.replace({ path: '/drive', query: q })
-})
 
 async function handleBatchDelete() {
   const hasFiles = selectedFileIds.value.length > 0
