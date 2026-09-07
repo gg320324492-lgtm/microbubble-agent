@@ -220,12 +220,20 @@ class VoiceprintService:
                 emb_t = outputs
             # 展平成 1D ndarray
             emb = emb_t.squeeze().cpu().numpy().astype(np.float32)
+            # 统一到 EMBEDDING_DIM
             if len(emb) >= EMBEDDING_DIM:
-                return emb[:EMBEDDING_DIM]
-            # embedding 维度不够，pad 零
-            padded = np.zeros(EMBEDDING_DIM, dtype=np.float32)
-            padded[: len(emb)] = emb
-            return padded
+                emb = emb[:EMBEDDING_DIM]
+            else:
+                padded = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+                padded[: len(emb)] = emb
+                emb = padded
+            # 2026-09-07 修复: 强制 L2 归一化（历史 bug：单次录入的原始 embedding
+            # norm 高达 488~859 未归一化，污染 pgvector 余弦比较语义）
+            norm = float(np.linalg.norm(emb))
+            if norm < 1e-6:
+                # 全零向量保持原样（调用方有 np.all(embedding==0) 检查）
+                return emb
+            return emb / norm
         except Exception as e:
             logger.error(f"底层 model 提取失败: {e}", exc_info=True)
             return np.zeros(EMBEDDING_DIM, dtype=np.float32)
@@ -239,6 +247,11 @@ class VoiceprintService:
         from app.models.member import Member
 
         embedding = self.extract_embedding(audio)
+
+        # 2026-09-07 防御: 拒绝录入全零/失效 embedding（模型加载失败时会产生）
+        if np.allclose(embedding, 0):
+            logger.warning("拒绝录入: embedding 全零（模型可能未加载成功）")
+            return False
 
         result = await db.execute(select(Member).where(Member.id == member_id))
         member = result.scalar_one_or_none()
@@ -286,10 +299,13 @@ class VoiceprintService:
         embedding_list = embedding.tolist()
 
         # 2026-08-21 #Step14.9: 过滤掉已毕业/已停用成员 (is_active=false), 避免误识别
+        # 2026-09-07 防御: 过滤 voice_sample_count=0 的残留向量（0 采样却有 embedding
+        # 一定是历史 bug 产物，如 4 名成员共用的同一坏向量）
         # 查询已录入声纹的成员，按余弦距离排序
         result = await db.execute(
             select(Member)
-            .where(Member.voice_embedding.isnot(None), Member.is_active == True)
+            .where(Member.voice_embedding.isnot(None), Member.is_active == True,
+                   Member.voice_sample_count > 0)
             .order_by(Member.voice_embedding.cosine_distance(embedding_list))
             .limit(1)
         )
@@ -333,9 +349,11 @@ class VoiceprintService:
 
         embedding_list = embedding.tolist()
 
+        # 2026-09-07 防御: 过滤 voice_sample_count=0 的残留向量
         result = await db.execute(
             select(Member)
-            .where(Member.voice_embedding.isnot(None), Member.is_active == True)
+            .where(Member.voice_embedding.isnot(None), Member.is_active == True,
+                   Member.voice_sample_count > 0)
             .order_by(Member.voice_embedding.cosine_distance(embedding_list))
             .limit(1)
         )
