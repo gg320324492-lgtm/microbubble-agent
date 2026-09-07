@@ -1068,7 +1068,7 @@ async function ensurePageBlob(fid, pageIdx, attempt = 0) {
     pptBlobMap[pageIdx] = URL.createObjectURL(resp.data)
     if (pageIdx === pptPageClamped.value) pptBlobCurrent.value = pptBlobMap[pageIdx]
   } catch {
-    if (attempt < 2) setTimeout(() => ensurePageBlob(fid, pageIdx, attempt + 1), 1200)
+    if (attempt < 4) setTimeout(() => ensurePageBlob(fid, pageIdx, attempt + 1), 1200 * (attempt + 1))
   }
 }
 async function refreshPptBlobs() {
@@ -1168,7 +1168,8 @@ async function ensureDocxBlob(fid, pageIdx, attempt = 0) {
     // 批次⑩.71: 拉到即挂载当前页 — 否则一次瞬时失败静默吞掉 → 永久黑屏无重试
     if (pageIdx === docxPageClamped.value) docxBlobCurrent.value = docxBlobMap[pageIdx]
   } catch {
-    if (attempt < 2) setTimeout(() => ensureDocxBlob(fid, pageIdx, attempt + 1), 1200)
+    // 批次⑩.77: 404 多为上传后 updated_at 未稳定 (缩略图/RAG touch 使 key 轮换) — 拉长重试窗口盖住不稳定期
+    if (attempt < 4) setTimeout(() => ensureDocxBlob(fid, pageIdx, attempt + 1), 1200 * (attempt + 1))
   }
 }
 async function refreshDocxBlobs() {
