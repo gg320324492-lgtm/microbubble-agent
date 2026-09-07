@@ -1916,18 +1916,20 @@ async def get_pdf_page_image(
     return FileResponse(str(p), media_type="image/png")
 
 
-# === 批次⑩.65 XLSX 预览 (2026-09-07 选型 D): openpyxl 抽前 200 行×6 列 JSON → 前端横幅+速览 ===
+# === 批次⑩.65 XLSX 预览 (2026-09-07 选型 D): openpyxl 抽前 200 行×60 列 JSON → 前端横幅+速览 ===
 # 与 pptx/docx-pages 同构状态机: converting(锁) → ready(ready.json) / error(error.txt)。
 # 缓存固定抽满 200 行, 端点按 max_rows 切片 (前端常态 8 行/全屏 200 行共用一份缓存)。
+# 列上限 60: 窄栏只显示前几列, 全屏横向滚动/缩放需要宽表全量。
 _XLSX_PREVIEW_LOCKS: dict = {}
 _XLSX_PREVIEW_ROOT = FsPath("/app/data/xlsx_preview")
 _XLSX_CACHE_ROWS = 200
-_XLSX_CACHE_COLS = 6
+_XLSX_CACHE_COLS = 60
 _XLSX_CELL_MAX_CHARS = 24
 
 
 def _xlsx_cache_key(updated_at) -> str:
-    return hashlib.md5(("v1:" + str(updated_at)).encode()).hexdigest()[:12]
+    # v2: 列上限 6→60 后旧缓存 (只有 6 列) 全部作废
+    return hashlib.md5(("v2:" + str(updated_at)).encode()).hexdigest()[:12]
 
 
 def _xlsx_cache_dir(file_id: int, key: str) -> FsPath:
