@@ -60,6 +60,7 @@ def generate_thumbnail_task(self, file_id: int):
                 if not k.file_path:
                     logger.warning(f"[ThumbnailTask] 文件无 MinIO path: id={file_id}")
                     k.thumbnail_status = "failed"
+                    k.updated_at = k.updated_at  # ⑩.78: 元数据更新不 touch updated_at (预览缓存 key 依赖它稳定)
                     await db.commit()
                     return
 
@@ -69,6 +70,7 @@ def generate_thumbnail_task(self, file_id: int):
                     return
 
                 k.thumbnail_status = "pending"
+                k.updated_at = k.updated_at  # ⑩.78 同上
                 await db.commit()
 
                 thumb_obj = await generate_thumbnail(
@@ -83,6 +85,7 @@ def generate_thumbnail_task(self, file_id: int):
                     k.thumbnail_generated_at = datetime.utcnow()
                 else:
                     k.thumbnail_status = "failed"
+                k.updated_at = k.updated_at  # ⑩.78 同上
                 await db.commit()
 
             except Exception as e:
@@ -93,6 +96,7 @@ def generate_thumbnail_task(self, file_id: int):
                     k2 = (await db.execute(stmt2)).scalar_one_or_none()
                     if k2:
                         k2.thumbnail_status = "failed"
+                        k2.updated_at = k2.updated_at  # ⑩.78 同上
                         await db.commit()
                 except Exception:
                     await db.rollback()
