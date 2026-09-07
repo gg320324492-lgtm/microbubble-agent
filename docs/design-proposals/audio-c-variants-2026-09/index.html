@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>音频预览 · C 系全自绘播放器 · 4 版 (2026-09)</title>
+<title>音频预览 · C 系全自绘播放器 v4 · 4 版 (2026-09)</title>
 <style>
   :root {
     --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
@@ -27,22 +27,24 @@
   .rail audio { display: none; }
 
   /* ===== 播放器通用骨架 (全自绘, 无原生控件) ===== */
-  .player { --fill: var(--teal); --track: rgba(38,48,44,.14); --vtrack: rgba(38,48,44,.14); --thumb: var(--teal); --pic: #fff; --tcol: var(--txt2); }
+  .player { --fill: var(--teal); --track: rgba(38,48,44,.14); --thumb: var(--teal); --pic: #fff; --tcol: var(--txt2);
+            --chipbg: rgba(14,118,110,.1); --chipfg: var(--teal); --chiphover: rgba(14,118,110,.22); }
   .head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .nm { font-size: 13px; font-weight: 650; }
   .meta { font-size: 10.5px; color: var(--txt2); }
-  .spd { margin-left: auto; border: none; cursor: pointer; font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.1); border-radius: 6px; padding: 4px 8px; flex: none; transition: background .13s; }
-  .spd:hover { background: rgba(14,118,110,.22); }
-  /* 音量行 — 独立于进度条上方 */
-  .vrow { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-  .vol { border: none; background: none; cursor: pointer; color: var(--fill); display: flex; align-items: center; padding: 2px; border-radius: 6px; flex: none; }
-  .vol:hover { background: rgba(14,118,110,.1); }
-  .vol svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  /* 右侧工具簇: 音量胶囊 (左) + 倍速胶囊 (右), 同高同底色 */
+  .tools { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+  .volbox { display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 7px; border-radius: 6px; background: var(--chipbg); }
+  .vol { border: none; background: none; cursor: pointer; color: var(--chipfg); display: flex; align-items: center; padding: 0; border-radius: 4px; flex: none; }
+  .vol:hover { opacity: .75; }
+  .vol svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
   .vol .v-off { display: none; }
   .vol.muted .v-on { display: none; }
   .vol.muted .v-off { display: block; }
-  .vslider { -webkit-appearance: none; appearance: none; width: 132px; height: 4px; border-radius: 999px; outline: none; cursor: pointer; background: linear-gradient(to right, var(--fill) 80%, var(--vtrack) 80%); }
-  .vslider::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%; background: var(--thumb); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .vslider { -webkit-appearance: none; appearance: none; width: 64px; height: 3px; border-radius: 999px; outline: none; cursor: pointer; background: linear-gradient(to right, var(--fill) 80%, var(--track) 80%); }
+  .vslider::-webkit-slider-thumb { -webkit-appearance: none; width: 9px; height: 9px; border-radius: 50%; background: var(--thumb); box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .spd { height: 24px; border: none; cursor: pointer; font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--chipfg); background: var(--chipbg); border-radius: 6px; padding: 0 8px; flex: none; transition: background .13s; }
+  .spd:hover { background: var(--chiphover); }
   /* 进度行 */
   .prow { display: flex; align-items: center; gap: 9px; }
   .pl-play { width: 30px; height: 30px; border-radius: 50%; border: none; cursor: pointer; background: var(--fill); color: var(--pic); display: flex; align-items: center; justify-content: center; flex: none; }
@@ -59,25 +61,23 @@
 
   /* ===== C1 深青横幅卡 ===== */
   .c1 { background: linear-gradient(135deg, #0E766E 0%, #0A5A54 100%); border-radius: 12px; padding: 16px 18px; color: #fff;
-        --fill: #fff; --track: rgba(255,255,255,.28); --vtrack: rgba(255,255,255,.28); --thumb: #fff; --pic: var(--teal); --tcol: rgba(255,255,255,.85); }
+        --fill: #fff; --track: rgba(255,255,255,.28); --thumb: #fff; --pic: var(--teal); --tcol: rgba(255,255,255,.85);
+        --chipbg: rgba(255,255,255,.18); --chipfg: #fff; --chiphover: rgba(255,255,255,.32); }
   .c1 .big { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
   .c1 .big svg { width: 18px; height: 18px; fill: #fff; }
   .c1 .nm { font-size: 13.5px; }
   .c1 .meta { color: rgba(255,255,255,.75); }
-  .c1 .spd { color: #fff; background: rgba(255,255,255,.18); }
-  .c1 .spd:hover { background: rgba(255,255,255,.32); }
-  .c1 .vol:hover { background: rgba(255,255,255,.15); }
 
   /* ===== C2 极简白卡 ===== */
   .c2 { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; }
-  .c2 .meta { margin-left: 0; font-family: var(--mono); font-size: 10px; }
+  .c2 .meta { font-family: var(--mono); font-size: 10px; }
 
   /* ===== C3 横向紧凑卡 (图标块居左) ===== */
   .c3 { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 13px; display: flex; align-items: center; gap: 13px; }
   .c3 .big { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, var(--teal), var(--teal-hi)); display: flex; align-items: center; justify-content: center; flex: none; }
   .c3 .big svg { width: 20px; height: 20px; fill: #fff; }
   .c3 .mid { flex: 1; min-width: 0; }
-  .c3 .vslider { width: 110px; }
+  .c3 .vslider { width: 56px; }
   .c3 .head { margin-bottom: 6px; }
 
   /* ===== C4 顶部色条卡 ===== */
@@ -91,25 +91,27 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>音频预览 · C 系全自绘播放器 · 4 版变体</h1>
-  <p class="sub">原生控件的音量键浏览器不允许隐藏（controlsList 只管下载/倍速/全屏），所以四版全部改为<b>全自绘播放器</b>：<b>音量键（喇叭+滑杆）独立成行放在进度条正上方</b>；进度条换成青色细条；播放/时长/倍速全部自绘，无任何原生重复键。四版差异只在卡片外观。下方播放器可真实播放（30s 示意音）。</p>
+  <h1>音频预览 · C 系全自绘播放器 v4 · 4 版变体</h1>
+  <p class="sub">音量键已挪到<b>倍速键左边</b>：头部行右端是一组同高同底色的工具簇 —— <b>[🔊 音量滑杆] [1.0x 倍速]</b> 两枚胶囊并排，视觉统一；下行仍是 播放键 + 时间 + 青色进度条。四版差异只在卡片外观。播放器可真实播放（30s 示意音）。</p>
 
   <div class="card">
     <div class="card-h"><span class="tag">C1</span><h2>深青横幅卡</h2></div>
-    <p class="card-d">整卡深青渐变白字，白色进度条与白色音量滑杆。对比最强、最有分量。</p>
+    <p class="card-d">整卡深青渐变白字，白色工具簇胶囊与白色进度条。对比最强、最有分量。</p>
     <div class="rail">
       <div class="c1 player">
         <div class="head">
           <div class="big"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
           <div><div class="nm">会议录音.m4a</div><div class="meta">音频 · 00:30</div></div>
-          <button class="spd">1.0x</button>
-        </div>
-        <div class="vrow">
-          <button class="vol" title="静音">
-            <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
-            <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
-          </button>
-          <input type="range" class="vslider" min="0" max="100" value="80">
+          <div class="tools">
+            <div class="volbox">
+              <button class="vol" title="静音">
+                <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
+                <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
+              </button>
+              <input type="range" class="vslider" min="0" max="100" value="80">
+            </div>
+            <button class="spd">1.0x</button>
+          </div>
         </div>
         <div class="prow">
           <button class="pl-play" title="播放/暂停">
@@ -123,25 +125,27 @@
         <audio preload="metadata"></audio>
       </div>
     </div>
-    <div class="notes"><span class="pro">✓ 深底白条对比强，倍速/音量/进度分工清晰</span><span class="con">⚠ 深色卡存在感强</span></div>
+    <div class="notes"><span class="pro">✓ 深底白条对比强，工具簇与进度条分工清晰</span><span class="con">⚠ 深色卡存在感强</span></div>
   </div>
 
   <div class="card">
     <div class="card-h"><span class="tag">C2</span><h2>极简白卡</h2></div>
-    <p class="card-d">文件名+时长+倍速一行，音量行、进度行依次往下。无图标，视觉最轻最隐形。</p>
+    <p class="card-d">文件名+时长一行，右端工具簇，下行播放+进度条。无图标，视觉最轻最隐形。</p>
     <div class="rail">
       <div class="c2 player">
         <div class="head">
           <span class="nm">会议录音.m4a</span>
           <span class="meta">00:30</span>
-          <button class="spd">1.0x</button>
-        </div>
-        <div class="vrow">
-          <button class="vol" title="静音">
-            <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
-            <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
-          </button>
-          <input type="range" class="vslider" min="0" max="100" value="80">
+          <div class="tools">
+            <div class="volbox">
+              <button class="vol" title="静音">
+                <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
+                <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
+              </button>
+              <input type="range" class="vslider" min="0" max="100" value="80">
+            </div>
+            <button class="spd">1.0x</button>
+          </div>
         </div>
         <div class="prow">
           <button class="pl-play" title="播放/暂停">
@@ -160,21 +164,23 @@
 
   <div class="card">
     <div class="card-h"><span class="tag">C3</span><h2>横向紧凑 · 图标居左</h2></div>
-    <p class="card-d">渐变音频图标块居左贯通三行，右侧自上而下：文件名+倍速 → 音量行 → 进度行。</p>
+    <p class="card-d">渐变音频图标块居左，右侧两行：文件名+工具簇 → 播放+进度条。</p>
     <div class="rail">
       <div class="c3 player">
         <div class="big"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
         <div class="mid">
           <div class="head">
             <span class="nm">会议录音.m4a</span>
-            <button class="spd">1.0x</button>
-          </div>
-          <div class="vrow">
-            <button class="vol" title="静音">
-              <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
-              <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
-            </button>
-            <input type="range" class="vslider" min="0" max="100" value="80">
+            <div class="tools">
+              <div class="volbox">
+                <button class="vol" title="静音">
+                  <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
+                  <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
+                </button>
+                <input type="range" class="vslider" min="0" max="100" value="80">
+              </div>
+              <button class="spd">1.0x</button>
+            </div>
           </div>
           <div class="prow">
             <button class="pl-play" title="播放/暂停">
@@ -194,21 +200,23 @@
 
   <div class="card">
     <div class="card-h"><span class="tag">C4</span><h2>顶部色条卡 · 精致细节</h2></div>
-    <p class="card-d">白卡顶部青金渐变色条点缀，文件名+倍速一行，音量行、进度行依次往下。</p>
+    <p class="card-d">白卡顶部青金渐变色条点缀，文件名+工具簇一行，下行播放+进度条。</p>
     <div class="rail">
       <div class="c4 player">
         <div class="bar"></div>
         <div class="inner">
           <div class="head">
             <span class="nm">会议录音.m4a</span>
-            <button class="spd">1.0x</button>
-          </div>
-          <div class="vrow">
-            <button class="vol" title="静音">
-              <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
-              <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
-            </button>
-            <input type="range" class="vslider" min="0" max="100" value="80">
+            <div class="tools">
+              <div class="volbox">
+                <button class="vol" title="静音">
+                  <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
+                  <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
+                </button>
+                <input type="range" class="vslider" min="0" max="100" value="80">
+              </div>
+              <button class="spd">1.0x</button>
+            </div>
           </div>
           <div class="prow">
             <button class="pl-play" title="播放/暂停">
@@ -299,7 +307,7 @@ document.querySelectorAll('.player').forEach(function (root) {
     audio.volume = val / 100;
     audio.muted = val === 0;
     volBtn.classList.toggle('muted', audio.muted);
-    vs.style.background = 'linear-gradient(to right, var(--fill) ' + val + '%, var(--vtrack) ' + val + '%)';
+    vs.style.background = 'linear-gradient(to right, var(--fill) ' + val + '%, var(--track) ' + val + '%)';
   }
   vs.addEventListener('input', volUI);
   volBtn.addEventListener('click', function () {
