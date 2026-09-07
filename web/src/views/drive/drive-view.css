@@ -1708,3 +1708,6 @@
     gap: var(--space-2);
   }
 }
+
+/* 批次⑩.79 (选型 C): 配额徽章迁入顶栏 (结构面板退役) */
+.wb-quota { margin-left: 10px; flex: none; }
