@@ -175,6 +175,14 @@
     <Teleport to="body">
       <MobileCommandPalette v-if="showCommandPalette" @close="showCommandPalette = false" />
     </Teleport>
+
+    <!-- 批次⑩.86: ShareLinkDialog 已 import 却从未渲染 — 「分享当前 folder」动作此前点了没反应 -->
+    <ShareLinkDialog
+      v-model="showShareLinkDialog"
+      :folder="shareLinkDialogFolder"
+      @created="refresh"
+      @revoked="refresh"
+    />
     </div>
   </MobileSwipeNavigation>
 </template>
@@ -254,7 +262,7 @@ async function loadDashboard() {
   }
 }
 
-const { folderTree, fetchTree } = useFolderTree()
+const { folderTree, fetchTree, findFolderById } = useFolderTree()
 const folderChips = computed(() => {
   const flat = []
   function walk(nodes, depth = 0) {
@@ -422,7 +430,7 @@ const emptyState = computed(() => {
   switch (activeTab.value) {
     case 'starred': return { icon: '⭐', text: '暂无收藏', hint: '长按文件卡片点 ⭐' }
     case 'recent':  return { icon: '🕐', text: '暂无最近', hint: '' }
-    case 'team':    return { icon: '🌐', text: '团队空间暂无文件', hint: '改 visibility 为团队' }
+    case 'team':    return { icon: '🌐', text: '团队空间暂无文件', hint: '点 + 上传, 或从电脑拖入' }
     default:        return { icon: '📂', text: '当前文件夹暂无文件', hint: '点 + 上传' }
   }
 })
@@ -494,7 +502,8 @@ async function onFileAction(action) {
       case 'share-folder': {
         if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10)
         // 当前 folder 简单展示; ShareLinkDialog 内有完整配置
-        const folderObj = { id: currentFolderId.value, name: `Folder #${currentFolderId.value}` }
+        // 批次⑩.86: 显示真实 folder 名 (此前恒 "Folder #id", 分享弹窗里没法辨认)
+        const folderObj = { id: currentFolderId.value, name: findFolderById(currentFolderId.value)?.name || `Folder #${currentFolderId.value}` }
         shareLinkDialogFolder.value = folderObj
         showShareLinkDialog.value = true
         ElMessage.info('请在弹窗中配置过期时间/密码/次数限制')
@@ -516,9 +525,7 @@ async function onFileAction(action) {
 }
 
 const uploadActions = [
-  { name: 'kb', label: '📚 入知识库', subtitle: '上传 + 自动解析' },
   { name: 'drive', label: '📁 入网盘', subtitle: '原始文件归档' },
-  { name: 'photo', label: '📷 拍照上传', subtitle: '调用摄像头' },
 ]
 const fabActions = [
   { name: 'upload', label: 'Upload file', icon: '📁', handler: onUploadClick },
@@ -538,8 +545,6 @@ function onUploadAction(action) {
     }
     return
   }
-  ElMessage.info(`"${action.label}" 即将上线, 临时跳 KB`)
-  router.push('/knowledge?action=upload&mode=' + action.name)
 }
 
 // === W72 B-3: 移动端分片上传 state ===

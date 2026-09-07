@@ -65,7 +65,7 @@
       </transition>
 
       <!-- 左: 结构树 + 快捷 (FolderTree 含 special 项 + 树节点拖放落点) -->
-      <aside class="wb-rail">
+      <aside class="wb-rail" :class="{ 'is-drop-target': treeDragActive }">
         <div class="wb-rail-cap">结构
           <button type="button" class="wb-cap-add" title="新建文件夹" @click="showCreateFolderDialog = true">
             <el-icon><Plus /></el-icon>
@@ -175,7 +175,7 @@
         <div class="wb-listarea">
           <!-- specialView 内嵌面板 (右栏/表格/dock 隐藏) -->
           <FileRequestListPanel v-if="specialView === 'requests'" />
-          <DriveTrashPanel v-else-if="specialView === 'trash'" />
+          <DriveTrashPanel v-else-if="specialView === 'trash'" @changed="refreshSideCounts" />
           <DriveFileTable
             v-else
             ref="tableRef"
@@ -208,6 +208,7 @@
             @page-change="onPageChange"
             @size-change="onPageSizeChange"
             @drop-into-folder="onMoveDrop"
+            @drag-change="treeDragActive = $event"
           />
         </div>
 
@@ -315,8 +316,8 @@
       :loading="folderDelete.loading"
       @confirm="onFolderDeleteConfirm"
     />
-    <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
-    <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" />
+    <ShareDialog v-model="showShareDialog" :file="shareDialogFile" @shared="onShareChanged" />
+    <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" @created="onShareChanged" @revoked="onShareChanged" />
     <!-- 批次③: 右键/右栏「版本沿革」直接开 dialog (含恢复 + 两版本对比 diff), 不强制跳 /versions 整页 -->
     <VersionHistoryDialog
       v-model:visible="showVersionsDialog"
@@ -867,6 +868,8 @@ const showCreateFolderDialog = ref(false)
 const showRenameDialog = ref(false)
 const renameTarget = ref(null)
 const renameTargetType = ref('file')  // file | folder
+// 批次⑩.86: 文件表拖拽进行中 → 左栏树高亮 (DriveFileTable drag-change)
+const treeDragActive = ref(false)
 const showMoveDialog = ref(false)
 const moveTargetFileId = ref(null)
 // 批次⑩.15: 待移档案对象 (供 MoveDialog 文件卡展示; 单选=1项, 批量=N项)
@@ -1046,6 +1049,13 @@ async function onRename(payload) {
   } catch (e) {
     ElMessage.error(e.message || '重命名失败')
   }
+}
+
+// 批次⑩.86: 分享创建/撤销会改文件可见性 (后端 create/revoke 跟随 visibility), 列表与计数需重拉
+// (ShareDialog shared / ShareLinkDialog created+revoked 此前无人监听)
+async function onShareChanged() {
+  await reloadCurrentView()
+  refreshSideCounts()
 }
 
 function handleFileMove(file) {
@@ -1929,6 +1939,12 @@ function onContextMenuClose() {
   background: var(--color-bg-card);
   border-right: 1px solid var(--color-border);
   padding: 12px 10px 0;
+}
+/* 批次⑩.86: 文件表拖拽中 → 左栏树高亮为可落点 (drag-change 事件此前无人监听) */
+.wb-rail.is-drop-target {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -3px;
+  background: var(--color-primary-bg);
 }
 .wb-rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 6px 10px 5px; display: flex; align-items: center; justify-content: space-between; }
 .wb-cap-add {

@@ -42,6 +42,7 @@
         @file-click="handleFileClick"
         @file-preview="handleFilePreview"
         @file-delete="handlePermanentDeleteSingle"
+        @file-version-history="handleVersionHistory"
         @toggle-select="toggleSelect"
         @page-change="handlePageChange"
       />
@@ -71,6 +72,10 @@ const {
 
 const viewMode = ref('list')  // 回收站默认 list 模式 (表格更清晰)
 
+// 批次⑩.86: 恢复/彻底删除后通知父层刷新侧栏计数 (trash/starred 计数变化,
+// 此前面板内部自管数据, 父层无法感知)
+const emit = defineEmits(['changed'])
+
 async function reload() {
   currentPage.value = 1
   await fetchTrash()
@@ -96,6 +101,7 @@ async function handleBatchRestore() {
       ElMessage.success(`已恢复 ${resp.succeeded_count} 个文件`)
     }
     await reload()
+    emit('changed')
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '恢复失败')
   }
@@ -112,6 +118,7 @@ async function handleBatchPermanentDelete() {
     const resp = await permanentDeleteBatch(selectedFileIds.value)
     ElMessage.success(`已彻底删除 ${resp.succeeded_count} 个文件`)
     await reload()
+    emit('changed')
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
@@ -127,6 +134,7 @@ async function handlePermanentDeleteSingle(file) {
     await permanentDeleteBatch([file.id])
     ElMessage.success('已删除')
     await reload()
+    emit('changed')
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
@@ -139,6 +147,11 @@ function handleFileClick(file) {
 
 function handleFilePreview(file) {
   handleFileClick(file)
+}
+
+function handleVersionHistory(file) {
+  // 批次⑩.86: version-history 事件此前 FileGrid 未转发, 按钮点击无任何反应
+  ElMessage.info('回收站文件无法查看版本历史, 请先恢复')
 }
 
 onMounted(() => {
