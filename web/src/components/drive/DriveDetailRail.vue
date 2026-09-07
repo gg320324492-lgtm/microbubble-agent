@@ -115,14 +115,42 @@
           <img v-else-if="previewKind === 'image'" :src="stageUrl" :alt="name" class="rf-img" />
           <!-- 视频播放器 (blob 流) -->
           <video v-else-if="previewKind === 'video' && stageUrl" :src="stageUrl" controls playsinline class="rf-media"></video>
-          <!-- 音频紧凑播放条 -->
+          <!-- 批次⑩.64 (用户选型 C1): 深青横幅自绘播放器 — 原生控件音量键无法隐藏, 全自绘 -->
           <div v-else-if="previewKind === 'audio'" class="rf-audio">
-            <span class="rf-disc">♫</span>
-            <div class="rf-audio-body">
-              <div class="rf-audio-nm" :title="name">{{ name }}</div>
-              <audio v-if="stageUrl" :src="stageUrl" controls class="rf-audio-ctl"></audio>
-              <div v-else class="rf-audio-nm" style="opacity:.6">加载中…</div>
+            <div class="rf-audio-head">
+              <span class="rf-audio-ico"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+              <div class="rf-audio-tt">
+                <div class="rf-audio-nm" :title="name">{{ name }}</div>
+                <div class="rf-audio-meta">音频 · {{ fmtSize(file.file_size) }}</div>
+              </div>
+              <div class="rf-audio-tools">
+                <div class="rf-audio-volbox">
+                  <button type="button" class="rf-audio-vol" :class="{ muted: audioMuted }" title="静音" @click="toggleAudioMute">
+                    <svg class="v-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13"/></svg>
+                    <svg class="v-off" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M16 9l5 6M21 9l-5 6"/></svg>
+                  </button>
+                  <input :value="audioVolume" @input="onAudioVolInput" type="range" class="rf-audio-vslider" min="0" max="100" title="音量" :style="audioVolStyle">
+                </div>
+                <button type="button" class="rf-audio-spd" title="播放倍速" @click="cycleAudioSpeed">{{ audioSpeed }}x</button>
+              </div>
             </div>
+            <div class="rf-audio-prow">
+              <button type="button" class="rf-audio-play" :disabled="!stageUrl" :title="audioPlaying ? '暂停' : '播放'" @click="toggleAudioPlay">
+                <svg v-if="!audioPlaying" viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg>
+                <svg v-else viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+              </button>
+              <span class="rf-audio-t mono">{{ fmtAudioTime(audioCur) }}</span>
+              <div class="rf-audio-seek" @pointerdown="audioSeekStart">
+                <div class="rf-audio-seek-track">
+                  <div class="rf-audio-seek-fill" :style="{ width: audioPct + '%' }"></div>
+                  <div class="rf-audio-seek-thumb" :style="{ left: audioPct + '%' }"></div>
+                </div>
+              </div>
+              <span class="rf-audio-t mono">{{ fmtAudioTime(audioDur) }}</span>
+            </div>
+            <audio v-if="stageUrl" ref="audioElRef" :src="stageUrl" preload="metadata" class="rf-audio-el"
+                   @play="audioPlaying = true" @pause="audioPlaying = false" @ended="audioPlaying = false"
+                   @timeupdate="onAudioTime" @loadedmetadata="onAudioMeta"></audio>
           </div>
           <!-- 批次⑩.17: 自研 PPT 结构化渲染 (python-pptx JSON → HTML) -->
           <!-- 批次⑩.25 (用户拍板): PPT 逐页 PNG 图片浏览 (LibreOffice 管线), 弃自研 HTML 渲染 -->
@@ -544,6 +572,106 @@ async function loadStageBlob() {
   finally { if (seq === stageSeq) stageLoading.value = false }
 }
 
+/* 批次⑩.64 (选型 C1): 深青横幅自绘音频播放器状态 */
+const audioElRef = ref(null)
+const audioPlaying = ref(false)
+const audioMuted = ref(false)
+const audioVolume = ref(80)
+const audioCur = ref(0)
+const audioDur = ref(0)
+const audioSpeedIdx = ref(0)
+const AUDIO_SPEEDS = [1, 1.25, 1.5, 2, 0.75]
+const audioSpeed = computed(() => {
+  const v = AUDIO_SPEEDS[audioSpeedIdx.value]
+  return Number.isInteger(v) ? v.toFixed(1) : String(v)
+})
+const audioPct = computed(() => (audioDur.value ? Math.min(100, audioCur.value / audioDur.value * 100) : 0))
+const audioVolStyle = computed(() => ({
+  background: `linear-gradient(to right, #fff ${audioVolume.value}%, rgba(255,255,255,.28) ${audioVolume.value}%)`,
+}))
+
+function fmtAudioTime(s) {
+  if (!isFinite(s) || s < 0) s = 0
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0')
+}
+function toggleAudioPlay() {
+  const el = audioElRef.value
+  if (!el) return
+  if (el.paused) el.play().catch(() => {})
+  else el.pause()
+}
+function onAudioVolInput(e) {
+  const el = audioElRef.value
+  audioVolume.value = Math.max(0, Math.min(100, Number(e.target.value) || 0))
+  if (el) {
+    el.volume = audioVolume.value / 100
+    el.muted = audioVolume.value === 0
+  }
+  audioMuted.value = audioVolume.value === 0
+}
+function toggleAudioMute() {
+  const el = audioElRef.value
+  if (!el) return
+  if (audioVolume.value === 0) {
+    audioVolume.value = 40
+    el.volume = 0.4
+    el.muted = false
+    audioMuted.value = false
+  } else {
+    el.muted = !el.muted
+    audioMuted.value = el.muted
+  }
+}
+function cycleAudioSpeed() {
+  const el = audioElRef.value
+  audioSpeedIdx.value = (audioSpeedIdx.value + 1) % AUDIO_SPEEDS.length
+  if (el) el.playbackRate = AUDIO_SPEEDS[audioSpeedIdx.value]
+}
+function onAudioTime() {
+  const el = audioElRef.value
+  if (el && !audioSeeking) audioCur.value = el.currentTime
+}
+function onAudioMeta() {
+  const el = audioElRef.value
+  if (el) {
+    audioDur.value = el.duration || 0
+    el.volume = audioVolume.value / 100
+  }
+}
+let audioSeeking = false
+function audioSeekStart(e) {
+  const el = audioElRef.value
+  const trackEl = e.currentTarget
+  if (!el || !audioDur.value || audioSeeking) return
+  audioSeeking = true
+  const apply = (ev) => {
+    const r = trackEl.getBoundingClientRect()
+    const p = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width))
+    el.currentTime = p * audioDur.value
+    audioCur.value = el.currentTime
+  }
+  apply(e)
+  trackEl.setPointerCapture?.(e.pointerId)
+  const move = (ev) => { if (audioSeeking) apply(ev) }
+  const up = () => {
+    audioSeeking = false
+    trackEl.removeEventListener('pointermove', move)
+    trackEl.removeEventListener('pointerup', up)
+    trackEl.removeEventListener('pointercancel', up)
+  }
+  trackEl.addEventListener('pointermove', move)
+  trackEl.addEventListener('pointerup', up)
+  trackEl.addEventListener('pointercancel', up)
+}
+/* 换文件即重置播放器状态 (audio 元素随 stageUrl 置空自动销毁停止) */
+watch(() => props.file?.id, () => {
+  audioPlaying.value = false
+  audioCur.value = 0
+  audioDur.value = 0
+  audioSpeedIdx.value = 0
+  audioSeeking = false
+})
+
 /* 文本类 1KB 截取渲染 (后端 /preview) */
 const textPreview = ref('')
 async function loadTextPreview() {
@@ -923,7 +1051,7 @@ function fmtDT(x) {
 }
 .rf-k-pdf { background: #525659; }
 .rf-k-video { background: #101613; }
-.rf-k-audio { background: linear-gradient(165deg, #ffffff, #F1EDE4); }
+.rf-k-audio { background: linear-gradient(165deg, #0E766E, #0A5A54); }
 .rf-k-office { background: linear-gradient(165deg, #FFF9F2 0%, #FFEDDD 100%); }
 .rf-img, .rf-media, .rf-pdf { width: 100%; height: 100%; object-fit: cover; display: block; border: none; }
 .rf-media { object-fit: contain; }
@@ -940,15 +1068,46 @@ function fmtDT(x) {
   font-family: var(--font-mono, monospace); font-size: 9px; color: var(--color-text-3, #8B968F);
   background: rgba(255,255,255,.78); padding: 2px 7px; border-radius: 9999px;
 }
-.rf-audio { padding: 12px 16px; display: flex; align-items: center; gap: 12px; height: 100%; box-sizing: border-box; }
-.rf-disc {
-  width: 40px; height: 40px; border-radius: 50%; flex: none;
-  background: var(--gradient-cta-button); display: grid; place-items: center;
-  color: #fff; font-size: 16px; box-shadow: 0 4px 12px rgba(14,118,110,.3);
+/* 批次⑩.64 (用户选型 C1): 深青横幅自绘播放器 — 无原生控件, 工具簇 [音量胶囊|倍速胶囊] 同高同底色 */
+.rf-audio {
+  height: 100%; box-sizing: border-box; padding: 13px 16px;
+  display: flex; flex-direction: column; justify-content: center; gap: 9px;
+  background: linear-gradient(135deg, #0E766E 0%, #0A5A54 100%); color: #fff;
 }
-.rf-audio-body { flex: 1; min-width: 0; }
-.rf-audio-nm { font-size: 11.5px; font-weight: var(--font-weight-medium); margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rf-audio-ctl { width: 100%; height: 30px; }
+.rf-audio-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rf-audio-ico { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
+.rf-audio-ico svg { width: 17px; height: 17px; fill: #fff; }
+.rf-audio-tt { flex: 1; min-width: 0; }
+.rf-audio-nm { font-size: 12.5px; font-weight: var(--font-weight-medium); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-audio-meta { font-size: 10px; color: rgba(255,255,255,.72); margin-top: 2px; }
+.rf-audio-tools { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
+.rf-audio-volbox { display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 7px; border-radius: 6px; background: rgba(255,255,255,.18); }
+.rf-audio-vol { border: none; background: none; cursor: pointer; color: #fff; display: flex; align-items: center; padding: 0; min-height: 0; }
+.rf-audio-vol:hover { opacity: .75; }
+.rf-audio-vol svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.rf-audio-vol .v-off { display: none; }
+.rf-audio-vol.muted .v-on { display: none; }
+.rf-audio-vol.muted .v-off { display: block; }
+.rf-audio-vslider { -webkit-appearance: none; appearance: none; width: 60px; height: 3px; border-radius: 999px; outline: none; cursor: pointer; }
+.rf-audio-vslider::-webkit-slider-thumb { -webkit-appearance: none; width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.rf-audio-spd { height: 24px; min-height: 0; border: none; cursor: pointer; font-family: var(--font-mono, 'JetBrains Mono', Consolas, monospace); font-size: 10px; font-weight: 700; color: #fff; background: rgba(255,255,255,.18); border-radius: 6px; padding: 0 8px; flex: none; }
+.rf-audio-spd:hover { background: rgba(255,255,255,.32); }
+.rf-audio-prow { display: flex; align-items: center; gap: 9px; }
+.rf-audio-play { width: 30px; height: 30px; min-height: 0; border-radius: 50%; border: none; cursor: pointer; background: #fff; color: #0E766E; display: flex; align-items: center; justify-content: center; flex: none; padding: 0; }
+.rf-audio-play:disabled { opacity: .5; cursor: default; }
+.rf-audio-play svg { width: 12px; height: 12px; fill: currentColor; }
+.rf-audio-t { font-size: 10px; color: rgba(255,255,255,.85); flex: none; min-width: 26px; }
+.rf-audio-seek { flex: 1; height: 16px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+.rf-audio-seek-track { position: relative; width: 100%; height: 4px; border-radius: 999px; background: rgba(255,255,255,.28); }
+.rf-audio-seek-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #fff; border-radius: 999px; }
+.rf-audio-seek-thumb { position: absolute; top: 50%; left: 0%; width: 11px; height: 11px; border-radius: 50%; background: #fff; transform: translate(-50%,-50%); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.rf-audio-el { display: none; }
+/* 全屏放映: 卡片居中悬浮于暗底 */
+:is(.rf-stage, .rf-ppt):fullscreen .rf-audio {
+  position: absolute; inset: 0; margin: auto;
+  height: fit-content; max-width: 720px; border-radius: 14px;
+  padding: 18px 22px; gap: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.4);
+}
 .rf-text {
   margin: 0; width: 100%; height: 100%; box-sizing: border-box;
   padding: 12px 14px; overflow: hidden; white-space: pre-wrap; word-break: break-all;
