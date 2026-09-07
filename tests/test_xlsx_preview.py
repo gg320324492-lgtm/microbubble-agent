@@ -63,12 +63,14 @@ def _write_xlsx(path, rows_by_sheet):
 
 
 def test_worker_truncation_and_clipping(tmp_path):
-    """worker: 30 行文件全量缓存, 7 列截前 6 列, 40 字符单元格裁到 24"""
+    """worker: 30 行文件全量缓存, 70 列截前 60 列, 40 字符单元格裁到 24"""
     p = tmp_path / "in.xlsx"
     long_cell = "X" * 40
+    head = [long_cell, "列B", "列C", "列D", "列E", "列F", "列G"] + [f"列{i}" for i in range(8, 71)]
     _write_xlsx(p, {
-        "数据": [["列A", "列B", "列C", "列D", "列E", "列F", "列G"]]
-               + [[long_cell, j, "", None, 1.5, True, "g"] for j in range(29)],
+        "数据": [head]
+               + [[long_cell, j, "", None, 1.5, True, "g"] + [f"c{k}" for k in range(63)]
+                  for j in range(29)],
         "空表": [],
     })
     cache_dir = tmp_path / "cache"
@@ -78,9 +80,10 @@ def test_worker_truncation_and_clipping(tmp_path):
     assert s1["name"] == "数据"
     assert s1["total_rows"] == 30
     assert len(s1["rows"]) == 30
-    assert all(len(r) == 6 for r in s1["rows"])          # 7 列 → 前 6 列
+    assert all(len(r) == 60 for r in s1["rows"])         # 70 列 → 前 60 列
     assert s1["rows"][1][0] == "X" * 24                  # 单元格 24 字符裁剪
-    assert s1["rows"][0][0] == "列A"
+    assert s1["rows"][0][1] == "列B"
+    assert s1["rows"][0][59] == "列60"                    # 第 60 列在缓存内
     assert s1["truncated"] is False                      # 30 行未超 200 缓存上限
     assert s2["rows"] == [] and s2["truncated"] is False  # 空表不算截断
 
