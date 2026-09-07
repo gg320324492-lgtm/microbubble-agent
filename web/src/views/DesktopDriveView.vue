@@ -929,11 +929,12 @@ function onPageSizeChange(size) {
 }
 
 const detailRailRef = ref(null)
+// 批次⑩.65~68: 有真实预览的类型, 列表双击 → 选中并直接全屏放映
+const FULLSCREEN_PREVIEW_EXTS = /\.(xlsx|zip|csv|pdf|docx|pptx|md|json|txt|log|png|jpe?g|gif|webp|mp4|mov|webm|mp3|m4a|wav|flac|aac|ogg)$/i
 function handleFilePreview(file) {
   // 批次⑩.61: 双击/Enter/Space → 右栏选中预览 (旧 FilePreviewDialog 弹窗退役)
   if (file && file.id != null) activeKey.value = file.id
-  // 批次⑩.65/66/67: 列表双击 excel/zip/csv → 选中并直接全屏放映
-  if (file && /\.(xlsx|zip|csv)$/i.test(file.file_name || '')) {
+  if (file && FULLSCREEN_PREVIEW_EXTS.test(file.file_name || '')) {
     nextTick(() => detailRailRef.value?.togglePptFull?.())
   }
   tableRef.value?.focus?.()
