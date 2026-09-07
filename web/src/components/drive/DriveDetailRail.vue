@@ -333,6 +333,51 @@
               </div>
             </template>
           </div>
+          <!-- 批次⑩.67 (2026-09-07 选型 A): CSV 预览 — 深青横幅 + 数据网格 (与 xlsx 同交互) -->
+          <div v-else-if="previewKind === 'csv'" class="rf-csv" @dblclick="togglePptFull">
+            <div v-if="csvStatus === 'idle' || csvStatus === 'loading'" class="rf-skel">
+              <div class="rf-conv-t">正在解析 CSV 数据…</div>
+              <div class="rf-conv-s">首次约 1-3 秒 · 之后打开秒出</div>
+              <div class="rf-skel-ttl" style="margin-top:18px"></div>
+              <div class="rf-skel-ln" style="width:78%"></div>
+            </div>
+            <div v-else-if="csvStatus === 'error' || !csvView.header.length" class="rail-cover-ph" :style="{ borderColor: typeColor }">
+              <span class="rail-cover-abbr">{{ typeAbbr }}</span>
+              <span class="rail-cover-hint">无预览图</span>
+            </div>
+            <template v-else>
+              <div class="rf-csv-head">
+                <span class="rf-csv-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 4v3h5V7H5zm7 0v3h7V7h-7zM5 12v3h5v-3H5zm7 0v3h7v-3h-7zM5 17v2h5v-2H5zm7 0v2h7v-2h-7z"/></svg></span>
+                <div class="rf-csv-tt">
+                  <div class="rf-csv-nm" :title="name">{{ name }}</div>
+                  <div class="rf-csv-meta">{{ csvMeta.total_rows }} 行 × {{ csvMeta.cols }} 列 · {{ (csvMeta.encoding || '').toUpperCase() }} · {{ fmtSize(file.file_size) }}</div>
+                </div>
+              </div>
+              <div ref="csvGridRef" class="rf-csv-gridwrap" tabindex="-1">
+                <table class="rf-csv-grid" :style="{ zoom: xlsxZoom / 100 }">
+                  <thead><tr><th v-for="(h, ci) in csvView.header" :key="'ch' + ci">{{ h }}</th></tr></thead>
+                  <tbody>
+                    <tr v-for="(r, ri) in csvView.body" :key="'cr' + ri">
+                      <td v-for="(c, ci) in r" :key="'cc' + ci">{{ c }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div v-if="!pptFull" class="rf-csv-fade"></div>
+              </div>
+              <div class="rf-csv-foot">
+                <template v-if="pptFull">
+                  <span>全屏 · 已加载 {{ Math.max(0, csvRows.length - 1) }} 行 · 滚轮/Ctrl+滚轮缩放</span>
+                  <span class="rf-xlsx-zoom">
+                    <button type="button" class="rf-xlsx-zbtn" :disabled="xlsxZoom <= 50" @click="adjustXlsxZoom(-10)">−</button>
+                    <span class="rf-xlsx-zpct">{{ xlsxZoom }}%</span>
+                    <button type="button" class="rf-xlsx-zbtn" :disabled="xlsxZoom >= 200" @click="adjustXlsxZoom(10)">＋</button>
+                    <button type="button" class="rf-xlsx-zbtn rf-xlsx-zreset" title="重置缩放" @click="xlsxZoom = 100">1:1</button>
+                  </span>
+                </template>
+                <template v-else>仅预览前 {{ Math.min(8, Math.max(0, csvRows.length - 1)) }} 行<template v-if="csvMeta.truncated"> · 全屏查看全部 {{ csvMeta.total_rows }} 行</template></template>
+              </div>
+            </template>
+          </div>
           <!-- 兜底占位 -->
           <div v-else class="rail-cover-ph" :style="{ borderColor: typeColor }">
             <span class="rail-cover-abbr">{{ typeAbbr }}</span>
@@ -618,7 +663,7 @@ watch(() => [props.file?.id, props.file?.thumbnail_status], async () => {
   coverUrl.value = null
   const f = props.file
   if (!f) return
-  if (['doc', 'docx', 'pdf', 'xlsx', 'zip'].includes(extOf.value)) return  // 批次⑩.62 分页/⑩.65 excel/⑩.66 zip 预览分支接管
+  if (['doc', 'docx', 'pdf', 'xlsx', 'zip', 'csv'].includes(extOf.value)) return  // 批次⑩.62 分页/⑩.65 excel/⑩.66 zip/⑩.67 csv 预览分支接管
   if (f.thumbnail_status === 'ready') {
     try {
       const resp = await axios.get(`/api/v1/drive/files/${f.id}/thumbnail`)
@@ -635,7 +680,8 @@ const previewKind = computed(() => {
   if (['mp3', 'm4a', 'wav'].includes(e)) return 'audio'
   if (e === 'pdf') return 'pdf'
   if (e === 'pptx') return 'ppt'   // 批次⑩.17: 自研结构化渲染 (python-pptx JSON)
-  if (['md', 'txt', 'csv', 'json', 'log'].includes(e)) return 'text'
+  if (e === 'csv') return 'csv'      // 批次⑩.67 (选型 A): csv-preview 数据网格 (编码自动探测)
+  if (['md', 'txt', 'json', 'log'].includes(e)) return 'text'
   if (['doc', 'docx'].includes(e)) return 'docx'   // 批次⑩.53: LibreOffice 管线预览
   if (e === 'xlsx') return 'excel'   // 批次⑩.65 (选型 D): openpyxl JSON 速览 (xls 留 office 占位)
   if (e === 'zip') return 'zip'      // 批次⑩.66 (选型 A): zip-list 清单下钻
@@ -654,7 +700,7 @@ const stageHeight = computed(() => {
     // 批次⑩.53: 竖版 A4 贴合 — 首页图自然比例未知前用 A4 竖比 (210:297)
     return nat ? Math.round(304 * nat.h / nat.w) : Math.round(304 * 297 / 210)
   }
-  return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220, excel: 268, zip: 272 }[previewKind.value] || 168
+  return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220, excel: 268, zip: 272, csv: 268 }[previewKind.value] || 168
 })
 
 /* 媒体/PDF blob 流 (带鉴权 axios → objectURL; 换文件/卸载即 revoke) */
@@ -1100,6 +1146,60 @@ watch([() => props.file?.id, previewKind], ([fid, kind]) => {
 }, { immediate: true })
 onBeforeUnmount(() => { stopZipPoll(); zipPollSeq++ })
 
+/* ---- 批次⑩.67 (选型 A): CSV 预览 — 编码探测 JSON, 网格交互复用 xlsx 全屏/缩放 ---- */
+const csvStatus = ref('idle')
+const csvRows = ref([])        // 缓存全量 200 行 (含表头行)
+const csvMeta = ref(null)      // {total_rows, truncated, encoding, delimiter, cols}
+const csvGridRef = ref(null)
+let csvPollTimer = null
+let csvPollSeq = 0
+const csvView = computed(() => {
+  const rows = csvRows.value
+  if (!rows.length) return { header: [], body: [] }
+  return {
+    header: rows[0],
+    body: pptFull.value ? rows.slice(1) : rows.slice(1, 1 + XLSX_RAIL_ROWS),
+  }
+})
+function stopCsvPoll() { if (csvPollTimer) { clearTimeout(csvPollTimer); csvPollTimer = null } }
+function startCsvPoll(fid) {
+  stopCsvPoll()
+  const seq = ++csvPollSeq
+  csvStatus.value = 'loading'
+  const tick = async () => {
+    if (seq !== csvPollSeq) return
+    try {
+      const resp = await axios.get(`/api/v1/drive/files/${fid}/csv-preview`, { params: { max_rows: 200 } })
+      const st = resp.data?.status
+      if (st === 'ready') {
+        csvStatus.value = 'ready'
+        csvRows.value = resp.data.rows || []
+        csvMeta.value = {
+          total_rows: resp.data.total_rows || 0,
+          truncated: !!resp.data.truncated,
+          encoding: resp.data.encoding || '',
+          delimiter: resp.data.delimiter || ',',
+          cols: resp.data.cols || 0,
+        }
+        return
+      }
+      if (st === 'error') { csvStatus.value = 'error'; return }
+      csvPollTimer = setTimeout(tick, 2000)
+    } catch {
+      csvPollTimer = setTimeout(tick, 2500)   // 瞬时网络错误重试 (同 xlsx 模式)
+    }
+  }
+  tick()
+}
+watch([() => props.file?.id, previewKind], ([fid, kind]) => {
+  stopCsvPoll()
+  csvRows.value = []
+  csvMeta.value = null
+  if (kind === 'csv' && fid != null) startCsvPoll(fid)
+  else csvStatus.value = 'idle'
+}, { immediate: true })
+onBeforeUnmount(() => { stopCsvPoll(); csvPollSeq++ })
+
 const prevDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value <= 1 : docxPageClamped.value <= 1)
 const nextDisabled = computed(() => previewKind.value === 'ppt' ? pptPageClamped.value >= pptImgTotalSafe.value : docxPageClamped.value >= docxImgTotalSafe.value)
 function prevAnyPage() { if (previewKind.value === 'ppt') prevPptPage(); else prevDocxPage() }
@@ -1132,15 +1232,16 @@ function onFsChange() {
   if (previewKind.value === 'excel') {
     if (pptFull.value) nextTick(() => xlsxGridRef.value?.focus?.())
     else xlsxZoom.value = 100
-  } else if (previewKind.value === 'zip' && pptFull.value) {
-    nextTick(() => zipListRef.value?.focus?.())
+  } else if (previewKind.value === 'zip' || previewKind.value === 'csv') {
+    if (pptFull.value) nextTick(() => (zipListRef.value || csvGridRef.value)?.focus?.())
+    else if (previewKind.value === 'csv') xlsxZoom.value = 100
   }
 }
 let wheelLock = 0
 function onFsWheel(ev) {
   if (!pptFull.value || !document.fullscreenElement) return
-  if (previewKind.value === 'excel') {
-    // 批次⑩.65: excel 全屏 — 原生表格滚动 (横/纵); Ctrl+滚轮缩放
+  if (previewKind.value === 'excel' || previewKind.value === 'csv') {
+    // 批次⑩.65/67: excel/csv 全屏 — 原生表格滚动 (横/纵); Ctrl+滚轮缩放
     if (ev.ctrlKey) { ev.preventDefault(); adjustXlsxZoom(ev.deltaY < 0 ? 10 : -10) }
     return
   }
@@ -1157,7 +1258,7 @@ function onFsWheel(ev) {
 }
 function onFsKeydown(ev) {
   if (!pptFull.value) return
-  if (previewKind.value === 'excel' || previewKind.value === 'zip') return   // 批次⑩.65/66: 方向键交给原生滚动
+  if (previewKind.value === 'excel' || previewKind.value === 'csv') return   // 批次⑩.65/66/67: 方向键交给原生滚动
   const isDocx = previewKind.value === 'docx' || previewKind.value === 'pdf'
   const page = isDocx ? docxPage : pptPage
   const total = isDocx ? docxImgTotalSafe.value : pptImgTotalSafe.value
@@ -1660,4 +1761,31 @@ defineExpose({ togglePptFull })
 :is(.rf-stage):fullscreen .rf-xlsx-grid { font-size: 12.5px; }
 :is(.rf-stage):fullscreen .rf-xlsx-grid th,
 :is(.rf-stage):fullscreen .rf-xlsx-grid td { padding: 6px 12px; }
+/* ── 批次⑩.67 (选型 A): CSV 预览 — 深青横幅 + 数据网格 (xlsx 网格同款样式) ── */
+.rf-csv { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
+.rf-csv-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
+.rf-csv-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
+.rf-csv-ico svg { width: 14px; height: 14px; fill: #fff; }
+.rf-csv-tt { flex: 1; min-width: 0; }
+.rf-csv-nm { font-size: 11px; font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-csv-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+.rf-csv-meta .mono, .rf-csv-meta { font-size: 9px; }
+.rf-csv-gridwrap { flex: 1; min-height: 0; overflow: hidden; position: relative; outline: none; }
+.rf-csv-grid { width: 100%; border-collapse: collapse; font-size: 10.6px; }
+.rf-csv-grid th {
+  text-align: left; font-weight: var(--font-weight-semibold); color: #0F5C38;
+  background: #E9F5EE; padding: 4.5px 8px; border-bottom: 1px solid #CBE4D5; white-space: nowrap;
+}
+.rf-csv-grid td {
+  padding: 4px 8px; color: var(--color-text-regular); border-bottom: 1px solid #F4F5F2;
+  white-space: nowrap; font-family: var(--font-family-mono, monospace); font-size: 10.2px;
+}
+.rf-csv-grid tbody tr:nth-child(even) td { background: #FAFBF9; }
+.rf-csv-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+.rf-csv-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FBFBF9; }
+:is(.rf-stage):fullscreen .rf-csv-gridwrap { overflow: auto; }
+:is(.rf-stage):fullscreen .rf-csv-grid { font-size: 12.5px; }
+:is(.rf-stage):fullscreen .rf-csv-grid th,
+:is(.rf-stage):fullscreen .rf-csv-grid td { padding: 6px 12px; }
+:is(.rf-stage):fullscreen .rf-csv-fade { display: none; }
 </style>
