@@ -303,6 +303,16 @@
       :loading="deleteConfirm.loading"
       @confirm="onConfirmDelete"
     />
+    <!-- 批次⑩.81 选型 A: 文件夹删除轻确认 (替换 ElMessageBox, 方案稿 2026-09-08-folder-delete-confirm-4ui) -->
+    <FolderDeleteConfirmDialog
+      v-model="folderDelete.visible"
+      :folder-name="folderDelete.folder?.name || ''"
+      :folder-count="folderDelete.folderCount"
+      :file-count="folderDelete.fileCount"
+      :admin-warning="folderDelete.adminWarning"
+      :loading="folderDelete.loading"
+      @confirm="onFolderDeleteConfirm"
+    />
     <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
     <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" />
     <!-- 批次③: 右键/右栏「版本沿革」直接开 dialog (含恢复 + 两版本对比 diff), 不强制跳 /versions 整页 -->
@@ -326,6 +336,8 @@ import FolderTree from '@/components/drive/FolderTree.vue'
 import DriveFileTable from '@/components/drive/DriveFileTable.vue'
 import DriveDetailRail from '@/components/drive/DriveDetailRail.vue'
 import DeleteConfirmDialog from '@/components/drive/DeleteConfirmDialog.vue'  // 批次⑩.73 选型 A 轻确认卡片
+import FolderDeleteConfirmDialog from '@/components/drive/FolderDeleteConfirmDialog.vue'  // 批次⑩.81 选型 A 文件夹删除轻确认
+import { useUserStore } from '@/stores/user'
 import StorageQuotaBadge from '@/components/drive/StorageQuotaBadge.vue'
 import VersionHistoryDialog from '@/components/drive/VersionHistoryDialog.vue'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
@@ -357,6 +369,17 @@ const router = useRouter()  // v2 PR2: 回收站路由跳转
 // 修法: 全部 state/computed 用 storeToRefs(store)，actions 才直接解构。
 import { storeToRefs } from 'pinia'
 const folderTreeStore = useFolderTree()
+const userStore = useUserStore()
+
+// 批次⑩.81 选型 A: 文件夹删除确认弹窗状态 (替换 ElMessageBox)
+const folderDelete = reactive({
+  visible: false,
+  folder: null,
+  folderCount: 0,
+  fileCount: 0,
+  adminWarning: false,
+  loading: false,
+})
 const {
   folderTree,
   selectedFolderId,
@@ -1419,29 +1442,38 @@ function onRowContextmenu(row, event) {
 }
 
 async function confirmDeleteFolderNode(folder) {
-  // 与 FolderTree 树节点删除同规则: 有子项 → 级联 confirm (后端 recursive)
+  // 批次⑩.81 选型 A: ElMessageBox → FolderDeleteConfirmDialog (预查子项计数供弹窗展示)
   let folderCount = 0, fileCount = 0
   try {
     const stats = await getChildrenStats(folder.id)
     folderCount = stats?.folder_count ?? 0
     fileCount = stats?.file_count ?? 0
   } catch { /* 计数失败按无子项走 */ }
-  const hasChildren = folderCount > 0 || fileCount > 0
-  const msg = hasChildren
-    ? `文件夹 "${folder.name}" 下还有 ${folderCount} 个子文件夹 + ${fileCount} 个文件, 将连同子项一起移入回收站, 30 天内可整体恢复。`
-    : `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复。`
-  try {
-    await ElMessageBox.confirm(msg, hasChildren ? '删除文件夹 + 子项 (级联)' : '删除文件夹',
-      { type: 'warning', confirmButtonText: hasChildren ? '全部移入回收站' : '删除', cancelButtonText: '取消' })
-  } catch { return }
+  const cid = userStore.userInfo?.id
+  const oid = folder.owner_id
+  folderDelete.folder = folder
+  folderDelete.folderCount = folderCount
+  folderDelete.fileCount = fileCount
+  folderDelete.adminWarning = !!userStore.isAdmin && cid != null && oid != null && Number(cid) !== Number(oid)
+  folderDelete.visible = true
+}
+
+async function onFolderDeleteConfirm() {
+  const folder = folderDelete.folder
+  if (!folder) return
+  const hasChildren = folderDelete.folderCount > 0 || folderDelete.fileCount > 0
+  folderDelete.loading = true
   try {
     await deleteFolderNode(folder.id, { recursive: hasChildren })
     ElMessage.success(hasChildren ? '文件夹与子项已全部移入回收站' : '文件夹已移入回收站')
+    folderDelete.visible = false
     if (activeKey.value === 'f-' + folder.id) activeKey.value = null
     fetchFolderTree('team')
     reloadCurrentView()
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || e.message || '删除失败')
+  } finally {
+    folderDelete.loading = false
   }
 }
 

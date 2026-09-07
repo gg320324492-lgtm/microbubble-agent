@@ -154,6 +154,17 @@
         <span v-if="trashCount != null" class="folder-tree-special-count">{{ trashCount }}</span>
       </div>
     </FolderContextMenu>
+
+    <!-- 批次⑩.81 选型 A: 文件夹删除轻确认 (替换 ElMessageBox, 方案稿 2026-09-08-folder-delete-confirm-4ui) -->
+    <FolderDeleteConfirmDialog
+      v-model="folderDelete.visible"
+      :folder-name="folderDelete.folder?.name || ''"
+      :folder-count="folderDelete.folderCount"
+      :file-count="folderDelete.fileCount"
+      :admin-warning="folderDelete.adminOverride"
+      :loading="folderDelete.loading"
+      @confirm="confirmFolderDelete"
+    />
   </div>
 </template>
 
@@ -161,11 +172,12 @@
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让玻璃态侧栏 + 多色 special 生效
 // v2.8 (2026-07-10) 右键菜单支持 (5 根项 + sub 节点共用 FolderContextMenu)
 import '@/views/drive/drive-view.css'
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
 import { Folder, FolderOpened, FolderAdd, Delete, Loading, Warning, Star, StarFilled, Share, Promotion, Plus, Bell, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTreeNode from './FolderTreeNode.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
+import FolderDeleteConfirmDialog from './FolderDeleteConfirmDialog.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 
 const props = defineProps({
@@ -213,6 +225,16 @@ const emit = defineEmits([
 ])
 
 const { fetchTree, deleteFolder, getChildrenStats } = useFolderTree()
+
+// 批次⑩.81 选型 A: 文件夹删除确认弹窗状态 (替换 ElMessageBox)
+const folderDelete = reactive({
+  visible: false,
+  folder: null,
+  folderCount: 0,
+  fileCount: 0,
+  adminOverride: false,
+  loading: false,
+})
 
 function handleRootClick() {
   emit('update:selectedFolderId', null)
@@ -322,101 +344,58 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
       ElMessage.info(`Folder ID: ${folder.id}`)
     }
   } else if (cmd === 'delete') {
-    // v2.14 (2026-07-10): 预查子 folder/file 数量, 智能 confirm 文案
-    // v2.16 (2026-07-11): 含子项时改 2 按钮 confirm — "全部移入回收站" 即 cascade
-    //   - 用户决策"有子文件夹也可以直接删除" → 后端 recursive=true
-    //   - 删除行为: 自身 + 子 folder + 子文件 全部进回收站, 30 天保留期可整体 restore
-    //   - 三种情况合并 (优先级: admin 越权 > 有子 (级联) > 普通)
+    // 批次⑩.81 选型 A: ElMessageBox → FolderDeleteConfirmDialog (预查子项计数供弹窗展示)
+    // 删除规则不变: 有子项 → 级联 recursive; admin 越权删他人 folder → 弹窗红字警告
     const stats = await getChildrenStats(folder.id)
-    const folderCount = stats?.folder_count ?? 0
-    const fileCount = stats?.file_count ?? 0
-    const hasChildren = folderCount > 0 || fileCount > 0
+    folderDelete.folder = folder
+    folderDelete.folderCount = stats?.folder_count ?? 0
+    folderDelete.fileCount = stats?.file_count ?? 0
+    folderDelete.adminOverride = isAdminOverride
+    folderDelete.visible = true
+  }
+}
 
-    let confirmMsg, confirmTitle, confirmType, confirmBtnText, doRecursive = false
-    if (isAdminOverride) {
-      // v2.13 + v2.14: admin 越权 (优先级最高)
-      // v2.16: admin 越权 + 有子 → 默认走 cascade (避免 admin 越权删 folder
-      //   后留下别人 owner 的子 folder 孤儿, 体验差)
-      const childWarn = hasChildren
-        ? `\n\n⚠️ 该 folder 下还有 ${folderCount} 个未删子 folder, ${fileCount} 个未删文件.\n确认后将连同子项一起移入回收站 (级联软删), 30 天内可整体恢复.`
-        : ''
-      confirmMsg = `⚠️ 该文件夹由其他成员拥有: "${folder.name}" 将进入回收站, 30 天内可恢复.\n建议先与 owner 沟通, 确认后再删除.${childWarn}`
-      confirmTitle = '⚠️ 删除他人拥有的文件夹'
-      confirmType = 'error'
-      confirmBtnText = hasChildren ? '我已确认, 全部移入回收站' : '我已确认, 继续删除'
-      doRecursive = hasChildren
-    } else if (hasChildren) {
-      // v2.16: 有子 folder / 文件 → 2 按钮 confirm 走 cascade
-      //   - 旧 v2.14 文案"请先清理它们再删除这个 folder" 走死胡同, 用户体验差
-      //   - 新文案明确告知级联删除 + 子项计数, 用户一眼看懂"全部一起进回收站"
-      const parts = []
-      if (folderCount > 0) parts.push(`${folderCount} 个子 folder`)
-      if (fileCount > 0) parts.push(`${fileCount} 个文件`)
-      confirmMsg = `⚠️ 文件夹 "${folder.name}" 下还有 ${parts.join(' + ')}, 点击确定后将连同子项一起移入回收站, 30 天内可整体恢复.`
-      confirmTitle = `删除文件夹 + 子项 (级联)`
-      confirmType = 'warning'
-      confirmBtnText = `全部移入回收站`
-      doRecursive = true
+// 批次⑩.81 选型 A: 弹窗「移入回收站」→ 执行删除 + 结果反馈 (403/404/400/401 区分提示)
+async function confirmFolderDelete() {
+  const folder = folderDelete.folder
+  if (!folder) return
+  const folderCount = folderDelete.folderCount
+  const fileCount = folderDelete.fileCount
+  const doRecursive = folderCount > 0 || fileCount > 0
+  folderDelete.loading = true
+  try {
+    await deleteFolder(folder.id, { recursive: doRecursive })
+    if (doRecursive) {
+      const sub = []
+      if (folderCount > 0) sub.push(`${folderCount} 个子 folder`)
+      if (fileCount > 0) sub.push(`${fileCount} 个文件`)
+      ElMessage.success(`文件夹 "${folder.name}" + ${sub.join(' + ')} 已全部移入回收站`)
     } else {
-      // v2.8: 普通删除 (无子项)
-      confirmMsg = `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复.`
-      confirmTitle = '删除文件夹'
-      confirmType = 'warning'
-      confirmBtnText = '删除'
+      const successMsg = folderDelete.adminOverride
+        ? `文件夹 "${folder.name}" (他人拥有) 已移入回收站`
+        : `文件夹 "${folder.name}" 已移入回收站`
+      ElMessage.success(successMsg)
     }
-    try {
-      await ElMessageBox.confirm(
-        confirmMsg,
-        confirmTitle,
-        {
-          type: confirmType,
-          confirmButtonText: confirmBtnText,
-          cancelButtonText: '取消',
-          dangerouslyUseHTMLString: false,
-        }
-      )
-      try {
-        await deleteFolder(folder.id, { recursive: doRecursive })
-        // v2.16: 区分级联 vs 普通 success 文案 (用户更清楚刚才发生了什么)
-        if (doRecursive) {
-          const sub = []
-          if (folderCount > 0) sub.push(`${folderCount} 个子 folder`)
-          if (fileCount > 0) sub.push(`${fileCount} 个文件`)
-          ElMessage.success(
-            `文件夹 "${folder.name}" + ${sub.join(' + ')} 已全部移入回收站`
-          )
-        } else {
-          const successMsg = isAdminOverride
-            ? `文件夹 "${folder.name}" (他人拥有) 已移入回收站`
-            : `文件夹 "${folder.name}" 已移入回收站`
-          ElMessage.success(successMsg)
-        }
-        await fetchTree()  // 显式重建树 (useFolderTree.deleteFolder 内部已调, 双保险)
-      } catch (e) {
-        // v2.9 + v2.11 增强: 404 友好提示 + console.error 同步 dev tools
-        //   - 之前用户只看 console 原始 404 (axios 错误) 没看到 friendly msg
-        //   - 加 console.error 让 DevTools Console 也能看到我们的提示
-        // v2.12 增强: 403 vs 404 区分 (folder 存在但非 owner 返 403 越权)
-        // v2.13: admin 已经能越权, 403 仍可能 = 普通用户跨 owner (正常拒绝)
-        const status = e.response?.status
-        const msg = e.response?.data?.detail || e.message
-        console.error(`[FolderContextMenu] delete folder ${folder.id} (recursive=${doRecursive}) failed:`, status, msg)
-        if (status === 403) {
-          // v2.12 新增: 后端 soft_delete_folder 区分了 owner-mismatch (403) vs 不存在 (404)
-          // 旧实现把两者都吞成 404, 误导用户「Folder不存在」, 实际是越权
-          ElMessage.error('删除失败: 该文件夹不属于您 (仅 owner 或 admin 可删除)')
-        } else if (status === 404) {
-          ElMessage.error(`文件夹不存在 (可能已被删除), 请刷新页面`)
-        } else if (status === 400) {
-          // FolderService.soft_delete_folder 返 400 (有未删子 folder/file, 默认 recursive=False)
-          ElMessage.error('删除失败: ' + msg)
-        } else if (status === 401) {
-          ElMessage.error('未登录, 请重新登录')
-        } else {
-          ElMessage.error('删除失败: ' + (msg || '未知错误'))
-        }
-      }
-    } catch (e) { /* user cancel */ }
+    folderDelete.visible = false
+    await fetchTree()  // 显式重建树 (useFolderTree.deleteFolder 内部已调, 双保险)
+  } catch (e) {
+    const status = e.response?.status
+    const msg = e.response?.data?.detail || e.message
+    console.error(`[FolderContextMenu] delete folder ${folder.id} (recursive=${doRecursive}) failed:`, status, msg)
+    if (status === 403) {
+      // owner-mismatch (403) vs 不存在 (404) 区分, 后者误导用户「Folder不存在」实为越权
+      ElMessage.error('删除失败: 该文件夹不属于您 (仅 owner 或 admin 可删除)')
+    } else if (status === 404) {
+      ElMessage.error(`文件夹不存在 (可能已被删除), 请刷新页面`)
+    } else if (status === 400) {
+      ElMessage.error('删除失败: ' + msg)
+    } else if (status === 401) {
+      ElMessage.error('未登录, 请重新登录')
+    } else {
+      ElMessage.error('删除失败: ' + (msg || '未知错误'))
+    }
+  } finally {
+    folderDelete.loading = false
   }
 }
 

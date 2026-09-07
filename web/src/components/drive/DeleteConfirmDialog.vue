@@ -1,7 +1,8 @@
 <!--
   DeleteConfirmDialog.vue — 批次⑩.73 (2026-09-07 选型 A 轻确认卡片)
   替换通用 ElMessageBox 删除确认: 文件名列表 (前 3 项 + 等共 N 项)
-  + 「移入回收站 · 3 天内可随时恢复」说明, 主按钮深青 (可恢复操作不用红色恐吓)。
+  + 「移入回收站 · 30 天内可随时恢复」说明, 主按钮深青 (可恢复操作不用红色恐吓)。
+  保留期对齐后端 DRIVE_RETENTION_DAYS=30 (app/config.py, 网盘回收站非任务垃圾桶的 3 天)。
 -->
 <template>
   <el-dialog
@@ -27,7 +28,7 @@
       </div>
       <div class="dcd-recycle">
         <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.4 2.6L3 8"/><path d="M3 3v5h5"/></svg>
-        <span>文件将移入回收站，<b>3 天内可随时恢复</b>，不会立即丢失</span>
+        <span>文件将移入回收站，<b>30 天内可随时恢复</b>，不会立即丢失</span>
       </div>
     </div>
     <template #footer>
