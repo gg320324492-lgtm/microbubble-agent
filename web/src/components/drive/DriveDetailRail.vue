@@ -1078,7 +1078,7 @@ async function refreshPptBlobs() {
   pptBlobCurrent.value = pptBlobMap[p] || null
 }
 watch([() => props.file?.id, previewKind], ([fid]) => {
-  if (fid != null) revokePptBlobs()  // 换文件清旧 blob
+  if (fid != null) { revokePptBlobs(); revokeDocxBlobs() }  // 换文件清旧 blob (⑩.71: docx 页图缓存也要清, 否则残留上一篇)
 })
 watch([() => props.file?.id, previewKind, pptPageClamped, pptImgStatus], refreshPptBlobs, { immediate: true })
 
