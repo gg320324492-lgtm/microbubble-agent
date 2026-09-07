@@ -114,7 +114,38 @@
           <!-- 图片真图 -->
           <img v-else-if="previewKind === 'image'" :src="stageUrl" :alt="name" class="rf-img" @dblclick="onStageDblClick" />
           <!-- 视频播放器 (blob 流) -->
-          <video v-else-if="previewKind === 'video' && stageUrl" :src="stageUrl" controls playsinline class="rf-media" @dblclick="onStageDblClick"></video>
+          <!-- 批次⑩.69 (选型 B): 视频自绘播放器 — 满铺画面 + 悬浮控件 (播放/进度/倍速/静音/全屏), 播放中自动隐匿 -->
+          <div v-else-if="previewKind === 'video' && stageUrl" class="rf-vid" :class="{ hide: vidPlaying && vidCtrlHide }"
+               @dblclick="onStageDblClick" @mousemove="vidPoke" @mouseleave="vidLeave">
+            <video ref="videoElRef" :src="stageUrl" playsinline class="rf-vid-el"
+                   @click="vidToggle" @play="vidPlaying = true; vidPoke()" @pause="vidPlaying = false; vidPoke()"
+                   @ended="vidPlaying = false; vidPoke()" @timeupdate="onVidTime" @loadedmetadata="onVidMeta"></video>
+            <button v-if="!vidPlaying" class="rf-vid-big" title="播放" @click.stop="vidToggle">
+              <svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg>
+            </button>
+            <div class="rf-vid-ctrl" @dblclick.stop>
+              <button class="vc-btn" :title="vidPlaying ? '暂停' : '播放'" @click.stop="vidToggle">
+                <svg v-if="!vidPlaying" viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg>
+                <svg v-else viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+              </button>
+              <span class="vc-t">{{ fmtAudioTime(vidCur) }}</span>
+              <div class="vc-seek" @pointerdown="vidSeekStart">
+                <div class="vc-track">
+                  <div class="vc-fill" :style="{ width: vidPct + '%' }"></div>
+                  <div class="vc-thumb" :style="{ left: vidPct + '%' }"></div>
+                </div>
+              </div>
+              <span class="vc-t">{{ fmtAudioTime(vidDur) }}</span>
+              <button class="vc-btn vc-spd" title="播放倍速" @click.stop="vidCycleSpeed">{{ vidSpeed }}x</button>
+              <button class="vc-btn" :title="vidMuted ? '取消静音' : '静音'" @click.stop="vidToggleMute">
+                <svg v-if="!vidMuted" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg>
+                <svg v-else viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.6 1.4l-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4-2.1-2.1 2.1-2.1-1.4-1.4-2.1 2.1z"/></svg>
+              </button>
+              <button class="vc-btn" title="全屏" @click.stop="togglePptFull">
+                <svg viewBox="0 0 24 24" class="vc-st"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
           <!-- 批次⑩.64 (用户选型 C1): 深青横幅自绘播放器 — 原生控件音量键无法隐藏, 全自绘 -->
           <div v-else-if="previewKind === 'audio'" class="rf-audio">
             <div class="rf-audio-head">
@@ -852,7 +883,82 @@ watch(() => props.file?.id, () => {
   audioDur.value = 0
   audioSpeedIdx.value = 0
   audioSeeking = false
+  /* 批次⑩.69: 视频自绘播放器状态同步重置 */
+  vidPlaying.value = false
+  vidCur.value = 0
+  vidDur.value = 0
+  vidSpeedIdx.value = 0
+  vidMuted.value = false
+  vidCtrlHide.value = false
 })
+
+/* ---- 批次⑩.69 (选型 B): 视频自绘播放器 — 悬浮控件/倍速/静音/双击全屏 ---- */
+const videoElRef = ref(null)
+const vidPlaying = ref(false)
+const vidCur = ref(0)
+const vidDur = ref(0)
+const vidMuted = ref(false)
+const vidSpeedIdx = ref(0)
+const vidCtrlHide = ref(false)
+let vidHideTimer = null
+const vidSpeed = computed(() => String(AUDIO_SPEEDS[vidSpeedIdx.value]))
+const vidPct = computed(() => (vidDur.value ? Math.min(100, vidCur.value / vidDur.value * 100) : 0))
+function vidToggle() {
+  const el = videoElRef.value
+  if (!el) return
+  if (el.paused) el.play().catch(() => {})
+  else el.pause()
+}
+function vidPoke() {
+  vidCtrlHide.value = false
+  if (vidHideTimer) clearTimeout(vidHideTimer)
+  if (vidPlaying.value) vidHideTimer = setTimeout(() => { vidCtrlHide.value = true }, 2500)
+}
+function vidLeave() { if (vidPlaying.value) vidCtrlHide.value = true }
+function onVidTime() {
+  const el = videoElRef.value
+  if (el && !vidSeeking) vidCur.value = el.currentTime
+}
+function onVidMeta() {
+  const el = videoElRef.value
+  if (el) vidDur.value = el.duration || 0
+}
+let vidSeeking = false
+function vidSeekStart(e) {
+  const el = videoElRef.value
+  const trackEl = e.currentTarget
+  if (!el || !vidDur.value || vidSeeking) return
+  vidSeeking = true
+  const apply = (ev) => {
+    const r = trackEl.getBoundingClientRect()
+    const p = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width))
+    el.currentTime = p * vidDur.value
+    vidCur.value = el.currentTime
+  }
+  apply(e)
+  trackEl.setPointerCapture?.(e.pointerId)
+  const move = (ev) => { if (vidSeeking) apply(ev) }
+  const up = () => {
+    vidSeeking = false
+    trackEl.removeEventListener('pointermove', move)
+    trackEl.removeEventListener('pointerup', up)
+    trackEl.removeEventListener('pointercancel', up)
+  }
+  trackEl.addEventListener('pointermove', move)
+  trackEl.addEventListener('pointerup', up)
+  trackEl.addEventListener('pointercancel', up)
+}
+function vidCycleSpeed() {
+  const el = videoElRef.value
+  vidSpeedIdx.value = (vidSpeedIdx.value + 1) % AUDIO_SPEEDS.length
+  if (el) el.playbackRate = AUDIO_SPEEDS[vidSpeedIdx.value]
+}
+function vidToggleMute() {
+  const el = videoElRef.value
+  if (!el) return
+  el.muted = !el.muted
+  vidMuted.value = el.muted
+}
 
 /* 文本类预览 (批次⑩.68 选型 D): /preview 现成通路 + 按扩展名智能渲染 */
 const textPreview = ref('')
@@ -1532,6 +1638,44 @@ defineExpose({ togglePptFull })
 .rf-audio-seek-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #fff; border-radius: 999px; }
 .rf-audio-seek-thumb { position: absolute; top: 50%; left: 0%; width: 11px; height: 11px; border-radius: 50%; background: #fff; transform: translate(-50%,-50%); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .rf-audio-el { display: none; }
+/* ── 批次⑩.69 (选型 B): 视频自绘播放器 — 满铺画面 + 悬浮控件, 播放中 2.5s 自动隐匿 ── */
+.rf-vid { height: 100%; position: relative; background: #000; }
+.rf-vid-el { width: 100%; height: 100%; object-fit: contain; display: block; }
+.rf-vid-big {
+  position: absolute; inset: 0; margin: auto; z-index: 2;
+  width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(14, 118, 110, .92); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .4); transition: transform var(--duration-fast);
+}
+.rf-vid-big:hover { transform: scale(1.08); }
+.rf-vid-big svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
+.rf-vid-ctrl {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px 7px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .72)); color: #fff;
+  transition: opacity .25s;
+}
+.rf-vid.hide .rf-vid-ctrl { opacity: 0; pointer-events: none; }
+.vc-btn { border: none; background: none; cursor: pointer; padding: 0; display: flex; align-items: center; flex: none; }
+.vc-btn svg { width: 14px; height: 14px; fill: #fff; }
+.vc-btn svg.vc-st { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.vc-btn:hover { opacity: .8; }
+.vc-t { font-family: var(--font-family-mono, monospace); font-size: 9px; color: rgba(255, 255, 255, .9); flex: none; }
+.vc-seek { flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+.vc-track { position: relative; width: 100%; height: 3.5px; border-radius: 999px; background: rgba(255, 255, 255, .25); }
+.vc-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--teal-2, #12897C); border-radius: 999px; }
+.vc-thumb { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: #fff; transform: translate(-50%, -50%); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.vc-spd {
+  font-family: var(--font-family-mono, monospace); font-size: 9px; font-weight: 700;
+  color: #fff; background: rgba(255, 255, 255, .18); border-radius: 6px; padding: 2px 6px;
+}
+.vc-spd:hover { background: rgba(255, 255, 255, .3); }
+:is(.rf-stage):fullscreen .rf-vid-ctrl { padding: 10px 18px 12px; }
+:is(.rf-stage):fullscreen .vc-btn svg { width: 18px; height: 18px; }
+:is(.rf-stage):fullscreen .vc-t { font-size: 12px; }
+:is(.rf-stage):fullscreen .vc-track { height: 5px; }
+:is(.rf-stage):fullscreen .vc-thumb { width: 12px; height: 12px; }
+:is(.rf-stage):fullscreen .vc-spd { font-size: 12px; padding: 3px 10px; }
 /* 全屏放映: 卡片居中悬浮于暗底 */
 :is(.rf-stage, .rf-ppt):fullscreen .rf-audio {
   position: absolute; inset: 0; margin: auto;
