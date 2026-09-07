@@ -3449,7 +3449,7 @@ async def get_thumbnail(
 
 
 PREVIEW_CACHE_TTL = 60  # Redis TTL (秒)
-PREVIEW_TEXT_MAX_BYTES = 1024  # text preview 截断阈值
+PREVIEW_TEXT_MAX_BYTES = 32768  # text preview 截断阈值 (批次⑩.68: 1KB→32KB, 右栏/全屏文本预览够用)
 PREVIEW_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg"}
 PREVIEW_PDF_EXT = {".pdf"}
 PREVIEW_TEXT_EXT = {
@@ -3547,10 +3547,11 @@ def _probe_pdf(data: bytes) -> Optional[int]:
 
 
 def _read_text_preview(data: bytes) -> str:
-    """读前 1KB 文本 (binary 时返空字符串)
+    """读前 32KB 文本 (binary 时返空字符串)
 
     binary 检测: 前 512 字节含 NUL byte 即判 binary.
-    UTF-8 容错解码 (fatal=False), 截断时不抛.
+    编码探测解码 (utf-8/gb18030, 批次⑩.68 — 实验室 GBK txt 乱码根治), 全文解码后截断
+    (避免切片切断多字节字符), 截断时不抛.
     """
     if not data:
         return ""
@@ -3559,10 +3560,9 @@ def _read_text_preview(data: bytes) -> str:
     for byte in sample:
         if byte == 0:
             return ""
-    # UTF-8 解码 + 截断
-    preview = data[:PREVIEW_TEXT_MAX_BYTES]
-    text = preview.decode("utf-8", errors="replace")
-    return text
+    # 编码探测解码 + 截断 (先解码全文再切, 防止多字节字符被切断)
+    text, _enc = _decode_text(data)
+    return text[:PREVIEW_TEXT_MAX_BYTES]
 
 
 @router.get("/files/{file_id}/preview", response_model=PreviewResponse)
