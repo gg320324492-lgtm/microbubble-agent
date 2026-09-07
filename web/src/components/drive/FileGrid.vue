@@ -97,6 +97,7 @@
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
         @view-comments="(f) => $emit('file-view-comments', f)"
+        @version-history="(f) => $emit('file-version-history', f)"
       />
     </div>
 
@@ -119,6 +120,7 @@
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
         @view-comments="(f) => $emit('file-view-comments', f)"
+        @version-history="(f) => $emit('file-version-history', f)"
       />
     </div>
 
@@ -141,6 +143,7 @@
         @share-link="(f) => $emit('file-share-link', f)"
         @delete="(f) => $emit('file-delete', f)"
         @view-comments="(f) => $emit('file-view-comments', f)"
+        @version-history="(f) => $emit('file-version-history', f)"
       />
     </div>
 
@@ -187,7 +190,7 @@ const props = defineProps({
 })
 
 // 2026-09-05: 'file-to-kb' emit 已删除 — 网盘文件上传后默认自动入库 RAG, 无手动入库入口
-defineEmits(['retry', 'folder-click', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-share-link', 'file-view-comments', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
+defineEmits(['retry', 'folder-click', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-share-link', 'file-view-comments', 'file-version-history', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
 
 // === v2.0: 空态多态 (top-level / folder / search) ===
 const emptyState = computed(() => {

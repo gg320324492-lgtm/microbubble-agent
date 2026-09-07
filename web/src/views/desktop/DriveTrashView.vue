@@ -49,6 +49,7 @@
         @file-click="handleFileClick"
         @file-preview="handleFilePreview"
         @file-delete="handlePermanentDeleteSingle"
+        @file-version-history="handleVersionHistory"
         @toggle-select="toggleSelect"
         @page-change="handlePageChange"
       />
@@ -148,6 +149,11 @@ function handleFileClick(file) {
 
 function handleFilePreview(file) {
   handleFileClick(file)
+}
+
+function handleVersionHistory(file) {
+  // 批次⑩.86: version-history 此前 FileGrid 未转发, 点击无反应
+  ElMessage.info('回收站文件无法查看版本历史, 请先恢复')
 }
 
 // 2026-07-02: 恢复 goBack (PR7 nested route 回滚后顶级 sibling 模式)
