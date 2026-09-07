@@ -1059,12 +1059,15 @@ function onImgLoad(ev) {
 const pptBlobMap = reactive({})
 const pptBlobCurrent = ref(null)
 let blobSeq = 0
-async function ensurePageBlob(fid, pageIdx) {
+async function ensurePageBlob(fid, pageIdx, attempt = 0) {
   if (fid == null || pptBlobMap[pageIdx]) return
   try {
     const resp = await axios.get(`/api/v1/drive/files/${fid}/pptx-pages/img-${pageIdx}`, { responseType: 'blob' })
     pptBlobMap[pageIdx] = URL.createObjectURL(resp.data)
-  } catch { /* 加载失败静默 */ }
+    if (pageIdx === pptPageClamped.value) pptBlobCurrent.value = pptBlobMap[pageIdx]
+  } catch {
+    if (attempt < 2) setTimeout(() => ensurePageBlob(fid, pageIdx, attempt + 1), 1200)
+  }
 }
 async function refreshPptBlobs() {
   const fid = props.file?.id
@@ -1154,12 +1157,16 @@ let docxBlobSeq = 0
 function docxThumbUrl(i) {
   return docxBlobMap[i] || ''
 }
-async function ensureDocxBlob(fid, pageIdx) {
+async function ensureDocxBlob(fid, pageIdx, attempt = 0) {
   if (fid == null || docxBlobMap[pageIdx]) return
   try {
     const resp = await axios.get('/api/v1/drive/files/' + fid + '/' + pagedEndpoint.value + '/img-' + pageIdx, { responseType: 'blob' })
     docxBlobMap[pageIdx] = URL.createObjectURL(resp.data)
-  } catch { /* 静默 */ }
+    // 批次⑩.71: 拉到即挂载当前页 — 否则一次瞬时失败静默吞掉 → 永久黑屏无重试
+    if (pageIdx === docxPageClamped.value) docxBlobCurrent.value = docxBlobMap[pageIdx]
+  } catch {
+    if (attempt < 2) setTimeout(() => ensureDocxBlob(fid, pageIdx, attempt + 1), 1200)
+  }
 }
 async function refreshDocxBlobs() {
   const fid = props.file?.id
