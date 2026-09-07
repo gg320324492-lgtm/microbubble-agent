@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZIP 预览窗口 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --color-text-placeholder: #C0C4CC;
+    --slate: #454B52;
+    --slate-deep: #333940;
+    --teal: #0E766E;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(380px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--slate); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  /* ══ 网盘右栏详情卡 1:1 ══ */
+  .rail { width: 336px; background: var(--color-bg-card); border: 1px solid var(--color-border);
+          border-radius: 14px; box-shadow: 0 4px 18px rgba(31,42,38,.06); overflow: hidden; }
+  .rail-hero { padding: 16px 16px 12px; }
+  .rf-stage { position: relative; overflow: hidden; border: 1px solid var(--color-border);
+              border-radius: var(--radius-lg); background: var(--color-bg-card); }
+  .rail-name { margin: 12px 0; font-size: 14px; font-weight: 600; word-break: break-all; }
+  .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rail-actions + .rail-actions { grid-template-columns: repeat(3, 1fr); margin-top: 8px; }
+  .rail-act { white-space: nowrap; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+              height: 46px; font-size: 11.5px; color: var(--color-text-regular);
+              border: 1px solid var(--color-border); border-radius: var(--radius-md);
+              background: var(--color-bg-card); cursor: pointer; font-family: inherit; transition: all .15s; }
+  .rail-act:hover { border-color: #B8C4C2; color: var(--slate); background: #F4F6F7; }
+  .rail-act.pri { background: linear-gradient(135deg, #0E766E, #12897C); border-color: transparent;
+                  color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+  .rail-act.wide { flex-direction: row; gap: 6px; font-size: 12px; }
+  .rail-act.danger:hover { color: #F56C6C; border-color: #F56C6C; background: #FEF0F0; }
+
+  /* ══ ZIP 通用: 石墨横幅头 ══ */
+  .zp-head { display: flex; align-items: center; gap: 9px; color: #fff; padding: 8px 11px;
+             background: linear-gradient(135deg, #454B52, #333940); }
+  .zp-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.16);
+            display: flex; align-items: center; justify-content: center; flex: none; }
+  .zp-ico svg { width: 14px; height: 14px; fill: #fff; }
+  .zp-tt { flex: 1; min-width: 0; }
+  .zp-nm { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zp-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+  .zp-meta .mono { font-family: var(--mono); }
+
+  /* ══ A: 清单下钻 ══ */
+  .kA { height: 272px; display: flex; flex-direction: column; }
+  .kA-crumb { flex: none; display: flex; align-items: center; gap: 4px; padding: 5.5px 10px;
+              border-bottom: 1px solid var(--color-border); background: #FAFBFC;
+              font-size: 10px; color: var(--color-text-secondary); overflow: hidden; white-space: nowrap; }
+  .kA-crumb .root { font-family: var(--mono); }
+  .kA-crumb .sep { color: var(--color-text-placeholder); }
+  .kA-crumb .cur { color: var(--slate); font-weight: 600; }
+  .kA-crumb button { border: none; background: none; cursor: pointer; font-size: 10px;
+                     color: var(--teal); font-family: inherit; padding: 0; }
+  .kA-crumb button:hover { text-decoration: underline; }
+  .kA-list { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .kA-item { display: flex; align-items: center; gap: 8px; padding: 6.5px 12px; cursor: pointer;
+             transition: background .12s; }
+  .kA-item:hover { background: #F4F6F7; }
+  .kA-item:hover .nm { color: var(--slate); }
+  .kA-item .glyph { flex: none; font-size: 12px; }
+  .kA-item .nm { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 500; color: var(--color-text-regular);
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .12s; }
+  .kA-item .cnt { flex: none; font-size: 9.5px; color: #fff; background: var(--slate);
+                  border-radius: 9999px; padding: 1px 7px; font-family: var(--mono); }
+  .kA-item .sz { flex: none; font-size: 9.5px; color: var(--color-text-placeholder); font-family: var(--mono); }
+  .kA-item .chev { flex: none; width: 10px; height: 10px; stroke: var(--color-text-placeholder);
+                   fill: none; stroke-width: 2; }
+  .kA-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 28px;
+             background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+  .kA-foot { flex: none; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+             border-top: 1px solid var(--color-border); background: #FAFBFC; text-align: center; }
+
+  /* ══ B: 完整目录树 ══ */
+  .kB { height: 272px; display: flex; flex-direction: column; }
+  .kB-tree { flex: 1; min-height: 0; overflow: hidden; position: relative; padding: 5px 0; }
+  .kB-row { display: flex; align-items: center; gap: 6px; padding: 4px 12px; font-size: 11px; }
+  .kB-row .tw { flex: none; width: 9px; height: 9px; stroke: var(--color-text-placeholder); fill: none; stroke-width: 2.2; }
+  .kB-row .glyph { flex: none; font-size: 11px; }
+  .kB-row .nm { flex: 1; min-width: 0; color: var(--color-text-regular); overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  .kB-row.folder .nm { font-weight: 600; color: var(--color-text-primary); }
+  .kB-row .sz { flex: none; font-size: 9px; color: var(--color-text-placeholder); font-family: var(--mono); }
+  .kB-row .cnt { flex: none; font-size: 9px; color: var(--color-text-placeholder); }
+  .kB-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 28px;
+             background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+  .kB-foot { flex: none; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+             border-top: 1px solid var(--color-border); background: #FAFBFC; text-align: center; }
+
+  /* ══ C: 深青横幅摘要 + 类型分布 ══ */
+  .kC { height: 152px; background: linear-gradient(165deg, #454B52, #333940); color: #fff;
+        display: flex; flex-direction: column; justify-content: center; gap: 11px; padding: 14px 16px; }
+  .kC-head { display: flex; align-items: center; gap: 10px; }
+  .kC-ico { width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.16);
+            display: flex; align-items: center; justify-content: center; flex: none; }
+  .kC-ico svg { width: 18px; height: 18px; fill: #fff; }
+  .kC-nm { font-size: 12.5px; font-weight: 600; }
+  .kC-meta { font-size: 10px; color: rgba(255,255,255,.72); margin-top: 2px; }
+  .kC-bar { display: flex; height: 10px; border-radius: 9999px; overflow: hidden; }
+  .kC-bar i { display: block; height: 100%; }
+  .kC-legend { display: flex; gap: 10px; font-size: 9.5px; color: rgba(255,255,255,.85); }
+  .kC-legend .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+
+  /* ══ D: 翻页清单 ══ */
+  .kD { height: 272px; display: flex; flex-direction: column; }
+  .kD-list { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .kD-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 11.5px; }
+  .kD-item:nth-child(even) { background: #FAFBFC; }
+  .kD-item .glyph { flex: none; font-size: 12px; }
+  .kD-item .nm { flex: 1; min-width: 0; color: var(--color-text-regular); overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; }
+  .kD-item .sz { flex: none; font-size: 9.5px; color: var(--color-text-placeholder); font-family: var(--mono); }
+  .kD-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+             background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+  .kD-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 9px;
+             padding: 5.5px 10px; border-top: 1px solid var(--color-border); background: #FAFBFC; }
+  .kD-foot button { border: 1px solid var(--color-border); background: var(--color-bg-card);
+                    border-radius: 6px; font-size: 10px; color: var(--color-text-regular);
+                    cursor: pointer; padding: 2px 10px; font-family: inherit; }
+  .kD-foot button:hover:not(:disabled) { color: var(--slate); border-color: var(--slate); }
+  .kD-foot button:disabled { opacity: .35; cursor: default; }
+  .kD-foot .pg { font-family: var(--mono); font-size: 10px; color: var(--color-text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>ZIP 预览窗口 · 四版 UI 选型</h1>
+  <p>场景：网盘右栏详情卡 · 打包归档.zip（4 个文件夹 · 12 个文件 · 8.4 MB → 解压 12.1 MB） · 2026-09-07 · 卡片真实尺寸 336px · A 可点文件夹进下一级，D 可翻页</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>清单下钻式（推荐）</h2></div>
+    <p class="v-sub">横幅头 + 顶级清单 · 点文件夹进入下一级 · 面包屑返回 · 后端一次抽全量条目 JSON</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kA">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm5 0v7l2-1.5L13 10V3H9zm2.5 9.5L10 14l1.5 1.5L13 14l-1.5-1.5z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">打包归档.zip</div>
+              <div class="zp-meta">4 个文件夹 · 12 个文件 · <span class="mono">8.4 MB</span></div>
+            </div>
+          </div>
+          <div class="kA-crumb" id="kA-crumb"></div>
+          <div class="kA-list" id="kA-list"></div>
+          <div class="kA-foot">点文件夹名进入下一级 · 点面包屑返回</div>
+        </div>
+        <h3 class="rail-name">打包归档.zip</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">「下一级」交互与右栏文件夹预览 (RAIL A) 完全同构，零学习成本</li>
+      <li class="pro">后端一个 zip-list 端点（zipfile 只读目录，不解压），前端逐级切片零请求</li>
+      <li class="con">深层文件要逐级点进去（不能一屏纵览全包）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>完整目录树</h2></div>
+    <p class="v-sub">缩进树全展开 · 一屏纵览全包结构 · 无需点击 · 全屏看全量</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kB">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm5 0v7l2-1.5L13 10V3H9zm2.5 9.5L10 14l1.5 1.5L13 14l-1.5-1.5z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">打包归档.zip</div>
+              <div class="zp-meta">4 个文件夹 · 12 个文件 · <span class="mono">8.4 MB</span></div>
+            </div>
+          </div>
+          <div class="kB-tree" id="kB-tree"></div>
+          <div class="kB-foot">共 16 项 · 窄栏截断显示 · 全屏看全量</div>
+        </div>
+        <h3 class="rail-name">打包归档.zip</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">结构一目了然，「下一级」天然可见，无需任何点击</li>
+      <li class="pro">实现最简：一次渲染全部行（全屏滚动复用 xlsx 全屏方案）</li>
+      <li class="con">大包（几百条目）窄栏只能看到开头，找深层文件费劲</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>摘要卡 + 类型分布</h2></div>
+    <p class="v-sub">石墨横幅只给统计和类型分布条 · 点全屏才展开清单 · 最轻最快</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kC">
+          <div class="kC-head">
+            <span class="kC-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm5 0v7l2-1.5L13 10V3H9zm2.5 9.5L10 14l1.5 1.5L13 14l-1.5-1.5z"/></svg></span>
+            <div>
+              <div class="kC-nm">打包归档.zip</div>
+              <div class="kC-meta">4 个文件夹 · 12 个文件 · <span class="mono">8.4 MB → 解压 12.1 MB</span></div>
+            </div>
+          </div>
+          <div class="kC-bar">
+            <i style="width:50%;background:#4A90E2"></i>
+            <i style="width:25%;background:#198754"></i>
+            <i style="width:25%;background:#E6A23C"></i>
+          </div>
+          <div class="kC-legend">
+            <span><i class="dot" style="background:#4A90E2"></i>图片 6</span>
+            <span><i class="dot" style="background:#198754"></i>表格 3</span>
+            <span><i class="dot" style="background:#E6A23C"></i>文档 3</span>
+          </div>
+        </div>
+        <h3 class="rail-name">打包归档.zip</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">秒开最轻，类型分布一眼看出包里是什么（对科研归档很直观）</li>
+      <li class="pro">与音频 C1 / xlsx D 横幅视觉基因统一</li>
+      <li class="con">窄栏看不到具体文件名，「下一级」要进全屏才能看</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>翻页清单</h2></div>
+    <p class="v-sub">横幅头 + 平铺全部条目（含路径）每页 10 条 · ‹ › 翻页 · 与 PPT 翻页同基因</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kD">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm5 0v7l2-1.5L13 10V3H9zm2.5 9.5L10 14l1.5 1.5L13 14l-1.5-1.5z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">打包归档.zip</div>
+              <div class="zp-meta">4 个文件夹 · 12 个文件 · <span class="mono">8.4 MB</span></div>
+            </div>
+          </div>
+          <div class="kD-list" id="kD-list"></div>
+          <div class="kD-foot">
+            <button id="kD-prev" onclick="kDgo(-1)">‹ 上一页</button>
+            <span class="pg" id="kD-pg">1 / 2 页</span>
+            <button id="kD-next" onclick="kDgo(1)">下一页 ›</button>
+          </div>
+        </div>
+        <h3 class="rail-name">打包归档.zip</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">全部条目带路径平铺，翻页即达任意层级，无深层点击</li>
+      <li class="pro">翻页交互与 PPT/PDF 全屏同基因；条目数可控不打爆窄栏</li>
+      <li class="con">大包翻页次数多；层级关系靠路径前缀表达，不如树/下钻直观</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+/* 模拟数据: 打包归档.zip */
+const ROOT = [
+  { t: 'dir',  name: '实验数据', cnt: 3, children: [
+    { t: 'xlsx', name: '表面张力-0828.xlsx', sz: '45 KB' },
+    { t: 'xlsx', name: '粒径分布-0901.xlsx', sz: '38 KB' },
+    { t: 'csv',  name: 'zeta-raw.csv', sz: '12 KB' },
+  ]},
+  { t: 'dir',  name: '论文草稿', cnt: 2, children: [
+    { t: 'doc',  name: 'manuscript-v3.docx', sz: '1.2 MB' },
+    { t: 'ppt',  name: 'Figure-plan.pptx', sz: '2.1 MB' },
+  ]},
+  { t: 'dir',  name: 'figures', cnt: 4, children: [
+    { t: 'img',  name: 'fig1-tension.png', sz: '820 KB' },
+    { t: 'img',  name: 'fig2-zeta.png', sz: '766 KB' },
+    { t: 'img',  name: 'fig3-size.png', sz: '940 KB' },
+    { t: 'img',  name: 'fig4-schematic.svg', sz: '65 KB' },
+  ]},
+  { t: 'dir',  name: '设备照片', cnt: 2, children: [
+    { t: 'img',  name: 'DSC-安装.jpg', sz: '3.1 MB' },
+    { t: 'img',  name: '气泡仪.jpg', sz: '2.2 MB' },
+  ]},
+  { t: 'txt',  name: 'README.txt', sz: '3 KB' },
+];
+const GLYPH = { dir: '📁', xlsx: '📊', csv: '📊', doc: '📄', ppt: '📽', img: '🖼', txt: '📄' };
+
+/* 方案 A: 下钻 */
+let kAPath = [];
+function kAChildren() {
+  let nodes = ROOT;
+  for (const name of kAPath) nodes = nodes.find(n => n.name === name && n.t === 'dir').children;
+  return nodes;
+}
+function kARender() {
+  const crumb = document.getElementById('kA-crumb');
+  const list = document.getElementById('kA-list');
+  let h = '<span class="root">打包归档.zip</span>';
+  kAPath.forEach((p, i) => {
+    h += ' <span class="sep">/</span> ';
+    if (i === kAPath.length - 1) h += '<span class="cur">' + p + '</span>';
+    else h += '<button onclick="kATo(' + i + ')">' + p + '</button>';
+  });
+  if (kAPath.length) h += ' <button onclick="kATo(' + (kAPath.length - 2) + ')">↑ 上级</button>';
+  crumb.innerHTML = h;
+  list.innerHTML = kAChildren().map(n =>
+    '<div class="kA-item" ' + (n.t === 'dir' ? 'onclick="kAIn(\'' + n.name + '\')"' : '') + '>' +
+    '<span class="glyph">' + GLYPH[n.t] + '</span>' +
+    '<span class="nm">' + n.name + '</span>' +
+    (n.t === 'dir' ? '<span class="cnt">' + n.cnt + ' 项</span><svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>' : '<span class="sz">' + n.sz + '</span>') +
+    '</div>').join('');
+}
+function kAIn(name) { kAPath.push(name); kARender(); }
+function kATo(i) { kAPath = kAPath.slice(0, i + 1); kARender(); }
+kARender();
+
+/* 方案 B: 完整树 */
+(function() {
+  const rows = [];
+  let shown = 0, LIMIT = 9;
+  function walk(nodes, depth) {
+    for (const n of nodes) {
+      if (shown >= LIMIT) return;
+      rows.push({ n, depth });
+      shown++;
+      if (n.t === 'dir') walk(n.children, depth + 1);
+    }
+  }
+  walk(ROOT, 0);
+  document.getElementById('kB-tree').innerHTML = rows.map(r =>
+    '<div class="kB-row ' + (r.n.t === 'dir' ? 'folder' : '') + '" style="padding-left:' + (12 + r.depth * 16) + 'px">' +
+    (r.n.t === 'dir' ? '<svg class="tw" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>' : '<span style="width:9px"></span>') +
+    '<span class="glyph">' + GLYPH[r.n.t] + '</span>' +
+    '<span class="nm">' + r.n.name + '</span>' +
+    (r.n.t === 'dir' ? '<span class="cnt">' + r.n.cnt + ' 项</span>' : '<span class="sz">' + r.n.sz + '</span>') +
+    '</div>').join('') + '<div class="kB-fade"></div>';
+})();
+
+/* 方案 D: 翻页 (顶级 + 子级平铺带路径) */
+const FLAT = [];
+(function() {
+  function walk(nodes, prefix) {
+    for (const n of nodes) {
+      FLAT.push({ name: prefix + n.name, dir: n.t === 'dir', sz: n.sz });
+      if (n.t === 'dir') walk(n.children, prefix + n.name + '/');
+    }
+  }
+  walk(ROOT, '');
+})();
+let kDp = 1;
+const kD_PER = 8, kD_TOTAL = Math.ceil(FLAT.length / kD_PER);
+function kDgo(d) { kDp = Math.min(kD_TOTAL, Math.max(1, kDp + d)); kDRender(); }
+function kDRender() {
+  const start = (kDp - 1) * kD_PER;
+  document.getElementById('kD-list').innerHTML = FLAT.slice(start, start + kD_PER).map(n =>
+    '<div class="kD-item"><span class="glyph">' + (n.dir ? '📁' : '📄') + '</span>' +
+    '<span class="nm">' + n.name + (n.dir ? '/' : '') + '</span>' +
+    '<span class="sz">' + (n.dir ? '—' : n.sz) + '</span></div>').join('') +
+    '<div class="kD-fade"></div>';
+  document.getElementById('kD-pg').textContent = kDp + ' / ' + kD_TOTAL + ' 页';
+  document.getElementById('kD-prev').disabled = kDp <= 1;
+  document.getElementById('kD-next').disabled = kDp >= kD_TOTAL;
+}
+kDRender();
+</script>
+</body>
+</html>

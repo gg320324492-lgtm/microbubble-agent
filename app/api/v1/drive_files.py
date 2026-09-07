@@ -2073,6 +2073,122 @@ async def get_xlsx_preview_status(
     return {"status": "converting"}
 
 
+# === 批次⑩.66 ZIP 预览 (2026-09-07 选型 A 清单下钻): zipfile 只读目录 → 全量条目 JSON ===
+# 与 xlsx-preview 同构状态机: converting(锁) → ready(ready.json) / error(error.txt)。
+# 条目 = 文件(路径+原始大小) + 自动补齐的隐式父目录 (部分 zip 无显式目录条目)。
+# 前端按 path 前缀逐级下钻 (方案 A), 后端不感知层级。
+_ZIP_PREVIEW_LOCKS: dict = {}
+_ZIP_PREVIEW_ROOT = FsPath("/app/data/zip_preview")
+_ZIP_MAX_ENTRIES = 5000
+
+
+def _zip_cache_key(updated_at) -> str:
+    return hashlib.md5(("v1:" + str(updated_at)).encode()).hexdigest()[:12]
+
+
+def _zip_cache_dir(file_id: int, key: str) -> FsPath:
+    return _ZIP_PREVIEW_ROOT / ("%d_%s" % (file_id, key))
+
+
+def _zip_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        import zipfile
+        files = []
+        dirs = set()
+        total_size = 0
+        with zipfile.ZipFile(src_path) as zf:
+            for info in zf.infolist():
+                name = info.filename.replace("\\", "/")
+                if not name:
+                    continue
+                if name.endswith("/"):
+                    dirs.add(name.rstrip("/"))
+                    continue
+                files.append({"path": name, "dir": False, "size": int(info.file_size)})
+                total_size += int(info.file_size)
+                parts = name.split("/")[:-1]
+                for i in range(1, len(parts) + 1):
+                    dirs.add("/".join(parts[:i]))
+        dir_list = [{"path": d, "dir": True, "size": 0} for d in sorted(dirs)]
+        total = len(dir_list) + len(files)
+        payload = {
+            "entries": sorted(dir_list + files, key=lambda e: e["path"])[:_ZIP_MAX_ENTRIES],
+            "total_files": len(files),
+            "total_dirs": len(dirs),
+            "total_size": total_size,
+            "truncated": total > _ZIP_MAX_ENTRIES,
+        }
+        tmp_json = cache_dir / "ready.json.tmp"
+        tmp_json.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp_json.replace(cache_dir / "ready.json")
+        logger.info("[zip-list] 解析完成 file=%d 文件=%d 文件夹=%d", file_id, len(files), len(dirs))
+    except Exception as e:
+        logger.error("[zip-preview] file=%s 解析失败: %s", file_id, e)
+        try:
+            (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
+        except Exception:
+            pass
+    finally:
+        _ZIP_PREVIEW_LOCKS.pop(key, None)
+
+
+@router.get("/files/{file_id}/zip-list")
+async def get_zip_list(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """ZIP 清单速览: 轮询状态端点 (ready 时返回全量条目 JSON, 前端按 path 前缀下钻).
+
+    zipfile 只读中央目录, 不解压; .zip 以外返回 400。
+    """
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    if not (f.file_name or "").lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="仅支持 .zip")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    key = _zip_cache_key(f.updated_at)
+    cache_dir = _zip_cache_dir(file_id, key)
+
+    if (cache_dir / "ready.json").exists():
+        try:
+            data = json.loads((cache_dir / "ready.json").read_text(encoding="utf-8"))
+        except Exception:
+            return {"status": "converting"}   # 半写/损坏 (原子写后应罕见) → 下轮重读
+        return {"status": "ready", **data}
+    if (cache_dir / "error.txt").exists():
+        return {"status": "error",
+                "message": (cache_dir / "error.txt").read_text(encoding="utf-8")[:200]}
+
+    lock = _ZIP_PREVIEW_LOCKS.setdefault(key, threading.Lock())
+    if not lock.acquire(blocking=False):
+        return {"status": "converting"}
+    try:
+        src = FsPath("/tmp") / ("zip_src_%d.zip" % file_id)
+        if not src.exists():
+            raw = await file_service.download_file(f.file_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            src.write_bytes(raw)
+    except Exception as e:
+        logger.error("[zip-preview] file=%d 源文件下载失败: %s", file_id, e)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
+        except Exception:
+            pass
+        _ZIP_PREVIEW_LOCKS.pop(key, None)
+        return {"status": "error", "message": str(e)[:200]}
+    th = threading.Thread(target=_zip_preview_worker,
+                          args=(file_id, str(src), cache_dir, key), daemon=True)
+    th.start()
+    return {"status": "converting"}
+
+
 # === 批次⑩.17 自研 PPT 第三栏预览: python-pptx 解析为结构化 JSON (2026-09-06) ===
 # .pptx = zip + OOXML — python-pptx 已在容器内 (1.0.2), 解析一次缓存 JSON,
 # 第三栏渲染器 (DriveDetailRail) 按 EMU 比例绝对定位还原 文本框/图片/表格。
