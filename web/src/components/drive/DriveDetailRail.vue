@@ -233,7 +233,7 @@
             </template>
           </div>
           <!-- 批次⑩.65 (2026-09-07 选型 D): XLSX 预览 — 深青横幅头 + 工作表标签 + 前 8 行速览 -->
-          <div v-else-if="previewKind === 'excel'" class="rf-xlsx">
+          <div v-else-if="previewKind === 'excel'" class="rf-xlsx" @dblclick="togglePptFull">
             <div v-if="xlsxStatus === 'idle' || xlsxStatus === 'loading'" class="rf-skel">
               <div class="rf-conv-t">正在解析 Excel 工作表…</div>
               <div class="rf-conv-s">首次约 1-3 秒 · 之后打开秒出</div>
@@ -286,7 +286,7 @@
             </template>
           </div>
           <!-- 批次⑩.66 (2026-09-07 选型 A): ZIP 预览 — 石墨横幅 + 面包屑下钻清单 -->
-          <div v-else-if="previewKind === 'zip'" class="rf-zip">
+          <div v-else-if="previewKind === 'zip'" class="rf-zip" @dblclick="onZipDblClick">
             <div v-if="zipStatus === 'idle' || zipStatus === 'loading'" class="rf-skel">
               <div class="rf-conv-t">正在读取压缩包目录…</div>
               <div class="rf-conv-s">首次约 1-3 秒 · 之后打开秒出</div>
@@ -1056,6 +1056,11 @@ const zipChildren = computed(() => {
   }
 })
 function stopZipPoll() { if (zipPollTimer) { clearTimeout(zipPollTimer); zipPollTimer = null } }
+// 批次⑩.66: 双击全屏 — 条目行/面包屑除外 (单击导航, 双击误触全屏)
+function onZipDblClick(ev) {
+  if (ev.target.closest('.rf-zip-item, .zc-seg')) return
+  togglePptFull()
+}
 function startZipPoll(fid) {
   stopZipPoll()
   const seq = ++zipPollSeq
