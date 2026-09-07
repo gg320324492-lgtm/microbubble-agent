@@ -23,9 +23,9 @@
         @dragleave="dropHint = false"
         @drop="onDrop"
       >
-        <!-- 展开/收起箭头 -->
+        <!-- 展开/收起箭头 (expandable=false 时不渲染, 团队共享盘一级文件夹禁用下拉防与右侧列表重复) -->
         <span
-          v-if="hasChildren"
+          v-if="hasChildren && expandable"
           class="folder-tree-node-toggle drive-folder-tree-node-toggle"
           :class="{ 'is-expanded': isExpanded }"
           @click.stop="$emit('toggle', folder.id)"
@@ -55,7 +55,7 @@
     </FolderContextMenu>
 
     <!-- v2.0: 缩进指示线 (深度 ≥ 1 时左侧 1px 主色 bg 30% 透明线, 增强树结构感) -->
-    <template v-if="isExpanded && folder.children?.length">
+    <template v-if="expandable && isExpanded && folder.children?.length">
       <FolderTreeNode
         v-for="child in folder.children"
         :key="child.id"
@@ -87,7 +87,9 @@ const props = defineProps({
   folder: { type: Object, required: true },
   depth: { type: Number, default: 0 },
   selectedFolderId: { type: [Number, null], default: null },
-  expandedFolderIds: { type: Set, default: () => new Set() }
+  expandedFolderIds: { type: Set, default: () => new Set() },
+  // false = 不渲染展开箭头和子节点 (团队共享盘一级文件夹用, 防止与右侧列表重复)
+  expandable: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['select', 'toggle', 'context-command', 'drop-files'])
