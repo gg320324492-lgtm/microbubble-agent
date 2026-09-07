@@ -1135,7 +1135,13 @@ async function onCreateFolder(payload) {
     // 下次打开 dialog (工具栏 / 空态 CTA) 默认走 selectedFolderId
     createSubFolderParentId.value = null
     ElMessage.success(`文件夹已创建: ${result.name}`)
-    // useFolderTree.createFolder 内部已 fetchTree, 不用再手动刷新
+    // 批次⑩.84: 右栏列表同步刷新 — 此前只 fetchTree 刷左栏树, 在当前浏览层新建的文件夹
+    // 不出现直到手动刷新 (右栏列表走 drive files API, 与树是两条数据链路)
+    if ((payload.parent_id ?? null) === (selectedFolderId.value ?? null)) {
+      await reloadCurrentView()
+    }
+    refreshSideCounts()
+    // useFolderTree.createFolder 内部已 fetchTree, 不用再手动刷新左栏树
   } catch (e) {
     // v2.29: 失败不 reset, dialog 保持打开, 用户修复后 retry 仍用同一 parent_id
     ElMessage.error(e.message || '创建文件夹失败')
