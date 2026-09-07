@@ -137,10 +137,17 @@
               </div>
               <span class="vc-t">{{ fmtAudioTime(vidDur) }}</span>
               <button class="vc-btn vc-spd" title="播放倍速" @click.stop="vidCycleSpeed">{{ vidSpeed }}x</button>
-              <button class="vc-btn" :title="vidMuted ? '取消静音' : '静音'" @click.stop="vidToggleMute">
-                <svg v-if="!vidMuted" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg>
-                <svg v-else viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.6 1.4l-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4-2.1-2.1 2.1-2.1-1.4-1.4-2.1 2.1z"/></svg>
-              </button>
+              <span class="rf-vid-volbox" :class="{ open: vidVolShow }" @dblclick.stop>
+                <span class="rf-vid-volpop">
+                  <span class="rf-vid-volpct">{{ Math.round(vidVol) }}%</span>
+                  <input type="range" class="rf-vid-volslider" min="0" max="100" :value="vidVol"
+                         @input="onVidVolInput" @dblclick.stop>
+                </span>
+                <button class="vc-btn" :title="vidVol === 0 ? '取消静音' : '音量'" @click.stop="vidVolShow = !vidVolShow">
+                  <svg v-if="vidVol > 0" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg>
+                  <svg v-else viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.6 1.4l-1.4 1.4 2.1 2.1-2.1 2.1 1.4 1.4 2.1-2.1 2.1 2.1 1.4-1.4-2.1-2.1 2.1-2.1-1.4-1.4-2.1 2.1z"/></svg>
+                </button>
+              </span>
               <button class="vc-btn" title="全屏" @click.stop="togglePptFull">
                 <svg viewBox="0 0 24 24" class="vc-st"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
               </button>
@@ -888,9 +895,9 @@ watch(() => props.file?.id, () => {
   vidCur.value = 0
   vidDur.value = 0
   vidSpeedIdx.value = 0
-  vidMuted.value = false
   vidCtrlHide.value = false
   vidHover.value = false
+  vidVolShow.value = false
 })
 
 /* ---- 批次⑩.69 (选型 B): 视频自绘播放器 — 悬浮控件/倍速/静音/双击全屏 ---- */
@@ -898,7 +905,6 @@ const videoElRef = ref(null)
 const vidPlaying = ref(false)
 const vidCur = ref(0)
 const vidDur = ref(0)
-const vidMuted = ref(false)
 const vidSpeedIdx = ref(0)
 const vidCtrlHide = ref(false)
 const vidHover = ref(false)
@@ -959,11 +965,21 @@ function vidCycleSpeed() {
   vidSpeedIdx.value = (vidSpeedIdx.value + 1) % AUDIO_SPEEDS.length
   if (el) el.playbackRate = AUDIO_SPEEDS[vidSpeedIdx.value]
 }
-function vidToggleMute() {
+/* 批次⑩.70 (选型 C): 音量纵向浮层 — 点喇叭弹出竖杆+百分比, 拖动实时调音量, 点外部收起 */
+const vidVol = ref(100)
+const vidVolShow = ref(false)
+function onVidVolInput(e) {
+  const v = Math.max(0, Math.min(100, Number(e.target.value) || 0))
+  vidVol.value = v
+  e.target.style.setProperty('--v', v + '%')
   const el = videoElRef.value
-  if (!el) return
-  el.muted = !el.muted
-  vidMuted.value = el.muted
+  if (el) {
+    el.volume = v / 100
+    el.muted = v === 0
+  }
+}
+function onDocClickCloseVol(e) {
+  if (vidVolShow.value && !e.target.closest('.rf-vid-volbox')) vidVolShow.value = false
 }
 
 /* 文本类预览 (批次⑩.68 选型 D): /preview 现成通路 + 按扩展名智能渲染 */
@@ -1458,11 +1474,13 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', onFsChange)
   document.addEventListener('keydown', onFsKeydown)
   document.addEventListener('wheel', onFsWheel, { passive: false })
+  document.addEventListener('click', onDocClickCloseVol)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', onFsChange)
   document.removeEventListener('keydown', onFsKeydown)
   document.removeEventListener('wheel', onFsWheel)
+  document.removeEventListener('click', onDocClickCloseVol)
   if (document.fullscreenElement) document.exitFullscreen?.()
 })
 function togglePptFull() {
@@ -1676,6 +1694,30 @@ defineExpose({ togglePptFull })
   color: #fff; background: rgba(255, 255, 255, .18); border-radius: 6px; padding: 2px 6px;
 }
 .vc-spd:hover { background: rgba(255, 255, 255, .3); }
+/* 批次⑩.70 (选型 C): 音量纵向浮层 — 点喇叭弹出竖杆+百分比 */
+.rf-vid-volbox { position: relative; display: flex; align-items: center; }
+.rf-vid-volpop {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: rgba(13, 18, 16, .92); border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 12px; padding: 12px 9px 9px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+  opacity: 0; pointer-events: none; transition: opacity .18s;
+  z-index: 6;
+}
+.rf-vid-volbox.open .rf-vid-volpop { opacity: 1; pointer-events: auto; }
+.rf-vid-volpct { font-family: var(--font-family-mono, monospace); font-size: 10px; color: #fff; }
+.rf-vid-volslider {
+  -webkit-appearance: none; appearance: none; width: 86px; height: 4px; border-radius: 999px;
+  outline: none; cursor: pointer; transform: rotate(-90deg); margin: 34px 0;
+  background: linear-gradient(to right, #fff var(--v, 100%), rgba(255, 255, 255, .28) var(--v, 100%));
+}
+.rf-vid-volslider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+}
+:is(.rf-stage):fullscreen .rf-vid-volpop { padding: 14px 11px 11px; }
+:is(.rf-stage):fullscreen .rf-vid-volpct { font-size: 12px; }
 :is(.rf-stage):fullscreen .rf-vid-ctrl { padding: 10px 18px 12px; }
 :is(.rf-stage):fullscreen .vc-btn svg { width: 18px; height: 18px; }
 :is(.rf-stage):fullscreen .vc-t { font-size: 12px; }
