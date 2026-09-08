@@ -456,16 +456,17 @@ const currentSubFolders = computed(() => {
   if (specialView.value === 'recent') return []
   if (selectedFolderId.value === null) {
     // 2026-08-30: 跳过"组会PPT"层级 — 团队共享盘直接展示人名文件夹
+    // 批次⑩.87: 空的一级文件夹 (如顶层新建的 111) 以自身出现, 否则顶层新建永远不可见
     const teamRoots = (folderTree.value || []).filter(f => f.is_team_default)
-    return teamRoots.flatMap(r => r.children || [])
+    return teamRoots.flatMap(r => (r.children?.length ? r.children : [r]))
   }
   const node = findFolderById(selectedFolderId.value)
   return node?.children || []
 })
 
-// 面包屑: 团队共享盘 → 组会PPT → 人名
+// 面包屑: 组会PPT → 人名 (⑩.87 后普通浏览 specialView 为 null, 不再以 'team' 为门卫)
 const folderBreadcrumb = computed(() => {
-  if (specialView.value !== 'team' || selectedFolderId.value === null) return []
+  if (selectedFolderId.value === null) return []
   const chain = []
   const walk = (nodes) => {
     for (const n of nodes || []) {
@@ -1262,13 +1263,9 @@ onMounted(pushNav)
 
 // ── 批次⑩.5: 面包屑可点击跳转 (祖先级直达, 当前级不可点) ──
 const crumbItems = computed(() => {
-  const items = [{ key: 'home', name: '课题组网盘', loc: { specialView: 'team', folderId: null } }]
-  if (specialView.value === 'team') {
-    items.push({ key: 'team', name: '团队共享盘', loc: { specialView: 'team', folderId: null } })
-    for (const f of folderBreadcrumb.value) {
-      items.push({ key: 'f-' + f.id, name: f.name, loc: { specialView: 'team', folderId: f.id } })
-    }
-  } else if (specialView.value === 'starred') {
+  // 批次⑩.87: home 也是普通视图 (specialView='team' 已随节点不可点击而不可达)
+  const items = [{ key: 'home', name: '课题组网盘', loc: { specialView: null, folderId: null } }]
+  if (specialView.value === 'starred') {
     items.push({ key: 'starred', name: '我的收藏', loc: { specialView: 'starred', folderId: null } })
   } else if (specialView.value === 'recent') {
     items.push({ key: 'recent', name: '最近上传', loc: { specialView: 'recent', folderId: null } })
@@ -1276,6 +1273,12 @@ const crumbItems = computed(() => {
     items.push({ key: 'trash', name: '回收站', loc: { specialView: 'trash', folderId: null } })
   } else if (specialView.value === 'requests') {
     items.push({ key: 'requests', name: '文件请求', loc: { specialView: 'requests', folderId: null } })
+  } else if (selectedFolderId.value !== null) {
+    // 批次⑩.87: 普通浏览也显示文件夹路径 — 此前只在 specialView==='team' 时渲染,
+    // 点树节点后面包屑恒为「课题组网盘」, 用户无法分辨自己在哪层 (111 建错层问题的根因之一)
+    for (const f of folderBreadcrumb.value) {
+      items.push({ key: 'f-' + f.id, name: f.name, loc: { specialView: null, folderId: f.id } })
+    }
   }
   return items
 })
