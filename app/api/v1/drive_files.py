@@ -1338,6 +1338,7 @@ async def _download_range(object_name: str, start: int, length: int) -> bytes:
 class BatchDownloadRequest(BaseModel):
     ids: Optional[List[int]] = Field(None, description="文件 id 列表")
     folder_id: Optional[int] = Field(None, description="递归下载整个 folder")
+    folder_ids: Optional[List[int]] = Field(None, description="递归下载多个 folder (可与 ids 混用)")
 
 
 @router.post("/files/batch-download")
@@ -1348,17 +1349,17 @@ async def batch_download_drive_files(
 ):
     """批量 ZIP 下载 (流式生成, 不落盘)
 
-    body: {"ids": [1,2,3]} OR {"folder_id": 4}
-    无权限文件跳过, ZIP 根目录生成 _skipped.txt
+    body: {"ids": [1,2,3]} OR {"folder_id": 4} OR {"ids": [...], "folder_ids": [...]}
+    无权限文件跳过, ZIP 根目录生成 _skipped.txt; folder_ids 内容按 <文件夹名>/ 前缀归档
     """
-    if not payload.ids and not payload.folder_id:
+    if not payload.ids and not payload.folder_id and not payload.folder_ids:
         # W1 T1 migration: 400 → AppException envelope (BATCH_PARAM_MISSING)
-        raise_app_error(400, ERR_BATCH_PARAM_MISSING, "ids 或 folder_id 必填其一")
+        raise_app_error(400, ERR_BATCH_PARAM_MISSING, "ids / folder_id / folder_ids 必填其一")
 
     svc = DriveService(db)
 
-    # 1) 收集 file 列表
-    file_records = []
+    # 1) 收集 (file, zip内路径前缀) — 前缀让文件夹内容按 <文件夹名>/ 归档
+    entries = []
     skipped = []
     if payload.ids:
         for fid in payload.ids:
@@ -1370,14 +1371,23 @@ async def batch_download_drive_files(
             if not f.file_path:
                 skipped.append(f"id={fid} 无 MinIO 对象")
                 continue
-            file_records.append(f)
-    elif payload.folder_id:
+            entries.append((f, ""))
+    if payload.folder_id:
         # 递归收集 folder 下的所有文件 (含子 folder)
-        file_records, skipped = await _collect_folder_files(
+        recs, skipped = await _collect_folder_files(
             db, svc, payload.folder_id, current_user.id, skipped
         )
+        entries.extend((f, "") for f in recs)
+    for folder_id in (payload.folder_ids or []):
+        recs, skipped = await _collect_folder_files(
+            db, svc, folder_id, current_user.id, skipped
+        )
+        from app.services.folder_service import FolderService
+        folder = await FolderService(db).get_folder(folder_id)
+        prefix = f"{folder.name}/" if folder else ""
+        entries.extend((f, prefix) for f in recs)
 
-    if not file_records and not skipped:
+    if not entries and not skipped:
         # W1 T1 migration: 404 → AppException envelope
         raise_app_error(404, ERR_FILE_NOT_FOUND, "无可下载文件")
 
@@ -1389,11 +1399,11 @@ async def batch_download_drive_files(
         # BytesIO 缓冲区 zip stream
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            for f in file_records:
+            for f, prefix in entries:
                 try:
                     data = await file_service.download_file(f.file_path)
-                    # ZIP 内路径: file_name (避免重复)
-                    arcname = f.file_name or f"file_{f.id}"
+                    # ZIP 内路径: [前缀/]file_name (避免重复)
+                    arcname = f"{prefix}{f.file_name or f'file_{f.id}'}"
                     # 防路径冲突 (同名)
                     existing = [n for n in zf.namelist() if n == arcname]
                     if existing:
