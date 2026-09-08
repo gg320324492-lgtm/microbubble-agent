@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正在分享 · 可见性入口 · 四版 UI 选型 (2026-09-08)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --color-text-placeholder: #C0C4CC;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --teal-bg: #F0F9F7;
+    --teal-border: #CBE4DC;
+    --danger: #F56C6C;
+    --warning: #E6A23C;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.6; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(480px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-tag.rec { background: #198754; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  /* 灰底舞台 */
+  .stage { background: repeating-linear-gradient(45deg, #E7E4DE 0 14px, #EDEAE4 14px 28px);
+           border-radius: var(--radius-lg); border: 1px solid var(--color-border);
+           padding: 0; display: flex; justify-content: center; overflow: hidden; }
+
+  /* ── 左栏 (workbench rail) 复刻 ── */
+  .rail { width: 232px; background: var(--color-bg-card); padding: 12px 10px 16px; display: flex; flex-direction: column; }
+  .rail-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary);
+              padding: 4px 10px 8px; display: flex; justify-content: space-between; }
+  .rail-cap .add { color: var(--color-text-secondary); font-size: 13px; }
+  .special { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 1px 2px;
+             border-radius: 8px; font-size: 13px; color: var(--color-text-regular); position: relative; }
+  .special svg { width: 15px; height: 15px; flex: none; fill: none; stroke: var(--teal); stroke-width: 1.8;
+                 stroke-linecap: round; stroke-linejoin: round; }
+  .special .cnt { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--color-text-placeholder); }
+  .special.root { font-weight: 600; color: var(--color-text-primary); }
+  .special.root::before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px;
+                          border-radius: 2px; background: var(--teal); }
+  .special.child { margin-left: 22px; }
+  .cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 10px 10px 4px; }
+
+  /* ── A: 分享中 快捷项 + 视图 ── */
+  .special.is-share { color: var(--teal); font-weight: 500; }
+  .special.is-share .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #2AA876;
+                                margin-left: auto; margin-right: 6px;
+                                box-shadow: 0 0 0 3px rgba(42,168,118,.15); }
+
+  /* 分享列表视图 (右侧缩略) */
+  .share-view { flex: 1; background: var(--color-bg-card); border-left: 1px solid var(--color-border);
+                padding: 14px 16px; min-width: 0; }
+  .sv-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .sv-head h4 { margin: 0; font-size: 14px; }
+  .sv-head span { font-size: 11px; color: var(--color-text-secondary); }
+  .sv-row { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: 1px solid var(--color-border);
+            border-radius: 8px; margin-bottom: 8px; font-size: 12.5px; background: #fff; }
+  .sv-row .ic { flex: none; }
+  .sv-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sv-row .nm small { display: block; color: var(--color-text-placeholder); font-size: 10.5px; }
+  .sv-row .exp { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--color-text-secondary); }
+  .sv-row .exp.soon { color: var(--warning); font-weight: 700; }
+  .sv-row .act { flex: none; display: flex; gap: 6px; }
+  .btn { font: inherit; font-size: 11.5px; border-radius: 6px; padding: 4px 10px; cursor: pointer;
+         border: 1px solid var(--color-border); background: #fff; color: var(--color-text-regular); }
+  .btn:hover { border-color: #B8E0DB; color: var(--teal); }
+  .btn.danger { border-color: #FBC4C4; color: var(--danger); }
+  .btn.danger:hover { background: #FFF5F5; }
+  .btn.pri { background: linear-gradient(135deg, #0E766E, #12897C); border: none; color: #fff; font-weight: 600; }
+  .type-tag { flex: none; font-size: 10px; padding: 2px 7px; border-radius: 999px;
+              background: var(--teal-bg); border: 1px solid var(--teal-border); color: #0B5C43; }
+
+  /* ── B: 树内徽标 ── */
+  .badge-share { display: inline-flex; align-items: center; gap: 3px; margin-left: auto;
+                 font-size: 10px; color: var(--teal); background: var(--teal-bg);
+                 border: 1px solid var(--teal-border); border-radius: 999px; padding: 1px 7px; }
+  .badge-share svg { width: 10px; height: 10px; stroke: var(--teal); }
+  .badge-share:hover { background: #E2F1EC; }
+  .tree-note { margin: 8px 10px 0; font-size: 10.5px; color: var(--color-text-placeholder); line-height: 1.5; }
+
+  /* ── C: 角标 + popover ── */
+  .stage-c { align-items: flex-start; position: relative; display: flex; }
+  .pop { position: absolute; left: 218px; top: 66px; width: 320px; background: #fff; border-radius: 10px;
+         box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 12px 14px; z-index: 5; }
+  .pop-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .pop-head .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #2AA876; }
+  .pop-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; font-size: 12px; }
+  .pop-row:hover { background: #FAFBFA; }
+  .pop-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pop-row .exp { flex: none; font-family: var(--mono); font-size: 10px; color: var(--color-text-secondary); }
+
+  /* ── D: 抽屉 ── */
+  .drawer-wrap { flex: 1; display: flex; min-width: 0; background: var(--color-bg-card); border-left: 1px solid var(--color-border); }
+  .drawer { width: 380px; background: #fff; border-left: 1px solid var(--color-border); padding: 14px 16px;
+            box-shadow: -8px 0 24px rgba(0,0,0,.08); }
+  .drawer h4 { margin: 0 0 4px; font-size: 14px; }
+  .drawer .sub { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 12px; }
+  .th { display: flex; gap: 8px; font-size: 10.5px; color: var(--color-text-placeholder);
+        padding: 0 4px 6px; border-bottom: 1px solid var(--color-border); margin-bottom: 4px; }
+  .th .c1 { flex: 1.6; } .th .c2 { flex: .8; } .th .c3 { flex: 1; text-align: right; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>正在分享 · 可见性入口 · 四版 UI 选型</h1>
+  <p>场景：左栏一眼看到哪些文件/文件夹正在被分享，并能直达撤销 · 2026-09-08 · 左栏为真实尺寸<br>
+     数据源：文件夹分享 (drive_folder_shares) + 文件分享链接 · 示例数据 = 冯懿鑫 (文件夹, 9-12 到期) + 传感器数据.csv (7 天)</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag rec">方案 A</span><h2>快捷区「分享中」入口（推荐）</h2></div>
+    <p class="v-sub">快捷组新增「分享中」项（与我的收藏/最近上传/回收站同构）· 绿色呼吸点表示有生效链接 · 点击进入分享列表视图，可直接复制/撤销</p>
+    <div class="stage">
+      <div class="rail">
+        <div class="rail-cap">结构 <span class="add">＋</span></div>
+        <div class="special root"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>团队共享盘</div>
+        <div class="special child"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>组会PPT <span class="cnt">24</span></div>
+        <div class="special child"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>111</div>
+        <div class="cap">快捷</div>
+        <div class="special"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7-5.1-2.7-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/></svg>我的收藏</div>
+        <div class="special"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>最近上传</div>
+        <div class="special"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 12.5h9L18 7"/></svg>回收站 <span class="cnt">2</span></div>
+        <div class="special is-share"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>分享中 <span class="live-dot"></span><span class="cnt">2</span></div>
+      </div>
+      <div class="share-view">
+        <div class="sv-head"><h4>分享中</h4><span>2 个生效链接 · 撤销后立即失效</span></div>
+        <div class="sv-row">
+          <span class="ic">📁</span>
+          <span class="nm">冯懿鑫 <small>团队共享盘 / 组会PPT</small></span>
+          <span class="type-tag">文件夹</span>
+          <span class="exp">9-12 到期</span>
+          <span class="act"><button class="btn">复制</button><button class="btn danger">撤销</button></span>
+        </div>
+        <div class="sv-row">
+          <span class="ic">📄</span>
+          <span class="nm">传感器数据.csv <small>团队共享盘 / 组会PPT / 陈天祥</small></span>
+          <span class="type-tag">文件</span>
+          <span class="exp soon">今天 18:00 到期</span>
+          <span class="act"><button class="btn">复制</button><button class="btn danger">撤销</button></span>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">与现有快捷项同一套交互（点击进视图、计数徽章、绿色呼吸点表状态），零学习成本</li>
+      <li class="pro">列表带路径 + 到期时间 + 复制/撤销，一步到位；<b>今天到期</b>自动橙色预警</li>
+      <li class="con">多一个常驻快捷项（无分享时呼吸点熄灭、计数隐藏，视觉负担小）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>树内徽标（就地可见）</h2></div>
+    <p class="v-sub">不加新入口：正在分享的文件夹在树里、右栏行尾挂 🔗n 徽标，悬停看到期时间 · 右栏行同理</p>
+    <div class="stage">
+      <div class="rail">
+        <div class="rail-cap">结构 <span class="add">＋</span></div>
+        <div class="special root"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>团队共享盘</div>
+        <div class="special child"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>组会PPT
+          <span class="badge-share"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>2</span>
+        </div>
+        <div class="special child"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>111</div>
+        <div class="special child" style="color:var(--teal); font-weight:500;"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>冯懿鑫
+          <span class="badge-share"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>🔗</span>
+        </div>
+        <div class="special child"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>艾琳朔</div>
+        <div class="tree-note">↑ 冯懿鑫 展开后同层显示（此示意未展开）；徽标 = 该夹下生效链接数，悬停显示「分享至 9-12」</div>
+      </div>
+      <div class="share-view">
+        <div class="sv-head"><h4>右栏行尾同步</h4><span>文件行同样挂 🔗 徽标</span></div>
+        <div class="sv-row">
+          <span class="ic">📁</span>
+          <span class="nm">冯懿鑫</span>
+          <span class="badge-share"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>分享至 9-12</span>
+          <span class="act"><button class="btn danger">撤销</button></span>
+        </div>
+        <div class="sv-row">
+          <span class="ic">📄</span>
+          <span class="nm">传感器数据.csv</span>
+          <span class="badge-share"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>7 天</span>
+          <span class="act"><button class="btn danger">撤销</button></span>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">就地可见：浏览到哪就看到哪，不改变任何导航结构</li>
+      <li class="pro">徽标即信息（数量/到期），悬停出详情</li>
+      <li class="con">没有汇总视图——想撤销得自己找到那行；徽标小，一屏外看不到</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>团队共享盘角标 + 浮层</h2></div>
+    <p class="v-sub">「团队共享盘」标题挂呼吸角标 · 点角标弹出浮层面板列出全部生效链接（节点本体保持不可点击）</p>
+    <div class="stage stage-c">
+      <div class="rail">
+        <div class="rail-cap">结构 <span class="add">＋</span></div>
+        <div class="special root" style="cursor:default;">
+          <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="12" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.3 7.1 15.5 11M8.3 16.9l7.2-3.9"/></svg>团队共享盘
+          <span class="badge-share" style="cursor:pointer; background:#2AA876; color:#fff; border-color:#2AA876;">2</span>
+        </div>
+        <div class="special child"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>组会PPT <span class="cnt">24</span></div>
+        <div class="special child"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>111</div>
+      </div>
+      <div class="pop">
+        <div class="pop-head"><span class="live-dot"></span>正在分享 (2)</div>
+        <div class="pop-row"><span>📁</span><span class="nm">冯懿鑫</span><span class="exp">9-12</span><button class="btn danger">撤销</button></div>
+        <div class="pop-row"><span>📄</span><span class="nm">传感器数据.csv</span><span class="exp">7 天</span><button class="btn danger">撤销</button></div>
+        <p style="font-size:10.5px;color:var(--color-text-secondary);margin:8px 2px 0">← 点角标弹出 · 点外部关闭</p>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">最轻量：零导航、零新页面，一眼全局</li>
+      <li class="pro">角标常驻（绿色=有生效链接），和「团队共享盘是分享边界」的语义吻合</li>
+      <li class="con">浮层空间有限，分享多时需要滚动；角标点击热区小，易被忽略</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>工具栏「分享管理」抽屉</h2></div>
+    <p class="v-sub">顶栏加「分享管理」按钮 → 右侧抽屉表格：类型/名称/有效期/操作 · 管理向，适合分享多的情况</p>
+    <div class="stage">
+      <div class="drawer-wrap">
+        <div class="share-view" style="opacity:.45;">
+          <div class="sv-head"><h4>课题组网盘</h4></div>
+          <div class="sv-row"><span class="ic">📁</span><span class="nm">冯懿鑫</span><span class="exp">—</span></div>
+          <div class="sv-row"><span class="ic">📁</span><span class="nm">艾琳朔</span><span class="exp">—</span></div>
+          <div class="sv-row"><span class="ic">📁</span><span class="nm">韩重阳</span><span class="exp">—</span></div>
+        </div>
+        <div class="drawer">
+          <h4>分享管理</h4>
+          <p class="sub">2 个生效链接 · 撤销后立即失效，文件可见性自动回团队</p>
+          <div class="th"><span class="c1">名称</span><span class="c2">类型</span><span class="c3">到期 / 操作</span></div>
+          <div class="sv-row">
+            <span class="nm">冯懿鑫</span><span class="type-tag">文件夹</span>
+            <span class="exp">9-12</span>
+            <span class="act"><button class="btn">复制</button><button class="btn danger">撤销</button></span>
+          </div>
+          <div class="sv-row">
+            <span class="nm">传感器数据.csv</span><span class="type-tag">文件</span>
+            <span class="exp soon">今天</span>
+            <span class="act"><button class="btn">复制</button><button class="btn danger">撤销</button></span>
+          </div>
+          <p style="font-size:11px;color:var(--color-text-secondary);margin-top:10px">
+            ↑ 顶栏按钮打开 · 抽屉从右滑入 · 支持按类型筛选</p>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">管理能力最强：表格容纳类型/到期/次数，分享数量多时最从容</li>
+      <li class="pro">入口不占左栏（左栏已经很满）</li>
+      <li class="con">藏得深——用户不点开就完全看不到「有东西在分享」；和「一眼看到」的诉求最弱</li>
+    </ul>
+  </section>
+
+</div>
+
+</body>
+</html>
