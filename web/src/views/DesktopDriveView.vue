@@ -273,7 +273,6 @@
     <CreateFolderDialog
       v-model="showCreateFolderDialog"
       :parent-id="currentCreateFolderParentId"
-      :parent-folder="currentCreateFolderParentFolder"
       @create="onCreateFolder"
     />
     <RenameDialog
@@ -895,15 +894,7 @@ const currentCreateFolderParentId = computed(() =>
     : selectedFolderId.value
 )
 
-// 右键触发时找该 folder 的 object 给 CreateFolderDialog 显示父文件夹 path
-// 默认走 store.selectedFolder computed (按 selectedFolderId)
-const currentCreateFolderParentFolder = computed(() => {
-  const id = createSubFolderParentId.value
-  if (id !== null) {
-    return findFolderById(id)
-  }
-  return selectedFolder.value
-})
+// 批次⑩.87e: currentCreateFolderParentFolder 已删 — 位置改由 CreateFolderDialog 内部下拉选择
 
 // === v2 PR1 dialog 状态 ===
 const showShareDialog = ref(false)
