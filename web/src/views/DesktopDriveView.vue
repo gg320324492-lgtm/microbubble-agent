@@ -714,16 +714,30 @@ async function handleBatchDelete() {
 }
 
 async function handleBatchMove() {
-  if (!selectedFileIds.value.length) return
+  // 批次⑩.87j: 支持文件夹 — 此前只认 selectedFileIds, 仅勾文件夹时「移动到」点了没反应
+  if (!selectedFileIds.value.length && !selectedFolderIds.value.length) return
   moveTargetFileId.value = selectedFileIds.value  // 复用 MoveDialog
+  moveTargetFolderIds.value = [...selectedFolderIds.value]
   showMoveDialog.value = true
 }
 
 async function handleBatchShare() {
   // 批次⑩.75: 单选 → 打开 ShareDialog (与右栏「分享」同一套: 可选有效期/可见性后再生成链接)
   // 多选 → 保留批量直链复制 (分享链接一条一文件, 弹 N 个设置窗不合理)
-  if (!selectedFileIds.value.length) return
-  if (selectedFileIds.value.length === 1) {
+  // 批次⑩.87j: 仅勾单个文件夹 → 走 ShareLinkDialog (与右键「分享」同一套)
+  const fileCount = selectedFileIds.value.length
+  const folderCount = selectedFolderIds.value.length
+  if (!fileCount && !folderCount) return
+  if (!fileCount && folderCount === 1) {
+    const f = tableFolders.value.find((x) => x.id === selectedFolderIds.value[0])
+    if (f) onShareFolder(f)
+    return
+  }
+  if (!fileCount && folderCount > 1) {
+    ElMessage.info('多文件夹请逐个右键「分享」(分享链接一夹一条)')
+    return
+  }
+  if (fileCount === 1) {
     const target = driveFiles.value.find(f => f.id === selectedFileIds.value[0])
     if (target) {
       shareDialogFile.value = target
@@ -890,12 +904,21 @@ const renameTargetType = ref('file')  // file | folder
 const treeDragActive = ref(false)
 const showMoveDialog = ref(false)
 const moveTargetFileId = ref(null)
+// 批次⑩.87j: 待移文件夹 ids (MoveDialog 复用为选择器, 确认后走 PUT /folders/{id})
+const moveTargetFolderIds = ref([])
 // 批次⑩.15: 待移档案对象 (供 MoveDialog 文件卡展示; 单选=1项, 批量=N项)
 const moveTargetFiles = computed(() => {
   const v = moveTargetFileId.value
-  if (v == null) return []
-  const ids = Array.isArray(v) ? v : [v]
-  return driveFiles.value.filter((f) => ids.includes(f.id))
+  const out = []
+  if (v != null) {
+    const ids = Array.isArray(v) ? v : [v]
+    out.push(...driveFiles.value.filter((f) => ids.includes(f.id)))
+  }
+  for (const fid of moveTargetFolderIds.value) {
+    const fo = findFolderById(fid)
+    if (fo) out.push({ id: 'f-' + fid, file_name: '📁 ' + fo.name })
+  }
+  return out
 })
 
 // v2.29 (2026-07-12) 右键 FolderTree 菜单"新建子文件夹" 触发的临时 parent_id
@@ -1074,25 +1097,47 @@ function handleFileMove(file) {
 }
 
 async function onMoveFile(payload) {
+  const folderIds = [...moveTargetFolderIds.value]
   try {
-    if (Array.isArray(payload.fileId)) {
+    if (Array.isArray(payload.fileId) && payload.fileId.length) {
       // 批次⑩.15 修复: 批量移动旧代码走 moveFile(数组) → PUT /files/undefined
       const resp = await doBatchMove(payload.fileId, payload.targetFolderId)
-      showMoveDialog.value = false
       ElMessage.success(`已移动 ${resp?.succeeded_count ?? payload.fileId.length} 个文件`)
-    } else {
+    } else if (!Array.isArray(payload.fileId) && payload.fileId != null) {
       await moveFile(payload.fileId, payload.targetFolderId)
-      showMoveDialog.value = false
       ElMessage.success('文件已移动')
+    }
+    if (folderIds.length) {
+      // 批次⑩.87j: 文件夹移动 — PUT /folders/{id} parent_id (0 = 团队共享盘顶层)
+      const raw = payload.targetFolderId
+      const target = raw == null ? 0 : Number(raw)
+      // 防环: 目标是待移文件夹自身的子树 → 后端不校验, 会损坏 path/depth
+      const inSubtree = (ancestorId, maybeDescId) => {
+        const node = findFolderById(ancestorId)
+        const walk = (n) => (n.children || []).some((c) => c.id === maybeDescId || walk(c))
+        return node ? walk(node) : false
+      }
+      let okF = 0, failF = 0
+      for (const fid of folderIds) {
+        if (Number(fid) === target || inSubtree(fid, target)) { failF++; continue }
+        try {
+          await axios.put(`/api/v1/folders/${fid}`, { parent_id: target })
+          okF++
+        } catch { failF++ }
+      }
+      if (failF) ElMessage.warning(`文件夹移动 ${okF} 个成功, ${failF} 个失败 (不能移进自身或其子文件夹)`)
+      else if (okF) ElMessage.success(`已移动 ${okF} 个文件夹`)
+      await fetchFolderTree()
     }
     // 批次⑩.85: 移动后按当前视图重拉 (moveFile 不再内部无参 fetchFiles, 那会跳到根层;
     // 批量路径此前也漏刷列表)
     await reloadCurrentView()
     refreshSideCounts()
   } catch (e) {
-    // 失败也关弹窗复位 submitting (此前弹窗保持打开但确认键永久 loading)
-    showMoveDialog.value = false
     ElMessage.error(e.message || '移动失败')
+  } finally {
+    showMoveDialog.value = false
+    moveTargetFolderIds.value = []
   }
 }
 
