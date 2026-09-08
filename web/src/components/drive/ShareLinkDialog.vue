@@ -307,7 +307,8 @@ async function createShare() {
     emit('created', data)
     ElMessage.success('分享链接已创建')
   } catch (e) {
-    ElMessage.error(`创建失败: ${e.message}`)
+    // 批次⑩.88c: 提取后端真实原因 (此前 e.message 是 axios 通用文案, 丢失 detail)
+    ElMessage.error(`创建失败: ${e.response?.data?.error?.message || e.response?.data?.detail || e.message}`)
   } finally {
     submitting.value = false
   }
@@ -322,7 +323,7 @@ async function revokeShare() {
     emit('revoked', result.value.id)
     result.value = null
   } catch (e) {
-    ElMessage.error(`撤销失败: ${e.message}`)
+    ElMessage.error(`撤销失败: ${e.response?.data?.error?.message || e.response?.data?.detail || e.message}`)
   }
 }
 
