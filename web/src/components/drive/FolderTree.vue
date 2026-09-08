@@ -65,11 +65,12 @@
     <div class="folder-tree-divider drive-folder-tree-divider" />
 
     <!-- v2 PR7: 团队共享盘 (绿) + 文件请求 (橙) -->
+    <!-- 批次⑩.87: 改为纯分组展示不可点击 — 点击进 specialView='team' 会与左栏树/右栏行为缠绕;
+         入口收敛为: 团队共享盘 → 树中的 组会PPT 等一级文件夹 -->
     <FolderContextMenu :items="teamMenuItems" placement="right-start" @command="(cmd) => onTeamContext(cmd)">
       <div
-        class="folder-tree-special-item drive-folder-tree-special-item is-team"
+        class="folder-tree-special-item drive-folder-tree-special-item is-team is-static"
         :class="{ 'is-active': specialView === 'team' }"
-        @click="$emit('update:specialView', 'team')"
       >
         <el-icon><Share /></el-icon>
         <span>团队共享盘</span>
@@ -371,6 +372,8 @@ function onSelectTeamFolder(team, _id) {
 .folder-tree-cap { font-size: 10.5px; letter-spacing: .12em; color: var(--color-text-secondary); padding: 10px 10px 4px; }
 .folder-tree-quick-cap { margin-top: 4px; }
 .folder-tree-special-item { position: relative; }
+/* 批次⑩.87: 团队共享盘为纯分组节点, 不可点击导航 */
+.folder-tree-special-item.is-static { cursor: default; }
 .folder-tree-special-count {
   margin-left: auto; font-family: var(--font-mono, Consolas, monospace);
   font-size: 10.5px; color: var(--color-text-placeholder);

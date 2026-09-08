@@ -451,7 +451,10 @@ function toggleDensity() { density.value = density.value === 'comfortable' ? 'co
 // === 2026-08-30: 团队共享盘子文件夹 (大图标卡片) ===
 // 当前层的子文件夹: team 顶层 = is_team_default 根 (组会PPT); 进入子层 = 该节点 children
 const currentSubFolders = computed(() => {
-  if (specialView.value !== 'team') return []
+  // 批次⑩.87: 文件夹行不再依赖 specialView==='team' — 点左栏树后 specialView 为 null,
+  // 此前门卫 return [] 导致右栏只显示文件不显示子文件夹
+  // (recent 是全盘平铺视图, 无文件夹行; starred 由 tableFolders 单行走 starredFolders)
+  if (specialView.value === 'recent') return []
   if (selectedFolderId.value === null) {
     // 2026-08-30: 跳过"组会PPT"层级 — 团队共享盘直接展示人名文件夹
     const teamRoots = (folderTree.value || []).filter(f => f.is_team_default)
