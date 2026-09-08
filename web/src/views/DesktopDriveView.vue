@@ -79,7 +79,6 @@
           :loading="treeLoading"
           :load-error="treeLoadError"
           :special-view="specialView"
-          :team-count="sideCounts.team"
           :starred-count="sideCounts.starred"
           :trash-count="sideCounts.trash"
           @update:selected-folder-id="selectedFolderId = $event"
