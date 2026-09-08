@@ -81,6 +81,7 @@
           :special-view="specialView"
           :starred-count="sideCounts.starred"
           :trash-count="sideCounts.trash"
+          :share-count="sideCounts.share"
           @update:selected-folder-id="selectedFolderId = $event"
           @update:special-view="specialView = $event"
           @toggle-expanded="toggleExpandedFolder"
@@ -175,6 +176,8 @@
           <!-- specialView 内嵌面板 (右栏/表格/dock 隐藏) -->
           <FileRequestListPanel v-if="specialView === 'requests'" />
           <DriveTrashPanel v-else-if="specialView === 'trash'" @changed="refreshSideCounts" />
+          <!-- 批次⑩.88 (方案A): 分享中面板 — 撤销后文件夹可见性回团队, 树要同步 -->
+          <DriveSharesPanel v-else-if="specialView === 'shared'" @changed="onSharesChanged" />
           <DriveFileTable
             v-else
             ref="tableRef"
@@ -345,6 +348,7 @@ import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v
 // 2026-07-02: DriveSubSidebar 已删除 (PR7 反转), 此处不再 import
 // 2026-07-02 inline 化: specialView 内嵌面板 (从 DesktopXxxView 抽取)
 import DriveTrashPanel from '@/components/drive/DriveTrashPanel.vue'
+import DriveSharesPanel from '@/components/drive/DriveSharesPanel.vue'  // 批次⑩.88 (方案A) 分享中视图
 import FileRequestListPanel from '@/components/drive/FileRequestListPanel.vue'
 import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
@@ -1013,6 +1017,8 @@ watch(specialView, async (newView) => {
     })
   } else if (newView === 'requests') {
     // 2026-07-02: FileRequestListPanel onMounted 自动 fetchMy, 无需手动调
+  } else if (newView === 'shared') {
+    // 批次⑩.88: DriveSharesPanel onMounted 自动 fetch, 无需手动调
   } else if (newView === 'recent') {
     // 批次⑩.85: 补 recent 分支 — 此前落入通用分支拉「当前文件夹」列表,
     // 与 reloadCurrentView 的全盘 include_subfolders 语义不一致, 首次点开显示错内容
@@ -1089,6 +1095,12 @@ async function onRename(payload) {
 async function onShareChanged() {
   await reloadCurrentView()
   refreshSideCounts()
+}
+
+// 批次⑩.88: 分享中面板撤销后 — 计数刷新 + 树同步 (文件夹可见性回团队)
+async function onSharesChanged() {
+  refreshSideCounts()
+  await fetchFolderTree('team')
 }
 
 function handleFileMove(file) {
@@ -1267,13 +1279,14 @@ const tableRef = ref(null)
 
 // 批次⑧ 对齐视觉稿树计数: 团队共享盘 (view=team total) / 我的收藏 / 回收站
 // 三个 mono 计数 — page_size=1 只取 total, 挂载拉一次, 收藏/删除/恢复动作后刷新
-const sideCounts = reactive({ team: null, starred: null, trash: null })
+const sideCounts = reactive({ team: null, starred: null, trash: null, share: null })
 async function refreshSideCounts() {
   try {
-    const [team, starred, trash] = await Promise.allSettled([
+    const [team, starred, trash, shares] = await Promise.allSettled([
       axios.get('/api/v1/drive/files', { params: { view: 'team', page: 1, page_size: 1 } }),
       axios.get('/api/v1/drive/starred', { params: { page: 1, page_size: 1 } }),
       axios.get('/api/v1/drive/trash', { params: { page: 1, page_size: 1 } }),
+      axios.get('/api/v1/drive/shares/active'),  // 批次⑩.88: 分享中计数
     ])
     if (team.status === 'fulfilled') sideCounts.team = team.value.data?.total ?? null
     // 批次⑩: 收藏计数 = 收藏文件 + 收藏文件夹
@@ -1281,6 +1294,10 @@ async function refreshSideCounts() {
       sideCounts.starred = (starred.value.data?.total || 0) + (starred.value.data?.folder_total || 0) || null
     }
     if (trash.status === 'fulfilled') sideCounts.trash = trash.value.data?.total ?? null
+    if (shares.status === 'fulfilled') {
+      const d = shares.value.data || {}
+      sideCounts.share = (d.folders?.length || 0) + (d.files?.length || 0) || null
+    }
   } catch { /* 计数拉取失败静默 (null = 不显示) */ }
 }
 onMounted(refreshSideCounts)
@@ -1327,6 +1344,8 @@ const crumbItems = computed(() => {
     items.push({ key: 'recent', name: '最近上传', loc: { specialView: 'recent', folderId: null } })
   } else if (specialView.value === 'trash') {
     items.push({ key: 'trash', name: '回收站', loc: { specialView: 'trash', folderId: null } })
+  } else if (specialView.value === 'shared') {
+    items.push({ key: 'shared', name: '分享中', loc: { specialView: 'shared', folderId: null } })
   } else if (specialView.value === 'requests') {
     items.push({ key: 'requests', name: '文件请求', loc: { specialView: 'requests', folderId: null } })
   } else if (selectedFolderId.value !== null) {

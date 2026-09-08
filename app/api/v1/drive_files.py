@@ -1545,6 +1545,67 @@ async def revoke_share_link(
     return
 
 
+# === 批次⑩.88 (方案A) 分享中视图: 聚合文件 + 文件夹的生效分享链接 ===
+
+@router.get("/shares/active")
+async def list_active_shares(
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """列出当前所有生效的分享链接 (文件 + 文件夹), 供左栏「分享中」视图
+
+    - 文件: knowledge.share_token 非空且未删 (storage_mode=drive); expires_at null = 永久
+    - 文件夹: drive_folder_shares 未撤销且未过期
+    单一团队空间: 任何成员可见全组分享 (与网盘内容可见性一致)
+    """
+    from datetime import datetime as _dt
+    from app.models.drive_share import DriveFolderShare
+    from app.models.folder import Folder
+
+    now = _dt.now()
+
+    folder_rows = (await db.execute(
+        select(DriveFolderShare, Folder)
+        .join(Folder, Folder.id == DriveFolderShare.folder_id)
+        .where(
+            DriveFolderShare.revoked_at.is_(None),
+            DriveFolderShare.expires_at > now,
+            Folder.deleted_at.is_(None),
+        )
+        .order_by(DriveFolderShare.expires_at)
+    )).all()
+    folders_out = [{
+        "id": s.folder_id,
+        "share_id": s.id,
+        "name": fo.name,
+        "path": fo.path,
+        "token": s.share_token,
+        "expires_at": s.expires_at.isoformat() if s.expires_at else None,
+    } for s, fo in folder_rows]
+
+    file_rows = (await db.execute(
+        select(
+            Knowledge.id, Knowledge.file_name, Knowledge.title,
+            Knowledge.share_token, Knowledge.share_expires_at, Knowledge.folder_id,
+        )
+        .where(
+            Knowledge.share_token.isnot(None),
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "drive",
+        )
+        .order_by(Knowledge.share_expires_at)
+    )).all()
+    files_out = [{
+        "id": r.id,
+        "name": r.file_name or r.title or f"文件 {r.id}",
+        "token": r.share_token,
+        "expires_at": r.share_expires_at.isoformat() if r.share_expires_at else None,
+        "folder_id": r.folder_id,
+    } for r in file_rows]
+
+    return {"folders": folders_out, "files": files_out}
+
+
 # === v2 PR1 公开分享 GET 端点 (含密码验证) ===
 
 

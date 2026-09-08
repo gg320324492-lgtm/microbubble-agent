@@ -156,6 +156,19 @@
       </div>
     </FolderContextMenu>
 
+    <!-- 批次⑩.88 (方案A): 分享中入口 — 生效链接计数 + 绿色呼吸点 -->
+    <div
+      class="folder-tree-special-item drive-folder-tree-special-item is-share"
+      :class="{ 'is-active': specialView === 'shared' }"
+      title="正在分享的文件与文件夹"
+      @click="$emit('update:specialView', 'shared')"
+    >
+      <el-icon><Share /></el-icon>
+      <span>分享中</span>
+      <span v-if="shareCount" class="share-live-dot"></span>
+      <span v-if="shareCount" class="folder-tree-special-count share-count-after-dot">{{ shareCount }}</span>
+    </div>
+
     <!-- 批次⑩.81 选型 A: 文件夹删除轻确认 (替换 ElMessageBox, 方案稿 2026-09-08-folder-delete-confirm-4ui) -->
     <FolderDeleteConfirmDialog
       v-model="folderDelete.visible"
@@ -187,7 +200,7 @@ const props = defineProps({
   expandedFolderIds: { type: Set, default: () => new Set() },
   loading: { type: Boolean, default: false },
   loadError: { type: [String, null], default: null },
-  specialView: { type: [String, null], default: null },  // 'starred' | 'recent' | 'trash' | 'requests' | null
+  specialView: { type: [String, null], default: null },  // 'starred' | 'recent' | 'trash' | 'requests' | 'shared' | null
   // v2 PR18 (W68 第 14 批 B-2): Team Folder 列表 (GET /api/v1/team-folders 返回)
   teamFolders: { type: Array, default: () => [] },
   selectedTeamFolderId: { type: [Number, null], default: null },
@@ -196,6 +209,8 @@ const props = defineProps({
   trashCount: { type: [Number, null], default: null },
   // 批次⑧: 团队共享盘特殊项计数 (视觉稿根节点 .c "471", 父层拉 view=team total)
   teamCount: { type: [Number, null], default: null },
+  // 批次⑩.88: 分享中计数 (生效链接数, null/0 = 不显示计数与呼吸点)
+  shareCount: { type: [Number, null], default: null },
 })
 
 // v2.27 (2026-07-12) BUG G 修复: 把 is_team_default=true 的 folder 从 folderTree 中分离
@@ -374,6 +389,17 @@ function onSelectTeamFolder(team, _id) {
 .folder-tree-special-item { position: relative; }
 /* 批次⑩.87: 团队共享盘为纯分组节点, 不可点击导航 */
 .folder-tree-special-item.is-static { cursor: default; }
+/* 批次⑩.88: 分享中呼吸点 (生效链接存在时的状态指示) */
+.folder-tree-special-item.is-share { color: var(--teal, #0e766e); font-weight: 500; }
+.share-live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #2aa876;
+  margin-left: auto; animation: share-pulse 2s ease-in-out infinite;
+}
+.share-count-after-dot { margin-left: 6px !important; }
+@keyframes share-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(42, 168, 118, .35); }
+  50% { box-shadow: 0 0 0 3px rgba(42, 168, 118, .12); }
+}
 .folder-tree-special-count {
   margin-left: auto; font-family: var(--font-mono, Consolas, monospace);
   font-size: 10.5px; color: var(--color-text-placeholder);
