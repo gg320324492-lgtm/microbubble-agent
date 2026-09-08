@@ -799,35 +799,46 @@ async function handleBatchUpdateVisibility(visibility) {
 }
 
 async function handleBatchToggleStar() {
-  if (!selectedFileIds.value.length) return
-  const ids = [...selectedFileIds.value]
-  // F10 修复 (批次②): 旧实现 for-toggleStar 会把已收藏项反向取消 (且 N 次请求)。
-  // 改为一次 POST /files/batch-star {file_ids, starred:true} 幂等置标 (后端批次① 落地,
-  // 前端先行; 该端点不存在/失败时 fallback 逐个 toggle, 但只处理未收藏项不再反向取消)。
-  try {
-    const resp = await batchStar(ids, true)
-    ElMessage.success(`已收藏 ${resp?.updated ?? ids.length} 个文件`)
-    refreshSideCounts()
-    return
-  } catch (e) {
-    console.warn('[DesktopDriveView] batch-star 失败, 回退逐个收藏:', e?.message || e)
-  }
-  let success = 0, fail = 0
-  for (const id of ids) {
-    const target = driveFiles.value.find(f => f.id === id)
-    if (target?.is_starred) continue  // 已收藏跳过, 不再 toggle 反向取消
+  // 批次⑩.87h: 勾选含文件夹时此前直接 return (只认 selectedFileIds), dock「收藏」点了没反应
+  const fileIds = [...selectedFileIds.value]
+  const folderIds = [...selectedFolderIds.value]
+  if (!fileIds.length && !folderIds.length) return
+  let okCount = 0, failCount = 0
+
+  if (fileIds.length) {
+    // F10 修复 (批次②): 一次 POST /files/batch-star {file_ids, starred:true} 幂等置标;
+    // 端点失败时 fallback 逐个收藏 (已收藏跳过, 不反向取消)
     try {
-      await toggleStar(id)
-      success++
+      const resp = await batchStar(fileIds, true)
+      okCount += resp?.updated ?? fileIds.length
     } catch (e) {
-      fail++
+      console.warn('[DesktopDriveView] batch-star 失败, 回退逐个收藏:', e?.message || e)
+      for (const id of fileIds) {
+        const target = driveFiles.value.find(f => f.id === id)
+        if (target?.is_starred) continue
+        try {
+          await toggleStar(id)
+          okCount++
+        } catch { failCount++ }
+      }
     }
   }
-  if (success || !fail) {
-    ElMessage.success(`已收藏 ${success} 个文件${fail ? `, 失败 ${fail}` : ''}`)
+
+  for (const fid of folderIds) {
+    try {
+      await axios.post(`/api/v1/folders/${fid}/toggle-star`)
+      okCount++
+    } catch { failCount++ }
+  }
+
+  if (okCount || !failCount) {
+    ElMessage.success(`已收藏 ${okCount} 项${failCount ? `, 失败 ${failCount}` : ''}`)
   } else {
     ElMessage.error('批量收藏失败')
   }
+  if (folderIds.length) await fetchFolderTree()  // 树节点 is_starred 刷新
+  refreshSideCounts()
+  if (specialView.value === 'starred') await reloadCurrentView()
 }
 
 async function handleFileToggleStar(target, kind = 'file') {
