@@ -102,6 +102,9 @@ if (import.meta.env.VITE_SENTRY_DSN && !import.meta.env.DEV) {
     release: `microbubble-agent-web@${__BUILD_ID__}`,
     tracesSampleRate: 0.1,
     sendDefaultPii: false,
+    // 批次⑩.87l: SDK 内置 web-vitals 采集器的已知误报 (bfcache/后台恢复时 startTime undefined),
+    // 只影响上报侧不影响功能; v10 升级后仍保留过滤兜底
+    ignoreErrors: [/Cannot read properties of undefined \(reading 'startTime'\)/],
     beforeSend(event) {
       // 双保险：dev/local 构建永不发送，即使误设了 VITE_SENTRY_DSN。
       if (import.meta.env.DEV) return null
