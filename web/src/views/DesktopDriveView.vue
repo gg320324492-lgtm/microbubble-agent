@@ -774,11 +774,16 @@ async function handleBatchShare() {
 }
 
 async function handleBatchDownload() {
-  // v77 留尾清理 (2026-07-20): 复用后端 batch-download ZIP 流式端点 (drive_files.py:931)
-  if (!selectedFileIds.value.length) return
+  // 批次⑩.87i: 支持文件夹混合下载 — 此前只认 selectedFileIds, 仅勾文件夹时静默 return
+  const fileIds = [...selectedFileIds.value]
+  const folderIds = [...selectedFolderIds.value]
+  if (!fileIds.length && !folderIds.length) return
   try {
-    await doBatchDownload([...selectedFileIds.value])
-    ElMessage.success(`已开始下载 ${selectedFileIds.value.length} 个文件的 ZIP 打包`)
+    await doBatchDownload(fileIds, folderIds)
+    const parts = []
+    if (fileIds.length) parts.push(`${fileIds.length} 个文件`)
+    if (folderIds.length) parts.push(`${folderIds.length} 个文件夹`)
+    ElMessage.success(`已开始下载 ${parts.join(' + ')} 的 ZIP 打包`)
   } catch (e) {
     ElMessage.error(e.response?.data?.error?.message || e.message || '批量下载失败')
   }

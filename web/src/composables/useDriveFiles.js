@@ -420,19 +420,23 @@ export function useDriveFiles() {
   }
 
   /**
-   * 批量下载 (v77 留尾清理 2026-07-20)
-   * 复用后端 POST /api/v1/drive/files/batch-download (drive_files.py:931, 已实装)
-   * 后端流式生成 ZIP, 无权限文件跳过并写入 _skipped.txt
+   * 批量下载 (v77 留尾清理 2026-07-20; 批次⑩.87i 支持文件夹混合)
+   * 复用后端 POST /api/v1/drive/files/batch-download
+   * 后端流式生成 ZIP, 无权限文件跳过并写入 _skipped.txt; folder_ids 内容按 <文件夹名>/ 归档
    *
-   * @param {number[]} ids - 选中文件 id 列表 (空数组直接 return, 上层已 disable)
+   * @param {number[]} ids - 选中文件 id 列表
+   * @param {number[]} [folderIds] - 选中文件夹 id 列表 (递归打包)
    * @returns {Promise<boolean>} 是否触发了下载
    */
-  async function batchDownload(ids) {
-    if (!ids || !ids.length) return false
+  async function batchDownload(ids, folderIds = []) {
+    const body = {}
+    if (ids?.length) body.ids = ids
+    if (folderIds?.length) body.folder_ids = folderIds
+    if (!body.ids && !body.folder_ids) return false
     try {
       const resp = await axios.post(
         '/api/v1/drive/files/batch-download',
-        { ids },
+        body,
         { responseType: 'blob' },
       )
       // 从 Content-Disposition 解析文件名 (后端给 drive_<user>_<ts>.zip)
