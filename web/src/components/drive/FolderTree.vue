@@ -237,7 +237,10 @@ const folderDelete = reactive({
 
 function handleFolderSelect(folderId) {
   emit('update:selectedFolderId', folderId)
-  // 不重置 specialView — 允许在团队共享盘 / 收藏等特殊视图下钻取 sub-folder
+  // 批次⑩.87: 点击文件夹退出特殊视图 (收藏/最近上传/回收站), 否则右栏仍停原视图毫无反应
+  //   v2.26 BUG F 曾特意保持 specialView — 当时退出会走 personal view 过滤掉团队文件 (0 文件 bug);
+  //   2026-09 单一团队工作区已无 personal/team 分野 (watch 统一 view='team'), 保留反而是导航死角
+  if (props.specialView) emit('update:specialView', null)
 }
 
 // === 右键菜单项配置 (rootMenuItems/requestsMenuItems + handler 已删: 模板从未引用的死代码) ===
