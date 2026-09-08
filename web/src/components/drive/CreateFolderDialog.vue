@@ -45,11 +45,15 @@
 
       <div class="cfd-fld">
         <label>位置</label>
-        <div class="cfd-loc">
+        <!-- 批次⑩.87e: 位置改为可选 — 团队共享盘顶层 / 组会PPT / 其子文件夹;
+             默认 = 打开时所在层 (右键「新建子文件夹」仍预选右键目标) -->
+        <div class="cfd-loc cfd-loc-sel">
           <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-          <span>{{ parentFolder ? parentFolder.name : '团队共享盘 · 顶层' }}</span>
+          <select v-model="selectedParentId" class="cfd-select" aria-label="选择创建位置">
+            <option v-for="o in parentOptions" :key="String(o.id)" :value="o.id">{{ o.label }}</option>
+          </select>
         </div>
-        <div v-if="parentFolder && parentFolder.depth >= 4" class="cfd-warn">
+        <div v-if="selectedDepth >= 4" class="cfd-warn">
           已是 5 层结构, 此文件夹内不能再新建子文件夹
         </div>
       </div>
@@ -72,11 +76,11 @@
 <script setup>
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useFolderTree } from '@/composables/useFolderTree'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  parentId: { type: [Number, null], default: null },
-  parentFolder: { type: [Object, null], default: null }
+  parentId: { type: [Number, null], default: null }  // 打开时的默认位置
 })
 
 const emit = defineEmits(['update:modelValue', 'create'])
@@ -94,8 +98,32 @@ const form = reactive({
   visibility: 'team'
 })
 
+// === 批次⑩.87e: 位置可选 ===
+const { folderTree } = useFolderTree()
+const selectedParentId = ref(null)
+
+// 扁平化团队盘树为位置选项: null = 顶层, 其后按 组会PPT → 子文件夹 逐级缩进展示
+const parentOptions = computed(() => {
+  const opts = [{ id: null, label: '团队共享盘 · 顶层', depth: 0 }]
+  const walk = (nodes, chain) => {
+    for (const n of nodes || []) {
+      const label = [...chain, n.name].join(' / ')
+      opts.push({ id: n.id, label, depth: Number(n.depth ?? chain.length + 1) })
+      if (n.children?.length) walk(n.children, [...chain, n.name])
+    }
+  }
+  walk(folderTree.value || [], [])
+  return opts
+})
+const selectedDepth = computed(() =>
+  parentOptions.value.find(o => o.id === selectedParentId.value)?.depth ?? 0
+)
+
 watch(visible, (v) => {
-  if (v) nextTick(() => nameInputRef.value?.focus?.())
+  if (v) {
+    selectedParentId.value = props.parentId
+    nextTick(() => nameInputRef.value?.focus?.())
+  }
 })
 
 function resetForm() {
@@ -119,7 +147,7 @@ async function onSubmit() {
   try {
     emit('create', {
       name,
-      parent_id: props.parentId,
+      parent_id: selectedParentId.value,
       visibility: 'team'  // 批次⑩.8: 恒 team — 公开属性改由分享行为驱动 (后端 ⑩.7)
     })
   } finally {
@@ -200,6 +228,12 @@ export default { name: 'CreateFolderDialog' }
   border-radius: 8px; padding: 8px 12px;
 }
 .cfd-loc svg { width: 13px; height: 13px; stroke: var(--color-primary); fill: none; stroke-width: 1.7; flex: none; }
+/* 批次⑩.87e: 位置可选 — select 融入 cfd-loc 壳 */
+.cfd-select {
+  flex: 1; min-width: 0; border: none; background: transparent;
+  font: inherit; color: inherit; outline: none; cursor: pointer;
+  appearance: auto;
+}
 .cfd-warn { margin-top: 6px; font-size: 11.5px; color: var(--color-warning); }
 
 .cfd-team { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }

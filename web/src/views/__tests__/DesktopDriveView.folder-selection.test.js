@@ -47,11 +47,9 @@ describe('DesktopDriveView folder selection refs', () => {
     await nextTick()
 
     const dialog = wrapper.findComponent(CreateFolderDialog)
+    // 批次⑩.87e: 位置改由 CreateFolderDialog 内部下拉选择, 父层只传默认 parentId
     expect(dialog.props('parentId')).toBe(folder.id)
-    expect(dialog.props('parentFolder')).toMatchObject({
-      id: folder.id,
-      name: folder.name,
-    })
+    expect(dialog.props('parentFolder')).toBeUndefined()
 
     wrapper.unmount()
   })
