@@ -1137,8 +1137,12 @@ async function onMoveFile(payload) {
           okF++
         } catch (e) {
           failF++
-          // 批次⑩.87k: 透出后端真实原因 (如「子文件夹可见性 (public) 高于父文件夹」= 有分享链接未撤销)
-          failReason = e.response?.data?.error?.message || e.response?.data?.detail || e.message
+          // 批次⑩.87k: 透出后端真实原因; 批次⑩.88: 可见性规则失败翻译成人话并指路撤销入口
+          // (后端原文「子文件夹可见性 (public) 高于父文件夹…」= 该夹有未撤销的分享链接)
+          const raw = e.response?.data?.error?.message || e.response?.data?.detail || e.message
+          failReason = /可见性|public|越权/.test(raw)
+            ? '该文件夹正在分享中，取消分享后即可移动（左栏「分享中」或右键「分享」可撤销）'
+            : raw
         }
       }
       if (failF) ElMessage.warning(`文件夹移动 ${okF} 个成功, ${failF} 个失败: ${failReason}`)
