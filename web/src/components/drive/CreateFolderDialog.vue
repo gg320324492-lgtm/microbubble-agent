@@ -75,6 +75,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { useFolderTree } from '@/composables/useFolderTree'
 
@@ -99,7 +100,10 @@ const form = reactive({
 })
 
 // === 批次⑩.87e: 位置可选 ===
-const { folderTree } = useFolderTree()
+// 必须 storeToRefs — 直接解构 store 拿到的是解包后的数组, 下面 folderTree.value 恒 undefined,
+// 位置选项只剩「顶层」, 默认 parentId 匹配不上 → 下拉显示空白
+const folderTreeStore = useFolderTree()
+const { folderTree } = storeToRefs(folderTreeStore)
 const selectedParentId = ref(null)
 
 // 扁平化团队盘树为位置选项: null = 顶层, 其后按 组会PPT → 子文件夹 逐级缩进展示
