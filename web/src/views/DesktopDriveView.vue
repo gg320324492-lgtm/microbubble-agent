@@ -1108,6 +1108,18 @@ function handleFileMove(file) {
   showMoveDialog.value = true
 }
 
+// 批次⑩.88c: 后端技术报错 → 用户可行动的人话 (可见性/深度两类高频误报)
+function friendlyDriveError(raw) {
+  const s = String(raw || '')
+  if (/可见性|越权暴露/.test(s)) {
+    return /文件/.test(s) && !/文件夹/.test(s.split('（')[0])
+      ? '该文件正在分享中，取消分享后即可移动（左栏「分享中」可撤销）'
+      : '目标位置存在正在分享中的内容，取消分享后即可移动（左栏「分享中」可撤销）'
+  }
+  if (/嵌套深度|超过上限/.test(s)) return '文件夹层级已达上限 (最多 5 层), 请换个位置'
+  return s
+}
+
 async function onMoveFile(payload) {
   const folderIds = [...moveTargetFolderIds.value]
   try {
@@ -1142,7 +1154,7 @@ async function onMoveFile(payload) {
           const raw = e.response?.data?.error?.message || e.response?.data?.detail || e.message
           failReason = /可见性|public|越权/.test(raw)
             ? '该文件夹正在分享中，取消分享后即可移动（左栏「分享中」或右键「分享」可撤销）'
-            : raw
+            : friendlyDriveError(raw)
         }
       }
       if (failF) ElMessage.warning(`文件夹移动 ${okF} 个成功, ${failF} 个失败: ${failReason}`)
@@ -1154,7 +1166,7 @@ async function onMoveFile(payload) {
     await reloadCurrentView()
     refreshSideCounts()
   } catch (e) {
-    ElMessage.error(e.message || '移动失败')
+    ElMessage.error(friendlyDriveError(e.response?.data?.error?.message || e.message) || '移动失败')
   } finally {
     showMoveDialog.value = false
     moveTargetFolderIds.value = []
@@ -1255,7 +1267,7 @@ async function onCreateFolder(payload) {
     // useFolderTree.createFolder 内部已 fetchTree, 不用再手动刷新左栏树
   } catch (e) {
     // v2.29: 失败不 reset, dialog 保持打开, 用户修复后 retry 仍用同一 parent_id
-    ElMessage.error(e.message || '创建文件夹失败')
+    ElMessage.error(friendlyDriveError(e.message) || '创建文件夹失败')
   }
 }
 
