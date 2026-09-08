@@ -1117,15 +1117,19 @@ async function onMoveFile(payload) {
         const walk = (n) => (n.children || []).some((c) => c.id === maybeDescId || walk(c))
         return node ? walk(node) : false
       }
-      let okF = 0, failF = 0
+      let okF = 0, failF = 0, failReason = ''
       for (const fid of folderIds) {
-        if (Number(fid) === target || inSubtree(fid, target)) { failF++; continue }
+        if (Number(fid) === target || inSubtree(fid, target)) { failF++; failReason = '不能移进自身或其子文件夹'; continue }
         try {
           await axios.put(`/api/v1/folders/${fid}`, { parent_id: target })
           okF++
-        } catch { failF++ }
+        } catch (e) {
+          failF++
+          // 批次⑩.87k: 透出后端真实原因 (如「子文件夹可见性 (public) 高于父文件夹」= 有分享链接未撤销)
+          failReason = e.response?.data?.error?.message || e.response?.data?.detail || e.message
+        }
       }
-      if (failF) ElMessage.warning(`文件夹移动 ${okF} 个成功, ${failF} 个失败 (不能移进自身或其子文件夹)`)
+      if (failF) ElMessage.warning(`文件夹移动 ${okF} 个成功, ${failF} 个失败: ${failReason}`)
       else if (okF) ElMessage.success(`已移动 ${okF} 个文件夹`)
       await fetchFolderTree()
     }
