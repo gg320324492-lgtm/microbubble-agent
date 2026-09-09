@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>主对话区重设计 · 4+3 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    /* 对话区真实色 (截图取色) */
+    --dk-page: #171A20; --dk-bub-ai: #232830; --dk-bub-user: #172126;
+    --coral: #FF8A6B; --coral-deep: #ef7256; --neon: #35C2A4; --grass: #67C23A;
+    --dk-text: #E2ECEA; --dk-dim: #7E8790; --paper: #FBFCFB;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1480px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  /* ═══ 诊断 ═══ */
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 26px; }
+  .diag h2 { font-size: 15px; font-weight: 650; margin-bottom: 12px; }
+  .diag-items { display: flex; gap: 14px; flex-wrap: wrap; }
+  .ditem { flex: 1; min-width: 260px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.75; color: var(--txt2); background: #FBFAF7; }
+  .ditem .num { font-family: var(--mono); font-weight: 700; color: #B4823C; margin-right: 6px; }
+  .ditem b { color: var(--txt); font-weight: 600; }
+  .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; border: 1px solid rgba(0,0,0,.15); }
+
+  /* ═══ 卡片 ═══ */
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 448px; }
+  .card.wide { width: 100%; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 58px; }
+
+  /* ═══ 对话小样 (暗色, 还原真实布局) ═══ */
+  .chat { background: var(--dk-page); border: 1px solid rgba(226,236,234,.2); border-radius: 14px; padding: 14px 14px 10px; color: var(--dk-text); }
+  .urow { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+  .ubub { max-width: 82%; padding: 10px 14px; font-size: 12px; line-height: 1.6; position: relative; }
+  .brow { display: flex; gap: 9px; margin-bottom: 14px; }
+  .bavatar { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg,#1c4ed8,#0ea5e9); flex-shrink: 0; margin-top: 2px; }
+  .bcontent { flex: 1; min-width: 0; }
+  .bhead { font-family: var(--mono); font-size: 8.5px; letter-spacing: .2em; color: var(--dk-dim); padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid rgba(226,236,234,.14); }
+  .bhead .no { color: var(--neon); font-size: 10px; }
+  .trace { font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; color: var(--dk-dim); margin-bottom: 8px; line-height: 1.8; }
+  .bbub { padding: 11px 14px; font-size: 12px; line-height: 1.7; background: var(--dk-bub-ai); border-radius: 14px; }
+  .nomore { background: transparent; border-radius: 0; padding: 2px 0 2px 0; }
+  .meta { display: flex; align-items: center; gap: 12px; margin-top: 8px; font-size: 10px; color: var(--dk-dim); }
+  .chip-green { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 10px; color: var(--grass); background: rgba(103,194,58,.10); border: 1px solid rgba(103,194,58,.4); }
+  .inbar { margin-top: 4px; border: 1px solid rgba(226,236,234,.4); border-radius: 14px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; box-shadow: 3px 3px 0 rgba(0,0,0,.3); }
+  .plus { width: 24px; height: 24px; border-radius: 999px; border: 1px solid rgba(226,236,234,.3); display: flex; align-items: center; justify-content: center; color: var(--dk-dim); font-size: 13px; }
+  .ph { flex: 1; color: #5c656d; font-size: 11.5px; }
+  .modes { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--dk-dim); }
+  .mode-on { display: inline-flex; align-items: center; gap: 3px; padding: 3px 10px; border-radius: 999px; background: var(--neon); color: #0b1512; font-weight: 600; }
+  .send { padding: 6px 14px; border-radius: 999px; font-size: 11.5px; font-weight: 650; }
+  .mic { color: var(--dk-dim); font-size: 12px; }
+
+  /* ── 现状 ── */
+  .v0 .ubub { background: var(--dk-bub-user); border: 1.5px solid rgba(255,138,107,.55); border-radius: 12px 3px 12px 12px; box-shadow: 3px 3px 0 rgba(0,0,0,.35); }
+  .v0 .ubub::before { content: 'Q · 03:01'; position: absolute; top: -7px; right: 10px; background: #12191d; padding: 0 6px; font-family: var(--mono); font-size: 7.5px; letter-spacing: .18em; color: var(--coral-deep); }
+  .v0 .meta .em { font-size: 11px; }
+  .v0 .send { background: var(--paper); color: #16232a; }
+
+  /* ── A 安静档案 ── */
+  .vA .ubub { background: var(--dk-bub-user); border: 1px solid rgba(255,138,107,.35); border-radius: 12px 3px 12px 12px; }
+  .vA .tsum { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: .06em; color: var(--dk-dim); margin-bottom: 8px; }
+  .vA .tsum .exp { margin-left: auto; border: 1px solid rgba(226,236,234,.18); border-radius: 5px; padding: 1px 7px; font-size: 8.5px; }
+  .vA .meta .act { border-bottom: 1px dotted rgba(126,135,144,.5); }
+  .vA .send { background: linear-gradient(135deg, var(--teal) 0%, #12968b 100%); color: #fff; }
+
+  /* ── B 对称气泡 ── */
+  .vB .ubub { background: rgba(255,138,107,.12); border: 1px solid rgba(255,138,107,.28); border-radius: 14px 14px 3px 14px; color: #F2D9D0; }
+  .vB .utime { text-align: right; font-family: var(--mono); font-size: 8px; letter-spacing: .1em; color: var(--dk-dim); margin-top: 4px; }
+  .vB .bbub { border: 1px solid rgba(226,236,234,.07); }
+  .vB .tsum { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 9px; color: var(--dk-dim); margin-bottom: 8px; }
+  .vB .send { background: linear-gradient(135deg, var(--teal) 0%, #12968b 100%); color: #fff; }
+
+  /* ── C 文档流 ── */
+  .vC .ubub { background: rgba(255,138,107,.06); border-left: 2px solid var(--coral-deep); border-radius: 4px 10px 10px 4px; }
+  .vC .bhead { padding-bottom: 6px; }
+  .vC .bhead .sum { float: right; letter-spacing: .04em; color: #6b757d; }
+  .vC .bbub { background: transparent; border-radius: 0; padding: 2px 0; }
+  .vC .meta { opacity: .55; }
+  .vC .send { background: linear-gradient(135deg, var(--teal) 0%, #12968b 100%); color: #fff; }
+  .vC .inbar { border-color: rgba(226,236,234,.28); }
+
+  /* ── D 工单档案 ── */
+  .vD .ubub { background: var(--dk-bub-user); border: 1px solid rgba(255,138,107,.4); border-radius: 12px 3px 12px 12px; }
+  .vD .steps { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .vD .st { font-family: var(--mono); font-size: 8.5px; padding: 2px 8px; border-radius: 5px; border: 1px solid rgba(226,236,234,.2); color: #9aa8a4; }
+  .vD .st.ok { border-color: rgba(53,194,164,.45); color: var(--neon); }
+  .vD .st.warn { border-color: rgba(230,162,60,.5); color: #E6A23C; }
+  .vD .bbub { border-left: 2px solid var(--neon); border-radius: 4px 14px 14px 4px; }
+  .vD .stamp { display: inline-block; margin-top: 8px; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; color: var(--neon); border: 1px solid rgba(53,194,164,.45); border-radius: 4px; padding: 2px 8px; }
+  .vD .send { background: var(--teal); color: #fff; }
+  .vD .modes .m { border: 1px solid rgba(226,236,234,.2); border-radius: 999px; padding: 2px 9px; }
+  .vD .modes .mode-on { border-color: var(--neon); }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .notes div { display: block; }
+
+  /* ═══ 第二轮 · ChatGPT 参照 ═══ */
+  .round2 { margin-top: 34px; margin-bottom: 16px; }
+  .round2 h1 { font-size: 18px; margin-bottom: 4px; }
+  .round2 .sub2 { color: var(--txt2); font-size: 12.5px; line-height: 1.8; margin-bottom: 4px; }
+
+  /* ChatGPT 骨架通用 */
+  .gc .urow { margin-bottom: 6px; }
+  .gc .ubub { background: rgba(255,255,255,.06); border-radius: 18px; padding: 10px 15px; border: none; box-shadow: none; max-width: 78%; }
+  .gc .noc { /* 无气泡 AI 正文容器 */ }
+  .gc .gsum { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: var(--dk-dim); border: 1px solid rgba(226,236,234,.14); border-radius: 8px; padding: 3px 10px; margin-bottom: 8px; background: rgba(255,255,255,.02); }
+  .gc .gsum .arr { font-size: 8px; }
+  .gc .ico { color: #6b757d; font-size: 11px; letter-spacing: 6px; }
+  .gc .inbar { border-radius: 24px; padding: 9px 12px; border-color: rgba(226,236,234,.3); box-shadow: none; }
+  .gc .send-round { width: 28px; height: 28px; border-radius: 999px; background: var(--neon); color: #0b1512; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .gc .hint { text-align: center; font-size: 9px; color: #565f66; margin-top: 6px; font-family: var(--mono); letter-spacing: .08em; }
+
+  /* E ChatGPT 现行式 */
+  .vE .bhead, .vE .bavatar { display: none; }
+  .vE .meta { opacity: 0; margin-top: 2px; }
+  /* F ChatGPT×档案混合 */
+  .vF .bhead { letter-spacing: .14em; border-bottom: none; padding-bottom: 2px; margin-bottom: 4px; }
+  .vF .bhead .score { float: right; letter-spacing: .04em; color: #6fae9f; }
+  /* G 宽幅阅读 */
+  .vG .bbub, .vG .noc-txt { font-size: 12.5px; line-height: 1.78; }
+  .vG .ubub { border-radius: 20px; background: rgba(255,255,255,.05); }
+  .vG .chat { padding: 16px 18px 12px; }
+
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>主对话区（暗色沉浸）重设计 · 4+3 方案</h1>
+  <p class="sub">承接侧栏两轮（批次⑩.67 青实底 / ⑩.68 会话卡 D）。对话区当前是<b>三种语言同屏</b>：气泡是档案纸墨（珊瑚描边+硬阴影+挖孔时间戳）、轨迹行是 debug 日志（mono 长文案+emoji）、输入区是现代 IM（青 chip+纸白发送）——互相抢。四案统一收拢到「档案 × 青色」一种语言，核心分歧只在一点：<b>Agent 过程信息（意图/补查/工具/自评）以什么形态存在</b>。</p>
+
+  <div class="diag">
+    <h2>问题诊断（截图取色 + 源码定位）</h2>
+    <div class="diag-items">
+      <div class="ditem"><span class="num">①</span><b>一条回复挂三层重复元数据</b><br>§ 头行 <b>TOOLS:</b> 工具名 → trace 行（意图/补查/query_tasks/综合/自评 全程展开）→ <b>TOOLS ✓</b> 尾缀——同一过程说三遍。trace 是 debug 长文案：「强制补查： 检测到数据查询未调用工具…」「重试中（第 1 次）：(容错解析, 仅恢复 score)」。</div>
+      <div class="ditem"><span class="num">②</span><b>自评绿 chip 每条常驻</b><br><span class="sw" style="background:#67C23A"></span><code style="font-family:var(--mono);font-size:11px">✓ 自我评估 score=7/10</code>×3 条同屏——内部 QA 元数据比正文还抢眼，与侧栏「三绿打架」同款问题。</div>
+      <div class="ditem"><span class="num">③</span><b>气泡语言分裂</b><br>用户 = <span class="sw" style="background:#FF8A6B"></span>珊瑚描边空心 + 硬阴影 + 挖孔时间戳（纸张语言）；AI = <span class="sw" style="background:#232830"></span>灰实底（IM 语言）。一空一实无对称逻辑。</div>
+      <div class="ditem"><span class="num">④</span><b>操作行 emoji 混排</b><br>🕒 27.3s · 🎧 · 🔄 · ⧉ · 👍 回答有帮助 · 👎 需要改进——黄色 emoji 混在灰色线性图标里，色相杂。</div>
+      <div class="ditem"><span class="num">⑤</span><b>输入区三色同框</b><br>发送 = <span class="sw" style="background:#FBFCFB"></span>纸白药丸（纸墨）、平衡 = <span class="sw" style="background:#35C2A4"></span>青实底（暗青）、聚焦描边 = <span class="sw" style="background:#FF7A5C"></span>珊瑚（主色）——三种强调色并存。</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card wide">
+      <div class="card-h"><span class="tag gray">现状</span><h2>三种语言同屏（截图同款）</h2></div>
+      <div class="chat v0">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="brow"><div class="bavatar"></div><div class="bcontent">
+          <div class="bhead"><span class="no">§ 9</span> 小气助手 · REPLY &nbsp;TOOLS: 📍 意图： 执行操作（置信度 95%）/ 📋 强制补查： 检测到数据查询未调用工具... / query_tasks / update_task / ✨ 综合分析中... / 📋 自评 7/10 ✓</div>
+          <div class="bbub">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="chip-green" style="margin-top:8px">✓ 自我评估 score=7/10</div>
+          <div class="meta"><span class="em">🕒</span> 42.8s <span class="em">🎧</span> <span class="em">🔄</span> <span class="em">⧉</span> <span style="margin-left:12px"><span class="em">👍</span> 回答有帮助</span><span><span class="em">👎</span> 需要改进</span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes">⚡ 快速 <span class="mode-on">⊙ 平衡</span> ❋ 深度</div><span class="mic">🎤</span><span class="send">发送</span></div>
+      </div>
+      <div class="notes"><span class="con">⚠ ①三层重复 ②绿 chip 常驻 ③气泡分裂 ④emoji 混排 ⑤输入区三色 —— 全部并存</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>安静档案 · 降噪收拢</h2></div>
+      <p class="card-d">骨架全不动，只把过程信息收成一行 mono 摘要（工具数 · 耗时 · 自评分），点「展开」才看全过程；绿 chip 取消常驻；操作行去 emoji；发送键归青。改动最小。</p>
+      <div class="chat vA">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="brow"><div class="bavatar"></div><div class="bcontent">
+          <div class="bhead"><span class="no">§ 9</span> 小气助手 · REPLY</div>
+          <div class="tsum">⚙ 2 工具 query_tasks · update_task <span style="color:var(--neon)">自评 7/10</span> <span class="exp">展开 ▾</span></div>
+          <div class="bbub">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="meta"><span class="act">42.8s</span><span class="act">重答</span><span class="act">复制</span><span class="act">朗读</span><span style="margin-left:auto"><span class="act">有帮助</span> · <span class="act">需改进</span></span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes">快速 <span class="mode-on">平衡</span> 深度</div><span class="mic">🎤</span><span class="send">发送</span></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 每条回复少 2 层噪音，正文重新成为主角</span></div>
+        <div><span class="pro">✓ 改动最小：只动 trace/chip/meta/发送键，气泡不碰</span></div>
+        <div><span class="con">⚠ 用户气泡仍是描边空心，与 AI 实底的不对称保留</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>对称气泡 · 角色实底化</h2></div>
+      <p class="card-d">A 的降噪基础上再统一气泡：用户 = 珊瑚调 12% 实底（保留暖色身份），AI = 现状灰底加极淡描边；挖孔时间戳取消，时间落到气泡下方。经典 IM 双色逻辑。</p>
+      <div class="chat vB">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="utime">03:01</div>
+        <div class="brow"><div class="bavatar"></div><div class="bcontent">
+          <div class="bhead"><span class="no">§ 9</span> 小气助手 · REPLY</div>
+          <div class="tsum">⚙ 2 工具 query_tasks · update_task <span style="color:var(--neon)">自评 7/10</span> <span class="exp" style="margin-left:auto;border:1px solid rgba(226,236,234,.18);border-radius:5px;padding:1px 7px;font-size:8.5px">展开 ▾</span></div>
+          <div class="bbub">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="meta"><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">42.8s</span><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">重答</span><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">复制</span><span style="margin-left:auto"><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">有帮助</span> · <span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">需改进</span></span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes">快速 <span class="mode-on">平衡</span> 深度</div><span class="mic">🎤</span><span class="send">发送</span></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 一暖一中性两实底，角色归属一眼可辨</span></div>
+        <div><span class="pro">✓ 硬阴影/挖孔time戳退场，珊瑚降为 12% 低饱和底</span></div>
+        <div><span class="con">⚠ 珊瑚底 + 青摘要同行，暖冷对比比 A 明显</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>文档流 · AI 去气泡</h2></div>
+      <p class="card-d">过程信息收进 § 头行行尾，AI 正文完全去气泡直接排在纸面上（Claude 式文档感）；用户消息变右侧引用块（左缘珊瑚线）。最安静、长回复阅读性最好。</p>
+      <div class="chat vC">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="brow"><div class="bavatar"></div><div class="bcontent">
+          <div class="bhead"><span class="no">§ 9</span> 小气助手 · REPLY <span class="sum">2 工具 · 35.9s · 自评 7/10 ▾</span></div>
+          <div class="bbub">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="meta"><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">42.8s</span><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">重答</span><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">复制</span><span style="margin-left:auto"><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">有帮助</span> · <span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">需改进</span></span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes">快速 <span class="mode-on">平衡</span> 深度</div><span class="mic">🎤</span><span class="send">发送</span></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 视觉噪音最低，长回复/表格/代码块排版最舒展</span></div>
+        <div><span class="pro">✓ § 头行成为唯一"档案条目"分隔，与工具面板档案语言最一致</span></div>
+        <div><span class="con">⚠ AI 无底色后，短回答的"这是一条回复"边界感变弱</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">D</span><h2>工单档案 · 工序可视化</h2></div>
+      <p class="card-d">过程信息从"日志行"改"工序 chips"：每步一枚短词描边 chip（完成青 / 异常琥珀），自评变印章式描边标。AI 气泡加青左线。强调 Agent 的可追溯专业感。</p>
+      <div class="chat vD">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="brow"><div class="bavatar"></div><div class="bcontent">
+          <div class="bhead"><span class="no">§ 9</span> 小气助手 · REPLY</div>
+          <div class="steps"><span class="st ok">意图 · 执行 95%</span><span class="st warn">补查 ×1</span><span class="st ok">query_tasks</span><span class="st ok">update_task</span><span class="st ok">综合 ✓</span><span class="st ok">自评 7/10</span></div>
+          <div class="bbub">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="meta"><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">42.8s</span><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">重答</span><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">复制</span><span style="margin-left:auto"><span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">有帮助</span> · <span class="act" style="border-bottom:1px dotted rgba(126,135,144,.5)">需改进</span></span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes"><span class="m">快速</span> <span class="mode-on m">平衡</span> <span class="m">深度</span></div><span class="mic">🎤</span><span class="send">发送</span></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 工具过程一目了然，异常/重试态有颜色语义</span></div>
+        <div><span class="pro">✓ 「科研工单」档案感最强，与 Agent 定位最配</span></div>
+        <div><span class="con">⚠ 每条回复仍占一行过程信息，安静度不如 A/C</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="round2">
+    <h1>第二轮 · ChatGPT 参照 (E / F / G)</h1>
+    <p class="sub2">共性：双侧去档案腔（挖孔时间戳/硬阴影/REPLY TOOLS 日志行全退场）→ 用户 = ChatGPT 式中灰圆角气泡，AI = 无气泡纯文本；过程信息完成后收成「▸ 已调用 2 个工具」可展开小胶囊；操作 = 纯图标 hover 淡入；发送 = 圆形 ↑ 键。分歧只在：<b>要不要保留「小气助手」身份行</b>，以及<b>阅读排版密度</b>。</p>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div class="card-h"><span class="tag">E</span><h2>ChatGPT 现行式 · 身份行退场</h2></div>
+      <p class="card-d">最接近 ChatGPT：无头像、无 § 行、无名字——AI 回复就是一段文本；过程收成小胶囊；操作纯图标常驻淡显。彻底的"对话本身即界面"。</p>
+      <div class="chat gc vE">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="brow" style="display:block"><div class="bcontent">
+          <div class="gsum">▸ 已调用 2 个工具 · 35.9s <span class="arr">▾</span></div>
+          <div class="bbub noc">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="meta" style="opacity:.75"><span class="ico">⧉ ↻ ♪</span><span style="letter-spacing:4px;color:#6b757d">▲ ▼</span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes">快速 <span class="mode-on">平衡</span> 深度</div><span class="mic">🎤</span><span class="send-round">↑</span></div>
+        <div class="hint">ENTER 发送 · SHIFT+ENTER 换行</div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 与 ChatGPT 心智模型零差异，上手成本为零</span></div>
+        <div><span class="pro">✓ 视觉最干净，回复区利用率最高</span></div>
+        <div><span class="con">⚠ 「小气助手」身份/档案条目感完全消失，像套壳 ChatGPT</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">F</span><h2>ChatGPT × 档案混合 · 保身份行</h2></div>
+      <p class="card-d">E 的全部骨架 + 保留头像与「§ 9 · 小气助手」mono 身份行（自评分收进行尾）——ChatGPT 的安静，加上课题组助手自己的档案身份。</p>
+      <div class="chat gc vF">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="brow"><div class="bavatar"></div><div class="bcontent">
+          <div class="bhead"><span class="no">§ 9</span> 小气助手 <span class="score">自评 7/10 · 35.9s</span></div>
+          <div class="gsum">▸ 已调用 2 个工具 <span class="arr">▾</span></div>
+          <div class="bbub noc">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="meta" style="opacity:.75"><span class="ico">⧉ ↻ ♪</span><span style="letter-spacing:4px;color:#6b757d">▲ ▼</span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes">快速 <span class="mode-on">平衡</span> 深度</div><span class="mic">🎤</span><span class="send-round">↑</span></div>
+        <div class="hint">ENTER 发送 · SHIFT+ENTER 换行</div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ ChatGPT 式安静 + 保留"这是小气助手在回答"的出处感</span></div>
+        <div><span class="pro">✓ § 序号档案体系延续，与侧栏/工具面板语言一致</span></div>
+        <div><span class="con">⚠ 身份行 + 过程胶囊 = 每条仍多一行，密度略高于 E</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">G</span><h2>ChatGPT 宽幅阅读 · 排版升级</h2></div>
+      <p class="card-d">E 的骨架 + 阅读排版向 ChatGPT 看齐：内容列加宽、字号 14.5→15px、行高 1.75、段距加大；用户气泡更大圆角更浅。长回复/表格/代码阅读性最好。</p>
+      <div class="chat gc vG">
+        <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+        <div class="brow" style="display:block"><div class="bcontent">
+          <div class="gsum">▸ 已调用 2 个工具 · 35.9s <span class="arr">▾</span></div>
+          <div class="bbub noc">已添加备注：本周组会汇报进度。任务"修改论文"状态已更新为进行中。需要我帮您查看其他任务详情吗？</div>
+          <div class="meta" style="opacity:.75"><span class="ico">⧉ ↻ ♪</span><span style="letter-spacing:4px;color:#6b757d">▲ ▼</span></div>
+        </div></div>
+        <div class="inbar"><div class="plus">+</div><div class="ph">问问小气…</div><div class="modes">快速 <span class="mode-on">平衡</span> 深度</div><span class="mic">🎤</span><span class="send-round">↑</span></div>
+        <div class="hint">ENTER 发送 · SHIFT+ENTER 换行</div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 长回复/公式/代码块的阅读舒适度七个方案里最好</span></div>
+        <div><span class="con">⚠ 与 E 观感接近，差异主要在排版密度，窄屏收益小</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>通用修复（四案都含）</b>：① 三层元数据（TOOLS 头 / trace 行 / 自评 chip）合并为一层　② 绿色自评 chip 不再常驻，score 以 mono 灰/青呈现　③ 操作行 emoji → 线性图标 + 文字　④ 发送键纸白 → 青渐变白字（同新对话按钮），输入区单一强调色　⑤ trace 长文案（"检测到数据查询未调用工具…"）降为展开后可见<br>
+    <b>各案差异轴</b>：A 只收过程信息｜B 再统一气泡为双实底｜C AI 彻底去气泡走文档流｜D 过程信息升为工序 chips 可视化｜E ChatGPT 现行式（身份行退场）｜F ChatGPT×档案混合（保 § 身份行）｜G ChatGPT 宽幅阅读（排版密度升级）<br>
+    <b>实施位置</b>：消息行 <code>ChatMessageRow.vue</code>（§ 头 / user-bubble 挖孔戳 / msg-meta）＋ <code>EventBadges.vue</code>（自评 chip）＋ <code>ToolTraceItem.vue</code>（trace 项）＋ <code>ChatViewSSE.vue</code> 沉浸段（user-bubble dark / 发送键 / 模式 chip）。虚拟列表消息高度若变化需同步 <code>useVirtualList</code> 行高。
+  </div>
+</div>
+</body>
+</html>
