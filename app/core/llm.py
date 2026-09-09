@@ -215,6 +215,15 @@ def parse_llm_json(text: str) -> dict:
     m = re.search(r'"?score"?\s*[:=]\s*(-?\d+)', text)
     if m:
         return {"score": int(m.group(1)), "suggestion": "(容错解析, 仅恢复 score)"}
+    # 2026-09-09 critic 加固: 意识流截断没 JSON 时, 中文评分措辞兜底
+    # ("评分：8" / "得 9 分" / "8/10")。按首个出现的数字取, 只认 0-10。
+    for pat in (
+        r'(?:评分|得分|分数|打分|给)\s*[:：为是]?\s*(\d{1,2})\s*分?',
+        r'(\d{1,2})\s*[/／]\s*10',
+    ):
+        mm = re.search(pat, text)
+        if mm and 0 <= int(mm.group(1)) <= 10:
+            return {"score": int(mm.group(1)), "suggestion": "(中文评分兜底解析)"}
     raise json.JSONDecodeError("all parse fallbacks failed", text, 0)
 
 
