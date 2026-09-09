@@ -214,7 +214,7 @@ services:
   #   缺点: 显存持续占用，闲置时不释放（按 RTX 5090 容量可接受）
   ollama:
     # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
-    image: ollama/ollama:0.31.1
+    image: ollama/ollama:latest  # 2026-09-10: 0.31.1→latest (qwen3.8 需新版 manifest; 回滚: 改回 :0.31.1)
     ports:
       - "127.0.0.1:11434:11434"     # host 仅本地访问 (避免暴露公网)
     volumes:
