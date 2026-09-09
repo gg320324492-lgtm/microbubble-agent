@@ -2626,24 +2626,50 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-bottom: 1px dashed rgba(22, 35, 42, 0.2);
   padding-bottom: 6px;
 }
-/* 会话条目: 透明 + 虚线分隔; 选中 = 纸卡 + 墨青左线 */
+/* 会话条目 (亮色): 透明 + 虚线分隔; 选中 = 纸卡 + 墨青左线 */
 .chat-immersive .session-sidebar .session-item {
   background: transparent;
   border-radius: 0;
   border-bottom: 1px dashed rgba(22, 35, 42, 0.18);
-}
-[data-theme="dark"] .chat-immersive .session-sidebar .session-item {
-  border-bottom-color: rgba(226, 236, 234, 0.18);
 }
 .chat-immersive .session-sidebar .session-item.active,
 .chat-immersive .session-sidebar .session-item.selected {
   background: #fdfefc;
   border-left: 3px solid #0e766e;
 }
+/* ═══ 批次⑩.68 暗色会话条目选型 D「卡片描边」(2026-09-10) ═══
+   诊断: 同屏三种绿打架 (荧光青绿左条 #35c2a4 / 草绿同步✓ #67c23a / 预览灰盒 #2a2d35)。
+   D: dark 条目 = 微底圆角卡 (去虚线/去左条), 选中 = 青染底 + 1px 青描边 (四边闭合);
+   ✓ 草绿 → 青灰同族; 分组标题虚线底边同步去除。
+   方案稿: docs/design-proposals/sidebar-recent-2026-09/index.html。亮色纸卡语言不变。 */
+[data-theme="dark"] .chat-immersive .session-sidebar .session-item {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.028);
+  margin-bottom: 6px;
+  transition: background 0.15s, border-color 0.15s;
+}
+[data-theme="dark"] .chat-immersive .session-sidebar .session-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
 [data-theme="dark"] .chat-immersive .session-sidebar .session-item.active,
 [data-theme="dark"] .chat-immersive .session-sidebar .session-item.selected {
-  background: rgba(53, 194, 164, 0.08);
-  border-left-color: #35c2a4;
+  background: rgba(53, 194, 164, 0.1);
+  border-color: rgba(53, 194, 164, 0.4);
+}
+[data-theme="dark"] .chat-immersive .session-sidebar .session-group-header {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+[data-theme="dark"] .chat-immersive .session-sidebar .synced-tag {
+  color: rgba(53, 194, 164, 0.65);
+}
+/* 预览去灰盒兜底: 任何运行时规则给的底色/描边一律清掉, 保持纯文字次级色 */
+[data-theme="dark"] .chat-immersive .session-sidebar .session-preview {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 /* 引用面板: 摘要 teal 印章条 + tab 墨青 + 角色徽章 (我=珊瑚 / AI=墨青) */
 .chat-immersive .cites-panel .cp-summary {
