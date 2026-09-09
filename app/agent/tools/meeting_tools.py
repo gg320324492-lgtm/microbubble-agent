@@ -28,9 +28,11 @@ logger = logging.getLogger("microbubble.agent.tools.meeting")
 
 
 class QueryMeetingsInput(BaseModel):
-    date_from: Optional[str] = Field(None, description="开始日期 YYYY-MM-DD")
-    date_to: Optional[str] = Field(None, description="结束日期 YYYY-MM-DD")
-    keyword: Optional[str] = Field(None, description="标题关键词")
+    date_from: Optional[str] = Field(None, description="开始日期 YYYY-MM-DD。仅当用户明确给出时间范围时才填；'最近/近期/上次/上个月'等模糊说法不要臆造日期窗口(会误滤目标会议)")
+    date_to: Optional[str] = Field(None, description="结束日期 YYYY-MM-DD，约束同上")
+    # 2026-09-09 质量修复: 实测模型把"近期/最近"塞进 keyword → title ILIKE 必 0 命中,
+    # "我们最近开过什么会议"被答成"未找到"(trace 5570-5574)。schema 明示禁令 + 工具层兜底双保险。
+    keyword: Optional[str] = Field(None, description="标题里真实可能出现的主题词(如'超材料','纳米气泡','评审','例会')；禁止填'最近/近期/上次/会议'等时间词或泛词——查最近会议请留空 keyword")
 
 
 class MeetingListItem(BaseModel):
@@ -57,6 +59,7 @@ class QueryMeetingsOutput(BaseModel):
     status: str
     count: int
     meetings: list[MeetingListItem]
+    note: Optional[str] = None  # 2026-09-09: 自愈放宽检索时说明改了什么条件
 
 
 @tool(
@@ -70,6 +73,13 @@ class QueryMeetingsOutput(BaseModel):
 async def query_meetings(input: QueryMeetingsInput, ctx: ToolContext) -> dict:
     """查询会议列表（含字段补全）"""
     from app.services.meeting_service import MeetingService
+
+    # 2026-09-09 质量修复 (trace 5570-5574): 模型常把"近期/最近"等时间词塞进 keyword,
+    # title ILIKE 必 0 命中 → 合理查询被答成"未找到"。纯时间词直接当无 keyword 处理。
+    VAGUE_KEYWORDS = {"近期", "最近", "最近一段时间", "上次", "上个", "这个", "本次", "会议", "全部", "所有"}
+    kw = (input.keyword or "").strip()
+    if kw in VAGUE_KEYWORDS:
+        kw = ""
 
     date_from = None
     date_to = None
@@ -85,7 +95,18 @@ async def query_meetings(input: QueryMeetingsInput, ctx: ToolContext) -> dict:
             pass
 
     svc = MeetingService(ctx.db)
-    meetings = await svc.get_meetings(date_from=date_from, date_to=date_to, keyword=input.keyword)
+    meetings = await svc.get_meetings(date_from=date_from, date_to=date_to, keyword=kw or None)
+
+    # 空结果两级自愈 (按特异性递减, 只放宽一层不放宽到底):
+    # 1) keyword+日期窗口 0 命中 → 保 keyword 去日期 (修"上次例会"类臆造窗口误滤)
+    # 2) 单 keyword 仍 0 命中 → 保日期窗口去 keyword (修主题词猜错标题)
+    fallback_note = None
+    if not meetings and kw and (date_from or date_to):
+        meetings = await svc.get_meetings(keyword=kw)
+        fallback_note = "指定日期范围内无命中，已放宽为全库按主题词检索"
+    if not meetings and kw:
+        meetings = await svc.get_meetings(date_from=date_from, date_to=date_to)
+        fallback_note = "主题词未匹配任何标题，已放宽为按时间列出会议" if not fallback_note else fallback_note
 
     # 构建返回 items（含字段补全）
     items = []
@@ -140,7 +161,11 @@ async def query_meetings(input: QueryMeetingsInput, ctx: ToolContext) -> dict:
             "rich_block_type": "meeting",
         })
 
-    return {"status": "success", "count": len(items), "meetings": items}
+    # 无条件全量查询限流最近 10 条 (防 22 场全返撑爆综合层)
+    if not kw and not date_from and not date_to:
+        items = items[:10]
+
+    return {"status": "success", "count": len(items), "meetings": items, "note": fallback_note}
 
 
 # ============================================================================

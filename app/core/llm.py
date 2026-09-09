@@ -14,6 +14,7 @@
 import hashlib
 import json
 import logging
+import re
 import time
 from collections import OrderedDict
 from threading import Lock
@@ -170,16 +171,51 @@ def get_default_model() -> str:
 
 
 def parse_llm_json(text: str) -> dict:
-    """解析 LLM 返回的 JSON 文本，自动处理 markdown 代码块包裹"""
+    """解析 LLM 返回的 JSON, 容错本地模型 (qwen 系) 的常见坏格式。
+
+    2026-09-09 底层重写 (原实现把结构空白里的换行也替换成字面 \\n 反而造非法 JSON)。
+    逐级放宽, 每级失败才降下一级:
+    1. 剥 markdown 代码围栏 → 严格 json.loads
+    2. 从意识流文本里截首个平衡 {...} → loads(strict=False 允许字符串内原始换行/制表符)
+       - 顺带修尾逗号; 截断输出则补 }*depth 闭合
+    3. 最低保底: 抠出 score 整数 (critic 按 score 决策, 有它就能恢复评审信号)
+    全失败抛 JSONDecodeError, 由调用方决定降级。
+    """
     text = text.strip()
     if text.startswith("```"):
-        lines = text.split("\n")
-        if lines[-1].strip() == "```":
-            text = "\n".join(lines[1:-1])
-        else:
-            text = "\n".join(lines[1:])
-        text = text.strip()
-    return json.loads(text)
+        text = re.sub(r"^```[a-zA-Z0-9_+-]*\s*", "", text)
+        text = re.sub(r"\s*```\s*$", "", text).strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    start = text.find("{")
+    if start != -1:
+        block, depth = None, 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    block = text[start:i + 1]
+                    break
+        if block is None:  # 截断: 取到末尾, depth = 未闭合的 { 数
+            block = text[start:]
+        closers = "}" * depth
+        for cand in (block, re.sub(r",\s*([}\]])", r"\1", block)):
+            for attempt in (cand, cand + closers):
+                try:
+                    return json.loads(attempt, strict=False)
+                except json.JSONDecodeError:
+                    continue
+
+    m = re.search(r'"?score"?\s*[:=]\s*(-?\d+)', text)
+    if m:
+        return {"score": int(m.group(1)), "suggestion": "(容错解析, 仅恢复 score)"}
+    raise json.JSONDecodeError("all parse fallbacks failed", text, 0)
 
 
 def extract_text_from_response(response) -> str:
