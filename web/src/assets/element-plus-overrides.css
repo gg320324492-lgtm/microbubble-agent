@@ -147,3 +147,116 @@
   background-color: #12968B;
   border-color: #12968B;
 }
+
+
+/* ============================================================
+   批次⑩.65 (用户选型 D 居中图标版): 全局 ElMessageBox 主题化
+   覆盖全站 46 处 confirm/prompt/alert — 大图标泡居中 + 标题正文居中
+   + 按钮两等分通栏 + 归档青确认键 (延续 ⑩.48 破坏性确认=青 语义)
+   选择器统一加 .el-overlay-message-box 前缀抬到 (0,2,0)+:
+   EP 按需组件 CSS 的加载顺序晚于本文件, 同权重会反压, 必须靠优先级稳赢
+   ============================================================ */
+.el-overlay-message-box .el-message-box {
+  --el-messagebox-border-radius: 16px;
+  --el-messagebox-box-shadow: 0 8px 28px rgba(38, 48, 44, 0.14), 0 2px 8px rgba(38, 48, 44, 0.08);
+  --el-messagebox-title-color: #26302c;
+  --el-messagebox-content-color: #4a544f;
+  width: 400px;
+  max-width: 86vw;
+  padding: 26px 24px 20px;
+  text-align: center;
+}
+.el-overlay-message-box .el-message-box__header { margin-bottom: 2px; }
+.el-overlay-message-box .el-message-box__title { font-size: 16px; font-weight: 650; text-align: center; }
+.el-overlay-message-box .el-message-box__headerbtn {
+  top: 10px; right: 10px; width: 28px; height: 28px;
+  border-radius: 6px; transition: background 0.13s;
+}
+.el-overlay-message-box .el-message-box__headerbtn:hover { background: rgba(38, 48, 44, 0.06); }
+.el-overlay-message-box .el-message-box__headerbtn:hover .el-message-box__close { color: #26302c; }
+
+/* 图标泡: EP 内联状态图标重排为居中圆角泡 */
+.el-overlay-message-box .el-message-box__container { display: block; }
+.el-overlay-message-box .el-message-box__status {
+  width: 52px; height: 52px; margin: 0 auto 12px;
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  box-sizing: border-box;
+}
+.el-overlay-message-box .el-message-box__status.el-message-box-icon--warning { color: #0e766e; --el-messagebox-color: #0e766e; background: rgba(14, 118, 110, 0.1); }
+.el-overlay-message-box .el-message-box__status.el-message-box-icon--warning svg { display: none; }
+.el-overlay-message-box .el-message-box__status.el-message-box-icon--warning::after {
+  content: '';
+  width: 24px; height: 24px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E766E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.el-overlay-message-box .el-message-box__status.el-message-box-icon--success { color: #2e8b62; --el-messagebox-color: #2e8b62; background: rgba(46, 139, 98, 0.12); }
+.el-overlay-message-box .el-message-box__status.el-message-box-icon--error { color: #b84523; --el-messagebox-color: #b84523; background: rgba(184, 69, 35, 0.12); }
+.el-overlay-message-box .el-message-box__status.el-message-box-icon--info { color: #8a938e; --el-messagebox-color: #8a938e; background: rgba(138, 147, 142, 0.14); }
+
+/* 正文居中排版 */
+.el-overlay-message-box .el-message-box__message { text-align: center; }
+.el-overlay-message-box .el-message-box__message p { font-size: 13px; line-height: 1.75; color: #4a544f; margin: 0; }
+
+/* 按钮两等分通栏 */
+.el-overlay-message-box .el-message-box__btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 20px; }
+.el-overlay-message-box .el-message-box__btns .el-button {
+  margin-left: 0; width: 100%; height: auto;
+  padding: 9px 0; border-radius: 8px; font-size: 13px; font-weight: 550;
+}
+.el-overlay-message-box .el-message-box__btns .el-button:only-child { grid-column: 1 / -1; }
+.el-overlay-message-box .el-message-box__btns .el-button:not(.el-button--primary) {
+  background: #fff; border-color: #e7e3da; color: #26302c;
+}
+.el-overlay-message-box .el-message-box__btns .el-button:not(.el-button--primary):hover,
+.el-overlay-message-box .el-message-box__btns .el-button:not(.el-button--primary):focus {
+  background: #f5f2eb; border-color: #d8d2c6; color: #26302c;
+}
+/* 确认键归档青 — :root 前缀反压 variables.css 的 AA #B84523 规则 (同 ⑩.48 手法) */
+:root .el-message-box__btns .el-button--primary:not(.is-text):not(.is-link) {
+  background-color: #0e766e;
+  border-color: #0e766e;
+}
+:root .el-message-box__btns .el-button--primary:not(.is-text):not(.is-link):hover,
+:root .el-message-box__btns .el-button--primary:not(.is-text):not(.is-link):focus {
+  background-color: #12968b;
+  border-color: #12968b;
+}
+:root .el-message-box__btns .el-button--primary:not(.is-text):not(.is-link):active {
+  background-color: #0c655e;
+  border-color: #0c655e;
+}
+
+/* prompt 输入框 (重命名等) */
+.el-overlay-message-box .el-message-box__input { padding-top: 14px; text-align: left; }
+.el-overlay-message-box .el-message-box__input .el-input__wrapper { border-radius: 8px; }
+.el-overlay-message-box .el-message-box__errormsg { text-align: left; }
+
+/* Dark 模式 — (0,3,0) 压过本文件 light (0,2,0) */
+[data-theme="dark"] .el-overlay-message-box .el-message-box__title { color: var(--color-text-primary, #e6e9ed); }
+[data-theme="dark"] .el-overlay-message-box .el-message-box__message p { color: #b9c2bd; }
+[data-theme="dark"] .el-overlay-message-box .el-message-box__headerbtn:hover { background: rgba(255, 255, 255, 0.08); }
+[data-theme="dark"] .el-overlay-message-box .el-message-box__headerbtn:hover .el-message-box__close { color: #e6e9ed; }
+[data-theme="dark"] .el-overlay-message-box .el-message-box__btns .el-button:not(.el-button--primary) {
+  background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.14); color: #e6e9ed;
+}
+[data-theme="dark"] .el-overlay-message-box .el-message-box__btns .el-button:not(.el-button--primary):hover,
+[data-theme="dark"] .el-overlay-message-box .el-message-box__btns .el-button:not(.el-button--primary):focus {
+  background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.24); color: #fff;
+}
+[data-theme="dark"] .el-overlay-message-box .el-message-box__status.el-message-box-icon--warning { color: #2aa79b; --el-messagebox-color: #2aa79b; background: rgba(42, 167, 155, 0.16); }
+[data-theme="dark"] .el-overlay-message-box .el-message-box__status.el-message-box-icon--warning::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232AA79B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6'/%3E%3C/svg%3E");
+}
+[data-theme="dark"] .el-overlay-message-box .el-message-box__status.el-message-box-icon--success { color: #58b98f; background: rgba(88, 185, 143, 0.16); }
+[data-theme="dark"] .el-overlay-message-box .el-message-box__status.el-message-box-icon--error { color: #e07b5a; background: rgba(224, 123, 90, 0.16); }
+[data-theme="dark"] .el-overlay-message-box .el-message-box__status.el-message-box-icon--info { color: #a6adb3; background: rgba(166, 173, 179, 0.18); }
+:root [data-theme="dark"] .el-message-box__btns .el-button--primary:not(.is-text):not(.is-link) {
+  background-color: #12968b;
+  border-color: #12968b;
+}
+:root [data-theme="dark"] .el-message-box__btns .el-button--primary:not(.is-text):not(.is-link):hover,
+:root [data-theme="dark"] .el-message-box__btns .el-button--primary:not(.is-text):not(.is-link):focus {
+  background-color: #17ab9e;
+  border-color: #17ab9e;
+}
