@@ -171,6 +171,7 @@ class DriveCommentsPathBackfillService:
         await self.db.commit()
         return result
 
+    async def backfill_for_file(
         self,
         file_id: int,
         *,

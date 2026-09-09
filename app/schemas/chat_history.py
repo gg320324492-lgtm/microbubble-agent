@@ -10,7 +10,7 @@ Pydantic V2 + 完整字段校验（max_length / ge / le / Optional）
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 # ====== ChatSession ======
@@ -20,6 +20,8 @@ class ChatSessionCreate(BaseModel):
     title: Optional[str] = Field(None, max_length=200, description="会话标题，缺省时前端用首条消息自动生成")
     first_message: Optional[str] = Field(None, max_length=10000, description="首条 user 消息（同时创建一条 user 消息记录）")
     client_session_id: Optional[str] = Field(None, max_length=64, description="前端生成 session_id（localStorage 兼容），缺省时后端生成")
+    # 2026-09-09 双写修复: 首条消息幂等键透传, 与 chat/stream 服务端持久化共用
+    first_message_client_msg_id: Optional[str] = Field(None, max_length=64, description="首条 user 消息的 client_msg_id 幂等键")
 
 
 class ChatSessionUpdate(BaseModel):
@@ -80,7 +82,17 @@ class ChatMessageCreate(BaseModel):
     role: str = Field(..., pattern="^(user|assistant|system|tool)$")
     content: str = Field(..., max_length=1048576, description="1MB 软上限，超过会警告")
     rich_blocks: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    # 2026-09-09 兼容 (实测 422): 前端 stopGeneration 的 partial-assistant 路径发
+    # tool_trace=列表 (trace 事件数组)。列表在 validator 包成 {"trace": [...]}，
+    # 读取端与 dict 结构一致; 之前整条消息被 422 静默丢弃。
     tool_trace: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+    @field_validator("tool_trace", mode="before")
+    @classmethod
+    def _coerce_tool_trace_list(cls, v: Any) -> Any:
+        if isinstance(v, list):
+            return {"trace": v}
+        return v
     message_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, alias="metadata", description="model / usage / intent_category")
     is_partial: Optional[bool] = False
     client_msg_id: Optional[str] = Field(None, max_length=64, description="幂等键")
@@ -163,6 +175,14 @@ class ChatSyncLocalMessage(BaseModel):
     message_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, alias="metadata")
     created_at: Optional[datetime] = None
     client_msg_id_dedup: Optional[str] = None  # 别名（防前端写错）
+
+    @field_validator("tool_trace", mode="before")
+    @classmethod
+    def _coerce_tool_trace_list(cls, v: Any) -> Any:
+        # 与 ChatMessageCreate 同款兼容 (2026-09-09): 列表 → {"trace": [...]}
+        if isinstance(v, list):
+            return {"trace": v}
+        return v
 
 
 class ChatSyncLocalSession(BaseModel):
