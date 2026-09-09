@@ -2351,17 +2351,25 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-color: #0e766e !important;
   color: #fbfcfb !important;
 }
+/* 批次⑩.67 (用户选型 A 归档青实底): dark 下新对话/顶栏➕ 用青色渐变白字 (同网盘上传键),
+   选中 tab 青色实底 — 与活跃会话青条/模式切换的暗色语言统一, 替换原纸墨反转两块亮纸色 */
 [data-theme="dark"] .chat-immersive .header-new-session.el-button--primary,
 [data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn {
-  background-color: #e2ecea !important;
-  border-color: #e2ecea !important;
-  color: #12191d !important;
+  background-color: #0e766e !important;
+  background-image: linear-gradient(135deg, #0e766e 0%, #12968b 100%) !important;
+  border-color: #0e766e !important;
+  color: #ffffff !important;
 }
-/* 批次⑩.66: variables.css 的 AA 规则 `:root .new-btn-text { color: #ffffff }` 不分主题,
-   dark 下按钮底已翻成纸色 #e2ecea, 白字 span 不继承根色 → 白-on-白不可读; 这里翻回墨字 */
+[data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn:hover,
+[data-theme="dark"] .chat-immersive .header-new-session.el-button--primary:hover {
+  background-color: #12968b !important;
+  background-image: linear-gradient(135deg, #12968b 0%, #17a897 100%) !important;
+  border-color: #12968b !important;
+  color: #ffffff !important;
+}
 [data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn .new-btn-text,
 [data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn .el-icon {
-  color: #12191d !important;
+  color: #ffffff !important;
 }
 /* 归档 tab 选中: 橙 → 墨 (child scoped 同特异性会赢注入序, 这里加链条 + !important) */
 .chat-immersive .session-sidebar .archive-tab.active {
@@ -2370,9 +2378,9 @@ function handleSearchKeydown(e: KeyboardEvent) {
   color: #fbfcfb !important;
 }
 [data-theme="dark"] .chat-immersive .session-sidebar .archive-tab.active {
-  background: #e2ecea !important;
-  border-color: #e2ecea !important;
-  color: #12191d !important;
+  background: #0e766e !important;
+  border-color: #0e766e !important;
+  color: #ffffff !important;
 }
 /* 模式切换 (快速/平衡/深度): 橙 → 墨青 */
 .chat-immersive .depth-toggle.active {
