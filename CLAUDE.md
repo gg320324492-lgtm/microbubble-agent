@@ -1,6 +1,25 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-10 对话质量实测收口: 第 1/2 组全修 + 模型升级 qwen3.8:27b, 已部署)
+
+**手测驱动修复链** (09-09→09-10, 全部已部署推送): 第 1 组会议链路 (意图分类器幽灵工具名 →
+registry 出口过滤 / data_query 0 调用 → nudge 代码强制 dispatch / critic 极简重试 +
+parse_llm_json 中文评分兜底 / 反谎报三态 guard) + 第 2 组任务链路 7 项 (update_task
+不传 status 强回写 in_progress 危险默认修复 / add_note 备注字段 / query_tasks due 排序 +
+title_keyword / update_task title→id 单调用定位 / query_all_member_tasks 统计守恒 /
+指代 prompt 规则 + _pronoun_anchor_note 就近轮标注优先 fail-closed 工程注入)。
+关键模式: 本地模型跑不稳两段式工具链 → 写操作工具自带定位; prompt 人肉工具清单必与
+registry 漂移 → 出口差集过滤; ollama openai-compat 拒 dict blocks content → 压平纯字符串。
+
+**模型升级 (用户拍板 2026-09-10)**: ollama 镜像 0.31.1→latest (0.33.3, qwen3.8 manifest
+需新版, commit `7dfbee0f0`) + `.env` 全部 10 个模型键统一 `qwen3.8:27b` (单模型驻 17GB/32GB,
+回滚备份 `backups/.env.pre-qwen38-*`, 该备份含我的重写产生的 CRLF/注释 churn, 功能键完整)。
+实测: critique JSON 全合法, 工具链全对, 热跑 38-50s/轮, 冷加载首问 ~200s (keep_alive 10m
+连续对话无感)。遗留: 指代消解 3/4 (27b 偶发选列表首人名, 根治需实体注入工程或云端模型);
+云端 nginx HTTP/2 慢回答掐流加固未排期 (本地 http://localhost/ 测试不受影响);
+任务 10/48 数据异常已按用户拍板改 done (进行中 19→17)。
+
 ## 当前状态 (2026-09-05 网盘文件默认入库 RAG — 全格式自动入库 + 手动入口退役 + analyze NameError 修复, 已部署)
 
 **需求**: "所有网盘文件默认入库, 支持所有格式, 可被 RAG 检索与正常调用, 不再需要『入库知识库』按钮"。
