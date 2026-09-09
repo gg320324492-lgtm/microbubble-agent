@@ -2357,6 +2357,12 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-color: #e2ecea !important;
   color: #12191d !important;
 }
+/* 批次⑩.66: variables.css 的 AA 规则 `:root .new-btn-text { color: #ffffff }` 不分主题,
+   dark 下按钮底已翻成纸色 #e2ecea, 白字 span 不继承根色 → 白-on-白不可读; 这里翻回墨字 */
+[data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn .new-btn-text,
+[data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn .el-icon {
+  color: #12191d !important;
+}
 /* 归档 tab 选中: 橙 → 墨 (child scoped 同特异性会赢注入序, 这里加链条 + !important) */
 .chat-immersive .session-sidebar .archive-tab.active {
   background: #16232a !important;
