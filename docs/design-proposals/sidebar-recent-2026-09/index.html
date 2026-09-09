@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>暗色侧栏「最近」列表重设计 · 4 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    /* 暗色侧栏真实色 */
+    --dk-side: #10171B; --dk-line: rgba(226,236,234,.18); --dk-grp: #7E8790;
+    --dk-title: #EDF3F1; --dk-meta: #7E8790; --dk-prev: #8A938E;
+    --neon: #35C2A4; --grass: #67C23A; --chip: #2A2D35;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1420px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  /* ═══ 问题诊断 ═══ */
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 26px; }
+  .diag h2 { font-size: 15px; font-weight: 650; margin-bottom: 12px; }
+  .diag-items { display: flex; gap: 14px; flex-wrap: wrap; }
+  .ditem { flex: 1; min-width: 250px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 12px; line-height: 1.75; color: var(--txt2); background: #FBFAF7; }
+  .ditem .num { font-family: var(--mono); font-weight: 700; color: #B4823C; margin-right: 6px; }
+  .ditem b { color: var(--txt); font-weight: 600; }
+  .sw { display: inline-block; width: 13px; height: 13px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; border: 1px solid rgba(0,0,0,.15); }
+
+  /* ═══ 方案卡片 ═══ */
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 340px; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 74px; }
+
+  /* ═══ 暗色侧栏小样 (还原真实色) ═══ */
+  .side { background: var(--dk-side); border: 1px solid rgba(226,236,234,.25); border-radius: 14px; padding: 10px 0 4px; color: var(--dk-title); overflow: hidden; }
+  .grp { font-family: var(--mono); font-size: 9px; letter-spacing: .24em; color: var(--dk-grp); padding: 2px 16px 6px; border-bottom: 1px dashed rgba(226,236,234,.2); }
+  .it { padding: 10px 12px; margin: 2px 8px 6px; border-left: 3px solid transparent; border-bottom: 1px dashed var(--dk-line); }
+  .it:last-child { border-bottom: none; }
+  .t { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--dk-title); }
+  .t .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ck { font-size: 10px; line-height: 1; }
+  .m { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; color: var(--dk-meta); margin-top: 5px; display: flex; gap: 9px; }
+  .p { font-size: 10.5px; color: var(--dk-prev); margin-top: 5px; line-height: 1.55; }
+
+  /* ── v0 现状 ── */
+  .v0 .it.on { background: rgba(53,194,164,.08); border-left-color: var(--neon); }
+  .v0 .ck { color: var(--grass); font-size: 13px; }
+  .v0 .p { background: var(--chip); border-radius: 6px; padding: 5px 9px; margin-right: 8px; color: #9AA3A8; }
+
+  /* ── A 青墨统一 ── */
+  .vA .it.on { background: rgba(53,194,164,.10); border-left-color: rgba(53,194,164,.5); }
+  .vA .ck { color: rgba(53,194,164,.65); }
+
+  /* ── B 引用线预览 ── */
+  .vB .it.on { background: rgba(53,194,164,.10); }
+  .vB .it.on .tx { font-weight: 650; }
+  .vB .p { border-left: 2px solid rgba(53,194,164,.45); padding-left: 8px; }
+  .vB .ck { color: rgba(53,194,164,.5); font-size: 9px; }
+
+  /* ── C 极简降噪 ── */
+  .vC .grp { border-bottom: none; padding-bottom: 2px; }
+  .vC .it { border-bottom: none; border-radius: 8px; border-left: none; margin-bottom: 2px; }
+  .vC .it.on { background: rgba(255,255,255,.06); }
+  .vC .m { font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; letter-spacing: 0; font-size: 10px; }
+  .vC .p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dk-grp); }
+  .vC .ck { color: rgba(53,194,164,.45); font-size: 9px; }
+
+  /* ── D 卡片描边 ── */
+  .vD .grp { border-bottom: none; padding-bottom: 2px; }
+  .vD .it { border-bottom: none; border-left: none; border: 1px solid transparent; border-radius: 10px; background: rgba(255,255,255,.028); margin-bottom: 5px; }
+  .vD .it.on { background: rgba(53,194,164,.10); border-color: rgba(53,194,164,.4); }
+  .vD .ck { color: rgba(53,194,164,.65); }
+  .vD .p { color: var(--dk-prev); }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .notes div { display: block; }
+
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>暗色侧栏「最近」列表重设计 · 4 方案</h1>
+  <p class="sub">承接上轮「新对话按钮 + 选中 tab → 青实底」(批次⑩.67) 之后，<b>会话条目本身</b>仍有两套语言没对齐：条目骨架是「档案风」（mono 元数据 + 虚线分隔 + 墨青），但左条/同步✓/预览块是另一套高饱和「系统风」。四案都只动暗色沉浸侧栏，亮色纸卡语言保持。</p>
+
+  <div class="diag">
+    <h2>问题诊断（截图取色）</h2>
+    <div class="diag-items">
+      <div class="ditem"><span class="num">①</span><b>荧光青绿左条</b><br><span class="sw" style="background:#35C2A4"></span><code style="font-family:var(--mono);font-size:11px">#35C2A4</code> 3px 实条 — 高饱和高亮度，暗底 #10171B 上像荧光笔，与低饱和档案语言冲突。</div>
+      <div class="ditem"><span class="num">②</span><b>草绿同步✓</b><br><span class="sw" style="background:#67C23A"></span><code style="font-family:var(--mono);font-size:11px">#67C23A</code> — 与左条是<b>两种绿</b>，同屏打架。它只是"已同步到云端"状态标记，不该比标题还抢眼。</div>
+      <div class="ditem"><span class="num">③</span><b>预览灰盒</b><br><span class="sw" style="background:#2A2D35"></span><code style="font-family:var(--mono);font-size:11px">#2A2D35</code> — 悬浮补丁块，比选中底还亮一档，看起来像渲染 bug 而非设计。</div>
+      <div class="ditem"><span class="num">④</span><b>层级倒挂</b><br>标题(白粗) → 灰盒预览(带底) → mono 元数据(最小最散)，预览抢过元数据；条目内 4 种视觉语言并存。</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <div class="card-h"><span class="tag">现状</span><h2>三绿打架（截图同款）</h2></div>
+      <p class="card-d">荧光左条 + 草绿✓ + 灰盒预览并存，选中条目像贴了三块补丁。</p>
+      <div class="side v0">
+        <div class="grp">🕒 最近</div>
+        <div class="it on"><div class="t"><span class="tx">现在有哪些进行…</span><span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>11 条</span></div><div class="p">现在有哪些进行中的任务？</div></div>
+        <div class="it"><div class="t"><span class="tx">你好</span><span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div><div class="p">你好</div></div>
+        <div class="it"><div class="t"><span class="tx">周会纪要整理</span></div><div class="m"><span>3 天前</span><span>5 条</span></div></div>
+      </div>
+      <div class="notes"><span class="con">⚠ ①荧光条 ②草绿✓ ③灰盒 ④层级乱 全部并存</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>青墨统一 · 只调色不动结构</h2></div>
+      <p class="card-d">左条降饱和为半透明墨青（.5），✓ 从草绿改青灰同族，预览去灰盒变纯文字。骨架（虚线/mono/间距）完全保留，改动最小、风险最低。</p>
+      <div class="side vA">
+        <div class="grp">🕒 最近</div>
+        <div class="it on"><div class="t"><span class="tx">现在有哪些进行…</span><span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>11 条</span></div><div class="p">现在有哪些进行中的任务？</div></div>
+        <div class="it"><div class="t"><span class="tx">你好</span><span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div><div class="p">你好</div></div>
+        <div class="it"><div class="t"><span class="tx">周会纪要整理</span></div><div class="m"><span>3 天前</span><span>5 条</span></div></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 全侧栏只剩一种绿（墨青），与已选青实底按钮同语言</span></div>
+        <div><span class="pro">✓ 纯 CSS 换色，亮色模式零影响</span></div>
+        <div><span class="con">⚠ 条目结构未变，预览与元数据的层级关系只是缓解</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>引用线预览 · 档案出处感</h2></div>
+      <p class="card-d">去掉左条，选中只留青染底 + 标题加重；预览改成「引用行」：2px 墨青竖线 + 次级文字，像档案里的出处批注。✓ 缩小降透明。</p>
+      <div class="side vB">
+        <div class="grp">🕒 最近</div>
+        <div class="it on"><div class="t"><span class="tx">现在有哪些进行…</span><span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>11 条</span></div><div class="p">现在有哪些进行中的任务？</div></div>
+        <div class="it"><div class="t"><span class="tx">你好</span><span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div><div class="p">你好</div></div>
+        <div class="it"><div class="t"><span class="tx">周会纪要整理</span></div><div class="m"><span>3 天前</span><span>5 条</span></div></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 预览有「用户说过这句话」的出处感，语义最准</span></div>
+        <div><span class="pro">✓ 无左条后选中态最安静，档案味保留最好</span></div>
+        <div><span class="con">⚠ 每条多一根竖线，窄侧栏下元素偏多</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>极简降噪 · 现代 IM 风</h2></div>
+      <p class="card-d">虚线、左条、mono、灰盒全部去掉；选中 = 纯白 .06 圆角块；元数据合并成一行「8 小时前 · 11 条」，预览单行省略。对齐 Claude/Linear 式安静列表。</p>
+      <div class="side vC">
+        <div class="grp">🕒 最近</div>
+        <div class="it on"><div class="t"><span class="tx">现在有哪些进行…</span><span class="ck">✓</span></div><div class="m"><span>8 小时前 · 11 条</span></div><div class="p">现在有哪些进行中的任务？</div></div>
+        <div class="it"><div class="t"><span class="tx">你好</span><span class="ck">✓</span></div><div class="m"><span>1 天前 · 89 条</span></div><div class="p">你好</div></div>
+        <div class="it"><div class="t"><span class="tx">周会纪要整理</span></div><div class="m"><span>3 天前 · 5 条</span></div></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 最安静协调，视觉噪音归零，密度最高</span></div>
+        <div><span class="con">⚠ mono/虚线档案语言退场，与搜索框等档案面板的呼应减弱</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">D</span><h2>卡片描边 · 选中语义最强</h2></div>
+      <p class="card-d">去掉虚线，每条变成微底色圆角卡片；选中 = 青染底 + 1px 青描边（描边代替左条，四边闭合语义更准）。条目边界感最强。</p>
+      <div class="side vD">
+        <div class="grp">🕒 最近</div>
+        <div class="it on"><div class="t"><span class="tx">现在有哪些进行…</span><span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>11 条</span></div><div class="p">现在有哪些进行中的任务？</div></div>
+        <div class="it"><div class="t"><span class="tx">你好</span><span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div><div class="p">你好</div></div>
+        <div class="it"><div class="t"><span class="tx">周会纪要整理</span></div><div class="m"><span>3 天前</span><span>5 条</span></div></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 选中/未选中边界最清晰，描边色 = 按钮青，语言统一</span></div>
+        <div><span class="con">⚠ 三层底色（侧栏/卡片/选中）需把控，档案虚线语言退场</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>通用修复（四案都含）</b>：① 荧光左条 <code>#35C2A4</code> → 半透明墨青 <code>rgba(53,194,164,.5)</code>（A/B 用条或底，C/D 换形态）　② 同步✓ <code>#67C23A</code> → <code>rgba(53,194,164,.6~.7)</code> 青灰同族　③ 预览灰盒 <code>#2A2D35</code> → 去底纯文字<br>
+    <b>亮色模式联动</b>：结构性调整（去灰盒 / ✓ 调色）同步应用；亮色选中态维持纸卡 <code>#fdfefc</code> + 墨青左条 <code>#0E766E</code> 不变。<br>
+    <b>实施位置</b>：暗色皮肤 <code>ChatViewSSE.vue:2629-2647</code>（沉浸侧栏覆盖段）；条目结构 <code>SessionItemRow.vue</code> / <code>SessionSidebar.vue</code>；✓ 为 <code>.synced-tag</code>；mono 元数据在 <code>SessionSidebar.vue</code> 档案语言段。若选 C/D 需同步核对虚拟列表 <code>SESSION_ITEM_HEIGHT=72</code>。
+  </div>
+</div>
+</body>
+</html>
