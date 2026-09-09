@@ -338,9 +338,14 @@ class MemoryService:
         import json
 
         # 构建对话文本
+        # 2026-09-09 硬门禁 (与上方 prompt 禁令配套, 不信任 LLM 自觉):
+        # 只投喂用户消息。助手回复是幻觉进入记忆库的唯一通道 — 实测上午测试中
+        # 助手编造的"例会讨论了项目进展/研究方向/团队合作"被本管线固化为
+        # memories#132-134, 后续每轮当"长期记忆"引用形成自强化污染回路。
         conversation = ""
-        for msg in messages[-10:]:  # 最近10条
-            role = "用户" if msg.get("role") == "user" else "助手"
+        for msg in messages[-20:]:  # 最近20条里筛用户消息
+            if msg.get("role") != "user":
+                continue
             content = msg.get("content", "")
             if isinstance(content, list):
                 # 多模态消息，只取文本部分
@@ -348,7 +353,7 @@ class MemoryService:
                     b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
                 )
             if content:
-                conversation += f"{role}: {content}\n"
+                conversation += f"用户: {content}\n"
 
         if len(conversation) < 50:
             return  # 对话太短，跳过
@@ -356,6 +361,12 @@ class MemoryService:
         prompt = f"""分析以下对话，提取值得长期记忆的信息。返回严格的JSON数组（不要包含其他文字）。
 只提取用户明确表达的偏好、重要的事实信息、人员-项目-成果关系。
 不要提取临时性信息。如果没有值得记忆的内容，返回空数组 []。
+
+硬性禁令 (2026-09-09 加固, 防止助手幻觉经提取管线固化为"长期记忆"):
+1. 只允许提取【用户】角色消息中明确陈述的事实 — 助手回复里的任何内容一律不得提取
+2. 禁止提取助手对数据的转述/总结/查询结果描述 (那些可能含幻觉, 且数据库里本就有权威版本)
+3. 禁止提取泛化套话 (如"讨论了项目进展、研究方向和团队合作"这类无具体信息量的描述)
+4. 助手说"根据记录/根据查询"引出的人物-事件关系, 即使看起来像事实也不要提取
 
 对话内容:
 {conversation[:2000]}

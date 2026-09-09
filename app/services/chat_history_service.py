@@ -139,6 +139,7 @@ async def create_session(
     title: Optional[str] = None,
     first_message: Optional[str] = None,
     client_session_id: Optional[str] = None,
+    first_message_client_msg_id: Optional[str] = None,
 ) -> ChatSession:
     """创建会话（可选同时创建首条 user 消息）
 
@@ -185,11 +186,15 @@ async def create_session(
     await db.flush()  # 拿 session.id
 
     # 首条 user 消息
+    # 2026-09-09 双写修复: 带上前端 client_msg_id, 让 chat/stream 服务端持久化
+    # 与后续 append 都走 append_message 同款幂等键去重 (老实现 cid=None →
+    # 6562/6563 同文两条的根源)
     if first_message:
         msg = ChatMessage(
             session_id=session_id,
             role=ROLE_USER,
             content=first_message,
+            client_msg_id=first_message_client_msg_id,
         )
         db.add(msg)
         session.message_count = 1

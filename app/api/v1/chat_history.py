@@ -115,6 +115,7 @@ async def create_session(
         title=body.title,
         first_message=body.first_message,
         client_session_id=body.client_session_id,
+        first_message_client_msg_id=body.first_message_client_msg_id,
     )
     return _session_to_out(session)
 
@@ -247,6 +248,7 @@ async def append_message(
     db: AsyncSession = Depends(get_db),
 ):
     """追加单条消息（幂等键 client_msg_id 防重复写）"""
+    # tool_trace 列表→dict 兼容在 ChatMessageCreate validator 层完成 (2026-09-09)
     msg = await svc.append_message(
         db, current_user.id, session_id,
         role=body.role,

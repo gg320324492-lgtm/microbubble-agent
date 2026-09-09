@@ -34,6 +34,7 @@ import logging
 from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from typing import List, Dict, Any, Optional
 
 from app.models.base import utcnow, BEIJING_TZ
@@ -321,8 +322,14 @@ class ReminderService:
             return {"total": 0, "success": 0, "fail": 0, "skipped": 0}
 
         # 2. 查所有 status=pending 的 reminder
+        # 2026-09-09 修生产事故: 下方 L349 聚合阶段访问 r.task (relationship)，async 会话
+        # 同步 lazy-load 必抛 MissingGreenlet → 窗口内每 10s 任务失败一次 + beat 持续投喂
+        # → celery 队列积压 1531 条，提醒全停、trace 落库排队。必须 selectinload 预取。
+        # (与 [[query-meetings-missing-greenlet-and-hallucination]] 同指纹: async 关系访问先查加载方式)
         result = await self.db.execute(
-            select(Reminder).where(Reminder.status == "pending")
+            select(Reminder)
+            .options(selectinload(Reminder.task))
+            .where(Reminder.status == "pending")
         )
         all_reminders = list(result.scalars().all())
 
