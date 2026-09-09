@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>确认删除弹窗 · 4 版 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-hi: #12968B; --coral: #FF7A5C; --coral-hi: #FF6647;
+    --red: #B84523; --red-hi: #A03D1F;
+    --paper: #FAF9F6;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --shadow: 0 8px 28px rgba(38,48,44,.14), 0 2px 8px rgba(38,48,44,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 18px; margin-bottom: 26px; }
+  .card-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 16px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.7; }
+
+  .stage { background: linear-gradient(160deg, #DFDCD3 0%, #CFCBC0 100%); border-radius: 14px; padding: 34px 20px; display: flex; justify-content: center; }
+
+  /* ===== 弹窗通用 ===== */
+  .dlg { background: #fff; border-radius: 16px; box-shadow: var(--shadow); width: 400px; padding: 20px 22px; }
+  .dlg-head { display: flex; align-items: center; margin-bottom: 12px; }
+  .dlg-title { font-size: 15px; font-weight: 650; }
+  .dlg-x { margin-left: auto; border: none; background: none; cursor: pointer; color: #B9B2A6; font-size: 15px; line-height: 1; padding: 3px; border-radius: 6px; }
+  .dlg-x:hover { background: rgba(0,0,0,.05); color: var(--txt); }
+  .dlg-msg { font-size: 13px; line-height: 1.75; color: #4A544F; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px; }
+  .dlg-msg .q { color: var(--txt); font-weight: 600; }
+  .dlg-warn-line { font-size: 11.5px; color: var(--txt2); margin-top: 3px; }
+  .dlg-btns { display: flex; justify-content: flex-end; gap: 10px; }
+  .btn { border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 550; cursor: pointer; border: 1px solid transparent; transition: all .15s; }
+  .btn.ghost { background: #fff; border-color: var(--line); color: var(--txt); }
+  .btn.ghost:hover { background: #F5F2EB; }
+  .icon-bub { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .icon-bub svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* 现状 (EP 默认) */
+  .now .icon-bub { background: rgba(230,162,60,.14); color: #E6A23C; border-radius: 50%; }
+  .now { border-radius: 8px; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+  .btn.danger-ep { background: #F56C6C; color: #fff; border-radius: 6px; }
+  .btn.danger-ep:hover { background: #F78989; }
+
+  /* A 青色 */
+  .a .icon-bub { background: rgba(14,118,110,.1); color: var(--teal); }
+  .btn.teal { background: var(--teal); color: #fff; }
+  .btn.teal:hover { background: var(--teal-hi); }
+
+  /* B 珊瑚 */
+  .b .icon-bub { background: rgba(255,122,92,.13); color: #E85A3A; }
+  .btn.coral { background: var(--coral); color: #fff; }
+  .btn.coral:hover { background: var(--coral-hi); }
+
+  /* C 柔红 */
+  .c .icon-bub { background: #FBEAE4; color: var(--red); }
+  .btn.red { background: var(--red); color: #fff; }
+  .btn.red:hover { background: var(--red-hi); }
+
+  /* D 居中 */
+  .d { text-align: center; padding: 26px 24px 20px; }
+  .d .icon-bub { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 12px; background: rgba(14,118,110,.1); color: var(--teal); }
+  .d .icon-bub svg { width: 24px; height: 24px; }
+  .d .dlg-title { font-size: 16px; }
+  .d .dlg-msg { display: block; margin-bottom: 6px; }
+  .d .dlg-btns { display: grid; grid-template-columns: 1fr 1fr; margin-top: 16px; }
+  .d .btn { padding: 9px 0; }
+
+  .notes { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; line-height: 1.8; flex-wrap: wrap; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .scope { font-size: 12px; color: var(--txt2); background: var(--paper); border: 1px dashed var(--line); border-radius: 10px; padding: 10px 14px; margin-bottom: 22px; line-height: 1.8; }
+  .scope b { color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>「确认删除」弹窗重设计 · 4 版</h1>
+  <p class="sub">现状是 Element Plus <b>默认样式的 ElMessageBox</b>（橙红 #F56C6C 按钮 + 默认 8px 圆角），全站共 <b>34 处</b>确认弹窗都是这套默认皮肤，均未跟设计系统。选中某版后用<b>一处全局 CSS 覆盖</b>统一全部 34 处（含聊天会话删除/批量永久删除/知识库/任务/回收站）。</p>
+  <p class="scope">范围说明：聊天会话删除 ×2、知识库 ×9、任务 ×6、回收站 ×4、网盘 ×6、成员/系统 ×7 —— 全部走同一 ElMessageBox，一次主题化全部生效。</p>
+
+  <div class="card">
+    <div class="card-h"><span class="tag">现状</span><h2>Element Plus 默认（截图同款）</h2></div>
+    <p class="card-d">默认橙红危险按钮、默认圆角与投影、警告图标风格与全局不符 —— 未做任何主题化。</p>
+    <div class="stage">
+      <div class="dlg now">
+        <div class="dlg-head"><span class="dlg-title">确认删除</span><button class="dlg-x">✕</button></div>
+        <div class="dlg-msg"><span class="icon-bub"><svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></span><span>删除会话「<span class="q">我们最近开过什么会议？</span>」？此操作不可撤销。</span></div>
+        <div class="dlg-btns"><button class="btn ghost">取消</button><button class="btn danger-ep">删除</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><span class="tag">A</span><h2>归档青 · 与网盘删除确认统一</h2></div>
+    <p class="card-d">延续批次⑩.48 已选定的语义：破坏性确认 = 归档青 #0E766E。图标换删除垃圾桶进青色圆角泡，标题/正文排版重做（会话名加重、不可撤销降为次级小字），16px 圆角 + 设计投影。</p>
+    <div class="stage">
+      <div class="dlg a">
+        <div class="dlg-head"><span class="dlg-title">确认删除</span><button class="dlg-x">✕</button></div>
+        <div class="dlg-msg"><span class="icon-bub"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M10 11v6M14 11v6"/></svg></span><span>删除会话「<span class="q">我们最近开过什么会议？</span>」？<span class="dlg-warn-line">此操作不可撤销。</span></span></div>
+        <div class="dlg-btns"><button class="btn ghost">取消</button><button class="btn teal">删除</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 与评论删除气泡同一语义，全局最一致</span><span class="con">⚠ 青色危险感偏弱</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><span class="tag">B</span><h2>珊瑚橙 · 全局品牌主色</h2></div>
+    <p class="card-d">用 variables.css 的品牌珊瑚橙 #FF7A5C 做确认按钮，珊瑚色图标泡。品牌感最强，橙系本身自带一点"注意"意味。</p>
+    <div class="stage">
+      <div class="dlg b">
+        <div class="dlg-head"><span class="dlg-title">确认删除</span><button class="dlg-x">✕</button></div>
+        <div class="dlg-msg"><span class="icon-bub"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M10 11v6M14 11v6"/></svg></span><span>删除会话「<span class="q">我们最近开过什么会议？</span>」？<span class="dlg-warn-line">此操作不可撤销。</span></span></div>
+        <div class="dlg-btns"><button class="btn ghost">取消</button><button class="btn coral">删除</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 品牌色贯穿，"注意"语义自然</span><span class="con">⚠ 与主操作按钮同色，删除显得不够特殊</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><span class="tag">C</span><h2>柔和危险红 · 语义优先</h2></div>
+    <p class="card-d">保留"删除=红"的行业直觉，但换成设计化的柔红：图标泡 #FBEAE4 + 深砖红 #B84523（对比度 AA 达标），不再是默认的亮橙红。危险语义最清晰。</p>
+    <div class="stage">
+      <div class="dlg c">
+        <div class="dlg-head"><span class="dlg-title">确认删除</span><button class="dlg-x">✕</button></div>
+        <div class="dlg-msg"><span class="icon-bub"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M10 11v6M14 11v6"/></svg></span><span>删除会话「<span class="q">我们最近开过什么会议？</span>」？<span class="dlg-warn-line">此操作不可撤销。</span></span></div>
+        <div class="dlg-btns"><button class="btn ghost">取消</button><button class="btn red">删除</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 破坏性语义最直白，误删率最低</span><span class="con">⚠ 与 ⑩.48 定下的"确认=青"语义并存（评论青/会话红）</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><span class="tag">D</span><h2>居中图标版 · 现代对话风</h2></div>
+    <p class="card-d">布局重排：大图标泡居中在上、标题/正文居中、按钮两等分通栏 —— 现代聊天软件删除确认的经典构图。配色跟 A 归档青。</p>
+    <div class="stage">
+      <div class="dlg d">
+        <div class="icon-bub"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M10 11v6M14 11v6"/></svg></div>
+        <div class="dlg-title">确认删除</div>
+        <div class="dlg-msg">删除会话「<span class="q">我们最近开过什么会议？</span>」？<div class="dlg-warn-line">此操作不可撤销</div></div>
+        <div class="dlg-btns"><button class="btn ghost">取消</button><button class="btn teal">删除</button></div>
+      </div>
+    </div>
+    <div class="notes"><span class="pro">✓ 构图现代，移动端同构好看</span><span class="con">⚠ 与站内其余弹窗（标题居左）构图不同</span></div>
+  </div>
+</div>
+</body>
+</html>
