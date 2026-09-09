@@ -1757,13 +1757,26 @@ _LAST_RESP_PATTERNS = (
 )
 # "负责人：X" / "主持人：X" / "由 X 主持" — 角色标注的人物 (指代最强信号)
 _MEMBER_LABEL_RE = re.compile(
-    r"(?:负责人|主持人|分配给|经办人|执行人|由)\s*[:：]?\s*([一-龥]{2,6})"
+    r"(?:负责人|主持人|分配给|经办人|执行人|由)\s*[:：是为]?\s*\**([一-龥]{2,6})"
 )
 
 
 def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[str]]:
-    """从最近一条 assistant 回答抽 (人物, 任务/标题) 候选实体"""
-    for msg in reversed(messages[:-1]):
+    """从最近最多 3 条 assistant 回答抽 (人物, 任务/标题) 候选实体。
+
+    2026-09-10 e2e 两条实测纪律:
+    - 不能只看最后一条 assistant — R2 答案常是"是否需要查看他…"的元话术轮,
+      实体在前面的实质回答里。
+    - 人名按答案文本首次出现位置排序 (先出现 ≈ 主语); 成员表 roster 序会把
+      主语挤出前 2, 锚定反把模型带偏。"负责人：X" 角色标注永远最优先。
+    """
+    roster = _member_names_cache()
+    _title_stop = ("进行中任务", "已完成任务", "待办任务", "任务列表", "无", "暂无")
+    labeled: list[str] = []
+    found: list[tuple[int, str]] = []  # (首现位置, 名字) 跨轮取最早
+    titles: list[str] = []
+    scanned = 0
+    for msg in reversed(messages):
         if msg.get("role") != "assistant":
             continue
         content = msg.get("content", "")
@@ -1774,20 +1787,37 @@ def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[
             )
         if not isinstance(content, str) or len(content) < 8:
             continue
-        # 优先级 1: 显式标注 ("负责人：X") — 指代几乎总指向它
-        # 优先级 2: 成员词典命中 (整轮回答里出现的人名) — 大列表轮会有多个, 歧义
-        labeled = [m.strip(" ：:*") for m in _MEMBER_LABEL_RE.findall(content)]
-        roster = _member_names_cache()
-        names = [n for n in labeled if n in roster] or [n for n in roster if n in content]
-        titles: list[str] = []
-        _title_stop = ("进行中任务", "已完成任务", "待办任务", "任务列表", "无", "暂无")
-        for pat in _LAST_RESP_PATTERNS:
-            for m in pat.findall(content):
-                m = m.strip(" ：:*")
-                if m and m not in titles and m not in names and not any(s in m for s in _title_stop):
-                    titles.append(m)
-        return names[:2], titles[:2]
-    return [], []
+        scanned += 1
+        labeled += [m.strip(" ：:*") for m in _MEMBER_LABEL_RE.findall(content)]
+        # 人名兜底只信最近一条 assistant (scanned==1): 更早轮多是大列表, 首名≠主语,
+        # 锚错比不锚更糟 (2026-09-10 k1 压测: R2 未提人名, 退到 R1 列表锚成胡小琪)
+        if scanned == 1:
+            for n in roster:
+                p = content.find(n)
+                if p >= 0:
+                    found.append((scanned, p, n))
+        if not titles:  # 任务标题只从最近一条实质 assistant 提
+            for pat in _LAST_RESP_PATTERNS:
+                for m in pat.findall(content):
+                    m = m.strip(" ：:*")
+                    # 加噪过滤: 含时间/状态/标点残片的不是标题 (2026-09-10 实测
+                    # "**最近的截止时间**" 加粗被误抽)
+                    if m and m not in roster                             and not any(s in m for s in _title_stop)                             and not re.search(r"时间|截止|进度|状态|注[：:]|\d{4}", m)                             and 2 <= len(m) <= 25 and m not in titles:
+                        titles.append(m)
+        if scanned >= 3:
+            break
+    # 排序键 = (轮次距本轮的正距离, 该轮内首次出现位置) — 最近一轮里出现过的
+    # 人名永远优先于更早轮 (上上轮大列表首位≠本轮主语, 2026-09-10 e2e 实锤)。
+    earliest: dict[str, tuple[int, int]] = {}
+    for round_i, p, n in found:
+        cur = earliest.get(n)
+        if cur is None or (round_i, p) < cur:
+            earliest[n] = (round_i, p)
+    found_sorted = sorted(earliest, key=lambda n: earliest[n])
+    # 收敛为单锚点 (2026-09-10 e2e 教训: 注入 2-3 个人名时模型仍挑错,
+    # 多候选=没锚)。"负责人：X" 标注最优先, 否则取答案文本最早出现的人名。
+    names = [n for n in dict.fromkeys(labeled + found_sorted) if n in roster]
+    return names[:1], titles[:2]
 
 
 _MEMBER_NAMES: list[str] = []
