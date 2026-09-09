@@ -2671,6 +2671,110 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-radius: 0;
   padding: 0;
 }
+
+/* ═══ 批次⑩.69 主对话区选型 E「ChatGPT 现行式」(2026-09-10) ═══
+   方案稿: docs/design-proposals/chat-main-2026-09/index.html。仅 dark 沉浸生效, 亮色不变。
+   核心: 用户=中灰圆角气泡(去珊瑚描边/硬阴影/挖孔时间戳), AI=无头像/无§头行/正文去气泡,
+   工具过程收成「▸ 已调用 N 个工具」可展开胶囊, 自评绿 chip 退场, 输入区药丸化+圆形↑发送键。 */
+/* —— 过程胶囊: 亮色隐藏(维持 § 头行 + showThinking 旧行为), 暗色替代 § 头行 —— */
+.chat-immersive .trace-pill { display: none; }
+[data-theme="dark"] .chat-immersive .trace-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin: 0 0 10px;
+  padding: 4px 12px;
+  border: 1px solid rgba(226, 236, 234, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-theme="dark"] .chat-immersive .trace-pill:hover {
+  border-color: rgba(226, 236, 234, 0.32);
+  background: rgba(255, 255, 255, 0.045);
+}
+[data-theme="dark"] .chat-immersive .trace-pill .tp-arrow { font-size: 10px; color: #6b757d; }
+/* —— 用户气泡: ChatGPT 式中灰圆角 —— */
+[data-theme="dark"] .chat-immersive .user-bubble {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: none !important;
+  border-radius: 18px !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] .chat-immersive .user-bubble::before { display: none; }
+[data-theme="dark"] .chat-immersive .user-bubble:hover { transform: none; box-shadow: none; }
+/* —— AI: 头像/§头行退场, 正文去气泡直接排在页面上 —— */
+[data-theme="dark"] .chat-immersive .msg-row.bot-row > .bot-msg-avatar { display: none !important; }
+[data-theme="dark"] .chat-immersive .dossier-entry-head { display: none; }
+[data-theme="dark"] .chat-immersive .msg-row .msg-content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px 0 0 !important;
+}
+/* —— 自评绿 chip 退场 (synthesis/retry/compressed 徽章保留) —— */
+[data-theme="dark"] .chat-immersive .event-badge-critique { display: none; }
+/* —— 操作行: tokens/耗时退场, 反馈按钮 icon-only 淡显 —— */
+[data-theme="dark"] .chat-immersive .mm-tokens,
+[data-theme="dark"] .chat-immersive .mm-duration { display: none; }
+[data-theme="dark"] .chat-immersive .msg-meta { margin-top: 4px; }
+[data-theme="dark"] .chat-immersive .feedback-buttons { margin-top: 0; gap: 2px; }
+[data-theme="dark"] .chat-immersive .fb-label { display: none; }
+[data-theme="dark"] .chat-immersive .fb-btn { opacity: 0.55; background: transparent; }
+[data-theme="dark"] .chat-immersive .fb-btn:hover:not(:disabled) { opacity: 1; background: rgba(255, 255, 255, 0.05); }
+[data-theme="dark"] .chat-immersive .fb-btn.active { opacity: 1; }
+/* —— 输入区: 24px 药丸 + 无硬阴影 + 圆形↑发送键 —— */
+[data-theme="dark"] .chat-immersive .input-core {
+  border-radius: 24px !important;
+  border-color: rgba(226, 236, 234, 0.3) !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] .chat-immersive .send-btn-pill {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px !important;
+  background: #35c2a4 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  font-size: 0 !important;
+  letter-spacing: 0 !important;
+  color: transparent !important;
+  position: relative;
+}
+[data-theme="dark"] .chat-immersive .send-btn-pill::before {
+  content: '↑';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0b1512;
+}
+[data-theme="dark"] .chat-immersive .send-btn-pill:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: none !important;
+  background: #43d4b6 !important;
+}
+[data-theme="dark"] .chat-immersive .send-btn-pill:disabled {
+  background: rgba(226, 236, 234, 0.14) !important;
+  color: transparent !important;
+}
+[data-theme="dark"] .chat-immersive .input-hint {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #565f66;
+}
 /* 引用面板: 摘要 teal 印章条 + tab 墨青 + 角色徽章 (我=珊瑚 / AI=墨青) */
 .chat-immersive .cites-panel .cp-summary {
   background: rgba(14, 118, 110, 0.06);
