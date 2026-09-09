@@ -118,22 +118,31 @@ async def critique_response(
 
     # 2. LLM 调
     llm = ctx.llm or LLMClient()
+    # 2026-09-09 (实测定位): qwen3:14b 无视 system"只输出 JSON"指令, 先写 ~1000 token
+    # 意识流分析 ("好的，我现在需要作为质量评审员...") 才可能接 JSON。olama/OpenAI 协议
+    # 没有 thinking=disabled 等价物, 唯一可靠解 = assistant 预填 "{" 强制续写 JSON
+    # (直探实测: 预填后首个输出即 "score": 8,...,意识流被压进 think 通道)。
+    # anthropic 后端不加 (无 partial 标志的尾部 assistant 无预填效果, 也无害)。
+    messages = [{"role": "user", "content": prompt}]
+    if getattr(settings, "LLM_BACKEND", "anthropic") != "anthropic":
+        messages.append({"role": "assistant", "content": "{"})
     try:
         resp = await llm.complete(
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             model=settings.AGENT_REFLECTION_MODEL,
             # 2026-06-14 Stage 5 收尾：mimo 等思考型模型显式禁用 thinking
-            system="你是质量评审员。直接输出纯 JSON。",
-            max_tokens=500,
+            system="你是质量评审员。你的输出第一个字符必须是 {，最后一个字符必须是 }，中间只有一段纯 JSON，禁止任何分析过程或前后缀文字。",
+            # 2026-09-09: 500→1200。实测 qwen3:14b 无视"直接输出 JSON"先写 ~500 token
+            # 意识流分析才被截断 (JSON 从未出现 → 全级 parse fallback 失败)，
+            # thinking=disabled 在 openai_compat/ollama 路径被丢弃无法约束。
+            max_tokens=1200,
             temperature=0.0,
             thinking={"type": "disabled"},
         )
-        # 提取文本
-        text = ""
-        for block in resp.content:
-            if hasattr(block, "text") and block.text:
-                text = block.text.strip()
-                break
+        # 提取文本 — 2026-09-09: 兼容只有 thinking 块的响应
+        # (qwen3:14b 自评路径实测偶发 content 空/全在 thinking, 老循环只认 block.text → "LLM returned empty text")
+        from app.core.llm import extract_text_from_response
+        text = extract_text_from_response(resp)
         if not text:
             raise ValueError("LLM returned empty text")
 
@@ -155,7 +164,12 @@ async def critique_response(
         return result
     except Exception as e:
         # Plan agent 5c：Reflection 失败不阻塞主流程，吞掉异常
-        logger.warning(f"critique failed: {type(e).__name__}: {e}")
+        # 2026-09-09: 附带原始输出前 300 字 (直探 14b 能产合法 JSON, 生产却连环失败, 无现场无法定位)
+        try:
+            _raw = text[:300]
+        except Exception:
+            _raw = "<text unavailable>"
+        logger.warning(f"critique failed: {type(e).__name__}: {e} | raw_head={_raw!r}")
         return CritiqueResult(
             score=0,
             addresses_question=True,  # 视为通过
