@@ -902,6 +902,16 @@ class AgenticLoop:
         tool_calls: list[dict] = []
         t0 = time.monotonic()
 
+        # 2026-09-10 指代锚定注入: 代词问题 + 上轮有实体 → 追加进本轮 system
+        # (ephemeral, 不落库不进 history; 只影响本次 run 的 LLM 调用)
+        try:
+            _anchor = _pronoun_anchor_note(messages)
+            if _anchor:
+                logger.info(f"[pronoun-anchor] {_anchor[:80]}...")
+                system = system + "\n\n" + _anchor
+        except Exception as _e:
+            logger.warning(f"[pronoun-anchor] 注入失败 (best-effort 跳过): {_e}")
+
         try:
             # ===== Phase 0: 强制 plan_step (#041 - 2026-06-28 chat agent 架构级集成) =====
             # Haiku 输出的 suggested_tools → agentic_loop 主动 dispatch (代码层强制, 不靠 LLM)
@@ -1729,6 +1739,103 @@ def _last_user_text(messages: list[dict]) -> str:
                     if isinstance(block, dict) and block.get("type") == "text":
                         return block.get("text", "")
     return ""
+
+
+# 2026-09-10 指代锚定 (实测第 2 组 R3: 上轮答案是韩重阳, "他手上还有其他任务吗"
+# 被模型查成列表第一人胡小琪 — 上下文里有信息但 14b 不去用, 提示词只能压概率)。
+# 工程补刀: 从上一轮 assistant 回答里正则抽实体, 显式注入本轮上下文, 把
+# "模型自己回看上文找实体" 这一步挪到代码里。
+_PRONOUN_RE = re.compile(
+    r"(他|她|它|他们|她们|这条|那条|这个任务|那个任务|这位|那人|"
+    r"刚才那?个|刚刚那?个|上面那?个|前面那?个|此任务|该任务|它的)"
+)
+_LAST_RESP_PATTERNS = (
+    re.compile(r"负责人[:：]\s*([^\s,，。;；、()（）\[]+)"),
+    re.compile(r"【([^】]{2,12})】"),
+    re.compile(r"[「【]([^」】]{2,25})[」】]"),
+    re.compile(r"\*\*([^*]{2,20})\*\*"),
+)
+# "负责人：X" / "主持人：X" / "由 X 主持" — 角色标注的人物 (指代最强信号)
+_MEMBER_LABEL_RE = re.compile(
+    r"(?:负责人|主持人|分配给|经办人|执行人|由)\s*[:：]?\s*([一-龥]{2,6})"
+)
+
+
+def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[str]]:
+    """从最近一条 assistant 回答抽 (人物, 任务/标题) 候选实体"""
+    for msg in reversed(messages[:-1]):
+        if msg.get("role") != "assistant":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            content = "".join(
+                b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        if not isinstance(content, str) or len(content) < 8:
+            continue
+        # 优先级 1: 显式标注 ("负责人：X") — 指代几乎总指向它
+        # 优先级 2: 成员词典命中 (整轮回答里出现的人名) — 大列表轮会有多个, 歧义
+        labeled = [m.strip(" ：:*") for m in _MEMBER_LABEL_RE.findall(content)]
+        roster = _member_names_cache()
+        names = [n for n in labeled if n in roster] or [n for n in roster if n in content]
+        titles: list[str] = []
+        _title_stop = ("进行中任务", "已完成任务", "待办任务", "任务列表", "无", "暂无")
+        for pat in _LAST_RESP_PATTERNS:
+            for m in pat.findall(content):
+                m = m.strip(" ：:*")
+                if m and m not in titles and m not in names and not any(s in m for s in _title_stop):
+                    titles.append(m)
+        return names[:2], titles[:2]
+    return [], []
+
+
+_MEMBER_NAMES: list[str] = []
+_MEMBER_NAMES_TS = 0.0
+
+
+def _member_names_cache() -> list[str]:
+    """成员姓名的进程内 10 分钟缓存 (query 时同步取, 避免每轮打库)。
+
+    拉不到 (无 DB/首次) 返 [] → 调用方退化到纯文本模式抽取。
+    """
+    global _MEMBER_NAMES, _MEMBER_NAMES_TS
+    import time as _t
+    if _MEMBER_NAMES and _t.time() - _MEMBER_NAMES_TS < 600:
+        return _MEMBER_NAMES
+    try:
+        import psycopg2
+        from app.config import settings
+        dsn = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+        with psycopg2.connect(dsn, connect_timeout=2) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT name FROM members WHERE is_active = true")
+                _MEMBER_NAMES = [r[0] for r in cur.fetchall()]
+        _MEMBER_NAMES_TS = _t.time()
+    except Exception:
+        pass  # best-effort: 拉不到就用旧值或空
+    return _MEMBER_NAMES
+
+
+def _pronoun_anchor_note(messages: list[dict]) -> str:
+    """本轮问题含代词且上文有实体 → 返回锚定提示; 否则 ''"""
+    q = _last_user_text(messages)
+    if not q or not _PRONOUN_RE.search(q):
+        return ""
+    names, titles = _extract_prev_round_entities(messages)
+    if not names and not titles:
+        return ""
+    parts = []
+    if names:
+        parts.append(f"人物：{'、'.join(names)}")
+    if titles:
+        parts.append(f"任务/标题：{'、'.join(titles)}")
+    return (
+        "[系统锚定] 用户本轮问题含指代词, 上一轮回答中的实体是 "
+        + "；".join(parts)
+        + "。填工具参数时优先使用上述实体 (如 assignee_name 用上面的人物名), "
+        "不要换成列表里其他人名。若指代对象明显不属于上述实体, 直接反问用户澄清。"
+    )
 
 
 def _extract_rich_block_json(accumulated_text: str) -> tuple[str, list[dict]]:
