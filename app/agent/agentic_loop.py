@@ -40,6 +40,7 @@ from app.agent.result_compressor import (
     inject_compressed_to_messages,
 )
 from app.agent.tool_registry import (
+    TOOL_REGISTRY,
     ToolContext,
     ToolNotFoundError,
     dispatch_tool,
@@ -1095,12 +1096,50 @@ class AgenticLoop:
                     }
                     if _needs_data and not _nudge_used and not tool_calls:
                         _nudge_used = True
-                        logger.info("[tool-nudge] data_query 首轮 0 工具调用 → 注入强制查询指令重试一轮")
                         yield StreamEvent(type="thinking", label="🔄 强制补查: 检测到数据查询未调用工具...")
-                        # assistant 轮压平为纯字符串 (仅本 nudge 路径): dump 后的 block dict
-                        # (含 thinking/citations=None 等扩展键) 会被 ollama openai 兼容层
-                        # 拒 400 "invalid message content type" (实测 15:07/15:19)。
-                        # 本分支保证此轮无 tool_use (tool_uses 为空才会进来), 压平不丢工具调用。
+                        # 2026-09-10 三次实测教训: 文本 nudge ("你必须调用工具") 模型照样不听
+                        # (直接输出复述指令的元话术)。改为**代码执行**: suggested_tools 里有
+                        # 注册工具就直接 dispatch, 真实结果注入 messages, 模型只需基于数据作答。
+                        _exec_tools = [t for t in (getattr(intent, "suggested_tools", None) or [])
+                                       if t in TOOL_REGISTRY][:2]
+                        if not _exec_tools and "query" in str(getattr(intent, "category", "")):
+                            _exec_tools = []  # 无建议工具时不强塞 (避免乱调)
+                        if _exec_tools:
+                            logger.info(f"[tool-nudge] 代码直接执行建议工具: {_exec_tools}")
+                            _inj: list[dict] = []
+                            for _j, _tn in enumerate(_exec_tools):
+                                _payload = _build_plan_step_input(_tn, intent, messages)
+                                try:
+                                    _res = await dispatch_tool(_tn, _payload, ctx)
+                                    yield StreamEvent(type="tool_use", tool_name=_tn,
+                                                      tool_input=_payload, tool_use_id=f"nudge_{_j}")
+                                    yield StreamEvent(type="tool_result", tool_name=_tn,
+                                                      tool_output=_res if isinstance(_res, dict) else {"result": str(_res)},
+                                                      tool_use_id=f"nudge_{_j}")
+                                    _rb = _extract_rich_block(_tn, _res)
+                                    if _rb:
+                                        rich_blocks.append(_rb)
+                                        yield StreamEvent(type="rich_block", block=_rb)
+                                    tool_calls.append({"name": _tn, "input": _payload, "output": _res})
+                                    _inj.append({
+                                        "type": "tool_result",
+                                        "tool_use_id": f"nudge_{_j}",
+                                        "content": json.dumps(_res, ensure_ascii=False, default=str)[:8000],
+                                    })
+                                except Exception as _e:
+                                    logger.warning(f"[tool-nudge] dispatch {_tn} 失败: {_e}")
+                            if _inj:
+                                # 注入格式对齐 Phase 0 已验证模式 (纯 text assistant 轮 +
+                                # user tool_result 列表): 手工构造 tool_use 块缺真实
+                                # model-generated id, ollama 兼容层可能拒 (与 400 同族风险)
+                                messages.append({"role": "assistant", "content": [
+                                    {"type": "text",
+                                     "text": "[补查] 检测到需要实时数据, 系统已代为查询 "
+                                             f"{len(_inj)} 个工具。"}]})
+                                messages.append({"role": "user", "content": _inj})
+                                continue
+                        # 无可执行工具 → 退回文本 nudge (assistant 轮压平纯字符串防 ollama 400)
+                        logger.info("[tool-nudge] 无建议工具, 退回文本指令重试")
                         _n_content = getattr(response, "content", None)
                         if not isinstance(_n_content, list):
                             _n_content = []

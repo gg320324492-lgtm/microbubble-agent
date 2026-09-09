@@ -107,6 +107,9 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 7 类之
 - **team_overview → 必填 ["query_members", "query_projects", "search_knowledge"]**（2026-07-15 #P2: 三件套, 必须并行 dispatch; 2026-09-09 工具名修正）
 - casual_chat → 必填 []（**严禁**填工具）
 - follow_up → 必填 []（与 casual_chat 同, 严禁填工具）
+- **data_query → 必填对应查询工具**（2026-09-10 实测补: 问会议 ["query_meetings"]、问任务
+  ["query_tasks"]、问成员 ["query_members"]、问统计 ["get_task_stats"]。此前 data_query 无
+  规则 → suggested_tools 常空, nudge 代码强制补查时无工具可执行, 只能退回文本指令被模型无视）
 - 任何场景 confidence < 0.5 时 → suggested_tools 设为 []（避免 hallucinated tools）
 
 用户问题：{question}
