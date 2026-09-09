@@ -25,6 +25,9 @@ class QueryTasksInput(BaseModel):
     status: Optional[str] = Field(None, description="按状态筛选（in_progress/blocked/review/done/cancelled）")
     project_name: Optional[str] = Field(None, description="按项目名称筛选")
     overdue: bool = Field(False, description="是否只查询逾期任务")
+    # 2026-09-10 新增: 实测模型按标题找任务 ("给「修改论文」加备注" 的回读确认)
+    # 时无参数可用 → 全量列表淹没目标。title_keyword 走 ilike 子串匹配。
+    title_keyword: Optional[str] = Field(None, description="按任务标题关键词筛选 (子串匹配)。确认/定位某个具体任务时用这个")
 
 
 class TaskListItem(BaseModel):
@@ -93,6 +96,13 @@ async def query_tasks(input: QueryTasksInput, ctx: ToolContext) -> dict:
         project_id=project_id,
         overdue=input.overdue,
     )
+    # title_keyword 子串过滤 (service 层无此参数, 工具层补; 数据量小无性能顾虑)
+    if input.title_keyword:
+        kw = input.title_keyword.strip()
+        tasks = [t for t in tasks if kw in (t.title or "")]
+    # 2026-09-10 排序确定性 (service 层无 ORDER BY, 物理序随机): 有截止的按截止升序
+    # (最紧在前, 直接服务"哪个最急"类问题), 无截止按 id 兜底。
+    tasks = sorted(tasks, key=lambda t: (t.due_date is None, t.due_date or t.created_at, t.id))
 
     # 批量获取 assignee 姓名 + project 名称
     assignee_ids = {t.assignee_id for t in tasks if t.assignee_id}
@@ -158,7 +168,7 @@ class CreateTaskOutput(BaseModel):
 
 @tool(
     name="create_task",
-    description="创建新任务。当用户要求创建任务、分配任务给某人时使用。",
+    description="【仅用于新建任务】当用户要求创建/新增/分配一个还不存在的任务时使用。⚠️ 对已有任务的任何修改 (加备注/改状态/改进度/延期) 一律用 update_task, 不要用本工具重复创建 (2026-09-10 实测: '给这个任务加备注'被错调成 create_task, 产生了重复任务)。",
     input_model=CreateTaskInput,
     output_model=CreateTaskOutput,
 )
@@ -264,45 +274,94 @@ async def create_task(input: CreateTaskInput, ctx: ToolContext) -> dict:
 
 
 class UpdateTaskInput(BaseModel):
-    task_id: int = Field(..., description="任务ID")
-    status: Optional[str] = Field(None, description="新状态：in_progress/blocked/review/done/cancelled")
+    task_id: Optional[int] = Field(None, description="任务ID (与 title_keyword 二选一; 不确定ID时用 title_keyword)")
+    # 2026-09-10: 实测两段式 (query_tasks 找 id → update_task) 模型会用错 status
+    # 过滤丢目标。单调用内 title→id 解析 (唯一命中才执行) 砍掉出错链。
+    title_keyword: Optional[str] = Field(None, description="按任务标题关键词定位任务 (需唯一命中; 多义返回候选列表)")
+    assignee_name: Optional[str] = Field(None, description="配合 title_keyword 的负责人姓名 (缩小/确认范围)")
+    status: Optional[str] = Field(None, description="新状态：in_progress/blocked/review/done/cancelled。不传=不改状态 (2026-09-10 修正: 此前不传会被强制回写成 in_progress, 已完成任务会被悄悄翻回进行中!)")
     progress: Optional[int] = Field(None, ge=0, le=100, description="进度百分比 0-100")
     due_date: Optional[str] = Field(None, description="新截止日期 YYYY-MM-DD HH:MM")
+    add_note: Optional[str] = Field(None, description="追加备注文本 (2026-09-10 新增): 写入 description 并带时间戳, 不覆盖原描述。用户说'给任务加备注/补充说明'用这个字段")
 
 
 class UpdateTaskOutput(BaseModel):
     status: str
     task_id: Optional[int] = None
     new_status: Optional[str] = None
+    note_written: bool = False
+    description_tail: Optional[str] = None
     rich_block_type: Optional[str] = None
 
 
 @tool(
     name="update_task",
-    description="更新任务状态。当用户要求标记任务完成、修改进度、延期等时使用。",
+    description="更新任务。支持：改状态/进度/截止日期，或追加备注(add_note)。注意不传 status 时不会改动状态（不会自动置为进行中）。用户要求'加备注/补充说明/留言'时用 add_note。",
     input_model=UpdateTaskInput,
     output_model=UpdateTaskOutput,
 )
 async def update_task(input: UpdateTaskInput, ctx: ToolContext) -> dict:
-    """更新任务（状态/进度/截止日期）"""
+    """更新任务（状态/进度/截止日期/追加备注），支持 task_id 直接指定或 title_keyword 定位"""
     from app.services.task_service import TaskService
     from app.models.base import BEIJING_TZ
     from datetime import datetime, timezone
 
     task_svc = TaskService(ctx.db)
-    task = await task_svc.get_task(input.task_id)
+    task = None
+    if input.task_id is not None:
+        task = await task_svc.get_task(input.task_id)
+    elif input.title_keyword:
+        # 2026-09-10: title→id 解析唯一命中才执行, 多义直接返回候选让模型确认
+        # (实测两段式"先 query 再 update"里模型会用错 status 过滤丢目标)
+        kw = input.title_keyword.strip()
+        cand = await task_svc.get_tasks(status=None)
+        cand = [t for t in cand if kw in (t.title or "")]
+        if input.assignee_name:
+            from app.services.member_service import MemberService
+            m = await MemberService(ctx.db).get_member_by_name(input.assignee_name)
+            if m:
+                cand = [t for t in cand if t.assignee_id == m.id]
+        if len(cand) == 1:
+            task = cand[0]
+        elif not cand:
+            return {"status": "error", "message": f"未找到标题含「{kw}」的任务"}
+        else:
+            return {"status": "error", "ambiguous": True,
+                    "message": f"「{kw}」匹配 {len(cand)} 个任务, 请用 task_id 指定",
+                    "candidates": [{"id": t.id, "title": t.title} for t in cand[:8]]}
     if not task:
-        return {"status": "error", "message": f"任务 {input.task_id} 不存在"}
+        return {"status": "error", "message": f"任务 {input.task_id or input.title_keyword} 不存在"}
 
     # 2026-09-05 角色扁平化：任何成员可更新任意任务（原创建者/被分配者/admin 限制废除）
 
-    updated = await task_svc.update_task_status(
-        task_id=input.task_id,
-        status=input.status or "in_progress",
-        progress=input.progress,
-    )
+    updated = task
+    # 2026-09-10 修正: 老实现 status or "in_progress" → 只想加备注/改进度时
+    # 会把已完成任务悄悄翻回 in_progress (实测任务 52 被这样改过状态)。
+    if input.status:
+        updated = await task_svc.update_task_status(
+            task_id=task.id,  # 2026-09-10: 不能用 input.task_id (title_keyword 路径下是 None)
+            status=input.status,
+            progress=input.progress,
+        )
+    elif input.progress is not None:
+        updated.progress = input.progress
+        await ctx.db.commit()
+        await ctx.db.refresh(updated)
     if not updated:
-        return {"status": "error", "message": f"任务 {input.task_id} 更新失败"}
+        return {"status": "error", "message": f"任务 {task.id} 更新失败"}
+
+    # 2026-09-10 新增: 备注写入 description (带时间戳追加, 不覆盖)
+    note_written = False
+    if input.add_note:
+        from datetime import datetime as _dt
+        from app.models.base import BEIJING_TZ as _BZ
+        stamp = _dt.now(_BZ).strftime("%Y-%m-%d %H:%M")
+        old_desc = (updated.description or "").rstrip()
+        line = f"[备注 {stamp}] {input.add_note.strip()}"
+        updated.description = f"{old_desc}\n{line}" if old_desc else line
+        await ctx.db.commit()
+        await ctx.db.refresh(updated)
+        note_written = True
 
     # 更新截止日期
     if input.due_date and updated:
@@ -317,5 +376,7 @@ async def update_task(input: UpdateTaskInput, ctx: ToolContext) -> dict:
         "status": "success",
         "task_id": updated.id,
         "new_status": updated.status,
+        "note_written": note_written,
+        "description_tail": (updated.description or "")[-120:] or None,
         "rich_block_type": None,
     }
