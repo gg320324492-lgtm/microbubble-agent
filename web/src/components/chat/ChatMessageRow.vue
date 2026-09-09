@@ -104,6 +104,19 @@ const dossierToolNames = computed(() => {
   return [...new Set(names)].join(' / ')
 })
 
+// 批次⑩.69 选型 E「ChatGPT 现行式」: 工具过程默认收成一枚可展开胶囊,
+// 替代常驻展开的 trace 行 + § 头行 TOOLS 名单 (亮色经 CSS 隐藏胶囊维持旧行为)
+const traceOpen = ref(false)
+const traceToolCount = computed(() => {
+  const trace = props.msg.toolTrace || []
+  return trace.filter((t: any) => t && t.name).length
+})
+const tracePillText = computed(() => {
+  const n = traceToolCount.value
+  const total = (props.msg.toolTrace || []).length
+  return n > 0 ? `已调用 ${n} 个工具` : `已执行 ${total} 步`
+})
+
 const timeDividerText = computed(() => {
   if (!hasTimeDivider.value || !props.prevTimestamp) return ''
   // W-N 2026-08-14: 同一天不重复显示（避免"今天 02:07"在每条消息前都出现）
@@ -285,6 +298,17 @@ function onEditKeydown(e: KeyboardEvent) {
             <span class="de-name">小气助手 · REPLY</span>
             <span v-if="dossierToolNames" class="de-tools">TOOLS: {{ dossierToolNames }} ✓</span>
           </div>
+          <button
+            v-if="msg.role === 'assistant' && msg.toolTrace && msg.toolTrace.length"
+            type="button"
+            class="trace-pill"
+            :aria-expanded="traceOpen"
+            :title="traceOpen ? '收起执行过程' : '展开执行过程'"
+            @click="traceOpen = !traceOpen"
+          >
+            <span class="tp-arrow" aria-hidden="true">{{ traceOpen ? '▾' : '▸' }}</span>
+            <span class="tp-text">{{ tracePillText }}<template v-if="msg.durationMs"> · {{ (msg.durationMs / 1000).toFixed(1) }}s</template></span>
+          </button>
           <ThinkingCapsule
             v-if="msg.role === 'assistant' && msg.phase"
             :phase="msg.phase"
@@ -298,7 +322,7 @@ function onEditKeydown(e: KeyboardEvent) {
             :collapsed-by-default="!!msg.collapsedByDefault"
           />
           <TransitionGroup
-            v-if="showThinking && msg.toolTrace && msg.toolTrace.length"
+            v-if="(traceOpen || showThinking) && msg.toolTrace && msg.toolTrace.length"
             tag="div" name="trace" class="tool-trace"
           >
             <ToolTraceItem
@@ -348,8 +372,8 @@ function onEditKeydown(e: KeyboardEvent) {
                在历史消息(usage/durationMs 未映射)时不渲染 → 所有按钮消失.
                改成"有内容就渲染" — usage/durationMs span 内部各自 v-if -->
           <div v-if="msg.state === 'idle' && msg.content" class="msg-meta">
-            <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
-            <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
+            <span v-if="msg.usage" class="mm-tokens">{{ msg.usage.total_tokens }} tokens</span>
+            <span v-if="msg.durationMs" class="mm-duration">{{ (msg.durationMs / 1000).toFixed(1) }}s</span>
             <el-button
               v-if="msg.content" text size="small"
               class="tts-btn"
