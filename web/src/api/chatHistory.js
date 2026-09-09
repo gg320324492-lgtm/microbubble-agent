@@ -64,11 +64,13 @@ export async function listSessions(opts = {}) {
  * @param {string} [opts.client_session_id] - 客户端 sessionId（可选）
  * @returns {Promise<ServerChatSession>}
  */
-export async function createSession({ title, first_message, client_session_id } = {}) {
+export async function createSession({ title, first_message, client_session_id, first_message_client_msg_id } = {}) {
   const { data } = await axios.post(`${BASE}/chat/sessions`, {
     ...(title ? { title } : {}),
     ...(first_message ? { first_message } : {}),
     ...(client_session_id ? { client_session_id } : {}),
+    // 2026-09-09 双写修复: 首条消息幂等键透传 (与 chat/stream 持久化共用同一 cid)
+    ...(first_message_client_msg_id ? { first_message_client_msg_id } : {}),
   }, { timeout: 10000 })
   return data
 }

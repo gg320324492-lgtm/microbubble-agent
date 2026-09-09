@@ -158,16 +158,19 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
     title,
     firstMessage,
     clientSessionId,
+    firstMessageClientMsgId,
   }: {
     title?: string
     firstMessage?: string
     clientSessionId?: string
+    firstMessageClientMsgId?: string
   }) {
     try {
       const session = await chatHistoryApi.createSession({
         ...(title ? { title } : {}),
         ...(firstMessage ? { first_message: firstMessage } : {}),
         ...(clientSessionId ? { client_session_id: clientSessionId } : {}),
+        ...(firstMessageClientMsgId ? { first_message_client_msg_id: firstMessageClientMsgId } : {}),
       })
       // 头部插入（最新会话在前）
       serverSessions.value.unshift(session)

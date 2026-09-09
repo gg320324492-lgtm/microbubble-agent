@@ -619,6 +619,9 @@ export function useChatStream() {
       const created = await chatHistoryStore.createServerSession({
         clientSessionId: targetSessionId,
         firstMessage: content,
+        // 2026-09-09 双写修复: 首条消息带同一幂等键, chat/stream 服务端持久化
+        // 与随后的 appendMessageAsync 都被去重 → 不再出现同文两条 user 消息
+        firstMessageClientMsgId: userMsg.client_msg_id,
       })
       if (created) {
         const persisted = await chatHistoryStore.appendMessageAsync(targetSessionId, {
