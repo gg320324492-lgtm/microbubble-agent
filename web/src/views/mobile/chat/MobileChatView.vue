@@ -293,16 +293,20 @@ async function onDeleteSession(s) {
   } catch {}
 }
 async function onTogglePinSession(s) {
-  await sessionsStore.setPinned(s.id, !s.is_pinned)
-  ElMessage.success(s.is_pinned ? '已收藏' : '已取消收藏')
+  // 先快照操作前的状态 — await 后 store 已翻转 s.is_pinned, 再读会拿到新值导致提示反
+  const wasPinned = s.is_pinned
+  await sessionsStore.setPinned(s.id, !wasPinned)
+  ElMessage.success(wasPinned ? '已取消收藏' : '已收藏')
 }
 // [CHAT-P1-E E3] 移动端归档/恢复 (复用 store.setArchived)
 async function onToggleArchiveSession(s) {
+  // 同上: await 前快照, 否则归档提示"已恢复"/恢复提示"已归档"
+  const wasArchived = s.is_archived
   try {
-    await sessionsStore.setArchived(s.id, !s.is_archived)
-    ElMessage.success(s.is_archived ? '已恢复' : '已归档')
+    await sessionsStore.setArchived(s.id, !wasArchived)
+    ElMessage.success(wasArchived ? '已恢复' : '已归档')
   } catch (e) {
-    ElMessage.error(s.is_archived ? '恢复失败' : '归档失败')
+    ElMessage.error(wasArchived ? '恢复失败' : '归档失败')
   }
 }
 const imageInputRef = ref(null)

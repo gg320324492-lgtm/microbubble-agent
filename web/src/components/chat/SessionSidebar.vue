@@ -179,11 +179,14 @@ const onTogglePinned = (session) => {
 // [CHAT-P1-E E3] 归档/恢复 (复用 chatSessions.ts:497-502 setArchived, store API 已存在)
 const onToggleArchive = async (session) => {
   closeContextMenu()
+  // 先快照操作前的状态 — setArchived await 后会把 is_archived 翻转,
+  // 再读 session.is_archived 拿到的是新值, 提示语会反 (未归档点归档提示"已恢复")
+  const wasArchived = session.is_archived
   try {
-    await store.setArchived(session.id, !session.is_archived)
-    ElMessage.success(session.is_archived ? '已恢复' : '已归档')
+    await store.setArchived(session.id, !wasArchived)
+    ElMessage.success(wasArchived ? '已恢复' : '已归档')
   } catch (e) {
-    ElMessage.error(session.is_archived ? '恢复失败' : '归档失败')
+    ElMessage.error(wasArchived ? '恢复失败' : '归档失败')
   }
 }
 
