@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>暗色侧栏配色 · 4 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --teal-hi: #12968B; --ink: #16232A; --paper: #E2ECEA; --paper-txt: #FBFCFB;
+    --dark-page: #12151A; --dark-side: #171B21; --dark-item: #1D222A;
+    --dk-text: #C7CDD3; --dk-text2: #7E8790; --dk-line: #262C34;
+    --teal-dk: #35C2A4;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1420px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 330px; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 58px; }
+
+  /* ===== 暗色侧栏小样 ===== */
+  .side { background: var(--dark-side); border-radius: 14px; padding: 12px; color: var(--dk-text); border: 1px solid #0C0F13; }
+  .newbtn { width: 100%; border: none; cursor: pointer; font-size: 13px; padding: 11px 0; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 7px; font-weight: 550; transition: all .15s; }
+  .filter { margin-top: 10px; border: 1px solid var(--dk-line); background: rgba(255,255,255,.02); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--dk-text2); display: flex; align-items: center; gap: 7px; }
+  .tabs { display: flex; gap: 5px; margin-top: 10px; }
+  .tab { flex: 1; text-align: center; font-size: 12px; padding: 8px 0; border-radius: 6px; border: 1px solid var(--dk-line); color: var(--dk-text2); }
+  .bulk { display: inline-block; margin-top: 10px; font-size: 12px; padding: 8px 14px; border: 1px solid var(--dk-line); border-radius: 6px; color: var(--dk-text2); }
+  .grp { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--dk-line); font-size: 11px; color: var(--dk-text2); display: flex; align-items: center; gap: 6px; }
+  .sess { margin-top: 8px; border-radius: 10px; padding: 9px 10px; font-size: 12.5px; }
+  .sess .t { display: flex; align-items: center; gap: 6px; color: var(--dk-text); }
+  .sess .t .ck { color: #67C23A; font-size: 11px; }
+  .sess .m { margin-top: 4px; font-size: 10.5px; color: var(--dk-text2); display: flex; gap: 8px; }
+  .sess.on { background: rgba(53,194,164,.07); border-left: 3px solid var(--teal-dk); }
+
+  /* 现状: 纸色大块 */
+  .v0 .newbtn { background: var(--paper); color: #12191D; }
+  .v0 .tab.on { background: var(--paper); color: #12191D; border-color: var(--paper); }
+  /* A 青色实底 */
+  .vA .newbtn { background: linear-gradient(135deg, var(--teal) 0%, var(--teal-hi) 100%); color: #fff; }
+  .vA .tab.on { background: var(--teal); color: #fff; border-color: var(--teal); }
+  /* B 墨底青描边 */
+  .vB .newbtn { background: rgba(53,194,164,.10); color: var(--teal-dk); border: 1px solid rgba(53,194,164,.55); }
+  .vB .tab.on { background: rgba(53,194,164,.12); color: var(--teal-dk); border-color: rgba(53,194,164,.55); }
+  /* C 柔纸低饱和 */
+  .vC .newbtn { background: #AFC4BD; color: #10181C; }
+  .vC .tab.on { background: rgba(53,194,164,.14); color: var(--teal-dk); border-color: rgba(53,194,164,.4); }
+  /* D 纸青双轨 */
+  .vD .newbtn { background: linear-gradient(135deg, var(--teal) 0%, var(--teal-hi) 60%, #1B8F84 100%); color: #fff; }
+  .vD .tab.on { background: var(--paper); color: #12191D; border-color: var(--paper); }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.8; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>暗色侧栏配色优化 · 4 方案</h1>
+  <p class="sub">现状问题：档案风「纸墨反转」让 <b>新对话按钮 + 选中 tab</b> 变成两块高亮纸色，叠在深色侧栏上像两个"洞"，与青色活跃条/模式切换的暗色语言脱节。四案统一了「新对话 = 主操作、选中 tab = 当前态」的层级，并与活跃会话的青色左条拉齐。全部含亮色不变、暗色生效，且过 AA 对比度。</p>
+
+  <div class="row">
+    <div class="card">
+      <div class="card-h"><span class="tag">现状</span><h2>纸色大块（截图同款）</h2></div>
+      <p class="card-d">新对话与选中 tab 都是高亮纸色块，两块叠放抢视线，与暗色底割裂。</p>
+      <div class="side v0">
+        <button class="newbtn">🖊 新对话</button>
+        <div class="filter">🔍 过滤会话标题或标签</div>
+        <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+        <div class="bulk">✓ 批量管理</div>
+        <div class="grp">🕐 最近</div>
+        <div class="sess on"><div class="t">我们最近开过什么… <span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>13 条</span></div></div>
+        <div class="sess"><div class="t">你好 <span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div></div>
+      </div>
+      <div class="notes"><span class="con">⚠ 两块纸色抢焦点，暗色语言不统一</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>归档青实底 · 全站统一</h2></div>
+      <p class="card-d">新对话用青色渐变实底白字（同网盘上传键），选中 tab 青色实底。与活跃会话青条、模式切换青色一脉相承，暗色语言完全统一。</p>
+      <div class="side vA">
+        <button class="newbtn">🖊 新对话</button>
+        <div class="filter">🔍 过滤会话标题或标签</div>
+        <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+        <div class="bulk">✓ 批量管理</div>
+        <div class="grp">🕐 最近</div>
+        <div class="sess on"><div class="t">我们最近开过什么… <span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>13 条</span></div></div>
+        <div class="sess"><div class="t">你好 <span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div></div>
+      </div>
+      <div class="notes"><span class="pro">✓ 与全站青色体系一致，层级最清晰</span><span class="con">⚠ 失去档案风"纸墨反转"特色</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>墨底青描边 · 最暗色原生</h2></div>
+      <p class="card-d">不再用实底大块：新对话与选中 tab 改为半透明青底 + 青描边 + 青字。整栏保持深色，只有色彩点缀，最安静协调。</p>
+      <div class="side vB">
+        <button class="newbtn">🖊 新对话</button>
+        <div class="filter">🔍 过滤会话标题或标签</div>
+        <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+        <div class="bulk">✓ 批量管理</div>
+        <div class="grp">🕐 最近</div>
+        <div class="sess on"><div class="t">我们最近开过什么… <span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>13 条</span></div></div>
+        <div class="sess"><div class="t">你好 <span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div></div>
+      </div>
+      <div class="notes"><span class="pro">✓ 暗色最原生，无抢眼大块</span><span class="con">⚠ 主操作强调感偏弱</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>柔纸降饱和 · 保留档案味</h2></div>
+      <p class="card-d">保留"纸色按钮"的档案风身份，但把纸色压暗降饱和（#AFC4BD），刺眼感消失；选中 tab 让位给半透明青。特色与协调兼得。</p>
+      <div class="side vC">
+        <button class="newbtn">🖊 新对话</button>
+        <div class="filter">🔍 过滤会话标题或标签</div>
+        <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+        <div class="bulk">✓ 批量管理</div>
+        <div class="grp">🕐 最近</div>
+        <div class="sess on"><div class="t">我们最近开过什么… <span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>13 条</span></div></div>
+        <div class="sess"><div class="t">你好 <span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div></div>
+      </div>
+      <div class="notes"><span class="pro">✓ 保留档案风身份， glare 大幅降低</span><span class="con">⚠ 纸色仍与青色并存两种点缀</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">D</span><h2>青渐变 + 纸色 tab · 双轨强调</h2></div>
+      <p class="card-d">新对话升级为青色渐变（主操作最强），选中 tab 保留纸色（当前态用纸墨反差）。一个页面只留一块纸色，层级明确。</p>
+      <div class="side vD">
+        <button class="newbtn">🖊 新对话</button>
+        <div class="filter">🔍 过滤会话标题或标签</div>
+        <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+        <div class="bulk">✓ 批量管理</div>
+        <div class="grp">🕐 最近</div>
+        <div class="sess on"><div class="t">我们最近开过什么… <span class="ck">✓</span></div><div class="m"><span>8 小时前</span><span>13 条</span></div></div>
+        <div class="sess"><div class="t">你好 <span class="ck">✓</span></div><div class="m"><span>1 天前</span><span>89 条</span></div></div>
+      </div>
+      <div class="notes"><span class="pro">✓ 主次分明，保留一点纸墨特色</span><span class="con">⚠ 仍有一块纸色</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
