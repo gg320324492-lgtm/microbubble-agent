@@ -87,22 +87,24 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 7 类之
   "category": "推荐人|找资料|解释概念|执行操作|数据查询|闲聊|团队概览|续讲",
   "confidence": 0.0-1.0,
   "keywords": ["关键词1", "关键词2"],
-  "suggested_tools": ["query_members", "list_projects", "search_knowledge"],
+  "suggested_tools": ["query_members", "query_projects", "search_knowledge"],
   "reasoning": "一句话分类理由"
 }}
 
 建议工具 (suggested_tools) 填写规则 (必读，影响 Phase 0 强制执行):
-- 从 34 个工具里选 1-3 个最相关的（**不要超过 3 个**，避免过度调度）:
+- 从注册工具里选 1-3 个最相关的（**不要超过 3 个**，避免过度调度）。**只能填下列真实工具名**
+  (2026-09-09 修正: 老清单含 list_meetings/get_task_detail/list_projects/get_formula/get_hypothesis
+   5 个不存在的名字 → Phase 0 强制调度 ToolNotFound 跳过, data_query 场景空手进综合):
   检索类: search_knowledge / web_search
-  公式类: list_formulas / get_formula
-  假设类: get_hypothesis / list_hypotheses
+  公式类: list_formulas
+  假设类: list_hypotheses
   成员类: query_members / get_member_profile
-  任务类: query_tasks / get_task_detail
-  会议类: list_meetings / get_meeting_transcript
-  项目类: list_projects / get_project_summary
+  任务类: query_tasks / get_task_stats
+  会议类: query_meetings / get_meeting_detail
+  项目类: query_projects / get_project_summary
 - search_info → 必填 ["search_knowledge"] 或 ["web_search"]
-- explain_concept → 必填 ["search_knowledge", "list_formulas"] 或 ["search_knowledge", "get_hypothesis"]
-- **team_overview → 必填 ["query_members", "list_projects", "search_knowledge"]**（2026-07-15 #P2: 三件套, 必须并行 dispatch）
+- explain_concept → 必填 ["search_knowledge", "list_formulas"] 或 ["search_knowledge", "list_hypotheses"]
+- **team_overview → 必填 ["query_members", "query_projects", "search_knowledge"]**（2026-07-15 #P2: 三件套, 必须并行 dispatch; 2026-09-09 工具名修正）
 - casual_chat → 必填 []（**严禁**填工具）
 - follow_up → 必填 []（与 casual_chat 同, 严禁填工具）
 - 任何场景 confidence < 0.5 时 → suggested_tools 设为 []（避免 hallucinated tools）
@@ -317,11 +319,28 @@ async def classify_intent(question: str, ctx: ToolContext) -> IntentResult:
 
         # 解析 JSON
         result_dict = parse_llm_json(text)
+        # 2026-09-09 运行时防御 (与 prompt 清单修正配套): 模型仍可能吐出注册表
+        # 外的工具名 (老 prompt 惯性 / 自造名)。在 Phase 0 消费前过一遍 registry
+        # 差集, 幽灵名直接剔除并 warning — 比运行到 dispatch_tool 抛 ToolNotFound
+        # 再跳过的链路短, 且 suggested_tools=[] 时 data_query 会正常走模型自选。
+        suggested = result_dict.get("suggested_tools", []) or []
+        if suggested:
+            try:
+                from app.agent.tool_registry import TOOL_REGISTRY
+                # 注册表为空 = tools 包尚未链式 import (test/独立进程路径), 此时
+                # 过滤会把合法工具全剔除 → 只在注册表非空时做差集防御。
+                if TOOL_REGISTRY:
+                    unknown = [t for t in suggested if t not in TOOL_REGISTRY]
+                    if unknown:
+                        logger.warning(f"intent suggested_tools 含未注册名, 已剔除: {unknown}")
+                        suggested = [t for t in suggested if t in TOOL_REGISTRY]
+            except Exception:
+                pass  # registry 加载异常不阻断分类主流程
         result = IntentResult(
             category=IntentCategory(_map_category(result_dict.get("category", "找资料"))),
             confidence=float(result_dict.get("confidence", 0.5)),
             keywords=result_dict.get("keywords", []),
-            suggested_tools=result_dict.get("suggested_tools", []),
+            suggested_tools=suggested,
             reasoning=result_dict.get("reasoning", ""),
         )
     except Exception as e:

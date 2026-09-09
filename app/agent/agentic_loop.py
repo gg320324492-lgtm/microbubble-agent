@@ -908,7 +908,7 @@ class AgenticLoop:
             # (data_query / execute_action / recommend_person / casual_chat 跳过, 避免误调)
             # feature flag AGENT_PLAN_STEP_ENABLED 控制总开关
             # 2026-07-15 #P2: fast mode (thinking_config.skip_plan_step=True) 跳过, 节省 0.5-7.5s
-            # 2026-07-15 #P2: 新增 team_overview → 强制 query_members + list_projects + search_knowledge 三件套
+            # 2026-07-15 #P2: 新增 team_overview → 强制 query_members + query_projects + search_knowledge 三件套 (2026-09-09 工具名修正)
             if (not (_has_thinking_config(ctx) and ctx.thinking_config.skip_plan_step)
                 and settings.AGENT_PLAN_STEP_ENABLED
                 and intent.category in {
@@ -1043,6 +1043,10 @@ class AgenticLoop:
 
             # ===== Phase 1: 工具循环 =====
             tool_loop_failed = False  # 2026-09-02 P0: LLM 层炸 (如模型无 tools capability) 时置位, synthesis 据此注入反谎报声明
+            # 2026-09-09 (实测第 1 组第二轮 R2/R4): qwen3:14b 在 data_query 高置信度下
+            # 概率性跳过工具直接综合作答 (trace 5583/5585 NO-TOOLS)。一次性强制 nudge:
+            # 首轮 0 tool_use 且 intent 需要实时数据 → 注入指令再跑一轮; 仅 1 次防死循环。
+            _nudge_used = False
             for round_idx in range(max_rounds):
                 try:
                     # #P5: 用户手动附加文档时屏蔽 RAG 类工具, 强制 LLM 只基于附加文档回答
@@ -1083,6 +1087,40 @@ class AgenticLoop:
                 # 提取 tool_use
                 tool_uses = _extract_tool_uses(response)
                 if not tool_uses:
+                    # 2026-09-09 单次强制 nudge: data_query/execute_action 意图 + 全程
+                    # 0 工具调用 → 注入一次硬指令再跑一轮 (模型概率性直接综合作答时,
+                    # 与其让 synthesis 说"未查询到", 不如逼它真查一次)。二轮仍不调 → 正常 break。
+                    _needs_data = intent is not None and getattr(intent, "category", None) in {
+                        IntentCategory.DATA_QUERY, IntentCategory.EXECUTE_ACTION,
+                    }
+                    if _needs_data and not _nudge_used and not tool_calls:
+                        _nudge_used = True
+                        logger.info("[tool-nudge] data_query 首轮 0 工具调用 → 注入强制查询指令重试一轮")
+                        yield StreamEvent(type="thinking", label="🔄 强制补查: 检测到数据查询未调用工具...")
+                        # assistant 轮压平为纯字符串 (仅本 nudge 路径): dump 后的 block dict
+                        # (含 thinking/citations=None 等扩展键) 会被 ollama openai 兼容层
+                        # 拒 400 "invalid message content type" (实测 15:07/15:19)。
+                        # 本分支保证此轮无 tool_use (tool_uses 为空才会进来), 压平不丢工具调用。
+                        _n_content = getattr(response, "content", None)
+                        if not isinstance(_n_content, list):
+                            _n_content = []
+                        _n_text = "".join(
+                            _block_dump(b).get("text", "")
+                            for b in _n_content
+                            if isinstance(_block_dump(b), dict) and _block_dump(b).get("type") == "text"
+                        )
+                        _n_text = _strip_fake_tool_calls(_n_text).strip()
+                        if _n_text:
+                            messages.append({"role": "assistant", "content": _n_text})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "系统提示: 你本轮的回答未包含任何工具调用, 但用户问题需要实时系统数据。"
+                                "必须先调用合适的工具 (query_meetings / query_tasks / query_members / "
+                                "search_knowledge 等) 获取数据, 再组织回答; 禁止跳过工具直接凭记忆或通识作答。"
+                            ),
+                        })
+                        continue
                     # LLM 决定不调工具 → 进入 synthesis
                     break
 

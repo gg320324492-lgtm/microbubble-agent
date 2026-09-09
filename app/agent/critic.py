@@ -14,6 +14,7 @@
 
 import json
 import logging
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -22,7 +23,7 @@ from app.agent.intent_classifier import IntentResult
 from app.agent.protocol import RichBlock, StreamEvent
 from app.agent.tool_registry import ToolContext
 from app.config import settings
-from app.core.llm import LLMClient, parse_llm_json
+from app.core.llm import LLMClient, extract_text_from_response, parse_llm_json
 
 logger = logging.getLogger("microbubble.agent.critic")
 
@@ -141,7 +142,6 @@ async def critique_response(
         )
         # 提取文本 — 2026-09-09: 兼容只有 thinking 块的响应
         # (qwen3:14b 自评路径实测偶发 content 空/全在 thinking, 老循环只认 block.text → "LLM returned empty text")
-        from app.core.llm import extract_text_from_response
         text = extract_text_from_response(resp)
         if not text:
             raise ValueError("LLM returned empty text")
@@ -170,6 +170,39 @@ async def critique_response(
         except Exception:
             _raw = "<text unavailable>"
         logger.warning(f"critique failed: {type(e).__name__}: {e} | raw_head={_raw!r}")
+
+        # 2026-09-09 critic 加固: 一次极简重试 (只问一个整数分, 8 token)。
+        # 主路径失败几乎都是"意识流被截断 → JSON 整体不可得", 但模型对
+        # "回答打几分 (只回一个数字)" 这种短输出稳定性极高 → 消灭 0/10 噪声。
+        try:
+            resp2 = await llm.complete(
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "给这段回答打 0-10 分 (7 以上=可用)。只回一个整数, 不要任何其他文字。\n"
+                        f"问题: {user_question[:200]}\n回答: {response_text[:600]}"
+                    ),
+                }],
+                model=settings.AGENT_REFLECTION_MODEL,
+                max_tokens=8,
+                temperature=0.0,
+            )
+            t2 = extract_text_from_response(resp2)
+            mm = re.search(r"\d{1,2}", t2 or "")
+            if mm and 0 <= int(mm.group(0)) <= 10:
+                _score2 = int(mm.group(0))
+                logger.info(f"critique retry-minimal 成功: score={_score2}/10")
+                return CritiqueResult(
+                    score=_score2,
+                    addresses_question=True,
+                    has_synthesis=True,
+                    has_citations=False,
+                    missing=[],
+                    suggestion="(极简重试仅得分数)",
+                )
+        except Exception as e2:
+            logger.warning(f"critique minimal retry failed: {type(e2).__name__}: {e2}")
+
         return CritiqueResult(
             score=0,
             addresses_question=True,  # 视为通过
