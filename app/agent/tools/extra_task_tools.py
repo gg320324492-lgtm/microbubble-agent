@@ -90,14 +90,30 @@ async def query_all_member_tasks(input: QueryAllMemberTasksInput, ctx: ToolConte
     lines.append(f"【已完成任务】（共 {len(done_list)} 个）")
     lines.extend(fmt(done_list) or ["- 无"])
     lines.append("")
-    lines.append(f"共 {len(in_progress_list) + len(done_list)} 个任务")
+
+    # 2026-09-10 统计守恒修正: workload 只按活跃成员分组, 挂在非活跃成员名下/
+    # cancelled 的任务会漏计 (实测"总计 92" vs 库 95)。总计直接从全量非删除
+    # 任务计算, 与列表口径不一致时明示差额来源。
+    from app.models.task import Task
+    all_rows = await ctx.db.execute(
+        select(Task.status).where(Task.deleted_at.is_(None))
+    )
+    status_rows = [r[0] for r in all_rows.all()]
+    total_all = len(status_rows)
+    done_all = sum(1 for s in status_rows if s == "done")
+    inprog_all = sum(1 for s in status_rows if s in ("in_progress", "todo"))
+    listed = len(in_progress_list) + len(done_list)
+    tail = f"共 {total_all} 个任务（进行中 {inprog_all} | 已完成 {done_all}）"
+    if listed != total_all:
+        tail += f"；列表按活跃成员展示 {listed} 个，差额为已停用成员/已取消/其他状态任务"
+    lines.append(tail)
 
     return {
         "status": "success",
         "formatted_text": "\n".join(lines),
-        "in_progress_count": len(in_progress_list),
-        "done_count": len(done_list),
-        "total_count": len(in_progress_list) + len(done_list),
+        "in_progress_count": inprog_all,
+        "done_count": done_all,
+        "total_count": total_all,
         "rich_block_type": None,
     }
 
