@@ -301,6 +301,7 @@ class UpdateTaskOutput(BaseModel):
     task_id: Optional[int] = None
     new_status: Optional[str] = None
     note_written: bool = False
+    add_note_requested: bool = False  # 2026-09-10: 反谎报 guard 判定用 (请求了 add_note 但没写成 → 不算成功)
     description_tail: Optional[str] = None
     rich_block_type: Optional[str] = None
 
@@ -388,6 +389,7 @@ async def update_task(input: UpdateTaskInput, ctx: ToolContext) -> dict:
         "task_id": updated.id,
         "new_status": updated.status,
         "note_written": note_written,
+        "add_note_requested": bool(input.add_note),
         "description_tail": (updated.description or "")[-120:] or None,
         "rich_block_type": None,
     }

@@ -94,10 +94,11 @@ def _compact_topic_results(results: List[Dict], limit: int = 10) -> List[Dict]:
     return compact
 
 
-def _build_last_turn(intent, query: str, answer: str, results: List[Dict]) -> Dict[str, Any]:
+def _build_last_turn(intent, query: str, answer: str, results: List[Dict],
+                     tool_trace: Optional[List[Dict]] = None) -> Dict[str, Any]:
     """构造回答完成后写入 Redis Hash 的 last_turn。"""
     compact = _compact_topic_results(results)
-    return {
+    turn: Dict[str, Any] = {
         "intent": intent.category.value if intent is not None else "casual_chat",
         "query": query,
         "chunk_ids": [row["id"] for row in compact],
@@ -105,18 +106,50 @@ def _build_last_turn(intent, query: str, answer: str, results: List[Dict]) -> Di
         "topics": [row["title"] for row in compact[:5] if row.get("title")],
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+    # 2026-09-10 反假否认: 本轮若真有写工具执行成功, 把确定性事实存入 last_turn,
+    # 下一轮核验问句 ("刚才那条写上了吗") 直接注入该事实, 不再让模型凭历史叙述猜。
+    if tool_trace:
+        try:
+            from app.agent.tool_registry import extract_write_fact
+            fact = extract_write_fact(tool_trace)
+            if fact:
+                turn["write_fact"] = fact
+        except Exception as e:
+            logger.warning(f"extract_write_fact skipped (best-effort): {e}")
+    return turn
 
 
-async def _set_last_turn(session_id: str, intent, query: str, answer: str, results: List[Dict]):
+async def _set_last_turn(session_id: str, intent, query: str, answer: str, results: List[Dict],
+                         tool_trace: Optional[List[Dict]] = None):
     """best-effort 保存 last_turn，Redis 故障不阻断流式。"""
     try:
+        turn = _build_last_turn(intent, query, answer, results, tool_trace=tool_trace)
+        # 2026-09-10 反假否认: 本轮没有新写但上轮有写事实 → 结转 (用户可能连续核验
+        # 多轮 "真的写上了吗"; 事实自带 ts, 注入文案按时间表述不谎称"上一轮")
+        if "write_fact" not in turn:
+            prev = await session_manager.get_session_meta(session_id, _LAST_TURN_META_FIELD)
+            if isinstance(prev, dict) and isinstance(prev.get("write_fact"), dict):
+                turn["write_fact"] = prev["write_fact"]
         await session_manager.set_session_meta(
             session_id,
             _LAST_TURN_META_FIELD,
-            _build_last_turn(intent, query, answer, results),
+            turn,
         )
     except Exception as e:
         logger.warning(f"set last_turn failed (best-effort): {e}")
+
+
+async def _get_last_write_fact(session_id: str) -> Optional[Dict[str, Any]]:
+    """读取上一轮写操作成功事实 (2026-09-10 反假否认), 失败返回 None。"""
+    try:
+        last_turn = await session_manager.get_session_meta(session_id, _LAST_TURN_META_FIELD)
+        if isinstance(last_turn, dict):
+            fact = last_turn.get("write_fact")
+            if isinstance(fact, dict) and fact.get("tool"):
+                return fact
+    except Exception as e:
+        logger.warning(f"get last_write_fact skipped (best-effort): {e}")
+    return None
 
 
 async def _load_knowledge_by_ids(db, ids: List[int]) -> List[Dict]:
@@ -578,6 +611,9 @@ class MicroBubbleAgent:
             if attached_block:
                 system = system + "\n" + attached_block
 
+        # 2026-09-10 反假否认: 读上一轮写操作成功事实 (与 chat_stream 对齐, 微信路径共用)
+        last_write_fact = await _get_last_write_fact(session_id)
+
         # 4. 调用 ChatEngine
         result = await self.engine.chat_with_brief_and_detail(
             messages=messages,
@@ -591,7 +627,23 @@ class MicroBubbleAgent:
             thinking_mode=thinking_mode,
             # #P5: 透传附加文档 ID → 屏蔽 RAG 工具 (与 chat_stream 一致)
             attached_knowledge_ids=attached_knowledge_ids,
+            # 2026-09-10 反假否认: 上轮写事实透传
+            last_write_fact=last_write_fact,
         )
+
+        # 4b. 本轮成功写操作事实写回 last_turn (下一轮核验问句可用)
+        try:
+            _fact = None
+            from app.agent.tool_registry import extract_write_fact
+            _fact = extract_write_fact(result.get("tool_results") or [])
+            if _fact:
+                _lt = await session_manager.get_session_meta(session_id, _LAST_TURN_META_FIELD)
+                _lt = _lt if isinstance(_lt, dict) else {}
+                _lt["write_fact"] = _fact
+                _lt["intent"] = (result.get("intent") or {}).get("category", _lt.get("intent"))
+                await session_manager.set_session_meta(session_id, _LAST_TURN_META_FIELD, _lt)
+        except Exception as e:
+            logger.warning(f"chat() write_fact persist skipped (best-effort): {e}")
 
         # 5. 持久化 session（截断到 window size）
         if history is None:
@@ -699,6 +751,10 @@ class MicroBubbleAgent:
             if context_block:
                 system = system + "\n" + context_block
 
+        # 2026-09-10 反假否认: 读上一轮写操作成功事实, 透传给 engine
+        # (agentic_loop 在核验问句命中时注入 system, 不经模型复述历史)
+        last_write_fact = await _get_last_write_fact(session_id)
+
         # 2026-08-15 #P4: 用户从知识库手动附加的文档 → 注入 system prompt (优先参考来源)
         logger.info(f"[P4-chat_stream] 收到 attached_knowledge_ids: {attached_knowledge_ids}")
         if attached_knowledge_ids and db is not None:
@@ -791,6 +847,8 @@ class MicroBubbleAgent:
             preclassified_intent=intent,
             # #P5: 透传 attached_knowledge_ids → 屏蔽 RAG 工具
             attached_knowledge_ids=attached_knowledge_ids,
+            # 2026-09-10 反假否认: 上轮写事实透传给 agentic_loop
+            last_write_fact=last_write_fact,
         )
 
         try:
@@ -844,6 +902,8 @@ class MicroBubbleAgent:
                         query=message,
                         answer=assistant_text,
                         results=retrieved_chunks,
+                        # 2026-09-10 反假否认: 本轮成功写操作事实随 last_turn 落 Redis
+                        tool_trace=assistant_tool_trace,
                     )
                     if persist_enabled:
                         logger.info(f"[P5-debug] 进入 assistant append, assistant_text len={len(assistant_text) if assistant_text else 0}")
