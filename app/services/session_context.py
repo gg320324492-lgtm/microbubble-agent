@@ -53,7 +53,14 @@ async def _fetch_pg_messages(
             if getattr(m, "is_partial", False) or getattr(m, "is_deleted", False):
                 continue
             content = m.content or ""
-            out.append({"role": m.role, "content": content})
+            entry: Dict = {"role": m.role, "content": content}
+            # 2026-09-10 指代锚定升级: 透传 tool_trace 给下游实体提取
+            # (tool_use.input 里的 assignee_name/title_keyword 是模型自己解析过的
+            # 权威实体, 比正则抠回答文本可靠)
+            tt = getattr(m, "tool_trace", None)
+            if tt:
+                entry["tool_trace"] = tt
+            out.append(entry)
         return out or None
     except Exception as e:
         logger.warning(
