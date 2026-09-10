@@ -22,6 +22,7 @@
  * - @follow-up-click (FollowUpChips -> ChatViewSSE.onFollowUpClick)
  */
 import { computed, ref, watch, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import { ChatDotRound, Headset, Document } from '@element-plus/icons-vue'
 import { useChatContextStore } from '@/stores/chatContext'
 import ThinkingCapsule from '@/components/chat/ThinkingCapsule.vue'
@@ -198,10 +199,8 @@ function confirmEdit() {
     ElMessage.warning('内容不能为空')
     return
   }
-  if (newContent === props.msg.content) {
-    cancelEdit()
-    return
-  }
+  // 批次⑩.69 修复「编辑后发送无响应」: 内容未改动时原先静默 cancelEdit 不重发,
+  // 用户感知为点了发送没反应; 对齐 ChatGPT 行为 — 未改动也原样重发(重新生成回答)
   emit('edit-send', {
     msg: props.msg,
     newContent,
@@ -249,8 +248,9 @@ function onEditKeydown(e: KeyboardEvent) {
             @keydown="onEditKeydown"
           />
           <div class="user-edit-actions">
-            <el-button size="small" @click="cancelEdit">取消</el-button>
-            <el-button size="small" type="primary" @click="confirmEdit">发送</el-button>
+            <span class="user-edit-kbd" aria-hidden="true">Esc 取消 · Ctrl+↵ 发送</span>
+            <button type="button" class="user-edit-cancel" @click="cancelEdit">取消</button>
+            <button type="button" class="user-edit-send" @click="confirmEdit">发送</button>
           </div>
         </div>
       </div>
@@ -487,41 +487,94 @@ function onEditKeydown(e: KeyboardEvent) {
   color: var(--color-primary, #ff7a5c);
 }
 
+/* 批次⑩.70 选型 A「ChatGPT 内联卡」: 编辑卡替换原气泡形态 — 同灰底/同圆角,
+   无边框 textarea 内嵌; 底部 快捷键提示 + 取消(灰字) + 发送(青实底药丸)。
+   全 token 化, 双主题通用 (旧版硬编码深色 rgba(0,0,0,.12)/#fff 已删) */
 .user-edit-wrap {
   width: 100%;
   max-width: 600px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 .user-edit-textarea {
   width: 100%;
   min-height: 60px;
   max-height: 400px;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 122, 92, 0.4);
-  background: rgba(0, 0, 0, 0.12);  /* 深色背景, 白色文字才可见 */
-  color: #fff;  /* 白色文字 */
+  border: none;
+  border-radius: 18px 18px 4px 18px;
+  background: rgba(22, 35, 42, 0.05);
+  color: var(--color-text-primary, #26302c);
   font-family: inherit;
   font-size: 14px;
   line-height: 1.6;
   resize: vertical;
   outline: none;
-  caret-color: #FF7A5C;  /* 主色光标 */
-  transition: border-color 150ms ease, background-color 150ms ease;
+  caret-color: var(--color-primary, #ff7a5c);
+  transition: box-shadow 150ms ease, background 150ms ease;
 }
 .user-edit-textarea:focus {
-  border-color: rgba(255, 122, 92, 0.8);
-  background: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 0 1.5px rgba(14, 118, 110, 0.4);
 }
 .user-edit-textarea::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-text-placeholder, #c0c4cc);
+}
+[data-theme="dark"] .user-edit-textarea {
+  background: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .user-edit-textarea:focus {
+  box-shadow: 0 0 0 1.5px rgba(53, 194, 164, 0.45);
 }
 .user-edit-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 8px;
+}
+.user-edit-kbd {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-placeholder, #a8abb2);
+  margin-right: auto;
+  white-space: nowrap;
+  user-select: none;
+}
+.user-edit-cancel {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #909399);
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.user-edit-cancel:hover {
+  background: var(--color-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--color-text-primary, #26302c);
+}
+.user-edit-send {
+  border: none;
+  background-image: linear-gradient(135deg, #0e766e 0%, #12968b 100%);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: filter 150ms ease, transform 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.user-edit-send:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+.user-edit-send:active {
+  transform: scale(0.97);
 }
 
 /* W-N 视觉设计: 气泡卡片风格 */

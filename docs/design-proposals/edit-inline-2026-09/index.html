@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息编辑窗重设计 · 3 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --neon: #35C2A4; --coral: #FF8A6B; --coral-deep: #ef7256;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --dk-page: #171A20;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1420px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.9; color: var(--txt2); }
+  .diag b { color: var(--txt); }
+  .diag .num { font-family: var(--mono); font-weight: 700; color: #B4823C; margin-right: 6px; }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 340px; }
+  .card.wide { width: 100%; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 56px; }
+
+  /* ═══ 编辑窗小样 ═══ */
+  .chat { background: var(--dk-page); border: 1px solid rgba(226,236,234,.2); border-radius: 14px; padding: 16px; color: #E2ECEA; }
+  .editwrap { max-width: 92%; margin-left: auto; }
+  .ta { width: 100%; min-height: 84px; padding: 12px 14px; font-size: 12.5px; line-height: 1.6; color: #E2ECEA; resize: vertical; font-family: inherit; }
+  .acts { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 10px; }
+  .kbd { font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; color: #565f66; margin-right: auto; white-space: nowrap; }
+  .acts > * { white-space: nowrap; }
+  .btn-ghost { border: none; background: transparent; color: #8A938E; font-size: 12px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+  .btn-teal { border: none; background: var(--teal); background-image: linear-gradient(135deg, #0e766e 0%, #12968b 100%); color: #fff; font-size: 12px; font-weight: 600; padding: 7px 18px; border-radius: 999px; cursor: pointer; }
+  .btn-outline { border: 1px solid rgba(53,194,164,.5); background: transparent; color: var(--neon); font-size: 12px; font-weight: 600; padding: 6px 16px; border-radius: 999px; cursor: pointer; }
+  .btn-white { border: none; background: #fff; color: #333; font-size: 13px; padding: 8px 18px; border-radius: 4px; cursor: pointer; }
+  .btn-orange { border: none; background: #e8683f; color: #fff; font-size: 13px; padding: 8px 18px; border-radius: 4px; cursor: pointer; }
+  .round-send { width: 28px; height: 28px; border-radius: 999px; background: var(--neon); color: #0b1512; border: none; font-size: 15px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* ── 现状 ── */
+  .v0 .ta { border: 1px solid rgba(255,138,107,.55); border-radius: 12px; background: rgba(255,255,255,.02); }
+  .v0 .acts { margin-top: 12px; }
+
+  /* ── A ChatGPT 内联卡 ── */
+  .vA .ta { border: none; border-radius: 18px 18px 4px 18px; background: rgba(255,255,255,.06); }
+  .vA .ta:focus { outline: none; }
+  .vA .editwrap { background: transparent; }
+
+  /* ── B 输入区同款 ── */
+  .vB .pill { border: 1px solid rgba(226,236,234,.3); border-radius: 24px; padding: 12px 16px; background: rgba(255,255,255,.03); }
+  .vB .ta { border: none; background: transparent; min-height: 60px; padding: 0; }
+  .vB .ta:focus { outline: none; }
+  .vB .pill:focus-within { border-color: var(--neon); }
+
+  /* ── C 极简描边 ── */
+  .vC .ta { border: 1px solid rgba(226,236,234,.25); border-radius: 12px; background: rgba(255,255,255,.02); }
+  .vC .ta:focus { outline: none; border-color: rgba(53,194,164,.5); }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>消息编辑窗（用户消息编辑态）重设计 · 3 方案</h1>
+  <p class="sub">配套已选的 E「ChatGPT 现行式」。当前编辑窗还是上一代语言：<b>珊瑚描边 + 白/橙方块 el-button</b>，且样式硬编码深色（亮色主题下破功）。三案都换成主题 token，双主题通用。</p>
+
+  <div class="diag">
+    <span class="num">①</span><b>样式语言过时</b>：珊瑚 1px 描边 + 直角白「取消」/ 橙「发送」el-button，与 E 方案的灰圆角/青色/圆形语言全部脱节。　<span class="num">②</span><b>硬编码深色</b>：<code style="font-family:var(--mono);font-size:11px">background: rgba(0,0,0,.12); color: #fff</code> 写死，亮色主题下白字打在浅底上不可读。　<span class="num">③</span><b>快捷键无提示</b>：Esc 取消 / Ctrl+Enter 发送已实现但用户不可见。
+  </div>
+
+  <div class="row">
+    <div class="card wide">
+      <div class="card-h"><span class="tag gray">现状</span><h2>珊瑚描边 + 白/橙方块按钮（截图同款）</h2></div>
+      <div class="chat v0">
+        <div class="editwrap">
+          <textarea class="ta">刚才那条备注写上了吗？原话是什么？</textarea>
+          <div class="acts"><span class="kbd"></span><button class="btn-white">取消</button><button class="btn-orange">发送</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>ChatGPT 内联卡 · 灰底即气泡</h2></div>
+      <p class="card-d">编辑卡直接替换原气泡的位置和形态：同一灰底、同圆角，无边框 textarea 内嵌其中；底部右侧 取消(灰字) + 发送(青实底药丸)，左侧 mono 快捷键提示。</p>
+      <div class="chat vA">
+        <div class="editwrap">
+          <textarea class="ta">刚才那条备注写上了吗？原话是什么？</textarea>
+          <div class="acts"><span class="kbd">ESC 取消 · CTRL+↵ 发送</span><button class="btn-ghost">取消</button><button class="btn-teal">发送</button></div>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 编辑态与消息气泡形态连续，最像 ChatGPT</span></div>
+        <div><span class="pro">✓ 双主题走 token，暗亮通用</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>输入区同款 · 药丸+圆形↑</h2></div>
+      <p class="card-d">编辑框完全复用底部输入区视觉：24px 药丸描边（聚焦转青），右端青色圆形 ↑ 发送键；取消是左侧灰字链接。两处输入体验零差异。</p>
+      <div class="chat vB">
+        <div class="editwrap">
+          <div class="pill">
+            <textarea class="ta">刚才那条备注写上了吗？原话是什么？</textarea>
+            <div class="acts" style="margin-top:6px"><span class="kbd">ESC 取消 · CTRL+↵ 发送</span><button class="btn-ghost">取消</button><button class="round-send">↑</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 与主输入框同一套语言，「这是同一个输入器」心智最顺</span></div>
+        <div><span class="con">⚠ 圆形↑按钮对「重发旧消息」的语义略弱于文字「发送」</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>极简描边 · 文字按钮</h2></div>
+      <p class="card-d">保留独立 textarea 但去珊瑚转中性描边（聚焦转青），按钮改文字按钮：取消=灰字，发送=青描边药丸。改动最小，双主题 token 化。</p>
+      <div class="chat vC">
+        <div class="editwrap">
+          <textarea class="ta">刚才那条备注写上了吗？原话是什么？</textarea>
+          <div class="acts"><span class="kbd">ESC 取消 · CTRL+↵ 发送</span><button class="btn-ghost">取消</button><button class="btn-outline">发送</button></div>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 改动最小，只换色不动结构</span></div>
+        <div><span class="con">⚠ 青描边按钮的强调感弱于 A/B 的实底</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>通用修复（三案都含）</b>：① 去珊瑚描边/白橙方块按钮，全 token 化（暗亮双主题通用）　② 快捷键提示可见（Esc 取消 · Ctrl+Enter 发送，已有实现只是不可见）　③ 顺带已修：编辑发送无响应 bug（ElMessage 漏导入 + 未改动内容静默不重发）<br>
+    <b>实施位置</b>：<code>ChatMessageRow.vue</code> 的 <code>.user-edit-wrap / .user-edit-textarea / .user-edit-actions</code>（现状硬编码深色的样式就在这里）
+  </div>
+</div>
+</body>
+</html>
