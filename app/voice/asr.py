@@ -143,10 +143,33 @@ class SpeechRecognizer:
 
     async def transcribe_stream(self, audio_chunk: bytes):
         """
-        流式语音识别 - 当前实现: 每个 chunk 单独调 HTTP /transcribe.
-        SenseVoice 60s chunk 推理 ~60ms, 30s 批延迟可接受 (实测).
-        未来如需更低延迟, 可扩展 SenseVoice 服务端 WebSocket 端点.
+        流式语音识别 — 后端开关 (2026-09-08):
+        - Streaming-7B (host:8006, RTF~0.1): settings.GPU_STREAMING_ASR_ENABLED
+          且服务健康时走此路, 整段 chunk 一次转写 (2.9s 增量块能力保留在服务端)
+        - 默认 SenseVoice HTTP (现状): 每个 chunk 单独调 /transcribe
+        两者失败均静默回退 SenseVoice, 保证功能不中断。
         """
+        from app.config import settings
+
+        if settings.GPU_STREAMING_ASR_ENABLED:
+            try:
+                from app.services import gpu_streaming_client
+
+                base_url = settings.GPU_STREAMING_ASR_URL
+                if await gpu_streaming_client.healthy(base_url):
+                    text = await gpu_streaming_client.transcribe_pcm(
+                        audio_chunk, base_url)
+                    text = text.strip()
+                    if text:
+                        # Streaming-7B 输出连续文本 (含 Speaker 标记), 单段透传;
+                        # 上游声纹聚类流程会重新归属说话人
+                        yield {"text": text, "start": 0.0, "end": 0.0,
+                               "speaker_label": "gpu_streaming_7b",
+                               "_backend": "streaming-7b"}
+                        return
+            except Exception as e:
+                logger.warning(f"[asr] Streaming-7B 不可用, 回退 SenseVoice: {e}")
+
         result = await self.transcribe(audio_chunk)
         for seg in result.get("segments", []):
             yield seg

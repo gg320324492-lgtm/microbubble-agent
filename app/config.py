@@ -113,6 +113,20 @@ class Settings(BaseSettings):
     # ASR 后端路由: sensevoice (新默认) / whisper (紧急回滚)
     ASR_DEFAULT_BACKEND: str = "sensevoice"
 
+    # 2026-09-07 GPU 会议 ASR (VibeVoice-ASR-7B, host 守护服务按需占显存)
+    # 详见 docs/vibevoice-evaluation-2026-09-07.md §5
+    # 会议转写路由: 长度 >= GPU_ASR_MIN_SEC 且 host 守护服务健康 → 7B (Who/When/What + 热词)
+    # 服务不可用/失败自动回退 SenseVoice 逐段链路
+    GPU_ASR_ENABLED: bool = True
+    GPU_ASR_URL: str = "http://host.docker.internal:8005"
+    GPU_ASR_MIN_SEC: int = 180     # 低于此时长直接走 SenseVoice (7B 加载无优势)
+    GPU_ASR_TIMEOUT: int = 7200    # 3h 会议分块转写上限
+
+    # 2026-09-08 Streaming-7B 实时 ASR (host 常驻 8006, RTF~0.1, 2.9s 增量块)
+    # 注意: 常驻 ~16GB 显存; 与 meeting_worker 并发时后者 OOM 会自动回退 SenseVoice
+    GPU_STREAMING_ASR_ENABLED: bool = True
+    GPU_STREAMING_ASR_URL: str = "http://host.docker.internal:8006"
+
     # Claude 生成参数
     CLAUDE_MAX_TOKENS: int = 8192
     SESSION_WINDOW_SIZE: int = 30

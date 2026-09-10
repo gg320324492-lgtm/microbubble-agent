@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
-"""GPU 会议处理 worker（子进程入口）
+"""GPU 会议处理 worker（子进程入口）— v2 已校准版
 
-每次会议处理由 manager.py 拉起本进程，处理完毕进程退出 → 显存彻底释放。
+推理路径与 2026-09-07 实测脚本 (test_vibevoice_7b.py) 完全一致：
+  - VibeVoiceASRForConditionalGeneration (bf16 + sdpa, 无需 flash-attn)
+  - 16kHz PCM 必须重采样到 24kHz (processor 对 numpy 输入不重采样)
+  - max_new_tokens 按音频时长估算 (dur*18+384)，防贪心跑满
+  - JSON 输出可能重复两遍，时间轴回卷即截断
+新增：>chunk_sec 长音频按能量谷值分块转写（块间说话人标签带块前缀，
+     由应用侧声纹质心投票统一映射真名）。
 
 用法:
   python -m app.gpu_worker.meeting_worker --job job.json --output result.json
@@ -9,276 +15,239 @@
 
 Job JSON:
 {
-  "task": "transcribe_meeting",
-  "audio_path": "E:/microbubble-agent/data/.../meeting-xxx.wav",
-  "hotwords": ["微纳米气泡", "UV臭氧", "王天志"],       # 可选
-  "members": [{"id": 1, "name": "王天志", "embedding": [0.1, ...]}],  # anchor 声纹
-  "match_threshold": 0.7,
-  "model": "microsoft/VibeVoice-ASR-7B",
-  "asr_repo": "E:/path/to/VibeVoice"                    # 可选: 官方仓库路径
+  "audio_wav": "C:/tmp/meeting.wav",     # 16kHz mono int16 wav
+  "hotwords": "热词背景: 微纳米气泡...",  # 可选 (context_info)
+  "chunk_sec": 900,                      # 可选, 默认 900s
+  "model_dir": "...", "asr_repo": "...", "tokenizer_dir": "..."  # 可选, 有默认
 }
 
 Result JSON:
-{
-  "status": "ok" | "error",
-  "segments": [{"speaker": "王天志", "speaker_label": "Speaker 1",
-                "start": 0.0, "end": 12.3, "text": "..."}],
-  "speaker_map": {"Speaker 1": {"name": "王天志", "member_id": 1,
-                                 "dist": 0.31, "segments": 55}},
-  "meta": {"model_load_sec": 42.1, "infer_sec": 130.0, "audio_sec": 1216.0,
-           "peak_vram_mb": 16200, "worker_pid": 12345}
-}
+{"status": "ok"|"error", "segments": [{"start","end","speaker_label","content"}],
+ "meta": {"model_load_sec","infer_sec","audio_sec","chunks","peak_vram_mb","worker_pid"}}
 """
 import argparse
 import json
+import os
+import re
+import subprocess
 import sys
 import time
+import wave
 from pathlib import Path
 
 import numpy as np
 
+# 默认路径（生产化时迁移权重后改环境变量即可）
+DEF_MODEL_DIR = r"E:\microbubble-agent\.workbuddy\vibevoice-test\models-vv"
+DEF_ASR_REPO = r"E:\microbubble-agent\.workbuddy\vibevoice-test\VibeVoice"
+DEF_TOKENIZER_DIR = r"E:\microbubble-agent\.workbuddy\vibevoice-test\qwen-tokenizer"
 
-# ---------------------------------------------------------------- 声纹名字映射
-def map_speakers_to_members(
-    segments: list,
-    members: list,
-    match_threshold: float = 0.7,
-) -> dict:
-    """说话人簇质心 ↔ 成员声纹 匹配（会议级投票，非单段匹配）
-
-    segments: [{"speaker_label": "Speaker 1", "start": s, "end": e}, ...]
-              需带 audio_path 时由调用方先提嵌入（此处假设已完成）
-    members:  [{"id": 1, "name": "王天志", "embedding": [...]}]
-    返回: {"Speaker 1": {"name": ..., "member_id": ..., "dist": ..., "segments": n}}
-          无法匹配（dist >= threshold）时 name=None。
-    """
-    # 每个说话人聚合全部时段 → 质心（会议级投票）
-    cluster_emb = {}
-    for seg, emb in segments:
-        label = seg.get("speaker_label") or "Unknown"
-        cluster_emb.setdefault(label, []).append(emb)
-
-    mapping = {}
-    for label, embs in cluster_emb.items():
-        cent = np.mean(np.stack(embs), axis=0)
-        norm = float(np.linalg.norm(cent))
-        cent = cent / norm if norm > 1e-6 else cent
-        best = None
-        for m in members:
-            v = np.asarray(m["embedding"], dtype=np.float32)
-            vn = float(np.linalg.norm(v))
-            if vn < 1e-6:
-                continue  # 跳过坏向量
-            v = v / vn
-            dist = float(1.0 - float(np.dot(cent, v)))
-            if best is None or dist < best[0]:
-                best = (dist, m)
-        if best is not None and best[0] < match_threshold:
-            dist, m = best
-            mapping[label] = {"name": m["name"], "member_id": m["id"],
-                              "dist": round(dist, 4), "segments": len(embs)}
-        else:
-            mapping[label] = {"name": None, "member_id": None,
-                              "dist": None if best is None else round(best[0], 4),
-                              "segments": len(embs)}
-    return mapping
+SR = 16000            # 输入 PCM 采样率
+TARGET_SR = 24000     # VibeVoice 目标采样率
 
 
-# ---------------------------------------------------------------- VRAM 探针
+# ---------------------------------------------------------------- 工具
 def vram_used_mb() -> int | None:
-    """当前 GPU 显存占用 (MB)；驱动不可用时返回 None"""
-    import subprocess
     try:
         r = subprocess.run(
             ["nvidia-smi", "--query-gpu=memory.used",
              "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=15)
-        if r.returncode != 0:
-            return None
-        return int(r.stdout.strip().splitlines()[0])
+        return int(r.stdout.strip().splitlines()[0]) if r.returncode == 0 else None
     except Exception:
         return None
 
 
-# ---------------------------------------------------------------- ASR 推理
-def load_asr_model(model_id: str, asr_repo: str | None):
-    """载入 VibeVoice-ASR（EXPERIMENTAL：待 GPU 驱动修复后按官方
-    demo/vibevoice_asr_inference_from_file.py 校准调用方式）
-
-    优先策略:
-      1. asr_repo 指向官方 VibeVoice 仓库 → 复用其推理实现
-      2. 否则 transformers AutoModel 加载 (microsoft/VibeVoice-ASR-HF)
-    """
-    import torch
-    from transformers import AutoModel, AutoProcessor
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    if device == "cpu":
-        raise RuntimeError(
-            "CUDA 不可用（当前驱动异常或无 GPU）。"
-            "会议 worker 必须跑在 GPU 上，请先修复 NVIDIA 驱动。")
-    model = AutoModel.from_pretrained(model_id, torch_dtype=torch.float16)
-    model = model.to(device).eval()
-    try:
-        processor = AutoProcessor.from_pretrained(model_id)
-    except Exception:
-        processor = None
-    return model, processor, device
+def load_wav_16k(path: str) -> np.ndarray:
+    with wave.open(path, "rb") as wf:
+        assert wf.getframerate() == SR and wf.getnchannels() == 1, \
+            f"期望 16kHz mono wav, 得到 {wf.getframerate()}Hz/{wf.getnchannels()}ch"
+        raw = wf.readframes(wf.getnframes())
+    return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
 
-def run_asr_inference(model, processor, device: str, audio_path: str,
-                      hotwords: list | None, asr_repo: str | None) -> list:
-    """执行转写，返回结构化段落
-    [{speaker_label, start, end, text}, ...] （EXPERIMENTAL，待 GPU 实测校准）
-    """
-    import torch
-    t0 = time.perf_counter()
-    # TODO(GPU 复测): 按 VibeVoice 官方 demo 校准 preprocess/generate/解析
-    # 官方输出含 "Start"/"End"/"Speaker"/"Content" 结构化字段
-    wav, sr = _load_audio_16k(audio_path)
-    inputs = processor(wav, sampling_rate=sr, return_tensors="pt",
-                       hotwords=hotwords or None)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    with torch.no_grad():
-        out = model.generate(**inputs, max_new_tokens=8192)
-    text = processor.batch_decode(out, skip_special_tokens=True)[0]
-    segments = _parse_structured_output(text)
-    _ = time.perf_counter() - t0
-    return segments
-
-
-def _load_audio_16k(path: str):
-    import soundfile as sf
+def resample_24k(wav: np.ndarray) -> np.ndarray:
     import scipy.signal as sps
-    wav, sr = sf.read(path, dtype="float32")
-    if wav.ndim > 1:
-        wav = wav.mean(axis=1)
-    if sr != 16000:
-        wav = sps.resample_poly(wav, 16000, sr).astype(np.float32)
-        sr = 16000
-    return wav, sr
+    return sps.resample_poly(wav, TARGET_SR, SR).astype(np.float32)
 
 
-def _parse_structured_output(text: str) -> list:
-    """解析官方结构化输出 → 段落列表（容错：无结构时退化为单段）"""
-    import re
-    segs = []
-    pat = re.compile(
-        r"\[?([\d.]+)\s*-\s*([\d.]+)\]?\s*(?:Speaker\s*(\d+))?\s*[:：]\s*(.+)")
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
+# ---------------------------------------------------------------- 模型加载
+def load_asr_model(model_dir: str, tokenizer_dir: str, asr_repo: str):
+    """实测校准的加载路径（见 docs/vibevoice-evaluation-2026-09-07.md §3.3）"""
+    import torch
+    if asr_repo not in sys.path:
+        sys.path.insert(0, asr_repo)
+    from vibevoice.modular.modeling_vibevoice_asr import (
+        VibeVoiceASRForConditionalGeneration)
+    from vibevoice.processor.vibevoice_asr_processor import (
+        VibeVoiceASRProcessor)
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA 不可用：会议 worker 必须跑在 GPU 上")
+    processor = VibeVoiceASRProcessor.from_pretrained(
+        model_dir, language_model_pretrained_name=tokenizer_dir)
+    model = VibeVoiceASRForConditionalGeneration.from_pretrained(
+        model_dir, dtype=torch.bfloat16, attn_implementation="sdpa",
+        trust_remote_code=True).to("cuda").eval()
+    return model, processor
+
+
+# ---------------------------------------------------------------- 分块
+def find_chunk_points(wav24: np.ndarray, chunk_sec: float = 900.0,
+                      search_sec: float = 30.0) -> list:
+    """在固定间隔附近找能量谷值作为切块点，减少切断句子"""
+    n = len(wav24)
+    total = n / TARGET_SR
+    if total <= chunk_sec:
+        return [0.0, total]
+    win = int(TARGET_SR)  # 1s 窗口能量
+    points = [0.0]
+    target = chunk_sec
+    while target < total - 5:
+        lo = max(points[-1] + 60, target - search_sec)
+        hi = min(total - 5, target + search_sec)
+        if hi <= lo:
+            points.append(target)
+            target += chunk_sec
             continue
-        m = pat.match(line)
-        if m:
-            segs.append({"speaker_label": f"Speaker {m.group(3)}" if m.group(3)
-                         else "Unknown",
-                         "start": float(m.group(1)), "end": float(m.group(2)),
-                         "text": m.group(4).strip()})
-    if not segs and text.strip():
-        segs = [{"speaker_label": "Unknown", "start": 0.0, "end": 0.0,
-                 "text": text.strip()}]
+        a, b = int(lo * TARGET_SR), int(hi * TARGET_SR)
+        seg = wav24[a:b]
+        nwin = len(seg) // win
+        if nwin < 2:
+            points.append(target)
+        else:
+            rms = np.sqrt(np.mean(seg[: nwin * win].reshape(nwin, win) ** 2,
+                                  axis=1)) + 1e-9
+            k = int(np.argmin(rms))
+            points.append(round(lo + k + 0.5, 2))
+        target = points[-1] + chunk_sec
+    points.append(total)
+    return points
+
+
+# ---------------------------------------------------------------- 单块转写
+def parse_segments(text: str) -> list:
+    segs = []
+    json_pat = re.compile(
+        r'\{\s*"Start"\s*:\s*([\d.]+)\s*,\s*"End"\s*:\s*([\d.]+)\s*,'
+        r'\s*"Speaker"\s*:\s*(\d+)\s*,\s*"Content"\s*:\s*"([^"]*)"\s*\}')
+    for m in json_pat.finditer(text):
+        seg = {"start": float(m.group(1)), "end": float(m.group(2)),
+               "spk": int(m.group(3)), "content": m.group(4)}
+        if segs and seg["start"] < segs[-1]["start"] - 1.0:
+            break  # 模型偶尔输出两遍 JSON：时间轴回卷即截断
+        segs.append(seg)
     return segs
 
 
+def transcribe_chunk(model, processor, wav24: np.ndarray, t0: float, t1: float,
+                     hotwords: str | None, chunk_idx: int) -> list:
+    import torch
+    piece = wav24[int(t0 * TARGET_SR): int(t1 * TARGET_SR)]
+    dur = len(piece) / TARGET_SR
+    if dur < 1.0:
+        return []
+    max_new = min(32768, int(dur * 18) + 384)
+    kwargs = {"context_info": hotwords} if hotwords else {}
+    inputs = processor(audio=piece, sampling_rate=TARGET_SR,
+                       return_tensors="pt", **kwargs)
+    inputs = {k: (v.to("cuda") if hasattr(v, "to") else v)
+              for k, v in inputs.items()}
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=max_new,
+                             do_sample=False)
+    text = processor.batch_decode(out, skip_special_tokens=True)[0]
+    segs = parse_segments(text)
+    result = []
+    for s in segs:
+        if s["end"] - s["start"] < 0.2 or not s["content"].strip():
+            continue
+        result.append({
+            "start": round(t0 + s["start"], 2),
+            "end": round(t0 + min(s["end"], dur), 2),
+            "speaker_label": f"c{chunk_idx}s{s['spk']}",
+            "content": s["content"].strip(),
+        })
+    return result
+
+
 # ---------------------------------------------------------------- 主流程
+def run_job(job: dict) -> dict:
+    t_start = time.perf_counter()
+    wav16 = load_wav_16k(job["audio_wav"])
+    audio_sec = len(wav16) / SR
+    wav24 = resample_24k(wav16)
+    print(f"[worker] audio {audio_sec:.1f}s, resampled 24kHz", flush=True)
+
+    model, processor = load_asr_model(
+        job.get("model_dir", os.environ.get("GPU_ASR_MODEL_DIR", DEF_MODEL_DIR)),
+        job.get("tokenizer_dir", os.environ.get("GPU_ASR_TOKENIZER_DIR",
+                                                DEF_TOKENIZER_DIR)),
+        job.get("asr_repo", os.environ.get("GPU_ASR_REPO", DEF_ASR_REPO)))
+    load_sec = time.perf_counter() - t_start
+    peak_vram = vram_used_mb()
+    print(f"[worker] model loaded {load_sec:.1f}s, vram={peak_vram}MB", flush=True)
+
+    hotwords = job.get("hotwords")
+    chunk_sec = float(job.get("chunk_sec", 900))
+    points = find_chunk_points(wav24, chunk_sec)
+    print(f"[worker] chunks: {[(round(a), round(b)) for a, b in zip(points, points[1:])]}", flush=True)
+
+    t1 = time.perf_counter()
+    segments = []
+    for ci, (a, b) in enumerate(zip(points, points[1:])):
+        segs = transcribe_chunk(model, processor, wav24, a, b, hotwords, ci)
+        segments.extend(segs)
+        print(f"[worker] chunk {ci}: +{len(segs)} segs (total {len(segments)})", flush=True)
+    infer_sec = time.perf_counter() - t1
+
+    return {
+        "status": "ok",
+        "segments": segments,
+        "meta": {
+            "model_load_sec": round(load_sec, 2),
+            "infer_sec": round(infer_sec, 2),
+            "audio_sec": round(audio_sec, 2),
+            "rtf": round(infer_sec / max(audio_sec, 1), 3),
+            "chunks": len(points) - 1,
+            "peak_vram_mb": peak_vram,
+            "worker_pid": os.getpid(),
+        },
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--job", help="job JSON 路径")
-    ap.add_argument("--output", help="result JSON 输出路径")
-    ap.add_argument("--selftest", action="store_true",
-                    help="无 GPU 生命周期自测（跳过模型加载）")
+    ap.add_argument("--job")
+    ap.add_argument("--output")
+    ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
 
-    result = {"status": "error", "segments": [], "speaker_map": {},
-              "meta": {"worker_pid": __import__("os").getpid()}}
+    result = {"status": "error", "segments": [],
+              "meta": {"worker_pid": os.getpid()}}
 
     def _write_and_exit(code: int):
         if args.output:
             Path(args.output).write_text(
                 json.dumps(result, ensure_ascii=False, indent=2),
                 encoding="utf-8")
-        # flush 后退出 —— exit 即显存释放保证
         sys.stdout.flush()
-        sys.exit(code)
+        sys.exit(code)  # 进程退出 = CUDA 上下文销毁 = 显存释放保证
 
     try:
         if args.selftest:
-            # 自测: 模拟段落 + 假成员，验证 JSON 管线与映射逻辑
-            rng = np.random.default_rng(7)
-            base = rng.normal(size=192).astype(np.float32)
-            base /= np.linalg.norm(base)
-            members = [{"id": 1, "name": "王天志",
-                        "embedding": (base + rng.normal(scale=0.02, size=192)
-                                      ).tolist()},
-                       {"id": 2, "name": "杨慈",
-                        "embedding": np.zeros(192).tolist()}]  # 坏向量应被跳过
-            segs = []
-            for i in range(10):
-                emb = (base + rng.normal(scale=0.05, size=192)).astype(np.float32)
-                emb /= np.linalg.norm(emb)
-                segs.append(({"speaker_label": "Speaker 1", "start": i * 10.0,
-                              "end": i * 10.0 + 8.0, "text": f"seg{i}"}, emb.tolist()))
-            t0 = time.perf_counter()
-            mapping = map_speakers_to_members(segs, members)
+            # 生命周期自测：分块逻辑 + JSON 管线（跳过模型加载，无 GPU 也可跑）
+            pts = find_chunk_points(np.zeros(TARGET_SR * 1000, dtype=np.float32), 300)
+            assert len(pts) == 5, f"分块点数异常: {pts}"  # 1000s/300s → 4 块
             result.update({
-                "status": "ok",
-                "segments": [s for s, _ in segs],
-                "speaker_map": mapping,
-                "meta": {**result["meta"],
-                         "selftest_sec": round(time.perf_counter() - t0, 3),
+                "status": "ok", "segments": [],
+                "meta": {"chunk_points": pts,
                          "vram_used_mb": vram_used_mb()}})
             _write_and_exit(0)
 
         job = json.loads(Path(args.job).read_text(encoding="utf-8"))
-        audio_path = job["audio_path"]
-        hotwords = job.get("hotwords") or []
-        members = job.get("members") or []
-        threshold = float(job.get("match_threshold", 0.7))
-        model_id = job.get("model", "microsoft/VibeVoice-ASR-7B")
-        asr_repo = job.get("asr_repo")
-
-        t0 = time.perf_counter()
-        model, processor, device = load_asr_model(model_id, asr_repo)
-        load_sec = time.perf_counter() - t0
-        peak_vram = vram_used_mb()
-
-        infer0 = time.perf_counter()
-        segments = run_asr_inference(model, processor, device, audio_path,
-                                     hotwords, asr_repo)
-        infer_sec = time.perf_counter() - infer0
-
-        # 会议级声纹映射：对每个 Speaker 聚合其段落嵌入质心
-        # （嵌入提取复用 app/services/voiceprint_service.py 的 ERes2Net）
-        from app.services.voiceprint_service import VoiceprintService
-        vs = VoiceprintService()
-        import soundfile as sf
-        wav, _ = sf.read(audio_path, dtype="float32")
-        if wav.ndim > 1:
-            wav = wav.mean(axis=1)
-        pairs = []
-        for seg in segments:
-            a, b = int(seg.get("start", 0) * 16000), int(seg.get("end", 0) * 16000)
-            chunk = wav[a:b] if b > a else wav[:16000]
-            if len(chunk) < 8000:
-                chunk = np.pad(chunk, (0, 16000 - len(chunk)))
-            pairs.append((seg, vs.extract_embedding(chunk.astype(np.float32)).tolist()))
-        mapping = map_speakers_to_members(pairs, members, threshold)
-
-        named = []
-        for seg in segments:
-            m = mapping.get(seg.get("speaker_label"), {})
-            named.append({**seg, "speaker": m.get("name") or seg.get("speaker_label")})
-
-        result.update({
-            "status": "ok",
-            "segments": named,
-            "speaker_map": mapping,
-            "meta": {**result["meta"], "model_load_sec": round(load_sec, 2),
-                     "infer_sec": round(infer_sec, 2), "device": device,
-                     "peak_vram_mb": peak_vram}})
+        result = run_job(job)
         _write_and_exit(0)
-
     except Exception as e:  # noqa: BLE001 — worker 必须以 JSON 报告一切失败
         result["error"] = f"{type(e).__name__}: {e}"
         _write_and_exit(1)
