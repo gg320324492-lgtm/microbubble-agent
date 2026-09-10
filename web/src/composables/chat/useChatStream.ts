@@ -33,7 +33,7 @@
  */
 
 // ===== 1. Vue 核心 =====
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, triggerRef, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
 // ===== 2. 项目内 =====
@@ -304,8 +304,14 @@ export function useChatStream() {
   /** per-session abort controller（多次点击同一会话时 abort 旧流） */
   const abortControllers: Record<string, AbortController> = {}
 
-  /** per-session 发送锁（防止同一会话快速点击叠加） */
-  const sendingSessions = new Set<string>()
+  /** per-session 发送锁（防止同一会话快速点击叠加）
+   *  类 20.189: 必须 shallowRef + triggerRef。纯 Set 的 add/delete 不触发
+   *  任何 Vue 依赖, isCurrentSessionSending (computed 只 track sessionId.value)
+   *  会永久缓存旧值 → 生成结束后"停止"按钮不回弹且点击无效。 */
+  const sendingSessions = shallowRef<Set<string>>(new Set<string>())
+  const isSending = (sid: string) => sendingSessions.value.has(sid)
+  const markSending = (sid: string) => { sendingSessions.value.add(sid); triggerRef(sendingSessions) }
+  const clearSending = (sid: string) => { sendingSessions.value.delete(sid); triggerRef(sendingSessions) }
 
   /** 已加载过 localStorage 的 session 集合（防重复覆盖后台 SSE 增量） */
   const loadedSessions = new Set<string>()
@@ -320,8 +326,8 @@ export function useChatStream() {
   // UI 状态
   // --------------------------------------------------------------------------
 
-  /** 当前会话是否正在生成（UI 用：消息区"三个点"动画） */
-  const isCurrentSessionSending = computed(() => sendingSessions.has(sessionId.value))
+  /** 当前会话是否正在生成（UI 用：消息区"三个点"动画 + 发送/停止按钮切换） */
+  const isCurrentSessionSending = computed(() => isSending(sessionId.value))
 
   // --------------------------------------------------------------------------
   // 会话 store 集成
@@ -565,7 +571,7 @@ export function useChatStream() {
     // #P5+: 不需要 placeholder, 图片本身就是内容. 设为空字符串 (后端 service 允许只发图, 不输文字)
     if (!content && img) content = ''
     else if (!content && file) content = ''
-    if (sendingSessions.has(sessionId.value)) return
+    if (isSending(sessionId.value)) return
 
     // ★ 2026-07-01 修复 bug 1a: 无 session 时(用户首次发消息) → 创建一个
     // 这是用户主动发消息的入口,符合"除非用户自己创建,不然不创建"的产品决策
@@ -674,7 +680,7 @@ export function useChatStream() {
     abortControllers[targetSessionId]?.abort()
     const controller = new AbortController()
     abortControllers[targetSessionId] = controller
-    sendingSessions.add(targetSessionId)
+    markSending(targetSessionId)
     // [CHAT-P1-E E2] 通知 chip 组件隐藏 (用户发新消息 → 旧 suggestions 失效)
     window.dispatchEvent(new CustomEvent('chat:send-start', {
       detail: { sessionId: targetSessionId },
@@ -712,7 +718,7 @@ export function useChatStream() {
         ElMessage.error(e.message || '发送失败')
       }
     } finally {
-      sendingSessions.delete(targetSessionId)
+      clearSending(targetSessionId)
       const finalAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
       finalAssistant.state = 'idle'
       finalAssistant.is_brief = false
@@ -1189,9 +1195,10 @@ export function useChatStream() {
         // 绕过 advancePhase 直接赋值（终态是显式重置指令）
         assistant.phase = 'aborted'
         // 后续 SSE 事件被忽略（state !== 'streaming'，switch case 不再处理）
-        // 立即关闭 loading
-        sendingSessions.delete(sid)
       }
+      // 立即关闭 loading (2026-09-10 修: 移出 state 守卫 — state 卡在非
+      // 'streaming' 时旧实现不删锁, 停止按钮永远高亮且再点无效)
+      clearSending(sid)
       // 立即持久化（用户可能直接关页面）
       persistSessionSync(sid)
       // #043: 通知 server 标记 partial（best-effort，不阻塞 stop UI）
@@ -1491,7 +1498,7 @@ export function useChatStream() {
     abortControllers[sid]?.abort()
     const controller = new AbortController()
     abortControllers[sid] = controller
-    sendingSessions.add(sid)
+    markSending(sid)
 
     try {
       const sendPayload = {
@@ -1550,7 +1557,7 @@ export function useChatStream() {
         ElMessage.error(e.message || '重新发送失败')
       }
     } finally {
-      sendingSessions.delete(sid)
+      clearSending(sid)
       const finalAssistant = activeAssistantMap.value[sid] || assistantMsg
       finalAssistant.state = 'idle'
       finalAssistant.is_brief = false
