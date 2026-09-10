@@ -100,9 +100,20 @@ async def query_tasks(input: QueryTasksInput, ctx: ToolContext) -> dict:
     if input.title_keyword:
         kw = input.title_keyword.strip()
         tasks = [t for t in tasks if kw in (t.title or "")]
-    # 2026-09-10 排序确定性 (service 层无 ORDER BY, 物理序随机): 有截止的按截止升序
-    # (最紧在前, 直接服务"哪个最急"类问题), 无截止按 id 兜底。
-    tasks = sorted(tasks, key=lambda t: (t.due_date is None, t.due_date or t.created_at, t.id))
+    # 2026-09-10 排序确定性: 活跃状态优先 (进行中/待办/阻塞/审核在前), 组内按
+    # due_date 升序 (最紧在前), 无截止靠后, id 兜底。
+    # ⚠ 纯 due 升序是坑 (stress4 实测): 全量查询时最老的 done 任务占前排,
+    # 压缩器 top-N 全是已完成项, 污染后续轮次的上下文实体。
+    _active = {"in_progress", "todo", "blocked", "review"}
+    tasks = sorted(
+        tasks,
+        key=lambda t: (
+            0 if t.status in _active else 1,
+            t.due_date is None,
+            t.due_date or t.created_at,
+            t.id,
+        ),
+    )
 
     # 批量获取 assignee 姓名 + project 名称
     assignee_ids = {t.assignee_id for t in tasks if t.assignee_id}
