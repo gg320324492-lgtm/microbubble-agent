@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网盘左侧结构面板 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --radius-md: 8px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1240px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.6; }
+  .grid { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(520px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  /* ══ 浏览器窗框 (缩比 0.62 的网盘页示意) ══ */
+  .win { width: 100%; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden;
+         background: var(--color-bg-card); box-shadow: 0 6px 22px rgba(31,42,38,.08); }
+  .win-bar { height: 26px; background: #E9E6E0; display: flex; align-items: center; gap: 5px; padding: 0 10px; }
+  .win-bar i { width: 8px; height: 8px; border-radius: 50%; background: #D5D1C9; }
+  .win-body { display: flex; min-height: 285px; font-size: 11px; }
+
+  /* 全局侧边栏 (四版共用, 窄图标态) */
+  .gnav { width: 44px; flex: none; background: #FBFAF7; border-right: 1px solid var(--color-border);
+          padding: 8px 0; display: flex; flex-direction: column; gap: 2px; }
+  .gnav .gi { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0;
+              color: var(--color-text-secondary); font-size: 8px; }
+  .gnav .gi b { display: block; width: 16px; height: 16px; border-radius: 5px; background: #E7E4DD; margin: 0 auto 2px; }
+  .gnav .gi.on { color: var(--teal); }
+  .gnav .gi.on b { background: var(--teal); }
+
+  /* 主区通用 */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .top { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--color-border); }
+  .crumb { font-size: 10.5px; color: var(--color-text-secondary); }
+  .crumb b { color: var(--color-text-primary); font-weight: 600; }
+  .spacer { flex: 1; }
+  .pill { font-size: 9.5px; border: 1px solid var(--color-border); border-radius: 999px; padding: 2.5px 9px; color: var(--color-text-regular); }
+  .pill.teal { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+  .list { flex: 1; padding: 6px 12px; }
+  .li { display: flex; align-items: center; gap: 8px; padding: 5.5px 8px; border-radius: 6px; color: var(--color-text-regular); }
+  .li:nth-child(odd) { background: #FAFAF7; }
+  .li .ic { flex: none; }
+  .li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .li .sz { flex: none; color: var(--color-text-placeholder); font-family: var(--mono); font-size: 9px; }
+  .quota { padding: 6px 12px; border-top: 1px solid var(--color-border); font-size: 9px; color: var(--color-text-placeholder); }
+
+  /* ══ A: 移除结构面板 · 顶部快捷胶囊条 ══ */
+  .kA-chips { display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-bottom: 1px solid var(--color-border); }
+  .chip { font-size: 9.5px; border: 1px solid var(--color-border); border-radius: 999px; padding: 2.5px 10px;
+          color: var(--color-text-regular); display: inline-flex; align-items: center; gap: 4px; }
+  .chip.on { background: rgba(14,118,110,.08); border-color: #B8E0DB; color: var(--teal); font-weight: 600; }
+  .chip .em { font-style: normal; }
+
+  /* ══ B: 面板瘦身「快捷 + 当前层子文件夹」 ══ */
+  .slim { width: 148px; flex: none; background: #FBFAF7; border-right: 1px solid var(--color-border);
+          padding: 8px 6px; display: flex; flex-direction: column; gap: 2px; }
+  .slim .cap { font-size: 8.5px; letter-spacing: .1em; color: var(--color-text-placeholder); padding: 6px 8px 3px; }
+  .slim .si { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px;
+              font-size: 10.5px; color: var(--color-text-regular); }
+  .slim .si:hover { background: #F1EFE9; }
+  .slim .si.on { background: rgba(14,118,110,.08); color: var(--teal); font-weight: 600; }
+  .slim .si .em { font-style: normal; flex: none; }
+  .slim .si .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slim .si .c { font-family: var(--mono); font-size: 8.5px; color: var(--color-text-placeholder); }
+  .slim .cur { border-top: 1px solid var(--color-border); margin-top: 6px; padding-top: 4px; }
+
+  /* ══ C: 收进全局侧边栏 (展开态示意) ══ */
+  .gnavC { width: 132px; padding: 8px 6px; }
+  .gnavC .gi { flex-direction: row; justify-content: flex-start; padding: 5px 8px; font-size: 10px; }
+  .gnavC .gi b { margin: 0; display: inline-block; }
+  .gnavC .sub { padding-left: 20px; font-size: 9.5px; color: var(--color-text-secondary); }
+  .gnavC .sub .si { padding: 4px 8px; }
+  .gnavC .dv { border-top: 1px solid var(--color-border); margin: 6px 4px; }
+
+  /* ══ D: 折叠图标条 + 悬停展开树 ══ */
+  .kD-rail { width: 34px; flex: none; background: #FBFAF7; border-right: 1px solid var(--color-border);
+             padding: 8px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .kD-rail .ri { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+                 font-size: 11px; color: var(--color-text-secondary); cursor: pointer; }
+  .kD-rail .ri:hover, .kD-rail .ri.on { background: rgba(14,118,110,.1); color: var(--teal); }
+  .kD-fly { position: absolute; left: 34px; top: 0; bottom: 0; width: 158px; background: #FBFAF7;
+            border-right: 1px solid var(--color-border); box-shadow: 8px 0 20px rgba(0,0,0,.06);
+            padding: 8px 6px; font-size: 10.5px; color: var(--color-text-regular); z-index: 4; }
+  .kD-wrap { position: relative; display: flex; flex: 1; min-width: 0; }
+  .kD-fly .cap { font-size: 8.5px; letter-spacing: .1em; color: var(--color-text-placeholder); padding: 2px 8px 6px; }
+  .kD-fly .ti { padding: 4px 8px 4px 16px; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kD-fly .ti:hover { background: #F1EFE9; }
+  .kD-fly .ti.root { padding-left: 8px; font-weight: 600; color: var(--color-text-primary); }
+  .kD-fly .quota2 { position: absolute; bottom: 8px; left: 8px; right: 8px; font-size: 8.5px; color: var(--color-text-placeholder); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>网盘左侧「结构」面板 · 四版 UI 选型</h1>
+  <p>问题：文件夹树 / 主列表文件夹 / 全局侧边栏 三方重复导航 · 2026-09-07 · 窗框为缩比示意图（全局侧栏取窄图标态），B/C/D 结构悬停或常驻可比较</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>移除结构面板 · 快捷胶囊条（推荐）</h2></div>
+    <p class="v-sub">整个结构面板删除 · 快捷入口(收藏/最近/回收站)变列表上方胶囊 · 导航只靠面包屑+文件夹行 · 主区更宽</p>
+    <div class="win">
+      <div class="win-bar"><i></i><i></i><i></i></div>
+      <div class="win-body">
+        <div class="gnav">
+          <div class="gi"><b></b>首页</div>
+          <div class="gi"><b></b>任务</div>
+          <div class="gi"><b></b>会议</div>
+          <div class="gi"><b></b>知识库</div>
+          <div class="gi on"><b></b>网盘</div>
+          <div class="gi"><b></b>设置</div>
+        </div>
+        <div class="main">
+          <div class="top">
+            <span class="crumb">课题组网盘 / 团队共享盘 / <b>测试分类文件夹</b></span>
+            <span class="spacer"></span>
+            <span class="pill">＋ 新建文件夹</span>
+            <span class="pill teal">上传</span>
+          </div>
+          <div class="kA-chips">
+            <span class="chip on"><i class="em">📁</i>全部</span>
+            <span class="chip"><i class="em">⭐</i>我的收藏</span>
+            <span class="chip"><i class="em">🕘</i>最近上传</span>
+            <span class="chip"><i class="em">🗑</i>回收站 <s style="text-decoration:none;color:var(--color-text-placeholder)">2</s></span>
+          </div>
+          <div class="list">
+            <div class="li"><span class="ic">📁</span><span class="nm">组会PPT</span><span class="sz">24 项</span></div>
+            <div class="li"><span class="ic">📁</span><span class="nm">测试分类文件夹</span><span class="sz">13 项</span></div>
+            <div class="li"><span class="ic">🔴</span><span class="nm">开题报告-气泡界面调控.pdf</span><span class="sz">63.5 KB</span></div>
+            <div class="li"><span class="ic">🟢</span><span class="nm">传感器数据.csv</span><span class="sz">20.1 KB</span></div>
+            <div class="li"><span class="ic">🔵</span><span class="nm">实验数据-全量演示.xlsx</span><span class="sz">15.9 KB</span></div>
+            <div class="li"><span class="ic">⚫</span><span class="nm">打包归档.zip</span><span class="sz">2.1 KB</span></div>
+          </div>
+          <div class="quota">全组已用 1.2 GB / 10.0 GB</div>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">重复导航彻底消除；列表区宽度 +148px，宽表/全屏体验直接受益</li>
+      <li class="pro">快捷入口(收藏/最近/回收站)保留为一排胶囊，一键可达</li>
+      <li class="con">深层文件夹跳转只能逐级点或靠面包屑回退（无树形全局视野）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>面板瘦身「快捷 + 当前层」</h2></div>
+    <p class="v-sub">全量树删除 · 面板只留两组：快捷入口 + 当前所在层的子文件夹（随导航联动） · 面板 148px</p>
+    <div class="win">
+      <div class="win-bar"><i></i><i></i><i></i></div>
+      <div class="win-body">
+        <div class="gnav">
+          <div class="gi"><b></b>首页</div>
+          <div class="gi"><b></b>任务</div>
+          <div class="gi"><b></b>会议</div>
+          <div class="gi"><b></b>知识库</div>
+          <div class="gi on"><b></b>网盘</div>
+          <div class="gi"><b></b>设置</div>
+        </div>
+        <div class="slim">
+          <div class="cap">快捷</div>
+          <div class="si"><span class="em">⭐</span><span class="n">我的收藏</span></div>
+          <div class="si"><span class="em">🕘</span><span class="n">最近上传</span></div>
+          <div class="si"><span class="em">🗑</span><span class="n">回收站</span><span class="c">2</span></div>
+          <div class="cap cur">当前位置 · 测试分类文件夹</div>
+          <div class="si"><span class="em">📁</span><span class="n">组会PPT</span><span class="c">24</span></div>
+        </div>
+        <div class="main">
+          <div class="top">
+            <span class="crumb">团队共享盘 / <b>测试分类文件夹</b></span>
+            <span class="spacer"></span>
+            <span class="pill">＋ 新建</span>
+            <span class="pill teal">上传</span>
+          </div>
+          <div class="list">
+            <div class="li"><span class="ic">🔴</span><span class="nm">开题报告-气泡界面调控.pdf</span><span class="sz">63.5 KB</span></div>
+            <div class="li"><span class="ic">🟢</span><span class="nm">传感器数据.csv</span><span class="sz">20.1 KB</span></div>
+            <div class="li"><span class="ic">🔵</span><span class="nm">实验数据-全量演示.xlsx</span><span class="sz">15.9 KB</span></div>
+            <div class="li"><span class="ic">⚫</span><span class="nm">打包归档.zip</span><span class="sz">2.1 KB</span></div>
+            <div class="li"><span class="ic">🟠</span><span class="nm">标定测试片段.mp4</span><span class="sz">636 KB</span></div>
+          </div>
+          <div class="quota">全组已用 1.2 GB / 10.0 GB</div>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">面板保留但不再重复主列表——只显示「当前层」的子文件夹，进哪层显示哪层</li>
+      <li class="pro">快捷区保留；面板从全量树 ~300px 瘦身到 148px</li>
+      <li class="con">仍占一列宽度；跨层跳转需面包屑</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>收进全局侧边栏</h2></div>
+    <p class="v-sub">「课题组网盘」在全局侧边栏内展开子级（收藏/最近/回收站/当前文件夹树）· 内层面板删除 · 全局唯一导航源</p>
+    <div class="win">
+      <div class="win-bar"><i></i><i></i><i></i></div>
+      <div class="win-body">
+        <div class="gnav gnavC">
+          <div class="gi"><b></b>首页</div>
+          <div class="gi"><b></b>任务管理</div>
+          <div class="gi"><b></b>知识库</div>
+          <div class="gi on"><b></b>课题组网盘 ▾</div>
+          <div class="sub">
+            <div class="si on"><span class="em">📁</span><span class="n">团队共享盘</span></div>
+            <div class="si"><span class="em">⭐</span><span class="n">我的收藏</span></div>
+            <div class="si"><span class="em">🕘</span><span class="n">最近上传</span></div>
+            <div class="si"><span class="em">🗑</span><span class="n">回收站</span><span class="c">2</span></div>
+            <div class="si"><span class="em">📂</span><span class="n">测试分类文件夹</span></div>
+          </div>
+          <div class="dv"></div>
+          <div class="gi"><b></b>团队协作</div>
+          <div class="gi"><b></b>个人设置</div>
+        </div>
+        <div class="main">
+          <div class="top">
+            <span class="crumb">团队共享盘 / <b>测试分类文件夹</b></span>
+            <span class="spacer"></span>
+            <span class="pill">＋ 新建</span>
+            <span class="pill teal">上传</span>
+          </div>
+          <div class="list">
+            <div class="li"><span class="ic">🔴</span><span class="nm">开题报告-气泡界面调控.pdf</span><span class="sz">63.5 KB</span></div>
+            <div class="li"><span class="ic">🟢</span><span class="nm">传感器数据.csv</span><span class="sz">20.1 KB</span></div>
+            <div class="li"><span class="ic">🔵</span><span class="nm">实验数据-全量演示.xlsx</span><span class="sz">15.9 KB</span></div>
+            <div class="li"><span class="ic">⚫</span><span class="nm">打包归档.zip</span><span class="sz">2.1 KB</span></div>
+          </div>
+          <div class="quota">全组已用 1.2 GB / 10.0 GB</div>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">全局侧边栏成为唯一导航源，网盘内外体验连续；主区最宽</li>
+      <li class="pro">全局侧边栏本是常驻，扩容零新增空间占用</li>
+      <li class="con">深层文件夹树仍需裁剪（常驻只放常用层）；改全局侧边栏涉及所有页面公共组件</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>折叠图标条 + 悬停展开树</h2></div>
+    <p class="v-sub">面板折叠为 34px 图标条（快捷+树入口）· 悬停浮出完整树 · 记住折叠状态 · 按需取用</p>
+    <div class="win">
+      <div class="win-bar"><i></i><i></i><i></i></div>
+      <div class="win-body">
+        <div class="gnav">
+          <div class="gi"><b></b>首页</div>
+          <div class="gi"><b></b>任务</div>
+          <div class="gi"><b></b>会议</div>
+          <div class="gi"><b></b>知识库</div>
+          <div class="gi on"><b></b>网盘</div>
+          <div class="gi"><b></b>设置</div>
+        </div>
+        <div class="kD-wrap">
+          <div class="kD-rail">
+            <div class="ri on" title="结构">🗂</div>
+            <div class="ri" title="我的收藏">⭐</div>
+            <div class="ri" title="最近上传">🕘</div>
+            <div class="ri" title="回收站">🗑</div>
+          </div>
+          <div class="kD-fly">
+            <div class="cap">结构 · 团队共享盘</div>
+            <div class="ti root">📁 团队共享盘</div>
+            <div class="ti">📁 组会PPT (24)</div>
+            <div class="ti">📁 测试分类文件夹 (13)</div>
+            <div class="ti">📁 冯懿鑫</div>
+            <div class="ti">📁 艾琳朔</div>
+            <div class="ti">📁 韩重阳</div>
+            <div class="quota2">1.2 GB / 10.0 GB</div>
+          </div>
+          <div class="main">
+            <div class="top">
+              <span class="crumb">团队共享盘 / <b>测试分类文件夹</b></span>
+              <span class="spacer"></span>
+              <span class="pill">＋ 新建</span>
+              <span class="pill teal">上传</span>
+            </div>
+            <div class="list">
+              <div class="li"><span class="ic">🔴</span><span class="nm">开题报告-气泡界面调控.pdf</span><span class="sz">63.5 KB</span></div>
+              <div class="li"><span class="ic">🟢</span><span class="nm">传感器数据.csv</span><span class="sz">20.1 KB</span></div>
+              <div class="li"><span class="ic">🔵</span><span class="nm">实验数据-全量演示.xlsx</span><span class="sz">15.9 KB</span></div>
+              <div class="li"><span class="ic">⚫</span><span class="nm">打包归档.zip</span><span class="sz">2.1 KB</span></div>
+              <div class="li"><span class="ic">🟠</span><span class="nm">标定测试片段.mp4</span><span class="sz">636 KB</span></div>
+            </div>
+            <div class="quota">全组已用 1.2 GB / 10.0 GB</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">树完整保留（悬停即得），默认只占 34px；主区宽度接近方案 A</li>
+      <li class="pro">悬浮树带容量条，折叠状态记忆（localStorage）</li>
+      <li class="con">悬停展开会浮层遮住列表前 158px；「折叠态找文件」多一步</li>
+    </ul>
+  </section>
+
+</div>
+</body>
+</html>

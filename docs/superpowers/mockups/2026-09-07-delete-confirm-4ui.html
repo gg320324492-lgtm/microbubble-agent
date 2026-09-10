@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>删除确认 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --danger: #F56C6C;
+    --warning: #E6A23C;
+    --radius-md: 8px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.6; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(420px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  /* 弹窗底座: 灰底遮罩内浮卡片 (真实观感) */
+  .stage {
+    background: repeating-linear-gradient(45deg, #E7E4DE 0 14px, #EDEAE4 14px 28px);
+    border-radius: var(--radius-lg); padding: 34px 0; display: flex; justify-content: center;
+    border: 1px solid var(--color-border); overflow: hidden;
+  }
+  .dlg {
+    width: 440px; background: var(--color-bg-card); border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.18); overflow: hidden;
+  }
+  .dlg-title { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0; font-size: 15px; font-weight: 600; }
+  .dlg-title .x { color: var(--color-text-secondary); font-size: 15px; cursor: default; }
+  .dlg-body { padding: 14px 20px 4px; font-size: 13px; color: var(--color-text-regular); }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 20px 18px; }
+  .btn { font: inherit; font-size: 13px; border-radius: 6px; padding: 8px 18px; cursor: pointer; border: 1px solid var(--color-border);
+         background: var(--color-bg-card); color: var(--color-text-regular); transition: all .15s; }
+  .btn:hover { border-color: #B8E0DB; color: var(--teal); }
+  .btn.primary { background: linear-gradient(135deg, #0E766E, #12897C); border: none; color: #fff; font-weight: 600;
+                 box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+  .btn.primary:hover { transform: translateY(-1px); color: #fff; }
+  .btn.danger { background: var(--danger); border: none; color: #fff; font-weight: 600; }
+  .btn.danger:hover { background: #e14747; color: #fff; }
+
+  .files { margin: 10px 0 4px; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
+  .file-row { display: flex; align-items: center; gap: 9px; padding: 8px 12px; font-size: 12.5px; color: var(--color-text-regular); }
+  .file-row:nth-child(even) { background: #FAFBFA; }
+  .file-row .ic { flex: none; }
+  .file-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-row .sz { flex: none; color: var(--color-text-placeholder); font-family: var(--mono); font-size: 10.5px; }
+  .more { padding: 6px 12px; font-size: 11.5px; color: var(--color-text-secondary); background: #FAFBFA; border-top: 1px dashed var(--color-border); }
+
+  .recycle {
+    display: flex; align-items: center; gap: 7px; margin-top: 10px;
+    background: #F0F9F7; border: 1px solid #CBE4DC; border-radius: 7px;
+    padding: 7px 11px; font-size: 12px; color: #0B5C43;
+  }
+  .recycle svg { width: 14px; height: 14px; flex: none; stroke: #0B5C43; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .warn-line { display: flex; align-items: flex-start; gap: 8px; }
+  .warn-line .dot { flex: none; width: 16px; height: 16px; border-radius: 50%; background: var(--warning); color: #fff;
+                    font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: 700; margin-top: 1px; }
+
+  /* D: 行内二次确认 + snackbar */
+  .inline-demo { padding: 14px 20px 4px; }
+  .inline-row { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border: 1px solid var(--color-border);
+                border-radius: 8px; font-size: 12.5px; }
+  .inline-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inline-del { font: inherit; font-size: 12px; border: 1px solid #FBC4C4; color: var(--danger); background: #FFF5F5;
+                border-radius: 6px; padding: 3px 10px; cursor: pointer; transition: all .15s; flex: none; }
+  .inline-del.armed { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  .snack {
+    margin: 12px 16px 18px; background: #2B2F2A; color: #EDEFEA; border-radius: 8px;
+    padding: 10px 14px; font-size: 12.5px; display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  }
+  .snack .undo { margin-left: auto; border: none; background: none; color: #7FD6C2; font: inherit; font-size: 12.5px;
+                 cursor: pointer; font-weight: 600; padding: 2px 6px; border-radius: 5px; }
+  .snack .undo:hover { background: rgba(127, 214, 194, .15); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>删除确认 · 四版 UI 选型</h1>
+  <p>场景：网盘批量删除确认（现状为通用 MessageBox，无文件名、无回收站说明） · 2026-09-07 · 弹窗为真实尺寸 · A/B/C 展示 3 文件多选场景</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>轻确认卡片（推荐）</h2></div>
+    <p class="v-sub">网盘风格 · 文件名列表 + 「移入回收站 · 3 天可恢复」提示 · 主按钮用深青（可恢复操作不配红色恐吓）</p>
+    <div class="stage">
+      <div class="dlg">
+        <div class="dlg-title">删除文件 <span class="x">✕</span></div>
+        <div class="dlg-body">
+          确定删除以下 <b>3 个文件</b>？
+          <div class="files">
+            <div class="file-row"><span class="ic">🔴</span><span class="nm">开题报告-气泡界面调控.pdf</span><span class="sz">4.0 KB</span></div>
+            <div class="file-row"><span class="ic">🟢</span><span class="nm">传感器数据.csv</span><span class="sz">20.1 KB</span></div>
+            <div class="file-row"><span class="ic">⚫</span><span class="nm">打包归档.zip</span><span class="sz">2.1 KB</span></div>
+          </div>
+          <div class="recycle">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8"/><path d="M3 3v5h5"/></svg>
+            文件将移入回收站，<b>3 天内可随时恢复</b>，不会立即丢失
+          </div>
+        </div>
+        <div class="dlg-foot">
+          <button class="btn">取消</button>
+          <button class="btn primary">移入回收站</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">信息完整（删什么/去哪里/可恢复），主按钮深青与全站一致</li>
+      <li class="pro">软删除语义如实传达，用户不恐慌；多选时列前 3 项 + 「等 N 项」</li>
+      <li class="con">比现状多几行内容（但都是必要信息）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>完整清单 + 红色警示</h2></div>
+    <p class="v-sub">保留红色危险按钮的严肃感 · 但补全文件清单（多选可滚动）与回收站说明 · 谨慎型</p>
+    <div class="stage">
+      <div class="dlg">
+        <div class="dlg-title">批量删除 <span class="x">✕</span></div>
+        <div class="dlg-body">
+          <div class="warn-line"><span class="dot">!</span><span>即将删除以下 <b>8 个文件</b>。文件将进入回收站并保留 <b>3 天</b>，逾期自动清除。</span></div>
+          <div class="files" style="max-height:132px;overflow-y:auto">
+            <div class="file-row"><span class="ic">🔴</span><span class="nm">开题报告-气泡界面调控.pdf</span><span class="sz">4.0 KB</span></div>
+            <div class="file-row"><span class="ic">🟢</span><span class="nm">传感器数据.csv</span><span class="sz">20.1 KB</span></div>
+            <div class="file-row"><span class="ic">⚫</span><span class="nm">打包归档.zip</span><span class="sz">2.1 KB</span></div>
+            <div class="file-row"><span class="ic">🟢</span><span class="nm">粒径分布-宽表演示.xlsx</span><span class="sz">10.0 KB</span></div>
+            <div class="file-row"><span class="ic">🔵</span><span class="nm">实验数据-全量演示.xlsx</span><span class="sz">15.9 KB</span></div>
+            <div class="file-row"><span class="ic">🔴</span><span class="nm">演示视频.mp4</span><span class="sz">598 KB</span></div>
+            <div class="file-row"><span class="ic">🟠</span><span class="nm">会议录音.m4a</span><span class="sz">82.1 KB</span></div>
+            <div class="file-row"><span class="ic">🟣</span><span class="nm">实验照片.png</span><span class="sz">156 KB</span></div>
+          </div>
+        </div>
+        <div class="dlg-foot">
+          <button class="btn">取消</button>
+          <button class="btn danger">确认删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">多选场景最稳妥：全量清单可滚动核对，红色保留操作严肃性</li>
+      <li class="con">大列表确认成本高；深红按钮 + 回收站说明并存，语义略拧巴</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>撤销优先（Gmail 式）</h2></div>
+    <p class="v-sub">不打断：直接执行删除 · 底部 Snackbar 提示「已移入回收站」+ 撤销按钮 · 交互最快</p>
+    <div class="stage" style="display:block; padding: 0;">
+      <div class="inline-demo">
+        <div class="inline-row">
+          <span>🟢</span><span class="nm">传感器数据.csv</span>
+          <button class="inline-del armed" id="del-btn">删除</button>
+        </div>
+        <p style="font-size:11px;color:var(--color-text-secondary);margin:8px 2px 0">↑ 点「删除」后立即执行，不弹任何窗</p>
+      </div>
+      <div class="snack">
+        <span>已将 <b>3 个文件</b> 移入回收站 · 3 天内可恢复</span>
+        <button class="undo" id="undo-btn">撤销</button>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="try">试玩：点行内「删除」，再点 Snackbar 的「撤销」</li>
+      <li class="pro">零打断最快；「撤销」比「确认」体验更好（删除本来就是可恢复操作）</li>
+      <li class="con">误删多个文件时没有核对清单的机会；实现改动最大（去掉弹窗改全局 Snackbar）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>行内二次确认</h2></div>
+    <p class="v-sub">不弹窗：按钮两段式（第一次点变红「确认删除」，3 秒内再点才执行）· 轻量防误触</p>
+    <div class="stage">
+      <div class="dlg">
+        <div class="dlg-title">删除文件 <span class="x">✕</span></div>
+        <div class="dlg-body">
+          <div class="files">
+            <div class="file-row"><span class="ic">🔴</span><span class="nm">开题报告-气泡界面调控.pdf</span><span class="sz">4.0 KB</span></div>
+            <div class="file-row"><span class="ic">🟢</span><span class="nm">传感器数据.csv</span><span class="sz">20.1 KB</span></div>
+            <div class="file-row"><span class="ic">⚫</span><span class="nm">打包归档.zip</span><span class="sz">2.1 KB</span></div>
+          </div>
+          <div class="recycle">文件将移入回收站，3 天内可随时恢复</div>
+        </div>
+        <div class="dlg-foot">
+          <button class="btn">取消</button>
+          <button class="btn" id="d2-btn" style="border-color:#FBC4C4;color:var(--danger)">删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="try">试玩：点「删除」→ 按钮变实心红「确认删除」→ 再点执行（3 秒不点自动复原）</li>
+      <li class="pro">弹窗变薄 + 防误触两段式；信息完整度与 A 相同</li>
+      <li class="con">两段式确认对「已带回收站兜底」的操作其实过度防御</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+/* D 两段式 */
+const d2 = document.getElementById('d2-btn');
+let d2t = null;
+d2.addEventListener('click', () => {
+  if (d2.classList.contains('danger')) { d2.textContent = '删除'; d2.classList.remove('danger'); clearTimeout(d2t); return; }
+  d2.textContent = '确认删除';
+  d2.classList.add('danger');
+  clearTimeout(d2t);
+  d2t = setTimeout(() => { d2.textContent = '删除'; d2.classList.remove('danger'); }, 3000);
+});
+/* C snackbar 演示 */
+document.getElementById('del-btn').addEventListener('click', function () {
+  this.textContent = '已删除 ✓';
+  setTimeout(() => { this.textContent = '删除'; }, 1200);
+});
+document.getElementById('undo-btn').addEventListener('click', () => {
+  const s = document.querySelector('.snack');
+  s.style.opacity = '.35';
+  setTimeout(() => { s.style.opacity = '1'; }, 600);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视频预览窗口 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(380px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  .rail { width: 336px; background: var(--color-bg-card); border: 1px solid var(--color-border);
+          border-radius: 14px; box-shadow: 0 4px 18px rgba(31,42,38,.06); overflow: hidden; }
+  .rail-hero { padding: 16px 16px 12px; }
+  .rf-stage { position: relative; overflow: hidden; border: 1px solid var(--color-border);
+              border-radius: var(--radius-lg); }
+  .rail-name { margin: 12px 0; font-size: 14px; font-weight: 600; word-break: break-all; }
+  .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rail-actions + .rail-actions { grid-template-columns: repeat(3, 1fr); margin-top: 8px; }
+  .rail-act { white-space: nowrap; display: flex; flex-direction: column; align-items: center; justify-content: center;
+              gap: 3px; height: 46px; font-size: 11.5px; color: var(--color-text-regular);
+              border: 1px solid var(--color-border); border-radius: var(--radius-md);
+              background: var(--color-bg-card); cursor: pointer; font-family: inherit; transition: all .15s; }
+  .rail-act:hover { border-color: #B8E0DB; color: var(--teal); background: #F0F9F7; }
+  .rail-act.pri { background: linear-gradient(135deg, #0E766E, #12897C); border-color: transparent;
+                  color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+  .rail-act.wide { flex-direction: row; gap: 6px; font-size: 12px; }
+  .rail-act.danger:hover { color: #F56C6C; border-color: #F56C6C; background: #FEF0F0; }
+
+  /* 伪造视频帧 (彩条测试画面) */
+  .frame {
+    position: relative; height: 100%;
+    background:
+      linear-gradient(115deg, transparent 42%, rgba(255,60,60,.55) 43%, rgba(255,60,60,.55) 47%, transparent 48%),
+      linear-gradient(90deg,
+        #c0c0c0 0 12.5%, #c0c000 12.5% 25%, #00c0c0 25% 37.5%, #00c000 37.5% 50%,
+        #c000c0 50% 62.5%, #c00000 62.5% 75%, #0000c0 75% 87.5%, #101010 87.5% 100%);
+  }
+  .frame .tc {
+    position: absolute; top: 6px; left: 6px; font-family: var(--mono); font-size: 8.5px;
+    color: #fff; background: rgba(0,0,0,.55); padding: 1.5px 6px; border-radius: 3px;
+  }
+
+  /* ══ A: 深青横幅控制条 (音频 C1 同基因) ══ */
+  .kA { height: 189px; display: flex; flex-direction: column; background: #101613; }
+  .kA-video { flex: 1; min-height: 0; }
+  .kA-ctrl {
+    flex: none; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff;
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  }
+  .kA-play { width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
+             background: #fff; color: #0E766E; display: flex; align-items: center; justify-content: center; flex: none; padding: 0; }
+  .kA-play svg { width: 11px; height: 11px; fill: currentColor; }
+  .kA-time { font-family: var(--mono); font-size: 9.5px; color: rgba(255,255,255,.85); flex: none; }
+  .kA-seek { flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; }
+  .kA-track { position: relative; width: 100%; height: 4px; border-radius: 999px; background: rgba(255,255,255,.28); }
+  .kA-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 35%; background: #fff; border-radius: 999px; }
+  .kA-thumb { position: absolute; top: 50%; left: 35%; width: 10px; height: 10px; border-radius: 50%;
+              background: #fff; transform: translate(-50%,-50%); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .kA-vol { display: flex; align-items: center; gap: 4px; flex: none; }
+  .kA-vol svg { width: 13px; height: 13px; fill: #fff; }
+  .kA-vbar { width: 44px; height: 3px; border-radius: 999px;
+             background: linear-gradient(to right, #fff 60%, rgba(255,255,255,.28) 60%); }
+
+  /* ══ B: 影院悬浮控件 ══ */
+  .kB { height: 189px; background: #000; }
+  .kB:hover .kB-ctrl { opacity: 1; }
+  .kB:hover .kB-bigplay { opacity: 0; }
+  .kB-ctrl {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px 7px;
+    background: linear-gradient(transparent, rgba(0,0,0,.72)); color: #fff;
+    opacity: 0; transition: opacity .25s;
+  }
+  .kB-bigplay {
+    position: absolute; inset: 0; margin: auto; z-index: 2;
+    width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(14,118,110,.92); display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4); transition: opacity .25s;
+  }
+  .kB-bigplay svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
+  .kB-play { border: none; background: none; cursor: pointer; padding: 0; display: flex; }
+  .kB-play svg { width: 15px; height: 15px; fill: #fff; }
+  .kB-time { font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,.9); flex: none; }
+  .kB-seek { flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; }
+  .kB-track { position: relative; width: 100%; height: 3.5px; border-radius: 999px; background: rgba(255,255,255,.25); }
+  .kB-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 35%; background: var(--teal-2); border-radius: 999px; }
+  .kB-thumb { position: absolute; top: 50%; left: 35%; width: 9px; height: 9px; border-radius: 50%;
+              background: #fff; transform: translate(-50%,-50%); }
+  .kB-full { border: none; background: none; cursor: pointer; display: flex; padding: 0; }
+  .kB-full svg { width: 13px; height: 13px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; }
+  .kB-tag { position: absolute; top: 6px; right: 6px; z-index: 3; font-family: var(--mono); font-size: 8px;
+            color: rgba(255,255,255,.8); background: rgba(0,0,0,.45); padding: 1.5px 6px; border-radius: 9999px; }
+
+  /* ══ C: 海报大按钮极简 ══ */
+  .kC { height: 189px; background: #000; }
+  .kC-bigplay {
+    position: absolute; inset: 0; margin: auto; z-index: 2;
+    width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85);
+    background: rgba(0,0,0,.35); backdrop-filter: blur(3px); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; transition: transform .2s, background .2s;
+  }
+  .kC-bigplay:hover { transform: scale(1.08); background: rgba(14,118,110,.85); border-color: transparent; }
+  .kC-bigplay svg { width: 20px; height: 20px; fill: #fff; margin-left: 3px; }
+  .kC-prog { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: 3px; background: rgba(255,255,255,.22); }
+  .kC-prog i { display: block; height: 100%; width: 35%; background: var(--teal-2); }
+  .kC-dur { position: absolute; right: 6px; bottom: 8px; z-index: 3; font-family: var(--mono);
+            font-size: 8.5px; color: rgba(255,255,255,.85); text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+
+  /* ══ D: 原生控件微调 ══ */
+  .kD { height: 189px; background: #101613; }
+  .kD video { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .kD-badge { position: absolute; top: 6px; right: 6px; z-index: 3; font-family: var(--mono); font-size: 8px;
+              color: rgba(255,255,255,.8); background: rgba(0,0,0,.45); padding: 1.5px 6px; border-radius: 9999px; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>视频预览窗口 · 四版 UI 选型</h1>
+  <p>场景：网盘右栏详情卡 · 演示视频.mp4（16:9 · 6 秒彩条测试片） · 2026-09-07 · 卡片真实尺寸 336px · B 悬停可试控件显隐</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>深青横幅控制条</h2></div>
+    <p class="v-sub">音频播放器 C1 同基因 · 画面在上，深青控制条独立在下 · 与全站横幅语言完全统一</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kA">
+          <div class="kA-video"><div class="frame"><span class="tc">00:00:02.100</span></div></div>
+          <div class="kA-ctrl">
+            <button class="kA-play"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+            <span class="kA-time">0:02</span>
+            <div class="kA-seek"><div class="kA-track"><div class="kA-fill"></div><div class="kA-thumb"></div></div></div>
+            <span class="kA-time">0:06</span>
+            <span class="kA-vol"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg></span>
+            <span class="kA-vbar"></span>
+          </div>
+        </div>
+        <h3 class="rail-name">演示视频.mp4</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">自绘控件风格 100% 可控，与音频 C1/深青横幅家族完全统一</li>
+      <li class="pro">画面区不被控件遮挡；控制条常显，进度一目了然</li>
+      <li class="con">画面高度被控制条占掉 ~40px（189 → 画面约 149px）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>影院悬浮控件（推荐）</h2></div>
+    <p class="v-sub">画面满铺 · 底部悬浮自绘控件，播放时自动隐藏、悬停/暂停浮现 · 主流播放器形态</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kB">
+          <div class="frame"><span class="tc">00:00:02.100</span></div>
+          <button class="kB-bigplay"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+          <span class="kB-tag">16:9 · 0:06</span>
+          <div class="kB-ctrl">
+            <button class="kB-play"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+            <span class="kB-time">0:02</span>
+            <div class="kB-seek"><div class="kB-track"><div class="kB-fill"></div><div class="kB-thumb"></div></div></div>
+            <span class="kB-time">0:06</span>
+            <button class="kB-full"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+          </div>
+        </div>
+        <h3 class="rail-name">演示视频.mp4</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">画面利用率最高（满铺 189px）；观感即主流播放器，零学习成本</li>
+      <li class="pro">中央青色大播放键 + 悬浮控件自动隐现，双击全屏照常</li>
+      <li class="con">自绘控件工作量中等（进度条/音量/隐现逻辑，可复用音频播放器的自绘经验）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>海报大按钮极简</h2></div>
+    <p class="v-sub">只留中央大播放键 + 一条细进度线 · 最克制 · 点击播放后控件进一步隐去</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kC">
+          <div class="frame"><span class="tc">00:00:02.100</span></div>
+          <button class="kC-bigplay"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+          <div class="kC-prog"><i></i></div>
+          <span class="kC-dur">0:06</span>
+        </div>
+        <h3 class="rail-name">演示视频.mp4</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">视觉最干净，预览场景（快速看一眼）足够用</li>
+      <li class="pro">实现最少的自绘方案（只有大按钮 + 细进度线）</li>
+      <li class="con">没有音量/倍速/拖动浮层，需要精细控制时得靠全屏或下载</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>原生控件微调</h2></div>
+    <p class="v-sub">保留浏览器原生控件（现状）· 仅统一深色舞台与容器质感 · 改动最小</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kD">
+          <div class="frame"></div>
+          <span class="kD-badge">原生控件</span>
+        </div>
+        <h3 class="rail-name">演示视频.mp4</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">几乎零工作量：原生控件自带音量/倍速/画中画全功能</li>
+      <li class="pro">功能最全（原生菜单含下载/画中画/倍速）</li>
+      <li class="con">控件样式随浏览器走，与全站深青语言不统一（当初音频就是这么重做成 C1 的）</li>
+    </ul>
+  </section>
+
+</div>
+</body>
+</html>

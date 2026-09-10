@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSV 预览窗口 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --color-text-placeholder: #C0C4CC;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(380px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  .rail { width: 336px; background: var(--color-bg-card); border: 1px solid var(--color-border);
+          border-radius: 14px; box-shadow: 0 4px 18px rgba(31,42,38,.06); overflow: hidden; }
+  .rail-hero { padding: 16px 16px 12px; }
+  .rf-stage { position: relative; overflow: hidden; border: 1px solid var(--color-border);
+              border-radius: var(--radius-lg); background: var(--color-bg-card); }
+  .rail-name { margin: 12px 0; font-size: 14px; font-weight: 600; word-break: break-all; }
+  .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rail-actions + .rail-actions { grid-template-columns: repeat(3, 1fr); margin-top: 8px; }
+  .rail-act { white-space: nowrap; display: flex; flex-direction: column; align-items: center; justify-content: center;
+              gap: 3px; height: 46px; font-size: 11.5px; color: var(--color-text-regular);
+              border: 1px solid var(--color-border); border-radius: var(--radius-md);
+              background: var(--color-bg-card); cursor: pointer; font-family: inherit; transition: all .15s; }
+  .rail-act:hover { border-color: #B8E0DB; color: var(--teal); background: #F0F9F7; }
+  .rail-act.pri { background: linear-gradient(135deg, #0E766E, #12897C); border-color: transparent;
+                  color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+  .rail-act.wide { flex-direction: row; gap: 6px; font-size: 12px; }
+  .rail-act.danger:hover { color: #F56C6C; border-color: #F56C6C; background: #FEF0F0; }
+
+  /* 深青横幅头 (xlsx D 同源) */
+  .zp-head { display: flex; align-items: center; gap: 9px; color: #fff; padding: 8px 11px;
+             background: linear-gradient(135deg, #0E766E, #0B655E); }
+  .zp-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; flex: none; }
+  .zp-ico svg { width: 14px; height: 14px; fill: #fff; }
+  .zp-tt { flex: 1; min-width: 0; }
+  .zp-nm { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zp-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+  .zp-meta .mono { font-family: var(--mono); }
+
+  /* ══ A: 数据网格 ══ */
+  .kA { height: 268px; display: flex; flex-direction: column; }
+  .kA-grid { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .kA-grid table { width: 100%; border-collapse: collapse; font-size: 10.6px; }
+  .kA-grid th { text-align: left; font-weight: 600; color: #0F5C38; background: #E9F5EE;
+                padding: 4.5px 8px; border-bottom: 1px solid #CBE4D5; white-space: nowrap; }
+  .kA-grid td { padding: 4px 8px; color: var(--color-text-regular); border-bottom: 1px solid #F4F5F2;
+                white-space: nowrap; font-family: var(--mono); font-size: 10.2px; }
+  .kA-grid tr:nth-child(even) td { background: #FAFBF9; }
+  .kA-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px;
+             background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+  .kA-foot { flex: none; display: flex; align-items: center; justify-content: center;
+             padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+             border-top: 1px solid var(--color-border); background: #FBFBF9; }
+
+  /* ══ B: 原文速览 ══ */
+  .kB { height: 268px; display: flex; flex-direction: column; background: #FBFCFB; }
+  .kB-pre { flex: 1; min-height: 0; overflow: hidden; position: relative; margin: 0;
+            padding: 9px 11px; font-family: var(--mono); font-size: 9.6px; line-height: 1.75;
+            color: var(--color-text-regular); white-space: pre; }
+  .kB-pre .ln { color: #B9C2BF; user-select: none; padding-right: 8px; }
+  .kB-pre .h1 { color: #0F5C38; font-weight: 700; }
+  .kB-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px;
+             background: linear-gradient(rgba(251,252,251,0), #FBFCFB); pointer-events: none; }
+  .kB-foot { flex: none; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+             border-top: 1px solid var(--color-border); background: #FBFBF9; text-align: center; }
+
+  /* ══ C: 摘要卡 ══ */
+  .kC { height: 152px; background: linear-gradient(165deg, #0E766E, #0A5A54); color: #fff;
+        display: flex; flex-direction: column; justify-content: center; gap: 11px; padding: 14px 16px; }
+  .kC-head { display: flex; align-items: center; gap: 10px; }
+  .kC-ico { width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; flex: none; }
+  .kC-ico svg { width: 18px; height: 18px; fill: #fff; }
+  .kC-nm { font-size: 12.5px; font-weight: 600; }
+  .kC-meta { font-size: 10px; color: rgba(255,255,255,.72); margin-top: 2px; }
+  .kC-stats { display: flex; gap: 6px; flex-wrap: wrap; }
+  .kC-pill { font-size: 10px; color: rgba(255,255,255,.92); background: rgba(255,255,255,.16);
+             border: 1px solid rgba(255,255,255,.14); padding: 3px 10px; border-radius: 9999px;
+             font-family: var(--mono); }
+
+  /* ══ D: 网格+原文切换 ══ */
+  .kD { height: 268px; display: flex; flex-direction: column; }
+  .kD-grid { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .kD-pre { flex: 1; min-height: 0; overflow: hidden; position: relative; margin: 0;
+            padding: 9px 11px; font-family: var(--mono); font-size: 9.6px; line-height: 1.75;
+            color: var(--color-text-regular); white-space: pre; background: #FBFCFB; }
+  .kD-toggle { flex: none; display: flex; align-items: center; gap: 4px; padding: 5px 8px;
+               border-top: 1px solid var(--color-border); background: #FBFBF9; }
+  .kD-toggle button { border: none; background: none; cursor: pointer; font-size: 10px;
+                      color: var(--color-text-secondary); font-family: inherit;
+                      padding: 2.5px 10px; border-radius: 9999px; }
+  .kD-toggle button.on { color: var(--teal); font-weight: 600; background: rgba(14,118,110,.10); }
+  .kD-toggle .info { margin-left: auto; font-size: 10px; color: var(--color-text-placeholder); font-family: var(--mono); }
+  .kD-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+             background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>CSV 预览窗口 · 四版 UI 选型</h1>
+  <p>场景：网盘右栏详情卡 · 传感器数据.csv（500 行 × 5 列 · UTF-8 · 38 KB） · 2026-09-07 · 卡片真实尺寸 336px · D 可切换网格/原文</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>数据网格（推荐）</h2></div>
+    <p class="v-sub">深青横幅 + 表头 + 前 8 行真数据 · 与 xlsx 预览完全同交互（全屏滚动/缩放/双击全屏）</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kA">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm1 4v3h5V7H5zm7 0v3h7V7h-7zM5 12v3h5v-3H5zm7 0v3h7v-3h-7zM5 17v2h5v-2H5zm7 0v2h7v-2h-7z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">传感器数据.csv</div>
+              <div class="zp-meta">500 行 × 5 列 · UTF-8 · <span class="mono">38 KB</span></div>
+            </div>
+          </div>
+          <div class="kA-grid">
+            <table>
+              <thead><tr><th>时间戳</th><th>温度 (°C)</th><th>湿度 (%RH)</th><th>压力 (kPa)</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr><td>2026-09-07 08:00:00</td><td>24.82</td><td>61.3</td><td>101.28</td><td>OK</td></tr>
+                <tr><td>2026-09-07 08:00:05</td><td>24.85</td><td>61.2</td><td>101.27</td><td>OK</td></tr>
+                <tr><td>2026-09-07 08:00:10</td><td>24.79</td><td>61.5</td><td>101.29</td><td>OK</td></tr>
+                <tr><td>2026-09-07 08:00:15</td><td>24.91</td><td>61.1</td><td>101.26</td><td>OK</td></tr>
+                <tr><td>2026-09-07 08:00:20</td><td>24.88</td><td>61.4</td><td>101.28</td><td>OK</td></tr>
+                <tr><td>2026-09-07 08:00:25</td><td>24.93</td><td>60.9</td><td>101.25</td><td>OK</td></tr>
+                <tr><td>2026-09-07 08:00:30</td><td>25.02</td><td>60.8</td><td>101.27</td><td>OK</td></tr>
+                <tr><td>2026-09-07 08:00:35</td><td>25.06</td><td>60.7</td><td>101.26</td><td>WARN</td></tr>
+              </tbody>
+            </table>
+            <div class="kA-fade"></div>
+          </div>
+          <div class="kA-foot">仅预览前 8 行 · 全屏查看全部 500 行</div>
+        </div>
+        <h3 class="rail-name">传感器数据.csv</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">与 xlsx 预览同基因：横幅+表格+全屏滚动缩放，交互零学习成本</li>
+      <li class="pro">后端 csv-preview 端点自动探测编码（GBK/Lab 的 csv 常见乱码问题一并解决）</li>
+      <li class="con">要看原始逗号分隔格式需下载（纯原文视图见 B/D）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>原文速览</h2></div>
+    <p class="v-sub">等宽字体的原始文本 · 行号 + 表头高亮 · 复用现成 /preview 端点，后端零改动</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kB">
+          <pre class="kB-pre"><span class="h1">时间戳,温度(°C),湿度(%RH),压力(kPa),状态</span>
+<span class="ln">2</span>2026-09-07 08:00:00,24.82,61.3,101.28,OK
+<span class="ln">3</span>2026-09-07 08:00:05,24.85,61.2,101.27,OK
+<span class="ln">4</span>2026-09-07 08:00:10,24.79,61.5,101.29,OK
+<span class="ln">5</span>2026-09-07 08:00:15,24.91,61.1,101.26,OK
+<span class="ln">6</span>2026-09-07 08:00:20,24.88,61.4,101.28,OK
+<span class="ln">7</span>2026-09-07 08:00:25,24.93,60.9,101.25,OK
+<span class="ln">8</span>2026-09-07 08:00:30,25.02,60.8,101.27,OK
+<span class="ln">9</span>2026-09-07 08:00:35,25.06,60.7,101.26,WARN
+<span class="ln">10</span>2026-09-07 08:00:40,25.11,60.6,101.25,OK</pre>
+          <div class="kB-fade"></div>
+          <div class="kB-foot">原文前 4 KB · 全屏滚动看更多</div>
+        </div>
+        <h3 class="rail-name">传感器数据.csv</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">最快落地：/preview 文本端点已存在，只补右栏渲染分支（当前是死代码）</li>
+      <li class="pro">100% 原貌——分隔符/引号/注释行都看得见</li>
+      <li class="con">列不对齐，数字比较费眼；大文件只显示前几 KB</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>摘要卡</h2></div>
+    <p class="v-sub">深青横幅只给行列/编码/分隔符统计 · 内容进全屏才看 · 最轻</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kC">
+          <div class="kC-head">
+            <span class="kC-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm1 4v3h5V7H5zm7 0v3h7V7h-7zM5 12v3h5v-3H5zm7 0v3h7v-3h-7zM5 17v2h5v-2H5zm7 0v2h7v-2h-7z"/></svg></span>
+            <div>
+              <div class="kC-nm">传感器数据.csv</div>
+              <div class="kC-meta"><span style="font-family:var(--mono)">38 KB</span> · UTF-8</div>
+            </div>
+          </div>
+          <div class="kC-stats">
+            <span class="kC-pill">500 行</span>
+            <span class="kC-pill">5 列</span>
+            <span class="kC-pill">逗号分隔</span>
+            <span class="kC-pill">有表头</span>
+          </div>
+        </div>
+        <h3 class="rail-name">传感器数据.csv</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">秒开零解析成本，统计信息对「先确认格式再下载」够用</li>
+      <li class="pro">与 xlsx/zip 横幅视觉统一</li>
+      <li class="con">不显示任何数据内容，预览价值最弱</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>网格 + 原文双视图</h2></div>
+    <p class="v-sub">默认数据网格 · 底部「网格 / 原文」小切换 · 两种诉求一次满足</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kD">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M4 3h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1zm1 4v3h5V7H5zm7 0v3h7V7h-7zM5 12v3h5v-3H5zm7 0v3h7v-3h-7zM5 17v2h5v-2H5zm7 0v2h7v-2h-7z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">传感器数据.csv</div>
+              <div class="zp-meta">500 行 × 5 列 · UTF-8 · <span class="mono">38 KB</span></div>
+            </div>
+          </div>
+          <div class="kD-grid" id="kD-grid">
+            <table style="width:100%;border-collapse:collapse;font-size:10.6px">
+              <thead><tr><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">时间戳</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">温度 (°C)</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">湿度 (%RH)</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">压力 (kPa)</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">状态</th></tr></thead>
+              <tbody>
+                <tr><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">2026-09-07 08:00:00</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">24.82</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">61.3</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">101.28</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">OK</td></tr>
+                <tr><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">2026-09-07 08:00:05</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">24.85</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">61.2</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">101.27</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">OK</td></tr>
+                <tr><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">2026-09-07 08:00:10</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">24.79</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">61.5</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">101.29</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">OK</td></tr>
+                <tr><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">2026-09-07 08:00:15</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">24.91</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">61.1</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">101.26</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">OK</td></tr>
+                <tr><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">2026-09-07 08:00:20</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">24.88</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">61.4</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">101.28</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">OK</td></tr>
+                <tr><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">2026-09-07 08:00:25</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">24.93</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">60.9</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">101.25</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px;background:#FAFBF9">OK</td></tr>
+              </tbody>
+            </table>
+            <div class="kD-fade"></div>
+          </div>
+          <div class="kD-toggle">
+            <button class="on" id="kD-btn-grid" onclick="kDView('grid')">网格</button>
+            <button id="kD-btn-raw" onclick="kDView('raw')">原文</button>
+            <span class="info" id="kD-info">500 行 × 5 列</span>
+          </div>
+        </div>
+        <h3 class="rail-name">传感器数据.csv</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">数据对齐看 + 原始格式查，双诉求覆盖；信息密度最高</li>
+      <li class="pro">网格走 csv-preview、原文走现成 /preview，两条数据通路都简单</li>
+      <li class="con">多一个切换控件，实现量 A×1.3 左右；336px 窄栏里切换价值打折</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+function kDView(v) {
+  const g = document.getElementById('kD-grid');
+  document.getElementById('kD-btn-grid').classList.toggle('on', v === 'grid');
+  document.getElementById('kD-btn-raw').classList.toggle('on', v === 'raw');
+  if (v === 'grid') {
+    g.outerHTML = '<div class="kD-grid" id="kD-grid"><table style="width:100%;border-collapse:collapse;font-size:10.6px"><thead><tr><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">时间戳</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">温度 (°C)</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">湿度 (%RH)</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">压力 (kPa)</th><th style="text-align:left;font-weight:600;color:#0F5C38;background:#E9F5EE;padding:4.5px 8px;border-bottom:1px solid #CBE4D5">状态</th></tr></thead><tbody><tr><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">2026-09-07 08:00:00</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">24.82</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">61.3</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">101.28</td><td style="padding:4px 8px;border-bottom:1px solid #F4F5F2;font-family:var(--mono);font-size:10.2px">OK</td></tr></tbody></table><div class="kD-fade"></div></div>';
+  } else {
+    g.outerHTML = '<pre class="kD-pre" id="kD-grid">时间戳,温度(°C),湿度(%RH),压力(kPa),状态\n2026-09-07 08:00:00,24.82,61.3,101.28,OK\n2026-09-07 08:00:05,24.85,61.2,101.27,OK\n2026-09-07 08:00:10,24.79,61.5,101.29,OK</pre>';
+  }
+}
+</script>
+</body>
+</html>
