@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TXT 预览窗口 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --color-text-placeholder: #C0C4CC;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(380px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+
+  .rail { width: 336px; background: var(--color-bg-card); border: 1px solid var(--color-border);
+          border-radius: 14px; box-shadow: 0 4px 18px rgba(31,42,38,.06); overflow: hidden; }
+  .rail-hero { padding: 16px 16px 12px; }
+  .rf-stage { position: relative; overflow: hidden; border: 1px solid var(--color-border);
+              border-radius: var(--radius-lg); background: var(--color-bg-card); }
+  .rail-name { margin: 12px 0; font-size: 14px; font-weight: 600; word-break: break-all; }
+  .rail-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .rail-actions + .rail-actions { grid-template-columns: repeat(3, 1fr); margin-top: 8px; }
+  .rail-act { white-space: nowrap; display: flex; flex-direction: column; align-items: center; justify-content: center;
+              gap: 3px; height: 46px; font-size: 11.5px; color: var(--color-text-regular);
+              border: 1px solid var(--color-border); border-radius: var(--radius-md);
+              background: var(--color-bg-card); cursor: pointer; font-family: inherit; transition: all .15s; }
+  .rail-act:hover { border-color: #B8E0DB; color: var(--teal); background: #F0F9F7; }
+  .rail-act.pri { background: linear-gradient(135deg, #0E766E, #12897C); border-color: transparent;
+                  color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(14,118,110,.3); }
+  .rail-act.wide { flex-direction: row; gap: 6px; font-size: 12px; }
+  .rail-act.danger:hover { color: #F56C6C; border-color: #F56C6C; background: #FEF0F0; }
+
+  /* 深青横幅头 */
+  .zp-head { display: flex; align-items: center; gap: 9px; color: #fff; padding: 8px 11px;
+             background: linear-gradient(135deg, #0E766E, #0B655E); }
+  .zp-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; flex: none; }
+  .zp-ico svg { width: 14px; height: 14px; fill: #fff; }
+  .zp-tt { flex: 1; min-width: 0; }
+  .zp-nm { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zp-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
+  .zp-meta .mono { font-family: var(--mono); }
+
+  /* ══ A: 原文速览 ══ */
+  .kA { height: 268px; display: flex; flex-direction: column; background: #FBFCFB; }
+  .kA-pre { flex: 1; min-height: 0; overflow: hidden; position: relative; margin: 0;
+            padding: 10px 12px; font-family: var(--mono); font-size: 10.2px; line-height: 1.8;
+            color: var(--color-text-regular); white-space: pre-wrap; word-break: break-all; }
+  .kA-pre b { color: var(--color-text-primary); }
+  .kA-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 32px;
+             background: linear-gradient(rgba(251,252,251,0), #FBFCFB); pointer-events: none; }
+  .kA-foot { flex: none; display: flex; align-items: center; justify-content: center;
+             padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+             border-top: 1px solid var(--color-border); background: #FBFBF9; }
+
+  /* ══ B: 行号原文 ══ */
+  .kB { height: 268px; display: flex; flex-direction: column; background: #FBFCFB; }
+  .kB-pre { flex: 1; min-height: 0; overflow: hidden; position: relative; margin: 0;
+            padding: 10px 0; font-family: var(--mono); font-size: 10.2px; line-height: 1.8;
+            color: var(--color-text-regular); white-space: pre-wrap; word-break: break-all; }
+  .kB-ln { display: flex; }
+  .kB-no { flex: none; width: 26px; text-align: right; padding-right: 8px; color: #B9C2BF; user-select: none; }
+  .kB-tx { flex: 1; min-width: 0; padding-right: 10px; }
+  .kB-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 32px;
+             background: linear-gradient(rgba(251,252,251,0), #FBFCFB); pointer-events: none; }
+  .kB-foot { flex: none; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+             border-top: 1px solid var(--color-border); background: #FBFBF9; text-align: center; }
+
+  /* ══ C: 摘要卡 ══ */
+  .kC { height: 152px; background: linear-gradient(165deg, #0E766E, #0A5A54); color: #fff;
+        display: flex; flex-direction: column; justify-content: center; gap: 11px; padding: 14px 16px; }
+  .kC-head { display: flex; align-items: center; gap: 10px; }
+  .kC-ico { width: 36px; height: 36px; border-radius: 9px; background: rgba(255,255,255,.18);
+            display: flex; align-items: center; justify-content: center; flex: none; }
+  .kC-ico svg { width: 18px; height: 18px; fill: #fff; }
+  .kC-nm { font-size: 12.5px; font-weight: 600; }
+  .kC-meta { font-size: 10px; color: rgba(255,255,255,.72); margin-top: 2px; }
+  .kC-stats { display: flex; gap: 6px; flex-wrap: wrap; }
+  .kC-pill { font-size: 10px; color: rgba(255,255,255,.92); background: rgba(255,255,255,.16);
+             border: 1px solid rgba(255,255,255,.14); padding: 3px 10px; border-radius: 9999px;
+             font-family: var(--mono); }
+
+  /* ══ D: 智能渲染 (json 格式化示例) ══ */
+  .kD { height: 268px; display: flex; flex-direction: column; background: #FBFCFB; }
+  .kD-body { flex: 1; min-height: 0; overflow: hidden; position: relative; margin: 0;
+             padding: 10px 12px; font-family: var(--mono); font-size: 10.2px; line-height: 1.8;
+             color: var(--color-text-regular); white-space: pre-wrap; word-break: break-all; }
+  .kD-body .k { color: #0F5C38; font-weight: 600; }
+  .kD-body .s { color: #8A5A00; }
+  .kD-body .n { color: #1D5FA8; }
+  .kD-body h4 { margin: 0 0 8px; font-family: inherit; font-size: 11px; color: var(--teal); }
+  .kD-body h5 { margin: 10px 0 4px; font-family: inherit; font-size: 10.5px; color: var(--color-text-primary); }
+  .kD-body p { margin: 0 0 6px; font-family: inherit; }
+  .kD-body ul { margin: 0 0 6px; padding-left: 18px; font-family: inherit; }
+  .kD-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 28px;
+             background: linear-gradient(rgba(251,252,251,0), #FBFCFB); pointer-events: none; }
+  .kD-foot { flex: none; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary);
+             border-top: 1px solid var(--color-border); background: #FBFBF9; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>TXT 预览窗口 · 四版 UI 选型</h1>
+  <p>场景：网盘右栏详情卡 · 备注说明.txt（86 行 · 2.3 KB · UTF-8） · 2026-09-07 · 卡片真实尺寸 336px · 覆盖 md/json/log 同类</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>原文速览（推荐）</h2></div>
+    <p class="v-sub">深青横幅 + 等宽原文 + 关键行高亮 · 底部渐隐 · 全屏滚动看全量 · 复用现成 /preview 端点</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kA">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1zm8 1.5V8h4.5L14 3.5zM8 12h8v1.6H8V12zm0 4h8v1.6H8V16zm0-8h5v1.6H8V8z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">备注说明.txt</div>
+              <div class="zp-meta">86 行 · UTF-8 · <span class="mono">2.3 KB</span></div>
+            </div>
+          </div>
+          <div class="kA-pre"><b>【实验备注 · 2026-08 批次】</b>
+
+一、样品制备
+  1. SDS 溶液配制浓度梯度: 0.001 / 0.005 / 0.010 / 0.050 mol/L
+  2. 全部使用超纯水 (18.2 MΩ·cm), 现配现用
+  3. pH 计每次使用前两点校准
+
+二、测量注意事项
+  - 表面张力仪开机预热 30 分钟以上
+  - 白金板每次测量前灼烧处理
+  - 每个浓度平行测 3 次取平均, 偏差超 0.2 mN/m 重测
+
+三、数据文件对应关系
+  - 表面张力-0828.xlsx ← 8 月 28 日批次
+  - 粒径分布-0901.xlsx ← 9 月 1 日批次
+  - zeta-raw.csv ← 原始导出, 未经剔除</div>
+          <div class="kA-fade"></div>
+          <div class="kA-foot">原文前 5 KB · 全屏滚动看全量</div>
+        </div>
+        <h3 class="rail-name">备注说明.txt</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">txt 的自然形态：所见即原文；后端零改动（/preview 现成）</li>
+      <li class="pro">与 csv 的原文通路一致，全屏滚动/双击全屏直接复用</li>
+      <li class="con">长行折行后缩进层级感略弱（表格类内容建议转 csv/xlsx）</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>行号原文</h2></div>
+    <p class="v-sub">左侧行号槽 · 讨论时可直接说「第 12 行」· 全屏同款带行号滚动</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kB">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1zm8 1.5V8h4.5L14 3.5zM8 12h8v1.6H8V12zm0 4h8v1.6H8V16zm0-8h5v1.6H8V8z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">备注说明.txt</div>
+              <div class="zp-meta">86 行 · UTF-8 · <span class="mono">2.3 KB</span></div>
+            </div>
+          </div>
+          <div class="kB-pre">
+            <div class="kB-ln"><span class="kB-no">1</span><span class="kB-tx"><b>【实验备注 · 2026-08 批次】</b></span></div>
+            <div class="kB-ln"><span class="kB-no">2</span><span class="kB-tx"></span></div>
+            <div class="kB-ln"><span class="kB-no">3</span><span class="kB-tx">一、样品制备</span></div>
+            <div class="kB-ln"><span class="kB-no">4</span><span class="kB-tx">  1. SDS 溶液配制浓度梯度: 0.001 / 0.005 / 0.010 / 0.050</span></div>
+            <div class="kB-ln"><span class="kB-no">5</span><span class="kB-tx">  2. 全部使用超纯水 (18.2 MΩ·cm), 现配现用</span></div>
+            <div class="kB-ln"><span class="kB-no">6</span><span class="kB-tx">  3. pH 计每次使用前两点校准</span></div>
+            <div class="kB-ln"><span class="kB-no">7</span><span class="kB-tx"></span></div>
+            <div class="kB-ln"><span class="kB-no">8</span><span class="kB-tx">二、测量注意事项</span></div>
+            <div class="kB-ln"><span class="kB-no">9</span><span class="kB-tx">  - 表面张力仪开机预热 30 分钟以上</span></div>
+          </div>
+          <div class="kB-fade"></div>
+          <div class="kB-foot">原文前 5 KB · 行号仅作位置参考</div>
+        </div>
+        <h3 class="rail-name">备注说明.txt</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">行号便于组会讨论定位（log 文件排错尤其有用）</li>
+      <li class="pro">与 A 同一条数据通路，只多一个行号槽渲染</li>
+      <li class="con">窄栏 336px 里行号挤占正文宽度；txt 场景价值不如 log</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>摘要卡</h2></div>
+    <p class="v-sub">横幅只给行数/大小/编码统计 · 内容进全屏才看 · 最轻</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kC">
+          <div class="kC-head">
+            <span class="kC-ico"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1zm8 1.5V8h4.5L14 3.5zM8 12h8v1.6H8V12zm0 4h8v1.6H8V16zm0-8h5v1.6H8V8z"/></svg></span>
+            <div>
+              <div class="kC-nm">备注说明.txt</div>
+              <div class="kC-meta"><span style="font-family:var(--mono)">2.3 KB</span> · UTF-8</div>
+            </div>
+          </div>
+          <div class="kC-stats">
+            <span class="kC-pill">86 行</span>
+            <span class="kC-pill">1,214 字</span>
+            <span class="kC-pill">UTF-8</span>
+          </div>
+        </div>
+        <h3 class="rail-name">备注说明.txt</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">秒开零成本，与 xlsx/zip/csv 横幅家族统一</li>
+      <li class="con">文本类「看内容」是第一诉求，摘要卡预览价值最弱</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>智能渲染（按扩展名）</h2></div>
+    <p class="v-sub">.md 渲染排版 / .json 格式化高亮 / .txt·.log 原文 —— 一套分支三种形态</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage kD">
+          <div class="zp-head">
+            <span class="zp-ico"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1zm8 1.5V8h4.5L14 3.5zM8 12h8v1.6H8V12zm0 4h8v1.6H8V16zm0-8h5v1.6H8V8z"/></svg></span>
+            <div class="zp-tt">
+              <div class="zp-nm">备注说明.txt / config.json / README.md</div>
+              <div class="zp-meta">按扩展名自动选择渲染方式</div>
+            </div>
+          </div>
+          <div class="kD-body">
+            <h4>.md → 渲染排版</h4>
+            <h5>样品制备</h5>
+            <p>SDS 溶液配制浓度梯度：<b>0.001 / 0.005 / 0.010 mol/L</b></p>
+            <ul><li>超纯水现配现用</li><li>pH 计两点校准</li></ul>
+            <h4>.json → 格式化高亮</h4>
+            <div>{
+  <span class="k">"sample"</span>: <span class="s">"WX-001"</span>,
+  <span class="k">"d50_um"</span>: <span class="n">28.7</span>,
+  <span class="k">"pdi"</span>: <span class="n">0.22</span>
+}</div>
+          </div>
+          <div class="kD-fade"></div>
+          <div class="kD-foot">md 渲染排版 · json 格式化 · txt/log 原文</div>
+        </div>
+        <h3 class="rail-name">备注说明.txt（及 md/json/log）</h3>
+        <div class="rail-actions">
+          <button class="rail-act pri">⤢ 全屏放映</button>
+          <button class="rail-act">⬇ 下载</button>
+          <button class="rail-act">◈ 分享</button>
+          <button class="rail-act">★ 收藏</button>
+        </div>
+        <div class="rail-actions">
+          <button class="rail-act wide">✎ 重命名</button>
+          <button class="rail-act wide">📂 移动</button>
+          <button class="rail-act wide danger">🗑 删除</button>
+        </div>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="pro">一次把 md/json/log 全类覆盖且各得其所，体验最完整</li>
+      <li class="pro">json 格式化对配置文件检查非常实用</li>
+      <li class="con">实现量最大（md 渲染器/json 高亮）；txt 单独看与 A 无差别</li>
+    </ul>
+  </section>
+
+</div>
+</body>
+</html>

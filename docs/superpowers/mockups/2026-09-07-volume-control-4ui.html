@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>音量调节控件 · 四版 UI 选型 (2026-09-07)</title>
+<style>
+  :root {
+    --color-border: #EBEEF5;
+    --color-bg-page: #F3F1ED;
+    --color-bg-card: #FFFFFF;
+    --color-text-primary: #303133;
+    --color-text-regular: #606266;
+    --color-text-secondary: #909399;
+    --teal: #0E766E;
+    --teal-2: #12897C;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --mono: Consolas, 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 34px 28px 60px; background: var(--color-bg-page);
+         font-family: 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif; color: var(--color-text-primary); }
+  .page-head { max-width: 1180px; margin: 0 auto 26px; }
+  .page-head h1 { font-size: 21px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--color-text-secondary); font-size: 13px; line-height: 1.6; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(380px, 1fr)); gap: 30px 34px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .v-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .v-tag { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 700; color: #fff;
+           background: var(--teal); border-radius: 6px; padding: 3px 9px; letter-spacing: .06em; }
+  .v-head h2 { font-size: 15.5px; margin: 0; }
+  .v-sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+  .v-note { margin: 12px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--color-text-regular); }
+  .v-note li { padding: 3px 0 3px 20px; position: relative; line-height: 1.5; }
+  .v-note li::before { position: absolute; left: 2px; font-weight: 700; }
+  .v-note li.pro::before { content: '＋'; color: #198754; }
+  .v-note li.con::before { content: '－'; color: #E85A3A; }
+  .v-note .try { color: var(--teal); font-weight: 600; }
+
+  .rail { width: 336px; background: var(--color-bg-card); border: 1px solid var(--color-border);
+          border-radius: 14px; box-shadow: 0 4px 18px rgba(31,42,38,.06); overflow: hidden; }
+  .rail-hero { padding: 16px 16px 12px; }
+  .rf-stage { position: relative; overflow: hidden; border: 1px solid var(--color-border);
+              border-radius: var(--radius-lg); }
+  .rail-name { margin: 12px 0; font-size: 14px; font-weight: 600; }
+
+  /* 模拟播放画面 (深色渐变, 音量控件所在控制条) */
+  .bar {
+    height: 189px; position: relative; display: flex; flex-direction: column; justify-content: flex-end;
+    background: linear-gradient(180deg, #17201d 0%, #0D1210 55%, #0E766E 130%);
+  }
+  .ctrl {
+    position: relative; display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px 9px; color: #fff;
+    background: linear-gradient(transparent, rgba(0,0,0,.65));
+  }
+  .ctrl .cap { position: absolute; top: -34px; left: 12px; font-family: var(--mono); font-size: 9px;
+               color: rgba(255,255,255,.55); }
+  .vc-btn { border: none; background: none; cursor: pointer; padding: 0; display: flex; align-items: center; flex: none; }
+  .vc-btn svg { width: 15px; height: 15px; fill: #fff; }
+  .vc-btn svg.vc-st { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .vc-t { font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,.9); flex: none; }
+  .vc-seek { flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; }
+  .vc-track { position: relative; width: 100%; height: 3.5px; border-radius: 999px; background: rgba(255,255,255,.25); }
+  .vc-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 40%; background: var(--teal-2); border-radius: 999px; }
+  .vc-thumb { position: absolute; top: 50%; left: 40%; width: 9px; height: 9px; border-radius: 50%;
+              background: #fff; transform: translate(-50%,-50%); }
+  .vc-spd { font-family: var(--mono); font-size: 9px; font-weight: 700; color: #fff;
+            background: rgba(255,255,255,.18); border-radius: 6px; padding: 3px 8px; }
+
+  /* 通用音量滑杆 (可拖) */
+  .vol-slider { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px; outline: none; cursor: pointer;
+                background: linear-gradient(to right, #fff var(--v, 60%), rgba(255,255,255,.28) var(--v, 60%)); }
+  .vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%;
+                                      background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .vol-pct { font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,.85); flex: none; min-width: 26px; text-align: center; }
+
+  /* ══ A: 点击弹出横向滑杆 ══ */
+  .kA-volbox { position: relative; display: flex; align-items: center; }
+  .kA-pop {
+    position: absolute; right: -6px; top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; gap: 7px;
+    background: rgba(13, 18, 16, .92); border: 1px solid rgba(255,255,255,.14);
+    border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(6px);
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+    z-index: 5;
+  }
+  .kA-volbox.open .kA-pop { opacity: 1; pointer-events: auto; }
+  .kA-volbox.open .kA-pop { right: calc(100% + 8px); }
+  .kA-pop .vol-slider { width: 90px; }
+  .kA-mute { border: none; background: none; cursor: pointer; padding: 0; display: flex; }
+  .kA-mute svg { width: 14px; height: 14px; fill: #fff; }
+
+  /* ══ B: 常驻迷你滑杆 ══ */
+  .kB-volbox { display: flex; align-items: center; gap: 6px; flex: none;
+               background: rgba(255,255,255,.14); border-radius: 7px; padding: 4px 8px; }
+  .kB-volbox .vol-slider { width: 64px; }
+  .kB-volbox svg { width: 13px; height: 13px; fill: #fff; flex: none; }
+
+  /* ══ C: 纵向浮层 ══ */
+  .kC-volbox { position: relative; display: flex; align-items: center; }
+  .kC-pop {
+    position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: rgba(13, 18, 16, .92); border: 1px solid rgba(255,255,255,.14);
+    border-radius: 12px; padding: 12px 9px 9px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+    z-index: 5;
+  }
+  .kC-volbox.open .kC-pop { opacity: 1; pointer-events: auto; }
+  .kC-pop .vol-slider { width: 86px; transform: rotate(-90deg); margin: 34px 0; }
+  .kC-pct { font-family: var(--mono); font-size: 10px; color: #fff; }
+
+  /* ══ D: 分段点击 ══ */
+  .kD-icon { position: relative; width: 15px; height: 15px; }
+  .kD-icon svg { position: absolute; inset: 0; fill: #fff; }
+  .kD-icon .waves path { stroke: #fff; stroke-width: 1.8; fill: none; stroke-linecap: round; }
+  .kD-badge {
+    position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 9px; color: #fff; background: rgba(13,18,16,.9);
+    border-radius: 6px; padding: 2px 7px; opacity: 0; transition: opacity .15s; pointer-events: none;
+  }
+  .kD-volbox:hover .kD-badge, .kD-volbox.bump .kD-badge { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>音量调节控件 · 四版 UI 选型</h1>
+  <p>场景：视频/音频播放器控制条的音量键 · 现状只能静音切换 · 2026-09-07 · 四版均可真实拖动调节（模拟值联动喇叭图标）</p>
+</div>
+
+<div class="grid">
+
+  <!-- ═══════════ 方案 A ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 A</span><h2>点击弹出横向滑杆（推荐）</h2></div>
+    <p class="v-sub">点喇叭 → 向左弹出胶囊滑杆（含静音快捷）· 拖动实时调音量 · 移开/再点收起 · YouTube 同形态</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage bar">
+          <span class="cap">点击右侧喇叭图标试试 →</span>
+          <div class="ctrl">
+            <button class="vc-btn"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+            <span class="vc-t">0:02</span>
+            <div class="vc-seek"><div class="vc-track"><div class="vc-fill"></div><div class="vc-thumb"></div></div></div>
+            <span class="vc-t">0:06</span>
+            <span class="vc-spd">1x</span>
+            <span class="kA-volbox" id="kA-box">
+              <span class="kA-pop">
+                <button class="kA-mute" id="kA-mute" title="静音"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg></button>
+                <input type="range" class="vol-slider" min="0" max="100" value="60" style="width:90px">
+                <span class="vol-pct" id="kA-pct">60%</span>
+              </span>
+              <button class="vc-btn" id="kA-toggle"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg></button>
+            </span>
+            <button class="vc-btn"><svg class="vc-st" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+          </div>
+        </div>
+        <h3 class="rail-name">音量控件 · 方案 A</h3>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="try">试玩：点喇叭弹出滑杆，拖动调音量，再点收起</li>
+      <li class="pro">不占常驻空间，全屏/窄栏都不挤；弹出胶囊里带静音快捷键</li>
+      <li class="pro">主流视频站标准形态，用户零学习成本</li>
+      <li class="con">每次调节多一步「先点开」</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 B ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 B</span><h2>常驻迷你滑杆</h2></div>
+    <p class="v-sub">喇叭 + 短滑杆做成一个胶囊常驻控制条 · 少一步直达 · 音频播放器现状即此形态</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage bar">
+          <span class="cap">滑杆可直接拖动 →</span>
+          <div class="ctrl">
+            <button class="vc-btn"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+            <span class="vc-t">0:02</span>
+            <div class="vc-seek"><div class="vc-track"><div class="vc-fill"></div><div class="vc-thumb"></div></div></div>
+            <span class="vc-t">0:06</span>
+            <span class="vc-spd">1x</span>
+            <span class="kB-volbox">
+              <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg>
+              <input type="range" class="vol-slider" min="0" max="100" value="60">
+            </span>
+            <button class="vc-btn"><svg class="vc-st" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+          </div>
+        </div>
+        <h3 class="rail-name">音量控件 · 方案 B</h3>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="try">试玩：直接拖动短滑杆</li>
+      <li class="pro">一步到位调节；音量状态永远可见</li>
+      <li class="pro">音频播放器已是此形态，视频复用后两者一致</li>
+      <li class="con">常驻占 ~110px 宽；视频 6 秒短片场景里控制条偏挤</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 C ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 C</span><h2>纵向音量浮层</h2></div>
+    <p class="v-sub">点喇叭 → 上方浮出竖向滑杆 + 百分比数字 · 网易云/QQ 音乐风格</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage bar">
+          <span class="cap">点击喇叭弹出竖向滑杆 →</span>
+          <div class="ctrl">
+            <button class="vc-btn"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+            <span class="vc-t">0:02</span>
+            <div class="vc-seek"><div class="vc-track"><div class="vc-fill"></div><div class="vc-thumb"></div></div></div>
+            <span class="vc-t">0:06</span>
+            <span class="vc-spd">1x</span>
+            <span class="kC-volbox" id="kC-box">
+              <span class="kC-pop">
+                <span class="kC-pct" id="kC-pct">60%</span>
+                <input type="range" class="vol-slider" min="0" max="100" value="60">
+              </span>
+              <button class="vc-btn" id="kC-toggle"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 00-2.5-4v8a4.5 4.5 0 002.5-4z"/></svg></button>
+            </span>
+            <button class="vc-btn"><svg class="vc-st" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+          </div>
+        </div>
+        <h3 class="rail-name">音量控件 · 方案 C</h3>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="try">试玩：点喇叭弹出竖杆，拖动调音量</li>
+      <li class="pro">浮层不挤控制条横向空间；百分比数字直观</li>
+      <li class="con">竖杆旋转实现在窄栏里要多留出上方空间；点击外部关闭需处理</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════ 方案 D ═══════════ -->
+  <section class="variant">
+    <div class="v-head"><span class="v-tag">方案 D</span><h2>分段点击（图标即滑杆）</h2></div>
+    <p class="v-sub">喇叭图标内的声波弧线数量即音量档位 · 点击循环 0 → 33% → 66% → 100% · 零额外空间</p>
+    <div class="rail">
+      <div class="rail-hero">
+        <div class="rf-stage bar">
+          <span class="cap">点击喇叭循环档位（悬停显示当前%）→</span>
+          <div class="ctrl">
+            <button class="vc-btn"><svg viewBox="0 0 24 24"><path d="M7 4l14 8-14 8z"/></svg></button>
+            <span class="vc-t">0:02</span>
+            <div class="vc-seek"><div class="vc-track"><div class="vc-fill"></div><div class="vc-thumb"></div></div></div>
+            <span class="vc-t">0:06</span>
+            <span class="vc-spd">1x</span>
+            <span class="kD-volbox" id="kD-box">
+              <span class="kD-badge" id="kD-badge">66%</span>
+              <button class="vc-btn kD-icon" id="kD-toggle" title="点击调节音量">
+                <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
+                <svg class="waves" viewBox="0 0 24 24">
+                  <path d="M14.5 9.5a4 4 0 010 5" style="display:none" id="kD-w1"/>
+                  <path d="M17 7a8 8 0 010 10" style="display:none" id="kD-w2"/>
+                </svg>
+              </button>
+            </span>
+            <button class="vc-btn"><svg class="vc-st" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+          </div>
+        </div>
+        <h3 class="rail-name">音量控件 · 方案 D</h3>
+      </div>
+    </div>
+    <ul class="v-note">
+      <li class="try">试玩：连点喇叭看档位循环（悬停显示当前 %）</li>
+      <li class="pro">零额外空间，控制条与现在一样紧凑；实现最轻</li>
+      <li class="con">只有 4 个档位（0/33/66/100），不能精细调</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+function bindSlider(id, pctId) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    el.style.setProperty('--v', el.value + '%');
+    const p = document.getElementById(pctId);
+    if (p) p.textContent = el.value + '%';
+  });
+  el.style.setProperty('--v', el.value + '%');
+}
+bindSlider('kA-box' ? null : null, null);
+document.querySelectorAll('.vol-slider').forEach(el => {
+  el.addEventListener('input', () => el.style.setProperty('--v', el.value + '%'));
+  el.style.setProperty('--v', el.value + '%');
+});
+/* A 弹层开关 */
+const kAbox = document.getElementById('kA-box');
+document.getElementById('kA-toggle').addEventListener('click', e => { e.stopPropagation(); kAbox.classList.toggle('open'); });
+document.addEventListener('click', e => { if (!kAbox.contains(e.target)) kAbox.classList.remove('open'); });
+document.getElementById('kA-mute').addEventListener('click', () => {
+  const sl = kAbox.querySelector('input');
+  const muted = sl.value === '0';
+  sl.value = muted ? 60 : 0;
+  sl.dispatchEvent(new Event('input'));
+});
+/* C 弹层开关 */
+const kCbox = document.getElementById('kC-box');
+document.getElementById('kC-toggle').addEventListener('click', e => { e.stopPropagation(); kCbox.classList.toggle('open'); });
+document.addEventListener('click', e => { if (!kCbox.contains(e.target)) kCbox.classList.remove('open'); });
+kCbox.querySelector('input').addEventListener('input', function () {
+  document.getElementById('kC-pct').textContent = this.value + '%';
+});
+/* D 分段点击 */
+const kDlevels = [0, 33, 66, 100];
+let kDi = 2;
+const kWaves = [document.getElementById('kD-w1'), document.getElementById('kD-w2')];
+const kDbadge = document.getElementById('kD-badge');
+function kDapply() {
+  kWaves[0].style.display = kDi >= 2 ? '' : 'none';
+  kWaves[1].style.display = kDi >= 3 ? '' : 'none';
+  kDbadge.textContent = kDlevels[kDi] + '%';
+}
+document.getElementById('kD-toggle').addEventListener('click', () => {
+  kDi = (kDi + 1) % 4;
+  kDapply();
+  kDbox.classList.add('bump');
+  setTimeout(() => kDbox.classList.remove('bump'), 800);
+});
+kDapply();
+</script>
+</body>
+</html>
