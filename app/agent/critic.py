@@ -88,6 +88,7 @@ async def critique_response(
     rich_blocks: list[RichBlock],
     tool_calls: list[dict],
     ctx: ToolContext,
+    extra_grounding: str = "",
 ) -> CritiqueResult:
     """对 LLM 综合响应做自评
 
@@ -95,6 +96,11 @@ async def critique_response(
     - 成功：返回正常 CritiqueResult
     - 失败：返回 score=0 + addresses_question=True（Plan agent 5c：吞掉异常，不阻塞主流程）
     - 不直接 yield SSE 事件，由调用方决定
+
+    extra_grounding (2026-09-10 假否认修复): 本轮 0 工具但存在**上轮写操作确定性事实**时，
+    由调用方注入该事实文本。否则 follow_up 轮 critic 拿到的工具证据恒为
+    "（无工具返回）"，无法识别与事实矛盾的回答（如否认本会话里刚执行成功的写操作），
+    只能凭文本流畅度给高分。
     """
     # 1. 准备 prompt
     tool_call_summary = "\n".join(
@@ -107,6 +113,12 @@ async def critique_response(
         f"[{tc.get('name', '?')}] {json.dumps(tc.get('output', {}), ensure_ascii=False, default=str)[:1500]}"
         for tc in tool_calls[:5] if tc.get("output")
     ) or "（无工具返回）"
+    # 2026-09-10: 本轮无工具时, 用注入的上轮写事实补齐 grounding 证据 (反假否认)
+    if extra_grounding:
+        tool_results_text = (
+            f"{tool_results_text}\n【跨轮确定性事实 (上轮已真实执行, 本轮回答若与之矛盾=hallucination)】\n"
+            + extra_grounding[:2000]
+        )
     prompt = _CRITIQUE_PROMPT.format(
         question=user_question,
         intent_category=intent.category.value,

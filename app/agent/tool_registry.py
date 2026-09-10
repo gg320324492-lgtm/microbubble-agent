@@ -62,6 +62,11 @@ class ToolContext:
         mode_label: str = "balanced",  # UI 展示名, 流式 done 事件回填
         # #P5: 用户手动附加的知识库文档 ID 列表 (非空时屏蔽 RAG 类工具)
         attached_knowledge_ids: Optional[list[int]] = None,
+        # 2026-09-10 上轮写操作事实注入 (反假否认): None 或
+        # {"tool","note","task_id","description_tail","answer","ts","intent"} —
+        # 由 micro_bubble_agent 从 session meta 读出并透传, 供 agentic_loop
+        # 系统注入 + 反谎报 guard + critic grounding 三处共用
+        last_write_fact: Optional[dict] = None,
     ):
         self.db = db
         self.user_id = user_id
@@ -75,6 +80,8 @@ class ToolContext:
         self.thinking_config = thinking_config  # None 时 agentic_loop 走 settings fallback 路径
         self.mode_label = mode_label
         self.attached_knowledge_ids = attached_knowledge_ids or []
+        # 2026-09-10 反假否认: 上轮写操作成功事实 (dict | None)
+        self.last_write_fact = last_write_fact
         # 2026-06-14 收官：grounding 守卫用 — 工具返回里出现过的成员 ID + 姓名
         # agentic_loop._extract_rich_block_json 解析 LLM 输出的 rich_block.data 时
         # 校验 name 是否在这个集合里，否则丢弃（防 LLM 凭空捏造成员名）
@@ -192,6 +199,101 @@ def get_all_tool_schemas(exclude_tools: Optional[set[str]] = None) -> list[dict]
 # ============================================================================
 # dispatch_tool：统一调度
 # ============================================================================
+
+
+# ============================================================================
+# 2026-09-10 写操作白名单 — 反谎报 guard / 上轮写事实注入 / critic 的单一事实源
+# ============================================================================
+# 这些工具会改数据库状态 (任务/会议/记忆/知识/网盘入库等)。
+# 判定口径: execute_action 意图下, 本轮 tool_calls 中没有任何**成功**的写工具
+# → 模型声称"已完成 X"即谎报成功; 反之历史里上轮写成功过而模型说"没做" → 假否认。
+# 新增写工具必须同步登记, 否则 guard 失明。
+
+WRITE_TOOL_NAMES: frozenset[str] = frozenset({
+    "create_task",
+    "update_task",
+    "create_meeting",
+    "save_memory",
+    "forget_memory",
+    "save_conversation_knowledge",
+    "submit_feedback",
+    "set_custom_instructions",
+    "enroll_voice",
+    "generate_project_plan",
+    "summarize_meeting_transcript",
+    "analyze_meeting_transcript",
+    "auto_research",  # 会写入知识库条目
+})
+
+
+def is_write_tool(name: str) -> bool:
+    return name in WRITE_TOOL_NAMES
+
+
+# 写工具"真改了库"的成功态集合: 多数工具契约是 status="success";
+# save_memory 特例返回 created/merged/updated (dedup 三态)。error/rejected/skipped 均算未执行。
+_WRITE_SUCCESS_STATUSES: frozenset[str] = frozenset({"success", "created", "merged", "updated"})
+
+
+def write_tool_succeeded(result: Any) -> bool:
+    """写工具结果是否代表"真的改了库"。
+
+    契约: 成功返回 {"status": "success", ...} (save_memory 特例 created/merged/updated);
+    error/rejected/skipped 都算未执行。
+    update_task 加备注场景额外要求 note_written=True (add_note 请求但没写成功不算)。
+    """
+    if not isinstance(result, dict):
+        return False
+    if result.get("status") not in _WRITE_SUCCESS_STATUSES:
+        return False
+    if result.get("add_note_requested") and not result.get("note_written"):
+        return False
+    return True
+
+
+# tool_calls 里每项代表一次执行; 兼容两种形态:
+#   - agentic_loop.tool_calls: {"name", "input", "output"}
+#   - micro_bubble_agent tool_trace 中 tool_result 项: {"name", "result"}
+def _result_of(item: dict) -> Any:
+    return item.get("output") if "output" in item else item.get("result")
+
+
+def has_successful_write(calls: list[dict]) -> bool:
+    """本轮 tool_calls 里是否存在至少一次成功的写工具调用。"""
+    for c in calls or []:
+        if isinstance(c, dict) and is_write_tool(c.get("name", "")) and write_tool_succeeded(_result_of(c)):
+            return True
+    return False
+
+
+def extract_write_fact(calls: list[dict]) -> Optional[dict]:
+    """从本轮 tool_calls 抽取**最后一次成功写操作**的紧凑事实 (供下轮核验注入)。
+
+    无成功写 → None。事实只保留可展示的标量字段 + 时间戳, 不带大列表 (防 Redis 膨胀)。
+    """
+    from datetime import datetime, timezone
+    fact: Optional[dict] = None
+    for c in calls or []:
+        if not isinstance(c, dict):
+            continue
+        name = c.get("name", "")
+        res = _result_of(c)
+        if not is_write_tool(name) or not write_tool_succeeded(res):
+            continue
+        res = res if isinstance(res, dict) else {}
+        compact = {"tool": name, "ts": datetime.now(timezone.utc).isoformat()}
+        # 只挑常见标量字段, 字符串值裁剪, 忽略 list/dict (tasks/members 等大结果不入库)
+        for k in ("task_id", "meeting_id", "note_written", "new_status", "description_tail",
+                  "title", "memory_id", "knowledge_id", "message"):
+            v = res.get(k)
+            if isinstance(v, bool):
+                compact[k] = v
+            elif isinstance(v, int):
+                compact[k] = v
+            elif isinstance(v, str) and v.strip():
+                compact[k] = v[:300]
+        fact = compact
+    return fact
 
 
 async def dispatch_tool(

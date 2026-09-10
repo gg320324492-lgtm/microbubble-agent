@@ -45,6 +45,7 @@ from app.agent.tool_registry import (
     ToolNotFoundError,
     dispatch_tool,
     get_all_tool_schemas,
+    has_successful_write,
 )
 from app.config import settings
 from app.core.llm import LLMClient
@@ -912,6 +913,19 @@ class AgenticLoop:
         except Exception as _e:
             logger.warning(f"[pronoun-anchor] 注入失败 (best-effort 跳过): {_e}")
 
+        # 2026-09-10 反假否认: 上轮写操作成功事实 + 本轮是核验问句 → 注入确定性事实
+        # (实测 trace 5697: "刚才那条备注写上了吗" 被模型答"还没写上", 与 DB 事实相反。
+        #  fast 路径 follow_up 不进工具循环, 模型只能凭对话历史叙述猜 — 历史里
+        #  assistant 说过的话本身可能就是错的, 必须以 session meta 里的工具执行事实为准)
+        _fact_note = ""
+        try:
+            _fact_note = _last_write_fact_note(ctx, messages)
+            if _fact_note:
+                logger.info(f"[write-fact-anchor] {_fact_note[:80]}...")
+                system = system + "\n\n" + _fact_note
+        except Exception as _e:
+            logger.warning(f"[write-fact-anchor] 注入失败 (best-effort 跳过): {_e}")
+
         try:
             # ===== Phase 0: 强制 plan_step (#041 - 2026-06-28 chat agent 架构级集成) =====
             # Haiku 输出的 suggested_tools → agentic_loop 主动 dispatch (代码层强制, 不靠 LLM)
@@ -1290,7 +1304,15 @@ class AgenticLoop:
             # 工具结果, 但 system prompt 里"必须先调 X 工具"的字面要求会诱导 synthesis 谎称
             # "已调用 X" + 编造结果 (trace 5539 实战: 编造 3 场不存在的会议). 注入确定性声明,
             # 让退化路径变成"明说查不了"而不是幻觉.
-            if (tool_loop_failed or not tool_calls) and intent is not None and getattr(intent, "category", None) in {
+            # 2026-09-10 扩展 (实测第 4 组 21:25 rerun, trace 5696): execute_action 轮 nudge
+            # 只补了只读 query_tasks (白名单全是读工具, 设计如此), 模型见"查到了任务"便输出
+            # "已为…添加备注" — 库里根本没写, 且老 guard 条件 `not tool_calls` 不成立, 完全
+            # 不触发。新口径: 写操作的成败以 tool_calls 里**成功写工具**记录为准 (registry
+            # 单一事实源), 有读无写同样注入硬声明。
+            _needs_write = intent is not None and getattr(intent, "category", None) == IntentCategory.EXECUTE_ACTION
+            _write_done = has_successful_write(tool_calls)
+            if (tool_loop_failed or not tool_calls or (_needs_write and not _write_done)) \
+                    and intent is not None and getattr(intent, "category", None) in {
                 IntentCategory.DATA_QUERY,
                 IntentCategory.EXECUTE_ACTION,
                 IntentCategory.TEAM_OVERVIEW,
@@ -1301,7 +1323,19 @@ class AgenticLoop:
                 # 有 tool_calls 但 loop 后段炸 → 必须基于已有结果作答, 严禁"没有任何数据";
                 # 0 调用且 loop_failed → 才允许"工具调用暂时失败";
                 # 0 调用未失败 → "本轮未能查询到相关数据", 严禁说"失败"。
-                if tool_calls:
+                if _needs_write and not _write_done and tool_calls:
+                    # 有读无写: 允许引用查询结果, 严禁声称写操作完成
+                    _honest = (
+                        "如实告知用户: 本轮**修改操作尚未执行**, 你只查到了数据。"
+                        "严禁输出'已添加/已更新/已删除/已保存'等任何完成时表述; 可以展示查询到的"
+                        "现状帮助用户确认目标, 或反问澄清, 但必须明说操作还没做, 建议用户重发指令。"
+                    )
+                elif _needs_write and not _write_done:
+                    _honest = (
+                        "如实告知用户: 本轮**修改操作未能执行** (没有任何写工具被成功调用), "
+                        "严禁输出'已完成/已添加/已更新'等完成时表述"
+                    )
+                elif tool_calls:
                     _honest = (
                         "请**基于上下文里已成功的工具结果**作答, 并明确标注哪些子问题未能核实。"
                         "严禁声称'本轮未查询到任何数据'或'系统无法调用工具' — 这与上下文矛盾"
@@ -1313,11 +1347,16 @@ class AgenticLoop:
                         "如实告知用户: '本轮未能查询到相关数据'。严禁把未调用说成'工具调用失败', "
                         "也不得暗示查询已执行过"
                     )
-                _state = (
-                    "本轮已有部分工具执行成功 (结果见对话上下文), 但工具循环提前终止。"
-                    if tool_calls else
-                    "本轮没有任何工具被实际执行, 你手上没有任务/会议/项目/成员等任何系统数据。"
-                )
+                if _needs_write and not _write_done:
+                    _state = (
+                        "本轮没有任何**写操作**工具执行成功 "
+                        + ("(只做了查询, 修改未落地)。" if tool_calls else "。")
+                        + "用户要求的创建/修改/删除/保存均未生效。"
+                    )
+                elif tool_calls:
+                    _state = "本轮已有部分工具执行成功 (结果见对话上下文), 但工具循环提前终止。"
+                else:
+                    _state = "本轮没有任何工具被实际执行, 你手上没有任务/会议/项目/成员等任何系统数据。"
                 guard = (
                     "\n\n## ⚠️ 本轮工具执行状态告知 (CRITICAL — 确定性注入, 非建议)\n"
                     f"{_state}\n"
@@ -1329,8 +1368,9 @@ class AgenticLoop:
                 )
                 system = system + guard
                 logger.warning(
-                    "[anti-hallucination-guard] tool_loop_failed=%s tool_calls=%d intent=%s → 注入反谎报声明",
-                    tool_loop_failed, len(tool_calls), getattr(intent, "category", None),
+                    "[anti-hallucination-guard] tool_loop_failed=%s tool_calls=%d intent=%s "
+                    "write_done=%s → 注入反谎报声明",
+                    tool_loop_failed, len(tool_calls), getattr(intent, "category", None), _write_done,
                 )
 
             # ===== Phase 2: Synthesis（流式综合输出） =====
@@ -1357,6 +1397,12 @@ class AgenticLoop:
             # ===== Phase 3: Critique =====
             # 2026-07-15 #P2: fast mode (thinking_config.skip_critique=True) 跳过 critique + retry, 节省 0.5-3s
             critique_skipped = _has_thinking_config(ctx) and ctx.thinking_config.skip_critique
+            # 2026-09-10 反假否认: 本轮无成功写但有上轮写事实 → 把事实喂给 critic,
+            # 否则 follow_up/data_query 轮工具证据恒为"（无工具返回）", critic 无从
+            # 核验模型是否否认了本会话里刚执行成功的操作 (trace 5697 自评 9/10 漏判根因)。
+            _critic_grounding = ""
+            if _fact_note and not has_successful_write(tool_calls):
+                _critic_grounding = _fact_note
             if not critique_skipped:
                 critique: CritiqueResult = await critique_response(
                     user_question=_last_user_text(messages),
@@ -1365,6 +1411,7 @@ class AgenticLoop:
                     rich_blocks=rich_blocks,
                     tool_calls=tool_calls,
                     ctx=ctx,
+                    extra_grounding=_critic_grounding,
                 )
                 # [snapshot] critique
                 yield critique_to_sse_event(critique)
@@ -1873,6 +1920,53 @@ def _member_names_cache() -> list[str]:
     except Exception:
         pass  # best-effort: 拉不到就用旧值或空
     return _MEMBER_NAMES
+
+
+# 2026-09-10 核验问句触发词: 用户回头确认"上轮那个操作做了吗/写上了吗/原话是什么"。
+# 命中且上轮有写操作成功事实 → 注入确定性事实, 防模型凭历史叙述假否认。
+_VERIFY_RE = re.compile(
+    r"(刚才|刚刚|之前|上(一?次|轮)|那条|那个|那件).{0,12}?"
+    r"(写|加|改|删|建|记|更新|设置|添加|提交|保存|删除)"
+    r"|(写|加|改|删|建|记|更新|设置|添加|保存).{0,4}(上了|好了|成功|完成|没|没有|了吗|了没|了没有)"
+    r"|(操作|修改|变更|备注|任务).{0,6}(成功|完成|生效|执行|落实)(了)?(吗|没|没有)"
+    r"|(原话|原文|内容|描述|备注).{0,6}(是|是什么|写)(什么|的什么)"
+)
+
+
+def _looks_like_verification(question: str) -> bool:
+    """本轮问题是否在核验上一轮某个写操作是否真的执行了。"""
+    q = (question or "").strip()
+    if not q:
+        return False
+    return bool(_VERIFY_RE.search(q))
+
+
+def _last_write_fact_note(ctx: ToolContext, messages: list[dict]) -> str:
+    """上轮写操作成功 + 本轮是核验问句 → 返回确定性事实提示; 否则 ''。
+
+    事实来源 ctx.last_write_fact (micro_bubble_agent 从 session meta 读入并透传),
+    不经 LLM 复述, 是对"工具是否真改库"的唯一可信记录。
+    """
+    fact = getattr(ctx, "last_write_fact", None)
+    if not isinstance(fact, dict) or not fact.get("tool"):
+        return ""
+    if not _looks_like_verification(_last_user_text(messages)):
+        return ""
+    lines = [
+        "[系统确定性事实] 上一轮本会话已成功执行一次写操作 (来自工具执行日志, 非模型复述):",
+        f"- 工具: {fact.get('tool')}",
+    ]
+    for k in ("task_id", "new_status", "description_tail", "title", "message", "note_written"):
+        v = fact.get(k)
+        if v not in (None, ""):
+            lines.append(f"- {k}: {v}")
+    lines.append(
+        "用户本轮在追问该操作是否完成。**必须以上述事实为准如实回答**: "
+        "该操作确已执行成功, 严禁回答'还没写上/没操作/还没来得及/未执行'等否定上轮操作的假否认; "
+        "如需复述改动后的原文, 直接引用 description_tail/message 等字段真实内容, 不要臆造。 "
+        "若用户改口要'重新加/再改', 则正常走本轮工具流程。"
+    )
+    return "\n".join(lines)
 
 
 def _pronoun_anchor_note(messages: list[dict]) -> str:

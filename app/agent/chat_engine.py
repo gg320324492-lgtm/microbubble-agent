@@ -69,6 +69,9 @@ class ChatEngine:
         preclassified_intent: Optional[IntentResult] = None,
         # #P5: 用户手动附加的知识库文档 ID 列表, 屏蔽 RAG 类工具
         attached_knowledge_ids: Optional[List[int]] = None,
+        # 2026-09-10 反假否认: 上一轮写操作成功事实 (micro_bubble_agent 从 session meta 读入),
+        # 透传给 ToolContext, 供 agentic_loop 系统注入 + 核验问句锚定
+        last_write_fact: Optional[Dict[str, Any]] = None,
     ) -> AsyncIterator[StreamEvent]:
         """方案 C 单阶段流式综合主入口
 
@@ -104,6 +107,8 @@ class ChatEngine:
             mode_label=thinking_config.label,
             # #P5: 用户手动附加文档 → agentic_loop 屏蔽 RAG 类工具
             attached_knowledge_ids=attached_knowledge_ids,
+            # 2026-09-10 反假否认: 透传上轮写事实
+            last_write_fact=last_write_fact,
         )
         intent: Optional[IntentResult] = preclassified_intent
         intent_category: Optional[str] = intent.category.value if intent else None
@@ -192,6 +197,8 @@ class ChatEngine:
             # 2026-07-13 #P1: 注入 thinking_config 给 agentic_loop 5 处真分支
             thinking_config=thinking_config,
             mode_label=thinking_config.label,
+            # 2026-09-10 反假否认: 主 ctx (loop.run 实际拿到的这个) 同样带上轮写事实
+            last_write_fact=last_write_fact,
         )
 
         loop = AgenticLoop()
@@ -248,6 +255,8 @@ class ChatEngine:
         preclassified_intent: Optional[IntentResult] = None,
         # #P5: 用户手动附加文档 → 屏蔽 RAG 工具
         attached_knowledge_ids: Optional[List[int]] = None,
+        # 2026-09-10 反假否认: 上轮写操作成功事实透传
+        last_write_fact: Optional[Dict[str, Any]] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式接口 — 内部转给 synthesize_stream
 
@@ -266,6 +275,8 @@ class ChatEngine:
             preclassified_intent=preclassified_intent,
             # #P5: 透传附加文档 ID
             attached_knowledge_ids=attached_knowledge_ids,
+            # 2026-09-10 反假否认
+            last_write_fact=last_write_fact,
         ):
             yield evt
 
@@ -289,6 +300,8 @@ class ChatEngine:
         thinking_mode: Optional[str] = None,
         # #P5: 透传附加文档 → 屏蔽 RAG 工具
         attached_knowledge_ids: Optional[List[int]] = None,
+        # 2026-09-10 反假否认: 上轮写操作成功事实透传
+        last_write_fact: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """非流式接口 — 消费 synthesize_stream 收集为 dict
 
@@ -333,6 +346,8 @@ class ChatEngine:
             thinking_mode=thinking_mode,
             # #P5: 透传附加文档 ID → 屏蔽 RAG 工具
             attached_knowledge_ids=attached_knowledge_ids,
+            # 2026-09-10 反假否认: 上轮写事实透传 (非流式路径)
+            last_write_fact=last_write_fact,
         ):
             if evt.type == "text_delta":
                 content += evt.delta or ""
