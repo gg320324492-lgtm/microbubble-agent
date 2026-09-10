@@ -10,7 +10,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.agent.tool_registry import ToolContext, tool
-from app.core.member_identity import member_status
+from app.core.member_identity import avatar_public_url as _avatar_public_url, member_status
 
 logger = logging.getLogger("microbubble.agent.tools.member")
 
@@ -76,7 +76,10 @@ async def query_members(input: QueryMembersInput, ctx: ToolContext) -> dict:
             "voice_enrolled": m.voice_embedding is not None,
             "voice_enrolled_at": m.voice_enrolled_at.isoformat() if m.voice_enrolled_at else None,
             "bio": (m.bio or "")[:200] if m.bio else None,
-            "avatar": m.avatar,
+            # 2026-09-10: 归一化裸 object key → /minio/microbubble/ 反代相对路径。
+            # 此前透传原始 m.avatar, rich_block 快照落库后数据修了 UI 仍 404
+            # (存量卡渲染) + 相对路径形态双部署 (云端/localhost) 同源可用。
+            "avatar": _avatar_public_url(m.avatar),
             "rich_block_type": "member",
         })
 

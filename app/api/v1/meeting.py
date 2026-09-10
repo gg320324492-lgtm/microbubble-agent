@@ -22,6 +22,7 @@ from app.schemas.meeting import (
     SpeakerMapRequest, MeetingAnalyticsResponse, TranscriptSpeakerRequest, TranscriptSpeakerUpdateRequest,
 )
 from app.services.meeting_service import MeetingService
+from app.core.member_identity import avatar_public_url
 from app.services.meeting_analysis_service import meeting_analysis
 from app.services.progress_service import init_progress
 from app.services.post_meeting_tasks import post_meeting_process
@@ -122,7 +123,8 @@ async def list_meetings(
                 "member_id": p.member_id,
                 "name": p.member.name if p.member else "",
                 "role": p.role or "participant",
-                "avatar": getattr(p.member, "avatar", None) if p.member else None,
+                # 2026-09-10: 归一裸 object key → minio 反代相对路径 (防头像 404)
+                "avatar": avatar_public_url(getattr(p.member, "avatar", None)) if p.member else None,
             })
         # 2026-08-04 P0: 推断 upload_mode, 避免 completed + last_chunk_index=-1/total_chunks=NULL 这种矛盾状态
         upload_mode = None
