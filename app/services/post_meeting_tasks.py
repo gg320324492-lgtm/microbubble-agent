@@ -136,25 +136,60 @@ def post_meeting_process(self, meeting_id: int):
                 await _persist_stage(proc_svc, run, "downloading_audio", "success", metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2)})
 
                 # ===== 阶段 1: ASR 转写 =====
-                await update_progress(meeting_id, ProgressStage.TRANSCRIBING, detail=f"转写 {len(segments)} 个语音段", redis_override=redis_client)
-                from app.voice.asr import asr_service
+                # 2026-09-07: 优先走 GPU 7B 链路 (VibeVoice-ASR, Who/When/What + 热词,
+                # host 守护服务按需占显存); 服务不可用/失败自动回退 SenseVoice 逐段链路
+                from app.config import settings as _settings
+                audio_total_sec = len(audio_pcm) / sample_rate
+                gpu_segments = None
+                if _settings.GPU_ASR_ENABLED and audio_total_sec >= _settings.GPU_ASR_MIN_SEC:
+                    try:
+                        from app.services.gpu_asr_client import get_gpu_asr_client
+                        gpu_client = get_gpu_asr_client()
+                        if await gpu_client.healthy():
+                            await update_progress(meeting_id, ProgressStage.TRANSCRIBING,
+                                                  detail=f"GPU 7B 转写整场会议 ({audio_total_sec:.0f}s)",
+                                                  redis_override=redis_client)
+                            gpu_segments = await asyncio.wait_for(
+                                gpu_client.transcribe_meeting(
+                                    audio_pcm, sr=sample_rate, meeting_id=meeting_id),
+                                timeout=_settings.GPU_ASR_TIMEOUT)
+                            logger.info(f"GPU 7B 转写完成: {len(gpu_segments)} 段")
+                    except Exception as gpu_err:
+                        logger.warning(f"GPU ASR 链路失败, 回退 SenseVoice: {gpu_err}")
+                        gpu_segments = None
 
                 transcript_segments = []
-                for i, seg in enumerate(segments):
-                    wav_bytes = _numpy_to_wav_bytes(seg.audio, sample_rate)
-                    result = await asr_service.transcribe(wav_bytes, language="zh", skip_convert=True)
-                    text = result.get("text", "").strip()
-                    if text:
-                        transcript_segments.append({
-                            "text": text,
-                            "start": round(seg.start_time, 2),
-                            "end": round(seg.end_time, 2),
-                            "speaker_label": f"speaker_{i}",
-                        })
-                    logger.debug(f"  段 {i+1}/{len(segments)}: [{seg.start_time:.1f}-{seg.end_time:.1f}s] {text[:50]}")
+                if gpu_segments:
+                    # 7B 已自带时间戳与说话人标签; 后续声纹聚类流程照常复用 (会用
+                    # speaker_label 之外的声纹嵌入重新聚类+投票, 因此这里仅透传)
+                    for s in gpu_segments:
+                        if (s.get("content") or "").strip():
+                            transcript_segments.append({
+                                "text": s["content"].strip(),
+                                "start": round(s["start"], 2),
+                                "end": round(s["end"], 2),
+                                "speaker_label": s.get("speaker_label") or "gpu_unknown",
+                            })
+                else:
+                    await update_progress(meeting_id, ProgressStage.TRANSCRIBING, detail=f"转写 {len(segments)} 个语音段", redis_override=redis_client)
+                    from app.voice.asr import asr_service
 
-                logger.info(f"ASR 转写完成: {len(transcript_segments)}/{len(segments)} 段有文本")
-                await _persist_stage(proc_svc, run, "transcribing", "success", metrics={"raw_segments": len(segments), "with_text": len(transcript_segments)})
+                    for i, seg in enumerate(segments):
+                        wav_bytes = _numpy_to_wav_bytes(seg.audio, sample_rate)
+                        result = await asr_service.transcribe(wav_bytes, language="zh", skip_convert=True)
+                        text = result.get("text", "").strip()
+                        if text:
+                            transcript_segments.append({
+                                "text": text,
+                                "start": round(seg.start_time, 2),
+                                "end": round(seg.end_time, 2),
+                                "speaker_label": f"speaker_{i}",
+                            })
+                        logger.debug(f"  段 {i+1}/{len(segments)}: [{seg.start_time:.1f}-{seg.end_time:.1f}s] {text[:50]}")
+
+                backend_tag = "gpu-vibevoice-7b" if gpu_segments else "sensevoice"
+                logger.info(f"ASR 转写完成 [{backend_tag}]: {len(transcript_segments)} 段有文本")
+                await _persist_stage(proc_svc, run, "transcribing", "success", metrics={"backend": backend_tag, "raw_segments": len(segments), "with_text": len(transcript_segments)})
 
                 # ===== 阶段 1.3: 语义断句（基于规则的对话切换检测） =====
                 import re
@@ -397,13 +432,15 @@ def post_meeting_process(self, meeting_id: int):
                         seg_names.append("发言人?")
                         continue
                     # 用原始音频段做识别（不是 embedding）
+                    # 2026-09-07: identify_speaker → identify_speaker_anchored
+                    # (只与已确认 anchor 比较, 杜绝未确认/污染向量造成的误认)
                     start_sample = int(seg["start"] * sample_rate)
                     end_sample = int(seg["end"] * sample_rate)
                     seg_audio = audio_pcm[start_sample:end_sample]
                     if len(seg_audio) < sample_rate * 0.5:
                         seg_names.append(None)
                         continue
-                    name, member_id, conf = await vp_service.identify_speaker(db, seg_audio)
+                    name, member_id, conf = await vp_service.identify_speaker_anchored(db, seg_audio)
                     if name and conf > 0.35:
                         seg_names.append(name)
                     else:
@@ -463,7 +500,7 @@ def post_meeting_process(self, meeting_id: int):
                                     if len(seg_audio) < sample_rate * 0.5:
                                         seg_names.append(None)
                                         continue
-                                    name, member_id, conf = await vp_service.identify_speaker(db, seg_audio)
+                                    name, member_id, conf = await vp_service.identify_speaker_anchored(db, seg_audio)
                                     if name and conf > 0.35:
                                         seg_names.append(name)
                                     else:

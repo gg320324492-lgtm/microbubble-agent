@@ -23,7 +23,8 @@ logger = logging.getLogger("microbubble.voiceprint")
 # 3D-Speaker 嵌入维度（ERes2Net 实际输出 192 维）
 EMBEDDING_DIM = 192
 # 声纹匹配置信度阈值（余弦距离，越低越相似）
-MATCH_THRESHOLD = 0.7
+# 2026-09-07: 0.7→0.65 — 清洗后实测发现 0.676 的擦线误配 (贾琦↔插话人)，收紧防误认
+MATCH_THRESHOLD = 0.65
 
 VOICEPRINT_MODEL_ID = "iic/speech_eres2net_sv_zh-cn_16k-common"
 

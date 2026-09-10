@@ -80,13 +80,9 @@ def _selftest():
         print("  stderr:", (proc.stderr or "")[-1000:])
         return 1
     result = json.loads(out.read_text(encoding="utf-8"))
-    sm = result.get("speaker_map", {})
-    s1 = sm.get("Speaker 1", {})
     passed = (result.get("status") == "ok"
-              and s1.get("name") == "王天志"
-              and (s1.get("dist") or 1.0) < 0.3
-              and sm.get("Speaker 2", {}).get("name") is None)  # 坏向量不映射
-    print(f"  speaker_map: {json.dumps(sm, ensure_ascii=False)}")
+              and len(result.get("meta", {}).get("chunk_points", [])) == 5)
+    print(f"  分块点: {result.get('meta', {}).get('chunk_points')}")
     print(f"  显存回落校验: 基线 {baseline} → "
           f"{vram_used_mb()} MB")
     out.unlink(missing_ok=True)
