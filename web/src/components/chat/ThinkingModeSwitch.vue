@@ -20,9 +20,10 @@ ThinkingModeSwitch.vue — W72 B-2 子 plan ③ 起步 (派工 v6 段 5 反馈 #
  *
  * 替代 顶栏 2 个 🧠/⚡ toggle button（视觉冲突）
  * 设计: 3 选 1 segmented control，input bar 上方
- * - ⚡快速 (fast):     本地 Qwen3-8B + 小 budget + 跳过完整 agent 流程
- * - 🖥平衡 (balanced): 本地 Qwen3-8B + 默认 budget + 完整 agent 流程
- * - ✨深度 (deep):     DeepSeek-R1-Distill-Qwen-7B + thinking + 完整质量控制
+ * - ⚡快速 (fast):     跳过计划/工具循环/自评, 响应最快 (后端 thinking_config.py)
+ * - 🖥平衡 (balanced): 完整 Agent 流程 + 自评重试 (默认档)
+ * - ✨深度 (deep):     thinking 推理 + 完整质量控制, 每小时限 30 次
+ *   (2026-09-10 修正: 三档后端统一 qwen2.5vl:7b, 差异在 thinking/管线/上限, 不在换模型)
  *
  * W72 B-2 改造 (派工 v6 段 5 反馈 #3 实战): useUiStore v-model type hint 必含
  *
@@ -43,9 +44,9 @@ interface ModeOption {
 const uiStore = useUiStore()
 
 const MODES: ModeOption[] = [
-  { value: 'fast', icon: Lightning, label: '快速', title: '快速回答 (Qwen3-8B · 跳过深度推理)' },
-  { value: 'balanced', icon: Cpu, label: '平衡', title: '平衡模式 (Qwen3-8B · 完整 Agent 流程)' },
-  { value: 'deep', icon: MagicStick, label: '深度', title: '深度模式 (DeepSeek-R1 + thinking + 完整质量控制)' },
+  { value: 'fast', icon: Lightning, label: '快速', title: '快速模式 (跳过计划/工具循环/自评 · 响应最快)' },
+  { value: 'balanced', icon: Cpu, label: '平衡', title: '平衡模式 (完整 Agent 流程 + 自评重试)' },
+  { value: 'deep', icon: MagicStick, label: '深度', title: '深度模式 (thinking 推理 + 完整质量控制 · 每小时限 30 次)' },
 ]
 
 function onChange(value: ThinkingMode): void {
