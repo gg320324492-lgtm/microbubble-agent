@@ -160,7 +160,7 @@ services:
       - "127.0.0.1:9000:9000"
       - "19001:9001"
     volumes:
-      - ./data/minio:/data
+      - minio_data:/data
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio2026secure}
@@ -323,6 +323,9 @@ services:
     mem_limit: 4g
     # W2 +N 类 20.149: 3D-Speaker 524 段 CPU 推理 5+ 分钟卡死 (CPU 99.97% 单核)
     # 给 celery-worker 加 GPU 资源 (Docker Desktop 需启用 WSL2 GPU passthrough)
+    # 2026-09-05 临时摘除 (nvidia-container-cli 找不到适配器) → 2026-09-11 复验恢复:
+    # celery 镜像 --gpus all 实测 RTX 5090 可见 (同 compose 的 meeting-worker/
+    # sensevoice 容器内 nvidia-smi 均正常), 按原注释"恢复后还原此块"执行。
     deploy:
       resources:
         reservations:
@@ -515,3 +518,8 @@ services:
       - default
     # 2026-08-17 #Step1: 加 mem_limit (Next.js + worker 估算 ~512M)
     mem_limit: 1g
+# 2026-09-05: MinIO data moved off Windows bind mount (9p) -> named volume.
+# Root cause: WSL2 9p write stalls are misjudged by monitorDiskWritable as "drive is faulty" -> drive offline -> heal loop -> CPU spikes.
+# The named volume lives on the WSL2 ext4 disk, which satisfies the POSIX contract MinIO requires.
+volumes:
+  minio_data:

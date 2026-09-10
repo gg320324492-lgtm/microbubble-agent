@@ -52,7 +52,7 @@ services:
   minio:
     image: minio/minio
     volumes:
-      - ./data/minio:/data
+      - minio_data:/data
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio2026secure}
@@ -135,3 +135,8 @@ services:
     networks:
       - default
     restart: unless-stopped
+# 2026-09-05: MinIO data moved off Windows bind mount (9p) -> named volume.
+# Root cause: WSL2 9p write stalls are misjudged by monitorDiskWritable as "drive is faulty" -> drive offline -> heal loop -> CPU spikes.
+# The named volume lives on the WSL2 ext4 disk, which satisfies the POSIX contract MinIO requires.
+volumes:
+  minio_data:
