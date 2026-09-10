@@ -38,3 +38,16 @@ def member_status(grade: Optional[str]) -> str:
         if any(k in g for k in keywords):
             return status
     return g
+
+
+def avatar_public_url(raw):
+    """member.avatar 归一 (2026-09-10 头像 404 修复): 裸 object key
+    ("avatars/x.jpg") → /minio/microbubble/ 反代相对路径 (云端与本地部署同源);
+    已是 http(s) 完整 URL 或 /minio/ 前缀的原样返回; 空透传 None。
+    读出口统一走这里, 别再直接透传 DB 原始值。
+    """
+    if not raw or not isinstance(raw, str):
+        return None
+    if raw.startswith("http") or raw.startswith("/minio/"):
+        return raw
+    return "/minio/microbubble/" + raw.lstrip("/")

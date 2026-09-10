@@ -5,10 +5,10 @@
  * 接收 block.data = {members: [{id, name, grade, title, research_area, email, skills, voice_enrolled, bio}]}
  * 2026-09-05 角色扁平化: 不再显示 管理员/组长/成员 等级, 显示年级身份称谓。
  */
-import { memberTitleOf } from '@/utils/memberIdentity'
+import { memberTitleOf, resolveAvatarUrl } from '@/utils/memberIdentity'
 
 const props = defineProps({ block: { type: Object, required: true } })
-const members = (props.block.data || {}).members || []
+const members = ((props.block.data || {}).members || []).map(m => ({ ...m, avatar: resolveAvatarUrl(m.avatar) }))
 </script>
 
 <template>

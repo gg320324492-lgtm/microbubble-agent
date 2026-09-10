@@ -36,6 +36,20 @@ export function memberTitleOf(member, fallback = DEFAULT_STATUS) {
   return member.title || memberStatus(member.grade) || fallback
 }
 
+/**
+ * 头像 URL 归一化 (2026-09-10 修 404): members.avatar / 工具输出历史上存在
+ * 裸对象名 ("avatars/xxx.jpg") 形态, 渲染端直接用会被浏览器按相对路径请求
+ * /avatars/xxx.jpg → SPA 下必 404。补成 MinIO 反代相对路径 (同源, 云端与
+ * 本地 localhost 部署都走各自 nginx 的 /minio/ location, 不依赖域名)。
+ */
+const MINIO_BASE = '/minio/microbubble/'
+export function resolveAvatarUrl(raw) {
+  if (!raw || typeof raw !== 'string') return raw || undefined
+  if (raw.startsWith('http') || raw.startsWith(MINIO_BASE)) return raw
+  // 裸 object key (含相对 /avatars/ 老形态)
+  return MINIO_BASE + raw.replace(/^\/+/, '')
+}
+
 /** el-tag type 配色 (按身份称谓, 替代原 admin/leader/member 三色等级) */
 export function memberTagType(member) {
   switch (memberTitleOf(member)) {
