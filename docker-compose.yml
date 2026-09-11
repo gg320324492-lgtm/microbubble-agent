@@ -283,7 +283,11 @@ services:
     # 使用 solo pool 避免 prefork 子进程保留旧代码快照。
     # 本项目的重任务主要受 GPU/模型限制，单 worker 更符合本地开发和线上稳定性；
     # 代码改动后 docker compose restart celery-worker 即可重新加载。
-    command: celery -A app.core.celery worker --loglevel=info --pool=solo
+    # 2026-09-11: solo→threads -c 4 — solo 单槽位下 fuse_entities_task (2-3h/次)
+    # 独占消费, 默认队列积压 8685 条 (reminders/flush/trace 全饿死; agent_traces
+    # 09-10 起停写的队列侧根因)。任务均为 per-task 新建 event loop + NullPool
+    # 独立 engine (celery_db), 线程隔离前提成立。回滚 = 改回 --pool=solo 单行。
+    command: celery -A app.core.celery worker --loglevel=info --pool=threads --concurrency=4
     volumes:
       - ./app:/app/app
       - ./data:/app/data

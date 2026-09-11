@@ -233,8 +233,20 @@ class TraceCollector:
                 self._schedule_persist()
         else:
             self.status = TraceStatus.COMPLETED
-            # 正常路径：Celery 异步持久化
-            self._schedule_persist()
+            # 2026-09-11: 正常路径改进程内直写 (与 abort/error 路径同构, _persist_now 自带
+            # NullPool 独立 engine)。原 Celery 投递依赖默认 worker 消费 — celery-worker
+            # --pool=solo 下 fuse_entities_task 单任务 2-3h 独占唯一槽位, trace 消息在
+            # broker 积压数日不落库 (agent_traces 09-10 16:03 后停写的根因)。
+            # Celery 仅保留为 create_task 调度失败时的退路。
+            try:
+                _bg_task = asyncio.create_task(self._persist_now())
+                _bg_task.add_done_callback(
+                    lambda t: logger.error(f"trace 正常路径 _persist_now 失败: {t.exception()}", exc_info=t.exception())
+                    if t.exception() else None
+                )
+            except Exception as e:
+                logger.error(f"trace 直写调度失败 (降级 Celery): {e}")
+                self._schedule_persist()
 
     @property
     def total_duration_ms(self) -> int:
