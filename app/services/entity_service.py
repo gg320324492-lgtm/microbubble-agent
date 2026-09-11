@@ -2,9 +2,12 @@
 
 import logging
 import asyncio
+import time
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc, text
+from sqlalchemy import join as sqlalchemy_join
+from sqlalchemy.orm import aliased
 
 from app.models.knowledge import Knowledge
 from app.models.knowledge_entity import KnowledgeEntity, EntityCoOccurrence
@@ -110,32 +113,117 @@ class EntityService:
             detail["sources"] = []
         return detail
 
-    async def bulk_fuse_entities(self, batch_size: int = 50):
-        """每日批量融合 — LLM 判定相似实体合并"""
-        result = await self.db.execute(
-            select(KnowledgeEntity.predicate, func.count(KnowledgeEntity.id).label("cnt"))
-            .group_by(KnowledgeEntity.predicate)
-            .having(func.count(KnowledgeEntity.id) > 1)
-            .order_by(desc("cnt")).limit(20)
-        )
-        predicate_groups = result.all()
-        merged_count = 0
+    async def bulk_fuse_entities(self, max_candidates: int = 500,
+                                 max_llm_calls: int = 300, max_seconds: int = 900):
+        """每日批量融合 — DB 侧预筛候选 + LLM 只判相似对 (2026-09-11 重做)
 
-        for pg in predicate_groups:
-            rows = await self.db.execute(
-                select(KnowledgeEntity).where(
-                    KnowledgeEntity.predicate == pg.predicate
-                ).order_by(desc(KnowledgeEntity.occurrence_count)).limit(batch_size)
+        旧版为 O(n²) 全对 LLM 判定 (20 predicate 组 × 50 实体 → 单组 1225 对,
+        最坏 ~2.45 万次本地 27b 调用 = 2-3h 长任务), 且 `_do_merge` commit 后
+        外层继续复用旧实体列表, 触发 MissingGreenlet。新版三层防御:
+
+        1. 候选生成下推 DB: ① 完全重复组 (subject+predicate+object 全等) 直接合并
+           零 LLM; ② 同 predicate 的 pgvector cosine 自连接 ≥ FUSION_SIMILARITY_THRESHOLD
+           取 top-N。对数从 n² 降到有界 max_candidates (1092 条无 embedding 实体
+           走 ① 精确路径覆盖, ② 只作用于有向量的 673 条)。
+        2. 预算硬上限: LLM 调用数 max_llm_calls + 墙钟 max_seconds, 任一触顶即停
+           (返回 partial=true), 保证任务时长可预估, 不再挤占 worker。
+        3. 每对经 db.get 现取 (merge 后 source 已删 → None 自动跳过), 不再持有
+           陈旧对象列表迭代; 配套 task 侧 expire_on_commit=False 的 NullPool session。
+        """
+        t0 = time.monotonic()
+        merged = 0
+        llm_calls = 0
+        budget_hit = ""
+
+        # ── Phase 1: 完全重复组 (subject+predicate+object+condition 全等, 零 LLM) ──
+        dup_rows = await self.db.execute(
+            select(
+                func.array_agg(KnowledgeEntity.id).label("ids"),
             )
-            entities = rows.scalars().all()
-            for i in range(len(entities)):
-                for j in range(i + 1, len(entities)):
-                    if await self._llm_judge_merge(entities[i], entities[j]):
-                        if await self._do_merge(entities[i], entities[j]):
-                            merged_count += 1
+            .select_from(KnowledgeEntity)
+            .group_by(KnowledgeEntity.subject, KnowledgeEntity.predicate,
+                      KnowledgeEntity.object, KnowledgeEntity.condition)
+            .having(func.count(KnowledgeEntity.id) > 1)
+            .order_by(desc(func.count(KnowledgeEntity.id)))
+            .limit(max_candidates)
+        )
+        merged_ids: set[int] = set()
+        for row in dup_rows.all():
+            # keep = 组内出现次数最高者 (并列取 id 最小, 确定性)
+            members = (await self.db.execute(
+                select(KnowledgeEntity.id, KnowledgeEntity.occurrence_count)
+                .where(KnowledgeEntity.id.in_(row.ids))
+                .order_by(desc(KnowledgeEntity.occurrence_count), KnowledgeEntity.id)
+            )).all()
+            if len(members) < 2:
+                continue
+            keep_id = members[0].id
+            for m in members[1:]:
+                if time.monotonic() - t0 > max_seconds:
+                    budget_hit = "time"
+                    break
+                target = await self.db.get(KnowledgeEntity, keep_id)
+                source = await self.db.get(KnowledgeEntity, m.id)
+                if not target or not source:
+                    continue
+                if await self._do_merge(target, source):
+                    merged += 1
+                    merged_ids.add(m.id)
+            if budget_hit:
+                break
 
-        logger.info(f"批量融合完成: 合并 {merged_count} 对实体")
-        return {"merged_pairs": merged_count}
+        # ── Phase 2: 相似候选对 (pgvector 自连接预筛, LLM 判定, 有预算) ──
+        if not budget_hit:
+            a = aliased(KnowledgeEntity, name="a")
+            b = aliased(KnowledgeEntity, name="b")
+            sim = 1 - a.embedding.cosine_distance(b.embedding)
+            cand_stmt = (
+                select(a.id.label("x"), b.id.label("y"))
+                .select_from(sqlalchemy_join(a, b, and_(
+                    b.predicate == a.predicate,
+                    b.id > a.id,
+                    b.embedding.isnot(None),
+                )))
+                .where(a.embedding.isnot(None))
+                .where(sim >= self.FUSION_SIMILARITY_THRESHOLD)
+                .order_by(sim.desc())
+                .limit(max_candidates)
+            )
+            cands = (await self.db.execute(cand_stmt)).all()
+            for c in cands:
+                if c.x in merged_ids or c.y in merged_ids:
+                    continue  # 已在 Phase 1 并入他主
+                if llm_calls >= max_llm_calls:
+                    budget_hit = "llm_calls"
+                    break
+                if time.monotonic() - t0 > max_seconds:
+                    budget_hit = "time"
+                    break
+                ea = await self.db.get(KnowledgeEntity, c.x)
+                eb = await self.db.get(KnowledgeEntity, c.y)
+                if not ea or not eb:
+                    continue
+                llm_calls += 1
+                if await self._llm_judge_merge(ea, eb):
+                    # 保留出现次数多的一方作 target
+                    if (ea.occurrence_count or 0) >= (eb.occurrence_count or 0):
+                        ok = await self._do_merge(ea, eb)
+                        gone = c.y
+                    else:
+                        ok = await self._do_merge(eb, ea)
+                        gone = c.x
+                    if ok:
+                        merged += 1
+                        merged_ids.add(gone)
+
+        elapsed = round(time.monotonic() - t0, 1)
+        out = {"merged_pairs": merged, "llm_calls": llm_calls, "elapsed_s": elapsed}
+        if budget_hit:
+            out["partial"] = True
+            out["budget"] = budget_hit
+        logger.info(f"批量融合完成: {out}"
+                    + (" (预算触顶, 余量下轮继续)" if budget_hit else ""))
+        return out
 
     # ── Internal ──
 
@@ -358,23 +446,39 @@ class EntityService:
             return False
 
     async def _do_merge(self, target: KnowledgeEntity, source: KnowledgeEntity) -> bool:
+        t, s = target.id, source.id
         try:
             existing = set(target.source_knowledge_ids or [])
-            for sid in (source.source_knowledge_ids or []):
-                if sid not in existing:
-                    target.source_knowledge_ids = (target.source_knowledge_ids or []) + [sid]
-                    existing.add(sid)
+            additions = [sid for sid in (source.source_knowledge_ids or []) if sid not in existing]
+            if additions:
+                target.source_knowledge_ids = list(existing.union(additions))
             target.occurrence_count = (target.occurrence_count or 0) + (source.occurrence_count or 0)
             target.confidence = max(target.confidence or 0, source.confidence or 0)
 
+            # 2026-09-11: 原实现直接整列 UPDATE, 与 (entity_a_id,entity_b_id,knowledge_id)
+            # 唯一键撞车 (实测 362→361 触发 UniqueViolation, 整对合并静默放弃,
+            # 是"融合跑了但 merged=0"的真凶)。改为: 只迁移不与 target 现有边冲突的
+            # 边, 冲突边 (语义即重复) 连同 source 残余边直接删除。
             await self.db.execute(
-                text("UPDATE entity_co_occurrence SET entity_a_id = :t WHERE entity_a_id = :s"),
-                {"t": target.id, "s": source.id}
+                text("""UPDATE entity_co_occurrence SET entity_a_id = :t
+                        WHERE entity_a_id = :s
+                          AND (entity_b_id, knowledge_id) NOT IN
+                            (SELECT entity_b_id, knowledge_id FROM entity_co_occurrence
+                             WHERE entity_a_id = :t)"""),
+                {"t": t, "s": s},
             )
             await self.db.execute(
-                text("UPDATE entity_co_occurrence SET entity_b_id = :t WHERE entity_b_id = :s"),
-                {"t": target.id, "s": source.id}
+                text("DELETE FROM entity_co_occurrence WHERE entity_a_id = :s"), {"s": s})
+            await self.db.execute(
+                text("""UPDATE entity_co_occurrence SET entity_b_id = :t
+                        WHERE entity_b_id = :s
+                          AND (entity_a_id, knowledge_id) NOT IN
+                            (SELECT entity_a_id, knowledge_id FROM entity_co_occurrence
+                             WHERE entity_b_id = :t)"""),
+                {"t": t, "s": s},
             )
+            await self.db.execute(
+                text("DELETE FROM entity_co_occurrence WHERE entity_b_id = :s"), {"s": s})
             await self.db.execute(
                 text("DELETE FROM entity_co_occurrence WHERE entity_a_id = entity_b_id")
             )
@@ -382,7 +486,7 @@ class EntityService:
             await self.db.commit()
             return True
         except Exception as e:
-            logger.warning(f"实体合并失败({source.id} -> {target.id}): {e}")
+            logger.warning(f"实体合并失败({s} -> {t}): {e}")
             await self.db.rollback()
             return False
 
