@@ -159,7 +159,7 @@ def _handler_factory():
                         _jobs.pop(job_id, None)
                     self._json(503, {"error": "queue full"})
                     return
-                self._json(202, {"job_id": job_id})
+                self._json(202, {"job_id": job_id, "status": "pending"})
             except Exception as e:  # noqa: BLE001
                 self._json(500, {"error": str(e)})
 
