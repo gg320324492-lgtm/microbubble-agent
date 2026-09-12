@@ -1,12 +1,14 @@
 # GlitchTip + Sentry 接入与装机
 
 > W87-B-1 只接入基础设施；当前默认关闭，尚未连接生产 GlitchTip。W87-X-2 再处理 `deploy-auto.sh`、域名/TLS 与生产密钥注入。
+>
+> 2026-09-13 现状核验：DSN 未设置时，Vite 会把 `Sentry.init` 整块 tree-shaking 掉——生产 dist 中搜不到 release 字面量（`microbubble-agent-web@`）与 `ignoreErrors`，即线上实际不含任何 Sentry 代码。这是守卫设计的预期行为，不是接线遗漏。另：控制台偶现的 `Uncaught TypeError: Cannot read properties of undefined (reading 'startTime')`（堆栈全在 `VM*` 匿名脚本）来自 Chrome DevTools 注入页面的自带 web-vitals 采集副本（上游 bug [GoogleChrome/web-vitals#792](https://github.com/GoogleChrome/web-vitals/issues/792)，DevTools 打开 + SPA 软导航触发），与本项目代码和本集成均无关，勿再归因于此。
 
 ## 1. 版本与架构
 
 - GlitchTip：`glitchtip/glitchtip:6.2.2`（Docker Hub patch 级钉死；2026-07-29 核验 manifest digest `sha256:ef28cc4b92c8c9e427b8ddd55682d6aa155129ddf1c5db5f6bbbd09155fd3b6e`）。
 - 后端：`sentry-sdk[fastapi]==2.13.0`，SDK 内置 `FastApiIntegration` 和 `CeleryIntegration`。
-- 前端：`@sentry/browser==8.55.2`、`@sentry/vue==8.55.2`。
+- 前端：`@sentry/browser==10.73.0`、`@sentry/vue==10.73.0`（批次⑩.87l 自 8.55.2 跨 v9/v10 升级，2026-09-08）。
 - GlitchTip 用 `SERVER_ROLE=all_in_one`，单容器内运行 Web 与任务 worker；复用现有 PostgreSQL 与 Redis（独立 Redis DB 1）。
 
 派工示例中的 `glitchtip/glitchtip-server:v4.1.0` 不是当前 Docker Hub 仓库；当前官方仓库是 `glitchtip/glitchtip`。`celery-sentry==0.4.0` 在 PyPI 也不存在，因此不写入不可安装依赖；Celery 接入由 `sentry-sdk.integrations.celery.CeleryIntegration` 提供。

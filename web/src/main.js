@@ -102,8 +102,12 @@ if (import.meta.env.VITE_SENTRY_DSN && !import.meta.env.DEV) {
     release: `microbubble-agent-web@${__BUILD_ID__}`,
     tracesSampleRate: 0.1,
     sendDefaultPii: false,
-    // 批次⑩.87l: SDK 内置 web-vitals 采集器的已知误报 (bfcache/后台恢复时 startTime undefined),
-    // 只影响上报侧不影响功能; v10 升级后仍保留过滤兜底
+    // 2026-09-13 归因修正 (原批次⑩.87l「SDK 内置采集器」归因有误): 此 TypeError 来自 Chrome
+    // DevTools 注入页面的自带 web-vitals 采集副本 (VM 匿名脚本, DevTools 打开 + SPA 软导航触发,
+    // 上游 bug GoogleChrome/web-vitals#792), 与本项目代码无关 — DSN 未配置时 Sentry.init 整块被
+    // tree-shaking, 部署 bundle 实测 0 处 web-vitals 采集代码。
+    // 仍保留 ignoreErrors: Sentry 启用后 window.onerror 会捕获该注入脚本的未捕获异常, 过滤上报噪音;
+    // 注意它只管上报侧, 消不掉控制台原始打印 (浏览器对 uncaught exception 无条件打印)
     ignoreErrors: [/Cannot read properties of undefined \(reading 'startTime'\)/],
     beforeSend(event) {
       // 双保险：dev/local 构建永不发送，即使误设了 VITE_SENTRY_DSN。
