@@ -22,9 +22,6 @@
         <b>{{ d.name }}</b>
         <span class="st">
           <span>{{ d.persons }} 人</span>
-          <span>{{ d.pct === null ? '—' : d.pct + '%' }}</span>
-          <span v-if="d.lateCount" class="lt">● 逾期 {{ d.lateCount }}</span>
-          <span v-else class="okt">按期</span>
         </span>
       </a>
       <a
@@ -53,13 +50,6 @@
           {{ d.name }}
           <div class="dsub">{{ d.period }} · MB-LAB PROJECT FILE</div>
         </div>
-        <div v-if="d.pct !== null" class="druler">
-          <i :style="{ width: d.pct + '%' }"></i>
-          <em v-if="d.pct < 100" :style="{ left: d.pct + '%' }"></em>
-          <em v-else style="left: calc(100% - 8px)"></em>
-        </div>
-        <span v-if="d.pct !== null" class="pct">{{ d.pct }}%</span>
-        <span class="dstate" :class="d.stamp.cls">{{ d.stamp.text }}</span>
         <span class="dops" @click.stop>
           <span class="op" @click="$emit('open-project', d.raw)">开卷</span>
         </span>
@@ -131,7 +121,6 @@
     <div class="tally">
       <span>全团卷宗账</span>
       <b>{{ linkedCount }}<i>/{{ totalMembers }} 入卷</i></b>
-      <b>{{ lateTotal }}<i> 逾期未闭里程碑</i></b>
       <b class="brk">{{ dossiers.map(d => `NO.${d.no}×${d.persons}`).join(' · ') }}</b>
     </div>
   </div>
@@ -144,7 +133,7 @@
  * 2026-09-04 主拍选定乙组 V: 卷为纲 · 人为目, 一个项目下方直接挂它的成员。
  * - 数据 0 新接口: GET /projects + GET /projects/{id}/milestones + memberStore (与两 Panel 同源)
  * - 成员归属 = projects.members id 数组反向 join; 幽灵 id (不在成员列表) 不计入行, 详情弹窗已有口径
- * - 逾期未闭/周期标尺 pct 口径与 ProjectsPanel 完全一致 (同一公式同判据)
+ * - 批次⑩.75: 本页不展示进度/逾期 (主指挥指示删除标尺/百分比/逾期戳), 不拉里程碑接口
  * - 排序: 导师→博→硕→本科→未分类→已毕业 (GORD)
  * - tokens 自包含在 .dossier-panel 根 (防跨组件继承断链); dark 翻转非 scoped 块 (v60-v67 教训)
  */
@@ -157,16 +146,12 @@ defineEmits(['open-project', 'open-member'])
 
 const memberStore = useMemberStore()
 const projects = ref([])
-const milestonesMap = ref({})   // { [projectId]: Milestone[] }
 
 async function fetchProjects() {
+  // 批次⑩.75: 本页不展示进度/逾期 — 不再拉里程碑接口
   try {
     const res = await axios.get('/api/v1/projects')
     projects.value = res.data?.items || (Array.isArray(res.data) ? res.data : [])
-    Promise.all(projects.value.map(p =>
-      axios.get(`/api/v1/projects/${p.id}/milestones`)
-        .then(r => { milestonesMap.value = { ...milestonesMap.value, [p.id]: r.data || [] } })
-        .catch(() => {})))
   } catch (e) {
     console.error('DossierPanel 拉取项目失败:', e)
   }
@@ -185,26 +170,6 @@ const GORD = { '副教授': 0, '教授': 0, '老师': 0, '助教': 0, '博士后
 const gradeRank = (m) => GORD[m.grade] ?? 7
 const isTeacher = (m) => /教授|老师|助教|博后|博士后/.test(m.grade || '') && !/毕业/.test(m.grade || '')
 const isAlumni = (m) => /毕业/.test(m.grade || '')
-
-const isMsDone = (m) => m.status === 'completed' || !!m.completed_at
-const isMsLate = (m) => !isMsDone(m) && m.due_date && dayjs(m.due_date).isBefore(dayjs(), 'day')
-
-function cyclePct(p) {
-  if (!p.start_date || !p.end_date) return null
-  const start = dayjs(p.start_date), end = dayjs(p.end_date)
-  if (!end.isAfter(start)) return null
-  const pct = dayjs().diff(start, 'day') / end.diff(start, 'day') * 100
-  return Math.max(0, Math.min(100, Math.round(pct)))
-}
-
-function stampOf(p) {
-  if (p.status === 'completed') return { text: '已结案', cls: 'ok' }
-  if (p.status === 'archived') return { text: '已归档', cls: 'ok' }
-  if (p.status === 'paused') return { text: '已暂停', cls: '' }
-  const late = (milestonesMap.value[p.id] || []).filter(isMsLate).length
-  if (late > 0) return { text: `逾期未闭 ×${late}`, cls: 'bad' }
-  return { text: '在研', cls: 'ok' }
-}
 
 const memberById = computed(() => {
   const map = {}
@@ -228,12 +193,9 @@ const dossiers = computed(() =>
         name: p.name,
         raw: p,
         period: `${f(p.start_date)} → ${f(p.end_date)}`,
-        pct,
-        lateCount: (milestonesMap.value[p.id] || []).filter(isMsLate).length,
         persons: persons.length,
         persons_list: persons,
         vpMissing: persons.filter(m => !m.voice_sample_count).length,
-        stamp: stampOf(p),
       }
     }))
 
@@ -246,10 +208,8 @@ const unfiled = computed(() =>
 
 const linkedCount = computed(() => linkedIds.value.size)
 const totalMembers = computed(() => memberStore.members.length)
-const lateTotal = computed(() => dossiers.value.reduce((s, d) => s + d.lateCount, 0))
-
 const headCount = computed(() =>
-  `${dossiers.value.length} FILES · ${linkedCount.value}/${totalMembers.value} LINKED · ${lateTotal.value} LATE`)
+  `${dossiers.value.length} FILES · ${linkedCount.value}/${totalMembers.value} LINKED`)
 
 function scrollTo(id) {
   const el = document.getElementById(id)
@@ -281,8 +241,6 @@ function scrollTo(id) {
 .ovchip .no { font-family: var(--ws-mono); font-size: 8.5px; letter-spacing: .14em; color: var(--ws-fog); }
 .ovchip b { display: block; font-family: var(--ws-serif); font-size: 13px; color: var(--ws-ink); margin: 3px 0 7px; line-height: 1.35; }
 .ovchip .st { display: flex; flex-wrap: wrap; gap: 9px; font-family: var(--ws-mono); font-size: 9.5px; color: var(--ws-steel); }
-.ovchip .lt { color: var(--ws-coral); }
-.ovchip .okt { color: var(--ws-teal); }
 .ovchip.warn { border-style: dashed; border-color: var(--ws-coral); }
 .ovchip.warn b { color: var(--ws-coral); }
 
@@ -294,13 +252,6 @@ function scrollTo(id) {
 .dt { font-family: var(--ws-serif); font-size: 15.5px; font-weight: 700; color: var(--ws-ink); line-height: 1.2; cursor: pointer; min-width: 0; }
 .dt:hover { color: var(--ws-teal); }
 .dsub { font-family: var(--ws-mono); font-size: 8.5px; letter-spacing: .1em; color: var(--ws-fog); margin-top: 3px; font-weight: 400; }
-.druler { flex: 1; max-width: 260px; height: 12px; position: relative; border-bottom: 1.5px solid var(--ws-ink); }
-.druler i { position: absolute; bottom: 2px; left: 0; height: 4px; background: var(--ws-teal); border-radius: 2px; }
-.druler em { position: absolute; bottom: 0; width: 0; height: 0; border: 4px solid transparent; border-bottom-color: var(--ws-coral); border-top: 0; margin-left: -4px; }
-.pct { font-family: var(--ws-serif); font-size: 13px; font-weight: 700; color: var(--ws-teal); width: 36px; text-align: right; }
-.dstate { font-family: var(--ws-mono); font-size: 9.5px; color: var(--ws-teal); border: 1px solid var(--ws-teal); border-radius: 5px; padding: 3px 8px; flex-shrink: 0; }
-.dstate.bad { color: var(--ws-coral); border: 1.5px dashed var(--ws-coral); border-radius: 5px; transform: rotate(-1.5deg); }
-.dstate.ok { color: var(--ws-teal); }
 .dops { display: flex; gap: 6px; flex-shrink: 0; }
 .op { font-size: 11px; color: var(--ws-steel); border: 1px solid var(--ws-hair); border-radius: 5px; padding: 3px 9px; cursor: pointer; background: var(--ws-card); }
 .op:hover { color: var(--ws-teal); border-color: var(--ws-teal); }
@@ -344,7 +295,6 @@ function scrollTo(id) {
   .ovband { grid-template-columns: 1fr 1fr; }
   .frow { grid-template-columns: 34px 130px minmax(90px, 1fr) auto 56px; }
   .fs { display: none; }
-  .druler { display: none; }
 }
 </style>
 
