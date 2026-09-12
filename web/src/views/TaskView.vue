@@ -14,9 +14,10 @@
       </div>
     </div>
 
-    <!-- Tab 切换：任务列表 / 垃圾桶 -->
-    <el-tabs v-model="activeTab" class="task-tabs">
-      <el-tab-pane label="任务列表" name="tasks" lazy>
+    <!-- Tab 切换: 任务列表 / 垃圾桶 — 批次⑩.78 铁律 31: 弃用 el-tabs 改共享 TabStrip (分段药丸) -->
+    <TabStrip v-model="activeTab" :items="tabItems" aria-label="任务区" class="task-tabs" />
+
+    <div v-show="activeTab === 'tasks'" class="task-pane">
         <!-- 顶部操作栏 -->
         <el-card class="filter-card card fade-slide-up stagger-1">
           <el-row :gutter="16" align="middle">
@@ -175,33 +176,25 @@
             </div>
           </div>
         </el-card>
-      </el-tab-pane>
+    </div>
 
-      <el-tab-pane name="trash" lazy>
-        <template #label>
-          <span class="trash-tab-label">
-            <svg class="trash-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-            <span>垃圾桶</span>
-            <span v-if="trashCount > 0" class="trash-count">{{ trashCount }}</span>
-          </span>
-        </template>
-        <!-- 垃圾桶列表 -->
-        <TaskTrash
-          :trash-tasks="trashTasks"
-          :trash-total="trashTotal"
-          :trash-page="trashPage"
-          :trash-page-size="trashPageSize"
-          :loading="loading"
-          :is-admin="isAdmin"
-          :current-user-id="currentUserId"
-          @restore="handleRestore"
-          @permanent-delete="handlePermanentDelete"
-          @batch-permanent-delete="handleBatchPermanentDelete"
-          @page-change="handleTrashPageChange"
-          @size-change="handleTrashSizeChange"
-        />
-      </el-tab-pane>
-    </el-tabs>
+    <div v-show="activeTab === 'trash'" class="task-pane">
+      <!-- 垃圾桶列表 -->
+      <TaskTrash
+        :trash-tasks="trashTasks"
+        :trash-total="trashTotal"
+        :trash-page="trashPage"
+        :trash-page-size="trashPageSize"
+        :loading="loading"
+        :is-admin="isAdmin"
+        :current-user-id="currentUserId"
+        @restore="handleRestore"
+        @permanent-delete="handlePermanentDelete"
+        @batch-permanent-delete="handleBatchPermanentDelete"
+        @page-change="handleTrashPageChange"
+        @size-change="handleTrashSizeChange"
+      />
+    </div>
 
     <!-- 创建/编辑弹窗 -->
     <TaskCreateDialog
@@ -227,6 +220,7 @@ import { useMemberStore } from '@/stores/member'
 import { useTask } from '@/composables/useTask'
 import TaskCreateDialog from './task/TaskCreateDialog.vue'
 import TaskTrash from './task/TaskTrash.vue'
+import TabStrip from '@/components/common/TabStrip.vue'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -252,6 +246,11 @@ const prClass = (p) => ({ high: 'hi', medium: 'md', low: 'lo' }[p] || 'lo')
 const dossierDate = dayjs().format('YYYY-MM-DD · HH:mm')
 const overdueCount = computed(() => activeTasks.value.filter(isOverdue).length)
 const activeTab = ref('tasks')
+// 批次⑩.78: TabStrip 分段药丸 — 垃圾桶计数 >0 时展示 mono chip
+const tabItems = computed(() => [
+  { key: 'tasks', label: '任务列表' },
+  { key: 'trash', label: '垃圾桶', count: trashCount.value > 0 ? trashCount.value : 0, countHot: true },
+])
 const showCreateDialog = ref(false)
 const editingTask = ref(null)
 
@@ -819,34 +818,6 @@ onMounted(() => {
   color: var(--color-danger);
 }
 
-/* ===== 垃圾桶 Tab (批次⑩.77 选型 C 分段药丸: 14px SVG + mono 计数 chip) ===== */
-.trash-tab-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-}
-.trash-ic {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  display: block;
-}
-.trash-count {
-  font-family: Consolas, 'SFMono-Regular', monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: rgba(163, 84, 63, 0.12);
-  color: var(--color-danger);
-  line-height: 1.4;
-}
 
 .auto-delete-none {
   color: var(--color-text-secondary);
@@ -918,31 +889,6 @@ onMounted(() => {
   letter-spacing: 0.12em; color: var(--dg-fog);
 }
 
-/* --- tabs 批次⑩.77 选型 C 分段药丸 (与 TabStrip 全站统一) --- */
-.task-tabs :deep(.el-tabs__nav-wrap)::after { display: none; }
-.task-tabs :deep(.el-tabs__active-bar) { display: none; }
-.task-tabs :deep(.el-tabs__nav) {
-  border: 1px solid var(--dg-hair);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.6);
-  padding: 4px;
-}
-.task-tabs :deep(.el-tabs__item) {
-  font-family: var(--dg-mono); font-size: 12px; letter-spacing: 0.1em;
-  color: var(--dg-fog);
-  height: 30px; line-height: 30px; padding: 0 18px;
-  border-radius: 999px;
-  transition: all 0.15s ease;
-}
-/* EP 经典下划线形态会清零 第2段 padding-left / 末段 padding-right (首尾贴边设计),
-   药丸形态必须还原, 否则段内容紧贴容器边缘 (用户反馈「边缘显示不全」) */
-.task-tabs :deep(.el-tabs__item:nth-of-type(2)) { padding-left: 18px; }
-.task-tabs :deep(.el-tabs__item:last-of-type) { padding-right: 18px; }
-.task-tabs :deep(.el-tabs__item:hover) { color: var(--dg-ink); }
-.task-tabs :deep(.el-tabs__item.is-active) {
-  color: #fbfcfb; font-weight: 700;
-  background: var(--dg-ink);
-}
 
 /* --- 卡片: hair 边框 + 硬阴影 --- */
 .filter-card, .task-list-card {
@@ -1104,9 +1050,6 @@ onMounted(() => {
 [data-theme="dark"] .task-action-btn--delete:hover {
   background: rgba(var(--color-danger-rgb), 0.18);
 }
-[data-theme="dark"] .trash-tab-label:hover {
-  background: rgba(144, 147, 153, 0.14);
-}
 
   /* === G 稿档案皮肤 dark (2026-09-04, 对齐 shot-G 夜览态) === */
   [data-theme="dark"] .task-view {
@@ -1115,18 +1058,6 @@ onMounted(() => {
     --dg-coral: #ef7256; --dg-green: #6fbf6f; --dg-amber: #d9a257;
     --dg-paper: #10171b; --dg-shadow: rgba(0, 0, 0, 0.5);
     background: #0c1215;
-  }
-  /* 批次⑩.77: 分段药丸 dark — 选中青实底墨字, 胶囊底透明深色 */
-  [data-theme="dark"] .task-tabs :deep(.el-tabs__nav) {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: var(--dg-hair);
-  }
-  [data-theme="dark"] .task-tabs :deep(.el-tabs__item.is-active) {
-    background: #35c2a4;
-    color: #0b1512;
-  }
-  [data-theme="dark"] .task-tabs :deep(.el-tabs__item:hover:not(.is-active)) {
-    color: var(--dg-ink);
   }
   [data-theme="dark"] .task-view .filter-card .el-button--primary {
     background: var(--dg-card); color: var(--dg-ink);
