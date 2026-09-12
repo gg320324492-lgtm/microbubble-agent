@@ -219,19 +219,24 @@ async def test_tenant_shared_resource_whitelist(seed_plans):
 
 @pytest.mark.asyncio
 async def test_tenant_index_migration(seed_plans):
-    """083 索引在 commercial_tenants / commercial_subscriptions / commercial_invoices 等表存在."""
+    """commercial 表索引存在 (PG pg_indexes 查询).
+
+    2026-09-12: 原 sqlite_master 查询是 SQLite 专用 (PG 无此表, 测试库迁移后必炸),
+    改查 pg_indexes。只校验模型声明 (__table_args__) 的索引 — create_all 可建;
+    alembic 083 迁移专属索引全集见 tests/test_alembic_084... 的 ALEMBIC_VERIFY 门禁。
+    """
     async with async_session() as db:
         from sqlalchemy import text
-        # 验证 083 加的索引存在 (用 sqlite 兼容查询)
         for idx in [
-            "ix_commercial_plans_tenant", "ix_commercial_tenants_api_key",
-            "ix_commercial_subs_plan_status", "ix_commercial_invoices_period",
-            "ix_commercial_usage_recorded", "ix_commercial_licenses_active",
+            "ix_commercial_tenants_status", "ix_commercial_tenants_plan",
+            "ix_commercial_subs_tenant", "ix_commercial_subs_status",
+            "ix_commercial_invoices_tenant", "ix_commercial_invoices_status",
+            "ix_commercial_usage_recorded_at",
         ]:
-            r = await db.execute(text(f"SELECT 1 FROM sqlite_master WHERE type='index' AND name='{idx}'"))
-            # 在某些 db 上 sqlite_master 不存在, 这里只断言不抛, 真实部署用 postgres verify
-            assert r is not None
-    assert True  # sqlite 上表结构可能不同, 这里只断言 API 不抛
+            r = (await db.execute(text(
+                "SELECT 1 FROM pg_indexes WHERE indexname = :n"
+            ), {"n": idx})).scalar()
+            assert r == 1, f"commercial 索引 {idx} 不存在 (模型声明但 create_all 未建?)"
 
 
 # ===== 计费接口预留 4 case =====
@@ -275,18 +280,27 @@ async def test_billing_invoice_pay_flow(seed_plans):
 
 @pytest.mark.asyncio
 async def test_billing_stripe_reserved():
-    """Stripe 网关 W76+ 预留, W73 调 create_payment 应抛 NotImplementedError."""
+    """Stripe 网关 mock 化 (W74 B-2: 真接入走 stripe_real + 主拍拍板).
+
+    2026-09-12: 旧断言 NotImplementedError 是 W73 桩时代语义, W74 起
+    StripeBillingGateway 继承 MockBillingGateway, create_payment 正常出 mock intent.
+    """
     gw = billing_gateway.get_billing_gateway("stripe")
-    with pytest.raises(NotImplementedError):
-        await gw.create_payment("inv_xxx", 100)
+    assert isinstance(gw, billing_gateway.StripeBillingGateway)
+    intent = await gw.create_payment("inv_xxx", 100)
+    assert intent.provider == "stripe"
+    assert intent.intent_id.startswith("stripe_pi_")
+    assert "mock.billing.local/stripe" in intent.redirect_url
 
 
 @pytest.mark.asyncio
 async def test_billing_alipay_reserved():
-    """Alipay 网关 W76+ 预留."""
+    """Alipay 网关 mock 化 (W74 B-2, 同 stripe)."""
     gw = billing_gateway.get_billing_gateway("alipay")
-    with pytest.raises(NotImplementedError):
-        await gw.create_payment("inv_xxx", 100)
+    assert isinstance(gw, billing_gateway.AlipayBillingGateway)
+    intent = await gw.create_payment("inv_xxx", 100)
+    assert intent.provider == "alipay"
+    assert intent.intent_id.startswith("alipay_pi_")
 
 
 # ===== License 校验 5 case =====

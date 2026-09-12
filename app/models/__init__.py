@@ -13,6 +13,9 @@ from app.models.formula_category import FormulaCategory
 from app.models.knowledge_multimodal import KnowledgeImage, KnowledgeExtraction  # Phase 7
 from app.models.knowledge_layout import KnowledgeLayout  # Phase 8 vision 看整篇
 from app.models.reminder import Reminder
+from app.models.billing import (  # 2026-09-12: 补注册商业表 (原仅 alembic 138 建, create_all 注册表缺失 → 测试库无表)
+    Plan, CommercialTenant, Subscription, Invoice, UsageRecord, License,
+)
 from app.models.memory import Memory
 from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
@@ -85,4 +88,6 @@ __all__ = [
     "DriveChunkedUpload",    # W72 B-3 分片上传会话 (alembic 080)
     "KnowledgeChunk",        # PR2 (W88 +15) knowledge 子表, FK CASCADE 100% 完整
     "KGEntity",              # PR8 (W94 +0) 知识图谱扁平实体, FK CASCADE + uq(name,type,kid)
+    "Plan", "CommercialTenant", "Subscription", "Invoice", "UsageRecord", "License",
+       # 2026-09-12 商业表补注册 (W72 Phase 8 模型一直漏在 Base.metadata 外)
 ]   # noqa

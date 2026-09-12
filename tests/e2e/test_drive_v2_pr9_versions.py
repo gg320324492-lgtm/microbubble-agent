@@ -26,6 +26,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from sqlalchemy import select
 from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -207,7 +208,7 @@ async def test_scenario_2_upload_new_version(e2e_client, e2e_db, clean_drive_pr9
     """场景 2: 上传新版本 → v2 / v3
 
     验证:
-    - POST /api/v1/drive/versions/files/{file_id}/versions 上传 v2
+    - POST /api/v1/versions/files/{file_id}/versions 上传 v2
     - 旧 v1 is_current=0
     - 新 v2 is_current=1, version_number=2
     - 再上传 v3 → version_number=3
@@ -229,21 +230,18 @@ async def test_scenario_2_upload_new_version(e2e_client, e2e_db, clean_drive_pr9
     await e2e_db.commit()
     await e2e_db.refresh(file_obj)
 
-    v1 = await create_initial_version(
-        db=e2e_db,
-        file_id=file_obj.id,
-        minio_object_key=file_obj.file_path,
-        size=file_obj.file_size,
-        uploader_id=0,
-    )
-    assert v1 is not None
+    # v1 由 create_file 内部自动创建 (drive_service.create_file → create_initial_version)
+    v1 = (await e2e_db.execute(
+        select(DriveFileVersion).where(DriveFileVersion.file_id == file_obj.id)
+    )).scalars().first()
+    assert v1 is not None, "create_file 应自动建 v1 版本行"
 
     # 上传 v2 (multipart form)
     v2_content = b"Version 2 content - 18 bytes"
     files = {"file": ("v2.txt", io.BytesIO(v2_content), "text/plain")}
     data = {"comment": "Updated to v2"}
     resp = await e2e_client.post(
-        f"/api/v1/drive/versions/files/{file_obj.id}/versions",
+        f"/api/v1/versions/files/{file_obj.id}/versions",
         files=files,
         data=data,
     )
@@ -267,7 +265,7 @@ async def test_scenario_2_upload_new_version(e2e_client, e2e_db, clean_drive_pr9
     files = {"file": ("v3.txt", io.BytesIO(v3_content), "text/plain")}
     data = {"comment": "v3 update"}
     resp = await e2e_client.post(
-        f"/api/v1/drive/versions/files/{file_obj.id}/versions",
+        f"/api/v1/versions/files/{file_obj.id}/versions",
         files=files,
         data=data,
     )
@@ -302,13 +300,6 @@ async def test_scenario_3_list_versions(e2e_client, e2e_db, clean_drive_pr9, moc
     await e2e_db.commit()
     await e2e_db.refresh(file_obj)
 
-    await create_initial_version(
-        db=e2e_db,
-        file_id=file_obj.id,
-        minio_object_key=file_obj.file_path,
-        size=file_obj.file_size,
-        uploader_id=0,
-    )
 
     # 上传 v2 + v3
     for n in (2, 3):
@@ -316,14 +307,14 @@ async def test_scenario_3_list_versions(e2e_client, e2e_db, clean_drive_pr9, moc
         files = {"file": (f"v{n}.txt", io.BytesIO(content), "text/plain")}
         data = {"comment": f"v{n} note"}
         resp = await e2e_client.post(
-            f"/api/v1/drive/versions/files/{file_obj.id}/versions",
+            f"/api/v1/versions/files/{file_obj.id}/versions",
             files=files,
             data=data,
         )
         assert resp.status_code == 201
 
     # GET 列表
-    resp = await e2e_client.get(f"/api/v1/drive/versions/files/{file_obj.id}/versions")
+    resp = await e2e_client.get(f"/api/v1/versions/files/{file_obj.id}/versions")
     assert resp.status_code == 200
     body = resp.json()
     assert body["file_id"] == file_obj.id
@@ -338,8 +329,8 @@ async def test_scenario_3_list_versions(e2e_client, e2e_db, clean_drive_pr9, moc
     assert items[0]["is_current"] is True
     assert items[1]["is_current"] is False
     assert items[2]["is_current"] is False
-    # uploader_name 来自 JOIN
-    assert items[0]["uploader_name"] == "PR9 E2E"
+    # uploader_name 来自 JOIN members; uploader_id=0 是合成 admin (members 表无此行) → None
+    assert items[0]["uploader_name"] is None
     print(f"[scenario 3] file_id={file_obj.id} listed 3 versions PASS")
 
 
@@ -368,26 +359,24 @@ async def test_scenario_4_download_old_version(e2e_client, e2e_db, clean_drive_p
     await e2e_db.commit()
     await e2e_db.refresh(file_obj)
 
-    v1 = await create_initial_version(
-        db=e2e_db,
-        file_id=file_obj.id,
-        minio_object_key=file_obj.file_path,
-        size=file_obj.file_size,
-        uploader_id=0,
-    )
+    # v1 由 create_file 内部自动创建 (2026-09-12: 手动再建会造成双 v1, 翻转只翻第一条)
+    v1 = (await e2e_db.execute(
+        select(DriveFileVersion).where(DriveFileVersion.file_id == file_obj.id)
+    )).scalars().first()
+    assert v1 is not None
 
     # 上传 v2 (让 v1 成为历史版)
     v2_content = b"v2 NEW content - 16 bytes"
     files = {"file": ("v2.txt", io.BytesIO(v2_content), "text/plain")}
     resp = await e2e_client.post(
-        f"/api/v1/drive/versions/files/{file_obj.id}/versions",
+        f"/api/v1/versions/files/{file_obj.id}/versions",
         files=files,
         data={"comment": "v2"},
     )
     assert resp.status_code == 201
 
     # 下载 v1
-    resp = await e2e_client.get(f"/api/v1/drive/versions/versions/{v1.id}/download")
+    resp = await e2e_client.get(f"/api/v1/versions/versions/{v1.id}/download")
     assert resp.status_code == 200
     body = resp.json()
     assert body["version_id"] == v1.id
@@ -430,19 +419,17 @@ async def test_scenario_5_rollback(e2e_client, e2e_db, clean_drive_pr9, mock_fil
     await e2e_db.commit()
     await e2e_db.refresh(file_obj)
 
-    v1 = await create_initial_version(
-        db=e2e_db,
-        file_id=file_obj.id,
-        minio_object_key=file_obj.file_path,
-        size=file_obj.file_size,
-        uploader_id=0,
-    )
+    # v1 由 create_file 内部自动创建 (2026-09-12: 手动再建会造成双 v1, 翻转只翻第一条)
+    v1 = (await e2e_db.execute(
+        select(DriveFileVersion).where(DriveFileVersion.file_id == file_obj.id)
+    )).scalars().first()
+    assert v1 is not None
 
     # 上传 v2 (内容 A)
     v2_content = b"Content A - rollback target"
     files = {"file": ("v2.txt", io.BytesIO(v2_content), "text/plain")}
     resp = await e2e_client.post(
-        f"/api/v1/drive/versions/files/{file_obj.id}/versions",
+        f"/api/v1/versions/files/{file_obj.id}/versions",
         files=files,
         data={"comment": "v2 content A"},
     )
@@ -453,7 +440,7 @@ async def test_scenario_5_rollback(e2e_client, e2e_db, clean_drive_pr9, mock_fil
     v3_content = b"Content B - to be rolled back"
     files = {"file": ("v3.txt", io.BytesIO(v3_content), "text/plain")}
     resp = await e2e_client.post(
-        f"/api/v1/drive/versions/files/{file_obj.id}/versions",
+        f"/api/v1/versions/files/{file_obj.id}/versions",
         files=files,
         data={"comment": "v3 content B"},
     )
@@ -462,7 +449,7 @@ async def test_scenario_5_rollback(e2e_client, e2e_db, clean_drive_pr9, mock_fil
 
     # 回滚到 v2
     resp = await e2e_client.post(
-        f"/api/v1/drive/versions/files/{file_obj.id}/versions/{v2_id}/rollback",
+        f"/api/v1/versions/files/{file_obj.id}/versions/{v2_id}/rollback",
         json={"new_comment": "Rolled back to v2 (Content A)"},
     )
     assert resp.status_code == 200, f"rollback 应 200, 实际 {resp.status_code} {resp.text}"

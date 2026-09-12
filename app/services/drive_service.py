@@ -1530,6 +1530,12 @@ class DriveService:
             starred_only=False,
             file_type=None,
             deleted_only=True,         # v2 PR2 fix: 仅 deleted_at IS NOT NULL
+            # 2026-09-12 修回收站漏文件 bug (陈旧 e2e 重跑抓到):
+            # 不传 include_subfolders 时 _build_folder_filter_clause(None, False)
+            # 会加 `folder_id IS NULL` 根目录过滤 → 从文件夹里删的文件在回收站
+            # 永远不显示 (docstring 说的"跨 folder 看"从未成立)。置 True 跳过
+            # folder 过滤, 与本 docstring + 前端回收站语义一致。
+            include_subfolders=True,
         )
 
     async def list_starred(

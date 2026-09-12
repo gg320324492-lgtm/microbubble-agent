@@ -46,13 +46,24 @@ FileNotFoundError 时优雅 skip; ③ folder_service 挂起根治: test 22 第�
 dispose 不清在借连接) → 连接泄漏 idle-in-transaction → 下个测试 setup_db
 DROP SCHEMA 永久等锁 (测试库独有死锁); 修法 = 每块重新绑定 service。
 
-**遗留陈旧测试清单** (需跟进, 全部是业务语义变更后没同步的旧断言):
-- trash_chunk ×6: admin-only 断言过期 (2026-09-05 扁平化后 permanent_delete
-  任何成员可删) + remaining_days + chunked_* 系列
-- pr9_versions ×4: 版本上传 404 (路由存在, 端点内 db.get 判定需调试)
-- **test_w78 license**: ⚠️ 疑似真产品 bug — `verify_license` 不校验
-  `lic.is_active`, 且在线验证无条件 `is_active=True` → **吊销的 license
-  下次在线验证复活**。commercial 模块, 待单独修。
+**遗留陈旧测试已全部修复** (2026-09-12 第二轮, 顺带挖出 2 个真产品 bug):
+- **license 吊销复活 (真产品 bug, 已修)**: `verify_license` 旧版不读
+  `is_active` 且在线验证无条件 `is_active=True` → revoke 后下次在线验证复活。
+  现未过期但 is_active=False → mode="revoked" 提前返回; online 分支不再重写
+  is_active。区分语义: 过期路径自置 is_active=False, 故先判过期再判吊销。
+- **回收站漏文件 (真产品 bug, 已修)**: `list_trash` 未传 include_subfolders →
+  folder_id IS NULL 根目录过滤生效 → **从文件夹里删的文件回收站永不显示**
+  (与 docstring"跨 folder 看"矛盾)。补 include_subfolders=True。
+- **billing 商业表模型注册缺口 (已修)**: billing.py 6 模型一直没进
+  app/models/__init__.py → Base.metadata 缺表 → create_all 测试库无商业表
+  (生产靠 alembic 138 掩盖)。已补注册。
+- trash_chunk: permanent_delete 断言改扁平化语义 (任何成员可删); chunked_* 6 个
+  适配 chunk_size ≥256KB 下限 (服务 W72 后加的校验); expire_all 后访问 ORM
+  属性触发同步懒加载 → 提前取标量。
+- pr9_versions: 测试 URL 多写 /drive 前缀 (路由实际挂 /api/v1/versions/*);
+  create_file 现自动建 v1, 测试又手动 create_initial_version → 同文件双
+  is_current=1 行, 翻转只翻第一条 → 改取自动行; uploader_id=0 合成 admin
+  无 members 行 → uploader_name=None 为正确语义。
 
 ## 当前状态 (2026-09-10 对话质量实测收口: 第 1/2 组全修 + 模型升级 qwen3.8:27b, 已部署)
 

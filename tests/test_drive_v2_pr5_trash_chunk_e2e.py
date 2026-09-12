@@ -27,8 +27,9 @@ from app.models.folder import Folder
 from app.models.knowledge import Knowledge
 from app.models.member import Member
 from app.services.drive_chunked_upload_service import (
-    DriveChunkedUploadError,
     DriveChunkedUploadService,
+    DriveChunkedUploadError,
+    MIN_CHUNK_SIZE,
     cleanup_expired_uploads,
 )
 from app.services.drive_service import DriveService
@@ -169,14 +170,19 @@ async def test_trash_preserves_original_location(db_session, user, folder):
 
 
 @pytest.mark.asyncio
-async def test_trash_permanent_delete_admin_only(db_session, user, folder, admin):
+async def test_trash_permanent_delete_any_member_single_team_space(db_session, user, folder, admin):
+    """永久删除无角色门禁 (2026-09-05 角色扁平化: 任何成员可永久删)
+
+    原断言 outsider=False 为扁平化前语义, 与
+    app/services/drive_service.permanent_delete 的"任何成员可永久删"矛盾
+    (2026-09-12 陈旧 e2e 重跑修正)。
+    """
     svc = DriveService(db_session)
     file_id = await _create_drive_file(svc, user, folder)
     await svc.soft_delete_file(file_id, current_user_id=user.id)
 
     outsider = await _create_member(db_session, "outsider")
-    assert await svc.permanent_delete(file_id, current_user_id=outsider.id) is False
-    assert await svc.permanent_delete(file_id, current_user_id=admin.id) is True
+    assert await svc.permanent_delete(file_id, current_user_id=outsider.id) is True
 
 
 @pytest.mark.asyncio
@@ -240,14 +246,14 @@ async def test_chunked_init_rejects_oversize(db_session, user, folder):
 @pytest.mark.asyncio
 async def test_chunked_single_chunk_size_validation(db_session, user, folder):
     service = DriveChunkedUploadService(db_session)
-    payload = b"hello drive chunk" * 1024
+    payload = _chunk_payload(b"hello drive chunk", 262144 * 4)
     checksum = hashlib.sha256(payload).hexdigest()
     upload = await service.init_upload(
         user_id=user.id,
         parent_id=folder.id,
         filename="tiny.txt",
         file_size=len(payload),
-        chunk_size=4096,
+        chunk_size=MIN_CHUNK_SIZE,
         checksum=checksum,
     )
     assert upload.total_chunks == 4
@@ -272,12 +278,14 @@ async def test_chunked_concurrent_chunks_idempotent(db_session, user, folder):
         parent_id=folder.id,
         filename="medium.bin",
         file_size=len(payload),
-        chunk_size=128 * 1024,
+        chunk_size=256 * 1024,  # 2026-09-12: 服务加 chunk_size 下限 (256KB) 后原小分片非法, 按新约束更新
         checksum=checksum,
     )
     expected_chunks = upload.total_chunks
+    chunk_size = upload.chunk_size
+    upload_id = upload.upload_id  # expire_all 前取标量 (expire 后访问属性触发同步懒加载)
     for index in range(expected_chunks):
-        chunk = payload[index * upload.chunk_size : (index + 1) * upload.chunk_size]
+        chunk = payload[index * chunk_size : (index + 1) * chunk_size]
         chunk_hash = hashlib.sha256(chunk).hexdigest()
         await service.upload_chunk(
             upload_id=upload.upload_id,
@@ -297,7 +305,7 @@ async def test_chunked_concurrent_chunks_idempotent(db_session, user, folder):
     upload_row = (
         await db_session.execute(
             select(DriveChunkedUpload).where(
-                DriveChunkedUpload.upload_id == upload.upload_id
+                DriveChunkedUpload.upload_id == upload_id
             )
         )
     ).scalar_one()
@@ -307,17 +315,18 @@ async def test_chunked_concurrent_chunks_idempotent(db_session, user, folder):
 @pytest.mark.asyncio
 async def test_chunked_resume_state_visible(db_session, user, folder):
     service = DriveChunkedUploadService(db_session)
-    payload = _chunk_payload(b"R", 256 * 1024)
+    payload = _chunk_payload(b"R", 262144 * 4)
     upload = await service.init_upload(
         user_id=user.id,
         parent_id=folder.id,
         filename="resume.bin",
         file_size=len(payload),
-        chunk_size=64 * 1024,
-    )
+        chunk_size=256 * 1024,
+    )  # 2026-09-12: 服务加 chunk_size 下限 (256KB) 后原小分片非法, 按新约束更新
     half = upload.total_chunks // 2
+    chunk_size = upload.chunk_size
     for index in range(half):
-        chunk = payload[index * upload.chunk_size : (index + 1) * upload.chunk_size]
+        chunk = payload[index * chunk_size : (index + 1) * chunk_size]
         await service.upload_chunk(
             upload_id=upload.upload_id,
             user_id=user.id,
@@ -339,11 +348,12 @@ async def test_chunked_complete_with_checksum(db_session, user, folder):
         parent_id=folder.id,
         filename="complete.bin",
         file_size=len(payload),
-        chunk_size=8 * 1024,
+        chunk_size=MIN_CHUNK_SIZE,
         checksum=checksum,
     )
+    chunk_size = upload.chunk_size
     for index in range(upload.total_chunks):
-        chunk = payload[index * upload.chunk_size : (index + 1) * upload.chunk_size]
+        chunk = payload[index * chunk_size : (index + 1) * chunk_size]
         await service.upload_chunk(
             upload_id=upload.upload_id,
             user_id=user.id,
@@ -370,10 +380,11 @@ async def test_chunked_complete_rejects_bad_checksum(db_session, user, folder):
         parent_id=folder.id,
         filename="bad.bin",
         file_size=len(payload),
-        chunk_size=8 * 1024,
+        chunk_size=MIN_CHUNK_SIZE,
     )
+    chunk_size = upload.chunk_size
     for index in range(upload.total_chunks):
-        chunk = payload[index * upload.chunk_size : (index + 1) * upload.chunk_size]
+        chunk = payload[index * chunk_size : (index + 1) * chunk_size]
         await service.upload_chunk(
             upload_id=upload.upload_id,
             user_id=user.id,
@@ -397,14 +408,14 @@ async def test_chunked_abort_removes_row(db_session, user, folder):
         user_id=user.id,
         parent_id=folder.id,
         filename="abort.bin",
-        file_size=4096 * 5,
-        chunk_size=2048,
+        file_size=MIN_CHUNK_SIZE * 2,
+        chunk_size=MIN_CHUNK_SIZE,
     )
     await service.upload_chunk(
         upload_id=upload.upload_id,
         user_id=user.id,
         chunk_index=0,
-        chunk_data=b"A" * 2048,
+        chunk_data=b"A" * MIN_CHUNK_SIZE,
         checksum=None,
     )
     assert await service.abort_upload(upload_id=upload.upload_id, user_id=user.id) is True
