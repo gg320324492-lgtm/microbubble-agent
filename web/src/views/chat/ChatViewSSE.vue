@@ -2323,6 +2323,16 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-radius: 12px 3px 12px 12px !important;
   box-shadow: 3px 3px 0 rgba(239, 114, 86, 0.14) !important;
 }
+/* 批次⑩.72 亮色选型 C 纸墨反转: 用户气泡 = 墨色实底白字 (替代珊瑚描边+硬阴影+挖孔时间戳) */
+.chat-immersive .user-bubble {
+  background: #16232a !important;
+  border: none !important;
+  border-radius: 18px !important;
+  color: #eef4f2 !important;
+  box-shadow: none !important;
+}
+.chat-immersive .user-bubble::before { display: none; }
+.chat-immersive .user-bubble:hover { transform: none; box-shadow: none; }
 [data-theme="dark"] .chat-immersive .user-bubble {
   background-color: #172126 !important;
   border-color: rgba(255, 138, 107, 0.55) !important;
@@ -2337,6 +2347,41 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 .chat-immersive .send-btn:hover:not(:disabled) {
   background-color: #0e766e !important;
+}
+/* 批次⑩.72 亮色选型 C: 发送键 = 墨色圆形↑ (对齐暗色形态), hover 转墨青 */
+.chat-immersive .send-btn-pill {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px !important;
+  background: #16232a !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  font-size: 0 !important;
+  letter-spacing: 0 !important;
+  color: transparent !important;
+  position: relative;
+}
+.chat-immersive .send-btn-pill::before {
+  content: '↑';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fbfcfb;
+}
+.chat-immersive .send-btn-pill:hover:not(:disabled) {
+  transform: scale(1.05);
+  background: #0e766e !important;
+  box-shadow: none !important;
+}
+.chat-immersive .send-btn-pill:disabled {
+  background: rgba(22, 35, 42, 0.18) !important;
+  color: transparent !important;
 }
 /* 头部/侧栏 新对话按钮: 墨色实底 */
 .chat-immersive .header-new-session.el-button--primary,
@@ -2382,14 +2427,14 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-color: #0e766e !important;
   color: #ffffff !important;
 }
-/* 模式切换 (快速/平衡/深度): 橙 → 墨青 */
+/* 模式切换 (快速/平衡/深度): 亮色 C = 墨色, 暗色 = 青亮 */
 .chat-immersive .depth-toggle.active {
-  color: #0e766e !important;
-  background: rgba(14, 118, 110, 0.10) !important;
+  color: #16232a !important;
+  background: rgba(22, 35, 42, 0.08) !important;
 }
 .chat-immersive .thinking-mode-switch .mode-option.active,
 .chat-immersive .mode-option.active {
-  background: #0e766e !important;
+  background: #16232a !important;
   background-image: none !important;
   color: #fff !important;
 }
@@ -2401,10 +2446,10 @@ function handleSearchKeydown(e: KeyboardEvent) {
   background: #35c2a4 !important;
   color: #0b1512 !important;
 }
-/* 检索徽标: 主色 → 墨青 */
+/* 检索徽标: 亮色 C = 墨色调, 暗色 = 青亮 */
 .chat-immersive .retrieval-badge {
-  color: #0e766e;
-  background: rgba(14, 118, 110, 0.08);
+  color: #16232a;
+  background: rgba(22, 35, 42, 0.06);
 }
 [data-theme="dark"] .chat-immersive .retrieval-badge {
   color: #35c2a4;
@@ -2577,9 +2622,9 @@ function handleSearchKeydown(e: KeyboardEvent) {
 [data-theme="dark"] .chat-immersive .header-search-pill .hsp-kbd { border-color: rgba(226,236,234,0.3); }
 .chat-immersive .input-core {
   background: #fdfefc;
-  border: 1.5px solid #16232a;
-  border-radius: 14px;
-  box-shadow: 4px 4px 0 rgba(22, 35, 42, 0.12);
+  border: 1.5px solid rgba(22, 35, 42, 0.45);
+  border-radius: 24px;
+  box-shadow: none;
 }
 [data-theme="dark"] .chat-immersive .input-core {
   background: var(--color-bg-card);
@@ -2623,19 +2668,25 @@ function handleSearchKeydown(e: KeyboardEvent) {
   font-size: 9.5px;
   letter-spacing: 0.24em;
   color: var(--color-text-secondary);
-  border-bottom: 1px dashed rgba(22, 35, 42, 0.2);
-  padding-bottom: 6px;
+  border-bottom: none;
+  padding-bottom: 2px;
 }
-/* 会话条目 (亮色): 透明 + 虚线分隔; 选中 = 纸卡 + 墨青左线 */
+/* 会话条目 (亮色): 批次⑩.72 选型 C 纸墨反转 — 圆角微白卡 (替代虚线分隔),
+   选中 = 纸白卡 + 1px 墨描边 (替代 3px 墨青左线), 对齐暗色卡片描边语言 */
 .chat-immersive .session-sidebar .session-item {
-  background: transparent;
-  border-radius: 0;
-  border-bottom: 1px dashed rgba(22, 35, 42, 0.18);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  margin-bottom: 5px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.chat-immersive .session-sidebar .session-item:hover {
+  background: #ffffff;
 }
 .chat-immersive .session-sidebar .session-item.active,
 .chat-immersive .session-sidebar .session-item.selected {
   background: #fdfefc;
-  border-left: 3px solid #0e766e;
+  border: 1px solid rgba(22, 35, 42, 0.45);
 }
 /* ═══ 批次⑩.68 暗色会话条目选型 D「卡片描边」(2026-09-10) ═══
    诊断: 同屏三种绿打架 (荧光青绿左条 #35c2a4 / 草绿同步✓ #67c23a / 预览灰盒 #2a2d35)。
@@ -2676,8 +2727,28 @@ function handleSearchKeydown(e: KeyboardEvent) {
    方案稿: docs/design-proposals/chat-main-2026-09/index.html。仅 dark 沉浸生效, 亮色不变。
    核心: 用户=中灰圆角气泡(去珊瑚描边/硬阴影/挖孔时间戳), AI=无头像/无§头行/正文去气泡,
    工具过程收成「▸ 已调用 N 个工具」可展开胶囊, 自评绿 chip 退场, 输入区药丸化+圆形↑发送键。 */
-/* —— 过程胶囊: 亮色隐藏(维持 § 头行 + showThinking 旧行为), 暗色替代 § 头行 —— */
-.chat-immersive .trace-pill { display: none; }
+/* —— 过程胶囊: 双主题显示 (⑩.72 起亮色同步), 亮色 = 纸卡描边 / 暗色 = 墨描边 —— */
+.chat-immersive .trace-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin: 0 0 10px;
+  padding: 4px 12px;
+  border: 1px solid rgba(22, 35, 42, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-immersive .trace-pill:hover {
+  border-color: rgba(22, 35, 42, 0.32);
+  background: #ffffff;
+}
+.chat-immersive .trace-pill .tp-arrow { font-size: 10px; color: #8a938e; }
 [data-theme="dark"] .chat-immersive .trace-pill {
   display: inline-flex;
   align-items: center;
@@ -2709,16 +2780,16 @@ function handleSearchKeydown(e: KeyboardEvent) {
 [data-theme="dark"] .chat-immersive .user-bubble::before { display: none; }
 [data-theme="dark"] .chat-immersive .user-bubble:hover { transform: none; box-shadow: none; }
 /* —— AI: 头像/§头行退场, 正文去气泡直接排在页面上 —— */
-[data-theme="dark"] .chat-immersive .msg-row.bot-row > .bot-msg-avatar { display: none !important; }
-[data-theme="dark"] .chat-immersive .dossier-entry-head { display: none; }
-[data-theme="dark"] .chat-immersive .msg-row .msg-content {
+/* —— 批次⑩.72 亮色对齐: 头像/§头行退场、AI 去气泡、绿 chip 退场改为双主题通用 —— */
+.chat-immersive .msg-row.bot-row > .bot-msg-avatar { display: none !important; }
+.chat-immersive .dossier-entry-head { display: none; }
+.chat-immersive .msg-row .msg-content {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 2px 0 0 !important;
 }
-/* —— 自评绿 chip 退场 (synthesis/retry/compressed 徽章保留) —— */
-[data-theme="dark"] .chat-immersive .event-badge-critique { display: none; }
+.chat-immersive .event-badge-critique { display: none; }
 /* —— 操作行: 批次⑩.71 选型 D 后时长改 mono 显示(双主题); tokens 已从模板移除;
       反馈按钮双主题 icon-only —— */
 [data-theme="dark"] .chat-immersive .msg-meta { margin-top: 4px; }

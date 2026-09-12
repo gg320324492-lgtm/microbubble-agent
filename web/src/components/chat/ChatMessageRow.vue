@@ -595,7 +595,9 @@ function onEditKeydown(e: KeyboardEvent) {
 }
 .user-edit-send {
   border: none;
-  background-image: linear-gradient(135deg, #0e766e 0%, #12968b 100%);
+  /* 批次⑩.72 亮色 C 纸墨反转: 发送 = 墨色实底; dark 主题转青渐变 */
+  background-color: #16232a;
+  background-image: none;
   color: #ffffff;
   font-size: 12.5px;
   font-weight: 600;
@@ -606,8 +608,12 @@ function onEditKeydown(e: KeyboardEvent) {
   -webkit-tap-highlight-color: transparent;
 }
 .user-edit-send:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.3);
   transform: translateY(-1px);
+}
+[data-theme='dark'] .user-edit-send {
+  background-color: #0e766e;
+  background-image: linear-gradient(135deg, #0e766e 0%, #12968b 100%);
 }
 .user-edit-send:active {
   transform: scale(0.97);
