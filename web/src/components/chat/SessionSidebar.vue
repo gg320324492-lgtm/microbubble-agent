@@ -72,7 +72,8 @@ const filteredSessions = computed(() => {
 const formatTime = (iso) => {
   if (!iso) return ''
   try {
-    const d = new Date(iso)
+    const d = parseDbDate(iso)
+    if (!d) return ''
     const now = new Date()
     const diffMs = now - d
     const diffMin = Math.floor(diffMs / 60000)

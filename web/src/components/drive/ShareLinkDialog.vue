@@ -159,6 +159,7 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { DocumentCopy, Refresh, CircleClose, Plus } from '@element-plus/icons-vue'
 import '@/views/drive/drive-view.css'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -277,7 +278,8 @@ async function copyPassword() {
 function formatExpires(isoString) {
   if (!isoString) return '永久'
   try {
-    return new Date(isoString).toLocaleString('zh-CN', { hour12: false })
+    const d = parseDbDate(isoString)
+    return d ? d.toLocaleString('zh-CN', { hour12: false }) : isoString
   } catch {
     return isoString
   }

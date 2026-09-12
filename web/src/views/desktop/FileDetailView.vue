@@ -145,6 +145,7 @@ import axios from 'axios'
 import CommentThread from '@/components/drive/CommentThread.vue'
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'
 import { useUserStore } from '@/stores/user'
+import { parseDbDate } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -205,7 +206,8 @@ function formatBytes(bytes) {
 
 function formatDateTime(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  const d = parseDbDate(iso)
+  return d ? d.toLocaleString('zh-CN', { hour12: false }) : iso
 }
 
 function goBack() {

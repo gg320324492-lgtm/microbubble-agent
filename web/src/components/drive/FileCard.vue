@@ -278,6 +278,7 @@ import {
   Files  // v77 P2.6-G.3: 未知类型 generic fallback 图标
 } from '@element-plus/icons-vue'
 import { useThumbnailLazyLoad } from '@/composables/useThumbnailLazyLoad'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   file: { type: Object, required: true },
@@ -346,9 +347,8 @@ function formatSize(bytes) {
  */
 function formatDate(iso) {
   if (!iso) return '-'
-  // 兼容 ISO 字符串 / Date 对象 / postgres timestamp-without-tz
-  const d = iso instanceof Date ? iso : new Date(iso)
-  if (isNaN(d.getTime())) return '-'
+  const d = parseDbDate(iso)
+  if (!d) return '-'
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }

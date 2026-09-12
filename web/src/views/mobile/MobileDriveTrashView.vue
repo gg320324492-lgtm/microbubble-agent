@@ -90,7 +90,7 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useDriveFiles } from '@/composables/useDriveFiles'
-import { formatSize } from '@/utils/format'
+import { formatSize, parseDbDate } from '@/utils/format'
 
 const {
   driveFiles, total, loading, loadError,
@@ -108,8 +108,8 @@ const hasAnything = computed(() => files.value.length > 0 || folders.value.lengt
 
 function formatDate(s) {
   if (!s) return ''
-  const d = new Date(s)
-  if (Number.isNaN(d.getTime())) return String(s).slice(0, 16)
+  const d = parseDbDate(s)
+  if (!d) return String(s).slice(0, 16)
   return `${d.getMonth() + 1}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 

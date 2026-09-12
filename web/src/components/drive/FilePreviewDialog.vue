@@ -195,6 +195,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -288,8 +289,8 @@ function formatSize(bytes) {
 function formatDateTime(s) {
   if (!s) return ''
   try {
-    const d = new Date(s)
-    if (isNaN(d.getTime())) return s
+    const d = parseDbDate(s)
+    if (!d) return s
     const pad = (n) => String(n).padStart(2, '0')
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
   } catch { return s }

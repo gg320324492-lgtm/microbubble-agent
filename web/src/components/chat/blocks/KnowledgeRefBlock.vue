@@ -17,6 +17,7 @@ import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -55,8 +56,8 @@ const stripHtml = (html) => {
 
 const normalizeDate = (value) => {
   if (!value) return 0
-  const timestamp = new Date(value).getTime()
-  return Number.isNaN(timestamp) ? 0 : timestamp
+  const timestamp = parseDbDate(value)?.getTime()
+  return timestamp || 0
 }
 
 const formatDate = (value) => {

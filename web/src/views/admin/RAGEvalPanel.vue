@@ -26,6 +26,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, VideoPlay, DataAnalysis } from '@element-plus/icons-vue'
 import { useRAGEval } from '@/composables/useRAGEval'
+import { parseDbDate } from '@/utils/format'
 
 const { reports, loading, error, lastUpdate, listReports, runEvaluation, fetchReportDetail } = useRAGEval()
 
@@ -69,7 +70,8 @@ async function onShowDetail(id) {
 function fmtTime(iso) {
   if (!iso) return '-'
   try {
-    return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { hour12: false }) : iso
   } catch {
     return iso
   }

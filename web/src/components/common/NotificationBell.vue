@@ -123,6 +123,7 @@ import {
   Document, Picture, VideoPlay, Headset, Tickets, FolderOpened, EditPen,
 } from '@element-plus/icons-vue'
 import { useNotificationsStore } from '@/composables/useNotifications'
+import { parseDbDate } from '@/utils/format'
 
 const router = useRouter()
 const store = useNotificationsStore()
@@ -168,9 +169,10 @@ function buildFallbackTitle(n) {
 
 function formatTime(iso) {
   if (!iso) return ''
-  const t = new Date(iso).getTime()
+  const t = parseDbDate(iso)
+  if (!t) return ''
   const now = Date.now()
-  const sec = Math.floor((now - t) / 1000)
+  const sec = Math.floor((now - t.getTime()) / 1000)
   if (sec < 60) return '刚刚'
   if (sec < 3600) return `${Math.floor(sec / 60)} 分钟前`
   if (sec < 86400) return `${Math.floor(sec / 3600)} 小时前`

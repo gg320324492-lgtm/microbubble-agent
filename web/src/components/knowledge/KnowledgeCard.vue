@@ -117,6 +117,7 @@
 import { computed } from 'vue'
 import { Download, Edit, Delete, Link } from '@element-plus/icons-vue'
 import { useChatContextStore } from '@/stores/chatContext'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -226,7 +227,8 @@ const sourceLabel = computed(() => {
 
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
+  const date = parseDbDate(dateStr)
+  if (!date) return ''
   const now = new Date()
   const diff = now - date
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))

@@ -87,6 +87,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import { parseDbDate } from '@/utils/format'
 
 const route = useRoute()
 const token = route.params.token
@@ -115,8 +116,8 @@ function fmtSize(bytes) {
   return (v >= 100 ? Math.round(v) : v.toFixed(1)) + ' ' + u[i]
 }
 function fmtExp(iso) {
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const d = parseDbDate(iso)
+  return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : ''
 }
 function dlUrl(fileId) {
   const pwd = password.value ? `?password=${encodeURIComponent(password.value)}` : ''

@@ -27,6 +27,7 @@ import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { fetchKbOverview, fetchKbQueueDepth, fetchKbFailures } from '@/api/kbMonitor'
 import { useKbMonitor } from '@/composables/useKbMonitor'
+import { parseDbDate } from '@/utils/format'
 
 const hours = ref(24)
 const loading = ref(false)
@@ -72,13 +73,15 @@ const fmtPct = (v) => (v == null ? '-' : `${(v * 100).toFixed(1)}%`)
 const fmtHour = (iso) => {
   if (!iso) return '-'
   try {
-    return new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit' })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit' }) : '-'
   } catch { return iso }
 }
 const fmtTime = (iso) => {
   if (!iso) return '-'
   try {
-    return new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'
   } catch { return iso }
 }
 const statusLabel = (s) => ({

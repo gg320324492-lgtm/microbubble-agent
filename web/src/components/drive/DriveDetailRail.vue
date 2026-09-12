@@ -598,6 +598,7 @@ import { marked } from 'marked'
 import CommentThread from '@/components/drive/CommentThread.vue'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useUserStore } from '@/stores/user'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   file: { type: Object, default: null },
@@ -697,8 +698,8 @@ function dotColor(name) {
 }
 function fmtMonth(iso) {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return '—'
+  const d = parseDbDate(iso)
+  if (!d) return '—'
   return d.getFullYear() === new Date().getFullYear()
     ? `${d.getMonth() + 1} 月`
     : `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`
@@ -1594,8 +1595,8 @@ function fmtSize(bytes) {
 }
 function fmtDT(x) {
   if (!x) return '—'
-  const d = new Date(x)
-  if (isNaN(d)) return String(x).slice(0, 16)
+  const d = parseDbDate(x)
+  if (!d) return String(x).slice(0, 16)
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }

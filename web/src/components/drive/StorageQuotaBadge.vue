@@ -30,6 +30,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   quotaInfo: {
@@ -68,10 +69,16 @@ const tooltipText = computed(() => {
     `总配额: ${formatBytes(quota_bytes)}`,
     `文件数: ${file_count || 0}`,
     is_over_quota ? '⚠️ 已超额' : '',
-    updated_at ? `更新: ${new Date(updated_at).toLocaleString('zh-CN')}` : '',
+    updated_at ? `更新: ${fmtQuotaTime(updated_at)}` : '',
   ].filter(Boolean)
   return lines.join('\n')
 })
+
+// naive UTC → 本地时区显示 (与 parseDbDate 全站口径一致)
+function fmtQuotaTime(iso) {
+  const d = parseDbDate(iso)
+  return d ? d.toLocaleString('zh-CN') : String(iso)
+}
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B'

@@ -47,6 +47,7 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import PlanSelector from './PlanSelector.vue'
+import { parseDbDate } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(true)
@@ -69,7 +70,8 @@ function formatCents(cents) {
 }
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('zh-CN')
+  const d = parseDbDate(iso)
+  return d ? d.toLocaleDateString('zh-CN') : ''
 }
 
 const headers = {

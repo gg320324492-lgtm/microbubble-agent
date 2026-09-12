@@ -221,6 +221,7 @@ import { useMemberStore } from '@/stores/member'
 import VoiceprintEnrollDialog from '@/components/VoiceprintEnrollDialog.vue'
 import { getDisplaySkills } from '@/utils/researchAreaSkills'
 import { memberTagType, memberTitleOf } from '@/utils/memberIdentity'
+import { parseDbDate } from '@/utils/format'
 
 defineEmits(['open-detail'])
 
@@ -321,7 +322,8 @@ const onEnrollSuccess = async () => {
 const formatEnrollTime = (iso) => {
   if (!iso) return ''
   try {
-    const d = new Date(iso)
+    const d = parseDbDate(iso)
+    if (!d) return ''
     const now = new Date()
     const diffSec = (now - d) / 1000
     if (diffSec < 60) return '刚刚'

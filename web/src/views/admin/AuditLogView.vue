@@ -105,6 +105,7 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { parseDbDate } from '@/utils/format'
 
 // W86 mini-11 D fix P3: 从 summary.by_action 动态派生可用 actions, 避免 18 个写死中 12 个死选项
 // 老代码 18 个写死, 实际只有 6 种, 12 个是死选项 → 用户选了无结果误以为系统坏了
@@ -147,7 +148,8 @@ function statusTag(code) {
 function formatTime(iso) {
   if (!iso) return ''
   try {
-    return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { hour12: false }) : iso
   } catch { return iso }
 }
 
