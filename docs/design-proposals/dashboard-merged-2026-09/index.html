@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仪表盘合并版 · 3 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --coral: #ef7256; --danger: #A3543F;
+    --hair: rgba(22,35,42,.12); --dim: #9AA4A0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 24px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .opt { margin-bottom: 34px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h h2 { font-size: 16px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+  .recipe { font-family: var(--mono); font-size: 10.5px; color: #B4823C; margin-bottom: 10px; }
+
+  .page { background: var(--paper); border: 1px solid rgba(22,35,42,.18); border-radius: 14px; overflow: hidden; }
+  .pbody { padding: 16px 20px 20px; }
+
+  /* hero */
+  .hero { background: var(--card); border: 1px solid var(--hair); border-radius: 14px; padding: 17px 20px; margin-bottom: 13px; display: flex; align-items: center; gap: 16px; }
+  .hi { font-size: 17px; font-weight: 700; }
+  .dt { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; color: var(--dim); margin-top: 4px; }
+  .pets { margin-left: auto; display: flex; gap: 10px; }
+  .pet { width: 46px; height: 52px; border-radius: 10px 10px 4px 4px; background: linear-gradient(180deg,#dcece5,#f2f7f5); border: 1px solid var(--hair); display: flex; align-items: flex-end; justify-content: center; font-size: 20px; padding-bottom: 4px; }
+  .herobtn { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 8px 15px; border-radius: 999px; background: var(--ink); color: #FBFCFB; font-weight: 600; }
+
+  /* 卡片 */
+  .blk { background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 12px; padding: 13px 15px; }
+  .blk-t { font-size: 11px; font-weight: 650; color: var(--ink); margin-bottom: 9px; display: flex; align-items: center; gap: 7px; }
+  .blk-t .en { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: var(--dim); font-weight: 400; }
+  .blk-t .more { margin-left: auto; font-size: 10px; color: var(--teal); font-weight: 400; }
+
+  /* 今日重点行 */
+  .frow { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(22,35,42,.08); background: var(--card); margin-bottom: 6px; }
+  .frow.hot { border-color: rgba(163,84,63,.3); }
+  .tick { width: 15px; height: 15px; border-radius: 999px; border: 1.5px solid #8fa0aa; flex-shrink: 0; }
+  .tt { font-size: 11.5px; color: var(--ink); }
+  .flag { font-size: 8.5px; padding: 1px 7px; border-radius: 5px; border: 1px solid rgba(22,35,42,.16); color: #5b6870; margin-left: auto; }
+  .flag.hot { border-color: rgba(163,84,63,.45); color: var(--danger); background: rgba(163,84,63,.07); }
+
+  /* KPI */
+  .kpirow { display: flex; gap: 10px; margin-bottom: 12px; }
+  .kpi { flex: 1; background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 11px; padding: 10px 14px; }
+  .kpi .kl { font-family: var(--mono); font-size: 8px; letter-spacing: .12em; color: var(--dim); }
+  .kpi .kv { font-size: 18px; font-weight: 700; color: var(--ink); margin-top: 3px; }
+  .kpi .kv small { font-size: 10px; font-weight: 400; color: var(--dim); margin-left: 3px; }
+
+  /* 时间线 */
+  .tl { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; }
+  .tld { background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 9px; padding: 8px 6px 9px; text-align: center; }
+  .tld .dw { font-family: var(--mono); font-size: 7.5px; letter-spacing: .12em; color: var(--dim); }
+  .tld .dn { font-family: var(--mono); font-size: 13px; color: var(--ink); margin: 4px 0 6px; }
+  .tld .bars { display: flex; flex-direction: column; gap: 3px; min-height: 14px; }
+  .tld .b { height: 5px; border-radius: 3px; background: var(--teal); opacity: .8; }
+  .tld .b.r { background: var(--danger); }
+  .tld.today { border-color: rgba(14,118,110,.5); }
+
+  /* 六宫格 */
+  .qgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .q { background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 11px; }
+  .q .qi { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .q .qt { font-size: 11.5px; font-weight: 600; color: var(--ink); }
+  .q .qs { font-family: var(--mono); font-size: 8.5px; color: var(--dim); margin-top: 3px; letter-spacing: .04em; }
+
+  /* 会议/知识 双卡 */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  .mini { display: flex; align-items: center; gap: 8px; padding: 7px 2px; font-size: 10.5px; color: #4a5560; }
+  .mini .mono { font-family: var(--mono); font-size: 8px; color: var(--dim); }
+  .mini .tt { font-size: 10.5px; }
+
+  /* 摘要条 */
+  .sumbar { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 12px; padding: 12px 16px; margin-top: 12px; font-size: 11.5px; color: var(--ink); }
+  .sumbar .mono { font-size: 9px; color: var(--dim); }
+  .sumbar .go { margin-left: auto; color: var(--teal); font-size: 11px; }
+
+  .opt-notes { margin-top: 10px; font-size: 11.5px; line-height: 1.8; }
+  .opt-notes .pro { color: #2E8B62; margin-right: 16px; } .opt-notes .con { color: #B4823C; }
+  .legendbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .legendbox b { color: var(--txt); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>仪表盘合并版 · 3 方案</h1>
+  <p class="sub">把上一轮 A/B/C/D 的优点合并成三个可直接定稿的完整设计。共同底线：<b>任务全量列表只在「任务管理」页</b>；问候 + 兔子宠物 + 开始对话保留；任务管理页零改动。</p>
+
+  <!-- ═══ 合并版 1 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">合并版 1</span><h2>今日优先 · 门户收纳在底部</h2><span class="desc">打开就先看到「需要今天处理」，模块入口退居页尾</span></div>
+    <div class="recipe">配方 = B 的今日切片(可勾选) + A 的六宫格(置底) + hero</div>
+    <div class="page">
+      <div class="pbody">
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20 · MB-LAB DAILY</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn">💬 开始对话</span>
+        </div>
+        <div class="blk">
+          <div class="blk-t">§ 需要今天处理 <span class="en">TODAY · 3</span><span class="more">任务管理 →</span></div>
+          <div class="frow hot"><span class="tick"></span><span class="tt">模拟任务</span><span class="flag hot">逾期 1 天</span></div>
+          <div class="frow"><span class="tick"></span><span class="tt">准备组会汇报 PPT</span><span class="flag">今日到期</span></div>
+          <div class="frow"><span class="tick"></span><span class="tt">回复审稿意见</span><span class="flag">今日到期</span></div>
+        </div>
+        <div style="height:12px"></div>
+        <div class="blk">
+          <div class="blk-t">模块入口 <span class="en">MODULES</span></div>
+          <div class="qgrid">
+            <div class="q"><span class="qi" style="background:#dcece5">✓</span><div><div class="qt">任务管理</div><div class="qs">17 进行中 · 72 已完成</div></div></div>
+            <div class="q"><span class="qi" style="background:#e3e8f8">🎥</span><div><div class="qt">会议</div><div class="qs">本周 2 场</div></div></div>
+            <div class="q"><span class="qi" style="background:#fdeeda">📚</span><div><div class="qt">知识库</div><div class="qs">345 条 · +12</div></div></div>
+            <div class="q"><span class="qi" style="background:#fde3de">🗂</span><div><div class="qt">课题组网盘</div><div class="qs">322 个文件</div></div></div>
+            <div class="q"><span class="qi" style="background:#ece4f8">👥</span><div><div class="qt">成员</div><div class="qs">9 人 · 3 未录声纹</div></div></div>
+            <div class="q"><span class="qi" style="background:#e2efdd">🧪</span><div><div class="qt">实验数据</div><div class="qs">DFT 运行中</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 第一屏聚焦今天的事</span><span class="con">✓ 模块入口仍在，只是不抢戏</span></div>
+  </div>
+
+  <!-- ═══ 合并版 2 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">合并版 2</span><h2>驾驶舱 · 时间线 + 今日 + 聚合</h2><span class="desc">信息最全的一版：KPI 行 + 7 天到期时间线 + 今日切片 + 会议/知识库聚合卡</span></div>
+    <div class="recipe">配方 = C 的 KPI+时间线骨架 + B 的今日切片 + C 的聚合卡</div>
+    <div class="page">
+      <div class="pbody">
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20 · MB-LAB DAILY</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn">💬 开始对话</span>
+        </div>
+        <div class="kpirow">
+          <div class="kpi"><div class="kl">TASKS</div><div class="kv">17<small>进行中</small></div></div>
+          <div class="kpi"><div class="kl">DONE</div><div class="kv">72<small>已完成</small></div></div>
+          <div class="kpi"><div class="kl">OVERDUE</div><div class="kv" style="color:var(--danger)">2<small>逾期</small></div></div>
+          <div class="kpi"><div class="kl">MEETINGS · WEEK</div><div class="kv">2<small>场次</small></div></div>
+        </div>
+        <div class="blk" style="margin-bottom:12px">
+          <div class="blk-t">未来 7 天到期时间线 <span class="en">DUE TIMELINE</span><span class="more">任务管理 →</span></div>
+          <div class="tl">
+            <div class="tld today"><div class="dw">FRI 12</div><div class="dn">今天</div><div class="bars"><span class="b r"></span><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">SAT 13</div><div class="dn">13</div><div class="bars"><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">SUN 14</div><div class="dn">14</div><div class="bars"></div></div>
+            <div class="tld"><div class="dw">MON 15</div><div class="dn">15</div><div class="bars"><span class="b"></span><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">TUE 16</div><div class="dn">16</div><div class="bars"><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">WED 17</div><div class="dn">17</div><div class="bars"></div></div>
+            <div class="tld"><div class="dw">THU 18</div><div class="dn">18</div><div class="bars"><span class="b"></span></div></div>
+          </div>
+        </div>
+        <div class="two">
+          <div class="blk">
+            <div class="blk-t">§ 需要今天处理 <span class="en">TODAY · 3</span></div>
+            <div class="frow hot"><span class="tick"></span><span class="tt">模拟任务</span><span class="flag hot">逾期 1 天</span></div>
+            <div class="frow"><span class="tick"></span><span class="tt">准备组会汇报 PPT</span><span class="flag">今日</span></div>
+          </div>
+          <div class="two" style="grid-template-columns:1fr;gap:12px">
+            <div class="blk">
+              <div class="blk-t">📅 即将到来 <span class="en">MEETINGS</span></div>
+              <div class="mini"><span class="mono">FRI 19:00</span><span class="tt">课题组周会</span></div>
+              <div class="mini"><span class="mono">MON 14:00</span><span class="tt">DFT 服务评审会</span></div>
+            </div>
+            <div class="blk">
+              <div class="blk-t">📚 最近入库 <span class="en">KNOWLEDGE</span></div>
+              <div class="mini"><span class="tt">MDPI 投稿格式要求</span><span class="mono" style="margin-left:auto">+2h</span></div>
+              <div class="mini"><span class="tt">气泡界面调控文献集</span><span class="mono" style="margin-left:auto">+1d</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 一页看全：数字 / 时间 / 今日 / 跨模块</span><span class="con">✗ 元素最多，需要新增聚合接口（时间线分布 + 会议/知识库最近项）</span></div>
+  </div>
+
+  <!-- ═══ 合并版 3 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">合并版 3</span><h2>极简双区 · 时间线 + 门户</h2><span class="desc">最安静的一版：上半 7 天时间线管「什么时候忙」，下半六宫格管「去哪儿」，无今日切片（今日事直接去任务页）</span></div>
+    <div class="recipe">配方 = A 的六宫格 + C 的时间线骨架，两者各占一半</div>
+    <div class="page">
+      <div class="pbody">
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20 · MB-LAB DAILY · 17 进行中 · 2 逾期</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn">💬 开始对话</span>
+        </div>
+        <div class="blk" style="margin-bottom:12px">
+          <div class="blk-t">未来 7 天到期时间线 <span class="en">DUE TIMELINE</span><span class="more">任务管理 →</span></div>
+          <div class="tl">
+            <div class="tld today"><div class="dw">FRI 12</div><div class="dn">今天</div><div class="bars"><span class="b r"></span><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">SAT 13</div><div class="dn">13</div><div class="bars"><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">SUN 14</div><div class="dn">14</div><div class="bars"></div></div>
+            <div class="tld"><div class="dw">MON 15</div><div class="dn">15</div><div class="bars"><span class="b"></span><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">TUE 16</div><div class="dn">16</div><div class="bars"><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">WED 17</div><div class="dn">17</div><div class="bars"></div></div>
+            <div class="tld"><div class="dw">THU 18</div><div class="dn">18</div><div class="bars"><span class="b"></span></div></div>
+          </div>
+        </div>
+        <div class="blk">
+          <div class="blk-t">模块入口 <span class="en">MODULES</span></div>
+          <div class="qgrid">
+            <div class="q"><span class="qi" style="background:#dcece5">✓</span><div><div class="qt">任务管理</div><div class="qs">17 进行中 · 2 逾期</div></div></div>
+            <div class="q"><span class="qi" style="background:#e3e8f8">🎥</span><div><div class="qt">会议</div><div class="qs">本周 2 场</div></div></div>
+            <div class="q"><span class="qi" style="background:#fdeeda">📚</span><div><div class="qt">知识库</div><div class="qs">345 条 · +12</div></div></div>
+            <div class="q"><span class="qi" style="background:#fde3de">🗂</span><div><div class="qt">课题组网盘</div><div class="qs">322 个文件</div></div></div>
+            <div class="q"><span class="qi" style="background:#ece4f8">👥</span><div><div class="qt">成员</div><div class="qs">9 人 · 3 未录声纹</div></div></div>
+            <div class="q"><span class="qi" style="background:#e2efdd">🧪</span><div><div class="qt">实验数据</div><div class="qs">DFT 运行中</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 结构最简单，无新接口（时间线用现有任务 due_date 即可算）</span><span class="pro">✓ hero 里直接带「17 进行中 · 2 逾期」摘要</span><span class="con">✗ 没有今日切片，看「今天具体啥任务」要点进任务页</span></div>
+  </div>
+
+  <div class="legendbox">
+    <b>三版共同</b>：任务全量列表/三卡/两套对话框从仪表盘移除（去重底线）；兔子宠物 + 开始对话保留；任务管理页零改动。<br>
+    <b>差异</b>：合并版 1 = 今日切片置顶 + 门户置底（无新接口）；合并版 2 = 信息最全（需新增 7 天分布与最近会议/入库聚合接口）；合并版 3 = 时间线 + 门户（无新接口，结构最简单）。<br>
+    <b>实施位置</b>：<code>Dashboard.vue</code> 按所选版本重写主体（hero 与 <code>DashboardPet.vue</code> 保留复用）；合并版 2 需后端补聚合端点。
+  </div>
+</div>
+</body>
+</html>
