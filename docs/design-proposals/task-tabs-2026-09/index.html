@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务页 Tab 重设计 · 4 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --fog: #8ba0a0; --hair: #c9d2ca; --danger: #A3543F;
+    --dk-side: #10171B; --dk-card: rgba(255,255,255,.028); --dk-line: rgba(226,236,234,.14);
+    --dk-text: #E2ECEA; --dk-dim: #7E8790; --neon: #35C2A4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1380px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.9; color: var(--txt2); }
+  .diag b { color: var(--txt); }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 420px; }
+  .card.wide { width: 100%; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 52px; }
+
+  /* ═══ tab 条舞台: 亮 + 暗 ═══ */
+  .stage { background: var(--paper); border: 1px solid rgba(22,35,42,.14); border-radius: 12px; padding: 6px 18px 0; margin-bottom: 8px; }
+  .stage.dark { background: var(--dk-side); border-color: rgba(226,236,234,.18); }
+  .theme-tag { font-family: var(--mono); font-size: 8.5px; letter-spacing: .18em; color: #9aa4a0; padding-top: 8px; display: block; }
+  .tabs { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--hair); }
+  .dark .tabs { border-bottom-color: var(--dk-line); }
+  .tab { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 12px 18px; font-size: 12px; letter-spacing: .12em; color: var(--fog); cursor: pointer; font-family: var(--mono); }
+  .dark .tab { color: var(--dk-dim); }
+  .tab.on { color: var(--ink); font-weight: 700; }
+  .dark .tab.on { color: var(--dk-text); }
+  .tab.on::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px; background: var(--ink); border-radius: 2px 2px 0 0; }
+  .dark .tab.on::after { background: var(--neon); }
+  .tab .cnt { font-size: 9.5px; letter-spacing: .04em; padding: 1px 6px; border-radius: 999px; background: rgba(22,35,42,.08); color: var(--fog); }
+  .dark .tab .cnt { background: rgba(255,255,255,.08); color: var(--dk-dim); }
+  .tab.on .cnt.hot, .cnt.hot { background: rgba(163,84,63,.12); color: var(--danger); }
+  svg.tic { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+  /* B 分段药丸 */
+  .stage.b2 { padding-top: 14px; padding-bottom: 14px; }
+  .seg { display: inline-flex; align-items: center; border: 1px solid var(--hair); border-radius: 999px; background: rgba(255,255,255,.6); padding: 3px; }
+  .dark .seg { border-color: var(--dk-line); background: var(--dk-card); }
+  .seg .s { display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px; border-radius: 999px; font-size: 12px; letter-spacing: .1em; color: var(--fog); font-family: var(--mono); }
+  .dark .seg .s { color: var(--dk-dim); }
+  .seg .s.on { background: var(--ink); color: #FBFCFB; font-weight: 700; }
+  .dark .seg .s.on { background: var(--neon); color: #0b1512; }
+  .seg .s .cnt { border: none; }
+  .seg .s.on .cnt { background: rgba(255,255,255,.22); color: inherit; }
+  .dark .seg .s.on .cnt { background: rgba(11,21,18,.18); color: inherit; }
+  .seg .s.on.cnt-hot .cnt, .seg .s .cnt.hot { background: rgba(163,84,63,.18); color: var(--danger); }
+
+  /* C 纸卡 */
+  .stage.c2 { padding-top: 14px; padding-bottom: 14px; }
+  .cards2 { display: inline-flex; gap: 8px; }
+  .tcard { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--hair); background: transparent; font-size: 12px; letter-spacing: .1em; color: var(--fog); font-family: var(--mono); box-shadow: 2px 2px 0 rgba(22,35,42,.06); }
+  .dark .tcard { border-color: var(--dk-line); color: var(--dk-dim); box-shadow: 2px 2px 0 rgba(0,0,0,.3); }
+  .tcard.on { background: var(--card); border-color: rgba(22,35,42,.45); color: var(--ink); font-weight: 700; }
+  .dark .tcard.on { background: rgba(53,194,164,.1); border-color: rgba(53,194,164,.4); color: var(--dk-text); }
+  .corner { width: 7px; height: 7px; background: var(--ink); border-radius: 2px; }
+  .dark .corner { background: var(--neon); }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>任务页 Tab（任务列表 / 垃圾桶）重设计 · 4 方案</h1>
+  <p class="sub">现状的问题：<b>垃圾桶的 20px 大图标</b> vs <b>12px mono 文字</b>不成比例（截图里像贴了个灰色 emoji）；<b>徽标是空悬红点</b>（el-badge 默认形态，没利用好 trashCount 这个有用信息）；active 下划线细、与文字对比弱。四案都以现有 mono 档案语言为基底，亮暗双主题同规则。</p>
+
+  <div class="diag">
+    <b>现状三宗</b>：① 20px 图标 + 12px 文字比例失衡　② el-badge 红点悬空、数量信息弱　③ active 2px 青线在 44px 高度里存在感弱。垃圾桶 tab 的 <code style="font-family:var(--mono)">trashCount</code> 是现成数据——四案都把它升级为可读的计数。
+  </div>
+
+  <div class="row">
+    <div class="card wide">
+      <div class="card-h"><span class="tag gray">现状</span><h2>大图标 + 悬空徽标（截图同款）</h2></div>
+      <div class="stage">
+        <div class="tabs">
+          <span class="tab on" style="font-weight:700;color:var(--ink)">任务列表</span>
+          <span class="tab" style="font-size:14px;color:#7d8a86">🗑️ <span style="font-size:14px;letter-spacing:0">垃圾桶</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>纯文字档案 tab · 计数入标签（推荐）</h2></div>
+      <p class="card-d">垃圾桶去图标，计数直接写进标签「垃圾桶 · 3」；active = 墨色加粗 + 2px 墨线（暗色青）。全页最统一的 mono 语言。</p>
+      <div class="stage">
+        <span class="theme-tag">LIGHT</span>
+        <div class="tabs">
+          <span class="tab on">任务列表</span>
+          <span class="tab">垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="stage dark">
+        <span class="theme-tag">DARK</span>
+        <div class="tabs">
+          <span class="tab on">任务列表</span>
+          <span class="tab">垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 零图标零花活，比例问题根除（推荐）</span></div>
+        <div><span class="pro">✓ 计数常驻可读，不再依赖悬空红点</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>对称线性图标 · 14px 同基线</h2></div>
+      <p class="card-d">两枚 tab 都配 14px 线性 SVG（列表=三横线，垃圾桶=垃圾桶），与 12px 文字同灰度同基线；计数贴角。</p>
+      <div class="stage">
+        <span class="theme-tag">LIGHT</span>
+        <div class="tabs">
+          <span class="tab on"><svg class="tic" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>任务列表</span>
+          <span class="tab"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="stage dark">
+        <span class="theme-tag">DARK</span>
+        <div class="tabs">
+          <span class="tab on"><svg class="tic" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>任务列表</span>
+          <span class="tab"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 图标语义保留且比例正确，两 tab 对称</span></div>
+        <div><span class="con">⚠ 纯文字 tab 页里显得略「满」</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>分段药丸 · 选中墨实底</h2></div>
+      <p class="card-d">一体化分段胶囊，去底线：选中 = 墨实底白字（暗色青实底墨字）；计数嵌在段内，快过期变警示色。模式切换/批量行的同族语言。</p>
+      <div class="stage b2">
+        <span class="theme-tag">LIGHT</span>
+        <div class="seg">
+          <span class="s on">任务列表</span>
+          <span class="s cnt-hot"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="stage dark b2">
+        <span class="theme-tag">DARK</span>
+        <div class="seg">
+          <span class="s on">任务列表</span>
+          <span class="s cnt-hot"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 与输入区模式切换（快速/平衡/深度）同族，整页控件语言归一</span></div>
+        <div><span class="con">⚠ 选中态重量大，作为页面唯一导航稍抢</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">D</span><h2>纸卡 tabs · 硬阴影档案卡</h2></div>
+      <p class="card-d">两枚圆角纸卡，选中 = 纸白底 + 墨描边 + 左缘墨点 + 页面同款 2px 硬阴影；未选中透明。档案「卡片抽屉」感最强。</p>
+      <div class="stage c2">
+        <span class="theme-tag">LIGHT</span>
+        <div class="cards2">
+          <span class="tcard on"><span class="corner"></span>任务列表</span>
+          <span class="tcard"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="stage dark c2">
+        <span class="theme-tag">DARK</span>
+        <div class="cards2">
+          <span class="tcard on"><span class="corner"></span>任务列表</span>
+          <span class="tcard"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 与页面卡片（filter-card 硬阴影）语言最呼应</span></div>
+        <div><span class="con">⚠ tabs 从「页框的一部分」变成「两个浮动卡」，存在感偏强</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>四案通用</b>：① 垃圾桶 20px 大图标 → 14px 线性 SVG 或去除（比例修复）　② el-badge 红点 → mono 计数 chip，trashCount=0 时整段隐藏　③ active 统一「加粗 + 2px 强调线/实底」　④ 亮暗双主题同规则（暗色强调色 = 青亮 #35C2A4）　⑤ el-tabs 结构保留（只换 deep 样式与 label slot，动画/键盘导航不受影响）<br>
+    <b>实施位置</b>：<code>TaskView.vue</code> 的 <code>.task-tabs :deep(...)</code> 样式段 + 垃圾桶 label slot（icon/badge 换法）。
+  </div>
+</div>
+</body>
+</html>
