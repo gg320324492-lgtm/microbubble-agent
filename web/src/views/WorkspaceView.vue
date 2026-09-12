@@ -5,72 +5,9 @@
     <div class="tab-panel">
       <DossierPanel
         ref="dossierRef"
-        @open-project="openProjectDetail"
         @open-member="openMemberDetail"
       />
     </div>
-
-    <!-- 项目详情 dialog (DossierPanel/卷开卷 触发) — J 稿卷宗开卷语言 -->
-    <el-dialog
-      v-model="projectDetailVisible"
-      :width="'720px'"
-      align-center
-      append-to-body
-      class="dossier-dialog"
-    >
-      <template #header>
-        <div class="dlg-fhead">
-          <div class="dlg-fhead-l">
-            <div class="dlg-fno">MB-LAB · PROJECT FILE · 卷宗 NO.{{ padId(detailProject?.id) }}</div>
-            <div class="dlg-title">{{ detailProject?.name }}</div>
-          </div>
-          <span class="hstamp" :class="projectStamp.cls">{{ projectStamp.text }}</span>
-        </div>
-      </template>
-      <div v-if="detailProject" class="dossier-body">
-        <div class="arow">
-          <span class="ak">研究方向</span>
-          <span class="av">{{ detailProject.research_area || '未登记' }}</span>
-        </div>
-        <div class="arow">
-          <span class="ak">周期</span>
-          <span class="av mono">{{ periodOf(detailProject) }}</span>
-        </div>
-        <div class="arow">
-          <span class="ak">项目描述</span>
-          <span class="av desc">{{ cleanDescriptionForDisplay(detailProject.description) || '暂无描述' }}</span>
-        </div>
-
-        <h4 class="sec-title">项目成员<span class="sec-n">{{ (detailProject.members || []).length }} PERSONS</span></h4>
-        <div class="labtag-row">
-          <span
-            v-for="memberId in detailProject.members"
-            :key="memberId"
-            class="labtag"
-            :class="{ ghost: !memberExists(memberId) }"
-          >{{ detailMemberName(memberId) }}</span>
-          <span v-if="!(detailProject.members || []).length" class="labtag ghost">未指派</span>
-        </div>
-
-        <h4 class="sec-title">里程碑<span class="sec-n">{{ detailMilestones.length }} ITEMS<template v-if="detailLateCount"> · {{ detailLateCount }} LATE</template></span></h4>
-        <div v-if="detailMilestones.length" class="ms-ledger">
-          <div
-            v-for="m in sortedDetailMilestones"
-            :key="m.id"
-            class="msrow"
-            :class="msState(m).cls"
-          >
-            <span class="msd">{{ fmtMs(m.completed_at || m.due_date) }}</span>
-            <div class="msc">
-              <span class="msn">{{ m.name }}</span>
-              <span v-if="m.description" class="msdesc">{{ m.description }}</span>
-            </div>
-            <span class="mss">{{ msState(m).label }}</span>
-          </div>
-        </div>
-        <p v-else class="empty-hint">○ 未立里程碑 · 卷内空白</p>
-      </div>
-    </el-dialog>
 
     <!-- 成员详情 dialog (DossierPanel emit 'open-member' 触发) — 成员档案开卷 -->
     <el-dialog
@@ -167,14 +104,16 @@
  *   (项目/成员/声纹信息全部由卷宗页承载; 建卷/编辑基建留在原 Panel 组件, 需要时回接)
  * - 两个详情 dialog 改 align-center: 弹窗跟随当前浏览位置 (视口垂直居中), 不再 top 5vh 钉死顶部
  * - 老 ?tab= 深链静默清 query, 不再弹任何抽屉
+ *
+ * 2026-09-12 项目详情 dialog (开卷) 整体移除: 46677c124 砍进度/逾期后项目弹窗仅剩
+ * 静态描述, 用户拍板删 DossierPanel 开卷入口 + 本弹窗全链路 (open-project emit/
+ * openProjectDetail/里程碑拉取与台账/项目章); 成员档案弹窗保留
  */
 
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
-import { cleanDescriptionForDisplay } from '@/utils/textSanitize'
 import DossierPanel from './workspace/DossierPanel.vue'
 import { memberTitleOf } from '@/utils/memberIdentity'
 
@@ -183,23 +122,6 @@ const router = useRouter()
 const memberStore = useMemberStore()
 
 const dossierRef = ref(null)
-
-// ====== 项目详情 dialog (从 ProjectsPanel 接收 open-detail) ======
-const projectDetailVisible = ref(false)
-const detailProject = ref(null)
-const detailMilestones = ref([])
-
-async function openProjectDetail(project) {
-  detailProject.value = project
-  detailMilestones.value = []
-  projectDetailVisible.value = true
-  try {
-    const res = await axios.get(`/api/v1/projects/${project.id}/milestones`)
-    detailMilestones.value = res.data || []
-  } catch (e) {
-    console.error('获取里程碑失败:', e)
-  }
-}
 
 // ====== 成员详情 dialog (从 MembersPanel 接收 open-detail) ======
 const memberDetailVisible = ref(false)
@@ -216,51 +138,11 @@ async function openMemberDetail(member) {
 const padId = (id) => (id == null ? '—' : String(id).padStart(3, '0'))
 const fmtMs = (d) => (d ? dayjs(d).format('YY/MM/DD') : '未定')
 
-const periodOf = (p) => {
-  if (!p.start_date && !p.end_date) return '起止未录'
-  const f = (d) => (d ? dayjs(d).format('YYYY-MM-DD') : '?')
-  return `${f(p.start_date)} → ${f(p.end_date)}`
-}
-
-const isMsDone = (m) => m.status === 'completed' || !!m.completed_at
-const isMsLate = (m) => !isMsDone(m) && m.due_date && dayjs(m.due_date).isBefore(dayjs(), 'day')
-
-function msState(m) {
-  if (isMsDone(m)) return { cls: 'done', label: '✓ 已完成' }
-  if (isMsLate(m)) return { cls: 'late', label: '逾期未闭' }
-  if (m.due_date) return { cls: 'soon', label: `剩 ${dayjs(m.due_date).diff(dayjs(), 'day')} 天` }
-  return { cls: '', label: '未定期' }
-}
-
-const sortedDetailMilestones = computed(() =>
-  [...detailMilestones.value].sort((a, b) =>
-    String(a.due_date || '9999').localeCompare(String(b.due_date || '9999'))))
-
-const detailLateCount = computed(() => detailMilestones.value.filter(isMsLate).length)
-
-const projectStamp = computed(() => {
-  const s = detailProject.value?.status
-  if (s === 'completed') return { text: '已结案', cls: 'ok' }
-  if (s === 'archived') return { text: '已归档', cls: 'ok' }
-  if (s === 'paused') return { text: '已暂停', cls: '' }
-  if (detailLateCount.value > 0) return { text: `逾期未闭 ×${detailLateCount.value}`, cls: '' }
-  return { text: '在研', cls: 'ok' }
-})
-
 // 2026-09-05 角色扁平化: 成员卷宗章 = 年级身份称谓 (原 admin/leader/member 等级章退役)
 const roleStamp = computed(() => {
   const t = memberTitleOf(detailMember.value)
   return { text: t, cls: t === '导师' ? '' : 'ok' }
 })
-
-// 幽灵成员 id (成员 API 过滤缺员) 与卡片同口径: 明说「用户不存在」
-function memberExists(id) {
-  return !!memberStore.members.find(m => m.id == id)  // eslint-disable-line eqeqeq
-}
-function detailMemberName(id) {
-  const m = memberStore.members.find(x => x.id == id)  // eslint-disable-line eqeqeq
-  return m?.name || '用户不存在'
-}
 
 onMounted(async () => {
   // 主动 fetch 一次成员数据 (卷宗行渲染依赖 memberStore)
@@ -291,12 +173,6 @@ onMounted(async () => {
   padding: var(--space-4);
   box-shadow: var(--shadow-sm);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
-}
-
-.empty-hint {
-  color: var(--ws-fog, #8ba0a0);
-  padding: 12px 0;
-  font-size: 12.5px;
 }
 </style>
 
@@ -358,22 +234,6 @@ onMounted(async () => {
 .dossier-dialog .labtag { font-family: var(--ws-mono); font-size: 10px; color: var(--ws-steel); background: var(--ws-paper); border: 1px solid var(--ws-hair); border-radius: 3px; padding: 3px 8px 3px 9px; }
 .dossier-dialog .labtag.ok { color: var(--ws-teal); border-color: var(--ws-teal); background: var(--ws-teal-soft); }
 .dossier-dialog .labtag.ghost { color: var(--ws-fog); border-style: dashed; }
-
-/* --- 里程碑台账 (替 el-timeline) --- */
-.dossier-dialog .ms-ledger { border: 1px solid var(--ws-hair); border-radius: 8px; overflow: hidden; }
-.dossier-dialog .msrow { display: grid; grid-template-columns: 66px 1fr auto; gap: 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--ws-paper); font-size: 13px; }
-.dossier-dialog .msrow:last-child { border-bottom: none; }
-.dossier-dialog .msrow:hover { background: var(--ws-paper); }
-.dossier-dialog .msd { font-family: var(--ws-mono); font-size: 10.5px; color: var(--ws-fog); }
-.dossier-dialog .msc { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.dossier-dialog .msn { color: var(--ws-ink); font-weight: 500; }
-.dossier-dialog .msdesc { font-size: 11.5px; color: var(--ws-steel); }
-.dossier-dialog .mss { font-family: var(--ws-mono); font-size: 10px; letter-spacing: .08em; color: var(--ws-fog); }
-.dossier-dialog .msrow.done .msn { color: var(--ws-fog); text-decoration: line-through; }
-.dossier-dialog .msrow.done .mss { color: var(--ws-teal); }
-.dossier-dialog .msrow.late { background: rgba(239, 114, 86, 0.06); }
-.dossier-dialog .msrow.late .msd { color: var(--ws-coral); font-weight: 700; }
-.dossier-dialog .msrow.late .mss { color: var(--ws-coral); font-weight: 700; }
 
 /* --- 成员档案标本牌 (替渐变 hero) --- */
 .dossier-dialog .dlg-hero { display: flex; align-items: center; gap: 14px; padding: 4px 2px 12px; border-bottom: 1px dashed var(--ws-hair); margin-bottom: 4px; }
