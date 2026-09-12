@@ -1061,20 +1061,23 @@ function onImgLoad(ev) {
 const pptBlobMap = reactive({})
 const pptBlobCurrent = ref(null)
 let blobSeq = 0
+let pptActiveFid = null   // 批次⑩.78: 换文件后在途请求/重试按此失效, 防旧页图落进新文件缓存
 async function ensurePageBlob(fid, pageIdx, attempt = 0) {
-  if (fid == null || pptBlobMap[pageIdx]) return
+  if (fid == null || fid !== pptActiveFid || pptBlobMap[pageIdx]) return
   try {
     const resp = await axios.get(`/api/v1/drive/files/${fid}/pptx-pages/img-${pageIdx}`, { responseType: 'blob' })
+    if (fid !== pptActiveFid) return   // 响应抵达前已换文件 → 整包丢弃 (blob 缓存按页号键, 不可跨文件复用)
     pptBlobMap[pageIdx] = URL.createObjectURL(resp.data)
     if (pageIdx === pptPageClamped.value) pptBlobCurrent.value = pptBlobMap[pageIdx]
   } catch {
-    if (attempt < 4) setTimeout(() => ensurePageBlob(fid, pageIdx, attempt + 1), 1200 * (attempt + 1))
+    if (attempt < 4 && fid === pptActiveFid) setTimeout(() => ensurePageBlob(fid, pageIdx, attempt + 1), 1200 * (attempt + 1))
   }
 }
 async function refreshPptBlobs() {
   const fid = props.file?.id
   // 批次⑩.56 守卫: 非 ppt 或转换未就绪时绝不预取页图 (避免 404 刷屏)
   if (fid == null || previewKind.value !== 'ppt' || pptImgStatus.value !== 'ready') { pptBlobCurrent.value = null; return }
+  pptActiveFid = fid
   const seq = ++blobSeq
   const p = pptPageClamped.value
   await ensurePageBlob(fid, p)
@@ -1082,12 +1085,7 @@ async function refreshPptBlobs() {
   if (seq !== blobSeq) return
   pptBlobCurrent.value = pptBlobMap[p] || null
 }
-watch([fileStamp, previewKind], ([stamp]) => {
-  if (stamp != null) { revokePptBlobs(); revokeDocxBlobs() }  // 换文件/重传清旧 blob (⑩.71: docx 页图缓存也要清, 否则残留上一篇)
-})
-watch([fileStamp, previewKind, pptPageClamped, pptImgStatus], refreshPptBlobs, { immediate: true })
-
-function stopPptPoll() { if (pptPollTimer) { clearTimeout(pptPollTimer); pptPollTimer = null } }
+function stopPptPoll() { pptPollSeq++; if (pptPollTimer) { clearTimeout(pptPollTimer); pptPollTimer = null } }
 function startPptPoll(fid) {
   stopPptPoll()
   const seq = ++pptPollSeq
@@ -1095,6 +1093,7 @@ function startPptPoll(fid) {
     if (seq !== pptPollSeq) return
     try {
       const resp = await axios.get(`/api/v1/drive/files/${fid}/pptx-pages`)
+      if (seq !== pptPollSeq) return   // 批次⑩.78: 在途响应抵达前已换文件 → 旧 status/total 不得落状态
       const st = resp.data?.status
       window.__pptPoll = { status: st, total: resp.data?.total, n: (resp.data?.pages || []).length, t: Date.now() }
       if (st === 'ready') {
@@ -1115,12 +1114,24 @@ function startPptPoll(fid) {
   }
   tick()
 }
+function revokePptBlobs() {
+  for (const k of Object.keys(pptBlobMap)) { try { URL.revokeObjectURL(pptBlobMap[k]) } catch {} delete pptBlobMap[k] }
+  pptBlobCurrent.value = null
+}
+/* 批次⑩.78 根治: 换文件的状态重置 watcher 必须先于 refreshPptBlobs 注册 —
+   Vue pre-flush watcher 按创建顺序执行, 旧顺序里预取 watcher 先跑时 pptImgStatus
+   还是上一个文件的 'ready'/total, 就绪守卫被穿透, 新文件页图在 LibreOffice 转换
+   期间被抢跑预取 → 404 刷屏 (换文件瞬间 img 请求比首次轮询先到后端) */
 watch([fileStamp, previewKind], ([stamp, kind]) => {
   const fid = stamp == null ? null : Number(String(stamp).split(':')[0])
   stopPptPoll()
+  pptActiveFid = null
   pptPage.value = 1
   pptImgUrls.value = []
+  pptImgTotal.value = 0
   pptImgNat.value = null
+  pptImgError.value = ''
+  revokePptBlobs()
   if (kind === 'ppt' && fid != null) {
     pptImgStatus.value = 'loading'
     startPptPoll(fid)
@@ -1128,11 +1139,8 @@ watch([fileStamp, previewKind], ([stamp, kind]) => {
     pptImgStatus.value = 'idle'
   }
 }, { immediate: true })
-function revokePptBlobs() {
-  for (const k of Object.keys(pptBlobMap)) { try { URL.revokeObjectURL(pptBlobMap[k]) } catch {} delete pptBlobMap[k] }
-  pptBlobCurrent.value = null
-}
-onBeforeUnmount(() => { stopPptPoll(); pptPollSeq++; revokePptBlobs() })
+watch([fileStamp, previewKind, pptPageClamped, pptImgStatus], refreshPptBlobs, { immediate: true })
+onBeforeUnmount(() => { stopPptPoll(); revokePptBlobs() })
 
 /* ---- 批次⑩.53: DOCX 预览 (LibreOffice 管线复用, 常态首页竖版 / 全屏缩略图) ---- */
 const docxImgStatus = ref('idle')
@@ -1157,25 +1165,28 @@ function onDocxImgLoad(ev) {
 const docxBlobMap = reactive({})
 const docxBlobCurrent = ref(null)
 let docxBlobSeq = 0
+let docxActiveFid = null   // 批次⑩.78: 同 pptx — 换文件后在途请求/重试按此失效
 function docxThumbUrl(i) {
   return docxBlobMap[i] || ''
 }
 async function ensureDocxBlob(fid, pageIdx, attempt = 0) {
-  if (fid == null || docxBlobMap[pageIdx]) return
+  if (fid == null || fid !== docxActiveFid || docxBlobMap[pageIdx]) return
   try {
     const resp = await axios.get('/api/v1/drive/files/' + fid + '/' + pagedEndpoint.value + '/img-' + pageIdx, { responseType: 'blob' })
+    if (fid !== docxActiveFid) return   // 响应抵达前已换文件 → 整包丢弃 (blob 缓存按页号键, 不可跨文件复用)
     docxBlobMap[pageIdx] = URL.createObjectURL(resp.data)
     // 批次⑩.71: 拉到即挂载当前页 — 否则一次瞬时失败静默吞掉 → 永久黑屏无重试
     if (pageIdx === docxPageClamped.value) docxBlobCurrent.value = docxBlobMap[pageIdx]
   } catch {
     // 批次⑩.77: 404 多为上传后 updated_at 未稳定 (缩略图/RAG touch 使 key 轮换) — 拉长重试窗口盖住不稳定期
-    if (attempt < 4) setTimeout(() => ensureDocxBlob(fid, pageIdx, attempt + 1), 1200 * (attempt + 1))
+    if (attempt < 4 && fid === docxActiveFid) setTimeout(() => ensureDocxBlob(fid, pageIdx, attempt + 1), 1200 * (attempt + 1))
   }
 }
 async function refreshDocxBlobs() {
   const fid = props.file?.id
   // 批次⑩.56 守卫: 非 docx 或转换未就绪时绝不预取页图
   if (fid == null || !pagedKind.value || docxImgStatus.value !== 'ready') { docxBlobCurrent.value = null; return }
+  docxActiveFid = fid
   const seq = ++docxBlobSeq
   const pg = docxPageClamped.value
   await ensureDocxBlob(fid, pg)
@@ -1183,11 +1194,11 @@ async function refreshDocxBlobs() {
   if (seq !== docxBlobSeq) return
   docxBlobCurrent.value = docxBlobMap[pg] || null
 }
-watch([fileStamp, previewKind, docxPageClamped, docxImgStatus], refreshDocxBlobs, { immediate: true })
 
 let docxAllSeq = 0
 async function ensureAllDocxBlobs(fid) {
   if (fid == null) return
+  docxActiveFid = fid   // 批次⑩.78: 轮询 ready 早于 blob watcher 运行, 须先立 active fid 否则全量预取被守卫拦截
   const seq = ++docxAllSeq
   for (let i = 1; i <= docxImgTotalSafe.value; i++) {
     if (seq !== docxAllSeq) return
@@ -1195,7 +1206,7 @@ async function ensureAllDocxBlobs(fid) {
     await new Promise(r => setTimeout(r, 0))
   }
 }
-function stopDocxPoll() { if (docxPollTimer) { clearTimeout(docxPollTimer); docxPollTimer = null } }
+function stopDocxPoll() { docxPollSeq++; if (docxPollTimer) { clearTimeout(docxPollTimer); docxPollTimer = null } }
 function startDocxPoll(fid) {
   stopDocxPoll()
   const seq = ++docxPollSeq
@@ -1203,6 +1214,7 @@ function startDocxPoll(fid) {
     if (seq !== docxPollSeq) return
     try {
       const resp = await axios.get('/api/v1/drive/files/' + fid + '/' + pagedEndpoint.value)
+      if (seq !== docxPollSeq) return   // 批次⑩.78: 在途响应抵达前已换文件 → 旧 status/total 不得落状态
       const st = resp.data?.status
       if (st === 'ready') {
         docxImgStatus.value = 'ready'
@@ -1222,12 +1234,23 @@ function startDocxPoll(fid) {
   }
   tick()
 }
+function revokeDocxBlobs() {
+  for (const k of Object.keys(docxBlobMap)) { try { URL.revokeObjectURL(docxBlobMap[k]) } catch {} delete docxBlobMap[k] }
+  docxBlobCurrent.value = null
+}
+/* 批次⑩.78 根治 (与 pptx 同因): 换文件的状态重置 watcher 必须先于 refreshDocxBlobs 注册,
+   否则从 ready 的 docx/pdf 切到另一个时, 预取 watcher 仍读到上一个文件的 'ready'/total,
+   守卫被穿透, 新文件页图在转换期间被抢跑预取 → 404 刷屏 */
 watch([fileStamp, previewKind], ([stamp, kind]) => {
   const fid = stamp == null ? null : Number(String(stamp).split(':')[0])
   stopDocxPoll()
+  docxActiveFid = null
   docxPage.value = 1
   docxImgUrls.value = []
+  docxImgTotal.value = 0
   docxImgNat.value = null
+  docxImgError.value = ''
+  revokeDocxBlobs()
   if ((kind === 'docx' || kind === 'pdf') && fid != null) {
     docxImgStatus.value = 'loading'
     startDocxPoll(fid)
@@ -1235,11 +1258,8 @@ watch([fileStamp, previewKind], ([stamp, kind]) => {
     docxImgStatus.value = 'idle'
   }
 }, { immediate: true })
-function revokeDocxBlobs() {
-  for (const k of Object.keys(docxBlobMap)) { try { URL.revokeObjectURL(docxBlobMap[k]) } catch {} delete docxBlobMap[k] }
-  docxBlobCurrent.value = null
-}
-onBeforeUnmount(() => { stopDocxPoll(); docxPollSeq++; revokeDocxBlobs() })
+watch([fileStamp, previewKind, docxPageClamped, docxImgStatus], refreshDocxBlobs, { immediate: true })
+onBeforeUnmount(() => { stopDocxPoll(); revokeDocxBlobs() })
 
 /* ---- 批次⑩.65 (选型 D): XLSX 预览 — openpyxl JSON, 常态表头+前 8 行 / 全屏缓存全量 ---- */
 const XLSX_RAIL_ROWS = 8
