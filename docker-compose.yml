@@ -437,9 +437,11 @@ services:
     env_file:
       - .env
     mem_limit: 512m
-    # 2026-08-17 #Step1: 加 healthcheck (标准端口 8765 socket 探测)
+    # 2026-09-12 修 unhealthy: stdio 模式 MCP 服务永不监听 TCP (原探测 8765 端口永远
+    # connection refused), app 侧 VISION_MCP_TRANSPORT=stdio 自行拉起子进程。
+    # 改为 /proc 进程存活探测 (容器内已实测 exit=0)
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.settimeout(3); s.connect((\"localhost\", 8765)); s.close()' || exit 1"]
+      test: ["CMD-SHELL", "python -c 'import os,sys; sys.exit(0 if any(\"mcp_server.server\" in open(\"/proc/\"+p+\"/cmdline\",\"rb\").read().decode(errors=\"ignore\").replace(chr(0),\" \") for p in os.listdir(\"/proc\") if p.isdigit()) else 1)'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -472,9 +474,10 @@ services:
       - default
     # 2026-08-17 #Step1: 加 mem_limit (Django + Postgres + Redis 估算 ~500M)
     mem_limit: 1g
-    # 2026-08-17 #Step1: 加 healthcheck (GlitchTip 自带 /_health/ 端点)
+    # 2026-09-12 修 unhealthy: glitchtip 镜像无 wget (原命令 exit 127 恒失败), 而其
+    # /_health/ 端点实测 200 正常。改用镜像自带 python urllib 探测 (容器内已实测 exit=0)
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/_health/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/_health/', timeout=5)\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
