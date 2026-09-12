@@ -508,6 +508,8 @@ async function loadThumbnail() {
   // 触发条件: storage_mode=drive + thumbnail_status='ready' (其他状态不请求, 走 type icon fallback)
   if (props.file.storage_mode !== 'drive') return
   if (props.file.thumbnail_status !== 'ready') return
+  // 批次⑩.74: 回收站/已删除文件不拉缩略图 — 软删后接口 404, 只产生噪音请求
+  if (props.trashContext || props.file.deleted_at) return
   try {
     const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/thumbnail`)
     if (resp.data.thumbnail_url) {
