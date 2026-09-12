@@ -43,7 +43,7 @@ async def verify_license(
     """验证 License 有效性.
 
     Returns:
-        dict: {"valid": bool, "tier": str, "mode": "online"|"offline_grace"|"read_only"|"expired", "expires_at": datetime, "days_until_expiry": int}
+        dict: {"valid": bool, "tier": str, "mode": "online"|"offline_grace"|"read_only"|"expired"|"revoked", "expires_at": datetime, "days_until_expiry": int}
 
     Logic:
     - online=True 时:
@@ -53,6 +53,14 @@ async def verify_license(
     - online=False 时 (离线宽限):
       1. last_verified_at + 7 天 > now → mode="offline_grace"
       2. 超 7 天 → mode="read_only"
+
+    2026-09-12 修吊销复活 bug (w78 test_11 抓到):
+    - 旧版从不读 is_active, 且在线校验无条件 is_active=True → revoke_license
+      吊销后, 下一次在线 verify 就把 license 洗回有效, 吊销形同虚设。
+    - 现在: 未过期但 is_active=False → mode="revoked", valid=False 提前返回;
+      online 分支不再写 is_active (active license 保持 active, 无需重写)。
+    - 吊销与过期区分: 过期路径自己会置 is_active=False, 故先判过期再判吊销 —
+      过期 license 仍报 read_only/expired 语义, 只有"未过期却被吊销"才报 revoked。
     """
     if not license_key:
         raise ValidationException("license_key required")
@@ -81,10 +89,19 @@ async def verify_license(
             "reason": "license expired",
         }
 
+    if not lic.is_active:
+        # 未过期但已被 revoke_license 显式吊销 → 拒绝 (旧版漏判, 在线验证还会复活)
+        return {
+            "valid": False, "tier": lic.tier, "mode": "revoked",
+            "expires_at": expires, "days_until_expiry": days_until,
+            "reason": "license revoked",
+        }
+
     if online:
         # 在线校验 — 更新 last_verified_at
+        # (2026-09-12: 删 `lic.is_active = True` — 吊销复活 bug 根因;
+        #  走到这里必然 is_active=True, 无需重写)
         lic.last_verified_at = now
-        lic.is_active = True
         await db.flush()
         return {
             "valid": True, "tier": lic.tier, "mode": "online",
