@@ -156,6 +156,33 @@ class TestSource0Discipline:
         names, _ = _extract(msgs)
         assert names == ["韩重阳"]
 
+    def test_tool_input_quotes_stripped(self):
+        """模型把标题带引号传参 (title_keyword=\"互联网➕ppt制作\") →
+        注入锚点必须剥掉引号, 不能污染参数填写 (2026-09-12 生产回放实锤)。"""
+        msgs = [
+            {"role": "assistant",
+             "content": "最紧的是 \"互联网➕ppt制作\"，负责人 **韩重阳**。",
+             "tool_trace": {"trace": [
+                 {"type": "tool_use", "id": "t", "name": "query_tasks",
+                  "input": {"title_keyword": "\"互联网➕ppt制作\""}}]}},
+            {"role": "user", "content": "给这个任务加个备注。"},
+        ]
+        _, titles = _extract(msgs)
+        assert titles and all('"' not in t and "“" not in t for t in titles), titles
+
+    def test_count_phrases_not_titles(self):
+        """加粗计数短语 (\"7 项任务\"/\"2 项已完成\") 不是任务标题 —
+        session vtql §9 实测 titles=['7 项任务','2 项已完成'] 污染源。"""
+        msgs = [
+            {"role": "assistant",
+             "content": "陈天祥名下共 **7 项任务**，其中 5 项进行中、**2 项已完成**："
+                        "搭建膜法、电化学、超声及容器试剂等多种产泡系统。",
+             "tool_trace": {"trace": []}},
+            {"role": "user", "content": "这个任务加个备注。"},
+        ]
+        _, titles = _extract(msgs)
+        assert not any("项" in t and any(c.isdigit() for c in t) for t in titles), titles
+
 
 class TestTracePayloadObservability:
     """2026-09-12 补洞: _build_payload 此前漏装 Stage 3 观测字段 →

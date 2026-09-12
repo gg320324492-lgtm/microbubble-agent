@@ -1,18 +1,18 @@
 """会话上下文公共函数 (W98 P2-F 抽公共, 微信 + Web 统一调用)
 
-设计:
+设计 (2026-09-12 起 PG 单一事实源):
 - 复用 chat_history_service.list_messages (只读, 不改)
-- Redis 空 → PG 全量回填最近 N 条 (12 轮 = 24 条)
-- Redis 非空 → last_pg_id 增量回填 (session_meta 存 Redis hash)
+- 登录会话每轮从 PG 全量回填最近 N 条 (12 轮 = 24 条) 并镜像进 Redis
+  (旧 last_pg_id 增量分支结构性丢轮, 见 ensure_session_context 注释)
 - best-effort: 任何 PG/Redis 异常 → 返回现有 Redis 消息, 绝不阻塞 chat
-- user_id 为 None (匿名 webchat) → 不加载 DB 历史, 越权铁律
+- user_id 为 None (匿名 webchat) → 不加载 DB 历史, 越权铁律, 走纯 Redis
 
 对外函数:
     ensure_session_context(db, user_id, session_id) -> List[Dict]
         返回 [{"role": "user"/"assistant", "content": str}, ...]
 
     set_last_pg_id(session_id, message_id) -> None
-        写 Redis meta hash 的 last_pg_id (best-effort)
+        保留: micro_bubble_agent 导入 + last_turn meta 语义兼容, 不再参与回填
 """
 from __future__ import annotations
 
@@ -116,26 +116,21 @@ async def ensure_session_context(
         return redis_msgs
 
     try:
-        if redis_msgs:
-            last_pg_id = await _get_last_pg_id(session_id)
-            if last_pg_id:
-                new_msgs = await _fetch_pg_messages(
-                    db, user_id, session_id,
-                    after_id=last_pg_id,
-                    limit=SESSION_CONTEXT_MAX_MSGS,
-                )
-                if new_msgs:
-                    redis_msgs = redis_msgs + new_msgs
-                    await session_manager.save_messages(session_id, redis_msgs)
-            return redis_msgs
-
+        # 2026-09-12 P0 根治: 登录会话一律以 PG 为单一事实源全量回填最近窗口。
+        # 旧 "Redis 非空 → last_pg_id 增量" 分支有结构性丢轮 bug: chat_stream 只把
+        # 消息落 PG + 推进 last_pg_id, 从不写回 Redis — 上一轮 ensure 之后才持久化的
+        # 那一对 exchange (user + assistant) 既不在 Redis 里, 又被新游标跳过,
+        # 永久丢失。实测 session vtql §7 "他手上" 锚到陈天祥、§9 失忆答
+        # "找到 95 个相关任务", 全部由此 (模型看到的 history 少了最近一轮)。
+        # PG 表有 (session_id, id) 索引, 每轮多一次 24 行窗口查询成本可忽略。
         pg_msgs = await _fetch_pg_messages(
             db, user_id, session_id,
             after_id=0,
             limit=SESSION_CONTEXT_MAX_MSGS,
         )
         if pg_msgs:
-            await session_manager.save_messages(session_id, pg_msgs)
+            if pg_msgs != redis_msgs:
+                await session_manager.save_messages(session_id, pg_msgs)
             return pg_msgs
         return redis_msgs
     except Exception as e:

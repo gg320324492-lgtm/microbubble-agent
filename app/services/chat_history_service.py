@@ -293,6 +293,31 @@ async def list_messages(
     if not include_deleted:
         conditions.append(ChatMessage.is_deleted.is_(False))
 
+    # 2026-09-12 修复: page=1 且游标=0 的"全量首页"语义此前是 asc+limit =
+    # **最旧** page_size 条 — session_context 回填按"最近 N 条"复用它时,
+    # 长会话每轮模型只能看到最早 24 条, 最近轮次全被裁掉 (与注释语义相反)。
+    # 现在改为"取最新 page_size 条窗口, 仍正序返回" — offset 分页 (page>1)
+    # 与增量游标 (after_id>0) 保持老 asc 语义不变 (前端聊天分页依赖它)。
+    if page == 1 and after_id == 0 and not include_deleted:
+        sub = (
+            select(ChatMessage.id)
+            .where(and_(*conditions))
+            .order_by(desc(ChatMessage.id))
+            .limit(page_size + 1)
+        ).subquery()
+        stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.id.in_(select(sub.c.id)))
+            .order_by(asc(ChatMessage.id))
+        )
+        result = await db.execute(stmt)
+        msgs = list(result.scalars().all())
+        msgs.sort(key=lambda m: m.id)  # in_ 不保证顺序
+        has_more = len(msgs) > page_size
+        if has_more:
+            msgs = msgs[-page_size:]
+        return msgs, has_more
+
     # 多取 1 条判断 has_more
     stmt = (
         select(ChatMessage)

@@ -1875,7 +1875,11 @@ def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[
                 for k, v in tin.items():
                     if not isinstance(v, str) or not v.strip():
                         continue
-                    v = v.strip()
+                    # 引号统一剥掉: 模型有时把标题带引号传参 ("互联网ppt"), 注入时
+                    # 保留引号会污染锚定文本 (2026-09-12 回放 §7 titles 带 ASCII 引号)
+                    v = v.strip().strip("\"'“”‘’")
+                    if not v:
+                        continue
                     # 只信"用户看得见"的实体: 该轮回答为空或没提到这个值, 说明是
                     # 模型内部自查 (如 get_member_profile 试探), 不算上轮主题
                     if not content or v not in content:
@@ -1885,7 +1889,7 @@ def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[
                     elif (k in _title_keys and v not in tool_titles
                             # 疑问词/碎片不是标题 (stress4 实测 "几个" 被当标题注入)
                             and not re.search(r"哪|几|什么|多少|怎么|如何|谁|吗|呢", v)):
-                        tool_titles.append(v)
+                        tool_titles.append(v.strip("\"'“”‘’"))
         if len(content) < 8:
             continue
         scanned += 1
@@ -1898,10 +1902,12 @@ def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[
         if not titles:
             for pat in _LAST_RESP_PATTERNS:
                 for m in pat.findall(content):
-                    m = m.strip(" ：:*")
+                    m = m.strip(" ：:*\"'“”‘’")
                     if (m and m not in roster
                             and not any(s in m for s in _title_stop)
                             and not re.search(r"时间|截止|进度|状态|注[：:]|\d{4}", m)
+                            # 计数短语不是任务标题 ("7 项任务"/"2 项已完成" — 加粗样式误抓)
+                            and not re.match(r"^\d+\s*[项个条]", m)
                             and 2 <= len(m) <= 25 and m not in titles):
                         titles.append(m)
         if scanned >= 3:
