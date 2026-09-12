@@ -2719,15 +2719,13 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 /* —— 自评绿 chip 退场 (synthesis/retry/compressed 徽章保留) —— */
 [data-theme="dark"] .chat-immersive .event-badge-critique { display: none; }
-/* —— 操作行: tokens/耗时退场, 反馈按钮 icon-only 淡显 —— */
-[data-theme="dark"] .chat-immersive .mm-tokens,
-[data-theme="dark"] .chat-immersive .mm-duration { display: none; }
+/* —— 操作行: 批次⑩.71 选型 D 后时长改 mono 显示(双主题); tokens 已从模板移除;
+      反馈按钮双主题 icon-only —— */
 [data-theme="dark"] .chat-immersive .msg-meta { margin-top: 4px; }
-[data-theme="dark"] .chat-immersive .feedback-buttons { margin-top: 0; gap: 2px; }
-[data-theme="dark"] .chat-immersive .fb-label { display: none; }
-[data-theme="dark"] .chat-immersive .fb-btn { opacity: 0.55; background: transparent; }
-[data-theme="dark"] .chat-immersive .fb-btn:hover:not(:disabled) { opacity: 1; background: rgba(255, 255, 255, 0.05); }
-[data-theme="dark"] .chat-immersive .fb-btn.active { opacity: 1; }
+.chat-immersive .feedback-buttons { margin-top: 0; gap: 2px; }
+.chat-immersive .fb-label { display: none; }
+[data-theme="dark"] .chat-immersive .fb-btn { background: transparent; }
+[data-theme="dark"] .chat-immersive .fb-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.05); }
 /* —— 输入区: 24px 药丸 + 无硬阴影 + 圆形↑发送键 —— */
 [data-theme="dark"] .chat-immersive .input-core {
   border-radius: 24px !important;
