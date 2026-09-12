@@ -1623,6 +1623,37 @@ from pathlib import Path as FsPath
 
 _PPTX_CONVERT_LOCKS: dict = {}
 
+# 2026-09-12 修复 (组会PPT/李胜景 预览巡检诊断): LibreOffice 全局串行门 —
+# soffice headless 并发转换共享 profile 互相冲突, 随机 exit 1 写入 error.txt。
+# pptx/docx 两条管线共用这一把 Semaphore(1), soffice 全局同一时刻只跑一个。
+_LIBREOFFICE_GATE = threading.Semaphore(1)
+
+# 2026-09-12 修复: error.txt 600s TTL — 超过视为可重试, 清除后允许重转。
+# 旧实现 error.txt 永久粘滞: 一次性失败 (如上面的 soffice 并发冲突) 后
+# 同一缓存 key 永不重试, 只能等 updated_at 变化或人工清缓存。
+PREVIEW_ERROR_RETRY_SECONDS = 600
+
+
+def _preview_error_if_fresh(cache_dir: FsPath) -> str | None:
+    """error.txt 存在且未过期 → 返回错误消息; 过期 → 删除并返回 None (允许重转)"""
+    p = cache_dir / "error.txt"
+    if not p.exists():
+        return None
+    try:
+        age = _time.time() - p.stat().st_mtime
+    except OSError:
+        return None
+    if age < PREVIEW_ERROR_RETRY_SECONDS:
+        try:
+            return p.read_text(encoding="utf-8", errors="replace")[:200]
+        except OSError:
+            return None
+    try:
+        p.unlink()
+    except OSError:
+        pass
+    return None
+
 
 def _pptx_cache_dir(file_id: int, key: str) -> FsPath:
     d = FsPath("/app/data/pptx_pages") / ("%d_%s" % (file_id, key))
@@ -1630,7 +1661,6 @@ def _pptx_cache_dir(file_id: int, key: str) -> FsPath:
 
 
 def _pptx_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
-    loop_backup = None
     try:
         cache_dir.mkdir(parents=True, exist_ok=True)
         tmp = FsPath("/tmp") / ("pptx_conv_%d_%s" % (file_id, key[:8]))
@@ -1640,10 +1670,16 @@ def _pptx_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: st
         data = FsPath(src_path).read_bytes()
         (tmp / "in.pptx").write_bytes(data)
 
-        subprocess.run(
-            ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(tmp), str(tmp / "in.pptx")],
-            check=True, timeout=600,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # 2026-09-12: 全局串行 + 独立 profile, 双保险防 soffice 并发冲突
+        _LIBREOFFICE_GATE.acquire()
+        try:
+            subprocess.run(
+                ["soffice", "-env:UserInstallation=file:///tmp/lo_pptx_profile",
+                 "--headless", "--convert-to", "pdf", "--outdir", str(tmp), str(tmp / "in.pptx")],
+                check=True, timeout=600,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        finally:
+            _LIBREOFFICE_GATE.release()
 
         pdf = tmp / "in.pdf"
         subprocess.run(
@@ -1663,12 +1699,9 @@ def _pptx_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: st
             (cache_dir / "error.txt").write_text(str(e)[:500])
         except Exception:
             pass
-        try:
-            lock = _PPTX_CONVERT_LOCKS.get(key)
-            if lock:
-                lock.acquire(); lock.release()
-        except Exception:
-            pass
+        # 2026-09-12: 删除旧失败分支的 lock.acquire/release — 端点线程持锁永不释放,
+        # worker 再 acquire 同一把锁会永久阻塞 → finally 不执行 → 锁表 key 永不清理,
+        # 该文件预览永远卡 converting (须重启进程)。
     finally:
         _PPTX_CONVERT_LOCKS.pop(key, None)
 
@@ -1699,22 +1732,30 @@ async def get_pptx_pages_status(
             total = 0
         return {"status": "ready", "total": total,
                 "pages": [f"/api/v1/drive/files/{file_id}/pptx-pages/img-{i}" for i in range(1, total + 1)]}
-    if (cache_dir / "error.txt").exists():
-        return {"status": "error", "message": (cache_dir / "error.txt").read_text()[:200]}
+    err = _preview_error_if_fresh(cache_dir)
+    if err is not None:
+        return {"status": "error", "message": err}
 
-    lock = _PPTX_CONVERT_LOCKS.get(key)
-    if lock is not None and lock.locked():
+    # 2026-09-12: 与 xlsx/zip-preview 同款锁模式 (setdefault + 非阻塞 acquire) —
+    # 旧实现端点 acquire 后永不释放, worker 失败再 acquire 死锁, key 永卡 converting。
+    lock = _PPTX_CONVERT_LOCKS.setdefault(key, threading.Lock())
+    if not lock.acquire(blocking=False):
         return {"status": "converting"}
-
-    lock = threading.Lock()
-    _PPTX_CONVERT_LOCKS[key] = lock
-    lock.acquire()
-    tmp = FsPath("/tmp") / ("pptx_conv_%d_%s" % (file_id, key[:8]))
-    src = FsPath("/tmp") / ("pptx_src_%d.pptx" % file_id)
-    if not src.exists():
-        raw = await file_service.download_file(f.file_path)
-        src.parent.mkdir(parents=True, exist_ok=True)
-        src.write_bytes(raw)
+    try:
+        src = FsPath("/tmp") / ("pptx_src_%d.pptx" % file_id)
+        if not src.exists():
+            raw = await file_service.download_file(f.file_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            src.write_bytes(raw)
+    except Exception as e:
+        logger.error("[pptx-pages] file=%d 源文件下载失败: %s", file_id, e)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / "error.txt").write_text(str(e)[:500])
+        except Exception:
+            pass
+        _PPTX_CONVERT_LOCKS.pop(key, None)
+        return {"status": "error", "message": str(e)[:200]}
     th = threading.Thread(target=_pptx_convert_worker,
                           args=(file_id, str(src), cache_dir, key), daemon=True)
     th.start()
@@ -1761,11 +1802,16 @@ def _docx_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: st
         data = FsPath(src_path).read_bytes()
         (tmp / "in.docx").write_bytes(data)
 
-        subprocess.run(
-            ["soffice", "-env:UserInstallation=file:///tmp/lo_docx_profile",
-             "--headless", "--convert-to", "pdf", "--outdir", str(tmp), str(tmp / "in.docx")],
-            check=True, timeout=600,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # 2026-09-12: 全局串行门 (与 pptx 共用) — 固定 profile 并发同样冲突
+        _LIBREOFFICE_GATE.acquire()
+        try:
+            subprocess.run(
+                ["soffice", "-env:UserInstallation=file:///tmp/lo_docx_profile",
+                 "--headless", "--convert-to", "pdf", "--outdir", str(tmp), str(tmp / "in.docx")],
+                check=True, timeout=600,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        finally:
+            _LIBREOFFICE_GATE.release()
 
         pdf = tmp / "in.pdf"
         shutil.copy(str(pdf), str(cache_dir / "doc.pdf"))  # 全屏连页阅读用
@@ -1786,12 +1832,7 @@ def _docx_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: st
             (cache_dir / "error.txt").write_text(str(e)[:500])
         except Exception:
             pass
-        try:
-            lock = _DOCX_CONVERT_LOCKS.get(key)
-            if lock:
-                lock.acquire(); lock.release()
-        except Exception:
-            pass
+        # 2026-09-12: 删除旧失败分支的 lock.acquire/release 死锁代码 (同 pptx)
     finally:
         _DOCX_CONVERT_LOCKS.pop(key, None)
 
@@ -1822,22 +1863,29 @@ async def get_docx_pages_status(
             total = 0
         return {"status": "ready", "total": total,
                 "pages": [f"/api/v1/drive/files/{file_id}/docx-pages/img-{i}" for i in range(1, total + 1)]}
-    if (cache_dir / "error.txt").exists():
-        return {"status": "error", "message": (cache_dir / "error.txt").read_text()[:200]}
+    err = _preview_error_if_fresh(cache_dir)
+    if err is not None:
+        return {"status": "error", "message": err}
 
-    lock = _DOCX_CONVERT_LOCKS.get(key)
-    if lock is not None and lock.locked():
+    # 2026-09-12: setdefault + 非阻塞 acquire 锁模式 (同 pptx, 修死锁)
+    lock = _DOCX_CONVERT_LOCKS.setdefault(key, threading.Lock())
+    if not lock.acquire(blocking=False):
         return {"status": "converting"}
-
-    lock = threading.Lock()
-    _DOCX_CONVERT_LOCKS[key] = lock
-    lock.acquire()
-    tmp = FsPath("/tmp") / ("docx_conv_%d_%s" % (file_id, key[:8]))
-    src = FsPath("/tmp") / ("docx_src_%d.docx" % file_id)
-    if not src.exists():
-        raw = await file_service.download_file(f.file_path)
-        src.parent.mkdir(parents=True, exist_ok=True)
-        src.write_bytes(raw)
+    try:
+        src = FsPath("/tmp") / ("docx_src_%d.docx" % file_id)
+        if not src.exists():
+            raw = await file_service.download_file(f.file_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            src.write_bytes(raw)
+    except Exception as e:
+        logger.error("[docx-pages] file=%d 源文件下载失败: %s", file_id, e)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / "error.txt").write_text(str(e)[:500])
+        except Exception:
+            pass
+        _DOCX_CONVERT_LOCKS.pop(key, None)
+        return {"status": "error", "message": str(e)[:200]}
     th = threading.Thread(target=_docx_convert_worker,
                           args=(file_id, str(src), cache_dir, key), daemon=True)
     th.start()
@@ -1910,12 +1958,7 @@ def _pdf_convert_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str
             (cache_dir / "error.txt").write_text(str(e)[:500])
         except Exception:
             pass
-        try:
-            lock = _PDF_CONVERT_LOCKS.get(key)
-            if lock:
-                lock.acquire(); lock.release()
-        except Exception:
-            pass
+        # 2026-09-12: 删除旧失败分支的 lock.acquire/release 死锁代码 (同 pptx)
     finally:
         _PDF_CONVERT_LOCKS.pop(key, None)
 
@@ -1946,21 +1989,29 @@ async def get_pdf_pages_status(
             total = 0
         return {"status": "ready", "total": total,
                 "pages": [f"/api/v1/drive/files/{file_id}/pdf-pages/img-{i}" for i in range(1, total + 1)]}
-    if (cache_dir / "error.txt").exists():
-        return {"status": "error", "message": (cache_dir / "error.txt").read_text()[:200]}
+    err = _preview_error_if_fresh(cache_dir)
+    if err is not None:
+        return {"status": "error", "message": err}
 
-    lock = _PDF_CONVERT_LOCKS.get(key)
-    if lock is not None and lock.locked():
+    # 2026-09-12: setdefault + 非阻塞 acquire 锁模式 (同 pptx, 修死锁)
+    lock = _PDF_CONVERT_LOCKS.setdefault(key, threading.Lock())
+    if not lock.acquire(blocking=False):
         return {"status": "converting"}
-
-    lock = threading.Lock()
-    _PDF_CONVERT_LOCKS[key] = lock
-    lock.acquire()
-    src = FsPath("/tmp") / ("pdf_src_%d.pdf" % file_id)
-    if not src.exists():
-        raw = await file_service.download_file(f.file_path)
-        src.parent.mkdir(parents=True, exist_ok=True)
-        src.write_bytes(raw)
+    try:
+        src = FsPath("/tmp") / ("pdf_src_%d.pdf" % file_id)
+        if not src.exists():
+            raw = await file_service.download_file(f.file_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            src.write_bytes(raw)
+    except Exception as e:
+        logger.error("[pdf-pages] file=%d 源文件下载失败: %s", file_id, e)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / "error.txt").write_text(str(e)[:500])
+        except Exception:
+            pass
+        _PDF_CONVERT_LOCKS.pop(key, None)
+        return {"status": "error", "message": str(e)[:200]}
     th = threading.Thread(target=_pdf_convert_worker,
                           args=(file_id, str(src), cache_dir, key), daemon=True)
     th.start()
@@ -2116,9 +2167,9 @@ async def get_xlsx_preview_status(
         except Exception:
             return {"status": "converting"}   # 半写/损坏 (原子写后应罕见) → 下轮重读
         return {"status": "ready", "sheets": _slice_xlsx_sheets(data.get("sheets", []), max_rows)}
-    if (cache_dir / "error.txt").exists():
-        return {"status": "error",
-                "message": (cache_dir / "error.txt").read_text(encoding="utf-8")[:200]}
+    err = _preview_error_if_fresh(cache_dir)
+    if err is not None:
+        return {"status": "error", "message": err}
 
     lock = _XLSX_PREVIEW_LOCKS.setdefault(key, threading.Lock())
     if not lock.acquire(blocking=False):
@@ -2232,9 +2283,9 @@ async def get_zip_list(
         except Exception:
             return {"status": "converting"}   # 半写/损坏 (原子写后应罕见) → 下轮重读
         return {"status": "ready", **data}
-    if (cache_dir / "error.txt").exists():
-        return {"status": "error",
-                "message": (cache_dir / "error.txt").read_text(encoding="utf-8")[:200]}
+    err = _preview_error_if_fresh(cache_dir)
+    if err is not None:
+        return {"status": "error", "message": err}
 
     lock = _ZIP_PREVIEW_LOCKS.setdefault(key, threading.Lock())
     if not lock.acquire(blocking=False):
