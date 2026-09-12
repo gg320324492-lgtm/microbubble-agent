@@ -1266,16 +1266,39 @@ export function useChatStream() {
   // --------------------------------------------------------------------------
   let playingAudio: HTMLAudioElement | null = null
 
+  // 批次⑩.73 fix: TTS 前剥离 markdown 语法 — 否则加粗 ** 会朗读成「星号星号」,
+  // 表格竖线/标题#/链接 URL 等也会被逐字念出
+  function stripMarkdownForTTS(md: string): string {
+    return md
+      .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?/g, ''))
+      .replace(/`([^`]*)`/g, '$1')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1')
+      .replace(/(\*\*\*|___)(.+?)\1/g, '$2')
+      .replace(/(\*\*|__)(.+?)\1/g, '$2')
+      .replace(/(\*|_)([^*_\n]+?)\1/g, '$2')
+      .replace(/~~(.+?)~~/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^>\s?/gm, '')
+      .replace(/^\s*[-*+]\s+/gm, '')
+      .replace(/^\|[\s:|-]+\|$/gm, '')
+      .replace(/\|/g, ' ')
+      .replace(/^-{3,}\s*$/gm, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
   async function playTTS(text: string) {
     if (!text) return
     if (playingAudio) {
       playingAudio.pause()
       playingAudio = null
     }
+    const cleaned = stripMarkdownForTTS(text) || text
     try {
       const r = await axios.post(
         '/api/v1/voice/tts',
-        { text, voice: 'zh_female' },
+        { text: cleaned, voice: 'zh_female' },
         { responseType: 'blob' }
       )
       const url = URL.createObjectURL(r.data)
