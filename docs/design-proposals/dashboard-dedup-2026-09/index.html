@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仪表盘 × 任务管理 去重 · 4 方案 (保持现有 UI)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --danger: #A3543F;
+    --hair: rgba(22,35,42,.12); --dim: #9AA4A0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1360px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+  .premise { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.9; color: var(--txt2); }
+  .premise b { color: var(--txt); }
+
+  .opt { margin-bottom: 32px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h h2 { font-size: 16px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+  .opt-notes { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 11.5px; line-height: 1.8; }
+  .opt-notes span.pro { color: #2E8B62; } .opt-notes span.con { color: #B4823C; }
+
+  /* 页面框架 */
+  .page { background: var(--paper); border: 1px solid rgba(22,35,42,.18); border-radius: 14px; overflow: hidden; }
+  .pbody { padding: 18px 22px 22px; }
+  .badge-row { display: flex; gap: 8px; margin: 8px 0 14px; flex-wrap: wrap; }
+  .bdg { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; padding: 3px 9px; border-radius: 5px; }
+  .keep { background: rgba(46,139,98,.1); color: #2E8B62; border: 1px solid rgba(46,139,98,.3); }
+  .cut { background: rgba(180,130,60,.1); color: #B4823C; border: 1px dashed rgba(180,130,60,.5); }
+  .del { background: rgba(163,84,63,.1); color: var(--danger); border: 1px solid rgba(163,84,63,.35); text-decoration: line-through; }
+
+  /* dashboard 元素 (现状还原) */
+  .hero { background: var(--card); border: 1px solid var(--hair); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; display: flex; align-items: center; gap: 16px; }
+  .hi { font-size: 17px; font-weight: 700; }
+  .dt { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; color: var(--dim); margin-top: 4px; }
+  .pets { margin-left: auto; display: flex; gap: 10px; }
+  .pet { width: 46px; height: 52px; border-radius: 10px 10px 4px 4px; background: linear-gradient(180deg,#dcece5,#f2f7f5); border: 1px solid var(--hair); display: flex; align-items: flex-end; justify-content: center; font-size: 20px; padding-bottom: 4px; }
+  .herobtn { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 8px 15px; border-radius: 999px; background: var(--ink); color: #FBFCFB; font-weight: 600; align-self: flex-start; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 14px; }
+  .stat-card { background: var(--card); border: 1px solid var(--hair); border-radius: 12px; padding: 13px 16px; }
+  .stat-label { font-family: var(--mono); font-size: 8px; letter-spacing: .14em; color: var(--dim); }
+  .stat-value { font-size: 24px; font-weight: 700; margin: 4px 0 6px; }
+  .v-teal { color: var(--teal); } .v-green { color: #3d7a3d; } .v-coral { color: var(--danger); }
+  .stat-hint { font-size: 10px; color: var(--dim); }
+  .card-sec { background: var(--card); border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; }
+  .card-head { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--hair); margin-bottom: 6px; }
+  .card-title { font-size: 12.5px; font-weight: 650; }
+  .sec-no { color: var(--teal); }
+  .view-all { margin-left: auto; font-size: 10.5px; color: var(--teal); }
+  .gh { display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px; }
+  .av { width: 22px; height: 22px; border-radius: 999px; background: linear-gradient(135deg,#5b8def,#8b5cf6); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+  .gn { font-size: 11px; font-weight: 600; color: var(--ink); }
+  .gc { font-family: var(--mono); font-size: 8.5px; color: var(--dim); }
+  .trow { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; }
+  .tick { width: 15px; height: 15px; border-radius: 999px; border: 1.5px solid #8fa0aa; flex-shrink: 0; }
+  .tt { font-size: 11.5px; color: var(--ink); }
+  .tm { font-family: var(--mono); font-size: 8.5px; color: var(--dim); margin-left: auto; }
+  .chip { font-size: 8.5px; padding: 1px 7px; border-radius: 5px; border: 1px solid rgba(22,35,42,.16); color: #5b6870; }
+  .chip.hot { border-color: rgba(163,84,63,.45); color: var(--danger); background: rgba(163,84,63,.07); }
+  .ghostact { font-size: 10px; color: #5b6870; border: none; background: transparent; padding: 2px 6px; }
+  .ghostact.hov { background: rgba(22,35,42,.07); color: var(--teal); }
+  .ghostact.danger { color: var(--danger); }
+
+  /* 任务管理页缩略 (D 用) */
+  .thead { background: var(--card); border: 1.5px solid var(--ink); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; box-shadow: 3px 3px 0 rgba(22,35,42,.08); }
+  .thead .tt2 { font-size: 15px; font-weight: 700; }
+  .thead .stats { display: flex; gap: 14px; font-size: 11px; margin-top: 6px; }
+  .thead .b { color: var(--teal); font-weight: 700; }
+  .thead .g { color: #3d7a3d; font-weight: 700; }
+
+  .legendbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .legendbox b { color: var(--txt); }
+  .legendbox code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>仪表盘 × 任务管理 去重 · 4 方案（保持现有 UI，只动内容归属）</h1>
+  <p class="sub">前提约束：<b>两页的视觉风格、布局语言全部不动</b>，只决定「哪块内容从哪页删除/搬家」。四案按改动量从小到大排列。</p>
+
+  <div class="premise">
+    <b>重复内容（三块）</b>：① 进行中任务列表（按负责人分组，两页几乎一样）　② 统计（仪表盘三卡 vs 任务页头部一行）　③ 创建/编辑任务对话框（仪表盘两套 vs 任务页一套）。<b>仪表盘独有</b>：问候 hero、兔子宠物、开始对话入口、时间。<b>任务页独有</b>：筛选器、垃圾桶、批量、编辑模式。
+  </div>
+
+  <!-- ═══ 1 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">1</span><h2>仪表盘瘦身 · 删「进行中任务」块</h2><span class="desc">改动最小：纯删除代码，TaskView 一行不动</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="badge-row"><span class="bdg keep">保留 hero + 宠物 + 开始对话</span><span class="bdg keep">保留 统计三卡（点击跳任务页）</span><span class="bdg del">删除 进行中任务列表块</span><span class="bdg del">删除 两套任务对话框</span></div>
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20 · MB-LAB DAILY</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn">💬 开始对话</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">IN PROGRESS</div><div class="stat-value v-teal">17</div><div class="stat-hint">任务执行中</div></div>
+          <div class="stat-card"><div class="stat-label">DONE</div><div class="stat-value v-green">72</div><div class="stat-hint">累计完成 · 9 人贡献</div></div>
+          <div class="stat-card"><div class="stat-label">OVERDUE</div><div class="stat-value v-coral">2</div><div class="stat-hint">点击查看逾期任务 →</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--dim);padding:6px 4px">（「进行中任务」整块已删除 —— 此处不再有任务列表）</div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 改动最小：删一个 section + 两套对话框，TaskView 零改动</span><span class="pro">✓ 三卡保留且本来就带跳转，数字仍有意义</span><span class="con">✗ 仪表盘剩余内容偏薄（hero + 三卡）</span></div>
+  </div>
+
+  <!-- ═══ 2 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">2</span><h2>仪表盘预览化 · 列表降级为只读预览</h2><span class="desc">列表保留（页面不空）但去掉 ✓完成/编辑按钮和对话框 —— 操作只在任务页做</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="badge-row"><span class="bdg keep">保留 hero + 宠物 + 三卡 + 列表</span><span class="bdg cut">列表去操作按钮（✓完成/编辑 移除）</span><span class="bdg del">删除 两套任务对话框</span></div>
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20 · MB-LAB DAILY</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn">💬 开始对话</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">IN PROGRESS</div><div class="stat-value v-teal">17</div><div class="stat-hint">任务执行中</div></div>
+          <div class="stat-card"><div class="stat-label">DONE</div><div class="stat-value v-green">72</div><div class="stat-hint">累计完成 · 9 人贡献</div></div>
+          <div class="stat-card"><div class="stat-label">OVERDUE</div><div class="stat-value v-coral">2</div><div class="stat-hint">点击查看逾期任务 →</div></div>
+        </div>
+        <div class="card-sec">
+          <div class="card-head"><span class="card-title"><span class="sec-no" style="color:var(--teal)">§</span> 进行中任务</span><span style="font-size:10px;color:var(--dim);margin-left:auto">只读预览 · 操作请到任务管理 →</span></div>
+          <div class="gh"><span class="av">天</span><span class="gn">王五</span><span class="gc">2 项</span></div>
+          <div class="trow"><span class="tick"></span><span class="tt">模拟任务</span><span class="chip hot">逾期 1 天</span><span class="tm">09-11</span></div>
+          <div class="trow"><span class="tick"></span><span class="tt">测试腾讯会议与听会是否冲突</span><span class="chip">中</span><span class="tm">09-15</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 页面保持丰满，仪表盘定位为「扫一眼的预览」</span><span class="pro">✓ 消除操作重复（完成/编辑只在任务页）</span><span class="con">✗ 列表内容本身仍与任务页重复</span></div>
+  </div>
+
+  <!-- ═══ 3 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">3</span><h2>互补切片 · 换成「今日到期 + 逾期」</h2><span class="desc">删全量「进行中」列表，换成任务页没有的切片：逾期 + 今日/明日到期（数量少，保留 ✓ 完成直操作）</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="badge-row"><span class="bdg keep">保留 hero + 宠物 + 三卡</span><span class="bdg del">删除 进行中任务列表块</span><span class="bdg keep">新增 需要今天处理的切片（可勾选）</span><span class="bdg del">删除 两套任务对话框</span></div>
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20 · MB-LAB DAILY</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn">💬 开始对话</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">IN PROGRESS</div><div class="stat-value v-teal">17</div><div class="stat-hint">任务执行中</div></div>
+          <div class="stat-card"><div class="stat-label">DONE</div><div class="stat-value v-green">72</div><div class="stat-hint">累计完成 · 9 人贡献</div></div>
+          <div class="stat-card"><div class="stat-label">OVERDUE</div><div class="stat-value v-coral">2</div><div class="stat-hint">点击查看逾期任务 →</div></div>
+        </div>
+        <div class="card-sec">
+          <div class="card-head"><span class="card-title"><span class="sec-no" style="color:var(--teal)">§</span> 需要今天处理</span><span style="font-size:10px;color:var(--dim);margin-left:auto">逾期 + 今日/明日到期 · 完成后自动消失</span></div>
+          <div class="trow" style="border:1px solid rgba(163,84,63,.25);margin-bottom:6px"><span class="tick"></span><span class="tt">模拟任务</span><span class="chip hot">逾期 1 天</span></div>
+          <div class="trow" style="border:1px solid rgba(22,35,42,.08);margin-bottom:6px"><span class="tick"></span><span class="tt">准备组会汇报 PPT</span><span class="tm">今日到期</span></div>
+          <div class="trow" style="border:1px solid rgba(22,35,42,.08)"><span class="tick"></span><span class="tt">回复审稿意见</span><span class="tm">今日到期</span></div>
+          <div style="font-size:10px;color:var(--dim);padding:8px 4px 0">全部任务请在「任务管理」页查看 →</div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 两页彻底互补：仪表盘=需要马上看的少数，任务页=全量管理</span><span class="pro">✓ 保留少量直操作（勾选完成），仪表盘不是纯预览</span><span class="con">✗ 换了切片视角，与现状差异比 1/2 大一点</span></div>
+  </div>
+
+  <!-- ═══ 4 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">4</span><h2>废除仪表盘 · hero 迁入任务页</h2><span class="desc">导航「仪表盘」直达任务管理；问候+宠物+开始对话变成任务页顶部欢迎条。页面数 -1</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="badge-row"><span class="bdg keep">hero + 宠物 + 开始对话 迁入任务页顶部</span><span class="bdg keep">统计三卡 → 任务页头部已有，不重复迁移</span><span class="bdg del">仪表盘路由与页面废除</span></div>
+        <div class="hero">
+          <div><div class="hi">下午好，Fable · 17 进行中 · 2 逾期</div><div class="dt">2026-09-12 FRI · 19:20 · TASK DOSSIER</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn">💬 开始对话</span>
+        </div>
+        <div class="thead">
+          <div class="tt2">任务管理</div>
+          <div class="stats"><span><span class="b">17</span> 进行中</span><span><span class="g">72</span> 已完成</span><span>89 总计</span></div>
+        </div>
+        <div class="card-sec">
+          <div class="gh"><span class="av">天</span><span class="gn">王五</span><span class="gc">3 项</span></div>
+          <div class="trow"><span class="tick"></span><span class="tt">模拟任务</span><span class="chip hot">逾期 1 天</span><span class="tm">09-11</span><span class="ghostact danger" style="margin-left:6px">删除</span></div>
+          <div class="trow"><span class="tick"></span><span class="tt">测试腾讯会议与听会是否冲突</span><span class="chip">中</span><span class="tm">09-15</span><span class="ghostact hov" style="margin-left:6px">编辑</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 页面数 -1，重复从根上消失，导航更短</span><span class="pro">✓ hero 问候保留（统计三卡不迁移，任务页头部已有同款）</span><span class="con">✗ 侧栏少一个入口；未来想要独立简报页需要再建</span></div>
+  </div>
+
+  <div class="legendbox">
+    <b>选择参考</b>：怕麻烦 → <b>1</b>（纯删除）；想保留页面丰满度 → <b>2</b>（只读预览）；想要两页互补且仪表盘仍有用 → <b>3</b>（今日切片，推荐）；觉得仪表盘没必要 → <b>4</b>（合并）。<br>
+    <b>实施位置</b>：全部只改 <code>Dashboard.vue</code>（1/2/3 号案的删除与调整都在这一个文件；4 号案额外改 <code>TaskView.vue</code> 顶部 + 路由/侧栏）。TaskView 在 1/2/3 号案中零改动。
+  </div>
+</div>
+</body>
+</html>
