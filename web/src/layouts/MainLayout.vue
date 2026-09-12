@@ -181,16 +181,16 @@ import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 import NotificationBell from '@/components/common/NotificationBell.vue'
 // 2026-07-12: 删除 Bell icon import (旧任务到期提醒铃铛已删除，统一走 NotificationBell)
 // 2026-09-04 G 稿: 删除 DataBoard import (项目动态升格为档案印章, 桌面侧栏改走 LayoutIconSprite #i-board)
-import { ArrowRight, Aim, Odometer, Cpu, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowRight, Aim, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files, SwitchButton } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
 // v78: 删除 mic 别名 (声纹已合并到 /workspace 走 Files 图标)
 // W86 mini batch 1: 删除 Odometer 别名 (KB 监控入口已合入项目动态 TabStrip, 不再走侧栏)
-// 2026-09-03: W86 误删 Odometer — /dashboard meta.icon 仍是 Odometer, 侧栏图标空白;
-//             同时补 Cpu (/dft meta.icon, 从未注册过). 删别名前必须 grep router meta.icon
+// 2026-09-03: W86 误删 Odometer — /dashboard meta.icon 仍是 Odometer, 侧栏图标空白. 删别名前必须 grep router meta.icon
+// 2026-09-13: 删除 Cpu (DFT/MD 计算已拆为独立项目, /dft 路由与侧栏入口一并移除)
 const iconMap = {
-  Odometer, Cpu,
+  Odometer,
   ChatDotRound, List, VideoCamera, Folder,
   User, Document, Memo, Setting, Files,
 }
@@ -258,7 +258,7 @@ const menuRoutes = computed(() => {
 // 分组前端硬编码 (G 稿 notes 既定策略), 后续需要再提 route meta.group
 const MENU_GROUPS = [
   { label: 'FRONT MATTER · 卷首', paths: ['dashboard'] },
-  { label: 'RESEARCH · 研究', paths: ['tasks', 'meetings', 'knowledge', 'dft'] },
+  { label: 'RESEARCH · 研究', paths: ['tasks', 'meetings', 'knowledge'] },
   { label: 'COLLAB · 协作', paths: ['chat', 'workspace', 'drive'] },
   { label: 'SYSTEM · 系统', paths: ['settings'] },
 ]
@@ -266,7 +266,7 @@ const MENU_GROUPS = [
 const iconId = {
   Odometer: 'i-gauge', ChatDotRound: 'i-chat', List: 'i-list',
   VideoCamera: 'i-camera', Files: 'i-files', Document: 'i-doc',
-  Folder: 'i-folder', Setting: 'i-sliders', Cpu: 'i-cpu',
+  Folder: 'i-folder', Setting: 'i-sliders',
 }
 // 侧栏计数徽标 (轻量只读, 拉取失败静默不显示; 勿与 /dashboard/stats 页内数据混用)
 const counts = ref({ tasksInProgress: null, knowledgeTotal: null })

@@ -63,7 +63,6 @@ MEMBER_FK_COLUMNS: tuple[tuple[str, str], ...] = (
     ("team_folders", "owner_id"),
     ("team_folder_audit_log", "actor_id"),
     ("drive_chunked_uploads", "user_id"),
-    ("dft_jobs", "user_id"),
     ("chat_session_attached_documents", "user_id"),
     ("research_task", "created_by_user_id"),
 )
