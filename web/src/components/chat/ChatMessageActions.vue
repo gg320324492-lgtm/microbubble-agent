@@ -166,16 +166,16 @@ function onCopyClick() {
   color: var(--color-primary, #ff7a5c);
 }
 
-/* 批次⑩.71 选型 D「文字胶囊」: 桌面端操作 = 描边小胶囊 (图标+中文标签),
-   与头部 chip / 编辑窗药丸同语言; hover 统一转墨青。 */
+/* 批次⑩.73 选型 B「幽灵文字钮」: 桌面端操作 = 无框灰字 (图标+标签直接坐在纸面上),
+   hover 才显浅灰底 + 墨青字; 暗色 hover 转青亮。替代上轮重描边胶囊。 */
 .chat-message-actions.mode-desktop .action-btn {
   height: 26px;
-  padding: 0 11px;
+  padding: 0 8px;
   gap: 5px;
-  border-radius: 999px;
-  border-color: var(--dossier-line, rgba(22, 35, 42, 0.2));
-  background: var(--color-bg-card, #ffffff);
-  color: var(--color-text-regular, #606266);
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary, #909399);
 }
 .chat-message-actions.mode-desktop .action-text {
   font-size: 11.5px;
@@ -183,18 +183,15 @@ function onCopyClick() {
   white-space: nowrap;
 }
 .chat-message-actions.mode-desktop .action-btn:hover:not(:disabled) {
-  background-color: rgba(14, 118, 110, 0.06);
-  border-color: #0e766e;
+  background-color: rgba(22, 35, 42, 0.07);
   color: #0e766e;
 }
 [data-theme='dark'] .chat-message-actions.mode-desktop .action-btn {
-  border-color: rgba(226, 236, 234, 0.2);
   background: transparent;
   color: var(--color-text-secondary);
 }
 [data-theme='dark'] .chat-message-actions.mode-desktop .action-btn:hover:not(:disabled) {
-  background-color: rgba(53, 194, 164, 0.08);
-  border-color: rgba(53, 194, 164, 0.5);
+  background-color: rgba(255, 255, 255, 0.07);
   color: #35c2a4;
 }
 
