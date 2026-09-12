@@ -22,6 +22,7 @@
         <el-icon :size="14"><component :is="item.icon" /></el-icon>
       </span>
       <span class="tab-strip__label">{{ item.label }}</span>
+      <span v-if="item.count" class="tab-strip__count" :class="{ 'is-hot': item.countHot }">{{ item.count }}</span>
     </button>
   </div>
 </template>
@@ -141,6 +142,34 @@ const onPick = (key) => {
 
 .tab-strip__label {
   display: inline-block;
+}
+
+/* 批次⑩.78: 段内 mono 计数 chip (item.count > 0 时显示; countHot = 需关注色) */
+.tab-strip__count {
+  font-family: var(--ts-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(128, 128, 128, 0.14);
+  color: var(--ts-steel);
+  line-height: 1.4;
+}
+.tab-strip__count.is-hot {
+  background: rgba(163, 84, 63, 0.14);
+  color: #a3543f;
+}
+.tab-strip__item.is-active .tab-strip__count {
+  background: rgba(251, 252, 251, 0.22);
+  color: inherit;
+}
+[data-theme="dark"] .tab-strip__count.is-hot {
+  background: rgba(248, 152, 152, 0.18);
+  color: #f89898;
+}
+[data-theme="dark"] .tab-strip__item.is-active .tab-strip__count {
+  background: rgba(11, 21, 18, 0.22);
+  color: inherit;
 }
 
 /* 横向滚动变体（mobile 7+ tab 用） */
