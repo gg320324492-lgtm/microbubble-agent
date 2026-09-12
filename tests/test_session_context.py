@@ -141,38 +141,43 @@ class TestEnsureSessionContext:
         session_manager_mock.save_messages.assert_awaited_once_with("s1", pg_msgs)
 
     @pytest.mark.asyncio
-    async def test_redis_nonempty_incremental_backfill(self):
-        """Redis 非空 + last_pg_id=10 + PG 新增 3 条 → 增量回填 after_id=10 且 save 合并结果"""
+    async def test_redis_nonempty_pg_window_overrides(self):
+        """2026-09-12 契约变更: Redis 非空也走 PG 全量窗口 (PG = 单一事实源)。
+
+        旧增量回填 (after_id=last_pg_id 只补新增) 有结构性丢轮 bug:
+        chat_stream 从不写回 Redis messages, 上一轮 ensure 之后才落库的
+        (user, assistant) 对既不在 Redis 又被新游标跳过 → 永久丢失。
+        """
         import app.agent.micro_bubble_agent as mba
 
         redis_msgs = [
             {"role": "user", "content": "q1"},
             {"role": "assistant", "content": "a1"},
         ]
-        new_msgs = [
+        pg_msgs = [
+            {"role": "user", "content": "q1"},
+            {"role": "assistant", "content": "a1"},
             {"role": "user", "content": "q2"},
             {"role": "assistant", "content": "a2"},
-            {"role": "user", "content": "q3"},
         ]
 
         session_manager_mock = MagicMock()
         session_manager_mock.get_messages = AsyncMock(return_value=redis_msgs)
-        session_manager_mock.get_meta = AsyncMock(return_value={"last_pg_id": 10})
         session_manager_mock.save_messages = AsyncMock()
 
         captured = {}
         async def fake_fetch(db, user_id, session_id, *, after_id=0, limit=24):
             captured["after_id"] = after_id
             captured["limit"] = limit
-            return new_msgs
+            return pg_msgs
 
         with patch("app.services.session_context.session_manager", session_manager_mock), \
              patch("app.services.session_context._fetch_pg_messages", fake_fetch):
             result = await mba._ensure_session_context(MagicMock(), user_id=1, session_id="s1")
 
-        assert captured["after_id"] == 10  # 断言 list_messages(after_id=last_pg_id)
-        assert result == redis_msgs + new_msgs
-        session_manager_mock.save_messages.assert_awaited_once_with("s1", redis_msgs + new_msgs)
+        assert captured["after_id"] == 0, "必须全量窗口, 不得走增量游标"
+        assert result == pg_msgs
+        session_manager_mock.save_messages.assert_awaited_once_with("s1", pg_msgs)
 
     @pytest.mark.asyncio
     async def test_redis_empty_pg_failure_returns_redis(self):
@@ -555,8 +560,8 @@ async def test_integration_restart_simulation(db, test_member):
 
 @pytest.mark.asyncio
 async def test_integration_incremental_backfill(db, test_member):
-    """真 PG: Redis 非空 + last_pg_id → 增量回填只补新增"""
-    import fakeredis.aioredis
+    """2026-09-12 契约变更后真 PG 回归: 即使 Redis stub 落后 (缺最近轮),
+    也必须以 PG 全量窗口为准, 最近新增消息不得丢失 (旧增量游标会丢整对 exchange)。"""
     import app.agent.micro_bubble_agent as mba
 
     from app.services import chat_history_service as chat_svc
@@ -569,7 +574,6 @@ async def test_integration_incremental_backfill(db, test_member):
             role="user" if i % 2 == 0 else "assistant",
             content=f"旧消息{i}",
         )
-    # 取当前最大 message id 作为 last_pg_id
     from sqlalchemy import select, func
     from app.models.chat_history import ChatMessage
     max_id = (await db.execute(select(func.max(ChatMessage.id)))).scalar()
@@ -582,7 +586,6 @@ async def test_integration_incremental_backfill(db, test_member):
             content=f"新消息{i}",
         )
 
-    fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
     redis_msgs = [{"role": "user", "content": "旧消息0"}, {"role": "assistant", "content": "旧消息1"}]
     session_manager_mock = MagicMock()
     session_manager_mock.get_messages = AsyncMock(return_value=redis_msgs)
@@ -590,12 +593,13 @@ async def test_integration_incremental_backfill(db, test_member):
     session_manager_mock.save_messages = AsyncMock()
     session_manager_mock.ttl = 172800
 
-    with patch("app.services.session_context.session_manager", session_manager_mock), \
-         patch("app.core.redis.get_redis", AsyncMock(return_value=fake)):
+    with patch("app.services.session_context.session_manager", session_manager_mock):
         result = await mba._ensure_session_context(db, user_id=test_member.id, session_id=sid)
 
-    assert len(result) == 2 + 3  # Redis 2 条 + 增量 3 条
-    assert result[-1]["content"] == "新消息2"
+    contents = [m["content"] for m in result]
+    assert "新消息2" in contents, "PG 全量窗口必须覆盖最近新增, 旧增量游标丢轮不得回归"
+    assert len(result) == 9  # 9 条真 PG 消息全窗口 (Redis stub 被 PG 取代)
+    session_manager_mock.save_messages.assert_awaited_once()
 
 
 # ============================================================================
@@ -654,34 +658,35 @@ class TestSessionContextPublicAPI:
         session_manager_mock.save_messages.assert_awaited_once_with("wx_s1", pg_msgs)
 
     @pytest.mark.asyncio
-    async def test_ensure_session_context_pg_hit_incremental(self):
-        """Redis 非空 + last_pg_id=10 + PG 新增 3 条 → 增量回填 after_id=10"""
+    async def test_ensure_session_context_pg_hit_full_window(self):
+        """2026-09-12 契约变更: PG 可用即全量窗口 (after_id=0), Redis 只做镜像。
+        旧 after_id=last_pg_id 增量回填会整对丢最近轮 (chat_stream 不写回 Redis)。"""
         from app.services.session_context import ensure_session_context
 
         redis_msgs = [{"role": "user", "content": "q1"}, {"role": "assistant", "content": "a1"}]
-        new_msgs = [
+        pg_msgs = [
+            {"role": "user", "content": "q1"},
+            {"role": "assistant", "content": "a1"},
             {"role": "user", "content": "q2"},
             {"role": "assistant", "content": "a2"},
-            {"role": "user", "content": "q3"},
         ]
 
         session_manager_mock = MagicMock()
         session_manager_mock.get_messages = AsyncMock(return_value=redis_msgs)
-        session_manager_mock.get_meta = AsyncMock(return_value={"last_pg_id": 10})
         session_manager_mock.save_messages = AsyncMock()
 
         captured = {}
         async def fake_fetch(db, user_id, session_id, *, after_id=0, limit=24):
             captured["after_id"] = after_id
-            return new_msgs
+            return pg_msgs
 
         with patch("app.services.session_context.session_manager", session_manager_mock), \
              patch("app.services.session_context._fetch_pg_messages", fake_fetch):
             result = await ensure_session_context(MagicMock(), user_id=42, session_id="wx_s1")
 
-        assert captured["after_id"] == 10
-        assert result == redis_msgs + new_msgs
-        session_manager_mock.save_messages.assert_awaited_once_with("wx_s1", redis_msgs + new_msgs)
+        assert captured["after_id"] == 0
+        assert result == pg_msgs
+        session_manager_mock.save_messages.assert_awaited_once_with("wx_s1", pg_msgs)
 
     @pytest.mark.asyncio
     async def test_ensure_session_context_user_id_none_越权铁律(self):
