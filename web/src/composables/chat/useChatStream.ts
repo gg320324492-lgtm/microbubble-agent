@@ -593,6 +593,14 @@ export function useChatStream() {
       loadedSessions.add(newId)
       justCreatedLocalSession = true
     }
+    // ★ 批次⑩.76 修复: 「新对话」按钮 / store 初始化 / 跨页入口会**先 mint 好本地会话**
+    //   (_isLocalOnly=true, id=user_<ts>_<rand>), 此时 sessionId 已存在但 server 侧未知 —
+    //   原逻辑走 else 分支直接 append → 404 → appendMessageAsync 内部自愈 (create+retry),
+    //   每个新会话首条消息都打一次 404 噪音。这里把预生成本地会话并入 create-first 路径。
+    if (!justCreatedLocalSession) {
+      const preMinted = sessionsStore.sessions.find(s => s.id === sessionId.value)
+      if (preMinted?._isLocalOnly) justCreatedLocalSession = true
+    }
 
     // ★ 关键：捕获目标 sessionId 到闭包（防止 SSE yield 时用户已切走）
     const targetSessionId = sessionId.value
@@ -631,6 +639,12 @@ export function useChatStream() {
         firstMessageClientMsgId: userMsg.client_msg_id,
       })
       if (created) {
+        // 批次⑩.76: 同步 store 标记 (_isLocalOnly→false), 后续消息走普通 append, 不再重复 create
+        const rec = sessionsStore.sessions.find(s => s.id === targetSessionId)
+        if (rec) {
+          rec._isLocalOnly = false
+          rec._syncStatus = 'synced'
+        }
         const persisted = await chatHistoryStore.appendMessageAsync(targetSessionId, {
           role: 'user',
           content,
