@@ -376,6 +376,17 @@ class TraceCollector:
             "total_duration_ms": self.total_duration_ms,
             "error": self.error,
             "status": self.status,
+            # 2026-09-12 修复: Stage 3 的 7 个观测字段此前只存 self 不进 payload,
+            # _persist_now/Celery 两条路径 payload.get(...) 恒 None → intent_category、
+            # critique_score 等列停写 (实测 5708-5712 全空, 而 UI 明明显示 "意图: 数据查询 95%")。
+            "intent_category": self.intent_category,
+            "intent_confidence": self.intent_confidence,
+            "critique_score": self.critique_score,
+            "retry_count": self.retry_count,
+            "tool_rounds_used": self.tool_rounds_used,
+            "compression_applied_count": self.compression_applied_count,
+            "retrieval_quality_score": self.retrieval_quality_score,
+            "retrieval_attempts": self.retrieval_attempts,
         }
 
     # ---- 序列化 ----
