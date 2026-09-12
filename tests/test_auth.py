@@ -129,3 +129,30 @@ async def test_change_password(client: AsyncClient, auth_headers, test_member):
         "new_password": "newpass123"
     })
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_update_profile_research_area(client: AsyncClient, auth_headers, test_member):
+    """2026-09-12: PUT /auth/profile 必须持久化 research_area (研究方向下拉选项目)。
+
+    根因回归: ProfileUpdateRequest 原本没有 research_area 字段, 前端存了也白存。
+    """
+    resp = await client.put("/api/v1/auth/profile", headers=auth_headers,
+                            json={"research_area": "黑臭水体无药剂低能耗治理"})
+    assert resp.status_code == 200
+    assert resp.json()["research_area"] == "黑臭水体无药剂低能耗治理"
+    # 持久化: 再拉一次 /auth/me 仍是新值
+    me = await client.get("/api/v1/auth/me", headers=auth_headers)
+    assert me.json()["research_area"] == "黑臭水体无药剂低能耗治理"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_research_area_clear(client: AsyncClient, auth_headers, test_member):
+    """research_area 支持清空: 传空字符串 → 服务端清空字段"""
+    resp = await client.put("/api/v1/auth/profile", headers=auth_headers,
+                            json={"research_area": "水处理"})
+    assert resp.status_code == 200
+    resp = await client.put("/api/v1/auth/profile", headers=auth_headers,
+                            json={"research_area": ""})
+    assert resp.status_code == 200
+    assert resp.json()["research_area"] == ""

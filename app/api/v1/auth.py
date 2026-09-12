@@ -227,6 +227,8 @@ async def update_profile(
         current_user.bio = request.bio
     if request.avatar is not None:
         current_user.avatar = request.avatar
+    if request.research_area is not None:  # 2026-09-12: 研究方向 ("" 视为清空)
+        current_user.research_area = request.research_area
 
     await db.commit()
     await db.refresh(current_user)
