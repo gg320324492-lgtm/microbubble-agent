@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息操作行重设计 · 4 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --teal: #0E766E; --neon: #35C2A4; --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F0F3F2; --ink: #223542; --ink2: #8A938E;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.9; color: var(--txt2); }
+  .diag b { color: var(--txt); }
+  .num { font-family: var(--mono); font-weight: 700; color: #B4823C; margin-right: 6px; }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 330px; }
+  .card.wide { width: 100%; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 56px; }
+
+  /* ═══ 操作行小样 (亮色纸面) ═══ */
+  .stage { background: var(--paper); border: 1px solid rgba(22,35,42,.12); border-radius: 12px; padding: 18px 16px; }
+  .mrow { display: flex; align-items: center; gap: 10px; }
+  .dur { font-size: 13px; color: var(--ink); }
+  .dur.mono { font-family: var(--mono); font-size: 11px; letter-spacing: .04em; color: var(--ink2); }
+  svg.ic { width: 16px; height: 16px; stroke: #4a5560; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+  /* 通用 hover 语义示意 (静态画出 hover 态的只用浅灰底) */
+  .bare { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+  .bare.hov { background: rgba(22,35,42,.06); }
+  .chip { width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(22,35,42,.22); background: var(--card); display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 1px 2px rgba(22,35,42,.05); }
+  .pillgrp { display: inline-flex; align-items: center; border: 1px solid rgba(22,35,42,.2); border-radius: 999px; background: var(--card); overflow: hidden; }
+  .pillgrp .seg { width: 30px; height: 26px; display: inline-flex; align-items: center; justify-content: center; }
+  .pillgrp .seg + .seg { border-left: 1px solid rgba(22,35,42,.12); }
+  .txtchip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(22,35,42,.2); border-radius: 999px; background: var(--card); padding: 5px 11px; font-size: 11.5px; color: var(--ink); white-space: nowrap; }
+  .txtchip svg.ic { width: 13px; height: 13px; }
+  .fb-ic { width: 26px; height: 26px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+  .fb-labeled { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ink2); }
+  .gap-l { margin-left: auto; }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>消息操作行（时长 · 朗读 · 重答 · 复制 · 反馈）重设计 · 4 方案</h1>
+  <p class="sub">截图里的不协调：<b>同一行三种形态</b>——34.9s 裸文本、耳机裸图标、重答/复制白色凸起卡片；再叠加反馈按钮的「emoji+文字」是第四种。暗色 E 方案已把该行收到 icon-only，但亮色仍是老样子，且四个按钮的 hover 语言各异（el 灰底 / 珊瑚底 / tooltip）。四案统一操作行的形态语言，暗亮两主题同规则。</p>
+
+  <div class="diag">
+    <span class="num">①</span><b>三种形态同排</b>：裸文本 + 裸图标 + 白卡片，视觉重量完全不同。　<span class="num">②</span><b>hover 语言各异</b>：朗读=el 灰底、重答/复制=珊瑚底、反馈=灰底+tooltip。　<span class="num">③</span><b>图标源混用</b>：el 线性图标 + 👍👎 emoji。　<span class="num">④</span><b>暗亮两套规则</b>：dark 已是 icon-only，light 仍带文字，同一次改版没对齐。
+  </div>
+
+  <div class="row">
+    <div class="card wide">
+      <div class="card-h"><span class="tag gray">现状</span><h2>三种形态并存（截图同款）</h2></div>
+      <div class="stage">
+        <div class="mrow">
+          <span class="dur">34.9s</span>
+          <span class="bare"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg></span>
+          <span style="width:26px"></span>
+          <span class="chip"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg></span>
+          <span style="width:8px"></span>
+          <span class="chip"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+          <span class="gap-l"></span>
+          <span class="fb-labeled">👍 回答有帮助</span>
+          <span class="fb-labeled">👎 需要改进</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>全裸图标行 · ChatGPT 同款</h2></div>
+      <p class="card-d">四枚图标全部去框：16px 线性、同灰度、同 28px 热区，hover 统一浅灰圆角底 + tooltip；时长改 mono 次级色；反馈也 icon-only（与暗色 E 对齐）。</p>
+      <div class="stage">
+        <div class="mrow">
+          <span class="dur mono">34.9s</span>
+          <span class="bare"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg></span>
+          <span class="bare hov"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg></span>
+          <span class="bare"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+          <span class="gap-l"></span>
+          <span class="fb-ic">👍</span><span class="fb-ic">👎</span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 形态归一，与已选 E 的安静语言一致（推荐）</span></div>
+        <div><span class="con">⚠ 图标语义靠 tooltip，新用户学习成本略高</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>统一描边 chip · 与头部同语言</h2></div>
+      <p class="card-d">四枚全部变成 28px 描边 chip（纸卡底+墨线，同头部搜索/侧栏开关），时长保持裸文本；反馈 emoji 也装进 chip。</p>
+      <div class="stage">
+        <div class="mrow">
+          <span class="dur">34.9s</span>
+          <span class="chip"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg></span>
+          <span class="chip"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg></span>
+          <span class="chip"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+          <span class="chip" style="font-size:12px">👍</span>
+          <span class="chip" style="font-size:12px">👎</span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 与头部 chip 语言呼应，档案卡片感最强</span></div>
+        <div><span class="con">⚠ 每条回复挂 5 个框，视觉偏重、噪音高</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>两段分组 · 播放信息 | 操作</h2></div>
+      <p class="card-d">按语义分两端：左侧「34.9s · 耳机」播放信息簇（裸文本+裸图标，弱化）；右侧操作收进一枚分段胶囊组（↻ | ⧉ | 👍 | 👎，竖线分隔）。</p>
+      <div class="stage">
+        <div class="mrow">
+          <span class="dur mono" style="opacity:.75">34.9s</span>
+          <span class="bare" style="opacity:.75"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg></span>
+          <span class="gap-l"></span>
+          <span class="pillgrp">
+            <span class="seg"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg></span>
+            <span class="seg"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+            <span class="seg" style="font-size:12px">👍</span>
+            <span class="seg" style="font-size:12px">👎</span>
+          </span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 信息/操作语义分组最清晰，两端平衡</span></div>
+        <div><span class="con">⚠ 胶囊组在窄气泡下仍占一行宽度</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">D</span><h2>文字胶囊 · 可发现性最高</h2></div>
+      <p class="card-d">操作带中文字标签：〔↻ 重答〕〔⧉ 复制〕〔♪ 朗读〕描边小胶囊；反馈保持 👍👎 裸图标。新手零学习成本。</p>
+      <div class="stage">
+        <div class="mrow">
+          <span class="dur mono">34.9s</span>
+          <span class="txtchip"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg>重答</span>
+          <span class="txtchip"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</span>
+          <span class="txtchip"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg>朗读</span>
+          <span class="gap-l"></span>
+          <span class="fb-ic">👍</span><span class="fb-ic">👎</span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 功能一目了然，不依赖 tooltip</span></div>
+        <div><span class="con">⚠ 每条回复行宽明显变长，与 E 的安静方向相悖</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>通用修复（四案都含）</b>：① 四枚操作 + 反馈统一为同尺寸/同灰度/同 hover 语言　② 图标源统一（👍👎 emoji 换线性 SVG 或统一保留，不再混排）　③ 时长改 mono 次级色（暗色 E 已隐藏 tokens/时长，本行规则暗亮各自动生效）　④ 朗读/重答/复制 hover 全部统一为同一底色公式（不再 el 灰底/珊瑚底各自为政）<br>
+    <b>实施位置</b>：<code>ChatMessageActions.vue</code>（重答/复制按钮）+ <code>ChatMessageRow.vue</code> 的 <code>.msg-meta / .tts-btn</code> + <code>FeedbackButtons.vue</code>；dark 侧已有 E 规则同步对齐。
+  </div>
+</div>
+</body>
+</html>
