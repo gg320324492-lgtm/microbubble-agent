@@ -174,6 +174,19 @@ async def delete_member(
             raise ValidationException(str(e))
 
     member.is_active = False
+
+    # 2026-09-12: 软删成员后其名下未删任务移入回收站 —
+    # 任务列表/仪表盘不再显示 (垃圾桶保留期内可恢复); 会议记录不受影响。
+    # 背景: 张懿软删后「准备数学考试」仍挂在任务列表 (assignee 已停用但任务仍可见)。
+    from app.models.task import Task
+    from app.models.base import utcnow
+    from sqlalchemy import update as _sa_update
+    await db.execute(
+        _sa_update(Task)
+        .where(Task.assignee_id == member.id, Task.deleted_at.is_(None))
+        .values(deleted_at=utcnow())
+    )
+
     await db.commit()
 
 
