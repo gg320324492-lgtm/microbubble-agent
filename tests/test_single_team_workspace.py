@@ -15,7 +15,7 @@
 注: /tree scope 兼容 (personal==team==all 同树) 见
 tests/test_drive_folders_tree_scope.py (已改写为统一树断言)。
 
-DB: 走 settings.DATABASE_URL (容器内为 db:5432 真库), 与 test_folder_service.py 同款
+DB: 走 conftest 测试库 (2026-09-12 迁移, 原误走生产库), 与 test_folder_service.py 同款
 fixture 模式 (UUID 唯一化 + replica role 清理)。
 """
 import pytest
@@ -26,6 +26,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy import select, text
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 from app.models.member import Member
 from app.models.folder import Folder
 from app.models.knowledge import Knowledge
@@ -47,7 +48,7 @@ def _mk_member(username: str, name: str) -> Member:
 
 @pytest_asyncio.fixture
 async def db_session():
-    url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(url, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:

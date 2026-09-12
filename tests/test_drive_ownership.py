@@ -7,7 +7,7 @@
 3. ValueError 守卫: member==anchor / member 不存在 / anchor 不存在
 4. member_cleanup.list_member_referencing_rows 只读普查 + blocking_refs 过滤
 
-DB: 走 settings.DATABASE_URL (容器内 db:5432 真库), 与 test_folder_service.py 同款
+DB: 走 conftest 测试库 (2026-09-12 迁移, 原误走生产库), 与 test_folder_service.py 同款
 fixture (UUID 唯一化 + replica role 清理)。
 """
 import secrets
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 from app.models.member import Member
 from app.models.folder import Folder
 from app.models.knowledge import Knowledge, KnowledgeVersion, FileRequest
@@ -38,7 +39,7 @@ def _mk_member(username: str) -> Member:
 
 @pytest_asyncio.fixture
 async def db_session():
-    url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(url, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:

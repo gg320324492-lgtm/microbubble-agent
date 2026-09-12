@@ -33,10 +33,7 @@ from app.services.drive_chunked_upload_service import (
 )
 from app.services.drive_service import DriveService
 
-TEST_DB_URL = os.environ.get(
-    "TEST_DATABASE_URL",
-    settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-)
+from tests.conftest import TEST_DB_URL  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
 
 
 @pytest_asyncio.fixture

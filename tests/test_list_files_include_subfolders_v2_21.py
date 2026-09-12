@@ -32,6 +32,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 from app.models.member import Member
 from app.models.folder import Folder
 from app.models.knowledge import Knowledge
@@ -44,12 +45,11 @@ from app.services.drive_service import DriveService
 async def db_session():
     """测试用真 DB + NullPool
 
-    容器内运行时 settings.DATABASE_URL 已被 docker-compose 覆盖为
     postgresql://postgres:microbubble2026@db:5432/microbubble, 所以直接用就行.
     本地 (无 override) 会用 default postgresql://postgres:password@localhost:5432/microbubble,
     测试会自动 SKIP / 失败 — 这是预期的 (本地没 DB fixture).
     """
-    url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(url, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:

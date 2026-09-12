@@ -25,7 +25,7 @@ from sqlalchemy import select
 # 让脚本可独立导入 (本地或容器)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.database import async_session, engine, Base
+from tests.conftest import test_async_session as async_session  # 2026-09-12 生产库测试迁移: 原 app.core.database.async_session 直连生产库, 改 conftest 测试库工厂
 from app.models.knowledge import FileMention
 from app.services.notification_service import notification_service, _MENTION_PATTERN
 
@@ -91,11 +91,10 @@ class TestParseMentions:
         assert notification_service.parse_mentions_from_text("@ ") == []
 
     def test_at_with_very_long_name(self):
-        """@ 后跟 20+ 字符 → regex max 16, 截断到 16 字符"""
+        """@ 后跟 20+ 字符 → regex max 32 (PR6-P4 与前端镜像同步 16→32), 26 字符全匹配"""
         result = notification_service.parse_mentions_from_text("@abcdefghijklmnopqrstuvwxyz")
-        # regex {1,16} 匹配 16 字符, 截断不超长字符
-        # 26 chars 超过 16, regex 匹配前 16 字符 "abcdefghijklmnop"
-        assert result == ["abcdefghijklmnop"]
+        # regex {1,32}: 26 chars < 32, 全匹配 (2026-09-12 修正陈旧断言, 原期望 {1,16} 截断)
+        assert result == ["abcdefghijklmnopqrstuvwxyz"]
 
     def test_chinese_4char(self):
         """4 字中文名匹配 (regex 1-16)"""

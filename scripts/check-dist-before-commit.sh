@@ -40,12 +40,41 @@
 # W100 +75c: set +e (不要 set -e, 否则内部 grep 无匹配返回 1 会短路整个 hook)
 set +e
 
+# ================================================================
+# 2026-09-12 hard gate (index-Dm-g8UdN.js 404 事故沉淀, commit 9bf09f01b):
+# 该事故 = `git add -A` 静默跳过 .gitignore 内新 hash 资产 + 本 hook 未安装。
+# 本节新增两道硬校验 (旧版只 auto-add 不验证, 且验证不了 index.html↔assets 配套):
+#   A. src 改了但 dist/index.html 无更新且无新产物 → 忘了 build, hard block
+#   B. staged index.html 引用的每个 assets/*.{js,css} 必须在本地磁盘存在,
+#      否则 (index.html 与 assets 来自不同次 build / 漏 add) → hard block
+#   逃生口: git commit --no-verify
+# ================================================================
+hard_verify_dist_refs() {
+    # 只在 web/dist/index.html 有 staged 改动时校验 (纯后端/docs 提交零开销)
+    if ! git diff --cached --name-only -- 'web/dist/index.html' 2>/dev/null | grep -q .; then
+        return 0
+    fi
+    MISSING=""
+    for ref in $(git show :web/dist/index.html 2>/dev/null | grep -oE 'assets/[A-Za-z0-9_.-]+\.(js|css)' | sort -u); do
+        [ -f "web/dist/$ref" ] || MISSING="$MISSING $ref"
+    done
+    if [ -n "$MISSING" ]; then
+        echo ""
+        echo "❌ [pre-commit] staged index.html 引用的资产在本地 web/dist 缺失:$MISSING"
+        echo "   大概率: index.html 与 assets 来自不同次 build, 或漏 git add -f web/dist/"
+        echo "   修复: cd web && npm run build && git add -f web/dist/ 重新 stage"
+        echo "   (确要跳过: git commit --no-verify)"
+        exit 1
+    fi
+}
+
 # 总耗时统计 (W100 +75c 新增)
 START_TIME=$(date +%s)
 
 # ---- 1. 检测 web/src/ 改动 ----
 # 没改 src 就跳过（docs/CI/test commit 不应触发）
 if [ -z "$(git diff --cached --name-only -- 'web/src/')" ]; then
+    hard_verify_dist_refs
     ELAPSED=$(($(date +%s) - START_TIME))
     exit 0
 fi
@@ -113,6 +142,16 @@ if [ -d "web/dist/assets" ]; then
 fi
 
 if [ -z "$local_new_dist" ]; then
+    # 2026-09-12 hard gate A: src 改了但 index.html 未 staged 且无新产物 → 忘了 build
+    if ! git diff --cached --name-only -- 'web/dist/index.html' 2>/dev/null | grep -q .; then
+        echo ""
+        echo "❌ [pre-commit] web/src/ 有改动, 但 web/dist/index.html 无更新且无新 hash 产物"
+        echo "   大概率忘了 build (改 src 必须重新 build, 否则线上仍是旧前端):"
+        echo "     cd web && npm run build && git add -f web/dist/"
+        echo "   (确要跳过: git commit --no-verify)"
+        exit 1
+    fi
+    hard_verify_dist_refs
     ELAPSED=$(($(date +%s) - START_TIME))
     exit 0
 fi
@@ -146,6 +185,9 @@ echo "✅ [pre-commit] 已 staged $new_staged 个 web/dist/ 文件, commit 继�
 echo ""
 
 # W100 +75c: 总耗时输出 + 30s 警告
+# 2026-09-12 hard gate B: auto-add 之后最终校验 staged index.html ↔ 磁盘资产配套
+hard_verify_dist_refs
+
 ELAPSED=$(($(date +%s) - START_TIME))
 echo "⏱  [pre-commit] hook 总耗时: ${ELAPSED}s"
 if [ "$ELAPSED" -gt 30 ]; then

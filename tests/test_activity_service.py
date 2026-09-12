@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.database import async_session
+from tests.conftest import test_async_session as async_session  # 2026-09-12 生产库测试迁移: 原 app.core.database.async_session 直连生产库, 改 conftest 测试库工厂
 from app.models.knowledge import ActivityEvent
 from app.services.activity_service import (
     activity_service,
@@ -121,21 +121,51 @@ async def db():
         yield session
 
 
+@pytest_asyncio.fixture
+async def seeded_events(db):
+    """2026-09-12 测试库迁移: 原依赖生产库存量 activity_events (测试库空表 → 分页断言 0 条失败)。
+
+    自播种 6 条 (actor 59 ×3 + actor 58 ×3), teardown 清理。
+    """
+    from app.models.knowledge import ActivityEvent
+    rows = []
+    for i in range(6):
+        evt = ActivityEvent(
+            actor_id=59 if i % 2 == 0 else 58,
+            action="upload",
+            target_type="file",
+            target_id=1000 + i,
+            target_name=f"seed_{i}.txt",
+        )
+        db.add(evt)
+        rows.append(evt)
+    await db.commit()
+    for r in rows:
+        await db.refresh(r)
+    yield rows
+    from sqlalchemy import delete as sql_delete
+    await db.execute(sql_delete(ActivityEvent).where(
+        ActivityEvent.id.in_([r.id for r in rows])
+    ))
+    await db.commit()
+
+
 @pytest.mark.asyncio
 class TestFeedDB:
     """feed cursor 分页 + actor_ids 过滤 — 集成测试"""
 
-    async def test_feed_with_actor_ids_filter(self, db):
+    async def test_feed_with_actor_ids_filter(self, db, seeded_events):
         """feed(actor_ids=[59]) 仅返 testbot 触发的活动"""
         events = await activity_service.feed(
             db,
             actor_ids=[59],  # xiaoqi_testbot
             limit=50,
         )
+        assert len(events) >= 3  # 播种了 3 条 actor=59
         # 全部是 actor_id=59
         assert all(e.actor_id == 59 for e in events)
 
-    async def test_feed_cursor_pagination(self, db):
+    async def test_feed_cursor_pagination(self, db, seeded_events):
         """feed(before_id=X) 仅返 id < X 的事件 (cursor 分页)"""
         # 拿前 5 条
         first_page = await activity_service.feed(db, limit=5)

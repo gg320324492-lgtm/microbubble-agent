@@ -1,6 +1,59 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-12 企业微信下线 + 测试库隔离 + 部署自愈, 已部署)
+
+**企业微信整体下线** (3 commits `bbe0f900e`/`f5eab0738`/`5365b153a` + 修复 `9bf09f01b`):
+删除 `app/wechat/` 全包 8 文件 + 回调路由 + celery 主动检查 + members 6 个微信列
+(alembic 139, 已执行) + `WECHAT_*` 7 项配置; ConversationAnalyzer 迁
+`app/services/conversation_analyzer.py` 保留; 提醒推送全量改站内
+(`notification_service.notify_user`: WS + 离线队列 + 浏览器 Web Push, 前端监听
+`reminder` 事件弹 toast); @提及匹配删 wechat_id 通路 (username > name 双路)。
+微信支付 billing (`WECHAT_PAY_*`) 是收款不是企微, 保留不动。
+**404 事故沉淀**: 5365b153a 用 `git add -A` 提交, .gitignore 内新 hash dist 资产
+被静默跳过 → 线上 index-Dm-g8UdN.js 404。三层修复见下。
+
+**测试库隔离 (生产库测试迁移)**: 22 个测试文件原直连生产库
+(`app.core.database.async_session/engine` 或 `settings.DATABASE_URL.replace(...)`
+自建 engine), 在生产留 debris (knowledge id=540 等)。全部迁 `tests.conftest`
+公共工厂: `test_async_session` (async_session 同形) / `get_test_engine()` /
+`get_test_database_url()` (TEST_DB_URL 提升模块级, 默认 db:5432/microbubble_test)。
+守卫: `tests/test_no_prod_db_imports.py` (allowlist: lazy_init mock /
+anchor_scripts sqlite patch / hnsw_bench INTEGRATION PoC)。
+顺手修 3 类既有坏测试: ① sync inspect 对 async engine 必抛 MissingGreenlet
+(旧版真库上也坏, 实测 app.engine 同样报错) → 改 `await conn.run_sync(...)`;
+② alembic 专属索引/GIN/EXPLAIN 测试在 create_all 测试库不可能过 →
+`ALEMBIC_VERIFY=1` 门禁 + 表名修正 (member→members, meeting→meetings, 原文件就写错);
+③ head_singleton 写死 '084_...' head 号 → 改"单 head"不变量; activity feed
+分页测试原依赖生产存量数据 → 自播种 fixture。
+**并发纪律: microbubble_test 是共享库, 严禁两批 pytest 并发跑
+(setup_db 每 test DROP SCHEMA 会互相砸, 出过 NoSuchTableError 假失败)**。
+
+**部署自愈 + 提交门禁**: deploy-auto.sh 的 dist 校验升级为"校验 index.html
+引用的全部 js+css 资产 + 失败 `deploy_fail()` 自动 `git reset --hard` 回滚到
+部署前 commit" (旧版只 exit 1, 坏状态已由 reset 落地, nginx 继续服务损坏目录)。
+`check-dist-before-commit.sh` 从软 auto-add 升级双硬门禁: A) src 改了但
+index.html 无更新且无新产物 = 忘 build → 拒; B) staged index.html 引用的资产
+本地缺失 = html/assets 不同 build 配套 → 拒。逃生口 `--no-verify`。
+**hooks 依赖本机安装** (`bash scripts/setup-hooks.sh`, 本次事故时 pre-commit
+根本没装): 新 clone 后必跑, `--check` 验状态。
+
+**迁移顺手修的既有坏测试** (都是陈旧断言, 非迁移回归): ① 写死 alembic head 号
+三连 (084/085/087 → 改"单 head"不变量, head 已演进到 139); ② w_n_g
+schema_drift 4 case 设计为宿主机 docker exec 查库, 容器内无 docker CLI →
+FileNotFoundError 时优雅 skip; ③ folder_service 挂起根治: test 22 第三代码块
+复用绑定已关闭 session 的 `svc` → 重开新连接跑 count 后无人关闭 (NullPool
+dispose 不清在借连接) → 连接泄漏 idle-in-transaction → 下个测试 setup_db
+DROP SCHEMA 永久等锁 (测试库独有死锁); 修法 = 每块重新绑定 service。
+
+**遗留陈旧测试清单** (需跟进, 全部是业务语义变更后没同步的旧断言):
+- trash_chunk ×6: admin-only 断言过期 (2026-09-05 扁平化后 permanent_delete
+  任何成员可删) + remaining_days + chunked_* 系列
+- pr9_versions ×4: 版本上传 404 (路由存在, 端点内 db.get 判定需调试)
+- **test_w78 license**: ⚠️ 疑似真产品 bug — `verify_license` 不校验
+  `lic.is_active`, 且在线验证无条件 `is_active=True` → **吊销的 license
+  下次在线验证复活**。commercial 模块, 待单独修。
+
 ## 当前状态 (2026-09-10 对话质量实测收口: 第 1/2 组全修 + 模型升级 qwen3.8:27b, 已部署)
 
 **手测驱动修复链** (09-09→09-10, 全部已部署推送): 第 1 组会议链路 (意图分类器幽灵工具名 →

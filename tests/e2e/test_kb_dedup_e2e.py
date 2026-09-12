@@ -17,6 +17,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.main import app
@@ -53,7 +54,7 @@ class _SessionFactory:
 
 @pytest_asyncio.fixture
 async def e2e_db():
-    db_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    db_url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(db_url, echo=False)
     session_factory = async_sessionmaker(
         engine, class_=AsyncSession, expire_on_commit=False

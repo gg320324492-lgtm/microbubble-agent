@@ -13,6 +13,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 from app.models.member import Member
 from app.models.knowledge import Knowledge
 from app.models.folder import Folder
@@ -23,7 +24,7 @@ from app.agent.tools.drive_tools import list_drive_files, search_my_files
 # === ToolContext 兼容 (复用 conftest 模式) ===
 @pytest_asyncio.fixture
 async def db_session():
-    url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(url, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:

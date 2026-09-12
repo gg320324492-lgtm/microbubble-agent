@@ -23,6 +23,44 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
+# 2026-09-12 自愈回滚机制 (index-Dm-g8UdN.js 404 事故沉淀, commit 9bf09f01b)
+# 背景: 下面的 dist 校验在 `git reset --hard origin/main` 之后执行。旧版校验
+# 失败只 `exit 1`, 但坏状态已经落地, nginx 继续服务损坏目录 → 线上 404。
+# 修复: 记录部署前 commit, 校验失败时回滚工作区到该 commit, 线上继续服务旧版。
+PREV_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+
+# dist 资产完整性: index.html 引用的每一个 assets/*.{js,css} 都必须存在
+dist_refs_ok() {
+    [ -f "$PROJECT_DIR/web/dist/index.html" ] || return 1
+    local ref
+    for ref in $(grep -oE 'assets/[A-Za-z0-9_.-]+\.(js|css)' "$PROJECT_DIR/web/dist/index.html" 2>/dev/null | sort -u); do
+        [ -f "$PROJECT_DIR/web/dist/$ref" ] || return 1
+    done
+    return 0
+}
+
+deploy_fail() {
+    log "ERROR: $1"
+    if [ -z "$PREV_HEAD" ]; then
+        log "CRITICAL: 无部署前 commit 记录, 无法回滚, 需人工介入"
+    elif ! git cat-file -e "$PREV_HEAD" 2>/dev/null; then
+        log "CRITICAL: PREV_HEAD $PREV_HEAD 不可用, 无法回滚, 需人工介入"
+    else
+        log "自愈: 回滚工作区到部署前 commit ${PREV_HEAD}..."
+        if git reset --hard "$PREV_HEAD" >> "$LOG_FILE" 2>&1; then
+            if dist_refs_ok; then
+                log "✅ 自愈成功: 线上继续服务回滚版本 (${PREV_HEAD})。修复 commit 后重新 push 即可"
+            else
+                log "CRITICAL: 回滚后 dist 仍缺资产 — 回滚目标 commit 本身损坏, 需人工介入"
+            fi
+        else
+            log "CRITICAL: git reset --hard 回滚失败, 需人工介入"
+        fi
+    fi
+    log "========== 部署中止 =========="
+    exit 1
+}
+
 # 2026-06-17 加固 v2：webhook secret 持久化文件自愈机制
 # 教训：guard 必须在 git clean 之前 + git clean 排除 .env.webhook + 缺失时从 PID 进程环境恢复
 # 6/17 v1 版本：guard 在 clean 之前检查 → 通过 → git clean -fdx 删 .env.webhook → 下次 deploy 失败循环
@@ -133,32 +171,30 @@ fi
 # 使用 git 已提交的 dist（不在服务器上构建，避免 2核2G OOM）
 cd "$PROJECT_DIR"
 if [ ! -f "$PROJECT_DIR/web/dist/index.html" ]; then
-    log "ERROR: dist/index.html 不存在，部署中止"
-    log "========== 部署中止 =========="
-    exit 1
+    deploy_fail "dist/index.html 不存在"
 fi
 
-# 2026-06-03 健全性检查：dist 必须包含至少 10 个 JS 文件
-# 背景：commit d619f33 漏 build，删了 23 个旧 dist 但没补新文件，
-# 导致 index.html 引用 index-mZemtrw0.js 但 dist 不存在 → 白屏
-# 这个检查会拦住未来类似的"只删不建" commit
-DIST_JS_COUNT=$(find "$PROJECT_DIR/web/dist/assets" -maxdepth 1 -name 'index-*.js' 2>/dev/null | wc -l)
+# 2026-06-03 健全性检查（2026-09-12 加强版）
+# 背景1 (2026-06-03): commit d619f33 漏 build，删了 23 个旧 dist 但没补新文件 → 白屏
+# 背景2 (2026-09-12): commit 5365b153a 用 git add -A 提交，.gitignore 内的新 hash
+#   资产被静默跳过 → index.html 引用 index-Dm-g8UdN.js 404。
+#   旧检查两个漏洞：① 只 grep head -1 第一个引用 ② 失败只 exit 1 不回滚，
+#   坏状态已由 reset --hard 落地，nginx 继续服务损坏目录。
+# 新行为: 校验 index.html 引用的【全部】js+css 资产；任一失败 → 回滚到部署前 commit
+DIST_DIR="$PROJECT_DIR/web/dist"
+DIST_JS_COUNT=$(find "$DIST_DIR/assets" -maxdepth 1 -name 'index-*.js' 2>/dev/null | wc -l)
 if [ "$DIST_JS_COUNT" -lt 1 ]; then
-    log "ERROR: dist/assets/index-*.js 不存在（$DIST_JS_COUNT 个），部署中止"
-    log "可能原因：commit 漏 npm run build，或 build 失败"
-    log "请在本地执行 'cd web && npm run build' 后重新 commit"
-    log "========== 部署中止 =========="
-    exit 1
+    deploy_fail "dist/assets/index-*.js 不存在（$DIST_JS_COUNT 个）— commit 漏 npm run build 或漏 git add -f web/dist/"
 fi
-# 二次检查：index.html 引用的 JS 是否在 dist 里
-INDEX_HASH=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' "$PROJECT_DIR/web/dist/index.html" | head -1)
-if [ -n "$INDEX_HASH" ] && [ ! -f "$PROJECT_DIR/web/dist/$INDEX_HASH" ]; then
-    log "ERROR: index.html 引用 $INDEX_HASH，但该文件不在 dist 中"
-    log "dist/assets/ 里实际有: $(ls $PROJECT_DIR/web/dist/assets/ 2>/dev/null | grep -E 'index-.*\.js' | tr '\n' ' ')"
-    log "========== 部署中止 =========="
-    exit 1
+MISSING_REFS=""
+for ref in $(grep -oE 'assets/[A-Za-z0-9_.-]+\.(js|css)' "$DIST_DIR/index.html" 2>/dev/null | sort -u); do
+    [ -f "$DIST_DIR/$ref" ] || MISSING_REFS="$MISSING_REFS $ref"
+done
+if [ -n "$MISSING_REFS" ]; then
+    log "dist/assets/ 里实际有: $(ls "$DIST_DIR/assets/" 2>/dev/null | tr '\n' ' ' | head -c 600)"
+    deploy_fail "index.html 引用的资产缺失:$MISSING_REFS"
 fi
-log "dist 健全性检查通过（$DIST_JS_COUNT 个 index-*.js，index.html 引用 $INDEX_HASH 存在）"
+log "dist 健全性检查通过（$DIST_JS_COUNT 个 index-*.js, index.html 全部引用存在）"
 
 # PWA SW 健全性检查：dist/sw.js 不能引用 unhashed manifest.webmanifest
 # 背景：vite-plugin-pwa 自动把 manifest.webmanifest 加进 precache 列表（globIgnores 对它无效），
@@ -174,8 +210,7 @@ if [ -f "$PROJECT_DIR/web/dist/sw.js" ]; then
         log "→ SW install 阶段 precache 失败 → 用户浏览器永久污染"
         log "修复方法：cd web && npm run build（必须走 && node scripts/postbuild-fix-manifest.js）"
         log "如果 npm run build 仍失败，看 postbuild-fix-manifest.js 第 4 步健全性自检的报错"
-        log "========== 部署中止 =========="
-        exit 1
+        deploy_fail "dist/sw.js 仍引用 unhashed manifest.webmanifest"
     fi
     log "PWA SW precache 检查通过（sw.js 不含 unhashed manifest 引用）"
 fi
@@ -196,8 +231,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
         echo "$STAGED_MANIFEST_OLD" | while IFS= read -r line; do log "  $line"; done
         log "修复方法：cd web && npm run build (重跑 postbuild-fix-manifest.js 自动 hash 化)"
         log "        然后 git reset HEAD web/dist/ 再 git add -f web/dist/ 重新 stage"
-        log "========== 部署中止 =========="
-        exit 1
+        deploy_fail "git diff --cached 含 unhashed manifest.webmanifest 引用 (commit 59187ce8 回归点)"
     fi
     log "PWA staged diff 检查通过 (git diff --cached 不含 unhashed manifest 引用)"
 fi

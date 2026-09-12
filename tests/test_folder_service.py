@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy import text, select
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 from app.models.member import Member
 from app.models.folder import Folder
 from app.models.knowledge import Knowledge
@@ -27,7 +28,7 @@ from app.services.folder_service import FolderService, FolderServiceError, MAX_F
 # === db session fixture (PR2.1 复用) ===
 @pytest_asyncio.fixture
 async def db_session():
-    url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(url, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     try:
@@ -826,8 +827,12 @@ async def test_soft_delete_recursive_owner_check_still_enforced(alice_bob):
         assert result["deleted_folders"] >= 2, f"父+子应一起进回收站: {result}"
 
     # 验证: 整棵子树已软删
+    # 2026-09-12 修: 原 `svc` 绑定在上面已退出的 session2 上, 复用关闭的 session
+    # 会重开新连接且无人关闭 (NullPool dispose 不清在借连接) → 连接泄漏 idle-in-transaction
+    # → 下一个测试 setup_db 的 DROP SCHEMA 永久等锁 (测试库独有死锁, 生产库不 DROP 故未暴露)
     async with factory() as session:
-        items, _ = await svc.list_folders(current_user_id=alice.id)
+        svc3 = FolderService(session)
+        items, _ = await svc3.list_folders(current_user_id=alice.id)
         assert fid not in {x.id for x in items}, "级联软删后父 folder 不应出现在活跃列表"
 
 
