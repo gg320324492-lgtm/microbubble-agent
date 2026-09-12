@@ -21,25 +21,30 @@
   - @batch-permanent-delete (trash only)
 -->
 <template>
-  <!-- v2.0 (2026-07-09) Drive 美化: .drive-batch-toolbar 走共享 CSS (橙渐变 + 数字徽章 + 按钮玻璃) -->
+  <!-- 批次⑩.74: trash 上下文常驻 (对齐定稿 mockup 的安静批量行) — files 上下文保持选中才出现 -->
   <transition name="drive-batch-toolbar-fade">
-    <div v-if="selectedCount > 0" class="drive-batch-toolbar">
+    <div
+      v-if="selectedCount > 0 || context === 'trash'"
+      class="drive-batch-toolbar"
+      :class="{ 'is-trash-quiet': context === 'trash' }"
+    >
       <div class="drive-batch-toolbar-left">
         <el-checkbox
           :model-value="allSelected"
           :indeterminate="indeterminate"
           @change="$emit('select-all')"
         >
-          <span class="batch-toolbar-label">已选 <span class="drive-batch-count">{{ selectedCount }}</span> 项<span v-if="sizeLabel"> · {{ sizeLabel }}</span></span>
+          <span class="batch-toolbar-label">{{ context === 'trash' ? '全选' : `已选 ${selectedCount} 项${sizeLabel ? ' · ' + sizeLabel : ''}` }}</span>
         </el-checkbox>
       </div>
 
       <div class="drive-batch-toolbar-right">
         <template v-if="context === 'trash'">
-          <el-button class="drive-batch-toolbar-btn" :icon="RefreshLeft" @click="$emit('batch-restore')">
+          <span class="batch-quiet-count">已选 {{ selectedCount }} 项</span>
+          <el-button class="drive-batch-toolbar-btn" :icon="RefreshLeft" :disabled="selectedCount === 0" @click="$emit('batch-restore')">
             批量恢复
           </el-button>
-          <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-permanent-delete')">
+          <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" :disabled="selectedCount === 0" @click="$emit('batch-permanent-delete')">
             彻底删除
           </el-button>
         </template>
@@ -122,6 +127,54 @@ function onOverflowCmd(cmd) {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   margin-left: var(--space-2);
+}
+
+/* 批次⑩.74: trash 常驻批量行 — 去橙渐变改安静 ghost, 对齐定稿 mockup */
+.drive-batch-toolbar.is-trash-quiet {
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-secondary);
+  padding: 9px 2px;
+}
+.drive-batch-toolbar.is-trash-quiet .batch-toolbar-label {
+  color: var(--color-text-secondary);
+}
+.drive-batch-toolbar.is-trash-quiet .batch-quiet-count {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-placeholder, #a8abb2);
+  margin-right: 4px;
+}
+.drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--color-text-secondary) !important;
+  font-size: 12px;
+}
+.drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn:not(:disabled):hover {
+  background: rgba(22, 35, 42, 0.07) !important;
+  color: #0e766e !important;
+}
+.drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn-danger:not(:disabled):hover {
+  background: rgba(245, 108, 108, 0.1) !important;
+  color: var(--color-danger) !important;
+}
+.drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+[data-theme='dark'] .drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: #35c2a4 !important;
+}
+[data-theme='dark'] .drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn-danger:not(:disabled):hover {
+  background: rgba(248, 152, 152, 0.12) !important;
+  color: #f89898 !important;
 }
 
 .drive-batch-toolbar-fade-enter-active,
