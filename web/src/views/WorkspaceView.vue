@@ -123,7 +123,7 @@ const memberStore = useMemberStore()
 
 const dossierRef = ref(null)
 
-// ====== 成员详情 dialog (从 MembersPanel 接收 open-detail) ======
+// ====== 成员详情 dialog (DossierPanel emit 'open-member' 触发) ======
 const memberDetailVisible = ref(false)
 const detailMember = ref(null)
 
