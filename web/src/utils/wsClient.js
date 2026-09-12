@@ -25,6 +25,33 @@ class WsClient {
     this.lastPongAt = 0
     this.lastConnectAt = 0
     this.successfulConnects = 0
+    this.lastOptions = {}
+    // 2026-09-10: bfcache/冻结生命周期处理。
+    // 页面进 Back-Forward Cache 时浏览器强杀 WS (console: "failed: Page entered
+    // Back-Forward Cache"), onclose 随后调度重连 → 烧掉一次退避计数 + 留下报错噪音。
+    // 规范做法: freeze/pagehide(persisted) 时主动断开, resume/pageshow(persisted) 时 0 延迟重连。
+    this._bfcachePending = false
+    this._onBfcacheFreeze = () => {
+      if (this.connected || this.shouldReconnect) {
+        this._bfcachePending = true
+        this.disconnect()
+      }
+    }
+    this._onBfcacheResume = () => {
+      if (!this._bfcachePending) return
+      this._bfcachePending = false
+      this.reconnectAttempts = 0
+      const token = localStorage.getItem('access_token')
+      if (!token) return
+      console.info('[WS] bfcache resume → 立即重连')
+      this.connect(token, this.lastOptions || {})
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('freeze', this._onBfcacheFreeze)
+      window.addEventListener('pagehide', (e) => { if (e.persisted) this._onBfcacheFreeze() })
+      window.addEventListener('resume', this._onBfcacheResume)
+      window.addEventListener('pageshow', (e) => { if (e.persisted) this._onBfcacheResume() })
+    }
   }
 
   connect(token, options = {}) {
@@ -32,6 +59,7 @@ class WsClient {
       console.warn('[WS] connect() 无 token, 跳过')
       return
     }
+    this.lastOptions = options
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return
     }
