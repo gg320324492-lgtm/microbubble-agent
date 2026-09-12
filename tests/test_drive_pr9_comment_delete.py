@@ -77,7 +77,7 @@ async def author_member(db):
         password_hash=get_password_hash("test123456"),
         role="member",
         grade="研一",
-        wechat_id=f"wx_pr9del_author_{uuid.uuid4().hex[:8]}",  # alembic 057 NOT NULL
+# alembic 057 NOT NULL
         is_active=True,
     )
     db.add(member)
@@ -111,7 +111,6 @@ async def second_member(db):
         password_hash=get_password_hash("test123456"),
         role="member",
         grade="研二",
-        wechat_id=f"wx_pr9del_second_{uuid.uuid4().hex[:8]}",
         is_active=True,
     )
     db.add(member)
@@ -142,7 +141,6 @@ async def admin_member(db):
         password_hash=get_password_hash("test123456"),
         role="admin",
         grade="教授",
-        wechat_id=f"wx_pr9del_admin_{uuid.uuid4().hex[:8]}",
         is_active=True,
     )
     db.add(member)

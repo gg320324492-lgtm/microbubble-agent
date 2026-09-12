@@ -36,10 +36,6 @@ celery_app.conf.update(
             "task": "app.services.reminder_service.process_reminders_task",
             "schedule": 10.0,  # 每10秒检查一次，秒级精确提醒
         },
-        "proactive-checks": {
-            "task": "app.wechat.scheduler.run_proactive_checks",
-            "schedule": 900.0,  # 每15分钟检查一次
-        },
         "memory-maintenance": {
             "task": "app.services.memory_service.maintenance_task",
             "schedule": 3600.0,  # 每小时
@@ -200,7 +196,6 @@ celery_app.conf.imports = [
     "app.services.rag_auto_ingest_service",  # W100 +73: RAG 自动 ingestion 流水线
     "app.services.rag_feedback_iteration_service",  # W100 +74: 负面反馈聚合 quarantine
     "app.services.drive_ingest_tasks",  # 2026-09-05 网盘文件默认入库 (上传/版本更新自动 drive → kb)
-    "app.wechat.scheduler",
 ]  # fmt: skip
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
 celery_app.autodiscover_tasks(
@@ -228,7 +223,6 @@ celery_app.autodiscover_tasks(
         "app.services.rag_auto_ingest_service",  # W100 +73: RAG 自动 ingestion
         "app.services.rag_feedback_iteration_service",  # W100 +74: 反馈聚合 quarantine
         "app.services.drive_ingest_tasks",  # 2026-09-05 网盘文件默认入库
-        "app.wechat.scheduler",
     ],
     related_name=None,
 )

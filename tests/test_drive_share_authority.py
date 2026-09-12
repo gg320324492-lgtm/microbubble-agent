@@ -25,8 +25,7 @@ async def _mk_member(db, tag, is_active=True):
     u = _uuid.uuid4().hex[:8]
     m = Member(
         username=f"sh5_{tag}_{u}", name=tag, password_hash="h", role="member",
-        grade="测试", is_active=is_active, wechat_id=f"wx_sh5_{tag}_{u}",
-    )
+        grade="测试", is_active=is_active    )
     db.add(m)
     await db.commit()
     await db.refresh(m)

@@ -54,16 +54,17 @@ def _load_sanitize_module():
 
 
 COPY_DUMP = (
-    "COPY public.members (id, username, email, phone, wechat_id, "
-    "external_userid, password_hash) FROM stdin;\n"
-    "5\tzhangsan\tzhang@gmail.com\t13812345678\twx_zhang\text_5\t$2b$12$realhashA\n"
-    "6\tlisi\tli@qq.com\t13987654321\twx_li\text_6\t$2b$12$realhashB\n"
+    # 2026-09 企业微信下线: members 表已无微信列 (alembic 139)
+    "COPY public.members (id, username, email, phone, "
+    "password_hash) FROM stdin;\n"
+    "5\tzhangsan\tzhang@gmail.com\t13812345678\t$2b$12$realhashA\n"
+    "6\tlisi\tli@qq.com\t13987654321\t$2b$12$realhashB\n"
     "\\.\n"
 )
 
 INSERT_DUMP = (
-    "INSERT INTO members (id, username, email, phone, wechat_id, password_hash) "
-    "VALUES (5, 'zhangsan', 'zhang@gmail.com', '13812345678', 'wx_zhang', "
+    "INSERT INTO members (id, username, email, phone, password_hash) "
+    "VALUES (5, 'zhangsan', 'zhang@gmail.com', '13812345678', "
     "'$2b$12$realhash');\n"
 )
 
@@ -149,24 +150,21 @@ class TestScenario2DumpAndSanitize:
         assert "zhang@gmail.com" not in out
         assert "li@qq.com" not in out
         assert "13812345678" not in out
-        assert "wx_zhang" not in out
         assert "realhashA" not in out
         # 脱敏结果就位
         assert "@test.local" in out
         assert "138****5678" in out
         assert "test_member_5" in out
         assert "test_member_6" in out
-        # wechat_id / external_userid → \N
-        assert "\\N" in out
 
     def test_sanitize_insert_format(self):
         mod = _load_sanitize_module()
         out, n = mod.sanitize_text(INSERT_DUMP)
-        assert n == 5, f"INSERT 5 字段应改, got {n}"
+        # 2026-09 企业微信下线: 原 wechat_id 列删除, 5 字段改 → 4 字段改
+        assert n == 4, f"INSERT 4 字段应改, got {n}"
         assert "zhang@gmail.com" not in out
         assert "'test_member_5'" in out
         assert "138****5678" in out
-        assert "NULL" in out  # wechat_id → NULL
         assert "@test.local" in out
 
     def test_non_target_table_untouched(self):

@@ -114,19 +114,17 @@ async def test_process_reminders_failed_marked_as_sent(monkeypatch):
         sched_mod.reminder_scheduler, "remove_batch", AsyncMock()
     )
 
-    # mock wechat_bot 返回 errcode=-1（失败）
-    async def fake_smart_send(*a, **k):
-        return {"errcode": -1, "errmsg": "fake fail"}
+    # mock notify_user 抛异常（站内推送失败, 2026-09 企微下线后走 notification_service）
+    async def fake_notify_fail(*a, **k):
+        raise RuntimeError("fake notify fail")
 
-    monkeypatch.setattr(rs_mod.wechat_bot, "smart_send", fake_smart_send)
+    monkeypatch.setattr(rs_mod, "notify_user", fake_notify_fail)
 
     r1 = _make_reminder(id=1, status="pending", assignee_id=1)
 
     member = MagicMock()
     member.id = 1
     member.name = "张三"
-    member.wechat_id = "wx_1"
-    member.external_userid = None
 
     db = MagicMock()
     call_count = [0]

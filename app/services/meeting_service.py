@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 from app.config import settings
 from typing import List, Optional, Dict, Any
@@ -10,8 +10,6 @@ from app.models.meeting import Meeting, MeetingParticipant
 from app.models.member import Member
 from app.models.reminder import Reminder
 from app.models.task import Task, TaskStatus, TaskPriority
-from app.wechat.analyzer import analyzer
-from app.wechat.identity import identity_resolver
 from app.core.llm import LLMClient, extract_text_from_response
 from app.services.meeting_analysis_service import meeting_analysis
 from app.services.reminder_scheduler import reminder_scheduler
@@ -452,12 +450,32 @@ class MeetingService:
         if not title:
             return None
 
-        # 匹配负责人
+        # 匹配负责人 (2026-09 企业微信下线: 原 identity_resolver.fuzzy_search 按
+        # 微信昵称/备注匹配, 现只按姓名/用户名 精确 → 包含 匹配 active 成员)
         assignee = None
         if assignee_name:
-            matches = await identity_resolver.fuzzy_search(assignee_name, self.db)
-            if matches:
-                assignee = matches[0]
+            kw = assignee_name.strip().lower()
+            m_result = await self.db.execute(
+                select(Member).where(
+                    Member.is_active == True,
+                    or_(
+                        func.lower(Member.name) == kw,
+                        func.lower(Member.username) == kw,
+                    ),
+                ).limit(1)
+            )
+            assignee = m_result.scalar_one_or_none()
+            if not assignee:
+                m_result = await self.db.execute(
+                    select(Member).where(
+                        Member.is_active == True,
+                        or_(
+                            Member.name.contains(assignee_name.strip()),
+                            Member.username.contains(assignee_name.strip()),
+                        ),
+                    ).limit(1)
+                )
+                assignee = m_result.scalar_one_or_none()
 
         # 解析截止日期
         due_date = None

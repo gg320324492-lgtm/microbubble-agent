@@ -569,7 +569,6 @@ class MicroBubbleAgent:
         image_data: Optional[bytes] = None,
         image_media_type: str = "image/png",
         user_id: Optional[int] = None,
-        channel_user_id: Optional[str] = None,
         *,
         model: Optional[str] = None,
         # 2026-07-13 #P1 三档推理模式透传
@@ -620,7 +619,6 @@ class MicroBubbleAgent:
             system=system,
             user_id=user_id,
             db=db,
-            channel_user_id=channel_user_id,
             session_id=session_id,
             synthesis_model_override=model,
             # 2026-07-13 #P1 透传
@@ -668,7 +666,6 @@ class MicroBubbleAgent:
         image_data: Optional[bytes] = None,
         image_media_type: str = "image/png",
         user_id: Optional[int] = None,
-        channel_user_id: Optional[str] = None,
         *,
         model: Optional[str] = None,
         # 2026-07-13 #P1 三档推理模式透传
@@ -839,7 +836,6 @@ class MicroBubbleAgent:
             system=system,
             user_id=user_id,
             db=db,
-            channel_user_id=channel_user_id,
             session_id=session_id,
             synthesis_model_override=model,
             # 2026-07-13 #P1 透传 + CHAT-P1-B 复用预分类

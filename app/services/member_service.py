@@ -1,7 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from typing import List, Optional
-import re
 
 from app.core.exceptions import ConflictException
 from app.models.member import Member
@@ -14,26 +13,15 @@ class MemberService:
         self.db = db
 
     # ============================================================
-    # v2 PR6-P13/P14/P15/P16: case-insensitive uniqueness helpers
+    # v2 PR6-P13: case-insensitive uniqueness helper
+    # (2026-09 企业微信下线: 原 4 列白名单 + placeholder 正则收缩为 username 一列;
+    #  wechat_id/personal_wechat_id/external_userid 列已由 alembic 139 删除)
     # ============================================================
-    # 通用 helper: 同时支持 4 个 identifier 列
-    # 反射 Member.__table__.columns 取列引用, 避免硬编码
-    _IDENTIFIER_COLUMNS = frozenset({
-        "username", "wechat_id", "personal_wechat_id", "external_userid",
-    })
+    _IDENTIFIER_COLUMNS = frozenset({"username"})
     # 列名 → 中文 label (用于 ConflictException 错误信息, 用户友好)
     _COLUMN_LABELS = {
         "username": "用户名",
-        "wechat_id": "企业微信号",
-        "personal_wechat_id": "个人微信号",
-        "external_userid": "微信外部ID",
     }
-    # v2 PR6-P17 (alembic 057) placeholder 格式: __NULL_BACKFILL_<id>__
-    # 14 行原 NULL wechat_id 被 backfill 成这个, 等 admin 后续真实值填充.
-    # 详见 alembic/versions/057_wechat_id_not_null.py.
-    # P1-3 fix (2026-07-08): _assert_identifier_unique 跳过 placeholder 字符串,
-    # 否则 admin 调 update_member(id=8, wechat_id='__NULL_BACKFILL_8__') 会撞自己.
-    _PLACEHOLDER_PATTERN = re.compile(r"^__NULL_BACKFILL_\d+__$")
 
     @staticmethod
     async def _assert_identifier_unique(
@@ -64,12 +52,7 @@ class MemberService:
             )
 
         if not value:
-            # 空 / None 跳过检查 (与 alembic 053/054/055/056 函数索引 NULL 不参与行为一致)
-            return
-
-        # P1-3 fix (2026-07-08): placeholder 字符串跳过检查
-        # admin update_member(id=8, wechat_id='__NULL_BACKFILL_8__') 不能撞自己
-        if isinstance(value, str) and MemberService._PLACEHOLDER_PATTERN.match(value):
+            # 空 / None 跳过检查 (与 alembic 053 函数索引 NULL 不参与行为一致)
             return
 
         normalized = value.lower().strip()

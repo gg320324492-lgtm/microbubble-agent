@@ -18,7 +18,6 @@ from app.services.reminder_service import ReminderService
 
 def _make_member(id=1, name="张三"):
     m = Member(id=id, name=name, is_active=True)
-    m.wechat_id = f"wx_{id}"
     return m
 
 

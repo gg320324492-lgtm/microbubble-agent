@@ -13,8 +13,6 @@ async def test_create_member(client: AsyncClient, admin_headers):
         "password": "newpass123",
         "grade": "研一",
         "research_area": "微纳米气泡",
-        # 2026-08-18 #Plan v2 #9: MemberCreate.wechat_id required (PR6-P17, DB NOT NULL)
-        "wechat_id": "newmember_wechat",
     })
     assert resp.status_code == 201
     data = resp.json()
@@ -30,8 +28,6 @@ async def test_create_duplicate_username(client: AsyncClient, admin_headers, tes
         "name": "重复用户",
         "username": "testuser",  # 已存在
         "password": "123456",
-        # 2026-08-18 #Plan v2 #9: MemberCreate.wechat_id required (PR6-P17)
-        "wechat_id": "dup_wechat",
     })
     # 2026-08-18 #Plan v2 #10: PR6-P16 起重复 identifier 返 ConflictException (409),
     # 非 400 (见 app/api/v1/member.py:138 提前检查 4 个 identifier 唯一性)
@@ -68,7 +64,11 @@ async def test_update_member(client: AsyncClient, admin_headers, test_member):
 
 
 @pytest.mark.asyncio
-async def test_delete_member_requires_admin(client: AsyncClient, auth_headers, test_member):
-    """删除成员需要管理员权限"""
+async def test_delete_member_soft_deactivates(client: AsyncClient, auth_headers, test_member):
+    """删除成员 = 软删停用 (is_active=False)
+
+    (2026-09-05 角色扁平化后 get_current_admin_user 仅要求登录, 不再返 403;
+     原断言 403 为扁平化前的陈旧语义, 本测试随企业微信清理一并修正)
+    """
     resp = await client.delete(f"/api/v1/members/{test_member.id}", headers=auth_headers)
-    assert resp.status_code == 403
+    assert resp.status_code == 204

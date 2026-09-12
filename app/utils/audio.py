@@ -6,7 +6,7 @@
 
 复用于：
 - app/api/v1/voiceprint.py（前端上传音频）
-- app/wechat/handler.py（企业微信语音消息）
+- (历史) app/wechat/handler.py 企业微信语音消息 — 2026-09 企微下线后仅声纹 API 在用
 """
 
 import io

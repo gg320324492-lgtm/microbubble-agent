@@ -81,7 +81,6 @@ async def alice_subfolders(db_session):
         is_active=True,
         # v2 PR6-P17 (2026-07-03): wechat_id NOT NULL 防 NULL 渗透
         # placeholder 格式避开 PR6-P14 UNIQUE 冲突
-        wechat_id=f"__NULL_BACKFILL_alice_v221_{u}__",
     )
     session.add(alice)
     await session.commit()

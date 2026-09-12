@@ -174,26 +174,6 @@ class SpeechRecognizer:
         for seg in result.get("segments", []):
             yield seg
 
-    async def transcribe_wechat_voice(self, audio_data: bytes, language: str = "zh") -> dict:
-        """
-        识别微信语音消息 (SILK/AMR/WAV 自动检测 + 转换为 WAV)
-
-        2026-06-30 ASR 迁移: 底层从本地 Whisper 改为 SenseVoice HTTP.
-        """
-        from app.voice.silk import silk_to_wav
-
-        # 检测格式
-        header = audio_data[:4] if len(audio_data) >= 4 else b""
-        logger.info(f"[asr] 微信语音: size={len(audio_data)}, header={header.hex()}")
-
-        # WAV 格式直接识别
-        if header == b"RIFF":
-            return await self.transcribe(audio_data, language=language, skip_convert=True)
-
-        # SILK / AMR 格式: 走 silk_to_wav 转换
-        wav_data = await silk_to_wav(audio_data)
-        return await self.transcribe(wav_data, language=language, skip_convert=True)
-
     def _bytes_to_wav(self, audio_data: bytes) -> bytes:
         """任意格式音频 → 16kHz mono WAV bytes (降低服务负载, 节省网络)"""
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_in:

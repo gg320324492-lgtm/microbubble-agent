@@ -224,9 +224,9 @@ async def e2e_env():
         await conn.run_sync(Base.metadata.create_all)
 
     async with _SESSION() as db:
-        owner = Member(id=1, username="owner", name="Owner", wechat_id="wx-owner", role="member")
-        member = Member(id=2, username="member", name="Member", wechat_id="wx-member", role="member")
-        admin = Member(id=3, username="admin", name="Admin", wechat_id="wx-admin", role="member")
+        owner = Member(id=1, username="owner", name="Owner", role="member")
+        member = Member(id=2, username="member", name="Member", role="member")
+        admin = Member(id=3, username="admin", name="Admin", role="member")
         db.add_all([owner, member, admin])
         await db.commit()
 

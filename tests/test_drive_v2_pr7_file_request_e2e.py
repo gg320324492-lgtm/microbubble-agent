@@ -70,7 +70,7 @@ async def pr7_test_member(db):
         password_hash="dummy_hash_not_used_in_tests",  # 测试不走密码登录
         role="member",
         grade="研一",
-        wechat_id=f"wx_pr7_{uuid.uuid4().hex[:8]}",  # alembic 057 NOT NULL
+# alembic 057 NOT NULL
         is_active=True,
     )
     db.add(member)

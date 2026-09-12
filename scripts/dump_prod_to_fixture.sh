@@ -9,7 +9,7 @@
 #   3. 提示下一步 sanitize (脱敏) — 本脚本不自动脱敏, 保证原始快照可追溯
 #
 # ⚠️ 默认 dry-run (只 echo pg_dump 命令, 不真跑). 加 --apply 才真导出.
-# ⚠️ dump 产物含 PII (email/phone/wechat_id), 必须经 sanitize_fixture.py --apply 脱敏
+# ⚠️ dump 产物含 PII (email/phone), 必须经 sanitize_fixture.py --apply 脱敏
 #    才能进 git. .gitignore 已排除 fixtures/*.sql (仅 *.sanitized.sql 白名单可提交).
 #
 # 用法:

@@ -249,27 +249,35 @@ async def create_task(input: CreateTaskInput, ctx: ToolContext) -> dict:
         reminders=reminders_data,
     )
 
-    # 微信通知（best-effort，失败不阻塞）
+    # 站内通知（2026-09 企业微信下线，原走 wechat notifier；best-effort 失败不阻塞）
     if assignee_id and ctx.user_id and assignee_id != ctx.user_id:
         try:
-            from app.wechat.notifier import notifier
+            from app.services.notification_service import notify_user
             assignee = await member_svc.get_member(assignee_id)
             creator = await member_svc.get_member(ctx.user_id)
             due_date_str = ""
             if due_date:
                 due_date_beijing = due_date.replace(tzinfo=timezone.utc).astimezone(BEIJING_TZ)
                 due_date_str = due_date_beijing.strftime("%Y-%m-%d %H:%M")
-            if assignee and (assignee.wechat_id or assignee.external_userid):
-                await notifier.notify_task_assigned(
-                    member=assignee,
-                    task_title=input.title,
-                    due_date=due_date_str,
-                    priority=input.priority,
-                    description=input.description or "",
-                    assigner=creator.name if creator else "管理员",
+            if assignee:
+                body_lines = [
+                    f"{creator.name if creator else '管理员'} 给你派了一个任务",
+                    f"📌 任务：{input.title}",
+                    f"⏱ 优先级：{input.priority}",
+                ]
+                if due_date_str:
+                    body_lines.append(f"📅 截止：{due_date_str}")
+                if input.description:
+                    body_lines.append(f"📝 {input.description}")
+                await notify_user(
+                    assignee.id,
+                    title=f"📌 新任务：{input.title}",
+                    body="\n".join(body_lines),
+                    context="reminder",
+                    db=ctx.db,
                 )
         except Exception as e:
-            logger.warning(f"微信通知失败（任务已创建）: {e}")
+            logger.warning(f"站内通知失败（任务已创建）: {e}")
 
     return {
         "status": "success",

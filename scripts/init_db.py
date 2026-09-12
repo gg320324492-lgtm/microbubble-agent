@@ -63,7 +63,7 @@ async def seed_data():
                 return
             print(f"数据库已有 {count} 条数据, critical users 缺失: {missing}, 强制 seed (W2 +N 自愈)")
 
-        # 走 app/seed/member_seeder.py (按 username 幂等, 含 wechat_id/voice/drive NULL 防护)
+        # 走 app/seed/member_seeder.py (按 username 幂等, 含 voice/drive NULL 防护)
         from app.seed.member_seeder import seed_default_members
         result = await seed_default_members(session)
         print(f"默认成员 seed 完成: +{result['added']} / 跳过 {result['skipped']} / 总数 {result['total']}")

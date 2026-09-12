@@ -33,7 +33,6 @@ def _mk_member(username: str) -> Member:
     return Member(
         username=username, name=f"Own {username}",
         password_hash="hash", role="member", grade="测试", is_active=True,
-        wechat_id=f"__TEST_BACKFILL_{username}__",
     )
 
 

@@ -67,12 +67,6 @@ def _to_null(_: str) -> str:
 COLUMN_SANITIZERS: Dict[str, Callable[[str], str]] = {
     "email": _mask_email,
     "phone": _mask_phone,
-    "wechat_id": _to_null,
-    "wechat_nickname": _to_null,
-    "wechat_remark": _to_null,
-    "personal_wechat_id": _to_null,
-    "wechat_mobile": _to_null,
-    "external_userid": _to_null,
     "password_hash": lambda _: TESTBOT_PASSWORD_HASH,
 }
 

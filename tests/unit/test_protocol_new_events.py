@@ -201,11 +201,9 @@ class TestToolContextNewFields:
         ctx = ToolContext(
             db="db_sentinel",
             user_id=42,
-            channel_user_id="wechat_xxx",
         )
         assert ctx.db == "db_sentinel"
         assert ctx.user_id == 42
-        assert ctx.channel_user_id == "wechat_xxx"
 
 
 class TestSseSemanticAnnotation:

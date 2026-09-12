@@ -57,7 +57,7 @@ class TaskService:
                 rem = Reminder(
                     task_id=task.id,
                     remind_at=r["remind_at"],
-                    remind_type=r.get("remind_type", "wechat"),
+                    remind_type=r.get("remind_type", "in_app"),
                     status="pending"
                 )
                 self.db.add(rem)
@@ -106,7 +106,7 @@ class TaskService:
         reminder = Reminder(
             task_id=task.id,
             remind_at=remind_at,
-            remind_type="wechat",
+            remind_type="in_app",
             status="pending",
             reminder_batch_date=batch_date,
             policy_version=2,

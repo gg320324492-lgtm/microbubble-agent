@@ -51,7 +51,7 @@ async def _ensure_test_knowledge(db):
                 id=59,
                 username="xiaoqi_testbot",
                 name="测试小助手",
-                wechat_id="__NULL_BACKFILL_59__",  # 满足 PR6-P17 NOT NULL
+# 满足 PR6-P17 NOT NULL
                 is_active=True,
                 role="admin",
             )
@@ -80,7 +80,6 @@ async def _ensure_test_knowledge(db):
                 id=2,
                 username="zhaohangjia",
                 name="赵航佳",
-                wechat_id="__NULL_BACKFILL_2__",
                 is_active=True,
                 role="member",
             ))

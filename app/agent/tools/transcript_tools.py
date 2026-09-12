@@ -118,7 +118,7 @@ async def summarize_meeting_transcript(input: SummarizeMeetingTranscriptInput, c
 
     from app.services.meeting_service import MeetingService
     from app.services.memory_service import MemoryService
-    from app.wechat.analyzer import ConversationAnalyzer
+    from app.services.conversation_analyzer import ConversationAnalyzer
 
     # 1. 摘要
     summary = await MeetingService._generate_summary(input.transcript_text)

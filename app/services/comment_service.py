@@ -106,15 +106,12 @@ class CommentService:
         try:
             usernames = notification_service.parse_mentions_from_text(content)
             if usernames:
-                # v2 PR6-P4 修复: 三路匹配, case-insensitive
-                all_stmt = select(Member.id, Member.username, Member.wechat_id, Member.name)
+                # 双路匹配, case-insensitive (2026-09 企业微信下线: 删 wechat_id 通路)
+                all_stmt = select(Member.id, Member.username, Member.name)
                 all_rows = (await db.execute(all_stmt)).all()
-                wechat_id_map: dict[str, int] = {}
                 username_map: dict[str, int] = {}
                 name_map: dict[str, int] = {}
                 for row in all_rows:
-                    if row.wechat_id:
-                        wechat_id_map[row.wechat_id.lower()] = row.id
                     if row.username:
                         username_map[row.username.lower()] = row.id
                     if row.name:
@@ -122,7 +119,7 @@ class CommentService:
                 seen: set[int] = set()
                 for u in usernames:
                     u_lower = u.lower()
-                    uid = wechat_id_map.get(u_lower) or username_map.get(u_lower) or name_map.get(u)
+                    uid = username_map.get(u_lower) or name_map.get(u)
                     if uid and uid not in seen:
                         seen.add(uid)
                         mentioned_user_ids.append(uid)

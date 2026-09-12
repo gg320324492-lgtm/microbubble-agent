@@ -49,12 +49,10 @@ async def alice_bob(db_session):
         username=u_alice, name="Alice Folder Test",
         password_hash="hash", role="member", grade="测试", is_active=True,
         # 2026-07-10 PR6-P17: wechat_id NOT NULL, 测试 fixture 用 `__TEST_BACKFILL_<u>__` 占位
-        wechat_id=f"__TEST_BACKFILL_{u}_alice__",
     )
     bob = Member(
         username=u_bob, name="Bob Folder Test",
         password_hash="hash", role="member", grade="测试", is_active=True,
-        wechat_id=f"__TEST_BACKFILL_{u}_bob__",
     )
     session.add_all([alice, bob])
     await session.commit()
