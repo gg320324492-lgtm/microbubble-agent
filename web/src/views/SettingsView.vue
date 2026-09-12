@@ -54,7 +54,13 @@
               <div class="field"><label>姓名 <i>NAME</i></label><el-input v-model="form.name" name="form-name" placeholder="请输入姓名"></el-input></div>
               <div class="field"><label>邮箱 <i>EMAIL</i></label><el-input v-model="form.email" name="form-email" placeholder="请输入邮箱"></el-input></div>
               <div class="field"><label>电话 <i>PHONE</i></label><el-input v-model="form.phone" name="form-phone" placeholder="请输入手机号"></el-input></div>
-              <div class="field"><label>研究方向 <i>FIELD</i></label><el-input v-model="form.research_area" name="form-research-area" placeholder="请输入研究方向"></el-input></div>
+              <div class="field"><label>研究方向 <i>FIELD</i></label>
+                <el-select v-model="form.research_area" name="form-research-area"
+                           placeholder="请选择课题组项目或输入自定义方向"
+                           filterable allow-create default-first-option clearable>
+                  <el-option v-for="p in projectOptions" :key="p" :label="p" :value="p"></el-option>
+                </el-select>
+              </div>
               <div class="field full"><label>个人简介 <i>BIO</i></label><el-input v-model="form.bio" name="form-bio" type="textarea" :rows="3" placeholder="介绍一下自己"></el-input></div>
             </div>
             <div class="btn-row">
@@ -247,6 +253,18 @@ const initForm = () => ({
 
 const form = reactive(initForm())
 
+// 2026-09-12: 研究方向下拉候选 = 课题组四大项目 (allow-create 保留自定义方向兼容旧自由文本)
+const projectOptions = ref([])
+async function fetchProjectOptions() {
+  try {
+    const res = await axios.get('/api/v1/projects')
+    const items = res.data?.items || (Array.isArray(res.data) ? res.data : [])
+    projectOptions.value = [...new Set(items.map((p) => p.name).filter(Boolean))]
+  } catch (e) {
+    console.warn('研究方向候选拉取失败:', e)  // 拉取失败降级为纯手输
+  }
+}
+
 const passwordForm = reactive({
   old_password: '',
   new_password: '',
@@ -382,7 +400,8 @@ const saveProfile = async () => {
       name: form.name,
       email: form.email || undefined,
       phone: form.phone || undefined,
-      bio: form.bio || undefined
+      bio: form.bio || undefined,
+      research_area: form.research_area || ''  // 2026-09-12: 研究方向下拉 (空串=清空)
     }
     // 只在用户新上传头像时发送 object_name，避免覆盖已存储的 object_name
     if (avatarChanged.value) {
@@ -399,7 +418,8 @@ const saveProfile = async () => {
       email: updated.email,
       phone: updated.phone,
       bio: updated.bio,
-      avatar: updated.avatar
+      avatar: updated.avatar,
+      research_area: updated.research_area
     })
     localStorage.setItem('user_info', JSON.stringify(stored))
 
@@ -508,6 +528,7 @@ const onGenerateRecoveryCode = async () => {
 
 onMounted(() => {
   fetchRecoveryStatus()
+  fetchProjectOptions()
 })
 </script>
 
@@ -676,6 +697,9 @@ onMounted(() => {
 }
 .section :deep(.el-textarea__inner:focus),
 .field :deep(.el-textarea__inner:focus) { border-bottom-color: var(--teal-soft); }
+/* 研究方向 el-select: 撑满栅格 + 复用下划线皮肤 (el-select 内部即 el-input__wrapper) */
+.field :deep(.el-select) { width: 100%; }
+.field :deep(.el-select .el-select__caret) { color: var(--muted); }
 .field :deep(.el-input__inner::placeholder),
 .field :deep(.el-textarea__inner::placeholder),
 .section :deep(.el-input__inner::placeholder) { color: #9fb0ab; }

@@ -76,6 +76,7 @@ class ProfileUpdateRequest(BaseModel):
     phone: Optional[str] = None
     bio: Optional[str] = None
     avatar: Optional[str] = None
+    research_area: Optional[str] = None  # 2026-09-12: 研究方向 (个人资料页下拉选项目)
 
 
 class RecoveryCodeResponse(BaseModel):
