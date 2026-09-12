@@ -270,7 +270,6 @@ async function batchResolveUsernames() {
       membersList.value = (data.items || []).map((m) => ({
         id: m.id,
         username: m.username,
-        wechat_id: m.wechat_id,
         name: m.name,
         avatar: m.avatar,
         role: m.role,

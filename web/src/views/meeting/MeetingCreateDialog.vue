@@ -49,7 +49,7 @@
         </div>
       </el-form-item>
       <el-form-item label="提前提醒">
-        <el-checkbox v-model="form.remindBefore">会议前 5 分钟企业微信提醒</el-checkbox>
+        <el-checkbox v-model="form.remindBefore">会议前 5 分钟站内提醒</el-checkbox>
       </el-form-item>
 
       <!-- 编辑模式：纪要字段 -->

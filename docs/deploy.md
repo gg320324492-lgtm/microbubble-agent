@@ -51,8 +51,8 @@
 
 ### 账号权限
 
-- 企业微信管理员权限（用于创建应用、配置回调）
 - GitHub 仓库访问权限
+- (2026-09 企业微信下线: 原企微管理员权限要求已移除)
 
 ---
 
@@ -194,12 +194,7 @@ POSTGRES_PASSWORD=你的数据库密码
 CLAUDE_API_KEY=sk-xxx
 CLAUDE_BASE_URL=https://your-proxy.com  # API 代理地址（可选）
 
-# 企业微信
-WECHAT_CORP_ID=wwxxxxxxxxxxxxxx
-WECHAT_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx
-WECHAT_AGENT_ID=1000002
-WECHAT_CALLBACK_TOKEN=your_callback_token
-WECHAT_ENCODING_AES_KEY=your_encoding_aes_key
+# (2026-09 企业微信下线: WECHAT_* 配置已删)
 
 # MinIO
 MINIO_ACCESS_KEY=minioadmin
@@ -275,43 +270,11 @@ docker compose logs -f app
 
 ---
 
-## 三、企业微信配置
+## 三、企业微信配置（已下线）
 
-### 3.1 创建应用
-
-1. 登录 [企业微信管理后台](https://work.weixin.qq.com/)
-2. 应用管理 → 自建 → 创建应用
-3. 填写应用名称（如"小气助手"）、上传 Logo
-4. 设置可见范围为全公司
-5. 记录 **AgentId**、**Secret**
-
-### 3.2 获取凭据
-
-- **CorpID**：我的企业 → 企业信息
-- **Secret**：应用管理 → 自建应用 → 查看 Secret
-- **AgentId**：应用管理 → 自建应用 → AgentId
-
-### 3.3 配置回调
-
-1. 应用管理 → 自建应用 → 接收消息 → 设置 API 接收
-2. 填写：
-   - URL: `https://agent.mnb-lab.cn/api/v1/wechat/callback`
-   - Token: 自定义一个 token（填入 `.env` 的 `WECHAT_CALLBACK_TOKEN`）
-   - EncodingAESKey: 随机生成（填入 `.env` 的 `WECHAT_ENCODING_AES_KEY`）
-3. 勾选事件：用户发送消息、外部联系人变更、客户群变更
-
-### 3.4 微信插件
-
-1. 应用管理 → 自建应用 → 微信插件 → 配置
-2. 设置插件名称和 Logo
-3. 成员扫码关注后可在普通微信内与机器人对话
-
-### 3.5 成员录入
-
-成员需要在企业微信中注册并绑定身份。系统通过以下方式自动绑定：
-- 成员在微信中给机器人发送消息
-- 系统通过姓名匹配成员数据库
-- 自动绑定 `wechat_id`（企业微信 UserId）
+2026-09 起课题组不再使用企业微信。`app/wechat/` 包、回调路由 `/api/v1/wechat/*`、
+`WECHAT_*` 环境变量与 members 表微信字段均已删除，提醒改走站内推送
+（铃铛 + 浏览器 Web Push）。本章仅作历史留档，无需任何配置。
 
 ---
 

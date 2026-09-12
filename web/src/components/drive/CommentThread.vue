@@ -167,7 +167,7 @@ const mention = useMentionAutocomplete({
     if (!ctx || ctx.triggerPos < 0) return
     const before = newContent.value.substring(0, ctx.triggerPos)
     const after = newContent.value.substring(ctx.triggerPos + 1 + ctx.query.length)
-    const mentionText = `@${member.name || member.wechat_id || member.username} `  // 批次⑩.51: 插入真实姓名 (后端三路匹配支持姓名精确解析)
+    const mentionText = `@${member.name || member.username} `  // 批次⑩.51: 插入真实姓名 (后端双路匹配 username/name)
     newContent.value = before + mentionText + after
     setTimeout(() => {
       const ta = inputRef.value?.$el?.querySelector?.('textarea')
@@ -261,7 +261,6 @@ async function batchResolveUsernames() {
       membersList.value = (resp.data.items || []).map((m) => ({
         id: m.id,
         username: m.username,
-        wechat_id: m.wechat_id,
         name: m.name,
         avatar: m.avatar,
         role: m.role,
@@ -290,7 +289,6 @@ async function batchResolveUsernames() {
       membersList.value = (resp.data.items || []).map((m) => ({
         id: m.id,
         username: m.username,
-        wechat_id: m.wechat_id,
         name: m.name,
         avatar: m.avatar,
         role: m.role,

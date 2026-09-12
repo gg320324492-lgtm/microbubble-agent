@@ -229,7 +229,7 @@
 // (3) Local Notification：Background Sync 重试完成后调 showNotification 反馈用户。
 //     仅 Local（不走 Web Push 协议）— 简单可靠。
 // (4) 不加 Web Push / Periodic Background Sync：
-//     - Web Push：后端走企业微信（v2 11AM 单一窗口），Web 是辅助通道，投资回报低
+//     - Web Push：提醒后端走站内推送（2026-09 企业微信下线），Web 是主通道
 //     - Periodic Background Sync：浏览器支持窄（仅 Chrome + engagement 分数），场景不匹配
 // 2026-07-02 v77 BUMP (二次)：main.js 加 controllerchange 监听 + init waiting 检查，
 //   比 SW_UPDATED 早 100-300ms 触发 force reload，缩短旧 SW 缓存污染窗口期。

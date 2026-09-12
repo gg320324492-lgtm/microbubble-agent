@@ -6,10 +6,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useMentionAutocomplete } from '../useMentionAutocomplete.js'
 
 const MOCK_MEMBERS = [
-  { id: 1,  username: 'wangtianzhi', wechat_id: 'WangTianZhi', name: '王天志', role: 'admin' },
-  { id: 2,  username: 'zhaohangjia', wechat_id: 'nuyoah.',     name: '赵航佳', role: 'admin' },
-  { id: 3,  username: 'dutonghe',    wechat_id: 'DuTongHe',   name: '杜同贺', role: 'member' },
-  { id: 18, username: 'yangci',      wechat_id: 'LiuSu',       name: '杨慈', role: 'member' },
+  { id: 1,  username: 'wangtianzhi', name: '王天志', role: 'admin' },
+  { id: 2,  username: 'zhaohangjia', name: '赵航佳', role: 'admin' },
+  { id: 3,  username: 'dutonghe',    name: '杜同贺', role: 'member' },
+  { id: 18, username: 'yangci',      name: '杨慈', role: 'member' },
 ]
 
 const wait = (ms = 200) => new Promise((r) => setTimeout(r, ms))
@@ -23,16 +23,16 @@ describe('useMentionAutocomplete - filterMembers behavior', () => {
     expect(ac.isOpen.value).toBe(true)
   })
 
-  it('exact match (wechat_id) ranked first', async () => {
+  it('exact match (username, case-insensitive) ranked first', async () => {
     const ac = useMentionAutocomplete({ members: MOCK_MEMBERS })
-    ac.query.value = 'nuyoah.'
+    ac.query.value = 'ZHAOHANGJIA'
     ac.refresh()
     await wait()
     const ids = ac.rawCandidates.value.map((c) => c.id)
     expect(ids[0]).toBe(2)
   })
 
-  it('prefix match (lowercase input) matches case-different wechat_id', async () => {
+  it('prefix match (lowercase input) matches username', async () => {
     const ac = useMentionAutocomplete({ members: MOCK_MEMBERS })
     ac.query.value = 'wang'
     ac.refresh()
@@ -55,8 +55,8 @@ describe('useMentionAutocomplete - filterMembers behavior', () => {
     // 应该精确匹配 name="王天志"? 不行, 名字是中文. 测英文 name 场景:
     // MOCK_MEMBERS 不含英文 name, 这里 inline 模拟.
     const MIXED_MEMBERS = [
-      { id: 100, username: 'wangtianzhi_en', wechat_id: '', name: 'WangTianZhi', role: 'member' },
-      { id: 101, username: 'alice', wechat_id: '', name: 'Alice Chen', role: 'member' },
+      { id: 100, username: 'wangtianzhi_en', name: 'WangTianZhi', role: 'member' },
+      { id: 101, username: 'alice', name: 'Alice Chen', role: 'member' },
     ]
     const ac = useMentionAutocomplete({ members: MIXED_MEMBERS })
 
@@ -94,8 +94,8 @@ describe('useMentionAutocomplete - filterMembers behavior', () => {
 
   it('English name prefix match (mixed case) - P1-8 fix', async () => {
     const MIXED_MEMBERS = [
-      { id: 200, username: 'bob_smith', wechat_id: '', name: 'Bob Smith', role: 'member' },
-      { id: 201, username: 'bobby_lee', wechat_id: '', name: 'Bobby Lee', role: 'member' },
+      { id: 200, username: 'bob_smith', name: 'Bob Smith', role: 'member' },
+      { id: 201, username: 'bobby_lee', name: 'Bobby Lee', role: 'member' },
     ]
     const ac = useMentionAutocomplete({ members: MIXED_MEMBERS })
 
@@ -238,7 +238,7 @@ describe('useMentionAutocomplete - keyboard navigation', () => {
 describe('useMentionAutocomplete - maxCandidates truncation', () => {
   it('returns at most maxCandidates entries', async () => {
     const bigList = Array.from({ length: 20 }, (_, i) => ({
-      id: i + 1, username: `user${i}`, wechat_id: `user${i}`, name: `user${i}`, role: 'member',
+      id: i + 1, username: `user${i}`, name: `user${i}`, role: 'member',
     }))
     const ac = useMentionAutocomplete({ members: bigList, maxCandidates: 5 })
     ac.refresh()
