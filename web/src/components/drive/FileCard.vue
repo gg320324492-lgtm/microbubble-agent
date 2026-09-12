@@ -25,7 +25,7 @@
     :class="[
       'file-card--' + viewMode,
       'drive-file-card-' + viewMode,
-      { 'is-selected': selected, 'is-private': file.visibility === 'private' }
+      { 'is-selected': selected, 'is-private': file.visibility === 'private', 'is-trash': trashContext }
     ]"
     :data-type="fileTypeKey"
     @click="$emit('click', file, $event)"
@@ -36,8 +36,8 @@
       <el-checkbox :model-value="selected" @change="$emit('toggle-select', file.id)" />
     </div>
 
-    <!-- v2 PR2: 收藏按钮 (右上角镜像 checkbox 位置, 始终可见) -->
-    <div class="file-card-star" @click.stop="$emit('toggle-star', file)">
+    <!-- v2 PR2: 收藏按钮 (右上角镜像 checkbox 位置, 始终可见) — 批次⑩.74: 回收站隐藏 -->
+    <div v-if="!trashContext" class="file-card-star" @click.stop="$emit('toggle-star', file)">
       <el-tooltip :content="file.is_starred ? '取消收藏' : '加入收藏'" placement="top">
         <el-icon :size="18" :class="{ 'is-starred': file.is_starred }">
           <component :is="file.is_starred ? StarFilled : Star" />
@@ -92,6 +92,16 @@
       <span v-if="file.folder_name" class="file-card-folder-hint">· 📂 {{ file.folder_name }}</span>
     </div>
 
+    <!-- 批次⑩.74: 回收站元数据 — 删除时间 + 剩余天数, 剩 7 天内转警示 -->
+    <div
+      v-if="trashContext && trashInfo && trashInfo.deletedText"
+      class="file-card-trash-meta"
+      :class="{ 'is-warn': trashInfo.soon }"
+    >
+      删除于 {{ trashInfo.deletedText }} · 剩 {{ trashInfo.daysLeft }} 天
+      <span v-if="trashInfo.soon" class="trash-warn-stamp">即将清除</span>
+    </div>
+
     <!-- 网格视图: 大小 + 日期 + 徽章 -->
     <div v-if="viewMode === 'grid'" class="file-card-meta">
       <span class="file-card-size">{{ formatSize(file.file_size) }}</span>
@@ -113,6 +123,16 @@
       下载 = 主色调 (最常用操作), 预览 = 信息蓝 (中性), 更多 = 默认灰.
     -->
     <div v-if="viewMode === 'grid'" class="file-card-actions">
+      <template v-if="trashContext">
+        <button type="button" class="trash-act trash-act--restore" @click.stop="$emit('restore', file)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>
+          <span>恢复</span>
+        </button>
+        <button type="button" class="trash-act trash-act--danger" title="彻底删除（不可撤销）" @click.stop="$emit('delete', file)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </template>
+      <template v-else>
       <button
         type="button"
         class="file-card-action file-card-action--download"
@@ -170,12 +190,35 @@
           </el-dropdown-menu>
         </template>
       </el-dropdown>
+      </template>
     </div>
 
-    <!-- 列表视图: 右侧操作栏 -->
+    <!-- 列表视图: 右侧操作栏 — 批次⑩.74: 回收站 = 恢复(主) + 彻底删除(危险 ghost) -->
     <div v-if="viewMode === 'list'" class="file-card-list-actions">
-      <el-button size="small" :icon="Download" circle @click.stop="handleDownload" />
-      <el-button size="small" :icon="View" circle @click.stop="$emit('preview', file)" />
+      <template v-if="trashContext">
+        <button
+          type="button"
+          class="trash-act trash-act--restore"
+          :aria-label="`恢复 ${file.title || file.file_name}`"
+          @click.stop="$emit('restore', file)"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>
+          <span>恢复</span>
+        </button>
+        <button
+          type="button"
+          class="trash-act trash-act--danger"
+          :aria-label="`彻底删除 ${file.title || file.file_name}`"
+          title="彻底删除（不可撤销）"
+          @click.stop="$emit('delete', file)"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </template>
+      <template v-else>
+        <el-button size="small" :icon="Download" circle @click.stop="handleDownload" />
+        <el-button size="small" :icon="View" circle @click.stop="$emit('preview', file)" />
+      </template>
     </div>
 
     <!--
@@ -210,6 +253,16 @@
       </div>
       <!-- 操作 -->
       <div class="file-row-col file-row-actions">
+        <template v-if="trashContext">
+          <button type="button" class="trash-act trash-act--restore" @click.stop="$emit('restore', file)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>
+            <span>恢复</span>
+          </button>
+          <button type="button" class="trash-act trash-act--danger" title="彻底删除（不可撤销）" @click.stop="$emit('delete', file)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          </button>
+        </template>
+        <template v-else>
         <button
           type="button"
           class="file-row-action-btn"
@@ -263,6 +316,7 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        </template>
       </div>
     </template>
   </div>
@@ -284,11 +338,28 @@ const props = defineProps({
   file: { type: Object, required: true },
   selected: { type: Boolean, default: false },
   selectable: { type: Boolean, default: false },
-  viewMode: { type: String, default: 'detail' }  // detail | grid | list (v2.16 detail 默认)
+  viewMode: { type: String, default: 'detail' },  // detail | grid | list (v2.16 detail 默认)
+  // 批次⑩.74 回收站上下文: 隐藏预览/下载/收藏等无效动作, 换 恢复/彻底删除 ghost 组 + 删除元数据
+  trashContext: { type: Boolean, default: false }
 })
 
 // F5 修复 (批次②): 'extract-to-kb' emit 随老管线菜单项删除
-defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
+defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star', 'restore'])
+
+// === 批次⑩.74: 回收站元数据 — 删除时间 + 剩余天数 (30 天 retention) ===
+const TRASH_RETENTION_DAYS = 30
+const trashInfo = computed(() => {
+  if (!props.trashContext) return null
+  const da = props.file.deleted_at ? parseDbDate(props.file.deleted_at) : null
+  if (!da || isNaN(da.getTime())) return { deletedText: '', daysLeft: null, soon: false }
+  const pad = n => String(n).padStart(2, '0')
+  const daysLeft = Math.max(0, Math.ceil((da.getTime() + TRASH_RETENTION_DAYS * 86400000 - Date.now()) / 86400000))
+  return {
+    deletedText: `${pad(da.getMonth() + 1)}-${pad(da.getDate())} ${pad(da.getHours())}:${pad(da.getMinutes())}`,
+    daysLeft,
+    soon: daysLeft <= 7
+  }
+})
 
 // === v2.0 (2026-07-09) Drive 美化: 按 file_type 提取 type key 用于 data-type ===
 // 与 drive-view.css 中的 .drive-file-card[data-type="pdf|doc|ppt|excel|image|video|audio|text"] 配套
@@ -710,6 +781,100 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ═══ 批次⑩.74 回收站上下文 (is-trash) ═══
+   行卡: 去顶部彩条/hover 抬升, 圆角白卡对齐侧栏会话卡语言 (亮墨/暗青 token) */
+.file-card.is-trash {
+  border-radius: 10px;
+  border-color: rgba(22, 35, 42, 0.09);
+}
+.file-card.is-trash::before {
+  display: none;
+}
+.file-card.is-trash:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(22, 35, 42, 0.28);
+}
+
+/* 删除元数据: mono 次级色, 剩 7 天内转警示红 */
+.file-card-trash-meta {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-placeholder, #a8abb2);
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.file-card-trash-meta.is-warn {
+  color: var(--color-danger);
+}
+.trash-warn-stamp {
+  font-size: 9px;
+  color: var(--color-danger);
+  border: 1px dashed var(--el-color-danger-light-5, rgba(245, 108, 108, 0.5));
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* ghost 动作组: 恢复(主) + 彻底删除(危险) — 批次⑩.73 幽灵钮同规格 */
+.trash-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  min-height: 26px; /* 批次⑩.74: 压过 mobile-base 全局 button min-height:44px */
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary, #909399);
+  font-size: 11.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.trash-act svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+.trash-act:hover {
+  background: rgba(22, 35, 42, 0.07);
+  color: #0e766e;
+}
+.trash-act--danger:hover {
+  background: rgba(245, 108, 108, 0.1);
+  color: var(--color-danger);
+}
+[data-theme='dark'] .trash-act:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #35c2a4;
+}
+[data-theme='dark'] .trash-act--danger:hover {
+  background: rgba(245, 108, 108, 0.15);
+  color: #f89898;
+}
+[data-theme='dark'] .file-card.is-trash {
+  border-color: rgba(226, 236, 234, 0.12);
+  background: var(--color-bg-card);
+}
+[data-theme='dark'] .file-card.is-trash:hover {
+  border-color: rgba(53, 194, 164, 0.4);
+}
+[data-theme='dark'] .file-card-trash-meta {
+  color: var(--color-text-secondary);
 }
 </style>
 

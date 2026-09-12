@@ -17,7 +17,7 @@
       <div class="page-header-left">
         <el-button :icon="ArrowLeft" text @click="goBack">返回网盘</el-button>
         <h2 class="page-title">🗑️ 回收站</h2>
-        <el-tag size="small" type="info">3 天后自动清除</el-tag>
+        <el-tag size="small" type="info">30 天后自动清除</el-tag>
       </div>
       <div class="page-header-right">
         <span class="trash-stat">共 {{ total }} 个文件 / 文件夹</span>
@@ -45,12 +45,11 @@
         :load-error="loadError"
         :view-mode="viewMode"
         :is-top-level="true"
+        :trash-context="true"
         @retry="fetchTrash"
         @file-click="handleFileClick"
-        @file-preview="handleFilePreview"
+        @file-restore="handleRestoreSingle"
         @file-delete="handlePermanentDeleteSingle"
-        @file-version-history="handleVersionHistory"
-        @toggle-select="toggleSelect"
         @page-change="handlePageChange"
       />
     </div>
@@ -147,13 +146,19 @@ function handleFileClick(file) {
   ElMessage.info('回收站文件无法预览, 请先恢复')
 }
 
-function handleFilePreview(file) {
-  handleFileClick(file)
-}
-
-function handleVersionHistory(file) {
-  // 批次⑩.86: version-history 此前 FileGrid 未转发, 点击无反应
-  ElMessage.info('回收站文件无法查看版本历史, 请先恢复')
+// 批次⑩.74: 单文件恢复 (trash 上下文「↩ 恢复」ghost 钮) — 非破坏性操作免确认
+async function handleRestoreSingle(file) {
+  try {
+    const resp = await batchRestore([file.id])
+    if (resp.skipped_ids?.length) {
+      ElMessage.warning(`恢复被跳过: ${file.file_name}`)
+    } else {
+      ElMessage.success(`已恢复 "${file.file_name}"`)
+    }
+    await reload()
+  } catch (e) {
+    ElMessage.error(e.message || '恢复失败')
+  }
 }
 
 // 2026-07-02: 恢复 goBack (PR7 nested route 回滚后顶级 sibling 模式)
