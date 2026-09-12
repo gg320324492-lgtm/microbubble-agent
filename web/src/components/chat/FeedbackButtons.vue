@@ -29,7 +29,7 @@
       :disabled="submitting"
       @click.stop="onClick(1)"
     >
-      <span class="fb-icon" aria-hidden="true">👍</span>
+      <span class="fb-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
       <span class="fb-label">回答有帮助</span>
     </button>
     <button
@@ -54,7 +54,7 @@
       :disabled="submitting"
       @click.stop="onClick(-1)"
     >
-      <span class="fb-icon" aria-hidden="true">👎</span>
+      <span class="fb-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="transform:scaleY(-1)"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
       <span class="fb-label">需要改进</span>
     </button>
   </div>
@@ -211,13 +211,12 @@ async function submit(rating, comment) {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  height: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 7px;
   background: transparent;
   cursor: pointer;
-  opacity: 0.7;
   transition: all 0.18s ease;
   font-size: 12px;
   color: var(--color-text-secondary, #6b7280);
@@ -243,15 +242,23 @@ async function submit(rating, comment) {
 .fb-btn {
   position: relative;
 }
+/* 批次⑩.73 选型 B: 幽灵规格 — hover 浅灰底 + 墨青, 与朗读/重答/复制统一 */
 .fb-btn:hover:not(:disabled) {
-  opacity: 1;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(22, 35, 42, 0.07);
+  color: #0e766e;
 }
 .fb-btn.active {
-  opacity: 1;
-  border-color: var(--color-primary, #FF7A5C);
-  background: rgba(255, 122, 92, 0.08);
-  color: var(--color-primary, #FF7A5C);
+  border-color: transparent;
+  background: rgba(14, 118, 110, 0.1);
+  color: #0e766e;
+}
+[data-theme='dark'] .fb-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: #35c2a4;
+}
+[data-theme='dark'] .fb-btn.active {
+  background: rgba(53, 194, 164, 0.12);
+  color: #35c2a4;
 }
 .fb-label {
   font-size: 12px;
@@ -270,5 +277,11 @@ async function submit(rating, comment) {
 .fb-icon {
   font-size: 14px;
   line-height: 1;
+  display: inline-flex;
+}
+.fb-icon svg {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 </style>

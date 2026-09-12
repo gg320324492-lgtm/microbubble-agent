@@ -455,7 +455,7 @@ function onEditKeydown(e: KeyboardEvent) {
   gap: 8px;
 }
 
-/* 批次⑩.71 选型 D: 时长 mono 次级色; 朗读按钮与重答/复制同款描边文字胶囊 */
+/* 批次⑩.73 选型 B: 时长 mono 次级色; 朗读按钮与重答/复制同款幽灵文字钮 (无框, hover 现形) */
 .mm-duration {
   font-family: Consolas, 'SFMono-Regular', monospace;
   font-size: 11px;
@@ -464,11 +464,11 @@ function onEditKeydown(e: KeyboardEvent) {
 }
 .tts-btn {
   height: 26px;
-  padding: 0 11px;
-  border-radius: 999px;
-  border: 1px solid var(--dossier-line, rgba(22, 35, 42, 0.2));
-  background: var(--color-bg-card, #ffffff);
-  color: var(--color-text-regular, #606266);
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary, #909399);
   gap: 5px;
 }
 .tts-text {
@@ -476,19 +476,15 @@ function onEditKeydown(e: KeyboardEvent) {
   line-height: 1;
 }
 .tts-btn:hover {
-  background-color: rgba(14, 118, 110, 0.06);
-  border-color: #0e766e;
-  color: #0e766e;
+  background-color: rgba(22, 35, 42, 0.07) !important;
+  color: #0e766e !important;
 }
 [data-theme='dark'] .tts-btn {
-  border-color: rgba(226, 236, 234, 0.2);
-  background: transparent;
   color: var(--color-text-secondary);
 }
 [data-theme='dark'] .tts-btn:hover {
-  background-color: rgba(53, 194, 164, 0.08);
-  border-color: rgba(53, 194, 164, 0.5);
-  color: #35c2a4;
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: #35c2a4 !important;
 }
 
 /* 2026-08-16 #71: 用户消息编辑 + hover 复制/编辑按钮 (ChatGPT 风格) */
