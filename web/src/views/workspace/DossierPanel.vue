@@ -46,13 +46,10 @@
     >
       <div class="dhead">
         <span class="dno">NO.{{ d.no }}</span>
-        <div class="dt" @click="$emit('open-project', d.raw)">
+        <div class="dt">
           {{ d.name }}
           <div class="dsub">{{ d.period }} · MB-LAB PROJECT FILE</div>
         </div>
-        <span class="dops" @click.stop>
-          <span class="op" @click="$emit('open-project', d.raw)">开卷</span>
-        </span>
       </div>
       <div class="dband">{{ d.persons }} 名成员编入此卷<template v-if="d.vpMissing"> · {{ d.vpMissing }} 人未录声纹</template></div>
       <div class="dbody">
@@ -142,7 +139,7 @@ import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
 
-defineEmits(['open-project', 'open-member'])
+defineEmits(['open-member'])
 
 const memberStore = useMemberStore()
 const projects = ref([])
@@ -248,10 +245,8 @@ function scrollTo(id) {
 .dhead { display: flex; align-items: center; gap: 14px; padding: 11px 16px; border-bottom: 1.5px solid var(--ws-hair); background: var(--ws-paper); border-radius: 10px 10px 0 0; }
 .dno { font-family: var(--ws-mono); font-size: 9px; letter-spacing: .12em; color: var(--ws-teal); border: 1.5px solid var(--ws-teal); border-radius: 4px; padding: 3px 7px; flex-shrink: 0; }
 .dno.warn { color: var(--ws-coral); border-color: var(--ws-coral); border-style: dashed; }
-.dt { font-family: var(--ws-serif); font-size: 15.5px; font-weight: 700; color: var(--ws-ink); line-height: 1.2; cursor: pointer; min-width: 0; }
-.dt:hover { color: var(--ws-teal); }
+.dt { font-family: var(--ws-serif); font-size: 15.5px; font-weight: 700; color: var(--ws-ink); line-height: 1.2; min-width: 0; }
 .dsub { font-family: var(--ws-mono); font-size: 8.5px; letter-spacing: .1em; color: var(--ws-fog); margin-top: 3px; font-weight: 400; }
-.dops { display: flex; gap: 6px; flex-shrink: 0; }
 .op { font-size: 11px; color: var(--ws-steel); border: 1px solid var(--ws-hair); border-radius: 5px; padding: 3px 9px; cursor: pointer; background: var(--ws-card); }
 .op:hover { color: var(--ws-teal); border-color: var(--ws-teal); }
 .op.add { background: var(--ws-teal); color: #fff; border-color: var(--ws-teal); }
