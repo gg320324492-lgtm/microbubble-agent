@@ -21,7 +21,7 @@ from sqlalchemy import select, delete
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.database import async_session
+from tests.conftest import test_async_session as async_session  # 2026-09-12 生产库测试迁移: 原 app.core.database.async_session 直连生产库, 改 conftest 测试库工厂
 from app.models.knowledge import FileComment, FileMention
 from app.services.comment_service import comment_service
 
@@ -37,7 +37,7 @@ async def db():
 @pytest_asyncio.fixture(autouse=True)
 async def _ensure_test_knowledge(db):
     """保证 file_id=540 + user_id=59 存在 (comment 测试硬编码)"""
-    from app.core.database import async_session as _session_factory
+    from tests.conftest import test_async_session as _session_factory
     from app.models.knowledge import Knowledge
     from app.models.member import Member
 

@@ -22,14 +22,13 @@ from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 
 
 @pytest.mark.asyncio
 async def test_087_knowledge_schema_contains_original_columns():
     """场景 1: alembic upgrade head 后 schema 含 original_parent_id + original_path 列"""
-    async_url = settings.DATABASE_URL.replace(
-        "postgresql://", "postgresql+asyncpg://"
-    )
+    async_url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(async_url)
     try:
         async with engine.connect() as conn:
@@ -72,9 +71,7 @@ async def test_087_orm_db_schema_match():
     """场景 2: ORM knowledge 模型列匹配 DB schema (reflection)"""
     from app.models.knowledge import Knowledge
 
-    async_url = settings.DATABASE_URL.replace(
-        "postgresql://", "postgresql+asyncpg://"
-    )
+    async_url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(async_url)
     try:
         async with engine.connect() as conn:
@@ -110,9 +107,8 @@ def test_087_alembic_single_head():
     s = ScriptDirectory.from_config(c)
 
     heads = s.get_heads()
-    assert heads == ["087_add_knowledge_original_parent_id"], (
-        f"alembic 链非 1 head 或 head 不是 087: {heads}"
-    )
+    # 2026-09-12: 断言从写死 087 改为单 head 不变量 (head 号随迁移演进, 当前 139)
+    assert len(heads) == 1, f"alembic 链非单 head: {heads}"
 
 
 def test_087_down_revision_chains_to_086():

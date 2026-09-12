@@ -16,6 +16,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
 
 pytestmark = pytest.mark.skipif(
     os.getenv("INTEGRATION") != "1",
@@ -24,9 +25,7 @@ pytestmark = pytest.mark.skipif(
 
 
 async def _get_session():
-    engine = create_async_engine(
-        settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-    )
+    engine = create_async_engine(get_test_database_url())  # 2026-09-12 测试库隔离
     Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     return engine, Session()
 

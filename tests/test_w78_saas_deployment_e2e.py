@@ -148,7 +148,8 @@ def test_08_alembic_single_head_085():
     s = ScriptDirectory.from_config(c)
     heads = s.get_heads()
     assert len(heads) == 1, f"alembic double-head detected: {heads}"
-    assert "085" in heads[0], f"expected head 085, got {heads}"
+    # 2026-09-12: 断言从写死 085 改为单 head 不变量 (head 号随迁移演进, 当前 139)
+    assert len(heads) == 1, f"alembic double-head detected: {heads}"
 
 
 def test_09_six_commercial_tables_defined():
@@ -197,7 +198,7 @@ async def test_11_license_4_modes_real_db_or_skip():
 
     无 docker DB 时跳过 (worktree 内常见)."""
     try:
-        from app.core.database import async_session
+        from tests.conftest import test_async_session as async_session
         async def _probe():
             try:
                 async with async_session() as db:

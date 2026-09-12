@@ -27,6 +27,25 @@ import pytest_asyncio
 # 条件 import：仅在非 SKIP_DB_SETUP 时才加载
 SKIP_DB_SETUP = bool(os.getenv("SKIP_DB_SETUP"))
 
+# ================================================================
+# 2026-09-12 生产库测试迁移: 测试库 URL 提升到模块级
+# (SKIP_DB_SETUP=1 的自建-engine 测试也要 import 得到)
+# 默认连 microbubble_test 隔离库, 可用 TEST_DATABASE_URL 环境变量覆盖。
+# 铁律: 测试禁止回退 settings.DATABASE_URL (生产 microbubble 库) —
+# 历史上这批测试在生产留 debris (如 knowledge id=540 "comment test file")。
+# 回归守卫: tests/test_no_prod_db_imports.py
+# ================================================================
+TEST_DB_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://postgres:microbubble2026@db:5432/microbubble_test",
+)
+
+
+def get_test_database_url():
+    """测试库 URL — 测试内自建 engine 用 (原生产 URL 回退的替代, 2026-09-12)"""
+    return TEST_DB_URL
+
+
 if not SKIP_DB_SETUP:
     # 重型依赖：仅当需要 DB 测试时才 import
     from httpx import AsyncClient, ASGITransport  # noqa: E402
@@ -52,15 +71,7 @@ if not SKIP_DB_SETUP:
     # "module 'app' has no attribute 'dependency_overrides'" (类 20.182 新)
     import app.models as _app_models  # noqa: E402,F401
 
-    # 2026-08-17 #Plan v2 业务回归: 修默认 TEST_DB_URL (连 localhost 错密码错库)
-    # 改用 env 实际值: db 容器 + microcubble2026 密码 + microbubble 库 (复用生产库, 不建新库)
-    # 允许 0 业务代码改动前提下修测试, 兼容 production 数据库
-    # 默认 localhost:5432 端口是 macOS / WSL2 host 测试用, 容器内走 db:5432
-    TEST_DB_URL = os.getenv(
-        "TEST_DATABASE_URL",
-        "postgresql+asyncpg://postgres:microbubble2026@db:5432/microbubble_test",
-    )
-
+    # 2026-09-12: TEST_DB_URL 已提升到模块级 (见文件头部), 这里不再重复定义
     # === W1 T1 conftest 跨 scope 真闭环 (2026-07-20) ===
     # 旧: module-level `engine = create_async_engine(...)` 单例 → cross-loop bind 首次 loop.
     # 新: lazy init + get_event_loop() fallback (与 app/core/database.py W5.1 一致).
@@ -127,6 +138,34 @@ if not SKIP_DB_SETUP:
     # 但强烈建议新代码用 _get_conftest_engine() / _get_test_session_maker()
     engine = None  # 老路径返回 None (调用方必须改用 lazy helper); 显式 None 比 stale engine 安全
     TestSession = None
+
+    # ================================================================
+    # 2026-09-12 生产库测试迁移: 公共测试库工厂 (回归守卫见
+    # tests/test_no_prod_db_imports.py)
+    #
+    # 历史问题: 部分测试直接 `from app.core.database import async_session`
+    # (该工厂绑定 DATABASE_URL = 生产 microbubble 库) → 测试直读直写生产库,
+    # 在生产留 debris (如实测 knowledge id=540 "comment test file")。
+    #
+    # 迁移约定: 测试一律 `from tests.conftest import test_async_session
+    # as async_session`, 与 setup_db / db fixture 共用 TEST_DATABASE_URL
+    # (默认 db:5432/microbubble_test 隔离库) + 跨 loop engine 重建逻辑。
+    # ================================================================
+    class _TestAsyncSessionFactory:
+        """`async_session()` 同形替代 — 每次 __call__ 重新解析当前 loop 的 sessionmaker
+
+        模块级缓存 sessionmaker 会绑死 import 时的 event loop (conftest W8.1
+        同一教训), 所以 __call__ 每次现取, 与 _get_test_session_maker 不 cache 一致。
+        """
+
+        def __call__(self):
+            return _get_test_session_maker()()
+
+    test_async_session = _TestAsyncSessionFactory()
+
+    def get_test_engine():
+        """测试库 engine (loop 感知) — 原 `from app.core.database import engine` 的替代"""
+        return _get_conftest_engine()
 else:
     # SKIP 模式：占位 stub，让 fixture 报"不可用"错误而非 import 失败
     engine = None

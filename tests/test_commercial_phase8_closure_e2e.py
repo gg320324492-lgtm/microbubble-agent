@@ -24,7 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.core.database import async_session  # noqa: E402
+from tests.conftest import test_async_session as async_session  # noqa: E402  # 2026-09-12 生产库测试迁移: 原 app.core.database.async_session 直连生产库, 改 conftest 测试库工厂
 from app.core.exceptions import AppException  # noqa: E402
 from app.models.billing import (  # noqa: E402
     CommercialTenant, Invoice, License, Plan, Subscription, UsageRecord,

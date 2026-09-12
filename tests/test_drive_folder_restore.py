@@ -8,7 +8,7 @@
 - B3:  级联软删补 original_parent_id/original_path 快照; restore 清快照且落点不变
 
 DB fixture: 复用 tests/conftest.py 的 db fixture (TEST_DATABASE_URL → microbubble_test),
-**绝不**走 settings.DATABASE_URL (容器跑测试污染生产事故铁律, 2026-09-05)。
+**绝不**走生产库 URL (容器跑测试污染生产事故铁律, 2026-09-05)。
 """
 import uuid as _uuid
 from datetime import datetime, timedelta, timezone
