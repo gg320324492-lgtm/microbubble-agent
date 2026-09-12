@@ -185,7 +185,6 @@ const dossiers = computed(() =>
         .map(id => memberById.value[id])
         .filter(Boolean)
         .sort((a, b) => gradeRank(a) - gradeRank(b) || a.id - b.id)
-      const pct = cyclePct(p)
       const f = (d) => (d ? dayjs(d).format('YYYY-MM') : '?')
       return {
         id: p.id,
