@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>操作行轻量化 · 4 方案 (2026-09 二轮)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1340px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.9; color: var(--txt2); }
+  .diag b { color: var(--txt); }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 410px; }
+  .card.wide { width: 100%; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 52px; }
+
+  /* ═══ 操作行舞台 (亮色纸面, 上文摘一句) ═══ */
+  .stage { background: var(--paper); border: 1px solid rgba(22,35,42,.14); border-radius: 12px; padding: 14px 16px 16px; }
+  .body-txt { font-size: 12px; color: #2a3a42; line-height: 1.7; margin-bottom: 14px; }
+  .mrow { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+  .dur { font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: #9aa4a0; }
+  svg.ic { width: 15px; height: 15px; stroke: #5b6870; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .gap-l { margin-left: auto; }
+
+  /* A 裸图标 */
+  .bare { width: 26px; height: 26px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; }
+  .bare.hov { background: rgba(22,35,42,.07); }
+
+  /* B 幽灵文字钮 */
+  .ghost { display: inline-flex; align-items: center; gap: 5px; border: none; background: transparent; border-radius: 7px; padding: 4px 8px; font-size: 11.5px; color: #5b6870; }
+  .ghost.hov { background: rgba(22,35,42,.07); color: var(--teal); }
+  .ghost svg.ic { width: 13px; height: 13px; }
+
+  /* C 紧凑描边组 */
+  .group { display: inline-flex; align-items: center; border: 1px solid rgba(22,35,42,.16); border-radius: 999px; background: var(--card); overflow: hidden; }
+  .group .seg { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 10.5px; color: #5b6870; }
+  .group .seg + .seg { border-left: 1px solid rgba(22,35,42,.1); }
+  .group .seg svg.ic { width: 12px; height: 12px; }
+
+  /* D hover 渐显 (基于 B) */
+  .dim { opacity: .35; }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>消息操作行轻量化 · 4 方案（二轮）</h1>
+  <p class="sub">上轮选的 D「文字胶囊」上线后暴露新问题：<b>三个描边胶囊太重</b>（次级操作抢过正文），<b>两个彩色 emoji 大拇指</b>是又一种语言且与胶囊脱节。本轮统一收敛：拇指全部换线性 SVG（去 emoji 彩色），四案按「安静程度」递进，都保留 63.4s mono 时长。</p>
+
+  <div class="diag">
+    <b>突兀根因</b>：① 胶囊 = 白底+描边+13px 内边距，在纸面底上是五块「浮起的小卡」，视觉重量 ≈ 正文一级元素　② 👍👎 emoji 自带橙黄色，是行里唯一的彩色　③ 拇指与胶囊之间 24px 断层，像两拨人　④ hover 语言仍不统一（胶囊墨青 / 拇指灰底）
+  </div>
+
+  <div class="row">
+    <div class="card wide">
+      <div class="card-h"><span class="tag gray">现状</span><h2>重胶囊 + 彩色 emoji（截图同款）</h2></div>
+      <div class="stage">
+        <div class="body-txt">"这个任务"指代不太明确——请告诉我你要加备注的是哪个任务，确认后我再帮你操作。</div>
+        <div class="mrow">
+          <span class="dur">63.4s</span>
+          <span style="display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(22,35,42,.28);background:#fff;border-radius:999px;padding:8px 15px;font-size:12px;box-shadow:0 1px 2px rgba(22,35,42,.06)">♪ 朗读</span>
+          <span style="display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(22,35,42,.28);background:#fff;border-radius:999px;padding:8px 15px;font-size:12px;box-shadow:0 1px 2px rgba(22,35,42,.06)">↻ 重答</span>
+          <span style="display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(22,35,42,.28);background:#fff;border-radius:999px;padding:8px 15px;font-size:12px;box-shadow:0 1px 2px rgba(22,35,42,.06)">⧉ 复制</span>
+          <span class="gap-l"></span>
+          <span style="font-size:15px">👍</span><span style="font-size:15px;margin-left:14px">👎</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>裸图标行 · 全去框去字</h2></div>
+      <p class="card-d">五枚全部变同规格裸图标（15px 线性 SVG、同灰度、26px 热区），hover 浅灰圆角底 + tooltip。最安静，与正文零争抢。</p>
+      <div class="stage">
+        <div class="body-txt">"这个任务"指代不太明确——请告诉我你要加备注的是哪个任务，确认后我再帮你操作。</div>
+        <div class="mrow">
+          <span class="dur">63.4s</span>
+          <span class="bare"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg></span>
+          <span class="bare hov"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg></span>
+          <span class="bare"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+          <span class="gap-l"></span>
+          <span class="bare"><svg class="ic" viewBox="0 0 24 24"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+          <span class="bare"><svg class="ic" viewBox="0 0 24 24" style="transform:scaleY(-1)"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 视觉重量最低，行内只剩一种语言</span></div>
+        <div><span class="con">⚠ 放弃文字标签，功能全靠 tooltip</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>幽灵文字钮 · 无框 hover 现形（推荐）</h2></div>
+      <p class="card-d">保留你选的文字标签，但去掉描边和白底——灰色「图标+字」直接坐在纸面上，hover 才显浅灰底+墨青字；拇指换线性 SVG 同款幽灵规格。轻但不失可读。</p>
+      <div class="stage">
+        <div class="body-txt">"这个任务"指代不太明确——请告诉我你要加备注的是哪个任务，确认后我再帮你操作。</div>
+        <div class="mrow">
+          <span class="dur">63.4s</span>
+          <span class="ghost"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg>朗读</span>
+          <span class="ghost hov"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg>重答</span>
+          <span class="ghost"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</span>
+          <span class="gap-l"></span>
+          <span class="ghost" style="padding:4px 6px"><svg class="ic" viewBox="0 0 24 24"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+          <span class="ghost" style="padding:4px 6px"><svg class="ic" viewBox="0 0 24 24" style="transform:scaleY(-1)"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 标签可读性保留，重量比描边胶囊降一档</span></div>
+        <div><span class="pro">✓ 拇指 SVG 化 + 同规格，行内完全同语言</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>紧凑描边组 · 五钮一排</h2></div>
+      <p class="card-d">保留描边语言但大幅减重：高度 38→24px、描边降淡、去阴影缩内边距，五钮（含 SVG 拇指）合进一枚分段胶囊组，竖线分隔零间隙。</p>
+      <div class="stage">
+        <div class="body-txt">"这个任务"指代不太明确——请告诉我你要加备注的是哪个任务，确认后我再帮你操作。</div>
+        <div class="mrow">
+          <span class="dur">63.4s</span>
+          <span class="group">
+            <span class="seg"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg>朗读</span>
+            <span class="seg"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg>重答</span>
+            <span class="seg"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</span>
+            <span class="seg"><svg class="ic" viewBox="0 0 24 24"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+            <span class="seg"><svg class="ic" viewBox="0 0 24 24" style="transform:scaleY(-1)"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+          </span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 一体工具栏，零散感消失，档案「票据」感保留</span></div>
+        <div><span class="con">⚠ 仍是页面上唯一的框元素，安静度不如 A/B</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">D</span><h2>hover 渐显 · 幽灵钮加强</h2></div>
+      <p class="card-d">B 的幽灵规格 + ChatGPT 式渐显：平时整行淡显 35%（只剩时长可读），鼠标进回复区才 100% 浮现。静态最干净，动态最优雅。</p>
+      <div class="stage">
+        <div class="body-txt">"这个任务"指代不太明确——请告诉我你要加备注的是哪个任务，确认后我再帮你操作。</div>
+        <div class="mrow">
+          <span class="dur">63.4s</span>
+          <span class="ghost dim"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="3" y="13" width="4" height="6" rx="2"/><rect x="17" y="13" width="4" height="6" rx="2"/></svg>朗读</span>
+          <span class="ghost dim"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2M21 12a9 9 0 0 1-15.5 6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></svg>重答</span>
+          <span class="ghost dim"><svg class="ic" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</span>
+          <span class="gap-l"></span>
+          <span class="ghost dim" style="padding:4px 6px"><svg class="ic" viewBox="0 0 24 24"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+          <span class="ghost dim" style="padding:4px 6px"><svg class="ic" viewBox="0 0 24 24" style="transform:scaleY(-1)"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3zm0 0l4-7a2 2 0 0 1 2 2v4h6a1.5 1.5 0 0 1 1.5 1.8l-1.2 6A1.5 1.5 0 0 1 17.8 20H7"/></svg></span>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 浏览长对话时操作行几乎隐形，最接近 ChatGPT</span></div>
+        <div><span class="con">⚠ 触屏无 hover，移动端需保持常显（分端处理）</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>四案通用</b>：① 👍👎 emoji → 线性 SVG（去彩色，同灰度）　② 拇指与前三钮同规格零断层　③ hover 统一「浅灰底 + 墨青字/图标」　④ 时长 mono 次级色不变　⑤ 暗色主题同规格翻译（hover 底换深色透明）<br>
+    <b>分歧轴</b>：A 裸图标无字 ｜ B 幽灵文字钮（推荐：保标签去重量）｜ C 一体分段工具栏 ｜ D = B + 整行 hover 渐显<br>
+    <b>实施位置</b>：<code>ChatMessageActions.vue</code>（重答/复制）+ <code>ChatMessageRow.vue</code>（.tts-btn / .mm-duration）+ <code>FeedbackButtons.vue</code>（fb-btn SVG 化 + 规格统一）
+  </div>
+</div>
+</body>
+</html>
