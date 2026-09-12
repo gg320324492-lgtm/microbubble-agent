@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>任务页 Tab · 交互式预览 (点击体验)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --danger: #A3543F;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 34px 24px 80px; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 21px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 12.5px; margin-bottom: 16px; line-height: 1.8; }
+  .sub b { color: #B4823C; }
+
+  /* ═══ 全局控制条 ═══ */
+  .ctrl { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 18px; margin-bottom: 24px; flex-wrap: wrap; }
+  .ctrl .lb { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--txt2); }
+  .tgl { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: #fff; }
+  .tgl button { border: none; background: transparent; padding: 5px 16px; border-radius: 999px; font-size: 12px; color: var(--txt2); cursor: pointer; font-family: inherit; }
+  .tgl button.on { background: var(--txt); color: #fff; font-weight: 600; }
+  .cnt-tgl { display: inline-flex; gap: 6px; }
+  .cnt-tgl button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 5px 13px; font-size: 12px; color: var(--txt2); cursor: pointer; font-family: inherit; }
+  .cnt-tgl button.on { border-color: #A3543F; color: var(--danger); background: rgba(163,84,63,.08); font-weight: 600; }
+  .hint { margin-left: auto; font-size: 11.5px; color: #9aa4a0; }
+
+  /* ═══ 方案卡片 ═══ */
+  .opt { margin-bottom: 26px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: #0E766E; background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .opt-h h2 { font-size: 15px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+
+  /* ═══ 主题作用域 ═══ */
+  .demo { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .demo[data-mode="light"] { background: #F4F6F4; --t-bg: #F4F6F4; --t-card: #fff; --t-ink: #16232A; --t-dim: #8ba0a0; --t-hair: #c9d2ca; --t-hi: rgba(22,35,42,.07); --t-accent: #0E766E; --t-on-accent: #FBFCFB; --t-hot-bg: rgba(163,84,63,.12); --t-hot: #A3543F; --t-seg-bg: rgba(255,255,255,.6); }
+  .demo[data-mode="dark"] { background: #10171B; --t-bg: #10171B; --t-card: rgba(255,255,255,.028); --t-ink: #E2ECEA; --t-dim: #7E8790; --t-hair: rgba(226,236,234,.14); --t-hi: rgba(255,255,255,.07); --t-accent: #35C2A4; --t-on-accent: #0b1512; --t-hot-bg: rgba(163,84,63,.22); --t-hot: #f89898; --t-seg-bg: rgba(255,255,255,.03); }
+
+  .bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; font-family: var(--mono); font-size: 9px; letter-spacing: .18em; color: var(--t-dim); }
+  .bar .mode { color: inherit; }
+
+  /* ═══ 通用 tab 内核 (各方案覆写) ═══ */
+  .tabs { display: flex; align-items: center; }
+  .tab { display: inline-flex; align-items: center; gap: 6px; padding: 12px 18px; font-size: 12px; letter-spacing: .12em; color: var(--t-dim); cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; transition: color .15s ease, background .15s ease; position: relative; }
+  .tab .cnt { font-size: 9.5px; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; background: rgba(128,128,128,.14); transition: all .15s ease; }
+  .tab .cnt.hot { background: var(--t-hot-bg); color: var(--t-hot); }
+  .tab .cnt:empty, .demo[data-cnt="0"] .tab .cnt { display: none; }
+  svg.tic { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .panel { padding: 16px 20px 20px; font-size: 12px; color: var(--t-dim); line-height: 1.8; min-height: 84px; }
+  .panel b { color: var(--t-ink); font-weight: 600; }
+  .panel .filter-hint { display: inline-block; border: 1px solid var(--t-hair); border-radius: 8px; padding: 6px 16px; margin-right: 8px; background: var(--t-card); }
+
+  /* ── A 纯文字档案 tab ── */
+  .optA .tabs { border-bottom: 1px solid var(--t-hair); }
+  .optA .tab.on { color: var(--t-ink); font-weight: 700; }
+  .optA .tab.on::after { content: ''; position: absolute; left: 16px; right: 16px; bottom: -1px; height: 2px; background: var(--t-ink); border-radius: 2px; }
+  .optA[data-mode="dark"] .tab.on::after { background: var(--t-accent); }
+  .optA .tab:hover:not(.on) { color: var(--t-ink); }
+
+  /* ── B 对称线性图标 ── */
+  .optB .tabs { border-bottom: 1px solid var(--t-hair); }
+  .optB .tab.on { color: var(--t-ink); font-weight: 700; }
+  .optB .tab.on::after { content: ''; position: absolute; left: 16px; right: 16px; bottom: -1px; height: 2px; background: var(--t-accent); border-radius: 2px; }
+  .optB .tab:hover:not(.on) { color: var(--t-ink); }
+
+  /* ── C 分段药丸 ── */
+  .optC .bar + .tabs-wrap { padding: 14px 18px 16px; }
+  .optC .tabs { border: 1px solid var(--t-hair); border-radius: 999px; background: var(--t-seg-bg); padding: 3px; width: fit-content; }
+  .optC .tab { border-radius: 999px; padding: 7px 18px; }
+  .optC .tab.on { background: var(--t-ink); color: var(--t-on-accent); font-weight: 700; }
+  .optC[data-mode="dark"] .tab.on { background: var(--t-accent); color: #0b1512; }
+  .optC .tab.on .cnt { background: rgba(255,255,255,.25); color: inherit; }
+  .optC[data-mode="dark"] .tab.on .cnt.hot { background: rgba(11,21,18,.25); color: inherit; }
+  .optC .tab:hover:not(.on) { color: var(--t-ink); }
+  .optC[data-mode="dark"] .tab:hover:not(.on) { color: var(--t-ink); }
+
+  /* ── D 纸卡 ── */
+  .optD .bar + .tabs-wrap { padding: 14px 18px 16px; }
+  .optD .tabs { gap: 10px; }
+  .optD .tab { border: 1px solid var(--t-hair); border-radius: 10px; padding: 9px 16px; background: transparent; box-shadow: 2px 2px 0 rgba(22,35,42,.06); }
+  .optD[data-mode="dark"] .tab { box-shadow: 2px 2px 0 rgba(0,0,0,.3); }
+  .optD .tab.on { background: var(--t-card); border-color: var(--t-ink); color: var(--t-ink); font-weight: 700; }
+  .optD[data-mode="dark"] .tab.on { background: rgba(53,194,164,.1); border-color: var(--t-accent); }
+  .optD .tab .corner { width: 7px; height: 7px; background: var(--t-ink); border-radius: 2px; }
+  .optD[data-mode="dark"] .tab .corner { background: var(--t-accent); }
+  .optD .tab:hover:not(.on) { border-color: var(--t-dim); color: var(--t-ink); }
+
+  .foot { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>任务页 Tab · 交互式预览</h1>
+  <p class="sub">下面四个方案都是<b>真的可以点</b>的：切 tab、hover、切主题、调垃圾桶数量。选中心仪的告诉我字母即可。</p>
+
+  <div class="ctrl">
+    <span class="lb">主题</span>
+    <span class="tgl" id="themeTgl">
+      <button data-mode="light" class="on">☀ 亮色</button>
+      <button data-mode="dark">🌙 暗色</button>
+    </span>
+    <span class="lb">垃圾桶数量</span>
+    <span class="cnt-tgl" id="cntTgl">
+      <button data-cnt="0">0</button>
+      <button data-cnt="3" class="on">3</button>
+      <button data-cnt="12">12</button>
+    </span>
+    <span class="hint">↑ 切换后所有方案同步变化，观察计数/选中态在两个主题下的表现</span>
+  </div>
+
+  <!-- ═══ A ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">A</span><h2>纯文字档案 tab · 计数入标签</h2><span class="desc">垃圾桶去图标，计数写进标签；active = 加粗 + 2px 墨线（暗色青线）</span></div>
+    <div class="demo optA" data-opt="A" data-mode="light" data-cnt="3">
+      <div class="bar"><span class="mode">LIGHT</span><span>任务页 · Team Tasks</span></div>
+      <div class="tabs">
+        <span class="tab on" data-pane="tasks">任务列表</span>
+        <span class="tab" data-pane="trash">垃圾桶 <span class="cnt hot">3</span></span>
+      </div>
+      <div class="panel" data-pane="tasks"><span class="filter-hint">任务状态</span><span class="filter-hint">负责人</span><br><br>任务列表内容区 —— <b>9 个进行中任务</b>，筛选后在此渲染卡片列表。</div>
+      <div class="panel" data-pane="trash" style="display:none">垃圾桶内容区 —— <b>3 个文件可恢复</b>，30 天后自动清除。</div>
+    </div>
+  </div>
+
+  <!-- ═══ B ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">B</span><h2>对称线性图标 · 14px 同基线</h2><span class="desc">两枚 tab 都配 14px 线性 SVG，与文字同灰度同基线</span></div>
+    <div class="demo optB" data-opt="B" data-mode="light" data-cnt="3">
+      <div class="bar"><span class="mode">LIGHT</span><span>任务页 · Team Tasks</span></div>
+      <div class="tabs">
+        <span class="tab on" data-pane="tasks"><svg class="tic" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>任务列表</span>
+        <span class="tab" data-pane="trash"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+      </div>
+      <div class="panel" data-pane="tasks"><span class="filter-hint">任务状态</span><span class="filter-hint">负责人</span><br><br>任务列表内容区 —— <b>9 个进行中任务</b>。</div>
+      <div class="panel" data-pane="trash" style="display:none">垃圾桶内容区 —— <b>3 个文件可恢复</b>。</div>
+    </div>
+  </div>
+
+  <!-- ═══ C ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">C</span><h2>分段药丸 · 选中墨实底</h2><span class="desc">与输入区模式切换（快速/平衡/深度）同族；计数嵌在段内</span></div>
+    <div class="demo optC" data-opt="C" data-mode="light" data-cnt="3">
+      <div class="bar"><span class="mode">LIGHT</span><span>任务页 · Team Tasks</span></div>
+      <div class="tabs-wrap">
+      <div class="tabs">
+        <span class="tab on" data-pane="tasks">任务列表</span>
+        <span class="tab" data-pane="trash"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+      </div>
+      </div>
+      <div class="panel" data-pane="tasks"><span class="filter-hint">任务状态</span><span class="filter-hint">负责人</span><br><br>任务列表内容区 —— <b>9 个进行中任务</b>。</div>
+      <div class="panel" data-pane="trash" style="display:none">垃圾桶内容区 —— <b>3 个文件可恢复</b>。</div>
+    </div>
+  </div>
+
+  <!-- ═══ D ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">D</span><h2>纸卡 tabs · 硬阴影档案卡</h2><span class="desc">选中 = 纸白底 + 墨描边 + 墨点；未选中透明浮卡</span></div>
+    <div class="demo optD" data-opt="D" data-mode="light" data-cnt="3">
+      <div class="bar"><span class="mode">LIGHT</span><span>任务页 · Team Tasks</span></div>
+      <div class="tabs-wrap">
+      <div class="tabs">
+        <span class="tab on" data-pane="tasks"><span class="corner"></span>任务列表</span>
+        <span class="tab" data-pane="trash"><svg class="tic" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>垃圾桶 <span class="cnt hot">3</span></span>
+      </div>
+      </div>
+      <div class="panel" data-pane="tasks"><span class="filter-hint">任务状态</span><span class="filter-hint">负责人</span><br><br>任务列表内容区 —— <b>9 个进行中任务</b>。</div>
+      <div class="panel" data-pane="trash" style="display:none">垃圾桶内容区 —— <b>3 个文件可恢复</b>。</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>体验要点</b>：① 点每个方案里的 tab 切换内容区，感受 hover / 选中态　② 顶部切亮/暗主题，四案同步变色　③ 垃圾桶数量切 0 → 计数 chip 隐藏（对应 trashCount=0 的真实场景）　④ 现状对比：20px 大图标 + 空悬红点已在这四案中分别以「去图标 / 线性 SVG / 计数 chip」解决
+  </div>
+</div>
+
+<script>
+  // tab 切换 (每方案独立)
+  document.querySelectorAll('.demo').forEach(demo => {
+    demo.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        demo.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+        t.classList.add('on');
+        const pane = t.dataset.pane;
+        demo.querySelectorAll('.panel').forEach(p => {
+          p.style.display = p.dataset.pane === pane ? '' : 'none';
+        });
+      });
+    });
+  });
+  // 主题切换
+  document.querySelectorAll('#themeTgl button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#themeTgl button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      document.querySelectorAll('.demo').forEach(d => d.dataset.mode = b.dataset.mode);
+      document.querySelectorAll('.bar .mode').forEach(m => m.textContent = b.dataset.mode.toUpperCase());
+    });
+  });
+  // 垃圾桶数量
+  document.querySelectorAll('#cntTgl button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#cntTgl button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      const n = b.dataset.cnt;
+      document.querySelectorAll('.demo').forEach(d => {
+        d.dataset.cnt = n;
+        d.querySelectorAll('.tab .cnt').forEach(c => { c.textContent = n; c.classList.toggle('hot', n !== '0'); });
+      });
+    });
+  });
+</script>
+</body>
+</html>
