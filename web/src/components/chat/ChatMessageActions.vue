@@ -170,6 +170,7 @@ function onCopyClick() {
    hover 才显浅灰底 + 墨青字; 暗色 hover 转青亮。替代上轮重描边胶囊。 */
 .chat-message-actions.mode-desktop .action-btn {
   height: 26px;
+  min-height: 26px; /* 批次⑩.74: 压过全局 44px 触控目标 */
   padding: 0 8px;
   gap: 5px;
   border: none;

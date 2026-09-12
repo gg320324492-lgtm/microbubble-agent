@@ -464,6 +464,7 @@ function onEditKeydown(e: KeyboardEvent) {
 }
 .tts-btn {
   height: 26px;
+  min-height: 26px; /* 批次⑩.74: 压过全局 44px 触控目标 */
   padding: 0 8px;
   border: none;
   border-radius: 7px;
