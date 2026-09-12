@@ -52,7 +52,7 @@
           <div class="mci-mention-avatar">{{ (m.name || m.username || '?').slice(0, 1) }}</div>
           <div class="mci-mention-info">
             <div class="mci-mention-name">{{ m.name || m.username }}</div>
-            <div class="mci-mention-username">@{{ m.wechat_id || m.username }}</div>
+            <div class="mci-mention-username">@{{ m.username }}</div>
           </div>
         </div>
       </div>
@@ -105,7 +105,7 @@ const mention = useMentionAutocomplete({
     if (!ctx || ctx.triggerPos < 0) return
     const before = text.value.substring(0, ctx.triggerPos)
     const after = text.value.substring(ctx.triggerPos + 1 + ctx.query.length)
-    const mentionText = `@${member.wechat_id || member.username} `
+    const mentionText = `@${member.username} `
     text.value = before + mentionText + after
     setTimeout(() => {
       const ta = inputRef.value?.$el?.querySelector?.('textarea')

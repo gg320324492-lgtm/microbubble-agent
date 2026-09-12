@@ -59,7 +59,7 @@
           <div class="dci-mention-avatar">{{ (m.name || m.username || '?').slice(0, 1) }}</div>
           <div class="dci-mention-info">
             <div class="dci-mention-name">{{ m.name || m.username }}</div>
-            <div class="dci-mention-username">@{{ m.wechat_id || m.username }}</div>
+            <div class="dci-mention-username">@{{ m.username }}</div>
           </div>
         </div>
       </div>
@@ -117,7 +117,7 @@ const canSend = computed(() => {
 })
 
 // 已 mention 用户预览 — B-3 v3.2
-// 扫描文本中所有 @handle, 匹配 membersList (wechat_id / username / name), 去重
+// 扫描文本中所有 @handle, 匹配 membersList (username / name), 去重 (2026-09 企微下线删 wechat_id)
 const mentionedPreview = computed(() => {
   const val = text.value || ''
   const handles = new Set()
@@ -130,7 +130,7 @@ const mentionedPreview = computed(() => {
   const seen = new Set()
   const result = []
   for (const member of props.membersList) {
-    const keys = [member.wechat_id, member.username, member.name]
+    const keys = [member.username, member.name]
       .filter(Boolean)
       .map((k) => String(k).toLowerCase())
     if (keys.some((k) => handles.has(k)) && !seen.has(member.id)) {
@@ -148,7 +148,7 @@ const mention = useMentionAutocomplete({
     if (!ctx || ctx.triggerPos < 0) return
     const before = text.value.substring(0, ctx.triggerPos)
     const after = text.value.substring(ctx.triggerPos + 1 + ctx.query.length)
-    const mentionText = `@${member.wechat_id || member.username} `
+    const mentionText = `@${member.username} `
     text.value = before + mentionText + after
     setTimeout(() => {
       const ta = inputRef.value?.$el?.querySelector?.('textarea')
