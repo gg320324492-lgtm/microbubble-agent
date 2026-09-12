@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仪表盘 × 任务管理 去重重设计 · 4 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --coral: #ef7256; --dim: #9AA4A0;
+    --hair: rgba(22,35,42,.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1360px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .matrix { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 26px; font-size: 12px; line-height: 1.7; color: var(--txt2); }
+  .matrix h2 { font-size: 14px; color: var(--txt); margin-bottom: 10px; }
+  .matrix table { width: 100%; border-collapse: collapse; }
+  .matrix th, .matrix td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+  .matrix th { background: #FBFAF7; font-weight: 600; color: var(--txt); }
+  .dup { color: #B4823C; font-weight: 600; }
+  .uniq { color: #2E8B62; font-weight: 600; }
+
+  .opt { margin-bottom: 30px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h h2 { font-size: 16px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+  .opt-notes { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 11.5px; line-height: 1.8; }
+  .opt-notes span.pro { color: #2E8B62; } .opt-notes span.con { color: #B4823C; }
+
+  /* ═══ 页面画面框架 ═══ */
+  .page { background: var(--paper); border: 1px solid rgba(22,35,42,.18); border-radius: 14px; overflow: hidden; }
+  .phead { display: flex; align-items: center; gap: 12px; padding: 14px 22px; background: rgba(255,255,255,.7); border-bottom: 1px solid var(--hair); }
+  .phead .logo { font-weight: 700; font-size: 13px; }
+  .pnav { display: flex; gap: 16px; margin-left: 18px; font-size: 12px; color: #7d8a86; }
+  .pnav .on { color: var(--ink); font-weight: 650; border-bottom: 2px solid var(--ink); padding-bottom: 2px; }
+  .pbody { padding: 18px 22px 22px; }
+  .mono { font-family: var(--mono); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; font-size: 11px; padding: 5px 13px; }
+
+  /* 通用卡片 */
+  .blk { background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 12px; padding: 14px 16px; }
+  .blk-t { font-size: 11px; font-weight: 650; color: var(--ink); margin-bottom: 10px; display: flex; align-items: center; gap: 7px; }
+  .blk-t .en { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: var(--dim); font-weight: 400; }
+  .blk-t .more { margin-left: auto; font-size: 10px; color: var(--teal); font-weight: 400; }
+
+  /* hero 通用 */
+  .hero { background: var(--card); border: 1px solid rgba(22,35,42,.12); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; display: flex; align-items: center; gap: 16px; }
+  .hero .hi { font-size: 17px; font-weight: 700; }
+  .hero .dt { font-family: var(--mono); font-size: 9px; letter-spacing: .1em; color: var(--dim); margin-top: 4px; }
+  .hero .pets { margin-left: auto; display: flex; gap: 10px; align-items: flex-end; }
+  .pet { width: 46px; height: 52px; border-radius: 10px 10px 4px 4px; background: linear-gradient(180deg,#dcece5,#f2f7f5); border: 1px solid var(--hair); display: flex; align-items: flex-end; justify-content: center; font-size: 20px; padding-bottom: 4px; }
+  .herobtn { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 8px 15px; border-radius: 999px; }
+  .solid { background: var(--ink); color: #FBFCFB; font-weight: 600; }
+  .line { border: 1px solid rgba(22,35,42,.3); color: var(--ink2,#5B6870); }
+
+  /* 任务行通用 */
+  .trow { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; }
+  .trow:hover { background: rgba(22,35,42,.04); }
+  .tick { width: 15px; height: 15px; border-radius: 999px; border: 1.5px solid #8fa0aa; flex-shrink: 0; }
+  .tt { font-size: 11.5px; color: var(--ink); }
+  .tmeta { font-family: var(--mono); font-size: 8.5px; color: var(--dim); letter-spacing: .03em; }
+  .chip { font-size: 8.5px; padding: 1px 7px; border-radius: 5px; border: 1px solid rgba(22,35,42,.16); color: #5b6870; }
+  .chip.hot { border-color: rgba(163,84,63,.45); color: var(--danger); background: rgba(163,84,63,.07); }
+  .gh { display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px; }
+  .av { width: 22px; height: 22px; border-radius: 999px; background: linear-gradient(135deg,#5b8def,#8b5cf6); color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+  .gn { font-size: 11px; font-weight: 600; color: var(--ink); }
+  .done-tick { width: 15px; height: 15px; border-radius: 999px; background: var(--teal); color: #fff; font-size: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* A 门户快捷格 */
+  .qgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .q { background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 11px; }
+  .q .qi { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .q .qt { font-size: 12px; font-weight: 600; color: var(--ink); }
+  .q .qs { font-family: var(--mono); font-size: 8.5px; color: var(--dim); margin-top: 3px; letter-spacing: .04em; }
+  .sumbar { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 12px; padding: 12px 16px; margin-top: 12px; font-size: 11.5px; color: var(--ink); }
+  .sumbar .mono { font-size: 9px; color: var(--dim); }
+  .sumbar .go { margin-left: auto; color: var(--teal); font-size: 11px; }
+
+  /* B 今日重点 */
+  .focusrow { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 9px; border: 1px solid rgba(22,35,42,.08); background: var(--card); margin-bottom: 7px; }
+  .focusrow.hot { border-color: rgba(163,84,63,.3); }
+  .feed .fi { display: flex; gap: 8px; padding: 7px 2px; border-bottom: 1px dashed var(--hair); font-size: 10.5px; color: #4a5560; align-items: baseline; }
+  .feed .fi:last-child { border-bottom: none; }
+  .feed .ft { font-family: var(--mono); font-size: 8px; color: var(--dim); flex-shrink: 0; }
+  .two-col { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; }
+
+  /* C 时间线 */
+  .tl { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; margin-bottom: 12px; }
+  .tld { background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 9px; padding: 8px 6px 9px; text-align: center; }
+  .tld .dw { font-family: var(--mono); font-size: 7.5px; letter-spacing: .12em; color: var(--dim); }
+  .tld .dn { font-family: var(--mono); font-size: 13px; color: var(--ink); margin: 4px 0 6px; }
+  .tld .bars { display: flex; flex-direction: column; gap: 3px; min-height: 14px; }
+  .tld .b { height: 5px; border-radius: 3px; background: var(--teal); opacity: .8; }
+  .tld .b.r { background: var(--danger); }
+  .tld.today { border-color: rgba(14,118,110,.5); }
+  .kpirow { display: flex; gap: 10px; margin-bottom: 12px; }
+  .kpi { flex: 1; background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 11px; padding: 11px 14px; }
+  .kpi .kl { font-family: var(--mono); font-size: 8px; letter-spacing: .12em; color: var(--dim); }
+  .kpi .kv { font-size: 19px; font-weight: 700; color: var(--ink); margin-top: 3px; }
+  .kpi .kv small { font-size: 10px; font-weight: 400; color: var(--dim); margin-left: 3px; }
+
+  .legendbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .legendbox b { color: var(--txt); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>仪表盘 × 任务管理 去重重设计 · 4 方案</h1>
+  <p class="sub">两个页面的主体内容几乎相同（任务列表 + 统计 + 创建/编辑对话框），仪表盘相当于一个「缩水版任务页」加一个问候 hero。四案共同原则：<b>任务的一切只在「任务管理」页存在</b>；仪表盘重新定位，变成任务页没有的东西。</p>
+
+  <div class="matrix">
+    <h2>重复内容矩阵（现状盘点）</h2>
+    <table>
+      <tr><th>内容块</th><th>仪表盘</th><th>任务管理</th><th>判定</th></tr>
+      <tr><td>进行中任务列表（按负责人分组 + 完成操作）</td><td>✓ 整块</td><td>✓ 更完整（含筛选/垃圾桶）</td><td class="dup">完全重复</td></tr>
+      <tr><td>统计（进行中/已完成/逾期）</td><td>✓ 三卡大数字</td><td>✓ 头部一行</td><td class="dup">重复</td></tr>
+      <tr><td>创建/编辑任务对话框</td><td>✓ 两套</td><td>✓ 一套</td><td class="dup">重复</td></tr>
+      <tr><td>问候 + 时间 + 兔子宠物 + 开始对话入口</td><td class="uniq">✓ 独有</td><td>—</td><td class="uniq">保留价值</td></tr>
+      <tr><td>筛选器 / 垃圾桶 / 编辑模式</td><td>—</td><td class="uniq">✓ 独有</td><td class="uniq">任务页专属</td></tr>
+    </table>
+  </div>
+
+  <!-- ═══ A ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">A</span><h2>极简门户 · 任务内容全撤</h2><span class="desc">仪表盘 = 问候 + 宠物 + 六宫格模块入口 + 一行任务摘要；所有任务内容只在任务管理页</span></div>
+    <div class="page">
+      <div class="phead"><span class="logo">MB-LAB</span><div class="pnav"><span class="on">仪表盘</span><span>任务管理</span><span>会议</span><span>知识库</span><span>网盘</span></div></div>
+      <div class="pbody">
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20 · MB-LAB DAILY</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn solid">💬 开始对话</span>
+        </div>
+        <div class="qgrid">
+          <div class="q"><span class="qi" style="background:#dcece5">✓</span><div><div class="qt">任务管理</div><div class="qs">17 进行中 · 2 逾期</div></div></div>
+          <div class="q"><span class="qi" style="background:#e3e8f8">🎥</span><div><div class="qt">会议</div><div class="qs">本周 2 场</div></div></div>
+          <div class="q"><span class="qi" style="background:#fdeeda">📚</span><div><div class="qt">知识库</div><div class="qs">345 条 · +12 本周</div></div></div>
+          <div class="q"><span class="qi" style="background:#fde3de">🗂</span><div><div class="qt">课题组网盘</div><div class="qs">322 个文件</div></div></div>
+          <div class="q"><span class="qi" style="background:#ece4f8">👥</span><div><div class="qt">成员</div><div class="qs">9 人 · 3 人未录声纹</div></div></div>
+          <div class="q"><span class="qi" style="background:#e2efdd">🧪</span><div><div class="qt">实验数据</div><div class="qs">DFT 服务运行中</div></div></div>
+        </div>
+        <div class="sumbar">
+          <span>📋 任务摘要</span><span class="mono">17 进行中 · 2 逾期 · 72 已完成</span>
+          <span class="go">打开任务管理 →</span>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 重复清零，仪表盘成为纯入口页，加载最快</span><span class="pro">✓ 六宫格计数让每个模块的入口都有信息量</span><span class="con">✗ 每次回仪表盘看到的东西几乎不变（摘要只有一行）</span></div>
+  </div>
+
+  <!-- ═══ B ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">B</span><h2>今日简报 · 只看需要今天处理的</h2><span class="desc">仪表盘 = 「我今天要干什么」：逾期 + 今日到期（可直接勾选完成）+ 团队动态流；不全量列表</span></div>
+    <div class="page">
+      <div class="phead"><span class="logo">MB-LAB</span><div class="pnav"><span class="on">仪表盘</span><span>任务管理</span><span>会议</span><span>知识库</span><span>网盘</span></div></div>
+      <div class="pbody">
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn solid">💬 开始对话</span>
+        </div>
+        <div class="two-col">
+          <div class="blk">
+            <div class="blk-t">今日重点 <span class="en">TODAY · 5</span><span class="more">全部任务 →</span></div>
+            <div class="focusrow hot"><span class="tick"></span><span class="tt">修改论文 · 截止今天</span><span class="chip hot" style="margin-left:auto">逾期 1 天</span></div>
+            <div class="focusrow"><span class="tick"></span><span class="tt">准备组会汇报 PPT</span><span class="tmeta" style="margin-left:auto">今日到期</span></div>
+            <div class="focusrow"><span class="tick"></span><span class="tt">回复审稿意见</span><span class="tmeta" style="margin-left:auto">今日到期</span></div>
+            <div class="focusrow"><span class="tick"></span><span class="tt">补充实验组对比数据</span><span class="tmeta" style="margin-left:auto">明日到期</span></div>
+            <div class="focusrow"><span class="tick"></span><span class="tt">整理八加大修复清单</span><span class="tmeta" style="margin-left:auto">明日到期</span></div>
+          </div>
+          <div class="blk feed">
+            <div class="blk-t">团队动态 <span class="en">ACTIVITY</span></div>
+            <div class="fi"><span class="ft">19:0x</span><span>会议助手 创建了任务「测试腾讯会议与听会是否冲突」</span></div>
+            <div class="fi"><span class="ft">18:3x</span><span>蒋芦笛 上传了「开题报告-气泡界面调空.pdf」</span></div>
+            <div class="fi"><span class="ft">17:5x</span><span>Fable 完成了任务「配置服务器」</span></div>
+            <div class="fi"><span class="ft">16:2x</span><span>知识库 新增「MDPI 投稿格式要求」</span></div>
+            <div class="fi"><span class="ft">15:0x</span><span>周之超 更新了「表面污染去除」研究方向</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 与任务页零重复：只显示「今天」的切片，勾选完成直达</span><span class="pro">✓ 团队动态流是任务页没有的新信息</span><span class="con">✗ 需要新增动态流接口（会议/文件/知识库最近事件聚合）</span></div>
+  </div>
+
+  <!-- ═══ C ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">C</span><h2>驾驶舱 · 7 天到期时间线</h2><span class="desc">统计升维成「未来 7 天到期分布」时间线 + 跨模块 KPI 行 + 会议/知识库聚合卡；不重复任何任务列表</span></div>
+    <div class="page">
+      <div class="phead"><span class="logo">MB-LAB</span><div class="pnav"><span class="on">仪表盘</span><span>任务管理</span><span>会议</span><span>知识库</span><span>网盘</span></div></div>
+      <div class="pbody">
+        <div class="hero">
+          <div><div class="hi">下午好，Fable</div><div class="dt">2026-09-12 FRI · 19:20</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn solid">💬 开始对话</span>
+        </div>
+        <div class="kpirow">
+          <div class="kpi"><div class="kl">TASKS</div><div class="kv">17<small>进行中</small></div></div>
+          <div class="kpi"><div class="kl">DONE</div><div class="kv">72<small>已完成</small></div></div>
+          <div class="kpi"><div class="kl">OVERDUE</div><div class="kv" style="color:var(--danger)">2<small>逾期</small></div></div>
+          <div class="kpi"><div class="kl">MEETINGS · WEEK</div><div class="kv">2<small>本场次</small></div></div>
+        </div>
+        <div class="blk">
+          <div class="blk-t">未来 7 天到期时间线 <span class="en">DUE TIMELINE</span><span class="more">任务管理 →</span></div>
+          <div class="tl">
+            <div class="tld today"><div class="dw">FRI 12</div><div class="dn">今天</div><div class="bars"><span class="b r"></span><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">SAT 13</div><div class="dn">13</div><div class="bars"><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">SUN 14</div><div class="dn">14</div><div class="bars"></div></div>
+            <div class="tld"><div class="dw">MON 15</div><div class="dn">15</div><div class="bars"><span class="b"></span><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">TUE 16</div><div class="dn">16</div><div class="bars"><span class="b"></span></div></div>
+            <div class="tld"><div class="dw">WED 17</div><div class="dn">17</div><div class="bars"></div></div>
+            <div class="tld"><div class="dw">THU 18</div><div class="dn">18</div><div class="bars"><span class="b"></span></div></div>
+          </div>
+          <div class="two-col" style="margin-top:4px">
+            <div class="blk" style="border:none;padding:0">
+              <div class="blk-t">📅 即将到来 <span class="en">MEETINGS</span></div>
+              <div class="trow"><span class="tmeta mono">FRI 19:00</span><span class="tt">课题组周会</span></div>
+              <div class="trow"><span class="tmeta mono">MON 14:00</span><span class="tt">DFT 服务评审会</span></div>
+            </div>
+            <div class="blk" style="border:none;padding:0">
+              <div class="blk-t">📚 最近入库 <span class="en">KNOWLEDGE</span></div>
+              <div class="trow"><span class="tt">MDPI 投稿格式要求</span><span class="tmeta" style="margin-left:auto">+2h</span></div>
+              <div class="trow"><span class="tt">气泡界面调控文献集</span><span class="tmeta" style="margin-left:auto">+1d</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 信息最丰富：时间维度 + 跨模块聚合，任务页完全没有这些视角</span><span class="pro">✓ 7 天时间线把「什么时候忙」可视化</span><span class="con">✗ 需要新增聚合接口（7 天到期分布 / 动态聚合），工作量最大</span></div>
+  </div>
+
+  <!-- ═══ D ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">D</span><h2>合并 · 废除仪表盘路由</h2><span class="desc">导航「仪表盘」直接指向任务管理；问候 + 宠物 + 开始对话迁移为任务页顶部欢迎条。页面数 -1，零重复</span></div>
+    <div class="page">
+      <div class="phead"><span class="logo">MB-LAB</span><div class="pnav"><span class="on">任务管理</span><span>会议</span><span>知识库</span><span>网盘</span></div></div>
+      <div class="pbody">
+        <div class="hero" style="margin-bottom:14px">
+          <div><div class="hi">下午好，Fable · 17 进行中 · 2 逾期</div><div class="dt">2026-09-12 FRI · 19:20 · TASK DOSSIER</div></div>
+          <div class="pets"><div class="pet">🐰</div><div class="pet">🐇</div></div>
+          <span class="herobtn solid">💬 开始对话</span>
+        </div>
+        <div class="blk" style="margin-bottom:12px">
+          <div class="blk-t">任务管理 <span class="en">TASK DOSSIER · 89 TOTAL</span><span class="more" style="margin-left:auto">☰ 视图 · 批量管理</span></div>
+          <div class="trow" style="border:1px solid rgba(22,35,42,.1);border-radius:8px;margin-bottom:6px"><span class="done-tick">✓</span><span class="tt" style="text-decoration:line-through;color:var(--dim)">配置服务器</span><span class="chip" style="margin-left:auto">中</span></div>
+          <div class="trow" style="border:1px solid rgba(22,35,42,.1);border-radius:8px;margin-bottom:6px"><span class="tick"></span><span class="tt">模拟任务</span><span class="chip hot" style="margin-left:auto">逾期 1 天</span></div>
+          <div class="trow" style="border:1px solid rgba(22,35,42,.1);border-radius:8px"><span class="tick"></span><span class="tt">测试腾讯会议与听会是否冲突</span><span class="chip" style="margin-left:auto">中</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 页面数 -1，导航更短，维护成本最低</span><span class="pro">✓ 重复问题从「 redesign 」层面直接消失</span><span class="con">✗ 失去独立仪表盘的扩展空间（未来想加动态流/时间线还得再建页）</span></div>
+  </div>
+
+  <div class="legendbox">
+    <b>选择参考</b>：想最省 → <b>A</b>；想要「每天打开就知道今天干什么」→ <b>B</b>（需新增动态流接口）；想要最丰富的跨模块总览 → <b>C</b>（工作量最大）；觉得仪表盘没必要存在 → <b>D</b>。<b>共同点</b>：四案都把「进行中任务列表 / 统计三卡 / 任务对话框」从仪表盘撤除，任务内容只在任务管理页维护；兔子宠物与开始对话入口全部保留。<br>
+    <b>实施位置</b>：<code>Dashboard.vue</code>（787 行，按所选方案重写；宠物组件 <code>DashboardPet.vue</code> 保留复用）＋ 导航路由（D 方案需改侧栏与路由表）。
+  </div>
+</div>
+</body>
+</html>
