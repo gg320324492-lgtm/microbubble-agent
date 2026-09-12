@@ -783,6 +783,18 @@ onMounted(() => {
   justify-content: center;
 }
 
+/* 批次⑩.74: 回收站 (is-trash) 行卡勾选框改静态排列 — list 模式旧的绝对定位
+   会被文件图标盖住, 用户看不到勾选框 (批量勾选不可用) */
+.file-card.is-trash .file-card-checkbox {
+  position: static;
+  top: auto;
+  left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 /* ═══ 批次⑩.74 回收站上下文 (is-trash) ═══
    行卡: 去顶部彩条/hover 抬升, 圆角白卡对齐侧栏会话卡语言 (亮墨/暗青 token) */
 .file-card.is-trash {
