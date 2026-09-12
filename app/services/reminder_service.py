@@ -4,13 +4,15 @@
 - 所有提醒统一在 11:00 AM 北京时间窗口发送（± 60min 容差）
 - 每个 task 只有 1 次 11AM 提醒机会：发完即结束，不重试
 - 同用户多条 reminder 聚合为 1 条 digest 消息（避免轰炸）
-- **任何微信消息都触发 ack**（用户活跃 = 不再推旧的）
-  - 包括"收到"/"OK"/"好"/"今天别提醒"/"你好"/"查询 XXX"等所有内容
-  - "完成"/"进度 X%" 仍然有 task 状态变更副作用
 - 失败也标 sent（one-shot，不重试）
 
-注：snooze_user_reminders 仍保留在 API 端点用于向后兼容，但微信路径已不再调用。
-设计文档：C:\\Users\\admin\\.claude\\plans\\snappy-coalescing-quiche.md
+2026-09 企业微信下线：
+- 推送通道从 wechat_bot.smart_send 改为 notification_service.notify_user
+  （站内 WS + 离线队列 + 浏览器 Web Push），"微信回复 ack" 路径随 wechat
+  模块删除，Web/API ack 保留。
+- "任何微信消息都触发 ack" 语义不再存在；ack 仅来自 Web 端操作。
+
+注：snooze_user_reminders 仍保留在 API 端点用于向后兼容。
 """
 """
 W86 mini-12 hotfix: 延迟 celery import 避免 router 加载时的循环导入
@@ -46,7 +48,7 @@ from app.services.reminder_policy import (
     is_in_digest_window,
     batch_date_for,
 )
-from app.wechat.bot import wechat_bot
+from app.services.notification_service import notify_user
 
 logger = logging.getLogger("microbubble.reminder")
 
@@ -94,28 +96,25 @@ class ReminderService:
             )
             return False
 
-        if not member.wechat_id and not member.external_userid:
-            logger.warning(
-                f"提醒 {reminder.id} 无法发送: 成员 {member.name} 无微信标识"
-            )
-            return False
-
         message = self._format_reminder_message(task, member)
 
         try:
-            result = await wechat_bot.smart_send(member, message)
-            errcode = (
-                result.get("errcode", -1) if isinstance(result, dict) else -1
+            delivered = await notify_user(
+                member.id,
+                title=f"🔔 任务提醒：{task.title}",
+                body=message,
+                context="reminder",
+                db=self.db,
             )
-            if errcode != 0:
-                logger.warning(
-                    f"微信推送返回错误: {result}, member={member.name}"
+            if delivered:
+                logger.info(f"站内提醒推送成功: member={member.name}")
+            else:
+                logger.info(
+                    f"站内提醒用户离线, 已入离线队列: member={member.name}"
                 )
-                return False
-            logger.info(f"微信推送成功: member={member.name}")
         except Exception as e:
             logger.error(
-                f"微信推送失败 reminder_id={reminder.id} member={member.name}: {e}",
+                f"站内提醒推送失败 reminder_id={reminder.id} member={member.name}: {e}",
                 exc_info=True,
             )
             return False
@@ -123,9 +122,8 @@ class ReminderService:
         return True
 
     async def send_meeting_reminder(self, reminder: Reminder) -> bool:
-        """发送会议提醒（Wave 3a，兼容旧 API）"""
+        """发送会议提醒（Wave 3a，兼容旧 API；2026-09 改站内推送）"""
         from app.models.meeting import Meeting, MeetingParticipant
-        from app.wechat.notifier import notify_meeting_reminder
 
         meeting_id = getattr(reminder, "meeting_id", None)
         if not meeting_id:
@@ -178,26 +176,35 @@ class ReminderService:
         except Exception:
             remind_min = 5
 
+        # 站内推送（2026-09 企业微信下线，原走 wechat notifier）
+        start_beijing = (
+            meeting.start_time.replace(tzinfo=timezone.utc).astimezone(
+                BEIJING_TZ
+            )
+            if meeting.start_time
+            else None
+        )
+        start_str = (
+            start_beijing.strftime("%m-%d %H:%M") if start_beijing else "待定"
+        )
         push_ok = False
         for p in participants:
-            wechat_id = p.wechat_id or p.external_userid or f"member_{p.id}"
             try:
-                result = await notify_meeting_reminder(
-                    wechat_id,
-                    {
-                        "title": meeting.title,
-                        "start_time": meeting.start_time,
-                        "location": meeting.location or "线上",
-                        "meeting_url": meeting.meeting_url or "",
-                        "participants": [pp.name for pp in participants],
-                    },
-                    remind_min,
+                await notify_user(
+                    p.id,
+                    title=f"📅 会议提醒：{meeting.title}",
+                    body=(
+                        f"会议「{meeting.title}」约 {remind_min} 分钟后开始\n"
+                        f"🕘 时间：{start_str}\n"
+                        f"📍 地点：{meeting.location or '线上'}"
+                    ),
+                    context="meeting_reminder",
+                    db=self.db,
                 )
-                if result:
-                    push_ok = True
+                push_ok = True
             except Exception as e:
                 logger.error(
-                    f"notify_meeting_reminder 失败: member={p.id} {e}",
+                    f"会议站内提醒失败: member={p.id} {e}",
                     exc_info=True,
                 )
 
@@ -259,13 +266,13 @@ class ReminderService:
     async def _send_digest_message(
         self, member: Member, reminders: list
     ) -> bool:
-        """聚合多 task → 1 条微信消息
+        """聚合多 task → 1 条站内通知
 
         11AM 推送时把该用户所有 pending reminder 合并成 1 条 digest，
-        避免 8 个任务就推 8 条轰炸。
+        避免 8 个任务就推 8 条轰炸。（2026-09 原微信通道改站内推送）
 
         Returns:
-            bool — 微信 API 是否返回 errcode=0
+            bool — 是否成功送达 (WS 在线推送或入离线队列)
         """
         lines = [f"📋 你今天有 {len(reminders)} 条待办：\n"]
         for r in reminders:
@@ -285,21 +292,19 @@ class ReminderService:
             lines.append(
                 f"• [{task.priority or 'medium'}] {task.title}（截止 {due_str}）"
             )
-        content = (
-            "\n".join(lines)
-            + "\n\n回复「收到」= 今天不再提醒；「完成 XXX」= 标记完成。"
-        )
+        content = "\n".join(lines)
 
         try:
-            result = await wechat_bot.smart_send(member, content)
-            errcode = (
-                result.get("errcode", -1) if isinstance(result, dict) else -1
+            delivered = await notify_user(
+                member.id,
+                title=f"📋 每日待办：{len(reminders)} 条",
+                body=content,
+                context="reminder_digest",
+                db=self.db,
             )
-            if errcode != 0:
-                logger.warning(
-                    f"digest send failed member_id={member.id} errcode={errcode}"
-                )
-                return False
+            logger.info(
+                f"digest 站内推送 member_id={member.id} delivered={delivered}"
+            )
             return True
         except Exception as e:
             logger.error(
@@ -378,17 +383,6 @@ class ReminderService:
                     fail += len(member_rems)
                     continue
 
-                if not member.wechat_id and not member.external_userid:
-                    logger.warning(
-                        f"成员 {member.name} 无微信标识，跳过 {len(member_rems)} 条 reminder"
-                    )
-                    for r in member_rems:
-                        r.status = "sent"
-                        r.sent_at = utcnow()
-                    await self.db.commit()
-                    fail += len(member_rems)
-                    continue
-
                 ok = await self._send_digest_message(member, member_rems)
                 # 失败也标 sent（one-shot，不重试）
                 for r in member_rems:
@@ -446,10 +440,9 @@ class ReminderService:
         """取消该用户所有 pending reminder（跨任务）
 
         用于：
-        - 微信发"收到"/"OK"/"好" → channel="wechat"
-        - 任务"完成" → channel="wechat_done"
         - Web 端"全部标为已读" → channel="web"
         - API 调用 → channel="api"
+        - (历史) 微信发"收到" → channel="wechat"，2026-09 企业微信下线后仅存档
 
         注意：不联动 task 状态（不修改 task.status / task.progress）。
         Returns:

@@ -328,6 +328,17 @@ export const useNotificationsStore = defineStore('notifications', () => {
       ]
       unreadCount.value = unreadCount.value + 1
     })
+    // 2026-09 企业微信下线: 任务/会议提醒改站内推送 (reminder_service → notify_user)
+    // 铃铛列表仍走 GET /reminders, 这里只负责实时 toast 提示
+    ws.on('reminder', (data) => {
+      import('element-plus').then(({ ElMessage }) => {
+        ElMessage.warning({
+          message: data.title || data.body || '你有新的提醒',
+          duration: 6000,
+          grouping: true,
+        })
+      }).catch(() => {})
+    })
     wsHandlersBound = true
   }
 

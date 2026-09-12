@@ -655,6 +655,10 @@ _CONTEXT_PRIORITY_MAP = {
     "star": NotificationPriority.LOW,        # 收藏低优先级
     "upload": NotificationPriority.MEDIUM,   # 上传通知
     "system": NotificationPriority.LOW,      # 系统级巡检
+    # 2026-09 企业微信下线: 提醒改站内推送 (reminder_service)
+    "reminder": NotificationPriority.HIGH,          # 任务到期/逾期, 必须立刻看到
+    "reminder_digest": NotificationPriority.HIGH,   # 11AM 每日待办汇总
+    "meeting_reminder": NotificationPriority.HIGH,  # 会议即将开始
 }
 
 
@@ -821,6 +825,44 @@ async def push_with_priority(
             logger.error("[Notify] push_to_browser create_task failed: %s", e, exc_info=True)
 
     return delivered
+
+
+async def notify_user(
+    user_id: int,
+    *,
+    title: str,
+    body: str,
+    context: str = "reminder",
+    link: Optional[str] = None,
+    db: Optional[object] = None,
+) -> int:
+    """站内通用推送 (2026-09 企业微信下线后提醒系统的唯一推送通道)
+
+    原任务提醒 / 11AM digest / 会议提醒走 wechat_bot.smart_send, 现统一走
+    push_with_priority: WS 在线推送 + 离线队列 (reconnect replay) + 浏览器
+    原生 Web Push 三通道。前端 useNotifications 监听 type='reminder' 弹 toast,
+    铃铛列表本身仍走 GET /reminders (不受本次改动影响)。
+
+    Args:
+        user_id: 目标成员 id (members.id)
+        title: 通知标题 (toast / 浏览器推送标题)
+        body: 通知正文
+        context: 场景标识, 决定推送优先级 (reminder/reminder_digest/meeting_reminder)
+        link: 可选跳转路径 (前端点击 toast 用)
+        db: AsyncSession (浏览器 Web Push 查 subscription 用, 可 None)
+
+    Returns:
+        1 = WS 推送成功, 0 = 已入离线队列
+    """
+    payload = {
+        "type": "reminder",
+        "context": context,
+        "title": title,
+        "body": body,
+    }
+    if link:
+        payload["link"] = link
+    return await push_with_priority(user_id, payload, db=db)
 
 
 async def _push_to_browser(user_id: int, payload: dict, db: object) -> None:

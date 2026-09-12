@@ -16,7 +16,7 @@ class Reminder(Base, TimestampMixin):
     remind_at = Column(DateTime, nullable=False)
 
     # 提醒类型
-    remind_type = Column(String(20), default="wechat")  # wechat/email/sms
+    remind_type = Column(String(20), default="in_app")  # in_app/email/sms (历史行可能是 'wechat', 2026-09 企业微信下线)
 
     # 状态
     status = Column(String(20), default="pending")  # pending/sent/cancelled/acknowledged
