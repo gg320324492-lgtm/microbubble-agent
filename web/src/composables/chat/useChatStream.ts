@@ -1265,6 +1265,7 @@ export function useChatStream() {
   // TTS 播放（提取自原 ChatViewSSE.vue）
   // --------------------------------------------------------------------------
   let playingAudio: HTMLAudioElement | null = null
+  let ttsAbort: AbortController | null = null
 
   // 批次⑩.73 fix: TTS 前剥离 markdown 语法 — 否则加粗 ** 会朗读成「星号星号」,
   // 表格竖线/标题#/链接 URL 等也会被逐字念出
@@ -1290,28 +1291,117 @@ export function useChatStream() {
 
   async function playTTS(text: string) {
     if (!text) return
+    // 重播时取消上一个流 (fetch 中断) 并停掉当前音频
+    ttsAbort?.abort()
+    ttsAbort = new AbortController()
+    const signal = ttsAbort.signal
     if (playingAudio) {
       playingAudio.pause()
       playingAudio = null
     }
     const cleaned = stripMarkdownForTTS(text) || text
     try {
-      const r = await axios.post(
-        '/api/v1/voice/tts',
-        { text: cleaned, voice: 'zh_female' },
-        { responseType: 'blob' }
-      )
-      const url = URL.createObjectURL(r.data)
+      const token = localStorage.getItem('access_token') || ''
+      const resp = await fetch('/api/v1/voice/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ text: cleaned, voice: 'zh_female' }),
+        signal,
+      })
+      if (!resp.ok) {
+        const detail = await resp.text().catch(() => '')
+        throw new Error(detail.slice(0, 200) || `HTTP ${resp.status}`)
+      }
+      // 批次⑩.73 提速: MSE 流式渐进播放 (边合成边响), 首声从"全部合成完"提前到"缓冲 0.2s";
+      // 不支持 audio/mpeg MSE 的浏览器 (Safari 等) 回退整段 blob
+      if (typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('audio/mpeg') && resp.body) {
+        await playTTSViaMSE(resp, signal)
+      } else {
+        const blob = await resp.blob()
+        playBlob(blob)
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError') return
+      ElMessage.error('TTS 播放失败：' + (e?.message || '未知错误'))
+    }
+  }
+
+  function playBlob(blob: Blob) {
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    playingAudio = audio
+    audio.onended = () => {
+      URL.revokeObjectURL(url)
+      playingAudio = null
+    }
+    audio.play()
+  }
+
+  function playTTSViaMSE(resp: Response, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const mediaSource = new MediaSource()
+      const url = URL.createObjectURL(mediaSource)
       const audio = new Audio(url)
       playingAudio = audio
       audio.onended = () => {
         URL.revokeObjectURL(url)
         playingAudio = null
+        resolve()
       }
-      audio.play()
-    } catch (e: any) {
-      ElMessage.error('TTS 播放失败：' + (e.response?.data?.detail || e.message))
-    }
+      audio.onerror = () => {
+        URL.revokeObjectURL(url)
+        playingAudio = null
+        reject(new Error('音频解码失败'))
+      }
+      mediaSource.addEventListener('sourceopen', () => {
+        let sb: SourceBuffer
+        try {
+          sb = mediaSource.addSourceBuffer('audio/mpeg')
+        } catch (e) {
+          reject(e as Error)
+          return
+        }
+        const reader = resp.body!.getReader()
+        let started = false
+        const pump = async () => {
+          try {
+            while (true) {
+              if (signal.aborted) {
+                reader.cancel().catch(() => {})
+                URL.revokeObjectURL(url)
+                if (playingAudio === audio) playingAudio = null
+                resolve()
+                return
+              }
+              const { done, value } = await reader.read()
+              if (done) {
+                if (mediaSource.readyState === 'open') mediaSource.endOfStream()
+                return
+              }
+              await new Promise<void>((res) => {
+                sb.addEventListener('updateend', () => res(), { once: true })
+                try {
+                  sb.appendBuffer(value)
+                } catch {
+                  res()
+                }
+              })
+              // 缓冲够 0.2s 即起播 — 起播速度从"整段合成完"提前到首包
+              if (!started && audio.buffered.length && audio.buffered.end(0) > 0.2) {
+                started = true
+                audio.play().catch(() => {})
+              }
+            }
+          } catch (e) {
+            if ((e as Error)?.name !== 'AbortError') reject(e as Error)
+          }
+        }
+        pump()
+      })
+    })
   }
 
   // --------------------------------------------------------------------------
