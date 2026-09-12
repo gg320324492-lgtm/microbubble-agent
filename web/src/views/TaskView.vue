@@ -925,15 +925,19 @@ onMounted(() => {
   border: 1px solid var(--dg-hair);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.6);
-  padding: 3px;
+  padding: 4px;
 }
 .task-tabs :deep(.el-tabs__item) {
   font-family: var(--dg-mono); font-size: 12px; letter-spacing: 0.1em;
   color: var(--dg-fog);
-  height: 32px; line-height: 32px; padding: 0 18px;
+  height: 30px; line-height: 30px; padding: 0 18px;
   border-radius: 999px;
   transition: all 0.15s ease;
 }
+/* EP 经典下划线形态会清零 第2段 padding-left / 末段 padding-right (首尾贴边设计),
+   药丸形态必须还原, 否则段内容紧贴容器边缘 (用户反馈「边缘显示不全」) */
+.task-tabs :deep(.el-tabs__item:nth-of-type(2)) { padding-left: 18px; }
+.task-tabs :deep(.el-tabs__item:last-of-type) { padding-right: 18px; }
 .task-tabs :deep(.el-tabs__item:hover) { color: var(--dg-ink); }
 .task-tabs :deep(.el-tabs__item.is-active) {
   color: #fbfcfb; font-weight: 700;
