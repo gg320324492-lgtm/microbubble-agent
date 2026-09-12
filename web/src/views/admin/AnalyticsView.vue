@@ -17,6 +17,7 @@ import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { fetchStats, fetchRecentLogs } from '@/api/analytics'
+import { parseDbDate } from '@/utils/format'
 
 const days = ref(7)
 const loading = ref(false)
@@ -36,7 +37,8 @@ const fmtNum = (v) => (v == null ? '-' : v.toLocaleString())
 const fmtTime = (iso) => {
   if (!iso) return '-'
   try {
-    return new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'
   } catch { return iso }
 }
 

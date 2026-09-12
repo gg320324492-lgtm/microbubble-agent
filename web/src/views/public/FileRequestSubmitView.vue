@@ -86,6 +86,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useFileRequests } from '@/composables/useFileRequests'
+import { parseDbDate } from '@/utils/format'
 
 const route = useRoute()
 const token = route.params.token
@@ -117,8 +118,8 @@ const canSubmit = computed(() => {
 function formatTime(iso) {
   if (!iso) return ''
   try {
-    const d = new Date(iso)
-    return d.toLocaleString('zh-CN', { hour12: false })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { hour12: false }) : iso
   } catch { return iso }
 }
 

@@ -140,6 +140,7 @@ import { useNotificationsStore } from '@/composables/useNotifications'
 import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
 import { useCommentTree } from '@/composables/useCommentTree'
 import CommentItem from '@/components/drive/CommentItem.vue'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   fileId: { type: Number, required: true },
@@ -210,9 +211,8 @@ const canPost = computed(() => {
 })
 
 function parseServerTime(iso) {
-  // 后端返回 UTC 裸时间串 (无时区后缀), new Date 会按本地时区解析 → 相差 8 小时
-  if (typeof iso === 'string' && !/Z|[+-]\d{2}:?\d{2}$/.test(iso)) return new Date(iso + 'Z')
-  return new Date(iso)
+  // 后端返回 UTC 裸时间串 (无时区后缀), 统一走 parseDbDate 补 Z 按 UTC 解析
+  return parseDbDate(iso) || new Date(NaN)
 }
 
 function formatTime(iso) {

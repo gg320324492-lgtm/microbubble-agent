@@ -262,6 +262,7 @@ import {
 } from '@element-plus/icons-vue'
 // W68 第 12 批 C-3: emoji react 虚拟滚动 (默认 8 + 折叠后 4)
 import { useEmojiLazyLoad } from '@/composables/useEmojiLazyLoad'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   comment: { type: Object, required: true },
@@ -348,8 +349,8 @@ const canReply = computed(() => props.depth < 2)  // MAX_COMMENT_DEPTH=2
 const canEdit = computed(() => {
   if (!isOwner.value) return false
   if (!props.comment.created_at) return false
-  const t = new Date(props.comment.created_at).getTime()
-  if (isNaN(t)) return false
+  const t = parseDbDate(props.comment.created_at)?.getTime()
+  if (!t || isNaN(t)) return false
   // 5 分钟编辑窗口 (v2 PR6-P6)
   return Date.now() - t < 5 * 60 * 1000
 })
@@ -399,13 +400,13 @@ function escapeHtml(s) {
 
 function formatTime(iso) {
   if (!iso) return ''
-  const t = new Date(iso).getTime()
-  if (isNaN(t)) return ''
-  const sec = Math.floor((Date.now() - t) / 1000)
+  const t = parseDbDate(iso)
+  if (!t) return ''
+  const sec = Math.floor((Date.now() - t.getTime()) / 1000)
   if (sec < 60) return '刚刚'
   if (sec < 3600) return `${Math.floor(sec / 60)} 分钟前`
   if (sec < 86400) return `${Math.floor(sec / 3600)} 小时前`
-  return new Date(iso).toLocaleDateString('zh-CN')
+  return t.toLocaleDateString('zh-CN')
 }
 
 function usernameById(userId) {

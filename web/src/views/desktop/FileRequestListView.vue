@@ -116,6 +116,7 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useFileRequests } from '@/composables/useFileRequests'
+import { parseDbDate } from '@/utils/format'
 import QrCode from '@/components/common/QrCode.vue'
 
 const {
@@ -153,8 +154,8 @@ function parseExtensions(text) {
 function formatTime(iso) {
   if (!iso) return ''
   try {
-    const d = new Date(iso)
-    return d.toLocaleString('zh-CN', { hour12: false })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { hour12: false }) : iso
   } catch { return iso }
 }
 

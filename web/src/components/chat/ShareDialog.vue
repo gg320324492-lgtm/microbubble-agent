@@ -73,6 +73,7 @@ import { ref, reactive, computed } from 'vue'
 import { CopyDocument } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useChatHistoryStore } from '@/stores/chatHistory'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -155,7 +156,8 @@ async function copyUrl() {
 function formatDate(iso) {
   if (!iso) return '未知时间'
   try {
-    return new Date(iso).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '未知时间'
   } catch { return '未知时间' }
 }
 </script>

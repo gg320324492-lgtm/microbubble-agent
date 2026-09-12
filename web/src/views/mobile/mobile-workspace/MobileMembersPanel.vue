@@ -125,6 +125,7 @@ import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import VoiceprintEnrollFlow from '@/components/mobile/VoiceprintEnrollFlow.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
 import { memberTagType, memberTitleOf } from '@/utils/memberIdentity'
+import { parseDbDate } from '@/utils/format'
 
 const members = ref([])
 const loading = ref(false)
@@ -280,8 +281,8 @@ async function onCreateSubmit(form) {
 function formatDate(t) {
   if (!t) return ''
   // 简单格式: 2026-07-02 11:30
-  const d = new Date(t)
-  if (Number.isNaN(d.getTime())) return ''
+  const d = parseDbDate(t)
+  if (!d) return ''
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }

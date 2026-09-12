@@ -75,6 +75,7 @@
 import { ref, watch, nextTick, computed, onBeforeUnmount } from 'vue'
 import { Search, ChatLineRound } from '@element-plus/icons-vue'
 import { useChatHistoryStore } from '@/stores/chatHistory'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -151,8 +152,8 @@ function selectResult(item) {
 function formatTime(iso) {
   if (!iso) return ''
   try {
-    const d = new Date(iso)
-    return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
   } catch { return '' }
 }
 </script>

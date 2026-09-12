@@ -60,6 +60,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   payment: { type: Object, default: () => null },
@@ -102,7 +103,8 @@ function formatAmount(cents) {
 function formatDate(isoString) {
   if (!isoString) return ''
   try {
-    return new Date(isoString).toLocaleString('zh-CN')
+    const d = parseDbDate(isoString)
+    return d ? d.toLocaleString('zh-CN') : isoString
   } catch {
     return isoString
   }

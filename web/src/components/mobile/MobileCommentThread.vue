@@ -81,6 +81,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   comment: { type: Object, required: true },
@@ -140,13 +141,13 @@ function escapeHtml(s) {
 
 function formatTime(iso) {
   if (!iso) return ''
-  const t = new Date(iso).getTime()
-  if (isNaN(t)) return ''
-  const sec = Math.floor((Date.now() - t) / 1000)
+  const t = parseDbDate(iso)
+  if (!t) return ''
+  const sec = Math.floor((Date.now() - t.getTime()) / 1000)
   if (sec < 60) return '刚刚'
   if (sec < 3600) return `${Math.floor(sec / 60)} 分钟前`
   if (sec < 86400) return `${Math.floor(sec / 3600)} 小时前`
-  return new Date(iso).toLocaleDateString('zh-CN')
+  return t.toLocaleDateString('zh-CN')
 }
 
 function usernameById(userId) {

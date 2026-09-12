@@ -130,6 +130,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatHistoryStore } from '@/stores/chatHistory'
 import { useUiStore } from '@/stores/useUiStore'
 import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4: 资料库附加文档传递
+import { parseDbDate } from '@/utils/format'  // 服务端 created_at 为 naive UTC 串, 统一补 Z 归一
 
 // ============================================================================
 // 类型定义
@@ -1452,7 +1453,8 @@ export function useChatStream() {
       content: serverMsg.content || '',
       richBlocks: serverMsg.rich_blocks || [],
       toolTrace: Array.isArray(serverMsg.tool_trace) ? serverMsg.tool_trace : [],
-      timestamp: serverMsg.created_at || new Date().toISOString(),
+      // 服务端 created_at 是 naive UTC 串 (无时区标记), 归一为带 Z 的 ISO, 避免显示层按本地时区误读差 8h
+      timestamp: parseDbDate(serverMsg.created_at)?.toISOString() || new Date().toISOString(),
       server_id: serverMsg.id,
       client_msg_id: serverMsg.client_msg_id,
       is_partial: !!serverMsg.is_partial,

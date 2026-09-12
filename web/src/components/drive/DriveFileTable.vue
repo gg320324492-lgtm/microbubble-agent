@@ -182,6 +182,7 @@
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import VirtualList from '@/components/common/VirtualList.vue'
 import { DRIVE_MOVE_MIME, isDriveMoveDragging, readDriveMovePayload } from '@/composables/useDriveDragMove'
+import { parseDbDate } from '@/utils/format'
 
 const props = defineProps({
   files: { type: Array, default: () => [] },
@@ -428,8 +429,8 @@ function fmtSize(bytes) {
 }
 function fmtTime(iso) {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return String(iso).slice(0, 10)
+  const d = parseDbDate(iso)
+  if (!d) return String(iso).slice(0, 10)
   const now = new Date()
   const p = (x) => String(x).padStart(2, '0')
   const sameYear = d.getFullYear() === now.getFullYear()
@@ -441,8 +442,8 @@ function fmtTime(iso) {
 /* 批次⑩.1: 文件夹"上传时间"列 = 子目录下最新文件的月份 (如 "9 月" / "2025 年 12 月"), 空夹 '—' */
 function fmtMonth(iso) {
   if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return '—'
+  const d = parseDbDate(iso)
+  if (!d) return '—'
   const sameYear = d.getFullYear() === new Date().getFullYear()
   return sameYear ? `${d.getMonth() + 1} 月` : `${d.getFullYear()} 年 ${d.getMonth() + 1} 月`
 }

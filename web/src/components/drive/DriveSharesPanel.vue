@@ -51,6 +51,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import { useFolderTree } from '@/composables/useFolderTree'
+import { parseDbDate } from '@/utils/format'
 
 const emit = defineEmits(['changed'])
 
@@ -105,14 +106,14 @@ function folderIdFromPath(path) {
 
 function expInfo(iso) {
   if (!iso) return { label: '永久', soon: false }
-  const exp = new Date(iso).getTime()
-  const diff = exp - Date.now()
+  const d = parseDbDate(iso)
+  if (!d) return { label: '永久', soon: false }
+  const diff = d.getTime() - Date.now()
   if (diff <= 0) return { label: '已过期', soon: true }
   if (diff < 24 * 3600 * 1000) {
     const h = Math.floor(diff / 3600000)
     return { label: `${h > 0 ? h + ' 小时' : Math.floor(diff / 60000) + ' 分钟'}后到期`, soon: true }
   }
-  const d = new Date(iso)
   return { label: `${d.getMonth() + 1}-${d.getDate()} 到期`, soon: false }
 }
 

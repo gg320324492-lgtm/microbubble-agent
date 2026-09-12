@@ -46,6 +46,27 @@ export function formatSize(bytes) {
   return `${v.toFixed(1)} ${units[i]}`
 }
 
+// 解析后端时间字段为 Date。
+// 后端 DateTime 列经 str() 序列化产出 naive UTC 串（"2026-09-12 05:08:12.345"，无时区标记），
+// 直接 new Date() 会按浏览器本地时区解读 → 北京时间显示差 8 小时。
+// 约定：无时区标记的串一律视为 UTC（与 CommentItem 的 iso+'Z' 同口径）；已带 Z/±hh:mm 的原样解析。
+export function parseDbDate(input) {
+  if (!input) return null
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input
+  if (typeof input === 'number') return new Date(input)
+  if (typeof input !== 'string') return null
+  const s = input.trim()
+  if (!s) return null
+  // 微信/部分接口可能产出 6 位微秒，JS 只认毫秒，截到 3 位
+  const norm = s.replace(' ', 'T').replace(/\.(\d{3})\d*$/, '.$1')
+  if (/Z|[+-]\d{2}:?\d{2}$/i.test(norm)) {
+    const d = new Date(norm)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(norm + 'Z')
+  return isNaN(d.getTime()) ? null : d
+}
+
 // 紧凑日期格式（用于 Dashboard 等空间有限的场景）
 export function formatCompactDate(date, emptyText = '无截止日期') {
   if (!date) return emptyText

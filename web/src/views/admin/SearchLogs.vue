@@ -17,6 +17,7 @@
  */
 import { onMounted } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
+import { parseDbDate } from '@/utils/format'
 import {
   useSearchLogs,
   GATE_DIMENSIONS,
@@ -50,13 +51,14 @@ const fmtMs = (v) => (v == null ? '-' : `${v.toLocaleString()} ms`)
 const fmtTime = (iso) => {
   if (!iso) return '-'
   try {
-    return new Date(iso).toLocaleString('zh-CN', {
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-    })
+    }) : '-'
   } catch {
     return iso
   }

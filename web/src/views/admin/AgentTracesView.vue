@@ -10,6 +10,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
+import { parseDbDate } from '@/utils/format'
 
 const traces = ref([])
 const total = ref(0)
@@ -30,7 +31,8 @@ const filters = ref({
 const formatDate = (iso) => {
   if (!iso) return ''
   try {
-    return new Date(iso).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    const d = parseDbDate(iso)
+    return d ? d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : iso
   } catch { return iso }
 }
 

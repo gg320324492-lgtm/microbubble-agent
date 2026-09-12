@@ -179,6 +179,7 @@ import { ChatDotRound, ArrowDown, ArrowUp, Edit } from '@element-plus/icons-vue'
 import { useNotificationsStore } from '@/composables/useNotifications'
 import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
 import { useCommentTree, MAX_COMMENT_DEPTH } from '@/composables/useCommentTree'
+import { parseDbDate } from '@/utils/format'
 
 // v2 PR6-P6: 编辑窗口 (秒), 与后端 COMMENT_EDIT_WINDOW_SECONDS=300 镜像
 const COMMENT_EDIT_WINDOW_SECONDS = 300
@@ -239,16 +240,15 @@ function canEdit(c) {
   if (!props.currentUserId) return false
   if (c.user_id !== props.currentUserId) return false
   if (!c.created_at) return false
-  const t = new Date(c.created_at).getTime()
+  const t = parseServerTime(c.created_at).getTime()
   if (isNaN(t)) return false
   const elapsed = (Date.now() - t) / 1000
   return elapsed <= COMMENT_EDIT_WINDOW_SECONDS
 }
 
 function parseServerTime(iso) {
-  // 后端返回 UTC 裸时间串 (无时区后缀), new Date 会按本地时区解析 → 相差 8 小时
-  if (typeof iso === 'string' && !/Z|[+-]\d{2}:?\d{2}$/.test(iso)) return new Date(iso + 'Z')
-  return new Date(iso)
+  // 后端返回 UTC 裸时间串 (无时区后缀), 统一走 parseDbDate 补 Z 按 UTC 解析
+  return parseDbDate(iso) || new Date(NaN)
 }
 
 function formatTime(iso) {
