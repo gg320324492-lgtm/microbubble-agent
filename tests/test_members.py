@@ -72,3 +72,34 @@ async def test_delete_member_soft_deactivates(client: AsyncClient, auth_headers,
     """
     resp = await client.delete(f"/api/v1/members/{test_member.id}", headers=auth_headers)
     assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_delete_member_trashes_assigned_tasks(client: AsyncClient, admin_headers, auth_headers, test_member):
+    """2026-09-12: 软删成员后其名下任务移入回收站 — 任务列表/仪表盘不再显示。
+
+    背景: 张懿软删后「准备数学考试」仍挂在任务列表 (assignee 已停用但任务仍可见)。
+    会议记录不受影响 (端点不触碰 meetings)。
+    """
+    ids = []
+    for title in ("任务甲", "任务乙"):
+        r = await client.post("/api/v1/tasks", headers=admin_headers,
+                              json={"title": title, "assignee_id": test_member.id})
+        assert r.status_code in (200, 201), r.text
+        ids.append(r.json()["id"])
+
+    # 软删成员
+    resp = await client.delete(f"/api/v1/members/{test_member.id}", headers=admin_headers)
+    assert resp.status_code == 204
+
+    # 默认任务列表不再显示该成员的任务
+    lst = await client.get("/api/v1/tasks", headers=admin_headers)
+    assert lst.status_code == 200
+    got = {t["id"] for t in lst.json()["items"]}
+    assert not (set(ids) & got), "被软删成员的任务应进入回收站, 不再出现在任务列表"
+
+    # 回收站可见 (include_deleted=true, 3 天保留期内可恢复)
+    trash = await client.get("/api/v1/tasks?include_deleted=true", headers=admin_headers)
+    assert trash.status_code == 200
+    trashed = {t["id"] for t in trash.json()["items"] if t["id"] in ids}
+    assert trashed == set(ids), "回收站应包含被删成员的全部未删任务"
