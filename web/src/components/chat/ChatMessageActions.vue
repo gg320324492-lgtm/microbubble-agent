@@ -11,7 +11,7 @@
       <el-icon class="action-icon" aria-hidden="true">
         <component :is="regenerating ? Loading : Refresh" />
       </el-icon>
-      <span v-if="mode === 'mobile'" class="action-text">{{ regenerateLabel }}</span>
+      <span class="action-text">{{ regenerating ? '生成中' : '重答' }}</span>
     </button>
     <button
       type="button"
@@ -24,7 +24,7 @@
       <el-icon class="action-icon" aria-hidden="true">
         <component :is="copying ? Check : CopyDocument" />
       </el-icon>
-      <span v-if="mode === 'mobile'" class="action-text">{{ copyLabel }}</span>
+      <span class="action-text">{{ copying ? '已复制' : '复制' }}</span>
     </button>
     <!-- 可视复制反馈 (desktop hover-mode 显示) -->
     <span v-if="copying" class="copy-feedback" role="status">{{ copyFeedback }}</span>
@@ -164,6 +164,38 @@ function onCopyClick() {
   background-color: var(--color-primary-alpha-10, rgba(255, 122, 92, 0.1));
   border-color: var(--color-primary-alpha-30, rgba(255, 122, 92, 0.3));
   color: var(--color-primary, #ff7a5c);
+}
+
+/* 批次⑩.71 选型 D「文字胶囊」: 桌面端操作 = 描边小胶囊 (图标+中文标签),
+   与头部 chip / 编辑窗药丸同语言; hover 统一转墨青。 */
+.chat-message-actions.mode-desktop .action-btn {
+  height: 26px;
+  padding: 0 11px;
+  gap: 5px;
+  border-radius: 999px;
+  border-color: var(--dossier-line, rgba(22, 35, 42, 0.2));
+  background: var(--color-bg-card, #ffffff);
+  color: var(--color-text-regular, #606266);
+}
+.chat-message-actions.mode-desktop .action-text {
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.chat-message-actions.mode-desktop .action-btn:hover:not(:disabled) {
+  background-color: rgba(14, 118, 110, 0.06);
+  border-color: #0e766e;
+  color: #0e766e;
+}
+[data-theme='dark'] .chat-message-actions.mode-desktop .action-btn {
+  border-color: rgba(226, 236, 234, 0.2);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+[data-theme='dark'] .chat-message-actions.mode-desktop .action-btn:hover:not(:disabled) {
+  background-color: rgba(53, 194, 164, 0.08);
+  border-color: rgba(53, 194, 164, 0.5);
+  color: #35c2a4;
 }
 
 .action-btn:focus-visible {

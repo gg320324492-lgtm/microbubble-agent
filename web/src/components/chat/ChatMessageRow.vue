@@ -372,7 +372,6 @@ function onEditKeydown(e: KeyboardEvent) {
                在历史消息(usage/durationMs 未映射)时不渲染 → 所有按钮消失.
                改成"有内容就渲染" — usage/durationMs span 内部各自 v-if -->
           <div v-if="msg.state === 'idle' && msg.content" class="msg-meta">
-            <span v-if="msg.usage" class="mm-tokens">{{ msg.usage.total_tokens }} tokens</span>
             <span v-if="msg.durationMs" class="mm-duration">{{ (msg.durationMs / 1000).toFixed(1) }}s</span>
             <el-button
               v-if="msg.content" text size="small"
@@ -382,6 +381,7 @@ function onEditKeydown(e: KeyboardEvent) {
               @click="emit('tts-play', msg.content)"
             >
               <el-icon><Headset /></el-icon>
+              <span class="tts-text">朗读</span>
             </el-button>
             <div class="msg-actions">
               <ChatMessageActions
@@ -453,6 +453,42 @@ function onEditKeydown(e: KeyboardEvent) {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 批次⑩.71 选型 D: 时长 mono 次级色; 朗读按钮与重答/复制同款描边文字胶囊 */
+.mm-duration {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+.tts-btn {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--dossier-line, rgba(22, 35, 42, 0.2));
+  background: var(--color-bg-card, #ffffff);
+  color: var(--color-text-regular, #606266);
+  gap: 5px;
+}
+.tts-text {
+  font-size: 11.5px;
+  line-height: 1;
+}
+.tts-btn:hover {
+  background-color: rgba(14, 118, 110, 0.06);
+  border-color: #0e766e;
+  color: #0e766e;
+}
+[data-theme='dark'] .tts-btn {
+  border-color: rgba(226, 236, 234, 0.2);
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+[data-theme='dark'] .tts-btn:hover {
+  background-color: rgba(53, 194, 164, 0.08);
+  border-color: rgba(53, 194, 164, 0.5);
+  color: #35c2a4;
 }
 
 /* 2026-08-16 #71: 用户消息编辑 + hover 复制/编辑按钮 (ChatGPT 风格) */
