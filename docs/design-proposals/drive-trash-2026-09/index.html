@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网盘回收站重设计 · 4 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --coral: #ef7256;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1360px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.9; color: var(--txt2); }
+  .diag b { color: var(--txt); }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 400px; }
+  .card.wide { width: 100%; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 52px; }
+
+  /* ═══ 回收站舞台 ═══ */
+  .stage { background: var(--paper); border: 1px solid rgba(22,35,42,.14); border-radius: 12px; padding: 14px 16px; }
+  .head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; margin-bottom: 10px; }
+  .h-title { font-size: 12px; font-weight: 650; }
+  .h-chip { font-family: var(--mono); font-size: 8.5px; letter-spacing: .06em; color: #7d8a86; border: 1px solid rgba(22,35,42,.18); border-radius: 5px; padding: 2px 7px; background: rgba(255,255,255,.6); }
+  .h-count { margin-left: auto; font-family: var(--mono); font-size: 9px; color: #9aa4a0; letter-spacing: .06em; }
+  .frow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  .fic { width: 28px; height: 32px; border: 1.5px solid #8fa0aa; border-radius: 4px; position: relative; flex-shrink: 0; background: var(--card); }
+  .fic::before { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 8px 8px 0; border-color: transparent var(--paper) transparent transparent; }
+  .fname { font-size: 12px; color: var(--ink); }
+  .fmeta { font-family: var(--mono); font-size: 9px; letter-spacing: .04em; color: #9aa4a0; margin-top: 3px; }
+  .fcol { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .ghost { display: inline-flex; align-items: center; gap: 4px; border: none; background: transparent; border-radius: 7px; padding: 4px 8px; font-size: 11px; color: #5b6870; }
+  .ghost.hov { background: rgba(22,35,42,.07); color: var(--teal); }
+  .ghost.danger { color: #a3543f; }
+  .leftbar { width: 3px; align-self: stretch; border-radius: 3px; background: linear-gradient(180deg,#ef7256,#e8683f); flex-shrink: 0; }
+  .days { font-family: var(--mono); font-size: 8.5px; color: #9aa4a0; }
+  .days b { color: var(--coral); font-weight: 700; }
+  .bar { width: 54px; height: 3px; background: rgba(22,35,42,.1); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; background: var(--coral); border-radius: 2px; }
+  .stamp { font-family: var(--mono); font-size: 8px; letter-spacing: .12em; color: #a3543f; border: 1px dashed rgba(163,84,63,.5); border-radius: 4px; padding: 2px 6px; flex-shrink: 0; }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>网盘回收站重设计 · 4 方案</h1>
+  <p class="sub">当前回收站还是旧「玻璃态 + 红橙 hero」皮肤，与新档案语言脱节，且有三个实打实的问题：<b>① 红粉横幅抢戏</b>（一个提示信息占了最重的视觉位）　<b>② 预览/下载按钮是无效的</b>（回收站点了只弹「无法预览，请先恢复」）　<b>③ 没有元数据</b>（何时删的、还剩几天可恢复，全都没有）。四案共同：横幅降为静默档案条、无效按钮换成「恢复 / 彻底删除」、补 mono 元数据、ghost 动作语言对齐操作行。</p>
+
+  <div class="diag">
+    <b>数据侧</b>：后端文件对象本就带 <code style="font-family:var(--mono)">deleted_at</code> — 删除时间 + 剩余天数（30 天 retention）可直接展示，无需后端改动。<b>主题侧</b>：跟随批次⑩.72 亮色墨 / 暗色青 token。
+  </div>
+
+  <div class="row">
+    <div class="card wide">
+      <div class="card-h"><span class="tag gray">现状</span><h2>红橙 hero + 无效按钮（截图同款）</h2></div>
+      <div class="stage">
+        <div style="background:rgba(239,114,86,.12);border-left:4px solid var(--coral);border-radius:6px;padding:10px 14px;font-size:12.5px;font-weight:650;margin-bottom:12px">🗑️ 回收站 — 已删除文件 30 天后自动清除</div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.08);border-radius:8px;position:relative;overflow:hidden"><div class="leftbar" style="position:absolute;left:0;top:0;bottom:0"></div><div class="frow"><div class="fic"></div><div class="fname">e2eauto1788586798.txt</div><span class="gap" style="margin-left:auto"></span><span class="ghost" style="border:1px solid rgba(22,35,42,.18);border-radius:999px;padding:6px 14px">⬇</span><span class="ghost" style="border:1px solid rgba(22,35,42,.18);border-radius:999px;padding:6px 14px;margin-left:8px">☆👁</span></div></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.08);border-radius:8px;position:relative;overflow:hidden;margin-top:10px"><div class="leftbar" style="position:absolute;left:0;top:0;bottom:0"></div><div class="frow"><div class="fic"></div><div class="fname">grid-test.txt</div><span style="margin-left:auto"></span><span class="ghost" style="border:1px solid rgba(22,35,42,.18);border-radius:999px;padding:6px 14px">⬇</span><span class="ghost" style="border:1px solid rgba(22,35,42,.18);border-radius:999px;padding:6px 14px;margin-left:8px">☆👁</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>纸卡 + 恢复优先（推荐）</h2></div>
+      <p class="card-d">横幅降为 mono 档案条；行 = 白卡圆角（对齐侧栏会话卡）；补「删除于 / 剩余」元数据；动作 = ghost「恢复」+ 危险 ghost「彻底删除」。与已定语言最连贯。</p>
+      <div class="stage">
+        <div class="head"><span class="h-title">回收站</span><span class="h-chip">30 天后自动清除</span><span class="h-count">共 322 项</span></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.1);border-radius:10px"><div class="frow"><div class="fic"></div><div class="fcol"><div class="fname">e2eauto1788586798.txt</div><div class="fmeta">删除于 09-08 14:22 · 剩 27 天</div></div><span class="ghost hov">↩ 恢复</span><span class="ghost danger">⌫</span></div></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.1);border-radius:10px;margin-top:8px"><div class="frow"><div class="fic"></div><div class="fcol"><div class="fname">grid-test.txt</div><div class="fmeta">删除于 09-05 09:10 · 剩 24 天</div></div><span class="ghost">↩ 恢复</span><span class="ghost danger">⌫</span></div></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.1);border-radius:10px;margin-top:8px"><div class="frow"><div class="fic" style="border-radius:6px"></div><div class="fcol"><div class="fname">实验数据 2026-08</div><div class="fmeta">文件夹 · 删除于 09-01 · 剩 20 天</div></div><span class="ghost">↩ 恢复</span><span class="ghost danger">⌫</span></div></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 与侧栏卡片/对话区语言完全同族（推荐）</span></div>
+        <div><span class="pro">✓ 恢复成为唯一显性动词，回收站意图最明确</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>台账行 · mono 分栏</h2></div>
+      <p class="card-d">无卡片，档案台账风：虚线分隔的行 + mono 分栏（名称 / 删除时间 / 剩余天数 / 动作）。信息密度最高，扫读最快。</p>
+      <div class="stage">
+        <div class="head"><span class="h-title">回收站</span><span class="h-chip">30 天后自动清除</span><span class="h-count">322 项</span></div>
+        <div style="font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:#9aa4a0;display:flex;gap:10px;padding:0 12px 6px;border-bottom:1px solid rgba(22,35,42,.14)"><span style="flex:1">文件</span><span style="width:110px">删除时间</span><span style="width:52px">剩余</span><span style="width:96px;text-align:right">操作</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px dashed rgba(22,35,42,.14)"><div class="fic" style="width:22px;height:26px"></div><div class="fname" style="flex:1;font-size:11.5px">e2eauto1788586798.txt</div><span class="days" style="width:110px">09-08 14:22</span><span class="days" style="width:52px"><b>27d</b></span><span style="width:96px;text-align:right"><span class="ghost hov" style="padding:3px 7px">恢复</span><span class="ghost danger" style="padding:3px 7px">⌫</span></span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px dashed rgba(22,35,42,.14)"><div class="fic" style="width:22px;height:26px"></div><div class="fname" style="flex:1;font-size:11.5px">grid-test.txt</div><span class="days" style="width:110px">09-05 09:10</span><span class="days" style="width:52px"><b>24d</b></span><span style="width:96px;text-align:right"><span class="ghost" style="padding:3px 7px">恢复</span><span class="ghost danger" style="padding:3px 7px">⌫</span></span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px"><div class="fic" style="width:22px;height:26px;border-radius:6px"></div><div class="fname" style="flex:1;font-size:11.5px">实验数据 2026-08</div><span class="days" style="width:110px">09-01 18:40</span><span class="days" style="width:52px"><b>20d</b></span><span style="width:96px;text-align:right"><span class="ghost" style="padding:3px 7px">恢复</span><span class="ghost danger" style="padding:3px 7px">⌫</span></span></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 台账感最强，剩余天数一眼可扫</span></div>
+        <div><span class="con">⚠ 分栏在窄容器下需要隐藏列</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>倒计时可视化 · 缓急一目了然</h2></div>
+      <p class="card-d">A 的骨架 + 把「剩余天数」升级为可视化：行尾 mono 大数字 + 细进度条（30 天 retention 消耗），快过期的文件自动变警示色。</p>
+      <div class="stage">
+        <div class="head"><span class="h-title">回收站</span><span class="h-chip">30 天后自动清除</span><span class="h-count">322 项</span></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.1);border-radius:10px"><div class="frow"><div class="fic"></div><div class="fcol"><div class="fname">e2eauto1788586798.txt</div><div class="fmeta">删除于 09-08 14:22</div></div><div style="text-align:right;margin-right:8px"><div class="days"><b>27</b> 天</div><div class="bar" style="margin-left:auto"><i style="width:90%"></i></div></div><span class="ghost hov">↩ 恢复</span><span class="ghost danger">⌫</span></div></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.1);border-radius:10px;margin-top:8px"><div class="frow"><div class="fic"></div><div class="fcol"><div class="fname">grid-test.txt</div><div class="fmeta">删除于 09-05 09:10</div></div><div style="text-align:right;margin-right:8px"><div class="days"><b>24</b> 天</div><div class="bar" style="margin-left:auto"><i style="width:80%"></i></div></div><span class="ghost">↩ 恢复</span><span class="ghost danger">⌫</span></div></div>
+        <div style="background:var(--card);border:1px solid rgba(163,84,63,.35);border-radius:10px;margin-top:8px"><div class="frow"><div class="fic"></div><div class="fcol"><div class="fname" style="color:#a3543f">会议记录-临时.txt</div><div class="fmeta" style="color:#a3543f">即将自动清除</div></div><div style="text-align:right;margin-right:8px"><div class="days" style="color:#a3543f"><b>2</b> 天</div><div class="bar" style="margin-left:auto"><i style="width:7%;background:#a3543f"></i></div></div><span class="ghost hov">↩ 恢复</span><span class="ghost danger">⌫</span></div></div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 「还能救回来吗」的紧迫感直接可见</span></div>
+        <div><span class="con">⚠ 行元素最多，密度略低</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">D</span><h2>极简 hover · 动作隐藏</h2></div>
+      <p class="card-d">最安静：行内只留 图标+名称+剩余天数 chip，动作组（恢复/删除）hover 才浮现。桌面浏览效率最高；移动端保持常显。</p>
+      <div class="stage">
+        <div class="head"><span class="h-title">回收站</span><span class="h-chip">30 天后自动清除</span><span class="h-count">共 322 项</span></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.1);border-radius:10px"><div class="frow"><div class="fic"></div><div class="fcol"><div class="fname">e2eauto1788586798.txt</div><div class="fmeta">删除于 09-08 14:22</div></div><span class="days" style="border:1px solid rgba(22,35,42,.14);border-radius:5px;padding:2px 7px">剩 27 天</span><span class="ghost hov" style="display:none"></span></div></div>
+        <div style="background:var(--card);border:1px solid rgba(22,35,42,.1);border-radius:10px;margin-top:8px"><div class="frow"><div class="fic"></div><div class="fcol"><div class="fname">grid-test.txt</div><div class="fmeta">删除于 09-05 09:10</div></div><span class="days" style="border:1px solid rgba(22,35,42,.14);border-radius:5px;padding:2px 7px">剩 24 天</span></div></div>
+        <div style="font-size:9.5px;color:#9aa4a0;margin-top:10px;padding-left:4px">hover 行时右侧浮现：↩ 恢复 · ⌫ 彻底删除（示意见 A）</div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 视觉最轻，长列表扫读无负担</span></div>
+        <div><span class="con">⚠ 恢复操作多一步 hover，高频恢复场景稍慢</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>四案通用</b>：① 红粉 hero 横幅 → 静默 mono 档案条（标题 + 「30 天后自动清除」chip + 共 N 项）　② 无效的预览/下载/收藏按钮移除（原点击只弹「无法预览」toast）→ 换成 ghost「↩ 恢复」+ 危险 ghost「⌫ 彻底删除」　③ 补元数据：删除时间 + 剩余天数（后端 <code>deleted_at</code> 已有）　④ ghost 动作规格 = 操作行批次⑩.73 同款（26px 热区 / hover 浅灰底 + 墨青）　⑤ 暗色主题同 token 翻译（卡底 rgba(255,255,255,.028)、ghost hover 白 5%）<br>
+    <b>实施位置</b>：<code>DriveTrashPanel.vue</code>（横幅 + 布局）＋ <code>FileGrid.vue</code> trash 上下文分支（动作按钮 / 元数据行）＋ <code>drive-view.css</code>（.drive-panel 旧玻璃态皮肤在 trash 场景停用）。多选批量工具栏（BatchActionToolbar）保留。
+  </div>
+</div>
+</body>
+</html>
