@@ -67,8 +67,8 @@ const onPick = (key) => {
 
 <style scoped>
 /* =====================================================================
-   2026-09-04 档案「标本签」皮肤 (G/J 稿语言, docs/design-proposals):
-   胶囊 pill → 底部 hair 线 + mono 编号签 + coral active bar
+   批次⑩.77 选型 C「分段药丸」: 一体胶囊容器 + mono 段 + 选中墨实底
+   (亮色墨底白字 / 暗色青底墨字), 与 TaskView 分段药丸、输入区模式切换同族。
    ===================================================================== */
 .tab-strip {
   --ts-ink: #16232a; --ts-steel: #5a6b6a; --ts-fog: #8ba0a0;
@@ -76,12 +76,11 @@ const onPick = (key) => {
   --ts-mono: Consolas, 'Courier New', monospace;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 2px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--ts-hair);
-  border-radius: 0;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--ts-hair);
+  border-radius: 999px;
   transition: var(--transition-all-fast, all 0.15s ease);
   animation: fadeSlideUp var(--duration-slow, 300ms) var(--ease-out, cubic-bezier(0, 0, 0.2, 1)) both;
 }
@@ -90,12 +89,14 @@ const onPick = (key) => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 14px;
+  padding: 7px 16px;
   background: transparent;
   border: none;
-  border-radius: 7px 7px 0 0;
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 13.5px;
+  font-family: var(--ts-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
   font-weight: 500;
   color: var(--ts-steel);
   white-space: nowrap;
@@ -115,7 +116,6 @@ const onPick = (key) => {
 
 .tab-strip__item:hover {
   color: var(--ts-ink);
-  background: rgba(14, 118, 110, 0.06);
 }
 
 .tab-strip__item:focus-visible {
@@ -124,24 +124,14 @@ const onPick = (key) => {
 }
 
 .tab-strip__item.is-active {
-  background: transparent;
-  color: var(--ts-ink);
-  font-weight: 600;
+  background: var(--ts-ink);
+  color: #fbfcfb;
+  font-weight: 700;
   box-shadow: none;
   transform: none;
 }
-.tab-strip__item.is-active .tab-strip__no { color: var(--ts-teal); }
-.tab-strip__item.is-active .tab-strip__icon { color: var(--ts-teal); }
-.tab-strip__item.is-active::after {
-  content: '';
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -1px;
-  height: 2px;
-  background: var(--ts-coral);
-  border-radius: 2px;
-}
+.tab-strip__item.is-active .tab-strip__no { color: rgba(251, 252, 251, 0.7); }
+.tab-strip__item.is-active .tab-strip__icon { color: rgba(251, 252, 251, 0.85); }
 
 .tab-strip__icon {
   display: inline-flex;
@@ -172,24 +162,17 @@ const onPick = (key) => {
   flex-shrink: 0;
 }
 
-/* underline 变体: 现与默认皮肤同构 (标本签即 underline 语言) */
+/* underline 变体: 与默认分段药丸同构 (保留 variant 入参兼容旧调用) */
 .tab-strip--underline {
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--ts-hair);
-  padding: 0 2px;
-  gap: 4px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--ts-hair);
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
 }
 
 .tab-strip--underline .tab-strip__item {
-  border-radius: 7px 7px 0 0;
-}
-
-.tab-strip--underline .tab-strip__item.is-active {
-  background: transparent;
-  box-shadow: none;
-  transform: none;
-  border-bottom: none;
+  border-radius: 999px;
 }
 </style>
 
@@ -198,8 +181,20 @@ const onPick = (key) => {
 [data-theme="dark"] .tab-strip {
   --ts-ink: #dfe9e6; --ts-steel: #9ab0ae; --ts-fog: #6b8286;
   --ts-hair: #27363e; --ts-teal: #35c2a4; --ts-coral: #ef7256;
+  background: rgba(255, 255, 255, 0.03);
 }
+[data-theme="dark"] .tab-strip--underline {
+  background: rgba(255, 255, 255, 0.03);
+}
+/* 批次⑩.77: 分段药丸 dark — 选中青实底墨字 */
+[data-theme="dark"] .tab-strip__item.is-active {
+  background: #35c2a4;
+  color: #0b1512;
+}
+[data-theme="dark"] .tab-strip__item.is-active .tab-strip__no { color: rgba(11, 21, 18, 0.65); }
+[data-theme="dark"] .tab-strip__item.is-active .tab-strip__icon { color: rgba(11, 21, 18, 0.8); }
 [data-theme="dark"] .tab-strip__item:hover {
-  background: rgba(53, 194, 164, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ts-ink);
 }
 </style>

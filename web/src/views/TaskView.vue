@@ -180,9 +180,9 @@
       <el-tab-pane name="trash" lazy>
         <template #label>
           <span class="trash-tab-label">
-            <el-icon :size="20"><Delete /></el-icon>
+            <svg class="trash-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
             <span>垃圾桶</span>
-            <el-badge v-if="trashCount > 0" :value="trashCount" class="trash-badge" />
+            <span v-if="trashCount > 0" class="trash-count">{{ trashCount }}</span>
           </span>
         </template>
         <!-- 垃圾桶列表 -->
@@ -819,28 +819,33 @@ onMounted(() => {
   color: var(--color-danger);
 }
 
-/* ===== 垃圾桶 Tab ===== */
+/* ===== 垃圾桶 Tab (批次⑩.77 选型 C 分段药丸: 14px SVG + mono 计数 chip) ===== */
 .trash-tab-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 15px;
-  font-weight: 500;
-  padding: 6px 14px;
-  border-radius: var(--radius-md, 8px);
-  transition: all var(--duration-fast, 150ms);
+  font-size: 12px;
+  letter-spacing: 0.1em;
 }
-.trash-tab-label:hover {
-  background: rgba(144, 147, 153, 0.1);
+.trash-ic {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
 }
-:deep(.task-tabs) .el-tabs__item {
-  font-size: 15px;
-  padding: 0 20px;
-  height: 44px;
-  line-height: 44px;
-}
-.trash-badge {
-  margin-left: 2px;
+.trash-count {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(163, 84, 63, 0.12);
+  color: var(--color-danger);
+  line-height: 1.4;
 }
 
 .auto-delete-none {
@@ -913,15 +918,27 @@ onMounted(() => {
   letter-spacing: 0.12em; color: var(--dg-fog);
 }
 
-/* --- tabs 标本签化 --- */
-.task-tabs :deep(.el-tabs__item) {
-  font-family: var(--dg-mono); font-size: 12px; letter-spacing: 0.14em;
-  color: var(--dg-fog);
+/* --- tabs 批次⑩.77 选型 C 分段药丸 (与 TabStrip 全站统一) --- */
+.task-tabs :deep(.el-tabs__nav-wrap)::after { display: none; }
+.task-tabs :deep(.el-tabs__active-bar) { display: none; }
+.task-tabs :deep(.el-tabs__nav) {
+  border: 1px solid var(--dg-hair);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 3px;
 }
-.task-tabs :deep(.el-tabs__item.is-active),
-.task-tabs :deep(.el-tabs__item:hover) { color: var(--dg-teal); }
-.task-tabs :deep(.el-tabs__active-bar) { background: var(--dg-teal); }
-.task-tabs :deep(.el-tabs__nav-wrap::after) { background: var(--dg-hair); }
+.task-tabs :deep(.el-tabs__item) {
+  font-family: var(--dg-mono); font-size: 12px; letter-spacing: 0.1em;
+  color: var(--dg-fog);
+  height: 32px; line-height: 32px; padding: 0 18px;
+  border-radius: 999px;
+  transition: all 0.15s ease;
+}
+.task-tabs :deep(.el-tabs__item:hover) { color: var(--dg-ink); }
+.task-tabs :deep(.el-tabs__item.is-active) {
+  color: #fbfcfb; font-weight: 700;
+  background: var(--dg-ink);
+}
 
 /* --- 卡片: hair 边框 + 硬阴影 --- */
 .filter-card, .task-list-card {
@@ -1094,6 +1111,18 @@ onMounted(() => {
     --dg-coral: #ef7256; --dg-green: #6fbf6f; --dg-amber: #d9a257;
     --dg-paper: #10171b; --dg-shadow: rgba(0, 0, 0, 0.5);
     background: #0c1215;
+  }
+  /* 批次⑩.77: 分段药丸 dark — 选中青实底墨字, 胶囊底透明深色 */
+  [data-theme="dark"] .task-tabs :deep(.el-tabs__nav) {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: var(--dg-hair);
+  }
+  [data-theme="dark"] .task-tabs :deep(.el-tabs__item.is-active) {
+    background: #35c2a4;
+    color: #0b1512;
+  }
+  [data-theme="dark"] .task-tabs :deep(.el-tabs__item:hover:not(.is-active)) {
+    color: var(--dg-ink);
   }
   [data-theme="dark"] .task-view .filter-card .el-button--primary {
     background: var(--dg-card); color: var(--dg-ink);
