@@ -90,14 +90,7 @@ class Settings(BaseSettings):
     TENCENT_MEETING_SDK_KEY: str = ""
     TENCENT_MEETING_USERID: str = ""  # 默认主持人企业用户ID
 
-    # 企业微信
-    WECHAT_CORP_ID: str = ""
-    WECHAT_AGENT_ID: str = ""
-    WECHAT_SECRET: str = ""
-    WECHAT_CALLBACK_TOKEN: str = ""
-    WECHAT_ENCODING_AES_KEY: str = ""
-    WECHAT_API_BASE_URL: str = "https://qyapi.weixin.qq.com"
-    WECHAT_EXTERNAL_SENDER: str = ""  # 外部联系人消息的发送者（企业微信userid）
+    # (2026-09 企业微信下线: WECHAT_* 7 项配置已删, 见 git 历史 / wechat 包删除 commit)
 
     # Whisper (2026-06-30 ASR 迁移: 退役中, 留作紧急回滚)
     WHISPER_MODEL_SIZE: str = "large-v3"

@@ -67,7 +67,6 @@ async def _make_member(db: AsyncSession, tag: str) -> object:
         role="member",
         grade="测试",
         is_active=True,
-        wechat_id=f"__TEST_BACKFILL_{u}_{tag}__",
     )
     db.add(m)
     await db.commit()

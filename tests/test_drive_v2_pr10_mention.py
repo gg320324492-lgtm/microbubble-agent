@@ -181,24 +181,25 @@ async def test_parse_mentions_three_way_match():
 
     db = MagicMock()
 
-    # 模拟 2 个 member: (id=3, username='alice', wechat_id='AliceWechat', name='张三')
-    #                  (id=4, username='bob',   wechat_id=None,         name='李四')
+    # 模拟 2 个 member: (id=3, username='alice', name='张三')
+    #                  (id=4, username='bob',   name='李四')
+    # (2026-09 企业微信下线: mention 解析删 wechat_id 通路, 3 元组改 2 元组)
     rows_result = MagicMock()
     rows_result.all.return_value = [
-        (3, "alice", "AliceWechat", "张三"),
-        (4, "bob", None, "李四"),
+        (3, "alice", "张三"),
+        (4, "bob", "李四"),
     ]
     db.execute = AsyncMock(return_value=rows_result)
 
-    # @张三 (name match) + @AliceWechat (wechat_id match) + @bob (username match)
-    text = "@张三 @AliceWechat @bob"
+    # @张三 (name match) + @bob (username match)
+    text = "@张三 @bob"
 
     # caller 是 user_id=100 (不在这 2 人里)
     result = await parse_mentions(db, text, exclude_user_id=100)
 
     assert 3 in result  # 张三
     assert 4 in result  # bob
-    assert len(result) == 2  # 实际命中 2 个 user (AliceWechat 和 alice 是同一 user=3)
+    assert len(result) == 2
     # 顺序按出现: 张三 (uid=3) 先, bob (uid=4) 后
     assert result[0] == 3 or result[0] == 4
     assert result[1] == 3 or result[1] == 4
@@ -213,7 +214,7 @@ async def test_parse_mentions_excludes_nonexistent_user():
     db = MagicMock()
     rows_result = MagicMock()
     rows_result.all.return_value = [
-        (3, "alice", None, "Alice"),
+        (3, "alice", "Alice"),
     ]
     db.execute = AsyncMock(return_value=rows_result)
 
@@ -232,8 +233,8 @@ async def test_parse_mentions_excludes_self_mention():
     db = MagicMock()
     rows_result = MagicMock()
     rows_result.all.return_value = [
-        (3, "alice", None, "张三"),
-        (10, "bob", None, "Bob"),
+        (3, "alice", "张三"),
+        (10, "bob", "Bob"),
     ]
     db.execute = AsyncMock(return_value=rows_result)
 
@@ -254,7 +255,7 @@ async def test_parse_mentions_dedup_repeat():
     db = MagicMock()
     rows_result = MagicMock()
     rows_result.all.return_value = [
-        (3, "alice", None, "张三"),
+        (3, "alice", "张三"),
     ]
     db.execute = AsyncMock(return_value=rows_result)
 

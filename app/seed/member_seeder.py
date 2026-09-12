@@ -3,7 +3,6 @@
 W2 +N 2026-08-04: 修复 init_db.py 永跳 bug + 接入 lifespan
 - 按 username 检测 (不是 count > 0)
 - 现有用户不动 (UPDATE 不安全, 留给显式 fix script)
-- wechat_id 缺失时用 username + '_default' (避免 NOT NULL 违规)
 - voice/drive 字段清 NULL (避免 NULL constraint)
 
 2026-09-05 角色扁平化: 不再区分 admin/leader, 所有成员 role 恒为 'member',
@@ -265,15 +264,10 @@ async def seed_default_members(db: AsyncSession) -> dict:
             skills=member_data.get("skills", []),
             role="member",  # 2026-09-05 角色扁平化: 全员等权
             email=member_data.get("email"),
-            personal_wechat_id=member_data.get("personal_wechat_id"),
             bio=member_data.get("bio", ""),
             is_active=member_data.get("is_active", True),
         )
 
-        # 处理 NOT NULL 约束
-        # wechat_id 是 NOT NULL, seed 数据里多数没设
-        if not m.wechat_id:
-            m.wechat_id = m.username + "_default"
 
         # 清 NULL 字段 (这些字段在 base model 里有默认 None, 但有些 migration 加了 NOT NULL)
         m.voice_embedding = None
@@ -308,12 +302,9 @@ async def seed_default_members(db: AsyncSession) -> dict:
                     skills=member_data.get("skills", []),
                     role="member",  # 2026-09-05 角色扁平化: 全员等权
                     email=member_data.get("email"),
-                    personal_wechat_id=member_data.get("personal_wechat_id"),
                     bio=member_data.get("bio", ""),
                     is_active=member_data.get("is_active", True),
                 )
-                if not m.wechat_id:
-                    m.wechat_id = m.username + "_default"
                 m.voice_embedding = None
                 m.voice_enrolled_at = None
                 m.voice_confirmed_at = None

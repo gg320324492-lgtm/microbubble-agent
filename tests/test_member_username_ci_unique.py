@@ -322,12 +322,12 @@ class TestMentionResolutionUnaffected:
                'username_map[row.username.lower()]' in source or \
                "username.lower()" in source
 
-    def test_three_path_match_preserved(self):
-        """3 路匹配 (wechat_id + username + name) 保留 (PR6-P4)"""
+    def test_two_path_match_preserved(self):
+        """双路匹配 (username + name) 保留 (PR6-P4; wechat_id 通路 2026-09 企微下线删除)"""
         import inspect
         from app.services import comment_service
         source = inspect.getsource(comment_service)
 
-        assert "wechat_id_map" in source
         assert "username_map" in source
         assert "name_map" in source
+        assert "wechat_id_map" not in source

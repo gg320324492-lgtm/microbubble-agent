@@ -121,7 +121,6 @@ async def test_private_folder_visible_to_all(db, client, test_member, auth_heade
     other = Member(
         username=f"tree_priv_other_{_uuid.uuid4().hex[:8]}", name="Tree Private Other",
         password_hash="hash", role="member", grade="测试", is_active=True,
-        wechat_id=f"__TEST_BACKFILL_treepriv_{_uuid.uuid4().hex[:8]}__",
     )
     db.add(other)
     await db.commit()

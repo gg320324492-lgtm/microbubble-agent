@@ -108,7 +108,6 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         upload_multipart,
         voice,
         voiceprint,
-        wechat,
         ws_notifications,
     )
     from app.api.v1 import mobile as mobile_v1
@@ -132,7 +131,6 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (knowledge_graph.router, {"prefix": "/api/v1", "tags": ["知识图谱"]}),  # W85 B-1 Phase 9 batch 1
         (mobile_aliases, {"prefix": "/api/v1", "tags": ["移动端别名"]}),
         (voice.router, {"prefix": "/api/v1", "tags": ["语音"]}),
-        (wechat.router, {"prefix": "/api/v1", "tags": ["企业微信"]}),
         (upload.router, {"prefix": "/api/v1", "tags": ["文件上传"]}),
         (tencent_meeting.router, {"prefix": "/api/v1", "tags": ["腾讯会议"]}),
         (memory.router, {"prefix": "/api/v1", "tags": ["长期记忆"]}),

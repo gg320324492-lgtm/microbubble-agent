@@ -269,10 +269,6 @@ async def test_member(db):
         role="member",
         grade="研一",
         is_active=True,
-        # 2026-08-18 #Plan v2 #7 验证: wechat_id 是 NOT NULL (alembic 057_wechat_id_not_null,
-        # 类 20.144 W2 +N 曾加 member_seeder wechat_id fallback). 旧 fixture 不传 wechat_id
-        # → NotNullViolationError. 补 testuser_wechat 唯一值 (防 UNIQUE 冲突).
-        wechat_id="testuser_wechat",
     )
     db.add(member)
     await db.commit()
@@ -319,8 +315,6 @@ async def admin_member(db):
         password_hash=get_password_hash(TEST_BOT_PASSWORD),
         role="admin",  # 保留 hardcoded, 不引用 TEST_BOT_ROLE — fixture 与 conftest 常量最小耦合
         is_active=True,
-        # 2026-08-18 #Plan v2 #7 验证: wechat_id NOT NULL (alembic 057), 补唯一值
-        wechat_id=f"{TEST_BOT_USERNAME}_wechat",
     )
     db.add(member)
     await db.commit()

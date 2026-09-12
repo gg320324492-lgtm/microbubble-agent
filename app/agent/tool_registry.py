@@ -48,7 +48,6 @@ class ToolContext:
         self,
         db=None,
         user_id: Optional[int] = None,
-        channel_user_id: Optional[str] = None,
         trace=None,  # TraceCollector 实例（见 tracing.py）
         event_callback: Optional[Callable] = None,  # 用于流式事件回传
         # 2026-06-14 方案 C 新增：跨 loop 安全注入点（铁律 1）
@@ -70,7 +69,6 @@ class ToolContext:
     ):
         self.db = db
         self.user_id = user_id
-        self.channel_user_id = channel_user_id
         self.trace = trace
         self.event_callback = event_callback
         self.redis = redis

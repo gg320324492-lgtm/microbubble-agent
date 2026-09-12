@@ -105,16 +105,15 @@ async def parse_mentions(
         # lower() usernames for case-insensitive match; 中文名走精确 (原样)
         # 这意味着 Pydantic 校验层应确保不会传 raw usernames 太长攻击 (regex 上限 32 char 防御)
         lowered = [u.lower() for u in raw_usernames]
-        # Build OR condition: lower(username) IN lowered OR lower(wechat_id) IN lowered OR name IN raw
-        # 注意: username/wechat_id 是 String(50)/(100), name 是 String(50), 支持中英文
+        # Build OR condition: lower(username) IN lowered OR name IN raw
+        # 2026-09 企业微信下线: 删 wechat_id 通路 (原与 alembic 054 唯一索引一致)
+        # username 是 String(50), name 是 String(50), 支持中英文
         stmt = select(
-            Member.id, Member.username, Member.wechat_id, Member.name
+            Member.id, Member.username, Member.name
         ).where(
             or_(
                 # username 走 lowercase 比较 (PostgreSQL `lower()` 函数)
                 func.lower(Member.username).in_(lowered),
-                # wechat_id 走 lowercase 比较 (与 alembic 054 唯一索引保持一致)
-                func.lower(Member.wechat_id).in_(lowered),
                 # name 精确匹配 (中英文混合, case-sensitive for Chinese chars)
                 Member.name.in_(raw_usernames),
             )
@@ -127,15 +126,12 @@ async def parse_mentions(
         )
         return []
 
-    # 3) build dict (优先级: username > wechat_id > name — 与 PR6 一致)
+    # 3) build dict (优先级: username > name — 与 PR6 一致; wechat_id 通路 2026-09 删)
     id_by_username: dict[str, int] = {}
-    id_by_wechat_id: dict[str, int] = {}
     id_by_name: dict[str, int] = {}
-    for member_id, username, wechat_id, name in rows:
+    for member_id, username, name in rows:
         if username:
             id_by_username[username.lower()] = member_id
-        if wechat_id:
-            id_by_wechat_id[wechat_id.lower()] = member_id
         if name:
             id_by_name[name] = member_id
 
@@ -143,11 +139,7 @@ async def parse_mentions(
     seen: set[int] = set()
     result: List[int] = []
     for username in raw_usernames:
-        uid = (
-            id_by_username.get(username.lower())
-            or id_by_wechat_id.get(username.lower())
-            or id_by_name.get(username)
-        )
+        uid = id_by_username.get(username.lower()) or id_by_name.get(username)
         if uid is None:
             continue
         if uid in seen:

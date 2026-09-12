@@ -776,23 +776,4 @@ class TestSessionContextPublicAPI:
         r_mock.hset.assert_awaited_once()
         r_mock.expire.assert_awaited_once()
 
-    @pytest.mark.asyncio
-    async def test_wechat_handler_imports_shared_function(self):
-        """微信 handler 真导入 ensure_session_context (派工 v10 §1 真验证)"""
-        import app.wechat.handler
-        import inspect
-        from app.services.session_context import ensure_session_context
-        # handler 模块源文件应 import ensure_session_context
-        src = inspect.getsource(app.wechat.handler)
-        assert "ensure_session_context" in src, "微信 handler 未接入共享 ensure_session_context"
-        assert "from app.services.session_context import" in src, "微信 handler 未走共享 import 路径"
-
-    @pytest.mark.asyncio
-    async def test_wechat_handler_calls_pre_agent_chat(self):
-        """微信 handler 3 处 agent.chat 前都先 ensure_session_context (派工 v10 §2)"""
-        import inspect
-        import app.wechat.handler
-        src = inspect.getsource(app.wechat.handler)
-        # 计数: 3 处 ensure_session_context 调用 (群聊 + 私聊 + kf)
-        call_count = src.count("await ensure_session_context(")
-        assert call_count == 3, f"微信 handler 应有 3 处 ensure_session_context 调用, 实际 {call_count}"
+    # (2026-09 企业微信下线: 原微信 handler import/callsite 两个铁证测试随 app/wechat 包删除)

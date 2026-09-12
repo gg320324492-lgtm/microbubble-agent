@@ -25,56 +25,6 @@ class VisionService:
             self._mcp_client = vision_mcp_client
         return self._mcp_client
 
-    async def download_image(self, media_id: str) -> Optional[bytes]:
-        """
-        从企业微信下载图片
-
-        Args:
-            media_id: 企业微信媒体文件ID
-
-        Returns:
-            图片二进制数据
-        """
-        try:
-            from app.wechat.bot import wechat_bot
-            token = await wechat_bot._get_access_token()
-
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{settings.WECHAT_API_BASE_URL.rstrip('/')}/cgi-bin/media/get",
-                    params={"access_token": token, "media_id": media_id}
-                )
-                logger.info(f"下载图片响应: status={response.status_code}, content-type={response.headers.get('content-type')}, size={len(response.content)}")
-
-                if response.status_code == 200:
-                    content_type = response.headers.get("content-type", "")
-                    # 企业微信返回 JSON 表示错误
-                    if "json" in content_type or "text" in content_type:
-                        logger.error(f"下载图片返回错误: {response.text[:500]}")
-                        return None
-                    return response.content
-                logger.error(f"下载图片失败: HTTP {response.status_code}, body={response.text[:500]}")
-                return None
-        except Exception as e:
-            logger.error(f"下载图片失败: {e}", exc_info=True)
-            return None
-
-    async def download_voice(self, media_id: str) -> Optional[bytes]:
-        """从企业微信下载语音（自动检测格式：SILK/AMR/WAV）"""
-        data = await self.download_image(media_id)
-        if data:
-            # 检测音频格式
-            if data[:4] == b'RIFF':
-                fmt = "WAV"
-            elif data[:4] == b'#!AM':
-                fmt = "AMR"
-            elif data[:4] == b'\x02#!':
-                fmt = "SILK"
-            else:
-                fmt = f"unknown({data[:4].hex()})"
-            logger.info(f"下载语音: media_id={media_id}, format={fmt}, size={len(data)} bytes")
-        return data
-
     def _detect_media_type(self, image_data: bytes) -> str:
         """根据图片魔数检测媒体类型"""
         if image_data[:8] == b'\x89PNG\r\n\x1a\n':

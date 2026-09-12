@@ -12,23 +12,20 @@ async def main():
     async with async_session() as db:
         rows = await db.execute(
             select(Member.name, Member.username, Member.role,
-                   Member.research_area, Member.wechat_id, Member.bio, Member.is_active)
+                   Member.research_area, Member.bio, Member.is_active)
             .order_by(Member.role.desc(), Member.name.asc())
         )
         members = rows.all()
 
         test = []
-        null_backfill = []
         real_no_ra = []
         real_with_ra = []
-        for n, u, r, ra, wid, bio, active in members:
+        for n, u, r, ra, bio, active in members:
             if not active:
                 continue
             entry = (n, u, r, ra or "(no RA)")
             if u and (u.startswith("test") or "Test" in n or u in ("xiaoqi_testbot", "xiaoqi_testbot_2")):
                 test.append(entry)
-            elif wid and wid.startswith("__NULL_BACKFILL"):
-                null_backfill.append(entry)
             elif not ra:
                 real_no_ra.append(entry)
             else:

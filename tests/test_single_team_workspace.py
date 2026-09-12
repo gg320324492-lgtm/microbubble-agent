@@ -42,7 +42,6 @@ def _mk_member(username: str, name: str) -> Member:
         grade="测试",
         is_active=True,
         # wechat_id NOT NULL (类 20.183): placeholder 避开 UNIQUE 冲突
-        wechat_id=f"__TEST_BACKFILL_{username}__",
     )
 
 

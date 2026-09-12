@@ -60,7 +60,6 @@ class ChatEngine:
         system: str,
         user_id: Optional[int] = None,
         db=None,
-        channel_user_id: Optional[str] = None,
         session_id: str = "default",
         synthesis_model_override: Optional[str] = None,
         # 2026-07-13 #P1 三态推理模式 (fast/balanced/deep): 'fast' | 'balanced' | 'deep' | None (= settings 默认)
@@ -101,7 +100,6 @@ class ChatEngine:
         ctx = ToolContext(
             db=db,
             user_id=user_id,
-            channel_user_id=channel_user_id,
             # 2026-07-13 #P1: 注入 thinking_config 给 intent_classifier 等后续步骤
             thinking_config=thinking_config,
             mode_label=thinking_config.label,
@@ -190,7 +188,6 @@ class ChatEngine:
         ctx = ToolContext(
             db=db,
             user_id=user_id,
-            channel_user_id=channel_user_id,
             trace=trace,
             llm=self.llm,  # 显式注入，避免 agentic_loop 走全局 LLMClient 单例（跨 loop 安全）
             synthesis_model_override=synthesis_model_override,
@@ -246,7 +243,6 @@ class ChatEngine:
         system: str,
         user_id: Optional[int] = None,
         db=None,
-        channel_user_id: Optional[str] = None,
         session_id: str = "default",
         *,
         synthesis_model_override: Optional[str] = None,
@@ -267,7 +263,6 @@ class ChatEngine:
             system=system,
             user_id=user_id,
             db=db,
-            channel_user_id=channel_user_id,
             session_id=session_id,
             synthesis_model_override=synthesis_model_override,
             # 2026-07-13 #P1 透传
@@ -290,7 +285,6 @@ class ChatEngine:
         system: str,
         user_id: Optional[int] = None,
         db=None,
-        channel_user_id: Optional[str] = None,
         session_id: str = "default",
         image_data: Optional[bytes] = None,
         image_media_type: str = "image/png",
@@ -339,7 +333,6 @@ class ChatEngine:
             system=system,
             user_id=user_id,
             db=db,
-            channel_user_id=channel_user_id,
             session_id=session_id,
             synthesis_model_override=synthesis_model_override,
             # 2026-07-13 #P1 透传

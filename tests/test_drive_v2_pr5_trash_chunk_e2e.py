@@ -55,7 +55,6 @@ async def user(db_session: AsyncSession) -> Member:
         username=f"w72b3_{suffix}",
         password_hash="x",
         name="W72 B-3",
-        wechat_id=f"w72b3_{suffix}",
     )
     db_session.add(member)
     await db_session.flush()
@@ -69,7 +68,6 @@ async def admin(db_session: AsyncSession) -> Member:
         username=f"w72b3_admin_{suffix}",
         password_hash="x",
         name="W72 B-3 Admin",
-        wechat_id=f"w72b3_admin_{suffix}",
         role="admin",
     )
     db_session.add(member)
@@ -127,7 +125,6 @@ async def _create_member(db_session, tag: str) -> Member:
         username=f"{tag}_{suffix}",
         password_hash="x",
         name=tag,
-        wechat_id=f"{tag}_{suffix}",
     )
     db_session.add(member)
     await db_session.flush()

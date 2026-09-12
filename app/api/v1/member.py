@@ -21,18 +21,13 @@ async def create_member(
 ):
     """创建成员
 
-    v2 PR6-P13/P14/P15/P16: case-insensitive username + wechat_id + personal_wechat_id + external_userid uniqueness check
+    v2 PR6-P13: case-insensitive username uniqueness check
+    (2026-09 企业微信下线: 原 wechat_id/personal_wechat_id/external_userid 检查已删)
     """
     from app.services.member_service import MemberService
     svc = MemberService(db)
     # PR6-P13 username 唯一 (alembic 053 兜底)
     await svc._assert_identifier_unique(db, "username", member_data.username)
-    # PR6-P14 wechat_id 唯一 (alembic 054 兜底)
-    await svc._assert_identifier_unique(db, "wechat_id", member_data.wechat_id)
-    # PR6-P15 personal_wechat_id 唯一 (alembic 055 兜底)
-    await svc._assert_identifier_unique(db, "personal_wechat_id", member_data.personal_wechat_id)
-    # PR6-P16 external_userid 唯一 (alembic 056 兜底)
-    await svc._assert_identifier_unique(db, "external_userid", member_data.external_userid)
 
     member = Member(
         name=member_data.name,
@@ -44,11 +39,6 @@ async def create_member(
         email=member_data.email,
         phone=member_data.phone,
         bio=member_data.bio,
-        wechat_id=member_data.wechat_id,
-        wechat_nickname=member_data.wechat_nickname,
-        wechat_remark=member_data.wechat_remark,
-        personal_wechat_id=member_data.personal_wechat_id,
-        wechat_mobile=member_data.wechat_mobile,
         role=member_data.role
     )
 
@@ -124,8 +114,8 @@ async def update_member(
 ):
     """更新成员
 
-    v2 PR6-P13/P14/P15/P16: 如果更新包含 4 个 identifier 字段,
-    走 case-insensitive 唯一检查 (排除自己)
+    v2 PR6-P13: 如果更新包含 username, 走 case-insensitive 唯一检查 (排除自己)
+    (2026-09 企业微信下线: 原 wechat_id/personal_wechat_id/external_userid 检查已删)
     """
     result = await db.execute(select(Member).where(Member.id == member_id))
     member = result.scalar_one_or_none()
@@ -135,25 +125,11 @@ async def update_member(
 
     update_data = member_data.model_dump(exclude_unset=True)
 
-    # PR6-P13/P14/P15/P16: 提前检查 4 个 identifier 唯一性, 失败时 ConflictException (409)
+    # PR6-P13: 提前检查 username 唯一性, 失败时 ConflictException (409)
     from app.services.member_service import MemberService
     if "username" in update_data and update_data["username"] is not None:
         await MemberService._assert_identifier_unique(
             db, "username", update_data["username"], exclude_member_id=member_id
-        )
-    if "wechat_id" in update_data and update_data["wechat_id"] is not None:
-        await MemberService._assert_identifier_unique(
-            db, "wechat_id", update_data["wechat_id"], exclude_member_id=member_id
-        )
-    if "personal_wechat_id" in update_data and update_data["personal_wechat_id"] is not None:
-        await MemberService._assert_identifier_unique(
-            db, "personal_wechat_id", update_data["personal_wechat_id"],
-            exclude_member_id=member_id,
-        )
-    if "external_userid" in update_data and update_data["external_userid"] is not None:
-        await MemberService._assert_identifier_unique(
-            db, "external_userid", update_data["external_userid"],
-            exclude_member_id=member_id,
         )
 
     for field, value in update_data.items():
@@ -199,9 +175,6 @@ async def delete_member(
 
     member.is_active = False
     await db.commit()
-
-    from app.core.redis import invalidate_verified_cache_for_member
-    await invalidate_verified_cache_for_member(member_id)
 
 
 # === v2 通知偏好 API（2026-06-15 提醒体系优化） ===

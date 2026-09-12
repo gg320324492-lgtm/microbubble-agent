@@ -22,8 +22,7 @@ async def svc_env(db):
     u = _uuid.uuid4().hex[:8]
     m = Member(
         username=f"mv_{u}", name="mover", password_hash="h",
-        role="member", grade="测试", is_active=True, wechat_id=f"wx_mv_{u}",
-    )
+        role="member", grade="测试", is_active=True    )
     db.add(m)
     await db.commit()
     await db.refresh(m)

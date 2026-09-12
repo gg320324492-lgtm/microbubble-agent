@@ -200,7 +200,7 @@ def _build_plan_step_input(tool_name: str, intent, messages: list[dict]) -> dict
 
     设计原则:
     - 不假数据: 宁可 Pydantic 报错让前端看到 status=error, 也不要 LLM 凭"想当然"填假值
-    - 不读 ctx 注入字段: user_id / channel_user_id / ctx 是 dispatcher 自动注入, 不能出现在 input 里
+    - 不读 ctx 注入字段: user_id / ctx 是 dispatcher 自动注入, 不能出现在 input 里
     """
     from app.agent.tool_registry import TOOL_REGISTRY
 
@@ -210,7 +210,7 @@ def _build_plan_step_input(tool_name: str, intent, messages: list[dict]) -> dict
     fields = td.input_model.model_fields
     required_fields = [
         fname for fname, finfo in fields.items()
-        if finfo.is_required() and fname not in {"user_id", "channel_user_id", "ctx"}
+        if finfo.is_required() and fname not in {"user_id", "ctx"}
     ]
     if not required_fields:
         return {}

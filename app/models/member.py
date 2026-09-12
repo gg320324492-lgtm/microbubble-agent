@@ -18,22 +18,8 @@ class Member(Base, TimestampMixin):
     grade = Column(String(20))  # 研一/研二/博一等
     research_area = Column(String(100))  # 研究方向
     skills = Column(ARRAY(String))  # 技能列表
-    # 2026-07-02 v2 PR6-P14: 大小写不敏感 UNIQUE INDEX (alembic 054_member_wechat_id_ci_unique)
-    # comment_service mention 解析用 wechat_id.lower() (3 路匹配优先) → 防 "WangTianZhi" vs "wangtianzhi" 歧义
-    # 2026-07-03 v2 PR6-P17: nullable=False (alembic 057_wechat_id_not_null 防 NULL 渗透)
-    # 14/35 行原 NULL 已 backfill 为 '__NULL_BACKFILL_<id>__' 占位, 留给后续真实值填充
-    wechat_id = Column(String(100), nullable=False)  # 企业微信 userid (NOT NULL)
-    wechat_nickname = Column(String(100))  # 企业微信昵称
-    wechat_remark = Column(String(100))  # 企业微信备注名
-    # 2026-07-02 v2 PR6-P15: 大小写不敏感 UNIQUE INDEX (alembic 055_member_personal_wechat_id_ci_unique)
-    # app/wechat/identity.py:79 resolve_by_wechat_id() 当前精确匹配, 但为防未来 lower() 匹配出现撞车
-    # 与 PR6-P13/014 同模式, _IDENTIFIER_COLUMNS 白名单已加 personal_wechat_id
-    personal_wechat_id = Column(String(100))  # 个人微信号
-    wechat_mobile = Column(String(20))  # 绑定手机号
-    # 2026-07-03 v2 PR6-P16: 大小写不敏感 UNIQUE INDEX (alembic 056_external_userid_ci)
-    # app/wechat/identity.py:41 resolve_by_external_userid() 当前精确匹配, 但为防未来 lower() 匹配出现撞车
-    # 与 PR6-P13/014/015 同模式, _IDENTIFIER_COLUMNS 白名单已加 external_userid (wm 开头通常大写)
-    external_userid = Column(String(100))  # 微信互通外部用户ID（普通微信用户，wm开头）
+    # (2026-09 企业微信下线: wechat_id/wechat_nickname/wechat_remark/
+    #  personal_wechat_id/wechat_mobile/external_userid 6 列已由 alembic 139 删除)
     email = Column(String(100))
     phone = Column(String(20))
     avatar = Column(String(500))
@@ -45,7 +31,7 @@ class Member(Base, TimestampMixin):
     role = Column(String(20), default="member")
     custom_instructions = Column(Text)  # 用户自定义指令
     notification_preferences = Column(JSON, nullable=True)  # 通知偏好（2026-06-15 v2）：
-    # {"enabled": True, "digest_time": "11:00", "channels": ["wechat"],
+    # {"enabled": True, "digest_time": "11:00", "channels": ["in_app"],
     #  "snoozed_until": "2026-06-16T03:00:00Z"}
 
     # 声纹识别

@@ -27,7 +27,6 @@ async def _mk_member(db, tag: str) -> Member:
     m = Member(
         username=f"frst_{tag}_{u}", name=f"restore-{tag}",
         password_hash="h", role="member", grade="测试", is_active=True,
-        wechat_id=f"wx_{tag}_{u}",
     )
     db.add(m)
     await db.commit()

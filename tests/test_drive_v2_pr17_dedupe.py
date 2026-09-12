@@ -75,7 +75,6 @@ async def _make_member(db, tag):
         password_hash=get_password_hash("test123456"),
         role="member",
         grade="研一",
-        wechat_id=f"wx_pr17_{tag}_{uuid.uuid4().hex[:8]}",
         is_active=True,
     )
     db.add(member)
