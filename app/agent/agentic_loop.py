@@ -1267,6 +1267,10 @@ class AgenticLoop:
                         yield compression_to_sse_event(tu["name"], tu["id"], compression)
                         # 把压缩信息注入 messages
                         inject_compressed_to_messages(messages, tu["name"], tu["id"], compression)
+                        # 2026-09-12 trace 观测补洞: 此前无人递增, agent_traces
+                        # .compression_applied_count 恒 0
+                        if ctx.trace is not None:
+                            ctx.trace.compression_applied_count += 1
 
                     round_results.append({
                         "type": "tool_result",
@@ -1295,6 +1299,10 @@ class AgenticLoop:
                     "content": cleaned_content,
                 })
                 messages.append({"role": "user", "content": round_results})
+                # 2026-09-12 trace 观测补洞: 工具轮数此前无人记录, agent_traces
+                # .tool_rounds_used 恒 0
+                if ctx.trace is not None:
+                    ctx.trace.tool_rounds_used = round_idx + 1
 
             # ===== Phase 1.5: 悬空 tool_use 防御 =====
             _sanitize_pending_tool_uses(messages, reason="max_rounds_reached")
@@ -1830,11 +1838,25 @@ def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[
     found: list[tuple[int, int, str]] = []  # (轮距, 首现位置, 名字)
     titles: list[str] = []
     scanned = 0
+    src0_checked = False  # 源 0 只看最近一条有 trace 的回答, 查过即关闸 (见下方纪律)
     for msg in reversed(messages):
         if msg.get("role") != "assistant":
             continue
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            content = "".join(
+                b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        if not isinstance(content, str):
+            content = ""
         # 源 0 (最高优先): tool_trace.tool_use.input 实体 (只取最近一条有 trace 的)
-        if not tool_names and not tool_titles:
+        # 2026-09-12 实测 (§7 "他手上" 锚成杜同贺) 双纪律:
+        # ① 查过即关闸 — 最近有 trace 的一轮没产出实体也不许继续翻更早轮, 否则
+        #    §2 轮的工具入参 (assignee_name=当前用户) 会跨轮污染 §7 的"他";
+        # ② 入参实体必须出现在该轮回答文本里 — 代词指代的是用户看到的主题,
+        #    模型内部自查过但没写进回答的实体不算 (§2 "你当前没有…" 文本无杜同贺)。
+        if not src0_checked:
             tt = msg.get("tool_trace")
             if isinstance(tt, str):
                 try:
@@ -1842,6 +1864,8 @@ def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[
                 except Exception:
                     tt = None
             trace = tt.get("trace", []) if isinstance(tt, dict) else []
+            if trace:
+                src0_checked = True
             for ev in trace:
                 if not isinstance(ev, dict) or ev.get("type") != "tool_use":
                     continue
@@ -1852,19 +1876,17 @@ def _extract_prev_round_entities(messages: list[dict]) -> tuple[list[str], list[
                     if not isinstance(v, str) or not v.strip():
                         continue
                     v = v.strip()
+                    # 只信"用户看得见"的实体: 该轮回答为空或没提到这个值, 说明是
+                    # 模型内部自查 (如 get_member_profile 试探), 不算上轮主题
+                    if not content or v not in content:
+                        continue
                     if k in _person_keys and v in roster and v not in tool_names:
                         tool_names.append(v)
                     elif (k in _title_keys and v not in tool_titles
                             # 疑问词/碎片不是标题 (stress4 实测 "几个" 被当标题注入)
                             and not re.search(r"哪|几|什么|多少|怎么|如何|谁|吗|呢", v)):
                         tool_titles.append(v)
-        content = msg.get("content", "")
-        if isinstance(content, list):
-            content = "".join(
-                b.get("text", "") for b in content
-                if isinstance(b, dict) and b.get("type") == "text"
-            )
-        if not isinstance(content, str) or len(content) < 8:
+        if len(content) < 8:
             continue
         scanned += 1
         labeled += [m.strip(" ：:*") for m in _MEMBER_LABEL_RE.findall(content)]
