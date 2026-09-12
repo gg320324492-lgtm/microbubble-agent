@@ -87,6 +87,8 @@
         :selected="selectedFileIds.includes(file.id)"
         :selectable="true"
         :view-mode="'detail'"
+        :trash-context="trashContext"
+        @restore="(f) => $emit('file-restore', f)"
         @click="(f, e) => $emit('file-click', f, e)"
         @toggle-select="(id) => $emit('toggle-select', id)"
         @toggle-star="(f) => $emit('file-toggle-star', f)"
@@ -110,6 +112,8 @@
         :selected="selectedFileIds.includes(file.id)"
         :selectable="true"
         :view-mode="'grid'"
+        :trash-context="trashContext"
+        @restore="(f) => $emit('file-restore', f)"
         @click="(f, e) => $emit('file-click', f, e)"
         @toggle-select="(id) => $emit('toggle-select', id)"
         @toggle-star="(f) => $emit('file-toggle-star', f)"
@@ -133,6 +137,8 @@
         :selected="selectedFileIds.includes(file.id)"
         :selectable="true"
         :view-mode="'list'"
+        :trash-context="trashContext"
+        @restore="(f) => $emit('file-restore', f)"
         @click="(f, e) => $emit('file-click', f, e)"
         @toggle-select="(id) => $emit('toggle-select', id)"
         @toggle-star="(f) => $emit('file-toggle-star', f)"
@@ -186,11 +192,14 @@ const props = defineProps({
   viewMode: { type: String, default: 'detail' },  // v2.16: detail 默认 (替代 grid) | grid | list
   isTopLevel: { type: Boolean, default: true },  // 是否顶级目录 (空态文案区分)
   isSearch: { type: Boolean, default: false },   // v2.0: 是否搜索无结果态
-  searchKeyword: { type: String, default: '' }   // v2.0: 用于 "未找到与 X 相关" 文案
+  searchKeyword: { type: String, default: '' },  // v2.0: 用于 "未找到与 X 相关" 文案
+  // 批次⑩.74: 回收站上下文 — FileCard 切换 恢复/彻底删除 动作 + 删除元数据
+  trashContext: { type: Boolean, default: false }
 })
 
 // 2026-09-05: 'file-to-kb' emit 已删除 — 网盘文件上传后默认自动入库 RAG, 无手动入库入口
-defineEmits(['retry', 'folder-click', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-share-link', 'file-view-comments', 'file-version-history', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
+// 批次⑩.74: 加 'file-restore' (回收站单文件恢复)
+defineEmits(['retry', 'folder-click', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-share-link', 'file-view-comments', 'file-version-history', 'file-delete', 'file-restore', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
 
 // === v2.0: 空态多态 (top-level / folder / search) ===
 const emptyState = computed(() => {
