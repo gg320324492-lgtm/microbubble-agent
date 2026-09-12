@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>亮色主题对齐暗色 · 3 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --coral: #ef7256;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 22px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+  .diag { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; margin-bottom: 26px; font-size: 12.5px; line-height: 1.9; color: var(--txt2); }
+  .diag b { color: var(--txt); }
+
+  .row { display: flex; gap: 22px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 20px 14px; width: 420px; }
+  .card.wide { width: 100%; }
+  .card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .card-h .tag { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .card-h .tag.gray { color: #8A938E; background: rgba(138,147,142,.08); border-color: rgba(138,147,142,.4); }
+  .card-h h2 { font-size: 15.5px; font-weight: 650; }
+  .card-d { color: var(--txt2); font-size: 12px; margin-bottom: 14px; line-height: 1.7; min-height: 52px; }
+
+  /* ═══ 小样: 侧栏 + 对话 ═══ */
+  .demo { display: flex; border: 1px solid rgba(22,35,42,.25); border-radius: 12px; overflow: hidden; height: 330px; background: var(--paper); }
+  .sb { width: 148px; flex-shrink: 0; background: var(--paper); border-right: 1px solid rgba(22,35,42,.25); padding: 9px 8px; display: flex; flex-direction: column; gap: 6px; }
+  .newbtn { border-radius: 8px; padding: 8px 0; font-size: 11px; text-align: center; font-weight: 600; }
+  .filt { border-bottom: 1.5px solid rgba(22,35,42,.35); font-size: 9.5px; color: #9aa4a0; padding: 4px 2px 5px; }
+  .tabs { display: flex; gap: 3px; }
+  .tab { flex: 1; text-align: center; font-size: 9px; padding: 5px 0; border-radius: 5px; border: 1px solid rgba(22,35,42,.18); color: #7d8a86; }
+  .grp { font-family: var(--mono); font-size: 7.5px; letter-spacing: .22em; color: #9aa4a0; margin-top: 3px; }
+  .it { border-radius: 8px; padding: 6px 7px; font-size: 9.5px; color: var(--ink); }
+  .it .m { font-family: var(--mono); font-size: 7px; color: #9aa4a0; margin-top: 3px; letter-spacing: .04em; }
+  .main { flex: 1; padding: 12px 14px; display: flex; flex-direction: column; font-size: 11px; }
+  .urow { display: flex; justify-content: flex-end; margin: 8px 0 4px; }
+  .ubub { max-width: 78%; padding: 8px 12px; font-size: 10.5px; line-height: 1.55; position: relative; }
+  .btxt { line-height: 1.7; color: #2a3a42; font-size: 10.5px; }
+  .btxt .num { color: var(--coral); }
+  .acts { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .dur { font-family: var(--mono); font-size: 8px; color: #9aa4a0; letter-spacing: .04em; }
+  .apill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(22,35,42,.22); border-radius: 999px; padding: 3px 9px; font-size: 8.5px; background: var(--card); color: #4a5560; }
+  .fb { font-size: 10px; margin-left: 6px; }
+  .inbar { margin-top: auto; border: 1px solid rgba(22,35,42,.35); border-radius: 16px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; font-size: 9.5px; color: #9aa4a0; }
+  .send-r { margin-left: auto; width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .trace { display: inline-flex; align-items: center; gap: 5px; border: 1px solid rgba(22,35,42,.16); border-radius: 6px; padding: 3px 9px; font-size: 8.5px; color: #7d8a86; background: rgba(255,255,255,.5); margin-bottom: 8px; align-self: flex-start; }
+  .head { display: flex; gap: 7px; align-items: flex-start; }
+  .avat { width: 20px; height: 20px; border-radius: 6px; background: #0e766e; flex-shrink: 0; }
+  .dhead { font-family: var(--mono); font-size: 7.5px; letter-spacing: .16em; color: #9aa4a0; border-bottom: 1px solid rgba(22,35,42,.14); padding-bottom: 5px; margin-bottom: 6px; }
+  .green-chip { display: inline-block; margin-top: 8px; font-size: 8px; color: #16a34a; background: rgba(103,194,58,.12); border: 1px solid rgba(103,194,58,.35); border-radius: 999px; padding: 2px 8px; align-self: flex-start; }
+
+  /* ── 现状 ── */
+  .v0 .newbtn { background: var(--ink); color: #fbfcfb; }
+  .v0 .tab.on { background: var(--ink); color: #fbfcfb; border-color: var(--ink); }
+  .v0 .it { border-left: 2px solid transparent; border-bottom: 1px dashed rgba(22,35,42,.15); border-radius: 0; }
+  .v0 .it.on { background: var(--card); border-left-color: var(--teal); }
+  .v0 .head .avat { display: block; }
+  .v0 .bb { background: var(--card); border: 1px solid rgba(22,35,42,.08); border-radius: 14px; padding: 10px 13px; box-shadow: 0 1px 3px rgba(22,35,42,.05); }
+  .v0 .ubub { background: var(--card); border: 1.5px solid rgba(239,114,86,.6); border-radius: 10px 3px 10px 10px; box-shadow: 2px 2px 0 rgba(239,114,86,.14); }
+  .v0 .ubub::before { content: 'Q · 15:46'; position: absolute; top: -7px; right: 8px; background: var(--paper); padding: 0 5px; font-family: var(--mono); font-size: 6.5px; letter-spacing: .15em; color: var(--coral); }
+  .v0 .inbar { box-shadow: 3px 3px 0 rgba(22,35,42,.12); border-radius: 12px; }
+  .v0 .send-r { background: var(--card); border: 1px solid rgba(22,35,42,.3); border-radius: 999px; color: var(--ink); }
+
+  /* ── A 墨青单色 ── */
+  .vA .newbtn { background: linear-gradient(135deg, #0e766e, #12968b); color: #fff; }
+  .vA .tab.on { background: var(--teal); color: #fff; border-color: var(--teal); }
+  .vA .it { background: rgba(255,255,255,.55); border: 1px solid transparent; margin-bottom: 3px; }
+  .vA .it.on { background: rgba(14,118,110,.08); border-color: rgba(14,118,110,.4); }
+  .vA .head .avat, .vA .dhead { display: none; }
+  .vA .bb { padding: 0; background: transparent; border: none; box-shadow: none; }
+  .vA .trace { display: inline-flex; }
+  .vA .ubub { background: rgba(22,35,42,.05); border: none; border-radius: 14px; }
+  .vA .inbar { border-radius: 16px; box-shadow: none; }
+  .vA .send-r { background: linear-gradient(135deg, #0e766e, #12968b); color: #fff; }
+
+  /* ── B 珊瑚用户身份 ── */
+  .vB .newbtn { background: linear-gradient(135deg, #0e766e, #12968b); color: #fff; }
+  .vB .tab.on { background: var(--teal); color: #fff; border-color: var(--teal); }
+  .vB .it { background: rgba(255,255,255,.55); border: 1px solid transparent; margin-bottom: 3px; }
+  .vB .it.on { background: rgba(14,118,110,.08); border-color: rgba(14,118,110,.4); }
+  .vB .head .avat, .vB .dhead { display: none; }
+  .vB .bb { padding: 0; background: transparent; border: none; box-shadow: none; }
+  .vB .ubub { background: rgba(239,114,86,.1); border: 1px solid rgba(239,114,86,.25); border-radius: 14px; color: #7c3a28; }
+  .vB .inbar { border-radius: 16px; box-shadow: none; }
+  .vB .send-r { background: linear-gradient(135deg, #0e766e, #12968b); color: #fff; }
+
+  /* ── C 纸墨反转 ── */
+  .vC .newbtn { background: var(--ink); color: #fbfcfb; }
+  .vC .tab.on { background: var(--ink); color: #fbfcfb; border-color: var(--ink); }
+  .vC .it { background: rgba(255,255,255,.55); border: 1px solid transparent; margin-bottom: 3px; }
+  .vC .it.on { background: var(--card); border-color: rgba(22,35,42,.45); }
+  .vC .head .avat, .vC .dhead { display: none; }
+  .vC .bb { padding: 0; background: transparent; border: none; box-shadow: none; }
+  .vC .ubub { background: var(--ink); color: #eef4f2; border: none; border-radius: 14px; }
+  .vC .inbar { border-radius: 16px; box-shadow: none; border-color: rgba(22,35,42,.5); }
+  .vC .send-r { background: var(--ink); color: #fbfcfb; }
+
+  .notes { margin-top: 12px; font-size: 11.5px; line-height: 1.9; }
+  .notes .pro { color: #2E8B62; } .notes .con { color: #B4823C; }
+  .foot { margin-top: 26px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .foot b { color: var(--txt); }
+  .foot code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>亮色主题对齐暗色 · 3 方案</h1>
+  <p class="sub">暗色经过五轮选型已是干净版（无头像 / 无 § REPLY 行 / AI 无气泡 / trace 胶囊 / 绿 chip 退场 / 侧栏卡片描边选中 / 圆形↑发送）。亮色还是上一代档案风。<b>三案的结构改造完全相同</b>（= 把暗色规则全部翻译到亮色），唯一分歧是亮色的<b>强调色身份</b>：墨青单色 / 保留珊瑚用户身份 / 纸墨反转。</p>
+
+  <div class="diag">
+    <b>亮暗差异清单（截图对照）</b>：① 侧栏会话选中 — 暗=青染底+1px青描边卡片，亮=纸白卡+3px墨青左线+虚线分隔　② 头像+§ REPLY TOOLS 日志行 — 暗已删，亮还在　③ AI 白底气泡 — 暗=无气泡纯文本，亮=白卡　④ 用户气泡 — 暗=灰圆角，亮=珊瑚描边+硬阴影+挖孔时间戳　⑤ 自评绿 chip — 暗已隐藏，亮常驻　⑥ trace 全程展开 — 暗已收胶囊　⑦ 发送键 — 暗=青色圆形↑，亮=纸白药丸+输入区硬阴影
+  </div>
+
+  <div class="row">
+    <div class="card wide">
+      <div class="card-h"><span class="tag gray">现状</span><h2>亮色档案风（截图同款）</h2></div>
+      <div class="demo v0">
+        <div class="sb">
+          <div class="newbtn">🖊 新对话</div>
+          <div class="filt">过滤会话标题或标签</div>
+          <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+          <div class="grp">🕒 最近</div>
+          <div class="it on">现在有哪些进行…<div class="m">8 小时前 11 条</div></div>
+          <div class="it">你好<div class="m">1 天前 89 条</div></div>
+        </div>
+        <div class="main">
+          <div class="head"><div class="avat"></div><div style="flex:1"><div class="dhead">§ 9 小气助手 · REPLY &nbsp;TOOLS: 意图: 执行操作 (95%) / query_tasks / update_task / 自评 7/10 ✓</div>
+          <div class="bb"><div class="btxt">"这个任务"指代不太明确——上一轮回答里并没有列出具体的任务条目。请告诉我：<span class="num">1.</span> 你要加备注的是哪个任务？<span class="num">2.</span> 确认备注内容为"本周组会汇报进度"？</div></div>
+          <div class="green-chip">✓ 自我评估 score=7/10</div>
+          <div class="acts"><span class="dur">63.4s</span><span class="apill">♪ 朗读</span><span class="apill">↻ 重答</span><span class="apill">⧉ 复制</span><span class="fb">👍 👎</span></div>
+          </div></div>
+          <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+          <div class="inbar">问问小气…<span class="send-r">↑</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">A</span><h2>墨青单色 · 完全镜像暗色（推荐）</h2></div>
+      <p class="card-d">暗色的青色系翻译成亮色的墨青：新对话/选中 tab/发送键 = 墨青实底，侧栏选中 = 墨青染底+描边，用户气泡 = 中性纸灰。珊瑚退出对话区，全页一种强调色。</p>
+      <div class="demo vA">
+        <div class="sb">
+          <div class="newbtn">🖊 新对话</div>
+          <div class="filt">过滤会话标题或标签</div>
+          <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+          <div class="grp">🕒 最近</div>
+          <div class="it on">现在有哪些进行…<div class="m">8 小时前 11 条</div></div>
+          <div class="it">你好<div class="m">1 天前 89 条</div></div>
+        </div>
+        <div class="main">
+          <span class="trace">▸ 已调用 2 个工具 · 63.4s</span>
+          <div class="btxt">"这个任务"指代不太明确——上一轮回答里并没有列出具体的任务条目。请告诉我：<span class="num">1.</span> 你要加备注的是哪个任务？<span class="num">2.</span> 确认备注内容为"本周组会汇报进度"？</div>
+          <div class="acts"><span class="dur">63.4s</span><span class="apill">♪ 朗读</span><span class="apill">↻ 重答</span><span class="apill">⧉ 复制</span><span class="fb">👍 👎</span></div>
+          <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+          <div class="inbar">问问小气…<span class="send-r">↑</span></div>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 与暗色逐元素一一对应，明暗切换零违和</span></div>
+        <div><span class="pro">✓ 单一强调色最干净，青色家族全站统一</span></div>
+        <div><span class="con">⚠ 失去珊瑚暖色身份，页面偏「性冷淡」</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">B</span><h2>珊瑚用户身份 · 一暖一中性</h2></div>
+      <p class="card-d">A 的全部结构 + 用户气泡改珊瑚调 10% 浅实底（无描边无阴影）——保留「这是我说的话」的暖色身份，其余强调色仍归墨青。</p>
+      <div class="demo vB">
+        <div class="sb">
+          <div class="newbtn">🖊 新对话</div>
+          <div class="filt">过滤会话标题或标签</div>
+          <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+          <div class="grp">🕒 最近</div>
+          <div class="it on">现在有哪些进行…<div class="m">8 小时前 11 条</div></div>
+          <div class="it">你好<div class="m">1 天前 89 条</div></div>
+        </div>
+        <div class="main">
+          <span class="trace">▸ 已调用 2 个工具 · 63.4s</span>
+          <div class="btxt">"这个任务"指代不太明确——上一轮回答里并没有列出具体的任务条目。请告诉我：<span class="num">1.</span> 你要加备注的是哪个任务？<span class="num">2.</span> 确认备注内容为"本周组会汇报进度"？</div>
+          <div class="acts"><span class="dur">63.4s</span><span class="apill">♪ 朗读</span><span class="apill">↻ 重答</span><span class="apill">⧉ 复制</span><span class="fb">👍 👎</span></div>
+          <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+          <div class="inbar">问问小气…<span class="send-r">↑</span></div>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 用户消息一眼可辨，保留产品暖色基因</span></div>
+        <div><span class="con">⚠ 暖冷双色同屏，干净度略低于 A</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">C</span><h2>纸墨反转 · 档案身份最强</h2></div>
+      <p class="card-d">保留现在的「墨色实底」身份（新对话/选中 tab 已是墨色）：用户气泡 = 墨色实底白字，发送键 = 墨色圆↑，侧栏选中 = 纸白卡+墨描边。像纸上的墨块。</p>
+      <div class="demo vC">
+        <div class="sb">
+          <div class="newbtn">🖊 新对话</div>
+          <div class="filt">过滤会话标题或标签</div>
+          <div class="tabs"><div class="tab">全部</div><div class="tab on">未归档</div><div class="tab">已归档</div></div>
+          <div class="grp">🕒 最近</div>
+          <div class="it on">现在有哪些进行…<div class="m">8 小时前 11 条</div></div>
+          <div class="it">你好<div class="m">1 天前 89 条</div></div>
+        </div>
+        <div class="main">
+          <span class="trace">▸ 已调用 2 个工具 · 63.4s</span>
+          <div class="btxt">"这个任务"指代不太明确——上一轮回答里并没有列出具体的任务条目。请告诉我：<span class="num">1.</span> 你要加备注的是哪个任务？<span class="num">2.</span> 确认备注内容为"本周组会汇报进度"？</div>
+          <div class="acts"><span class="dur">63.4s</span><span class="apill">♪ 朗读</span><span class="apill">↻ 重答</span><span class="apill">⧉ 复制</span><span class="fb">👍 👎</span></div>
+          <div class="urow"><div class="ubub">帮我给这个任务加一条备注：本周组会汇报进度</div></div>
+          <div class="inbar">问问小气…<span class="send-r">↑</span></div>
+        </div>
+      </div>
+      <div class="notes">
+        <div><span class="pro">✓ 纸墨档案身份最强，与现有墨色按钮延续</span></div>
+        <div><span class="con">⚠ 与暗色的青色系不对应，明暗切换色感跳跃</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>三案共同的结构改造（= 暗色规则翻译到亮色，不可选项）</b>：① 删头像 + § REPLY TOOLS 头行　② AI 白底气泡 → 无气泡纯文本　③ trace 收「▸ 已调用 N 个工具」胶囊　④ 自评绿 chip 退场　⑤ 用户气泡去珊瑚描边/硬阴影/挖孔时间戳 → 圆角实底　⑥ 输入区去硬阴影　⑦ 发送键改圆形↑　⑧ 侧栏条目虚线分隔 → 圆角卡片，选中改「染底+描边」（去 3px 左线）<br>
+    <b>分歧轴</b>：A 用户气泡=纸灰 / 强调=墨青｜B 用户气泡=珊瑚浅底 / 强调=墨青｜C 用户气泡=墨色白字 / 强调=墨<br>
+    <b>实施位置</b>：<code>ChatViewSSE.vue</code> 沉浸段亮色规则（user-bubble / dossier-entry-head / msg-content / send-btn-pill）+ <code>ChatMessageRow.vue</code>（trace-pill 亮色显示 / 头像隐藏）+ <code>SessionSidebar.vue</code> 档案语言段（条目虚线/左线）。暗色不动。
+  </div>
+</div>
+</body>
+</html>
