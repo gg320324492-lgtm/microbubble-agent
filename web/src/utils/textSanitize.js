@@ -6,7 +6,7 @@
  *
  * 触发场景 (2026-07-15):
  *   - 后端清洗是预防, 已写库历史数据或 chat 路径旁路的脏 description 仍可能进入 UI
- *   - 前端 ProjectsPanel.vue 显示时调 cleanDescriptionForDisplay() 兜底
+ *   - 前端面板显示时调 cleanDescriptionForDisplay() 兜底 (原 ProjectsPanel 已于 2026-09-12 删除, 工具保留)
  *
  * 清洗策略:
  *   1. 剥离 markdown 字符 (* _ ` # > 等)
