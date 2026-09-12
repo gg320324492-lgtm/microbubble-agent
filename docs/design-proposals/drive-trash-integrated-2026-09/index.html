@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>回收站整体画面 · 重设计定稿预览 (2026-09)</title>
+<style>
+  :root {
+    --paper: #F4F6F4; --card: #FFFFFF; --ink: #16232A; --ink2: #5B6870;
+    --dim: #9AA4A0; --line: rgba(22,35,42,.12); --teal: #0E766E; --danger: #A3543F;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --dk-side: #10171B; --dk-card: rgba(255,255,255,.028); --dk-line: rgba(226,236,234,.14);
+    --dk-text: #E2ECEA; --dk-dim: #7E8790; --neon: #35C2A4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #EFede7; font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 30px 20px 60px; color: var(--ink); }
+  .frame { max-width: 1280px; margin: 0 auto 34px; border-radius: 14px; overflow: hidden; border: 1px solid rgba(22,35,42,.2); box-shadow: 0 6px 30px rgba(22,35,42,.08); }
+  .note { max-width: 1280px; margin: 0 auto 12px; font-size: 12.5px; color: #8A938E; line-height: 1.8; }
+  .note b { color: #26302C; }
+  .cap { max-width: 1280px; margin: 0 auto 10px; font-size: 13px; font-weight: 650; color: #26302C; }
+  .cap .t { font-family: var(--mono); font-size: 12px; color: #0E766E; border: 1px solid rgba(14,118,110,.4); border-radius: 999px; padding: 2px 10px; margin-right: 8px; }
+
+  /* ═══ 亮色整体画面 ═══ */
+  .app { background: var(--paper); }
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: rgba(255,255,255,.7); border-bottom: 1px solid var(--line); }
+  .crumb { font-size: 13px; color: var(--ink2); }
+  .crumb b { color: var(--ink); font-weight: 600; }
+  .crumb .sep { color: var(--dim); margin: 0 6px; }
+  .search { flex: 1; max-width: 420px; margin: 0 auto; border: 1px solid rgba(22,35,42,.25); border-radius: 999px; padding: 6px 14px; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 8px; background: var(--card); }
+  .search .kbd { margin-left: auto; font-family: var(--mono); font-size: 9px; border: 1px solid rgba(22,35,42,.2); border-radius: 4px; padding: 1px 5px; color: var(--dim); }
+  .topbtn { font-size: 12px; padding: 6px 13px; border-radius: 999px; border: 1px solid rgba(22,35,42,.2); background: var(--card); color: var(--ink2); }
+  .topbtn.primary { background: var(--ink); border-color: var(--ink); color: #FBFCFB; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+  .crumbrow { display: flex; align-items: center; gap: 10px; padding: 12px 22px 4px; font-size: 13px; }
+  .back { width: 26px; height: 26px; border-radius: 999px; border: 1px solid rgba(22,35,42,.25); display: inline-flex; align-items: center; justify-content: center; color: var(--ink2); background: var(--card); }
+  .comfort { margin-left: auto; font-size: 11.5px; color: var(--dim); border: 1px solid var(--line); border-radius: 7px; padding: 4px 10px; background: rgba(255,255,255,.6); }
+
+  .panel { margin: 10px 22px 18px; }
+  .phead { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .ptitle { font-size: 14px; font-weight: 650; display: inline-flex; align-items: center; gap: 7px; }
+  .chip { font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em; color: #7d8a86; border: 1px solid rgba(22,35,42,.18); border-radius: 5px; padding: 2px 8px; background: rgba(255,255,255,.6); }
+  .pcount { margin-left: auto; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--dim); }
+  .batchrow { display: flex; align-items: center; gap: 8px; padding: 9px 0; }
+  .bchk { width: 13px; height: 13px; border: 1.5px solid rgba(22,35,42,.3); border-radius: 3px; }
+  .btxt { font-size: 11.5px; color: var(--ink2); }
+  .bact { font-size: 11px; color: var(--teal); border: 1px dashed rgba(14,118,110,.4); border-radius: 8px; padding: 3px 10px; }
+
+  .frow { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 10px; padding: 11px 14px; margin-top: 8px; transition: border-color .15s; }
+  .frow:hover { border-color: rgba(22,35,42,.28); }
+  .fchk { width: 14px; height: 14px; border: 1.5px solid rgba(22,35,42,.25); border-radius: 4px; flex-shrink: 0; }
+  .fic { width: 30px; height: 34px; border: 1.5px solid #8FA0AA; border-radius: 4px; position: relative; flex-shrink: 0; background: #fff; }
+  .fic::before { content: ''; position: absolute; top: -1.5px; right: -1.5px; border-style: solid; border-width: 0 9px 9px 0; border-color: transparent var(--paper) transparent transparent; }
+  .fic.folder { border-radius: 6px; border-color: #C9A36B; }
+  .fic.folder::before { display: none; }
+  .fcol { flex: 1; min-width: 0; }
+  .fname { font-size: 12.5px; color: var(--ink); }
+  .fmeta { font-family: var(--mono); font-size: 9.5px; letter-spacing: .04em; color: var(--dim); margin-top: 3px; }
+  .fmeta .warn { color: var(--danger); }
+  .act { display: inline-flex; align-items: center; gap: 5px; border: none; background: transparent; border-radius: 7px; padding: 5px 9px; font-size: 11.5px; color: var(--ink2); }
+  .act:hover { background: rgba(22,35,42,.07); color: var(--teal); }
+  .act.del:hover { background: rgba(163,84,63,.1); color: var(--danger); }
+  .act svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .del-stamp { font-family: var(--mono); font-size: 9px; color: var(--danger); border: 1px dashed rgba(163,84,63,.45); border-radius: 5px; padding: 2px 7px; margin-right: 6px; }
+  .pager { display: flex; align-items: center; gap: 6px; justify-content: flex-end; padding: 14px 2px 2px; font-size: 11.5px; color: var(--dim); }
+  .pg { min-width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; }
+  .pg.on { background: var(--ink); color: #FBFCFB; }
+
+  /* ═══ 暗色对照条 ═══ */
+  .dk { background: var(--dk-side); padding: 14px 18px; border-top: 1px solid rgba(226,236,234,.2); }
+  .dk .dkhead { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--dk-line); }
+  .dk .ptitle { color: var(--dk-text); }
+  .dk .chip { color: var(--dk-dim); border-color: var(--dk-line); background: rgba(255,255,255,.03); }
+  .dk .pcount { color: var(--dk-dim); }
+  .dk .frow { background: var(--dk-card); border-color: transparent; }
+  .dk .frow.on { background: rgba(53,194,164,.1); border-color: rgba(53,194,164,.4); }
+  .dk .fname { color: var(--dk-text); }
+  .dk .fmeta { color: var(--dk-dim); }
+  .dk .fmeta .warn { color: #f89898; }
+  .dk .fic { border-color: #4a5860; background: rgba(255,255,255,.04); }
+  .dk .act { color: var(--dk-dim); }
+  .dk .act:hover { background: rgba(255,255,255,.07); color: var(--neon); }
+  .dk .act.del:hover { background: rgba(248,152,152,.12); color: #f89898; }
+
+  .legend { max-width: 1280px; margin: 0 auto; background: #fff; border: 1px solid #E7E3DA; border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.9; color: #8A938E; }
+  .legend b { color: #26302C; }
+  .legend code { font-family: var(--mono); font-size: 11px; background: rgba(14,118,110,.07); border: 1px solid rgba(14,118,110,.25); border-radius: 4px; padding: 1px 6px; color: var(--teal); }
+</style>
+</head>
+<body>
+
+<div class="cap"><span class="t">定稿预览</span>亮色主题 · 完整回收站画面（含新删除按钮）</div>
+<div class="frame">
+<div class="app">
+  <div class="topbar">
+    <span class="crumb">课题组网盘</span>
+    <div class="search">🔍 搜索文件名（支持中文，输入即搜）<span class="kbd">Ctrl K</span></div>
+    <span class="topbtn">＋ 新建文件夹</span>
+    <span class="topbtn primary">⬆ 上传</span>
+  </div>
+  <div class="crumbrow">
+    <span class="back">←</span>
+    <span class="crumb">课题组网盘<span class="sep">/</span><b>回收站</b></span>
+    <span class="comfort">共 322 项 · ☰ 舒适</span>
+  </div>
+
+  <div class="panel">
+    <div class="phead">
+      <span class="ptitle">🗑️ 回收站</span>
+      <span class="chip">已删除文件 30 天后自动清除</span>
+      <span class="pcount">共 322 项</span>
+    </div>
+    <div class="batchrow">
+      <span class="bchk"></span><span class="btxt">全选</span>
+      <span class="bact">批量恢复</span>
+      <span class="bact" style="color:#A3543F;border-color:rgba(163,84,63,.4)">批量彻底删除</span>
+      <span class="btxt" style="margin-left:auto;color:var(--dim)">已选 0 项</span>
+    </div>
+
+    <div class="frow">
+      <span class="fchk"></span>
+      <div class="fic"></div>
+      <div class="fcol">
+        <div class="fname">e2eauto1788586798.txt</div>
+        <div class="fmeta">删除于 09-08 14:22 · 剩 27 天</div>
+      </div>
+      <button class="act"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>恢复</button>
+      <button class="act del" title="彻底删除（不可撤销）"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+    </div>
+
+    <div class="frow">
+      <span class="fchk"></span>
+      <div class="fic"></div>
+      <div class="fcol">
+        <div class="fname">grid-test.txt</div>
+        <div class="fmeta">删除于 09-05 09:10 · 剩 24 天</div>
+      </div>
+      <button class="act"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>恢复</button>
+      <button class="act del" title="彻底删除（不可撤销）"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+    </div>
+
+    <div class="frow">
+      <span class="fchk"></span>
+      <div class="fic folder"></div>
+      <div class="fcol">
+        <div class="fname">实验数据 2026-08</div>
+        <div class="fmeta">文件夹 · 删除于 09-01 18:40 · 剩 20 天</div>
+      </div>
+      <button class="act"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>恢复</button>
+      <button class="act del" title="彻底删除（不可撤销）"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+    </div>
+
+    <div class="frow" style="border-color:rgba(163,84,63,.3)">
+      <span class="fchk"></span>
+      <div class="fic"></div>
+      <div class="fcol">
+        <div class="fname" style="color:var(--danger)">会议记录-临时.txt</div>
+        <div class="fmeta"><span class="warn">即将自动清除 · 剩 2 天</span></div>
+      </div>
+      <span class="del-stamp">即将清除</span>
+      <button class="act"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>恢复</button>
+      <button class="act del" title="彻底删除（不可撤销）"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+    </div>
+
+    <div class="pager">‹ <span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span> … <span class="pg">11</span> ›</div>
+  </div>
+</div>
+</div>
+
+<div class="cap"><span class="t">同款</span>暗色主题对照（同一套结构，青色语言）</div>
+<div class="frame">
+<div class="dk">
+  <div class="dkhead">
+    <span class="ptitle">🗑️ 回收站</span>
+    <span class="chip">已删除文件 30 天后自动清除</span>
+    <span class="pcount">共 322 项</span>
+  </div>
+  <div class="frow on">
+    <div class="fic"></div>
+    <div class="fcol"><div class="fname">e2eauto1788586798.txt</div><div class="fmeta">删除于 09-08 14:22 · 剩 27 天</div></div>
+    <button class="act"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>恢复</button>
+    <button class="act del" title="彻底删除（不可撤销）"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+  </div>
+  <div class="frow">
+    <div class="fic"></div>
+    <div class="fcol"><div class="fname">grid-test.txt</div><div class="fmeta">删除于 09-05 09:10 · 剩 24 天</div></div>
+    <button class="act"><svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v3"/></svg>恢复</button>
+    <button class="act del" title="彻底删除（不可撤销）"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+  </div>
+</div>
+</div>
+
+<div class="legend">
+  <b>这一版的完整逻辑</b>：红粉 hero 横幅 → 静默档案条（标题 + 30 天清除 chip + 共 N 项）；无效的预览/下载/收藏按钮移除，换成 <b>「↩ 恢复」幽灵钮（主操作）</b> + <b>垃圾桶 SVG 幽灵钮（彻底删除，hover 变红、带 tooltip「彻底删除（不可撤销）」，点击仍有确认弹窗）</b>；每行补 mono 元数据「删除于 · 剩 N 天」，剩 7 天内自动转警示色并挂「即将清除」戳；行卡/幽灵钮规格与侧栏会话卡、消息操作行同族；暗色同结构换青色 token。批量工具栏与分页保留。
+</div>
+
+</body>
+</html>
