@@ -777,15 +777,10 @@ def post_meeting_process(self, meeting_id: int):
                 # 2026-08-04 P0: 占位标题判断扩展, 兼容"正在听会（ID N）"格式
                 # 之前只识别 startswith("听会")/空/精确等于"未命名会议",
                 # 会留下"正在听会（ID 242）"这种占位文本, 导致从未触发生成逻辑.
-                import re as _re_title
+                # 2026-09-13: 占位判断抽取为共享 helper (粘贴分析流同款语义)
+                from app.services.meeting_analysis_service import is_placeholder_meeting_title
                 _title_raw = (meeting.title or "").strip()
-                _title_is_placeholder = (
-                    not _title_raw
-                    or _title_raw.startswith("听会")
-                    or _title_raw == "未命名会议"
-                    or bool(_re_title.match(r"^正在听会[（(]ID\s*\d+[)）]\s*$", _title_raw))
-                )
-                if _title_is_placeholder:
+                if is_placeholder_meeting_title(_title_raw):
                     logger.info(f"开始生成标题，当前标题: '{meeting.title}'")
                     new_title = await meeting_analysis.generate_title(transcript_text)
                     logger.info(f"标题生成结果: '{new_title}'")

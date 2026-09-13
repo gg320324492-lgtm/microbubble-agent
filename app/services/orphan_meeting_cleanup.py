@@ -83,6 +83,11 @@ async def _scan_and_cleanup() -> dict:
                         f"(last_chunk_index={m.last_chunk_index}, total_chunks={m.total_chunks}), "
                         f"已自动清理 [UA: {ua_short}]"
                     )
+                    # 2026-09-13: 占位标题 (正在听会（ID N）) 改为明确状态,
+                    # 避免列表里永远显示"正在听会"造成误解
+                    from app.services.meeting_analysis_service import is_placeholder_meeting_title
+                    if is_placeholder_meeting_title(m.title or ""):
+                        m.title = f"听会记录（已清理 {m.created_at.strftime('%m-%d %H:%M')}）" 
                     # 顺手清 MinIO（防孤儿文件）
                     try:
                         deleted = await chunked_upload_service.delete_chunks(m.id)

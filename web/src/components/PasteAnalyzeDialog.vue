@@ -233,6 +233,14 @@ const goAnalyze = async () => {
       mapping = mappingPanelRef.value.getMapping()
     }
 
+    // 2026-09-13 空转录守卫: 空白转录会产生"内容为空"的垃圾分析 (会议 248 案例)
+    if (!form.value.transcript_text || !form.value.transcript_text.trim()) {
+      analyzing.value = false
+      ElMessage.warning('转录内容为空，请先粘贴会议转录文本')
+      stage.value = 2
+      return
+    }
+
     const payload = {
       title: form.value.title,
       start_time: form.value.start_time,
