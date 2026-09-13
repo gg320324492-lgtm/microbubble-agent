@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仪表盘 × 任务管理 · 风格扩展 5 方案 v2 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --danger: #A3543F;
+    --hair: rgba(22,35,42,.12); --dim: #9AA4A0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 24px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .opt { margin-bottom: 42px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h h2 { font-size: 16px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+  .opt-notes { margin-top: 10px; font-size: 11.5px; line-height: 1.8; }
+  .opt-notes .pro { color: #2E8B62; margin-right: 16px; } .opt-notes .con { color: #B4823C; }
+
+  .page { border-radius: 14px; overflow: hidden; }
+  .pbody { padding: 18px 22px 22px; }
+
+  /* ═══ 6 Material You ═══ */
+  .mu { background: #F7F2FA; }
+  .mu .pbody { padding: 20px 24px; }
+  .mu .greet { font-size: 22px; font-weight: 400; color: #1d1b20; margin-bottom: 4px; }
+  .mu .greet small { font-size: 13px; color: #49454f; }
+  .mu-chips { display: flex; gap: 8px; margin: 14px 0 16px; flex-wrap: wrap; }
+  .mchip { border-radius: 999px; padding: 8px 16px; font-size: 12px; background: #e8def8; color: #1d1b20; }
+  .mchip.t { background: #cff4e4; } .mchip.o { background: #fde8d7; } .mchip.g { background: #d7f0dc; }
+  .mu .big { border-radius: 26px; background: #e8def8; padding: 18px 20px; margin-bottom: 12px; }
+  .mu .big .bt { font-size: 13px; font-weight: 600; color: #4a4459; }
+  .mu .big .bn { font-size: 30px; font-weight: 500; color: #1d1b20; margin: 4px 0 2px; }
+  .mu .big .bs { font-size: 11px; color: #6b6478; }
+  .mu-row { display: flex; gap: 12px; }
+  .mu .list { background: #f3edf7; border-radius: 26px; padding: 6px 16px; flex: 1; }
+  .mu .li { display: flex; align-items: center; gap: 10px; padding: 11px 4px; border-bottom: 1px solid #e0d9ec; font-size: 12px; color: #1d1b20; }
+  .mu .li:last-child { border-bottom: none; }
+  .mu .dot { width: 36px; height: 36px; border-radius: 999px; background: #e8def8; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #4a4459; }
+  .mu .fcard { border-radius: 20px; background: #e8f0e4; padding: 14px 16px; flex: 1; }
+  .mu .fcard .ff { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 11.5px; color: #1d1b20; }
+  .mu .fcard .ff small { display: block; font-size: 9.5px; color: #6b7466; }
+
+  /* ═══ 7 Notion ═══ */
+  .no { background: #ffffff; }
+  .no .pbody { padding: 26px 40px 40px; max-width: 1080px; margin: 0 auto; }
+  .no .crumb { font-size: 11px; color: #9b9a97; margin-bottom: 8px; font-family: var(--mono); }
+  .no .cover { background: linear-gradient(120deg,#f5f0e8 0%,#eef2ee 60%,#e8eef4 100%); border-radius: 8px; height: 90px; margin-bottom: -34px; }
+  .no .emoji { font-size: 42px; margin: 0 0 6px 6px; position: relative; }
+  .no h2 { font-size: 27px; font-weight: 700; color: #37352f; }
+  .no .meta { display: flex; gap: 14px; font-size: 11px; color: #9b9a97; margin: 10px 0 20px; padding-bottom: 12px; border-bottom: 1px solid #efefed; flex-wrap: wrap; }
+  .no .meta span b { color: #37352f; }
+  .no h3 { font-size: 11px; font-weight: 600; color: #9b9a97; text-transform: uppercase; letter-spacing: .06em; margin: 22px 0 10px; }
+  .no .db { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 20px; }
+  .no .dbv { border: 1px solid #efefed; border-radius: 6px; padding: 8px 11px; font-size: 11px; }
+  .no .dbv b { font-size: 15px; color: #37352f; }
+  .no .dbv small { color: #9b9a97; margin-left: 5px; }
+  .no .dbv.hot b { color: #c4554d; }
+  .no .row { display: flex; align-items: center; gap: 9px; padding: 7px 8px; font-size: 12px; color: #37352f; border-radius: 5px; }
+  .no .row:hover { background: #f7f6f3; }
+  .no .row .st { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: #f1f0ec; color: #7a7468; }
+  .no .row .st.hot { background: #fbe4e4; color: #c4554d; }
+  .no .row .due { margin-left: auto; font-size: 10.5px; color: #9b9a97; }
+  .no .row .who { width: 17px; height: 17px; border-radius: 999px; background: #e3e2de; color: #7a7468; font-size: 8px; display: inline-flex; align-items: center; justify-content: center; }
+  .no .files { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .no .file { border: 1px solid #efefed; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #37352f; }
+  .no .file small { display: block; font-size: 9.5px; color: #9b9a97; margin-top: 2px; }
+
+  /* ═══ 8 Apple ═══ */
+  .ap { background: #f5f5f7; font-family: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif; }
+  .ap .pbody { padding: 26px 30px; }
+  .ap .greet { font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: #1d1d1f; margin-bottom: 18px; }
+  .ap .greet small { font-size: 15px; font-weight: 400; color: #86868b; margin-left: 10px; }
+  .ap .cards { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
+  .ap .acard { background: #fff; border-radius: 20px; padding: 20px 22px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+  .ap .acard .ah { font-size: 12px; font-weight: 600; color: #86868b; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; }
+  .ap .abig { font-size: 40px; font-weight: 700; color: #1d1d1f; letter-spacing: -.02em; }
+  .ap .abig small { font-size: 15px; color: #86868b; font-weight: 400; margin-left: 6px; }
+  .ap .arow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f0f0f2; font-size: 12.5px; color: #1d1d1f; }
+  .ap .arow:last-child { border-bottom: none; }
+  .ap .arow .sym { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .ap .arow .due { margin-left: auto; font-size: 10.5px; color: #86868b; }
+  .ap .ring { display: flex; align-items: center; gap: 16px; }
+  .ap .statline { font-size: 12px; color: #1d1d1f; line-height: 2; }
+  .ap .statline b { font-size: 15px; }
+
+  /* ═══ 9 复古像素 ═══ */
+  .px { background: #1a1c2c; font-family: 'Courier New', var(--mono); color: #efefff; padding: 22px 24px; }
+  .px .pxh { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #3b4163; padding-bottom: 12px; margin-bottom: 16px; }
+  .px .pxt { font-size: 15px; font-weight: 700; color: #ffcd75; letter-spacing: .08em; }
+  .px .pxs { font-size: 10px; color: #8b9bb4; }
+  .px-quests { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .px .pq { border: 3px solid #3b4163; background: #24283f; padding: 12px 14px; margin-bottom: 12px; }
+  .px .pq .pqn { font-size: 12px; color: #efefff; margin-bottom: 6px; }
+  .px .pq .pqd { font-size: 9.5px; color: #8b9bb4; line-height: 1.7; }
+  .px .pq .pqr { display: inline-block; margin-top: 6px; font-size: 9px; color: #ffcd75; border: 1.5px solid #ffcd75; padding: 2px 8px; }
+  .px .pq.hot { border-color: #e43b44; }
+  .px .pq.hot .pqn { color: #e43b44; }
+  .px-loot { border: 3px solid #3b4163; background: #24283f; padding: 12px 14px; }
+  .px-loot .lt { font-size: 10px; color: #8b9bb4; margin-bottom: 8px; letter-spacing: .06em; }
+  .px-loot .li2 { display: flex; align-items: center; gap: 9px; padding: 5px 0; font-size: 10.5px; }
+  .px-loot .li2 .ic { width: 22px; height: 22px; background: #3b4163; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+
+  /* ═══ 10 手账贴纸 ═══ */
+  .sj { background: #fdf9f1; }
+  .sj .pbody { padding: 20px 24px; }
+  .sj .washitape { display: inline-block; background: repeating-linear-gradient(45deg,#f9d9c4,#f9d9c4 6px,#f6c9ae 6px,#f6c9ae 12px); padding: 5px 22px; font-family: var(--mono); font-size: 10px; letter-spacing: .16em; color: #8c6a52; transform: rotate(-2deg); margin-bottom: 14px; }
+  .sj .hero2 { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .sj .hi2 { font-family: 'Kaiti SC', 'KaiTi', Georgia, serif; font-size: 21px; color: #4a3f35; }
+  .sj .note2 { background: #fffef5; border: 1px solid #e8dcc4; box-shadow: 2px 3px 0 rgba(74,63,53,.12); padding: 13px 15px; transform: rotate(-.6deg); }
+  .sj .note2 .n2t { font-family: 'Kaiti SC', 'KaiTi', Georgia, serif; font-size: 13px; color: #4a3f35; margin-bottom: 8px; border-bottom: 1px dashed #d8cdb2; padding-bottom: 5px; }
+  .sj .n2row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #5b5147; padding: 4px 0; }
+  .sj .n2row .cb { width: 13px; height: 13px; border: 1.5px solid #8c7a5e; border-radius: 3px; flex-shrink: 0; }
+  .sj .n2row.due .cb { border-color: var(--danger); }
+  .sj .n2row.due { color: var(--danger); }
+  .sj .polaroid { background: #fff; border: 1px solid #e0d6c2; padding: 8px 8px 10px; box-shadow: 2px 3px 6px rgba(74,63,53,.15); transform: rotate(1.2deg); }
+  .sj .polaroid .pic { height: 52px; background: linear-gradient(135deg,#dcece5,#c9ded6); border-radius: 3px; }
+  .sj .polaroid .cap { font-family: 'Kaiti SC', 'KaiTi', serif; font-size: 10px; color: #7a6f60; text-align: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>仪表盘 × 任务管理 · 风格扩展 v2 · 5 方案</h1>
+  <p class="sub">换一批气质方向：<b>Material You 舒适紫 / Notion 文档流 / Apple 清晰 / 复古像素游戏 / 手账贴纸</b>。每版都是仪表盘×任务管理的完整合并（任务只在此页管理），亮色示意为主。</p>
+
+  <!-- ═══ 6 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">6</span><h2>Material You · 舒适圆角紫</h2><span class="desc">大圆角 26px 色块 + 无边框列表 + 柔和紫粉绿底色。Android 12 原生感觉，温柔不刺激</span></div>
+    <div class="page mu">
+      <div class="pbody">
+        <div class="greet">下午好，Fable <small>9 月 12 日 周五</small></div>
+        <div class="mu-chips">
+          <span class="mchip">进行中 17</span>
+          <span class="mchip o">逾期 2</span>
+          <span class="mchip g">已完成 72</span>
+          <span class="mchip">网盘 322 件</span>
+        </div>
+        <div class="big">
+          <div class="bt">今日需要处理</div>
+          <div class="bn">3</div>
+          <div class="bs">逾期 1 · 今日到期 2 —— 完成后自动消失</div>
+        </div>
+        <div class="mu-row">
+          <div class="list">
+            <div class="li"><span class="dot">王</span>模拟任务 · 逾期 1 天</div>
+            <div class="li"><span class="dot">蒋</span>MDPI 投稿修改 · 今夜截止</div>
+            <div class="li"><span class="dot">周</span>表面污染去除实验 · 09-22</div>
+          </div>
+          <div class="fcard">
+            <div class="ff">🖼 实验照片.png<small>蒋芦笛 · 25 分钟前</small></div>
+            <div class="ff">📄 参考文献.pdf<small>周之超 · 2 小时前</small></div>
+            <div class="ff">🎞 演示视频.mp4<small>王五 · 昨天</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 温柔舒适，圆角色块自带亲和力，移动端体验极佳</span><span class="con">✗ 紫色系与现有暖橙/墨青语言差异大，全站需要跟随调色</span></div>
+  </div>
+
+  <!-- ═══ 7 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">7</span><h2>Notion 文档流 · 数据库视图</h2><span class="desc">无边框文档流：封面横幅 + emoji 页标题 + 数据库式统计视图 + 极简行列表。像打开一篇 Notion 页面</span></div>
+    <div class="page no">
+      <div class="pbody">
+        <div class="cover"></div>
+        <div class="emoji">🗂</div>
+        <h2>任务管理 & 网盘</h2>
+        <div class="meta">
+          <span>📅 2026-09-12</span><span>👤 值班 Fable</span><span><b>17</b> 进行中</span><span><b>2</b> 逾期</span><span><b>72</b> 已完成</span>
+        </div>
+        <h3>◼ 概览</h3>
+        <div class="db">
+          <div class="dbv"><b>17</b><small>进行中</small></div>
+          <div class="dbv hot"><b>2</b><small>逾期</small></div>
+          <div class="dbv"><b>72</b><small>已完成</small></div>
+          <div class="dbv"><b>8</b><small>本周新增文件</small></div>
+        </div>
+        <h3>◼ 进行中任务</h3>
+        <div class="row"><span class="who">天</span>模拟任务<span class="st hot">逾期 1 日</span><span class="who">王五</span><span class="due">09-11</span></div>
+        <div class="row"><span class="who">蒋</span>MDPI 投稿修改<span class="st hot">今夜截止</span><span class="who">蒋芦笛</span><span class="due">09-12</span></div>
+        <div class="row"><span class="who">天</span>测试腾讯会议与听会是否冲突<span class="st">进行中</span><span class="who">王五</span><span class="due">09-15</span></div>
+        <div class="row"><span class="who">周</span>表面污染去除实验<span class="st">进行中</span><span class="who">周之超</span><span class="due">09-22</span></div>
+        <h3>◼ 网盘最近上传</h3>
+        <div class="files">
+          <div class="file">🖼 实验照片.png<small>蒋芦笛 · 25 分钟前 · 图片</small></div>
+          <div class="file">📄 参考文献.pdf<small>周之超 · 2 小时前 · 文档</small></div>
+          <div class="file">🎞 演示视频.mp4<small>王五 · 昨天 · 视频</small></div>
+          <div class="file">🎙 会议录音.m4a<small>王五 · 昨天 · 音频</small></div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 最耐看最不会腻，文档流天然适配长内容</span><span class="pro">✓ 无边框极简，实现成本最低</span><span class="con">✗ 视觉记忆点弱，「像 Notion」本身是双刃剑</span></div>
+  </div>
+
+  <!-- ═══ 8 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">8</span><h2>Apple 清晰 · 大数字卡片</h2><span class="desc">iOS 健康 App 气质：白卡大圆角 20px、超大数字、克制的灰阶。数据自己会说话</span></div>
+    <div class="page ap">
+      <div class="pbody">
+        <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+        <div class="cards">
+          <div class="acard">
+            <div class="ah">任务</div>
+            <div class="abig">17<small>进行中</small></div>
+            <div class="ring" style="margin-top:10px">
+              <div style="text-align:center"><div style="font-size:22px;font-weight:700;color:#c4554d">2</div><div style="font-size:9px;color:#86868b">逾期</div></div>
+              <div style="text-align:center"><div style="font-size:22px;font-weight:700;color:#0e766e">5</div><div style="font-size:9px;color:#86868b">高优先</div></div>
+              <div style="text-align:center"><div style="font-size:22px;font-weight:700">7</div><div style="font-size:9px;color:#86868b">本周到期</div></div>
+            </div>
+          </div>
+          <div class="acard">
+            <div class="ah">逾期与今日</div>
+            <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>模拟任务<span class="due">逾期 1 日 · 王五</span></div>
+            <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>MDPI 投稿修改<span class="due">今夜截止 · 蒋芦笛</span></div>
+            <div class="arow"><span class="sym" style="background:#e8f0e4;color:#3d7a3d">✓</span>准备组会汇报 PPT<span class="due">明日 · 贾琦</span></div>
+          </div>
+          <div class="acard">
+            <div class="ah">网盘</div>
+            <div class="arow"><span class="sym" style="background:#e8def8">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+            <div class="arow"><span class="sym" style="background:#e8f0e4">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+            <div class="arow"><span class="sym" style="background:#fdeeda">🎞</span>演示视频.mp4<span class="due">昨天</span></div>
+          </div>
+          <div class="acard">
+            <div class="ah">累计</div>
+            <div class="statline">已完成 <b>72</b> 项<br>全库文件 <b>322</b> 个<br>成员 <b>9</b> 人 · 3 人未录声纹</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 克制优雅，大数字一眼可读，白卡与任何背景兼容</span><span class="con">✗ 气质偏「健康报告」，个性最弱</span></div>
+  </div>
+
+  <!-- ═══ 9 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">9</span><h2>复古像素 RPG · 8-bit 委托榜</h2><span class="desc">上一轮远征队的像素风重制：暗底蓝紫 + 描边像素框，任务=任务榜，网盘=战利品仓库</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="px">
+          <div class="pxh"><span class="pxt">★ MB-LAB 委托榜 ★</span><span class="pxs">DAY 257 · 19:20 · 值班 FABLE</span></div>
+          <div class="px-quests">
+            <div>
+              <div class="pq hot"><div class="pqn">!! 模拟任务</div><div class="pqd">受托人: 王五<br>期限: 已逾期 1 日<br>报酬: 20 XP</div><span class="pqr">紧急</span></div>
+              <div class="pq hot"><div class="pqn">!! MDPI 投稿修改</div><div class="pqd">受托人: 蒋芦笛<br>期限: 今夜 24:00<br>报酬: 50 XP</div><span class="pqr">紧急</span></div>
+              <div class="pq"><div class="pqn">测试腾讯会议与听会是否冲突</div><div class="pqd">受托人: 王五<br>期限: 09-15<br>报酬: 20 XP</div></div>
+            </div>
+            <div>
+              <div class="pq"><div class="pqn">开题报告修改</div><div class="pqd">受托人: 蒋芦笛<br>期限: 09-20<br>报酬: 50 XP</div></div>
+              <div class="pq"><div class="pqn">表面污染去除实验</div><div class="pqd">受托人: 周之超<br>期限: 09-22<br>报酬: 20 XP</div></div>
+              <div class="px-loot">
+                <div class="lt">▼ 战利品仓库 · 本周 +8</div>
+                <div class="li2"><span class="ic">🖼</span>实验照片.png · 蒋芦笛</div>
+                <div class="li2"><span class="ic">📄</span>参考文献.pdf · 周之超</div>
+                <div class="li2"><span class="ic">🎞</span>演示视频.mp4 · 王五</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 像素风个性拉满，与 8-bit 情怀契合；委托榜=任务全量</span><span class="con">✓ 风格强烈但配色克制（暗底+黄点缀），比上轮 RPG 更耐看</span><span class="con">✗ 像素字需要专用字体，正式场合观感仍偏玩</span></div>
+  </div>
+
+  <!-- ═══ 10 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">10</span><h2>手账贴纸 · 纸胶带便签</h2><span class="desc">暖纸底 + 和纸胶带标题 + 便签卡（微微旋转）+ 拍立得相框（网盘新料）。温柔手作感，与课题组的暖橙基因最亲</span></div>
+    <div class="page">
+      <div class="pbody sj">
+        <div class="washitape">MB-LAB · 本周手账 · 09-12 FRI</div>
+        <div class="hero2">
+          <div class="hi2">下午好，Fable —— 这周有 17 件事在进行，2 件迟到了</div>
+          <span class="herobtn" style="margin-left:auto">💬 开始对话</span>
+        </div>
+        <div class="two">
+          <div>
+            <div class="note2" style="margin-bottom:14px">
+              <div class="n2t">▸ 今天要做的</div>
+              <div class="n2row due"><span class="cb"></span>模拟任务（逾期 1 天 · 王五）</div>
+              <div class="n2row due"><span class="cb"></span>MDPI 投稿修改（今夜截止 · 蒋芦笛）</div>
+              <div class="n2row"><span class="cb"></span>准备组会汇报 PPT（明日）</div>
+            </div>
+            <div class="note2">
+              <div class="n2t">▸ 最近完成</div>
+              <div class="n2row"><span class="cb" style="background:#0e766e;border-color:#0e766e"></span>配置服务器（昨日 · Fable）</div>
+              <div class="n2row"><span class="cb" style="background:#0e766e;border-color:#0e766e"></span>部署 ASR 守护（09-11 · 王五）</div>
+            </div>
+          </div>
+          <div>
+            <div class="two" style="grid-template-columns:1fr 1fr;gap:14px">
+              <div class="polaroid"><div class="pic"></div><div class="cap">实验照片.png<br>蒋芦笛 · 25 分钟前</div></div>
+              <div class="polaroid"><div class="pic"></div><div class="cap">参考文献.pdf<br>周之超 · 2 小时前</div></div>
+              <div class="polaroid"><div class="pic"></div><div class="cap">演示视频.mp4<br>王五 · 昨天</div></div>
+              <div class="polaroid"><div class="pic"></div><div class="cap">会议录音.m4a<br>王五 · 昨天</div></div>
+            </div>
+            <div style="font-family:var(--mono);font-size:9px;color:#8c7a5e;margin-top:14px;letter-spacing:.08em">网盘 12.4 / 50 GB · 本周 +8 · 全库 322 件</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 手账/拍立得元素与课题组「温度感」最搭，便签微旋转有手作味</span><span class="con">✗ 旋转元素多了略花哨，正式演示场合需收敛</span></div>
+  </div>
+
+  <div class="legendbox">
+    <b>五案气质轴</b>：6 Material 舒适紫 → 7 Notion 极简 → 8 Apple 克制 → 9 像素游戏 → 10 手账温柔。<br>
+    <b>共同底线</b>：单页合并仪表盘与任务管理；数据全部现有接口；网盘最近上传必在。<br>
+    <b>与上一轮关系</b>：1 作战室(暗色指挥) / 2 晨报(报纸) / 3 RPG(拟物质感) / 4 时间之河(时间轴) / 5 看板(拖拽) 仍可选；本轮五案更偏「日常可长期用」的成熟能落地风格。<br>
+    选定任意一版（或跨轮组合）→ 出可交互原型 → 确认 → 实施到真实 Dashboard.vue。
+  </div>
+</div>
+</body>
+</html>
