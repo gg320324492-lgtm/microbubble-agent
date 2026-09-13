@@ -14,7 +14,6 @@ import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import select, update, func, delete, and_
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.config import settings
@@ -25,8 +24,13 @@ logger = logging.getLogger(__name__)
 
 
 def _create_session_factory():
-    """独立引擎 + NullPool (Celery 跨事件循环范式)"""
-    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    """独立引擎 + NullPool (Celery 跨事件循环范式)
+
+    返回 (engine, session_factory) — 任务体结束必须 await engine.dispose()。
+    2026-09-13 修复: 旧实现引用未导入的 async_sessionmaker 与未定义的 engine,
+    三个任务一触发即 NameError → 所有用户的 drive_used_bytes 自重构后停更。
+    """
+    return create_celery_engine_and_session()
 
 
 @celery_app.task(name="storage.recalc_user", bind=True, max_retries=2, default_retry_delay=30)
@@ -41,7 +45,7 @@ def recalc_user_storage_task(self, user_id: int):
     import asyncio
 
     async def _run():
-        session_factory = _create_session_factory()
+        engine, session_factory = _create_session_factory()
         async with session_factory() as db:
             try:
                 user = (await db.execute(select(Member).where(Member.id == user_id))).scalar_one_or_none()
@@ -70,6 +74,8 @@ def recalc_user_storage_task(self, user_id: int):
                 logger.error(f"[StorageTask] 异常 user_id={user_id}: {e}", exc_info=True)
                 await db.rollback()
                 raise
+            finally:
+                await engine.dispose()
 
     asyncio.run(_run())
 
@@ -80,7 +86,7 @@ def recalc_all_storage_task(self):
     import asyncio
 
     async def _run():
-        session_factory = _create_session_factory()
+        engine, session_factory = _create_session_factory()
         async with session_factory() as db:
             try:
                 users = (await db.execute(select(Member.id))).scalars().all()
@@ -126,6 +132,8 @@ def recalc_all_storage_task(self):
                 logger.error(f"[StorageTask] recalc_all 异常: {e}", exc_info=True)
                 await db.rollback()
                 raise
+            finally:
+                await engine.dispose()
 
     asyncio.run(_run())
 
@@ -136,7 +144,7 @@ def cleanup_expired_chunked_sessions_task(self):
     import asyncio
 
     async def _run():
-        session_factory = _create_session_factory()
+        engine, session_factory = _create_session_factory()
         async with session_factory() as db:
             try:
                 now = datetime.utcnow()
@@ -172,5 +180,7 @@ def cleanup_expired_chunked_sessions_task(self):
             except Exception as e:
                 logger.error(f"[StorageTask] cleanup 异常: {e}", exc_info=True)
                 await db.rollback()
+            finally:
+                await engine.dispose()
 
     asyncio.run(_run())
