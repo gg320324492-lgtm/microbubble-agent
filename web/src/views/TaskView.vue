@@ -755,6 +755,29 @@ onMounted(() => {
   background: transparent;
 }
 
+/* ── 行操作钮 hover 显形: 平时隐没 (占位不跳版, visibility 移出 tab 序防误焦),
+   行悬停 / 键盘聚焦时淡入; 触屏设备 (hover: none) 常显兜底 ── */
+.task-row .complete-btn,
+.task-row .task-action-btn {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease-out, visibility 0.15s ease-out, transform 0.15s ease-out;
+}
+.task-row:hover .complete-btn,
+.task-row:hover .task-action-btn,
+.task-row:focus-within .complete-btn,
+.task-row:focus-within .task-action-btn {
+  opacity: 1;
+  visibility: visible;
+}
+@media (hover: none) {
+  .task-row .complete-btn,
+  .task-row .task-action-btn {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
 .complete-btn--outline:hover {
   border-color: var(--color-success);
   background: rgba(82, 196, 26, 0.1);
