@@ -415,7 +415,6 @@ const fetchInProgressTasks = async () => {
     })
     inProgressTasks.value = allTasks
   } catch (e) { console.error('获取进行中任务失败:', e) }
-  loadingTasks.value = false
   loadingCards.value = false
 }
 
