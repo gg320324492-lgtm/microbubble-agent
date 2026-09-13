@@ -23,7 +23,7 @@ from app.schemas.meeting import (
 )
 from app.services.meeting_service import MeetingService
 from app.core.member_identity import avatar_public_url
-from app.services.meeting_analysis_service import meeting_analysis
+from app.services.meeting_analysis_service import is_placeholder_meeting_title, meeting_analysis
 from app.services.progress_service import init_progress
 from app.services.post_meeting_tasks import post_meeting_process
 
@@ -182,6 +182,10 @@ async def analyze_transcript_text(
     """
     meeting_service = MeetingService(db)
 
+    # 2026-09-13 空转录守卫: 空白转录会产生"内容为空"的垃圾分析 (会议 248 案例)
+    if not (request.transcript_text or "").strip():
+        raise HTTPException(status_code=400, detail="转录内容为空，无法分析。请先粘贴会议转录文本")
+
     if request.speaker_mapping is None:
         # 阶段1：只检测发言者，不创建会议
         detection = await meeting_analysis.detect_speakers(request.transcript_text)
@@ -193,7 +197,11 @@ async def analyze_transcript_text(
 
     # 阶段2：完整分析
     try:
-        title = request.title or await meeting_analysis.generate_title(request.transcript_text)
+        # 2026-09-13 标题覆盖: 占位标题 (正在听会（ID N）等) 也触发 AI 生成,
+        # 与直播后处理同口径 (is_placeholder_meeting_title)
+        title = request.title or ""
+        if not title.strip() or is_placeholder_meeting_title(title):
+            title = await meeting_analysis.generate_title(request.transcript_text)
         result = await meeting_service.process_pasted_transcript(
             title=title,
             start_time=request.start_time,

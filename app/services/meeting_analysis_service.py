@@ -760,4 +760,20 @@ def _char_count(text: str) -> int:
 
 
 # 全局单例
+def is_placeholder_meeting_title(title: str) -> bool:
+    """判断会议标题是否为占位标题 (听会开始时的默认命名)。
+
+    2026-09-13 从 post_meeting_tasks 内联判断抽取共享 —
+    直播后处理 / 粘贴转录分析 两条链路都需要在标题为占位时触发 AI 生成。
+    """
+    import re as _re
+    t = (title or "").strip()
+    return (
+        not t
+        or t.startswith("听会")
+        or t == "未命名会议"
+        or bool(_re.match(r"^正在听会[（(]ID\s*\d+[)）]\s*$", t))
+    )
+
+
 meeting_analysis = MeetingAnalysisService()
