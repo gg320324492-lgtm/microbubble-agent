@@ -5,9 +5,10 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-channels'
 import { APP_NAME, APP_VERSION } from '@shared/constants'
-import type { AppInfo, AuthSession, IpcResult } from '@shared/types'
+import type { AppInfo, AuthSession, ChatMessage, ChatSession, IpcResult } from '@shared/types'
 import type { SqlDatabase } from './db/adapters'
 import { AuthService } from './services/auth.service'
+import { ChatService } from './services/chat.service'
 import { SettingsService } from './services/settings.service'
 
 const ok = <T>(data: T): IpcResult<T> => ({ ok: true, data })
@@ -55,6 +56,7 @@ function makeFilePersistence(file: string) {
 export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): void {
   const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')))
   const settings = new SettingsService(db)
+  const chat = new ChatService(db)
 
   // 启动即尝试恢复上次会话（有持久化 token 且未过期则免登录）
   auth.restore()
@@ -95,6 +97,61 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       const user = auth.requireUser()
       settings.set(String(p?.key ?? ''), p?.value ?? null, user.id)
       return null
+    })
+  )
+
+  ipcMain.handle(IPC.CHAT_SESSIONS_LIST, (): IpcResult<ChatSession[]> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      return chat.listSessions(user.id).map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at, updatedAt: r.updated_at }))
+    })
+  )
+
+  ipcMain.handle(IPC.CHAT_SESSION_CREATE, (_e, p): IpcResult<ChatSession> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      const r = chat.createSession(user.id, p?.title ? String(p.title) : undefined)
+      return { id: r.id, title: r.title, createdAt: r.created_at, updatedAt: r.updated_at }
+    })
+  )
+
+  ipcMain.handle(IPC.CHAT_SESSION_RENAME, (_e, p): IpcResult<null> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      chat.renameSession(user.id, String(p?.id ?? ''), String(p?.title ?? ''))
+      return null
+    })
+  )
+
+  ipcMain.handle(IPC.CHAT_SESSION_DELETE, (_e, p): IpcResult<null> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      chat.deleteSession(user.id, String(p?.id ?? ''))
+      return null
+    })
+  )
+
+  ipcMain.handle(IPC.CHAT_MESSAGES_LIST, (_e, p): IpcResult<ChatMessage[]> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      return chat
+        .listMessages(user.id, String(p?.sessionId ?? ''))
+        .map((r) => ({ id: r.id, sessionId: r.session_id, role: r.role, content: r.content, createdAt: r.created_at }))
+    })
+  )
+
+  ipcMain.handle(IPC.CHAT_SEND, (_e, p): IpcResult<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      const toDto = (r: { id: string; session_id: string; role: string; content: string; created_at: number }) => ({
+        id: r.id,
+        sessionId: r.session_id,
+        role: r.role as ChatMessage['role'],
+        content: r.content,
+        createdAt: r.created_at
+      })
+      const { userMessage, assistantMessage } = chat.send(user.id, String(p?.sessionId ?? ''), String(p?.content ?? ''))
+      return { userMessage: toDto(userMessage), assistantMessage: toDto(assistantMessage) }
     })
   )
 
