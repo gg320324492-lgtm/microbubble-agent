@@ -17,6 +17,8 @@ function createWindow(): void {
     frame: false, // 无边框 — 自绘标题栏（TitleBar.vue）
     show: false,
     autoHideMenuBar: true,
+    // dev 模式窗口/任务栏图标（打包后由 exe 内嵌 icon 提供）
+    icon: join(app.getAppPath(), 'resources', 'icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true, // 铁律 1

@@ -3,6 +3,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import logoUrl from '../assets/logo.png'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -33,7 +34,7 @@ async function onSubmit(): Promise<void> {
   <main class="auth-root">
     <section class="auth-shell" aria-labelledby="login-title">
       <aside class="auth-identity" data-testid="login-identity" aria-label="小气科研工作台 产品说明">
-        <div class="auth-brand"><span class="auth-brand-mark" aria-hidden="true">∿</span><span>MicroBubble Lab</span></div>
+        <div class="auth-brand"><img class="auth-brand-logo" :src="logoUrl" alt="微纳米气泡课题组" /><span>MicroBubble Lab</span></div>
         <p class="auth-kicker">SCIENTIFIC WORKBENCH</p>
         <h1>把课题组的数据，装进一台本地工作台。</h1>
         <p>实验、知识、会议与 AI 助手汇集在同一套本地科研工作台；数据存本机，断网可用。</p>
