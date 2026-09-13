@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>首页三模块 · 任务 + 会议 + 网盘 · 4 方案 (2026-09)</title>
+<style>
+  :root { --bg: #EFede7; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .opt { margin-bottom: 42px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h h2 { font-size: 16px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+  .opt-notes { margin-top: 10px; font-size: 11.5px; line-height: 1.8; }
+  .opt-notes .pro { color: #2E8B62; margin-right: 16px; } .opt-notes .con { color: #B4823C; }
+
+  .page { background: #f5f5f7; border-radius: 14px; overflow: hidden; font-family: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif; }
+  .pbody { padding: 24px 28px 28px; }
+  .greet { font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: #1d1d1f; margin-bottom: 18px; }
+  .greet small { font-size: 14px; font-weight: 400; color: #86868b; margin-left: 10px; }
+
+  .acard { background: #fff; border-radius: 20px; padding: 20px 22px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+  .ah { font-size: 12px; font-weight: 600; color: #86868b; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .ah .n { font-family: var(--mono); font-size: 10px; color: #b0b0b5; }
+  .ah .more { margin-left: auto; font-size: 10.5px; color: #0e766e; text-transform: none; letter-spacing: 0; }
+  .abig { font-size: 40px; font-weight: 700; color: #1d1d1f; letter-spacing: -.02em; }
+  .abig small { font-size: 15px; color: #86868b; font-weight: 400; margin-left: 6px; }
+  .arow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f0f0f2; font-size: 12.5px; color: #1d1d1f; }
+  .arow:last-child { border-bottom: none; }
+  .arow .sym { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .arow .due { margin-left: auto; font-size: 10.5px; color: #86868b; }
+  .tick { width: 16px; height: 16px; border-radius: 999px; border: 1.5px solid #b0b0b5; flex-shrink: 0; }
+  .ring3 { display: flex; justify-content: space-around; margin-top: 14px; }
+  .ring3 .rg { text-align: center; }
+  .ring3 .rg .n { font-size: 22px; font-weight: 700; }
+  .ring3 .rg.hot .n { color: #c4554d; }
+  .ring3 .rg .l { font-size: 9.5px; color: #86868b; margin-top: 2px; }
+  .av { width: 20px; height: 20px; border-radius: 999px; color: #fff; font-size: 8.5px; display: inline-flex; align-items: center; justify-content: center; }
+  .a1 { background: linear-gradient(135deg,#5b8def,#8b5cf6); }
+  .a2 { background: linear-gradient(135deg,#10b981,#059669); }
+  .a3 { background: linear-gradient(135deg,#f59e0b,#d97706); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .main-side { display: grid; grid-template-columns: 1.7fr 1fr; gap: 16px; }
+
+  /* 日历融合条 */
+  .cal { display: grid; grid-template-columns: repeat(7,1fr); gap: 8px; }
+  .cald { background: #f5f5f7; border-radius: 10px; padding: 9px 6px 10px; text-align: center; }
+  .cald.today { background: #1d1d1f; }
+  .cald.today .d, .cald.today .w { color: #fff; }
+  .cald .w { font-family: var(--mono); font-size: 7.5px; letter-spacing: .12em; color: #86868b; }
+  .cald .d { font-size: 15px; font-weight: 700; color: #1d1d1f; margin: 4px 0 7px; }
+  .cald .ev { display: flex; flex-direction: column; gap: 3px; min-height: 20px; }
+  .cald .e { height: 4px; border-radius: 2px; background: #0e766e; opacity: .85; width: 80%; margin: 0 auto; }
+  .cald .e.m { background: #5b8def; }
+  .cald .e.r { background: #c4554d; opacity: .9; }
+
+  /* 会议大卡 */
+  .meet-big { background: linear-gradient(135deg,#16232a,#1d3230); border-radius: 20px; color: #eef4f2; padding: 22px 26px; }
+  .meet-big .ml { font-family: var(--mono); font-size: 9px; letter-spacing: .16em; color: #35c2a4; margin-bottom: 10px; }
+  .meet-big .mt { font-size: 21px; font-weight: 700; }
+  .meet-big .ms { font-size: 11px; color: #9ab8b2; margin-top: 8px; }
+  .meet-big .nextlist { margin-top: 14px; border-top: 1px solid rgba(238,244,242,.15); padding-top: 12px; }
+  .meet-big .nrow { display: flex; gap: 10px; padding: 5px 0; font-size: 11.5px; }
+  .meet-big .nrow .mono { font-family: var(--mono); font-size: 9px; color: #35c2a4; }
+
+  .storebar { height: 6px; background: #e8e8ed; border-radius: 3px; overflow: hidden; margin: 8px 0 10px; }
+  .storebar i { display: block; height: 100%; background: #0e766e; border-radius: 3px; }
+  .sym.g { background: #e8f0e4; } .sym.r { background: #fbe4e4; } .sym.p { background: #e8def8; } .sym.o { background: #fdeeda; } .sym.b { background: #e3e8f8; }
+  .legendbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .legendbox b { color: var(--txt); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>首页 · 任务 + 会议 + 网盘 三模块 · 4 方案</h1>
+  <p class="sub">延续 Apple 清晰风（白卡 20px + 大数字 + 克制灰阶），三模块齐全。新增<b>会议模块</b>内容：即将到来的会议（次数 + 最近两场）。四版布局各异，数据全部现有接口。</p>
+
+  <!-- ═══ A ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">A</span><h2>三列平衡 · 一模块一卡</h2><span class="desc">任务 / 会议 / 网盘各一卡等宽并排，每卡自带 KPI 或列表；对称、直觉、扩展性最好</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div class="three">
+        <div class="acard">
+          <div class="ah">任务 TASKS <span class="n">17 进行中</span><span class="more">任务管理 →</span></div>
+          <div class="abig">17<small>进行中</small></div>
+          <div class="ring3">
+            <div class="rg hot"><div class="n">2</div><div class="l">逾期</div></div>
+            <div class="rg"><div class="n">3</div><div class="l">今日到期</div></div>
+            <div class="rg"><div class="n">72</div><div class="l">已完成</div></div>
+          </div>
+        </div>
+        <div class="acard">
+          <div class="ah">会议 MEETINGS <span class="n">本周 2 场</span><span class="more">会议 →</span></div>
+          <div class="abig">2<small>本周场次</small></div>
+          <div class="ring3">
+            <div class="rg"><div class="n">19:00</div><div class="l">今日 课题组周会</div></div>
+            <div class="rg"><div class="n">MON</div><div class="l">DFT 评审会</div></div>
+          </div>
+        </div>
+        <div class="acard">
+          <div class="ah">网盘 DRIVE <span class="n">322 个文件</span><span class="more">网盘 →</span></div>
+          <div class="abig">12.4<small>/ 50 GB</small></div>
+          <div class="ring3">
+            <div class="rg"><div class="n">8</div><div class="l">本周新增</div></div>
+            <div class="rg"><div class="n">4</div><div class="l">最近 24h</div></div>
+            <div class="rg"><div class="n">25%</div><div class="l">存储已用</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="acard" style="margin-top:16px">
+        <div class="ah">最近动态</div>
+        <div class="arow"><span class="sym r">!</span>模拟任务 逾期 1 日 · 王五<span class="due">09-11</span></div>
+        <div class="arow"><span class="sym p">🖼</span>实验照片.png 上传 · 蒋芦笛<span class="due">25 分钟前</span></div>
+        <div class="arow"><span class="sym g">✓</span>配置服务器 完成 · Fable<span class="due">昨日</span></div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 三模块等权一卡一席位，最直觉</span><span class="con">✗ 卡内只有计数与下一场，细节要点进去</span></div>
+  </div>
+
+  <!-- ═══ B ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">B</span><h2>任务主卡 + 侧双卡</h2><span class="desc">任务独占左侧 2/3 宽（今日可勾选清单 + 成员任务分组），右侧会议卡与网盘卡竖排。重任务轻展示</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div class="main-side">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="acard">
+            <div class="ah">需要今天处理 <span class="n">TODAY · 3</span><span class="more">任务管理 →</span></div>
+            <div class="arow"><span class="tick"></span>模拟任务 · 王五<span class="due" style="color:#c4554d">逾期 1 日</span></div>
+            <div class="arow"><span class="tick"></span>MDPI 投稿修改 · 蒋芦笛<span class="due">今夜截止</span></div>
+            <div class="arow"><span class="tick"></span>准备组会汇报 PPT · 贾琦<span class="due">明日</span></div>
+          </div>
+          <div class="acard">
+            <div class="ah">成员任务 <span class="n">BY MEMBER</span><span class="more">任务管理 →</span></div>
+            <div class="arow"><span class="av a1">天</span>王五 · 模拟任务<span class="due" style="color:#c4554d">逾期 1 日</span></div>
+            <div class="arow"><span class="av a2">蒋</span>蒋芦笛 · 开题报告修改<span class="due">09-20</span></div>
+            <div class="arow"><span class="av a3">周</span>周之超 · 表面污染去除实验<span class="due">09-22</span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="acard">
+            <div class="ah">会议 <span class="n">本周 2 场</span><span class="more">会议 →</span></div>
+            <div class="arow"><span class="sym b">📅</span>课题组周会<span class="due">今日 19:00</span></div>
+            <div class="arow"><span class="sym b">📅</span>DFT 服务评审会<span class="due">周一 14:00</span></div>
+          </div>
+          <div class="acard">
+            <div class="ah">网盘 <span class="n">322 件</span><span class="more">网盘 →</span></div>
+            <div class="arow"><span class="sym p">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+            <div class="arow"><span class="sym g">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+            <div class="arow"><span class="sym o">🎞</span>演示视频.mp4<span class="due">昨天</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 左重右轻，日常打开先处理今天的事</span><span class="con">✗ 任务占 2/3，网盘/会议细节被压缩</span></div>
+  </div>
+
+  <!-- ═══ C ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">C</span><h2>日历融合顶置 · 任务会议一条河</h2><span class="desc">7 天日历条融合两种事件：任务到期（墨绿条）+ 会议（蓝点），先看节奏再进三卡。三模块第一次在同一条时间线上</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div class="acard" style="margin-bottom:16px">
+        <div class="ah">未来 7 天 · 任务到期与会议 <span class="n">绿=任务到期 蓝=会议</span></div>
+        <div class="cal">
+          <div class="cald today"><div class="w">FRI 12</div><div class="d">12</div><div class="ev"><span class="e r"></span><span class="e"></span><span class="e m"></span></div></div>
+          <div class="cald"><div class="w">SAT 13</div><div class="d">13</div><div class="ev"><span class="e"></span></div></div>
+          <div class="cald"><div class="w">SUN 14</div><div class="d">14</div><div class="ev"></div></div>
+          <div class="cald"><div class="w">MON 15</div><div class="d">15</div><div class="ev"><span class="e"></span><span class="e m"></span></div></div>
+          <div class="cald"><div class="w">TUE 16</div><div class="d">16</div><div class="ev"><span class="e"></span></div></div>
+          <div class="cald"><div class="w">WED 17</div><div class="d">17</div><div class="ev"></div></div>
+          <div class="cald"><div class="w">THU 18</div><div class="d">18</div><div class="ev"><span class="e"></span></div></div>
+        </div>
+      </div>
+      <div class="three">
+        <div class="acard">
+          <div class="ah">任务 <span class="n">17 进行中 · 2 逾期</span><span class="more">任务管理 →</span></div>
+          <div class="arow"><span class="sym r">!</span>模拟任务 · 王五<span class="due">逾期 1 日</span></div>
+          <div class="arow"><span class="sym r">!</span>MDPI 投稿修改 · 蒋芦笛<span class="due">今夜</span></div>
+          <div class="arow"><span class="sym g">✓</span>准备组会汇报 PPT · 贾琦<span class="due">明日</span></div>
+        </div>
+        <div class="acard">
+          <div class="ah">会议 <span class="n">本周 2 场</span><span class="more">会议 →</span></div>
+          <div class="arow"><span class="sym b">📅</span>课题组周会<span class="due">今日 19:00</span></div>
+          <div class="arow"><span class="sym b">📅</span>DFT 服务评审会<span class="due">周一 14:00</span></div>
+        </div>
+        <div class="acard">
+          <div class="ah">网盘 <span class="n">322 件 · 12.4 GB</span><span class="more">网盘 →</span></div>
+          <div class="arow"><span class="sym p">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+          <div class="arow"><span class="sym g">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+          <div class="arow"><span class="sym o">🎞</span>演示视频.mp4<span class="due">昨天</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 任务与会议第一次出现在同一条时间线上，周节奏一目了然</span><span class="pro">✓ 融合日历条是本方案的独特记忆点</span></div>
+  </div>
+
+  <!-- ═══ D ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">D</span><h2>会议倒计时大卡 · 下会压顶</h2><span class="desc">下一场会议做成深色大横幅置顶（倒计时 + 议程），下方三卡：任务/网盘/后续会议。仪式感与紧迫感兼备</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div class="meet-big" style="background:linear-gradient(135deg,#16232a,#1d3230);border-radius:20px;color:#eef4f2;padding:22px 26px;margin-bottom:16px">
+        <div class="ml">NEXT MEETING · 1 小时 40 分后</div>
+        <div class="mt">课题组周会</div>
+        <div class="ms">今日 19:00 · 腾讯会议 · 议题：本周进度 / MDPI 投稿 / DFT 服务评审</div>
+      </div>
+      <div class="three">
+        <div class="acard">
+          <div class="ah">任务 <span class="n">17 · 2 逾期</span><span class="more">任务管理 →</span></div>
+          <div class="arow"><span class="sym r">!</span>模拟任务 · 王五<span class="due">逾期 1 日</span></div>
+          <div class="arow"><span class="sym r">!</span>MDPI 投稿修改<span class="due">今夜</span></div>
+          <div class="arow"><span class="sym g">✓</span>准备组会汇报 PPT<span class="due">明日</span></div>
+        </div>
+        <div class="acard">
+          <div class="ah">会议 <span class="n">本周 2 场</span><span class="more">会议 →</span></div>
+          <div class="arow"><span class="sym b">📅</span>课题组周会<span class="due">今日</span></div>
+          <div class="arow"><span class="sym b">📅</span>DFT 服务评审会<span class="due">周一</span></div>
+        </div>
+        <div class="acard">
+          <div class="ah">网盘 <span class="n">322 件 · 12.4 GB</span><span class="more">网盘 →</span></div>
+          <div class="arow"><span class="sym p">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+          <div class="arow"><span class="sym g">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+          <div class="arow"><span class="sym o">🎞</span>演示视频.mp4<span class="due">昨天</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 会议倒计时横幅有真实紧迫感，组会前打开正好用</span><span class="con">✗ 深色大横幅是页面唯一深色块，风格上需接受这个对比</span></div>
+  </div>
+
+  <div class="legendbox">
+    <b>选择参考</b>：要平衡直觉 → <b>A</b>；重任务轻展示 → <b>B</b>；想要三模块融在一条时间线上 → <b>C</b>（独特记忆点）；组会频繁、会议重要 → <b>D</b>。<br>
+    <b>共同</b>：Apple 清晰风不变；任务/会议/网盘三模块各有一席；任务全量管理仍在任务管理页（从任务卡进入）。<br>
+    <b>数据</b>：会议卡需要现有会议接口返回最近 N 场（已有）；C 的融合日历 = 任务 due_date + 会议时间合并，无新端点。
+  </div>
+</div>
+</body>
+</html>
