@@ -62,7 +62,6 @@
           <h2 class="card-title"><span class="sec-no">§</span> 任务</h2>
           <div class="card-head-right">
             <span class="card-count mono">TASKS</span>
-            <button class="view-all" @click="$router.push('/tasks')">任务管理 →</button>
           </div>
         </div>
         <div class="kpi-body">
