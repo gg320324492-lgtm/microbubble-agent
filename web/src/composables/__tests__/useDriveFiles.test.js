@@ -175,3 +175,21 @@ describe('useDriveFiles v2 PR6-P19 (团队共享盘隔离)', () => {
     })
   })
 })
+// 2026-09-13 回归: 回收站「全选」复选框选中后无法取消 — BatchActionToolbar emit
+// 不带目标状态 + selectAll 无清空分支, 二次点击等于重复全选 (用户视角=无响应)
+describe('全选切换 selectAll(checked) (2026-09-13 回收站全选)', () => {
+  it('selectAll() 全选, selectAll(false) 清空选择', async () => {
+    setActivePinia(createPinia())
+    const { useDriveFiles } = await import('@/composables/useDriveFiles')
+    const { selectAll, driveFiles, selectedFileIds } = useDriveFiles()
+
+    driveFiles.value = [{ id: 1 }, { id: 2 }, { id: 3 }]
+
+    selectAll()
+    expect([...selectedFileIds.value]).toEqual([1, 2, 3])
+
+    // 二次点击 (checkbox 变 false) 必须清空, 而不是再次全选
+    selectAll(false)
+    expect([...selectedFileIds.value]).toEqual([])
+  })
+})
