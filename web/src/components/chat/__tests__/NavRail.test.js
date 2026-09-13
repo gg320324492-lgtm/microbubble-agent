@@ -23,15 +23,15 @@
  *   + 移动端专属 <button class="mobile-close" aria-label="关闭导航">
  * - 折叠按钮: <button class="collapse-btn"> 调 uiStore.toggleNavRail()
  * - 移动端遮罩: <button class="nav-rail-scrim" v-if="mobileOpen">
- * - 主题机制: themeStore.mode + themeStore.accent → 通过 watch 写
- *   document.documentElement data-theme="light|dark" + data-accent="orange|ocean|forest"
- *   (非 nav 元素的 data-theme-accent 属性, 那是旧版猜测的契约)
+ * - 主题机制: themeStore.mode → 通过 watch 写
+ *   document.documentElement data-theme="light|dark"
+ *   (2026-09-13 accent 多主题色已移除, data-accent 不再写入)
  *
  * 测试场景 (8):
  * 1. 桌面端 NavRail 渲染 — 6 个路由项 + data-testid
  * 2. 当前路由高亮 — /chat 路由 li.nav-rail-item.active 命中 + router-link aria-current=page
- * 3. accent 切换 — themeStore.setAccent orange→ocean→forest (无内嵌切换按钮, 走 store API)
- * 4. theme+accent 双层切换 — document.documentElement data-theme/data-accent 6 组合
+ * 3. 明暗切换 — themeStore.toggle light↔dark (无内嵌切换按钮, 走 store API)
+ * 4. theme 切换 — document.documentElement data-theme light/dark 往返
  * 5. 移动端断点 — isMobile=true 时 mobile-close 按钮显示 + mobile-open class 视 prop 而定
  * 6. 移动端 mobile-close 触发 closeMobile emit
  * 7. 移动端 nav item 点击触发 closeMobile emit
@@ -111,11 +111,12 @@ describe('NavRail.vue — W89-X-19c 适配真实契约 (8 scenarios)', () => {
         clear: () => {},
       }
     }
-    // 重置 document.documentElement 的 data-theme / data-accent (themeStore apply)
+    // 重置 document.documentElement 的 data-theme (themeStore apply)
     if (typeof document !== 'undefined') {
       document.documentElement.removeAttribute('data-theme')
-      document.documentElement.removeAttribute('data-accent')
     }
+    // 清持久化的 theme (scenario_3/4 会写) — 保证每个 case 从 light 起步
+    try { localStorage.removeItem('theme') } catch { /* jsdom 无 localStorage 时忽略 */ }
   })
 
   afterEach(() => {
@@ -148,46 +149,36 @@ describe('NavRail.vue — W89-X-19c 适配真实契约 (8 scenarios)', () => {
     expect(allActive.length).toBe(1)
   })
 
-  it('scenario_3: accent 循环切换 — store API orange → ocean → forest → orange', async () => {
+  it('scenario_3: 明暗切换 — store API toggle light → dark → light', async () => {
     const { themeStore } = await setup('/chat')
-    // 初始 orange (themeStore 内部 watch → document.data-accent)
-    expect(themeStore.accent).toBe('orange')
-    expect(document.documentElement.getAttribute('data-accent')).toBe('orange')
-    // 切 ocean
-    themeStore.setAccent('ocean')
+    // 初始 light (themeStore 内部 watch → document.data-theme)
+    expect(themeStore.isDark).toBe(false)
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    // 切 dark
+    themeStore.toggle()
     await flushPromises()
-    expect(themeStore.accent).toBe('ocean')
-    expect(document.documentElement.getAttribute('data-accent')).toBe('ocean')
-    // 切 forest
-    themeStore.setAccent('forest')
+    expect(themeStore.isDark).toBe(true)
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    // 切回 light
+    themeStore.toggle()
     await flushPromises()
-    expect(themeStore.accent).toBe('forest')
-    expect(document.documentElement.getAttribute('data-accent')).toBe('forest')
-    // 切回 orange 循环
-    themeStore.setAccent('orange')
-    await flushPromises()
-    expect(themeStore.accent).toBe('orange')
+    expect(themeStore.isDark).toBe(false)
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 
-  it('scenario_4: theme+accent 双层切换 — document.documentElement data-theme×data-accent = 6 组合', async () => {
+  it('scenario_4: theme 切换 — store set() 直写 data-theme light/dark 往返', async () => {
     const { themeStore } = await setup('/chat')
 
-    const combos = [
-      { accent: 'orange', dark: false, expectTheme: 'light',  expectAccent: 'orange' },
-      { accent: 'orange', dark: true,  expectTheme: 'dark',   expectAccent: 'orange' },
-      { accent: 'ocean',  dark: false, expectTheme: 'light',  expectAccent: 'ocean'  },
-      { accent: 'ocean',  dark: true,  expectTheme: 'dark',   expectAccent: 'ocean'  },
-      { accent: 'forest', dark: false, expectTheme: 'light',  expectAccent: 'forest' },
-      { accent: 'forest', dark: true,  expectTheme: 'dark',   expectAccent: 'forest' },
-    ]
-
-    for (const c of combos) {
-      themeStore.setAccent(c.accent)
-      themeStore.set(c.dark ? 'dark' : 'light')
+    for (const mode of ['dark', 'light', 'dark']) {
+      themeStore.set(mode)
       await flushPromises()
-      expect(document.documentElement.getAttribute('data-theme')).toBe(c.expectTheme)
-      expect(document.documentElement.getAttribute('data-accent')).toBe(c.expectAccent)
+      expect(themeStore.mode).toBe(mode)
+      expect(document.documentElement.getAttribute('data-theme')).toBe(mode)
     }
+    // 非法值不生效
+    themeStore.set('blue')
+    await flushPromises()
+    expect(themeStore.mode).toBe('dark')
   })
 
   it('scenario_5: 移动端断点 — isMobile=true 时 mobile-close 按钮显示 + nav 含 mobile-open (若 prop)', async () => {

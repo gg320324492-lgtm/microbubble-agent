@@ -1,0 +1,14 @@
+
+.long-press-wrapper[data-v-74844b8f] {
+  display: contents; /* 不影响子元素布局 */
+  /* 按下时视觉反馈 */
+  transition: opacity 150ms;
+}
+.long-press-wrapper.is-pressing[data-v-74844b8f] {
+  opacity: 0.7;
+}
+
+[data-theme="dark"] .long-press-wrapper {
+  /* 组件本身无背景色，但确保子元素在 dark 下不被父容器透出的暗色影响可读性 */
+  color: var(--color-text-regular);
+}

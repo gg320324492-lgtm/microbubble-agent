@@ -400,18 +400,6 @@
   border-bottom-color: var(--color-border);
 }
 
-/* v77 P2.6-D: ocean / forest 主题 dialog header 装饰 */
-[data-accent="ocean"] .el-dialog__header,
-[data-accent="forest"] .el-dialog__header {
-  background: var(--color-primary-bg);
-  border-bottom: 1px solid var(--color-primary-border);
-  border-top-left-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-lg);
-}
-[data-theme="dark"][data-accent="ocean"] .el-dialog__header,
-[data-theme="dark"][data-accent="forest"] .el-dialog__header {
-  background: rgba(var(--color-primary-rgb), 0.10);
-}
 /* 2026-07-03: long-press-wrapper dark 覆盖 + .template-card:active 触摸反馈删除 (模板管理删除后无引用) */
 
 /* 铁律 31: TabStrip 容器 + TabPanel 容器（替代原 .meeting-tabs el-tabs） */

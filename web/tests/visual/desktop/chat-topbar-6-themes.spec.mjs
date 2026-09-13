@@ -1,10 +1,11 @@
 /**
- * chat-topbar-6-themes.spec.mjs — W72 B-5 桌面端 ChatViewSSE 顶栏 6 主题 dark mode 完整版视觉回归
+ * chat-topbar-themes.spec.mjs — 桌面端 ChatViewSSE 顶栏明暗双主题 dark mode 视觉回归
+ * (原 chat-topbar-6-themes.spec.mjs, 2026-09-13 accent 多主题色移除后收敛为 light/dark 双轴)
  *
  * 范围:
- *   - 6 主题: orange-light, ocean-light, forest-light, orange-dark, ocean-dark, forest-dark
+ *   - 2 主题: orange-light, orange-dark
  *   - 3 viewport: desktop (1280x800), tablet (900x600), mobile (375x800)
- *   - 总计: 18 视觉快照 (6 × 3)
+ *   - 总计: 6 视觉快照 (2 × 3)
  *
  * 锚点范式第 215 守恒 (W72 B-5 收口)
  *
@@ -15,16 +16,13 @@
  * 截图:
  *   - 截 .chat-header 元素 (顶栏) 而非整页 (顶栏是改造目标)
  *   - baseline 目录: tests/visual/desktop/chat-topbar-6-themes.spec.mjs-snapshots/
+ *     (沿用旧目录名, orange-* 快照与 6 主题时代视觉一致, 无需 re-baseline)
  */
 import { test, expect } from '@playwright/test'
 
 const THEMES = [
   { mode: 'light', accent: 'orange' },
-  { mode: 'light', accent: 'ocean' },
-  { mode: 'light', accent: 'forest' },
   { mode: 'dark', accent: 'orange' },
-  { mode: 'dark', accent: 'ocean' },
-  { mode: 'dark', accent: 'forest' },
 ]
 
 const VIEWPORTS = [
@@ -41,14 +39,12 @@ for (const theme of THEMES) {
       // 1. viewport
       await page.setViewportSize({ width: vp.width, height: vp.height })
 
-      // 2. 注入主题到 localStorage (useThemeStore 读 STORAGE_KEY_THEME/STORAGE_KEY_ACCENT)
+      // 2. 注入主题到 localStorage (useThemeStore 读 STORAGE_KEY_THEME)
       await page.addInitScript(
         ({ mode, accent }) => {
           try {
             localStorage.setItem('theme', mode)
-            localStorage.setItem('accent', accent)
             document.documentElement.setAttribute('data-theme', mode)
-            document.documentElement.setAttribute('data-accent', accent)
           } catch {
             /* localStorage 不可用 */
           }

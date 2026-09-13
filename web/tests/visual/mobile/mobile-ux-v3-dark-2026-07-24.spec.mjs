@@ -112,7 +112,8 @@ test.describe('mobile-ux-v3-dark-2026-07-24: dark mode + 长按 + 响应式 e2e'
     // 因此 data-theme 应为 light (默认), 不是自动跟随系统
     // 此测试主要验证 colorScheme context 注入生效
     expect(['light', 'dark']).toContain(themeAttr.dataTheme)
-    expect(['orange', 'ocean', 'forest']).toContain(themeAttr.dataAccent)
+    // 2026-09-13 accent 多主题色移除 — data-accent 不再写入, 应为 null
+    expect(themeAttr.dataAccent).toBeNull()
 
     // 验证 prefers-color-scheme 在浏览器侧已生效
     const prefColorScheme = await page.evaluate(() => ({

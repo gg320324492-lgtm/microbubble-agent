@@ -90,13 +90,6 @@
 .quick-icon--knowledge { background: linear-gradient(135deg, #409EFF, #79BBFF); }
 .quick-icon--me       { background: linear-gradient(135deg, #909399, #B9BCC1); }
 
-// ===== 主题色预览 swatch (SettingsView) =====
-// v77 P2.6-E.1: 收敛 SettingsView.vue:221 opt.preview runtime :style
-// 颜色与原 accentOptions.preview 完全一致（视觉零变化）
-.theme-preview--orange { background: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%); }
-.theme-preview--ocean  { background: linear-gradient(135deg, #4A90E2 0%, #5AD8A6 100%); }
-.theme-preview--forest { background: linear-gradient(135deg, #4CAF50 0%, #FFB74D 100%); }
-
 // ===== 文件 hero 渐变 (KnowledgeCard) =====
 // v77 P2.6-E.1: 收敛 KnowledgeCard.vue:12 fileHeroGradient runtime :style
 // 5 类文件 type → 5 个类（颜色与原 fileTypeInfo.gradient 完全一致）

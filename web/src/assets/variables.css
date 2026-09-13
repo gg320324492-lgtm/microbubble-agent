@@ -236,11 +236,11 @@
   --vh: 100vh; /* 默认 fallback */
   --dvh: 100dvh; /* 现代浏览器优先 */
 
-  /* v77 P2.6 fix: --el-color-primary 映射已移到 [data-accent="..."] attribute block 内
-     (specificity 0,1,1 > EP :root 0,0,1)。原因：EP on-demand CSS (el-button.css 等) 加载晚于 variables.css
-     EP 自己的 :root { --el-color-primary: #409eff } 后加载会覆盖 :root 映射，
-     导致 ocean/forest 主题按钮白字（对比度 1.05:1 严重不达 WCAG AA）。
-     attribute block 永远赢 EP :root，且影响所有引用 --el-color-primary 的 EP 组件。*/
+  /* v77 P2.6 fix: --el-color-primary 映射在文件末尾的 [data-theme] attribute block 内
+     (specificity 0,1,0 > EP :root 0,0,1)。原因：EP on-demand CSS (el-button.css 等) 加载晚于 variables.css
+     EP 自己的 :root { --el-color-primary: #409eff } 后加载会覆盖 :root 映射。
+     attribute block 永远赢 EP :root，且影响所有引用 --el-color-primary 的 EP 组件。
+     (2026-09-13 accent 多主题色移除，原 [data-accent="..."] 双轴块收敛为 [data-theme] 单轴) */
 
   /* ===== 声纹 bar 渐变 (VoiceprintCard.vue) — v77 P2.6-G.3 =====
      6 主题独立覆盖（弱信号→强信号）：light/orange 默认用 warning→primary 渐变（暖色），ocean 用蓝调，forest 用绿调。
@@ -810,8 +810,8 @@ body {
   --el-button-hover-border-color: var(--color-primary-light);
   color: #fff;
 }
-/* v77 P2.6 fix: ocean/forest/light 主题 plain primary 按钮对比度已通过
-   [data-accent="..."] attribute block 显式设 --el-color-primary 解决 (specificity 0,1,1 > EP :root)。
+/* v77 P2.6 fix: ocean/forest/light 主题 plain primary 按钮对比度问题已通过
+   attribute block 显式设 --el-color-primary 解决 (specificity (0,1,0) > EP :root，见文件末尾 [data-theme] 块)。
    不再需要 .el-button--primary.is-plain/is-text/is-link 单独覆盖 — 根因修了后 symptom 自动消失。
    之前 909cc67d / 6f28d239 / d80aa532 这 3 个 commit 的 workaround 已全部失效（CDP 验证），删除。*/
 
@@ -825,18 +825,6 @@ body {
 .el-button--primary.is-plain,
 .el-button--primary.is-text,
 .el-button--primary.is-link {
-  --el-button-text-color: var(--color-primary-dark);
-  --el-button-bg-color: var(--color-primary-bg);
-  --el-button-border-color: var(--color-primary-border);
-  --el-button-hover-bg-color: var(--color-primary);
-  --el-button-hover-text-color: var(--el-color-white);
-  --el-button-hover-border-color: var(--color-primary);
-  font-weight: 600;
-}
-/* specificity (0,3,0) > (0,2,0) — [data-accent] 块对 accent 主题覆盖 default 规则 */
-[data-accent] .el-button--primary.is-plain,
-[data-accent] .el-button--primary.is-text,
-[data-accent] .el-button--primary.is-link {
   --el-button-text-color: var(--color-primary-dark);
   --el-button-bg-color: var(--color-primary-bg);
   --el-button-border-color: var(--color-primary-border);
@@ -1467,19 +1455,14 @@ body {
 /* - 截止日期 06/05 灰色在 dark 上 = --color-text-regular (#c0c4cc) 修复后可见，不是 --color-text-secondary (仍偏暗) */
 
 /* ============================================
-   v69 P1: 6 套主题色板（双轴正交）
-   <html data-theme="light|dark" data-accent="orange|ocean|forest">
-   - light/orange: 复用 :root 默认值，不重复定义
-   - dark/orange:   复用 [data-theme="dark"] 默认值，不重复定义
-   - ocean/forest:  每个组合单独定义变量覆盖
+   主题 EP token 映射（2026-09-13 移除 accent 多主题色后的单轴版本）
+   <html data-theme="light|dark">
+   EP primary token 必须放 attribute block：specificity (0,1,0) > EP :root (0,0,1)，
+   否则 EP on-demand CSS 后加载的 :root { --el-color-primary: #409eff } 会反超映射
    ============================================ */
 
 /* === 暖橙 light (默认主题) === */
-[data-accent="orange"] {
-  /* v77 P2.6 fix: EP primary token 在 attribute block 内映射 (specificity 0,1,1 > EP :root 0,0,1)
-     之前 :root 块定义 --el-color-primary: var(--color-primary)，但 EP on-demand CSS 加载晚于 variables.css
-     EP 自己的 :root { --el-color-primary: #409eff } 后加载覆盖，导致 ocean/forest 主题按钮变白字
-     把 EP token 显式设到 attribute block 内，attribute selector specificity 永远赢 EP :root */
+[data-theme] {
   --el-color-primary: #FF7A5C;
   --el-color-primary-light-3: #FF9D85;
   --el-color-primary-light-5: #FF9D85;
@@ -1489,159 +1472,8 @@ body {
   --el-color-primary-dark-2: #E85A3A;
 }
 
-/* === 海蓝 light === */
-[data-accent="ocean"] {
-  --color-primary: #4A90E2;
-  --color-primary-light: #6BABFF;
-  --color-primary-dark: #2E6BB8;
-  --color-primary-bg: #E8F2FE;
-  --color-primary-border: rgba(74, 144, 226, 0.22);
-  --color-accent: #5AD8A6;
-  --color-primary-rgb: 74, 144, 226;   /* v76.6: ocean light --color-primary = #4A90E2 */
-  --color-primary-light-rgb: 107, 171, 255;  /* --color-primary-light = #6BABFF */
-  --color-accent-rgb: 90, 216, 166;    /* --color-accent = #5AD8A6 */
-  --color-accent-bg: #E6F8F1;
-  --color-shadow-primary: rgba(74, 144, 226, 0.30);
-  --color-bg-sidebar: rgba(232, 242, 254, 0.92);
-  --color-sidebar-border: rgba(74, 144, 226, 0.14);
-  --shadow-primary: 0 4px 20px rgba(74, 144, 226, 0.30);
-  --shadow-glow: 0 4px 24px rgba(74, 144, 226, 0.20);
-  --shadow-sidebar: 4px 0 24px rgba(74, 144, 226, 0.08);
-  --gradient-welcome-hero: linear-gradient(135deg, #4A90E2 0%, #5AD8A6 100%);
-  --gradient-group-header: linear-gradient(135deg, #E8F2FE 0%, #E6F8F1 100%);
-  --gradient-stat-in-progress: linear-gradient(135deg, #E8F2FE 0%, #D5E8FA 100%);
-  --gradient-stat-done: linear-gradient(135deg, #E6F8F1 0%, #D0F0E2 100%);
-  --gradient-stat-overdue: linear-gradient(135deg, #FCE8E8 0%, #FAD5D5 100%);
-  /* v77 P2.6 fix: EP primary token 在 attribute block 内映射，specificity (0,1,1) > EP :root (0,0,1) */
-  --el-color-primary: #4A90E2;
-  --el-color-primary-light-3: #6BABFF;
-  --el-color-primary-light-5: #6BABFF;
-  --el-color-primary-light-7: #6BABFF;
-  --el-color-primary-light-8: #6BABFF;
-  --el-color-primary-light-9: #6BABFF;
-  --el-color-primary-dark-2: #2E6BB8;
-
-  /* v77 P2.6-G.3: voiceprint bar 跟随海蓝主题 */
-  --vp-bar-low:  #E8F2FE;
-  --vp-bar-mid:  linear-gradient(90deg, #5EA1FF 0%, #1890FF 100%);
-  --vp-bar-high: #1890FF;
-}
-
-/* === 森林绿 light === */
-[data-accent="forest"] {
-  --color-primary: #4CAF50;
-  --color-primary-light: #66BB6A;
-  --color-primary-dark: #2E7D32;
-  --color-primary-bg: #E8F5E9;
-  --color-primary-border: rgba(76, 175, 80, 0.22);
-  --color-accent: #FFB74D;
-  --color-primary-rgb: 76, 175, 80;    /* v76.6: forest light --color-primary = #4CAF50 */
-  --color-primary-light-rgb: 102, 187, 106;  /* --color-primary-light = #66BB6A */
-  --color-accent-rgb: 255, 183, 77;    /* --color-accent = #FFB74D (forest 金橙不变) */
-  --color-accent-bg: #FFF5E5;
-  --color-shadow-primary: rgba(76, 175, 80, 0.30);
-  --color-bg-sidebar: rgba(232, 245, 233, 0.92);
-  --color-sidebar-border: rgba(76, 175, 80, 0.14);
-  --shadow-primary: 0 4px 20px rgba(76, 175, 80, 0.30);
-  --shadow-glow: 0 4px 24px rgba(76, 175, 80, 0.20);
-  --shadow-sidebar: 4px 0 24px rgba(76, 175, 80, 0.08);
-  --gradient-welcome-hero: linear-gradient(135deg, #4CAF50 0%, #FFB74D 100%);
-  --gradient-group-header: linear-gradient(135deg, #E8F5E9 0%, #FFF5E5 100%);
-  --gradient-stat-in-progress: linear-gradient(135deg, #E8F5E9 0%, #D5EBD7 100%);
-  --gradient-stat-done: linear-gradient(135deg, #E6F8F1 0%, #D0F0E2 100%);
-  --gradient-stat-overdue: linear-gradient(135deg, #FCE8E8 0%, #FAD5D5 100%);
-  /* v77 P2.6 fix: EP primary token 在 attribute block 内映射 */
-  --el-color-primary: #4CAF50;
-  --el-color-primary-light-3: #66BB6A;
-  --el-color-primary-light-5: #66BB6A;
-  --el-color-primary-light-7: #66BB6A;
-  --el-color-primary-light-8: #66BB6A;
-  --el-color-primary-light-9: #66BB6A;
-  --el-color-primary-dark-2: #2E7D32;
-
-  /* v77 P2.6-G.3: voiceprint bar 跟随森林主题 */
-  --vp-bar-low:  #F0F9EB;
-  --vp-bar-mid:  linear-gradient(90deg, #95DE64 0%, #52C41A 100%);
-  --vp-bar-high: #52C41A;
-}
-
-/* === 海蓝 dark === */
-[data-theme="dark"][data-accent="ocean"] {
-  --color-primary: #6BABFF;
-  --color-primary-light: #8DC0FF;
-  --color-primary-dark: #4A90E2;
-  --color-primary-bg: rgba(74, 144, 226, 0.18);
-  --color-primary-border: rgba(74, 144, 226, 0.30);
-  --color-accent: #7DE0BA;
-  --color-primary-rgb: 107, 171, 255;  /* v76.6: dark ocean --color-primary = #6BABFF */
-  --color-primary-light-rgb: 141, 192, 255;  /* --color-primary-light = #8DC0FF */
-  --color-accent-rgb: 125, 224, 186;   /* --color-accent = #7DE0BA */
-  --color-accent-bg: rgba(90, 216, 166, 0.14);
-  --color-shadow-primary: rgba(74, 144, 226, 0.45);
-  --color-bg-sidebar: rgba(18, 26, 38, 0.92);
-  --color-sidebar-border: rgba(107, 171, 255, 0.22);
-  --shadow-primary: 0 4px 20px rgba(74, 144, 226, 0.45);
-  --shadow-glow: 0 4px 24px rgba(74, 144, 226, 0.35);
-  --gradient-welcome-hero: linear-gradient(135deg, #2E6BB8 0%, #3FA483 100%);
-  --gradient-group-header: linear-gradient(135deg, #2a2d35 0%, rgba(74, 144, 226, 0.18) 100%);
-  --gradient-stat-in-progress: rgba(74, 144, 226, 0.18);
-  --gradient-stat-done: rgba(133, 206, 97, 0.18);
-  --gradient-stat-overdue: rgba(247, 137, 137, 0.18);
-  /* v77 P2.6 fix: EP primary token in dark mode (specificity (0,2,1) > EP :root) */
-  --el-color-primary: #6BABFF;
-  --el-color-primary-light-3: #8DC0FF;
-  --el-color-primary-light-5: #8DC0FF;
-  --el-color-primary-light-7: #8DC0FF;
-  --el-color-primary-light-8: #8DC0FF;
-  --el-color-primary-light-9: #8DC0FF;
-  --el-color-primary-dark-2: #4A90E2;
-
-  /* v77 P2.6-G.3: voiceprint bar dark/ocean */
-  --vp-bar-low:  rgba(74, 144, 226, 0.18);
-  --vp-bar-mid:  linear-gradient(90deg, #6BABFF 0%, #4A90E2 100%);
-  --vp-bar-high: #6BABFF;
-}
-
-/* === 森林绿 dark === */
-[data-theme="dark"][data-accent="forest"] {
-  --color-primary: #66BB6A;
-  --color-primary-light: #81C784;
-  --color-primary-dark: #4CAF50;
-  --color-primary-bg: rgba(76, 175, 80, 0.18);
-  --color-primary-border: rgba(76, 175, 80, 0.30);
-  --color-accent: #FFCA80;
-  --color-primary-rgb: 102, 187, 106;  /* v76.6: dark forest --color-primary = #66BB6A */
-  --color-primary-light-rgb: 129, 199, 132;  /* --color-primary-light = #81C784 */
-  --color-accent-rgb: 255, 202, 128;   /* --color-accent = #FFCA80 */
-  --color-accent-bg: rgba(255, 183, 77, 0.14);
-  --color-shadow-primary: rgba(76, 175, 80, 0.45);
-  --color-bg-sidebar: rgba(18, 28, 22, 0.92);
-  --color-sidebar-border: rgba(102, 187, 106, 0.22);
-  --shadow-primary: 0 4px 20px rgba(76, 175, 80, 0.45);
-  --shadow-glow: 0 4px 24px rgba(76, 175, 80, 0.35);
-  --gradient-welcome-hero: linear-gradient(135deg, #2E7D32 0%, #C68A3A 100%);
-  --gradient-group-header: linear-gradient(135deg, #2a2d35 0%, rgba(76, 175, 80, 0.18) 100%);
-  --gradient-stat-in-progress: rgba(76, 175, 80, 0.18);
-  --gradient-stat-done: rgba(133, 206, 97, 0.18);
-  --gradient-stat-overdue: rgba(247, 137, 137, 0.18);
-  /* v77 P2.6 fix: EP primary token in dark mode */
-  --el-color-primary: #66BB6A;
-  --el-color-primary-light-3: #81C784;
-  --el-color-primary-light-5: #81C784;
-  --el-color-primary-light-7: #81C784;
-  --el-color-primary-light-8: #81C784;
-  --el-color-primary-light-9: #81C784;
-  --el-color-primary-dark-2: #4CAF50;
-
-  /* v77 P2.6-G.3: voiceprint bar dark/forest */
-  --vp-bar-low:  rgba(76, 175, 80, 0.18);
-  --vp-bar-mid:  linear-gradient(90deg, #95DE64 0%, #66BB6A 100%);
-  --vp-bar-high: #66BB6A;
-}
-
 /* === 暖橙 dark === */
-[data-theme="dark"][data-accent="orange"] {
-  /* v77 P2.6 fix: EP primary token in dark mode */
+[data-theme="dark"] {
   --el-color-primary: #FF9D85;
   --el-color-primary-light-3: #FF7A5C;
   --el-color-primary-light-5: #FF7A5C;
@@ -1651,17 +1483,17 @@ body {
   --el-color-primary-dark-2: #FFB347;
 }
 
-/* === 成员 grade + role chip (实色主色 + 白字, 6 主题自动适配) ===
-   v77 前 MemberView L530-551 已有 ocean/forest 主题重染 (浅主色底 + 主色字)
+/* === 成员 grade + role chip (实色主色 + 白字, 明暗双主题自动适配) ===
+   v77 前 MemberView L530-551 已有 per-accent 主题重染 (浅主色底 + 主色字)
    该方案对比度差: 主色字落半透明主色底几乎看不清.
-   本块用实色 var(--color-primary) + 白字 + font-weight 600, 6 主题下均高对比.
+   本块用实色 var(--color-primary) + 白字 + font-weight 600, 明暗下均高对比.
    v78 上一轮 (.grade-tag) 扩成 .member-info .el-tag + .hero-tags .el-tag
    覆盖 MemberView L78 + MobileMemberDetailView L34 的 role chip (与 grade chip 同款).
    voice-tag (success/warning) 用 :not(.voice-tag) 排除, 保留 EP 语义色.
-   .member-skills 仅 .grade-tag 升级 — skill 数组 tag (装备研发等) 仍走原 ocean/forest 重染.
-   位置选在 6 主题变量定义完后, 而非 .el-tag dark 块附近 (L924-935),
+   .member-skills 仅 .grade-tag 升级 — skill 数组 tag (装备研发等) 仍走原重染.
+   位置选在主题变量定义完后, 而非 .el-tag dark 块附近 (L924-935),
    是为了"主题变量"和"使用主题变量的组件 class"分层组织.
-   !important 是为防止 v77 P2.6-D L530-551 老的 ocean/forest 重染块反向覆盖. */
+   !important 是为防止 v77 P2.6-D L530-551 老的重染块反向覆盖. */
 .member-info .el-tag,
 .hero-tags > .el-tag:not(.voice-tag),
 .member-skills .grade-tag {

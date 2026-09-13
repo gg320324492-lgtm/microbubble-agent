@@ -72,7 +72,7 @@
           </section>
 
           <!-- §2 账号安全 -->
-          <section class="section">
+          <section class="section" style="margin-bottom: 0;">
             <div class="sec-head">
               <span class="sec-no">§2</span><h2>账号安全</h2><span class="en">SECURITY</span>
             </div>
@@ -123,39 +123,6 @@
               </button>
             </div>
           </section>
-
-          <!-- §3 外观主题 -->
-          <section class="section" style="margin-bottom: 0;">
-            <div class="sec-head">
-              <span class="sec-no">§3</span><h2>外观主题</h2><span class="en">APPEARANCE</span>
-            </div>
-            <div class="lever-row">
-              <span class="lever-name">深色模式</span>
-              <span class="lever-desc">当前：{{ themeModeLabel }} · 也可在顶栏右侧 ☀️ / 🌙 快速切换</span>
-              <el-switch v-model="isDark" class="dossier-switch" aria-label="深色模式"></el-switch>
-            </div>
-            <div class="lever-row">
-              <span class="lever-name">主题色</span>
-              <span class="lever-desc">当前主色：{{ activeAccentLabel }}</span>
-              <span></span>
-            </div>
-            <div class="theme-row">
-              <button
-                v-for="opt in accentOptions"
-                :key="opt.value"
-                type="button"
-                class="swatch"
-                :class="{ 'is-on': themeStore.accent === opt.value }"
-                :aria-pressed="themeStore.accent === opt.value"
-                :aria-label="opt.label"
-                @click="themeStore.setAccent(opt.value)"
-              >
-                <span class="dot" :class="opt.previewClass"></span>
-                <b>{{ opt.label }}</b>
-                <small>{{ opt.value.toUpperCase() }}</small>
-              </button>
-            </div>
-          </section>
         </main>
       </div>
     </div>
@@ -192,30 +159,10 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-// v68 (2026-06-26): 主题切换接入 useThemeStore（之前桌面 SettingsView 没有主题入口）
-import { useThemeStore } from '@/stores/useThemeStore'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
-const themeStore = useThemeStore()
 const userInfo = computed(() => userStore.userInfo)
-
-// v68: 主题切换（双向绑定到 el-switch）
-const isDark = computed({
-  get: () => themeStore.isDark,
-  set: (v) => themeStore.set(v ? 'dark' : 'light'),
-})
-const themeModeLabel = computed(() => (isDark.value ? '深色' : '浅色'))
-// v69 P1: 3 套主色 picker，调用 themeStore.setAccent 切换
-// v77 P2.6-E.1: 收敛 preview → previewClass（_runtime-style-tokens.scss .theme-preview--*）
-const accentOptions = [
-  { value: 'orange', label: '活力橙', previewClass: 'theme-preview--orange' },
-  { value: 'ocean',  label: '海蓝',   previewClass: 'theme-preview--ocean' },
-  { value: 'forest', label: '森林绿', previewClass: 'theme-preview--forest' },
-]
-const activeAccentLabel = computed(
-  () => accentOptions.find((o) => o.value === themeStore.accent)?.label || '活力橙'
-)
 
 const roleLabel = computed(() => userStore.userRole)  // 2026-09-05 角色扁平化: 年级身份称谓
 
@@ -763,53 +710,6 @@ onMounted(() => {
 .recover-info p { font-size: 12px; color: var(--muted); margin: 6px 0 0; max-width: 480px; line-height: 1.8; }
 .recover-btn { flex: none; height: 42px; padding: 0 22px; font-size: 12.5px; }
 
-/* 外观: 仪表行 + 色板 */
-.lever-row {
-  display: flex; align-items: center; gap: 16px;
-  padding: 15px 2px; border-bottom: 1px dashed var(--line-dash);
-}
-.lever-row:first-of-type { margin-top: 8px; }
-.lever-name { font-size: 13.5px; font-weight: 700; min-width: 96px; }
-.lever-desc { font-size: 12px; color: var(--muted); flex: 1; }
-.lever-row > span:last-child:not(.lever-desc) { width: 52px; }
-
-/* el-switch 重塑为仪器拨杆 */
-.dossier-switch :deep(.el-switch__core) {
-  min-width: 52px; height: 26px; border-radius: 999px;
-  background: var(--line-dash); border: 1.5px solid var(--ink);
-  transition: background 170ms ease, border-color 170ms ease;
-}
-.dossier-switch.is-checked :deep(.el-switch__core) {
-  background: rgba(14, 118, 110, 0.14); border-color: var(--teal);
-}
-.dossier-switch :deep(.el-switch__action) {
-  background: var(--ink); border: none;
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-.dossier-switch.is-checked :deep(.el-switch__action) { background: var(--teal); color: #fff; }
-
-.theme-row { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
-.swatch {
-  width: 132px; border: 1px solid var(--line-dash); border-radius: 12px;
-  padding: 14px; cursor: pointer; background: var(--card);
-  text-align: left; font: inherit; color: var(--ink);
-  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
-  position: relative;
-}
-.swatch:hover { border-color: var(--ink); transform: translateY(-2px); }
-.swatch:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-.swatch .dot { display: block; width: 100%; height: 34px; border-radius: 7px; margin-bottom: 10px; }
-.swatch b { font-size: 12.5px; }
-.swatch small {
-  display: block; font-family: var(--font-mono);
-  font-size: 9.5px; letter-spacing: 0.12em; color: var(--muted); margin-top: 2px;
-}
-.swatch.is-on { border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 var(--shadow-ink); }
-.swatch.is-on::after {
-  content: '✓'; position: absolute; top: 8px; right: 10px;
-  color: var(--ink); font-weight: 700;
-}
-
 /* ── 恢复码对话框 — 档案语言同款 (标本标签 + 墨线 + 硬阴影) ── */
 .settings-dossier :deep(.el-dialog.recovery-dialog) {
   background: var(--card);
@@ -904,7 +804,7 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn, .swatch, .avatar-btn { transition: none !important; }
+  .btn, .avatar-btn { transition: none !important; }
 }
 </style>
 

@@ -32,13 +32,11 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000'
 const TEST_USER = process.env.TEST_USER || 'xiaoqi_testbot'
 const TEST_PASS = process.env.TEST_PASS || 'testbot_pass_2026'
 
-// 4 主题组合 (light/dark × orange/ocean)
+// 明暗双主题 (2026-09-13 accent 多主题色移除, 原 light/dark × orange/ocean 收敛为 2)
 // dangerRgb 来自 variables.css: light=#F56C6C (245,108,108), dark=#f78989 (247,137,137)
 const THEMES = [
   { name: 'light-orange', theme: 'light', accent: 'orange', primaryRgb: '255, 122, 92', dangerRgb: '245, 108, 108' },
-  { name: 'light-ocean',  theme: 'light', accent: 'ocean',  primaryRgb: '74, 144, 226',  dangerRgb: '245, 108, 108' },
   { name: 'dark-orange',  theme: 'dark',  accent: 'orange', primaryRgb: '255, 157, 133', dangerRgb: '247, 137, 137' },
-  { name: 'dark-ocean',   theme: 'dark',  accent: 'ocean',  primaryRgb: '107, 171, 255', dangerRgb: '247, 137, 137' },
 ]
 
 /**
