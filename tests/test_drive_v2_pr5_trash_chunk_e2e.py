@@ -244,6 +244,52 @@ async def test_chunked_init_rejects_oversize(db_session, user, folder):
 
 
 @pytest.mark.asyncio
+async def test_chunked_init_into_other_members_team_folder(db_session, user, admin):
+    """2026-09 单一团队空间: folder.owner_id 仅作创建人溯源, 不再是权限门。
+
+    2026-09-13 线上事故: 旧 owner 过滤导致往他人创建的团队文件夹分片上传 init
+    必然 404「目标文件夹不存在或无权访问」→ ≥50MB 文件 (唯一通路为分片) 全部失败。
+    """
+    other_folder = Folder(
+        name=f"team-{uuid.uuid4().hex[:6]}",
+        owner_id=admin.id,
+        visibility="team",
+        depth=0,
+        path="/",
+    )
+    db_session.add(other_folder)
+    await db_session.flush()
+    other_folder.path = f"/{other_folder.id}/"
+    await db_session.commit()
+
+    service = DriveChunkedUploadService(db_session)
+    payload = _chunk_payload(b"team folder upload", 256 * 1024)
+    upload = await service.init_upload(
+        user_id=user.id,  # 上传者 ≠ folder 创建人 (admin)
+        parent_id=other_folder.id,
+        filename="team-ppt.pptx",
+        file_size=len(payload),
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+    assert upload.upload_id
+    assert upload.parent_id == other_folder.id
+
+
+@pytest.mark.asyncio
+async def test_chunked_init_nonexistent_folder_still_404(db_session, user):
+    """去掉 owner 过滤后, 文件夹真实不存在仍必须 404"""
+    service = DriveChunkedUploadService(db_session)
+    with pytest.raises(DriveChunkedUploadError) as exc:
+        await service.init_upload(
+            user_id=user.id,
+            parent_id=999999999,
+            filename="ghost.bin",
+            file_size=262144,
+        )
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_chunked_single_chunk_size_validation(db_session, user, folder):
     service = DriveChunkedUploadService(db_session)
     payload = _chunk_payload(b"hello drive chunk", 262144 * 4)

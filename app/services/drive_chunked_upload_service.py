@@ -185,17 +185,20 @@ class DriveChunkedUploadService:
         checksum = _validate_sha256(checksum, "checksum")
 
         if parent_id is not None:
+            # 2026-09 单一团队空间: folder.owner_id 仅作创建人溯源, 不再是权限门
+            # (与 folder_service / drive_service.create_file 同口径)。旧 owner 过滤
+            # 导致往他人创建的团队文件夹分片上传必然 404 (2026-09-13 线上事故:
+            # ≥50MB 文件唯一通路为分片上传, init 即被拒)。
             folder = (
                 await self.db.execute(
                     select(Folder).where(
                         Folder.id == parent_id,
-                        Folder.owner_id == user_id,
                         Folder.deleted_at.is_(None),
                     )
                 )
             ).scalar_one_or_none()
             if folder is None:
-                raise DriveChunkedUploadError("目标文件夹不存在或无权访问", 404)
+                raise DriveChunkedUploadError("目标文件夹不存在", 404)
 
         # Reuse an unfinished identical session so browser refresh can resume naturally.
         existing = (
