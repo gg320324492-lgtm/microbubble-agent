@@ -46,7 +46,7 @@
               </el-select>
             </el-col>
             <el-col :xs="12" :sm="12" :md="6">
-              <el-button type="primary" class="btn btn-primary" @click="openCreateDialog">
+              <el-button type="primary" class="btn btn-primary create-task-btn" @click="openCreateDialog">
                 <el-icon><Plus /></el-icon>
                 创建任务
               </el-button>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>创建任务按钮 · 墨线风候选方案</title>
+<style>
+  /* ═══ 档案墨线风变量 (与 Dashboard.vue .dashboard-dossier 完全一致) ═══ */
+  :root {
+    --paper: #f4f6f4;
+    --card: #fdfefc;
+    --ink: #16232a;
+    --teal: #0e766e;
+    --teal-soft: #198e83;
+    --coral: #ef7256;
+    --line: #cdd8d4;
+    --line-dash: #b9c9c5;
+    --muted: #5f6f6b;
+    --shadow-ink: rgba(22, 35, 42, 0.12);
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 48px 24px 80px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .page-head { margin-bottom: 34px; }
+  .page-head .tag {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em;
+    color: var(--teal); border: 1px solid var(--line-dash);
+    display: inline-block; padding: 2px 10px; margin-bottom: 10px;
+    background: var(--card); border-radius: 2px;
+  }
+  .page-head h1 { font-size: 22px; font-weight: 700; letter-spacing: .04em; }
+  .page-head p { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  .scheme { margin-bottom: 40px; }
+  .scheme-head {
+    display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px;
+  }
+  .scheme-head .no {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em;
+    color: var(--card); background: var(--ink); padding: 2px 9px; border-radius: 2px;
+  }
+  .scheme-head h2 { font-size: 16px; font-weight: 700; letter-spacing: .05em; }
+  .scheme-head .desc { color: var(--muted); font-size: 12.5px; }
+  .scheme-head .desc b { color: var(--teal); font-weight: 600; }
+
+  /* ═══ 筛选条上下文模拟 (还原首页内嵌任务管理的真实场景) ═══ */
+  .ctx {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 2px 2px 0 var(--shadow-ink);
+    padding: 18px 20px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .fake-select {
+    flex: 1; min-width: 180px; height: 36px;
+    border: 1px solid var(--line-dash); border-radius: 4px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px; color: #a2aeaa; font-size: 13px;
+    font-family: initial;
+    background: var(--card);
+  }
+  .fake-select::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid #a2aeaa; border-bottom: 1.5px solid #a2aeaa; transform: rotate(45deg) translateY(-2px); }
+
+  /* ═══ 按钮 ═══ */
+  .btn {
+    height: 40px; padding: 0 20px;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--font-serif); font-size: 14px; font-weight: 600; letter-spacing: .08em;
+    border-radius: 3px; cursor: pointer; white-space: nowrap;
+    transition: all .15s ease-out;
+    user-select: none;
+  }
+  .btn .plus { font-family: var(--font-mono); font-weight: 700; font-size: 15px; }
+
+  /* ── 现状 · 旧色板 (#B84523 旧珊瑚橙压暗) ── */
+  .btn--old {
+    background: #B84523; color: #fff;
+    border: 1px solid #B84523; border-radius: 4px;
+    font-family: initial; font-weight: 500; letter-spacing: 0;
+    box-shadow: none;
+  }
+  .btn--old:hover { background: #a53d1e; }
+
+  /* ── A · 墨青实心 (与 hero「开始对话」同款) ── */
+  .btn--a {
+    background: var(--teal); color: var(--card);
+    border: 1.5px solid var(--teal);
+    box-shadow: 3px 3px 0 var(--shadow-ink);
+  }
+  .btn--a:hover {
+    background: var(--teal-soft); border-color: var(--teal-soft);
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--shadow-ink);
+  }
+  .btn--a:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shadow-ink); }
+
+  /* ── B · 墨线描边 (与「任务管理 →」同族, 悬停反白) ── */
+  .btn--b {
+    background: transparent; color: var(--ink);
+    border: 1.5px solid var(--ink);
+  }
+  .btn--b:hover { background: var(--ink); color: var(--card); }
+  .btn--b:active { opacity: .85; }
+
+  /* ── C · 墨黑实心 (印章实底, 页面最强主操作) ── */
+  .btn--c {
+    background: var(--ink); color: var(--paper);
+    border: 1.5px solid var(--ink);
+    box-shadow: 3px 3px 0 var(--shadow-ink);
+  }
+  .btn--c:hover { background: #24363f; border-color: #24363f; transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--shadow-ink); }
+  .btn--c:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shadow-ink); }
+
+  /* ── D · 珊瑚印章 (墨线风珊瑚色, 呼应逾期警示) ── */
+  .btn--d {
+    background: var(--coral); color: #fff;
+    border: 1.5px solid var(--coral);
+    box-shadow: 3px 3px 0 var(--shadow-ink);
+  }
+  .btn--d:hover { background: #d9543a; border-color: #d9543a; transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--shadow-ink); }
+  .btn--d:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--shadow-ink); }
+
+  .hover-hint {
+    margin-top: 10px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+    color: var(--muted);
+  }
+  .hover-hint::before { content: "→ "; color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="page-head">
+    <span class="tag">CREATE-TASK BUTTON · UI CANDIDATES</span>
+    <h1>「+ 创建任务」按钮 · 墨线风候选方案</h1>
+    <p>场景为首页仪表盘内嵌任务管理的筛选条。全部方案使用档案墨线风变量（暗色主题自动适配）。把鼠标放到按钮上可看悬停/按下交互。</p>
+  </header>
+
+  <section class="scheme">
+    <div class="scheme-head">
+      <span class="no">现状</span>
+      <h2>旧色板 #B84523</h2>
+      <span class="desc">旧暖橙珊瑚色系压暗版 · Element Plus 默认样式，与新仪表盘割裂</span>
+    </div>
+    <div class="ctx">
+      <div class="fake-select">任务状态</div>
+      <div class="fake-select">负责人</div>
+      <button class="btn btn--old"><span class="plus">＋</span>创建任务</button>
+    </div>
+  </section>
+
+  <section class="scheme">
+    <div class="scheme-head">
+      <span class="no">方案 A</span>
+      <h2>墨青实心</h2>
+      <span class="desc">与卷首「开始对话」同款 · <b>一致性最高</b>，硬投影 + 衬线字，最稳</span>
+    </div>
+    <div class="ctx">
+      <div class="fake-select">任务状态</div>
+      <div class="fake-select">负责人</div>
+      <button class="btn btn--a"><span class="plus">＋</span>创建任务</button>
+    </div>
+    <div class="hover-hint">悬停提亮为浅墨青并微微抬起；按下投影收回</div>
+  </section>
+
+  <section class="scheme">
+    <div class="scheme-head">
+      <span class="no">方案 B</span>
+      <h2>墨线描边</h2>
+      <span class="desc">与「任务管理 →」同族 · 纸面墨线，<b>最克制</b>，悬停墨底反白</span>
+    </div>
+    <div class="ctx">
+      <div class="fake-select">任务状态</div>
+      <div class="fake-select">负责人</div>
+      <button class="btn btn--b"><span class="plus">＋</span>创建任务</button>
+    </div>
+    <div class="hover-hint">悬停墨色填充反白，像盖章落下</div>
+  </section>
+
+  <section class="scheme">
+    <div class="scheme-head">
+      <span class="no">方案 C</span>
+      <h2>墨黑实心</h2>
+      <span class="desc">墨色印章实底 · <b>主次最强</b>，在筛选条里一眼锁定，不带彩色</span>
+    </div>
+    <div class="ctx">
+      <div class="fake-select">任务状态</div>
+      <div class="fake-select">负责人</div>
+      <button class="btn btn--c"><span class="plus">＋</span>创建任务</button>
+    </div>
+    <div class="hover-hint">悬停微抬 + 墨色变浅；按下投影收回</div>
+  </section>
+
+  <section class="scheme">
+    <div class="scheme-head">
+      <span class="no">方案 D</span>
+      <h2>珊瑚印章</h2>
+      <span class="desc">墨线风自己的珊瑚色 #EF7256 · <b>保留暖色点缀</b>，但已换新色板（非旧 #B84523）</span>
+    </div>
+    <div class="ctx">
+      <div class="fake-select">任务状态</div>
+      <div class="fake-select">负责人</div>
+      <button class="btn btn--d"><span class="plus">＋</span>创建任务</button>
+    </div>
+    <div class="hover-hint">悬停珊瑚加深并抬起；与逾期警示色呼应，页面有且仅此一处暖色</div>
+  </section>
+</div>
+</body>
+</html>
