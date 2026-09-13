@@ -27,12 +27,14 @@ import StatusBar from './StatusBar.vue'
 }
 .shell-body {
   display: grid;
-  grid-template-columns: var(--wb-sidebar-width) 1fr;
+  grid-template-columns: 56px 1fr;
   overflow: hidden;
 }
 .shell-main {
-  overflow-y: auto;
-  padding: var(--space-6);
+  overflow: hidden; /* 内部模块自行滚动（会话列表/消息流各自滚动） */
   background: var(--color-bg-page);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 </style>

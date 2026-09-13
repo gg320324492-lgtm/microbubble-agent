@@ -10,6 +10,12 @@ export const IPC = {
   AUTH_LOGOUT: 'auth:logout',
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
+  CHAT_SESSIONS_LIST: 'chat:sessions:list',
+  CHAT_SESSION_CREATE: 'chat:session:create',
+  CHAT_SESSION_RENAME: 'chat:session:rename',
+  CHAT_SESSION_DELETE: 'chat:session:delete',
+  CHAT_MESSAGES_LIST: 'chat:messages:list',
+  CHAT_SEND: 'chat:send',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
   WINDOW_CLOSE: 'window:close'

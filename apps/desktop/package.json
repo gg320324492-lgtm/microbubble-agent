@@ -6,11 +6,11 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "pack": "electron-vite build && electron-builder --dir",
-    "dist": "electron-vite build && electron-builder --win nsis"
+    "pack": "npm run build && electron-builder --dir -c.npmRebuild=false",
+    "dist": "npm run build && electron-builder --win nsis -c.npmRebuild=false"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
