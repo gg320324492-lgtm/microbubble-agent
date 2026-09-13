@@ -3,6 +3,11 @@ appId: cn.mnb-lab.workbench
 productName: MicroBubbleWorkbench
 directories:
   output: release
+  buildResources: build
+icon: build/icon.ico
+extraResources:
+  - from: resources
+    to: resources
 files:
   - out/**
   - package.json

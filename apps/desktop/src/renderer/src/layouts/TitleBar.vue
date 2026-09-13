@@ -2,6 +2,7 @@
 // 自绘标题栏 — 整条可拖拽，右侧窗口控制按钮；双击最大化
 import { APP_NAME } from '@shared/constants'
 import { useAuthStore } from '../stores/auth'
+import logoUrl from '../assets/logo.png'
 
 const auth = useAuthStore()
 const api = window.api // 模板作用域内不可直接访问 window，桥接引用
@@ -10,7 +11,7 @@ const api = window.api // 模板作用域内不可直接访问 window，桥接�
 <template>
   <header class="titlebar" @dblclick="api.window.toggleMaximize()">
     <div class="titlebar-brand">
-      <span class="titlebar-dot" aria-hidden="true"></span>
+      <img class="titlebar-logo" :src="logoUrl" alt="微纳米气泡课题组" />
       <span class="titlebar-name">{{ APP_NAME }}</span>
       <span v-if="auth.user" class="titlebar-user">· {{ auth.user.displayName || auth.user.username }}</span>
     </div>
@@ -45,12 +46,11 @@ const api = window.api // 模板作用域内不可直接访问 window，桥接�
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }
-.titlebar-dot {
-  width: 9px;
-  height: 9px;
+.titlebar-logo {
+  width: 20px;
+  height: 20px;
   border-radius: var(--radius-full);
-  background: var(--gradient-welcome-hero);
-  box-shadow: 0 0 8px rgba(255, 122, 92, 0.6);
+  flex-shrink: 0;
 }
 .titlebar-user {
   color: var(--wb-panel-text-dim);

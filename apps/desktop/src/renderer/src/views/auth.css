@@ -53,9 +53,13 @@
   letter-spacing: 0.06em;
   color: rgba(var(--color-primary-rgb), 1);
 }
-.auth-brand-mark {
-  font-size: 20px;
-  line-height: 1;
+.auth-brand-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  background: #fff; /* 组徽蓝底圆形自带, 白底兜底防透明边缘发暗 */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+  flex-shrink: 0;
 }
 .auth-kicker {
   margin-top: 40px;
