@@ -1,7 +1,19 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
-## 当前状态 (2026-09-12 企业微信下线 + 测试库隔离 + 部署自愈, 已部署)
+## 当前状态 (2026-09-13 桌面端存量删除待重做; 09-12 企业微信下线 + 测试库隔离 + 部署自愈, 已部署)
+
+**桌面端推倒重做 (2026-09-13, 用户拍板"太乱, 一步步重做")**:
+存量全删 — commit `034459967`: `desktop/` Electron 工程 (ScientificResearchOS
+0.1.0, 147 commits) + `scripts/desktop_migration` + `tests/desktop_migration`
++ `docs/desktop-conversion/|desktop-migration/` + 9-08 两份方案文档 (UI 原生化
+N1-N6 / FileAgentLoop S0-S5)。**归档 tag `archive/desktop-before-redo-20260913`**,
+旧实现与旧方案随时可查。本机已同步清理: 两份已装应用 (C: Aug-28 构建 186MB /
+D: 旧版) + Start Menu/桌面快捷方式 + `%APPDATA%\microbubble-desktop` 用户数据
+(含迁移快照 scientific.db, 源头云端 PG 可再生) 全部删除。**已知断点教训**
+(重做时必须解决): 0.1.0 登录表单走的是 Phase-1 云端 `/auth/login` 通道,
+main 进程写好的本地账号体系 (product.auth, scrypt) 没接线 — "本地科研账号"
+文案与实际行为不符。当前桌面端 = 零代码起点, 重做方案与用户逐步商定。
 
 **企业微信整体下线** (3 commits `bbe0f900e`/`f5eab0738`/`5365b153a` + 修复 `9bf09f01b`):
 删除 `app/wechat/` 全包 8 文件 + 回调路由 + celery 主动检查 + members 6 个微信列
