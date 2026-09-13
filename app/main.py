@@ -237,7 +237,7 @@ async def lifespan(app: FastAPI):
     # CI test app (qa-bench-ci.yml) 由 scripts/init_db.py 单独 docker exec 跑 create_all + seed,
     # lifespan 此处只阻塞 /health 端点 ~30s+ 没有任何收益. 见文档 memory/w67-...-init-db-fast-2026-07-23.md
     if SKIP_DB_SETUP:
-        print("[SKIP_DB_SETUP] 跳过 lifespan 内 DB 启动操作 (create_all / seed_formula_library / reminder sync)")
+        print("[SKIP_DB_SETUP] 跳过 lifespan 内 DB 启动操作 (create_all / reminder sync)")
     else:
         # 先尝试安装 pgvector 扩展（单独事务，失败不影响后续操作）
         try:
@@ -291,15 +291,6 @@ async def lifespan(app: FastAPI):
                     print("[seq-sync] 所有 sequence 已对齐")
         except Exception as e:
             print(f"[seq-sync] 漂移检测失败（不影响启动）: {e}")
-
-        # 初始化内置公式库（幂等）
-        try:
-            from app.core.database import async_session
-            from app.seed.seeder import seed_formula_library
-            async with async_session() as db:
-                await seed_formula_library(db)
-        except Exception as e:
-            print(f"内置公式库初始化失败（可忽略）: {e}")
 
         # W2 +N 2026-08-04: 默认成员 seed (修复 0 用户事故)
         # 按 username 幂等, 既存用户不动, 不会阻塞启动

@@ -55,7 +55,7 @@
  * - 复用 ChatMessageActions / FeedbackButtons 风格 (toolbar + tag button)
  * - 智能显示逻辑:
  *   - 🕸️ 知识图谱: 有 entity/keyword hint 或有 explore_knowledge_graph tool 时显示
- *   - 📐 公式: msg.content 含 LaTeX (`$...$` / `$$...$$`) 或调用 list_formulas 时显示
+ *   - 📐 公式: msg.content 含 LaTeX (`$...$` / `$$...$$`) 时显示
  *   - 💡 假设: 调用 list_hypotheses tool 时显示
  * - 通用 fallback: 3 个按钮都显示 (无任何信号时)
  * - 仅在 assistant 完成态 (state='idle' && content) 时父组件挂载
@@ -89,7 +89,7 @@ const props = withDefaults(
     intent?: { category?: string; confidence?: number; keywords?: string[] } | null
     /** 消息内容 (用于检测 LaTeX) */
     content?: string
-    /** 工具调用 trace (用于检测 list_formulas / list_hypotheses / explore_knowledge_graph) */
+    /** 工具调用 trace (用于检测 list_hypotheses / explore_knowledge_graph) */
     toolTrace?: Array<{ name?: string; toolName?: string; type?: string }>
     /** 是否强制显示所有按钮 (覆盖智能判断) */
     forceAll?: boolean
@@ -127,7 +127,6 @@ const toolNames = computed(() => {
 })
 
 const calledGraphTool = computed(() => toolNames.value.has('explore_knowledge_graph'))
-const calledFormulaTool = computed(() => toolNames.value.has('list_formulas'))
 const calledHypothesisTool = computed(() => toolNames.value.has('list_hypotheses'))
 
 const showGraph = computed(() => {
@@ -137,7 +136,7 @@ const showGraph = computed(() => {
 
 const showFormula = computed(() => {
   if (props.forceAll) return true
-  return hasLatexContent.value || calledFormulaTool.value
+  return hasLatexContent.value
 })
 
 const showHypothesis = computed(() => {

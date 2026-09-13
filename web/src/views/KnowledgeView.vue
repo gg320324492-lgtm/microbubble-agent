@@ -67,7 +67,6 @@
         <el-tag type="info" size="small" effect="plain">📚 知识 {{ total }}</el-tag>
         <el-tag type="success" size="small" effect="plain">🔗 实体 {{ entityTotal }}</el-tag>
         <el-tag type="warning" size="small" effect="plain">🧪 假设 {{ hypothesisTotal }}</el-tag>
-        <el-tag type="primary" size="small" effect="plain">📐 公式 {{ formulaTotal }}</el-tag>
         <el-tag type="info" size="small" effect="plain">📁 分类 {{ categories.length }}</el-tag>
         <!-- v2 PR3: 跳转 chip 到网盘 -->
         <el-tag
@@ -117,19 +116,6 @@
         :hypothesis-total="hypothesisTotal"
         :hypothesis-page="hypothesisPage"
         @refresh="handleHypothesisRefresh"
-      />
-    </div>
-
-    <!-- ===== 公式计算 Tab (v77 P2.6-E.3 拆分到 KnowledgeFormulaTab.vue) ===== -->
-    <div v-show="activeTab === 'formulas'" role="tabpanel"
-      :aria-labelledby="`tab-strip-formulas`" class="tab-panel">
-      <KnowledgeFormulaTab
-        ref="formulaTabRef"
-        :formula-list="formulaList"
-        :formula-total="formulaTotal"
-        :formula-page="formulaPage"
-        :formula-categories="formulaCategories"
-        @refresh="handleFormulaRefresh"
       />
     </div>
 
@@ -189,7 +175,6 @@
  *   - KnowledgeDashboard (已存在)
  *   - KnowledgeEntityTab (v77 P2.6-E.3 新增)
  *   - KnowledgeHypothesisTab (v77 P2.6-E.3 新增)
- *   - KnowledgeFormulaTab (v77 P2.6-E.3 新增)
  * 1 个 dialog 抽出:
  *   - KnowledgeCreateDialog (v77 P2.6-E.3 新增)
  */
@@ -197,7 +182,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { Document, Share, MagicStick, Histogram } from '@element-plus/icons-vue'
+import { Document, Share, MagicStick } from '@element-plus/icons-vue'
 import { useKnowledge } from '@/composables/useKnowledge'
 import { useSearchAnalyticsStore } from '@/stores/useSearchAnalytics'
 import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4
@@ -206,7 +191,6 @@ import KnowledgeToolbar from '@/components/knowledge/KnowledgeToolbar.vue'
 import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
 import KnowledgeEntityTab from '@/components/knowledge/KnowledgeEntityTab.vue'
 import KnowledgeHypothesisTab from '@/components/knowledge/KnowledgeHypothesisTab.vue'
-import KnowledgeFormulaTab from '@/components/knowledge/KnowledgeFormulaTab.vue'
 import KnowledgeCreateDialog from '@/components/knowledge/KnowledgeCreateDialog.vue'
 import KnowledgeQADialog from './knowledge/KnowledgeQADialog.vue'
 import KnowledgeUploadDialog from './knowledge/KnowledgeUploadDialog.vue'
@@ -217,10 +201,8 @@ const {
   statsData, categories, hotTags, loadError,  // 2026-06-30
   entityList, entityTotal, entityPage, entityGraphData,
   hypothesisList, hypothesisTotal, hypothesisPage,
-  formulaList, formulaTotal, formulaPage, formulaCategories,
   fetchKnowledge, fetchCategories, fetchStats, deleteKnowledge: deleteKnowledgeApi,
-  searchEntities, fetchEntityGraph, fetchHypotheses,
-  fetchFormulas, fetchFormulaCategories
+  searchEntities, fetchEntityGraph, fetchHypotheses
 } = useKnowledge()
 
 const isMobile = ref(window.innerWidth <= 768)
@@ -235,7 +217,7 @@ const route = useRoute()
 const router = useRouter()
 
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas']
+const VALID_TABS = ['knowledge', 'entities', 'hypotheses']
 if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
   activeTab.value = String(route.query.tab)
 }
@@ -245,7 +227,6 @@ const tabItems = [
   { key: 'knowledge',  label: '知识库',       icon: Document },
   { key: 'entities',   label: '实体图谱',     icon: Share },
   { key: 'hypotheses', label: '科研假设',     icon: MagicStick },
-  { key: 'formulas',   label: '公式计算',     icon: Histogram },
 ]
 
 const searchAnalytics = useSearchAnalyticsStore()
@@ -282,7 +263,6 @@ const entityDetail = ref(null)
 // 子组件 refs（v77 P2.6-E.3: 用于 watch activeTab 时主动 fetch）
 const entityTabRef = ref(null)
 const hypothesisTabRef = ref(null)
-const formulaTabRef = ref(null)
 
 // ── 搜索和筛选 ──
 // W99 N-6 改进 (1): KnowledgeView 搜索结果点击埋点接通 + 改进 (3) top-1 高亮
@@ -422,13 +402,6 @@ const handleHypothesisRefresh = (payload) => {
   }
 }
 
-const handleFormulaRefresh = (payload) => {
-  if (payload.list !== undefined) {
-    formulaList.value = payload.list
-    formulaTotal.value = payload.total
-  }
-}
-
 const showEntityDetail = async (id) => {
   try {
     const res = await axios.get(`/api/v1/knowledge/entities/${id}`)
@@ -462,10 +435,6 @@ watch(activeTab, (tab) => {
   if (tab === 'hypotheses') {
     hypothesisTabRef.value?.fetchHypotheses()
   }
-  if (tab === 'formulas') {
-    formulaTabRef.value?.fetchFormulas()
-    fetchFormulaCategories()
-  }
   // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
   router.replace({ query: { ...route.query, tab } })
 })
@@ -495,12 +464,9 @@ onMounted(() => {
   fetchKnowledge()
   fetchStats()
   fetchCategories()
-  // 2026-06-30 修复 D: 健康度摘要的 entity/hyp/formula total 同步。
-  // formulaList 同时驱动公式 tab，不能只取 page_size=1，否则直达 ?tab=formulas 时
-  // activeTab watcher 不会补跑，页面会把 API 的 36 条错误渲染成仅 1 条。
+  // 2026-06-30 修复 D: 健康度摘要的 entity/hyp total 同步。
   searchEntities({ page: 1, page_size: 1 })
   fetchHypotheses({ page: 1, page_size: 1 })
-  fetchFormulas({ page: 1, page_size: 20 })
 
   window.addEventListener('resize', handleResize)
 })

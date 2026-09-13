@@ -233,51 +233,48 @@ def _build_plan_step_input(tool_name: str, intent, messages: list[dict]) -> dict
     return {}
 
 
-# 概念问 4 域 → 4 tool 硬下限 (#042 - 2026-06-28 chat agent 架构级集成)
-# 对齐 prompts.py _CROSS_DOMAIN_SYNTHESIS_SECTION 章节顺序 (知识 → 公式 → 假设 → 成员)
-# 与 #086 prompt 软规则协同: prompt 让 LLM 写"4 域综合", 代码保证 context 全
+# 概念问 3 域 → 3 tool 硬下限 (#042 - 2026-06-28 chat agent 架构级集成; 2026-09-13 公式域随公式计算功能移除)
+# 对齐 prompts.py _CROSS_DOMAIN_SYNTHESIS_SECTION 章节顺序 (知识 → 假设 → 成员)
+# 与 #086 prompt 软规则协同: prompt 让 LLM 写"3 域综合", 代码保证 context 全
 CONCEPT_DOMAIN_TOOLS: tuple[str, ...] = (
     "search_knowledge",   # 知识域
-    "list_formulas",      # 公式域
     "list_hypotheses",    # 假设域
     "query_members",      # 成员域
 )
 
 
 def _expand_concept_to_four_domain(planned: list[str]) -> list[str]:
-    """explain_concept 4 域代码强制 fan-out (#042)
+    """explain_concept 域代码强制 fan-out (#042; 2026-09-13 公式域移除后为 3 域, 函数名保留历史)
 
     规则:
-      1. 保留 planned 原顺序 + 原 tool (不删 LLM 已 planned 的, 包括非 4 域 tool)
-      2. 追加缺失的 4 域 tool, 按 CONCEPT_DOMAIN_TOOLS 顺序补
-      3. P2-3 fix (2026-07-08): 截断时**优先保留 4 域 tool**, 非 4 域被砍.
+      1. 保留 planned 原顺序 + 原 tool (不删 LLM 已 planned 的, 包括非域 tool)
+      2. 追加缺失的域 tool, 按 CONCEPT_DOMAIN_TOOLS 顺序补
+      3. P2-3 fix (2026-07-08): 截断时**优先保留域 tool**, 非域被砍.
          之前实现: 简单 slice [:MAX], 当 LLM planned 6 个工具时按原顺序砍第 6 个,
-         可能砍掉 query_members (4 域) 而保留 LLM 最后选的 get_meeting_transcript.
-         修复: 4 域工具永远在结果前部, 截断时优先保留.
+         可能砍掉 query_members (域工具) 而保留 LLM 最后选的 get_meeting_transcript.
+         修复: 域工具永远在结果前部, 截断时优先保留.
       4. 返回新 list (不修改原参数)
 
     示例:
       planned=['search_knowledge']
-        → 4 域前移: [search_k, list_f, list_h, query_m] = 4
+        → 域前移: [search_k, list_h, query_m] = 3
       planned=['search_knowledge', 'get_meeting_transcript']
-        → 4 域前移: [list_f, list_h, query_m, search_k, get_meeting_transcript] = 5 (get_meeting 在尾)
-      planned=['search_knowledge', 'list_formulas', 'query_members']
-        → 4 域前移: [list_f, list_h, query_m, search_k] = 4 (search_k 排尾)
-      planned=['a', 'b', 'c', 'd', 'e', 'f'] (6 个非 4 域)
-        → 4 域前移: [search_k, list_f, list_h, query_m, a] = 5 (b/c/d/e/f 砍, 4 域全保)
+        → 域前移: [list_h, query_m, search_k, get_meeting_transcript] = 4 (get_meeting 在尾)
+      planned=['a', 'b', 'c', 'd', 'e', 'f'] (6 个非域)
+        → 域前移: [search_k, list_h, query_m, a] = 4 (b/c/d/e/f 砍, 域全保)
 
     不变量:
       - len(result) ≤ AGENT_PLAN_STEP_MAX
-      - **4 域 tool 全部保留** (除非 LLM 已 planned 5+ 个 4 域 tool)
-      - 原 planned 中非 4 域 tool 优先被砍 (4 域优先)
+      - **域 tool 全部保留** (除非 LLM 已 planned 5+ 个域 tool)
+      - 原 planned 中非域 tool 优先被砍 (域优先)
     """
     planned_set = set(planned)
     expanded = list(planned)
     for tool in CONCEPT_DOMAIN_TOOLS:
         if tool not in planned_set:
             expanded.append(tool)
-    # P2-3 fix: 把 4 域工具移到前部, LLM planned 的非 4 域保留在尾部 (按 LLM 顺序).
-    # 截断 [:MAX] 时优先保留前部 (4 域), 尾部非 4 域被砍.
+    # P2-3 fix: 把域工具移到前部, LLM planned 的非域保留在尾部 (按 LLM 顺序).
+    # 截断 [:MAX] 时优先保留前部 (域), 尾部非域被砍.
     four_domain = [t for t in expanded if t in CONCEPT_DOMAIN_TOOLS]
     others = [t for t in expanded if t not in CONCEPT_DOMAIN_TOOLS]
     return (four_domain + others)[: settings.AGENT_PLAN_STEP_MAX]

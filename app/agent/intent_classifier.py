@@ -99,14 +99,13 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 7 类之
   (2026-09-09 修正: 老清单含 list_meetings/get_task_detail/list_projects/get_formula/get_hypothesis
    5 个不存在的名字 → Phase 0 强制调度 ToolNotFound 跳过, data_query 场景空手进综合):
   检索类: search_knowledge / web_search
-  公式类: list_formulas
   假设类: list_hypotheses
   成员类: query_members / get_member_profile
   任务类: query_tasks / get_task_stats
   会议类: query_meetings / get_meeting_detail
   项目类: query_projects / get_project_summary
 - search_info → 必填 ["search_knowledge"] 或 ["web_search"]
-- explain_concept → 必填 ["search_knowledge", "list_formulas"] 或 ["search_knowledge", "list_hypotheses"]
+- explain_concept → 必填 ["search_knowledge", "list_hypotheses"] 或 ["search_knowledge", "query_members"]
 - **team_overview → 必填 ["query_members", "query_projects", "search_knowledge"]**（2026-07-15 #P2: 三件套, 必须并行 dispatch; 2026-09-09 工具名修正）
 - casual_chat → 必填 []（**严禁**填工具）
 - follow_up → 必填 []（与 casual_chat 同, 严禁填工具）

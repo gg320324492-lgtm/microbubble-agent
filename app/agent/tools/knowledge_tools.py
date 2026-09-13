@@ -49,7 +49,7 @@ def _filter_result_for_llm(doc: dict) -> dict:
     模仿训练数据 tool_use 协议输出 fake XML <function=...>。剥除内部字段后 LLM 看到
     干净的 id+title+content，不会触发 fake tool_call 模式。
 
-    其他工具 (list_formulas / list_hypotheses / query_members) 不受影响。
+    其他工具 (list_hypotheses / query_members) 不受影响。
     """
     return {k: v for k, v in doc.items() if k not in INTERNAL_RESULT_FIELDS}
 
