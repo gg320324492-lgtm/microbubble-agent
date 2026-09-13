@@ -1,0 +1,11 @@
+{
+  "name": "@mb/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "设计令牌单一来源 — 源自 web/src/assets/variables.css（2026-09-14 快照）。web 端接入在 N6。",
+  "main": "variables.css",
+  "exports": {
+    ".": "./variables.css",
+    "./variables.css": "./variables.css"
+  }
+}

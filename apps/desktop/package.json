@@ -1,0 +1,36 @@
+{
+  "name": "@mb/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "小气 · 科研工作台 — Electron 桌面端（M0 骨架）",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "pack": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@mb/design-tokens": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "element-plus": "^2.9.3",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "2.4.6",
+    "electron": "^32.2.7",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "jsdom": "^30.0.1",
+    "typescript": "~5.6.3",
+    "vitest": "^2.1.9",
+    "vue-tsc": "^2.1.10"
+  }
+}

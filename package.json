@@ -1,0 +1,13 @@
+{
+  "name": "microbubble-agent",
+  "version": "0.0.0",
+  "private": true,
+  "description": "小气 · 微纳米气泡课题组智能Agent —— monorepo 根（web/ 仍为独立 npm 工程，N6 再接入）",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "desktop:dev": "pnpm --filter @mb/desktop dev",
+    "desktop:build": "pnpm --filter @mb/desktop build",
+    "desktop:typecheck": "pnpm --filter @mb/desktop typecheck",
+    "desktop:test": "pnpm --filter @mb/desktop test"
+  }
+}
