@@ -2,6 +2,7 @@
 // M1-A 阶段 send() 为本地回声应答（断网可测全链路）；M1-B 接模型网关后替换 responder。
 import { randomBytes } from 'node:crypto'
 import type { SqlDatabase } from '../db/adapters'
+import type { ChatTurn } from './model-gateway.service'
 
 export interface SessionRow {
   id: string
@@ -64,10 +65,16 @@ export class ChatService {
 
   /**
    * 发送一条用户消息并生成回复。
-   * M1-A: 无模型配置 → 本地回声（含会话统计），保证离线可验收全链路；
-   * M1-B: 在此处接入模型网关流式输出。
+   * 传 respond（模型网关流式回调）时走真实模型，否则本地回声（断网可验收全链路）。
+   * 流式期间 assistant 消息先以空内容落库，增量经 onDelta 推给 renderer，完成后回写全文。
    */
-  send(userId: string, sessionId: string, content: string): { userMessage: MessageRow; assistantMessage: MessageRow } {
+  async send(
+    userId: string,
+    sessionId: string,
+    content: string,
+    respond?: (turns: ChatTurn[]) => Promise<string>,
+    onDelta?: (assistantMessageId: string, delta: string) => void
+  ): Promise<{ userMessage: MessageRow; assistantMessage: MessageRow }> {
     const text = content.trim()
     if (!text) throw new Error('消息不能为空')
     if (text.length > 8000) throw new Error('消息过长（上限 8000 字符）')
@@ -84,20 +91,42 @@ export class ChatService {
       this.db.prepare('UPDATE chat_sessions SET title = ? WHERE id = ?').run(text.slice(0, 24), sessionId)
     }
 
-    const reply = this.echoResponder(sessionId, text)
     const assistantMessage: MessageRow = {
       id: genId('m'),
       session_id: sessionId,
       role: 'assistant',
-      content: reply,
+      content: '',
       created_at: Date.now()
     }
     this.db
       .prepare('INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(assistantMessage.id, sessionId, 'assistant', assistantMessage.content, assistantMessage.created_at)
+      .run(assistantMessage.id, sessionId, 'assistant', '', assistantMessage.created_at)
 
+    try {
+      if (respond) {
+        const turns = this.buildTurns(sessionId, text)
+        assistantMessage.content = await respond(turns)
+      } else {
+        assistantMessage.content = this.echoResponder(sessionId, text)
+      }
+    } catch (e) {
+      assistantMessage.content = `⚠️ 生成失败：${e instanceof Error ? e.message : '未知错误'}`
+    }
+    this.db.prepare('UPDATE chat_messages SET content = ? WHERE id = ?').run(assistantMessage.content, assistantMessage.id)
     this.db.prepare('UPDATE chat_sessions SET updated_at = ? WHERE id = ?').run(Date.now(), sessionId)
+
+    void onDelta
     return { userMessage, assistantMessage }
+  }
+
+  /** 组装模型上下文：最近 20 条历史 + 本条新消息 */
+  private buildTurns(sessionId: string, newText: string): ChatTurn[] {
+    const history = this.db
+      .prepare("SELECT role, content FROM chat_messages WHERE session_id = ? AND role IN ('user','assistant') ORDER BY rowid DESC LIMIT 19")
+      .all(sessionId) as { role: 'user' | 'assistant'; content: string }[]
+    const turns: ChatTurn[] = history.reverse().map((m) => ({ role: m.role, content: m.content }))
+    turns.push({ role: 'user', content: newText })
+    return turns
   }
 
   private countMessages(sessionId: string): number {
@@ -115,11 +144,11 @@ export class ChatService {
       .prepare('SELECT COUNT(*) AS msgs FROM chat_messages WHERE session_id = ?')
       .get(sessionId) as { msgs: number }
     return [
-      `（本地回声 · 模型网关 M1-B 接入）已收到你的消息：`,
+      `（本地回声 · 尚未配置模型服务）已收到你的消息：`,
       ``,
       `> ${text}`,
       ``,
-      `本会话消息数：${stats.msgs}。这条回复由本地生成——断网状态下完整链路可用：会话持久化在 SQLite，杀掉进程重开依然在。`
+      `本会话消息数：${stats.msgs}。到「设置 → 模型服务」配置 API Key 后即为真实模型对话；这条回复由本地生成，断网可完整验收。`
     ].join('\n')
   }
 }

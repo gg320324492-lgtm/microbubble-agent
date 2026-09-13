@@ -3,6 +3,7 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { registerIpc } from './ipc'
 import { openDatabase } from './db'
+import { IPC } from '@shared/ipc-channels'
 import { APP_NAME, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from '@shared/constants'
 
 let mainWindow: BrowserWindow | null = null
@@ -29,6 +30,10 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+  // 最大化/还原状态推送给渲染层（标题栏三键图标切换）
+  const pushState = (): void => mainWindow?.webContents.send(IPC.WINDOW_STATE_EVENT, mainWindow?.isMaximized() ?? false)
+  mainWindow.on('maximize', pushState)
+  mainWindow.on('unmaximize', pushState)
   mainWindow.on('closed', () => {
     mainWindow = null
   })

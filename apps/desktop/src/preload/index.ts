@@ -29,7 +29,20 @@ const api = {
     sessionDelete: (id: string): Promise<void> => invoke(IPC.CHAT_SESSION_DELETE, { id }),
     messagesList: (sessionId: string): Promise<ChatMessage[]> => invoke(IPC.CHAT_MESSAGES_LIST, { sessionId }),
     send: (sessionId: string, content: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> =>
-      invoke(IPC.CHAT_SEND, { sessionId, content })
+      invoke(IPC.CHAT_SEND, { sessionId, content }),
+    abort: (sessionId: string): Promise<void> => invoke(IPC.CHAT_ABORT, { sessionId }),
+    onStreamEvent: (cb: (e: unknown) => void): (() => void) => {
+      const listener = (_e: unknown, payload: unknown): void => cb(payload as never)
+      ipcRenderer.on(IPC.CHAT_STREAM_EVENT, listener as never)
+      return () => ipcRenderer.removeListener(IPC.CHAT_STREAM_EVENT, listener as never)
+    }
+  },
+  model: {
+    list: () => invoke(IPC.MODEL_LIST),
+    save: (p: unknown) => invoke(IPC.MODEL_SAVE, p),
+    remove: (id: string) => invoke(IPC.MODEL_DELETE, { id }),
+    setDefault: (id: string) => invoke(IPC.MODEL_SET_DEFAULT, { id }),
+    test: (p: unknown) => invoke(IPC.MODEL_TEST, p)
   },
   settings: {
     get: (key: string): Promise<unknown> => invoke(IPC.SETTINGS_GET, { key }),
@@ -38,7 +51,13 @@ const api = {
   window: {
     minimize: (): Promise<void> => invoke(IPC.WINDOW_MINIMIZE),
     toggleMaximize: (): Promise<void> => invoke(IPC.WINDOW_TOGGLE_MAXIMIZE),
-    close: (): Promise<void> => invoke(IPC.WINDOW_CLOSE)
+    close: (): Promise<void> => invoke(IPC.WINDOW_CLOSE),
+    isMaximized: (): Promise<boolean> => invoke(IPC.WINDOW_IS_MAXIMIZED),
+    onStateChange: (cb: (maximized: boolean) => void): (() => void) => {
+      const listener = (_e: unknown, value: unknown): void => cb(Boolean(value))
+      ipcRenderer.on(IPC.WINDOW_STATE_EVENT, listener as never)
+      return () => ipcRenderer.removeListener(IPC.WINDOW_STATE_EVENT, listener as never)
+    }
   }
 } as const
 

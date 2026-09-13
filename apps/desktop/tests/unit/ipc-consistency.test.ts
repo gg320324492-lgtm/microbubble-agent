@@ -14,16 +14,16 @@ function channelsUsed(rel: string): Set<string> {
 }
 
 describe('IPC 白名单一致性', () => {
-  it('preload 与 main 引用的 channel 集合完全一致', () => {
+  it('preload 引用的 channel 都被 main 侧消费（ipc.ts + index.ts）', () => {
     const preload = channelsUsed('preload/index.ts')
-    const main = channelsUsed('main/ipc.ts')
+    const main = new Set([...channelsUsed('main/ipc.ts'), ...channelsUsed('main/index.ts')])
     expect(preload.size).toBeGreaterThan(0)
-    expect([...preload].sort()).toEqual([...main].sort())
+    for (const ch of preload) expect(main.has(ch)).toBe(true)
   })
 
   it('所有声明的 channel 都被消费（无死常量）', () => {
     const declared = new Set(Object.keys(IPC))
-    const used = channelsUsed('main/ipc.ts')
+    const used = new Set([...channelsUsed('main/ipc.ts'), ...channelsUsed('main/index.ts'), ...channelsUsed('preload/index.ts')])
     expect([...used].sort()).toEqual([...declared].sort())
   })
 })

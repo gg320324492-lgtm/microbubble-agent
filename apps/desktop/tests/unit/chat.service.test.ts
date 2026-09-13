@@ -46,7 +46,7 @@ describe('ChatService.send（本地回声）', () => {
     const { chat } = makeChat()
     const s = chat.createSession('user-a')
     await new Promise((r) => setTimeout(r, 5)) // 保证 updated_at 时间差
-    const { userMessage, assistantMessage } = chat.send('user-a', s.id, '什么是臭氧微纳米气泡？')
+    const { userMessage, assistantMessage } = await chat.send('user-a', s.id, '什么是臭氧微纳米气泡？')
 
     expect(userMessage.role).toBe('user')
     expect(userMessage.content).toBe('什么是臭氧微纳米气泡？')
@@ -61,19 +61,19 @@ describe('ChatService.send（本地回声）', () => {
     expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant'])
   })
 
-  it('空消息/超长消息拒绝，他人会话不可发送', () => {
+  it('空消息/超长消息拒绝，他人会话不可发送', async () => {
     const { chat } = makeChat()
     const s = chat.createSession('user-a')
-    expect(() => chat.send('user-a', s.id, '   ')).toThrow('不能为空')
-    expect(() => chat.send('user-a', s.id, 'x'.repeat(8001))).toThrow('过长')
-    expect(() => chat.send('user-b', s.id, 'hi')).toThrow('会话不存在')
+    await expect(chat.send('user-a', s.id, '   ')).rejects.toThrow('不能为空')
+    await expect(chat.send('user-a', s.id, 'x'.repeat(8001))).rejects.toThrow('过长')
+    await expect(chat.send('user-b', s.id, 'hi')).rejects.toThrow('会话不存在')
   })
 
-  it('多轮消息按时间升序排列', () => {
+  it('多轮消息按时间升序排列', async () => {
     const { chat } = makeChat()
     const s = chat.createSession('user-a')
-    chat.send('user-a', s.id, '第一问')
-    chat.send('user-a', s.id, '第二问')
+    await chat.send('user-a', s.id, '第一问')
+    await chat.send('user-a', s.id, '第二问')
     const msgs = chat.listMessages('user-a', s.id)
     expect(msgs).toHaveLength(4) // 2 轮 × (user + assistant)
     expect(msgs.filter((m) => m.role === 'user').map((m) => m.content)).toEqual(['第一问', '第二问'])

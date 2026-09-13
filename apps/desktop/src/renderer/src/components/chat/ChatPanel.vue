@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// 对话面板 — 消息流 + 空态欢迎页 + 输入区（M1-A 为本地回声应答，M1-B 接流式模型）
-import { nextTick, ref, watch } from 'vue'
+// 对话面板 — 流式渲染（模型网关）/ 本地回声双模式，停止生成（Esc 中止）
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { ChatStreamEvent, ModelProvider } from '@shared/types'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
 
@@ -10,6 +11,35 @@ const store = useChatStore()
 
 const draft = ref('')
 const sending = ref(false)
+const streaming = ref(false)
+const providers = ref<ModelProvider[]>([])
+const defaultProvider = computed(() => providers.value.find((p) => p.isDefault) ?? null)
+
+let offStream: (() => void) | null = null
+
+async function loadProviders(): Promise<void> {
+  try {
+    providers.value = await window.api.model.list()
+  } catch {
+    providers.value = []
+  }
+}
+
+function onStreamEvent(e: ChatStreamEvent): void {
+  if (e.sessionId !== store.activeId) return
+  const msg = store.messages.find((m) => m.id === e.messageId)
+  if (!msg) return
+  if (e.type === 'delta') {
+    msg.content += e.delta
+    void scrollToBottom()
+  } else if (e.type === 'done') {
+    msg.content = e.content
+    streaming.value = false
+  } else if (e.type === 'error') {
+    msg.content = msg.content ? msg.content + '\n\n⚠️ ' + e.message : '⚠️ ' + e.message
+    streaming.value = false
+  }
+}
 const messagesEl = ref<HTMLElement | null>(null)
 
 async function onSend(): Promise<void> {
@@ -20,18 +50,32 @@ async function onSend(): Promise<void> {
     return
   }
   sending.value = true
+  streaming.value = defaultProvider.value !== null
   try {
-    await store.send(text)
+    const { assistantMessage } = await store.send(text)
     draft.value = ''
     await scrollToBottom()
+    // 回声模式同步返回完整内容；流式模式 content 为空，等 stream-event 逐步填充
+    if (assistantMessage.content) streaming.value = false
   } catch (e) {
+    streaming.value = false
     ElMessage.error(e instanceof Error ? e.message : '发送失败')
   } finally {
     sending.value = false
   }
 }
 
+async function onStop(): Promise<void> {
+  if (!store.activeId) return
+  await window.api.chat.abort(store.activeId)
+  streaming.value = false
+}
+
 function onKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && streaming.value) {
+    void onStop()
+    return
+  }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
     void onSend()
@@ -48,6 +92,12 @@ watch(
   () => void scrollToBottom()
 )
 
+onMounted(() => {
+  void loadProviders()
+  offStream = window.api.chat.onStreamEvent(onStreamEvent)
+})
+onUnmounted(() => offStream?.())
+
 const suggestions = [
   { icon: '🧪', title: '设计实验方案', text: '帮我设计一个臭氧微纳米气泡降解四环素的对比实验方案' },
   { icon: '📊', title: '分析实验数据', text: '我有一组降解率随时间变化的数据，帮我分析动力学参数' },
@@ -63,15 +113,24 @@ async function onStart(text: string): Promise<void> {
 function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
+
+function isStreamingTail(m: { role: string; id: string }): boolean {
+  const last = store.messages[store.messages.length - 1]
+  return streaming.value && m.role === 'assistant' && last?.id === m.id
+}
 </script>
 
 <template>
   <section class="chat">
     <header class="chat-head">
       <span class="chat-title">{{ store.sessions.find((s) => s.id === store.activeId)?.title || 'AI 助手' }}</span>
-      <span class="chat-model" title="模型网关将在 M1-B 接入">
+      <span v-if="defaultProvider" class="chat-model chat-model-on" :title="defaultProvider.baseUrl + ' · ' + defaultProvider.model">
         <span class="chat-model-dot" aria-hidden="true"></span>
-        本地回声模式 · 模型网关 M1-B 接入
+        {{ defaultProvider.name }} / {{ defaultProvider.model }}
+      </span>
+      <span v-else class="chat-model" title="到「设置 → 模型服务」配置 API Key">
+        <span class="chat-model-dot chat-model-dot-off" aria-hidden="true"></span>
+        未配置模型 · 本地回声
       </span>
     </header>
 
@@ -93,8 +152,8 @@ function fmtTime(ts: number): string {
       <template v-else>
         <div v-for="m in store.messages" :key="m.id" class="msg" :class="`msg-${m.role}`">
           <div class="msg-avatar" aria-hidden="true">{{ m.role === 'user' ? '我' : 'AI' }}</div>
-          <div class="msg-bubble">
-            <div class="msg-content">{{ m.content }}</div>
+          <div class="msg-bubble" :class="{ 'is-streaming': isStreamingTail(m) }">
+            <div class="msg-content">{{ m.content }}<span v-if="isStreamingTail(m)" class="stream-cursor" aria-hidden="true">▍</span></div>
             <div class="msg-time">{{ fmtTime(m.createdAt) }}</div>
           </div>
         </div>
@@ -110,10 +169,15 @@ function fmtTime(ts: number): string {
         :disabled="sending"
         @keydown="onKeydown"
       ></textarea>
-      <button class="composer-send" :disabled="sending || !draft.trim() || !store.activeId" @click="onSend">
-        {{ sending ? '发送中…' : '发送' }}
-      </button>
-      <p class="composer-hint">当前为本地回声模式；接入模型后此窗口即为完整 Agent（工具调用 · 流式输出）。</p>
+      <div class="composer-bar">
+        <span class="composer-hint">{{
+          streaming ? '生成中… Esc 或点停止可中断（已生成内容保留）' : 'Enter 发送 · Shift+Enter 换行'
+        }}</span>
+        <button v-if="streaming" class="composer-stop" @click="onStop">■ 停止</button>
+        <button class="composer-send" :disabled="sending || !draft.trim() || !store.activeId" @click="onSend">
+          {{ sending ? '发送中…' : '发送' }}
+        </button>
+      </div>
     </footer>
   </section>
 </template>
@@ -149,10 +213,16 @@ function fmtTime(ts: number): string {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
+.chat-model-on {
+  color: var(--color-success);
+}
 .chat-model-dot {
   width: 7px;
   height: 7px;
   border-radius: var(--radius-full);
+  background: var(--color-success);
+}
+.chat-model-dot-off {
   background: var(--color-warning);
 }
 .chat-body {
@@ -269,6 +339,40 @@ function fmtTime(ts: number): string {
   font-size: 11px;
   color: var(--color-text-placeholder);
 }
+.is-streaming {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+}
+.stream-cursor {
+  display: inline-block;
+  color: var(--color-primary);
+  animation: cursorBlink 0.9s steps(2) infinite;
+}
+@keyframes cursorBlink {
+  50% { opacity: 0; }
+}
+.composer-bar {
+  margin-top: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.composer-hint {
+  flex: 1;
+  font-size: 11px;
+  color: var(--color-text-placeholder);
+}
+.composer-stop {
+  padding: 8px 18px;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.composer-stop:hover {
+  background: var(--color-danger-bg);
+}
 /* 输入区 */
 .chat-composer {
   padding: var(--space-3) var(--space-5) var(--space-4);
@@ -293,8 +397,6 @@ function fmtTime(ts: number): string {
   box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
 }
 .composer-send {
-  margin-top: var(--space-2);
-  float: right;
   padding: 8px 22px;
   border: none;
   border-radius: var(--radius-md);
@@ -316,7 +418,7 @@ function fmtTime(ts: number): string {
 }
 .composer-hint {
   clear: both;
-  margin-top: var(--space-2);
+  margin-top: 0;
   font-size: 11px;
   color: var(--color-text-placeholder);
 }

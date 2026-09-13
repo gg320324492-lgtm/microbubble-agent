@@ -16,8 +16,18 @@ export const IPC = {
   CHAT_SESSION_DELETE: 'chat:session:delete',
   CHAT_MESSAGES_LIST: 'chat:messages:list',
   CHAT_SEND: 'chat:send',
+  CHAT_ABORT: 'chat:abort',
+  /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */
+  CHAT_STREAM_EVENT: 'chat:stream-event',
+  WINDOW_STATE_EVENT: 'window:state-event',
+  MODEL_LIST: 'model:list',
+  MODEL_SAVE: 'model:save',
+  MODEL_DELETE: 'model:delete',
+  MODEL_SET_DEFAULT: 'model:set-default',
+  MODEL_TEST: 'model:test',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
+  WINDOW_IS_MAXIMIZED: 'window:is-maximized',
   WINDOW_CLOSE: 'window:close'
 } as const
 
