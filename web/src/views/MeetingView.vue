@@ -8,6 +8,14 @@
     <!-- Tab 1: 会议列表 (原内容) -->
     <div v-show="activeTab === 'meetings'" role="tabpanel"
       :aria-labelledby="`tab-strip-meetings`" class="tab-panel">
+        <!-- 2026-09-13 墨线重做: 档案头部行 (配色走页面令牌, 见 meeting-view.css 末段) -->
+        <div class="meet-head">
+          <div>
+            <div class="meet-eyebrow">MEETINGS · 会议管理</div>
+            <div class="meet-title">会议列表</div>
+          </div>
+          <span class="meet-count mono">共 {{ total }} 条</span>
+        </div>
         <!-- 顶部操作栏 -->
         <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
