@@ -1857,13 +1857,16 @@ defineExpose({ togglePptFull })
   height: 100vh !important;
   width: 100vw !important;
 }
-/* 批次⑩.71: 全屏页图改绝对定位+max 双约束 — grid 容器内 height:100% 退化为 auto, 竖版 A4 会裁半 */
+/* 批次⑩.71: 全屏页图改绝对定位铺满 wrap — grid 容器内 height:100% 退化为 auto, 竖版 A4 会裁半 */
 :is(.rf-stage, .rf-ppt):fullscreen .rf-slide-wrap { padding: 0; position: relative; }
-/* contain 适配: 绝对定位铺满 wrap + max 约束 + margin auto → 等比最大化居中, 任意屏幕/页型比例不裁切 */
+/* contain 双向适配: img 盒子铺满 wrap (width/height 100%) + object-fit:contain 等比缩放。
+   2026-09-13 二次修复: 旧写法 width/height:auto + max:100% 只缩不放 — PPT 转换页图
+   (~1160×652) 比屏幕小, 全屏后按原始像素 1:1 居中显示, 屏幕再大也不放大 (用户报告
+   「PPT 不能全屏展示」的真因); width/height:100% 让盒子铺满视口, contain 负责小图
+   放大 / 大图缩小, 任意页型比例不裁切不变形。 */
 :is(.rf-stage, .rf-ppt):fullscreen .rf-ppt-img {
   position: absolute; inset: 0; margin: auto;
-  width: auto; height: auto;
-  max-width: 100%; max-height: 100%;
+  width: 100%; height: 100%;
   object-fit: contain; border-radius: 0;
 }
 :is(.rf-stage, .rf-ppt):fullscreen .rf-pill { display: flex; bottom: 26px; padding: 6px 12px; }
