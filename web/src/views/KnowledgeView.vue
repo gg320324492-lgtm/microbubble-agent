@@ -116,6 +116,7 @@
         :hypothesis-total="hypothesisTotal"
         :hypothesis-page="hypothesisPage"
         @refresh="handleHypothesisRefresh"
+        @page-change="handleHypothesisPageChange"
       />
     </div>
 
@@ -383,6 +384,12 @@ const handleEntityRefresh = (payload) => {
   if (payload.graph !== undefined) {
     entityGraphData.value = payload.graph
   }
+}
+
+// 2026-09-13: 假设 tab 翻页接线 — 之前父级没监听 @page-change → 假设列表翻页完全无效
+const handleHypothesisPageChange = (page) => {
+  hypothesisPage.value = page
+  hypothesisTabRef.value?.fetchHypotheses()
 }
 
 // W86 mini-8 fix (派工 v6 §1.2 真验证, 3 路搜证):
