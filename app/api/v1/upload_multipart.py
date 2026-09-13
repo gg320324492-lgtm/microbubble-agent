@@ -93,14 +93,12 @@ async def init_multipart(
             status_code=400,
             detail=f"非法 visibility: {payload.visibility}",
         )
-    # folder_id 越权校验
+    # folder_id 存在性校验 (2026-09 单一团队空间: owner_id 仅作溯源, 不再是权限门)
     if payload.folder_id is not None:
         folder_svc = FolderService(db)
         folder = await folder_svc.get_folder(payload.folder_id)
         if folder is None:
             raise HTTPException(status_code=404, detail=f"folder {payload.folder_id} 不存在")
-        if folder.owner_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权在该 folder 中上传")
 
     try:
         init_resp = await generic_chunked_upload_service.init_upload(
@@ -135,14 +133,12 @@ async def complete_multipart(
     if visibility not in ("private", "team", "public"):
         raise HTTPException(status_code=400, detail=f"非法 visibility: {visibility}")
 
-    # folder_id 越权校验
+    # folder_id 存在性校验 (2026-09 单一团队空间: owner_id 仅作溯源, 不再是权限门)
     if folder_id is not None:
         folder_svc = FolderService(db)
         folder = await folder_svc.get_folder(folder_id)
         if folder is None:
             raise HTTPException(status_code=404, detail=f"folder {folder_id} 不存在")
-        if folder.owner_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权在该 folder 中上传")
 
     # 1) 读 file bytes
     data = await file.read()

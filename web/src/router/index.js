@@ -53,10 +53,12 @@ const routes = [
       },
       {
         // 批次⑩.80: 任务管理完整迁入仪表盘 (合并页), 旧地址重定向保兼容
+        // 批次⑩.82: 去掉 meta.icon 删除侧栏入口 (点击本就重定向回仪表盘, 纯冗余);
+        // 路由保留作 fallback — 仪表盘任务卡「任务管理 →」/ 对话深链 {name:'Tasks'} / 老书签
         path: 'tasks',
         name: 'Tasks',
         redirect: to => ({ path: '/dashboard', query: to.query }),
-        meta: { title: '任务管理', icon: 'List' }
+        meta: { title: '任务管理' }
       },
       {
         // 移动端任务回收站（桌面嵌入 TaskView，移动端独立路由）
