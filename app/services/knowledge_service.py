@@ -271,18 +271,6 @@ async def _run_analyze_and_embed(
                     await db.commit()
                     analysis_ok = True
 
-            # Step 2.5: 保存公式（独立容错）
-            if analysis.get("formulas"):
-                try:
-                    from app.services.formula_service import FormulaService
-                    async with session_factory() as db_f:
-                        formula_svc = FormulaService(db_f)
-                        await formula_svc.save_formulas_from_analysis(
-                            knowledge_id, analysis["formulas"]
-                        )
-                except Exception as e:
-                    logger.warning(f"公式保存失败(knowledge_id={knowledge_id}): {e}")
-
             # Step 2.6: 自动生成假设（独立容错，异步执行）
             if analysis.get("entities") and len(analysis["entities"]) >= 2:
                 try:

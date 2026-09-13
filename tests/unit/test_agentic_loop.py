@@ -39,10 +39,10 @@ class TestExpandConceptToFourDomain:
     """
 
     def test_single_4domain_tool_appended_to_length_4(self):
-        """planned=['search_knowledge'] → 补齐 4 域 = 4 个."""
+        """planned=['search_knowledge'] → 补齐全部域."""
         result = _expand_concept_to_four_domain(['search_knowledge'])
-        assert len(result) == 4
-        # 4 域 tool 全在结果里
+        assert len(result) == len(CONCEPT_DOMAIN_TOOLS)
+        # 域 tool 全在结果里
         for tool in CONCEPT_DOMAIN_TOOLS:
             assert tool in result
         assert 'search_knowledge' in result
@@ -63,31 +63,30 @@ class TestExpandConceptToFourDomain:
             assert tool in result
 
     def test_six_non_4domain_truncated_keeps_all_4domain(self):
-        """P2-3 核心 bug 场景: planned 6 个非 4 域 → MAX=5 → 4 域全保 + 1 个非 4 域.
+        """P2-3 核心 bug 场景: planned 6 个非域 → 域全保 + 截断到 MAX.
 
-        修复前: 简单 slice [:5] 砍掉第 6 个, 但 4 域补全后追加在末尾,
-                砍掉的是 query_members 等 4 域工具.
-        修复后: 4 域移到前部, 砍掉的是 LLM planned 的非 4 域尾部.
+        修复前: 简单 slice [:5] 砍掉第 6 个, 但域工具补全后追加在末尾,
+                砍掉的是 query_members 等域工具.
+        修复后: 域移到前部, 砍掉的是 LLM planned 的非域尾部.
         """
-        planned = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 个非 4 域
+        planned = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 个非域
         result = _expand_concept_to_four_domain(planned)
-        # MAX=5 (默认 settings.AGENT_PLAN_STEP_MAX), 所以结果长度 = 5
-        assert len(result) == 5
-        # 4 域工具**全部**保留 (不被砍)
+        # 域工具**全部**保留 (不被砍)
         for tool in CONCEPT_DOMAIN_TOOLS:
-            assert tool in result, f"4 域 tool {tool} 应被保留"
-        # 非 4 域只有 1 个 (砍掉 5 个), 必须是 'a' (LLM 原顺序第一个)
+            assert tool in result, f"域 tool {tool} 应被保留"
+        # 结果截断到 MAX=5: 3 个域工具 + 2 个非域 (LLM 原顺序前 2 个)
+        assert len(result) <= 5
         others = [t for t in result if t not in CONCEPT_DOMAIN_TOOLS]
-        assert others == ['a']
+        assert others == ['a', 'b']
 
     def test_four_domain_dedup_when_llm_planned_partial(self):
-        """LLM 已 planned 部分 4 域 → 只补缺失的."""
+        """LLM 已 planned 部分域 → 只补缺失的."""
         result = _expand_concept_to_four_domain(
-            ['search_knowledge', 'list_formulas', 'query_members']
+            ['search_knowledge', 'query_members']
         )
-        # 4 域中 list_hypotheses 缺失 → 自动补
+        # 域中 list_hypotheses 缺失 → 自动补
         assert 'list_hypotheses' in result
-        # 没有重复 (4 域去重)
+        # 没有重复 (域去重)
         assert len(result) == len(set(result))
         # search_knowledge 仍在结果 (LLM 原 planned)
         assert 'search_knowledge' in result

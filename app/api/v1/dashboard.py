@@ -217,23 +217,10 @@ async def get_dashboard_summary(
 
 # ============================================================
 # 移动端简化别名端点（mobile views 用，避免嵌套 /knowledge/* 路径）
-# - /formula            → /knowledge/formulas
 # - /hypothesis         → /knowledge/hypotheses
 # (2026-09-13: /memory 别名端点已随长期记忆功能移除)
+# (2026-09-13: /formula 别名端点已随公式计算功能移除)
 # ============================================================
-@mobile_router.get("/formula")
-async def mobile_list_formulas(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    current_user: Member = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """移动端公式列表（MobileKnowledgeView.vue 用）"""
-    from app.services.formula_service import FormulaService
-    svc = FormulaService(db)
-    return await svc.list_formulas(page=page, page_size=page_size)
-
-
 @mobile_router.get("/hypothesis")
 async def mobile_list_hypotheses(
     page: int = Query(1, ge=1),

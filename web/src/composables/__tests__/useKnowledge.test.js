@@ -104,20 +104,6 @@ describe('useKnowledge', () => {
     expect(hypothesisTotal.value).toBe(1)
   })
 
-  it('fetchFormulas 获取公式列表', async () => {
-    const mockFormulas = {
-      items: [{ id: 1, name: 'Young-Laplace方程', category: '气泡力学' }],
-      total: 1
-    }
-    axios.get.mockResolvedValue({ data: mockFormulas })
-
-    const { formulaList, formulaTotal, fetchFormulas } = useKnowledge()
-    await fetchFormulas()
-
-    expect(formulaList.value).toEqual(mockFormulas.items)
-    expect(formulaTotal.value).toBe(1)
-  })
-
   it('状态变量正确初始化', () => {
     const { knowledgeList, total, currentPage, pageSize, loading, searchQuery, filterCategory } = useKnowledge()
 

@@ -31,12 +31,6 @@ export function useKnowledge() {
   const hypothesisTotal = ref(0)
   const hypothesisPage = ref(1)
 
-  // 公式
-  const formulaList = ref([])
-  const formulaTotal = ref(0)
-  const formulaPage = ref(1)
-  const formulaCategories = ref([])
-
   // API 调用
   const fetchKnowledge = async (params = {}) => {
     loading.value = true
@@ -143,26 +137,6 @@ export function useKnowledge() {
     }
   }
 
-  const fetchFormulas = async (params = {}) => {
-    loading.value = true
-    try {
-      const res = await axios.get('/api/v1/knowledge/formulas', { params })
-      formulaList.value = res.data.items || []
-      formulaTotal.value = res.data.total || 0
-    } finally {
-      loading.value = false
-    }
-  }
-
-  const fetchFormulaCategories = async () => {
-    try {
-      const res = await axios.get('/api/v1/knowledge/formulas/categories')
-      formulaCategories.value = res.data.categories || []
-    } catch (e) {
-      console.error('获取公式分类失败:', e)
-    }
-  }
-
   return {
     // 状态
     knowledgeList, total, currentPage, pageSize, loading,
@@ -170,10 +144,8 @@ export function useKnowledge() {
     statsData, categories, hotTags, loadError,  // 2026-06-30: loadError 区分失败 vs 空
     entityList, entityTotal, entityPage, entityGraphData,
     hypothesisList, hypothesisTotal, hypothesisPage,
-    formulaList, formulaTotal, formulaPage, formulaCategories,
     // 方法
     fetchKnowledge, fetchCategories, fetchStats, deleteKnowledge,
-    searchEntities, fetchEntityGraph, fetchHypotheses,
-    fetchFormulas, fetchFormulaCategories
+    searchEntities, fetchEntityGraph, fetchHypotheses
   }
 }

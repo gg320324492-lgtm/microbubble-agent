@@ -97,18 +97,6 @@
         />
       </div>
 
-      <!-- Tab: 公式 -->
-      <div v-else-if="activeTab === 'formulas'" class="mg-rise mg-stagger-1">
-        <CardList
-          :items="formulas"
-          :field-config="formulaFieldConfig"
-          :loading="loadingFormulas"
-          empty-icon="🧮"
-          empty-title="暂无公式"
-          @item-click="viewFormula"
-        />
-      </div>
-
       <!-- Tab: 健康度 -->
       <div v-else-if="activeTab === 'health'">
         <div class="info-pane mg-rise mg-stagger-1">
@@ -215,7 +203,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { formatDateTime } from '@/utils/format'
-import { Document, Share, MagicStick, Histogram, DataLine } from '@element-plus/icons-vue'
+import { Document, Share, MagicStick, DataLine } from '@element-plus/icons-vue'
 import TabStrip from '@/components/common/TabStrip.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
@@ -232,7 +220,7 @@ const route = useRoute()
 const activeTab = ref('knowledge')
 
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas', 'health']  // PR8: drive tab moved to /m-drive
+const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'health']  // PR8: drive tab moved to /m-drive
 if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
   activeTab.value = String(route.query.tab)
 }
@@ -242,16 +230,13 @@ const tabItems = [
   { key: 'knowledge',  label: '知识',     icon: Document },
   { key: 'entities',   label: '实体',     icon: Share },
   { key: 'hypotheses', label: '假设',     icon: MagicStick },
-  { key: 'formulas',   label: '公式',     icon: Histogram },
   { key: 'health',     label: '健康',     icon: DataLine },
 ]
 
 const knowledgeList = ref([])
 const hypotheses = ref([])
-const formulas = ref([])
 const loading = ref(false)
 const loadingHypotheses = ref(false)
-const loadingFormulas = ref(false)
 
 const showSearch = ref(false)
 const showCreateSheet = ref(false)
@@ -279,7 +264,6 @@ const tabs = [
   { name: 'knowledge',  label: '知识',     icon: Document },
   { name: 'entities',   label: '实体',     icon: Share },
   { name: 'hypotheses', label: '假设',     icon: MagicStick },
-  { name: 'formulas',   label: '公式',     icon: Histogram },
   { name: 'health',     label: '健康',     icon: DataLine },
 ]
 
@@ -321,12 +305,6 @@ const hypothesisFieldConfig = computed(() => ({
   }),
 }))
 
-const formulaFieldConfig = computed(() => ({
-  title: (f) => f.name || f.formula_id || '公式',
-  subtitle: (f) => `${f.domain || '通用'} · ${f.variables?.length || 0} 个变量`,
-  badge: (f) => ({ label: f.category || '公式', type: 'info' }),
-}))
-
 // fabActions 已随 MobileFab 移除; uploadInputRef/driveUploadInputRef/showManualSheet/
 // showResearchSheet 由 header「+」的 createActions → onCreateAction handler 复用 (18 处引用)
 
@@ -360,7 +338,6 @@ function switchTab(tab) {
   // TabStrip emit update:modelValue 已自动更新 activeTab, 不再手动赋值
   if (tab === 'knowledge' && knowledgeList.value.length === 0) fetchKnowledge()
   if (tab === 'hypotheses' && hypotheses.value.length === 0) fetchHypotheses()
-  if (tab === 'formulas' && formulas.value.length === 0) fetchFormulas()
 }
 
 // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
@@ -406,18 +383,6 @@ async function fetchHypotheses() {
   }
 }
 
-async function fetchFormulas() {
-  loadingFormulas.value = true
-  try {
-    const res = await axios.get('/api/v1/formula', { params: { page: 1, page_size: 20 } })
-    formulas.value = res.data?.items || []
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loadingFormulas.value = false
-  }
-}
-
 // W99 N-6 改进 (2): 移动端搜索埋点接通 (同桌面 store)
 //   每次搜索都触发 startSearch (含 0 结果场景), 切换 query 时先 reset
 const searchAnalytics = useSearchAnalyticsStore()
@@ -457,11 +422,6 @@ function viewHypothesis(item) {
   // 假设详情：路由跳到桌面版（假设 detail Dialog 已在桌面 KnowledgeView 实现）
   // 桌面 URL：/knowledge，参数 ?hypothesisId=xxx 触发 dialog
   router.push({ path: '/knowledge', query: { tab: 'hypotheses', id: item.id } })
-}
-
-function viewFormula(item) {
-  // 公式详情：路由跳到桌面版（公式计算器已在桌面 KnowledgeView 实现）
-  router.push({ path: '/knowledge', query: { tab: 'formulas', id: item.id } })
 }
 
 function editKnowledge(item) {

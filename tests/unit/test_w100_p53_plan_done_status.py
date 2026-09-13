@@ -152,7 +152,7 @@ class TestW100P53PlanDoneStatus:
         intent = IntentResult(
             category=IntentCategory.SEARCH_INFO,
             suggested_tools=["search_knowledge", "query_members", "list_projects",
-                            "get_meeting_transcript", "get_task", "list_formulas"],
+                            "get_meeting_transcript", "get_task", "list_hypotheses"],
             confidence=0.95,
         )
 

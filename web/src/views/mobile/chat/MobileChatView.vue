@@ -685,9 +685,10 @@ function onProEntryMobile(msg, kind) {
     if (kind === 'graph') {
       router.push({ path: '/knowledge/graph', query: { session: sessionId, msg: String(msg?.id || '') } })
     } else if (kind === 'formula') {
+      // 2026-09-13 公式计算 tab 移除 → 改为知识库搜索 (关键词兜底)
       const kws = msg?.intent?.keywords
       const search = Array.isArray(kws) && kws.length ? kws[0] : ''
-      router.push({ path: '/knowledge', query: { tab: 'formulas', search } })
+      router.push({ path: '/knowledge', query: { tab: 'knowledge', search } })
     } else if (kind === 'hypothesis') {
       router.push({ path: '/knowledge', query: { tab: 'hypotheses', from: String(msg?.id || '') } })
     }

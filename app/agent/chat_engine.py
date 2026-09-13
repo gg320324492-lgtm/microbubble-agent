@@ -586,7 +586,6 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
         "get_meeting_transcript": ("transcript", "会议转录"),
         "get_member_profile": ("member", "成员资料"),
         "get_project_summary": ("project", "项目摘要"),
-        "list_formulas": ("formula", "公式列表"),
         "list_hypotheses": ("hypothesis", "假设列表"),
         "get_recent_meeting_conclusions": ("meeting", "近期会议结论"),
         "analyze_meeting_transcript": ("meeting", "会议分析"),
