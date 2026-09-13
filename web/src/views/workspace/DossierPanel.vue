@@ -176,7 +176,8 @@ const memberById = computed(() => {
 
 const dossiers = computed(() =>
   [...projects.value]
-    .sort((a, b) => a.id - b.id)
+    // 2026-09-13: 导师组固定第一 (卷纲次序: 导师组 → 研究方向卷), 其余按 id 升序
+    .sort((a, b) => ((b.name === '导师组') ? 1 : 0) - ((a.name === '导师组') ? 1 : 0) || a.id - b.id)
     .map((p) => {
       const persons = (p.members || [])
         .map(id => memberById.value[id])
