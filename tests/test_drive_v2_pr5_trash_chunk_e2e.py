@@ -567,3 +567,93 @@ def test_desktop_upload_dialog_uses_chunked_uploader():
     src = Path("web/src/components/drive/DriveUploadDialog.vue").read_text(encoding="utf-8")
     assert "DriveChunkedUploader" in src
     assert "CHUNKED_THRESHOLD" in src
+
+
+# ============================================================
+# 2026-09-13 缺口修复: 彻底删除级联 KB 孪生 (自动入库共享网盘 MinIO 对象)
+# ============================================================
+
+async def _create_kb_twin(db_session, src: Knowledge, user) -> Knowledge:
+    """按 auto_ingest (drive → kb) 的真实形状构造孪生: 与网盘源共享同一 file_path"""
+    twin = Knowledge(
+        title=src.title,
+        content=src.content or "",
+        file_path=src.file_path,
+        file_name=src.file_name,
+        file_type=src.file_type,
+        file_size=src.file_size,
+        file_hash=src.file_hash,
+        created_by=user.id,
+        storage_mode="kb",
+        visibility="team",
+    )
+    db_session.add(twin)
+    await db_session.commit()
+    return twin
+
+
+@pytest.mark.asyncio
+async def test_permanent_delete_cascades_kb_twin(db_session, user, folder):
+    """彻底删除网盘记录 → 自动入库 KB 孪生必须级联硬删。
+
+    孪生与网盘源共享同一 MinIO 对象 (file_path 相同); 对象被 purge 后孪生若仍
+    存活即成死链 (预览/下载 404)。"""
+    svc = DriveService(db_session)
+    file_id = await _create_drive_file(svc, user, folder)
+    src = await db_session.get(Knowledge, file_id)
+    twin = await _create_kb_twin(db_session, src, user)
+
+    await svc.soft_delete_file(file_id, current_user_id=user.id)
+    assert await svc.permanent_delete(file_id, current_user_id=user.id) is True
+
+    assert await db_session.get(Knowledge, file_id) is None
+    assert await db_session.get(Knowledge, twin.id) is None
+
+
+@pytest.mark.asyncio
+async def test_permanent_delete_batch_cascades_kb_twins(db_session, user, folder):
+    """批量彻底删除 (回收站全选→彻底删除) 同样级联 KB 孪生"""
+    svc = DriveService(db_session)
+    ids, twin_ids = [], []
+    for i in range(2):
+        fid = await _create_drive_file(svc, user, folder, suffix=f"kb-cascade-{i}")
+        src = await db_session.get(Knowledge, fid)
+        twin = await _create_kb_twin(db_session, src, user)
+        ids.append(fid)
+        twin_ids.append(twin.id)
+
+    for fid in ids:
+        await svc.soft_delete_file(fid, current_user_id=user.id)
+
+    deleted, skipped = await svc.permanent_delete_batch(ids, current_user_id=user.id)
+    assert deleted == 2
+    assert skipped == []
+    for tid in twin_ids:
+        assert await db_session.get(Knowledge, tid) is None
+
+
+@pytest.mark.asyncio
+async def test_collect_live_kb_twins_only_live_same_path(db_session, user, folder):
+    """helper 语义: 仅返回「存活 + storage_mode=kb + file_path 相同」的孪生;
+    已删孪生与不同路径的 kb 行不受影响"""
+    from app.services.drive_service import collect_live_kb_twins
+
+    svc = DriveService(db_session)
+    file_id = await _create_drive_file(svc, user, folder)
+    src = await db_session.get(Knowledge, file_id)
+    twin = await _create_kb_twin(db_session, src, user)
+    # 已删孪生 → 不应命中
+    dead = await _create_kb_twin(db_session, src, user)
+    dead.deleted_at = dead.created_at
+    await db_session.commit()
+    # 无关 kb 行 (不同 file_path) → 不应命中
+    other = Knowledge(
+        title="other", content="", file_path="uploads/other/x.pptx", file_name="x.pptx",
+        file_size=1, created_by=user.id,
+        storage_mode="kb", visibility="team",
+    )
+    db_session.add(other)
+    await db_session.commit()
+
+    rows = await collect_live_kb_twins(db_session, [src])
+    assert [r.id for r in rows] == [twin.id]

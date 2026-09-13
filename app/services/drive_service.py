@@ -304,6 +304,29 @@ def _build_list_files_query(
 # 2026-07-12 死代码清理: _to_naive_dt helper 提取到 app.utils.datetime_utils.to_naive_datetime
 
 
+async def collect_live_kb_twins(db: AsyncSession, drive_rows: list) -> list:
+    """2026-09-13 缺口修复: 收集「自动入库 KB 孪生」的存活记录。
+
+    上传即自动入库 (drive → kb) 生成的孪生记录与网盘源**共享同一 MinIO 对象**
+    (file_path 相同)。网盘记录被彻底删除 (单删/批删/3 天自动清理) 时对象会被
+    物理清除, 孪生若仍存活即成死链 (预览/下载 404) → 三个物理清理路径都必须
+    级联硬删孪生。
+
+    语义: storage_mode='kb' + file_path 命中 + deleted_at IS NULL (已删孪生不重复命中)。
+    """
+    paths = list({r.file_path for r in drive_rows if getattr(r, "file_path", None)})
+    if not paths:
+        return []
+    result = await db.execute(
+        select(Knowledge).where(
+            Knowledge.storage_mode == "kb",
+            Knowledge.file_path.in_(paths),
+            Knowledge.deleted_at.is_(None),
+        )
+    )
+    return list(result.scalars().all())
+
+
 class DriveServiceError(Exception):
     """业务级错误，调用方映射成 HTTP 4xx"""
     def __init__(self, message: str, status_code: int = 400):
@@ -1790,10 +1813,15 @@ class DriveService:
         ):
             # 2026-09: created_by/is_admin owner 门禁已删, current_user_id 参数保留兼容签名
             return False
+        # 2026-09-13 缺口修复: 级联硬删自动入库 KB 孪生 — 孪生与网盘源共享同一
+        # MinIO 对象 (file_path 相同), 对象被 purge 后孪生存活即成死链 (404)
+        kb_twins = await collect_live_kb_twins(self.db, [f])
         # 批次① B2: 旧实现只删 f.file_path 当前对象, PR9 历史版本对象泄漏。
         # collect 必须在 db.delete 前 (FK CASCADE 一删主行, 版本行即消失查不到 key);
         # purge 在 commit 后 (MinIO 失败不回滚 DB 硬删)。
-        object_keys = await collect_object_keys(self.db, [f])
+        object_keys = await collect_object_keys(self.db, [f] + kb_twins)
+        for twin in kb_twins:
+            await self.db.delete(twin)
         await self.db.delete(f)
         await self.db.commit()
         failures = purge_minio_keys(object_keys)
@@ -1802,7 +1830,10 @@ class DriveService:
                 f"[DriveService.permanent_delete] MinIO 清理失败 {failures}/{len(object_keys)} "
                 f"key id={f.id} (DB 行已删, 对象留待孤儿巡检)"
             )
-        logger.info(f"[DriveService.permanent_delete] id={f.id} objects_purged={len(object_keys)}")
+        logger.info(
+            f"[DriveService.permanent_delete] id={f.id} objects_purged={len(object_keys)} "
+            f"kb_twins_cascaded={len(kb_twins)}"
+        )
         return True
 
     async def permanent_delete_batch(
@@ -1825,15 +1856,20 @@ class DriveService:
             )
         )
         files = list(result.scalars().all())
+        # 2026-09-13 缺口修复: 级联硬删自动入库 KB 孪生 (共享 MinIO 对象, 见
+        # collect_live_kb_twins) — 否则对象被 purge 后孪生存活即成死链
+        kb_twins = await collect_live_kb_twins(self.db, files)
         # 批次① B2: 与 permanent_delete 同款 — 全部 key 在任何 db.delete 前收集
         # (版本行随主行 CASCADE 消失), MinIO 清理工统一挪到 commit 后。
-        object_keys = await collect_object_keys(self.db, files)
+        object_keys = await collect_object_keys(self.db, files + kb_twins)
         skipped = []
         deleted = 0
         for f in files:
             # 2026-09 单一团队空间: 删除 created_by/is_admin owner skip
             await self.db.delete(f)
             deleted += 1
+        for twin in kb_twins:
+            await self.db.delete(twin)
         existing_ids = {f.id for f in files}
         for fid in file_ids:
             if fid not in existing_ids:

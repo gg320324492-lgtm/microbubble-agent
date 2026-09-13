@@ -35,6 +35,7 @@ from app.models.folder import Folder
 from app.models.knowledge import Knowledge
 from app.services.cleanup_backup import backup_rows_to_json
 from app.services.drive_object_gc import collect_object_keys, purge_minio_keys
+from app.services.drive_service import collect_live_kb_twins
 from app.utils.datetime_utils import to_naive_datetime
 
 logger = logging.getLogger("microbubble.drive_cleanup_service")
@@ -104,13 +105,33 @@ async def clean_old_drive_files(db: AsyncSession, cutoff_date: datetime) -> dict
             "strategy": "storage_mode='drive' AND deleted_at IS NOT NULL AND deleted_at < cutoff",
         },
     )
+    # 2026-09-13 缺口修复: 级联硬删自动入库 KB 孪生 (与网盘源共享 MinIO 对象,
+    # 见 drive_service.collect_live_kb_twins) — 对象被清后孪生存活即死链。
+    # PR6-P10 backup_before_delete 同款纪律: 孪生也先备份再删。
+    kb_twins = await collect_live_kb_twins(db, expired_files)
+    if kb_twins:
+        await backup_rows_to_json(
+            db,
+            model=Knowledge,
+            where_clause=Knowledge.id.in_([t.id for t in kb_twins]),
+            table_name="drive_kb_twins",
+            extra_metadata={
+                "cutoff_date": cutoff_naive.isoformat(),
+                "strategy": "自动入库 KB 孪生级联 (storage_mode='kb' AND file_path 命中过期 drive 源)",
+            },
+        )
+
     # 当前对象 + 全部历史版本对象 key (B2: 旧实现连版本对象从不知道要清)
-    file_object_keys = await collect_object_keys(db, expired_files)
+    file_object_keys = await collect_object_keys(db, expired_files + kb_twins)
 
     # 物理删 DB 行
     if deleted_file_count > 0:
         delete_files_stmt = delete(Knowledge).where(drive_files_where)
         await db.execute(delete_files_stmt)
+        if kb_twins:
+            await db.execute(
+                delete(Knowledge).where(Knowledge.id.in_([t.id for t in kb_twins]))
+            )
 
     # MinIO 物理删除放在文件硬删 commit 之后:
     # 类 20.181 教训: purge 只走 DB commit 后路径, 防测试 session rollback 时
