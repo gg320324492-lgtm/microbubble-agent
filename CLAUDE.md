@@ -22,6 +22,21 @@ D: 旧版) + Start Menu/桌面快捷方式 + `%APPDATA%\microbubble-desktop` 用
 main 进程写好的本地账号体系 (product.auth, scrypt) 没接线 — "本地科研账号"
 文案与实际行为不符。当前桌面端 = 零代码起点, 重做方案与用户逐步商定。
 
+**M0 工作台骨架已落地 (2026-09-14, commit `67e5dfae8`)**: pnpm monorepo
+(`pnpm-workspace.yaml` + `packages/design-tokens` + `apps/desktop`, web/ 不动)。
+Electron 32 + electron-vite + Vue3 + Pinia, 安全三铁律 + CSP + IPC 白名单 12 通道;
+本地账号 (首启注册管理员 → login → 会话 safeStorage 恢复, scrypt), SQLite 迁移链
+001-002 (users/sessions/settings), 工作台壳 = 无边框自绘标题栏 + 侧边栏六项 +
+状态栏。测试 16/16 (vitest, node:sqlite 适配器避开 Electron ABI)。**运行**:
+`pnpm desktop:dev`; dev 库在 `%APPDATA%\@mb\desktop\`, demo 账号已种 (demo/demo12345)。
+**环境坑沉淀**: ① pnpm 的 .npmrc runtime=electron 不传给 prebuild-install, 需手动
+`node <prebuild-install>/bin.js --runtime electron --target 32.x` 拉 ABI-128 预编译
+(装错 ABI 时 require() 不报错, new Database() 才报, 别被骗); ② electron postinstall
+在本机静默半装 (dist 只有 locales), 手动解压缓存 zip + `printf` 写 path.txt (禁 echo,
+带 \n 会让 spawn 路径变 electron.exe\n); ③ happy-dom 18 与 VTU trigger 不兼容 → 用 jsdom;
+④ 组件测试 stub window 用 Object.assign(window,{api}), 整体 stubGlobal('window',
+{...window}) 会丢原型上的 Event 构造器。
+
 **企业微信整体下线** (3 commits `bbe0f900e`/`f5eab0738`/`5365b153a` + 修复 `9bf09f01b`):
 删除 `app/wechat/` 全包 8 文件 + 回调路由 + celery 主动检查 + members 6 个微信列
 (alembic 139, 已执行) + `WECHAT_*` 7 项配置; ConversationAnalyzer 迁
