@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议详情页 UI 重做 · 四方案索引</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); padding: 48px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 10px; background: var(--card); border-radius: 2px; }
+  h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  a.card { display: block; text-decoration: none; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 18px 22px; margin-bottom: 12px; transition: all .2s ease-out; }
+  a.card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(22,35,42,.12); border-color: var(--teal); }
+  .no { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); }
+  .name { font-size: 17px; font-weight: 700; margin: 4px 0 4px; }
+  .desc { font-size: 13px; color: var(--muted); }
+  .best { font-family: var(--font-mono); font-size: 10px; color: var(--coral); margin-top: 6px; letter-spacing: .1em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">MEETING DETAIL REDESIGN · 2026-09-13</span>
+  <h1>会议详情页 UI 重做 · 四方案</h1>
+  <div class="sub">范围: 会议纪要 / 转录记录 / 发言统计 三个 Tab + 右侧栏（录音回放/听会/相关会议）。风格沿用档案墨线（配色④青灰水墨）。点开预览，选定后回复方案字母即可实施（可混搭）。</div>
+
+  <a class="card" href="meeting-detail-redesign-a-档案公文.html">
+    <div class="no">PLAN A</div>
+    <div class="name">档案公文</div>
+    <div class="desc">三 Tab 结构保留，内容"公文化"排版：§ 章节编号 + mono 元数据 + 虚线章节线，摘要/要点/决议像一份正式会议纪要档案。</div>
+    <div class="best">BEST FOR · 零学习成本 / 最小改动 / 正式感</div>
+  </a>
+
+  <a class="card" href="meeting-detail-redesign-b-时间轴剧场.html">
+    <div class="no">PLAN B</div>
+    <div class="name">时间轴剧场</div>
+    <div class="desc">墨色常驻播放条置顶，转录记录升级为垂直时间轴主角（点时间戳 seek，决议珊瑚节点标出），纪要摘要作为侧栏卡片。</div>
+    <div class="best">BEST FOR · 边听回放边对记录 / 回放工作流</div>
+  </a>
+
+  <a class="card" href="meeting-detail-redesign-c-双栏工作台.html">
+    <div class="no">PLAN C</div>
+    <div class="name">双栏工作台</div>
+    <div class="desc">左侧粘性目录（按发言人分组的要点/决议/统计/转录）+ 右侧内容流；要点带勾选、决议带「转任务」动作。</div>
+    <div class="best">BEST FOR · 会后跟进 / 任务转化 / 工作台感</div>
+  </a>
+
+  <a class="card" href="meeting-detail-redesign-d-简报文档.html">
+    <div class="no">PLAN D</div>
+    <div class="name">简报文档</div>
+    <div class="desc">三 Tab 合并为一份连贯简报文档：导语摘要 → 要点按发言人分组 → 决议编号清单 → 统计卡片 → 转录折叠附录；粘性锚点导航 + 导出 PDF 友好。</div>
+    <div class="best">BEST FOR · 阅读连续性 / 归档导出 / 分享</div>
+  </a>
+</div>
+</body>
+</html>

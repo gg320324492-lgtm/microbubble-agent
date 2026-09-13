@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议详情重做 · 方案D 简报文档</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b; --gold: #a37c22;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); font-size: 14px; line-height: 1.75; padding: 32px 24px 80px; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  .pv-head { margin-bottom: 20px; }
+  .pv-head .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 8px; background: var(--card); border-radius: 2px; }
+  .pv-head h1 { font-size: 21px; font-weight: 700; }
+  .pv-head p { color: var(--muted); font-size: 13px; }
+
+  /* 锚点导航 (粘性) */
+  .anchors { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; flex-wrap: wrap;
+    background: var(--paper); padding: 10px 0; border-bottom: 1px solid var(--line); margin-bottom: 26px; }
+  .anchors a { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; color: var(--muted);
+    text-decoration: none; border: 1px solid var(--line-dash); border-radius: 9999px; padding: 2px 13px; background: var(--card); }
+  .anchors a:hover { color: var(--teal); border-color: var(--teal); }
+
+  /* 文档纸面 */
+  .doc { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 40px 52px 48px; }
+  .doc .kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: .4em; color: var(--teal); margin-bottom: 10px; }
+  .doc h1 { font-size: 24px; font-weight: 700; line-height: 1.45; letter-spacing: .03em; margin-bottom: 12px; }
+  .doc .meta { display: flex; flex-wrap: wrap; gap: 16px; font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    border-top: 1px solid var(--ink); border-bottom: 1px dashed var(--line-dash); padding: 9px 2px; margin-bottom: 26px; }
+
+  .lead {
+    font-size: 15px; line-height: 2; padding: 16px 20px; margin-bottom: 30px;
+    background: rgba(14, 118, 110, .05); border-left: 3px solid var(--teal);
+  }
+  .lead .lb { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); display: block; margin-bottom: 4px; }
+
+  .h2 { display: flex; align-items: baseline; gap: 12px; margin: 32px 0 14px; }
+  .h2 .no { font-family: var(--font-mono); font-size: 22px; color: rgba(14, 118, 110, .35); font-weight: 700; }
+  .h2 .zh { font-size: 17px; font-weight: 700; letter-spacing: .08em; }
+  .h2 .en { font-family: var(--font-mono); font-size: 9px; letter-spacing: .3em; color: var(--muted); }
+
+  .speaker { margin-bottom: 18px; }
+  .speaker .row { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+  .speaker .av { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 11px; display: grid; place-items: center; font-family: var(--font-mono); }
+  .speaker .nm { font-weight: 700; font-size: 13px; }
+  .speaker .ct { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .speaker ul { list-style: none; padding-left: 31px; }
+  .speaker li { font-size: 13.5px; padding: 3px 0; position: relative; }
+  .speaker li::before { content: '·'; color: var(--teal); font-weight: 700; position: absolute; left: -13px; }
+
+  .decision { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px dashed var(--line-dash); }
+  .decision .no { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: rgba(14, 118, 110, .4); }
+  .decision .tx { font-size: 13.5px; }
+  .decision .who { font-weight: 700; }
+
+  .conf-lead { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+  .conf { border: 1px solid var(--line); border-radius: 3px; padding: 8px 16px; text-align: center; }
+  .conf b { font-family: var(--font-mono); font-size: 18px; color: var(--teal); display: block; }
+  .conf span { font-size: 11px; color: var(--muted); }
+
+  details { border-top: 1px solid var(--ink); margin-top: 34px; padding-top: 14px; }
+  summary { cursor: pointer; font-family: var(--font-mono); font-size: 11px; letter-spacing: .25em; color: var(--muted); }
+  details[open] summary { margin-bottom: 10px; }
+  .tr-row { display: grid; grid-template-columns: 60px 84px 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line-dash); font-size: 13px; }
+  .tr-row .ts { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .tr-row .who { font-weight: 700; color: var(--teal); }
+
+  .doc-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 26px; }
+  .dact { font-size: 12px; padding: 6px 15px; border-radius: 3px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  .dact.pri { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pv-head">
+    <span class="tag">MEETING DETAIL · REDESIGN 方案D</span>
+    <h1>方案D · 简报文档</h1>
+    <p>三个 Tab 合并为一份连贯的「会议简报」：导语摘要 → 讨论要点 → 决议 → 统计 → 转录折叠附录。顶部粘性锚点导航跳分区，天然适合打印/导出 PDF 归档。</p>
+  </div>
+
+  <div class="anchors">
+    <a href="#sec-abstract">ABSTRACT 摘要</a>
+    <a href="#sec-points">POINTS 要点</a>
+    <a href="#sec-decisions">DECISIONS 决议</a>
+    <a href="#sec-stats">STATS 统计</a>
+    <a href="#sec-transcript">TRANSCRIPT 转录</a>
+  </div>
+
+  <div class="doc">
+    <div class="kicker">MEETING MINUTES · 2026-08-21</div>
+    <h1>关于超材料与原子层面构造及变换模式理论的讨论</h1>
+    <div class="meta">
+      <span>🕒 2026-08-21 10:44</span><span>⏱ 3分23秒</span><span>👥 3 人参与</span><span>📍 未设置</span><span>✅ 已完成</span>
+    </div>
+
+    <div class="lead" id="sec-abstract">
+      <span class="lb">ABSTRACT · 会话摘要</span>
+      本次测试会议围绕超材料（人工构造）的研究进展与理论应用展开深入讨论。发言人介绍了通过原子层面的人工构造实现自然材料无法具备的功能，重点探讨了负折射率及变换光学理论的可行性与应用模式。讨论了利用半导体气点调控原子排列状态的原理及其在复杂功能设计中的潜力。会议最终确认了聚焦于超材料组合模式进行复杂功能实现的后续研究方向。
+    </div>
+
+    <div class="h2" id="sec-points"><span class="no">01</span><span class="zh">讨论要点</span><span class="en">KEY POINTS</span></div>
+
+    <div class="speaker">
+      <div class="row"><span class="av">余</span><span class="nm">余歆客</span><span class="ct">2 条要点</span></div>
+      <ul>
+        <li>指出通过人工构造原子层面结构可实现自然材料无法具备的功能，强调材料创新在实现特定物理特性中的核心作用。</li>
+        <li>提出利用开关二极管等元件控制特定状态，实现从简单到复杂功能的处理与转换逻辑设计。</li>
+      </ul>
+    </div>
+    <div class="speaker">
+      <div class="row"><span class="av">A</span><span class="nm">发言人 A</span><span class="ct">1 条要点</span></div>
+      <ul><li>回顾了超材料发展历史，提及 1996 年英国构建的人工构造及首个负折射率材料的概念提出背景与意义。</li></ul>
+    </div>
+    <div class="speaker">
+      <div class="row"><span class="av">陈</span><span class="nm">陈金薪</span><span class="ct">1 条要点</span></div>
+      <ul><li>指出当前研究热点已转向新型超材料领域，并讨论了变换光学理论在功能设计中的应用模式及其各项性能指标的实现路径。</li></ul>
+    </div>
+    <div class="speaker">
+      <div class="row"><span class="av">B</span><span class="nm">发言人 B</span><span class="ct">2 条要点</span></div>
+      <ul>
+        <li>介绍了通过半导体气点调控原子排列状态（0/1 切换）来实现不同物理状态的原理及控制机制。</li>
+        <li>说明原子排列方式存在 2^N 种方位组合可能，可实现多种复杂的超材料功能设计需求。</li>
+      </ul>
+    </div>
+
+    <div class="h2" id="sec-decisions"><span class="no">02</span><span class="zh">决议事项</span><span class="en">DECISIONS</span></div>
+    <div class="decision"><span class="no">01</span><div class="tx"><span class="who">【全组共识】</span>确认了利用变换光学理论及半导体调控技术进行复杂功能实现的可行性方向，将作为后续研究的核心路径推进。</div></div>
+    <div class="decision"><span class="no">02</span><div class="tx"><span class="who">【韩重阳】</span>决定委托老师处理个人发票开具事宜，以解决因行程晚点导致的报销流程滞后问题。</div></div>
+
+    <div class="h2" id="sec-stats"><span class="no">03</span><span class="zh">发言统计</span><span class="en">SPEAKER STATS</span></div>
+    <div class="conf-lead">
+      <div class="conf"><b>42</b><span>余歆客 · 句</span></div>
+      <div class="conf"><b>31</b><span>发言人A · 句</span></div>
+      <div class="conf"><b>26</b><span>发言人B · 句</span></div>
+      <div class="conf"><b>19</b><span>陈金薪 · 句</span></div>
+    </div>
+
+    <details id="sec-transcript">
+      <summary>TRANSCRIPT · 完整转录记录 (15 段) — 点击展开</summary>
+      <div class="tr-row"><span class="ts">00:00</span><span class="who">余歆客</span><span>我们今天讨论一下超材料的研究进展……</span></div>
+      <div class="tr-row"><span class="ts">00:42</span><span class="who">发言人A</span><span>1996 年英国构建了首个负折射率材料……</span></div>
+    </details>
+
+    <div class="doc-actions">
+      <button class="dact">✎ 编辑纪要</button>
+      <button class="dact">⬇ 导出 PDF</button>
+      <button class="dact pri">🔗 分享</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
