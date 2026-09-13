@@ -36,10 +36,6 @@ celery_app.conf.update(
             "task": "app.services.reminder_service.process_reminders_task",
             "schedule": 10.0,  # 每10秒检查一次，秒级精确提醒
         },
-        "memory-maintenance": {
-            "task": "app.services.memory_service.maintenance_task",
-            "schedule": 3600.0,  # 每小时
-        },
         "knowledge-evolution-weekly": {
             "task": "app.services.knowledge_evolution_tasks.evolve_knowledge_base",
             "schedule": 7 * 24 * 3600.0,  # 每周
@@ -170,7 +166,6 @@ celery_app.conf.update(
 celery_app.conf.imports = [
     "app.services.reminder_service",
     "app.services.post_meeting_tasks",
-    "app.services.memory_service",
     "app.services.knowledge_evolution_tasks",
     "app.services.task_service",
     "app.services.orphan_meeting_cleanup",
@@ -202,7 +197,6 @@ celery_app.autodiscover_tasks(
     [
         "app.services.reminder_service",
         "app.services.post_meeting_tasks",
-        "app.services.memory_service",
         "app.services.knowledge_evolution_tasks",
         "app.services.task_service",
         "app.services.orphan_meeting_cleanup",

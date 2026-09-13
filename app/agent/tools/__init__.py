@@ -15,7 +15,6 @@ from app.agent.tools import project_tools  # noqa: F401
 from app.agent.tools import formula_tools  # noqa: F401
 from app.agent.tools import hypothesis_tools  # noqa: F401
 from app.agent.tools import knowledge_tools  # noqa: F401
-from app.agent.tools import memory_tools  # noqa: F401
 from app.agent.tools import search_tools  # noqa: F401
 from app.agent.tools import feedback_tools  # noqa: F401
 from app.agent.tools import voice_tools  # noqa: F401
@@ -40,7 +39,6 @@ __all__ = [
     "formula_tools",
     "hypothesis_tools",
     "knowledge_tools",
-    "memory_tools",
     "search_tools",
     "feedback_tools",
     "voice_tools",

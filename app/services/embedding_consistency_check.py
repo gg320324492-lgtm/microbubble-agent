@@ -10,7 +10,6 @@ KNOWN_CALLERS = (
     "auto_research",
     "entity_service",
     "meeting_service",
-    "memory_service",
     "knowledge_service",
 )
 

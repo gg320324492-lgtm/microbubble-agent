@@ -96,7 +96,6 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         meeting_recording,
         admin_meetings,  # Batch C-2 会议管理 API
         member,
-        memory,
         notifications,
         project,
         push_notifications,  # v3.2 PWA 浏览器推送
@@ -132,7 +131,6 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (voice.router, {"prefix": "/api/v1", "tags": ["语音"]}),
         (upload.router, {"prefix": "/api/v1", "tags": ["文件上传"]}),
         (tencent_meeting.router, {"prefix": "/api/v1", "tags": ["腾讯会议"]}),
-        (memory.router, {"prefix": "/api/v1", "tags": ["长期记忆"]}),
         (voiceprint.router, {"prefix": "/api/v1", "tags": ["声纹识别"]}),
         (meeting_progress.router, {"prefix": "/api/v1", "tags": ["会议进度"]}),
         (dashboard.router, {"prefix": "/api/v1", "tags": ["项目动态"]}),

@@ -18,7 +18,7 @@
 W86 mini-12 hotfix: 延迟 celery import 避免 router 加载时的循环导入
 (b31318238/W86 mini-9 userStore getter 修复时, 未触发 task_router 业务 endpoint 调用,
 health 200 掩盖了 celery partial init 错误. 实际 /api/v1/* 业务 endpoint 报 500.
-Fix A: 延迟 import, 沿用 memory_service.py 底部 try/except 模式)
+Fix A: 延迟 import, try/except + fallback decorator 模式)
 """
 try:
     from celery import shared_task

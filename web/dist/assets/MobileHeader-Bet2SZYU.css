@@ -1,0 +1,84 @@
+
+.mobile-chat-header[data-v-43956829] {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* 玻璃头部: 半透明 + blur18, 让 mg-page 极光透出 */
+  background: var(--mg-glass-bg-strong);
+  border-bottom: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  /* iOS 顶部安全区 */
+  padding-top: var(--sat);
+}
+[data-theme="dark"] .mobile-chat-header[data-v-43956829] {
+  border-bottom-color: var(--mg-glass-border);
+}
+.header-inner[data-v-43956829] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-mobile-height, 52px);
+  padding: 0 var(--mobile-padding-x, 16px);
+  gap: 8px;
+}
+.icon-btn[data-v-43956829] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--mg-text);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-size: 22px;
+  line-height: 1;
+}
+.icon-btn[data-v-43956829]:active {
+  background: var(--mg-gradient-soft);
+  color: var(--mg-primary);
+}
+.header-title[data-v-43956829] {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+.title-text[data-v-43956829] {
+  font-size: var(--font-size-md, 15px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--mg-text-strong);
+}
+.status-text[data-v-43956829] {
+  font-size: 11px;
+  color: var(--mg-text-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 1px;
+}
+.status-dot[data-v-43956829] {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success, #67C23A);
+}
+.status-text.is-active .status-dot[data-v-43956829] {
+  background: var(--color-primary);
+  animation: pulse-dot-43956829 1.2s infinite;
+}
+@keyframes pulse-dot-43956829 {
+0%, 100% { opacity: 1;
+}
+50% { opacity: 0.4;
+}
+}
+
+
+[data-theme="dark"] .mobile-chat-header .title-text { color: var(--mg-text-strong);
+}
+[data-theme="dark"] .mobile-chat-header .status-text { color: var(--mg-text-soft);
+}

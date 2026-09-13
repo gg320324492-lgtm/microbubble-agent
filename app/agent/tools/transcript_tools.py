@@ -109,7 +109,7 @@ class SummarizeMeetingTranscriptOutput(BaseModel):
     output_model=SummarizeMeetingTranscriptOutput,
 )
 async def summarize_meeting_transcript(input: SummarizeMeetingTranscriptInput, ctx: ToolContext) -> dict:
-    """总结转录 + 写长期记忆（DB 副作用）"""
+    """总结会议转录（摘要 + 行动项 + 决议）"""
     if not ctx.user_id:
         return {
             "status": "error", "message": "无法识别用户身份",
@@ -117,7 +117,6 @@ async def summarize_meeting_transcript(input: SummarizeMeetingTranscriptInput, c
         }
 
     from app.services.meeting_service import MeetingService
-    from app.services.memory_service import MemoryService
     from app.services.conversation_analyzer import ConversationAnalyzer
 
     # 1. 摘要
@@ -135,14 +134,6 @@ async def summarize_meeting_transcript(input: SummarizeMeetingTranscriptInput, c
             key_points.append(point)
     for d in analysis.get("decisions", []):
         key_points.append(f"[决定] {d}")
-    # 3. 写长期记忆
-    mem_svc = MemoryService(ctx.db)
-    await mem_svc.save_memory(
-        user_id=ctx.user_id,
-        memory_type="summary",
-        content=f"【会议总结】\n\n摘要：{summary}\n\n要点：{'；'.join(key_points)}\n\n原始转录：{input.transcript_text[:3000]}",
-        importance=0.8,
-    )
     return {
         "status": "success",
         "summary": summary,

@@ -274,65 +274,6 @@ class TestLastPgId:
             assert await mba._get_last_pg_id("s1") is None
 
 
-class TestInjectMemories:
-    """_inject_memories: 共享记忆注入段"""
-
-    @pytest.mark.asyncio
-    async def test_memories_injected(self):
-        import app.agent.micro_bubble_agent as mba
-
-        mem_svc = MagicMock()
-        mem_svc.search_memories = AsyncMock(return_value=[
-            {"memory_type": "preference", "content": "喜欢简洁回答"},
-            {"memory_type": "entity", "content": "王天志是组长"},
-        ])
-
-        with patch("app.services.memory_service.MemoryService", MagicMock(return_value=mem_svc)):
-            text = await mba._inject_memories(MagicMock(), user_id=1, query="近况")
-
-        assert "关于用户的长期记忆" in text
-        assert "喜欢简洁回答" in text
-        assert "王天志是组长" in text
-
-    @pytest.mark.asyncio
-    async def test_no_memories_returns_empty(self):
-        import app.agent.micro_bubble_agent as mba
-        mem_svc = MagicMock()
-        mem_svc.search_memories = AsyncMock(return_value=[])
-        with patch("app.services.memory_service.MemoryService", MagicMock(return_value=mem_svc)):
-            assert await mba._inject_memories(MagicMock(), user_id=1, query="x") == ""
-
-    @pytest.mark.asyncio
-    async def test_failure_returns_empty(self):
-        import app.agent.micro_bubble_agent as mba
-        mem_svc = MagicMock()
-        mem_svc.search_memories = AsyncMock(side_effect=RuntimeError("boom"))
-        with patch("app.services.memory_service.MemoryService", MagicMock(return_value=mem_svc)):
-            assert await mba._inject_memories(MagicMock(), user_id=1, query="x") == ""
-
-
-class TestBuildSystemPromptUsesSharedInject:
-    """_build_system_prompt 走共享 _inject_memories（流式/非流式统一 — A4）"""
-
-    @pytest.mark.asyncio
-    async def test_streaming_system_prompt_contains_memories(self):
-        """流式路径: _build_system_prompt(user_id, db) 注入记忆"""
-        from app.agent.micro_bubble_agent import MicroBubbleAgent
-        import app.agent.micro_bubble_agent as mba
-
-        agent = MicroBubbleAgent()
-        mem_svc = MagicMock()
-        mem_svc.search_memories = AsyncMock(return_value=[
-            {"memory_type": "summary", "content": "课题组近期聚焦臭氧微纳米气泡"},
-        ])
-
-        with patch("app.services.memory_service.MemoryService", MagicMock(return_value=mem_svc)):
-            prompt = await agent._build_system_prompt(1, "介绍一下课题组近况", MagicMock())
-
-        assert "关于用户的长期记忆" in prompt
-        assert "臭氧微纳米气泡" in prompt
-
-
 class TestChatStreamHistoryInjection:
     """chat_stream 端到端: PG 历史注入 LLM messages（mock engine）"""
 

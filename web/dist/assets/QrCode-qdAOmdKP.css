@@ -1,0 +1,10 @@
+
+.qrcode-wrapper[data-v-2f2c91da] {
+  display: inline-block;
+  line-height: 0;
+}
+.qrcode-wrapper[data-v-2f2c91da] svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

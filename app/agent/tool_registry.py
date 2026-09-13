@@ -202,7 +202,7 @@ def get_all_tool_schemas(exclude_tools: Optional[set[str]] = None) -> list[dict]
 # ============================================================================
 # 2026-09-10 写操作白名单 — 反谎报 guard / 上轮写事实注入 / critic 的单一事实源
 # ============================================================================
-# 这些工具会改数据库状态 (任务/会议/记忆/知识/网盘入库等)。
+# 这些工具会改数据库状态 (任务/会议/知识/网盘入库等)。
 # 判定口径: execute_action 意图下, 本轮 tool_calls 中没有任何**成功**的写工具
 # → 模型声称"已完成 X"即谎报成功; 反之历史里上轮写成功过而模型说"没做" → 假否认。
 # 新增写工具必须同步登记, 否则 guard 失明。
@@ -211,8 +211,6 @@ WRITE_TOOL_NAMES: frozenset[str] = frozenset({
     "create_task",
     "update_task",
     "create_meeting",
-    "save_memory",
-    "forget_memory",
     "save_conversation_knowledge",
     "submit_feedback",
     "set_custom_instructions",
@@ -228,15 +226,15 @@ def is_write_tool(name: str) -> bool:
     return name in WRITE_TOOL_NAMES
 
 
-# 写工具"真改了库"的成功态集合: 多数工具契约是 status="success";
-# save_memory 特例返回 created/merged/updated (dedup 三态)。error/rejected/skipped 均算未执行。
-_WRITE_SUCCESS_STATUSES: frozenset[str] = frozenset({"success", "created", "merged", "updated"})
+# 写工具"真改了库"的成功态集合: 契约是 status="success"。
+# error/rejected/skipped 均算未执行。
+_WRITE_SUCCESS_STATUSES: frozenset[str] = frozenset({"success"})
 
 
 def write_tool_succeeded(result: Any) -> bool:
     """写工具结果是否代表"真的改了库"。
 
-    契约: 成功返回 {"status": "success", ...} (save_memory 特例 created/merged/updated);
+    契约: 成功返回 {"status": "success", ...};
     error/rejected/skipped 都算未执行。
     update_task 加备注场景额外要求 note_written=True (add_note 请求但没写成功不算)。
     """
@@ -282,7 +280,7 @@ def extract_write_fact(calls: list[dict]) -> Optional[dict]:
         compact = {"tool": name, "ts": datetime.now(timezone.utc).isoformat()}
         # 只挑常见标量字段, 字符串值裁剪, 忽略 list/dict (tasks/members 等大结果不入库)
         for k in ("task_id", "meeting_id", "note_written", "new_status", "description_tail",
-                  "title", "memory_id", "knowledge_id", "message"):
+                  "title", "knowledge_id", "message"):
             v = res.get(k)
             if isinstance(v, bool):
                 compact[k] = v

@@ -438,7 +438,7 @@ def get_system_prompt() -> str:
 当用户询问所有成员任务、团队任务分布时，**必须调用 query_all_member_tasks 工具**并直接输出 formatted_text 结果，不要调用其他工具、不要编造数据库错误。
 
 When a user asks about all members task status, you must:
-- **USE query_all_member_tasks tool** - do not use search_memory or other tools
+- **USE query_all_member_tasks tool** - do not use other tools
 - Output results in fixed format: [In Progress] -> [To Do] -> [Done]
 - If response contains "formatted_text" field, output it directly without modification
 
@@ -541,18 +541,6 @@ When a user asks about all members task status, you must:
 - 当知识库无结果或用户询问最新信息时，使用联网搜索
 - 当你不确定某个事实、数据、或信息时，主动搜索后再回答，不要凭记忆猜测
 - 对于实时性要求高的问题（新闻、最新研究、天气、实时数据），优先联网搜索
-
-## 长期记忆使用规则
-
-- 当用户说"记住..."、"以后..."、"不要..."时，使用 save_memory 保存偏好
-- 当用户**自我介绍**或**提到自己的研究方向/任务**时，使用 save_memory 保存为 user_fact
-- 当对话出现**用户相关的任务上下文**时，使用 save_memory 保存为 task_ctx
-- 当需要回忆之前的对话信息时，使用 search_memory 检索
-- 当用户说"忘掉..."、"删除记忆"时，使用 forget_memory
-- 当用户问"你记住了什么"时，使用 search_memory 查询并展示
-- **严禁**保存其他成员的事实（走 knowledge_graph_builder）或项目状态（走 projects 表）
-- **严禁**保存测试数据 / 占位符 / 短内容（会被 save_memory 拦截）
-- 不要重复保存已有记忆，save_memory 内置自动 dedup（相似度 >= 85% 合并）
 
 ## 知识库保存规则
 

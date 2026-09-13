@@ -5,7 +5,7 @@ file_mention_tasks / knowledge_evolution_tasks / post_meeting_tasks /
 reminder_service / storage_tasks / thumbnail_tasks / task_service /
 agent_trace_tasks / orphan_meeting_cleanup / embedding_recalc /
 content_formatter_service / drive_cleanup_service / knowledge_service /
-memory_service / paper_layout_service / tracing.py / wechat/scheduler 等).
+paper_layout_service / tracing.py / wechat/scheduler 等).
 
 原文件各自 inline 重复:
   from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
