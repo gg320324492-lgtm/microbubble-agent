@@ -101,6 +101,11 @@ const buildOption = () => {
 const renderChart = async () => {
   if (!chartRef.value) return
   await nextTick()
+  // 容器尚未完成布局 (图谱 tab 未激活 / v-show 隐藏中) 时宽高为 0,
+  // echarts.init 会生成 0x0 画布并刷 "Can't get DOM width or height" 警告 —
+  // 跳过本次, 等 ResizeObserver / window resize 在容器有尺寸后触发
+  // handleResize 补首次渲染
+  if (chartRef.value.clientWidth === 0 || chartRef.value.clientHeight === 0) return
   if (chartInstance) chartInstance.dispose()
   chartInstance = echarts.init(chartRef.value)
   chartInstance.setOption(buildOption())
@@ -121,7 +126,12 @@ const renderChart = async () => {
 }
 
 const handleResize = () => {
-  if (chartInstance) chartInstance.resize()
+  if (!chartInstance) {
+    // 首次渲染因容器零尺寸被跳过 → 容器出现尺寸时在这里补渲染
+    renderChart()
+    return
+  }
+  chartInstance.resize()
 }
 
 // W86 mini-5 fix: 父容器高度变化 (grid/flex 重排、tab 切换) 不触发 window resize,

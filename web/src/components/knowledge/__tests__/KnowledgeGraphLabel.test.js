@@ -89,20 +89,57 @@ describe('W86 mini-5 图谱节点 label (normalizeGraphData)', () => {
 describe('W86 mini-5 KnowledgeGraphExplorer 渲染 + 自适应高度', () => {
   beforeEach(() => setOptionSpy.mockClear())
 
+  // jsdom 的 clientWidth/clientHeight 恒为 0; 2026-09-13 起 renderChart 对零尺寸
+  // 容器跳过 init (消灭 ECharts "Can't get DOM width or height" 警告),
+  // 断言渲染的用例必须先 stub 出真实尺寸
+  function stubElementSize(width, height) {
+    const spies = [
+      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width),
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(height),
+    ]
+    return () => spies.forEach((s) => s.mockRestore())
+  }
+
   it('ECharts series data[].name 落到 subject (端到端到 option 层)', async () => {
-    mount(KnowledgeGraphExplorer, {
+    const restoreSize = stubElementSize(640, 480)
+    try {
+      mount(KnowledgeGraphExplorer, {
+        props: { nodes: entityNodes, edges: entityEdges, loading: false },
+        attachTo: document.body,
+      })
+      await flushPromises()
+
+      expect(setOptionSpy).toHaveBeenCalled()
+      const option = setOptionSpy.mock.calls[0][0]
+      const data = option.series[0].data
+      expect(data.map(d => d.name)).toEqual(['微纳米气泡', '超声空化'])
+      // label.formatter '{b}' 渲染的就是 name, 所以 name 正确即节点文字正确
+      expect(option.series[0].label.show).toBe(true)
+      expect(option.series[0].label.formatter).toBe('{b}')
+    } finally {
+      restoreSize()
+    }
+  })
+
+  it('容器零尺寸时跳过 init (不刷 Can\'t get DOM width 警告), 有尺寸后 resize 补渲染', async () => {
+    const wrapper = mount(KnowledgeGraphExplorer, {
       props: { nodes: entityNodes, edges: entityEdges, loading: false },
       attachTo: document.body,
     })
     await flushPromises()
+    // jsdom 默认 clientWidth/Height = 0 → renderChart 跳过 init
+    expect(setOptionSpy).not.toHaveBeenCalled()
 
-    expect(setOptionSpy).toHaveBeenCalled()
-    const option = setOptionSpy.mock.calls[0][0]
-    const data = option.series[0].data
-    expect(data.map(d => d.name)).toEqual(['微纳米气泡', '超声空化'])
-    // label.formatter '{b}' 渲染的就是 name, 所以 name 正确即节点文字正确
-    expect(option.series[0].label.show).toBe(true)
-    expect(option.series[0].label.formatter).toBe('{b}')
+    const restoreSize = stubElementSize(640, 480)
+    try {
+      window.dispatchEvent(new Event('resize'))
+      await flushPromises()
+      // handleResize 发现 chartInstance 为空 → 补首次渲染
+      expect(setOptionSpy).toHaveBeenCalled()
+    } finally {
+      restoreSize()
+      wrapper.unmount()
+    }
   })
 
   it('loading / 空数据时不初始化图表 (不报错)', async () => {

@@ -10,9 +10,11 @@
 
   功能:
   - 文件夹拖拽接收 (useFolderDropZone, 支持 webkitGetAsEntry)
-  - 进度条 per 文件 (PR2.8 multipart API)
+  - 进度条 per 文件 (PR2.8 multipart API + DriveChunkedUploader 分片进度)
   - 多文件批量顺序上传
-  - 大于 50MB 走 multipart, 小于走 single endpoint
+  - ≥50MB 走 DriveChunkedUploader 真分片 (5MB/片), <50MB 走 single endpoint
+    (50MB 对齐 nginx location /api 的 client_max_body_size 50m, 整文件单请求
+    一旦超过它会被 nginx 直接 413 — 2026-09-13 线上事故)
 
   数据流:
   1. 拖拽/选择文件 → fileList 累加
@@ -102,13 +104,14 @@
     </div>
 
     <!-- W72 B-3: Drive 专用分片上传 (替换 multipart 简版, 支持断点续传 + SHA256) -->
+    <!-- folderId 用 '' 哨兵表示顶级; parent-id prop 只认 Number|null (分片 init 走 JSON, 后端 Optional[int]) -->
     <div v-if="chunkedItems.length > 0" class="drive-upload-chunked-list">
       <DriveChunkedUploader
         v-for="item in chunkedItems"
         :key="item.uid"
         :ref="(el) => registerChunkedUploader(item.uid, el)"
         :file="item.file"
-        :parent-id="form.folderId"
+        :parent-id="form.folderId || null"
         :visibility="form.visibility"
         :is-team-shared="props.isTeamShared"
         :auto-start="true"
@@ -121,8 +124,10 @@
     <!-- 配置区 -->
     <el-form :model="form" label-width="100px" :disabled="uploading" class="drive-upload-form">
       <el-form-item label="目标文件夹">
+        <!-- 顶级用 '' 哨兵: Element Plus 的 option value 不接受 null (Invalid prop: got Null);
+             form.folderId 在各 API 边界再映射回 null / '' -->
         <el-select v-model="form.folderId" placeholder="选择目标文件夹 (留空=顶级)" clearable filterable>
-          <el-option label="📁 团队共享盘 · 顶级" :value="null" />
+          <el-option label="📁 团队共享盘 · 顶级" value="" />
           <template v-for="f in flatFolderOptions" :key="f.id">
             <el-option :label="f.label" :value="f.id" />
           </template>
@@ -184,15 +189,19 @@ const chunkedItems = ref([])  // W72 B-3: 走 DriveChunkedUploader 的较大文�
 const chunkedRefs = ref(new Map())
 const uploading = ref(false)
 const uploadedCount = ref(0)
-const SMALL_FILE_THRESHOLD = 50 * 1024 * 1024  // 50MB
-const CHUNKED_THRESHOLD = 200 * 1024 * 1024   // 200MB 起走分片 (≥ 50MB 但小)
+// ≥ CHUNKED_THRESHOLD 必须走 DriveChunkedUploader 真分片 (5MB/片), 其余走 single
+// endpoint 单请求整文件上传 — 上限 50MB 对齐 nginx client_max_body_size 50m。
+// 旧 CHUNKED_THRESHOLD=200MB 导致 [50MB, 200MB) 落入整文件 POST
+// /upload/multipart/complete → 被 nginx 直接 413 (2026-09-13 线上事故)
+const CHUNKED_THRESHOLD = 50 * 1024 * 1024   // 50MB
 
 // PR4: useFileHash (复用同一个 worker 实例避免重复创建) + useDriveFiles (instantUpload)
 const { calc: calcHash } = useFileHash()
 const { instantUpload } = useDriveFiles()
 
 const form = reactive({
-  folderId: props.defaultFolderId,
+  // '' = 顶级 (el-option 哨兵; null 会触发 Element Plus option value 类型告警)
+  folderId: props.defaultFolderId ?? '',
   visibility: 'team'
 })
 
@@ -232,7 +241,7 @@ watch(visible, async (newVal) => {
   if (newVal) {
     // 批次⑩.72: 每次打开默认上传到"当前所在文件夹" (form.folderId 仅在 setup 初始化过,
     // 后续 currentFolder 变化不会回流) — 打开后仍可手动更改
-    form.folderId = props.defaultFolderId ?? null
+    form.folderId = props.defaultFolderId ?? ''
     await nextTick()
     if (dropZoneRef.value) bindDropZone(dropZoneRef.value)
     await fetchTree()
@@ -265,24 +274,27 @@ function onFileInputChange(e) {
 }
 
 function addFiles(entries) {
-  const newItems = entries.map(({ file, relativePath }) => ({
+  // 413 修复 (2026-09-13): ≥ CHUNKED_THRESHOLD 只进 chunkedItems (DriveChunkedUploader
+  // 真分片), 不再同时进 fileItems — 旧逻辑两处都放, ≥200MB 文件会被 uploadOne
+  // 再整文件 POST 一遍 (双上传 + 413)
+  const smallEntries = entries.filter(({ file }) => !file || file.size < CHUNKED_THRESHOLD)
+  const chunkedEntries = entries.filter(({ file }) => file && file.size >= CHUNKED_THRESHOLD)
+  const newItems = smallEntries.map(({ file, relativePath }) => ({
     file,
     relativePath,
     status: 'pending',
     progress: 0,
   }))
   fileItems.value = [...fileItems.value, ...newItems]
-  const chunked = entries
-    .filter(({ file }) => file && file.size >= CHUNKED_THRESHOLD)
-    .map(({ file, relativePath }, index) => ({
-      uid: `chunked-${Date.now()}-${index}-${file.name}`,
-      file,
-      relativePath,
-    }))
+  const chunked = chunkedEntries.map(({ file, relativePath }, index) => ({
+    uid: `chunked-${Date.now()}-${index}-${file.name}`,
+    file,
+    relativePath,
+  }))
   if (chunked.length > 0) {
     chunkedItems.value = [...chunkedItems.value, ...chunked]
   }
-  ElMessage.success(`已添加 ${newItems.length} 个文件`)
+  ElMessage.success(`已添加 ${entries.length} 个文件`)
 }
 
 function registerChunkedUploader(uid, el) {
@@ -294,7 +306,7 @@ function onChunkedDone(item, payload) {
   if (!payload) return
   chunkedItems.value = chunkedItems.value.filter((entry) => entry.uid !== item.uid)
   ElMessage.success(`分片上传完成: ${item.relativePath}`)
-  emit('uploaded', { count: 1, folderId: form.folderId })
+  emit('uploaded', { count: 1, folderId: form.folderId || null })
   maybeCloseDialog()
 }
 
@@ -339,7 +351,7 @@ function resetForm() {
   chunkedItems.value = []
   chunkedRefs.value.clear()
   uploadedCount.value = 0
-  form.folderId = props.defaultFolderId
+  form.folderId = props.defaultFolderId ?? ''
   form.visibility = 'team'
 }
 
@@ -366,7 +378,7 @@ async function onSubmit() {
     const successCount = fileItems.value.filter(i => i.status === 'done').length
     if (successCount > 0) {
       ElMessage.success(`上传完成: ${successCount}/${fileItems.value.length}`)
-      emit('uploaded', { count: successCount, folderId: form.folderId })
+      emit('uploaded', { count: successCount, folderId: form.folderId || null })
       // 短暂延迟后关闭 dialog
       setTimeout(() => {
         visible.value = false
@@ -380,102 +392,66 @@ async function onSubmit() {
 }
 
 async function uploadOne(item) {
-  // v2 PR4: 秒传先查 hash, 命中走零带宽 dedup (仅小文件)
-  // 大文件 multipart 暂不秒传 (PR5 范围)
-  const SMALL_FILE_THRESHOLD = 50 * 1024 * 1024  // 50MB
+  // 防御: ≥ CHUNKED_THRESHOLD 的文件已被 addFiles 分流到 DriveChunkedUploader。
+  // 整文件单请求 POST 的 body 一旦 ≥50MB 会被 nginx client_max_body_size 50m
+  // 直接 413 (2026-09-13 线上事故, 旧 multipart 路径已删除)
+  if (item.file.size >= CHUNKED_THRESHOLD) {
+    item.status = 'error'
+    ElMessage.error(`${item.relativePath} (≥ ${formatSize(CHUNKED_THRESHOLD)}) 请使用分片上传`)
+    return
+  }
 
-  // PR4 step 1: 算 hash (仅小文件, 大文件 multipart 不秒传)
-  if (item.file.size < SMALL_FILE_THRESHOLD && item.file.size < 100 * 1024 * 1024) {
-    item.status = 'hashing'
-    item.progress = 0
-    try {
-      const fileHash = await calcHash(item.file)
-      item.fileHash = fileHash
+  // v2 PR4: 秒传先查 hash, 命中走零带宽 dedup
+  item.status = 'hashing'
+  item.progress = 0
+  try {
+    const fileHash = await calcHash(item.file)
+    item.fileHash = fileHash
 
-      // PR4 step 2: 查 instant-upload
-      item.status = 'checking-instant'
-      const instant = await instantUpload({
-        fileHash,
-        fileName: item.file.name,
-        fileSize: item.file.size,
-        folderId: form.folderId || null,
-        visibility: form.visibility,
-        isTeamShared: !!props.isTeamShared,  // v2 PR6-P19
-      })
+    // 查 instant-upload
+    const instant = await instantUpload({
+      fileHash,
+      fileName: item.file.name,
+      fileSize: item.file.size,
+      folderId: form.folderId || null,
+      visibility: form.visibility,
+      isTeamShared: !!props.isTeamShared,  // v2 PR6-P19
+    })
 
-      if (instant.instant) {
-        // PR4 step 3a: 命中秒传 → 跳过文件上传
-        item.status = 'done-instant'
-        item.dedupSavedBytes = instant.dedup_saved_bytes
-        item.fileId = instant.file_id
-        item.progress = 100
-        return  // 秒传完成, 不走 multipart
-      }
-      // instant=false → 走老路径
-    } catch (e) {
-      // hash 失败 / instant-upload 报错 → 不阻塞, 降级到普通上传
-      console.warn('[PR4] hash/instant-upload 失败, 降级普通上传:', e)
+    if (instant.instant) {
+      // 命中秒传 → 跳过文件上传
+      item.status = 'done-instant'
+      item.dedupSavedBytes = instant.dedup_saved_bytes
+      item.fileId = instant.file_id
+      item.progress = 100
+      return  // 秒传完成
     }
+    // instant=false → 走普通上传
+  } catch (e) {
+    // hash 失败 / instant-upload 报错 → 不阻塞, 降级到普通上传
+    console.warn('[PR4] hash/instant-upload 失败, 降级普通上传:', e)
   }
 
   item.status = 'uploading'
   item.progress = 0
 
-  if (item.file.size < SMALL_FILE_THRESHOLD) {
-    // 小文件: 单端点上传
-    const formData = new FormData()
-    formData.append('file', item.file)
-    formData.append('folder_id', form.folderId || '')
-    formData.append('visibility', form.visibility)
-    formData.append('storage_mode', 'drive')
-    // v2 PR6-P19 修复: 小文件路径之前漏传 is_team_shared, 导致走"团队共享盘"
-    // 视图上传的小文件仍写入 is_team_shared=false → 显示在个人网盘
-    formData.append('is_team_shared', props.isTeamShared ? 'true' : 'false')
+  const formData = new FormData()
+  formData.append('file', item.file)
+  formData.append('folder_id', form.folderId || '')
+  formData.append('visibility', form.visibility)
+  formData.append('storage_mode', 'drive')
+  // v2 PR6-P19 修复: 小文件路径之前漏传 is_team_shared, 导致走"团队共享盘"
+  // 视图上传的小文件仍写入 is_team_shared=false → 显示在个人网盘
+  formData.append('is_team_shared', props.isTeamShared ? 'true' : 'false')
 
-    await axios.post('/api/v1/drive/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (e) => {
-        if (e.total) {
-          item.progress = Math.round((e.loaded / e.total) * 100)
-        }
+  await axios.post('/api/v1/drive/files/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (e.total) {
+        item.progress = Math.round((e.loaded / e.total) * 100)
       }
-    })
-  } else {
-    // 大文件: multipart 3 阶段 (init + complete + abort on error)
-    // ⚠️ 后端 schema (MultipartInitRequest) 用 `filename` + `total_size`, 区别于
-    //    PR4 `/drive/files/instant-upload` 的 `file_name` + `file_size` 命名约定.
-    //    见 app/api/v1/upload_multipart.py:5 docstring 的 canonical wire format.
-    const initResp = await axios.post('/api/v1/upload/multipart/init', {
-      filename: item.file.name,
-      total_size: item.file.size,
-      content_type: item.file.type || 'application/octet-stream'
-    })
-    const uploadId = initResp.data.upload_id
-
-    try {
-      const completeForm = new FormData()
-      completeForm.append('upload_id', uploadId)
-      completeForm.append('folder_id', form.folderId || '')
-      completeForm.append('visibility', form.visibility)
-      completeForm.append('storage_mode', 'drive')
-      // v2 PR6-P19 修复: 大文件 complete 路径之前漏传 is_team_shared
-      completeForm.append('is_team_shared', props.isTeamShared ? 'true' : 'false')
-      completeForm.append('data', item.file)
-
-      await axios.post('/api/v1/upload/multipart/complete', completeForm, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (e) => {
-          if (e.total) {
-            item.progress = Math.round((e.loaded / e.total) * 100)
-          }
-        }
-      })
-    } catch (e) {
-      // 失败回滚: 通知后端清理 MinIO
-      await axios.post('/api/v1/upload/multipart/abort', { upload_id: uploadId }).catch(() => {})
-      throw e
     }
-  }
+  })
 }
 </script>
 

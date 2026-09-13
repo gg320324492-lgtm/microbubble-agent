@@ -280,7 +280,19 @@ async def ws_asr(ws: WebSocket):
         state["last_used"] = time.time()
 
 
+def _hide_console() -> None:
+    """隐藏宿主控制台窗口（任务栏/Alt+Tab 不再显示，服务照常运行）。
+    设 GPU_ASR_SHOW_CONSOLE=1 可保留窗口查看日志。"""
+    if sys.platform != "win32" or os.environ.get("GPU_ASR_SHOW_CONSOLE"):
+        return
+    import ctypes
+    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+    if hwnd:
+        ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+
+
 def main():
+    _hide_console()
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int,
                     default=int(os.environ.get("GPU_STREAMING_PORT", "8006")))
