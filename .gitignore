@@ -192,3 +192,8 @@ _r*-guard.txt
 
 # ZCode CLI 会话本地配置 (2026-09-13)
 .zcode/
+
+# 桌面端 (apps/desktop) 构建产物 — 2026-09-14 M0 monorepo 起步
+apps/desktop/out/
+apps/desktop/release/
+apps/desktop/dist-electron/

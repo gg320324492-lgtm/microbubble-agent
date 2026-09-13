@@ -1,0 +1,20 @@
+# electron-builder — M0 最小可安装配置（未签名，正式发布走 M6 发布设计）
+appId: cn.mnb-lab.workbench
+productName: MicroBubbleWorkbench
+directories:
+  output: release
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: MicroBubbleWorkbench-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  shortcutName: 小气科研工作台

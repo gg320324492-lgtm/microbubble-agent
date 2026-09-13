@@ -1,0 +1,53 @@
+// 应用级扩展令牌 — 深色身份面板等桌面专属补充（品牌色一律取自 @mb/design-tokens）
+:root {
+  --wb-panel-950: #211713; /* 暖黑 — 登录页身份区/状态栏底 */
+  --wb-panel-900: #2c1f19;
+  --wb-panel-text: #f5ece6;
+  --wb-panel-text-dim: rgba(245, 236, 230, 0.62);
+  --wb-titlebar-height: 40px;
+  --wb-statusbar-height: 26px;
+  --wb-sidebar-width: 208px;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* 输入类元素允许选中 */
+input,
+textarea {
+  user-select: text;
+}
+
+*:focus-visible {
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* 滚动条 — 细暖色 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 122, 92, 0.25);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 122, 92, 0.45);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
