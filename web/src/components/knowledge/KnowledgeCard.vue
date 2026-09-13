@@ -285,7 +285,7 @@ const formatDate = (dateStr) => {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
-  box-shadow: 0 2px 6px rgba(255, 122, 92, 0.32);
+  box-shadow: 0 2px 6px rgba(61, 107, 100, 0.28);
 }
 .top-result-glyph {
   font-size: 11px;
@@ -327,14 +327,15 @@ const formatDate = (dateStr) => {
 .file-hero-type {
   font-size: 14px;
   font-weight: 700;
-  color: rgba(0, 0, 0, 0.75);
+  /* 2026-09-13 配色④ 青灰水墨: 墨青类型字 (随主题 token 翻转) */
+  color: var(--color-primary);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
 .file-hero-imgs {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.55);
+  color: var(--color-text-secondary);
   margin-top: 2px;
 }
 
@@ -593,5 +594,22 @@ const formatDate = (dateStr) => {
 [data-theme="dark"] .top-result-badge {
   background: var(--color-primary);
   color: #fff;
+}
+
+/* 2026-09-13 配色④ 青灰水墨: 深色主题 hero 深洗 (全局 scss 里的浅洗只适合浅色) */
+[data-theme="dark"] .card-file-hero--pdf {
+  background: linear-gradient(135deg, #1e2826 0%, #161d1b 100%);
+}
+[data-theme="dark"] .card-file-hero--word {
+  background: linear-gradient(135deg, #1d2629 0%, #181e20 100%);
+}
+[data-theme="dark"] .card-file-hero--ppt {
+  background: linear-gradient(135deg, #1e2825 0%, #181f1d 100%);
+}
+[data-theme="dark"] .card-file-hero--excel {
+  background: linear-gradient(135deg, #1d2825 0%, #182019 100%);
+}
+[data-theme="dark"] .card-file-hero--other {
+  background: linear-gradient(135deg, #1e2426 0%, #181c1d 100%);
 }
 </style>

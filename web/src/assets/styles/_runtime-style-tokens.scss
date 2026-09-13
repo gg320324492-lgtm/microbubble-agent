@@ -93,11 +93,13 @@
 // ===== 文件 hero 渐变 (KnowledgeCard) =====
 // v77 P2.6-E.1: 收敛 KnowledgeCard.vue:12 fileHeroGradient runtime :style
 // 5 类文件 type → 5 个类（颜色与原 fileTypeInfo.gradient 完全一致）
-.card-file-hero--pdf   { background: linear-gradient(135deg, #FEE2E2 0%, #FCA5A5 100%); }
-.card-file-hero--word  { background: linear-gradient(135deg, #DBEAFE 0%, #93C5FD 100%); }
-.card-file-hero--ppt   { background: linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%); }
-.card-file-hero--excel { background: linear-gradient(135deg, #D1FAE5 0%, #6EE7B7 100%); }
-.card-file-hero--other { background: linear-gradient(135deg, #E5E7EB 0%, #9CA3AF 100%); }
+// 2026-09-13 配色④「青灰水墨」重着色: 高饱和黄/粉/蓝渐变 → 冷灰青洗 (几乎无色,
+// 类型由 .file-hero-type 墨青文字区分); 深色主题深洗覆盖见 KnowledgeCard.vue 非 scoped 块
+.card-file-hero--pdf   { background: linear-gradient(135deg, #e9edee 0%, #f6f8f8 100%); }
+.card-file-hero--word  { background: linear-gradient(135deg, #eaeff1 0%, #f7f9fa 100%); }
+.card-file-hero--ppt   { background: linear-gradient(135deg, #e9efee 0%, #f6f9f8 100%); }
+.card-file-hero--excel { background: linear-gradient(135deg, #ebf0ee 0%, #f6f9f7 100%); }
+.card-file-hero--other { background: linear-gradient(135deg, #eceeee 0%, #f5f7f7 100%); }
 
 // ===== category-badge dynamic (KnowledgeCard) =====
 // v77 P2.6-E.1: 命名约定 .category-badge--<知识分类 name 小写连字符>
