@@ -604,6 +604,30 @@ onMounted(() => {
 /* ── 批次⑩.80 任务管理完整迁入 (tv-embed) ─────────────── */
 .tv-embed :deep(.page-container) { padding: 0; max-width: none; }
 .tv-embed :deep(.task-view) { --dg-shadow: rgba(22, 35, 42, 0.1); }
+
+/* ── 批次⑩.81 创建任务按钮 — 用户选型 C 墨黑实心 (墨线印章) ── */
+/* !important 压制 variables.css 的 :root AA 规则; dark 模式沿用全站 primary 变墨青的既有约定 */
+.tv-embed :deep(.create-task-btn) {
+  background: var(--ink) !important;
+  border: 1.5px solid var(--ink) !important;
+  color: var(--paper) !important;
+  border-radius: 3px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  box-shadow: 3px 3px 0 var(--shadow-ink);
+  transition: all 0.15s ease-out;
+}
+.tv-embed :deep(.create-task-btn:hover) {
+  background: #24363f !important;
+  border-color: #24363f !important;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--shadow-ink);
+}
+.tv-embed :deep(.create-task-btn:active) {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--shadow-ink);
+}
 </style>
 
 <!-- dark 换墨盘 (与 SettingsView 同变量族) -->
