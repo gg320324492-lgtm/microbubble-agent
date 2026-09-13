@@ -8,7 +8,10 @@
 0.1.0, 147 commits) + `scripts/desktop_migration` + `tests/desktop_migration`
 + `docs/desktop-conversion/|desktop-migration/` + 9-08 两份方案文档 (UI 原生化
 N1-N6 / FileAgentLoop S0-S5)。**归档 tag `archive/desktop-before-redo-20260913`**,
-旧实现与旧方案随时可查。本机已同步清理: 两份已装应用 (C: Aug-28 构建 186MB /
+旧实现与旧方案随时可查。09-13 二次清理: 删 `docs/superpowers/` 4 份桌面
+plan/spec (login-ui 设计+计划 / R0-R7 发布程序 / mbrp 迁移设计); 用户拍板
+**恢复保留 `docs/desktop-ui-migration-and-release.md` (9-08 UI 原生化 N1-N6 +
+阿里云 OSS/CDN 发布通道) 作为重做蓝本**, FileAgentLoop S0-S5 方案仍在归档。本机已同步清理: 两份已装应用 (C: Aug-28 构建 186MB /
 D: 旧版) + Start Menu/桌面快捷方式 + `%APPDATA%\microbubble-desktop` 用户数据
 (含迁移快照 scientific.db, 源头云端 PG 可再生) 全部删除。**已知断点教训**
 (重做时必须解决): 0.1.0 登录表单走的是 Phase-1 云端 `/auth/login` 通道,
