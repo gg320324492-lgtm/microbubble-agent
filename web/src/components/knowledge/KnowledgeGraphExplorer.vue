@@ -41,6 +41,8 @@ const normalizedData = computed(() => {
 
 const buildOption = () => {
   const { nodes, links, categories } = normalizedData.value
+  // 2026-09-13 重做: 力导参数随规模自适应, 防大图 (100 节点) 挤成一团
+  const n = nodes?.length || 0
   return {
     tooltip: {
       trigger: 'item',
@@ -54,11 +56,15 @@ const buildOption = () => {
         return ''
       },
     },
+    // 图例固定画布右上角横排 (旧版 vertical+middle 悬在关系线中间, 挡图)
     legend: categories?.length > 1 ? {
       data: categories.map(c => c.name),
-      orient: 'vertical',
+      orient: 'horizontal',
       right: 10,
-      top: 'middle',
+      top: 6,
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { fontSize: 10 },
     } : undefined,
     animationDurationUpdate: 600,
     animationEasingUpdate: 'cubicInOut',
@@ -67,10 +73,15 @@ const buildOption = () => {
       layout: 'force',
       roam: true,
       draggable: true,
+      // 画布内缩: 节点标签 (position:right) 不再被容器边缘裁剪
+      left: 30,
+      top: 40,
+      right: 110,
+      bottom: 30,
       force: {
-        repulsion: 200,
-        edgeLength: [80, 240],
-        gravity: 0.05,
+        repulsion: n > 70 ? 420 : n > 40 ? 320 : 240,
+        edgeLength: [60, 200],
+        gravity: 0.12,
       },
       data: nodes,
       links: links,
@@ -78,17 +89,18 @@ const buildOption = () => {
       label: {
         show: true,
         position: 'right',
-        fontSize: 11,
+        fontSize: 10.5,
+        color: '#41564f',
         formatter: '{b}',
       },
       lineStyle: {
-        color: '#bbb',
-        curveness: 0.15,
-        width: 1,
+        color: 'rgba(113, 138, 131, 0.4)',
+        curveness: 0.12,
+        width: 1.2,
       },
       emphasis: {
         focus: 'adjacency',
-        lineStyle: { width: 2 },
+        lineStyle: { width: 2.2 },
       },
       edgeLabel: {
         fontSize: 10,

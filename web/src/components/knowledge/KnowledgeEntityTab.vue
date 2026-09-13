@@ -1,75 +1,139 @@
-<!-- KnowledgeEntityTab.vue — v77 P2.6-E.3 拆分自 KnowledgeView.vue
-     W86 mini-4 fix: 复用 KnowledgeGraphExplorer.vue (Phase 9 W85 B-1), 现代化 ECharts 渲染
-     + loading state 骨架屏 + 保留搜索/过滤/侧栏实体详情
+<!--
+  KnowledgeEntityTab.vue — 实体图谱 tab · 2026-09-13 档案墨线风重做
+
+  重做要点 (用户报告: 图谱混乱/标签裁剪/列表难翻/风格不齐):
+  - 墨线档案头部行 (mono eyebrow + 衬线标题 + 刷新) 取代 el-card 过滤条
+  - 过滤行: 关键字宽框 + 主体/关系窄框 + 常用关系快速戳, 回车即搜
+  - 左 2fr 图谱 / 右 1.2fr 实体列表, 面板高度对齐 (min-height 640)
+  - 列表行: predicate 改 mono 戳 + 置信度细条, 墨线虚线分隔
+  - 配色全部走 var(--color-*) — 自动继承 .knowledge-view 页面配色④青灰水墨 + 深色主题
+
+  契约不变:
+  Props: entityList / entityTotal / entityPage / entityGraphData (来自 useKnowledge)
+  Emits: refresh / page-change / show-entity-detail
+  Expose: searchEntitiesLocal / fetchEntityGraphLocal (父级 watch(activeTab) 调用)
 -->
 <template>
-  <div>
-    <el-card class="filter-card">
-      <el-row :gutter="12">
-        <el-col :span="5">
-          <el-input v-model="entitySearch.subject" name="entitySearch-subject" placeholder="主体" clearable @keyup.enter="searchEntitiesLocal" />
-        </el-col>
-        <el-col :span="5">
-          <el-input v-model="entitySearch.predicate" name="entitySearch-predicate" placeholder="关系" clearable @keyup.enter="searchEntitiesLocal" />
-        </el-col>
-        <el-col :span="6">
-          <el-input v-model="entitySearch.keyword" name="entitySearch-keyword" placeholder="关键字搜索" clearable @keyup.enter="searchEntitiesLocal" />
-        </el-col>
-        <el-col :span="4">
-          <el-button type="primary" @click="searchEntitiesLocal">搜索实体</el-button>
-        </el-col>
-        <el-col :span="4">
-          <el-button @click="fetchEntityGraphLocal" :loading="entityGraphLoading">刷新图谱</el-button>
-        </el-col>
-      </el-row>
-    </el-card>
+  <div class="entity-tab">
+    <!-- 头部行 -->
+    <div class="et-head">
+      <div>
+        <div class="et-eyebrow">ENTITY GRAPH · 关系网络</div>
+        <div class="et-title">实体关系图谱</div>
+      </div>
+      <button class="et-refresh" :disabled="entityGraphLoading" @click="fetchEntityGraphLocal">
+        <span class="et-refresh-glyph" :class="{ spin: entityGraphLoading }">⟳</span>
+        刷新图谱
+      </button>
+    </div>
 
-    <div class="entity-linked-view">
-      <div class="entity-graph-panel">
-        <div class="panel-header">
-          <h3 class="panel-title">🔗 关系网络</h3>
-          <span class="panel-hint">点击节点查看详情</span>
+    <!-- 过滤行 -->
+    <div class="et-filters">
+      <input
+        v-model="entitySearch.keyword"
+        class="et-input et-input-wide"
+        placeholder="搜索主体、关系、客体、条件…"
+        @keyup.enter="searchEntitiesLocal"
+      />
+      <input
+        v-model="entitySearch.subject"
+        class="et-input"
+        placeholder="主体 (精确)"
+        @keyup.enter="searchEntitiesLocal"
+      />
+      <input
+        v-model="entitySearch.predicate"
+        class="et-input"
+        placeholder="关系 (精确)"
+        @keyup.enter="searchEntitiesLocal"
+      />
+      <button class="et-btn et-btn-pri" @click="searchEntitiesLocal">搜索实体</button>
+    </div>
+
+    <!-- 常用关系快速过滤 -->
+    <div class="et-quick">
+      <span class="et-quick-label">常用关系</span>
+      <button
+        v-for="p in QUICK_PREDICATES"
+        :key="p"
+        class="et-quick-chip"
+        :class="{ on: entitySearch.predicate === p }"
+        @click="quickPredicate(p)"
+      >{{ p }}</button>
+      <button
+        v-if="entitySearch.predicate"
+        class="et-quick-clear"
+        @click="quickPredicate('')"
+      >✕ 清除</button>
+    </div>
+
+    <!-- 主体双栏 -->
+    <div class="et-body">
+      <!-- 图谱面板 -->
+      <div class="et-graph-panel">
+        <div class="et-panel-header">
+          <span class="et-panel-title"><span class="et-link-glyph">🔗</span> 关系网络</span>
+          <span class="et-panel-hint">点击节点查看详情 · 滚轮缩放 · 拖拽平移</span>
         </div>
-        <!-- W86 mini-4 fix: 复用 Phase 9 KnowledgeGraphExplorer 现代化 ECharts -->
+
+        <div v-if="entityGraphLoading" class="et-skel">
+          <div class="et-skel-line" style="width: 42%"></div>
+          <div class="et-skel-line" style="width: 68%"></div>
+          <div class="et-skel-line" style="width: 55%"></div>
+          <div class="et-skel-line" style="width: 74%"></div>
+        </div>
         <KnowledgeGraphExplorer
+          v-else-if="entityGraphData?.nodes?.length"
           :nodes="entityGraphData.nodes"
           :edges="entityGraphData.edges"
           :loading="entityGraphLoading"
           @node-click="handleGraphNodeClick"
         />
+        <div v-else class="et-empty">
+          <div class="et-empty-mark">∅</div>
+          <div class="et-empty-t">暂无图谱数据</div>
+          <div class="et-empty-s">添加知识条目并触发深度研究后, 这里会自动生成关系网络</div>
+          <button class="et-btn" @click="fetchEntityGraphLocal">重新加载</button>
+        </div>
       </div>
 
-      <div class="entity-list-panel">
-        <div class="panel-header">
-          <h3 class="panel-title">📋 实体列表</h3>
-          <span class="panel-count">{{ entityList.length }} 个实体</span>
+      <!-- 列表面板 -->
+      <div class="et-list-panel">
+        <div class="et-panel-header">
+          <span class="et-panel-title"><span class="et-link-glyph">📋</span> 实体列表</span>
+          <span class="et-panel-hint">{{ entityTotal }} 条</span>
         </div>
-        <div v-if="entityList.length === 0" class="list-empty">
-          <el-empty description="暂无实体数据" :image-size="60" />
+
+        <div v-if="entityList.length === 0" class="et-empty">
+          <div class="et-empty-mark">∅</div>
+          <div class="et-empty-t">暂无实体数据</div>
+          <div class="et-empty-s">调整搜索条件后重试</div>
         </div>
-        <div v-else class="entity-list-scroll">
+
+        <div v-else class="et-list-scroll">
           <div
             v-for="e in entityList"
             :key="e.id"
-            class="entity-card"
-            :class="{ 'entity-card-active': selectedEntityId === e.id }"
+            class="et-row"
+            :class="{ 'et-row-on': selectedEntityId === e.id }"
             @click="handleEntityClick(e)"
           >
-            <div class="entity-triple">
-              <span class="entity-subject">{{ e.subject }}</span>
-              <span class="entity-predicate">{{ e.predicate }}</span>
-              <span class="entity-object">{{ e.object }}</span>
+            <div class="et-triple">
+              <span class="et-subject">{{ e.subject }}</span>
+              <span class="et-pred">{{ e.predicate }}</span>
+              <span class="et-object">{{ e.object }}</span>
             </div>
-            <div v-if="e.condition" class="entity-condition-text">条件: {{ e.condition }}</div>
-            <div class="entity-meta">
-              <span class="meta-item">{{ e.source_count }} 篇文档</span>
-              <span class="meta-item">{{ e.occurrence_count }} 次出现</span>
-              <span class="meta-confidence">
-                <el-progress :percentage="Math.round(e.confidence * 100)" :stroke-width="3" :show-text="false" style="width:60px" />
+            <div v-if="e.condition" class="et-cond">条件 · {{ e.condition }}</div>
+            <div class="et-meta">
+              <span>{{ e.source_count }} 篇文档</span>
+              <span>{{ e.occurrence_count }} 次出现</span>
+              <span class="et-conf" :title="`置信度 ${Math.round(e.confidence * 100)}%`">
+                <i :style="{ width: Math.round(e.confidence * 100) + '%' }"></i>
               </span>
             </div>
           </div>
         </div>
+
         <el-pagination
           v-if="entityTotal > 0"
           :current-page="entityPage"
@@ -86,16 +150,13 @@
 
 <script setup>
 /**
- * KnowledgeEntityTab.vue — 实体图谱 tab（v77 P2.6-E.3 从 KnowledgeView.vue 拆分）
- * W86 mini-4 fix: 复用 KnowledgeGraphExplorer (Phase 9) 取代自维护 ECharts
+ * KnowledgeEntityTab.vue — 实体图谱 tab (v77 P2.6-E.3 拆分; 2026-09-13 墨线重做)
  *
- * 父组件: KnowledgeView.vue (lazy-loaded tab-pane)
- * Props: entityList / entityTotal / entityPage / entityGraphData（来自 useKnowledge composable）
- *
- * 关键点:
- * - ECharts instance 由 KnowledgeGraphExplorer 内部 lifecycle 管理
- * - 父组件不再持有 entityChartInstance 引用（v60-v67 教训：避免跨组件状态共享）
- * - 父组件只管 search/filter/list, 图谱渲染委派给 Explorer
+ * 数据流契约不变:
+ * - Props: entityList / entityTotal / entityPage / entityGraphData (来自 useKnowledge)
+ * - Emits: refresh (list+graph 回传父级) / page-change / show-entity-detail
+ * - Expose: searchEntitiesLocal / fetchEntityGraphLocal (父级 watch(activeTab) 调用)
+ * - 取数: axios 直连 /api/v1/knowledge/entities(+ /graph), request.js 拦截器注入鉴权
  */
 import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
@@ -115,6 +176,14 @@ const entitySearch = ref({ subject: '', predicate: '', keyword: '' })
 const selectedEntityId = ref(null)
 const entityGraphLoading = ref(false)
 
+// 常用关系快速过滤 (后端 predicate 参数为精确匹配)
+const QUICK_PREDICATES = ['产生', '具有', '提高', '影响', '抑制', '改善']
+
+const quickPredicate = (p) => {
+  entitySearch.value.predicate = p
+  searchEntitiesLocal()
+}
+
 const searchEntitiesLocal = async () => {
   try {
     const params = { ...entitySearch.value, page: props.entityPage, page_size: 20 }
@@ -130,12 +199,7 @@ const searchEntitiesLocal = async () => {
 const fetchEntityGraphLocal = async () => {
   entityGraphLoading.value = true
   try {
-    // W86 mini-6 fix: 之前直接 emit('refresh') 让父组件更新 entityGraphData,
-    //   但 watch 链路 (KnowledgeView.vue:405) 只在 activeTab 切换时触发
-    //   entityTabRef.value.fetchEntityGraphLocal(), 初次进入实体 tab 用户看到空图,
-    //   必须手动点"刷新图谱"才能加载.
-    //   现在直接调 fetchEntityGraph 立即拉数据并更新 entityGraphData,
-    //   父组件 handleEntityRefresh 仍会接收到 graph 数据 (兼容老路径).
+    // W86 mini-6 fix: 直接拉图谱并回传父级 (兼容老路径), 不依赖父级 watch 链路
     const res = await axios.get('/api/v1/knowledge/entities/graph', {
       params: { limit: 100 }
     })
@@ -148,16 +212,6 @@ const fetchEntityGraphLocal = async () => {
   }
 }
 
-// W86 mini-6 fix: 切 tab 自动加载 — KnowledgeView.vue 的 watch(activeTab) 在
-//   activeTab === 'entities' 时调 entityTabRef.value.fetchEntityGraphLocal(),
-//   但 KnowledgeGraphExplorer 只在 props.entityGraphData 变化时才重新渲染.
-//   这里加 onMounted + watch 兜底, 配合父组件 watch 实现"切 tab 即加载, 不需手动刷新".
-//   关键: 仅在 entityGraphData 为空时触发, 避免重复请求.
-// W86 mini-7 fix (派工 v6 §1.2 真验证): onMounted 同时调 searchEntitiesLocal,
-//   父组件 useKnowledge 初始化时 searchEntities({ page_size: 1 }) 把 entityList
-//   设为 [1 item] → 用户直接进入 entities tab 或刷新页面时 watch(activeTab) 不会触发
-//   (activeTab 已是 'entities' 无变化), 列表永远停在 1 条. onMounted 同时 fetch
-//   list + graph, 保证 entityList 在组件挂载时即补齐 20 条.
 onMounted(() => {
   if (!props.entityGraphData?.nodes?.length) {
     fetchEntityGraphLocal()
@@ -169,7 +223,7 @@ onMounted(() => {
 })
 
 // 兜底: 父组件 emit('refresh') 后 entityGraphData 通过 props 变化,
-//   若数据仍为空 (e.g. 接口异常), 重新拉一次.
+// 若数据仍为空 (e.g. 接口异常), 重新拉一次.
 watch(() => props.entityGraphData?.nodes?.length, (newLen, oldLen) => {
   if (oldLen !== undefined && newLen === 0 && oldLen > 0) {
     fetchEntityGraphLocal()
@@ -178,8 +232,6 @@ watch(() => props.entityGraphData?.nodes?.length, (newLen, oldLen) => {
 
 const handleGraphNodeClick = (nodeData) => {
   if (!nodeData) return
-  // nodeData.id 是 string (KnowledgeGraphExplorer 内部 normalize 后的 id)
-  // 找到原始 entity 并高亮 + emit
   const entityId = Number(nodeData.id || nodeData.entityId)
   if (!entityId) return
   selectedEntityId.value = entityId
@@ -197,255 +249,180 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
 </script>
 
 <style scoped>
-.filter-card {
-  margin-bottom: var(--space-4);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-}
-
-.entity-linked-view {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
-}
-
-.entity-graph-panel,
-.entity-list-panel {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
-}
-
-/* W86 mini-5 fix: 老代码 .entity-graph-panel 无 height/flex, 子组件
-   KnowledgeGraphExplorer 的 height:100% 没有可解析的父高度 → 图谱塌到
-   min-height 480px 且不随面板拉伸, 用户看到"小框显示不全".
-   面板改 flex column + 600px 下限, 图谱区 flex:1 吃掉 header 以外的剩余空间. */
-.entity-graph-panel {
+/* ═══ 墨线档案 · 页面配色④令牌自动继承 (.knowledge-view 覆盖) ═══ */
+.entity-tab {
   display: flex;
   flex-direction: column;
-  min-height: 600px;
+  gap: 14px;
+  animation: fadeSlideUp var(--duration-slow, .3s) ease-out both;
 }
 
-.entity-graph-panel :deep(.kg-explorer) {
-  flex: 1;
-  min-height: 0; /* flex 子项默认 min-height:auto 会撑破容器 */
+/* 头部行 */
+.et-head { display: flex; justify-content: space-between; align-items: flex-end; }
+.et-eyebrow {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 10px; letter-spacing: .3em; color: var(--color-text-secondary);
+}
+.et-title {
+  font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  font-size: 21px; font-weight: 700; letter-spacing: .05em; line-height: 1.3;
+  margin-top: 2px;
+}
+.et-refresh {
+  font-size: 12.5px; padding: 7px 16px; border-radius: 3px; cursor: pointer;
+  background: var(--color-bg-card); color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.et-refresh:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); }
+.et-refresh:disabled { opacity: .55; cursor: wait; }
+.et-refresh-glyph { display: inline-block; }
+.et-refresh-glyph.spin { animation: et-spin 1s linear infinite; }
+@keyframes et-spin { to { transform: rotate(360deg); } }
+
+/* 过滤行 */
+.et-filters { display: flex; gap: 10px; }
+.et-input {
+  background: var(--color-bg-card); color: var(--color-text-primary);
+  border: 1px solid var(--color-border); border-radius: 3px;
+  padding: 9px 12px; font-size: 13px; outline: none; min-width: 0;
+}
+.et-input::placeholder { color: var(--color-text-placeholder); }
+.et-input:focus { border-color: var(--color-primary); }
+.et-input-wide { flex: 1; }
+.et-input:not(.et-input-wide) { width: 150px; }
+.et-btn {
+  font-size: 13px; padding: 9px 18px; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--color-border); background: var(--color-bg-card);
+  color: var(--color-text-primary); white-space: nowrap;
+}
+.et-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.et-btn-pri {
+  background: var(--color-primary); border-color: var(--color-primary); color: #fff;
+  font-weight: 600;
+}
+.et-btn-pri:hover { background: var(--color-primary-light); border-color: var(--color-primary-light); color: #fff; }
+
+/* 常用关系快速过滤 */
+.et-quick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.et-quick-label {
+  font-family: Consolas, 'SFMono-Regular', monospace;
+  font-size: 10px; letter-spacing: .25em; color: var(--color-text-secondary);
+}
+.et-quick-chip {
+  font-size: 12px; padding: 2px 13px; border-radius: 9999px; cursor: pointer;
+  border: 1px dashed var(--color-border); background: transparent; color: var(--color-text-secondary);
+}
+.et-quick-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.et-quick-chip.on {
+  border-style: solid; border-color: var(--color-primary);
+  background: var(--color-primary); color: #fff; font-weight: 600;
+}
+.et-quick-clear {
+  font-size: 12px; border: none; background: none; cursor: pointer;
+  color: var(--color-text-secondary); text-decoration: underline;
+}
+.et-quick-clear:hover { color: var(--color-primary); }
+
+/* 主体双栏 */
+.et-body {
+  display: grid; grid-template-columns: 2fr 1.2fr; gap: 16px; align-items: stretch;
+}
+.et-graph-panel, .et-list-panel {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border); border-radius: 4px;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.et-graph-panel { min-height: 640px; }
+.et-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 16px; border-bottom: 1px dashed var(--color-border);
+}
+.et-panel-title { font-weight: 700; font-size: 14px; letter-spacing: .04em; }
+.et-link-glyph { margin-right: 4px; }
+.et-panel-hint { font-family: Consolas, monospace; font-size: 10px; letter-spacing: .12em; color: var(--color-text-secondary); }
+
+.et-graph-panel :deep(.kg-explorer) {
+  flex: 1; min-height: 0;
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--color-border-light);
+/* 加载骨架 */
+.et-skel { padding: 26px; }
+.et-skel-line {
+  height: 12px; border-radius: 3px; margin-bottom: 14px;
+  background: linear-gradient(90deg, var(--color-border) 25%, var(--color-bg-page) 50%, var(--color-border) 75%);
+  background-size: 200% 100%; animation: et-shimmer 1.4s infinite;
 }
+@keyframes et-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
-.panel-title {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin: 0;
+/* 空态 */
+.et-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 40px 20px; text-align: center;
 }
+.et-empty-mark { font-family: Consolas, monospace; font-size: 34px; color: var(--color-text-placeholder); }
+.et-empty-t { font-weight: 700; font-size: 14px; }
+.et-empty-s { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 10px; }
 
-.panel-hint,
-.panel-count {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+/* 实体列表 */
+.et-list-scroll {
+  flex: 1; overflow-y: auto; padding: 10px 12px;
+  max-height: 560px;
 }
+.et-list-scroll::-webkit-scrollbar { width: 5px; }
+.et-list-scroll::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
 
-.entity-graph-container {
-  height: 500px;
-  width: 100%;
+.et-row {
+  padding: 10px 12px; border-radius: 3px; cursor: pointer;
+  border-bottom: 1px dashed var(--color-border);
+  transition: background var(--duration-fast, .15s) ease-out;
 }
-
-.graph-empty,
-.list-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-}
-
-.entity-list-scroll {
-  max-height: 500px;
-  overflow-y: auto;
-  padding: var(--space-3);
-}
-
-.entity-list-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.entity-list-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.entity-list-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-text-placeholder);
-  border-radius: 3px;
-}
-
-.entity-card {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-light);
-  margin-bottom: var(--space-2);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.entity-card:hover {
-  border-color: var(--color-primary);
+.et-row:hover { background: var(--color-primary-bg); }
+.et-row-on {
   background: var(--color-primary-bg);
+  box-shadow: inset 2px 0 0 var(--color-primary);
 }
-
-.entity-card-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-  box-shadow: 0 0 0 2px var(--color-primary-border);
+.et-triple { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.et-subject { font-weight: 700; }
+.et-pred {
+  font-family: Consolas, monospace; font-size: 10px; letter-spacing: .08em;
+  border: 1px solid var(--color-primary); color: var(--color-primary);
+  border-radius: 2px; padding: 0 6px;
 }
-
-.entity-triple {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  flex-wrap: wrap;
+.et-object { color: var(--color-text-primary); }
+.et-cond { font-size: 11px; color: var(--color-text-secondary); margin-top: 3px; }
+.et-meta {
+  display: flex; align-items: center; gap: 12px; margin-top: 5px;
+  font-family: Consolas, monospace; font-size: 10px; color: var(--color-text-secondary);
 }
-
-.entity-subject {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-primary);
+.et-conf {
+  width: 54px; height: 3px; background: var(--color-border);
+  border-radius: 2px; overflow: hidden; display: inline-block;
 }
-
-.entity-predicate {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  padding: 2px 8px;
-  background: var(--color-info-bg);
-  border-radius: var(--radius-full);
-}
-
-.entity-object {
-  color: var(--color-accent);
-}
-
-.entity-condition-text {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-2);
-}
-
-.entity-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.meta-confidence {
-  margin-left: auto;
-}
+.et-conf i { display: block; height: 100%; background: var(--color-primary); }
 
 .entity-pagination {
-  padding: var(--space-3);
-  border-top: 1px solid var(--color-border-light);
-  display: flex;
-  justify-content: center;
+  display: flex; justify-content: center;
+  border-top: 1px dashed var(--color-border);
+  padding: 8px 12px;
 }
 
-.entity-triple-large {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--font-size-lg);
-  margin-bottom: var(--space-4);
-}
-
-.entity-detail-section h4 {
-  margin: 0 0 var(--space-3) 0;
-  color: var(--color-text-primary);
-}
-
-.source-item {
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-info-bg);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-2);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.source-item:hover {
-  background: var(--color-primary-bg);
-}
-
-.clickable {
-  cursor: pointer;
+@media (max-width: 900px) {
+  .et-body { grid-template-columns: 1fr; }
+  .et-filters { flex-wrap: wrap; }
+  .et-input-wide { flex: 1 1 100%; }
+  .et-input:not(.et-input-wide) { flex: 1; width: auto; }
+  .et-graph-panel { min-height: 480px; }
 }
 </style>
 
 <style>
-/* v77 P2.6-E.3: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
-[data-theme="dark"] .entity-graph-panel,
-[data-theme="dark"] .entity-list-panel {
-  background: var(--color-bg-card);
-}
-[data-theme="dark"] .panel-header {
-  border-bottom-color: var(--color-border-light);
-}
-[data-theme="dark"] .entity-card {
-  border-color: var(--color-border-light);
-}
-[data-theme="dark"] .entity-pagination {
-  border-top-color: var(--color-border-base);
-}
-/* W86 mini-8 fix (派工 v6 §1.2 真验证, 3 路搜证):
-   el-pagination 的 .el-pager li 与 .btn-prev/.btn-next 默认色使用
-   --el-text-color-regular, 在暗色主题下变量映射不充分导致页码数字
-   与按钮文字看不清 (用户反馈). 这里显式覆盖 color + background,
-   强制使用项目自有的 --color-text-regular / --color-primary token.
-   注意: 与 variables.css:932 全局 .el-pagination 规则互补, 全局规则
-   只覆盖容器, 这里覆盖子元素. */
-[data-theme="dark"] .entity-pagination .el-pager li,
-[data-theme="dark"] .entity-pagination .btn-prev,
-[data-theme="dark"] .entity-pagination .btn-next {
-  background: transparent !important;
+/* 暗色主题分页可读性 (W86 修复恢复): .el-pager li 数字在暗色下继承失当 */
+[data-theme="dark"] .entity-pagination .el-pager li {
   color: var(--color-text-regular) !important;
 }
 [data-theme="dark"] .entity-pagination .el-pager li.is-active {
+  color: #fff !important;
   background-color: var(--color-primary) !important;
-  color: var(--el-color-white) !important;
-}
-[data-theme="dark"] .entity-pagination .el-pager li:hover,
-[data-theme="dark"] .entity-pagination .btn-prev:hover,
-[data-theme="dark"] .entity-pagination .btn-next:hover {
-  color: var(--color-primary) !important;
-}
-[data-theme="dark"] .entity-pagination .el-pagination__total {
-  color: var(--color-text-regular) !important;
-}
-[data-theme="dark"] .entity-list-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-text-placeholder);
-}
-[data-theme="dark"] .entity-card-active {
-  background: var(--color-primary-bg);
-  box-shadow: 0 0 0 2px var(--color-primary-border);
-}
-[data-theme="dark"] .el-empty__image svg,
-[data-theme="dark"] .el-empty__image img {
-  filter: invert(0.9) hue-rotate(180deg);
-}
-[data-theme="dark"] .el-empty__description p {
-  color: var(--color-text-secondary);
 }
 </style>
