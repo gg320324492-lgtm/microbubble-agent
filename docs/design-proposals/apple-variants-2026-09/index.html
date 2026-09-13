@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apple 清晰风 · 内容搭配 5 版 (2026-09)</title>
+<style>
+  :root { --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 26px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .opt { margin-bottom: 40px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h h2 { font-size: 16px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+  .opt-notes { margin-top: 10px; font-size: 11.5px; line-height: 1.8; }
+  .opt-notes .pro { color: #2E8B62; margin-right: 16px; } .opt-notes .con { color: #B4823C; }
+
+  .page { background: #f5f5f7; border-radius: 14px; overflow: hidden; font-family: -apple-system, 'PingFang SC', 'Segoe UI', sans-serif; }
+  .pbody { padding: 24px 28px 28px; }
+  .greet { font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: #1d1d1f; margin-bottom: 18px; }
+  .greet small { font-size: 14px; font-weight: 400; color: #86868b; margin-left: 10px; }
+  .acard { background: #fff; border-radius: 20px; padding: 20px 22px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+  .ah { font-size: 12px; font-weight: 600; color: #86868b; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; }
+  .abig { font-size: 40px; font-weight: 700; color: #1d1d1f; letter-spacing: -.02em; }
+  .abig small { font-size: 15px; color: #86868b; font-weight: 400; margin-left: 6px; }
+  .arow { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f0f0f2; font-size: 12.5px; color: #1d1d1f; }
+  .arow:last-child { border-bottom: none; }
+  .arow .sym { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+  .arow .due { margin-left: auto; font-size: 10.5px; color: #86868b; }
+  .ring3 { display: flex; justify-content: space-around; margin-top: 12px; }
+  .ring3 .rg { text-align: center; }
+  .ring3 .rg .n { font-size: 22px; font-weight: 700; }
+  .ring3 .rg .l { font-size: 9.5px; color: #86868b; margin-top: 2px; }
+  .av { width: 20px; height: 20px; border-radius: 999px; color: #fff; font-size: 8.5px; display: inline-flex; align-items: center; justify-content: center; }
+  .a1 { background: linear-gradient(135deg,#5b8def,#8b5cf6); }
+  .a2 { background: linear-gradient(135deg,#10b981,#059669); }
+  .a3 { background: linear-gradient(135deg,#f59e0b,#d97706); }
+  .a4 { background: linear-gradient(135deg,#ef7256,#d94f3d); }
+  .sub2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .storebar { height: 6px; background: #e8e8ed; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .storebar i { display: block; height: 100%; background: #0e766e; border-radius: 3px; }
+  .seg3 { display: flex; align-items: baseline; gap: 18px; margin-top: 10px; }
+  .seg3 .s { text-align: center; }
+  .seg3 .s .n { font-size: 18px; font-weight: 700; }
+  .seg3 .s .l { font-size: 9px; color: #86868b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Apple 清晰风 · 内容搭配 5 版</h1>
+  <p class="sub">风格锁定第 8 版（白卡 20px 圆角 + 大数字 + 克制灰阶），五版只换<b>内容的组织方式</b>：主体是谁、什么东西放大、什么东西收起来。数据全部现有接口。</p>
+
+  <!-- ═══ 8-1 任务大头版 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">8-1</span><h2>任务大头版</h2><span class="desc">任务占绝对 C 位：一张巨型任务卡（超大 17 + 三子计数 + 逾期/今日行内列表），右侧网盘窄卡，底部累计小卡</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div style="display:grid;grid-template-columns:1.8fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="acard">
+          <div class="ah">任务 · 进行中</div>
+          <div class="abig">17</div>
+          <div class="ring3">
+            <div class="rg"><div class="n" style="color:#c4554d">2</div><div class="l">逾期</div></div>
+            <div class="rg"><div class="n">5</div><div class="l">高优先级</div></div>
+            <div class="rg"><div class="n">3</div><div class="l">今日到期</div></div>
+            <div class="rg"><div class="n">72</div><div class="l">累计完成</div></div>
+          </div>
+          <div style="margin-top:14px">
+            <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>模拟任务 · 王五<span class="due">逾期 1 日</span></div>
+            <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>MDPI 投稿修改 · 蒋芦笛<span class="due">今夜截止</span></div>
+            <div class="arow"><span class="sym" style="background:#e8f0e4">✓</span>准备组会汇报 PPT · 贾琦<span class="due">明日</span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="acard">
+            <div class="ah">网盘 · 最近上传</div>
+            <div class="arow"><span class="sym" style="background:#e8def8">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+            <div class="arow"><span class="sym" style="background:#e8f0e4">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+            <div class="arow"><span class="sym" style="background:#fdeeda">🎞</span>演示视频.mp4<span class="due">昨天</span></div>
+          </div>
+          <div class="acard">
+            <div class="ah">网盘 · 存储</div>
+            <div class="abig" style="font-size:24px">12.4<small>/ 50 GB</small></div>
+            <div class="storebar"><i style="width:25%"></i></div>
+            <div style="font-size:10px;color:#86868b;margin-top:6px">本周 +8 个文件 · 全库 322 件</div>
+          </div>
+        </div>
+      </div>
+      <div class="acard">
+        <div class="ah">累计</div>
+        <div style="display:flex;gap:34px;font-size:12px;color:#1d1d1f"><span>成员 <b style="font-size:15px">9</b> 人</span><span>全库 <b style="font-size:15px">322</b> 文件</span><span>会议 <b style="font-size:15px">128</b> 场</span><span>3 人未录声纹</span></div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 任务绝对主角，数字冲击力最强</span><span class="con">✗ 网盘内容被压缩到侧边</span></div>
+  </div>
+
+  <!-- ═══ 8-2 日历顶置版 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">8-2</span><h2>日历顶置版</h2><span class="desc">Apple 日历风横条置顶（7 天到期 + 每天数量），下方两张对称卡：逾期与今日 | 最近上传。累计小卡垫底</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div class="acard" style="margin-bottom:16px">
+        <div class="ah">未来 7 天到期</div>
+        <div class="tl" style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
+          <div style="text-align:center"><div style="font-size:9px;color:#c4554d;font-weight:700">FRI 12</div><div style="font-size:20px;font-weight:700;margin:4px 0">2</div><div style="font-size:9px;color:#c4554d">含逾期 1</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:#86868b">SAT 13</div><div style="font-size:20px;font-weight:700;margin:4px 0">1</div><div style="font-size:9px;color:#86868b">今日到期</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:#86868b">SUN 14</div><div style="font-size:20px;font-weight:700;margin:4px 0">0</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:#86868b">MON 15</div><div style="font-size:20px;font-weight:700;margin:4px 0">2</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:#86868b">TUE 16</div><div style="font-size:20px;font-weight:700;margin:4px 0">1</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:#86868b">WED 17</div><div style="font-size:20px;font-weight:700;margin:4px 0">0</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:#86868b">THU 18</div><div style="font-size:20px;font-weight:700;margin:4px 0">1</div></div>
+        </div>
+      </div>
+      <div class="sub2">
+        <div class="acard">
+          <div class="ah">逾期与今日 · 可直接完成</div>
+          <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>模拟任务 · 王五<span class="due">逾期 1 日</span></div>
+          <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>MDPI 投稿修改 · 蒋芦笛<span class="due">今夜截止</span></div>
+          <div class="arow"><span class="sym" style="background:#e8f0e4">✓</span>准备组会汇报 PPT · 贾琦<span class="due">明日</span></div>
+        </div>
+        <div class="acard">
+          <div class="ah">网盘最近上传</div>
+          <div class="arow"><span class="sym" style="background:#e8def8">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+          <div class="arow"><span class="sym" style="background:#e8f0e4">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+          <div class="arow"><span class="sym" style="background:#fdeeda">🎞</span>演示视频.mp4<span class="due">昨天</span></div>
+        </div>
+      </div>
+      <div class="acard" style="margin-top:16px">
+        <div class="ah">累计</div>
+        <div style="display:flex;gap:34px;font-size:12px;color:#1d1d1f"><span>成员 <b style="font-size:15px">9</b> 人</span><span>全库 <b style="font-size:15px">322</b> 文件</span><span>存储 12.4 / 50 GB</span><span>3 人未录声纹</span></div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 「这一周忙不忙」最直观，日历条是天然的时间锚点</span><span class="pro">✓ 与 8-1 数据相同、组织不同——选布局不选功能</span></div>
+  </div>
+
+  <!-- ═══ 8-3 成员视角版 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">8-3</span><h2>成员视角版</h2><span class="desc">主体 = 每成员一张白卡（头像 + 数字 + 该成员任务行），顶部小 KPI，底部网盘横排卡。回答「每个人手上有啥」</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
+        <div class="acard" style="padding:14px 16px">
+          <div style="display:flex;align-items:center;gap:8px"><span class="av a1">天</span><span style="font-size:12px;font-weight:600">王五</span></div>
+          <div style="font-size:26px;font-weight:700;margin:8px 0 2px">2</div>
+          <div style="font-size:9.5px;color:#c4554d">逾期 1 项</div>
+        </div>
+        <div class="acard" style="padding:14px 16px">
+          <div style="display:flex;align-items:center;gap:8px"><span class="av a2">蒋</span><span style="font-size:12px;font-weight:600">蒋芦笛</span></div>
+          <div style="font-size:26px;font-weight:700;margin:8px 0 2px">1</div>
+          <div style="font-size:9.5px;color:#86868b">今夜截止</div>
+        </div>
+        <div class="acard" style="padding:14px 16px">
+          <div style="display:flex;align-items:center;gap:8px"><span class="av a3">周</span><span style="font-size:12px;font-weight:600">周之超</span></div>
+          <div style="font-size:26px;font-weight:700;margin:8px 0 2px">1</div>
+          <div style="font-size:9.5px;color:#86868b">09-22 到期</div>
+        </div>
+        <div class="acard" style="padding:14px 16px">
+          <div style="display:flex;align-items:center;gap:8px"><span class="av a4">贾</span><span style="font-size:12px;font-weight:600">贾琦</span></div>
+          <div style="font-size:26px;font-weight:700;margin:8px 0 2px">1</div>
+          <div style="font-size:9.5px;color:#86868b">09-25 到期</div>
+        </div>
+      </div>
+      <div class="acard">
+        <div class="ah">明细 · 按成员</div>
+        <div class="arow"><span class="av a1">天</span>模拟任务<span class="st hot" style="font-size:10px;padding:2px 8px;border-radius:4px;background:#fbe4e4;color:#c4554d">逾期 1 日</span><span class="due">王五</span></div>
+        <div class="arow"><span class="av a1">天</span>测试腾讯会议与听会是否冲突<span class="st">进行中</span><span class="due">王五</span></div>
+        <div class="arow"><span class="av a2">蒋</span>开题报告修改<span class="st">进行中</span><span class="due">蒋芦笛</span></div>
+        <div class="arow"><span class="av a3">周</span>表面污染去除实验<span class="st">进行中</span><span class="due">周之超</span></div>
+      </div>
+      <div class="acard" style="margin-top:16px">
+        <div class="ah">网盘最近上传</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="arow"><span class="sym" style="background:#e8def8">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+          <div class="arow"><span class="sym" style="background:#e8f0e4">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 「谁手上有啥活」最清楚，组长视角友好</span><span class="con">✗ 成员多时卡片墙需要分页/折叠</span></div>
+  </div>
+
+  <!-- ═══ 8-4 网盘聚焦版 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">8-4</span><h2>网盘聚焦版</h2><span class="desc">网盘当主角：大存储卡（超大 12.4GB + 分类条）+ 最近上传 2×2 网格；任务收成右侧窄卡（仅 17/2/今日 3）</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div style="display:grid;grid-template-columns:1.8fr 1fr;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="acard">
+            <div class="ah">网盘 · 存储</div>
+            <div class="abig">12.4<small>/ 50 GB</small></div>
+            <div class="storebar" style="margin:10px 0 12px"><i style="width:25%"></i></div>
+            <div style="display:flex;gap:8px">
+              <div class="arow" style="border:1px solid #f0f0f2;border-radius:8px;flex:1;justify-content:space-between"><span>🖼 图片 68</span><span class="due">4.2 GB</span></div>
+              <div class="arow" style="border:1px solid #f0f0f2;border-radius:8px;flex:1;justify-content:space-between"><span>📄 文档 214</span><span class="due">6.1 GB</span></div>
+              <div class="arow" style="border:1px solid #f0f0f2;border-radius:8px;flex:1;justify-content:space-between"><span>🎞 视频 22</span><span class="due">2.1 GB</span></div>
+            </div>
+          </div>
+          <div class="acard">
+            <div class="ah">最近上传</div>
+            <div class="arow"><span class="sym" style="background:#e8def8">🖼</span>实验照片.png<span class="due">蒋芦笛 · 25 分钟前</span></div>
+            <div class="arow"><span class="sym" style="background:#e8f0e4">📄</span>参考文献.pdf<span class="due">周之超 · 2 小时前</span></div>
+            <div class="arow"><span class="sym" style="background:#fdeeda">🎞</span>演示视频.mp4<span class="due">王五 · 昨天</span></div>
+            <div class="arow"><span class="sym" style="background:#fdeeda">🎙</span>会议录音.m4a<span class="due">王五 · 昨天</span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="acard">
+            <div class="ah">任务速览</div>
+            <div class="abig" style="font-size:30px">17</div>
+            <div class="ring3">
+              <div class="rg"><div class="n" style="color:#c4554d">2</div><div class="l">逾期</div></div>
+              <div class="rg"><div class="n">3</div><div class="l">今日</div></div>
+              <div class="rg"><div class="n">72</div><div class="l">已完成</div></div>
+            </div>
+            <div style="font-size:10px;color:#0e766e;text-align:center;margin-top:8px">任务管理 →</div>
+          </div>
+          <div class="acard">
+            <div class="ah">今日到期</div>
+            <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>模拟任务<span class="due">逾期</span></div>
+            <div class="arow"><span class="sym" style="background:#e8f0e4">✓</span>MDPI 投稿修改<span class="due">今夜</span></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 网盘素材部门的存在感最强（存储/分类/最近全齐）</span><span class="con">✗ 任务被压成侧栏速览，重度任务用户会嫌浅</span></div>
+  </div>
+
+  <!-- ═══ 8-5 双大卡对分 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">8-5</span><h2>双大卡对分</h2><span class="desc">左右两张等高大卡：左「任务」（大 17 + 逾期/今日行内列表 + 完成勾选），右「网盘」（大 322 件 + 存储条 + 最近 3 行）；下排两张小卡（今日切片 + 累计）</span></div>
+    <div class="page"><div class="pbody">
+      <div class="greet">概览<small>9 月 12 日 · 周五</small></div>
+      <div class="sub2" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="acard">
+          <div class="ah">任务 TASKS</div>
+          <div class="abig">17<small>进行中</small></div>
+          <div style="margin-top:12px">
+            <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>模拟任务<span class="due">逾期 1 日</span></div>
+            <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>MDPI 投稿修改<span class="due">今夜截止</span></div>
+            <div class="arow"><span class="sym" style="background:#e8f0e4">✓</span>准备组会汇报 PPT<span class="due">明日</span></div>
+          </div>
+        </div>
+        <div class="acard">
+          <div class="ah">网盘 DRIVE</div>
+          <div class="abig">322<small>个文件 · 12.4 GB</small></div>
+          <div class="storebar" style="margin:12px 0"><i style="width:25%"></i></div>
+          <div class="arow"><span class="sym" style="background:#e8def8">🖼</span>实验照片.png<span class="due">25 分钟前</span></div>
+          <div class="arow"><span class="sym" style="background:#e8f0e4">📄</span>参考文献.pdf<span class="due">2 小时前</span></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="acard">
+          <div class="ah">今日需要处理</div>
+          <div class="arow"><span class="sym" style="background:#fbe4e4;color:#c4554d">!</span>模拟任务 · 王五<span class="due">逾期 1 日</span></div>
+          <div class="arow"><span class="sym" style="background:#e8f0e4">✓</span>MDPI 投稿修改 · 蒋芦笛<span class="due">今夜截止</span></div>
+        </div>
+        <div class="acard">
+          <div class="ah">累计</div>
+          <div style="display:flex;gap:30px;font-size:12px;color:#1d1d1f;padding:4px 0"><span>成员 <b style="font-size:15px">9</b></span><span>会议 <b style="font-size:15px">128</b> 场</span><span>3 人未录声纹</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="opt-notes"><span class="pro">✓ 两张大卡一任务一网盘，权重完全对等，最符合「两模块」的定位</span><span class="con">✗ 层级少，信息深度中等</span></div>
+  </div>
+
+  <div class="legendbox">
+    <b>五版内容搭配轴</b>：8-1 任务大头 ｜ 8-2 日历顶置+双卡 ｜ 8-3 成员视角卡墙 ｜ 8-4 网盘聚焦 ｜ 8-5 双大卡对分。<br>
+    <b>均为</b>：Apple 白卡 20px + 大数字 + 克制灰阶；任务全量管理仍在任务管理页；数据全部现有接口。<br>
+    选定一版（或组合，如「8-1 的大任务卡 + 8-3 的成员卡墙」）我就出可交互原型并实施。
+  </div>
+</div>
+</body>
+</html>
