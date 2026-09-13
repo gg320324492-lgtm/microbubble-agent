@@ -734,8 +734,17 @@ onMounted(() => {
   margin-right: -4px;  /* 紧凑排列：与 complete-btn 视觉距离 */
 }
 
-.complete-btn {
+/* 圆钮几何修正: EP is-circle 的 width:32/padding:8 内容区仅 16px, 装 18px 图标时会被主题规则挤成椭圆 — 钉死正方形 */
+.complete-btn,
+.task-action-btn {
   flex-shrink: 0;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50% !important;
 }
 
 .complete-btn--outline {
