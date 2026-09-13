@@ -11,20 +11,6 @@
             <span class="hero-meta-sep">·</span>
             <span>{{ currentTime }}</span>
           </div>
-          <div class="hero-tip" :class="tipKind" v-if="summary">
-            <template v-if="summary.overdue_tasks > 0">
-              <span class="tip-mark">!</span>
-              团队共有 <b>{{ summary.overdue_tasks }}</b> 项逾期任务待处理
-            </template>
-            <template v-else-if="summary.in_progress_tasks > 0">
-              <span class="tip-mark">→</span>
-              团队共有 <b>{{ summary.in_progress_tasks }}</b> 项任务进行中
-            </template>
-            <template v-else>
-              <span class="tip-mark">✓</span>
-              今日任务已完成，继续保持
-            </template>
-          </div>
         </div>
 
         <div class="hero-side">
@@ -72,112 +58,93 @@
       </div>
     </section>
 
-    <!-- ═══ 统计三卡 ═══ -->
-    <div class="stat-grid">
-      <template v-if="loadingStats">
-        <div class="stat-card is-skeleton" v-for="i in 3" :key="i">
-          <div class="sk sk-label"></div>
-          <div class="sk sk-num"></div>
-          <div class="sk sk-hint"></div>
+    <!-- ═══ 三模块卡: 任务 / 会议 / 网盘 (批次⑩.79 方案 A 三列平衡) ═══ -->
+    <div class="tri-grid">
+      <!-- 任务 -->
+      <div class="card tri-card fade-slide-up stagger-1">
+        <div class="card-head">
+          <h2 class="card-title"><span class="sec-no">§</span> 任务</h2>
+          <div class="card-head-right">
+            <span class="card-count mono">TASKS</span>
+            <button class="view-all" @click="$router.push('/tasks')">任务管理 →</button>
+          </div>
         </div>
-      </template>
-      <template v-else>
-        <div class="stat-card fade-slide-up stagger-1">
-          <div class="stat-label">IN PROGRESS</div>
-          <div class="stat-name">进行中</div>
-          <div class="stat-value stat-value--teal" :ref="el => animateNumber(el, summary?.in_progress_tasks || 0)">0</div>
-          <div class="stat-rule"></div>
-          <div class="stat-hint">任务执行中</div>
+        <div class="kpi-body">
+          <div v-if="loadingCards" class="sk tri-skel-line"></div>
+          <template v-else>
+            <div class="kpi-big mono">{{ inProgressTasks.length }}<span class="kpi-unit">进行中</span></div>
+            <div class="kpi-ring">
+              <div class="kr"><div class="n hot">{{ overdueCount }}</div><div class="l">逾期</div></div>
+              <div class="kr"><div class="n">{{ todayDueCount }}</div><div class="l">今日到期</div></div>
+              <div class="kr"><div class="n">{{ summary?.done_tasks ?? 0 }}</div><div class="l">已完成</div></div>
+            </div>
+          </template>
         </div>
-        <div class="stat-card fade-slide-up stagger-2">
-          <div class="stat-label">DONE</div>
-          <div class="stat-name">已完成</div>
-          <div class="stat-value stat-value--green" :ref="el => animateNumber(el, summary?.done_tasks || 0)">0</div>
-          <div class="stat-rule"></div>
-          <div class="stat-hint">累计完成{{ memberCount ? ' · ' + memberCount + ' 人贡献' : '' }}</div>
+      </div>
+      <!-- 会议 -->
+      <div class="card tri-card fade-slide-up stagger-2">
+        <div class="card-head">
+          <h2 class="card-title"><span class="sec-no">§</span> 会议</h2>
+          <div class="card-head-right">
+            <span class="card-count mono">MEETINGS</span>
+            <button class="view-all" @click="$router.push('/meetings')">会议 →</button>
+          </div>
         </div>
-        <div class="stat-card stat-card--danger fade-slide-up stagger-3 clickable"
-             :class="{ 'has-danger': (summary?.overdue_tasks || 0) > 0 }"
-             @click="$router.push('/tasks?overdue=true')">
-          <div class="stat-label">OVERDUE</div>
-          <div class="stat-name">已逾期</div>
-          <div class="stat-value stat-value--coral" :ref="el => animateNumber(el, summary?.overdue_tasks || 0)">0</div>
-          <div class="stat-rule"></div>
-          <div class="stat-hint">点击查看逾期任务</div>
-          <span v-if="(summary?.overdue_tasks || 0) > 0" class="stamp">需处理</span>
+        <div class="kpi-body">
+          <div v-if="loadingCards" class="sk tri-skel-line"></div>
+          <template v-else>
+            <div class="kpi-big mono">{{ weekMeetings }}<span class="kpi-unit">本周场次</span></div>
+            <div class="kpi-ring">
+              <div class="kr" v-for="m in upcomingMeetings" :key="m.id">
+                <div class="n">{{ fmtMeetingTime(m.start_time) }}</div>
+                <div class="l">{{ m.title }}</div>
+              </div>
+              <div class="kr" v-if="!upcomingMeetings.length"><div class="l">暂无安排</div></div>
+            </div>
+          </template>
         </div>
-      </template>
+      </div>
+      <!-- 网盘 -->
+      <div class="card tri-card fade-slide-up stagger-3">
+        <div class="card-head">
+          <h2 class="card-title"><span class="sec-no">§</span> 网盘</h2>
+          <div class="card-head-right">
+            <span class="card-count mono">DRIVE</span>
+            <button class="view-all" @click="$router.push('/drive')">网盘 →</button>
+          </div>
+        </div>
+        <div class="kpi-body">
+          <div v-if="loadingCards" class="sk tri-skel-line"></div>
+          <template v-else>
+            <div class="kpi-big mono">{{ driveUsedGB }}<span class="kpi-unit">/ {{ driveQuotaGB }} GB</span></div>
+            <div class="kpi-ring">
+              <div class="kr"><div class="n">{{ driveWeekNew }}</div><div class="l">本周新增</div></div>
+              <div class="kr"><div class="n">{{ drive24h }}</div><div class="l">最近 24h</div></div>
+              <div class="kr"><div class="n">{{ driveFileCount }}</div><div class="l">全库文件</div></div>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
 
-    <!-- ═══ 进行中任务（按负责人分组）═══ -->
-    <section class="card tasks-card fade-slide-up stagger-3">
-      <header class="card-head">
-        <h2 class="card-title"><span class="sec-no">§</span> 进行中任务</h2>
+    <!-- ═══ 最近动态 (逾期任务 + 网盘上传混排) ═══ -->
+    <div class="card dyn-card fade-slide-up stagger-4">
+      <div class="card-head">
+        <h2 class="card-title"><span class="sec-no">§</span> 最近动态</h2>
         <div class="card-head-right">
-          <span class="card-count mono">{{ inProgressTasks.length }} TOTAL · BY ASSIGNEE</span>
-          <button class="view-all" @click="$router.push('/tasks')">查看全部 →</button>
-        </div>
-      </header>
-
-      <!-- 骨架屏 -->
-      <div v-if="loadingTasks" class="task-groups">
-        <div v-for="i in 2" :key="i" class="task-group is-skeleton">
-          <div class="group-head">
-            <div class="sk sk-avatar"></div>
-            <div class="sk sk-line" style="width: 90px"></div>
-          </div>
-          <div class="group-body">
-            <div v-for="j in 2" :key="j" class="task-row">
-              <div class="sk sk-line" style="flex:1"></div>
-              <div class="sk sk-line" style="width: 60px"></div>
-            </div>
-          </div>
+          <span class="card-count mono">ACTIVITY · 逾期与上传</span>
+          <button class="view-all" @click="$router.push('/tasks')">任务管理 →</button>
         </div>
       </div>
-      <div v-else-if="inProgressTasks.length === 0" class="empty-state">
-        <el-empty description="暂无进行中任务" :image-size="60" />
-      </div>
-      <div v-else class="task-groups">
-        <div v-for="(group, gIdx) in groupedTasks" :key="group.assignee_id"
-             class="task-group fade-slide-up" :style="{ animationDelay: `${(gIdx + 3) * 60}ms` }">
-          <!-- 负责人头部 -->
-          <div class="group-head" :class="{ 'unassigned-group': group.assignee_id === 'unassigned' }"
-               @click="toggleGroup(group.assignee_id)" role="button"
-               :aria-expanded="!collapsedGroups[group.assignee_id]"
-               :aria-label="`折叠展开 ${group.assignee_id === 'unassigned' ? '会议创建的任务' : memberStore.getMemberName(group.assignee_id)}`">
-            <span class="monogram" aria-hidden="true">
-              <img v-if="group.assignee_id !== 'unassigned' && memberStore.getMemberAvatar(group.assignee_id)"
-                   :src="memberStore.getMemberAvatar(group.assignee_id)"
-                   :alt="`${memberStore.getMemberName(group.assignee_id)}的头像`" />
-              <template v-else>{{ group.assignee_id === 'unassigned' ? '会' : memberStore.getMemberName(group.assignee_id).charAt(0) }}</template>
-            </span>
-            <span class="group-name">{{ group.assignee_id === 'unassigned' ? '会议创建的任务' : memberStore.getMemberName(group.assignee_id) }}</span>
-            <span class="group-count mono">{{ group.tasks.length }} 项</span>
-            <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[group.assignee_id] }" aria-hidden="true"><ArrowDown /></el-icon>
-          </div>
-          <!-- 任务列表 -->
-          <div v-show="!collapsedGroups[group.assignee_id]" class="group-body">
-            <div v-for="task in group.tasks" :key="task.id" class="task-row" :class="{ overdue: isOverdue(task.due_date) }">
-              <div class="task-main">
-                <div class="task-title">{{ task.title }}</div>
-                <div class="task-chips">
-                  <span class="chip" :class="'chip--p-' + (task.priority || 'medium')">{{ getPriorityLabel(task.priority) }}</span>
-                  <span v-if="task.status === 'in_progress'" class="chip chip--status">进行中</span>
-                  <span v-if="task.source === 'meeting'" class="chip chip--meeting">会议创建</span>
-                </div>
-              </div>
-              <div class="task-due mono" :class="{ overdue: isOverdue(task.due_date) }">
-                <span v-if="isOverdue(task.due_date)" class="due-mark" aria-hidden="true">!</span>{{ formatDate(task.due_date) }}
-              </div>
-              <div class="task-actions">
-                <button class="act act--done" @click.stop="completeTask(task)" aria-label="完成任务：{{ task.title }}">✓ 完成</button>
-                <button class="act act--edit" @click.stop="openEditDialog(task)" aria-label="编辑任务：{{ task.title }}">编辑</button>
-              </div>
-            </div>
-          </div>
+      <div class="dyn-list">
+        <div v-for="(row, i) in activityRows" :key="i" class="dyn-row">
+          <span class="dyn-sym" :class="row.kind">{{ row.sym }}</span>
+          <span class="dyn-txt" :class="{ hot: row.hot }">{{ row.text }}</span>
+          <span class="dyn-time">{{ row.time }}</span>
         </div>
+        <div v-if="!activityRows.length" class="dyn-empty">暂无动态</div>
       </div>
-    </section>
+    </div>
 
     <!-- ═══ 创建任务对话框 ═══ -->
     <el-dialog v-model="showCreateTask" title="创建任务" :width="isMobile ? '90vw' : '500px'" class="dossier-dialog">
@@ -219,52 +186,7 @@
       </template>
     </el-dialog>
 
-    <!-- ═══ 编辑任务对话框 ═══ -->
-    <el-dialog v-model="showEditDialog" title="编辑任务" :width="isMobile ? '90vw' : '500px'" class="dossier-dialog">
-      <el-form :model="editForm" label-width="80px">
-        <el-form-item label="任务标题" required>
-          <el-input v-model="editForm.title" name="editForm-title" placeholder="请输入任务标题" />
-        </el-form-item>
-        <el-form-item label="负责人">
-          <el-select v-model="editForm.assignee_id" name="editForm-assignee_id" placeholder="选择负责人" clearable>
-            <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="优先级">
-          <el-radio-group v-model="editForm.priority">
-            <el-radio value="high">高</el-radio>
-            <el-radio value="medium">中</el-radio>
-            <el-radio value="low">低</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="editForm.status" name="editForm-status">
-            <el-option label="进行中" value="in_progress" />
-            <el-option label="阻塞" value="blocked" />
-            <el-option label="已完成" value="done" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="截止日期">
-          <el-date-picker
-            v-model="editForm.due_date"
-            name="editForm-due_date"
-            type="datetime"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            placeholder="选择截止日期和时间"
-            style="width: 100%"
-            :clearable="true"
-          />
-        </el-form-item>
-        <el-form-item label="任务描述">
-          <el-input v-model="editForm.description" name="editForm-description" type="textarea" :rows="3" placeholder="请输入任务描述" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showEditDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveEdit">保存</el-button>
-      </template>
-    </el-dialog>
+    <!-- 批次⑩.79: 编辑任务对话框删除 — 编辑操作只在「任务管理」页, 仪表盘仅保留创建 -->
   </div>
 </template>
 
@@ -298,7 +220,12 @@ const currentTime = ref('')
 const currentDate = ref('')
 
 const loadingStats = ref(true)
-const loadingTasks = ref(true)
+const loadingCards = ref(true)
+
+// 批次⑩.79: 会议 / 网盘数据 (方案 A 三模块卡)
+const meetings = ref([])
+const driveFiles = ref([])
+const driveQuota = ref(null)
 
 const collapsedGroups = ref({})
 const toggleGroup = (assigneeId) => {
@@ -346,28 +273,6 @@ onUnmounted(() => {
 
 const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' })
 
-const editingTask = ref(null)
-const showEditDialog = ref(false)
-const editForm = ref({ title: '', assignee_id: null, priority: 'medium', status: 'in_progress', due_date: null, description: '', reminders: [] })
-
-const openEditDialog = (task) => {
-  editingTask.value = task
-  editForm.value = { ...task, reminders: task.reminders ? [...task.reminders] : [] }
-  showEditDialog.value = true
-}
-
-const saveEdit = async () => {
-  if (!editForm.value.title) { ElMessage.warning('请输入任务标题'); return }
-  try {
-    await axios.put(`/api/v1/tasks/${editingTask.value.id}`, editForm.value)
-    ElMessage.success('任务更新成功')
-    showEditDialog.value = false
-    editingTask.value = null
-    fetchInProgressTasks()
-    fetchDashboardStats()
-  } catch (e) { ElMessage.error('更新任务失败') }
-}
-
 const completeTask = async (task) => {
   try {
     await axios.put(`/api/v1/tasks/${task.id}`, { status: 'done' })
@@ -392,6 +297,89 @@ const tipKind = computed(() => {
   if (s.overdue_tasks > 0) return 'tip--danger'
   if (s.in_progress_tasks > 0) return 'tip--ok'
   return 'tip--quiet'
+})
+
+// ─── 批次⑩.79 方案 A: 三模块派生 ───
+const overdueTasks = computed(() => inProgressTasks.value.filter(t => isOverdue(t.due_date)))
+const overdueCount = computed(() => overdueTasks.value.length)
+const todayDueCount = computed(() => inProgressTasks.value.filter(t => {
+  if (!t.due_date) return false
+  const d = dayjs(t.due_date)
+  return !d.isBefore(dayjs(), 'day') && d.isBefore(dayjs().add(1, 'day'))
+}).length)
+
+// 会议: 今天起的 upcoming, 本周(7 天内)计数 + 最近两场
+const fetchMeetings = async () => {
+  try {
+    const from = dayjs().format('YYYY-MM-DD')
+    const res = await axios.get('/api/v1/meetings', { params: { date_from: from, page_size: 10 } })
+    const items = res.data?.items || res.data || []
+    meetings.value = [...items].sort((a, b) => dayjs(a.start_time).diff(dayjs(b.start_time)))
+  } catch (e) { console.error('获取会议失败:', e) }
+}
+const weekMeetings = computed(() =>
+  meetings.value.filter(m => dayjs(m.start_time).isBefore(dayjs().add(7, 'day'))).length
+)
+const upcomingMeetings = computed(() => meetings.value.slice(0, 2))
+const fmtMeetingTime = (iso) => {
+  if (!iso) return '—'
+  const d = dayjs(iso)
+  const pad = n => String(n).padStart(2, '0')
+  return d.isSame(dayjs(), 'day')
+    ? `${pad(d.hour())}:${pad(d.minute())}`
+    : d.format('ddd')
+}
+
+// 网盘: 最近上传 + 存储配额 + 本周/24h 计数
+const fetchDrive = async () => {
+  try {
+    const [filesRes, quotaRes] = await Promise.all([
+      axios.get('/api/v1/drive/files', { params: { page: 1, page_size: 50 } }),
+      axios.get('/api/v1/drive/storage-quota').catch(() => null),
+    ])
+    const items = (filesRes.data?.items || []).slice()
+    items.sort((a, b) => dayjs(b.created_at).diff(dayjs(a.created_at)))
+    driveFiles.value = items
+    driveQuota.value = quotaRes?.data || null
+  } catch (e) { console.error('获取网盘数据失败:', e) }
+}
+const driveUsedGB = computed(() => {
+  const used = driveQuota.value?.used_bytes
+  return used ? (used / Math.pow(1024, 3)).toFixed(1) : '—'
+})
+const driveQuotaGB = computed(() => {
+  const quota = driveQuota.value?.quota_bytes
+  return quota ? (quota / Math.pow(1024, 3)).toFixed(0) : '—'
+})
+const driveFileCount = computed(() => driveQuota.value?.file_count ?? '—')
+const driveWeekNew = computed(() =>
+  driveFiles.value.filter(f => f.created_at && dayjs(f.created_at).isAfter(dayjs().subtract(7, 'day'))).length
+)
+const drive24h = computed(() =>
+  driveFiles.value.filter(f => f.created_at && dayjs(f.created_at).isAfter(dayjs().subtract(1, 'day'))).length
+)
+
+// 最近动态: 逾期任务 + 最近上传 混排 (按时间倒序)
+const memberNameOf = (id) => memberStore.getMemberName(id)
+const activityRows = computed(() => {
+  const rows = []
+  for (const t of overdueTasks.value.slice(0, 2)) {
+    rows.push({
+      sym: '!', kind: 'hot', hot: true,
+      text: `${t.title} 已逾期 · ${memberNameOf(t.assignee_id)}`,
+      time: t.due_date ? dayjs(t.due_date).format('MM-DD') : '',
+      sortKey: dayjs(t.due_date || 0).valueOf(),
+    })
+  }
+  for (const f of driveFiles.value.slice(0, 3)) {
+    rows.push({
+      sym: '↑', kind: 'up',
+      text: `${f.file_name} 上传 · ${f.owner_name || memberNameOf(f.created_by) || '成员'}`,
+      time: f.created_at ? dayjs(f.created_at).format('MM-DD HH:mm') : '',
+      sortKey: dayjs(f.created_at || 0).valueOf(),
+    })
+  }
+  return rows.sort((a, b) => b.sortKey - a.sortKey)
 })
 
 const fetchDashboardStats = async () => {
@@ -428,6 +416,7 @@ const fetchInProgressTasks = async () => {
     inProgressTasks.value = allTasks
   } catch (e) { console.error('获取进行中任务失败:', e) }
   loadingTasks.value = false
+  loadingCards.value = false
 }
 
 const groupedTasks = computed(() => {
@@ -470,6 +459,8 @@ onMounted(() => {
   clockTimer = setInterval(updateTime, 1000)
   fetchDashboardStats()
   fetchInProgressTasks()
+  fetchMeetings()
+  fetchDrive()
   memberStore.refreshMembers()
   window.addEventListener('resize', handleResize)
 })
@@ -758,6 +749,48 @@ onMounted(() => {
 }
 .dashboard.dashboard-dossier .hero-actions .dbtn--line:hover { border-style: solid !important; background: rgba(14, 118, 110, 0.06) !important; }
 .dashboard.dashboard-dossier .hero-actions .dbtn { border-radius: 3px; height: 44px; }
+
+/* ── 批次⑩.79 方案 A: 三模块卡 + 最近动态 ─────────────── */
+.tri-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 26px; }
+@media (max-width: 900px) { .tri-grid { grid-template-columns: 1fr; } }
+.tri-card { padding-bottom: 16px; min-height: 150px; }
+.tri-card .card-head { padding: 14px 20px 10px; }
+.kpi-body { padding: 4px 22px 6px; min-height: 74px; }
+.kpi-big {
+  font-family: var(--font-mono); font-size: 42px; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; color: var(--teal);
+}
+.kpi-unit { font-family: var(--font-serif); font-size: 13px; color: var(--muted); margin-left: 8px; }
+.kpi-ring {
+  display: flex; justify-content: space-between; gap: 8px;
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px dashed var(--line-dash);
+}
+.kr { text-align: center; min-width: 0; }
+.kr .n { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--ink); }
+.kr .n.hot { color: var(--coral); }
+.kr .l { font-size: 10px; color: var(--muted); margin-top: 3px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tri-skel-line { height: 46px; }
+
+.dyn-card { padding-bottom: 10px; }
+.dyn-list { padding: 4px 24px 8px; }
+.dyn-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 6px;
+  border-bottom: 1px dashed var(--line-dash);
+}
+.dyn-row:last-child { border-bottom: none; }
+.dyn-sym {
+  display: inline-grid; place-items: center; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 50%;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+}
+.dyn-sym.hot { background: var(--coral); color: var(--card); }
+.dyn-sym.up { background: var(--teal); color: var(--card); }
+.dyn-txt { flex: 1; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dyn-txt.hot { color: var(--coral); font-weight: 600; }
+.dyn-time { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: var(--muted); flex-shrink: 0; }
+.dyn-empty { padding: 18px 6px; color: var(--muted); font-size: 12px; text-align: center; }
 </style>
 
 <!-- dark 换墨盘 (与 SettingsView 同变量族) -->
