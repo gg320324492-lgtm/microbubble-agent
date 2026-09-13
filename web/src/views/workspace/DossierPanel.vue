@@ -162,7 +162,7 @@ defineExpose({ fetchProjects })
 const padId = (id) => (id == null ? '—' : String(id).padStart(3, '0'))
 
 const GORD = { '副教授': 0, '教授': 0, '老师': 0, '助教': 0, '博士后': 0, '博后': 0,
-               '博一': 1, '博二': 1, '博三': 1, '研三': 2, '研二': 3, '研一': 4,
+               '博零': 1, '博一': 1, '博二': 1, '博三': 1, '研三': 2, '研二': 3, '研一': 4,
                '大四': 5, '大三': 6, '大二': 6, '大一': 6, '已毕业': 9 }
 const gradeRank = (m) => GORD[m.grade] ?? 7
 const isTeacher = (m) => /教授|老师|助教|博后|博士后/.test(m.grade || '') && !/毕业/.test(m.grade || '')
