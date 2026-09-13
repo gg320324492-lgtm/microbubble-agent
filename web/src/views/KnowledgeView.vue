@@ -601,6 +601,34 @@ onUnmounted(() => {
     padding: var(--space-3);
   }
 }
+
+/* ═══ 2026-09-13 配色④「青灰水墨」(用户选型, 布局零改动) ═══
+   页面作用域配色令牌覆盖: 冷灰纸面 + 白卡 + 墨青唯一强调 (#3d6b64),
+   Element Plus 主按钮换墨色 (--el-color-primary)。仅本页生效, 不影响其他页面。 */
+.knowledge-view {
+  --color-text-primary: #1c2427;
+  --color-text-regular: #39434b;
+  --color-text-secondary: #78848a;
+  --color-text-placeholder: #a9b3b9;
+  --color-border: #d9dee1;
+  --color-border-light: #e6ebee;
+  --color-info-bg: #eef1f3;
+  --color-primary: #3d6b64;
+  --color-primary-light: #4a7d75;
+  --color-primary-dark: #2f544e;
+  --color-primary-bg: #edf2f1;
+  --color-primary-border: rgba(61, 107, 100, 0.35);
+  --color-accent: #3d6b64;
+  --color-accent-bg: #edf2f1;
+  /* EP 主按钮 → 墨色 (添加知识/AI问答/分页当前页) */
+  --el-color-primary: #1c2427;
+  --el-color-primary-light-3: #454f55;
+  --el-color-primary-light-5: #6e777d;
+  --el-color-primary-light-7: #a8aeb3;
+  --el-color-primary-light-8: #c8cdd1;
+  --el-color-primary-light-9: #e9eced;
+  --el-color-primary-dark-2: #161d20;
+}
 </style>
 
 <style>
@@ -616,6 +644,22 @@ onUnmounted(() => {
 [data-theme="dark"] .health-summary-drive-chip {
   background: var(--color-danger-bg, rgba(245, 108, 108, 0.12));
   color: var(--color-danger);
+}
+
+/* 2026-09-13 配色④ 深色适配: 墨青提亮为可读档, 其余沿用全局深色令牌 */
+[data-theme="dark"] .knowledge-view {
+  --color-primary: #6fa39b;
+  --color-primary-light: #85b8b1;
+  --color-primary-bg: rgba(111, 163, 155, 0.14);
+  --color-primary-border: rgba(111, 163, 155, 0.4);
+  --color-accent: #6fa39b;
+  --el-color-primary: #6fa39b;
+  --el-color-primary-light-3: #558078;
+  --el-color-primary-light-5: #40605b;
+  --el-color-primary-light-7: #2e4742;
+  --el-color-primary-light-8: #263a36;
+  --el-color-primary-light-9: #1e2e2b;
+  --el-color-primary-dark-2: #85b8b1;
 }
 </style>
 
