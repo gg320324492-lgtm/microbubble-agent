@@ -11,7 +11,11 @@ N1-N6 / FileAgentLoop S0-S5)。**归档 tag `archive/desktop-before-redo-2026091
 旧实现与旧方案随时可查。09-13 二次清理: 删 `docs/superpowers/` 4 份桌面
 plan/spec (login-ui 设计+计划 / R0-R7 发布程序 / mbrp 迁移设计); 用户拍板
 **恢复保留 `docs/desktop-ui-migration-and-release.md` (9-08 UI 原生化 N1-N6 +
-阿里云 OSS/CDN 发布通道) 作为重做蓝本**, FileAgentLoop S0-S5 方案仍在归档。本机已同步清理: 两份已装应用 (C: Aug-28 构建 186MB /
+阿里云 OSS/CDN 发布通道) 作为重做蓝本**, FileAgentLoop S0-S5 方案仍在归档。
+**骨架设计已定稿** `docs/superpowers/specs/2026-09-13-desktop-rebuild-skeleton-design.md`:
+账号=本地注册/登录+可选绑定云端 (用户拍板), 协作数据 v1 在线直连+缓存后置 N5
+(用户拍板), 本地库 001-003 起步迁移链, 里程碑 M0 骨架+账号 → M1 AI 助手 →
+M2 知识库+会议 → …, 安全基线/登录页规格自归档回收。本机已同步清理: 两份已装应用 (C: Aug-28 构建 186MB /
 D: 旧版) + Start Menu/桌面快捷方式 + `%APPDATA%\microbubble-desktop` 用户数据
 (含迁移快照 scientific.db, 源头云端 PG 可再生) 全部删除。**已知断点教训**
 (重做时必须解决): 0.1.0 登录表单走的是 Phase-1 云端 `/auth/login` 通道,
