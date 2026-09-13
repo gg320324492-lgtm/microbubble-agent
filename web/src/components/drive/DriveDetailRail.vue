@@ -1538,12 +1538,8 @@ function onStageDblClick(ev) {
   if (ev.target.closest('.rf-pill, .rf-pill-docx, .rf-fs-btn, .rf-xlsx-zbtn, .rf-act')) return
   togglePptFull()
 }
-const pptSlideH = computed(() => {
-  if (!pptFull.value) return null
-  const nat = pptImgNat.value
-  if (!nat) return null
-  return Math.round(stageW.value / (nat.w / nat.h))
-})
+// 2026-09-13 移除死代码 pptSlideH (引用未定义的 stageW, 一旦被模板接线即抛 ReferenceError;
+// 全屏页图尺寸现由纯 CSS contain 适配, 见 :fullscreen .rf-ppt-img 规则)
 
 const inlineUrl = computed(() =>
   props.file ? `/api/v1/drive/files/${props.file.id}/download?disposition=inline` : '')
@@ -1853,6 +1849,14 @@ defineExpose({ togglePptFull })
 .rf-ppt-img { display: block; width: 100%; height: auto; border-radius: 4px 4px 0 0; }
 /* 全屏放映: 全屏根是 .rf-stage (rfStageRef, 带内联高度) 而非 .rf-ppt — 选择器必须用 :is(.rf-stage,.rf-ppt):fullscreen 才能命中 */
 :is(.rf-stage, .rf-ppt):fullscreen { background: #0D1210; border: none; }
+/* 2026-09-13 修复: .rf-stage 带内联 height (stageHeight, 按侧栏 304px 宽适配),
+   内联样式优先级高于 UA 样式表的 :fullscreen height:100% (UA 规则不带 !important)
+   → 全屏舞台只有侧栏高度、垂直居中, 页图被 max-height 钳成居中小块, 上下大片黑边。
+   !important 是唯一能压过内联样式的层级: 全屏态强制满屏高宽 (视频/音频同根同修)。 */
+.rf-stage:fullscreen {
+  height: 100vh !important;
+  width: 100vw !important;
+}
 /* 批次⑩.71: 全屏页图改绝对定位+max 双约束 — grid 容器内 height:100% 退化为 auto, 竖版 A4 会裁半 */
 :is(.rf-stage, .rf-ppt):fullscreen .rf-slide-wrap { padding: 0; position: relative; }
 /* contain 适配: 绝对定位铺满 wrap + max 约束 + margin auto → 等比最大化居中, 任意屏幕/页型比例不裁切 */
