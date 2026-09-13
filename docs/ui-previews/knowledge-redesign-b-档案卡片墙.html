@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识库重做 · 方案B 档案卡片墙</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); font-size: 14px; line-height: 1.6; padding: 40px 24px 80px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .mono { font-family: var(--font-mono); }
+  .page-head { margin-bottom: 26px; }
+  .page-head .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 10px; background: var(--card); border-radius: 2px; }
+  .page-head h1 { font-size: 22px; font-weight: 700; letter-spacing: .04em; }
+  .page-head p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  .tabs { display: flex; border: 1px solid var(--line); background: var(--card); border-radius: 4px; overflow: hidden; width: fit-content; margin-bottom: 18px; }
+  .tab { font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em; padding: 8px 22px; color: var(--muted); border-right: 1px solid var(--line); }
+  .tab:last-child { border-right: none; }
+  .tab.on { background: var(--teal); color: #fdfefc; }
+  .tab .no { opacity: .65; margin-right: 8px; }
+
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .search { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 3px; padding: 9px 12px; color: var(--muted); font-size: 13px; }
+  .act { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; padding: 9px 14px; border-radius: 3px; border: 1px solid var(--line); background: var(--card); white-space: nowrap; }
+  .act.pri { background: var(--coral); border-color: var(--coral); color: #fff; }
+  .act.dark { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+  /* 分类行: 横排 chips (沿用现状交互位置) */
+  .cats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .cat { font-size: 12px; border: 1px dashed var(--line-dash); border-radius: 9999px; padding: 3px 14px; color: var(--muted); background: var(--card); cursor: pointer; }
+  .cat .n { font-family: var(--font-mono); font-size: 10px; opacity: .7; margin-left: 4px; }
+  .cat.on { border-style: solid; border-color: var(--teal); color: var(--teal); font-weight: 700; background: rgba(14,118,110,.06); }
+
+  .sec-head { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 12px; }
+  .sec-head .l { font-size: 15px; font-weight: 700; letter-spacing: .06em; }
+  .sec-head .l::before { content: '§ '; color: var(--teal); }
+  .sec-head .r { font-family: var(--font-mono); font-size: 10px; letter-spacing: .2em; color: var(--muted); }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kcard { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; transition: all .2s ease-out; }
+  .kcard:hover { transform: translateY(-3px); box-shadow: 0 8px 22px var(--shadow-ink, rgba(22,35,42,.12)); border-color: var(--teal-soft); }
+  .kcard .top { display: flex; justify-content: space-between; align-items: center; }
+  .stamp { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; border: 1px solid var(--teal); color: var(--teal); border-radius: 2px; padding: 2px 8px; }
+  .stamp.b { border-color: var(--coral); color: var(--coral); }
+  .star { font-size: 11px; color: var(--coral); border: 1px dashed var(--line-dash); border-radius: 9999px; padding: 0 8px; }
+  .kcard .title { font-weight: 700; font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 40px; }
+  .kcard .ex { font-size: 12px; color: var(--muted); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .kcard .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tg { font-size: 11px; color: var(--muted); border: 1px dashed var(--line-dash); border-radius: 9999px; padding: 0 8px; }
+  .kcard .foot { margin-top: auto; padding-top: 8px; border-top: 1px dashed var(--line-dash); display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+
+  .pager { margin-top: 16px; display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--muted); background: var(--card); border: 1px dashed var(--line-dash); border-radius: 4px; padding: 9px 16px; }
+  .foot-strip { margin-top: 14px; display: flex; gap: 22px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .2em; color: var(--muted); background: var(--card); border: 1px dashed var(--line-dash); border-radius: 4px; padding: 9px 16px; }
+  .foot-strip b { color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-head">
+    <span class="tag">KNOWLEDGE · REDESIGN 方案B</span>
+    <h1>方案B · 档案卡片墙</h1>
+    <p>沿用现在的「搜索 + 分类行 + 卡片网格」结构与交互位置，只把视觉换成墨线档案：彩色渐变头图退场，类型改 mono 戳，卡片白纸细线。改动成本最小、用户零学习成本。</p>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on"><span class="no">01</span>知识库</div>
+    <div class="tab"><span class="no">02</span>实体图谱</div>
+    <div class="tab"><span class="no">03</span>科研假设</div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">🔍 搜索知识库…</div>
+    <div class="act pri">＋ 添加知识</div>
+    <div class="act">↑ 上传文件</div>
+    <div class="act dark">✳ AI问答</div>
+    <div class="act">⇄ 实体图谱</div>
+    <div class="act">🗄 课题组网盘</div>
+  </div>
+
+  <div class="cats">
+    <span class="cat on">全部<span class="n">342</span></span>
+    <span class="cat">论文<span class="n">96</span></span>
+    <span class="cat">方法<span class="n">41</span></span>
+    <span class="cat">标准<span class="n">17</span></span>
+    <span class="cat">综述<span class="n">28</span></span>
+    <span class="cat">案例<span class="n">33</span></span>
+    <span class="cat">FAQ<span class="n">12</span></span>
+    <span class="cat">笔记<span class="n">54</span></span>
+    <span class="cat">手册<span class="n">19</span></span>
+    <span class="cat">自动拓展<span class="n">179</span></span>
+    <span class="cat">网盘<span class="n">8</span></span>
+  </div>
+
+  <div class="sec-head"><span class="l">最近知识</span><span class="r">RECENT · SORT: UPDATED ▾</span></div>
+
+  <div class="grid">
+    <div class="kcard" style="border-color:var(--coral)">
+      <div class="top"><span class="stamp b">PPT</span><span class="star">★ 推荐</span></div>
+      <div class="title">2026.9.12-博二-赵航佳.pptx</div>
+      <div class="ex">本文档是博士生赵航佳的课题进展汇报，主要研究微纳米气泡的动力学行为及其在水处理中的应用…</div>
+      <div class="tags"><span class="tg">论文</span><span class="tg">微纳米气泡动力学与…</span></div>
+      <div class="foot"><span>20 张图</span><span>今天</span></div>
+    </div>
+
+    <div class="kcard">
+      <div class="top"><span class="stamp">论文</span><span></span></div>
+      <div class="title">【2023No.6 论文推荐】合肥工业大学周辉教授团队: 臭氧微纳米气泡在食品杀菌中的应用</div>
+      <div class="ex">该研究系统阐述了臭氧微纳米气泡的理化特性、制备与表征方法，并重点介绍了其在水处理、果蔬清洗和水产品杀菌…</div>
+      <div class="tags"><span class="tg">微纳米气泡</span><span class="tg">臭氧</span><span class="tg">食品杀菌</span><span class="tg">+2</span></div>
+      <div class="foot"><span>论文推荐</span><span>昨天</span></div>
+    </div>
+
+    <div class="kcard">
+      <div class="top"><span class="stamp">论文</span><span></span></div>
+      <div class="title">【傅博微展2016】郑晨: 微气泡群形成机制及性能的基础研究</div>
+      <div class="ex">该研究系统探究了微流控分散设备内气液微分散体系（微气泡群）的形成机制，并深入分析了微气泡群在微管道内的…</div>
+      <div class="tags"><span class="tg">微气泡群</span><span class="tg">微流控分散</span><span class="tg">+2</span></div>
+      <div class="foot"><span>傅博微展</span><span>昨天</span></div>
+    </div>
+
+    <div class="kcard">
+      <div class="top"><span class="stamp">论文</span><span></span></div>
+      <div class="title">独家 | 如何减少微流体中的气泡?</div>
+      <div class="ex">网页内容指出，在微流体系统中，任何导致流体流速突然降低或通道突然膨胀的设计，都会无意中成为气泡生成器…</div>
+      <div class="tags"><span class="tg">微流体</span><span class="tg">气泡生成</span><span class="tg">+1</span></div>
+      <div class="foot"><span>微流控学院</span><span>昨天</span></div>
+    </div>
+
+    <div class="kcard">
+      <div class="top"><span class="stamp b">PPT</span><span></span></div>
+      <div class="title">2026.09.蒋芦笛组会汇报ptx.pptx</div>
+      <div class="ex">本文档为一份关于含油废水处理技术的学术汇报PPT，系统介绍了含油废水的来源、分类、主要处理方法…</div>
+      <div class="tags"><span class="tg">综述</span><span class="tg">含油废水处理技术综…</span></div>
+      <div class="foot"><span>20 张图</span><span>昨天</span></div>
+    </div>
+
+    <div class="kcard">
+      <div class="top"><span class="stamp">笔记</span><span></span></div>
+      <div class="title">肖佐林-组会汇报.pdf</div>
+      <div class="ex">该文档是肖佐林关于微纳米气泡技术的组会汇报PPT，核心介绍了微纳米气泡的定义、特性（大比表面积、慢上升速度…</div>
+      <div class="tags"><span class="tg">微纳米气泡</span><span class="tg">比表面积</span><span class="tg">Zeta电位</span></div>
+      <div class="foot"><span>20 张图</span><span>昨天</span></div>
+    </div>
+
+    <div class="kcard">
+      <div class="top"><span class="stamp b">PPT</span><span></span></div>
+      <div class="title">刘莫菲自我介绍.pptx</div>
+      <div class="ex">本文档为课题组新成员刘莫菲的自我介绍PPT，内容包括其本科院校（河北工业大学）和实验课程经历（COD测定、氨氮测定等）…</div>
+      <div class="tags"><span class="tg">笔记</span><span class="tg">课题组新成员自我…</span></div>
+      <div class="foot"><span>7 张图</span><span>昨天</span></div>
+    </div>
+
+    <div class="kcard">
+      <div class="top"><span class="stamp b">PPT</span><span></span></div>
+      <div class="title">2026.07.16 -研一-刘子煜.pptx</div>
+      <div class="ex">本文档分析了黑臭水体的成因机理，并介绍了一个生物接触氧化-沉淀原位修复技术的工程案例…</div>
+      <div class="tags"><span class="tg">案例</span><span class="tg">黑臭水体</span><span class="tg">微生物群落</span></div>
+      <div class="foot"><span>20 张图</span><span>昨天</span></div>
+    </div>
+  </div>
+
+  <div class="pager"><span>共 342 条 · 显示 1-8</span><span>‹ 1 / 43 ›</span></div>
+  <div class="foot-strip">
+    <span>HEALTH <b>优</b></span><span>矛盾 <b>2</b></span><span>重复 <b>5</b></span><span>过期 <b>0</b></span><span>网盘 <b>1.2 / 10 GB</b></span>
+  </div>
+</div>
+</body>
+</html>
