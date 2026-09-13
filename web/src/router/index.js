@@ -52,9 +52,10 @@ const routes = [
         meta: { title: '智能对话', icon: 'ChatDotRound' }
       },
       {
+        // 批次⑩.80: 任务管理完整迁入仪表盘 (合并页), 旧地址重定向保兼容
         path: 'tasks',
         name: 'Tasks',
-        component: resolveMobileComponent('TaskView', 'MobileTaskView'),
+        redirect: to => ({ path: '/dashboard', query: to.query }),
         meta: { title: '任务管理', icon: 'List' }
       },
       {

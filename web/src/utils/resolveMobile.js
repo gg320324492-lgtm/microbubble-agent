@@ -1,4 +1,3 @@
-import { defineAsyncComponent } from 'vue'
 import { useViewportRef } from '@/composables/useIsMobile'
 
 /**
@@ -48,10 +47,13 @@ function resolveKey(prefix, path) {
  *
  * @param {string} desktopPath - 相对 @/views/ 的路径，如 'chat/ChatViewSSE'
  * @param {string} mobilePath - 相对 @/views/mobile/ 的路径，如 'chat/MobileChatView'
- * @returns {Function} defineAsyncComponent 包装的动态组件
+ * @returns {Function} 异步加载函数 () => Promise<Component>
+ *   (2026-09-13 起不再用 defineAsyncComponent 包装: Vue Router 对 route component
+ *   期望 `() => import()` 形式, 传 defineAsyncComponent 会每条路由刷一次
+ *   "Component defined using defineAsyncComponent()" 警告)
  */
 export function resolveMobileComponent(desktopPath, mobilePath) {
-  return defineAsyncComponent(() => {
+  return async () => {
     const isMobile = isCurrentlyMobile()
     const target = isMobile && mobilePath
       ? mobileModules[resolveKey('mobile/', mobilePath)]
@@ -64,25 +66,25 @@ export function resolveMobileComponent(desktopPath, mobilePath) {
       return desktopModules[resolveKey('', desktopPath)]()
     }
     return target()
-  })
+  }
 }
 
 /**
- * 仅移动端组件（如果移动端不存在对应组件，路由 fallback 到桌面版）
+ * 仅桌面端组件
  */
 export function resolveComponent(desktopPath) {
-  return defineAsyncComponent(() => {
+  return async () => {
     return desktopModules[resolveKey('', desktopPath)]()
-  })
+  }
 }
 
 /**
  * 仅移动端组件（桌面版缺失时显示占位）
  */
 export function resolveMobileOnly(mobilePath) {
-  return defineAsyncComponent(() => {
+  return async () => {
     return mobileModules[resolveKey('mobile/', mobilePath)]()
-  })
+  }
 }
 
 export default resolveMobileComponent

@@ -189,3 +189,6 @@ _r*-guard.txt
 
 # 会话工具本地状态 (memory/model test, 2GB+)
 .workbuddy/
+
+# ZCode CLI 会话本地配置 (2026-09-13)
+.zcode/

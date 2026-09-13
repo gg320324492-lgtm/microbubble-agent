@@ -22,15 +22,27 @@ function routeComponent(name) {
   return route.components?.default || route.component
 }
 
+// 2026-09-13 起 resolveMobile* 返回普通异步加载函数 (Vue Router lazy 形式,
+// `() => Promise<Component>`), 不再是 defineAsyncComponent 对象 (无 __asyncLoader);
+// 传函数正是 Vue Router 官方推荐写法, 同时消灭每条路由的
+// "Component defined using defineAsyncComponent()" 警告。
+// import.meta.glob 的 loader resolve 出的是模块命名空间 — Vue Router 生产路径
+// 会自动解包 .default, 测试里手动等价解包
+function unwrapModule(resolved) {
+  return resolved && typeof resolved === 'object' && 'default' in resolved
+    ? resolved.default
+    : resolved
+}
+
 async function loadRouteComponent(name, width) {
   setViewport(width)
-  return routeComponent(name).__asyncLoader()
+  const comp = routeComponent(name)
+  return unwrapModule(typeof comp === 'function' ? await comp() : comp)
 }
 
 async function loadResolvedComponent(desktopPath, mobilePath, width) {
   setViewport(width)
-  const asyncComponent = resolveMobileComponent(desktopPath, mobilePath)
-  return asyncComponent.__asyncLoader()
+  return unwrapModule(await resolveMobileComponent(desktopPath, mobilePath)())
 }
 
 beforeEach(() => {

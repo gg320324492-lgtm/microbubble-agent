@@ -245,6 +245,41 @@ onMounted(() => {
   min-height: 100vh;
 }
 
+/* 首页铃铛入口 (PageHeader #right slot, slot 内容归父 scope) */
+.home-bell-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--mg-glass-border, rgba(255, 255, 255, 0.5));
+  border-radius: 50%;
+  background: var(--mg-glass-bg-strong, rgba(255, 255, 255, 0.66));
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur, 12px));
+  backdrop-filter: blur(var(--mg-glass-blur, 12px));
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
+}
+.home-bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--mg-danger, #E26A6A);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .dashboard-main {
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
 }

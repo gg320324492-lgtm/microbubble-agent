@@ -18,7 +18,6 @@
     class="mvd-arch"
     width="480px"
     :close-on-click-modal="false"
-    @open="onOpen"
   >
     <template #header>
       <div class="mvd-head">

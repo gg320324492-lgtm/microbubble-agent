@@ -19,10 +19,6 @@
               <el-icon><ChatDotRound /></el-icon>
               开始对话
             </el-button>
-            <el-button class="dbtn dbtn--line" size="large" @click="showCreateTask = true">
-              <el-icon><Plus /></el-icon>
-              创建任务
-            </el-button>
           </div>
 
           <!-- 🐰 兔子角: 独立纵向区间, 气泡在按钮下方留出, 不再压到操作区 -->
@@ -127,86 +123,26 @@
       </div>
     </div>
 
-    <!-- ═══ 最近动态 (逾期任务 + 网盘上传混排) ═══ -->
-    <div class="card dyn-card fade-slide-up stagger-4">
-      <div class="card-head">
-        <h2 class="card-title"><span class="sec-no">§</span> 最近动态</h2>
-        <div class="card-head-right">
-          <span class="card-count mono">ACTIVITY · 逾期与上传</span>
-          <button class="view-all" @click="$router.push('/tasks')">任务管理 →</button>
-        </div>
-      </div>
-      <div class="dyn-list">
-        <div v-for="(row, i) in activityRows" :key="i" class="dyn-row">
-          <span class="dyn-sym" :class="row.kind">{{ row.sym }}</span>
-          <span class="dyn-txt" :class="{ hot: row.hot }">{{ row.text }}</span>
-          <span class="dyn-time">{{ row.time }}</span>
-        </div>
-        <div v-if="!activityRows.length" class="dyn-empty">暂无动态</div>
-      </div>
+    <!-- ═══ 任务管理 (批次⑩.80 完整迁入 — 侧栏任务管理入口指向本页) ═══ -->
+    <div class="tv-embed">
+      <TaskView />
     </div>
-
-    <!-- ═══ 创建任务对话框 ═══ -->
-    <el-dialog v-model="showCreateTask" title="创建任务" :width="isMobile ? '90vw' : '500px'" class="dossier-dialog">
-      <el-form :model="newTask" label-width="80px">
-        <el-form-item label="任务标题" required>
-          <el-input v-model="newTask.title" name="newTask-title" placeholder="请输入任务标题" />
-        </el-form-item>
-        <el-form-item label="负责人">
-          <el-select v-model="newTask.assignee_id" name="newTask-assignee_id" placeholder="选择负责人" clearable>
-            <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="优先级">
-          <el-radio-group v-model="newTask.priority">
-            <el-radio value="high">高</el-radio>
-            <el-radio value="medium">中</el-radio>
-            <el-radio value="low">低</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="截止日期">
-          <el-date-picker
-            v-model="newTask.due_date"
-            name="newTask-due_date"
-            type="datetime"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            placeholder="选择截止日期和时间"
-            style="width: 100%"
-            :clearable="true"
-          />
-        </el-form-item>
-        <el-form-item label="任务描述">
-          <el-input v-model="newTask.description" name="newTask-description" type="textarea" :rows="3" placeholder="请输入任务描述" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateTask = false">取消</el-button>
-        <el-button type="primary" @click="createTask">创建</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 批次⑩.79: 编辑任务对话框删除 — 编辑操作只在「任务管理」页, 仪表盘仅保留创建 -->
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { ArrowDown, ChatDotRound, Plus } from '@element-plus/icons-vue'
+import { ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { formatCompactDate } from '@/utils/format'
-import { getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
+import TaskView from './TaskView.vue'
 import DashboardPet from '@/components/DashboardPet.vue'
 import { GROUP_LEVELS, calcLevel } from '@/components/DashboardPetFacts.js'
 
 const memberStore = useMemberStore()
 const userStore = useUserStore()
-const members = computed(() => memberStore.members)
-const memberCount = computed(() => members.value.length)
 
 const dashboardData = ref({})
 // 2026-09-03 修复: 大兔 XP 从全组 done_tasks 推导 (此前 groupPetStats 从未赋值, 恒 Lv.1)
@@ -214,8 +150,6 @@ const dashboardData = ref({})
 const groupPetStats = ref({ total_xp: 0, level: 1, tasks_completed: 0 })
 const summary = computed(() => dashboardData.value.summary)
 const inProgressTasks = ref([])
-const showCreateTask = ref(false)
-const isMobile = ref(window.innerWidth <= 768)
 const currentTime = ref('')
 const currentDate = ref('')
 
@@ -227,34 +161,6 @@ const meetings = ref([])
 const driveFiles = ref([])
 const driveQuota = ref(null)
 
-const collapsedGroups = ref({})
-const toggleGroup = (assigneeId) => {
-  collapsedGroups.value[assigneeId] = !collapsedGroups.value[assigneeId]
-}
-
-const animateNumber = (el, target) => {
-  if (!el || target === undefined || target === null) return
-  const targetNum = Number(target)
-  if (isNaN(targetNum)) return
-  // 时钟每秒 tick 触发重渲染 → :ref 回调重复执行。目标未变则跳过, 避免动画每秒从头重放。
-  if (el.dataset.animTarget === String(targetNum)) return
-  el.dataset.animTarget = String(targetNum)
-  const from = Number(el.dataset.animValue) || 0
-  const duration = 500
-  const startTime = performance.now()
-  const animate = (now) => {
-    const elapsed = now - startTime
-    const progress = Math.min(elapsed / duration, 1)
-    const eased = 1 - Math.pow(1 - progress, 3)
-    const val = Math.round(from + (targetNum - from) * eased)
-    el.textContent = val
-    el.dataset.animValue = String(val)
-    if (progress < 1) requestAnimationFrame(animate)
-  }
-  requestAnimationFrame(animate)
-}
-
-const handleResize = () => { isMobile.value = window.innerWidth <= 768 }
 const updateTime = () => {
   const now = dayjs()
   currentTime.value = now.format('HH:mm:ss')
@@ -264,23 +170,11 @@ const updateTime = () => {
 let clockTimer = null
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
   if (clockTimer) {
     clearInterval(clockTimer)
     clockTimer = null
   }
 })
-
-const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' })
-
-const completeTask = async (task) => {
-  try {
-    await axios.put(`/api/v1/tasks/${task.id}`, { status: 'done' })
-    ElMessage.success('任务已完成')
-    fetchInProgressTasks()
-    fetchDashboardStats()
-  } catch (e) { ElMessage.error('操作失败') }
-}
 
 const username = computed(() => userStore.username || '用户')
 
@@ -289,14 +183,6 @@ const greeting = computed(() => {
   if (hour < 12) return '早上好'
   if (hour < 18) return '下午好'
   return '晚上好'
-})
-
-const tipKind = computed(() => {
-  const s = summary.value
-  if (!s) return ''
-  if (s.overdue_tasks > 0) return 'tip--danger'
-  if (s.in_progress_tasks > 0) return 'tip--ok'
-  return 'tip--quiet'
 })
 
 // ─── 批次⑩.79 方案 A: 三模块派生 ───
@@ -359,28 +245,6 @@ const drive24h = computed(() =>
   driveFiles.value.filter(f => f.created_at && dayjs(f.created_at).isAfter(dayjs().subtract(1, 'day'))).length
 )
 
-// 最近动态: 逾期任务 + 最近上传 混排 (按时间倒序)
-const memberNameOf = (id) => memberStore.getMemberName(id)
-const activityRows = computed(() => {
-  const rows = []
-  for (const t of overdueTasks.value.slice(0, 2)) {
-    rows.push({
-      sym: '!', kind: 'hot', hot: true,
-      text: `${t.title} 已逾期 · ${memberNameOf(t.assignee_id)}`,
-      time: t.due_date ? dayjs(t.due_date).format('MM-DD') : '',
-      sortKey: dayjs(t.due_date || 0).valueOf(),
-    })
-  }
-  for (const f of driveFiles.value.slice(0, 3)) {
-    rows.push({
-      sym: '↑', kind: 'up',
-      text: `${f.file_name} 上传 · ${f.owner_name || memberNameOf(f.created_by) || '成员'}`,
-      time: f.created_at ? dayjs(f.created_at).format('MM-DD HH:mm') : '',
-      sortKey: dayjs(f.created_at || 0).valueOf(),
-    })
-  }
-  return rows.sort((a, b) => b.sortKey - a.sortKey)
-})
 
 const fetchDashboardStats = async () => {
   try {
@@ -418,39 +282,6 @@ const fetchInProgressTasks = async () => {
   loadingCards.value = false
 }
 
-const groupedTasks = computed(() => {
-  const groups = {}
-  for (const task of inProgressTasks.value) {
-    const id = task.assignee_id || 'unassigned'
-    if (!groups[id]) {
-      groups[id] = { assignee_id: id, tasks: [] }
-    }
-    groups[id].tasks.push(task)
-  }
-  return Object.values(groups).sort((a, b) => {
-    if (a.assignee_id === 'unassigned' && b.assignee_id !== 'unassigned') return -1
-    if (b.assignee_id === 'unassigned' && a.assignee_id !== 'unassigned') return 1
-    const aHasOverdue = a.tasks.some(t => isOverdue(t.due_date))
-    const bHasOverdue = b.tasks.some(t => isOverdue(t.due_date))
-    if (aHasOverdue && !bHasOverdue) return -1
-    if (!aHasOverdue && bHasOverdue) return 1
-    return b.tasks.length - a.tasks.length
-  })
-})
-
-const createTask = async () => {
-  if (!newTask.value.title) { ElMessage.warning('请输入任务标题'); return }
-  try {
-    await axios.post('/api/v1/tasks', newTask.value)
-    ElMessage.success('任务创建成功')
-    showCreateTask.value = false
-    newTask.value = { title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' }
-    fetchInProgressTasks()
-    fetchDashboardStats()
-  } catch (e) { ElMessage.error('创建任务失败') }
-}
-
-const formatDate = (date) => formatCompactDate(date, '无截止')
 const isOverdue = (date) => date && dayjs(date).isBefore(dayjs())
 
 onMounted(() => {
@@ -461,7 +292,6 @@ onMounted(() => {
   fetchMeetings()
   fetchDrive()
   memberStore.refreshMembers()
-  window.addEventListener('resize', handleResize)
 })
 </script>
 
@@ -749,47 +579,9 @@ onMounted(() => {
 .dashboard.dashboard-dossier .hero-actions .dbtn--line:hover { border-style: solid !important; background: rgba(14, 118, 110, 0.06) !important; }
 .dashboard.dashboard-dossier .hero-actions .dbtn { border-radius: 3px; height: 44px; }
 
-/* ── 批次⑩.79 方案 A: 三模块卡 + 最近动态 ─────────────── */
-.tri-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 26px; }
-@media (max-width: 900px) { .tri-grid { grid-template-columns: 1fr; } }
-.tri-card { padding-bottom: 16px; min-height: 150px; }
-.tri-card .card-head { padding: 14px 20px 10px; }
-.kpi-body { padding: 4px 22px 6px; min-height: 74px; }
-.kpi-big {
-  font-family: var(--font-mono); font-size: 42px; font-weight: 700; line-height: 1.1;
-  font-variant-numeric: tabular-nums; color: var(--teal);
-}
-.kpi-unit { font-family: var(--font-serif); font-size: 13px; color: var(--muted); margin-left: 8px; }
-.kpi-ring {
-  display: flex; justify-content: space-between; gap: 8px;
-  margin-top: 14px; padding-top: 12px;
-  border-top: 1px dashed var(--line-dash);
-}
-.kr { text-align: center; min-width: 0; }
-.kr .n { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--ink); }
-.kr .n.hot { color: var(--coral); }
-.kr .l { font-size: 10px; color: var(--muted); margin-top: 3px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tri-skel-line { height: 46px; }
-
-.dyn-card { padding-bottom: 10px; }
-.dyn-list { padding: 4px 24px 8px; }
-.dyn-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 11px 6px;
-  border-bottom: 1px dashed var(--line-dash);
-}
-.dyn-row:last-child { border-bottom: none; }
-.dyn-sym {
-  display: inline-grid; place-items: center; flex-shrink: 0;
-  width: 22px; height: 22px; border-radius: 50%;
-  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-}
-.dyn-sym.hot { background: var(--coral); color: var(--card); }
-.dyn-sym.up { background: var(--teal); color: var(--card); }
-.dyn-txt { flex: 1; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dyn-txt.hot { color: var(--coral); font-weight: 600; }
-.dyn-time { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: var(--muted); flex-shrink: 0; }
-.dyn-empty { padding: 18px 6px; color: var(--muted); font-size: 12px; text-align: center; }
+/* ── 批次⑩.80 任务管理完整迁入 (tv-embed) ─────────────── */
+.tv-embed :deep(.page-container) { padding: 0; max-width: none; }
+.tv-embed :deep(.task-view) { --dg-shadow: rgba(22, 35, 42, 0.1); }
 </style>
 
 <!-- dark 换墨盘 (与 SettingsView 同变量族) -->
