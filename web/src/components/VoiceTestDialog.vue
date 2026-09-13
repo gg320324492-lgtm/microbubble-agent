@@ -342,7 +342,7 @@ onMounted(() => {
   })
   themeObserver.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ['data-theme', 'data-accent'],
+    attributeFilter: ['data-theme'],
   })
 })
 

@@ -763,12 +763,9 @@ onMounted(() => {
 <!--
   W72 第 2 批 C-3 dark mode 跨组件适配
   CLAUDE.md v60-v67 第 5 次强化：dark mode 跨组件必须非 scoped
-  6 主题完整版 (corl + ocean + forest + sunset + purple + mono)
 -->
 <style>
-/* 6 主题 token — 复用 useThemeStore + 顶栏 6 主题选择器 */
-[data-theme="dark"] .mobile-subscription-view,
-[data-theme="dark"][data-accent="coral"] .mobile-subscription-view {
+[data-theme="dark"] .mobile-subscription-view {
   background: rgb(26, 26, 26);
   color: rgb(224, 224, 224);
 }

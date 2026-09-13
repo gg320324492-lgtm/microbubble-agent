@@ -22,13 +22,13 @@ function readRgbVar(name) {
 
 onMounted(() => {
   nextTick(() => render())
-  // 监听主题/主色切换 → 重绘 ECharts (因 ECharts option 是 static snapshot, 不会自动跟随 CSS 变量)
+  // 监听主题切换 → 重绘 ECharts (因 ECharts option 是 static snapshot, 不会自动跟随 CSS 变量)
   themeObserver = new MutationObserver(() => {
     if (chartInstance) render()
   })
   themeObserver.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ['data-theme', 'data-accent'],
+    attributeFilter: ['data-theme'],
   })
 })
 

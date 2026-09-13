@@ -1,0 +1,55 @@
+
+.plan-selector[data-v-eb201fcf] {
+  padding: 16px 0;
+}
+.period-toggle[data-v-eb201fcf] {
+  margin-bottom: 24px;
+}
+.plan-grid[data-v-eb201fcf] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.plan-card[data-v-eb201fcf] {
+  text-align: center;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+.plan-card-featured[data-v-eb201fcf] {
+  border-color: var(--color-primary, #FF7A5C);
+}
+.plan-name[data-v-eb201fcf] {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.plan-price[data-v-eb201fcf] {
+  margin-bottom: 16px;
+}
+.price-currency[data-v-eb201fcf] {
+  font-size: 14px;
+  vertical-align: top;
+}
+.price-value[data-v-eb201fcf] {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--color-primary, #FF7A5C);
+}
+.price-period[data-v-eb201fcf] {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+}
+.plan-features[data-v-eb201fcf] {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+  text-align: left;
+  font-size: 13px;
+  color: var(--color-text-secondary, #666);
+}
+.plan-features li[data-v-eb201fcf] {
+  padding: 4px 0;
+}
+.plan-button[data-v-eb201fcf] {
+  width: 100%;
+}

@@ -6,7 +6,8 @@
  * 覆盖:
  *   P0-1: 桌面 /members 成员卡 grade + role chip 是主色实色 + 白字 + font-weight 600
  *   P0-2: 移动 /members/{name} hero-tags 同样升级
- *   同时验证 6 主题 (orange/ocean/forest × light/dark) 自动切换背景色
+ *   同时验证明暗双主题 (light/dark) 自动切换背景色
+ *   (2026-09-13 accent 多主题色移除, 原 6 主题矩阵收敛为 2)
  *
  * 不写 baseline 对比 — 用 evaluate() 拿 computed style 精确断言颜色, 比 toHaveScreenshot 更稳定
  *
@@ -24,14 +25,10 @@ import { test, expect } from '@playwright/test'
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const TEST_TOKEN = process.env.TEST_TOKEN || ''
 
-// 6 主题 (light/dark × orange/ocean/forest) — 主题颜色预期
+// 明暗双主题 — 主题颜色预期 (2026-09-13 accent 多主题色移除, 原 6 主题矩阵收敛为 2)
 const THEMES = [
   { name: 'light-orange', theme: 'light', accent: 'orange', rgb: '255, 122, 92', darkRgb: '255, 122, 92' },
-  { name: 'light-ocean',  theme: 'light', accent: 'ocean',  rgb: '74, 144, 226', darkRgb: '74, 144, 226' },
-  { name: 'light-forest', theme: 'light', accent: 'forest', rgb: '76, 175, 80',  darkRgb: '76, 175, 80' },
   { name: 'dark-orange',  theme: 'dark',  accent: 'orange', rgb: '255, 157, 133', darkRgb: '255, 157, 133' },
-  { name: 'dark-ocean',   theme: 'dark',  accent: 'ocean',  rgb: '107, 171, 255', darkRgb: '107, 171, 255' },
-  { name: 'dark-forest',  theme: 'dark',  accent: 'forest', rgb: '102, 187, 106', darkRgb: '102, 187, 106' },
 ]
 
 async function setupPage(page, { theme, accent }) {
@@ -81,7 +78,7 @@ function parseRgb(rgbStr) {
 }
 
 test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
-  test('P0-1: 桌面 /workspace?tab=members grade + role chip 6 主题验证', async ({ page }) => {
+  test('P0-1: 桌面 /workspace?tab=members grade + role chip 明暗双主题验证', async ({ page }) => {
     const failures = []
     for (const t of THEMES) {
       await setupPage(page, { theme: t.theme, accent: t.accent })
