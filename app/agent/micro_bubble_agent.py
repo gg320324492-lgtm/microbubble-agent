@@ -334,25 +334,6 @@ def _window_messages(messages: List[Dict]) -> List[Dict]:
     return deduped[-_SESSION_CONTEXT_MAX_MSGS:]
 
 
-async def _inject_memories(db, user_id: int, query: str) -> str:
-    """长期记忆注入段（共享函数, 流式/非流式路径统一调用 — A4）
-
-    返回追加文本（如 "\n关于用户的长期记忆:\n- [...]"）；无记忆或失败返回 ""。
-    """
-    try:
-        from app.services.memory_service import MemoryService
-        mem_svc = MemoryService(db)
-        memories = await mem_svc.search_memories(user_id, query, top_k=5)
-        if memories:
-            memory_text = "\n".join(
-                f"- [{m['memory_type']}] {m['content']}" for m in memories
-            )
-            return f"\n关于用户的长期记忆:\n{memory_text}"
-    except Exception as e:
-        logger.warning(f"构建记忆提示词失败: {e}")
-    return ""
-
-
 # ============================================================================
 # 2026-07-15 #P2: 课题组概览上下文注入 (Redis 1h 缓存)
 # ============================================================================
@@ -651,9 +632,8 @@ class MicroBubbleAgent:
             await session_manager.save_messages(session_id, messages)
             await session_manager.update_meta(session_id, user_id=user_id)
 
-        # 6. 异步后台：记忆 + 知识提取
+        # 6. 异步后台：知识提取
         if user_id and db:
-            asyncio.create_task(self._extract_memories_bg(user_id, messages, session_id))
             asyncio.create_task(self._extract_knowledge_bg(user_id, messages, session_id))
 
         return result
@@ -711,7 +691,7 @@ class MicroBubbleAgent:
         content = self._build_user_content(message, image_data, image_media_type)
         messages.append({"role": "user", "content": content})
 
-        # 3. 构造 system prompt（流式路径同样注入长期记忆 — A4）
+        # 3. 构造 system prompt
         system = await self._build_system_prompt(user_id, message, db) if user_id else get_system_prompt()
 
         # B1: prompt 构造后分类一次；闲聊/续讲显式覆盖 fast，并传 engine 复用。
@@ -932,17 +912,6 @@ class MicroBubbleAgent:
                             assistant_msg_persisted = True
                             # [CHAT-P0-A A3] assistant 落库后更新 last_pg_id（增量回填游标）
                             await _set_last_pg_id(session_id, assistant_msg_id)
-                            # [CHAT-P0-A A4] 流式完成后 fire-and-forget 记忆提取（闭环: 流式
-                            # 回答也进长期记忆, 不再"非流式才提取")
-                            if user_id and db:
-                                conv_msgs = [
-                                    {"role": m.get("role"), "content": m.get("content")}
-                                    for m in messages
-                                    if isinstance(m, dict)
-                                ] + [{"role": "assistant", "content": assistant_text}]
-                                asyncio.create_task(
-                                    self._extract_memories_bg(user_id, conv_msgs, session_id)
-                                )
                             # 2026-08-17 #Step14: summary 写路径 (Plan v1 P2)
                             # 复用 fire-and-forget 模式: 异步 LLM 压缩 chat_messages.summary + key_topics
                             # 不阻塞主流程. 走 settings.SUMMARY_LLM_ENABLED 开关
@@ -1569,11 +1538,6 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.error(f"_build_system_prompt: team_overview injection failed: {e}", exc_info=True)
 
-        # 3. 长期记忆
-        memory_text = await _inject_memories(db, user_id, query)
-        if memory_text:
-            parts.append(memory_text)
-
         # 4. 会议转录检测
         if _is_meeting_transcript_query(query):
             parts.append(get_meeting_analyzer_prompt())
@@ -1583,19 +1547,6 @@ class MicroBubbleAgent:
     # =========================================================================
     # 后台任务
     # =========================================================================
-
-    async def _extract_memories_bg(self, user_id: int, messages: List[Dict], session_id: str):
-        """后台记忆提取"""
-        from app.core.database import async_session
-        try:
-            async with async_session() as db:
-                from app.services.memory_service import MemoryService
-                mem_svc = MemoryService(db)
-                await mem_svc.extract_memories_from_conversation(
-                    user_id=user_id, messages=messages, session_id=session_id
-                )
-        except Exception as e:
-            logger.error(f"后台记忆提取失败: {e}")
 
     async def _save_message_summary_bg(self, message_id: int, content: str) -> None:
         """2026-08-17 #Step14: chat_messages.summary 写路径 (Plan v1 P2)

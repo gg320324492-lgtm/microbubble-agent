@@ -28,8 +28,7 @@ def test_truncation_contract(length, expected):
     ("caller", "expected"),
     [("kb_qa", True), ("hybrid_retriever", True),
      ("semantic_search", True), ("auto_research", False),
-     ("entity_service", False), ("memory_service", False),
-     ("knowledge_service", False), ("", False)],
+     ("entity_service", False), ("knowledge_service", False), ("", False)],
 )
 def test_query_caller_allowlist(caller, expected):
     assert should_use_query_prefix(caller) is expected

@@ -61,7 +61,6 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 7 类之
 - explain_concept: 用户想理解概念/原理/定义（如「什么是」「原理」「如何工作」）
 - execute_action: 用户想执行操作。包括：
   - 任务/会议/项目的增删改（如「创建任务」「删除会议」「立项」）
-  - **记忆操作**（如「记住：XX」「忘掉XX」「以后XX」「不要XX」→ save_memory / forget_memory）
   - **保存知识**（如「保存到知识库」→ save_conversation_knowledge）
   - 提醒/通知（如「提醒我」）
 - data_query: 用户想查询数据（任务列表/会议列表/统计「多少」「几个」）

@@ -16,7 +16,6 @@ from app.models.reminder import Reminder
 from app.models.billing import (  # 2026-09-12: 补注册商业表 (原仅 alembic 138 建, create_all 注册表缺失 → 测试库无表)
     Plan, CommercialTenant, Subscription, Invoice, UsageRecord, License,
 )
-from app.models.memory import Memory
 from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
 from app.models.voiceprint_history import VoiceprintHistory

@@ -1,0 +1,271 @@
+
+.mobile-knowledge-detail[data-v-ba598c71] {
+  min-height: 100vh;
+  /* 2026-08-31 液态毛玻璃升级: 颜色/圆角/阴影全部走 --mg-* token,
+     极光背景由根节点 .mg-page 提供. 详情页可读性优先: 正文卡背景提到 --mg-glass-bg-strong. */
+  display: flex;
+  flex-direction: column;
+}
+.detail-main[data-v-ba598c71] {
+  flex: 1;
+  padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+}
+
+/* 标题 */
+.detail-title[data-v-ba598c71] {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  line-height: 1.4;
+  margin: 0 0 12px;
+}
+
+/* 元信息 */
+.detail-meta[data-v-ba598c71] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--mg-text-soft);
+}
+.category-badge[data-v-ba598c71], .type-badge[data-v-ba598c71] {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  color: var(--mg-primary);
+  border-radius: var(--mg-radius-pill);
+  font-weight: 600;
+}
+/* 分类色点: 沿用全局 .knowledge-color-* 的 --accent 原色语义, 无分类时回落主色 */
+.category-dot[data-v-ba598c71] {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, var(--mg-primary));
+  flex-shrink: 0;
+}
+.type-badge[data-v-ba598c71] {
+  color: var(--mg-text-soft);
+}
+.detail-date[data-v-ba598c71] {
+  font-size: 11px;
+  color: var(--mg-text-soft);
+}
+
+/* 标签 (基础胶囊形状/色由模板上的 .mg-chip 提供) */
+.detail-tags[data-v-ba598c71] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.tag-chip[data-v-ba598c71] {
+  font-size: 11px;
+}
+
+/* 内容区: 玻璃卡; --main (摘要/完整内容) 背景提高保证可读性 */
+.content-section[data-v-ba598c71] {
+  background: var(--mg-glass-bg);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(var(--mg-glass-blur));
+  backdrop-filter: blur(var(--mg-glass-blur));
+  border-radius: var(--mg-radius-lg);
+  box-shadow: var(--mg-shadow-sm);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.content-section--main[data-v-ba598c71] {
+  background: var(--mg-glass-bg-strong);
+  box-shadow: var(--mg-shadow);
+}
+.section-title[data-v-ba598c71] {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  margin: 0 0 12px;
+  padding-left: 8px;
+  border-left: 3px solid var(--mg-primary);
+}
+
+/* 概念 / 主题 */
+.concept-list[data-v-ba598c71] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.concept-chip[data-v-ba598c71], .topic-chip[data-v-ba598c71] {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  color: var(--mg-text);
+  border-radius: var(--mg-radius-pill);
+  font-size: 12px;
+}
+.topic-chip[data-v-ba598c71] {
+  background: var(--mg-warning-soft);
+  border-color: transparent;
+  color: var(--mg-warning);
+}
+
+/* 三元组 */
+.triple-list[data-v-ba598c71] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.triple-card[data-v-ba598c71] {
+  padding: 10px 12px;
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  border-radius: var(--mg-radius-md);
+}
+.triple-row[data-v-ba598c71] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.triple-subject[data-v-ba598c71], .triple-object[data-v-ba598c71] {
+  font-weight: 700;
+  color: var(--mg-primary);
+}
+.triple-predicate[data-v-ba598c71] {
+  color: var(--mg-text-soft);
+  font-size: 12px;
+}
+.triple-condition[data-v-ba598c71] {
+  font-size: 11px;
+  color: var(--mg-text-soft);
+  margin-top: 4px;
+}
+.triple-confidence[data-v-ba598c71] {
+  margin-top: 6px;
+  height: 3px;
+  background: var(--mg-glass-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.conf-bar[data-v-ba598c71] {
+  height: 100%;
+  background: var(--mg-gradient-btn);
+}
+
+/* 摘要 + 内容 */
+.summary-text[data-v-ba598c71], .content-text[data-v-ba598c71], .source-text[data-v-ba598c71] {
+  font-size: 14px;
+  color: var(--mg-text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.source-text[data-v-ba598c71] {
+  color: var(--mg-primary);
+  text-decoration: underline;
+}
+
+/* 加载 */
+.loading-state[data-v-ba598c71] {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--mg-text-soft);
+}
+.loading-spinner[data-v-ba598c71] {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--mg-glass-border);
+  border-top-color: var(--mg-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+/* Header — 玻璃胶囊 (与列表页一致, 触摸目标 44px) */
+.header-action[data-v-ba598c71] {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--mg-radius-pill);
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--mg-shadow-sm);
+  font-size: 18px;
+  color: var(--mg-text);
+  cursor: pointer;
+  transition: transform 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.header-action[data-v-ba598c71]:active { transform: scale(0.94);
+}
+
+/* 目录 Sheet — 悬浮强玻璃面板 (mg token 自带 dark 变体) */
+.toc-overlay[data-v-ba598c71] {
+  position: fixed;
+  inset: 0;
+  z-index: 4500;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+}
+.toc-panel[data-v-ba598c71] {
+  width: 80%;
+  max-width: 320px;
+  background: var(--mg-glass-bg-strong);
+  border: 1.5px solid var(--mg-glass-border);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--mg-shadow-lg);
+  border-radius: 0 var(--mg-radius-lg) var(--mg-radius-lg) 0;
+  padding: 8px 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+.toc-handle[data-v-ba598c71] {
+  display: none;
+}
+.toc-title[data-v-ba598c71] {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  margin: 12px 0 16px;
+}
+.toc-list[data-v-ba598c71] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.toc-item[data-v-ba598c71] {
+  min-height: 44px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--mg-radius-md);
+  font-size: 14px;
+  color: var(--mg-text);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.toc-item[data-v-ba598c71]:active { background: var(--mg-glass-bg); color: var(--mg-primary);
+}
+.toc-sheet-enter-active[data-v-ba598c71], .toc-sheet-leave-active[data-v-ba598c71] {
+  transition: opacity 0.25s ease;
+}
+.toc-sheet-enter-active .toc-panel[data-v-ba598c71], .toc-sheet-leave-active .toc-panel[data-v-ba598c71] {
+  transition: transform 0.3s var(--ease-sheet);
+}
+.toc-sheet-enter-from[data-v-ba598c71], .toc-sheet-leave-to[data-v-ba598c71] { opacity: 0;
+}
+.toc-sheet-enter-from .toc-panel[data-v-ba598c71], .toc-sheet-leave-to .toc-panel[data-v-ba598c71] {
+  transform: translateX(-100%);
+}

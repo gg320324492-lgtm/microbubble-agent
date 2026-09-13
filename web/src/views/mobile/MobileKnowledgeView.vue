@@ -119,61 +119,6 @@
         </div>
       </div>
 
-      <!-- Tab: 我的长期记忆 (v28 step 68) -->
-      <div v-else-if="activeTab === 'memory'" class="mg-rise mg-stagger-1">
-        <div class="memory-mobile-toolbar">
-          <input
-            v-model="memorySearch.keyword"
-            type="search"
-            placeholder="搜索记忆内容..."
-            class="memory-mobile-search"
-            @keyup.enter="fetchMemories"
-          />
-          <select v-model="memorySearch.type" class="memory-mobile-select" @change="fetchMemories">
-            <option value="">全部类型</option>
-            <option value="preference">偏好</option>
-            <option value="user_fact">用户事实</option>
-            <option value="task_ctx">任务上下文</option>
-            <option value="entity">实体关系</option>
-          </select>
-        </div>
-
-        <div v-if="memoryLoading && memoryList.length === 0" class="memory-mobile-loading">
-          <div v-for="i in 3" :key="i" class="skeleton-card">
-            <div class="skeleton-line w-40" />
-            <div class="skeleton-line w-90" />
-          </div>
-        </div>
-
-        <div v-else-if="memoryList.length === 0" class="empty-state-mobile">
-          <div class="empty-icon">🧠</div>
-          <div class="empty-title">还没有记忆</div>
-          <div class="empty-hint">与小气对话时会自动学习</div>
-        </div>
-
-        <div v-else class="memory-mobile-list">
-          <article v-for="item in memoryList" :key="item.id" class="memory-mobile-card mg-glass">
-            <div class="memory-mobile-header">
-              <span class="memory-mobile-type mg-chip" :class="`type-${item.memory_type}`">
-                {{ memoryTypeNameMap[item.memory_type] || item.memory_type }}
-              </span>
-              <span class="memory-mobile-imp">⭐ {{ Math.round((item.importance || 0) * 100) }}%</span>
-            </div>
-            <div v-if="item.key" class="memory-mobile-key">🔑 {{ item.key }}</div>
-            <p class="memory-mobile-content">{{ item.content }}</p>
-            <div class="memory-mobile-footer">
-              <span class="memory-mobile-time">{{ formatDateTime(item.created_at) }}</span>
-              <button type="button" class="memory-mobile-forget" @click.stop="forgetMemory(item)">遗忘</button>
-            </div>
-          </article>
-        </div>
-
-        <div v-if="memoryTotal > memoryPageSize" class="pagination-mobile">
-          <button type="button" class="page-btn" :disabled="memoryCurrentPage <= 1" @click="memoryCurrentPage--; fetchMemories()">上一页</button>
-          <span class="page-info">{{ memoryCurrentPage }} / {{ Math.ceil(memoryTotal / memoryPageSize) }}</span>
-          <button type="button" class="page-btn" :disabled="memoryCurrentPage >= Math.ceil(memoryTotal / memoryPageSize)" @click="memoryCurrentPage++; fetchMemories()">下一页</button>
-        </div>
-      </div>
     </main>
 
     <!-- 浮动 MobileFab 与 header「+」动作表重复 (2026-08-31 UI 审查移除)；header「+」已含手动/上传/研究/入网盘 -->
@@ -270,7 +215,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { formatDateTime } from '@/utils/format'
-import { Document, Share, MagicStick, Histogram, Memo, DataLine } from '@element-plus/icons-vue'
+import { Document, Share, MagicStick, Histogram, DataLine } from '@element-plus/icons-vue'
 import TabStrip from '@/components/common/TabStrip.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
@@ -287,7 +232,7 @@ const route = useRoute()
 const activeTab = ref('knowledge')
 
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas', 'memory', 'health']  // PR8: drive tab moved to /m-drive
+const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas', 'health']  // PR8: drive tab moved to /m-drive
 if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
   activeTab.value = String(route.query.tab)
 }
@@ -298,60 +243,8 @@ const tabItems = [
   { key: 'entities',   label: '实体',     icon: Share },
   { key: 'hypotheses', label: '假设',     icon: MagicStick },
   { key: 'formulas',   label: '公式',     icon: Histogram },
-  { key: 'memory',     label: '长期记忆', icon: Memo },
   { key: 'health',     label: '健康',     icon: DataLine },
 ]
-
-// v28 step 68: 长期记忆 Tab 状态（合并自 MobileMemoryView）
-const memoryList = ref([])
-const memoryTotal = ref(0)
-const memoryCurrentPage = ref(1)
-const memoryPageSize = ref(20)
-const memoryLoading = ref(false)
-const memorySearch = ref({ keyword: '', type: '' })
-
-const memoryTypeNameMap = {
-  preference: '偏好',
-  user_fact: '用户事实',
-  task_ctx: '任务上下文',
-  summary: '摘要',
-  entity: '实体关系',
-}
-
-const fetchMemories = async () => {
-  memoryLoading.value = true
-  try {
-    const params = {
-      page: memoryCurrentPage.value,
-      page_size: memoryPageSize.value,
-    }
-    if (memorySearch.value.keyword) params.keyword = memorySearch.value.keyword
-    if (memorySearch.value.type) params.memory_type = memorySearch.value.type
-    const res = await axios.get('/api/v1/memory', { params })
-    memoryList.value = res.data.items || []
-    memoryTotal.value = res.data.total || 0
-  } catch (e) {
-    console.error('[MobileKnowledgeView] 获取长期记忆失败:', e)
-    ElMessage.error('获取长期记忆失败')
-  } finally {
-    memoryLoading.value = false
-  }
-}
-
-const forgetMemory = async (item) => {
-  try {
-    await ElMessageBox.confirm(`确定遗忘「${(item.content || '').slice(0, 30)}...」？`, '遗忘确认', {
-      type: 'warning',
-      confirmButtonText: '遗忘',
-      cancelButtonText: '取消',
-    })
-    await axios.delete(`/api/v1/memory/${item.id}`)
-    ElMessage.success('已遗忘')
-    fetchMemories()
-  } catch (e) {
-    if (e !== 'cancel') console.error(e)
-  }
-}
 
 const knowledgeList = ref([])
 const hypotheses = ref([])
@@ -387,7 +280,6 @@ const tabs = [
   { name: 'entities',   label: '实体',     icon: Share },
   { name: 'hypotheses', label: '假设',     icon: MagicStick },
   { name: 'formulas',   label: '公式',     icon: Histogram },
-  { name: 'memory',     label: '长期记忆', icon: Memo },
   { name: 'health',     label: '健康',     icon: DataLine },
 ]
 
@@ -469,7 +361,6 @@ function switchTab(tab) {
   if (tab === 'knowledge' && knowledgeList.value.length === 0) fetchKnowledge()
   if (tab === 'hypotheses' && hypotheses.value.length === 0) fetchHypotheses()
   if (tab === 'formulas' && formulas.value.length === 0) fetchFormulas()
-  if (tab === 'memory' && memoryList.value.length === 0 && !memoryLoading.value) fetchMemories()
 }
 
 // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
@@ -904,113 +795,6 @@ onMounted(() => {
   font-size: 14px;
   cursor: pointer;
 }
-
-/* v28 step 68: 长期记忆 Tab 移动端样式 */
-.memory-mobile-toolbar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 0 4px;
-}
-.memory-mobile-search {
-  flex: 1;
-  min-width: 0;
-  height: 44px;
-  padding: 0 16px;
-  border: 1.5px solid var(--mg-glass-border);
-  border-radius: var(--mg-radius-pill);
-  background: var(--mg-glass-bg-strong);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  color: var(--mg-text);
-  font-size: 14px;
-  outline: none;
-  font-family: inherit;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
-}
-.memory-mobile-search::placeholder { color: var(--mg-text-faint); }
-.memory-mobile-search:focus {
-  border-color: var(--mg-primary);
-  box-shadow: var(--mg-shadow-sm);
-}
-.memory-mobile-select {
-  height: 44px;
-  padding: 0 10px;
-  border: 1.5px solid var(--mg-glass-border);
-  border-radius: var(--mg-radius-pill);
-  background: var(--mg-glass-bg-strong);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  color: var(--mg-text);
-  font-size: 13px;
-}
-
-.memory-mobile-loading {
-  padding: 0 4px;
-}
-
-.memory-mobile-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0 4px;
-}
-
-/* 玻璃底/描边/blur 由模板上的 .mg-glass 提供, 此处只覆写圆角与内边距 */
-.memory-mobile-card {
-  border-radius: var(--mg-radius-md);
-  padding: 13px 14px;
-}
-
-.memory-mobile-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-/* 基础芯片形状由模板上的 .mg-chip 提供 (默认紫 = 偏好/摘要/实体) */
-.memory-mobile-type.type-user_fact { color: var(--mg-success); background: var(--mg-success-soft); }
-.memory-mobile-type.type-task_ctx { color: var(--mg-warning); background: var(--mg-warning-soft); }
-
-.memory-mobile-imp {
-  font-size: 11px;
-  color: var(--mg-text-soft);
-}
-
-.memory-mobile-key {
-  font-size: 11px;
-  color: var(--mg-primary);
-  margin-bottom: 4px;
-}
-
-.memory-mobile-content {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--mg-text);
-  margin: 0 0 8px;
-}
-
-.memory-mobile-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: var(--mg-text-soft);
-}
-
-.memory-mobile-forget {
-  border: none;
-  background: transparent;
-  color: var(--mg-danger);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 44px;
-  padding: 10px 8px;
-  -webkit-tap-highlight-color: transparent;
-}
-.memory-mobile-forget:active { opacity: 0.6; }
 
 /* 空态 — 玻璃卡 (规范: emoji + --mg-text-soft 文案放 mg-glass 卡里) */
 .empty-state-mobile {

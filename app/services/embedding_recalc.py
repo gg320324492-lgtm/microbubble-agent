@@ -33,10 +33,9 @@ from app.core.celery import celery_app
 logger = logging.getLogger("microbubble.embedding_recalc")
 
 
-# 4 张表 + 内容字段名映射 (用于提取待重算文本)
+# 3 张表 + 内容字段名映射 (用于提取待重算文本)
 TABLE_TO_MODEL = {
     "knowledge": ("Knowledge", "content"),
-    "memories": ("Memory", "content"),
     "meetings": ("Meeting", "summary"),  # meeting 用 summary 作为嵌入源
     "knowledge_entities": ("KnowledgeEntity", "subject"),  # entity 用三元组拼接
 }
@@ -45,14 +44,12 @@ TABLE_TO_MODEL = {
 def _import_model_class(table: str):
     """懒加载 model class (避免 celery 启动时 import 全部 ORM)"""
     from app.models.knowledge import Knowledge
-    from app.models.memory import Memory
     from app.models.meeting import Meeting
     from app.models.knowledge_entity import KnowledgeEntity
     from app.models.knowledge_chunk import KnowledgeChunk
 
     return {
         "knowledge": Knowledge,
-        "memories": Memory,
         "meetings": Meeting,
         "knowledge_entities": KnowledgeEntity,
         "knowledge_chunks": KnowledgeChunk,
@@ -121,7 +118,7 @@ def recalc_one_embedding(self, table: str, row_id: int):
     """单条 embedding 重算 (幂等: WHERE embedding IS NULL)
 
     Args:
-        table: 表名 (knowledge / memories / meetings / knowledge_entities)
+        table: 表名 (knowledge / meetings / knowledge_entities)
         row_id: 主键 ID
 
     Returns:

@@ -1089,7 +1089,6 @@ curl http://localhost:8000/api/v1/dft/tools
 | `app/services/project_service.py` | 项目+里程碑 CRUD |
 | `app/services/knowledge_service.py` | 知识库 CRUD + 语义搜索 |
 | `app/services/reminder_service.py` | 提醒服务 + Celery task |
-| `app/services/memory_service.py` | 长期记忆 CRUD + 语义搜索 + LLM 提取 |
 | `app/services/search_service.py` | 联网搜索（搜狗+必应双引擎） |
 | `app/services/embedding_service.py` | 向量嵌入（text2vec-base-chinese） |
 | `app/services/file_parser_service.py` | 文件内容提取（PDF/Word/Excel/PPT） |

@@ -30,7 +30,7 @@ class TestWriteToolFacts:
     def test_write_tools_are_registered(self):
         from app.agent.tool_registry import WRITE_TOOL_NAMES, is_write_tool
         # 核心写工具必须在白名单 (新写工具不登记 = guard 失明, 见 registry 注释)
-        for t in ("create_task", "update_task", "save_memory", "save_conversation_knowledge"):
+        for t in ("create_task", "update_task", "save_conversation_knowledge"):
             assert t in WRITE_TOOL_NAMES
             assert is_write_tool(t)
         # 只读工具不得进白名单 (否则谎报 guard 会被读操作误判为已写)
@@ -45,13 +45,6 @@ class TestWriteToolFacts:
         assert not write_tool_succeeded({"status": "skipped"})
         assert not write_tool_succeeded(None)
         assert not write_tool_succeeded("not a dict")
-
-    def test_save_memory_success_states(self):
-        """save_memory 特例契约: created/merged/updated 都算改库成功。"""
-        from app.agent.tool_registry import write_tool_succeeded
-        for st in ("created", "merged", "updated"):
-            assert write_tool_succeeded({"status": st, "memory_id": 1})
-        assert not write_tool_succeeded({"status": "blocked"})
 
     def test_add_note_requested_but_not_written_is_failure(self):
         """update_task 关键陷阱: add_note 请求了但 note_written=False → 不算成功写。"""

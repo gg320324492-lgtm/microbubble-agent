@@ -1,0 +1,232 @@
+
+/* ============================================================
+   液态毛玻璃 (Liquid Glass) 升级 — 2026-08-31
+   分组 section = mg-glass 卡 (template 挂类, scoped 定尺寸);
+   行分隔 1px rgba(124,107,216,.12); 头像圈渐变描边;
+   危险操作 (退出登录) 走 --mg-danger; 颜色一律 --mg-* token
+   ============================================================ */
+.mobile-settings-view[data-v-d86719dc] {
+  min-height: 100vh;
+  /* background 交给全局 .mg-page (本视图无同名全局竞争类, 单类即可命中) */
+}
+.settings-main[data-v-d86719dc] {
+  padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+}
+
+/* 头像卡片 (mg-glass surface) */
+.avatar-card[data-v-d86719dc] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 16px;
+  margin-bottom: 14px;
+}
+.avatar-wrap[data-v-d86719dc] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+/* 头像圈渐变描边: gradient 作 padding 露出 3px 圆环 */
+.avatar-wrap[data-v-d86719dc] .el-avatar {
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  font-weight: 800;
+  box-shadow: var(--mg-shadow-sm);
+}
+.avatar-wrap[data-v-d86719dc] .el-avatar > img {
+  border-radius: 50%;
+}
+.avatar-circle[data-v-d86719dc] {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--mg-gradient-btn);
+  /* stylelint-disable-next-line color-named */
+  color: white;
+  font-size: 28px;
+  font-weight: var(--font-weight-semibold, 600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-upload-btn[data-v-d86719dc] {
+  background: var(--mg-glass-bg-strong);
+  border: 1px solid var(--mg-glass-border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mg-primary);
+  cursor: pointer;
+  padding: 8px 14px;
+  min-height: 44px;
+  border-radius: var(--mg-radius-pill);
+  transition: transform 150ms ease;
+}
+.avatar-upload-btn[data-v-d86719dc]:active { transform: scale(0.95);
+}
+.user-info[data-v-d86719dc] {
+  flex: 1;
+  min-width: 0;
+}
+.user-name[data-v-d86719dc] {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  margin-bottom: 6px;
+}
+.user-role[data-v-d86719dc] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* role-tag: 底色/文字由 mg-chip 全局类提供 (紫 tint), 此处只留尺寸与语义变体 */
+.role-tag[data-v-d86719dc] {
+  font-size: 11px;
+}
+/* 身份称谓配色 (2026-09-05 角色扁平化): 导师=暖红 / 博字辈=金 / 硕士=主色 / 本科生=绿 */
+.role-advisor[data-v-d86719dc] { background: var(--mg-danger-soft); color: var(--mg-danger);
+}
+.role-postdoc[data-v-d86719dc], .role-phd[data-v-d86719dc] { background: var(--mg-warning-soft); color: var(--mg-warning);
+}
+.role-undergrad[data-v-d86719dc] { background: var(--mg-success-soft, var(--mg-primary-soft)); color: var(--mg-success, var(--mg-primary));
+}
+.user-email[data-v-d86719dc] {
+  font-size: 12px;
+  color: var(--mg-text-soft);
+}
+
+/* 设置项分组卡 (mg-glass surface) */
+.settings-section[data-v-d86719dc] {
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+/* 嵌套的 "思考模式" 分组不重复起卡, 融入外层玻璃卡 */
+.settings-section .settings-section[data-v-d86719dc] {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  margin-bottom: 0;
+  padding: 4px 0 10px;
+}
+.settings-item[data-v-d86719dc] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(124, 107, 216, 0.12);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 150ms ease;
+}
+.settings-item[data-v-d86719dc]:last-child { border-bottom: none;
+}
+.settings-item[data-v-d86719dc]:active {
+  background: rgba(124, 107, 216, 0.08);
+}
+/* 行尾嵌套分组前的最后一行按钮去掉分隔线 */
+.settings-item + .settings-section[data-v-d86719dc] { border-top: 1px solid rgba(124, 107, 216, 0.12);
+}
+/* 图标块: 柔渐变底 (对齐样稿 d-task .em: 34px 圆角 12px;
+   inline style 的旧 --color-* tint 用 !important 覆盖) */
+.item-icon[data-v-d86719dc] {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--mg-gradient-soft) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.item-info[data-v-d86719dc] { flex: 1; min-width: 0;
+}
+.item-title[data-v-d86719dc] {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mg-text-strong);
+  margin-bottom: 2px;
+}
+.item-desc[data-v-d86719dc] {
+  font-size: 11px;
+  color: var(--mg-text-soft);
+}
+.item-arrow[data-v-d86719dc] {
+  font-size: 20px;
+  color: var(--mg-text-faint);
+}
+
+/* 只读信息 (mg-glass surface) */
+.readonly-section[data-v-d86719dc] {
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.section-title[data-v-d86719dc] {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--mg-text-strong);
+  margin: 6px 2px 12px;
+}
+.readonly-list[data-v-d86719dc] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.readonly-item[data-v-d86719dc] {
+  display: flex;
+  font-size: 13px;
+}
+.readonly-label[data-v-d86719dc] {
+  flex: 0 0 70px;
+  color: var(--mg-text-soft);
+}
+.readonly-value[data-v-d86719dc] {
+  flex: 1;
+  color: var(--mg-text-strong);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* 退出登录 — 危险操作用 --mg-danger */
+.logout-btn[data-v-d86719dc] {
+  width: 100%;
+  padding: 14px;
+  margin-top: 4px;
+  background: var(--mg-danger-soft);
+  color: var(--mg-danger);
+  border: 1.5px solid var(--mg-danger);
+  border-radius: var(--mg-radius-md);
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 150ms ease, opacity 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.logout-btn[data-v-d86719dc]:active { transform: scale(0.97); opacity: 0.8;
+}
+/* 2026-08-31: snoozed-badge / push-status-* 样式随「通知偏好 / 推送通知」两项移除 */
+
+[data-theme="dark"] .mobile-settings-view .settings-group {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .mobile-settings-view .settings-item .item-label {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .mobile-settings-view .theme-swatch {
+  border: 2px solid var(--color-border-light);
+}
+[data-theme="dark"] .mobile-settings-view .theme-swatch.active {
+  border-color: var(--color-primary);
+}
+/* 2026-08-31: 思考模式 mode-* 样式迁至 MobileChatView (选择器移入对话输入区) */

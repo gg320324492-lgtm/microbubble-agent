@@ -1,0 +1,367 @@
+
+.session-drawer-root[data-v-d105f9b5] {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  pointer-events: none;
+}
+.session-drawer-mask[data-v-d105f9b5] {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.session-drawer-body[data-v-d105f9b5] {
+  /* 视图局部深玻璃 token (mobile-glass.css 无深紫变量, 禁止新增全局 token, 故局部定义;
+     深紫底色经 var() fallback 携带, 其余为黑白遮罩豁免) */
+  --mgsd-fg: var(--mg-on-primary);
+  --mgsd-fg-soft: rgba(255, 255, 255, 0.64);
+  --mgsd-fg-faint: rgba(255, 255, 255, 0.42);
+  --mgsd-border: rgba(255, 255, 255, 0.14);
+  --mgsd-item-active: rgba(255, 255, 255, 0.12);
+  position: relative;
+  width: 80vw;
+  max-width: 320px;
+  height: 100%;
+  background: var(--mgsd-panel, rgba(36, 30, 55, 0.82));
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  color: var(--mgsd-fg);
+  border-right: 1.5px solid var(--mgsd-border);
+  box-shadow: var(--mg-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  /* iOS 顶部安全区 */
+  padding-top: var(--sat);
+  transform: translateX(-100%);
+  transition: transform 0.3s var(--ease-bounce);
+}
+
+/* [CHAT-P1-E E3] 移动端归档过滤 tab */
+.archive-filter-tabs[data-v-d105f9b5] {
+  display: flex;
+  gap: 4px;
+  padding: 0 16px 8px;
+}
+.archive-tab[data-v-d105f9b5] {
+  flex: 1;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-pill);
+  cursor: pointer;
+  color: var(--mgsd-fg-soft);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease;
+}
+.archive-tab[data-v-d105f9b5]:active {
+  transform: scale(0.97);
+}
+.archive-tab.active[data-v-d105f9b5] {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border-color: transparent;
+}
+[data-theme="dark"] .session-drawer-body[data-v-d105f9b5] {
+  /* dark 下纯黑遮罩再压深一档 (黑白遮罩豁免 lint) */
+  background: rgba(0, 0, 0, 0.55);
+  border-right: 1.5px solid var(--mgsd-border);
+}
+
+/* 抽屉打开 */
+.session-drawer-enter-active .session-drawer-mask[data-v-d105f9b5],
+.session-drawer-leave-active .session-drawer-mask[data-v-d105f9b5] {
+  transition: opacity 0.25s ease;
+}
+.session-drawer-enter-active .session-drawer-body[data-v-d105f9b5],
+.session-drawer-leave-active .session-drawer-body[data-v-d105f9b5] {
+  transition: transform 0.3s var(--ease-bounce);
+}
+.session-drawer-enter-from .session-drawer-mask[data-v-d105f9b5],
+.session-drawer-leave-to .session-drawer-mask[data-v-d105f9b5] {
+  opacity: 0;
+}
+.session-drawer-enter-from .session-drawer-body[data-v-d105f9b5],
+.session-drawer-leave-to .session-drawer-body[data-v-d105f9b5] {
+  transform: translateX(-100%);
+}
+
+/* 显式打开态（用于 Transition 嵌套 fallback） */
+.session-drawer-root > .session-drawer-mask[data-v-d105f9b5] {
+  opacity: 1;
+}
+.session-drawer-root > .session-drawer-body[data-v-d105f9b5] {
+  transform: translateX(0);
+}
+.drawer-header[data-v-d105f9b5] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mgsd-border);
+}
+.drawer-header h3[data-v-d105f9b5] {
+  font-size: var(--font-size-md, 15px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--mgsd-fg);
+  margin: 0;
+}
+.close-btn[data-v-d105f9b5] {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--mgsd-fg-soft);
+  font-size: 18px;
+  cursor: pointer;
+}
+.close-btn[data-v-d105f9b5]:active {
+  background: var(--mgsd-item-active);
+}
+.new-session-btn[data-v-d105f9b5] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 12px 16px 8px;
+  padding: 12px;
+  border-radius: var(--mg-radius-md);
+  background: var(--mg-gradient-btn);
+  /* stylelint-disable-next-line color-named */
+  color: var(--mg-on-primary);
+  border: none;
+  font-size: var(--font-size-base, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  box-shadow: var(--mg-primary-shadow);
+  transition: transform 150ms ease;
+}
+.new-session-btn[data-v-d105f9b5]:active {
+  transform: scale(0.97);
+}
+.plus-icon[data-v-d105f9b5] {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* #043 Phase 6: 搜索 trigger */
+.search-trigger[data-v-d105f9b5] {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px;
+  margin: 0 16px 8px;
+  padding: 10px 12px;
+  border-radius: var(--mg-radius-pill);
+  background: var(--mgsd-item-active);
+  border: 1px solid var(--mgsd-border);
+  color: var(--mgsd-fg-soft);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.search-icon[data-v-d105f9b5] { font-size: 16px;
+}
+.search-trigger[data-v-d105f9b5]:active { background: var(--mgsd-item-active); transform: scale(0.97);
+}
+.session-list[data-v-d105f9b5] {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+.session-item[data-v-d105f9b5] {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 12px;
+  border-radius: var(--mg-radius-md);
+  cursor: pointer;
+  color: var(--mgsd-fg);
+  margin-bottom: 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+.session-item[data-v-d105f9b5]:active,
+.session-item.active[data-v-d105f9b5] {
+  background: var(--mgsd-item-active);
+  color: var(--mgsd-fg);
+}
+.session-title[data-v-d105f9b5] {
+  display: flex; align-items: center; gap: 4px;
+  font-size: var(--font-size-base, 14px);
+  font-weight: var(--font-weight-medium, 500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.session-title-text[data-v-d105f9b5] { overflow: hidden; text-overflow: ellipsis;
+}
+.pinned-mark[data-v-d105f9b5] { font-size: 11px;
+}
+.session-preview[data-v-d105f9b5] {
+  font-size: 12px;
+  color: var(--mgsd-fg-soft);
+  /* ★ 修复: preview 数据含 \n 时旧 nowrap 渲染出多行导致卡片看起来重叠.
+     用 -webkit-line-clamp 强制 2 行截断 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+/* #043 Phase 6: tags inline chip */
+.session-tags[data-v-d105f9b5] {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  margin-top: 4px;
+}
+.tag-chip[data-v-d105f9b5] {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--mg-radius-pill);
+  background: var(--mgsd-item-active);
+  color: var(--mgsd-fg-soft);
+}
+.tag-more[data-v-d105f9b5] {
+  font-size: 10px;
+  color: var(--mgsd-fg-faint);
+  align-self: center;
+}
+.empty[data-v-d105f9b5] {
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--mgsd-fg-faint);
+  font-size: 12px;
+}
+
+/* W100 +28: 批量操作 */
+.batch-row[data-v-d105f9b5] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 8px;
+}
+.batch-toggle-btn[data-v-d105f9b5] {
+  min-height: 44px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-pill);
+  cursor: pointer;
+  color: var(--mgsd-fg-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+.batch-toggle-btn.active[data-v-d105f9b5] {
+  background: var(--mg-gradient-btn);
+  color: var(--mg-on-primary);
+  border-color: transparent;
+}
+.batch-mini-btn[data-v-d105f9b5] {
+  min-height: 44px;
+  padding: 6px 12px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-pill);
+  cursor: pointer;
+  color: var(--mgsd-fg-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+.batch-mini-btn[data-v-d105f9b5]:disabled { opacity: 0.4; cursor: not-allowed;
+}
+.session-item-wrapper[data-v-d105f9b5] {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  /* ★ ★ 修复移动端 sidebar 卡片重叠: 用户实测 19 条卡片互相重叠.
+     同桌面 SessionSidebar 根因: .session-item-wrapper 用 flex row + align-items center,
+     内部 button .session-item 默认 flex-shrink: 1 被 batch-checkbox 36px 撑高压成
+     单行塌陷. min-height + flex-shrink: 0 + box-shadow 三件套 */
+  min-height: 64px !important;
+  overflow: hidden !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  /* 卡片间更多视觉分隔 */
+  margin: 2px 4px 8px !important;
+  padding: 4px 0;
+}
+.session-item-wrapper.active[data-v-d105f9b5] {
+  background: var(--mgsd-item-active);
+}
+.session-item-wrapper.selected[data-v-d105f9b5] {
+  background: var(--mgsd-item-active);
+}
+.session-item-wrapper.batch-mode[data-v-d105f9b5] {
+  padding: 0 4px;
+}
+.session-item-wrapper .session-item[data-v-d105f9b5] {
+  flex: 1;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.batch-checkbox[data-v-d105f9b5] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.batch-checkbox input[data-v-d105f9b5] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+.archived-mark[data-v-d105f9b5] { font-size: 11px;
+}
+.batch-action-bar[data-v-d105f9b5] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--mgsd-border);
+  background: transparent;
+  gap: 8px;
+  /* iOS 底部安全区 */
+  padding-bottom: calc(10px + var(--sab, 0px));
+}
+.batch-count[data-v-d105f9b5] {
+  font-size: 13px;
+  color: var(--mgsd-fg-soft);
+  white-space: nowrap;
+}
+.batch-actions[data-v-d105f9b5] {
+  display: flex;
+  gap: 8px;
+}
+.batch-action-btn[data-v-d105f9b5] {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--mgsd-item-active);
+  border: 1px solid var(--mgsd-border);
+  border-radius: var(--mg-radius-md);
+  cursor: pointer;
+  color: var(--mgsd-fg);
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+}
+.batch-action-btn[data-v-d105f9b5]:disabled { opacity: 0.4; cursor: not-allowed;
+}
+.batch-action-btn.danger[data-v-d105f9b5] { color: var(--mg-danger); border-color: var(--mg-danger);
+}

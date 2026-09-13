@@ -133,12 +133,6 @@
       />
     </div>
 
-    <!-- ===== 我的长期记忆 Tab (v77 P2.6-E.3 拆分到 KnowledgeMemoryTab.vue) ===== -->
-    <div v-show="activeTab === 'memory'" role="tabpanel"
-      :aria-labelledby="`tab-strip-memory`" class="tab-panel">
-      <KnowledgeMemoryTab ref="memoryTabRef" />
-    </div>
-
     <!-- 添加/编辑知识对话框 (v77 P2.6-E.3 拆分到 KnowledgeCreateDialog.vue) -->
     <KnowledgeCreateDialog
       v-model="showCreateDialog"
@@ -196,7 +190,6 @@
  *   - KnowledgeEntityTab (v77 P2.6-E.3 新增)
  *   - KnowledgeHypothesisTab (v77 P2.6-E.3 新增)
  *   - KnowledgeFormulaTab (v77 P2.6-E.3 新增)
- *   - KnowledgeMemoryTab (v77 P2.6-E.3 新增)
  * 1 个 dialog 抽出:
  *   - KnowledgeCreateDialog (v77 P2.6-E.3 新增)
  */
@@ -204,7 +197,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { Document, Share, MagicStick, Histogram, Memo } from '@element-plus/icons-vue'
+import { Document, Share, MagicStick, Histogram } from '@element-plus/icons-vue'
 import { useKnowledge } from '@/composables/useKnowledge'
 import { useSearchAnalyticsStore } from '@/stores/useSearchAnalytics'
 import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4
@@ -214,7 +207,6 @@ import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
 import KnowledgeEntityTab from '@/components/knowledge/KnowledgeEntityTab.vue'
 import KnowledgeHypothesisTab from '@/components/knowledge/KnowledgeHypothesisTab.vue'
 import KnowledgeFormulaTab from '@/components/knowledge/KnowledgeFormulaTab.vue'
-import KnowledgeMemoryTab from '@/components/knowledge/KnowledgeMemoryTab.vue'
 import KnowledgeCreateDialog from '@/components/knowledge/KnowledgeCreateDialog.vue'
 import KnowledgeQADialog from './knowledge/KnowledgeQADialog.vue'
 import KnowledgeUploadDialog from './knowledge/KnowledgeUploadDialog.vue'
@@ -243,7 +235,7 @@ const route = useRoute()
 const router = useRouter()
 
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas', 'memory']
+const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas']
 if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
   activeTab.value = String(route.query.tab)
 }
@@ -254,7 +246,6 @@ const tabItems = [
   { key: 'entities',   label: '实体图谱',     icon: Share },
   { key: 'hypotheses', label: '科研假设',     icon: MagicStick },
   { key: 'formulas',   label: '公式计算',     icon: Histogram },
-  { key: 'memory',     label: '我的长期记忆', icon: Memo },
 ]
 
 const searchAnalytics = useSearchAnalyticsStore()
@@ -292,7 +283,6 @@ const entityDetail = ref(null)
 const entityTabRef = ref(null)
 const hypothesisTabRef = ref(null)
 const formulaTabRef = ref(null)
-const memoryTabRef = ref(null)
 
 // ── 搜索和筛选 ──
 // W99 N-6 改进 (1): KnowledgeView 搜索结果点击埋点接通 + 改进 (3) top-1 高亮
@@ -475,9 +465,6 @@ watch(activeTab, (tab) => {
   if (tab === 'formulas') {
     formulaTabRef.value?.fetchFormulas()
     fetchFormulaCategories()
-  }
-  if (tab === 'memory') {
-    memoryTabRef.value?.fetchMemories()
   }
   // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
   router.replace({ query: { ...route.query, tab } })
