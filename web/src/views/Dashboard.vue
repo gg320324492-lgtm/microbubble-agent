@@ -579,6 +579,28 @@ onMounted(() => {
 .dashboard.dashboard-dossier .hero-actions .dbtn--line:hover { border-style: solid !important; background: rgba(14, 118, 110, 0.06) !important; }
 .dashboard.dashboard-dossier .hero-actions .dbtn { border-radius: 3px; height: 44px; }
 
+/* ── 批次⑩.79 方案 A: 三模块卡 ─────────────── */
+.tri-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 26px; }
+@media (max-width: 900px) { .tri-grid { grid-template-columns: 1fr; } }
+.tri-card { padding-bottom: 16px; min-height: 150px; }
+.tri-card .card-head { padding: 14px 20px 10px; }
+.kpi-body { padding: 4px 22px 6px; min-height: 74px; }
+.kpi-big {
+  font-family: var(--font-mono); font-size: 42px; font-weight: 700; line-height: 1.1;
+  font-variant-numeric: tabular-nums; color: var(--teal);
+}
+.kpi-unit { font-family: var(--font-serif); font-size: 13px; color: var(--muted); margin-left: 8px; }
+.kpi-ring {
+  display: flex; justify-content: space-between; gap: 8px;
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px dashed var(--line-dash);
+}
+.kr { text-align: center; min-width: 0; }
+.kr .n { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--ink); }
+.kr .n.hot { color: var(--coral); }
+.kr .l { font-size: 10px; color: var(--muted); margin-top: 3px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tri-skel-line { height: 46px; }
+
 /* ── 批次⑩.80 任务管理完整迁入 (tv-embed) ─────────────── */
 .tv-embed :deep(.page-container) { padding: 0; max-width: none; }
 .tv-embed :deep(.task-view) { --dg-shadow: rgba(22, 35, 42, 0.1); }
