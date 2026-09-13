@@ -81,6 +81,33 @@
       </div>
     </div>
 
+    <!-- ====== 方案B: 墨色常驻播放条 (时间轴 seek 联动) ====== -->
+    <div class="player-bar" v-if="meeting">
+      <template v-if="meeting.audio_url">
+        <button class="pb-play" @click="togglePlay" :title="isPlaying ? '暂停' : '播放'">
+          {{ isPlaying ? '⏸' : '▶' }}
+        </button>
+        <span class="pb-tm">{{ formatTs(pbCurrent) }} / {{ formatTs(pbDuration || meeting.audio_duration) }}</span>
+        <div class="pb-track" @click="seekToEvent">
+          <i :style="{ width: pbPct + '%' }" />
+        </div>
+        <button class="pb-spd" @click="cycleSpeed">{{ pbSpeed }}x</button>
+        <span class="pb-note">点击转录时间戳可 seek · 当前段自动高亮</span>
+        <audio
+          ref="audioEl"
+          :src="getAudioSrc(meeting.audio_url)"
+          @timeupdate="onAudioTime"
+          @loadedmetadata="onAudioMeta"
+          @ended="isPlaying = false"
+          @pause="isPlaying = false"
+          @play="isPlaying = true"
+        />
+      </template>
+      <template v-else>
+        <span class="pb-note">无录音 · 本会议来自粘贴转录分析，时间轴浏览模式</span>
+      </template>
+    </div>
+
     <!-- ====== 主体区域 ====== -->
     <div class="detail-body">
       <!-- 左侧 Tab 内容 -->
@@ -270,7 +297,7 @@
                   v-for="(entry, i) in displayedTranscriptEntries"
                   :key="i"
                   class="transcript-entry"
-                  :class="{ 'entry-removed': entry.removed }"
+                  :class="{ 'entry-removed': entry.removed, 'entry-current': hasAudio && i === currentTranscriptIdx }"
                 >
                   <div class="transcript-left">
                     <el-avatar :size="28" :src="getSpeakerAvatar(entry.speaker)" class="transcript-avatar" :alt="`${entry.speaker || '未知'}的头像`">
@@ -314,7 +341,12 @@
                       </el-popover>
                       <el-tag v-if="entry.removed" size="small" type="info" effect="plain">已过滤</el-tag>
                       <el-tag v-else-if="entry.polish_failed" size="small" type="warning" effect="plain">降级</el-tag>
-                      <span v-if="entry.ts" class="transcript-ts">{{ formatTs(entry.ts) }}</span>
+                      <span
+                        v-if="entry.ts"
+                        class="transcript-ts ts-seek"
+                        :title="`跳转到 ${formatTs(entry.ts)}`"
+                        @click.stop="seekToTs(entry.ts)"
+                      >▶ {{ formatTs(entry.ts) }}</span>
                     </div>
                     <div v-if="!entry.removed" class="transcript-text">
                       {{ getPolishedText(entry, i) }}
@@ -348,12 +380,20 @@
 
       <!-- 右侧边栏 -->
       <div class="detail-side">
-        <!-- 录音回放 -->
-        <el-card v-if="meeting.audio_url" class="side-card">
-          <template #header><span>🎙️ 录音回放</span></template>
-          <AudioPlayer :src="getAudioSrc(meeting.audio_url)" :duration="meeting.audio_duration" />
-          <div v-if="meeting.audio_duration" class="audio-meta">
-            录音时长: {{ formatDuration(meeting.audio_duration) }}
+        <!-- 方案B: 会话摘要侧卡 (从纪要 Tab 提升常驻) -->
+        <el-card class="side-card side-abstract">
+          <template #header><span class="side-eyebrow">ABSTRACT · 会话摘要</span></template>
+          <p class="side-abstract-text">{{ meeting.summary || '暂无摘要' }}</p>
+        </el-card>
+
+        <!-- 方案B: 决议侧卡 -->
+        <el-card v-if="groupedDecisions.length" class="side-card side-decisions">
+          <template #header><span class="side-eyebrow">DECISIONS · 决议</span></template>
+          <div v-for="(group, gi) in groupedDecisions" :key="gi" class="side-decision-group">
+            <div class="side-decision-who">{{ group.speaker || '未识别发言人' }}</div>
+            <ul class="side-decision-list">
+              <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
+            </ul>
           </div>
         </el-card>
 
@@ -404,7 +444,6 @@ import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import SpeakerStatsCard from '@/components/SpeakerStatsCard.vue'
-import AudioPlayer from '@/components/AudioPlayer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -418,10 +457,11 @@ const saving = ref(false)
 const savingTranscriptSpeaker = ref(null)
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
 const VALID_TABS = ['minutes', 'transcript', 'stats']
+// 2026-09-13 方案B 时间轴剧场: 默认进入转录时间轴 (页面主角), 纪要/统计仍可切换
 const activeTab = ref(
   route.query.tab && VALID_TABS.includes(String(route.query.tab))
     ? String(route.query.tab)
-    : 'minutes'
+    : 'transcript'
 )
 // 2026-07-08 修复: 大会议 (3331+ 段) v-for 渲染 ~30k Element Plus 组件
 // 触发 "Maximum call stack size exceeded"。transcript 改分页渲染，每页 50 段，
@@ -454,6 +494,67 @@ watch(() => route.query.tab, (t) => {
 })
 
 const relatedMeetings = ref([])
+
+// ===== 2026-09-13 方案B: 墨色常驻播放条 (替代侧栏 AudioPlayer 卡) =====
+// 原生 <audio> 受控: 播放/暂停/seek/倍速; 时间轴时间戳点击 → seekToTs 联动
+const audioEl = ref(null)
+const isPlaying = ref(false)
+const pbCurrent = ref(0)
+const pbDuration = ref(0)
+const pbSpeed = ref(1)
+const hasAudio = computed(() => !!meeting.value?.audio_url)
+const pbPct = computed(() => (pbDuration.value ? Math.min(100, (pbCurrent.value / pbDuration.value) * 100) : 0))
+
+function togglePlay() {
+  const el = audioEl.value
+  if (!el) return
+  if (el.paused) { el.play(); isPlaying.value = true } else { el.pause(); isPlaying.value = false }
+}
+function onAudioTime() {
+  if (audioEl.value) pbCurrent.value = audioEl.value.currentTime
+}
+function onAudioMeta() {
+  if (audioEl.value && audioEl.value.duration) pbDuration.value = audioEl.value.duration
+}
+function seekTo(sec) {
+  const el = audioEl.value
+  if (!el) return
+  el.currentTime = Math.min(Math.max(sec, 0), el.duration || sec)
+  pbCurrent.value = el.currentTime
+}
+function seekToEvent(e) {
+  const el = audioEl.value
+  if (!el || !el.duration) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  seekTo(((e.clientX - rect.left) / rect.width) * el.duration)
+}
+// 时间轴时间戳点击: seek + 自动播放
+function seekToTs(sec) {
+  seekTo(sec)
+  const el = audioEl.value
+  if (el && el.paused) { el.play() }
+  if (!activeTab.value || activeTab.value !== 'transcript') activeTab.value = 'transcript'
+}
+function cycleSpeed() {
+  const el = audioEl.value
+  if (!el) return
+  const speeds = [1, 1.5, 2]
+  pbSpeed.value = speeds[(speeds.indexOf(pbSpeed.value) + 1) % speeds.length]
+  el.playbackRate = pbSpeed.value
+}
+// 当前播放段: 显示的转录条目中最后一条 ts <= 播放进度的段 (自动高亮)
+const currentTranscriptIdx = computed(() => {
+  if (!hasAudio.value || !isPlaying.value && pbCurrent.value === 0) return -1
+  let idx = -1
+  const list = displayedTranscriptEntries.value || []
+  for (let i = 0; i < list.length; i++) {
+    const ts = list[i]?.ts
+    if (ts == null) continue
+    if (ts <= pbCurrent.value) idx = i
+    else break
+  }
+  return idx
+})
 
 const editingPoint = ref(null)  // 当前编辑的要点 ID
 
@@ -1523,4 +1624,133 @@ onMounted(async () => {
   color: var(--color-text-secondary);
 }
 /* v71 P1: 移除 .speaker-row.clickable / .expanded dark (不再折叠) */
+
+/* ═══ 2026-09-13 方案B「时间轴剧场」· 配色④青灰水墨页面令牌 ═══ */
+.meeting-detail {
+  --color-text-primary: #1c2427;
+  --color-text-regular: #39434b;
+  --color-text-secondary: #78848a;
+  --color-text-placeholder: #a9b3b9;
+  --color-border: #d9dee1;
+  --color-border-light: #e6ebee;
+  --color-info-bg: #eef1f3;
+  --color-primary: #3d6b64;
+  --color-primary-light: #4a7d75;
+  --color-primary-dark: #2f544e;
+  --color-primary-bg: #edf2f1;
+  --color-primary-border: rgba(61, 107, 100, 0.35);
+  --color-accent: #3d6b64;
+  --color-accent-bg: #edf2f1;
+  --color-primary-strong: #1c2427;
+  --el-color-primary: #1c2427;
+  --el-color-primary-light-3: #454f55;
+  --el-color-primary-light-5: #6e777d;
+  --el-color-primary-light-7: #a8aeb3;
+  --el-color-primary-light-8: #c8cdd1;
+  --el-color-primary-light-9: #e9eced;
+  --el-color-primary-dark-2: #161d20;
+}
+
+/* 墨色常驻播放条 */
+.player-bar {
+  position: sticky; top: 0; z-index: 8;
+  display: flex; align-items: center; gap: 14px;
+  background: var(--ink, #16232a); color: var(--color-bg-page, #f4f6f4);
+  border-radius: 4px; padding: 11px 18px;
+  box-shadow: 0 8px 22px rgba(22, 35, 42, 0.25);
+}
+.player-bar.no-audio-hidden { display: none; }
+.pb-play {
+  width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--coral, #ef7256); color: #fff; font-size: 14px;
+  display: grid; place-items: center;
+}
+.pb-play:hover { filter: brightness(1.1); }
+.pb-tm { font-family: Consolas, 'SFMono-Regular', monospace; font-size: 12px; letter-spacing: .06em; white-space: nowrap; }
+.pb-track {
+  flex: 1; height: 5px; border-radius: 3px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.18); position: relative;
+}
+.pb-track i {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: var(--coral, #ef7256); border-radius: 3px;
+}
+.pb-spd {
+  font-family: Consolas, monospace; font-size: 11px; cursor: pointer;
+  background: transparent; color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; padding: 1px 8px;
+}
+.pb-note {
+  font-family: Consolas, monospace; font-size: 10px; letter-spacing: .1em;
+  color: rgba(255, 255, 255, 0.55); white-space: nowrap;
+}
+
+/* 转录时间戳 → seek 按钮 */
+.transcript-ts.ts-seek {
+  cursor: pointer; color: var(--teal-soft, #198e83);
+  font-weight: 700; border-bottom: 1px dashed currentColor;
+  margin-left: auto;
+}
+.transcript-ts.ts-seek:hover { color: var(--coral, #ef7256); }
+
+/* 当前播放段高亮 */
+.transcript-entry.entry-current {
+  background: var(--color-primary-bg, #edf2f1);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+  border-radius: 4px;
+}
+
+/* 侧栏摘要/决议卡 */
+.side-eyebrow {
+  font-family: Consolas, monospace; font-size: 9px; letter-spacing: .25em;
+  color: var(--color-text-secondary);
+}
+.side-abstract-text {
+  font-size: 12.5px; color: var(--color-text-regular); line-height: 1.75; margin: 0;
+  max-height: 200px; overflow-y: auto;
+}
+.side-decision-group { margin-bottom: 10px; }
+.side-decision-who {
+  font-weight: 700; font-size: 12px; color: var(--color-primary);
+  margin-bottom: 3px;
+}
+.side-decision-list { list-style: none; padding-left: 12px; }
+.side-decision-list li {
+  font-size: 12px; color: var(--color-text-regular); line-height: 1.6;
+  padding: 2px 0; position: relative;
+}
+.side-decision-list li::before { content: '·'; color: var(--coral); font-weight: 700; position: absolute; left: -10px; }
+</style>
+
+<style>
+/* 配色④ 深色主题页面令牌 (非 scoped, 铁律 26) */
+[data-theme="dark"] .meeting-detail {
+  --color-text-primary: #e5ebe7;
+  --color-text-regular: #c3cdc7;
+  --color-text-secondary: #93a29b;
+  --color-text-placeholder: #6d7f7a;
+  --color-border: #2a3430;
+  --color-border-light: #232c28;
+  --color-info-bg: rgba(147, 162, 155, 0.12);
+  --color-primary: #6fa39b;
+  --color-primary-light: #85b8b1;
+  --color-primary-dark: #4a7d75;
+  --color-primary-bg: rgba(111, 163, 155, 0.14);
+  --color-primary-border: rgba(111, 163, 155, 0.4);
+  --color-accent: #6fa39b;
+  --color-accent-bg: rgba(111, 163, 155, 0.14);
+  --color-primary-strong: #3d6b64;
+  --el-color-primary: #6fa39b;
+  --el-color-primary-light-3: #558078;
+  --el-color-primary-light-5: #40605b;
+  --el-color-primary-light-7: #2e4742;
+  --el-color-primary-light-8: #263a36;
+  --el-color-primary-light-9: #1e2e2b;
+  --el-color-primary-dark-2: #85b8b1;
+}
+[data-theme="dark"] .player-bar {
+  background: #0b0f0d;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+[data-theme="dark"] .transcript-ts.ts-seek { color: #7fb3aa; }
 </style>
