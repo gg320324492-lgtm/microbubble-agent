@@ -596,20 +596,5 @@ const formatDate = (dateStr) => {
   color: #fff;
 }
 
-/* 2026-09-13 配色④ 青灰水墨: 深色主题 hero 深洗 (全局 scss 里的浅洗只适合浅色) */
-[data-theme="dark"] .card-file-hero--pdf {
-  background: linear-gradient(135deg, #1e2826 0%, #161d1b 100%);
-}
-[data-theme="dark"] .card-file-hero--word {
-  background: linear-gradient(135deg, #1d2629 0%, #181e20 100%);
-}
-[data-theme="dark"] .card-file-hero--ppt {
-  background: linear-gradient(135deg, #1e2825 0%, #181f1d 100%);
-}
-[data-theme="dark"] .card-file-hero--excel {
-  background: linear-gradient(135deg, #1d2825 0%, #182019 100%);
-}
-[data-theme="dark"] .card-file-hero--other {
-  background: linear-gradient(135deg, #1e2426 0%, #181c1d 100%);
-}
+/* 2026-09-13 配色④ hero 深洗已移至全局 _runtime-style-tokens.scss (缓存安全) */
 </style>

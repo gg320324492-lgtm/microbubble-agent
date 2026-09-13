@@ -101,6 +101,56 @@
 .card-file-hero--excel { background: linear-gradient(135deg, #ebf0ee 0%, #f6f9f7 100%); }
 .card-file-hero--other { background: linear-gradient(135deg, #eceeee 0%, #f5f7f7 100%); }
 
+/* 深色主题: hero 深洗 (浅洗只适合浅色; 2026-09-13 配色④ 青灰水墨)
+   放全局入口 css 的原因: css-only 改动不会改变同名 chunk css 的文件名,
+   浏览器缓存旧文件 → 入口 css 哈希每 build 必变, 永不下发陈旧配色 */
+[data-theme="dark"] .card-file-hero--pdf   { background: linear-gradient(135deg, #1e2826 0%, #161d1b 100%); }
+[data-theme="dark"] .card-file-hero--word  { background: linear-gradient(135deg, #1d2629 0%, #181e20 100%); }
+[data-theme="dark"] .card-file-hero--ppt   { background: linear-gradient(135deg, #1e2825 0%, #181f1d 100%); }
+[data-theme="dark"] .card-file-hero--excel { background: linear-gradient(135deg, #1d2825 0%, #182019 100%); }
+[data-theme="dark"] .card-file-hero--other { background: linear-gradient(135deg, #1e2426 0%, #181c1d 100%); }
+
+/* ===== 知识库页 配色④「青灰水墨」页面作用域令牌 (2026-09-13 用户选型) =====
+   冷灰纸面 + 白卡 + 墨青唯一强调 (#3d6b64); EP 主按钮换墨色。
+   同样放全局入口 css 以规避 chunk css 同名缓存陷阱。布局零改动。 */
+.knowledge-view {
+  --color-text-primary: #1c2427;
+  --color-text-regular: #39434b;
+  --color-text-secondary: #78848a;
+  --color-text-placeholder: #a9b3b9;
+  --color-border: #d9dee1;
+  --color-border-light: #e6ebee;
+  --color-info-bg: #eef1f3;
+  --color-primary: #3d6b64;
+  --color-primary-light: #4a7d75;
+  --color-primary-dark: #2f544e;
+  --color-primary-bg: #edf2f1;
+  --color-primary-border: rgba(61, 107, 100, 0.35);
+  --color-accent: #3d6b64;
+  --color-accent-bg: #edf2f1;
+  --el-color-primary: #1c2427;
+  --el-color-primary-light-3: #454f55;
+  --el-color-primary-light-5: #6e777d;
+  --el-color-primary-light-7: #a8aeb3;
+  --el-color-primary-light-8: #c8cdd1;
+  --el-color-primary-light-9: #e9eced;
+  --el-color-primary-dark-2: #161d20;
+}
+[data-theme="dark"] .knowledge-view {
+  --color-primary: #6fa39b;
+  --color-primary-light: #85b8b1;
+  --color-primary-bg: rgba(111, 163, 155, 0.14);
+  --color-primary-border: rgba(111, 163, 155, 0.4);
+  --color-accent: #6fa39b;
+  --el-color-primary: #6fa39b;
+  --el-color-primary-light-3: #558078;
+  --el-color-primary-light-5: #40605b;
+  --el-color-primary-light-7: #2e4742;
+  --el-color-primary-light-8: #263a36;
+  --el-color-primary-light-9: #1e2e2b;
+  --el-color-primary-dark-2: #85b8b1;
+}
+
 // ===== category-badge dynamic (KnowledgeCard) =====
 // v77 P2.6-E.1: 命名约定 .category-badge--<知识分类 name 小写连字符>
 // 颜色映射与原 categoryColors 完全一致（视觉零变化）
