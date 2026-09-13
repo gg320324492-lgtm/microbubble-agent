@@ -40,12 +40,13 @@ export const useChatStore = defineStore('chat', () => {
     await refreshSessions()
   }
 
-  async function send(content: string): Promise<void> {
+  async function send(content: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> {
     if (!activeId.value) throw new Error('未选择会话')
-    const { userMessage, assistantMessage } = await window.api.chat.send(activeId.value, content)
-    messages.value.push(userMessage, assistantMessage)
+    const result = await window.api.chat.send(activeId.value, content)
+    messages.value.push(result.userMessage, result.assistantMessage)
     // 标题可能因首条消息自动生成，刷新列表
     await refreshSessions()
+    return result
   }
 
   return { sessions, activeId, messages, loadingList, refreshSessions, select, create, rename, remove, send }

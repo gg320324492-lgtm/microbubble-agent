@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// 设置 — M0 真实内容：账号信息 + 应用信息；绑定云端/账号管理后续里程碑
+// 设置 — 账号信息 / 模型服务 / 应用信息
 import { onMounted, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import ModelServiceSection from '../components/settings/ModelServiceSection.vue'
 import type { AppInfo } from '@shared/types'
 
 const auth = useAuthStore()
@@ -46,9 +47,11 @@ function fmtDate(ts: number): string {
       <p class="hint">所有数据保存在上述本地数据库文件中，可随时备份。</p>
     </section>
 
+    <ModelServiceSection />
+
     <section class="card block">
       <h2>云端同步</h2>
-      <p class="hint">绑定网页端账号以导入既有数据的功能将在 M2 提供。未绑定时，工作台完全本地运行。</p>
+      <p class="hint">本地库 ⇄ 云端的可选同步将在后续里程碑提供。当前工作台完全本地运行。</p>
     </section>
   </div>
 </template>

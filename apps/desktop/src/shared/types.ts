@@ -40,5 +40,34 @@ export interface ChatMessage {
   createdAt: number
 }
 
+export type ModelProtocol = 'openai' | 'anthropic'
+
+/** 模型服务配置（apiKey 永不明文出主进程，只回掩码） */
+export interface ModelProvider {
+  id: string
+  name: string
+  protocol: ModelProtocol
+  baseUrl: string
+  model: string
+  apiKeyMasked: string | null
+  isDefault: boolean
+}
+
+export interface ModelProviderInput {
+  id?: string
+  name: string
+  protocol: ModelProtocol
+  baseUrl: string
+  model: string
+  /** 明文 key 仅在保存瞬间进入主进程，空串=保留旧 key */
+  apiKey?: string
+}
+
+/** chat:stream-event 载荷 */
+export type ChatStreamEvent =
+  | { type: 'delta'; sessionId: string; messageId: string; delta: string }
+  | { type: 'done'; sessionId: string; messageId: string; content: string }
+  | { type: 'error'; sessionId: string; messageId: string; message: string }
+
 /** 统一 IPC 返回包 — preload 解包，失败时 reject(Error) */
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }

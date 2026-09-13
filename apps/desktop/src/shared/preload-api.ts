@@ -1,5 +1,5 @@
 // window.api 形状声明 — renderer 侧全局类型（与 preload/index.ts 实现严格同步）
-import type { AppInfo, AuthSession, ChatMessage, ChatSession, LocalUser } from './types'
+import type { AppInfo, AuthSession, ChatMessage, ChatSession, ChatStreamEvent, LocalUser, ModelProvider, ModelProviderInput } from './types'
 
 export interface PreloadApi {
   app: {
@@ -19,6 +19,15 @@ export interface PreloadApi {
     sessionDelete(id: string): Promise<void>
     messagesList(sessionId: string): Promise<ChatMessage[]>
     send(sessionId: string, content: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>
+    abort(sessionId: string): Promise<void>
+    onStreamEvent(cb: (e: ChatStreamEvent) => void): () => void
+  }
+  model: {
+    list(): Promise<ModelProvider[]>
+    save(p: ModelProviderInput): Promise<void>
+    remove(id: string): Promise<void>
+    setDefault(id: string): Promise<void>
+    test(p: ModelProviderInput): Promise<{ ok: boolean; message: string }>
   }
   settings: {
     get(key: string): Promise<unknown>
@@ -28,6 +37,8 @@ export interface PreloadApi {
     minimize(): Promise<void>
     toggleMaximize(): Promise<void>
     close(): Promise<void>
+    isMaximized(): Promise<boolean>
+    onStateChange(cb: (maximized: boolean) => void): () => void
   }
 }
 
@@ -41,4 +52,4 @@ export interface WindowWithApi extends Window {
   api: PreloadApi
 }
 
-export type { LocalUser, AuthSession, AppInfo, ChatSession, ChatMessage }
+export type { LocalUser, AuthSession, AppInfo, ChatSession, ChatMessage, ChatStreamEvent, ModelProvider, ModelProviderInput }

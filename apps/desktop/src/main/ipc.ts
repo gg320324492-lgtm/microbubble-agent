@@ -5,10 +5,11 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-channels'
 import { APP_NAME, APP_VERSION } from '@shared/constants'
-import type { AppInfo, AuthSession, ChatMessage, ChatSession, IpcResult } from '@shared/types'
+import type { AppInfo, AuthSession, ChatMessage, ChatSession, ChatStreamEvent, IpcResult, ModelProvider, ModelProtocol } from '@shared/types'
 import type { SqlDatabase } from './db/adapters'
 import { AuthService } from './services/auth.service'
 import { ChatService } from './services/chat.service'
+import { ModelGatewayService } from './services/model-gateway.service'
 import { SettingsService } from './services/settings.service'
 
 const ok = <T>(data: T): IpcResult<T> => ({ ok: true, data })
@@ -53,10 +54,29 @@ function makeFilePersistence(file: string) {
   }
 }
 
+/** safeStorage 加密器（apiKey / 会话 token 共用）— 加密不可用时 encrypt 返回空串 */
+function makeCipher(): { encrypt(plaintext: string): string; decrypt(ciphertext: string): string | null } {
+  return {
+    encrypt(plaintext: string): string {
+      if (!safeStorage.isEncryptionAvailable()) return ''
+      return safeStorage.encryptString(plaintext).toString('base64')
+    },
+    decrypt(ciphertext: string): string | null {
+      try {
+        if (!safeStorage.isEncryptionAvailable()) return null
+        return safeStorage.decryptString(Buffer.from(ciphertext, 'base64'))
+      } catch {
+        return null
+      }
+    }
+  }
+}
+
 export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): void {
   const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')))
   const settings = new SettingsService(db)
   const chat = new ChatService(db)
+  const gateway = new ModelGatewayService(db, makeCipher())
 
   // 启动即尝试恢复上次会话（有持久化 token 且未过期则免登录）
   auth.restore()
@@ -140,20 +160,121 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     })
   )
 
-  ipcMain.handle(IPC.CHAT_SEND, (_e, p): IpcResult<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> =>
-    tryRun(() => {
+  ipcMain.handle(IPC.CHAT_SEND, async (_e, p): Promise<IpcResult<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>> => {
+    try {
       const user = auth.requireUser()
-      const toDto = (r: { id: string; session_id: string; role: string; content: string; created_at: number }) => ({
+      const sessionId = String(p?.sessionId ?? '')
+      const content = String(p?.content ?? '')
+      const win = getWindow()
+
+      const { userMessage, assistantMessage } = await chat.send(
+        user.id,
+        sessionId,
+        content,
+        gateway.getDefault(user.id)
+          ? async (turns) => {
+              const full = await gateway.streamChat(user.id, sessionId, turns, (delta) => {
+                const evt: ChatStreamEvent = { type: 'delta', sessionId, messageId: assistantMessage.id, delta }
+                win?.webContents.send(IPC.CHAT_STREAM_EVENT, evt)
+              })
+              const done: ChatStreamEvent = { type: 'done', sessionId, messageId: assistantMessage.id, content: full }
+              win?.webContents.send(IPC.CHAT_STREAM_EVENT, done)
+              return full
+            }
+          : undefined,
+        (messageId, delta) => {
+          const evt: ChatStreamEvent = { type: 'delta', sessionId, messageId, delta }
+          win?.webContents.send(IPC.CHAT_STREAM_EVENT, evt)
+        }
+      )
+      const toDto = (r: { id: string; session_id: string; role: string; content: string; created_at: number }): ChatMessage => ({
         id: r.id,
         sessionId: r.session_id,
         role: r.role as ChatMessage['role'],
         content: r.content,
         createdAt: r.created_at
       })
-      const { userMessage, assistantMessage } = chat.send(user.id, String(p?.sessionId ?? ''), String(p?.content ?? ''))
-      return { userMessage: toDto(userMessage), assistantMessage: toDto(assistantMessage) }
+      return { ok: true, data: { userMessage: toDto(userMessage), assistantMessage: toDto(assistantMessage) } }
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return { ok: false, error: { code: e.code ?? 'ERROR', message: e.message } }
+    }
+  })
+
+  ipcMain.handle(IPC.CHAT_ABORT, (_e, p): IpcResult<null> => {
+    gateway.abort(String(p?.sessionId ?? ''))
+    return { ok: true, data: null }
+  })
+
+  // ---------- 模型网关 ----------
+
+  const toProviderDto = (r: { id: string; name: string; protocol: ModelProtocol; baseUrl: string; model: string; isDefault: boolean; apiKeyEncrypted: string }): ModelProvider => ({
+    id: r.id,
+    name: r.name,
+    protocol: r.protocol,
+    baseUrl: r.baseUrl,
+    model: r.model,
+    apiKeyMasked: r.apiKeyEncrypted ? '••••••••' : null,
+    isDefault: r.isDefault
+  })
+
+  ipcMain.handle(IPC.MODEL_LIST, (): IpcResult<ModelProvider[]> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      return gateway.list(user.id).map(toProviderDto)
     })
   )
+
+  ipcMain.handle(IPC.MODEL_SAVE, (_e, p): IpcResult<null> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      gateway.save(user.id, {
+        id: p?.id ? String(p.id) : undefined,
+        name: String(p?.name ?? ''),
+        protocol: (p?.protocol === 'anthropic' ? 'anthropic' : 'openai') as ModelProtocol,
+        baseUrl: String(p?.baseUrl ?? ''),
+        model: String(p?.model ?? ''),
+        apiKey: p?.apiKey ? String(p.apiKey) : undefined
+      })
+      return null
+    })
+  )
+
+  ipcMain.handle(IPC.MODEL_DELETE, (_e, p): IpcResult<null> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      gateway.remove(user.id, String(p?.id ?? ''))
+      return null
+    })
+  )
+
+  ipcMain.handle(IPC.MODEL_SET_DEFAULT, (_e, p): IpcResult<null> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      gateway.setDefault(user.id, String(p?.id ?? ''))
+      return null
+    })
+  )
+
+  ipcMain.handle(IPC.MODEL_TEST, async (_e, p): Promise<IpcResult<{ ok: boolean; message: string }>> => {
+    try {
+      const user = auth.requireUser()
+      if (p?.id) {
+        return { ok: true, data: await gateway.testConnection(user.id, String(p.id)) }
+      }
+      // 表单未保存场景：直接探针
+      const probe = await gateway.probe({
+        protocol: (p?.protocol === 'anthropic' ? 'anthropic' : 'openai') as ModelProtocol,
+        baseUrl: String(p?.baseUrl ?? ''),
+        model: String(p?.model ?? ''),
+        apiKey: String(p?.apiKey ?? '')
+      })
+      return { ok: true, data: probe }
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return { ok: false, error: { code: e.code ?? 'ERROR', message: e.message } }
+    }
+  })
 
   ipcMain.handle(IPC.WINDOW_MINIMIZE, (): IpcResult<null> => {
     getWindow()?.minimize()
@@ -167,6 +288,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     }
     return ok(null)
   })
+  ipcMain.handle(IPC.WINDOW_IS_MAXIMIZED, (): IpcResult<boolean> => ok(getWindow()?.isMaximized() ?? false))
   ipcMain.handle(IPC.WINDOW_CLOSE, (): IpcResult<null> => {
     getWindow()?.close()
     return ok(null)
