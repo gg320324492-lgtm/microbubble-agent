@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议详情重做 · 方案C 双栏工作台</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b; --gold: #a37c22;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); font-size: 14px; line-height: 1.7; padding: 32px 24px 80px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .pv-head { margin-bottom: 20px; }
+  .pv-head .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 8px; background: var(--card); border-radius: 2px; }
+  .pv-head h1 { font-size: 21px; font-weight: 700; }
+  .pv-head p { color: var(--muted); font-size: 13px; }
+
+  .md-head { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 15px 22px; margin-bottom: 14px; display: flex; align-items: center; gap: 14px; }
+  .md-title { font-size: 18px; font-weight: 700; }
+  .md-stamp { font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--teal); color: var(--teal); border-radius: 2px; padding: 1px 8px; }
+  .md-meta { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+  .body { display: grid; grid-template-columns: 236px 1fr; gap: 16px; align-items: start; }
+
+  /* 左: 粘性目录工作台 */
+  .toc { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .toc-panel { background: var(--card); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .toc-panel .ph { font-family: var(--font-mono); font-size: 10px; letter-spacing: .25em; color: var(--muted); padding: 9px 14px; border-bottom: 1px dashed var(--line-dash); }
+  .toc-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 14px; font-size: 13px; cursor: pointer; border-left: 2px solid transparent; }
+  .toc-item:hover { background: rgba(14,118,110,.05); }
+  .toc-item.on { border-left-color: var(--teal); color: var(--teal); font-weight: 700; background: rgba(14,118,110,.05); }
+  .toc-item .n { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .task-btn { display: flex; justify-content: space-between; padding: 8px 14px; font-size: 12.5px; color: var(--teal); cursor: pointer; border-top: 1px dashed var(--line-dash); }
+  .task-btn:hover { background: rgba(14,118,110,.05); }
+
+  /* 右: 内容流 */
+  .flow .sec { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 17px 20px; margin-bottom: 14px; scroll-margin-top: 16px; }
+  .sec-t { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .sec-t .no { font-family: var(--font-mono); font-size: 10px; color: var(--teal); letter-spacing: .2em; }
+  .sec-t .zh { font-size: 15px; font-weight: 700; letter-spacing: .06em; }
+  .sec-t .ln { flex: 1; border-bottom: 1px dashed var(--line-dash); }
+  .abstract { font-size: 13.5px; line-height: 1.85; }
+
+  .pt { display: flex; gap: 10px; padding: 5px 0; font-size: 13.5px; align-items: flex-start; }
+  .pt .cb { width: 15px; height: 15px; border: 1px solid var(--line-dash); border-radius: 3px; margin-top: 4px; flex: none; cursor: pointer; }
+  .pt .cb:hover { border-color: var(--teal); }
+  .pt .who { font-weight: 700; color: var(--teal); margin-right: 4px; }
+
+  .dc { display: flex; gap: 10px; padding: 7px 0; font-size: 13.5px; align-items: flex-start; border-bottom: 1px dashed var(--line-dash); }
+  .dc:last-child { border-bottom: none; }
+  .dc .dn { font-family: var(--font-mono); font-size: 11px; color: var(--coral); min-width: 40px; }
+  .dc .mk { margin-left: auto; font-size: 11px; color: var(--teal); border: 1px solid var(--line-dash); border-radius: 2px; padding: 1px 8px; cursor: pointer; white-space: nowrap; }
+  .dc .mk:hover { border-color: var(--teal); }
+
+  .stats-line { display: flex; flex-wrap: wrap; gap: 10px; }
+  .st-chip { font-size: 12px; border: 1px solid var(--line); border-radius: 3px; padding: 5px 12px; }
+  .st-chip b { font-family: var(--font-mono); color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pv-head">
+    <span class="tag">MEETING DETAIL · REDESIGN 方案C</span>
+    <h1>方案C · 双栏工作台</h1>
+    <p>左侧粘性目录（摘要 / 讨论要点按发言人 / 决议 / 发言统计）+ 右侧内容流。要点带勾选框、决议带「转任务」动作——把纪要当成可处理的工作清单。适合"会后跟进"场景。</p>
+  </div>
+
+  <div class="md-head">
+    <span class="md-title">关于超材料与原子层面构造及变换模式理论的讨论</span>
+    <span class="md-stamp">已完成</span>
+    <span class="md-meta">03:23 · 3 人 · 2026-08-21 10:44</span>
+  </div>
+
+  <div class="body">
+    <div class="toc">
+      <div class="toc-panel">
+        <div class="ph">OUTLINE · 目录</div>
+        <div class="toc-item on"><span>会话摘要</span></div>
+        <div class="toc-item"><span>讨论要点 · 余歆客</span><span class="n">2</span></div>
+        <div class="toc-item"><span>讨论要点 · 发言人A</span><span class="n">1</span></div>
+        <div class="toc-item"><span>讨论要点 · 陈金薪</span><span class="n">1</span></div>
+        <div class="toc-item"><span>讨论要点 · 发言人B</span><span class="n">2</span></div>
+        <div class="toc-item"><span>决议事项</span><span class="n">2</span></div>
+        <div class="toc-item"><span>发言统计</span></div>
+        <div class="toc-item"><span>转录记录</span></div>
+      </div>
+      <div class="toc-panel">
+        <div class="ph">FOLLOW-UP · 跟进</div>
+        <div class="task-btn"><span>全部要点转任务</span><span>→</span></div>
+        <div class="task-btn"><span>决议转任务 (2)</span><span>→</span></div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="sec">
+        <div class="sec-t"><span class="no">§ 01</span><span class="zh">会话摘要</span><span class="ln"></span></div>
+        <div class="abstract">本次会议围绕超材料（人工构造）的研究进展与理论应用展开深入讨论。发言人介绍了通过原子层面的人工构造实现自然材料无法具备的功能，重点探讨了负折射率及变换光学理论的可行性与应用模式。讨论了利用半导体气点调控原子排列状态的原理及其在复杂功能设计中的潜力。韩重阳汇报了个人行程相关事务并委托开具发票事宜。会议最终确认了聚焦于超材料组合模式进行复杂功能实现的后续研究方向，明确了理论验证与实验设计的重点路径。</div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t"><span class="no">§ 02</span><span class="zh">讨论要点 · 余歆客</span><span class="ln"></span></div>
+        <div class="pt"><span class="cb"></span><span>指出通过人工构造原子层面结构可实现自然材料无法具备的功能，强调材料创新在实现特定物理特性中的核心作用。</span></div>
+        <div class="pt"><span class="cb"></span><span>提出利用开关二极管等元件控制特定状态，实现从简单到复杂功能的处理与转换逻辑设计。</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t"><span class="no">§ 03</span><span class="zh">讨论要点 · 发言人A / 陈金薪</span><span class="ln"></span></div>
+        <div class="pt"><span class="cb"></span><span><span class="who">发言人A:</span>回顾了超材料发展历史，提及 1996 年英国构建的人工构造及首个负折射率材料的概念提出背景与意义。</span></div>
+        <div class="pt"><span class="cb"></span><span><span class="who">陈金薪:</span>指出当前研究热点已转向新型超材料领域，并讨论了变换光学理论在功能设计中的应用模式及其各项性能指标的实现路径。</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t"><span class="no">§ 04</span><span class="zh">决议事项</span><span class="ln"></span></div>
+        <div class="dc"><span class="dn">决议 1</span><span>【全组共识】确认了利用变换光学理论及半导体调控技术进行复杂功能实现的可行性方向，将作为后续研究的核心路径推进。</span><span class="mk">转任务</span></div>
+        <div class="dc"><span class="dn">决议 2</span><span>【韩重阳】决定委托老师处理个人发票开具事宜，以解决因行程晚点导致的报销流程滞后问题。</span><span class="mk">转任务</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t"><span class="no">§ 05</span><span class="zh">发言统计</span><span class="ln"></span></div>
+        <div class="stats-line">
+          <span class="st-chip">余歆客 <b>42 句</b></span>
+          <span class="st-chip">发言人A <b>31 句</b></span>
+          <span class="st-chip">发言人B <b>26 句</b></span>
+          <span class="st-chip">陈金薪 <b>19 句</b></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

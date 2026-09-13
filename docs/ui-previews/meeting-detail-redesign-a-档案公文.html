@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议详情重做 · 方案A 档案公文</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --gold: #a37c22;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); font-size: 14px; line-height: 1.7; padding: 32px 24px 80px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .mono { font-family: var(--font-mono); }
+
+  .pv-head { margin-bottom: 22px; }
+  .pv-head .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 8px; background: var(--card); border-radius: 2px; }
+  .pv-head h1 { font-size: 21px; font-weight: 700; }
+  .pv-head p { color: var(--muted); font-size: 13px; }
+
+  /* 会议详情头 */
+  .md-head { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 18px 22px; margin-bottom: 16px; }
+  .md-back { font-family: var(--font-mono); font-size: 10px; letter-spacing: .2em; color: var(--muted); }
+  .md-title-row { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+  .md-title { font-size: 19px; font-weight: 700; }
+  .md-stamp { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; border: 1px solid var(--teal); color: var(--teal); border-radius: 2px; padding: 1px 8px; }
+  .md-meta { display: flex; gap: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .md-actions { margin-left: auto; display: flex; gap: 8px; }
+  .md-act { font-size: 12px; padding: 6px 14px; border-radius: 3px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  .md-act.pri { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .md-act.danger { color: #c0564a; border-color: rgba(239,114,86,.5); background: transparent; }
+
+  /* 布局: 主 + 侧 */
+  .body { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
+  .main { background: var(--card); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .tb { font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em; padding: 10px 22px; color: var(--muted); border-right: 1px solid var(--line); cursor: pointer; }
+  .tb:last-child { border-right: none; }
+  .tb.on { background: var(--ink); color: var(--paper); }
+  .tb .no { opacity: .65; margin-right: 8px; }
+
+  .doc { padding: 22px 28px 26px; }
+  .sec { margin-bottom: 24px; }
+  .sec-t { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .sec-t .no { font-family: var(--font-mono); font-size: 10px; color: var(--teal); letter-spacing: .2em; }
+  .sec-t .zh { font-size: 15px; font-weight: 700; letter-spacing: .06em; }
+  .sec-t .ln { flex: 1; border-bottom: 1px dashed var(--line-dash); }
+
+  .abstract {
+    background: rgba(14, 118, 110, .05); border: 1px solid rgba(14, 118, 110, .2);
+    border-radius: 3px; padding: 13px 16px; font-size: 13.5px; line-height: 1.85;
+  }
+  .abstract .lb { font-family: var(--font-mono); font-size: 10px; letter-spacing: .25em; color: var(--teal); display: block; margin-bottom: 5px; }
+
+  .sp-group { margin-bottom: 14px; }
+  .sp-row { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+  .sp-avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 11px; display: grid; place-items: center; font-family: var(--font-mono); }
+  .sp-name { font-weight: 700; font-size: 13px; }
+  .sp-count { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+  .pt { display: flex; gap: 9px; padding: 4px 0 4px 31px; font-size: 13.5px; }
+  .pt::before { content: '·'; color: var(--teal); font-weight: 700; }
+
+  .dc { display: flex; gap: 9px; padding: 5px 0; font-size: 13.5px; }
+  .dc .dn { font-family: var(--font-mono); font-size: 11px; color: var(--coral); min-width: 26px; }
+  .dc .who { font-weight: 700; }
+
+  .edit-btn { font-size: 12px; padding: 6px 14px; border-radius: 3px; border: 1px dashed var(--line-dash); background: transparent; color: var(--muted); cursor: pointer; }
+  .edit-btn:hover { color: var(--teal); border-color: var(--teal); }
+
+  /* 转录 tab (示意) */
+  .tr-row { display: grid; grid-template-columns: 64px 88px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line-dash); font-size: 13px; }
+  .tr-row .ts { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .tr-row .who { font-weight: 700; color: var(--teal); }
+  .stats-bar { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; }
+  .stats-bar .nm { width: 90px; font-weight: 700; }
+  .stats-bar .bar { flex: 1; height: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 9999px; overflow: hidden; }
+  .stats-bar .bar i { display: block; height: 100%; background: var(--teal-soft); }
+  .stats-bar .v { font-family: var(--font-mono); font-size: 11px; color: var(--muted); width: 100px; text-align: right; }
+
+  /* 侧栏 */
+  .side { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 18px; }
+  .spanel { background: var(--card); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .spanel .ph { font-family: var(--font-mono); font-size: 10px; letter-spacing: .25em; color: var(--muted); padding: 9px 14px; border-bottom: 1px dashed var(--line-dash); }
+  .player { padding: 14px; }
+  .player .row { display: flex; align-items: center; gap: 10px; }
+  .player .play { width: 38px; height: 38px; border-radius: 50%; background: var(--coral); color: #fff; display: grid; place-items: center; font-size: 14px; cursor: pointer; }
+  .player .track { flex: 1; height: 4px; background: var(--paper); border-radius: 2px; position: relative; }
+  .player .track i { position: absolute; left: 0; top: 0; height: 100%; width: 8%; background: var(--coral); border-radius: 2px; }
+  .player .tm { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 7px; display: flex; justify-content: space-between; }
+  .listen { padding: 14px; }
+  .listen .box { border: 1px dashed var(--line-dash); border-radius: 4px; text-align: center; padding: 18px; color: var(--muted); font-size: 12.5px; }
+  .listen .box .mic { font-size: 22px; display: block; margin-bottom: 6px; color: var(--coral); }
+  .rel { padding: 6px 14px 10px; }
+  .rel a { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--teal); text-decoration: none; padding: 5px 0; border-bottom: 1px dashed var(--line-dash); }
+  .rel a:last-child { border-bottom: none; }
+  .rel .pct { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pv-head">
+    <span class="tag">MEETING DETAIL · REDESIGN 方案A</span>
+    <h1>方案A · 档案公文</h1>
+    <p>三 Tab 结构保留，内容全部"公文化"排版：§ 章节编号、mono 元数据、虚线章节线。摘要/要点/决议像一份正式会议纪要档案。改动成本最小。</p>
+  </div>
+
+  <div class="md-head">
+    <div class="md-back">← 返回列表 · MEETINGS/247</div>
+    <div class="md-title-row">
+      <span class="md-title">关于超材料与原子层面构造及变换模式理论的讨论</span>
+      <span class="md-stamp">已完成</span>
+      <div class="md-actions"><span class="md-act">编辑</span><span class="md-act danger">删除</span></div>
+    </div>
+    <div class="md-meta">
+      <span>🕒 2026-08-21 10:44</span><span>📍 未设置</span><span>⏱ 3分23秒</span><span>👥 3 人</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="main">
+      <div class="tabs">
+        <div class="tb on" onclick="show('minutes',this)"><span class="no">01</span>会议纪要</div>
+        <div class="tb" onclick="show('transcript',this)"><span class="no">02</span>转录记录</div>
+        <div class="tb" onclick="show('stats',this)"><span class="no">03</span>发言统计</div>
+      </div>
+
+      <div class="doc" id="p-minutes">
+        <div class="sec">
+          <div class="sec-t"><span class="no">§ 01</span><span class="zh">会话摘要</span><span class="ln"></span></div>
+          <div class="abstract"><span class="lb">ABSTRACT</span>本次会议围绕超材料（人工构造）的研究进展与理论应用展开深入讨论。发言人介绍了通过原子层面的人工构造实现自然材料无法具备的功能，重点探讨了负折射率及变换光学理论的可行性与应用模式。讨论了利用半导体气点调控原子排列状态的原理及其在复杂功能设计中的潜力。韩重阳汇报了个人行程相关事务并委托开具发票事宜。会议最终确认了聚焦于超材料组合模式进行复杂功能实现的后续研究方向，明确了理论验证与实验设计的重点路径。</div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-t"><span class="no">§ 02</span><span class="zh">讨论要点</span><span class="ln"></span></div>
+
+          <div class="sp-group">
+            <div class="sp-row"><span class="sp-avatar">余</span><span class="sp-name">余歆客</span><span class="sp-count">2 条要点</span></div>
+            <div class="pt">指出通过人工构造原子层面结构可实现自然材料无法具备的功能，强调材料创新在实现特定物理特性中的核心作用。</div>
+            <div class="pt">提出利用开关二极管等元件控制特定状态，实现从简单到复杂功能的处理与转换逻辑设计。</div>
+          </div>
+
+          <div class="sp-group">
+            <div class="sp-row"><span class="sp-avatar">发</span><span class="sp-name">发言人 A</span><span class="sp-count">1 条要点</span></div>
+            <div class="pt">回顾了超材料发展历史，提及 1996 年英国构建的人工构造及首个负折射率材料的概念提出背景与意义。</div>
+          </div>
+
+          <div class="sp-group">
+            <div class="sp-row"><span class="sp-avatar">陈</span><span class="sp-name">陈金薪</span><span class="sp-count">1 条要点</span></div>
+            <div class="pt">指出当前研究热点已转向新型超材料领域，并讨论了变换光学理论在功能设计中的应用模式及其各项性能指标的实现路径。</div>
+          </div>
+
+          <div class="sp-group">
+            <div class="sp-row"><span class="sp-avatar">发</span><span class="sp-name">发言人 B</span><span class="sp-count">2 条要点</span></div>
+            <div class="pt">介绍了通过半导体气点调控原子排列状态（0/1 切换）来实现不同物理状态的原理及控制机制。</div>
+            <div class="pt">说明原子排列方式存在 $2^N$ 种方位组合可能，指出这种排列多样性可实现多种复杂的超材料功能设计需求。</div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-t"><span class="no">§ 03</span><span class="zh">决议事项</span><span class="ln"></span></div>
+          <div class="dc"><span class="dn">决议 1</span><span class="who">【全组共识】</span>确认了利用变换光学理论及半导体调控技术进行复杂功能实现的可行性方向，将作为后续研究的核心路径推进。</div>
+          <div class="dc"><span class="dn">决议 2</span><span class="who">【韩重阳】</span>决定委托老师处理个人发票开具事宜，以解决因行程晚点导致的报销流程滞后问题。</div>
+        </div>
+
+        <button class="edit-btn">✎ 编辑纪要</button>
+      </div>
+
+      <div class="doc" id="p-transcript" style="display:none">
+        <div class="sec-t"><span class="no">§ 02</span><span class="zh">转录记录</span><span class="ln"></span></div>
+        <div class="tr-row"><span class="ts">00:00</span><span class="who">余歆客</span><span>我们今天讨论一下超材料的研究进展，先从原子层面构造说起。</span></div>
+        <div class="tr-row"><span class="ts">00:42</span><span class="who">发言人A</span><span>1996 年英国构建了首个负折射率人工构造材料，这是这个领域的起点。</span></div>
+        <div class="tr-row"><span class="ts">01:20</span><span class="who">陈金薪</span><span>现在热点已经转向新型超材料，变换光学的应用模式也在变化。</span></div>
+        <div class="tr-row"><span class="ts">02:05</span><span class="who">发言人B</span><span>半导体气点调控原子排列，本质上是 0/1 状态的切换机制。</span></div>
+        <div class="tr-row"><span class="ts">02:51</span><span class="who">余歆客</span><span>对，排列组合有 2^N 种可能，功能设计的自由度非常大。</span></div>
+        <p style="margin-top:10px;font-size:12px;color:var(--muted)">示意：转录按时间倒序/正序排列，说话人 mono 戳 + 时间戳。</p>
+      </div>
+
+      <div class="doc" id="p-stats" style="display:none">
+        <div class="sec-t"><span class="no">§ 03</span><span class="zh">发言统计</span><span class="ln"></span></div>
+        <div class="stats-bar"><span class="nm">余歆客</span><span class="bar"><i style="width:78%"></i></span><span class="v">42 句 · 96 秒</span></div>
+        <div class="stats-bar"><span class="nm">发言人A</span><span class="bar"><i style="width:56%"></i></span><span class="v">31 句 · 68 秒</span></div>
+        <div class="stats-bar"><span class="nm">发言人B</span><span class="bar"><i style="width:47%"></i></span><span class="v">26 句 · 57 秒</span></div>
+        <div class="stats-bar"><span class="nm">陈金薪</span><span class="bar"><i style="width:35%"></i></span><span class="v">19 句 · 22 秒</span></div>
+        <p style="margin-top:10px;font-size:12px;color:var(--muted)">示意：发言占比条形 + 句数/时长 mono 统计。</p>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="spanel">
+        <div class="ph">PLAYBACK · 录音回放</div>
+        <div class="player">
+          <div class="row"><span class="play">▶</span><div class="track"><i></i></div><span class="mono" style="font-size:10px;color:var(--muted)">1x</span></div>
+          <div class="tm"><span>00:00</span><span>03:23</span></div>
+        </div>
+      </div>
+      <div class="spanel">
+        <div class="ph">LIVE · 听会</div>
+        <div class="listen"><div class="box"><span class="mic">🎙️</span>点击开始听会</div></div>
+      </div>
+      <div class="spanel">
+        <div class="ph">RELATED · 相关会议</div>
+        <div class="rel">
+          <a href="#">研究方向讨论与实验指导<span class="pct">43%</span></a>
+          <a href="#">2026.5.28 例行例会<span class="pct">42%</span></a>
+          <a href="#">会议研讨报告素材制作与图片逻辑优化<span class="pct">41%</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function show(id, el) {
+    ['minutes','transcript','stats'].forEach(k => {
+      const n = document.getElementById('p-' + k);
+      if (n) n.style.display = (k === id) ? 'block' : 'none';
+    });
+    document.querySelectorAll('.tb').forEach(t => t.classList.remove('on'));
+    el.classList.add('on');
+  }
+</script>
+</body>
+</html>
