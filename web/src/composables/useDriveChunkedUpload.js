@@ -191,11 +191,7 @@ export function useDriveChunkedUpload() {
     try {
       await runChunkUploads(file)
       status.value = 'finalizing'
-      await axios.post(
-        '/api/v1/drive/chunked-uploads/' + uploadId.value + '/complete',
-        { final_checksum: checksum.value, visibility, is_team_shared },
-        { headers: authHeaders() }
-      )
+      await completeWithRetry({ final_checksum: checksum.value, visibility, is_team_shared })
       status.value = 'done'
       resumable.removeSession(uploadId.value)
     } catch (error) {
@@ -204,6 +200,30 @@ export function useDriveChunkedUpload() {
       throw error
     }
     return { upload_id: uploadId.value, file_name: file.name }
+  }
+
+  // complete 是长请求 (服务端合并全部分片 + SHA256 校验 + 回写 MinIO), 链路
+  // (nginx → FRP 隧道) 对它的瞬态切断 (2026-09-13 502: 分片全传完但 complete
+  // 未达后端) 不代表服务端失败 → 仅对网络错误与 5xx 网关码重试;
+  // 4xx 业务错误 (409 缺分片 / 422 校验失败 / 404 会话不存在) 不重试
+  async function completeWithRetry(postBody) {
+    const TRANSIENT = new Set([502, 503, 504])
+    let lastError
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        return await axios.post(
+          '/api/v1/drive/chunked-uploads/' + uploadId.value + '/complete',
+          postBody,
+          { headers: authHeaders() }
+        )
+      } catch (error) {
+        lastError = error
+        const transient = TRANSIENT.has(error?.response?.status) || !error?.response
+        if (!transient || attempt === 3) break
+        await new Promise((resolve) => setTimeout(resolve, 1500 * attempt))
+      }
+    }
+    throw lastError
   }
 
   async function abort() {
@@ -239,11 +259,7 @@ export function useDriveChunkedUpload() {
     try {
       await runChunkUploads(file)
       status.value = 'finalizing'
-      await axios.post(
-        '/api/v1/drive/chunked-uploads/' + uploadId.value + '/complete',
-        { final_checksum: checksum.value || null, visibility: session.visibility || 'team' },
-        { headers: authHeaders() }
-      )
+      await completeWithRetry({ final_checksum: checksum.value || null, visibility: session.visibility || 'team' })
       status.value = 'done'
       resumable.removeSession(uploadId.value)
     } catch (error) {
