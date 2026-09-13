@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>仪表盘 × 任务管理 · 天马行空合并 5 方案 (2026-09)</title>
+<style>
+  :root {
+    --bg: #EFede7; --card: #FFFFFF; --line: #E7E3DA; --txt: #26302C; --txt2: #8A938E;
+    --mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --paper: #F4F6F4; --ink: #16232A; --teal: #0E766E; --danger: #A3543F;
+    --hair: rgba(22,35,42,.12); --dim: #9AA4A0; --amber: #C07F2E; --green: #3d7a3d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; padding: 40px 24px 80px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--txt2); font-size: 13px; margin-bottom: 24px; line-height: 1.8; }
+  .sub b { color: #B4823C; font-weight: 600; }
+
+  .opt { margin-bottom: 40px; }
+  .opt-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .opt-h .tag { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--teal); background: rgba(14,118,110,.08); border: 1px solid rgba(14,118,110,.4); padding: 2px 10px; border-radius: 9999px; }
+  .opt-h h2 { font-size: 16px; font-weight: 650; }
+  .opt-h .desc { font-size: 12px; color: var(--txt2); }
+  .opt-notes { margin-top: 10px; font-size: 11.5px; line-height: 1.8; }
+  .opt-notes .pro { color: #2E8B62; margin-right: 16px; } .opt-notes .con { color: #B4823C; }
+
+  .page { background: var(--paper); border: 1px solid rgba(22,35,42,.18); border-radius: 14px; overflow: hidden; }
+  .pbody { padding: 16px 20px 20px; }
+
+  /* 通用 */
+  .mono { font-family: var(--mono); }
+  .blk { background: var(--card); border: 1px solid rgba(22,35,42,.09); border-radius: 12px; padding: 13px 15px; }
+  .blk-t { font-size: 11px; font-weight: 650; color: var(--ink); margin-bottom: 9px; display: flex; align-items: center; gap: 7px; }
+  .blk-t .en { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: var(--dim); font-weight: 400; }
+  .av { width: 24px; height: 24px; border-radius: 999px; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+  .a1 { background: linear-gradient(135deg,#5b8def,#8b5cf6); }
+  .a2 { background: linear-gradient(135deg,#10b981,#059669); }
+  .a3 { background: linear-gradient(135deg,#f59e0b,#d97706); }
+  .tick { width: 15px; height: 15px; border-radius: 999px; border: 1.5px solid #8fa0aa; flex-shrink: 0; }
+
+  /* ═══ 1 作战室 ═══ */
+  .war { background: #0d1418; border-radius: 14px; padding: 18px 20px; color: #dfe9e6; font-family: var(--mono); }
+  .war-top { display: flex; align-items: center; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(226,236,234,.15); }
+  .war-top .wt { font-size: 13px; font-weight: 700; letter-spacing: .1em; }
+  .war-top .wclock { margin-left: auto; font-size: 10px; color: #6b8286; }
+  .wgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .wcol h4 { font-size: 9px; letter-spacing: .2em; color: #35c2a4; margin-bottom: 8px; }
+  .wcard { background: rgba(255,255,255,.045); border: 1px solid rgba(226,236,234,.12); border-left: 3px solid #35c2a4; border-radius: 8px; padding: 9px 11px; margin-bottom: 8px; }
+  .wcard.hot { border-left-color: #f89898; }
+  .wcard .wt1 { font-size: 11px; font-family: 'PingFang SC', sans-serif; }
+  .wcard .wt2 { font-size: 8.5px; color: #6b8286; margin-top: 4px; letter-spacing: .06em; }
+  .wticker { margin-top: 12px; border-top: 1px dashed rgba(226,236,234,.15); padding-top: 10px; font-size: 9.5px; color: #6b8286; letter-spacing: .05em; }
+
+  /* ═══ 2 科研日报 ═══ */
+  .news { background: #FBFAF6; border: 1px solid #d8d2c4; padding: 22px 26px; }
+  .news-masthead { text-align: center; border-bottom: 3px double #2b2620; padding-bottom: 10px; }
+  .news-name { font-family: Georgia, 'Times New Roman', serif; font-size: 26px; font-weight: 700; letter-spacing: .12em; }
+  .news-sub { font-size: 9px; color: #7a7468; letter-spacing: .3em; margin-top: 4px; font-family: var(--mono); }
+  .news-cols { column-count: 3; column-gap: 22px; column-rule: 1px solid #d8d2c4; margin-top: 14px; text-align: justify; }
+  .news h3 { font-family: Georgia, serif; font-size: 14px; border-bottom: 1px solid #2b2620; padding-bottom: 3px; margin-bottom: 7px; }
+  .news-item { font-size: 10.5px; line-height: 1.7; color: #3a352c; margin-bottom: 8px; break-inside: avoid; }
+  .news-item b { color: #8c2f1a; }
+  .news-headline { font-family: Georgia, serif; font-size: 17px; line-height: 1.5; text-align: center; margin: 12px 0 6px; }
+  .news-kicker { text-align: center; font-size: 9px; color: #7a7468; letter-spacing: .25em; margin-bottom: 2px; font-family: var(--mono); }
+  .news-ad { border: 1px solid #d8d2c4; padding: 8px 10px; text-align: center; font-size: 9.5px; color: #7a7468; margin-top: 6px; }
+
+  /* ═══ 3 RPG 委托板 ═══ */
+  .rpg { background: linear-gradient(180deg,#1a2430 0%,#141d26 100%); border-radius: 14px; padding: 18px 20px; color: #e8e2d4; }
+  .rpg-party { display: flex; align-items: center; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(232,226,212,.15); }
+  .rpg-hero { display: flex; align-items: center; gap: 9px; }
+  .rpg-hero .rh { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: rgba(232,226,212,.08); border: 1px solid rgba(232,226,212,.2); }
+  .rpg-hero .rn { font-size: 11.5px; font-weight: 700; }
+  .rpg-hero .rl { font-size: 8.5px; color: #b8a97e; font-family: var(--mono); }
+  .rpg-xp { flex: 1; max-width: 320px; }
+  .rpg-xp .xt { font-size: 8.5px; color: #b8a97e; font-family: var(--mono); margin-bottom: 4px; }
+  .xpbar { height: 8px; background: rgba(232,226,212,.1); border-radius: 4px; border: 1px solid rgba(232,226,212,.2); overflow: hidden; }
+  .xpbar i { display: block; height: 100%; background: linear-gradient(90deg,#b8a97e,#e8c76a); }
+  .quests { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 14px; }
+  .qcard { background: rgba(232,226,212,.05); border: 1px solid rgba(232,226,212,.15); border-radius: 10px; padding: 11px 13px; position: relative; }
+  .qcard .qr { font-size: 10.5px; font-weight: 700; }
+  .qcard .qd { font-size: 9px; color: #b8a97e; margin-top: 5px; line-height: 1.6; }
+  .qcard .qrk { position: absolute; top: 10px; right: 11px; font-size: 13px; }
+  .qcard.hard { border-color: rgba(248,152,152,.35); }
+  .qcard.done { opacity: .55; }
+  .qcard.done .qr { text-decoration: line-through; }
+  .rpg-loot { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .loot { font-size: 9px; padding: 4px 10px; border-radius: 999px; border: 1px dashed rgba(184,169,126,.4); color: #b8a97e; font-family: var(--mono); }
+
+  /* ═══ 4 时间之河 ═══ */
+  .river { position: relative; padding: 18px 0 6px; }
+  .rv-track { position: relative; height: 150px; }
+  .rv-line { position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: var(--ink); }
+  .rv-line::after { content: ''; position: absolute; right: -2px; top: -4px; border: 5px solid transparent; border-left: 8px solid var(--ink); }
+  .rv-node { position: absolute; width: 140px; }
+  .rv-node .rv-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--card); border: 2px solid var(--ink); margin: 0 auto; }
+  .rv-node.up { bottom: 55%; } .rv-node.up .rv-dot { margin-bottom: 6px; }
+  .rv-node.down { top: 55%; } .rv-node.down .rv-dot { margin-top: 6px; }
+  .rv-card { background: var(--card); border: 1px solid var(--hair); border-radius: 9px; padding: 7px 9px; font-size: 10px; box-shadow: 2px 2px 0 rgba(22,35,42,.07); }
+  .rv-card .rc1 { font-weight: 650; }
+  .rv-card .rc2 { font-family: var(--mono); font-size: 8px; color: var(--dim); margin-top: 2px; }
+  .rv-card.hot { border-color: rgba(163,84,63,.5); }
+  .rv-card.file { border-style: dashed; }
+  .rv-now { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1.5px dashed var(--danger); }
+  .rv-now span { position: absolute; top: -4px; left: 6px; font-family: var(--mono); font-size: 8px; color: var(--danger); letter-spacing: .1em; }
+
+  /* ═══ 5 看板 ═══ */
+  .kb-top { display: flex; align-items: center; gap: 12px; margin-bottom: 13px; }
+  .kb-col { display: grid; grid-template-columns: repeat(4, 1fr); gap: 11px; }
+  .kbc { background: rgba(22,35,42,.03); border: 1px solid var(--hair); border-radius: 11px; padding: 10px; min-height: 200px; }
+  .kbc-t { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; padding: 3px 4px 8px; }
+  .kbc-t .n { font-family: var(--mono); font-size: 9px; color: var(--dim); }
+  .kbt { background: var(--card); border: 1px solid rgba(22,35,42,.1); border-radius: 8px; padding: 8px 10px; margin-bottom: 7px; box-shadow: 0 1px 2px rgba(22,35,42,.05); }
+  .kbt .kt1 { font-size: 10.5px; }
+  .kbt .kt2 { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .kbt .p { font-size: 8px; padding: 1px 6px; border-radius: 4px; background: rgba(22,35,42,.06); color: var(--dim); }
+  .kbt .p.hi { background: rgba(163,84,63,.1); color: var(--danger); }
+  .kbt .due { font-family: var(--mono); font-size: 8px; color: var(--dim); margin-left: auto; }
+  .kbt .due.hot { color: var(--danger); }
+
+  .legendbox { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; font-size: 12px; line-height: 1.9; color: var(--txt2); }
+  .legendbox b { color: var(--txt); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>仪表盘 × 任务管理 · 天马行空合并 5 方案</h1>
+  <p class="sub">彻底放开的五个概念方向：不再是「仪表盘 + 任务页」的取舍，而是<b>一个页面同时是两者</b>。数据全部来自现有接口（任务/网盘/成员），先看概念与气质，选定后我再细化交互稿。</p>
+
+  <!-- ═══ 1 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">1</span><h2>作战室 WAR ROOM</h2><span class="desc">深色指挥中心：顶部战况条，三列任务流（紧急/进行/完成），底部滚动情报。任务管理即仪表盘本身</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="war">
+          <div class="war-top">
+            <span class="wt">⬢ MB-LAB 作战室</span>
+            <span style="font-size:9px;color:#35c2a4">● 系统正常 · DFT 服务在线</span>
+            <span class="wclock">2026-09-12 FRI 19:20:44 · 值班 FABLE</span>
+          </div>
+          <div class="wgrid">
+            <div class="wcol">
+              <h4>◤ 紧急 E-2</h4>
+              <div class="wcard hot"><div class="wt1">模拟任务</div><div class="wt2">王五 · 逾期1天 · P中</div></div>
+              <div class="wcard hot"><div class="wt1">MDPI 投稿修改</div><div class="wt2">蒋芦笛 · 今日24:00 · P高</div></div>
+            </div>
+            <div class="wcol">
+              <h4>◤ 进行中 O-17</h4>
+              <div class="wcard"><div class="wt1">测试腾讯会议与听会是否冲突</div><div class="wt2">王五 · D+3</div></div>
+              <div class="wcard"><div class="wt1">开题报告修改</div><div class="wt2">蒋芦笛 · D+8</div></div>
+              <div class="wcard"><div class="wt1">表面污染去除实验</div><div class="wt2">周之超 · D+10</div></div>
+            </div>
+            <div class="wcol">
+              <h4>◤ 已完成 D-72</h4>
+              <div class="wcard" style="border-left-color:#4c5f63"><div class="wt1" style="text-decoration:line-through;color:#8ba0a0">配置服务器</div><div class="wt2">Fable · 09-12 16:2x</div></div>
+              <div class="wcard" style="border-left-color:#4c5f63"><div class="wt1" style="text-decoration:line-through;color:#8ba0a0">部署 ASR 守护</div><div class="wt2">王五 · 09-11</div></div>
+            </div>
+          </div>
+          <div class="wticker">│ INTEL │ 19:0x 王五 上传 演示视频.mp4 ─ 18:3x 蒋芦笛 上传 开题报告气泡界面调空.pdf ─ 17:5x 系统完成任务「配置服务器」+20XP ─ 16:2x 会议助手 创建「测试腾讯会议冲突」</div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 沉浸感最强，任务全量即主界面（紧急/进行/完成三列 = 完整任务管理）</span><span class="pro">✓ 底部情报流把网盘/任务事件汇成一条</span><span class="con">✗ 深色专属设计，亮色主题需另一套翻译；信息密度高</span></div>
+  </div>
+
+  <!-- ═══ 2 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">2</span><h2>科研晨报 MORNING PAPER</h2><span class="desc">打开像翻一份实验室日报：头条=今日必办，版面=任务专栏/网盘新料/成员动态，报纸排版</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="news">
+          <div class="news-masthead">
+            <div class="news-name">微纳米气泡课题组 · 每日纪事</div>
+            <div class="news-sub">MB-LAB DAILY · 第 257 期 · 2026年9月12日 星期五 · 今日值班 FABLE</div>
+          </div>
+          <div class="news-kicker">今日必办</div>
+          <div class="news-headline">模拟任务已逾期一日，MDPI 投稿修改今夜截止<br>组会汇报材料尚缺演示视频一节</div>
+          <div class="news-cols">
+            <div>
+              <h3>任务版</h3>
+              <div class="news-item"><b>■ 逾期</b>　模拟任务（王五，逾期 1 日）连续第二日登上版面，建议优先处置。</div>
+              <div class="news-item"><b>■ 今截</b>　MDPI 投稿修改（蒋芦笛）于今日 24:00 截止，为当前唯一高优先级事项。</div>
+              <div class="news-item"><b>■ 进行</b>　全组在办 17 项：王五 2 项、蒋芦笛 1 项、周之超 1 项。近七日到期分布 2·1·0·2·1·0·1。</div>
+              <div class="news-item"><b>■ 已结</b>　「配置服务器」昨日下午办结，本月累计完成 72 项。</div>
+            </div>
+            <div>
+              <h3>网盘新料</h3>
+              <div class="news-item"><b>实验照片.png</b>　蒋芦笛 25 分钟前上传至 /组会材料。</div>
+              <div class="news-item"><b>参考文献.pdf</b>　周之超 2 小时前上传至 /文献，共 12 页。</div>
+              <div class="news-item"><b>演示视频.mp4</b>　王五昨日上传，时长 4 分 12 秒。</div>
+              <div class="news-ad">存储告示：已用 12.4 / 50 GB（24.8%）<br>本周新增文件 8 件 · 全库 322 件</div>
+            </div>
+            <div>
+              <h3>成员动态</h3>
+              <div class="news-item">会议助手昨日自动创建「测试腾讯会议与听会是否冲突」一项，待认领。</div>
+              <div class="news-item">周之超更新研究方向为「表面污染去除」，声纹样本 3 条已录入。</div>
+              <div class="news-item">贾琦整理表面清洗 SOP 一事排期至 09-25。</div>
+              <div class="news-ad">今日值班：FABLE<br>明日值班：王五 · 组会 19:00 请勿迟到</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 气质独一无二，把状态汇报变成「读报」体验，信息可长可短</span><span class="pro">✓ 头条自动生成（逾期+今日截止聚合），任务管理藏在版面里</span><span class="con">✗ 交互性弱（报纸隐喻偏展示），操作任务仍需进任务页</span></div>
+  </div>
+
+  <!-- ═══ 3 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">3</span><h2>课题组远征队 QUEST BOARD</h2><span class="desc">RPG 化：团队=冒险小队（等级/XP），任务=委托卡（难度/悬赏），网盘=战利品，兔子=队伍吉祥物</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="rpg">
+          <div class="rpg-party">
+            <div class="rpg-hero"><div class="rh">🐰</div><div><div class="rn">微纳米远征队</div><div class="rl">LV.7 · 1440/2000 XP</div></div></div>
+            <div class="rpg-xp"><div class="xt">队伍经验 · 完成任务 +20 XP · 全员 72 件委托办结</div><div class="xpbar"><i style="width:72%"></i></div></div>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <span class="rpg-hero"><div class="rh" style="width:28px;height:28px;font-size:13px">天</div></span>
+              <span class="rpg-hero"><div class="rh" style="width:28px;height:28px;font-size:13px">蒋</div></span>
+              <span class="rpg-hero"><div class="rh" style="width:28px;height:28px;font-size:13px">周</div></span>
+              <span class="rpg-hero"><div class="rh" style="width:28px;height:28px;font-size:13px">贾</div></span>
+            </div>
+          </div>
+          <div class="quests">
+            <div class="qcard hard"><span class="qrk">🔥</span><div class="qr">讨伐逾期之影</div><div class="qd">模拟任务 · 王五 · 已逾期 1 日<br>悬赏：P中 · 连坐：组会汇报</div></div>
+            <div class="qcard hard"><span class="qrk">⏳</span><div class="qr">今夜之约</div><div class="qd">MDPI 投稿修改 · 蒋芦笛 · 24:00 截止<br>悬赏：P高 · 传说级</div></div>
+            <div class="qcard"><span class="qrk">⚔️</span><div class="qr">会议冲突排查</div><div class="qd">腾讯会议×听会 · 王五 · 09-15<br>悬赏：P中</div></div>
+            <div class="qcard"><span class="qrk">📖</span><div class="qr">开题报告重铸</div><div class="qd">蒋芦笛 · 09-20 · P高</div></div>
+            <div class="qcard"><span class="qrk">🧪</span><div class="qr">表面污染净化</div><div class="qd">周之超 · 09-22 · P低</div></div>
+            <div class="qcard done"><span class="qrk">✅</span><div class="qr">服务器配置</div><div class="qd">Fable · 昨日办结 · +20 XP</div></div>
+          </div>
+          <div class="rpg-loot">
+            <span class="loot">🏆 战利品 实验照片.png</span>
+            <span class="loot">📜 参考文献.pdf</span>
+            <span class="loot">🎞 演示视频.mp4</span>
+            <span class="loot">+ 本周 8 件入库</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 游戏化激励（XP/等级/委托），兔子宠物天然融入世界观</span><span class="pro">✓ 委托卡=任务本体，燃起「清版」欲望</span><span class="con">✗ 风格强烈，长辈/正式场合观感存疑；文案需要持续运营</span></div>
+  </div>
+
+  <!-- ═══ 4 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">4</span><h2>时间之河 TIME RIVER</h2><span class="desc">以一条从左（过去）到右（未来）的时间河为唯一主角：完成的任务与上传的文件沉在下游，今日立牌，未来到期任务漂在上游</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+          <span style="font-size:13px;font-weight:700">下午好，Fable</span>
+          <span class="mono" style="font-size:9px;color:var(--dim);letter-spacing:.08em">2026-09-12 FRI · 河宽 7 天</span>
+          <span style="margin-left:auto">🐰 🐇</span>
+        </div>
+        <div class="river">
+          <div class="rv-track">
+            <div class="rv-line"></div>
+            <div class="rv-now"><span>NOW</span></div>
+            <div class="rv-node up" style="left:2%">
+              <div class="rv-card"><div class="rc1">✓ 配置服务器</div><div class="rc2">昨日 16:2x · FABLE</div></div>
+              <div class="rv-dot"></div>
+            </div>
+            <div class="rv-node down" style="left:9%">
+              <div class="rv-dot"></div>
+              <div class="rv-card file"><div class="rc1">🎞 演示视频.mp4</div><div class="rc2">昨日 · 王五</div></div>
+            </div>
+            <div class="rv-node up" style="left:18%">
+              <div class="rv-card file"><div class="rc1">📄 参考文献.pdf</div><div class="rc2">2 小时前 · 周之超</div></div>
+              <div class="rv-dot"></div>
+            </div>
+            <div class="rv-node down" style="left:27%">
+              <div class="rv-dot"></div>
+              <div class="rv-card file"><div class="rc1">🖼 实验照片.png</div><div class="rc2">25 分钟前 · 蒋芦笛</div></div>
+            </div>
+            <div class="rv-node up" style="left:47%">
+              <div class="rv-card hot"><div class="rc1">! 模拟任务</div><div class="rc2">王五 · 已逾期 1 日</div></div>
+              <div class="rv-dot" style="border-color:var(--danger)"></div>
+            </div>
+            <div class="rv-node down" style="left:50.5%">
+              <div class="rv-dot" style="border-color:var(--danger)"></div>
+              <div class="rv-card hot"><div class="rc1">! MDPI 投稿修改</div><div class="rc2">蒋芦笛 · 今夜 24:00</div></div>
+            </div>
+            <div class="rv-node up" style="left:64%">
+              <div class="rv-card"><div class="rc1">测试腾讯会议冲突</div><div class="rc2">王五 · 09-15</div></div>
+              <div class="rv-dot"></div>
+            </div>
+            <div class="rv-node down" style="left:76%">
+              <div class="rv-dot"></div>
+              <div class="rv-card"><div class="rc1">开题报告修改</div><div class="rc2">蒋芦笛 · 09-20</div></div>
+            </div>
+            <div class="rv-node up" style="left:88%">
+              <div class="rv-card"><div class="rc1">表面污染去除实验</div><div class="rc2">周之超 · 09-22</div></div>
+              <div class="rv-dot"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 「什么时候发生/要发生」一眼看穿，任务与文件统一到时间维度</span><span class="pro">✓ 概念最惊艳，截图发群里最有记忆点</span><span class="con">✗ 节点多时拥挤（需折叠/缩放交互），实现复杂度最高</span></div>
+  </div>
+
+  <!-- ═══ 5 ═══ -->
+  <div class="opt">
+    <div class="opt-h"><span class="tag">5</span><h2>看板合一 KANBAN HOME</h2><span class="desc">仪表盘直接变成任务看板：四列（逾期/进行中/已完成/本周到期）拖拽管理，顶部统计条 + 右上角网盘动态小窗。管理即总览</span></div>
+    <div class="page">
+      <div class="pbody">
+        <div class="kb-top">
+          <span style="font-size:13px;font-weight:700">下午好，Fable</span>
+          <span class="mono" style="font-size:9px;color:var(--dim)">17 进行中 · 2 逾期 · 72 已完成 · 本周到期 7</span>
+          <span style="margin-left:auto">🐰 🐇</span>
+          <span class="mono" style="font-size:8.5px;color:var(--dim);border:1px dashed var(--hair);border-radius:8px;padding:5px 10px">🗂 新料: 实验照片.png (25分前) · 参考文献.pdf (2h)</span>
+        </div>
+        <div class="kb-col">
+          <div class="kbc">
+            <div class="kbc-t">⏰ 逾期 <span class="n">×2</span></div>
+            <div class="kbt"><div class="kt1">模拟任务</div><div class="kt2"><span class="av a1" style="width:16px;height:16px;font-size:8px">天</span><span class="p">P中</span><span class="due hot">逾期1日</span></div></div>
+            <div class="kbt"><div class="kt1">MDPI 投稿修改</div><div class="kt2"><span class="av a2" style="width:16px;height:16px;font-size:8px">蒋</span><span class="p hi">P高</span><span class="due hot">今夜</span></div></div>
+          </div>
+          <div class="kbc">
+            <div class="kbc-t">▶ 进行中 <span class="n">×17</span></div>
+            <div class="kbt"><div class="kt1">测试腾讯会议冲突</div><div class="kt2"><span class="av a1" style="width:16px;height:16px;font-size:8px">天</span><span class="p">P中</span><span class="due">09-15</span></div></div>
+            <div class="kbt"><div class="kt1">开题报告修改</div><div class="kt2"><span class="av a2" style="width:16px;height:16px;font-size:8px">蒋</span><span class="p hi">P高</span><span class="due">09-20</span></div></div>
+            <div class="kbt" style="opacity:.6;text-align:center;color:var(--dim);font-size:9px">+14 more</div>
+          </div>
+          <div class="kbc">
+            <div class="kbc-t">✓ 已完成 <span class="n">×72</span></div>
+            <div class="kbt"><div class="kt1" style="text-decoration:line-through;color:var(--dim)">配置服务器</div><div class="kt2"><span class="due">昨日 · Fable</span></div></div>
+            <div class="kbt"><div class="kt1" style="text-decoration:line-through;color:var(--dim)">部署 ASR 守护</div><div class="kt2"><span class="due">09-11 · 王五</span></div></div>
+          </div>
+          <div class="kbc">
+            <div class="kbc-t">📅 本周到期 <span class="n">×7</span></div>
+            <div class="kbt"><div class="kt1">准备组会 PPT</div><div class="kt2"><span class="due">明天</span></div></div>
+            <div class="kbt"><div class="kt1">回复审稿意见</div><div class="kt2"><span class="due">明天</span></div></div>
+            <div class="kbt"><div class="kt1">演示视频剪辑</div><div class="kt2"><span class="due">09-16</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="opt-notes"><span class="pro">✓ 真正的「管理即总览」：拖拽改状态，四列即完整任务管理，无需跳页</span><span class="pro">✓ 网盘新料收成右上角小窗，不抢戏</span><span class="con">✗ 与传统仪表盘形态差异最大，需要拖拽交互实现成本</span></div>
+  </div>
+
+  <div class="legendbox">
+    <b>五案共同</b>：单页同时承担仪表盘与任务管理（侧栏任务按钮移除，仅从此页操作任务）；数据全部现有接口。<br>
+    <b>落地成本排序</b>（低→高）：5 看板 ≈ 1 作战室 → 2 晨报（自动文案生成）→ 3 远征队（XP 体系已有）→ 4 时间之河（缩放折叠交互最重）。<br>
+    选定概念后我会出对应的可交互原型（像版 1 那样可点），确认后再实施。
+  </div>
+</div>
+</body>
+</html>
