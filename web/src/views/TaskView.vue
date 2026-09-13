@@ -734,12 +734,15 @@ onMounted(() => {
   margin-right: -4px;  /* 紧凑排列：与 complete-btn 视觉距离 */
 }
 
-/* 圆钮几何修正: EP is-circle 的 width:32/padding:8 内容区仅 16px, 装 18px 图标时会被主题规则挤成椭圆 — 钉死正方形 */
+/* 圆钮几何修正: 全局触控规则给 .el-button 加了 min-height:44px (min-height 永远钳制 height, !important 无效),
+   32 宽 x 44 高 = 竖椭圆 — 必须 min-* 一并钉死才能成真圆 */
 .complete-btn,
 .task-action-btn {
   flex-shrink: 0;
   width: 32px !important;
   height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
   padding: 0 !important;
   display: inline-flex !important;
   align-items: center;

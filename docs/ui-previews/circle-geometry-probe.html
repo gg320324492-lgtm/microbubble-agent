@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>圆钮几何探针 — 生产 CSS 实测</title>
+<!-- 直接引用生产环境正在下发的两份 CSS, 与用户浏览器拿到的完全一致 -->
+<link rel="stylesheet" href="https://agent.mnb-lab.cn/assets/index-pZSITDSk.css">
+<link rel="stylesheet" href="https://agent.mnb-lab.cn/assets/TaskView-VTKvjH_u.css">
+<style>
+  body { font-family: sans-serif; padding: 30px; background: #fff; }
+  .task-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+  .probe-out { margin-top: 24px; font: 13px/1.7 Consolas, monospace; background: #f6f8f7; border: 1px solid #ccd; padding: 14px; white-space: pre-wrap; }
+  button { cursor: pointer; }
+</style>
+</head>
+<body>
+  <h3>1:1 复刻生产 DOM (类名 + scoped 属性 + 18px 图标):</h3>
+  <div class="task-view">
+    <div class="task-row">
+      <button type="button" data-v-4931b6fc class="el-button el-button--default is-circle complete-btn complete-btn--outline" id="probe1">
+        <span><i class="el-icon" style="font-size:18px; font-style: normal;">✓</i></span>
+      </button>
+      <span>outline 对号钮</span>
+    </div>
+    <div class="task-row">
+      <button type="button" data-v-4931b6fc class="el-button el-button--default is-circle complete-btn complete-btn--done" id="probe2">
+        <span><i class="el-icon" style="font-size:18px; font-style: normal;">✓</i></span>
+      </button>
+      <span>done 对号钮</span>
+    </div>
+    <div class="task-row">
+      <button type="button" data-v-4931b6fc class="el-button el-button--default is-circle task-action-btn task-action-btn--edit" id="probe3">
+        <span><i class="el-icon" style="font-size:18px; font-style: normal;">✎</i></span>
+      </button>
+      <span>编辑钮</span>
+    </div>
+  </div>
+  <div class="probe-out" id="out">测量中...</div>
+<script>
+  const out = [];
+  for (const id of ['probe1', 'probe2', 'probe3']) {
+    const el = document.getElementById(id);
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    out.push(`${id}: 盒 ${r.width.toFixed(1)}x${r.height.toFixed(1)} | w=${cs.width} h=${cs.height} pad=${cs.padding} minW=${cs.minWidth} minH=${cs.minHeight} radius=${cs.borderRadius} display=${cs.display} boxSizing=${cs.boxSizing}`);
+  }
+  document.getElementById('out').textContent = out.join('\n');
+</script>
+</body>
+</html>

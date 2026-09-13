@@ -290,6 +290,53 @@ async def test_chunked_init_nonexistent_folder_still_404(db_session, user):
 
 
 @pytest.mark.asyncio
+async def test_chunked_concurrent_put_no_lost_update(db_session, user, folder):
+    """2026-09-13 事故回归: 前端 3 并发分片对 uploaded_chunks JSON 读-改-写互相覆盖
+    (15 片全传完 DB 只剩 13 → complete 恒 409)。行锁重读合并后并发写不得丢片。"""
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    service = DriveChunkedUploadService(db_session)
+    payload = _chunk_payload(b"C", 256 * 1024)
+    upload = await service.init_upload(
+        user_id=user.id,
+        parent_id=folder.id,
+        filename="race.bin",
+        file_size=len(payload) * 2,
+        chunk_size=256 * 1024,
+        checksum=hashlib.sha256(payload).hexdigest(),
+    )
+
+    engine = create_async_engine(TEST_DB_URL)
+    SessionMaker = async_sessionmaker(engine, expire_on_commit=False)
+
+    # expire_all 前取标量 (expire 后访问属性触发同步懒加载 → MissingGreenlet)
+    upload_id_value = upload.upload_id
+    owner_id_value = user.id
+
+    async def put_with_own_session(index):
+        async with SessionMaker() as session:
+            svc = DriveChunkedUploadService(session)
+            await svc.upload_chunk(
+                upload_id=upload_id_value,
+                user_id=owner_id_value,
+                chunk_index=index,
+                chunk_data=payload,
+                checksum=hashlib.sha256(payload).hexdigest(),
+            )
+
+    try:
+        await asyncio.gather(put_with_own_session(0), put_with_own_session(1))
+    finally:
+        await engine.dispose()
+
+    db_session.expire_all()
+    final = await service.get_upload(upload_id_value, owner_id_value)
+    assert sorted(final.uploaded_chunks) == [0, 1]
+
+
+@pytest.mark.asyncio
 async def test_chunked_single_chunk_size_validation(db_session, user, folder):
     service = DriveChunkedUploadService(db_session)
     payload = _chunk_payload(b"hello drive chunk", 262144 * 4)
