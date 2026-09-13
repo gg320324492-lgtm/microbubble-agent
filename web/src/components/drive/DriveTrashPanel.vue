@@ -42,6 +42,7 @@
         :is-top-level="true"
         :trash-context="true"
         @retry="fetchTrash"
+        @toggle-select="toggleSelect"
         @file-click="handleFileClick"
         @file-restore="handleRestoreSingle"
         @file-delete="handlePermanentDeleteSingle"
