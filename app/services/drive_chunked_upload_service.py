@@ -276,6 +276,10 @@ class DriveChunkedUploadService:
             chunk_data,
             content_type="application/octet-stream",
         )
+        # 2026-09-13 线上事故: 前端 3 并发分片对 uploaded_chunks JSON 列做"读-改-写",
+        # 并发 UPDATE 互相覆盖 (15 片全传完 DB 只剩 13 → complete 恒 409「仍缺少 chunks」)。
+        # 落盘后用行锁重读-合并-写回, 串行化同会话的并发更新。
+        await self.db.refresh(upload, attribute_names=["uploaded_chunks"], with_for_update=True)
         upload.uploaded_chunks = sorted(set(upload.uploaded_chunks or []) | {chunk_index})
         upload.status = "uploading"
         upload.updated_at = datetime.utcnow()
