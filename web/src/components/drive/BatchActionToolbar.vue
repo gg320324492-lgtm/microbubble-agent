@@ -32,7 +32,7 @@
         <el-checkbox
           :model-value="allSelected"
           :indeterminate="indeterminate"
-          @change="$emit('select-all')"
+          @change="$emit('select-all', $event)"
         >
           <span class="batch-toolbar-label">{{ context === 'trash' ? '全选' : `已选 ${selectedCount} 项${sizeLabel ? ' · ' + sizeLabel : ''}` }}</span>
         </el-checkbox>

@@ -369,8 +369,10 @@ export function useDriveFiles() {
     selectedFileIds.value = []
   }
 
-  function selectAll() {
-    selectedFileIds.value = driveFiles.value.map(f => f.id)
+  function selectAll(checked = true) {
+    // 2026-09-13 修复: 支持取消全选 — BatchActionToolbar 的全选 checkbox emit 新状态,
+    // false = 清空 (旧实现只会重复全选, 回收站全选后二次点击看似无响应)
+    selectedFileIds.value = checked ? driveFiles.value.map(f => f.id) : []
   }
 
   // ============================================================
