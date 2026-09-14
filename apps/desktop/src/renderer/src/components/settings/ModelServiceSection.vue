@@ -8,7 +8,7 @@ const PRESETS: { name: string; protocol: ModelProtocol; baseUrl: string; model: 
   { name: 'DeepSeek', protocol: 'openai', baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' },
   { name: 'Kimi / Moonshot', protocol: 'openai', baseUrl: 'https://api.moonshot.cn', model: 'moonshot-v1-8k' },
   { name: 'MiniMax', protocol: 'openai', baseUrl: 'https://api.minimax.chat', model: 'abab6.5s-chat' },
-  { name: 'MiMo (小米)', protocol: 'anthropic', baseUrl: 'https://api-mimo.xiaomi.com', model: 'mimo-v2.5' },
+  { name: 'MiMo (小米)', protocol: 'anthropic', baseUrl: 'https://token-plan-cn.xiaomimimo.com/anthropic', model: 'mimo-v2.5' },
   { name: '自定义 OpenAI 兼容', protocol: 'openai', baseUrl: 'https://', model: '' }
 ]
 
