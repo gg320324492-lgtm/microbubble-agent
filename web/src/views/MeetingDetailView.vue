@@ -397,16 +397,6 @@
           </div>
         </el-card>
 
-        <!-- 听会 -->
-        <el-card class="side-card">
-          <template #header><span>听会</span></template>
-          <MeetingRoom v-if="showCallRoom" @call-ended="onCallEnded" style="height: 400px" />
-          <div v-else class="call-placeholder" @click="startLiveCall">
-            <el-icon size="40" color="var(--color-primary)"><Microphone /></el-icon>
-            <p>点击开始听会</p>
-          </div>
-        </el-card>
-
         <!-- 相关会议 -->
         <el-card v-if="relatedMeetings.length > 0" class="side-card">
           <template #header><span>相关会议</span></template>
@@ -422,13 +412,6 @@
   <div v-else class="loading-state">
     <el-icon class="is-loading" size="24"><Loading /></el-icon> 加载中...
   </div>
-
-  <!-- 会后处理进度弹窗 -->
-  <ProcessingDialog
-    v-if="processingDialogVisible && meeting"
-    :meeting-id="meeting.id"
-    @close="processingDialogVisible = false"
-  />
 </template>
 
 <script setup>
@@ -440,8 +423,6 @@ import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
 import TabStrip from '@/components/common/TabStrip.vue'
-import MeetingRoom from '@/components/MeetingRoom.vue'
-import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import SpeakerStatsCard from '@/components/SpeakerStatsCard.vue'
 
@@ -452,7 +433,6 @@ const memberStore = useMemberStore()
 const meeting = ref(null)
 const editing = ref(false)
 const editingMinutes = ref(false)
-const showCallRoom = ref(false)
 const saving = ref(false)
 const savingTranscriptSpeaker = ref(null)
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
@@ -837,9 +817,6 @@ const groupedDecisions = computed(() => groupBySpeaker(meeting.value?.decisions)
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
 
-// 挂断后处理进度弹窗
-const processingDialogVisible = ref(false)
-
 // ===== 数据加载 =====
 
 const fetchMeeting = async () => {
@@ -952,18 +929,6 @@ async function saveTranscriptSpeaker(displayIndex, speaker) {
   } finally {
     savingTranscriptSpeaker.value = null
   }
-}
-
-// ===== 听会 =====
-
-function startLiveCall() {
-  showCallRoom.value = true
-}
-
-function onCallEnded() {
-  showCallRoom.value = false
-  fetchMeeting()
-  processingDialogVisible.value = true
 }
 
 // ===== 删除 =====
