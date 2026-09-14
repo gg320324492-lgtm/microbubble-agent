@@ -177,12 +177,13 @@ describe('W86 mini-7 实体列表 onMounted 自动 fetch', () => {
     })
     await flushPromises()
 
-    // 验证 20 条 entity-card 渲染 (派工 v6 §1.2 实战: 列表应渲染 20 而非 1)
-    const cards = wrapper.findAll('.entity-card')
+    // 验证 20 条实体行渲染 (2026-09-13 墨线重做: .entity-card → .et-row,
+    // 该断言在重做后未跟上一直坏 — 本次据实修正)
+    const cards = wrapper.findAll('.et-row')
     expect(cards).toHaveLength(20)
 
-    // 验证 panel-count 文案
-    expect(wrapper.text()).toContain('20 个实体')
+    // 验证面板计数文案 (墨线版: "{{ entityTotal }} 条")
+    expect(wrapper.text()).toContain('131 条')
   })
 
   it('Fix 1.4 handleEntityRefresh guard: graph emit 不会覆盖 entityList (派工 v6 §1.2)', async () => {

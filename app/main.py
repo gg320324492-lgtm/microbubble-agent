@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import time
 import warnings
 from contextlib import asynccontextmanager
 from uuid import uuid4
@@ -205,6 +206,33 @@ def _start_router_loader(app: FastAPI) -> asyncio.Task:
     return task
 
 
+def _warmup_ml_imports() -> None:
+    """2026-09-14 知识库首屏冻结根治: 在启动线程池预热重型 ML 导入链。
+
+    根因 (audit_log 实测指纹): /knowledge/entities 等 handler 是 async def,
+    内部才 `from app.services.entity_service import EntityService` →
+    embedding_service 顶层 `from sentence_transformers import SentenceTransformer`
+    → torch/transformers/datasets 冷导入。async handler 跑在事件循环上,
+    这段同步 import (Windows 容器冷启动实测 ~8s) 把**整个** loop 冻住,
+    同刻并发的所有 /api/v1 请求一起排队 (duration_ms 7.8-8.4s 集体同时返回)。
+
+    预热后请求路径命中 sys.modules 即 O(1)。失败不致命 (请求路径仍按老逻辑懒导入)。
+    """
+    t0 = time.monotonic()
+    try:
+        import sentence_transformers  # noqa: F401  torch/transformers/datasets 随之进 sys.modules
+        print(f"[warmup] ML import chain ready in {time.monotonic() - t0:.1f}s")
+    except Exception as e:
+        print(f"[warmup] ML 预热失败 (请求路径将退回懒导入): {e!r}")
+
+
+async def _warmup_ml_background() -> None:
+    try:
+        await asyncio.to_thread(_warmup_ml_imports)
+    except Exception as e:
+        print(f"[warmup] 预热任务异常 (不影响服务): {e!r}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
@@ -344,9 +372,15 @@ async def lifespan(app: FastAPI):
     # 后台 task 让 ASGI startup 立即完成；重型同步 import 在线程中执行，不占用事件循环，
     # 因而 /health 会在业务 router 尚未 ready 时也能持续响应。
     router_loader_task = _start_router_loader(app)
+    # 2026-09-14 知识库首屏冻结根治: 启动即预热 ML 导入链 (线程中, 不阻塞 startup)
+    warmup_task = asyncio.create_task(
+        _warmup_ml_background(), name="warmup-ml-imports"
+    )
 
     yield
     # 关闭时执行
+    if not warmup_task.done():
+        warmup_task.cancel()
     if not router_loader_task.done():
         router_loader_task.cancel()
         try:

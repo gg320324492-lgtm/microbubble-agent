@@ -40,7 +40,9 @@ export function useKnowledge() {
         page_size: pageSize.value,
         ...params
       }
-      if (searchQuery.value) queryParams.search = searchQuery.value
+      // 2026-09-14 修 bug: 参数名必须是 keyword — 后端 list_knowledge 的形参就是 keyword,
+      // 之前一直发 search= 被 FastAPI 静默丢弃 → 搜索框形同虚设 (实测 total 恒等于无过滤)
+      if (searchQuery.value) queryParams.keyword = searchQuery.value
       // #043: 自动拓展走 source_type 过滤, 与 category 互斥 (同一时间只挂一个)
       if (filterSourceType.value) {
         queryParams.source_type = filterSourceType.value
@@ -93,6 +95,15 @@ export function useKnowledge() {
     try {
       const res = await axios.get('/api/v1/knowledge/stats')
       statsData.value = res.data
+      // 2026-09-14 首屏瘦身: 实体/假设总数并入 stats (entity_total/hypothesis_total),
+      // 替代 KnowledgeView onMounted 的 2 个 page_size=1 探量请求。
+      // 老后端未带字段时 (缓存/回滚窗口) 保持 undefined 不覆盖 tab 已拉到的真值
+      if (typeof res.data?.entity_total === 'number') {
+        entityTotal.value = res.data.entity_total
+      }
+      if (typeof res.data?.hypothesis_total === 'number') {
+        hypothesisTotal.value = res.data.hypothesis_total
+      }
     } catch (e) {
       console.error('获取统计失败:', e)
       // 兜底空结构, 避免 health-summary tag 模板拿 undefined
@@ -107,13 +118,14 @@ export function useKnowledge() {
   }
 
   const searchEntities = async (params = {}) => {
-    loading.value = true
+    // 2026-09-14 性能: 不再翻转主列表 loading — 之前首屏 6 个并发请求共抢一个
+    // loading ref, entities/hypotheses 探量返回先后不一 → Dashboard 骨架闪烁拖长
     try {
       const res = await axios.get('/api/v1/knowledge/entities', { params })
       entityList.value = res.data.items || []
       entityTotal.value = res.data.total || 0
-    } finally {
-      loading.value = false
+    } catch (e) {
+      console.error('获取实体失败:', e)
     }
   }
 
@@ -127,13 +139,13 @@ export function useKnowledge() {
   }
 
   const fetchHypotheses = async (params = {}) => {
-    loading.value = true
+    // 2026-09-14 性能: 同 searchEntities, 不翻转主列表 loading
     try {
       const res = await axios.get('/api/v1/knowledge/hypotheses', { params })
       hypothesisList.value = res.data.items || []
       hypothesisTotal.value = res.data.total || 0
-    } finally {
-      loading.value = false
+    } catch (e) {
+      console.error('获取假设失败:', e)
     }
   }
 
