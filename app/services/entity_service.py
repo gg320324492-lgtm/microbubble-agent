@@ -7,7 +7,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc, text
 from sqlalchemy import join as sqlalchemy_join
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, load_only
 
 from app.models.knowledge import Knowledge
 from app.models.knowledge_entity import KnowledgeEntity, EntityCoOccurrence
@@ -76,7 +76,20 @@ class EntityService:
             count_q = count_q.where(and_(*filters))
         total = (await self.db.execute(count_q)).scalar() or 0
 
-        query = base.order_by(desc(KnowledgeEntity.occurrence_count))
+        # 2026-09-14 首屏瘦身: 只取列表渲染所需列 — 老实现 select(KnowledgeEntity)
+        # 把 halfvec(1024) embedding 整列拖回来序列化给前端, 列表根本不用。
+        # _entity_to_dict 不读 embedding, 用 load_only 保留 ORM 行语义。
+        query = (
+            base.options(load_only(
+                KnowledgeEntity.id, KnowledgeEntity.subject,
+                KnowledgeEntity.predicate, KnowledgeEntity.object,
+                KnowledgeEntity.condition, KnowledgeEntity.confidence,
+                KnowledgeEntity.source_knowledge_ids,
+                KnowledgeEntity.occurrence_count,
+                KnowledgeEntity.created_at, KnowledgeEntity.updated_at,
+            ))
+            .order_by(desc(KnowledgeEntity.occurrence_count))
+        )
         query = query.offset((page - 1) * page_size).limit(page_size)
         rows = (await self.db.execute(query)).scalars().all()
 
@@ -345,7 +358,14 @@ class EntityService:
 
     async def _centered_graph(self, entity_id: int, limit: int) -> dict:
         r = await self.db.execute(
-            select(KnowledgeEntity).where(KnowledgeEntity.id == entity_id)
+            select(KnowledgeEntity).options(load_only(
+                KnowledgeEntity.id, KnowledgeEntity.subject,
+                KnowledgeEntity.predicate, KnowledgeEntity.object,
+                KnowledgeEntity.condition, KnowledgeEntity.confidence,
+                KnowledgeEntity.source_knowledge_ids,
+                KnowledgeEntity.occurrence_count,
+                KnowledgeEntity.created_at, KnowledgeEntity.updated_at,
+            )).where(KnowledgeEntity.id == entity_id)
         )
         center = r.scalar_one_or_none()
         if not center:
@@ -359,6 +379,14 @@ class EntityService:
         # 新实现: 1 个 JOIN 拉所有 (co + entity) 对
         co_stmt = (
             select(EntityCoOccurrence, KnowledgeEntity)
+            .options(load_only(
+                KnowledgeEntity.id, KnowledgeEntity.subject,
+                KnowledgeEntity.predicate, KnowledgeEntity.object,
+                KnowledgeEntity.condition, KnowledgeEntity.confidence,
+                KnowledgeEntity.source_knowledge_ids,
+                KnowledgeEntity.occurrence_count,
+                KnowledgeEntity.created_at, KnowledgeEntity.updated_at,
+            ))
             .join(
                 KnowledgeEntity,
                 or_(
@@ -392,6 +420,7 @@ class EntityService:
         # W86 mini-4 fix: 单次 JOIN 替代 N+1 (派工 v4 铁律 3 真验证)
         # 老实现: 每条 co 边触发 2 个 entity 查询 (limit=50 → 100 个 query)
         # 新实现: 1 个 JOIN 拉所有 (co + entity) 对, 服务端再 dedupe
+        # 2026-09-14: load_only 裁掉 halfvec embedding 列 (图谱只用文本字段)
         stmt = (
             select(EntityCoOccurrence, KnowledgeEntity)
             .join(
@@ -401,6 +430,14 @@ class EntityService:
                     EntityCoOccurrence.entity_b_id == KnowledgeEntity.id,
                 ),
             )
+            .options(load_only(
+                KnowledgeEntity.id, KnowledgeEntity.subject,
+                KnowledgeEntity.predicate, KnowledgeEntity.object,
+                KnowledgeEntity.condition, KnowledgeEntity.confidence,
+                KnowledgeEntity.source_knowledge_ids,
+                KnowledgeEntity.occurrence_count,
+                KnowledgeEntity.created_at, KnowledgeEntity.updated_at,
+            ))
             .order_by(desc(EntityCoOccurrence.weight))
             .limit(limit * 2)  # 边 × 2 端点
         )

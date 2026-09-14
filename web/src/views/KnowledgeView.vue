@@ -92,8 +92,10 @@
       </div>
     </div>
 
-    <!-- ===== 实体图谱 Tab (v77 P2.6-E.3 拆分到 KnowledgeEntityTab.vue) ===== -->
-    <div v-show="activeTab === 'entities'" role="tabpanel"
+    <!-- ===== 实体图谱 Tab (v77 P2.6-E.3 拆分到 KnowledgeEntityTab.vue) =====
+         2026-09-14 性能: v-if 惰性挂载 — 老 v-show 首挂就跑子组件 onMounted 的
+         entities/graph 请求, 与父级探量重复, 首屏 8 请求 → 现在进 tab 才发 -->
+    <div v-if="tabActivated.entities" v-show="activeTab === 'entities'" role="tabpanel"
       :aria-labelledby="`tab-strip-entities`" class="tab-panel">
       <KnowledgeEntityTab
         ref="entityTabRef"
@@ -107,8 +109,9 @@
       />
     </div>
 
-    <!-- ===== 假设 Tab (v77 P2.6-E.3 拆分到 KnowledgeHypothesisTab.vue) ===== -->
-    <div v-show="activeTab === 'hypotheses'" role="tabpanel"
+    <!-- ===== 假设 Tab (v77 P2.6-E.3 拆分到 KnowledgeHypothesisTab.vue) =====
+         2026-09-14 性能: 同上惰性挂载, 假设列表进 tab 才拉 -->
+    <div v-if="tabActivated.hypotheses" v-show="activeTab === 'hypotheses'" role="tabpanel"
       :aria-labelledby="`tab-strip-hypotheses`" class="tab-panel">
       <KnowledgeHypothesisTab
         ref="hypothesisTabRef"
@@ -202,8 +205,7 @@ const {
   statsData, categories, hotTags, loadError,  // 2026-06-30
   entityList, entityTotal, entityPage, entityGraphData,
   hypothesisList, hypothesisTotal, hypothesisPage,
-  fetchKnowledge, fetchCategories, fetchStats, deleteKnowledge: deleteKnowledgeApi,
-  searchEntities, fetchEntityGraph, fetchHypotheses
+  fetchKnowledge, fetchCategories, fetchStats, deleteKnowledge: deleteKnowledgeApi
 } = useKnowledge()
 
 const isMobile = ref(window.innerWidth <= 768)
@@ -222,6 +224,14 @@ const VALID_TABS = ['knowledge', 'entities', 'hypotheses']
 if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
   activeTab.value = String(route.query.tab)
 }
+
+// 2026-09-14 性能: tab 惰性挂载开关 — 实体/假设 tab 只在首次访问时挂载,
+// 挂载即自带数据请求 (子组件 onMounted), 首屏不再预拉 entities/hypotheses/graph。
+// 在 ?tab= 深链解析之后求值, 保证深链进某 tab 立即挂载
+const tabActivated = ref({
+  entities: activeTab.value === 'entities',
+  hypotheses: activeTab.value === 'hypotheses',
+})
 
 // TabStrip 配置（铁律 30: EP 图标 named import + 通过 props 传入）
 const tabItems = [
@@ -433,14 +443,21 @@ watch(searchQuery, (val) => {
 })
 
 watch(activeTab, (tab) => {
-  if (tab === 'entities') {
-    if (entityTabRef.value) {
+  // 2026-09-14 性能: 首次进入置位 v-if 挂载开关 (子组件 onMounted 自带取数);
+  // 再次切入 (已挂载) 走 ref 主动刷新, 与原 v-show 行为一致
+  const firstMount = tab === 'entities'
+    ? !tabActivated.value.entities
+    : tab === 'hypotheses' ? !tabActivated.value.hypotheses : false
+  if (tab === 'entities') tabActivated.value.entities = true
+  if (tab === 'hypotheses') tabActivated.value.hypotheses = true
+  if (!firstMount) {
+    if (tab === 'entities' && entityTabRef.value) {
       entityTabRef.value.searchEntitiesLocal()
       entityTabRef.value.fetchEntityGraphLocal()
     }
-  }
-  if (tab === 'hypotheses') {
-    hypothesisTabRef.value?.fetchHypotheses()
+    if (tab === 'hypotheses') {
+      hypothesisTabRef.value?.fetchHypotheses()
+    }
   }
   // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
   router.replace({ query: { ...route.query, tab } })
@@ -468,12 +485,14 @@ onMounted(() => {
   searchQuery.value = ''
   currentPage.value = 1
 
+  // 2026-09-14 首屏瘦身: 6 请求 → 3 请求。
+  // 实体/假设探量 (page_size=1) 删除 — entityTotal/hypothesisTotal 改从
+  // stats 接口的 entity_total/hypothesis_total 拿 (fetchStats 内回填);
+  // entities/graph 随 tab 惰性挂载延后 (见 tabActivated)。
+  // 背景: 那 3 个请求在首屏并发风暴里触发后端 entity_service 冷导入, 曾冻结事件循环 ~8s。
   fetchKnowledge()
   fetchStats()
   fetchCategories()
-  // 2026-06-30 修复 D: 健康度摘要的 entity/hyp total 同步。
-  searchEntities({ page: 1, page_size: 1 })
-  fetchHypotheses({ page: 1, page_size: 1 })
 
   window.addEventListener('resize', handleResize)
 })

@@ -267,10 +267,24 @@ async def knowledge_stats(
     for st in ("auto_expansion", "auto_research", "conversation", "meeting", "paper", "chat"):
         source_types.setdefault(st, 0)
 
+    # 2026-09-14 首屏瘦身: 实体/假设总数并入 stats,
+    # 替代前端 KnowledgeView onMounted 的 2 个 page_size=1 探量请求
+    # (那 2 个请求 lazy-import entity_service → torch 冷导入冻结事件循环)
+    from app.models.knowledge_entity import KnowledgeEntity
+    from app.models.knowledge_hypothesis import KnowledgeHypothesis
+    entity_total = (await db.execute(
+        select(func.count()).select_from(KnowledgeEntity)
+    )).scalar() or 0
+    hypothesis_total = (await db.execute(
+        select(func.count()).select_from(KnowledgeHypothesis)
+    )).scalar() or 0
+
     return {
         "total": total,
         "categories": categories,
         "source_types": source_types,
+        "entity_total": entity_total,
+        "hypothesis_total": hypothesis_total,
     }
 
 
