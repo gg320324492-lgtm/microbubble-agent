@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 C · 人像卡片墙 — 团队协作</title>
+<style>
+:root {
+  --primary: #0E766E;  --primary-dark: #0B5D56;
+  --primary-bg: rgba(14,118,110,.09);  --primary-border: rgba(14,118,110,.35);
+  --text: #22302C;  --text-2: #52615C;  --text-3: #8B968F;  --text-4: #B9BFB6;
+  --bg: #F2F0EB;  --card: #FFFFFF;  --line: #E5E1D8;  --line-2: #D5D0C3;  --bg-hover: #EEEBE3;
+  --danger: #D94F2B;
+  --shadow-sm: 0 2px 8px rgba(20,40,35,.07);
+  --shadow-md: 0 6px 22px rgba(20,40,35,.12);
+  --r-md: 8px; --r-lg: 12px; --r-full: 9999px;
+  --grad-cta: linear-gradient(135deg, #0E766E, #12897C);
+  --dur: 180ms;
+  --font: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+[data-theme="dark"] {
+  --text: #E9E8E2;  --text-2: #B9C0B9;  --text-3: #8B938C;  --text-4: #5E665F;
+  --bg: #121513;  --card: #1A1E1B;  --line: #2E342F;  --line-2: #3A413A;  --bg-hover: #242A25;
+  --primary: #35C2A4;  --primary-dark: #5AD0B5;  --primary-bg: rgba(53,194,164,.12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13.5px; }
+button { font-family: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+svg.i { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; flex: none; }
+.prop-bar { position: fixed; left: 16px; bottom: 14px; z-index: 99; display: flex; gap: 8px; }
+.prop-bar a { font-size: 12px; padding: 6px 12px; border-radius: var(--r-full); background: var(--card); border: 1px solid var(--line); color: var(--text-2); text-decoration: none; box-shadow: var(--shadow-sm); }
+.prop-bar a.on { background: var(--grad-cta); color: #fff; border-color: transparent; }
+
+.page { max-width: 1280px; margin: 0 auto; padding: 24px 26px 90px; }
+
+/* 工具行 = 网盘同款 */
+.tools { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.tools h1 { font-size: 17px; font-weight: 650; margin-right: 4px; }
+.gsearch { display: flex; align-items: center; gap: 8px; width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 7px 12px; transition: all var(--dur); }
+.gsearch:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(14,118,110,.10); }
+.gsearch input { border: none; outline: none; background: none; font: inherit; color: var(--text); flex: 1; min-width: 0; }
+.gsearch input::placeholder { color: var(--text-4); }
+.gsearch kbd { font-family: var(--mono); font-size: 10px; color: var(--text-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 5px; background: var(--bg); }
+.tools .sp { flex: 1; }
+.tools .stat { font-size: 12px; color: var(--text-3); }
+.tools .stat b { font-family: var(--mono); color: var(--text-2); font-weight: 600; }
+
+/* 筛选 chips 行 */
+.frow { display: flex; align-items: center; gap: 8px; padding: 6px 0 18px; flex-wrap: wrap; }
+.frow .lab { font-size: 12px; color: var(--text-3); margin-right: 2px; }
+.fchip { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; padding: 5px 12px; border-radius: var(--r-full); border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); transition: all var(--dur); }
+.fchip .dot { width: 7px; height: 7px; border-radius: 50%; }
+.fchip.on { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); font-weight: 600; }
+.fchip:hover:not(.on) { border-color: var(--primary-border); color: var(--primary-dark); }
+
+/* 卡片墙 */
+.wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); gap: 14px; }
+.pc { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 18px 16px 14px; display: flex; flex-direction: column; gap: 2px; transition: all var(--dur); cursor: default; }
+.pc:hover { border-color: var(--primary-border); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.pc.dim { opacity: .55; }
+.av { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 10px; }
+.pc b.n { font-size: 14.5px; font-weight: 650; }
+.pc .sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); margin-bottom: 8px; }
+.pc .area { font-size: 12.5px; color: var(--text-2); line-height: 1.5; min-height: 2.9em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pc .area.dim { color: var(--text-4); }
+.pc .sk { display: flex; gap: 4px; flex-wrap: wrap; margin: 8px 0 0; min-height: 20px; }
+.pc .sk span { font-size: 10.5px; color: var(--text-3); border: 1px solid var(--line-2); border-radius: var(--r-full); padding: 1px 8px; white-space: nowrap; }
+.pc .foot { display: flex; align-items: center; gap: 6px; margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+.pjd { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); background: var(--bg); border-radius: var(--r-full); padding: 2.5px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.pjd .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.vpip { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--primary-dark); }
+.vpip svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.9; }
+.vpip.no { color: var(--text-4); }
+.pc .ops { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; opacity: 0; transition: opacity var(--dur); }
+.pc:hover .ops { opacity: 1; }
+.pc .ops button { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); display: grid; place-items: center; box-shadow: var(--shadow-sm); }
+.pc .ops button:hover { border-color: var(--primary-border); color: var(--primary-dark); background: var(--primary-bg); }
+.pc .ops svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+/* 群像统计条 */
+.strip { display: flex; gap: 26px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 13px 20px; margin-bottom: 18px; box-shadow: var(--shadow-sm); }
+.strip .kpi { display: flex; flex-direction: column; }
+.strip .kpi b { font-size: 19px; font-weight: 700; font-family: var(--mono); }
+.strip .kpi span { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+.strip .divi { width: 1px; align-self: stretch; background: var(--line); }
+.strip .mix { flex: 1; display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
+.strip .mix i { height: 100%; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); }
+.legend i { width: 8px; height: 8px; border-radius: 2.5px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="tools">
+    <h1>团队协作</h1>
+    <label class="gsearch"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="搜索姓名 / 研究方向 / 技能"><kbd>Ctrl K</kbd></label>
+    <span class="sp"></span>
+    <span class="stat" id="stat"></span>
+  </div>
+
+  <div class="strip">
+    <div class="kpi"><b>20</b><span>在册成员</span></div>
+    <div class="divi"></div>
+    <div class="kpi"><b>5</b><span>在研项目</span></div>
+    <div class="divi"></div>
+    <div class="kpi"><b>6</b><span>已录声纹</span></div>
+    <div class="divi"></div>
+    <div class="mix" title="届别构成">
+      <i style="width:5%;background:#0E766E"></i><i style="width:20%;background:#2F5D8A"></i><i style="width:40%;background:#3E7A52"></i><i style="width:30%;background:#B07C24"></i><i style="width:5%;background:#D5D0C3"></i>
+    </div>
+    <div class="legend">
+      <span><i style="background:#0E766E"></i>导师</span><span><i style="background:#2F5D8A"></i>博士</span><span><i style="background:#3E7A52"></i>硕士</span><span><i style="background:#B07C24"></i>本科</span><span><i style="background:#D5D0C3"></i>待完善</span>
+    </div>
+  </div>
+
+  <div class="frow" id="filters">
+    <span class="lab">项目</span>
+    <button class="fchip on" data-f="all">全部</button>
+    <span class="lab" style="margin-left:10px">届别</span>
+    <button class="fchip" data-f="g:导师">导师</button>
+    <button class="fchip" data-f="g:博士">博士</button>
+    <button class="fchip" data-f="g:硕士">硕士</button>
+    <button class="fchip" data-f="g:本科">本科</button>
+    <button class="fchip" data-f="novp">未录声纹</button>
+    <span class="lab" style="margin-left:10px">入组</span>
+    <button class="fchip" data-f="join">最近 1 年</button>
+  </div>
+  <div class="frow" id="pfilters" style="padding-top:0">
+    <span class="lab">项目卷</span>
+  </div>
+
+  <div class="wall" id="wall"></div>
+</div>
+
+<div class="prop-bar">
+  <a href="index.html">总览</a><a href="A-workbench.html">A 工作台</a><a href="B-roster.html">B 名录</a><a class="on" href="C-cards.html">C 卡片墙</a><a href="D-matrix.html">D 人才表</a>
+</div>
+
+<script>
+const COLORS = ['#0E766E','#2F5D8A','#3E7A52','#B07C24','#7C4E96','#A84B6F','#B3392F','#3E7A70'];
+const PROJECTS = ['导师组','黑臭水体无药剂低能耗治理','饮用水水质提升与安全保障','水产高密度无抗养殖与品质改善','气泡成核过程调控与设备研发'];
+const PCOLOR = { '导师组':0,'黑臭水体无药剂低能耗治理':1,'饮用水水质提升与安全保障':2,'水产高密度无抗养殖与品质改善':3,'气泡成核过程调控与设备研发':4 };
+const M = [
+  { id:1,n:'王天志',g:'副教授',area:'微纳米气泡技术与应用',sk:['项目管理','气泡生成','水处理'],vp:121,pj:[0],join:'2019-09' },
+  { id:2,n:'赵航佳',g:'博二',area:'黑臭水体治理',sk:['臭氧微纳米气泡','底泥-水界面','污染物去除'],vp:0,pj:[1],join:'2024-09' },
+  { id:3,n:'陈金薪',g:'博一',area:'循环水养殖水质调控',sk:['工厂化养殖','生物过滤'],vp:8,pj:[3],join:'2024-09' },
+  { id:4,n:'冯懿鑫',g:'博一',area:'气泡成核机理',sk:['高速摄像','数值模拟'],vp:5,pj:[4],join:'2025-09' },
+  { id:5,n:'艾琳朔',g:'研二',area:'空化泡动力学',sk:['声学测量','PIV 流场'],vp:0,pj:[4],join:'2024-09' },
+  { id:6,n:'耿嘉栋',g:'博二',area:'无抗养殖饲料替代',sk:['水产营养','益生菌'],vp:0,pj:[3],join:'2023-09' },
+  { id:7,n:'杜同贺',g:'研二',area:'微气泡增氧',sk:['溶解氧监测','曝气装置'],vp:0,pj:[3,4],join:'2024-09' },
+  { id:8,n:'胡小琪',g:'研三',area:'黑臭水体',sk:['水质指纹','光催化'],vp:0,pj:[1],join:'2023-09' },
+  { id:9,n:'关小未',g:'研三',area:'盐碱土改良',sk:['盐碱土修复','种养系统','农业应用'],vp:0,pj:[2],join:'2023-09' },
+  { id:10,n:'刘子毅',g:'研一',area:'气液两相流',sk:['CFD 仿真','PIV 流场'],vp:0,pj:[4],join:'2025-09' },
+  { id:11,n:'韩重阳',g:'研一',area:'养殖尾水处理',sk:['人工湿地','脱氮除磷'],vp:0,pj:[3],join:'2025-09' },
+  { id:12,n:'李胜景',g:'大四',area:'水体微生物',sk:['16S 测序','数据分析'],vp:0,pj:[3],join:'2022-09' },
+  { id:13,n:'宋洋',g:'研三',area:'饮用水处理',sk:['生物稳定性','管网生物膜','膜耦合'],vp:3,pj:[2],join:'2023-09' },
+  { id:18,n:'张宏魁',g:'研三',area:'曝气设备设计',sk:['SolidWorks','流道设计'],vp:0,pj:[4],join:'2023-09' },
+  { id:20,n:'王书馨',g:'大三',area:'水质检测',sk:['滴定分析','文献调研'],vp:0,pj:[4],join:'2022-09' },
+  { id:21,n:'贾琦',g:'大四',area:'表面清洗',sk:['实验辅助','数据整理','表面清洗'],vp:12,pj:[1],join:'2022-09' },
+  { id:22,n:'周之超',g:'大四',area:'表面污染去除',sk:['表面去除','文献调研','实验辅助'],vp:11,pj:[1],join:'2022-09' },
+  { id:27,n:'蒋芦笛',g:'研三',area:'',sk:[],vp:0,pj:[1],join:'2023-09' },
+  { id:28,n:'刘莫菲',g:'研一',area:'',sk:[],vp:0,pj:[1],join:'2025-09' },
+  { id:58,n:'刘子煜',g:'研二',area:'',sk:[],vp:0,pj:[1],join:'2024-09' },
+];
+const famOf = g => /教授|助教/.test(g) ? '导师' : /博/.test(g) ? '博士' : /研/.test(g) ? '硕士' : /大/.test(g) ? '本科' : '其他';
+
+// 项目卷 chips
+document.getElementById('pfilters').insertAdjacentHTML('beforeend',
+  PROJECTS.map((p,i)=>`<button class="fchip" data-f="pj:${i}"><span class="dot" style="background:${COLORS[PCOLOR[p]]}"></span>${p.length>9?p.slice(0,9)+'…':p}<span style="font-family:var(--mono);font-size:10px;color:var(--text-4)">${M.filter(m=>m.pj.includes(i)).length}</span></button>`).join(''));
+
+let q = '', active = new Set();
+function match(m) {
+  if (q && !(m.n + m.area + m.sk.join('')).toLowerCase().includes(q)) return false;
+  const gFams = [...active].filter(a=>a.startsWith('g:')).map(a=>a.slice(2));
+  if (gFams.length && !gFams.includes(famOf(m.g))) return false;
+  const pjs = [...active].filter(a=>a.startsWith('pj:')).map(a=>+a.slice(3));
+  if (pjs.length && !pjs.some(p=>m.pj.includes(p))) return false;
+  if (active.has('novp') && m.vp) return false;
+  if (active.has('join') && m.join < '2025-09') return false;
+  return true;
+}
+function render() {
+  const list = M.filter(match);
+  document.getElementById('stat').innerHTML = `显示 <b>${list.length}</b> / 20 人`;
+  document.getElementById('wall').innerHTML = list.map(m => `
+    <div class="pc ${(!m.area||!m.sk.length)?'dim':''}">
+      <div class="ops"><button title="查看档案"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg></button><button title="编辑"><svg viewBox="0 0 24 24"><path d="M4 20h4L20 8l-4-4L4 16z"/></svg></button></div>
+      <span class="av" style="background:${COLORS[m.id % COLORS.length]}">${m.n[0]}</span>
+      <b class="n">${m.n}</b>
+      <span class="sub">#${String(m.id).padStart(3,'0')} · ${m.g} · 入组 ${m.join}</span>
+      <p class="area ${m.area?'':'dim'}">${m.area || '研究方向未登记'}</p>
+      <div class="sk">${m.sk.slice(0,3).map(s=>`<span>${s}</span>`).join('')}</div>
+      <div class="foot">
+        ${m.pj.slice(0,2).map(p=>`<span class="pjd"><span class="dot" style="background:${COLORS[PCOLOR[PROJECTS[p]]]}"></span>${PROJECTS[p].length>7?PROJECTS[p].slice(0,7)+'…':PROJECTS[p]}</span>`).join('') || '<span class="pjd" style="color:var(--text-4)">未编入项目</span>'}
+        ${m.vp ? `<span class="vpip"><svg viewBox="0 0 24 24"><path d="M12 3v10"/><path d="M7 8a5 5 0 0 1 10 0v5"/><rect x="4" y="13" width="4" height="6" rx="2"/><rect x="16" y="13" width="4" height="6" rx="2"/></svg>×${m.vp}</span>`
+               : `<span class="vpip no"><svg viewBox="0 0 24 24"><path d="m4 4 16 16"/><path d="M12 3v10"/><rect x="4" y="13" width="4" height="6" rx="2"/><rect x="16" y="13" width="4" height="6" rx="2"/></svg>未录</span>`}
+      </div>
+    </div>`).join('') || `<p style="grid-column:1/-1;color:var(--text-3);font-size:13px;padding:34px 0;text-align:center">没有符合条件的成员 · 试试去掉部分筛选</p>`;
+}
+document.getElementById('q').addEventListener('input', e => { q = e.target.value.trim().toLowerCase(); render(); });
+document.querySelectorAll('.fchip').forEach(b => b.addEventListener('click', () => {
+  const f = b.dataset.f;
+  if (f === 'all') { active.clear(); document.querySelectorAll('.fchip').forEach(x=>x.classList.remove('on')); b.classList.add('on'); }
+  else {
+    document.querySelector('[data-f="all"]').classList.remove('on');
+    if (f.startsWith('g:')) { // 届别互斥
+      document.querySelectorAll('.fchip[data-f^="g:"]').forEach(x=>{ if(x!==b) x.classList.remove('on'); if(x.classList.contains('on')) active.delete(x.dataset.f); });
+    }
+    b.classList.toggle('on');
+    b.classList.contains('on') ? active.add(f) : active.delete(f);
+    if (!active.size) document.querySelector('[data-f="all"]').classList.add('on');
+  }
+  render();
+}));
+render();
+</script>
+</body>
+</html>

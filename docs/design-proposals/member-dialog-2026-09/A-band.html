@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A · 色带档案 — 成员详情弹窗</title>
+<style>
+:root {
+  --primary:#0E766E; --primary-dark:#0B5D56; --primary-bg:rgba(14,118,110,.09); --primary-border:rgba(14,118,110,.35);
+  --text:#22302C; --text-2:#52615C; --text-3:#8B968F; --text-4:#B9BFB6;
+  --bg:#F2F0EB; --card:#FFFFFF; --line:#E5E1D8; --line-2:#D5D0C3; --bg-hover:#EEEBE3;
+  --danger:#D94F2B; --shadow:0 24px 64px rgba(20,40,35,.28); --r-md:8px; --r-lg:12px; --r-full:9999px;
+  --font:'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif;
+  --mono:Consolas,'JetBrains Mono','Courier New',monospace;
+}
+[data-theme="dark"] {
+  --text:#E9E8E2; --text-2:#B9C0B9; --text-3:#8B938C; --text-4:#5E665F;
+  --bg:#121513; --card:#1A1E1B; --line:#2E342F; --line-2:#3A413A; --bg-hover:#242A25;
+  --primary:#35C2A4; --primary-dark:#5AD0B5; --primary-bg:rgba(53,194,164,.12); --primary-border:rgba(53,194,164,.35);
+  --shadow:0 24px 64px rgba(0,0,0,.6);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); font-size:13.5px; min-height:100vh; }
+.stage { position:fixed; inset:0; display:grid; place-items:center; }
+/* 背景虚化的名录页, 交代弹窗出现的位置 */
+.behind { position:fixed; inset:0; padding:26px 40px; filter:blur(2px) saturate(.85); opacity:.55; }
+.behind .bar { height:34px; width:180px; border-radius:99px; background:var(--line); margin-bottom:18px; }
+.behind .card { background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:14px; overflow:hidden; }
+.behind .hd { padding:12px 18px; border-bottom:1px solid var(--line); font-weight:650; }
+.behind .ln { padding:0 18px; height:44px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); color:var(--text-3); font-size:12.5px; }
+.behind .ln:last-child { border:none; }
+.behind .sq { width:26px; height:26px; border-radius:7px; flex:none; }
+.scrim { position:fixed; inset:0; background:rgba(20,28,25,.4); }
+[data-theme="dark"] .scrim { background:rgba(0,0,0,.6); }
+.prop-bar { position:fixed; left:16px; bottom:14px; z-index:99; display:flex; gap:8px; }
+.prop-bar a { font-size:12px; padding:6px 12px; border-radius:var(--r-full); background:var(--card); border:1px solid var(--line); color:var(--text-2); text-decoration:none; }
+.prop-bar a.on { background:linear-gradient(135deg,#0E766E,#12897C); color:#fff; border-color:transparent; }
+.theme-t { position:fixed; right:16px; bottom:14px; z-index:99; font-size:12px; padding:6px 12px; border-radius:var(--r-full); background:var(--card); border:1px solid var(--line); color:var(--text-2); cursor:pointer; }
+.sw { position:fixed; top:14px; right:16px; z-index:99; display:flex; background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:2px; }
+.sw button { border:none; background:none; font-size:12px; color:var(--text-2); padding:5px 11px; border-radius:6px; cursor:pointer; }
+.sw button.on { background:var(--primary-bg); color:var(--primary-dark); font-weight:600; box-shadow:inset 0 0 0 1px var(--primary-border); }
+
+/* ============ 弹窗 ============ */
+.dlg { position:relative; z-index:5; width:640px; max-width:calc(100vw - 48px); background:var(--card); border-radius:16px; box-shadow:var(--shadow); overflow:hidden; }
+/* 色带头带: 成员哈希色 = 名录行头像同一族 */
+.band { height:84px; background:linear-gradient(120deg, var(--mem) 0%, color-mix(in srgb, var(--mem) 72%, #00000010) 100%); position:relative; }
+.band::after { content:''; position:absolute; inset:0; background:radial-gradient(120px 84px at 88% 0%, rgba(255,255,255,.22), transparent 70%); }
+.band .no { position:absolute; right:18px; top:14px; font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:rgba(255,255,255,.85); }
+.dlg .close { position:absolute; top:14px; right:14px; width:28px; height:28px; border-radius:50%; border:none; background:rgba(255,255,255,.18); color:#fff; font-size:15px; cursor:pointer; display:grid; place-items:center; line-height:1; }
+.dlg .close:hover { background:rgba(255,255,255,.32); }
+.idcard { display:flex; gap:16px; padding:0 26px; margin-top:-32px; position:relative; z-index:2; align-items:flex-end; }
+.idcard .av { width:76px; height:76px; border-radius:16px; border:3px solid var(--card); background:var(--mem); color:#fff; display:grid; place-items:center; font-size:30px; font-weight:650; flex:none; box-shadow:0 6px 18px rgba(20,40,35,.18); overflow:hidden; }
+.idcard .av img { width:100%; height:100%; object-fit:cover; }
+.idcard .who { padding-bottom:8px; min-width:0; flex:1; }
+.idcard h2 { font-size:22px; font-weight:700; letter-spacing:.01em; }
+.idcard .tags { display:flex; gap:7px; margin-top:7px; flex-wrap:wrap; }
+.tag { font-size:11.5px; padding:2.5px 10px; border-radius:var(--r-full); background:var(--bg); border:1px solid var(--line); color:var(--text-2); }
+.tag.t { background:var(--primary-bg); border-color:var(--primary-border); color:var(--primary-dark); font-weight:600; }
+.tag.vp { font-family:var(--mono); font-size:11px; }
+.tag.vp.no { color:var(--text-4); border-style:dashed; background:none; }
+.body { padding:20px 26px 24px; }
+.kv { display:grid; grid-template-columns:64px 1fr; gap:0 14px; }
+.kv dt { font-size:12px; color:var(--text-3); padding:9px 0; }
+.kv dd { font-size:13.5px; color:var(--text); padding:9px 0; border-bottom:1px solid var(--line); min-width:0; word-break:break-all; }
+.kv dt { border-bottom:1px solid var(--line); }
+.kv > dt:nth-last-of-type(1), .kv > dd:nth-last-of-type(1) { border-bottom:none; }
+.kv dd.mono { font-family:var(--mono); font-size:12.5px; color:var(--text-2); }
+.sect { margin-top:18px; }
+.sect h3 { font-size:12px; color:var(--text-3); font-weight:500; margin-bottom:8px; }
+.bio { font-size:13px; color:var(--text-2); line-height:1.8; }
+.chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chip { font-size:12px; color:var(--text-2); border:1px solid var(--line-2); border-radius:var(--r-full); padding:3px 12px; }
+/* 声纹状态块 */
+.vpbox { margin-top:18px; border:1px solid var(--line); border-radius:var(--r-lg); padding:14px 16px; display:flex; align-items:center; gap:14px; background:var(--bg); }
+[data-theme="dark"] .vpbox { background:#171B18; }
+.vpbox.owned { background:var(--primary-bg); border-color:var(--primary-border); }
+.wave { display:flex; align-items:center; gap:2.5px; height:26px; flex:none; }
+.wave i { width:3px; border-radius:2px; background:var(--primary); }
+.vpbox .txt { flex:1; min-width:0; }
+.vpbox .txt b { display:block; font-size:13px; font-weight:650; }
+.vpbox .txt span { font-size:11.5px; color:var(--text-3); }
+.vpbox .n { font-family:var(--mono); font-size:20px; font-weight:650; color:var(--primary-dark); }
+.vpbox .n small { font-size:10.5px; color:var(--text-3); font-weight:400; }
+.acts { display:flex; gap:8px; margin-top:20px; }
+.btn { font-size:12.5px; padding:7px 16px; border-radius:var(--r-md); border:1px solid var(--line-2); background:var(--card); color:var(--text-2); cursor:pointer; }
+.btn.main { background:linear-gradient(135deg,#0E766E,#12897C); border-color:transparent; color:#fff; font-weight:600; }
+.btn:hover { border-color:var(--primary-border); color:var(--primary-dark); }
+.btn.main:hover { color:#fff; }
+</style>
+</head>
+<body>
+<div class="behind">
+  <div class="bar"></div>
+  <div class="card"><div class="hd">黑臭水体无药剂低能耗治理 · 7 人</div>
+    <div class="ln"><span class="sq" style="background:#2F5D8A"></span>赵航佳 · 博二 · 黑臭水体治理</div>
+    <div class="ln"><span class="sq" style="background:#3E7A52"></span>胡小琪 · 研三</div>
+    <div class="ln"><span class="sq" style="background:#B07C24"></span>贾琦 · 大四 · 表面清洗</div></div>
+  <div class="card"><div class="hd">气泡成核过程调控与设备研发 · 5 人</div>
+    <div class="ln"><span class="sq" style="background:#7C4E96"></span>冯懿鑫 · 博一</div>
+    <div class="ln"><span class="sq" style="background:#A84B6F"></span>刘子毅 · 研一</div></div>
+</div>
+<div class="scrim"></div>
+
+<div class="sw"><button class="on" onclick="pick(0)">赵航佳</button><button onclick="pick(1)">王天志</button></div>
+<div class="theme-t" onclick="flip()">深色 / 浅色</div>
+
+<div class="stage"><div class="dlg" id="dlg"></div></div>
+
+<div class="prop-bar">
+  <a href="index.html">总览</a><a class="on" href="A-band.html">A 色带档案</a><a href="B-card.html">B 名片面</a><a href="C-drawer.html">C 侧抽屉</a><a href="D-ledger.html">D 字盘卷首</a>
+</div>
+
+<script>
+const MEMBERS = [
+  { n:'赵航佳', id:2, grade:'博二', title:'博士', mem:'#2F5D8A', photo:'', dir:'黑臭水体治理',
+    email:'zhaohangjia@tju.edu.cn', phone:'', bio:'围绕微纳米气泡在黑臭水体治理中的应用开展研究，重点关注微纳米气泡与底泥-水界面污染物之间的相互作用机制。',
+    skills:['臭氧微纳米气泡','底泥-水界面','污染物去除'], vp:0, vpAt:'' },
+  { n:'王天志', id:1, grade:'副教授', title:'导师', mem:'#0E766E', photo:'', dir:'微纳米气泡技术与应用',
+    email:'wangtz@tju.edu.cn', phone:'138****0021', bio:'课题组负责人，微纳米气泡发生装置与水体修复方向。',
+    skills:['项目管理','气泡生成','水处理','曝气设备'], vp:121, vpAt:'2026-08-14' },
+];
+let cur = 0;
+function bars(n) {
+  const hs = [8,14,20,11,18,9,16,22,10,15,19,8];
+  return hs.map((h,i)=>`<i style="height:${h}px;opacity:${.45+ (i%4)*.18}"></i>`);
+}
+function render() {
+  const m = MEMBERS[cur];
+  document.documentElement.style.setProperty('--mem', m.mem);
+  dlg.innerHTML = `
+    <div class="band"><span class="no">档案 NO.${String(m.id).padStart(3,'0')}</span><button class="close">×</button></div>
+    <div class="idcard">
+      <div class="av">${m.photo?`<img src="${m.photo}">`:m.n[0]}</div>
+      <div class="who"><h2>${m.n}</h2>
+        <div class="tags"><span class="tag t">${m.title} · ${m.grade}</span>
+        ${m.vp?`<span class="tag vp">声纹已录入</span>`:`<span class="tag vp no">声纹未录入</span>`}</div></div>
+    </div>
+    <div class="body">
+      <dl class="kv">
+        <dt>研究方向</dt><dd>${m.dir}</dd>
+        <dt>邮箱</dt><dd class="mono">${m.email}</dd>
+        <dt>手机</dt><dd class="mono">${m.phone || '—'}</dd>
+      </dl>
+      <div class="sect"><h3>个人简介</h3><p class="bio">${m.bio}</p></div>
+      <div class="sect"><h3>技能</h3><div class="chips">${m.skills.map(s=>`<span class="chip">${s}</span>`).join('')}</div></div>
+      <div class="vpbox ${m.vp?'owned':''}">
+        <span class="wave">${bars(m.vp).join('')}</span>
+        <span class="txt"><b>${m.vp?`已录入 ${m.vp} 段采样`:'还没有录入声纹'}</b>
+          <span>${m.vp?`最近采样 ${m.vpAt} · 会议发言自动识别`:'录入后组会发言可自动标出你的名字'}</span></span>
+        ${m.vp?`<span class="n">${m.vp}<small> 段</small></span>`:''}
+      </div>
+      <div class="acts"><button class="btn main">${m.vp?'重新录入声纹':'录入声纹'}</button><button class="btn">查看相关会议</button><button class="btn">查看网盘文件</button></div>
+    </div>`;
+}
+function pick(i){ cur=i; document.querySelectorAll('.sw button').forEach((b,k)=>b.classList.toggle('on',k===i)); render(); }
+function flip(){ const el = document.documentElement; el.getAttribute('data-theme')==='dark' ? el.removeAttribute('data-theme') : el.setAttribute('data-theme','dark'); }
+render();
+</script>
+</body>
+</html>

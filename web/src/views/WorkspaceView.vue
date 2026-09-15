@@ -1,7 +1,6 @@
 <template>
   <div class="workspace-view">
-    <!-- 2026-09-04 主拍(两轮): 团队协作页 = V 稿「卷宗」单一综合界面,
-         管理入口 tab 也撤除; 详情弹窗 align-center 跟随当前浏览位置 (不再钉死视口顶) -->
+    <!-- 2026-09-04 主拍(两轮): 团队协作页 = 单一综合界面; 详情弹窗 align-center 跟随浏览位置 -->
     <div class="tab-panel">
       <DossierPanel
         ref="dossierRef"
@@ -9,75 +8,75 @@
       />
     </div>
 
-    <!-- 成员详情 dialog (DossierPanel emit 'open-member' 触发) — 成员档案开卷 -->
+    <!-- 成员详情 dialog — A 稿「色带档案」(docs/design-proposals/member-dialog-2026-09/A-band.html)
+         色带 = 成员哈希色 (与名录行头像同族 memberAvatarColor), 弹窗身份 = 列表身份 -->
     <el-dialog
       v-model="memberDetailVisible"
-      :width="'600px'"
+      width="640px"
       align-center
       append-to-body
-      class="dossier-dialog"
+      class="member-file-dialog"
+      :show-close="false"
     >
-      <template #header>
-        <div class="dlg-fhead">
-          <div class="dlg-fhead-l">
-            <div class="dlg-fno">MB-LAB · MEMBER FILE · 档案 NO.{{ padId(detailMember?.id) }}</div>
-            <div class="dlg-title">{{ detailMember?.name }}</div>
-          </div>
-          <span class="hstamp" :class="roleStamp.cls">{{ roleStamp.text }}</span>
-        </div>
-      </template>
-      <div v-if="detailMember" class="dossier-body">
-        <div class="dlg-hero">
-          <div class="dlg-avatar">
-            <img v-if="detailMember.avatar" :src="detailMember.avatar" :alt="detailMember.name">
+      <div
+        v-if="detailMember"
+        class="mfd"
+        :style="{ '--mfd-mem': memberColor }"
+      >
+        <button type="button" class="mfd-close" aria-label="关闭" @click="memberDetailVisible = false">×</button>
+        <div class="mfd-band"><span class="no">档案 NO.{{ padId(detailMember.id) }}</span></div>
+        <div class="mfd-idcard">
+          <div class="av">
+            <img v-if="detailMember.avatar" :src="resolveAvatarUrl(detailMember.avatar)" :alt="detailMember.name">
             <template v-else>{{ detailMember.name?.charAt(0) }}</template>
           </div>
-          <div class="dlg-hero-tags">
-            <span v-if="detailMember.grade" class="labtag">届别 {{ detailMember.grade }}</span>
-            <span class="labtag" :class="detailMember.voice_enrolled_at ? 'ok' : 'ghost'">
-              {{ detailMember.voice_enrolled_at ? '🎤 已录入声纹' : '未录入声纹' }}
+          <div class="who">
+            <h2>{{ detailMember.name }}</h2>
+            <div class="tags">
+              <span class="tag t">{{ memberTitleOf(detailMember) }} · {{ detailMember.grade || '届别未录' }}</span>
+              <span v-if="detailMember.voice_sample_count" class="tag vp">声纹已录入</span>
+              <span v-else class="tag vp no">声纹未录入</span>
+            </div>
+          </div>
+        </div>
+        <div class="mfd-body">
+          <dl class="kv">
+            <dt>研究方向</dt><dd>{{ detailMember.research_area || '未登记' }}</dd>
+            <dt>邮箱</dt><dd class="mono">{{ detailMember.email || '—' }}</dd>
+            <dt>手机</dt><dd class="mono">{{ detailMember.phone || '—' }}</dd>
+          </dl>
+          <div v-if="detailMember.bio" class="sect">
+            <h3>个人简介</h3>
+            <p class="bio">{{ detailMember.bio }}</p>
+          </div>
+          <div v-if="detailMember.skills?.length" class="sect">
+            <h3>技能</h3>
+            <div class="chips"><span v-for="s in detailMember.skills" :key="s" class="chip">{{ s }}</span></div>
+          </div>
+          <div class="vpbox" :class="{ owned: detailMember.voice_sample_count }">
+            <span class="wave" aria-hidden="true"><i v-for="(h, i) in WAVE_BARS" :key="i" :style="{ height: h + 'px', opacity: .45 + (i % 4) * .18 }"></i></span>
+            <span class="txt">
+              <b>{{ detailMember.voice_sample_count ? `已录入 ${detailMember.voice_sample_count} 段采样` : '还没有录入声纹' }}</b>
+              <span v-if="detailMember.voice_sample_count">最近采样 {{ fmtDate(detailMember.voice_enrolled_at) }} · 会议发言自动识别</span>
+              <span v-else>录入后组会发言可自动标出名字</span>
             </span>
+            <span v-if="detailMember.voice_sample_count" class="n">{{ detailMember.voice_sample_count }}<small> 段</small></span>
+          </div>
+          <div class="acts">
+            <button type="button" class="btn main" @click="openEnroll">
+              {{ detailMember.voice_sample_count ? '重新录入声纹' : '录入声纹' }}
+            </button>
           </div>
         </div>
-
-        <h4 class="sec-title">基本信息<span class="sec-n">PERSONAL DATA</span></h4>
-        <div class="arow">
-          <span class="ak">研究方向</span>
-          <span class="av">{{ detailMember.research_area || '未登记' }}</span>
-        </div>
-        <div class="arow">
-          <span class="ak">邮箱</span>
-          <span class="av mono">{{ detailMember.email || '—' }}</span>
-        </div>
-        <div class="arow">
-          <span class="ak">手机</span>
-          <span class="av mono">{{ detailMember.phone || '—' }}</span>
-        </div>
-        <div class="arow">
-          <span class="ak">个人简介</span>
-          <span class="av desc">{{ detailMember.bio || '未填写' }}</span>
-        </div>
-
-        <template v-if="detailMember.skills?.length">
-          <h4 class="sec-title">技能<span class="sec-n">{{ detailMember.skills.length }} TAGS</span></h4>
-          <div class="labtag-row">
-            <span v-for="skill in detailMember.skills" :key="skill" class="labtag">{{ skill }}</span>
-          </div>
-        </template>
-
-        <template v-if="detailMember.voice_enrolled_at">
-          <h4 class="sec-title">声纹<span class="sec-n">VOICEPRINT</span></h4>
-          <div class="arow">
-            <span class="ak">录入时间</span>
-            <span class="av mono">{{ fmtMs(detailMember.voice_enrolled_at) }}</span>
-          </div>
-          <div class="arow">
-            <span class="ak">采样次数</span>
-            <span class="av mono">{{ detailMember.voice_sample_count || 1 }} 次</span>
-          </div>
-        </template>
       </div>
     </el-dialog>
+
+    <!-- 声纹录入基建复用 (VoiceprintEnrollDialog: modelValue + member, success 后刷新名册) -->
+    <VoiceprintEnrollDialog
+      v-model="enrollVisible"
+      :member="detailMember"
+      @success="onEnrollSuccess"
+    />
   </div>
 </template>
 
@@ -86,28 +85,19 @@
  * WorkspaceView.vue — v78 UI redesign "团队协作" 容器
  *
  * 设计: 合并原 /projects、/members、/voiceprint 3 个独立路由为 1 个 /workspace 路由
- * - 顶部 3 个 tab: 项目 / 成员 / 声纹
- * - tab 切换同步 ?tab=xxx URL query, 刷新定位保持
- * - 项目/成员详情用 el-dialog 弹层模式 (与原桌面 ProjectView.showDetailDialog 一致)
  * - 移动端通过 resolveMobileComponent 切换到 MobileWorkspaceView
  *
- * 2026-07-03: 模板管理删除后, WorkspaceView 只剩项目 / 成员 / 声纹 3 个 tab
- *
- * 2026-09-04 J 稿「卷宗」语言收口:
- * - 两个详情 dialog 重写为档案开卷 (mono 卷宗号 + 衬线题名 + 骑缝章 + 表格行 + 里程碑台账),
- *   el-descriptions/el-tag/el-timeline 全部移除; 数据拉取逻辑零改动
- * - TabStrip 同步换标本签皮肤 (共享组件, 全站生效)
- * - 幽灵成员 id (不在成员列表) 与卡片口径统一: 显示「用户不存在」
- *
  * 2026-09-04 V 稿综合界面收口 (主拍两轮: 只保留卷宗一屏):
- * - TabStrip 三签移除, DossierPanel 为唯一主视图; 管理台抽屉/入口按钮第二轮也撤除
- *   (项目/成员/声纹信息全部由卷宗页承载; 建卷/编辑基建留在原 Panel 组件, 需要时回接)
- * - 两个详情 dialog 改 align-center: 弹窗跟随当前浏览位置 (视口垂直居中), 不再 top 5vh 钉死顶部
- * - 老 ?tab= 深链静默清 query, 不再弹任何抽屉
+ * - TabStrip 三签移除, DossierPanel 为唯一主视图; 老 ?tab= 深链静默清 query
  *
- * 2026-09-12 项目详情 dialog (开卷) 整体移除: 46677c124 砍进度/逾期后项目弹窗仅剩
- * 静态描述, 用户拍板删 DossierPanel 开卷入口 + 本弹窗全链路 (open-project emit/
- * openProjectDetail/里程碑拉取与台账/项目章); 成员档案弹窗保留
+ * 2026-09-12 项目详情 dialog (开卷) 整体移除 (open-project emit/里程碑台账/项目章);
+ * 成员档案弹窗保留
+ *
+ * 2026-09-15 团队协作页整体换 B「名录卷宗」皮肤 (主拍, 网盘工作台设计语言);
+ * 本次成员详情弹窗换 A 稿「色带档案」皮肤 (docs/design-proposals/member-dialog-2026-09/):
+ * 旧「卷宗开卷」衬线题名/mono 档案号/骑缝章全退役。哈希色带与名录行头像同族
+ * (memberAvatarColor 单一来源); "未录声纹"从灰字状态升级为可操作的 CTA
+ * (接驳既有 VoiceprintEnrollDialog)。数据拉取逻辑零改动。
  */
 
 import { ref, computed, onMounted } from 'vue'
@@ -115,7 +105,8 @@ import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
 import DossierPanel from './workspace/DossierPanel.vue'
-import { memberTitleOf } from '@/utils/memberIdentity'
+import VoiceprintEnrollDialog from '@/components/VoiceprintEnrollDialog.vue'
+import { memberTitleOf, memberAvatarColor, resolveAvatarUrl } from '@/utils/memberIdentity'
 
 const route = useRoute()
 const router = useRouter()
@@ -134,15 +125,30 @@ async function openMemberDetail(member) {
   memberDetailVisible.value = true
 }
 
-// ====== 卷宗派生 (口径与 ProjectsPanel 卡片一致) ======
-const padId = (id) => (id == null ? '—' : String(id).padStart(3, '0'))
-const fmtMs = (d) => (d ? dayjs(d).format('YY/MM/DD') : '未定')
+// ====== 色带/头像哈希色 (与名录行同族, 单一来源 memberAvatarColor) ======
+const memberColor = computed(() => memberAvatarColor(detailMember.value))
 
-// 2026-09-05 角色扁平化: 成员卷宗章 = 年级身份称谓 (原 admin/leader/member 等级章退役)
-const roleStamp = computed(() => {
-  const t = memberTitleOf(detailMember.value)
-  return { text: t, cls: t === '导师' ? '' : 'ok' }
-})
+// 声纹状态块装饰波形 (静态) 与日期
+const WAVE_BARS = [8, 14, 20, 11, 18, 9, 16, 22, 10, 15, 19, 8]
+const fmtDate = (d) => (d ? dayjs(d).format('YYYY-MM-DD') : '—')
+const padId = (id) => (id == null ? '—' : String(id).padStart(3, '0'))
+
+// ====== 声纹录入 (复用既有基建) ======
+const enrollVisible = ref(false)
+function openEnroll() {
+  if (!detailMember.value) return
+  enrollVisible.value = true
+}
+async function onEnrollSuccess() {
+  try {
+    await memberStore.refreshMembers?.()
+    // 刷新弹窗内数据 (采样数/最近采样时间)
+    const fresh = memberStore.members.find((m) => m.id === detailMember.value?.id)
+    if (fresh) detailMember.value = fresh
+  } catch (e) {
+    console.warn('声纹录入后刷新名册失败:', e)
+  }
+}
 
 onMounted(async () => {
   // 主动 fetch 一次成员数据 (卷宗行渲染依赖 memberStore)
@@ -176,79 +182,93 @@ onMounted(async () => {
 }
 </style>
 
-<!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
 <!-- =====================================================================
-     J 稿「卷宗开卷」dialog 皮肤 (2026-09-04)
-     el-dialog teleport 场景 → 骨架规则必须非 scoped + customClass 收窄;
-     tokens 定义在 .dossier-dialog 根上自包含, 不依赖组件树继承
+     A 稿「色带档案」dialog 皮肤 (2026-09-15)
+     el-dialog teleport (append-to-body) → 骨架规则必须非 scoped +
+     class 收窄; tokens 定义在 .member-file-dialog 根上自包含,
+     dark 覆盖非 scoped 块 (v60-v67 教训), 色板对齐名录 B 稿夜览态
      ===================================================================== -->
 <style>
-.dossier-dialog {
-  --ws-card: #fdfefc; --ws-ink: #16232a; --ws-steel: #5a6b6a; --ws-fog: #8ba0a0;
-  --ws-hair: #c9d2ca; --ws-teal: #0e766e; --ws-teal-soft: #dcece5;
-  --ws-coral: #ef7256; --ws-paper: #f4f6f4; --ws-shadow: rgba(22, 35, 42, 0.14);
-  --ws-mono: Consolas, 'Courier New', monospace;
-  --ws-serif: Georgia, 'Songti SC', 'SimSun', serif;
-  background: var(--ws-card);
-  border: 1.5px solid var(--ws-ink);
-  border-radius: 10px;
-  box-shadow: 4px 4px 0 var(--ws-shadow), 0 12px 40px rgba(0, 0, 0, 0.12);
+.member-file-dialog {
+  --rb-primary: #0E766E; --rb-primary-dark: #0B5D56;
+  --rb-primary-bg: rgba(14, 118, 110, .09); --rb-primary-border: rgba(14, 118, 110, .35);
+  --rb-text: #22302C; --rb-text-2: #52615C; --rb-text-3: #8B968F; --rb-text-4: #B9BFB6;
+  --rb-bg: #F2F0EB; --rb-card: #FFFFFF; --rb-line: #E5E1D8; --rb-line-2: #D5D0C3;
+  --rb-r-md: 8px; --rb-r-lg: 12px; --rb-r-full: 9999px;
+  --rb-grad-cta: linear-gradient(135deg, #0E766E, #12897C);
+  --rb-mono: Consolas, 'JetBrains Mono', 'Courier New', monospace;
+  border-radius: 16px;
+  overflow: hidden;
+  /* 显式声明: 全局 [data-theme=dark] .el-dialog 同特异性, 只改变量会被它压住 (J 稿教训) */
+  background: var(--rb-card);
 }
-.dossier-dialog .el-dialog__header {
-  border-bottom: 1px dashed var(--ws-hair);
-  padding: 18px 22px 12px;
-  margin-right: 0;
+.member-file-dialog .el-dialog__header { display: none; }
+.member-file-dialog .el-dialog__body { padding: 0; }
+
+.mfd { position: relative; color: var(--rb-text); font-size: 13.5px; }
+.mfd-close {
+  position: absolute; top: 14px; right: 14px; z-index: 3;
+  width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, .18); color: #fff; font-size: 15px; line-height: 1;
+  cursor: pointer; display: grid; place-items: center;
 }
-.dossier-dialog .el-dialog__body { padding: 16px 22px 22px; max-height: 72vh; overflow-y: auto; }
-/* align-center 弹窗: 内容超高时 body 内滚, 弹窗本体不顶出视口 */
-.dossier-dialog.is-align-center { max-height: 92vh; display: flex; flex-direction: column; }
-.dossier-dialog .el-dialog__headerbtn { top: 10px; right: 12px; }
-
-/* --- 卷首行: mono 卷宗号 + 衬线题名 + 骑缝章 --- */
-.dossier-dialog .dlg-fhead { display: flex; align-items: flex-start; gap: 14px; padding-right: 30px; }
-.dossier-dialog .dlg-fhead-l { flex: 1; min-width: 0; }
-.dossier-dialog .dlg-fno { font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .16em; color: var(--ws-teal); margin-bottom: 4px; }
-.dossier-dialog .dlg-title { font-family: var(--ws-serif); font-size: 21px; font-weight: 600; color: var(--ws-ink); line-height: 1.3; }
-.dossier-dialog .hstamp {
-  font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .14em;
-  color: var(--ws-coral); border: 1.5px dashed var(--ws-coral); border-radius: 6px;
-  padding: 4px 9px; transform: rotate(-2deg); display: inline-block; flex-shrink: 0; margin-top: 12px; background: none;
+.mfd-close:hover { background: rgba(255, 255, 255, .32); }
+.mfd-band {
+  height: 84px; position: relative;
+  background: linear-gradient(120deg, var(--mfd-mem, #0E766E) 0%, color-mix(in srgb, var(--mfd-mem, #0E766E) 78%, #000) 100%);
 }
-.dossier-dialog .hstamp.ok { color: var(--ws-teal); border-color: var(--ws-teal); }
-
-/* --- 表格行 (替 el-descriptions) --- */
-.dossier-dialog .arow { display: flex; gap: 12px; padding: 9px 2px; border-bottom: 1px dotted var(--ws-hair); font-size: 13px; }
-.dossier-dialog .arow:last-of-type { border-bottom: none; }
-.dossier-dialog .ak { font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .14em; color: var(--ws-fog); width: 64px; flex-shrink: 0; padding-top: 3px; }
-.dossier-dialog .av { color: var(--ws-ink); flex: 1; min-width: 0; }
-.dossier-dialog .av.mono { font-family: var(--ws-mono); font-size: 12px; }
-.dossier-dialog .av.desc { color: var(--ws-steel); line-height: 1.75; }
-
-/* --- § 分节标本签 --- */
-.dossier-dialog .sec-title { margin: 18px 0 10px; font-size: 14px; font-weight: 600; color: var(--ws-ink); display: flex; align-items: baseline; gap: 10px; }
-.dossier-dialog .sec-title::before { content: '§ '; color: var(--ws-teal); }
-.dossier-dialog .sec-n { font-family: var(--ws-mono); font-size: 9.5px; letter-spacing: .14em; color: var(--ws-fog); font-weight: 400; }
-
-/* --- labtag 族 (替 el-tag) --- */
-.dossier-dialog .labtag-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.dossier-dialog .labtag { font-family: var(--ws-mono); font-size: 10px; color: var(--ws-steel); background: var(--ws-paper); border: 1px solid var(--ws-hair); border-radius: 3px; padding: 3px 8px 3px 9px; }
-.dossier-dialog .labtag.ok { color: var(--ws-teal); border-color: var(--ws-teal); background: var(--ws-teal-soft); }
-.dossier-dialog .labtag.ghost { color: var(--ws-fog); border-style: dashed; }
-
-/* --- 成员档案标本牌 (替渐变 hero) --- */
-.dossier-dialog .dlg-hero { display: flex; align-items: center; gap: 14px; padding: 4px 2px 12px; border-bottom: 1px dashed var(--ws-hair); margin-bottom: 4px; }
-.dossier-dialog .dlg-avatar { width: 56px; height: 56px; border: 1.5px solid var(--ws-ink); border-radius: 8px; background: var(--ws-paper); display: grid; place-items: center; font-family: var(--ws-serif); font-size: 22px; color: var(--ws-ink); overflow: hidden; flex-shrink: 0; }
-.dossier-dialog .dlg-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.dossier-dialog .dlg-hero-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-
-/* --- dark (铁律 26: 非 scoped; 对齐 J 稿 data-dark 夜览态) --- */
-[data-theme="dark"] .dossier-dialog {
-  --ws-card: #18232a; --ws-ink: #dfe9e6; --ws-steel: #9ab0ae; --ws-fog: #6b8286;
-  --ws-hair: #27363e; --ws-teal: #35c2a4; --ws-teal-soft: #12312b;
-  --ws-coral: #ef7256; --ws-paper: #10171b; --ws-shadow: rgba(0, 0, 0, 0.5);
-  /* 显式重复声明: 全局 [data-theme=dark] .el-dialog 的 bg/border 同特异性, 只改变量会被它压住 */
-  background: var(--ws-card);
-  border-color: var(--ws-ink);
+.mfd-band::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120px 84px at 88% 0%, rgba(255,255,255,.22), transparent 70%); }
+.mfd-band .no { position: absolute; right: 18px; top: 14px; font-family: var(--rb-mono); font-size: 11px; letter-spacing: .14em; color: rgba(255,255,255,.85); }
+.mfd-idcard { display: flex; gap: 16px; padding: 0 26px; margin-top: -32px; position: relative; z-index: 2; align-items: flex-end; }
+.mfd-idcard .av {
+  width: 76px; height: 76px; border-radius: 16px; border: 3px solid var(--rb-card);
+  background: var(--mfd-mem, #0E766E); color: #fff;
+  display: grid; place-items: center; font-size: 30px; font-weight: 650; flex: none;
+  box-shadow: 0 6px 18px rgba(20, 40, 35, .18); overflow: hidden;
 }
-[data-theme="dark"] .dossier-dialog .el-dialog__headerbtn .el-dialog__close { color: var(--ws-fog); }
+.mfd-idcard .av img { width: 100%; height: 100%; object-fit: cover; }
+.mfd-idcard .who { padding-bottom: 8px; min-width: 0; flex: 1; }
+.mfd-idcard h2 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .01em; color: var(--rb-text); }
+.mfd-idcard .tags { display: flex; gap: 7px; margin-top: 7px; flex-wrap: wrap; }
+.mfd .tag { font-size: 11.5px; padding: 2.5px 10px; border-radius: var(--rb-r-full); background: var(--rb-bg); border: 1px solid var(--rb-line); color: var(--rb-text-2); }
+.mfd .tag.t { background: var(--rb-primary-bg); border-color: var(--rb-primary-border); color: var(--rb-primary-dark); font-weight: 600; }
+.mfd .tag.vp { font-family: var(--rb-mono); font-size: 11px; }
+.mfd .tag.vp.no { color: var(--rb-text-4); border-style: dashed; background: none; }
+.mfd-body { padding: 20px 26px 24px; }
+.mfd .kv { display: grid; grid-template-columns: 64px 1fr; gap: 0 14px; margin: 0; }
+.mfd .kv dt { font-size: 12px; color: var(--rb-text-3); padding: 9px 0; border-bottom: 1px solid var(--rb-line); }
+.mfd .kv dd { font-size: 13.5px; color: var(--rb-text); padding: 9px 0; border-bottom: 1px solid var(--rb-line); min-width: 0; word-break: break-all; margin: 0; }
+.mfd .kv > dt:nth-last-of-type(1), .mfd .kv > dd:nth-last-of-type(1) { border-bottom: none; }
+.mfd .kv dd.mono { font-family: var(--rb-mono); font-size: 12.5px; color: var(--rb-text-2); }
+.mfd .sect { margin-top: 18px; }
+.mfd .sect h3 { font-size: 12px; color: var(--rb-text-3); font-weight: 500; margin: 0 0 8px; }
+.mfd .bio { font-size: 13px; color: var(--rb-text-2); line-height: 1.8; margin: 0; }
+.mfd .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.mfd .chip { font-size: 12px; color: var(--rb-text-2); border: 1px solid var(--rb-line-2); border-radius: var(--rb-r-full); padding: 3px 12px; }
+.mfd .vpbox { margin-top: 18px; border: 1px solid var(--rb-line); border-radius: var(--rb-r-lg); padding: 14px 16px; display: flex; align-items: center; gap: 14px; background: var(--rb-bg); }
+.mfd .vpbox.owned { background: var(--rb-primary-bg); border-color: var(--rb-primary-border); }
+.mfd .wave { display: flex; align-items: center; gap: 2.5px; height: 26px; flex: none; }
+.mfd .wave i { width: 3px; border-radius: 2px; background: var(--rb-primary); }
+.mfd .vpbox .txt { flex: 1; min-width: 0; }
+.mfd .vpbox .txt b { display: block; font-size: 13px; font-weight: 650; color: var(--rb-text); }
+.mfd .vpbox .txt span { font-size: 11.5px; color: var(--rb-text-3); }
+.mfd .vpbox .n { font-family: var(--rb-mono); font-size: 20px; font-weight: 650; color: var(--rb-primary-dark); white-space: nowrap; }
+.mfd .vpbox .n small { font-size: 10.5px; color: var(--rb-text-3); font-weight: 400; }
+.mfd .acts { display: flex; gap: 8px; margin-top: 20px; }
+.mfd .btn { font-size: 12.5px; padding: 7px 16px; border-radius: var(--rb-r-md); border: 1px solid var(--rb-line-2); background: var(--rb-card); color: var(--rb-text-2); cursor: pointer; }
+.mfd .btn.main { background: var(--rb-grad-cta); border-color: transparent; color: #fff; font-weight: 600; }
+.mfd .btn.main:hover { opacity: .92; color: #fff; }
+
+/* dark: 对齐名录 B 稿夜览色板 (色带保持成员哈希色) */
+[data-theme="dark"] .member-file-dialog {
+  --rb-text: #E9E8E2; --rb-text-2: #B9C0B9; --rb-text-3: #8B938C; --rb-text-4: #5E665F;
+  --rb-bg: #121513; --rb-card: #1A1E1B; --rb-line: #2E342F; --rb-line-2: #3A413A;
+  --rb-primary: #35C2A4; --rb-primary-dark: #5AD0B5; --rb-primary-bg: rgba(53, 194, 164, .12);
+  --rb-primary-border: rgba(53, 194, 164, .35);
+  --rb-grad-cta: linear-gradient(135deg, #1D9C81, #35C2A4);
+  background: var(--rb-card);
+}
+[data-theme="dark"] .mfd .vpbox { background: #171B18; }
+[data-theme="dark"] .mfd .vpbox.owned { background: var(--rb-primary-bg); }
+[data-theme="dark"] .mfd-idcard .av { box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
 </style>

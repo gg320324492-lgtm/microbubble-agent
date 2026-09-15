@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B · 名片面 — 成员详情弹窗</title>
+<style>
+:root {
+  --primary:#0E766E; --primary-dark:#0B5D56; --primary-bg:rgba(14,118,110,.09); --primary-border:rgba(14,118,110,.35);
+  --text:#22302C; --text-2:#52615C; --text-3:#8B968F; --text-4:#B9BFB6;
+  --bg:#F2F0EB; --card:#FFFFFF; --line:#E5E1D8; --line-2:#D5D0C3; --bg-hover:#EEEBE3;
+  --shadow:0 24px 64px rgba(20,40,35,.28); --r-md:8px; --r-lg:12px; --r-full:9999px;
+  --font:'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif;
+  --mono:Consolas,'JetBrains Mono','Courier New',monospace;
+}
+[data-theme="dark"] {
+  --text:#E9E8E2; --text-2:#B9C0B9; --text-3:#8B938C; --text-4:#5E665F;
+  --bg:#121513; --card:#1A1E1B; --line:#2E342F; --line-2:#3A413A; --bg-hover:#242A25;
+  --primary:#35C2A4; --primary-dark:#5AD0B5; --primary-bg:rgba(53,194,164,.12); --primary-border:rgba(53,194,164,.35);
+  --shadow:0 24px 64px rgba(0,0,0,.6);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); font-size:13.5px; min-height:100vh; }
+.behind { position:fixed; inset:0; padding:26px 40px; filter:blur(2px) saturate(.85); opacity:.55; }
+.behind .bar { height:34px; width:180px; border-radius:99px; background:var(--line); margin-bottom:18px; }
+.behind .card { background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:14px; overflow:hidden; }
+.behind .hd { padding:12px 18px; border-bottom:1px solid var(--line); font-weight:650; }
+.behind .ln { padding:0 18px; height:44px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); color:var(--text-3); font-size:12.5px; }
+.behind .ln:last-child { border:none; }
+.behind .sq { width:26px; height:26px; border-radius:7px; flex:none; }
+.scrim { position:fixed; inset:0; background:rgba(20,28,25,.4); }
+[data-theme="dark"] .scrim { background:rgba(0,0,0,.6); }
+.prop-bar { position:fixed; left:16px; bottom:14px; z-index:99; display:flex; gap:8px; }
+.prop-bar a { font-size:12px; padding:6px 12px; border-radius:var(--r-full); background:var(--card); border:1px solid var(--line); color:var(--text-2); text-decoration:none; }
+.prop-bar a.on { background:linear-gradient(135deg,#0E766E,#12897C); color:#fff; border-color:transparent; }
+.theme-t { position:fixed; right:16px; bottom:14px; z-index:99; font-size:12px; padding:6px 12px; border-radius:var(--r-full); background:var(--card); border:1px solid var(--line); color:var(--text-2); cursor:pointer; }
+.sw { position:fixed; top:14px; right:16px; z-index:99; display:flex; background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:2px; }
+.sw button { border:none; background:none; font-size:12px; color:var(--text-2); padding:5px 11px; border-radius:6px; cursor:pointer; }
+.sw button.on { background:var(--primary-bg); color:var(--primary-dark); font-weight:600; box-shadow:inset 0 0 0 1px var(--primary-border); }
+.stage { position:fixed; inset:0; display:grid; place-items:center; z-index:5; }
+
+/* ============ 名片 ============ */
+.dlg { width:400px; max-width:calc(100vw - 48px); background:var(--card); border-radius:18px; box-shadow:var(--shadow); overflow:hidden; position:relative; }
+.close { position:absolute; top:12px; right:12px; width:28px; height:28px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--text-3); font-size:14px; cursor:pointer; display:grid; place-items:center; z-index:3; }
+.close:hover { color:var(--primary-dark); border-color:var(--primary-border); }
+/* 顶部: 居中大头像 */
+.hero { padding:34px 28px 0; text-align:center; }
+.av { width:92px; height:92px; margin:0 auto; border-radius:26px; background:linear-gradient(140deg, var(--mem), color-mix(in srgb, var(--mem) 65%, #000)); color:#fff; display:grid; place-items:center; font-size:38px; font-weight:650; box-shadow:0 10px 26px color-mix(in srgb, var(--mem) 40%, transparent); overflow:hidden; }
+.av img { width:100%; height:100%; object-fit:cover; }
+.hero h2 { font-size:21px; font-weight:700; margin-top:14px; }
+.hero .sub { font-size:12.5px; color:var(--text-3); margin-top:5px; }
+.hero .sub b { color:var(--primary-dark); font-weight:600; }
+/* 三个数字位 */
+.stats { display:flex; margin:20px 28px 0; border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; }
+.stats div { flex:1; text-align:center; padding:12px 6px; background:var(--bg); }
+[data-theme="dark"] .stats div { background:#171B18; }
+.stats div + div { border-left:1px solid var(--line); }
+.stats .n { font-family:var(--mono); font-size:19px; font-weight:650; color:var(--text); }
+.stats .n.dim { color:var(--text-4); }
+.stats .k { font-size:11px; color:var(--text-3); margin-top:2px; }
+/* 明细分格 */
+.rows { margin:18px 28px 0; }
+.r { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); align-items:baseline; }
+.r:last-child { border-bottom:none; }
+.r .k { width:56px; flex:none; font-size:12px; color:var(--text-3); }
+.r .v { flex:1; font-size:13px; color:var(--text); min-width:0; word-break:break-all; }
+.r .v.mono { font-family:var(--mono); font-size:12.5px; color:var(--text-2); }
+.r .v.dim { color:var(--text-4); }
+.chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chip { font-size:11.5px; color:var(--text-2); border:1px solid var(--line-2); border-radius:var(--r-full); padding:2.5px 11px; }
+.bio { font-size:12.5px; color:var(--text-2); line-height:1.85; }
+.acts { display:flex; gap:8px; padding:20px 28px 26px; }
+.btn { flex:1; font-size:12.5px; padding:9px 0; text-align:center; border-radius:var(--r-md); border:1px solid var(--line-2); background:var(--card); color:var(--text-2); cursor:pointer; }
+.btn.main { background:linear-gradient(135deg,#0E766E,#12897C); border-color:transparent; color:#fff; font-weight:600; }
+.btn:hover { border-color:var(--primary-border); color:var(--primary-dark); }
+.btn.main:hover { color:#fff; }
+</style>
+</head>
+<body>
+<div class="behind">
+  <div class="bar"></div>
+  <div class="card"><div class="hd">黑臭水体无药剂低能耗治理 · 7 人</div>
+    <div class="ln"><span class="sq" style="background:#2F5D8A"></span>赵航佳 · 博二 · 黑臭水体治理</div>
+    <div class="ln"><span class="sq" style="background:#3E7A52"></span>胡小琪 · 研三</div>
+    <div class="ln"><span class="sq" style="background:#B07C24"></span>贾琦 · 大四 · 表面清洗</div></div>
+</div>
+<div class="scrim"></div>
+<div class="sw"><button class="on" onclick="pick(0)">赵航佳</button><button onclick="pick(1)">王天志</button></div>
+<div class="theme-t" onclick="flip()">深色 / 浅色</div>
+<div class="stage"><div class="dlg" id="dlg"></div></div>
+
+<div class="prop-bar">
+  <a href="index.html">总览</a><a href="A-band.html">A 色带档案</a><a class="on" href="B-card.html">B 名片面</a><a href="C-drawer.html">C 侧抽屉</a><a href="D-ledger.html">D 字盘卷首</a>
+</div>
+
+<script>
+const MEMBERS = [
+  { n:'赵航佳', id:2, grade:'博二', title:'博士', mem:'#2F5D8A', dir:'黑臭水体治理', pj:1, meet:14,
+    email:'zhaohangjia@tju.edu.cn', phone:'', bio:'围绕微纳米气泡在黑臭水体治理中的应用开展研究，重点关注微纳米气泡与底泥-水界面污染物之间的相互作用机制。',
+    skills:['臭氧微纳米气泡','底泥-水界面','污染物去除'], vp:0, vpAt:'' },
+  { n:'王天志', id:1, grade:'副教授', title:'导师', mem:'#0E766E', dir:'微纳米气泡技术与应用', pj:5, meet:236,
+    email:'wangtz@tju.edu.cn', phone:'138****0021', bio:'课题组负责人，微纳米气泡发生装置与水体修复方向。',
+    skills:['项目管理','气泡生成','水处理','曝气设备'], vp:121, vpAt:'2026-08-14' },
+];
+let cur = 0;
+function render() {
+  const m = MEMBERS[cur];
+  document.documentElement.style.setProperty('--mem', m.mem);
+  dlg.innerHTML = `
+    <button class="close">×</button>
+    <div class="hero">
+      <div class="av">${m.n[0]}</div>
+      <h2>${m.n}</h2>
+      <div class="sub"><b>${m.title}</b> · ${m.grade} · 档案 NO.${String(m.id).padStart(3,'0')}</div>
+    </div>
+    <div class="stats">
+      <div><div class="n ${m.vp?'':'dim'}">${m.vp || '—'}</div><div class="k">声纹采样</div></div>
+      <div><div class="n">${m.pj}</div><div class="k">在研项目</div></div>
+      <div><div class="n">${m.meet}</div><div class="k">参会发言</div></div>
+    </div>
+    <div class="rows">
+      <div class="r"><span class="k">研究方向</span><span class="v">${m.dir}</span></div>
+      <div class="r"><span class="k">邮箱</span><span class="v mono">${m.email}</span></div>
+      <div class="r"><span class="k">手机</span><span class="v mono ${m.phone?'':'dim'}">${m.phone || '未登记'}</span></div>
+      <div class="r"><span class="k">技能</span><span class="v"><span class="chips">${m.skills.map(s=>`<span class="chip">${s}</span>`).join('')}</span></span></div>
+      <div class="r"><span class="k">简介</span><span class="v"><p class="bio">${m.bio}</p></span></div>
+    </div>
+    <div class="acts"><button class="btn main">${m.vp?'重新录入声纹':'录入声纹'}</button><button class="btn">编辑资料</button></div>`;
+}
+function pick(i){ cur=i; document.querySelectorAll('.sw button').forEach((b,k)=>b.classList.toggle('on',k===i)); render(); }
+function flip(){ const el=document.documentElement; el.getAttribute('data-theme')==='dark'?el.removeAttribute('data-theme'):el.setAttribute('data-theme','dark'); }
+render();
+</script>
+</body>
+</html>

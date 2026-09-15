@@ -50,6 +50,13 @@ export function resolveAvatarUrl(raw) {
   return MINIO_BASE + raw.replace(/^\/+/, '')
 }
 
+/** 成员哈希色族 (网盘工作台 8 色档案板): 名录行头像与详情弹窗色带共用, 单一来源防漂移 */
+export const MEMBER_AVATAR_COLORS = ['#0E766E', '#2F5D8A', '#3E7A52', '#B07C24', '#7C4E96', '#A84B6F', '#B3392F', '#3E7A70']
+export function memberAvatarColor(member) {
+  const id = typeof member === 'object' ? member?.id : member
+  return MEMBER_AVATAR_COLORS[(id ?? 0) % MEMBER_AVATAR_COLORS.length]
+}
+
 /** el-tag type 配色 (按身份称谓, 替代原 admin/leader/member 三色等级) */
 export function memberTagType(member) {
   switch (memberTitleOf(member)) {

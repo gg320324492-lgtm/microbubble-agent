@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 B · 名录卷宗 — 团队协作</title>
+<style>
+:root {
+  --primary: #0E766E;  --primary-dark: #0B5D56;
+  --primary-bg: rgba(14,118,110,.09);  --primary-border: rgba(14,118,110,.35);
+  --text: #22302C;  --text-2: #52615C;  --text-3: #8B968F;  --text-4: #B9BFB6;
+  --bg: #F2F0EB;  --card: #FFFFFF;  --line: #E5E1D8;  --line-2: #D5D0C3;  --bg-hover: #EEEBE3;
+  --danger: #D94F2B;
+  --shadow-sm: 0 2px 8px rgba(20,40,35,.07);
+  --r-md: 8px; --r-lg: 12px; --r-full: 9999px;
+  --grad-cta: linear-gradient(135deg, #0E766E, #12897C);
+  --dur: 180ms;
+  --font: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+[data-theme="dark"] {
+  --text: #E9E8E2;  --text-2: #B9C0B9;  --text-3: #8B938C;  --text-4: #5E665F;
+  --bg: #121513;  --card: #1A1E1B;  --line: #2E342F;  --line-2: #3A413A;  --bg-hover: #242A25;
+  --primary: #35C2A4;  --primary-dark: #5AD0B5;  --primary-bg: rgba(53,194,164,.12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13.5px; }
+button { font-family: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+svg.i { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; flex: none; }
+.prop-bar { position: fixed; left: 16px; bottom: 14px; z-index: 99; display: flex; gap: 8px; }
+.prop-bar a { font-size: 12px; padding: 6px 12px; border-radius: var(--r-full); background: var(--card); border: 1px solid var(--line); color: var(--text-2); text-decoration: none; box-shadow: var(--shadow-sm); }
+.prop-bar a.on { background: var(--grad-cta); color: #fff; border-color: transparent; }
+
+.page { max-width: 1020px; margin: 0 auto; padding: 26px 24px 90px; }
+
+/* 页头：一行说完 */
+.head { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 18px; }
+.head h1 { font-size: 19px; font-weight: 650; letter-spacing: .01em; }
+.head .meta { font-size: 12px; color: var(--text-3); padding-bottom: 3px; }
+.head .meta b { font-family: var(--mono); color: var(--text-2); font-weight: 600; }
+.head .sp { flex: 1; }
+.seg { display: flex; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 2px; }
+.seg button { border: none; background: none; font-size: 12.5px; color: var(--text-2); padding: 5px 13px; border-radius: 6px; }
+.seg button.on { background: var(--primary-bg); color: var(--primary-dark); font-weight: 600; box-shadow: inset 0 0 0 1px var(--primary-border); }
+
+/* 项目条 (横向锚导) */
+.pstrip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 14px; scrollbar-width: none; }
+.pstrip::-webkit-scrollbar { display: none; }
+.pill { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 12.5px; color: var(--text-2); background: var(--card); border: 1px solid var(--line); border-radius: var(--r-full); padding: 6px 13px; transition: all var(--dur); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; }
+.pill .c { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.pill:hover { border-color: var(--primary-border); color: var(--primary-dark); }
+.pill.on { background: var(--grad-cta); border-color: transparent; color: #fff; font-weight: 600; }
+.pill.on .c { color: rgba(255,255,255,.75); }
+
+/* 卷 = 项目节 */
+.doss { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); margin-bottom: 16px; scroll-margin-top: 12px; }
+.dhead { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.dhead .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.dhead h2 { font-size: 14.5px; font-weight: 650; }
+.dhead .period { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); margin-left: 2px; }
+.dhead .sp { flex: 1; }
+.dhead .cnt { font-size: 11.5px; color: var(--text-3); }
+.dhead .cnt b { color: var(--text-2); font-family: var(--mono); }
+
+/* 成员行: 单行紧凑 */
+.row { display: grid; grid-template-columns: minmax(160px, 1.2fr) 74px minmax(140px, 1.2fr) 1fr 88px; gap: 14px; align-items: center; padding: 0 20px; height: 52px; border-bottom: 1px solid var(--line); transition: background var(--dur); cursor: default; }
+.row:last-child { border-bottom: none; }
+.row:hover { background: var(--bg-hover); }
+.nm { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.av { width: 30px; height: 30px; border-radius: var(--r-md); display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #fff; flex: none; }
+.nm b { font-weight: 600; font-size: 13.5px; }
+.nm .id { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); margin-left: 4px; font-weight: 400; }
+.gtag { font-size: 11.5px; padding: 2px 9px; border-radius: var(--r-full); background: var(--bg); border: 1px solid var(--line); color: var(--text-2); justify-self: start; white-space: nowrap; }
+.gtag.t { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); }
+.area { font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.area.dim { color: var(--text-4); font-style: normal; }
+.sk { display: flex; gap: 5px; flex-wrap: nowrap; overflow: hidden; }
+.sk span { font-size: 11px; color: var(--text-3); border: 1px solid var(--line-2); border-radius: var(--r-full); padding: 1.5px 9px; white-space: nowrap; flex: none; }
+.vp { justify-self: end; font-family: var(--mono); font-size: 11px; color: var(--primary-dark); background: var(--primary-bg); border-radius: var(--r-full); padding: 2.5px 9px; white-space: nowrap; }
+.vp.no { color: var(--text-4); background: none; border: 1px dashed var(--line-2); padding: 1.5px 8px; }
+.muted .row { opacity: .62; }
+
+/* 未编入节 */
+.doss.warn .dhead { border-bottom-style: dashed; }
+.doss.warn .dhead .dot { background: var(--danger) !important; }
+
+/* 空项目 */
+.empty { padding: 16px 20px; font-size: 12.5px; color: var(--text-4); }
+
+@media (max-width: 860px) { .row { grid-template-columns: minmax(120px,1fr) 66px 1fr 76px; } .sk { display: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>团队协作</h1>
+    <span class="meta"><b>20</b> 人 · <b>5</b> 卷 · 声纹 <b>6/20</b></span>
+    <span class="sp"></span>
+    <div class="seg"><button class="on">按项目</button><button>按届别</button></div>
+  </div>
+
+  <div class="pstrip" id="pstrip"></div>
+  <div id="dossiers"></div>
+</div>
+
+<div class="prop-bar">
+  <a href="index.html">总览</a><a href="A-workbench.html">A 工作台</a><a class="on" href="B-roster.html">B 名录</a><a href="C-cards.html">C 卡片墙</a><a href="D-matrix.html">D 人才表</a>
+</div>
+
+<script>
+const COLORS = ['#0E766E','#2F5D8A','#3E7A52','#B07C24','#7C4E96','#A84B6F','#B3392F','#3E7A70'];
+const PROJECTS = [
+  { name: '导师组', period: '', color: 0 },
+  { name: '黑臭水体无药剂低能耗治理', period: '2024-09 → 2027-06', color: 1 },
+  { name: '饮用水水质提升与安全保障', period: '2023-09 → 2026-06', color: 2 },
+  { name: '水产高密度无抗养殖与品质改善', period: '2024-03 → 2027-03', color: 3 },
+  { name: '气泡成核过程调控与设备研发', period: '2025-04 → 2028-04', color: 4 },
+];
+const M = [
+  { id:1,  n:'王天志', g:'副教授', area:'微纳米气泡技术与应用', sk:['项目管理','气泡生成','水处理'], vp:121, pj:['导师组'] },
+  { id:2,  n:'赵航佳', g:'博二',   area:'黑臭水体治理', sk:['臭氧微纳米气泡','底泥-水界面','污染物去除'], vp:0, pj:['黑臭水体无药剂低能耗治理'] },
+  { id:3,  n:'陈金薪', g:'博一',   area:'循环水养殖水质调控', sk:['工厂化养殖','生物过滤'], vp:8, pj:['水产高密度无抗养殖与品质改善'] },
+  { id:4,  n:'冯懿鑫', g:'博一',   area:'气泡成核机理', sk:['高速摄像','数值模拟'], vp:5, pj:['气泡成核过程调控与设备研发'] },
+  { id:5,  n:'艾琳朔', g:'研二',   area:'空化泡动力学', sk:['声学测量','PIV 流场'], vp:0, pj:['气泡成核过程调控与设备研发'] },
+  { id:6,  n:'耿嘉栋', g:'博二',   area:'无抗养殖饲料替代', sk:['水产营养','益生菌'], vp:0, pj:['水产高密度无抗养殖与品质改善'] },
+  { id:7,  n:'杜同贺', g:'研二',   area:'微气泡增氧', sk:['溶解氧监测','曝气装置'], vp:0, pj:['水产高密度无抗养殖与品质改善','气泡成核过程调控与设备研发'] },
+  { id:8,  n:'胡小琪', g:'研三',   area:'黑臭水体', sk:['水质指纹','光催化'], vp:0, pj:['黑臭水体无药剂低能耗治理'] },
+  { id:9,  n:'关小未', g:'研三',   area:'盐碱土改良', sk:['盐碱土修复','种养系统','农业应用'], vp:0, pj:['饮用水水质提升与安全保障'] },
+  { id:10, n:'刘子毅', g:'研一',   area:'气液两相流', sk:['CFD 仿真','PIV 流场'], vp:0, pj:['气泡成核过程调控与设备研发'] },
+  { id:11, n:'韩重阳', g:'研一',   area:'养殖尾水处理', sk:['人工湿地','脱氮除磷'], vp:0, pj:['水产高密度无抗养殖与品质改善'] },
+  { id:12, n:'李胜景', g:'大四',   area:'水体微生物', sk:['16S 测序','数据分析'], vp:0, pj:['水产高密度无抗养殖与品质改善'] },
+  { id:13, n:'宋洋',   g:'研三',   area:'饮用水处理', sk:['生物稳定性','管网生物膜','膜耦合'], vp:3, pj:['饮用水水质提升与安全保障'] },
+  { id:18, n:'张宏魁', g:'研三',   area:'曝气设备设计', sk:['SolidWorks','流道设计'], vp:0, pj:['气泡成核过程调控与设备研发'] },
+  { id:20, n:'王书馨', g:'大三',   area:'水质检测', sk:['滴定分析','文献调研'], vp:0, pj:['气泡成核过程调控与设备研发'] },
+  { id:21, n:'贾琦',   g:'大四',   area:'表面清洗', sk:['实验辅助','数据整理','表面清洗'], vp:12, pj:['黑臭水体无药剂低能耗治理'] },
+  { id:22, n:'周之超', g:'大四',   area:'表面污染去除', sk:['表面去除','文献调研','实验辅助'], vp:11, pj:['黑臭水体无药剂低能耗治理'] },
+  { id:27, n:'蒋芦笛', g:'研三',   area:'', sk:[], vp:0, pj:['黑臭水体无药剂低能耗治理'] },
+  { id:28, n:'刘莫菲', g:'研一',   area:'', sk:[], vp:0, pj:['黑臭水体无药剂低能耗治理'] },
+  { id:58, n:'刘子煜', g:'研二',   area:'', sk:[], vp:0, pj:['黑臭水体无药剂低能耗治理'] },
+];
+const GR = { '副教授':0,'博零':1,'博一':1,'博二':1,'博三':1,'研三':2,'研二':3,'研一':4,'大四':5,'大三':6 };
+const gradeClass = g => /教授|助教/.test(g) ? 't' : '';
+
+const pstrip = document.getElementById('pstrip');
+pstrip.innerHTML = `<a class="pill on" href="#all"><span class="dot" style="background:var(--grad-cta)"></span>全部<span class="c">20</span></a>` +
+  PROJECTS.map((p,i)=>`<a class="pill" href="#pj${i}"><span class="dot" style="background:${COLORS[p.color]}"></span>${p.name}<span class="c">${M.filter(m=>m.pj.includes(p.name)).length}</span></a>`).join('') +
+  `<a class="pill" href="#unfiled" style="border-style:dashed"><span class="dot" style="background:var(--danger)"></span>未编入<span class="c">${M.filter(m=>!m.pj.length).length}</span></a>`;
+
+function rowHtml(m) {
+  return `<div class="row">
+    <span class="nm"><span class="av" style="background:${COLORS[m.id % COLORS.length]}">${m.n[0]}</span><b>${m.n}</b><span class="id">#${String(m.id).padStart(3,'0')}</span></span>
+    <span class="gtag ${gradeClass(m.g)}">${m.g}</span>
+    <span class="area ${m.area?'':'dim'}">${m.area || '研究方向未登记'}</span>
+    <span class="sk">${m.sk.slice(0,3).map(s=>`<span>${s}</span>`).join('')}</span>
+    ${m.vp ? `<span class="vp">声纹 × ${m.vp}</span>` : `<span class="vp no">未录入</span>`}
+  </div>`;
+}
+
+const dos = document.getElementById('dossiers');
+dos.innerHTML = PROJECTS.map((p,i) => {
+  const list = M.filter(m => m.pj.includes(p.name)).sort((a,b)=>(GR[a.g]??7)-(GR[b.g]??7)||a.id-b.id);
+  const vpNo = list.filter(m=>!m.vp).length;
+  return `<section class="doss ${vpNo===list.length&&list.length?'muted':''}" id="pj${i}">
+    <div class="dhead"><span class="dot" style="background:${COLORS[p.color]}"></span>
+      <h2>${p.name}</h2>${p.period?`<span class="period">${p.period}</span>`:''}
+      <span class="sp"></span>
+      <span class="cnt"><b>${list.length}</b> 人${vpNo?` · ${vpNo} 人未录声纹`:''}</span>
+    </div>
+    ${list.map(rowHtml).join('') || '<div class="empty">此卷暂无成员 · 编入后自动显示</div>'}
+  </section>`;
+}).join('') +
+`<section class="doss warn" id="unfiled">
+  <div class="dhead"><span class="dot"></span><h2>未编入项目</h2><span class="sp"></span><span class="cnt"><b>${M.filter(m=>!m.pj.length).length}</b> 人</span></div>
+  ${M.filter(m=>!m.pj.length).map(rowHtml).join('') || '<div class="empty">全员已编入项目 ✓</div>'}
+</section>`;
+
+// 锚导高亮
+window.addEventListener('scroll', () => {
+  let cur = null;
+  document.querySelectorAll('.doss').forEach(s => { if (s.getBoundingClientRect().top < 90) cur = s.id; });
+  document.querySelectorAll('.pill').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + (cur || 'all')));
+}, { passive: true });
+</script>
+</body>
+</html>
