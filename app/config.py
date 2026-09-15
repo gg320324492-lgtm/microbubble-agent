@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     # 服务不可用/失败自动回退 SenseVoice 逐段链路
     GPU_ASR_ENABLED: bool = True
     GPU_ASR_URL: str = "http://host.docker.internal:8005"
+    # 2026-09-16 实测：分块长度直接决定段落粒度（600s 音频）
+    #   chunk_sec=900 → 16 段（≈37.5s/段，模型把多轮对话合并成长段）
+    #   chunk_sec=300 → 53 段（≈11s/段，粒度细 3.3 倍）
+    # 分块长度由 **host 侧** GPU_ASR_CHUNK_SEC 环境变量控制（daemon 在宿主跑，
+    # 读不到容器 config），默认 300。
     # 2026-09-16 实测副产物（值得留意，影响 7B 是否值得走）：
     #   600s 真实会议音频走 7B 只产出 **16 个段落**（≈37.5s/段），
     #   而 SenseVoice 逐段链路在同一场 96 分钟会议上产出 **1891 段**。
@@ -120,17 +125,21 @@ class Settings(BaseSettings):
     # 事故: 96 分 27 秒的会议走 7B，跑到 7200s 硬超时才被杀 —— 2 小时 GPU 白占，
     # 客户端全程无进展信号，最终仍回退 SenseVoice。
     #
-    # 2026-09-16 实测校准（scripts/measure_gpu_asr_rtf.py，会议 250 前 600s 真实音频）：
-    #   模型加载 38.8s + 推理 363s = 墙钟 411s，**RTF = 0.605**，VRAM 21.0GB
-    #   （与 docs/vibevoice-deployment-report-2026-09-07.md 的 0.53~0.97 吻合）
-    # 结论：单看 RTF，96 分钟音频理论上约 58 分钟即可完成；生产上却跑满 2 小时，
-    # 说明退化来自**环境争用**（当时 GPU 上还驻留 ollama 27B 等）或个别分块病态解码，
-    # 而不是 RTF 估算本身。因此这里取"实测 × 安全系数"：
-    #   worker 预算 = JOB_TIMEOUT - 120 = 3480s
-    #   按实测 0.605 并留 1.6x 余量 → 3480 / (0.605×1.6) ≈ 3600s（60 分钟）
-    # 运行时另有第二道保险：worker `--max-seconds` 会按已完成分块外推，超预算即
-    # **提前中止**（几分钟内回退 SenseVoice，而不是耗满 1 小时）。
-    GPU_ASR_MAX_SEC: int = 3600
+    # 2026-09-16 两轮实测校准（scripts/measure_gpu_asr_rtf.py / --dump-raw）：
+    # 【第一轮】600s 音频、chunk_sec=900：RTF=0.605，VRAM 21GB（与文档 0.53~0.97 吻合）
+    #   → 但 96 分钟会议生产上跑满 7200s 仍未完成，RTF 对不上 → 继续深挖。
+    # 【第二轮】--dump-raw 抓到原始解码文本，发现**模型输出完 JSON 后不发 EOS，
+    #   一路吐逗号直到 max_new_tokens 用尽**（gen_tokens≈8558，末尾数千 token 全是
+    #   逗号）→ 生成时间被 max_new_tokens 主导，RTF 虚高，这就是 7200s 超时的真凶。
+    #   修复（StoppingCriteria 截断退化尾巴 + max_new 收紧）后复测：
+    #   chunk_sec=300：gen_tokens 4609/5092，**RTF 0.33**，600s 只需 197s 推理，
+    #   段落 53 段（≈11s/段，粒度细 3.3 倍）且与修复前完全一致（质量无损）。
+    #
+    # 【闸门推算】worker 预算 = JOB_TIMEOUT - 120 = 3480s；按实测 0.33 并按
+    # "GPU 被其它进程（如 ollama）占用时退化 2 倍"计 0.66 → 3480/0.66 ≈ 5272s。
+    # 取 **5400s（90 分钟）**，覆盖绝大多数会议；运行时另有 worker `--max-seconds`
+    # 按已完成分块外推、超预算提前中止作为第二道保险。
+    GPU_ASR_MAX_SEC: int = 5400
     GPU_ASR_STALL_SEC: int = 900
 
     # 2026-09-08 Streaming-7B 实时 ASR (host 常驻 8006, RTF~0.1, 2.9s 增量块)
