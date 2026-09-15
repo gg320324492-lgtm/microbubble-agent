@@ -30,10 +30,18 @@ function safeExec(cmd, fallback) {
   try {
     return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf-8' }).trim()
   } catch {
+    console.warn(`[vite] git 命令失败（${cmd}），使用确定性兜底值: ${fallback}`)
     return fallback
   }
 }
-const BUILD_TIMESTAMP = safeExec('git log -1 --format=%cI', `unknown-${process.pid}-${Date.now()}`)
+// 2026-09-16 加固：原兜底是 `unknown-${process.pid}-${Date.now()}` —— **非确定性**。
+// 一旦构建环境里没有 git（PATH 不全 / CI 未装 git），BUILD_TIMESTAMP 每次构建都不同，
+// 又回到"所有 chunk 内容 hash 全变"的老问题，而且**静默发生、无人察觉**。
+// 实测就踩了这个坑：用缺 git 的 PATH 连续构建两次，assets 里 380 处文件名差异，
+// 一度误判"构建不可复现"；把 git 放回 PATH 后两次构建 md5 完全一致。
+// 现在兜底改成固定哨兵值：失去"区分部署"的能力，但保住**构建确定性**，
+// 并打印警告让环境问题可见，而不是伪装成"正常构建"。
+const BUILD_TIMESTAMP = safeExec('git log -1 --format=%cI', 'unknown-timestamp')
 const BUILD_ID = safeExec('git rev-parse --short HEAD', 'unknown-head')
 
 // webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
