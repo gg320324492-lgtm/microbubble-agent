@@ -323,7 +323,14 @@ def _handler_factory():
                 wav_path = TMP_DIR / f"{job_id}_{meeting_id}.wav"
                 out_path = TMP_DIR / f"{job_id}_{meeting_id}.result.json"
                 _pcm_to_wav(pcm, sr, wav_path)
-                job_json = {"audio_wav": str(wav_path), "hotwords": _hotwords()}
+                # 2026-09-16 实测：分块长度**直接决定段落粒度与耗时**
+                #   600s 音频实测：chunk_sec=900 → 16 段 / rtf 0.60
+                #                   chunk_sec=300 → 53 段 / rtf 1.04
+                #   900s 分块会让模型把多轮对话合并成长段（≈37.5s/段），
+                #   对前端逐段浏览与发言人归属都不利。默认改用 300s。
+                #   宿主侧可用 GPU_ASR_CHUNK_SEC 覆盖。
+                job_json = {"audio_wav": str(wav_path), "hotwords": _hotwords(),
+                            "chunk_sec": int(os.environ.get("GPU_ASR_CHUNK_SEC", "300"))}
                 wav_path.with_suffix(".job.json").write_text(
                     json.dumps(job_json, ensure_ascii=False), encoding="utf-8")
                 with _lock:
