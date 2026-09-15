@@ -126,7 +126,7 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
-import { memberTitleOf, resolveAvatarUrl } from '@/utils/memberIdentity'
+import { memberTitleOf, resolveAvatarUrl, memberAvatarColor, MEMBER_AVATAR_COLORS } from '@/utils/memberIdentity'
 
 defineEmits(['open-member'])
 
@@ -150,10 +150,9 @@ defineExpose({ fetchProjects })
 
 const padId = (id) => (id == null ? '—' : String(id).padStart(3, '0'))
 
-// B 稿 8 色档案板 (头像哈希底色, 与网盘文件夹色块同一族)
-const AV_COLORS = ['#0E766E', '#2F5D8A', '#3E7A52', '#B07C24', '#7C4E96', '#A84B6F', '#B3392F', '#3E7A70']
-const avColor = (m) => AV_COLORS[(m.id ?? 0) % AV_COLORS.length]
-const projColor = (id) => AV_COLORS[(id ?? 0) % AV_COLORS.length]
+// B 稿 8 色档案板 (头像哈希底色, 与网盘文件夹色块同一族; 单一来源在 memberIdentity)
+const avColor = (m) => memberAvatarColor(m)
+const projColor = (id) => MEMBER_AVATAR_COLORS[(id ?? 0) % MEMBER_AVATAR_COLORS.length]
 
 const GORD = { '副教授': 0, '教授': 0, '老师': 0, '助教': 0, '博士后': 0, '博后': 0,
                '博零': 1, '博一': 1, '博二': 1, '博三': 1, '研三': 2, '研二': 3, '研一': 4,

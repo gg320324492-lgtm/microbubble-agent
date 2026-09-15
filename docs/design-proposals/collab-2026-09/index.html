@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>团队协作 UI 方案总览 — 2026-09</title>
+<style>
+:root {
+  --primary: #0E766E; --text: #22302C; --text-2: #52615C; --text-3: #8B968F;
+  --bg: #F2F0EB; --card: #fff; --line: #E5E1D8; --line-2: #D5D0C3;
+  --grad: linear-gradient(135deg,#0E766E,#12897C);
+  --font: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; }
+.page { max-width: 1280px; margin: 0 auto; padding: 40px 28px 80px; }
+h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+.lead { color: var(--text-2); font-size: 13.5px; margin-bottom: 30px; line-height: 1.7; }
+.lead b { color: var(--primary); }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.opt { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; text-decoration: none; color: inherit; display: block; transition: all .18s; }
+.opt:hover { border-color: var(--primary); box-shadow: 0 8px 28px rgba(20,40,35,.13); transform: translateY(-2px); }
+.opt img { width: 100%; display: block; border-bottom: 1px solid var(--line); }
+.opt .txt { padding: 16px 18px 18px; }
+.opt h3 { font-size: 15.5px; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+.opt h3 .tag { font-size: 10.5px; color: #fff; background: var(--grad); border-radius: 99px; padding: 2px 9px; font-weight: 600; }
+.opt p { font-size: 12.5px; color: var(--text-2); line-height: 1.7; }
+.opt ul { margin: 8px 0 0 16px; font-size: 12px; color: var(--text-3); line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>团队协作 · UI 改版方案</h1>
+  <p class="lead">目标：告别「档案卷宗」的复古装饰语言（粗黑描边、硬阴影、衬线字、印章贴纸），改用<b>课题组网盘三栏工作台</b>的干净设计体系 —— 暖纸底 <b>#F2F0EB</b> / 白卡细描边 / 深青 <b>#0E766E</b> 主行动 / 灰阶文字层级 / 大圆角小徽章。四版均为静态稿，含深色变量，数据取当前生产快照。</p>
+  <div class="grid">
+    <a class="opt" href="A-workbench.html">
+      <img src="shot-A.png" alt="方案 A 三栏工作台">
+      <div class="txt"><h3>方案 A · 三栏工作台 <span class="tag">最像网盘</span></h3>
+      <p>与网盘完全同构：左栏项目导航（选中高亮 + 人数徽标 + 声纹覆盖进度卡），中栏成员表格（搜索 + 筛选 chips + 悬停出操作），右栏成员档案（未选人时显示团队规模/届别/最近入组概览）。</p>
+      <ul><li>信息密度最高，20 人 + 5 项目一屏尽览</li><li>交互模型用户已在网盘熟悉，零学习成本</li><li>缺点：占用横向宽度，窄屏需收栏</li></ul></div>
+    </a>
+    <a class="opt" href="B-roster.html">
+      <img src="shot-B.png" alt="方案 B 名录卷宗">
+      <div class="txt"><h3>方案 B · 名录卷宗 <span class="tag">改动最小</span></h3>
+      <p>保留现版「项目为纲、成员挂卷」的信息架构与顶部项目锚导，但整套皮肤换成网盘语言：白卡细边、单行 52px 紧凑成员行、灰阶层级、去描边去印章。顶部一行统计代替黑底总账条。</p>
+      <ul><li>用户已习惯现有浏览方式，只失忆「装饰」不失忆「结构」</li><li>单列窄页，最省事、最不易出回归</li><li>缺点：项目多时需要滚动穿透</li></ul></div>
+    </a>
+    <a class="opt" href="C-cards.html">
+      <img src="shot-C.png" alt="方案 C 人像卡片墙">
+      <div class="txt"><h3>方案 C · 人像卡片墙 <span class="tag">以人为本</span></h3>
+      <p>网盘的搜索/筛选/chips/统计条语言搬到「人」上：成员 = 一张卡（头像 + 方向 + 技能 + 项目色点 + 声纹状态），顶部群像统计条 + 项目/届别双行筛选。适合把团队当「人才图谱」浏览。</p>
+      <ul><li>最不像表格，视觉最轻快，突出个人</li><li>筛选/搜索是真交互（稿内可试）</li><li>缺点：一屏约 12 人，纵向滚动多；项目视角弱化</li></ul></div>
+    </a>
+    <a class="opt" href="D-matrix.html">
+      <img src="shot-D.png" alt="方案 D 团队总表">
+      <div class="txt"><h3>方案 D · 团队总表 <span class="tag">管理视角</span></h3>
+      <p>一张全量可排序总表：成员 × 项目矩阵（✓ 格 + 悬停可「编入」），列为网盘式细表头，点击列头排序（届别/声纹/入组），表尾人力分布合计行。缺登记信息的人在页脚一条提示点齐。</p>
+      <ul><li>适合导师查「谁在哪个项目、谁缺声纹」一目了然</li><li>可排序可搜索，管理效率最高</li><li>缺点：表宽 1080+，小屏横向滚动</li></ul></div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

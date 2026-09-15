@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>方案 A · 三栏工作台 — 团队协作</title>
+<style>
+:root {
+  --primary: #0E766E;  --primary-dark: #0B5D56;
+  --primary-bg: rgba(14,118,110,.09);  --primary-border: rgba(14,118,110,.35);
+  --accent: #C77A2E;
+  --text: #22302C;  --text-2: #52615C;  --text-3: #8B968F;  --text-4: #B9BFB6;
+  --bg: #F2F0EB;  --card: #FFFFFF;  --line: #E5E1D8;  --line-2: #D5D0C3;  --bg-hover: #EEEBE3;
+  --danger: #D94F2B;  --success: #3E7A52;
+  --shadow-sm: 0 2px 8px rgba(20,40,35,.07);
+  --r-sm: 4px;  --r-md: 8px;  --r-lg: 12px;  --r-full: 9999px;
+  --grad-cta: linear-gradient(135deg, #0E766E, #12897C);
+  --dur: 180ms;  --ease: cubic-bezier(0,0,.2,1);
+  --font: 'PingFang SC','Microsoft YaHei','Segoe UI',Inter,sans-serif;
+  --mono: Consolas,'JetBrains Mono','Courier New',monospace;
+}
+[data-theme="dark"] {
+  --text: #E9E8E2;  --text-2: #B9C0B9;  --text-3: #8B938C;  --text-4: #5E665F;
+  --bg: #121513;  --card: #1A1E1B;  --line: #2E342F;  --line-2: #3A413A;  --bg-hover: #242A25;
+  --primary: #35C2A4;  --primary-dark: #5AD0B5;  --primary-bg: rgba(53,194,164,.12);
+  --accent: #E0A45C;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13.5px; }
+button { font-family: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+svg.i { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; flex: none; }
+.prop-bar { position: fixed; left: 16px; bottom: 14px; z-index: 99; display: flex; gap: 8px; }
+.prop-bar a { font-size: 12px; padding: 6px 12px; border-radius: var(--r-full); background: var(--card); border: 1px solid var(--line); color: var(--text-2); text-decoration: none; box-shadow: var(--shadow-sm); }
+.prop-bar a.on { background: var(--grad-cta); color: #fff; border-color: transparent; }
+.prop-bar button { font-size: 12px; padding: 6px 12px; border-radius: var(--r-full); background: var(--card); border: 1px solid var(--line); color: var(--text-2); box-shadow: var(--shadow-sm); }
+
+.app { display: flex; flex-direction: column; height: 100vh; min-width: 1180px; }
+
+/* 顶栏 */
+.top { flex: none; height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 18px; background: var(--card); border-bottom: 1px solid var(--line); }
+.top h1 { font-size: 14.5px; font-weight: 600; }
+.top .crumb { font-size: 12.5px; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
+.top .crumb b { color: var(--text); font-weight: 600; }
+.top .sp { flex: 1; }
+.top .stat { font-size: 12px; color: var(--text-3); }
+.top .stat b { color: var(--text); font-weight: 600; font-family: var(--mono); font-size: 12.5px; }
+.me { width: 28px; height: 28px; border-radius: 50%; background: var(--grad-cta); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+
+.body { flex: 1; display: flex; min-height: 0; }
+
+/* 左栏: 项目导航 */
+.rail { width: 232px; flex: none; background: var(--card); border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow-y: auto; padding: 14px 10px; }
+.rail .cap { font-size: 10.5px; letter-spacing: .12em; color: var(--text-3); padding: 8px 10px 5px; }
+.plist { list-style: none; }
+.pnode { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 7px; color: var(--text-2); font-size: 13px; border: none; background: none; width: 100%; text-align: left; transition: background var(--dur); }
+.pnode svg { width: 15px; height: 15px; stroke: var(--primary); fill: none; stroke-width: 1.7; flex: none; }
+.pnode .n { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pnode .c { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.pnode:hover { background: var(--bg-hover); color: var(--text); }
+.pnode.on { background: var(--primary-bg); color: var(--primary-dark); font-weight: 600; }
+[data-theme="dark"] .pnode.on { color: var(--primary); }
+.covbox { margin: 12px 8px 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg); }
+.covbox .l { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); margin-bottom: 7px; }
+.covbox .l b { color: var(--text); font-weight: 600; }
+.qbar { height: 5px; background: var(--line-2); border-radius: 3px; overflow: hidden; }
+.qbar i { display: block; height: 100%; width: 30%; background: var(--grad-cta); border-radius: 3px; }
+
+/* 中栏 */
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+.ctools { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 18px 10px; }
+.gsearch { display: flex; align-items: center; gap: 8px; width: 300px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 7px 12px; transition: all var(--dur); }
+.gsearch:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(14,118,110,.10); }
+.gsearch input { border: none; outline: none; background: none; font: inherit; color: var(--text); flex: 1; min-width: 0; }
+.gsearch input::placeholder { color: var(--text-4); }
+.fchip { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; padding: 5px 11px; border-radius: var(--r-full); border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); }
+.fchip.on { background: var(--primary-bg); border-color: var(--primary-border); color: var(--primary-dark); font-weight: 600; }
+.ctools .hint { margin-left: auto; font-size: 11.5px; color: var(--text-4); }
+
+.tablewrap { flex: 1; overflow-y: auto; margin: 0 12px 12px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { position: sticky; top: 0; z-index: 5; }
+th { background: var(--card); text-align: left; font-size: 11px; font-weight: 500; letter-spacing: .06em; color: var(--text-3); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { padding-left: 18px; }
+tr.row { border-bottom: 1px solid var(--line); cursor: default; }
+tr.row:last-child { border-bottom: none; }
+tr.row td { padding: 8px 12px; height: 44px; vertical-align: middle; color: var(--text-2); }
+tr.row:hover td { background: var(--bg-hover); }
+tr.row.sel td { background: var(--primary-bg); }
+.nm { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 500; }
+.av { width: 28px; height: 28px; border-radius: var(--r-md); display: grid; place-items: center; font-size: 12.5px; font-weight: 600; flex: none; color: #fff; }
+.nm .id { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); font-weight: 400; margin-left: 2px; }
+.gtag { font-size: 11.5px; padding: 2px 9px; border-radius: var(--r-full); background: var(--bg); border: 1px solid var(--line); color: var(--text-2); white-space: nowrap; }
+.gtag.t { background: rgba(14,118,110,.08); border-color: var(--primary-border); color: var(--primary-dark); }
+.vp { font-family: var(--mono); font-size: 11px; color: var(--primary-dark); background: var(--primary-bg); border-radius: var(--r-full); padding: 2.5px 9px; white-space: nowrap; }
+.vp.no { color: var(--text-4); background: none; border: 1px dashed var(--line-2); padding: 1.5px 8px; }
+.op { font-size: 12px; color: var(--primary-dark); border: 1px solid var(--line-2); border-radius: var(--r-md); padding: 4px 11px; background: var(--card); opacity: 0; transition: opacity var(--dur); }
+tr.row:hover .op, tr.row.sel .op { opacity: 1; }
+.op:hover { border-color: var(--primary-border); background: var(--primary-bg); }
+
+/* 右栏 */
+.detail { width: 320px; flex: none; background: var(--card); border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow-y: auto; }
+.d-hero { padding: 18px; border-bottom: 1px solid var(--line); display: flex; gap: 13px; align-items: center; }
+.d-hero .av { width: 46px; height: 46px; border-radius: var(--r-lg); font-size: 19px; }
+.d-hero .who b { font-size: 15.5px; font-weight: 600; display: block; }
+.d-hero .who span { font-size: 11.5px; color: var(--text-3); display: block; margin-top: 3px; }
+.d-meta { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.d-meta h5 { font-size: 11px; letter-spacing: .1em; color: var(--text-3); font-weight: 500; margin-bottom: 8px; }
+.d-meta dl { display: grid; grid-template-columns: 60px 1fr; gap: 7px 10px; font-size: 12.5px; }
+.d-meta dt { color: var(--text-3); }
+.d-meta dd { color: var(--text-2); }
+.sk { display: inline-block; font-size: 11.5px; color: var(--text-2); border: 1px solid var(--line-2); border-radius: var(--r-full); padding: 1.5px 9px; margin: 0 4px 4px 0; }
+.pj { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-2); padding: 5px 0; }
+.pj .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.d-act { display: flex; gap: 8px; padding: 14px 18px; }
+.d-act button { flex: 1; font-size: 12.5px; padding: 7.5px 0; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--card); color: var(--text-2); }
+.d-act button.pri { background: var(--grad-cta); color: #fff; border: none; font-weight: 600; }
+
+/* 概览态 (右栏未选人) */
+.ov-sec { padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.ov-sec h5 { font-size: 11px; letter-spacing: .1em; color: var(--text-3); font-weight: 500; margin-bottom: 10px; }
+.bars { display: flex; flex-direction: column; gap: 8px; }
+.bar { display: grid; grid-template-columns: 100px 1fr 26px; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+.bar .t { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.bar .t i { display: block; height: 100%; background: var(--primary); opacity: .75; border-radius: 3px; }
+.bar .v { font-family: var(--mono); font-size: 11px; color: var(--text-3); text-align: right; }
+.jrow { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 12.5px; color: var(--text-2); }
+.jrow .av { width: 24px; height: 24px; border-radius: 7px; font-size: 11px; }
+.jrow time { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="crumb">首页 <svg class="i" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg> <b>团队协作</b></div>
+    <span class="sp"></span>
+    <span class="stat"><b>20</b> 人 · <b>5</b> 个项目 · 声纹 <b>6/20</b></span>
+    <span class="me">王</span>
+  </div>
+
+  <div class="body">
+    <!-- 左栏 -->
+    <nav class="rail">
+      <div class="cap">项目</div>
+      <ul class="plist" id="plist"></ul>
+      <div class="cap" style="margin-top:8px">其他</div>
+      <ul class="plist">
+        <li><button class="pnode" data-p="__all"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg><span class="n">全部成员</span><span class="c">20</span></button></li>
+        <li><button class="pnode" data-p="__novp"><svg viewBox="0 0 24 24"><path d="M12 3v10"/><path d="M7 8a5 5 0 0 1 10 0v5"/><rect x="4" y="13" width="4" height="6" rx="2"/><rect x="16" y="13" width="4" height="6" rx="2"/></svg><span class="n">未录声纹</span><span class="c">14</span></button></li>
+      </ul>
+      <div class="covbox">
+        <div class="l"><span>声纹覆盖</span><b>6 / 20</b></div>
+        <div class="qbar"><i style="width:30%"></i></div>
+      </div>
+    </nav>
+
+    <!-- 中栏 -->
+    <main class="center">
+      <div class="ctools">
+        <label class="gsearch"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input placeholder="搜索成员姓名 / 研究方向"><kbd style="font-family:var(--mono);font-size:10px;color:var(--text-3);border:1px solid var(--line-2);border-radius:4px;padding:0 5px;background:var(--bg)">Ctrl K</kbd></label>
+        <span class="fchip on">全部</span>
+        <span class="fchip">导师</span>
+        <span class="fchip">博士</span>
+        <span class="fchip">硕士</span>
+        <span class="fchip">本科</span>
+        <span class="hint" id="hint">共 7 人 · 点击行查看详情</span>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th style="width:230px">名称</th><th style="width:88px">届别</th><th>研究方向</th><th style="width:240px">技能</th><th style="width:96px">声纹</th><th style="width:64px"></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- 右栏 -->
+    <aside class="detail" id="detail"></aside>
+  </div>
+</div>
+
+<div class="prop-bar">
+  <a href="index.html">总览</a><a class="on" href="A-workbench.html">A 工作台</a><a href="B-roster.html">B 名录</a><a href="C-cards.html">C 卡片墙</a><a href="D-matrix.html">D 人才表</a>
+  <button id="themeBtn">深色</button>
+</div>
+
+<script>
+const COLORS = ['#0E766E','#2F5D8A','#3E7A52','#B07C24','#7C4E96','#A84B6F','#B3392F','#3E7A70'];
+const PROJECTS = [
+  { name: '导师组', period: '', color: 0 },
+  { name: '黑臭水体无药剂低能耗治理', period: '2024-09 → 2027-06', color: 1 },
+  { name: '饮用水水质提升与安全保障', period: '2023-09 → 2026-06', color: 3 },
+  { name: '水产高密度无抗养殖与品质改善', period: '2024-03 → 2027-03', color: 2 },
+  { name: '气泡成核过程调控与设备研发', period: '2025-04 → 2028-04', color: 4 },
+];
+const M = [
+  { id:1,  n:'王天志', g:'副教授',   area:'微纳米气泡技术与应用', sk:['项目管理','气泡生成','水处理'], vp:121, pj:['导师组'], join:'2019-09' },
+  { id:2,  n:'赵航佳', g:'博二',     area:'黑臭水体治理', sk:['臭氧微纳米气泡','底泥-水界面','污染物去除'], vp:0, pj:['黑臭水体无药剂低能耗治理'], join:'2024-09' },
+  { id:3,  n:'陈金薪', g:'博一',     area:'循环水养殖水质调控', sk:['工厂化养殖','生物过滤'], vp:8, pj:['水产高密度无抗养殖与品质改善'], join:'2024-09' },
+  { id:4,  n:'冯懿鑫', g:'博一',     area:'气泡成核机理', sk:['高速摄像','数值模拟'], vp:5, pj:['气泡成核过程调控与设备研发'], join:'2025-09' },
+  { id:5,  n:'艾琳朔', g:'研二',     area:'空化泡动力学', sk:['声学测量','PIV 流场'], vp:0, pj:['气泡成核过程调控与设备研发'], join:'2024-09' },
+  { id:6,  n:'耿嘉栋', g:'博二',     area:'无抗养殖饲料替代', sk:['水产营养','益生菌'], vp:0, pj:['水产高密度无抗养殖与品质改善'], join:'2023-09' },
+  { id:7,  n:'杜同贺', g:'研二',     area:'微气泡增氧', sk:['溶解氧监测','曝气装置'], vp:0, pj:['水产高密度无抗养殖与品质改善','气泡成核过程调控与设备研发'], join:'2024-09' },
+  { id:8,  n:'胡小琪', g:'研三',     area:'黑臭水体', sk:['水质指纹','光催化'], vp:0, pj:['黑臭水体无药剂低能耗治理'], join:'2023-09' },
+  { id:9,  n:'关小未', g:'研三',     area:'盐碱土改良', sk:['盐碱土修复','种养系统','农业应用'], vp:0, pj:['饮用水水质提升与安全保障'], join:'2023-09' },
+  { id:10, n:'刘子毅', g:'研一',     area:'气液两相流', sk:['CFD 仿真','PIV 流场'], vp:0, pj:['气泡成核过程调控与设备研发'], join:'2025-09' },
+  { id:11, n:'韩重阳', g:'研一',     area:'养殖尾水处理', sk:['人工湿地','脱氮除磷'], vp:0, pj:['水产高密度无抗养殖与品质改善'], join:'2025-09' },
+  { id:12, n:'李胜景', g:'大四',     area:'水体微生物', sk:['16S 测序','数据分析'], vp:0, pj:['水产高密度无抗养殖与品质改善'], join:'2022-09' },
+  { id:13, n:'宋洋',   g:'研三',     area:'饮用水处理', sk:['生物稳定性','管网生物膜','膜耦合'], vp:3, pj:['饮用水水质提升与安全保障'], join:'2023-09' },
+  { id:18, n:'张宏魁', g:'研三',     area:'曝气设备设计', sk:['SolidWorks','流道设计'], vp:0, pj:['气泡成核过程调控与设备研发'], join:'2023-09' },
+  { id:20, n:'王书馨', g:'大三',     area:'水质检测', sk:['滴定分析','文献调研'], vp:0, pj:['气泡成核过程调控与设备研发'], join:'2022-09' },
+  { id:21, n:'贾琦',   g:'大四',     area:'表面清洗', sk:['实验辅助','数据整理','表面清洗'], vp:12, pj:['黑臭水体无药剂低能耗治理'], join:'2022-09' },
+  { id:22, n:'周之超', g:'大四',     area:'表面污染去除', sk:['表面去除','文献调研','实验辅助'], vp:11, pj:['黑臭水体无药剂低能耗治理'], join:'2022-09' },
+  { id:27, n:'蒋芦笛', g:'研三',     area:'研究方向未登记', sk:[], vp:0, pj:['黑臭水体无药剂低能耗治理'], join:'2023-09' },
+  { id:28, n:'刘莫菲', g:'研一',     area:'研究方向未登记', sk:[], vp:0, pj:['黑臭水体无药剂低能耗治理'], join:'2025-09' },
+  { id:58, n:'刘子煜', g:'研二',     area:'研究方向未登记', sk:[], vp:0, pj:['黑臭水体无药剂低能耗治理'], join:'2024-09' },
+];
+const gradeClass = g => /教授|助教/.test(g) ? 't' : '';
+const avatar = (m, cls='') => `<span class="av ${cls}" style="background:${COLORS[m.id % COLORS.length]}">${m.n[0]}</span>`;
+
+let curPj = '黑臭水体无药剂低能耗治理', selId = null;
+const plist = document.getElementById('plist');
+PROJECTS.forEach(p => {
+  const cnt = M.filter(m => m.pj.includes(p.name)).length;
+  plist.insertAdjacentHTML('beforeend',
+    `<li><button class="pnode ${p.name===curPj?'on':''}" data-p="${p.name}">
+      <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span class="n">${p.name}</span><span class="c">${cnt}</span></button></li>`);
+});
+
+function membersOf(key) {
+  if (key === '__all') return M;
+  if (key === '__novp') return M.filter(m => !m.vp);
+  return M.filter(m => m.pj.includes(key));
+}
+const GR = { '副教授':0,'博零':1,'博一':1,'博二':1,'博三':1,'研三':2,'研二':3,'研一':4,'大四':5,'大三':6,'大二':6,'大一':6 };
+
+function render() {
+  let list = membersOf(curPj).sort((a,b)=>(GR[a.g]??7)-(GR[b.g]??7)||a.id-b.id);
+  document.getElementById('rows').innerHTML = list.map(m => `
+    <tr class="row ${m.id===selId?'sel':''}" onclick="pick(${m.id})">
+      <td><span class="nm">${avatar(m)}${m.n}<span class="id">#${String(m.id).padStart(3,'0')}</span></span></td>
+      <td><span class="gtag ${gradeClass(m.g)}">${m.g}</span></td>
+      <td style="color:${m.area.includes('未登记')?'var(--text-4)':'var(--text-2)'}">${m.area}</td>
+      <td>${m.sk.slice(0,3).map(s=>`<span class="sk" style="font-size:11px">${s}</span>`).join('')||'<span style="color:var(--text-4)">—</span>'}</td>
+      <td>${m.vp?`<span class="vp">× ${m.vp}</span>`:`<span class="vp no">未录入</span>`}</td>
+      <td><button class="op">详情</button></td>
+    </tr>`).join('');
+  const tot = curPj==='__all' ? '全部成员' : curPj==='__novp' ? '未录声纹' : curPj;
+  document.getElementById('hint').textContent = `${tot} · 共 ${list.length} 人 · 点击行查看详情`;
+  renderDetail();
+}
+function pick(id) { selId = (selId===id? null : id); render(); }
+function renderDetail() {
+  const d = document.getElementById('detail');
+  const m = M.find(x => x.id === selId);
+  if (!m) {
+    d.innerHTML = `
+      <div class="ov-sec"><h5>团队规模</h5><div class="bars">
+        ${PROJECTS.map(p=>{const c=M.filter(x=>x.pj.includes(p.name)).length;return `<div class="bar"><span class="t" style="overflow:visible;background:none;color:var(--text-2);width:auto">${p.name.length>6?p.name.slice(0,6)+'…':p.name}</span><span class="t"><i style="width:${c/20*100*2.6}%;max-width:100%;background:${COLORS[p.color]}"></i></span><span class="v">${c}</span></div>`}).join('')}
+      </div></div>
+      <div class="ov-sec"><h5>届别分布</h5><div class="bars">
+        ${[['导师',1],['博士',4],['硕士',8],['本科',6],['未登记',1]].map(([k,v])=>`<div class="bar"><span style="color:var(--text-2)">${k}</span><span class="t"><i style="width:${v/20*100}%"></i></span><span class="v">${v}</span></div>`).join('')}
+      </div></div>
+      <div class="ov-sec" style="border-bottom:none"><h5>最近入组</h5>
+        ${[M[9],M[3],M[19],M[10]].map(m=>`<div class="jrow">${avatar(m)}<span>${m.n}</span><span class="gtag" style="font-size:10.5px;padding:1px 7px">${m.g}</span><time>${m.join}</time></div>`).join('')}
+      </div>
+      <div style="padding:0 18px 18px;font-size:11.5px;color:var(--text-4)">选中成员后，这里显示其档案。</div>`;
+    return;
+  }
+  d.innerHTML = `
+    <div class="d-hero">${avatar(m)}<div class="who"><b>${m.n}</b><span>#${String(m.id).padStart(3,'0')} · ${m.g} · 入组 ${m.join}</span></div></div>
+    <div class="d-meta"><h5>研究方向</h5><div style="font-size:13px;color:var(--text)">${m.area}</div></div>
+    <div class="d-meta"><h5>技能标签</h5>${m.sk.length?m.sk.map(s=>`<span class="sk">${s}</span>`).join(''):'<span style="font-size:12px;color:var(--text-4)">未登记</span>'}</div>
+    <div class="d-meta"><h5>所属项目</h5>${m.pj.length?m.pj.map(p=>`<div class="pj"><span class="dot" style="background:${COLORS[(PROJECTS.find(x=>x.name===p)||{color:0}).color]}"></span>${p}</div>`).join(''):'<span style="font-size:12px;color:var(--text-4)">暂未编入项目</span>'}</div>
+    <div class="d-meta" style="border-bottom:none"><h5>声纹</h5>${m.vp?`<span class="vp">已录入 × ${m.vp}</span>`:`<span class="vp no">未录入</span>`}</div>
+    <div class="d-act"><button>录入声纹</button><button class="pri">查看完整档案</button></div>`;
+}
+document.querySelectorAll('.pnode').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.pnode').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); curPj = b.dataset.p; selId = null; render();
+}));
+render();
+// theme toggle
+document.querySelector('.prop-bar button').addEventListener('click', e => {
+  const root = document.documentElement;
+  root.dataset.theme = root.dataset.theme === 'dark' ? '' : 'dark';
+  e.target.textContent = root.dataset.theme === 'dark' ? '浅色' : '深色';
+});
+</script>
+</body>
+</html>
