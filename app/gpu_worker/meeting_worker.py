@@ -118,6 +118,91 @@ def load_asr_model(model_dir: str, tokenizer_dir: str, asr_repo: str):
     return model, processor
 
 
+# ---------------------------------------------------------------- 生成停止条件
+def _make_degenerate_tail_stopper(processor, window: int = 64,
+                                  comma_ratio: float = 0.9,
+                                  check_every: int = 16):
+    """构造一个"退化尾巴"停止条件。
+
+    2026-09-16 实测发现（`--dump-raw` 抓到的原始解码文本）：
+    VibeVoice-ASR 在输出完 JSON 段落后**不会发 EOS 正常收尾**，而是一路吐逗号
+    （`,,,,,,,,,,...`）直到 `max_new_tokens` 用尽。后果：
+      · 生成时间被 max_new_tokens 主导，真正的 JSON 只占其中一小部分
+        （300s 分块实测 gen_tokens≈8558，其中末尾数千 token 全是逗号）；
+      · RTF 被严重虚高 —— 这是 96 分钟会议跑满 7200s 硬超时的重要成因之一；
+      · 纯属浪费算力，且拖长了占用 GPU 的时间。
+    这里用 StoppingCriteria 检测"尾部窗口几乎全是逗号"，命中即停，
+    让生成在 JSON 结束处自然收尾。
+    """
+    import torch
+    from transformers import StoppingCriteria
+
+    class _DegenerateTailStopper(StoppingCriteria):
+        def __init__(self):
+            self._n = 0
+
+        def __call__(self, input_ids, scores, **kwargs):
+            self._n += 1
+            if self._n % check_every:
+                return False
+            try:
+                tail_ids = input_ids[0, -window:]
+                tail = processor.batch_decode(
+                    [tail_ids], skip_special_tokens=True)[0]
+            except Exception:  # noqa: BLE001
+                return False
+            if len(tail) < window // 2:
+                return False
+            non_comma = len(tail.replace(",", "").replace(" ", "")
+                             .replace("\n", "").replace("，", ""))
+            # 去掉逗号/空白后所剩无几 → 判定为退化尾巴
+            return non_comma <= len(tail) * (1 - comma_ratio)
+
+    return _DegenerateTailStopper()
+
+
+# ---------------------------------------------------------------- 生成停止条件
+def _make_degenerate_tail_stopper(processor, window: int = 64,
+                                  comma_ratio: float = 0.9,
+                                  check_every: int = 16):
+    """构造一个"退化尾巴"停止条件。
+
+    2026-09-16 实测发现（`--dump-raw` 抓到的原始解码文本）：
+    VibeVoice-ASR 在输出完 JSON 段落后**不会发 EOS 正常收尾**，而是一路吐逗号
+    （`,,,,,,,,,,...`）直到 `max_new_tokens` 用尽。后果：
+      · 生成时间被 max_new_tokens 主导，真正的 JSON 只占其中一小部分
+        （300s 分块实测 gen_tokens≈8558，其中末尾数千 token 全是逗号）；
+      · RTF 被严重虚高 —— 这是 96 分钟会议跑满 7200s 硬超时的重要成因之一；
+      · 纯属浪费算力，且拖长了占用 GPU 的时间。
+    这里用 StoppingCriteria 检测"尾部窗口几乎全是逗号"，命中即停，
+    让生成在 JSON 结束处自然收尾。
+    """
+    from transformers import StoppingCriteria
+
+    class _DegenerateTailStopper(StoppingCriteria):
+        def __init__(self):
+            self._n = 0
+
+        def __call__(self, input_ids, scores, **kwargs):
+            self._n += 1
+            if self._n % check_every:
+                return False
+            try:
+                tail_ids = input_ids[0, -window:]
+                tail = processor.batch_decode(
+                    [tail_ids], skip_special_tokens=True)[0]
+            except Exception:  # noqa: BLE001
+                return False
+            if len(tail) < window // 2:
+                return False
+            non_comma = len(tail.replace(",", "").replace(" ", "")
+                             .replace("\n", "").replace("，", ""))
+            # 去掉逗号/空白后所剩无几 → 判定为退化尾巴
+            return non_comma <= len(tail) * (1 - comma_ratio)
+
+    return _DegenerateTailStopper()
+
+
 # ---------------------------------------------------------------- 分块
 def find_chunk_points(wav24: np.ndarray, chunk_sec: float = 900.0,
                       search_sec: float = 30.0) -> list:
@@ -167,22 +252,47 @@ def parse_segments(text: str) -> list:
 
 
 def transcribe_chunk(model, processor, wav24: np.ndarray, t0: float, t1: float,
-                     hotwords: str | None, chunk_idx: int) -> list:
+                     hotwords: str | None, chunk_idx: int,
+                     dump_raw_dir: str | None = None) -> list:
+    """转写单个分块。
+
+    2026-09-16: `dump_raw_dir` 把**模型原始解码文本**落盘 —— 没有它就只能猜
+    "段落少是模型合并还是解析丢弃"（本次正是靠它发现尾部逗号退化问题）。
+    """
     import torch
     piece = wav24[int(t0 * TARGET_SR): int(t1 * TARGET_SR)]
     dur = len(piece) / TARGET_SR
     if dur < 1.0:
         return []
     max_new = min(32768, int(dur * 18) + 384)
+    # 2026-09-16: gen_tokens 实测显示真实 JSON 只占很小一部分，主要是尾部逗号。
+    # 配合下面的 StoppingCriteria 之后，max_new 只需覆盖"真实内容"的量级：
+    # 300s 分块实测约 28 个 JSON 对象 ≈ 2.5k 字符，按 ~6 token/秒语音留足余量。
+    max_new = min(max_new, int(dur * 8) + 512)
     kwargs = {"context_info": hotwords} if hotwords else {}
     inputs = processor(audio=piece, sampling_rate=TARGET_SR,
                        return_tensors="pt", **kwargs)
     inputs = {k: (v.to("cuda") if hasattr(v, "to") else v)
               for k, v in inputs.items()}
+    stopper = _make_degenerate_tail_stopper(processor)
     with torch.no_grad():
         out = model.generate(**inputs, max_new_tokens=max_new,
-                             do_sample=False)
+                             do_sample=False, stopping_criteria=[stopper])
     text = processor.batch_decode(out, skip_special_tokens=True)[0]
+    if dump_raw_dir:
+        try:
+            dp = Path(dump_raw_dir) / f"chunk{chunk_idx}_raw.txt"
+            dp.parent.mkdir(parents=True, exist_ok=True)
+            n_objs = len(re.findall(r'\{\s*"Start"', text))
+            dp.write_text(
+                f"# chunk={chunk_idx} span={t0:.1f}~{t1:.1f}s dur={dur:.1f}s "
+                f"max_new_tokens={max_new} gen_tokens={out.shape[-1]}\n"
+                f"# raw_json_objects={n_objs}\n{'=' * 60}\n{text}",
+                encoding="utf-8")
+            print(f"[worker] chunk {chunk_idx} raw dumped: {n_objs} json objects, "
+                  f"gen_tokens={out.shape[-1]}", flush=True)
+        except OSError as e:
+            print(f"[worker] raw dump 失败: {e}", flush=True)
     segs = parse_segments(text)
     result = []
     for s in segs:
@@ -199,7 +309,8 @@ def transcribe_chunk(model, processor, wav24: np.ndarray, t0: float, t1: float,
 
 # ---------------------------------------------------------------- 主流程
 def run_job(job: dict, progress_path: str | None = None,
-            max_seconds: float | None = None) -> dict:
+            max_seconds: float | None = None,
+            dump_raw_dir: str | None = None) -> dict:
     """跑完整场会议转写。
 
     max_seconds: 时间预算。每块结束后用已跑时长外推总耗时，若会超预算则**提前中止**
@@ -237,7 +348,8 @@ def run_job(job: dict, progress_path: str | None = None,
     aborted = False
     abort_reason = None
     for ci, (a, b) in enumerate(zip(points, points[1:])):
-        segs = transcribe_chunk(model, processor, wav24, a, b, hotwords, ci)
+        segs = transcribe_chunk(model, processor, wav24, a, b, hotwords, ci,
+                                dump_raw_dir=dump_raw_dir)
         segments.extend(segs)
         done_sec = b if b else audio_sec
         elapsed = time.perf_counter() - t1
@@ -294,6 +406,10 @@ def main():
     ap.add_argument("--log", default=None, help="保留位（守护已把 stdout 重定向到日志文件）")
     ap.add_argument("--max-seconds", type=float, default=None,
                     help="时间预算；外推超预算则提前中止，避免拖到守护硬超时")
+    ap.add_argument("--chunk-sec", type=float, default=None,
+                    help="覆盖分块长度（秒）；诊断段落粒度/耗时权衡时用")
+    ap.add_argument("--dump-raw", default=None,
+                    help="把模型原始解码文本落到该目录（诊断段落数/退化尾巴用）")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
 
@@ -326,8 +442,11 @@ def main():
             _write_and_exit(0)
 
         job = json.loads(Path(args.job).read_text(encoding="utf-8"))
+        if args.chunk_sec:
+            job["chunk_sec"] = args.chunk_sec
         result = run_job(job, progress_path=args.progress,
-                         max_seconds=args.max_seconds)
+                         max_seconds=args.max_seconds,
+                         dump_raw_dir=args.dump_raw)
         _write_and_exit(0 if result.get("status") == "ok" else 2)
     except Exception as e:  # noqa: BLE001 — worker 必须以 JSON 报告一切失败
         result["error"] = f"{type(e).__name__}: {e}"
