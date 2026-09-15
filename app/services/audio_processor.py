@@ -28,6 +28,25 @@ class AudioSegment:
 class AudioProcessor:
     """音频格式转换 + 离线 VAD 分段"""
 
+    # ---------- 2026-09-16 P0: 低能量窗口二次 VAD 救援参数 ----------
+    # 事故：会议 250 出现 186s 无转录窗口，音频能量与语音段相当（1s 子窗最大 -24.9dB
+    # vs 语音段 RMS p50 -26.5dB），但一次 VAD 在该窗口只判出 0.5s。silero 默认
+    # threshold=0.4 对远场/轻声偏严；而 SenseVoice 链路只转写 VAD 段 → 直接丢语音。
+    # 关掉只需把 VAD_RESCUE_ENABLED 置 False。
+    VAD_RESCUE_ENABLED = True
+    VAD_RESCUE_MIN_GAP_SEC = 20.0      # 只复检长于此时长的空窗
+    VAD_RESCUE_THRESHOLD = 0.15        # 二次检测阈值（比主检测的 0.4 低）
+    VAD_RESCUE_MIN_SPEECH_MS = 150     # 二次检测的最小语音时长
+    VAD_RESCUE_ENERGY_MARGIN_DB = 6.0  # 地板 = 已检出语音 per-1s RMS 的 p20 - 此余量
+    VAD_RESCUE_MAX_WINDOWS = 40        # 单场最多复检多少个空窗（控成本）
+    # "语音样"判定门槛：捞回时长 ≥ 10s，或占空窗比例 ≥ 5% —— 低于此视为
+    # 噪声碎片（椅子/咳嗽/桌椅声），不算"漏抓语音"。
+    VAD_RESCUE_SPEECH_LIKE_MIN_SEC = 10.0
+    VAD_RESCUE_SPEECH_LIKE_MIN_RATIO = 0.05
+    # 最近一次 segment_audio() 的音频证据报告（长空窗分类），供质量门禁使用。
+    # 约定：单例 + 单场串行处理，调用方在 segment_audio 之后立即读取。
+    last_segment_report: dict = {}
+
     async def convert_webm_to_wav(self, webm_data: bytes) -> np.ndarray:
         """WebM/Opus → 16kHz mono float32 PCM（通过 ffmpeg）
 
@@ -145,6 +164,26 @@ class AudioProcessor:
             else:
                 merged.append(seg)
 
+        # 2026-09-16 P0: 低能量窗口二次救援
+        # 背景：会议 250 出现 186s 无转录窗口（39:03~42:09），音频能量与语音段相当
+        # （1s 子窗最大 -24.9dB，而语音段 RMS p50=-26.5dB），但一次 VAD 在该窗口
+        # 只判出 0.5s 语音 —— silero 默认 threshold=0.4 把远场/轻声误判为静音。
+        # 而 SenseVoice 链路**只转写 VAD 段**，所以这段语音根本没送到 ASR，
+        # 直接表现为转写缺口（coverage 0.75 / gap_count 24）。
+        # 这里对长空窗用更低阈值复检，并以能量为门槛，避免把纯噪声捞成"语音"。
+        rescued, self.last_segment_report = self._rescue_low_energy_windows(
+            audio, sample_rate, merged, model, get_speech_timestamps)
+        if rescued:
+            merged.extend(rescued)
+            merged.sort(key=lambda s: s["start"])
+            remerged = [merged[0]]
+            for seg in merged[1:]:
+                if seg["start"] - remerged[-1]["end"] < sample_rate * 0.1:
+                    remerged[-1]["end"] = max(remerged[-1]["end"], seg["end"])
+                else:
+                    remerged.append(seg)
+            merged = remerged
+
         # 切割
         segments = []
         for seg in merged:
@@ -161,8 +200,134 @@ class AudioProcessor:
                 end_time=end / sample_rate,
             ))
 
-        logger.info(f"VAD 分段完成: {len(segments)} 段（原始 {len(speeches)} 段，合并后 {len(merged)} 段）")
+        logger.info(f"VAD 分段完成: {len(segments)} 段（原始 {len(speeches)} 段，"
+                    f"合并后 {len(merged)} 段，救援 {len(rescued)} 段）")
         return segments
+
+    # ---------------------------------------------------------------- 救援
+    def _rescue_low_energy_windows(self, audio, sample_rate, merged, model,
+                                   get_speech_timestamps) -> tuple:
+        """对"长空窗"用低阈值二次 VAD，捞回被误判为静音的低电平语音。
+
+        返回 (rescued_segments, report)。report 会被 `segment_audio` 记到
+        `self.last_segment_report`，供上层（质量门禁）判"长间隔到底是真实静音
+        还是漏抓"—— 这正是质量检查里 `transcript_long_gap` 一直缺的那份音频证据。
+
+        判定门槛（双重，避免捞进纯噪声）：
+          1) 窗口内存在 1s 子窗，其 RMS 高于"救援地板"
+             （地板 = 已检出语音的 per-1s RMS 的 20 分位 - MARGIN_DB）
+          2) 二次 VAD（低阈值）确实在该窗口内找到时长 ≥ 0.5s 的段
+        """
+        if not self.VAD_RESCUE_ENABLED or not merged:
+            return [], {}
+        import numpy as np
+        n = len(audio)
+        win = int(sample_rate)
+
+        def _rms_db(x) -> float:
+            if len(x) == 0:
+                return -120.0
+            r = float(np.sqrt(np.mean(np.asarray(x, dtype=np.float64) ** 2)))
+            return 20 * np.log10(max(r, 1e-9))
+
+        # 已检出语音的 per-1s RMS 分布 → 地板
+        speech_rms = []
+        for seg in merged:
+            s, e = int(seg["start"]), int(seg["end"])
+            for i in range(s, max(s, e - win) + 1, win):
+                chunk = audio[i:i + win]
+                if len(chunk) >= win // 2:
+                    speech_rms.append(_rms_db(chunk))
+        if not speech_rms:
+            return [], {}
+        floor_db = float(np.percentile(speech_rms, 20)) - self.VAD_RESCUE_ENERGY_MARGIN_DB
+
+        # 找出所有长空窗
+        windows = []
+        prev_end = 0
+        for seg in merged:
+            gap = seg["start"] - prev_end
+            if gap >= int(self.VAD_RESCUE_MIN_GAP_SEC * sample_rate):
+                windows.append((prev_end, seg["start"]))
+            prev_end = max(prev_end, seg["end"])
+        if n - prev_end >= int(self.VAD_RESCUE_MIN_GAP_SEC * sample_rate):
+            windows.append((prev_end, n))
+        if not windows:
+            return [], {"floor_db": round(floor_db, 1),
+                        "long_gap_min_sec": self.VAD_RESCUE_MIN_GAP_SEC,
+                        "windows": [], "long_gap_count": 0,
+                        "speech_like_gap_count": 0}
+
+        rescued = []
+        examined = 0
+        report_windows = []
+        for w_start, w_end in windows[: self.VAD_RESCUE_MAX_WINDOWS]:
+            w_audio = audio[w_start:w_end]
+            if len(w_audio) < win:
+                continue
+            # 能量门槛：窗口内最强 1s 是否够响
+            subs = [_rms_db(w_audio[i:i + win])
+                    for i in range(0, max(1, len(w_audio) - win), win)]
+            peak_db = max(subs) if subs else _rms_db(w_audio)
+            examined += 1
+            rec = {"start": round(w_start / sample_rate, 1),
+                   "end": round(w_end / sample_rate, 1),
+                   "gap_sec": round((w_end - w_start) / sample_rate, 1),
+                   "peak_db": round(peak_db, 1),
+                   "above_floor": bool(peak_db > floor_db),
+                   "rescued_sec": 0.0,
+                   "speech_like": False}
+            if peak_db <= floor_db:
+                report_windows.append(rec)   # 连地板都没到 → 明确静音
+                continue
+            import torch
+            try:
+                sub_speeches = get_speech_timestamps(
+                    torch.from_numpy(w_audio.copy()), model,
+                    threshold=self.VAD_RESCUE_THRESHOLD,
+                    min_speech_duration_ms=self.VAD_RESCUE_MIN_SPEECH_MS,
+                    min_silence_duration_ms=100,
+                    return_seconds=False, sampling_rate=sample_rate,
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"VAD 救援复检失败（跳过该窗口）: {e}")
+                report_windows.append(rec)
+                continue
+            got = 0.0
+            for sp in sub_speeches or []:
+                s, e = w_start + sp["start"], w_start + sp["end"]
+                if e - s < sample_rate * 0.5:
+                    continue
+                seg_db = _rms_db(audio[s:e])
+                if seg_db <= floor_db:
+                    continue  # 复检出来的段本身也太弱 → 视为噪声
+                rescued.append({"start": s, "end": e})
+                got += (e - s) / sample_rate
+            rec["rescued_sec"] = round(got, 1)
+            # 判"语音样"：不能只看"有没有捞到片段"—— 186s 空窗里捞到 1.5s 的孤立
+            # 片段更像椅子/咳嗽/桌椅噪声，不是"漏抓了 3 分钟语音"。
+            # 因此要求捞回时长占空窗比例达标（或绝对时长够长）才算语音样。
+            ratio = got / max((w_end - w_start) / sample_rate, 1e-6)
+            rec["rescued_ratio"] = round(ratio, 4)
+            rec["speech_like"] = bool(
+                got >= self.VAD_RESCUE_SPEECH_LIKE_MIN_SEC
+                or ratio >= self.VAD_RESCUE_SPEECH_LIKE_MIN_RATIO
+            )
+            report_windows.append(rec)
+        if examined:
+            rescued_sec = sum(x["end"] - x["start"] for x in rescued) / sample_rate
+            logger.info(
+                f"VAD 低能量救援: 检查 {examined} 个长空窗（地板 {floor_db:.1f}dB），"
+                f"捞回 {len(rescued)} 段 / {rescued_sec:.1f}s"
+            )
+        report = {
+            "floor_db": round(floor_db, 1),
+            "long_gap_min_sec": self.VAD_RESCUE_MIN_GAP_SEC,
+            "windows": report_windows,
+            "long_gap_count": len(report_windows),
+            "speech_like_gap_count": sum(1 for w in report_windows if w["speech_like"]),
+        }
+        return rescued, report
 
     async def convert_and_segment(self, webm_data: bytes) -> tuple[np.ndarray, List[AudioSegment], int]:
         """一步完成：WebM → PCM + VAD 分段
