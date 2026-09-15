@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H · 阶色 — 届别分组细分方案</title>
+<link rel="stylesheet" href="_skin.css">
+<style>
+/* 阶色: 零额外高度 — 不加子头, 用一阶同族色 (深→浅 = 高年级→低年级) 标在行左缘 + 年级 chip */
+.row { border-left: 3px solid transparent; }
+.row.t0 { border-left-color: #0B5D56; background: rgba(11,93,86,.035); }
+.row.t1 { border-left-color: #4E8478; background: rgba(78,132,120,.03); }
+.row.t2 { border-left-color: #9BB4AC; background: rgba(155,180,172,.03); }
+.row.t3 { border-left-color: #C3D2CC; }
+.gtag.t0 { color: #0B5D56; border-color: rgba(11,93,86,.35); background: rgba(11,93,86,.08); }
+.gtag.t1 { color: #3c6b60; border-color: rgba(78,132,120,.35); background: rgba(78,132,120,.08); }
+.gtag.t2 { color: #6d8a82; border-color: rgba(155,180,172,.5); background: rgba(155,180,172,.1); }
+.gtag.t3 { color: var(--text-4); }
+/* 组头右侧小图例 */
+.legend { display: inline-flex; gap: 12px; margin-left: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+.legend i { width: 8px; height: 8px; border-radius: 2.5px; flex: none; }
+.ramp { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-4); margin-left: 6px; }
+.ramp i { width: 16px; height: 8px; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>团队协作</h1>
+    <span class="meta"><b>20</b> 人 · <b>4</b> 组 · 声纹 <b>8/20</b></span>
+    <span class="sp"></span>
+    <div class="seg"><button>按项目</button><button class="on">按届别</button></div>
+  </div>
+  <p class="note"><b>H 阶色</b> — 一行都不多占：届别顺序（研三→研二→研一）排好后，用一阶「深松青→浅灰绿」同族色同时刷在行左缘色条和年级 chip 上，颜色深浅 = 资序高低；组头带小图例。20 人小册子式最密的读法，跨届扫读靠色彩直觉，不靠文字分节。</p>
+  <div id="out"></div>
+</div>
+<div class="prop-bar">
+  <a href="index.html">总览</a><a href="E-subband.html">E 子带</a><a href="F-rail.html">F 导轨</a><a href="G-chips.html">G 胶囊</a><a class="on" href="H-tone.html">H 阶色</a><a href="I-fold.html">I 折叠</a>
+</div>
+<script src="_shared.js"></script>
+<script>
+const { M } = window.COHORT_DATA
+const RAMP = ['#0B5D56','#4E8478','#9BB4AC','#C3D2CC']
+const IDORD = ['导师','博士后','博士','硕士','本科生','校友']
+const groups = new Map()
+for (const m of M) { const t = memberStatus(m.g); (groups.get(t) || groups.set(t, []).get(t)).push(m) }
+const ordered = [...groups.entries()].sort((a,b) => (IDORD.indexOf(a[0])<0?99:IDORD.indexOf(a[0])) - (IDORD.indexOf(b[0])<0?99:IDORD.indexOf(b[0])))
+function subs(list) {
+  const s = new Map()
+  for (const m of [...list].sort((a,b)=>(window.SUBORDER[a.g]??5)-(window.SUBORDER[b.g]??5)||a.id-b.id)) {
+    if (!s.has(m.g)) s.set(m.g, []); s.get(m.g).push(m)
+  }
+  return [...s.entries()]
+}
+document.getElementById('out').innerHTML = ordered.map(([t, list], gi) => {
+  const color = window.COHORT_DATA.COLORS[gi % 8]
+  const vpNo = list.filter(m=>!m.vp).length
+  const sub = subs(list)
+  const toneIdx = {}
+  sub.forEach(([g], i) => toneIdx[g] = Math.min(i, 3))
+  const multi = sub.length > 1
+  const legend = multi ? `<span class="legend">${sub.map(([g, ms], i) => `<span><i style="background:${RAMP[Math.min(i,3)]}"></i>${g} ${ms.length}</span>`).join('')}</span>` : ''
+  const rows = sub.map(([g, ms]) => ms.map(m => `
+    <div class="row ${multi ? 't'+toneIdx[g] : ''}">
+      <span class="nm"><span class="av" style="background:${avColor(m.id)}">${m.n[0]}</span><b>${m.n}</b><span class="id">#${String(m.id).padStart(3,'0')}</span></span>
+      <span class="gtag ${multi ? 't'+toneIdx[g] : (isTeacher(m.g)?'t':'')}">${m.g}</span>
+      <span class="area ${m.area?'':'dim'}">${m.area || '研究方向未登记'}</span>
+      <span class="sk">${m.sk.slice(0,3).map(s=>`<span>${s}</span>`).join('')}</span>
+      ${m.vp ? `<span class="vp">声纹 × ${m.vp}</span>` : `<span class="vp no">未录入</span>`}
+    </div>`).join('')).join('')
+  return `<section class="doss"><div class="dhead"><span class="dot" style="background:${color}"></span><h2>${t}</h2>${legend}<span class="sp"></span><span class="cnt"><b>${list.length}</b> 人${vpNo?` · ${vpNo} 人未录声纹`:''}</span></div>${rows}</section>`
+}).join('')
+</script>
+</body>
+</html>

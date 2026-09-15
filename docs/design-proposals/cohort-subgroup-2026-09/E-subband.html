@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E · 子带 — 届别分组细分方案</title>
+<link rel="stylesheet" href="_skin.css">
+<style>
+/* 子带: 身份组卡内插一条细带, mono 届别 + 人数 + 声纹缺录, 右侧渐隐发丝线 */
+.sub { display: flex; align-items: center; gap: 10px; padding: 8px 20px 7px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.sub .sn { font-size: 12px; font-weight: 650; color: var(--text); letter-spacing: .04em; }
+.sub .sc { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); }
+.sub .sc b { color: var(--text-2); font-weight: 600; }
+.sub .tick { width: 3px; height: 12px; border-radius: 2px; background: var(--primary); opacity: .55; flex: none; }
+.sub .fade { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line-2), transparent); }
+/* 仅当组头下方确实接子带时才去双线; 无子带的节 (导师单行) 保留组头分隔线 */
+.dhead.nob { border-bottom: none; }
+/* 子带已声明届别, 仅在有子带的组内收起行内年级 chip、悬停行时浮现 */
+.doss.has-sub .row .gtag { visibility: collapse; }
+.doss.has-sub .row:hover .gtag { visibility: visible; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>团队协作</h1>
+    <span class="meta"><b>20</b> 人 · <b>4</b> 组 · 声纹 <b>8/20</b></span>
+    <span class="sp"></span>
+    <div class="seg"><button>按项目</button><button class="on">按届别</button></div>
+  </div>
+  <p class="note"><b>E 子带</b> — 身份组卡内按年级从高到低插「研三/研二/研一」细带（mono 计数 + 未录声纹提示）。改动最小：行结构、锚导、色点全部沿用现版；行内年级 chip 收起、悬停才出现，避免与子带重复。</p>
+  <div id="out"></div>
+</div>
+<div class="prop-bar">
+  <a href="index.html">总览</a><a class="on" href="E-subband.html">E 子带</a><a href="F-rail.html">F 导轨</a><a href="G-chips.html">G 胶囊</a><a href="H-tone.html">H 阶色</a><a href="I-fold.html">I 折叠</a>
+</div>
+<script src="_shared.js"></script>
+<script>
+const { M } = window.COHORT_DATA
+const IDORD = ['导师','博士后','博士','硕士','本科生','校友']
+const groups = new Map()
+for (const m of M) { const t = memberStatus(m.g); (groups.get(t) || groups.set(t, []).get(t)).push(m) }
+const ordered = [...groups.entries()].sort((a,b) => (IDORD.indexOf(a[0])<0?99:IDORD.indexOf(a[0])) - (IDORD.indexOf(b[0])<0?99:IDORD.indexOf(b[0])))
+
+function subs(list) {
+  const s = new Map()
+  for (const m of [...list].sort((a,b)=>(window.SUBORDER[a.g]??5)-(window.SUBORDER[b.g]??5)||a.id-b.id)) {
+    if (!s.has(m.g)) s.set(m.g, [])
+    s.get(m.g).push(m)
+  }
+  return [...s.entries()]
+}
+function rowHtml(m) {
+  return `<div class="row">
+    <span class="nm"><span class="av" style="background:${avColor(m.id)}">${m.n[0]}</span><b>${m.n}</b><span class="id">#${String(m.id).padStart(3,'0')}</span></span>
+    <span class="gtag ${isTeacher(m.g)?'t':''}">${m.g}</span>
+    <span class="area ${m.area?'':'dim'}">${m.area || '研究方向未登记'}</span>
+    <span class="sk">${m.sk.slice(0,3).map(s=>`<span>${s}</span>`).join('')}</span>
+    ${m.vp ? `<span class="vp">声纹 × ${m.vp}</span>` : `<span class="vp no">未录入</span>`}
+  </div>`
+}
+document.getElementById('out').innerHTML = ordered.map(([t, list], gi) => {
+  const sub = subs(list)
+  const vpNo = list.filter(m=>!m.vp).length
+  const color = window.COHORT_DATA.COLORS[gi % 8]
+  const noBand = sub.length <= 1 && (t === '导师')
+  const body = noBand
+    ? list.map(rowHtml).join('')
+    : sub.map(([g, ms]) => `
+      <div class="sub"><span class="tick" style="background:${color}"></span><span class="sn">${g}</span><span class="sc"><b>${ms.length}</b> 人 · 声纹 ${ms.filter(x=>x.vp).length}/${ms.length}</span><span class="fade"></span></div>
+      ${ms.map(rowHtml).join('')}`).join('')
+  return `<section class="doss${noBand ? '' : ' has-sub'}"><div class="dhead${noBand ? '' : ' nob'}"><span class="dot" style="background:${color}"></span><h2>${t}</h2><span class="sp"></span><span class="cnt"><b>${list.length}</b> 人${vpNo?` · ${vpNo} 人未录声纹`:''}</span></div>${body}</section>`
+}).join('')
+</script>
+</body>
+</html>

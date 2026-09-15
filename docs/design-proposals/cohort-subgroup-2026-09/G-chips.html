@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>G · 胶囊筛选 — 届别分组细分方案</title>
+<link rel="stylesheet" href="_skin.css">
+<style>
+/* 胶囊: 组头下方一行届别 chips (研三/研二/研一 + 人数), 点击只留该届, "全部"复位 */
+.gtabs { display: flex; align-items: center; gap: 7px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.gtabs .lab { font-size: 11px; color: var(--text-4); margin-right: 2px; letter-spacing: .04em; }
+.gtab { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-full); padding: 3.5px 11px; transition: all var(--dur); }
+.gtab .c { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.gtab:hover { border-color: var(--primary-border); color: var(--primary-dark); }
+.gtab.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.gtab.on .c { color: rgba(255,255,255,.8); }
+.gtabs .tip { margin-left: auto; font-size: 11px; color: var(--text-4); font-family: var(--mono); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>团队协作</h1>
+    <span class="meta"><b>20</b> 人 · <b>4</b> 组 · 声纹 <b>8/20</b></span>
+    <span class="sp"></span>
+    <div class="seg"><button>按项目</button><button class="on">按届别</button></div>
+  </div>
+  <p class="note"><b>G 胶囊筛选</b> — 组头下挂一条届别胶囊栏（按高到低排，mono 计数），点胶囊即只看该届、卡内原地收窄，点「全部」复位。默认不折叠、全量可见；组大时（硕士 12 人）一眼能按届切。锚导高度不变，交互最接近网盘搜索 chips。</p>
+  <div id="out"></div>
+</div>
+<div class="prop-bar">
+  <a href="index.html">总览</a><a href="E-subband.html">E 子带</a><a href="F-rail.html">F 导轨</a><a class="on" href="G-chips.html">G 胶囊</a><a href="H-tone.html">H 阶色</a><a href="I-fold.html">I 折叠</a>
+</div>
+<script src="_shared.js"></script>
+<script>
+const { M } = window.COHORT_DATA
+const IDORD = ['导师','博士后','博士','硕士','本科生','校友']
+const groups = new Map()
+for (const m of M) { const t = memberStatus(m.g); (groups.get(t) || groups.set(t, []).get(t)).push(m) }
+const ordered = [...groups.entries()].sort((a,b) => (IDORD.indexOf(a[0])<0?99:IDORD.indexOf(a[0])) - (IDORD.indexOf(b[0])<0?99:IDORD.indexOf(b[0])))
+function subs(list) {
+  const s = new Map()
+  for (const m of [...list].sort((a,b)=>(window.SUBORDER[a.g]??5)-(window.SUBORDER[b.g]??5)||a.id-b.id)) {
+    if (!s.has(m.g)) s.set(m.g, []); s.get(m.g).push(m)
+  }
+  return [...s.entries()]
+}
+function rowHtml(m) {
+  return `<div class="row" data-g="${m.g}">
+    <span class="nm"><span class="av" style="background:${avColor(m.id)}">${m.n[0]}</span><b>${m.n}</b><span class="id">#${String(m.id).padStart(3,'0')}</span></span>
+    <span class="gtag ${isTeacher(m.g)?'t':''}">${m.g}</span>
+    <span class="area ${m.area?'':'dim'}">${m.area || '研究方向未登记'}</span>
+    <span class="sk">${m.sk.slice(0,3).map(s=>`<span>${s}</span>`).join('')}</span>
+    ${m.vp ? `<span class="vp">声纹 × ${m.vp}</span>` : `<span class="vp no">未录入</span>`}
+  </div>`
+}
+document.getElementById('out').innerHTML = ordered.map(([t, list], gi) => {
+  const color = window.COHORT_DATA.COLORS[gi % 8]
+  const vpNo = list.filter(m=>!m.vp).length
+  const sub = subs(list)
+  const chips = sub.length > 1
+    ? `<div class="gtabs"><span class="lab">届别</span>
+        <button class="gtab on" data-f="*">全部<span class="c">${list.length}</span></button>
+        ${sub.map(([g, ms]) => `<button class="gtab" data-f="${g}">${g}<span class="c">${ms.length}</span></button>`).join('')}
+        <span class="tip">点胶囊筛选</span></div>`
+    : ''
+  return `<section class="doss" data-t="${t}"><div class="dhead"><span class="dot" style="background:${color}"></span><h2>${t}</h2><span class="sp"></span><span class="cnt"><b>${list.length}</b> 人${vpNo?` · ${vpNo} 人未录声纹`:''}</span></div>${chips}${sub.map(([g,ms])=>ms.map(rowHtml).join('')).join('')}</section>`
+}).join('')
+document.querySelectorAll('.doss').forEach(card => {
+  card.querySelectorAll('.gtab').forEach(btn => btn.addEventListener('click', () => {
+    const f = btn.dataset.f
+    card.querySelectorAll('.gtab').forEach(b => b.classList.toggle('on', b === btn))
+    card.querySelectorAll('.row').forEach(r => r.style.display = (f === '*' || r.dataset.g === f) ? '' : 'none')
+  }))
+})
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F · 左导轨 — 届别分组细分方案</title>
+<link rel="stylesheet" href="_skin.css">
+<style>
+/* 左导轨: 组卡内部改用「届别竖轨」 — 每届一个色签挂在左缘, 行缩进对齐 */
+.subwrap { display: flex; border-bottom: 1px solid var(--line); }
+.subwrap:last-child { border-bottom: none; }
+.rail { flex: none; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 11px 0 11px; border-right: 1px dashed var(--line); background: linear-gradient(180deg, var(--bg), var(--card) 90%); }
+.rail .rg { font-size: 12.5px; font-weight: 700; color: var(--text-2); writing-mode: horizontal-tb; letter-spacing: .06em; }
+.rail .rn { font-family: var(--mono); font-size: 10px; color: var(--text-4); }
+.rail .bar { width: 14px; height: 2.5px; border-radius: 2px; background: var(--line-2); }
+.rail .bar.hot { background: var(--primary); opacity: .6; }
+.subbody { flex: 1; min-width: 0; }
+.subbody .row { padding-left: 6px; }
+.subbody .row:first-child { border-top: none; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>团队协作</h1>
+    <span class="meta"><b>20</b> 人 · <b>4</b> 组 · 声纹 <b>8/20</b></span>
+    <span class="sp"></span>
+    <div class="seg"><button>按项目</button><button class="on">按届别</button></div>
+  </div>
+  <p class="note"><b>F 左导轨</b> — 每个身份组内按年级从高到低切成竖轨段：左缘窄轨写届别 + 人数 + 小色标（该届有人未录声纹则点亮深青）。视觉上"一届一段"最分明，纵向节奏感强；比 E 更占横向 62px。</p>
+  <div id="out"></div>
+</div>
+<div class="prop-bar">
+  <a href="index.html">总览</a><a href="E-subband.html">E 子带</a><a class="on" href="F-rail.html">F 导轨</a><a href="G-chips.html">G 胶囊</a><a href="H-tone.html">H 阶色</a><a href="I-fold.html">I 折叠</a>
+</div>
+<script src="_shared.js"></script>
+<script>
+const { M } = window.COHORT_DATA
+const IDORD = ['导师','博士后','博士','硕士','本科生','校友']
+const groups = new Map()
+for (const m of M) { const t = memberStatus(m.g); (groups.get(t) || groups.set(t, []).get(t)).push(m) }
+const ordered = [...groups.entries()].sort((a,b) => (IDORD.indexOf(a[0])<0?99:IDORD.indexOf(a[0])) - (IDORD.indexOf(b[0])<0?99:IDORD.indexOf(b[0])))
+function subs(list) {
+  const s = new Map()
+  for (const m of [...list].sort((a,b)=>(window.SUBORDER[a.g]??5)-(window.SUBORDER[b.g]??5)||a.id-b.id)) {
+    if (!s.has(m.g)) s.set(m.g, []); s.get(m.g).push(m)
+  }
+  return [...s.entries()]
+}
+function rowHtml(m) {
+  return `<div class="row">
+    <span class="nm"><span class="av" style="background:${avColor(m.id)}">${m.n[0]}</span><b>${m.n}</b><span class="id">#${String(m.id).padStart(3,'0')}</span></span>
+    <span class="gtag ${isTeacher(m.g)?'t':''}">${m.g}</span>
+    <span class="area ${m.area?'':'dim'}">${m.area || '研究方向未登记'}</span>
+    <span class="sk">${m.sk.slice(0,3).map(s=>`<span>${s}</span>`).join('')}</span>
+    ${m.vp ? `<span class="vp">声纹 × ${m.vp}</span>` : `<span class="vp no">未录入</span>`}
+  </div>`
+}
+document.getElementById('out').innerHTML = ordered.map(([t, list], gi) => {
+  const color = window.COHORT_DATA.COLORS[gi % 8]
+  const vpNo = list.filter(m=>!m.vp).length
+  const segs = subs(list).map(([g, ms]) => {
+    const miss = ms.some(m=>!m.vp)
+    return `<div class="subwrap">
+      <div class="rail" style="--rc:${color}"><span class="rg">${g}</span><span class="rn">${ms.length}人</span><span class="bar ${miss?'hot':''}"></span></div>
+      <div class="subbody">${ms.map(rowHtml).join('')}</div>
+    </div>`
+  }).join('')
+  return `<section class="doss"><div class="dhead"><span class="dot" style="background:${color}"></span><h2>${t}</h2><span class="sp"></span><span class="cnt"><b>${list.length}</b> 人${vpNo?` · ${vpNo} 人未录声纹`:''}</span></div>${segs}</section>`
+}).join('')
+</script>
+</body>
+</html>
