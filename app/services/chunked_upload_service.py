@@ -215,13 +215,21 @@ class ChunkedUploadService:
         return deleted
 
     async def delete_merged(self, meeting_id: int) -> bool:
-        """仅删除 merged.webm（merge 后的最终文件）"""
-        merged = self._merged_object_name(meeting_id)
-        try:
-            file_service.delete_file(merged)
-            return True
-        except Exception:
-            return False
+        """仅删除 merge 后的最终文件。
+
+        2026-09-15 P0 修正: 原实现只删 `merged.webm`。但字节级拼接
+        (`merge_chunks_raw`) 会按嗅探结果写成 `merged.m4a / .mp3 / .ogg / .wav`，
+        只删 .webm 会留下孤儿文件。现在按扩展名逐个尝试。
+        """
+        deleted_any = False
+        base = self.MERGED_OBJECT_TMPL.format(meeting_id=meeting_id).rsplit(".", 1)[0]
+        for ext in ("webm", "m4a", "mp3", "ogg", "wav", "aac"):
+            try:
+                file_service.delete_file(f"{base}.{ext}")
+                deleted_any = True
+            except Exception:  # noqa: BLE001 — 文件不存在即视为已清理
+                continue
+        return deleted_any
 
     async def delete_all(self, meeting_id: int) -> int:
         """

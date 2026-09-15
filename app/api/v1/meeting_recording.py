@@ -216,6 +216,14 @@ async def reset_chunks_endpoint(
         raise HTTPException(status_code=404, detail="会议不存在")
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可重置分片")
+    # 2026-09-15 P0: 状态守卫 —— reset 会把 audio_url/upload_status 清空,
+    # 若会议已进入 processing/completed, 清空会直接毁掉已有录音与流水线结果。
+    # 前端只在"停止上传前的重传准备"阶段调用, 此时 status 必然是 recording。
+    if meeting.status != "recording":
+        raise HTTPException(
+            status_code=400,
+            detail=f"会议不在录音状态 (status={meeting.status}), 拒绝重置分片",
+        )
 
     try:
         deleted = await chunked_upload_service.delete_chunks(meeting_id)

@@ -68,6 +68,13 @@ class GPUASRClient:
             raise GPUASRError(f"提交失败: {e}") from e
 
         t0 = time.time()
+        # 2026-09-15 P0 修复（会议 250 重跑事故）：轮询瞬时故障容错。
+        # 事故现场：21:10 提交 7B 作业，21:50:51 轮询抛了一次异常（错误信息为空），
+        # 原实现直接 `raise GPUASRError(...)` 放弃整条 GPU 链路 → 白扔 40 分钟
+        # 后回退 SenseVoice，最终把整条流水线拖过 1 小时、触发 broker 重复投递。
+        # 修法：连续 N 次轮询失败才放弃；单次抖动只是重试。
+        consecutive_failures = 0
+        max_consecutive_failures = 6  # 6 次 × poll_interval(5s) ≈ 30s 容忍窗口
         while True:
             if time.time() - t0 > self.timeout_total:
                 raise GPUASRError("转写超时")
@@ -77,8 +84,20 @@ class GPUASRClient:
                     r = await client.get(f"{self.base_url}/jobs/{job_id}")
                 r.raise_for_status()
                 info = r.json()
+                consecutive_failures = 0
             except Exception as e:
-                raise GPUASRError(f"轮询失败: {e}") from e
+                consecutive_failures += 1
+                if consecutive_failures >= max_consecutive_failures:
+                    raise GPUASRError(
+                        f"轮询失败 {consecutive_failures} 次: {e}"
+                    ) from e
+                # 瞬时抖动 → 继续下一轮轮询
+                import logging as _logging
+                _logging.getLogger("microbubble.gpu_asr").warning(
+                    f"GPU ASR 轮询第 {consecutive_failures}/{max_consecutive_failures} 次失败"
+                    f"（继续重试）: {e}"
+                )
+                continue
             status = info.get("status")
             if progress_cb:
                 try:

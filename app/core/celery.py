@@ -18,11 +18,34 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,  # worker OOM/重启时重新入队，避免任务静默丢失
+    # 2026-09-15 P0 修复（听会会议 250 重跑失败事故）
+    # ------------------------------------------------------------------
+    # 事故：post_meeting_process(250) 于 21:09:23 启动，因 GPU ASR 链路卡了 40 分钟
+    # 才回退 SenseVoice，整条流水线（转写 7min + 声纹 4min + 27B 润色 ~30min+）
+    # 必然超过 1 小时。而 `task_acks_late=True` + Redis broker 的默认
+    # `visibility_timeout=3600s` 会在满 1 小时时把**尚未 ack 的任务重新投递**：
+    # 22:09:27 出现了同 task id 的第二次执行，从阶段 0 重跑，撞上瞬时的
+    # SenseVoice 健康检查失败 → 直接把会议标记为 error，而第一次执行的结果
+    # 因为流水线只在最后一步落库，全部作废。
+    # 修法：把 visibility_timeout 提到 6 小时，覆盖最长会议的全流水线耗时。
+    # 注意 task_time_limit=600 对 `--pool=threads` **不生效**（Celery 时间限制
+    # 仅 prefork 池可用），所以这里的上限实际由 visibility_timeout 决定。
+    broker_transport_options={
+        "visibility_timeout": 21600,  # 6h，长会议流水线跑完前不得重复投递
+    },
     task_time_limit=600,  # 单 task 最长 10 分钟，硬终止失控任务
     task_soft_time_limit=540,  # 9 分钟软警告，给任务清理资源的机会
     worker_max_tasks_per_child=1000,  # 定期回收 worker，防止长期内存泄漏
     worker_prefetch_multiplier=1,
     # 2026-08-04 Batch D-1: 路由表, 让 meeting-processing 走独立队列
+    # ⚠️ 注意（2026-09-15 发现）：这里的 pattern 与真实 task name 不匹配 ——
+    # 真实模块是 `app.services.post_meeting_tasks.post_meeting_process`，
+    # 而 pattern 写成了 `app.services.post_meeting_process.*`，
+    # 因此**会议后处理从未真正走进 meeting-processing 队列**，
+    # 一直被通用 celery-worker（threads 池 + 4 并发）兜住，
+    # 导致专用 worker（-Q meeting-processing --pool=solo）长期空转，
+    # 且会议处理与提醒/统计等任务争抢资源，还享受不到线程池外的时间限制语义。
+    # 未在本批次修改（需与时间限制策略一起评估），留待专项修复。
     task_routes={
         "app.services.post_meeting_process.*": {"queue": "meeting-processing"},
         "app.services.meeting_reprocessing.*": {"queue": "meeting-processing"},
