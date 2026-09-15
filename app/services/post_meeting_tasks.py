@@ -133,7 +133,16 @@ def post_meeting_process(self, meeting_id: int):
 
                 audio_pcm, segments, sample_rate = await audio_processor.convert_and_segment(audio_data)
                 logger.info(f"音频转码+VAD 分段完成: {len(segments)} 段, 总时长 {len(audio_pcm)/sample_rate:.1f}s")
-                await _persist_stage(proc_svc, run, "downloading_audio", "success", metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2)})
+                # 2026-09-16: 取音频证据（长空窗分类），供质量门禁判"长间隔是真实静音
+                # 还是漏抓"。见 audio_processor._rescue_low_energy_windows 注释。
+                gap_evidence = dict(getattr(audio_processor, "last_segment_report", None) or {})
+                if gap_evidence:
+                    logger.info(
+                        f"音频证据: 长空窗 {gap_evidence.get('long_gap_count')} 个, "
+                        f"其中语音样 {gap_evidence.get('speech_like_gap_count')} 个, "
+                        f"地板 {gap_evidence.get('floor_db')}dB"
+                    )
+                await _persist_stage(proc_svc, run, "downloading_audio", "success", metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2), "audio_gap_evidence": gap_evidence})
 
                 # ===== 阶段 1: ASR 转写 =====
                 # 2026-09-07: 优先走 GPU 7B 链路 (VibeVoice-ASR, Who/When/What + 热词,
@@ -958,6 +967,10 @@ def post_meeting_process(self, meeting_id: int):
                     "summary": meeting.summary,
                     "key_points": meeting.key_points,
                     "decisions": meeting.decisions,
+                    # 2026-09-16: 音频证据 —— 让质量门禁能区分"真实静音"与"漏抓"，
+                    # 避免长会议上的真实静音被永久判 fail（原来只有一句
+                    # "需用音频证据分类" 的提示，但证据从未传进来）。
+                    "audio_gap_evidence": gap_evidence,
                 }
                 qa_result = _eval_quality(meeting_dict)
                 meeting.quality_status = qa_result["status"]

@@ -108,16 +108,29 @@ class Settings(BaseSettings):
     # 服务不可用/失败自动回退 SenseVoice 逐段链路
     GPU_ASR_ENABLED: bool = True
     GPU_ASR_URL: str = "http://host.docker.internal:8005"
+    # 2026-09-16 实测副产物（值得留意，影响 7B 是否值得走）：
+    #   600s 真实会议音频走 7B 只产出 **16 个段落**（≈37.5s/段），
+    #   而 SenseVoice 逐段链路在同一场 96 分钟会议上产出 **1891 段**。
+    #   7B 会把连续语音合并成长段，段落粒度差 → 前端逐段浏览/发言人归属都更粗。
+    #   因此 7B 的收益主要在"整段 Who/When/What + 热词"，不在粒度；
+    #   若要启用长会议 7B，建议先把 chunk_sec 调小并实测段落粒度与说话人归属质量。
     GPU_ASR_MIN_SEC: int = 180     # 低于此时长直接走 SenseVoice (7B 加载无优势)
-    GPU_ASR_TIMEOUT: int = 7200    # 3h 会议分块转写上限
+    GPU_ASR_TIMEOUT: int = 3600    # 单作业硬上限（含模型加载）。原 7200 太长：卡住的作业独占 GPU 2 小时
     # 2026-09-15 P0（会议 250 重跑事故）: 7B 链路的两道保险
     # 事故: 96 分 27 秒的会议走 7B，跑到 7200s 硬超时才被杀 —— 2 小时 GPU 白占，
-    # 客户端全程无进展信号，最终仍回退 SenseVoice。实测该 7B 对 1.5h 会议
-    # 不可能在预算内跑完，因此：
-    #   1) GPU_ASR_MAX_SEC: 音频超过此时长**直接不走 7B**，省掉必然失败的尝试。
-    #      3200s ≈ 53 分钟（按实测 rtf≈0.9~1.0 反推，留 1.5~2x 余量）。
-    #   2) GPU_ASR_STALL_SEC: 进度停滞超过此秒数即判卡死，放弃并取消作业。
-    GPU_ASR_MAX_SEC: int = 3200
+    # 客户端全程无进展信号，最终仍回退 SenseVoice。
+    #
+    # 2026-09-16 实测校准（scripts/measure_gpu_asr_rtf.py，会议 250 前 600s 真实音频）：
+    #   模型加载 38.8s + 推理 363s = 墙钟 411s，**RTF = 0.605**，VRAM 21.0GB
+    #   （与 docs/vibevoice-deployment-report-2026-09-07.md 的 0.53~0.97 吻合）
+    # 结论：单看 RTF，96 分钟音频理论上约 58 分钟即可完成；生产上却跑满 2 小时，
+    # 说明退化来自**环境争用**（当时 GPU 上还驻留 ollama 27B 等）或个别分块病态解码，
+    # 而不是 RTF 估算本身。因此这里取"实测 × 安全系数"：
+    #   worker 预算 = JOB_TIMEOUT - 120 = 3480s
+    #   按实测 0.605 并留 1.6x 余量 → 3480 / (0.605×1.6) ≈ 3600s（60 分钟）
+    # 运行时另有第二道保险：worker `--max-seconds` 会按已完成分块外推，超预算即
+    # **提前中止**（几分钟内回退 SenseVoice，而不是耗满 1 小时）。
+    GPU_ASR_MAX_SEC: int = 3600
     GPU_ASR_STALL_SEC: int = 900
 
     # 2026-09-08 Streaming-7B 实时 ASR (host 常驻 8006, RTF~0.1, 2.9s 增量块)

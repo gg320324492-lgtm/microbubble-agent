@@ -141,11 +141,37 @@ class MeetingQualityEvaluator:
             metrics["transcript_max_gap_sec"] = round(max_gap, 2)
             metrics["transcript_gap_count_gt5s"] = sum(1 for g in gaps if g > 5)
             if max_gap > self.THRESHOLDS["max_gap_fail_sec"]:
-                issues.append({
-                    "code": "transcript_long_gap",
-                    "level": "fail",
-                    "message": f"最长无转录间隔 {max_gap:.0f}s > 180s, 需用音频证据分类是真实静音还是 ASR 漏抓",
-                })
+                # 2026-09-16: 引入**音频证据**判定"真实静音"还是"漏抓"。
+                # 原实现只按秒数硬判 fail，但长会议里出现 3 分钟静音完全正常
+                # （会议 250 就有一条 186s 的 fail，长期挂着无法消除）。
+                # 证据由 audio_processor 产出：对每个长空窗用低阈值 VAD 复检，
+                # 只有"能量高于地板 **且** 复检出语音"才算语音样。
+                ev = (self.m.get("audio_gap_evidence") or {}) if isinstance(self.m, dict) else {}
+                speech_like = ev.get("speech_like_gap_count")
+                metrics["audio_gap_evidence"] = ev or None
+                if ev and speech_like == 0:
+                    issues.append({
+                        "code": "transcript_long_gap_silence",
+                        "level": "warn",
+                        "message": (
+                            f"最长无转录间隔 {max_gap:.0f}s，但音频证据表明该空窗内无语音"
+                            f"（低阈值 VAD 复检 0 段；地板 {ev.get('floor_db')}dB；"
+                            f"共检查 {ev.get('long_gap_count')} 个长空窗）→ 判为真实静音/非语音噪声，非 ASR 漏抓"
+                        ),
+                    })
+                else:
+                    detail = (
+                        f"音频证据: 语音样空窗 {speech_like}/{ev.get('long_gap_count')} 个"
+                        if ev else "缺少音频证据"
+                    )
+                    issues.append({
+                        "code": "transcript_long_gap",
+                        "level": "fail",
+                        "message": (
+                            f"最长无转录间隔 {max_gap:.0f}s > "
+                            f"{self.THRESHOLDS['max_gap_fail_sec']:.0f}s；{detail} → 疑似漏抓，需人工核对"
+                        ),
+                    })
             elif max_gap > self.THRESHOLDS["max_gap_warn_sec"]:
                 issues.append({
                     "code": "transcript_long_gap",
