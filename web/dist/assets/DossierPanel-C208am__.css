@@ -1,0 +1,163 @@
+
+/* --- tokens 自包含 (B 名录 = 网盘工作台设计语言, 不依赖组件树继承) --- */
+.dossier-panel[data-v-9f1ead18] {
+  --rb-primary: #0e766e; --rb-primary-dark: #0b5d56;
+  --rb-primary-bg: rgba(14, 118, 110, .09); --rb-primary-border: rgba(14, 118, 110, .35);
+  --rb-text: #22302c; --rb-text-2: #52615c; --rb-text-3: #8b968f; --rb-text-4: #b9bfb6;
+  --rb-bg: #f2f0eb; --rb-card: #ffffff; --rb-line: #e5e1d8; --rb-line-2: #d5d0c3; --rb-bg-hover: #eeebe3;
+  --rb-danger: #d94f2b;
+  --rb-shadow-sm: 0 2px 8px rgba(20, 40, 35, .07);
+  --rb-r-md: 8px; --rb-r-lg: 12px; --rb-r-full: 9999px;
+  --rb-grad-cta: linear-gradient(135deg, #0e766e, #12897c);
+  --rb-dur: 180ms;
+  --rb-mono: Consolas, 'JetBrains Mono', 'Courier New', monospace;
+
+  position: relative;
+  margin: calc(-1 * var(--space-4, 16px));
+  padding: 26px 24px 60px;
+  min-height: 100%;
+  background: var(--rb-bg);
+  color: var(--rb-text);
+  font-size: 13.5px;
+}
+.dossier-panel[data-v-9f1ead18] button { font-family: inherit;
+}
+.dossier-panel[data-v-9f1ead18] a:focus-visible, .dossier-panel[data-v-9f1ead18] button:focus-visible { outline: 2px solid var(--rb-primary); outline-offset: 1px;
+}
+
+/* --- 页头: 一行说完 --- */
+.head[data-v-9f1ead18] { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 18px;
+}
+.head h1[data-v-9f1ead18] { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: .01em; color: var(--rb-text);
+}
+.head .meta[data-v-9f1ead18] { font-size: 12px; color: var(--rb-text-3); padding-bottom: 3px;
+}
+.head .meta b[data-v-9f1ead18] { font-family: var(--rb-mono); color: var(--rb-text-2); font-weight: 600;
+}
+.head .grow[data-v-9f1ead18] { flex: 1;
+}
+.seg[data-v-9f1ead18] { display: flex; background: var(--rb-card); border: 1px solid var(--rb-line); border-radius: var(--rb-r-md); padding: 2px;
+}
+.seg button[data-v-9f1ead18] { border: none; background: none; font-size: 12.5px; color: var(--rb-text-2); padding: 5px 13px; border-radius: 6px; cursor: pointer;
+}
+.seg button.on[data-v-9f1ead18] { background: var(--rb-primary-bg); color: var(--rb-primary-dark); font-weight: 600; box-shadow: inset 0 0 0 1px var(--rb-primary-border);
+}
+
+/* --- 横向锚导 --- */
+.pstrip[data-v-9f1ead18] { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 14px;
+}
+.pstrip[data-v-9f1ead18]::-webkit-scrollbar { display: none;
+}
+.pill[data-v-9f1ead18] { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; text-decoration: none; font-size: 12.5px; color: var(--rb-text-2); background: var(--rb-card); border: 1px solid var(--rb-line); border-radius: var(--rb-r-full); padding: 6px 13px; cursor: pointer; transition: all var(--rb-dur);
+}
+.pill .dot[data-v-9f1ead18] { width: 8px; height: 8px; border-radius: 50%; flex: none;
+}
+.pill .dot.all[data-v-9f1ead18] { background: var(--rb-grad-cta);
+}
+.pill .dot.warn[data-v-9f1ead18] { background: var(--rb-danger);
+}
+.pill .c[data-v-9f1ead18] { font-family: var(--rb-mono); font-size: 10.5px; color: var(--rb-text-4);
+}
+.pill[data-v-9f1ead18]:hover { border-color: var(--rb-primary-border); color: var(--rb-primary-dark);
+}
+.pill.on[data-v-9f1ead18] { background: var(--rb-grad-cta); border-color: transparent; color: #fff; font-weight: 600;
+}
+.pill.on .c[data-v-9f1ead18] { color: rgba(255, 255, 255, .75);
+}
+.pill.dashed[data-v-9f1ead18] { border-style: dashed;
+}
+
+/* --- 卷 (白卡节) --- */
+.doss[data-v-9f1ead18] { background: var(--rb-card); border: 1px solid var(--rb-line); border-radius: var(--rb-r-lg); box-shadow: var(--rb-shadow-sm); margin-bottom: 16px; scroll-margin-top: 12px;
+}
+.dhead[data-v-9f1ead18] { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--rb-line);
+}
+.dhead .dot[data-v-9f1ead18] { width: 10px; height: 10px; border-radius: 3px; flex: none;
+}
+.dhead h2[data-v-9f1ead18] { margin: 0; font-size: 14.5px; font-weight: 650; color: var(--rb-text);
+}
+.dhead .period[data-v-9f1ead18] { font-family: var(--rb-mono); font-size: 10.5px; color: var(--rb-text-4); margin-left: 2px;
+}
+.dhead .grow[data-v-9f1ead18] { flex: 1;
+}
+.dhead .cnt[data-v-9f1ead18] { font-size: 11.5px; color: var(--rb-text-3);
+}
+.dhead .cnt b[data-v-9f1ead18] { color: var(--rb-text-2); font-family: var(--rb-mono);
+}
+
+/* --- 成员行: 单行紧凑 --- */
+.row[data-v-9f1ead18] { display: grid; grid-template-columns: minmax(160px, 1.2fr) 74px minmax(140px, 1.2fr) 1fr 88px 56px; gap: 14px; align-items: center; padding: 0 20px; height: 52px; border-bottom: 1px solid var(--rb-line); transition: background var(--rb-dur);
+}
+.row[data-v-9f1ead18]:last-child { border-bottom: none;
+}
+.row[data-v-9f1ead18]:hover { background: var(--rb-bg-hover);
+}
+.row:hover .op[data-v-9f1ead18] { opacity: 1;
+}
+.nm[data-v-9f1ead18] { display: flex; align-items: center; gap: 10px; min-width: 0;
+}
+.av[data-v-9f1ead18] { width: 30px; height: 30px; border-radius: var(--rb-r-md); display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #fff; flex: none; overflow: hidden;
+}
+.av img[data-v-9f1ead18] { width: 100%; height: 100%; object-fit: cover;
+}
+.nm b[data-v-9f1ead18] { font-weight: 600; font-size: 13.5px; color: var(--rb-text);
+}
+.nm .id[data-v-9f1ead18] { font-family: var(--rb-mono); font-size: 10.5px; color: var(--rb-text-4); margin-left: 4px; font-weight: 400;
+}
+.gtag[data-v-9f1ead18] { font-size: 11.5px; padding: 2px 9px; border-radius: var(--rb-r-full); background: var(--rb-bg); border: 1px solid var(--rb-line); color: var(--rb-text-2); justify-self: start; white-space: nowrap;
+}
+.gtag.t[data-v-9f1ead18] { background: var(--rb-primary-bg); border-color: var(--rb-primary-border); color: var(--rb-primary-dark);
+}
+.area[data-v-9f1ead18] { font-size: 12.5px; color: var(--rb-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.area.dim[data-v-9f1ead18] { color: var(--rb-text-4);
+}
+.sk[data-v-9f1ead18] { display: flex; gap: 5px; flex-wrap: nowrap; overflow: hidden; min-width: 0;
+}
+.sk span[data-v-9f1ead18] { font-size: 11px; color: var(--rb-text-3); border: 1px solid var(--rb-line-2); border-radius: var(--rb-r-full); padding: 1.5px 9px; white-space: nowrap; flex: none;
+}
+.vp[data-v-9f1ead18] { justify-self: end; font-family: var(--rb-mono); font-size: 11px; color: var(--rb-primary-dark); background: var(--rb-primary-bg); border-radius: var(--rb-r-full); padding: 2.5px 9px; white-space: nowrap;
+}
+.vp.no[data-v-9f1ead18] { color: var(--rb-text-4); background: none; border: 1px dashed var(--rb-line-2); padding: 1.5px 8px;
+}
+.fop[data-v-9f1ead18] { justify-self: end;
+}
+.op[data-v-9f1ead18] { opacity: 0; transition: opacity var(--rb-dur); font-size: 11px; color: var(--rb-text-2); border: 1px solid var(--rb-line-2); border-radius: 6px; padding: 3px 9px; cursor: pointer; background: var(--rb-card);
+}
+.op[data-v-9f1ead18]:hover { color: var(--rb-primary-dark); border-color: var(--rb-primary-border); background: var(--rb-primary-bg);
+}
+.op.cta[data-v-9f1ead18] { color: var(--rb-danger); border-color: var(--rb-danger); border-style: dashed;
+}
+.op.cta[data-v-9f1ead18]:hover { background: rgba(217, 79, 43, .07);
+}
+
+/* 整卷全员缺声纹 → 弱示 (B 稿 muted 语义) */
+.muted .row[data-v-9f1ead18] { opacity: .62;
+}
+
+/* 未编入节 */
+.doss.warn .dhead[data-v-9f1ead18] { border-bottom-style: dashed;
+}
+.doss.warn .dhead .dot[data-v-9f1ead18] { background: var(--rb-danger) !important;
+}
+.empty[data-v-9f1ead18] { padding: 16px 20px; font-size: 12.5px; color: var(--rb-text-4);
+}
+
+/* --- 窄屏: 行收掉技能列 --- */
+@media (max-width: 1100px) {
+.dossier-panel[data-v-9f1ead18] { margin: calc(-1 * var(--space-3, 12px)); padding: 18px 14px 40px;
+}
+.row[data-v-9f1ead18] { grid-template-columns: minmax(120px, 1fr) 66px 1fr 76px 48px;
+}
+.sk[data-v-9f1ead18] { display: none;
+}
+}
+
+[data-theme="dark"] .dossier-panel {
+  --rb-text: #e9e8e2; --rb-text-2: #b9c0b9; --rb-text-3: #8b938c; --rb-text-4: #5e665f;
+  --rb-bg: #121513; --rb-card: #1a1e1b; --rb-line: #2e342f; --rb-line-2: #3a413a; --rb-bg-hover: #242a25;
+  --rb-primary: #35c2a4; --rb-primary-dark: #5ad0b5; --rb-primary-bg: rgba(53, 194, 164, .12);
+  --rb-primary-border: rgba(53, 194, 164, .35);
+  --rb-grad-cta: linear-gradient(135deg, #1d9c81, #35c2a4);
+  --rb-shadow-sm: 0 2px 8px rgba(0, 0, 0, .35);
+}
