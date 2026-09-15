@@ -6,6 +6,7 @@
 触发条件（每 10 分钟一次）：
 - status = 'recording'
 - recording_started_at < NOW() - ORPHAN_MEETING_TIMEOUT_MINUTES 分钟（默认 30, 原 60 改 30）
+- **且** Redis 上无录音心跳（app/services/recording_heartbeat.py）← 2026-09-15 P0 新增
 
 动作：
 - 标 status='error', error_reason 含 user_agent + last_chunk_index + total_chunks
@@ -18,6 +19,11 @@
      原条件漏了这部分, 会议永远卡 recording 永不清理。
   2. error_reason 拼 user_agent 片段, 便于事后排查兼容性问题 (HarmonyOS ArkWeb 等)。
   3. 阈值改 60min → 30min (settings.ORPHAN_MEETING_TIMEOUT_MINUTES 可配置)。
+
+2026-09-15 P0 改动（听会 09-14 事故）:
+  4. 加录音心跳守卫。事故: 会议 250 录音 1h40m 被本任务在 20:14:58 误标 error,
+     而用户 21:18 才停止录音 → 整场录音丢失。原判据只看时间不看前端存活。
+     现在心跳仍在的会议会被跳过（skipped_alive），真孤儿仍照常清理。
 """
 
 import asyncio
@@ -61,6 +67,7 @@ async def _scan_and_cleanup() -> dict:
     threshold = datetime.utcnow() - timedelta(minutes=settings.ORPHAN_MEETING_TIMEOUT_MINUTES)
     cleaned = []
     errors = []
+    skipped_alive = []  # 2026-09-15: 心跳仍在, 主动跳过的会议
 
     try:
         async with session_factory() as db:
@@ -75,6 +82,21 @@ async def _scan_and_cleanup() -> dict:
 
             for m in orphans:
                 try:
+                    # 2026-09-15 P0 修复 (听会 09-14 事故): 心跳守卫
+                    # 事故: 会议 250 录音 1h40m, 20:14:58 被本任务误判为孤儿标记 error,
+                    # 但用户 21:18 才停止录音 → 录音数据全丢。
+                    # 原判据只看 recording_started_at, 完全不关心前端是否还活着,
+                    # 于是任何超过 30 分钟的会议都会被误杀。
+                    # 修法: 录音页面每 60s 写一次 Redis 心跳 (TTL 300s),
+                    # 心跳仍在 → 前端还活着 → 跳过, 交给用户自己 stop。
+                    from app.services.recording_heartbeat import is_recording_alive
+                    if await is_recording_alive(m.id, redis_client=redis_client):
+                        logger.info(
+                            f"会议 {m.id} 录音超时但心跳仍在 (前端仍在录音), 跳过清理"
+                        )
+                        skipped_alive.append(m.id)
+                        continue
+
                     # 标 error (2026-07-16: error_reason 拼 user_agent 片段)
                     m.status = "error"
                     ua_short = (m.user_agent or 'unknown')[:80]
@@ -117,4 +139,9 @@ async def _scan_and_cleanup() -> dict:
         await redis_client.aclose()
         await engine.dispose()
 
-    return {"cleaned": cleaned, "errors": errors, "count": len(cleaned)}
+    return {
+        "cleaned": cleaned,
+        "errors": errors,
+        "count": len(cleaned),
+        "skipped_alive": skipped_alive,
+    }

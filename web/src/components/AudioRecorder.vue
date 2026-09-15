@@ -56,13 +56,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useChunkedRecorder } from '@/composables/useChunkedRecorder'
+import { sendRecordingHeartbeat } from '@/composables/useMeetingAudioUpload'
 import UploadStatusBadge from '@/components/UploadStatusBadge.vue'
 
 const props = defineProps({
@@ -121,6 +122,38 @@ function formatTime(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
+// ===== 录音心跳（2026-09-15 P0）=====
+// 后端 orphan_meeting_cleanup 每 10 分钟扫一次"录音超 30min 未 stop"的会议并标 error。
+// 事故：会议 250 录了 1h40m，20:14:58 被误标 error，但用户 21:18 才停止 → 录音全丢。
+// 现在录音期间每 60s 上报一次心跳（Redis TTL 300s），心跳仍在的会议会被清理任务跳过。
+let heartbeatTimer = null
+
+function beatHeartbeat() {
+  const mid = meetingIdRef.value
+  if (!mid) return
+  sendRecordingHeartbeat(mid)
+}
+
+function startHeartbeat() {
+  stopHeartbeat()
+  beatHeartbeat()
+  heartbeatTimer = setInterval(beatHeartbeat, 60000)
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+}
+
+// meetingId 是父组件异步创建的，到位后立刻补一次心跳（不等下一个 60s 周期）
+watch(meetingIdRef, (mid) => {
+  if (mid && isActive()) beatHeartbeat()
+})
+
+onUnmounted(stopHeartbeat)
+
 // ===== 初始化 =====
 
 onMounted(() => {
@@ -136,6 +169,7 @@ onMounted(() => {
 async function handleStart() {
   try {
     await start()
+    startHeartbeat()
     emit('recording-start')
   } catch (err) {
     // 2026-07-16 修复 (#207 完整流程): 精细化错误处理 + catch 块完整 rollback
@@ -197,6 +231,7 @@ function confirmStop() {
 
 async function doStop() {
   stoppedDuration.value = elapsed.value
+  stopHeartbeat()
   const blob = await stop()
   emit('recording-stop')
   // 清除全局录音指示器（胶囊）
@@ -290,6 +325,17 @@ function togglePlayback() {
 defineExpose({
   getAudioBlob,
   getDuration: () => elapsed.value,
+  /**
+   * 2026-09-15 P0: 把"实时分片"的落库情况暴露给父组件。
+   * 父组件在停止后用它判断该走 merge-chunks（实时分片完整）
+   * 还是走字节切片重传（iOS Safari 从不触发 timeslice，分片数恒为 0）。
+   * @returns {{uploadedCount:number,totalChunks:number,pendingCount:number}}
+   */
+  getLiveUploadStats: () => ({
+    uploadedCount: uploadedCount.value,
+    totalChunks: totalChunks.value,
+    pendingCount: pendingCount.value,
+  }),
 })
 </script>
 
