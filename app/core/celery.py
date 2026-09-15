@@ -38,21 +38,31 @@ celery_app.conf.update(
     worker_max_tasks_per_child=1000,  # 定期回收 worker，防止长期内存泄漏
     worker_prefetch_multiplier=1,
     # 2026-08-04 Batch D-1: 路由表, 让 meeting-processing 走独立队列
-    # ⚠️ 注意（2026-09-15 发现）：这里的 pattern 与真实 task name 不匹配 ——
-    # 真实模块是 `app.services.post_meeting_tasks.post_meeting_process`，
-    # 而 pattern 写成了 `app.services.post_meeting_process.*`，
-    # 因此**会议后处理从未真正走进 meeting-processing 队列**，
-    # 一直被通用 celery-worker（threads 池 + 4 并发）兜住，
-    # 导致专用 worker（-Q meeting-processing --pool=solo）长期空转，
-    # 且会议处理与提醒/统计等任务争抢资源，还享受不到线程池外的时间限制语义。
-    # 未在本批次修改（需与时间限制策略一起评估），留待专项修复。
+    # 2026-09-15 P0 修复（会议 250 重跑事故）: 原 pattern 与实际 task name 不匹配 ——
+    #   真实模块是 `app.services.post_meeting_tasks.post_meeting_process`（实测
+    #   `celery inspect registered` 确认），而 pattern 写成了
+    #   `app.services.post_meeting_process.*`（不存在的模块名），
+    #   于是**会议后处理从未走进 meeting-processing 队列**，一直被通用
+    #   celery-worker（--pool=threads --concurrency=4）兜住：
+    #     · 专用 worker（-Q meeting-processing --pool=solo，且带 GPU 预留）长期空转；
+    #     · 会议处理与提醒/统计/网盘等任务抢 4 个线程与 4G 内存；
+    #     · （实测已确认）---pool=threads 和 --pool=solo 都**不执行** task_time_limit，
+    #       所以长会议没有硬上限，真正的兜底是 broker 的 visibility_timeout。
+    # `app.services.meeting_reprocessing.*` 同样是死路由（没有该模块的 task），
+    # 改为指向真实的会议相关任务模块。
     task_routes={
-        "app.services.post_meeting_process.*": {"queue": "meeting-processing"},
-        "app.services.meeting_reprocessing.*": {"queue": "meeting-processing"},
+        "app.services.post_meeting_tasks.*": {"queue": "meeting-processing"},
         "app.services.qa_bench_tasks.*": {"queue": "meeting-processing"},
     },
+    # 长会议流水线（转写 + 声纹 + 润色 + 纪要）在实测中约需 60 分钟，
+    # 300s/600s 这类默认上限会直接掐死它。这里显式放大到 3h 以备将来
+    # 切换到 prefork 池（prefork 才会真正执行时间限制）。
     task_annotations={
-        "app.services.post_meeting_process.*": {"rate_limit": "6/m"},
+        "app.services.post_meeting_tasks.post_meeting_process": {
+            "rate_limit": "6/m",
+            "time_limit": 10800,
+            "soft_time_limit": 10500,
+        },
     },
     beat_schedule={
         "check-reminders": {

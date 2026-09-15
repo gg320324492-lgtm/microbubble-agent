@@ -378,6 +378,105 @@ class MeetingAnalysisService:
     # === 结构化分析 ===
 
     MAX_CHUNK_CHARS = 8000  # 单次分析最多 8000 字
+    # 2026-09-15 P0（会议 250 重跑事故）: 发言者映射前缀的字符上限。
+    # 事故现场：会议 250 的 speaker_mapping 有上千条逐段条目
+    # （SenseVoice 路径下 speaker_label 是 `speaker_{i}`，逐段唯一），
+    # 序列化后 27,016 字；拼到转录前面后总长 63,111 字 → 分 8 块，
+    # **前 3.4 块全是映射表、没有任何对话**，LLM 只能回
+    # "本次提供的会议转录材料（第3/6部分）…未包含任何实际对话文本"，
+    # 这句元话又被 _combine_summaries_sync 原样拼进了最终摘要。
+    MAX_MAPPING_PREFIX_CHARS = 600
+
+    @classmethod
+    def _compact_speaker_mapping(cls, speaker_mapping: dict) -> str:
+        """把 speaker_label → 姓名 的映射压成**有界**的简短花名册。
+
+        条目少（≤ 30）时逐条列出（PasteAnalyze 这类人工映射场景，信息全）；
+        条目爆炸时按姓名归并（`贾琦: speaker_0/1/2… 等 900 个标签`），
+        保证前缀长度有上界，不再挤占分块预算。
+        """
+        if not isinstance(speaker_mapping, dict) or not speaker_mapping:
+            return ""
+        items = [(str(k), str(v)) for k, v in speaker_mapping.items()]
+        if len(items) <= 30:
+            body = ", ".join(f"【{k}】→ {v}" for k, v in items)
+        else:
+            by_name: dict = {}
+            for k, v in items:
+                by_name.setdefault(v, []).append(k)
+            parts = []
+            for name, labels in sorted(by_name.items(), key=lambda kv: -len(kv[1])):
+                sample = "/".join(labels[:3])
+                parts.append(f"{name}（{sample}… 共 {len(labels)} 个标签）")
+            body = "、".join(parts)
+        body = body[: cls.MAX_MAPPING_PREFIX_CHARS]
+        return f"发言者映射：{body}"
+
+    # 2026-09-15: LLM 元话语/自述性句子特征（分块摘要里出现的"我没有材料"类陈述）
+    _META_TALK_PATTERNS = (
+        "本次提供", "提供的会议转录", "转录材料", "未包含任何", "未包含实际",
+        "没有实质性", "无实质性内容", "无法提取", "无法生成", "建议补充",
+        "仅包含说话人", "仅包含", "第1/", "第2/", "第3/", "第4/", "第5/",
+        "第6/", "第7/", "第8/", "部分）", "部分)", "由于缺乏", "材料不足",
+        "看不到", "无法判断会议主题",
+    )
+
+    @classmethod
+    def _sanitize_chunk_summary(cls, text: str) -> str:
+        """剔除分块摘要里的 LLM 元话语，只保留真正的会议结论性陈述。
+
+        事故里最终摘要开头就是一句"本次提供的会议转录材料（第1/6部分）仅包含
+        说话人识别映射表…"，对读者毫无价值且严重误导。
+        """
+        if not text:
+            return ""
+        kept = []
+        for sent in re.split(r"(?<=[。；!！?？\n])", text):
+            s = sent.strip()
+            if not s:
+                continue
+            if any(p in s for p in cls._META_TALK_PATTERNS):
+                continue
+            kept.append(s)
+        return "".join(kept).strip("；。 \n")
+
+    async def _consolidate_summaries(self, summaries: List[str]) -> str:
+        """把多个分块摘要整合成一段连贯摘要（项目标准：3-6 句）。
+
+        原来只是用"；"把每块摘要串起来（`_combine_summaries_sync`），
+        块与块之间有大量重复的背景交代，读起来像六份摘要拼接。
+        这里用一次额外 LLM 调用做归并；失败则回退到清洗后的拼接。
+        """
+        cleaned = [s for s in (self._sanitize_chunk_summary(x) for x in summaries) if s]
+        if not cleaned:
+            return ""
+        if len(cleaned) == 1:
+            return cleaned[0]
+        joined = "\n".join(f"- {s}" for s in cleaned)
+        prompt = (
+            "下面是同一场会议按时间顺序分块分析得到的若干段摘要。"
+            "请把它们整合成【一段】连贯的中文会议摘要，要求：\n"
+            "1) 3-6 句话，覆盖会议背景、讨论过程、关键人物观点、结论与后续方向；\n"
+            "2) 不要提及\"部分\"\"分块\"\"转录材料\"等材料处理细节，不要写任何"
+            "关于\"材料不完整/无法分析\"的说明；\n"
+            "3) 不要分段、不要编号、不要 markdown，直接输出摘要正文。\n\n"
+            f"分块摘要：\n{joined[:6000]}"
+        )
+        try:
+            response = await self.llm.complete(
+                messages=[{"role": "user", "content": prompt}],
+                system="你是课题组会议纪要专家，只输出整合后的摘要正文。",
+                max_tokens=1200,
+                thinking={"type": "disabled"},
+            )
+            text = extract_text_from_response(response).strip()
+            text = re.sub(r"^(摘要[:：]\s*)", "", text).strip()
+            if text:
+                logger.info(f"摘要二次汇总成功: {len(summaries)} 块 → {len(text)} 字")
+                return text
+        except Exception as e:  # noqa: BLE001 — 汇总失败不影响主流程
+            logger.warning(f"摘要二次汇总失败, 回退清洗拼接: {type(e).__name__}: {e}")
+        return self._combine_summaries_sync(cleaned)
 
     async def analyze_transcript(
         self,
@@ -391,18 +490,16 @@ class MeetingAnalysisService:
         2026-08-04 P0: 返回结构化结果，包含 success_chunk_count / failure_chunk_count
         / errors。0/N 成功 → success=False, failure=True；部分成功 → success=True,
         warning=True, errors=[...]。
+
+        2026-09-15 P0: 发言者映射不再拼进正文（会挤占分块预算，见
+        MAX_MAPPING_PREFIX_CHARS 注释），改为压缩后放进 system prompt；
+        多块摘要改为二次 LLM 归并 + 元话语清洗。
         """
-        if speaker_mapping:
-            applied = []
-            for issue, resolved in speaker_mapping.items():
-                applied.append(f"【{issue}】→ {resolved}")
-            transcript_text = (
-                f"发言者映射：{', '.join(applied)}\n\n{transcript_text}"
-            )
+        roster = self._compact_speaker_mapping(speaker_mapping) if speaker_mapping else ""
 
         # 短文本直接分析
         if len(transcript_text) <= self.MAX_CHUNK_CHARS:
-            result, err = await self._analyze_chunk_safe(transcript_text)
+            result, err = await self._analyze_chunk_safe(transcript_text, roster=roster)
             if err is not None:
                 return {
                     "summary": "",
@@ -416,7 +513,7 @@ class MeetingAnalysisService:
                     "failure_chunk_count": 1,
                     "errors": [err],
                 }
-            return self._finalize_analysis_result([result], [])
+            return await self._finalize_analysis_result([result], [])
 
         # 长文本：分块分析
         lines = transcript_text.split('\n')
@@ -442,7 +539,7 @@ class MeetingAnalysisService:
         chunk_errors: List[Dict[str, Any]] = []
         for i, chunk in enumerate(chunks):
             result, err = await self._analyze_chunk_safe(
-                chunk, chunk_index=i, total_chunks=len(chunks)
+                chunk, chunk_index=i, total_chunks=len(chunks), roster=roster
             )
             if err is not None:
                 logger.error(f"分块 {i+1}/{len(chunks)} 分析失败: {err}")
@@ -450,10 +547,11 @@ class MeetingAnalysisService:
                 continue
             chunk_results.append(result)
 
-        return self._finalize_analysis_result(chunk_results, chunk_errors)
+        return await self._finalize_analysis_result(chunk_results, chunk_errors)
 
     async def _analyze_chunk_safe(
-        self, chunk_text: str, chunk_index: int = 0, total_chunks: int = 1
+        self, chunk_text: str, chunk_index: int = 0, total_chunks: int = 1,
+        roster: str = "",
     ) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """分析单个文本块，失败时返回 (None, error_dict)；成功返回 (result, None)"""
         import asyncio
@@ -461,6 +559,11 @@ class MeetingAnalysisService:
         header = ""
         if total_chunks > 1:
             header = f"（第 {chunk_index + 1}/{total_chunks} 部分）\n\n"
+        # 2026-09-15: 花名册走 system prompt，不占 chunk 预算（原来拼在正文前，
+        # 上千条映射直接把前 3 个块吃满，见 MAX_MAPPING_PREFIX_CHARS 注释）
+        system_prompt = "你是课题组会议分析专家。只输出 JSON，不要其他内容。"
+        if roster:
+            system_prompt += f"\n\n【讲话人对照】{roster}\n（仅用于判断谁说了什么，不要把它当成会议内容。）"
 
         last_err: Optional[Dict[str, Any]] = None
         for attempt in range(2):
@@ -472,7 +575,7 @@ class MeetingAnalysisService:
                             transcript_text=header + chunk_text[: self.MAX_CHUNK_CHARS]
                         ),
                     }],
-                    system="你是课题组会议分析专家。只输出 JSON，不要其他内容。",
+                    system=system_prompt,
                     max_tokens=8192,
                     thinking={"type": "disabled"},
                 )
@@ -517,7 +620,7 @@ class MeetingAnalysisService:
                 await asyncio.sleep(1)
         return None, last_err
 
-    def _finalize_analysis_result(
+    async def _finalize_analysis_result(
         self,
         chunk_results: List[Dict[str, Any]],
         chunk_errors: List[Dict[str, Any]],
@@ -534,11 +637,12 @@ class MeetingAnalysisService:
             if result.get("summary"):
                 chunk_summaries.append(result["summary"])
 
-        # 同步合并需要 await; 此函数内不 await, 改为 outer 调度
-        # 调用方是 `analyze_transcript` async context, 因此这里直接 inline 同步合并
+        # 2026-09-15 P0: 多块摘要改为"清洗元话语 + 二次 LLM 归并"
+        # （原实现用"；"直接拼接，事故里最终摘要开头就是一句
+        #  "本次提供的会议转录材料（第1/6部分）仅包含说话人识别映射表…"）
         summary = ""
         if chunk_summaries:
-            summary = chunk_summaries[0] if len(chunk_summaries) == 1 else self._combine_summaries_sync(chunk_summaries)
+            summary = await self._consolidate_summaries(chunk_summaries)
             summary = clean_person_names(summary)
 
         MAX_KEY_POINTS = 8
