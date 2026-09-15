@@ -106,6 +106,7 @@ import ProcessingSheet from '@/components/mobile/ProcessingSheet.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
+import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
 
 const router = useRouter()
 const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
@@ -155,12 +156,22 @@ async function onAudioReady(blob) {
   // 立即弹进度，不阻塞 UI
   showProgress.value = true
   try {
-    const fd = new FormData()
-    fd.append('file', blob, `recording_${meetingId.value}.webm`)
-    await axios.post(`/api/v1/meetings/${meetingId.value}/upload-audio`, fd)
+    // 2026-09-15 P0 (听会 09-14 事故): 不再无条件走一次性 upload-audio。
+    // iOS Safari 不触发 MediaRecorder 的 timeslice → 实时分片数恒为 0，
+    // 旧代码会把整场 1h40m 录音(162MB)塞进一个 POST，被 nginx 50m 上限 RST 掉，
+    // 用户只看到 "Network Error" 且录音全丢。
+    // 现在统一交给 finalizeMeetingAudioUpload 按"实时分片是否完整 + 体积"
+    // 自动选择 merge-chunks / 字节切片重传 / 一次性上传三条路径。
+    const liveStats = () => recorderRef.value?.getLiveUploadStats?.() || {}
+    await finalizeMeetingAudioUpload({
+      meetingId: meetingId.value,
+      blob,
+      liveStats,
+      onNotice: (msg) => ElMessage({ message: msg, type: 'warning', duration: 6000 }),
+    })
     await axios.post(`/api/v1/meetings/${meetingId.value}/stop-recording`)
   } catch (err) {
-    ElMessage.error('上传失败: ' + (err.response?.data?.detail || err.message))
+    ElMessage.error('上传失败: ' + describeUploadError(err))
     // 上传失败时关闭进度弹窗，让用户可以重试
     showProgress.value = false
   }

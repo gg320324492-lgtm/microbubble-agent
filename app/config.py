@@ -170,7 +170,17 @@ class Settings(BaseSettings):
 
     # 2026-07-16 +060: 孤儿会议清理阈值 (默认 30 分钟, 旧版硬编码 60min 太长)
     # 录音超过此分钟数仍未 stop 的会议, Celery beat 自动标 error。
+    # 2026-09-15 P0 补充: 该阈值现在**必须配合录音心跳**才能真正清理
+    # (见 app/services/recording_heartbeat.py) —— 心跳仍在的会议会被跳过,
+    # 否则任何超过 30 分钟的会议都会被误杀 (09-14 会议 250 事故根因之一)。
     ORPHAN_MEETING_TIMEOUT_MINUTES: int = 30
+
+    # 2026-09-15 P0 (听会 09-14 事故): 一次性上传的体积上限 (默认 600MB)
+    # 超过此值直接返回 413 + 明确中文文案, 而不是让 nginx 提前 RST 掉连接、
+    # 前端只看到 "Network Error"。前端在超限时会自动改走分片上传
+    # (PUT /audio-chunk 切片 + POST /merge-chunks?mode=raw)。
+    # 注意与 nginx 的 client_max_body_size 保持一致的量级 (云端已放宽到 1024m)。
+    MAX_ONESHOT_UPLOAD_BYTES: int = 600 * 1024 * 1024
 
     # 2026-06-19：开始听会 → 不再自动从会议决策/action items 创建任务
     # 关闭后 _auto_create_task_from_meeting 不再被调用，user 需手动建任务

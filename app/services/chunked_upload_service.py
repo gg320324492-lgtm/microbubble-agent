@@ -42,10 +42,13 @@ class ChunkedUploadService:
         返回 MinIO object_name。
         """
         object_name = self._chunk_object_name(meeting_id, idx)
+        # 2026-09-15 P0: 嗅探真实容器 (iOS Safari 出 audio/mp4, 桌面 Chrome 出 webm),
+        # 不再硬编码 audio/webm — 否则 iOS 录音的回放 MIME 类型是错的。
+        _, content_type = self.sniff_audio_container(blob)
         await file_service.upload_to_path(
             object_name=object_name,
             file_data=blob,
-            content_type="audio/webm",
+            content_type=content_type,
         )
         return object_name
 
@@ -130,6 +133,70 @@ class ChunkedUploadService:
                 f"({len(merged_data)} bytes from {len(chunks)} chunks)"
             )
             return merged_object_name
+
+    @staticmethod
+    def sniff_audio_container(first_bytes: bytes) -> tuple:
+        """从首个分片的文件头嗅探真实容器格式。
+
+        2026-09-15 P0 新增 (听会 09-14 事故): 原实现把所有录音硬编码成
+        `audio/webm`。但 iOS Safari 的 MediaRecorder 只支持 audio/mp4 (AAC),
+        落库/落 MinIO 的 content_type 写成 webm 会让 <audio> 在 iOS 上无法回放。
+        返回 (扩展名, content_type)。
+        """
+        head = (first_bytes or b"")[:16]
+        if head[:4] == b"\x1a\x45\xdf\xa3":
+            return "webm", "audio/webm"
+        if len(head) >= 12 and head[4:8] == b"ftyp":
+            return "m4a", "audio/mp4"
+        if head[:4] == b"OggS":
+            return "ogg", "audio/ogg"
+        if head[:4] == b"RIFF":
+            return "wav", "audio/wav"
+        if head[:3] == b"ID3" or head[:2] in (b"\xff\xfb", b"\xff\xf3", b"\xff\xf2", b"\xff\xfa"):
+            return "mp3", "audio/mpeg"
+        return "webm", "audio/webm"
+
+    async def merge_chunks_raw(self, meeting_id: int) -> str:
+        """字节级按序拼接所有 chunk（不做任何容器解析）。
+
+        2026-09-15 P0 新增 (听会 09-14 事故): iOS Safari 不遵守
+        `MediaRecorder.start(timeslice)`，ondataavailable 只在 stop 触发一次，
+        于是前端在停止时把整段 blob 按固定字节数切片上传。这些切片是同一个
+        MP4/WebM 容器的**原始字节区间**，不是独立可解码的媒体文件 —— 用
+        ffmpeg concat demuxer 解析每一片会失败。此方法直接按 chunk_index 升序
+        做字节拼接，对完整 blob 的字节区间是**无损且精确**的还原。
+
+        返回合并后的 MinIO object_name（扩展名按嗅探结果决定）。
+        """
+        chunks = await self.list_chunks(meeting_id)
+        if not chunks:
+            raise ValueError(f"会议 {meeting_id} 无 chunk 可合并")
+
+        logger.info(f"开始原始字节拼接会议 {meeting_id} 的 {len(chunks)} 个 chunk")
+
+        parts = []
+        for chunk in chunks:
+            data = await file_service.download_file(chunk["object_name"])
+            if not data:
+                raise RuntimeError(f"chunk {chunk['object_name']} 下载为空")
+            parts.append(data)
+
+        merged_data = b"".join(parts)
+        if not merged_data:
+            raise RuntimeError("原始拼接结果为空")
+
+        ext, content_type = self.sniff_audio_container(merged_data)
+        object_name = self.MERGED_OBJECT_TMPL.format(meeting_id=meeting_id).rsplit(".", 1)[0] + f".{ext}"
+        await file_service.upload_to_path(
+            object_name=object_name,
+            file_data=merged_data,
+            content_type=content_type,
+        )
+        logger.info(
+            f"会议 {meeting_id} 原始拼接完成: {object_name} "
+            f"({len(merged_data)} bytes [{content_type}] from {len(chunks)} chunks)"
+        )
+        return object_name
 
     async def delete_chunks(self, meeting_id: int) -> int:
         """

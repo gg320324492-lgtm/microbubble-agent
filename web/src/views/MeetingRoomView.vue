@@ -102,6 +102,7 @@ import AudioRecorder from '@/components/AudioRecorder.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
+import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
 
 const router = useRouter()
 const route = useRoute()
@@ -153,12 +154,18 @@ async function onAudioReady(blob) {
   // 立即弹进度，不阻塞 UI
   showProgress.value = true
   try {
-    const fd = new FormData()
-    fd.append('file', blob, `recording_${meetingId.value}.webm`)
-    await axios.post(`/api/v1/meetings/${meetingId.value}/upload-audio`, fd)
+    // 2026-09-15 P0 (听会 09-14 事故): 同 MobileMeetingRoom —— 不再无条件一次性
+    // 上传整段录音，改为按"实时分片是否完整 + 体积"自动选 merge / 切片 / 一次性。
+    const liveStats = () => recorderRef.value?.getLiveUploadStats?.() || {}
+    await finalizeMeetingAudioUpload({
+      meetingId: meetingId.value,
+      blob,
+      liveStats,
+      onNotice: (msg) => ElMessage({ message: msg, type: 'warning', duration: 6000 }),
+    })
     await axios.post(`/api/v1/meetings/${meetingId.value}/stop-recording`)
   } catch (err) {
-    ElMessage.error('上传失败: ' + (err.response?.data?.detail || err.message))
+    ElMessage.error('上传失败: ' + describeUploadError(err))
     showProgress.value = false
   }
 }

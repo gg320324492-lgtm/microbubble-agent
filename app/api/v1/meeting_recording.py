@@ -89,13 +89,37 @@ async def upload_audio(
     if len(file_data) == 0:
         raise HTTPException(status_code=400, detail="文件为空")
 
+    # 2026-09-15 P0 (听会 09-14 事故): 一次性上传的体积守卫。
+    # 事故现场: nginx client_max_body_size=50m 直接 RST 掉 162MB 的请求体,
+    # 浏览器 axios 只抛 "Network Error" —— 用户完全不知道发生了什么, 也不知道该怎么自救。
+    # 现在后端主动给一个 **带明确文案的 413**，前端拿到 detail 就能提示
+    # "录音过大, 正在改用分片上传" 或引导用户重试。
+    size_mb = len(file_data) / (1024 * 1024)
+    if len(file_data) > settings.MAX_ONESHOT_UPLOAD_BYTES:
+        logger.warning(
+            f"一次性上传体积超限 (会议 {meeting_id}): {size_mb:.1f}MB > "
+            f"{settings.MAX_ONESHOT_UPLOAD_BYTES / (1024 * 1024):.0f}MB, 拒绝并要求走分片"
+        )
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"录音体积 {size_mb:.0f}MB 超过一次性上传上限 "
+                f"{settings.MAX_ONESHOT_UPLOAD_BYTES // (1024 * 1024)}MB。"
+                "请改用分片上传（前端会自动切换），或缩短单次录音时长。"
+            ),
+        )
+
     # 上传到 MinIO
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"recording_{meeting_id}_{timestamp}.webm"
+    # 2026-09-15 P0: 按真实容器定扩展名/MIME。原来硬编码 .webm + audio/webm，
+    # 而 iOS Safari 的 MediaRecorder 只会产出 audio/mp4 —— 存成 webm 会让
+    # 会议详情页的 <audio> 在 iOS 上无法回放。
+    container_ext, container_mime = chunked_upload_service.sniff_audio_container(file_data)
+    filename = f"recording_{meeting_id}_{timestamp}.{container_ext}"
     upload_result = await file_service.upload_file(
         file_data=file_data,
         filename=filename,
-        content_type=file.content_type or "audio/webm",
+        content_type=file.content_type or container_mime,
         prefix="recordings"
     )
 
@@ -168,17 +192,76 @@ async def upload_audio_chunk(
     }
 
 
-@router.post("/meetings/{meeting_id}/merge-chunks")
-async def merge_chunks_endpoint(
+@router.post("/meetings/{meeting_id}/chunks/reset")
+async def reset_chunks_endpoint(
     meeting_id: int,
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    """清空某会议已上传的所有 chunk，把分片计数复位。
+
+    2026-09-15 P0 新增 (听会 09-14 事故修复链): iOS Safari 的 MediaRecorder
+    不遵守 `start(timeslice)`，停止时只拿到一整段 blob。前端在"停止"阶段若
+    判定实时分片流不完整，会改为把整段 blob 按固定字节数切片重传 —— 但此时
+    MinIO 上可能残留早先零散上传的实时分片，且它们的 chunk_index 会与新切片
+    撞号，导致最终 merge 出来的是两份录音交错拼接的垃圾。
+
+    因此重传前必须先复位：删掉 MinIO 上该会议的全部 chunk，并把
+    last_chunk_index / total_chunks / audio_url 归零。
+    仅允许会议创建者调用；不改变 meeting.status。
     """
-    合并该会议的所有 chunk 成完整 webm 文件。
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可重置分片")
+
+    try:
+        deleted = await chunked_upload_service.delete_chunks(meeting_id)
+    except Exception as e:
+        logger.error(f"重置分片时删除 MinIO chunk 失败 (会议 {meeting_id}): {e}")
+        raise HTTPException(status_code=500, detail=f"清空分片失败: {e}")
+
+    # 同时清掉可能的 merged 产物，避免旧 merged 被误当成本次录音
+    try:
+        await chunked_upload_service.delete_merged(meeting_id)
+    except Exception as e:  # noqa: BLE001 — best-effort
+        logger.warning(f"清理旧 merged 失败 (会议 {meeting_id}): {e}")
+
+    meeting.last_chunk_index = -1
+    meeting.total_chunks = 0
+    meeting.audio_url = None
+    meeting.upload_status = "pending"
+    await db.commit()
+
+    logger.info(f"会议 {meeting_id} 分片已复位: 删除 {deleted} 个 chunk")
+    return {"meeting_id": meeting_id, "deleted_chunks": deleted, "reset": True}
+
+
+@router.post("/meetings/{meeting_id}/merge-chunks")
+async def merge_chunks_endpoint(
+    meeting_id: int,
+    mode: str = Query(
+        "auto",
+        pattern="^(auto|ffmpeg|raw)$",
+        description="auto=按首片容器嗅探自动选; ffmpeg=concat demuxer (实时 webm 分片); "
+                    "raw=字节级拼接 (整段 blob 的字节切片)",
+    ),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    合并该会议的所有 chunk 成完整音频文件。
 
     调用时机：用户点"结束听会"（在 stop-recording 之前调一次）。
     失败模式：若 MinIO 上无 chunk，返回 400（前端应 fallback 提示）。
+
+    2026-09-15 P0: 新增 `mode` 参数。这是听会 09-14 事故的第二段修复 ——
+    - 桌面 Chrome 实时分片: 每片是独立的 WebM cluster 序列 → ffmpeg concat 可用
+    - iOS Safari 整段切片: 每片只是同一个 MP4 容器的**原始字节区间**，不是
+      独立可解析的媒体文件 → ffmpeg 解析必失败，必须走字节级拼接
+    `auto` 会下载首片嗅探文件头自动选择，并在 ffmpeg 失败时回退到 raw。
     """
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
@@ -194,8 +277,33 @@ async def merge_chunks_endpoint(
             detail=f"无可合并的 chunk (last_chunk_index={meeting.last_chunk_index})"
         )
 
+    # auto: 嗅探首片决定合并策略
+    effective_mode = mode
+    if mode == "auto":
+        effective_mode = "ffmpeg"
+        try:
+            chunks = await chunked_upload_service.list_chunks(meeting_id)
+            if chunks:
+                first = await file_service.download_file(chunks[0]["object_name"])
+                ext, _ = chunked_upload_service.sniff_audio_container(first or b"")
+                # mp4/m4a = 整段 blob 的字节切片 (iOS Safari) → 必须字节拼接
+                effective_mode = "raw" if ext in ("m4a", "mp3", "ogg", "wav") else "ffmpeg"
+        except Exception as e:  # noqa: BLE001 — 嗅探失败退回 ffmpeg 老路径
+            logger.warning(f"合并模式嗅探失败 (会议 {meeting_id}): {e}, 退回 ffmpeg")
+
     try:
-        merged_object_name = await chunked_upload_service.merge_chunks(meeting_id)
+        if effective_mode == "raw":
+            merged_object_name = await chunked_upload_service.merge_chunks_raw(meeting_id)
+        else:
+            try:
+                merged_object_name = await chunked_upload_service.merge_chunks(meeting_id)
+            except Exception as ffmpeg_err:
+                # 兜底: ffmpeg 解析不了的分片集合，用字节拼接再试一次
+                logger.warning(
+                    f"ffmpeg 合并失败, 回退字节拼接 (会议 {meeting_id}): {ffmpeg_err}"
+                )
+                effective_mode = "raw"
+                merged_object_name = await chunked_upload_service.merge_chunks_raw(meeting_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -208,7 +316,6 @@ async def merge_chunks_endpoint(
     # 更新会议字段
     meeting.audio_url = merged_object_name
     meeting.upload_status = "completed"
-    meeting.audio_size_bytes = None  # 让后处理阶段重新计算
     # W2-7: 下载合并后的文件，ffprobe 探测真实媒体时长写入 media_duration_seconds
     # audio_duration（墙钟差）由 stop-recording 阶段写入，此处不动
     try:
@@ -231,7 +338,40 @@ async def merge_chunks_endpoint(
     return {
         "audio_url": meeting.audio_url,
         "chunks_merged": meeting.last_chunk_index + 1,
+        "merge_mode": effective_mode,
     }
+
+
+@router.post("/meetings/{meeting_id}/recording-heartbeat")
+async def recording_heartbeat(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """录音存活心跳（2026-09-15 P0 新增）。
+
+    修的问题：会议 250 在 09-14 19:38:34 由杜同贺（iPhone）创建并开始听会，
+    20:14:58 被 orphan_meeting_cleanup 判定"录音超过 30min 未 stop"标记为 error
+    —— 但用户当时**仍在录音中**（21:18 才点停止）。原因是孤儿清理只看
+    `recording_started_at < now - 30min`，完全不关心前端是否还活着，
+    于是任何超过 30 分钟的会议都会被误杀。
+
+    这里提供一个低成本存活信号：录音页面每 60s 调一次本端点，写一个
+    Redis key（TTL 300s）。cleanup 扫描时若 key 仍存在则跳过该会议。
+    这样"长会议"和"真孤儿（刷新/关页面走后无人再发心跳）"可以区分开。
+
+    只做 Redis 写 + 轻量 DB 校验，不 commit，不污染 updated_at。
+    """
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可上报录音心跳")
+
+    from app.services.recording_heartbeat import touch_recording_heartbeat
+    ok = await touch_recording_heartbeat(meeting_id)
+    return {"meeting_id": meeting_id, "alive": bool(ok), "status": meeting.status}
 
 
 @router.get("/meetings/{meeting_id}/upload-status")
@@ -300,12 +440,23 @@ async def stop_recording(
         )
 
     # ★ 兜底：如果走 chunked 但还没 merge，尝试自动 merge
+    # 2026-09-15 P0 修复: 原实现只调 merge_chunks() 然后 db.refresh()，但 service 层
+    # 不回写 Meeting 字段 → refresh 后 audio_url 依然是 None，会议"有音频但库里没记录"。
+    # 现在显式接收 service 返回的 object_name 并落库；同时对 ffmpeg 解析不了的分片
+    # 集合回退到字节级拼接（iOS Safari 整段 blob 切片场景）。
     if meeting.upload_status == "uploading" and not meeting.audio_url:
         try:
             logger.info(f"stop-recording 自动 merge 会议 {meeting_id} 的 chunks")
-            await chunked_upload_service.merge_chunks(meeting_id)
-            # 重新查 audio_url
-            await db.refresh(meeting)
+            try:
+                merged_name = await chunked_upload_service.merge_chunks(meeting_id)
+            except Exception as ffmpeg_err:
+                logger.warning(
+                    f"stop-recording ffmpeg 合并失败, 回退字节拼接 (会议 {meeting_id}): {ffmpeg_err}"
+                )
+                merged_name = await chunked_upload_service.merge_chunks_raw(meeting_id)
+            meeting.audio_url = merged_name
+            meeting.upload_status = "completed"
+            await db.commit()
         except Exception as e:
             logger.error(f"自动 merge 失败: {e}")
             meeting.upload_status = "failed"
@@ -324,6 +475,13 @@ async def stop_recording(
         meeting.audio_duration = int(delta.total_seconds())
 
     await db.commit()
+
+    # 2026-09-15 P0: 录音正常收尾 → 清心跳，避免 key 残留让真孤儿永远不被清理
+    try:
+        from app.services.recording_heartbeat import clear_recording_heartbeat
+        await clear_recording_heartbeat(meeting_id)
+    except Exception as e:  # noqa: BLE001 — best-effort
+        logger.warning(f"清录音心跳失败 (会议 {meeting_id}): {e}")
 
     # 触发 Celery 后处理
     from app.services.post_meeting_tasks import post_meeting_process
@@ -397,6 +555,13 @@ async def cancel_recording(
     meeting.upload_status = "cancelled"
     await db.commit()
     await db.refresh(meeting)
+
+    # 2026-09-15 P0: 取消录音 → 清心跳（否则会一直"装活"挡住孤儿清理）
+    try:
+        from app.services.recording_heartbeat import clear_recording_heartbeat
+        await clear_recording_heartbeat(meeting_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"取消录音时清心跳失败 (会议 {meeting_id}): {e}")
     log.info(
         f"Meeting {meeting_id} 取消录音: status recording → error, "
         f"audio_url/last_chunk_index/total_chunks 已清空"
