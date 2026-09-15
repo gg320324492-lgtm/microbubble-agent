@@ -1053,6 +1053,27 @@ def post_meeting_process(self, meeting_id: int):
                             m2.status = "error"
                             m2.error_reason = str(e)[:500]
                             await db2.commit()
+                        # 2026-09-15 修复：失败时必须**收尾处理轮次**。
+                        # 原来只有成功路径写 overall_status（第 970 行），失败路径
+                        # 只改 meeting.status，导致 meeting_processing_runs 里的
+                        # overall_status 永远停在 "running"、finished_at 永远为 NULL
+                        # （实测会议 250 的 run 53 就是这种"假在跑"状态），
+                        # 监控/管理页会把它当成仍在处理中的任务。
+                        from app.models.meeting_processing import MeetingProcessingRun
+                        from datetime import datetime as _dt, timezone as _tz
+                        run_row = (await db2.execute(
+                            select(MeetingProcessingRun)
+                            .where(MeetingProcessingRun.meeting_id == meeting_id,
+                                   MeetingProcessingRun.overall_status == "running")
+                            .order_by(MeetingProcessingRun.id.desc()).limit(1)
+                        )).scalar_one_or_none()
+                        if run_row:
+                            run_row.overall_status = "error"
+                            run_row.finished_at = _dt.now(_tz.utc).replace(tzinfo=None)
+                            run_row.metrics = {**(run_row.metrics or {}),
+                                               "error": str(e)[:300]}
+                            await db2.commit()
+                            logger.info(f"处理轮次 {run_row.id} 已收尾为 error")
                     # 2026-08-04 P0: progress DONE 强制 status="done" 会覆盖 error,
                     # 改为显式传 status="error", 让前端能看到真实失败.
                     await update_progress(
