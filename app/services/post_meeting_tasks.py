@@ -141,7 +141,18 @@ def post_meeting_process(self, meeting_id: int):
                 from app.config import settings as _settings
                 audio_total_sec = len(audio_pcm) / sample_rate
                 gpu_segments = None
-                if _settings.GPU_ASR_ENABLED and audio_total_sec >= _settings.GPU_ASR_MIN_SEC:
+                # 2026-09-15 P0（会议 250 重跑事故）: 长音频时长闸门。
+                # 事故: 96 分 27 秒的会议走了 7B，2 小时硬超时被杀，白占 GPU 且
+                # 客户端全程拿不到进展信号，最后还是回退 SenseVoice。
+                # 7B 实测 rtf 0.9~1.0+，超过 GPU_ASR_MAX_SEC 的会议**必然跑不完**，
+                # 直接跳过（不提交作业、不占 GPU），把时间留给真正能出结果的路径。
+                if _settings.GPU_ASR_ENABLED and audio_total_sec > _settings.GPU_ASR_MAX_SEC:
+                    logger.info(
+                        f"音频 {audio_total_sec:.0f}s 超过 GPU_ASR_MAX_SEC="
+                        f"{_settings.GPU_ASR_MAX_SEC}s，跳过 7B 链路直接走 SenseVoice"
+                        f"（避免必然超时的长作业独占 GPU）"
+                    )
+                elif _settings.GPU_ASR_ENABLED and audio_total_sec >= _settings.GPU_ASR_MIN_SEC:
                     try:
                         from app.services.gpu_asr_client import get_gpu_asr_client
                         gpu_client = get_gpu_asr_client()
@@ -151,11 +162,20 @@ def post_meeting_process(self, meeting_id: int):
                                                   redis_override=redis_client)
                             gpu_segments = await asyncio.wait_for(
                                 gpu_client.transcribe_meeting(
-                                    audio_pcm, sr=sample_rate, meeting_id=meeting_id),
+                                    audio_pcm, sr=sample_rate, meeting_id=meeting_id,
+                                    progress_cb=lambda msg: logger.info(f"  [gpu-asr] {msg}")),
                                 timeout=_settings.GPU_ASR_TIMEOUT)
                             logger.info(f"GPU 7B 转写完成: {len(gpu_segments)} 段")
+                        else:
+                            logger.warning(
+                                f"GPU ASR 守护不可用/正忙（{gpu_client.health_detail}），"
+                                f"直接走 SenseVoice"
+                            )
                     except Exception as gpu_err:
-                        logger.warning(f"GPU ASR 链路失败, 回退 SenseVoice: {gpu_err}")
+                        logger.warning(
+                            f"GPU ASR 链路失败, 回退 SenseVoice: "
+                            f"{type(gpu_err).__name__}: {gpu_err}"
+                        )
                         gpu_segments = None
 
                 transcript_segments = []
@@ -702,7 +722,11 @@ def post_meeting_process(self, meeting_id: int):
 
                 # ===== 阶段 2.5: AI 润色转录 =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="AI 润色转录文本", redis_override=redis_client)
-                from app.services.meeting_ai_polish import polish_segments_with_lock
+                # 2026-09-15 P0（会议 250 润色 0 变化事故）: 改用分批润色。
+                # 原实现把整场 1904 段一次性发一个 prompt → 63,545 tokens，
+                # 远超 ollama num_ctx=16386（服务端日志明确 truncating），
+                # 截断后撞 10 分钟超时 → 整场降级为原文 → 0 段变化。
+                from app.services.meeting_ai_polish import polish_segments_batched
 
                 # 准备润色上下文
                 participant_names = list(speaker_mapping.values())
@@ -723,16 +747,30 @@ def post_meeting_process(self, meeting_id: int):
                     })
 
                 try:
-                    polish_result = await polish_segments_with_lock(
-                        meeting_id, segments_for_polish, polish_context
+                    polish_result = await polish_segments_batched(
+                        meeting_id, segments_for_polish, polish_context,
+                        on_progress=lambda done, total: logger.info(
+                            f"  AI 润色进度: {done}/{total} 批"),
                     )
                     polished_segments = polish_result.get("polished", []) or []
                     if polished_segments:
                         # 将润色后的文本回写到 transcript_segments
+                        changed = 0
                         for i, polished in enumerate(polished_segments):
                             if i < len(transcript_segments):
-                                transcript_segments[i]["text_polished"] = polished.get("text", transcript_segments[i]["text"])
-                        logger.info(f"AI 润色完成: {len(polished_segments)} 段")
+                                new_text = polished.get("text", transcript_segments[i]["text"])
+                                transcript_segments[i]["text_polished"] = new_text
+                                if new_text != transcript_segments[i]["text"]:
+                                    changed += 1
+                        logger.info(
+                            f"AI 润色完成: {len(polished_segments)} 段, "
+                            f"其中 {changed} 段实际发生变化"
+                        )
+                        if changed == 0:
+                            logger.warning(
+                                "AI 润色完成但 0 段发生变化 —— 极可能是 LLM 侧失败降级"
+                                "（超时/上下文超限），请检查 ollama 日志的 truncating 记录"
+                            )
                     else:
                         logger.warning("AI 润色返回空结果，使用原文")
                 except Exception as e:

@@ -111,43 +111,82 @@ function Stop-SshTunnel {
 }
 
 function Get-TunnelStatus {
-    if (Test-Path $PID_FILE) {
-        $tunnelPid = Get-Content $PID_FILE -Raw | ForEach-Object { $_.Trim() }
-        if ($tunnelPid -match '^\d+$') {
-            $proc = Get-Process -Id $tunnelPid -ErrorAction SilentlyContinue
-            if ($proc.Name -eq "ssh") {
-                Write-Log "Status: RUNNING (PID: $tunnelPid)"
-                Write-Log "Ports: $($FORWARDS.ForEach({ "$($_.Name): $($_.RemotePort)" }) -join ', ')"
-                return
-            }
-        }
+    $tunnelPid = Get-LiveTunnelPid
+    if ($tunnelPid) {
+        Write-Log "Status: RUNNING (PID: $tunnelPid)"
+        Write-Log "Ports: $($FORWARDS.ForEach({ "$($_.Name): $($_.RemotePort)" }) -join ', ')"
+        return
     }
     Write-Log "Status: STOPPED"
 }
 
+# 2026-09-15 P0 修复（隧道抖动事故）:
+# 本脚本的看门狗原来只认 PID_FILE 里的 pid。但 `scripts/tunnel/guard-ssh-tunnel.ps1`
+# （计划任务每 5 分钟）也会按自己的判活逻辑拉起一条**独立**的 ssh 隧道，它不写本
+# 脚本的 PID_FILE。于是出现两个监管者互不认账的局面：
+#   看门狗认为"隧道已死" → 再拉一条 → 远端 8000/9000/2222 已被上一条占着 →
+#   `-o ExitOnForwardFailure=yes` 让新连接立刻退出 255 → 看门狗 30s 后再来一次……
+# 实测 2026-09-15 白天 `ssh-tunnel.log` 出现 115 次 `SSH exited immediately (code: 255)`，
+# 持续约 70 分钟；隧道断时移动端就是 "Network Error"。
+# 修法：判活时**兜底认领**进程表里任何一条连到本服务器的 ssh -R 隧道（并回写 PID_FILE
+# 自愈），保证两个监管者最终收敛到同一条隧道，不再互相踩端口。
+function Get-LiveTunnelPid {
+    if (Test-Path $PID_FILE) {
+        $tunnelPid = Get-Content $PID_FILE -Raw | ForEach-Object { $_.Trim() }
+        if ($tunnelPid -match '^\d+$') {
+            $proc = Get-Process -Id $tunnelPid -ErrorAction SilentlyContinue
+            if ($proc -and $proc.Name -eq "ssh") { return $tunnelPid }
+        }
+    }
+    # 兜底：认领外部（guard 脚本）启动的隧道
+    try {
+        $ext = Get-CimInstance Win32_Process -Filter "Name='ssh.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -like "*$SSH_HOST*" -and $_.CommandLine -like '*-R *' } |
+            Select-Object -First 1
+        if ($ext) {
+            $ext.Id | Out-File -FilePath $PID_FILE -Encoding ASCII -Force
+            Write-Log "ADOPTED external tunnel (PID: $($ext.Id)) — PID_FILE 已自愈"
+            return $ext.Id
+        }
+    } catch {
+        Write-Log "WARN: adopt external tunnel failed: $_"
+    }
+    return $null
+}
+
 # Watchdog: 持续监控 ssh.exe 状态, 死了就重启
 # v2026-07-02 新增 - 解决 ssh 进程因网络抖动/服务端 idle timeout 退出后不自动恢复的问题
+# v2026-09-15 修复 - 认领外部隧道 + 连续失败指数退避（避免端口争抢活锁）
 # 主入口调用后永不返回, 直到 PowerShell 进程被 SIGTERM (关机/手动 stop)
 function Watch-SshTunnel {
-    $WATCH_INTERVAL_SEC = 30
-    Write-Log "Watchdog started (interval: ${WATCH_INTERVAL_SEC}s, Ctrl+C / Stop-SshTunnel to exit)"
+    $BASE_INTERVAL_SEC = 30
+    $MAX_INTERVAL_SEC = 300
+    $interval = $BASE_INTERVAL_SEC
+    $consecutiveFailures = 0
+    Write-Log "Watchdog started (interval: ${BASE_INTERVAL_SEC}s, 失败退避上限 ${MAX_INTERVAL_SEC}s)"
     while ($true) {
-        Start-Sleep -Seconds $WATCH_INTERVAL_SEC
-        $alive = $false
-        if (Test-Path $PID_FILE) {
-            $curPid = Get-Content $PID_FILE -Raw | ForEach-Object { $_.Trim() }
-            if ($curPid -match '^\d+$') {
-                $cur = Get-Process -Id $curPid -ErrorAction SilentlyContinue
-                if ($cur -and $cur.Name -eq "ssh") { $alive = $true }
+        Start-Sleep -Seconds $interval
+        $livePid = Get-LiveTunnelPid
+        if ($livePid) {
+            if ($consecutiveFailures -gt 0) {
+                Write-Log "隧道恢复 (PID: $livePid)，退避重置"
             }
+            $consecutiveFailures = 0
+            $interval = $BASE_INTERVAL_SEC
+            continue
         }
-        if (-not $alive) {
-            Write-Log "WARN: tunnel not running, restarting..."
-            $ok = Start-SshTunnel
-            if (-not $ok) {
-                Write-Log "ERROR: restart failed, will retry next cycle"
-            }
+        Write-Log "WARN: tunnel not running, restarting... (连续失败 $consecutiveFailures 次)"
+        $ok = Start-SshTunnel
+        if ($ok) {
+            $consecutiveFailures = 0
+            $interval = $BASE_INTERVAL_SEC
+        } else {
+            $consecutiveFailures++
+            # 指数退避：端口争抢时越急着重试，服务端越晚释放，会形成活锁
+            $interval = [Math]::Min($BASE_INTERVAL_SEC * [Math]::Pow(2, [Math]::Min($consecutiveFailures, 4)), $MAX_INTERVAL_SEC)
+            Write-Log "ERROR: restart failed (连续 $consecutiveFailures 次)，下次 ${interval}s 后重试"
         }
+    }
     }
 }
 

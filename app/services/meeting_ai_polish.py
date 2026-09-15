@@ -280,6 +280,10 @@ async def polish_segments_with_lock(
     - 等待方 200ms 后重读缓存，命中即返回
     - 缓存未命中才递归重试（持锁方可能还在写）
     - 兜底：递归 5 次后仍拿不到锁则直接调 with_cache（防极端情况死循环）
+
+    ⚠️ 注意：本函数把**传入的全部 segments 一次性**发一个 prompt。整场会议
+    （上千段、3~6 万字）会远超模型上下文。长会议请改用
+    `polish_segments_batched()`（2026-09-15 P0 新增）。
     """
     import asyncio
 
@@ -313,3 +317,99 @@ async def polish_segments_with_lock(
     finally:
         if acquired:
             await r.delete(lock_key)
+
+
+# ====================================================================
+# 2026-09-15 P0 新增：整场会议的**分批**润色
+# ====================================================================
+def split_polish_batches(segments: list[dict],
+                         max_chars: int | None = None,
+                         max_segments: int | None = None) -> list[list[dict]]:
+    """按"累计字符数 + 段数"双阈值切批，保证单个 prompt 落在模型上下文内。
+
+    事故（会议 250 / 2026-09-15）：流水线把 1904 段一次性交给 polish，
+    prompt 达 **63,545 tokens**，而 ollama 的 num_ctx 只有 **16,386** ——
+    服务端日志 `truncating input prompt limit=16386 prompt=63545`，
+    截断后的请求又撞上客户端 10 分钟超时 → `AI 润色失败（降级为原文）:
+    Request timed out.` → 1904 段全部原样保留 → 质量指标
+    `polish_real_change_ratio=0.0`（历史会议 246 同样是 0，同一个根因）。
+    """
+    max_chars = max_chars or settings.POLISH_LLM_BATCH_MAX_CHARS
+    max_segments = max_segments or settings.POLISH_LLM_BATCH_MAX_SEGMENTS
+    batches: list[list[dict]] = []
+    cur: list[dict] = []
+    cur_chars = 0
+    for seg in segments:
+        seg_chars = len(json.dumps(seg, ensure_ascii=False))
+        if cur and (cur_chars + seg_chars > max_chars or len(cur) >= max_segments):
+            batches.append(cur)
+            cur, cur_chars = [], 0
+        cur.append(seg)
+        cur_chars += seg_chars
+    if cur:
+        batches.append(cur)
+    return batches
+
+
+async def polish_segments_batched(
+    meeting_id: int,
+    segments: list[dict],
+    meeting_context: dict,
+    on_progress=None,
+) -> dict:
+    """把整场会议分段后逐批润色，批次间互不影响。
+
+    - 每批走 `polish_segments_with_cache`（保留原有缓存/锁语义）
+    - 单批失败只影响这一批（用原文兜底），不会像原实现那样**一场会议整批降级**
+    - 按输入顺序拼接结果，保持与输入一一对应（下游靠 index 回写）
+    """
+    if not segments:
+        return {"polished": [], "key_points": [], "boundary_after_index": None, "summary": None}
+
+    batches = split_polish_batches(segments)
+    total = len(batches)
+    logger.info(
+        f"AI 润色分批: {len(segments)} 段 → {total} 批"
+        f"（每批 ≤{settings.POLISH_LLM_BATCH_MAX_CHARS} 字 / "
+        f"{settings.POLISH_LLM_BATCH_MAX_SEGMENTS} 段）"
+    )
+
+    polished_all: list[dict] = []
+    key_points_all: list[dict] = []
+    failed_batches = 0
+
+    for i, batch in enumerate(batches):
+        try:
+            result = await polish_segments_with_cache(meeting_id, batch, meeting_context)
+            polished = (result or {}).get("polished") or []
+            if len(polished) != len(batch):
+                # 长度不一致说明模型漏项/多项 → 本批用原文兜底，避免 index 错位污染全文
+                logger.warning(
+                    f"润色批 {i + 1}/{total} 段数不匹配 "
+                    f"(输入 {len(batch)} / 输出 {len(polished)})，本批用原文兜底"
+                )
+                polished = _fallback_polished(batch)["polished"]
+                failed_batches += 1
+            polished_all.extend(polished)
+            key_points_all.extend((result or {}).get("key_points") or [])
+        except Exception as e:  # noqa: BLE001 — 单批失败不拖垮整场
+            failed_batches += 1
+            logger.warning(f"润色批 {i + 1}/{total} 失败（本批用原文兜底）: "
+                           f"{type(e).__name__}: {e}")
+            polished_all.extend(_fallback_polished(batch)["polished"])
+        if on_progress:
+            try:
+                on_progress(i + 1, total)
+            except Exception:  # noqa: BLE001
+                pass
+
+    logger.info(
+        f"AI 润色分批完成: {total - failed_batches}/{total} 批成功, "
+        f"共 {len(polished_all)} 段"
+    )
+    return {
+        "polished": polished_all,
+        "key_points": key_points_all,
+        "boundary_after_index": None,
+        "summary": None,
+    }

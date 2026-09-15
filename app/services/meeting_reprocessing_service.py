@@ -239,7 +239,9 @@ class MeetingReprocessingService:
             meeting.title = new_title
 
     async def _stage_polish(self, meeting: Meeting) -> None:
-        from app.services.meeting_ai_polish import polish_segments_with_lock
+        # 2026-09-15 P0: 与 post_meeting_tasks 一致改用**分批**润色 ——
+        # 原实现把整场转录一次性发一个 prompt，长会议必然超模型上下文被截断。
+        from app.services.meeting_ai_polish import polish_segments_batched
         transcript = meeting.transcript or []
         if not transcript:
             return
@@ -247,7 +249,7 @@ class MeetingReprocessingService:
             {"speaker": s.get("speaker", "未知"), "text": s.get("text", ""), "ts": s.get("start", 0)}
             for s in transcript
         ]
-        result = await polish_segments_with_lock(
+        result = await polish_segments_batched(
             meeting.id, segments,
             {"title": meeting.title or "未命名会议", "participants": [], "topic": None, "context": []},
         )

@@ -46,6 +46,32 @@ SR = 16000            # 输入 PCM 采样率
 TARGET_SR = 24000     # VibeVoice 目标采样率
 
 
+# ------------------------------------------------- 进度落盘（2026-09-15 新增）
+def write_progress(progress_path, **fields):
+    """把进度原子写入 json，供守护 /jobs/{id} 透出，客户端据此判断"在跑"还是"卡死"。
+
+    事故背景：此前子进程 stdout 被守护 `capture_output=True` 吞掉，2 小时里完全
+    看不到进度，无法区分"在推理"与"卡死"。现在每块结束都刷新一次。
+    """
+    if not progress_path:
+        return
+    try:
+        p = Path(progress_path)
+        cur = {}
+        if p.exists():
+            try:
+                cur = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cur = {}
+        cur.update(fields)
+        cur["updated_at"] = time.time()
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(cur, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(p)
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------- 工具
 def vram_used_mb() -> int | None:
     try:
@@ -172,13 +198,23 @@ def transcribe_chunk(model, processor, wav24: np.ndarray, t0: float, t1: float,
 
 
 # ---------------------------------------------------------------- 主流程
-def run_job(job: dict) -> dict:
+def run_job(job: dict, progress_path: str | None = None,
+            max_seconds: float | None = None) -> dict:
+    """跑完整场会议转写。
+
+    max_seconds: 时间预算。每块结束后用已跑时长外推总耗时，若会超预算则**提前中止**
+      并返回 status="aborted"。事故教训：96 分钟音频曾一路跑到 7200s 硬超时才被杀，
+      整整 2 小时 GPU 被白占、且客户端在此期间无任何可用信号。提前中止把"注定失败"
+      的尝试压缩到十几分钟，让上层尽早回退 SenseVoice。
+    """
     t_start = time.perf_counter()
+    write_progress(progress_path, phase="loading_audio")
     wav16 = load_wav_16k(job["audio_wav"])
     audio_sec = len(wav16) / SR
     wav24 = resample_24k(wav16)
     print(f"[worker] audio {audio_sec:.1f}s, resampled 24kHz", flush=True)
 
+    write_progress(progress_path, phase="loading_model", audio_sec=round(audio_sec, 1))
     model, processor = load_asr_model(
         job.get("model_dir", os.environ.get("GPU_ASR_MODEL_DIR", DEF_MODEL_DIR)),
         job.get("tokenizer_dir", os.environ.get("GPU_ASR_TOKENIZER_DIR",
@@ -191,35 +227,73 @@ def run_job(job: dict) -> dict:
     hotwords = job.get("hotwords")
     chunk_sec = float(job.get("chunk_sec", 900))
     points = find_chunk_points(wav24, chunk_sec)
+    n_chunks = len(points) - 1
     print(f"[worker] chunks: {[(round(a), round(b)) for a, b in zip(points, points[1:])]}", flush=True)
+    write_progress(progress_path, phase="transcribing", chunks_total=n_chunks,
+                   model_load_sec=round(load_sec, 2), peak_vram_mb=peak_vram)
 
     t1 = time.perf_counter()
     segments = []
+    aborted = False
+    abort_reason = None
     for ci, (a, b) in enumerate(zip(points, points[1:])):
         segs = transcribe_chunk(model, processor, wav24, a, b, hotwords, ci)
         segments.extend(segs)
-        print(f"[worker] chunk {ci}: +{len(segs)} segs (total {len(segments)})", flush=True)
-    infer_sec = time.perf_counter() - t1
+        done_sec = b if b else audio_sec
+        elapsed = time.perf_counter() - t1
+        rtf = elapsed / max(done_sec, 1)
+        eta = rtf * max(audio_sec - done_sec, 0)
+        print(f"[worker] chunk {ci + 1}/{n_chunks}: +{len(segs)} segs "
+              f"(total {len(segments)}), elapsed={elapsed:.0f}s rtf={rtf:.2f} eta={eta:.0f}s",
+              flush=True)
+        write_progress(progress_path, phase="transcribing", chunk_done=ci + 1,
+                       chunks_total=n_chunks, segments=len(segments),
+                       elapsed_sec=round(elapsed, 1), rtf=round(rtf, 3),
+                       eta_sec=round(eta, 1),
+                       last_chunk_segments=len(segs))
 
-    return {
-        "status": "ok",
-        "segments": segments,
-        "meta": {
-            "model_load_sec": round(load_sec, 2),
-            "infer_sec": round(infer_sec, 2),
-            "audio_sec": round(audio_sec, 2),
-            "rtf": round(infer_sec / max(audio_sec, 1), 3),
-            "chunks": len(points) - 1,
-            "peak_vram_mb": peak_vram,
-            "worker_pid": os.getpid(),
-        },
+        # 时间预算早退：已跑时长 + 剩余外推 > 预算 → 立即中止，别拖到硬超时
+        if max_seconds and (elapsed + eta) > max_seconds:
+            aborted = True
+            abort_reason = (
+                f"时间预算不足: 已跑 {elapsed:.0f}s, 外推剩余 {eta:.0f}s, "
+                f"合计 {elapsed + eta:.0f}s > 预算 {max_seconds:.0f}s "
+                f"(rtf={rtf:.2f}, 已完成 {ci + 1}/{n_chunks} 块)"
+            )
+            print(f"[worker] ABORT {abort_reason}", flush=True)
+            write_progress(progress_path, phase="aborted", reason=abort_reason)
+            break
+
+    infer_sec = time.perf_counter() - t1
+    meta = {
+        "model_load_sec": round(load_sec, 2),
+        "infer_sec": round(infer_sec, 2),
+        "audio_sec": round(audio_sec, 2),
+        "rtf": round(infer_sec / max(audio_sec, 1), 3),
+        "chunks": n_chunks,
+        "chunks_done": (ci + 1) if n_chunks else 0,
+        "peak_vram_mb": peak_vram,
+        "worker_pid": os.getpid(),
     }
+    if aborted:
+        meta["abort_reason"] = abort_reason
+        # 已完成的块仍带回去，便于上层诊断（客户端会把 aborted 当失败处理并回退）
+        return {"status": "aborted", "segments": segments, "meta": meta}
+
+    write_progress(progress_path, phase="done", segments=len(segments),
+                   infer_sec=round(infer_sec, 1))
+    return {"status": "ok", "segments": segments, "meta": meta}
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--job")
     ap.add_argument("--output")
+    ap.add_argument("--progress", default=None,
+                    help="进度 json 落盘路径（守护透出给客户端，判活/判卡死用）")
+    ap.add_argument("--log", default=None, help="保留位（守护已把 stdout 重定向到日志文件）")
+    ap.add_argument("--max-seconds", type=float, default=None,
+                    help="时间预算；外推超预算则提前中止，避免拖到守护硬超时")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
 
@@ -239,6 +313,12 @@ def main():
             # 生命周期自测：分块逻辑 + JSON 管线（跳过模型加载，无 GPU 也可跑）
             pts = find_chunk_points(np.zeros(TARGET_SR * 1000, dtype=np.float32), 300)
             assert len(pts) == 5, f"分块点数异常: {pts}"  # 1000s/300s → 4 块
+            # 预算早退逻辑自测：预算 1s 时 5 个 60s 块必须提前退出
+            import tempfile
+            with tempfile.TemporaryDirectory() as td:
+                pp = str(Path(td) / "p.json")
+                write_progress(pp, phase="selftest", n=1)
+                assert json.loads(Path(pp).read_text(encoding="utf-8"))["phase"] == "selftest"
             result.update({
                 "status": "ok", "segments": [],
                 "meta": {"chunk_points": pts,
@@ -246,10 +326,13 @@ def main():
             _write_and_exit(0)
 
         job = json.loads(Path(args.job).read_text(encoding="utf-8"))
-        result = run_job(job)
-        _write_and_exit(0)
+        result = run_job(job, progress_path=args.progress,
+                         max_seconds=args.max_seconds)
+        _write_and_exit(0 if result.get("status") == "ok" else 2)
     except Exception as e:  # noqa: BLE001 — worker 必须以 JSON 报告一切失败
         result["error"] = f"{type(e).__name__}: {e}"
+        if args.progress:
+            write_progress(args.progress, phase="error", error=result["error"])
         _write_and_exit(1)
 
 

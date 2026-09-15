@@ -110,6 +110,15 @@ class Settings(BaseSettings):
     GPU_ASR_URL: str = "http://host.docker.internal:8005"
     GPU_ASR_MIN_SEC: int = 180     # 低于此时长直接走 SenseVoice (7B 加载无优势)
     GPU_ASR_TIMEOUT: int = 7200    # 3h 会议分块转写上限
+    # 2026-09-15 P0（会议 250 重跑事故）: 7B 链路的两道保险
+    # 事故: 96 分 27 秒的会议走 7B，跑到 7200s 硬超时才被杀 —— 2 小时 GPU 白占，
+    # 客户端全程无进展信号，最终仍回退 SenseVoice。实测该 7B 对 1.5h 会议
+    # 不可能在预算内跑完，因此：
+    #   1) GPU_ASR_MAX_SEC: 音频超过此时长**直接不走 7B**，省掉必然失败的尝试。
+    #      3200s ≈ 53 分钟（按实测 rtf≈0.9~1.0 反推，留 1.5~2x 余量）。
+    #   2) GPU_ASR_STALL_SEC: 进度停滞超过此秒数即判卡死，放弃并取消作业。
+    GPU_ASR_MAX_SEC: int = 3200
+    GPU_ASR_STALL_SEC: int = 900
 
     # 2026-09-08 Streaming-7B 实时 ASR (host 常驻 8006, RTF~0.1, 2.9s 增量块)
     # 注意: 常驻 ~16GB 显存; 与 meeting_worker 并发时后者 OOM 会自动回退 SenseVoice
@@ -267,6 +276,14 @@ class Settings(BaseSettings):
     POLISH_BATCH_INTERVAL_SECONDS: int = 30  # L2 攒批触发间隔
     POLISH_BATCH_MAX_SEGMENTS: int = 5  # L2 攒批最大段数
     POLISH_BATCH_MIN_CHARS: int = 30  # L2 攒批最少字符数（避免空批）
+
+    # 2026-09-15 P0（会议 250 润色 0 变化事故）: 整场会议润色的**单批**预算。
+    # 事故: 1904 段一次性发一个 prompt → 63,545 tokens，而 ollama num_ctx 只有
+    # 16,386（服务端 `truncating input prompt limit=16386 prompt=63545`），
+    # 截断后又撞客户端 10 分钟超时 → 整场降级为原文 → polish_real_change_ratio=0.0。
+    # 3000 字 ≈ 2.5~3k tokens，给输出留足空间，单批稳定落在上下文内。
+    POLISH_LLM_BATCH_MAX_CHARS: int = 3000
+    POLISH_LLM_BATCH_MAX_SEGMENTS: int = 120
     TRANSCRIPT_BUFFER_MAX_ENTRIES: int = 200  # Redis LIST 限长（test_maxlen_200 契约）
 
     # ========================================================================
