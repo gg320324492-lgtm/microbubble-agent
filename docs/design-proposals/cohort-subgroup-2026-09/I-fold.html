@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I · 折叠 — 届别分组细分方案</title>
+<link rel="stylesheet" href="_skin.css">
+<style>
+/* 折叠: 身份组内每届 = 一个可展开小节头 (chevron), 默认全开; 组头右侧「收起低年级」一键 */
+.subh { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: var(--card); border-bottom: 1px solid var(--line); cursor: pointer; transition: background var(--dur); user-select: none; }
+.subh:hover { background: var(--bg-hover); }
+.subh .chev { width: 14px; height: 14px; flex: none; transition: transform var(--dur); color: var(--text-3); }
+.subh.closed .chev { transform: rotate(-90deg); }
+.subh .sg { font-size: 13px; font-weight: 650; color: var(--text); min-width: 34px; }
+.subh .dots { display: inline-flex; gap: 3px; }
+.subh .dots i { width: 6px; height: 6px; border-radius: 50%; }
+.subh .scc { font-family: var(--mono); font-size: 10.5px; color: var(--text-4); }
+.subh .sp { flex: 1; }
+.subh .mini-vp { font-size: 11px; color: var(--text-3); }
+.subrows.closed { display: none; }
+.fold-all { font-size: 11.5px; color: var(--primary-dark); background: none; border: 1px dashed var(--primary-border); border-radius: var(--r-full); padding: 3px 10px; margin-left: 12px; }
+.fold-all:hover { background: var(--primary-bg); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>团队协作</h1>
+    <span class="meta"><b>20</b> 人 · <b>4</b> 组 · 声纹 <b>8/20</b></span>
+    <span class="sp"></span>
+    <div class="seg"><button>按项目</button><button class="on">按届别</button></div>
+  </div>
+  <p class="note"><b>I 折叠</b> — 每届升格为可点折的小节：小节头 = chevron + 届别 + 迷你头像点阵 + 人数/声纹。默认全展开（和 E 差不多但节头可点）；人多时点「收起低年级」一键只留高年级。适合成员涨到 40+ 后仍保持一屏管理。</p>
+  <div id="out"></div>
+</div>
+<div class="prop-bar">
+  <a href="index.html">总览</a><a href="E-subband.html">E 子带</a><a href="F-rail.html">F 导轨</a><a href="G-chips.html">G 胶囊</a><a href="H-tone.html">H 阶色</a><a class="on" href="I-fold.html">I 折叠</a>
+</div>
+<script src="_shared.js"></script>
+<script>
+const { M } = window.COHORT_DATA
+const IDORD = ['导师','博士后','博士','硕士','本科生','校友']
+const groups = new Map()
+for (const m of M) { const t = memberStatus(m.g); (groups.get(t) || groups.set(t, []).get(t)).push(m) }
+const ordered = [...groups.entries()].sort((a,b) => (IDORD.indexOf(a[0])<0?99:IDORD.indexOf(a[0])) - (IDORD.indexOf(b[0])<0?99:IDORD.indexOf(b[0])))
+function subs(list) {
+  const s = new Map()
+  for (const m of [...list].sort((a,b)=>(window.SUBORDER[a.g]??5)-(window.SUBORDER[b.g]??5)||a.id-b.id)) {
+    if (!s.has(m.g)) s.set(m.g, []); s.get(m.g).push(m)
+  }
+  return [...s.entries()]
+}
+function rowHtml(m) {
+  return `<div class="row">
+    <span class="nm"><span class="av" style="background:${avColor(m.id)}">${m.n[0]}</span><b>${m.n}</b><span class="id">#${String(m.id).padStart(3,'0')}</span></span>
+    <span class="gtag ${isTeacher(m.g)?'t':''}">${m.g}</span>
+    <span class="area ${m.area?'':'dim'}">${m.area || '研究方向未登记'}</span>
+    <span class="sk">${m.sk.slice(0,3).map(s=>`<span>${s}</span>`).join('')}</span>
+    ${m.vp ? `<span class="vp">声纹 × ${m.vp}</span>` : `<span class="vp no">未录入</span>`}
+  </div>`
+}
+document.getElementById('out').innerHTML = ordered.map(([t, list], gi) => {
+  const color = window.COHORT_DATA.COLORS[gi % 8]
+  const vpNo = list.filter(m=>!m.vp).length
+  const sub = subs(list)
+  const multi = sub.length > 1
+  const body = sub.map(([g, ms], si) => {
+    const dots = ms.slice(0, 8).map(m => `<i style="background:${m.vp ? color : 'var(--line-2)'}"></i>`).join('') + (ms.length > 8 ? `<span style="font-size:10px;color:var(--text-4)">+${ms.length-8}</span>` : '')
+    const vpx = ms.filter(m=>!m.vp).length
+    return `
+    <div class="subh" data-k="${gi}-${si}"><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6l4 4 4-4"/></svg><span class="sg">${g}</span><span class="dots">${dots}</span><span class="scc">${ms.length} 人</span><span class="sp"></span><span class="mini-vp">${vpx ? vpx + ' 人未录声纹' : '声纹齐 ✓'}</span></div>
+    <div class="subrows" data-k="${gi}-${si}">${ms.map(rowHtml).join('')}</div>`
+  }).join('')
+  const foldBtn = multi ? `<button class="fold-all" data-g="${gi}">收起低年级</button>` : ''
+  return `<section class="doss" data-g="${gi}"><div class="dhead"><span class="dot" style="background:${color}"></span><h2>${t}</h2>${foldBtn}<span class="sp"></span><span class="cnt"><b>${list.length}</b> 人${vpNo?` · ${vpNo} 人未录声纹`:''}</span></div>${body}</section>`
+}).join('')
+document.querySelectorAll('.subh').forEach(h => h.addEventListener('click', () => {
+  h.classList.toggle('closed')
+  document.querySelector(`.subrows[data-k="${h.dataset.k}"]`).classList.toggle('closed')
+}))
+document.querySelectorAll('.fold-all').forEach(b => b.addEventListener('click', () => {
+  const card = document.querySelector(`.doss[data-g="${b.dataset.g}"]`)
+  const heads = [...card.querySelectorAll('.subh')]
+  const anyOpen = heads.slice(1).some(h => !h.classList.contains('closed'))
+  heads.forEach((h, i) => {
+    const close = anyOpen ? i > 0 : false
+    h.classList.toggle('closed', close)
+    card.querySelector(`.subrows[data-k="${h.dataset.k}"]`).classList.toggle('closed', close)
+  })
+  b.textContent = anyOpen ? '全部展开' : '收起低年级'
+}))
+</script>
+</body>
+</html>

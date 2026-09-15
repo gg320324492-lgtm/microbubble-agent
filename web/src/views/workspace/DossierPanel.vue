@@ -38,13 +38,14 @@
       ><span class="dot warn"></span>未编入<span class="c">{{ unfiled.length }}</span></a>
     </div>
 
-    <!-- 卷 = 项目节 (按项目) / 身份组节 (按届别), 节下挂单行紧凑成员行 -->
+    <!-- 卷 = 项目节 (按项目) / 身份组节 (按届别)。按届别时组内切「届别竖轨」段 (F 稿):
+         左缘窄轨 = 细年级 + 人数 + 缺声纹点亮标; 按项目走同结构的无轨分段, 外观不变 -->
     <section
       v-for="sec in sections"
       :id="`doss-${sec.key}`"
       :key="sec.key"
       class="doss"
-      :class="{ muted: sec.persons > 0 && sec.vpMissing === sec.persons }"
+      :class="{ muted: sec.persons > 0 && sec.vpMissing === sec.persons, banded: viewMode === 'grade' }"
     >
       <div class="dhead">
         <span class="dot" :style="{ background: sec.color }"></span>
@@ -54,22 +55,31 @@
         <span class="cnt"><b>{{ sec.persons }}</b> 人<template v-if="sec.vpMissing"> · {{ sec.vpMissing }} 人未录声纹</template></span>
       </div>
       <template v-if="sec.persons">
-        <div v-for="m in sec.persons_list" :key="m.id" class="row">
-          <span class="nm">
-            <span class="av" :style="{ background: avColor(m) }">
-              <img v-if="m.avatar" :src="resolveAvatarUrl(m.avatar)" :alt="m.name">
-              <template v-else>{{ m.name?.charAt(0) }}</template>
-            </span>
-            <b>{{ m.name }}</b><span class="id">#{{ padId(m.id) }}</span>
-          </span>
-          <span class="gtag" :class="{ t: isTeacher(m) }">{{ m.grade || '届别未录' }}</span>
-          <span class="area" :class="{ dim: !m.research_area }">{{ m.research_area || '研究方向未登记' }}</span>
-          <span class="sk"><span v-for="s in (m.skills || []).slice(0, 3)" :key="s">{{ s }}</span></span>
-          <span v-if="m.voice_sample_count" class="vp">声纹 × {{ m.voice_sample_count }}</span>
-          <span v-else class="vp no">未录入</span>
-          <span class="fop" @click.stop>
-            <button type="button" class="op" @click="$emit('open-member', m)">详情</button>
-          </span>
+        <div v-for="b in sec.bands" :key="b.g || 'all'" class="subwrap">
+          <div v-if="b.rail" class="rail">
+            <span class="rg">{{ b.g }}</span>
+            <span class="rn">{{ b.ms.length }}人</span>
+            <span class="bar" :class="{ hot: b.miss }"></span>
+          </div>
+          <div class="subbody">
+            <div v-for="m in b.ms" :key="m.id" class="row">
+              <span class="nm">
+                <span class="av" :style="{ background: avColor(m) }">
+                  <img v-if="m.avatar" :src="resolveAvatarUrl(m.avatar)" :alt="m.name">
+                  <template v-else>{{ m.name?.charAt(0) }}</template>
+                </span>
+                <b>{{ m.name }}</b><span class="id">#{{ padId(m.id) }}</span>
+              </span>
+              <span class="gtag" :class="{ t: isTeacher(m) }">{{ m.grade || '届别未录' }}</span>
+              <span class="area" :class="{ dim: !m.research_area }">{{ m.research_area || '研究方向未登记' }}</span>
+              <span class="sk"><span v-for="s in (m.skills || []).slice(0, 3)" :key="s">{{ s }}</span></span>
+              <span v-if="m.voice_sample_count" class="vp">声纹 × {{ m.voice_sample_count }}</span>
+              <span v-else class="vp no">未录入</span>
+              <span class="fop" @click.stop>
+                <button type="button" class="op" @click="$emit('open-member', m)">详情</button>
+              </span>
+            </div>
+          </div>
         </div>
       </template>
       <div v-else class="empty">{{ viewMode === 'project' ? '此卷暂无成员 · 编入后自动显示' : '此组暂无成员' }}</div>
@@ -119,7 +129,8 @@
  *   "按项目 / 按届别" 分段切换 (按届别 = memberTitleOf 身份称谓分组, 纯前端派生)
  * - 成员归属 = projects.members id 数组反向 join; 幽灵 id 不计入行 (口径不变)
  * - 批次⑩.75 守恒: 不展示进度/逾期, 不拉里程碑接口
- * - 排序: 导师→博→硕→本科→未分类→已毕业 (GORD); 按届别按身份称谓序
+ * - 排序: 导师→博→硕→本科→未分类→已毕业 (GORD); 按届别组内切 F 稿竖轨段
+ *   (2026-09-15 主拍 F): 身份组内按 SUBORDER 细年级高→低切段, 段轨 = 届别+人数+缺声纹点亮标
  * - tokens 自包含在 .dossier-panel 根 (防跨组件继承断链); dark 翻转非 scoped 块 (v60-v67 教训)
  */
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
@@ -160,6 +171,24 @@ const GORD = { '副教授': 0, '教授': 0, '老师': 0, '助教': 0, '博士后
 const gradeRank = (m) => GORD[m.grade] ?? 7
 const isTeacher = (m) => /教授|老师|助教|博后|博士后/.test(m.grade || '') && !/毕业/.test(m.grade || '')
 
+// F 稿竖轨: 身份组内按细年级切段 (高年级在前), 与提案快照 SUBORDER 同口径;
+// 未覆盖的自定义 grade 串落 5 垫底, 彼此再按 id 升序
+const SUBORDER = { 博二: 0, 博一: 1, 博零: 2, 直博: 0, 研三: 0, 研二: 1, 研一: 2,
+                   大四: 0, 大三: 1, 大二: 2, 大一: 3 }
+const subRank = (m) => SUBORDER[(m.grade || '').trim()] ?? 5
+function bandsOf(list) {
+  const sorted = [...list].sort((a, b) => subRank(a) - subRank(b) || a.id - b.id)
+  const map = new Map()
+  for (const m of sorted) {
+    const g = (m.grade || '').trim() || '届别未录'
+    if (!map.has(g)) map.set(g, { g, ms: [], miss: false })
+    const b = map.get(g)
+    b.ms.push(m)
+    if (!m.voice_sample_count) b.miss = true
+  }
+  return [...map.values()]
+}
+
 const memberById = computed(() => {
   const map = {}
   for (const m of memberStore.members) map[m.id] = m
@@ -188,6 +217,7 @@ const dossiers = computed(() =>
         period: `${f(p.start_date)} → ${f(p.end_date)}`,
         persons: persons.length,
         persons_list: persons,
+        bands: [{ g: '', ms: persons, miss: false, rail: false }], // 按项目不出轨
         vpMissing: persons.filter(m => !m.voice_sample_count).length,
       }
     }))
@@ -211,7 +241,8 @@ const gradeGroups = computed(() => {
       color: projColor(rank(title) < 99 ? rank(title) : 8),
       period: '',
       persons: list.length,
-      persons_list: [...list].sort((a, b) => (isTeacher(a) ? 0 : 1) - (isTeacher(b) ? 0 : 1) || a.id - b.id),
+      persons_list: [...list].sort((a, b) => subRank(a) - subRank(b) || a.id - b.id),
+      bands: bandsOf(list).map(b => ({ ...b, rail: true })),
       vpMissing: list.filter(m => !m.voice_sample_count).length,
     }))
 })
@@ -362,6 +393,18 @@ onBeforeUnmount(() => spy?.disconnect())
 .op:hover { color: var(--rb-primary-dark); border-color: var(--rb-primary-border); background: var(--rb-primary-bg); }
 .op.cta { color: var(--rb-danger); border-color: var(--rb-danger); border-style: dashed; }
 .op.cta:hover { background: rgba(217, 79, 43, .07); }
+
+/* --- 届别竖轨 (F 稿): 仅按届别视图出轨; 按项目走无轨分段外观不变 --- */
+.doss.banded { overflow: hidden; } /* 轨渐变在 12px 圆角处不外溢 (同 F 稿 .doss) */
+.doss.banded .subwrap { display: flex; border-bottom: 1px solid var(--rb-line); }
+.doss.banded .subwrap:last-child { border-bottom: none; }
+.doss.banded .rail { flex: none; width: 62px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 11px 0; border-right: 1px dashed var(--rb-line); background: linear-gradient(180deg, var(--rb-bg), var(--rb-card) 90%); }
+.doss.banded .rail .rg { font-size: 12.5px; font-weight: 700; color: var(--rb-text-2); letter-spacing: .06em; }
+.doss.banded .rail .rn { font-family: var(--rb-mono); font-size: 10px; color: var(--rb-text-4); }
+.doss.banded .rail .bar { width: 14px; height: 2.5px; border-radius: 2px; background: var(--rb-line-2); }
+.doss.banded .rail .bar.hot { background: var(--rb-primary); opacity: .6; }
+.doss.banded .subbody { flex: 1; min-width: 0; }
+.doss.banded .subbody .row { padding-left: 6px; }
 
 /* 整卷全员缺声纹 → 弱示 (B 稿 muted 语义) */
 .muted .row { opacity: .62; }
