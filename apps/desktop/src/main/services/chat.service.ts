@@ -1,8 +1,9 @@
 // 会话服务 — 会话 CRUD + 消息存取（按 user_id 强隔离）。
-// M1-A 阶段 send() 为本地回声应答（断网可测全链路）；M1-B 接模型网关后替换 responder。
+// M1-B 起接模型网关流式应答；C-2 起应答可为结构化结果（meta 携带 thinking/工具轮次）。
 import { randomBytes } from 'node:crypto'
 import type { SqlDatabase } from '../db/adapters'
 import type { ChatTurn } from './model-gateway.service'
+import type { MessageMeta } from '@shared/types'
 
 export interface SessionRow {
   id: string
@@ -17,7 +18,23 @@ export interface MessageRow {
   session_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  /** JSON 序列化的 MessageMeta；null = 纯文本消息 */
+  meta: string | null
   created_at: number
+}
+
+/** 应答器返回：纯文本，或带 meta 的结构化结果（Agent 循环） */
+export type ResponderResult = string | { content: string; meta?: MessageMeta | null }
+
+/** meta 列安全解析 — 损坏 JSON 一律按无 meta 处理（ipc 投影与测试共用） */
+export function parseMessageMeta(raw: string | null | undefined): MessageMeta | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as MessageMeta
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 const genId = (prefix: string) => `${prefix}-${Date.now()}-${randomBytes(3).toString('hex')}`
@@ -59,20 +76,21 @@ export class ChatService {
     this.requireOwned(userId, sessionId)
     // rowid = 插入顺序：同毫秒多条消息也能稳定保序（created_at 只精确到 ms）
     return this.db
-      .prepare('SELECT id, session_id, role, content, created_at FROM chat_messages WHERE session_id = ? ORDER BY rowid ASC')
+      .prepare('SELECT id, session_id, role, content, meta, created_at FROM chat_messages WHERE session_id = ? ORDER BY rowid ASC')
       .all(sessionId) as MessageRow[]
   }
 
   /**
    * 发送一条用户消息并生成回复。
-   * 传 respond（模型网关流式回调）时走真实模型，否则本地回声（断网可验收全链路）。
-   * 流式期间 assistant 消息先以空内容落库，增量经 onDelta 推给 renderer，完成后回写全文。
+   * 传 respond（模型网关/Agent 循环回调）时走真实模型，否则本地回声（断网可验收全链路）。
+   * respond 可返回纯文本或 { content, meta } 结构化结果（meta 持久化到 meta 列）。
+   * 流式期间 assistant 消息先以空内容落库，增量经流事件推给 renderer，完成后回写全文。
    */
   async send(
     userId: string,
     sessionId: string,
     content: string,
-    respond?: (turns: ChatTurn[]) => Promise<string>,
+    respond?: (turns: ChatTurn[], assistantMessageId: string) => Promise<ResponderResult>,
     onDelta?: (assistantMessageId: string, delta: string) => void
   ): Promise<{ userMessage: MessageRow; assistantMessage: MessageRow }> {
     const text = content.trim()
@@ -81,9 +99,9 @@ export class ChatService {
     this.requireOwned(userId, sessionId)
 
     const now = Date.now()
-    const userMessage: MessageRow = { id: genId('m'), session_id: sessionId, role: 'user', content: text, created_at: now }
+    const userMessage: MessageRow = { id: genId('m'), session_id: sessionId, role: 'user', content: text, meta: null, created_at: now }
     this.db
-      .prepare('INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
+      .prepare('INSERT INTO chat_messages (id, session_id, role, content, meta, created_at) VALUES (?, ?, ?, ?, NULL, ?)')
       .run(userMessage.id, sessionId, 'user', text, now)
 
     // 首条消息自动生成会话标题
@@ -96,23 +114,34 @@ export class ChatService {
       session_id: sessionId,
       role: 'assistant',
       content: '',
+      meta: null,
       created_at: Date.now()
     }
     this.db
-      .prepare('INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
+      .prepare('INSERT INTO chat_messages (id, session_id, role, content, meta, created_at) VALUES (?, ?, ?, ?, NULL, ?)')
       .run(assistantMessage.id, sessionId, 'assistant', '', assistantMessage.created_at)
 
     try {
       if (respond) {
+        // assistant 行此刻已落库（先占位后回写），把 id 交给 respond 供流事件标记消息归属
         const turns = this.buildTurns(sessionId, text)
-        assistantMessage.content = await respond(turns)
+        const res = await respond(turns, assistantMessage.id)
+        if (typeof res === 'string') {
+          assistantMessage.content = res
+        } else {
+          assistantMessage.content = res.content
+          assistantMessage.meta = res.meta ? JSON.stringify(res.meta) : null
+        }
       } else {
         assistantMessage.content = this.echoResponder(sessionId, text)
       }
     } catch (e) {
       assistantMessage.content = `⚠️ 生成失败：${e instanceof Error ? e.message : '未知错误'}`
     }
-    this.db.prepare('UPDATE chat_messages SET content = ? WHERE id = ?').run(assistantMessage.content, assistantMessage.id)
+    // meta 在结构化应答分支里已是 JSON 字符串，这里直接落列
+    this.db
+      .prepare('UPDATE chat_messages SET content = ?, meta = ? WHERE id = ?')
+      .run(assistantMessage.content, assistantMessage.meta, assistantMessage.id)
     this.db.prepare('UPDATE chat_sessions SET updated_at = ? WHERE id = ?').run(Date.now(), sessionId)
 
     void onDelta

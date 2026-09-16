@@ -1,19 +1,25 @@
 <script setup lang="ts">
-// 对话面板 — 流式渲染（模型网关）/ 本地回声双模式，停止生成（Esc 中止）
+// 对话面板 — Agent 循环流式渲染（C-2）：live 虚拟气泡承接轮次/工具卡片/思维链事件，
+// send 返回后由带 meta 的持久化消息接管（工具卡片还原为完成态、thinking 折叠面板）；Esc 随时中断
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ChatStreamEvent, ModelProvider } from '@shared/types'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
+import { applyStreamEvent, createLiveState, type LiveAgentState } from '../../stores/chat-events'
+import ToolCard from './ToolCard.vue'
+import ThinkingPanel from './ThinkingPanel.vue'
 
 const auth = useAuthStore()
 const store = useChatStore()
 
 const draft = ref('')
 const sending = ref(false)
-const streaming = ref(false)
 const providers = ref<ModelProvider[]>([])
 const defaultProvider = computed(() => providers.value.find((p) => p.isDefault) ?? null)
+const wsRoot = ref<string | null>(null)
+const live = ref<LiveAgentState | null>(null)
+const streaming = computed(() => live.value !== null)
 
 let offStream: (() => void) | null = null
 
@@ -26,19 +32,11 @@ async function loadProviders(): Promise<void> {
 }
 
 function onStreamEvent(e: ChatStreamEvent): void {
-  if (e.sessionId !== store.activeId) return
-  const msg = store.messages.find((m) => m.id === e.messageId)
-  if (!msg) return
-  if (e.type === 'delta') {
-    msg.content += e.delta
-    void scrollToBottom()
-  } else if (e.type === 'done') {
-    msg.content = e.content
-    streaming.value = false
-  } else if (e.type === 'error') {
-    msg.content = msg.content ? msg.content + '\n\n⚠️ ' + e.message : '⚠️ ' + e.message
-    streaming.value = false
-  }
+  if (e.sessionId !== store.activeId || !live.value) return
+  // 完成收口交给 send promise（持久化消息接管），这里只消费增量/轮次/工具卡片事件
+  if (e.type === 'done' || e.type === 'error') return
+  applyStreamEvent(live.value, e)
+  void scrollToBottom()
 }
 const messagesEl = ref<HTMLElement | null>(null)
 
@@ -49,26 +47,25 @@ async function onSend(): Promise<void> {
     ElMessage.warning('请先在左侧选择或新建会话')
     return
   }
+  const isLive = defaultProvider.value !== null
+  if (isLive) live.value = createLiveState()
   sending.value = true
-  streaming.value = defaultProvider.value !== null
   try {
-    const { assistantMessage } = await store.send(text)
+    await store.send(text)
     draft.value = ''
     await scrollToBottom()
-    // 回声模式同步返回完整内容；流式模式 content 为空，等 stream-event 逐步填充
-    if (assistantMessage.content) streaming.value = false
   } catch (e) {
-    streaming.value = false
     ElMessage.error(e instanceof Error ? e.message : '发送失败')
   } finally {
+    live.value = null
     sending.value = false
   }
 }
 
 async function onStop(): Promise<void> {
   if (!store.activeId) return
+  // main 侧双停（HTTP 流 + 循环）；live 气泡由 onSend 的 finally 收口
   await window.api.chat.abort(store.activeId)
-  streaming.value = false
 }
 
 function onKeydown(e: KeyboardEvent): void {
@@ -94,6 +91,14 @@ watch(
 
 onMounted(() => {
   void loadProviders()
+  window.api.workspace
+    .get()
+    .then((s) => {
+      wsRoot.value = s.root
+    })
+    .catch(() => {
+      wsRoot.value = null
+    })
   offStream = window.api.chat.onStreamEvent(onStreamEvent)
 })
 onUnmounted(() => offStream?.())
@@ -113,11 +118,6 @@ async function onStart(text: string): Promise<void> {
 function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
-
-function isStreamingTail(m: { role: string; id: string }): boolean {
-  const last = store.messages[store.messages.length - 1]
-  return streaming.value && m.role === 'assistant' && last?.id === m.id
-}
 </script>
 
 <template>
@@ -131,6 +131,14 @@ function isStreamingTail(m: { role: string; id: string }): boolean {
       <span v-else class="chat-model" title="到「设置 → 模型服务」配置 API Key">
         <span class="chat-model-dot chat-model-dot-off" aria-hidden="true"></span>
         未配置模型 · 本地回声
+      </span>
+      <span
+        v-if="defaultProvider && !wsRoot"
+        class="chat-model"
+        title="到「设置 → 工作区」选择 GitHub 仓库根后，Agent 可使用文件工具"
+      >
+        <span class="chat-model-dot chat-model-dot-off" aria-hidden="true"></span>
+        未设置工作区 · 纯对话
       </span>
     </header>
 
@@ -152,9 +160,30 @@ function isStreamingTail(m: { role: string; id: string }): boolean {
       <template v-else>
         <div v-for="m in store.messages" :key="m.id" class="msg" :class="`msg-${m.role}`">
           <div class="msg-avatar" aria-hidden="true">{{ m.role === 'user' ? '我' : 'AI' }}</div>
-          <div class="msg-bubble" :class="{ 'is-streaming': isStreamingTail(m) }">
-            <div class="msg-content">{{ m.content }}<span v-if="isStreamingTail(m)" class="stream-cursor" aria-hidden="true">▍</span></div>
+          <div class="msg-bubble">
+            <!-- Agent 结构化内容：思维链折叠面板 + 工具卡片（还原为完成态） -->
+            <ThinkingPanel v-if="m.role === 'assistant' && m.meta?.thinking" :text="m.meta.thinking" />
+            <template v-if="m.role === 'assistant' && m.meta?.tools">
+              <ToolCard v-for="c in m.meta.tools" :key="c.id" :call="c" />
+            </template>
+            <div class="msg-content">{{ m.content }}</div>
+            <div v-if="m.meta?.stopped" class="meta-note">⏹ 已停止 — 以上为已生成的部分内容</div>
+            <div v-else-if="m.meta?.hitRoundCap" class="meta-note">⏳ 已达单次任务最大轮数（{{ m.meta.rounds }} 轮），可继续对话接着做</div>
+            <div v-if="m.meta && m.meta.toolsAvailable === false" class="meta-note">
+              未设置工作区（或模型协议不支持工具）— 本次为纯对话回答
+            </div>
             <div class="msg-time">{{ fmtTime(m.createdAt) }}</div>
+          </div>
+        </div>
+
+        <!-- Agent 循环 live 气泡：轮次提示 / 工具卡片流转 / thinking / 增量正文 -->
+        <div v-if="live" class="msg msg-assistant" data-testid="live-bubble">
+          <div class="msg-avatar" aria-hidden="true">AI</div>
+          <div class="msg-bubble is-streaming">
+            <div v-if="live.label" class="round-hint" data-testid="round-hint">{{ live.label }}</div>
+            <ThinkingPanel v-if="live.thinking" :text="live.thinking" streaming />
+            <ToolCard v-for="c in live.tools" :key="c.id" :call="c" />
+            <div v-if="live.text" class="msg-content">{{ live.text }}<span class="stream-cursor" aria-hidden="true">▍</span></div>
           </div>
         </div>
       </template>
@@ -349,6 +378,16 @@ function isStreamingTail(m: { role: string; id: string }): boolean {
 }
 @keyframes cursorBlink {
   50% { opacity: 0; }
+}
+.round-hint {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+}
+.meta-note {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 .composer-bar {
   margin-top: var(--space-2);

@@ -82,6 +82,13 @@ export const MIGRATIONS: Migration[] = [
         created_at INTEGER
       );
     `
+  },
+  {
+    id: 5,
+    name: 'chat-messages-meta',
+    sql: `
+      ALTER TABLE chat_messages ADD COLUMN meta TEXT;
+    `
   }
 ]
 
