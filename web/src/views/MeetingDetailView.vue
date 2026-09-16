@@ -1623,27 +1623,24 @@ onMounted(async () => {
   --el-color-primary-dark-2: #161d20;
 }
 
-/* 墨色常驻播放条 */
+/* 2026-09-13 选型②「墨绿胶囊」: 深绿渐变全圆角胶囊 + 亮绿实底圆钮 */
 .player-bar {
-  position: sticky; top: 0; z-index: 8;
+  position: sticky; top: 12px; z-index: 8;
   display: flex; align-items: center; gap: 14px;
-  background: var(--ink, #16232a); color: var(--color-bg-page, #f4f6f4);
-  border-radius: 4px; padding: 9px 16px;
-  box-shadow: 0 6px 18px rgba(22, 35, 42, 0.22);
+  background: linear-gradient(135deg, #0d201c 0%, #1a3d33 60%, #234a3f 100%);
+  color: #eaf4f0;
+  border-radius: 9999px; padding: 10px 26px 10px 14px;
+  box-shadow: 0 10px 28px rgba(18, 36, 31, 0.4);
 }
 .player-bar.no-audio-hidden { display: none; }
-/* 2026-09-13 播放钮精修: 实底珊瑚大圆钮 → 描边小圆钮 (悬停点亮), 降噪融入墨条 */
 .pb-play {
-  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
-  background: transparent; border: 1.5px solid rgba(255, 255, 255, 0.38);
-  color: rgba(255, 255, 255, 0.92); font-size: 11px;
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+  background: #52a896; border: none; color: #0d201c; font-size: 13px;
   display: grid; place-items: center;
-  transition: all var(--duration-fast, .15s) ease-out;
+  box-shadow: 0 3px 12px rgba(82, 168, 150, 0.5);
+  transition: transform var(--duration-fast, .15s) ease-out;
 }
-.pb-play:hover {
-  border-color: var(--coral, #ef7256); color: var(--coral, #ef7256);
-  background: rgba(239, 114, 86, 0.12);
-}
+.pb-play:hover { transform: scale(1.06); }
 .pb-tm { font-family: Consolas, 'SFMono-Regular', monospace; font-size: 12px; letter-spacing: .06em; white-space: nowrap; }
 .pb-sep { opacity: .45; margin: 0 2px; }
 .pb-track {
@@ -1654,17 +1651,17 @@ onMounted(async () => {
 .pb-track:hover { height: 6px; }
 .pb-track i {
   position: absolute; left: 0; top: 0; height: 100%;
-  background: var(--coral, #ef7256); border-radius: 3px;
+  background: #52a896; border-radius: 3px;
 }
 .pb-spd {
   font-family: Consolas, monospace; font-size: 11px; cursor: pointer;
   background: transparent; color: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 2px; padding: 1px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 9999px; padding: 1px 9px;
 }
 .pb-spd:hover { border-color: rgba(255, 255, 255, 0.5); }
 .pb-note {
   font-family: Consolas, monospace; font-size: 10px; letter-spacing: .1em;
-  color: rgba(255, 255, 255, 0.4); white-space: nowrap;
+  color: rgba(234, 244, 240, 0.5); white-space: nowrap;
 }
 
 /* 转录时间戳 → seek 按钮 */
@@ -1730,9 +1727,10 @@ onMounted(async () => {
   --el-color-primary-light-9: #1e2e2b;
   --el-color-primary-dark-2: #85b8b1;
 }
+/* 选型② 墨绿胶囊自含深色底, 深色主题下仅加深投影 */
 [data-theme="dark"] .player-bar {
-  background: #0b0f0d;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(135deg, #0a1815 0%, #142e26 60%, #1b3d34 100%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 [data-theme="dark"] .transcript-ts.ts-seek { color: #7fb3aa; }
 </style>
