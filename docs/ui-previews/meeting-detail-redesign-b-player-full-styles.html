@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案B 播放条整体 UI · 四版方案</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b; --gold: #a37c22;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); font-size: 14px; line-height: 1.7; padding: 32px 24px 80px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .pv-head { margin-bottom: 24px; }
+  .pv-head .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 8px; background: var(--card); border-radius: 2px; }
+  .pv-head h1 { font-size: 21px; font-weight: 700; }
+  .pv-head p { color: var(--muted); font-size: 13px; }
+
+  .variant { margin-bottom: 38px; }
+  .v-label { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .v-label .no { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--coral); }
+  .v-label .nm { font-size: 14.5px; font-weight: 700; letter-spacing: .05em; }
+  .v-label .desc { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  .pbar { display: flex; align-items: center; gap: 14px; }
+  .pbar .play { flex: none; display: grid; place-items: center; cursor: pointer; transition: all .15s ease-out; }
+  .pbar .tm { font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; white-space: nowrap; }
+  .pbar .tm .sep { opacity: .45; }
+  .pbar .track { flex: 1; position: relative; cursor: pointer; }
+  .pbar .spd { font-family: var(--font-mono); font-size: 11px; cursor: pointer; white-space: nowrap; }
+  .pbar .note { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; white-space: nowrap; }
+
+  /* ═══ ① 纸面浅条: 白卡融入页面, 墨青实底圆钮 ═══ */
+  .s1 { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 11px 18px; }
+  .s1 .play { width: 32px; height: 32px; border-radius: 50%; background: var(--teal); color: #fff; border: none; font-size: 12px; }
+  .s1 .play:hover { background: var(--teal-soft); }
+  .s1 .track { height: 4px; background: rgba(22, 35, 42, 0.12); border-radius: 2px; }
+  .s1 .track i { display: block; height: 100%; width: 8%; background: var(--teal); border-radius: 2px; }
+  .s1 .spd { border: 1px solid var(--line); border-radius: 2px; padding: 1px 8px; color: var(--muted); }
+  .s1 .note { color: var(--muted); }
+
+  /* ═══ ② 墨青胶囊: 全圆角深青胶囊 + 珊瑚实底钮 ═══ */
+  .s2 { background: linear-gradient(135deg, #0d201c 0%, #12332c 100%); color: #f4f6f4;
+    border-radius: 9999px; padding: 12px 26px 12px 16px;
+    box-shadow: 0 10px 26px rgba(13, 32, 28, 0.35); }
+  .s2 .play { width: 34px; height: 34px; border-radius: 50%; background: var(--coral); color: #fff; border: none; font-size: 13px;
+    box-shadow: 0 3px 10px rgba(239, 114, 86, 0.45); }
+  .s2 .play:hover { transform: scale(1.06); }
+  .s2 .track { height: 4px; background: rgba(255,255,255,.18); border-radius: 2px; }
+  .s2 .track i { display: block; height: 100%; width: 8%; background: var(--coral); border-radius: 2px; }
+  .s2 .spd { border: 1px solid rgba(255,255,255,.3); border-radius: 9999px; padding: 1px 9px; color: #f4f6f4; }
+  .s2 .note { color: rgba(255,255,255,.5); }
+
+  /* ═══ ③ 毛玻璃悬浮: 半透明磨砂 + 浮起投影, 需页面纹理衬托 ═══ */
+  .v3-stage { position: relative; border-radius: 6px; overflow: hidden; padding: 34px 30px;
+    background: linear-gradient(160deg, #b8ccc4 0%, #7fa89e 45%, #41564f 100%); }
+  .v3-stage .ghost { position: absolute; inset: 0; opacity: .25; color: #fff;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .3em; padding: 8px 12px; }
+  .s3 { position: relative; display: flex; align-items: center; gap: 14px;
+    background: rgba(22, 35, 42, 0.5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 10px; padding: 12px 20px;
+    box-shadow: 0 14px 34px rgba(10, 20, 18, 0.4); color: #f4f6f4; }
+  .s3 .play { width: 34px; height: 34px; border-radius: 50%; border: none;
+    background: linear-gradient(135deg, #ef7256, #f5a623); color: #fff; font-size: 12px;
+    box-shadow: 0 3px 12px rgba(239, 114, 86, 0.5); }
+  .s3 .track { height: 4px; background: rgba(255,255,255,.25); border-radius: 2px; }
+  .s3 .track i { display: block; height: 100%; width: 8%; background: #fff; border-radius: 2px; }
+  .s3 .spd { border: 1px solid rgba(255,255,255,.35); border-radius: 9999px; padding: 1px 9px; color: #f4f6f4; }
+  .s3 .note { color: rgba(255,255,255,.55); }
+
+  /* ═══ ④ 方形线框: 无底条, 墨线双界 + 方形描边钮 ═══ */
+  .s4 { border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line);
+    padding: 12px 4px; background: transparent; }
+  .s4 .play { width: 32px; height: 32px; border-radius: 3px; border: 1.5px solid var(--ink);
+    background: transparent; color: var(--ink); font-size: 11px; }
+  .s4 .play:hover { background: var(--ink); color: var(--paper); }
+  .s4 .track { height: 3px; background: rgba(22, 35, 42, 0.14); border-radius: 2px; }
+  .s4 .track i { display: block; height: 100%; width: 8%; background: var(--ink); border-radius: 2px; }
+  .s4 .spd { border: 1px solid var(--line); border-radius: 2px; padding: 1px 8px; color: var(--muted); }
+  .s4 .note { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pv-head">
+    <span class="tag">PLAN B · PLAYER FULL UI</span>
+    <h1>方案B 播放条整体 UI · 四版</h1>
+    <p>形状 / 配色 / 底色 / 按钮语言全部放开。以下四版按真实尺寸渲染，选中的实装到时间轴剧场页（深浅主题都会做）。</p>
+  </div>
+
+  <!-- ═══ ① 纸面浅条 ═══ -->
+  <div class="variant">
+    <div class="v-label"><span class="no">①</span><span class="nm">纸面浅条</span><span class="desc">白卡融入页面，零对比突兀；墨青实底圆钮</span></div>
+    <div class="pbar s1">
+      <span class="play">▶</span>
+      <span class="tm">00:24 <span class="sep">/</span> 03:23</span>
+      <div class="track"><i></i></div>
+      <span class="spd">1x</span>
+      <span class="note">时间戳点击 seek · 当前段自动高亮</span>
+    </div>
+  </div>
+
+  <!-- ═══ ② 墨青胶囊 ═══ -->
+  <div class="variant">
+    <div class="v-label"><span class="no">②</span><span class="nm">墨青胶囊</span><span class="desc">全圆角深青渐变胶囊 + 珊瑚发光圆钮 — 播放条成为页面上的一件「乐器」</span></div>
+    <div class="pbar s2">
+      <span class="play">▶</span>
+      <span class="tm">00:24 <span class="sep">/</span> 03:23</span>
+      <div class="track"><i></i></div>
+      <span class="spd">1x</span>
+      <span class="note">时间戳点击 seek · 当前段自动高亮</span>
+    </div>
+  </div>
+
+  <!-- ═══ ③ 毛玻璃悬浮 ═══ -->
+  <div class="variant">
+    <div class="v-label"><span class="no">③</span><span class="nm">毛玻璃悬浮</span><span class="desc">磨砂半透明浮层，悬浮投影，现代播放器质感（衬在渐变舞台上展示）</span></div>
+    <div class="v3-stage">
+      <div class="ghost">TIMELINE · 转录时间轴区域衬底示意 · TIMELINE · 转录时间轴区域衬底示意 ·</div>
+      <div class="pbar s3">
+        <span class="play">▶</span>
+        <span class="tm">00:24 <span class="sep">/</span> 03:23</span>
+        <div class="track"><i></i></div>
+        <span class="spd">1x</span>
+        <span class="note">时间戳点击 seek · 当前段自动高亮</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ④ 方形线框 ═══ -->
+  <div class="variant">
+    <div class="v-label"><span class="no">④</span><span class="nm">方形线框</span><span class="desc">无底条，墨线双界 + 方形描边钮 — 与简报/线框语言同源，最克制</span></div>
+    <div class="pbar s4">
+      <span class="play">▶</span>
+      <span class="tm">00:24 <span class="sep">/</span> 03:23</span>
+      <div class="track"><i></i></div>
+      <span class="spd">1x</span>
+      <span class="note">时间戳点击 seek · 当前段自动高亮</span>
+    </div>
+  </div>
+
+  <div class="tip" style="font-size: 12px; color: var(--muted); background: var(--card); border: 1px dashed var(--line-dash); border-radius: 4px; padding: 10px 16px; margin-top: 10px;">
+    四版功能完全一致: 播放/暂停/进度条点击与拖拽 seek/倍速/时间戳联动/当前段高亮/时长 Infinity 兜底。差异只在视觉语言。
+  </div>
+</div>
+</body>
+</html>
