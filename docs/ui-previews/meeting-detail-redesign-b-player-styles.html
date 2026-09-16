@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案B 进度条样式 · 四选一</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --teal-soft: #198e83; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+    --bar-bg: #10151a; --bar-fg: #f4f6f4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); font-size: 14px; line-height: 1.7; padding: 32px 24px 80px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .pv-head { margin-bottom: 24px; }
+  .pv-head .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 8px; background: var(--card); border-radius: 2px; }
+  .pv-head h1 { font-size: 21px; font-weight: 700; }
+  .pv-head p { color: var(--muted); font-size: 13px; }
+
+  .variant { margin-bottom: 34px; }
+  .v-label { display: flex; align-items: baseline; gap: 10px; margin-bottom: 9px; }
+  .v-label .no { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--coral); }
+  .v-label .nm { font-size: 14.5px; font-weight: 700; letter-spacing: .05em; }
+  .v-label .desc { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  /* ═══ 播放条通用底座 (墨色常驻条) ═══ */
+  .pbar { display: flex; align-items: center; gap: 14px;
+    background: var(--bar-bg); color: var(--bar-fg);
+    border-radius: 4px; padding: 10px 18px;
+    box-shadow: 0 8px 22px rgba(22,35,42,.22); }
+  .pbar .play { width: 30px; height: 30px; border-radius: 50%; flex: none;
+    border: 1.5px solid rgba(255,255,255,.4); background: transparent; color: var(--bar-fg);
+    display: grid; place-items: center; font-size: 11px; cursor: pointer;
+    transition: all .15s ease-out; }
+  .pbar .play:hover { border-color: var(--coral); color: var(--coral); background: rgba(239,114,86,.12); }
+  .pbar .tm { font-family: var(--font-mono); font-size: 12px; letter-spacing: .06em; white-space: nowrap; }
+  .pbar .tm .sep { opacity: .45; }
+  .pbar .spd { font-family: var(--font-mono); font-size: 11px; flex: none;
+    background: transparent; color: inherit;
+    border: 1px solid rgba(255,255,255,.25); border-radius: 2px; padding: 2px 8px; }
+  .pbar .note { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+    color: rgba(255,255,255,.4); white-space: nowrap; }
+
+  /* ── ① 极细墨线: 2px hairline, 播放段墨青点亮 ── */
+  .v1 .tr { flex: 1; height: 2px; background: rgba(255,255,255,.16); border-radius: 1px; position: relative; }
+  .v1 .tr i { position: absolute; left: 0; top: 0; height: 100%; width: 8%; background: var(--coral); border-radius: 1px; }
+  .v1:hover .tr { height: 3px; }
+
+  /* ── ② 波形频谱: 40 根细柱模拟录音波形, 已播珊瑚/未播灰白 ── */
+  .v2 .wave { flex: 1; height: 30px; display: flex; align-items: center; gap: 2.5px; }
+  .v2 .wave b { flex: 1; border-radius: 1px; background: rgba(255,255,255,.22); }
+  .v2 .wave b.played { background: var(--coral); }
+  .v2:hover .wave b.played { background: #ff8f75; }
+
+  /* ── ③ 拖点滑杆: 6px 槽 + 珊瑚填充 + 白色圆点拇指 ── */
+  .v3 .tr { flex: 1; height: 6px; background: rgba(255,255,255,.16); border-radius: 3px; position: relative; }
+  .v3 .tr i { position: absolute; left: 0; top: 0; height: 100%; width: 8%; background: var(--coral); border-radius: 3px; }
+  .v3 .tr .knob { position: absolute; left: 8%; top: 50%; transform: translate(-50%, -50%);
+    width: 13px; height: 13px; border-radius: 50%; background: #fff;
+    box-shadow: 0 1px 5px rgba(0,0,0,.45); }
+
+  /* ── ④ 章节分段: 每段转录一个圆角块, 已播段实心 ── */
+  .v4 .segs { flex: 1; height: 14px; display: flex; gap: 4px; }
+  .v4 .segs b { flex: 1; border-radius: 2px; background: rgba(255,255,255,.18); cursor: pointer; }
+  .v4 .segs b.played { background: var(--coral); }
+  .v4 .segs b:hover { background: rgba(255,255,255,.35); }
+
+  .tip { font-size: 12px; color: var(--muted); background: var(--card); border: 1px dashed var(--line-dash);
+    border-radius: 4px; padding: 10px 16px; margin-top: 10px; }
+  .tip b { color: var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pv-head">
+    <span class="tag">PLAN B · PLAYER BAR STYLES</span>
+    <h1>方案B 进度条样式 · 四选一</h1>
+    <p>排版不变（墨色常驻条 + 时间轴剧场），只换进度条主体的视觉语言。以下按真实尺寸渲染，可直接对比。</p>
+  </div>
+
+  <!-- ── ① 极细墨线 ── -->
+  <div class="variant v1">
+    <div class="v-label"><span class="no">①</span><span class="nm">极细墨线</span><span class="desc">2px 发丝线，安静到几乎隐形，悬停微增</span></div>
+    <div class="pbar">
+      <span class="play">▶</span>
+      <span class="tm">00:24 <span class="sep">/</span> 03:23</span>
+      <div class="tr"><i></i></div>
+      <span class="spd">1x</span>
+      <span class="note">时间戳 seek</span>
+    </div>
+  </div>
+
+  <!-- ── ② 波形频谱 ── -->
+  <div class="variant v2">
+    <div class="v-label"><span class="no">②</span><span class="nm">波形频谱</span><span class="desc">40 根细柱模拟录音波形，已播珊瑚点亮 — 最有「录音」感</span></div>
+    <div class="pbar">
+      <span class="play">▶</span>
+      <span class="tm">00:24 / 03:23</span>
+      <div class="wave">
+        <b class="played" style="height:22%"></b><b class="played" style="height:38%"></b><b class="played" style="height:30%"></b><b class="played" style="height:52%"></b><b class="played" style="height:44%"></b><b class="played" style="height:61%"></b><b class="played" style="height:35%"></b><b class="played" style="height:48%"></b><b class="played" style="height:58%"></b><b class="played" style="height:26%"></b><b class="played" style="height:40%"></b><b class="played" style="height:66%"></b><b class="played" style="height:52%"></b><b class="played" style="height:33%"></b><b class="played" style="height:57%"></b><b class="played" style="height:45%"></b><b class="played" style="height:62%"></b><b class="played" style="height:37%"></b><b class="played" style="height:29%"></b><b class="played" style="height:51%"></b>
+        <b style="height:24%"></b><b style="height:41%"></b><b style="height:33%"></b><b style="height:56%"></b><b style="height:47%"></b><b style="height:38%"></b><b style="height:60%"></b><b style="height:28%"></b><b style="height:44%"></b><b style="height:36%"></b><b style="height:53%"></b><b style="height:42%"></b><b style="height:31%"></b><b style="height:49%"></b><b style="height:27%"></b><b style="height:58%"></b><b style="height:35%"></b><b style="height:46%"></b><b style="height:23%"></b><b style="height:39%"></b>
+      </div>
+      <span class="spd">1x</span>
+      <span class="note">seek</span>
+    </div>
+    <div class="tip">实装说明: 波形峰值从音频文件<b>预计算一次</b>存 JSON, 播放时按进度点亮, 无运行时开销。</div>
+  </div>
+
+  <!-- ── ③ 拖点滑杆 ── -->
+  <div class="variant v3">
+    <div class="v-label"><span class="no">③</span><span class="nm">拖点滑杆</span><span class="desc">6px 槽 + 白色圆点拇指，经典播放器交互，拖拽目标最明确</span></div>
+    <div class="pbar">
+      <span class="play">▶</span>
+      <span class="tm">00:24 / 03:23</span>
+      <div class="tr"><i></i><span class="knob"></span></div>
+      <span class="spd">1x</span>
+      <span class="note">seek</span>
+    </div>
+  </div>
+
+  <!-- ── ④ 章节分段 ── -->
+  <div class="variant v4">
+    <div class="v-label"><span class="no">④</span><span class="nm">章节分段</span><span class="desc">每段转录一个圆角块，段间留缝 — 与时间轴分段的叙事对齐</span></div>
+    <div class="pbar">
+      <span class="play">▶</span>
+      <span class="tm">00:24 / 03:23</span>
+      <div class="segs">
+        <b class="played" title="开场"></b><b class="played" title="要点1"></b><b class="played" title="要点2"></b><b class="played" title="要点3"></b><b class="played" title="讨论"></b>
+        <b title="要点4"></b><b title="讨论"></b><b title="决议"></b>
+      </div>
+      <span class="spd">1x</span>
+      <span class="note">分段 = 转录段</span>
+    </div>
+  </div>
+
+  <div class="tip" style="margin-top: 26px">
+    选定编号后实装：样式 + 点击 seek + 拖拽 + Infinity:NaN 兜底一并完成。
+    波形②需要一次音频解码预计算（上传/分析时生成 peaks JSON），其余三款零额外数据。
+  </div>
+</div>
+</body>
+</html>
