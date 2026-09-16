@@ -1,16 +1,28 @@
 // IPC 注册 — 白名单 channel 与 shared/ipc-channels.ts 一一对应，测试有一致性校验。
 // 会话 token 持久化走 safeStorage（Win DPAPI 绑定本机），解密失败即清除重来，不阻塞（E-3 铁律）。
-import { app, ipcMain, BrowserWindow, safeStorage } from 'electron'
+import { app, dialog, ipcMain, BrowserWindow, safeStorage } from 'electron'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-channels'
 import { APP_NAME, APP_VERSION } from '@shared/constants'
-import type { AppInfo, AuthSession, ChatMessage, ChatSession, ChatStreamEvent, IpcResult, ModelProvider, ModelProtocol } from '@shared/types'
+import type {
+  AppInfo,
+  AuthSession,
+  ChatMessage,
+  ChatSession,
+  ChatStreamEvent,
+  IpcResult,
+  ModelProvider,
+  ModelProtocol,
+  WorkspaceAuditEntry
+} from '@shared/types'
 import type { SqlDatabase } from './db/adapters'
 import { AuthService } from './services/auth.service'
 import { ChatService } from './services/chat.service'
 import { ModelGatewayService } from './services/model-gateway.service'
 import { SettingsService } from './services/settings.service'
+import { WorkspaceService } from './services/workspace/workspace.service'
+import { AuditService } from './services/workspace/audit.service'
 
 const ok = <T>(data: T): IpcResult<T> => ({ ok: true, data })
 const fail = (code: string, message: string): IpcResult<never> => ({ ok: false, error: { code, message } })
@@ -77,6 +89,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   const settings = new SettingsService(db)
   const chat = new ChatService(db)
   const gateway = new ModelGatewayService(db, makeCipher())
+  const workspace = new WorkspaceService(join(dbPath, '..', 'workspace'))
+  const audit = new AuditService(db)
 
   // 启动即尝试恢复上次会话（有持久化 token 且未过期则免登录）
   auth.restore()
@@ -275,6 +289,38 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       return { ok: false, error: { code: e.code ?? 'ERROR', message: e.message } }
     }
   })
+
+  // ---------- 工作区（Agent 文件操作地基） ----------
+
+  ipcMain.handle(IPC.WORKSPACE_GET, (): IpcResult<{ root: string | null }> => tryRun(() => ({ root: workspace.getRoot() })))
+
+  ipcMain.handle(IPC.WORKSPACE_SET, async (): Promise<IpcResult<string | null>> => {
+    try {
+      const win = getWindow()
+      const ret = win
+        ? await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] })
+        : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+      if (ret.canceled || ret.filePaths.length === 0) return ok(null) // 用户取消
+      workspace.setRoot(ret.filePaths[0])
+      return ok(workspace.getRoot())
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.WORKSPACE_AUDIT_LIST, (_e, p): IpcResult<WorkspaceAuditEntry[]> =>
+    tryRun(() =>
+      audit.list(Number(p?.limit) || 20).map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        tool: r.tool,
+        inputSummary: r.input_summary,
+        ok: r.ok === 1,
+        createdAt: r.created_at
+      }))
+    )
+  )
 
   ipcMain.handle(IPC.WINDOW_MINIMIZE, (): IpcResult<null> => {
     getWindow()?.minimize()

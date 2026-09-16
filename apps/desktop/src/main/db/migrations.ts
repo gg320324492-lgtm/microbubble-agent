@@ -68,6 +68,20 @@ export const MIGRATIONS: Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at);
     `
+  },
+  {
+    id: 4,
+    name: 'workspace-audit',
+    sql: `
+      CREATE TABLE IF NOT EXISTS workspace_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        tool TEXT,
+        input_summary TEXT,
+        ok INTEGER,
+        created_at INTEGER
+      );
+    `
   }
 ]
 

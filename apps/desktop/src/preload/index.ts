@@ -2,7 +2,7 @@
 // 所有方法白名单化，绝不暴露 ipcRenderer 本体。
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc-channels'
-import type { AppInfo, AuthSession, ChatMessage, ChatSession, IpcResult } from '@shared/types'
+import type { AppInfo, AuthSession, ChatMessage, ChatSession, IpcResult, WorkspaceAuditEntry } from '@shared/types'
 
 async function invoke<T>(channel: string, payload?: unknown): Promise<T> {
   const res = (await ipcRenderer.invoke(channel, payload)) as IpcResult<T>
@@ -47,6 +47,11 @@ const api = {
   settings: {
     get: (key: string): Promise<unknown> => invoke(IPC.SETTINGS_GET, { key }),
     set: (key: string, value: unknown): Promise<void> => invoke(IPC.SETTINGS_SET, { key, value })
+  },
+  workspace: {
+    get: (): Promise<{ root: string | null }> => invoke(IPC.WORKSPACE_GET),
+    set: (): Promise<string | null> => invoke(IPC.WORKSPACE_SET),
+    auditList: (limit?: number): Promise<WorkspaceAuditEntry[]> => invoke(IPC.WORKSPACE_AUDIT_LIST, { limit })
   },
   window: {
     minimize: (): Promise<void> => invoke(IPC.WINDOW_MINIMIZE),
