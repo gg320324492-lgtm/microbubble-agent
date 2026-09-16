@@ -3,7 +3,7 @@
 // awaiting_confirm 显示行级 diff（新增绿/删除红）+「批准 / 拒绝」（仅 live 卡可操作，
 // 持久化还原的未决卡降级为「已取消/未完成」）；rejected 标识；write_file 成功且
 // 有备份时提供「回滚此写入」。
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import type { FileDiff, ToolCallRecord } from '@shared/types'
 
 const props = defineProps<{ call: ToolCallRecord; live?: boolean; interactive?: boolean }>()
@@ -15,8 +15,42 @@ const emit = defineEmits<{
 
 const expanded = ref(false)
 
+// 确认倒计时（纯展示）— 与主进程 CONFIRM_TIMEOUT_MS（5 分钟，超时自动按拒绝）保持一致
+const CONFIRM_COUNTDOWN_SECONDS = 300
+const remain = ref(CONFIRM_COUNTDOWN_SECONDS)
+let countdownTimer: ReturnType<typeof setInterval> | undefined
+
 const isAwaiting = computed(() => props.call.status === 'awaiting_confirm')
 const isRejected = computed(() => props.call.status === 'rejected')
+
+const countdownText = computed(() => {
+  const m = Math.floor(remain.value / 60)
+  const s = remain.value % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+})
+
+function stopCountdown(): void {
+  if (countdownTimer !== undefined) {
+    clearInterval(countdownTimer)
+    countdownTimer = undefined
+  }
+}
+
+watch(
+  isAwaiting,
+  (active) => {
+    stopCountdown()
+    if (active && props.live) {
+      remain.value = CONFIRM_COUNTDOWN_SECONDS
+      countdownTimer = setInterval(() => {
+        remain.value = Math.max(0, remain.value - 1)
+        if (remain.value === 0) stopCountdown()
+      }, 1000)
+    }
+  },
+  { immediate: true }
+)
+onUnmounted(stopCountdown)
 
 const statusLabel = computed(() => {
   switch (props.call.status) {
@@ -93,6 +127,9 @@ const dataText = computed<string>(() => {
       <div v-if="live" class="confirm-actions">
         <button class="btn-approve" data-testid="btn-approve" @click.stop="emit('resolve', call, true)">批准</button>
         <button class="btn-reject" data-testid="btn-reject" @click.stop="emit('resolve', call, false)">拒绝</button>
+        <span class="countdown" data-testid="confirm-countdown">
+          {{ remain > 0 ? `剩余 ${countdownText}` : '已超时，将自动拒绝' }}
+        </span>
       </div>
     </div>
 
@@ -221,8 +258,14 @@ const dataText = computed<string>(() => {
 }
 .confirm-actions {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3) var(--space-3);
+}
+.countdown {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 .btn-approve,
 .btn-reject {

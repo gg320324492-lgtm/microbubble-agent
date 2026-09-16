@@ -176,7 +176,11 @@ export class AgentLoopService {
         }
         round++
 
-        emit({ kind: 'round', round, label: tools.length > 0 ? `第 ${round} 轮 · 正在思考…` : '正在思考…' })
+        emit({
+          kind: 'round',
+          round,
+          label: tools.length > 0 ? `第 ${round}/${MAX_AGENT_ROUNDS} 轮 · 正在思考…` : '正在思考…'
+        })
         let res: StreamTurnResult
         try {
           res = await this.streamTurn(userId, sessionId, {

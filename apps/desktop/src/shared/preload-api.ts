@@ -51,6 +51,8 @@ export interface PreloadApi {
     get(): Promise<{ root: string | null }>
     /** 弹系统目录选择框，确认后 setRoot；返回所选根目录，取消返回 null */
     set(): Promise<string | null>
+    /** 清除工作区（回到未设置态；不删除工作区目录内任何文件） */
+    clear(): Promise<void>
     auditList(limit?: number): Promise<WorkspaceAuditEntry[]>
   }
   window: {

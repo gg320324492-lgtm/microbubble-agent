@@ -55,6 +55,7 @@ const api = {
   workspace: {
     get: (): Promise<{ root: string | null }> => invoke(IPC.WORKSPACE_GET),
     set: (): Promise<string | null> => invoke(IPC.WORKSPACE_SET),
+    clear: (): Promise<void> => invoke(IPC.WORKSPACE_CLEAR),
     auditList: (limit?: number): Promise<WorkspaceAuditEntry[]> => invoke(IPC.WORKSPACE_AUDIT_LIST, { limit })
   },
   window: {

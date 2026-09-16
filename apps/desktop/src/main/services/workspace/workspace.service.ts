@@ -1,7 +1,7 @@
 // 工作区服务 — Agent 文件操作的安全围栏（工单 C-1）。
 // 工作区 = 一个 GitHub 仓库的本地根目录；.git/ 读写禁区、不执行 git 命令。
 // 持久化用 node:fs 写 <storeDir>/workspace.json（不引入 electron-store）。
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 /** 围栏越界 / 禁区命中 — 调用方（工具循环）据此把错误回给模型 */
@@ -72,6 +72,16 @@ export class WorkspaceService {
     this.root = root
     mkdirSync(this.storeDir, { recursive: true })
     writeFileSync(this.storeFile, JSON.stringify({ root }, null, 2), 'utf8')
+  }
+
+  /** 清除工作区 — 回到未设置态，删除持久化文件（不影响工作区目录内的任何文件） */
+  clearRoot(): void {
+    this.root = null
+    try {
+      rmSync(this.storeFile, { force: true })
+    } catch {
+      /* 删除失败不阻塞（下次 setRoot 会覆写） */
+    }
   }
 
   private ensureAgentMd(root: string): void {

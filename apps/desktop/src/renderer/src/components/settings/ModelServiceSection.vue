@@ -122,13 +122,17 @@ onMounted(refresh)
 
     <!-- 配置列表 -->
     <div v-if="providers.length && !editing" class="provider-list">
-      <div v-for="p in providers" :key="p.id" class="provider" :class="{ 'is-default': p.isDefault }">
+      <div v-for="p in providers" :key="p.id" class="provider" :class="{ 'is-default': p.isDefault, 'is-key-invalid': p.keyState === 'invalid' }">
         <div class="provider-main">
-          <span class="provider-name">{{ p.name }} <span class="proto-badge">{{ p.protocol }}</span></span>
+          <span class="provider-name">
+            {{ p.name }} <span class="proto-badge">{{ p.protocol }}</span>
+            <span v-if="p.keyState === 'invalid'" class="key-invalid-tag" data-testid="key-invalid">Key 失效</span>
+          </span>
           <span class="provider-meta">{{ p.baseUrl }} · {{ p.model }}</span>
-          <span class="provider-key">Key {{ p.apiKeyMasked ?? '未设置' }}</span>
+          <span class="provider-key">Key {{ p.apiKeyMasked ?? '未设置' }}<template v-if="p.keyState === 'invalid'"> · 本机解密失败（系统环境变化所致），重填即可恢复</template></span>
         </div>
         <div class="provider-actions">
+          <span v-if="p.keyState === 'invalid'" class="mini-btn mini-refill" data-testid="btn-refill" @click="startEdit(p)">重填 Key</span>
           <span v-if="p.isDefault" class="default-tag">默认</span>
           <button v-else class="mini-btn" @click="onSetDefault(p)">设为默认</button>
           <button class="mini-btn" @click="startEdit(p)">编辑</button>
@@ -215,6 +219,31 @@ onMounted(refresh)
 .provider.is-default {
   border-color: rgba(var(--color-primary-rgb), 0.45);
   background: var(--color-primary-bg);
+}
+.provider.is-key-invalid {
+  border-color: rgba(217, 119, 6, 0.55);
+  background: rgba(217, 119, 6, 0.06);
+}
+.key-invalid-tag {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: #d97706;
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--font-weight-normal);
+}
+.mini-refill {
+  padding: 4px 10px;
+  border: 1px solid #d97706;
+  border-radius: var(--radius-sm);
+  color: #b45309;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+}
+.mini-refill:hover {
+  background: #d97706;
+  color: #fff;
 }
 .provider-main {
   display: flex;

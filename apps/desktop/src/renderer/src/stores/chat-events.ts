@@ -15,6 +15,10 @@ export function createLiveState(): LiveAgentState {
   return { text: '', thinking: '', tools: [], round: 0, label: '' }
 }
 
+/** 回滚二次确认文案（ChatPanel 弹窗用；内容契约有测试锁定） */
+export const ROLLBACK_CONFIRM_TEXT =
+  '回滚将把文件内容恢复为本次写入前的备份版本，并覆盖文件的当前内容。确定要回滚吗？'
+
 /** 原地更新 live 状态；done 事件由调用方处理（清空缓冲 = 真实消息接管） */
 export function applyStreamEvent(live: LiveAgentState, e: ChatStreamEvent): void {
   if (e.type === 'delta') {

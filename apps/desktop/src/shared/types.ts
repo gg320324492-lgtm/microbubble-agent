@@ -53,6 +53,8 @@ export interface ModelProvider {
   model: string
   apiKeyMasked: string | null
   isDefault: boolean
+  /** key 在本机解密失败（DPAPI 上下文变化等）→ invalid，UI 给重填引导 */
+  keyState: 'ok' | 'invalid'
 }
 
 export interface ModelProviderInput {

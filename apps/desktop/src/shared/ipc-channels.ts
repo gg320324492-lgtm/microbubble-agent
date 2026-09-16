@@ -31,6 +31,7 @@ export const IPC = {
   MODEL_TEST: 'model:test',
   WORKSPACE_GET: 'workspace:get',
   WORKSPACE_SET: 'workspace:set',
+  WORKSPACE_CLEAR: 'workspace:clear',
   WORKSPACE_AUDIT_LIST: 'workspace:audit-list',
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',

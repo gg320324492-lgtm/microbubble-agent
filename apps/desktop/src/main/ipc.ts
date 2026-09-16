@@ -19,7 +19,7 @@ import type {
 import type { SqlDatabase } from './db/adapters'
 import { AuthService } from './services/auth.service'
 import { ChatService, parseMessageMeta } from './services/chat.service'
-import { ModelGatewayService } from './services/model-gateway.service'
+import { ModelGatewayService, type ProviderRecord } from './services/model-gateway.service'
 import { SettingsService } from './services/settings.service'
 import { WorkspaceService } from './services/workspace/workspace.service'
 import { AuditService } from './services/workspace/audit.service'
@@ -301,20 +301,23 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   // ---------- 模型网关 ----------
 
-  const toProviderDto = (r: { id: string; name: string; protocol: ModelProtocol; baseUrl: string; model: string; isDefault: boolean; apiKeyEncrypted: string }): ModelProvider => ({
+  const toProviderDto = (
+    r: ProviderRecord & { keyState?: 'ok' | 'invalid' }
+  ): ModelProvider => ({
     id: r.id,
     name: r.name,
     protocol: r.protocol,
     baseUrl: r.baseUrl,
     model: r.model,
     apiKeyMasked: r.apiKeyEncrypted ? '••••••••' : null,
-    isDefault: r.isDefault
+    isDefault: r.isDefault,
+    keyState: r.keyState ?? 'ok'
   })
 
   ipcMain.handle(IPC.MODEL_LIST, (): IpcResult<ModelProvider[]> =>
     tryRun(() => {
       const user = auth.requireUser()
-      return gateway.list(user.id).map(toProviderDto)
+      return gateway.listWithKeyState(user.id).map(toProviderDto)
     })
   )
 
@@ -387,6 +390,13 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       return fail(e.code ?? 'ERROR', e.message)
     }
   })
+
+  ipcMain.handle(IPC.WORKSPACE_CLEAR, (): IpcResult<null> =>
+    tryRun(() => {
+      workspace.clearRoot()
+      return null
+    })
+  )
 
   ipcMain.handle(IPC.WORKSPACE_AUDIT_LIST, (_e, p): IpcResult<WorkspaceAuditEntry[]> =>
     tryRun(() =>

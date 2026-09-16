@@ -127,6 +127,8 @@ describe('AgentLoopService 全链路（ReAct）', () => {
     const toolStatuses = events.filter((e) => e.kind === 'tool').map((e) => (e.kind === 'tool' ? e.call.status : ''))
     expect(toolStatuses).toEqual(['running', 'ok'])
     expect(events.some((e) => e.kind === 'round' && e.round === 2)).toBe(true)
+    // 轮次进度（R-1 打磨）：label 携带上限 → 「第 N/15 轮」
+    expect(events.some((e) => e.kind === 'round' && e.label.includes('2/15'))).toBe(true)
     expect(h.audit.list(10)).toHaveLength(2)
   })
 

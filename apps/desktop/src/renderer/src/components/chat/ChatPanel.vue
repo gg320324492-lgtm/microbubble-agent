@@ -2,11 +2,11 @@
 // 对话面板 — Agent 循环流式渲染（C-2）：live 虚拟气泡承接轮次/工具卡片/思维链事件，
 // send 返回后由带 meta 的持久化消息接管（工具卡片还原为完成态、thinking 折叠面板）；Esc 随时中断
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ChatMessage, ChatStreamEvent, ModelProvider, ToolCallRecord } from '@shared/types'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
-import { applyStreamEvent, createLiveState, type LiveAgentState } from '../../stores/chat-events'
+import { applyStreamEvent, createLiveState, ROLLBACK_CONFIRM_TEXT, type LiveAgentState } from '../../stores/chat-events'
 import ToolCard from './ToolCard.vue'
 import ThinkingPanel from './ThinkingPanel.vue'
 
@@ -95,9 +95,18 @@ async function onResolve(call: ToolCallRecord, approve: boolean): Promise<void> 
   }
 }
 
-/** 回滚一次 write_file：main 恢复备份 + 审计 + 回写 meta，这里同步本地卡片 */
+/** 回滚一次 write_file：二次确认 → main 恢复备份 + 审计 + 回写 meta，这里同步本地卡片 */
 async function onRollback(m: ChatMessage, call: ToolCallRecord): Promise<void> {
   if (!store.activeId) return
+  try {
+    await ElMessageBox.confirm(ROLLBACK_CONFIRM_TEXT, '回滚确认', {
+      type: 'warning',
+      confirmButtonText: '回滚',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return // 取消
+  }
   try {
     const res = await window.api.chat.rollbackWrite(store.activeId, m.id, call.id)
     const target = m.meta?.tools?.find((t) => t.id === call.id)

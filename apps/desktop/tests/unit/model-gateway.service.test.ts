@@ -57,6 +57,24 @@ describe('Provider 配置管理', () => {
     expect(gw.list('u1')[0].isDefault).toBe(true)
     expect(gw.list('u2')).toHaveLength(0)
   })
+
+  it('listWithKeyState — 正常密文 ok；解不开的密文标记 invalid（重填引导依据）', () => {
+    const db = openNodeSqlite(':memory:')
+    runMigrations(db)
+    const gwOk = new ModelGatewayService(db, cipher)
+    gwOk.save('u1', { name: 'A', protocol: 'anthropic', baseUrl: 'https://a.com', model: 'm', apiKey: 'k1' })
+    const [okRow] = gwOk.listWithKeyState('u1')
+    expect(okRow.keyState).toBe('ok')
+
+    const brokenCipher: KeyCipher = {
+      encrypt: (s) => Buffer.from('enc:' + s).toString('base64'),
+      decrypt: () => null // 模拟 DPAPI/LocalState 上下文变化后解密失败
+    }
+    const gwBroken = new ModelGatewayService(db, brokenCipher)
+    const [badRow] = gwBroken.listWithKeyState('u1')
+    expect(badRow.keyState).toBe('invalid') // 同一条密文，环境变了就解不开
+    db.close()
+  })
 })
 
 describe('streamChat 双协议 SSE 解析', () => {

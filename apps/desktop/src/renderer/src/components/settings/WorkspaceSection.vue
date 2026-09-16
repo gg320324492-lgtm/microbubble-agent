@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 设置页工作区区块 — 当前工作区/未设置态 + 目录选择 + 最近 20 条审计记录（工单 C-1 §4）
 import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { WorkspaceAuditEntry } from '@shared/types'
 
 const SUGGESTED = 'E:\\microbubble-agent\\desktop-conversion'
@@ -25,6 +25,25 @@ async function onPick(): Promise<void> {
     ElMessage.error(e instanceof Error ? e.message : '设置工作区失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function onClear(): Promise<void> {
+  try {
+    await ElMessageBox.confirm('清除后 Agent 将回到纯对话模式（不会删除工作区目录内的任何文件）。确定清除？', '清除工作区', {
+      type: 'warning',
+      confirmButtonText: '清除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return // 取消
+  }
+  try {
+    await window.api.workspace.clear()
+    ElMessage.success('工作区已清除')
+    await refresh()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '清除失败')
   }
 }
 
@@ -52,7 +71,10 @@ onMounted(() => {
           <span class="ws-hint-inline">Agent 尚不可用 — 选择一个目录作为工作区后即可启用文件工具。</span>
         </template>
       </div>
-      <button class="pick-btn" :disabled="loading" @click="onPick">{{ loading ? '选择中…' : '选择目录' }}</button>
+      <div class="ws-actions">
+        <button v-if="root" class="clear-btn" data-testid="btn-clear-ws" @click="onClear">清除</button>
+        <button class="pick-btn" :disabled="loading" @click="onPick">{{ loading ? '选择中…' : '选择目录' }}</button>
+      </div>
     </div>
 
     <p class="hint">建议将工作区设为 <span class="mono">{{ SUGGESTED }}</span>（GitHub 仓库根）。Agent 仅在该目录内读写；.git/ 为禁区，Agent 也不会执行任何 git 命令。</p>
@@ -103,6 +125,25 @@ onMounted(() => {
 .ws-hint-inline {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+}
+.ws-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.clear-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.clear-btn:hover {
+  border-color: var(--color-danger, #d64545);
+  color: var(--color-danger, #d64545);
 }
 .pick-btn {
   flex-shrink: 0;
