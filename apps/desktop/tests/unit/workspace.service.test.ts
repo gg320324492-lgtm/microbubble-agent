@@ -155,4 +155,20 @@ describe('WorkspaceService 持久化与维护', () => {
     expect(resolved.endsWith('新文件.md')).toBe(true)
     mkdirSync(resolved.replace(/[\\/]新文件\.md$/, ''), { recursive: true }) // 证明路径可直接交给 fs 使用
   })
+
+  it('clearRoot（R-1 打磨）— 清除后回未设置态、持久化文件删除、工作区文件不动、可重设', () => {
+    const root = makeRoot()
+    writeFileSync(join(root, 'keep.txt'), '保留')
+    const store = makeStore()
+    const ws = new WorkspaceService(store)
+    ws.setRoot(root)
+    expect(ws.getRoot()).not.toBeNull()
+    ws.clearRoot()
+    expect(ws.getRoot()).toBeNull()
+    expect(() => ws.resolveInWorkspace('keep.txt')).toThrow(WorkspaceEscapeError)
+    expect(existsSync(join(root, 'keep.txt'))).toBe(true) // 工作区文件不受影响
+    expect(existsSync(join(store, 'workspace.json'))).toBe(false) // 持久化已清除
+    ws.setRoot(root) // 清除后可重新设置
+    expect(ws.getRoot()).not.toBeNull()
+  })
 })

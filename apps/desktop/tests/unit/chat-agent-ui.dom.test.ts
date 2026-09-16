@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 工具卡片 / thinking 折叠面板 / live 事件累积 — Agent UI 契约（工单 C-2 §5）
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ToolCard from '@renderer/components/chat/ToolCard.vue'
 import ThinkingPanel from '@renderer/components/chat/ThinkingPanel.vue'
@@ -140,5 +140,22 @@ describe('ToolCard 确认态/拒绝态/回滚（C-3）', () => {
     expect(w2.text()).toContain('已回滚')
     const w3 = mount(ToolCard, { props: { call: { ...okCall(), data: { path: 'n.txt' } }, interactive: true } })
     expect(w3.find('[data-testid="btn-rollback"]').exists()).toBe(false)
+  })
+
+  it('确认倒计时（R-1 打磨）— live 卡显示剩余时间并随时间递减', async () => {
+    vi.useFakeTimers()
+    try {
+      const w = mount(ToolCard, { props: { call: awaitingCall, live: true } })
+      expect(w.get('[data-testid="confirm-countdown"]').text()).toContain('05:00')
+      await vi.advanceTimersByTimeAsync(61_000)
+      expect(w.get('[data-testid="confirm-countdown"]').text()).toContain('03:59')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('确认倒计时 — 非 live（已还原）卡不显示倒计时', () => {
+    const w = mount(ToolCard, { props: { call: awaitingCall } })
+    expect(w.find('[data-testid="confirm-countdown"]').exists()).toBe(false)
   })
 })

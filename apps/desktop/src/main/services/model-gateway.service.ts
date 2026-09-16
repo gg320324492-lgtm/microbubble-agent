@@ -118,6 +118,17 @@ export class ModelGatewayService {
     return providers.find((p) => p.isDefault) ?? providers[0] ?? null
   }
 
+  /**
+   * 列表 + key 健康状态 — 本机解密失败（DPAPI/LocalState 上下文变化）标记 invalid，
+   * UI 据此给出重填引导（真机实测发生过：密文存在但解不开，用户无处下手）。
+   */
+  listWithKeyState(userId: string): (ProviderRecord & { keyState: 'ok' | 'invalid' })[] {
+    return this.list(userId).map((p) => ({
+      ...p,
+      keyState: this.cipher.decrypt(p.apiKeyEncrypted) ? ('ok' as const) : ('invalid' as const)
+    }))
+  }
+
   private decryptKey(p: ProviderRecord): string {
     const key = this.cipher.decrypt(p.apiKeyEncrypted)
     if (!key) throw new Error('API Key 解密失败，请重新填写')
