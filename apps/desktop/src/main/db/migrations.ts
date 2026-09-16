@@ -89,6 +89,26 @@ export const MIGRATIONS: Migration[] = [
     sql: `
       ALTER TABLE chat_messages ADD COLUMN meta TEXT;
     `
+  },
+  {
+    id: 6,
+    name: 'knowledge-documents',
+    sql: `
+      CREATE TABLE IF NOT EXISTS knowledge_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        file_name TEXT,
+        file_size INTEGER NOT NULL DEFAULT 0,
+        tags TEXT NOT NULL DEFAULT '[]',
+        source TEXT NOT NULL DEFAULT 'local_import',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_knowledge_user ON knowledge_documents(user_id, updated_at);
+      CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(title_seg, content_seg, tokenize='unicode61');
+    `
   }
 ]
 

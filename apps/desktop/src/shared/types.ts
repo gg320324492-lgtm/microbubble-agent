@@ -180,3 +180,49 @@ export interface WorkspaceAuditEntry {
   ok: boolean
   createdAt: number
 }
+
+// ============ 本地知识库（M2-1）============
+
+/** 知识库文档元信息（列表用，不含正文） */
+export interface KnowledgeDocMeta {
+  id: number
+  title: string
+  tags: string[]
+  fileName: string | null
+  fileSize: number
+  source: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** 知识库文档全文（详情/编辑用） */
+export interface KnowledgeDocFull extends KnowledgeDocMeta {
+  content: string
+}
+
+/** 导入输入（渲染层文件选择器读文本后传主进程） */
+export interface KnowledgeImportInput {
+  name: string
+  content: string
+}
+
+export interface KnowledgeImportResult {
+  imported: KnowledgeDocMeta[]
+  skipped: { name: string; reason: string }[]
+}
+
+export interface KnowledgeUpdateInput {
+  title?: string
+  content?: string
+  tags?: string[]
+}
+
+/** 检索命中：片段 + 高亮偏移（相对 snippet 文本），按相关度排序 */
+export interface KnowledgeSearchHit {
+  id: number
+  title: string
+  tags: string[]
+  snippet: string
+  highlight: { start: number; end: number } | null
+  updatedAt: number
+}
