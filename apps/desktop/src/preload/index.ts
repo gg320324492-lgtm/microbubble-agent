@@ -2,7 +2,19 @@
 // 所有方法白名单化，绝不暴露 ipcRenderer 本体。
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '@shared/ipc-channels'
-import type { AppInfo, AuthSession, ChatMessage, ChatSession, IpcResult, WorkspaceAuditEntry } from '@shared/types'
+import type {
+  AppInfo,
+  AuthSession,
+  ChatMessage,
+  ChatSession,
+  IpcResult,
+  KnowledgeDocFull,
+  KnowledgeDocMeta,
+  KnowledgeImportResult,
+  KnowledgeUpdateInput,
+  KnowledgeSearchHit,
+  WorkspaceAuditEntry
+} from '@shared/types'
 
 async function invoke<T>(channel: string, payload?: unknown): Promise<T> {
   const res = (await ipcRenderer.invoke(channel, payload)) as IpcResult<T>
@@ -57,6 +69,14 @@ const api = {
     set: (): Promise<string | null> => invoke(IPC.WORKSPACE_SET),
     clear: (): Promise<void> => invoke(IPC.WORKSPACE_CLEAR),
     auditList: (limit?: number): Promise<WorkspaceAuditEntry[]> => invoke(IPC.WORKSPACE_AUDIT_LIST, { limit })
+  },
+  knowledge: {
+    list: (): Promise<KnowledgeDocMeta[]> => invoke(IPC.KNOWLEDGE_LIST),
+    get: (id: number): Promise<KnowledgeDocFull | null> => invoke(IPC.KNOWLEDGE_GET, { id }),
+    import: (files: { name: string; content: string }[]): Promise<KnowledgeImportResult> => invoke(IPC.KNOWLEDGE_IMPORT, { files }),
+    update: (id: number, patch: KnowledgeUpdateInput): Promise<KnowledgeDocFull | null> => invoke(IPC.KNOWLEDGE_UPDATE, { id, ...patch }),
+    delete: (id: number): Promise<boolean> => invoke(IPC.KNOWLEDGE_DELETE, { id }),
+    search: (query: string): Promise<KnowledgeSearchHit[]> => invoke(IPC.KNOWLEDGE_SEARCH, { query })
   },
   window: {
     minimize: (): Promise<void> => invoke(IPC.WINDOW_MINIMIZE),

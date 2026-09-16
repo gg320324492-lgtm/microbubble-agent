@@ -5,6 +5,11 @@ import type {
   ChatMessage,
   ChatSession,
   ChatStreamEvent,
+  KnowledgeDocFull,
+  KnowledgeDocMeta,
+  KnowledgeImportResult,
+  KnowledgeSearchHit,
+  KnowledgeUpdateInput,
   LocalUser,
   ModelProvider,
   ModelProviderInput,
@@ -54,6 +59,14 @@ export interface PreloadApi {
     /** 清除工作区（回到未设置态；不删除工作区目录内任何文件） */
     clear(): Promise<void>
     auditList(limit?: number): Promise<WorkspaceAuditEntry[]>
+  }
+  knowledge: {
+    list(): Promise<KnowledgeDocMeta[]>
+    get(id: number): Promise<KnowledgeDocFull | null>
+    import(files: { name: string; content: string }[]): Promise<KnowledgeImportResult>
+    update(id: number, patch: KnowledgeUpdateInput): Promise<KnowledgeDocFull | null>
+    delete(id: number): Promise<boolean>
+    search(query: string): Promise<KnowledgeSearchHit[]>
   }
   window: {
     minimize(): Promise<void>

@@ -12,6 +12,10 @@ import type {
   ChatSession,
   ChatStreamEvent,
   IpcResult,
+  KnowledgeDocFull,
+  KnowledgeDocMeta,
+  KnowledgeImportResult,
+  KnowledgeSearchHit,
   ModelProvider,
   ModelProtocol,
   WorkspaceAuditEntry
@@ -23,6 +27,7 @@ import { ModelGatewayService, type ProviderRecord } from './services/model-gatew
 import { SettingsService } from './services/settings.service'
 import { WorkspaceService } from './services/workspace/workspace.service'
 import { AuditService } from './services/workspace/audit.service'
+import { KnowledgeService } from './services/knowledge/knowledge.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
 import { listDirTool } from './agent/tools/list-dir'
@@ -101,6 +106,12 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   const gateway = new ModelGatewayService(db, makeCipher())
   const workspace = new WorkspaceService(join(dbPath, '..', 'workspace'))
   const audit = new AuditService(db)
+  // 本地知识库（M2-1）— 原件副本目录 + 回收站注入（与 C-3 delete_file 同模式）
+  const knowledge = new KnowledgeService(
+    db,
+    join(dbPath, '..', 'files'),
+    { trashItem: (abs) => shell.trashItem(abs) }
+  )
   // Agent 工具循环（C-2/C-3）— 只读工具 auto；写工具 confirm 拦截在循环层；
   // delete_file 的回收站能力在此注入（工具与测试不 import Electron ABI）
   const registry = new ToolRegistry(workspace, audit)
@@ -371,6 +382,47 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       return { ok: false, error: { code: e.code ?? 'ERROR', message: e.message } }
     }
   })
+
+  // ---------- 本地知识库（M2-1） ----------
+
+  ipcMain.handle(IPC.KNOWLEDGE_LIST, (): IpcResult<KnowledgeDocMeta[]> => tryRun(() => {
+    const user = auth.requireUser()
+    return knowledge.list(user.id)
+  }))
+
+  ipcMain.handle(IPC.KNOWLEDGE_GET, (_e, p): IpcResult<KnowledgeDocFull | null> => tryRun(() => {
+    const user = auth.requireUser()
+    return knowledge.get(user.id, Number(p?.id))
+  }))
+
+  ipcMain.handle(IPC.KNOWLEDGE_IMPORT, (_e, p): IpcResult<KnowledgeImportResult> => tryRun(() => {
+    const user = auth.requireUser()
+    return knowledge.importFromFiles(user.id, Array.isArray(p?.files) ? p.files : [])
+  }))
+
+  ipcMain.handle(IPC.KNOWLEDGE_UPDATE, (_e, p): IpcResult<KnowledgeDocFull | null> => tryRun(() => {
+    const user = auth.requireUser()
+    return knowledge.update(user.id, Number(p?.id), {
+      ...(p?.title !== undefined ? { title: String(p.title) } : {}),
+      ...(p?.content !== undefined ? { content: String(p.content) } : {}),
+      ...(Array.isArray(p?.tags) ? { tags: p.tags.map(String) } : {})
+    })
+  }))
+
+  ipcMain.handle(IPC.KNOWLEDGE_DELETE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      const user = auth.requireUser()
+      return ok(await knowledge.delete(user.id, Number(p?.id)))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.KNOWLEDGE_SEARCH, (_e, p): IpcResult<KnowledgeSearchHit[]> => tryRun(() => {
+    const user = auth.requireUser()
+    return knowledge.search(user.id, String(p?.query ?? ''))
+  }))
 
   // ---------- 工作区（Agent 文件操作地基） ----------
 

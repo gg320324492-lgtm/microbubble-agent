@@ -42,8 +42,8 @@ export const routes = [
       {
         path: 'knowledge',
         name: 'knowledge',
-        component: () => import('../views/ComingSoonView.vue'),
-        meta: { title: '知识库', milestone: 'M2', icon: 'book' }
+        component: () => import('../views/KnowledgeView.vue'),
+        meta: { title: '知识库', icon: 'book' }
       },
       {
         path: 'meetings',
