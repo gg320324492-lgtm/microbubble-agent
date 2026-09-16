@@ -6,7 +6,7 @@
 import { computed, ref } from 'vue'
 import type { FileDiff, ToolCallRecord } from '@shared/types'
 
-const props = defineProps<{ call: ToolCallRecord; live?: boolean }>()
+const props = defineProps<{ call: ToolCallRecord; live?: boolean; interactive?: boolean }>()
 
 const emit = defineEmits<{
   (e: 'resolve', call: ToolCallRecord, approve: boolean): void
@@ -100,7 +100,7 @@ const dataText = computed<string>(() => {
     <div v-if="isRejected" class="rejected-note">用户拒绝执行，未改动工作区</div>
 
     <!-- 回滚（write_file 成功且有备份；已回滚/新建文件不显示） -->
-    <div v-if="call.status === 'ok' && live && writeData && !writeData.rolledBack" class="rollback-bar">
+    <div v-if="call.status === 'ok' && interactive && writeData && !writeData.rolledBack" class="rollback-bar">
       <button class="btn-rollback" data-testid="btn-rollback" @click.stop="emit('rollback')">↩ 回滚此写入</button>
     </div>
     <div v-if="call.status === 'ok' && writeData?.rolledBack" class="rolledback-note">已回滚（原内容已恢复）</div>
