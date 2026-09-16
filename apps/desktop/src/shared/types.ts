@@ -71,3 +71,18 @@ export type ChatStreamEvent =
 
 /** 统一 IPC 返回包 — preload 解包，失败时 reject(Error) */
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
+
+/** 工作区状态（workspace:get 返回；root 为 null 表示未设置） */
+export interface WorkspaceState {
+  root: string | null
+}
+
+/** 工作区审计记录（workspace_audit 行的跨进程投影） */
+export interface WorkspaceAuditEntry {
+  id: number
+  userId: string
+  tool: string
+  inputSummary: string
+  ok: boolean
+  createdAt: number
+}

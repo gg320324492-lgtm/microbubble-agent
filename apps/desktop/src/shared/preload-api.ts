@@ -1,5 +1,15 @@
 // window.api 形状声明 — renderer 侧全局类型（与 preload/index.ts 实现严格同步）
-import type { AppInfo, AuthSession, ChatMessage, ChatSession, ChatStreamEvent, LocalUser, ModelProvider, ModelProviderInput } from './types'
+import type {
+  AppInfo,
+  AuthSession,
+  ChatMessage,
+  ChatSession,
+  ChatStreamEvent,
+  LocalUser,
+  ModelProvider,
+  ModelProviderInput,
+  WorkspaceAuditEntry
+} from './types'
 
 export interface PreloadApi {
   app: {
@@ -33,6 +43,12 @@ export interface PreloadApi {
     get(key: string): Promise<unknown>
     set(key: string, value: unknown): Promise<void>
   }
+  workspace: {
+    get(): Promise<{ root: string | null }>
+    /** 弹系统目录选择框，确认后 setRoot；返回所选根目录，取消返回 null */
+    set(): Promise<string | null>
+    auditList(limit?: number): Promise<WorkspaceAuditEntry[]>
+  }
   window: {
     minimize(): Promise<void>
     toggleMaximize(): Promise<void>
@@ -52,4 +68,4 @@ export interface WindowWithApi extends Window {
   api: PreloadApi
 }
 
-export type { LocalUser, AuthSession, AppInfo, ChatSession, ChatMessage, ChatStreamEvent, ModelProvider, ModelProviderInput }
+export type { LocalUser, AuthSession, AppInfo, ChatSession, ChatMessage, ChatStreamEvent, ModelProvider, ModelProviderInput, WorkspaceAuditEntry }
