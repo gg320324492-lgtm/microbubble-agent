@@ -131,14 +131,14 @@ describe('ToolCard 确认态/拒绝态/回滚（C-3）', () => {
       summary: '已覆写 f.txt',
       data: { path: 'f.txt', backupPath: '.agent-backups/123/f.txt', rolledBack: rolled }
     })
-    const w1 = mount(ToolCard, { props: { call: okCall(), live: true } })
+    const w1 = mount(ToolCard, { props: { call: okCall(), interactive: true } })
     expect(w1.find('[data-testid="btn-rollback"]').exists()).toBe(true)
     await w1.get('[data-testid="btn-rollback"]').trigger('click')
     expect(w1.emitted('rollback')).toHaveLength(1)
-    const w2 = mount(ToolCard, { props: { call: okCall(true), live: true } })
+    const w2 = mount(ToolCard, { props: { call: okCall(true), interactive: true } })
     expect(w2.find('[data-testid="btn-rollback"]').exists()).toBe(false)
     expect(w2.text()).toContain('已回滚')
-    const w3 = mount(ToolCard, { props: { call: { ...okCall(), data: { path: 'n.txt' } }, live: true } })
+    const w3 = mount(ToolCard, { props: { call: { ...okCall(), data: { path: 'n.txt' } }, interactive: true } })
     expect(w3.find('[data-testid="btn-rollback"]').exists()).toBe(false)
   })
 })
