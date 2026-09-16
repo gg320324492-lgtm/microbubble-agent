@@ -31,6 +31,10 @@ const api = {
     send: (sessionId: string, content: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> =>
       invoke(IPC.CHAT_SEND, { sessionId, content }),
     abort: (sessionId: string): Promise<void> => invoke(IPC.CHAT_ABORT, { sessionId }),
+    confirmResolve: (sessionId: string, callId: string, approve: boolean): Promise<void> =>
+      invoke(IPC.CHAT_CONFIRM_RESOLVE, { sessionId, callId, approve }),
+    rollbackWrite: (sessionId: string, messageId: string, callId: string): Promise<{ path: string }> =>
+      invoke(IPC.CHAT_ROLLBACK_WRITE, { sessionId, messageId, callId }),
     onStreamEvent: (cb: (e: unknown) => void): (() => void) => {
       const listener = (_e: unknown, payload: unknown): void => cb(payload as never)
       ipcRenderer.on(IPC.CHAT_STREAM_EVENT, listener as never)

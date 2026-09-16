@@ -1,6 +1,6 @@
 // IPC 注册 — 白名单 channel 与 shared/ipc-channels.ts 一一对应，测试有一致性校验。
 // 会话 token 持久化走 safeStorage（Win DPAPI 绑定本机），解密失败即清除重来，不阻塞（E-3 铁律）。
-import { app, dialog, ipcMain, BrowserWindow, safeStorage } from 'electron'
+import { app, dialog, ipcMain, BrowserWindow, safeStorage, shell } from 'electron'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-channels'
@@ -29,6 +29,10 @@ import { listDirTool } from './agent/tools/list-dir'
 import { readFileTool } from './agent/tools/read-file'
 import { globTool } from './agent/tools/glob'
 import { grepTool } from './agent/tools/grep'
+import { writeFileTool } from './agent/tools/write-file'
+import { mkdirTool } from './agent/tools/mkdir'
+import { createDeleteFileTool } from './agent/tools/delete-file'
+import { restoreFromBackup } from './agent/tools/rollback'
 
 const ok = <T>(data: T): IpcResult<T> => ({ ok: true, data })
 const fail = (code: string, message: string): IpcResult<never> => ({ ok: false, error: { code, message } })
@@ -97,16 +101,21 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   const gateway = new ModelGatewayService(db, makeCipher())
   const workspace = new WorkspaceService(join(dbPath, '..', 'workspace'))
   const audit = new AuditService(db)
-  // Agent 工具循环（C-2）— 只读工具全部 auto 权限；streamTurn 指向网关的原生 tool_use 流
+  // Agent 工具循环（C-2/C-3）— 只读工具 auto；写工具 confirm 拦截在循环层；
+  // delete_file 的回收站能力在此注入（工具与测试不 import Electron ABI）
   const registry = new ToolRegistry(workspace, audit)
   registry.register(listDirTool)
   registry.register(readFileTool)
   registry.register(globTool)
   registry.register(grepTool)
+  registry.register(writeFileTool)
+  registry.register(mkdirTool)
+  registry.register(createDeleteFileTool({ trashItem: (abs) => shell.trashItem(abs) }))
   const agentLoop = new AgentLoopService(
     (userId, sessionId, req) => gateway.streamAgentTurn(userId, sessionId, req),
     registry,
-    workspace
+    workspace,
+    audit
   )
 
   // 启动即尝试恢复上次会话（有持久化 token 且未过期则免登录）
@@ -250,9 +259,45 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.CHAT_ABORT, (_e, p): IpcResult<null> => {
     const sessionId = String(p?.sessionId ?? '')
     gateway.abort(sessionId) // 杀在途 HTTP 流
-    agentLoop.stop(sessionId) // 杀轮间空隙（循环在每轮开始与工具间检查）
+    agentLoop.stop(sessionId) // 杀轮间空隙 + 取消未决写确认
     return { ok: true, data: null }
   })
+
+  // 写工具确认结果回传（C-3）— 批准后循环层继续 invoke；拒绝则回喂拒绝语义
+  ipcMain.handle(IPC.CHAT_CONFIRM_RESOLVE, (_e, p): IpcResult<boolean> =>
+    tryRun(() => {
+      const found = agentLoop.resolveConfirm(String(p?.sessionId ?? ''), String(p?.callId ?? ''), p?.approve === true)
+      if (!found) throw new Error('确认请求不存在或已过期')
+      return true
+    })
+  )
+
+  // 回滚一次 write_file（C-3）— 从 .agent-backups 恢复原内容，审计留痕并回写卡片状态
+  ipcMain.handle(IPC.CHAT_ROLLBACK_WRITE, (_e, p): IpcResult<{ path: string }> =>
+    tryRun(() => {
+      const user = auth.requireUser()
+      const sessionId = String(p?.sessionId ?? '')
+      const messageId = String(p?.messageId ?? '')
+      const callId = String(p?.callId ?? '')
+      const row = chat.getMessage(user.id, sessionId, messageId)
+      if (!row) throw new Error('消息不存在')
+      const meta = parseMessageMeta(row.meta)
+      const call = meta?.tools?.find((t) => t.id === callId)
+      if (!call) throw new Error('未找到该写入记录')
+      const data = call.data as { path?: string; backupPath?: string; rolledBack?: boolean } | undefined
+      if (!data?.backupPath) throw new Error('该写入没有备份（新建文件），无法回滚')
+      if (data.rolledBack) throw new Error('该写入已回滚过')
+      const targetAbs = workspace.resolveInWorkspace(String(data.path))
+      const backupAbs = workspace.resolveInWorkspace(String(data.backupPath))
+      restoreFromBackup(targetAbs, backupAbs)
+      audit.record(user.id, 'rollback_write', `已回滚 ${data.path}（恢复自 ${data.backupPath}）`, true)
+      chat.patchToolCall(user.id, sessionId, messageId, callId, {
+        summary: `已回滚：已恢复原内容（备份 ${data.backupPath}）`,
+        data: { ...data, rolledBack: true }
+      })
+      return { path: String(data.path) }
+    })
+  )
 
   // ---------- 模型网关 ----------
 

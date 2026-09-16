@@ -101,7 +101,8 @@ describe('AgentLoopService 全链路（ReAct）', () => {
           })
       ]),
       h.registry,
-      h.ws
+      h.ws,
+      h.audit
     )
     const events: LoopEvent[] = []
     const out = await run(loop, (e) => events.push(e))
@@ -145,7 +146,8 @@ describe('AgentLoopService 全链路（ReAct）', () => {
         () => turnRes({ text: '都看完了。', assistantBlocks: [{ type: 'text', text: '都看完了。' }] })
       ]),
       h.registry,
-      h.ws
+      h.ws,
+      h.audit
     )
     const out = await run(loop)
     expect(out.meta.tools?.map((t) => t.status)).toEqual(['ok', 'ok'])
@@ -168,7 +170,8 @@ describe('AgentLoopService 全链路（ReAct）', () => {
         () => turnRes({ text: '好的，没有这个工具。', assistantBlocks: [{ type: 'text', text: '好的，没有这个工具。' }] })
       ]),
       h.registry,
-      h.ws
+      h.ws,
+      h.audit
     )
     const out = await run(loop)
     expect(out.meta.tools?.[0].status).toBe('error')
@@ -194,7 +197,8 @@ describe('AgentLoopService 全链路（ReAct）', () => {
         })
       },
       h.registry,
-      h.ws
+      h.ws,
+      h.audit
     )
     const out = await run(loop)
     expect(h.requests).toHaveLength(MAX_AGENT_ROUNDS)
@@ -215,7 +219,8 @@ describe('AgentLoopService 全链路（ReAct）', () => {
         () => turnRes({ text: '不应到达' })
       ]),
       h.registry,
-      h.ws
+      h.ws,
+      h.audit
     )
     const out = await run(loop)
     expect(out.meta.stopped).toBe(true)
@@ -229,7 +234,8 @@ describe('AgentLoopService 全链路（ReAct）', () => {
     const loop = new AgentLoopService(
       scriptStream(h, [() => turnRes({ text: '纯对话回答' })]),
       h.registry,
-      h.ws
+      h.ws,
+      h.audit
     )
     const out = await run(loop)
     expect(out.content).toBe('纯对话回答')
@@ -250,7 +256,7 @@ describe('Agent 系统提示词与工具定义', () => {
 
   it('buildToolDefs — registry 工具转 Anthropic input_schema 形状；无工作区返回空', () => {
     const h = makeHarness()
-    const loop = new AgentLoopService(async () => turnRes({}), h.registry, h.ws)
+    const loop = new AgentLoopService(async () => turnRes({}), h.registry, h.ws, h.audit)
     const defs = loop.buildToolDefs()
     expect(defs).toHaveLength(2)
     for (const d of defs) {
@@ -258,6 +264,6 @@ describe('Agent 系统提示词与工具定义', () => {
       expect(d.input_schema).toMatchObject({ type: 'object' })
     }
     const bare = makeHarness({ withRoot: false })
-    expect(new AgentLoopService(async () => turnRes({}), bare.registry, bare.ws).buildToolDefs()).toEqual([])
+    expect(new AgentLoopService(async () => turnRes({}), bare.registry, bare.ws, bare.audit).buildToolDefs()).toEqual([])
   })
 })

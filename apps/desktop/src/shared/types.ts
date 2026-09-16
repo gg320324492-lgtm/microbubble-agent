@@ -74,14 +74,28 @@ export type ChatStreamEvent =
   | { type: 'done'; sessionId: string; messageId: string; content: string; meta?: MessageMeta | null }
   | { type: 'error'; sessionId: string; messageId: string; message: string }
 
-/** 一次工具调用（工具卡片数据；status 流转 running → ok | error） */
+/** 一次工具调用（工具卡片数据；status 流转 running → ok | error；写工具含确认态） */
 export interface ToolCallRecord {
   id: string
   name: string
   input: unknown
-  status: 'running' | 'ok' | 'error'
+  status: 'running' | 'ok' | 'error' | 'awaiting_confirm' | 'rejected'
   summary: string
   data?: unknown
+}
+
+/** 行级 diff 单行（工具卡片确认面板渲染） */
+export interface DiffLine {
+  kind: 'add' | 'del' | 'ctx'
+  text: string
+}
+
+/** write_file 的 diff 数据（放 ToolCallRecord.data.diff；不进模型回喂） */
+export interface FileDiff {
+  path: string
+  kind: 'create' | 'overwrite'
+  lines: DiffLine[]
+  truncated: boolean
 }
 
 /** assistant 消息的 Agent 结构化信息（chat_messages.meta JSON 列；工具卡片/思维链还原用） */
