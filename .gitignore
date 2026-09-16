@@ -200,3 +200,6 @@ apps/desktop/dist-electron/
 
 # 豁免: 桌面端打包资源目录 (icon 等), 不受全局 build/ 规则影响
 !apps/desktop/build/
+
+# 桌面端转化指挥部 (独立 git 仓库, 与本仓库互相隔离)
+desktop-conversion/
