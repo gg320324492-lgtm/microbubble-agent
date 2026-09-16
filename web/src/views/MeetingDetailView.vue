@@ -87,12 +87,12 @@
         <button class="pb-play" @click="togglePlay" :title="isPlaying ? '暂停' : '播放'">
           {{ isPlaying ? '⏸' : '▶' }}
         </button>
-        <span class="pb-tm">{{ formatTs(pbCurrent) }} / {{ formatTs(pbDuration || meeting.audio_duration) }}</span>
+        <span class="pb-tm">{{ formatTs(pbCurrent) }} <span class="pb-sep">/</span> {{ pbDurText }}</span>
         <div class="pb-track" @click="seekToEvent">
           <i :style="{ width: pbPct + '%' }" />
         </div>
         <button class="pb-spd" @click="cycleSpeed">{{ pbSpeed }}x</button>
-        <span class="pb-note">点击转录时间戳可 seek · 当前段自动高亮</span>
+        <span class="pb-note">时间戳点击 seek</span>
         <audio
           ref="audioEl"
           :src="getAudioSrc(meeting.audio_url)"
@@ -494,8 +494,15 @@ function onAudioTime() {
   if (audioEl.value) pbCurrent.value = audioEl.value.currentTime
 }
 function onAudioMeta() {
-  if (audioEl.value && audioEl.value.duration) pbDuration.value = audioEl.value.duration
+  // 2026-09-13 修复: 流式/缺失元数据时 duration 可能为 Infinity, 回退 audio_duration
+  const d = audioEl.value?.duration
+  pbDuration.value = (d && isFinite(d)) ? d : (meeting.value?.audio_duration || 0)
 }
+const pbDurText = computed(() => {
+  if (pbDuration.value > 0) return formatTs(pbDuration.value)
+  const ad = meeting.value?.audio_duration
+  return ad ? formatTs(ad) : '--:--'
+})
 function seekTo(sec) {
   const el = audioEl.value
   if (!el) return
@@ -1621,21 +1628,30 @@ onMounted(async () => {
   position: sticky; top: 0; z-index: 8;
   display: flex; align-items: center; gap: 14px;
   background: var(--ink, #16232a); color: var(--color-bg-page, #f4f6f4);
-  border-radius: 4px; padding: 11px 18px;
-  box-shadow: 0 8px 22px rgba(22, 35, 42, 0.25);
+  border-radius: 4px; padding: 9px 16px;
+  box-shadow: 0 6px 18px rgba(22, 35, 42, 0.22);
 }
 .player-bar.no-audio-hidden { display: none; }
+/* 2026-09-13 播放钮精修: 实底珊瑚大圆钮 → 描边小圆钮 (悬停点亮), 降噪融入墨条 */
 .pb-play {
-  width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer;
-  background: var(--coral, #ef7256); color: #fff; font-size: 14px;
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  background: transparent; border: 1.5px solid rgba(255, 255, 255, 0.38);
+  color: rgba(255, 255, 255, 0.92); font-size: 11px;
   display: grid; place-items: center;
+  transition: all var(--duration-fast, .15s) ease-out;
 }
-.pb-play:hover { filter: brightness(1.1); }
+.pb-play:hover {
+  border-color: var(--coral, #ef7256); color: var(--coral, #ef7256);
+  background: rgba(239, 114, 86, 0.12);
+}
 .pb-tm { font-family: Consolas, 'SFMono-Regular', monospace; font-size: 12px; letter-spacing: .06em; white-space: nowrap; }
+.pb-sep { opacity: .45; margin: 0 2px; }
 .pb-track {
-  flex: 1; height: 5px; border-radius: 3px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.18); position: relative;
+  flex: 1; height: 4px; border-radius: 3px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.16); position: relative;
+  transition: height .15s ease-out;
 }
+.pb-track:hover { height: 6px; }
 .pb-track i {
   position: absolute; left: 0; top: 0; height: 100%;
   background: var(--coral, #ef7256); border-radius: 3px;
@@ -1643,11 +1659,12 @@ onMounted(async () => {
 .pb-spd {
   font-family: Consolas, monospace; font-size: 11px; cursor: pointer;
   background: transparent; color: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 2px; padding: 1px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 2px; padding: 1px 8px;
 }
+.pb-spd:hover { border-color: rgba(255, 255, 255, 0.5); }
 .pb-note {
   font-family: Consolas, monospace; font-size: 10px; letter-spacing: .1em;
-  color: rgba(255, 255, 255, 0.55); white-space: nowrap;
+  color: rgba(255, 255, 255, 0.4); white-space: nowrap;
 }
 
 /* 转录时间戳 → seek 按钮 */
