@@ -95,6 +95,7 @@
         <span class="pb-note">时间戳点击 seek</span>
         <audio
           ref="audioEl"
+          preload="metadata"
           :src="getAudioSrc(meeting.audio_url)"
           @timeupdate="onAudioTime"
           @loadedmetadata="onAudioMeta"

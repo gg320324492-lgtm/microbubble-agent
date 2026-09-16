@@ -16,6 +16,8 @@ from app.core.security import get_current_user
 from app.models.member import Member
 from app.models.meeting import Meeting
 from app.services.file_service import file_service
+from app.services.faststart import ensure_faststart_async
+
 from app.services.chunked_upload_service import chunked_upload_service
 from app.services.audio_metadata import ffprobe_duration_async
 
@@ -126,6 +128,8 @@ async def upload_audio(
     # 保存 object_name（而非 presigned URL，后者会过期）
     meeting.audio_url = upload_result.get("object_name")
     meeting.upload_status = "completed"
+    # 2026-09-13: faststart 重排 (moov 前置), 修复拖动进度条要顺序拖完已播字节的慢 seek
+    ensure_faststart_async(upload_result.get("object_name"))
     # 2026-08-04 P0: 一次性上传视为"整段上传完成 1 块", 避免 completed + last_chunk_index=-1/total_chunks=NULL 的矛盾状态
     meeting.last_chunk_index = 0
     meeting.total_chunks = 1
@@ -324,6 +328,8 @@ async def merge_chunks_endpoint(
     # 更新会议字段
     meeting.audio_url = merged_object_name
     meeting.upload_status = "completed"
+    # 2026-09-13: faststart 重排 (moov 前置), 修复拖动进度条要顺序拖完已播字节的慢 seek
+    ensure_faststart_async(merged_object_name)
     # W2-7: 下载合并后的文件，ffprobe 探测真实媒体时长写入 media_duration_seconds
     # audio_duration（墙钟差）由 stop-recording 阶段写入，此处不动
     try:

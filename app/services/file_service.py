@@ -45,6 +45,57 @@ class FileService:
             self._set_public_read_policy()
         return self._client
 
+    def ensure_faststart(self, object_name: str) -> dict:
+        """2026-09-13: 录音文件 faststart 重排 (moov 前置), 修复拖动进度条响应极慢。
+
+        iPhone MediaRecorder 流式产出的 m4a / Chrome 产出的 webm, 索引原子在文件尾,
+        浏览器 <audio> seek 必须顺序拖完已播字节 (143MB 会议实测拖动后要等数分钟)。
+        ffmpeg -c copy 流复制重排, 秒级完成, 不转码不损音质。
+
+        Returns: {"remuxed": bool, "size": int, "error": str|None}
+        """
+        import os
+        import subprocess
+        import tempfile
+
+        result = {"remuxed": False, "size": 0, "error": None}
+        try:
+            st = self.client.stat_object(self.bucket, object_name)
+            ext = os.path.splitext(object_name)[1].lower()
+            if ext not in (".mp4", ".m4a", ".webm"):
+                result["error"] = f"unsupported ext {ext}"
+                return result
+
+            tmp_in = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+            tmp_in.close()
+            tmp_out = tempfile.NamedTemporaryFile(suffix=".faststart" + ext, delete=False)
+            tmp_out.close()
+            try:
+                self.client.fget_object(self.bucket, object_name, tmp_in.name)
+                cmd = ["ffmpeg", "-y", "-i", tmp_in.name, "-c", "copy"]
+                if ext in (".mp4", ".m4a"):
+                    cmd += ["-movflags", "+faststart"]
+                cmd.append(tmp_out.name)
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+                if proc.returncode != 0 or not os.path.getsize(tmp_out.name):
+                    result["error"] = f"ffmpeg rc={proc.returncode}"
+                    return result
+                self.client.fput_object(
+                    self.bucket, object_name, tmp_out.name,
+                    content_type=st.content_type or "application/octet-stream",
+                )
+                result["remuxed"] = True
+                result["size"] = os.path.getsize(tmp_out.name)
+            finally:
+                for f in (tmp_in.name, tmp_out.name):
+                    try:
+                        os.remove(f)
+                    except OSError:
+                        pass
+        except Exception as e:
+            result["error"] = str(e)[:200]
+        return result
+
     def _ensure_bucket(self):
         """确保 bucket 存在"""
         if not self._client.bucket_exists(self.bucket):
