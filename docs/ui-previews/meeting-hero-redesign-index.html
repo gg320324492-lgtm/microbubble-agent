@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议详情顶端 UI 重做 · 四方案索引</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); padding: 48px 24px 80px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 10px; background: var(--card); border-radius: 2px; }
+  h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .note { font-size: 12.5px; color: var(--ink); background: var(--card); border: 1px dashed var(--line-dash); border-radius: 4px; padding: 10px 16px; margin-bottom: 26px; }
+  .note b { color: var(--coral); }
+  a.card { display: block; text-decoration: none; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 18px 22px; margin-bottom: 12px; transition: all .2s ease-out; }
+  a.card:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(22,35,42,.12); border-color: var(--teal); }
+  .no { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); }
+  .name { font-size: 17px; font-weight: 700; margin: 4px 0 4px; }
+  .desc { font-size: 13px; color: var(--muted); }
+  .best { font-family: var(--font-mono); font-size: 10px; color: var(--coral); margin-top: 6px; letter-spacing: .1em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="tag">MEETING HERO REDESIGN · 2026-09-14</span>
+  <h1>会议详情顶端 UI 重做 · 四方案</h1>
+  <div class="sub">范围: Hero 区（返回/标题/状态戳/元数据/参与者头像/编辑删除）。三 Tab 与播放条不在本次范围，预览页中仅作衔接示意。</div>
+  <div class="note">⚠ 预览同时发现的 bug 将随选型一并修复: 播放条时长显示 <b>Infinity:NaN</b> — 音频时长元数据缺失/未加载时 formatTs 失控，需加兜底 (fallback 到 audio_duration 或显示 --:--)。</div>
+
+  <a class="card" href="meeting-hero-redesign-a-卷首档案条.html">
+    <div class="no">PLAN A</div>
+    <div class="name">卷首档案条</div>
+    <div class="desc">两行紧凑档案条：标题/状态/动作一行，元数据+头像第二行（虚线分隔）。竖向最省，与常驻播放条形成"档案条 + 设备条"组合。</div>
+    <div class="best">BEST FOR · 竖向空间利用 / 全站默认感</div>
+  </a>
+
+  <a class="card" href="meeting-hero-redesign-b-印章卷首.html">
+    <div class="no">PLAN B</div>
+    <div class="name">印章卷首</div>
+    <div class="desc">大衬线标题为绝对主角，右侧竖排「已完成」档案印章戳；编辑/删除收进 ⋯ 下拉。仪式感最强，顶面最干净。</div>
+    <div class="best">BEST FOR · 仪式感 / 档案馆气质</div>
+  </a>
+
+  <a class="card" href="meeting-hero-redesign-c-双列档案卡.html">
+    <div class="no">PLAN C</div>
+    <div class="name">双列档案卡</div>
+    <div class="desc">左列大标题 + 参与者，右列独立「会议资料卡」（DATE/LOCATION/DURATION/STATUS mono 表格）+ 动作按钮收在卡底。信息分组最清晰。</div>
+    <div class="best">BEST FOR · 信息分组 / 资料卡质感</div>
+  </a>
+
+  <a class="card" href="meeting-hero-redesign-d-极简单行.html">
+    <div class="no">PLAN D</div>
+    <div class="name">极简单行</div>
+    <div class="desc">全部信息压进一行：返回 | #编号 | 标题 | 状态戳 | 元数据 | 头像组 | 图标钮；参与名单第二行弱化。竖向压缩到极致。</div>
+    <div class="best">BEST FOR · 极致省空间 / 宽屏一行流</div>
+  </a>
+</div>
+</body>
+</html>

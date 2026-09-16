@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>会议详情顶端重做 · 方案C 双列档案卡</title>
+<style>
+  :root {
+    --paper: #f4f6f4; --card: #fdfefc; --ink: #16232a;
+    --teal: #0e766e; --coral: #ef7256;
+    --line: #cdd8d4; --line-dash: #b9c9c5; --muted: #5f6f6b;
+    --font-serif: 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+    --font-mono: Consolas, 'SFMono-Regular', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-serif); font-size: 14px; line-height: 1.7; padding: 32px 24px 80px; }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .pv-head { margin-bottom: 22px; }
+  .pv-head .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .3em; color: var(--teal); border: 1px solid var(--line-dash); display: inline-block; padding: 2px 10px; margin-bottom: 8px; background: var(--card); border-radius: 2px; }
+  .pv-head h1 { font-size: 21px; font-weight: 700; }
+  .pv-head p { color: var(--muted); font-size: 13px; }
+
+  /* ── 方案C: 左标题右资料卡 ── */
+  .hero { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 22px 26px; }
+  .hero .back { font-family: var(--font-mono); font-size: 10px; letter-spacing: .2em; color: var(--muted); text-decoration: none; }
+  .hero-grid { display: grid; grid-template-columns: 1fr 250px; gap: 30px; margin-top: 10px; }
+  .hero-l .kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: .35em; color: var(--teal); margin-bottom: 6px; }
+  .hero-l .title { font-size: 20px; font-weight: 700; line-height: 1.5; margin-bottom: 12px; }
+  .hero-l .title .stamp { font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--teal); color: var(--teal); border-radius: 2px; padding: 2px 10px; vertical-align: 5px; margin-left: 10px; font-weight: 400; }
+  .avs { display: flex; }
+  .av { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--card); display: grid; place-items: center; font-size: 11px; color: #fff; margin-left: -8px; }
+  .av:first-child { margin-left: 0; }
+  .av.a { background: #41564f; } .av.b { background: #6b8787; } .av.c { background: #8fa5a0; }
+  .hero-l .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  /* 右列: 会议资料卡 (mono 表格) */
+  .fact { background: var(--paper); border: 1px dashed var(--line-dash); border-radius: 3px; padding: 12px 16px; font-family: var(--font-mono); font-size: 11px; }
+  .fact .r { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed rgba(184, 201, 197, .4); }
+  .fact .r:last-child { border-bottom: none; }
+  .fact .k { color: var(--muted); }
+  .fact .v { color: var(--ink); }
+  .fact .v.on { color: var(--teal); font-weight: 700; }
+  .hero-acts { display: flex; gap: 8px; margin-top: 12px; }
+  .act { flex: 1; text-align: center; font-size: 12px; padding: 6px 0; border-radius: 3px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  .act.pri { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .act.danger { color: #c0564a; border-color: rgba(239,114,86,.5); }
+
+  .player { margin-top: 14px; display: flex; align-items: center; gap: 14px;
+    background: var(--ink); color: var(--paper); border-radius: 4px; padding: 11px 18px; }
+  .player .play { width: 34px; height: 34px; border-radius: 50%; background: var(--coral); display: grid; place-items: center; }
+  .player .tm { font-family: var(--font-mono); font-size: 12px; }
+  .player .track { flex: 1; height: 4px; background: rgba(255,255,255,.18); border-radius: 2px; }
+  .player .note { font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,.55); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="pv-head">
+    <span class="tag">MEETING HERO · REDESIGN 方案C</span>
+    <h1>方案C · 双列档案卡</h1>
+    <p>头部信息分组：左列大标题 + 参与者，右列独立「会议资料卡」（mono 表格呈现日期/地点/时长/状态），动作按钮收在资料卡底部。信息分组最清晰。</p>
+  </div>
+
+  <div class="hero">
+    <a class="back" href="#">← 返回列表</a>
+    <div class="hero-grid">
+      <div class="hero-l">
+        <div class="kicker">MEETING #247 · ARCHIVE</div>
+        <div class="title">关于超材料与原子层面构造及变换模式理论的讨论<span class="stamp">已完成</span></div>
+        <div class="avs"><span class="av a">王</span><span class="av b">杜</span><span class="av c">陈</span></div>
+        <div class="hint">共 3 人参与 · 全组讨论 3 分 23 秒</div>
+      </div>
+      <div>
+        <div class="fact">
+          <div class="r"><span class="k">DATE</span><span class="v">2026-08-21 10:44</span></div>
+          <div class="r"><span class="k">LOCATION</span><span class="v">未设置</span></div>
+          <div class="r"><span class="k">DURATION</span><span class="v on">3 分 23 秒</span></div>
+          <div class="r"><span class="k">STATUS</span><span class="v on">已完成</span></div>
+        </div>
+        <div class="hero-acts">
+          <span class="act pri">✎ 编辑</span>
+          <span class="act danger">🗑 删除</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="player">
+    <span class="play">▶</span>
+    <span class="tm">00:00 / 03:23</span>
+    <div class="track"></div>
+    <span class="note">点击转录时间戳可 seek · 当前段自动高亮</span>
+  </div>
+</div>
+</body>
+</html>
