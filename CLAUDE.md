@@ -9,18 +9,16 @@
 + `docs/desktop-conversion/|desktop-migration/` + 9-08 两份方案文档 (UI 原生化
 N1-N6 / FileAgentLoop S0-S5)。**归档 tag `archive/desktop-before-redo-20260913`**,
 旧实现与旧方案随时可查。09-13 二次清理: 删 `docs/superpowers/` 4 份桌面
-plan/spec (login-ui 设计+计划 / R0-R7 发布程序 / mbrp 迁移设计); 用户拍板
-**恢复保留 `docs/desktop-ui-migration-and-release.md` (9-08 UI 原生化 N1-N6 +
-阿里云 OSS/CDN 发布通道) 作为重做蓝本**, FileAgentLoop S0-S5 方案仍在归档。
-**骨架设计已定稿** `docs/superpowers/specs/2026-09-13-desktop-rebuild-skeleton-design.md`:
-账号=本地注册/登录+可选绑定云端 (用户拍板), 协作数据 v1 在线直连+缓存后置 N5
-(用户拍板), 本地库 001-003 起步迁移链, 里程碑 M0 骨架+账号 → M1 AI 助手 →
-M2 知识库+会议 → …, 安全基线/登录页规格自归档回收。本机已同步清理: 两份已装应用 (C: Aug-28 构建 186MB /
-D: 旧版) + Start Menu/桌面快捷方式 + `%APPDATA%\microbubble-desktop` 用户数据
-(含迁移快照 scientific.db, 源头云端 PG 可再生) 全部删除。**已知断点教训**
-(重做时必须解决): 0.1.0 登录表单走的是 Phase-1 云端 `/auth/login` 通道,
-main 进程写好的本地账号体系 (product.auth, scrypt) 没接线 — "本地科研账号"
-文案与实际行为不符。当前桌面端 = 零代码起点, 重做方案与用户逐步商定。
+plan/spec (login-ui 设计+计划 / R0-R7 发布程序 / mbrp 迁移设计)。
+**⚠️ 桌面端建设已迁独立指挥部 `desktop-conversion/` (2026-09-14, 独立 git 仓库,
+父仓库整体 ignore, 只干桌面转化的事、不影响父项目)**: 总指挥模式 (本类窗口只拆解/
+派工/验收, 执行交其他 agent, 一次一张工单), 计划/工单/验收/决策/会话简报全在那边 —
+9-08 蓝本在 `desktop-conversion/docs/plans/2026-09-08-desktop-ui-native-and-release.md`,
+骨架设计在 `desktop-conversion/docs/plans/2026-09-13-desktop-rebuild-skeleton-design.md`
+(账号=本地注册/登录+可选绑定云端, 能本地尽本地+验收淘汰制 §3.1, 里程碑 M0✅/M1-A✅/
+M1-B✅ 模型网关 MiMo 实测通, 进行中 M1-C Agent 工具循环)。接手先读
+`desktop-conversion/docs/session-log/` 最新简报 + `docs/decisions/DECISIONS.md`。
+FileAgentLoop S0-S5 方案仍在归档。
 
 **M0 工作台骨架已落地 (2026-09-14, commit `67e5dfae8`)**: pnpm monorepo
 (`pnpm-workspace.yaml` + `packages/design-tokens` + `apps/desktop`, web/ 不动)。
