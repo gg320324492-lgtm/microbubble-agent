@@ -17,6 +17,10 @@ export const IPC = {
   CHAT_MESSAGES_LIST: 'chat:messages:list',
   CHAT_SEND: 'chat:send',
   CHAT_ABORT: 'chat:abort',
+  /** renderer → main：写工具确认结果回传（approve=true 批准 / false 拒绝） */
+  CHAT_CONFIRM_RESOLVE: 'chat:confirm-resolve',
+  /** renderer → main：回滚一次 write_file（从 .agent-backups 恢复原内容并留痕） */
+  CHAT_ROLLBACK_WRITE: 'chat:rollback-write',
   /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */
   CHAT_STREAM_EVENT: 'chat:stream-event',
   WINDOW_STATE_EVENT: 'window:state-event',

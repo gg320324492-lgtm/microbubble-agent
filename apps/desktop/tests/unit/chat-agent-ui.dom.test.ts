@@ -73,3 +73,72 @@ describe('live 事件累积（chat-events）', () => {
     expect(live.tools[0].status).toBe('ok')
   })
 })
+
+describe('ToolCard 确认态/拒绝态/回滚（C-3）', () => {
+  const awaitingCall: ToolCallRecord = {
+    id: 'tw',
+    name: 'write_file',
+    input: { path: 'a.txt' },
+    status: 'awaiting_confirm',
+    summary: '将覆写 a.txt（请审阅差异）',
+    data: {
+      diff: {
+        path: 'a.txt',
+        kind: 'overwrite',
+        truncated: false,
+        lines: [
+          { kind: 'ctx', text: '公共行' },
+          { kind: 'del', text: '旧行' },
+          { kind: 'add', text: '新行' }
+        ]
+      }
+    }
+  }
+
+  it('live 确认态 — diff 增绿删红 + 批准/拒绝按钮回传决定', async () => {
+    const w = mount(ToolCard, { props: { call: awaitingCall, live: true } })
+    expect(w.text()).toContain('待确认')
+    expect(w.find('[data-testid="diff"]').exists()).toBe(true)
+    expect(w.findAll('.diff-add').map((n) => n.text())).toContain('新行')
+    expect(w.findAll('.diff-del').map((n) => n.text())).toContain('旧行')
+    await w.get('[data-testid="btn-reject"]').trigger('click')
+    expect(w.emitted('resolve')![0]?.[1]).toEqual(false)
+    await w.get('[data-testid="btn-approve"]').trigger('click')
+    expect(w.emitted('resolve')![1]?.[1]).toEqual(true)
+  })
+
+  it('持久化未决确认降级 — 无操作按钮，展示「已取消/未完成」', () => {
+    const w = mount(ToolCard, { props: { call: awaitingCall } })
+    expect(w.text()).toContain('已取消/未完成')
+    expect(w.find('[data-testid="btn-approve"]').exists()).toBe(false)
+    expect(w.find('[data-testid="btn-reject"]').exists()).toBe(false)
+  })
+
+  it('拒绝态 — 标识与未改动说明', () => {
+    const w = mount(ToolCard, {
+      props: { call: { ...runningCall, id: 'tr', status: 'rejected', summary: '用户拒绝执行' } }
+    })
+    expect(w.text()).toContain('已拒绝')
+    expect(w.text()).toContain('未改动工作区')
+  })
+
+  it('回滚按钮 — 有备份且未回滚显示并可触发；已回滚/新建文件不显示', async () => {
+    const okCall = (rolled?: boolean): ToolCallRecord => ({
+      id: 'w1',
+      name: 'write_file',
+      input: { path: 'f.txt' },
+      status: 'ok',
+      summary: '已覆写 f.txt',
+      data: { path: 'f.txt', backupPath: '.agent-backups/123/f.txt', rolledBack: rolled }
+    })
+    const w1 = mount(ToolCard, { props: { call: okCall(), live: true } })
+    expect(w1.find('[data-testid="btn-rollback"]').exists()).toBe(true)
+    await w1.get('[data-testid="btn-rollback"]').trigger('click')
+    expect(w1.emitted('rollback')).toHaveLength(1)
+    const w2 = mount(ToolCard, { props: { call: okCall(true), live: true } })
+    expect(w2.find('[data-testid="btn-rollback"]').exists()).toBe(false)
+    expect(w2.text()).toContain('已回滚')
+    const w3 = mount(ToolCard, { props: { call: { ...okCall(), data: { path: 'n.txt' } }, live: true } })
+    expect(w3.find('[data-testid="btn-rollback"]').exists()).toBe(false)
+  })
+})

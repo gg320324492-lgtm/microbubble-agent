@@ -15,7 +15,10 @@ export interface ToolContext {
 export interface ToolResult {
   ok: boolean
   summary: string
+  /** 回喂给模型的数据（须小；read_file 的 content 走这里，受 8000 字符截断保护） */
   data?: unknown
+  /** 仅给工具卡片的数据（如 write_file 的 diff）— 绝不回喂模型 */
+  cardData?: unknown
   error?: string
 }
 
@@ -26,6 +29,8 @@ export interface AgentTool {
   permission: ToolPermissionLevel
   parameters: { type: 'object'; properties: Record<string, unknown>; required: string[] }
   execute(input: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>
+  /** confirm 工具的确认前预览（无副作用）— 循环层拦截时调用，产出供用户审阅的 diff/信息 */
+  preview?(input: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>
 }
 
 const INPUT_SUMMARY_MAX = 500

@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto'
 import type { SqlDatabase } from '../db/adapters'
 import type { ChatTurn } from './model-gateway.service'
-import type { MessageMeta } from '@shared/types'
+import type { MessageMeta, ToolCallRecord } from '@shared/types'
 
 export interface SessionRow {
   id: string
@@ -146,6 +146,41 @@ export class ChatService {
 
     void onDelta
     return { userMessage, assistantMessage }
+  }
+
+  /** 按归属查单条消息（含 meta 原文）；跨会话/他人会话一律查不到 */
+  getMessage(userId: string, sessionId: string, messageId: string): MessageRow | null {
+    this.requireOwned(userId, sessionId)
+    const row = this.db
+      .prepare('SELECT id, session_id, role, content, meta, created_at FROM chat_messages WHERE id = ? AND session_id = ?')
+      .get(messageId, sessionId) as MessageRow | undefined
+    return row ?? null
+  }
+
+  /**
+   * 更新消息 meta 里某张工具卡片（回滚等主进程侧状态回写）。
+   * 返回 false = 消息/卡片不存在或无 meta。
+   */
+  patchToolCall(
+    userId: string,
+    sessionId: string,
+    messageId: string,
+    callId: string,
+    patch: { summary?: string; status?: ToolCallRecord['status']; data?: unknown }
+  ): boolean {
+    const row = this.getMessage(userId, sessionId, messageId)
+    if (!row) return false
+    const meta = parseMessageMeta(row.meta)
+    const tools = meta?.tools
+    const call = tools?.find((t) => t.id === callId)
+    if (!call) return false
+    if (patch.summary !== undefined) call.summary = patch.summary
+    if (patch.status !== undefined) call.status = patch.status
+    if (patch.data !== undefined) call.data = patch.data
+    this.db
+      .prepare('UPDATE chat_messages SET meta = ? WHERE id = ?')
+      .run(JSON.stringify({ ...(meta as MessageMeta), tools }), messageId)
+    return true
   }
 
   /** 组装模型上下文：最近 20 条历史 + 本条新消息 */

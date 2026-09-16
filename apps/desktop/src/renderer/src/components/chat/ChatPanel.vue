@@ -3,7 +3,7 @@
 // send 返回后由带 meta 的持久化消息接管（工具卡片还原为完成态、thinking 折叠面板）；Esc 随时中断
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { ChatStreamEvent, ModelProvider } from '@shared/types'
+import type { ChatMessage, ChatStreamEvent, ModelProvider, ToolCallRecord } from '@shared/types'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
 import { applyStreamEvent, createLiveState, type LiveAgentState } from '../../stores/chat-events'
@@ -76,6 +76,38 @@ function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault()
     void onSend()
+  }
+}
+
+/** 写工具确认（C-3）：乐观更新 live 卡片，权威状态由 main 的 tool 事件跟进 */
+async function onResolve(call: ToolCallRecord, approve: boolean): Promise<void> {
+  if (!store.activeId || !live.value) return
+  applyStreamEvent(live.value, {
+    type: 'tool',
+    sessionId: store.activeId,
+    messageId: '',
+    call: { ...call, status: approve ? 'running' : 'rejected', summary: approve ? '已批准，执行中…' : '用户拒绝执行' }
+  })
+  try {
+    await window.api.chat.confirmResolve(store.activeId, call.id, approve)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '确认失败')
+  }
+}
+
+/** 回滚一次 write_file：main 恢复备份 + 审计 + 回写 meta，这里同步本地卡片 */
+async function onRollback(m: ChatMessage, call: ToolCallRecord): Promise<void> {
+  if (!store.activeId) return
+  try {
+    const res = await window.api.chat.rollbackWrite(store.activeId, m.id, call.id)
+    const target = m.meta?.tools?.find((t) => t.id === call.id)
+    if (target) {
+      target.summary = '已回滚：已恢复原内容'
+      if (target.data && typeof target.data === 'object') (target.data as Record<string, unknown>)['rolledBack'] = true
+    }
+    ElMessage.success(`已回滚 ${res.path}`)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '回滚失败')
   }
 }
 
@@ -161,10 +193,10 @@ function fmtTime(ts: number): string {
         <div v-for="m in store.messages" :key="m.id" class="msg" :class="`msg-${m.role}`">
           <div class="msg-avatar" aria-hidden="true">{{ m.role === 'user' ? '我' : 'AI' }}</div>
           <div class="msg-bubble">
-            <!-- Agent 结构化内容：思维链折叠面板 + 工具卡片（还原为完成态） -->
+            <!-- Agent 结构化内容：思维链折叠面板 + 工具卡片（还原为完成态；未决确认降级展示） -->
             <ThinkingPanel v-if="m.role === 'assistant' && m.meta?.thinking" :text="m.meta.thinking" />
             <template v-if="m.role === 'assistant' && m.meta?.tools">
-              <ToolCard v-for="c in m.meta.tools" :key="c.id" :call="c" />
+              <ToolCard v-for="c in m.meta.tools" :key="c.id" :call="c" :interactive="true" @rollback="onRollback(m, c)" />
             </template>
             <div class="msg-content">{{ m.content }}</div>
             <div v-if="m.meta?.stopped" class="meta-note">⏹ 已停止 — 以上为已生成的部分内容</div>
@@ -182,7 +214,7 @@ function fmtTime(ts: number): string {
           <div class="msg-bubble is-streaming">
             <div v-if="live.label" class="round-hint" data-testid="round-hint">{{ live.label }}</div>
             <ThinkingPanel v-if="live.thinking" :text="live.thinking" streaming />
-            <ToolCard v-for="c in live.tools" :key="c.id" :call="c" />
+            <ToolCard v-for="c in live.tools" :key="c.id" :call="c" :live="true" @resolve="onResolve" />
             <div v-if="live.text" class="msg-content">{{ live.text }}<span class="stream-cursor" aria-hidden="true">▍</span></div>
           </div>
         </div>

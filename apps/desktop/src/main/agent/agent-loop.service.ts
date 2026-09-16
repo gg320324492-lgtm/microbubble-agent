@@ -16,13 +16,21 @@ import type {
 } from '@shared/types'
 import type { ChatTurn } from '../services/model-gateway.service'
 import type { ToolRegistry } from './tool-registry'
+import type { AgentTool } from './tool-registry'
 import type { WorkspaceService } from '../services/workspace/workspace.service'
+import type { AuditService } from '../services/workspace/audit.service'
 
 /** 单次任务最大 LLM 请求轮数 */
 export const MAX_AGENT_ROUNDS = 15
 
+/** 单个写操作确认等待上限（超时按拒绝处理 — 安全默认） */
+export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000
+
 /** 回喂模型的单条 tool_result 序列化上限（保护上下文窗口） */
 const TOOL_RESULT_MAX_CHARS = 8000
+
+/** 用户确认决定 */
+export type ConfirmDecision = 'approve' | 'reject' | 'stop'
 
 /** AGENT.md 注入 system 的截断长度 */
 const AGENT_MD_MAX_CHARS = 4000
@@ -75,15 +83,60 @@ export class AgentLoopService {
   /** 已请求停止的会话（CHAT_ABORT 置位，run 结束清除） */
   private readonly stopped = new Set<string>()
 
+  /** 进行中的写操作确认（CHAT_CONFIRM_RESOLVE / stop 唤醒） */
+  private readonly pendingConfirms = new Map<string, { resolve: (d: ConfirmDecision) => void; timer: ReturnType<typeof setTimeout> }>()
+
   constructor(
     private readonly streamTurn: StreamTurnFn,
     private readonly registry: ToolRegistry,
-    private readonly workspace: WorkspaceService
+    private readonly workspace: WorkspaceService,
+    private readonly audit: AuditService
   ) {}
 
-  /** 用户请求停止（与网关 HTTP abort 并联：一个杀在途流，一个杀轮间空隙） */
+  /** 用户请求停止（杀在途等待 + HTTP 流 + 轮间空隙） */
   stop(sessionId: string): void {
     this.stopped.add(sessionId)
+    for (const [key, pending] of this.pendingConfirms) {
+      if (key.startsWith(`${sessionId}::`)) {
+        this.pendingConfirms.delete(key)
+        pending.resolve('stop')
+      }
+    }
+  }
+
+  /** renderer 回传确认结果；返回 false 表示确认请求不存在/已过期/已超时 */
+  resolveConfirm(sessionId: string, callId: string, approve: boolean): boolean {
+    const key = `${sessionId}::${callId}`
+    const pending = this.pendingConfirms.get(key)
+    if (!pending) return false
+    this.pendingConfirms.delete(key)
+    pending.resolve(approve ? 'approve' : 'reject')
+    return true
+  }
+
+  /** 等待用户对某次写操作的决定；超时按拒绝（安全默认：不写） */
+  private waitConfirm(sessionId: string, callId: string): Promise<ConfirmDecision> {
+    return new Promise((resolve) => {
+      const key = `${sessionId}::${callId}`
+      const timer = setTimeout(() => {
+        if (this.pendingConfirms.delete(key)) resolve('reject')
+      }, CONFIRM_TIMEOUT_MS)
+      this.pendingConfirms.set(key, {
+        resolve: (d) => {
+          clearTimeout(timer)
+          resolve(d)
+        },
+        timer
+      })
+    })
+  }
+
+  /** confirm 预览用：与 registry.invoke 相同的 path 参数围栏预解析（invoke 仍会自行解析原始入参） */
+  private preResolvePath(tool: AgentTool, input: Record<string, unknown>): Record<string, unknown> {
+    if (tool.parameters.properties['path'] && typeof input['path'] === 'string') {
+      return { ...input, path: this.workspace.resolveInWorkspace(input['path']) }
+    }
+    return input
   }
 
   /** registry.list() → Anthropic tools 格式（parameters 已是 JSON Schema，改名 input_schema） */
@@ -149,27 +202,88 @@ export class AgentLoopService {
         }
         if (res.stopReason !== 'tool_use' || res.toolUses.length === 0) break
 
-        // 逐个执行本响应里的全部 tool_use（含未注册 catch → ok:false 回喂）
+        // 逐个执行本响应里的全部 tool_use（含未注册 catch → ok:false 回喂；confirm 工具在循环层拦截）
         const results: AgentContentBlock[] = []
         for (const tu of res.toolUses) {
           if (isAborted()) {
             stopped = true
             break
           }
+          const tool = this.registry.get(tu.name)
+          const rawInput = (tu.input ?? {}) as Record<string, unknown>
+
+          // ---- confirm 拦截（invoke 保持「已授权即执行」，授权决定在这里）----
+          if (tool?.permission === 'confirm') {
+            let previewData: unknown
+            let previewSummary = `等待确认：${tu.name}`
+            try {
+              const resolvedInput = this.preResolvePath(tool, rawInput)
+              if (tool.preview) {
+                const pv = await tool.preview(resolvedInput, { userId, workspaceRoot: root ?? '' })
+                previewData = pv.data
+                previewSummary = pv.summary
+              }
+            } catch (err) {
+              // 预检（围栏/参数）失败 — 与 auto 工具同语义：不执行、不审计、错误回喂
+              const message = err instanceof Error ? err.message : String(err)
+              const failed: ToolCallRecord = { id: tu.id, name: tu.name, input: rawInput, status: 'error', summary: message }
+              upsertCall(toolCalls, failed)
+              emit({ kind: 'tool', call: { ...failed } })
+              results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify({ ok: false, summary: message }), is_error: true })
+              continue
+            }
+
+            const awaiting: ToolCallRecord = {
+              id: tu.id,
+              name: tu.name,
+              input: rawInput,
+              status: 'awaiting_confirm',
+              summary: previewSummary,
+              data: previewData
+            }
+            upsertCall(toolCalls, awaiting)
+            emit({ kind: 'tool', call: { ...awaiting } })
+
+            const decision = await this.waitConfirm(sessionId, tu.id)
+            if (decision === 'stop') {
+              stopped = true
+              break
+            }
+            if (decision === 'reject') {
+              // 拒绝：不执行，审计留痕（ok:0），回喂明确拒绝语义（模型可改道）
+              this.audit.record(userId, tu.name, `用户拒绝: ${summarizeShort(rawInput)}`, false)
+              const rejected: ToolCallRecord = { ...awaiting, status: 'rejected', summary: '用户拒绝执行' }
+              upsertCall(toolCalls, rejected)
+              emit({ kind: 'tool', call: { ...rejected } })
+              results.push({
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: JSON.stringify({
+                  ok: false,
+                  denied: true,
+                  summary: `用户拒绝了 ${tu.name} 操作，未执行。请调整方案或直接询问用户。`
+                }),
+                is_error: true
+              })
+              continue
+            }
+            // approve → 落入下方正常执行（审计前后各一条照常）
+          }
+
           const call: ToolCallRecord = { id: tu.id, name: tu.name, input: tu.input, status: 'running', summary: '运行中…' }
-          toolCalls.push(call)
+          upsertCall(toolCalls, call)
           emit({ kind: 'tool', call: { ...call } })
 
           let result
           try {
-            result = await this.registry.invoke(tu.name, tu.input ?? {}, { userId, workspaceRoot: root ?? '' })
+            result = await this.registry.invoke(tu.name, rawInput, { userId, workspaceRoot: root ?? '' })
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             result = { ok: false, summary: `工具不可用：${message}`, error: message }
           }
           call.status = result.ok ? 'ok' : 'error'
           call.summary = result.summary
-          call.data = result.data
+          call.data = result.cardData ?? result.data
           emit({ kind: 'tool', call: { ...call } })
           results.push({
             type: 'tool_result',
@@ -202,6 +316,22 @@ export class AgentLoopService {
       }
     }
   }
+}
+
+function upsertCall(list: ToolCallRecord[], call: ToolCallRecord): void {
+  const i = list.findIndex((t) => t.id === call.id)
+  if (i >= 0) list[i] = call
+  else list.push(call)
+}
+
+function summarizeShort(value: unknown): string {
+  let text: string
+  try {
+    text = JSON.stringify(value) ?? String(value)
+  } catch {
+    text = String(value)
+  }
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text
 }
 
 function serializeToolResult(result: { ok: boolean; summary: string; data?: unknown; error?: string }): string {
