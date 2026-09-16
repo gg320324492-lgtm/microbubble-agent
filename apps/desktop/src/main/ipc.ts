@@ -18,11 +18,17 @@ import type {
 } from '@shared/types'
 import type { SqlDatabase } from './db/adapters'
 import { AuthService } from './services/auth.service'
-import { ChatService } from './services/chat.service'
+import { ChatService, parseMessageMeta } from './services/chat.service'
 import { ModelGatewayService } from './services/model-gateway.service'
 import { SettingsService } from './services/settings.service'
 import { WorkspaceService } from './services/workspace/workspace.service'
 import { AuditService } from './services/workspace/audit.service'
+import { ToolRegistry } from './agent/tool-registry'
+import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
+import { listDirTool } from './agent/tools/list-dir'
+import { readFileTool } from './agent/tools/read-file'
+import { globTool } from './agent/tools/glob'
+import { grepTool } from './agent/tools/grep'
 
 const ok = <T>(data: T): IpcResult<T> => ({ ok: true, data })
 const fail = (code: string, message: string): IpcResult<never> => ({ ok: false, error: { code, message } })
@@ -91,6 +97,17 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   const gateway = new ModelGatewayService(db, makeCipher())
   const workspace = new WorkspaceService(join(dbPath, '..', 'workspace'))
   const audit = new AuditService(db)
+  // Agent 工具循环（C-2）— 只读工具全部 auto 权限；streamTurn 指向网关的原生 tool_use 流
+  const registry = new ToolRegistry(workspace, audit)
+  registry.register(listDirTool)
+  registry.register(readFileTool)
+  registry.register(globTool)
+  registry.register(grepTool)
+  const agentLoop = new AgentLoopService(
+    (userId, sessionId, req) => gateway.streamAgentTurn(userId, sessionId, req),
+    registry,
+    workspace
+  )
 
   // 启动即尝试恢复上次会话（有持久化 token 且未过期则免登录）
   auth.restore()
@@ -170,7 +187,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       const user = auth.requireUser()
       return chat
         .listMessages(user.id, String(p?.sessionId ?? ''))
-        .map((r) => ({ id: r.id, sessionId: r.session_id, role: r.role, content: r.content, createdAt: r.created_at }))
+        .map((r) => ({ id: r.id, sessionId: r.session_id, role: r.role, content: r.content, meta: parseMessageMeta(r.meta), createdAt: r.created_at }))
     })
   )
 
@@ -180,20 +197,34 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       const sessionId = String(p?.sessionId ?? '')
       const content = String(p?.content ?? '')
       const win = getWindow()
+      const hasProvider = gateway.getDefault(user.id) !== null
 
       const { userMessage, assistantMessage } = await chat.send(
         user.id,
         sessionId,
         content,
-        gateway.getDefault(user.id)
-          ? async (turns) => {
-              const full = await gateway.streamChat(user.id, sessionId, turns, (delta) => {
-                const evt: ChatStreamEvent = { type: 'delta', sessionId, messageId: assistantMessage.id, delta }
-                win?.webContents.send(IPC.CHAT_STREAM_EVENT, evt)
+        hasProvider
+          ? async (turns, assistantId) => {
+              // Agent 循环（C-2）：多轮 tool_use；assistantId 用于流事件标记消息归属
+              const run = await agentLoop.run({
+                userId: user.id,
+                sessionId,
+                baseTurns: turns,
+                system: buildAgentSystemPrompt(workspace.getRoot()),
+                emit: (evt) => {
+                  const base = { sessionId, messageId: assistantId } as const
+                  const payload: ChatStreamEvent =
+                    evt.kind === 'text'
+                      ? { type: 'delta', ...base, delta: evt.delta }
+                      : evt.kind === 'thinking'
+                        ? { type: 'thinking', ...base, delta: evt.delta }
+                        : evt.kind === 'round'
+                          ? { type: 'round', ...base, round: evt.round, label: evt.label }
+                          : { type: 'tool', ...base, call: evt.call }
+                  win?.webContents.send(IPC.CHAT_STREAM_EVENT, payload)
+                }
               })
-              const done: ChatStreamEvent = { type: 'done', sessionId, messageId: assistantMessage.id, content: full }
-              win?.webContents.send(IPC.CHAT_STREAM_EVENT, done)
-              return full
+              return { content: run.content, meta: run.meta }
             }
           : undefined,
         (messageId, delta) => {
@@ -201,11 +232,12 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
           win?.webContents.send(IPC.CHAT_STREAM_EVENT, evt)
         }
       )
-      const toDto = (r: { id: string; session_id: string; role: string; content: string; created_at: number }): ChatMessage => ({
+      const toDto = (r: { id: string; session_id: string; role: string; content: string; meta: string | null; created_at: number }): ChatMessage => ({
         id: r.id,
         sessionId: r.session_id,
         role: r.role as ChatMessage['role'],
         content: r.content,
+        meta: parseMessageMeta(r.meta),
         createdAt: r.created_at
       })
       return { ok: true, data: { userMessage: toDto(userMessage), assistantMessage: toDto(assistantMessage) } }
@@ -216,7 +248,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   })
 
   ipcMain.handle(IPC.CHAT_ABORT, (_e, p): IpcResult<null> => {
-    gateway.abort(String(p?.sessionId ?? ''))
+    const sessionId = String(p?.sessionId ?? '')
+    gateway.abort(sessionId) // 杀在途 HTTP 流
+    agentLoop.stop(sessionId) // 杀轮间空隙（循环在每轮开始与工具间检查）
     return { ok: true, data: null }
   })
 
