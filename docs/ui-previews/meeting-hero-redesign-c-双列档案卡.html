@@ -45,12 +45,17 @@
   .act.pri { background: var(--ink); color: var(--paper); border-color: var(--ink); }
   .act.danger { color: #c0564a; border-color: rgba(239,114,86,.5); }
 
-  .player { margin-top: 14px; display: flex; align-items: center; gap: 14px;
-    background: var(--ink); color: var(--paper); border-radius: 4px; padding: 11px 18px; }
-  .player .play { width: 34px; height: 34px; border-radius: 50%; background: var(--coral); display: grid; place-items: center; }
-  .player .tm { font-family: var(--font-mono); font-size: 12px; }
-  .player .track { flex: 1; height: 4px; background: rgba(255,255,255,.18); border-radius: 2px; }
-  .player .note { font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,.55); }
+  .player { display: flex; align-items: center; gap: 12px;
+    background: var(--paper); border: 1px dashed var(--line-dash); border-radius: 3px;
+    padding: 10px 16px; margin-top: 14px; font-family: var(--font-mono); }
+  .player .play { width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid var(--teal);
+    background: transparent; color: var(--teal); display: grid; place-items: center; font-size: 10px; cursor: pointer;
+    transition: all .15s ease-out; }
+  .player .play:hover { background: var(--teal); color: #fff; }
+  .player .tm { font-family: var(--font-mono); font-size: 11px; }
+  .player .track { flex: 1; height: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 2px; position: relative; }
+  .player .track i { position: absolute; left: 0; top: 0; height: 100%; width: 10%; background: var(--teal); border-radius: 2px; }
+  .player .note { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -88,8 +93,8 @@
   <div class="player">
     <span class="play">▶</span>
     <span class="tm">00:00 / 03:23</span>
-    <div class="track"></div>
-    <span class="note">点击转录时间戳可 seek · 当前段自动高亮</span>
+    <div class="track"><i style="width: 10%; background: var(--teal);"></i></div>
+    <span class="note">时间戳点击 seek</span>
   </div>
 </div>
 </body>
