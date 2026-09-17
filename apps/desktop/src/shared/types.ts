@@ -388,3 +388,65 @@ export interface ExperimentSearchHit {
   highlight: { start: number; end: number } | null
   updatedAt: number
 }
+
+// ============ 本地稿件库（M3-2）============
+
+export type ManuscriptStatus = 'draft' | 'revising' | 'submitted' | 'published'
+
+/** 稿件元信息（列表用，不含正文） */
+export interface ManuscriptMeta {
+  id: number
+  title: string
+  status: ManuscriptStatus
+  targetJournal: string
+  tags: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ManuscriptFile {
+  id: number
+  manuscriptId: number
+  fileName: string
+  fileSize: number
+  createdAt: number
+}
+
+/** 稿件详情（含正文与附件） */
+export interface ManuscriptFull extends ManuscriptMeta {
+  content: string
+  files: ManuscriptFile[]
+}
+
+export interface ManuscriptCreateInput {
+  title: string
+  status?: ManuscriptStatus
+  targetJournal?: string
+  tags?: string[]
+  content?: string
+}
+
+export interface ManuscriptUpdateInput {
+  title?: string
+  status?: ManuscriptStatus
+  targetJournal?: string
+  tags?: string[]
+  content?: string
+}
+
+/** 字数统计结果（中文字符数 + 总词数） */
+export interface ManuscriptWordStats {
+  cjkChars: number
+  words: number
+}
+
+/** 稿件检索命中：snippet 来自正文原文 */
+export interface ManuscriptSearchHit {
+  id: number
+  title: string
+  status: ManuscriptStatus
+  targetJournal: string
+  snippet: string
+  highlight: { start: number; end: number } | null
+  updatedAt: number
+}

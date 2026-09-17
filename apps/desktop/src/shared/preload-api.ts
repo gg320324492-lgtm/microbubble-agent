@@ -17,6 +17,13 @@ import type {
   ExperimentStatus,
   ExperimentUpdateInput,
   LocalUser,
+  ManuscriptCreateInput,
+  ManuscriptFile,
+  ManuscriptFull,
+  ManuscriptSearchHit,
+  ManuscriptStatus,
+  ManuscriptUpdateInput,
+  ManuscriptWordStats,
   MeetingCreateInput,
   MeetingDetail,
   MeetingFile,
@@ -94,6 +101,18 @@ export interface PreloadApi {
     removeFile(meetingId: number, fileId: number): Promise<boolean>
     openFile(meetingId: number, fileId: number): Promise<{ path: string } | null>
     search(query: string): Promise<MeetingSearchHit[]>
+  }
+  manuscripts: {
+    list(status?: ManuscriptStatus): Promise<ManuscriptFull[]>
+    get(id: number): Promise<ManuscriptFull | null>
+    create(input: ManuscriptCreateInput): Promise<{ id: number }>
+    update(id: number, patch: ManuscriptUpdateInput): Promise<boolean>
+    delete(id: number): Promise<boolean>
+    addFile(manuscriptId: number, file: { name: string; data: Uint8Array }): Promise<ManuscriptFile | null>
+    removeFile(manuscriptId: number, fileId: number): Promise<boolean>
+    openFile(manuscriptId: number, fileId: number): Promise<{ path: string } | null>
+    search(query: string): Promise<ManuscriptSearchHit[]>
+    stats(content: string): Promise<ManuscriptWordStats>
   }
   experiments: {
     list(status?: ExperimentStatus): Promise<ExperimentFull[]>

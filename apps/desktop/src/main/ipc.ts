@@ -18,6 +18,7 @@ import type {
   KnowledgeSearchHit,
   ModelProvider,
   ExperimentStatus,
+  ManuscriptStatus,
   ModelProtocol,
   WorkspaceAuditEntry
 } from '@shared/types'
@@ -31,6 +32,7 @@ import { AuditService } from './services/workspace/audit.service'
 import { KnowledgeService } from './services/knowledge/knowledge.service'
 import { MeetingService } from './services/meeting/meeting.service'
 import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/experiment.service'
+import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './services/manuscript/manuscript.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
 import { listDirTool } from './agent/tools/list-dir'
@@ -133,6 +135,16 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       openPath: (abs) => shell.openPath(abs)
     }
   )
+  // 本地稿件库（M3-2）— 同注入装配
+  const manuscripts = new ManuscriptService(
+    db,
+    join(dbPath, '..', 'files'),
+    {
+      trashItem: (abs) => shell.trashItem(abs),
+      openPath: (abs) => shell.openPath(abs)
+    }
+  )
+
   // Agent 工具循环（C-2/C-3）— 只读工具 auto；写工具 confirm 拦截在循环层；
   // delete_file 的回收站能力在此注入（工具与测试不 import Electron ABI）
   const registry = new ToolRegistry(workspace, audit)
@@ -680,6 +692,131 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.EXPERIMENTS_SEARCH, (_e, p): IpcResult<unknown[]> => tryRun(() => {
     const user = auth.requireUser()
     return experiments.search(user.id, String(p?.query ?? ''))
+  }))
+
+  // ---------- 本地稿件库（M3-2） ----------
+
+  ipcMain.handle(IPC.MANUSCRIPTS_LIST, (_e, p): IpcResult<unknown[]> => tryRun(() => {
+    const user = auth.requireUser()
+    const status = typeof p?.status === 'string' && (MANUSCRIPT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ManuscriptStatus) : undefined
+    return manuscripts.list(user.id, status).map((r) => ({
+      id: r.id,
+      title: r.title,
+      status: r.status as ManuscriptStatus,
+      targetJournal: r.target_journal,
+      tags: (() => {
+        try {
+          const v = JSON.parse(r.tags)
+          return Array.isArray(v) ? v.map(String) : []
+        } catch {
+          return []
+        }
+      })(),
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      content: r.content,
+      files: [] as unknown[],
+      wordStats: manuscriptStats(r.content)
+    }))
+  }))
+
+  ipcMain.handle(IPC.MANUSCRIPTS_GET, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const detail = manuscripts.get(user.id, Number(p?.id))
+    if (!detail) return null
+    const m = detail.manuscript
+    let tags: string[] = []
+    try {
+      const v = JSON.parse(m.tags)
+      tags = Array.isArray(v) ? v.map(String) : []
+    } catch {
+      tags = []
+    }
+    return {
+      id: m.id,
+      title: m.title,
+      status: m.status as ManuscriptStatus,
+      targetJournal: m.target_journal,
+      tags,
+      content: m.content,
+      createdAt: m.created_at,
+      updatedAt: m.updated_at,
+      files: detail.files.map((f) => ({
+        id: f.id,
+        manuscriptId: f.manuscript_id,
+        fileName: f.file_name,
+        fileSize: f.file_size,
+        createdAt: f.created_at
+      })),
+      wordStats: manuscriptStats(m.content)
+    }
+  }))
+
+  ipcMain.handle(IPC.MANUSCRIPTS_CREATE, (_e, p): IpcResult<{ id: number }> => tryRun(() => {
+    const user = auth.requireUser()
+    const id = manuscripts.create(user.id, {
+      title: String(p?.title ?? ''),
+      ...(p?.status !== undefined ? { status: p.status as ManuscriptStatus } : {}),
+      ...(p?.targetJournal !== undefined ? { targetJournal: String(p.targetJournal) } : {}),
+      ...(Array.isArray(p?.tags) ? { tags: p.tags.map(String) } : {}),
+      ...(p?.content !== undefined ? { content: String(p.content) } : {})
+    })
+    return { id }
+  }))
+
+  ipcMain.handle(IPC.MANUSCRIPTS_UPDATE, (_e, p): IpcResult<boolean> => tryRun(() => {
+    const user = auth.requireUser()
+    return manuscripts.update(user.id, Number(p?.id), {
+      ...(p?.title !== undefined ? { title: String(p.title) } : {}),
+      ...(p?.status !== undefined ? { status: p.status as ManuscriptStatus } : {}),
+      ...(p?.targetJournal !== undefined ? { targetJournal: String(p.targetJournal) } : {}),
+      ...(Array.isArray(p?.tags) ? { tags: p.tags.map(String) } : {}),
+      ...(p?.content !== undefined ? { content: String(p.content) } : {})
+    })
+  }))
+
+  ipcMain.handle(IPC.MANUSCRIPTS_DELETE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      const user = auth.requireUser()
+      return ok(await manuscripts.delete(user.id, Number(p?.id)))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.MANUSCRIPTS_FILE_ADD, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const f = manuscripts.addFile(user.id, Number(p?.manuscriptId), {
+      name: String(p?.name ?? ''),
+      data: new Uint8Array(p?.data ?? [])
+    })
+    return f ? { id: f.id, manuscriptId: f.manuscript_id, fileName: f.file_name, fileSize: f.file_size, createdAt: f.created_at } : null
+  }))
+
+  ipcMain.handle(IPC.MANUSCRIPTS_FILE_REMOVE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      const user = auth.requireUser()
+      return ok(await manuscripts.removeFile(user.id, Number(p?.manuscriptId), Number(p?.fileId)))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.MANUSCRIPTS_FILE_OPEN, (_e, p): IpcResult<{ path: string } | null> => tryRun(() => {
+    const user = auth.requireUser()
+    const path = manuscripts.openFile(user.id, Number(p?.manuscriptId), Number(p?.fileId))
+    return path ? { path } : null
+  }))
+
+  ipcMain.handle(IPC.MANUSCRIPTS_SEARCH, (_e, p): IpcResult<unknown[]> => tryRun(() => {
+    const user = auth.requireUser()
+    return manuscripts.search(user.id, String(p?.query ?? ''))
+  }))
+
+  ipcMain.handle(IPC.MANUSCRIPTS_STATS, (_e, p): IpcResult<unknown> => tryRun(() => {
+    return manuscriptStats(String(p?.content ?? ''))
   }))
 
   // ---------- 工作区（Agent 文件操作地基） ----------
