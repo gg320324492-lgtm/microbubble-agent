@@ -11,6 +11,14 @@ import type {
   KnowledgeSearchHit,
   KnowledgeUpdateInput,
   LocalUser,
+  MeetingCreateInput,
+  MeetingDetail,
+  MeetingFile,
+  MeetingListItem,
+  MeetingSearchHit,
+  MeetingTranscript,
+  MeetingTranscriptImportInput,
+  MeetingUpdateInput,
   ModelProvider,
   ModelProviderInput,
   WorkspaceAuditEntry
@@ -67,6 +75,19 @@ export interface PreloadApi {
     update(id: number, patch: KnowledgeUpdateInput): Promise<KnowledgeDocFull | null>
     delete(id: number): Promise<boolean>
     search(query: string): Promise<KnowledgeSearchHit[]>
+  }
+  meetings: {
+    list(): Promise<MeetingListItem[]>
+    get(id: number): Promise<MeetingDetail | null>
+    create(input: MeetingCreateInput): Promise<{ id: number }>
+    update(id: number, patch: MeetingUpdateInput): Promise<boolean>
+    delete(id: number): Promise<boolean>
+    importTranscript(p: MeetingTranscriptImportInput): Promise<MeetingTranscript | null>
+    updateTranscript(meetingId: number, transcriptId: number, content: string): Promise<MeetingTranscript | null>
+    addFile(meetingId: number, file: { name: string; data: Uint8Array }): Promise<MeetingFile | null>
+    removeFile(meetingId: number, fileId: number): Promise<boolean>
+    openFile(meetingId: number, fileId: number): Promise<{ path: string } | null>
+    search(query: string): Promise<MeetingSearchHit[]>
   }
   window: {
     minimize(): Promise<void>

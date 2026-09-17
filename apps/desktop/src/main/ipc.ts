@@ -28,6 +28,7 @@ import { SettingsService } from './services/settings.service'
 import { WorkspaceService } from './services/workspace/workspace.service'
 import { AuditService } from './services/workspace/audit.service'
 import { KnowledgeService } from './services/knowledge/knowledge.service'
+import { MeetingService } from './services/meeting/meeting.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
 import { listDirTool } from './agent/tools/list-dir'
@@ -111,6 +112,15 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     db,
     join(dbPath, '..', 'files'),
     { trashItem: (abs) => shell.trashItem(abs) }
+  )
+  // 本地会议档案（M2-2）— 附件删除走回收站、打开走 openPath，均注入装配
+  const meetings = new MeetingService(
+    db,
+    join(dbPath, '..', 'files'),
+    {
+      trashItem: (abs) => shell.trashItem(abs),
+      openPath: (abs) => shell.openPath(abs)
+    }
   )
   // Agent 工具循环（C-2/C-3）— 只读工具 auto；写工具 confirm 拦截在循环层；
   // delete_file 的回收站能力在此注入（工具与测试不 import Electron ABI）
@@ -422,6 +432,146 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.KNOWLEDGE_SEARCH, (_e, p): IpcResult<KnowledgeSearchHit[]> => tryRun(() => {
     const user = auth.requireUser()
     return knowledge.search(user.id, String(p?.query ?? ''))
+  }))
+
+  // ---------- 本地会议档案（M2-2） ----------
+
+  const meetingToDto = (m: {
+    id: number
+    title: string
+    meeting_date: number | null
+    location: string
+    attendees: string
+    minutes: string
+    created_at: number
+    updated_at: number
+  }) => {
+    let attendees: string[] = []
+    try {
+      const v = JSON.parse(m.attendees)
+      attendees = Array.isArray(v) ? v.map(String) : []
+    } catch {
+      attendees = []
+    }
+    return {
+      id: m.id,
+      title: m.title,
+      meetingDate: m.meeting_date,
+      location: m.location,
+      attendees,
+      minutes: m.minutes,
+      createdAt: m.created_at,
+      updatedAt: m.updated_at
+    }
+  }
+  const toTranscriptDto = (t: { id: number; meeting_id: number; content: string; source: string; created_at: number; updated_at: number }) => ({
+    id: t.id,
+    meetingId: t.meeting_id,
+    content: t.content,
+    source: t.source as 'paste' | 'txt' | 'srt',
+    createdAt: t.created_at,
+    updatedAt: t.updated_at
+  })
+  const toFileDto = (f: { id: number; meeting_id: number; file_name: string; file_size: number; created_at: number }) => ({
+    id: f.id,
+    meetingId: f.meeting_id,
+    fileName: f.file_name,
+    fileSize: f.file_size,
+    createdAt: f.created_at
+  })
+
+  ipcMain.handle(IPC.MEETINGS_LIST, (): IpcResult<unknown[]> => tryRun(() => {
+    const user = auth.requireUser()
+    return meetings.list(user.id).map(meetingToDto)
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_GET, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const detail = meetings.get(user.id, Number(p?.id))
+    if (!detail) return null
+    return {
+      meeting: meetingToDto(detail.meeting),
+      transcripts: detail.transcripts.map(toTranscriptDto),
+      files: detail.files.map(toFileDto)
+    }
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_CREATE, (_e, p): IpcResult<{ id: number }> => tryRun(() => {
+    const user = auth.requireUser()
+    const id = meetings.create(user.id, {
+      title: String(p?.title ?? ''),
+      meetingDate: p?.meetingDate === null || p?.meetingDate === undefined ? null : Number(p.meetingDate),
+      location: p?.location !== undefined ? String(p.location) : undefined,
+      attendees: Array.isArray(p?.attendees) ? p.attendees.map(String) : undefined,
+      minutes: p?.minutes !== undefined ? String(p.minutes) : undefined
+    })
+    return { id }
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_UPDATE, (_e, p): IpcResult<boolean> => tryRun(() => {
+    const user = auth.requireUser()
+    return meetings.update(user.id, Number(p?.id), {
+      ...(p?.title !== undefined ? { title: String(p.title) } : {}),
+      ...(p?.meetingDate !== undefined ? { meetingDate: p.meetingDate === null ? null : Number(p.meetingDate) } : {}),
+      ...(p?.location !== undefined ? { location: String(p.location) } : {}),
+      ...(Array.isArray(p?.attendees) ? { attendees: p.attendees.map(String) } : {}),
+      ...(p?.minutes !== undefined ? { minutes: String(p.minutes) } : {})
+    })
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_DELETE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      const user = auth.requireUser()
+      return ok(await meetings.delete(user.id, Number(p?.id)))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.MEETINGS_TRANSCRIPT_IMPORT, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const t = meetings.importTranscript(user.id, Number(p?.meetingId), {
+      content: String(p?.content ?? ''),
+      source: p?.source === 'txt' || p?.source === 'srt' ? p.source : 'paste'
+    })
+    return t ? toTranscriptDto(t) : null
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_TRANSCRIPT_UPDATE, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const t = meetings.updateTranscript(user.id, Number(p?.meetingId), Number(p?.transcriptId), String(p?.content ?? ''))
+    return t ? toTranscriptDto(t) : null
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_FILE_ADD, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const f = meetings.addFile(user.id, Number(p?.meetingId), {
+      name: String(p?.name ?? ''),
+      data: new Uint8Array(p?.data ?? [])
+    })
+    return f
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_FILE_REMOVE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      const user = auth.requireUser()
+      return ok(await meetings.removeFile(user.id, Number(p?.meetingId), Number(p?.fileId)))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.MEETINGS_FILE_OPEN, (_e, p): IpcResult<{ path: string } | null> => tryRun(() => {
+    const user = auth.requireUser()
+    const path = meetings.openFile(user.id, Number(p?.meetingId), Number(p?.fileId))
+    return path ? { path } : null
+  }))
+
+  ipcMain.handle(IPC.MEETINGS_SEARCH, (_e, p): IpcResult<unknown[]> => tryRun(() => {
+    const user = auth.requireUser()
+    return meetings.search(user.id, String(p?.query ?? ''))
   }))
 
   // ---------- 工作区（Agent 文件操作地基） ----------

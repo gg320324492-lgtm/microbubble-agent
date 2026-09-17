@@ -11,8 +11,16 @@ import type {
   KnowledgeDocFull,
   KnowledgeDocMeta,
   KnowledgeImportResult,
-  KnowledgeUpdateInput,
   KnowledgeSearchHit,
+  KnowledgeUpdateInput,
+  MeetingCreateInput,
+  MeetingDetail,
+  MeetingFile,
+  MeetingListItem,
+  MeetingSearchHit,
+  MeetingTranscript,
+  MeetingTranscriptImportInput,
+  MeetingUpdateInput,
   WorkspaceAuditEntry
 } from '@shared/types'
 
@@ -77,6 +85,23 @@ const api = {
     update: (id: number, patch: KnowledgeUpdateInput): Promise<KnowledgeDocFull | null> => invoke(IPC.KNOWLEDGE_UPDATE, { id, ...patch }),
     delete: (id: number): Promise<boolean> => invoke(IPC.KNOWLEDGE_DELETE, { id }),
     search: (query: string): Promise<KnowledgeSearchHit[]> => invoke(IPC.KNOWLEDGE_SEARCH, { query })
+  },
+  meetings: {
+    list: (): Promise<MeetingListItem[]> => invoke(IPC.MEETINGS_LIST),
+    get: (id: number): Promise<MeetingDetail | null> => invoke(IPC.MEETINGS_GET, { id }),
+    create: (input: MeetingCreateInput): Promise<{ id: number }> => invoke(IPC.MEETINGS_CREATE, input),
+    update: (id: number, patch: MeetingUpdateInput): Promise<boolean> => invoke(IPC.MEETINGS_UPDATE, { id, ...patch }),
+    delete: (id: number): Promise<boolean> => invoke(IPC.MEETINGS_DELETE, { id }),
+    importTranscript: (p: MeetingTranscriptImportInput): Promise<MeetingTranscript | null> => invoke(IPC.MEETINGS_TRANSCRIPT_IMPORT, p),
+    updateTranscript: (meetingId: number, transcriptId: number, content: string): Promise<MeetingTranscript | null> =>
+      invoke(IPC.MEETINGS_TRANSCRIPT_UPDATE, { meetingId, transcriptId, content }),
+    addFile: (meetingId: number, file: { name: string; data: Uint8Array }): Promise<MeetingFile | null> =>
+      invoke(IPC.MEETINGS_FILE_ADD, { meetingId, name: file.name, data: file.data }),
+    removeFile: (meetingId: number, fileId: number): Promise<boolean> =>
+      invoke(IPC.MEETINGS_FILE_REMOVE, { meetingId, fileId }),
+    openFile: (meetingId: number, fileId: number): Promise<{ path: string } | null> =>
+      invoke(IPC.MEETINGS_FILE_OPEN, { meetingId, fileId }),
+    search: (query: string): Promise<MeetingSearchHit[]> => invoke(IPC.MEETINGS_SEARCH, { query })
   },
   window: {
     minimize: (): Promise<void> => invoke(IPC.WINDOW_MINIMIZE),
