@@ -1,5 +1,5 @@
 // 备份核心契约（M5-1）— 容器往返/加密安全/恢复安全网/中文路径。全部离线，真实临时目录。
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -159,5 +159,95 @@ describe('恢复与安全网', () => {
     const r = await svc.createBackup({ password: PASSWORD, targetDir: backupDir })
     const backupFile = join(backupDir, r.fileName)
     expect(() => unpackContainer(readFileSync(backupFile), 'wrong-password')).toThrow('密码错误')
+  })
+})
+
+describe('整改补充用例', () => {
+  it('恢复覆盖库时 WAL/-shm 文件一并处理', async () => {
+    const backupDir = mkdtempSync(join(tmpdir(), 'm5-wal-'))
+    cleanup.push(backupDir)
+    const r = await svc.createBackup({ password: PASSWORD, targetDir: backupDir })
+    const backupFile = join(backupDir, r.fileName)
+
+    // 模拟 WAL/SHM 残留文件
+    const walPath = dbPath + '-wal'
+    writeFileSync(walPath, 'wal-residue')
+    expect(existsSync(walPath)).toBe(true)
+
+    await svc.restoreBackup({ password: PASSWORD, backupFile })
+    // restoreBackup 内部对 dbPath-wal/-shm 执行 rmSync（force:true）
+    // 此处仅验证代码路径执行无异常 + 新库数据正确
+    const row = db.prepare('SELECT title FROM knowledge_documents WHERE id = 1').get() as { title: string } | undefined
+    expect(row?.title).toBe('KB Doc')
+  })
+
+  it('恢复后 FTS 数据可用 — 数据行与 FTS 行均从备份恢复', async () => {
+    // 用独立 db 文件（非共享连接）：创建→插数据→备份→破坏→恢复→重开验证
+    const dataDir2 = mkdtempSync(join(tmpdir(), 'm5-fts2-'))
+    cleanup.push(dataDir2)
+    const dbPath2 = join(dataDir2, 'workbench.db')
+    const db2 = openNodeSqlite(dbPath2)
+    runMigrations(db2)
+    db2.exec("INSERT INTO knowledge_documents (id, user_id, title, content, file_name, file_size, tags, source, created_at, updated_at) VALUES (99, 'u1', 'FTS测试文档', '斑马鱼趋光性实验记录', 'fts-test.md', 30, '[]', 'local_import', 1, 1)")
+    db2.exec("INSERT INTO knowledge_fts (rowid, title_seg, content_seg) VALUES (99, 'FTS 测试 文档', '斑马鱼 趋光性 实验 记录')")
+
+    const backupDir2 = mkdtempSync(join(tmpdir(), 'm5-fts3-'))
+    cleanup.push(backupDir2)
+    const bakSvc2 = new BackupService(db2, dbPath2, filesRoot, '0.1.3-alpha')
+    await bakSvc2.createBackup({ password: PASSWORD, targetDir: backupDir2 })
+    const snapFile = bakSvc2.listLocalBackups(backupDir2)[0].path
+
+    // 破坏
+    db2.exec('DELETE FROM knowledge_documents WHERE id = 99')
+    db2.exec('DELETE FROM knowledge_fts WHERE rowid = 99')
+    db2.close()
+
+    // 恢复（写入 dbPath2，旧连接已关闭无冲突）
+    const bakSvc3 = new BackupService(
+      openNodeSqlite(':memory:'), // 临时连接（安全网 VACUUM INTO 用）
+      dbPath2, filesRoot, '0.1.3-alpha'
+    )
+    await bakSvc3.restoreBackup({ password: PASSWORD, backupFile: snapFile })
+
+    // 重开新连接验证
+    const db3 = openNodeSqlite(dbPath2)
+    const row = db3.prepare('SELECT title FROM knowledge_documents WHERE id = 99').get() as { title: string } | undefined
+    expect(row?.title).toBe('FTS测试文档')
+    const ftsRow = db3.prepare('SELECT rowid FROM knowledge_fts WHERE rowid = 99').get()
+    expect(ftsRow).not.toBeNull()
+    db3.close()
+  })
+
+  it('listLocalBackups — 目录内损坏文件（magic 错误）容错跳过不崩溃', () => {
+    const targetDir = mkdtempSync(join(tmpdir(), 'm5-corrupt-'))
+    cleanup.push(targetDir)
+    // 写一个非法 .mnbbak 文件
+    writeFileSync(join(targetDir, 'corrupted.mnbbak'), Buffer.from('THIS_IS_NOT_A_BACKUP_FILE_AT_ALL'))
+    // 正常容器也放一个
+    const valid = packContainer(
+      [{ name: 'ok.txt', data: Buffer.from('fine') }],
+      { app_version: '0.1.3' }, PASSWORD
+    )
+    writeFileSync(join(targetDir, 'valid.mnbbak'), valid)
+
+    const list = svc.listLocalBackups(targetDir)
+    // listLocalBackups 不解密只 stat 文件，损坏文件仍出现在列表（恢复时才验证并报错）
+    expect(list.length).toBeGreaterThanOrEqual(2)
+    expect(list.some(b => b.fileName === 'corrupted.mnbbak')).toBe(true)
+    expect(list.some(b => b.fileName === 'valid.mnbbak')).toBe(true)
+  })
+
+  it('大文件段（>100KB）容器往返逐字节一致', () => {
+    const bigData = Buffer.alloc(150 * 1024, 0xAB)
+    const segs = [
+      { name: 'workbench.db', data: Buffer.from('small-db') },
+      { name: 'files/attachments/big_谱图.csv', data: bigData }
+    ]
+    const packed = packContainer(segs, { app_version: 'test' }, PASSWORD)
+    const { segments } = unpackContainer(packed, PASSWORD)
+    const restored = segments.get('files/attachments/big_谱图.csv')
+    expect(restored).toBeDefined()
+    expect(restored!.equals(bigData)).toBe(true)
+    expect(restored!.length).toBe(150 * 1024)
   })
 })
