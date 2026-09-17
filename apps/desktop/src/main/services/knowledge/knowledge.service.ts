@@ -5,7 +5,8 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import type { SqlDatabase } from '../../db/adapters'
-import { matchPhraseFor, segmentForIndex } from './cjk-bigram'
+import { matchPhraseFor } from './cjk-bigram'
+import { ftsDeleteRow, ftsSyncRow } from '../../db/fts'
 
 export interface KnowledgeDocRow {
   id: number
@@ -160,7 +161,7 @@ export class KnowledgeService {
         }
       }
     }
-    this.db.prepare('DELETE FROM knowledge_fts WHERE rowid = ?').run(id)
+    ftsDeleteRow(this.db, 'knowledge_fts', id)
     this.db.prepare('DELETE FROM knowledge_documents WHERE id = ? AND user_id = ?').run(id, userId)
     return true
   }
@@ -191,8 +192,7 @@ export class KnowledgeService {
   }
 
   private syncFts(id: number, title: string, content: string): void {
-    this.db.prepare('DELETE FROM knowledge_fts WHERE rowid = ?').run(id)
-    this.db.prepare('INSERT INTO knowledge_fts (rowid, title_seg, content_seg) VALUES (?, ?, ?)').run(id, segmentForIndex(title), segmentForIndex(content))
+    ftsSyncRow(this.db, 'knowledge_fts', id, { title_seg: title, content_seg: content })
   }
 
   private saveOriginalCopy(id: number, name: string, content: string): void {

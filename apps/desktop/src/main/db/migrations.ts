@@ -109,6 +109,42 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_knowledge_user ON knowledge_documents(user_id, updated_at);
       CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(title_seg, content_seg, tokenize='unicode61');
     `
+  },
+  {
+    id: 7,
+    name: 'meeting-archives',
+    sql: `
+      CREATE TABLE IF NOT EXISTS meetings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        meeting_date INTEGER,
+        location TEXT NOT NULL DEFAULT '',
+        attendees TEXT NOT NULL DEFAULT '[]',
+        minutes TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_meetings_user ON meetings(user_id, updated_at);
+      CREATE TABLE IF NOT EXISTS meeting_transcripts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'paste',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_meeting_transcripts_meeting ON meeting_transcripts(meeting_id);
+      CREATE TABLE IF NOT EXISTS meeting_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meeting_id INTEGER NOT NULL,
+        file_name TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_meeting_files_meeting ON meeting_files(meeting_id);
+      CREATE VIRTUAL TABLE IF NOT EXISTS meeting_fts USING fts5(title_seg, minutes_seg, transcript_seg, tokenize='unicode61');
+    `
   }
 ]
 

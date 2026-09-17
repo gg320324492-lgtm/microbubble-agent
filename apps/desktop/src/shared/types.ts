@@ -226,3 +226,108 @@ export interface KnowledgeSearchHit {
   highlight: { start: number; end: number } | null
   updatedAt: number
 }
+
+// ============ 本地会议档案（M2-2）============
+
+/** 会议条目元信息（列表用） */
+export interface MeetingMeta {
+  id: number
+  title: string
+  meetingDate: number | null
+  location: string
+  attendees: string[]
+  minutes: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** 会议转录条目 */
+export interface MeetingTranscript {
+  id: number
+  meetingId: number
+  content: string
+  source: 'paste' | 'txt' | 'srt'
+  createdAt: number
+  updatedAt: number
+}
+
+/** 会议附件条目（文件本体在 userData/data/files/meetings/<meetingId>/） */
+export interface MeetingFile {
+  id: number
+  meetingId: number
+  fileName: string
+  fileSize: number
+  createdAt: number
+}
+
+/** 会议详情（含转录与附件） */
+export interface MeetingFull extends MeetingMeta {
+  transcripts: MeetingTranscript[]
+  files: MeetingFile[]
+}
+
+export interface MeetingCreateInput {
+  title: string
+  meetingDate?: number | null
+  location?: string
+  attendees?: string[]
+  minutes?: string
+}
+
+export interface MeetingUpdateInput {
+  title?: string
+  meetingDate?: number | null
+  location?: string
+  attendees?: string[]
+  minutes?: string
+}
+
+export interface MeetingTranscriptInput {
+  content: string
+  source: 'paste' | 'txt' | 'srt'
+}
+
+/** 会议检索命中：hitSource 标明命中所处位置（标题/纪要/转录） */
+export interface MeetingSearchHit {
+  id: number
+  title: string
+  meetingDate: number | null
+  location: string
+  hitSource: 'title' | 'minutes' | 'transcript'
+  snippet: string
+  highlight: { start: number; end: number } | null
+  updatedAt: number
+}
+
+/** 会议详情的跨进程投影（转录/附件行随详情一起返回） */
+export interface MeetingDetail {
+  meeting: {
+    id: number
+    title: string
+    meetingDate: number | null
+    location: string
+    attendees: string[]
+    minutes: string
+    createdAt: number
+    updatedAt: number
+  }
+  transcripts: MeetingTranscript[]
+  files: MeetingFile[]
+}
+
+export interface MeetingListItem {
+  id: number
+  title: string
+  meetingDate: number | null
+  location: string
+  attendees: string[]
+  minutes: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface MeetingTranscriptImportInput {
+  meetingId: number
+  content: string
+  source: 'paste' | 'txt' | 'srt'
+}

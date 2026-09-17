@@ -48,8 +48,8 @@ export const routes = [
       {
         path: 'meetings',
         name: 'meetings',
-        component: () => import('../views/ComingSoonView.vue'),
-        meta: { title: '会议', milestone: 'M2', icon: 'calendar' }
+        component: () => import('../views/MeetingsView.vue'),
+        meta: { title: '会议', icon: 'calendar' }
       },
       {
         path: 'settings',
