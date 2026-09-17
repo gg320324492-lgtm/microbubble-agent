@@ -1,7 +1,7 @@
 // 主进程入口 — 无边框窗口 + 三铁律安全基线（骨架设计 §5）
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
-import { registerIpc } from './ipc'
+import { registerIpc, installDesktopPrimitives } from './ipc'
 import { openDatabase } from './db'
 import { IPC } from '@shared/ipc-channels'
 import { APP_NAME, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from '@shared/constants'
@@ -62,11 +62,38 @@ function createWindow(): void {
   }
 }
 
+// 单实例锁（M4）— 二次启动不产生新实例，聚焦已有窗口
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
+
 app.whenReady().then(() => {
   const dbPath = join(app.getPath('userData'), 'data', 'workbench.db')
   const db = openDatabase(dbPath)
-  registerIpc(db, dbPath, () => mainWindow)
+  installDesktopPrimitives(() => mainWindow)
+  const { desktop } = registerIpc(db, dbPath, () => mainWindow)
   createWindow()
+
+  // 托盘常驻 + 关窗行为分流（M4）
+  desktop.setupTray(join(app.getAppPath(), 'resources', 'icon.png'))
+  let forceQuit = false
+  app.on('before-quit', () => {
+    forceQuit = true
+  })
+  mainWindow!.on('close', (e) => {
+    if (forceQuit) return
+    if (desktop.handleMainWindowClose() === 'quit') return
+    e.preventDefault()
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -45,7 +45,8 @@ async function invoke<T>(channel: string, payload?: unknown): Promise<T> {
 
 const api = {
   app: {
-    info: (): Promise<AppInfo> => invoke(IPC.APP_INFO)
+    info: (): Promise<AppInfo> => invoke(IPC.APP_INFO),
+    quit: (): Promise<void> => invoke(IPC.APP_QUIT)
   },
   auth: {
     status: (): Promise<{ userCount: number }> => invoke(IPC.AUTH_STATUS),
@@ -115,6 +116,10 @@ const api = {
     openFile: (meetingId: number, fileId: number): Promise<{ path: string } | null> =>
       invoke(IPC.MEETINGS_FILE_OPEN, { meetingId, fileId }),
     search: (query: string): Promise<MeetingSearchHit[]> => invoke(IPC.MEETINGS_SEARCH, { query })
+  },
+  desktop: {
+    applyShortcut: (accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }> =>
+      invoke(IPC.DESKTOP_APPLY_SHORTCUT, { accelerator })
   },
   experiments: {
     list: (status?: ExperimentStatus): Promise<ExperimentFull[]> => invoke(IPC.EXPERIMENTS_LIST, { status }),
