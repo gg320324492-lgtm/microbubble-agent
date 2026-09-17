@@ -115,6 +115,11 @@ export interface PreloadApi {
     search(query: string): Promise<ManuscriptSearchHit[]>
     stats(content: string): Promise<ManuscriptWordStats>
   }
+  backup: {
+    create(password: string, targetDir: string): Promise<{ fileName: string; size: number }>
+    restore(password: string, backupFile: string): Promise<{ needRestart: boolean }>
+    list(targetDir: string): Promise<{ fileName: string; size: number; appVersion: string; createdAt: number; path: string }[]>
+  }
   desktop: {
     applyShortcut(accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }>
   }

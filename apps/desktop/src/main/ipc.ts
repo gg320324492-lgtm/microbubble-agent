@@ -33,6 +33,7 @@ import { KnowledgeService } from './services/knowledge/knowledge.service'
 import { MeetingService } from './services/meeting/meeting.service'
 import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/experiment.service'
 import { DesktopIntegrationService } from './services/desktop/desktop-integration.service'
+import { BackupService } from './services/backup/backup.service'
 import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './services/manuscript/manuscript.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
@@ -184,6 +185,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   )
 
   // 桌面集成（M4）— 托盘/通知/全局快捷键，Electron 能力注入装配
+  // 备份服务（M5-1）— VACUUM INTO + 附件目录打包
+  const backup = new BackupService(db, dbPath, join(dbPath, '..', 'files'), APP_VERSION)
+
   const desktop = new DesktopIntegrationService({
     isWindowVisible: () => getWindow()?.isVisible() ?? false,
     focusWindow: () => {
@@ -498,6 +502,32 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       return { ok: false, error: { code: e.code ?? 'ERROR', message: e.message } }
     }
   })
+
+  // ---------- 备份与恢复（M5-1） ----------
+
+  ipcMain.handle(IPC.BACKUP_CREATE, async (_e, p): Promise<IpcResult<{ fileName: string; size: number }>> => {
+    try {
+      auth.requireUser() // 登录守卫
+      return ok(await backup.createBackup({ password: String(p?.password ?? ''), targetDir: String(p?.targetDir ?? '') }))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.BACKUP_RESTORE, async (_e, p): Promise<IpcResult<{ needRestart: boolean }>> => {
+    try {
+      auth.requireUser() // 登录守卫
+      return ok(await backup.restoreBackup({ password: String(p?.password ?? ''), backupFile: String(p?.backupFile ?? '') }))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.BACKUP_LIST, (_e, p): IpcResult<unknown[]> => tryRun(() => {
+    return backup.listLocalBackups(String(p?.targetDir ?? ''))
+  }))
 
   // ---------- 桌面集成（M4） ----------
 
