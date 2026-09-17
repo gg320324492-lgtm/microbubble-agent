@@ -1,6 +1,6 @@
 // IPC 注册 — 白名单 channel 与 shared/ipc-channels.ts 一一对应，测试有一致性校验。
 // 会话 token 持久化走 safeStorage（Win DPAPI 绑定本机），解密失败即清除重来，不阻塞（E-3 铁律）。
-import { app, dialog, ipcMain, BrowserWindow, safeStorage, shell } from 'electron'
+import { app, dialog, ipcMain, BrowserWindow, safeStorage, shell, Tray, Menu, globalShortcut, Notification } from 'electron'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-channels'
@@ -32,6 +32,7 @@ import { AuditService } from './services/workspace/audit.service'
 import { KnowledgeService } from './services/knowledge/knowledge.service'
 import { MeetingService } from './services/meeting/meeting.service'
 import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/experiment.service'
+import { DesktopIntegrationService } from './services/desktop/desktop-integration.service'
 import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './services/manuscript/manuscript.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
@@ -104,7 +105,44 @@ function makeCipher(): { encrypt(plaintext: string): string; decrypt(ciphertext:
   }
 }
 
-export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): void {
+// 桌面集成原语（M4）— main/index.ts 启动时安装真实 Electron 绑定；测试环境不触碰
+let trayRef: Tray | null = null
+let desktopTrayCreate: (iconPath: string) => void = () => undefined
+let desktopTraySetToolTip: (tip: string) => void = () => undefined
+let desktopTraySetContextMenu: (items: { label: string; action: () => void }[]) => void = () => undefined
+let desktopTrayOnLeftClick: (cb: () => void) => void = () => undefined
+let desktopTrayDestroy: () => void = () => undefined
+let desktopNotify: (title: string, body: string, onClick: () => void) => void = () => undefined
+let desktopRegisterShortcut: (acc: string, cb: () => void) => boolean = () => false
+let desktopUnregisterShortcut: (acc: string) => void = () => undefined
+
+/** main/index.ts 启动时安装 Electron 真实绑定（托盘/通知/globalShortcut） */
+export function installDesktopPrimitives(getWindow: () => BrowserWindow | null): void {
+  desktopTrayCreate = (iconPath) => {
+    trayRef = new Tray(iconPath)
+  }
+  desktopTraySetToolTip = (tip) => trayRef?.setToolTip(tip)
+  desktopTraySetContextMenu = (items) => {
+    trayRef?.setContextMenu(
+      Menu.buildFromTemplate(items.map((i) => ({ label: i.label, click: () => i.action() })))
+    )
+  }
+  desktopTrayOnLeftClick = (cb) => trayRef?.on('click', () => cb())
+  desktopTrayDestroy = () => {
+    trayRef?.destroy()
+    trayRef = null
+  }
+  desktopNotify = (title, body, onClick) => {
+    const n = new Notification({ title, body })
+    n.on('click', () => onClick())
+    n.show()
+  }
+  desktopRegisterShortcut = (acc, cb) => globalShortcut.register(acc, cb)
+  desktopUnregisterShortcut = (acc) => globalShortcut.unregister(acc)
+  void getWindow
+}
+
+export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): { desktop: DesktopIntegrationService } {
   const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')))
   const settings = new SettingsService(db)
   const chat = new ChatService(db)
@@ -144,6 +182,47 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       openPath: (abs) => shell.openPath(abs)
     }
   )
+
+  // 桌面集成（M4）— 托盘/通知/全局快捷键，Electron 能力注入装配
+  const desktop = new DesktopIntegrationService({
+    isWindowVisible: () => getWindow()?.isVisible() ?? false,
+    focusWindow: () => {
+      const w = getWindow()
+      if (w) {
+        if (w.isMinimized()) w.restore()
+        w.show()
+        w.focus()
+      }
+    },
+    hideWindow: () => getWindow()?.hide(),
+    trayCreate: (iconPath) => {
+      desktopTrayCreate(iconPath)
+    },
+    traySetToolTip: (tip) => desktopTraySetToolTip(tip),
+    traySetContextMenu: (items) => desktopTraySetContextMenu(items),
+    trayOnLeftClick: (cb) => desktopTrayOnLeftClick(cb),
+    trayDestroy: () => desktopTrayDestroy(),
+    notify: (title, body, onClick) => desktopNotify(title, body, onClick),
+    registerGlobalShortcut: (acc, cb) => desktopRegisterShortcut(acc, cb),
+    unregisterGlobalShortcut: (acc) => desktopUnregisterShortcut(acc),
+    getSetting: (key) => {
+      try {
+        return settings.get(key, auth.requireUser().id)
+      } catch {
+        return undefined
+      }
+    },
+    setSetting: (key, value) => {
+      try {
+        settings.set(key, value, auth.requireUser().id)
+      } catch {
+        /* 未登录时写失败 */
+      }
+    },
+    quit: () => {
+      app.quit()
+    }
+  })
 
   // Agent 工具循环（C-2/C-3）— 只读工具 auto；写工具 confirm 拦截在循环层；
   // delete_file 的回收站能力在此注入（工具与测试不 import Electron ABI）
@@ -285,6 +364,10 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
           win?.webContents.send(IPC.CHAT_STREAM_EVENT, evt)
         }
       )
+      if (hasProvider) {
+        const sessionTitle = chat.listSessions(user.id).find((x) => x.id === sessionId)?.title ?? 'AI 助手'
+        desktop.onAgentTurnComplete(sessionTitle, assistantMessage.content)
+      }
       const toDto = (r: { id: string; session_id: string; role: string; content: string; meta: string | null; created_at: number }): ChatMessage => ({
         id: r.id,
         sessionId: r.session_id,
@@ -414,6 +497,17 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       const e = err as Error & { code?: string }
       return { ok: false, error: { code: e.code ?? 'ERROR', message: e.message } }
     }
+  })
+
+  // ---------- 桌面集成（M4） ----------
+
+  ipcMain.handle(IPC.DESKTOP_APPLY_SHORTCUT, (_e, p): IpcResult<{ ok: boolean; accelerator: string; error?: string }> =>
+    tryRun(() => desktop.applyGlobalShortcut(String(p?.accelerator ?? '')))
+  )
+
+  ipcMain.handle(IPC.APP_QUIT, (): IpcResult<null> => {
+    app.quit()
+    return ok(null)
   })
 
   // ---------- 本地知识库（M2-1） ----------
@@ -876,5 +970,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     return ok(null)
   })
 
-  void app // 本模块暂未直接使用 app，显式置空引用保持 import 语义清晰
+  desktop.restoreGlobalShortcut()
+
+  return { desktop }
 }
+
+void app

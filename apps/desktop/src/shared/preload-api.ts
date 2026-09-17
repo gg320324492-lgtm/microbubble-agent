@@ -40,6 +40,7 @@ import type {
 export interface PreloadApi {
   app: {
     info(): Promise<AppInfo>
+    quit(): Promise<void>
   }
   auth: {
     status(): Promise<{ userCount: number }>
@@ -113,6 +114,9 @@ export interface PreloadApi {
     openFile(manuscriptId: number, fileId: number): Promise<{ path: string } | null>
     search(query: string): Promise<ManuscriptSearchHit[]>
     stats(content: string): Promise<ManuscriptWordStats>
+  }
+  desktop: {
+    applyShortcut(accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }>
   }
   experiments: {
     list(status?: ExperimentStatus): Promise<ExperimentFull[]>

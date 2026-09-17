@@ -59,6 +59,8 @@ export const IPC = {
   EXPERIMENTS_FILE_REMOVE: 'experiments:file-remove',
   EXPERIMENTS_FILE_OPEN: 'experiments:file-open',
   EXPERIMENTS_SEARCH: 'experiments:search',
+  DESKTOP_APPLY_SHORTCUT: 'desktop:apply-shortcut',
+  APP_QUIT: 'app:quit',
   MANUSCRIPTS_LIST: 'manuscripts:list',
   MANUSCRIPTS_GET: 'manuscripts:get',
   MANUSCRIPTS_CREATE: 'manuscripts:create',
