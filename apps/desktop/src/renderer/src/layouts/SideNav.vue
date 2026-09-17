@@ -19,7 +19,7 @@ const items: NavItem[] = [
   { to: '/app/assistant', label: 'AI 助手', icon: 'chat' },
   { to: '/app/eln', label: '实验 ELN', icon: 'flask', badge: 'M3' },
   { to: '/app/manuscripts', label: '稿件', icon: 'doc', badge: 'M3' },
-  { to: '/app/knowledge', label: '知识库', icon: 'book', badge: 'M2' },
+  { to: '/app/knowledge', label: '知识库', icon: 'book' },
   { to: '/app/meetings', label: '会议', icon: 'calendar', badge: 'M2' },
   { to: '/app/settings', label: '设置', icon: 'gear' }
 ]
