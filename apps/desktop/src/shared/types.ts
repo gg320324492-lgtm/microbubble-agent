@@ -331,3 +331,60 @@ export interface MeetingTranscriptImportInput {
   content: string
   source: 'paste' | 'txt' | 'srt'
 }
+
+// ============ 本地实验记录本（M3-1）============
+
+export type ExperimentStatus = 'draft' | 'ongoing' | 'completed' | 'archived'
+
+/** 实验条目元信息（列表用，不含记录正文） */
+export interface ExperimentMeta {
+  id: number
+  title: string
+  code: string
+  status: ExperimentStatus
+  tags: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ExperimentFile {
+  id: number
+  experimentId: number
+  fileName: string
+  fileSize: number
+  createdAt: number
+}
+
+/** 实验详情（含记录正文与附件） */
+export interface ExperimentFull extends ExperimentMeta {
+  content: string
+  files: ExperimentFile[]
+}
+
+export interface ExperimentCreateInput {
+  title: string
+  code?: string
+  status?: ExperimentStatus
+  tags?: string[]
+  content?: string
+}
+
+export interface ExperimentUpdateInput {
+  title?: string
+  code?: string
+  status?: ExperimentStatus
+  tags?: string[]
+  content?: string
+}
+
+/** 检索命中：snippet 来自记录正文原文 */
+export interface ExperimentSearchHit {
+  id: number
+  code: string
+  title: string
+  status: ExperimentStatus
+  tags: string[]
+  snippet: string
+  highlight: { start: number; end: number } | null
+  updatedAt: number
+}

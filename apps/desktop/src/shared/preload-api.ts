@@ -10,6 +10,12 @@ import type {
   KnowledgeImportResult,
   KnowledgeSearchHit,
   KnowledgeUpdateInput,
+  ExperimentCreateInput,
+  ExperimentFile,
+  ExperimentFull,
+  ExperimentSearchHit,
+  ExperimentStatus,
+  ExperimentUpdateInput,
   LocalUser,
   MeetingCreateInput,
   MeetingDetail,
@@ -88,6 +94,17 @@ export interface PreloadApi {
     removeFile(meetingId: number, fileId: number): Promise<boolean>
     openFile(meetingId: number, fileId: number): Promise<{ path: string } | null>
     search(query: string): Promise<MeetingSearchHit[]>
+  }
+  experiments: {
+    list(status?: ExperimentStatus): Promise<ExperimentFull[]>
+    get(id: number): Promise<ExperimentFull | null>
+    create(input: ExperimentCreateInput): Promise<{ id: number; code: string }>
+    update(id: number, patch: ExperimentUpdateInput): Promise<boolean>
+    delete(id: number): Promise<boolean>
+    addFile(experimentId: number, file: { name: string; data: Uint8Array }): Promise<ExperimentFile | null>
+    removeFile(experimentId: number, fileId: number): Promise<boolean>
+    openFile(experimentId: number, fileId: number): Promise<{ path: string } | null>
+    search(query: string): Promise<ExperimentSearchHit[]>
   }
   window: {
     minimize(): Promise<void>

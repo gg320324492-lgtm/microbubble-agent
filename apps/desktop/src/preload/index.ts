@@ -21,6 +21,12 @@ import type {
   MeetingTranscript,
   MeetingTranscriptImportInput,
   MeetingUpdateInput,
+  ExperimentCreateInput,
+  ExperimentFile,
+  ExperimentFull,
+  ExperimentSearchHit,
+  ExperimentStatus,
+  ExperimentUpdateInput,
   WorkspaceAuditEntry
 } from '@shared/types'
 
@@ -102,6 +108,20 @@ const api = {
     openFile: (meetingId: number, fileId: number): Promise<{ path: string } | null> =>
       invoke(IPC.MEETINGS_FILE_OPEN, { meetingId, fileId }),
     search: (query: string): Promise<MeetingSearchHit[]> => invoke(IPC.MEETINGS_SEARCH, { query })
+  },
+  experiments: {
+    list: (status?: ExperimentStatus): Promise<ExperimentFull[]> => invoke(IPC.EXPERIMENTS_LIST, { status }),
+    get: (id: number): Promise<ExperimentFull | null> => invoke(IPC.EXPERIMENTS_GET, { id }),
+    create: (input: ExperimentCreateInput): Promise<{ id: number; code: string }> => invoke(IPC.EXPERIMENTS_CREATE, input),
+    update: (id: number, patch: ExperimentUpdateInput): Promise<boolean> => invoke(IPC.EXPERIMENTS_UPDATE, { id, ...patch }),
+    delete: (id: number): Promise<boolean> => invoke(IPC.EXPERIMENTS_DELETE, { id }),
+    addFile: (experimentId: number, file: { name: string; data: Uint8Array }): Promise<ExperimentFile | null> =>
+      invoke(IPC.EXPERIMENTS_FILE_ADD, { experimentId, name: file.name, data: file.data }),
+    removeFile: (experimentId: number, fileId: number): Promise<boolean> =>
+      invoke(IPC.EXPERIMENTS_FILE_REMOVE, { experimentId, fileId }),
+    openFile: (experimentId: number, fileId: number): Promise<{ path: string } | null> =>
+      invoke(IPC.EXPERIMENTS_FILE_OPEN, { experimentId, fileId }),
+    search: (query: string): Promise<ExperimentSearchHit[]> => invoke(IPC.EXPERIMENTS_SEARCH, { query })
   },
   window: {
     minimize: (): Promise<void> => invoke(IPC.WINDOW_MINIMIZE),

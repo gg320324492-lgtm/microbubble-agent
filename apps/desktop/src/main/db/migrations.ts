@@ -145,6 +145,34 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_meeting_files_meeting ON meeting_files(meeting_id);
       CREATE VIRTUAL TABLE IF NOT EXISTS meeting_fts USING fts5(title_seg, minutes_seg, transcript_seg, tokenize='unicode61');
     `
+  },
+  {
+    id: 8,
+    name: 'experiment-notebook',
+    sql: `
+      CREATE TABLE IF NOT EXISTS experiments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        code TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'ongoing',
+        tags TEXT NOT NULL DEFAULT '[]',
+        content TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_experiments_user ON experiments(user_id, updated_at);
+      CREATE TABLE IF NOT EXISTS experiment_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        experiment_id INTEGER NOT NULL,
+        file_name TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_experiment_files_exp ON experiment_files(experiment_id);
+      CREATE VIRTUAL TABLE IF NOT EXISTS experiments_fts USING fts5(title_seg, content_seg, tokenize='unicode61');
+      CREATE TABLE IF NOT EXISTS eln_counters (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+    `
   }
 ]
 
