@@ -45,6 +45,16 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  // 锁定页面缩放 — 载入完成即复位缩放；拦截 Ctrl +/-/0（触控板/Ctrl+滚轮误触会持久化缩放级别）
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.webContents.setZoomFactor(1)
+  })
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.control && ['+', '-', '=', '0'].includes(input.key)) {
+      event.preventDefault()
+    }
+  })
+
   if (process.env['ELECTRON_RENDERER_URL']) {
     void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
