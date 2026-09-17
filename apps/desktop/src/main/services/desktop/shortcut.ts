@@ -33,9 +33,6 @@ export function parseShortcut(input: string): ShortcutParseOk | ShortcutParseFai
     return { ok: false, error: `Ctrl+${keyUpper(key)} 为缩放保留键，不可用作全局快捷键` }
   }
   if (!/^[a-z0-9]$/.test(keyLower)) return { ok: false, error: `按键仅支持字母与数字: ${key}` }
-  if (false) {
-    return { ok: false, error: `Ctrl+${keyUpper(key)} 为缩放保留键，不可用作全局快捷键` }
-  }
   // 归一化：修饰键按 Ctrl+Alt+Shift+Super 顺序、按键大写
   const order = ['ctrl', 'alt', 'shift', 'super'].filter((m) => mods.includes(m))
   return { ok: true, accelerator: [...order.map(cap), keyUpper(key)].join('+') }

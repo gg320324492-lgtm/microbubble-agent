@@ -501,8 +501,15 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   // ---------- 桌面集成（M4） ----------
 
-  ipcMain.handle(IPC.DESKTOP_APPLY_SHORTCUT, (_e, p): IpcResult<{ ok: boolean; accelerator: string; error?: string }> =>
-    tryRun(() => desktop.applyGlobalShortcut(String(p?.accelerator ?? '')))
+  ipcMain.handle(IPC.DESKTOP_APPLY_SHORTCUT, (_e, p): IpcResult<{ ok: boolean; accelerator: string; error?: string; suggestion?: string }> =>
+    tryRun(() => {
+      const r = desktop.applyGlobalShortcut(String(p?.accelerator ?? ''))
+      if (!r.ok) {
+        const suggestion = desktop.findAvailableAlternative(String(p?.accelerator ?? ''))
+        return { ...r, suggestion: suggestion ?? undefined }
+      }
+      return r
+    })
   )
 
   ipcMain.handle(IPC.APP_QUIT, (): IpcResult<null> => {
@@ -965,6 +972,16 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     return ok(null)
   })
   ipcMain.handle(IPC.WINDOW_IS_MAXIMIZED, (): IpcResult<boolean> => ok(getWindow()?.isMaximized() ?? false))
+  ipcMain.handle(IPC.WINDOW_SHOW, (): IpcResult<null> => {
+    const w = getWindow()
+    if (w) { w.show() }
+    return ok(null)
+  })
+  ipcMain.handle(IPC.WINDOW_FOCUS, (): IpcResult<null> => {
+    const w = getWindow()
+    if (w) { w.show(); w.focus() }
+    return ok(null)
+  })
   ipcMain.handle(IPC.WINDOW_CLOSE, (): IpcResult<null> => {
     getWindow()?.close()
     return ok(null)

@@ -155,6 +155,8 @@ const api = {
     toggleMaximize: (): Promise<void> => invoke(IPC.WINDOW_TOGGLE_MAXIMIZE),
     close: (): Promise<void> => invoke(IPC.WINDOW_CLOSE),
     isMaximized: (): Promise<boolean> => invoke(IPC.WINDOW_IS_MAXIMIZED),
+    show: (): Promise<void> => invoke(IPC.WINDOW_SHOW),
+    focus: (): Promise<void> => invoke(IPC.WINDOW_FOCUS),
     onStateChange: (cb: (maximized: boolean) => void): (() => void) => {
       const listener = (_e: unknown, value: unknown): void => cb(Boolean(value))
       ipcRenderer.on(IPC.WINDOW_STATE_EVENT, listener as never)

@@ -134,6 +134,8 @@ export interface PreloadApi {
     toggleMaximize(): Promise<void>
     close(): Promise<void>
     isMaximized(): Promise<boolean>
+    show(): Promise<void>
+    focus(): Promise<void>
     onStateChange(cb: (maximized: boolean) => void): () => void
   }
 }
