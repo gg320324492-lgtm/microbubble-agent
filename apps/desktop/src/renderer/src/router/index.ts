@@ -30,8 +30,8 @@ export const routes = [
       {
         path: 'eln',
         name: 'eln',
-        component: () => import('../views/ComingSoonView.vue'),
-        meta: { title: '实验 ELN', milestone: 'M3', icon: 'flask' }
+        component: () => import('../views/ExperimentView.vue'),
+        meta: { title: '实验 ELN', icon: 'flask' }
       },
       {
         path: 'manuscripts',

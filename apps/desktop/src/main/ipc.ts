@@ -17,6 +17,7 @@ import type {
   KnowledgeImportResult,
   KnowledgeSearchHit,
   ModelProvider,
+  ExperimentStatus,
   ModelProtocol,
   WorkspaceAuditEntry
 } from '@shared/types'
@@ -29,6 +30,7 @@ import { WorkspaceService } from './services/workspace/workspace.service'
 import { AuditService } from './services/workspace/audit.service'
 import { KnowledgeService } from './services/knowledge/knowledge.service'
 import { MeetingService } from './services/meeting/meeting.service'
+import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/experiment.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
 import { listDirTool } from './agent/tools/list-dir'
@@ -115,6 +117,15 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   )
   // 本地会议档案（M2-2）— 附件删除走回收站、打开走 openPath，均注入装配
   const meetings = new MeetingService(
+    db,
+    join(dbPath, '..', 'files'),
+    {
+      trashItem: (abs) => shell.trashItem(abs),
+      openPath: (abs) => shell.openPath(abs)
+    }
+  )
+  // 本地实验记录本（M3-1）— 同注入装配
+  const experiments = new ExperimentService(
     db,
     join(dbPath, '..', 'files'),
     {
@@ -572,6 +583,103 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.MEETINGS_SEARCH, (_e, p): IpcResult<unknown[]> => tryRun(() => {
     const user = auth.requireUser()
     return meetings.search(user.id, String(p?.query ?? ''))
+  }))
+
+  // ---------- 本地实验记录本（M3-1） ----------
+
+  const toExperimentMeta = (r: { id: number; title: string; code: string; status: string; tags: string; created_at: number; updated_at: number }) => {
+    let tags: string[] = []
+    try {
+      const v = JSON.parse(r.tags)
+      tags = Array.isArray(v) ? v.map(String) : []
+    } catch {
+      tags = []
+    }
+    return { id: r.id, title: r.title, code: r.code, status: r.status as ExperimentStatus, tags, createdAt: r.created_at, updatedAt: r.updated_at }
+  }
+  const toExperimentFile = (f: { id: number; experiment_id: number; file_name: string; file_size: number; created_at: number }) => ({
+    id: f.id,
+    experimentId: f.experiment_id,
+    fileName: f.file_name,
+    fileSize: f.file_size,
+    createdAt: f.created_at
+  })
+
+  ipcMain.handle(IPC.EXPERIMENTS_LIST, (_e, p): IpcResult<unknown[]> => tryRun(() => {
+    const user = auth.requireUser()
+    const status = typeof p?.status === 'string' && (EXPERIMENT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ExperimentStatus) : undefined
+    return experiments.list(user.id, status).map((r) => ({ ...toExperimentMeta(r), content: r.content }))
+  }))
+
+  ipcMain.handle(IPC.EXPERIMENTS_GET, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const detail = experiments.get(user.id, Number(p?.id))
+    if (!detail) return null
+    return { ...toExperimentMeta(detail.experiment), content: detail.experiment.content, files: detail.files.map(toExperimentFile) }
+  }))
+
+  ipcMain.handle(IPC.EXPERIMENTS_CREATE, (_e, p): IpcResult<{ id: number; code: string }> => tryRun(() => {
+    const user = auth.requireUser()
+    const id = experiments.create(user.id, {
+      title: String(p?.title ?? ''),
+      ...(p?.code !== undefined && String(p.code).trim() !== '' ? { code: String(p.code) } : {}),
+      ...(p?.status !== undefined ? { status: p.status as ExperimentStatus } : {}),
+      ...(Array.isArray(p?.tags) ? { tags: p.tags.map(String) } : {}),
+      ...(p?.content !== undefined ? { content: String(p.content) } : {})
+    })
+    const row = experiments.get(user.id, id)!.experiment
+    return { id, code: row.code }
+  }))
+
+  ipcMain.handle(IPC.EXPERIMENTS_UPDATE, (_e, p): IpcResult<boolean> => tryRun(() => {
+    const user = auth.requireUser()
+    return experiments.update(user.id, Number(p?.id), {
+      ...(p?.title !== undefined ? { title: String(p.title) } : {}),
+      ...(p?.code !== undefined ? { code: String(p.code) } : {}),
+      ...(p?.status !== undefined ? { status: p.status as ExperimentStatus } : {}),
+      ...(Array.isArray(p?.tags) ? { tags: p.tags.map(String) } : {}),
+      ...(p?.content !== undefined ? { content: String(p.content) } : {})
+    })
+  }))
+
+  ipcMain.handle(IPC.EXPERIMENTS_DELETE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      const user = auth.requireUser()
+      return ok(await experiments.delete(user.id, Number(p?.id)))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.EXPERIMENTS_FILE_ADD, (_e, p): IpcResult<unknown> => tryRun(() => {
+    const user = auth.requireUser()
+    const f = experiments.addFile(user.id, Number(p?.experimentId), {
+      name: String(p?.name ?? ''),
+      data: new Uint8Array(p?.data ?? [])
+    })
+    return f ? toExperimentFile(f) : null
+  }))
+
+  ipcMain.handle(IPC.EXPERIMENTS_FILE_REMOVE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      const user = auth.requireUser()
+      return ok(await experiments.removeFile(user.id, Number(p?.experimentId), Number(p?.fileId)))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.EXPERIMENTS_FILE_OPEN, (_e, p): IpcResult<{ path: string } | null> => tryRun(() => {
+    const user = auth.requireUser()
+    const path = experiments.openFile(user.id, Number(p?.experimentId), Number(p?.fileId))
+    return path ? { path } : null
+  }))
+
+  ipcMain.handle(IPC.EXPERIMENTS_SEARCH, (_e, p): IpcResult<unknown[]> => tryRun(() => {
+    const user = auth.requireUser()
+    return experiments.search(user.id, String(p?.query ?? ''))
   }))
 
   // ---------- 工作区（Agent 文件操作地基） ----------
