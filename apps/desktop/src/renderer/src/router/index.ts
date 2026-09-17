@@ -36,8 +36,8 @@ export const routes = [
       {
         path: 'manuscripts',
         name: 'manuscripts',
-        component: () => import('../views/ComingSoonView.vue'),
-        meta: { title: '稿件', milestone: 'M3', icon: 'doc' }
+        component: () => import('../views/ManuscriptsView.vue'),
+        meta: { title: '稿件', icon: 'doc' }
       },
       {
         path: 'knowledge',

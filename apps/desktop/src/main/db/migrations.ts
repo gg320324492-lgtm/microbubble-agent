@@ -173,6 +173,33 @@ export const MIGRATIONS: Migration[] = [
       CREATE VIRTUAL TABLE IF NOT EXISTS experiments_fts USING fts5(title_seg, content_seg, tokenize='unicode61');
       CREATE TABLE IF NOT EXISTS eln_counters (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
     `
+  },
+  {
+    id: 9,
+    name: 'manuscript-library',
+    sql: `
+      CREATE TABLE IF NOT EXISTS manuscripts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        target_journal TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]',
+        content TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_manuscripts_user ON manuscripts(user_id, updated_at);
+      CREATE TABLE IF NOT EXISTS manuscript_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        manuscript_id INTEGER NOT NULL,
+        file_name TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_manuscript_files_ms ON manuscript_files(manuscript_id);
+      CREATE VIRTUAL TABLE IF NOT EXISTS manuscripts_fts USING fts5(title_seg, content_seg, tokenize='unicode61');
+    `
   }
 ]
 
