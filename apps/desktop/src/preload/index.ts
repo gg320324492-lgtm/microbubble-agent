@@ -117,6 +117,13 @@ const api = {
       invoke(IPC.MEETINGS_FILE_OPEN, { meetingId, fileId }),
     search: (query: string): Promise<MeetingSearchHit[]> => invoke(IPC.MEETINGS_SEARCH, { query })
   },
+  backup: {
+    create: (password: string, targetDir: string): Promise<{ fileName: string; size: number }> =>
+      invoke(IPC.BACKUP_CREATE, { password, targetDir }),
+    restore: (password: string, backupFile: string): Promise<{ needRestart: boolean }> =>
+      invoke(IPC.BACKUP_RESTORE, { password, backupFile }),
+    list: (targetDir: string): Promise<unknown[]> => invoke(IPC.BACKUP_LIST, { targetDir })
+  },
   desktop: {
     applyShortcut: (accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }> =>
       invoke(IPC.DESKTOP_APPLY_SHORTCUT, { accelerator })
