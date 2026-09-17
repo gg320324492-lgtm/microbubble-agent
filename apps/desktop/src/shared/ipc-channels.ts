@@ -74,6 +74,8 @@ export const IPC = {
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
   WINDOW_IS_MAXIMIZED: 'window:is-maximized',
+  WINDOW_SHOW: 'window:show',
+  WINDOW_FOCUS: 'window:focus',
   WINDOW_CLOSE: 'window:close'
 } as const
 

@@ -129,6 +129,19 @@ export class DesktopIntegrationService {
     return this.currentShortcut
   }
 
+  /** 冲突时自动探测候选快捷键；成功即注册并返回建议，全部失败返回 null */
+  findAvailableAlternative(original: string): string | null {
+    const candidates = ['Ctrl+Shift+M', 'Ctrl+Alt+K', 'Ctrl+Alt+P']
+    for (const c of candidates) {
+      if (c === original) continue
+      if (this.p.registerGlobalShortcut(c, () => this.toggleMainWindow())) {
+        this.p.unregisterGlobalShortcut(c) // 探测成功即释放，等用户确认后正式注册
+        return c
+      }
+    }
+    return null
+  }
+
   // ---------- 内部 ----------
 
   private getSetting(key: string): unknown {
