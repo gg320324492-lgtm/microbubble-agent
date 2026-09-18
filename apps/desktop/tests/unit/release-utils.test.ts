@@ -1,5 +1,6 @@
 // M6-2 清账①⑤ — 发布脚本纯函数：版本同步校验 / latest.yml 生成与校验 / out 分批清理
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -7,12 +8,16 @@ import {
   buildLatestYml,
   checkVersionSync,
   chunk,
+  classifyNativeAbi,
+  electronTarget,
   extractAppVersion,
   planOutCleanup,
   verifyLatestYml
 } from '../../scripts/lib/release-utils.mjs'
 
+const require = createRequire(import.meta.url)
 const APP_ROOT = resolve(__dirname, '../..')
+const REPO_NODE_MODULES = resolve(APP_ROOT, '../../node_modules')
 
 describe('版本两处同步校验（R-1 类翻车防线）', () => {
   it('真实仓库文件必须同步：package.json.version === constants.ts APP_VERSION', () => {
@@ -78,6 +83,41 @@ describe('latest.yml 生成与一致性校验（清账①）', () => {
     expect(names.exe).toBe('MicroBubbleWorkbench-0.1.5-alpha-setup.exe')
     expect(names.blockmap).toBe('MicroBubbleWorkbench-0.1.5-alpha-setup.exe.blockmap')
     expect(names.latestYml).toBe('latest.yml')
+  })
+})
+
+describe('原生模块 ABI 判定（M6-2 修复：CI 装到 Node ABI 导致应用启动即崩）', () => {
+  it('Node 能加载 = Node ABI（需修正）；报 128 = 已是 Electron ABI；其余为未知', () => {
+    expect(classifyNativeAbi({ ok: true })).toBe('node')
+    expect(
+      classifyNativeAbi({
+        ok: false,
+        error:
+          "The module '…\\better_sqlite3.node' was compiled against a different Node.js version using\nNODE_MODULE_VERSION 128. This version of Node.js requires\nNODE_MODULE_VERSION 127."
+      })
+    ).toBe('electron')
+    expect(classifyNativeAbi({ ok: false, error: 'Cannot find module' })).toBe('unknown')
+    expect(classifyNativeAbi({ ok: false })).toBe('unknown')
+  })
+
+  it('electronTarget 取 electron 包版本（prebuild-install 的 --target）', () => {
+    expect(electronTarget('32.3.3')).toBe('32.3.3')
+    expect(electronTarget(' 32.3.3 ')).toBe('32.3.3')
+  })
+
+  it('真实环境自检：本地打包所依赖的 better-sqlite3 必须是 Electron ABI', () => {
+    // 本地 node_modules 若退回 Node ABI，打包出的应用会启动即崩（v0.1.5-alpha 首航实测）
+    const binary = resolve(REPO_NODE_MODULES, '.pnpm/better-sqlite3@12.11.1/node_modules/better-sqlite3/build/Release/better_sqlite3.node')
+    if (!existsSync(binary)) return // 布局变化时跳过（CI 由 release.mjs native 步骤兜底）
+    let probe: { ok: boolean; error?: string }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      require(binary)
+      probe = { ok: true }
+    } catch (e) {
+      probe = { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+    expect(classifyNativeAbi(probe)).toBe('electron')
   })
 })
 

@@ -42,3 +42,5 @@ export declare function verifyLatestYml(ymlText: string, expected: LatestYmlExpe
 export declare function chunk<T>(items: T[], size: number): T[][]
 export declare function planOutCleanup(topLevelEntries: string[], batchSize?: number): string[][]
 export declare function artifactNames(version: string): ArtifactNames
+export declare function classifyNativeAbi(probe: { ok: boolean; error?: string }): 'node' | 'electron' | 'unknown'
+export declare function electronTarget(version: string): string
