@@ -109,7 +109,10 @@ function stepNative() {
     return
   }
 
-  const prebuildBin = join(dirname(require.resolve('prebuild-install/package.json')), 'bin.js')
+  // pnpm 隔离布局下 prebuild-install 不是顶层依赖，必须相对 better-sqlite3 自身解析
+  // （从 scripts/ 直接 require.resolve 会 MODULE_NOT_FOUND——CI 实测踩到）
+  const bsqRequire = createRequire(join(bsqDir, 'package.json'))
+  const prebuildBin = join(dirname(bsqRequire.resolve('prebuild-install/package.json')), 'bin.js')
   log('拉取 Electron 预编译包（无需 VS 工具链）…')
   run('node', [prebuildBin, '--runtime=electron', `--target=${electronTarget(electronVersion)}`, '--arch=x64'], {
     cwd: bsqDir
