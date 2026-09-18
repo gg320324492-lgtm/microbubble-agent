@@ -1,6 +1,36 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-18 晚 会议 253 转写丢失双重 bug 修复 — merge 静默丢片 + ASR 无重试, 音频不可恢复, 已部署)
+
+**会议 253 "正在听会" 处理失败复盘 (09-18 20:12-20:21 录音, 转写 500)**:
+- **两个独立 bug 叠加**:
+  1. **merge 静默丢片 (真凶, 内容丢失)**: 307 个实时 webm 分片 (~5MB, 每秒 1 片)
+     走 `merge_chunks` ffmpeg concat demuxer。Chrome MediaRecorder 实时分片
+     **只有首片带 EBML header**, 后续 306 片是裸 cluster → ffmpeg demux 失败但
+     **rc=0 静默跳过**, 产物只剩首片 0.96s (15KB) → 8 分钟会议只转出一个词。
+     `auto` 模式嗅探首片是 webm → 选 ffmpeg (旧注释"每片独立可 concat"是错的),
+     ffmpeg rc=0 又不触发 raw 兜底。**修复**: `merge_chunks` 加产物完整性校验
+     (`assert_merged_integrity`: 产物 < 输入字节一半 → 抛错 → 端点自动回退
+     `merge_chunks_raw` 字节拼接, raw 对实时分片本就正确)。
+  2. **ASR 无重试 + 无自愈**: sensevoice CUDA 上下文被 09-16 驱动更新炸掉
+     (与 ollama 同源事故, 见下节), 推理第一个 kernel 即 500 → 任何一段失败
+     整场会议 error, 且 error_reason 只有泛化 "500 Internal Server Error"。
+     **修复**: ① `app/voice/asr.py` 5xx/网络错误指数退避重试 3 次 (2s/4s),
+     最终失败把服务端 detail (如 "CUDA error") 透传进 error_reason, 4xx 不重试;
+     ② `sensevoice_server.py` GPU 推理失败自动回退 CPU 重载模型并重试本次请求
+     (`_infer_with_gpu_fallback`), 启动时 CUDA 不可用也降级 CPU 不再崩溃循环,
+     /health 新增 `active_device`/`gpu_broken`/`cuda_available` 自报告;
+     ③ watchdog 扫 sensevoice 日志签名 (`GPU-FALLBACK|CUDA error`, ASCII 才
+     可靠 — 中文在 PowerShell cp936 下乱码匹配不上)。
+- **⚠️ 音频不可恢复**: merge 成功后 chunks 被 `delete_chunks` 清理, MinIO
+  **versioning Off**, 已删对象无副本。253 只剩 0.96s ("特性"一词)。
+- **恢复路径缺口**: `meeting_reprocessing_service` 的 transcription stage 至今
+  **未实现** (execute() 直接抛 "尚未实现"), 转写失败后无 service 化重跑入口,
+  本次是 `post_meeting_process.delay(253)` 重派整个任务恢复的 (音频没坏时可用)。
+- **测试**: `tests/test_merge_integrity.py` 4/4 + `tests/test_asr_retry.py` 4/4
+  (tests/ 不在容器 volume, docker cp 进容器跑)。
+
 ## 当前状态 (2026-09-18 ollama 冷启动事故三层防御 — 驱动更新→WSL 错配根因, warmup+看门狗+监控, 已部署)
 
 **"首次对话 3.5 分钟后 network error" 事故复盘 (2026-09-16 20:56 发生, 09-18 修复收口)**:

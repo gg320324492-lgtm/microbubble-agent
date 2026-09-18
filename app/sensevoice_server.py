@@ -32,17 +32,85 @@ SAMPLE_RATE = 16000  # SenseVoice 强制 16kHz
 # 全局模型实例
 _model: Optional[object] = None
 _model_load_time: float = 0
+# 2026-09-18 GPU 事故防御 (会议 253): Windows 更新 NVIDIA 驱动后 WSL2 VM 未重启,
+# CUDA 上下文损坏 → 推理第一个 kernel 即抛 "CUDA error: unknown error", 每次请求
+# 都 500 且永不自愈。现在: GPU 推理失败 → 自动回退 CPU 重载模型并重试本次请求。
+# (启动时 CUDA 不可用也直接降级 CPU, 避免容器反复崩溃重启。)
+_current_device: str = DEVICE
+_gpu_broken: bool = False
 
 
 def _load_model_sync():
-    """lifespan 同步加载 (在 executor 跑)"""
-    global _model, _model_load_time
+    """lifespan 同步加载 (在 executor 跑)。启动时 CUDA 不可用 → 自动降级 CPU"""
+    global _model, _model_load_time, _current_device, _gpu_broken
     from funasr import AutoModel
-    print(f"[sensevoice] Loading {MODEL} on {DEVICE}...", flush=True)
+    target = DEVICE
+    try:
+        print(f"[sensevoice] Loading {MODEL} on {target}...", flush=True)
+        t0 = time.time()
+        _model = AutoModel(model=MODEL, device=target, disable_update=True)
+        _model_load_time = time.time() - t0
+        print(f"[sensevoice] Loaded in {_model_load_time:.1f}s", flush=True)
+        _current_device = target
+        return
+    except Exception as load_err:
+        if target != "cuda":
+            raise
+        print(
+            f"[sensevoice] CUDA 加载失败 ({load_err}), 降级 CPU 重新加载...", flush=True
+        )
+        _gpu_broken = True
+        t0 = time.time()
+        _model = AutoModel(model=MODEL, device="cpu", disable_update=True)
+        _model_load_time = time.time() - t0
+        _current_device = "cpu"
+        print(f"[sensevoice] CPU 加载完成 ({_model_load_time:.1f}s)", flush=True)
+
+
+def _reload_model_on_cpu_sync():
+    """GPU 推理失败后的 CPU 重载 (同步, 在 executor 跑)"""
+    global _model, _current_device, _gpu_broken, _model_load_time
+    try:
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+    from funasr import AutoModel
+    # ASCII 标记行: watchdog 扫日志用 (中文在 PowerShell cp936 下会乱码, 匹配不可靠)
+    print("[sensevoice] GPU-FALLBACK: switching model to CPU", flush=True)
+    print("[sensevoice] 回退 CPU: 重新加载模型 ...", flush=True)
     t0 = time.time()
-    _model = AutoModel(model=MODEL, device=DEVICE, disable_update=True)
+    _model = AutoModel(model=MODEL, device="cpu", disable_update=True)
     _model_load_time = time.time() - t0
-    print(f"[sensevoice] Loaded in {_model_load_time:.1f}s", flush=True)
+    _current_device = "cpu"
+    _gpu_broken = True
+    print(f"[sensevoice] CPU 模型加载完成 ({_model_load_time:.1f}s)", flush=True)
+
+
+async def _infer_with_gpu_fallback(exec_fn):
+    """执行推理; GPU 上失败且尚未回退过 → 重载 CPU 模型并重试一次。
+
+    exec_fn: 同步 callable (闭包捕获本次推理参数), 返回推理结果。
+    返回 (推理结果, 实际推理时使用的 device)。
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        return await loop.run_in_executor(None, exec_fn), _current_device
+    except Exception as e:
+        if _current_device != "cuda":
+            raise
+        cuda_ok = None
+        try:
+            cuda_ok = torch.cuda.is_available()
+        except Exception:
+            pass
+        print(
+            f"[sensevoice] GPU 推理失败 (torch.cuda.is_available={cuda_ok}): "
+            f"{type(e).__name__}: {e}",
+            flush=True,
+        )
+        await loop.run_in_executor(None, _reload_model_on_cpu_sync)
+        return await loop.run_in_executor(None, exec_fn), _current_device
 
 
 def _get_gpu_memory_mib() -> int:
@@ -123,12 +191,19 @@ app = FastAPI(title="SenseVoice ASR Service", lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    """健康检查: 模型状态 + GPU 显存"""
+    """健康检查: 模型状态 + GPU 显存 + GPU 健康自报告 (2026-09-18 新增)"""
     vram_mib = _get_gpu_memory_mib()
+    try:
+        cuda_available = bool(torch.cuda.is_available())
+    except Exception:
+        cuda_available = False
     return {
         "status": "healthy" if _model is not None else "loading",
         "model": MODEL,
         "device": DEVICE,
+        "active_device": _current_device,
+        "gpu_broken": _gpu_broken,
+        "cuda_available": cuda_available,
         "model_loaded": _model is not None,
         "model_load_time_sec": round(_model_load_time, 1) if _model else None,
         "vram_mib": vram_mib,
@@ -182,17 +257,19 @@ async def transcribe(
         raise HTTPException(status_code=400, detail=f"Audio decode failed: {e}")
 
     # FunASR inference (run in thread pool to avoid blocking event loop)
-    loop = asyncio.get_event_loop()
     t0 = time.time()
 
     # 【关键路由 2026-06-30】长音频自动走 chunked
+    # 2026-09-18: 两路推理都包 _infer_with_gpu_fallback — GPU 上下文损坏时自动
+    # 回退 CPU 重载并重试本次请求, 不再把 500 抛给调用方 (会议 253 事故防御)
     if duration >= LONG_AUDIO_THRESHOLD_SEC:
         # 长音频: 分块循环推理
         def _do_chunked():
             return _chunked_transcribe(audio_array, language, CHUNK_DURATION_SEC, batch_size_s)
 
         try:
-            result, n_chunks = await loop.run_in_executor(None, _do_chunked)
+            res, device_used = await _infer_with_gpu_fallback(_do_chunked)
+            result, n_chunks = res
             inference_mode = "chunked"
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Chunked inference failed: {e}")
@@ -208,11 +285,14 @@ async def transcribe(
             )
 
         try:
-            result = await loop.run_in_executor(None, _do_inference)
+            result, device_used = await _infer_with_gpu_fallback(_do_inference)
             n_chunks = 1
             inference_mode = "single"
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
+
+    if device_used != DEVICE:
+        print(f"[sensevoice] 本次推理实际使用 {device_used} (配置 {DEVICE})", flush=True)
 
     elapsed = time.time() - t0
 

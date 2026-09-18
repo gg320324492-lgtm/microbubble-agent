@@ -270,9 +270,12 @@ async def merge_chunks_endpoint(
     失败模式：若 MinIO 上无 chunk，返回 400（前端应 fallback 提示）。
 
     2026-09-15 P0: 新增 `mode` 参数。这是听会 09-14 事故的第二段修复 ——
-    - 桌面 Chrome 实时分片: 每片是独立的 WebM cluster 序列 → ffmpeg concat 可用
     - iOS Safari 整段切片: 每片只是同一个 MP4 容器的**原始字节区间**，不是
       独立可解析的媒体文件 → ffmpeg 解析必失败，必须走字节级拼接
+    - 桌面 Chrome 实时分片: **只有首片带 EBML header**，后续片是裸 WebM
+      cluster —— ffmpeg concat demuxer 会**静默丢弃** (rc=0, 产物只剩首片,
+      会议 253 事故)。现在 merge_chunks 内置产物完整性校验, 校验不过自动
+      回退 raw; raw 对实时分片本就正确 (分片按序拼接 = 还原原始字节流)。
     `auto` 会下载首片嗅探文件头自动选择，并在 ffmpeg 失败时回退到 raw。
     """
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))

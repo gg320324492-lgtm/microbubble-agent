@@ -108,15 +108,30 @@ try {
         }
     }
 
-    # 2026-09-18 新增: ollama CUDA 检测 — Windows 更新 NVIDIA 驱动后 WSL2 VM 未重启,
-    # 容器会静默回退 CPU (ggml_cuda_init failed), 17GB 模型纯 CPU 加载 3.5min+ 导致
-    # 首条消息超时报错 (当日 17:14 驱动更新, 20:56 才被用户发现). 症状只在真实加载
-    # 时出现, 故扫容器日志签名; 修复 = wsl --shutdown + 重启 Docker Desktop.
-    $cudaBroken = $false
-    if ($statusMap.ContainsKey("microbubble-agent-ollama-1") -and $statusMap["microbubble-agent-ollama-1"].State -eq "running") {
-        $cudaFailLines = docker logs --since 24h microbubble-agent-ollama-1 2>&1 | Select-String "ggml_cuda_init: failed"
-        if ($cudaFailLines) { $cudaBroken = $true }
+    # 2026-09-18 GPU services check - Windows NVIDIA driver update without WSL restart
+    # silently breaks CUDA context inside containers:
+    #   ollama:     "ggml_cuda_init: failed" (CPU fallback, 17GB model loads 3.5min+)
+    #   sensevoice: "GPU-FALLBACK" / "CUDA error" (server auto-falls-back to CPU)
+    # Symptoms only appear on real inference, so we scan container log signatures.
+    # Fix = wsl --shutdown + restart Docker Desktop.
+    # Note: ASCII-only patterns (Chinese garbles under PowerShell cp936).
+    $gpuIssues = @()
+    $gpuLogChecks = @(
+        @{ Name = "microbubble-agent-ollama-1";     Pattern = "ggml_cuda_init: failed" },
+        @{ Name = "microbubble-agent-sensevoice-1"; Pattern = "GPU-FALLBACK|CUDA error|CUDA initialization" }
+    )
+    foreach ($chk in $gpuLogChecks) {
+        $fullName = $null
+        foreach ($key in $statusMap.Keys) {
+            if ($key -like ("*" + $chk.Name)) { $fullName = $key; break }
+        }
+        if (-not $fullName) { continue }  # container missing already reported above
+        $failLines = docker logs --since 24h $fullName 2>&1 | Select-String -Pattern $chk.Pattern
+        if ($failLines) {
+            $gpuIssues += "$($chk.Name): CUDA broken, needs WSL + Docker Desktop restart"
+        }
     }
+    $cudaBroken = ($gpuIssues.Count -gt 0)
 
     # Read last state (avoid repeat alerts)
     $lastHasIssue = $false
@@ -143,12 +158,13 @@ try {
     $alertMsg = ""
     if ($downServices.Count -gt 0) { $alertMsg += "Stopped: " + ($downServices -join ", ") + ". " }
     if ($unhealthyServices.Count -gt 0) { $alertMsg += "Unhealthy: " + ($unhealthyServices -join ", ") + "." }
-    if ($cudaBroken) { $alertMsg += "Ollama GPU不可用 (CUDA初始化失败已回退CPU, 需重启WSL和DockerDesktop). " }
+    if ($cudaBroken) { $alertMsg += ($gpuIssues -join "; ") + ". " }
 
     Write-Log "ERROR" "Service anomaly detected" @{
         down = $downServices
         unhealthy = $unhealthyServices
         cudaBroken = $cudaBroken
+        gpuIssues = $gpuIssues
         alert = $alertMsg
     }
 
@@ -163,6 +179,7 @@ try {
         down = $downServices
         unhealthy = $unhealthyServices
         cudaBroken = $cudaBroken
+        gpuIssues = $gpuIssues
     }
     $stateObj | ConvertTo-Json | Set-Content $StateFile -Encoding UTF8
     exit 1
