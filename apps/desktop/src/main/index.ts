@@ -86,7 +86,12 @@ app.whenReady().then(() => {
   createWindow()
 
   // 托盘常驻 + 关窗行为分流（M4）
-  desktop.setupTray(join(app.getAppPath(), 'resources', 'icon.png'))
+  // 打包后 app.getAppPath() 指向 app.asar（内部无 resources/），图标由 extraResources 落在
+  // <install>/resources/resources/，故打包态改用 process.resourcesPath；开发态仍走 app 根目录
+  const trayIcon = app.isPackaged
+    ? join(process.resourcesPath, 'resources', 'icon.png')
+    : join(app.getAppPath(), 'resources', 'icon.png')
+  desktop.setupTray(trayIcon)
   let forceQuit = false
   let exitBackupDone = false
   app.on('before-quit', (e) => {
