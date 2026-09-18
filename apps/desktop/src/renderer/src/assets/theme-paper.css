@@ -126,10 +126,16 @@
 
 /* ============================================================
    Element Plus 变量映射
-   [data-theme='paper'] 由 main.ts 写在 <html> 上；
-   属性选择器 specificity (0,1,0) > EP :root (0,0,1)，稳定生效。
+   [data-theme='paper'] 由 main.ts 写在 <html> 上。
+   ⚠ 选择器必须是 :root[data-theme='paper']（specificity 0,2,0）：
+     - `:root` 是**伪类**，specificity 为 (0,1,0)，与单纯 `[data-theme='paper']`（属性选择器，
+       同样 0,1,0）**同级** —— 同级则后加载者胜，EP 的 index.css 在 main.ts 中最后引入，
+       会直接压掉映射（打包版实测：--el-color-primary 仍是 EP 默认 #409eff）。
+     - 加上 :root 前缀后为 (0,2,0)，稳定高于 EP 的 :root，与加载顺序无关。
+   （共享令牌包内注释写的「attribute block 0,1,0 > EP :root 0,0,1」把 :root 误当作元素级，
+     实为伪类级；此处按正确权重处理。）
    ============================================================ */
-[data-theme='paper'] {
+:root[data-theme='paper'] {
   /* 主色系（EP 的 light-N 是「向白混合」，故浅阶取主色与纸底的中间调） */
   --el-color-primary: #3e5c76;
   --el-color-primary-light-3: #6b889f;

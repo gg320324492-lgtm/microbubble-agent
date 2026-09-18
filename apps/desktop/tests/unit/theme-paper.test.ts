@@ -67,10 +67,19 @@ describe('宣纸令牌 — 关键取值（paper 设计稿为唯一源头）', ()
 })
 
 describe('Element Plus 覆盖 — 独立文件 + 变量映射齐备', () => {
-  it('EP 映射集中在 [data-theme=paper] 块（specificity 高于 EP 自身 :root）', () => {
-    expect(themeCss).toMatch(/\[data-theme='paper'\]\s*\{/)
-    const block = themeCss.slice(themeCss.indexOf("[data-theme='paper']"))
+  it('EP 映射集中在 :root[data-theme=paper] 块（0,2,0，压过 EP 自身 :root 的 0,1,0）', () => {
+    // 回归锁定：`:root` 是伪类（0,1,0），若只写 [data-theme='paper']（同为 0,1,0）则同级，
+    // EP 后加载的 index.css 会直接压掉映射（打包版实测 --el-color-primary 仍是 #409eff）
+    expect(themeCss).toMatch(/:root\[data-theme='paper'\]\s*\{/)
+    const block = themeCss.slice(themeCss.indexOf(":root[data-theme='paper']"))
     expect(block).toContain('--el-color-primary: #3e5c76')
+  })
+
+  it('EP 覆盖文件在 main.ts 中最后加载（顺序兜底，与特异性双保险）', () => {
+    const iEp = mainTs.indexOf('element-plus/dist/index.css')
+    const iPaper = mainTs.indexOf('./assets/theme-paper.css')
+    expect(iEp).toBeGreaterThanOrEqual(0)
+    expect(iPaper).toBeGreaterThan(iEp)
   })
 
   it('覆盖工单要求的变量族：主色系/圆角/字号/文本/背景/填充', () => {
