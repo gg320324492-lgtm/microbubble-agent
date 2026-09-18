@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 // 命令面板组件契约（M4）— 渲染过滤 / 键盘导航 / 执行回调
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { CommandRegistry } from '@shared/command-registry'
 import CommandPalette from '@renderer/components/CommandPalette.vue'
+
+// jsdom 未实现 scrollIntoView — 组件在 nextTick 中调用会产生 unhandled rejection
+beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn()
+})
 
 function makeRegistry(): CommandRegistry {
   const r = new CommandRegistry()

@@ -326,6 +326,26 @@ export interface MeetingListItem {
   updatedAt: number
 }
 
+export interface OssSettings {
+  bucket: string
+  endpoint: string
+  prefix: string
+  accessKeyId: string
+  /** safeStorage 加密后的 base64；渲染层永不接触明文 */
+  accessKeySecretEnc: string
+}
+
+export interface OssTestResult {
+  ok: boolean
+  error?: string
+}
+
+export interface OssRemoteBackup {
+  key: string
+  size: number
+  lastModified: string
+}
+
 export interface MeetingTranscriptImportInput {
   meetingId: number
   content: string

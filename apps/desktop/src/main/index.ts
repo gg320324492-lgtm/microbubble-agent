@@ -63,6 +63,8 @@ function createWindow(): void {
 }
 
 // 单实例锁（M4）— 二次启动不产生新实例，聚焦已有窗口
+// MNB_USER_DATA：测试/多实例隔离用 userData 覆盖（仅显式设置时生效）
+if (process.env['MNB_USER_DATA']) app.setPath('userData', process.env['MNB_USER_DATA'])
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
@@ -80,14 +82,24 @@ app.whenReady().then(() => {
   const dbPath = join(app.getPath('userData'), 'data', 'workbench.db')
   const db = openDatabase(dbPath)
   installDesktopPrimitives(() => mainWindow)
-  const { desktop } = registerIpc(db, dbPath, () => mainWindow)
+  const { desktop, runExitBackup } = registerIpc(db, dbPath, () => mainWindow)
   createWindow()
 
   // 托盘常驻 + 关窗行为分流（M4）
   desktop.setupTray(join(app.getAppPath(), 'resources', 'icon.png'))
   let forceQuit = false
-  app.on('before-quit', () => {
+  let exitBackupDone = false
+  app.on('before-quit', (e) => {
     forceQuit = true
+    if (exitBackupDone) return
+    // 退出自动备份（M5-2）— 开关关/未登录时立即返回；内部 10s 超时，失败不阻塞退出
+    e.preventDefault()
+    void runExitBackup()
+      .catch(() => null)
+      .finally(() => {
+        exitBackupDone = true
+        app.quit()
+      })
   })
   mainWindow!.on('close', (e) => {
     if (forceQuit) return
