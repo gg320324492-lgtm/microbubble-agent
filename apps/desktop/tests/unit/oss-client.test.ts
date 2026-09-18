@@ -174,4 +174,18 @@ describe('整改回归（打回两项）', () => {
     expect(normalizeEndpoint('http://127.0.0.1:9000')).toBe('http://127.0.0.1:9000') // minio 类自建端点保留 http
     expect(normalizeEndpoint('')).toBe('')
   })
+
+  it('virtual-hosted 风格 — 上传/列举 URL 主机名为 <bucket>.<endpoint-host>（真机联调锁死：路径风格被 SecondLevelDomainForbidden 拒绝）', async () => {
+    const { fn, calls } = fakeHttp()
+    const client = new OssClient(CONFIG, fn)
+    await client.putObject('desktop-backup/x.mnbbak', Buffer.from('d'))
+    const putUrl = new URL(calls[0].url)
+    expect(putUrl.hostname).toBe('test-bucket.oss-cn-hangzhou.aliyuncs.com')
+    expect(putUrl.pathname).toBe('/desktop-backup/x.mnbbak')
+    await client.listObjects('desktop-backup/')
+    const listCall = vi.mocked(fn).mock.calls[1][0]
+    const listUrl = new URL(listCall.url)
+    expect(listUrl.hostname).toBe('test-bucket.oss-cn-hangzhou.aliyuncs.com')
+    expect(listUrl.searchParams.get('prefix')).toBe('desktop-backup/')
+  })
 })
