@@ -34,6 +34,7 @@ import type {
   MeetingUpdateInput,
   ModelProvider,
   ModelProviderInput,
+  UpdateState,
   WorkspaceAuditEntry
 } from './types'
 
@@ -131,6 +132,19 @@ export interface PreloadApi {
   }
   desktop: {
     applyShortcut(accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }>
+  }
+  update: {
+    /** 当前更新状态快照 */
+    state(): Promise<UpdateState>
+    /** 手动检查更新（设置页按钮） */
+    check(): Promise<UpdateState>
+    /** 用户确认后开始下载 */
+    download(): Promise<UpdateState>
+    /** 安装并重启（仅 ready 态生效）；返回是否已触发 */
+    install(): Promise<boolean>
+    onStateChange(cb: (s: UpdateState) => void): () => void
+    /** 更新通知被点击 → 跳转设置页 */
+    onOpenSettings(cb: () => void): () => void
   }
   experiments: {
     list(status?: ExperimentStatus): Promise<ExperimentFull[]>

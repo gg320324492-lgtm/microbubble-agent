@@ -86,7 +86,15 @@ export const IPC = {
   WINDOW_IS_MAXIMIZED: 'window:is-maximized',
   WINDOW_SHOW: 'window:show',
   WINDOW_FOCUS: 'window:focus',
-  WINDOW_CLOSE: 'window:close'
+  WINDOW_CLOSE: 'window:close',
+  UPDATE_STATE_GET: 'update:state-get',
+  UPDATE_CHECK: 'update:check',
+  UPDATE_DOWNLOAD: 'update:download',
+  UPDATE_INSTALL: 'update:install',
+  /** main → renderer 推送通道（更新状态机快照），preload 以 on* 方式暴露 */
+  UPDATE_STATE_EVENT: 'update:state-event',
+  /** main → renderer：通知被点击后跳转设置页 */
+  UPDATE_OPEN_SETTINGS: 'update:open-settings'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

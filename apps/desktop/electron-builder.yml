@@ -23,3 +23,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   shortcutName: 小气科研工作台
+# 自动更新源（M6-1）— 有 publish 段时 electron-builder 才会产出 resources/app-update.yml
+# （electron-updater 的下载器必读该文件，仅运行时 setFeedURL 不足以替代），同时自动生成
+# latest.yml 更新信息。发布流程用 `gh release create` 上传，故打包时务必带 `-p never` 禁止
+# electron-builder 自行上传，避免重复发布。
+publish:
+  provider: github
+  owner: gg320324492-lgtm
+  repo: microbubble-agent

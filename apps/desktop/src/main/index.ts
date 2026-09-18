@@ -1,10 +1,11 @@
 // 主进程入口 — 无边框窗口 + 三铁律安全基线（骨架设计 §5）
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
-import { registerIpc, installDesktopPrimitives } from './ipc'
+import { registerIpc, installDesktopPrimitives, installUpdaterPort } from './ipc'
 import { openDatabase } from './db'
+import { createElectronUpdaterPort } from './services/update/updater-adapter'
 import { IPC } from '@shared/ipc-channels'
-import { APP_NAME, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from '@shared/constants'
+import { APP_NAME, ENV_UPDATE_FEED, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from '@shared/constants'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -82,7 +83,17 @@ app.whenReady().then(() => {
   const dbPath = join(app.getPath('userData'), 'data', 'workbench.db')
   const db = openDatabase(dbPath)
   installDesktopPrimitives(() => mainWindow)
-  const { desktop, runExitBackup } = registerIpc(db, dbPath, () => mainWindow)
+  // 自动更新适配层装配（M6-1）— 全仓库唯一 import electron-updater 的位置在此装配；
+  // 服务层只拿到注入端口，故状态机与版本比较可完全离线单测。
+  installUpdaterPort(
+    createElectronUpdaterPort({
+      feedUrl: process.env[ENV_UPDATE_FEED] ?? null,
+      log: (message) => {
+        console.log(message)
+      }
+    })
+  )
+  const { desktop, update, runExitBackup } = registerIpc(db, dbPath, () => mainWindow)
   createWindow()
 
   // 托盘常驻 + 关窗行为分流（M4）
@@ -92,6 +103,9 @@ app.whenReady().then(() => {
     ? join(process.resourcesPath, 'resources', 'icon.png')
     : join(app.getAppPath(), 'resources', 'icon.png')
   desktop.setupTray(trayIcon)
+
+  // 启动后 5s 后台检查更新（不阻塞启动、失败静默；受「自动检查更新」开关约束）
+  update.scheduleAutoCheck()
   let forceQuit = false
   let exitBackupDone = false
   app.on('before-quit', (e) => {

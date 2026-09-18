@@ -5,3 +5,5 @@ export const APP_VERSION = '0.1.4-alpha'
 export const WINDOW_MIN_WIDTH = 1024
 export const WINDOW_MIN_HEIGHT = 640
 export const SESSION_TTL_MS = 60 * 60 * 1000
+/** 真机/联调用更新 feed 覆盖（设置后走 generic provider 指向本地静态服务） */
+export const ENV_UPDATE_FEED = 'MNB_UPDATE_FEED'

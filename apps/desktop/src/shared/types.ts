@@ -470,3 +470,22 @@ export interface ManuscriptSearchHit {
   highlight: { start: number; end: number } | null
   updatedAt: number
 }
+
+// ---------- 自动更新（M6-1）----------
+
+export type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'
+
+/** 更新状态快照 — 主进程状态机的对外（渲染进程）视图 */
+export interface UpdateState {
+  status: UpdateStatus
+  /** 目标新版本号（available / downloading / ready 时有值） */
+  version: string | null
+  /** 下载进度 0-100（downloading 时有值） */
+  percent: number
+  /** 错误原因（error 时有值） */
+  error: string | null
+  /** 环境不支持（非打包且无 feed 覆盖）时为 true */
+  disabled: boolean
+  /** 最近一次检查完成时间戳（ms） */
+  checkedAt: number | null
+}

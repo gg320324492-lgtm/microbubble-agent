@@ -34,6 +34,7 @@ import type {
   ExperimentSearchHit,
   ExperimentStatus,
   ExperimentUpdateInput,
+  UpdateState,
   WorkspaceAuditEntry
 } from '@shared/types'
 
@@ -137,6 +138,22 @@ const api = {
   desktop: {
     applyShortcut: (accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }> =>
       invoke(IPC.DESKTOP_APPLY_SHORTCUT, { accelerator })
+  },
+  update: {
+    state: (): Promise<UpdateState> => invoke(IPC.UPDATE_STATE_GET),
+    check: (): Promise<UpdateState> => invoke(IPC.UPDATE_CHECK),
+    download: (): Promise<UpdateState> => invoke(IPC.UPDATE_DOWNLOAD),
+    install: (): Promise<boolean> => invoke(IPC.UPDATE_INSTALL),
+    onStateChange: (cb: (s: UpdateState) => void): (() => void) => {
+      const listener = (_e: unknown, payload: unknown): void => cb(payload as UpdateState)
+      ipcRenderer.on(IPC.UPDATE_STATE_EVENT, listener as never)
+      return () => ipcRenderer.removeListener(IPC.UPDATE_STATE_EVENT, listener as never)
+    },
+    onOpenSettings: (cb: () => void): (() => void) => {
+      const listener = (): void => cb()
+      ipcRenderer.on(IPC.UPDATE_OPEN_SETTINGS, listener as never)
+      return () => ipcRenderer.removeListener(IPC.UPDATE_OPEN_SETTINGS, listener as never)
+    }
   },
   experiments: {
     list: (status?: ExperimentStatus): Promise<ExperimentFull[]> => invoke(IPC.EXPERIMENTS_LIST, { status }),

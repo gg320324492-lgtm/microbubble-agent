@@ -4,7 +4,7 @@ import { app, dialog, ipcMain, BrowserWindow, safeStorage, shell, Tray, Menu, gl
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-channels'
-import { APP_NAME, APP_VERSION } from '@shared/constants'
+import { APP_NAME, APP_VERSION, ENV_UPDATE_FEED } from '@shared/constants'
 import type {
   AppInfo,
   AuthSession,
@@ -20,6 +20,7 @@ import type {
   ExperimentStatus,
   ManuscriptStatus,
   ModelProtocol,
+  UpdateState,
   WorkspaceAuditEntry
 } from '@shared/types'
 import type { SqlDatabase } from './db/adapters'
@@ -33,6 +34,7 @@ import { KnowledgeService } from './services/knowledge/knowledge.service'
 import { MeetingService } from './services/meeting/meeting.service'
 import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/experiment.service'
 import { DesktopIntegrationService } from './services/desktop/desktop-integration.service'
+import { UpdateService, type UpdaterPort } from './services/update/update.service'
 import { BackupService } from './services/backup/backup.service'
 import { OssClient } from './services/backup/oss.client'
 import { normalizeEndpoint } from './services/backup/oss-sig'
@@ -145,7 +147,32 @@ export function installDesktopPrimitives(getWindow: () => BrowserWindow | null):
   void getWindow
 }
 
-export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): { desktop: DesktopIntegrationService; runExitBackup: () => Promise<{ fileName: string; uploaded: boolean } | null> } {
+// 更新端口（M6-1）— main/index.ts 用适配层装配真实 electron-updater；未装配时用空端口，
+// 保证服务可构造、状态机与 IPC 在无 Electron 运行时也成立。
+let updaterPort: UpdaterPort | null = null
+
+/** main/index.ts 启动时装配真实 updater（适配层是全仓库唯一 import electron-updater 处） */
+export function installUpdaterPort(port: UpdaterPort): void {
+  updaterPort = port
+}
+
+function resolveUpdaterPort(): UpdaterPort {
+  return (
+    updaterPort ?? {
+      checkForUpdates: async () => null,
+      downloadUpdate: async () => undefined,
+      quitAndInstall: () => undefined,
+      onProgress: () => undefined,
+      onDownloaded: () => undefined
+    }
+  )
+}
+
+export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): {
+  desktop: DesktopIntegrationService
+  update: UpdateService
+  runExitBackup: () => Promise<{ fileName: string; uploaded: boolean } | null>
+} {
   const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')))
   const settings = new SettingsService(db)
   const chat = new ChatService(db)
@@ -229,6 +256,40 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     },
     quit: () => {
       app.quit()
+    }
+  })
+
+  // 自动更新（M6-1）— 提示式：启动后台检查 + 设置页手动检查；绝不自动下载/自动安装。
+  // 非打包环境 electron-updater 会拒绝运行，故默认禁用；联调时用 feed 覆盖放行。
+  const update = new UpdateService({
+    currentVersion: APP_VERSION,
+    envSupported: app.isPackaged || Boolean(process.env[ENV_UPDATE_FEED]),
+    port: resolveUpdaterPort(),
+    getSetting: (key) => {
+      try {
+        return settings.get(key, auth.requireUser().id)
+      } catch {
+        return undefined
+      }
+    },
+    isWindowVisible: () => getWindow()?.isVisible() ?? false,
+    // 复用 M4 通知注入（desktopNotify）
+    notify: (title, body, onClick) => desktopNotify(title, body, onClick),
+    onOpenSettings: () => {
+      const w = getWindow()
+      if (w) {
+        if (w.isMinimized()) w.restore()
+        w.show()
+        w.focus()
+        w.webContents.send(IPC.UPDATE_OPEN_SETTINGS, true)
+      }
+    },
+    onStateChange: (state) => {
+      getWindow()?.webContents.send(IPC.UPDATE_STATE_EVENT, state)
+    },
+    log: (message) => {
+      // 打包后无控制台，重定向 stdout 启动时仍可取证；不进任何用户可见界面
+      console.log(message)
     }
   })
 
@@ -1139,6 +1200,29 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   desktop.restoreGlobalShortcut()
 
+  // ---------- 自动更新（M6-1）----------
+  ipcMain.handle(IPC.UPDATE_STATE_GET, (): IpcResult<UpdateState> => tryRun(() => update.snapshot()))
+
+  ipcMain.handle(IPC.UPDATE_CHECK, async (): Promise<IpcResult<UpdateState>> => {
+    try {
+      return ok(await update.check('manual'))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'UPDATE_CHECK_FAILED', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.UPDATE_DOWNLOAD, async (): Promise<IpcResult<UpdateState>> => {
+    try {
+      return ok(await update.download())
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'UPDATE_DOWNLOAD_FAILED', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.UPDATE_INSTALL, (): IpcResult<boolean> => tryRun(() => update.installAndRestart()))
+
   const runExitBackup = async (): Promise<{ fileName: string; uploaded: boolean } | null> => {
     try {
       const autoOnExit = settings.get('backup.autoOnExit', auth.requireUser().id) === true
@@ -1152,7 +1236,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     }
   }
 
-  return { desktop, runExitBackup }
+  return { desktop, update, runExitBackup }
 }
 
 void app

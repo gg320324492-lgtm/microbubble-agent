@@ -1,0 +1,12 @@
+# 开发环境更新配置（electron-updater 约定文件，仅 dev 读取）
+#
+# 打包版由 electron-builder 依据 electron-builder.yml 的 publish 段生成 resources/app-update.yml；
+# 未打包时 electron-updater 会改读本文件，其 updaterCacheDirName 是下载器初始化必需的字段
+# （缺文件会在下载阶段报 ENOENT app-update.yml）。
+#
+# 实际 feed 地址由运行时 setFeedURL 决定：默认走下面的 GitHub provider；
+# 真机/联调时用环境变量 MNB_UPDATE_FEED 覆盖为本地静态服务（generic provider）。
+provider: github
+owner: gg320324492-lgtm
+repo: microbubble-agent
+updaterCacheDirName: '@mbdesktop-updater'
