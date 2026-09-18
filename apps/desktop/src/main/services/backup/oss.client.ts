@@ -19,6 +19,22 @@ export class OssClient {
     private readonly http: HttpFn
   ) {}
 
+  /** virtual-hosted 风格对象 URL — https://<bucket>.<endpoint-host>/<key>（真机联调整改：路径风格被 OSS SecondLevelDomainForbidden 拒绝） */
+  private objectUrl(key: string): string {
+    const u = new URL(this.config.endpoint)
+    u.hostname = `${this.config.bucket}.${u.hostname}`
+    u.pathname = `/${key.split('/').map(encodeURIComponent).join('/')}`
+    return u.toString()
+  }
+
+  /** virtual-hosted 风格 bucket 列举 URL — https://<bucket>.<endpoint-host>/?prefix=... */
+  private bucketListUrl(prefix: string): string {
+    const u = new URL(this.config.endpoint)
+    u.hostname = `${this.config.bucket}.${u.hostname}`
+    u.search = `prefix=${encodeURIComponent(prefix)}`
+    return u.toString()
+  }
+
   /** 通用签名请求发送 */
   private async request(verb: string, key: string, body?: Buffer, contentType?: string): Promise<OssHttpResponse> {
     const date = ossDate()
@@ -29,7 +45,7 @@ export class OssClient {
       verb, contentMd5: md5, contentType: ct, date,
       canonicalizedResource: res, accessKeySecret: this.config.accessKeySecret
     })
-    const url = `${this.config.endpoint}/${key}`
+    const url = this.objectUrl(key)
     const headers: Record<string, string> = {
       Date: date,
       Authorization: ossAuthorization(this.config.accessKeyId, signature)
@@ -70,12 +86,15 @@ export class OssClient {
       verb: 'GET', date, canonicalizedResource: res,
       accessKeySecret: this.config.accessKeySecret
     })
-    const url = `${this.config.endpoint}?prefix=${encodeURIComponent(prefix)}`
+    const url = this.bucketListUrl(prefix)
     const httpRes = await this.http({
       method: 'GET', url,
       headers: { Date: date, Authorization: ossAuthorization(this.config.accessKeyId, signature) }
     })
-    if (httpRes.status >= 300) throw new Error(`OSS listObjects → HTTP ${httpRes.status}`)
+    if (httpRes.status >= 300) {
+      const errText = httpRes.body.toString('utf8').slice(0, 200)
+      throw new Error(`OSS listObjects → HTTP ${httpRes.status}: ${errText}`)
+    }
 
     // 手动解析 XML（简单正则——不含 continuation/ISO8601 时区高级场景）
     const xml = httpRes.body.toString('utf8')
