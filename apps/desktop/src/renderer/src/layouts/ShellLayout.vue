@@ -1,8 +1,24 @@
 <script setup lang="ts">
 // 工作台外壳 — 自绘标题栏 + 侧边栏六项 + 状态栏（骨架设计 §3 信息架构）
+import { onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import TitleBar from './TitleBar.vue'
 import SideNav from './SideNav.vue'
 import StatusBar from './StatusBar.vue'
+
+const router = useRouter()
+let offOpenSettings: (() => void) | null = null
+
+// M6-1：更新通知被点击 → 主进程聚焦窗口并推送本事件，这里落到设置页
+onMounted(() => {
+  offOpenSettings = window.api.update.onOpenSettings(() => {
+    void router.push({ name: 'settings' })
+  })
+})
+
+onUnmounted(() => {
+  offOpenSettings?.()
+})
 </script>
 
 <template>

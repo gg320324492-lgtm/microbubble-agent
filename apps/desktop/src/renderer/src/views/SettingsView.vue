@@ -6,6 +6,7 @@ import ModelServiceSection from '../components/settings/ModelServiceSection.vue'
 import WorkspaceSection from '../components/settings/WorkspaceSection.vue'
 import DesktopIntegrationSection from '../components/settings/DesktopIntegrationSection.vue'
 import BackupSection from '../components/settings/BackupSection.vue'
+import AboutUpdateSection from '../components/settings/AboutUpdateSection.vue'
 import type { AppInfo } from '@shared/types'
 
 const auth = useAuthStore()
@@ -57,6 +58,8 @@ function fmtDate(ts: number): string {
     <DesktopIntegrationSection />
 
     <BackupSection />
+
+    <AboutUpdateSection />
 
     <section class="card block">
       <h2>云端同步</h2>
