@@ -11,6 +11,7 @@
   保留为旧 API，新代码用 LLMClient
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -639,6 +640,53 @@ class LLMClient:
         resp = await fallback_client.chat.completions.create(**fallback_params)
         return openai_response_to_anthropic_message(resp)
 
+    async def _stream_ollama_first_token_guard(self, params: dict):
+        """2026-09-18 冷启动事故防御: ollama 首 token 看门狗 + 云端降级.
+
+        事故: Windows 更新 NVIDIA 驱动后 WSL2 VM 未重启 → 容器 CUDA 初始化失败
+        静默回退 CPU, 17GB 模型纯 CPU 加载 3.5min+ 期间 create() 一直阻塞等响应头,
+        SSE 长时间静默被链路中间层掐断 (浏览器 ERR_CONNECTION_CLOSED).
+
+        ollama OpenAI 兼容端点在模型可用前不发响应头, 所以 wait_for(create()) 即
+        首 token 看门狗: 超时视为模型不可用/冷加载卡死, 取消本次请求 (ollama 收到
+        断连会中止加载) 并降级云端 (mimo openai_compat) 重试一次.
+        """
+        timeout = max(1, int(getattr(settings, "OLLAMA_FIRST_TOKEN_TIMEOUT", 60)))
+        try:
+            return await asyncio.wait_for(
+                self.openai_client.chat.completions.create(**params),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            if not getattr(settings, "OLLAMA_CLOUD_FALLBACK", True):
+                raise
+            cloud_base = (
+                getattr(settings, "LLM_OPENAI_COMPAT_BASE_URL", "")
+                or settings.MIMO_BASE_URL
+            )
+            cloud_key = (
+                getattr(settings, "LLM_OPENAI_COMPAT_API_KEY", "")
+                or settings.MIMO_API_KEY
+            )
+            cloud_model = (
+                getattr(settings, "LLM_OPENAI_COMPAT_MODEL", "")
+                or settings.MIMO_MODEL
+            )
+            if not cloud_base or not cloud_key:
+                logger.error(
+                    f"ollama 首 token 超时 {timeout}s 且未配置云端降级 "
+                    f"(MIMO_API_KEY 空), 放弃降级直接抛错"
+                )
+                raise
+            logger.warning(
+                f"ollama 首 token 超时 {timeout}s (疑似冷加载卡死/模型不可用), "
+                f"降级云端 {cloud_model} 重试"
+            )
+            cloud_client = AsyncOpenAI(api_key=cloud_key, base_url=cloud_base)
+            cloud_params = dict(params)
+            cloud_params["model"] = cloud_model
+            return await cloud_client.chat.completions.create(**cloud_params)
+
     async def stream(
         self,
         messages: list[dict],
@@ -684,6 +732,9 @@ class LLMClient:
                 if oai_tools:
                     params["tools"] = oai_tools
                 try:
+                    if self.backend == "ollama":
+                        # 2026-09-18: 首 token 看门狗 + 云端降级 (见方法 docstring)
+                        return await self._stream_ollama_first_token_guard(params)
                     return await self.openai_client.chat.completions.create(**params)
                 except Exception as e:
                     # P0-3 2026-07-03: mimo 429 fallback 到 ollama (流式)

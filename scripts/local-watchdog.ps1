@@ -15,6 +15,7 @@ $LogFile = Join-Path $LogDir ("watchdog-{0}.log" -f (Get-Date -Format 'yyyyMMdd'
 $StateFile = Join-Path $LogDir "last-state.json"
 
 # Expected services (W100 +N updated: 13 containers)
+# 2026-09-18: pg-exporter-dev-1 → pg-exporter-1 (实际容器名, -dev 是陈旧名单导致永久误报 missing)
 $ExpectedServices = @(
     "microbubble-agent-app-1",
     "microbubble-agent-db-1",
@@ -27,7 +28,7 @@ $ExpectedServices = @(
     "microbubble-agent-ollama-1",
     "microbubble-agent-sensevoice-1",
     "microbubble-agent-vision-mcp-1",
-    "microbubble-agent-pg-exporter-dev-1",
+    "microbubble-agent-pg-exporter-1",
     "microbubble-agent-langfuse-1"
 )
 
@@ -91,13 +92,30 @@ try {
     $downServices = @()
     $unhealthyServices = @()
     foreach ($svc in $ExpectedServices) {
-        if (-not $statusMap.ContainsKey($svc)) {
-            $downServices += "$svc (missing)"
-        } elseif ($statusMap[$svc].State -ne "running") {
-            $downServices += "$svc ($($statusMap[$svc].State))"
-        } elseif ($statusMap[$svc].Status -match "unhealthy|restarting|exited") {
-            $unhealthyServices += "$svc ($($statusMap[$svc].Status))"
+        # 2026-09-18: 孤儿 compose run 的容器带随机 hex 前缀 (如 6010d5393430_microbubble-agent-...),
+        # 精确匹配永久 missing → 状态文件常驻 hasIssue=true → 状态转换告警永不触发 (watchdog 变哑).
+        # 改后缀匹配. 前缀是 compose project hash, 硬编码不可靠.
+        $entry = $null
+        foreach ($key in $statusMap.Keys) {
+            if ($key -like "*$svc") { $entry = $statusMap[$key]; break }
         }
+        if (-not $entry) {
+            $downServices += "$svc (missing)"
+        } elseif ($entry.State -ne "running") {
+            $downServices += "$svc ($($entry.State))"
+        } elseif ($entry.Status -match "unhealthy|restarting|exited") {
+            $unhealthyServices += "$svc ($($entry.Status))"
+        }
+    }
+
+    # 2026-09-18 新增: ollama CUDA 检测 — Windows 更新 NVIDIA 驱动后 WSL2 VM 未重启,
+    # 容器会静默回退 CPU (ggml_cuda_init failed), 17GB 模型纯 CPU 加载 3.5min+ 导致
+    # 首条消息超时报错 (当日 17:14 驱动更新, 20:56 才被用户发现). 症状只在真实加载
+    # 时出现, 故扫容器日志签名; 修复 = wsl --shutdown + 重启 Docker Desktop.
+    $cudaBroken = $false
+    if ($statusMap.ContainsKey("microbubble-agent-ollama-1") -and $statusMap["microbubble-agent-ollama-1"].State -eq "running") {
+        $cudaFailLines = docker logs --since 24h microbubble-agent-ollama-1 2>&1 | Select-String "ggml_cuda_init: failed"
+        if ($cudaFailLines) { $cudaBroken = $true }
     }
 
     # Read last state (avoid repeat alerts)
@@ -109,7 +127,7 @@ try {
         } catch { $lastHasIssue = $false }
     }
 
-    $hasIssue = ($downServices.Count -gt 0) -or ($unhealthyServices.Count -gt 0)
+    $hasIssue = ($downServices.Count -gt 0) -or ($unhealthyServices.Count -gt 0) -or $cudaBroken
 
     if (-not $hasIssue) {
         Write-Log "INFO" "All services healthy" @{ service_count = $ExpectedServices.Count }
@@ -125,10 +143,12 @@ try {
     $alertMsg = ""
     if ($downServices.Count -gt 0) { $alertMsg += "Stopped: " + ($downServices -join ", ") + ". " }
     if ($unhealthyServices.Count -gt 0) { $alertMsg += "Unhealthy: " + ($unhealthyServices -join ", ") + "." }
+    if ($cudaBroken) { $alertMsg += "Ollama GPU不可用 (CUDA初始化失败已回退CPU, 需重启WSL和DockerDesktop). " }
 
     Write-Log "ERROR" "Service anomaly detected" @{
         down = $downServices
         unhealthy = $unhealthyServices
+        cudaBroken = $cudaBroken
         alert = $alertMsg
     }
 
@@ -142,6 +162,7 @@ try {
         timestamp = Get-Date -Format "o"
         down = $downServices
         unhealthy = $unhealthyServices
+        cudaBroken = $cudaBroken
     }
     $stateObj | ConvertTo-Json | Set-Content $StateFile -Encoding UTF8
     exit 1

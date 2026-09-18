@@ -1,6 +1,37 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+## 当前状态 (2026-09-18 ollama 冷启动事故三层防御 — 驱动更新→WSL 错配根因, warmup+看门狗+监控, 已部署)
+
+**"首次对话 3.5 分钟后 network error" 事故复盘 (2026-09-16 20:56 发生, 09-18 修复收口)**:
+- **根因链 (日志实证)**: ① `OLLAMA_KEEP_ALIVE=10m` 闲置必卸载 → 首条消息必冷加载;
+  ② 09-16 17:14 Windows 自动更新 NVIDIA 驱动 (DriverStore 新快照 `b20cc8aeaed64fc2`),
+  跑了 6 天没重启的 Docker Desktop/WSL2 VM 仍绑 09-05 旧快照 (`436833bbb0f00476`);
+  ③ 容器内 `ggml_cuda_init: failed ... CUDA driver version is insufficient` →
+  **RTX 5090 完全不可见, 17GB qwen3.8:27b 静默回退纯 CPU** (慢的是 CPU_REPACK 张量重排,
+  E 盘 NVMe 不是瓶颈); ④ 加载 3m27s 未完成, SSE 静默被链路掐断 → ERR_CONNECTION_CLOSED
+  → "抱歉，我暂时无法回复"。同一容器 09-16 16:56 GPU 还好 (offloaded 66/66), 铁证时间线。
+- **⚠️ 永久纪律: Windows 更新 NVIDIA 驱动后必须 `wsl --shutdown` + 重启 Docker Desktop**,
+  否则 ollama 静默回退 CPU 且无任何报错暴露。验证标志: ollama 日志
+  `offloaded 66/66 layers to GPU` + `ollama ps` 显示 `100% GPU`。GPU 冷加载实测 100.7s。
+- **三层防御 (09-18 落地)**:
+  1. **预热**: `POST /api/v1/chat/warmup` (app/api/v1/chat.py, fire-and-forget 幂等,
+     已驻留→ready/预热中→warming/探测失败→unavailable 永不 5xx) + 前端
+     `web/src/api/agent/warmup.ts` 在 ChatViewSSE onMounted 触发 — 打字窗口覆盖冷加载;
+  2. **首 token 看门狗**: `app/core/llm.py:_stream_ollama_first_token_guard` — ollama
+     OpenAI 兼容端点模型可用前不发响应头, `asyncio.wait_for(create(), 60s)` 超时即判
+     卡死, 自动降级云端 mimo 重试 (`OLLAMA_FIRST_TOKEN_TIMEOUT`/`OLLAMA_CLOUD_FALLBACK`
+     可配); 仅 backend=ollama 分支生效, openai_compat 的 429→ollama fallback 不受影响;
+  3. **监控**: `scripts/local-watchdog.ps1` 扫 `docker logs --since 24h` 的
+     `ggml_cuda_init: failed` 签名告警 (TTS+日志, 状态转换去重)。
+- **顺手修活 watchdog (真 bug)**: `$ExpectedServices` 精确匹配 vs 孤儿 compose 容器的
+  随机 hex 前缀 (如 `6010d5393430_microbubble-agent-vision-mcp-1`) + 陈旧名单
+  (`pg-exporter-dev-1` 实际是 `pg-exporter-1`) → 状态文件**常驻 hasIssue=true, 状态
+  转换告警永不触发 (watchdog 早就哑了)**。修复: `-like "*$svc"` 后缀匹配 + 名单更正。
+- **keep_alive 10m → 30m** (docker-compose.yml, 09-09 用户定的 10m 经权衡放宽:
+  课间/会议间隙不再必冷加载; 永驻 -1 仍不用)。测试: `tests/test_chat_warmup_and_first_token.py`
+  11/11 (tests/ 不在容器 volume 里, 需 docker cp 进容器跑)。
+
 ## 当前状态 (2026-09-13 桌面端存量删除待重做; 09-12 企业微信下线 + 测试库隔离 + 部署自愈, 已部署)
 
 **桌面端推倒重做 (2026-09-13, 用户拍板"太乱, 一步步重做")**:
