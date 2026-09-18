@@ -1,5 +1,5 @@
 // 备份核心契约（M5-1）— 容器往返/加密安全/恢复安全网/中文路径。全部离线，真实临时目录。
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -253,30 +253,39 @@ describe('整改补充用例', () => {
 })
 
 describe('退出自动备份（M5-2）', () => {
-  const exitDir = (): string => join(filesRoot, '..', 'backups')
+  const newExitDir = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'm5-exit-'))
+    cleanup.push(dir)
+    return dir
+  }
 
   it('开关关 — 不触发备份，返回 null', async () => {
-    const res = await svc.exitAutoBackup({ password: PASSWORD, autoOnExit: false })
+    const targetDir = newExitDir()
+    const res = await svc.exitAutoBackup({ password: PASSWORD, autoOnExit: false, targetDir })
     expect(res).toBeNull()
-    expect(existsSync(exitDir())).toBe(false) // 目录未创建 = 零副作用
+    // mkdtemp 自身已建目录 — 断言无 .mnbbak 产物 = 零副作用
+    expect(readdirSync(targetDir).filter((f) => f.endsWith('.mnbbak'))).toHaveLength(0)
   })
 
   it('开关开 — 触发本地备份产物落地（未配置 OSS → uploaded=false）', async () => {
-    const res = await svc.exitAutoBackup({ password: PASSWORD, autoOnExit: true })
+    const targetDir = newExitDir()
+    const res = await svc.exitAutoBackup({ password: PASSWORD, autoOnExit: true, targetDir })
     expect(res).not.toBeNull()
     expect(res!.fileName).toMatch(/^workbench-\d{8}-\d{6}\.mnbbak$/)
     expect(res!.uploaded).toBe(false)
-    expect(existsSync(join(exitDir(), res!.fileName))).toBe(true)
+    expect(existsSync(join(targetDir, res!.fileName))).toBe(true)
   })
 
   it('开关开 + OSS 上传失败（不可达 endpoint）— 不抛错不阻塞，uploaded=false', async () => {
+    const targetDir = newExitDir()
     const res = await svc.exitAutoBackup({
       password: PASSWORD,
       autoOnExit: true,
-      ossConfig: { bucket: 'b', endpoint: 'https://127.0.0.1:9', prefix: 't/', accessKeyId: 'a', accessKeySecret: 's' }
+      ossConfig: { bucket: 'b', endpoint: 'https://127.0.0.1:9', prefix: 't/', accessKeyId: 'a', accessKeySecret: 's' },
+      targetDir
     })
     expect(res).not.toBeNull()
     expect(res!.uploaded).toBe(false)
-    expect(existsSync(join(exitDir(), res!.fileName))).toBe(true) // 本地备份仍在
+    expect(existsSync(join(targetDir, res!.fileName))).toBe(true) // 本地备份仍在
   })
 })

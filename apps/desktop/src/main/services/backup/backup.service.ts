@@ -238,9 +238,11 @@ export class BackupService {
     password: string
     autoOnExit: boolean
     ossConfig?: OssConfig | null
+    /** 测试注入用 — 默认 filesRoot 同级 backups 目录 */
+    targetDir?: string
   }): Promise<{ fileName: string; uploaded: boolean } | null> {
     if (!opts.autoOnExit) return null
-    const targetDir = join(this.filesRoot, '..', 'backups')
+    const targetDir = opts.targetDir ?? join(this.filesRoot, '..', 'backups')
     const timeout = new Promise<never>((_, reject) => {
       const timer = setTimeout(() => reject(new Error('退出备份超时')), 10_000)
       timer.unref?.() // 超时保护不阻塞进程退出
