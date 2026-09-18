@@ -13,7 +13,7 @@
   grid-template-columns: minmax(360px, 45%) minmax(420px, 55%);
   overflow: hidden;
   border: 1px solid var(--color-border);
-  border-radius: 22px;
+  border-radius: var(--radius-xl);
   background: var(--color-bg-card);
   box-shadow: var(--shadow-lg);
 }
@@ -22,9 +22,10 @@
   padding: 48px;
   overflow: hidden;
   color: var(--wb-panel-text);
-  background: linear-gradient(150deg, var(--wb-panel-950) 0%, var(--wb-panel-900) 62%, #3d2a20 100%);
+  /* M7：暖黑 → 靛墨深阶（宣纸换新；结构不变） */
+  background: linear-gradient(150deg, var(--wb-panel-950) 0%, var(--wb-panel-900) 62%, #4d6b85 100%);
 }
-/* 装饰：低透明网格（实验记录纸）+ 珊瑚色气泡波纹，纯 CSS 无图片 */
+/* 装饰：低透明网格（实验记录纸）+ 纸色气泡波纹，纯 CSS 无图片 */
 .auth-identity::before {
   content: '';
   position: absolute;
@@ -33,6 +34,7 @@
     linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
   background-size: 28px 28px;
 }
+/* 波纹用纸色（深底上靛墨会与底同色不可见） */
 .auth-identity::after {
   content: '';
   position: absolute;
@@ -41,8 +43,8 @@
   width: 260px;
   height: 260px;
   border-radius: 50%;
-  border: 1.5px solid rgba(var(--color-primary-rgb), 0.35);
-  box-shadow: 0 0 0 28px rgba(var(--color-primary-rgb), 0.12), 0 0 0 56px rgba(var(--color-primary-rgb), 0.05);
+  border: 1.5px solid rgba(249, 245, 236, 0.28);
+  box-shadow: 0 0 0 28px rgba(249, 245, 236, 0.08), 0 0 0 56px rgba(249, 245, 236, 0.04);
 }
 .auth-brand {
   display: flex;
@@ -51,7 +53,8 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   letter-spacing: 0.06em;
-  color: rgba(var(--color-primary-rgb), 1);
+  /* 深底上品牌字用纸色（靛墨在靛墨面板上不可读） */
+  color: var(--wb-panel-text);
 }
 .auth-brand-logo {
   width: 26px;

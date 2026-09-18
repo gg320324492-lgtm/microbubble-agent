@@ -50,11 +50,12 @@ onMounted(async () => {
   border-radius: var(--radius-full);
 }
 .statusbar-led.is-on {
-  background: #67c23a;
-  box-shadow: 0 0 6px rgba(103, 194, 58, 0.8);
+  /* M7：走宣纸语义令牌（原硬编码 EP 绿/红） */
+  background: var(--color-success);
+  box-shadow: 0 0 6px rgba(74, 124, 89, 0.8);
 }
 .statusbar-led.is-off {
-  background: #f56c6c;
+  background: var(--color-danger);
 }
 .statusbar-right {
   display: flex;

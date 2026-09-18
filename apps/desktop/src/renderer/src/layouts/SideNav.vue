@@ -114,8 +114,10 @@ async function onLogout(): Promise<void> {
   color: var(--wb-panel-text);
 }
 .rail-item.is-active {
-  background: var(--color-primary);
-  color: #fff;
+  /* M7：深靛墨栏上用「纸面 chip + 靛墨图标」表达选中（靛墨压靛墨对比不足） */
+  background: var(--color-bg-card);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
 }
 .rail-badge {
   position: absolute;
@@ -129,8 +131,8 @@ async function onLogout(): Promise<void> {
   line-height: 13px;
 }
 .rail-item.is-active .rail-badge {
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 .rail-footer {
   padding-top: var(--space-2);

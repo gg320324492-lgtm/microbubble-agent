@@ -53,12 +53,14 @@ jobs:
       - name: Install (workspace only)
         run: pnpm install --frozen-lockfile
 
-      # 门禁三件套 + 原生模块 ABI 对齐 + 打包 + latest.yml 生成与自校验 —— 与本地发布同一脚本
-      # native 步骤：CI 全新安装拿到的是 Node ABI 的 better-sqlite3，必须换成 Electron ABI
-      # 预编译包，否则打包出的应用启动即崩（v0.1.5-alpha 首航实测踩到）
-      - name: Gates + native + package + latest.yml
+      # 门禁三件套 + 原生模块 ABI 对齐 + 打包 + 产物可运行性门禁 + latest.yml 生成与自校验
+      # —— 与本地发布同一脚本
+      # native：CI 全新安装拿到的是 Node ABI 的 better-sqlite3，必须换成 Electron ABI
+      #         预编译包，否则打包出的应用启动即崩（v0.1.5-alpha 首航实测踩到）
+      # smoke ：静默启动打包产物 + CDP 断言状态栏版本号，跑不起来即 fail（M7 随车必办②）
+      - name: Gates + native + package + smoke + latest.yml
         working-directory: apps/desktop
-        run: node scripts/release.mjs clean native gates package latest verify
+        run: node scripts/release.mjs version clean native gates package smoke latest verify
 
       - name: Resolve release tag
         id: tag

@@ -2,10 +2,12 @@
 // 桌面端发布脚本（M6-2）— 本地与 CI 共用同一套步骤，消灭手工补 latest.yml。
 //
 // 用法:
-//   node scripts/release.mjs                 # 全流程：clean → gates → package → latest → verify
+//   node scripts/release.mjs                 # 全流程：version → clean → native → gates → package → smoke → latest → verify
+//   node scripts/release.mjs version         # 版本两处同步校验（package.json ↔ constants.ts）
 //   node scripts/release.mjs clean           # 分批清理 out/（绕开本地沙箱批量删除阈值）
 //   node scripts/release.mjs gates           # test + typecheck + build
 //   node scripts/release.mjs package         # electron-builder -p never（禁止自行上传）
+//   node scripts/release.mjs smoke           # 产物可运行性门禁（启动产物 + CDP 断言状态栏版本）
 //   node scripts/release.mjs latest          # 生成并校验 latest.yml
 //   node scripts/release.mjs verify          # 版本同步 + 三件套一致性自验
 //
@@ -68,6 +70,14 @@ function stepClean() {
   cleanOutDir(join(ROOT, 'out'), log)
 }
 
+/**
+ * 版本同步一致性门禁（M7 随车必办③）— package.json ↔ src/shared/constants.ts。
+ * 放最前面：版本不一致是最廉价的失败，不该等到打包完才发现（R-1 类翻车防线）。
+ */
+function stepVersion() {
+  assertVersionSync()
+}
+
 /** 门禁三件套 */
 function stepGates() {
   run('pnpm', ['test'])
@@ -125,6 +135,15 @@ function stepPackage() {
   run('npx', ['electron-builder', '--win', 'nsis', '-c.npmRebuild=false', '-p', 'never'])
 }
 
+/**
+ * 产物可运行性门禁（M7 随车必办②）— 静默启动打包产物 + CDP 断言状态栏版本号。
+ * 放在 latest/verify 之前：产物跑不起来就没有必要生成更新信息、更不该发布。
+ * 覆盖：主进程 → 原生模块（Electron ABI）→ IPC → 渲染进程 → 版本一致性。
+ */
+function stepSmoke() {
+  run('node', [join(ROOT, 'scripts', 'smoke-package.mjs')])
+}
+
 function sha512Base64(file) {
   return new Promise((res, rej) => {
     const h = createHash('sha512')
@@ -170,8 +189,17 @@ async function stepVerify() {
 
 // ---------- 入口 ----------
 
-const STEPS = { clean: stepClean, native: stepNative, gates: stepGates, package: stepPackage, latest: stepLatest, verify: stepVerify }
-const ORDER = ['clean', 'native', 'gates', 'package', 'latest', 'verify']
+const STEPS = {
+  version: stepVersion,
+  clean: stepClean,
+  native: stepNative,
+  gates: stepGates,
+  package: stepPackage,
+  smoke: stepSmoke,
+  latest: stepLatest,
+  verify: stepVerify
+}
+const ORDER = ['version', 'clean', 'native', 'gates', 'package', 'smoke', 'latest', 'verify']
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 const selected = args.length ? args : ORDER
