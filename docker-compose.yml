@@ -221,9 +221,12 @@ services:
       - ./data/ollama:/root/.ollama
     environment:
       # 2026-09-09: -1(永驻显存) → 10m。对话期间每个请求刷新计时器, 模型常驻不冷加载;
-      # 停止对话 10 分钟后自动卸载释放显存 (用户显式要求)。全 chat 已收敛单模型 qwen3:14b,
+      # 停止对话后自动卸载释放显存 (用户显式要求)。全 chat 已收敛单模型 qwen3.8:27b,
       # 不再多模型互挤。回滚永驻: 改回 -1。
-      - OLLAMA_KEEP_ALIVE=10m
+      # 2026-09-18: 10m → 30m。GPU 冷加载实测 100s, 10m 闲后首条消息必等 1.5 分钟;
+      # 30m 覆盖课间/会议间隙。再配合: 前端聊天页 onMounted 预热 (/chat/warmup)
+      # + 后端首 token 看门狗超时降级云端 (app/core/llm.py)。
+      - OLLAMA_KEEP_ALIVE=30m
       - OLLAMA_HOST=0.0.0.0:11434
     extra_hosts:
       # Docker Desktop Windows 默认只 bind IPv6, 加 host-gateway 强制 IPv4 NAT

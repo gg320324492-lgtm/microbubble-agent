@@ -15,9 +15,12 @@
 - chat 路由内部走 agent.micro_bubble_agent v2（与 v1 core 共存）
 """
 
+import asyncio
 import json
 import logging
 from typing import Any, AsyncIterator, Literal, Optional, List
+
+import httpx
 
 from fastapi import (
     APIRouter,
@@ -36,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.micro_bubble_agent import agent as v2_agent
 from app.agent.protocol import StreamEvent
+from app.config import settings
 from app.core.database import get_db
 from app.core.exceptions import ValidationException
 from app.core.redis import session_store
@@ -304,6 +308,73 @@ async def chat_with_file(
         rich_blocks=result.get("rich_blocks", []),
         tool_trace=result.get("tool_trace", []),
     )
+
+
+# ============================================================================
+# 端点：POST /chat/warmup (2026-09-18 冷加载防御)
+# ============================================================================
+
+# 模块级预热状态 (单进程单 worker, 幂等去重足够)
+_OLLAMA_WARMUP_IN_FLIGHT = False
+
+
+@router.post("/chat/warmup")
+async def chat_warmup(current_user: Member = Depends(get_current_user)):
+    """预热本地聊天模型 (fire-and-forget, 立即返回)
+
+    背景: OLLAMA_KEEP_ALIVE 到期后模型卸载, 首条消息要等 GPU 冷加载 (~100s),
+    期间 SSE 静默容易被链路掐断 (2026-09-18 事故). 前端聊天页挂载时调本端点,
+    用户打字的窗口正好覆盖加载.
+
+    幂等语义: 模型已驻留 → ready / 预热中 → warming / 起后台预热 → warming
+    探测失败 → unavailable. 永不阻塞、永不 5xx (预热失败只记日志,
+    对话链路由 LLMClient 首 token 看门狗 + 云端降级兜底).
+    """
+    global _OLLAMA_WARMUP_IN_FLIGHT
+
+    base = settings.OLLAMA_BASE_URL.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[: -len("/v1")]
+    model = settings.OLLAMA_MODEL
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            ps = await client.get(f"{base}/api/ps")
+            loaded = model in ps.text
+    except Exception as e:
+        logger.warning(f"warmup: ollama /api/ps 探测失败: {e}")
+        return {"status": "unavailable", "model": model}
+
+    if loaded:
+        return {"status": "ready", "model": model}
+
+    if _OLLAMA_WARMUP_IN_FLIGHT:
+        return {"status": "warming", "model": model}
+
+    _OLLAMA_WARMUP_IN_FLIGHT = True
+
+    async def _warm():
+        global _OLLAMA_WARMUP_IN_FLIGHT
+        try:
+            # timeout 覆盖最坏情形 (CPU 回退加载 3min+), 失败只记日志
+            async with httpx.AsyncClient(timeout=600.0) as client:
+                await client.post(
+                    f"{base}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": "hi",
+                        "stream": False,
+                        "options": {"num_predict": 1},
+                    },
+                )
+            logger.info(f"warmup: 模型 {model} 预热完成")
+        except Exception as e:
+            logger.warning(f"warmup: 模型 {model} 预热失败 (对话链路走看门狗兜底): {e}")
+        finally:
+            _OLLAMA_WARMUP_IN_FLIGHT = False
+
+    asyncio.create_task(_warm())
+    return {"status": "warming", "model": model}
 
 
 # ============================================================================

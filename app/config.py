@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     # 2026-07-03 P0-3: openai_compat (mimo) 429 fallback 用的 ollama 模型.
     # 默认复用 OLLAMA_MODEL (qwen3:8b), 未来可改 qwen3:14b 等更稳 fallback.
     OLLAMA_FALLBACK_MODEL: str = ""
+    # 2026-09-18 冷启动事故防御 (驱动更新后 WSL2 未重启 → 容器 CUDA 静默回退 CPU,
+    # 17GB 模型纯 CPU 加载 3.5min+ → SSE 被中间层掐断 ERR_CONNECTION_CLOSED):
+    # ollama 流式 create() 在模型可用前不发响应头, 阻塞时长即"模型不可用"信号.
+    # 首 token 看门狗秒数: create() 超过该秒数视为冷加载卡死/模型不可用.
+    OLLAMA_FIRST_TOKEN_TIMEOUT: int = 60
+    # 首 token 超时后降级云端 (mimo openai_compat) 重试; False 时超时直接抛错.
+    OLLAMA_CLOUD_FALLBACK: bool = True
 
     # Vision MCP 配置（保留开关，未来切本地 vision 模型时启用）
     VISION_USE_MCP: bool = False

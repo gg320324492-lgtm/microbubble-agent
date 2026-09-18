@@ -65,6 +65,7 @@ import { useUiStore } from '@/stores/useUiStore'
 import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4: 资料库附加文档
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { warmupChatModel } from '@/api/agent/warmup'  // 2026-09-18 冷加载防御
 import { renderMarkdown } from '@/utils/markdown'
 import { formatTimeDivider } from '@/utils/timeDivider'
 
@@ -797,6 +798,9 @@ function onProEntryClick(msg: ChatMessage, kind: 'graph' | 'formula' | 'hypothes
 
 onMounted(async () => {
   await nextTick()
+  // 2026-09-18 冷加载防御: 进页面即后台预热本地模型 (fire-and-forget, 永不 throw),
+  // 用户打字的窗口正好覆盖 ollama GPU 冷加载 (~100s), 首条消息不再空等
+  warmupChatModel()
   // #P5: 加载用户全局附加文档 (从 server, 跨刷新持久)
   chatCtx.loadFromServer()
   scrollToBottom()
