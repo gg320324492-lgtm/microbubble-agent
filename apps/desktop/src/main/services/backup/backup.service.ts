@@ -241,7 +241,10 @@ export class BackupService {
   }): Promise<{ fileName: string; uploaded: boolean } | null> {
     if (!opts.autoOnExit) return null
     const targetDir = join(this.filesRoot, '..', 'backups')
-    const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('退出备份超时')), 10_000))
+    const timeout = new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => reject(new Error('退出备份超时')), 10_000)
+      timer.unref?.() // 超时保护不阻塞进程退出
+    })
     const doBackup = async () => {
       const res = await this.createBackup({ password: opts.password, targetDir })
       let uploaded = false
