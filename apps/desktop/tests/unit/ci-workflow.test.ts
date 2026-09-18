@@ -69,12 +69,12 @@ describe('desktop-release.yml — 步骤链与产物', () => {
     expect(yml).toContain('latest.yml')
   })
 
-  it('发布脚本与本地一致：clean/gates/package/latest/verify 五步全用', () => {
+  it('发布脚本与本地一致：clean/native/gates/package/latest/verify 六步全用', () => {
     const yml = readWorkflow()
     const step = /node scripts\/release\.mjs ([^\n]+)/.exec(yml)
     expect(step).not.toBeNull()
     const steps = (step?.[1] ?? '').trim().split(/\s+/)
-    expect(steps).toEqual(['clean', 'gates', 'package', 'latest', 'verify'])
+    expect(steps).toEqual(['clean', 'native', 'gates', 'package', 'latest', 'verify'])
   })
 
   it('tag 解析支持 push tag / 手动指定 / 兜底 ci.<run_number>', () => {

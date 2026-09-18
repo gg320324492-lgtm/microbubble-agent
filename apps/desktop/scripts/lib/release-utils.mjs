@@ -125,3 +125,24 @@ export function artifactNames(version) {
   const exe = `MicroBubbleWorkbench-${version}-setup.exe`
   return { exe, blockmap: `${exe}.blockmap`, latestYml: 'latest.yml' }
 }
+
+/**
+ * 判定原生模块（.node）的 ABI 归属（M6-2 修复）。
+ *
+ * 判定技巧：Node 能 require 成功 ⇒ 该二进制是 **Node ABI**，打包进 Electron 必崩
+ * （实测 Electron 32 需 NODE_MODULE_VERSION 128，而 Node 22 是 127）；
+ * 抛错且提到 128 ⇒ 已是 Electron ABI，正确；其余错误视为未知（不擅自改写）。
+ *
+ * @param {{ ok: boolean, error?: string }} probe
+ * @returns {'node' | 'electron' | 'unknown'}
+ */
+export function classifyNativeAbi(probe) {
+  if (probe?.ok) return 'node'
+  const err = String(probe?.error ?? '')
+  return /NODE_MODULE_VERSION\s+128/.test(err) ? 'electron' : 'unknown'
+}
+
+/** 从 electron 包版本得到 prebuild-install 需要的 target */
+export function electronTarget(version) {
+  return String(version ?? '').trim()
+}

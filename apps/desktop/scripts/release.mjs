@@ -11,15 +11,18 @@
 //
 // 说明：out/ 分批清理仅本地需要（沙箱对单次 rmSync 有 50 文件阈值）；CI 无此限制但共用同一脚本。
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { cleanOutDir } from './lib/clean-out.mjs'
 import {
   artifactNames,
   buildLatestYml,
   checkVersionSync,
-  planOutCleanup,
+  classifyNativeAbi,
+  electronTarget,
   verifyLatestYml
 } from './lib/release-utils.mjs'
 
@@ -57,26 +60,12 @@ function assertVersionSync() {
 
 // ---------- 步骤 ----------
 
-/** out/ 分批清理（清账⑤） */
+/** 递归收集文件路径（不含目录） */
+/**
+ * out/ 分批清理（清账⑤）— 实现见 lib/clean-out.mjs（守卫友好分批 + 回退）。
+ */
 function stepClean() {
-  const outDir = join(ROOT, 'out')
-  if (!existsSync(outDir)) {
-    log('out/ 不存在，跳过清理')
-    return
-  }
-  const entries = readdirSync(outDir)
-  if (entries.length === 0) {
-    rmSync(outDir, { recursive: true, force: true })
-    log('out/ 为空，已移除')
-    return
-  }
-  const batches = planOutCleanup(entries)
-  log(`out/ 顶层条目 ${entries.length} 个，分 ${batches.length} 批删除`)
-  for (const [i, batch] of batches.entries()) {
-    for (const name of batch) rmSync(join(outDir, name), { recursive: true, force: true })
-    log(`  批 ${i + 1}/${batches.length} 完成（${batch.length} 项）`)
-  }
-  rmSync(outDir, { recursive: true, force: true })
+  cleanOutDir(join(ROOT, 'out'), log)
 }
 
 /** 门禁三件套 */
@@ -84,6 +73,51 @@ function stepGates() {
   run('pnpm', ['test'])
   run('pnpm', ['typecheck'])
   run('pnpm', ['build'])
+}
+
+/**
+ * 原生依赖 ABI 对齐（M6-2 修复）— 打包前必须保证 .node 是 Electron ABI。
+ *
+ * 背景：`better-sqlite3` 是原生模块。CI 全新 `pnpm install` 会装到 **Node ABI(127)** 预编译包，
+ * 而 Electron 32 需要 **NODE_MODULE_VERSION 128**；若直接打包，应用启动即
+ * "was compiled against a different Node.js version" 崩溃（v0.1.5-alpha 首航实测踩到）。
+ * 本地 node_modules 恰已是 128 所以长期未暴露。
+ *
+ * 这里用 prebuild-install 拉 Electron 预编译包（**无需 VS 工具链**，CI/本地一致）；
+ * 若拉取失败则直接终止发布——绝不产出 ABI 不匹配的安装包。
+ */
+function stepNative() {
+  const require = createRequire(import.meta.url)
+  const electronVersion = JSON.parse(readFileSync(require.resolve('electron/package.json'), 'utf8')).version
+  const bsqPkgPath = require.resolve('better-sqlite3/package.json')
+  const bsqDir = dirname(bsqPkgPath)
+  const binary = join(bsqDir, 'build', 'Release', 'better_sqlite3.node')
+
+  const probe = () => {
+    try {
+      require(binary)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  const before = classifyNativeAbi(probe())
+  log(`原生模块 ABI 探测：${before}（Electron ${electronVersion} 需要 128）`)
+  if (before === 'electron') {
+    log('已是 Electron ABI，跳过')
+    return
+  }
+
+  const prebuildBin = join(dirname(require.resolve('prebuild-install/package.json')), 'bin.js')
+  log('拉取 Electron 预编译包（无需 VS 工具链）…')
+  run('node', [prebuildBin, '--runtime=electron', `--target=${electronTarget(electronVersion)}`, '--arch=x64'], {
+    cwd: bsqDir
+  })
+
+  const after = classifyNativeAbi(probe())
+  if (after !== 'electron') die(`原生模块 ABI 仍不是 Electron（${after}）——拒绝发布`)
+  log('原生模块已对齐 Electron ABI')
 }
 
 /** 打包（-p never：发布由 gh/CI 显式完成，禁止 electron-builder 自行上传） */
@@ -136,8 +170,8 @@ async function stepVerify() {
 
 // ---------- 入口 ----------
 
-const STEPS = { clean: stepClean, gates: stepGates, package: stepPackage, latest: stepLatest, verify: stepVerify }
-const ORDER = ['clean', 'gates', 'package', 'latest', 'verify']
+const STEPS = { clean: stepClean, native: stepNative, gates: stepGates, package: stepPackage, latest: stepLatest, verify: stepVerify }
+const ORDER = ['clean', 'native', 'gates', 'package', 'latest', 'verify']
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('-'))
 const selected = args.length ? args : ORDER

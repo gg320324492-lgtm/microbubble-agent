@@ -6,7 +6,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && electron-vite build",
+    "build": "node scripts/clean-out.mjs && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "pack": "npm run build && electron-builder --dir -c.npmRebuild=false",
