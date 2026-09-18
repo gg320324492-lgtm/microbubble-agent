@@ -251,3 +251,32 @@ describe('整改补充用例', () => {
     expect(restored!.length).toBe(150 * 1024)
   })
 })
+
+describe('退出自动备份（M5-2）', () => {
+  const exitDir = (): string => join(filesRoot, '..', 'backups')
+
+  it('开关关 — 不触发备份，返回 null', async () => {
+    const res = await svc.exitAutoBackup({ password: PASSWORD, autoOnExit: false })
+    expect(res).toBeNull()
+    expect(existsSync(exitDir())).toBe(false) // 目录未创建 = 零副作用
+  })
+
+  it('开关开 — 触发本地备份产物落地（未配置 OSS → uploaded=false）', async () => {
+    const res = await svc.exitAutoBackup({ password: PASSWORD, autoOnExit: true })
+    expect(res).not.toBeNull()
+    expect(res!.fileName).toMatch(/^workbench-\d{8}-\d{6}\.mnbbak$/)
+    expect(res!.uploaded).toBe(false)
+    expect(existsSync(join(exitDir(), res!.fileName))).toBe(true)
+  })
+
+  it('开关开 + OSS 上传失败（不可达 endpoint）— 不抛错不阻塞，uploaded=false', async () => {
+    const res = await svc.exitAutoBackup({
+      password: PASSWORD,
+      autoOnExit: true,
+      ossConfig: { bucket: 'b', endpoint: 'https://127.0.0.1:9', prefix: 't/', accessKeyId: 'a', accessKeySecret: 's' }
+    })
+    expect(res).not.toBeNull()
+    expect(res!.uploaded).toBe(false)
+    expect(existsSync(join(exitDir(), res!.fileName))).toBe(true) // 本地备份仍在
+  })
+})
