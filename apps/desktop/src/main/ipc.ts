@@ -37,6 +37,14 @@ import { DesktopIntegrationService } from './services/desktop/desktop-integratio
 import { UpdateService, type UpdaterPort } from './services/update/update.service'
 import { isUpdateChannelAvailable } from './services/update/feed-config'
 import { BackupService } from './services/backup/backup.service'
+import {
+  EXIT_PASSWORD_ENC_KEY,
+  EXIT_PASSWORD_KEY,
+  maskSecret,
+  planExitPasswordMigration,
+  planExitPasswordWrite,
+  resolveExitPassword
+} from './services/backup/exit-password'
 import { OssClient } from './services/backup/oss.client'
 import { normalizeEndpoint } from './services/backup/oss-sig'
 import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './services/manuscript/manuscript.service'
@@ -178,7 +186,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')))
   const settings = new SettingsService(db)
   const chat = new ChatService(db)
-  const gateway = new ModelGatewayService(db, makeCipher())
+  const cipher = makeCipher()
+  const gateway = new ModelGatewayService(db, cipher)
   const workspace = new WorkspaceService(join(dbPath, '..', 'workspace'))
   const audit = new AuditService(db)
   // 本地知识库（M2-1）— 原件副本目录 + 回收站注入（与 C-3 delete_file 同模式）
@@ -343,14 +352,25 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.SETTINGS_GET, (_e, p): IpcResult<unknown> =>
     tryRun(() => {
       const user = auth.requireUser()
-      return settings.get(String(p?.key ?? ''), user.id)
+      const key = String(p?.key ?? '')
+      // 敏感设置一律不回显明文/密文（M6-2 清账③）
+      if (key === EXIT_PASSWORD_KEY) return maskSecret(readExitPassword(user.id) !== null)
+      return settings.get(key, user.id)
     })
   )
 
   ipcMain.handle(IPC.SETTINGS_SET, (_e, p): IpcResult<null> =>
     tryRun(() => {
       const user = auth.requireUser()
-      settings.set(String(p?.key ?? ''), p?.value ?? null, user.id)
+      const key = String(p?.key ?? '')
+      // 敏感设置在写入路径即转 safeStorage 加密，明文不落盘
+      if (key === EXIT_PASSWORD_KEY) {
+        const plan = planExitPasswordWrite(p?.value ?? null, cipher)
+        settings.set(EXIT_PASSWORD_ENC_KEY, plan.encrypted, user.id)
+        settings.set(EXIT_PASSWORD_KEY, null, user.id)
+        return null
+      }
+      settings.set(key, p?.value ?? null, user.id)
       return null
     })
   )
@@ -1203,6 +1223,23 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   desktop.restoreGlobalShortcut()
 
+  /**
+   * 读取退出备份密码（M6-2 清账③）— 优先解密 safeStorage 密文；
+   * 命中旧明文时顺带完成一次性迁移（加密覆盖 → 清明文），无旧值则不做任何写入。
+   */
+  function readExitPassword(userId: string): string | null {
+    const legacy = settings.get(EXIT_PASSWORD_KEY, userId)
+    const encrypted = settings.get(EXIT_PASSWORD_ENC_KEY, userId)
+    const resolved = resolveExitPassword({ legacyPlaintext: legacy, encrypted, cipher })
+    if (resolved.needsMigration) {
+      const plan = planExitPasswordMigration({ legacyPlaintext: legacy, encrypted, cipher })
+      if (plan.encrypted) settings.set(EXIT_PASSWORD_ENC_KEY, plan.encrypted, userId)
+      if (plan.clearPlaintext) settings.set(EXIT_PASSWORD_KEY, null, userId)
+      console.log('[backup] exitPassword 已迁移至 safeStorage 加密存储')
+    }
+    return resolved.password
+  }
+
   // ---------- 自动更新（M6-1）----------
   ipcMain.handle(IPC.UPDATE_STATE_GET, (): IpcResult<UpdateState> => tryRun(() => update.snapshot()))
 
@@ -1230,7 +1267,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     try {
       const autoOnExit = settings.get('backup.autoOnExit', auth.requireUser().id) === true
       if (!autoOnExit) return null
-      const password = settings.get('backup.exitPassword', auth.requireUser().id) as string | undefined
+      const password = readExitPassword(auth.requireUser().id)
       if (!password) return null
       const cfg = readOssConfig()
       return backup.exitAutoBackup({ password, autoOnExit: true, ossConfig: cfg })

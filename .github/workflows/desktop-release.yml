@@ -1,0 +1,115 @@
+name: desktop-release
+
+# 桌面端发布流水线（M6-2）
+#
+# 触发条件
+#   - push tag v*      ：正式发布（tag 即 Release 名）
+#   - workflow_dispatch：手动/首航联调（可用 inputs.tag 指定；留空则生成 v<version>-ci.<run_number>）
+#
+# 范围约束：本仓库另含 web/ 等非桌面内容，流水线**只构建 apps/desktop**：
+#   - 依赖安装走 workspace（packages: apps/*、packages/*），web/ 不在 workspace 内，不会被安装
+#   - 门禁与打包全部在 apps/desktop 下执行（scripts/release.mjs）
+#
+# 权限：仅需 Actions 内置 GITHUB_TOKEN（contents: write 用于创建 Release 与上传产物），无额外 secrets。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布使用的 tag（留空则用 v<package.json version>-ci.<run_number>）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # node:sqlite（测试用 SQLite 适配层）自 Node 22.5 起可用，故固定 22.x
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Install (workspace only)
+        run: pnpm install --frozen-lockfile
+
+      # 门禁三件套 + 打包 + latest.yml 生成与自校验 —— 与本地发布同一脚本
+      - name: Gates + package + latest.yml
+        working-directory: apps/desktop
+        run: node scripts/release.mjs clean gates package latest verify
+
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          elif [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            VER=$(node -p "require('./package.json').version")
+            TAG="v${VER}-ci.${{ github.run_number }}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "resolved tag: ${TAG}"
+
+      - name: Publish GitHub Release (three artifacts)
+        shell: bash
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.tag }}"
+          VER=$(node -p "require('./apps/desktop/package.json').version")
+          REL="apps/desktop/release"
+          EXE="${REL}/MicroBubbleWorkbench-${VER}-setup.exe"
+          for f in "$EXE" "${EXE}.blockmap" "${REL}/latest.yml"; do
+            [ -f "$f" ] || { echo "缺少产物: $f"; exit 1; }
+          done
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在 → 覆盖上传三件套"
+            gh release upload "$TAG" "$EXE" "${EXE}.blockmap" "${REL}/latest.yml" --clobber
+          else
+            echo "创建 Release $TAG"
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --generate-notes \
+              --prerelease \
+              "$EXE" "${EXE}.blockmap" "${REL}/latest.yml"
+          fi
+          echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/${TAG}"
+
+      - name: Upload build artifacts (workflow run)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-nsis-${{ github.run_number }}
+          path: |
+            apps/desktop/release/MicroBubbleWorkbench-*-setup.exe
+            apps/desktop/release/MicroBubbleWorkbench-*-setup.exe.blockmap
+            apps/desktop/release/latest.yml
+          if-no-files-found: warn
+          retention-days: 14

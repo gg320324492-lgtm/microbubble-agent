@@ -1,5 +1,32 @@
 # CHANGELOG — 小气 · 科研工作台 桌面端
 
+## v0.1.5-alpha（2026-09-19）
+
+### 自动更新——从「手动下载」到「提示即升」（M6-1）
+- **[M6-1] 自动更新通道（electron-updater）**：启动 5 秒后台检查（不阻塞启动、失败静默）
+  + 设置页「检查更新」手动入口；发现新版本弹系统通知（点击聚焦并跳设置页）+ 设置页展示
+  版本与下载进度条；**全程不自动下载、不自动安装**——下载由用户点击、安装前二次确认
+- **[M6-1] 设置页新增「关于与更新」区块**：当前版本、更新状态/进度、检查/下载/安装按钮、
+  「自动检查更新」开关（默认开）
+- **[fix] 打包态缺失 `app-update.yml` 导致更新下载失败**：electron-builder 配置补 publish 段，
+  打包自动产出 app-update.yml 与 latest.yml
+- **[fix] 未打包环境更新检查被整体跳过且伪装「已是最新」**：装配漏传 `forceDev` 使
+  electron-updater 闸门关闭、不发任何请求却返回 null；现以纯函数统一装配决策（feed-config），
+  跳过场景如实显示「更新检查不可用（开发环境）」
+
+### 发布自动化与打包清账（M6-2）
+- **[M6-2] CI/CD 自动化**：新增 `.github/workflows/desktop-release.yml`——推送 `v*` tag 或手动
+  触发即自动跑门禁三件套 → 打包 → 生成 latest.yml → 创建 GitHub Release 并上传三件套；
+  只构建 `apps/desktop`，仅用内置 GITHUB_TOKEN
+- **[M6-2] 发布脚本 `scripts/release.mjs`**（本地与 CI 同一脚本）：版本两处同步校验、
+  out/ 分批清理、latest.yml 自动生成并逐字段自校验——消灭手工补 latest.yml
+- **[M6-2] 托盘图标资源化**：托盘改用 `icon.ico`（Windows 原生多尺寸，高 DPI 不再拉伸模糊），
+  缺 .ico 时自动回退 `icon.png`
+- **[M6-2] 退出自动备份密码迁移 safeStorage**：`backup.exitPassword` 由明文改为
+  `safeStorage` 加密存储（读旧明文 → 加密覆盖 → 清明文，兼容无旧值），界面只回显掩码
+- **[M6-2] OSS 快照列举支持分页**：`listObjects` 按 continuation token 循环翻页，
+  修复快照数超过单页上限（1000）时列表截断丢数据；并加按 key 去重防服务端异常重复
+
 ## v0.1.4-alpha（2026-09-18）
 
 ### 备份与恢复——工作数据可带走（M5 收尾）

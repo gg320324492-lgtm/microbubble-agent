@@ -1,10 +1,12 @@
 // 主进程入口 — 无边框窗口 + 三铁律安全基线（骨架设计 §5）
 import { app, BrowserWindow, shell } from 'electron'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { registerIpc, installDesktopPrimitives, installUpdaterPort } from './ipc'
 import { openDatabase } from './db'
 import { createElectronUpdaterPort } from './services/update/updater-adapter'
 import { resolveUpdateFeedConfig } from './services/update/feed-config'
+import { resolveTrayIcon } from './services/desktop/tray-icon'
 import { IPC } from '@shared/ipc-channels'
 import { APP_NAME, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from '@shared/constants'
 
@@ -101,12 +103,14 @@ app.whenReady().then(() => {
   createWindow()
 
   // 托盘常驻 + 关窗行为分流（M4）
-  // 打包后 app.getAppPath() 指向 app.asar（内部无 resources/），图标由 extraResources 落在
-  // <install>/resources/resources/，故打包态改用 process.resourcesPath；开发态仍走 app 根目录
-  const trayIcon = app.isPackaged
-    ? join(process.resourcesPath, 'resources', 'icon.png')
-    : join(app.getAppPath(), 'resources', 'icon.png')
-  desktop.setupTray(trayIcon)
+  // 图标解析：.ico 优先（多尺寸）、.png 回退；打包态走 process.resourcesPath，
+  // 开发态走 app 根目录（见 resolveTrayIcon）
+  const trayIcon = resolveTrayIcon({
+    resourcesRoot: app.isPackaged ? process.resourcesPath : app.getAppPath(),
+    exists: existsSync
+  })
+  if (trayIcon.missing) console.log('[tray] 图标资源缺失，托盘可能无法显示')
+  desktop.setupTray(trayIcon.path)
 
   // 启动后 5s 后台检查更新（不阻塞启动、失败静默；受「自动检查更新」开关约束）
   update.scheduleAutoCheck()

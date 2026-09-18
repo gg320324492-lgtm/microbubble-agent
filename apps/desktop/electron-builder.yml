@@ -8,6 +8,10 @@ icon: build/icon.ico
 extraResources:
   - from: resources
     to: resources
+  # 托盘图标 .ico（Windows 原生多尺寸）— 与 icon.png 同落 <resources>/resources/，
+  # 运行时由 resolveTrayIcon 优先取 .ico、缺则回退 .png（M6-2 清账②）
+  - from: build/icon.ico
+    to: resources/icon.ico
 files:
   - out/**
   - package.json
