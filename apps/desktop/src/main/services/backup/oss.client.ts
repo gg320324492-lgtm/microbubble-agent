@@ -59,6 +59,7 @@ export class OssClient {
 
   /**
    * 列出前缀下全部对象（GET bucket + prefix 参数）。
+   * prefix 由调用方传全量前缀（如 desktop-backup/）——client 不再内部拼 config.prefix（整改：防双拼）。
    * XML 手动正则解析——只提取 Key/Size/LastModified，不含 CommonPrefixes 等高级结构（局限已注明）。
    */
   async listObjects(prefix: string): Promise<OssObjectSummary[]> {
@@ -69,7 +70,7 @@ export class OssClient {
       verb: 'GET', date, canonicalizedResource: res,
       accessKeySecret: this.config.accessKeySecret
     })
-    const url = `${this.config.endpoint}?prefix=${encodeURIComponent(this.config.prefix + prefix)}`
+    const url = `${this.config.endpoint}?prefix=${encodeURIComponent(prefix)}`
     const httpRes = await this.http({
       method: 'GET', url,
       headers: { Date: date, Authorization: ossAuthorization(this.config.accessKeyId, signature) }

@@ -68,3 +68,15 @@ export function ossAuthorization(accessKeyId: string, signature: string): string
 export function canonicalResource(bucket: string, key: string): string {
   return `/${bucket}/${key}`
 }
+
+/**
+ * endpoint 归一化（整改缺陷 2）— 无 scheme 自动补 https://。
+ * 选归一化而非报错：用户直接粘贴「oss-cn-hangzhou.aliyuncs.com」是最常见输入，
+ * OSS endpoint 恒为 HTTPS 可安全补全；其余异常仍由测试连接红字给出原因。
+ */
+export function normalizeEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim()
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  return `https://${trimmed}`
+}

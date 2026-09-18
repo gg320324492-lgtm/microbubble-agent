@@ -35,6 +35,7 @@ import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/ex
 import { DesktopIntegrationService } from './services/desktop/desktop-integration.service'
 import { BackupService } from './services/backup/backup.service'
 import { OssClient } from './services/backup/oss.client'
+import { normalizeEndpoint } from './services/backup/oss-sig'
 import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './services/manuscript/manuscript.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
@@ -543,7 +544,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       if (!enc) return null
       return {
         bucket,
-        endpoint: (settings.get('backup.oss.endpoint', auth.requireUser().id) as string) ?? '',
+        endpoint: normalizeEndpoint((settings.get('backup.oss.endpoint', auth.requireUser().id) as string) ?? ''),
         prefix: (settings.get('backup.oss.prefix', auth.requireUser().id) as string) ?? 'desktop-backup/',
         accessKeyId: (settings.get('backup.oss.accessKeyId', auth.requireUser().id) as string) ?? '',
         accessKeySecret: safeStorage.decryptString(Buffer.from(enc, 'base64'))
@@ -561,7 +562,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       settings.set('backup.oss.accessKeySecretEnc', enc, user.id)
     }
     settings.set('backup.oss.bucket', String(p?.bucket ?? ''), user.id)
-    settings.set('backup.oss.endpoint', String(p?.endpoint ?? ''), user.id)
+    settings.set('backup.oss.endpoint', normalizeEndpoint(String(p?.endpoint ?? '')), user.id)
     settings.set('backup.oss.prefix', String(p?.prefix ?? 'desktop-backup/'), user.id)
     settings.set('backup.oss.accessKeyId', String(p?.accessKeyId ?? ''), user.id)
     return null

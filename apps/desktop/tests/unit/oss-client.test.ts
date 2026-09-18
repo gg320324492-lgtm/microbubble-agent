@@ -1,6 +1,6 @@
 // OSS 签名与客户端契约（M5-2）— 签名/请求形状/XML 解析/上传下载往返。全部注入假 HTTP。
 import { describe, expect, it, vi } from 'vitest'
-import { contentMd5, ossDate, signOssV1, canonicalResource, ossAuthorization } from '@main/services/backup/oss-sig'
+import { contentMd5, ossDate, signOssV1, canonicalResource, ossAuthorization, normalizeEndpoint } from '@main/services/backup/oss-sig'
 import { OssClient } from '@main/services/backup/oss.client'
 import type { OssConfig, OssHttpRequest, OssHttpResponse } from '@main/services/backup/oss-sig'
 
@@ -151,5 +151,27 @@ describe('上传下载往返', () => {
     const got = await client.getObject('desktop-backup/rt.mnbbak')
     expect(got.equals(data)).toBe(true)
     expect(store.size).toBe(1)
+  })
+})
+
+describe('整改回归（打回两项）', () => {
+  it('listObjects prefix 单拼 — 请求参数精确等于调用方全量前缀，无 config.prefix 双拼', async () => {
+    let capturedUrl = ''
+    const fn = vi.fn(async (req: OssHttpRequest): Promise<OssHttpResponse> => {
+      capturedUrl = req.url
+      return { status: 200, body: Buffer.from('<?xml version="1.0"?><ListBucketResult></ListBucketResult>') }
+    })
+    const client = new OssClient(CONFIG, fn)
+    await client.listObjects('desktop-backup/')
+    const prefix = new URL(capturedUrl).searchParams.get('prefix')
+    expect(prefix).toBe('desktop-backup/') // 精确相等 — 双拼 desktop-backup/desktop-backup/ 会在此失败
+  })
+
+  it('normalizeEndpoint — 无 scheme 自动补 https://，带 scheme 原样，空串归空', () => {
+    expect(normalizeEndpoint('oss-cn-hangzhou.aliyuncs.com')).toBe('https://oss-cn-hangzhou.aliyuncs.com')
+    expect(normalizeEndpoint('  oss-cn-hangzhou.aliyuncs.com ')).toBe('https://oss-cn-hangzhou.aliyuncs.com')
+    expect(normalizeEndpoint('https://oss-cn-hangzhou.aliyuncs.com')).toBe('https://oss-cn-hangzhou.aliyuncs.com')
+    expect(normalizeEndpoint('http://127.0.0.1:9000')).toBe('http://127.0.0.1:9000') // minio 类自建端点保留 http
+    expect(normalizeEndpoint('')).toBe('')
   })
 })
