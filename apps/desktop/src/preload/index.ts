@@ -122,7 +122,17 @@ const api = {
       invoke(IPC.BACKUP_CREATE, { password, targetDir }),
     restore: (password: string, backupFile: string): Promise<{ needRestart: boolean }> =>
       invoke(IPC.BACKUP_RESTORE, { password, backupFile }),
-    list: (targetDir: string): Promise<unknown[]> => invoke(IPC.BACKUP_LIST, { targetDir })
+    list: (targetDir: string): Promise<unknown[]> => invoke(IPC.BACKUP_LIST, { targetDir }),
+    deleteLocal: (fileName: string): Promise<boolean> => invoke(IPC.BACKUP_DELETE_LOCAL, { fileName }),
+    oss: {
+      saveConfig: (cfg: { bucket: string; endpoint: string; prefix: string; accessKeyId: string; accessKeySecret: string }): Promise<void> =>
+        invoke(IPC.BACKUP_OSS_SAVE_CONFIG, cfg),
+      test: (): Promise<{ ok: boolean; error?: string }> => invoke(IPC.BACKUP_OSS_TEST),
+      upload: (filePath: string): Promise<{ key: string; size: number }> => invoke(IPC.BACKUP_OSS_UPLOAD, { filePath }),
+      listRemote: (): Promise<{ key: string; size: number; lastModified: string }[]> => invoke(IPC.BACKUP_OSS_LIST_REMOTE),
+      download: (remoteKey: string): Promise<{ localPath: string }> => invoke(IPC.BACKUP_OSS_DOWNLOAD, { remoteKey }),
+      deleteRemote: (remoteKey: string): Promise<void> => invoke(IPC.BACKUP_OSS_DELETE_REMOTE, { remoteKey })
+    }
   },
   desktop: {
     applyShortcut: (accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }> =>

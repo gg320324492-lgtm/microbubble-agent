@@ -119,6 +119,15 @@ export interface PreloadApi {
     create(password: string, targetDir: string): Promise<{ fileName: string; size: number }>
     restore(password: string, backupFile: string): Promise<{ needRestart: boolean }>
     list(targetDir: string): Promise<{ fileName: string; size: number; appVersion: string; createdAt: number; path: string }[]>
+    deleteLocal(fileName: string): Promise<boolean>
+    oss: {
+      saveConfig(cfg: { bucket: string; endpoint: string; prefix: string; accessKeyId: string; accessKeySecret: string }): Promise<void>
+      test(): Promise<{ ok: boolean; error?: string }>
+      upload(filePath: string): Promise<{ key: string; size: number }>
+      listRemote(): Promise<{ key: string; size: number; lastModified: string }[]>
+      download(remoteKey: string): Promise<{ localPath: string }>
+      deleteRemote(remoteKey: string): Promise<void>
+    }
   }
   desktop: {
     applyShortcut(accelerator: string): Promise<{ ok: boolean; accelerator: string; error?: string }>

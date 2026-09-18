@@ -34,6 +34,7 @@ import { MeetingService } from './services/meeting/meeting.service'
 import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/experiment.service'
 import { DesktopIntegrationService } from './services/desktop/desktop-integration.service'
 import { BackupService } from './services/backup/backup.service'
+import { OssClient } from './services/backup/oss.client'
 import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './services/manuscript/manuscript.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
@@ -143,7 +144,7 @@ export function installDesktopPrimitives(getWindow: () => BrowserWindow | null):
   void getWindow
 }
 
-export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): { desktop: DesktopIntegrationService } {
+export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => BrowserWindow | null): { desktop: DesktopIntegrationService; runExitBackup: () => Promise<{ fileName: string; uploaded: boolean } | null> } {
   const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')))
   const settings = new SettingsService(db)
   const chat = new ChatService(db)
@@ -187,6 +188,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   // 桌面集成（M4）— 托盘/通知/全局快捷键，Electron 能力注入装配
   // 备份服务（M5-1）— VACUUM INTO + 附件目录打包
   const backup = new BackupService(db, dbPath, join(dbPath, '..', 'files'), APP_VERSION)
+  /** 默认备份目录 — 空 targetDir 时兜底；与 exitAutoBackup 产物目录一致 */
+  const backupDir = join(dbPath, '..', 'backups')
 
   const desktop = new DesktopIntegrationService({
     isWindowVisible: () => getWindow()?.isVisible() ?? false,
@@ -508,7 +511,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.BACKUP_CREATE, async (_e, p): Promise<IpcResult<{ fileName: string; size: number }>> => {
     try {
       auth.requireUser() // 登录守卫
-      return ok(await backup.createBackup({ password: String(p?.password ?? ''), targetDir: String(p?.targetDir ?? '') }))
+      return ok(await backup.createBackup({ password: String(p?.password ?? ''), targetDir: String(p?.targetDir ?? '') || backupDir }))
     } catch (err) {
       const e = err as Error & { code?: string }
       return fail(e.code ?? 'ERROR', e.message)
@@ -526,7 +529,123 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   })
 
   ipcMain.handle(IPC.BACKUP_LIST, (_e, p): IpcResult<unknown[]> => tryRun(() => {
-    return backup.listLocalBackups(String(p?.targetDir ?? ''))
+    return backup.listLocalBackups(String(p?.targetDir ?? '') || backupDir)
+  }))
+
+  // ---------- OSS 通道（M5-2） ----------
+
+  /** 读 settings 中的 OSS 配置，Secret safeStorage 解密；未配置返回 null */
+  function readOssConfig(): { bucket: string; endpoint: string; prefix: string; accessKeyId: string; accessKeySecret: string } | null {
+    try {
+      const bucket = settings.get('backup.oss.bucket', auth.requireUser().id) as string | undefined
+      if (!bucket) return null
+      const enc = settings.get('backup.oss.accessKeySecretEnc', auth.requireUser().id) as string | undefined
+      if (!enc) return null
+      return {
+        bucket,
+        endpoint: (settings.get('backup.oss.endpoint', auth.requireUser().id) as string) ?? '',
+        prefix: (settings.get('backup.oss.prefix', auth.requireUser().id) as string) ?? 'desktop-backup/',
+        accessKeyId: (settings.get('backup.oss.accessKeyId', auth.requireUser().id) as string) ?? '',
+        accessKeySecret: safeStorage.decryptString(Buffer.from(enc, 'base64'))
+      }
+    } catch {
+      return null
+    }
+  }
+
+  ipcMain.handle(IPC.BACKUP_OSS_SAVE_CONFIG, (_e, p): IpcResult<null> => tryRun(() => {
+    const user = auth.requireUser()
+    const secret = String(p?.accessKeySecret ?? '')
+    if (secret) {
+      const enc = safeStorage.encryptString(secret).toString('base64')
+      settings.set('backup.oss.accessKeySecretEnc', enc, user.id)
+    }
+    settings.set('backup.oss.bucket', String(p?.bucket ?? ''), user.id)
+    settings.set('backup.oss.endpoint', String(p?.endpoint ?? ''), user.id)
+    settings.set('backup.oss.prefix', String(p?.prefix ?? 'desktop-backup/'), user.id)
+    settings.set('backup.oss.accessKeyId', String(p?.accessKeyId ?? ''), user.id)
+    return null
+  }))
+
+  ipcMain.handle(IPC.BACKUP_OSS_TEST, async (_e): Promise<IpcResult<{ ok: boolean; error?: string }>> => {
+    try {
+      auth.requireUser()
+      const cfg = readOssConfig()
+      if (!cfg) return fail('NO_CONFIG', 'OSS 配置不完整')
+      const client = new OssClient(cfg, async (req: { method: string; url: string; headers: Record<string, string>; body?: Buffer }) => {
+        const { default: https } = await import('node:https')
+        return new Promise((resolve, reject) => {
+          const url = new URL(req.url)
+          const opts = { hostname: url.hostname, port: url.port || 443, path: url.pathname + url.search, method: req.method, headers: req.headers }
+          const httpReq = https.request(opts, (res) => {
+            const chunks: Buffer[] = []
+            res.on('data', (c: Buffer) => chunks.push(c))
+            res.on('end', () => resolve({ status: res.statusCode ?? 500, body: Buffer.concat(chunks) }))
+          })
+          httpReq.on('error', reject)
+          httpReq.end()
+        })
+      })
+      return ok(await client.testConnection())
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.BACKUP_OSS_UPLOAD, async (_e, p): Promise<IpcResult<{ key: string; size: number }>> => {
+    try {
+      auth.requireUser()
+      const cfg = readOssConfig()
+      if (!cfg) return fail('NO_CONFIG', 'OSS 配置不完整')
+      return ok(await backup.uploadBackup(cfg, String(p?.filePath ?? '')))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.BACKUP_OSS_LIST_REMOTE, async (_e): Promise<IpcResult<unknown[]>> => {
+    try {
+      auth.requireUser()
+      const cfg = readOssConfig()
+      if (!cfg) return fail('NO_CONFIG', 'OSS 配置不完整')
+      return ok(await backup.listRemoteBackups(cfg))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.BACKUP_OSS_DOWNLOAD, async (_e, p): Promise<IpcResult<{ localPath: string }>> => {
+    try {
+      auth.requireUser()
+      const cfg = readOssConfig()
+      if (!cfg) return fail('NO_CONFIG', 'OSS 配置不完整')
+      return ok(await backup.downloadBackup(cfg, String(p?.remoteKey ?? ''), join(dbPath, '..', 'backups')))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  ipcMain.handle(IPC.BACKUP_OSS_DELETE_REMOTE, async (_e, p): Promise<IpcResult<boolean>> => {
+    try {
+      auth.requireUser()
+      const cfg = readOssConfig()
+      if (!cfg) return fail('NO_CONFIG', 'OSS 配置不完整')
+      await backup.deleteRemoteBackup(cfg, String(p?.remoteKey ?? ''))
+      return ok(true)
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
+
+  // 删除本地快照（合并列表「删除」操作）— 仅限默认备份目录内的 .mnbbak
+  ipcMain.handle(IPC.BACKUP_DELETE_LOCAL, (_e, p): IpcResult<boolean> => tryRun(() => {
+    auth.requireUser()
+    return backup.deleteLocalBackup(backupDir, String(p?.fileName ?? ''))
   }))
 
   // ---------- 桌面集成（M4） ----------
@@ -1019,7 +1138,20 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   desktop.restoreGlobalShortcut()
 
-  return { desktop }
+  const runExitBackup = async (): Promise<{ fileName: string; uploaded: boolean } | null> => {
+    try {
+      const autoOnExit = settings.get('backup.autoOnExit', auth.requireUser().id) === true
+      if (!autoOnExit) return null
+      const password = settings.get('backup.exitPassword', auth.requireUser().id) as string | undefined
+      if (!password) return null
+      const cfg = readOssConfig()
+      return backup.exitAutoBackup({ password, autoOnExit: true, ossConfig: cfg })
+    } catch {
+      return null // 退出备份失败不阻塞退出
+    }
+  }
+
+  return { desktop, runExitBackup }
 }
 
 void app
