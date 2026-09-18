@@ -7,8 +7,13 @@ import { isNewer } from './version'
 
 /** 更新端口 — 由适配层实现（真实 electron-updater / 测试 fake） */
 export interface UpdaterPort {
-  /** 查询更新源；返回可用新版本号，无更新返回 null */
-  checkForUpdates(): Promise<{ version?: string | null } | null>
+  /**
+   * 查询更新源。
+   * - `{ version }` 有可用新版本
+   * - `null` / `{}` 已是最新
+   * - `{ skipped: true }` 适配层闸门关闭（未打包且未放行）——**不是**"已是最新"，必须区别对待
+   */
+  checkForUpdates(): Promise<{ version?: string | null; skipped?: boolean } | null>
   downloadUpdate(): Promise<void>
   quitAndInstall(): void
   onProgress(cb: (percent: number) => void): void
@@ -74,6 +79,12 @@ export class UpdateService {
 
     try {
       const res = await this.deps.port.checkForUpdates()
+      // 适配层闸门关闭：如实标记环境不可用，绝不落入"已是最新版本"（M6-1 打回项 2）
+      if (res?.skipped) {
+        this.deps.log?.(`[update] ${trigger} check skipped by updater: 环境不支持（未打包且未放行 dev 更新配置）`)
+        this.dispatch({ type: 'set-disabled', disabled: true })
+        return this.snapshot()
+      }
       const version = res?.version ?? null
       if (version && isNewer(version, this.deps.currentVersion)) {
         this.dispatch({ type: 'check-available', version })

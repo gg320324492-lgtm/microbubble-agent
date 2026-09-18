@@ -156,3 +156,43 @@ describe('更新服务 — 提示式下载与安装（绝不自动）', () => {
     expect(logs.some((l) => l.includes('feed 不可达'))).toBe(true)
   })
 })
+
+describe('更新服务 — 跳过场景状态诚实性（M6-1 打回项 2）', () => {
+  it('适配层上报 skipped 时不得落入「已是最新」：转为环境不可用且不产生检查完成事实', async () => {
+    const p = makePort({ checkForUpdates: vi.fn().mockResolvedValue({ skipped: true }) })
+    const { svc, notify } = makeService({ port: p.port })
+
+    await svc.check('manual')
+    const s = svc.snapshot()
+
+    expect(s.disabled).toBe(true)
+    expect(s.status).toBe('idle')
+    expect(s.version).toBeNull()
+    expect(s.error).toBeNull()
+    // 关键：UI 的「已是最新版本」判据是 status=idle && checkedAt!=null，此处必须为 null
+    expect(s.checkedAt).toBeNull()
+    expect(notify).not.toHaveBeenCalled()
+  })
+
+  it('skipped 后不再反复发起检查（避免无效请求）', async () => {
+    const checkSpy = vi.fn().mockResolvedValue({ skipped: true })
+    const p = makePort({ checkForUpdates: checkSpy })
+    const { svc } = makeService({ port: p.port })
+
+    await svc.check('manual')
+    await svc.check('manual')
+    await svc.check('auto')
+    expect(checkSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('对照：正常的"无更新"仍会产生检查完成事实（保留「已是最新」语义）', async () => {
+    const p = makePort({ checkForUpdates: vi.fn().mockResolvedValue(null) })
+    const { svc } = makeService({ port: p.port })
+
+    await svc.check('manual')
+    const s = svc.snapshot()
+    expect(s.status).toBe('idle')
+    expect(s.disabled).toBe(false)
+    expect(s.checkedAt).not.toBeNull()
+  })
+})

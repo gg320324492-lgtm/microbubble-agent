@@ -22,6 +22,9 @@ let offState: (() => void) | null = null
 
 const statusText = computed(() => {
   const s = state.value
+  // 环境不可用（未打包且无更新源，或适配层闸门关闭）必须如实说明，
+  // 绝不落入「已是最新版本」——那会把"检查被跳过"伪装成"确实没有新版本"（M6-1 打回项 2）
+  if (s.disabled) return '更新检查不可用（开发环境）'
   switch (s.status) {
     case 'checking':
       return '正在检查更新…'
@@ -182,7 +185,8 @@ onUnmounted(() => {
       </dd>
     </div>
     <p v-if="state.disabled" class="hint" data-testid="update-disabled-hint">
-      当前为开发环境（未打包且未指定更新源），更新通道不生效；打包版将自动启用。
+      更新检查不可用（开发环境）：当前未打包且未指定更新源，electron-updater 会整体跳过检查。
+      打包版自动启用；联调时用 MNB_UPDATE_FEED 指向更新源即可。
     </p>
     <p class="hint section-note">
       提示式更新：发现新版本后由你确认下载，安装前再次确认，全程不会自动安装。

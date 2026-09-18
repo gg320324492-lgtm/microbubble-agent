@@ -4,7 +4,7 @@ import { app, dialog, ipcMain, BrowserWindow, safeStorage, shell, Tray, Menu, gl
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { IPC } from '@shared/ipc-channels'
-import { APP_NAME, APP_VERSION, ENV_UPDATE_FEED } from '@shared/constants'
+import { APP_NAME, APP_VERSION } from '@shared/constants'
 import type {
   AppInfo,
   AuthSession,
@@ -35,6 +35,7 @@ import { MeetingService } from './services/meeting/meeting.service'
 import { ExperimentService, EXPERIMENT_STATUSES } from './services/experiment/experiment.service'
 import { DesktopIntegrationService } from './services/desktop/desktop-integration.service'
 import { UpdateService, type UpdaterPort } from './services/update/update.service'
+import { isUpdateChannelAvailable } from './services/update/feed-config'
 import { BackupService } from './services/backup/backup.service'
 import { OssClient } from './services/backup/oss.client'
 import { normalizeEndpoint } from './services/backup/oss-sig'
@@ -159,7 +160,8 @@ export function installUpdaterPort(port: UpdaterPort): void {
 function resolveUpdaterPort(): UpdaterPort {
   return (
     updaterPort ?? {
-      checkForUpdates: async () => null,
+      // 未装配适配层时不能声称"已是最新"：如实上报跳过（M6-1 打回项 2）
+      checkForUpdates: async () => ({ skipped: true }),
       downloadUpdate: async () => undefined,
       quitAndInstall: () => undefined,
       onProgress: () => undefined,
@@ -263,7 +265,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   // 非打包环境 electron-updater 会拒绝运行，故默认禁用；联调时用 feed 覆盖放行。
   const update = new UpdateService({
     currentVersion: APP_VERSION,
-    envSupported: app.isPackaged || Boolean(process.env[ENV_UPDATE_FEED]),
+    // 与服务层/适配层共用同一事实来源（feed-config），避免"一侧放行、一侧闸门关闭"的接线断裂
+    envSupported: isUpdateChannelAvailable({ env: process.env, isPackaged: app.isPackaged }),
     port: resolveUpdaterPort(),
     getSetting: (key) => {
       try {
