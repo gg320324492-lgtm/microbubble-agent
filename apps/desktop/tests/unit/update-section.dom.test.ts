@@ -118,3 +118,25 @@ describe('「关于与更新」区块 — 交互', () => {
     expect(setSetting).toHaveBeenCalledWith('update.autoCheck', false)
   })
 })
+
+describe('「关于与更新」区块 — 跳过场景文案诚实性（M6-1 打回项 2）', () => {
+  it('disabled 时状态为「更新检查不可用（开发环境）」，绝不出现「已是最新」', async () => {
+    // 故意带上 checkedAt（模拟"曾经检查过"），disabled 必须压过"已是最新"语义
+    stubApi(stateOf({ status: 'idle', disabled: true, checkedAt: Date.now() }))
+    const w = mount(AboutUpdateSection)
+    await flushPromises()
+
+    expect(w.get('[data-testid="update-status"]').text()).toBe('更新检查不可用（开发环境）')
+    expect(w.text()).not.toContain('已是最新')
+    expect(w.get('[data-testid="update-disabled-hint"]').text()).toContain('更新检查不可用（开发环境）')
+  })
+
+  it('对照：正常 idle + checkedAt 仍显示「已是最新版本」（未误伤正常语义）', async () => {
+    stubApi(stateOf({ status: 'idle', disabled: false, checkedAt: Date.now() }))
+    const w = mount(AboutUpdateSection)
+    await flushPromises()
+
+    expect(w.get('[data-testid="update-status"]').text()).toContain('已是最新版本')
+    expect(w.find('[data-testid="update-disabled-hint"]').exists()).toBe(false)
+  })
+})

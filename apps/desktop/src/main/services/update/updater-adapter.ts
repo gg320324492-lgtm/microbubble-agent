@@ -9,6 +9,7 @@
 // 指向本地静态服务（MNB_UPDATE_FEED），无需改动打包配置。
 import { autoUpdater } from 'electron-updater'
 import { ENV_UPDATE_FEED } from '@shared/constants'
+import { resolveForceDevUpdateConfig } from './feed-config'
 import type { UpdaterPort } from './update.service'
 
 /** 更新源 — GitHub Releases（公开仓库，匿名可读） */
@@ -41,7 +42,8 @@ export function createElectronUpdaterPort(options: UpdaterAdapterOptions = {}): 
   autoUpdater.autoInstallOnAppQuit = false
   // 全部版本都是 prerelease（v0.1.x-alpha），不放开该开关会永远"无更新"
   autoUpdater.allowPrerelease = true
-  autoUpdater.forceDevUpdateConfig = Boolean(options.forceDev && feedUrl)
+  // 未打包环境必须显式放行，否则 isUpdaterActive() 为 false → 检查被整体跳过（M6-1 打回缺陷）
+  autoUpdater.forceDevUpdateConfig = resolveForceDevUpdateConfig({ feedUrl, forceDev: options.forceDev })
 
   if (feedUrl) {
     autoUpdater.setFeedURL(feedUrl)
@@ -59,6 +61,13 @@ export function createElectronUpdaterPort(options: UpdaterAdapterOptions = {}): 
 
   return {
     checkForUpdates: async () => {
+      // 先判闸门：electron-updater 在 isUpdaterActive() 为 false 时会直接返回 null 且**不发任何请求**，
+      // 与"确实没有新版本"无法区分。此处显式上报 skipped，交由服务层如实标记为环境不可用，
+      // 避免 UI 把"检查被跳过"伪装成"已是最新版本"。
+      if (!autoUpdater.isUpdaterActive()) {
+        log('[updater][warn] 更新检查被跳过：未打包环境且未放行 dev 更新配置')
+        return { skipped: true }
+      }
       // 事件与返回值双通道取版本号：部分 provider 在"无更新"时不返回结果对象
       const captured: { version: string | null } = { version: null }
       const onAvailable = (info: { version?: string }): void => {
