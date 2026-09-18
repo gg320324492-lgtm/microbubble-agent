@@ -113,19 +113,57 @@ class SpeechRecognizer:
             audio_data = self._bytes_to_wav(audio_data)
 
         # HTTP 上传给 SenseVoice 服务
-        async with httpx.AsyncClient(timeout=600) as client:  # 10 min timeout (3h 会议 < 60s)
-            resp = await client.post(
-                f"{SENSEVOICE_SERVICE_URL}/transcribe",
-                files={"audio": ("audio.wav", audio_data, "audio/wav")},
-                data={"language": language, "task": task},
-            )
-            if resp.status_code != 200:
-                logger.error(
-                    f"[asr] SenseVoice 服务错误: status={resp.status_code}, "
-                    f"body={resp.text[:500]}, audio_size={len(audio_data)}"
+        # 2026-09-18 重试防御 (会议 253 事故): 驱动更新炸掉 CUDA 上下文 → 首段推理
+        # 即 500 → 整场会议失败且 error_reason 只有泛化的 "500 Internal Server Error"。
+        # 现在: 5xx/网络错误指数退避重试 (2s/4s, 共 3 次), 最终失败时把服务端
+        # detail (如 "CUDA error: unknown error") 带进异常消息, 4xx 不重试直接抛。
+        _ASR_ATTEMPTS = 3
+        result = None
+        last_detail = ""
+        for attempt in range(1, _ASR_ATTEMPTS + 1):
+            try:
+                async with httpx.AsyncClient(timeout=600) as client:  # 10 min timeout (3h 会议 < 60s)
+                    resp = await client.post(
+                        f"{SENSEVOICE_SERVICE_URL}/transcribe",
+                        files={"audio": ("audio.wav", audio_data, "audio/wav")},
+                        data={"language": language, "task": task},
+                    )
+                    if resp.status_code != 200:
+                        logger.error(
+                            f"[asr] SenseVoice 服务错误: status={resp.status_code}, "
+                            f"body={resp.text[:500]}, audio_size={len(audio_data)}"
+                        )
+                    resp.raise_for_status()
+                    result = resp.json()
+                    break
+            except httpx.HTTPStatusError as e:
+                body = ""
+                if e.response is not None:
+                    try:
+                        body = e.response.text[:300]
+                    except Exception:
+                        body = "<unreadable body>"
+                last_detail = f"status={e.response.status_code if e.response else '?'} body={body}"
+                # 4xx (音频非法等) 重试无意义, 直接抛
+                if e.response is not None and e.response.status_code < 500:
+                    raise RuntimeError(
+                        f"SenseVoice /transcribe 请求错误 (不重试): {last_detail}"
+                    ) from e
+            except httpx.RequestError as e:
+                last_detail = f"network {type(e).__name__}: {e}"
+            except ValueError as e:  # resp.json() 解析失败
+                last_detail = f"bad json: {e}"
+            if attempt < _ASR_ATTEMPTS:
+                backoff = 2 ** attempt
+                logger.warning(
+                    f"[asr] SenseVoice /transcribe 第 {attempt} 次失败 "
+                    f"({last_detail[:200]}), {backoff}s 后重试"
                 )
-            resp.raise_for_status()
-            result = resp.json()
+                await asyncio.sleep(backoff)
+        if result is None:
+            raise RuntimeError(
+                f"SenseVoice /transcribe 重试 {_ASR_ATTEMPTS} 次仍失败: {last_detail}"
+            )
 
         # 后处理: 7 层幻觉过滤 (CLAUDE.md memory/asr-benchmark-2026-06-30)
         result["text"] = apply_7_layers(

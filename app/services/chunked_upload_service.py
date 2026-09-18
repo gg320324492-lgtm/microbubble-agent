@@ -71,6 +71,22 @@ class ChunkedUploadService:
         result.sort(key=lambda x: x["chunk_index"])
         return result
 
+    @staticmethod
+    def assert_merged_integrity(merged_size: int, total_in_bytes: int) -> None:
+        """ffmpeg concat 产物完整性校验 (2026-09-18 会议 253 事故)。
+
+        copy 模式下产物字节应接近全部分片之和。低于一半说明绝大多数分片
+        被 ffmpeg 静默丢弃 (无 header 的 webm cluster 续片 demux 失败但
+        rc=0) —— 必须抛错触发调用方的 raw 字节拼接兜底。
+        """
+        if total_in_bytes <= 0:
+            return
+        if merged_size < total_in_bytes * 0.5:
+            raise RuntimeError(
+                f"ffmpeg concat 产物不完整: {merged_size}B << 输入 {total_in_bytes}B "
+                f"(webm cluster 续片被 ffmpeg 静默丢弃), 需回退 raw 字节拼接"
+            )
+
     async def merge_chunks(self, meeting_id: int) -> str:
         """
         合并某会议的所有 chunk 成完整 webm 文件。
@@ -91,10 +107,12 @@ class ChunkedUploadService:
             merged_path = tmp_path / "merged.webm"
 
             # 1. 下载所有 chunk 到本地 + 写 concat 列表
+            total_in_bytes = 0
             with chunks_txt.open("w", encoding="utf-8") as f:
                 for chunk in chunks:
                     local = chunks_dir / f"chunk_{chunk['chunk_index']:05d}.webm"
                     data = await file_service.download_file(chunk["object_name"])
+                    total_in_bytes += len(data)
                     local.write_bytes(data)
                     f.write(f"file '{local.absolute().as_posix()}'\n")
 
@@ -119,6 +137,19 @@ class ChunkedUploadService:
 
             if not merged_path.exists() or merged_path.stat().st_size == 0:
                 raise RuntimeError("ffmpeg 合并输出为空")
+
+            # 2.5 完整性校验 (2026-09-18 会议 253 事故): 实时 webm 分片只有首片带
+            # EBML header, 后续片是裸 cluster —— ffmpeg concat demuxer 解析不了时
+            # **静默跳过且 rc=0**, 307 片 (~5MB) 只产出首片 ~1s (15KB), 兜底逻辑
+            # 完全没触发。copy 模式下产物字节应接近全部分片之和; 低于一半说明
+            # 绝大多数分片被丢弃 → 抛错让调用方 (merge-chunks 端点) 回退 raw 拼接。
+            merged_size = merged_path.stat().st_size
+            self.assert_merged_integrity(merged_size, total_in_bytes)
+            if merged_size < total_in_bytes:
+                logger.warning(
+                    f"ffmpeg 产物小于输入 (会议 {meeting_id}): "
+                    f"{merged_size}B / {total_in_bytes}B"
+                )
 
             # 3. 上传合并后的文件
             merged_data = merged_path.read_bytes()
