@@ -11,7 +11,7 @@
 //
 // 说明：out/ 分批清理仅本地需要（沙箱对单次 rmSync 有 50 文件阈值）；CI 无此限制但共用同一脚本。
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -93,13 +93,14 @@ function stepNative() {
   const bsqDir = dirname(bsqPkgPath)
   const binary = join(bsqDir, 'build', 'Release', 'better_sqlite3.node')
 
+  const bsqRequire = createRequire(join(bsqDir, 'package.json'))
+  const prebuildBin = join(dirname(bsqRequire.resolve('prebuild-install/package.json')), 'bin.js')
+
+  // 探测必须在**子进程**里做：在当前进程 require(.node) 会持有文件句柄，
+  // 随后 prebuild-install 覆盖同一文件会 EBUSY（CI 实测踩到）。
   const probe = () => {
-    try {
-      require(binary)
-      return { ok: true }
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
+    const r = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(binary)})`], { encoding: 'utf8' })
+    return { ok: r.status === 0, error: `${r.stderr ?? ''}${r.stdout ?? ''}` }
   }
 
   const before = classifyNativeAbi(probe())
@@ -109,10 +110,6 @@ function stepNative() {
     return
   }
 
-  // pnpm 隔离布局下 prebuild-install 不是顶层依赖，必须相对 better-sqlite3 自身解析
-  // （从 scripts/ 直接 require.resolve 会 MODULE_NOT_FOUND——CI 实测踩到）
-  const bsqRequire = createRequire(join(bsqDir, 'package.json'))
-  const prebuildBin = join(dirname(bsqRequire.resolve('prebuild-install/package.json')), 'bin.js')
   log('拉取 Electron 预编译包（无需 VS 工具链）…')
   run('node', [prebuildBin, '--runtime=electron', `--target=${electronTarget(electronVersion)}`, '--arch=x64'], {
     cwd: bsqDir
