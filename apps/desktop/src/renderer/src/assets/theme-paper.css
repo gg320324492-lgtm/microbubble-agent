@@ -1,0 +1,365 @@
+/* ============================================================
+   宣纸暖白（paper）令牌层 — M7 UI 换新
+   ------------------------------------------------------------
+   唯一设计源头：desktop-conversion/docs/design/ui-style-proposals.html 的 paper 主题
+   （决策 U3）。本文件是**应用侧覆盖层**，不改动 @mb/design-tokens 共享包——该包同时被
+   web 端使用，桌面端采用 paper 语言不应反向改写共享包（工作区范围亦限定 apps/desktop）。
+
+   加载顺序（main.ts）：@mb/design-tokens → 本文件 → app.css → element-plus
+   EP 变量映射放在 [data-theme='paper'] 属性块内：specificity 0,1,0 > EP 自身 :root 的
+   0,0,1，可稳定压过 EP 随需加载的 CSS（沿用共享包 v77 P2.6 已验证的做法）。
+   ============================================================ */
+
+:root {
+  /* ---------- 主色系：珊瑚橙 → 靛墨蓝 ---------- */
+  --color-primary: #3e5c76;
+  --color-primary-light: #5b7c99;
+  --color-primary-dark: #2d4356;
+  --color-primary-bg: #e7edf3;
+  --color-primary-border: rgba(62, 92, 118, 0.22);
+  --color-primary-rgb: 62, 92, 118;
+  --color-primary-light-rgb: 91, 124, 153;
+  --color-primary-light-3: #5b7c99;
+  --color-primary-light-9: #f2f5f8;
+  --color-primary-700: #2d4356;
+  --color-primary-strong: #2d4356;
+  --color-primary-text: #ffffff;
+
+  /* ---------- 辅助色：金橙 → 棕金（宣纸朱砂调） ---------- */
+  --color-accent: #9a7b4f;
+  --color-accent-bg: #f2ebdd;
+  --color-accent-rgb: 154, 123, 79;
+
+  /* ---------- 背景三级：米色纸感 ---------- */
+  --color-bg-page: #f3eddf; /* 纸底 */
+  --color-bg-card: #fffdf7; /* 卡片 */
+  --color-bg-secondary: #efe6d2; /* 次级面（tile-paper） */
+  --color-bg-warm: #f9f5ec; /* 面板 */
+  --color-bg-elevated: #fffdf7;
+  --color-bg-light: #f9f5ec;
+  --color-bg-tag: #efe6d2;
+  --color-bg-hover: #f2ebdd;
+  --color-bg-card-rgb: 255, 253, 247;
+
+  /* ---------- 边框两级 ---------- */
+  --color-border: #e4d9c3;
+  --color-border-light: #eee5d5;
+  --color-border-base: #e4d9c3;
+  --color-border-dark: #d8cbb0;
+
+  /* ---------- 文本两级 ---------- */
+  --color-text-primary: #33302a;
+  --color-text-regular: #5b564b;
+  --color-text-secondary: #8d8574;
+  --color-text-secondary-rgb: 141, 133, 116;
+  --color-text-placeholder: #b3ab99;
+  --color-text-disabled: #c4bcaa;
+
+  /* ---------- 语义色 ---------- */
+  --color-success: #4a7c59;
+  --color-success-bg: #e4efe7;
+  --color-success-light-9: #eef5f0;
+  --color-warning: #9a7b4f;
+  --color-warning-bg: #f2ebdd;
+  --color-warning-border: #e0d0b2;
+  --color-warning-light-5: #f6f0e4;
+  --color-warning-light-9: #f9f5ec;
+  --color-warning-text: #7d6238;
+  --color-danger: #a4504a;
+  --color-danger-bg: #f6e7e5;
+  --color-danger-rgb: 164, 80, 74;
+  --color-danger-border: #e3c6c3;
+  --color-danger-light-5: #f9eeed;
+  --color-danger-light-9: #fbf4f3;
+  --color-info: #8d8574;
+  --color-info-bg: #f2ebdd;
+
+  /* ---------- 侧栏（玻璃拟态 → 纸面） ---------- */
+  --color-bg-sidebar: rgba(249, 245, 236, 0.94);
+  --color-sidebar-border: rgba(62, 92, 118, 0.14);
+  --shadow-sidebar: 4px 0 20px rgba(90, 70, 30, 0.08);
+
+  /* ---------- 圆角（基准 10px，纸感圆润） ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ---------- 纸感阴影（暖褐调，非纯黑） ---------- */
+  --shadow-xs: 0 1px 2px rgba(90, 70, 30, 0.06);
+  --shadow-sm: 0 1px 4px rgba(90, 70, 30, 0.1);
+  --shadow-md: 0 2px 10px rgba(90, 70, 30, 0.1);
+  --shadow-lg: 0 6px 24px rgba(90, 70, 30, 0.12);
+  --shadow-primary: 0 2px 10px rgba(62, 92, 118, 0.22);
+  --shadow-glow: 0 2px 14px rgba(62, 92, 118, 0.16);
+  --color-shadow-primary: rgba(62, 92, 118, 0.22);
+
+  /* ---------- 渐变库（珊瑚 → 靛墨/纸色） ---------- */
+  --gradient-group-header: linear-gradient(135deg, #f9f5ec 0%, #f3eddf 100%);
+  --gradient-stat-in-progress: linear-gradient(135deg, #e7edf3 0%, #dbe4ec 100%);
+  --gradient-stat-done: linear-gradient(135deg, #e4efe7 0%, #d8e9dd 100%);
+  --gradient-stat-overdue: linear-gradient(135deg, #f6e7e5 0%, #efd9d6 100%);
+  --gradient-welcome-hero: linear-gradient(135deg, #3e5c76 0%, #5b7c99 100%);
+  /* 用户气泡：靛墨深阶 + 白字，对比度 AA 以上 */
+  --gradient-user-bubble: linear-gradient(135deg, #3e5c76 0%, #2d4356 100%);
+  --gradient-thumbnail-empty: linear-gradient(135deg, #f9f5ec 0%, #f3eddf 100%);
+  --gradient-paper-warm: linear-gradient(135deg, #f9f5ec 0%, #fffdf7 100%);
+  --gradient-paper-qa-q: linear-gradient(135deg, #f2ebdd, #e8dcc4);
+  --gradient-paper-qa-a: linear-gradient(135deg, #e7edf3, #dbe4ec);
+  --gradient-paper-success: linear-gradient(135deg, #e4efe7 0%, #f2f8f4 100%);
+  --gradient-cta-button: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  --gradient-progress-bar: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+
+  /* ---------- 声纹条（珊瑚 → 棕金/靛墨） ---------- */
+  --vp-bar-low: #f2ebdd;
+  --vp-bar-mid: linear-gradient(90deg, #9a7b4f 0%, #3e5c76 100%);
+  --vp-bar-high: #3e5c76;
+
+  /* ---------- 衬线标题字体栈（正文保持无衬线） ---------- */
+  --wb-head-font: Georgia, 'Songti SC', 'STSong', 'SimSun', 'Noto Serif SC', serif;
+
+  /* ---------- paper 专属补充 ---------- */
+  --paper-tile: #efe6d2; /* SideNav 图标 tile 底 */
+  --paper-line: rgba(90, 70, 30, 0.1); /* 纸纹分隔线 */
+}
+
+/* ============================================================
+   Element Plus 变量映射
+   [data-theme='paper'] 由 main.ts 写在 <html> 上；
+   属性选择器 specificity (0,1,0) > EP :root (0,0,1)，稳定生效。
+   ============================================================ */
+[data-theme='paper'] {
+  /* 主色系（EP 的 light-N 是「向白混合」，故浅阶取主色与纸底的中间调） */
+  --el-color-primary: #3e5c76;
+  --el-color-primary-light-3: #6b889f;
+  --el-color-primary-light-5: #93a8ba;
+  --el-color-primary-light-7: #bcc9d5;
+  --el-color-primary-light-8: #d0dae2;
+  --el-color-primary-light-9: #e7edf3;
+  --el-color-primary-dark-2: #2d4356;
+
+  /* 文本色 */
+  --el-text-color-primary: #33302a;
+  --el-text-color-regular: #5b564b;
+  --el-text-color-secondary: #8d8574;
+  --el-text-color-placeholder: #b3ab99;
+  --el-text-color-disabled: #c4bcaa;
+
+  /* 背景 / 填充 / 边框 */
+  --el-bg-color: #fffdf7;
+  --el-bg-color-page: #f3eddf;
+  --el-bg-color-overlay: #fffdf7;
+  --el-fill-color: #f9f5ec;
+  --el-fill-color-light: #f9f5ec;
+  --el-fill-color-lighter: #fbf8f1;
+  --el-fill-color-blank: #fffdf7;
+  --el-fill-color-dark: #efe6d2;
+  --el-fill-color-darker: #e8ddc7;
+  --el-border-color: #e4d9c3;
+  --el-border-color-light: #eee5d5;
+  --el-border-color-lighter: #f2ead9;
+  --el-border-color-extra-light: #f6f0e2;
+  --el-border-color-dark: #d8cbb0;
+  --el-border-color-darker: #c9b99a;
+  --el-color-white: #fffdf7;
+  --el-color-black: #33302a;
+
+  /* 语义色 */
+  --el-color-success: #4a7c59;
+  --el-color-success-light-3: #7ba888;
+  --el-color-success-light-5: #a0c2aa;
+  --el-color-success-light-7: #c6dbcc;
+  --el-color-success-light-8: #d9e7dd;
+  --el-color-success-light-9: #e4efe7;
+  --el-color-success-dark-2: #3b6347;
+  --el-color-warning: #9a7b4f;
+  --el-color-warning-light-3: #b8a17e;
+  --el-color-warning-light-5: #cdbb9f;
+  --el-color-warning-light-7: #e0d3bf;
+  --el-color-warning-light-8: #e9dfcf;
+  --el-color-warning-light-9: #f2ebdd;
+  --el-color-warning-dark-2: #7d6238;
+  --el-color-danger: #a4504a;
+  --el-color-danger-light-3: #c17f7a;
+  --el-color-danger-light-5: #d3a5a2;
+  --el-color-danger-light-7: #e3c6c3;
+  --el-color-danger-light-8: #ecd6d4;
+  --el-color-danger-light-9: #f6e7e5;
+  --el-color-danger-dark-2: #86403b;
+  --el-color-error: #a4504a;
+  --el-color-error-light-9: #f6e7e5;
+  --el-color-error-dark-2: #86403b;
+  --el-color-info: #8d8574;
+  --el-color-info-light-9: #f2ebdd;
+  --el-color-info-dark-2: #726b5d;
+
+  /* 圆角（EP 组件跟随纸感基准） */
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 6px;
+  --el-border-radius-round: 9999px;
+  --el-border-radius-circle: 50%;
+
+  /* 字号 */
+  --el-font-size-extra-small: 12px;
+  --el-font-size-small: 13px;
+  --el-font-size-base: 14px;
+  --el-font-size-medium: 15px;
+  --el-font-size-large: 18px;
+  --el-font-size-extra-large: 22px;
+
+  /* 纸感阴影 */
+  --el-box-shadow: 0 2px 10px rgba(90, 70, 30, 0.1);
+  --el-box-shadow-light: 0 1px 4px rgba(90, 70, 30, 0.1);
+  --el-box-shadow-lighter: 0 1px 2px rgba(90, 70, 30, 0.06);
+  --el-box-shadow-dark: 0 6px 24px rgba(90, 70, 30, 0.12);
+  --el-mask-color: rgba(51, 48, 42, 0.5);
+}
+
+/* ============================================================
+   Element Plus 组件级微调（以 paper 设计稿观感为准）
+   ============================================================ */
+
+/* 按钮：主按钮靛墨实底白字；次要按钮纸面底 + 靛墨描边 */
+[data-theme='paper'] .el-button {
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-md);
+}
+[data-theme='paper'] .el-button--primary {
+  --el-button-bg-color: var(--color-primary);
+  --el-button-border-color: var(--color-primary);
+  --el-button-hover-bg-color: var(--color-primary-light);
+  --el-button-hover-border-color: var(--color-primary-light);
+  --el-button-active-bg-color: var(--color-primary-dark);
+  --el-button-active-border-color: var(--color-primary-dark);
+  box-shadow: var(--shadow-primary);
+}
+[data-theme='paper'] .el-button--danger {
+  --el-button-bg-color: var(--color-danger);
+  --el-button-border-color: var(--color-danger);
+  --el-button-hover-bg-color: #b5625c;
+  --el-button-hover-border-color: #b5625c;
+}
+
+/* 输入类：纸面底 + 棕褐描边，聚焦用靛墨 */
+[data-theme='paper'] .el-input__wrapper,
+[data-theme='paper'] .el-textarea__inner,
+[data-theme='paper'] .el-select__wrapper {
+  background-color: var(--color-bg-card);
+  box-shadow: 0 0 0 1px var(--color-border-dark) inset;
+  border-radius: var(--radius-md);
+}
+[data-theme='paper'] .el-input__wrapper.is-focus,
+[data-theme='paper'] .el-textarea__inner:focus,
+[data-theme='paper'] .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--color-primary) inset, 0 0 0 3px rgba(var(--color-primary-rgb), 0.12);
+}
+
+/* 对话框 / 确认框：纸面卡片 + 衬线标题 + 圆角 */
+[data-theme='paper'] .el-dialog,
+[data-theme='paper'] .el-message-box {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+[data-theme='paper'] .el-dialog__title,
+[data-theme='paper'] .el-message-box__title {
+  font-family: var(--wb-head-font);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+/* 危险确认：纸面底 + 朱砂描边（设计稿 .btn.danger 观感） */
+[data-theme='paper'] .el-message-box__btns .el-button--primary {
+  background: var(--color-bg-card);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  box-shadow: none;
+}
+[data-theme='paper'] .el-message-box__btns .el-button--primary:hover {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+/* 表格：纸面分隔线，表头用暖褐底 */
+[data-theme='paper'] .el-table {
+  --el-table-border-color: var(--color-border-light);
+  --el-table-header-bg-color: var(--color-bg-warm);
+  --el-table-header-text-color: var(--color-text-secondary);
+  --el-table-row-hover-bg-color: var(--color-bg-hover);
+  --el-table-bg-color: var(--color-bg-card);
+  --el-table-tr-bg-color: var(--color-bg-card);
+  font-size: var(--font-size-sm);
+}
+
+/* 开关：靛墨开启态 */
+[data-theme='paper'] .el-switch.is-checked .el-switch__core {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+/* 进度条：靛墨填充 + 纸底轨道 */
+[data-theme='paper'] .el-progress-bar__outer {
+  background-color: var(--color-border);
+  border-radius: var(--radius-full);
+}
+[data-theme='paper'] .el-progress-bar__inner {
+  background: var(--gradient-progress-bar);
+}
+
+/* 标签：纸面 pill，语义色走 weak 底 + 实色字 */
+[data-theme='paper'] .el-tag {
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  font-weight: var(--font-weight-medium);
+}
+[data-theme='paper'] .el-tag--primary {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme='paper'] .el-tag--success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+[data-theme='paper'] .el-tag--warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+[data-theme='paper'] .el-tag--danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+[data-theme='paper'] .el-tag--info {
+  background: var(--color-bg-tag);
+  color: var(--color-text-secondary);
+}
+
+/* 消息提示：纸面卡片 + 暖褐阴影 */
+[data-theme='paper'] .el-message,
+[data-theme='paper'] .el-notification {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text-primary);
+}
+
+/* 下拉 / 弹层 */
+[data-theme='paper'] .el-popper.is-light,
+[data-theme='paper'] .el-dropdown__popper,
+[data-theme='paper'] .el-select__popper {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow-md);
+}
+[data-theme='paper'] .el-select-dropdown__item.is-selected {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* 空态：纸面插图底 */
+[data-theme='paper'] .el-empty__description p {
+  color: var(--color-text-secondary);
+}

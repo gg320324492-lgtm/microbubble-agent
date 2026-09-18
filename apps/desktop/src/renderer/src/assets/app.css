@@ -1,9 +1,10 @@
-// 应用级扩展令牌 — 深色身份面板等桌面专属补充（品牌色一律取自 @mb/design-tokens）
+/* 应用级扩展令牌 — 桌面专属补充（品牌色一律取自 @mb/design-tokens + M7 宣纸覆盖层） */
 :root {
-  --wb-panel-950: #211713; /* 暖黑 — 登录页身份区/状态栏底 */
-  --wb-panel-900: #2c1f19;
-  --wb-panel-text: #f5ece6;
-  --wb-panel-text-dim: rgba(245, 236, 230, 0.62);
+  /* 登录页身份区：暖黑 → 靛墨深阶（M7 宣纸换新） */
+  --wb-panel-950: #2b3f52;
+  --wb-panel-900: #3e5c76;
+  --wb-panel-text: #f9f5ec;
+  --wb-panel-text-dim: rgba(249, 245, 236, 0.68);
   --wb-titlebar-height: 40px;
   --wb-statusbar-height: 26px;
   --wb-sidebar-width: 208px;
@@ -36,18 +37,49 @@ textarea {
   outline-offset: var(--focus-outline-offset);
 }
 
-/* 滚动条 — 细暖色 */
+/* ============================================================
+   M7 宣纸暖白 — 衬线标题
+   页面主标题与 h1/h2/h3 使用衬线字体栈（Georgia + 宋体回退），正文保持无衬线。
+   各视图 scoped 样式只覆写字号/字重，字体族由此处统一生效。
+   ============================================================ */
+h1,
+h2,
+h3,
+.wb-head {
+  font-family: var(--wb-head-font);
+  letter-spacing: 0.01em;
+}
+
+/* 滚动条 — 靛墨细条（M7：珊瑚橙清零） */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 122, 92, 0.25);
+  background: rgba(var(--color-primary-rgb), 0.26);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 122, 92, 0.45);
+  background: rgba(var(--color-primary-rgb), 0.46);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* ============================================================
+   M7 随车必办① — 可滚动页面容器
+   .shell-main 为固定高度网格项（overflow: auto），视图根容器直接成为滚动内容。
+   列表型视图（知识库/会议/ELN/稿件/设置）无需各自声明 overflow；
+   对话页需要内部独立滚动，故其根容器改用 .page-fixed（见 AssistantView）。
+   ============================================================ */
+.page-scroll {
+  min-height: 100%;
+  padding: var(--space-6) var(--space-8);
+  box-sizing: border-box;
+}
+
+/* 纸纹分隔线（设计稿 .describe 左边线观感） */
+.wb-rule {
+  border-left: 3px solid var(--color-primary);
+  padding-left: var(--space-4);
 }

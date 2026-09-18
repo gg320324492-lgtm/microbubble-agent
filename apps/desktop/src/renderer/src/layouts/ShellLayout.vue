@@ -47,7 +47,13 @@ onUnmounted(() => {
   overflow: hidden;
 }
 .shell-main {
-  overflow: hidden; /* 内部模块自行滚动（会话列表/消息流各自滚动） */
+  /* M7 随车必办①：矮窗口下内容可滚（M5-2 遗留缺陷——此前 overflow:hidden 会把超长
+     内容直接裁掉且无法滚动，设置页最先暴露）。
+     列表型视图根容器是 min-height:auto 的列向 flex item，不会收缩到内容以下，
+     因此内容超高时由本容器滚动；对话页 .workbench 显式 min-height:0 恰好填满，
+     仍走内部独立滚动（消息流/会话列表各自滚动），不会出现双滚动条。 */
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--color-bg-page);
   display: flex;
   flex-direction: column;
