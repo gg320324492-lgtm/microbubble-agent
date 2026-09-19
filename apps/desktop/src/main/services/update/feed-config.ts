@@ -5,7 +5,7 @@
 //   服务层 envSupported = true（放行）而适配层 forceDevUpdateConfig = false（闸门关闭）
 // 自相矛盾：electron-updater 的 isUpdaterActive() 在未打包环境返回 false，
 // checkForUpdates() 直接 return null 且不发任何请求，UI 误报「已是最新版本」。
-import { ENV_UPDATE_FEED } from '@shared/constants'
+import { ENV_UPDATE_FEED, ENV_UPDATE_FEED_PROVIDER, UPDATE_FEED_BASE } from '@shared/constants'
 
 export interface UpdateFeedConfig {
   /** feed 覆盖地址（环境变量 MNB_UPDATE_FEED），未设置或纯空白为 null */
@@ -40,4 +40,55 @@ export function isUpdateChannelAvailable(input: UpdateEnvInput): boolean {
  */
 export function resolveForceDevUpdateConfig(options: { feedUrl: string | null; forceDev?: boolean }): boolean {
   return Boolean(options.forceDev && options.feedUrl)
+}
+
+// ============================================================
+// R-8：生效 feed 解析（默认 OSS generic，GitHub 保留为可配置回退）
+// ============================================================
+
+/** feed 来源：env 覆盖 / 默认 OSS / GitHub 回退 */
+export type UpdateFeedSource = 'env' | 'oss' | 'github'
+
+export interface EffectiveUpdateFeed {
+  /** 最终 feed 地址；null 表示交给 GitHub provider（回退路径） */
+  url: string | null
+  source: UpdateFeedSource
+}
+
+/** feed 地址归一化：去空白、补末位斜杠（electron-updater generic 要求目录形式） */
+export function normalizeFeedUrl(raw: string): string {
+  const t = String(raw ?? '').trim()
+  if (!t) return ''
+  return t.endsWith('/') ? t : `${t}/`
+}
+
+/**
+ * 解析"实际生效"的 feed。
+ * 优先级（高 → 低）：
+ *   ① MNB_UPDATE_FEED 显式覆盖（M6-1 测试缝隙；本地联调/定向验证用）
+ *   ② MNB_UPDATE_FEED_PROVIDER=github → 回退 GitHub provider（应急开关）
+ *   ③ 默认：OSS generic（国内直连，R-8 起为常规路径）
+ *
+ * 注意与 resolveUpdateFeedConfig 的分工：后者只回答"有没有显式覆盖"（供 forceDev 判定，
+ * 语义保持 M6-1 不变），本函数回答"最终打到哪个地址"。拆开是为了不动既有契约。
+ */
+export function resolveEffectiveUpdateFeed(input: UpdateEnvInput): EffectiveUpdateFeed {
+  const override = resolveUpdateFeedConfig(input).feedUrl
+  if (override) return { url: normalizeFeedUrl(override), source: 'env' }
+
+  const provider = String(input.env[ENV_UPDATE_FEED_PROVIDER] ?? '')
+    .trim()
+    .toLowerCase()
+  if (provider === 'github') return { url: null, source: 'github' }
+
+  return { url: UPDATE_FEED_BASE, source: 'oss' }
+}
+
+/**
+ * 是否放开预发布版本（R-8 起 stable 频道不再需要）。
+ * 仅当**当前应用版本本身**带预发布后缀（如 1.0.1-beta.1）时才放开——既保留回退能力，
+ * 又让正式版（1.0.1）不会被 alpha/beta 误拉走。v0.1.x-alpha 时期恒为 true，行为不变。
+ */
+export function resolveAllowPrerelease(appVersion: string): boolean {
+  return /-[0-9A-Za-z]/.test(String(appVersion ?? ''))
 }

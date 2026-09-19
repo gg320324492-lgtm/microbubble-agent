@@ -46,12 +46,57 @@ export function normalizeEndpoint(endpoint) {
   return /^https?:\/\//i.test(t) ? t : `https://${t}`
 }
 
+/** CI 用环境变量名（GitHub Actions Secrets） */
+export const ENV_AK = 'OSS_UPLOAD_AK'
+export const ENV_SK = 'OSS_UPLOAD_SK'
+export const ENV_BUCKET = 'OSS_UPLOAD_BUCKET'
+export const ENV_ENDPOINT = 'OSS_UPLOAD_ENDPOINT'
+/** 默认 bucket / endpoint（与 R-7 一致；CI 只需注入 AK/SK） */
+export const DEFAULT_BUCKET = 'mnb-workbench-releases'
+export const DEFAULT_ENDPOINT = 'https://oss-cn-beijing.aliyuncs.com'
+
+/**
+ * 从环境变量解析凭据（CI 模式）。
+ * AK/SK 任一缺失 → 返回 null（调用方据此「跳过并警告、不 fail」）。
+ * 绝不回显任何值。
+ */
+export function parseCredsFromEnv(env) {
+  const ak = String(env?.[ENV_AK] ?? '').trim()
+  const sk = String(env?.[ENV_SK] ?? '').trim()
+  if (!ak || !sk) return null
+  return {
+    bucket: String(env?.[ENV_BUCKET] ?? '').trim() || DEFAULT_BUCKET,
+    endpoint: normalizeEndpoint(String(env?.[ENV_ENDPOINT] ?? '').trim() || DEFAULT_ENDPOINT),
+    accessKeyId: ak,
+    accessKeySecret: sk
+  }
+}
+
+/** 凭据来源描述（供日志，不含任何凭据值） */
+export function describeCredsSource(creds, from) {
+  return `bucket=${creds.bucket} endpoint=${creds.endpoint} 来源=${from}（凭据已加载，值不回显）`
+}
+
 /** 对象 key：<version>/<fileName>（version 去 v 前缀） */
 export function ossKey(version, fileName) {
   const v = String(version ?? '').trim().replace(/^v/i, '')
   if (!v) throw new Error('版本号为空')
   if (!fileName || /[/\\]/.test(String(fileName))) throw new Error(`非法文件名：${fileName}`)
   return `${v}/${fileName}`
+}
+
+/**
+ * 带前缀的对象 key（R-8）——CI 上传到 feed 稳定路径 `releases/`。
+ * prefix 为空/未给 → 退回 <version>/<fileName>（R-7 行为不变）。
+ */
+export function ossObjectKey({ prefix, version, fileName }) {
+  const name = String(fileName ?? '')
+  if (!name || /[/\\]/.test(name)) throw new Error(`非法文件名：${fileName}`)
+  const p = String(prefix ?? '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+  if (!p) return ossKey(version, name)
+  return `${p}/${name}`
 }
 
 /** CanonicalizedResource：/<bucket>/<key> */
@@ -103,6 +148,57 @@ export function verifySha256(buf, expectedHex) {
   if (!want) return { ok: false, actual, reason: '未提供期望 sha256' }
   if (actual !== want) return { ok: false, actual, reason: `sha256 不一致：${actual} vs ${want}` }
   return { ok: true, actual }
+}
+
+/** 解析 OSS 标准错误 XML */
+export function parseOssError(text) {
+  const pick = (tag) => new RegExp(`<${tag}>([^<]*)</${tag}>`).exec(String(text ?? ''))?.[1]?.trim() ?? ''
+  return {
+    code: pick('Code'),
+    message: pick('Message'),
+    requestId: pick('RequestId'),
+    hostId: pick('HostId')
+  }
+}
+
+/**
+ * OSS 错误码 → 可执行建议。
+ * 排障顺序：先看 Code 再动手——四类根因（凭据 / 签名 / 权限 / bucket）各有专属错误码，
+ * 混为一谈会白跑很多趟。
+ */
+export function explainOssError(code) {
+  switch (String(code ?? '')) {
+    case 'InvalidAccessKeyId':
+      return 'AccessKeyId 不被 OSS 认可。核对：① AK ID 是否完整（RAM AK 通常 24 字符、LTAI 开头，抄漏/截断会直接报此错）② 该 AK 是否已被禁用或删除 ③ 是否误用了另一个账号的凭据'
+    case 'SignatureDoesNotMatch':
+      return '签名不匹配。核对：① 本机时间与 OSS 偏差需 <15 分钟（Date 头为 GMT）② Content-MD5 / Content-Type 是否与实际请求体一致'
+    case 'AccessDenied':
+      return '凭据有效但无权限。为该 RAM 子账号授予本 bucket 的 PutObject / GetObject / ListObjects（若要开静态网站还需 PutBucketWebsite）'
+    case 'NoSuchBucket':
+      return 'bucket 不存在或不在该 region。核对 bucket 名与 endpoint 区域是否匹配'
+    case 'RequestTimeTooSkewed':
+      return '本机时间与 OSS 偏差过大，校准系统时间后重试'
+    case 'InvalidBucketName':
+      return 'bucket 名非法：仅允许小写字母、数字、连字符，长度 3-63'
+    case '':
+      return '响应不是 OSS 标准错误 XML（可能是网络层/代理返回）。检查网络与代理设置'
+    default:
+      return `未收录的错误码 ${code}，请按 <Message> 原文排查`
+  }
+}
+
+/** 组合成一段可读的失败说明 */
+export function describeOssFailure(status, text) {
+  const e = parseOssError(text)
+  const hint = explainOssError(e.code)
+  return [
+    `HTTP ${status} ${e.code || '(无 Code)'}`,
+    e.message ? `Message: ${e.message}` : '',
+    `建议: ${hint}`,
+    e.requestId ? `RequestId: ${e.requestId}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n         ')
 }
 
 // ============================================================
@@ -200,12 +296,41 @@ async function main() {
   const dir = resolve(arg('dir', 'release'))
   const credsPath = arg('creds')
   const pagePath = arg('page')
-  if (!version || !credsPath) {
-    console.error('用法：node scripts/upload-release-oss.mjs --version <v> --dir <dir> --creds <creds.json> [--page <html>]')
+  const prefix = arg('prefix') // 例：releases（CI 稳定路径）；缺省则用 <version>/
+  const skipIfMissing = process.argv.includes('--skip-if-missing')
+
+  if (!version) {
+    console.error('用法：node scripts/upload-release-oss.mjs --version <v> --dir <dir> [--creds <creds.json>] [--prefix releases] [--page <html>] [--skip-if-missing]')
     process.exit(2)
   }
-  const creds = parseCreds(readFileSync(credsPath, 'utf8'))
-  console.log(`[oss] bucket=${creds.bucket} endpoint=${creds.endpoint}（凭据已加载，值不回显）`)
+
+  // 凭据双模式：--creds 文件优先；否则读环境变量（CI Secrets）
+  let creds = null
+  let credsFrom = ''
+  if (credsPath) {
+    if (!existsSync(credsPath)) {
+      console.error(`[oss][FATAL] 凭据文件不存在：${credsPath}`)
+      process.exit(2)
+    }
+    creds = parseCreds(readFileSync(credsPath, 'utf8'))
+    credsFrom = '凭据文件'
+  } else {
+    creds = parseCredsFromEnv(process.env)
+    credsFrom = '环境变量'
+    if (!creds) {
+      const msg = `未提供凭据（--creds 文件或环境变量 ${ENV_AK}/${ENV_SK} 均未设置）`
+      if (skipIfMissing) {
+        console.log(`[oss][WARN] ${msg} —— 按 --skip-if-missing 跳过 OSS 上传，不影响本次发布`)
+        return
+      }
+      console.error(`[oss][FATAL] ${msg}`)
+      process.exit(2)
+    }
+  }
+  console.log(`[oss] ${describeCredsSource(creds, credsFrom)}`)
+
+  // 上传前自检：先打一发轻量签名请求，避免 88MB 传完才发现凭据/权限问题
+  await preflight(creds)
 
   const results = []
   for (const tpl of ARTIFACTS) {
@@ -216,7 +341,7 @@ async function main() {
       continue
     }
     const body = readFileSync(local)
-    const key = ossKey(version, name)
+    const key = ossObjectKey({ prefix, version, fileName: name })
     const localSha = verifySha256(body, '').actual
     console.log(`[oss] 上传 ${name}（${formatBytes(body.length)}）→ ${key}`)
     await putObject(creds, key, body, name.endsWith('.yml') ? 'text/yaml; charset=utf-8' : 'application/octet-stream')
@@ -255,6 +380,31 @@ async function main() {
   console.log('\n===== 国内直连 URL =====')
   for (const r of results) console.log(`${r.name}\n  ${r.url}\n  ${r.size} bytes  sha256 ${r.sha256}`)
   if (pageUrl) console.log(`落地页\n  ${pageUrl}`)
+}
+
+/**
+ * 上传前自检（R-8）：一发签名 ListObjects。
+ * 目的是把「凭据/权限」类问题在动 88MB 之前就暴露出来，并给出可执行建议。
+ */
+async function preflight(creds) {
+  const date = new Date().toUTCString()
+  const signature = signV1({
+    verb: 'GET',
+    date,
+    canonicalizedResource: `/${creds.bucket}/`,
+    accessKeySecret: creds.accessKeySecret
+  })
+  const host = normalizeEndpoint(creds.endpoint).replace(/^https?:\/\//i, '')
+  const res = await fetch(`https://${creds.bucket}.${host}/?max-keys=1`, {
+    headers: { Date: date, Authorization: authHeader(creds.accessKeyId, signature) }
+  })
+  if (res.ok) {
+    console.log('[oss] ✓ 自检通过：凭据有效且具备 ListObjects 权限')
+    return
+  }
+  const text = await res.text().catch(() => '')
+  console.error(`[oss][FATAL] 自检失败（未开始上传）：\n         ${describeOssFailure(res.status, text)}`)
+  process.exit(2)
 }
 
 const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))

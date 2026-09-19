@@ -1,6 +1,6 @@
 {
   "name": "@mb/desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "小气 · 科研工作台 — Electron 桌面端（M0 骨架）",
   "main": "out/main/index.js",

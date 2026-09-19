@@ -4,14 +4,26 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_BUCKET,
+  DEFAULT_ENDPOINT,
+  ENV_AK,
+  ENV_BUCKET,
+  ENV_ENDPOINT,
+  ENV_SK,
   authHeader,
   canonicalResource,
   contentMd5,
+  describeCredsSource,
+  describeOssFailure,
+  explainOssError,
   formatBytes,
   normalizeEndpoint,
   objectUrl,
   ossKey,
+  ossObjectKey,
   parseCreds,
+  parseCredsFromEnv,
+  parseOssError,
   signV1,
   verifySha256,
   verifySize
@@ -167,6 +179,96 @@ describe('上传后校验', () => {
   })
 })
 
+describe('凭据双模式 — 文件 / 环境变量（CI Secrets）', () => {
+  it('环境变量齐备 → 解析成功，bucket/endpoint 走默认值', () => {
+    const c = parseCredsFromEnv({ [ENV_AK]: 'AKID', [ENV_SK]: 'SECRET' })
+    expect(c).toEqual({
+      bucket: DEFAULT_BUCKET,
+      endpoint: DEFAULT_ENDPOINT,
+      accessKeyId: 'AKID',
+      accessKeySecret: 'SECRET'
+    })
+  })
+
+  it('环境变量可覆盖 bucket / endpoint（无 scheme 自动补 https）', () => {
+    const c = parseCredsFromEnv({
+      [ENV_AK]: 'AKID',
+      [ENV_SK]: 'SECRET',
+      [ENV_BUCKET]: 'other-bucket',
+      [ENV_ENDPOINT]: 'oss-cn-shanghai.aliyuncs.com'
+    })
+    expect(c?.bucket).toBe('other-bucket')
+    expect(c?.endpoint).toBe('https://oss-cn-shanghai.aliyuncs.com')
+  })
+
+  it('AK 或 SK 任一缺失 → null（调用方据此跳过并警告，不 fail）', () => {
+    expect(parseCredsFromEnv({})).toBeNull()
+    expect(parseCredsFromEnv({ [ENV_AK]: 'AKID' })).toBeNull()
+    expect(parseCredsFromEnv({ [ENV_SK]: 'SECRET' })).toBeNull()
+    expect(parseCredsFromEnv({ [ENV_AK]: '  ', [ENV_SK]: 'SECRET' })).toBeNull()
+    expect(parseCredsFromEnv(undefined as never)).toBeNull()
+  })
+
+  it('凭据来源描述不含任何凭据值', () => {
+    const c = parseCredsFromEnv({ [ENV_AK]: 'AKID', [ENV_SK]: 'SECRET' })
+    const desc = describeCredsSource(c!, '环境变量')
+    expect(desc).toContain('环境变量')
+    expect(desc).not.toContain('AKID')
+    expect(desc).not.toContain('SECRET')
+  })
+})
+
+describe('对象 key — releases/ 稳定路径（R-8 CI 上传）', () => {
+  it('给 prefix → <prefix>/<fileName>（与版本号无关）', () => {
+    expect(ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: 'latest.yml' })).toBe('releases/latest.yml')
+    expect(ossObjectKey({ prefix: 'releases/', version: '1.0.1', fileName: 'a.exe' })).toBe('releases/a.exe')
+    expect(ossObjectKey({ prefix: '/releases/', version: '1.0.1', fileName: 'a.exe' })).toBe('releases/a.exe')
+  })
+
+  it('不给 prefix → 退回 <version>/<fileName>（R-7 行为不变）', () => {
+    expect(ossObjectKey({ version: '1.0.0', fileName: 'a.exe' })).toBe('1.0.0/a.exe')
+    expect(ossObjectKey({ prefix: '  ', version: 'v1.0.0', fileName: 'a.exe' })).toBe('1.0.0/a.exe')
+    expect(ossObjectKey({ prefix: '', version: '1.0.1', fileName: 'a.exe' })).toBe('1.0.1/a.exe')
+  })
+
+  it('非法文件名一律抛错（防路径穿越）', () => {
+    expect(() => ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: '../x.exe' })).toThrow(/非法文件名/)
+    expect(() => ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: '' })).toThrow(/非法文件名/)
+  })
+})
+
+describe('OSS 错误分诊 — 错误码 → 可执行建议', () => {
+  const xml = (code: string, msg = 'm') =>
+    `<?xml version="1.0"?><Error><Code>${code}</Code><Message>${msg}</Message><RequestId>RID1</RequestId><HostId>h</HostId></Error>`
+
+  it('parseOssError 提取四字段；非 XML 时全空', () => {
+    expect(parseOssError(xml('InvalidAccessKeyId', 'not exist'))).toEqual({
+      code: 'InvalidAccessKeyId',
+      message: 'not exist',
+      requestId: 'RID1',
+      hostId: 'h'
+    })
+    expect(parseOssError('<html>502</html>')).toEqual({ code: '', message: '', requestId: '', hostId: '' })
+  })
+
+  it('四类根因各给专属建议（凭据/签名/权限/bucket 不混为一谈）', () => {
+    expect(explainOssError('InvalidAccessKeyId')).toMatch(/AK ID 是否完整/)
+    expect(explainOssError('SignatureDoesNotMatch')).toMatch(/时间|偏差/)
+    expect(explainOssError('AccessDenied')).toMatch(/权限|PutObject/)
+    expect(explainOssError('NoSuchBucket')).toMatch(/bucket 名|region/)
+    expect(explainOssError('')).toMatch(/不是 OSS 标准错误 XML/)
+    expect(explainOssError('WeirdCode')).toMatch(/未收录/)
+  })
+
+  it('describeOssFailure 汇总状态码 + Message + 建议 + RequestId', () => {
+    const s = describeOssFailure(403, xml('InvalidAccessKeyId', 'not exist'))
+    expect(s).toContain('HTTP 403 InvalidAccessKeyId')
+    expect(s).toContain('not exist')
+    expect(s).toContain('建议')
+    expect(s).toContain('RID1')
+  })
+})
+
 describe('凭据零明文 — 脚本源码契约', () => {
   const src = readFileSync(resolve(__dirname, '../../scripts/upload-release-oss.mjs'), 'utf8')
 
@@ -183,11 +285,13 @@ describe('凭据零明文 — 脚本源码契约', () => {
     for (const l of logLines) {
       // ① 绝不引用敏感字段
       expect(l, `日志行引用了敏感字段：${l.trim()}`).not.toMatch(/accessKeySecret|accessKeyId/)
-      // ② 绝不整体打印 creds 对象。白名单仅两项非敏感访问 + CLI 参数名/文件名：
+      // ② 绝不整体打印 creds 对象。白名单：非敏感访问、CLI 参数名/文件名，
+      //    以及 describeCredsSource()——它本身有独立断言保证只输出 bucket/endpoint。
       const rest = l
         .replace(/creds\.(bucket|endpoint)/g, '')
         .replace(/--creds/g, '')
         .replace(/creds\.json/g, '')
+        .replace(/describeCredsSource\(creds, credsFrom\)/g, '')
       expect(rest, `日志行打印了凭据对象：${l.trim()}`).not.toMatch(/\bcreds\b/)
     }
   })

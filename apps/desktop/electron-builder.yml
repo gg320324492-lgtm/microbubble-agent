@@ -27,11 +27,16 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   shortcutName: 小气科研工作台
-# 自动更新源（M6-1）— 有 publish 段时 electron-builder 才会产出 resources/app-update.yml
+# 自动更新源（M6-1 / R-8）— 有 publish 段时 electron-builder 才会产出 resources/app-update.yml
 # （electron-updater 的下载器必读该文件，仅运行时 setFeedURL 不足以替代），同时自动生成
 # latest.yml 更新信息。发布流程用 `gh release create` 上传，故打包时务必带 `-p never` 禁止
 # electron-builder 自行上传，避免重复发布。
+#
+# R-8：provider 由 github 改为 generic（阿里云 OSS 国内直连）。
+# ⚠ 权威来源是应用侧常量 src/shared/constants.ts 的 UPDATE_FEED_BASE（适配层每次都
+#    setFeedURL 覆盖此处默认值）。本段只决定 latest.yml 是否产出与 app-update.yml 的兜底内容，
+#    因此 releases.mnb-lab.cn 域名接入时**必须改的是 constants.ts 那一行**；此处同步改一次
+#    仅为保持两处文本一致（不改也不影响运行时行为）。
 publish:
-  provider: github
-  owner: gg320324492-lgtm
-  repo: microbubble-agent
+  provider: generic
+  url: https://mnb-workbench-releases.oss-cn-beijing.aliyuncs.com/releases/
