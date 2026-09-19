@@ -69,8 +69,8 @@ function assertThemeTokens() {
   const bg = assertCssVariable(cssTexts, '--color-bg-page', '#f3eddf')
   if (!bg.ok) die(`主题令牌断言失败：${bg.reason}`)
   const font = assertCssVariable(cssTexts, '--wb-head-font', 'Georgia, "Songti SC", "STSong", "SimSun", "Noto Serif SC", serif')
-  if (!font.ok) log(`  （衬线字体栈断言跳过：${font.reason}）`)
-  else log('✓ 宣纸底色与衬线标题栈断言通过')
+  if (!font.ok) die(`衬线字体栈断言失败：${font.reason}`)
+  log('✓ 宣纸底色与衬线标题栈断言通过')
 }
 
 assertThemeTokens()

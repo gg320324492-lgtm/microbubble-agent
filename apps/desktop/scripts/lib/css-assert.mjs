@@ -80,6 +80,15 @@ export function winningDeclaration(declarations) {
   return winner
 }
 
+/** 值比较归一化：去引号差异（压缩器会把 "Songti SC" 写成 'Songti SC'）、压空白、转小写 */
+export function normalizeCssValue(v) {
+  return String(v ?? '')
+    .replace(/["']/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
 /**
  * 断言：某自定义属性最终生效值等于期望值。
  * @param {string[]} cssTexts 按加载顺序拼接的 CSS 文本（前者先加载）
@@ -99,8 +108,8 @@ export function assertCssVariable(cssTexts, prop, expected) {
   if (!winner) {
     return { ok: false, winner: null, reason: `构建产物中未找到 ${prop} 的任何声明` }
   }
-  const actual = String(winner.value).trim().toLowerCase()
-  const want = String(expected).trim().toLowerCase()
+  const actual = normalizeCssValue(winner.value)
+  const want = normalizeCssValue(expected)
   if (actual !== want) {
     return {
       ok: false,

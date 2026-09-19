@@ -80,6 +80,14 @@ describe('声明收集与取胜规则', () => {
     expect(assertCssVariable([css], '--el-color-primary', BRAND_PRIMARY).ok).toBe(true)
   })
 
+  it('值比较对引号/空白/大小写宽容（压缩器会把 "Songti SC" 写成 \'Songti SC\'）', () => {
+    const css = `:root{--wb-head-font:Georgia, 'Songti SC', STSong, serif}`
+    const res = assertCssVariable([css], '--wb-head-font', 'Georgia, "Songti SC", STSong, serif')
+    expect(res.ok, res.reason ?? '').toBe(true)
+    // 但真实差异仍必须判失败
+    expect(assertCssVariable([css], '--wb-head-font', 'Georgia, "Songti SC", SimSun, serif').ok).toBe(false)
+  })
+
   it('多条声明按文档序收集；同级取靠后者', () => {
     const css = `a{--x:1}\n:root{--x:2}\n:root{--x:3}`
     const decls = collectDeclarations(css, '--x')
