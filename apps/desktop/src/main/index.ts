@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { registerIpc, installDesktopPrimitives, installUpdaterPort } from './ipc'
 import { openDatabase } from './db'
 import { createElectronUpdaterPort } from './services/update/updater-adapter'
-import { resolveUpdateFeedConfig } from './services/update/feed-config'
+import { resolveEffectiveUpdateFeed, resolveUpdateFeedConfig } from './services/update/feed-config'
 import { resolveTrayIcon } from './services/desktop/tray-icon'
 import { IPC } from '@shared/ipc-channels'
 import { APP_NAME, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH } from '@shared/constants'
@@ -89,11 +89,15 @@ app.whenReady().then(() => {
   // 自动更新适配层装配（M6-1）— 全仓库唯一 import electron-updater 的位置在此装配；
   // 服务层只拿到注入端口，故状态机与版本比较可完全离线单测。
   // feed 覆盖存在时必须同时放行未打包环境（forceDev），否则 electron-updater 会整体跳过检查。
-  const feed = resolveUpdateFeedConfig({ env: process.env, isPackaged: app.isPackaged })
+  // R-8：生效 feed 由 resolveEffectiveUpdateFeed 解析——MNB_UPDATE_FEED 覆盖 > 默认 OSS generic
+  // > MNB_UPDATE_FEED_PROVIDER=github 回退。forceDev 仍只由显式覆盖驱动（M6-1 语义不变）。
+  const feedOverride = resolveUpdateFeedConfig({ env: process.env, isPackaged: app.isPackaged })
+  const feed = resolveEffectiveUpdateFeed({ env: process.env, isPackaged: app.isPackaged })
   installUpdaterPort(
     createElectronUpdaterPort({
-      feedUrl: feed.feedUrl,
-      forceDev: feed.forceDev,
+      feedUrl: feed.url,
+      feedSource: feed.source,
+      forceDev: feedOverride.forceDev,
       log: (message) => {
         console.log(message)
       }

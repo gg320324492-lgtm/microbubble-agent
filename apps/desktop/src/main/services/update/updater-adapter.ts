@@ -8,8 +8,8 @@
 // 「已打包」与「未打包（配合 forceDevUpdateConfig）」两种场景，且便于真机联调时把 feed
 // 指向本地静态服务（MNB_UPDATE_FEED），无需改动打包配置。
 import { autoUpdater } from 'electron-updater'
-import { ENV_UPDATE_FEED } from '@shared/constants'
-import { resolveForceDevUpdateConfig } from './feed-config'
+import { APP_VERSION, ENV_UPDATE_FEED } from '@shared/constants'
+import { resolveAllowPrerelease, resolveForceDevUpdateConfig, type UpdateFeedSource } from './feed-config'
 import type { UpdaterPort } from './update.service'
 
 /** 更新源 — GitHub Releases（公开仓库，匿名可读） */
@@ -21,8 +21,10 @@ export { ENV_UPDATE_FEED }
 export interface UpdaterAdapterOptions {
   owner?: string
   repo?: string
-  /** 显式 feed 覆盖（本地伪造 feed / 联调）；为空则用 GitHub provider */
+  /** 生效 feed 地址（装配层已按 env > OSS 默认 > GitHub 回退 解析）；为空则用 GitHub provider */
   feedUrl?: string | null
+  /** feed 来源（仅用于日志与联调取证，不影响行为） */
+  feedSource?: UpdateFeedSource
   /** 未打包环境是否允许检查（配合 feedUrl 使用；生产恒为 false） */
   forceDev?: boolean
   log?: (message: string) => void
@@ -40,18 +42,22 @@ export function createElectronUpdaterPort(options: UpdaterAdapterOptions = {}): 
 
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
-  // 全部版本都是 prerelease（v0.1.x-alpha），不放开该开关会永远"无更新"
-  autoUpdater.allowPrerelease = true
+  // R-8：stable 频道（v1.0.1 起版本号不带后缀）默认不放开预发布；
+  // 仅当应用自身版本带预发布后缀时放开——既保留回退能力，又不会被 alpha/beta 误拉走。
+  // v0.1.x-alpha 时期该表达式恒为 true，行为与 M6-1 一致。
+  autoUpdater.allowPrerelease = resolveAllowPrerelease(APP_VERSION)
   // 未打包环境必须显式放行，否则 isUpdaterActive() 为 false → 检查被整体跳过（M6-1 打回缺陷）
   autoUpdater.forceDevUpdateConfig = resolveForceDevUpdateConfig({ feedUrl, forceDev: options.forceDev })
 
+  const log = options.log ?? ((): void => undefined)
+
   if (feedUrl) {
     autoUpdater.setFeedURL(feedUrl)
+    log(`[updater] feed=${feedUrl}（来源 ${options.feedSource ?? 'unknown'}）`)
   } else {
     autoUpdater.setFeedURL({ provider: 'github', owner, repo })
+    log(`[updater] feed=github:${owner}/${repo}（回退路径）`)
   }
-
-  const log = options.log ?? ((): void => undefined)
   autoUpdater.logger = {
     info: (m?: unknown) => log(`[updater] ${String(m ?? '')}`),
     warn: (m?: unknown) => log(`[updater][warn] ${String(m ?? '')}`),

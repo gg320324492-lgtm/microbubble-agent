@@ -23,13 +23,42 @@ describe('desktop-release.yml — 存在性与触发条件', () => {
     expect(yml).toMatch(/^\s{2}workflow_dispatch:/m)
   })
 
-  it('权限仅需内置 GITHUB_TOKEN（contents: write），不依赖额外 secrets', () => {
+  it('权限仅需内置 GITHUB_TOKEN（contents: write）+ R-8 新增的 OSS 上传 Secrets', () => {
     const yml = readWorkflow()
     expect(yml).toMatch(/^permissions:/m)
     expect(yml).toMatch(/^\s{2}contents:\s*write\s*$/m)
-    // 除 GITHUB_TOKEN 外不得出现其他 secrets 引用
+    // R-8 起新增 OSS 镜像所需的两个 Secrets（用户已在仓库配置）；
+    // 除此之外不得出现其他 secrets 引用（保持"最小凭据面"）
     const secrets = [...yml.matchAll(/secrets\.([A-Za-z0-9_]+)/g)].map((m) => m[1])
-    expect([...new Set(secrets)]).toEqual(['GITHUB_TOKEN'])
+    expect([...new Set(secrets)].sort()).toEqual(['GITHUB_TOKEN', 'OSS_UPLOAD_AK', 'OSS_UPLOAD_SK'])
+  })
+})
+
+describe('desktop-release.yml — OSS 镜像步骤（R-8）', () => {
+  it('存在 OSS 上传步骤：调用上传脚本 + releases/ 稳定路径', () => {
+    const yml = readWorkflow()
+    expect(yml).toMatch(/name:\s*Mirror artifacts to OSS feed/)
+    expect(yml).toMatch(/scripts\/upload-release-oss\.mjs/)
+    expect(yml).toMatch(/--prefix\s+releases/)
+    expect(yml).toMatch(/working-directory:\s*apps\/desktop/)
+  })
+
+  it('凭据经 env 注入两个 Secrets，且未配置时黄字警告 + 跳过不 fail', () => {
+    const yml = readWorkflow()
+    expect(yml).toMatch(/OSS_UPLOAD_AK:\s*\$\{\{\s*secrets\.OSS_UPLOAD_AK\s*\}\}/)
+    expect(yml).toMatch(/OSS_UPLOAD_SK:\s*\$\{\{\s*secrets\.OSS_UPLOAD_SK\s*\}\}/)
+    // 未配置 → ::warning 注解（CI 上黄字可见）
+    expect(yml).toMatch(/::warning title=OSS 镜像已跳过::/)
+    // 脚本以 --skip-if-missing 运行：缺凭据时退出码 0，不阻断发布
+    expect(yml).toMatch(/--skip-if-missing/)
+  })
+
+  it('OSS 步骤位于 GitHub Release 之后（镜像失败不回滚已发布的 Release）', () => {
+    const yml = readWorkflow()
+    const iRelease = yml.indexOf('Publish GitHub Release')
+    const iOss = yml.indexOf('Mirror artifacts to OSS feed')
+    expect(iRelease).toBeGreaterThanOrEqual(0)
+    expect(iOss).toBeGreaterThan(iRelease)
   })
 })
 

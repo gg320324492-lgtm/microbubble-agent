@@ -106,6 +106,24 @@ jobs:
           fi
           echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/${TAG}"
 
+      # R-8：把三件套镜像到 OSS feed 稳定路径 releases/（应用内「检查更新」的国内直连源）
+      # 凭据走 GitHub Actions Secrets OSS_UPLOAD_AK / OSS_UPLOAD_SK（由仓库管理员配置）。
+      # 未配置 → 黄字警告并跳过，**不影响发布**（GitHub Release 已在上一步完成）。
+      # 脚本自带上传前自检（签名 ListObjects），凭据/权限问题会在动 88MB 之前暴露。
+      - name: Mirror artifacts to OSS feed (releases/)
+        shell: bash
+        working-directory: apps/desktop
+        env:
+          OSS_UPLOAD_AK: ${{ secrets.OSS_UPLOAD_AK }}
+          OSS_UPLOAD_SK: ${{ secrets.OSS_UPLOAD_SK }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OSS_UPLOAD_AK:-}" ] || [ -z "${OSS_UPLOAD_SK:-}" ]; then
+            echo "::warning title=OSS 镜像已跳过::未配置 Secrets OSS_UPLOAD_AK / OSS_UPLOAD_SK，本次仅发布 GitHub Release；应用内更新源仍指向 OSS，需补传 releases/ 前缀"
+          fi
+          VER=$(node -p "require('./package.json').version")
+          node scripts/upload-release-oss.mjs --version "$VER" --dir release --prefix releases --skip-if-missing
+
       - name: Upload build artifacts (workflow run)
         if: always()
         uses: actions/upload-artifact@v4
