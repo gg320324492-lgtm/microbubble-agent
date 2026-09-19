@@ -17,7 +17,7 @@ import StatusBar from '@renderer/layouts/StatusBar.vue'
 function stubApi(overrides: Record<string, unknown> = {}): void {
   Object.assign(window, {
     api: {
-      app: { info: vi.fn().mockResolvedValue({ version: '0.1.6-alpha', platform: 'win32', dbPath: 'x', appName: 'x' }) },
+      app: { info: vi.fn().mockResolvedValue({ version: '1.0.0', platform: 'win32', dbPath: 'x', appName: 'x' }) },
       auth: { logout: vi.fn().mockResolvedValue(undefined), restore: vi.fn().mockResolvedValue(null) },
       ...overrides
     }
@@ -72,7 +72,7 @@ describe('状态栏换新 — 版本与本地数据状态仍正确渲染', () =>
 
     expect(w.find('.statusbar').exists()).toBe(true)
     expect(w.text()).toContain('本地数据库就绪')
-    expect(w.text()).toContain('v0.1.6-alpha')
+    expect(w.text()).toContain('v1.0.0')
     expect(w.text()).toContain('SQLite')
     expect(w.find('.statusbar-led').classes()).toContain('is-on')
   })

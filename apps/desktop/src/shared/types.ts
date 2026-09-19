@@ -29,6 +29,9 @@ export interface ChatSession {
   title: string
   createdAt: number
   updatedAt: number
+  /** V1 用量记账：会话累计输入/输出 token（迁移 010） */
+  tokensIn: number
+  tokensOut: number
 }
 
 /** 消息（chat_messages 行的跨进程投影） */
@@ -151,6 +154,19 @@ export interface StreamTurnResult {
   toolUses: ToolUseBlock[]
   /** 供下一轮回喂的 assistant content blocks（text + tool_use，thinking 不回传） */
   assistantBlocks: AgentContentBlock[]
+  /**
+   * V1 用量记账：本轮流式返回的 token 用量。
+   * 可选 —— 协议未返回 usage 的网关/测试假实现可缺省；消费方一律按 0 处理（见 addUsage）。
+   */
+  usage?: TokenUsage
+}
+
+/** 用量记账（V1）— 归一化后的 token 用量；usageComplete=false 表示来源字段缺失或非法 */
+export interface TokenUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  usageComplete: boolean
 }
 
 export interface StreamTurnRequest {

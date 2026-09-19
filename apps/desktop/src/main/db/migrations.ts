@@ -200,6 +200,15 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_manuscript_files_ms ON manuscript_files(manuscript_id);
       CREATE VIRTUAL TABLE IF NOT EXISTS manuscripts_fts USING fts5(title_seg, content_seg, tokenize='unicode61');
     `
+  },
+  {
+    // V1 用量记账：会话级 token 累计（每轮 agent 完成后累加）
+    id: 10,
+    name: 'chat-session-usage',
+    sql: `
+      ALTER TABLE chat_sessions ADD COLUMN tokens_in INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE chat_sessions ADD COLUMN tokens_out INTEGER NOT NULL DEFAULT 0;
+    `
   }
 ]
 

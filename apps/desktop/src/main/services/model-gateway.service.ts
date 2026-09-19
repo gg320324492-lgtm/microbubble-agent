@@ -4,6 +4,7 @@
 import { randomBytes } from 'node:crypto'
 import type { SqlDatabase } from '../db/adapters'
 import type { ModelProtocol, StreamTurnRequest, StreamTurnResult, StopReason } from '@shared/types'
+import { extractAnthropicUsage, extractOpenAiUsage, normalizeUsage } from './model/usage'
 
 export interface ProviderRecord {
   id: string
@@ -279,6 +280,8 @@ export class ModelGatewayService {
     }
     const blocks = new Map<number, BlockState>()
     let stopReason: StopReason = 'end_turn'
+    // V1：SSE 用量原始值累积（Anthropic 的 input 在 message_start、output 在 message_delta）
+    let usageRaw: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number } = {}
 
     try {
       const isAnthropic = p.protocol === 'anthropic'
@@ -325,6 +328,8 @@ export class ModelGatewayService {
               delta?: { type?: string; text?: string; thinking?: string; partial_json?: string; stop_reason?: string }
               choices?: { delta?: { content?: string }; finish_reason?: string }[]
             }
+            // V1 用量记账：SSE 片段里的 usage 逐片累积（Anthropic 跨 message_start/message_delta）
+            usageRaw = { ...usageRaw, ...(isAnthropic ? extractAnthropicUsage(json) : extractOpenAiUsage(json)) }
             if (isAnthropic) {
               if (json.type === 'content_block_start' && json.content_block?.type) {
                 blocks.set(json.index ?? 0, {
@@ -406,7 +411,7 @@ export class ModelGatewayService {
       if (!text && !thinking && toolUses.length === 0 && reason !== 'aborted') {
         throw new Error('模型返回了空回复')
       }
-      return { stopReason: reason, text, thinking, toolUses, assistantBlocks }
+      return { stopReason: reason, text, thinking, toolUses, assistantBlocks, usage: normalizeUsage(usageRaw) }
     }
   }
 }

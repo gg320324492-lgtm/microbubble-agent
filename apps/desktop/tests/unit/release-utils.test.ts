@@ -70,7 +70,7 @@ describe('latest.yml 生成与一致性校验（清账①）', () => {
   it('version/sha512/size/url 任一不符都被判失败（消灭手工补）', () => {
     const yml = buildLatestYml({ ...expected, releaseDate: '2026-09-19T00:00:00.000Z' })
 
-    expect(verifyLatestYml(yml, { ...expected, version: '0.1.6-alpha' }).ok).toBe(false)
+    expect(verifyLatestYml(yml, { ...expected, version: '9.9.9' }).ok).toBe(false)
     expect(verifyLatestYml(yml, { ...expected, size: 1 }).ok).toBe(false)
     expect(verifyLatestYml(yml, { ...expected, sha512: 'other' }).ok).toBe(false)
     expect(verifyLatestYml(yml, { ...expected, fileName: 'other.exe' }).ok).toBe(false)
