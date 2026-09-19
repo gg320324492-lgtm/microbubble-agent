@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>下载 · 小气 · 科研工作台</title>
+<meta name="description" content="小气 · 科研工作台 v1.0.0 — 把课题组的数据，装进一台本地工作台。数据存本机，断网可用。Windows 10/11 64 位，国内直连下载。">
+<style>
+/* ============================================================
+   深夜极简（slate）— 设计令牌源自 download-page-proposals.html 的 slate 主题
+   固定暗色，无主题切换器
+   ============================================================ */
+:root{
+  --bg:#171a20; --hero:#0d1117; --hero-text:#d5dde6; --card:#151d26; --border:#29323e;
+  --text:#d5dde6; --text2:#7d8896; --accent:#4cc2ff; --accent-weak:#12283a;
+  --ok:#3fb950; --radius:10px; --shadow:0 4px 16px rgba(0,0,0,.5);
+  --head-font:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --btn-bg:#1f6feb; --btn-text:#fff; --chip-bg:#12283a; --chip-text:#4cc2ff;
+  --mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:14px/1.6 var(--head-font);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.stage{max-width:1060px;margin:30px auto 70px;padding:0 22px}
+.page{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);background:var(--bg)}
+
+/* Hero */
+.hero{background:var(--hero);color:var(--hero-text);padding:52px 48px;text-align:center}
+.hero .badge{display:inline-block;font-size:12px;letter-spacing:3px;border:1px solid currentColor;border-radius:999px;padding:3px 14px;opacity:.85;margin-bottom:18px}
+.hero h1{font-family:var(--head-font);font-size:34px;font-weight:600;letter-spacing:1px}
+.hero .slogan{font-size:16px;opacity:.85;margin:12px 0 30px;overflow-wrap:anywhere}
+.dl-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.dl-main{display:inline-block;padding:14px 38px;border-radius:var(--radius);background:var(--btn-bg);color:var(--btn-text);font-size:16px;font-weight:700;text-decoration:none;transition:filter .15s,transform .15s}
+.dl-main:hover{filter:brightness(1.08)}
+.dl-main:active{transform:scale(.985)}
+.dl-main small{display:block;font-size:11px;font-weight:400;opacity:.75;margin-top:2px;overflow-wrap:anywhere}
+.dl-sec{display:inline-block;padding:14px 26px;border-radius:var(--radius);border:1px solid currentColor;color:var(--hero-text);font-size:14px;text-decoration:none;opacity:.9;transition:opacity .15s}
+.dl-sec:hover{opacity:1}
+.hero .ver{font-size:12.5px;opacity:.7;margin-top:16px}
+
+/* 区块 */
+.sec{background:var(--card);padding:26px 30px;border-top:1px solid var(--border)}
+.sec h2{font-family:var(--head-font);font-size:17px;margin-bottom:14px}
+.feats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.feat{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--card)}
+.feat .tile{width:30px;height:30px;border-radius:8px;background:var(--accent-weak);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-bottom:8px}
+.feat b{font-size:13.5px;display:block}
+.feat span{font-size:12px;color:var(--text2)}
+
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+.step{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--card);font-size:12.5px}
+.step b{color:var(--accent);font-size:12px}
+.dual{margin-top:10px;font-size:12px;color:var(--text2)}
+.dual b{color:var(--text)}
+
+/* 校验行 */
+.sha{margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--text2);overflow-wrap:anywhere}
+.sha code{font-family:var(--mono);color:var(--text)}
+
+.footer{padding:16px 30px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text2);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+/* 响应式：窄屏 */
+@media (max-width:820px){
+  .feats{grid-template-columns:repeat(2,1fr)}
+  .steps{grid-template-columns:1fr}
+  .hero{padding:40px 22px}
+  .hero h1{font-size:26px}
+  .stage{margin:16px auto 40px;padding:0 12px}
+}
+@media (max-width:520px){
+  .feats{grid-template-columns:1fr}
+  .dl-row{flex-direction:column;align-items:stretch}
+  .dl-main,.dl-sec{display:block;text-align:center;padding:14px 20px}
+  .sec{padding:20px 18px}
+  .footer{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="page">
+
+    <div class="hero">
+      <div class="badge">WINDOWS 10 / 11 · 64 位</div>
+      <h1>小气 · 科研工作台</h1>
+      <div class="slogan">把课题组的数据，装进一台本地工作台。数据存本机，断网可用。</div>
+      <div class="dl-row">
+        <a class="dl-main" href="https://mnb-workbench-releases.oss-cn-beijing.aliyuncs.com/1.0.0/MicroBubbleWorkbench-1.0.0-setup.exe">下载 Windows 版<small>MicroBubbleWorkbench-1.0.0-setup.exe · 87.9 MB · 国内直连</small></a>
+        <a class="dl-sec" href="https://github.com/gg320324492-lgtm/microbubble-agent/releases/tag/v1.0.0" rel="noopener">GitHub 下载</a>
+      </div>
+      <div class="ver">v1.0.0 · 2026-09-19 发布 · 未签名安装包（SmartScreen 选「仍要运行」）</div>
+    </div>
+
+    <div class="sec">
+      <h2>六大功能模块</h2>
+      <div class="feats">
+        <div class="feat"><div class="tile">知</div><b>本地知识库</b><span>Markdown 导入 · 中文全文检索</span></div>
+        <div class="feat"><div class="tile">会</div><b>会议档案</b><span>纪要 · 转录 · 附件一体管理</span></div>
+        <div class="feat"><div class="tile">验</div><b>实验记录本</b><span>自动编号 · 四态流转 · 模板</span></div>
+        <div class="feat"><div class="tile">稿</div><b>稿件库</b><span>目标期刊 · 字数统计 · 版本</span></div>
+        <div class="feat"><div class="tile">AI</div><b>AI 助手</b><span>读写工作区 · 工具卡片可视</span></div>
+        <div class="feat"><div class="tile">备</div><b>加密备份</b><span>AES-256 · 阿里云 OSS 云端</span></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>三步开始使用</h2>
+      <div class="steps">
+        <div class="step"><b>STEP 1 · 安装</b><br>双击安装包，首启创建本机管理员账号——账号与数据只存本机</div>
+        <div class="step"><b>STEP 2 · 配置</b><br>配置模型 Key（如 MiMo），选择一个目录作为你的科研工作区</div>
+        <div class="step"><b>STEP 3 · 使用</b><br>六大模块即开即用，断网可用；一键备份，数据可带走</div>
+      </div>
+      <div class="dual">下载源：<b>① 国内直连（阿里云 OSS）</b> ② GitHub Releases——内容完全一致，按网络情况自选</div>
+      <div class="sha">安装包校验（SHA-256）：<code>6941e8c1b27a4a3f34af63b07ceff030c14db59905189b780708bc4226d5e8bb</code></div>
+    </div>
+
+    <div class="footer">
+      <span>© 2026 MicroBubble Lab · 小气 · 科研工作台</span>
+      <span>应用内「检查更新」可直升新版本</span>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
