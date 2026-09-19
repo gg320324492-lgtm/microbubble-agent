@@ -10,6 +10,7 @@ export declare function collectDeclarations(
 export declare function winningDeclaration(
   declarations: Array<{ selector: string; value: string; index: number }>
 ): { selector: string; value: string; index: number } | null
+export declare function normalizeCssValue(v: unknown): string
 export declare function assertCssVariable(
   cssTexts: string[],
   prop: string,
