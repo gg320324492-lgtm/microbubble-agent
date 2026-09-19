@@ -110,6 +110,34 @@ describe('OSS V1 签名 — 与固定夹具逐字节一致', () => {
     // md5('Check') 的 base64（注意不是 base64('Check')）
     expect(contentMd5(Buffer.from('Check'))).toBe('Bgvy1YeZHY8JChMJsoUpHA==')
   })
+
+  it('StringToSign 构造与独立实现（openssl）逐字节一致', () => {
+    // 期望值由 openssl 独立算出，交叉验证本实现的 StringToSign 拼装：
+    //   printf '<6 行>' | openssl dgst -sha1 -hmac <secret> -binary | openssl base64
+    const secret = 'OtxrzxIsfpFjA7SwPzILwy8Bw21TLhquhboDYROV'
+    // ① 带 CanonicalizedOSSHeaders（OSS 头各占一行，最后拼 CanonicalizedResource）
+    expect(
+      signV1({
+        verb: 'PUT',
+        contentMd5: 'eB5eJF1ptWaXm4bijSPyxw==',
+        contentType: 'text/html',
+        date: 'Thu, 17 Nov 2005 18:49:58 GMT',
+        canonicalizedResource: 'x-oss-meta-author:foo@bar.com\n/oss-example/nelson',
+        accessKeySecret: secret
+      })
+    ).toBe('4u31IfA8Z+t7ofztPQ2w8n2clic=')
+    // ② 无 OSS 头（本上传脚本的实际形态）：Date 之后直接接 CanonicalizedResource
+    expect(
+      signV1({
+        verb: 'PUT',
+        contentMd5: 'eB5eJF1ptWaXm4bijSPyxw==',
+        contentType: 'text/html',
+        date: 'Thu, 17 Nov 2005 18:49:58 GMT',
+        canonicalizedResource: '/oss-example/nelson',
+        accessKeySecret: secret
+      })
+    ).toBe('LNAVCpRhoMq7+fL5OzU7sUkNHE8=')
+  })
 })
 
 describe('上传后校验', () => {
