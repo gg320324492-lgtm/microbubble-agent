@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // 国内分发上传脚本（工单 R-7）— 零依赖，node 直跑，不动业务代码。
 //
 // 复用 M5-2 的 OSS V1 签名模式（HMAC-SHA1），把发布产物上传到公共读 bucket 的
@@ -14,7 +13,6 @@
 import { createHash, createHmac } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 // ============================================================
 // 纯函数层（离线可单测）
@@ -407,7 +405,10 @@ async function preflight(creds) {
   process.exit(2)
 }
 
-const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+// 仅在「被 node 直接执行」时跑 main；被 import（如单测）时不跑。
+// 不用 import.meta.url —— 该表达式在 vitest 的 CJS 转换下不可用，会连带把
+// import 本模块的测试文件一起弄成解析失败（R-8 首航实测）。argv 判定对 ESM/CJS 均安全。
+const invokedDirectly = /upload-release-oss\.mjs$/.test(String(process.argv[1] ?? ''))
 if (invokedDirectly) {
   main().catch((e) => {
     console.error(`[oss][FATAL] ${e instanceof Error ? e.message : String(e)}`)
