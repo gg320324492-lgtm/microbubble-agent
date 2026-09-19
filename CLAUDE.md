@@ -3,6 +3,16 @@
 
 ## 当前状态 (2026-09-18 晚 会议 253 转写丢失双重 bug 修复 — merge 静默丢片 + ASR 无重试, 音频不可恢复, 已部署)
 
+**09-19 头像全挂 502 (MinIO 端口僵尸, WSL 重启第三个受害者, 已修复)**:
+09-18 深夜 `wsl --shutdown` 重启后 Docker Desktop 的 vpnkit 端口发布对"未重建
+的容器"会进入**僵尸状态: TCP 能握手但 HTTP 永不应答** (socket connect 测试会
+误判正常!)。受害者顺序: ollama 11434 (聊天) → **minio 9000 (头像全 502,
+09-19 用户发现)** → neo4j/pg-exporter 同病。修复 = `docker compose up -d
+--force-recreate <svc>` (restart 不够)。langfuse 孤儿容器重建后端口映射从
+陈旧的 3000→3001 变成当前 3001→3000。**操作纪律: 任何 WSL/Docker Desktop
+重启后, 必须对所有发布端口做 HTTP 级验证** (TCP 通 ≠ 通), 或直接批量
+force-recreate。watchdog 已加 MinIO 9000 的 HTTP 探测 (5 分钟告警)。
+
 **会议 253 "正在听会" 处理失败复盘 (09-18 20:12-20:21 录音, 转写 500)**:
 - **两个独立 bug 叠加**:
   1. **merge 静默丢片 (真凶, 内容丢失)**: 307 个实时 webm 分片 (~5MB, 每秒 1 片)

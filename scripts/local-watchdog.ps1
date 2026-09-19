@@ -133,6 +133,22 @@ try {
     }
     $cudaBroken = ($gpuIssues.Count -gt 0)
 
+    # 2026-09-19: MinIO port-publish zombie check. After a WSL/Docker Desktop
+    # restart, vpnkit port forwards can go half-dead (TCP accepts, HTTP never
+    # answers) -> cloud nginx serves 502 for ALL avatars/files (09-18 incident,
+    # minio 9000 + earlier ollama 11434). HTTP-level probe required; a TCP
+    # connect test is NOT sufficient. Fix = force-recreate the container.
+    $minioDown = $false
+    try {
+        $minioResp = Invoke-WebRequest -Uri "http://127.0.0.1:9000/minio/health/live" -UseBasicParsing -TimeoutSec 5
+        if ($minioResp.StatusCode -ne 200) { $minioDown = $true }
+    } catch {
+        $minioDown = $true
+    }
+    if ($minioDown) {
+        $gpuIssues += "MinIO port 9000 unreachable from host (port-publish zombie; fix: docker compose up -d --force-recreate minio)"
+    }
+
     # Read last state (avoid repeat alerts)
     $lastHasIssue = $false
     if (Test-Path $StateFile) {
@@ -142,7 +158,7 @@ try {
         } catch { $lastHasIssue = $false }
     }
 
-    $hasIssue = ($downServices.Count -gt 0) -or ($unhealthyServices.Count -gt 0) -or $cudaBroken
+    $hasIssue = ($downServices.Count -gt 0) -or ($unhealthyServices.Count -gt 0) -or $cudaBroken -or $minioDown
 
     if (-not $hasIssue) {
         Write-Log "INFO" "All services healthy" @{ service_count = $ExpectedServices.Count }
@@ -158,12 +174,13 @@ try {
     $alertMsg = ""
     if ($downServices.Count -gt 0) { $alertMsg += "Stopped: " + ($downServices -join ", ") + ". " }
     if ($unhealthyServices.Count -gt 0) { $alertMsg += "Unhealthy: " + ($unhealthyServices -join ", ") + "." }
-    if ($cudaBroken) { $alertMsg += ($gpuIssues -join "; ") + ". " }
+    if ($cudaBroken -or $minioDown) { $alertMsg += ($gpuIssues -join "; ") + ". " }
 
     Write-Log "ERROR" "Service anomaly detected" @{
         down = $downServices
         unhealthy = $unhealthyServices
         cudaBroken = $cudaBroken
+        minioDown = $minioDown
         gpuIssues = $gpuIssues
         alert = $alertMsg
     }
@@ -179,6 +196,7 @@ try {
         down = $downServices
         unhealthy = $unhealthyServices
         cudaBroken = $cudaBroken
+        minioDown = $minioDown
         gpuIssues = $gpuIssues
     }
     $stateObj | ConvertTo-Json | Set-Content $StateFile -Encoding UTF8
