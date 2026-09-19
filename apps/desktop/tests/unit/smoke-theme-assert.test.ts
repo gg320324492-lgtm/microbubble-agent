@@ -69,6 +69,17 @@ describe('主题令牌断言 — 失败态（复刻 M7 真实缺陷）', () => {
 })
 
 describe('声明收集与取胜规则', () => {
+  it('注释必须剥离：注释里提到的声明不得被当成真声明（真实产物踩到过）', () => {
+    // 共享令牌包注释里就写着「EP 自己的 :root{--el-color-primary:#409eff}」这类说明文字
+    const css = `/* 说明：EP 自己的 :root { --el-color-primary: #409eff } */\n:root[data-theme='paper']{--el-color-primary:${BRAND_PRIMARY}}`
+    const decls = collectDeclarations(css, '--el-color-primary')
+    expect(decls.length).toBe(1)
+    expect(decls[0].selector).toBe(":root[data-theme='paper']")
+    // 注释文本也不得污染特异性统计
+    expect(specificity(decls[0].selector)).toEqual([0, 2, 0])
+    expect(assertCssVariable([css], '--el-color-primary', BRAND_PRIMARY).ok).toBe(true)
+  })
+
   it('多条声明按文档序收集；同级取靠后者', () => {
     const css = `a{--x:1}\n:root{--x:2}\n:root{--x:3}`
     const decls = collectDeclarations(css, '--x')

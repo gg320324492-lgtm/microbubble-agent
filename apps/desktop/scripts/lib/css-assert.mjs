@@ -35,6 +35,12 @@ export function compareSpecificity(a, b) {
   return 0
 }
 
+/** 剥离 CSS 注释 —— 必须做：注释里常出现「EP 自己的 :root{--el-color-primary:#409eff}」这类
+ *  说明文字，不剥离会被当成真声明解析，且注释文本会污染选择器特异性的统计。 */
+export function stripComments(css) {
+  return String(css ?? '').replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
 /**
  * 收集某个自定义属性的所有声明（含所在选择器与文档序）。
  * @param {string} css 单份 CSS 文本
@@ -43,7 +49,7 @@ export function compareSpecificity(a, b) {
  */
 export function collectDeclarations(css, prop, baseIndex = 0) {
   const out = []
-  const text = String(css ?? '')
+  const text = stripComments(css)
   // 逐条规则扫描：selector { ... }（不处理 @media 嵌套，本仓库品牌色映射不在媒体查询内）
   const ruleRe = /([^{}]+)\{([^{}]*)\}/g
   let m
