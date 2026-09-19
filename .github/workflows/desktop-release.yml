@@ -62,47 +62,6 @@ jobs:
         working-directory: apps/desktop
         run: node scripts/release.mjs version clean native gates package smoke latest verify
 
-      # 【临时诊断】R-8 首航 oss-upload.test.ts 在 CI 报 SyntaxError 而本地不复现，
-      # 用于取证文件字节与 esbuild 解析结果；定位后删除本步骤。
-      - name: DEBUG oss-upload.test.ts bytes
-        if: always()
-        shell: bash
-        working-directory: apps/desktop
-        run: |
-          echo "--- 环境 ---"
-          node --version
-          npx vitest --version 2>&1 | head -2
-          echo "--- 哈希/大小 ---"
-          sha256sum tests/unit/oss-upload.test.ts scripts/upload-release-oss.mjs
-          wc -c tests/unit/oss-upload.test.ts scripts/upload-release-oss.mjs
-          echo "--- 行尾/编码 ---"
-          cat > /tmp/dbg.cjs <<'EOF'
-          const fs = require('fs')
-          for (const p of ['tests/unit/oss-upload.test.ts', 'scripts/upload-release-oss.mjs']) {
-            const b = fs.readFileSync(p)
-            const s = b.toString('utf8')
-            console.log(p)
-            console.log('  CRLF=', (s.match(/\r\n/g) || []).length, 'loneCR=', (s.match(/\r(?!\n)/g) || []).length, 'LF=', (s.match(/\n/g) || []).length)
-            console.log('  BOM=', b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf, 'utf8RoundTrip=', Buffer.from(s, 'utf8').equals(b))
-            console.log('  line5=', JSON.stringify(s.split(/\r?\n/)[4]))
-          }
-          try {
-            const esbuild = require('esbuild')
-            console.log('  esbuild=', require('esbuild/package.json').version)
-            for (const [p, loader] of [['tests/unit/oss-upload.test.ts', 'ts'], ['scripts/upload-release-oss.mjs', 'js']]) {
-              esbuild.transform(fs.readFileSync(p, 'utf8'), { loader, format: 'esm' })
-                .then(() => console.log('  esbuild OK:', p))
-                .catch((e) => console.log('  esbuild FAIL:', p, '|', String(e.message).split('\n')[0]))
-            }
-          } catch (e) {
-            console.log('  esbuild 不可 require:', String(e.message).split('\n')[0])
-          }
-          EOF
-          node /tmp/dbg.cjs
-          sleep 3
-          echo "--- git blob（应与工作区一致）---"
-          git hash-object tests/unit/oss-upload.test.ts
-          git ls-tree HEAD apps/desktop/tests/unit/oss-upload.test.ts
 
       - name: Resolve release tag
         id: tag

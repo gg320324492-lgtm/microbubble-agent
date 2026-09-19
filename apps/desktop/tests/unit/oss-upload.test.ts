@@ -2,32 +2,16 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_BUCKET,
-  DEFAULT_ENDPOINT,
-  ENV_AK,
-  ENV_BUCKET,
-  ENV_ENDPOINT,
-  ENV_SK,
-  authHeader,
-  canonicalResource,
-  contentMd5,
-  describeCredsSource,
-  describeOssFailure,
-  explainOssError,
-  formatBytes,
-  normalizeEndpoint,
-  objectUrl,
-  ossKey,
-  ossObjectKey,
-  parseCreds,
-  parseCredsFromEnv,
-  parseOssError,
-  signV1,
-  verifySha256,
-  verifySize
-} from '../../scripts/upload-release-oss.mjs'
+import { beforeAll, describe, expect, it } from 'vitest'
+
+// R-8 说明：上传脚本是纯 Node ESM（.mjs + shebang，供 node 直跑）。
+// 这里**在运行时动态 import**，而不是静态 import —— 静态 import 会让 vitest 在收集阶段
+// 转换该 .mjs，在 CI 环境触发 SyntaxError（本地同内容同版本不复现）；动态 import 走 Node
+// 原生 ESM 加载器，绕开该路径。类型来自同目录的 upload-release-oss.d.mts。
+let M: typeof import('../../scripts/upload-release-oss.mjs')
+beforeAll(async () => {
+  M = await import('../../scripts/upload-release-oss.mjs')
+})
 
 const VALID = JSON.stringify({
   bucket: 'mnb-workbench-releases',
@@ -38,7 +22,7 @@ const VALID = JSON.stringify({
 
 describe('凭据解析 — 结构校验且不回显敏感值', () => {
   it('四字段齐备时解析成功，endpoint 归一化', () => {
-    const c = parseCreds(VALID)
+    const c = M.parseCreds(VALID)
     expect(c.bucket).toBe('mnb-workbench-releases')
     expect(c.endpoint).toBe('https://oss-cn-beijing.aliyuncs.com')
     expect(c.accessKeyId).toBe('AKIDEXAMPLE')
@@ -46,11 +30,11 @@ describe('凭据解析 — 结构校验且不回显敏感值', () => {
   })
 
   it('缺字段 / 非法 JSON / 空值 一律抛错，且错误信息不含 Secret', () => {
-    expect(() => parseCreds(JSON.stringify({ bucket: 'b' }))).toThrow(/缺少字段/)
-    expect(() => parseCreds('not json')).toThrow(/合法 JSON/)
-    expect(() => parseCreds(JSON.stringify({ ...JSON.parse(VALID), accessKeySecret: '  ' }))).toThrow(/accessKeySecret/)
+    expect(() => M.parseCreds(JSON.stringify({ bucket: 'b' }))).toThrow(/缺少字段/)
+    expect(() => M.parseCreds('not json')).toThrow(/合法 JSON/)
+    expect(() => M.parseCreds(JSON.stringify({ ...JSON.parse(VALID), accessKeySecret: '  ' }))).toThrow(/accessKeySecret/)
     try {
-      parseCreds(JSON.stringify({ bucket: 'b', endpoint: 'e', accessKeyId: 'a', accessKeySecret: 'SUPERSECRET' }))
+      M.parseCreds(JSON.stringify({ bucket: 'b', endpoint: 'e', accessKeyId: 'a', accessKeySecret: 'SUPERSECRET' }))
       // 缺字段不会走到这里
     } catch (e) {
       expect(String(e instanceof Error ? e.message : e)).not.toContain('SUPERSECRET')
@@ -59,53 +43,53 @@ describe('凭据解析 — 结构校验且不回显敏感值', () => {
 })
 
 describe('endpoint / key / URL 构造', () => {
-  it('normalizeEndpoint：补 scheme、去尾斜杠', () => {
-    expect(normalizeEndpoint('oss-cn-beijing.aliyuncs.com')).toBe('https://oss-cn-beijing.aliyuncs.com')
-    expect(normalizeEndpoint('https://oss-cn-beijing.aliyuncs.com/')).toBe('https://oss-cn-beijing.aliyuncs.com')
-    expect(normalizeEndpoint('  ')).toBe('')
+  it('M.normalizeEndpoint：补 scheme、去尾斜杠', () => {
+    expect(M.normalizeEndpoint('oss-cn-beijing.aliyuncs.com')).toBe('https://oss-cn-beijing.aliyuncs.com')
+    expect(M.normalizeEndpoint('https://oss-cn-beijing.aliyuncs.com/')).toBe('https://oss-cn-beijing.aliyuncs.com')
+    expect(M.normalizeEndpoint('  ')).toBe('')
   })
 
-  it('ossKey：<version>/<file>，v 前缀被剥离；非法输入抛错', () => {
-    expect(ossKey('1.0.0', 'a.exe')).toBe('1.0.0/a.exe')
-    expect(ossKey('v1.0.0', 'a.exe')).toBe('1.0.0/a.exe')
-    expect(() => ossKey('', 'a.exe')).toThrow(/版本号/)
-    expect(() => ossKey('1.0.0', 'a/b.exe')).toThrow(/非法文件名/)
+  it('M.ossKey：<version>/<file>，v 前缀被剥离；非法输入抛错', () => {
+    expect(M.ossKey('1.0.0', 'a.exe')).toBe('1.0.0/a.exe')
+    expect(M.ossKey('v1.0.0', 'a.exe')).toBe('1.0.0/a.exe')
+    expect(() => M.ossKey('', 'a.exe')).toThrow(/版本号/)
+    expect(() => M.ossKey('1.0.0', 'a/b.exe')).toThrow(/非法文件名/)
   })
 
-  it('objectUrl：bucket 作子域，虚拟主机风格直连地址', () => {
-    expect(objectUrl('https://oss-cn-beijing.aliyuncs.com', 'mnb-workbench-releases', '1.0.0/x.exe')).toBe(
+  it('M.objectUrl：bucket 作子域，虚拟主机风格直连地址', () => {
+    expect(M.objectUrl('https://oss-cn-beijing.aliyuncs.com', 'mnb-workbench-releases', '1.0.0/x.exe')).toBe(
       'https://mnb-workbench-releases.oss-cn-beijing.aliyuncs.com/1.0.0/x.exe'
     )
     // 无 scheme 的 endpoint 也能得到同样结果
-    expect(objectUrl('oss-cn-beijing.aliyuncs.com', 'b', 'k')).toBe('https://b.oss-cn-beijing.aliyuncs.com/k')
+    expect(M.objectUrl('oss-cn-beijing.aliyuncs.com', 'b', 'k')).toBe('https://b.oss-cn-beijing.aliyuncs.com/k')
   })
 })
 
 describe('OSS V1 签名 — 与固定夹具逐字节一致', () => {
   it('PUT 签名（含 Content-MD5 / Content-Type）', () => {
-    const sig = signV1({
+    const sig = M.signV1({
       verb: 'PUT',
       contentMd5: 'Q2hlY2s=',
       contentType: 'application/octet-stream',
       date: 'Mon, 01 Jan 2024 00:00:00 GMT',
-      canonicalizedResource: canonicalResource('b', 'k.exe'),
+      canonicalizedResource: M.canonicalResource('b', 'k.exe'),
       accessKeySecret: 'testsecret'
     })
     expect(sig).toBe('euvNvqHIQL2/tsA5sQ5Lh2ja9h4=')
   })
 
   it('GET 签名（Content-MD5/Content-Type 为空串占位）', () => {
-    const sig = signV1({
+    const sig = M.signV1({
       verb: 'GET',
       date: 'Mon, 01 Jan 2024 00:00:00 GMT',
-      canonicalizedResource: canonicalResource('b', 'k.exe'),
+      canonicalizedResource: M.canonicalResource('b', 'k.exe'),
       accessKeySecret: 'testsecret'
     })
     expect(sig).toBe('s2/bV6GknXXtgZ4ZezaIiI2vanI=')
   })
 
   it('桶级子资源（?website）签名与 Authorization 头格式', () => {
-    const sig = signV1({
+    const sig = M.signV1({
       verb: 'PUT',
       contentMd5: 'AAAA',
       contentType: 'application/xml',
@@ -114,13 +98,13 @@ describe('OSS V1 签名 — 与固定夹具逐字节一致', () => {
       accessKeySecret: 'testsecret'
     })
     expect(sig).toBe('VEbnfv3FwJkWSAdEQiTZTXjkjF8=')
-    expect(authHeader('AKID', sig)).toBe(`OSS AKID:${sig}`)
-    expect(authHeader('AKID', sig)).toMatch(/^OSS [^:]+:.+$/)
+    expect(M.authHeader('AKID', sig)).toBe(`OSS AKID:${sig}`)
+    expect(M.authHeader('AKID', sig)).toMatch(/^OSS [^:]+:.+$/)
   })
 
   it('Content-MD5 为 body 的 base64 md5', () => {
     // md5('Check') 的 base64（注意不是 base64('Check')）
-    expect(contentMd5(Buffer.from('Check'))).toBe('Bgvy1YeZHY8JChMJsoUpHA==')
+    expect(M.contentMd5(Buffer.from('Check'))).toBe('Bgvy1YeZHY8JChMJsoUpHA==')
   })
 
   it('StringToSign 构造与独立实现（openssl）逐字节一致', () => {
@@ -129,7 +113,7 @@ describe('OSS V1 签名 — 与固定夹具逐字节一致', () => {
     const secret = 'OtxrzxIsfpFjA7SwPzILwy8Bw21TLhquhboDYROV'
     // ① 带 CanonicalizedOSSHeaders（OSS 头各占一行，最后拼 CanonicalizedResource）
     expect(
-      signV1({
+      M.signV1({
         verb: 'PUT',
         contentMd5: 'eB5eJF1ptWaXm4bijSPyxw==',
         contentType: 'text/html',
@@ -140,7 +124,7 @@ describe('OSS V1 签名 — 与固定夹具逐字节一致', () => {
     ).toBe('4u31IfA8Z+t7ofztPQ2w8n2clic=')
     // ② 无 OSS 头（本上传脚本的实际形态）：Date 之后直接接 CanonicalizedResource
     expect(
-      signV1({
+      M.signV1({
         verb: 'PUT',
         contentMd5: 'eB5eJF1ptWaXm4bijSPyxw==',
         contentType: 'text/html',
@@ -154,64 +138,64 @@ describe('OSS V1 签名 — 与固定夹具逐字节一致', () => {
 
 describe('上传后校验', () => {
   it('字节数一致通过，不一致给出原因', () => {
-    expect(verifySize(100, 100).ok).toBe(true)
-    expect(verifySize(99, 100).ok).toBe(false)
-    expect(verifySize(99, 100).reason).toContain('99')
-    expect(verifySize(Number.NaN, 100).ok).toBe(false)
+    expect(M.verifySize(100, 100).ok).toBe(true)
+    expect(M.verifySize(99, 100).ok).toBe(false)
+    expect(M.verifySize(99, 100).reason).toContain('99')
+    expect(M.verifySize(Number.NaN, 100).ok).toBe(false)
   })
 
   it('sha256 比对（大小写不敏感），不一致时回报实际值', () => {
     const buf = Buffer.from('hello')
     const hex = createHash('sha256').update(buf).digest('hex')
-    expect(verifySha256(buf, hex).ok).toBe(true)
-    expect(verifySha256(buf, hex.toUpperCase()).ok).toBe(true)
-    const bad = verifySha256(buf, 'deadbeef')
+    expect(M.verifySha256(buf, hex).ok).toBe(true)
+    expect(M.verifySha256(buf, hex.toUpperCase()).ok).toBe(true)
+    const bad = M.verifySha256(buf, 'deadbeef')
     expect(bad.ok).toBe(false)
     expect(bad.actual).toBe(hex)
-    expect(verifySha256(buf, '').ok).toBe(false)
+    expect(M.verifySha256(buf, '').ok).toBe(false)
   })
 
-  it('formatBytes 可读化（落地页展示大小用）', () => {
-    expect(formatBytes(512)).toBe('512 B')
-    expect(formatBytes(2048)).toBe('2.0 KB')
-    expect(formatBytes(92193290)).toBe('87.9 MB')
-    expect(formatBytes(0)).toBe('0 B')
+  it('M.formatBytes 可读化（落地页展示大小用）', () => {
+    expect(M.formatBytes(512)).toBe('512 B')
+    expect(M.formatBytes(2048)).toBe('2.0 KB')
+    expect(M.formatBytes(92193290)).toBe('87.9 MB')
+    expect(M.formatBytes(0)).toBe('0 B')
   })
 })
 
 describe('凭据双模式 — 文件 / 环境变量（CI Secrets）', () => {
   it('环境变量齐备 → 解析成功，bucket/endpoint 走默认值', () => {
-    const c = parseCredsFromEnv({ [ENV_AK]: 'AKID', [ENV_SK]: 'SECRET' })
+    const c = M.parseCredsFromEnv({ [M.ENV_AK]: 'AKID', [M.ENV_SK]: 'SECRET' })
     expect(c).toEqual({
-      bucket: DEFAULT_BUCKET,
-      endpoint: DEFAULT_ENDPOINT,
+      bucket: M.DEFAULT_BUCKET,
+      endpoint: M.DEFAULT_ENDPOINT,
       accessKeyId: 'AKID',
       accessKeySecret: 'SECRET'
     })
   })
 
   it('环境变量可覆盖 bucket / endpoint（无 scheme 自动补 https）', () => {
-    const c = parseCredsFromEnv({
-      [ENV_AK]: 'AKID',
-      [ENV_SK]: 'SECRET',
-      [ENV_BUCKET]: 'other-bucket',
-      [ENV_ENDPOINT]: 'oss-cn-shanghai.aliyuncs.com'
+    const c = M.parseCredsFromEnv({
+      [M.ENV_AK]: 'AKID',
+      [M.ENV_SK]: 'SECRET',
+      [M.ENV_BUCKET]: 'other-bucket',
+      [M.ENV_ENDPOINT]: 'oss-cn-shanghai.aliyuncs.com'
     })
     expect(c?.bucket).toBe('other-bucket')
     expect(c?.endpoint).toBe('https://oss-cn-shanghai.aliyuncs.com')
   })
 
   it('AK 或 SK 任一缺失 → null（调用方据此跳过并警告，不 fail）', () => {
-    expect(parseCredsFromEnv({})).toBeNull()
-    expect(parseCredsFromEnv({ [ENV_AK]: 'AKID' })).toBeNull()
-    expect(parseCredsFromEnv({ [ENV_SK]: 'SECRET' })).toBeNull()
-    expect(parseCredsFromEnv({ [ENV_AK]: '  ', [ENV_SK]: 'SECRET' })).toBeNull()
-    expect(parseCredsFromEnv(undefined as never)).toBeNull()
+    expect(M.parseCredsFromEnv({})).toBeNull()
+    expect(M.parseCredsFromEnv({ [M.ENV_AK]: 'AKID' })).toBeNull()
+    expect(M.parseCredsFromEnv({ [M.ENV_SK]: 'SECRET' })).toBeNull()
+    expect(M.parseCredsFromEnv({ [M.ENV_AK]: '  ', [M.ENV_SK]: 'SECRET' })).toBeNull()
+    expect(M.parseCredsFromEnv(undefined as never)).toBeNull()
   })
 
   it('凭据来源描述不含任何凭据值', () => {
-    const c = parseCredsFromEnv({ [ENV_AK]: 'AKID', [ENV_SK]: 'SECRET' })
-    const desc = describeCredsSource(c!, '环境变量')
+    const c = M.parseCredsFromEnv({ [M.ENV_AK]: 'AKID', [M.ENV_SK]: 'SECRET' })
+    const desc = M.describeCredsSource(c!, '环境变量')
     expect(desc).toContain('环境变量')
     expect(desc).not.toContain('AKID')
     expect(desc).not.toContain('SECRET')
@@ -220,20 +204,20 @@ describe('凭据双模式 — 文件 / 环境变量（CI Secrets）', () => {
 
 describe('对象 key — releases/ 稳定路径（R-8 CI 上传）', () => {
   it('给 prefix → <prefix>/<fileName>（与版本号无关）', () => {
-    expect(ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: 'latest.yml' })).toBe('releases/latest.yml')
-    expect(ossObjectKey({ prefix: 'releases/', version: '1.0.1', fileName: 'a.exe' })).toBe('releases/a.exe')
-    expect(ossObjectKey({ prefix: '/releases/', version: '1.0.1', fileName: 'a.exe' })).toBe('releases/a.exe')
+    expect(M.ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: 'latest.yml' })).toBe('releases/latest.yml')
+    expect(M.ossObjectKey({ prefix: 'releases/', version: '1.0.1', fileName: 'a.exe' })).toBe('releases/a.exe')
+    expect(M.ossObjectKey({ prefix: '/releases/', version: '1.0.1', fileName: 'a.exe' })).toBe('releases/a.exe')
   })
 
   it('不给 prefix → 退回 <version>/<fileName>（R-7 行为不变）', () => {
-    expect(ossObjectKey({ version: '1.0.0', fileName: 'a.exe' })).toBe('1.0.0/a.exe')
-    expect(ossObjectKey({ prefix: '  ', version: 'v1.0.0', fileName: 'a.exe' })).toBe('1.0.0/a.exe')
-    expect(ossObjectKey({ prefix: '', version: '1.0.1', fileName: 'a.exe' })).toBe('1.0.1/a.exe')
+    expect(M.ossObjectKey({ version: '1.0.0', fileName: 'a.exe' })).toBe('1.0.0/a.exe')
+    expect(M.ossObjectKey({ prefix: '  ', version: 'v1.0.0', fileName: 'a.exe' })).toBe('1.0.0/a.exe')
+    expect(M.ossObjectKey({ prefix: '', version: '1.0.1', fileName: 'a.exe' })).toBe('1.0.1/a.exe')
   })
 
   it('非法文件名一律抛错（防路径穿越）', () => {
-    expect(() => ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: '../x.exe' })).toThrow(/非法文件名/)
-    expect(() => ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: '' })).toThrow(/非法文件名/)
+    expect(() => M.ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: '../x.exe' })).toThrow(/非法文件名/)
+    expect(() => M.ossObjectKey({ prefix: 'releases', version: '1.0.1', fileName: '' })).toThrow(/非法文件名/)
   })
 })
 
@@ -241,27 +225,27 @@ describe('OSS 错误分诊 — 错误码 → 可执行建议', () => {
   const xml = (code: string, msg = 'm') =>
     `<?xml version="1.0"?><Error><Code>${code}</Code><Message>${msg}</Message><RequestId>RID1</RequestId><HostId>h</HostId></Error>`
 
-  it('parseOssError 提取四字段；非 XML 时全空', () => {
-    expect(parseOssError(xml('InvalidAccessKeyId', 'not exist'))).toEqual({
+  it('M.parseOssError 提取四字段；非 XML 时全空', () => {
+    expect(M.parseOssError(xml('InvalidAccessKeyId', 'not exist'))).toEqual({
       code: 'InvalidAccessKeyId',
       message: 'not exist',
       requestId: 'RID1',
       hostId: 'h'
     })
-    expect(parseOssError('<html>502</html>')).toEqual({ code: '', message: '', requestId: '', hostId: '' })
+    expect(M.parseOssError('<html>502</html>')).toEqual({ code: '', message: '', requestId: '', hostId: '' })
   })
 
   it('四类根因各给专属建议（凭据/签名/权限/bucket 不混为一谈）', () => {
-    expect(explainOssError('InvalidAccessKeyId')).toMatch(/AK ID 是否完整/)
-    expect(explainOssError('SignatureDoesNotMatch')).toMatch(/时间|偏差/)
-    expect(explainOssError('AccessDenied')).toMatch(/权限|PutObject/)
-    expect(explainOssError('NoSuchBucket')).toMatch(/bucket 名|region/)
-    expect(explainOssError('')).toMatch(/不是 OSS 标准错误 XML/)
-    expect(explainOssError('WeirdCode')).toMatch(/未收录/)
+    expect(M.explainOssError('InvalidAccessKeyId')).toMatch(/AK ID 是否完整/)
+    expect(M.explainOssError('SignatureDoesNotMatch')).toMatch(/时间|偏差/)
+    expect(M.explainOssError('AccessDenied')).toMatch(/权限|PutObject/)
+    expect(M.explainOssError('NoSuchBucket')).toMatch(/bucket 名|region/)
+    expect(M.explainOssError('')).toMatch(/不是 OSS 标准错误 XML/)
+    expect(M.explainOssError('WeirdCode')).toMatch(/未收录/)
   })
 
-  it('describeOssFailure 汇总状态码 + Message + 建议 + RequestId', () => {
-    const s = describeOssFailure(403, xml('InvalidAccessKeyId', 'not exist'))
+  it('M.describeOssFailure 汇总状态码 + Message + 建议 + RequestId', () => {
+    const s = M.describeOssFailure(403, xml('InvalidAccessKeyId', 'not exist'))
     expect(s).toContain('HTTP 403 InvalidAccessKeyId')
     expect(s).toContain('not exist')
     expect(s).toContain('建议')
