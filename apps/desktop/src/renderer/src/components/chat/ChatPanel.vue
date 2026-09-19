@@ -7,7 +7,7 @@ import type { ChatMessage, ChatStreamEvent, ModelProvider, ToolCallRecord } from
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
 import { applyStreamEvent, createLiveState, ROLLBACK_CONFIRM_TEXT, type LiveAgentState } from '../../stores/chat-events'
-import { formatTokens } from '@shared/usage'
+import { sessionUsageLabel } from '@shared/usage'
 import ToolCard from './ToolCard.vue'
 import ThinkingPanel from './ThinkingPanel.vue'
 
@@ -23,11 +23,7 @@ const live = ref<LiveAgentState | null>(null)
 const streaming = computed(() => live.value !== null)
 // V1 用量记账：当前会话累计用量（迁移 010 两列随会话列表下发，无需新 IPC 通道）
 const activeSession = computed(() => store.sessions.find((s) => s.id === store.activeId) ?? null)
-const activeUsage = computed(() => {
-  const s = activeSession.value
-  if (!s || (s.tokensIn === 0 && s.tokensOut === 0)) return null
-  return { in: formatTokens(s.tokensIn), out: formatTokens(s.tokensOut) }
-})
+const activeUsage = computed(() => sessionUsageLabel(activeSession.value))
 
 let offStream: (() => void) | null = null
 
@@ -174,7 +170,7 @@ function fmtTime(ts: number): string {
     <header class="chat-head">
       <span class="chat-title">{{ store.sessions.find((s) => s.id === store.activeId)?.title || 'AI 助手' }}</span>
       <span v-if="activeUsage" class="chat-usage" data-testid="chat-usage" :title="`本会话累计用量：输入 ${activeSession?.tokensIn} / 输出 ${activeSession?.tokensOut} tokens`">
-        ↑{{ activeUsage.in }} ↓{{ activeUsage.out }}
+        ↑{{ activeUsage.input }} ↓{{ activeUsage.output }}
       </span>
       <span v-if="defaultProvider" class="chat-model chat-model-on" :title="defaultProvider.baseUrl + ' · ' + defaultProvider.model">
         <span class="chat-model-dot" aria-hidden="true"></span>

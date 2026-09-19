@@ -8,7 +8,7 @@ import {
   normalizeUsage,
   usageFromColumns
 } from '@main/services/model/usage'
-import { formatTokens } from '@shared/usage'
+import { formatTokens, sessionUsageLabel } from '@shared/usage'
 
 describe('usage 归一化 — NaN / 负数 / 缺失一律归零', () => {
   it('正常值原样保留并标记可信', () => {
@@ -117,5 +117,21 @@ describe('会话累计 — addUsage / 列还原', () => {
     expect(formatTokens(12345)).toBe('12k')
     expect(formatTokens(Number.NaN)).toBe('0')
     expect(formatTokens(-5)).toBe('0')
+  })
+})
+
+describe('会话用量标签 — chip 显隐契约（对话面板展示）', () => {
+  it('无会话 / 总量为 0 → null（不渲染 chip）', () => {
+    expect(sessionUsageLabel(null)).toBeNull()
+    expect(sessionUsageLabel(undefined)).toBeNull()
+    expect(sessionUsageLabel({ tokensIn: 0, tokensOut: 0 })).toBeNull()
+    expect(sessionUsageLabel({ tokensIn: Number.NaN, tokensOut: 0 })).toBeNull()
+    expect(sessionUsageLabel({})).toBeNull()
+  })
+
+  it('有量 → 给出紧凑的输入/输出文本（任一非零即显示）', () => {
+    expect(sessionUsageLabel({ tokensIn: 1234, tokensOut: 567 })).toEqual({ input: '1.2k', output: '567' })
+    expect(sessionUsageLabel({ tokensIn: 0, tokensOut: 20 })).toEqual({ input: '0', output: '20' })
+    expect(sessionUsageLabel({ tokensIn: 20000, tokensOut: 0 })).toEqual({ input: '20k', output: '0' })
   })
 })
