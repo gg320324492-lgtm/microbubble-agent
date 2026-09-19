@@ -1,0 +1,2 @@
+# electron-vite 临时配置（dev 运行时生成）
+electron.vite.config.*.mjs
