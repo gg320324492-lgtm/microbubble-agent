@@ -8,10 +8,11 @@
 // 断言链覆盖：主进程启动 → 原生模块（better-sqlite3/Electron ABI）→ IPC → 渲染进程 → 版本一致性。
 // 任一步失败即非 0 退出，CI 直接 fail。
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { assertCssVariable, BRAND_PRIMARY } from './lib/css-assert.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.MNB_SMOKE_PORT || 9333)
@@ -27,6 +28,53 @@ const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).ver
 const exe = join(ROOT, 'release', 'win-unpacked', 'MicroBubbleWorkbench.exe')
 if (!existsSync(exe)) die(`未找到打包产物：${exe}（请先执行 package）`)
 log(`待验证产物：${exe}（期望版本 ${version}）`)
+
+/**
+ * 主题令牌断言（V1 新增）— 读构建产物 CSS，按 CSS 级联规则求「真正生效」的
+ * --el-color-primary，必须等于品牌色。
+ *
+ * 为什么必须做级联判定而不是文本包含：M7 实测过「写了但被 EP 的 :root 压掉」
+ * （:root 是伪类 0,1,0，与 [data-theme] 同级 → 后加载者胜），文本里能搜到品牌色，
+ * 但实际生效的是 EP 默认蓝。只有级联判定能拦住这类静默失效。
+ */
+function assertThemeTokens() {
+  const assetsDir = join(ROOT, 'out', 'renderer', 'assets')
+  const htmlPath = join(ROOT, 'out', 'renderer', 'index.html')
+  if (!existsSync(assetsDir)) die(`未找到构建产物 CSS 目录：${assetsDir}（请先执行 build）`)
+
+  // 按 index.html 中 <link> 的真实顺序加载（级联顺序即由此决定）
+  let files = []
+  if (existsSync(htmlPath)) {
+    const html = readFileSync(htmlPath, 'utf8')
+    files = [...html.matchAll(/<link[^>]+href="([^"]+\.css)"/g)].map((m) =>
+      join(ROOT, 'out', 'renderer', m[1].replace(/^\.?\//, ''))
+    )
+  }
+  if (files.length === 0) {
+    files = readdirSync(assetsDir)
+      .filter((f) => f.endsWith('.css'))
+      .sort()
+      .map((f) => join(assetsDir, f))
+  }
+  const cssTexts = files.filter((f) => existsSync(f)).map((f) => readFileSync(f, 'utf8'))
+  if (cssTexts.length === 0) die('构建产物中未读到任何 CSS 文件')
+
+  const res = assertCssVariable(cssTexts, '--el-color-primary', BRAND_PRIMARY)
+  if (!res.ok) {
+    die(`主题令牌断言失败：${res.reason}\n（EP 组件会回落到 Element Plus 默认蓝，UI 换新静默失效）`)
+  }
+  log(`✓ 主题令牌断言通过：--el-color-primary 生效值 = ${BRAND_PRIMARY}（选择器 "${res.winner.selector}"）`)
+
+  // 附带校验：宣纸底色与衬线栈也在生效值上
+  const bg = assertCssVariable(cssTexts, '--color-bg-page', '#f3eddf')
+  if (!bg.ok) die(`主题令牌断言失败：${bg.reason}`)
+  const font = assertCssVariable(cssTexts, '--wb-head-font', 'Georgia, "Songti SC", "STSong", "SimSun", "Noto Serif SC", serif')
+  if (!font.ok) log(`  （衬线字体栈断言跳过：${font.reason}）`)
+  else log('✓ 宣纸底色与衬线标题栈断言通过')
+}
+
+assertThemeTokens()
+
 
 const userData = mkdtempSync(join(tmpdir(), 'mnb-smoke-'))
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

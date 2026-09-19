@@ -378,7 +378,14 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.CHAT_SESSIONS_LIST, (): IpcResult<ChatSession[]> =>
     tryRun(() => {
       const user = auth.requireUser()
-      return chat.listSessions(user.id).map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at, updatedAt: r.updated_at }))
+      return chat.listSessions(user.id).map((r) => ({
+        id: r.id,
+        title: r.title,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        tokensIn: r.tokens_in ?? 0,
+        tokensOut: r.tokens_out ?? 0
+      }))
     })
   )
 
@@ -386,7 +393,14 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     tryRun(() => {
       const user = auth.requireUser()
       const r = chat.createSession(user.id, p?.title ? String(p.title) : undefined)
-      return { id: r.id, title: r.title, createdAt: r.created_at, updatedAt: r.updated_at }
+      return {
+        id: r.id,
+        title: r.title,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        tokensIn: r.tokens_in ?? 0,
+        tokensOut: r.tokens_out ?? 0
+      }
     })
   )
 
@@ -448,6 +462,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
                   win?.webContents.send(IPC.CHAT_STREAM_EVENT, payload)
                 }
               })
+              // V1 用量记账：本会话累计（迁移 010 两列；每轮 agent 完成即累加）
+              chat.addSessionUsage(sessionId, run.usage)
               return { content: run.content, meta: run.meta }
             }
           : undefined,

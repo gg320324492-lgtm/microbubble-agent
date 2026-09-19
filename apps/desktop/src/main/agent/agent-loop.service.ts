@@ -19,6 +19,8 @@ import type { ToolRegistry } from './tool-registry'
 import type { AgentTool } from './tool-registry'
 import type { WorkspaceService } from '../services/workspace/workspace.service'
 import type { AuditService } from '../services/workspace/audit.service'
+import { ZERO_USAGE, addUsage } from '../services/model/usage'
+import type { TokenUsage } from '@shared/types'
 
 /** 单次任务最大 LLM 请求轮数 */
 export const MAX_AGENT_ROUNDS = 15
@@ -77,6 +79,8 @@ export interface AgentRunParams {
 export interface AgentRunResult {
   content: string
   meta: MessageMeta
+  /** V1 用量记账：本次 run 跨轮累计的 token 用量 */
+  usage: TokenUsage
 }
 
 export class AgentLoopService {
@@ -162,6 +166,8 @@ export class AgentLoopService {
     const turns: AgentTurn[] = baseTurns.map((t) => ({ role: t.role === 'assistant' ? 'assistant' : 'user', content: t.content }))
     let round = 0
     let stopped = false
+    // V1 用量记账：跨轮累加（每轮 res.usage 归一化后相加）
+    let usageTotal: TokenUsage = ZERO_USAGE
     let hitCap = false
 
     try {
@@ -196,6 +202,7 @@ export class AgentLoopService {
           break
         }
 
+        usageTotal = addUsage(usageTotal, res.usage)
         if (res.thinking) thinkingParts.push(res.thinking)
         if (res.text) textParts.push(res.text)
         // tool_use 块必须原样回放，Anthropic 协议要求 tool_use → tool_result 相邻配对（thinking 不回传）
@@ -310,6 +317,7 @@ export class AgentLoopService {
     const content = textParts.join('\n\n')
     return {
       content,
+      usage: usageTotal,
       meta: {
         thinking: thinkingParts.join('\n\n') || undefined,
         tools: toolCalls.length > 0 ? toolCalls : undefined,

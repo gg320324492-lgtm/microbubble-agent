@@ -11,6 +11,9 @@ export interface SessionRow {
   title: string
   created_at: number
   updated_at: number
+  /** V1 用量记账：会话累计输入/输出 token（迁移 010） */
+  tokens_in: number
+  tokens_out: number
 }
 
 export interface MessageRow {
@@ -44,13 +47,30 @@ export class ChatService {
 
   listSessions(userId: string): SessionRow[] {
     return this.db
-      .prepare('SELECT id, user_id, title, created_at, updated_at FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC')
+      .prepare(
+        'SELECT id, user_id, title, created_at, updated_at, tokens_in, tokens_out FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC'
+      )
       .all(userId) as SessionRow[]
+  }
+
+  /** V1 用量记账：累加一轮的 token 用量（迁移 010 的两列） */
+  addSessionUsage(sessionId: string, usage: { inputTokens: number; outputTokens: number }): void {
+    this.db
+      .prepare('UPDATE chat_sessions SET tokens_in = tokens_in + ?, tokens_out = tokens_out + ? WHERE id = ?')
+      .run(Math.max(0, Math.floor(usage.inputTokens) || 0), Math.max(0, Math.floor(usage.outputTokens) || 0), sessionId)
   }
 
   createSession(userId: string, title = '新会话'): SessionRow {
     const now = Date.now()
-    const row: SessionRow = { id: genId('cs'), user_id: userId, title, created_at: now, updated_at: now }
+    const row: SessionRow = {
+      id: genId('cs'),
+      user_id: userId,
+      title,
+      created_at: now,
+      updated_at: now,
+      tokens_in: 0,
+      tokens_out: 0
+    }
     this.db
       .prepare('INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
       .run(row.id, row.user_id, row.title, row.created_at, row.updated_at)
