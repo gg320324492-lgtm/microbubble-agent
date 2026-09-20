@@ -57,8 +57,11 @@ const TOOL_RESULT_HEAD_RATIO = 0.6
 /** 用户确认决定 */
 export type ConfirmDecision = 'approve' | 'reject' | 'stop'
 
-/** AGENT.md 注入 system 的截断长度 */
-const AGENT_MD_MAX_CHARS = 4000
+/**
+ * 工作区守则（AGENTS.md / AGENT.md）注入 system 的预算 —— **按字节** 8KB（M8-3 §6）。
+ * 原实现按「字符」截 4000，中文场景实际可达 12KB，与工单「预算 ≤8KB」不符。
+ */
+const AGENT_MD_MAX_BYTES = 8 * 1024
 
 /** Agent system 提示词 — 含工作区根路径与相对路径约定；AGENT.md 存在时节选注入 */
 export function buildAgentSystemPrompt(workspaceRoot: string | null): string {
@@ -73,11 +76,19 @@ export function buildAgentSystemPrompt(workspaceRoot: string | null): string {
     '- 涉及文件内容的问题先动手查（调工具），不要凭空猜测。',
     '- 回答用中文；引用文件时给出相对路径。'
   ]
-  try {
-    const agentMd = readFileSync(join(workspaceRoot, 'AGENT.md'), 'utf8')
-    lines.push('', '—— 以下是工作区 AGENT.md 行为守则（节选）——', agentMd.slice(0, AGENT_MD_MAX_CHARS))
-  } catch {
-    /* 无守则文件则跳过注入 */
+  // M8-3 §6：工作区守则注入。AGENTS.md（复数，对标惯例）优先，回退既有 AGENT.md。
+  // 预算 ≤8KB：超限截断并附一行提示（让模型知道还有内容没看到）。
+  for (const fileName of ['AGENTS.md', 'AGENT.md']) {
+    try {
+      const raw = readFileSync(join(workspaceRoot, fileName), 'utf8')
+      const clipped = fitUtf8Prefix(raw, AGENT_MD_MAX_BYTES)
+      const truncated = clipped.length < raw.length
+      lines.push('', `—— 以下是工作区 ${fileName} 行为守则${truncated ? '（已按 8KB 预算节选）' : ''} ——`, clipped)
+      if (truncated) lines.push(`（${fileName} 内容超过 8KB 已截断，如需完整守则请直接读取该文件）`)
+      break
+    } catch {
+      /* 该文件不存在则试下一个 */
+    }
   }
   return lines.join('\n')
 }

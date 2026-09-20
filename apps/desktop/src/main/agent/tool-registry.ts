@@ -10,6 +10,8 @@ export type ToolPermissionLevel = 'auto' | 'confirm' // 本单只实现 'auto'�
 export interface ToolContext {
   userId: string
   workspaceRoot: string
+  /** M8-3：会话 id（todowrite 的会话级清单存储需要；旧调用方可省略） */
+  sessionId?: string
 }
 
 export interface ToolResult {

@@ -57,6 +57,7 @@ import { normalizePruneConfig, type PruneConfig } from './agent/context/prune'
 import type { StreamTurnFn, StreamTurnResult } from '@shared/types'
 import { listDirTool } from './agent/tools/list-dir'
 import { readFileTool } from './agent/tools/read-file'
+import { createTodoWriteTool, TodoStore } from './agent/tools/todowrite'
 import { globTool } from './agent/tools/glob'
 import { grepTool } from './agent/tools/grep'
 import { writeFileTool } from './agent/tools/write-file'
@@ -315,6 +316,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   const registry = new ToolRegistry(workspace, audit)
   registry.register(listDirTool)
   registry.register(readFileTool)
+  // M8-3 §7：todowrite（第 10 个工具）——会话级清单，注入共享 store
+  const todoStore = new TodoStore()
+  registry.register(createTodoWriteTool({ store: todoStore }))
   registry.register(globTool)
   registry.register(grepTool)
   registry.register(writeFileTool)

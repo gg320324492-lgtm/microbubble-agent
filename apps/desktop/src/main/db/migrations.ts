@@ -209,6 +209,27 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE chat_sessions ADD COLUMN tokens_in INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE chat_sessions ADD COLUMN tokens_out INTEGER NOT NULL DEFAULT 0;
     `
+  },
+  {
+    // M8-3 证据链：记录每次工具调用「为什么被允许/拒绝」
+    //   permission_rule 命中的权限规则（如 write@workspace=allow / write@default=ask）
+    //   confirmed       是否弹过确认（NULL = 未弹）
+    //   user_choice     用户选择 approve / reject / abort
+    id: 11,
+    name: 'audit-evidence-chain',
+    sql: `
+      ALTER TABLE workspace_audit ADD COLUMN permission_rule TEXT;
+      ALTER TABLE workspace_audit ADD COLUMN confirmed INTEGER;
+      ALTER TABLE workspace_audit ADD COLUMN user_choice TEXT;
+    `
+  },
+  {
+    // M8-3 上下文收尾：裁切记录持久化到会话元数据（事后可复盘「某次回答为何丢上下文」）
+    id: 12,
+    name: 'chat-session-context-records',
+    sql: `
+      ALTER TABLE chat_sessions ADD COLUMN context_records TEXT;
+    `
   }
 ]
 
