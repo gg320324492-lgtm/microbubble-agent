@@ -20,6 +20,7 @@ import type { AgentTool } from './tool-registry'
 import type { WorkspaceService } from '../services/workspace/workspace.service'
 import type { AuditService } from '../services/workspace/audit.service'
 import { ZERO_USAGE, addUsage } from '../services/model/usage'
+import { fitUtf8Prefix, fitUtf8Suffix, utf8ByteLength } from './tools/output-limit'
 import type { TokenUsage } from '@shared/types'
 
 /** 单次任务最大 LLM 请求轮数 */
@@ -28,8 +29,19 @@ export const MAX_AGENT_ROUNDS = 15
 /** 单个写操作确认等待上限（超时按拒绝处理 — 安全默认） */
 export const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000
 
-/** 回喂模型的单条 tool_result 序列化上限（保护上下文窗口） */
-const TOOL_RESULT_MAX_CHARS = 8000
+/**
+ * 回喂模型的单条 tool_result 序列化上限（保护上下文窗口）。
+ *
+ * M8-1 修正：原实现是「8000 **字符** 头部硬切」—— 有两个问题：
+ *   ① 字符 ≠ 字节，中文场景实际能塞进去的内容远少于预期；
+ *   ② **只留头部**会把工具写在尾部的「续读提示 / 错误原因」直接切掉，
+ *      导致模型看不到「怎么继续读」——真机实测模型原话「没有看到截断提示」。
+ * 现改为「字节预算 + 头尾保留」，预算取 32KB（大于 read_file 的 24KB 工具预算，
+ * 留出 JSON 包装余量），确保工具侧的输出与提示能完整抵达模型。
+ */
+const TOOL_RESULT_MAX_BYTES = 32 * 1024
+/** 超限时头尾分配（尾部必须保住续读提示/错误信息） */
+const TOOL_RESULT_HEAD_RATIO = 0.6
 
 /** 用户确认决定 */
 export type ConfirmDecision = 'approve' | 'reject' | 'stop'
@@ -353,5 +365,20 @@ function serializeToolResult(result: { ok: boolean; summary: string; data?: unkn
   } catch {
     text = JSON.stringify({ ok: result.ok, summary: result.summary, data: String(result.data) })
   }
-  return text.length > TOOL_RESULT_MAX_CHARS ? `${text.slice(0, TOOL_RESULT_MAX_CHARS)}…(截断)` : text
+  return clipToolResultText(text)
+}
+
+/**
+ * 工具结果回喂裁剪（纯函数，便于离线断言）：超预算时保留头 60% + 尾 40%，
+ * 中间以省略标记连接 —— **尾部一定要留住**（续读提示、错误原因都在尾部）。
+ */
+export function clipToolResultText(text: string, maxBytes = TOOL_RESULT_MAX_BYTES): string {
+  const bytes = utf8ByteLength(text)
+  if (bytes <= maxBytes) return text
+  const marker = `\n…（此处省略 ${bytes} 字节中的中段内容，尾部信息已保留）…\n`
+  const markerBytes = utf8ByteLength(marker)
+  const budget = Math.max(0, maxBytes - markerBytes)
+  const head = fitUtf8Prefix(text, Math.floor(budget * TOOL_RESULT_HEAD_RATIO))
+  const tail = fitUtf8Suffix(text, budget - utf8ByteLength(head))
+  return `${head}${marker}${tail}`
 }

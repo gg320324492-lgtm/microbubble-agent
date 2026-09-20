@@ -207,7 +207,20 @@ export class ModelGatewayService {
       const res = await fetch(url, { method: 'POST', headers, body, signal: controller.signal })
       if (!res.ok || !res.body) {
         const detail = await res.text().catch(() => '')
-        throw new Error(`模型服务返回 HTTP ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`)
+        const err = new Error(`模型服务返回 HTTP ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`) as Error & {
+          status?: number
+          headers?: Record<string, string>
+        }
+        // M8-1：把状态码与响应头挂到错误对象上 —— 重试层据此分类并尊重 Retry-After。
+        // 对用户可见的文案仍走 llm-retry 的归一化，不直接暴露这里的原文。
+        err.status = res.status
+        const retryAfter = res.headers.get('retry-after')
+        const retryAfterMs = res.headers.get('retry-after-ms')
+        err.headers = {
+          ...(retryAfter ? { 'retry-after': retryAfter } : {}),
+          ...(retryAfterMs ? { 'retry-after-ms': retryAfterMs } : {})
+        }
+        throw err
       }
 
       const reader = res.body.getReader()
@@ -303,7 +316,20 @@ export class ModelGatewayService {
       const res = await fetch(url, { method: 'POST', headers, body, signal: controller.signal })
       if (!res.ok || !res.body) {
         const detail = await res.text().catch(() => '')
-        throw new Error(`模型服务返回 HTTP ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`)
+        const err = new Error(`模型服务返回 HTTP ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`) as Error & {
+          status?: number
+          headers?: Record<string, string>
+        }
+        // M8-1：把状态码与响应头挂到错误对象上 —— 重试层据此分类并尊重 Retry-After。
+        // 对用户可见的文案仍走 llm-retry 的归一化，不直接暴露这里的原文。
+        err.status = res.status
+        const retryAfter = res.headers.get('retry-after')
+        const retryAfterMs = res.headers.get('retry-after-ms')
+        err.headers = {
+          ...(retryAfter ? { 'retry-after': retryAfter } : {}),
+          ...(retryAfterMs ? { 'retry-after-ms': retryAfterMs } : {})
+        }
+        throw err
       }
 
       const reader = res.body.getReader()

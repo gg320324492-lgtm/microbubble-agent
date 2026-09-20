@@ -2,6 +2,7 @@
 import { readFileSync, statSync } from 'node:fs'
 import type { AgentTool, ToolResult } from '../tool-registry'
 import { displayRel, walkTree } from './walk'
+import { GREP_CONTENT_MAX_BYTES, buildContinuationNotice, limitHeadTailLines, utf8ByteLength } from './output-limit'
 
 const MAX_MATCHES = 100
 const LINE_DISPLAY_MAX = 500
@@ -74,12 +75,38 @@ export const grepTool: AgentTool = {
       }
       return true
     })
-    const truncated = matches.length >= MAX_MATCHES
+    const hitLimit = matches.length >= MAX_MATCHES
     const scopeRel = displayRel(scope, ctx.workspaceRoot)
+
+    // M8-1 §1：命中条数有上限仍可能单条很长 → 再加一道**字节预算**（head_tail：头 45% + 尾 55%），
+    // 保证整段输出不撑爆上下文；被省略的中间行数写进提示，模型据此缩小范围继续搜。
+    const joined = matches.join('\n')
+    const limited = limitHeadTailLines(joined, {
+      maxBytes: GREP_CONTENT_MAX_BYTES,
+      notice: ({ omittedLines, retainedHeadLines, retainedTailLines }) =>
+        buildContinuationNotice({
+          originalBytes: utf8ByteLength(joined),
+          maxBytes: GREP_CONTENT_MAX_BYTES,
+          strategy: 'head_tail_lines',
+          returnedBodyLines: retainedHeadLines + retainedTailLines,
+          omittedLines,
+          retainedHeadLines,
+          retainedTailLines
+        })
+    })
+    const truncated = hitLimit || limited.truncated
+    const budgetNote = limited.truncated ? '，输出超出 16KB 预算已按头尾截断' : ''
     return {
       ok: true,
-      summary: `在 ${scopeRel} 内搜索「${pattern}」命中 ${matches.length} 条${truncated ? '（已达上限 100，仅返回前 100 条）' : ''}`,
-      data: { pattern, scope: scopeRel, matches, truncated }
+      summary: `在 ${scopeRel} 内搜索「${pattern}」命中 ${matches.length} 条${hitLimit ? '（已达上限 100，仅返回前 100 条）' : ''}${budgetNote}`,
+      data: {
+        pattern,
+        scope: scopeRel,
+        matches,
+        truncated,
+        content: limited.text,
+        ...(limited.truncation ? { truncation: limited.truncation } : {})
+      }
     }
   }
 }

@@ -12,6 +12,8 @@ import { ToolRegistry } from '@main/agent/tool-registry'
 import { AgentLoopService, MAX_AGENT_ROUNDS, buildAgentSystemPrompt, type LoopEvent } from '@main/agent/agent-loop.service'
 import { listDirTool } from '@main/agent/tools/list-dir'
 import { readFileTool } from '@main/agent/tools/read-file'
+import { clipToolResultText } from '@main/agent/agent-loop.service'
+import { utf8ByteLength } from '@main/agent/tools/output-limit'
 import type { AgentContentBlock, StreamTurnFn, StreamTurnRequest, StreamTurnResult, ToolUseBlock } from '@shared/types'
 import type { ChatTurn } from '@main/services/model-gateway.service'
 
@@ -267,5 +269,30 @@ describe('Agent 系统提示词与工具定义', () => {
     }
     const bare = makeHarness({ withRoot: false })
     expect(new AgentLoopService(async () => turnRes({}), bare.registry, bare.ws, bare.audit).buildToolDefs()).toEqual([])
+  })
+})
+
+describe('M8-1 回喂裁剪 — 尾部信息必须保住（真机实测暴露的集成缺陷）', () => {
+  it('未超预算 → 原样返回', () => {
+    const t = JSON.stringify({ ok: true, summary: '小结果' })
+    expect(clipToolResultText(t)).toBe(t)
+  })
+
+  it('超预算 → 头尾都保留，**尾部续读提示不丢**（原实现只留头部会切掉它）', () => {
+    const notice = '[已截断：原始 67199 字节，输出上限 24576 字节；已返回前 290 行。继续读取请带参数：read_file(path="big.md", offset=291, length=2000)]'
+    const text = `{"ok":true,"data":{"content":"${'数'.repeat(20000)}${notice}"}}`
+    const clipped = clipToolResultText(text, 4096)
+    expect(utf8ByteLength(clipped)).toBeLessThanOrEqual(4096)
+    expect(clipped).toContain('省略')
+    // 关键断言：续读提示在尾部 → 必须仍在结果里，否则模型无从续读
+    expect(clipped).toContain('[已截断：')
+    expect(clipped).toContain('offset=291')
+  })
+
+  it('中文内容按字节计（不会因字符数假象而超预算）', () => {
+    const text = '中'.repeat(5000) // 15000 字节
+    const clipped = clipToolResultText(text, 4096)
+    expect(utf8ByteLength(clipped)).toBeLessThanOrEqual(4096)
+    expect(clipped).not.toContain('\uFFFD')
   })
 })

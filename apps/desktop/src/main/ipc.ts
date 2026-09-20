@@ -52,6 +52,8 @@ import { normalizeEndpoint } from './services/backup/oss-sig'
 import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './services/manuscript/manuscript.service'
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
+import { classifyLlmError, parseRetryAfterMs, withCommitBoundaryRetry } from './agent/llm-retry'
+import type { StreamTurnFn, StreamTurnResult } from '@shared/types'
 import { listDirTool } from './agent/tools/list-dir'
 import { readFileTool } from './agent/tools/read-file'
 import { globTool } from './agent/tools/glob'
@@ -317,12 +319,38 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   registry.register(writeFileTool)
   registry.register(mkdirTool)
   registry.register(createDeleteFileTool({ trashItem: (abs) => shell.trashItem(abs) }))
-  const agentLoop = new AgentLoopService(
-    (userId, sessionId, req) => gateway.streamAgentTurn(userId, sessionId, req),
-    registry,
-    workspace,
-    audit
-  )
+  // M8-1 §2 装配：提交边界重试包在**网关 SSE 请求外层** —— agent-loop 完全无感（仍是 StreamTurnFn）。
+  // 首个可见 delta 之前失败（429/5xx/网络/空响应）→ 静默重试；之后失败 → 不重试，交给循环并入文。
+  const streamTurnWithRetry: StreamTurnFn = (userId, sessionId, req) =>
+    withCommitBoundaryRetry<StreamTurnResult>({
+      now: () => Date.now(),
+      sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)),
+      onRetry: ({ attempt, delayMs, kind }) =>
+        console.log(`[agent][retry] 第 ${attempt} 次重试（${kind}），等待 ${delayMs}ms`),
+      attempt: (visible) =>
+        gateway.streamAgentTurn(userId, sessionId, {
+          ...req,
+          // 桥接「首个可见 delta」：一旦有正文/思考流出即视为已提交，此后不再重试
+          onEvent: (e) => {
+            visible(e.kind === 'text' ? 'text' : 'thinking')
+            req.onEvent(e)
+          }
+        }),
+      toFailure: (err) => {
+        const e = err as Error & { status?: number; code?: string; headers?: Record<string, string> }
+        const retryAfterMs = parseRetryAfterMs(e?.headers, Date.now())
+        return {
+          kind: classifyLlmError({
+            ...(e?.status === undefined ? {} : { status: e.status }),
+            ...(e?.code === undefined ? {} : { code: e.code }),
+            message: e?.message ?? String(err)
+          }),
+          ...(retryAfterMs === undefined ? {} : { retryAfterMs })
+        }
+      }
+    })
+
+  const agentLoop = new AgentLoopService(streamTurnWithRetry, registry, workspace, audit)
 
   // 启动即尝试恢复上次会话（有持久化 token 且未过期则免登录）
   auth.restore()

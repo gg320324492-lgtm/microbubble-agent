@@ -146,14 +146,55 @@ describe('read_file', () => {
     expect(res.error).toContain('二进制')
   })
 
-  it('边界 — 超 256KB 截断并在 summary 注明', async () => {
+  it('边界 — 超 24KB 字节预算截断，并在文本尾部给出结构化续读提示（M8-1）', async () => {
     const res = await invoke('read_file', { path: 'big.txt' })
     expect(res.ok).toBe(true)
-    const data = res.data as { content: string; truncated: boolean; size: number }
+    const data = res.data as {
+      content: string
+      truncated: boolean
+      size: number
+      returnedLines: number
+      totalLines: number
+      truncation?: { nextOffset?: number; originalBytes: number; maxBytes: number }
+    }
     expect(data.truncated).toBe(true)
     expect(data.size).toBe(300 * 1024)
-    expect(data.content.length).toBe(256 * 1024)
+    // 预算为 24KB（含提示本身），故返回文本不超过 24KB 且明显大于 0
+    const bytes = Buffer.byteLength(data.content, 'utf8')
+    expect(bytes).toBeLessThanOrEqual(24 * 1024)
+    expect(bytes).toBeGreaterThan(1024)
     expect(res.summary).toContain('截断')
+    // 续读协议闭环：提示可读且给出下一步（big.txt 是单行 300KB → 走「超长行」分支）
+    expect(data.content).toContain('[已截断：')
+    expect(data.content).toMatch(/超长行|read_file\(path=/)
+    expect(data.truncation?.maxBytes).toBe(24 * 1024)
+  })
+
+  it('超长行 — 单行超过预算时返回该行前段而非空内容（M8-1 改进点）', async () => {
+    const res = await invoke('read_file', { path: 'big.txt' })
+    const data = res.data as { content: string }
+    // 参考实现此处只返回提示、正文为空；本实现回退为首行部分内容，保证模型至少拿到可用片段
+    const body = data.content.split('\n\n')[0] ?? ''
+    expect(body.length).toBeGreaterThan(1024)
+    expect(body).toMatch(/^a+$/) // 未混入提示文本
+  })
+
+  it('续读 — 多行文件按提示的 nextOffset 继续读，能读到后续行（与提示闭环）', async () => {
+    // 造一个「行数很多、每行很短」的文件：截断后提示里的 offset 应正好指向未读到的首行
+    const lines = Array.from({ length: 4000 }, (_, i) => `第${i + 1}行：${'x'.repeat(20)}`)
+    writeFileSync(join(root, 'many-lines.txt'), lines.join('\n'))
+    const first = await invoke('read_file', { path: 'many-lines.txt' })
+    const d1 = first.data as { truncated: boolean; returnedLines: number; truncation?: { nextOffset?: number } }
+    expect(d1.truncated).toBe(true)
+    const next = d1.truncation?.nextOffset ?? 1
+    expect(next).toBe(d1.returnedLines + 1)
+    const res = await invoke('read_file', { path: 'many-lines.txt', offset: next, length: 10 })
+    expect(res.ok).toBe(true)
+    const data = res.data as { offset: number; returnedLines: number; content: string }
+    expect(data.offset).toBe(next)
+    expect(data.returnedLines).toBe(10)
+    // 续读到的正是第 next 行起（内容可校验，证明 offset 语义正确）
+    expect(data.content.split('\n')[0]).toBe(lines[next - 1])
   })
 })
 
