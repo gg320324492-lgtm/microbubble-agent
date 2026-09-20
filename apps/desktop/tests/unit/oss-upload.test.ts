@@ -256,6 +256,9 @@ describe('OSS 错误分诊 — 错误码 → 可执行建议', () => {
     expect(explainOssError('InvalidAccessKeyId')).toMatch(/AK ID 是否完整/)
     expect(explainOssError('SignatureDoesNotMatch')).toMatch(/时间|偏差/)
     expect(explainOssError('AccessDenied')).toMatch(/权限|PutObject/)
+    // R-9 实测新增：AK 所属 RAM 用户被禁用（Secrets 未换现役 AK 时就会撞到这个）
+    expect(explainOssError('UserDisable')).toMatch(/禁用/)
+    expect(explainOssError('UserDisable')).toMatch(/Secrets/)
     expect(explainOssError('NoSuchBucket')).toMatch(/bucket 名|region/)
     expect(explainOssError('')).toMatch(/不是 OSS 标准错误 XML/)
     expect(explainOssError('WeirdCode')).toMatch(/未收录/)

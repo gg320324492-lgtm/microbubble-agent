@@ -170,6 +170,8 @@ export function explainOssError(code) {
       return 'AccessKeyId 不被 OSS 认可。核对：① AK ID 是否完整（RAM AK 通常 24 字符、LTAI 开头，抄漏/截断会直接报此错）② 该 AK 是否已被禁用或删除 ③ 是否误用了另一个账号的凭据'
     case 'SignatureDoesNotMatch':
       return '签名不匹配。核对：① 本机时间与 OSS 偏差需 <15 分钟（Date 头为 GMT）② Content-MD5 / Content-Type 是否与实际请求体一致'
+    case 'UserDisable':
+      return 'AK 所属的 RAM 子账号或账号已被禁用。到阿里云控制台确认该子账号状态（是否被禁用/删除），或换用现役 AK 后更新 GitHub Secrets OSS_UPLOAD_AK / OSS_UPLOAD_SK'
     case 'AccessDenied':
       return '凭据有效但无权限。为该 RAM 子账号授予本 bucket 的 PutObject / GetObject / ListObjects（若要开静态网站还需 PutBucketWebsite）'
     case 'NoSuchBucket':
