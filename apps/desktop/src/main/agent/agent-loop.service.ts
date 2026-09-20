@@ -32,6 +32,18 @@ import {
   type PruneRecord
 } from './context/prune'
 import { summarizeRounds } from './context/summarize'
+import {
+  categoryOfPermissionLevel,
+  denyMessage,
+  resolvePermission,
+  ruleFromChoice,
+  type PermissionValue,
+  type RememberChoice,
+  type ResolvedPermission,
+  type ToolCategory
+} from './permissions/policy'
+import { callSignature, evaluateRunaway, type RunawayVerdict } from './guards'
+import { AbortRegistry, SteeringBuffer } from './abort'
 import type { TokenUsage } from '@shared/types'
 
 /** 单次任务最大 LLM 请求轮数 */
@@ -56,6 +68,13 @@ const TOOL_RESULT_HEAD_RATIO = 0.6
 
 /** 用户确认决定 */
 export type ConfirmDecision = 'approve' | 'reject' | 'stop'
+
+/** M8-3：确认结果（decision + 用户是否选择记住到某作用域） */
+export interface ConfirmOutcome {
+  decision: ConfirmDecision
+  /** 'once' 或缺省 = 仅本次（不落库）；workspace/global = 记住 */
+  remember?: RememberChoice
+}
 
 /**
  * 工作区守则（AGENTS.md / AGENT.md）注入 system 的预算 —— **按字节** 8KB（M8-3 §6）。
@@ -110,6 +129,21 @@ export type LoopEvent =
       actions: { round: number; action: 'trim_tool_result' | 'drop_group'; summarized: boolean }[]
     }
 
+/**
+ * 权限端口（M8-3 §1/§2）—— 由装配层注入三层 store 的读写，循环本身不关心存储位置。
+ * 缺省实现 = 「只读放行、写类询问」= 现行为（零行为变更）。
+ */
+export interface PermissionPort {
+  /** sessionId 用于取「本次会话」层规则 */
+  resolve(category: ToolCategory, sessionId: string): ResolvedPermission
+  remember(category: ToolCategory, value: 'allow' | 'deny', choice: RememberChoice, sessionId: string): void
+}
+
+export const DEFAULT_PERMISSION_PORT: PermissionPort = {
+  resolve: (category) => resolvePermission({ session: {}, workspace: {}, global: {} }, category),
+  remember: () => undefined
+}
+
 export interface AgentRunParams {
   userId: string
   sessionId: string
@@ -128,8 +162,10 @@ export interface AgentRunResult {
 }
 
 export class AgentLoopService {
-  /** 已请求停止的会话（CHAT_ABORT 置位，run 结束清除） */
-  private readonly stopped = new Set<string>()
+  /** M8-3：统一中止源（用户停止 / 权限拒绝 / runaway / 应用退出） */
+  private readonly aborts = new AbortRegistry()
+  /** M8-3：steering 缓冲（轮边界注入） */
+  private readonly steering = new SteeringBuffer()
   /** M8-2 上下文预算配置（默认 128k 窗口 70% 触发 / 50% 目标） */
   private contextConfig: PruneConfig = { ...DEFAULT_PRUNE_CONFIG }
   /** 最近一次裁切记录（会话元数据 / 调试区展示用） */
@@ -160,47 +196,67 @@ export class AgentLoopService {
   }
 
   /** 进行中的写操作确认（CHAT_CONFIRM_RESOLVE / stop 唤醒） */
-  private readonly pendingConfirms = new Map<string, { resolve: (d: ConfirmDecision) => void; timer: ReturnType<typeof setTimeout> }>()
+  private readonly pendingConfirms = new Map<string, { resolve: (o: ConfirmOutcome) => void; timer: ReturnType<typeof setTimeout> }>()
 
   constructor(
     private readonly streamTurn: StreamTurnFn,
     private readonly registry: ToolRegistry,
     private readonly workspace: WorkspaceService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private permissions: PermissionPort = DEFAULT_PERMISSION_PORT
   ) {}
+
+  /** M8-3：装配层注入权限端口（三层 store） */
+  setPermissionPort(port: PermissionPort): void {
+    this.permissions = port
+  }
+
+  /** M8-3 steering：会话进行中用户输入即时指令（轮边界注入，不打断进行中的工具） */
+  steer(sessionId: string, text: string): void {
+    this.steering.push(sessionId, text)
+  }
+
+  /** M8-3：应用退出时中止全部在跑会话（并入统一中止源） */
+  abortAllForShutdown(): string[] {
+    return this.aborts.abortAll('shutdown')
+  }
+
+  /** M8-3：最近一次 runaway 判定（可观测/测试用） */
+  lastRunaway: RunawayVerdict | null = null
 
   /** 用户请求停止（杀在途等待 + HTTP 流 + 轮间空隙） */
   stop(sessionId: string): void {
-    this.stopped.add(sessionId)
+    this.aborts.for(sessionId).abort('user')
     for (const [key, pending] of this.pendingConfirms) {
       if (key.startsWith(`${sessionId}::`)) {
         this.pendingConfirms.delete(key)
-        pending.resolve('stop')
+        pending.resolve({ decision: 'stop' })
       }
     }
   }
 
   /** renderer 回传确认结果；返回 false 表示确认请求不存在/已过期/已超时 */
-  resolveConfirm(sessionId: string, callId: string, approve: boolean): boolean {
+  resolveConfirm(sessionId: string, callId: string, approve: boolean, remember?: RememberChoice): boolean {
     const key = `${sessionId}::${callId}`
     const pending = this.pendingConfirms.get(key)
     if (!pending) return false
     this.pendingConfirms.delete(key)
-    pending.resolve(approve ? 'approve' : 'reject')
+    // M8-3：携带「记住」选择（仅本次 / 此工作区 / 全局）—— 仅本次不落库
+    pending.resolve({ decision: approve ? 'approve' : 'reject', ...(remember === undefined ? {} : { remember }) })
     return true
   }
 
   /** 等待用户对某次写操作的决定；超时按拒绝（安全默认：不写） */
-  private waitConfirm(sessionId: string, callId: string): Promise<ConfirmDecision> {
+  private waitConfirm(sessionId: string, callId: string): Promise<ConfirmOutcome> {
     return new Promise((resolve) => {
       const key = `${sessionId}::${callId}`
       const timer = setTimeout(() => {
-        if (this.pendingConfirms.delete(key)) resolve('reject')
+        if (this.pendingConfirms.delete(key)) resolve({ decision: 'reject' })
       }, CONFIRM_TIMEOUT_MS)
       this.pendingConfirms.set(key, {
-        resolve: (d) => {
+        resolve: (o) => {
           clearTimeout(timer)
-          resolve(d)
+          resolve(o)
         },
         timer
       })
@@ -297,10 +353,15 @@ export class AgentLoopService {
 
   async run(params: AgentRunParams): Promise<AgentRunResult> {
     const { userId, sessionId, baseTurns, system, emit } = params
-    const isAborted = (): boolean => this.stopped.has(sessionId)
+    const abortSrc = this.aborts.for(sessionId)
+    const isAborted = (): boolean => abortSrc.aborted
     const tools = this.buildToolDefs()
     const root = this.workspace.getRoot()
     const toolCalls: ToolCallRecord[] = []
+    // M8-3 runaway guard 状态（跨轮累计，仅本次 run 有效）
+    const callSignatures: string[] = []
+    const roundProgress: boolean[] = []
+    let wroteThisRound = false
     const textParts: string[] = []
     const thinkingParts: string[] = []
 
@@ -323,6 +384,7 @@ export class AgentLoopService {
           break
         }
         round++
+        wroteThisRound = false
 
         emit({
           kind: 'round',
@@ -367,8 +429,49 @@ export class AgentLoopService {
           const tool = this.registry.get(tu.name)
           const rawInput = (tu.input ?? {}) as Record<string, unknown>
 
+          // ---- M8-3 权限三值判定（deny 直接拒绝 / allow 直接放行 / ask 走确认流）----
+          // 工具类别沿用现确认流分组：confirm → write、auto → readonly
+          const category: ToolCategory = tool ? categoryOfPermissionLevel(tool.permission) : 'readonly'
+          const perm = tool ? this.permissions.resolve(category, sessionId) : { value: 'allow' as PermissionValue, scope: 'default' as const, isDefault: true }
+          const ruleTag = `${category}@${perm.scope}=${perm.value}`
+
+          if (tool && perm.value === 'deny') {
+            // deny：不弹窗、不执行，审计留痕（含否决来源），回喂中性说明
+            this.audit.record(userId, tu.name, `权限禁止: ${summarizeShort(rawInput)}`, false, {
+              permissionRule: `${category}@${perm.deniedBy ?? perm.scope}=deny`,
+              confirmed: false,
+              userChoice: null
+            })
+            const denied: ToolCallRecord = {
+              id: tu.id,
+              name: tu.name,
+              input: rawInput,
+              status: 'rejected',
+              summary: `已被权限设置禁止（${category}）`
+            }
+            upsertCall(toolCalls, denied)
+            emit({ kind: 'tool', call: { ...denied } })
+            results.push({
+              type: 'tool_result',
+              tool_use_id: tu.id,
+              content: JSON.stringify({ ok: false, denied: true, summary: denyMessage(category, tu.name) }),
+              is_error: true
+            })
+            continue
+          }
+
+          // allow 快捷路径：不弹窗，但仍写一条证据（命中规则 + 未弹确认）——
+          // 工单要求「每次工具执行追加记录：命中的规则/是否弹确认/用户选择」
+          if (tool && perm.value === 'allow' && tool.permission === 'confirm') {
+            this.audit.record(userId, tu.name, `按规则放行: ${summarizeShort(rawInput)}`, true, {
+              permissionRule: ruleTag,
+              confirmed: false,
+              userChoice: null
+            })
+          }
+
           // ---- confirm 拦截（invoke 保持「已授权即执行」，授权决定在这里）----
-          if (tool?.permission === 'confirm') {
+          if (tool?.permission === 'confirm' && perm.value === 'ask') {
             let previewData: unknown
             let previewSummary = `等待确认：${tu.name}`
             try {
@@ -399,14 +502,24 @@ export class AgentLoopService {
             upsertCall(toolCalls, awaiting)
             emit({ kind: 'tool', call: { ...awaiting } })
 
-            const decision = await this.waitConfirm(sessionId, tu.id)
+            const outcome = await this.waitConfirm(sessionId, tu.id)
+            const decision = outcome.decision
             if (decision === 'stop') {
+              abortSrc.abort('user')
               stopped = true
               break
             }
             if (decision === 'reject') {
-              // 拒绝：不执行，审计留痕（ok:0），回喂明确拒绝语义（模型可改道）
-              this.audit.record(userId, tu.name, `用户拒绝: ${summarizeShort(rawInput)}`, false)
+              // 记住拒绝（仅本次则不落库）；审计留痕含命中规则与用户选择
+              if (outcome.remember && outcome.remember !== 'once') {
+                const rule = ruleFromChoice(category, 'deny', outcome.remember)
+                if (rule) this.permissions.remember(category, 'deny', outcome.remember, sessionId)
+              }
+              this.audit.record(userId, tu.name, `用户拒绝: ${summarizeShort(rawInput)}`, false, {
+                permissionRule: ruleTag,
+                confirmed: true,
+                userChoice: 'reject'
+              })
               const rejected: ToolCallRecord = { ...awaiting, status: 'rejected', summary: '用户拒绝执行' }
               upsertCall(toolCalls, rejected)
               emit({ kind: 'tool', call: { ...rejected } })
@@ -422,7 +535,15 @@ export class AgentLoopService {
               })
               continue
             }
-            // approve → 落入下方正常执行（审计前后各一条照常）
+            // approve → 记住选择（仅本次不落库），随后落入下方正常执行
+            if (outcome.remember && outcome.remember !== 'once') {
+              this.permissions.remember(category, 'allow', outcome.remember, sessionId)
+            }
+            this.audit.record(userId, tu.name, `用户允许: ${summarizeShort(rawInput)}`, true, {
+              permissionRule: ruleTag,
+              confirmed: true,
+              userChoice: 'approve'
+            })
           }
 
           const call: ToolCallRecord = { id: tu.id, name: tu.name, input: tu.input, status: 'running', summary: '运行中…' }
@@ -431,7 +552,8 @@ export class AgentLoopService {
 
           let result
           try {
-            result = await this.registry.invoke(tu.name, rawInput, { userId, workspaceRoot: root ?? '' })
+            // sessionId 供 todowrite 等会话级工具使用（M8-3 §7）
+            result = await this.registry.invoke(tu.name, rawInput, { userId, workspaceRoot: root ?? '', sessionId })
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             result = { ok: false, summary: `工具不可用：${message}`, error: message }
@@ -446,16 +568,44 @@ export class AgentLoopService {
             content: serializeToolResult(result),
             is_error: !result.ok
           })
+
+          // ---- M8-3 runaway guard：同工具同参数连击 / 本轮是否有落盘 ----
+          callSignatures.push(callSignature(tu.name, rawInput))
+          if (result.ok && category === 'write') wroteThisRound = true
+          const verdict = evaluateRunaway({ callSignatures, roundProgress })
+          this.lastRunaway = verdict
+          if (verdict.action === 'abort') {
+            abortSrc.abort('runaway', `repeat=${verdict.count ?? 0}`)
+            stopped = true
+            textParts.push(`— ${verdict.message ?? '检测到重复空转，已自动停止。'}`)
+            break
+          }
+          if (verdict.action === 'warn') {
+            textParts.push(`— ${verdict.message ?? ''}`)
+          }
         }
         if (stopped) break
+        // 每轮结束记录「本轮是否有落盘」，供无进展检测（M8-3 §4 规则②）
+        roundProgress.push(wroteThisRound)
+        if (roundProgress.length > 20) roundProgress.shift()
+        if (callSignatures.length > 20) callSignatures.shift()
         turns.push({ role: 'user', content: results })
+
+        // M8-3 steering：轮边界注入用户在进行中补充的要求。
+        // **必须放在工具结果之后** —— 若插在 tool_use 与 tool_result 之间，
+        // 会破坏「tool_result 紧随其 tool_use」的协议要求（集成测试抓到过）。
+        const pendingSteering = this.steering.drain(sessionId)
+        if (pendingSteering.length > 0) {
+          turns.push({ role: 'user', content: SteeringBuffer.format(pendingSteering) })
+          emit({ kind: 'round', round, label: `已采纳你在进行中补充的 ${pendingSteering.length} 条要求` })
+        }
       }
 
       if (hitCap) {
         textParts.push(`— 已连续执行 ${MAX_AGENT_ROUNDS} 轮工具调用仍未完成，为安全起见本次到此为止。可以继续对话让它接着做。`)
       }
     } finally {
-      this.stopped.delete(sessionId) // 只清本次 run 的停止标记
+      this.aborts.release(sessionId) // 本次 run 结束：释放中止源（下次任务从干净状态开始）
     }
 
     const content = textParts.join('\n\n')

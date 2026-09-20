@@ -194,10 +194,12 @@ describe('AgentLoopService 全链路（ReAct）', () => {
         h.requests.push(req)
         n++
         const id = `t${n}`
+        // M8-3：参数逐轮变化 —— 同工具同参数连击会被 runaway guard 提前中止（新设计行为），
+        // 本用例要验的是「轮数上限」，故不能让参数完全相同
         return turnRes({
           stopReason: 'tool_use',
-          toolUses: [toolUse(id, 'list_dir', { path: '.' })],
-          assistantBlocks: [{ type: 'tool_use', id, name: 'list_dir', input: { path: '.' } }]
+          toolUses: [toolUse(id, 'list_dir', { path: `.${'/'.repeat(0)}r${n}` })],
+          assistantBlocks: [{ type: 'tool_use', id, name: 'list_dir', input: { path: `.${'/'.repeat(0)}r${n}` } }]
         })
       },
       h.registry,

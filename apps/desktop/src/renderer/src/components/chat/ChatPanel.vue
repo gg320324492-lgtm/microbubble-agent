@@ -84,7 +84,7 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 /** 写工具确认（C-3）：乐观更新 live 卡片，权威状态由 main 的 tool 事件跟进 */
-async function onResolve(call: ToolCallRecord, approve: boolean): Promise<void> {
+async function onResolve(call: ToolCallRecord, approve: boolean, remember: 'once' | 'workspace' | 'global' = 'once'): Promise<void> {
   if (!store.activeId || !live.value) return
   applyStreamEvent(live.value, {
     type: 'tool',
@@ -93,7 +93,7 @@ async function onResolve(call: ToolCallRecord, approve: boolean): Promise<void> 
     call: { ...call, status: approve ? 'running' : 'rejected', summary: approve ? '已批准，执行中…' : '用户拒绝执行' }
   })
   try {
-    await window.api.chat.confirmResolve(store.activeId, call.id, approve)
+    await window.api.chat.confirmResolve(store.activeId, call.id, approve, remember)
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '确认失败')
   }

@@ -25,6 +25,11 @@ export const IPC = {
   AGENT_CONTEXT_GET: 'agent:context-get',
   /** M8-2 上下文预算配置写入（设置页调试区） */
   AGENT_CONTEXT_SET: 'agent:context-set',
+  /** M8-3 权限查看/写入（设置页工具权限区块） */
+  AGENT_PERMISSIONS_GET: 'agent:permissions-get',
+  AGENT_PERMISSIONS_SET: 'agent:permissions-set',
+  /** M8-3 steering：任务进行中补充要求 */
+  AGENT_STEER: 'agent:steer',
   /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */
   CHAT_STREAM_EVENT: 'chat:stream-event',
   WINDOW_STATE_EVENT: 'window:state-event',

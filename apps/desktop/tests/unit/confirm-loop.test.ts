@@ -108,7 +108,14 @@ describe('confirm 链路（循环层拦截）', () => {
     expect(out.meta.tools?.[0]).toMatchObject({ id: 'tw', status: 'ok' })
     expect((out.meta.tools?.[0].data as { created: boolean }).created).toBe(true)
     expect(toolStatuses(events)).toEqual(['awaiting_confirm', 'running', 'ok'])
-    expect(h.audit.list(10)).toHaveLength(2) // invoke 前后各一，无拒绝留痕
+    // M8-3：invoke 前后各一（既有）+ 一条**证据链**记录（命中规则/是否弹确认/用户选择）
+    const rows = h.audit.list(10)
+    expect(rows).toHaveLength(3)
+    const evidence = rows.find((r) => r.permission_rule !== null && r.permission_rule !== undefined)
+    expect(evidence).toBeTruthy()
+    expect(String(evidence!.permission_rule)).toMatch(/^write@/)
+    expect(evidence!.confirmed).toBe(1)
+    expect(evidence!.user_choice).toBe('approve')
     // 回喂 ok；diff 留在卡片数据，不进模型上下文
     const fed = h.requests[1].turns[2].content as AgentContentBlock[]
     expect(fed[0]).toMatchObject({ type: 'tool_result', tool_use_id: 'tw', is_error: false })

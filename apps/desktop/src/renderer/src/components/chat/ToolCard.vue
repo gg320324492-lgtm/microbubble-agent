@@ -3,13 +3,13 @@
 // awaiting_confirm 显示行级 diff（新增绿/删除红）+「批准 / 拒绝」（仅 live 卡可操作，
 // 持久化还原的未决卡降级为「已取消/未完成」）；rejected 标识；write_file 成功且
 // 有备份时提供「回滚此写入」。
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, ref, onUnmounted, watch } from 'vue'
 import type { FileDiff, ToolCallRecord } from '@shared/types'
 
 const props = defineProps<{ call: ToolCallRecord; live?: boolean; interactive?: boolean }>()
 
 const emit = defineEmits<{
-  (e: 'resolve', call: ToolCallRecord, approve: boolean): void
+  (e: 'resolve', call: ToolCallRecord, approve: boolean, remember: 'once' | 'workspace' | 'global'): void
   (e: 'rollback'): void
 }>()
 
@@ -21,6 +21,8 @@ const remain = ref(CONFIRM_COUNTDOWN_SECONDS)
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 
 const isAwaiting = computed(() => props.call.status === 'awaiting_confirm')
+/** M8-3：确认时是否记住该选择到某作用域（默认仅本次，行为与现状一致） */
+const remember = ref<'once' | 'workspace' | 'global'>('once')
 const isRejected = computed(() => props.call.status === 'rejected')
 
 const countdownText = computed(() => {
@@ -125,8 +127,14 @@ const dataText = computed<string>(() => {
         <div v-for="(line, i) in diff.lines" :key="i" class="diff-line" :class="`diff-${line.kind}`">{{ line.text }}</div>
       </div>
       <div v-if="live" class="confirm-actions">
-        <button class="btn-approve" data-testid="btn-approve" @click.stop="emit('resolve', call, true)">批准</button>
-        <button class="btn-reject" data-testid="btn-reject" @click.stop="emit('resolve', call, false)">拒绝</button>
+        <!-- M8-3：记住范围（仅本次 / 此工作区 / 全局）——「仅本次」不落库 -->
+        <select v-model="remember" class="remember-select" data-testid="remember-select" @click.stop>
+          <option value="once">仅本次</option>
+          <option value="workspace">此工作区记住</option>
+          <option value="global">全局记住</option>
+        </select>
+        <button class="btn-approve" data-testid="btn-approve" @click.stop="emit('resolve', call, true, remember)">批准</button>
+        <button class="btn-reject" data-testid="btn-reject" @click.stop="emit('resolve', call, false, remember)">拒绝</button>
         <span class="countdown" data-testid="confirm-countdown">
           {{ remain > 0 ? `剩余 ${countdownText}` : '已超时，将自动拒绝' }}
         </span>
@@ -334,3 +342,12 @@ const dataText = computed<string>(() => {
   word-break: break-all;
 }
 </style>
+
+.remember-select {
+  font-size: var(--font-size-xs);
+  padding: 2px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+}

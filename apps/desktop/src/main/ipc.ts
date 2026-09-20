@@ -54,6 +54,17 @@ import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
 import { classifyLlmError, parseRetryAfterMs, withCommitBoundaryRetry } from './agent/llm-retry'
 import { normalizePruneConfig, type PruneConfig } from './agent/context/prune'
+import type { RememberChoice } from './agent/permissions/policy'
+import {
+  TOOL_CATEGORIES,
+  normalizeStore,
+  resolvePermission,
+  ruleFromChoice,
+  type PermissionStore,
+  type PermissionValue,
+  type ToolCategory
+} from './agent/permissions/policy'
+import type { PermissionPort } from './agent/agent-loop.service'
 import type { StreamTurnFn, StreamTurnResult } from '@shared/types'
 import { listDirTool } from './agent/tools/list-dir'
 import { readFileTool } from './agent/tools/read-file'
@@ -317,6 +328,50 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   registry.register(listDirTool)
   registry.register(readFileTool)
   // M8-3 §7：todowrite（第 10 个工具）——会话级清单，注入共享 store
+  // ---- M8-3 §2 权限三层存储装配 ----
+  //   会话级：内存 Map（本次会话有效，进程退出即清）
+  //   工作区级：工作区 store 目录下的 permissions.json（换工作区即换规则）
+  //   全局级：settings 键（跨工作区生效）
+  const GLOBAL_PERMS_KEY = 'agent.permissions.global'
+  const sessionPerms = new Map<string, Partial<Record<ToolCategory, PermissionValue>>>()
+  const workspacePermsFile = join(workspace.getRoot() ?? dbPath, '..', 'permissions.json')
+  const readJsonPerms = (file: string): Partial<Record<ToolCategory, PermissionValue>> => {
+    try {
+      return normalizeStore({ workspace: JSON.parse(readFileSync(file, 'utf8')) }).workspace
+    } catch {
+      return {}
+    }
+  }
+  const writeJsonPerms = (file: string, layer: Partial<Record<ToolCategory, PermissionValue>>): void => {
+    try {
+      writeFileSync(file, JSON.stringify(layer, null, 2), 'utf8')
+    } catch (e) {
+      console.log(`[permissions] 工作区规则写入失败：${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  const readPermissionStore = (sessionId: string): PermissionStore =>
+    normalizeStore({
+      session: sessionPerms.get(sessionId) ?? {},
+      workspace: readJsonPerms(workspacePermsFile),
+      global: settings.get(GLOBAL_PERMS_KEY, currentUserId() ?? undefined)
+    })
+  const permissionPort: PermissionPort = {
+    resolve: (category, sessionId) => resolvePermission(readPermissionStore(sessionId), category),
+    remember: (category, value, choice, sessionId) => {
+      const rule = ruleFromChoice(category, value, choice)
+      if (!rule) return // 「仅本次」不落库
+      if (rule.scope === 'session') {
+        sessionPerms.set(sessionId, { ...(sessionPerms.get(sessionId) ?? {}), [category]: value })
+      } else if (rule.scope === 'workspace') {
+        writeJsonPerms(workspacePermsFile, { ...readJsonPerms(workspacePermsFile), [category]: value })
+      } else {
+        const next = normalizeStore({ global: { ...(settings.get(GLOBAL_PERMS_KEY, currentUserId() ?? undefined) as object ?? {}), [category]: value } }).global
+        settings.set(GLOBAL_PERMS_KEY, next, currentUserId() ?? undefined)
+      }
+      console.log(`[permissions] 已记住：${category}=${value} @ ${rule.scope}`)
+    }
+  }
+
   const todoStore = new TodoStore()
   registry.register(createTodoWriteTool({ store: todoStore }))
   registry.register(globTool)
@@ -549,7 +604,13 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   // 写工具确认结果回传（C-3）— 批准后循环层继续 invoke；拒绝则回喂拒绝语义
   ipcMain.handle(IPC.CHAT_CONFIRM_RESOLVE, (_e, p): IpcResult<boolean> =>
     tryRun(() => {
-      const found = agentLoop.resolveConfirm(String(p?.sessionId ?? ''), String(p?.callId ?? ''), p?.approve === true)
+      // M8-3：透传「记住」选择（仅本次 / 此工作区 / 全局）
+      const found = agentLoop.resolveConfirm(
+        String(p?.sessionId ?? ''),
+        String(p?.callId ?? ''),
+        p?.approve === true,
+        (p?.remember as RememberChoice | undefined) ?? undefined
+      )
       if (!found) throw new Error('确认请求不存在或已过期')
       return true
     })
@@ -1230,6 +1291,52 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     })
   )
 
+  // M8-3 §2/§4：权限查看与写入（设置页「工具权限」区块）
+  ipcMain.handle(IPC.AGENT_PERMISSIONS_GET, (): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      const sessionId = ''
+      return {
+        categories: TOOL_CATEGORIES.map((c) => {
+          const r = resolvePermission(readPermissionStore(sessionId), c)
+          return { category: c, value: r.value, scope: r.scope, isDefault: r.isDefault }
+        }),
+        global: normalizeStore({ global: settings.get(GLOBAL_PERMS_KEY, currentUserId() ?? undefined) }).global,
+        workspace: readJsonPerms(workspacePermsFile)
+      }
+    })
+  )
+  ipcMain.handle(IPC.AGENT_PERMISSIONS_SET, (_e, p): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      const patch = (p ?? {}) as { category?: string; value?: string; scope?: string }
+      const category = String(patch.category ?? '') as ToolCategory
+      const value = String(patch.value ?? '') as PermissionValue
+      const scope = String(patch.scope ?? 'global') as 'workspace' | 'global'
+      if (!TOOL_CATEGORIES.includes(category)) throw new Error(`未知工具类别: ${category}`)
+      if (value !== 'allow' && value !== 'ask' && value !== 'deny') throw new Error(`未知权限值: ${value}`)
+      if (scope === 'workspace') {
+        writeJsonPerms(workspacePermsFile, { ...readJsonPerms(workspacePermsFile), [category]: value })
+      } else {
+        const cur = (settings.get(GLOBAL_PERMS_KEY, currentUserId() ?? undefined) as Record<string, unknown>) ?? {}
+        settings.set(GLOBAL_PERMS_KEY, normalizeStore({ global: { ...cur, [category]: value } }).global, currentUserId() ?? undefined)
+      }
+      console.log(`[permissions] 设置页写入：${category}=${value} @ ${scope}`)
+      return { ok: true }
+    })
+  )
+
+  // M8-3 §5：steering —— 任务进行中用户补充要求（轮边界注入）
+  ipcMain.handle(IPC.AGENT_STEER, (_e, p): IpcResult<null> =>
+    tryRun(() => {
+      auth.requireUser()
+      const sessionId = String((p as { sessionId?: string })?.sessionId ?? '')
+      const text = String((p as { text?: string })?.text ?? '')
+      if (sessionId && text.trim()) agentLoop.steer(sessionId, text)
+      return null
+    })
+  )
+
   // M8-2 §2 配置化：写入上下文预算（部分更新；范围校验后持久化并立即生效）
   ipcMain.handle(IPC.AGENT_CONTEXT_SET, (_e, p): IpcResult<unknown> =>
     tryRun(() => {
@@ -1367,6 +1474,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   // M8-2 预算配置：在 currentUserId 就绪后读取并应用（未配置 → 默认值 = 现行为，零变更）
   agentLoop.setContextConfig(readContextConfig())
+  // M8-3：注入权限端口（三层 store）；未配置任何规则时判定结果 = 现行为
+  agentLoop.setPermissionPort(permissionPort)
 
   ipcMain.handle(IPC.BACKUP_DAILY_GET, (): IpcResult<unknown> => tryRun(() => dailyBackup.snapshot()))
   ipcMain.handle(IPC.BACKUP_DAILY_SET, (_e, p): IpcResult<unknown> =>

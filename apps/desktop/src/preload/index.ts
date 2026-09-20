@@ -66,8 +66,8 @@ const api = {
     send: (sessionId: string, content: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> =>
       invoke(IPC.CHAT_SEND, { sessionId, content }),
     abort: (sessionId: string): Promise<void> => invoke(IPC.CHAT_ABORT, { sessionId }),
-    confirmResolve: (sessionId: string, callId: string, approve: boolean): Promise<void> =>
-      invoke(IPC.CHAT_CONFIRM_RESOLVE, { sessionId, callId, approve }),
+    confirmResolve: (sessionId: string, callId: string, approve: boolean, remember?: 'once' | 'workspace' | 'global'): Promise<void> =>
+      invoke(IPC.CHAT_CONFIRM_RESOLVE, { sessionId, callId, approve, remember }),
     rollbackWrite: (sessionId: string, messageId: string, callId: string): Promise<{ path: string }> =>
       invoke(IPC.CHAT_ROLLBACK_WRITE, { sessionId, messageId, callId }),
     onStreamEvent: (cb: (e: unknown) => void): (() => void) => {
@@ -120,7 +120,10 @@ const api = {
   },
   agent: {
     contextGet: (): Promise<unknown> => invoke(IPC.AGENT_CONTEXT_GET),
-    contextSet: (patch: Record<string, unknown>): Promise<unknown> => invoke(IPC.AGENT_CONTEXT_SET, patch)
+    contextSet: (patch: Record<string, unknown>): Promise<unknown> => invoke(IPC.AGENT_CONTEXT_SET, patch),
+    permissionsGet: (): Promise<unknown> => invoke(IPC.AGENT_PERMISSIONS_GET),
+    permissionsSet: (patch: Record<string, unknown>): Promise<unknown> => invoke(IPC.AGENT_PERMISSIONS_SET, patch),
+    steer: (sessionId: string, text: string): Promise<null> => invoke(IPC.AGENT_STEER, { sessionId, text })
   },
   backup: {
     create: (password: string, targetDir: string): Promise<{ fileName: string; size: number }> =>

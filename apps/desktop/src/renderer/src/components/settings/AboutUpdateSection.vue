@@ -153,6 +153,38 @@ const ctxDebugText = computed(() => {
   )
 })
 
+// ---------- M8-3 工具权限（最小 UI：按类别列生效值 + 来源作用域） ----------
+interface PermRow {
+  category: 'readonly' | 'write'
+  value: 'allow' | 'ask' | 'deny'
+  scope: 'session' | 'workspace' | 'global' | 'default'
+  isDefault: boolean
+}
+const permRows = ref<PermRow[]>([])
+
+async function loadPermissions(): Promise<void> {
+  try {
+    const res = (await window.api.agent.permissionsGet()) as { categories: PermRow[] }
+    permRows.value = res.categories ?? []
+  } catch {
+    /* 未登录时静默 */
+  }
+}
+
+async function savePermission(row: PermRow, value: 'allow' | 'ask' | 'deny'): Promise<void> {
+  try {
+    await window.api.agent.permissionsSet({ category: row.category, value, scope: 'global' })
+    await loadPermissions()
+    ElMessage.success('工具权限已更新')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
+  }
+}
+
+const categoryLabel = (c: string): string => (c === 'write' ? '写操作（新建/覆写/删除文件）' : '只读操作（读取/搜索/列目录）')
+const scopeText = (r: PermRow): string =>
+  r.scope === 'session' ? '本次会话' : r.scope === 'workspace' ? '此工作区' : r.scope === 'global' ? '全局' : '默认'
+
 /** 保存预算配置（部分更新；主侧做范围校验与非法回退，并立即生效） */
 async function saveContextConfig(): Promise<void> {
   try {
@@ -169,6 +201,7 @@ async function saveContextConfig(): Promise<void> {
 }
 
 onMounted(() => {
+  void loadPermissions()
   load().catch(() => undefined)
   offState = window.api.update.onStateChange((s) => {
     state.value = s
@@ -243,6 +276,25 @@ onUnmounted(() => {
     <p class="hint section-note">
       提示式更新：发现新版本后由你确认下载，安装前再次确认，全程不会自动安装。
     </p>
+    <!-- M8-3 工具权限（最小 UI） -->
+    <details class="ctx-debug" data-testid="tool-permissions">
+      <summary>工具权限</summary>
+      <div v-for="row in permRows" :key="row.category" class="perm-row" :data-testid="`perm-${row.category}`">
+        <span class="perm-name">{{ categoryLabel(row.category) }}</span>
+        <select
+          :value="row.value"
+          :data-testid="`perm-select-${row.category}`"
+          @change="savePermission(row, ($event.target as HTMLSelectElement).value as 'allow' | 'ask' | 'deny')"
+        >
+          <option value="allow">允许</option>
+          <option value="ask">每次询问</option>
+          <option value="deny">禁止</option>
+        </select>
+        <span class="perm-scope">来源：{{ scopeText(row) }}{{ row.isDefault ? '（未自定义）' : '' }}</span>
+      </div>
+      <p class="hint tiny">默认与现行为一致：只读直接执行、写操作每次询问。任一层设为「禁止」后，更近的「允许」不会覆盖它。</p>
+    </details>
+
     <!-- M8-2 上下文调试（最小实现，不做大 UI） -->
     <details class="ctx-debug" data-testid="context-debug">
       <summary>上下文用量（调试）</summary>
@@ -391,4 +443,20 @@ onUnmounted(() => {
   width: 84px;
   padding: 2px 4px;
   font-size: var(--font-size-xs);
+}
+
+.perm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-xs);
+}
+.perm-name {
+  min-width: 160px;
+  color: var(--color-text-primary);
+}
+.perm-scope {
+  color: var(--color-text-secondary);
 }
