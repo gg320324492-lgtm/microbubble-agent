@@ -38,6 +38,7 @@ const cfg = (over: Partial<PruneConfig> = {}): PruneConfig => ({
   targetRatio: 0.5,
   keepRecentRounds: 3,
   toolResultTrimBytes: 8 * 1024,
+  reserveTokens: 0, // 单测默认不预留，便于隔离断言；预留行为单列用例
   ...over
 })
 
@@ -392,7 +393,8 @@ describe('预算配置化 — 范围校验与非法回退（默认即现行为�
       triggerRatio: 0.7,
       targetRatio: 0.5,
       keepRecentRounds: 3,
-      toolResultTrimBytes: 8 * 1024
+      toolResultTrimBytes: 8 * 1024,
+      reserveTokens: 6 * 1024
     })
     // 空/非法输入一律回到默认（零行为变更）
     expect(normalizePruneConfig(undefined)).toEqual(DEFAULT_PRUNE_CONFIG)
@@ -457,5 +459,46 @@ describe('预算配置化 — 范围校验与非法回退（默认即现行为�
     expect(plan.records.some((r) => r.action === 'drop_group')).toBe(true)
     expect(plan.roundsToSummarize.length).toBeGreaterThan(0)
     expect(validateToolPairing(plan.turns)).toHaveLength(0)
+  })
+})
+// ---------------------------------------------------------------- 8 预算预留（M8-3 §8 接线）
+
+describe('预算预留 — 触发线判定前移', () => {
+  it('预留额度使「未触线」变为「触线」：同一上下文，预留前不裁、预留后裁', () => {
+    const c = normalizePruneConfig({ windowTokens: 20000, triggerRatio: 0.5, targetRatio: 0.3, keepRecentRounds: 1, toolResultTrimBytes: 512 })
+    const trigger = triggerTokens(c) // 10000
+    // 造一个「刚好在触发线下方」的上下文（内容足够多，确保预留后确有可裁之物）
+    const turns = longSession(6, 4000)
+    const est = estimateTurns(turns)
+    expect(est).toBeLessThan(trigger)
+
+    // 不预留 → 不裁（零副作用）
+    const noReserve = planPrune(turns, c, { reserveTokens: 0 })
+    expect(noReserve.pruned).toBe(false)
+    expect(noReserve.records).toHaveLength(0)
+    expect(noReserve.turns).toEqual(turns)
+
+    // 预留足够大 → 判定前移 → 触发裁切
+    const withReserve = planPrune(turns, c, { reserveTokens: trigger })
+    expect(withReserve.pruned).toBe(true)
+    expect(withReserve.records.length).toBeGreaterThan(0)
+    expect(withReserve.afterTokens).toBeLessThan(withReserve.beforeTokens)
+  })
+
+  it('预留为 0 时行为与不预留完全一致（零行为变更）', () => {
+    const c = normalizePruneConfig({ windowTokens: 16384 })
+    const turns = longSession(8, 4000)
+    const a = planPrune(turns, { ...c, reserveTokens: 0 })
+    const b = planPrune(turns, { ...c, reserveTokens: 0 }, { reserveTokens: 0 })
+    expect(a.pruned).toBe(b.pruned)
+    expect(a.afterTokens).toBe(b.afterTokens)
+    expect(a.records.length).toBe(b.records.length)
+  })
+
+  it('预留额度可配置且有范围校验（0 合法，超上限回退默认）', () => {
+    expect(normalizePruneConfig({ reserveTokens: 0 }).reserveTokens).toBe(0)
+    expect(normalizePruneConfig({ reserveTokens: 4096 }).reserveTokens).toBe(4096)
+    expect(normalizePruneConfig({ reserveTokens: 999999 }).reserveTokens).toBe(DEFAULT_PRUNE_CONFIG.reserveTokens)
+    expect(normalizePruneConfig({ reserveTokens: -1 }).reserveTokens).toBe(DEFAULT_PRUNE_CONFIG.reserveTokens)
   })
 })

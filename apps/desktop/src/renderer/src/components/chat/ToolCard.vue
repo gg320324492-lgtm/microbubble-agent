@@ -92,6 +92,26 @@ const writeData = computed<{ backupPath?: string; rolledBack?: boolean } | null>
 
 const showDiff = computed(() => isAwaiting.value || expanded.value || isRejected.value)
 
+// M8-3 §6：todowrite 清单卡片（三态：待办灰 / 进行中蓝 / 完成绿+删除线）
+interface TodoRow {
+  id: string
+  text: string
+  status: 'pending' | 'in_progress' | 'done'
+}
+const todoData = computed<{ todos: TodoRow[]; summary?: { text?: string } } | null>(() => {
+  if (props.call.name !== 'todowrite') return null
+  const d = props.call.data as { todos?: unknown } | undefined
+  if (!d || !Array.isArray(d.todos)) return null
+  const todos = d.todos.filter((t): t is TodoRow => {
+    const o = t as Partial<TodoRow>
+    return typeof o?.id === 'string' && typeof o?.text === 'string'
+  })
+  return { todos, summary: (d as { summary?: { text?: string } }).summary }
+})
+
+const todoStatusLabel = (s: TodoRow['status']): string =>
+  s === 'done' ? '已完成' : s === 'in_progress' ? '进行中' : '待办'
+
 const dataText = computed<string>(() => {
   if (props.call.data === undefined) return ''
   try {
@@ -149,6 +169,15 @@ const dataText = computed<string>(() => {
       <button class="btn-rollback" data-testid="btn-rollback" @click.stop="emit('rollback')">↩ 回滚此写入</button>
     </div>
     <div v-if="call.status === 'ok' && writeData?.rolledBack" class="rolledback-note">已回滚（原内容已恢复）</div>
+
+    <!-- M8-3 §6：任务清单卡片（状态点 + 文本 + 完成删除线） -->
+    <ul v-if="todoData" class="todo-list" data-testid="todo-list">
+      <li v-for="t in todoData.todos" :key="t.id" class="todo-item" :class="`todo-${t.status}`" :data-testid="`todo-${t.status}`">
+        <span class="todo-dot" aria-hidden="true"></span>
+        <span class="todo-text" :title="todoStatusLabel(t.status)">{{ t.text }}</span>
+      </li>
+    </ul>
+    <p v-if="todoData?.summary?.text" class="todo-summary" data-testid="todo-summary">{{ todoData.summary.text }}</p>
 
     <div v-if="expanded && !isAwaiting" class="tool-detail" data-testid="tool-detail">
       <div class="detail-line"><span class="detail-key">结果</span><span>{{ call.summary }}</span></div>
@@ -349,5 +378,42 @@ const dataText = computed<string>(() => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: transparent;
+  color: var(--color-text-secondary);
+}
+
+/* M8-3 §6 任务清单卡片 */
+.todo-list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+.todo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: var(--color-text-secondary);
+}
+.todo-in_progress .todo-dot {
+  background: var(--color-primary);
+}
+.todo-done .todo-dot {
+  background: var(--color-success, #3e8e5a);
+}
+.todo-done .todo-text {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+.todo-summary {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }

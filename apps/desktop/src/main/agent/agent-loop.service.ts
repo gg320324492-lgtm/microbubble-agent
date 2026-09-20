@@ -280,17 +280,22 @@ export class AgentLoopService {
     turns: readonly AgentTurn[],
     userId: string,
     sessionId: string,
-    emit: (e: LoopEvent) => void
+    emit: (e: LoopEvent) => void,
+    tools: readonly unknown[] = []
   ): Promise<AgentTurn[]> {
     const config = this.contextConfig
     const estimated = estimateTurns(turns)
     this.lastEstimate = estimated
     const trigger = triggerTokens(config)
-    if (estimated <= trigger) return [...turns]
+    // 预留额度参与触发判定（与 planPrune 内一致）
+    const reserveTokens = tools.length > 0 ? config.reserveTokens : 0
+    if (estimated + reserveTokens <= trigger) return [...turns]
 
     try {
       // 第一遍规划：拿到「即将整组裁掉的轮次」，再决定是否生成摘要
-      const plan = planPrune(turns, config)
+      // M8-3 §8：有工具可用时按「预计本轮工具结果」预留额度（无工具则无产出，不预留）
+      const reserveTokens = tools.length > 0 ? config.reserveTokens : 0
+      const plan = planPrune(turns, config, { reserveTokens })
       let finalPlan = plan
       let summarizedRounds = new Set<number>()
 
@@ -394,7 +399,7 @@ export class AgentLoopService {
         let res: StreamTurnResult
         try {
           // M8-2：送模型前做一次上下文预算管理（未触线则零开销原样返回）
-          const budgetedTurns = await this.applyContextBudget(turns, userId, sessionId, emit)
+          const budgetedTurns = await this.applyContextBudget(turns, userId, sessionId, emit, tools)
           res = await this.streamTurn(userId, sessionId, {
             system,
             turns: budgetedTurns,

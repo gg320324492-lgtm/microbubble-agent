@@ -27,6 +27,11 @@ export interface PruneConfig {
   keepRecentRounds: number
   /** 单条工具结果正文裁剪预算（字节）；复用 M8-1 的头尾语义 */
   toolResultTrimBytes: number
+  /**
+   * 轮次开始的**预算预留**（token，M8-3 §8）：按「预计本轮工具结果」预留额度，
+   * 让触发线判定前移，减少「刚裁完又被一轮大结果顶爆」。0 = 不预留。
+   */
+  reserveTokens: number
 }
 
 export const DEFAULT_PRUNE_CONFIG: PruneConfig = {
@@ -34,7 +39,9 @@ export const DEFAULT_PRUNE_CONFIG: PruneConfig = {
   triggerRatio: 0.7,
   targetRatio: 0.5,
   keepRecentRounds: 3,
-  toolResultTrimBytes: 8 * 1024
+  toolResultTrimBytes: 8 * 1024,
+  // 预留 ≈ 24KB 工具结果（≈6k tokens）再留一点余量 —— 与 read_file 的 24KB 预算同量级
+  reserveTokens: 6 * 1024
 }
 
 /** 可配置项的合法范围（越界即回退默认，避免坏配置把预算算歪） */
@@ -43,7 +50,8 @@ export const PRUNE_CONFIG_RANGES = {
   triggerRatio: { min: 0.1, max: 0.95 },
   targetRatio: { min: 0.05, max: 0.9 },
   keepRecentRounds: { min: 0, max: 50 },
-  toolResultTrimBytes: { min: 256, max: 256 * 1024 }
+  toolResultTrimBytes: { min: 256, max: 256 * 1024 },
+  reserveTokens: { min: 0, max: 64 * 1024 }
 } as const
 
 /**
@@ -75,8 +83,9 @@ export function normalizePruneConfig(raw: unknown): PruneConfig {
   const toolResultTrimBytes = Math.floor(
     clamp(num(o['toolResultTrimBytes']), 'toolResultTrimBytes', DEFAULT_PRUNE_CONFIG.toolResultTrimBytes)
   )
+  const reserveTokens = Math.floor(clamp(num(o['reserveTokens']), 'reserveTokens', DEFAULT_PRUNE_CONFIG.reserveTokens))
 
-  return { windowTokens, triggerRatio, targetRatio, keepRecentRounds, toolResultTrimBytes }
+  return { windowTokens, triggerRatio, targetRatio, keepRecentRounds, toolResultTrimBytes, reserveTokens }
 }
 
 /** 触发线（token） */
@@ -253,6 +262,8 @@ export interface PlanPruneOptions {
   summaries?: Map<number, string>
   /** 当前时间（注入，便于离线断言记录） */
   now?: number
+  /** 覆盖预留额度（缺省取配置里的 reserveTokens） */
+  reserveTokens?: number
 }
 
 /**
@@ -270,9 +281,11 @@ export function planPrune(
   const now = options.now ?? Date.now()
   const beforeTokens = estimateTurns(turns)
   const trigger = triggerTokens(config)
+  // M8-3 §8 预算预留：按「预计本轮还会产出多少工具结果」把判定前移
+  const reserve = options.reserveTokens ?? config.reserveTokens
 
-  // 未触线 → 原样返回（零副作用）
-  if (beforeTokens <= trigger) {
+  // 未触线（含预留）→ 原样返回（零副作用）
+  if (beforeTokens + reserve <= trigger) {
     return { turns: [...turns], pruned: false, beforeTokens, afterTokens: beforeTokens, records: [], roundsToSummarize: [] }
   }
 
