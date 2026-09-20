@@ -1462,6 +1462,45 @@ class AgenticLoop:
                 yield critique_to_sse_event(critique)
                 accumulated_text = retry_text
 
+            # ===== Phase 4.4: 空综合强制重试 (2026-09-20) =====
+            # 事故: "搜一下吧" 等 follow_up 轮 synthesis 返回空正文, 且 critique
+            # 对空文本打分失败 (score=NULL → should_retry=False) → 重试机制整条
+            # 失明, Phase 4.5 兜底只对"有 rich blocks"生效 → 用户看到 0 字回答,
+            # 落库被 "content 不能为空" 拒绝 (4 连发实测)。
+            # 本兜底确定性触发(不依赖 critique): 空正文强制重 synthesis 一次;
+            # 仍空则服务端生成保底文本并补发 text_delta (所见即所存, 落库合法)。
+            if not accumulated_text.strip():
+                logger.warning("[Phase 4.4] synthesis 空正文, 强制重试一次")
+                yield StreamEvent(
+                    type="retry",
+                    retry_reason="回答正文为空, 重试生成",
+                    retry_count=1,
+                )
+                _empty_retry_system = (
+                    system
+                    + "\n\n【强制要求】上一轮你没有生成任何可见回答正文。本次必须直接输出给用户阅读的中文回答正文；"
+                    "即使要说明限制或反问，也必须写出完整文字，严禁输出空回复。"
+                )
+                empty_retry_text = ""
+                async for evt in self._synthesize_stream(
+                    messages=messages,
+                    system=_empty_retry_system,
+                    llm=llm,
+                    thinking_config=ctx.thinking_config,
+                ):
+                    if evt.type == "text_delta":
+                        empty_retry_text += evt.delta or ""
+                    yield evt
+                if empty_retry_text.strip():
+                    accumulated_text = empty_retry_text
+                else:
+                    accumulated_text = (
+                        "抱歉，这一轮我没有生成出回答正文（模型返回为空）。"
+                        "你可以点击「重答」再试一次，或者换个问法描述你的需求。"
+                    )
+                    yield StreamEvent(type="text_delta", delta=accumulated_text)
+                    logger.error("[Phase 4.4] 重试仍为空, 已下发服务端保底文本")
+
             # 2026-07-13 #P1 修复: final_text 在 try 内定义, except 块 (异常兜底) 引用会 UnboundLocalError
             # 提前初始化, 让 except 块安全访问 (L1360 `not final_text.strip()`)
             final_text = ""
