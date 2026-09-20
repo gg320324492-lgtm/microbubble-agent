@@ -126,12 +126,15 @@ describe('每日定时备份服务 — 成功路径', () => {
 })
 
 describe('每日定时备份服务 — 失败可感知', () => {
-  it('未配置密码 → 不执行且给出明确原因（不静默）', async () => {
-    const { svc, notify } = makeService({ password: null })
+  it('未配置密码 → 不执行、不通知、**不占用当天名额**', async () => {
+    const { svc, ports, notify } = makeService({ password: null })
     const r = await svc.runNow('test')
     expect(r.ok).toBe(false)
     expect(r.error).toContain('未配置备份密码')
-    expect(notify).not.toHaveBeenCalled() // 密码未配置属「未生效」而非失败，不打扰用户
+    expect(notify).not.toHaveBeenCalled() // 属「未生效」而非失败，不打扰用户
+    // 关键：不算一次尝试 —— 用户当天补配密码后仍能跑（实测踩到过「占了名额」）
+    expect(ports.readLastResult()).toBeNull()
+    expect(ports.readLastRunDate()).toBeNull()
   })
 
   it('体积超阈值 → 跳过 + 系统通知 + 明确报错', async () => {

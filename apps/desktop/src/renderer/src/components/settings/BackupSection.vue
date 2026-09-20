@@ -35,6 +35,7 @@ const dailyTargetDir = ref('')
 const dailyLast = ref<DailyResult | null>(null)
 const dailyPasswordConfigured = ref(false)
 const dailyRunning = ref(false)
+const dailyPassword = ref('')
 
 async function loadDaily(): Promise<void> {
   try {
@@ -59,6 +60,28 @@ async function saveDaily(patch: Record<string, unknown>): Promise<void> {
     await loadDaily()
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '保存定时备份设置失败')
+  }
+}
+
+/**
+ * 保存定时备份所需的密码。
+ * 说明：上方「备份密码」输入框只用于**当次**「立即备份」，不持久化；持久化密码（定时备份与
+ * 退出自动备份共用）走 settings 的 backup.exitPassword（主侧 safeStorage 加密存储）。
+ * 此前提示「需先配置上方备份密码」是误导 —— 真机验证时踩到，故在此提供显式保存入口。
+ */
+async function saveDailyPassword(): Promise<void> {
+  const pwd = dailyPassword.value
+  if (!pwd.trim()) {
+    ElMessage.warning('请输入备份密码')
+    return
+  }
+  try {
+    await window.api.settings.set('backup.exitPassword', pwd)
+    dailyPassword.value = ''
+    await loadDaily()
+    ElMessage.success('备份密码已加密保存（定时备份与退出自动备份共用）')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '保存密码失败')
   }
 }
 
@@ -385,7 +408,7 @@ onMounted(async () => {
     <div class="daily-section" data-testid="daily-backup">
       <h3>每日定时备份</h3>
       <p class="hint">
-        应用运行中每天自动备份一次（需先配置上方「备份密码」）。错过不补跑，第二天再触发。
+        应用运行中每天自动备份一次（需先在下方保存「备份密码」）。错过不补跑，第二天再触发。
       </p>
       <div class="switch-row">
         <label>
@@ -454,9 +477,21 @@ onMounted(async () => {
           {{ dailyLastText }}
         </span>
       </div>
-      <p v-if="!dailyPasswordConfigured" class="hint warn-text">
-        未配置备份密码 —— 定时备份不会执行。请在上方设置密码后开启。
-      </p>
+      <div class="form-row">
+        <label>备份密码</label>
+        <input
+          v-model="dailyPassword"
+          type="password"
+          data-testid="daily-password"
+          placeholder="设置后定时备份才会执行（safeStorage 加密保存）"
+        />
+      </div>
+      <div class="daily-actions">
+        <button class="primary-btn" data-testid="daily-save-password" @click="saveDailyPassword">保存备份密码</button>
+        <span class="daily-last" :class="{ 'is-fail': !dailyPasswordConfigured }" data-testid="daily-pwd-state">
+          {{ dailyPasswordConfigured ? '密码已配置' : '密码未配置 —— 定时备份不会执行' }}
+        </span>
+      </div>
     </div>
 
     <!-- OSS 配置（M5-2） -->

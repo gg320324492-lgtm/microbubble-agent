@@ -1307,9 +1307,17 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       return dailyBackup.updateConfig(patch)
     })
   )
-  ipcMain.handle(IPC.BACKUP_DAILY_RUN, async (): Promise<IpcResult<unknown>> =>
-    tryRun(() => dailyBackup.runNow('manual'))
-  )
+  // 注意：tryRun 是**同步**的（ok(fn())），传 async 回调仍会把 Promise 包进返回值，
+  // 被 Electron 结构化克隆拒绝（实测报 "An object could not be cloned"）。异步 handler
+  // 必须像 BACKUP_CREATE 那样显式 await（沿用同一模式）。
+  ipcMain.handle(IPC.BACKUP_DAILY_RUN, async (): Promise<IpcResult<unknown>> => {
+    try {
+      return ok(await dailyBackup.runNow('manual'))
+    } catch (err) {
+      const e = err as Error & { code?: string }
+      return fail(e.code ?? 'ERROR', e.message)
+    }
+  })
 
   // ---------- 自动更新（M6-1）----------
   ipcMain.handle(IPC.UPDATE_STATE_GET, (): IpcResult<UpdateState> => tryRun(() => update.snapshot()))

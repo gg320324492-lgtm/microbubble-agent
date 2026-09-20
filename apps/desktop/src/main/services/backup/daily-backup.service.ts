@@ -114,9 +114,9 @@ export class DailyBackupService {
     try {
       const password = this.ports.getPassword()
       if (!password) {
-        const r: DailyBackupResult = { at, ok: false, error: '未配置备份密码，定时备份不生效' }
-        this.finish(r, today)
-        return r
+        // 「未配置密码」不是一次备份尝试：**不占用当天名额**，也不写 last 结果。
+        // 否则用户当天补配密码后要等到第二天才会跑（实测踩到）。
+        return { at, ok: false, error: '未配置备份密码，定时备份不生效' }
       }
 
       // 体积硬闸：当前容器为整内存打包，超限明确报错并跳过（不静默失败）
