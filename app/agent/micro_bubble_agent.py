@@ -1003,6 +1003,50 @@ class MicroBubbleAgent:
                                 except Exception as e2:
                                     logger.error(f"[chat_stream persist] partial 持久化也失败: {e2}")
 
+        except GeneratorExit:
+            # 2026-09-20 客户端断连持久化根治: GeneratorExit 继承 BaseException,
+            # 下面 CancelledError/Exception 两个 handler 都接不住 → 断连 (如云端
+            # ERR_HTTP2_PROTOCOL_ERROR / BFCache 掐线) 时已生成的 assistant 文本
+            # 全部不落库, 下一轮上下文"看不到自己上一条回答"(9/20 RAG 会话实测)。
+            # 约束: GeneratorExit 关闭流程中禁止 yield (触发 "async generator
+            # ignored GeneratorExit" RuntimeError), 故复用 tracing 的
+            # fire-and-forget 后台任务模式落库, 然后必须 re-raise 让 aclose 完成。
+            logger.warning(
+                f"[chat_stream persist] GeneratorExit (客户端断连): "
+                f"user_msg_id={user_msg_id} assistant_text_len={len(assistant_text)}"
+            )
+            if persist_enabled and assistant_text:
+
+                async def _persist_partial_on_disconnect():
+                    try:
+                        from app.services import chat_history_service as chat_svc
+                        await chat_svc.append_message(
+                            db, user_id, session_id,
+                            role="assistant",
+                            content=assistant_text,
+                            rich_blocks=assistant_rich_blocks,
+                            tool_trace={"trace": assistant_tool_trace} if assistant_tool_trace else {},
+                            message_metadata={
+                                "source": "stream_disconnect",
+                                "ts": stream_ts,
+                            },
+                            is_partial=True,
+                            client_msg_id=assistant_client_msg_id + "_disconnect",
+                        )
+                        logger.info(
+                            f"[chat_stream persist] 断连 partial 落库成功 len={len(assistant_text)}"
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"[chat_stream persist] 断连 partial 落库失败: {e}", exc_info=True
+                        )
+
+                try:
+                    asyncio.create_task(_persist_partial_on_disconnect())
+                except Exception as e:
+                    logger.error(f"[chat_stream persist] 断连落库任务启动失败: {e}")
+            raise  # GeneratorExit 必须重抛
+
         except asyncio.CancelledError:
             # 流式中断（用户关浏览器 / 主动 stop）
             logger.warning(

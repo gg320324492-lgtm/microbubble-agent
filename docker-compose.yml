@@ -66,13 +66,20 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-#     deploy:
-#       resources:
-#         reservations:
-#           devices:
-#             - driver: nvidia
-#               count: 1
-#               capabilities: [gpu]
+    # 2026-09-20 恢复 GPU (曾被注释致 embedding/reranker 静默回退 CPU):
+    # dmesg 铁证 uvicorn 两次被 global OOM killer 击杀 (RSS 15.8/17.1GB), 凶手即
+    # CPU torch 推理 (0.6B reranker 给 20+ 长文本打分 = 152s + 数 GB RAM 尖峰)。
+    # GPU 化后 rerank 秒级且内存尖峰消失; 27b 占 ~18GB/32GB, 剩余余量充足。
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    # 内存保险丝: 再发生泄漏/尖峰时容器按 cgroup 干净被杀 (docker 可见 OOMKilled),
+    # 不再触发 VM 级 global OOM 连坐 ollama/db
+    mem_limit: 8g
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
