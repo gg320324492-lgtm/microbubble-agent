@@ -233,6 +233,23 @@ async def _warmup_ml_background() -> None:
         print(f"[warmup] 预热任务异常 (不影响服务): {e!r}")
 
 
+async def _warmup_embedding_background() -> None:
+    """2026-09-20 首次语义检索冻结事件循环根治: 启动即后台预载 embedding 模型。
+
+    事故: app 重启后首条知识问题在请求路径懒加载 Qwen3-Embedding-0.6B
+    (HF Hub 联网探测逐文件超时 + torch 构建 GIL 饥饿), 事件循环冻结 ~30s,
+    同窗口所有 API (createServerSession 等) 排队 → 前端 10s 超时。
+    预载后请求路径命中单例 O(1); 失败不致命 (请求路径仍可懒加载兜底)。
+    """
+    try:
+        from app.services.embedding_service import _get_model
+        t0 = time.monotonic()
+        await asyncio.to_thread(_get_model)
+        print(f"[warmup] Embedding 模型预载完成 in {time.monotonic() - t0:.1f}s")
+    except Exception as e:
+        print(f"[warmup] Embedding 预载失败 (请求路径将懒加载兜底): {e!r}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
@@ -376,11 +393,17 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(
         _warmup_ml_background(), name="warmup-ml-imports"
     )
+    # 2026-09-20: 同理预载 embedding 模型 (事故注释见 _warmup_embedding_background)
+    embedding_warmup_task = asyncio.create_task(
+        _warmup_embedding_background(), name="warmup-embedding"
+    )
 
     yield
     # 关闭时执行
     if not warmup_task.done():
         warmup_task.cancel()
+    if not embedding_warmup_task.done():
+        embedding_warmup_task.cancel()
     if not router_loader_task.done():
         router_loader_task.cancel()
         try:

@@ -44,6 +44,10 @@ services:
       - .env
     environment:
       - HF_ENDPOINT=${HF_ENDPOINT:-}
+      # 2026-09-20: HF 模型已全部本地缓存 (hub/ 下 6 个), 禁 Hub 联网探测 —
+      # 国内网络每次懒加载空耗 10-30s 且与 torch 构建叠加冻结事件循环
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=microbubble2024
@@ -292,6 +296,10 @@ services:
       - .env
     environment:
       - HF_ENDPOINT=${HF_ENDPOINT:-}
+      # 2026-09-20: HF 模型已全部本地缓存 (hub/ 下 6 个), 禁 Hub 联网探测 —
+      # 国内网络每次懒加载空耗 10-30s 且与 torch 构建叠加冻结事件循环
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=microbubble2024
