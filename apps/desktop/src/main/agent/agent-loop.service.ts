@@ -415,7 +415,15 @@ export class AgentLoopService {
 
         usageTotal = addUsage(usageTotal, res.usage)
         if (res.thinking) thinkingParts.push(res.thinking)
-        if (res.text) textParts.push(res.text)
+        if (res.text) {
+          textParts.push(res.text)
+        } else if (res.thinking && res.thinking.trim()) {
+          // R-10-B1：模型只产出推理、没产出正文（真机 mimo-v2.5 实测）。
+          // 静默留空会让用户看到空气泡，这里显式说明并附上推理摘要，便于用户判断与重试。
+          textParts.push(
+            `（模型本轮只返回了推理过程，没有给出正文。以下为推理摘要，可换个说法再问一次）\n\n${res.thinking.trim()}`
+          )
+        }
         // tool_use 块必须原样回放，Anthropic 协议要求 tool_use → tool_result 相邻配对（thinking 不回传）
         turns.push({ role: 'assistant', content: res.assistantBlocks })
         if (res.stopReason === 'aborted' || isAborted()) {

@@ -30,6 +30,24 @@ export interface KeyCipher {
 const genId = () => `mp-${Date.now()}-${randomBytes(3).toString('hex')}`
 const SETTINGS_KEY = 'model.providers'
 
+/**
+ * 该模型是否应显式关闭「扩展思考」（R-10-B1，真机实测）。
+ *
+ * 背景：mimo-v2.5（anthropic 协议）默认开启扩展思考，真机抓到两种形状：
+ *   A 默认：thinking 块 + text 块（**流里混有 signature_delta** —— 网关原先不认识的字段）
+ *   B 显式关闭：单一 text 块，完全标准
+ * 真机症状是「thinking 有内容、正文为空」——即模型只产出了推理、没产出正文。
+ * 对这类模型显式关闭思考可稳定拿到标准形状（实测 B 形状 200 且正文完整）。
+ *
+ * 注意：**只在 anthropic 协议下**加该参数；对其它厂商/协议保持原样（零回归）。
+ */
+const THINKING_ONLY_PRONE_MODELS: readonly RegExp[] = [/^mimo/i]
+
+export function shouldDisableThinking(protocol: string, model: string): boolean {
+  if (protocol !== 'anthropic') return false
+  return THINKING_ONLY_PRONE_MODELS.some((re) => re.test(String(model ?? '').trim()))
+}
+
 export class ModelGatewayService {
   /** 每个 provider 的进行中 AbortController（按 providerId+会话维度挂 sessionId） */
   private aborts = new Map<string, AbortController>()
@@ -302,6 +320,9 @@ export class ModelGatewayService {
       const headers: Record<string, string> = isAnthropic
         ? { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
         : { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` }
+      // R-10-B1：对「默认开启扩展思考、可能只回 thinking 不回正文」的模型显式关闭思考，
+      // 以稳定拿到标准形状（真机实测：mimo-v2.5 关闭后为单一 text 块，正文完整）
+      const disableThinking = isAnthropic && shouldDisableThinking(p.protocol, p.model)
       const body = isAnthropic
         ? JSON.stringify({
             model: p.model,
@@ -309,7 +330,8 @@ export class ModelGatewayService {
             stream: true,
             system: req.system,
             messages: req.turns,
-            ...(req.tools.length > 0 ? { tools: req.tools } : {})
+            ...(req.tools.length > 0 ? { tools: req.tools } : {}),
+            ...(disableThinking ? { thinking: { type: 'disabled' } } : {})
           })
         : JSON.stringify({ model: p.model, stream: true, messages: req.turns })
 
@@ -377,6 +399,11 @@ export class ModelGatewayService {
                   req.onEvent({ kind: 'thinking', delta: json.delta.thinking })
                 } else if (json.delta?.type === 'input_json_delta' && json.delta.partial_json) {
                   block.json += json.delta.partial_json
+                } else if (json.delta?.type && json.delta.type !== 'signature_delta') {
+                  // R-10-B1 加固：**未知 delta 类型一律安全忽略**（只记 debug 日志，绝不打断流）。
+                  // signature_delta 是 Anthropic 扩展思考的签名字段，属已知且无需处理的类型，故不刷日志。
+                  // 此分支的意义：未来任何厂商新增 delta 字段都不会再让正文丢失。
+                  console.log(`[gateway] 忽略未知 delta 类型：${json.delta.type}（index=${json.index ?? 0}）`)
                 }
               } else if (json.type === 'message_delta' && json.delta?.stop_reason) {
                 stopReason = normalizeStopReason(json.delta.stop_reason)
