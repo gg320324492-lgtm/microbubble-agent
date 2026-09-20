@@ -21,6 +21,16 @@ import type { WorkspaceService } from '../services/workspace/workspace.service'
 import type { AuditService } from '../services/workspace/audit.service'
 import { ZERO_USAGE, addUsage } from '../services/model/usage'
 import { fitUtf8Prefix, fitUtf8Suffix, utf8ByteLength } from './tools/output-limit'
+import {
+  DEFAULT_PRUNE_CONFIG,
+  applySummaries,
+  estimateTurns,
+  planPrune,
+  triggerTokens,
+  type PruneConfig,
+  type PruneRecord
+} from './context/prune'
+import { summarizeRounds } from './context/summarize'
 import type { TokenUsage } from '@shared/types'
 
 /** 单次任务最大 LLM 请求轮数 */
@@ -77,6 +87,16 @@ export type LoopEvent =
   | { kind: 'thinking'; delta: string }
   | { kind: 'round'; round: number; label: string }
   | { kind: 'tool'; call: ToolCallRecord }
+  /** M8-2 可观测性：上下文估算与裁切事件（设置页调试区/日志可见） */
+  | {
+      kind: 'context'
+      estimatedTokens: number
+      triggerTokens: number
+      pruned: boolean
+      afterTokens: number
+      /** 本次裁切的轮次与动作摘要 */
+      actions: { round: number; action: 'trim_tool_result' | 'drop_group'; summarized: boolean }[]
+    }
 
 export interface AgentRunParams {
   userId: string
@@ -98,6 +118,22 @@ export interface AgentRunResult {
 export class AgentLoopService {
   /** 已请求停止的会话（CHAT_ABORT 置位，run 结束清除） */
   private readonly stopped = new Set<string>()
+  /** M8-2 上下文预算配置（默认 128k 窗口 70% 触发 / 50% 目标） */
+  private contextConfig: PruneConfig = { ...DEFAULT_PRUNE_CONFIG }
+  /** 最近一次裁切记录（会话元数据 / 调试区展示用） */
+  private lastPruneRecords: PruneRecord[] = []
+  private lastEstimate = 0
+
+  /** 供设置页调试区读取 */
+  contextSnapshot(): { estimatedTokens: number; triggerTokens: number; records: PruneRecord[] } {
+    return { estimatedTokens: this.lastEstimate, triggerTokens: triggerTokens(this.contextConfig), records: this.lastPruneRecords }
+  }
+
+  /** 覆盖上下文预算配置（测试/设置页） */
+  setContextConfig(patch: Partial<PruneConfig>): PruneConfig {
+    this.contextConfig = { ...this.contextConfig, ...patch }
+    return this.contextConfig
+  }
 
   /** 进行中的写操作确认（CHAT_CONFIRM_RESOLVE / stop 唤醒） */
   private readonly pendingConfirms = new Map<string, { resolve: (d: ConfirmDecision) => void; timer: ReturnType<typeof setTimeout> }>()
@@ -156,6 +192,76 @@ export class AgentLoopService {
   }
 
   /** registry.list() → Anthropic tools 格式（parameters 已是 JSON Schema，改名 input_schema） */
+  /**
+   * M8-2：上下文预算管理 —— 触发线判定 → 裁切规划 → 摘要随车 → 记录可观测事件。
+   * 返回可直接喂给网关的 turns。**绝不因裁切失败而中断对话**（异常即回退原 turns）。
+   */
+  private async applyContextBudget(
+    turns: readonly AgentTurn[],
+    userId: string,
+    sessionId: string,
+    emit: (e: LoopEvent) => void
+  ): Promise<AgentTurn[]> {
+    const config = this.contextConfig
+    const estimated = estimateTurns(turns)
+    this.lastEstimate = estimated
+    const trigger = triggerTokens(config)
+    if (estimated <= trigger) return [...turns]
+
+    try {
+      // 第一遍规划：拿到「即将整组裁掉的轮次」，再决定是否生成摘要
+      const plan = planPrune(turns, config)
+      let finalPlan = plan
+      let summarizedRounds = new Set<number>()
+
+      if (plan.roundsToSummarize.length > 0) {
+        // 摘要请求复用注入的 streamTurn（已套 M8-1 提交边界重试），tools 为空、事件静默
+        const { summaries } = await summarizeRounds(
+          {
+            complete: async ({ system: s, user }) => {
+              const res = await this.streamTurn(userId, sessionId, {
+                system: s,
+                turns: [{ role: 'user', content: user }],
+                tools: [],
+                onEvent: () => undefined
+              })
+              return res.text
+            },
+            log: (m) => console.log(m)
+          },
+          plan.roundsToSummarize
+        )
+        if (summaries.size > 0) {
+          finalPlan = applySummaries(turns, config, summaries)
+          summarizedRounds = new Set(summaries.keys())
+        }
+      }
+
+      this.lastPruneRecords = finalPlan.records
+      emit({
+        kind: 'context',
+        estimatedTokens: finalPlan.beforeTokens,
+        triggerTokens: trigger,
+        pruned: finalPlan.pruned,
+        afterTokens: finalPlan.afterTokens,
+        actions: finalPlan.records.map((r) => ({
+          round: r.round,
+          action: r.action,
+          summarized: summarizedRounds.has(r.round)
+        }))
+      })
+      console.log(
+        `[context] 触发裁切：${finalPlan.beforeTokens} → ${finalPlan.afterTokens} tokens（触发线 ${trigger}），` +
+          `动作 ${finalPlan.records.length} 项，摘要 ${summarizedRounds.size} 轮`
+      )
+      return finalPlan.turns
+    } catch (e) {
+      // 上下文管理不能成为新的故障点：失败即原样继续
+      console.log(`[context] 裁切失败，按原上下文继续：${e instanceof Error ? e.message : String(e)}`)
+      return [...turns]
+    }
+  }
+
   buildToolDefs(): AnthropicToolDef[] {
     if (!this.workspace.getRoot()) return [] // 无工作区 → 不提供任何工具
     return this.registry.list().map((t) => ({
@@ -201,9 +307,11 @@ export class AgentLoopService {
         })
         let res: StreamTurnResult
         try {
+          // M8-2：送模型前做一次上下文预算管理（未触线则零开销原样返回）
+          const budgetedTurns = await this.applyContextBudget(turns, userId, sessionId, emit)
           res = await this.streamTurn(userId, sessionId, {
             system,
-            turns,
+            turns: budgetedTurns,
             tools,
             onEvent: (e: StreamTurnEvent) => emit(e.kind === 'text' ? { kind: 'text', delta: e.delta } : { kind: 'thinking', delta: e.delta })
           })

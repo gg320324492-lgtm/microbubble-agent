@@ -285,3 +285,56 @@ describe('AuditService', () => {
     expect(readFileSync(join(root, 'AGENT.md'), 'utf8')).toContain('Agent 行为守则') // setRoot 附带生效
   })
 })
+describe('M8-2 read_file 超长行按字节窗口读取', () => {
+  it('byteOffset 窗口：按字节取，尾部不切断多字节字符，并给出 byteOffset 续读提示', async () => {
+    // 造一个单行 100KB 的中文文件（单行超 24KB 预算 → 走字节窗口）
+    const oneLine = '中'.repeat(40000) // 120000 字节
+    writeFileSync(join(root, 'one-line.txt'), oneLine)
+
+    const first = await invoke('read_file', { path: 'one-line.txt', byteOffset: 0, byteLength: 6000 })
+    expect(first.ok).toBe(true)
+    const d1 = first.data as {
+      byteOffset: number
+      byteLength: number
+      truncated: boolean
+      content: string
+      truncation?: { nextByteOffset?: number }
+    }
+    expect(d1.byteOffset).toBe(0)
+    expect(d1.truncated).toBe(true)
+    expect(d1.content).not.toContain('\uFFFD') // 未切断码点
+    // 正文（提示之前）必须正好是整数字节的中文
+    const body = d1.content.split('\n\n[已截断：')[0]!
+    expect(Buffer.byteLength(body, 'utf8')).toBe(6000)
+    expect(d1.truncation?.nextByteOffset).toBe(6000)
+    expect(d1.content).toContain('byteOffset=6000')
+
+    // 从非对齐偏移继续（6001 落在字符中间）→ 丢弃开头半个字符，仍安全
+    const mid = await invoke('read_file', { path: 'one-line.txt', byteOffset: 6001, byteLength: 3000 })
+    expect(mid.ok).toBe(true)
+    const d2 = mid.data as { content: string; byteOffset: number }
+    expect(d2.content).not.toContain('\uFFFD')
+    expect(d2.content.split('\n\n[已截断：')[0]!.length).toBeGreaterThan(0)
+
+    // 读到末尾 → truncated=false 且无续读提示
+    const tail = await invoke('read_file', { path: 'one-line.txt', byteOffset: 119000 })
+    const d3 = tail.data as { truncated: boolean; content: string }
+    expect(d3.truncated).toBe(false)
+    expect(d3.content).not.toContain('[已截断：')
+  })
+
+  it('字节窗口与行窗口正交：同一文件两种参数各取其义', async () => {
+    const lines = Array.from({ length: 200 }, (_, i) => `第${i + 1}行内容`)
+    writeFileSync(join(root, 'two-ways.txt'), lines.join('\n'))
+    const byLine = await invoke('read_file', { path: 'two-ways.txt', offset: 3, length: 2 })
+    const dl = byLine.data as { offset: number; returnedLines: number; content: string }
+    expect(dl.offset).toBe(3)
+    expect(dl.returnedLines).toBe(2)
+    expect(dl.content.startsWith('第3行内容')).toBe(true)
+
+    const byByte = await invoke('read_file', { path: 'two-ways.txt', byteOffset: 0, byteLength: 20 })
+    const db = byByte.data as { byteOffset: number; content: string }
+    expect(db.byteOffset).toBe(0)
+    expect(db.content.startsWith('第1行内容')).toBe(true)
+  })
+})

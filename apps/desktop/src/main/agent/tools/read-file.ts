@@ -10,6 +10,7 @@ import { displayRel } from './walk'
 import {
   READ_TEXT_MAX_BYTES,
   buildContinuationNotice,
+  fitUtf8Prefix,
   limitPrefixLines,
   utf8ByteLength
 } from './output-limit'
@@ -26,14 +27,20 @@ export const readFileTool: AgentTool = {
   name: 'read_file',
   description:
     `读取工作区内一个 UTF-8 文本文件。默认返回前 ${READ_TEXT_MAX_BYTES / 1024}KB（按字节预算逐行截断，不切断多字节字符）；` +
-    '内容过长时结果尾部会给出续读提示，按提示带 offset/length 参数（按行，1 基）继续读取。二进制文件拒绝读取。',
+    '内容过长时结果尾部会给出续读提示，按提示带 offset/length（按行，1 基）或 byteOffset/byteLength（按字节）继续读取。二进制文件拒绝读取。',
   permission: 'auto',
   parameters: {
     type: 'object',
     properties: {
       path: { type: 'string', description: '相对工作区的文件路径，如 docs/notes.md' },
       offset: { type: 'number', description: '起始行号（1 基）。续读时用上一次提示里的 nextOffset' },
-      length: { type: 'number', description: '本次最多读取的行数；省略则读到预算用尽' }
+      length: { type: 'number', description: '本次最多读取的行数；省略则读到预算用尽' },
+      byteOffset: {
+        type: 'number',
+        description:
+          '行内字节窗口起点（0 基，针对**单行即超过预算**的文件如压缩 JSON/单行日志）。与 offset/length 正交：给了它就走按字节读取'
+      },
+      byteLength: { type: 'number', description: '行内字节窗口长度；省略则读到预算用尽' }
     },
     required: ['path']
   },
@@ -43,6 +50,15 @@ export const readFileTool: AgentTool = {
 
     const offset = parsePositiveInt(input['offset']) ?? 1
     const length = parsePositiveInt(input['length'])
+    // M8-2 §4：行内字节窗口（byteOffset 允许为 0，故不能用 parsePositiveInt）
+    const byteOffsetRaw = input['byteOffset']
+    const byteOffset =
+      typeof byteOffsetRaw === 'number' && Number.isFinite(byteOffsetRaw) && byteOffsetRaw >= 0
+        ? Math.floor(byteOffsetRaw)
+        : typeof byteOffsetRaw === 'string' && /^\d+$/.test(byteOffsetRaw)
+          ? Number(byteOffsetRaw)
+          : undefined
+    const byteLength = parsePositiveInt(input['byteLength'])
 
     let st
     try {
@@ -74,6 +90,69 @@ export const readFileTool: AgentTool = {
     const allLines = raw.split(/\r?\n/)
     const totalBytes = buf.length
     const rel = displayRel(file, ctx.workspaceRoot)
+
+    // M8-2 §4：按字节窗口读取（针对单行超预算的文件）。
+    // UTF-8 边界安全：先按字节切，再把首尾不完整的多字节序列修剪掉（复用 fitUtf8Prefix/Suffix）。
+    if (byteOffset !== undefined) {
+      const start = Math.min(byteOffset, totalBytes)
+      const end = byteLength === undefined ? totalBytes : Math.min(start + byteLength, totalBytes)
+      const windowBytes = buf.subarray(start, end)
+      // 起点若落在多字节字符中间，丢弃开头的不完整序列；终点同理
+      let text = windowBytes.toString('utf8')
+      // 起点落在字符中间时丢弃开头连续的续字节（0b10xxxxxx）。
+      // consumedStart 记录实际丢弃的字节数 —— 续读位置必须按「真实消费」计算，
+      // 否则 nextByte 会永远差那几个字节，导致读完仍报 truncated（单测抓到过）。
+      let consumedStart = 0
+      if (start > 0 && ((windowBytes[0] ?? 0) & 0xc0) === 0x80) {
+        let k = 0
+        while (k < windowBytes.length && (windowBytes[k]! & 0xc0) === 0x80) k += 1
+        consumedStart = k
+        text = windowBytes.subarray(k).toString('utf8')
+      }
+      // 终点也可能落在多字节字符中间：Node 的 Buffer.toString 会在末尾补一个替换字符（U+FFFD）。
+      // 真机/单测都抓到过 —— 必须把它剥掉，否则模型会看到乱码。（起点侧同理，见上面的续字节丢弃）
+      if (end < totalBytes && text.endsWith('\uFFFD')) text = text.slice(0, -1)
+      text = fitUtf8Prefix(text, utf8ByteLength(text))
+      const nextByte = start + consumedStart + utf8ByteLength(text)
+      const more = nextByte < totalBytes
+      const notice = more
+        ? buildContinuationNotice({
+            originalBytes: totalBytes,
+            maxBytes: READ_TEXT_MAX_BYTES,
+            strategy: 'prefix_lines',
+            returnedBodyLines: 1,
+            resumeCall: `read_file(path="${rel}", byteOffset=${nextByte}, byteLength=${byteLength ?? 24576})`
+          })
+        : ''
+      const finalText = notice ? `${text}\n\n${notice}` : text
+      return {
+        ok: true,
+        summary: `已按字节窗口读取 ${rel}（第 ${start}–${nextByte} 字节 / 共 ${totalBytes} 字节）${more ? '，后续请用提示里的 byteOffset 继续' : ''}`,
+        data: {
+          path: rel,
+          size: totalBytes,
+          truncated: more,
+          byteOffset: start,
+          byteLength: utf8ByteLength(text),
+          content: finalText,
+          ...(more
+            ? {
+                truncation: {
+                  truncated: true,
+                  hasMore: true,
+                  strategy: 'prefix_lines' as const,
+                  originalBytes: totalBytes,
+                  returnedBytes: utf8ByteLength(finalText),
+                  maxBytes: READ_TEXT_MAX_BYTES,
+                  returnedBodyLines: 1,
+                  offsetUnit: 'byte' as unknown as 'line',
+                  nextByteOffset: nextByte
+                }
+              }
+            : {})
+        }
+      }
+    }
 
     // 按 offset/length 先切出请求的窗口（整行），再对该窗口做字节预算
     const startLine = Math.min(offset, allLines.length + 1)

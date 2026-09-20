@@ -116,6 +116,27 @@ async function onAutoSwitch(e: Event): Promise<void> {
   }
 }
 
+// ---------- M8-2 上下文调试（最小实现：只展示估算与最近裁切） ----------
+const ctxDebug = ref<{ estimatedTokens: number; triggerTokens: number; records: { round: number; action: string; at: number }[] } | null>(null)
+
+async function loadContextDebug(): Promise<void> {
+  try {
+    ctxDebug.value = (await window.api.agent.contextGet()) as typeof ctxDebug.value
+  } catch {
+    /* 未登录/无会话时静默 */
+  }
+}
+
+const ctxDebugText = computed(() => {
+  const d = ctxDebug.value
+  if (!d) return '暂无数据'
+  const last = d.records.length > 0 ? d.records[d.records.length - 1]! : null
+  return (
+    `当前会话估算 ${d.estimatedTokens} tokens（触发线 ${d.triggerTokens}）｜` +
+    (last ? `最近裁切：第 ${last.round} 轮 ${last.action === 'drop_group' ? '整组' : '正文'}（${new Date(last.at).toLocaleTimeString()}）` : '尚未发生裁切')
+  )
+})
+
 onMounted(() => {
   load().catch(() => undefined)
   offState = window.api.update.onStateChange((s) => {
@@ -191,6 +212,12 @@ onUnmounted(() => {
     <p class="hint section-note">
       提示式更新：发现新版本后由你确认下载，安装前再次确认，全程不会自动安装。
     </p>
+    <!-- M8-2 上下文调试（最小实现，不做大 UI） -->
+    <details class="ctx-debug" data-testid="context-debug">
+      <summary>上下文用量（调试）</summary>
+      <p class="hint tiny" data-testid="context-debug-text">{{ ctxDebugText }}</p>
+      <button class="ghost-btn" data-testid="context-debug-refresh" @click="loadContextDebug">刷新</button>
+    </details>
   </section>
 </template>
 
@@ -283,3 +310,27 @@ onUnmounted(() => {
   border-top: none;
 }
 </style>
+
+.ctx-debug {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
+}
+.ctx-debug > summary {
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.hint.tiny {
+  font-size: var(--font-size-xs);
+  margin: var(--space-1) 0;
+}
+.ghost-btn {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+}

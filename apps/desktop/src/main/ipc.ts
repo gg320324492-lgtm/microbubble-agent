@@ -481,15 +481,19 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
                 system: buildAgentSystemPrompt(workspace.getRoot()),
                 emit: (evt) => {
                   const base = { sessionId, messageId: assistantId } as const
-                  const payload: ChatStreamEvent =
+                  const payload: ChatStreamEvent | null =
                     evt.kind === 'text'
                       ? { type: 'delta', ...base, delta: evt.delta }
                       : evt.kind === 'thinking'
                         ? { type: 'thinking', ...base, delta: evt.delta }
                         : evt.kind === 'round'
                           ? { type: 'round', ...base, round: evt.round, label: evt.label }
-                          : { type: 'tool', ...base, call: evt.call }
-                  win?.webContents.send(IPC.CHAT_STREAM_EVENT, payload)
+                          : evt.kind === 'tool'
+                            ? { type: 'tool', ...base, call: evt.call }
+                            : null
+                  // M8-2 context 事件不进对话流（避免干扰用户），只落日志供排查；
+                  // 当前估算与最近裁切通过 agent:context-get 供设置页调试区读取
+                  if (payload) win?.webContents.send(IPC.CHAT_STREAM_EVENT, payload)
                 }
               })
               // V1 用量记账：本会话累计（迁移 010 两列；每轮 agent 完成即累加）
@@ -1203,6 +1207,14 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   // ---------- 工作区（Agent 文件操作地基） ----------
 
   ipcMain.handle(IPC.WORKSPACE_GET, (): IpcResult<{ root: string | null }> => tryRun(() => ({ root: workspace.getRoot() })))
+
+  // M8-2 可观测性：上下文估算与最近裁切（设置页调试区）
+  ipcMain.handle(IPC.AGENT_CONTEXT_GET, (): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      return agentLoop.contextSnapshot()
+    })
+  )
 
   ipcMain.handle(IPC.WORKSPACE_SET, async (): Promise<IpcResult<string | null>> => {
     try {
