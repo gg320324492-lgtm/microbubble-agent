@@ -114,7 +114,7 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 7 类之
   规则 → suggested_tools 常空, nudge 代码强制补查时无工具可执行, 只能退回文本指令被模型无视）
 - 任何场景 confidence < 0.5 时 → suggested_tools 设为 []（避免 hallucinated tools）
 
-用户问题：{question}
+用户问题：{question} /no_think
 """
 
 

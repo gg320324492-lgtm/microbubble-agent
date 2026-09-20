@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     # 2026-07-02 openai_compat backend dispatch
     # LLM_BACKEND: "anthropic" (默认) / "openai_compat" (mimo /v1, 抗 429) / "ollama" (本地)
     LLM_BACKEND: str = "anthropic"
+    # 2026-09-21: qwen3.8 默认思考路径会间歇性空响应/超长烧写 (零字回答实锤),
+    # ollama 后端经 extra_body 传 think=False 直接出正文; 深度思考需求可置 false
+    OLLAMA_DISABLE_THINKING: bool = True
     # openai_compat 端点 (mimo /v1, 抗 anthropic 协议 429 限流)
     LLM_OPENAI_COMPAT_BASE_URL: str = ""
     LLM_OPENAI_COMPAT_API_KEY: str = ""

@@ -1063,6 +1063,15 @@ class AgenticLoop:
                     label=f"📋 计划完成 ({success_count}/{len(planned)})",
                 )
 
+            # ===== 2026-09-21: qwen3.8 思考模式根治 =====
+            # 默认思考路径会间歇性把整轮生成耗在 reasoning 里且 content 为空
+            # (零字回答 + 分钟级挂起 + ollama runner 楔死三次实锤)。快速/平衡
+            # 模式用 /no_think 软开关直接出正文 (直接探测实测正文稳定); 深度
+            # 模式保留完整思考。对其他模型该 token 无约定语义, 无副作用。
+            if not (_has_thinking_config(ctx) and ctx.thinking_config.mode == "deep"):
+                if "/no_think" not in system:
+                    system = system + " /no_think"
+
             # ===== Phase 1: 工具循环 =====
             tool_loop_failed = False  # 2026-09-02 P0: LLM 层炸 (如模型无 tools capability) 时置位, synthesis 据此注入反谎报声明
             # 2026-09-09 (实测第 1 组第二轮 R2/R4): qwen3:14b 在 data_query 高置信度下
@@ -1462,6 +1471,10 @@ class AgenticLoop:
                 yield critique_to_sse_event(critique)
                 accumulated_text = retry_text
 
+            # 2026-07-13 #P1 修复: final_text 在 try 内定义, except 块 (异常兜底) 引用会 UnboundLocalError
+            # 提前初始化, 让 except 块安全访问 (L1360 `not final_text.strip()`)
+            final_text = ""
+
             # ===== Phase 4.4: 空综合强制重试 (2026-09-20) =====
             # 事故: "搜一下吧" 等 follow_up 轮 synthesis 返回空正文, 且 critique
             # 对空文本打分失败 (score=NULL → should_retry=False) → 重试机制整条
@@ -1481,9 +1494,25 @@ class AgenticLoop:
                     + "\n\n【强制要求】上一轮你没有生成任何可见回答正文。本次必须直接输出给用户阅读的中文回答正文；"
                     "即使要说明限制或反问，也必须写出完整文字，严禁输出空回复。"
                 )
+                # 2026-09-21 根因实锤: qwen3.8 默认思考路径会间歇性把整轮生成耗在
+                # reasoning 里且 content 为空 (直接探测: 默认 → content="", 追加
+                # /no_think → 正文正常)。重试时对最后一条 user 消息追加软开关,
+                # 强制跳过思考直接出正文 (qwen3 家族约定, 对其他模型无害)。
+                retry_messages = list(messages)
+                for _i in range(len(retry_messages) - 1, -1, -1):
+                    _m = retry_messages[_i]
+                    # 2026-09-21 实测: content 可能是 Anthropic 块列表 (非 str), 须防护
+                    if _m.get("role") == "user" and isinstance(_m.get("content"), str):
+                        _c = _m["content"].rstrip()
+                        if "/no_think" not in _c:
+                            retry_messages[_i] = {
+                                **_m,
+                                "content": (_c + " /no_think").strip(),
+                            }
+                        break
                 empty_retry_text = ""
                 async for evt in self._synthesize_stream(
-                    messages=messages,
+                    messages=retry_messages,
                     system=_empty_retry_system,
                     llm=llm,
                     thinking_config=ctx.thinking_config,
@@ -1501,9 +1530,6 @@ class AgenticLoop:
                     yield StreamEvent(type="text_delta", delta=accumulated_text)
                     logger.error("[Phase 4.4] 重试仍为空, 已下发服务端保底文本")
 
-            # 2026-07-13 #P1 修复: final_text 在 try 内定义, except 块 (异常兜底) 引用会 UnboundLocalError
-            # 提前初始化, 让 except 块安全访问 (L1360 `not final_text.strip()`)
-            final_text = ""
 
             # ===== Phase 4.5: 在 done 之前重算 text_without_json（retry 后文本可能已变）=====
             # 2026-06-15 修复元话语泄露：把"剥除 JSON 段 + fake tool_call + 元话语"的最终干净文本
@@ -1737,6 +1763,32 @@ class AgenticLoop:
             # llm.stream() 是 AsyncIterator（不是 async context manager），
             # 正确用法：async for 拿 stream 后再 async with
             # 2026-06-14 Stage 5 收尾：mimo 等思考型模型显式禁用 thinking（避免只返 thinking）
+            # 2026-09-21: ollama 后端综合改走【非流式】— 0.33.3 的 /v1 流式路径忽略
+            # think=false 且 reasoning-only 流导致空正文 (实测: 非流式 think=false
+            # 0.99s 出正文; 流式同参 7min 挂起)。全文到手后切片成 text_delta 下发,
+            # 上游持久化/UI 协议不变。
+            if getattr(settings, "LLM_BACKEND", "") == "ollama" and getattr(
+                settings, "OLLAMA_DISABLE_THINKING", True
+            ):
+                resp = await llm.complete(
+                    **kwargs,
+                    model=chosen_model,
+                )
+                accumulated = "".join(
+                    getattr(_blk, "text", "")
+                    for _blk in (getattr(resp, "content", None) or [])
+                    if getattr(_blk, "type", "") == "text"
+                )
+                for _i in range(0, len(accumulated), 32):
+                    yield StreamEvent(type="text_delta", delta=accumulated[_i : _i + 32])
+                text_without_json, rich_blocks = _extract_rich_block_json(accumulated)
+                text_without_json = _strip_fake_tool_calls(text_without_json)
+                text_without_json = _strip_qwen3_section_markers(text_without_json)
+                text_without_json = _strip_json_envelope(text_without_json)
+                text_without_json = _strip_meta_thinking(text_without_json)
+                for _rb in rich_blocks:
+                    yield StreamEvent(type="rich_block", block=_rb)
+                return
             async for stream in llm.stream(
                 **kwargs,
                 model=chosen_model,

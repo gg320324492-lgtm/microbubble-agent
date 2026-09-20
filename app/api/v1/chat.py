@@ -460,11 +460,39 @@ async def chat_stream_route(
         前端回来经 /chat/generation-status 轮询发现并拉取 (ChatGPT 行为)。
         """
         from app.core.database import async_session
+        from app.core import llm as _llm_mod
         _ACTIVE_GENERATIONS.add(gen_key)
+        loop = asyncio.get_running_loop()
+        _state = {"last_event": loop.time()}
+
+        async def _watchdog_keepalive() -> None:
+            """2026-09-21: 双信号续期看门狗 — ①LLM 持续吐 chunk (含纯 reasoning,
+            不产生业务事件); ②最近 60s 内有过业务事件 (静默工具如 web_search 执行中)。
+            两者都不满足才让 420s 倒计时走完 = 只杀真停滞。reschedule 撞到期沿的
+            RuntimeError 捕获忽略 (真到期时上层 TimeoutError 走 partial 落库)。"""
+            while True:
+                await asyncio.sleep(10)
+                try:
+                    llm_fresh = _llm_mod.llm_stream_activity_seconds_ago() < 30
+                    event_fresh = (loop.time() - _state["last_event"]) < 60
+                    if llm_fresh or event_fresh:
+                        try:
+                            _watchdog.reschedule(loop.time() + 420)
+                        except RuntimeError:
+                            pass
+                except Exception:
+                    continue
+
+        _keeper = asyncio.create_task(_watchdog_keepalive())
         try:
             async with async_session() as produce_db:
-                # 600s 看门狗: 超时走 agent 的 CancelledError 路径落库 partial
-                async with asyncio.timeout(600):
+                # 看门狗 v2 (2026-09-21): 语义从"总时长上限"改为"停滞检测"——
+                # 每收到一个事件就续期 420s。冷模型加载(~100s) + 慢工具
+                # (web_search 可数分钟) + 空综合重试链是合法长任务, 总上限会
+                # 误杀 (实测 9.4min 正常轮被 600s 总上限击杀); 420s 无任何
+                # 事件产出才是真卡死。
+                loop = asyncio.get_running_loop()
+                async with asyncio.timeout(420) as _watchdog:
                     async for event in v2_agent.chat_stream(
                         message=request.message,
                         session_id=request.session_id,
@@ -480,6 +508,7 @@ async def chat_stream_route(
                         # 2026-09-03: 网页搜索模式透传
                         web_search=request.web_search,
                     ):
+                        _state["last_event"] = loop.time()
                         await queue.put(("ev", event))
             await queue.put(("done", None))
         except asyncio.CancelledError:
@@ -492,6 +521,7 @@ async def chat_stream_route(
             )
             await queue.put(("done", None))
         finally:
+            _keeper.cancel()
             _ACTIVE_GENERATIONS.discard(gen_key)
             await queue.put(("exit", None))  # 双保险: 消费者永不挂死
 

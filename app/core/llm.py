@@ -19,6 +19,37 @@ import re
 import time
 from collections import OrderedDict
 from threading import Lock
+
+# 2026-09-21: LLM 流式 chunk 级活跃时间戳 (含 reasoning chunk) — 供断线续答
+# 看门狗区分"模型持续思考中"与"真停滞": reasoning chunk 不产生业务事件,
+# 但它是活跃产出, 不能算停滞
+LAST_STREAM_CHUNK_MONOTONIC: float = 0.0
+
+
+def llm_stream_activity_seconds_ago() -> float:
+    """距最近一次收到 LLM 流式 chunk 的秒数 (无任何 chunk 记录时返回大数)"""
+    if LAST_STREAM_CHUNK_MONOTONIC <= 0.0:
+        return 1e9
+    return max(0.0, time.monotonic() - LAST_STREAM_CHUNK_MONOTONIC)
+
+
+def apply_ollama_no_think(params: dict) -> dict:
+    """2026-09-21: qwen3.8 on ollama 0.33 /v1 默认思考路径会间歇性把整轮生成
+    耗在 reasoning 且 content 为空 (零字回答 / 7min 挂起 / runner 楔死三连实锤,
+    /no_think 文本软开关在 /v1 无效)。think=False 实测 0.99s 直接出正文。
+    仅 ollama 后端注入 (openai SDK 经 extra_body 透传为顶层字段);
+    深度思考需求可置 OLLAMA_DISABLE_THINKING=false 关闭。"""
+    try:
+        if (
+            getattr(settings, "OLLAMA_DISABLE_THINKING", True)
+            and getattr(settings, "LLM_BACKEND", "") == "ollama"
+        ):
+            extra = params.setdefault("extra_body", {})
+            if isinstance(extra, dict):
+                extra.setdefault("think", False)
+    except Exception:
+        pass
+    return params
 from typing import Any, AsyncIterator, Optional
 
 import anthropic
@@ -114,6 +145,7 @@ class _OAIStreamShim:
         return self
 
     async def __anext__(self):
+        global LAST_STREAM_CHUNK_MONOTONIC
         if not self._entered:
             raise RuntimeError("必须 'async with stream as s:' 后再迭代")
         # 优先返回 buffer 里的 events
@@ -126,6 +158,8 @@ class _OAIStreamShim:
                 chunk = await self._oai_iter.__anext__()
             except StopAsyncIteration:
                 raise StopAsyncIteration
+            # 2026-09-21: 每个 chunk 都记活跃 (reasoning chunk 不产生业务 event)
+            LAST_STREAM_CHUNK_MONOTONIC = time.monotonic()
             chunk_dict = self._chunk_to_dict(chunk)
             events = openai_streaming_delta_to_anthropic_events(
                 chunk_dict, "", self._tool_acc
@@ -134,6 +168,15 @@ class _OAIStreamShim:
                 # 第一个 event 立即返, 后续 buffer 下次返
                 self._buffered = events[1:]
                 return _OAIEventShim(events[0])
+            # 2026-09-21: 纯 reasoning 烧写上限 — 只出思考不出正文/工具超过
+            # 4000 字, 提前收束 (上层走空综合兜底 /no_think 重试), 避免单轮
+            # 思考拖数分钟 (实测 reasoning_chars ~1900 时正文已恒为空)
+            if getattr(self._tool_acc, "reasoning_chars", 0) > 4000:
+                logger.warning(
+                    f"OAI stream: 纯 reasoning 超 4000 字无正文, 提前收束 "
+                    f"(reasoning_chars={getattr(self._tool_acc, 'reasoning_chars', 0)})"
+                )
+                raise StopAsyncIteration
         # 1000 个连续空 chunk — 异常但不该发生, 优雅退出
         # 真发生说明模型永久卡在 thinking 不出 content (可能 max_tokens 触顶)
         logger.warning(
@@ -579,7 +622,9 @@ class LLMClient:
                 _span = self._trace_call(m, messages, system, "complete_openai", max_tokens=max_tokens, temperature=temperature)
                 _span.__enter__()
                 try:
-                    resp = await self.openai_client.chat.completions.create(**params)
+                    resp = await self.openai_client.chat.completions.create(
+                        **apply_ollama_no_think(params)
+                    )
                 finally:
                     _span.update(output={"model": m, "status": "ok"})
                     _span.__exit__(None, None, None)
@@ -654,7 +699,9 @@ class LLMClient:
         timeout = max(1, int(getattr(settings, "OLLAMA_FIRST_TOKEN_TIMEOUT", 60)))
         try:
             return await asyncio.wait_for(
-                self.openai_client.chat.completions.create(**params),
+                self.openai_client.chat.completions.create(
+                    **apply_ollama_no_think(params)
+                ),
                 timeout=timeout,
             )
         except asyncio.TimeoutError:
@@ -734,7 +781,9 @@ class LLMClient:
                 try:
                     if self.backend == "ollama":
                         # 2026-09-18: 首 token 看门狗 + 云端降级 (见方法 docstring)
-                        return await self._stream_ollama_first_token_guard(params)
+                        return await self._stream_ollama_first_token_guard(
+                            apply_ollama_no_think(params)
+                        )
                     return await self.openai_client.chat.completions.create(**params)
                 except Exception as e:
                     # P0-3 2026-07-03: mimo 429 fallback 到 ollama (流式)
