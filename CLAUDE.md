@@ -347,9 +347,10 @@ chat 等丢失 ~1500 行 2 天未察觉。今日从 backups/microbubble_20260826
 --column-inserts + ON CONFLICT(id) 全量补插恢复 (minio 5.4GB 二进制始终完好)。
 恢复表: knowledge 531 / folders 321 / members 37 / chat 588+231 / knowledge_relations
 212 / formulas 36 / images 17 / extractions 24 / entity_co_occurrence 234 / file_comments 46。
-**DFT 计算系统整体外置
 **DFT 计算系统整体外置 `E:\dft-service`** (独立 git repo, 5 后端真算闭环, MCP 已注册
-user 作用域), 本仓库只剩 HTTP 代理 + agent 工具 (7 个) — 详见 dft-service/CLAUDE.md。
+user 作用域)。**2026-09-13 (commit 1ae17cb83) 本仓库侧的 HTTP 代理 / agent 工具 (7 个) /
+DftView 前端已全部移除 — DFT 与本项目已无代码关联**; 残留仅 alembic 099 孤儿表 dft_jobs
+(迁移链占用不可删) 与 E:\dft-service 独立仓库。详见 dft-service/CLAUDE.md。
 
 ### 类 20 新增 (永久铁律)
 - **类 20.212**: 清理"残留"容器/compose 栈前必须 `docker inspect` 查 mounts + 生产
@@ -384,7 +385,7 @@ user 作用域), 本仓库只剩 HTTP 代理 + agent 工具 (7 个) — 详见 d
   8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能); glitchtip + vision-mcp 重启前即 unhealthy;
   `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1` Exited 4 周残留并存。
 
-## 当前状态 (2026-08-30 DFT 系统外置 E:\dft-service — 8 缺口修复 + GROMACS 链路 6 真 bug, 4 后端真算验证)
+## 当前状态 (2026-08-30 DFT 系统外置 E:\dft-service — 8 缺口修复 + GROMACS 链路 6 真 bug, 4 后端真算验证) 【历史记录: 本仓库侧集成已于 2026-09-13 全部移除, 见 commit 1ae17cb83】
 
 DFT/MD 计算系统整体迁出为独立服务 `E:\dft-service\` (git repo, 2 commits, v1.0.0)。本仓库只剩 HTTP 编排层, 0 计算代码。
 
