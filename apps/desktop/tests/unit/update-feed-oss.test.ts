@@ -19,9 +19,9 @@ const PACKED = { isPackaged: true }
 
 describe('feed 常量 — OSS 直链 + 域名一行切换点', () => {
   it('UPDATE_FEED_BASE = OSS 主机 + releases/ 前缀，末位斜杠必需', () => {
-    expect(UPDATE_FEED_HOST).toBe('https://mnb-workbench-releases.oss-cn-beijing.aliyuncs.com')
+    expect(UPDATE_FEED_HOST).toBe('https://releases.mnb-lab.cn')
     expect(UPDATE_FEED_PREFIX).toBe('releases/')
-    expect(UPDATE_FEED_BASE).toBe('https://mnb-workbench-releases.oss-cn-beijing.aliyuncs.com/releases/')
+    expect(UPDATE_FEED_BASE).toBe('https://releases.mnb-lab.cn/releases/')
     expect(UPDATE_FEED_BASE.endsWith('/')).toBe(true)
   })
 })

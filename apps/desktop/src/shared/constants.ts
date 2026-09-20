@@ -1,7 +1,7 @@
 // 主进程常量 — 窗口尺寸/版本号（与骨架设计 §5 安全基线配套）
 export const APP_NAME = '小气 · 科研工作台'
 /// 发布版本 — 每版与 package.json version 同步更新（M6 可改为构建期自动注入）
-export const APP_VERSION = '1.0.1'
+export const APP_VERSION = '1.1.0'
 export const WINDOW_MIN_WIDTH = 1024
 export const WINDOW_MIN_HEIGHT = 640
 export const SESSION_TTL_MS = 60 * 60 * 1000
@@ -13,7 +13,7 @@ export const ENV_UPDATE_FEED = 'MNB_UPDATE_FEED'
  *   'https://releases.mnb-lab.cn'
  * 即可让应用侧 feed 整体切到短域名（路径前缀不变）。
  */
-export const UPDATE_FEED_HOST = 'https://mnb-workbench-releases.oss-cn-beijing.aliyuncs.com'
+export const UPDATE_FEED_HOST = 'https://releases.mnb-lab.cn'
 /** feed 稳定路径前缀：latest.yml 与安装包同目录（electron-updater generic provider） */
 export const UPDATE_FEED_PREFIX = 'releases/'
 /** 默认 feed 基址（generic provider，末位斜杠必需） */

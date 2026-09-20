@@ -13,6 +13,77 @@ const creating = ref(false)
 const restoring = ref(false)
 const restorePassword = ref('')
 
+// ---------- 每日定时备份（R-9 B） ----------
+// 节拍与体积闸在主侧纯函数；此处只做配置读写与结果展示（失败可感知：结果行 + 系统通知）
+interface DailyState {
+  enabled: boolean
+  mode: 'first-launch' | 'fixed-time'
+  delayMinutes: number
+  atTime: string
+  keep: number
+}
+interface DailyResult {
+  at: number
+  ok: boolean
+  fileName?: string
+  size?: number
+  deleted?: number
+  error?: string
+}
+const daily = ref<DailyState>({ enabled: false, mode: 'first-launch', delayMinutes: 10, atTime: '03:00', keep: 7 })
+const dailyTargetDir = ref('')
+const dailyLast = ref<DailyResult | null>(null)
+const dailyPasswordConfigured = ref(false)
+const dailyRunning = ref(false)
+
+async function loadDaily(): Promise<void> {
+  try {
+    const s = (await window.api.backup.dailyGet()) as {
+      config: DailyState
+      targetDir: string
+      last: DailyResult | null
+      passwordConfigured: boolean
+    }
+    daily.value = { ...s.config }
+    dailyTargetDir.value = s.targetDir ?? ''
+    dailyLast.value = s.last ?? null
+    dailyPasswordConfigured.value = !!s.passwordConfigured
+  } catch {
+    /* 读取失败保持默认，不阻塞设置页 */
+  }
+}
+
+async function saveDaily(patch: Record<string, unknown>): Promise<void> {
+  try {
+    await window.api.backup.dailySet(patch)
+    await loadDaily()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '保存定时备份设置失败')
+  }
+}
+
+async function onDailyRunNow(): Promise<void> {
+  dailyRunning.value = true
+  try {
+    await window.api.backup.dailyRun()
+    await loadDaily()
+    ElMessage.success(dailyLast.value?.ok ? '定时备份已执行一次' : '本次备份未成功，详见下方结果')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '立即备份失败')
+  } finally {
+    dailyRunning.value = false
+  }
+}
+
+const dailyLastText = computed(() => {
+  const r = dailyLast.value
+  if (!r) return '尚未执行'
+  const when = new Date(r.at).toLocaleString()
+  return r.ok
+    ? `${when} · 成功 · ${r.fileName ?? ''}（${fmtSize(r.size ?? 0)}${r.deleted ? ` · 清理 ${r.deleted} 份` : ''}）`
+    : `${when} · 失败 · ${r.error ?? '未知原因'}`
+})
+
 // ---------- OSS 配置（M5-2） ----------
 const ossForm = ref({ bucket: '', endpoint: '', prefix: 'desktop-backup/', accessKeyId: '', accessKeySecret: '' })
 const ossConfigured = ref(false)
@@ -284,6 +355,7 @@ async function onDelete(row: MergedSnap): Promise<void> {
 
 onMounted(async () => {
   await loadOssForm()
+  await loadDaily()
   try {
     autoOnExit.value = (await window.api.settings.get('backup.autoOnExit')) === true
     uploadAfterCreate.value = (await window.api.settings.get('backup.uploadAfterCreate')) === true
@@ -307,6 +379,84 @@ onMounted(async () => {
     <div class="switch-row">
       <label><input type="checkbox" v-model="uploadAfterCreate" data-testid="upload-switch" @change="onUploadSwitchChange" /> 备份后上传云端</label>
       <label><input type="checkbox" v-model="autoOnExit" data-testid="auto-exit-switch" @change="onAutoExitChange" /> 退出时自动备份</label>
+    </div>
+
+    <!-- 每日定时备份（R-9 B） -->
+    <div class="daily-section" data-testid="daily-backup">
+      <h3>每日定时备份</h3>
+      <p class="hint">
+        应用运行中每天自动备份一次（需先配置上方「备份密码」）。错过不补跑，第二天再触发。
+      </p>
+      <div class="switch-row">
+        <label>
+          <input
+            type="checkbox"
+            data-testid="daily-switch"
+            :checked="daily.enabled"
+            @change="saveDaily({ enabled: ($event.target as HTMLInputElement).checked })"
+          />
+          开启每日定时备份
+        </label>
+      </div>
+      <div class="form-row">
+        <label>触发方式</label>
+        <select data-testid="daily-mode" :value="daily.mode" @change="saveDaily({ mode: ($event.target as HTMLSelectElement).value })">
+          <option value="first-launch">当天首次启动后延迟</option>
+          <option value="fixed-time">每天固定时刻</option>
+        </select>
+      </div>
+      <div v-if="daily.mode === 'first-launch'" class="form-row">
+        <label>延迟（分钟）</label>
+        <input
+          type="number"
+          min="0"
+          max="1440"
+          data-testid="daily-delay"
+          :value="daily.delayMinutes"
+          @change="saveDaily({ delayMinutes: Number(($event.target as HTMLInputElement).value) })"
+        />
+      </div>
+      <div v-else class="form-row">
+        <label>固定时刻</label>
+        <input
+          type="time"
+          data-testid="daily-time"
+          :value="daily.atTime"
+          @change="saveDaily({ atTime: ($event.target as HTMLInputElement).value })"
+        />
+      </div>
+      <div class="form-row">
+        <label>保留份数</label>
+        <input
+          type="number"
+          min="0"
+          max="100"
+          data-testid="daily-keep"
+          :value="daily.keep"
+          @change="saveDaily({ keep: Number(($event.target as HTMLInputElement).value) })"
+        />
+      </div>
+      <p class="hint">0 = 不清理；清理只删本应用生成的 workbench-*.mnbbak，目录内其它文件不动。</p>
+      <div class="form-row">
+        <label>备份目标目录</label>
+        <input
+          v-model="dailyTargetDir"
+          data-testid="daily-target"
+          placeholder="留空 = 本机默认目录；可填共享目录如 \\\\server\\backup\\你的名字"
+          @change="saveDaily({ targetDir: dailyTargetDir })"
+        />
+      </div>
+      <div class="daily-actions">
+        <button class="primary-btn" data-testid="daily-run" :disabled="dailyRunning" @click="onDailyRunNow">
+          {{ dailyRunning ? '备份中…' : '立即备份一次' }}
+        </button>
+        <span class="daily-last" :class="{ 'is-fail': dailyLast && !dailyLast.ok }" data-testid="daily-last">
+          {{ dailyLastText }}
+        </span>
+      </div>
+      <p v-if="!dailyPasswordConfigured" class="hint warn-text">
+        未配置备份密码 —— 定时备份不会执行。请在上方设置密码后开启。
+      </p>
     </div>
 
     <!-- OSS 配置（M5-2） -->
@@ -379,3 +529,33 @@ onMounted(async () => {
 .mini-btn:disabled { opacity: 0.5; cursor: default; }
 .mini-btn.danger:hover { border-color: var(--color-danger, #d64545); color: var(--color-danger, #d64545); }
 </style>
+
+/* R-9 B 每日定时备份区块 */
+.daily-section {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+.daily-section h3 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-2);
+}
+.daily-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-2);
+}
+.daily-last {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.daily-last.is-fail {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-medium);
+}
+.warn-text {
+  color: var(--color-warning-text);
+}

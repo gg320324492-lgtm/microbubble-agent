@@ -209,3 +209,18 @@
     padding: 36px 28px;
   }
 }
+
+/* R-9 A1：auth 页窗口控制栏 —— frame:false 下登录/注册页此前无任何窗口控制，用户无法
+   最小化或关闭。整条为拖拽区，右侧三键豁免拖拽（复用通用 WindowControls）。 */
+.auth-windowbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 10;
+  -webkit-app-region: drag;
+}

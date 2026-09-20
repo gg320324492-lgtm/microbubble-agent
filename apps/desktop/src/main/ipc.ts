@@ -37,6 +37,8 @@ import { DesktopIntegrationService } from './services/desktop/desktop-integratio
 import { UpdateService, type UpdaterPort } from './services/update/update.service'
 import { isUpdateChannelAvailable } from './services/update/feed-config'
 import { BackupService } from './services/backup/backup.service'
+import { DailyBackupService } from './services/backup/daily-backup.service'
+import { localDateKey, type DailyBackupResult } from './services/backup/daily-backup'
 import {
   EXIT_PASSWORD_ENC_KEY,
   EXIT_PASSWORD_KEY,
@@ -1255,6 +1257,59 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     }
     return resolved.password
   }
+
+  // ---------- 每日定时备份（R-9 B）----------
+  // 端口全部由既有能力注入：密码复用「退出自动备份」的 safeStorage 链路，打包/清理复用
+  // BackupService，通知复用 M4 的 desktopNotify。节拍与体积闸在 daily-backup.ts（纯函数）。
+  const DAILY_KEY_CONFIG = 'backup.daily.config'
+  const DAILY_KEY_LAST = 'backup.daily.last'
+  const DAILY_KEY_TARGET = 'backup.daily.targetDir'
+  const currentUserId = (): string | null => {
+    try {
+      return auth.requireUser().id
+    } catch {
+      return null // 未登录时不触发定时备份
+    }
+  }
+  const dailyBackup = new DailyBackupService({
+    readConfig: () => settings.get(DAILY_KEY_CONFIG, currentUserId() ?? undefined),
+    writeConfig: (cfg) => settings.set(DAILY_KEY_CONFIG, cfg, currentUserId() ?? undefined),
+    // 日期键由 last.at 用**本地时区**推导（与 daily-backup 的 localDateKey 同口径，
+    // 不能用 toISOString —— 那是 UTC，跨时区会错一天）
+    readLastRunDate: () => {
+      const r = settings.get(DAILY_KEY_LAST, currentUserId() ?? undefined) as DailyBackupResult | null
+      return r && typeof r.at === 'number' ? localDateKey(r.at) : null
+    },
+    // 日期键不单独落库：它就是 last.at 的本地日期投影，避免两个键互相漂移
+    writeLastRunDate: () => undefined,
+    readLastResult: () => (settings.get(DAILY_KEY_LAST, currentUserId() ?? undefined) as DailyBackupResult | null) ?? null,
+    writeLastResult: (r) => settings.set(DAILY_KEY_LAST, r, currentUserId() ?? undefined),
+    getPassword: () => {
+      const uid = currentUserId()
+      return uid ? readExitPassword(uid) : null
+    },
+    getTargetDir: () => String(settings.get(DAILY_KEY_TARGET, currentUserId() ?? undefined) ?? '').trim() || backupDir,
+    createBackup: (o) => backup.createBackup(o),
+    applyRetention: (dir, o) => backup.applyRetention(dir, o),
+    measureFilesBytes: () => backup.measureFilesBytes(),
+    notify: (title, body) => desktopNotify(title, body, () => undefined),
+    log: (m) => console.log(`[daily-backup] ${m}`)
+  })
+  dailyBackup.start()
+
+  ipcMain.handle(IPC.BACKUP_DAILY_GET, (): IpcResult<unknown> => tryRun(() => dailyBackup.snapshot()))
+  ipcMain.handle(IPC.BACKUP_DAILY_SET, (_e, p): IpcResult<unknown> =>
+    tryRun(() => {
+      const patch = (p ?? {}) as Record<string, unknown>
+      if (typeof patch.targetDir === 'string') {
+        settings.set(DAILY_KEY_TARGET, patch.targetDir.trim(), currentUserId() ?? undefined)
+      }
+      return dailyBackup.updateConfig(patch)
+    })
+  )
+  ipcMain.handle(IPC.BACKUP_DAILY_RUN, async (): Promise<IpcResult<unknown>> =>
+    tryRun(() => dailyBackup.runNow('manual'))
+  )
 
   // ---------- 自动更新（M6-1）----------
   ipcMain.handle(IPC.UPDATE_STATE_GET, (): IpcResult<UpdateState> => tryRun(() => update.snapshot()))

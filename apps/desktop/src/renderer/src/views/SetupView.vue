@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import logoUrl from '../assets/logo.png'
+import WindowControls from '../components/WindowControls.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -36,10 +37,14 @@ async function onSubmit(): Promise<void> {
     loading.value = false
   }
 }
+const api = window.api // 模板作用域内不可直接访问 window，桥接引用
 </script>
 
 <template>
   <main class="auth-root">
+  <div class="auth-windowbar" @dblclick="api.window.toggleMaximize()">
+    <WindowControls variant="page" />
+  </div>
     <section class="auth-shell" aria-labelledby="setup-title">
       <aside class="auth-identity" data-testid="login-identity" aria-label="小气科研工作台 产品说明">
         <div class="auth-brand"><img class="auth-brand-logo" :src="logoUrl" alt="微纳米气泡课题组" /><span>MicroBubble Lab</span></div>

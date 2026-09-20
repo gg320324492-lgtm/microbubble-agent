@@ -125,6 +125,10 @@ const api = {
       invoke(IPC.BACKUP_RESTORE, { password, backupFile }),
     list: (targetDir: string): Promise<unknown[]> => invoke(IPC.BACKUP_LIST, { targetDir }),
     deleteLocal: (fileName: string): Promise<boolean> => invoke(IPC.BACKUP_DELETE_LOCAL, { fileName }),
+    // R-9 B 每日定时备份：配置读取/写入 + 立即执行一次
+    dailyGet: (): Promise<unknown> => invoke(IPC.BACKUP_DAILY_GET),
+    dailySet: (patch: Record<string, unknown>): Promise<unknown> => invoke(IPC.BACKUP_DAILY_SET, patch),
+    dailyRun: (): Promise<unknown> => invoke(IPC.BACKUP_DAILY_RUN),
     oss: {
       saveConfig: (cfg: { bucket: string; endpoint: string; prefix: string; accessKeyId: string; accessKeySecret: string }): Promise<void> =>
         invoke(IPC.BACKUP_OSS_SAVE_CONFIG, cfg),

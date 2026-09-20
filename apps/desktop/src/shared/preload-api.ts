@@ -121,6 +121,12 @@ export interface PreloadApi {
     restore(password: string, backupFile: string): Promise<{ needRestart: boolean }>
     list(targetDir: string): Promise<{ fileName: string; size: number; appVersion: string; createdAt: number; path: string }[]>
     deleteLocal(fileName: string): Promise<boolean>
+    /** R-9 B 每日定时备份：读取配置 + 最近结果 + 目标目录 + 密码是否已配置 */
+    dailyGet(): Promise<unknown>
+    /** R-9 B 写入定时备份配置（部分更新；targetDir 单独落库） */
+    dailySet(patch: Record<string, unknown>): Promise<unknown>
+    /** R-9 B 立即执行一次定时备份（设置页「立即备份一次」） */
+    dailyRun(): Promise<unknown>
     oss: {
       saveConfig(cfg: { bucket: string; endpoint: string; prefix: string; accessKeyId: string; accessKeySecret: string }): Promise<void>
       test(): Promise<{ ok: boolean; error?: string }>

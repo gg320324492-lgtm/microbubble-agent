@@ -71,6 +71,10 @@ export const IPC = {
   BACKUP_OSS_DOWNLOAD: 'backup:oss-download',
   BACKUP_OSS_DELETE_REMOTE: 'backup:oss-delete-remote',
   BACKUP_DELETE_LOCAL: 'backup:delete-local',
+  /** R-9 B 每日定时备份 */
+  BACKUP_DAILY_GET: 'backup:daily-get',
+  BACKUP_DAILY_SET: 'backup:daily-set',
+  BACKUP_DAILY_RUN: 'backup:daily-run',
   MANUSCRIPTS_LIST: 'manuscripts:list',
   MANUSCRIPTS_GET: 'manuscripts:get',
   MANUSCRIPTS_CREATE: 'manuscripts:create',

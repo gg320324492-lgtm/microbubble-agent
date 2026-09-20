@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, relative } from 'node:path'
 import type { SqlDatabase } from '../../db/adapters'
+import { BACKUP_EXT, buildBackupFileName, selectForRetention } from '@shared/backup-naming'
 import { packContainer, unpackContainer } from './container'
 import type { OssConfig } from './oss.client'
 import { OssClient } from './oss.client'
@@ -16,7 +17,6 @@ export interface LocalBackupInfo {
   path: string
 }
 
-const BACKUP_EXT = '.mnbbak'
 const FILES_SUBDIRS = ['knowledge', 'meetings', 'experiments']
 
 export class BackupService {
@@ -31,6 +31,47 @@ export class BackupService {
   vacuumInto(targetPath: string): void {
     try { rmSync(targetPath, { force: true }) } catch { /* 忽略 */ }
     this.db.exec(`VACUUM INTO '${targetPath.replace(/\\/g, '/')}'`)
+  }
+
+  /**
+   * R-9 B：测量附件目录体积（整内存打包前的硬闸）。
+   * 只统计 collectFileSegments 会真正读入内存的那些子目录，口径与打包一致。
+   */
+  measureFilesBytes(): number {
+    if (!existsSync(this.filesRoot)) return 0
+    let total = 0
+    for (const sub of FILES_SUBDIRS) {
+      const subDir = join(this.filesRoot, sub)
+      if (!existsSync(subDir)) continue
+      collectRecursive(subDir, (_rel, abs) => {
+        try {
+          total += statSync(abs).size
+        } catch {
+          /* 单个文件读不到不影响整体测量 */
+        }
+      })
+    }
+    return total
+  }
+
+  /**
+   * R-9 B：按保留策略清理目标目录。
+   * 只删**本应用命名模式 + 指定前缀**的文件（selectForRetention 保证），用户自己放在
+   * 同一目录的其它文件一律不动 —— 这是父项目「清理规则与产物命名不匹配」教训的直接对策。
+   */
+  applyRetention(targetDir: string, opts: { prefix?: string; keep: number }): { deleted: string[] } {
+    if (!existsSync(targetDir)) return { deleted: [] }
+    const doomed = selectForRetention(readdirSync(targetDir), opts)
+    const deleted: string[] = []
+    for (const name of doomed) {
+      try {
+        rmSync(join(targetDir, name), { force: true })
+        deleted.push(name)
+      } catch {
+        /* 单个删除失败不影响其余（下次再清） */
+      }
+    }
+    return { deleted }
   }
 
   /** 收集 files/ 目录下全部附件（含子目录与中文路径）为段列表 */
@@ -64,12 +105,11 @@ export class BackupService {
 
     const segments: { name: string; data: Buffer }[] = [this.collectSqliteSegment(), ...this.collectFileSegments()]
     const now = new Date()
-    const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    const baseName = namePrefix ? `${namePrefix}-${ts}` : `workbench-${ts}`
-    let fileName = `${baseName}.mnbbak`
+    // R-9 B：命名统一走 @shared/backup-naming（与保留清理同一常量来源，防「生成/清理规则不匹配」）
+    let fileName = buildBackupFileName(namePrefix, now, 1)
     let seq = 2
     while (existsSync(join(targetDir, fileName))) {
-      fileName = `${baseName} (${seq}).mnbbak`
+      fileName = buildBackupFileName(namePrefix, now, seq)
       seq++
     }
     const filePath = join(targetDir, fileName)

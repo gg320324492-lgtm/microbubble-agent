@@ -22,7 +22,13 @@ function stubApi(overrides: Partial<Record<string, unknown>> = {}): void {
       },
       app: { info: vi.fn().mockResolvedValue({ version: '0.1.0', platform: 'win32', dbPath: 'x', appName: 'x' }) },
       settings: { get: vi.fn(), set: vi.fn() },
-      window: { minimize: vi.fn(), toggleMaximize: vi.fn(), close: vi.fn() },
+      window: {
+        minimize: vi.fn(),
+        toggleMaximize: vi.fn(),
+        close: vi.fn(),
+        isMaximized: vi.fn().mockResolvedValue(false),
+        onStateChange: vi.fn().mockReturnValue(() => undefined)
+      },
       ...overrides
     }
   })
