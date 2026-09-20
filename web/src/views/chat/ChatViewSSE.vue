@@ -402,6 +402,19 @@ const refreshJumpToTop = () => {
     scrollHeight - clientHeight > TOP_THRESHOLD_PX && scrollTop > TOP_THRESHOLD_PX
 }
 
+// 2026-09-20 同族修正: "跳到最新"同样只在内容可滚动且离底部足够远时显示
+// (事故截图: 短会话贴顶时"跳到最新"也误显, 与"跳到最早"同一无条件置 true 病根)
+const refreshJumpToBottom = () => {
+  if (!messagesRef.value) {
+    showJumpToBottom.value = false
+    return
+  }
+  const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+  showJumpToBottom.value =
+    scrollHeight - clientHeight > STICK_THRESHOLD_PX && distanceFromBottom > STICK_THRESHOLD_PX
+}
+
 // P0-#2 新增: 滚到顶部 (用于"跳到最早"按钮)
 const scrollToTop = async () => {
   await nextTick()
@@ -429,7 +442,7 @@ const onMessagesScroll = () => {
   } else if (distanceFromTop < TOP_THRESHOLD_PX) {
     // P0-#2: 接近顶部 → 关闭"跳到最早"按钮 (已在顶部无需按钮)
     autoStick.value = false
-    showJumpToBottom.value = true
+    refreshJumpToBottom()  // 2026-09-20: 无溢出时不显示"跳到最新" (同族事故修正)
     showJumpToTop.value = false
   } else {
     // P0-#2: 中间区域 → 两个按钮都显示 (用户可自由跳到任一端)
@@ -453,7 +466,7 @@ const jumpToTop = () => {
   if (messagesRef.value) {
     messagesRef.value.scrollTop = 0
   }
-  showJumpToBottom.value = true  // 离底部远 → 显示"跳到最新"按钮
+  refreshJumpToBottom()  // 2026-09-20: 不再无条件置 true
   showJumpToTop.value = false
 }
 
