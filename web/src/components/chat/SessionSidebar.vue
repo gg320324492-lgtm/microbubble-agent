@@ -630,6 +630,8 @@ onUpdated(() => {
             <label class="batch-checkbox" @click.stop>
               <input
                 type="checkbox"
+                :id="'sidebar-check-' + s.id"
+                name="sidebar-check"
                 :checked="selectedIds.has(s.id)"
                 @change="toggleSelect(s.id)"
                 :aria-label="`选择 ${s.title || '新对话'}`"

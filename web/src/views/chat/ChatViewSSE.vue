@@ -983,6 +983,8 @@ function handleSearchKeydown(e: KeyboardEvent) {
               <span class="hsp-ico"><el-icon><Search /></el-icon></span>
               <input
                 ref="searchInputRef"
+                id="chat-header-search"
+                name="chat-header-search"
                 :value="searchQuery"
                 @input="onHeaderSearchInput($event)"
                 @keydown.esc.prevent="onHeaderSearchClear"

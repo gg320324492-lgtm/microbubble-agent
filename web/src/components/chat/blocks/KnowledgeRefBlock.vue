@@ -27,6 +27,10 @@ const props = defineProps({
   },
 })
 
+// 2026-09-20: 排序下拉的实例级唯一 id — 会话内多个引用卡曾共享静态 id
+// kb-ref-sort-select, 触发 Chrome "Duplicate form field id" 审计
+const sortSelectId = `kb-ref-sort-select-${Math.random().toString(36).slice(2, 9)}`
+
 const router = useRouter()
 const { isMobile } = useIsMobile()
 
@@ -297,9 +301,10 @@ onUnmounted(cancelHoverDetail)
       <span class="icon" aria-hidden="true">📚</span>
       <span class="title">{{ block.title || '知识引用' }} ({{ results.length }})</span>
       <div v-if="results.length > 1" class="sort-control">
-        <label class="sort-label" for="kb-ref-sort-select">排序</label>
+        <label class="sort-label" :for="sortSelectId">排序</label>
         <select
-          id="kb-ref-sort-select"
+          :id="sortSelectId"
+          name="kb-ref-sort"
           class="sort-select"
           :value="sortMode"
           aria-label="引用块排序方式"

@@ -62,6 +62,8 @@ const emit = defineEmits<{
     <label v-if="showBatchCheckbox" class="batch-checkbox" @click.stop>
       <input
         type="checkbox"
+        :id="'session-check-' + session.id"
+        name="session-check"
         :checked="selected"
         @change="toggleSelect(session.id)"
         :aria-label="`选择 ${session.title || '新对话'}`"

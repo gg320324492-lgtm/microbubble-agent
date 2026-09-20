@@ -241,6 +241,8 @@ function onEditKeydown(e: KeyboardEvent) {
         <div class="user-edit-wrap">
           <textarea
             ref="editTextareaRef"
+            :id="'msg-edit-' + msg.id"
+            name="msg-edit"
             v-model="editContent"
             class="user-edit-textarea"
             rows="3"
