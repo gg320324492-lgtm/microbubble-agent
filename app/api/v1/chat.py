@@ -381,6 +381,20 @@ async def chat_warmup(current_user: Member = Depends(get_current_user)):
 # 端点：流式 /chat/stream (v2 新)
 # ============================================================================
 
+# 2026-09-20 断线续答: 进行中生成的进程内注册表 (uvicorn 单 worker; 硬杀随进程
+# 消失 = 天然兜底 false)。detached tasks 持引用防 GC。
+_ACTIVE_GENERATIONS: set = set()
+_DETACHED_GENERATION_TASKS: set = set()
+
+
+@router.get("/chat/generation-status")
+async def chat_generation_status(
+    session_id: str = "",
+    current_user: Member = Depends(get_current_user),
+):
+    """断线续答配套: 前端回到会话时轮询本端点, 发现后台仍在生成则继续轮询历史"""
+    return {"generating": f"{current_user.id}:{session_id}" in _ACTIVE_GENERATIONS}
+
 
 @router.post("/chat/stream")
 async def chat_stream_route(
@@ -425,45 +439,94 @@ async def chat_stream_route(
     #   - 没传 (None) → 自动从 chat_session_attached_documents 查用户全局附加
     # 这样前端不用每次发消息都传 ID, 用户全局附加的文档会自动注入
     """
-    async def event_generator() -> AsyncIterator[str]:
-        try:
-            # #P5: 自动从 DB 读用户全局附加 (如果没显式传)
-            effective_attached_ids = request.attached_knowledge_ids
-            if effective_attached_ids is None:
-                from app.models.chat_session_attached_document import ChatSessionAttachedDocument
-                stmt = (
-                    select(ChatSessionAttachedDocument.knowledge_id)
-                    .where(ChatSessionAttachedDocument.user_id == current_user.id)
-                    .limit(8)
-                )
-                effective_attached_ids = [r[0] for r in (await db.execute(stmt)).all()]
+    # #P5: 自动从 DB 读用户全局附加 (如果没显式传) — 提前到路由体执行
+    effective_attached_ids = request.attached_knowledge_ids
+    if effective_attached_ids is None:
+        from app.models.chat_session_attached_document import ChatSessionAttachedDocument
+        stmt = (
+            select(ChatSessionAttachedDocument.knowledge_id)
+            .where(ChatSessionAttachedDocument.user_id == current_user.id)
+            .limit(8)
+        )
+        effective_attached_ids = [r[0] for r in (await db.execute(stmt)).all()]
 
-            async for event in v2_agent.chat_stream(
-                message=request.message,
-                session_id=request.session_id,
-                db=db,
-                user_id=current_user.id,
-                model=request.model,
-                # 2026-07-13 #P1 三档推理模式透传
-                thinking_mode=request.thinking_mode,
-                # #P5: 知识库手动附加文档 (显式传优先, 否则查用户全局)
-                attached_knowledge_ids=effective_attached_ids,
-                # 2026-09-03: 前端幂等键透传 (用户消息防双写)
-                client_msg_id=request.client_msg_id,
-                # 2026-09-03: 网页搜索模式透传
-                web_search=request.web_search,
-            ):
-                yield event.to_sse()
+    gen_key = f"{current_user.id}:{request.session_id}"
+
+    async def produce(queue: "asyncio.Queue") -> None:
+        """断线续答核心 (2026-09-20): 生产者持【自己的 DB 会话】驱动 agent 到完成。
+
+        旧版内联驱动 + 请求级 db → 刷新/切页 = 断连即全停。新版客户端断开后
+        producer 继续在后台跑完, agent 完成路径把完整回答落库 (is_partial=False);
+        前端回来经 /chat/generation-status 轮询发现并拉取 (ChatGPT 行为)。
+        """
+        from app.core.database import async_session
+        _ACTIVE_GENERATIONS.add(gen_key)
+        try:
+            async with async_session() as produce_db:
+                # 600s 看门狗: 超时走 agent 的 CancelledError 路径落库 partial
+                async with asyncio.timeout(600):
+                    async for event in v2_agent.chat_stream(
+                        message=request.message,
+                        session_id=request.session_id,
+                        db=produce_db,
+                        user_id=current_user.id,
+                        model=request.model,
+                        # 2026-07-13 #P1 三档推理模式透传
+                        thinking_mode=request.thinking_mode,
+                        # #P5: 知识库手动附加文档 (显式传优先, 否则查用户全局)
+                        attached_knowledge_ids=effective_attached_ids,
+                        # 2026-09-03: 前端幂等键透传 (用户消息防双写)
+                        client_msg_id=request.client_msg_id,
+                        # 2026-09-03: 网页搜索模式透传
+                        web_search=request.web_search,
+                    ):
+                        await queue.put(("ev", event))
+            await queue.put(("done", None))
+        except asyncio.CancelledError:
+            await queue.put(("done", None))
+            raise
         except Exception as e:
-            logger.error(f"SSE 流式异常: {e}", exc_info=True)
-            err = StreamEvent(
-                type="error",
-                code="STREAM_ERROR",
-                message=str(e),
+            logger.error(f"SSE producer 异常: {e}", exc_info=True)
+            await queue.put(
+                ("ev", StreamEvent(type="error", code="STREAM_ERROR", message=str(e)))
             )
-            yield err.to_sse()
+            await queue.put(("done", None))
         finally:
-            yield "data: [DONE]\n\n"
+            _ACTIVE_GENERATIONS.discard(gen_key)
+            await queue.put(("exit", None))  # 双保险: 消费者永不挂死
+
+    async def event_generator() -> AsyncIterator[str]:
+        queue: "asyncio.Queue" = asyncio.Queue()
+        task = asyncio.create_task(produce(queue))
+        detached = False
+        try:
+            while True:
+                kind, payload = await queue.get()
+                if kind == "ev":
+                    yield payload.to_sse()
+                else:
+                    break
+        except GeneratorExit:
+            # 客户端断开 (刷新/切页/断网): 不取消 producer, 生成转后台续跑
+            detached = True
+            _DETACHED_GENERATION_TASKS.add(task)
+            task.add_done_callback(_DETACHED_GENERATION_TASKS.discard)
+            logger.info(f"[chat_stream] 客户端断开, 生成转后台续跑: {gen_key}")
+            raise
+        except asyncio.CancelledError:
+            # 2026-09-20 E2E 实测: consumer 挂在 await queue.get(), ASGI 断连以
+            # 任务取消 (而非 GeneratorExit) 形态抵达此处 — 同罪同办, 不取消
+            # producer, 转后台续跑。否则 finally 会亲手 cancel 掉后台生成。
+            detached = True
+            _DETACHED_GENERATION_TASKS.add(task)
+            task.add_done_callback(_DETACHED_GENERATION_TASKS.discard)
+            logger.info(f"[chat_stream] 客户端断开(取消), 生成转后台续跑: {gen_key}")
+            raise
+        finally:
+            if not detached and not task.done():
+                task.cancel()
+        # 正常结束补发 [DONE] 帧 (断开路径无需)
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         event_generator(),

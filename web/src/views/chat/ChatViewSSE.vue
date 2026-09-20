@@ -66,6 +66,7 @@ import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatContextStore } from '@/stores/chatContext'  // 2026-08-15 #P4: 资料库附加文档
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { warmupChatModel } from '@/api/agent/warmup'  // 2026-09-18 冷加载防御
+import { chatHistoryApi } from '@/api/chatHistory'  // 2026-09-20 断线续答轮询
 import { renderMarkdown } from '@/utils/markdown'
 import { formatTimeDivider } from '@/utils/timeDivider'
 
@@ -120,6 +121,7 @@ const {
   asrRecognize,
   // 2026-08-16 #71: ChatGPT 风格 — 编辑消息后重发
   resendUserMessage,
+  fetchSessionFromServer, // 2026-09-20 断线续答: 轮询完成后拉取完整回答
 } = useChatStream()
 
 // Cache the message-id lookup used by regenerate; unrelated UI updates reuse it.
@@ -848,8 +850,69 @@ function formatAttachedTime(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+// ============================================================================
+// 2026-09-20 断线续答: 刷新/切页后回到会话, 若服务端仍在后台生成, 轮询状态,
+// 完成后自动拉取完整回答进会话 (配合后端 producer 解耦, ChatGPT 行为)
+// ============================================================================
+let genPollTimer: ReturnType<typeof setInterval> | null = null
+let genPollSid = ''
+
+function stopBackgroundPoll() {
+  if (genPollTimer) {
+    clearInterval(genPollTimer)
+    genPollTimer = null
+  }
+  genPollSid = ''
+}
+
+async function pollBackgroundGeneration() {
+  const sid = sessionId.value
+  if (!sid) return
+  try {
+    const st = await chatHistoryApi.generationStatus(sid)
+    if (!st?.generating) return
+  } catch {
+    return // 网络抖动: 下一轮 sessionId 变化或刷新再试
+  }
+  if (genPollSid === sid && genPollTimer) return // 已在轮询同一会话
+  stopBackgroundPoll()
+  genPollSid = sid
+  console.info('[ChatViewSSE] 检测到后台生成进行中, 开始轮询:', sid)
+  genPollTimer = setInterval(async () => {
+    if (genPollSid !== sessionId.value) {
+      stopBackgroundPoll()
+      return
+    }
+    try {
+      const st = await chatHistoryApi.generationStatus(sid)
+      if (!st?.generating) {
+        stopBackgroundPoll()
+        await fetchSessionFromServer(sid)
+        await nextTick()
+        scrollToBottom()
+        console.info('[ChatViewSSE] 后台生成完成, 完整回答已拉取:', sid)
+      }
+    } catch {
+      /* 网络抖动忽略, 下个 tick 再试 */
+    }
+  }, 3000)
+  // 安全上限 8 分钟自动停 (生成看门狗 600s + 富余)
+  setTimeout(() => {
+    if (genPollSid === sid) stopBackgroundPoll()
+  }, 8 * 60 * 1000)
+}
+
+watch(
+  sessionId,
+  (sid) => {
+    if (sid) void pollBackgroundGeneration()
+  },
+  { immediate: true },
+)
+
 onUnmounted(() => {
   document.removeEventListener('keydown', handleSearchKeydown)
+  stopBackgroundPoll() // 2026-09-20 断线续答: 组件卸载清轮询
   // useChatStream 的 onUnmounted 已处理：abort 所有 SSE + 持久化所有 session
   // 这里无需额外逻辑
 })

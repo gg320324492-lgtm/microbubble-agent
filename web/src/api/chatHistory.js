@@ -136,6 +136,19 @@ export async function listMessages(sid, opts = {}) {
 }
 
 /**
+ * 查询会话服务端是否仍在后台生成 (2026-09-20 断线续答配套)
+ * @param {string} sid
+ * @returns {Promise<{generating: boolean}>}
+ */
+export async function generationStatus(sid) {
+  const { data } = await axios.get(`${BASE}/chat/generation-status`, {
+    params: { session_id: sid },
+    timeout: 10000,
+  })
+  return data
+}
+
+/**
  * 追加单条消息（幂等 by client_msg_id）
  * @param {string} sid
  * @param {Object} msg - { role, content, rich_blocks?, tool_trace?, message_metadata?, client_msg_id?, is_partial? }
@@ -291,6 +304,7 @@ export const chatHistoryApi = {
   getPublicShare,
   searchSessions,
   syncFromLocal,
+  generationStatus,
 }
 
 export default chatHistoryApi

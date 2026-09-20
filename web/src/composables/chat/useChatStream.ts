@@ -1713,6 +1713,7 @@ export function useChatStream() {
     onSwitchSession,
     clearChat,
     ensureSessionLoaded,
+    fetchSessionFromServer, // 2026-09-20 断线续答: 后台生成完成后 ChatViewSSE 轮询拉取
 
     // 发送
     sendMessage,
