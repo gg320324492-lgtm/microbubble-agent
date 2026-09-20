@@ -234,6 +234,13 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
       syncedSessionIds.value.delete(sid)
       return true
     } catch (e: any) {
+      // 2026-09-20: 404 = 会话本就不存在或已删 (超时重试双发 / localStorage 残留
+      // 服务器清理) — 视为幂等成功, 本地状态照常清理, 不再报"删除失败"噪音
+      if (e?.response?.status === 404) {
+        serverSessions.value = serverSessions.value.filter(s => s.id !== sid)
+        syncedSessionIds.value.delete(sid)
+        return true
+      }
       console.error(`[chatHistory] deleteServerSession 失败: sid=${sid}`, e?.response?.data?.detail || e?.message)
       return false
     }
