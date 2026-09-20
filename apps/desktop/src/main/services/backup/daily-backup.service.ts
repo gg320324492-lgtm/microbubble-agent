@@ -69,13 +69,21 @@ export class DailyBackupService {
     targetDir: string
     passwordConfigured: boolean
     lastRunDate: string | null
+    /** 下次自动备份时刻（供设置页状态行展示）；无计划时为 null */
+    nextRunAt: number | null
   } {
+    const config = normalizeDailyBackupConfig(this.ports.readConfig())
+    const lastRunDate = this.ports.readLastRunDate()
+    // 「下次自动」= 今日判定里的 dueAt；已跑过今天则算明日（仅用于展示，不参与调度）
+    const decision = decideDailyBackup({ config, sessionStartedAt: this.sessionStartedAt, lastRunDate, now: Date.now() })
+    const nextRunAt = decision.dueAt === null ? null : lastRunDate === localDateKey(Date.now()) ? decision.dueAt + 24 * 60 * 60 * 1000 : decision.dueAt
     return {
-      config: normalizeDailyBackupConfig(this.ports.readConfig()),
+      config,
       last: this.ports.readLastResult(),
       targetDir: this.ports.getTargetDir(),
       passwordConfigured: this.ports.getPassword() !== null,
-      lastRunDate: this.ports.readLastRunDate()
+      lastRunDate,
+      nextRunAt
     }
   }
 

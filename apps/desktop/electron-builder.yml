@@ -39,4 +39,4 @@ nsis:
 #    仅为保持两处文本一致（不改也不影响运行时行为）。
 publish:
   provider: generic
-  url: https://mnb-workbench-releases.oss-cn-beijing.aliyuncs.com/releases/
+  url: https://releases.mnb-lab.cn/releases/

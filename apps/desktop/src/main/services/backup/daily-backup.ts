@@ -73,7 +73,8 @@ export function normalizeDailyBackupConfig(raw: unknown): DailyBackupConfig {
     delayMinutes: Number.isFinite(delay) && delay >= 0 && delay <= 24 * 60 ? Math.floor(delay) : DEFAULT_DAILY_BACKUP_CONFIG.delayMinutes,
     // 只校验格式会放进 '99:99' 这种值（测试抓到过），必须同时校验时分范围
     atTime: isValidClock(String(o.atTime ?? '')) ? String(o.atTime) : DEFAULT_DAILY_BACKUP_CONFIG.atTime,
-    keep: Number.isFinite(keep) && keep >= 0 ? Math.floor(keep) : DEFAULT_DAILY_BACKUP_CONFIG.keep
+    // R5：范围 0–30（0 = 不清理），超出即夹回默认，避免误填 999 把清理变成空转
+    keep: Number.isFinite(keep) && keep >= 0 && keep <= 30 ? Math.floor(keep) : DEFAULT_DAILY_BACKUP_CONFIG.keep
   }
 }
 

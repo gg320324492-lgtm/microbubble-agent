@@ -167,6 +167,11 @@ describe('配置归一化与工具函数', () => {
   it('非法/缺失字段回退默认（坏配置不能把定时器打死）', () => {
     expect(normalizeDailyBackupConfig(null)).toEqual(DEFAULT_DAILY_BACKUP_CONFIG)
     expect(normalizeDailyBackupConfig({ enabled: 'yes', delayMinutes: -5, keep: -1, atTime: '99:99' })).toEqual(DEFAULT_DAILY_BACKUP_CONFIG)
+    // R5：保留份数范围 0–30，超范围回退默认
+    expect(normalizeDailyBackupConfig({ keep: 31 }).keep).toBe(DEFAULT_DAILY_BACKUP_CONFIG.keep)
+    expect(normalizeDailyBackupConfig({ keep: 999 }).keep).toBe(DEFAULT_DAILY_BACKUP_CONFIG.keep)
+    expect(normalizeDailyBackupConfig({ keep: 0 }).keep).toBe(0)
+    expect(normalizeDailyBackupConfig({ keep: 30 }).keep).toBe(30)
     const ok = normalizeDailyBackupConfig({ enabled: true, mode: 'fixed-time', delayMinutes: 30, atTime: '23:59', keep: 0 })
     expect(ok).toEqual({ enabled: true, mode: 'fixed-time', delayMinutes: 30, atTime: '23:59', keep: 0 })
   })
