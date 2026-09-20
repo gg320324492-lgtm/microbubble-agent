@@ -383,10 +383,23 @@ const scrollToBottom = async (force = false) => {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight
       autoStick.value = true
       showJumpToBottom.value = false
-      // P0-#2: 滚到底后, 离顶部远 → 显示"跳到最早"按钮
-      showJumpToTop.value = true
+      refreshJumpToTop()
     }
   }
+}
+
+// P0-#2 修正 (2026-09-20): "跳到最早"只在内容真正可滚动 (溢出 > 阈值) 且当前
+// 离顶部足够远时显示。事故: 新会话仅 2 条消息, 流式自动滚底把 showJumpToTop
+// 硬置 true, 而短会话 scrollTop 赋值不产生真实滚动 → scroll 事件不触发 →
+// onMessagesScroll 的修正逻辑永远不跑, 按钮卡显。
+const refreshJumpToTop = () => {
+  if (!messagesRef.value) {
+    showJumpToTop.value = false
+    return
+  }
+  const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
+  showJumpToTop.value =
+    scrollHeight - clientHeight > TOP_THRESHOLD_PX && scrollTop > TOP_THRESHOLD_PX
 }
 
 // P0-#2 新增: 滚到顶部 (用于"跳到最早"按钮)
@@ -432,7 +445,7 @@ const jumpToBottom = () => {
   }
   autoStick.value = true
   showJumpToBottom.value = false
-  showJumpToTop.value = true  // P0-#2: 跳到底后离顶部远 → 显示"跳到最早"
+  refreshJumpToTop()  // P0-#2 修正: 不再无条件置 true (同 scrollToBottom 事故注释)
 }
 
 // P0-#2 新增: 跳到最早 (历史起点)
