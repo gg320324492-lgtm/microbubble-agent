@@ -203,3 +203,6 @@ apps/desktop/dist-electron/
 
 # 桌面端转化指挥部 (独立 git 仓库, 与本仓库互相隔离)
 desktop-conversion/
+
+# Agent 会话暂存（2026-09-20）
+.agent-backups/
