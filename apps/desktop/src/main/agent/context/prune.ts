@@ -17,8 +17,8 @@ import { estimateContext, utf8Bytes, type EstimateMessage, type EstimateSegment 
 import { fitUtf8Prefix, fitUtf8Suffix } from '../tools/output-limit'
 
 export interface PruneConfig {
-  /** 模型上下文窗口（token） */
-  contextWindow: number
+  /** 模型上下文窗口假设（token）—— 可配置，默认 131072 */
+  windowTokens: number
   /** 触发线比例：超过「窗口 × 此值」才裁（默认 0.7） */
   triggerRatio: number
   /** 目标比例：裁到「窗口 × 此值」为止（默认 0.5） */
@@ -30,21 +30,63 @@ export interface PruneConfig {
 }
 
 export const DEFAULT_PRUNE_CONFIG: PruneConfig = {
-  contextWindow: 128 * 1024,
+  windowTokens: 131072,
   triggerRatio: 0.7,
   targetRatio: 0.5,
   keepRecentRounds: 3,
   toolResultTrimBytes: 8 * 1024
 }
 
+/** 可配置项的合法范围（越界即回退默认，避免坏配置把预算算歪） */
+export const PRUNE_CONFIG_RANGES = {
+  windowTokens: { min: 4096, max: 4 * 1024 * 1024 },
+  triggerRatio: { min: 0.1, max: 0.95 },
+  targetRatio: { min: 0.05, max: 0.9 },
+  keepRecentRounds: { min: 0, max: 50 },
+  toolResultTrimBytes: { min: 256, max: 256 * 1024 }
+} as const
+
+/**
+ * 归一化用户配置（纯函数）：逐项做范围校验，越界/非法一律回退默认。
+ * 约束：targetRatio 必须 < triggerRatio（否则会「裁到比触发线还高」而永不生效）——
+ * 不满足时 targetRatio 回退默认（默认 0.5 < 0.7 ✓）。
+ */
+export function normalizePruneConfig(raw: unknown): PruneConfig {
+  const o = (raw ?? {}) as Record<string, unknown>
+  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+  const clamp = (v: number | undefined, key: keyof typeof PRUNE_CONFIG_RANGES, fallback: number): number => {
+    const r = PRUNE_CONFIG_RANGES[key]
+    if (v === undefined || v < r.min || v > r.max) return fallback
+    return v
+  }
+
+  const windowTokens = clamp(num(o['windowTokens']), 'windowTokens', DEFAULT_PRUNE_CONFIG.windowTokens)
+  const triggerRatio = clamp(num(o['triggerRatio']), 'triggerRatio', DEFAULT_PRUNE_CONFIG.triggerRatio)
+  let targetRatio = clamp(num(o['targetRatio']), 'targetRatio', DEFAULT_PRUNE_CONFIG.targetRatio)
+  if (targetRatio >= triggerRatio) {
+    // 不能简单回退到默认目标比例：用户把 triggerRatio 调小（如 0.3）时，默认 0.5 仍 >= 0.3，
+    // 会「裁到比触发线还高」→ 永远不生效。改为按默认比例（0.5/0.7）等比缩到触发线以下。
+    const keepDefaultProportion = (DEFAULT_PRUNE_CONFIG.targetRatio / DEFAULT_PRUNE_CONFIG.triggerRatio) * triggerRatio
+    targetRatio = Math.max(PRUNE_CONFIG_RANGES.targetRatio.min, Math.min(keepDefaultProportion, triggerRatio * 0.9))
+  }
+  const keepRecentRounds = Math.floor(
+    clamp(num(o['keepRecentRounds']), 'keepRecentRounds', DEFAULT_PRUNE_CONFIG.keepRecentRounds)
+  )
+  const toolResultTrimBytes = Math.floor(
+    clamp(num(o['toolResultTrimBytes']), 'toolResultTrimBytes', DEFAULT_PRUNE_CONFIG.toolResultTrimBytes)
+  )
+
+  return { windowTokens, triggerRatio, targetRatio, keepRecentRounds, toolResultTrimBytes }
+}
+
 /** 触发线（token） */
 export function triggerTokens(config: PruneConfig): number {
-  return Math.floor(config.contextWindow * config.triggerRatio)
+  return Math.floor(config.windowTokens * config.triggerRatio)
 }
 
 /** 目标线（token） */
 export function targetTokens(config: PruneConfig): number {
-  return Math.floor(config.contextWindow * config.targetRatio)
+  return Math.floor(config.windowTokens * config.targetRatio)
 }
 
 export interface PruneRecord {

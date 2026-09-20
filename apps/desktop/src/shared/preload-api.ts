@@ -59,8 +59,6 @@ export interface PreloadApi {
     send(sessionId: string, content: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }>
     abort(sessionId: string): Promise<void>
     /** 写工具确认结果回传；确认请求已过期时 reject */
-    /** M8-2：上下文估算与最近裁切（设置页调试区） */
-    contextGet(): Promise<unknown>
     confirmResolve(sessionId: string, callId: string, approve: boolean): Promise<void>
     /** 回滚一次 write_file（从备份恢复原内容并审计留痕） */
     rollbackWrite(sessionId: string, messageId: string, callId: string): Promise<{ path: string }>
@@ -121,6 +119,8 @@ export interface PreloadApi {
   agent: {
     /** M8-2：上下文估算与最近裁切（设置页调试区） */
     contextGet(): Promise<unknown>
+    /** M8-2：写入上下文预算配置（部分更新；主侧范围校验后立即生效） */
+    contextSet(patch: Record<string, unknown>): Promise<unknown>
   }
   backup: {
     create(password: string, targetDir: string): Promise<{ fileName: string; size: number }>

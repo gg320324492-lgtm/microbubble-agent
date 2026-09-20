@@ -66,7 +66,6 @@ const api = {
     send: (sessionId: string, content: string): Promise<{ userMessage: ChatMessage; assistantMessage: ChatMessage }> =>
       invoke(IPC.CHAT_SEND, { sessionId, content }),
     abort: (sessionId: string): Promise<void> => invoke(IPC.CHAT_ABORT, { sessionId }),
-    contextGet: (): Promise<unknown> => invoke(IPC.AGENT_CONTEXT_GET),
     confirmResolve: (sessionId: string, callId: string, approve: boolean): Promise<void> =>
       invoke(IPC.CHAT_CONFIRM_RESOLVE, { sessionId, callId, approve }),
     rollbackWrite: (sessionId: string, messageId: string, callId: string): Promise<{ path: string }> =>
@@ -120,7 +119,8 @@ const api = {
     search: (query: string): Promise<MeetingSearchHit[]> => invoke(IPC.MEETINGS_SEARCH, { query })
   },
   agent: {
-    contextGet: (): Promise<unknown> => invoke(IPC.AGENT_CONTEXT_GET)
+    contextGet: (): Promise<unknown> => invoke(IPC.AGENT_CONTEXT_GET),
+    contextSet: (patch: Record<string, unknown>): Promise<unknown> => invoke(IPC.AGENT_CONTEXT_SET, patch)
   },
   backup: {
     create: (password: string, targetDir: string): Promise<{ fileName: string; size: number }> =>

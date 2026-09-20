@@ -26,6 +26,7 @@ import {
   applySummaries,
   estimateTurns,
   planPrune,
+  targetTokens,
   triggerTokens,
   type PruneConfig,
   type PruneRecord
@@ -125,8 +126,20 @@ export class AgentLoopService {
   private lastEstimate = 0
 
   /** 供设置页调试区读取 */
-  contextSnapshot(): { estimatedTokens: number; triggerTokens: number; records: PruneRecord[] } {
-    return { estimatedTokens: this.lastEstimate, triggerTokens: triggerTokens(this.contextConfig), records: this.lastPruneRecords }
+  contextSnapshot(): {
+    estimatedTokens: number
+    triggerTokens: number
+    targetTokens: number
+    config: PruneConfig
+    records: PruneRecord[]
+  } {
+    return {
+      estimatedTokens: this.lastEstimate,
+      triggerTokens: triggerTokens(this.contextConfig),
+      targetTokens: targetTokens(this.contextConfig),
+      config: { ...this.contextConfig },
+      records: this.lastPruneRecords
+    }
   }
 
   /** 覆盖上下文预算配置（测试/设置页） */

@@ -10,7 +10,9 @@ import {
 } from '@main/agent/context/estimate'
 import {
   DEFAULT_PRUNE_CONFIG,
+  PRUNE_CONFIG_RANGES,
   estimateTurns,
+  normalizePruneConfig,
   planPrune,
   splitRounds,
   targetTokens,
@@ -31,7 +33,7 @@ import type { AgentTurn } from '@shared/types'
 // ---------------------------------------------------------------- 夹具
 
 const cfg = (over: Partial<PruneConfig> = {}): PruneConfig => ({
-  contextWindow: 128 * 1024,
+  windowTokens: 131072,
   triggerRatio: 0.7,
   targetRatio: 0.5,
   keepRecentRounds: 3,
@@ -121,7 +123,7 @@ describe('触发线与保留策略', () => {
   })
 
   it('阈值边界：正好等于触发线不裁，超过即裁', () => {
-    const c = cfg({ contextWindow: 2000, triggerRatio: 0.5, targetRatio: 0.3, keepRecentRounds: 1, toolResultTrimBytes: 1024 })
+    const c = cfg({ windowTokens: 2000, triggerRatio: 0.5, targetRatio: 0.3, keepRecentRounds: 1, toolResultTrimBytes: 1024 })
     const trigger = triggerTokens(c) // 1000
     // 造一个刚好不触线的会话
     const small: AgentTurn[] = [{ role: 'user', content: '目标' }, ...toolRound('a', 'x'.repeat(200))]
@@ -136,7 +138,7 @@ describe('触发线与保留策略', () => {
   })
 
   it('保留近端：最近 K 轮完整保留（其 tool_use/tool_result 不被裁）', () => {
-    const c = cfg({ contextWindow: 3000, triggerRatio: 0.3, targetRatio: 0.15, keepRecentRounds: 2, toolResultTrimBytes: 512 })
+    const c = cfg({ windowTokens: 3000, triggerRatio: 0.3, targetRatio: 0.15, keepRecentRounds: 2, toolResultTrimBytes: 512 })
     const turns = longSession(6, 3000)
     const plan = planPrune(turns, c)
     expect(plan.pruned).toBe(true)
@@ -153,7 +155,7 @@ describe('触发线与保留策略', () => {
   })
 
   it('首条用户目标消息永不裁切（即使是最老的）', () => {
-    const c = cfg({ contextWindow: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
+    const c = cfg({ windowTokens: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
     const turns = longSession(8, 4000)
     const plan = planPrune(turns, c)
     expect(plan.pruned).toBe(true)
@@ -161,7 +163,7 @@ describe('触发线与保留策略', () => {
   })
 
   it('裁切记录含轮次/动作/字节/token/时间（供会话元数据）', () => {
-    const c = cfg({ contextWindow: 3000, triggerRatio: 0.3, targetRatio: 0.15, keepRecentRounds: 1, toolResultTrimBytes: 512 })
+    const c = cfg({ windowTokens: 3000, triggerRatio: 0.3, targetRatio: 0.15, keepRecentRounds: 1, toolResultTrimBytes: 512 })
     const now = 1_700_000_000_000
     const plan = planPrune(longSession(6, 3000), c, { now })
     expect(plan.records.length).toBeGreaterThan(0)
@@ -203,7 +205,7 @@ describe('工具组原子裁切 — 绝不产生孤儿 tool_result', () => {
   })
 
   it('整组裁切时 tool_use 与 tool_result **同切**（结果里没有孤儿）', () => {
-    const c = cfg({ contextWindow: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
+    const c = cfg({ windowTokens: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
     const turns = longSession(8, 4000)
     const plan = planPrune(turns, c)
     expect(plan.records.some((r) => r.action === 'drop_group')).toBe(true)
@@ -225,7 +227,7 @@ describe('工具组原子裁切 — 绝不产生孤儿 tool_result', () => {
     expect(trimmed).toContain('尾部关键结论') // 尾部不丢
     expect(trimmed).toContain('省略')
     // 单轮 trim 场景下协议不变
-    const c = cfg({ contextWindow: 4000, triggerRatio: 0.3, targetRatio: 0.25, keepRecentRounds: 1, toolResultTrimBytes: 512 })
+    const c = cfg({ windowTokens: 4000, triggerRatio: 0.3, targetRatio: 0.25, keepRecentRounds: 1, toolResultTrimBytes: 512 })
     const plan = planPrune(longSession(3, 6000), c)
     expect(validateToolPairing(plan.turns)).toHaveLength(0)
   })
@@ -241,7 +243,7 @@ describe('工具组原子裁切 — 绝不产生孤儿 tool_result', () => {
     ]
     // 输入本身已有孤儿 → 输出必须校验失败，故 planPrune 应回退为不裁
     expect(validateToolPairing(weird).some((i) => i.kind === 'orphan_tool_result')).toBe(true)
-    const c = cfg({ contextWindow: 100, triggerRatio: 0.01, targetRatio: 0.005, keepRecentRounds: 0, toolResultTrimBytes: 8 })
+    const c = cfg({ windowTokens: 100, triggerRatio: 0.01, targetRatio: 0.005, keepRecentRounds: 0, toolResultTrimBytes: 8 })
     const plan = planPrune(weird, c)
     expect(plan.pruned).toBe(false)
     expect(plan.records).toHaveLength(0)
@@ -320,7 +322,7 @@ describe('LLM 摘要随车', () => {
 
 describe('摘要与裁切的衔接', () => {
   it('提供摘要 → 整组裁切后插入注记；未提供 → 记录到 roundsToSummarize', () => {
-    const c = cfg({ contextWindow: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
+    const c = cfg({ windowTokens: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
     const turns = longSession(8, 4000)
     const dry = planPrune(turns, c)
     expect(dry.roundsToSummarize.length).toBeGreaterThan(0)
@@ -337,7 +339,7 @@ describe('摘要与裁切的衔接', () => {
   })
 
   it('摘要注记也占用预算：注入超长摘要仍不破坏协议与上限', () => {
-    const c = cfg({ contextWindow: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
+    const c = cfg({ windowTokens: 2000, triggerRatio: 0.2, targetRatio: 0.1, keepRecentRounds: 1, toolResultTrimBytes: 256 })
     const turns = longSession(8, 4000)
     const dry = planPrune(turns, c)
     const summaries = new Map(dry.roundsToSummarize.map((r) => [r.round, '摘'.repeat(2000)]))
@@ -373,11 +375,87 @@ describe('估算工具函数', () => {
     expect(rounds[1]!.indexes).toEqual([2, 3])
   })
 
-  it('DEFAULT_PRUNE_CONFIG 与工单口径一致（128k 窗口 70%/50%、近端 3 轮）', () => {
-    expect(DEFAULT_PRUNE_CONFIG.contextWindow).toBe(128 * 1024)
+  it('DEFAULT_PRUNE_CONFIG 与工单口径一致（131072 窗口 70%/50%、近端 3 轮）', () => {
+    expect(DEFAULT_PRUNE_CONFIG.windowTokens).toBe(131072)
     expect(DEFAULT_PRUNE_CONFIG.triggerRatio).toBe(0.7)
     expect(DEFAULT_PRUNE_CONFIG.targetRatio).toBe(0.5)
     expect(DEFAULT_PRUNE_CONFIG.keepRecentRounds).toBe(3)
-    expect(triggerTokens(DEFAULT_PRUNE_CONFIG)).toBe(Math.floor(128 * 1024 * 0.7))
+    expect(triggerTokens(DEFAULT_PRUNE_CONFIG)).toBe(Math.floor(131072 * 0.7))
+  })
+})
+// ---------------------------------------------------------------- 7 预算配置化（M8-2 续作）
+
+describe('预算配置化 — 范围校验与非法回退（默认即现行为）', () => {
+  it('默认值 = 现行为：windowTokens 131072 / 触发 0.70 / 目标 0.50', () => {
+    expect(DEFAULT_PRUNE_CONFIG).toEqual({
+      windowTokens: 131072,
+      triggerRatio: 0.7,
+      targetRatio: 0.5,
+      keepRecentRounds: 3,
+      toolResultTrimBytes: 8 * 1024
+    })
+    // 空/非法输入一律回到默认（零行为变更）
+    expect(normalizePruneConfig(undefined)).toEqual(DEFAULT_PRUNE_CONFIG)
+    expect(normalizePruneConfig(null)).toEqual(DEFAULT_PRUNE_CONFIG)
+    expect(normalizePruneConfig({})).toEqual(DEFAULT_PRUNE_CONFIG)
+    expect(normalizePruneConfig({ windowTokens: 'big', triggerRatio: NaN })).toEqual(DEFAULT_PRUNE_CONFIG)
+  })
+
+  it('合法值原样生效（小窗口 16384 → 触发 11468 / 目标 8192）', () => {
+    const c = normalizePruneConfig({ windowTokens: 16384, triggerRatio: 0.7, targetRatio: 0.5 })
+    expect(c.windowTokens).toBe(16384)
+    expect(triggerTokens(c)).toBe(11468)
+    expect(targetTokens(c)).toBe(8192)
+  })
+
+  it('越界回退默认（逐项独立，不互相污染）', () => {
+    // windowTokens 低于下限 / 高于上限
+    expect(normalizePruneConfig({ windowTokens: 100 }).windowTokens).toBe(DEFAULT_PRUNE_CONFIG.windowTokens)
+    expect(normalizePruneConfig({ windowTokens: 99_999_999 }).windowTokens).toBe(DEFAULT_PRUNE_CONFIG.windowTokens)
+    // 比例越界
+    expect(normalizePruneConfig({ triggerRatio: 0.99 }).triggerRatio).toBe(DEFAULT_PRUNE_CONFIG.triggerRatio)
+    expect(normalizePruneConfig({ triggerRatio: 0.01 }).triggerRatio).toBe(DEFAULT_PRUNE_CONFIG.triggerRatio)
+    expect(normalizePruneConfig({ targetRatio: 0 }).targetRatio).toBe(DEFAULT_PRUNE_CONFIG.targetRatio)
+    // 合法项不受其它项非法影响
+    const c = normalizePruneConfig({ windowTokens: 32768, triggerRatio: 99, keepRecentRounds: 5 })
+    expect(c.windowTokens).toBe(32768)
+    expect(c.triggerRatio).toBe(DEFAULT_PRUNE_CONFIG.triggerRatio)
+    expect(c.keepRecentRounds).toBe(5)
+    // 边界值本身合法
+    expect(normalizePruneConfig({ windowTokens: PRUNE_CONFIG_RANGES.windowTokens.min }).windowTokens).toBe(4096)
+    expect(normalizePruneConfig({ windowTokens: PRUNE_CONFIG_RANGES.windowTokens.max }).windowTokens).toBe(4 * 1024 * 1024)
+  })
+
+  it('targetRatio 必须 < triggerRatio（否则裁到比触发线还高 → 永不生效），违反即回退默认', () => {
+    const bad = normalizePruneConfig({ triggerRatio: 0.3, targetRatio: 0.5 })
+    // 回退不能是「默认 0.5」——那仍 >= 0.3；须按默认比例等比缩到触发线以下
+    expect(bad.targetRatio).toBeLessThan(bad.triggerRatio)
+    expect(bad.targetRatio).toBeGreaterThan(0)
+    expect(bad.targetRatio / bad.triggerRatio).toBeCloseTo(0.5 / 0.7, 2)
+    // 相等也算违反
+    const equal = normalizePruneConfig({ triggerRatio: 0.4, targetRatio: 0.4 })
+    expect(equal.targetRatio).toBeLessThan(equal.triggerRatio)
+    // 合法组合保留
+    const ok = normalizePruneConfig({ triggerRatio: 0.6, targetRatio: 0.3 })
+    expect(ok.triggerRatio).toBe(0.6)
+    expect(ok.targetRatio).toBe(0.3)
+  })
+
+  it('小数/整数归一：keepRecentRounds 与 trimBytes 取整；trim 越界回退', () => {
+    expect(normalizePruneConfig({ keepRecentRounds: 2.7 }).keepRecentRounds).toBe(2)
+    expect(normalizePruneConfig({ toolResultTrimBytes: 1024.9 }).toolResultTrimBytes).toBe(1024)
+    expect(normalizePruneConfig({ toolResultTrimBytes: 1 }).toolResultTrimBytes).toBe(DEFAULT_PRUNE_CONFIG.toolResultTrimBytes)
+    expect(normalizePruneConfig({ keepRecentRounds: -1 }).keepRecentRounds).toBe(DEFAULT_PRUNE_CONFIG.keepRecentRounds)
+  })
+
+  it('小窗口配置下 planPrune 真的会触发整组裁切 + 待摘要列表（② 项的离线前提）', () => {
+    const c = normalizePruneConfig({ windowTokens: 16384, triggerRatio: 0.7, targetRatio: 0.5 })
+    const turns = longSession(8, 4000)
+    const plan = planPrune(turns, c)
+    expect(plan.pruned).toBe(true)
+    // 小窗口下 trim 不足以达标 → 必然走到整组裁切
+    expect(plan.records.some((r) => r.action === 'drop_group')).toBe(true)
+    expect(plan.roundsToSummarize.length).toBeGreaterThan(0)
+    expect(validateToolPairing(plan.turns)).toHaveLength(0)
   })
 })

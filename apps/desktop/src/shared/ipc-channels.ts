@@ -23,6 +23,8 @@ export const IPC = {
   CHAT_ROLLBACK_WRITE: 'chat:rollback-write',
   /** M8-2 上下文估算与最近裁切（设置页调试区） */
   AGENT_CONTEXT_GET: 'agent:context-get',
+  /** M8-2 上下文预算配置写入（设置页调试区） */
+  AGENT_CONTEXT_SET: 'agent:context-set',
   /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */
   CHAT_STREAM_EVENT: 'chat:stream-event',
   WINDOW_STATE_EVENT: 'window:state-event',

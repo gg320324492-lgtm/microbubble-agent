@@ -53,6 +53,7 @@ import { ManuscriptService, MANUSCRIPT_STATUSES, manuscriptStats } from './servi
 import { ToolRegistry } from './agent/tool-registry'
 import { AgentLoopService, buildAgentSystemPrompt } from './agent/agent-loop.service'
 import { classifyLlmError, parseRetryAfterMs, withCommitBoundaryRetry } from './agent/llm-retry'
+import { normalizePruneConfig, type PruneConfig } from './agent/context/prune'
 import type { StreamTurnFn, StreamTurnResult } from '@shared/types'
 import { listDirTool } from './agent/tools/list-dir'
 import { readFileTool } from './agent/tools/read-file'
@@ -351,6 +352,15 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     })
 
   const agentLoop = new AgentLoopService(streamTurnWithRetry, registry, workspace, audit)
+
+  // M8-2 §2 配置化：上下文预算（windowTokens / triggerRatio / targetRatio …）走既有 settings 机制。
+  // 默认值即现行为 → 未配置时零行为变更；非法值经 normalizePruneConfig 回退默认。
+  const CONTEXT_CONFIG_KEY = 'agent.context.config'
+  // 注意：此处**只声明**，调用必须晚于 currentUserId 的声明（见每日定时备份区块之后），
+  // 否则会触发 TDZ「Cannot access 'currentUserId' before initialization」导致启动即崩
+  // —— 类型检查与单测都抓不到，是 M8-2 真机验证发现的。
+  const readContextConfig = (): PruneConfig =>
+    normalizePruneConfig(settings.get(CONTEXT_CONFIG_KEY, currentUserId() ?? undefined))
 
   // 启动即尝试恢复上次会话（有持久化 token 且未过期则免登录）
   auth.restore()
@@ -1216,6 +1226,20 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     })
   )
 
+  // M8-2 §2 配置化：写入上下文预算（部分更新；范围校验后持久化并立即生效）
+  ipcMain.handle(IPC.AGENT_CONTEXT_SET, (_e, p): IpcResult<unknown> =>
+    tryRun(() => {
+      const uid = auth.requireUser().id
+      const merged = normalizePruneConfig({ ...readContextConfig(), ...((p ?? {}) as Record<string, unknown>) })
+      settings.set(CONTEXT_CONFIG_KEY, merged, uid)
+      agentLoop.setContextConfig(merged)
+      console.log(
+        `[context] 预算配置已更新：window=${merged.windowTokens} 触发=${merged.triggerRatio} 目标=${merged.targetRatio} 近端=${merged.keepRecentRounds} 轮`
+      )
+      return merged
+    })
+  )
+
   ipcMain.handle(IPC.WORKSPACE_SET, async (): Promise<IpcResult<string | null>> => {
     try {
       const win = getWindow()
@@ -1336,6 +1360,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     log: (m) => console.log(`[daily-backup] ${m}`)
   })
   dailyBackup.start()
+
+  // M8-2 预算配置：在 currentUserId 就绪后读取并应用（未配置 → 默认值 = 现行为，零变更）
+  agentLoop.setContextConfig(readContextConfig())
 
   ipcMain.handle(IPC.BACKUP_DAILY_GET, (): IpcResult<unknown> => tryRun(() => dailyBackup.snapshot()))
   ipcMain.handle(IPC.BACKUP_DAILY_SET, (_e, p): IpcResult<unknown> =>

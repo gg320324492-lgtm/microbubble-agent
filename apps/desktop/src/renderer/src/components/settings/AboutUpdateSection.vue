@@ -117,11 +117,27 @@ async function onAutoSwitch(e: Event): Promise<void> {
 }
 
 // ---------- M8-2 上下文调试（最小实现：只展示估算与最近裁切） ----------
-const ctxDebug = ref<{ estimatedTokens: number; triggerTokens: number; records: { round: number; action: string; at: number }[] } | null>(null)
+const ctxDebug = ref<{
+  estimatedTokens: number
+  triggerTokens: number
+  targetTokens?: number
+  config?: { windowTokens: number; triggerRatio: number; targetRatio: number; keepRecentRounds: number }
+  records: { round: number; action: string; at: number }[]
+} | null>(null)
+// M8-2 续作：预算三项可配置（默认即现行为；非法值主侧回退默认）
+const ctxWindow = ref(131072)
+const ctxTrigger = ref(0.7)
+const ctxTarget = ref(0.5)
 
 async function loadContextDebug(): Promise<void> {
   try {
-    ctxDebug.value = (await window.api.agent.contextGet()) as typeof ctxDebug.value
+    const snap = (await window.api.agent.contextGet()) as typeof ctxDebug.value
+    ctxDebug.value = snap
+    if (snap?.config) {
+      ctxWindow.value = snap.config.windowTokens
+      ctxTrigger.value = snap.config.triggerRatio
+      ctxTarget.value = snap.config.targetRatio
+    }
   } catch {
     /* 未登录/无会话时静默 */
   }
@@ -136,6 +152,21 @@ const ctxDebugText = computed(() => {
     (last ? `最近裁切：第 ${last.round} 轮 ${last.action === 'drop_group' ? '整组' : '正文'}（${new Date(last.at).toLocaleTimeString()}）` : '尚未发生裁切')
   )
 })
+
+/** 保存预算配置（部分更新；主侧做范围校验与非法回退，并立即生效） */
+async function saveContextConfig(): Promise<void> {
+  try {
+    await window.api.agent.contextSet({
+      windowTokens: Number(ctxWindow.value),
+      triggerRatio: Number(ctxTrigger.value),
+      targetRatio: Number(ctxTarget.value)
+    })
+    await loadContextDebug()
+    ElMessage.success('上下文预算已更新（立即生效）')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
+  }
+}
 
 onMounted(() => {
   load().catch(() => undefined)
@@ -216,7 +247,14 @@ onUnmounted(() => {
     <details class="ctx-debug" data-testid="context-debug">
       <summary>上下文用量（调试）</summary>
       <p class="hint tiny" data-testid="context-debug-text">{{ ctxDebugText }}</p>
-      <button class="ghost-btn" data-testid="context-debug-refresh" @click="loadContextDebug">刷新</button>
+      <div class="ctx-cfg">
+        <label>模型窗口(tokens) <input v-model.number="ctxWindow" type="number" min="4096" data-testid="ctx-window" /></label>
+        <label>触发比 <input v-model.number="ctxTrigger" type="number" step="0.05" min="0.1" max="0.95" data-testid="ctx-trigger" /></label>
+        <label>目标比 <input v-model.number="ctxTarget" type="number" step="0.05" min="0.05" max="0.9" data-testid="ctx-target" /></label>
+        <button class="ghost-btn" data-testid="ctx-save" @click="saveContextConfig">保存预算</button>
+        <button class="ghost-btn" data-testid="context-debug-refresh" @click="loadContextDebug">刷新</button>
+      </div>
+      <p class="hint tiny">默认 131072 / 0.70 / 0.50（即现行为）。目标比须小于触发比，越界会自动回退默认。</p>
     </details>
   </section>
 </template>
@@ -332,5 +370,25 @@ onUnmounted(() => {
   background: transparent;
   color: var(--color-text-primary);
   cursor: pointer;
+  font-size: var(--font-size-xs);
+}
+
+.ctx-cfg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.ctx-cfg label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.ctx-cfg input {
+  width: 84px;
+  padding: 2px 4px;
   font-size: var(--font-size-xs);
 }
