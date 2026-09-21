@@ -57,9 +57,9 @@ function openRegister(): void {
       <form class="auth-form" @submit.prevent="onSubmit">
         <p class="auth-eyebrow">欢迎回来</p>
         <h2 id="login-title">进入科研工作台</h2>
-        <p class="auth-lede">账号保存在本机，断网也可登录使用。</p>
+        <p class="auth-lede">用课题组账号登录（与网页端同一套账号）；登录后断网也可继续使用。</p>
         <label for="login-username">用户名</label>
-        <input id="login-username" v-model="form.username" type="text" autocomplete="username" :disabled="loading" placeholder="例如：wangtianzhi" />
+        <input id="login-username" v-model="form.username" type="text" autocomplete="username" :disabled="loading" placeholder="课题组账号（与网页端相同）" />
         <label for="login-password">密码</label>
         <input id="login-password" v-model="form.password" type="password" autocomplete="current-password" :disabled="loading" placeholder="输入你的密码" />
         <p class="register-hint">
