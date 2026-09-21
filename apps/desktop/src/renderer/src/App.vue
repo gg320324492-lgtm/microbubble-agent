@@ -17,6 +17,7 @@ function registerCommands(): void {
     { id: 'nav-eln', title: '实验 ELN', keywords: 'sy shiyan eln 实验 experiment', action: nav('/app/eln') },
     { id: 'nav-manuscripts', title: '稿件', keywords: 'gj gaojian 稿件 manuscript', action: nav('/app/manuscripts') },
     { id: 'nav-knowledge', title: '知识库', keywords: 'zsk zhishi 知识 knowledge', action: nav('/app/knowledge') },
+    { id: 'nav-drive', title: '网盘', keywords: 'wp wangpan 网盘 drive 文件', action: nav('/app/drive') },
     { id: 'nav-meetings', title: '会议', keywords: 'hy huiyi 会议 meeting', action: nav('/app/meetings') },
     { id: 'nav-settings', title: '设置', keywords: 'sz shezhi 设置 settings', action: nav('/app/settings') },
     { id: 'new-experiment', title: '新建实验（实验 ELN）', keywords: 'xj sy xinjian 新建实验', action: nav('/app/eln') },

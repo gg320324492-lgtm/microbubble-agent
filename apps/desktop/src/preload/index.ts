@@ -131,6 +131,19 @@ const api = {
     bind: (payload: { baseUrl?: string; username: string; password: string }): Promise<unknown> => invoke(IPC.CLOUD_BIND, payload),
     unbind: (): Promise<unknown> => invoke(IPC.CLOUD_UNBIND)
   },
+  drive: {
+    state: (): Promise<unknown> => invoke(IPC.DRIVE_STATE),
+    list: (parentId?: number | null): Promise<unknown> => invoke(IPC.DRIVE_LIST, { parentId: parentId ?? null }),
+    upload: (payload: { filePath: string; parentId?: number | null }): Promise<unknown> => invoke(IPC.DRIVE_UPLOAD, payload),
+    rename: (id: number, title: string): Promise<unknown> => invoke(IPC.DRIVE_RENAME, { id, title }),
+    remove: (id: number): Promise<unknown> => invoke(IPC.DRIVE_DELETE, { id }),
+    pendingUploads: (): Promise<unknown> => invoke(IPC.DRIVE_PENDING_UPLOADS),
+    onProgress: (cb: (p: unknown) => void): (() => void) => {
+      const listener = (_e: unknown, payload: unknown): void => cb(payload as never)
+      ipcRenderer.on(IPC.DRIVE_UPLOAD, listener as never)
+      return () => ipcRenderer.removeListener(IPC.DRIVE_UPLOAD, listener as never)
+    }
+  },
   backup: {
     create: (password: string, targetDir: string): Promise<{ fileName: string; size: number }> =>
       invoke(IPC.BACKUP_CREATE, { password, targetDir }),

@@ -46,6 +46,12 @@ export const routes = [
         meta: { title: '知识库', icon: 'book' }
       },
       {
+        path: 'drive',
+        name: 'drive',
+        component: () => import('../views/DriveView.vue'),
+        meta: { title: '网盘', icon: 'folder' }
+      },
+      {
         path: 'meetings',
         name: 'meetings',
         component: () => import('../views/MeetingsView.vue'),

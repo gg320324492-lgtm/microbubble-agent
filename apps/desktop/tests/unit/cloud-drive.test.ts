@@ -1,0 +1,353 @@
+// M2-3c 远程网盘 + 通用分块文件通道 —— 全部离线，HTTP 注入式
+// 契约来自 app/api/v1/drive_*.py 只读调研（前缀 /drive、/folders、/drive/chunked-uploads）
+import { describe, expect, it } from 'vitest'
+import { CloudApiClient, type CloudHttpFn, type CloudHttpRequest, type CloudHttpResponse, type CloudTokens } from '@main/services/cloud/api-client'
+import { RemoteDriveService, driveErrorMessage, normalizeDriveItem, normalizeDrivePage } from '@main/services/cloud/drive'
+import { DEFAULT_CHUNK_SIZE, MemorySessionStore, chunkCount, type ChunkReader } from '@main/services/cloud/transfer'
+import { cloudGuidance, cloudUsableState, featureErrorMessage, inaccessibleMessage } from '@main/services/cloud/guidance'
+
+function res(status: number, json: unknown, headers: Record<string, string> = {}): CloudHttpResponse {
+  return { status, headers, text: typeof json === 'string' ? json : JSON.stringify(json) }
+}
+
+interface Harness {
+  svc: RemoteDriveService
+  requests: CloudHttpRequest[]
+  sessions: MemorySessionStore
+  refreshed: CloudTokens[]
+}
+
+function harness(
+  script: ((req: CloudHttpRequest) => CloudHttpResponse | Promise<CloudHttpResponse>)[],
+  opts: { tokens?: CloudTokens | null; baseUrl?: () => string } = {}
+): Harness {
+  const requests: CloudHttpRequest[] = []
+  let i = 0
+  const http: CloudHttpFn = async (req) => {
+    requests.push(req)
+    const step = script[Math.min(i, script.length - 1)]!
+    i += 1
+    return step(req)
+  }
+  const sessions = new MemorySessionStore()
+  const refreshed: CloudTokens[] = []
+  let current = 'https://agent.mnb-lab.cn'
+  const svc = new RemoteDriveService({
+    client: new CloudApiClient({ http, baseUrl: current }),
+    tokens: () => (opts.tokens === undefined ? { accessToken: 'AT1', refreshToken: 'RT1' } : opts.tokens),
+    baseUrl: opts.baseUrl ?? (() => current),
+    sessions,
+    onTokensRefreshed: (t) => refreshed.push(t)
+  })
+  void current
+  return { svc, requests, sessions, refreshed }
+}
+
+// 服务端形状样例（虚构占位）
+const fileItem = (id: number, over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  id,
+  title: `占位文件${id}.txt`,
+  file_path: `drive/${id}`,
+  file_name: `占位文件${id}.txt`,
+  file_type: 'txt',
+  file_size: 1234,
+  storage_mode: 'drive',
+  visibility: 'team',
+  folder_id: null,
+  owner_name: '演示同学',
+  created_at: '2026-09-01T10:00:00',
+  updated_at: '2026-09-02T11:00:00',
+  ...over
+})
+
+const uploadSession = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+  upload_id: 'up-1',
+  filename: '占位大文件.bin',
+  file_size: 12 * 1024 * 1024,
+  chunk_size: DEFAULT_CHUNK_SIZE,
+  total_chunks: 3,
+  uploaded_chunks: [],
+  status: 'pending',
+  expires_at: '2026-09-22T00:00:00',
+  ...over
+})
+
+/** 从内存读分块（测试用，不碰盘） */
+function memoryReader(size: number): ChunkReader {
+  const buf = new Uint8Array(size)
+  for (let i = 0; i < size; i += 1) buf[i] = i % 256
+  return async (offset, length) => buf.slice(offset, offset + length)
+}
+
+// ---------------------------------------------------------------- 1 适配回放（≥4）
+
+describe('网盘契约适配回放', () => {
+  it('目录列表：GET /drive/files 参数正确，解析 {items,total}', async () => {
+    const h = harness([() => res(200, { items: [fileItem(1), fileItem(2)], total: 2 })])
+    const r = await h.svc.list({ parentId: 5, keyword: '占位' })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.total).toBe(2)
+      expect(r.data.items[0]).toMatchObject({ id: 1, fileName: '占位文件1.txt', fileType: 'txt', visibility: 'team' })
+    }
+    const url = new URL(h.requests[0]!.url)
+    expect(url.pathname).toBe('/api/v1/drive/files')
+    expect(url.searchParams.get('parent_id')).toBe('5')
+    expect(url.searchParams.get('keyword')).toBe('占位')
+    expect(h.requests[0]!.headers['authorization']).toBe('Bearer AT1')
+  })
+
+  it('根目录列表：不带 parent_id 参数', async () => {
+    const h = harness([() => res(200, { items: [], total: 0 })])
+    await h.svc.list()
+    expect(new URL(h.requests[0]!.url).search).toBe('')
+  })
+
+  it('详情 / 按路径：GET /drive/files/{id} 与 GET /drive/by-path', async () => {
+    const h = harness([() => res(200, fileItem(9)), () => res(200, fileItem(10))])
+    const a = await h.svc.get(9)
+    const b = await h.svc.byPath('sub/dir/占位.txt')
+    expect(a.ok && a.data.id).toBe(9)
+    expect(b.ok && b.data.id).toBe(10)
+    expect(h.requests[0]!.url).toBe('https://agent.mnb-lab.cn/api/v1/drive/files/9')
+    expect(h.requests[1]!.url).toContain('/api/v1/drive/by-path?path=')
+  })
+
+  it('重命名：PUT /drive/files/{id} 只带传入字段', async () => {
+    const h = harness([() => res(200, fileItem(3, { title: '改名后.txt' }))])
+    const r = await h.svc.rename(3, { title: '改名后.txt' })
+    expect(r.ok).toBe(true)
+    expect(h.requests[0]!.method).toBe('PUT')
+    expect(JSON.parse(h.requests[0]!.body!)).toEqual({ title: '改名后.txt' })
+  })
+
+  it('删除：DELETE，204 空体不报错', async () => {
+    const h = harness([() => res(204, '')])
+    const r = await h.svc.remove(4)
+    expect(r.ok).toBe(true)
+    expect(h.requests[0]!.method).toBe('DELETE')
+    expect(h.requests[0]!.url).toBe('https://agent.mnb-lab.cn/api/v1/drive/files/4')
+  })
+})
+
+// ---------------------------------------------------------------- 2 分块上传时序（≥4）
+
+describe('分块上传三件套时序', () => {
+  it('大文件：init → chunks(0..2) → complete，顺序与路径正确', async () => {
+    const size = 3 * DEFAULT_CHUNK_SIZE // 3 块
+    const h = harness([
+      () => res(201, uploadSession({ file_size: size, total_chunks: 3 })), // init
+      () => res(200, uploadSession({ file_size: size, total_chunks: 3, uploaded_chunks: [0] })),
+      () => res(200, uploadSession({ file_size: size, total_chunks: 3, uploaded_chunks: [0, 1] })),
+      () => res(200, fileItem(77)) // complete
+    ])
+    const progress: number[] = []
+    const r = await h.svc.upload({
+      filename: '占位大文件.bin',
+      fileSize: size,
+      readChunk: memoryReader(size),
+      onProgress: (p) => progress.push(p.percent)
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.item?.id).toBe(77)
+      expect(r.data.uploadedChunks).toBe(3)
+      expect(r.data.resumed).toBe(false)
+    }
+    const paths = h.requests.map((q) => `${q.method} ${new URL(q.url).pathname}`)
+    expect(paths).toEqual([
+      'POST /api/v1/drive/chunked-uploads/init',
+      'PUT /api/v1/drive/chunked-uploads/up-1/chunks/0',
+      'PUT /api/v1/drive/chunked-uploads/up-1/chunks/1',
+      'PUT /api/v1/drive/chunked-uploads/up-1/chunks/2',
+      'POST /api/v1/drive/chunked-uploads/up-1/complete'
+    ])
+    expect(progress.at(-1)).toBe(100)
+    expect(h.sessions.list()).toHaveLength(0) // 完成后清本地会话
+  })
+
+  it('init 请求体：filename/file_size/chunk_size 必填，parent_id 可选', async () => {
+    const size = 2 * DEFAULT_CHUNK_SIZE
+    const h = harness([() => res(201, uploadSession({ file_size: size, total_chunks: 2 })), () => res(200, uploadSession({ total_chunks: 2, uploaded_chunks: [0, 1] })), () => res(200, uploadSession({ total_chunks: 2, uploaded_chunks: [0, 1] })), () => res(200, fileItem(1))])
+    await h.svc.upload({ filename: 'a.bin', fileSize: size, readChunk: memoryReader(size), parentId: 42 })
+    const initBody = JSON.parse(h.requests[0]!.body!) as Record<string, unknown>
+    expect(initBody.filename).toBe('a.bin')
+    expect(initBody.file_size).toBe(size)
+    expect(initBody.chunk_size).toBe(DEFAULT_CHUNK_SIZE)
+    expect(initBody.parent_id).toBe(42)
+  })
+
+  it('小文件走简化路径：POST /drive/files/upload，不建会话', async () => {
+    const size = 1024
+    const h = harness([() => res(201, fileItem(88))])
+    const r = await h.svc.upload({ filename: '小.txt', fileSize: size, readChunk: memoryReader(size) })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.uploadedChunks).toBe(1)
+    expect(h.requests).toHaveLength(1)
+    expect(h.requests[0]!.url).toBe('https://agent.mnb-lab.cn/api/v1/drive/files/upload')
+    expect(h.sessions.list()).toHaveLength(0)
+  })
+
+  it('chunkCount 口径：向上取整（与服务端 total_chunks 一致）', () => {
+    expect(chunkCount(0)).toBe(0)
+    expect(chunkCount(1)).toBe(1)
+    expect(chunkCount(DEFAULT_CHUNK_SIZE)).toBe(1)
+    expect(chunkCount(DEFAULT_CHUNK_SIZE + 1)).toBe(2)
+    expect(chunkCount(3 * DEFAULT_CHUNK_SIZE)).toBe(3)
+  })
+})
+
+// ---------------------------------------------------------------- 3 断点续传（≥3）
+
+describe('断点续传', () => {
+  it('中断后重传：以服务端 uploaded_chunks 为准，只补缺口', async () => {
+    const size = 4 * DEFAULT_CHUNK_SIZE // 4 块
+    // 第一次：传完第 0 块后中断（第 1 块返回错误）
+    const h1 = harness([
+      () => res(201, uploadSession({ file_size: size, total_chunks: 4 })),
+      () => res(200, uploadSession({ file_size: size, total_chunks: 4, uploaded_chunks: [0] })),
+      () => res(500, { error: { code: 'BOOM', message: 'x' } }) // 第 1 块失败
+    ])
+    const first = await h1.svc.upload({ filename: 'big.bin', fileSize: size, readChunk: memoryReader(size), resumeKey: 'k1' })
+    expect(first.ok).toBe(false)
+    expect(h1.sessions.list()).toHaveLength(1) // ★ 会话已持久化（断点留痕）
+    expect(h1.sessions.get('k1')?.uploadedChunks).toEqual([0])
+
+    // 第二次：服务端说已收到 0、1 两块 → 只传 2、3
+    const h2 = harness([
+      () => res(200, uploadSession({ file_size: size, total_chunks: 4, uploaded_chunks: [0, 1] })), // GET 会话
+      () => res(200, uploadSession({ total_chunks: 4, uploaded_chunks: [0, 1, 2] })),
+      () => res(200, uploadSession({ total_chunks: 4, uploaded_chunks: [0, 1, 2, 3] })),
+      () => res(200, fileItem(99))
+    ])
+    h2.sessions.set('k1', h1.sessions.get('k1')!) // 复用同一持久化会话
+    const progress: { percent: number; skipped?: number }[] = []
+    const second = await h2.svc.upload({
+      filename: 'big.bin',
+      fileSize: size,
+      readChunk: memoryReader(size),
+      resumeKey: 'k1',
+      onProgress: (p) => progress.push({ percent: p.percent, ...(p.skippedChunks === undefined ? {} : { skipped: p.skippedChunks }) })
+    })
+    expect(second.ok).toBe(true)
+    if (second.ok) {
+      expect(second.data.resumed).toBe(true)
+      expect(second.data.uploadedChunks).toBe(4)
+    }
+    const putIndexes = h2.requests
+      .filter((q) => q.method === 'PUT')
+      .map((q) => Number(new URL(q.url).pathname.split('/').pop()))
+    expect(putIndexes).toEqual([2, 3]) // ★ 只补缺口，不重头
+    expect(progress[0]?.skipped).toBe(2) // 起始即报告跳过 2 块
+  })
+
+  it('会话在服务端已失效：本地会话被清并重新创建', async () => {
+    const size = 2 * DEFAULT_CHUNK_SIZE
+    const h = harness([
+      () => res(404, { error: { code: 'NOT_FOUND', message: 'gone' } }), // GET 会话失效
+      () => res(201, uploadSession({ file_size: size, total_chunks: 2 })),
+      () => res(200, uploadSession({ total_chunks: 2, uploaded_chunks: [0] })),
+      () => res(200, uploadSession({ total_chunks: 2, uploaded_chunks: [0, 1] })),
+      () => res(200, fileItem(5))
+    ])
+    h.sessions.set('k2', { uploadId: 'old', filename: 'x', fileSize: size, chunkSize: DEFAULT_CHUNK_SIZE, totalChunks: 2, uploadedChunks: [0], status: 'pending', expiresAt: '', updatedAt: 0 })
+    const r = await h.svc.upload({ filename: 'x', fileSize: size, readChunk: memoryReader(size), resumeKey: 'k2' })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.resumed).toBe(false)
+    expect(h.requests[0]!.method).toBe('GET') // 先查会话
+    expect(h.requests[1]!.url).toContain('/init') // 再重建
+  })
+
+  it('会话持久化往返：MemorySessionStore 读写一致；pendingUploads 可列出', async () => {
+    const store = new MemorySessionStore()
+    const s = { uploadId: 'u1', filename: 'f', fileSize: 10, chunkSize: 4, totalChunks: 3, uploadedChunks: [0, 2], status: 'pending', expiresAt: 'x', updatedAt: 1 }
+    store.set('k', s)
+    expect(store.get('k')).toEqual(s)
+    expect(store.list()).toHaveLength(1)
+    store.remove('k')
+    expect(store.get('k')).toBeNull()
+    expect(store.list()).toHaveLength(0)
+
+    const h = harness([() => res(200, { items: [], total: 0 })])
+    h.sessions.set('p', s)
+    expect(h.svc.pendingUploads()).toHaveLength(1)
+  })
+
+  it('取消上传：DELETE 会话并清本地', async () => {
+    const h = harness([() => res(204, '')])
+    h.sessions.set('k3', { uploadId: 'up-9', filename: 'f', fileSize: 1, chunkSize: 1, totalChunks: 1, uploadedChunks: [], status: 'pending', expiresAt: '', updatedAt: 0 })
+    const r = await h.svc.cancelUpload('up-9', 'k3')
+    expect(r.ok).toBe(true)
+    expect(h.requests[0]!.method).toBe('DELETE')
+    expect(h.sessions.list()).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------- 4 可见性（≥2）
+
+describe('可见性沿用服务端', () => {
+  it('visibility 三值原样透传，一条不剔除（客户端不本地过滤）', async () => {
+    const h = harness([() => res(200, { items: [fileItem(1, { visibility: 'private' }), fileItem(2, { visibility: 'team' }), fileItem(3, { visibility: 'public' })], total: 3 })])
+    const r = await h.svc.list()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.items.map((x) => x.visibility)).toEqual(['private', 'team', 'public'])
+  })
+
+  it('403 不可见：中性文案，不暴露服务端原文与 id', async () => {
+    const h = harness([() => res(403, { error: { code: 'FORBIDDEN', message: 'no permission on file 88' } })])
+    const r = await h.svc.get(88)
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      const msg = driveErrorMessage(r.error)
+      expect(msg).not.toMatch(/FORBIDDEN|no permission|88/)
+      expect(featureErrorMessage({ kind: 'client', message: 'x', detail: '403 forbidden' })).toBe(inaccessibleMessage())
+    }
+  })
+})
+
+// ---------------------------------------------------------------- 5 提供者刷新（≥1）
+
+describe('外部状态「提供者」模式', () => {
+  it('改绑定后请求打新地址（禁构造期快照 —— M2-3b 同款回归）', async () => {
+    let current = 'https://agent.mnb-lab.cn'
+    const h = harness([() => res(200, { items: [], total: 0 })], { baseUrl: () => current })
+    await h.svc.list()
+    expect(h.requests[0]!.url.startsWith('https://agent.mnb-lab.cn')).toBe(true)
+    current = 'http://127.0.0.1:8899'
+    await h.svc.list()
+    expect(h.requests[1]!.url.startsWith('http://127.0.0.1:8899')).toBe(true)
+  })
+
+  it('未绑定：不发请求，直接给出引导（且状态机文案由 guidance 统一给出）', async () => {
+    const h = harness([() => res(200, { items: [], total: 0 })], { tokens: null })
+    const r = await h.svc.list()
+    expect(r.ok).toBe(false)
+    expect(h.requests).toHaveLength(0)
+    const state = cloudUsableState({ status: 'unbound' })
+    const g = cloudGuidance(state, '网盘')
+    expect(g.title).toContain('网盘')
+    expect(g.canOpenSettings).toBe(true)
+    // ★ 组件不得硬编码措辞：文案来自集中状态机
+    expect(g.actionLabel).toContain('设置')
+    expect(cloudGuidance('offline', '网盘').canOpenSettings).toBe(false)
+    expect(cloudGuidance('ready', '网盘').title).toBe('')
+  })
+})
+
+// ---------------------------------------------------------------- 6 协议健壮（≥1）
+
+describe('畸形响应不崩溃', () => {
+  it('列表/详情畸形：丢弃无效项、明确报错，不抛异常', async () => {
+    expect(normalizeDrivePage(null).items).toEqual([])
+    expect(normalizeDrivePage({ items: 'oops' }).items).toEqual([])
+    expect(normalizeDrivePage([fileItem(1)]).items).toHaveLength(1) // 容忍裸数组
+    expect(normalizeDriveItem({ file_name: '无 id.txt' })).toBeNull()
+    expect(normalizeDriveItem({ id: 1 })).toBeNull()
+    expect(normalizeDriveItem('str')).toBeNull()
+
+    const h = harness([() => res(200, '"just a string"')])
+    const r = await h.svc.get(1)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe('malformed')
+  })
+})

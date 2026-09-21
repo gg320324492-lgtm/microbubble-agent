@@ -137,6 +137,19 @@ export interface PreloadApi {
     /** 解绑（清令牌与绑定状态，不删本地数据） */
     unbind(): Promise<unknown>
   }
+  drive: {
+    /** M2-3c：网盘数据源状态（引导态，文案由集中状态机给出） */
+    state(): Promise<unknown>
+    list(parentId?: number | null): Promise<unknown>
+    /** 上传本地文件（分块/断点续传由主进程处理，进度经 drive:progress 事件推送） */
+    upload(payload: { filePath: string; parentId?: number | null }): Promise<unknown>
+    rename(id: number, title: string): Promise<unknown>
+    remove(id: number): Promise<unknown>
+    /** 未完成上传（「继续上传」入口） */
+    pendingUploads(): Promise<unknown>
+    /** 上传进度事件（返回取消订阅函数） */
+    onProgress(cb: (p: unknown) => void): () => void
+  }
   backup: {
     create(password: string, targetDir: string): Promise<{ fileName: string; size: number }>
     restore(password: string, backupFile: string): Promise<{ needRestart: boolean }>

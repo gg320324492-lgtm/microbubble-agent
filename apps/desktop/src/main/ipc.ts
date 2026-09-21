@@ -65,6 +65,9 @@ import {
   type ToolCategory
 } from './agent/permissions/policy'
 import type { PermissionPort } from './agent/agent-loop.service'
+import { RemoteDriveService, driveErrorMessage } from './services/cloud/drive'
+import { cloudGuidance, cloudUsableState } from './services/cloud/guidance'
+import type { SessionStore, UploadSession } from './services/cloud/transfer'
 import {
   RemoteKnowledgeService,
   knowledgeErrorMessage,
@@ -959,6 +962,96 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     return ok(null)
   })
 
+  // ---------- 远程网盘（M2-3c）----------
+  // 实例在下方（currentUserId 就绪后）赋值，此处仅前置声明，避免 TDZ（M8-2/M2-3b 双实证）。
+  let remoteDrive: RemoteDriveService
+
+  ipcMain.handle(IPC.DRIVE_STATE, (): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      const binding = readCloudState()
+      const effective = binding.status === 'bound' && readCloudTokens() === null ? { ...binding, status: 'unbound' as const } : binding
+      const state = cloudUsableState(effective)
+      const g = cloudGuidance(state, '网盘')
+      return {
+        state,
+        title: g.title,
+        hint: g.hint,
+        canOpenSettings: g.canOpenSettings,
+        actionLabel: g.actionLabel,
+        baseUrl: effective.baseUrl,
+        username: effective.username ?? null
+      }
+    })
+  )
+
+  ipcMain.handle(IPC.DRIVE_LIST, async (_e, p): Promise<IpcResult<unknown>> => {
+    auth.requireUser()
+    const r = await remoteDrive.list({ parentId: p?.parentId ?? null })
+    if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
+    return ok(r.data)
+  })
+
+  ipcMain.handle(IPC.DRIVE_RENAME, async (_e, p): Promise<IpcResult<unknown>> => {
+    auth.requireUser()
+    const r = await remoteDrive.rename(Number(p?.id), { title: String(p?.title ?? '') })
+    if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
+    return ok(r.data)
+  })
+
+  ipcMain.handle(IPC.DRIVE_DELETE, async (_e, p): Promise<IpcResult<boolean>> => {
+    auth.requireUser()
+    const r = await remoteDrive.remove(Number(p?.id))
+    if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
+    return ok(true)
+  })
+
+  ipcMain.handle(IPC.DRIVE_PENDING_UPLOADS, (): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      return remoteDrive.pendingUploads()
+    })
+  )
+
+  // 上传：分块读盘（不整文件进内存）+ 进度事件推给渲染层
+  ipcMain.handle(IPC.DRIVE_UPLOAD, async (e, p): Promise<IpcResult<unknown>> => {
+    auth.requireUser()
+    const filePath = String(p?.filePath ?? '')
+    if (!filePath) return fail('INVALID_INPUT', '请选择要上传的文件')
+    const parentId = p?.parentId === undefined || p?.parentId === null ? null : Number(p.parentId)
+    try {
+      const { statSync, openSync, readSync, closeSync } = await import('node:fs')
+      const st = statSync(filePath)
+      if (!st.isFile()) return fail('INVALID_INPUT', '只能上传文件')
+      const fd = openSync(filePath, 'r')
+      const readChunk = async (offset: number, length: number): Promise<Uint8Array> => {
+        const buf = Buffer.allocUnsafe(length)
+        readSync(fd, buf, 0, length, offset)
+        return new Uint8Array(buf)
+      }
+      try {
+        const r = await remoteDrive.upload({
+          filename: filePath.split(/[\\/]/).pop() ?? '未命名',
+          fileSize: st.size,
+          readChunk,
+          parentId,
+          onProgress: (prog) => {
+            // 进度事件：大文件上传时渲染层据此画进度条
+            if (!e.sender.isDestroyed()) e.sender.send(IPC.DRIVE_UPLOAD, { kind: 'progress', ...prog })
+          }
+        })
+        if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
+        return ok(r.data)
+      } finally {
+        closeSync(fd)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(`[drive] 上传异常：${msg}`)
+      return fail('DRIVE_UPLOAD_FAILED', '上传失败，请检查文件是否可读或稍后重试。')
+    }
+  })
+
   // ---------- 远程知识库（M2-3b：数据源切父级服务器） ----------
   // 注意：实例在下方（currentUserId 就绪后）才赋值，此处仅前置声明，避免 TDZ。
   let remoteKnowledge: RemoteKnowledgeService
@@ -1660,6 +1753,37 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   // M8-2 已在同位置踩过同一个坑，真机首启再次抓到）。
   // 本地知识库服务实例保留但不接线 —— 本地遗留数据不迁移、不删除（工单 §4 硬边界）。
   void knowledge
+  // M2-3c：远程网盘 —— 同样必须晚于 currentUserId 声明（TDZ 教训）
+  // 上传会话持久化到 settings（断点续传跨重启可用）
+  // 内存索引 + settings 持久化：settings 提供 get/set，没有「按前缀列出」，
+  // 故用内存 Map 记账（进程内可列），settings 负责跨重启恢复。
+  const driveSessionIndex = new Map<string, UploadSession>()
+  const driveSessionStore: SessionStore = {
+    get: (key) => {
+      const raw = settings.get(`drive.upload.${key}`, currentUserId() ?? undefined) as UploadSession | null | undefined
+      const s = raw && typeof raw.uploadId === 'string' ? raw : null
+      if (s) driveSessionIndex.set(key, s)
+      return s
+    },
+    set: (key, session) => {
+      driveSessionIndex.set(key, session)
+      settings.set(`drive.upload.${key}`, session, currentUserId() ?? undefined)
+    },
+    remove: (key) => {
+      driveSessionIndex.delete(key)
+      settings.set(`drive.upload.${key}`, null, currentUserId() ?? undefined)
+    },
+    list: () => [...driveSessionIndex.values()]
+  }
+  remoteDrive = new RemoteDriveService({
+    client: makeCloudClient(readCloudState().baseUrl),
+    tokens: () => readCloudTokens(),
+    baseUrl: () => readCloudState().baseUrl,
+    sessions: driveSessionStore,
+    onTokensRefreshed: (t) => writeCloudTokens(t),
+    log: (m) => console.log(m)
+  })
+
   remoteKnowledge = new RemoteKnowledgeService({
     client: makeCloudClient(readCloudState().baseUrl),
     tokens: () => readCloudTokens(),

@@ -34,6 +34,13 @@ export const IPC = {
   CLOUD_STATUS_GET: 'cloud:status-get',
   CLOUD_BIND: 'cloud:bind',
   CLOUD_UNBIND: 'cloud:unbind',
+  /** M2-3c 远程网盘 */
+  DRIVE_STATE: 'drive:state',
+  DRIVE_LIST: 'drive:list',
+  DRIVE_UPLOAD: 'drive:upload',
+  DRIVE_RENAME: 'drive:rename',
+  DRIVE_DELETE: 'drive:delete',
+  DRIVE_PENDING_UPLOADS: 'drive:pending-uploads',
   /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */
   CHAT_STREAM_EVENT: 'chat:stream-event',
   WINDOW_STATE_EVENT: 'window:state-event',
