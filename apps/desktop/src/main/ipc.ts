@@ -1637,6 +1637,19 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     })
   )
 
+  // M2-3a+：外链（仅 http/https，白名单协议，避免被滥用打开本地文件）
+  ipcMain.handle(IPC.APP_OPEN_EXTERNAL, async (_e, p): Promise<IpcResult<null>> => {
+    const url = String((p as { url?: string })?.url ?? '')
+    if (!/^https?:\/\//i.test(url)) return fail('INVALID_INPUT', '仅支持打开 http/https 链接')
+    try {
+      await shell.openExternal(url)
+      return ok(null)
+    } catch (err) {
+      console.log(`[app] 打开外链失败：${err instanceof Error ? err.message : String(err)}`)
+      return fail('OPEN_EXTERNAL_FAILED', '无法打开浏览器，请手动访问 mnb-lab.cn')
+    }
+  })
+
   // M8-3 §5：steering —— 任务进行中用户补充要求（轮边界注入）
   ipcMain.handle(IPC.AGENT_STEER, (_e, p): IpcResult<null> =>
     tryRun(() => {
@@ -1787,6 +1800,48 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   agentLoop.setContextConfig(readContextConfig())
   // M8-3：注入权限端口（三层 store）；未配置任何规则时判定结果 = 现行为
   agentLoop.setPermissionPort(permissionPort)
+
+  // M2-3a+ 统一登录：父级账号登录 → 云端身份关联 + 首次认领本机历史数据
+  ipcMain.handle(IPC.AUTH_CLOUD_LOGIN, async (_e, p): Promise<IpcResult<unknown>> => {
+    const payload = (p ?? {}) as { baseUrl?: string; username?: string; password?: string }
+    const username = String(payload.username ?? '').trim()
+    const password = String(payload.password ?? '')
+    if (!username || !password) {
+      return fail('INVALID_INPUT', '请填写账号与密码')
+    }
+    try {
+      const baseUrl = normalizeBaseUrl(payload.baseUrl ?? readCloudState().baseUrl)
+      const client = makeCloudClient(baseUrl)
+      const loginRes = await client.login(username, password)
+      if (!loginRes.ok) {
+        console.log(`[auth] 云端登录失败（${loginRes.error.kind}）：${loginRes.error.detail ?? ''}`)
+        return fail(`CLOUD_${loginRes.error.kind.toUpperCase().replace('-', '_')}`, loginRes.error.message)
+      }
+      // 取父级身份（用于认领映射与展示）
+      const meRes = await client.me(loginRes.data.accessToken)
+      if (!meRes.ok) {
+        return fail(`CLOUD_${meRes.error.kind.toUpperCase().replace('-', '_')}`, meRes.error.message)
+      }
+      // 令牌落 safeStorage（离线宽容依赖本地会话；云端令牌供远程功能用）
+      writeCloudTokens(loginRes.data)
+      writeCloudState({ status: 'bound', baseUrl, username: meRes.data.name, updatedAt: Date.now() })
+      // 本机身份 + 一次性认领
+      const r = auth.loginWithCloud({ cloudUserId: String(meRes.data.id), cloudUsername: meRes.data.name })
+      console.log(`[auth] 云端登录成功：${meRes.data.name}（首次接入=${r.firstClaim}）`)
+      return ok({
+        user: r.session.user,
+        expiresAt: r.session.expiresAt,
+        firstClaim: r.firstClaim,
+        claimedCounts: r.claimedCounts,
+        summary: r.summary,
+        cloudUsername: meRes.data.name
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(`[auth] 云端登录异常：${msg}`)
+      return fail('CLOUD_NETWORK', '无法连接云端服务器，请检查网络或服务器地址。')
+    }
+  })
 
   // M2-3b：远程知识库服务 —— **必须晚于 currentUserId 声明**（readCloudState 内部依赖它，
   // 否则触发 TDZ「Cannot access 'currentUserId' before initialization」导致启动即崩；

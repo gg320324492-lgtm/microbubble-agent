@@ -36,6 +36,25 @@ export const useAuthStore = defineStore('auth', () => {
     expiresAt.value = s.expiresAt
   }
 
+  /**
+   * 统一登录（M2-3a+）：以父级账号登录。成功后云端身份自动关联，
+   * 首次登录会认领本机历史数据（返回 summary 供提示）。
+   */
+  async function cloudLogin(
+    username: string,
+    password: string,
+    baseUrl?: string
+  ): Promise<{ firstClaim: boolean; summary: string; cloudUsername: string }> {
+    const r = (await window.api.auth.cloudLogin({
+      username,
+      password,
+      ...(baseUrl ? { baseUrl } : {})
+    })) as { user: LocalUser; expiresAt: number; firstClaim: boolean; summary: string; cloudUsername: string }
+    user.value = r.user
+    expiresAt.value = r.expiresAt
+    return { firstClaim: r.firstClaim, summary: r.summary, cloudUsername: r.cloudUsername }
+  }
+
   async function registerAdmin(username: string, displayName: string, password: string): Promise<void> {
     const s: AuthSession = await window.api.auth.registerAdmin({ username, displayName, password })
     user.value = s.user
@@ -64,6 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
     needsSetup,
     init,
     login,
+    cloudLogin,
     registerAdmin,
     logout
   }

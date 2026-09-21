@@ -34,6 +34,10 @@ export const IPC = {
   CLOUD_STATUS_GET: 'cloud:status-get',
   CLOUD_BIND: 'cloud:bind',
   CLOUD_UNBIND: 'cloud:unbind',
+  /** M2-3a+ 统一登录：以父级账号登录本机（取代本地建号 + 手动绑定） */
+  AUTH_CLOUD_LOGIN: 'auth:cloud-login',
+  /** M2-3a+：用系统浏览器打开外部链接（注册引导等） */
+  APP_OPEN_EXTERNAL: 'app:open-external',
   /** M2-3c 远程网盘 */
   DRIVE_STATE: 'drive:state',
   DRIVE_LIST: 'drive:list',

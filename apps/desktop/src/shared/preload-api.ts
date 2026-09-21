@@ -40,10 +40,14 @@ import type {
 
 export interface PreloadApi {
   app: {
+    /** 用系统浏览器打开外链（仅允许 http/https） */
+    openExternal(url: string): Promise<void>
     info(): Promise<AppInfo>
     quit(): Promise<void>
   }
   auth: {
+    /** M2-3a+：以父级账号登录（成功后云端身份自动关联并认领本机历史数据） */
+    cloudLogin(payload: { baseUrl?: string; username: string; password: string }): Promise<unknown>
     status(): Promise<{ userCount: number }>
     registerAdmin(p: { username: string; displayName?: string; password: string }): Promise<AuthSession>
     login(p: { username: string; password: string }): Promise<AuthSession>

@@ -77,16 +77,16 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
   await auth.init()
 
+  // M2-3a+ 统一登录：**本地建号已退役**，不再分流到 setup。
+  // 有缓存会话（含离线宽容）→ 直接进；无会话 → 登录窗（父级账号）。
   if (to.path.startsWith('/app') && !auth.isAuthenticated) {
-    return auth.needsSetup ? { name: 'setup' } : { name: 'login' }
+    return { name: 'login' }
   }
   if ((to.name === 'login' || to.name === 'setup') && auth.isAuthenticated) {
     return { name: 'assistant' }
   }
-  if (to.name === 'login' && auth.needsSetup) {
-    return { name: 'setup' }
-  }
-  if (to.name === 'setup' && auth.userCount > 0) {
+  // setup 路由保留但**不可达**（直接访问也送回登录窗）——本地 users 表结构保留不删
+  if (to.name === 'setup') {
     return { name: 'login' }
   }
   return true

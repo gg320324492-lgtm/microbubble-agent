@@ -35,20 +35,21 @@ export function cloudGuidance(state: CloudUsableState, feature = ''): CloudGuida
   const what = feature ? `${feature}` : '此功能'
   switch (state) {
     case 'unbound':
+      // M2-3a+：统一登录后语义为「未登录」（不再有「绑定」这一动作）
       return {
         state,
-        title: `需连接云端才能使用${what}`,
-        hint: `${what}数据保存在课题组服务器上。请到「设置 · 云端连接」登录你的课题组账号。`,
+        title: `需登录课题组账号才能使用${what}`,
+        hint: `${what}数据保存在课题组服务器上。请到「设置 · 账号」登录你的课题组账号。`,
         canOpenSettings: true,
-        actionLabel: '前往设置 · 云端连接'
+        actionLabel: '前往设置 · 账号'
       }
     case 'expired':
       return {
         state,
-        title: '云端登录状态已失效',
-        hint: '请到「设置 · 云端连接」重新登录账号。',
+        title: '登录状态已失效',
+        hint: '请到「设置 · 账号」重新登录。',
         canOpenSettings: true,
-        actionLabel: '前往设置 · 云端连接'
+        actionLabel: '前往设置 · 账号'
       }
     case 'offline':
       return {

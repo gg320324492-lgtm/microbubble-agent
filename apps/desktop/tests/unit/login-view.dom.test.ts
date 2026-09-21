@@ -17,6 +17,8 @@ function stubApi(overrides: Partial<Record<string, unknown>> = {}): void {
         status: vi.fn().mockResolvedValue({ userCount: 1 }),
         restore: vi.fn().mockResolvedValue(null),
         login: vi.fn(),
+        // M2-3a+ 统一登录：登录窗改走 cloudLogin
+        cloudLogin: vi.fn(async () => ({ firstClaim: false, summary: '', cloudUsername: 'wangtz' })),
         registerAdmin: vi.fn(),
         logout: vi.fn().mockResolvedValue(undefined)
       },
@@ -73,21 +75,24 @@ describe('登录页 UI 契约', () => {
     const wrapper = await mountLogin()
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toBe('请输入用户名和密码')
+    expect(wrapper.get('[role="alert"]').text()).toBe('请输入课题组账号与密码') // M2-3a+ 措辞
   })
 
   it('提交期间禁用输入与按钮，文案切「登录中…」', async () => {
     const wrapper = await mountLogin()
     const store = useAuthStore()
-    let finish!: (v: undefined) => void
-    vi.spyOn(store, 'login').mockImplementation(() => new Promise((r) => (finish = r)))
+    let finish!: (v: { firstClaim: boolean; summary: string; cloudUsername: string }) => void
+    // M2-3a+：登录窗改走 cloudLogin
+    vi.spyOn(store, 'cloudLogin').mockImplementation(
+      () => new Promise((r) => (finish = r))
+    )
     await wrapper.get('#login-username').setValue('wang')
     await wrapper.get('#login-password').setValue('password123')
     await wrapper.get('form').trigger('submit')
     expect(wrapper.get('#login-username').attributes('disabled')).toBeDefined()
     expect(wrapper.get('#login-password').attributes('disabled')).toBeDefined()
     expect(wrapper.get('button[type="submit"]').text()).toBe('登录中…')
-    finish(undefined)
+    finish({ firstClaim: false, summary: '', cloudUsername: 'wangtz' })
     await flushPromises()
   })
 

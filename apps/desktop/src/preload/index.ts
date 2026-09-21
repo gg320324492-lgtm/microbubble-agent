@@ -46,10 +46,12 @@ async function invoke<T>(channel: string, payload?: unknown): Promise<T> {
 
 const api = {
   app: {
+    openExternal: (url: string): Promise<void> => invoke(IPC.APP_OPEN_EXTERNAL, { url }),
     info: (): Promise<AppInfo> => invoke(IPC.APP_INFO),
     quit: (): Promise<void> => invoke(IPC.APP_QUIT)
   },
   auth: {
+    cloudLogin: (payload: { baseUrl?: string; username: string; password: string }): Promise<unknown> => invoke(IPC.AUTH_CLOUD_LOGIN, payload),
     status: (): Promise<{ userCount: number }> => invoke(IPC.AUTH_STATUS),
     registerAdmin: (p: { username: string; displayName?: string; password: string }): Promise<AuthSession> =>
       invoke(IPC.AUTH_REGISTER_ADMIN, p),

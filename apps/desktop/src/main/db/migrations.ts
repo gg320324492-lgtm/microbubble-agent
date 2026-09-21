@@ -230,6 +230,21 @@ export const MIGRATIONS: Migration[] = [
     sql: `
       ALTER TABLE chat_sessions ADD COLUMN context_records TEXT;
     `
+  },
+  {
+    // M2-3a+ 统一登录：users 行作为「云端账号缓存」
+    //   cloud_user_id   父级账号 id（NULL = 旧的本地账号，未与云端关联）
+    //   cloud_username  父级用户名（冗余便于展示/排查）
+    //   claimed_at      该云端身份在本机完成数据认领的时间
+    // 保留本地 users 表与既有列不删（向前兼容，工单 §3）
+    id: 13,
+    name: 'users-cloud-identity',
+    sql: `
+      ALTER TABLE users ADD COLUMN cloud_user_id TEXT;
+      ALTER TABLE users ADD COLUMN cloud_username TEXT;
+      ALTER TABLE users ADD COLUMN claimed_at INTEGER;
+      CREATE INDEX IF NOT EXISTS idx_users_cloud ON users(cloud_user_id);
+    `
   }
 ]
 

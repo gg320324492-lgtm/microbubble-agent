@@ -5,6 +5,13 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import type { SqlDatabase } from '../db/adapters'
 import { SESSION_TTL_MS } from '@shared/constants'
+import {
+  CLAIMABLE_TABLES,
+  claimSummary,
+  planClaim,
+  type CloudIdentity,
+  type LocalUserRow
+} from './cloud-identity'
 import type { AuthSession, LocalUser, UserRole } from '@shared/types'
 
 const SCRYPT_N = 16384
@@ -59,6 +66,19 @@ function mapUser(r: UserRow): LocalUser {
     isActive: r.is_active === 1,
     createdAt: r.created_at
   }
+}
+
+/** 统一登录结果（工单 M2-3a+）：会话 + 首次认领信息 */
+export interface CloudLoginResult {
+  session: AuthSession
+  /** 本次是否首次接入（首次会做数据认领） */
+  firstClaim: boolean
+  /** 本次是否新建了云端身份缓存行 */
+  createdUser: boolean
+  /** 认领到的数据条数（按表标签） */
+  claimedCounts: Record<string, number>
+  /** 面向用户的一句话（非首次为空串） */
+  summary: string
 }
 
 export class AuthService {
@@ -157,6 +177,79 @@ export class AuthService {
       throw err
     }
     return mapUser(row)
+  }
+
+  /**
+   * 统一登录（工单 M2-3a+ §2）：以**父级账号身份**登录本机。
+   *
+   * 流程：
+   *   1. 决策（纯函数 planClaim）：复用已有缓存行 / 新建 / 认领旧本地账号数据
+   *   2. 首次认领时，把「无主旧账号」名下的数据 re-point 到该云端身份（**一次性**）
+   *   3. 起本地会话（令牌仍走 safeStorage；离线宽容依赖它）
+   *
+   * 多账号隔离：只认领 cloud_user_id 为 NULL 的旧行；已被别的云端账号认领过的行绝不参与。
+   * 本地 users 表行保留（向前兼容），仅新增云端映射列。
+   */
+  loginWithCloud(identity: CloudIdentity): CloudLoginResult {
+    const users = this.db
+      .prepare('SELECT id, username, cloud_user_id AS cloudUserId FROM users')
+      .all() as LocalUserRow[]
+    const plan = planClaim(identity, users)
+
+    let localUserId: string
+    if (plan.reuseLocalUserId) {
+      localUserId = plan.reuseLocalUserId
+    } else {
+      localUserId = `u-cloud-${identity.cloudUserId}`
+      const now = Date.now()
+      this.db
+        .prepare(
+          'INSERT INTO users (id, username, display_name, password_hash, role, is_active, created_at, updated_at, cloud_user_id, cloud_username) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)'
+        )
+        .run(
+          localUserId,
+          plan.createUsername ?? identity.cloudUsername,
+          identity.cloudUsername,
+          // 哨兵值：云端身份不持有本地密码，本地密码校验永不通过
+          'cloud:sso',
+          'member',
+          now,
+          now,
+          String(identity.cloudUserId),
+          identity.cloudUsername
+        )
+    }
+
+    const counts: Record<string, number> = {}
+    if (plan.firstClaim && plan.orphanUserIds.length > 0) {
+      const placeholders = plan.orphanUserIds.map(() => '?').join(',')
+      for (const { table, label } of CLAIMABLE_TABLES) {
+        try {
+          const info = this.db
+            .prepare(`UPDATE ${table} SET user_id = ? WHERE user_id IN (${placeholders})`)
+            .run(localUserId, ...plan.orphanUserIds)
+          const n = Number((info as { changes?: number }).changes ?? 0)
+          if (n > 0) counts[label] = n
+        } catch {
+          // 表不存在（老库/未迁移）→ 跳过，不阻塞登录
+        }
+      }
+      this.db.prepare('UPDATE users SET claimed_at = ? WHERE id = ?').run(Date.now(), localUserId)
+      console.log(
+        `[auth] 云端身份 ${identity.cloudUsername} 首次接入，认领：${Object.entries(counts)
+          .map(([k, v]) => `${k} ${v} 条`)
+          .join('、') || '无'}`
+      )
+    }
+
+    const session = this.startSession(localUserId)
+    return {
+      session,
+      firstClaim: plan.firstClaim,
+      createdUser: plan.reuseLocalUserId === null,
+      claimedCounts: counts,
+      summary: plan.firstClaim ? claimSummary(counts) : ''
+    }
   }
 
   /** 当前会话是否仍有效（内存检查，不查库） */

@@ -345,16 +345,17 @@ onUnmounted(() => {
     </p>
     <!-- M2-3a 云端连接（最小 UI） -->
     <details class="ctx-debug" data-testid="cloud-connection" open>
-      <summary>云端连接</summary>
+      <summary>账号</summary>
       <p class="hint tiny" data-testid="cloud-status">
         <span :class="cloudStatusClass">●</span>
-        {{ cloud?.statusLabel ?? '未绑定' }}
+        {{ cloud?.statusLabel ?? '未登录' }}
         <template v-if="cloud?.username">· {{ cloud.username }}</template>
         <template v-if="cloud?.lastError"> · {{ cloud.lastError }}</template>
       </p>
       <template v-if="cloud?.status === 'bound'">
-        <button class="ghost-btn" data-testid="cloud-unbind" :disabled="cloudBusy" @click="unbindCloud">解除绑定</button>
-        <p class="hint tiny">服务器：{{ cloud.baseUrl }}（解除绑定只清登录状态，本地数据不受影响）</p>
+        <p class="hint tiny">当前登录：{{ cloud.username }}（服务器：{{ cloud.baseUrl }}）</p>
+        <button class="ghost-btn" data-testid="account-signout" :disabled="cloudBusy" @click="unbindCloud">退出登录</button>
+        <p class="hint tiny">退出只清除登录状态，**本机数据保留**；同账号下次登录自动认领回来。</p>
       </template>
       <template v-else>
         <div class="ctx-cfg">
