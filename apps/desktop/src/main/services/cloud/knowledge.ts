@@ -74,6 +74,12 @@ export type TokensProvider = () => CloudTokens | null
 export interface RemoteKnowledgeDeps {
   client: CloudApiClient
   tokens: TokensProvider
+  /**
+   * 当前绑定的服务器地址提供者（**每次请求前刷新**）。
+   * 必要性：客户端在构造时捕获 baseUrl，若用户之后绑定到别的服务器（如自建/局域网），
+   * 不刷新就会继续打旧地址 → 401。模拟 E2E 实测抓到过这个缺陷。
+   */
+  baseUrl?: () => string
   /** 续期成功后回调（装配层据此把新 access 落回加密存储） */
   onTokensRefreshed?: (tokens: CloudTokens) => void
   log?: (message: string) => void
@@ -185,12 +191,14 @@ export function inaccessibleMessage(): string {
 export class RemoteKnowledgeService {
   private readonly client: CloudApiClient
   private readonly tokens: TokensProvider
+  private readonly baseUrlProvider: (() => string) | null
   private readonly onTokensRefreshed: (tokens: CloudTokens) => void
   private readonly log: (m: string) => void
 
   constructor(deps: RemoteKnowledgeDeps) {
     this.client = deps.client
     this.tokens = deps.tokens
+    this.baseUrlProvider = deps.baseUrl ?? null
     this.onTokensRefreshed = deps.onTokensRefreshed ?? ((): void => undefined)
     this.log = deps.log ?? ((): void => undefined)
   }
@@ -212,6 +220,8 @@ export class RemoteKnowledgeService {
   ): Promise<CloudResult<unknown>> {
     const tok = this.requireTokens()
     if (!tok.ok) return tok
+    // ★ 每次请求前按当前绑定刷新地址（用户可能中途换了服务器）
+    if (this.baseUrlProvider) this.client.setBaseUrl(this.baseUrlProvider())
     const res = await this.client.requestWithAuth(method, path, tok.data, opts)
     if (!res.ok) return res
     if (res.data.refreshed) {

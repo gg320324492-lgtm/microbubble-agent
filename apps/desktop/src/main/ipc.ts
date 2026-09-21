@@ -1663,6 +1663,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   remoteKnowledge = new RemoteKnowledgeService({
     client: makeCloudClient(readCloudState().baseUrl),
     tokens: () => readCloudTokens(),
+    // 每次请求前按当前绑定刷新地址（用户可能中途改服务器）
+    baseUrl: () => readCloudState().baseUrl,
     onTokensRefreshed: (t) => writeCloudTokens(t),
     log: (m) => console.log(m)
   })

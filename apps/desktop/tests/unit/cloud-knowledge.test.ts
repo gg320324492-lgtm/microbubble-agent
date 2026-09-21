@@ -248,3 +248,27 @@ describe('畸形响应不崩溃', () => {
     expect(normalizeKnowledgeDetail(123)).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------- 9 地址刷新（模拟 E2E 抓到的缺陷）
+
+describe('服务器地址刷新（绑定后改地址必须生效）', () => {
+  it('baseUrl 提供者每次请求前生效：构造时是默认地址，绑定后指向新地址', async () => {
+    const requests: CloudHttpRequest[] = []
+    const http: CloudHttpFn = async (req) => {
+      requests.push(req)
+      return res(200, { items: [], total: 0 })
+    }
+    let current = 'https://agent.mnb-lab.cn'
+    const svc = new RemoteKnowledgeService({
+      client: new CloudApiClient({ http, baseUrl: current }),
+      tokens: () => ({ accessToken: 'AT', refreshToken: 'RT' }),
+      baseUrl: () => current
+    })
+    await svc.list()
+    expect(requests[0]!.url.startsWith('https://agent.mnb-lab.cn')).toBe(true)
+    // 用户中途改绑定（如自建/局域网）→ 下一次请求必须打到新地址
+    current = 'http://127.0.0.1:8899'
+    await svc.list()
+    expect(requests[1]!.url.startsWith('http://127.0.0.1:8899')).toBe(true)
+  })
+})
