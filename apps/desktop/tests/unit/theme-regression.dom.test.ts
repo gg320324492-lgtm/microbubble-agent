@@ -30,17 +30,19 @@ beforeEach(() => {
 })
 
 describe('SideNav 换新 — 六模块项与选中态仍工作', () => {
-  it('渲染六个模块项，当前路由项标记选中并带 aria-current', async () => {
+  // M2-3c：网盘入口加入后由 6 项变 7 项（预期内变更）
+  it('渲染七个模块项（含网盘），当前路由项标记选中并带 aria-current', async () => {
     const w = mount(SideNav)
     await flushPromises()
 
     const items = w.findAll('.rail-item')
-    expect(items.length).toBe(6)
+    expect(items.length).toBe(7) // M2-3c：6 → 7（新增网盘入口）
     expect(items.map((i) => i.attributes('aria-label'))).toEqual([
       'AI 助手',
       '实验 ELN',
       '稿件',
       '知识库',
+      '网盘', // M2-3c：新增网盘入口，置于知识库之后
       '会议',
       '设置'
     ])
@@ -61,7 +63,7 @@ describe('SideNav 换新 — 六模块项与选中态仍工作', () => {
     await flushPromises()
     await w.findAll('.rail-item')[0].trigger('click')
     // 路由 push 由 useRouter 提供；此处只断言按钮可点击且不抛错
-    expect(w.findAll('.rail-item').length).toBe(6)
+    expect(w.findAll('.rail-item').length).toBe(7) // M2-3c：6 → 7
   })
 })
 

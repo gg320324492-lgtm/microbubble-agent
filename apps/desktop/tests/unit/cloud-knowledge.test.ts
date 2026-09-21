@@ -272,3 +272,55 @@ describe('服务器地址刷新（绑定后改地址必须生效）', () => {
     expect(requests[1]!.url.startsWith('http://127.0.0.1:8899')).toBe(true)
   })
 })
+
+// ---------------------------------------------------------------- 10 分页拉全（真机数量对不上根因）
+
+describe('列表分页：超单页上限时逐页取全（防静默截断）', () => {
+  it('服务端 250 条 → 分 3 页取全，且按 total 提前停止', async () => {
+    const all = Array.from({ length: 250 }, (_, i) => item(i + 1))
+    const { svc, requests } = harness([
+      (req) => {
+        const page = Number(new URL(req.url).searchParams.get('page') ?? 1)
+        const size = Number(new URL(req.url).searchParams.get('page_size') ?? 20)
+        return res(200, { items: all.slice((page - 1) * size, page * size), total: all.length })
+      }
+    ])
+    // 模拟装配层的「拉全」循环（与 ipc.ts 中同一算法）
+    const collected: { id: number }[] = []
+    let page = 1
+    let total = Number.POSITIVE_INFINITY
+    for (; page <= 50; page += 1) {
+      const r = await svc.list({ page, pageSize: 100 })
+      if (!r.ok) break
+      collected.push(...r.data.items)
+      total = r.data.total
+      if (r.data.items.length === 0 || collected.length >= total) break
+    }
+    expect(collected).toHaveLength(250)
+    expect(total).toBe(250)
+    expect(requests).toHaveLength(3) // 100 + 100 + 50 → 第 3 页即达 total，不再请求第 4 页
+    expect(requests.map((q) => new URL(q.url).searchParams.get('page'))).toEqual(['1', '2', '3'])
+  })
+
+  it('恰好整页：200 条时第 2 页达 total 即停（不多发一次空请求）', async () => {
+    const all = Array.from({ length: 200 }, (_, i) => item(i + 1))
+    const { svc, requests } = harness([
+      (req) => {
+        const page = Number(new URL(req.url).searchParams.get('page') ?? 1)
+        const size = Number(new URL(req.url).searchParams.get('page_size') ?? 20)
+        return res(200, { items: all.slice((page - 1) * size, page * size), total: all.length })
+      }
+    ])
+    const collected: unknown[] = []
+    let total = Number.POSITIVE_INFINITY
+    for (let page = 1; page <= 50; page += 1) {
+      const r = await svc.list({ page, pageSize: 100 })
+      if (!r.ok) break
+      collected.push(...r.data.items)
+      total = r.data.total
+      if (r.data.items.length === 0 || collected.length >= total) break
+    }
+    expect(collected).toHaveLength(200)
+    expect(requests).toHaveLength(2)
+  })
+})

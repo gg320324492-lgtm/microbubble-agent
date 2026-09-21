@@ -234,7 +234,7 @@ onMounted(async () => {
         </div>
       </div>
       <div class="detail-meta">
-        {{ fmtTime(selected.updatedAt) }} · {{ fmtSize(selected.fileSize) }}
+        {{ fmtTime(selected.updatedAt) }}<template v-if="selected.fileSize > 0"> · {{ fmtSize(selected.fileSize) }}</template>
         <span v-for="t in selected.tags" :key="t" class="tag">{{ t }}</span>
       </div>
       <textarea v-if="editing" v-model="editText" class="edit-area" rows="20"></textarea>
@@ -285,7 +285,9 @@ onMounted(async () => {
           </p>
           <div class="doc-meta">
             <span v-for="t in d.tags" :key="t" class="tag">{{ t }}</span>
-            <span class="doc-size">{{ fmtSize(d.fileSize) }}</span>
+            <!-- 远程知识条目无文件大小字段（服务端契约不返回）→ 隐藏大小，改显类型徽标，避免误导性的「0 B」 -->
+            <span v-if="d.fileSize > 0" class="doc-size" data-testid="doc-size">{{ fmtSize(d.fileSize) }}</span>
+            <span v-else class="doc-size" data-testid="doc-badge">文档</span>
           </div>
         </button>
       </div>

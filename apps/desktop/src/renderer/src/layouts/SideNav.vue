@@ -20,6 +20,8 @@ const items: NavItem[] = [
   { to: '/app/eln', label: '实验 ELN', icon: 'flask' },
   { to: '/app/manuscripts', label: '稿件', icon: 'doc' },
   { to: '/app/knowledge', label: '知识库', icon: 'book' },
+  // M2-3c：网盘（远程）；未绑定时进入显示引导态
+  { to: '/app/drive', label: '网盘', icon: 'folder' },
   { to: '/app/meetings', label: '会议', icon: 'calendar' },
   { to: '/app/settings', label: '设置', icon: 'gear' }
 ]

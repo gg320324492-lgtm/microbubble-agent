@@ -69,6 +69,7 @@ import { RemoteDriveService, driveErrorMessage } from './services/cloud/drive'
 import { cloudGuidance, cloudUsableState } from './services/cloud/guidance'
 import type { SessionStore, UploadSession } from './services/cloud/transfer'
 import {
+  RemoteKnowledgeItem,
   RemoteKnowledgeService,
   knowledgeErrorMessage,
   knowledgeGuidance,
@@ -1113,9 +1114,23 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   ipcMain.handle(IPC.KNOWLEDGE_LIST, async (): Promise<IpcResult<KnowledgeDocMeta[]>> => {
     auth.requireUser()
-    const r = await remoteKnowledge.list({ page: 1, pageSize: 100 })
-    if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
-    return ok(r.data.items.map(toDocMeta) as unknown as KnowledgeDocMeta[])
+    // ★ 拉全所有分页：服务端按页返回，单页 100 条会**静默截断**（用户数量对不上的根因）。
+    // 逐页取到 total 为止，上限 50 页（5000 条）防失控。
+    const PAGE_SIZE = 100
+    const all: RemoteKnowledgeItem[] = []
+    let page = 1
+    let total = Number.POSITIVE_INFINITY
+    for (; page <= 50; page += 1) {
+      const r = await remoteKnowledge.list({ page, pageSize: PAGE_SIZE })
+      if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
+      all.push(...r.data.items)
+      total = r.data.total
+      if (r.data.items.length === 0 || all.length >= total) break
+    }
+    if (Number.isFinite(total) && all.length < total) {
+      console.log(`[knowledge] 列表达到分页上限：已取 ${all.length}/${total} 条`)
+    }
+    return ok(all.map(toDocMeta) as unknown as KnowledgeDocMeta[])
   })
 
   ipcMain.handle(IPC.KNOWLEDGE_GET, async (_e, p): Promise<IpcResult<KnowledgeDocFull | null>> => {
