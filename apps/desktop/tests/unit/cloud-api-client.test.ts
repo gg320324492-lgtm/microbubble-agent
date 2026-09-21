@@ -37,7 +37,7 @@ function httpScript(script: ((req: CloudHttpRequest) => CloudHttpResponse | Prom
 const loginOk = () => res(200, { access_token: 'AT1', refresh_token: 'RT1', token_type: 'bearer' })
 const meOk = () => res(200, { id: 7, name: '王天志', grade: '博士', email: 'a@b.c' })
 
-function client(script: Parameters<typeof httpScript>[0], baseUrl = 'https://mnb-lab.cn'): { c: CloudApiClient; requests: CloudHttpRequest[] } {
+function client(script: Parameters<typeof httpScript>[0], baseUrl = 'https://agent.mnb-lab.cn'): { c: CloudApiClient; requests: CloudHttpRequest[] } {
   const { http, requests } = httpScript(script)
   return { c: new CloudApiClient({ http, baseUrl }), requests }
 }
@@ -52,7 +52,7 @@ describe('绑定流程', () => {
     if (r.ok) expect(r.data).toEqual({ accessToken: 'AT1', refreshToken: 'RT1' })
     expect(requests).toHaveLength(1)
     expect(requests[0]!.method).toBe('POST')
-    expect(requests[0]!.url).toBe('https://mnb-lab.cn/api/v1/auth/login')
+    expect(requests[0]!.url).toBe('https://agent.mnb-lab.cn/api/v1/auth/login')
     expect(JSON.parse(requests[0]!.body!)).toEqual({ username: 'wangtianzhi', password: 'secret' })
     expect(requests[0]!.headers['content-type']).toBe('application/json')
   })
@@ -113,9 +113,9 @@ describe('令牌续期', () => {
       expect((r.data.json as { name: string }).name).toBe('王天志')
     }
     expect(requests.map((q) => q.url)).toEqual([
-      'https://mnb-lab.cn/api/v1/auth/me',
-      'https://mnb-lab.cn/api/v1/auth/refresh',
-      'https://mnb-lab.cn/api/v1/auth/me'
+      'https://agent.mnb-lab.cn/api/v1/auth/me',
+      'https://agent.mnb-lab.cn/api/v1/auth/refresh',
+      'https://agent.mnb-lab.cn/api/v1/auth/me'
     ])
     expect(JSON.parse(requests[1]!.body!)).toEqual({ refresh_token: 'RT1' })
     expect(requests[2]!.headers['authorization']).toBe('Bearer AT2') // 重放用新令牌
@@ -230,7 +230,7 @@ describe('绑定状态机', () => {
   })
 
   it('服务器地址归一化：去尾斜杠、非法值回退默认、可切换（测试指向 localhost）', () => {
-    expect(normalizeBaseUrl('https://mnb-lab.cn/')).toBe('https://mnb-lab.cn')
+    expect(normalizeBaseUrl('https://agent.mnb-lab.cn/')).toBe('https://agent.mnb-lab.cn')
     expect(normalizeBaseUrl('  http://127.0.0.1:8000/// ')).toBe('http://127.0.0.1:8000')
     expect(normalizeBaseUrl('')).toBe(DEFAULT_CLOUD_BASE_URL)
     expect(normalizeBaseUrl('not-a-url')).toBe(DEFAULT_CLOUD_BASE_URL)
@@ -282,5 +282,40 @@ describe('超时与请求头', () => {
     await c.me('AT')
     expect(spy).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
+  })
+})
+
+// ---------------------------------------------------------------- 8 真实服务器形状回放（M2-3a 实测）
+
+describe('真实服务器响应形状回放（agent.mnb-lab.cn 实测）', () => {
+  it('错密码：真实返回 401 + {"error":{"code":"AUTH_ERROR",...}} → 归一化为 auth + 中性文案', async () => {
+    // 形状取自 2026-09-21 对 https://agent.mnb-lab.cn/api/v1/auth/login 的真实请求
+    const { http } = httpScript([
+      () => res(401, { error: { code: 'AUTH_ERROR', message: '用户名或密码错误', details: {} } })
+    ])
+    const c = new CloudApiClient({ http })
+    const r = await c.login('someone', 'wrong')
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error.kind).toBe('auth')
+      // 不给用户看服务端原文，用本地中性文案
+      expect(r.error.message).toBe('云端账号或密码不正确，或登录状态已过期。')
+      expect(r.error.detail).toContain('AUTH_ERROR') // 原始信息仍留在 detail 供日志
+    }
+  })
+
+  it('缺令牌访问 /auth/me：真实返回 401（JSON）→ 触发续期而不是当成服务端故障', async () => {
+    const { c, requests } = client([
+      () => res(401, { error: { code: 'AUTH_ERROR', message: '未认证' } }),
+      () => res(200, { access_token: 'AT2', token_type: 'bearer' }),
+      () => res(200, { id: 1, name: '某同学' })
+    ])
+    const r = await c.requestWithAuth('GET', '/api/v1/auth/me', { accessToken: 'AT_OLD', refreshToken: 'RT' })
+    expect(r.ok).toBe(true)
+    expect(requests).toHaveLength(3) // 401 → refresh → 重放
+  })
+
+  it('默认地址为真实 API 主机（网页端同源地址会返回 SPA，实测不可用）', () => {
+    expect(DEFAULT_CLOUD_BASE_URL).toBe('https://agent.mnb-lab.cn')
   })
 })

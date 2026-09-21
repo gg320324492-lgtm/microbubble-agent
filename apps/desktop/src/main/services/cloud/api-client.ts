@@ -54,7 +54,17 @@ export interface CloudError {
 
 export type CloudResult<T> = { ok: true; data: T } | { ok: false; error: CloudError }
 
-export const DEFAULT_CLOUD_BASE_URL = 'https://mnb-lab.cn'
+/**
+ * 默认云端地址。
+ *
+ * 注意（M2-3a 真机实测纠正）：工单原写 `https://mnb-lab.cn`，但**实测该主机返回的是网页端 SPA**
+ * （`/api/v1/auth/me` 返回 HTML 200、POST 返回 405），API 实际部署在 `https://agent.mnb-lab.cn`：
+ *   GET  /health           → 200
+ *   GET  /api/v1/auth/me   → 401（JSON，缺令牌）
+ *   POST /api/v1/auth/login（错密码）→ 401 {"error":{"code":"AUTH_ERROR","message":"用户名或密码错误"}}
+ * 故默认值按证据取真实 API 主机；地址在设置页可改（含自建/局域网部署）。
+ */
+export const DEFAULT_CLOUD_BASE_URL = 'https://agent.mnb-lab.cn'
 export const DEFAULT_TIMEOUT_MS = 15_000
 
 /** 归一化 base url（去掉尾部斜杠；非法值回退默认） */

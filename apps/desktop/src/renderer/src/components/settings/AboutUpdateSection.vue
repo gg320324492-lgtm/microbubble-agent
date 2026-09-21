@@ -163,7 +163,7 @@ interface CloudState {
   hasTokens?: boolean
 }
 const cloud = ref<CloudState | null>(null)
-const cloudBaseUrl = ref('https://mnb-lab.cn')
+const cloudBaseUrl = ref('https://agent.mnb-lab.cn')
 const cloudAccount = ref('')
 const cloudPassword = ref('')
 const cloudBusy = ref(false)
