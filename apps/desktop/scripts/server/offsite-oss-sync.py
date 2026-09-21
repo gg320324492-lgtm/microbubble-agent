@@ -4,7 +4,7 @@
 
 设计约束（对齐工单与父项目复盘教训）：
   · 零第三方依赖：Python 3.8+ stdlib only（urllib / hmac / hashlib / base64 / argparse）
-  · 手写 SigV4 签名 + 服务端加密（SSE，x-oss-server-side-encryption: AES256）
+  · 手写 V1 签名（与项目 oss-sig.ts / CI 上传脚本同款，2026-09-21 实测修正：原 V4 实现混入 AWS SigV4 头格式被 OSS 拒绝）+ 服务端加密（SSE，x-oss-server-side-encryption: AES256）
   · 三段式 CLI：--scan（只读）/ --apply --confirm（上传）/ --cleanup N（清理 N 天前）
   · 幂等：远端同名且同大小 → 跳过，不重复上传
   · **禁止默认凭证回落**：AK/SK 必须由环境变量或显式凭据文件提供，缺失即报错退出，
@@ -104,15 +104,27 @@ def load_credentials(creds_file: str | None) -> Credentials:
 
 # ---------------------------------------------------------------- SigV4
 
-def _hmac(key: bytes, msg: str) -> bytes:
-    return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
-
-
-def _signing_key(secret: str, date_stamp: str, region: str) -> bytes:
-    k = _hmac(("OSS4" + secret).encode("utf-8"), date_stamp)
-    k = _hmac(k, region)
-    k = _hmac(k, SERVICE)
-    return _hmac(k, "aliyun_v4_request")
+def build_auth_header(
+    creds: Credentials,
+    method: str,
+    object_key: str,
+    extra_headers: dict[str, str] | None = None,
+    query: dict[str, str] | None = None,
+) -> tuple[str, str]:
+    """返回 (Authorization 头, Date 头)。V1 签名（与项目 oss-sig.ts / CI 上传脚本同款，本单实测可用）。
+    object_key 为空串表示桶级列举：CanonicalizedResource = /bucket/；
+    列举查询参数（list-type/prefix/max-keys/continuation-token）不参与 V1 签名。"""
+    date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    headers = dict(extra_headers or {})
+    canonical_oss_headers = "".join(
+        f"{k.lower()}:{headers[k]}\n" for k in sorted(h for h in headers if h.lower().startswith("x-oss-"))
+    )
+    resource = f"/{creds.bucket}/{object_key}" if object_key else f"/{creds.bucket}/"
+    string_to_sign = "\n".join([method, "", "", date, canonical_oss_headers + resource])
+    signature = base64.b64encode(
+        hmac.new(creds.access_key_secret.encode("utf-8"), string_to_sign.encode("utf-8"), hashlib.sha1).digest()
+    ).decode()
+    return f"OSS {creds.access_key_id}:{signature}", date
 
 
 def _canonical_query(params: dict[str, str]) -> str:
@@ -120,54 +132,6 @@ def _canonical_query(params: dict[str, str]) -> str:
         return ""
     items = sorted((urllib.parse.quote(k, safe="-_.~"), urllib.parse.quote(v, safe="-_.~")) for k, v in params.items())
     return "&".join(f"{k}={v}" for k, v in items)
-
-
-def build_auth_header(
-    creds: Credentials,
-    method: str,
-    object_key: str,
-    payload_hash: str,
-    extra_headers: dict[str, str] | None = None,
-    query: dict[str, str] | None = None,
-) -> tuple[str, str]:
-    """返回 (Authorization 头, x-oss-date)。object_key 为空串表示桶级操作。"""
-    now = datetime.now(timezone.utc)
-    amz_date = now.strftime("%Y%m%dT%H%M%SZ")
-    date_stamp = now.strftime("%Y%m%d")
-
-    host = f"{creds.bucket}.{creds.endpoint}"
-    headers = {
-        "host": host,
-        "x-oss-content-sha256": payload_hash,
-        "x-oss-date": amz_date,
-    }
-    if extra_headers:
-        headers.update({k.lower(): v for k, v in extra_headers.items()})
-
-    signed_names = sorted(headers.keys())
-    canonical_headers = "".join(f"{k}:{headers[k]}\n" for k in signed_names)
-    signed_headers = ";".join(signed_names)
-
-    canonical_uri = "/" + urllib.parse.quote(object_key, safe="/-_.~") if object_key else "/"
-    canonical_request = "\n".join(
-        [method, canonical_uri, _canonical_query(query or {}), canonical_headers, signed_headers, payload_hash]
-    )
-
-    scope = f"{date_stamp}/{creds.region}/{SERVICE}/aliyun_v4_request"
-    string_to_sign = "\n".join(
-        [ALGO, amz_date, scope, hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()]
-    )
-    signature = hmac.new(
-        _signing_key(creds.access_key_secret, date_stamp, creds.region),
-        string_to_sign.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-
-    auth = (
-        f"{ALGO} Credential={creds.access_key_id}/{scope},"
-        f"SignedHeaders={signed_headers},Signature={signature}"
-    )
-    return auth, amz_date
 
 
 # ---------------------------------------------------------------- OSS 操作
@@ -181,14 +145,13 @@ def _request(
     encrypt: bool = False,
 ) -> tuple[int, bytes]:
     payload = body or b""
-    payload_hash = hashlib.sha256(payload).hexdigest()
     extra: dict[str, str] = {}
     if encrypt:
         extra[SSE_HEADER] = SSE_VALUE
     if body is not None:
-        extra["content-length"] = str(len(payload))
+        extra["Content-Length"] = str(len(payload))
 
-    auth, amz_date = build_auth_header(creds, method, object_key, payload_hash, extra, query)
+    auth, date = build_auth_header(creds, method, object_key, extra, query)
     host = f"{creds.bucket}.{creds.endpoint}"
     url = f"https://{host}/"
     if object_key:
@@ -198,14 +161,10 @@ def _request(
 
     headers = {
         "Authorization": auth,
-        "x-oss-content-sha256": payload_hash,
-        "x-oss-date": amz_date,
+        "Date": date,
         "User-Agent": "mnb-offsite-sync/1.0",
     }
-    if encrypt:
-        headers[SSE_HEADER] = SSE_VALUE
-    if body is not None:
-        headers["Content-Length"] = str(len(payload))
+    headers.update(extra)
 
     req = urllib.request.Request(url, data=payload if body is not None else None, headers=headers, method=method)
     try:
