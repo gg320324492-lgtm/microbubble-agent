@@ -41,6 +41,8 @@ export const IPC = {
   DRIVE_RENAME: 'drive:rename',
   DRIVE_DELETE: 'drive:delete',
   DRIVE_PENDING_UPLOADS: 'drive:pending-uploads',
+  /** M2-3c 下载（选择保存位置后流式落盘） */
+  DRIVE_DOWNLOAD: 'drive:download',
   /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */
   CHAT_STREAM_EVENT: 'chat:stream-event',
   WINDOW_STATE_EVENT: 'window:state-event',

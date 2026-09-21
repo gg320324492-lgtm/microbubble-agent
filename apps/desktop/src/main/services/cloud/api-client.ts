@@ -23,6 +23,8 @@ export interface CloudHttpResponse {
   headers: Record<string, string>
   /** 响应正文（文本；调用方自行 JSON.parse） */
   text: string
+  /** 二进制响应体（下载场景；与 text 二者其一） */
+  bytes?: Uint8Array
 }
 
 export type CloudHttpFn = (req: CloudHttpRequest) => Promise<CloudHttpResponse>
@@ -251,6 +253,53 @@ export class CloudApiClient {
       }
     }
     return { ok: true, data: { id: j.id, name: j.name, grade: (j.grade as string) ?? null, email: (j.email as string) ?? null } }
+  }
+
+  /**
+   * 二进制请求（下载场景）：401 → 续期一次 → 重放。
+   * 与 requestWithAuth 同一套令牌语义，只是返回字节而非 JSON。
+   */
+  async requestBinaryWithAuth(
+    path: string,
+    tokens: CloudTokens
+  ): Promise<CloudResult<{ bytes: Uint8Array; headers: Record<string, string>; tokens: CloudTokens; refreshed: boolean }>> {
+    const once = async (accessToken: string): Promise<CloudResult<{ bytes: Uint8Array; headers: Record<string, string> }>> => {
+      try {
+        const res = await this.http({
+          method: 'GET',
+          url: this.url(path),
+          headers: { authorization: `Bearer ${accessToken}` },
+          timeoutMs: this.timeoutMs
+        })
+        if (res.status < 200 || res.status >= 300) {
+          return {
+            ok: false,
+            error: normalizeCloudError({ status: res.status, headers: res.headers, detail: res.text.slice(0, 300) })
+          }
+        }
+        return { ok: true, data: { bytes: res.bytes ?? new Uint8Array(), headers: res.headers } }
+      } catch (e) {
+        return {
+          ok: false,
+          error: normalizeCloudError({
+            detail: e instanceof Error ? e.message : String(e),
+            exceptionName: e instanceof Error ? e.name : undefined
+          })
+        }
+      }
+    }
+    const first = await once(tokens.accessToken)
+    if (first.ok) return { ok: true, data: { ...first.data, tokens, refreshed: false } }
+    if (first.error.kind !== 'auth') return first
+    this.log(`[cloud] 下载 access 失效，尝试续期一次：${path}`)
+    const refreshed = await this.refresh(tokens.refreshToken)
+    if (!refreshed.ok) {
+      return { ok: false, error: { kind: 'auth', message: '登录状态已失效，请重新绑定云端账号。', detail: refreshed.error.detail } }
+    }
+    const next: CloudTokens = { accessToken: refreshed.data.accessToken, refreshToken: tokens.refreshToken }
+    const replay = await once(next.accessToken)
+    if (!replay.ok) return replay
+    return { ok: true, data: { ...replay.data, tokens: next, refreshed: true } }
   }
 
   /**

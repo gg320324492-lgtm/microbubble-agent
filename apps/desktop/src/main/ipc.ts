@@ -1013,6 +1013,45 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     })
   )
 
+  // 下载：弹保存对话框 → 分片落盘（进度经 DRIVE_DOWNLOAD 事件推送）
+  ipcMain.handle(IPC.DRIVE_DOWNLOAD, async (e, p): Promise<IpcResult<unknown>> => {
+    auth.requireUser()
+    const id = Number(p?.id)
+    if (!Number.isFinite(id)) return fail('INVALID_INPUT', '缺少文件标识')
+    try {
+      const { dialog } = await import('electron')
+      const win = BrowserWindow.getAllWindows()[0]
+      const meta = await remoteDrive.get(id)
+      const suggested = meta.ok ? meta.data.fileName : `云端文件-${id}`
+      const picked = win
+        ? await dialog.showSaveDialog(win, { defaultPath: suggested })
+        : await dialog.showSaveDialog({ defaultPath: suggested })
+      if (picked.canceled || !picked.filePath) {
+        return fail('CANCELLED', '已取消下载')
+      }
+      const { createWriteStream } = await import('node:fs')
+      const ws = createWriteStream(picked.filePath)
+      const r = await remoteDrive.download(id, {
+        write: async (bytes) => {
+          await new Promise<void>((resolve, reject) => {
+            ws.write(Buffer.from(bytes), (err) => (err ? reject(err) : resolve()))
+          })
+        },
+        onProgress: (prog) => {
+          if (!e.sender.isDestroyed()) e.sender.send(IPC.DRIVE_DOWNLOAD, { kind: 'progress', ...prog })
+        }
+      })
+      await new Promise<void>((resolve) => ws.end(() => resolve()))
+      if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
+      console.log(`[drive] 下载完成：${r.data.bytes} 字节 → ${picked.filePath}`)
+      return ok({ bytes: r.data.bytes, path: picked.filePath })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(`[drive] 下载异常：${msg}`)
+      return fail('DRIVE_DOWNLOAD_FAILED', '下载失败，请稍后重试。')
+    }
+  })
+
   // 上传：分块读盘（不整文件进内存）+ 进度事件推给渲染层
   ipcMain.handle(IPC.DRIVE_UPLOAD, async (e, p): Promise<IpcResult<unknown>> => {
     auth.requireUser()

@@ -149,6 +149,8 @@ export interface PreloadApi {
     pendingUploads(): Promise<unknown>
     /** 上传进度事件（返回取消订阅函数） */
     onProgress(cb: (p: unknown) => void): () => void
+    /** 下载（主进程弹保存对话框后流式落盘；进度经 drive:download 事件推送） */
+    download(id: number): Promise<unknown>
   }
   backup: {
     create(password: string, targetDir: string): Promise<{ fileName: string; size: number }>

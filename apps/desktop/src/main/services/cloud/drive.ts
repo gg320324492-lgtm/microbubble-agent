@@ -220,6 +220,44 @@ export class RemoteDriveService {
     }
   }
 
+  /**
+   * 下载文件（服务端自带 `_check_download_visibility` 可见性校验 → 403 走中性文案）。
+   *
+   * 说明：当前注入式 HTTP 接口一次返回整个响应体，故实现为「整取后分片落盘 + 分片进度」。
+   * 真正的流式下载需要把 http 接口扩展为异步迭代体 —— 已列入遗留项（接口形态不变时不做）。
+   */
+  async download(
+    id: number,
+    opts: { write: ChunkWriter; onProgress?: (p: TransferProgress) => void; signal?: AbortSignal }
+  ): Promise<CloudResult<DownloadResult>> {
+    const t = this.tokens()
+    if (!t) return { ok: false, error: { kind: 'auth', message: '尚未连接云端。' } }
+    // ★ 每次请求前刷新地址（提供者模式，禁构造期快照）
+    this.client.setBaseUrl(this.baseUrlProvider())
+    const res = await this.client.requestBinaryWithAuth(`/api/v1/drive/files/${id}/download`, t)
+    if (!res.ok) return res
+    if (res.data.refreshed) this.log('[drive] 下载触发续期，已回写新 access')
+
+    const bytes = res.data.bytes
+    const slices = sliceBytes(bytes)
+    let written = 0
+    for (const sl of slices) {
+      if (opts.signal?.aborted) return { ok: false, error: { kind: 'timeout', message: '下载已取消。' } }
+      await opts.write(sl)
+      written += sl.length
+      opts.onProgress?.({
+        transferred: written,
+        total: bytes.length,
+        percent: bytes.length === 0 ? 100 : Math.floor((written / bytes.length) * 100)
+      })
+    }
+    if (bytes.length === 0) opts.onProgress?.({ transferred: 0, total: 0, percent: 100 })
+    return {
+      ok: true,
+      data: { bytes: written, serverFileName: parseContentDisposition(res.data.headers), slices: slices.length }
+    }
+  }
+
   /** 未完成上传列表（UI「继续上传」入口） */
   pendingUploads(): UploadSession[] {
     return this.transfer.pendingSessions()
@@ -229,6 +267,46 @@ export class RemoteDriveService {
   async cancelUpload(uploadId: string, resumeKey?: string): Promise<CloudResult<true>> {
     return this.transfer.cancelSession(uploadId, resumeKey)
   }
+}
+
+// ---------------------------------------------------------------- 下载辅助（纯函数）
+
+/** 落盘写入器（注入：生产用 fs 流式写；测试用内存收集） */
+export type ChunkWriter = (bytes: Uint8Array) => Promise<void>
+
+export interface DownloadResult {
+  /** 实际写入字节数 */
+  bytes: number
+  /** 服务端给出的文件名（Content-Disposition；无则 null） */
+  serverFileName: string | null
+  /** 分片数（进度用） */
+  slices: number
+}
+
+/** 从 Content-Disposition 提取文件名（RFC 5987 的 filename* 优先） */
+export function parseContentDisposition(headers: Record<string, string>): string | null {
+  const cd = headers['content-disposition'] ?? ''
+  if (!cd) return null
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim())
+    } catch {
+      return star[1].trim()
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(cd)
+  return plain?.[1]?.trim() ?? null
+}
+
+/** 把字节切成分片（默认 1MB），供分片落盘与进度回调 */
+export function sliceBytes(bytes: Uint8Array, sliceSize = 1024 * 1024): Uint8Array[] {
+  if (bytes.length === 0) return []
+  const out: Uint8Array[] = []
+  for (let off = 0; off < bytes.length; off += sliceSize) {
+    out.push(bytes.subarray(off, Math.min(off + sliceSize, bytes.length)))
+  }
+  return out
 }
 
 /** 统一错误文案（403 → 不可见中性文案；其余沿用归一化文案） */

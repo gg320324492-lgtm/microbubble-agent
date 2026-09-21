@@ -102,6 +102,17 @@ async function pickAndUpload(): Promise<void> {
   input.click()
 }
 
+/** 下载：主进程弹保存对话框后落盘；进度经事件推送 */
+async function download(item: DriveItem): Promise<void> {
+  try {
+    const r = (await window.api.drive.download(item.id)) as { bytes?: number }
+    ElMessage.success(`已下载（${fmtSize(r?.bytes ?? 0)}）`)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '下载失败'
+    if (!msg.includes('取消')) ElMessage.error(msg)
+  }
+}
+
 async function rename(item: DriveItem): Promise<void> {
   try {
     const { value } = await ElMessageBox.prompt('新名称', '重命名', { inputValue: item.title })
@@ -189,6 +200,7 @@ onMounted(async () => {
           <span class="drive-name" :title="it.fileName">{{ it.fileName }}</span>
           <span class="drive-size">{{ fmtSize(it.fileSize) }}</span>
           <span v-if="it.visibility" class="drive-vis">{{ it.visibility }}</span>
+          <button class="mini-btn" data-testid="drive-download" @click="download(it)">下载</button>
           <button class="mini-btn" @click="rename(it)">重命名</button>
           <button class="mini-btn danger" @click="remove(it)">删除</button>
         </li>

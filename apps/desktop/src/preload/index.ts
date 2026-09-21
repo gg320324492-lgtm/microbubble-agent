@@ -138,6 +138,7 @@ const api = {
     rename: (id: number, title: string): Promise<unknown> => invoke(IPC.DRIVE_RENAME, { id, title }),
     remove: (id: number): Promise<unknown> => invoke(IPC.DRIVE_DELETE, { id }),
     pendingUploads: (): Promise<unknown> => invoke(IPC.DRIVE_PENDING_UPLOADS),
+    download: (id: number): Promise<unknown> => invoke(IPC.DRIVE_DOWNLOAD, { id }),
     onProgress: (cb: (p: unknown) => void): (() => void) => {
       const listener = (_e: unknown, payload: unknown): void => cb(payload as never)
       ipcRenderer.on(IPC.DRIVE_UPLOAD, listener as never)

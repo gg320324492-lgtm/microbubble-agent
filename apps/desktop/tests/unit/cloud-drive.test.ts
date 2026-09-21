@@ -2,7 +2,7 @@
 // 契约来自 app/api/v1/drive_*.py 只读调研（前缀 /drive、/folders、/drive/chunked-uploads）
 import { describe, expect, it } from 'vitest'
 import { CloudApiClient, type CloudHttpFn, type CloudHttpRequest, type CloudHttpResponse, type CloudTokens } from '@main/services/cloud/api-client'
-import { RemoteDriveService, driveErrorMessage, normalizeDriveItem, normalizeDrivePage } from '@main/services/cloud/drive'
+import { RemoteDriveService, driveErrorMessage, normalizeDriveItem, normalizeDrivePage, parseContentDisposition, sliceBytes } from '@main/services/cloud/drive'
 import { DEFAULT_CHUNK_SIZE, MemorySessionStore, chunkCount, type ChunkReader } from '@main/services/cloud/transfer'
 import { cloudGuidance, cloudUsableState, featureErrorMessage, inaccessibleMessage } from '@main/services/cloud/guidance'
 
@@ -349,5 +349,133 @@ describe('畸形响应不崩溃', () => {
     const r = await h.svc.get(1)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error.kind).toBe('malformed')
+  })
+})
+
+// ---------------------------------------------------------------- 7 下载（≥3）
+
+describe('文件下载', () => {
+  /** 构造带二进制的响应 */
+  const binRes = (bytes: Uint8Array, headers: Record<string, string> = {}): CloudHttpResponse => ({
+    status: 200,
+    headers,
+    text: '',
+    bytes
+  })
+
+  function downloadHarness(script: ((req: CloudHttpRequest) => CloudHttpResponse | Promise<CloudHttpResponse>)[]): {
+    svc: RemoteDriveService
+    requests: CloudHttpRequest[]
+  } {
+    const requests: CloudHttpRequest[] = []
+    let i = 0
+    const http: CloudHttpFn = async (req) => {
+      requests.push(req)
+      const step = script[Math.min(i, script.length - 1)]!
+      i += 1
+      return step(req)
+    }
+    const svc = new RemoteDriveService({
+      client: new CloudApiClient({ http, baseUrl: 'https://agent.mnb-lab.cn' }),
+      tokens: () => ({ accessToken: 'AT1', refreshToken: 'RT1' }),
+      baseUrl: () => 'https://agent.mnb-lab.cn'
+    })
+    return { svc, requests }
+  }
+
+  it('下载：请求正确端点 + 分片落盘 + 进度到 100% + 字节数一致', async () => {
+    const payload = new Uint8Array(2.5 * 1024 * 1024) // 2.5MB → 3 片（1MB 切）
+    for (let i = 0; i < payload.length; i += 1) payload[i] = i % 251
+    const h = downloadHarness([() => binRes(payload, { 'content-disposition': 'attachment; filename="占位.bin"' })])
+    const chunks: Uint8Array[] = []
+    const progress: number[] = []
+    const r = await h.svc.download(7, {
+      write: async (b) => {
+        chunks.push(b)
+      },
+      onProgress: (p) => progress.push(p.percent)
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.bytes).toBe(payload.length)
+      expect(r.data.slices).toBe(3)
+      expect(r.data.serverFileName).toBe('占位.bin')
+    }
+    // 落盘内容与源字节逐字节一致
+    const merged = Buffer.concat(chunks.map((c) => Buffer.from(c)))
+    expect(merged.length).toBe(payload.length)
+    expect(Buffer.compare(merged, Buffer.from(payload))).toBe(0)
+    expect(progress.at(-1)).toBe(100)
+    expect(h.requests[0]!.url).toBe('https://agent.mnb-lab.cn/api/v1/drive/files/7/download')
+    expect(h.requests[0]!.headers['authorization']).toBe('Bearer AT1')
+  })
+
+  it('403 不可见：中性文案（不暴露服务端原文）', async () => {
+    const h = downloadHarness([() => ({ status: 403, headers: {}, text: '{"error":{"code":"FORBIDDEN","message":"no permission on file 7"}}' })])
+    const r = await h.svc.download(7, { write: async () => undefined })
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      const msg = driveErrorMessage(r.error)
+      expect(msg).not.toMatch(/FORBIDDEN|no permission|7/)
+    }
+  })
+
+  it('401 → 续期 → 重放下载（令牌语义与 JSON 请求一致）', async () => {
+    const payload = new Uint8Array(10)
+    const h = downloadHarness([
+      () => ({ status: 401, headers: {}, text: '{}' }),
+      () => res(200, { access_token: 'AT2', token_type: 'bearer' }),
+      () => binRes(payload)
+    ])
+    const r = await h.svc.download(3, { write: async () => undefined })
+    expect(r.ok).toBe(true)
+    expect(h.requests.map((q) => new URL(q.url).pathname)).toEqual([
+      '/api/v1/drive/files/3/download',
+      '/api/v1/auth/refresh',
+      '/api/v1/drive/files/3/download'
+    ])
+    expect(h.requests[2]!.headers['authorization']).toBe('Bearer AT2')
+  })
+
+  it('取消下载：signal 已中止 → 中性取消文案，不继续写盘', async () => {
+    const payload = new Uint8Array(2 * 1024 * 1024)
+    const h = downloadHarness([() => binRes(payload)])
+    const ac = new AbortController()
+    ac.abort()
+    let wrote = 0
+    const r = await h.svc.download(1, {
+      write: async () => {
+        wrote += 1
+      },
+      signal: ac.signal
+    })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.message).toContain('取消')
+    expect(wrote).toBe(0)
+  })
+
+  it('空文件：进度直接 100%、字节 0、不写盘', async () => {
+    const h = downloadHarness([() => binRes(new Uint8Array(0))])
+    let wrote = 0
+    const progress: number[] = []
+    const r = await h.svc.download(1, {
+      write: async () => {
+        wrote += 1
+      },
+      onProgress: (p) => progress.push(p.percent)
+    })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.bytes).toBe(0)
+    expect(wrote).toBe(0)
+    expect(progress).toEqual([100])
+  })
+
+  it('纯函数：Content-Disposition 解析与分片切分', () => {
+    expect(parseContentDisposition({ 'content-disposition': 'attachment; filename="a b.txt"' })).toBe('a b.txt')
+    expect(parseContentDisposition({ 'content-disposition': "attachment; filename*=UTF-8''%E5%8D%A0%E4%BD%8D.bin" })).toBe('占位.bin')
+    expect(parseContentDisposition({})).toBeNull()
+    expect(sliceBytes(new Uint8Array(0))).toEqual([])
+    expect(sliceBytes(new Uint8Array(3 * 1024 * 1024)).length).toBe(3)
+    expect(sliceBytes(new Uint8Array(1024 * 1024 + 1)).length).toBe(2)
   })
 })
