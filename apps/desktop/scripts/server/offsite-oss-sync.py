@@ -116,11 +116,12 @@ def build_auth_header(
     列举查询参数（list-type/prefix/max-keys/continuation-token）不参与 V1 签名。"""
     date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
     headers = dict(extra_headers or {})
+    content_type = next((headers[k] for k in headers if k.lower() == "content-type"), "")
     canonical_oss_headers = "".join(
         f"{k.lower()}:{headers[k]}\n" for k in sorted(h for h in headers if h.lower().startswith("x-oss-"))
     )
     resource = f"/{creds.bucket}/{object_key}" if object_key else f"/{creds.bucket}/"
-    string_to_sign = "\n".join([method, "", "", date, canonical_oss_headers + resource])
+    string_to_sign = "\n".join([method, "", content_type, date, canonical_oss_headers + resource])
     signature = base64.b64encode(
         hmac.new(creds.access_key_secret.encode("utf-8"), string_to_sign.encode("utf-8"), hashlib.sha1).digest()
     ).decode()
@@ -149,6 +150,9 @@ def _request(
     if encrypt:
         extra[SSE_HEADER] = SSE_VALUE
     if body is not None:
+        # 显式声明 Content-Type 并纳入 V1 签名——urllib 会给带 body 的请求默认补
+        # application/x-www-form-urlencoded，与空串签名不一致（实测 403 教训）
+        extra["Content-Type"] = "application/octet-stream"
         extra["Content-Length"] = str(len(payload))
 
     auth, date = build_auth_header(creds, method, object_key, extra, query)
