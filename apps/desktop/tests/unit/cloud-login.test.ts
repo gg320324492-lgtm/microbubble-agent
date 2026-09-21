@@ -270,3 +270,97 @@ describe('本地注册退役', () => {
     expect(src).not.toMatch(/await auth\.login\(/)
   })
 })
+
+// ---------------------------------------------------------------- 6 认领前备份安全网
+
+describe('认领前备份（写用户真实数据前的安全网）', () => {
+  it('★ 首次认领会先调备份钩子；二次登录（零认领）不再调', () => {
+    const db = openNodeSqlite(':memory:')
+    runMigrations(db)
+    let backups = 0
+    const auth = new AuthService(db, memPersistence(), () => {
+      backups += 1
+    })
+    db.prepare(
+      'INSERT INTO users (id, username, display_name, password_hash, role, is_active, created_at, updated_at) VALUES (?,?,?,?,?,1,?,?)'
+    ).run('u-old', 'old-local', '旧账号', 'x', 'admin', 1, 1)
+    db.prepare('INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at) VALUES (?,?,?,?,?)').run('s1', 'u-old', 'x', 1, 1)
+
+    auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(backups).toBe(1) // 首次认领前备份
+    auth.logout()
+    auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(backups).toBe(1) // 二次零认领 → 不再备份
+  })
+
+  it('无无主数据时（无可认领）不触发备份', () => {
+    const db = openNodeSqlite(':memory:')
+    runMigrations(db)
+    let backups = 0
+    const auth = new AuthService(db, memPersistence(), () => {
+      backups += 1
+    })
+    auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(backups).toBe(0) // 全新机器没有要认领的东西
+  })
+
+  it('备份钩子抛错不阻塞登录（安全网本身不能把人锁在门外）', () => {
+    const db = openNodeSqlite(':memory:')
+    runMigrations(db)
+    const auth = new AuthService(db, memPersistence(), () => {
+      throw new Error('disk full')
+    })
+    db.prepare(
+      'INSERT INTO users (id, username, display_name, password_hash, role, is_active, created_at, updated_at) VALUES (?,?,?,?,?,1,?,?)'
+    ).run('u-old', 'old-local', '旧账号', 'x', 'admin', 1, 1)
+    const r = auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(r.session.user.username).toBe('wangtz') // 登录成功
+  })
+})
+
+// ---------------------------------------------------------------- 6 认领前备份安全网
+
+describe('认领前备份（写用户真实数据前的安全网）', () => {
+  it('★ 首次认领会先调备份钩子；二次登录（零认领）不再调', () => {
+    const db = openNodeSqlite(':memory:')
+    runMigrations(db)
+    let backups = 0
+    const auth = new AuthService(db, memPersistence(), () => {
+      backups += 1
+    })
+    db.prepare(
+      'INSERT INTO users (id, username, display_name, password_hash, role, is_active, created_at, updated_at) VALUES (?,?,?,?,?,1,?,?)'
+    ).run('u-old', 'old-local', '旧账号', 'x', 'admin', 1, 1)
+    db.prepare('INSERT INTO chat_sessions (id, user_id, title, created_at, updated_at) VALUES (?,?,?,?,?)').run('s1', 'u-old', 'x', 1, 1)
+
+    auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(backups).toBe(1) // 首次认领前备份
+    auth.logout()
+    auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(backups).toBe(1) // 二次零认领 → 不再备份
+  })
+
+  it('无无主数据时（无可认领）不触发备份', () => {
+    const db = openNodeSqlite(':memory:')
+    runMigrations(db)
+    let backups = 0
+    const auth = new AuthService(db, memPersistence(), () => {
+      backups += 1
+    })
+    auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(backups).toBe(0) // 全新机器没有要认领的东西
+  })
+
+  it('备份钩子抛错不阻塞登录（安全网本身不能把人锁在门外）', () => {
+    const db = openNodeSqlite(':memory:')
+    runMigrations(db)
+    const auth = new AuthService(db, memPersistence(), () => {
+      throw new Error('disk full')
+    })
+    db.prepare(
+      'INSERT INTO users (id, username, display_name, password_hash, role, is_active, created_at, updated_at) VALUES (?,?,?,?,?,1,?,?)'
+    ).run('u-old', 'old-local', '旧账号', 'x', 'admin', 1, 1)
+    const r = auth.loginWithCloud(identity('7', 'wangtz'))
+    expect(r.session.user.username).toBe('wangtz') // 登录成功
+  })
+})

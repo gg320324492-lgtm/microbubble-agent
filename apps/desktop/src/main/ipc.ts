@@ -222,7 +222,20 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   update: UpdateService
   runExitBackup: () => Promise<{ fileName: string; uploaded: boolean } | null>
 } {
-  const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')))
+  const auth = new AuthService(db, makeFilePersistence(join(dbPath, '..', 'session-token.enc')),
+    // M2-3a+ 安全网：首次认领（re-point 用户真实数据）前落一份数据库备份，出岔子可回滚
+    () => {
+      try {
+        const { copyFileSync, existsSync } = require('node:fs') as typeof import('node:fs')
+        if (!existsSync(dbPath)) return
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const dest = `${dbPath}.pre-claim-${stamp}.bak`
+        copyFileSync(dbPath, dest)
+        console.log(`[auth] 已备份数据库（认领前）：${dest}`)
+      } catch (e) {
+        console.log(`[auth] 备份数据库失败（不阻塞登录）：${e instanceof Error ? e.message : String(e)}`)
+      }
+    })
   const settings = new SettingsService(db)
   const chat = new ChatService(db)
   const cipher = makeCipher()

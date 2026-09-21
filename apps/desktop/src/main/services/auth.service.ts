@@ -89,7 +89,15 @@ export class AuthService {
 
   constructor(
     private readonly db: SqlDatabase,
-    private readonly persistence: SessionPersistence
+    private readonly persistence: SessionPersistence,
+    /**
+     * 首次认领前的安全钩子（工单 M2-3a+ 附加安全网）。
+     *
+     * 认领会把旧本地账号名下的数据 re-point 到云端身份 —— 这是对**用户真实数据**的写操作。
+     * 注入此钩子让装配层在认领前落一份数据库备份，出岔子可回滚。
+     * 钩子失败**不阻塞登录**（只记日志），避免备份问题把用户锁在门外。
+     */
+    private readonly beforeClaim?: () => void
   ) {}
 
   getUserCount(): number {
@@ -222,6 +230,12 @@ export class AuthService {
 
     const counts: Record<string, number> = {}
     if (plan.firstClaim && plan.orphanUserIds.length > 0) {
+      // ★ 认领前先落一份备份（写用户真实数据前的安全网）；失败不阻塞登录
+      try {
+        this.beforeClaim?.()
+      } catch (e) {
+        console.log(`[auth] 认领前备份失败（不阻塞登录）：${e instanceof Error ? e.message : String(e)}`)
+      }
       const placeholders = plan.orphanUserIds.map(() => '?').join(',')
       for (const { table, label } of CLAIMABLE_TABLES) {
         try {
