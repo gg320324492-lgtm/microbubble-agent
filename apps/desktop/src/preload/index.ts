@@ -94,6 +94,7 @@ const api = {
     auditList: (limit?: number): Promise<WorkspaceAuditEntry[]> => invoke(IPC.WORKSPACE_AUDIT_LIST, { limit })
   },
   knowledge: {
+    sourceState: (): Promise<unknown> => invoke(IPC.KNOWLEDGE_SOURCE_STATE),
     list: (): Promise<KnowledgeDocMeta[]> => invoke(IPC.KNOWLEDGE_LIST),
     get: (id: number): Promise<KnowledgeDocFull | null> => invoke(IPC.KNOWLEDGE_GET, { id }),
     import: (files: { name: string; content: string }[]): Promise<KnowledgeImportResult> => invoke(IPC.KNOWLEDGE_IMPORT, { files }),

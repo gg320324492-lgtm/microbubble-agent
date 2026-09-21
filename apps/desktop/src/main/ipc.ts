@@ -66,6 +66,15 @@ import {
 } from './agent/permissions/policy'
 import type { PermissionPort } from './agent/agent-loop.service'
 import {
+  RemoteKnowledgeService,
+  knowledgeErrorMessage,
+  knowledgeGuidance,
+  knowledgeSourceState,
+  toDocFull,
+  toDocMeta,
+  toSearchHit
+} from './services/cloud/knowledge'
+import {
   CloudApiClient,
   DEFAULT_CLOUD_BASE_URL,
   cloudStatusLabel,
@@ -950,46 +959,80 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     return ok(null)
   })
 
-  // ---------- 本地知识库（M2-1） ----------
+  // ---------- 远程知识库（M2-3b：数据源切父级服务器） ----------
+  // 注意：实例在下方（currentUserId 就绪后）才赋值，此处仅前置声明，避免 TDZ。
+  let remoteKnowledge: RemoteKnowledgeService
+  //
+  // 说明：**渲染层调用面与返回形状保持不变**（list/get/search/update/delete），只换数据源，
+  // 因此知识库页面无需重写。本地遗留表（knowledge_documents 等）本单**不迁移、不删除、不显示**，
+  // 原样保留在库中（工单 §4 硬边界）；「本地→云端迁移工具」待总指挥/用户拍板。
 
-  ipcMain.handle(IPC.KNOWLEDGE_LIST, (): IpcResult<KnowledgeDocMeta[]> => tryRun(() => {
-    const user = auth.requireUser()
-    return knowledge.list(user.id)
-  }))
-
-  ipcMain.handle(IPC.KNOWLEDGE_GET, (_e, p): IpcResult<KnowledgeDocFull | null> => tryRun(() => {
-    const user = auth.requireUser()
-    return knowledge.get(user.id, Number(p?.id))
-  }))
-
-  ipcMain.handle(IPC.KNOWLEDGE_IMPORT, (_e, p): IpcResult<KnowledgeImportResult> => tryRun(() => {
-    const user = auth.requireUser()
-    return knowledge.importFromFiles(user.id, Array.isArray(p?.files) ? p.files : [])
-  }))
-
-  ipcMain.handle(IPC.KNOWLEDGE_UPDATE, (_e, p): IpcResult<KnowledgeDocFull | null> => tryRun(() => {
-    const user = auth.requireUser()
-    return knowledge.update(user.id, Number(p?.id), {
-      ...(p?.title !== undefined ? { title: String(p.title) } : {}),
-      ...(p?.content !== undefined ? { content: String(p.content) } : {}),
-      ...(Array.isArray(p?.tags) ? { tags: p.tags.map(String) } : {})
+  /** 远程知识库服务：令牌从 settings 取（M2-3a 加密存储），续期后回写 */
+  /** 知识库数据源状态（渲染层据此显示引导态） */
+  ipcMain.handle(IPC.KNOWLEDGE_SOURCE_STATE, (): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      const binding = readCloudState()
+      const effective = binding.status === 'bound' && readCloudTokens() === null ? { ...binding, status: 'unbound' as const } : binding
+      const state = knowledgeSourceState(effective)
+      return { state, ...knowledgeGuidance(state), baseUrl: effective.baseUrl, username: effective.username ?? null }
     })
-  }))
+  )
 
-  ipcMain.handle(IPC.KNOWLEDGE_DELETE, async (_e, p): Promise<IpcResult<boolean>> => {
-    try {
-      const user = auth.requireUser()
-      return ok(await knowledge.delete(user.id, Number(p?.id)))
-    } catch (err) {
-      const e = err as Error & { code?: string }
-      return fail(e.code ?? 'ERROR', e.message)
-    }
+  ipcMain.handle(IPC.KNOWLEDGE_LIST, async (): Promise<IpcResult<KnowledgeDocMeta[]>> => {
+    auth.requireUser()
+    const r = await remoteKnowledge.list({ page: 1, pageSize: 100 })
+    if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
+    return ok(r.data.items.map(toDocMeta) as unknown as KnowledgeDocMeta[])
   })
 
-  ipcMain.handle(IPC.KNOWLEDGE_SEARCH, (_e, p): IpcResult<KnowledgeSearchHit[]> => tryRun(() => {
-    const user = auth.requireUser()
-    return knowledge.search(user.id, String(p?.query ?? ''))
-  }))
+  ipcMain.handle(IPC.KNOWLEDGE_GET, async (_e, p): Promise<IpcResult<KnowledgeDocFull | null>> => {
+    auth.requireUser()
+    const r = await remoteKnowledge.get(Number(p?.id))
+    if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
+    return ok(toDocFull(r.data) as unknown as KnowledgeDocFull)
+  })
+
+  ipcMain.handle(IPC.KNOWLEDGE_IMPORT, async (_e, p): Promise<IpcResult<KnowledgeImportResult>> => {
+    auth.requireUser()
+    // 远程模式：逐条新建；失败项进 skipped（不中断其余）
+    const files = Array.isArray(p?.files) ? (p.files as { name?: unknown; content?: unknown }[]) : []
+    const imported: unknown[] = []
+    const skipped: { name: string; reason: string }[] = []
+    for (const f of files) {
+      const name = String(f?.name ?? '未命名')
+      const r = await remoteKnowledge.create({ title: name, content: String(f?.content ?? '') })
+      if (r.ok) imported.push(toDocMeta(r.data))
+      else skipped.push({ name, reason: knowledgeErrorMessage(r.error) })
+    }
+    return ok({ imported, skipped } as unknown as KnowledgeImportResult)
+  })
+
+  ipcMain.handle(IPC.KNOWLEDGE_UPDATE, async (_e, p): Promise<IpcResult<KnowledgeDocFull | null>> => {
+    auth.requireUser()
+    const r = await remoteKnowledge.update(Number(p?.id), {
+      ...(p?.title !== undefined ? { title: String(p.title) } : {}),
+      ...(p?.content !== undefined ? { content: String(p.content) } : {}),
+      ...(Array.isArray(p?.tags) ? { tags: (p.tags as unknown[]).map(String) } : {})
+    })
+    if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
+    return ok(toDocFull(r.data) as unknown as KnowledgeDocFull)
+  })
+
+  ipcMain.handle(IPC.KNOWLEDGE_DELETE, async (_e, p): Promise<IpcResult<boolean>> => {
+    auth.requireUser()
+    const r = await remoteKnowledge.remove(Number(p?.id))
+    if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
+    return ok(true)
+  })
+
+  ipcMain.handle(IPC.KNOWLEDGE_SEARCH, async (_e, p): Promise<IpcResult<KnowledgeSearchHit[]>> => {
+    auth.requireUser()
+    // ★ 远程模式一律走**服务端检索端点**：本地 CJK bigram 只适用于本地模式
+    const r = await remoteKnowledge.search(String(p?.query ?? ''))
+    if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
+    return ok(r.data.map(toSearchHit) as unknown as KnowledgeSearchHit[])
+  })
 
   // ---------- 本地会议档案（M2-2） ----------
 
@@ -1611,6 +1654,18 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   agentLoop.setContextConfig(readContextConfig())
   // M8-3：注入权限端口（三层 store）；未配置任何规则时判定结果 = 现行为
   agentLoop.setPermissionPort(permissionPort)
+
+  // M2-3b：远程知识库服务 —— **必须晚于 currentUserId 声明**（readCloudState 内部依赖它，
+  // 否则触发 TDZ「Cannot access 'currentUserId' before initialization」导致启动即崩；
+  // M8-2 已在同位置踩过同一个坑，真机首启再次抓到）。
+  // 本地知识库服务实例保留但不接线 —— 本地遗留数据不迁移、不删除（工单 §4 硬边界）。
+  void knowledge
+  remoteKnowledge = new RemoteKnowledgeService({
+    client: makeCloudClient(readCloudState().baseUrl),
+    tokens: () => readCloudTokens(),
+    onTokensRefreshed: (t) => writeCloudTokens(t),
+    log: (m) => console.log(m)
+  })
 
   ipcMain.handle(IPC.BACKUP_DAILY_GET, (): IpcResult<unknown> => tryRun(() => dailyBackup.snapshot()))
   ipcMain.handle(IPC.BACKUP_DAILY_SET, (_e, p): IpcResult<unknown> =>

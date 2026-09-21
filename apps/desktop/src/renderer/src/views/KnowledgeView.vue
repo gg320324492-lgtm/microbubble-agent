@@ -162,7 +162,32 @@ function fmtSize(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
 }
 
+// M2-3b：知识库已切远程数据源 —— 未绑定/离线/失效时显示引导态（不可用但不崩）
+interface KnowledgeSourceGate {
+  state: 'ready' | 'unbound' | 'offline' | 'expired'
+  title: string
+  hint: string
+  canOpenSettings: boolean
+}
+const sourceGate = ref<KnowledgeSourceGate>({ state: 'ready', title: '', hint: '', canOpenSettings: false })
+const sourceBlocked = computed(() => sourceGate.value.state !== 'ready')
+
+async function loadSourceState(): Promise<void> {
+  try {
+    sourceGate.value = (await window.api.knowledge.sourceState()) as KnowledgeSourceGate
+  } catch {
+    // 取不到状态时不阻塞页面（按 ready 处理，后续请求自会给出错误）
+    sourceGate.value = { state: 'ready', title: '', hint: '', canOpenSettings: false }
+  }
+}
+
+function openCloudSettings(): void {
+  location.hash = '/app/settings'
+}
+
 onMounted(async () => {
+  await loadSourceState()
+  if (sourceBlocked.value) return
   try {
     await refreshList()
   } catch {
@@ -173,7 +198,21 @@ onMounted(async () => {
 
 <template>
   <div class="kb">
-    <h1>知识库</h1>
+    <!-- M2-3b：数据源引导态（未绑定 / 离线 / 凭据失效）—— 不可用但不崩，指向设置页 -->
+    <div v-if="sourceBlocked" class="source-gate" data-testid="knowledge-source-gate">
+      <h1>{{ sourceGate.title }}</h1>
+      <p>{{ sourceGate.hint }}</p>
+      <button
+        v-if="sourceGate.canOpenSettings"
+        class="ghost-btn"
+        data-testid="knowledge-open-settings"
+        @click="openCloudSettings"
+      >
+        前往设置 · 云端连接
+      </button>
+    </div>
+
+    <h1 v-show="!sourceBlocked">知识库</h1>
 
     <!-- 详情 / 编辑态 -->
     <section v-if="selected" class="card detail">

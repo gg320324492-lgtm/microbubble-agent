@@ -46,6 +46,8 @@ export const IPC = {
   WORKSPACE_SET: 'workspace:set',
   WORKSPACE_CLEAR: 'workspace:clear',
   WORKSPACE_AUDIT_LIST: 'workspace:audit-list',
+  /** M2-3b：知识库数据源状态（未绑定/离线时渲染层显示引导态） */
+  KNOWLEDGE_SOURCE_STATE: 'knowledge:source-state',
   KNOWLEDGE_LIST: 'knowledge:list',
   KNOWLEDGE_GET: 'knowledge:get',
   KNOWLEDGE_IMPORT: 'knowledge:import',

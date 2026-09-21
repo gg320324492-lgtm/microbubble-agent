@@ -84,6 +84,8 @@ export interface PreloadApi {
     auditList(limit?: number): Promise<WorkspaceAuditEntry[]>
   }
   knowledge: {
+    /** M2-3b：知识库数据源状态（引导态用） */
+    sourceState(): Promise<unknown>
     list(): Promise<KnowledgeDocMeta[]>
     get(id: number): Promise<KnowledgeDocFull | null>
     import(files: { name: string; content: string }[]): Promise<KnowledgeImportResult>
