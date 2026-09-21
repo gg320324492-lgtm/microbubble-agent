@@ -215,7 +215,7 @@ onMounted(async () => {
     <h1 v-show="!sourceBlocked">知识库</h1>
 
     <!-- 详情 / 编辑态 -->
-    <section v-if="selected" class="card detail">
+    <section v-if="selected && !sourceBlocked" class="card detail">
       <div class="detail-head">
         <button class="back-btn" @click="backToList">← 返回列表</button>
         <template v-if="editing">
@@ -242,7 +242,7 @@ onMounted(async () => {
     </section>
 
     <!-- 列表态 -->
-    <template v-else>
+    <template v-else-if="!sourceBlocked">
       <div class="kb-toolbar">
         <input
           v-model="query"
