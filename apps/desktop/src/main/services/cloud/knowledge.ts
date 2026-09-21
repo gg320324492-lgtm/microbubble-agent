@@ -244,6 +244,40 @@ export class RemoteKnowledgeService {
   }
 
   /**
+   * 列表（**拉全所有分页**）。
+   *
+   * 为什么需要：服务端按页返回，若只取第一页（如 pageSize=100），超过部分会**静默截断**
+   * —— 真机实测「桌面端条目数比 web 端少」的根因就是它（不是可见性过滤）。
+   * 逐页取到 total 为止；maxPages 防失控（默认 50 页 = 5000 条）。
+   */
+  async listAll(
+    opts: { pageSize?: number; category?: string; keyword?: string; maxPages?: number } = {}
+  ): Promise<CloudResult<KnowledgeListPage>> {
+    const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 100))
+    const maxPages = Math.max(1, opts.maxPages ?? 50)
+    const items: RemoteKnowledgeItem[] = []
+    let total = Number.POSITIVE_INFINITY
+    let page = 1
+    for (; page <= maxPages; page += 1) {
+      const r = await this.list({
+        page,
+        pageSize,
+        ...(opts.category ? { category: opts.category } : {}),
+        ...(opts.keyword ? { keyword: opts.keyword } : {})
+      })
+      if (!r.ok) return r
+      items.push(...r.data.items)
+      total = r.data.total
+      // 已达 total 或该页为空 → 停止（不再多发一次空请求）
+      if (r.data.items.length === 0 || items.length >= total) break
+    }
+    if (Number.isFinite(total) && items.length < total) {
+      this.log(`[knowledge] 列表达到分页上限：已取 ${items.length}/${total} 条（maxPages=${maxPages}）`)
+    }
+    return { ok: true, data: { items, total: Number.isFinite(total) ? total : items.length, page: 1, pageSize } }
+  }
+
+  /**
    * 检索 —— **走服务端检索端点**。
    * 本地 CJK bigram 逻辑只适用于本地模式，远程模式一律交给服务端（工单 §1 明确）。
    */

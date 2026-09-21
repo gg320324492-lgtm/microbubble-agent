@@ -275,52 +275,60 @@ describe('服务器地址刷新（绑定后改地址必须生效）', () => {
 
 // ---------------------------------------------------------------- 10 分页拉全（真机数量对不上根因）
 
-describe('列表分页：超单页上限时逐页取全（防静默截断）', () => {
-  it('服务端 250 条 → 分 3 页取全，且按 total 提前停止', async () => {
+describe('列表分页：listAll 拉全所有页（防静默截断）', () => {
+  /** 造一个「按页切片」的服务端脚本 */
+  const pagedScript = (all: Record<string, unknown>[]) => (req: CloudHttpRequest): CloudHttpResponse => {
+    const u = new URL(req.url)
+    const page = Number(u.searchParams.get('page') ?? 1)
+    const size = Number(u.searchParams.get('page_size') ?? 20)
+    return res(200, { items: all.slice((page - 1) * size, page * size), total: all.length })
+  }
+
+  it('服务端 250 条 → 分 3 页取全，且按 total 提前停止（不多发第 4 页）', async () => {
     const all = Array.from({ length: 250 }, (_, i) => item(i + 1))
-    const { svc, requests } = harness([
-      (req) => {
-        const page = Number(new URL(req.url).searchParams.get('page') ?? 1)
-        const size = Number(new URL(req.url).searchParams.get('page_size') ?? 20)
-        return res(200, { items: all.slice((page - 1) * size, page * size), total: all.length })
-      }
-    ])
-    // 模拟装配层的「拉全」循环（与 ipc.ts 中同一算法）
-    const collected: { id: number }[] = []
-    let page = 1
-    let total = Number.POSITIVE_INFINITY
-    for (; page <= 50; page += 1) {
-      const r = await svc.list({ page, pageSize: 100 })
-      if (!r.ok) break
-      collected.push(...r.data.items)
-      total = r.data.total
-      if (r.data.items.length === 0 || collected.length >= total) break
+    const { svc, requests } = harness([pagedScript(all)])
+    const r = await svc.listAll({ pageSize: 100 })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.items).toHaveLength(250)
+      expect(r.data.total).toBe(250)
     }
-    expect(collected).toHaveLength(250)
-    expect(total).toBe(250)
-    expect(requests).toHaveLength(3) // 100 + 100 + 50 → 第 3 页即达 total，不再请求第 4 页
     expect(requests.map((q) => new URL(q.url).searchParams.get('page'))).toEqual(['1', '2', '3'])
   })
 
-  it('恰好整页：200 条时第 2 页达 total 即停（不多发一次空请求）', async () => {
+  it('恰好整页 200 条 → 第 2 页达 total 即停（不多发一次空请求）', async () => {
     const all = Array.from({ length: 200 }, (_, i) => item(i + 1))
-    const { svc, requests } = harness([
-      (req) => {
-        const page = Number(new URL(req.url).searchParams.get('page') ?? 1)
-        const size = Number(new URL(req.url).searchParams.get('page_size') ?? 20)
-        return res(200, { items: all.slice((page - 1) * size, page * size), total: all.length })
-      }
-    ])
-    const collected: unknown[] = []
-    let total = Number.POSITIVE_INFINITY
-    for (let page = 1; page <= 50; page += 1) {
-      const r = await svc.list({ page, pageSize: 100 })
-      if (!r.ok) break
-      collected.push(...r.data.items)
-      total = r.data.total
-      if (r.data.items.length === 0 || collected.length >= total) break
-    }
-    expect(collected).toHaveLength(200)
+    const { svc, requests } = harness([pagedScript(all)])
+    const r = await svc.listAll({ pageSize: 100 })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.items).toHaveLength(200)
     expect(requests).toHaveLength(2)
+  })
+
+  it('单页内（<100 条）→ 只请求 1 次', async () => {
+    const all = Array.from({ length: 37 }, (_, i) => item(i + 1))
+    const { svc, requests } = harness([pagedScript(all)])
+    const r = await svc.listAll()
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.data.items).toHaveLength(37)
+    expect(requests).toHaveLength(1)
+  })
+
+  it('服务端 total 虚高（> 实有）→ 触到 maxPages 即停，不无限循环', async () => {
+    const { svc, requests } = harness([() => res(200, { items: [item(1)], total: 99999 })])
+    const r = await svc.listAll({ pageSize: 100, maxPages: 3 })
+    expect(r.ok).toBe(true)
+    // 每页都返回同一条（模拟异常服务端）→ 恰好请求 maxPages 次后停
+    expect(requests).toHaveLength(3)
+    if (r.ok) expect(r.data.total).toBe(99999) // 如实回传服务端 total，便于上层发现异常
+  })
+
+  it('中途某页失败 → 整体失败（不返回半截列表，避免用户以为「就这么多」）', async () => {
+    const all = Array.from({ length: 250 }, (_, i) => item(i + 1))
+    const script = [pagedScript(all), pagedScript(all), () => res(500, { error: { code: 'BOOM', message: 'x' } })]
+    const { svc } = harness(script)
+    const r = await svc.listAll({ pageSize: 100 })
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe('server')
   })
 })
