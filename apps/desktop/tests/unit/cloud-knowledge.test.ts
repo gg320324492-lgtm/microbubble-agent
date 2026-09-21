@@ -221,7 +221,7 @@ describe('链路：续期 / 未绑定 / 断网', () => {
 
 describe('畸形响应不崩溃', () => {
   it('列表响应缺 items / 类型错乱 → 空列表 + total 兜底（不抛）', () => {
-    expect(normalizeKnowledgePage(null, 1, 20)).toEqual({ items: [], total: 0, page: 1, pageSize: 20 })
+    expect(normalizeKnowledgePage(null, 1, 20)).toMatchObject({ items: [], total: 0, page: 1, pageSize: 20 })
     expect(normalizeKnowledgePage({ items: 'oops', total: 'x' }, 1, 20).items).toEqual([])
     expect(normalizeKnowledgePage([item(1)], 1, 20).items).toHaveLength(1) // 容忍裸数组
     expect(normalizeKnowledgePage({ items: [item(1)], total: 9 }, 1, 20).total).toBe(9)
@@ -330,5 +330,92 @@ describe('列表分页：listAll 拉全所有页（防静默截断）', () => {
     const r = await svc.listAll({ pageSize: 100 })
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error.kind).toBe('server')
+  })
+})
+
+// ---------------------------------------------------------------- 11 真机数量排查（8~9 vs 856）
+
+describe('数量排查：856 条真实场景 + total 口径', () => {
+  /** 服务端按页切片（形状照 app/api/v1/knowledge.py 的 KnowledgeList(items, total)） */
+  const paged856 = (req: CloudHttpRequest): CloudHttpResponse => {
+    const u = new URL(req.url)
+    const page = Number(u.searchParams.get('page') ?? 1)
+    const size = Number(u.searchParams.get('page_size') ?? 20)
+    const all = Array.from({ length: 856 }, (_, i) => item(i + 1))
+    return res(200, { items: all.slice((page - 1) * size, page * size), total: all.length })
+  }
+
+  it('★ 856 条：9 页取全（100×8 + 56），断言累计条数与请求页序', async () => {
+    const { svc, requests } = harness([paged856])
+    const r = await svc.listAll({ pageSize: 100 })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.items).toHaveLength(856)
+      expect(r.data.total).toBe(856)
+    }
+    expect(requests).toHaveLength(9)
+    expect(requests.map((q) => new URL(q.url).searchParams.get('page'))).toEqual([
+      '1', '2', '3', '4', '5', '6', '7', '8', '9'
+    ])
+    // 参数形状与 web 端 useKnowledge.js 完全一致（只带 page / page_size）
+    const u = new URL(requests[0]!.url)
+    expect([...u.searchParams.keys()].sort()).toEqual(['page', 'page_size'])
+    expect(u.searchParams.get('page_size')).toBe('100')
+  })
+
+  it('★ 请求形状与 web 端逐字对齐：路径 /api/v1/knowledge，无额外参数', async () => {
+    const { svc, requests } = harness([paged856])
+    await svc.listAll()
+    const u = new URL(requests[0]!.url)
+    expect(u.pathname).toBe('/api/v1/knowledge')
+    // 不得带 has_file / category / source_type / keyword 等过滤（那会缩小集合）
+    expect(u.searchParams.has('has_file')).toBe(false)
+    expect(u.searchParams.has('category')).toBe(false)
+    expect(u.searchParams.has('source_type')).toBe(false)
+    expect(u.searchParams.has('keyword')).toBe(false)
+  })
+
+  it('响应用 pagination.total 包裹时也能取到（对齐 web 的读取优先级）', async () => {
+    const { svc } = harness([
+      () => res(200, { items: [item(1), item(2)], pagination: { total: 856, page: 1, page_size: 2 } }),
+      () => res(200, { items: [], pagination: { total: 856 } })
+    ])
+    const r = await svc.list({ page: 1, pageSize: 2 })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.total).toBe(856) // ★ 不是本页条数 2
+      expect(r.data.totalFromServer).toBe(true)
+    }
+  })
+
+  it('响应完全没有 total 字段 → 退化为本页条数并标记 totalFromServer=false（可被上层发现）', async () => {
+    const { svc } = harness([() => res(200, { items: [item(1), item(2), item(3)] })])
+    const r = await svc.list()
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.total).toBe(3)
+      expect(r.data.totalFromServer).toBe(false)
+    }
+  })
+
+  it('诊断日志含页号/条数/total，且不含任何文档内容字段', async () => {
+    const logs: string[] = []
+    const requests: CloudHttpRequest[] = []
+    let i = 0
+    const http: CloudHttpFn = async (req) => {
+      requests.push(req)
+      i += 1
+      return paged856(req)
+    }
+    const svc = new RemoteKnowledgeService({
+      client: new CloudApiClient({ http, baseUrl: 'https://agent.mnb-lab.cn' }),
+      tokens: () => ({ accessToken: 'AT', refreshToken: 'RT' }),
+      log: (m) => logs.push(m)
+    })
+    await svc.listAll({ pageSize: 100 })
+    expect(logs.some((l) => /page=1 page_size=100 → items=100 total=856/.test(l))).toBe(true)
+    expect(logs.some((l) => /GET \/api\/v1\/knowledge\?page=1&page_size=100/.test(l))).toBe(true)
+    // 隐私：日志只含数字与路径，不含 title/snippet/summary 等正文相关字段名
+    expect(logs.join('\n')).not.toMatch(/title|snippet|summary|content/i)
   })
 })

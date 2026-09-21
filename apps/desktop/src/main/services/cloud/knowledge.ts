@@ -48,6 +48,8 @@ export interface KnowledgeListPage {
   total: number
   page: number
   pageSize: number
+  /** 服务端是否真的给了 total（false = 退化为本页条数，调用方应警惕截断） */
+  totalFromServer?: boolean
 }
 
 export interface CreateKnowledgeInput {
@@ -135,8 +137,11 @@ export function normalizeKnowledgePage(raw: unknown, page: number, pageSize: num
   const o = (raw ?? {}) as Record<string, unknown>
   const rawItems = Array.isArray(raw) ? raw : Array.isArray(o.items) ? o.items : []
   const items = rawItems.map(normalizeKnowledgeItem).filter((x): x is RemoteKnowledgeItem => x !== null)
-  const total = typeof o.total === 'number' ? o.total : items.length
-  return { items, total, page, pageSize }
+  // total 口径对齐 web 端 useKnowledge.js：优先 `pagination.total`，其次顶层 `total`，
+  // 都没有才退化为本页条数（此时**必须**让调用方知道，否则会静默截断成单页）。
+  const pag = (o.pagination ?? {}) as Record<string, unknown>
+  const total = typeof pag.total === 'number' ? pag.total : typeof o.total === 'number' ? o.total : items.length
+  return { items, total, page, pageSize, totalFromServer: typeof pag.total === 'number' || typeof o.total === 'number' }
 }
 
 /** 归一化检索结果数组 */
@@ -203,6 +208,11 @@ export class RemoteKnowledgeService {
     this.log = deps.log ?? ((): void => undefined)
   }
 
+  /** 诊断用：当前客户端 base（便于确认打的是哪台服务器） */
+  private baseUrlHint(): string {
+    return this.client.getBaseUrl()
+  }
+
   /** 未绑定 → 直接返回 unbound 错误（不发起请求） */
   private requireTokens(): CloudResult<CloudTokens> {
     const t = this.tokens()
@@ -236,6 +246,8 @@ export class RemoteKnowledgeService {
     const page = Math.max(1, opts.page ?? 1)
     const pageSize = Math.min(100, Math.max(1, opts.pageSize ?? 20))
     const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+    // 诊断：与 web 端 F12 抓包逐字对比用（web 用 useKnowledge.js → 同样只带 page/page_size）
+    this.log(`[knowledge] GET /api/v1/knowledge?${qs.toString()}（base=${this.baseUrlHint()}）`)
     if (opts.category) qs.set('category', opts.category)
     if (opts.keyword) qs.set('keyword', opts.keyword)
     const res = await this.call('GET', `/api/v1/knowledge?${qs.toString()}`)
@@ -257,6 +269,7 @@ export class RemoteKnowledgeService {
     const maxPages = Math.max(1, opts.maxPages ?? 50)
     const items: RemoteKnowledgeItem[] = []
     let total = Number.POSITIVE_INFINITY
+    let lastTotalFromServer: boolean | undefined
     let page = 1
     for (; page <= maxPages; page += 1) {
       const r = await this.list({
@@ -268,8 +281,17 @@ export class RemoteKnowledgeService {
       if (!r.ok) return r
       items.push(...r.data.items)
       total = r.data.total
+      lastTotalFromServer = r.data.totalFromServer
+      // ★ 诊断日志：真机「桌面 9 条 vs web 856 条」排查用 —— 逐页记录
+      //   请求路径/参数、服务端返回的 total、本页条数。**不含任何文档内容。**
+      this.log(
+        `[knowledge] page=${page} page_size=${pageSize} → items=${r.data.items.length} total=${total}（累计 ${items.length}）`
+      )
       // 已达 total 或该页为空 → 停止（不再多发一次空请求）
       if (r.data.items.length === 0 || items.length >= total) break
+    }
+    if (lastTotalFromServer === false) {
+      this.log('[knowledge] ⚠ 服务端响应缺少 total 字段 → 无法判断是否还有下一页，可能存在截断')
     }
     if (Number.isFinite(total) && items.length < total) {
       this.log(`[knowledge] 列表达到分页上限：已取 ${items.length}/${total} 条（maxPages=${maxPages}）`)
