@@ -125,6 +125,11 @@ const api = {
     permissionsSet: (patch: Record<string, unknown>): Promise<unknown> => invoke(IPC.AGENT_PERMISSIONS_SET, patch),
     steer: (sessionId: string, text: string): Promise<null> => invoke(IPC.AGENT_STEER, { sessionId, text })
   },
+  cloud: {
+    statusGet: (): Promise<unknown> => invoke(IPC.CLOUD_STATUS_GET),
+    bind: (payload: { baseUrl?: string; username: string; password: string }): Promise<unknown> => invoke(IPC.CLOUD_BIND, payload),
+    unbind: (): Promise<unknown> => invoke(IPC.CLOUD_UNBIND)
+  },
   backup: {
     create: (password: string, targetDir: string): Promise<{ fileName: string; size: number }> =>
       invoke(IPC.BACKUP_CREATE, { password, targetDir }),

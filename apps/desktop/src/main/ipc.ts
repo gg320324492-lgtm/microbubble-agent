@@ -65,6 +65,16 @@ import {
   type ToolCategory
 } from './agent/permissions/policy'
 import type { PermissionPort } from './agent/agent-loop.service'
+import {
+  CloudApiClient,
+  DEFAULT_CLOUD_BASE_URL,
+  cloudStatusLabel,
+  initialBindingState,
+  normalizeBaseUrl,
+  type CloudBindingState,
+  type CloudHttpFn,
+  type CloudTokens
+} from './services/cloud/api-client'
 import type { StreamTurnFn, StreamTurnResult } from '@shared/types'
 import { listDirTool } from './agent/tools/list-dir'
 import { readFileTool } from './agent/tools/read-file'
@@ -371,6 +381,70 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       console.log(`[permissions] 已记住：${category}=${value} @ ${rule.scope}`)
     }
   }
+
+  // ---- M2-3a 云端连接（父级账号绑定）----
+  //   令牌：safeStorage 加密后落 settings（同 backup.exitPassword / apiKey 模式）；
+  //        解密失败或跨实例不可解 → 视为未绑定（不阻塞启动）。
+  //   账号密码只经 UI 输入，绝不落日志/审计。
+  const CLOUD_TOKENS_KEY = 'cloud.tokens'
+  const CLOUD_STATE_KEY = 'cloud.binding'
+
+  /** 生产 HTTP：注入式接口的 fetch 实现（超时 + 不跟随重定向以外的花活） */
+  const cloudHttp: CloudHttpFn = async (req) => {
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: req.headers,
+      ...(req.body === undefined ? {} : { body: req.body }),
+      signal: AbortSignal.timeout(req.timeoutMs)
+    })
+    const headers: Record<string, string> = {}
+    res.headers.forEach((v, k) => (headers[k.toLowerCase()] = v))
+    return { status: res.status, headers, text: await res.text() }
+  }
+
+  const readCloudState = (): CloudBindingState => {
+    const raw = settings.get(CLOUD_STATE_KEY, currentUserId() ?? undefined) as Partial<CloudBindingState> | undefined
+    const base = initialBindingState(raw?.baseUrl ?? DEFAULT_CLOUD_BASE_URL)
+    const status = raw?.status
+    return {
+      ...base,
+      status: status === 'bound' || status === 'expired' || status === 'offline' ? status : 'unbound',
+      ...(typeof raw?.username === 'string' ? { username: raw.username } : {}),
+      ...(typeof raw?.lastError === 'string' ? { lastError: raw.lastError } : {}),
+      updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : 0
+    }
+  }
+  const writeCloudState = (state: CloudBindingState): void => {
+    settings.set(CLOUD_STATE_KEY, state, currentUserId() ?? undefined)
+  }
+
+  /** 读取令牌（解密失败 → null，视为未绑定） */
+  const readCloudTokens = (): CloudTokens | null => {
+    const enc = settings.get(CLOUD_TOKENS_KEY, currentUserId() ?? undefined) as string | undefined
+    if (!enc) return null
+    const plain = cipher.decrypt(enc)
+    if (!plain) {
+      console.log('[cloud] 令牌解密失败（跨实例或系统凭据变更）→ 视为未绑定')
+      return null
+    }
+    try {
+      const j = JSON.parse(plain) as Partial<CloudTokens>
+      return typeof j.accessToken === 'string' && typeof j.refreshToken === 'string' ? (j as CloudTokens) : null
+    } catch {
+      return null
+    }
+  }
+  const writeCloudTokens = (tokens: CloudTokens | null): void => {
+    if (!tokens) {
+      settings.set(CLOUD_TOKENS_KEY, '', currentUserId() ?? undefined)
+      return
+    }
+    const enc = cipher.encrypt(JSON.stringify(tokens))
+    settings.set(CLOUD_TOKENS_KEY, enc, currentUserId() ?? undefined)
+  }
+
+  const makeCloudClient = (baseUrl: string): CloudApiClient =>
+    new CloudApiClient({ http: cloudHttp, baseUrl, log: (m) => console.log(m) })
 
   const todoStore = new TodoStore()
   registry.register(createTodoWriteTool({ store: todoStore }))
@@ -1323,6 +1397,67 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       }
       console.log(`[permissions] 设置页写入：${category}=${value} @ ${scope}`)
       return { ok: true }
+    })
+  )
+
+  // M2-3a §3/§4：云端连接状态（设置页「云端连接」区块 + 可观测性）
+  ipcMain.handle(IPC.CLOUD_STATUS_GET, (): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      const state = readCloudState()
+      const hasTokens = readCloudTokens() !== null
+      // 令牌丢失（解密失败/被清）但状态还是 bound → 视为未绑定，避免误导
+      const effective: CloudBindingState = state.status === 'bound' && !hasTokens ? { ...state, status: 'unbound' } : state
+      return { ...effective, statusLabel: cloudStatusLabel(effective.status), hasTokens }
+    })
+  )
+
+  // 绑定：登录 → 取用户信息 → 加密落库（账号密码只用一次，绝不落库/日志）
+  ipcMain.handle(IPC.CLOUD_BIND, async (_e, p): Promise<IpcResult<unknown>> => {
+    const payload = (p ?? {}) as { baseUrl?: string; username?: string; password?: string }
+    const username = String(payload.username ?? '').trim()
+    const password = String(payload.password ?? '')
+    if (!username || !password) {
+      return { ok: false, error: { code: 'INVALID_INPUT', message: '请填写云端账号与密码' } }
+    }
+    try {
+      const uid = auth.requireUser().id
+      const baseUrl = normalizeBaseUrl(payload.baseUrl ?? readCloudState().baseUrl)
+      const client = makeCloudClient(baseUrl)
+
+      const loginRes = await client.login(username, password)
+      if (!loginRes.ok) {
+        const state: CloudBindingState = { ...readCloudState(), baseUrl, status: 'expired', lastError: loginRes.error.message, updatedAt: Date.now() }
+        writeCloudState(state)
+        console.log(`[cloud] 绑定失败（${loginRes.error.kind}）：${loginRes.error.detail ?? ''}`)
+        return { ok: false, error: { code: `CLOUD_${loginRes.error.kind.toUpperCase().replace('-', '_')}`, message: loginRes.error.message } }
+      }
+
+      // 回填服务器侧用户名（绑定成功的凭证）
+      const meRes = await client.me(loginRes.data.accessToken)
+      const name = meRes.ok ? meRes.data.name : username
+      writeCloudTokens(loginRes.data)
+      const state: CloudBindingState = { status: 'bound', baseUrl, username: name, updatedAt: Date.now() }
+      writeCloudState(state)
+      console.log(`[cloud] 绑定成功：${baseUrl} 用户=${name}（uid=${uid}）`)
+      return { ok: true, data: { ...state, statusLabel: cloudStatusLabel(state.status), hasTokens: true } }
+    } catch (e) {
+      // 异常一律归一化为中性文案（原始信息进日志）
+      const msg = e instanceof Error ? e.message : String(e)
+      console.log(`[cloud] 绑定异常：${msg}`)
+      return { ok: false, error: { code: 'CLOUD_NETWORK', message: '无法连接云端服务器，请检查网络或服务器地址。' } }
+    }
+  })
+
+  // 解绑：清除令牌与绑定状态（**不删本地任何业务数据**）
+  ipcMain.handle(IPC.CLOUD_UNBIND, (): IpcResult<unknown> =>
+    tryRun(() => {
+      auth.requireUser()
+      writeCloudTokens(null)
+      const state: CloudBindingState = { ...initialBindingState(readCloudState().baseUrl), updatedAt: Date.now() }
+      writeCloudState(state)
+      console.log('[cloud] 已解绑（令牌与绑定状态已清除；本地数据未动）')
+      return { ...state, statusLabel: cloudStatusLabel(state.status), hasTokens: false }
     })
   )
 

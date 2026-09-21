@@ -153,6 +153,72 @@ const ctxDebugText = computed(() => {
   )
 })
 
+// ---------- M2-3a 云端连接（父级账号绑定；账号密码只经本表单提交，不进日志） ----------
+interface CloudState {
+  status: 'unbound' | 'bound' | 'expired' | 'offline'
+  statusLabel?: string
+  baseUrl: string
+  username?: string
+  lastError?: string
+  hasTokens?: boolean
+}
+const cloud = ref<CloudState | null>(null)
+const cloudBaseUrl = ref('https://mnb-lab.cn')
+const cloudAccount = ref('')
+const cloudPassword = ref('')
+const cloudBusy = ref(false)
+
+async function loadCloud(): Promise<void> {
+  try {
+    const st = (await window.api.cloud.statusGet()) as CloudState
+    cloud.value = st
+    if (st?.baseUrl) cloudBaseUrl.value = st.baseUrl
+  } catch {
+    /* 未登录时静默 */
+  }
+}
+
+async function bindCloud(): Promise<void> {
+  if (!cloudAccount.value.trim() || !cloudPassword.value) {
+    ElMessage.warning('请填写云端账号与密码')
+    return
+  }
+  cloudBusy.value = true
+  try {
+    const r = (await window.api.cloud.bind({
+      baseUrl: cloudBaseUrl.value,
+      username: cloudAccount.value.trim(),
+      password: cloudPassword.value
+    })) as { status?: string }
+    cloudPassword.value = '' // 提交后立即清空，不在内存里留着
+    await loadCloud()
+    ElMessage.success(`已连接云端（${r?.status === 'bound' ? cloud.value?.username ?? '已绑定' : '已提交'}）`)
+  } catch (e) {
+    cloudPassword.value = ''
+    ElMessage.error(e instanceof Error ? e.message : '绑定失败')
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+async function unbindCloud(): Promise<void> {
+  cloudBusy.value = true
+  try {
+    await window.api.cloud.unbind()
+    await loadCloud()
+    ElMessage.success('已解除绑定（本地数据未受影响）')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '解绑失败')
+  } finally {
+    cloudBusy.value = false
+  }
+}
+
+const cloudStatusClass = computed(() => {
+  const st = cloud.value?.status ?? 'unbound'
+  return st === 'bound' ? 'cloud-ok' : st === 'expired' || st === 'offline' ? 'cloud-warn' : 'cloud-idle'
+})
+
 // ---------- M8-3 工具权限（最小 UI：按类别列生效值 + 来源作用域） ----------
 interface PermRow {
   category: 'readonly' | 'write'
@@ -201,6 +267,7 @@ async function saveContextConfig(): Promise<void> {
 }
 
 onMounted(() => {
+  void loadCloud()
   void loadPermissions()
   load().catch(() => undefined)
   offState = window.api.update.onStateChange((s) => {
@@ -276,6 +343,32 @@ onUnmounted(() => {
     <p class="hint section-note">
       提示式更新：发现新版本后由你确认下载，安装前再次确认，全程不会自动安装。
     </p>
+    <!-- M2-3a 云端连接（最小 UI） -->
+    <details class="ctx-debug" data-testid="cloud-connection" open>
+      <summary>云端连接</summary>
+      <p class="hint tiny" data-testid="cloud-status">
+        <span :class="cloudStatusClass">●</span>
+        {{ cloud?.statusLabel ?? '未绑定' }}
+        <template v-if="cloud?.username">· {{ cloud.username }}</template>
+        <template v-if="cloud?.lastError"> · {{ cloud.lastError }}</template>
+      </p>
+      <template v-if="cloud?.status === 'bound'">
+        <button class="ghost-btn" data-testid="cloud-unbind" :disabled="cloudBusy" @click="unbindCloud">解除绑定</button>
+        <p class="hint tiny">服务器：{{ cloud.baseUrl }}（解除绑定只清登录状态，本地数据不受影响）</p>
+      </template>
+      <template v-else>
+        <div class="ctx-cfg">
+          <label>服务器地址 <input v-model="cloudBaseUrl" type="text" data-testid="cloud-baseurl" /></label>
+        </div>
+        <div class="ctx-cfg">
+          <label>云端账号 <input v-model="cloudAccount" type="text" data-testid="cloud-account" /></label>
+          <label>密码 <input v-model="cloudPassword" type="password" data-testid="cloud-password" /></label>
+          <button class="ghost-btn" data-testid="cloud-bind" :disabled="cloudBusy" @click="bindCloud">绑定</button>
+        </div>
+        <p class="hint tiny">用课题组网页端的账号登录。账号密码只用于本次绑定，不会保存到本地。</p>
+      </template>
+    </details>
+
     <!-- M8-3 工具权限（最小 UI） -->
     <details class="ctx-debug" data-testid="tool-permissions">
       <summary>工具权限</summary>
@@ -460,3 +553,8 @@ onUnmounted(() => {
 .perm-scope {
   color: var(--color-text-secondary);
 }
+
+/* M2-3a 云端连接状态点 */
+.cloud-ok { color: var(--color-success, #3e8e5a); }
+.cloud-warn { color: var(--color-warning, #b7791f); }
+.cloud-idle { color: var(--color-text-secondary); }

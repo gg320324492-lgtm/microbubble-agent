@@ -30,6 +30,10 @@ export const IPC = {
   AGENT_PERMISSIONS_SET: 'agent:permissions-set',
   /** M8-3 steering：任务进行中补充要求 */
   AGENT_STEER: 'agent:steer',
+  /** M2-3a 云端连接（父级账号绑定） */
+  CLOUD_STATUS_GET: 'cloud:status-get',
+  CLOUD_BIND: 'cloud:bind',
+  CLOUD_UNBIND: 'cloud:unbind',
   /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */
   CHAT_STREAM_EVENT: 'chat:stream-event',
   WINDOW_STATE_EVENT: 'window:state-event',
