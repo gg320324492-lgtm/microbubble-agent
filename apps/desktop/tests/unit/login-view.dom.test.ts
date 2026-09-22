@@ -60,7 +60,8 @@ describe('登录页 UI 契约', () => {
     const wrapper = await mountLogin()
     expect(wrapper.get('[data-testid="login-identity"]').text()).toContain('MicroBubble Lab')
     expect(wrapper.text()).toContain('进入科研工作台')
-    expect(wrapper.text()).toContain('账号和数据仅保存在本机数据库')
+    // 快修：底部文案改准确表述（云端登录语义下「仅保存在本机」有误导）
+    expect(wrapper.text()).toContain('登录凭据加密保存在本机')
   })
 
   it('用户名/密码 label + autocomplete 语义完整', async () => {
