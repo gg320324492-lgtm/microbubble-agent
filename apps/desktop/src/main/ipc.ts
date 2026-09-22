@@ -231,6 +231,21 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
         const dest = `${dbPath}.pre-claim-${stamp}.bak`
         copyFileSync(dbPath, dest)
         console.log(`[auth] 已备份数据库（认领前）：${dest}`)
+        // 只保留最近 3 份认领备份，避免长期累积占空间
+        try {
+          const { readdirSync, unlinkSync } = require('node:fs') as typeof import('node:fs')
+          const { dirname, basename, join } = require('node:path') as typeof import('node:path')
+          const dir = dirname(dbPath)
+          const prefix = `${basename(dbPath)}.pre-claim-`
+          const olds = readdirSync(dir)
+            .filter((f) => f.startsWith(prefix) && f.endsWith('.bak'))
+            .sort()
+            .slice(0, -3) // 时间戳可排序，留下最新 3 份
+          for (const f of olds) unlinkSync(join(dir, f))
+          if (olds.length) console.log(`[auth] 已清理 ${olds.length} 份过期认领备份`)
+        } catch (e) {
+          console.log(`[auth] 清理过期备份失败（不影响登录）：${e instanceof Error ? e.message : String(e)}`)
+        }
       } catch (e) {
         console.log(`[auth] 备份数据库失败（不阻塞登录）：${e instanceof Error ? e.message : String(e)}`)
       }
@@ -1139,23 +1154,36 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   /** 远程知识库服务：令牌从 settings 取（M2-3a 加密存储），续期后回写 */
   /** 知识库数据源状态（渲染层据此显示引导态） */
-  ipcMain.handle(IPC.KNOWLEDGE_SOURCE_STATE, (): IpcResult<unknown> =>
-    tryRun(() => {
+  ipcMain.handle(IPC.KNOWLEDGE_SOURCE_STATE, async (): Promise<IpcResult<unknown>> => {
+    try {
+      return ok(await (async () => {
       auth.requireUser()
       // DL-1：以认证态为唯一事实源推导（不再读独立的绑定状态存储）
       const snap = cloudAuthSnapshot()
       const state = cloudUsableStateFromAuth(snap)
       const g = knowledgeGuidance(state)
+      // 附带服务端返回的条目总数（DL-1 #3 决定性诊断：用户一眼可见 total 是 9 还是 856）。
+      // 只在可用态下取，避免未登录/离线时多发一次请求。
+      let total: number | null = null
+      if (state === 'ready') {
+        const r = await remoteKnowledge.list({ page: 1, pageSize: 1 })
+        if (r.ok) total = r.data.total
+      }
       return {
         state,
         title: g.title,
         hint: g.hint,
         canOpenSettings: g.canOpenSettings,
         baseUrl: readCloudBaseUrl(),
-        username: snap.isCloudIdentity ? auth.cloudIdentityOfCurrentUser() : null
+        username: snap.isCloudIdentity ? auth.cloudIdentityOfCurrentUser() : null,
+        total
       }
-    })
-  )
+      })())
+    } catch (e) {
+      const err = e as Error & { code?: string }
+      return fail(err.code ?? 'ERROR', err.message)
+    }
+  })
 
   ipcMain.handle(IPC.KNOWLEDGE_LIST, async (): Promise<IpcResult<KnowledgeDocMeta[]>> => {
     auth.requireUser()

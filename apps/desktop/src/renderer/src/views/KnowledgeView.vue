@@ -172,9 +172,16 @@ interface KnowledgeSourceGate {
 const sourceGate = ref<KnowledgeSourceGate>({ state: 'ready', title: '', hint: '', canOpenSettings: false })
 const sourceBlocked = computed(() => sourceGate.value.state !== 'ready')
 
+const serverTotal = ref<number | null>(null)
+
+/** 服务端返回的条目总数（DL-1 #3 决定性诊断：一眼可见 total 是 9 还是 856） */
+const serverTotal = ref<number | null>(null)
+
 async function loadSourceState(): Promise<void> {
   try {
-    sourceGate.value = (await window.api.knowledge.sourceState()) as KnowledgeSourceGate
+    const st = (await window.api.knowledge.sourceState()) as KnowledgeSourceGate & { total?: number | null }
+    sourceGate.value = st
+    serverTotal.value = typeof st.total === 'number' ? st.total : null
   } catch {
     // 取不到状态时不阻塞页面（按 ready 处理，后续请求自会给出错误）
     sourceGate.value = { state: 'ready', title: '', hint: '', canOpenSettings: false }
@@ -259,6 +266,12 @@ onMounted(async () => {
       </div>
 
       <!-- 空态引导 -->
+      <p v-if="serverTotal !== null" class="hint tiny" data-testid="kb-server-total">
+        服务端共 {{ serverTotal }} 条（本机显示 {{ shown.length }} 条）
+      </p>
+      <p v-if="serverTotal !== null" class="hint tiny" data-testid="kb-server-total">
+        服务端共 {{ serverTotal }} 条（本机显示 {{ shown.length }} 条）
+      </p>
       <div v-if="shown.length === 0" class="card empty" data-testid="kb-empty">
         <template v-if="isSearchMode">
           <p class="empty-title">没有找到与「{{ query }}」相关的文档</p>
