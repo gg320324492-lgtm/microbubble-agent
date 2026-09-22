@@ -252,15 +252,37 @@ describe('本地注册退役', () => {
     expect(guard).not.toContain('needsSetup ?')
   })
 
-  it('★ 登录窗无本地建号入口，且提供「到 mnb-lab.cn 注册」外链引导', async () => {
+  it('★ 登录窗无本地建号入口；引导为纯文案「请联系管理员开通」（无外链）', async () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync('src/renderer/src/views/LoginView.vue', 'utf8')
     expect(src).toContain('data-testid="login-register-hint"')
-    expect(src).toContain('mnb-lab.cn')
-    expect(src).toContain('api.app.openExternal')
+    expect(src).toContain('还没有课题组账号？请联系管理员开通')
+    // 快修：引导行改为纯文案，不再有外链/注册跳转
+    expect(src).not.toContain('openRegister')
+    expect(src).not.toContain('openExternal')
     // 不再有本地注册/建号调用
     expect(src).not.toContain('registerAdmin')
     expect(src).not.toContain('auth.register')
+  })
+
+  it('★ 登录窗不暴露服务器地址（默认内置；配置覆盖留在代码层）', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('src/renderer/src/views/LoginView.vue', 'utf8')
+    expect(src).not.toContain('login-server')
+    expect(src).not.toContain('server-adv')
+    expect(src).not.toContain('高级选项')
+    // 代码层仍保留覆盖能力（store/IPC 接受 baseUrl）
+    const store = readFileSync('src/renderer/src/stores/auth.ts', 'utf8')
+    expect(store).toContain('baseUrl')
+    const ipc = readFileSync('src/main/ipc.ts', 'utf8')
+    expect(ipc).toContain('payload.baseUrl')
+  })
+
+  it('★ 底部文案不再宣称「账号和数据仅保存在本机」', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync('src/renderer/src/views/LoginView.vue', 'utf8')
+    expect(src).not.toContain('账号和数据仅保存在本机')
+    expect(src).toContain('登录凭据加密保存在本机')
   })
 
   it('登录窗走云端登录（cloudLogin）而非本地 login', async () => {

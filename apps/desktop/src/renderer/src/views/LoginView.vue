@@ -33,12 +33,10 @@ async function onSubmit(): Promise<void> {
   }
 }
 const api = window.api // 模板作用域内不可直接访问 window，桥接引用
-/** 服务器地址（高级折叠，默认课题组 API 主机；自建/局域网部署可改） */
-const server = ref('https://agent.mnb-lab.cn')
-/** 本地不再提供注册：无账号时引导去网页端注册 */
-function openRegister(): void {
-  void api.app.openExternal('https://mnb-lab.cn')
-}
+// 服务器地址：默认内置（agent.mnb-lab.cn）。
+// 普通用户界面**不再暴露**该配置；运维需要覆盖时走代码层能力（auth.cloudLogin 仍接受 baseUrl，
+// 亦可通过设置项覆盖），无需在登录窗暴露。
+const server = ref('')
 </script>
 
 <template>
@@ -51,7 +49,7 @@ function openRegister(): void {
         <div class="auth-brand"><img class="auth-brand-logo" :src="logoUrl" alt="微纳米气泡课题组" /><span>MicroBubble Lab</span></div>
         <p class="auth-kicker">SCIENTIFIC WORKBENCH</p>
         <h1>把课题组的数据，装进一台本地工作台。</h1>
-        <p>实验、知识、会议与 AI 助手汇集在同一套本地科研工作台；数据存本机，断网可用。</p>
+        <p>实验、知识、会议与 AI 助手汇集在同一套科研工作台；登录一次即可用，断网也能继续工作。</p>
         <p class="auth-status"><span class="auth-status-dot" aria-hidden="true"></span>本地数据库已就绪 <b aria-hidden="true">•</b> 离线优先</p>
       </aside>
       <form class="auth-form" @submit.prevent="onSubmit">
@@ -62,17 +60,11 @@ function openRegister(): void {
         <input id="login-username" v-model="form.username" type="text" autocomplete="username" :disabled="loading" placeholder="课题组账号（与网页端相同）" />
         <label for="login-password">密码</label>
         <input id="login-password" v-model="form.password" type="password" autocomplete="current-password" :disabled="loading" placeholder="输入你的密码" />
-        <p class="register-hint">
-          还没有课题组账号？
-          <a href="#" data-testid="login-register-hint" @click.prevent="openRegister">到 mnb-lab.cn 注册</a>
-        </p>
-        <details class="server-adv">
-          <summary>高级选项</summary>
-          <input id="login-server" v-model="server" type="text" :disabled="loading" placeholder="服务器地址（默认课题组 API 主机）" />
-        </details>
+        <p class="register-hint" data-testid="login-register-hint">还没有课题组账号？请联系管理员开通。</p>
+
         <button type="submit" :disabled="loading">{{ loading ? '登录中…' : '安全登录' }}</button>
         <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
-        <p class="auth-note"><span aria-hidden="true">▣</span>账号和数据仅保存在本机数据库。</p>
+        <p class="auth-note"><span aria-hidden="true">▣</span>登录凭据加密保存在本机；会话与本地资料存本机，知识库与网盘内容存课题组服务器。</p>
       </form>
     </section>
   </main>
