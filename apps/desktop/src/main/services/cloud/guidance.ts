@@ -8,6 +8,33 @@ import type { CloudError } from './api-client'
 
 export type CloudUsableState = 'ready' | 'unbound' | 'offline' | 'expired'
 
+/**
+ * 云端可用性快照（DL-1 修复核心）。
+ *
+ * ★ **以认证状态为唯一事实源**：不再维护独立的「绑定状态」存储。
+ *   此前 M2-3a 的绑定状态只在「绑定 IPC」里置位，统一登录路径没联动 → 登录了仍显示「未绑定」。
+ *   现在由认证态（本地会话 + 该身份是否为云端身份 + 云端令牌是否在）**推导**，无第二份状态。
+ *
+ * 提供者模式：调用方每次用时取快照，禁止构造期缓存。
+ */
+export interface CloudAuthSnapshot {
+  /** 本地会话有效（含离线宽容：令牌未过期即可） */
+  loggedIn: boolean
+  /** 当前身份是云端身份（users 行有 cloud_user_id 映射） */
+  isCloudIdentity: boolean
+  /** 云端 access/refresh 令牌可读（加密存储可解密） */
+  hasCloudTokens: boolean
+}
+
+/** 由认证快照推导数据源可用状态（纯函数） */
+export function cloudUsableStateFromAuth(snap: CloudAuthSnapshot, error?: CloudError): CloudUsableState {
+  if (!snap.loggedIn || !snap.isCloudIdentity) return 'unbound'
+  // 已登录但云端令牌不可读 → 需重新登录（旧绑定/换机/系统凭据变更）
+  if (!snap.hasCloudTokens) return 'expired'
+  if (error && (error.kind === 'network' || error.kind === 'timeout')) return 'offline'
+  return 'ready'
+}
+
 export interface CloudGuidance {
   state: CloudUsableState
   /** 面向用户的中性标题（空串 = 可用，无需引导） */
@@ -19,7 +46,10 @@ export interface CloudGuidance {
   actionLabel: string
 }
 
-/** 由绑定状态 + 最近错误推断可用状态（纯函数） */
+/**
+ * @deprecated DL-1：改为 cloudUsableStateFromAuth（以认证态为唯一事实源）。
+ * 保留仅为兼容既有调用点，新代码不要再用。
+ */
 export function cloudUsableState(binding: { status: string }, error?: CloudError): CloudUsableState {
   if (binding.status === 'unbound') return 'unbound'
   if (binding.status === 'expired') return 'expired'

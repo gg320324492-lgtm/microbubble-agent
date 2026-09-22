@@ -348,6 +348,9 @@ export class CloudApiClient {
 
 export type CloudBindingStatus = 'unbound' | 'bound' | 'expired' | 'offline'
 
+/** 与 CloudBindingStatus 同值域的别名（DL-1：数据源状态由认证态推导后共用同一套标签） */
+export type CloudUsableStateLike = 'unbound' | 'bound' | 'expired' | 'offline'
+
 export interface CloudBindingState {
   status: CloudBindingStatus
   baseUrl: string
@@ -368,8 +371,8 @@ export function isCloudUsable(state: CloudBindingState): boolean {
   return state.status === 'bound'
 }
 
-export function cloudStatusLabel(status: CloudBindingStatus): string {
-  return status === 'bound'
+export function cloudStatusLabel(status: CloudBindingStatus | CloudUsableStateLike | 'ready'): string {
+  return status === 'bound' || status === 'ready'
     ? '已连接'
     : status === 'expired'
       ? '凭据失效'

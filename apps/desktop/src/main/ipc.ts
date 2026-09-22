@@ -66,13 +66,12 @@ import {
 } from './agent/permissions/policy'
 import type { PermissionPort } from './agent/agent-loop.service'
 import { RemoteDriveService, driveErrorMessage } from './services/cloud/drive'
-import { cloudGuidance, cloudUsableState } from './services/cloud/guidance'
+import { cloudGuidance, cloudUsableStateFromAuth, type CloudAuthSnapshot } from './services/cloud/guidance'
 import type { SessionStore, UploadSession } from './services/cloud/transfer'
 import {
   RemoteKnowledgeService,
   knowledgeErrorMessage,
   knowledgeGuidance,
-  knowledgeSourceState,
   toDocFull,
   toDocMeta,
   toSearchHit
@@ -427,6 +426,35 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     return { status: res.status, headers, text: await res.text() }
   }
 
+  /**
+   * DL-1 修复：数据源状态**以认证态为唯一事实源**推导，不再维护第二份「绑定状态」。
+   * 每次调用现取（提供者模式），杜绝构造期/写入期快照导致的断层。
+   */
+  const cloudAuthSnapshot = (): CloudAuthSnapshot => {
+    let loggedIn = false
+    try {
+      auth.requireUser()
+      loggedIn = true
+    } catch {
+      loggedIn = false
+    }
+    const cloudUsername = loggedIn ? auth.cloudIdentityOfCurrentUser() : null
+    return {
+      loggedIn,
+      isCloudIdentity: cloudUsername !== null,
+      hasCloudTokens: readCloudTokens() !== null
+    }
+  }
+
+  /** 服务器地址：机器级元数据（不按用户隔离），仅作配置来源，**不作为状态** */
+  const readCloudBaseUrl = (): string => {
+    const raw = settings.get('cloud.baseUrl') as string | undefined
+    return normalizeBaseUrl(raw ?? DEFAULT_CLOUD_BASE_URL)
+  }
+  const writeCloudBaseUrl = (url: string): void => {
+    settings.set('cloud.baseUrl', normalizeBaseUrl(url))
+  }
+
   const readCloudState = (): CloudBindingState => {
     const raw = settings.get(CLOUD_STATE_KEY, currentUserId() ?? undefined) as Partial<CloudBindingState> | undefined
     const base = initialBindingState(raw?.baseUrl ?? DEFAULT_CLOUD_BASE_URL)
@@ -438,9 +466,6 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       ...(typeof raw?.lastError === 'string' ? { lastError: raw.lastError } : {}),
       updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : 0
     }
-  }
-  const writeCloudState = (state: CloudBindingState): void => {
-    settings.set(CLOUD_STATE_KEY, state, currentUserId() ?? undefined)
   }
 
   /** 读取令牌（解密失败 → null，视为未绑定） */
@@ -982,9 +1007,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.DRIVE_STATE, (): IpcResult<unknown> =>
     tryRun(() => {
       auth.requireUser()
-      const binding = readCloudState()
-      const effective = binding.status === 'bound' && readCloudTokens() === null ? { ...binding, status: 'unbound' as const } : binding
-      const state = cloudUsableState(effective)
+      // DL-1：以认证态为唯一事实源推导
+      const snap = cloudAuthSnapshot()
+      const state = cloudUsableStateFromAuth(snap)
       const g = cloudGuidance(state, '网盘')
       return {
         state,
@@ -992,8 +1017,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
         hint: g.hint,
         canOpenSettings: g.canOpenSettings,
         actionLabel: g.actionLabel,
-        baseUrl: effective.baseUrl,
-        username: effective.username ?? null
+        baseUrl: readCloudBaseUrl(),
+        username: snap.isCloudIdentity ? auth.cloudIdentityOfCurrentUser() : null
       }
     })
   )
@@ -1117,10 +1142,18 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.KNOWLEDGE_SOURCE_STATE, (): IpcResult<unknown> =>
     tryRun(() => {
       auth.requireUser()
-      const binding = readCloudState()
-      const effective = binding.status === 'bound' && readCloudTokens() === null ? { ...binding, status: 'unbound' as const } : binding
-      const state = knowledgeSourceState(effective)
-      return { state, ...knowledgeGuidance(state), baseUrl: effective.baseUrl, username: effective.username ?? null }
+      // DL-1：以认证态为唯一事实源推导（不再读独立的绑定状态存储）
+      const snap = cloudAuthSnapshot()
+      const state = cloudUsableStateFromAuth(snap)
+      const g = knowledgeGuidance(state)
+      return {
+        state,
+        title: g.title,
+        hint: g.hint,
+        canOpenSettings: g.canOpenSettings,
+        baseUrl: readCloudBaseUrl(),
+        username: snap.isCloudIdentity ? auth.cloudIdentityOfCurrentUser() : null
+      }
     })
   )
 
@@ -1593,60 +1626,30 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ipcMain.handle(IPC.CLOUD_STATUS_GET, (): IpcResult<unknown> =>
     tryRun(() => {
       auth.requireUser()
-      const state = readCloudState()
-      const hasTokens = readCloudTokens() !== null
-      // 令牌丢失（解密失败/被清）但状态还是 bound → 视为未绑定，避免误导
-      const effective: CloudBindingState = state.status === 'bound' && !hasTokens ? { ...state, status: 'unbound' } : state
-      return { ...effective, statusLabel: cloudStatusLabel(effective.status), hasTokens }
+      // DL-1：以认证态为唯一事实源推导（不再读独立的绑定状态存储）
+      const snap = cloudAuthSnapshot()
+      const state = cloudUsableStateFromAuth(snap)
+      return {
+        status: state,
+        statusLabel: cloudStatusLabel(state),
+        baseUrl: readCloudBaseUrl(),
+        ...(snap.isCloudIdentity ? { username: auth.cloudIdentityOfCurrentUser() } : {}),
+        hasTokens: snap.hasCloudTokens
+      }
     })
   )
 
-  // 绑定：登录 → 取用户信息 → 加密落库（账号密码只用一次，绝不落库/日志）
-  ipcMain.handle(IPC.CLOUD_BIND, async (_e, p): Promise<IpcResult<unknown>> => {
-    const payload = (p ?? {}) as { baseUrl?: string; username?: string; password?: string }
-    const username = String(payload.username ?? '').trim()
-    const password = String(payload.password ?? '')
-    if (!username || !password) {
-      return { ok: false, error: { code: 'INVALID_INPUT', message: '请填写云端账号与密码' } }
-    }
-    try {
-      const uid = auth.requireUser().id
-      const baseUrl = normalizeBaseUrl(payload.baseUrl ?? readCloudState().baseUrl)
-      const client = makeCloudClient(baseUrl)
-
-      const loginRes = await client.login(username, password)
-      if (!loginRes.ok) {
-        const state: CloudBindingState = { ...readCloudState(), baseUrl, status: 'expired', lastError: loginRes.error.message, updatedAt: Date.now() }
-        writeCloudState(state)
-        console.log(`[cloud] 绑定失败（${loginRes.error.kind}）：${loginRes.error.detail ?? ''}`)
-        return { ok: false, error: { code: `CLOUD_${loginRes.error.kind.toUpperCase().replace('-', '_')}`, message: loginRes.error.message } }
-      }
-
-      // 回填服务器侧用户名（绑定成功的凭证）
-      const meRes = await client.me(loginRes.data.accessToken)
-      const name = meRes.ok ? meRes.data.name : username
-      writeCloudTokens(loginRes.data)
-      const state: CloudBindingState = { status: 'bound', baseUrl, username: name, updatedAt: Date.now() }
-      writeCloudState(state)
-      console.log(`[cloud] 绑定成功：${baseUrl} 用户=${name}（uid=${uid}）`)
-      return { ok: true, data: { ...state, statusLabel: cloudStatusLabel(state.status), hasTokens: true } }
-    } catch (e) {
-      // 异常一律归一化为中性文案（原始信息进日志）
-      const msg = e instanceof Error ? e.message : String(e)
-      console.log(`[cloud] 绑定异常：${msg}`)
-      return { ok: false, error: { code: 'CLOUD_NETWORK', message: '无法连接云端服务器，请检查网络或服务器地址。' } }
-    }
-  })
-
-  // 解绑：清除令牌与绑定状态（**不删本地任何业务数据**）
+  // 退出登录（原「解绑」，M2-3a+ §5 语义调整）：清云端令牌 + 结束本地会话。
+  // 状态无需另存 —— 认证态变「未登录」后，数据源状态自动回 unbound（DL-1 提供者模式）。
+  // **本地业务数据一律保留**（同账号下次登录自动认领回来）。
   ipcMain.handle(IPC.CLOUD_UNBIND, (): IpcResult<unknown> =>
     tryRun(() => {
       auth.requireUser()
       writeCloudTokens(null)
-      const state: CloudBindingState = { ...initialBindingState(readCloudState().baseUrl), updatedAt: Date.now() }
-      writeCloudState(state)
-      console.log('[cloud] 已解绑（令牌与绑定状态已清除；本地数据未动）')
-      return { ...state, statusLabel: cloudStatusLabel(state.status), hasTokens: false }
+      auth.logout()
+      console.log('[account] 已退出登录（云端令牌已清；本地数据未动）')
+      const state = cloudUsableStateFromAuth(cloudAuthSnapshot())
+      return { status: state, statusLabel: cloudStatusLabel(state), baseUrl: readCloudBaseUrl(), hasTokens: false }
     })
   )
 
@@ -1835,18 +1838,19 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       if (!meRes.ok) {
         return fail(`CLOUD_${meRes.error.kind.toUpperCase().replace('-', '_')}`, meRes.error.message)
       }
-      // 令牌落 safeStorage（离线宽容依赖本地会话；云端令牌供远程功能用）
+      // ★ 顺序铁律（DL-1 根因修复）：必须先建立本地会话，再写**按用户隔离**的令牌。
+      //   旧顺序先写令牌/状态（用旧或空用户 id 作键），而读取时用新身份 → 键不匹配
+      //   → 登录成功却永远读不到 → 知识库/网盘误显「未绑定」。
+      const cloudLogin = auth.loginWithCloud({ cloudUserId: String(meRes.data.id), cloudUsername: meRes.data.name })
       writeCloudTokens(loginRes.data)
-      writeCloudState({ status: 'bound', baseUrl, username: meRes.data.name, updatedAt: Date.now() })
-      // 本机身份 + 一次性认领
-      const r = auth.loginWithCloud({ cloudUserId: String(meRes.data.id), cloudUsername: meRes.data.name })
-      console.log(`[auth] 云端登录成功：${meRes.data.name}（首次接入=${r.firstClaim}）`)
+      writeCloudBaseUrl(baseUrl)
+      console.log(`[auth] 云端登录成功：${meRes.data.name}（首次接入=${cloudLogin.firstClaim}）`)
       return ok({
-        user: r.session.user,
-        expiresAt: r.session.expiresAt,
-        firstClaim: r.firstClaim,
-        claimedCounts: r.claimedCounts,
-        summary: r.summary,
+        user: cloudLogin.session.user,
+        expiresAt: cloudLogin.session.expiresAt,
+        firstClaim: cloudLogin.firstClaim,
+        claimedCounts: cloudLogin.claimedCounts,
+        summary: cloudLogin.summary,
         cloudUsername: meRes.data.name
       })
     } catch (err) {
@@ -1886,7 +1890,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   remoteDrive = new RemoteDriveService({
     client: makeCloudClient(readCloudState().baseUrl),
     tokens: () => readCloudTokens(),
-    baseUrl: () => readCloudState().baseUrl,
+    // DL-1：数据源取机器级地址元数据（旧状态存储已废除，读它会回落到默认主机 → 请求打错服务器）
+    baseUrl: () => readCloudBaseUrl(),
     sessions: driveSessionStore,
     onTokensRefreshed: (t) => writeCloudTokens(t),
     log: (m) => console.log(m)
@@ -1896,7 +1901,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     client: makeCloudClient(readCloudState().baseUrl),
     tokens: () => readCloudTokens(),
     // 每次请求前按当前绑定刷新地址（用户可能中途改服务器）
-    baseUrl: () => readCloudState().baseUrl,
+    // DL-1：数据源取机器级地址元数据（旧状态存储已废除，读它会回落到默认主机 → 请求打错服务器）
+    baseUrl: () => readCloudBaseUrl(),
     onTokensRefreshed: (t) => writeCloudTokens(t),
     log: (m) => console.log(m)
   })

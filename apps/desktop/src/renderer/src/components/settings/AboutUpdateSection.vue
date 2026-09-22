@@ -163,41 +163,15 @@ interface CloudState {
   hasTokens?: boolean
 }
 const cloud = ref<CloudState | null>(null)
-const cloudBaseUrl = ref('https://agent.mnb-lab.cn')
-const cloudAccount = ref('')
-const cloudPassword = ref('')
+// DL-1 / M2-3a+：绑定表单已退役（登录统一在登录窗），此处不再保留账号/密码/地址表单状态
 const cloudBusy = ref(false)
 
 async function loadCloud(): Promise<void> {
   try {
     const st = (await window.api.cloud.statusGet()) as CloudState
     cloud.value = st
-    if (st?.baseUrl) cloudBaseUrl.value = st.baseUrl
   } catch {
     /* 未登录时静默 */
-  }
-}
-
-async function bindCloud(): Promise<void> {
-  if (!cloudAccount.value.trim() || !cloudPassword.value) {
-    ElMessage.warning('请填写云端账号与密码')
-    return
-  }
-  cloudBusy.value = true
-  try {
-    const r = (await window.api.cloud.bind({
-      baseUrl: cloudBaseUrl.value,
-      username: cloudAccount.value.trim(),
-      password: cloudPassword.value
-    })) as { status?: string }
-    cloudPassword.value = '' // 提交后立即清空，不在内存里留着
-    await loadCloud()
-    ElMessage.success(`已连接云端（${r?.status === 'bound' ? cloud.value?.username ?? '已绑定' : '已提交'}）`)
-  } catch (e) {
-    cloudPassword.value = ''
-    ElMessage.error(e instanceof Error ? e.message : '绑定失败')
-  } finally {
-    cloudBusy.value = false
   }
 }
 
@@ -358,15 +332,8 @@ onUnmounted(() => {
         <p class="hint tiny">退出只清除登录状态，**本机数据保留**；同账号下次登录自动认领回来。</p>
       </template>
       <template v-else>
-        <div class="ctx-cfg">
-          <label>服务器地址 <input v-model="cloudBaseUrl" type="text" data-testid="cloud-baseurl" /></label>
-        </div>
-        <div class="ctx-cfg">
-          <label>云端账号 <input v-model="cloudAccount" type="text" data-testid="cloud-account" /></label>
-          <label>密码 <input v-model="cloudPassword" type="password" data-testid="cloud-password" /></label>
-          <button class="ghost-btn" data-testid="cloud-bind" :disabled="cloudBusy" @click="bindCloud">绑定</button>
-        </div>
-        <p class="hint tiny">用课题组网页端的账号登录。账号密码只用于本次绑定，不会保存到本地。</p>
+        <!-- DL-1 / M2-3a+：绑定交互已退役 —— 登录统一在登录窗（父级账号） -->
+        <p class="hint tiny">当前未登录。请退出设置后，在登录窗用课题组账号登录（与网页端同一套账号）。</p>
       </template>
     </details>
 

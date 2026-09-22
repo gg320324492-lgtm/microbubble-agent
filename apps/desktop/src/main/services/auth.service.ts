@@ -266,6 +266,22 @@ export class AuthService {
     }
   }
 
+  /**
+   * 当前身份是否为云端身份（DL-1）：返回云端用户名，非云端身份/未登录返回 null。
+   * 以 users 行的 cloud_user_id 映射为唯一依据（认证态事实源的一部分）。
+   */
+  cloudIdentityOfCurrentUser(): string | null {
+    if (!this.currentUserId) return null
+    try {
+      const row = this.db
+        .prepare('SELECT cloud_username, cloud_user_id FROM users WHERE id = ?')
+        .get(this.currentUserId) as { cloud_username: string | null; cloud_user_id: string | null } | undefined
+      return row && row.cloud_user_id ? (row.cloud_username ?? 'cloud') : null
+    } catch {
+      return null
+    }
+  }
+
   /** 当前会话是否仍有效（内存检查，不查库） */
   hasLiveSession(): boolean {
     return this.currentToken !== null && this.currentExpiresAt > Date.now()

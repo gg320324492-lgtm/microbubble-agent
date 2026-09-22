@@ -130,7 +130,6 @@ const api = {
   },
   cloud: {
     statusGet: (): Promise<unknown> => invoke(IPC.CLOUD_STATUS_GET),
-    bind: (payload: { baseUrl?: string; username: string; password: string }): Promise<unknown> => invoke(IPC.CLOUD_BIND, payload),
     unbind: (): Promise<unknown> => invoke(IPC.CLOUD_UNBIND)
   },
   drive: {

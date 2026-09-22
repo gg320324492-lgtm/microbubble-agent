@@ -32,7 +32,6 @@ export const IPC = {
   AGENT_STEER: 'agent:steer',
   /** M2-3a 云端连接（父级账号绑定） */
   CLOUD_STATUS_GET: 'cloud:status-get',
-  CLOUD_BIND: 'cloud:bind',
   CLOUD_UNBIND: 'cloud:unbind',
   /** M2-3a+ 统一登录：以父级账号登录本机（取代本地建号 + 手动绑定） */
   AUTH_CLOUD_LOGIN: 'auth:cloud-login',

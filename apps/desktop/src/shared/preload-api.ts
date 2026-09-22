@@ -136,8 +136,6 @@ export interface PreloadApi {
   cloud: {
     /** M2-3a：云端连接状态（状态 + 服务器用户名 + 最近错误） */
     statusGet(): Promise<unknown>
-    /** 绑定父级账号（账号密码只经此一次性提交，不落库/日志） */
-    bind(payload: { baseUrl?: string; username: string; password: string }): Promise<unknown>
     /** 解绑（清令牌与绑定状态，不删本地数据） */
     unbind(): Promise<unknown>
   }
