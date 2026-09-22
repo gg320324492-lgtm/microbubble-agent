@@ -13,7 +13,7 @@ const milestone = (route.meta.milestone as string) ?? '后续版本'
       <span class="coming-badge">{{ milestone }}</span>
       <h1>{{ title }}</h1>
       <p>
-        {{ title }}将按里程碑规划逐个落地，采用本地优先架构——数据存本机、断网可用。
+        {{ title }}将按里程碑规划逐个落地，采用本地优先架构——本地资料存本机、断网可用。
         实际验收不达标的功能会被移出桌面端，保留在网页端使用。
       </p>
     </div>

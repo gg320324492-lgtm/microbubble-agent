@@ -50,7 +50,7 @@ const api = window.api // 模板作用域内不可直接访问 window，桥接�
         <div class="auth-brand"><img class="auth-brand-logo" :src="logoUrl" alt="微纳米气泡课题组" /><span>MicroBubble Lab</span></div>
         <p class="auth-kicker">SCIENTIFIC WORKBENCH</p>
         <h1>把课题组的数据，装进一台本地工作台。</h1>
-        <p>实验、知识、会议与 AI 助手汇集在同一套本地科研工作台；数据存本机，断网可用。</p>
+        <p>实验、知识、会议与 AI 助手汇集在同一套科研工作台；登录一次即可用，断网也能继续工作。</p>
         <p class="auth-status"><span class="auth-status-dot" aria-hidden="true"></span>本地数据库已就绪 <b aria-hidden="true">•</b> 离线优先</p>
       </aside>
       <form class="auth-form" @submit.prevent="onSubmit">

@@ -19,7 +19,7 @@ onMounted(async () => {
   <footer class="statusbar">
     <div class="statusbar-left">
       <span class="statusbar-led" :class="failed ? 'is-off' : 'is-on'" aria-hidden="true"></span>
-      <span>{{ failed ? '本地数据库未就绪' : '本地数据库就绪 · 数据存本机 · 断网可用' }}</span>
+      <span>{{ failed ? '本地数据库未就绪' : '本地数据库就绪 · 本地资料存本机 · 断网可用' }}</span>
     </div>
     <div class="statusbar-right">
       <span v-if="info">v{{ info.version }}</span>
