@@ -58,16 +58,17 @@ describe('知识库列表 — 「0 B」修复', () => {
     // ★ 核心断言：不再出现误导性的「0 B」
     expect(text).not.toContain('0 B')
     // 改为类型徽标
-    expect(w.findAll('[data-testid="doc-badge"]').length).toBeGreaterThan(0)
+    expect(w.findAll('[data-testid="kb-badge"]').length).toBeGreaterThan(0) // UI1-3：统一「文档」徽标
     expect(text).toContain('文档')
   })
 
-  it('本地条目（fileSize>0）仍显示真实大小（不误伤迁移后场景）', async () => {
+  it('UI1-3 新设计：卡片不再显示字节大小，统一「文档」徽标（父级契约无该字段）', async () => {
     stubKnowledgeApi([{ id: 3, title: '占位本地条目', tags: [], fileSize: 2048, updatedAt: Date.now() }])
     const w = mount(KnowledgeView, { global: { stubs: { transition: false } } })
     await flushPromises()
     await flushPromises()
-    expect(w.text()).toContain('2.0 KB')
-    expect(w.find('[data-testid="doc-size"]').exists()).toBe(true)
+    expect(w.text()).not.toContain('0 B')
+    expect(w.text()).not.toContain('KB')
+    expect(w.find('[data-testid="kb-badge"]').exists()).toBe(true)
   })
 })

@@ -312,6 +312,25 @@ export class RemoteKnowledgeService {
     return { ok: true, data: normalizeSearchResults(res.data) }
   }
 
+  /** 统计（父级 /knowledge/stats）：分类计数 + 实体/假设总数，用于页面概要 chips */
+  async stats(): Promise<CloudResult<{ total: number; categories: Record<string, number>; entityTotal: number; hypothesisTotal: number }>> {
+    const res = await this.call('GET', '/api/v1/knowledge/stats')
+    if (!res.ok) return res
+    const o = (res.data ?? {}) as Record<string, unknown>
+    const cats = (o.categories ?? {}) as Record<string, unknown>
+    const categories: Record<string, number> = {}
+    for (const [k, v] of Object.entries(cats)) if (typeof v === 'number') categories[k] = v
+    return {
+      ok: true,
+      data: {
+        total: typeof o.total === 'number' ? o.total : 0,
+        categories,
+        entityTotal: typeof o.entity_total === 'number' ? o.entity_total : 0,
+        hypothesisTotal: typeof o.hypothesis_total === 'number' ? o.hypothesis_total : 0
+      }
+    }
+  }
+
   /** 详情（含正文） */
   async get(id: number): Promise<CloudResult<RemoteKnowledgeDetail>> {
     const res = await this.call('GET', `/api/v1/knowledge/${encodeURIComponent(String(id))}`)

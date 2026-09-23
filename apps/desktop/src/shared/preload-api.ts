@@ -90,6 +90,8 @@ export interface PreloadApi {
   knowledge: {
     /** M2-3b：知识库数据源状态（引导态用） */
     sourceState(): Promise<unknown>
+    /** UI1-3：知识库统计（分类/实体/假设计数） */
+    stats(): Promise<unknown>
     list(): Promise<KnowledgeDocMeta[]>
     get(id: number): Promise<KnowledgeDocFull | null>
     import(files: { name: string; content: string }[]): Promise<KnowledgeImportResult>

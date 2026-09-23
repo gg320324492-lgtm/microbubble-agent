@@ -97,6 +97,7 @@ const api = {
   },
   knowledge: {
     sourceState: (): Promise<unknown> => invoke(IPC.KNOWLEDGE_SOURCE_STATE),
+    stats: (): Promise<unknown> => invoke(IPC.KNOWLEDGE_STATS),
     list: (): Promise<KnowledgeDocMeta[]> => invoke(IPC.KNOWLEDGE_LIST),
     get: (id: number): Promise<KnowledgeDocFull | null> => invoke(IPC.KNOWLEDGE_GET, { id }),
     import: (files: { name: string; content: string }[]): Promise<KnowledgeImportResult> => invoke(IPC.KNOWLEDGE_IMPORT, { files }),

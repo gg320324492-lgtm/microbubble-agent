@@ -1,15 +1,33 @@
 <script setup lang="ts">
-// 本地知识库（M2-1）— 列表/中文检索/导入/编辑，断网全功能。
-// 导入走渲染层文件选择器读文本后交主进程；检索走 FTS5（应用层 bigram 预切词）。
+// 知识库页（UI1-3 原生还原）— 数据来自父级服务器（M2-3b），本页只做呈现。
+//
+// 信息架构对齐父级 web/src/views/KnowledgeView.vue：
+//   工具栏（检索/分类筛选/导入/刷新） → 统计概要 chips（health-summary 对应物）
+//   → 知识卡片列表（标题/分类/标签/日期/文档徽标） → 分页器（total > pageSize 时显示）
+// 去除 web 专属元素：chat-selection banner（桌面无「对话选文档」场景）。
+// 实体/假设 tab 依赖图谱端点 → 本单隐藏（见交付报告遗留）。
+//
+// 远程知识项**无文件大小字段**（父级契约不返回）→ 显示「文档」徽标而非「0 B」。
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { KnowledgeDocFull, KnowledgeDocMeta, KnowledgeSearchHit } from '@shared/types'
+import KbGuide from '../components/knowledge/KbGuide.vue'
+
+interface GateInfo {
+  state: 'ready' | 'unbound' | 'offline' | 'expired'
+  title: string
+  hint: string
+  canOpenSettings: boolean
+  actionLabel?: string
+}
+
+const PAGE_SIZE = 20
 
 const docs = ref<KnowledgeDocMeta[]>([])
 const query = ref('')
-const hits = ref<KnowledgeSearchHit[] | null>(null) // null = 未在检索态
+const hits = ref<KnowledgeSearchHit[] | null>(null)
 const searching = ref(false)
-const importing = ref(false)
+const loading = ref(false)
 const selected = ref<KnowledgeDocFull | null>(null)
 const editText = ref('')
 const editTitle = ref('')
@@ -17,19 +35,27 @@ const editing = ref(false)
 const saving = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
-interface KbListItem {
+const gate = ref<GateInfo>({ state: 'ready', title: '', hint: '', canOpenSettings: false })
+const blocked = computed(() => gate.value.state !== 'ready')
+
+const page = ref(1)
+const category = ref('')
+const stats = ref<{ total: number; categories: Record<string, number>; entityTotal: number; hypothesisTotal: number } | null>(null)
+
+interface KbCard {
   id: number
   title: string
   tags: string[]
   fileSize: number
   updatedAt: number
   snippet: string
-  highlight: KnowledgeSearchHit['highlight']
+  category: string
 }
 
-const shown = computed<KbListItem[]>(() => {
+/** 卡片数据源：检索态走服务端命中，否则全量列表 */
+const allItems = computed<KbCard[]>(() => {
   if (hits.value !== null) {
-    const metaById = new Map(docs.value.map((d) => [d.id, d]))
+    const metaById = new Map(docs.value.map((d) => [d.id, d as KnowledgeDocMeta & { category?: string }]))
     return hits.value.map((h) => ({
       id: h.id,
       title: h.title,
@@ -37,116 +63,106 @@ const shown = computed<KbListItem[]>(() => {
       fileSize: metaById.get(h.id)?.fileSize ?? 0,
       updatedAt: h.updatedAt,
       snippet: h.snippet,
-      highlight: h.highlight
+      category: metaById.get(h.id)?.category ?? ''
     }))
   }
-  return docs.value.map((d) => ({ id: d.id, title: d.title, tags: d.tags, fileSize: d.fileSize, updatedAt: d.updatedAt, snippet: '', highlight: null }))
+  return docs.value.map((d) => {
+    const meta = d as KnowledgeDocMeta & { category?: string }
+    return { id: d.id, title: d.title, tags: d.tags, fileSize: d.fileSize, updatedAt: d.updatedAt, snippet: '', category: meta.category ?? '' }
+  })
 })
-const isSearchMode = computed(() => hits.value !== null && query.value.trim() !== '')
 
-async function refreshList(): Promise<void> {
-  docs.value = await window.api.knowledge.list()
+const filtered = computed<KbCard[]>(() =>
+  category.value ? allItems.value.filter((d) => d.category === category.value) : allItems.value
+)
+const total = computed(() => filtered.value.length)
+const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+/** 分页器显示条件对齐父级：total > pageSize */
+const showPager = computed(() => total.value > PAGE_SIZE)
+const shown = computed<KbCard[]>(() => filtered.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE))
+
+const categoryOptions = computed<string[]>(() => {
+  const fromStats = stats.value ? Object.keys(stats.value.categories) : []
+  const fromDocs = allItems.value.map((d) => d.category).filter(Boolean)
+  return [...new Set([...fromStats, ...fromDocs])].sort()
+})
+
+function fmtDate(ms: number): string {
+  if (!ms) return ''
+  const d = new Date(ms)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-async function onSearch(): Promise<void> {
+async function loadGate(): Promise<void> {
+  try {
+    gate.value = (await window.api.knowledge.sourceState()) as GateInfo
+  } catch {
+    gate.value = { state: 'ready', title: '', hint: '', canOpenSettings: false }
+  }
+}
+
+async function loadAll(): Promise<void> {
+  if (blocked.value) return
+  loading.value = true
+  try {
+    docs.value = await window.api.knowledge.list()
+    page.value = 1
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadStats(): Promise<void> {
+  if (blocked.value) return
+  try {
+    stats.value = (await window.api.knowledge.stats()) as typeof stats.value
+  } catch {
+    stats.value = null // 统计失败不阻塞页面
+  }
+}
+
+/** 检索：回车触发**服务端语义检索**（本地 bigram 不适用于远程模式） */
+async function doSearch(): Promise<void> {
   const q = query.value.trim()
   if (!q) {
     hits.value = null
+    page.value = 1
     return
   }
   searching.value = true
   try {
     hits.value = await window.api.knowledge.search(q)
+    page.value = 1
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '检索失败')
   } finally {
     searching.value = false
   }
 }
 
-function onSearchInput(): void {
-  if (!query.value.trim()) hits.value = null // 清空即回到列表态
-  else void onSearch()
+function clearSearch(): void {
+  query.value = ''
+  hits.value = null
+  page.value = 1
 }
 
-function pickFiles(): void {
-  fileInput.value?.click()
-}
-
-async function onFilesPicked(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  if (files.length === 0) return
-  importing.value = true
-  try {
-    const payload: { name: string; content: string }[] = []
-    for (const f of files) {
-      payload.push({ name: f.name, content: await f.text() })
-    }
-    const res = await window.api.knowledge.import(payload)
-    if (res.imported.length) ElMessage.success(`已导入 ${res.imported.length} 个文档`)
-    for (const s of res.skipped) ElMessage.warning(`${s.name}：${s.reason}`)
-    hits.value = null
-    query.value = ''
-    await refreshList()
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '导入失败')
-  } finally {
-    importing.value = false
-    input.value = ''
-  }
+function pickCategory(c: string): void {
+  category.value = category.value === c ? '' : c
+  page.value = 1
 }
 
 async function openDoc(id: number): Promise<void> {
-  const doc = await window.api.knowledge.get(id)
-  if (!doc) {
-    ElMessage.error('文档不存在')
-    return
-  }
-  selected.value = doc
-  editText.value = doc.content
-  editTitle.value = doc.title
-  editing.value = false
-}
-
-function startEdit(): void {
-  editing.value = true
-}
-
-async function saveEdit(): Promise<void> {
-  if (!selected.value) return
-  saving.value = true
   try {
-    const updated = await window.api.knowledge.update(selected.value.id, {
-      title: editTitle.value,
-      content: editText.value
-    })
-    if (updated) {
-      selected.value = updated
-      editing.value = false
-      ElMessage.success('已保存')
-      await refreshList()
-    }
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : '保存失败')
-  } finally {
-    saving.value = false
+    selected.value = await window.api.knowledge.get(id)
+    editTitle.value = selected.value?.title ?? ''
+    editText.value = selected.value?.content ?? ''
+    editing.value = false
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '打开失败')
   }
-}
-
-async function removeDoc(id: number): Promise<void> {
-  try {
-    await ElMessageBox.confirm('删除后原件副本将移入系统回收站（可恢复）。确定删除？', '删除文档', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
-  await window.api.knowledge.delete(id)
-  if (selected.value?.id === id) selected.value = null
-  ElMessage.success('已删除')
-  hits.value = null
-  await refreshList()
 }
 
 function backToList(): void {
@@ -154,374 +170,362 @@ function backToList(): void {
   editing.value = false
 }
 
-function fmtTime(ts: number): string {
-  return new Date(ts).toLocaleString('zh-CN')
-}
-
-function fmtSize(bytes: number): string {
-  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
-}
-
-// M2-3b：知识库已切远程数据源 —— 未绑定/离线/失效时显示引导态（不可用但不崩）
-interface KnowledgeSourceGate {
-  state: 'ready' | 'unbound' | 'offline' | 'expired'
-  title: string
-  hint: string
-  canOpenSettings: boolean
-}
-const sourceGate = ref<KnowledgeSourceGate>({ state: 'ready', title: '', hint: '', canOpenSettings: false })
-const sourceBlocked = computed(() => sourceGate.value.state !== 'ready')
-
-const serverTotal = ref<number | null>(null)
-
-/** 服务端返回的条目总数（DL-1 #3 决定性诊断：一眼可见 total 是 9 还是 856） */
-
-async function loadSourceState(): Promise<void> {
+async function saveEdit(): Promise<void> {
+  if (!selected.value) return
+  saving.value = true
   try {
-    const st = (await window.api.knowledge.sourceState()) as KnowledgeSourceGate & { total?: number | null }
-    sourceGate.value = st
-    serverTotal.value = typeof st.total === 'number' ? st.total : null
-  } catch {
-    // 取不到状态时不阻塞页面（按 ready 处理，后续请求自会给出错误）
-    sourceGate.value = { state: 'ready', title: '', hint: '', canOpenSettings: false }
+    const updated = await window.api.knowledge.update(selected.value.id, { title: editTitle.value, content: editText.value })
+    if (updated) selected.value = updated
+    editing.value = false
+    await loadAll()
+    ElMessage.success('已保存')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '保存失败')
+  } finally {
+    saving.value = false
   }
 }
 
-function openCloudSettings(): void {
+async function removeDoc(id: number): Promise<void> {
+  try {
+    await ElMessageBox.confirm('确定删除这条知识？', '删除确认', { type: 'warning' })
+  } catch {
+    return
+  }
+  try {
+    await window.api.knowledge.delete(id)
+    backToList()
+    await loadAll()
+    await loadStats()
+    ElMessage.success('已删除')
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '删除失败')
+  }
+}
+
+function triggerImport(): void {
+  fileInput.value?.click()
+}
+
+async function onFilesPicked(ev: Event): Promise<void> {
+  const input = ev.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  if (!files.length) return
+  try {
+    const payload = await Promise.all(files.map(async (f) => ({ name: f.name, content: await f.text() })))
+    const res = await window.api.knowledge.import(payload)
+    if (res.imported.length) ElMessage.success(`已导入 ${res.imported.length} 个文档`)
+    for (const s of res.skipped) ElMessage.warning(`${s.name}：${s.reason}`)
+    await loadAll()
+    await loadStats()
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '导入失败')
+  } finally {
+    input.value = ''
+  }
+}
+
+function openSettings(): void {
   location.hash = '/app/settings'
 }
 
 onMounted(async () => {
-  await loadSourceState()
-  if (sourceBlocked.value) return
-  try {
-    await refreshList()
-  } catch {
-    /* 主进程异常保持空态 */
-  }
+  await loadGate()
+  if (blocked.value) return
+  await loadAll()
+  await loadStats()
 })
 </script>
 
 <template>
   <div class="kb">
-    <!-- M2-3b：数据源引导态（未绑定 / 离线 / 凭据失效）—— 不可用但不崩，指向设置页 -->
-    <div v-if="sourceBlocked" class="source-gate" data-testid="knowledge-source-gate">
-      <h1>{{ sourceGate.title }}</h1>
-      <p>{{ sourceGate.hint }}</p>
-      <button
-        v-if="sourceGate.canOpenSettings"
-        class="ghost-btn"
-        data-testid="knowledge-open-settings"
-        @click="openCloudSettings"
-      >
-        前往设置 · 云端连接
-      </button>
-    </div>
+    <!-- 引导态（独立组件；文案来自主进程集中状态机，零硬编码） -->
+    <KbGuide v-if="blocked" :gate="gate" feature="知识库" @open-settings="openSettings" @retry="loadAll" />
 
-    <h1 v-show="!sourceBlocked">知识库</h1>
-
-    <!-- 详情 / 编辑态 -->
-    <section v-if="selected && !sourceBlocked" class="card detail">
-      <div class="detail-head">
-        <button class="back-btn" @click="backToList">← 返回列表</button>
-        <template v-if="editing">
-          <input v-model="editTitle" class="title-input" />
-        </template>
-        <h2 v-else class="detail-title">{{ selected.title }}</h2>
-        <div class="detail-actions">
-          <template v-if="editing">
-            <button class="btn-primary" :disabled="saving" @click="saveEdit">{{ saving ? '保存中…' : '保存' }}</button>
-            <button class="btn-ghost" @click="editing = false; editText = selected.content; editTitle = selected.title">取消</button>
-          </template>
-          <template v-else>
-            <button class="mini-btn" @click="startEdit">编辑</button>
-            <button class="mini-btn danger" @click="removeDoc(selected.id)">删除</button>
-          </template>
-        </div>
-      </div>
-      <div class="detail-meta">
-        {{ fmtTime(selected.updatedAt) }}<template v-if="selected.fileSize > 0"> · {{ fmtSize(selected.fileSize) }}</template>
-        <span v-for="t in selected.tags" :key="t" class="tag">{{ t }}</span>
-      </div>
-      <textarea v-if="editing" v-model="editText" class="edit-area" rows="20"></textarea>
-      <pre v-else class="doc-content">{{ selected.content }}</pre>
-    </section>
-
-    <!-- 列表态 -->
-    <template v-else-if="!sourceBlocked">
-      <div class="kb-toolbar">
-        <input
-          v-model="query"
-          class="search-input"
-          placeholder="全文检索（支持中文，如：臭氧）…"
-          data-testid="kb-search"
-          @input="onSearchInput"
-          @keydown.enter="onSearch"
-        />
-        <button class="import-btn" data-testid="kb-import" :disabled="importing" @click="pickFiles">
-          {{ importing ? '导入中…' : '＋ 导入文档' }}
-        </button>
-        <input ref="fileInput" type="file" accept=".md,.markdown,.txt" multiple hidden @change="onFilesPicked" />
-      </div>
-
-      <!-- 空态引导 -->
-      <p v-if="serverTotal !== null" class="hint tiny" data-testid="kb-server-total">
-        服务端共 {{ serverTotal }} 条（本机显示 {{ shown.length }} 条）
-      </p>
-      <div v-if="shown.length === 0" class="card empty" data-testid="kb-empty">
-        <template v-if="isSearchMode">
-          <p class="empty-title">没有找到与「{{ query }}」相关的文档</p>
-          <p class="empty-hint">换个关键词试试，或导入更多 Markdown / 文本文档。</p>
-        </template>
-        <template v-else>
-          <p class="empty-title">知识库还是空的</p>
-          <p class="empty-hint">点击「＋ 导入文档」把 Markdown / TXT 文档导入本机知识库；导入后即可全文检索、浏览与编辑。数据只存在本机，断网可用。</p>
-        </template>
-      </div>
-
-      <!-- 列表 / 检索命中 -->
-      <div v-else class="doc-list">
-        <button v-for="d in shown" :key="d.id" class="doc-item card" @click="openDoc(d.id)">
-          <div class="doc-row1">
-            <span class="doc-title">{{ d.title }}</span>
-            <span class="doc-time">{{ fmtTime(d.updatedAt) }}</span>
-          </div>
-          <p v-if="d.snippet" class="doc-snippet">
-            <template v-if="d.highlight">
-              {{ d.snippet.slice(0, d.highlight.start) }}<mark class="hl">{{ d.snippet.slice(d.highlight.start, d.highlight.end) }}</mark>{{ d.snippet.slice(d.highlight.end) }}
+    <template v-else>
+      <!-- ===== 详情 / 编辑态 ===== -->
+      <section v-if="selected" class="kb-detail card" data-testid="kb-detail">
+        <header class="kb-detail-head">
+          <button class="ghost-btn" data-testid="kb-back" @click="backToList">← 返回列表</button>
+          <input v-if="editing" v-model="editTitle" class="kb-title-input" data-testid="kb-edit-title" />
+          <h2 v-else class="kb-detail-title">{{ selected.title }}</h2>
+          <div class="kb-detail-actions">
+            <template v-if="editing">
+              <button class="btn-primary" :disabled="saving" data-testid="kb-save" @click="saveEdit">
+                {{ saving ? '保存中…' : '保存' }}
+              </button>
+              <button class="ghost-btn" @click="editing = false">取消</button>
             </template>
-            <template v-else>{{ d.snippet }}</template>
-          </p>
-          <div class="doc-meta">
-            <span v-for="t in d.tags" :key="t" class="tag">{{ t }}</span>
-            <!-- 远程知识条目无文件大小字段（服务端契约不返回）→ 隐藏大小，改显类型徽标，避免误导性的「0 B」 -->
-            <span v-if="d.fileSize > 0" class="doc-size" data-testid="doc-size">{{ fmtSize(d.fileSize) }}</span>
-            <span v-else class="doc-size" data-testid="doc-badge">文档</span>
+            <template v-else>
+              <button class="mini-btn" data-testid="kb-edit" @click="editing = true">编辑</button>
+              <button class="mini-btn danger" data-testid="kb-delete" @click="removeDoc(selected.id)">删除</button>
+            </template>
           </div>
-        </button>
-      </div>
+        </header>
+        <p class="kb-detail-meta">
+          {{ fmtDate(selected.updatedAt) }}<span class="kb-badge" data-testid="kb-detail-badge">文档</span>
+        </p>
+        <textarea v-if="editing" v-model="editText" class="kb-editor" data-testid="kb-edit-content"></textarea>
+        <pre v-else class="kb-content">{{ selected.content }}</pre>
+      </section>
+
+      <!-- ===== 列表态 ===== -->
+      <template v-else>
+        <header class="kb-head">
+          <h1 class="kb-title">知识库</h1>
+          <div class="kb-actions">
+            <button class="btn-primary" data-testid="kb-import" :disabled="loading" @click="triggerImport">导入文档</button>
+            <button class="ghost-btn" data-testid="kb-refresh" @click="loadAll">刷新</button>
+            <input ref="fileInput" type="file" accept=".md,.txt,.markdown" multiple hidden @change="onFilesPicked" />
+          </div>
+        </header>
+
+        <!-- 工具栏：检索 + 分类筛选 -->
+        <div class="kb-toolbar">
+          <div class="kb-search">
+            <input
+              v-model="query"
+              data-testid="kb-search-input"
+              placeholder="检索知识（回车，走服务端语义检索）"
+              @keyup.enter="doSearch"
+            />
+            <button class="ghost-btn" data-testid="kb-search-btn" :disabled="searching" @click="doSearch">
+              {{ searching ? '检索中…' : '检索' }}
+            </button>
+            <button v-if="hits !== null" class="ghost-btn" data-testid="kb-search-clear" @click="clearSearch">清除</button>
+          </div>
+          <div v-if="categoryOptions.length" class="kb-chips" data-testid="kb-category-chips">
+            <button
+              v-for="c in categoryOptions"
+              :key="c"
+              class="kb-chip"
+              :class="{ 'is-active': category === c }"
+              :data-testid="`kb-cat-${c}`"
+              @click="pickCategory(c)"
+            >
+              {{ c }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 统计概要（对齐父级 health-summary） -->
+        <div v-if="stats" class="kb-summary" data-testid="kb-summary">
+          <span class="kb-stat" data-testid="kb-stat-knowledge">📚 知识 {{ stats.total }}</span>
+          <span class="kb-stat">🔗 实体 {{ stats.entityTotal }}</span>
+          <span class="kb-stat">🧪 假设 {{ stats.hypothesisTotal }}</span>
+          <span class="kb-stat">📁 分类 {{ categoryOptions.length }}</span>
+        </div>
+
+        <p v-if="loading" class="kb-hint">加载中…</p>
+
+        <!-- 卡片列表 -->
+        <p v-else-if="shown.length === 0" class="kb-hint" data-testid="kb-empty">
+          <template v-if="hits !== null">没有找到与「{{ query }}」相关的文档。</template>
+          <template v-else>知识库还是空的，点「导入文档」添加 Markdown / 文本。</template>
+        </p>
+        <ul v-else class="kb-list" data-testid="kb-list">
+          <li v-for="d in shown" :key="d.id" class="kb-item card" :data-testid="`kb-item-${d.id}`">
+            <button class="kb-item-main" @click="openDoc(d.id)">
+              <span class="kb-item-title">{{ d.title }}</span>
+              <span v-if="d.snippet" class="kb-item-snippet">{{ d.snippet }}</span>
+            </button>
+            <div class="kb-item-meta">
+              <span v-if="d.category" class="kb-cat">{{ d.category }}</span>
+              <span v-for="t in d.tags" :key="t" class="kb-tag">{{ t }}</span>
+              <span class="kb-date">{{ fmtDate(d.updatedAt) }}</span>
+              <!-- 远程知识项无字节大小 → 文档徽标（不显示「0 B」） -->
+              <span class="kb-badge" data-testid="kb-badge">文档</span>
+            </div>
+          </li>
+        </ul>
+
+        <!-- 分页器（total > pageSize 时显示，对齐父级） -->
+        <div v-if="showPager" class="kb-pager" data-testid="kb-pager">
+          <span class="kb-pager-total" data-testid="kb-pager-total">共 {{ total }} 条</span>
+          <button class="mini-btn" data-testid="kb-pager-prev" :disabled="page <= 1" @click="page -= 1">上一页</button>
+          <span class="kb-pager-page" data-testid="kb-pager-page">{{ page }} / {{ pageCount }}</span>
+          <button class="mini-btn" data-testid="kb-pager-next" :disabled="page >= pageCount" @click="page += 1">下一页</button>
+        </div>
+      </template>
     </template>
   </div>
 </template>
 
 <style scoped>
 .kb {
-  max-width: 760px;
-  margin: 0 auto;
+  padding: var(--space-4);
+  height: 100%;
+  overflow-y: auto;
 }
-.kb h1 {
-  font-size: 20px;
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-5);
+.kb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
-.card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+.kb-title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+.kb-actions {
+  display: flex;
+  gap: var(--space-2);
 }
 .kb-toolbar {
   display: flex;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-.search-input {
-  flex: 1;
-  height: 38px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-card);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-}
-.search-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-.import-btn {
-  padding: 0 var(--space-4);
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: #fff;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.import-btn:disabled {
-  opacity: 0.6;
-}
-.empty {
-  padding: var(--space-8) var(--space-6);
-  text-align: center;
-}
-.empty-title {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-}
-.empty-hint {
-  margin-top: var(--space-2);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: 1.7;
-}
-.doc-list {
-  display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
-.doc-item {
-  display: block;
-  width: 100%;
-  padding: var(--space-4);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-out);
-}
-.doc-item:hover {
-  border-color: rgba(var(--color-primary-rgb), 0.5);
-}
-.doc-row1 {
+.kb-search {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-.doc-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-.doc-time {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--color-text-placeholder);
-}
-.doc-snippet {
-  margin-top: var(--space-2);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: 1.7;
-  word-break: break-word;
-}
-.hl {
-  background: rgba(var(--color-primary-rgb), 0.25);
-  border-radius: 2px;
-  padding: 0 1px;
-}
-.doc-meta {
-  margin-top: var(--space-2);
-  display: flex;
-  align-items: center;
   gap: var(--space-2);
 }
-.tag {
-  padding: 1px 8px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  font-size: 10px;
-}
-.doc-size {
-  font-size: 10px;
-  color: var(--color-text-placeholder);
-}
-/* 详情 */
-.detail {
-  padding: var(--space-5);
-}
-.detail-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.back-btn {
-  border: none;
-  background: transparent;
-  color: var(--color-primary);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  flex-shrink: 0;
-}
-.detail-title {
+.kb-search input {
   flex: 1;
+}
+.kb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.kb-chip {
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.kb-chip.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.kb-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.kb-hint {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.kb-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.kb-item {
+  padding: var(--space-3);
+}
+.kb-item-main {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.kb-item-title {
+  display: block;
   font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  min-width: 0;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+}
+.kb-item-snippet {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.title-input {
-  flex: 1;
-  height: 34px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-}
-.detail-actions {
+.kb-item-meta {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
-  flex-shrink: 0;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
-.mini-btn {
-  padding: 4px 12px;
+.kb-cat {
+  color: var(--color-primary);
+}
+.kb-tag {
+  padding: 0 6px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-card);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
 }
-.mini-btn.danger:hover {
-  border-color: var(--color-danger, #d64545);
-  color: var(--color-danger, #d64545);
-}
-.btn-primary {
-  padding: 5px 16px;
-  border: none;
+.kb-badge {
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-primary);
-  color: #fff;
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-}
-.btn-ghost {
-  padding: 5px 16px;
-  border: none;
-  background: transparent;
   color: var(--color-text-secondary);
-  cursor: pointer;
-  font-size: var(--font-size-xs);
 }
-.detail-meta {
-  margin: var(--space-2) 0 var(--space-3);
-  font-size: var(--font-size-xs);
+.kb-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+}
+.kb-detail {
+  padding: var(--space-4);
+}
+.kb-detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.kb-detail-title {
+  margin: 0;
+  flex: 1;
+  font-size: var(--font-size-lg);
+}
+.kb-title-input {
+  flex: 1;
+}
+.kb-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.kb-detail-meta {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-3);
 }
-.doc-content {
-  margin: 0;
-  font-family: inherit;
-  font-size: var(--font-size-sm);
-  line-height: 1.8;
-  color: var(--color-text-regular);
+.kb-content {
   white-space: pre-wrap;
   word-break: break-word;
-}
-.edit-area {
-  width: 100%;
   font-family: inherit;
   font-size: var(--font-size-sm);
   line-height: 1.8;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-page);
   color: var(--color-text-primary);
-  resize: vertical;
+  margin: 0;
+}
+.kb-editor {
+  width: 100%;
+  min-height: 320px;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  line-height: 1.8;
 }
 </style>

@@ -60,6 +60,8 @@ export const IPC = {
   WORKSPACE_AUDIT_LIST: 'workspace:audit-list',
   /** M2-3b：知识库数据源状态（未绑定/离线时渲染层显示引导态） */
   KNOWLEDGE_SOURCE_STATE: 'knowledge:source-state',
+  /** UI1-3：知识库统计（分类/实体/假设计数，页面概要 chips） */
+  KNOWLEDGE_STATS: 'knowledge:stats',
   KNOWLEDGE_LIST: 'knowledge:list',
   KNOWLEDGE_GET: 'knowledge:get',
   KNOWLEDGE_IMPORT: 'knowledge:import',

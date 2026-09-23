@@ -1185,6 +1185,14 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     }
   })
 
+  // UI1-3：知识库统计（分类/实体/假设计数）—— 对齐父级 health-summary
+  ipcMain.handle(IPC.KNOWLEDGE_STATS, async (): Promise<IpcResult<unknown>> => {
+    auth.requireUser()
+    const r = await remoteKnowledge.stats()
+    if (!r.ok) return fail(`KNOWLEDGE_${r.error.kind.toUpperCase().replace('-', '_')}`, knowledgeErrorMessage(r.error))
+    return ok(r.data)
+  })
+
   ipcMain.handle(IPC.KNOWLEDGE_LIST, async (): Promise<IpcResult<KnowledgeDocMeta[]>> => {
     auth.requireUser()
     // ★ 拉全所有分页（逻辑在服务层 listAll，避免「测试副本 ≠ 真实实现」）

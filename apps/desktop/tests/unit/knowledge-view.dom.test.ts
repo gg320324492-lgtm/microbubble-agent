@@ -52,9 +52,9 @@ describe('KnowledgeView（知识库占位转正）', () => {
     await flushPromises()
     expect(w.text()).toContain('臭氧实验笔记')
     expect(w.text()).toContain('实验')
-    // 输入即检
-    await w.get('[data-testid="kb-search"]').setValue('臭氧')
-    await w.get('[data-testid="kb-search"]').trigger('input')
+    // UI1-3：检索改为「回车触发」（走服务端语义检索），不再是输入即检
+    await w.get('[data-testid="kb-search-input"]').setValue('臭氧')
+    await w.get('[data-testid="kb-search-input"]').trigger('keyup.enter')
     await flushPromises()
     expect(window.api.knowledge.search).toHaveBeenCalledWith('臭氧')
     expect(w.text()).toContain('臭氧微纳米气泡')
