@@ -81,8 +81,23 @@ export function createTodoWriteTool(deps: TodoToolDeps): AgentTool {
           data: { todos: list.items, summary: todoSummary(list), rendered: renderForModel(list) }
         }
       } else {
-        const id = String(input['id'] ?? '')
-        if (!id) return { ok: false, summary: '缺少 id 参数', error: '缺少 id' }
+        let id = String(input['id'] ?? '')
+        // R-11 微项：允许按序号操作（从 1 开始，对应 list 输出顺序）——
+        // 模型记 id 容易错，按序号更稳。id 优先，index 兜底。
+        if (!id) {
+          const rawIndex = input['index']
+          const idx = typeof rawIndex === 'number' ? rawIndex : Number(rawIndex)
+          if (Number.isFinite(idx) && idx >= 1 && idx <= list.items.length) {
+            id = list.items[idx - 1]!.id
+          } else if (rawIndex !== undefined) {
+            return {
+              ok: false,
+              summary: `序号 ${String(rawIndex)} 超出范围（当前共 ${list.items.length} 项）`,
+              error: '序号非法'
+            }
+          }
+        }
+        if (!id) return { ok: false, summary: '缺少 id 或 index 参数', error: '缺少 id/index' }
         const res =
           action === 'remove' ? removeTodo(list, id) : setTodoStatus(list, id, parseStatus(action) ?? 'pending', t)
         if (!res.ok) return { ok: false, summary: res.error ?? '操作失败', error: res.error }

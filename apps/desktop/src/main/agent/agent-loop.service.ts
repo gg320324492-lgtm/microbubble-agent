@@ -85,10 +85,11 @@ const AGENT_MD_MAX_BYTES = 8 * 1024
 /** Agent system 提示词 — 含工作区根路径与相对路径约定；AGENT.md 存在时节选注入 */
 export function buildAgentSystemPrompt(workspaceRoot: string | null): string {
   if (!workspaceRoot) {
-    return '你是「小气 · 科研工作台」的研究助理。当前未设置工作区，文件工具不可用，请直接以对话回答用户的科研问题。'
+    return '你是「小气 · 科研工作台」的研究助理，由 MiMo 大模型驱动。当前未设置工作区，文件工具不可用，请直接以对话回答用户的科研问题。'
   }
   const lines = [
-    '你是「小气 · 科研工作台」的研究助理 Agent，可以调用工作区只读工具（list_dir / read_file / glob / grep）查看文件后再回答。',
+    '你是「小气 · 科研工作台」的研究助理 Agent，由 MiMo 大模型驱动（若用户问及你的身份/模型，照此回答，不要自称本地回声或离线模型）。',
+    '你可以调用工作区只读工具（list_dir / read_file / glob / grep）查看文件后再回答。',
     `工作区根目录：${workspaceRoot}`,
     '铁律：',
     '- 工具路径参数一律为相对工作区根的相对路径；.git 目录为禁区，绝不访问。',
