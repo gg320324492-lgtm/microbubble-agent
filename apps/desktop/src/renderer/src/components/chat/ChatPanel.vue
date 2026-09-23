@@ -6,6 +6,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ChatMessage, ChatStreamEvent, ModelProvider, ToolCallRecord } from '@shared/types'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
+// CU2：自动滚动跟随的纯逻辑（可离线测；与程序性滚动区分，避免自锁）
+import { bottomScrollTop, followOnNewMessage, nextFollowing } from '../../composables/useAutoFollow'
 import { applyStreamEvent, createLiveState, ROLLBACK_CONFIRM_TEXT, type LiveAgentState } from '../../stores/chat-events'
 import { sessionUsageLabel } from '@shared/usage'
 import ToolCard from './ToolCard.vue'
@@ -43,6 +45,9 @@ function onStreamEvent(e: ChatStreamEvent): void {
   void scrollToBottom()
 }
 const messagesEl = ref<HTMLElement | null>(null)
+// CU1/CU2：跟随判定走纯逻辑（可离线测），并与「程序性滚动」区分，避免自锁
+const following = ref(true)
+let programmatic = false
 
 async function onSend(): Promise<void> {
   const text = draft.value.trim()
@@ -126,12 +131,41 @@ async function onRollback(m: ChatMessage, call: ToolCallRecord): Promise<void> {
 
 async function scrollToBottom(): Promise<void> {
   await nextTick()
-  if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+  const el = messagesEl.value
+  if (!el) return
+  programmatic = true
+  el.scrollTop = bottomScrollTop({ scrollHeight: el.scrollHeight })
+  // 程序性滚动同样会触发 scroll 事件：下一帧再解锁，避免被误判成「用户上滚」
+  requestAnimationFrame(() => {
+    programmatic = false
+  })
+}
+
+/** CU2：用户滚动时更新跟随状态（贴底=跟随；上滚=暂停；回底=恢复） */
+function onBodyScroll(): void {
+  const el = messagesEl.value
+  if (!el) return
+  following.value = nextFollowing(
+    { scrollTop: el.scrollTop, clientHeight: el.clientHeight, scrollHeight: el.scrollHeight },
+    following.value,
+    programmatic
+  )
 }
 
 watch(
   () => store.activeId,
-  () => void scrollToBottom()
+  () => {
+    following.value = true // 切换会话：重置为跟随
+    void scrollToBottom()
+  }
+)
+
+// CU2：消息增长（新消息 / 流式输出）时，仅在跟随时才拉到底 —— 绝不打断用户回看历史
+watch(
+  () => store.messages.reduce((a, m) => a + (m.content?.length ?? 0), 0),
+  () => {
+    if (followOnNewMessage(following.value)) void scrollToBottom()
+  }
 )
 
 onMounted(() => {
@@ -190,7 +224,7 @@ function fmtTime(ts: number): string {
       </span>
     </header>
 
-    <div ref="messagesEl" class="chat-body">
+    <div ref="messagesEl" class="chat-body" @scroll.passive="onBodyScroll">
       <!-- 空态欢迎页 -->
       <div v-if="!store.activeId" class="chat-welcome">
         <h1>你好，{{ auth.user?.displayName || auth.user?.username }}</h1>
