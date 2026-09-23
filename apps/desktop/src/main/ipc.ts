@@ -68,6 +68,7 @@ import type { PermissionPort } from './agent/agent-loop.service'
 import { RemoteDriveService, driveErrorMessage } from './services/cloud/drive'
 import { CloudBackupService, probeFromSettings } from './services/backup/cloud-backup.service'
 import { planAutoProvision } from './services/backup/auto-provision'
+import { BACKUP_MAX_FILES_BYTES } from './services/backup/daily-backup'
 import { cloudGuidance, cloudUsableStateFromAuth, type CloudAuthSnapshot } from './services/cloud/guidance'
 import type { SessionStore, UploadSession } from './services/cloud/transfer'
 import {
@@ -1985,11 +1986,21 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       if (enc) settings.set('backup.cloud.key', enc, currentUserId() ?? undefined)
     },
     packContainer: async () => {
-      // 复用既有容器打包（数据库 + 附件清单）；此处只打数据库主文件，附件走既有 measureFilesBytes 闸
-      const { readFileSync } = await import('node:fs')
-      const bytes = readFileSync(dbPath)
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16).replace('T', '-')
-      return { fileName: `workbench-${stamp.replace(/-/g, '').slice(0, 13)}-1.mnbbak`, bytes: new Uint8Array(bytes) }
+      // ★ 工单 ZB 补完：复用**完整 packContainer**（SQLite 快照 + 附件分段）——
+      //   与本地备份路线同一打包路径，故云端容器与本地容器**格式一致**，可用同一条恢复路径解开。
+      // 体积防护沿既有 R-9 语义：附件总量超限则明确报错（不静默截断）
+      const filesBytes = backup.measureFilesBytes()
+      if (filesBytes > BACKUP_MAX_FILES_BYTES) {
+        throw new Error(
+          `附件体积 ${Math.round(filesBytes / 1024 / 1024)}MB 超过上限 ${Math.round(BACKUP_MAX_FILES_BYTES / 1024 / 1024)}MB，已跳过本次云端备份`
+        )
+      }
+      const key = cloudBackup.ensureProtectionKey()
+      const { fileName, bytes } = backup.buildContainerBytes({ password: key })
+      console.log(
+        `[backup] 完整容器已构建：${fileName}（${bytes.length} bytes，附件分段 ${backup.countFileSegments()} 个，附件总量 ${filesBytes} bytes）`
+      )
+      return { fileName, bytes: new Uint8Array(bytes) }
     },
     uploadFile: async (remotePath, bytes) => {
       // 复用 M2-3c 分块通道：小文件走简化路径，大文件分块

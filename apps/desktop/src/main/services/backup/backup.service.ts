@@ -120,6 +120,28 @@ export class BackupService {
   }
 
   /**
+   * 只产出容器字节（工单 ZB 补完：云端托管备份用）。
+   *
+   * ★ 与 `createBackup` **共用同一段收集逻辑**（SQLite 快照 + 附件分段），
+   *   故云端容器与本地容器**格式完全一致** —— 服务器侧取回的 key + 容器可用同一条恢复路径解开。
+   * 不落本地盘（云端通道直接上传字节）。
+   */
+  buildContainerBytes(opts: { password: string }): { fileName: string; bytes: Buffer } {
+    const { password } = opts
+    if (!password || !password.trim()) throw new Error('备份密码不能为空')
+    const segments: { name: string; data: Buffer }[] = [this.collectSqliteSegment(), ...this.collectFileSegments()]
+    const bytes = packContainer(segments, { app_version: this.appVersion }, password)
+    // 命名与本地一致（保留策略依赖同一命名模式）
+    const fileName = buildBackupFileName(undefined, new Date(), 1)
+    return { fileName, bytes }
+  }
+
+  /** 附件分段数（供云端日志观测，不泄露内容） */
+  countFileSegments(): number {
+    return this.collectFileSegments().length
+  }
+
+  /**
    * 从备份容器恢复：解密验签 → 安全网（保留当前数据快照）→ 覆盖库与文件。
    * 返回 needRestart: true — 调用方提示重启应用重载数据。
    */
