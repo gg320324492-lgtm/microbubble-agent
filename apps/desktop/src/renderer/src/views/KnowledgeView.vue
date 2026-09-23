@@ -175,7 +175,6 @@ const sourceBlocked = computed(() => sourceGate.value.state !== 'ready')
 const serverTotal = ref<number | null>(null)
 
 /** 服务端返回的条目总数（DL-1 #3 决定性诊断：一眼可见 total 是 9 还是 856） */
-const serverTotal = ref<number | null>(null)
 
 async function loadSourceState(): Promise<void> {
   try {
@@ -266,9 +265,6 @@ onMounted(async () => {
       </div>
 
       <!-- 空态引导 -->
-      <p v-if="serverTotal !== null" class="hint tiny" data-testid="kb-server-total">
-        服务端共 {{ serverTotal }} 条（本机显示 {{ shown.length }} 条）
-      </p>
       <p v-if="serverTotal !== null" class="hint tiny" data-testid="kb-server-total">
         服务端共 {{ serverTotal }} 条（本机显示 {{ shown.length }} 条）
       </p>
