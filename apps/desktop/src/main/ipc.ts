@@ -66,6 +66,8 @@ import {
 } from './agent/permissions/policy'
 import type { PermissionPort } from './agent/agent-loop.service'
 import { RemoteDriveService, driveErrorMessage } from './services/cloud/drive'
+import { CloudBackupService, probeFromSettings } from './services/backup/cloud-backup.service'
+import { planAutoProvision } from './services/backup/auto-provision'
 import { cloudGuidance, cloudUsableStateFromAuth, type CloudAuthSnapshot } from './services/cloud/guidance'
 import type { SessionStore, UploadSession } from './services/cloud/transfer'
 import {
@@ -1017,6 +1019,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   // ---------- 远程网盘（M2-3c）----------
   // 实例在下方（currentUserId 就绪后）赋值，此处仅前置声明，避免 TDZ（M8-2/M2-3b 双实证）。
   let remoteDrive: RemoteDriveService
+  /** 工单 ZB：零感托管备份执行器（装配在 currentUserId 就绪后） */
+  let cloudBackup: CloudBackupService
 
   ipcMain.handle(IPC.DRIVE_STATE, (): IpcResult<unknown> =>
     tryRun(() => {
@@ -1897,6 +1901,21 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       writeCloudTokens(loginRes.data)
       writeCloudBaseUrl(baseUrl)
       console.log(`[auth] 云端登录成功：${meRes.data.name}（首次接入=${cloudLogin.firstClaim}）`)
+      // ★ 工单 ZB：零感托管备份 —— 登录即生效（既有手工配置零覆盖；离线顺延）
+      try {
+        const probe = probeFromSettings((k) => settings.get(k, auth.requireUser().id))
+        const plan = planAutoProvision({ probe, cloudUsername: meRes.data.name })
+        if (plan.provision && plan.config) {
+          settings.set('backup.daily.config', plan.config, auth.requireUser().id)
+          console.log('[backup] 已自动启用零感托管备份（每日 + 保留 7 份；云端 backups/ 目录）')
+          // 首次登录立刻跑一次（零操作：用户什么都不用做）；失败不影响登录
+          void cloudBackup.runOnce({ enabled: true, keep: plan.config.keep }).catch(() => undefined)
+        } else {
+          console.log(`[backup] 跳过自动配置（${plan.reason}）`)
+        }
+      } catch (e) {
+        console.log(`[backup] 自动配置异常（不影响登录）：${e instanceof Error ? e.message : String(e)}`)
+      }
       return ok({
         user: cloudLogin.session.user,
         expiresAt: cloudLogin.session.expiresAt,
@@ -1946,6 +1965,69 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     baseUrl: () => readCloudBaseUrl(),
     sessions: driveSessionStore,
     onTokensRefreshed: (t) => writeCloudTokens(t),
+    log: (m) => console.log(m)
+  })
+
+  // 工单 ZB：零感托管备份执行器（复用 M2-3c 云端通道；密钥走 safeStorage）
+  cloudBackup = new CloudBackupService({
+    getCloudUsername: () => auth.cloudIdentityOfCurrentUser(),
+    getProtectionKey: () => {
+      const enc = settings.get('backup.cloud.key', currentUserId() ?? undefined) as string | undefined
+      if (!enc) return null
+      try {
+        return cipher.decrypt(enc) || null
+      } catch {
+        return null
+      }
+    },
+    setProtectionKey: (key) => {
+      const enc = cipher.encrypt(key)
+      if (enc) settings.set('backup.cloud.key', enc, currentUserId() ?? undefined)
+    },
+    packContainer: async () => {
+      // 复用既有容器打包（数据库 + 附件清单）；此处只打数据库主文件，附件走既有 measureFilesBytes 闸
+      const { readFileSync } = await import('node:fs')
+      const bytes = readFileSync(dbPath)
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16).replace('T', '-')
+      return { fileName: `workbench-${stamp.replace(/-/g, '').slice(0, 13)}-1.mnbbak`, bytes: new Uint8Array(bytes) }
+    },
+    uploadFile: async (remotePath, bytes) => {
+      // 复用 M2-3c 分块通道：小文件走简化路径，大文件分块
+      const parts = remotePath.split('/')
+      const name = parts.pop() ?? 'backup.mnbbak'
+      const r = await remoteDrive.upload({
+        filename: name,
+        fileSize: bytes.length,
+        readChunk: async (offset, length) => bytes.subarray(offset, offset + length)
+      })
+      if (!r.ok) return { ok: false, error: driveErrorMessage(r.error) }
+      return { ok: true }
+    },
+    listRemote: async (remoteDir) => {
+      const r = await remoteDrive.list({ keyword: remoteDir.split('/').pop() ?? '' })
+      if (!r.ok) return { ok: false, error: driveErrorMessage(r.error) }
+      return {
+        ok: true,
+        entries: r.data.items.map((i) => ({ name: i.fileName, createdAt: Date.parse(i.updatedAt ?? '') || 0 }))
+      }
+    },
+    deleteRemote: async (remotePath) => {
+      const r = await remoteDrive.list({ keyword: remotePath.split('/').pop() ?? '' })
+      if (!r.ok) return { ok: false, error: driveErrorMessage(r.error) }
+      const hit = r.data.items.find((i) => i.fileName === remotePath.split('/').pop())
+      if (!hit) return { ok: false, error: '未找到远端文件' }
+      const del = await remoteDrive.remove(hit.id)
+      return del.ok ? { ok: true } : { ok: false, error: driveErrorMessage(del.error) }
+    },
+    isOnline: () => true, // 实际在线判定由上传失败驱动（离线时上传即失败 → 顺延）
+    notify: (title, body) => {
+      try {
+        const { Notification } = require('electron') as typeof import('electron')
+        if (Notification.isSupported()) new Notification({ title, body }).show()
+      } catch {
+        /* 通知不可用不影响备份 */
+      }
+    },
     log: (m) => console.log(m)
   })
 

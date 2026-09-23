@@ -116,7 +116,9 @@ const statusLine = computed(() => {
       : '下次自动：已暂停'
     : '自动备份：未开启'
   const kept = `已保留 ${localKeptCount.value}/${daily.value.keep === 0 ? '不限' : daily.value.keep} 份`
-  return `${last} ｜ ${next} ｜ ${kept}`
+  // 工单 ZB：零感托管备份 —— 开启即「已自动保护」（登录后全自动，组员零操作）
+  const head = daily.value.enabled ? '已自动保护 · ' : ''
+  return `${head}${last} ｜ ${next} ｜ ${kept}`
 })
 
 
