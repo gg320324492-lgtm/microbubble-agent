@@ -71,7 +71,6 @@ import type { SessionStore, UploadSession } from './services/cloud/transfer'
 import {
   RemoteKnowledgeService,
   knowledgeErrorMessage,
-  knowledgeGuidance,
   toDocFull,
   toDocMeta,
   toSearchHit
@@ -1177,7 +1176,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       // DL-1：以认证态为唯一事实源推导（不再读独立的绑定状态存储）
       const snap = cloudAuthSnapshot()
       const state = cloudUsableStateFromAuth(snap)
-      const g = knowledgeGuidance(state)
+      // DL-1/UI1-3：统一走集中状态机（与网盘同一套文案；不再用 M2-3b 的旧文案函数）
+      const g = cloudGuidance(state, '知识库')
       // 附带服务端返回的条目总数（DL-1 #3 决定性诊断：用户一眼可见 total 是 9 还是 856）。
       // 只在可用态下取，避免未登录/离线时多发一次请求。
       let total: number | null = null
