@@ -140,6 +140,8 @@ const api = {
     rename: (id: number, title: string): Promise<unknown> => invoke(IPC.DRIVE_RENAME, { id, title }),
     remove: (id: number): Promise<unknown> => invoke(IPC.DRIVE_DELETE, { id }),
     pendingUploads: (): Promise<unknown> => invoke(IPC.DRIVE_PENDING_UPLOADS),
+    folders: (parentId?: number | null): Promise<unknown> => invoke(IPC.DRIVE_FOLDERS, { parentId: parentId ?? null }),
+    createFolder: (name: string, parentId?: number | null): Promise<unknown> => invoke(IPC.DRIVE_CREATE_FOLDER, { name, parentId: parentId ?? null }),
     download: (id: number): Promise<unknown> => invoke(IPC.DRIVE_DOWNLOAD, { id }),
     onProgress: (cb: (p: unknown) => void): (() => void) => {
       const listener = (_e: unknown, payload: unknown): void => cb(payload as never)

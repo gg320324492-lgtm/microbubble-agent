@@ -44,6 +44,10 @@ export const IPC = {
   DRIVE_RENAME: 'drive:rename',
   DRIVE_DELETE: 'drive:delete',
   DRIVE_PENDING_UPLOADS: 'drive:pending-uploads',
+  /** UI1-3：文件夹列表（导航） */
+  DRIVE_FOLDERS: 'drive:folders',
+  /** UI1-3：新建文件夹 */
+  DRIVE_CREATE_FOLDER: 'drive:create-folder',
   /** M2-3c 下载（选择保存位置后流式落盘） */
   DRIVE_DOWNLOAD: 'drive:download',
   /** main → renderer 推送通道（流式增量 / 窗口状态），preload 以 on* 方式暴露 */

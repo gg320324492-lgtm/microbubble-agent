@@ -1059,6 +1059,22 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     return ok(true)
   })
 
+  ipcMain.handle(IPC.DRIVE_FOLDERS, async (_e, p): Promise<IpcResult<unknown>> => {
+    auth.requireUser()
+    const r = await remoteDrive.listFolders(p?.parentId ?? null)
+    if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
+    return ok(r.data)
+  })
+
+  ipcMain.handle(IPC.DRIVE_CREATE_FOLDER, async (_e, p): Promise<IpcResult<unknown>> => {
+    auth.requireUser()
+    const name = String(p?.name ?? '').trim()
+    if (!name) return fail('INVALID_INPUT', '请填写文件夹名称')
+    const r = await remoteDrive.createFolder(name, p?.parentId ?? null)
+    if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
+    return ok(r.data)
+  })
+
   ipcMain.handle(IPC.DRIVE_PENDING_UPLOADS, (): IpcResult<unknown> =>
     tryRun(() => {
       auth.requireUser()

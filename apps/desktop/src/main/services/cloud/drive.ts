@@ -178,6 +178,25 @@ export class RemoteDriveService {
     return { ok: true, data: item }
   }
 
+  /** 文件夹列表（父级 /folders，UI1-3 文件夹导航） */
+  async listFolders(parentId: number | null = null): Promise<CloudResult<RemoteFolder[]>> {
+    const qs = parentId === null ? '' : `?parent_id=${encodeURIComponent(String(parentId))}`
+    const res = await this.call('GET', `/api/v1/folders${qs}`)
+    if (!res.ok) return res
+    return { ok: true, data: normalizeFolderPage(res.data) }
+  }
+
+  /** 新建文件夹（父级 POST /folders） */
+  async createFolder(name: string, parentId: number | null = null): Promise<CloudResult<RemoteFolder>> {
+    const body: Record<string, unknown> = { name }
+    if (parentId !== null) body.parent_id = parentId
+    const res = await this.call('POST', '/api/v1/folders', { body })
+    if (!res.ok) return res
+    const f = normalizeFolder(res.data)
+    if (!f) return { ok: false, error: { kind: 'malformed', message: '云端返回了无法识别的文件夹信息。' } }
+    return { ok: true, data: f }
+  }
+
   /** 删除 */
   async remove(id: number): Promise<CloudResult<true>> {
     const res = await this.call('DELETE', `/api/v1/drive/files/${encodeURIComponent(String(id))}`)
@@ -307,6 +326,34 @@ export function sliceBytes(bytes: Uint8Array, sliceSize = 1024 * 1024): Uint8Arr
     out.push(bytes.subarray(off, Math.min(off + sliceSize, bytes.length)))
   }
   return out
+}
+
+// ---------------------------------------------------------------- 文件夹
+
+/** 网盘文件夹（与父级 FolderItem 对齐） */
+export interface RemoteFolder {
+  id: number
+  name: string
+  parentId: number | null
+  visibility: string | null
+  path: string | null
+}
+
+/** 归一化文件夹；缺 id/name 视为无效 */
+export function normalizeFolder(raw: unknown): RemoteFolder | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const id = asNumber(o.id)
+  const name = asString(o.name)
+  if (id === null || !name) return null
+  return { id, name, parentId: asNumber(o.parent_id), visibility: asString(o.visibility), path: asString(o.path) }
+}
+
+/** 归一化文件夹列表（容忍裸数组与 {items,total}） */
+export function normalizeFolderPage(raw: unknown): RemoteFolder[] {
+  const o = (raw ?? {}) as Record<string, unknown>
+  const arr = Array.isArray(raw) ? raw : Array.isArray(o.items) ? o.items : []
+  return arr.map(normalizeFolder).filter((x): x is RemoteFolder => x !== null)
 }
 
 /** 统一错误文案（403 → 不可见中性文案；其余沿用归一化文案） */

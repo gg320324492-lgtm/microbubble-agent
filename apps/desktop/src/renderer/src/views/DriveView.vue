@@ -1,10 +1,26 @@
 <script setup lang="ts">
-// M2-3c 远程网盘（最小可用实现）
+// 网盘页（UI1-3 原生还原）— 数据来自父级服务器（M2-3c），本页只做呈现。
 //
-// 说明：引导态文案**全部来自主进程集中状态机**（cloudGuidance），本组件不硬编码「绑定」措辞
-// —— 后续统一登录把语义切为「未登录」时，只改状态机即可。
-import { computed, onMounted, ref } from 'vue'
+// 布局对齐父级 web/src/views/DesktopDriveView.vue（工作台形态）：
+//   顶栏（搜索 / 新建文件夹 / 上传） → 面包屑（文件夹层级导航） → 拖拽区 + 文件列表/网格
+// 能力：拖拽上传（复用 M2-3c 分块通道，含进度）、文件夹进入与返回、下载、重命名、删除。
+//
+// 引导态文案全部来自主进程集中状态机（guidance.ts），本组件零硬编码措辞。
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  ROOT_CRUMB,
+  crumbPath,
+  currentFolderId,
+  enterFolder,
+  extractLocalPaths,
+  filterItems,
+  goToCrumb,
+  hasDraggedFiles,
+  isDragActive,
+  nextDragDepth,
+  type Crumb
+} from '../composables/useDriveNav'
 
 interface DriveItem {
   id: number
@@ -15,6 +31,12 @@ interface DriveItem {
   folderId: number | null
   visibility: string | null
   ownerName: string | null
+}
+
+interface DriveFolder {
+  id: number
+  name: string
+  parentId: number | null
 }
 
 interface DriveState {
@@ -29,11 +51,23 @@ interface DriveState {
 
 const gate = ref<DriveState | null>(null)
 const items = ref<DriveItem[]>([])
+const folders = ref<DriveFolder[]>([])
 const loading = ref(false)
 const uploading = ref(false)
 const progress = ref<{ percent: number; transferred: number; total: number } | null>(null)
 const pending = ref<{ uploadId: string; filename: string; uploadedChunks: number[]; totalChunks: number }[]>([])
 const blocked = computed(() => (gate.value?.state ?? 'ready') !== 'ready')
+
+// 导航与搜索
+const crumbs = ref<Crumb[]>([ROOT_CRUMB])
+const keyword = ref('')
+const currentId = computed(() => currentFolderId(crumbs.value))
+const breadcrumbText = computed(() => crumbPath(crumbs.value))
+const shownItems = computed(() => filterItems(items.value, keyword.value))
+
+// 拖拽（深度计数避免子元素 enter/leave 闪烁）
+const dragDepth = ref(0)
+const dragActive = computed(() => isDragActive(dragDepth.value))
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`
@@ -54,8 +88,12 @@ async function loadList(): Promise<void> {
   if (blocked.value) return
   loading.value = true
   try {
-    const page = (await window.api.drive.list(null)) as { items?: DriveItem[] }
+    const [page, fs] = await Promise.all([
+      window.api.drive.list(currentId.value) as Promise<{ items?: DriveItem[] }>,
+      window.api.drive.folders(currentId.value) as Promise<DriveFolder[]>
+    ])
     items.value = Array.isArray(page?.items) ? page.items : []
+    folders.value = Array.isArray(fs) ? fs : []
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '加载失败')
   } finally {
@@ -71,38 +109,66 @@ async function loadPending(): Promise<void> {
   }
 }
 
-/** 上传（选择本地文件 → 主进程分块/续传；进度经事件推送） */
-async function pickAndUpload(): Promise<void> {
+/** 上传一组本地路径（拖拽或文件选择共用） */
+async function uploadPaths(paths: { path: string; name: string }[]): Promise<void> {
+  if (!paths.length) return
+  uploading.value = true
+  try {
+    for (const f of paths) {
+      progress.value = { percent: 0, transferred: 0, total: 0 }
+      try {
+        await window.api.drive.upload({ filePath: f.path, parentId: currentId.value })
+      } catch (e) {
+        ElMessage.error(`${f.name}：${e instanceof Error ? e.message : '上传失败'}`)
+      }
+    }
+    ElMessage.success(`已上传 ${paths.length} 个文件`)
+    await loadList()
+    await loadPending()
+  } finally {
+    uploading.value = false
+    progress.value = null
+  }
+}
+
+/** 选择本地文件（工具栏上传按钮） */
+function pickAndUpload(): void {
   const input = document.createElement('input')
   input.type = 'file'
-  input.onchange = async () => {
-    const f = input.files?.[0]
-    if (!f) return
-    // Electron 下 File 带 path（webUtils）；无则用 name 兜底提示
-    const filePath = (f as File & { path?: string }).path ?? ''
-    if (!filePath) {
-      ElMessage.warning('无法读取本地路径，请改用桌面端文件选择入口')
-      return
-    }
-    uploading.value = true
-    progress.value = { percent: 0, transferred: 0, total: f.size }
-    try {
-      await window.api.drive.upload({ filePath, parentId: null })
-      ElMessage.success('上传完成')
-      await loadList()
-      await loadPending()
-    } catch (e) {
-      ElMessage.error(e instanceof Error ? e.message : '上传失败')
-      await loadPending() // 中断留痕：可在「未完成上传」继续
-    } finally {
-      uploading.value = false
-      progress.value = null
-    }
+  input.multiple = true
+  input.onchange = () => {
+    const files = Array.from(input.files ?? []) as (File & { path?: string })[]
+    void uploadPaths(extractLocalPaths(files))
   }
   input.click()
 }
 
-/** 下载：主进程弹保存对话框后落盘；进度经事件推送 */
+/** 新建文件夹 */
+async function createFolder(): Promise<void> {
+  try {
+    const { value } = await ElMessageBox.prompt('文件夹名称', '新建文件夹', { inputValue: '新建文件夹' })
+    const name = (value ?? '').trim()
+    if (!name) return
+    await window.api.drive.createFolder(name, currentId.value)
+    await loadList()
+    ElMessage.success('已创建')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e instanceof Error ? e.message : '创建失败')
+  }
+}
+
+function openFolder(f: DriveFolder): void {
+  crumbs.value = enterFolder(crumbs.value, { id: f.id, name: f.name })
+  keyword.value = ''
+  void loadList()
+}
+
+function backTo(index: number): void {
+  crumbs.value = goToCrumb(crumbs.value, index)
+  keyword.value = ''
+  void loadList()
+}
+
 async function download(item: DriveItem): Promise<void> {
   try {
     const r = (await window.api.drive.download(item.id)) as { bytes?: number }
@@ -139,13 +205,41 @@ async function remove(item: DriveItem): Promise<void> {
   }
 }
 
+// ---- 拖拽上传 ----
+function onDragEnter(e: DragEvent): void {
+  if (!hasDraggedFiles(e.dataTransfer)) return
+  e.preventDefault()
+  dragDepth.value = nextDragDepth(dragDepth.value, 'enter')
+}
+function onDragOver(e: DragEvent): void {
+  if (!hasDraggedFiles(e.dataTransfer)) return
+  e.preventDefault() // 必须阻止默认，否则浏览器会打开文件
+}
+function onDragLeave(e: DragEvent): void {
+  if (!hasDraggedFiles(e.dataTransfer)) return
+  dragDepth.value = nextDragDepth(dragDepth.value, 'leave')
+}
+function onDrop(e: DragEvent): void {
+  if (!hasDraggedFiles(e.dataTransfer)) return
+  e.preventDefault()
+  dragDepth.value = nextDragDepth(dragDepth.value, 'drop')
+  const files = Array.from(e.dataTransfer?.files ?? []) as (File & { path?: string })[]
+  const paths = extractLocalPaths(files)
+  if (!paths.length) {
+    ElMessage.warning('未能读取本地路径，请改用「上传」按钮选择文件')
+    return
+  }
+  void uploadPaths(paths)
+}
+
 function openSettings(): void {
   location.hash = '/app/settings'
 }
 
+let offProgress: (() => void) | null = null
+
 onMounted(async () => {
-  // 上传进度事件（主进程 → 渲染层）
-  window.api.drive.onProgress((p) => {
+  offProgress = window.api.drive.onProgress((p) => {
     progress.value = p as { percent: number; transferred: number; total: number }
   })
   await loadState()
@@ -153,11 +247,15 @@ onMounted(async () => {
   await loadList()
   await loadPending()
 })
+
+onUnmounted(() => {
+  offProgress?.()
+})
 </script>
 
 <template>
   <div class="drive">
-    <!-- M2-3c：数据源引导态（文案来自主进程集中状态机，组件不硬编码措辞） -->
+    <!-- 引导态（文案来自主进程集中状态机，组件不硬编码措辞） -->
     <div v-if="blocked" class="drive-gate" data-testid="drive-source-gate">
       <h1>{{ gate?.title }}</h1>
       <p>{{ gate?.hint }}</p>
@@ -167,17 +265,44 @@ onMounted(async () => {
     </div>
 
     <template v-else>
+      <!-- 顶栏：搜索 / 新建文件夹 / 上传 -->
       <header class="drive-head">
-        <h1>网盘</h1>
+        <h1 class="drive-title">网盘</h1>
         <div class="drive-actions">
+          <input v-model="keyword" class="drive-search" data-testid="drive-search" placeholder="搜索当前目录" />
+          <button class="ghost-btn" data-testid="drive-new-folder" @click="createFolder">新建文件夹</button>
           <button class="btn-primary" data-testid="drive-upload" :disabled="uploading" @click="pickAndUpload">
-            {{ uploading ? '上传中…' : '上传文件' }}
+            {{ uploading ? '上传中…' : '上传' }}
           </button>
           <button class="ghost-btn" data-testid="drive-refresh" @click="loadList">刷新</button>
         </div>
       </header>
 
-      <!-- 上传进度（大文件可见） -->
+      <!-- 面包屑（文件夹层级导航） -->
+      <nav class="drive-crumbs" data-testid="drive-crumbs" aria-label="目录路径">
+        <template v-for="(c, i) in crumbs" :key="`${i}-${c.id ?? 'root'}`">
+          <button class="crumb" :data-testid="`drive-crumb-${i}`" :disabled="i === crumbs.length - 1" @click="backTo(i)">
+            {{ c.name }}
+          </button>
+          <span v-if="i < crumbs.length - 1" class="crumb-sep" aria-hidden="true">/</span>
+        </template>
+        <span class="drive-crumb-path" data-testid="drive-crumb-path">{{ breadcrumbText }}</span>
+      </nav>
+
+      <!-- 拖拽区（拖入高亮 → 松手触发分块上传） -->
+      <div
+        class="drive-drop"
+        :class="{ 'is-active': dragActive }"
+        data-testid="drive-dropzone"
+        @dragenter="onDragEnter"
+        @dragover="onDragOver"
+        @dragleave="onDragLeave"
+        @drop="onDrop"
+      >
+        <span class="drive-drop-hint">{{ dragActive ? '松开即上传到当前目录' : '把文件拖到这里上传' }}</span>
+      </div>
+
+      <!-- 上传进度 -->
       <div v-if="progress" class="drive-progress" data-testid="drive-progress">
         <div class="bar"><i :style="{ width: progress.percent + '%' }"></i></div>
         <span>{{ progress.percent }}%（{{ fmtSize(progress.transferred) }} / {{ fmtSize(progress.total) }}）</span>
@@ -187,24 +312,37 @@ onMounted(async () => {
       <div v-if="pending.length" class="drive-pending" data-testid="drive-pending">
         <p>有 {{ pending.length }} 个未完成的上传，重新上传同一文件会自动续传。</p>
         <ul>
-          <li v-for="p in pending" :key="p.uploadId">
-            {{ p.filename }}（已传 {{ p.uploadedChunks.length }}/{{ p.totalChunks }} 块）
-          </li>
+          <li v-for="p in pending" :key="p.uploadId">{{ p.filename }}（已传 {{ p.uploadedChunks.length }}/{{ p.totalChunks }} 块）</li>
         </ul>
       </div>
 
       <p v-if="loading" class="drive-hint">加载中…</p>
-      <p v-else-if="items.length === 0" class="drive-hint" data-testid="drive-empty">网盘里还没有文件。</p>
-      <ul v-else class="drive-list" data-testid="drive-list">
-        <li v-for="it in items" :key="it.id" class="drive-item" :data-testid="`drive-item-${it.id}`">
-          <span class="drive-name" :title="it.fileName">{{ it.fileName }}</span>
-          <span class="drive-size">{{ fmtSize(it.fileSize) }}</span>
-          <span v-if="it.visibility" class="drive-vis">{{ it.visibility }}</span>
-          <button class="mini-btn" data-testid="drive-download" @click="download(it)">下载</button>
-          <button class="mini-btn" @click="rename(it)">重命名</button>
-          <button class="mini-btn danger" @click="remove(it)">删除</button>
-        </li>
-      </ul>
+
+      <template v-else>
+        <p v-if="!folders.length && !shownItems.length" class="drive-hint" data-testid="drive-empty">
+          <template v-if="keyword">没有匹配「{{ keyword }}」的文件。</template>
+          <template v-else>这个目录还没有内容，拖文件进来或点「上传」。</template>
+        </p>
+
+        <!-- 文件夹 -->
+        <ul v-if="folders.length" class="drive-list" data-testid="drive-folders">
+          <li v-for="f in folders" :key="`f-${f.id}`" class="drive-item" :data-testid="`drive-folder-${f.id}`">
+            <button class="drive-folder-btn" @click="openFolder(f)">📁 {{ f.name }}</button>
+          </li>
+        </ul>
+
+        <!-- 文件 -->
+        <ul v-if="shownItems.length" class="drive-list" data-testid="drive-list">
+          <li v-for="it in shownItems" :key="it.id" class="drive-item" :data-testid="`drive-item-${it.id}`">
+            <span class="drive-name" :title="it.fileName">{{ it.fileName }}</span>
+            <span class="drive-size">{{ fmtSize(it.fileSize) }}</span>
+            <span v-if="it.visibility" class="drive-vis">{{ it.visibility }}</span>
+            <button class="mini-btn" data-testid="drive-download" @click="download(it)">下载</button>
+            <button class="mini-btn" @click="rename(it)">重命名</button>
+            <button class="mini-btn danger" @click="remove(it)">删除</button>
+          </li>
+        </ul>
+      </template>
     </template>
   </div>
 </template>
@@ -212,6 +350,8 @@ onMounted(async () => {
 <style scoped>
 .drive {
   padding: var(--space-4);
+  height: 100%;
+  overflow-y: auto;
 }
 .drive-head {
   display: flex;
@@ -219,9 +359,59 @@ onMounted(async () => {
   justify-content: space-between;
   gap: var(--space-3);
 }
+.drive-title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
 .drive-actions {
   display: flex;
   gap: var(--space-2);
+  align-items: center;
+}
+.drive-search {
+  min-width: 180px;
+}
+.drive-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: var(--space-2) 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+.crumb {
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  padding: 0 2px;
+}
+.crumb:disabled {
+  color: var(--color-text-primary);
+  cursor: default;
+}
+.crumb-sep {
+  color: var(--color-text-secondary);
+}
+.drive-crumb-path {
+  margin-left: auto;
+  opacity: 0.6;
+}
+.drive-drop {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  text-align: center;
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  transition: border-color 0.15s, background 0.15s;
+}
+.drive-drop.is-active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
 }
 .drive-gate {
   max-width: 520px;
@@ -244,6 +434,14 @@ onMounted(async () => {
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--color-border);
   font-size: var(--font-size-sm);
+}
+.drive-folder-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: 0;
 }
 .drive-name {
   flex: 1;

@@ -22,6 +22,8 @@ function stubDriveApi(opts: {
         return opts.list ?? { items: [], total: 0 }
       },
       pendingUploads: async () => opts.pending ?? [],
+      // UI1-3：网盘页新增文件夹导航
+      folders: async () => [],
       rename: vi.fn(),
       remove: vi.fn(),
       upload: vi.fn(),

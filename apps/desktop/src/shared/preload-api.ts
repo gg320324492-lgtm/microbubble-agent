@@ -151,6 +151,10 @@ export interface PreloadApi {
     remove(id: number): Promise<unknown>
     /** 未完成上传（「继续上传」入口） */
     pendingUploads(): Promise<unknown>
+    /** UI1-3：文件夹列表（导航用） */
+    folders(parentId?: number | null): Promise<unknown>
+    /** UI1-3：新建文件夹 */
+    createFolder(name: string, parentId?: number | null): Promise<unknown>
     /** 上传进度事件（返回取消订阅函数） */
     onProgress(cb: (p: unknown) => void): () => void
     /** 下载（主进程弹保存对话框后流式落盘；进度经 drive:download 事件推送） */
