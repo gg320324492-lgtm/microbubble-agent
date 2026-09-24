@@ -51,7 +51,9 @@ const api = {
     quit: (): Promise<void> => invoke(IPC.APP_QUIT)
   },
   auth: {
-    cloudLogin: (payload: { baseUrl?: string; username: string; password: string }): Promise<unknown> => invoke(IPC.AUTH_CLOUD_LOGIN, payload),
+    cloudLogin: (payload: { baseUrl?: string; username: string; password: string; remember?: boolean }): Promise<unknown> => invoke(IPC.AUTH_CLOUD_LOGIN, payload),
+    rememberGet: (): Promise<unknown> => invoke(IPC.AUTH_REMEMBER_GET),
+    rememberSet: (payload: { remember: boolean; username?: string; password?: string }): Promise<unknown> => invoke(IPC.AUTH_REMEMBER_SET, payload),
     status: (): Promise<{ userCount: number }> => invoke(IPC.AUTH_STATUS),
     registerAdmin: (p: { username: string; displayName?: string; password: string }): Promise<AuthSession> =>
       invoke(IPC.AUTH_REGISTER_ADMIN, p),

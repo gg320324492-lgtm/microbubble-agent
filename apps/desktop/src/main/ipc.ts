@@ -67,6 +67,7 @@ import {
 import type { PermissionPort } from './agent/agent-loop.service'
 import { RemoteDriveService, driveErrorMessage } from './services/cloud/drive'
 import { CloudBackupService, probeFromSettings } from './services/backup/cloud-backup.service'
+import { buildRememberPayload, parseRemember, serializeRemember, shouldPersistRemember } from './services/auth/remember'
 import { planAutoProvision } from './services/backup/auto-provision'
 import { BACKUP_MAX_FILES_BYTES } from './services/backup/daily-backup'
 import { cloudGuidance, cloudUsableStateFromAuth, type CloudAuthSnapshot } from './services/cloud/guidance'
@@ -1706,11 +1707,44 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       auth.requireUser()
       writeCloudTokens(null)
       auth.logout()
+      settings.set(REMEMBER_KEY, null) // DL-2：退出登录即清除记住的账号密码
       console.log('[account] 已退出登录（云端令牌已清；本地数据未动）')
       const state = cloudUsableStateFromAuth(cloudAuthSnapshot())
       return { status: state, statusLabel: cloudStatusLabel(state), baseUrl: readCloudBaseUrl(), hasTokens: false }
     })
   )
+
+  // DL-2：记住账号密码（凭据经 safeStorage/DPAPI 加密；退出登录时清除）
+  const REMEMBER_KEY = 'auth.remembered'
+  ipcMain.handle(IPC.AUTH_REMEMBER_GET, (): IpcResult<unknown> => {
+    try {
+      const enc = settings.get(REMEMBER_KEY) as string | undefined
+      if (!enc) return ok(null)
+      const plain = cipher.decrypt(enc)
+      if (!plain) return ok(null) // 解密失败（换机/系统凭据变更）→ 视为未记住
+      const parsed = parseRemember(plain) // 纯函数解析（畸形 → null）
+      return ok(parsed)
+    } catch {
+      return ok(null)
+    }
+  })
+
+  ipcMain.handle(IPC.AUTH_REMEMBER_SET, (_e, p): IpcResult<boolean> => {
+    try {
+      const payload = (p ?? {}) as { remember?: boolean; username?: string; password?: string }
+      if (!payload.remember) {
+        settings.set(REMEMBER_KEY, null)
+        return ok(true)
+      }
+      const built = buildRememberPayload({ username: payload.username, password: payload.password })
+      const enc = built ? cipher.encrypt(serializeRemember(built)) : null
+      if (!shouldPersistRemember({ remember: true, payload: built, encrypted: enc })) return ok(false)
+      settings.set(REMEMBER_KEY, enc)
+      return ok(true)
+    } catch {
+      return ok(false)
+    }
+  })
 
   // M2-3a+：外链（仅 http/https，白名单协议，避免被滥用打开本地文件）
   ipcMain.handle(IPC.APP_OPEN_EXTERNAL, async (_e, p): Promise<IpcResult<null>> => {
@@ -1903,6 +1937,18 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       const cloudLogin = auth.loginWithCloud({ cloudUserId: String(meRes.data.id), cloudUsername: meRes.data.name })
       writeCloudTokens(loginRes.data)
       writeCloudBaseUrl(baseUrl)
+      // DL-2：记住账号密码（勾选则加密保存；未勾选则清除既有记录）
+      try {
+        const built = buildRememberPayload({ username, password })
+        const enc = built ? cipher.encrypt(serializeRemember(built)) : null
+        if (shouldPersistRemember({ remember: (payload as { remember?: boolean }).remember === true, payload: built, encrypted: enc })) {
+          settings.set(REMEMBER_KEY, enc)
+        } else {
+          settings.set(REMEMBER_KEY, null)
+        }
+      } catch {
+        /* 记住凭据失败不影响登录 */
+      }
       console.log(`[auth] 云端登录成功：${meRes.data.name}（首次接入=${cloudLogin.firstClaim}）`)
       // ★ 工单 ZB：零感托管备份 —— 登录即生效（既有手工配置零覆盖；离线顺延）
       try {

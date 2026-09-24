@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 登录页 — M2-3a+ 统一登录：以**父级账号**联网登录（本地建号已退役）；视觉沿用归档规格的双栏/a11y 结构
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../stores/auth'
@@ -23,7 +23,7 @@ async function onSubmit(): Promise<void> {
   loading.value = true
   try {
     // M2-3a+ 统一登录：走父级账号（取代本地建号 + 手动绑定）
-    const r = await auth.cloudLogin(form.value.username, form.value.password, server.value || undefined)
+    const r = await auth.cloudLogin(form.value.username, form.value.password, server.value || undefined, remember.value)
     if (r.firstClaim && r.summary) ElMessage.success(r.summary)
     void router.push({ name: 'assistant' })
   } catch (e) {
@@ -37,6 +37,27 @@ const api = window.api // 模板作用域内不可直接访问 window，桥接�
 // 普通用户界面**不再暴露**该配置；运维需要覆盖时走代码层能力（auth.cloudLogin 仍接受 baseUrl，
 // 亦可通过设置项覆盖），无需在登录窗暴露。
 const server = ref('')
+
+/** DL-2：记住账号与密码（凭据经系统 DPAPI 加密保存在本机） */
+const remember = ref(false)
+
+/** 挂载时尝试预填已记住的账号密码 */
+async function prefillRemembered(): Promise<void> {
+  try {
+    const r = (await api.auth.rememberGet()) as { username?: string; password?: string } | null
+    if (r?.username) {
+      form.value.username = r.username
+      form.value.password = r.password ?? ''
+      remember.value = true
+    }
+  } catch {
+    /* 未记住 / 解密失败 → 保持空表单 */
+  }
+}
+
+onMounted(() => {
+  void prefillRemembered()
+})
 </script>
 
 <template>
@@ -60,6 +81,14 @@ const server = ref('')
         <input id="login-username" v-model="form.username" type="text" autocomplete="username" :disabled="loading" placeholder="课题组账号（与网页端相同）" />
         <label for="login-password">密码</label>
         <input id="login-password" v-model="form.password" type="password" autocomplete="current-password" :disabled="loading" placeholder="输入你的密码" />
+        <label class="remember-row">
+          <input v-model="remember" type="checkbox" data-testid="login-remember" :disabled="loading" />
+          <span>记住账号与密码（本机加密保存，退出登录时清除）</span>
+        </label>
+        <label class="remember-row">
+          <input v-model="remember" type="checkbox" data-testid="login-remember" :disabled="loading" />
+          <span>记住账号与密码（本机加密保存，退出登录时清除）</span>
+        </label>
         <p class="register-hint" data-testid="login-register-hint">还没有课题组账号？请联系管理员开通。</p>
 
         <button type="submit" :disabled="loading">{{ loading ? '登录中…' : '安全登录' }}</button>

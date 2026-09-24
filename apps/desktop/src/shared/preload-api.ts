@@ -47,7 +47,11 @@ export interface PreloadApi {
   }
   auth: {
     /** M2-3a+：以父级账号登录（成功后云端身份自动关联并认领本机历史数据） */
-    cloudLogin(payload: { baseUrl?: string; username: string; password: string }): Promise<unknown>
+    cloudLogin(payload: { baseUrl?: string; username: string; password: string; remember?: boolean }): Promise<unknown>
+    /** DL-2：读取已记住的账号密码（DPAPI 解密） */
+    rememberGet(): Promise<unknown>
+    /** DL-2：保存或清除已记住的账号密码 */
+    rememberSet(payload: { remember: boolean; username?: string; password?: string }): Promise<unknown>
     status(): Promise<{ userCount: number }>
     registerAdmin(p: { username: string; displayName?: string; password: string }): Promise<AuthSession>
     login(p: { username: string; password: string }): Promise<AuthSession>

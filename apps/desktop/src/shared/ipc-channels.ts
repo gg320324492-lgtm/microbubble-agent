@@ -35,6 +35,10 @@ export const IPC = {
   CLOUD_UNBIND: 'cloud:unbind',
   /** M2-3a+ 统一登录：以父级账号登录本机（取代本地建号 + 手动绑定） */
   AUTH_CLOUD_LOGIN: 'auth:cloud-login',
+  /** DL-2：读取「记住的账号密码」（DPAPI 解密；无则 null） */
+  AUTH_REMEMBER_GET: 'auth:remember-get',
+  /** DL-2：保存/清除「记住的账号密码」（remember=false 即清除） */
+  AUTH_REMEMBER_SET: 'auth:remember-set',
   /** M2-3a+：用系统浏览器打开外部链接（注册引导等） */
   APP_OPEN_EXTERNAL: 'app:open-external',
   /** M2-3c 远程网盘 */

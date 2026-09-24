@@ -43,12 +43,15 @@ export const useAuthStore = defineStore('auth', () => {
   async function cloudLogin(
     username: string,
     password: string,
-    baseUrl?: string
+    baseUrl?: string,
+    remember?: boolean
   ): Promise<{ firstClaim: boolean; summary: string; cloudUsername: string }> {
     const r = (await window.api.auth.cloudLogin({
       username,
       password,
-      ...(baseUrl ? { baseUrl } : {})
+      ...(baseUrl ? { baseUrl } : {}),
+      // DL-2：勾选则加密记住账号密码（未勾选会清除既有记录）
+      remember: remember === true
     })) as { user: LocalUser; expiresAt: number; firstClaim: boolean; summary: string; cloudUsername: string }
     user.value = r.user
     expiresAt.value = r.expiresAt
