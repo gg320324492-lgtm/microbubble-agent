@@ -13,8 +13,9 @@
 //
 // 说明：out/ 分批清理仅本地需要（沙箱对单次 rmSync 有 50 文件阈值）；CI 无此限制但共用同一脚本。
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -108,9 +109,32 @@ function stepNative() {
 
   // 探测必须在**子进程**里做：在当前进程 require(.node) 会持有文件句柄，
   // 随后 prebuild-install 覆盖同一文件会 EBUSY（CI 实测踩到）。
+  //
+  // ★ 用**临时脚本文件**而不是 `node -e`：本机实测 `-e` 形式下子进程可能被环境
+  //   静默终止（status=null、stderr/stdout 均为空）→ 探测得空串 → 误判 `unknown`
+  //   → 发布被错误拒绝。文件式探测在同一环境下稳定返回真实错误文本。
+  //   两种形式都不改写在探测失败时的行为：拿不到有效信息仍按 unknown 处理。
   const probe = () => {
-    const r = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(binary)})`], { encoding: 'utf8' })
-    return { ok: r.status === 0, error: `${r.stderr ?? ''}${r.stdout ?? ''}` }
+    const probeFile = join(tmpdir(), `mnb-abi-probe-${process.pid}.cjs`)
+    try {
+      writeFileSync(
+        probeFile,
+        `try { require(${JSON.stringify(binary)}); console.log('NODE_ABI_OK') } catch (e) { console.error(String(e && e.message || e)) }\n`
+      )
+      const r = spawnSync(process.execPath, [probeFile], { encoding: 'utf8' })
+      const text = `${r.stderr ?? ''}${r.stdout ?? ''}`
+      // 子进程被信号终止（status=null）或毫无输出 ⇒ 探测不可信，明确标记
+      if (r.status === null || text.trim() === '') {
+        return { ok: false, error: '', inconclusive: true }
+      }
+      return { ok: r.status === 0, error: text }
+    } finally {
+      try {
+        rmSync(probeFile, { force: true })
+      } catch {
+        /* 清理失败不影响判定 */
+      }
+    }
   }
 
   const before = classifyNativeAbi(probe())
