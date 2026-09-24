@@ -135,7 +135,7 @@ const api = {
   },
   drive: {
     state: (): Promise<unknown> => invoke(IPC.DRIVE_STATE),
-    list: (parentId?: number | null): Promise<unknown> => invoke(IPC.DRIVE_LIST, { parentId: parentId ?? null }),
+    list: (folderId?: number | null, keyword?: string): Promise<unknown> => invoke(IPC.DRIVE_LIST, { folderId: folderId ?? null, ...(keyword ? { keyword } : {}) }),
     upload: (payload: { filePath: string; parentId?: number | null }): Promise<unknown> => invoke(IPC.DRIVE_UPLOAD, payload),
     rename: (id: number, title: string): Promise<unknown> => invoke(IPC.DRIVE_RENAME, { id, title }),
     remove: (id: number): Promise<unknown> => invoke(IPC.DRIVE_DELETE, { id }),

@@ -31,6 +31,9 @@ interface DriveItem {
   folderId: number | null
   visibility: string | null
   ownerName: string | null
+  /** DL-2：列表列需要上传时间（web 列：名称/大小/上传者/时间） */
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface DriveFolder {
@@ -51,7 +54,6 @@ interface DriveState {
 
 const gate = ref<DriveState | null>(null)
 const items = ref<DriveItem[]>([])
-const folders = ref<DriveFolder[]>([])
 const loading = ref(false)
 const uploading = ref(false)
 const progress = ref<{ percent: number; transferred: number; total: number } | null>(null)
@@ -84,16 +86,31 @@ async function loadState(): Promise<void> {
   }
 }
 
+/** 全量文件夹树（DL-2：来自 /drive/tree?scope=team，只拉一次） */
+const tree = ref<DriveFolder[]>([])
+
+async function loadTree(): Promise<void> {
+  if (blocked.value) return
+  try {
+    const t = (await window.api.drive.folders()) as DriveFolder[]
+    tree.value = Array.isArray(t) ? t : []
+  } catch {
+    tree.value = []
+  }
+}
+
+/** 当前目录的子文件夹（从树里按 parentId 筛，避免逐目录请求） */
+const subFolders = computed<DriveFolder[]>(() =>
+  tree.value.filter((f) => (f.parentId ?? null) === currentId.value)
+)
+
 async function loadList(): Promise<void> {
   if (blocked.value) return
   loading.value = true
   try {
-    const [page, fs] = await Promise.all([
-      window.api.drive.list(currentId.value) as Promise<{ items?: DriveItem[] }>,
-      window.api.drive.folders(currentId.value) as Promise<DriveFolder[]>
-    ])
+    // DL-2：契约参数为 folder_id（根视图不传）；view=team + 排序由服务层统一带上
+    const page = (await window.api.drive.list(currentId.value)) as { items?: DriveItem[] }
     items.value = Array.isArray(page?.items) ? page.items : []
-    folders.value = Array.isArray(fs) ? fs : []
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : '加载失败')
   } finally {
@@ -244,6 +261,7 @@ onMounted(async () => {
   })
   await loadState()
   if (blocked.value) return
+  await loadTree()
   await loadList()
   await loadPending()
 })
@@ -319,14 +337,14 @@ onUnmounted(() => {
       <p v-if="loading" class="drive-hint">加载中…</p>
 
       <template v-else>
-        <p v-if="!folders.length && !shownItems.length" class="drive-hint" data-testid="drive-empty">
+        <p v-if="!subFolders.length && !shownItems.length" class="drive-hint" data-testid="drive-empty">
           <template v-if="keyword">没有匹配「{{ keyword }}」的文件。</template>
           <template v-else>这个目录还没有内容，拖文件进来或点「上传」。</template>
         </p>
 
         <!-- 文件夹 -->
-        <ul v-if="folders.length" class="drive-list" data-testid="drive-folders">
-          <li v-for="f in folders" :key="`f-${f.id}`" class="drive-item" :data-testid="`drive-folder-${f.id}`">
+        <ul v-if="subFolders.length" class="drive-list" data-testid="drive-folders">
+          <li v-for="f in subFolders" :key="`f-${f.id}`" class="drive-item" :data-testid="`drive-folder-${f.id}`">
             <button class="drive-folder-btn" @click="openFolder(f)">📁 {{ f.name }}</button>
           </li>
         </ul>
@@ -334,8 +352,10 @@ onUnmounted(() => {
         <!-- 文件 -->
         <ul v-if="shownItems.length" class="drive-list" data-testid="drive-list">
           <li v-for="it in shownItems" :key="it.id" class="drive-item" :data-testid="`drive-item-${it.id}`">
-            <span class="drive-name" :title="it.fileName">{{ it.fileName }}</span>
-            <span class="drive-size">{{ fmtSize(it.fileSize) }}</span>
+            <span class="drive-name" :title="it.fileName" data-testid="drive-item-name">{{ it.fileName }}</span>
+            <span class="drive-size" data-testid="drive-item-size">{{ fmtSize(it.fileSize) }}</span>
+            <span class="drive-owner" data-testid="drive-item-owner">{{ it.ownerName ?? '—' }}</span>
+            <span class="drive-time" data-testid="drive-item-time">{{ (it.createdAt ?? '').slice(0, 10) }}</span>
             <span v-if="it.visibility" class="drive-vis">{{ it.visibility }}</span>
             <button class="mini-btn" data-testid="drive-download" @click="download(it)">下载</button>
             <button class="mini-btn" @click="rename(it)">重命名</button>
@@ -450,6 +470,8 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .drive-size,
+.drive-owner,
+.drive-time,
 .drive-vis {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);

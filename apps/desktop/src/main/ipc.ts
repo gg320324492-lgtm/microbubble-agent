@@ -1044,7 +1044,8 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   ipcMain.handle(IPC.DRIVE_LIST, async (_e, p): Promise<IpcResult<unknown>> => {
     auth.requireUser()
-    const r = await remoteDrive.list({ parentId: p?.parentId ?? null })
+    // DL-2：契约参数是 folder_id（不是 parent_id）；根视图不带
+    const r = await remoteDrive.list({ folderId: p?.folderId ?? null, ...(p?.keyword ? { keyword: String(p.keyword) } : {}) })
     if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
     return ok(r.data)
   })
@@ -1063,9 +1064,10 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     return ok(true)
   })
 
-  ipcMain.handle(IPC.DRIVE_FOLDERS, async (_e, p): Promise<IpcResult<unknown>> => {
+  ipcMain.handle(IPC.DRIVE_FOLDERS, async (): Promise<IpcResult<unknown>> => {
     auth.requireUser()
-    const r = await remoteDrive.listFolders(p?.parentId ?? null)
+    // DL-2：文件夹树改接实测契约 /drive/tree?scope=team（废弃 /folders 自造树）
+    const r = await remoteDrive.tree('team')
     if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
     return ok(r.data)
   })

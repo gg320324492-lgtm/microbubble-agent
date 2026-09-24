@@ -82,9 +82,9 @@ function memoryReader(size: number): ChunkReader {
 // ---------------------------------------------------------------- 1 适配回放（≥4）
 
 describe('网盘契约适配回放', () => {
-  it('目录列表：GET /drive/files 参数正确，解析 {items,total}', async () => {
+  it('★ DL-2 契约：子目录列表用 folder_id（不是 parent_id），带 view=team/排序/分页', async () => {
     const h = harness([() => res(200, { items: [fileItem(1), fileItem(2)], total: 2 })])
-    const r = await h.svc.list({ parentId: 5, keyword: '占位' })
+    const r = await h.svc.list({ folderId: 336, keyword: '占位' })
     expect(r.ok).toBe(true)
     if (r.ok) {
       expect(r.data.total).toBe(2)
@@ -92,15 +92,28 @@ describe('网盘契约适配回放', () => {
     }
     const url = new URL(h.requests[0]!.url)
     expect(url.pathname).toBe('/api/v1/drive/files')
-    expect(url.searchParams.get('parent_id')).toBe('5')
+    // ★ 用户 F12 实测契约参数
+    expect(url.searchParams.get('folder_id')).toBe('336')
+    expect(url.searchParams.get('view')).toBe('team')
+    expect(url.searchParams.get('sort_by')).toBe('created_at')
+    expect(url.searchParams.get('sort_order')).toBe('desc')
+    expect(url.searchParams.get('starred_only')).toBe('false')
+    expect(url.searchParams.get('page')).toBe('1')
+    expect(url.searchParams.get('page_size')).toBe('100')
     expect(url.searchParams.get('keyword')).toBe('占位')
+    // 旧参数必须消失（DL-2 病根：parent_id 服务端不识别 → 永远返回根视图）
+    expect(url.searchParams.get('parent_id')).toBeNull()
     expect(h.requests[0]!.headers['authorization']).toBe('Bearer AT1')
   })
 
-  it('根目录列表：不带 parent_id 参数', async () => {
+  it('★ DL-2 契约：根视图**不带 folder_id**，但带 view=team 与排序分页', async () => {
     const h = harness([() => res(200, { items: [], total: 0 })])
     await h.svc.list()
-    expect(new URL(h.requests[0]!.url).search).toBe('')
+    const url = new URL(h.requests[0]!.url)
+    expect(url.searchParams.get('folder_id')).toBeNull()
+    expect(url.searchParams.get('parent_id')).toBeNull()
+    expect(url.searchParams.get('view')).toBe('team')
+    expect(url.searchParams.get('page_size')).toBe('100')
   })
 
   it('详情 / 按路径：GET /drive/files/{id} 与 GET /drive/by-path', async () => {

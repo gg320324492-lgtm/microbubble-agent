@@ -144,7 +144,8 @@ export interface PreloadApi {
   drive: {
     /** M2-3c：网盘数据源状态（引导态，文案由集中状态机给出） */
     state(): Promise<unknown>
-    list(parentId?: number | null): Promise<unknown>
+    /** DL-2：契约参数为 folder_id（根视图不传）；keyword 走服务端搜索 */
+    list(folderId?: number | null, keyword?: string): Promise<unknown>
     /** 上传本地文件（分块/断点续传由主进程处理，进度经 drive:progress 事件推送） */
     upload(payload: { filePath: string; parentId?: number | null }): Promise<unknown>
     rename(id: number, title: string): Promise<unknown>

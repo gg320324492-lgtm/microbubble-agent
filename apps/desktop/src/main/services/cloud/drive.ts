@@ -90,6 +90,34 @@ export function normalizeDriveItem(raw: unknown): RemoteDriveItem | null {
   }
 }
 
+/**
+ * 归一化文件夹树（DL-2）：递归展开 children，输出**扁平列表**（带 parentId 便于建树/面包屑）。
+ * 容忍形状：裸数组 / `{items}` / `{tree}` / `{nodes}` / 节点含 `children|nodes|subfolders`。
+ */
+export function normalizeTree(raw: unknown): RemoteFolder[] {
+  const out: RemoteFolder[] = []
+  const pick = (v: unknown): unknown[] => {
+    if (Array.isArray(v)) return v
+    const o = (v ?? {}) as Record<string, unknown>
+    for (const k of ['items', 'tree', 'nodes', 'folders', 'data']) {
+      if (Array.isArray(o[k])) return o[k] as unknown[]
+    }
+    return []
+  }
+  const walk = (nodes: unknown[], parentId: number | null): void => {
+    for (const n of nodes) {
+      const f = normalizeFolder(n)
+      if (!f) continue
+      const o = n as Record<string, unknown>
+      out.push({ ...f, parentId: f.parentId ?? parentId })
+      const kids = pick(o['children'] ?? o['nodes'] ?? o['subfolders'])
+      if (kids.length) walk(kids, f.id)
+    }
+  }
+  walk(pick(raw), null)
+  return out
+}
+
 /** 归一化列表：容忍裸数组与 `{items,total}` 两种形状 */
 export function normalizeDrivePage(raw: unknown): DriveListPage {
   const o = (raw ?? {}) as Record<string, unknown>
@@ -137,15 +165,41 @@ export class RemoteDriveService {
     return { ok: true, data: res.data.json }
   }
 
-  /** 目录/文件列表（parentId 为空 = 根；keyword 为服务端搜索） */
-  async list(opts: { parentId?: number | null; keyword?: string } = {}): Promise<CloudResult<DriveListPage>> {
+  /**
+   * 文件列表（DL-2 修复：按网页端 F12 实测契约）。
+   *
+   * ★ 契约（2026-09-24 用户实测）：
+   *   GET /api/v1/drive/files?page=1&page_size=20&sort_by=created_at&sort_order=desc
+   *                          &starred_only=false&view=team[&folder_id=336]
+   *   · **进入子目录 = 追加 `folder_id`**；根视图**不带** folder_id
+   *   · 旧实现用 `parent_id` → 服务端不识别 → 始终返回根视图 → **文件夹内文件不显示**（DL-2 病根）
+   */
+  async list(
+    opts: { folderId?: number | null; keyword?: string; page?: number; pageSize?: number; view?: string } = {}
+  ): Promise<CloudResult<DriveListPage>> {
     const qs = new URLSearchParams()
-    if (opts.parentId !== undefined && opts.parentId !== null) qs.set('parent_id', String(opts.parentId))
+    qs.set('page', String(opts.page ?? 1))
+    qs.set('page_size', String(opts.pageSize ?? 100))
+    qs.set('sort_by', 'created_at')
+    qs.set('sort_order', 'desc')
+    qs.set('starred_only', 'false')
+    qs.set('view', opts.view ?? 'team')
+    // 根视图不带 folder_id（实测契约）
+    if (opts.folderId !== undefined && opts.folderId !== null) qs.set('folder_id', String(opts.folderId))
     if (opts.keyword) qs.set('keyword', opts.keyword)
-    const suffix = qs.toString() ? `?${qs.toString()}` : ''
-    const res = await this.call('GET', `/api/v1/drive/files${suffix}`)
+    const res = await this.call('GET', `/api/v1/drive/files?${qs.toString()}`)
     if (!res.ok) return res
     return { ok: true, data: normalizeDrivePage(res.data) }
+  }
+
+  /**
+   * 文件夹树（DL-2 修复：接实测契约，废弃 /folders 自造树）。
+   *   GET /api/v1/drive/tree?scope=team → 侧栏树（组会PPT/实验数据/项目资料…）
+   */
+  async tree(scope = 'team'): Promise<CloudResult<RemoteFolder[]>> {
+    const res = await this.call('GET', `/api/v1/drive/tree?scope=${encodeURIComponent(scope)}`)
+    if (!res.ok) return res
+    return { ok: true, data: normalizeTree(res.data) }
   }
 
   /** 按路径取（服务端 `GET /by-path`） */
