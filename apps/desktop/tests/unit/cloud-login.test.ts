@@ -256,7 +256,9 @@ describe('本地注册退役', () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync('src/renderer/src/views/LoginView.vue', 'utf8')
     expect(src).toContain('data-testid="login-register-hint"')
-    expect(src).toContain('还没有课题组账号？请联系管理员开通')
+    // DL-3 补完：精简为「没有账号？请联系管理员开通」
+    expect(src).toContain('没有账号？请联系管理员开通')
+    expect(src).not.toContain('还没有课题组账号')
     // 快修：引导行改为纯文案，不再有外链/注册跳转
     expect(src).not.toContain('openRegister')
     expect(src).not.toContain('openExternal')
@@ -278,11 +280,12 @@ describe('本地注册退役', () => {
     expect(ipc).toContain('payload.baseUrl')
   })
 
-  it('★ 底部文案不再宣称「账号和数据仅保存在本机」', async () => {
+  it('★ 底部脚注整行移除（DL-3 补完：信息与记住项/其他页重复）', async () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync('src/renderer/src/views/LoginView.vue', 'utf8')
     expect(src).not.toContain('账号和数据仅保存在本机')
-    expect(src).toContain('登录凭据加密保存在本机')
+    expect(src).not.toContain('登录凭据加密保存在本机')
+    expect(src).not.toContain('auth-note')
   })
 
   it('登录窗走云端登录（cloudLogin）而非本地 login', async () => {

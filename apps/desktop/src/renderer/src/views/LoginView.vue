@@ -76,20 +76,18 @@ onMounted(() => {
       <form class="auth-form" @submit.prevent="onSubmit">
         <p class="auth-eyebrow">欢迎回来</p>
         <h2 id="login-title">进入科研工作台</h2>
-        <p class="auth-lede">用课题组账号登录（与网页端同一套账号）；登录后断网也可继续使用。</p>
         <label for="login-username">用户名</label>
         <input id="login-username" v-model="form.username" type="text" autocomplete="username" :disabled="loading" placeholder="课题组账号（与网页端相同）" />
         <label for="login-password">密码</label>
         <input id="login-password" v-model="form.password" type="password" autocomplete="current-password" :disabled="loading" placeholder="输入你的密码" />
         <label class="remember-row">
           <input v-model="remember" type="checkbox" data-testid="login-remember" :disabled="loading" />
-          <span>记住账号与密码（本机加密保存，退出登录时清除）</span>
+          <span>记住账号与密码</span>
         </label>
-        <p class="register-hint" data-testid="login-register-hint">还没有课题组账号？请联系管理员开通。</p>
+        <p class="register-hint" data-testid="login-register-hint">没有账号？请联系管理员开通</p>
 
         <button type="submit" :disabled="loading">{{ loading ? '登录中…' : '安全登录' }}</button>
         <p v-if="error" class="auth-error" role="alert">{{ error }}</p>
-        <p class="auth-note"><span aria-hidden="true">▣</span>登录凭据加密保存在本机；会话与本地资料存本机，知识库与网盘内容存课题组服务器。</p>
       </form>
     </section>
   </main>
