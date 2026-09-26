@@ -143,6 +143,50 @@ describe('网盘契约适配回放', () => {
   })
 })
 
+// ---------------------------------------------------------------- 1b 树端点定论（DL-3）
+
+describe('DL-3 文件夹树端点定论（web 源码只读调研）', () => {
+  // 病根回放：M2-3b 实现用 /api/v1/drive/tree —— 该路径服务端不存在（总指挥用用户 F12 令牌实测 404）
+  //   → 树恒为空 → 网盘页「空白」。定论依据：web/src/composables/useFolderTree.js
+  //   fetchTree() = fetch('/api/v1/folders/tree?scope=…')。
+  it('★ tree() 请求 /api/v1/folders/tree?scope=team（旧 404 路径一旦回归立即爆红）', async () => {
+    const h = harness([() => res(200, { tree: [{ id: 10, name: '组会PPT', children: [] }], max_depth: 3, scope: 'team' })])
+    const r = await h.svc.tree('team')
+    expect(r.ok).toBe(true)
+    const url = new URL(h.requests[0]!.url)
+    expect(url.pathname).toBe('/api/v1/folders/tree')
+    expect(url.searchParams.get('scope')).toBe('team')
+    expect(url.pathname).not.toBe('/api/v1/drive/tree')
+  })
+
+  it('★ 后端真实形状回放：{tree, max_depth, scope}；节点无 parent_id 时按遍历上下文补链', async () => {
+    // 形状取自 app/api/v1/drive_folders.py get_folder_tree：节点 {id, name, children} + owner_name/is_starred
+    const raw = {
+      tree: [
+        { id: 10, name: '组会PPT', owner_name: '管理员', is_starred: false, children: [{ id: 336, name: '艾琳琳', owner_name: '艾琳琳' }] },
+        { id: 20, name: '实验数据', children: [] }
+      ],
+      max_depth: 3,
+      scope: 'team'
+    }
+    const h = harness([() => res(200, raw)])
+    const r = await h.svc.tree()
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.map((f) => f.name)).toEqual(['组会PPT', '艾琳琳', '实验数据'])
+      expect(r.data.find((f) => f.id === 10)?.parentId).toBeNull()
+      expect(r.data.find((f) => f.id === 336)?.parentId).toBe(10)
+    }
+  })
+
+  it('树请求失败（如旧路径 404）错误透传：不吞错、不返回半棵树', async () => {
+    const h = harness([() => res(404, { error: { code: 'NOT_FOUND', message: 'Not Found' } })])
+    const r = await h.svc.tree()
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe('client')
+  })
+})
+
 // ---------------------------------------------------------------- 2 分块上传时序（≥4）
 
 describe('分块上传三件套时序', () => {

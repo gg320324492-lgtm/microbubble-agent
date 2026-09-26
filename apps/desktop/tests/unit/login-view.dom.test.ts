@@ -103,3 +103,27 @@ describe('登录页 UI 契约', () => {
     expect(source).toContain('@media (max-width: 760px)')
   })
 })
+
+// ---------------------------------------------------------------- DL-3 记住凭据勾选框
+
+describe('DL-3 记住凭据勾选框 — 唯一性 + 紧凑样式契约', () => {
+  it('★ 勾选框渲染次数 = 1（回归防线：模板重复插入曾致 ×2）', async () => {
+    const wrapper = await mountLogin()
+    expect(wrapper.findAll('[data-testid="login-remember"]')).toHaveLength(1)
+    // 文案同样只允许出现一次
+    const hits = wrapper.text().match(/记住账号与密码/g) ?? []
+    expect(hits).toHaveLength(1)
+  })
+
+  it('★ 紧凑行内布局契约：label.remember-row 单行排布，checkbox 小尺寸品牌色（源码契约）', async () => {
+    const wrapper = await mountLogin()
+    const row = wrapper.find('label.remember-row')
+    expect(row.exists()).toBe(true)
+    expect(row.find('input[type="checkbox"]').exists()).toBe(true)
+    // 源码契约：.auth-form input 的 44px 全宽规则必须被 checkbox 规则显式还原
+    const css = readFileSync(resolve(__dirname, '../../src/renderer/src/views/auth.css'), 'utf8')
+    expect(css).toContain('.auth-form .remember-row')
+    expect(css).toMatch(/\.auth-form \.remember-row input\[type='checkbox'\][^}]*width: 15px/)
+    expect(css).toMatch(/\.auth-form \.remember-row input\[type='checkbox'\][^}]*accent-color/)
+  })
+})

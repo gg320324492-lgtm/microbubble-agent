@@ -150,6 +150,33 @@
   background: var(--color-bg-secondary);
   cursor: not-allowed;
 }
+/* DL-3：记住账号与密码 —— 紧凑行内勾选。.auth-form input 的 44px 全宽规则会误伤
+   checkbox（巨型原生样式根因），此处显式还原为小尺寸并同行排布。 */
+.auth-form .remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: var(--space-3) 0 0;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.auth-form .remember-row input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.auth-form .remember-row input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 .auth-form button {
   margin-top: var(--space-5);
   height: 46px;

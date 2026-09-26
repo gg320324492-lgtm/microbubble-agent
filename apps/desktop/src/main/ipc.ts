@@ -1067,7 +1067,7 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
 
   ipcMain.handle(IPC.DRIVE_FOLDERS, async (): Promise<IpcResult<unknown>> => {
     auth.requireUser()
-    // DL-2：文件夹树改接实测契约 /drive/tree?scope=team（废弃 /folders 自造树）
+    // DL-3：文件夹树接 web 源码定论端点 /folders/tree?scope=team（/drive/tree 实测 404）
     const r = await remoteDrive.tree('team')
     if (!r.ok) return fail(`DRIVE_${r.error.kind.toUpperCase().replace('-', '_')}`, driveErrorMessage(r.error))
     return ok(r.data)

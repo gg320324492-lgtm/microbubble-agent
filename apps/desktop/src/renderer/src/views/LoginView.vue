@@ -85,10 +85,6 @@ onMounted(() => {
           <input v-model="remember" type="checkbox" data-testid="login-remember" :disabled="loading" />
           <span>记住账号与密码（本机加密保存，退出登录时清除）</span>
         </label>
-        <label class="remember-row">
-          <input v-model="remember" type="checkbox" data-testid="login-remember" :disabled="loading" />
-          <span>记住账号与密码（本机加密保存，退出登录时清除）</span>
-        </label>
         <p class="register-hint" data-testid="login-register-hint">还没有课题组账号？请联系管理员开通。</p>
 
         <button type="submit" :disabled="loading">{{ loading ? '登录中…' : '安全登录' }}</button>

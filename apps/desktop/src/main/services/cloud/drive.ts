@@ -193,11 +193,14 @@ export class RemoteDriveService {
   }
 
   /**
-   * 文件夹树（DL-2 修复：接实测契约，废弃 /folders 自造树）。
-   *   GET /api/v1/drive/tree?scope=team → 侧栏树（组会PPT/实验数据/项目资料…）
+   * 文件夹树（DL-3 修复：旧路径 /api/v1/drive/tree 实测 404 → 网盘页空白）。
+   *   GET /api/v1/folders/tree?scope=team → 侧栏树（组会PPT/实验数据/项目资料…）
+   * 端点定论（只读调研）：web/src/composables/useFolderTree.js fetchTree() 用
+   *   fetch('/api/v1/folders/tree?…')；响应 { tree: [{id, name, children…}], max_depth, scope }
+   *   （app/api/v1/drive_folders.py get_folder_tree 同印证）。normalizeTree 已容忍该形状。
    */
   async tree(scope = 'team'): Promise<CloudResult<RemoteFolder[]>> {
-    const res = await this.call('GET', `/api/v1/drive/tree?scope=${encodeURIComponent(scope)}`)
+    const res = await this.call('GET', `/api/v1/folders/tree?scope=${encodeURIComponent(scope)}`)
     if (!res.ok) return res
     return { ok: true, data: normalizeTree(res.data) }
   }

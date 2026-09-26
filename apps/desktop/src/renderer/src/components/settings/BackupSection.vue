@@ -121,6 +121,11 @@ const statusLine = computed(() => {
   return `${head}${last} ｜ ${next} ｜ ${kept}`
 })
 
+/** DL-3：跳转网盘页，让「已自动保护」可见可达（云端备份在网盘 backups/<用户>/） */
+function openDrivePage(): void {
+  location.hash = '/app/drive'
+}
+
 
 // ---------- 云端配置（M5-2） ----------
 const ossForm = ref({ bucket: '', endpoint: '', prefix: 'desktop-backup/', accessKeyId: '', accessKeySecret: '' })
@@ -481,6 +486,11 @@ onMounted(async () => {
 
       <!-- ④ 状态行 -->
       <p class="status-line" data-testid="backup-status">{{ statusLine }}</p>
+      <!-- DL-3：保护状态可见可达 —— 备份落在用户网盘 backups/<用户>/ 目录，点击直达网盘页 -->
+      <p class="status-line" data-testid="backup-cloud-guide">
+        备份保存在你的云端网盘 backups/ 目录 ·
+        <a href="#" class="cloud-guide-link" @click.prevent="openDrivePage">查看</a>
+      </p>
     </div>
 
     <!-- 高级选项（默认收起） -->
@@ -660,6 +670,14 @@ onMounted(async () => {
   margin-top: var(--space-3);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+}
+.cloud-guide-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.cloud-guide-link:hover {
+  text-decoration: underline;
 }
 .pwd-state {
   font-size: var(--font-size-sm);

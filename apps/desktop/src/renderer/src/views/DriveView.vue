@@ -86,7 +86,7 @@ async function loadState(): Promise<void> {
   }
 }
 
-/** 全量文件夹树（DL-2：来自 /drive/tree?scope=team，只拉一次） */
+/** 全量文件夹树（DL-3：来自 /folders/tree?scope=team，只拉一次） */
 const tree = ref<DriveFolder[]>([])
 
 async function loadTree(): Promise<void> {

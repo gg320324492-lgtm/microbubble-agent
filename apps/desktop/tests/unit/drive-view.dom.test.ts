@@ -12,24 +12,28 @@ function stubDriveApi(opts: {
   list?: unknown
   pending?: unknown
   listRejects?: string
-}): void {
+  folders?: unknown
+}): { listCalls: Array<number | null> } {
+  const listCalls: Array<number | null> = []
   const onProgress = vi.fn(() => () => undefined)
   ;(globalThis as unknown as { window: { api: unknown } }).window.api = {
     drive: {
       state: async () => opts.state ?? { state: 'ready', title: '', hint: '', canOpenSettings: false, actionLabel: '' },
-      list: async () => {
+      list: async (folderId?: number | null) => {
+        listCalls.push(folderId ?? null)
         if (opts.listRejects) throw new Error(opts.listRejects)
         return opts.list ?? { items: [], total: 0 }
       },
       pendingUploads: async () => opts.pending ?? [],
       // UI1-3：网盘页新增文件夹导航
-      folders: async () => [],
+      folders: async () => opts.folders ?? [],
       rename: vi.fn(),
       remove: vi.fn(),
       upload: vi.fn(),
       onProgress
     }
   }
+  return { listCalls }
 }
 
 afterEach(() => {
@@ -118,5 +122,67 @@ describe('网盘页 — 真挂载', () => {
     await flushPromises()
     // 结构性断言：容器仍在，未抛异常
     expect(w.find('.drive').exists()).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------- DL-3 目录视图契约
+
+describe('DL-3 当前目录视图 — 子文件夹与文件混合渲染', () => {
+  it('★ 根视图：子文件夹可见（团队盘根只有文件夹），不出「空目录」误导文案', async () => {
+    stubDriveApi({
+      folders: [
+        { id: 10, name: '组会PPT', parentId: null },
+        { id: 20, name: '实验数据', parentId: null }
+      ],
+      list: { items: [], total: 0 }
+    })
+    const w = mount(DriveView, { global: { stubs: { transition: false } } })
+    await flushPromises()
+    expect(w.find('[data-testid="drive-folders"]').exists()).toBe(true)
+    expect(w.find('[data-testid="drive-folder-10"]').text()).toContain('组会PPT')
+    expect(w.find('[data-testid="drive-folder-20"]').exists()).toBe(true)
+    // 根视图文件为空是正常的 → 不渲染文件列表；但子文件夹在场 → 空态文案不得出现
+    expect(w.find('[data-testid="drive-list"]').exists()).toBe(false)
+    expect(w.find('[data-testid="drive-empty"]').exists()).toBe(false)
+  })
+
+  it('★ 混合视图：当前目录的子文件夹与文件同时渲染（DL-2 空白页病根回归防线）', async () => {
+    stubDriveApi({
+      folders: [{ id: 336, name: '艾琳琳', parentId: null }],
+      list: {
+        items: [
+          { id: 1, title: 'a.pptx', fileName: 'a.pptx', fileType: 'pptx', fileSize: 1024, folderId: 10, visibility: 'team', ownerName: '演示' }
+        ],
+        total: 1
+      }
+    })
+    const w = mount(DriveView, { global: { stubs: { transition: false } } })
+    await flushPromises()
+    expect(w.find('[data-testid="drive-folder-336"]').exists()).toBe(true)
+    const list = w.find('[data-testid="drive-list"]')
+    expect(list.exists()).toBe(true)
+    expect(list.findAll('li')).toHaveLength(1)
+    expect(w.text()).toContain('a.pptx')
+  })
+
+  it('进入子文件夹：面包屑推进、只渲染直接子文件夹、按 folder_id 拉文件列表', async () => {
+    const { listCalls } = stubDriveApi({
+      folders: [
+        { id: 10, name: '组会PPT', parentId: null },
+        { id: 336, name: '艾琳琳', parentId: 10 },
+        { id: 337, name: '深层目录', parentId: 336 }
+      ]
+    })
+    const w = mount(DriveView, { global: { stubs: { transition: false } } })
+    await flushPromises()
+    expect(listCalls[0]).toBeNull() // 根视图不带 folder_id
+    await w.get('[data-testid="drive-folder-10"] .drive-folder-btn').trigger('click')
+    await flushPromises()
+    // 面包屑推进到 组会PPT；文件列表按 folder_id=10 拉取
+    expect(w.find('[data-testid="drive-crumbs"]').text()).toContain('组会PPT')
+    expect(listCalls[1]).toBe(10)
+    // 只显示当前目录的直接子文件夹（艾琳琳），隔代（深层目录）不出现
+    expect(w.find('[data-testid="drive-folder-336"]').exists()).toBe(true)
+    expect(w.find('[data-testid="drive-folder-337"]').exists()).toBe(false)
   })
 })

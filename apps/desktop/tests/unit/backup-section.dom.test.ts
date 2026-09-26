@@ -88,4 +88,17 @@ describe('备份区块 — 结构可挂载（R 阶段回归防线）', () => {
     const btns = w.findAll('button').filter((b) => /^立即备份/.test(b.text().trim()))
     expect(btns.length).toBe(1)
   })
+
+  it('DL-3：状态行旁有云端备份指引，点击直达网盘页（保护状态可见可达）', async () => {
+    const w = mount(BackupSection, { global: { stubs: { teleport: true } } })
+    await new Promise((r) => setTimeout(r, 30))
+    const guide = w.find('[data-testid="backup-cloud-guide"]')
+    expect(guide.exists()).toBe(true)
+    expect(guide.text()).toContain('备份保存在你的云端网盘')
+    expect(guide.text()).toContain('backups/')
+    expect(guide.text()).toContain('查看')
+    // 点击「查看」→ 跳网盘页（hash 路由）
+    await guide.get('a').trigger('click')
+    expect(window.location.hash).toBe('#/app/drive')
+  })
 })
