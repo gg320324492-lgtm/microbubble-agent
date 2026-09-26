@@ -15,6 +15,9 @@ const PRESETS: { name: string; protocol: ModelProtocol; baseUrl: string; model: 
 const providers = ref<ModelProvider[]>([])
 const editing = ref(false)
 const form = ref({ id: '', name: '', protocol: 'openai' as ModelProtocol, baseUrl: '', model: '', apiKey: '' })
+/** DL-4：预设选择态（独立于 form.name）。预设 = 纯快捷填充器：只单向回填字段，
+ *  手改任一字段即清空选择，绝不反向回写——自定义模型可稳定停留。 */
+const preset = ref('')
 const testing = ref(false)
 const saving = ref(false)
 
@@ -23,21 +26,29 @@ async function refresh(): Promise<void> {
 }
 
 function onPresetChange(name: string): void {
-  const preset = PRESETS.find((p) => p.name === name)
-  if (preset) {
-    form.value.protocol = preset.protocol
-    form.value.baseUrl = preset.baseUrl
-    form.value.model = preset.model
+  preset.value = name
+  const p = PRESETS.find((x) => x.name === name)
+  if (p) {
+    form.value.protocol = p.protocol
+    form.value.baseUrl = p.baseUrl
+    form.value.model = p.model
   }
+}
+
+/** 手动修改任何字段 → 预设下拉清空（只清选择，不动已填字段） */
+function clearPreset(): void {
+  preset.value = ''
 }
 
 function startAdd(): void {
   editing.value = true
-  form.value = { id: '', name: PRESETS[0].name, protocol: PRESETS[0].protocol, baseUrl: PRESETS[0].baseUrl, model: PRESETS[0].model, apiKey: '' }
+  preset.value = ''
+  form.value = { id: '', name: '', protocol: PRESETS[0].protocol, baseUrl: PRESETS[0].baseUrl, model: PRESETS[0].model, apiKey: '' }
 }
 
 function startEdit(p: ModelProvider): void {
   editing.value = true
+  preset.value = ''
   form.value = { id: p.id, name: p.name, protocol: p.protocol, baseUrl: p.baseUrl, model: p.model, apiKey: '' }
 }
 
@@ -117,7 +128,7 @@ onMounted(refresh)
   <section class="card block">
     <div class="block-head">
       <h2>模型服务</h2>
-      <button v-if="!editing" class="add-btn" @click="startAdd">＋ 添加</button>
+      <button v-if="!editing" class="add-btn" data-testid="btn-add" @click="startAdd">＋ 添加</button>
     </div>
 
     <!-- 配置列表 -->
@@ -146,32 +157,34 @@ onMounted(refresh)
     <div v-if="editing" class="form">
       <div class="form-row">
         <label>预设</label>
-        <select :value="form.name" @change="onPresetChange(($event.target as HTMLSelectElement).value)">
+        <!-- DL-4：单向快捷填充器。显示独立选择态，不借道「名称」；手改字段即清空 -->
+        <select :value="preset" data-testid="model-preset" @change="onPresetChange(($event.target as HTMLSelectElement).value)">
+          <option value="">选择预设快速填充（可选）</option>
           <option v-for="p in PRESETS" :key="p.name" :value="p.name">{{ p.name }}</option>
         </select>
       </div>
       <div class="form-row">
         <label>名称</label>
-        <input v-model="form.name" type="text" placeholder="显示名称" />
+        <input v-model="form.name" type="text" data-testid="model-name" placeholder="显示名称" @input="clearPreset" />
       </div>
       <div class="form-row">
         <label>协议</label>
-        <select v-model="form.protocol">
+        <select v-model="form.protocol" data-testid="model-protocol" @change="clearPreset">
           <option value="openai">OpenAI 兼容</option>
           <option value="anthropic">Anthropic</option>
         </select>
       </div>
       <div class="form-row">
         <label>Base URL</label>
-        <input v-model="form.baseUrl" type="url" placeholder="https://api.example.com" />
+        <input v-model="form.baseUrl" type="url" data-testid="model-baseurl" placeholder="https://api.example.com" @input="clearPreset" />
       </div>
       <div class="form-row">
         <label>模型 ID</label>
-        <input v-model="form.model" type="text" placeholder="例如 deepseek-chat" />
+        <input v-model="form.model" type="text" data-testid="model-modelid" placeholder="例如 deepseek-chat，也可以是预设之外的自定义模型" @input="clearPreset" />
       </div>
       <div class="form-row">
         <label>API Key</label>
-        <input v-model="form.apiKey" type="password" :placeholder="form.id ? '留空则保留原 Key' : 'sk-…'" autocomplete="off" />
+        <input v-model="form.apiKey" type="password" data-testid="model-apikey" :placeholder="form.id ? '留空则保留原 Key' : 'sk-…'" autocomplete="off" />
       </div>
       <div class="form-actions">
         <button class="btn-primary" :disabled="saving" @click="onSave">{{ saving ? '保存中…' : '保存' }}</button>
