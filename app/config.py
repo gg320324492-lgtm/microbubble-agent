@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     OLLAMA_FIRST_TOKEN_TIMEOUT: int = 60
     # 首 token 超时后降级云端 (mimo openai_compat) 重试; False 时超时直接抛错.
     OLLAMA_CLOUD_FALLBACK: bool = True
+    # 2026-09-28: ollama 0.33.3 /v1 对 extra_body.think=false 间歇性失效
+    # (会议 254 润色批实测: 英文 reasoning 7.5k-13k token 烧穿 600s 超时, JSON 永不返回).
+    # complete() 的 ollama 无工具调用改走原生 /api/chat (think 一等参数) 失败回退 /v1;
+    # 置 False 可关掉原生通道回到纯 /v1 行为.
+    OLLAMA_NATIVE_COMPLETE: bool = True
 
     # Vision MCP 配置（保留开关，未来切本地 vision 模型时启用）
     VISION_USE_MCP: bool = False

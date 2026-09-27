@@ -53,6 +53,7 @@ def apply_ollama_no_think(params: dict) -> dict:
 from typing import Any, AsyncIterator, Optional
 
 import anthropic
+import httpx
 import logging
 
 logger = logging.getLogger("microbubble.llm")
@@ -515,6 +516,28 @@ class LLMClient:
         调用方 30+ caller 零感知 backend 差异.
         """
         if self.backend in ("openai_compat", "ollama"):
+            # 2026-09-28: ollama 后端无工具调用优先走原生 /api/chat。
+            # 背景: ollama 0.33.3 /v1 对 extra_body.think=false 间歇性失效,
+            # 会议 254 润色批实测单批烧 7.5k-13k 英文 reasoning token,
+            # 600s 超时内 JSON 永不返回 → 全部批次原文兜底。
+            # 原生端点 think 是一等参数, 实测 think=false 直出正文;
+            # 失败自动回退 _complete_openai_compat 老路径, 行为可由
+            # OLLAMA_NATIVE_COMPLETE=False 关闭。
+            if (
+                self.backend == "ollama"
+                and not tools
+                and getattr(settings, "OLLAMA_NATIVE_COMPLETE", True)
+            ):
+                try:
+                    return await self._complete_ollama_native(
+                        messages, model=model, system=system,
+                        max_tokens=max_tokens, temperature=temperature,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"ollama 原生 /api/chat 失败, 回退 /v1: "
+                        f"{type(e).__name__}: {e}"
+                    )
             return await self._complete_openai_compat(
                 messages, model=model, system=system, tools=tools,
                 max_tokens=max_tokens, temperature=temperature,
@@ -579,6 +602,65 @@ class LLMClient:
         # 所有模型都失败
         logger.error(f"所有 LLM 模型失败: {models_to_try}")
         raise last_exc  # type: ignore
+
+    async def _complete_ollama_native(
+        self,
+        messages: list[dict],
+        *,
+        model: Optional[str] = None,
+        system: Optional[str] = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.3,
+    ) -> Any:
+        """ollama 原生 /api/chat 路径 (非流式, think=false)。
+
+        2026-09-28: ollama 0.33.3 的 /v1 OpenAI 兼容层对 extra_body.think=false
+        间歇性失效 (会议 254 润色批: 单批 7.5k-13k 英文 reasoning 烧穿 600s 超时,
+        正文 JSON 永不返回)。原生端点的 think 是一等参数, false 时直出正文。
+
+        - messages: Anthropic 形状 [{role, content}], 经 anthropic_messages_to_openai
+          复用同一转换 (system 提升为 system 消息)。
+        - 响应包装成 Anthropic Message 形状 (_AnthropicMsgDict, 经
+          openai_response_to_anthropic_message), caller 零感知。
+        - 仅在 complete() 的 ollama 无工具分支调用; 任何异常由调用方回退
+          _complete_openai_compat 老路径。
+        """
+        base = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434/v1")
+        base = base.removesuffix("/v1").rstrip("/")
+        payload = {
+            "model": model or self.models[0],
+            "messages": anthropic_messages_to_openai(messages, system),
+            "stream": False,
+            "think": False,
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+        }
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(600.0, connect=10.0)
+        ) as client:
+            resp = await client.post(f"{base}/api/chat", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        msg = data.get("message") or {}
+        content = (msg.get("content") or "").strip()
+        if not content:
+            # think 未被模型尊重时 reasoning 会落在独立字段, 兜底透传 (与
+            # extract_text_from_response 的 thinking 兜底语义一致)
+            content = (msg.get("thinking") or "").strip()
+        prompt_tokens = int(data.get("prompt_eval_count") or 0)
+        completion_tokens = int(data.get("eval_count") or 0)
+        fake_openai_resp = {
+            "id": f"chatcmpl-ollama-native-{data.get('created_at', '')}",
+            "choices": [{
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+            },
+        }
+        return openai_response_to_anthropic_message(fake_openai_resp)
 
     async def _complete_openai_compat(
         self,
