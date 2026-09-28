@@ -191,7 +191,15 @@ async function prebuiltDirectFetch(electronVersion, bsqDir, binary) {
   if (r.status !== 0) die(`tar 解包失败（exit ${r.status}）：${r.stderr ?? ''}`)
   const extracted = join(dir, 'build', 'Release', 'better_sqlite3.node')
   if (!existsSync(extracted)) die(`解包产物缺失：${extracted}`)
+  // 先 unlink 断开 pnpm 硬链接再写入——直写硬链接会穿透到内容寻址存储（该文件可能被锁/只读）
+  try {
+    rmSync(binary, { force: true })
+  } catch (e) {
+    die(`删除旧二进制失败（疑似被占用）：${String(e && e.message || e)}`)
+  }
   copyFileSync(extracted, binary)
+  const hash = (p) => createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 16)
+  log(`诊断：extracted=${statSync(extracted).size}B/${hash(extracted)} target=${statSync(binary).size}B/${hash(binary)}（两者应为同值）`)
   rmSync(dir, { recursive: true, force: true })
   log(`已替换二进制（${tgz.length} B ← better-sqlite3 v${bsqVersion} electron-v${abi}）`)
 }
