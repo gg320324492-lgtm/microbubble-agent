@@ -1,9 +1,6 @@
 <template>
   <div class="meeting-view">
-    <!-- 铁律 31: tab 统一用 <TabStrip> -->
-    <div class="tab-strip-wrapper">
-      <TabStrip v-model="activeTab" :items="tabItems" aria-label="会议视图切换" />
-    </div>
+    <!-- 2026-09-28 用户决策: 单 tab 时代移除顶部 TabStrip 胶囊, 与下方档案标题"会议列表"重复 -->
 
     <!-- Tab 1: 会议列表 (原内容) -->
     <div v-show="activeTab === 'meetings'" role="tabpanel"
@@ -231,12 +228,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { VideoCamera, Document } from '@element-plus/icons-vue'
+import { Document } from '@element-plus/icons-vue'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useMeeting } from '@/composables/useMeeting'
 import { useRecordingState } from '@/composables/useRecordingState'
-import TabStrip from '@/components/common/TabStrip.vue'
 import MeetingCreateDialog from './meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
@@ -251,18 +247,14 @@ const route = useRoute()
 const memberStore = useMemberStore()
 
 // v78 UI redesign: 模板管理 tab 已删除 (2026-07-03 用户决策), 现在只剩 1 tab "会议列表"
-// 保留 VALID_TABS / tabItems / TabStrip 框架, 方便未来加新 tab
+// 2026-09-28: TabStrip 胶囊已移除 (与档案标题重复), 保留 activeTab 驱动 v-show,
+// VALID_TABS / ?tab= 同步逻辑留作未来加新 tab 的框架
 const VALID_TABS = ['meetings']
 const activeTab = ref(
   route.query.tab && VALID_TABS.includes(String(route.query.tab))
     ? String(route.query.tab)
     : 'meetings'
 )
-
-// 铁律 30: EP 图标 named import + 通过 props 传入
-const tabItems = [
-  { key: 'meetings',  label: '会议列表', icon: VideoCamera },
-]
 
 // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
 watch(activeTab, (tab) => {
