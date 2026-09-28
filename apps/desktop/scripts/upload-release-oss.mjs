@@ -11,8 +11,10 @@
 //
 // 凭据安全：Secret 只从文件读取并留在内存；本脚本**不打印、不写日志、不回显**任何凭据值。
 import { createHash, createHmac } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
 
 // ============================================================
 // 纯函数层（离线可单测）
@@ -231,20 +233,27 @@ async function putObject(creds, key, body, contentType) {
   const md5 = contentMd5(body)
   const { signature } = signedHeaders(creds, 'PUT', key, { contentType, md5, date })
   const url = objectUrl(creds.endpoint, creds.bucket, key)
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Date: date,
-      'Content-MD5': md5,
-      'Content-Type': contentType,
-      'Content-Length': String(body.length),
-      Authorization: authHeader(creds.accessKeyId, signature)
-    },
-    body
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`PUT ${key} 失败：HTTP ${res.status} ${text.slice(0, 300)}`)
+  // 用 curl 而非 fetch：Node fetch(undici) 有 5 分钟 body 硬超时，跨境传 87MB 必被掐
+  // （v1.3.0-ci.9/ci.10 三连实测）；curl 无此限制且 --retry 自带重试。签名仍在本脚本计算。
+  const tmp = join(tmpdir(), `oss-upload-${Date.now()}.bin`)
+  writeFileSync(tmp, body)
+  try {
+    const r = spawnSync('curl', [
+      '-sS', '-X', 'PUT', url,
+      '-H', `Date: ${date}`,
+      '-H', `Content-MD5: ${md5}`,
+      '-H', `Content-Type: ${contentType}`,
+      '-H', `Authorization: ${authHeader(creds.accessKeyId, signature)}`,
+      '--data-binary', `@${tmp}`,
+      '--max-time', '1800', '--connect-timeout', '30',
+      '-o', process.platform === 'win32' ? 'NUL' : '/dev/null',
+      '-w', '%{http_code}'
+    ], { encoding: 'utf8' })
+    if (r.status !== 0 && r.status !== 22) throw new Error(`curl 失败（exit ${r.status}）`)
+    const code = Number((r.stdout ?? '').trim().slice(-3))
+    if (code !== 200) throw new Error(`PUT ${key} 失败：HTTP ${code}`)
+  } finally {
+    try { rmSync(tmp, { force: true }) } catch { /* 清理失败不影响判定 */ }
   }
   return { url, md5 }
 }
