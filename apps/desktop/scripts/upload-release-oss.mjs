@@ -344,7 +344,23 @@ async function main() {
     const key = ossObjectKey({ prefix, version, fileName: name })
     const localSha = verifySha256(body, '').actual
     console.log(`[oss] 上传 ${name}（${formatBytes(body.length)}）→ ${key}`)
-    await putObject(creds, key, body, name.endsWith('.yml') ? 'text/yaml; charset=utf-8' : 'application/octet-stream')
+    // 大文件（~87MB）单次 PUT 跨境网络偶发超时（v1.3.0-ci.9 实测 5 分钟 fetch failed）——指数重试
+    let lastErr
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await putObject(creds, key, body, name.endsWith('.yml') ? 'text/yaml; charset=utf-8' : 'application/octet-stream')
+        lastErr = null
+        break
+      } catch (e) {
+        lastErr = e
+        if (attempt < 3) {
+          const wait = attempt * 10_000
+          console.log(`[oss] 第 ${attempt} 次上传失败（${String(e.message).slice(0, 120)}），${wait / 1000}s 后重试…`)
+          await new Promise((r) => setTimeout(r, wait))
+        }
+      }
+    }
+    if (lastErr) throw lastErr
 
     const back = await getObject(creds, key)
     const sizeCheck = verifySize(back.buf.length, body.length)
