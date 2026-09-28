@@ -13,7 +13,7 @@
 //
 // 说明：out/ 分批清理仅本地需要（沙箱对单次 rmSync 有 50 文件阈值）；CI 无此限制但共用同一脚本。
 import { createHash } from 'node:crypto'
-import { copyFileSync, createReadStream, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, createReadStream, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -167,7 +167,20 @@ async function stepNative() {
     })
   }
   const final = classifyNativeAbi(probe())
-  if (final !== 'electron') die(`原生模块 ABI 仍不是 Electron（${final}）——拒绝发布`)
+  if (final !== 'electron') {
+    // 终极诊断：路径、实体、哈希、探针原始输出全量回显（CI 2026-09-28 系列实测定案用）
+    const hashOf = (p) => { try { return createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 16) } catch (e) { return 'ERR:' + e.message } }
+    let realPath = '', symlink = ''
+    try { realPath = realpathSync(binary); symlink = realPath === binary ? 'realpath=same' : 'REALPATH-DIFFERS' } catch (e) { realPath = 'ERR:' + e.message }
+    const p2 = probe()
+    die([
+      `原生模块 ABI 仍不是 Electron（${final}）——拒绝发布。终极诊断：`,
+      `  target : ${binary}`,
+      `  realpath: ${realPath}（${symlink}）`,
+      `  sha256  : ${hashOf(binary)} | size: ${statSync(binary).size}`,
+      `  复测探针: status=${p2.ok ? '0(require成功)' : '非0'} raw=${JSON.stringify((p2.error || '').slice(0, 200))}`
+    ].join('\n'))
+  }
   log('原生模块已对齐 Electron ABI')
 }
 
