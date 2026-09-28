@@ -161,7 +161,8 @@ async function stepNative() {
     // 被污染为 node-ABI 构建（解包哈希=node 预编译哈希）。预编译资产不可信时，
     // 用 Electron 官方头文件本地编译——CI (windows-2022) 自带 MSVC + Python，确定性达成 ABI。
     log('直连兜底未达成 Electron ABI（上游资产疑似污染），用 Electron 头文件本地编译…')
-    run('npx', ['node-gyp', 'rebuild', '--runtime=electron', `--target=${electronTarget(electronVersion)}`, '--arch=x64', '--dist-url=https://electronjs.org/headers'], {
+    // node-gyp@12：runner 镜像已升 VS 18（2026），9.4.1 报 unknown version "undefined"
+    run('npx', ['node-gyp@12.1.0', 'rebuild', '--runtime=electron', `--target=${electronTarget(electronVersion)}`, '--arch=x64', '--dist-url=https://electronjs.org/headers'], {
       cwd: bsqDir
     })
   }
