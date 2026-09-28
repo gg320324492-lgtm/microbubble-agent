@@ -119,7 +119,9 @@ async function stepNative() {
     try {
       writeFileSync(
         probeFile,
-        `try { require(${JSON.stringify(binary)}); console.log('NODE_ABI_OK') } catch (e) { console.error(String(e && e.message || e)) }\n`
+        // ★ catch 路径必须 process.exit(1)：否则 require 失败也被吞成正常退出（status 0），
+        //   探针恒判 'node'（v1.3.0-ci.1~ci.7 连环红跑的真凶——343a7bf27 引入的回归）
+        `try { require(${JSON.stringify(binary)}); console.log('NODE_ABI_OK') } catch (e) { console.error(String(e && e.message || e)); process.exit(1) }\n`
       )
       const r = spawnSync(process.execPath, [probeFile], { encoding: 'utf8' })
       const text = `${r.stderr ?? ''}${r.stdout ?? ''}`
