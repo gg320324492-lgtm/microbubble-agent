@@ -1,0 +1,28 @@
+name: upload-download-page
+
+# 落地页（download-page.html）单独上传——发布列车之外的小步更新入口。
+# 凭据与 desktop-release 的 OSS 镜像步同源（Secrets OSS_UPLOAD_AK/SK）。
+# 用法：gh workflow run upload-download-page
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  page:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Upload landing page to OSS
+        env:
+          OSS_UPLOAD_AK: ${{ secrets.OSS_UPLOAD_AK }}
+          OSS_UPLOAD_SK: ${{ secrets.OSS_UPLOAD_SK }}
+        run: node scripts/upload-release-oss.mjs --version 1.3.0 --dir release --page scripts/download-page.html --skip-if-missing
