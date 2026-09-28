@@ -13,7 +13,7 @@
 //
 // 说明：out/ 分批清理仅本地需要（沙箱对单次 rmSync 有 50 文件阈值）；CI 无此限制但共用同一脚本。
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, createReadStream, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -97,7 +97,7 @@ function stepGates() {
  * 这里用 prebuild-install 拉 Electron 预编译包（**无需 VS 工具链**，CI/本地一致）；
  * 若拉取失败则直接终止发布——绝不产出 ABI 不匹配的安装包。
  */
-function stepNative() {
+async function stepNative() {
   const require = createRequire(import.meta.url)
   const electronVersion = JSON.parse(readFileSync(require.resolve('electron/package.json'), 'utf8')).version
   const bsqPkgPath = require.resolve('better-sqlite3/package.json')
@@ -150,8 +150,50 @@ function stepNative() {
   })
 
   const after = classifyNativeAbi(probe())
-  if (after !== 'electron') die(`原生模块 ABI 仍不是 Electron（${after}）——拒绝发布`)
+  if (after !== 'electron') {
+    // CI 2026-09-28 实测：prebuild-install 可能 exit 0、零输出、且不替换二进制（静默空转）。
+    // 兜底：显式下载官方 electron 预编译包并替换，每一步硬失败——绝不静默。
+    log(`prebuild-install 通道未生效（ABI 仍 ${after}），走直连下载兜底…`)
+    await prebuiltDirectFetch(electronVersion, bsqDir, binary)
+    const final = classifyNativeAbi(probe())
+    if (final !== 'electron') die(`原生模块 ABI 仍不是 Electron（${final}）——拒绝发布`)
+  }
   log('原生模块已对齐 Electron ABI')
+}
+
+/**
+ * 直连兜底：从 better-sqlite3 官方 GitHub Release 下载 electron 预编译包，解包替换二进制。
+ * Electron 主版本 → NODE_MODULE_VERSION 映射在此固化；升 Electron 时必须同步本表，
+ * 脚本会在未知主版本上硬失败并提示（绝不猜）。
+ */
+const ELECTRON_MODULE_VERSIONS = { 32: 128 }
+
+async function prebuiltDirectFetch(electronVersion, bsqDir, binary) {
+  const major = Number(String(electronVersion).split('.')[0])
+  const abi = ELECTRON_MODULE_VERSIONS[major]
+  if (!abi) die(`直连兜底缺 Electron ${major} 的 ABI 映射——请在 release.mjs ELECTRON_MODULE_VERSIONS 补表后重试`)
+  const bsqVersion = JSON.parse(readFileSync(join(bsqDir, 'package.json'), 'utf8')).version
+  const url = `https://github.com/WiseLibs/better-sqlite3/releases/download/v${bsqVersion}/better-sqlite3-v${bsqVersion}-electron-v${abi}-win32-x64.tar.gz`
+  log(`直连下载：${url}`)
+  let res
+  try {
+    res = await fetch(url, { redirect: 'follow' })
+  } catch (e) {
+    die(`直连下载网络失败：${String(e && e.cause ? e.cause.code || e.cause : e)} —— ${url}`)
+  }
+  if (!res.ok) die(`直连下载失败 HTTP ${res.status}：${url}`)
+  const tgz = Buffer.from(await res.arrayBuffer())
+  if (tgz.length < 100_000) die(`直连下载体积异常（${tgz.length} B），疑似损坏：${url}`)
+  const dir = mkdtempSync(join(tmpdir(), 'mnb-prebuilt-'))
+  writeFileSync(join(dir, 'prebuilt.tar.gz'), tgz)
+  // 相对路径 + cwd：GNU tar 会把「C:\」当作远程主机名（force-local 不可移植），bsdtar 无此问题
+  const r = spawnSync('tar', ['-xzf', 'prebuilt.tar.gz', '-C', '.', 'build/Release/better_sqlite3.node'], { cwd: dir, encoding: 'utf8' })
+  if (r.status !== 0) die(`tar 解包失败（exit ${r.status}）：${r.stderr ?? ''}`)
+  const extracted = join(dir, 'build', 'Release', 'better_sqlite3.node')
+  if (!existsSync(extracted)) die(`解包产物缺失：${extracted}`)
+  copyFileSync(extracted, binary)
+  rmSync(dir, { recursive: true, force: true })
+  log(`已替换二进制（${tgz.length} B ← better-sqlite3 v${bsqVersion} electron-v${abi}）`)
 }
 
 /** 打包（-p never：发布由 gh/CI 显式完成，禁止 electron-builder 自行上传） */
