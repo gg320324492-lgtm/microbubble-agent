@@ -105,6 +105,8 @@ onMounted(() => {
   border-right: 1px solid var(--color-border);
   background: var(--color-bg-card);
   overflow: hidden;
+  /* DL-5: 防御性 —— grid item min-height:auto 不收缩，会话多时撑破行约束 */
+  min-height: 0;
 }
 .sessions-new {
   margin: var(--space-3);

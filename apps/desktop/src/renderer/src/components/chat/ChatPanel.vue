@@ -297,8 +297,11 @@ function fmtTime(ts: number): string {
 .chat {
   flex: 1;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* DL-5: 1fr 改 minmax(0,1fr) + 补 min-height:0 —— grid item 的 min-height:auto
+     不可收缩到内容以下，消息一长即撑破行高（整页滚动根因之二）。 */
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
+  min-height: 0;
   background: var(--color-bg-page);
 }
 .chat-head {

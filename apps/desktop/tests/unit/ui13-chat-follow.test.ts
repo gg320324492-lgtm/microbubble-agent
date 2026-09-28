@@ -63,9 +63,9 @@ describe('CU1 输入框常驻（布局层）', () => {
   it('★ ChatPanel 采用三行网格（头部/可滚主体/输入区），输入区不随内容滚走', async () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync('src/renderer/src/components/chat/ChatPanel.vue', 'utf8')
-    // 三行网格：auto（头） 1fr（主体） auto（输入）
+    // 三行网格：auto（头） minmax(0,1fr)（主体，DL-5 可收缩） auto（输入）
     expect(src).toMatch(/\.chat\s*\{[^}]*display:\s*grid/s)
-    expect(src).toMatch(/grid-template-rows:\s*auto\s+1fr\s+auto/)
+    expect(src).toMatch(/grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/)
     // 只有主体可滚（输入区不参与滚动）
     expect(src).toMatch(/\.chat-body\s*\{[^}]*overflow-y:\s*auto/s)
   })
