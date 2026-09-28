@@ -152,12 +152,21 @@ async function stepNative() {
   const after = classifyNativeAbi(probe())
   if (after !== 'electron') {
     // CI 2026-09-28 实测：prebuild-install 可能 exit 0、零输出、且不替换二进制（静默空转）。
-    // 兜底：显式下载官方 electron 预编译包并替换，每一步硬失败——绝不静默。
+    // 兜底一：显式下载官方 electron 预编译包并替换，每一步硬失败——绝不静默。
     log(`prebuild-install 通道未生效（ABI 仍 ${after}），走直连下载兜底…`)
     await prebuiltDirectFetch(electronVersion, bsqDir, binary)
-    const final = classifyNativeAbi(probe())
-    if (final !== 'electron') die(`原生模块 ABI 仍不是 Electron（${final}）——拒绝发布`)
   }
+  if (classifyNativeAbi(probe()) !== 'electron') {
+    // 兜底二（终极）：CI 2026-09-28 实测上游 better-sqlite3 v12.11.1 的 electron-v128 资产内容
+    // 被污染为 node-ABI 构建（解包哈希=node 预编译哈希）。预编译资产不可信时，
+    // 用 Electron 官方头文件本地编译——CI (windows-2022) 自带 MSVC + Python，确定性达成 ABI。
+    log('直连兜底未达成 Electron ABI（上游资产疑似污染），用 Electron 头文件本地编译…')
+    run('npx', ['node-gyp', 'rebuild', '--runtime=electron', `--target=${electronTarget(electronVersion)}`, '--arch=x64'], {
+      cwd: bsqDir
+    })
+  }
+  const final = classifyNativeAbi(probe())
+  if (final !== 'electron') die(`原生模块 ABI 仍不是 Electron（${final}）——拒绝发布`)
   log('原生模块已对齐 Electron ABI')
 }
 
