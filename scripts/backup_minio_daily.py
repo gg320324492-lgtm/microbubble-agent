@@ -52,12 +52,15 @@ def log(msg: str):
 
 
 def load_minio_credentials() -> tuple[str, str]:
-    """从 .env.webhook 或环境变量读 MinIO 凭证"""
+    """从环境变量、.env.webhook 或 .env 读 MinIO 凭证（缺钥直接报错，绝不硬编码）"""
     access_key = os.environ.get("MINIO_ACCESS_KEY")
     secret_key = os.environ.get("MINIO_SECRET_KEY")
 
-    env_path = Path(r"E:\microbubble-agent\.env.webhook")
-    if env_path.exists():
+    for env_path in (Path(r"E:\microbubble-agent\.env.webhook"), Path(r"E:\microbubble-agent\.env")):
+        if access_key and secret_key:
+            break
+        if not env_path.exists():
+            continue
         for line in env_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line.startswith("#") or "=" not in line:
@@ -69,10 +72,8 @@ def load_minio_credentials() -> tuple[str, str]:
             elif k == "MINIO_SECRET_KEY" and not secret_key:
                 secret_key = v
 
-    if not access_key:
-        access_key = "minioadmin"
-    if not secret_key:
-        secret_key = "***REMOVED***"
+    if not access_key or not secret_key:
+        raise SystemExit("[FATAL] MinIO 凭证缺失：请设置 MINIO_ACCESS_KEY / MINIO_SECRET_KEY 环境变量，或写入 .env.webhook / .env")
     return access_key, secret_key
 
 

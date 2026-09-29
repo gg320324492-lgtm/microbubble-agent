@@ -20,7 +20,7 @@ from minio.commonconfig import CopySource
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ENDPOINT = "127.0.0.1:9000"
-client = Minio(ENDPOINT, access_key="minioadmin", secret_key="***REMOVED***", secure=False)
+client = Minio(ENDPOINT, access_key="minioadmin", secret_key=os.environ["MINIO_SECRET_KEY"], secure=False)
 
 MIME = {
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
