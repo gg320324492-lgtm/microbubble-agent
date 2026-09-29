@@ -26,6 +26,12 @@ W72 第 2 批 B-2 — 差量验收 e2e. 仅写验收测试 + 验收报告, **不
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+# 2026-09-30 S1.3 (阶段收尾规划): 原文件 13 处硬编码 str(REPO_ROOT / "...") 绝对
+# 路径断言, 在 CI/容器/任何他机必挂 (红灯潜伏 2 个月的根因)。改为仓库相对锚定,
+# 测试语义 (模块存在 + 源码结构断言) 不变。
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # 让 import 走 SKIP_DB_SETUP=1 路径 — 避免重型 import + DB 依赖
 os.environ["SKIP_DB_SETUP"] = "1"
@@ -85,7 +91,7 @@ def test_pr3_thread_05_cross_user_desktop_to_mobile_visibility():
     """3.1.5 跨 desktop + mobile 可见性 — 同一 list API (前端组件层做 device 切换)"""
     # mobile 端 MobileCommentThread.vue + desktop 端 DesktopCommentThread.vue 共用 list API
     import os
-    base = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/web/src"
+    base = str(REPO_ROOT / "web" / "src")
     assert os.path.exists(f"{base}/components/desktop/DesktopCommentThread.vue"), \
         "DesktopCommentThread.vue 必须存在 (跨设备基线)"
     assert os.path.exists(f"{base}/views/mobile/MobileCommentThread.vue"), \
@@ -160,7 +166,7 @@ def test_pr3_soft_delete_04_admin_role_can_delete():
     """3.2.4 admin 可删 — service 实现 3 角色权限 (author / file owner / admin)"""
     # 通过 API 层 source 检查 (3 角色 OR 逻辑)
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     assert os.path.exists(api_path)
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
@@ -178,7 +184,7 @@ def test_pr3_soft_delete_05_non_owner_non_admin_forbidden():
 def test_pr3_soft_delete_06_30day_recycle_purge():
     """3.2.6 30 天回收物理删 — Celery task 存在 (drive_comments_path_backfill_tasks)"""
     import os
-    tasks_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/services/drive_comments_path_backfill_tasks.py"
+    tasks_path = str(REPO_ROOT / "app" / "services" / "drive_comments_path_backfill_tasks.py")
     assert os.path.exists(tasks_path), "path backfill tasks 模块存在 (Celery 30 天复用)"
     # ORM 软删字段已存在 (由 celery task 30 天后 UPDATE)
     from app.models.drive_comment import DriveComment
@@ -264,7 +270,7 @@ def test_pr3_path_03_list_by_path_prefix():
     assert hasattr(DriveCommentService, "list_by_path_prefix")
     # API 端点 /by-path 注册
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
     assert "/by-path" in api_src, "API 必须注册 /by-path 端点"
@@ -275,7 +281,7 @@ def test_pr3_path_04_breadcrumb_ancestor_chain():
     from app.services.drive_comment_service import DriveCommentService
     assert hasattr(DriveCommentService, "get_breadcrumb")
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
     assert "/breadcrumb" in api_src, "API 必须注册 /breadcrumb 端点"
@@ -290,7 +296,7 @@ def test_pr3_audit_01_create_no_audit():
     """3.5.1 create 不写 audit_log — PR9 老设计 (仅 DELETE 写)"""
     # DELETE API 写 audit_log, CREATE API 不写 — 验证 DELETE 路径
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
     # delete_comment 函数体内含 AuditLog
@@ -302,7 +308,7 @@ def test_pr3_audit_01_create_no_audit():
 def test_pr3_audit_02_delete_writes_audit_log():
     """3.5.2 DELETE 写 audit_log — action='delete', resource_type='comment'"""
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
     assert "action=\"delete\"" in api_src, "DELETE API 必须写 action='delete'"
@@ -313,7 +319,7 @@ def test_pr3_audit_03_edit_does_not_write_audit():
     """3.5.3 PATCH 不写 audit_log — PR9 老设计 (仅 DELETE 写)"""
     # edit API 不应含 audit 写 (验证仅 DELETE 写)
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
     # PATCH 函数体不应有 AuditLog 引用
@@ -327,7 +333,7 @@ def test_pr3_audit_03_edit_does_not_write_audit():
 def test_pr3_audit_04_reaction_no_audit():
     """3.5.4 reaction 不写 audit_log (PR12 设计 — 仅 WS push)"""
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_reactions.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_reactions.py")
     assert os.path.exists(api_path), "drive_reactions.py API 必须存在"
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
@@ -337,7 +343,7 @@ def test_pr3_audit_04_reaction_no_audit():
 def test_pr3_audit_05_delete_audit_meta_data_fields():
     """3.5.5 DELETE audit meta_data 含 4 字段"""
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
     # meta_data 字段
@@ -350,7 +356,7 @@ def test_pr3_audit_05_delete_audit_meta_data_fields():
 def test_pr3_audit_06_delete_audit_best_effort():
     """3.5.6 DELETE 即使 audit 失败, 软删仍 204 (best-effort)"""
     import os
-    api_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/api/v1/drive_comments.py"
+    api_path = str(REPO_ROOT / "app" / "api" / "v1" / "drive_comments.py")
     with open(api_path, "r", encoding="utf-8") as f:
         api_src = f.read()
     # 审计失败不阻塞 — try/except 包 audit 写
@@ -378,7 +384,7 @@ def test_pr3_notify_02_reaction_publishes_ws():
 def test_pr3_notify_03_nested_reply_notification():
     """3.6.3 嵌套回复触发通知 — mention_parser 解析 @username"""
     import os
-    parser_path = "E:/microbubble-agent/.claude/worktrees/agent-w72-2-b2-pr3comment/app/services/mention_parser.py"
+    parser_path = str(REPO_ROOT / "app" / "services" / "mention_parser.py")
     assert os.path.exists(parser_path), "mention_parser.py 必须存在 (PR10 集成)"
     # 验证提及解析器导出
     import importlib.util
