@@ -100,7 +100,5 @@ export function claimSummary(claimedCounts: Record<string, number>): string {
 export const CLAIMABLE_TABLES: readonly { table: string; label: string }[] = [
   { table: 'chat_sessions', label: '会话' },
   { table: 'knowledge_documents', label: '知识' },
-  { table: 'meetings', label: '会议' },
-  { table: 'manuscripts', label: '稿件' },
-  { table: 'experiments', label: '实验' }
+  { table: 'meetings', label: '会议' }
 ]

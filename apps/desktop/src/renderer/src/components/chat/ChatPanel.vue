@@ -60,10 +60,13 @@ async function onSend(): Promise<void> {
   if (isLive) live.value = createLiveState()
   sending.value = true
   try {
-    await store.send(text)
+    // DL-6：校验通过即清空草稿——真实模型时代 CHAT_SEND 悬置数秒~分钟，草稿滞留到
+    // 生成结束是体验缺陷；失败时 catch 仅在输入框仍为空时回填，不覆盖期间新输入
     draft.value = ''
+    await store.send(text)
     await scrollToBottom()
   } catch (e) {
+    if (draft.value === '') draft.value = text
     ElMessage.error(e instanceof Error ? e.message : '发送失败')
   } finally {
     live.value = null

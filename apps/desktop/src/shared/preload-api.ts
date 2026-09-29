@@ -10,20 +10,7 @@ import type {
   KnowledgeImportResult,
   KnowledgeSearchHit,
   KnowledgeUpdateInput,
-  ExperimentCreateInput,
-  ExperimentFile,
-  ExperimentFull,
-  ExperimentSearchHit,
-  ExperimentStatus,
-  ExperimentUpdateInput,
   LocalUser,
-  ManuscriptCreateInput,
-  ManuscriptFile,
-  ManuscriptFull,
-  ManuscriptSearchHit,
-  ManuscriptStatus,
-  ManuscriptUpdateInput,
-  ManuscriptWordStats,
   MeetingCreateInput,
   MeetingDetail,
   MeetingFile,
@@ -116,18 +103,6 @@ export interface PreloadApi {
     openFile(meetingId: number, fileId: number): Promise<{ path: string } | null>
     search(query: string): Promise<MeetingSearchHit[]>
   }
-  manuscripts: {
-    list(status?: ManuscriptStatus): Promise<ManuscriptFull[]>
-    get(id: number): Promise<ManuscriptFull | null>
-    create(input: ManuscriptCreateInput): Promise<{ id: number }>
-    update(id: number, patch: ManuscriptUpdateInput): Promise<boolean>
-    delete(id: number): Promise<boolean>
-    addFile(manuscriptId: number, file: { name: string; data: Uint8Array }): Promise<ManuscriptFile | null>
-    removeFile(manuscriptId: number, fileId: number): Promise<boolean>
-    openFile(manuscriptId: number, fileId: number): Promise<{ path: string } | null>
-    search(query: string): Promise<ManuscriptSearchHit[]>
-    stats(content: string): Promise<ManuscriptWordStats>
-  }
   agent: {
     /** M8-2：上下文估算与最近裁切（设置页调试区） */
     contextGet(): Promise<unknown>
@@ -200,17 +175,6 @@ export interface PreloadApi {
     onStateChange(cb: (s: UpdateState) => void): () => void
     /** 更新通知被点击 → 跳转设置页 */
     onOpenSettings(cb: () => void): () => void
-  }
-  experiments: {
-    list(status?: ExperimentStatus): Promise<ExperimentFull[]>
-    get(id: number): Promise<ExperimentFull | null>
-    create(input: ExperimentCreateInput): Promise<{ id: number; code: string }>
-    update(id: number, patch: ExperimentUpdateInput): Promise<boolean>
-    delete(id: number): Promise<boolean>
-    addFile(experimentId: number, file: { name: string; data: Uint8Array }): Promise<ExperimentFile | null>
-    removeFile(experimentId: number, fileId: number): Promise<boolean>
-    openFile(experimentId: number, fileId: number): Promise<{ path: string } | null>
-    search(query: string): Promise<ExperimentSearchHit[]>
   }
   window: {
     minimize(): Promise<void>

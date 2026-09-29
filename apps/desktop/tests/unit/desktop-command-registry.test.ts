@@ -4,7 +4,7 @@ import { CommandRegistry } from '@shared/command-registry'
 
 function make(): CommandRegistry {
   const r = new CommandRegistry()
-  r.register({ id: 'nav-eln', title: '实验 ELN', keywords: 'sy shiyan eln', action: () => undefined })
+  r.register({ id: 'nav-drive', title: '网盘', keywords: 'wp wangpan drive', action: () => undefined })
   r.register({ id: 'nav-knowledge', title: '知识库', keywords: 'zsk zhishi knowledge', action: () => undefined })
   r.register({ id: 'quit', title: '退出应用', keywords: 'tc tuichu quit exit', action: () => undefined })
   return r
@@ -14,7 +14,7 @@ describe('CommandRegistry', () => {
   it('注册 + 列表 — 按注册顺序返回全部', () => {
     const r = make()
     expect(r.list()).toHaveLength(3)
-    expect(r.list().map((c) => c.id)).toEqual(['nav-eln', 'nav-knowledge', 'quit'])
+    expect(r.list().map((c) => c.id)).toEqual(['nav-drive', 'nav-knowledge', 'quit'])
   })
 
   it('注册重复 id 抛错；空 id 抛错', () => {
@@ -26,12 +26,12 @@ describe('CommandRegistry', () => {
   it('过滤 — 标题子串大小写不敏感', () => {
     const r = make()
     expect(r.filter('退出').map((c) => c.id)).toEqual(['quit'])
-    expect(r.filter('eln').map((c) => c.id)).toEqual(['nav-eln'])
+    expect(r.filter('drive').map((c) => c.id)).toEqual(['nav-drive'])
   })
 
   it('过滤 — keywords 子串与拼音首字母前缀', () => {
     const r = make()
-    expect(r.filter('sy').map((c) => c.id)).toEqual(['nav-eln']) // 拼音首字母 'sy' 前缀
+    expect(r.filter('wp').map((c) => c.id)).toEqual(['nav-drive']) // 拼音首字母 'wp' 前缀
     expect(r.filter('zhishi').map((c) => c.id)).toEqual(['nav-knowledge'])
     expect(r.filter('exit').map((c) => c.id)).toEqual(['quit'])
   })

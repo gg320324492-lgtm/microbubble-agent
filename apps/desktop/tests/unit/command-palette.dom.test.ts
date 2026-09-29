@@ -13,7 +13,7 @@ beforeEach(() => {
 function makeRegistry(): CommandRegistry {
   const r = new CommandRegistry()
   const calls: string[] = []
-  r.register({ id: 'nav-eln', title: '实验 ELN', keywords: 'sy shiyan', action: () => calls.push('eln') })
+  r.register({ id: 'nav-drive', title: '网盘', keywords: 'wp wangpan', action: () => calls.push('drive') })
   r.register({ id: 'nav-knowledge', title: '知识库', keywords: 'zsk zhishi', action: () => calls.push('kb') })
   r.register({ id: 'quit', title: '退出应用', keywords: 'tc quit', action: () => calls.push('quit') })
   // 暴露 calls 供断言（挂到 registry 上）
@@ -58,7 +58,7 @@ describe('CommandPalette 命令面板', () => {
     const { w, registry } = mountPalette(true)
     await w.vm.$nextTick()
     await w.find('[data-testid="palette-input"]').trigger('keydown', { key: 'Enter' })
-    expect(getCalls(registry)).toEqual(['eln']) // 首项 = 实验 ELN
+    expect(getCalls(registry)).toEqual(['drive']) // 首项 = 网盘
   })
 
   it('Esc 触发 close 事件', async () => {
@@ -78,6 +78,6 @@ describe('CommandPalette 命令面板', () => {
     await w.find('[data-testid="palette-input"]').trigger('keydown', { key: 'ArrowUp' })
     await w.find('[data-testid="palette-input"]').trigger('keydown', { key: 'ArrowUp' })
     await w.find('[data-testid="palette-input"]').trigger('keydown', { key: 'Enter' })
-    expect(getCalls(w.vm.registry as CommandRegistry)).toContain('eln')
+    expect(getCalls(w.vm.registry as CommandRegistry)).toContain('drive')
   })
 })

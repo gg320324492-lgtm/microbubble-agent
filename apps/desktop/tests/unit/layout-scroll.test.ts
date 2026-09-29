@@ -36,12 +36,10 @@ describe('布局滚动 — .shell-main 必须可滚', () => {
     expect(rule).toMatch(/flex:\s*1/)
   })
 
-  it('六个模块 + 设置页的根容器均为内容高度（min-height 不为 0 的固定值，父级可滚）', () => {
+  it('在役列表型模块 + 设置页的根容器均为内容高度（min-height 不为 0 的固定值，父级可滚）', () => {
     const roots: Array<[string, string]> = [
       ['views/KnowledgeView.vue', '.kb {'],
       ['views/MeetingsView.vue', '.mtg {'],
-      ['views/ExperimentView.vue', '.eln {'],
-      ['views/ManuscriptsView.vue', '.ms {'],
       ['views/SettingsView.vue', '.settings {']
     ]
     for (const [file, selector] of roots) {

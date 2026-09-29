@@ -28,18 +28,6 @@ export const routes = [
         meta: { title: 'AI 助手', icon: 'chat' }
       },
       {
-        path: 'eln',
-        name: 'eln',
-        component: () => import('../views/ExperimentView.vue'),
-        meta: { title: '实验 ELN', icon: 'flask' }
-      },
-      {
-        path: 'manuscripts',
-        name: 'manuscripts',
-        component: () => import('../views/ManuscriptsView.vue'),
-        meta: { title: '稿件', icon: 'doc' }
-      },
-      {
         path: 'knowledge',
         name: 'knowledge',
         component: () => import('../views/KnowledgeView.vue'),

@@ -20,20 +20,7 @@ import type {
   MeetingSearchHit,
   MeetingTranscript,
   MeetingTranscriptImportInput,
-  ManuscriptCreateInput,
-  ManuscriptFile,
-  ManuscriptFull,
-  ManuscriptSearchHit,
-  ManuscriptStatus,
-  ManuscriptUpdateInput,
-  ManuscriptWordStats,
   MeetingUpdateInput,
-  ExperimentCreateInput,
-  ExperimentFile,
-  ExperimentFull,
-  ExperimentSearchHit,
-  ExperimentStatus,
-  ExperimentUpdateInput,
   UpdateState,
   WorkspaceAuditEntry
 } from '@shared/types'
@@ -191,35 +178,6 @@ const api = {
       ipcRenderer.on(IPC.UPDATE_OPEN_SETTINGS, listener as never)
       return () => ipcRenderer.removeListener(IPC.UPDATE_OPEN_SETTINGS, listener as never)
     }
-  },
-  experiments: {
-    list: (status?: ExperimentStatus): Promise<ExperimentFull[]> => invoke(IPC.EXPERIMENTS_LIST, { status }),
-    get: (id: number): Promise<ExperimentFull | null> => invoke(IPC.EXPERIMENTS_GET, { id }),
-    create: (input: ExperimentCreateInput): Promise<{ id: number; code: string }> => invoke(IPC.EXPERIMENTS_CREATE, input),
-    update: (id: number, patch: ExperimentUpdateInput): Promise<boolean> => invoke(IPC.EXPERIMENTS_UPDATE, { id, ...patch }),
-    delete: (id: number): Promise<boolean> => invoke(IPC.EXPERIMENTS_DELETE, { id }),
-    addFile: (experimentId: number, file: { name: string; data: Uint8Array }): Promise<ExperimentFile | null> =>
-      invoke(IPC.EXPERIMENTS_FILE_ADD, { experimentId, name: file.name, data: file.data }),
-    removeFile: (experimentId: number, fileId: number): Promise<boolean> =>
-      invoke(IPC.EXPERIMENTS_FILE_REMOVE, { experimentId, fileId }),
-    openFile: (experimentId: number, fileId: number): Promise<{ path: string } | null> =>
-      invoke(IPC.EXPERIMENTS_FILE_OPEN, { experimentId, fileId }),
-    search: (query: string): Promise<ExperimentSearchHit[]> => invoke(IPC.EXPERIMENTS_SEARCH, { query })
-  },
-  manuscripts: {
-    list: (status?: ManuscriptStatus): Promise<ManuscriptFull[]> => invoke(IPC.MANUSCRIPTS_LIST, { status }),
-    get: (id: number): Promise<ManuscriptFull | null> => invoke(IPC.MANUSCRIPTS_GET, { id }),
-    create: (input: ManuscriptCreateInput): Promise<{ id: number }> => invoke(IPC.MANUSCRIPTS_CREATE, input),
-    update: (id: number, patch: ManuscriptUpdateInput): Promise<boolean> => invoke(IPC.MANUSCRIPTS_UPDATE, { id, ...patch }),
-    delete: (id: number): Promise<boolean> => invoke(IPC.MANUSCRIPTS_DELETE, { id }),
-    addFile: (manuscriptId: number, file: { name: string; data: Uint8Array }): Promise<ManuscriptFile | null> =>
-      invoke(IPC.MANUSCRIPTS_FILE_ADD, { manuscriptId, name: file.name, data: file.data }),
-    removeFile: (manuscriptId: number, fileId: number): Promise<boolean> =>
-      invoke(IPC.MANUSCRIPTS_FILE_REMOVE, { manuscriptId, fileId }),
-    openFile: (manuscriptId: number, fileId: number): Promise<{ path: string } | null> =>
-      invoke(IPC.MANUSCRIPTS_FILE_OPEN, { manuscriptId, fileId }),
-    search: (query: string): Promise<ManuscriptSearchHit[]> => invoke(IPC.MANUSCRIPTS_SEARCH, { query }),
-    stats: (content: string): Promise<ManuscriptWordStats> => invoke(IPC.MANUSCRIPTS_STATS, { content })
   },
   window: {
     minimize: (): Promise<void> => invoke(IPC.WINDOW_MINIMIZE),
