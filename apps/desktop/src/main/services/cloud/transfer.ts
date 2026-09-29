@@ -229,7 +229,8 @@ export class FileTransferService {
       const bytes = await req.readChunk(0, req.fileSize)
       // 服务端该端点只收 multipart/form-data（web 端 DriveUploadDialog 同款字段）；
       // 旧 JSON {file_base64} 形态 422（恢复演练 2026-09-29 实锤：ZB 零感备份容器上传全废）。
-      // is_team_shared 不传 → 服务端默认 false = 个人网盘视图（ZB 备份隐私语义所在，勿改）。
+      // 注：is_team_shared 服务端已恒置 True（该字段退役，迁移 133）；备份隐私由服务端
+      // 依目标文件夹路径强制 visibility='private'（ZB-1，保留区=backups/ 根子树），与上传参数无关。
       const boundary = '----mnb-form-' + Date.now().toString(36)
       const enc = (s: string): Buffer => Buffer.from(s, 'utf8')
       const safeName = req.filename.replace(/[\r\n"]/g, '_')

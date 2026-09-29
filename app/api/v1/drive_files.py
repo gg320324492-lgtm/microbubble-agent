@@ -25,7 +25,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1._drive_error_helper import (
@@ -1592,6 +1592,11 @@ async def list_active_shares(
             Knowledge.share_token.isnot(None),
             Knowledge.deleted_at.is_(None),
             Knowledge.storage_mode == "drive",
+            # ZB-1: private 文件对非 owner 隐身 (token 列表 = 内容公开通道, 不可越过可见性)
+            or_(
+                Knowledge.created_by == current_user.id,
+                Knowledge.visibility != "private",
+            ),
         )
         .order_by(Knowledge.share_expires_at)
     )).all()

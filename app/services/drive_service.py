@@ -397,6 +397,32 @@ async def _stream_concat_chunks(
             pass
 
 
+# ==========================================================================
+# ZB-1 备份保留区 (backups/ 目录复活 private)
+# ==========================================================================
+
+# 备份保留区根目录名 — 与桌面端零感托管备份根对齐:
+# apps/desktop/src/main/services/backup/auto-provision.ts `CLOUD_BACKUP_ROOT = 'backups'`。
+# 落在该根目录子树内的 drive 文件由服务端强制 visibility='private' (仅 owner 可见),
+# 使零感备份的加密容器与解密钥匙 key.json 不对全组暴露。
+# 判定由服务端依据目标文件夹路径做出, 不接受客户端传任何标志位。
+BACKUP_RESERVED_ROOT_NAME = "backups"
+
+
+def _normalize_reserved_name(name: Optional[str]) -> str:
+    """保留区目录名归一: 去首尾空白 + 小写 (工单定案: 大小写与前后空白归一)"""
+    return (name or "").strip().lower()
+
+
+def is_backup_reserved_root_name(name: Optional[str]) -> bool:
+    """顶层目录名是否为备份保留区根 (纯函数, 单测边界用)。
+
+    边界: 'backups' → True; 'BackupS'/' backups ' → True (归一后相等);
+    'backups2'/'backups_old'/None/'' → False (必须整名相等, 不做前缀匹配)。
+    """
+    return _normalize_reserved_name(name) == BACKUP_RESERVED_ROOT_NAME
+
+
 class DriveService:
     """Drive 文件元数据 CRUD"""
 
@@ -442,6 +468,21 @@ class DriveService:
             return True
         return file.visibility != "private"
 
+    async def _is_backup_reserved_folder(self, folder: Folder) -> bool:
+        """判断文件夹是否位于备份保留区 (顶层目录名归一后 == 'backups')。
+
+        沿 parent 链上溯到根, 根目录名归一后等于 BACKUP_RESERVED_ROOT_NAME 即保留区。
+        深度上限 16 (目录树策略上限 5 层 + 余量), 防脏数据成环时死循环。
+        """
+        cur: Optional[Folder] = folder
+        depth = 0
+        while cur is not None and depth < 16:
+            if cur.parent_id is None:
+                return is_backup_reserved_root_name(cur.name)
+            cur = await self.get_folder(cur.parent_id)
+            depth += 1
+        return False
+
     # ==========================================================================
     # CRUD
     # ==========================================================================
@@ -486,16 +527,28 @@ class DriveService:
         if storage_mode == "drive":
             assert visibility in ("private", "team", "public"), f"invalid visibility: {visibility}"
 
+        # ZB-1 备份保留区: 服务端依目标文件夹路径判定 (不信任客户端标志位)。
+        # 保留区内强制 visibility='private' (零感备份容器+key.json 仅 owner 可见);
+        # 区外维持 2026-09 单一团队空间行为逐字不变。
+        backup_reserved = False
+        if storage_mode == "drive" and folder_id is not None:
+            reserved_folder = await self.get_folder(folder_id)
+            if reserved_folder is not None:
+                backup_reserved = await self._is_backup_reserved_folder(reserved_folder)
+
         # 2026-09 单一团队空间: drive 文件 private 概念退役 — 本方法是无网盘 upload/
         # create_file 的统一收口点, incoming 'private' 一律强制改写为 'team' (log warning)。
         # 同时 is_team_shared 服务端恒置 True (迁移 133 回填后该字段退役)。
+        # ZB-1 例外: 备份保留区内强制 private (客户端传什么都不影响), is_team_shared 维持恒 True (死字段)。
         if storage_mode == "drive":
-            if visibility == "private":
+            if visibility == "private" and not backup_reserved:
                 logger.warning(
                     "[DriveService.create_file] visibility='private' 已退役, 强制改写为 "
                     f"'team' (file_name={file_name}, created_by={created_by or owner_id})"
                 )
                 visibility = "team"
+            if backup_reserved:
+                visibility = "private"
             is_team_shared = True
 
         # 配额校验
@@ -831,6 +884,9 @@ class DriveService:
         if file is None:
             return None
         # 2026-09 单一团队空间: 删除 created_by != current_user_id 门禁 (溯源非权限)
+        # ZB-1: private 文件对非 owner 隐身 (更新/改名/改 visibility = 变相泄露内容)
+        if not self._can_see_file(file, current_user_id):
+            return None
 
         # visibility 上限
         if visibility is not None:
@@ -904,6 +960,9 @@ class DriveService:
         )
         file = file.scalar_one_or_none()
         if file is None:
+            return False
+        # ZB-1: private 文件对非 owner 隐身 (不可被他人软删/移动到回收站)
+        if not self._can_see_file(file, current_user_id):
             return False
 
         # 快照原目录与物化路径；软删本身仍保留 folder_id，快照用于父目录在
@@ -982,6 +1041,9 @@ class DriveService:
         file = file.scalar_one_or_none()
         if file is None:
             return None
+        # ZB-1: private 文件对非 owner 隐身 (恢复他人私有备份 = 暴露其存在与元数据)
+        if not self._can_see_file(file, current_user_id):
+            return None
         await self._restore_original_location(file)
         file.deleted_at = None
         await self.db.commit()
@@ -1040,6 +1102,9 @@ class DriveService:
         )
         file = file.scalar_one_or_none()
         if file is None:
+            return None
+        # ZB-1: private 文件对非 owner 隐身 (extract = 把他人私有文件公开发布到知识库)
+        if not self._can_see_file(file, current_user_id):
             return None
 
         # visibility 必须升 (private → team/public)
@@ -1197,6 +1262,9 @@ class DriveService:
         )
         f = f.scalar_one_or_none()
         if f is None:
+            return None
+        # ZB-1: private 文件对非 owner 隐身 (分享链接 = 内容公开通道, 更不可由他人代开)
+        if not self._can_see_file(f, current_user_id):
             return None
         # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可生成分享链接)
 
@@ -1368,6 +1436,9 @@ class DriveService:
         f = f.scalar_one_or_none()
         if f is None:
             return None
+        # ZB-1: private 文件对非 owner 隐身 (改 visibility = 把他人私有文件翻公开)
+        if not self._can_see_file(f, current_user_id):
+            return None
         # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可改 visibility)
 
         # visibility 上限 (private 不能往公开升级除非 folder 允许)
@@ -1418,6 +1489,9 @@ class DriveService:
         )
         f = f.scalar_one_or_none()
         if f is None:
+            return None
+        # ZB-1: private 文件对非 owner 隐身 (star/unstar 会触发对 owner 的通知, 元数据不可探)
+        if not self._can_see_file(f, current_user_id):
             return None
         existing = (await self.db.execute(
             select(DriveFileStar).where(
@@ -1613,6 +1687,10 @@ class DriveService:
         skipped = []
         deleted = 0
         for f in files:
+            # ZB-1: private 文件对非 owner 隐身 (不可被他人批量软删, 静默入 skipped 与不存在同义)
+            if not self._can_see_file(f, current_user_id):
+                skipped.append(f.id)
+                continue
             # 2026-09 单一团队空间: 删除 created_by owner skip
             f.original_parent_id = f.folder_id
             if f.folder_id is None:
@@ -1673,6 +1751,10 @@ class DriveService:
         skipped = []
         restored = 0
         for f in files:
+            # ZB-1: private 文件对非 owner 隐身 (不可被他人恢复)
+            if not self._can_see_file(f, current_user_id):
+                skipped.append(f.id)
+                continue
             # 2026-09 单一团队空间: 删除 created_by/is_admin owner skip
             await self._restore_original_location(f)
             f.deleted_at = None
@@ -1724,6 +1806,10 @@ class DriveService:
         skipped = []
         moved = 0
         for f in files:
+            # ZB-1: private 文件对非 owner 隐身 (不可被他人移走)
+            if not self._can_see_file(f, current_user_id):
+                skipped.append(f.id)
+                continue
             # 2026-09 单一团队空间: 删除 created_by owner skip
             if target_folder is not None:
                 self._validate_visibility_inherits(f.visibility, target_folder.visibility)
@@ -1770,6 +1856,10 @@ class DriveService:
         skipped = []
         updated = 0
         for f in files:
+            # ZB-1: private 文件对非 owner 隐身 (不可被他人翻 visibility)
+            if not self._can_see_file(f, current_user_id):
+                skipped.append(f.id)
+                continue
             # 2026-09 单一团队空间: 删除 created_by owner skip
             if f.folder_id is not None:
                 folder = await self.get_folder(f.folder_id)
@@ -1810,6 +1900,8 @@ class DriveService:
             f is None
             or f.deleted_at is None
             or f.storage_mode != "drive"
+            # ZB-1: private 文件对非 owner 隐身 (他人不可硬删其备份, 连存在性都不可探)
+            or not self._can_see_file(f, current_user_id)
         ):
             # 2026-09: created_by/is_admin owner 门禁已删, current_user_id 参数保留兼容签名
             return False
@@ -1865,6 +1957,10 @@ class DriveService:
         skipped = []
         deleted = 0
         for f in files:
+            # ZB-1: private 文件对非 owner 隐身 (不可被他人批量硬删)
+            if not self._can_see_file(f, current_user_id):
+                skipped.append(f.id)
+                continue
             # 2026-09 单一团队空间: 删除 created_by/is_admin owner skip
             await self.db.delete(f)
             deleted += 1
@@ -1984,12 +2080,18 @@ class DriveService:
 
         # 2026-09 单一团队空间: 与 create_file 同款收口 — private 退役强制 team,
         # is_team_shared 服务端恒 True (秒传行也是 drive 文件)
-        if visibility == "private":
+        # ZB-1 例外: 备份保留区内强制 private (服务端依路径判定, 与 create_file 同口径)
+        backup_reserved = False
+        if folder is not None:
+            backup_reserved = await self._is_backup_reserved_folder(folder)
+        if visibility == "private" and not backup_reserved:
             logger.warning(
                 "[DriveService.create_instant_upload] visibility='private' 已退役, "
                 f"强制改写为 'team' (file_name={file_name})"
             )
             visibility = "team"
+        if backup_reserved:
+            visibility = "private"
         is_team_shared = True
 
         # 新行 + 复用同 hash
@@ -2050,7 +2152,8 @@ class DriveService:
             新 Knowledge 行 (is_latest=True)
         """
         cur = await self.db.get(Knowledge, file_id)
-        if cur is None:
+        if cur is None or not self._can_see_file(cur, uploader_id):
+            # ZB-1: private 文件对非 owner 隐身 (向他人私有文件注入新版本 = 覆写其内容)
             raise DriveServiceError(
                 f"文件 id={file_id} 不存在", status_code=404,
             )
@@ -2185,7 +2288,8 @@ class DriveService:
             新 Knowledge 行 (is_latest=True, 与被恢复的 v1 内容字节级一致)
         """
         cur = await self.db.get(Knowledge, file_id)
-        if cur is None:
+        if cur is None or not self._can_see_file(cur, uploader_id):
+            # ZB-1: private 文件对非 owner 隐身 (恢复他人私有文件的版本 = 改写其内容链)
             raise DriveServiceError(
                 f"文件 id={file_id} 不存在", status_code=404,
             )
