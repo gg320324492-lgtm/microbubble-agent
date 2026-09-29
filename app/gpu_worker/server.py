@@ -50,7 +50,9 @@ from pathlib import Path
 import numpy as np
 
 PORT = int(os.environ.get("GPU_ASR_PORT", "8005"))
-TMP_DIR = Path(os.environ.get("GPU_ASR_TMP", r"E:\microbubble-agent\.workbuddy\vibevoice-test\jobs"))
+# 2026-09-30 S2.1 前置: jobs 目录默认值跟随 VIBEVOICE_HOME (与历史硬编码逐字节相同)
+TMP_DIR = Path(os.environ.get("GPU_ASR_TMP")
+               or (os.environ.get("VIBEVOICE_HOME", r"E:\microbubble-agent\.workbuddy\vibevoice-test") + r"\jobs"))
 HOTWORDS_FILE = Path(__file__).parent / "hotwords.txt"
 # 2026-09-15: 单作业硬超时（秒）。原硬编码 7200 太长——卡住的作业会独占 GPU 2 小时。
 JOB_TIMEOUT = int(os.environ.get("GPU_ASR_JOB_TIMEOUT", "3600"))

@@ -26,7 +26,9 @@ import threading
 import time
 from pathlib import Path
 
-_DEF_REPO = r"E:\microbubble-agent\.workbuddy\vibevoice-test\VibeVoice"
+# 2026-09-30 S2.1 前置: 路径收敛到 VIBEVOICE_HOME (默认与历史硬编码逐字节相同)
+_VIBEVOICE_HOME = os.environ.get("VIBEVOICE_HOME", r"E:\microbubble-agent\.workbuddy\vibevoice-test")
+_DEF_REPO = _VIBEVOICE_HOME + r"\VibeVoice"
 if _DEF_REPO not in sys.path and Path(_DEF_REPO).exists():
     sys.path.insert(0, _DEF_REPO)
 
@@ -36,8 +38,8 @@ import uvicorn  # noqa: E402
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 
-DEF_MODEL_DIR = r"E:\microbubble-agent\.workbuddy\vibevoice-test\streaming-model"
-DEF_TOKENIZER_DIR = r"E:\microbubble-agent\.workbuddy\vibevoice-test\qwen-tokenizer"
+DEF_MODEL_DIR = _VIBEVOICE_HOME + r"\streaming-model"
+DEF_TOKENIZER_DIR = _VIBEVOICE_HOME + r"\qwen-tokenizer"
 SR = 16000
 TARGET_SR = 24000
 

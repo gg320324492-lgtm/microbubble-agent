@@ -37,10 +37,12 @@ from pathlib import Path
 
 import numpy as np
 
-# 默认路径（生产化时迁移权重后改环境变量即可）
-DEF_MODEL_DIR = r"E:\microbubble-agent\.workbuddy\vibevoice-test\models-vv"
-DEF_ASR_REPO = r"E:\microbubble-agent\.workbuddy\vibevoice-test\VibeVoice"
-DEF_TOKENIZER_DIR = r"E:\microbubble-agent\.workbuddy\vibevoice-test\qwen-tokenizer"
+# 默认路径（2026-09-30 S2.1 前置: 收敛到 VIBEVOICE_HOME 单一环境变量, 归位时只需
+# 改 env/默认值一处, 不再逐行找硬编码; 默认值与历史硬编码逐字节相同, 零行为变化）
+VIBEVOICE_HOME = os.environ.get("VIBEVOICE_HOME", r"E:\microbubble-agent\.workbuddy\vibevoice-test")
+DEF_MODEL_DIR = VIBEVOICE_HOME + r"\models-vv"
+DEF_ASR_REPO = VIBEVOICE_HOME + r"\VibeVoice"
+DEF_TOKENIZER_DIR = VIBEVOICE_HOME + r"\qwen-tokenizer"
 
 SR = 16000            # 输入 PCM 采样率
 TARGET_SR = 24000     # VibeVoice 目标采样率
