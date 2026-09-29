@@ -23,8 +23,9 @@
 
 - **统一登录** — 与网页端同一套账号，登录一次即可用，断网也能继续工作
 - **远程知识库 / 网盘** — 数据与网页端同源互通，原生体验（检索、筛选、分页、拖拽上传、文件夹导航）
-- **AI 助手** — 本地优先，读写工作区、工具调用可视
-- **零感托管备份** — 登录即全自动备份（AES-256-GCM 加密容器 + 密钥托管），笔记本报废数据可救
+- **AI 助手** — 本地优先，读写工作区，工具调用可视
+- **零感托管备份** — 登录即全自动备份（AES-256-GCM 加密容器 + 密钥托管），笔记本报废数据可救；备份容器与密钥仅本人可见，且不会进入知识库与语义检索
+- **自动更新通知** — 启动时自动检查（每日至多一次），发现新版本弹窗显示版本号与更新日志，一键下载安装；更新源国内直连，不依赖 GitHub
 
 ## 技术栈
 
@@ -33,7 +34,7 @@
 | 后端 | Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL |
 | Web 前端 | Vue 3.5 + Element Plus + Vite + Pinia + ECharts |
 | 桌面客户端 | Electron + Vue 3 + TypeScript + better-sqlite3 |
-| AI | Claude API (Sonnet) + mimo-v2.5 多模态 |
+| AI | MiMo `mimo-v2.6-flash`（OpenAI 兼容网关，现役）· 可切换 Claude / 本地 ollama |
 | 语音 | faster-whisper (GPU) + Edge-TTS + silero-vad |
 | 声纹 | 3D-Speaker ERes2Net + pgvector |
 | 缓存 | Redis |
@@ -116,4 +117,6 @@ powershell scripts/run-reprocess.ps1 -Meeting 120 -Steps regen                  
 
 ## 许可证
 
-私有项目，未经许可不得复制或分发。
+本仓库自 2026-09-29 起为**公开仓库**（公开前已完成历史凭据清洗）；此处原「私有项目」表述已同步更正。
+
+项目为课题组内部科研用途，未经许可不得复制或分发。
