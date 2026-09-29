@@ -318,6 +318,7 @@ export class CloudApiClient {
   ): Promise<CloudResult<{ json: unknown; tokens: CloudTokens; refreshed: boolean }>> {
     const first = await this.request(method, path, {
       ...(opts.body === undefined ? {} : { body: opts.body }),
+      ...(opts.contentType ? { contentType: opts.contentType } : {}),
       accessToken: tokens.accessToken,
       idempotent: method === 'GET'
     })
@@ -339,6 +340,7 @@ export class CloudApiClient {
     const nextTokens: CloudTokens = { accessToken: refreshed.data.accessToken, refreshToken: tokens.refreshToken }
     const replay = await this.request(method, path, {
       ...(opts.body === undefined ? {} : { body: opts.body }),
+      ...(opts.contentType ? { contentType: opts.contentType } : {}),
       accessToken: nextTokens.accessToken,
       idempotent: method === 'GET'
     })
