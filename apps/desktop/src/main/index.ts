@@ -118,8 +118,14 @@ app.whenReady().then(() => {
     exists: existsSync
   })
   if (trayIcon.missing) console.log('[tray] 图标资源缺失，托盘可能无法显示')
-  desktop.setupTray(trayIcon.path)
-
+  // DL-7：托盘创建失败只降级不拖垮 whenReady 尾段——下一行的启动自动检查是更新通知的
+  // 生命线（Tray 构造在图标路径缺失时直接抛，未包兜底时 scheduleAutoCheck 及其后的
+  // 退出备份/activate 处理全部静默失联，且无任何日志可见）
+  try {
+    desktop.setupTray(trayIcon.path)
+  } catch (e) {
+    console.log(`[tray] 托盘创建失败（已降级，更新检查等不受影响）：${e instanceof Error ? e.message : String(e)}`)
+  }
   // 启动后 5s 后台检查更新（不阻塞启动、失败静默；受「自动检查更新」开关约束）
   update.scheduleAutoCheck()
   let forceQuit = false
