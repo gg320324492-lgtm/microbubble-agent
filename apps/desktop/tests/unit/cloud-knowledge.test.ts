@@ -109,7 +109,7 @@ describe('契约适配回放', () => {
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.data.id).toBe(100)
     expect(requests[0]!.method).toBe('POST')
-    expect(JSON.parse(requests[0]!.body!)).toEqual({ title: '新条目', content: '正文', category: '实验方法', tags: ['a'] })
+    expect(JSON.parse(String(requests[0]!.body))).toEqual({ title: '新条目', content: '正文', category: '实验方法', tags: ['a'] })
   })
 
   it('编辑：PUT 只带传入字段（不改的字段不下发）', async () => {
@@ -118,7 +118,7 @@ describe('契约适配回放', () => {
     expect(r.ok).toBe(true)
     expect(requests[0]!.method).toBe('PUT')
     expect(requests[0]!.url).toBe('https://agent.mnb-lab.cn/api/v1/knowledge/5')
-    expect(JSON.parse(requests[0]!.body!)).toEqual({ title: '改后标题' })
+    expect(JSON.parse(String(requests[0]!.body))).toEqual({ title: '改后标题' })
   })
 
   it('删除：DELETE 204 空体不解析 JSON 也不报错', async () => {

@@ -53,7 +53,7 @@ describe('绑定流程', () => {
     expect(requests).toHaveLength(1)
     expect(requests[0]!.method).toBe('POST')
     expect(requests[0]!.url).toBe('https://agent.mnb-lab.cn/api/v1/auth/login')
-    expect(JSON.parse(requests[0]!.body!)).toEqual({ username: 'wangtianzhi', password: 'secret' })
+    expect(JSON.parse(String(requests[0]!.body))).toEqual({ username: 'wangtianzhi', password: 'secret' })
     expect(requests[0]!.headers['content-type']).toBe('application/json')
   })
 
@@ -117,7 +117,7 @@ describe('令牌续期', () => {
       'https://agent.mnb-lab.cn/api/v1/auth/refresh',
       'https://agent.mnb-lab.cn/api/v1/auth/me'
     ])
-    expect(JSON.parse(requests[1]!.body!)).toEqual({ refresh_token: 'RT1' })
+    expect(JSON.parse(String(requests[1]!.body))).toEqual({ refresh_token: 'RT1' })
     expect(requests[2]!.headers['authorization']).toBe('Bearer AT2') // 重放用新令牌
   })
 

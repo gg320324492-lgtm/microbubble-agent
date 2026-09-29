@@ -131,7 +131,7 @@ describe('网盘契约适配回放', () => {
     const r = await h.svc.rename(3, { title: '改名后.txt' })
     expect(r.ok).toBe(true)
     expect(h.requests[0]!.method).toBe('PUT')
-    expect(JSON.parse(h.requests[0]!.body!)).toEqual({ title: '改名后.txt' })
+    expect(JSON.parse(String(h.requests[0]!.body))).toEqual({ title: '改名后.txt' })
   })
 
   it('删除：DELETE，204 空体不报错', async () => {
@@ -227,7 +227,7 @@ describe('分块上传三件套时序', () => {
     const size = 2 * DEFAULT_CHUNK_SIZE
     const h = harness([() => res(201, uploadSession({ file_size: size, total_chunks: 2 })), () => res(200, uploadSession({ total_chunks: 2, uploaded_chunks: [0, 1] })), () => res(200, uploadSession({ total_chunks: 2, uploaded_chunks: [0, 1] })), () => res(200, fileItem(1))])
     await h.svc.upload({ filename: 'a.bin', fileSize: size, readChunk: memoryReader(size), parentId: 42 })
-    const initBody = JSON.parse(h.requests[0]!.body!) as Record<string, unknown>
+    const initBody = JSON.parse(String(h.requests[0]!.body)) as Record<string, unknown>
     expect(initBody.filename).toBe('a.bin')
     expect(initBody.file_size).toBe(size)
     expect(initBody.chunk_size).toBe(DEFAULT_CHUNK_SIZE)

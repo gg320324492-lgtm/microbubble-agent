@@ -142,7 +142,7 @@ export class FileTransferService {
   private async call(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
-    opts: { body?: unknown } = {}
+    opts: { body?: unknown; contentType?: string } = {}
   ): Promise<CloudResult<unknown>> {
     const t = this.deps.tokens()
     if (!t) return { ok: false, error: { kind: 'auth', message: '尚未连接云端。' } }
@@ -227,13 +227,26 @@ export class FileTransferService {
     // ---- 简化路径：小文件 ----
     if (req.fileSize <= SMALL_FILE_THRESHOLD) {
       const bytes = await req.readChunk(0, req.fileSize)
+      // 服务端该端点只收 multipart/form-data（web 端 DriveUploadDialog 同款字段）；
+      // 旧 JSON {file_base64} 形态 422（恢复演练 2026-09-29 实锤：ZB 零感备份容器上传全废）。
+      // is_team_shared 不传 → 服务端默认 false = 个人网盘视图（ZB 备份隐私语义所在，勿改）。
+      const boundary = '----mnb-form-' + Date.now().toString(36)
+      const enc = (s: string): Buffer => Buffer.from(s, 'utf8')
+      const safeName = req.filename.replace(/[\r\n"]/g, '_')
+      const parts: Buffer[] = [
+        enc(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${safeName}"\r\nContent-Type: application/octet-stream\r\n\r\n`),
+        Buffer.from(bytes),
+        enc(`\r\n--${boundary}\r\nContent-Disposition: form-data; name="filename"\r\n\r\n${safeName}\r\n`),
+        enc(`--${boundary}\r\nContent-Disposition: form-data; name="storage_mode"\r\n\r\ndrive\r\n`),
+        ...(req.parentId !== undefined && req.parentId !== null
+          ? [enc(`--${boundary}\r\nContent-Disposition: form-data; name="folder_id"\r\n\r\n${String(req.parentId)}\r\n`)]
+          : []),
+        ...(req.visibility ? [enc(`--${boundary}\r\nContent-Disposition: form-data; name="visibility"\r\n\r\n${req.visibility}\r\n`)] : []),
+        enc(`--${boundary}--\r\n`)
+      ]
       const res = await this.call('POST', '/api/v1/drive/files/upload', {
-        body: {
-          filename: req.filename,
-          file_base64: bytesToBase64(bytes),
-          ...(req.parentId !== undefined && req.parentId !== null ? { parent_id: req.parentId } : {}),
-          ...(req.visibility ? { visibility: req.visibility } : {})
-        }
+        body: Buffer.concat(parts),
+        contentType: `multipart/form-data; boundary=${boundary}`
       })
       if (!res.ok) return res
       emit({ transferred: req.fileSize, total: req.fileSize, percent: 100 })

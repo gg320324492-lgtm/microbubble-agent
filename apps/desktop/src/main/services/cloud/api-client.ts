@@ -14,7 +14,7 @@ export interface CloudHttpRequest {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   url: string
   headers: Record<string, string>
-  body?: string
+  body?: string | Uint8Array
   timeoutMs: number
 }
 
@@ -161,20 +161,23 @@ export class CloudApiClient {
     return `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`
   }
 
-  /** 单次请求（不发重试）；异常已归一化 */
+  /** 单次请求（不发重试）；异常已归一化。body 传 Uint8Array 时须配 contentType（multipart 场景） */
   private async request(
     method: CloudHttpRequest['method'],
     path: string,
-    opts: { body?: unknown; accessToken?: string; idempotent?: boolean } = {}
+    opts: { body?: unknown; accessToken?: string; idempotent?: boolean; contentType?: string } = {}
   ): Promise<CloudResult<{ status: number; json: unknown }>> {
-    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    const isRaw = opts.body instanceof Uint8Array
+    const headers: Record<string, string> = {
+      'content-type': opts.contentType ?? 'application/json'
+    }
     if (opts.accessToken) headers['authorization'] = `Bearer ${opts.accessToken}`
     const req: CloudHttpRequest = {
       method,
       url: this.url(path),
       headers,
       timeoutMs: this.timeoutMs,
-      ...(opts.body === undefined ? {} : { body: JSON.stringify(opts.body) })
+      ...(opts.body === undefined ? {} : { body: isRaw ? (opts.body as Uint8Array) : JSON.stringify(opts.body) })
     }
 
     const attempt = async (): Promise<CloudResult<{ status: number; json: unknown }>> => {
@@ -311,7 +314,7 @@ export class CloudApiClient {
     method: CloudHttpRequest['method'],
     path: string,
     tokens: CloudTokens,
-    opts: { body?: unknown } = {}
+    opts: { body?: unknown; contentType?: string } = {}
   ): Promise<CloudResult<{ json: unknown; tokens: CloudTokens; refreshed: boolean }>> {
     const first = await this.request(method, path, {
       ...(opts.body === undefined ? {} : { body: opts.body }),
