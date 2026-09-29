@@ -1,5 +1,5 @@
 // 备份核心契约（M5-1）— 容器往返/加密安全/恢复安全网/中文路径。全部离线，真实临时目录。
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -287,5 +287,22 @@ describe('退出自动备份（M5-2）', () => {
     expect(res).not.toBeNull()
     expect(res!.uploaded).toBe(false)
     expect(existsSync(join(targetDir, res!.fileName))).toBe(true) // 本地备份仍在
+  })
+})
+
+describe('附件段收集 — 子目录路径保真（恢复演练 2026-09-29 回归）', () => {
+  it('嵌套子目录附件的段名保留完整相对路径（不再拍扁到 files/ 根）', () => {
+    const nested = join(filesRoot, 'knowledge', 'deep', 'nested')
+    mkdirSync(nested, { recursive: true })
+    writeFileSync(join(nested, '附件-样本.bin'), Buffer.from('nested-attachment-bytes'))
+    mkdirSync(join(filesRoot, 'knowledge', 'shallow'), { recursive: true })
+    writeFileSync(join(filesRoot, 'knowledge', 'shallow', '另一文件.txt'), Buffer.from('flat'))
+
+    const segs = svc.collectFileSegments()
+    const names = segs.map((s) => s.name)
+    expect(names).toContain('files/knowledge/deep/nested/附件-样本.bin')
+    expect(names).toContain('files/knowledge/shallow/另一文件.txt')
+    // 拍扁回归：绝不出现裸文件名段
+    expect(names.filter((n) => n.startsWith('files/')).every((n) => n.slice('files/'.length).includes('/'))).toBe(true)
   })
 })

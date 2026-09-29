@@ -74,7 +74,9 @@ export class BackupService {
     return { deleted }
   }
 
-  /** 收集 files/ 目录下全部附件（含子目录与中文路径）为段列表 */
+  /** 收集 files/ 目录下全部附件（含子目录与中文路径）为段列表。
+   *  段名必须带完整子目录层（files/<sub>/<相对路径>）——缺层会让恢复错位
+   *  （恢复演练 2026-09-29 实锤：旧实现连 sub 层都丢，附件恢复后应用找不到）。 */
   collectFileSegments(): { name: string; data: Buffer }[] {
     const segments: { name: string; data: Buffer }[] = []
     if (!existsSync(this.filesRoot)) return segments
@@ -82,7 +84,7 @@ export class BackupService {
       const subDir = join(this.filesRoot, sub)
       if (!existsSync(subDir)) continue
       collectRecursive(subDir, (rel, abs) => {
-        segments.push({ name: `files/${rel}`, data: readFileSync(abs) })
+        segments.push({ name: `files/${sub}/${rel}`, data: readFileSync(abs) })
       })
     }
     return segments
@@ -324,15 +326,20 @@ export class BackupService {
   }
 }
 
-/** 递归收集目录下全部文件，回调参数为相对路径（正斜杠）与绝对路径 */
+/** 递归收集目录下全部文件，回调参数为相对路径（正斜杠）与绝对路径。
+ *  rel 必须相对**原始扫描根** base——旧实现误用递归当前层作 base，子目录附件段名
+ *  被拍扁成裸文件名（恢复错位到 files/ 根 + 同名互相覆盖；恢复演练 2026-09-29 实锤）。 */
 function collectRecursive(base: string, cb: (rel: string, abs: string) => void): void {
-  let entries: string[]
-  try { entries = readdirSync(base) } catch { return }
-  for (const e of entries) {
-    const abs = join(base, e)
-    let isDir = false
-    try { isDir = statSync(abs).isDirectory() } catch { continue }
-    if (isDir) collectRecursive(abs, cb)
-    else cb(relative(base, abs).replaceAll('\\', '/'), abs)
+  const walk = (dir: string): void => {
+    let entries: string[]
+    try { entries = readdirSync(dir) } catch { return }
+    for (const e of entries) {
+      const abs = join(dir, e)
+      let isDir = false
+      try { isDir = statSync(abs).isDirectory() } catch { continue }
+      if (isDir) walk(abs)
+      else cb(relative(base, abs).replaceAll('\\', '/'), abs)
+    }
   }
+  walk(base)
 }
