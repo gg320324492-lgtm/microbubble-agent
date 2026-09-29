@@ -23,6 +23,10 @@ from sqlalchemy import delete, select
 
 logger = logging.getLogger("microbubble.drive_index_service")
 
+# FIN-1 A2: 任务引擎 URL 可注入 (生产恒 None → create_celery_engine_and_session,
+# 行为逐字不变); 测试注入测试库 URL 使任务不连生产库
+_index_db_url_override = None
+
 # file_parser_service 支持的扩展名 (与 parser 内 SUPPORTED_EXTENSIONS 对齐)
 SUPPORTED_EXTS = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md"}
 
@@ -186,7 +190,20 @@ if _HAS_CELERY:
             from app.services.drive_index_service import index_drive_content
             from app.core.celery_db import create_celery_engine_and_session as _mk
 
-            engine, session_factory = _mk()
+            # FIN-1 A2: 测试可注入引擎 URL (生产恒 None → 既有 celery_db 通道, 行为逐字不变)
+            override = globals().get("_index_db_url_override")
+            if override:
+                from sqlalchemy.ext.asyncio import (
+                    AsyncSession,
+                    async_sessionmaker,
+                    create_async_engine,
+                )
+                from sqlalchemy.pool import NullPool
+
+                engine = create_async_engine(override, poolclass=NullPool)
+                session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            else:
+                engine, session_factory = _mk()
             try:
                 # ZB-2: 备份产物形态 (.mnbbak / .key.json) 跳过内容索引——
                 # key.json 的 chunk 会把密钥信封明文写进 knowledge_chunks

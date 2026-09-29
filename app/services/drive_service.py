@@ -441,13 +441,14 @@ class DriveService:
         """验证文件 visibility ≤ 所在文件夹 visibility（防止越权暴露）
 
         文件夹是文件的"上界": 文件 visibility 必须 <= 文件夹 visibility
+        (FIN-1 C1 修正: 旧 docstring 写「folder=team 可放 public」与代码矛盾——
+        代码按 VISIBILITY_ORDER 严格比较, 以代码实际行为为准, 行为未改)
 
-        例如:
-          folder=private → 文件只能是 private (不允许 team/public, 否则其他人能看到)
-          folder=team    → 文件可以是 private/team/public (team 文件夹允许任何 visibility)
-          folder=public  → 文件只能是 public (公开文件夹不能放私人草稿)
-
-        VISIBILITY_ORDER 排序: private(0) < team(1) < public(2)
+        按 VISIBILITY_ORDER 排序 private(0) < team(1) < public(2):
+          folder=private → 文件只能是 private
+          folder=team    → 文件可以是 private/team (public 高于 team, 会被本校验拒绝,
+                           batch_update_visibility 等调用方将其计入 skipped)
+          folder=public  → 文件只能是 public
         """
         if folder_visibility is None:
             return
@@ -890,6 +891,15 @@ class DriveService:
 
         # visibility 上限
         if visibility is not None:
+            # FIN-1 A1: 备份形态禁止改 public (与 update_visibility/分享链接同口径)
+            if visibility == "public":
+                from app.services.drive_ingest_tasks import is_backup_artifact_name
+
+                if is_backup_artifact_name(file.file_name):
+                    raise DriveServiceError(
+                        "备份文件不支持公开可见 (内容含备份密钥)",
+                        status_code=400,
+                    )
             target_folder_id = folder_id if folder_id is not None else file.folder_id
             if target_folder_id is not None:
                 folder = await self.get_folder(target_folder_id)
@@ -1268,6 +1278,18 @@ class DriveService:
             return None
         # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可生成分享链接)
 
+        # FIN-1 A1: 备份形态禁止公开分享 (owner 也在内) —— 「分享即公开」(2026-09-05)
+        # 会把文件翻 public, 备份的 key.json 一旦翻公开, 密钥信封随链接对外可达。
+        # 仅豁免备份形态, 不推翻分享即公开的产品决策; 拦截对用户可见 (API 层转 400)。
+        from app.services.drive_ingest_tasks import is_backup_artifact_name
+
+        if is_backup_artifact_name(f.file_name):
+            raise DriveServiceError(
+                "备份文件不支持公开分享 (内容含备份密钥, 恢复请使用桌面端零感备份通道)",
+                status_code=400,
+            )
+        # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可生成分享链接)
+
         # 32 字符 token (44 字符 url-safe base64)
         token = secrets.token_urlsafe(24)[:32]
         f.share_token = token
@@ -1440,6 +1462,17 @@ class DriveService:
         if not self._can_see_file(f, current_user_id):
             return None
         # 2026-09 单一团队空间: 删除 created_by owner 门禁 (任何成员可改 visibility)
+
+        # FIN-1 A1: 备份形态禁止改 public (与分享链接同口径, owner 也在内;
+        # team 双向不受限, 保留可逆空间)
+        if new_visibility == "public":
+            from app.services.drive_ingest_tasks import is_backup_artifact_name
+
+            if is_backup_artifact_name(f.file_name):
+                raise DriveServiceError(
+                    "备份文件不支持公开可见 (内容含备份密钥)",
+                    status_code=400,
+                )
 
         # visibility 上限 (private 不能往公开升级除非 folder 允许)
         if f.folder_id is not None:
@@ -1860,6 +1893,13 @@ class DriveService:
             if not self._can_see_file(f, current_user_id):
                 skipped.append(f.id)
                 continue
+            # FIN-1 A1: 备份形态禁止批量翻 public (与单文件 update_visibility 同口径)
+            if new_visibility == "public":
+                from app.services.drive_ingest_tasks import is_backup_artifact_name
+
+                if is_backup_artifact_name(f.file_name):
+                    skipped.append(f.id)
+                    continue
             # 2026-09 单一团队空间: 删除 created_by owner skip
             if f.folder_id is not None:
                 folder = await self.get_folder(f.folder_id)

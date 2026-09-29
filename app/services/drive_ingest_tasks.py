@@ -23,6 +23,16 @@ from app.core.celery import celery_app
 
 logger = logging.getLogger("microbubble.drive_ingest")
 
+# FIN-1 A2: 任务引擎 URL 可注入 —— 生产恒 None → settings.DATABASE_URL (行为逐字
+# 不变); 测试注入测试库 URL, 使任务不连生产库 (conftest 铁律: 测试禁止回退生产库)
+_database_url_override = None
+
+
+def _resolve_engine_url() -> str:
+    """任务引擎 URL: 注入优先, 默认 settings.DATABASE_URL (统一转 asyncpg 驱动)"""
+    url = _database_url_override or settings.DATABASE_URL
+    return url.replace("postgresql://", "postgresql+asyncpg://")
+
 # ZB-2 备份产物形态 — 零感托管备份的容器与解密钥匙 (桌面端 cloud-backup.service
 # 同目录同命名: <name>.mnbbak + <name>.mnbbak.key.json)。这类文件的 content 是
 # 密钥信封明文, 绝不入知识库/向量索引 (跳过 drive→kb 抽取与 drive 内容索引)。
@@ -45,7 +55,7 @@ def auto_ingest_drive_file_task(self, drive_file_id: int, reingest: bool = False
     """网盘文件 → 知识库自动入库 (上传/版本更新后异步执行)"""
 
     engine = create_async_engine(
-        settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+        _resolve_engine_url(),
         poolclass=NullPool,
     )
     session_factory = async_sessionmaker(

@@ -296,8 +296,13 @@ class TestPrivateWriteGates:
         fid = backup_fixture["file"].id
         assert await svc.extract_to_kb(fid, backup_fixture["b"].id) is None
         assert await svc.create_share_link(fid, backup_fixture["b"].id) is None
-        # owner 分享仍可用 (既有语义: 分享即公开, owner 自主行为)
-        assert await svc.create_share_link(fid, backup_fixture["a"].id) is not None
+        # FIN-1 A1: 备份形态 owner 也禁止分享 (分享即公开会让密钥信封对外可达)
+        from app.services.drive_service import DriveServiceError
+
+        with pytest.raises(DriveServiceError):
+            await svc.create_share_link(fid, backup_fixture["a"].id)
+        await session.refresh(backup_fixture["file"])
+        assert backup_fixture["file"].visibility == "private"  # 未被翻转
 
     @pytest.mark.asyncio
     async def test_visibility_and_star_hidden_to_b(self, backup_fixture, db_session):

@@ -31,13 +31,21 @@ SKIP_DB_SETUP = bool(os.getenv("SKIP_DB_SETUP"))
 # 2026-09-12 生产库测试迁移: 测试库 URL 提升到模块级
 # (SKIP_DB_SETUP=1 的自建-engine 测试也要 import 得到)
 # 默认连 microbubble_test 隔离库, 可用 TEST_DATABASE_URL 环境变量覆盖。
-# 铁律: 测试禁止回退 settings.DATABASE_URL (生产 microbubble 库) —
+# 铁律: 测试禁止**连接** settings.DATABASE_URL (生产 microbubble 库) —
 # 历史上这批测试在生产留 debris (如 knowledge id=540 "comment test file")。
-# 回归守卫: tests/test_no_prod_db_imports.py
+# 回归守卫: tests/test_no_prod_db_imports.py + test_fin1_backup_share_block.py
 # ================================================================
+# FIN-1 A2: 默认 URL 从 settings.DATABASE_URL **派生** (只借凭据与主机, 库名换
+# microbubble_test) —— 09-29 密钥轮换后旧硬编码密码失效, 硬编码即要么泄露凭据
+# 进公共仓库、要么因密码过期而必须依赖外部 env; 派生两者皆免, 且永不连生产库
+# (守卫: test_fin1_backup_share_block.py::test_guard_conftest_test_url_differs_from_production)
+from app.config import settings as _settings  # 轻量 (pydantic settings), 非 DB 重型依赖
+
 TEST_DB_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:microbubble2026@db:5432/microbubble_test",
+    _settings.DATABASE_URL.replace(
+        "postgresql://", "postgresql+asyncpg://"
+    ).replace("/microbubble", "/microbubble_test"),
 )
 
 

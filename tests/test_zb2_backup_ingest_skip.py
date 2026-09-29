@@ -27,6 +27,23 @@ from app.services.drive_to_kb_service import DriveToKBService
 from tests.conftest import get_test_database_url
 
 
+def _run_ingest_task_selfcontained(drive_file_id: int):
+    """FIN-1 A2: 注入测试库 URL 后内联执行任务 —— 不依赖外部 DATABASE_URL env,
+    任务绝不连生产库 (自洽 + 守卫)"""
+    import app.services.drive_ingest_tasks as dit
+    from concurrent.futures import ThreadPoolExecutor
+
+    old = dit._database_url_override
+    dit._database_url_override = get_test_database_url()
+    try:
+        with ThreadPoolExecutor(1) as ex:
+            return ex.submit(
+                lambda: dit.auto_ingest_drive_file_task.apply(args=[drive_file_id]).get()
+            ).result(timeout=120)
+    finally:
+        dit._database_url_override = old
+
+
 def _mk_member(username: str, name: str) -> Member:
     return Member(
         username=username,
@@ -123,12 +140,8 @@ class TestIngestTaskSkip:
         session, _ = db_session
         k = await _mk_drive_row(session, zb2_user.id, "probe.mnbbak.key.json")
 
-        # 线程内执行: 任务体 asyncio.run 与 pytest-asyncio 的活动循环互斥
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(1) as ex:
-            res = ex.submit(
-                lambda: auto_ingest_drive_file_task.apply(args=[k.id]).get()
-            ).result(timeout=120)
+        # FIN-1 A2: 注入测试库 URL 后内联执行 (自洽, 任务不连生产库)
+        res = _run_ingest_task_selfcontained(k.id)
         assert res["skipped"] == "backup-artifact"
         assert res["knowledge_id"] is None
 
@@ -147,11 +160,7 @@ class TestIngestTaskSkip:
     async def test_backup_container_shape_skipped(self, zb2_user, db_session):
         session, _ = db_session
         k = await _mk_drive_row(session, zb2_user.id, "probe.mnbbak")
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(1) as ex:
-            res = ex.submit(
-                lambda: auto_ingest_drive_file_task.apply(args=[k.id]).get()
-            ).result(timeout=120)
+        res = _run_ingest_task_selfcontained(k.id)
         assert res["skipped"] == "backup-artifact"
 
 
