@@ -293,7 +293,17 @@ async function stepVerify() {
   }
   const sha512 = await sha512Base64(exePath)
   const size = statSync(exePath).size
-  const check = verifyLatestYml(readFileSync(ymlPath, 'utf8'), { version, fileName: names.exe, sha512, size })
+  // FIN-1/R-12 修复: 与 stepLatest 同源抽取 releaseNotes —— verify 的 expected
+  // 不带而 yml 带 → verifyLatestYml 按两侧不对称判失败（DL-7 对称守护），首航
+  // v1.3.2-ci.1 实锤。两步必须同口径。
+  const changelogPath = join(ROOT, 'CHANGELOG.md')
+  const releaseNotes = existsSync(changelogPath)
+    ? extractChangelogSection(readFileSync(changelogPath, 'utf8'), `v${version}`)
+    : null
+  const check = verifyLatestYml(readFileSync(ymlPath, 'utf8'), {
+    version, fileName: names.exe, sha512, size,
+    ...(releaseNotes ? { releaseNotes } : {}),
+  })
   if (!check.ok) die(`三件套一致性失败：\n  ${check.issues.join('\n  ')}`)
   log(`三件套一致性 OK：${names.exe} (${size} B) / ${names.blockmap} / ${names.latestYml}`)
 }
