@@ -1,0 +1,114 @@
+name: Server Tests Baseline (full tests/)
+
+# 2026-09-30 S1.2 (阶段收尾规划 docs/plans/2026-09-30-phase-closeout-plan.md, 仓库 desktop-conversion)
+#
+# 背景: 服务端 451 个测试文件此前无任何 workflow 跑过全量 —— rag-framework-ci.yml
+#   只跑 tests/rag_framework/ 子集, qa-bench-ci.yml 是 LLM 质量基准, desktop-release.yml
+#   只覆盖 apps/desktop。已实证红灯潜伏: test_drive_v2_pr3_comment_v2_e2e.py 红了 2 个月。
+#
+# 分两步走 (本文件是第 1 步):
+#   1) continue-on-error: true 收集全量基线红灯清单 (junit artifact), 不阻塞合并
+#   2) 清单收敛后逐个修复, 最终把 continue-on-error 摘除转为硬门
+#
+# 环境对齐 (CLAUDE.md 测试纪律):
+#   - tests/conftest.py: TEST_DATABASE_URL 环境变量优先; 铁律禁止连生产库名 microbubble
+#   - 测试库需 extension: vector (pgvector) + pg_trgm (conftest create_all 依赖)
+#   - services 用 pgvector/pgvector:pg16 内置扩展, 免手工编译 (类 20.141)
+#   - 每次运行是全新 postgres 容器 → 无 "共享 microbubble_test 并发 DROP SCHEMA" 冲突
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/server-tests-baseline.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server-tests-baseline:
+    name: Full tests/ baseline (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: microbubble_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary --retries 10 --timeout 120 -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Prepare test DB (extensions)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d microbubble_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS vector;
+          CREATE EXTENSION IF NOT EXISTS pg_trgm;
+          SQL
+
+      - name: Run full test suite (baseline collection, failures expected)
+        continue-on-error: true
+        env:
+          TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/microbubble_test"
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/microbubble_test"
+          REDIS_URL: "redis://localhost:6379/0"
+          SKIP_DB_SETUP: ""
+        run: |
+          set -o pipefail
+          python -m pytest tests/ -q \
+            --continue-on-collection-errors \
+            --junitxml=test-results-baseline.xml \
+            -rfE 2>&1 | tee pytest-baseline-output.txt || true
+          echo "===== BASELINE SUMMARY ====="
+          grep -E "^(FAILED|ERROR)" pytest-baseline-output.txt | head -100 || true
+          tail -5 pytest-baseline-output.txt
+
+      - name: Upload baseline report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-tests-baseline-${{ github.run_number }}
+          path: |
+            test-results-baseline.xml
+            pytest-baseline-output.txt
+          retention-days: 14
+          if-no-files-found: warn
