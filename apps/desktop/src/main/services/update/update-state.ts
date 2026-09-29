@@ -29,7 +29,7 @@ export type { UpdateState, UpdateStatus }
 
 export type UpdateEvent =
   | { type: 'check-start' }
-  | { type: 'check-available'; version: string }
+  | { type: 'check-available'; version: string; releaseNotes?: string | null }
   | { type: 'check-none' }
   | { type: 'check-error'; message: string }
   | { type: 'download-start' }
@@ -68,9 +68,19 @@ export function reduceUpdate(state: UpdateState, event: UpdateEvent, now: number
       if (state.status === 'downloading' || state.status === 'ready') return state
       return { ...state, status: 'checking', error: null }
 
-    case 'check-available':
+    case 'check-available': {
       if (state.disabled || state.status !== 'checking') return state
-      return { status: 'available', version: event.version, percent: 0, error: null, disabled: false, checkedAt: now }
+      const base: UpdateState = {
+        status: 'available',
+        version: event.version,
+        percent: 0,
+        error: null,
+        disabled: false,
+        checkedAt: now
+      }
+      // DL-7：notes 仅在有值时落键（历史形状兼容，旧断言不因空键破坏）
+      return event.releaseNotes ? { ...base, releaseNotes: event.releaseNotes } : base
+    }
 
     case 'check-none':
       if (state.disabled || state.status !== 'checking') return state

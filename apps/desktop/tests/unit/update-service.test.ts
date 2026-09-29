@@ -1,6 +1,6 @@
 // M6-1 更新服务 — 通知触发判定（复用 M4 模式）+ 编排 + 提示式边界
 import { describe, expect, it, vi } from 'vitest'
-import { UpdateService, type UpdaterPort } from '@main/services/update/update.service'
+import { AUTO_CHECK_DELAY_MS, UpdateService, type UpdaterPort } from '@main/services/update/update.service'
 import type { UpdateState } from '@shared/types'
 
 function makePort(overrides: Partial<UpdaterPort> = {}): {
@@ -194,5 +194,108 @@ describe('更新服务 — 跳过场景状态诚实性（M6-1 打回项 2）', (
     expect(s.status).toBe('idle')
     expect(s.disabled).toBe(false)
     expect(s.checkedAt).not.toBeNull()
+  })
+})
+
+describe('DL-7 — releaseNotes 透传与启动自动检查节流', () => {
+  it('端口返回 releaseNotes → 随 check-available 进入快照；无 notes 则不落键', async () => {
+    const withNotes = makePort({ checkForUpdates: vi.fn().mockResolvedValue({ version: '1.3.2', releaseNotes: '### 更新\n- x' }) })
+    const a = makeService({ port: withNotes.port, windowVisible: false })
+    await a.svc.check('manual')
+    expect(a.svc.snapshot().releaseNotes).toBe('### 更新\n- x')
+
+    const noNotes = makePort({ checkForUpdates: vi.fn().mockResolvedValue({ version: '1.3.2' }) })
+    const b = makeService({ port: noNotes.port })
+    await b.svc.check('manual')
+    expect('releaseNotes' in b.svc.snapshot()).toBe(false)
+  })
+
+  it('★ 每日节流：20h 内已自动检查 → 本次启动不再打网络；过期/无记录 → 正常检查并记录时间戳', async () => {
+    vi.useFakeTimers()
+    try {
+      const NOW = new Date('2026-09-29T10:00:00Z').getTime()
+      vi.setSystemTime(NOW)
+
+      // 场景 1：20h 内已检查 → 跳过（不设定时器、不写时间戳）
+      const fresh = makePort()
+      let lastFresh: number | null = NOW - 2 * 60 * 60 * 1000
+      const s1 = new UpdateService({
+        currentVersion: '1.3.1',
+        envSupported: true,
+        port: fresh.port,
+        getSetting: () => undefined,
+        isWindowVisible: () => true,
+        notify: vi.fn(),
+        onOpenSettings: vi.fn(),
+        getLastAutoCheckAt: () => lastFresh,
+        setLastAutoCheckAt: (t) => (lastFresh = t)
+      })
+      s1.scheduleAutoCheck()
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(fresh.checkSpy).not.toHaveBeenCalled()
+      expect(lastFresh).toBe(NOW - 2 * 60 * 60 * 1000) // 未被改写
+      s1.dispose()
+
+      // 场景 2：上次检查已过 25h → 触发检查并在发请求前记录时间戳
+      // （场景 1 的 advance 已把 fake 时钟推走 10s，先重置基准再排程）
+      vi.setSystemTime(NOW)
+      const stale = makePort()
+      let lastStale: number | null = NOW - 25 * 60 * 60 * 1000
+      const s2 = new UpdateService({
+        currentVersion: '1.3.1',
+        envSupported: true,
+        port: stale.port,
+        getSetting: () => undefined,
+        isWindowVisible: () => true,
+        notify: vi.fn(),
+        onOpenSettings: vi.fn(),
+        getLastAutoCheckAt: () => lastStale,
+        setLastAutoCheckAt: (t) => (lastStale = t)
+      })
+      s2.scheduleAutoCheck()
+      await vi.advanceTimersByTimeAsync(6_000)
+      expect(stale.checkSpy).toHaveBeenCalledTimes(1)
+      expect(lastStale).toBe(NOW + AUTO_CHECK_DELAY_MS) // 触发时刻记录（请求发起前）
+      s2.dispose()
+
+      // 场景 3：无记录（首启/文件损坏）→ 正常检查
+      vi.setSystemTime(NOW)
+      const first = makePort()
+      const s3 = new UpdateService({
+        currentVersion: '1.3.1',
+        envSupported: true,
+        port: first.port,
+        getSetting: () => undefined,
+        isWindowVisible: () => true,
+        notify: vi.fn(),
+        onOpenSettings: vi.fn(),
+        getLastAutoCheckAt: () => null,
+        setLastAutoCheckAt: () => undefined
+      })
+      s3.scheduleAutoCheck()
+      await vi.advanceTimersByTimeAsync(6_000)
+      expect(first.checkSpy).toHaveBeenCalledTimes(1)
+      s3.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('手动检查不受节流限制（节流只拦启动自动检查这一次触发）', async () => {
+    const NOW = Date.now()
+    const p = makePort()
+    const s = new UpdateService({
+      currentVersion: '1.3.1',
+      envSupported: true,
+      port: p.port,
+      getSetting: () => undefined,
+      isWindowVisible: () => true,
+      notify: vi.fn(),
+      onOpenSettings: vi.fn(),
+      getLastAutoCheckAt: () => NOW - 1000,
+      setLastAutoCheckAt: () => undefined
+    })
+    await s.check('manual')
+    expect(p.checkSpy).toHaveBeenCalledTimes(1)
   })
 })

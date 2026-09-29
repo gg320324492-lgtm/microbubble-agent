@@ -126,3 +126,40 @@ describe('更新状态机 — 禁用态与幂等', () => {
     expect(reset.version).toBeNull()
   })
 })
+
+describe('DL-7 — releaseNotes 随状态机流转', () => {
+  it('check-available 带 releaseNotes → 落入状态；不带 → 键不存在（历史形状兼容）', () => {
+    const withNotes = run([
+      { type: 'check-start' },
+      { type: 'check-available', version: '1.3.2', releaseNotes: '### 更新内容\n- 发送即上屏' }
+    ])
+    expect(withNotes.status).toBe('available')
+    expect(withNotes.releaseNotes).toBe('### 更新内容\n- 发送即上屏')
+
+    const without = run([
+      { type: 'check-start' },
+      { type: 'check-available', version: '1.3.2' }
+    ])
+    expect(without.status).toBe('available')
+    expect('releaseNotes' in without).toBe(false)
+  })
+
+  it('available→downloading→ready 保留 notes；check-none/reset 回到干净态', () => {
+    const s = run([
+      { type: 'check-start' },
+      { type: 'check-available', version: '1.3.2', releaseNotes: '日志' },
+      { type: 'download-start' },
+      { type: 'download-progress', percent: 50 },
+      { type: 'download-done' }
+    ])
+    expect(s.status).toBe('ready')
+    expect(s.releaseNotes).toBe('日志')
+
+    const none = run([
+      { type: 'check-start' },
+      { type: 'check-none' }
+    ])
+    expect(none.status).toBe('idle')
+    expect('releaseNotes' in none).toBe(false)
+  })
+})

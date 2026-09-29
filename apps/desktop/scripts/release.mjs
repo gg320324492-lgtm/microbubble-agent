@@ -26,6 +26,7 @@ import {
   checkVersionSync,
   classifyNativeAbi,
   electronTarget,
+  extractChangelogSection,
   verifyLatestYml
 } from './lib/release-utils.mjs'
 
@@ -261,10 +262,21 @@ async function stepLatest() {
   if (!existsSync(exePath)) die(`未找到安装包：${exePath}（请先执行 package）`)
   const sha512 = await sha512Base64(exePath)
   const size = statSync(exePath).size
-  const yml = buildLatestYml({ version, fileName: names.exe, sha512, size })
+  // DL-7 Part A：CHANGELOG 对应版本段落注入 releaseNotes（应用内更新弹窗的日志正文，
+  // 经国内 CDN 直达，不依赖 GitHub Release notes）。命中/未命中都必须显式留痕。
+  const changelogPath = join(ROOT, 'CHANGELOG.md')
+  let releaseNotes = null
+  if (existsSync(changelogPath)) {
+    releaseNotes = extractChangelogSection(readFileSync(changelogPath, 'utf8'), `v${version}`)
+    if (releaseNotes) log(`更新日志命中：CHANGELOG v${version} 段落 ${releaseNotes.length} 字符`)
+    else log(`[warn] CHANGELOG.md 未找到 v${version} 段落，latest.yml 不含 releaseNotes（发布前请补齐章节）`)
+  } else {
+    log(`[warn] 未找到 ${changelogPath}，latest.yml 不含 releaseNotes`)
+  }
+  const yml = buildLatestYml({ version, fileName: names.exe, sha512, size }, releaseNotes)
   writeFileSync(join(RELEASE_DIR, names.latestYml), yml)
-  log(`latest.yml 已生成：version=${version} size=${size}`)
-  const check = verifyLatestYml(yml, { version, fileName: names.exe, sha512, size })
+  log(`latest.yml 已生成：version=${version} size=${size}${releaseNotes ? ` releaseNotes=${releaseNotes.length} 字符` : '（无更新日志）'}`)
+  const check = verifyLatestYml(yml, { version, fileName: names.exe, sha512, size, ...(releaseNotes ? { releaseNotes } : {}) })
   if (!check.ok) die(`latest.yml 自校验失败：\n  ${check.issues.join('\n  ')}`)
   log('latest.yml 自校验通过')
 }

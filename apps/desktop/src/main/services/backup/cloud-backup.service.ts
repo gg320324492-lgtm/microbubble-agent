@@ -162,6 +162,8 @@ export class CloudBackupService {
   }
 
   private notifyFail(title: string, body: string): void {
+    // DL-7 Part C：失败必须落主进程日志（演练 ④：只弹通知零痕迹，排查全靠翻服务器日志）
+    this.log(`[backup] ${title}：${body}`)
     this.deps.notify?.(title, body)
   }
 }

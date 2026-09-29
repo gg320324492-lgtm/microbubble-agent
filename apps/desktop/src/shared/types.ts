@@ -385,4 +385,6 @@ export interface UpdateState {
   disabled: boolean
   /** 最近一次检查完成时间戳（ms） */
   checkedAt: number | null
+  /** DL-7：更新日志正文（来自 updateInfo.releaseNotes；available 时可能有值，其余状态为空） */
+  releaseNotes?: string | null
 }

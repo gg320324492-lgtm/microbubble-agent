@@ -9,11 +9,11 @@ import { isNewer } from './version'
 export interface UpdaterPort {
   /**
    * 查询更新源。
-   * - `{ version }` 有可用新版本
+   * - `{ version, releaseNotes? }` 有可用新版本（releaseNotes 来自 latest.yml，DL-7 Part A 注入）
    * - `null` / `{}` 已是最新
    * - `{ skipped: true }` 适配层闸门关闭（未打包且未放行）——**不是**"已是最新"，必须区别对待
    */
-  checkForUpdates(): Promise<{ version?: string | null; skipped?: boolean } | null>
+  checkForUpdates(): Promise<{ version?: string | null; releaseNotes?: string | null; skipped?: boolean } | null>
   downloadUpdate(): Promise<void>
   quitAndInstall(): void
   onProgress(cb: (percent: number) => void): void
@@ -33,12 +33,20 @@ export interface UpdateServiceDeps {
   onOpenSettings: () => void
   onStateChange?: (state: UpdateState) => void
   log?: (message: string) => void
+  /**
+   * DL-7：启动自动检查的每日节流存取（userData 下小 JSON，登录无关）。
+   * 缺省 = 不节流（与历史行为一致）；装配层注入后「每日至多打一次网络」。
+   */
+  getLastAutoCheckAt?: () => number | null
+  setLastAutoCheckAt?: (t: number) => void
 }
 
 /** 设置键 — 复用现有 settings 通道（按用户隔离） */
 export const SETTING_AUTO_CHECK = 'update.autoCheck'
 /** 启动后延迟自动检查（不阻塞启动） */
 export const AUTO_CHECK_DELAY_MS = 5000
+/** DL-7：启动自动检查节流窗口（20h——略短于一天，保证每天首启总能查一次） */
+export const AUTO_CHECK_THROTTLE_MS = 20 * 60 * 60 * 1000
 
 export class UpdateService {
   private state: UpdateState
@@ -87,7 +95,8 @@ export class UpdateService {
       }
       const version = res?.version ?? null
       if (version && isNewer(version, this.deps.currentVersion)) {
-        this.dispatch({ type: 'check-available', version })
+        const notes = typeof res?.releaseNotes === 'string' && res.releaseNotes.length > 0 ? res.releaseNotes : null
+        this.dispatch({ type: 'check-available', version, releaseNotes: notes })
         this.notifyAvailable(version)
       } else {
         this.dispatch({ type: 'check-none' })
@@ -122,12 +131,22 @@ export class UpdateService {
     return true
   }
 
-  /** 启动后延迟自动检查（失败静默）；定时器 unref 以免阻塞进程退出 */
+  /**
+   * 启动后延迟自动检查（失败静默）；定时器 unref 以免阻塞进程退出。
+   * DL-7：每日至多一次——注入了节流存取时，距上次自动检查不足 20h 直接跳过（手动检查不受限）。
+   */
   scheduleAutoCheck(delayMs: number = AUTO_CHECK_DELAY_MS): void {
     if (this.state.disabled) return
+    const last = this.deps.getLastAutoCheckAt?.() ?? null
+    if (last && Date.now() - last < AUTO_CHECK_THROTTLE_MS) {
+      this.deps.log?.('[update] auto check skipped: 24h 内已自动检查过（节流）')
+      return
+    }
     if (this.autoCheckTimer) clearTimeout(this.autoCheckTimer)
     this.autoCheckTimer = setTimeout(() => {
       this.autoCheckTimer = null
+      // 记录在发请求前：检查失败也算当日已检查，避免失败风暴把每次启动都打成网络请求
+      this.deps.setLastAutoCheckAt?.(Date.now())
       void this.check('auto')
     }, delayMs)
     const t = this.autoCheckTimer as unknown as { unref?: () => void }

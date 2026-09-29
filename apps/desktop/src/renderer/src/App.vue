@@ -5,6 +5,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CommandRegistry, type Command } from '@shared/command-registry'
 import CommandPalette from './components/CommandPalette.vue'
+import UpdateNotifyDialog from './components/UpdateNotifyDialog.vue'
 
 const router = useRouter()
 const showPalette = ref(false)
@@ -46,4 +47,6 @@ onUnmounted(() => {
 <template>
   <router-view />
   <CommandPalette :registry="registry" :visible="showPalette" @close="showPalette = false" />
+  <!-- DL-7：启动期更新通知（有新版本时弹一次；与设置页 M6-1 入口共用状态机） -->
+  <UpdateNotifyDialog />
 </template>

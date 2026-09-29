@@ -349,6 +349,24 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     log: (message) => {
       // 打包后无控制台，重定向 stdout 启动时仍可取证；不进任何用户可见界面
       console.log(message)
+    },
+    // DL-7：启动自动检查「每日至多一次」节流的持久化（userData 下小 JSON，与登录态无关——
+    // 5s 延迟触发时用户可能尚未登录，settings 通道会被 AUTH_REQUIRED 挡掉）
+    getLastAutoCheckAt: () => {
+      try {
+        const raw = readFileSync(join(app.getPath('userData'), 'update-last-autocheck.json'), 'utf8')
+        const parsed = JSON.parse(raw) as { at?: number }
+        return typeof parsed.at === 'number' ? parsed.at : null
+      } catch {
+        return null
+      }
+    },
+    setLastAutoCheckAt: (t) => {
+      try {
+        writeFileSync(join(app.getPath('userData'), 'update-last-autocheck.json'), JSON.stringify({ at: t }), 'utf8')
+      } catch (e) {
+        console.log(`[update] 记录自动检查时间失败：${e instanceof Error ? e.message : String(e)}`)
+      }
     }
   })
 
@@ -1656,7 +1674,14 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     createBackup: (o) => backup.createBackup(o),
     applyRetention: (dir, o) => backup.applyRetention(dir, o),
     measureFilesBytes: () => backup.measureFilesBytes(),
-    notify: (title, body) => desktopNotify(title, body, () => undefined),
+    // DL-7 Part C：desktopNotify 内部无兜底（Notification 构造/show 可能抛），此处不再静默吞
+    notify: (title, body) => {
+      try {
+        desktopNotify(title, body, () => undefined)
+      } catch (e) {
+        console.log(`[daily-backup] 系统通知发送失败：${e instanceof Error ? e.message : String(e)}`)
+      }
+    },
     log: (m) => console.log(`[daily-backup] ${m}`)
   })
   dailyBackup.start()
@@ -1839,8 +1864,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       try {
         const { Notification } = require('electron') as typeof import('electron')
         if (Notification.isSupported()) new Notification({ title, body }).show()
-      } catch {
-        /* 通知不可用不影响备份 */
+      } catch (e) {
+        // DL-7 Part C：通知不可用不再静默——落日志但不重抛（通知失败不影响备份主流程）
+        console.log(`[backup] 系统通知发送失败：${e instanceof Error ? e.message : String(e)}`)
       }
     },
     log: (m) => console.log(m)

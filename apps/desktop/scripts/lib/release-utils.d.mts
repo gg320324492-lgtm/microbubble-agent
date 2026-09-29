@@ -22,6 +22,8 @@ export interface LatestYmlExpectation {
   fileName: string
   sha512: string
   size: number
+  /** DL-7 Part A：带此字段时 verifyLatestYml 校验 releaseNotes 存在且一致；未带时校验其省略 */
+  releaseNotes?: string
 }
 
 export interface VerifyResult {
@@ -37,7 +39,8 @@ export interface ArtifactNames {
 
 export declare function extractAppVersion(source: string): string | null
 export declare function checkVersionSync(input: { pkgVersion: string; constantsSource: string }): VersionSyncResult
-export declare function buildLatestYml(input: LatestYmlInput): string
+export declare function buildLatestYml(input: LatestYmlInput, releaseNotes?: string | null): string
+export declare function extractChangelogSection(changelogSource: string, version: string): string | null
 export declare function verifyLatestYml(ymlText: string, expected: LatestYmlExpectation): VerifyResult
 export declare function chunk<T>(items: T[], size: number): T[][]
 export declare function planOutCleanup(topLevelEntries: string[], batchSize?: number): string[][]

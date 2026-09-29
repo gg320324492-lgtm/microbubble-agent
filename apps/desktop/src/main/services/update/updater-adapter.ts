@@ -75,16 +75,24 @@ export function createElectronUpdaterPort(options: UpdaterAdapterOptions = {}): 
         return { skipped: true }
       }
       // 事件与返回值双通道取版本号：部分 provider 在"无更新"时不返回结果对象
-      const captured: { version: string | null } = { version: null }
-      const onAvailable = (info: { version?: string }): void => {
+      const captured: { version: string | null; notes: string | null } = { version: null, notes: null }
+      const onAvailable = (info: { version?: string; releaseNotes?: unknown }): void => {
         captured.version = info?.version ?? null
+        captured.notes = typeof info?.releaseNotes === 'string' ? info.releaseNotes : null
       }
       autoUpdater.on('update-available', onAvailable)
       try {
         const res = await autoUpdater.checkForUpdates()
         const fromResult = res?.isUpdateAvailable ? (res.updateInfo?.version ?? null) : null
+        const fromResultNotes =
+          res?.isUpdateAvailable && typeof (res.updateInfo as { releaseNotes?: unknown } | undefined)?.releaseNotes === 'string'
+            ? (res.updateInfo as { releaseNotes: string }).releaseNotes
+            : null
         const version = captured.version ?? fromResult
-        return version ? { version } : null
+        const releaseNotes = captured.notes ?? fromResultNotes
+        // DL-7：releaseNotes（latest.yml releaseNotes 字段，Part A 注入）随版本一并上交；
+        // GitHub 回退路径下该字段是 ReleaseNoteInfo[] 而非字符串 → 视为无日志（弹窗优雅降级）
+        return version ? (releaseNotes ? { version, releaseNotes } : { version }) : null
       } finally {
         autoUpdater.removeListener('update-available', onAvailable)
       }
