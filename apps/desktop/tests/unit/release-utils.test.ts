@@ -125,6 +125,14 @@ describe('DL-7 Part A：CHANGELOG 段落抽取', () => {
     expect(extractChangelogSection('', 'v1.0.0')).toBeNull()
     expect(extractChangelogSection(CHANGELOG, '')).toBeNull()
   })
+
+  it('真实仓库 CRLF 行尾：抽取结果规范化为 LF（latest.yml 与弹窗不混入 \\r）', () => {
+    const crlf = CHANGELOG.replace(/\n/g, '\r\n')
+    const section = extractChangelogSection(crlf, 'v1.3.1')
+    expect(section).not.toBeNull()
+    expect(section).not.toContain('\r')
+    expect(section).toContain('输入框立即清空')
+  })
 })
 
 describe('DL-7 Part A：releaseNotes 注入 latest.yml（YAML 安全往返）', () => {

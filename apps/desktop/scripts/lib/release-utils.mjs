@@ -90,7 +90,8 @@ export function buildLatestYml(input, releaseNotes) {
  * @returns {string | null} 命中返回段落正文；找不到返回 null（不静默返回整篇、不抛异常）
  */
 export function extractChangelogSection(changelogSource, version) {
-  const text = String(changelogSource ?? '')
+  // 行尾规范化：仓库实际是 CRLF，latest.yml/弹窗展示统一 LF（\r 在 YAML 与 <pre> 里都是噪音）
+  const text = String(changelogSource ?? '').replace(/\r\n/g, '\n')
   const ver = String(version ?? '').trim()
   if (!ver) return null
   const escaped = ver.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

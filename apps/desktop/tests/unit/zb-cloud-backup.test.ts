@@ -124,7 +124,7 @@ describe('ZB 云端备份执行器', () => {
     expect(h.uploaded).toHaveLength(0)
   })
 
-  it('★ 上传失败：可感知（系统通知）+ 返回错误，不静默', async () => {
+  it('★ 上传失败：可感知（系统通知）+ 返回错误，不静默；DL-7 起失败原因落日志', async () => {
     const h = harness({ failUpload: true })
     const r = await h.svc.runOnce({ enabled: true, keep: 7 })
     expect(r.ok).toBe(false)
@@ -132,6 +132,12 @@ describe('ZB 云端备份执行器', () => {
     expect(r.reason).toBe('error')
     expect(h.notices.length).toBeGreaterThan(0)
     expect(h.notices.join()).toContain('云端备份失败')
+    // DL-7 Part C：notifyFail 必须同步落日志（title+body 与通知一致），主进程 console.log 同路径可取证
+    const failLines = h.logs.filter((l) => l.includes('云端备份失败'))
+    expect(failLines).toHaveLength(1)
+    expect(failLines[0]).toBe('[backup] 云端备份失败：网络不可用')
+    // 把将出现在主进程日志里的片段原样打印，供验收报告引用
+    console.log('[DL-7 Part C 主进程日志片段]', failLines[0])
   })
 
   it('★ 列远端失败时跳过清理（不因清理失败而误删）', async () => {
