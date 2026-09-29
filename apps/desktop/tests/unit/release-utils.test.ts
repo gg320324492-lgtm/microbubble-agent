@@ -206,6 +206,22 @@ describe('DL-7 Part A：releaseNotes 注入 latest.yml（YAML 安全往返）', 
     }
   })
 
+  it('FIN-1 B2: 尾随多换行归一为单个换行; 仅含换行视为空 (字段省略)', () => {
+    for (const [raw, normalized] of [
+      ['abc\n\n', 'abc\n'],
+      ['abc\n\n\n', 'abc\n'],
+      ['a\n\nb\n', 'a\n\nb\n'],
+      ['abc\n', 'abc\n'],
+      ['abc', 'abc'],
+    ] as const) {
+      const parsed = yaml.load(buildLatestYml({ ...expected }, raw)) as { releaseNotes?: string }
+      expect(parsed.releaseNotes, JSON.stringify(raw)).toBe(normalized)
+    }
+    // 仅含换行 → 无内容可表达 → 字段整体省略 (与 legacy 输出逐字一致)
+    const legacy = buildLatestYml({ ...expected })
+    expect(buildLatestYml({ ...expected }, '\n')).toBe(legacy)
+  })
+
   it('verifyLatestYml：notes 命中通过；缺失/不一致/多出（expected 未带而 yml 带）均判失败', () => {
     const yml = buildLatestYml({ ...expected }, GNARLY)
     expect(verifyLatestYml(yml, { ...expected, releaseNotes: GNARLY }).ok).toBe(true)

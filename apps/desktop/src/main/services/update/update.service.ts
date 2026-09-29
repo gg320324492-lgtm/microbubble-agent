@@ -139,7 +139,9 @@ export class UpdateService {
     if (this.state.disabled) return
     const last = this.deps.getLastAutoCheckAt?.() ?? null
     if (last && Date.now() - last < AUTO_CHECK_THROTTLE_MS) {
-      this.deps.log?.('[update] auto check skipped: 24h 内已自动检查过（节流）')
+      this.deps.log?.(
+        `[update] auto check skipped: ${Math.round(AUTO_CHECK_THROTTLE_MS / 3600000)}h 内已自动检查过（节流）`
+      )
       return
     }
     if (this.autoCheckTimer) clearTimeout(this.autoCheckTimer)

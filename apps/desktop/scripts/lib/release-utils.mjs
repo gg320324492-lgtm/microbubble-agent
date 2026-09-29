@@ -44,14 +44,21 @@ export function checkVersionSync(input) {
  * releaseNotes 的 YAML 字面量块标量表示（DL-7 Part A）。
  * 任意多行 Markdown（`:` `#` `---` 缩进、空行、引号、反斜杠、中文）整块转义：
  * 块体逐行缩进 4 空格，空行保持为空，任何内容行都不可能被误读为结构键。
- * chomp 规则：输入以 \n 结尾用 clip（`|`，解回恰好补一个 \n）；否则 strip（`|-`）——
- * 两者配合保证 js-yaml 解回与输入逐字一致。
+ *
+ * 入参契约（FIN-1 B2）：尾随 **2 个及以上**换行会被归一为单个换行（块标量 clip
+ * 语义只能精确表达「至多一个尾随换行」，多尾随空行在 YAML 文本形态下有损）；
+ * 其余内容逐字往返。生产唯一调用方 extractChangelogSection 已剥除全部尾随空白，
+ * 归一不可达，此处为防御性契约。
+ *
+ * chomp 规则：归一后以 \n 结尾用 clip（`|`，解回恰好补一个 \n）；否则 strip（`|-`）——
+ * 两者配合保证 js-yaml 解回与归一后输入逐字一致。
  * @param {string} notes
  * @returns {string[]} 该字段对应的输出行（不含结尾空行）
  */
 function releaseNotesLines(notes) {
-  const chomp = notes.endsWith('\n') ? '|' : '|-'
-  const rawLines = notes.split('\n')
+  const normalized = notes.replace(/\n{2,}$/, '\n')
+  const chomp = normalized.endsWith('\n') ? '|' : '|-'
+  const rawLines = normalized.split('\n')
   if (chomp === '|') rawLines.pop() // 尾部 \n 由 clip 语义补回，不产出多余的空行
   return [`releaseNotes: ${chomp}`, ...rawLines.map((l) => (l.length > 0 ? `    ${l}` : ''))]
 }
@@ -76,7 +83,11 @@ export function buildLatestYml(input, releaseNotes) {
     `sha512: ${input.sha512}`,
     `releaseDate: '${releaseDate}'`
   ]
-  const notes = typeof releaseNotes === 'string' ? releaseNotes : ''
+  // FIN-1 B2 入参契约: 仅含换行视为空 (字段省略); 尾随 2+ 个换行归一为单个
+  // (块标量 clip 语义边界, 归一后逐字往返); 其余逐字。
+  let notes = typeof releaseNotes === 'string' ? releaseNotes : ''
+  if (notes === '\n') notes = ''
+  else notes = notes.replace(/\n{2,}$/, '\n')
   if (notes.length === 0) return [...head, ''].join('\n')
   return [...head, ...releaseNotesLines(notes), ''].join('\n')
 }

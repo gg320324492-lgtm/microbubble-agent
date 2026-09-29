@@ -1806,36 +1806,43 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
   ): { ok: true; dirParts: string[]; name: string } | { ok: false; error: string } => {
     const parts = remotePath.split('/')
     const name = parts.pop() ?? ''
-    if (!name.trim() || name.includes('\\') || name.includes('..')) {
+    // FIN-1 B3: 单点 '.' 一并拒掉 (会建出名为 '.' 的怪文件夹)
+    if (!name.trim() || name.includes('\\') || name.includes('..') || name.trim() === '.') {
       return { ok: false, error: `非法备份文件名: ${name}` }
     }
     const dirParts: string[] = []
     for (const seg of parts) {
       const s = seg.trim()
       if (!s) continue
-      if (s.includes('\\') || s.includes('..')) {
+      if (s.includes('\\') || s.includes('..') || s === '.') {
         return { ok: false, error: `非法备份目录段: ${remotePath}` }
       }
       dirParts.push(s)
     }
     return { ok: true, dirParts, name }
   }
-  const ensureRemoteFolderId = async (name: string, parentId: number | null): Promise<number | null> => {
+  const ensureRemoteFolderId = async (
+    name: string,
+    parentId: number | null
+  ): Promise<{ ok: true; id: number } | { ok: false; error: string }> => {
+    // FIN-1 B4: listFolders 失败显式向上传播 (瞬时网络错误不得放大成重复建夹)
     const lst = await remoteDrive.listFolders(parentId)
-    if (lst.ok) {
-      const hit = lst.data.find((f) => f.name === name)
-      if (hit) return hit.id
-    }
+    if (!lst.ok) return { ok: false, error: driveErrorMessage(lst.error) }
+    const hit = lst.data.find((f) => f.name === name)
+    if (hit) return { ok: true, id: hit.id }
     const created = await remoteDrive.createFolder(name, parentId)
-    return created.ok ? created.data.id : null
+    return created.ok ? { ok: true, id: created.data.id } : { ok: false, error: driveErrorMessage(created.error) }
   }
-  const ensureRemoteFolderPath = async (dirParts: string[]): Promise<number | null> => {
+  const ensureRemoteFolderPath = async (
+    dirParts: string[]
+  ): Promise<{ ok: true; id: number } | { ok: false; error: string }> => {
     let pid: number | null = null
     for (const seg of dirParts) {
-      pid = await ensureRemoteFolderId(seg, pid)
-      if (pid === null) return null
+      const r = await ensureRemoteFolderId(seg, pid)
+      if (!r.ok) return r
+      pid = r.id
     }
-    return pid
+    return { ok: true, id: pid ?? 0 }
   }
   const resolveRemoteFolderPath = async (dirParts: string[]): Promise<number | null> => {
     // 只查不建 (listRemote/deleteRemote 语义: 目录不存在 = 无可操作项)
@@ -1889,8 +1896,9 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       // 上传仍复用 M2-3c 分块通道, 与普通文件上传同款传 parentId。
       const parsed = normalizeBackupSegments(remotePath)
       if (!parsed.ok) return { ok: false, error: parsed.error }
-      const parentId = await ensureRemoteFolderPath(parsed.dirParts)
-      if (parentId === null) return { ok: false, error: `备份目录创建失败: ${parsed.dirParts.join('/')}` }
+      const ensured = await ensureRemoteFolderPath(parsed.dirParts)
+      if (!ensured.ok) return { ok: false, error: ensured.error } // FIN-1 B4: 失败可感知, 不静默建夹
+      const parentId = ensured.id
       const r = await remoteDrive.upload({
         filename: parsed.name,
         fileSize: bytes.length,
