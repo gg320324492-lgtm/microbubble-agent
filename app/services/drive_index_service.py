@@ -188,6 +188,23 @@ if _HAS_CELERY:
 
             engine, session_factory = _mk()
             try:
+                # ZB-2: 备份产物形态 (.mnbbak / .key.json) 跳过内容索引——
+                # key.json 的 chunk 会把密钥信封明文写进 knowledge_chunks
+                from app.models.knowledge import Knowledge
+                from app.services.drive_ingest_tasks import is_backup_artifact_name
+
+                async with session_factory() as _db:
+                    row_name = (
+                        await _db.execute(
+                            select(Knowledge.file_name).where(Knowledge.id == knowledge_id)
+                        )
+                    ).scalar()
+                if is_backup_artifact_name(row_name):
+                    logger.info(
+                        f"[wp2] knowledge_id={knowledge_id} file_name={row_name} "
+                        f"为备份产物形态, 跳过内容索引 (ZB-2)"
+                    )
+                    return {"knowledge_id": knowledge_id, "skipped": "backup-artifact"}
                 return await index_drive_content(knowledge_id, session_factory)
             finally:
                 await engine.dispose()

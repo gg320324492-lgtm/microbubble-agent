@@ -1798,6 +1798,58 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
     log: (m) => console.log(m)
   })
 
+  // ZB-2: 备份远端目录解析 — 目录段防穿越口径同 backup.service.ts deleteLocalBackup
+  // (段内禁止 '\\' 与 '..' 且非空); find-or-create 走 remoteDrive 既有通道
+  // (listFolders 精确匹配 → createFolder), 不硬编码 folder id。
+  const normalizeBackupSegments = (
+    remotePath: string
+  ): { ok: true; dirParts: string[]; name: string } | { ok: false; error: string } => {
+    const parts = remotePath.split('/')
+    const name = parts.pop() ?? ''
+    if (!name.trim() || name.includes('\\') || name.includes('..')) {
+      return { ok: false, error: `非法备份文件名: ${name}` }
+    }
+    const dirParts: string[] = []
+    for (const seg of parts) {
+      const s = seg.trim()
+      if (!s) continue
+      if (s.includes('\\') || s.includes('..')) {
+        return { ok: false, error: `非法备份目录段: ${remotePath}` }
+      }
+      dirParts.push(s)
+    }
+    return { ok: true, dirParts, name }
+  }
+  const ensureRemoteFolderId = async (name: string, parentId: number | null): Promise<number | null> => {
+    const lst = await remoteDrive.listFolders(parentId)
+    if (lst.ok) {
+      const hit = lst.data.find((f) => f.name === name)
+      if (hit) return hit.id
+    }
+    const created = await remoteDrive.createFolder(name, parentId)
+    return created.ok ? created.data.id : null
+  }
+  const ensureRemoteFolderPath = async (dirParts: string[]): Promise<number | null> => {
+    let pid: number | null = null
+    for (const seg of dirParts) {
+      pid = await ensureRemoteFolderId(seg, pid)
+      if (pid === null) return null
+    }
+    return pid
+  }
+  const resolveRemoteFolderPath = async (dirParts: string[]): Promise<number | null> => {
+    // 只查不建 (listRemote/deleteRemote 语义: 目录不存在 = 无可操作项)
+    let pid: number | null = null
+    for (const seg of dirParts) {
+      const lst = await remoteDrive.listFolders(pid)
+      if (!lst.ok) return null
+      const hit = lst.data.find((f) => f.name === seg)
+      if (!hit) return null
+      pid = hit.id
+    }
+    return pid
+  }
+
   // 工单 ZB：零感托管备份执行器（复用 M2-3c 云端通道；密钥走 safeStorage）
   cloudBackup = new CloudBackupService({
     getCloudUsername: () => auth.cloudIdentityOfCurrentUser(),
@@ -1832,19 +1884,30 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       return { fileName, bytes: new Uint8Array(bytes) }
     },
     uploadFile: async (remotePath, bytes) => {
-      // 复用 M2-3c 分块通道：小文件走简化路径，大文件分块
-      const parts = remotePath.split('/')
-      const name = parts.pop() ?? 'backup.mnbbak'
+      // ZB-2: 解析目录段并 find-or-create 文件夹链 (backups/<user>) —— 目录信息
+      // 不再丢弃 (旧实现只传文件名, 备份落根目录 + team, 全组可见他人钥匙)。
+      // 上传仍复用 M2-3c 分块通道, 与普通文件上传同款传 parentId。
+      const parsed = normalizeBackupSegments(remotePath)
+      if (!parsed.ok) return { ok: false, error: parsed.error }
+      const parentId = await ensureRemoteFolderPath(parsed.dirParts)
+      if (parentId === null) return { ok: false, error: `备份目录创建失败: ${parsed.dirParts.join('/')}` }
       const r = await remoteDrive.upload({
-        filename: name,
+        filename: parsed.name,
         fileSize: bytes.length,
-        readChunk: async (offset, length) => bytes.subarray(offset, offset + length)
+        readChunk: async (offset, length) => bytes.subarray(offset, offset + length),
+        parentId
       })
       if (!r.ok) return { ok: false, error: driveErrorMessage(r.error) }
       return { ok: true }
     },
     listRemote: async (remoteDir) => {
-      const r = await remoteDrive.list({ keyword: remoteDir.split('/').pop() ?? '' })
+      // ZB-2: 按目录段解析保留区文件夹, 在**该文件夹内**按文件名查 —— 旧实现按
+      // keyword 全局搜, applyRetention 会找错/找不到目录导致清理失效
+      const parsed = normalizeBackupSegments(remoteDir)
+      if (!parsed.ok) return { ok: false, error: parsed.error }
+      const folderId = await resolveRemoteFolderPath(parsed.dirParts)
+      if (folderId === null) return { ok: true, entries: [] } // 目录未建 = 无可清理项
+      const r = await remoteDrive.list({ folderId, keyword: parsed.name })
       if (!r.ok) return { ok: false, error: driveErrorMessage(r.error) }
       return {
         ok: true,
@@ -1852,9 +1915,15 @@ export function registerIpc(db: SqlDatabase, dbPath: string, getWindow: () => Br
       }
     },
     deleteRemote: async (remotePath) => {
-      const r = await remoteDrive.list({ keyword: remotePath.split('/').pop() ?? '' })
+      // ZB-2: 与 listRemote 同口径 —— 在解析出的保留区文件夹内精确删除,
+      // 不再按 keyword 全局搜 (避免误删别处同名文件)
+      const parsed = normalizeBackupSegments(remotePath)
+      if (!parsed.ok) return { ok: false, error: parsed.error }
+      const folderId = await resolveRemoteFolderPath(parsed.dirParts)
+      if (folderId === null) return { ok: false, error: '未找到远端文件' }
+      const r = await remoteDrive.list({ folderId, keyword: parsed.name })
       if (!r.ok) return { ok: false, error: driveErrorMessage(r.error) }
-      const hit = r.data.items.find((i) => i.fileName === remotePath.split('/').pop())
+      const hit = r.data.items.find((i) => i.fileName === parsed.name)
       if (!hit) return { ok: false, error: '未找到远端文件' }
       const del = await remoteDrive.remove(hit.id)
       return del.ok ? { ok: true } : { ok: false, error: driveErrorMessage(del.error) }

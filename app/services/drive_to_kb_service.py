@@ -390,7 +390,11 @@ class DriveToKBService:
         # drive 侧 title/file_name 上限 500, kb 侧 Knowledge.title String(200)
         # + CHECK 约束 → 截断到 200 防直抄 500
         title = (row.title or row.file_name or f"网盘文件 {row.id}")[:200]
-        visibility = row.visibility if row.visibility != "private" else "team"
+        # ZB-2: 孪生行继承源行 visibility (旧实现 private → team 是可见性放大——
+        # 抽取动作把 owner 私有文件翻成全组可见)。KB 读取侧 (knowledge_service/
+        # hybrid_retriever) 对非 team/public 行有硬过滤, private 孪生仅 owner 相关,
+        # 语义安全; 备份形态在任务入口已整体跳过 (ZB-2), 此处继承影响其余 private 文件。
+        visibility = row.visibility
         knowledge = Knowledge(
             title=title,
             content=content,
