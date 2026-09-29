@@ -113,15 +113,18 @@ def upgrade() -> None:
 def downgrade() -> None:
     # 恢复「行还在」: 占位 content (原始密钥明文无法也不应还原), chunks 不恢复。
     # id 已被重建占用的跳过 (应用侧可能已产生新行)。
+    # created_at/updated_at 无 server_default (TimestampMixin 为 python 侧默认), 用 now() 补。
     op.execute(
         f"""
         INSERT INTO knowledge (id, title, content, source_type, source, file_name,
                                file_type, file_size, created_by, storage_mode,
-                               visibility, folder_id, analysis_status)
+                               visibility, folder_id, analysis_status,
+                               created_at, updated_at)
         SELECT a.id, a.file_name,
                '[ZB-2 迁移 141: 备份形态知识库行已删除 (原文含密钥信封明文, 不可还原)]',
                'drive_extracted', '', a.file_name, 'bin', 0, a.created_by,
-               'kb', a.visibility, NULL, 'skipped'
+               'kb', a.visibility, NULL, 'skipped',
+               now(), now()
         FROM {_ARCHIVE_TABLE} a
         WHERE NOT EXISTS (SELECT 1 FROM knowledge k WHERE k.id = a.id)
         """
