@@ -2,19 +2,18 @@ name: Server Tests Baseline (full tests/)
 
 # 2026-09-30 S1.2 (阶段收尾规划 docs/plans/2026-09-30-phase-closeout-plan.md, 仓库 desktop-conversion)
 #
-# 背景: 服务端 451 个测试文件此前无任何 workflow 跑过全量 —— rag-framework-ci.yml
-#   只跑 tests/rag_framework/ 子集, qa-bench-ci.yml 是 LLM 质量基准, desktop-release.yml
-#   只覆盖 apps/desktop。已实证红灯潜伏: test_drive_v2_pr3_comment_v2_e2e.py 红了 2 个月。
+# 背景: 服务端 451 个测试文件此前无任何 workflow 跑过全量。红灯已实证潜伏 2 个月
+#   (test_drive_v2_pr3_comment_v2_e2e.py, S1.3 已修)。
 #
-# 分两步走 (本文件是第 1 步):
-#   1) continue-on-error: true 收集全量基线红灯清单 (junit artifact), 不阻塞合并
-#   2) 清单收敛后逐个修复, 最终把 continue-on-error 摘除转为硬门
+# v2 (2026-09-30): v1 单 job 串行跑全量, 90 分钟 timeout 只完成 ~8-10% 被杀
+#   (run 36618267053, 1h30m26s cancelled)。改为 8 片 matrix:
+#   - 全部 test_*.py 排序后 round-robin 均分 8 片 (每片时长均匀, 不按字母序聚集)
+#   - 每个 matrix job 独立 postgres+redis service 容器 → 并发分片天然库隔离,
+#     不触发 "共享 microbubble_test 并发 DROP SCHEMA 互砸" (CLAUDE.md 铁律)
+#   - 每片 continue-on-error + junit artifact; summary job 合并统计
 #
-# 环境对齐 (CLAUDE.md 测试纪律):
-#   - tests/conftest.py: TEST_DATABASE_URL 环境变量优先; 铁律禁止连生产库名 microbubble
-#   - 测试库需 extension: vector (pgvector) + pg_trgm (conftest create_all 依赖)
-#   - services 用 pgvector/pgvector:pg16 内置扩展, 免手工编译 (类 20.141)
-#   - 每次运行是全新 postgres 容器 → 无 "共享 microbubble_test 并发 DROP SCHEMA" 冲突
+# 分两步走 (本文件仍是第 1 步): 收集全量基线红灯清单, 不阻塞合并;
+#   清单收敛后逐个修复, 最终摘除 continue-on-error 转硬门, 并可删片数。
 
 on:
   push:
@@ -31,9 +30,13 @@ permissions:
 
 jobs:
   server-tests-baseline:
-    name: Full tests/ baseline (non-blocking)
+    name: shard ${{ matrix.shard }} (non-blocking)
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
 
     services:
       postgres:
@@ -85,7 +88,15 @@ jobs:
           CREATE EXTENSION IF NOT EXISTS pg_trgm;
           SQL
 
-      - name: Run full test suite (baseline collection, failures expected)
+      # round-robin 分片: 排序后按 NR % 8 轮转分发, 每片混合全仓各类测试, 时长均匀
+      - name: Split test files into 8 shards
+        run: |
+          mkdir -p .pytest-chunks
+          find tests -name "test_*.py" | sort | \
+            awk -v N=8 '{print > (".pytest-chunks/chunk-" (NR % N) ".txt")}'
+          wc -l .pytest-chunks/chunk-*.txt
+
+      - name: Run shard ${{ matrix.shard }} (baseline collection, failures expected)
         continue-on-error: true
         env:
           TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/microbubble_test"
@@ -94,21 +105,88 @@ jobs:
           SKIP_DB_SETUP: ""
         run: |
           set -o pipefail
-          python -m pytest tests/ -q \
-            --continue-on-collection-errors \
-            --junitxml=test-results-baseline.xml \
-            -rfE 2>&1 | tee pytest-baseline-output.txt || true
-          echo "===== BASELINE SUMMARY ====="
-          grep -E "^(FAILED|ERROR)" pytest-baseline-output.txt | head -100 || true
-          tail -5 pytest-baseline-output.txt
+          echo "===== shard ${{ matrix.shard }} files: $(wc -l < .pytest-chunks/chunk-${{ matrix.shard }}.txt) ====="
+          tr '\n' '\0' < .pytest-chunks/chunk-${{ matrix.shard }}.txt | \
+            xargs -0 python -m pytest -q \
+              --continue-on-collection-errors \
+              --junitxml=report-shard-${{ matrix.shard }}.xml \
+              -rfE 2>&1 | tee pytest-shard-${{ matrix.shard }}.txt || true
+          echo "===== SHARD ${{ matrix.shard }} SUMMARY ====="
+          grep -E "^(FAILED|ERROR)" pytest-shard-${{ matrix.shard }}.txt | head -60 || true
+          tail -3 pytest-shard-${{ matrix.shard }}.txt
 
-      - name: Upload baseline report
+      - name: Upload shard report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: server-tests-baseline-${{ github.run_number }}
+          name: baseline-shard-${{ matrix.shard }}
           path: |
-            test-results-baseline.xml
-            pytest-baseline-output.txt
+            report-shard-${{ matrix.shard }}.xml
+            pytest-shard-${{ matrix.shard }}.txt
           retention-days: 14
           if-no-files-found: warn
+
+  baseline-summary:
+    name: Merge baseline summary
+    runs-on: ubuntu-latest
+    needs: server-tests-baseline
+    if: always()
+    steps:
+      - name: Download all shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baseline-shard-*
+          merge-multiple: true
+          path: reports
+
+      - name: Merge statistics into step summary
+        run: |
+          python - <<'EOF'
+          import glob, os, xml.etree.ElementTree as ET
+
+          tot = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          bad = []
+          for f in sorted(glob.glob("reports/report-shard-*.xml")):
+              ts = ET.parse(f).getroot()
+              if ts.tag == "testsuites":
+                  suites = ts.findall("testsuite")
+              else:
+                  suites = [ts]
+              for s in suites:
+                  for k in tot:
+                      tot[k] += int(s.get(k, 0))
+                  for tc in s.iter("testcase"):
+                      for kind in ("failure", "error"):
+                          node = tc.find(kind)
+                          if node is not None:
+                              bad.append(f"{kind.upper():7s} {tc.get('classname','')}.{tc.get('name','')}")
+                              break
+
+          lines = [
+              "## Full tests/ baseline (v2, 8 shards)",
+              "",
+              f"| passed | failed | errors | skipped | total |",
+              f"|---|---|---|---|---|",
+              f"| {tot['tests']-tot['failures']-tot['errors']-tot['skipped']} | {tot['failures']} | {tot['errors']} | {tot['skipped']} | {tot['tests']} |",
+              "",
+              f"<details><summary>FAILED/ERROR 清单 ({len(bad)} 条)</summary>",
+              "",
+              "```",
+          ]
+          lines += bad[:200]
+          if len(bad) > 200:
+              lines.append(f"... 另有 {len(bad)-200} 条, 见 shard artifact")
+          lines += ["```", "</details>"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write("\n".join(lines) + "\n")
+          print("\n".join(lines[:8]))
+          print(f"bad total: {len(bad)}")
+          EOF
+
+      - name: Upload merged reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-merged-reports
+          path: reports/
+          retention-days: 14
