@@ -83,6 +83,10 @@ if (!gotTheLock) {
 }
 
 app.whenReady().then(() => {
+  // Windows 应用身份统一（logo 统一 2026-09-29）：任务栏分组/通知气泡都挂到
+  // cn.mnb-lab.workbench 名下——dev/调试直启实例也显示应用窗口图标（蓝色课题组 logo），
+  // 不再露出 Electron 默认原子图标。与 electron-builder.yml appId 同值。
+  if (process.platform === 'win32') app.setAppUserModelId('cn.mnb-lab.workbench')
   const dbPath = join(app.getPath('userData'), 'data', 'workbench.db')
   const db = openDatabase(dbPath)
   installDesktopPrimitives(() => mainWindow)
