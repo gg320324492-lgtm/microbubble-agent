@@ -1,0 +1,190 @@
+
+.trash-toolbar[data-v-31bf0bbe] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.batch-count[data-v-31bf0bbe] {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-left: auto;
+}
+
+/* 隐藏选择列（非编辑模式） */
+[data-v-31bf0bbe] .col-hidden {
+  visibility: hidden;
+  width: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+.task-title-cell[data-v-31bf0bbe] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.task-deleted[data-v-31bf0bbe] {
+  color: var(--color-text-secondary);
+  text-decoration: line-through;
+}
+.assignee-cell[data-v-31bf0bbe] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.deleted-time[data-v-31bf0bbe] {
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
+}
+.task-actions[data-v-31bf0bbe] {
+  display: flex;
+  gap: 4px;
+}
+.no-permission[data-v-31bf0bbe] {
+  color: var(--color-text-placeholder);
+  font-size: 13px;
+}
+.pagination[data-v-31bf0bbe] {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* PR #7: 移动端样式（CardList + 简易分页） */
+.mobile-task-actions[data-v-31bf0bbe] {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.mobile-action-btn[data-v-31bf0bbe] {
+  flex: 1;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-action-btn.restore[data-v-31bf0bbe] {
+  background: var(--color-success-bg);
+  color: var(--color-success, #67C23A);
+}
+.mobile-action-btn.delete[data-v-31bf0bbe] {
+  background: var(--color-danger-bg);
+  color: var(--color-danger, #F56C6C);
+}
+.mobile-action-btn[data-v-31bf0bbe]:active { opacity: 0.7;
+}
+.mobile-pagination[data-v-31bf0bbe] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  margin-top: 12px;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+}
+.page-info[data-v-31bf0bbe] {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.page-actions[data-v-31bf0bbe] {
+  display: flex;
+  gap: 8px;
+}
+.page-actions button[data-v-31bf0bbe] {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-page);
+  font-size: 12px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+}
+.page-actions button[data-v-31bf0bbe]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 自动删除倒计时 — 两行显示 */
+.auto-delete-cell[data-v-31bf0bbe] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+.auto-delete-relative[data-v-31bf0bbe] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.auto-delete-absolute[data-v-31bf0bbe] {
+  font-size: 11px;
+  color: var(--color-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+.auto-delete-icon[data-v-31bf0bbe] {
+  font-size: 12px;
+  animation: pulse-warning 2s var(--ease-in-out) infinite;
+}
+.auto-delete-none[data-v-31bf0bbe] {
+  color: var(--color-text-placeholder);
+}
+
+/* <= 0h：已过期 */
+.auto-delete-imminent[data-v-31bf0bbe] {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+  animation: pulse-danger 1.2s var(--ease-in-out) infinite;
+}
+
+/* < 6h：紧急 */
+.auto-delete-urgent[data-v-31bf0bbe] {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* 6-24h：警告 */
+.auto-delete-warning[data-v-31bf0bbe] {
+  color: var(--color-warning);
+  font-weight: var(--font-weight-medium);
+}
+
+/* 24-72h：正常 */
+.auto-delete-normal[data-v-31bf0bbe] {
+  color: var(--color-text-secondary);
+}
+
+/* > 72h：安全 */
+.auto-delete-safe[data-v-31bf0bbe] {
+  color: var(--color-text-placeholder);
+}
+
+
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .batch-count { color: var(--color-text-secondary);
+}
+[data-theme="dark"] .mobile-pagination {
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .page-actions button {
+  border-color: var(--color-border);
+  background: var(--color-bg-page);
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .auto-delete-imminent { color: var(--color-danger);
+}
+[data-theme="dark"] .auto-delete-urgent { color: var(--color-warning);
+}
+[data-theme="dark"] .auto-delete-warning { color: var(--color-warning);
+}
+[data-theme="dark"] .mobile-action-btn.restore {
+  background: var(--color-success-bg);
+  color: var(--color-success, #67C23A);
+}
+[data-theme="dark"] .mobile-action-btn.delete {
+  background: var(--color-danger-bg);
+  color: var(--color-danger, #F56C6C);
+}

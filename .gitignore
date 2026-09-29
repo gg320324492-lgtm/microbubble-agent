@@ -75,7 +75,12 @@ fixtures/prod_dump_*.sql
 
 # 前端
 node_modules/
-web/dist/
+# 2026-09-30 S1.4 (阶段收尾规划): web/dist 从"入库却 gitignore"矛盾改为显式承认入库。
+# 原因: 部署契约就是 git 里的 dist (push -> 云端 webhook -> deploy-auto.sh 校验并服务
+# web/dist, 见 scripts/deploy-auto.sh:34-37)。git rm --cached 会让云端 pull 物理删除
+# dist -> 整站 404。显式重新包含后, git add -f 不再需要 (历史上漏 -f 导致过 PWA
+# manifest 410 回归, CLAUDE.md 2026-07-11)。
+!web/dist/
 .webpack/
 # Playwright 测试输出
 test-results/
