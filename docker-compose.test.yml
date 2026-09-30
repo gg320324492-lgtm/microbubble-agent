@@ -58,7 +58,10 @@ services:
 
   # MinIO (端口错开, 独立凭据 + bucket microbubble-test)
   minio-test:
-    image: minio/minio
+    # 2026-10-01 S3.7: 原为 `minio/minio` 无 tag，官方镜像已迁 quay.io，
+    # CI 报 pull access denied / repository does not exist，Playwright 两个 job
+    # 全部死在 Start test environment。钉版本而非 latest，保证可复现。
+    image: quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${TEST_MINIO_ACCESS_KEY:-test_minio}

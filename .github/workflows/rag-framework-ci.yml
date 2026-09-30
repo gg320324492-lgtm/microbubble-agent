@@ -53,7 +53,12 @@ jobs:
       - name: Install core deps
         run: |
           python -m pip install --upgrade pip
-          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic
+          # 2026-10-01 S3.7: 补 jieba + rank-bm25。两者都在 requirements.txt:61-62 声明,
+          # 且被 app/services/bm25_service.py:11-12 模块级 import, 但本列表是 L48-52 从
+          # `-r requirements.txt` 改写而来时漏掉的 → CI 收集阶段 ModuleNotFoundError,
+          # 整个 RAG 门禁长期红。根治方案(改回 -r requirements.txt, 会连带装 torch 拖慢 CI)
+          # 留档单独立项, 本轮只做最小改动让门禁真绿。
+          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic jieba rank-bm25
 
       - name: Run RAG framework tests (mock mode)
         env:
