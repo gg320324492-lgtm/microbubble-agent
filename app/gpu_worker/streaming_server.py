@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 
 # 2026-09-30 S2.1 前置: 路径收敛到 VIBEVOICE_HOME (默认与历史硬编码逐字节相同)
-_VIBEVOICE_HOME = os.environ.get("VIBEVOICE_HOME", r"E:\microbubble-agent\.workbuddy\vibevoice-test")
+_VIBEVOICE_HOME = os.environ.get("VIBEVOICE_HOME", r"E:\microbubble-agent\data\vibevoice-test")
 _DEF_REPO = _VIBEVOICE_HOME + r"\VibeVoice"
 if _DEF_REPO not in sys.path and Path(_DEF_REPO).exists():
     sys.path.insert(0, _DEF_REPO)

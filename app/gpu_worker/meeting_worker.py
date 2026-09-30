@@ -37,9 +37,10 @@ from pathlib import Path
 
 import numpy as np
 
-# 默认路径（2026-09-30 S2.1 前置: 收敛到 VIBEVOICE_HOME 单一环境变量, 归位时只需
-# 改 env/默认值一处, 不再逐行找硬编码; 默认值与历史硬编码逐字节相同, 零行为变化）
-VIBEVOICE_HOME = os.environ.get("VIBEVOICE_HOME", r"E:\microbubble-agent\.workbuddy\vibevoice-test")
+# 2026-09-30 S2.1 归位完成: 41GB 生产依赖已从隐藏的 .workbuddy\vibevoice-test 搬到
+# data\vibevoice-test (同盘 move, 0.1 秒零拷贝); 显式 VIBEVOICE_HOME 仍优先。
+# 实测: 7B 链路 60s 音频 80s 转写完成, jobs 临时目录确认落在新位置。
+VIBEVOICE_HOME = os.environ.get("VIBEVOICE_HOME", r"E:\microbubble-agent\data\vibevoice-test")
 DEF_MODEL_DIR = VIBEVOICE_HOME + r"\models-vv"
 DEF_ASR_REPO = VIBEVOICE_HOME + r"\VibeVoice"
 DEF_TOKENIZER_DIR = VIBEVOICE_HOME + r"\qwen-tokenizer"
