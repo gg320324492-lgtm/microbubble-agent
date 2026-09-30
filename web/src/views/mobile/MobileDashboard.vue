@@ -272,7 +272,7 @@ onMounted(() => {
   padding: 0 4px;
   border-radius: 8px;
   background: var(--mg-danger, #E26A6A);
-  color: #fff;
+  color: var(--mg-on-primary, #fff);  /* 2026-09-30 S3.4: 硬编码色改变量 (与 MobileInputBar 同款) */
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -568,7 +568,7 @@ onMounted(() => {
   height: 16px;
   padding: 0 4px;
   background: var(--mg-danger);
-  color: #fff;
+  color: var(--mg-on-primary, #fff);  /* 2026-09-30 S3.4: 硬编码色改变量 (与 MobileInputBar 同款) */
   border-radius: var(--mg-radius-pill);
   font-size: 10px;
   font-weight: 700;

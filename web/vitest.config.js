@@ -24,11 +24,14 @@ export default defineConfig({
       'tests/e2e/mobile_swipe_gesture.spec.js',
       'tests/e2e/mobile_voice_input.spec.js',
       'tests/e2e/mobile_push_notification.spec.js',
-      // 2026-09-30 S3.4: 同类漏网补齐。Playwright 侧 testMatch 在
-      // playwright.e2e.config.js (mobile-baseline / mobile_dark_v33) 与主 config
-      // (tests/visual/**), 这些 spec 归 Playwright 跑, 在 vitest 里只会整体崩。
+      // 2026-09-30 S3.4: 同类漏网补齐。mobile-baseline.spec.js 是真 Playwright
+      // spec (import { test, expect } from '@playwright/test'), 归 playwright 跑, vitest 排除。
       'tests/e2e/mobile-baseline.spec.js',
-      'tests/e2e/mobile_dark_v33.spec.js',
+      // ⚠️ mobile_dark_v33.spec.js **不能**排除: 它是 vitest + @vue/test-utils 用例
+      // (文件头自述 + 第 29-30 行 import), 跑在 vitest 里。曾误加进 playwright.e2e.config.js
+      // 的 testMatch, 结果 vitest 排除 + playwright 跑不了 = 彻底不跑, 比改动前更糟。
+      // 它断言的"dark 模式 6 view 不应有硬编码 hex" stylelint 不管 (color-no-hex: null),
+      // 故它是那条约束的唯一执行者。
     ],
     coverage: {
       provider: 'v8',
