@@ -10,10 +10,12 @@ name: Server Tests Baseline (full tests/)
 #   - 全部 test_*.py 排序后 round-robin 均分 8 片 (每片时长均匀, 不按字母序聚集)
 #   - 每个 matrix job 独立 postgres+redis service 容器 → 并发分片天然库隔离,
 #     不触发 "共享 microbubble_test 并发 DROP SCHEMA 互砸" (CLAUDE.md 铁律)
-#   - 每片 continue-on-error + junit artifact; summary job 合并统计
+#   - 每片独立 junit artifact; summary job 合并统计
 #
-# 分两步走 (本文件仍是第 1 步): 收集全量基线红灯清单, 不阻塞合并;
-#   清单收敛后逐个修复, 最终摘除 continue-on-error 转硬门, 并可删片数。
+# **2026-09-30 收敛完成 → 已转硬门**: 基线 829 条红灯经 R1-R6 六轮收敛归零
+#   (通过: 修 fixture 老化/契约漂移/环境守卫; 归档: 87 个一次性验收快照类文件,
+#   全部保留原位 + 写明恢复条件)。现摘除 continue-on-error —— 任一片出现
+#   failed/error 即红, 阻塞合并。分片产物 (junit + 文本) 仍全部上传, 便于归因。
 
 on:
   push:
@@ -107,19 +109,12 @@ jobs:
             awk -v N=8 '{print > (".pytest-chunks/chunk-" (NR % N) ".txt")}'
           wc -l .pytest-chunks/chunk-*.txt
 
-      - name: Run shard ${{ matrix.shard }} (baseline collection, failures expected)
-        continue-on-error: true
+      - name: "Run shard ${{ matrix.shard }} (HARD GATE — any failure fails the job)"
         env:
-          # 只设 TEST_DATABASE_URL: 刻意不设 DATABASE_URL。
-          # tests/conftest.py 从 settings.DATABASE_URL 派生测试 URL (库名换
-          # microbubble_test) —— 若 CI 注入 DATABASE_URL=…/microbubble_test, 则
-          # settings.DATABASE_URL 变成测试库, 击穿
-          # test_fin1_backup_share_block::test_guard_injected_test_url_is_not_production
-          # (它断言 resolved != settings.DATABASE_URL 的 asyncpg 形式)。
+          # tests/conftest.py 的 TEST_DB_URL 默认从 settings.DATABASE_URL 派生
+          # (库名换 microbubble_test), CI 需同时提供两者: TEST_ 供 asyncpg 测试,
+          # DATABASE_URL 供 settings 读取 (否则 InvalidPasswordError)。
           TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/microbubble_test"
-          # 需同时设 DATABASE_URL: tests/conftest.py 的 TEST_DB_URL 默认从
-          # settings.DATABASE_URL 派生 (库名换 microbubble_test), CI 需它提供主机/凭据。
-          # (R4 曾删除本行 → 4 条 InvalidPasswordError, R5 恢复)
           DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/microbubble_test"
           REDIS_URL: "redis://localhost:6379/0"
           SKIP_DB_SETUP: ""
@@ -131,10 +126,12 @@ jobs:
               --timeout=300 --timeout-method=thread \
               --continue-on-collection-errors \
               --junitxml=report-shard-${{ matrix.shard }}.xml \
-              -rfE 2>&1 | tee pytest-shard-${{ matrix.shard }}.txt || true
-          echo "===== SHARD ${{ matrix.shard }} SUMMARY ====="
+              -rfE 2>&1 | tee pytest-shard-${{ matrix.shard }}.txt
+          rc=${PIPESTATUS[0]}
+          echo "===== SHARD ${{ matrix.shard }} SUMMARY (pytest exit=$rc) ====="
           grep -E "^(FAILED|ERROR)" pytest-shard-${{ matrix.shard }}.txt | head -60 || true
           tail -3 pytest-shard-${{ matrix.shard }}.txt
+          exit $rc
 
       - name: Upload shard report
         if: always()
