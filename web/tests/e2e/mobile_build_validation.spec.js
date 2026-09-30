@@ -50,6 +50,10 @@ function runProductionBuild() {
     encoding: 'utf8',
     env: {
       ...process.env,
+      // 类 20.133: 显式钉死生产模式。不设时 Vite 可能沿用外层环境的 NODE_ENV
+      // (如 CI/测试上下文里的 test), 产出未 mangle 的 dist (2026-10-01 实测:
+      // NODE_ENV=test 产物 50 行 / 334,468 bytes, production 11 行 / 280,175 bytes)。
+      NODE_ENV: 'production',
       FORCE_COLOR: '0',
       NO_COLOR: '1',
     },

@@ -182,9 +182,14 @@ timeout 30 git add -f web/dist/ || {
 # 事故: 核查期间工作树出现一份**非 production 构建**的 dist (入口 chunk 280KB → 334KB,
 # 标识符未 mangle)。若被提交, 云端 pull 后会直接服务这份未压缩产物。
 #
-# 判据用**行数**而非字节数 (2026-09-30 修正): 压缩产物是极少的行 (当前 11 行, 单行
-# 上百 KB); 未压缩产物是几千行。行数与应用规模无关, 不会像绝对字节阈值那样在应用
-# 正常增长到某个体量时误伤一次完全正确的构建 —— 那会制造查不出原因的假故障。
+# 判据用**行数**而非字节数 (2026-09-30 修正): 行数与应用规模无关, 不会像绝对字节
+# 阈值那样在应用正常增长到某个体量时误伤一次完全正确的构建 —— 那会制造查不出原因的
+# 假故障。
+#
+# 阈值 30 的由来 (2026-10-01 实测, 原值 200 拦不住已知坏产物):
+#   - production 构建 (npm run build, NODE_ENV=production): **11 行**
+#   - NODE_ENV=test 构建 (未 mangle): **50 行** / 334,468 bytes
+#   取 30 落在两者之间: 正常产物留 2.7x 余量, 已知坏产物 (50 行) 必被拦。
 verify_dist_is_minified() {
     local entry lines
     entry=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' web/dist/index.html 2>/dev/null | head -1)
@@ -192,17 +197,17 @@ verify_dist_is_minified() {
         return 0   # 无入口 chunk, 交给既有校验处理
     fi
     lines=$(wc -l < "web/dist/$entry" | tr -d ' ')
-    if [ "$lines" -gt 200 ]; then
+    if [ "$lines" -gt 30 ]; then
         echo ""
-        echo "❌ [pre-commit] web/dist/$entry 有 $lines 行 (> 200), 疑似非 production 构建"
-        echo "   判据: 压缩产物行数极少 (当前正常值 ~11 行); 未压缩产物为几千行。"
+        echo "❌ [pre-commit] web/dist/$entry 有 $lines 行 (> 30), 疑似非 production 构建"
+        echo "   判据: production 11 行 / NODE_ENV=test 50 行 (2026-10-01 实测)。"
         echo "   行数判据与产物体量无关, 不会因应用增长误伤。"
         echo "   修复: rm -rf web/dist && cd web && npm run build && git add -f web/dist/"
         exit 1
     fi
 }
 
-verify_dist_is_minified
+ verify_dist_is_minified
 
 # ---- 4. 验证 + 报告 ----
 new_staged=$(git diff --cached --name-only -- 'web/dist/' | wc -l)
