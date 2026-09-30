@@ -67,7 +67,9 @@ services:
     #   quay.io/minio/minio 的所有候选 tag（含 latest、官方 releases 标 Latest 的那个）
     #   在本机均取不到 manifest，疑上游镜像供给停滞（旁证 issue #21675）。
     #   **不退回无 tag 形式**（那正是本条要修的 bug），也不换 S3 实现（属产品决策，
-    #   app/ 与 alembic 迁移里 minio_object_key 相关面很大）。待上游恢复后换真实 tag。
+    #   app/ 与 alembic 迁移里 minio_object_key 相关面很大（52 处），属产品决策面。
+    #   爆炸半径仅 Playwright：qa-bench-baseline 用 pip 客户端库、qa-bench-ci/smoke 连生产
+    #   compose 的 localhost:9000，三者均不依赖本 minio-test 服务。待上游恢复后换真实 tag。
     image: quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z
     command: server /data --console-address ":9001"
     environment:
