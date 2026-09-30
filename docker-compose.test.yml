@@ -58,9 +58,16 @@ services:
 
   # MinIO (端口错开, 独立凭据 + bucket microbubble-test)
   minio-test:
-    # 2026-10-01 S3.7: 原为 `minio/minio` 无 tag，官方镜像已迁 quay.io，
-    # CI 报 pull access denied / repository does not exist，Playwright 两个 job
-    # 全部死在 Start test environment。钉版本而非 latest，保证可复现。
+    # 2026-10-01 S3.7 ⚠️ 修复受阻，勿误读为已修：
+    #   诊断成立 = 原为 `minio/minio` 无 tag（全文件唯一如此），官方镜像已迁 quay.io，
+    #   CI 报 pull access denied / repository does not exist，Playwright 两个 job
+    #   全部死在 Start test environment。
+    #   但当前 tag 是**复检官误写、已实测确认不存在**（docker manifest inspect exit=1）；
+    #   对照组 hello-world / redis:7-alpine / alpine:3 均正常 → 非本机 registry 问题，
+    #   quay.io/minio/minio 的所有候选 tag（含 latest、官方 releases 标 Latest 的那个）
+    #   在本机均取不到 manifest，疑上游镜像供给停滞（旁证 issue #21675）。
+    #   **不退回无 tag 形式**（那正是本条要修的 bug），也不换 S3 实现（属产品决策，
+    #   app/ 与 alembic 迁移里 minio_object_key 相关面很大）。待上游恢复后换真实 tag。
     image: quay.io/minio/minio:RELEASE.2024-09-13T20-26-02Z
     command: server /data --console-address ":9001"
     environment:
