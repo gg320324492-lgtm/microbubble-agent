@@ -1,5 +1,16 @@
 # MicroBubble Agent - 记忆索引 (W86 mini-16 减负, 锚点 337 → 338 +1, 67 active + 96 archived = 163)
 
+> ⚠️ **本目录已于 2026-08-21 停更**（最后一次写入）。它是**历史沉淀归档**，不是活跃
+> 知识库——新会话**不要**把这里当作"项目现状"的依据，只在追溯"当初为什么这么定"时查阅。
+>
+> **当前项目上下文看哪里**（2026-09-30 收口后）：
+> - **现状与铁律**：`CLAUDE.md` 顶部"当前状态"段 + 各"类 20.xx"纪律条目
+> - **本轮阶段收尾**：`desktop-conversion/docs/plans/2026-09-30-phase-closeout-plan.md`
+>   及其同目录 `docs/acceptance/2026-09-30-server-tests-baseline-v2.md`
+> - **决策链**：`desktop-conversion/docs/decisions/DECISIONS.md`（含 D12 桌面端实战记忆抢救）
+>
+> 恢复维护的话，先清理与 CLAUDE.md 冲突的过时陈述再继续追加。
+
 > **W86 mini-16 减负收口**: 主指挥协调范式第 67 次派工. 锚点范式 W87 337 → W87-X-5 338 (+1, docs/memory 同步实施, 0 production code 例外 1 沿用 W86 mini-12). 历史 batch closure memory 大幅归档, active 文件 178 → 67 (-62%), 总文件 234 → 163 (-30%). MEMORY.md 主题索引同步重整, 9 类主题分类保留.
 >
 > **2026-08-20→21 修正**: 用户截图反馈 sidebar UI 重叠 + 批量管理"清空"无效, 主拍委派本地 PC 一次性整理 E 盘 + 3 commits 修复 + 远程 SSH `bash scripts/deploy-auto.sh` 手动 deploy. 详尽沉淀见 [`memory/e-drive-cleanup-sidebar-fix-2026-08-20-21.md`](./memory/e-drive-cleanup-sidebar-fix-2026-08-20-21.md).
