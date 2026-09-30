@@ -37,6 +37,24 @@ from app.services.drive_service import DriveService
 from tests.conftest import TEST_DB_URL  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
 
 
+def _minio_reachable() -> bool:
+    """本文件为真连 MinIO 的集成测试 (永久删除会触发 drive_object_gc 实删对象)。
+    CI 无 MinIO → 模块级 skip; 本地/容器环境照常跑。"""
+    import socket
+    try:
+        s = socket.create_connection(("localhost", 9000), timeout=1.0)
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _minio_reachable(),
+    reason="真连 MinIO (localhost:9000) 的集成测试, 无 MinIO 环境跳过 (2026-09-30 S1.2)",
+)
+
+
 @pytest_asyncio.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     engine = create_async_engine(TEST_DB_URL, pool_pre_ping=True)

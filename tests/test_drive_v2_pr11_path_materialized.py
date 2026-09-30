@@ -46,11 +46,13 @@ async def pr11_drive_folder(db, test_member):
 async def pr11_drive_file(db, test_member, pr11_drive_folder):
     """PR11 测试用 file (storage_mode='drive')"""
     file_row = Knowledge(
+        title='drive_pr11_test.pdf',
+        content='test content',
         file_name='drive_pr11_test.pdf',
         file_path='/tmp/drive_pr11_test.pdf',
         file_size=1024,
         file_type='pdf',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=pr11_drive_folder.id,
         visibility='public',
         storage_mode='drive',

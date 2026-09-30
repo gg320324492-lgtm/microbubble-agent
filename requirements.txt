@@ -113,3 +113,10 @@ llama-index-embeddings-langchain>=0.4.0,<0.6.0
 
 # === LangFuse (开源 Tracing, 替代 LangSmith) ===
 langfuse>=2.0.0,<3.0.0
+
+# === Drive v2 PR10 协同编辑 (2026-09-30 S1.2 收敛补装) ===
+# pycrdt: 生产 drive_collab_service 为函数内懒 import (未装时静默降级), 但
+#   test_drive_v2_pr10_collab_* 顶层硬 import — CI/容器无此包即 ModuleNotFoundError。
+# fakeredis: tests/rag 缓存与 collab 测试的 Redis mock (CLAUDE.md 测试 mock 策略)。
+pycrdt>=0.14.0
+fakeredis>=2.20.0

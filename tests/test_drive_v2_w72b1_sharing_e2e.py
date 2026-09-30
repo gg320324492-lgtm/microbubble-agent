@@ -101,6 +101,7 @@ CREATE TABLE knowledge (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title VARCHAR(500),
     content TEXT,
+    embedding_model_version VARCHAR(64),
     category VARCHAR(100),
     topic VARCHAR(100),
     tags VARCHAR(500),

@@ -43,11 +43,13 @@ async def drive_folder(db, test_member):
 async def text_file(db, test_member, drive_folder):
     """文本文件 (.py) 用来做文本 diff"""
     file_row = Knowledge(
+        title='script_v1.py',
+        content='test content',
         file_name='script_v1.py',
         file_path='/tmp/script_v1.py',
         file_size=200,
         file_type='py',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=drive_folder.id,
         visibility='public',
         storage_mode='drive',
@@ -62,11 +64,13 @@ async def text_file(db, test_member, drive_folder):
 async def binary_file(db, test_member, drive_folder):
     """二进制文件 (.pdf) 用来做 metadata diff"""
     file_row = Knowledge(
+        title='thesis.pdf',
+        content='test content',
         file_name='thesis.pdf',
         file_path='/tmp/thesis.pdf',
         file_size=102400,
         file_type='pdf',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=drive_folder.id,
         visibility='public',
         storage_mode='drive',
@@ -81,11 +85,13 @@ async def binary_file(db, test_member, drive_folder):
 async def another_file(db, test_member, drive_folder):
     """另一个文件 (跨文件测试用)"""
     file_row = Knowledge(
+        title='other_doc.md',
+        content='test content',
         file_name='other_doc.md',
         file_path='/tmp/other_doc.md',
         file_size=50,
         file_type='md',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=drive_folder.id,
         visibility='public',
         storage_mode='drive',

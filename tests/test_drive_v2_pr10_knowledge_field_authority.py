@@ -42,6 +42,8 @@ async def test_file_owner_can_comment_via_created_by(client, db, test_member, dr
     """
     # 用 created_by 创建 file (不用 uploader_id, Knowledge 没这字段)
     file_row = Knowledge(
+        title='hotfix_pr10_test.pdf',
+        content='test content',
         file_name='hotfix_pr10_test.pdf',
         file_path='/tmp/hotfix_pr10_test.pdf',
         file_size=2048,
@@ -109,6 +111,8 @@ def test_knowledge_orm_attribute_access_created_by_works():
     修复后: .created_by 是有效字段.
     """
     file_row = Knowledge(
+        title='test.pdf',
+        content='test content',
         file_name='test.pdf',
         file_path='/tmp/test.pdf',
         file_size=100,
@@ -138,6 +142,8 @@ async def test_drive_file_version_uploader_id_still_works(db, test_member, drive
     本次 hot-fix 仅修 Knowledge 引用错误, 不动 DriveFileVersion.
     """
     file_row = Knowledge(
+        title='versioned.pdf',
+        content='test content',
         file_name='versioned.pdf',
         file_path='/tmp/versioned.pdf',
         file_size=3000,

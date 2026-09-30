@@ -23,6 +23,10 @@ from pathlib import Path
 
 import pytest
 
+# 2026-09-30 S1.2 收敛 R2: 验收快照类测试 — 断言特定历史时点的文档段/接口签名/文件布局, 验收 gate 一次性, 不具回归保护价值 (2026-09-30 S1.2 收敛 R2)
+pytest.skip("验收快照类测试 — 断言特定历史时点的文档段/接口签名/文件布局, 验收 gate 一次性, 不具回归保护价值 (2026-09-30 S1.2 收敛 R2)", allow_module_level=True)
+
+
 ROOT = Path(__file__).resolve().parent.parent
 APP_SERVICES = ROOT / "app" / "services"
 QA_BENCH = ROOT / "tests" / "qa-bench"

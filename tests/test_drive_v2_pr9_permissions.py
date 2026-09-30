@@ -54,6 +54,8 @@ async def drive_folder(db, test_member):
 async def drive_file(db, test_member, drive_folder):
     """创建一个 drive 文件 (created_by=test_member, folder=上面)"""
     file_row = Knowledge(
+        title='drive_pr9_perm_test.pdf',
+        content='test content',
         file_name='drive_pr9_perm_test.pdf',
         file_path='/tmp/drive_pr9_perm_test.pdf',
         file_size=1024,
@@ -271,6 +273,8 @@ async def test_check_file_owner_or_folder_admin_no_folder_no_owner_denied(
 
     # 创建一个孤儿 file (无 folder)
     orphan_file = Knowledge(
+        title='orphan.pdf',
+        content='test content',
         file_name='orphan.pdf',
         file_path='/tmp/orphan.pdf',
         file_size=512,

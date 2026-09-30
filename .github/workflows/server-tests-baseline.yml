@@ -75,6 +75,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # libsndfile: soundfile 库的系统依赖 — rag multimodal 音频链路需要
+          # (基线 R1: 24 条 "find_library sndfile" OSError, 2026-09-30 S1.2 收敛 R2)
+          sudo apt-get update -qq && sudo apt-get install -y -qq libsndfile1
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 120 -r requirements.txt
           pip install pytest pytest-asyncio

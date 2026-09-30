@@ -53,11 +53,13 @@ async def drive_file(db, test_member, drive_folder):
     storage_mode='drive' (必备, 否则 service 拒绝评论)
     """
     file_row = Knowledge(
+        title='drive_pr9_test.pdf',
+        content='test content',
         file_name='drive_pr9_test.pdf',
         file_path='/tmp/drive_pr9_test.pdf',
         file_size=1024,
         file_type='pdf',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=drive_folder.id,
         visibility='public',
         storage_mode='drive',  # PR9 必备
@@ -442,11 +444,13 @@ async def test_unauthorized_user_cannot_comment(
 
     # 在 private folder 下创建文件
     private_file = Knowledge(
+        title='private.pdf',
+        content='test content',
         file_name='private.pdf',
         file_path='/tmp/private.pdf',
         file_size=1024,
         file_type='pdf',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=drive_folder.id,
         visibility='private',
         storage_mode='drive',
@@ -528,11 +532,13 @@ async def test_comment_on_non_drive_file_rejected(
 ):
     """普通 kb 文件 (storage_mode != drive) 不支持评论 → 400"""
     kb_file = Knowledge(
+        title='kb_file.pdf',
+        content='test content',
         file_name='kb_file.pdf',
         file_path='/tmp/kb.pdf',
         file_size=1024,
         file_type='pdf',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=None,
         visibility='private',
         storage_mode='kb',  # 非 drive

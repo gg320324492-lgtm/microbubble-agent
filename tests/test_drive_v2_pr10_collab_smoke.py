@@ -114,9 +114,11 @@ def test_alembic_064_syntax():
     )
 
     # 3. 全项目必须 1 个 head (CLAUDE.md §2026-07-24 铁律)
+    # 2026-09-30 S1.2: 原断言写死 head == ["064_drive_documents"], alembic 链已演进到 141+。
+    # 改为"单 head"不变量 (与 tests/test_no_prod_db_imports.py 等 084/085/087 三连修正同款)。
     heads = script.get_heads()
-    assert heads == ["064_drive_documents"], (
-        f"应有且仅有 1 个 head 064_drive_documents, 实际 {heads}"
+    assert len(heads) == 1, (
+        f"应有且仅有 1 个 head (串单链纪律), 实际 {heads}"
     )
 
 

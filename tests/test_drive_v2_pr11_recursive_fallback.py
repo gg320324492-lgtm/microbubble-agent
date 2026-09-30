@@ -62,11 +62,13 @@ async def fallback_drive_folder(db, test_member):
 async def fallback_drive_file(db, test_member, fallback_drive_folder):
     """PR11 fallback 测试用 file (storage_mode='drive')"""
     file_row = Knowledge(
+        title='drive_pr11_fallback.pdf',
+        content='test content',
         file_name='drive_pr11_fallback.pdf',
         file_path='/tmp/drive_pr11_fallback.pdf',
         file_size=1024,
         file_type='pdf',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=fallback_drive_folder.id,
         visibility='public',
         storage_mode='drive',

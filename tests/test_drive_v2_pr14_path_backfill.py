@@ -51,11 +51,13 @@ async def pr14_drive_folder(db, test_member):
 async def pr14_drive_file(db, test_member, pr14_drive_folder):
     """PR14 测试用 file (storage_mode='drive')"""
     file_row = Knowledge(
+        title='drive_pr14_test.pdf',
+        content='test content',
         file_name='drive_pr14_test.pdf',
         file_path='/tmp/drive_pr14_test.pdf',
         file_size=1024,
         file_type='pdf',
-        uploader_id=test_member.id,
+        created_by=test_member.id,
         folder_id=pr14_drive_folder.id,
         visibility='public',
         storage_mode='drive',
@@ -246,11 +248,13 @@ async def test_backfill_all_dry_run_does_not_write(
     await db.commit()
     await db.refresh(folder2)
     file2 = Knowledge(
+        title='drive_pr14_test2.pdf',
+        content='test content',
         file_name='drive_pr14_test2.pdf',
         file_path='/tmp/drive_pr14_test2.pdf',
         file_size=1024,
         file_type='pdf',
-        uploader_id=folder2.owner_id,
+        created_by=folder2.owner_id,
         folder_id=folder2.id,
         visibility='public',
         storage_mode='drive',

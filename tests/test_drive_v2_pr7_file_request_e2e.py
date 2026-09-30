@@ -640,9 +640,11 @@ async def test_frontend_file_request_list_panel_renders_qr():
 
     # 测试文件在 tests/, worktree 根 = parents[2], 向上再 2 级 = 仓库根
     # .claude/worktrees/agent-w72-2-b4-tests/tests/test_x.py
-    # parents[0]=tests, parents[1]=worktree, parents[2]=worktrees, parents[3]=.claude, parents[4]=repo
+    # 2026-09-30 S1.2: 原 parents[4] 是 worktree 深路径 (.worktrees/agent-*/tests/...) 时代的
+    # 层数, 文件进主仓后在 CI (/home/runner/work/repo/repo/tests/...) 错 3 层 → /home/runner/web。
+    # parents[1] 对主仓与 worktree 两种布局都是仓库/worktree 根。
     test_file = Path(__file__).resolve()
-    repo_root = test_file.parents[4]  # repo 根 (microbubble-agent/)
+    repo_root = test_file.parents[1]  # repo 根 (microbubble-agent/)
     qrcode_path = repo_root / "web" / "src" / "components" / "common" / "QrCode.vue"
     panel_path = repo_root / "web" / "src" / "components" / "drive" / "FileRequestListPanel.vue"
 
