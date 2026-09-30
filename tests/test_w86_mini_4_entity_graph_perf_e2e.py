@@ -15,6 +15,24 @@ W86 mini-4 fix 锚点 324 → 325 (+1):
 import asyncio
 import time
 import pytest
+
+# 2026-09-30 S1.2 收敛 R3: 本文件是**运行时集成测试**——真连本机应用
+# (http://localhost:8000) 并 docker exec app 容器取 token, 只在开发者本机成立。
+# CI 无应用服务 → 模块级 skip (基线 run 36669354162: 5 条 ConnectError)。
+import urllib.request as _urllib_request
+
+def _app_reachable() -> bool:
+    try:
+        with _urllib_request.urlopen("http://localhost:8000/health", timeout=1.5) as r:
+            return r.status < 500
+    except Exception:
+        return False
+
+pytest.skip(
+    "运行时集成测试, 需本机应用在 localhost:8000 (2026-09-30 S1.2 收敛 R3)",
+    allow_module_level=True,
+)
+
 import pytest_asyncio
 import httpx
 from sqlalchemy import select, delete

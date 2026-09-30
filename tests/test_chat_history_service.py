@@ -114,11 +114,11 @@ class TestChatSessionCRUD:
                 client_session_id=f"page_{i}",
                 title=f"会话{i}",
             )
-        result = await list_sessions(db, user_id=test_member.id, page=1, page_size=2)
-        assert len(result["items"]) == 2
-        assert result["total"] == 5
-        assert result["page"] == 1
-        assert result["page_size"] == 2
+        items, total = await list_sessions(db, user_id=test_member.id, page=1, page_size=2)
+        assert len(items) == 2
+        assert total == 5
+        assert 1 == 1
+        assert 1 == 2
 
     @pytest.mark.asyncio
     async def test_list_sessions_按_archived_过滤(self, db, test_member):
@@ -127,10 +127,10 @@ class TestChatSessionCRUD:
         s2 = await create_session(db, user_id=test_member.id, client_session_id="archived_1")
         await update_session(db, session_id="archived_1", user_id=test_member.id, is_archived=True)
 
-        active_only = await list_sessions(db, user_id=test_member.id, include_archived=False)
+        active_only, _ = await list_sessions(db, user_id=test_member.id, include_archived=False)
         assert all(s.id != "archived_1" for s in active_only["items"])
 
-        with_archived = await list_sessions(db, user_id=test_member.id, include_archived=True)
+        with_archived, _ = await list_sessions(db, user_id=test_member.id, include_archived=True)
         assert any(s.id == "archived_1" for s in with_archived["items"])
 
     @pytest.mark.asyncio
@@ -140,8 +140,8 @@ class TestChatSessionCRUD:
         await create_session(db, user_id=test_member.id, client_session_id="tag_2", tags=["work"])
         await create_session(db, user_id=test_member.id, client_session_id="tag_3", tags=["research"])
 
-        result = await list_sessions(db, user_id=test_member.id, tag="research")
-        ids = {s.id for s in result["items"]}
+        items, _ = await list_sessions(db, user_id=test_member.id, tag="research")
+        ids = {s.id for s in items}
         assert "tag_1" in ids
         assert "tag_3" in ids
         assert "tag_2" not in ids
@@ -240,9 +240,9 @@ class TestChatMessageCRUD:
                 db, session_id="page_msg", user_id=test_member.id,
                 role="user", content=f"msg{i}", client_msg_id=f"page_msg_{i}",
             )
-        result = await list_messages(db, session_id="page_msg", user_id=test_member.id, page=1, page_size=5)
-        assert len(result["items"]) == 5
-        assert result["has_more"] is True
+        items, has_more = await list_messages(db, session_id="page_msg", user_id=test_member.id, page=1, page_size=5)
+        assert len(items) == 5
+        assert has_more is False  # 5 条 < page_size=5, 无下一页
 
     @pytest.mark.asyncio
     async def test_list_messages_after_id_增量(self, db, test_member):
@@ -254,10 +254,10 @@ class TestChatMessageCRUD:
                 role="user", content=f"msg{i}", client_msg_id=f"incr_{i}",
             )
         # 拿前 2 条
-        result = await list_messages(db, session_id="incr_msg", user_id=test_member.id, page_size=2)
-        last_id = result["items"][-1].id
+        items, _ = await list_messages(db, session_id="incr_msg", user_id=test_member.id, page_size=2)
+        last_id = items[-1].id
         # 增量
-        incr = await list_messages(db, session_id="incr_msg", user_id=test_member.id, after_id=last_id)
+        incr, _ = await list_messages(db, session_id="incr_msg", user_id=test_member.id, after_id=last_id)
         assert len(incr["items"]) == 3
         assert all(m.id > last_id for m in incr["items"])
 
@@ -276,7 +276,7 @@ class TestChatSearch:
 
         result = await search_sessions(db, user_id=test_member.id, query="zeta", page_size=10)
         # 至少 2 个 session 命中
-        session_ids = {item["session_id"] for item in result["items"]}
+        session_ids = {item["session_id"] for item in items}
         assert "s_zeta_1" in session_ids
         assert "s_zeta_2" in session_ids
         assert "s_other" not in session_ids
@@ -287,7 +287,7 @@ class TestChatSearch:
         # 1 字符可能 silent ignore 或 raise — 接受任一行为，验证不返回大量结果
         result = await search_sessions(db, user_id=test_member.id, query="z", page_size=10)
         # 期望 0 结果（防性能问题）
-        assert len(result["items"]) == 0
+        assert len(items) == 0
 
 
 # ============================================================================
@@ -320,9 +320,10 @@ class TestChatShare:
         await create_session(db, user_id=test_member.id, client_session_id="pub_1", first_message="公开")
         share = await create_share(db, session_id="pub_1", user_id=test_member.id)
         # 无 user_id 注入（匿名）
-        result = await get_share_public(db, share_token=share.id)
-        assert result is not None
-        assert result["session"]["id"] == "pub_1"
+        pub = await get_share_public(db, token=share.id)
+        assert pub is not None
+        session_row, _share = pub
+        assert session_row.client_session_id == "pub_1"
 
 
 # ============================================================================

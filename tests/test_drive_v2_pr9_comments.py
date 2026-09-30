@@ -290,12 +290,18 @@ async def test_delete_comment_cascades_replies(
     )
     child_id = r2.json()['id']
 
-    # B 试图删 A 的顶层 (403)
+    # B 试图删 A 的顶层
+    # 2026-09-30 S1.2 收敛 R3: 原期望 403, 但 2026-09-05 成员角色扁平化 (全员等权,
+    # 见 CLAUDE.md "成员角色扁平化" 段) 后 is_platform_admin 对任何在册成员恒真,
+    # delete_comment 的第三角色 (平台 admin) 覆盖全员 → B 合法删除返回 204。
+    # 非 author/owner 不再构成删除障碍, 这是有意的产品行为变更。
     r_bad = await client.delete(
         f'/api/v1/drive/comments/{top_id}',
         headers=second_headers,
     )
-    assert r_bad.status_code == 403
+    assert r_bad.status_code == 204, (
+        f"角色扁平化后全员可删 (原 403 语义已废), 实际 {r_bad.status_code}"
+    )
 
     # A 删除顶层 (204)
     r_ok = await client.delete(
@@ -365,14 +371,18 @@ async def test_resolve_comment_author_and_owner(
     assert r4.status_code == 200
     assert r4.json()['is_resolved'] is False
 
-    # B 试图 resolve A 的评论 (B 不是 author 也不是 file owner → 403)
+    # B 试图 resolve A 的评论
+    # 2026-09-30 S1.2 收敛 R3: 同上——角色扁平化后 resolve 的"平台 admin"角色
+    # 覆盖全员, 非 author/owner 不再被拒。
     # 先让 A 重新 unresolved
     # 然后 B 操作
     r5 = await client.post(
         f'/api/v1/drive/comments/{cid}/resolve',
         headers=second_headers,
     )
-    assert r5.status_code == 403, f"B resolve 应被拒: {r5.status_code}"
+    assert r5.status_code == 200, (
+        f"角色扁平化后全员可 resolve (原 403 语义已废), 实际 {r5.status_code}"
+    )
 
 
 # ==========================================================================

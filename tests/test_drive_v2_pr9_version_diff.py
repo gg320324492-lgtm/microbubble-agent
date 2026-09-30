@@ -217,7 +217,7 @@ async def test_text_diff_returns_unified_diff(
 
     # 调用 diff API
     resp = await client.get(
-        f"/api/v1/drive/versions/files/{text_file.id}/diff?from=1&to=2",
+        f"/api/v1/versions/files/{text_file.id}/diff?from=1&to=2",
         headers=auth_headers,
     )
     assert resp.status_code == 200, f"diff failed: {resp.text}"
@@ -267,7 +267,7 @@ async def test_binary_diff_returns_metadata_only(
     )
 
     resp = await client.get(
-        f"/api/v1/drive/versions/files/{binary_file.id}/diff?from=1&to=2",
+        f"/api/v1/versions/files/{binary_file.id}/diff?from=1&to=2",
         headers=auth_headers,
     )
     assert resp.status_code == 200, f"diff failed: {resp.text}"
@@ -311,7 +311,7 @@ async def test_same_version_returns_empty_diff(
 
     # from == to == 1
     resp = await client.get(
-        f"/api/v1/drive/versions/files/{text_file.id}/diff?from=1&to=1",
+        f"/api/v1/versions/files/{text_file.id}/diff?from=1&to=1",
         headers=auth_headers,
     )
     assert resp.status_code == 200, f"diff failed: {resp.text}"
@@ -358,7 +358,7 @@ async def test_cross_file_version_rejected_and_missing_404(
     # 试图 diff file A 的 v1 vs file B 的 v1 (用 file A 的 file_id, 但 server 校验时会发现 v2 不属于 file A)
     # → 应 404 (v2 not found in file A)
     resp = await client.get(
-        f"/api/v1/drive/versions/files/{text_file.id}/diff?from=1&to=2",
+        f"/api/v1/versions/files/{text_file.id}/diff?from=1&to=2",
         headers=auth_headers,
     )
     # v2 不属于 file_id (text_file) → 404
@@ -366,14 +366,14 @@ async def test_cross_file_version_rejected_and_missing_404(
 
     # 缺失 version → 404
     resp2 = await client.get(
-        f"/api/v1/drive/versions/files/{text_file.id}/diff?from=1&to=99",
+        f"/api/v1/versions/files/{text_file.id}/diff?from=1&to=99",
         headers=auth_headers,
     )
     assert resp2.status_code == 404, f"缺失 version 应 404, 实际 {resp2.status_code}"
 
     # 反向: from=99 → 404
     resp3 = await client.get(
-        f"/api/v1/drive/versions/files/{text_file.id}/diff?from=99&to=1",
+        f"/api/v1/versions/files/{text_file.id}/diff?from=99&to=1",
         headers=auth_headers,
     )
     assert resp3.status_code == 404
@@ -402,7 +402,7 @@ async def test_preview_returns_first_n_lines(
 
     # head_lines=10
     resp = await client.get(
-        f"/api/v1/drive/versions/files/{text_file.id}/versions/{v.id}/preview?head_lines=10",
+        f"/api/v1/versions/files/{text_file.id}/versions/{v.id}/preview?head_lines=10",
         headers=auth_headers,
     )
     assert resp.status_code == 200, f"preview failed: {resp.text}"
@@ -417,7 +417,7 @@ async def test_preview_returns_first_n_lines(
 
     # head_lines=200 (>> total) → truncated=False, 全返
     resp2 = await client.get(
-        f"/api/v1/drive/versions/files/{text_file.id}/versions/{v.id}/preview?head_lines=200",
+        f"/api/v1/versions/files/{text_file.id}/versions/{v.id}/preview?head_lines=200",
         headers=auth_headers,
     )
     assert resp2.status_code == 200

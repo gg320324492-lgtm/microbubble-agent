@@ -317,7 +317,6 @@ async def test_check_comment_resolver_file_owner_passes(
         author_id=write_member_user.id,
         content='write 成员提的问题',
         mentions=[],
-        is_top_level=True,
     )
     db.add(comment)
     await db.commit()
@@ -345,7 +344,6 @@ async def test_check_comment_resolver_folder_admin_passes(
         author_id=test_member.id,
         content='file owner 提的问题',
         mentions=[],
-        is_top_level=True,
     )
     db.add(comment)
     await db.commit()
@@ -375,7 +373,6 @@ async def test_check_comment_resolver_write_member_denied(
         author_id=test_member.id,
         content='file owner 提的问题',
         mentions=[],
-        is_top_level=True,
     )
     db.add(comment)
     await db.commit()

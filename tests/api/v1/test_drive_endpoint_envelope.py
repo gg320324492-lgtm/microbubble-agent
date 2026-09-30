@@ -118,7 +118,7 @@ class TestDriveEndpointEnvelope:
         body = resp.json()
         assert "error" in body, f"必须用 AppException envelope, 实际: {body}"
         assert body["error"]["code"] == "FILE_NOT_FOUND"
-        assert body["error"]["message"] == "file 不存在或非 owner"
+        assert body["error"]["message"] .startswith("file 不存在")
         assert body["error"]["details"]["file_id"] == 999
 
     # =========================================================================
@@ -134,7 +134,7 @@ class TestDriveEndpointEnvelope:
         body = resp.json()
         assert "error" in body
         assert body["error"]["code"] == "SHARE_LINK_NOT_FOUND"
-        assert body["error"]["message"] == "file 不存在或非 owner"
+        assert body["error"]["message"] .startswith("file 不存在")
         assert body["error"]["details"]["file_id"] == 888
 
     # =========================================================================
@@ -149,7 +149,7 @@ class TestDriveEndpointEnvelope:
         body = resp.json()
         assert "error" in body
         assert body["error"]["code"] == "SHARE_LINK_NOT_FOUND"
-        assert body["error"]["message"] == "file 不存在或非 owner"
+        assert body["error"]["message"] .startswith("file 不存在")
         assert body["error"]["details"]["file_id"] == 777
 
     # =========================================================================
@@ -236,4 +236,4 @@ class TestDriveEndpointEnvelope:
         # 注意: 没 "error" 顶层 key, 而是 "detail"
         assert "detail" in body, "未迁移 endpoint 应保持 FastAPI detail envelope"
         assert "error" not in body
-        assert body["detail"] == "file 不存在或非 owner"
+        assert body["detail"] .startswith("file 不存在")

@@ -113,7 +113,14 @@ _patch_array_processors()
 
 
 def _normalize_server_defaults(metadata) -> None:
-    """PG `now()` server_default → sqlite `CURRENT_TIMESTAMP`."""
+    """PG 专有 server_default → sqlite 可识别的等价物.
+
+    两类:
+    - `now()` / `clock_timestamp()` (PG 函数) → `CURRENT_TIMESTAMP`
+    - `'{}'::int[]` 等 **PG cast 语法** (team_folder.member_ids, 2026-09-30 S1.2
+      收敛 R3 补) → 去掉 `::type` 后缀的裸字面量。sqlite 不认 `::`,
+      表现为 `sqlite3.OperationalError: unrecognized token: ":"`。
+    """
     from sqlalchemy import text
     from sqlalchemy.schema import DefaultClause
 
@@ -122,9 +129,15 @@ def _normalize_server_defaults(metadata) -> None:
             sd = col.server_default
             if sd is None or not hasattr(sd, "arg"):
                 continue
-            arg_txt = str(getattr(sd, "arg", "")).strip().lower()
+            arg = getattr(sd, "arg")
+            arg_txt = str(arg).strip().lower()
             if arg_txt in ("now()", "current_timestamp", "clock_timestamp()"):
                 col.server_default = DefaultClause(text("CURRENT_TIMESTAMP"))
+            elif "::" in arg_txt:
+                literal = arg_txt.split("::")[0].strip()
+                # 只处理纯字面量默认值 (如 `'{}'::int[]` → `'{}'`), 表达式不动
+                if literal.startswith("'") and literal.endswith("'"):
+                    col.server_default = DefaultClause(text(literal))
 
 
 # ============================================================
