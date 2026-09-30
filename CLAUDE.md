@@ -968,7 +968,24 @@ curl http://localhost:8000/api/v1/dft/tools
 - **子组件拆分**：18 个子组件（Task:3 + Knowledge:8 + Meeting:3），主 View ≤ 1920 行
 - **Vitest 测试**：`web/vitest.config.js` — composable 测试（23 个）+ 组件测试（15 个）= 38 个测试通过
 
-### 2026-06-13 webhint PWA 5 警告全栈修复新增（commit `08f440f` + `c855f0e`）
+> ⚠️ **本节已于 2026-07-27 失效（PWA 被强制注销）** —— commit `36b0b2ec9`
+> （W68 第 14 批 H-3）把 `web/vite.config.js` 的 `VitePWA({ disable: true })` 打开，
+> 理由是"主指挥浏览器老 SW 仍 active 致持续刷新"。**当前 dist 不含任何 PWA 产物**
+> （无 `manifest.*.webmanifest`、无 `sw.js`、index.html 无 manifest link）——这是
+> **预期状态，不是缺陷**。
+>
+> 因此以下内容**仅作历史记录**，不要照做：`manifestHashPlugin`、postbuild manifest
+> hash 改名、nginx `location = /manifest.webmanifest { return 410; }`、部署时
+> `git add -f web/dist/manifest.{hash}.webmanifest`。
+> **若将来要重新启用 PWA**：先在 vite.config.js 把 `disable` 改回 false，再按本节
+> 纪律补齐 manifest MIME / hash / SW 生命周期，并**清理浏览器端旧 SW 与 Cache Storage**
+> （这正是当初禁用的根因）。
+>
+> 另注：nginx 侧 `types { application/manifest+json webmanifest; }` 曾因
+> "server context 是完全覆盖语义"打挂整站 MIME（`08f440f` 事故），现已回滚——
+> 那个坑与 PWA 是否启用无关，仍值得记住（见下方 nginx 段）。
+
+### 2026-06-13 webhint PWA 5 警告全栈修复新增（commit `08f440f` + `c855f0e`）〔已失效，见上方警示〕
 
 - **Nginx 缺 `.webmanifest` MIME（commit `08f440f`）** — Nginx 默认 `mime.types` 不包含 `.webmanifest`（到 1.27 才内置），回退 `application/octet-stream` → 浏览器拒绝解析 PWA manifest → 添加桌面图标失败。**修复**：server block 加 `types { application/manifest+json webmanifest; }` + `charset_types` 同步加 `application/manifest+json`（让 `charset utf-8` 生效）。**诊断**：`curl -I https://xxx/manifest.webmanifest | grep Content-Type` 看是不是 octet-stream。**纪律**：所有 PWA 项目上线前必须验证 manifest MIME，**仅一次**而不是每个 server 都加。
 - **`vite-plugin-pwa` 输出 manifest 不带 hash（commit `08f440f`）** — `manifest.webmanifest` 文件名固定不走 rollup hash 流程，webhint cache-busting 永远警告。**修复**：写一个 Vite 插件 `manifestHashPlugin`（closeBundle 钩子）→ `crypto.createHash('sha256').update(content).digest('hex').slice(0, 8)` → 重命名为 `manifest.{8char_hash}.webmanifest` + 同步改 `index.html`/`offline.html` 的 link 引用。**8 字符 hex 满足 webhint 默认 `[0-9a-f]+` 正则**。**Vite 5+ emitFile 不适用**（manifest 是 vite-plugin-pwa 输出，emitted by another plugin），必须 fs.renameSync。
@@ -976,7 +993,12 @@ curl http://localhost:8000/api/v1/dft/tools
 - **删除 manifest.webmanifest 后 SPA fallback 误返 index.html（commit `c855f0e`）** — git 删除旧 manifest 文件后，Nginx `try_files $uri $uri/ /index.html` 找不到文件 → fallback `/index.html`（1924 字节 HTML 内容） → 任何残留引用/书签/扫描器拿到 HTML 内容物以为是 manifest。**修复**：在 `/` location 前加 `location = /manifest.webmanifest { return 410; }` 精确 410 Gone。**纪律**：SPA 部署时**所有被废弃的资源路径**都应该有明确返回（410 / 404），不能依赖 try_files fallback。
 - **theme-color Firefox 不支持** — Edge DevTools 内置 webhint 不读 `.hintrc`，永远警告。**纪律**：`.hintrc` 配 `meta-theme-color: "off"`（webhint CLI 0 警告），接受 Edge DevTools 误报。Chrome/Safari/iOS Safari PWA 顶部栏颜色价值 > Edge DevTools 警告噪音。**永远不要**完全删除 theme-color meta（损失浏览器原生美化）。
 
-### 2026-07-11 PWA manifest 410 回归 (commit `59187ce8` cascade folder delete 引入, `5d2bcdfd` 修复)
+### 2026-07-11 PWA manifest 410 回归 (commit `59187ce8` cascade folder delete 引入, `5d2bcdfd` 修复) 〔已失效，见上方 2026-07-27 注销警示〕
+
+> ⚠️ 本节铁律全部建立在"PWA 启用"前提上，该前提已于 2026-07-27 被
+> `36b0b2ec9` 取消（`VitePWA({ disable: true })`）。**不要**再执行
+> `git add -f web/dist/manifest.{hash}.webmanifest` 等操作——文件根本不存在。
+> 保留本节仅为解释 `5d2bcdfd` 提交为何存在。
 
 > ⚠️ **铁律**: `web/package.json` `"build": "vite build && node scripts/postbuild-fix-manifest.js"` 是**唯一**合法 build 命令。**严禁** `vite build` 直跑然后 force-add commit dist — manifest.webmanifest 保持 unhashed → nginx `location = /manifest.webmanifest { return 410; }` 拦截 → 浏览器 `Manifest fetch failed, code 410` → PWA install 失败。`package.json` 有 `build:raw` 别名但**仅供调试 sw.js 内容用**, 调试完必须重跑 `npm run build` 才能 commit。
 
