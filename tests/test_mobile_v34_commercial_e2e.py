@@ -20,6 +20,16 @@ import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+# 2026-09-30 S1.2 收敛: 本文件的 page_object fixture 从未被定义 (tests/ 全树零定义),
+# 全量收集时 335 case 全部 fixture-not-found error (基线 run 36629742863 实证)。
+# 视觉快照的实际执行走 acceptance report 流程, 不经 pytest。模块级 skip 保留
+# case 定义作 W72 验收资产, 待补 fixture 或正式归档时再评估。
+pytest.skip(
+    "page_object fixture 不存在 — 视觉快照走 acceptance report 流程, "
+    "见 docs/acceptance/2026-09-30-server-tests-baseline-v2.md",
+    allow_module_level=True,
+)
+
 # ============ 配置 ============
 
 THEMES = ['coral', 'ocean', 'forest', 'sunset', 'purple', 'mono']
