@@ -2,9 +2,9 @@
 ## 项目简介
 
 > **怎么读这个文件**（2026-09-30 标注）：本文件有 **20 个 `## 当前状态` 段**，按时间
-> **倒序**堆叠（最新的在最上），全部自称"当前"——实为**历史快照**，只最新那个
-> （第 4 行，2026-09-18）描述现状，其余是事故档案/批次收口记录。
-> **长期铁律**（类 20.xx 共 75 条）散落在 890–1380 行之间，检索方式：`grep -n "类 20\." CLAUDE.md`。
+> **倒序**堆叠（最新的在最上），全部自称"当前"——实为**历史快照**，只最上面那两段
+> （2026-09-30 阶段收尾 / 2026-09-18 会议事故）描述现状，其余是事故档案/批次收口记录。
+> **长期铁律**（`类 20.xx` 共 75 条）散落在文中段，检索方式：`grep -n "类 20\." CLAUDE.md`。
 > 想知道"现在该怎么做"看顶部当前状态 + 本段；想知道"当初为什么这么定"往下翻。
 
 ## 当前状态 (2026-09-30 阶段收尾全面收口 — CI 硬门转正 / 94GB 死重清零 / 41GB 生产依赖归位 / 远端补齐)
@@ -21,6 +21,9 @@
   `DATABASE_URL` **两个都要设**（conftest 从后者派生库名）。
 
 **物理布局 (S1.1 / S2.1 完成)**:
+- **alembic 单 head = `141_zb2_backup_kb_purge`**（容器 `alembic heads` 实测，2026-09-30）。
+  本文件历史段落里出现的 084/085/104/105/139 等 head 号**都是当时的快照**，写断言时
+  用「恰为 1 个 head」不变量，别写死编号（已有 084/085/087 三连修正先例）。
 - 删死重 **94.4 GB**：`llama-cpp-tools/qwen3-14b-f16.gguf` 52.1G、`models/Qwen3-14B-FP16`
   28.2G、`.ollama/` 13.5G、`.claude/recovery-clones/`、零源码的 `web-minimal/`。
   **`data/ollama` 61.6G 是 ollama 容器挂载点，勿删**。
@@ -515,8 +518,8 @@ const clearSelection = () => {
 
 - 后端: Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery
 - 前端: Vue 3 + Vite + Element Plus（原版 `web/`，极简版 `web-minimal/`）
-- AI: Claude API (Sonnet) + faster-whisper + pgvector
-- 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
+- AI: 主模型走 `LLM_BACKEND`（`CLAUDE_MODEL` 为空时回落 `mimo-v2.5`，`app/core/llm.py:215`）+ SenseVoice/VibeVoice ASR + pgvector
+- 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (`docker-compose.yml` **15 个服务** + GPU 会议转写守护)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
 **Plan v2 #1 业务回归完整收官** (2026-08-17 → 2026-08-18), 主拍决策 + 1 天投入批准后, 8 commits 据实累计 +8, 0 业务代码改动 (除 1 个真实生产 model bug 修复), 0 失败:
 
@@ -961,13 +964,14 @@ curl http://localhost:8000/api/v1/dft/tools
 
 ## 关键架构决策
 
-- Agent 工具调用通过 `app/agent/core.py` 的 `_execute_tool` 方法路由到 service 层（17 个工具已全部接入）
+- Agent 工具调用经 `app/agent/tools/` 工具注册表路由到 service 层（**15 个模块共 32 个 `@tool`**）。
+  ~~`app/agent/core.py` 的 `_execute_tool`~~ 已于 2026-06-14 方案 C 全部迁出（`tools/__init__.py:6` 有迁移说明）
 - `chat()` 和 `chat_stream()` 接收 `db: AsyncSession` 参数，由 API 路由通过 `Depends(get_db)` 传入
 - 使用 `AsyncAnthropic` 客户端，不阻塞事件循环
 - **Agent 回复采用"先简要后详细"双层结构** — 两阶段并行调用，简要立即返回，详细后台追加
 - **MCP 视觉服务架构** — 预写架构，切换支持图片识别的文本模型时启用（如未来切 Claude 视觉）
-- 认证使用 JWT，`app/core/security.py` 已实现，31 个端点全部接入 `get_current_user`
-- 会话存储已迁移到 Redis（`RedisSessionStore`，24 小时 TTL）
+- 认证使用 JWT，`app/core/security.py` 已实现；`app/api/` 下 **342 个路由装饰器**、330 处 `get_current_user` 引用
+- 会话存储在 Redis（`RedisSessionStore`，**48 小时 TTL** — `app/config.py:250` `SESSION_TTL=172800`）
 - 知识库使用 pgvector 做向量搜索（扩展已在 main.py 启动时自动安装；嵌入模型现役为 **Qwen/Qwen3-Embedding-0.6B**（1024d，`app/services/embedding_service.py:32`），`text2vec-base-chinese`（768d）仅为备选）
 - **知识库深层逻辑系统（Knowledge Brain）** — 八大模块：
   - **动态 LLM 分析**：LLM 根据内容自由生成分类/标签/key_concepts/related_topics/knowledge_type，不再硬编码
@@ -978,15 +982,18 @@ curl http://localhost:8000/api/v1/dft/tools
   - **实体知识图谱**：跨文档实体融合（精确匹配→embedding 余弦→新建），共现网络，ECharts 力导向图可视化
   - **假设生成引擎**：从实体三元组+知识空白 LLM 生成可验证假设，proposed/validated/rejected 生命周期
   - (2026-09-13 移除量化推理引擎/公式分类体系/公式自动分类 — 公式计算功能整体下线，文献多模态公式提取保留)
-- 语音识别使用 faster-whisper GPU，TTS 使用 Edge-TTS
+- 语音识别现役为 **SenseVoice**（`ASR_DEFAULT_BACKEND=sensevoice`，GPU 容器服务）；
+  链路为 GPU 会议转写 7B（VibeVoice-ASR，运行时在 `data/vibevoice-test`）优先 + SenseVoice 分段回退。
+  faster-whisper（`app/whisper_server.py`）保留为紧急回滚后端。TTS 主路径 Edge-TTS
 - **会议转录总结工具** — `summarize_meeting_transcript` 工具支持对话触发与长期存储
 - **任务软删除/垃圾桶** — 删除任务进入垃圾桶（deleted_at 字段），支持恢复或永久删除，3天后自动清除（Celery beat 每 1h 调度 `auto_purge_trash_task`，垃圾桶 UI 双行显示倒计时 + 5 级紧急度颜色）。详细状态见 [README.md](README.md#当前状态2026-06-03)
-- **微信对话双消息模式** — 收到消息后 0.5 秒内先发"🤔 收到，让我思考一下..."，后台异步处理后发正式回复，解决等待无反馈问题
+- ~~**微信对话双消息模式**~~ — 企业微信已于 2026-09-12 整体下线，此模式无现存代码
 - **移动端独立抽屉架构** — 移动端侧边栏使用 el-container 外部独立 div + Vue Transition，完全绕过 Element Plus aside 的全局 CSS 干扰。桌面端 `v-if="!isMobile"` 零影响
 - **通知面板** — 铃铛使用 el-popover 弹窗面板，显示每条提醒的具体内容（任务标题+提醒时间）、全部标为已读、点击跳转任务；头像读取 userStore.userInfo.avatar 真实 URL
 - **任务权限模型** — 所有成员可见全部任务（降低认知负担）；2026-09-05 角色扁平化后所有登录成员等权，任意成员可编辑/删除/恢复/永久删除
 - **状态统一** — "待办"(todo) 和 "进行中"(in_progress) 语义高度重合，已统一为"进行中"。新建任务默认 in_progress，现有 todo 任务兼容显示
-- **移动端路由级双栈架构**（2026-06-13 收官）— 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不共享 component 树。`useIsMobile.js` 监听 viewport + UA 兜底 → `router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` → 桌面端 `el-*` 与移动端 `nut-*` CSS 完全隔离。**PWA 4 策略**：manifest + service worker（workbox）预缓存 app shell + useSafeArea 读 iPhone 安全区 + 离线 IndexedDB 兜底。**视觉回归测试**：Playwright 5 viewport × 13 核心页面，CI 截图对比基线
+- **移动端路由级双栈架构**（2026-06-13 收官）— 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不共享 component 树。`useIsMobile.js` 监听 viewport + UA 兜底 → `router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` → 桌面端 `el-*` 与移动端 `nut-*` CSS 完全隔离。**离线策略**：~~PWA 4（manifest + workbox SW 预缓存）~~ 已于 2026-07-27 强制注销（见下文 PWA 失效警示）；
+  `useSafeArea` 读 iPhone 安全区仍有效。**视觉回归测试**：Playwright 5 viewport × 13 核心页面，CI 截图对比基线
 
 ## 代码质量规范（2026-06-04 升级）
 
@@ -994,13 +1001,14 @@ curl http://localhost:8000/api/v1/dft/tools
 - **统一异常响应格式**：`{"error": {"code": "RESOURCE_NOT_FOUND", "message": "...", "details": {...}}}`
 - **异常类层次**：`app/core/exceptions.py` — AppException/NotFoundException/ValidationException/AuthException/ForbiddenException/ConflictException/RateLimitException
 - **统一分页模型**：`app/schemas/pagination.py` — PaginationParams + PaginatedResponse + PaginationMeta
-- **全站分级限流**：`app/core/rate_limit.py` — auth:5次/分, write:30次/分, read:100次/分, upload:10次/分
+- **全站分级限流**：`app/core/rate_limit.py:209-217` — auth:20次/分、write:30、read:200、upload:10；
+  另有 sse:10、chunked_upload:60、drive_upload:50、drive_list:300、auth_refresh:60
 - **安全响应头**：X-Content-Type-Options/X-Frame-Options/X-XSS-Protection/Referrer-Policy/X-Request-ID
 
 ### 前端架构
 - **Composable 模式**：`web/src/composables/` — useTask/useMeeting/useKnowledge 提取共享状态 + API 调用
-- **子组件拆分**：18 个子组件（Task:3 + Knowledge:8 + Meeting:3），主 View ≤ 1920 行
-- **Vitest 测试**：`web/vitest.config.js` — composable 测试（23 个）+ 组件测试（15 个）= 38 个测试通过
+- **子组件拆分**：`web/src/components/` 下 **139 个 .vue**，分布 9 个子目录（mobile 27 / drive 25 / chat 25 / paper 13 / knowledge 7 / common 5 / desktop 4 / voiceprint 3）
+- **Vitest 测试**：`web/vitest.config.js` — **96 个测试文件 / 1038 个用例**（composable 31 文件 + component 32 文件等）
 
 > ⚠️ **本节已于 2026-07-27 失效（PWA 被强制注销）** —— commit `36b0b2ec9`
 > （W68 第 14 批 H-3）把 `web/vite.config.js` 的 `VitePWA({ disable: true })` 打开，
@@ -1214,7 +1222,9 @@ curl http://localhost:8000/api/v1/dft/tools
   - **兜底**：用户可手动 DevTools → Application → Storage → Clear site data 彻底重置
 
 ### 测试规范
-- **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试
+- **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试。
+  规模：`tests/` 下 **381 个测试文件 / 3782 个 test 函数**；CI 硬门 `server-tests-baseline.yml`
+  8 片实跑 **3112 用例**（2926 passed / 186 skipped，归档守卫使 skipped 数偏高）
 - **前端**：Vitest + @vue/test-utils，composable 测试优先，组件测试选择性覆盖
 - **Mock 策略**：Redis 用 fakeredis，Claude API 用 respx，Embedding 用固定向量
 
