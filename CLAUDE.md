@@ -934,7 +934,7 @@ curl http://localhost:8000/api/v1/dft/tools
 - **MCP 视觉服务架构** — 预写架构，切换支持图片识别的文本模型时启用（如未来切 Claude 视觉）
 - 认证使用 JWT，`app/core/security.py` 已实现，31 个端点全部接入 `get_current_user`
 - 会话存储已迁移到 Redis（`RedisSessionStore`，24 小时 TTL）
-- 知识库使用 pgvector 做向量搜索（扩展已在 main.py 启动时自动安装，已接入 text2vec-base-chinese 真实语义搜索）
+- 知识库使用 pgvector 做向量搜索（扩展已在 main.py 启动时自动安装；嵌入模型现役为 **Qwen/Qwen3-Embedding-0.6B**（1024d，`app/services/embedding_service.py:32`），`text2vec-base-chinese`（768d）仅为备选）
 - **知识库深层逻辑系统（Knowledge Brain）** — 八大模块：
   - **动态 LLM 分析**：LLM 根据内容自由生成分类/标签/key_concepts/related_topics/knowledge_type，不再硬编码
   - **自动关联引擎**：新入库条目通过 pgvector 余弦相似度 + 概念重叠自动发现关联关系，双向写入 knowledge_relations 表
@@ -1195,7 +1195,7 @@ curl http://localhost:8000/api/v1/dft/tools
 | `app/services/knowledge_service.py` | 知识库 CRUD + 语义搜索 |
 | `app/services/reminder_service.py` | 提醒服务 + Celery task |
 | `app/services/search_service.py` | 联网搜索（搜狗+必应双引擎） |
-| `app/services/embedding_service.py` | 向量嵌入（text2vec-base-chinese） |
+| `app/services/embedding_service.py` | 向量嵌入（Qwen3-Embedding-0.6B, 1024d; 备选 text2vec-base-chinese） |
 | `app/services/file_parser_service.py` | 文件内容提取（PDF/Word/Excel/PPT） |
 | `app/services/llm_analysis_service.py` | LLM 内容分析（动态分类+标签+摘要+核心概念） |
 | `app/services/knowledge_graph_service.py` | 知识图谱服务（自动关联+BFS 遍历+动态分类+标签云+统计） |

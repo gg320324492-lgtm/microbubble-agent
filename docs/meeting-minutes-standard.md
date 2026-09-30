@@ -84,5 +84,6 @@
 ## 维护要求
 
 - 手动修改数据库会议内容时，必须同时检查 `summary`、`key_points`、`decisions` 和 `transcript_polished`。
-- 自动分析 prompt 修改时，必须同步更新本规范、`README.md`、`ROADMAP.md`、`CLAUDE.md`、`AGENTS.md` 中的相关说明。
+- 自动分析 prompt 修改时，必须同步更新本规范、`README.md`、`ROADMAP.md`、`CLAUDE.md` 中的相关说明。
+  （~~`AGENTS.md`~~ 已于 2026-07-12 标记 DEPRECATED 并由 CLAUDE.md 替代，不再更新）
 - `transcript` 原始转录不改；只优化 `transcript_polished` 和结构化纪要字段。
