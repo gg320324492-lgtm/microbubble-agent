@@ -465,7 +465,10 @@
 ### 测试规范
 - **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试。
   规模：`tests/` 下 **381 个测试文件 / 3782 个 test 函数**；CI 硬门 `server-tests-baseline.yml`
-  8 片实跑 **3112 用例**（2926 passed / 186 skipped，归档守卫使 skipped 数偏高）
+  8 片实跑 **3112 用例**（2926 passed / 186 skipped）
+  - ⚠️ **87 个测试文件已归档**（模块级 `pytest.skip`）—— 断言历史 commit / 已下线功能 /
+    一次性验收 gate / 需真环境。**恢复流程与分类清单见 [`tests/ARCHIVED.md`](tests/ARCHIVED.md)**。
+    守门类测试（`test_no_prod_db_imports.py` 禁止测试直连生产库）**不得归档**。
 - **前端**：Vitest + @vue/test-utils，composable 测试优先，组件测试选择性覆盖
 - **Mock 策略**：Redis 用 fakeredis，Claude API 用 respx，Embedding 用固定向量
 
