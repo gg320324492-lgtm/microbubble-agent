@@ -1,7 +1,7 @@
 # docs/ — 项目文档索引
 
-> **2026-09-30 建立**。本目录有 380 个 md，分散在根目录（127 个散落文件）与 20 个
-> 子目录中。**本索引只说明"哪一类东西去哪找"，不逐个罗列文件**——逐个列的清单会在
+> **2026-09-30 建立**。本目录原有 380 个 md，分散在根目录（127 个散落文件）与 20 个
+> 子目录中；同日收敛把 45 个一次性产物迁入 `archived/2026-09-30-root-snapshots/`（README 在内说明迁移依据），根目录现存 83 个。**本索引只说明"哪一类东西去哪找"，不逐个罗列文件**——逐个列的清单会在
 > 下一次新增文档时立刻过时，那正是"8 套材料"混乱的来源。
 >
 > **当前状态不在这里**：`CLAUDE.md` 顶部 `## 当前状态` 段是唯一的现状权威。
@@ -16,7 +16,7 @@
 | **当初为什么这么定（决策链）** | `docs/decisions/`、`docs/refactor-decision/`、`docs/W-N-decisions/` |
 | **怎么部署 / 部署出过什么问题** | `docs/deploy.md`（现行）+ 根目录 `deploy-*` `build-dist-runbook.md`（历史） |
 | **RAG 架构与评测** | `docs/rag/`（31 个）、`docs/qa-bench/`、`docs/bench/` |
-| **桌面端 / 网盘 Drive v2 的方案与部署** | 根目录 `drive-v2-*` `desktop-*` 系列 + `docs/design/` `docs/design-proposals/` |
+| **桌面端 / 网盘 Drive v2 的方案与部署** | 根目录 `drive-v2-*` `desktop-*` 系列（**11 份 `drive-v2-*` 是同一功能按 PR 序号分的方案文档**，读 `docs/decisions/` 与本表定位，不要指望单文件覆盖全貌）+ `docs/design/` `docs/design-proposals/` |
 | **会议纪要格式（硬规则）** | `CLAUDE.md` 的 `## 会议纪要标准格式` |
 | **前端设计令牌** | `docs/color-tokens.md` + `web/src/assets/variables.css`（后者是真值） |
 | **阶段排期与路线图** | `docs/roadmap-phases/`、`docs/phase14/`、`docs/phase15/` |
@@ -34,8 +34,8 @@
 | `history/` | 19 | 历史档案 | 只读 |
 | `superpowers/` | 22 | 早期方案与审计反馈 | 只读 |
 | `roadmap-phases/` `phase14/` `phase15/` `P2-leftover/` | 38 | 阶段计划与留口 | 多已完结 |
-| `archived/` `_archive_2026-07-12/` | 115 | **归档** | 只读，不再更新 |
-| （根目录散落 127 个） | 127 | 混合：现行 runbook + 一次性方案 + 修复记录 | 见上方查找表 |
+| `archived/` `_archive_2026-07-12/` | 161 | **归档** | 只读，不再更新 |
+| （根目录现存 83 个） | 83 | 混合：现行 runbook + 专题方案 + 活引用锚点 | 见上方查找表 |
 
 ## 写文档的纪律
 
