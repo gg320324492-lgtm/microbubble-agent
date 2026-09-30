@@ -65,6 +65,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # 全历史: tests/rag/qa_bench_* 断言基线 commit (如 git log 59b2a9603..HEAD),
+          # 默认 shallow clone (depth=1) 下 "fatal: bad revision" → 26 条红灯。
+          # 2026-09-30 S1.2 收敛 R4。
+          fetch-depth: 0
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
