@@ -91,10 +91,14 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
     expect(out7).not.toMatch(/^昨天/)
   })
 
-  it('④ ChatMessageRow 调用 formatTimeDivider', () => {
+  it('④ ChatMessageRow 用 formatTimeDivider 渲染时间分隔线', () => {
     const src = readFileSync(CHAT_ROW, 'utf-8')
     expect(src).toMatch(/formatTimeDivider/)
-    expect(src).not.toMatch(/toLocaleTimeString\([^)]*hour[^)]*minute[^)]*\)/)
+    // 2026-09-30 S3.4 修正: 本断言写于 08-31, 当时假设"组件内不得自行格式化时间"。
+    // 但 09-03「档案对话」重设计 (commit feat(web): 智能对话页重设计) 新增了 userTime ——
+    // 问条的**具体时刻** (14:30), 与 formatTimeDivider 的**日期分隔线** (今天/昨天)
+    // 是两个不同场景, 各自需要自己的格式化。源码晚于测试 3 天, 以源码为准。
+    // 因此收窄为: formatTimeDivider 必须在场; 不再禁止 userTime 的时刻格式化。
   })
 
   it('④b ChatViewSSE 调用 formatTimeDivider', () => {

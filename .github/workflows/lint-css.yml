@@ -78,10 +78,21 @@ jobs:
           fi
 
       # 同时跑 vitest 兜底（stylelint 漏掉的逻辑错误）
-      - name: Run unit tests (smoke)
+      # 2026-09-30 S3.4: 原本双重不拦截 —— ① `| tail -30` 在没有 pipefail 的默认 shell
+      # 下把 pytest 退出码吞掉 ② continue-on-error: true。两者叠加意味着 1,440 个前端
+      # 用例一条都拦不住。参照 server-tests-baseline.yml 的做法: set -o pipefail +
+      # ${PIPESTATUS[0]} 让退出码如实上抛。
+      - name: Run unit tests (real gate)
         working-directory: web
-        run: npm run test:unit -- --run --reporter=dot 2>&1 | tail -30
-        continue-on-error: true  # 不阻断 stylelint 主检查 (test failure 是另一回事)
+        run: |
+          set -o pipefail
+          npm run test:unit -- --run --reporter=dot 2>&1 | tee vitest-output.txt | tail -40
+          rc=${PIPESTATUS[0]}
+          echo "vitest exit=$rc"
+          exit $rc
+        # 存量清零前先保留 non-blocking, 待 14 条断言漂移修完再摘 (见 desktop-conversion
+        # docs/plans/2026-09-30-phase-closeout-plan.md S3.4)
+        continue-on-error: true
 
   # P3 守卫：v70/v71/v72 累计的 0 错误基线 + v74 趋势统计
   stylelint-baseline-guard:

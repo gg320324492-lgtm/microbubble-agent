@@ -295,6 +295,31 @@ async function onDelete(c) {
   }
 }
 
+// 2026-09-30 S3.4: 模板第 80 行 @click="toggleEditForm" 一直引用着一个**从未定义**的
+// 函数 —— 点"编辑"按钮会报 "toggleEditForm is not a function", 编辑表单永远打不开。
+// 该缺陷由 tests/.../CommentItem.test.js 的两条用例捕获 (曾因无闸门长期未被发现)。
+// 语义与 cancelEdit 对称: 已开则关闭 (等同 cancelEdit), 未开则初始化内容后打开。
+function toggleEditForm() {
+  if (showEditForm.value) {
+    cancelEdit()
+    return
+  }
+  showEditForm.value = true
+  editContent.value = props.comment.content
+  // @提及面板与输入框聚焦都是增强项, 任一不可用都不该阻断编辑本身 —— 整体防御,
+  // 避免辅助功能异常把 showEditForm 已经置好的表单又打回去 (tests 的 composable/element
+  // mock 并不提供 open/focus, 真实环境虽可用但不该成为硬依赖)。
+  nextTick(() => {
+    try {
+      editMention.open?.()
+      const ta = editInputRef.value
+      ta?.focus?.()
+    } catch (e) {
+      // 静默: 辅助功能失败不影响编辑主流程
+    }
+  })
+}
+
 function cancelEdit() {
   showEditForm.value = false
   editContent.value = ''

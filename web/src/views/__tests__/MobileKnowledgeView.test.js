@@ -30,12 +30,13 @@ describe('MobileKnowledgeView - PR8 移除 files tab 静态回归', () => {
     )
     expect(validTabsMatch, 'VALID_TABS 数组必须存在').toBeTruthy()
     const tabsArray = validTabsMatch[1]
-    // 不含 'files' 字符串
-    expect(tabsArray).not.toMatch(/'files'/)
-    // 含 6 个 tab key
+    // 已下线的 tab 不得复活: files (PR8 移到 /m-drive) / formulas (2026-09-13
+    // 公式计算整体下线) / memory (随 Knowledge Brain 改版移除)
+    expect(tabsArray).not.toMatch(/'files'|'formulas'|'memory'/)
+    // 现役 4 个 tab key
     const count =
-      (tabsArray.match(/'(knowledge|entities|hypotheses|formulas|memory|health)'/g) || []).length
-    expect(count).toBe(6)
+      (tabsArray.match(/'(knowledge|entities|hypotheses|health)'/g) || []).length
+    expect(count).toBe(4)
   })
 
   it('tabItems 数组无 files entry', () => {
@@ -44,10 +45,10 @@ describe('MobileKnowledgeView - PR8 移除 files tab 静态回归', () => {
       /const tabItems\s*=\s*\[([\s\S]*?)\]/
     )
     expect(tabItemsMatch, 'tabItems 数组必须存在').toBeTruthy()
-    expect(tabItemsMatch[1]).not.toMatch(/key:\s*'files'/)
-    // 6 个 key
-    const keyCount = (tabItemsMatch[1].match(/key:\s*'(knowledge|entities|hypotheses|formulas|memory|health)'/g) || []).length
-    expect(keyCount).toBe(6)
+    expect(tabItemsMatch[1]).not.toMatch(/key:\s*'(files|formulas|memory)'/)
+    // 现役 4 个 key (2026-09-30 S3.4 对齐源码真值: formulas 已随公式计算下线移除)
+    const keyCount = (tabItemsMatch[1].match(/key:\s*'(knowledge|entities|hypotheses|health)'/g) || []).length
+    expect(keyCount).toBe(4)
   })
 
   it('兼容旧 tabs 数组无 files entry', () => {

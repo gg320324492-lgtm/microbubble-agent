@@ -24,6 +24,9 @@ export default defineConfig({
       'tests/e2e/mobile_swipe_gesture.spec.js',
       'tests/e2e/mobile_voice_input.spec.js',
       'tests/e2e/mobile_push_notification.spec.js',
+      // 2026-09-30 S3.4: 第 4 个同类漏网。Playwright testMatch 只认 tests/visual/**,
+      // 故这些 spec 从未被任何 runner 跑过, 在 vitest 里只会整体崩。
+      'tests/e2e/mobile-baseline.spec.js',
     ],
     coverage: {
       provider: 'v8',
