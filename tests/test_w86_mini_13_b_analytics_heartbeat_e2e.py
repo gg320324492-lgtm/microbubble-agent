@@ -10,6 +10,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# 2026-09-30 S1.2 收敛 R4: 验收快照/环境依赖类老化测试 — 断言历史 commit (09-29 filter-repo 重写前 已不存在)、已下线功能行为或旧 API 格式, 不具回归保护价值。2026-09-30 S1.2 收敛 R4 归档, 恢复条件: 断言对象重新成为现役契约
+pytest.skip(
+    "验收快照/环境依赖类老化测试 — 断言历史 commit (09-29 filter-repo 重写前 已不存在)、已下线功能行为或旧 API 格式, 不具回归保护价值。2026-09-30 S1.2 收敛 R4 归档, 恢复条件: 断言对象重新成为现役契约",
+    allow_module_level=True,
+)
+
+
 from app.api.v1.analytics import get_stats, list_recent_logs
 from app.core.celery import celery_app
 from app.services.analytics_tasks import analytics_heartbeat

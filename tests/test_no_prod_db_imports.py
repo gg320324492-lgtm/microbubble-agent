@@ -20,6 +20,7 @@
   连 localhost:5432 且默认 skip (真跑时由 scripts/bench_hnsw_params.py 自建 engine)
 """
 import re
+
 from pathlib import Path
 
 TESTS_DIR = Path(__file__).resolve().parent
