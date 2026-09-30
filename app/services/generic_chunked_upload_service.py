@@ -26,6 +26,16 @@
 
 配额: 单文件 ≤ 2GB (MAX_DRIVE_FILE_SIZE_BYTES)
 """
+# ==========================================================================
+# 分片上传有四个相关文件, 别误判为重复代码:
+#   chunked_upload_service           会议录音边录边传 (本地临时文件 + ffmpeg 合并)
+#   generic_chunked_upload_service   通用分片上传 (不持久化会话, 无 resume)
+#   drive_chunked_upload_service     网盘分片 (PG 表 + sha256 + resume + 过期清理)
+#   drive_chunked_upload_tasks       Celery wrapper, 仅调度 cleanup
+# 2026-09-30 已核实"合并四件套"的建议不成立 (存储契约不同), 见
+# app/services/CHUNKED_UPLOAD.md
+# ==========================================================================
+
 import logging
 import os
 import uuid as _uuid_lib

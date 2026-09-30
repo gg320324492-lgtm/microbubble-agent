@@ -4,6 +4,16 @@ This is intentionally separate from ``app.services.chunked_upload_service`` (mee
 and the legacy ``ChunkedUploadSession`` implementation. The 080 API contract uses UUID upload
 ids, per-chunk SHA256 validation, JSON progress, and a 24-hour TTL.
 """
+# ==========================================================================
+# 分片上传有四个相关文件, 别误判为重复代码:
+#   chunked_upload_service           会议录音边录边传 (本地临时文件 + ffmpeg 合并)
+#   generic_chunked_upload_service   通用分片上传 (不持久化会话, 无 resume)
+#   drive_chunked_upload_service     网盘分片 (PG 表 + sha256 + resume + 过期清理)
+#   drive_chunked_upload_tasks       Celery wrapper, 仅调度 cleanup
+# 2026-09-30 已核实"合并四件套"的建议不成立 (存储契约不同), 见
+# app/services/CHUNKED_UPLOAD.md
+# ==========================================================================
+
 
 from __future__ import annotations
 
