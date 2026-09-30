@@ -1,6 +1,42 @@
 # MicroBubble Agent - 项目上下文
 ## 项目简介
 
+> **怎么读这个文件**（2026-09-30 标注）：本文件有 **20 个 `## 当前状态` 段**，按时间
+> **倒序**堆叠（最新的在最上），全部自称"当前"——实为**历史快照**，只最新那个
+> （第 4 行，2026-09-18）描述现状，其余是事故档案/批次收口记录。
+> **长期铁律**（类 20.xx 共 75 条）散落在 890–1380 行之间，检索方式：`grep -n "类 20\." CLAUDE.md`。
+> 想知道"现在该怎么做"看顶部当前状态 + 本段；想知道"当初为什么这么定"往下翻。
+
+## 当前状态 (2026-09-30 阶段收尾全面收口 — CI 硬门转正 / 94GB 死重清零 / 41GB 生产依赖归位 / 远端补齐)
+
+**服务端全量测试首次有真闸门 (S1.2 完成)**:
+- `server-tests-baseline.yml` 8 片 matrix 跑 3112 用例；基线 **829 条红灯经 R1-R6 六轮
+  收敛归零**（最终 passed 2926 / failed 0 / errors 0 / skipped 186），已摘
+  `continue-on-error` —— 任一片失败即阻塞合并。**此前 451 个测试文件从未有任何
+  workflow 跑过全量**（RAG-FW CI 只跑 `tests/rag_framework/` 一个子集）。
+- **87 个测试文件带模块级守卫**（一次性验收快照 / 环境依赖类，全部原位保留 +
+  文件头写明恢复条件）。**守门类测试不得归档**（`test_no_prod_db_imports` 禁止测试
+  直连生产库）。
+- 容器跑 pytest：URL 必须 `postgresql+asyncpg://`；CI 里 `TEST_DATABASE_URL` 与
+  `DATABASE_URL` **两个都要设**（conftest 从后者派生库名）。
+
+**物理布局 (S1.1 / S2.1 完成)**:
+- 删死重 **94.4 GB**：`llama-cpp-tools/qwen3-14b-f16.gguf` 52.1G、`models/Qwen3-14B-FP16`
+  28.2G、`.ollama/` 13.5G、`.claude/recovery-clones/`、零源码的 `web-minimal/`。
+  **`data/ollama` 61.6G 是 ollama 容器挂载点，勿删**。
+- 会议转写 41.7 GB 运行时已从隐藏的 `.workbuddy/vibevoice-test` 归位到
+  **`data/vibevoice-test`**，位置由 `VIBEVOICE_HOME` 控制（4 个消费点：3 个
+  `app/gpu_worker/*.py` + `scripts/start_gpu_asr_daemon.bat`，开机自启任务
+  `MicroBubble-GPU-ASR-Daemon` 调它）。已实测 7B 链路 60s 音频 80s 转写通过。
+
+**文档与远端 (S0.1 / S2.2 部分完成)**:
+- `desktop-conversion/` 已建私有远端 `gg320324492-lgtm/microbubble-desktop-conversion`
+  （此前 126 commits 只存在于本机单盘）。
+- 阶段收尾全过程见 `desktop-conversion/docs/plans/2026-09-30-phase-closeout-plan.md`
+  与 `docs/acceptance/2026-09-30-server-tests-baseline-v2.md`。
+- **PWA 已于 2026-07-27 强制注销**（`36b0b2ec9`，`VitePWA({ disable: true })`）：
+  dist 无 manifest / 无 sw.js 是**预期状态**，见下方 971 行失效警示。
+
 ## 当前状态 (2026-09-18 晚 会议 253 转写丢失双重 bug 修复 — merge 静默丢片 + ASR 无重试, 音频不可恢复, 已部署)
 
 **09-19 头像全挂 502 (MinIO 端口僵尸, WSL 重启第三个受害者, 已修复)**:
@@ -481,8 +517,6 @@ const clearSelection = () => {
 - 前端: Vue 3 + Vite + Element Plus（原版 `web/`，极简版 `web-minimal/`）
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
-
-## 当前状态 (2026-08-18 Plan v2 #1 业务回归全链路修复收口 — 8 commits, 锚点范式 ~603 → ~611 据实累计, 0 测试基础设施破坏)
 
 **Plan v2 #1 业务回归完整收官** (2026-08-17 → 2026-08-18), 主拍决策 + 1 天投入批准后, 8 commits 据实累计 +8, 0 业务代码改动 (除 1 个真实生产 model bug 修复), 0 失败:
 
