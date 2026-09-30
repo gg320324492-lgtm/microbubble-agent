@@ -12,14 +12,27 @@ const viewPath = resolve(__dirname, '../ChatViewSSE.vue')
 const source = readFileSync(viewPath, 'utf-8')
 
 describe('ChatViewSSE W100 +61 polish (dark mode + 浏览器降级 + print)', () => {
-  it('① Notebook 按钮 light mode hover/focus 加 color-mix 背景', () => {
-    expect(source).toMatch(/\.header-context-toggle:hover[\s\S]*?color-mix\(in srgb, var\(--color-primary\)/)
-    expect(source).toMatch(/\.header-context-toggle:focus-visible\s*\{/)
+  // 2026-10-01: ①/② 原盯 `.header-context-toggle` (Notebook 引用切换键), 该键已被
+  // f1c3c2645「移除头部『引用』切换按钮」连同死样式一起删干净 (源文件 0 命中)。
+  // 头部控制权已交给 #chat-header-search-toggle + .header-search-pill, 断言改钉现行契约:
+  // hover/focus-visible 必须有高亮背景, 且 dark mode 必须逐条覆盖。
+  it('① 头部控制键 light mode hover/focus-visible 加高亮背景', () => {
+    expect(source).toMatch(
+      /\.chat-immersive #chat-header-search-toggle:hover,\n\.chat-immersive #chat-header-search-toggle:focus-visible \{/
+    )
+    expect(source).toMatch(
+      /\.chat-immersive #chat-header-search-toggle:hover,[\s\S]*?background: rgba\(14, 118, 110, 0\.06\);/
+    )
+    expect(source).toMatch(/\.chat-immersive \.header-search-pill:focus-within \{/)
   })
 
-  it('② Notebook 按钮 dark mode 覆盖 hover/focus', () => {
-    expect(source).toMatch(/\[data-theme="dark"\]\s+\.header-context-toggle:hover/)
-    expect(source).toMatch(/\[data-theme="dark"\]\s+\.header-context-toggle:focus-visible/)
+  it('② 头部控制键 dark mode 覆盖 hover/focus-visible', () => {
+    expect(source).toMatch(/\[data-theme="dark"\] \.chat-immersive #chat-header-search-toggle:hover/)
+    expect(source).toMatch(/\[data-theme="dark"\] \.chat-immersive #chat-header-search-toggle:focus-visible/)
+    expect(source).toMatch(
+      /\[data-theme="dark"\] \.chat-immersive #chat-header-search-toggle:hover,[\s\S]*?background: rgba\(53, 194, 164, 0\.08\);/
+    )
+    expect(source).toMatch(/\[data-theme="dark"\] \.chat-immersive \.header-search-pill:focus-within \{/)
   })
 
   it('③ 用户气泡 dark mode 加 box-shadow + color-mix 边框', () => {

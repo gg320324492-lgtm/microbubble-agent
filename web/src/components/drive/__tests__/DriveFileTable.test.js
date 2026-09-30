@@ -2,13 +2,9 @@
  * DriveFileTable.test.js — 三栏工作台行表组件 (批次③ B)
  * mount-smoke + 关键交互契约: folder 行前置 / 行事件 emit / 列头排序 / 选择 checkbox 同步
  */
-import { describe, it, expect, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils'
 
-vi.mock('axios', () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: { thumbnail_url: 'http://minio/x/thumb.webp' } }) },
-}))
-import axios from 'axios'
 import DriveFileTable from '@/components/drive/DriveFileTable.vue'
 
 const files = [
@@ -62,10 +58,15 @@ describe('DriveFileTable', () => {
     expect(w.emitted('sort-change')[0]).toEqual(['file_name'])
   })
 
-  it('checkbox change emit select-toggle; 表头全选 emit select-all(true)', async () => {
+  it('checkbox change emit select-toggle (文件夹行走 select-toggle-folder); 表头全选 emit select-all(true)', async () => {
     const w = factory()
-    const box = w.findAll('.dft-row input[type=checkbox]')[0]
-    await box.setValue(true)
+    // 批次⑩.1 起文件夹行也带 checkbox, 且恒排在文件行之前 → 文件行 checkbox 从 [2] 起
+    const boxes = w.findAll('.dft-row input[type=checkbox]')
+    expect(boxes.length).toBe(5)
+    await boxes[0].setValue(true)
+    expect(w.emitted('select-toggle-folder')[0]).toEqual([3])
+    expect(w.emitted('select-toggle')).toBeFalsy()
+    await boxes[2].setValue(true)
     expect(w.emitted('select-toggle')[0]).toEqual([11])
 
     const head = w.find('.dft-head input[type=checkbox]')
@@ -132,43 +133,46 @@ describe('DriveFileTable', () => {
   })
 })
 
-describe('DriveFileTable 封面块 (复刻视觉稿: 真缩略图 + 类型色块)', () => {
-  const coverFiles = [
-    { id: 21, file_name: '泡径分布.png', storage_mode: 'drive', thumbnail_status: 'ready' },
-    { id: 22, file_name: '报告.pdf', storage_mode: 'drive', thumbnail_status: 'ready' },
-    { id: 23, file_name: '讲义.pptx', storage_mode: 'drive', thumbnail_status: 'none' },
+describe('DriveFileTable 类型点 (批次⑧: 行内缩略图/缩写色块退役, 封面统一看右栏)', () => {
+  const dotFiles = [
+    { id: 21, file_name: '泡径分布.png' },
+    { id: 22, file_name: '报告.pdf' },
+    { id: 23, file_name: '讲义.pptx' },
   ]
-  function coverMount(files, folders) {
+  function dotMount(files, folders) {
     return mount(DriveFileTable, {
       props: { files, folders, loading: false },
       global: { stubs: { ElPagination: true } },
     })
   }
-  it('图片行走 inline 直链, ready PDF 拉 thumbnail 端点, 无缩略图类型回落缩写块', async () => {
-    const w = coverMount(coverFiles, [{ id: 9, name: '实验数据' }])
-    await flushPromises()
+  it('文件夹行走 .dft-folder-ic 描边图标, 文件行走类型色点 (abbr 进 title)', () => {
+    const w = dotMount(dotFiles, [{ id: 9, name: '实验数据' }])
     const rows = w.findAll('.dft-row')
-    expect(rows[0].find('.dft-glyph-folder').exists()).toBe(true)
-    expect(rows[1].find('.dft-glyph img').attributes('src')).toContain('/api/v1/drive/files/21/download?disposition=inline')
-    expect(rows[2].find('.dft-glyph img').attributes('src')).toBe('http://minio/x/thumb.webp')
-    expect(axios.get).toHaveBeenCalledWith('/api/v1/drive/files/22/thumbnail')
-    expect(rows[3].find('.dft-glyph img').exists()).toBe(false)
-    expect(rows[3].find('.dft-glyph-ext').text()).toBe('PPTX')
-  })
-  it('缩略图加载失败 (img error) 回落类型缩写块', async () => {
-    const w = coverMount([coverFiles[1]], [])
-    await flushPromises()
-    const img = w.find('.dft-glyph img')
-    expect(img.exists()).toBe(true)
-    await img.trigger('error')
-    await flushPromises()
+    expect(rows[0].classes()).toContain('is-folder')
+    expect(rows[0].find('.dft-folder-ic').exists()).toBe(true)
+    expect(rows[0].find('.dft-dot').exists()).toBe(false)
+
+    const pngDot = rows[1].find('.dft-dot')
+    expect(pngDot.exists()).toBe(true)
+    expect(pngDot.attributes('title')).toBe('PNG')
+    expect(pngDot.attributes('style')).toContain('color-file-image')
+    expect(rows[2].find('.dft-dot').attributes('title')).toBe('PDF')
+    expect(rows[2].find('.dft-dot').attributes('style')).toContain('color-file-pdf')
+    expect(rows[3].find('.dft-dot').attributes('title')).toBe('PPTX')
+    expect(rows[3].find('.dft-dot').attributes('style')).toContain('color-warning')
+    // 行内不再拉缩略图 (封面由右栏负责)
+    expect(w.find('.dft-glyph').exists()).toBe(false)
     expect(w.find('.dft-glyph img').exists()).toBe(false)
-    expect(w.find('.dft-glyph-ext').text()).toBe('PDF')
   })
-  it('文件夹封面色确定性: 同名恒同色', () => {
-    const a = coverMount([], [{ id: 1, name: '组会 PPT' }]).find('.dft-glyph').attributes('style')
-    const b = coverMount([], [{ id: 2, name: '组会 PPT' }]).find('.dft-glyph').attributes('style')
+  it('类型色确定性: 同名恒同色, 不同类型不同色', () => {
+    const a = dotMount([{ id: 1, file_name: '报告.pdf' }], []).find('.dft-dot').attributes('style')
+    const b = dotMount([{ id: 2, file_name: '报告.pdf' }], []).find('.dft-dot').attributes('style')
+    const c = dotMount([{ id: 3, file_name: '讲义.pptx' }], []).find('.dft-dot').attributes('style')
     expect(a).toBe(b)
-    expect(a).toContain('color')
+    expect(a).not.toBe(c)
+    expect(a).toContain('background')
+    // 未知扩展名回落占位色, 仍走类型点 (不回落文件夹图标)
+    const d = dotMount([{ id: 4, file_name: '无扩展名' }], []).find('.dft-dot').attributes('style')
+    expect(d).toContain('color-text-placeholder')
   })
 })

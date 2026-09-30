@@ -66,7 +66,7 @@ web/**/_token.json
 # .env 备份 (含旧 SECRET_KEY 等敏感配置, 教训: 2026-07-01 secret rotation)
 .env.backup-*
 .env.*.bak
-# 2026-10-01 补缺口: `.env.bak-<日期>` 形式绕过上面两模式 + 第 193 行全局 *.bak
+# 2026-10-01 补缺口: `.env.bak-<日期>` 形式绕过上面两模式 + 第 196 行全局 *.bak
 # (check-ignore 实测四种模式全漏; 工作树 .env.bak-20260927-023217 含密钥)
 .env.bak*
 

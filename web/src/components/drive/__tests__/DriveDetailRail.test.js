@@ -54,23 +54,64 @@ describe('DriveDetailRail', () => {
     expect(w.text()).toContain('冯懿鑫')
   })
 
-  it('动作按钮全 emit 真实事件', async () => {
-    const w = factory()
-    await w.findAll('.rail-act')[0].trigger('click')      // 预览
-    expect(w.emitted('preview')[0][0].id).toBe(11)
-    await w.findAll('.rail-act')[1].trigger('click')      // 下载
-    expect(w.emitted('download')).toBeTruthy()
-    await w.findAll('.rail-act')[2].trigger('click')      // 分享
-    expect(w.emitted('share')).toBeTruthy()
-    await w.findAll('.rail-act')[3].trigger('click')      // 收藏
-    expect(w.emitted('toggle-star')).toBeTruthy()
-    const second = w.findAll('.rail-actions--second .rail-act')
-    // 2026-09-05: "加入知识库"按钮已移除 (网盘文件默认自动入库 RAG), 剩 重命名/移动/删除
+  it('动作按钮 emit 真实事件 (ppt/docx/pdf: 首排翻页三键 + 二排 下载/分享/收藏 + 三排 重命名/移动/删除)', async () => {
+    const w = factory()   // file_name=组会0901.pptx → previewKind='ppt', 走内嵌预览
+    const rows = w.findAll('.rail-actions')
+    expect(rows.length).toBe(3)
+
+    // 首排 = 上一页 / 全屏放映 / 下一页。批次⑩.37 选型 B 起内嵌预览, 原「预览」按钮已退役
+    const pager = rows[0].findAll('.rail-act')
+    expect(pager.length).toBe(3)
+    expect(pager[0].classes()).toContain('pv')
+    expect(pager[1].classes()).toContain('pri')
+    expect(pager[2].classes()).toContain('nx')
+    expect(pager[0].attributes('disabled')).toBeDefined()   // 停在第 1 页, 不能往前翻
+    expect(w.emitted('preview')).toBeFalsy()                 // 内嵌预览, 不再从动作键 emit preview
+
+    const second = rows[1].findAll('.rail-act')              // 下载 / 分享 / 收藏
     expect(second.length).toBe(3)
-    await second[0].trigger('click')                       // 重命名
+    await second[0].trigger('click')
+    expect(w.emitted('download')[0][0].id).toBe(11)
+    await second[1].trigger('click')
+    expect(w.emitted('share')[0][0].id).toBe(11)
+    await second[2].trigger('click')
+    expect(w.emitted('toggle-star')[0][0].id).toBe(11)
+
+    const third = rows[2].findAll('.rail-act')               // 重命名 / 移动 / 删除
+    expect(third.length).toBe(3)
+    expect(third[0].text()).toContain('重命名')
+    expect(third[1].text()).toContain('移动')
+    expect(third[2].text()).toContain('删除')
+    await third[0].trigger('click')
     expect(w.emitted('rename')).toBeTruthy()
-    await second[2].trigger('click')                       // 删除
+    await third[1].trigger('click')
+    expect(w.emitted('move')).toBeTruthy()
+    await third[2].trigger('click')
     expect(w.emitted('delete')).toBeTruthy()
+  })
+
+  it('动作按钮 emit 真实事件 (其余类型: 首排 全屏放映/下载/分享/收藏, 不渲染翻页二排)', async () => {
+    const w = factory({ file: { ...file, id: 12, file_name: '周报.md', file_type: '.md' } })
+    const rows = w.findAll('.rail-actions')
+    expect(rows.length).toBe(2)
+    const first = rows[0].findAll('.rail-act')
+    expect(first.length).toBe(4)
+    expect(first[0].classes()).toContain('pri')              // 全屏放映
+    expect(first[1].text()).toContain('下载')
+    expect(first[2].text()).toContain('分享')
+    await first[1].trigger('click')
+    expect(w.emitted('download')[0][0].id).toBe(12)
+    await first[2].trigger('click')
+    expect(w.emitted('share')[0][0].id).toBe(12)
+    await first[3].trigger('click')
+    expect(w.emitted('toggle-star')[0][0].id).toBe(12)
+
+    // 2026-09-05: "加入知识库"按钮已移除 (网盘文件默认自动入库 RAG), 剩 重命名/移动/删除
+    const second = rows[1].findAll('.rail-act')
+    expect(second.length).toBe(3)
+    expect(second[0].text()).toContain('重命名')
+    expect(second[1].text()).toContain('移动')
+    expect(second[2].text()).toContain('删除')
   })
 
   it('评论 tab 挂 CommentThread 且 fileId 正确', () => {

@@ -1,7 +1,7 @@
 // useSwipeGesture.test.js — 触摸滑动识别 composable 单元测试
 // 2026-07-22  PR8 mobile 文件预览 swipe
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { ref, nextTick } from 'vue'
 import { useSwipeGesture } from '../useSwipeGesture'
 
@@ -23,19 +23,24 @@ function makeTouch(x, y) {
 }
 
 /**
- * 触发完整 swipe: touchstart → touchmove → touchend (含 elapsed 控制)
+ * 触发完整 swipe: touchstart → touchmove → touchend (elapsed 可控)
+ *
+ * 2026-10-01 修 flaky (原 "全量跑偶发红 / 单跑 3/3 过")。原实现只对 touchend 段
+ * mock Date.now, touchstart/touchmove 段读的是**真时钟** → elapsed 可能是 0, 也可能 ≥1ms。
+ * elapsed 一旦 ≥1 就进 W68 速度判定 (useSwipeGesture.js:100-120): 49px / 1ms = 49 px/ms
+ * 远大于 velocity(0.3) → 提前触发 callback, "49px 不触发" 随机红。单跑时 elapsed 恰为 0
+ * 侥幸躲开, 全量并发下必红。改为整段手势钉死时钟, 阈值判定/速度判定归谁由 elapsed 显式决定。
  */
 function fireSwipe(el, { startX, startY, endX, endY, elapsed = 50 }) {
+  const startTime = 1_000_000 // 固定基准, 避免依赖真实墙钟
+  const nowSpy = vi.spyOn(Date, 'now')
+  nowSpy.mockReturnValue(startTime)            // touchstart
   el.dispatchEvent(makeTouchEvent('touchstart', [makeTouch(startX, startY)]))
 
+  nowSpy.mockReturnValue(startTime + elapsed) // touchmove (速度判定在这里)
   el.dispatchEvent(makeTouchEvent('touchmove', [makeTouch(endX, endY)]))
 
-  // mock Date.now 让 elapsed 可控 (touchstart 一次 + touchend 一次)
-  const startTime = Date.now()
-  const nowSpy = vi.spyOn(Date, 'now')
-  nowSpy.mockReturnValueOnce(startTime)
-  nowSpy.mockReturnValueOnce(startTime + elapsed)
-
+  nowSpy.mockReturnValue(startTime + elapsed) // touchend (阈值/超时判定在这里)
   el.dispatchEvent(makeTouchEvent('touchend', [makeTouch(endX, endY)]))
 
   nowSpy.mockRestore()
@@ -49,6 +54,12 @@ describe('useSwipeGesture', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     elementRef = ref(container)
+  })
+
+  // composable 的监听挂在 DOM 上而非组件生命周期内, 容器必须逐例摘掉, 否则残留到后续用例
+  afterEach(() => {
+    container.remove()
+    vi.restoreAllMocks()
   })
 
   it('向左 swipe (dx < 0, |dx| > threshold) 触发 onSwipeLeft 回调', async () => {
@@ -99,10 +110,23 @@ describe('useSwipeGesture', () => {
     onSwipeRight(cbR)
     await nextTick()
 
-    fireSwipe(container, { startX: 100, startY: 100, endX: 51, endY: 100 })  // dx = -49
-    fireSwipe(container, { startX: 51, startY: 100, endX: 100, endY: 100 }) // dx = +49
+    // 必须同时慢到不过速度判定: 49px / 200ms = 0.245 px/ms < velocity(0.3),
+    // 且 200ms <= timeout(300) 让 touchend 走到阈值分支 → 只有 threshold 挡得住
+    fireSwipe(container, { startX: 100, startY: 100, endX: 51, endY: 100, elapsed: 200 })  // dx = -49
+    fireSwipe(container, { startX: 51, startY: 100, endX: 100, endY: 100, elapsed: 200 })  // dx = +49
     expect(cbL).not.toHaveBeenCalled()
     expect(cbR).not.toHaveBeenCalled()
+  })
+
+  it('W68 速度判定: 位移不足 threshold 但够快 (> velocity 0.3 px/ms) 照样触发', async () => {
+    const { onSwipeLeft } = useSwipeGesture(elementRef, { threshold: 50, timeout: 300 })
+    const cb = vi.fn()
+    onSwipeLeft(cb)
+    await nextTick()
+
+    // 49px / 50ms = 0.98 px/ms > 0.3 → touchmove 阶段就触发 (设计上就是如此, 不是回归)
+    fireSwipe(container, { startX: 100, startY: 100, endX: 51, endY: 100, elapsed: 50 })
+    expect(cb).toHaveBeenCalledTimes(1)
   })
 
   it('边界: 位移 51px 触发 (刚好高于 threshold)', async () => {
