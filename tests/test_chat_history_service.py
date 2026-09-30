@@ -128,10 +128,10 @@ class TestChatSessionCRUD:
         await update_session(db, session_id="archived_1", user_id=test_member.id, is_archived=True)
 
         active_only, _ = await list_sessions(db, user_id=test_member.id, include_archived=False)
-        assert all(s.id != "archived_1" for s in active_only["items"])
+        assert all(s.id != "archived_1" for s in active_only)
 
         with_archived, _ = await list_sessions(db, user_id=test_member.id, include_archived=True)
-        assert any(s.id == "archived_1" for s in with_archived["items"])
+        assert any(s.id == "archived_1" for s in with_archived)
 
     @pytest.mark.asyncio
     async def test_list_sessions_按_tag_过滤(self, db, test_member):
@@ -258,8 +258,8 @@ class TestChatMessageCRUD:
         last_id = items[-1].id
         # 增量
         incr, _ = await list_messages(db, session_id="incr_msg", user_id=test_member.id, after_id=last_id)
-        assert len(incr["items"]) == 3
-        assert all(m.id > last_id for m in incr["items"])
+        assert len(incr) == 3
+        assert all(m.id > last_id for m in incr)
 
 
 # ============================================================================
@@ -276,7 +276,7 @@ class TestChatSearch:
 
         result = await search_sessions(db, user_id=test_member.id, query="zeta", page_size=10)
         # 至少 2 个 session 命中
-        session_ids = {item["session_id"] for item in items}
+        session_ids = {item["session_id"] for item in result}
         assert "s_zeta_1" in session_ids
         assert "s_zeta_2" in session_ids
         assert "s_other" not in session_ids
@@ -287,7 +287,7 @@ class TestChatSearch:
         # 1 字符可能 silent ignore 或 raise — 接受任一行为，验证不返回大量结果
         result = await search_sessions(db, user_id=test_member.id, query="z", page_size=10)
         # 期望 0 结果（防性能问题）
-        assert len(items) == 0
+        assert len(result) == 0
 
 
 # ============================================================================

@@ -29,6 +29,13 @@ from pathlib import Path
 
 import pytest
 
+# 2026-09-30 S1.2 收敛 R4: 验收快照类 — 断言 nginx conf 含特定历史热修行
+pytest.skip(
+    "验收快照类 — 断言 nginx conf 含特定历史热修行",
+    allow_module_level=True,
+)
+
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 

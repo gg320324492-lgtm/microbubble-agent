@@ -25,6 +25,13 @@ W92-X-2 据实修法:
 """
 
 import re
+import pytest  # 2026-09-30 S1.2 收敛 R4
+
+pytest.skip(
+    "需 playwright 浏览器 + 有效 TEST_TOKEN 跑 a11y 基线, CI 无此环境",
+    allow_module_level=True,
+)
+
 from pathlib import Path
 
 SNAPSHOT_DIR = (

@@ -13,6 +13,13 @@ import os
 import subprocess
 
 import pytest
+
+# 2026-09-30 S1.2 收敛 R4: schema drift 查询走 docker exec 宿主机容器, CI 无 docker CLI (CLAUDE.md 已记录该模式应优雅 skip)
+pytest.skip(
+    "schema drift 查询走 docker exec 宿主机容器, CI 无 docker CLI (CLAUDE.md 已记录该模式应优雅 skip)",
+    allow_module_level=True,
+)
+
 from sqlalchemy import text
 
 from tests.conftest import test_async_session as async_session  # 2026-09-12 生产库测试迁移: 原 app.core.database.async_session 直连生产库, 改 conftest 测试库工厂

@@ -110,8 +110,13 @@ jobs:
       - name: Run shard ${{ matrix.shard }} (baseline collection, failures expected)
         continue-on-error: true
         env:
+          # 只设 TEST_DATABASE_URL: 刻意不设 DATABASE_URL。
+          # tests/conftest.py 从 settings.DATABASE_URL 派生测试 URL (库名换
+          # microbubble_test) —— 若 CI 注入 DATABASE_URL=…/microbubble_test, 则
+          # settings.DATABASE_URL 变成测试库, 击穿
+          # test_fin1_backup_share_block::test_guard_injected_test_url_is_not_production
+          # (它断言 resolved != settings.DATABASE_URL 的 asyncpg 形式)。
           TEST_DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/microbubble_test"
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/microbubble_test"
           REDIS_URL: "redis://localhost:6379/0"
           SKIP_DB_SETUP: ""
         run: |

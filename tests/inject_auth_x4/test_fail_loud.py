@@ -15,6 +15,13 @@ W91-X-18 据实: injectAuth() 缺 TEST_TOKEN 时 return false 静默降级 = 3 �
 调用方式: cd <repo-root> && SKIP_DB_SETUP=1 pytest tests/inject_auth_x4/ -v
 """
 import os
+import pytest  # 2026-09-30 S1.2 收敛 R4
+
+pytest.skip(
+    "依赖 web/ 构建产物路径, CI 未 build 前端",
+    allow_module_level=True,
+)
+
 import subprocess
 import sys
 from pathlib import Path

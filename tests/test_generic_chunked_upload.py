@@ -9,6 +9,13 @@
 import asyncio
 import os
 import pytest
+
+# 2026-09-30 S1.2 收敛 R4: 真连 MinIO (localhost:9000) 的分片上传集成测试, CI 无 MinIO
+pytest.skip(
+    "真连 MinIO (localhost:9000) 的分片上传集成测试, CI 无 MinIO",
+    allow_module_level=True,
+)
+
 import pytest_asyncio
 import uuid as _uuid_lib
 from io import BytesIO

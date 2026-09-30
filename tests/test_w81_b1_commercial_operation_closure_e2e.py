@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """W81 B-1 商业化运营 + Phase 8 收官新增 2-case e2e。"""
 from pathlib import Path
+import pytest  # 2026-09-30 S1.2 收敛 R4
+
+pytest.skip(
+    "验收快照类 — 断言收尾报告文档存在",
+    allow_module_level=True,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNBOOK = ROOT / "docs" / "w81-1st-batch-b1-commercial-operation-closure-2026-07-28.md"

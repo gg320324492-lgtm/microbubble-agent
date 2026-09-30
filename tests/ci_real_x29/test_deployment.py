@@ -11,6 +11,13 @@ from pathlib import Path
 
 import pytest
 
+# 2026-09-30 S1.2 收敛 R4: 真实部署环境验收 (需真服务器/凭据核对), CI 不可复现
+pytest.skip(
+    "真实部署环境验收 (需真服务器/凭据核对), CI 不可复现",
+    allow_module_level=True,
+)
+
+
 WEB = Path(__file__).resolve().parents[2] / "web"
 
 

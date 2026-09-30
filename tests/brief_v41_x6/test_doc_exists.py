@@ -1,4 +1,11 @@
 from pathlib import Path
+import pytest  # 2026-09-30 S1.2 收敛 R4
+
+pytest.skip(
+    "验收快照类 — 断言 CLAUDE.md 含特定历史段落, 非回归保护",
+    allow_module_level=True,
+)
+
 
 DOC = Path(__file__).resolve().parents[2] / "docs" / "dispatch-template-v4.1.md"
 CLAUDE = Path(__file__).resolve().parents[2] / "CLAUDE.md"

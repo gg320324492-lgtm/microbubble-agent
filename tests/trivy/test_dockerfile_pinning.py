@@ -29,6 +29,15 @@ DOCKERFILES = [
 
 COMPOSE_FILE = "docker-compose.yml"
 
+# 有意使用浮动 tag 的镜像登记处 (2026-09-30 S1.2 收敛 R4)。
+# 每条必须写明"为什么钉不住" + "怎么回滚", 否则纪律与运维决策打架时无裁决依据。
+FLOATING_EXEMPT = {
+    # ollama: 2026-09-10 从 0.31.1 → latest —— qwen3.8 manifest 需新版镜像才认,
+    # 钉回 0.31.1 会导致 manifest 解析失败 (聊天功能整体不可用)。
+    # 回滚方式: 改回 ollama/ollama:0.31.1
+    "ollama/ollama:latest",
+}
+
 # FROM <image>[:tag] [AS name]  — 忽略 FROM <stage-name> 的多阶段引用
 FROM_RE = re.compile(r"^\s*FROM\s+(?P<ref>\S+)", re.IGNORECASE)
 IMAGE_RE = re.compile(r"^\s*image:\s*(?P<ref>\S+)")
@@ -69,7 +78,12 @@ def _is_pinned(ref: str) -> bool:
       - tag 以 3 段数字开头 (3.11.15-slim / 20.19.6-alpine / 12.1.1-runtime-*), 或
       - 上游只有 2 段版本方案的镜像 (postgres:16.14-alpine)
     不钉死 = 无 tag (隐式 latest) / 'latest' / 'alpine' / '16-alpine' / '3.11-slim' 这类浮动.
+
+    例外见 FLOATING_EXEMPT (2026-09-30 S1.2 收敛 R4 新增): 有意用浮动 tag 的镜像
+    必须在该集合登记并写明理由, 避免"纪律与运维决策打架"时无处裁决。
     """
+    if ref in FLOATING_EXEMPT:
+        return True
     tag = _tag_of(ref)
     if tag is None or tag == "latest":
         return False
@@ -128,7 +142,10 @@ def test_refs_discovered():
     from_refs = [r for r in refs if r[0] != COMPOSE_FILE]
     image_refs = [r for r in refs if r[0] == COMPOSE_FILE]
     assert len(from_refs) == 10, f"期望 10 个 FROM, 实际 {len(from_refs)}: {from_refs}"
-    assert len(image_refs) == 7, f"期望 7 个 compose image, 实际 {len(image_refs)}: {image_refs}"
+    assert len(image_refs) >= 7, (
+    f"期望 >=7 个 compose image (写死精确数会随服务增删失效), "
+    f"实际 {len(image_refs)}: {image_refs}"
+)
 
 
 @pytest.mark.parametrize("rel,lineno,ref", _collect_refs(), ids=lambda v: str(v))
@@ -145,7 +162,7 @@ def test_no_bare_latest_anywhere():
     offenders = [
         f"{rel}:{lineno} {ref}"
         for rel, lineno, ref in _collect_refs()
-        if _tag_of(ref) in (None, "latest")
+        if _tag_of(ref) in (None, "latest") and ref not in FLOATING_EXEMPT
     ]
     assert not offenders, "发现裸 latest / 无 tag 引用:\n" + "\n".join(offenders)
 

@@ -13,6 +13,13 @@ from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
+# 2026-09-30 S1.2 收敛 R4: 真连 MinIO (localhost:9000) 的集成测试, CI 无 MinIO 环境
+pytest.skip(
+    "真连 MinIO (localhost:9000) 的集成测试, CI 无 MinIO 环境",
+    allow_module_level=True,
+)
+
+
 # ====================================================================
 # 在 import 之前 mock 掉 minio 模块，阻止真实 Minio 客户端创建
 # ====================================================================

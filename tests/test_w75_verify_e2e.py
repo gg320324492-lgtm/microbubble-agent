@@ -72,8 +72,11 @@ class TestNineTableIndexVerification:
         cfg.set_main_option("script_location", "alembic")
         script = ScriptDirectory.from_config(cfg)
         heads = script.get_heads()
-        assert heads == ["085_billing_payment_tables"], (
-            f"alembic 应单 head 085, 实得 {heads} (派工 v4 铁律 3 派工书假设校准)"
+        # 2026-09-30 S1.2 收敛 R4: 原写死 heads == ["085_billing_payment_tables"],
+        # alembic 链已演进到 141+ (与 CLAUDE.md 084/085/087 三连修正同款)。
+        # 改为"单 head"不变量 —— 串单链纪律本身才是要守的东西。
+        assert len(heads) == 1, (
+            f"alembic 应恰为单 head (串单链纪律), 实得 {heads}"
         )
 
         # 084 + 085 都在链上

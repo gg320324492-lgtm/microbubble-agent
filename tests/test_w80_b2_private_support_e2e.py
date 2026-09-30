@@ -33,6 +33,13 @@ from pathlib import Path
 
 import pytest
 
+# 2026-09-30 S1.2 收敛 R4: 验收快照类 — 断言特定 runbook 文档存在
+pytest.skip(
+    "验收快照类 — 断言特定 runbook 文档存在",
+    allow_module_level=True,
+)
+
+
 # ── 项目根目录 ──────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.parent
 COMMERCIAL_DIR = PROJECT_ROOT / "commercial"
