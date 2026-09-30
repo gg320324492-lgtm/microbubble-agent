@@ -32,7 +32,7 @@ jobs:
   server-tests-baseline:
     name: shard ${{ matrix.shard }} (non-blocking)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +80,10 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq libsndfile1
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 120 -r requirements.txt
-          pip install pytest pytest-asyncio
+          # pytest-timeout: 单测级超时保护。2026-09-30 S1.2 收敛 R3: shard 7 因个别
+          # 长 timeout / subprocess 测试挂死拖到 45min 整片被杀 (报告全丢)。加
+          # --timeout=300 后单测超 5 分钟即被 thread 模式杀掉并标记, 不再连坐整片。
+          pip install pytest pytest-asyncio pytest-timeout
 
       - name: Prepare test DB (extensions)
         env:
@@ -111,6 +114,7 @@ jobs:
           echo "===== shard ${{ matrix.shard }} files: $(wc -l < .pytest-chunks/chunk-${{ matrix.shard }}.txt) ====="
           tr '\n' '\0' < .pytest-chunks/chunk-${{ matrix.shard }}.txt | \
             xargs -0 python -m pytest -q \
+              --timeout=300 --timeout-method=thread \
               --continue-on-collection-errors \
               --junitxml=report-shard-${{ matrix.shard }}.xml \
               -rfE 2>&1 | tee pytest-shard-${{ matrix.shard }}.txt || true
