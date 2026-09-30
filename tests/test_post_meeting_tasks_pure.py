@@ -136,7 +136,20 @@ class TestEditDistance:
         s = "陈金薪" * 50
         assert _edit_distance(s, s) == 0
 
-    def test_does_not_mutate_inputs(self):
-        a, b = "abc", "abd"
-        _edit_distance(a, b)
-        assert a == "abc" and b == "abd"
+    def test_repeated_calls_are_stable(self):
+        """DP 用一维数组原地更新, 若实现有状态污染, 重复调用结果会漂移
+
+        (注: 原想断言"输入字符串未被改写", 但 Python str 不可变, 那条是空断言 —— 改为
+        验证可观测的等价性质: 同一输入重复调用结果一致)
+        """
+        a, b = "kitten", "sitting"
+        first = _edit_distance(a, b)
+        assert all(_edit_distance(a, b) == first for _ in range(5))
+
+    def test_longer_string_order_matters_for_result_not_inputs(self):
+        """长度差异大时的对称性 (DP 数组复用是否残留脏数据)"""
+        # 60 个 x → 5 个 y: 替换 60 次 (不能用删除+插入更省, Levenshtein 不允许交换)
+        a, b = "x" * 60, "y" * 5
+        assert _edit_distance(a, b) == _edit_distance(b, a) == 60
+        # 中间插入调用后, 短串结果不得被污染
+        assert _edit_distance("abc", "abd") == 1

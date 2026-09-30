@@ -20,6 +20,7 @@ from app.services.voiceprint_voting import (
     _cluster_center,
     _cosine_distance,
     _merge_homogeneous_clusters,
+    smart_select_k,
 )
 
 
@@ -164,10 +165,115 @@ class TestMergeHomogeneousClusters:
         out, mapping = _merge_homogeneous_clusters(ci, [0, 1])
         assert set(mapping.keys()) == {0, 1}
 
+    def test_no_center_cluster_when_merge_happens(self):
+        """⚠️ 契约不干净之处 (2026-09-30 评审定性, 非 bug):
+
+        `root_to_cids` 只从 `cids_with_center` 构建, 所以**合并路径**下 center=None 的
+        簇会从 `new_cluster_info` 里整个消失; 而 `cid_to_root` 仍保留它 —— 两条路径
+        输出契约不一致 (不合并时保留, 合并时丢失)。
+
+        实务影响为零, 因为: ①无 center 的簇其 name_votes/seg_confs 必为空
+        (vote_with_quality_gates 第 328 行预过滤掉了 None/全零段), 丢的不是票;
+        ②下游遍历时有 `if center is None: continue` 兜底 (同文件第 397 行)。
+
+        本用例把**当前行为固定下来**: 若将来有人修这个不一致, 此用例会红, 提醒
+        同步更新契约说明。
+        """
+        ci = {
+            0: _info([1.0, 0.0]),
+            1: _info([0.98, 0.2]),        # 与 0 高度相似 → 触发合并
+            2: {"center": None, "total": 1, "name_votes": {}, "seg_confs": {}},
+        }
+        out, mapping = _merge_homogeneous_clusters(ci, [0, 1, 2])
+        # 0/1 合并成一组; cid 2 因无 center 不参与 cos 比较, 自己成组
+        assert mapping[0] == mapping[1], "0/1 高度相似应合并 (cos≈0.980)"
+        assert mapping[2] == 2, "无 center 的簇不参与合并, 保持独立"
+        assert set(mapping.keys()) == {0, 1, 2}, "cid_to_root 仍含全部 cid"
+        assert 2 not in out, "当前行为: 合并路径下无 center 的簇被丢弃 (见 docstring)"
+
     def test_threshold_is_configurable(self):
-        """阈值可调: 同一对向量在低阈值下不合并"""
-        ci = {0: _info([1.0, 0.0]), 1: _info([0.9, 0.44])}  # cos ≈ 0.915
+        """阈值可调: 同一对向量在低阈值下不合并 (此处 cos≈0.898)"""
+        ci = {0: _info([1.0, 0.0]), 1: _info([0.9, 0.44])}  # cos ≈ 0.898
         _, m_low = _merge_homogeneous_clusters(ci, [0, 1], merge_threshold=0.99)
         _, m_high = _merge_homogeneous_clusters(ci, [0, 1], merge_threshold=0.85)
         assert len(set(m_low.values())) == 2
         assert len(set(m_high.values())) == 1
+
+
+# ==========================================================================
+# smart_select_k
+# ==========================================================================
+
+
+def _blobs(n_per: int, centers: list, dim: int = 8, seed: int = 0) -> list:
+    """构造可聚类的 embedding: 每个 center 周围撒 n_per 个点"""
+    rng = np.random.default_rng(seed)
+    out = []
+    for c in centers:
+        base = np.zeros(dim)
+        base[: len(c)] = c
+        for _ in range(n_per):
+            out.append(base + rng.normal(0, 0.08, dim))
+    return out
+
+
+class TestSmartSelectK:
+    def test_degenerate_few_samples(self):
+        """有效样本 < 2 时必须降级, 不能抛异常"""
+        labels, k, score, meta = smart_select_k([np.array([1.0, 0.0])])
+        assert labels == [-1] and k == 1 and score == -1.0
+        assert meta["_meta"]["low_quality"] is True
+
+    def test_all_invalid_segments(self):
+        labels, k, score, meta = smart_select_k([None, np.zeros(4), np.zeros(4)])
+        assert labels == [-1, -1, -1]
+        assert k == 1 and meta["_meta"]["low_quality"] is True
+
+    def test_empty_input(self):
+        labels, k, _, meta = smart_select_k([])
+        assert labels == [] and k == 1 and meta["_meta"]["low_quality"] is True
+
+    def test_recovers_obvious_three_speaker_structure(self):
+        """三个明显分离的团 → 应选出 K=3 (n_expected=3 时 proximity 也指向 3)"""
+        embs = _blobs(8, [[1, 0, 0, 0, 0, 0, 0, 0],
+                          [0, 1, 0, 0, 0, 0, 0, 0],
+                          [0, 0, 1, 0, 0, 0, 0, 0]])
+        labels, k, score, all_scores = smart_select_k(embs, n_expected=3)
+        assert len(labels) == len(embs)
+        assert k == 3, f"应识别出 3 个说话人, 实际 K={k}"
+        assert len(set(labels)) == 3
+        assert "_meta" in all_scores
+        assert {"low_quality", "best_sil", "best_k"} <= set(all_scores["_meta"]), (
+            f"_meta 至少含三项质量元数据, 实际 {sorted(all_scores['_meta'])}"
+        )
+        assert all_scores["_meta"]["best_k"] == k, "_meta.best_k 应与返回值 k 一致"
+
+    def test_recovers_obvious_two_speaker_structure(self):
+        embs = _blobs(8, [[1, 0, 0, 0, 0, 0, 0, 0],
+                          [0, 1, 0, 0, 0, 0, 0, 0]])
+        _, k, _, _ = smart_select_k(embs, n_expected=2)
+        assert k == 2
+
+    def test_labels_length_equals_input(self):
+        """labels 必须与 seg_embs 等长 (无效段标 -1), 下游按位置对齐"""
+        embs = _blobs(5, [[1, 0, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0]])
+        embs.insert(3, None)          # 混入一个无效段
+        labels, _, _, _ = smart_select_k(embs, n_expected=2)
+        assert len(labels) == len(embs)
+        assert labels[3] == -1, "无效段应标 -1"
+
+    def test_low_quality_flag_when_structure_is_amorphous(self):
+        """无结构的均匀随机点 → silhouette 低 → low_quality=True"""
+        rng = np.random.default_rng(7)
+        embs = list(rng.normal(0, 1, (30, 8)))
+        _, _, _, all_scores = smart_select_k(embs, n_expected=3)
+        assert all_scores["_meta"]["low_quality"] is True, "无结构数据应标记低质量"
+
+    def test_n_expected_shifts_k_up(self):
+        """同样的数据, n_expected 越大越倾向选更大的 K (proximity 因子)"""
+        embs = _blobs(8, [[1, 0, 0, 0, 0, 0, 0, 0],
+                          [0, 1, 0, 0, 0, 0, 0, 0],
+                          [0, 0, 1, 0, 0, 0, 0, 0]])
+        _, k_low, _, _ = smart_select_k(embs, n_expected=2)
+        _, k_high, _, _ = smart_select_k(embs, n_expected=4)
+        assert k_high >= k_low, f"n_expected=4 的 K({k_high}) 不应小于 n_expected=2 的 K({k_low})"
