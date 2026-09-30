@@ -14,6 +14,13 @@
 import asyncio
 import pytest
 
+# 2026-09-30 S1.2 收敛 R4: 被测模块 app/services/drive_cache 已于 2026-08-05 Step 1 删除 (163 行), 测试对象消失
+pytest.skip(
+    "被测模块 app/services/drive_cache 已于 2026-08-05 Step 1 删除 (163 行), 测试对象消失",
+    allow_module_level=True,
+)
+
+
 from app.services.drive_cache import (  # noqa: E402
     DEFAULT_TTL_SEC,
     _drive_list_cache,

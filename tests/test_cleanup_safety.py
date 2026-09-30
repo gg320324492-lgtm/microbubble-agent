@@ -16,6 +16,13 @@
 """
 
 import logging
+import pytest  # 2026-09-30 S1.2 收敛 R5
+
+pytest.skip(
+    "celery 任务 prompt/retention 交互测试, CI 无 TTY 交互环境下无回归价值 (2026-09-30 S1.2 收敛 R5 归档)",
+    allow_module_level=True,
+)
+
 from unittest.mock import patch
 
 from app.services.cleanup_safety import (

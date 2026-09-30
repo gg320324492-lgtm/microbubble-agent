@@ -27,6 +27,11 @@ TESTS_DIR = Path(__file__).resolve().parent
 
 # 相对 tests/ 的路径; 目录用 (parts) 元组, 文件用名字
 ALLOWLIST = {
+    # conftest.py 本文件就是测试库 URL 工厂的定义处 (TEST_DB_URL 从
+    # settings.DATABASE_URL 派生库名), 必须使用该变量 —— 2026-09-30 S1.2 收敛 R5
+    ("conftest.py",),
+    # 本文件自身 (守卫规则) 需要对照 settings.DATABASE_URL 才能判定
+    ("test_fin1_backup_share_block.py",),
     ("test_database_lazy_init.py",),
     ("e2e", "test_anchor_scripts_smoke.py"),
     ("integration", "test_hnsw_bench_real.py"),
