@@ -77,6 +77,31 @@ jobs:
             echo "::notice::@webhint/quick-lint 未安装, 跳过 webhint 步骤 (npm i -D @webhint/quick-lint 可启用)"
           fi
 
+  # 2026-10-01 S3.4 (b): vitest 从 stylelint job 拆出。原先它排在 `Run Stylelint`
+  # 之后且二者同 job，而 `Run Stylelint` 无 continue-on-error —— 296 条既有 stylelint
+  # 债会让它先行失败并**短路整个 job**，`Run unit tests` 从未被执行
+  # （实测该 run 的 `Run unit tests` 步骤组 / `vitest exit=` / `Test Files` 命中数均为 0）。
+  # 拆开后本 job 不依赖 stylelint 结论，门禁才**可证伪**：红了能证明门禁在工作。
+  # stylelint 债本身见 S3.7 与 S3.4 (c)（baseline-guard 修复 + 基线棘轮），不在本改动范围。
+  frontend-unit-tests:
+    name: Frontend unit tests (vitest real gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci --prefer-offline --no-audit --no-fund
+
       # 同时跑 vitest 兜底（stylelint 漏掉的逻辑错误）
       # 2026-09-30 S3.4: 原本双重不拦截 —— ① `| tail -30` 在没有 pipefail 的默认 shell
       # 下把 pytest 退出码吞掉 ② continue-on-error: true。两者叠加意味着 1,440 个前端
@@ -110,6 +135,7 @@ jobs:
             web/test-results/
           retention-days: 14
           if-no-files-found: warn
+
 
   # P3 守卫：v70/v71/v72 累计的 0 错误基线 + v74 趋势统计
   stylelint-baseline-guard:
