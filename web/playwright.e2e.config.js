@@ -13,8 +13,14 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests/e2e',
   // tests/e2e 下混有历史 vitest-style spec (thinking-mode-breadcrumb 等) 与
-  // describe 内 test.use 的老写法 — Playwright 跑不了. 本 config 只认 mock 基线 spec.
-  testMatch: /mobile-baseline\.spec\.js/,
+  // describe 内 test.use 的老写法 — Playwright 跑不了. 本 config 只认能跑的 spec.
+  //
+  // 2026-09-30 S3.4: 补 mobile_dark_v33.spec.js。它此前**任何 runner 都不跑**
+  // (本 config 的 testMatch 只认 mobile-baseline, 主 config 只认 tests/visual),
+  // 只在 vitest 里整体崩。它断言的"移动端 dark 模式 6 view 不应有硬编码 hex"并未被
+  // stylelint 覆盖 —— stylelint 配置里 "color-no-hex": null 是**主动禁用**该规则,
+  // 故本 spec 是这条约束的唯一执行者, 属真盲区。
+  testMatch: /(mobile-baseline|mobile_dark_v33)\.spec\.js/,
   fullyParallel: false,
   workers: 1,
   reporter: 'list',

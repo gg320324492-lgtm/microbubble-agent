@@ -24,9 +24,11 @@ export default defineConfig({
       'tests/e2e/mobile_swipe_gesture.spec.js',
       'tests/e2e/mobile_voice_input.spec.js',
       'tests/e2e/mobile_push_notification.spec.js',
-      // 2026-09-30 S3.4: 第 4 个同类漏网。Playwright testMatch 只认 tests/visual/**,
-      // 故这些 spec 从未被任何 runner 跑过, 在 vitest 里只会整体崩。
+      // 2026-09-30 S3.4: 同类漏网补齐。Playwright 侧 testMatch 在
+      // playwright.e2e.config.js (mobile-baseline / mobile_dark_v33) 与主 config
+      // (tests/visual/**), 这些 spec 归 Playwright 跑, 在 vitest 里只会整体崩。
       'tests/e2e/mobile-baseline.spec.js',
+      'tests/e2e/mobile_dark_v33.spec.js',
     ],
     coverage: {
       provider: 'v8',

@@ -323,7 +323,8 @@ function toggleEditForm() {
 function cancelEdit() {
   showEditForm.value = false
   editContent.value = ''
-  editMention.close()
+  // 与 toggleEditForm 的 editMention.open?.() 对称 —— 辅助功能不可用不该抛错
+  editMention.close?.()
 }
 
 async function submitEdit() {

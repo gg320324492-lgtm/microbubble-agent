@@ -178,6 +178,30 @@ timeout 30 git add -f web/dist/ || {
     exit 0  # W100 +75c: 不阻断 commit, 仅警告
 }
 
+# ---- 3.5 拒绝未压缩产物 (2026-09-30 S3.4 新增) ----
+# 事故: 核查期间工作树出现一份**非 production 构建**的 dist (入口 chunk 280KB → 334KB,
+# +19.4%, 标识符未 mangle)。若被提交, 云端 pull 后会直接服务这份未压缩产物。
+# 检测手段: production 构建的入口 chunk 应显著小于未压缩版; 且不应残留本仓源码里的
+# 长标识符名 (minify 会 mangle 掉)。
+verify_dist_is_minified() {
+    local entry
+    entry=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' web/dist/index.html 2>/dev/null | head -1)
+    if [ -z "$entry" ] || [ ! -f "web/dist/$entry" ]; then
+        return 0   # 无入口 chunk, 交给既有校验处理
+    fi
+    local size
+    size=$(wc -c < "web/dist/$entry" | tr -d ' ')
+    if [ "$size" -gt 400000 ]; then
+        echo ""
+        echo "❌ [pre-commit] web/dist/$entry 体积异常 ($size bytes > 400000)"
+        echo "   典型症状: 用非 production 模式构建 (标识符未 mangle), 线上会服务未压缩产物。"
+        echo "   修复: rm -rf web/dist && cd web && npm run build && git add -f web/dist/"
+        exit 1
+    fi
+}
+
+verify_dist_is_minified
+
 # ---- 4. 验证 + 报告 ----
 new_staged=$(git diff --cached --name-only -- 'web/dist/' | wc -l)
 echo ""
