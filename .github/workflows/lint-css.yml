@@ -143,6 +143,12 @@ jobs:
       # 本仓也无 eslint 工具链（web/ 下无配置文件、package.json 只有 lint:css、
       # vite.config.js 无 eslint 段），故不引入 eslint，用零依赖行数比较。
       # 真拆属 S3.6-3b（大工程）；本步只防继续恶化。
+      # 2026-10-01 S3.3 (甲): design-tokens 副本漂移检测。
+      # 既有 check-token-orphans.sh 只覆盖 web 那份（package 那份连孤儿检查都没有），
+      # 且不比对副本漂移；Electron 侧亦无 PR 级门禁。故在此独立把关。
+      - name: Check design-tokens drift
+        run: sh scripts/check-design-tokens-drift.sh
+
       - name: Frontend size budget (ratchet)
         run: |
           set +e

@@ -36,7 +36,7 @@ HOOKS_DIR="$REPO_ROOT/.git/hooks"
 SCRIPTS_DIR="$REPO_ROOT/scripts"
 
 # ---- 1. 检查所有 hook script 存在 ----
-REQUIRED_SCRIPTS="check-secrets-before-commit.sh check-dist-before-commit.sh"
+REQUIRED_SCRIPTS="check-secrets-before-commit.sh check-dist-before-commit.sh check-design-tokens-drift.sh"
 for s in $REQUIRED_SCRIPTS; do
     if [ ! -f "$SCRIPTS_DIR/$s" ]; then
         echo "❌ 错误: 缺 $SCRIPTS_DIR/$s"
@@ -60,8 +60,11 @@ if [ "$1" = "--check" ]; then
     elif ! grep -q "check-dist-before-commit.sh" "$HOOKS_DIR/pre-commit" 2>/dev/null; then
         echo "❌ pre-commit 不含 dist 检查 (过时版本)"
         NEEDS_INSTALL=1
+    elif ! grep -q "check-design-tokens-drift.sh" "$HOOKS_DIR/pre-commit" 2>/dev/null; then
+        echo "❌ pre-commit 不含 design-tokens 漂移检查 (过时版本)"
+        NEEDS_INSTALL=1
     else
-        echo "✅ pre-commit 已正确配置 (secrets + dist)"
+        echo "✅ pre-commit 已正确配置 (secrets + dist + design-tokens 漂移)"
     fi
 
     if [ ! -f "$HOOKS_DIR/post-commit" ]; then
@@ -95,13 +98,18 @@ cat > "$HOOKS_DIR/pre-commit" << 'HOOK_EOF'
 #!/bin/sh
 # .git/hooks/pre-commit
 #
-# 串联两个独立检查 (顺序很重要):
+# 串联三个独立检查 (顺序很重要):
 #   1. secrets: hard block (admin JWT 等凭据绝不能入库)
 #   2. dist:    soft auto-fix (漏 add web/dist/ 自动补)
+#   3. design-tokens drift: hard block (两份副本必须逐字节一致)
 #
 # 为什么顺序: secrets 必须在 dist 之前
 #   - secrets fail → commit 中止, 不应让 dist hook 再 auto-add 文件
 #   - dist auto-add 可能改变 staged diff, 让 secrets check 错位
+#
+# 为什么 drift 放最后: 前两道通过后才做这个较慢的校验。
+#   package 那份无任何消费者级校验 (Electron 单测只断言 main.ts 里有那行 import,
+#   从不检查 CSS 内容, 且只在 desktop-release.yml 跑) → 必须卡在这里。
 #
 # 安装方式: bash scripts/setup-hooks.sh (CLAUDE.md 2026-07-01 沉淀)
 
@@ -112,10 +120,13 @@ sh "$REPO_ROOT/scripts/check-secrets-before-commit.sh" "$@"
 
 # 2. Dist check (soft auto-fix, 含 token-orphan hard block, 教训: CLAUDE.md 2026-06-26 f6a2bc3d)
 sh "$REPO_ROOT/scripts/check-dist-before-commit.sh" "$@"
+
+# 3. design-tokens 副本漂移 (2026-10-01 S3.3 甲方案)
+sh "$REPO_ROOT/scripts/check-design-tokens-drift.sh" "$@"
 HOOK_EOF
 
 chmod +x "$HOOKS_DIR/pre-commit"
-echo "   ✅ pre-commit 已更新 (串联 secrets + dist)"
+echo "   ✅ pre-commit 已更新 (串联 secrets + dist + design-tokens 漂移)"
 
 # ---- 4. 安装/更新 post-commit ----
 echo "📦 安装 post-commit hook..."
