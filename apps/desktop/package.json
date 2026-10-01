@@ -6,7 +6,9 @@
   "description": "小气 · 科研工作台 — Electron 桌面端（M0 骨架）",
   "main": "out/main/index.js",
   "scripts": {
+    "predev": "bash ../../scripts/sync-design-tokens.sh",
     "dev": "electron-vite dev",
+    "prebuild": "bash ../../scripts/sync-design-tokens.sh",
     "build": "node scripts/clean-out.mjs && electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
