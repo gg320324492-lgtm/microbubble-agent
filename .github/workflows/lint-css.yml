@@ -205,7 +205,12 @@ jobs:
             git checkout -q HEAD -- web/ 2>/dev/null || true
             echo "已 checkout 基线 commit: $BASELINE_SHA"
           else
-            BASELINE=$(echo "$current_error_count")
+            # 2026-10-01 S3.7 ⑤ 复核: 此处小写 `$current_error_count` 是**正确**的——
+            # 上游 `Get current error count` 写入 GITHUB_ENV 的键名就是小写
+            # (`echo "current_error_count=$CURRENT" >> "$GITHUB_ENV"`), 且该 step
+            # 在本 step 之前执行, GITHUB_ENV 注入对后续所有 step 可见。
+            # ⚠️ 不要"规范化"成大写 CURRENT_ERROR_COUNT —— 那才会真的取不到。
+            BASELINE="$current_error_count"
             echo "::warning title=基线取不到::本轮回退为与当前值比较，趋势检测本轮不生效（浅克隆可能不含 HEAD~1）"
           fi
           echo "baseline=$BASELINE" >> "$GITHUB_OUTPUT"
@@ -234,6 +239,12 @@ jobs:
       - name: Check against registered baseline
         env:
           REGISTERED: 296
+          # 2026-10-01 S3.7 ⑤ 补: Bash 普通变量不跨 step 共享。`CURRENT` 只在
+          # `Get current error count` 的 shell 里被赋值，`Trend comparison` 里的
+          # `CURRENT=${{ steps.current.outputs.current }}` 也只活在那一个 step。
+          # 本 step 原直接写 $CURRENT → 展开为空 → `[ "" -gt 296 ]` 恒假 →
+          # **新增违规静默放行**，棘轮形同虚设。必须经 outputs 显式接线。
+          CURRENT: ${{ steps.current.outputs.current }}
         run: |
           echo "已登记基线: $REGISTERED 条"
           echo "本次实测:   $CURRENT 条"
