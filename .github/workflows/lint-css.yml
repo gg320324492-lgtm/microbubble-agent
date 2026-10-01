@@ -137,6 +137,43 @@ jobs:
 
       # 对齐后端: junit xml + 全量输出都上传, 摘掉 continue-on-error 后红灯才有据可查
       # (此前只 tail -40, 失败时看不到完整报告)
+      # 2026-10-01 S3.6-3a: 前端热点体量棘轮 —— 政策"只降不升"。
+      # 三个热点合计 10,757 行（paperAdapter 5633 / ChatViewSSE 2973 /
+      # DriveDetailRail 2151，取 `wc -l` 口径，与本表追踪表一致），此前无任何工具在看它们；
+      # 本仓也无 eslint 工具链（web/ 下无配置文件、package.json 只有 lint:css、
+      # vite.config.js 无 eslint 段），故不引入 eslint，用零依赖行数比较。
+      # 真拆属 S3.6-3b（大工程）；本步只防继续恶化。
+      - name: Frontend size budget (ratchet)
+        run: |
+          set +e
+          declare -A BUDGET=(
+            ["web/src/utils/paperAdapter.js"]=5633
+            ["web/src/views/chat/ChatViewSSE.vue"]=2973
+            ["web/src/components/drive/DriveDetailRail.vue"]=2151
+          )
+          FAILED=0
+          TOTAL_NOW=0
+          TOTAL_BUDGET=0
+          for f in "${!BUDGET[@]}"; do
+            LIMIT="${BUDGET[$f]}"
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f,title=体量门禁失效::被监控文件不存在，本棘轮已失去意义，请更新 BUDGET"
+              FAILED=1
+              continue
+            fi
+            NOW=$(wc -l < "$f" | tr -d ' ')
+            TOTAL_NOW=$((TOTAL_NOW + NOW))
+            TOTAL_BUDGET=$((TOTAL_BUDGET + LIMIT))
+            if [ "$NOW" -gt "$LIMIT" ]; then
+              echo "::error file=$f,title=前端热点体量新增::$NOW > 基线 $LIMIT（+$((NOW - LIMIT))）。真拆见 S3.6-3b；新增一律 fail。"
+              FAILED=1
+            elif [ "$NOW" -lt "$LIMIT" ]; then
+              echo "::notice title=前端热点体量改善::$f 较基线少 $((LIMIT - NOW)) 行，请把 BUDGET 里该文件的数字调低以固化成果。"
+            fi
+          done
+          echo "合计: $TOTAL_NOW / 基线 $TOTAL_BUDGET"
+          exit $FAILED
+
       - name: Upload vitest report
         if: always()
         uses: actions/upload-artifact@v4
