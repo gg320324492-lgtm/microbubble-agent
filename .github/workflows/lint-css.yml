@@ -10,6 +10,10 @@ on:
       - "web/package-lock.json"
       - "web/playwright.config.js"
       - "web/tests/**"
+      # 2026-10-01 S3.7 6: change this workflow itself did not trigger it before -
+      # past removals of continue-on-error / vitest job split could only be verified
+      # via manual workflow_dispatch.
+      - ".github/workflows/lint-css.yml"
   push:
     branches: [main]
     paths:
@@ -19,6 +23,10 @@ on:
       - "web/package-lock.json"
       - "web/playwright.config.js"
       - "web/tests/**"
+      # 2026-10-01 S3.7 6: change this workflow itself did not trigger it before -
+      # past removals of continue-on-error / vitest job split could only be verified
+      # via manual workflow_dispatch.
+      - ".github/workflows/lint-css.yml"
   # v76.4: 允许手动触发 baseline-guard, 输入 max-increase 临时放宽门禁
   # 用法: Actions → Lint CSS → Run workflow → 输入 max_increase + tracking_issue
   workflow_dispatch:
