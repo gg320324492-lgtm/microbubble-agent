@@ -168,8 +168,19 @@ jobs:
         run: |
           # 2026-10-01 S3.7 ⑤: Actions 的 run: 默认 bash -e，原写法使 exit 2
           # 直接打死本 step，current 从未写出 → 该 job 只可能在 0 错时通过。
-          OUTPUT=$(npm run lint:css 2>&1) || true
+          set +e
+          OUTPUT=$(npm run lint:css 2>&1)
+          LINT_RC=$?
+          set -e
+          # 2026-10-01: `|| true` 会把「lint:css 跑不起来」与「真的 0 错」压成同一个 0，
+          # 曾导致 guard 假绿（CI 实测 CURRENT=0 而本地为 296）。故必须留痕。
+          echo "::group::lint:css 诊断 (exit=$LINT_RC, 输出 $(echo "$OUTPUT" | wc -l) 行)"
+          echo "$OUTPUT" | tail -30
+          echo "::endgroup::"
           CURRENT=$(echo "$OUTPUT" | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
+          if [ "$CURRENT" = "0" ] && [ "$LINT_RC" != "0" ]; then
+            echo "::error title=stylelint 结果不可信::lint:css 以 exit=$LINT_RC 失败却未解析出错误数（多为环境/依赖问题，非 0 错）。不可把本次结果当作基线。"
+          fi
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "current_error_count=$CURRENT" >> "$GITHUB_ENV"
           echo "📊 当前错误数: $CURRENT"
