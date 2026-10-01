@@ -119,7 +119,11 @@ jobs:
         working-directory: web
         run: |
           set -o pipefail
-          npm run test:unit -- --run --reporter=dot 2>&1 | tee vitest-output.txt | tail -40
+          npm run test:unit -- --run --reporter=dot 2>&1 | tee vitest-output.txt | tail -80
+          # 2026-10-01 S3.7: tail -40 -> tail -80。原值会切掉紧邻其上的
+          # `echo "vitest exit=$rc"`（它在管道之后、exit 之前，而 dot reporter
+          # 输出远超 40 行）-> 红灯时看不到退出码，归因困难。tee 写的是全量，
+          # 该行一直在 artifact 里；此处只影响 console 可读性。
           rc=${PIPESTATUS[0]}
           echo "vitest exit=$rc"
           exit $rc

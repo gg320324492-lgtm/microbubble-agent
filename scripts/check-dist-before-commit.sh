@@ -73,7 +73,13 @@ START_TIME=$(date +%s)
 
 # ---- 1. 检测 web/src/ 改动 ----
 # 没改 src 就跳过（docs/CI/test commit 不应触发）
-if [ -z "$(git diff --cached --name-only -- 'web/src/')" ]; then
+# 2026-10-01 S3.7 1: 排除纯测试目录。原 pathspec 'web/src/' 前缀匹配会命中
+# web/src/**/__tests__/，导致纯测试提交也被要求重建 dist —— 与 L75 注释
+# "docs/CI/test commit 不应触发" 矛盾。改用 exclude 语法。
+# 语法说明: git pathspec 的 ':(exclude)' 前缀必须先跟一个非排除 pathspec 才生效，
+# 故写成 'web/src/' 后面紧跟 ':(exclude)web/src/**/__tests__/**'。
+SRC_CHANGED=$(git diff --cached --name-only -- 'web/src/' ':(exclude)web/src/**/__tests__/**')
+if [ -z "$SRC_CHANGED" ]; then
     hard_verify_dist_refs
     ELAPSED=$(($(date +%s) - START_TIME))
     exit 0
