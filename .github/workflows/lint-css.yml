@@ -14,6 +14,15 @@ on:
       # past removals of continue-on-error / vitest job split could only be verified
       # via manual workflow_dispatch.
       - ".github/workflows/lint-css.yml"
+      # 2026-10-01 S3.78: drift 门要守的 4 个文件此前有 3 个不在 paths 内 ——
+      # 其中 `packages/design-tokens/**` 是**副本本体**，漏它等于门禁形同虚设
+      # （手改副本的 commit 不含 web/src/** 也不含 scripts/**，门禁根本不跑；
+      #  而该包无任何其它门禁覆盖：stylelint 只看 web 那份、Electron 无 PR 级门禁、
+      #  pre-commit 只在本地）。补齐检测器、生成器与 prebuild 接线本身。
+      - "scripts/check-design-tokens-drift.sh"
+      - "scripts/sync-design-tokens.sh"
+      - "packages/design-tokens/**"
+      - "apps/desktop/package.json"
   push:
     branches: [main]
     paths:
@@ -27,6 +36,15 @@ on:
       # past removals of continue-on-error / vitest job split could only be verified
       # via manual workflow_dispatch.
       - ".github/workflows/lint-css.yml"
+      # 2026-10-01 S3.78: drift 门要守的 4 个文件此前有 3 个不在 paths 内 ——
+      # 其中 `packages/design-tokens/**` 是**副本本体**，漏它等于门禁形同虚设
+      # （手改副本的 commit 不含 web/src/** 也不含 scripts/**，门禁根本不跑；
+      #  而该包无任何其它门禁覆盖：stylelint 只看 web 那份、Electron 无 PR 级门禁、
+      #  pre-commit 只在本地）。补齐检测器、生成器与 prebuild 接线本身。
+      - "scripts/check-design-tokens-drift.sh"
+      - "scripts/sync-design-tokens.sh"
+      - "packages/design-tokens/**"
+      - "apps/desktop/package.json"
   # v76.4: 允许手动触发 baseline-guard, 输入 max-increase 临时放宽门禁
   # 用法: Actions → Lint CSS → Run workflow → 输入 max_increase + tracking_issue
   workflow_dispatch:
