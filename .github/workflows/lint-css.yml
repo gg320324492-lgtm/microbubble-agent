@@ -177,7 +177,8 @@ jobs:
           echo "::group::lint:css 诊断 (exit=$LINT_RC, 输出 $(echo "$OUTPUT" | wc -l) 行)"
           echo "$OUTPUT" | tail -30
           echo "::endgroup::"
-          CURRENT=$(echo "$OUTPUT" | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
+          CLEAN=$(echo "$OUTPUT" | sed 's/\x1b\[[0-9;]*m//g')
+          CURRENT=$(echo "$CLEAN" | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
           if [ "$CURRENT" = "0" ] && [ "$LINT_RC" != "0" ]; then
             echo "::error title=stylelint 结果不可信::lint:css 以 exit=$LINT_RC 失败却未解析出错误数（多为环境/依赖问题，非 0 错）。不可把本次结果当作基线。"
           fi
@@ -200,11 +201,11 @@ jobs:
           BASELINE_SHA=$(git rev-parse --verify HEAD~1 2>/dev/null || echo '')
           if [ -n "$BASELINE_SHA" ]; then
             git checkout -q "$BASELINE_SHA" -- web/ 2>/dev/null || true
-            BASELINE=$(cd web && (npm run lint:css 2>&1 || true) | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
+            BASELINE=$(cd web && (npm run lint:css 2>&1 || true) | sed 's/\x1b\[[0-9;]*m//g' | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
             git checkout -q HEAD -- web/ 2>/dev/null || true
             echo "已 checkout 基线 commit: $BASELINE_SHA"
           else
-            BASELINE=$(echo "$CURRENT")
+            BASELINE=$(echo "$current_error_count")
             echo "::warning title=基线取不到::本轮回退为与当前值比较，趋势检测本轮不生效（浅克隆可能不含 HEAD~1）"
           fi
           echo "baseline=$BASELINE" >> "$GITHUB_OUTPUT"
