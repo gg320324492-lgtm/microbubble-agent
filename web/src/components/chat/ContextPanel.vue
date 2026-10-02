@@ -334,7 +334,10 @@ function formatDuration(ms?: number): string {
 .cp-empty {
   padding: 40px 16px;
   text-align: center;
-  color: var(--color-text-placeholder, #c0c4cc);
+  /* 2026-10-03 a11y: --color-text-placeholder #C0C4CC 压卡片底只有 1.61.
+     占位符灰留给真 placeholder 用, 提示文字改走 --color-text-secondary
+     (同 .dci-hint 的既有处理, variables.css:1878). */
+  color: var(--color-text-secondary, #6b6e76);
   font-size: 14px;
 }
 .cp-list {

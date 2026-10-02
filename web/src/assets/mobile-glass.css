@@ -25,7 +25,10 @@
   --mg-text: #322940;
   --mg-text-strong: #3B2E52;
   --mg-text-soft: #8A7BA8;
-  --mg-text-faint: #A396BC;
+  /* 2026-10-03 a11y: #A396BC 在玻璃胶囊实底 (最亮 #ffffff) 上仅 2.63, 远低于 AA 4.5.
+     提暗到 #6B5FA8 = 5.26..5.49 (最差底 #ffffff), 同族紫相不变.
+     dark 变体见下方 [data-theme="dark"] (浅底反过来要提亮, 不是同一个值). */
+  --mg-text-faint: #6B5FA8;
 
   /* ----- 玻璃卡片配方 ----- */
   --mg-glass-bg: rgba(255, 255, 255, 0.5);
@@ -37,7 +40,14 @@
   --mg-shadow-lg: 0 18px 40px rgba(120, 90, 180, 0.24);
 
   /* ----- 品牌渐变 (紫→品红→粉) ----- */
-  --mg-primary: #7C6BD8;
+  /* 2026-10-03 a11y: #7C6BD8 当**文字色**用在 .mg-tabbar 选中项上时仅 4.06 (需 4.5).
+     提暗到 #5B4CB8 = 6.35 on #fbfaf9.
+     副带收益: --mg-on-primary 白字压在本色作**底**时 (MobileTaskTrash .check-mark)
+     从 4.24 一并修到 6.62 — 原本也是不合格的.
+     下方 --mg-gradient* 里写死的 #7C6BD8 不动: 渐变按钮是装饰性大色块, 不承载
+     小字号文字, 保持品牌紫原样. dark **不加** override — 深底上文字要变亮而非变暗,
+     且 dark tabbar 选中项用的是写死的 #B9ADF0 (见下方 dark 块), 不读本 token. */
+  --mg-primary: #5B4CB8;
   --mg-primary-2: #C66BD8;
   --mg-primary-3: #F08AC0;
   --mg-gradient: linear-gradient(135deg, #7C6BD8 0%, #C66BD8 55%, #F08AC0 100%);
@@ -87,7 +97,10 @@
   --mg-text: #EAE6F5;
   --mg-text-strong: #F4F1FB;
   --mg-text-soft: #A79CC4;
-  --mg-text-faint: #7E749B;
+  /* 2026-10-03 a11y: dark 下方向相反 —— 浅字压深底要**提亮**.
+     #7E749B 在最差底 (悬浮胶囊 rgba(56,48,84,.72) 压页面 = #2E2845) 仅 3.23.
+     #9C93BE = 4.87 on #2E2845 / 6.39 on #16131F, 仍与 --mg-text-soft #A79CC4 留一档台阶. */
+  --mg-text-faint: #9C93BE;
 
   --mg-glass-bg: rgba(58, 50, 86, 0.5);
   --mg-glass-bg-strong: rgba(64, 55, 94, 0.66);

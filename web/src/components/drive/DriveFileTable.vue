@@ -22,7 +22,11 @@
   >
     <!-- 列头 -->
     <div ref="dftHeadRef" class="dft-head" role="row">
-      <span class="dft-c dft-c--check">
+      <!-- 2026-10-03 a11y: role="row" 的**直接子元素必须**是 cell/gridcell/columnheader
+           (WCAG 4.1.2 / ARIA required-owned-elements), 裸 <span>/<input> 会触发
+           axe aria-required-children [critical]. 原来只有 3 个可排序列写了
+           role="columnheader", 全选框/上传者/收藏 3 列漏了 —— 补齐 6 列. -->
+      <span class="dft-c dft-c--check" role="columnheader">
         <input
           type="checkbox"
           :checked="allChecked"
@@ -41,13 +45,13 @@
         role="columnheader"
         @click="$emit('sort-change', 'file_size')"
       >大小<span v-if="sortKeyOf === 'file_size'" class="dft-arr">{{ arrow }}</span></span>
-      <span class="dft-c dft-c--owner">上传者</span>
+      <span class="dft-c dft-c--owner" role="columnheader">上传者</span>
       <span
         class="dft-c dft-c--time sortable"
         role="columnheader"
         @click="$emit('sort-change', 'created_at')"
       >上传时间<span v-if="sortKeyOf === 'created_at'" class="dft-arr">{{ arrow }}</span></span>
-      <span class="dft-c dft-c--star dft-star-head" title="收藏 (仅自己可见)">收藏</span>
+      <span class="dft-c dft-c--star dft-star-head" role="columnheader" title="收藏 (仅自己可见)">收藏</span>
     </div>
 
     <!-- 表体 -->
@@ -97,7 +101,8 @@
             @dragleave="onRowDragleave(item)"
             @drop="onRowFolderDrop(item, $event)"
           >
-            <span class="dft-c dft-c--check" @click.stop>
+            <!-- 2026-10-03 a11y: 同表头, role="row" 的 6 个直接子元素全部补 role="gridcell" -->
+            <span class="dft-c dft-c--check" role="gridcell" @click.stop>
               <template v-if="item.kind === 'file'">
                 <input
                   type="checkbox"
@@ -115,7 +120,7 @@
                 />
               </template>
             </span>
-            <span class="dft-c dft-c--name">
+            <span class="dft-c dft-c--name" role="gridcell">
               <!-- 批次⑧ 对齐视觉稿 .nm: 文件夹=teal 描边图标, 文件=7px 类型色 dot (行内缩略图/缩写色块退役, 封面统一看右栏) -->
               <svg v-if="item.kind === 'folder'" viewBox="0 0 24 24" class="dft-folder-ic" aria-hidden="true">
                 <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -127,12 +132,12 @@
               </span>
               <span v-if="item.kind === 'file' && item.data.is_latest === false" class="dft-old" title="非最新版本">旧版</span>
             </span>
-            <span class="dft-c dft-c--size num">{{
+            <span class="dft-c dft-c--size num" role="gridcell">{{
               item.kind === 'file'
                 ? fmtSize(item.data.file_size)
                 : (item.data.size_bytes != null ? fmtSize(item.data.size_bytes) : '—')
             }}</span>
-            <span class="dft-c dft-c--owner">
+            <span class="dft-c dft-c--owner" role="gridcell">
               <!-- 批次⑩.1: 上传者只对具体文件显示; 头像优先真实照片, 无则首字回退 -->
               <template v-if="item.kind === 'file' && (item.data.owner_name || item.data.owner_username)">
                 <span class="dft-av">
@@ -143,8 +148,8 @@
               </template>
               <template v-else>—</template>
             </span>
-            <span class="dft-c dft-c--time num">{{ item.kind === 'file' ? fmtTime(item.data.created_at) : fmtMonth(item.data.latest_file_at) }}</span>
-            <span class="dft-c dft-c--star" @click.stop>
+            <span class="dft-c dft-c--time num" role="gridcell">{{ item.kind === 'file' ? fmtTime(item.data.created_at) : fmtMonth(item.data.latest_file_at) }}</span>
+            <span class="dft-c dft-c--star" role="gridcell" @click.stop>
               <button
                 type="button"
                 class="dft-star"

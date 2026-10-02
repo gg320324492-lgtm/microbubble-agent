@@ -2092,7 +2092,9 @@ function onContextMenuClose() {
 .wb-cap-add { min-height: 0; }
 .wb-crumb-search { color: var(--color-primary-dark); font-size: var(--font-size-xs); }
 /* 视觉稿 .sz: mono 11px text-4 */
-.wb-total { font-family: var(--font-mono, Consolas, monospace); font-size: 11px; color: var(--color-text-placeholder); white-space: nowrap; }
+/* 2026-10-03 a11y: --color-text-placeholder #C0C4CC 压 --color-bg-page #F3F1ED 只有 1.55.
+   占位符灰留给真 placeholder 用, 计数文字改走 --color-text-secondary (4.52). */
+.wb-total { font-family: var(--font-mono, Consolas, monospace); font-size: 11px; color: var(--color-text-secondary); white-space: nowrap; }
 .wb-density {
   border: 1px solid var(--color-border); background: var(--color-bg-card);
   border-radius: var(--radius-md); font-size: var(--font-size-xs); color: var(--color-text-regular);

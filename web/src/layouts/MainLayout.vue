@@ -386,7 +386,13 @@ const handleLogout = () => {
   --dg-card: #fdfefc;
   --dg-ink: #16232a;
   --dg-steel: #5a6b6a;
-  --dg-fog: #8ba0a0;
+  /* 2026-10-03 a11y: #8ba0a0 是这套皮肤的标志性灰, 但压 --dg-chrome #eaece7 只有
+     2.31 (9-10px 的 .ver/.taglabel/.t2 全用它) —— 为达 WCAG AA 做的**最小**调整:
+     同一族青灰, 色相不变, 只降到达标线. #546566 = 5.15 on #eaece7 / 6.05 on #fdfefc.
+     选它而非更深的 #4F6060 是为了与相邻 --dg-steel #5a6b6a 保持 1.09 的可感知差
+     (原 #5A6C6C 是 1.01, 两个 token 会糊成一个, 层级就没了).
+     dark 变体见文件底部非 scoped 块. */
+  --dg-fog: #546566;
   --dg-hair: #c9d2ca;
   --dg-teal: #0e766e;
   --dg-teal-soft: #dcece5;
@@ -614,7 +620,7 @@ nav.menu {
   --dg-card: #fdfefc;
   --dg-ink: #16232a;
   --dg-steel: #5a6b6a;
-  --dg-fog: #8ba0a0;
+  --dg-fog: #546566;
   --dg-hair: #c9d2ca;
   --dg-teal: #0e766e;
   --dg-teal-soft: #dcece5;
@@ -1032,7 +1038,7 @@ nav.menu {
     --dg-card: #fdfefc;
     --dg-ink: #16232a;
     --dg-steel: #5a6b6a;
-    --dg-fog: #8ba0a0;
+    --dg-fog: #546566;
     --dg-hair: #c9d2ca;
     --dg-teal: #0e766e;
     --dg-teal-soft: #dcece5;
@@ -1082,7 +1088,10 @@ nav.menu {
     font-size: 8.5px;
     letter-spacing: 0.12em;
     color: var(--dg-fog);
-    opacity: 0.75;
+    /* 2026-10-03 a11y: opacity 0.75 把 --dg-fog 合成成 #7E8B8C, 在 #fdfefc 上只有
+       3.48 —— axe 按**合成后**颜色判, 所以改 token 不够, 必须像 variables.css:1873
+       对 .dfcv-empty .empty-hint 做的那样去掉 opacity 改实色. */
+    opacity: 1;
   }
   .dg-user-menu .el-dropdown-menu__item:focus-visible {
     outline: 2px solid var(--dg-teal);
@@ -1101,7 +1110,7 @@ nav.menu {
     --dg-card: #18232a;
     --dg-ink: #dfe9e6;
     --dg-steel: #9ab0ae;
-    --dg-fog: #6b8286;
+    --dg-fog: #8ba4a6; /* 2026-10-03 a11y: 同 .aside dark, 原 #6b8286 = 3.93 不合格 */
     --dg-hair: #27363e;
     --dg-teal: #35c2a4;
     --dg-teal-soft: #12312b;
@@ -1119,7 +1128,11 @@ nav.menu {
     --dg-card: #18232a;
     --dg-ink: #dfe9e6;
     --dg-steel: #9ab0ae;
-    --dg-fog: #6b8286;
+    /* 2026-10-03 a11y: 原 #6b8286 在 --dg-card #18232a 上只有 3.93, **深色下本来就是
+       不合格的** (与本轮 17 条无关的既存失败). 深底要提亮不是调暗.
+       #8ba4a6 = 7.15 on #0c1215 (侧栏) / 6.06 on #18232a (顶栏), 且与
+       --dg-steel #9ab0ae 保持 1.15 台阶, 层级不塌. */
+    --dg-fog: #8ba4a6;
     --dg-hair: #27363e;
     --dg-teal: #35c2a4;
     --dg-teal-soft: #12312b;
@@ -1140,7 +1153,7 @@ nav.menu {
     --dg-card: #18232a;
     --dg-ink: #dfe9e6;
     --dg-steel: #9ab0ae;
-    --dg-fog: #6b8286;
+    --dg-fog: #8ba4a6; /* 2026-10-03 a11y: 同 .aside dark, 原 #6b8286 = 3.93 不合格 */
     --dg-hair: #27363e;
     --dg-teal: #35c2a4;
     --dg-teal-soft: #12312b;

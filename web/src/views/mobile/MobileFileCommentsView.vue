@@ -437,7 +437,10 @@ onBeforeUnmount(() => {
 
 .mfcc-tab-btn.active {
   background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
-  color: var(--color-primary, #ff7a5c);
+  /* 2026-10-03 a11y: 主色 #ff7a5c 是 bg/装饰色, 压 --color-primary-bg #fff0ed 只有 2.31.
+     文字场景一律走 --color-primary-text (#B84523 = 4.84), 同 DesktopFileCommentsView
+     .dfcv-tab-btn.active 的既有写法 (variables.css:1873). */
+  color: var(--color-primary-text, #b84523);
   font-weight: 600;
 }
 
@@ -483,7 +486,11 @@ onBeforeUnmount(() => {
 .mfcc-empty .empty-hint {
   margin: 0;
   font-size: 12px;
-  opacity: 0.75;
+  /* 2026-10-03 a11y: opacity 0.75 把继承来的 --color-text-secondary #6B6E76 合成成
+     #8E9097, 在 --color-bg-card #fff 上只有 2.83 —— axe 按合成后颜色判.
+     去 opacity 改实色, 与 variables.css 里 .dfcv-empty .empty-hint 同一套修法. */
+  opacity: 1;
+  color: var(--color-text-secondary, #6b6e76);
 }
 
 .mfcc-list {

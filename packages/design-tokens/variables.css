@@ -1884,6 +1884,36 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
   color: var(--color-text-secondary); /* #6B6E76 on #f5f7fa = 4.75 */
 }
 
+/* ============================================
+   2026-10-03 a11y 第二轮 (17 条真实违规, JWT 修好后门禁第一次扫到有内容的页面)
+   全部是 9-13px 小字 → 适用 WCAG AA 4.5:1, 无一算大字 (3:1).
+
+   (1) --color-primary-text 的 dark 覆盖 —— 该 token 只在上面的 :root 里定义,
+       dark 块没有对应翻转, 于是 dark 下沿用深色的 #B84523.
+       而 dark 的激活 tab 底是 rgba(255,122,92,.15) 压卡片 = #3C2B2C,
+       #B84523 在上面只有 2.02. 加覆盖后:
+         .dfcv-tab-btn.active (上一轮刚修的) 在 dark 下从 2.02 → 6.62 —— 顺带修好
+         .mfcc-tab-btn.active (MobileFileCommentsView, 本轮新增消费点) → 6.62
+       复用 dark 的 --color-primary #FF9D85, 与 dark 主色同源, 不另造色. */
+[data-theme="dark"] {
+  --color-primary-text: #FF9D85;   /* on dark 激活底 #3C2B2C = 6.62, on #2a2d35 = 6.83 */
+}
+
+/* (2) .el-input__count (show-word-limit 字数计数, 12px) — EP 用 --el-color-info,
+       本项目从未覆盖该变量 (grep 零引用), EP 的 dark css-vars 也没 import,
+       故它**两套主题都是 #909399**.
+   ⚠️ 不能直接套 --color-text-secondary: 本项目也没覆盖 --el-fill-color-blank,
+       计数器的白底在 dark 下依然是 #FFFFFF, 而 dark 的 --color-text-secondary
+       #a8aab0 压白底只有 2.32. 故按 EP 变量作用域给, 两套主题各给一个能过 4.5 的值. */
+:root .el-input__count,
+:root .el-input__count .el-input__count-inner {
+  color: #6B6E76;         /* light: on --el-fill-color-blank #ffffff = 5.10 (原 #909399 = 3.08) */
+}
+[data-theme="dark"] .el-input__count,
+[data-theme="dark"] .el-input__count .el-input__count-inner {
+  color: #5C5F66;         /* dark:  底仍是 #ffffff, #5C5F66 = 6.40 */
+}
+
 /* W101 P3-A11Y: 全局 :focus-visible 兜底 (WCAG 2.4.7)
    组件内已有 :focus-visible 规则的 (e.g. NavRail / PlanSteps / ContentBriefDetail /
    ChatMessageActions) 不受影响; 未明确写的元素 (e.g. 通用 <button>/<a>) 仍可见焦点.
