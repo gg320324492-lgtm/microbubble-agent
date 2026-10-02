@@ -294,22 +294,48 @@ def test_alembic_17_idempotent_guard_pattern():
     assert "ck_rag_eval_reports_hit_rate_range" in content
 
 
-@pytest.mark.xfail(
-    reason="W-N anchor 推进后 alembic head 演进 (W97 PR1-10 加 087-091 + W-N 半精度链 100-104 + chat-attach 106 + summary 107). 此 PR5 era 测试期望 091 head 已过时, 用 xfail 标记 obsolete.",
-    strict=False,
-)
 def test_alembic_18_alembic_heads_one():
-    """alembic 串单链 (090 → 091), python -m alembic heads = 1"""
+    """alembic 串单链: python -m alembic heads 恰为 1 个 head (断言不变量, 不写死编号)
+
+    2026-10-02 去硬编码 head 编号 (与 .github/workflows/rag-framework-ci.yml 同型修复,
+    commit 0f6ade289):
+
+    - 本测试原本断言 head == "091_add_kg_entity", 但真实 head 早已推进
+      (2026-10-02 容器实测 = 141_zb2_backup_kb_purge)。该 assert 在 line "编号断言"
+      处先行失败, 导致其**下方**真正有保护力的 "恰为 1 head" 断言**永远执行不到**
+      —— 函数看着有门禁, 实则一条信息都不提供 (本项目反复栽过的那类假门禁)。
+    - 改断言不变量 "恰为 1 个 head" 后, 编号继续推进不会误红, 而**双 head** 仍然会红。
+      双 head 才是要拦的真问题: 并行 migration agent 都声明同一 down_revision
+      会让链分叉, `alembic upgrade head` 直接报 Multiple head revisions 阻塞部署
+      (2026-07-24 串单链纪律事故, CLAUDE.md 永久锚点)。
+    - 摘除 @pytest.mark.xfail(strict=False): 该标记不是跳过, 而是**照常执行**函数体
+      只把失败记成 xfail —— 实测 junit XML 里它被归类为 "skipped", 在
+      server-tests-baseline.yml 的分母里计入 186 skipped 而非 2926 passed,
+      等于对基线零贡献。摘除后本用例转为活断言, 从 skipped 移入 passed。
+
+    显式 cwd=REPO_ROOT: alembic heads 是 cwd 相关的 —— 从仓库外执行返回码 255
+    (FAILED: No config file 'alembic.ini' found), 在 xfail 下这个失败会被吞掉,
+    摘除标记后就会变成硬失败。故与 test_alembic_16_revision_present 用同一个
+    REPO_ROOT 取法把它钉死。
+    """
     import subprocess
+    from pathlib import Path
+    repo_root = Path(__file__).resolve().parent.parent.parent
     result = subprocess.run(
         ["python", "-m", "alembic", "heads"],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=30, cwd=repo_root,
     )
     assert result.returncode == 0, f"alembic heads 失败: {result.stderr}"
-    # CHAT-P0-D W98 +0 修复: 期望 head 更新为 091_add_kg_entity (W94 PR8 接入后 090 不再是 head)
-    assert "091_add_kg_entity" in result.stdout, f"alembic head 应为 091_add_kg_entity, 实测 {result.stdout}"
-    # 单链 (只有 1 行)
-    assert len(result.stdout.strip().splitlines()) == 1, f"派工 brief 期望 1 head, 实测 {result.stdout}"
+    # 输出格式: "<revision_id> (head)" 每 head 一行。只数 head 行, 不校验具体编号 ——
+    # 编号是随迁移推进漂移的快照, 写死它等于让守卫每加一个迁移就红一次 (类 20.158 /
+    # CLAUDE.md 永久铁律: 写断言时用「恰为 1 个 head」不变量, 别写死编号)。
+    head_lines = [ln for ln in result.stdout.strip().splitlines() if "(head)" in ln]
+    assert head_lines, f"alembic heads 无输出: {result.stdout!r}"
+    assert len(head_lines) == 1, (
+        f"alembic 链应恰为 1 个 head, 实测 {len(head_lines)} 个: {result.stdout}\n"
+        f"常见成因: 并行 migration agent 都声明了同一 down_revision, 链上分叉成双 head。\n"
+        f"修法: 让后一张迁移的 down_revision 接前一张 (串单链), 别用 alembic merge 留坑。"
+    )
 
 
 # ============== 19-22: 22/22 e2e 总结 + 性能 + 写库 ==============
