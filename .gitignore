@@ -58,6 +58,14 @@ scripts/**/_token.json
 web/**/_login.json
 web/**/_token.txt
 web/**/_token.json
+# 2026-10-03: 拦截 agent 调试时落盘的明文 JWT/凭据文件。
+# 事故留档: 有 agent 排查 a11y 登录态时把真实 access_token 写进
+#   web/testtoken.txt (141B, 以 eyJ 开头的 JWT), 未跟踪但也未被忽略 ——
+#   处在"一次 git add -A 就会推上远端"的风险位。
+# 上面几条只覆盖 _token.txt/_token.json/_login.json 这几个具体命名,
+#   换个名(testtoken.txt / token.txt / auth.txt)就漏, 故加通配。
+**/*token*.txt
+**/*token*.json
 # 兜底: 所有下划线开头的 .json (临时 seed / cache / 中间产物)
 **/_*.json
 # 未来若有合法 _*.json (如下划线配置), 取消下方注释; 当前 0 合法
