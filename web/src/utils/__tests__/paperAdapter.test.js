@@ -5,20 +5,16 @@
 import { describe, it, expect } from 'vitest'
 import {
   normalizePaperData,
-  parsePaperSections,
-  extractPageMarkers,
-  extractFigureMarkers,
-  extractTableMarkers,
-  splitReferences,
-  buildAnchorTree,
-  autoLinkContent,
-  cleanContent,
-  classifyImageKind,
-  matchFiguresWithCaptions,
-  translateKeywordToEnglish,
-  translateKeywordsToEnglish,
-  extractAuthorsAndJournal,
-} from '../paperAdapter'
+} from '../paper/normalize'
+import {
+  parsePaperSections, splitReferences,
+} from '../paper/sections'
+import {
+  extractPageMarkers, extractFigureMarkers, extractTableMarkers, cleanContent,
+} from '../paper/content'
+import {
+  buildAnchorTree, autoLinkContent, classifyImageKind, matchFiguresWithCaptions, translateKeywordToEnglish, translateKeywordsToEnglish, extractAuthorsAndJournal,
+} from '../paper/figures'
 
 describe('extractPageMarkers', () => {
   it('识别 [PAGE:N] 标准格式', () => {

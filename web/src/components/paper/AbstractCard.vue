@@ -44,7 +44,9 @@
 <script setup>
 import { computed } from 'vue'
 import { Aim, Document } from '@element-plus/icons-vue'
-import { autoLinkContent } from '@/utils/paperAdapter'
+import {
+  autoLinkContent,
+} from '@/utils/paper/figures'
 
 const props = defineProps({
   paper: { type: Object, required: true },

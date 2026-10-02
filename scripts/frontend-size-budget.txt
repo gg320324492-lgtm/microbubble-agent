@@ -18,7 +18,7 @@
 # ⚠️ 2026-10-02 (S3.8 前置): 新增 glob 一类。
 #   原实现是 declare -A 硬编码三条, 对 paperAdapter.js 拆分产生的新文件
 #   (web/src/utils/paper/*.js) 完全失明 —— "只降不升"的保护在拆分当天即失效。
-#   glob 基线 5800 —— 依据是 2026-10-02 实测的**六文件**切分合计 **5633**:
+#   glob 基线 5774（已固化）—— 依据是 2026-10-02 实测的**六文件**切分合计 **5633**:
 #     constants 285 (L1-285, 含 _idCounter/_genId/_escapeHtml + 8 条带 g 正则)
 #     + qa 125 + content 684 + sections 1042 + figures 1369 + normalize 2128
 #     = 5633, 覆盖全文件零缝隙零重叠。
@@ -27,13 +27,14 @@
 #     ② 把"拆分"当成了带删减的拆分 —— 实测是**零删减搬家**: 真死码仅 24 行
 #        (_embedAnchors 7 + _isTocPage 17), 注释 1679 + 空行 429 占 37.4%。
 #     取 5800 而非 5633: 零余量会诱发"改基线"而非"真减重"; 167 行余量足够。
-#   取 5800 而非此前的 5500: 5500 比实测 5633 低 133 行, **第一次拆分 PR 必然红灯**,
+#   曾取 5800（预留 167 行余量）; 实测 5774 落在余量内, 余量判断成立。
+#   此前 5500 的问题: 比实测 5633 低 133 行, **第一次拆分 PR 必然红灯**,
 #     而"PR 内改基线"正是 S3.7 ⑧ 刚出过事的薄弱面 (放宽基线的 commit 不被自己触发)。
 #     让第一次拆分必然踩进一个刚修好的坑, 是用已修的坑换一条已写进本文件的纪律, 不划算。
 #   **真减重压力由 paperAdapter.js 那条 5633 承担** —— 它才是主体;
 #     glob 这条是防双计/脱管的护栏, 不是减重指标。
-#   首次拆分 PR 完成后, 必须用 wc -l 实测合计替换 5800, 并把 note 段清空。
-#     脚本会在每次运行时 ::notice 提醒此事（含目录尚未建立的跳过路径）。
+#   ✅ 已于 2026-10-02 拆分落地时按实测固化为 5774 并清空 note 段
+#     （`wc -l web/src/utils/paper/*.js | tail -1` = 5774, 七文件）。
 #
 # 纪律: PowerShell 下数行数必须显式 -Encoding UTF8 (或用 pwsh 7+)。
 #   本文件无 BOM, 按 ANSI 代码页解码会吞掉换行 (5633 -> 5011), 再叠加
@@ -57,11 +58,13 @@
 #      暂定提醒永远消不掉。只改②不改① → 永远红。
 #   交付判据: `sh scripts/frontend-size-budget-check.sh` 本地 exit 0,
 #   且输出里**不再出现** `暂定基线待实测替换` 的 notice(说明 note 段已清)。
-file|web/src/utils/paperAdapter.js|5633
+# [S3.8 已完成 2026-10-02] file|web/src/utils/paperAdapter.js|5633 —— 该文件已删除，
+#   实现拆入 web/src/utils/paper/ 七文件（constants/qa/content/sections/figures/normalize/index）。
+#   不留 barrel 是 S3.8 的既定决策（E2）：留壳会被本棘轮与 glob 各算一遍，同一批代码双计。
 file|web/src/views/chat/ChatViewSSE.vue|2973
 file|web/src/components/drive/DriveDetailRail.vue|2151
 file|web/src/views/DesktopDriveView.vue|2229
-glob|web/src/utils/paper|5800|provisional
+glob|web/src/utils/paper|5774
 #
 # ── 取舍: web/src/utils/__tests__/paperAdapter.test.js (3555 行) 刻意不加 ──
 #   不加。它是测试文件，不进生产 bundle，本次棘轮要防的是"前端热点体量上涨"

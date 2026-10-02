@@ -13,7 +13,9 @@
 //   6. ResizeObserver 绑定 + unmount 时 disconnect (自适应高度)
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { normalizeGraphData } from '@/utils/paperAdapter'
+import {
+  normalizeGraphData,
+} from '@/utils/paper/normalize'
 
 const setOptionSpy = vi.fn()
 vi.mock('echarts', () => {

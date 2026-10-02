@@ -21,7 +21,9 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
-import { normalizeGraphData } from '@/utils/paperAdapter'
+import {
+  normalizeGraphData,
+} from '@/utils/paper/normalize'
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },

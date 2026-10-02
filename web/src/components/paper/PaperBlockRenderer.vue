@@ -84,7 +84,9 @@
 import { computed } from 'vue'
 import { Picture } from '@element-plus/icons-vue'
 import FigureCard from './FigureCard.vue'
-import { autoLinkContent } from '@/utils/paperAdapter'
+import {
+  autoLinkContent,
+} from '@/utils/paper/figures'
 import { formatChemicalText } from '@/utils/chemFormat'
 import { renderMarkdown } from '@/utils/markdown'
 

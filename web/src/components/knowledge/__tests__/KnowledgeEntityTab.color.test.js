@@ -22,7 +22,9 @@
 //   6. KnowledgeEntityTab onMounted → fetchEntityGraphLocal 自动调用 ≥1 次
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { normalizeGraphData } from '@/utils/paperAdapter'
+import {
+  normalizeGraphData,
+} from '@/utils/paper/normalize'
 
 vi.mock('echarts', () => {
   const makeInstance = () => ({

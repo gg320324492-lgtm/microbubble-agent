@@ -69,7 +69,9 @@
 import { computed, ref } from 'vue'
 import PaperBlockRenderer from './PaperBlockRenderer.vue'
 import FigureCard from './FigureCard.vue'
-import { splitReferences } from '@/utils/paperAdapter'
+import {
+  splitReferences,
+} from '@/utils/paper/sections'
 
 const props = defineProps({
   section: { type: Object, required: true },

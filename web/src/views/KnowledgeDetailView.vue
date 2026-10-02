@@ -206,11 +206,14 @@ import RightAnchorNav from '@/components/paper/RightAnchorNav.vue'
 
 import {
   normalizePaperData,
-  buildAnchorTree,
-  extractFigureMarkers,
   normalizeGraphData,
-  cleanContent,
-} from '@/utils/paperAdapter'
+} from '@/utils/paper/normalize'
+import {
+  buildAnchorTree,
+} from '@/utils/paper/figures'
+import {
+  extractFigureMarkers, cleanContent,
+} from '@/utils/paper/content'
 
 const route = useRoute()
 const router = useRouter()
