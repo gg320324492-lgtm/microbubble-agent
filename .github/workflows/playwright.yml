@@ -165,16 +165,46 @@ jobs:
               python scripts/ensure_test_user.py
           } 2>&1 | tee /tmp/init-db.log
 
-          # fail-loud 三连断言 (任一不满足即 exit 1, 不让"没建号"再流到快照比对才炸):
+          # fail-loud 断言 (任一不满足即 exit 1, 不让"没建号"再流到快照比对才炸):
           #   数据库初始化完成 ← scripts/init_db.py:29
           #   [CREATED] / [OK]    ← scripts/ensure_test_user.py:116 / :90
-          #   无 "No such container" / Traceback
+          #   无 "No such container" / **真** traceback
+          #
+          # 2026-10-03 S3.9 修正 (run 37035451684 实测): 原来的
+          #   `grep -qE "No such container|Traceback"`
+          # 会在**建号成功之后**仍然误报失败。原因是 passlib 探测 bcrypt 版本时
+          # 会往 stderr 打一段 (trapped) 警告, 它字面量里就含 "Traceback":
+          #     (trapped) error reading bcrypt version
+          #     Traceback (most recent call last):
+          #       File ".../passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+          #         version = _bcrypt.__about__.__version__
+          #     AttributeError: module 'bcrypt' has no attribute '__about__'
+          # 这段是**良性**的: passlib 只是想知道 bcrypt 版本, 拿不到就跳过;
+          # 实测 hash/verify 全部正常 (镜像内实跑: verify ok=True, reject ok=True),
+          # 且日志里 [CREATED] 测试账号: id=23 已经打出来 —— 建号本就成功。
+          # 所以不能按 "Traceback" 字面量判失败。修法: 先把这 7 行**已知的良性
+          # passlib 噪音**用 grep -vE 剔掉, 再对剩余内容判失败:
+          #   (trapped) error reading bcrypt version        <- 良性首行
+          #   Traceback (most recent call last):           <- 良性首行 (顶格! '^Traceback' 拦不住)
+          #     File ".../passlib/handlers/bcrypt.py"     <- 良性帧
+          #     version = _bcrypt.__about__.__version__    <- 良性源码行
+          #               ^^^^^^^^^^^^^^^^^                <- 良性指示符行
+          #   AttributeError: ... has no attribute '__about__'  <- 良性末行
+          # 注意: 试过用 '^Traceback' 收紧, **无效** —— passlib 那行 Traceback
+          # 恰好顶格 (实测 repr 确认不以空格开头), 仍会误伤。故只能按内容白名单剔除。
+          # 剔除后仍会命中的才是真异常 (已实测 5 个用例):
+          #   正例(应放行): 仅 passlib 噪音 + [CREATED] 成功行
+          #   反例(应拦下): 脚本自身 Traceback / "No such container" / "[ERROR] ..."
+          #                / 我们自己代码抛的 Traceback (member_service.py 帧)
+          # 真正的失败信号已由上面两条 grep 兜住 (缺 "数据库初始化完成" /
+          # 缺 [CREATED]/[OK] 都会 exit 1), 这里只是额外防御。
           grep -q "数据库初始化完成" /tmp/init-db.log || {
             echo "::error::init_test_db_all 未跑成功 (缺 '数据库初始化完成') — 测试账号多半没建"; exit 1; }
           grep -qE "\[(CREATED|OK)\]" /tmp/init-db.log || {
             echo "::error::ensure_test_user 未建号 (缺 [CREATED]/[OK]) — 后续 login 必 AUTH_ERROR"; exit 1; }
-          if grep -qE "No such container|Traceback" /tmp/init-db.log; then
-            echo "::error::init_test_db_all 输出含容器/异常错误"; cat /tmp/init-db.log; exit 1
+          if grep -vE "^\(trapped\)|passlib/handlers/bcrypt\.py|_bcrypt\.__about__|^Traceback \(most recent call last\):$|^ +\^+$|^ *version = _bcrypt|has no attribute '__about__'" /tmp/init-db.log \
+             | grep -qE "No such container|Traceback|Error:"; then
+            echo "::error::init_test_db_all 输出含容器/致命异常错误"; cat /tmp/init-db.log; exit 1
           fi
 
       - name: Get fresh TEST_TOKEN from app-test
