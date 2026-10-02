@@ -10,6 +10,14 @@
   --color-primary-dark: #E85A3A;
   --color-primary-bg: #FFF0ED;
   --color-primary-border: rgba(255, 122, 92, 0.2);
+  /* v77 P2.7: 主色 alpha 梯度 (2026-10-03 token orphan 收敛 (b) 类)
+     此前 8 处 var(--color-primary-alpha-N, <字面值>) 散在 ChatMessageActions.vue /
+     ProEntries.vue 的 hover 态, 全靠 fallback 兜底。提升为真令牌时**值沿用原
+     fallback 字面值**, 渲染逐像素不变; 暗色主题已由 --color-primary-rgb 派生的
+     rgba(var(--color-primary-rgb), N) 自动跟随, 故此处只定义亮色基准。 */
+  --color-primary-alpha-10: rgba(255, 122, 92, 0.1);
+  --color-primary-alpha-20: rgba(255, 122, 92, 0.2);
+  --color-primary-alpha-30: rgba(255, 122, 92, 0.3);
 
   /* ===== 辅助色 - 金橙 ===== */
   --color-accent: #FFB347;
@@ -41,6 +49,7 @@
   --color-text-placeholder: #C0C4CC;
   --color-border: #EBEEF5;
   --color-border-light: #F0F0F0;
+  --color-border-lighter: #F2F6FC; /* v77 P2.7: ContextPanel 三处分隔线 (2026-10-03 token orphan 收敛 (b) 类)。值沿用原 fallback, 渲染不变 */
   --color-bg-page: #F3F1ED;
   --color-bg-card: #FFFFFF;
   --color-bg-secondary: #F0F2F5; /* W98: RAGEvalPanel / FigureCard 代码块与图占位背景 (此前为 orphan token) */

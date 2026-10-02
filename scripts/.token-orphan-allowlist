@@ -15,3 +15,155 @@
 --color-bg-soft
 --color-bg-soft-dark
 --color-border-dark
+
+# ===== 2026-10-03: orphan 收敛 (S3.8 拆分后本门禁第一次真跑到) =====
+#
+# 实测基线: 修复前本门禁报 **130 条 ref 行 / 43 个唯一 token** (@HEAD, 3 个 token 源)。
+# 分三类处置, 不是一律塞白名单:
+#   (a) 22 个 --mg-* 液态玻璃 token (76 处引用) → **补进脚本 TOKEN_SOURCES**
+#       (mobile-glass.css 本就定义它们 + main.js:64 全局 import, 是脚本漏扫),
+#       已在 check-token-orphans.sh 处置, 不在此列。
+#   (b) 4 个 (--color-primary-alpha-10/20/30 + --color-border-lighter) → **提升为
+#       variables.css 真令牌** (语义明确 + 多处复用), 值沿用原 fallback 字面值,
+#       渲染逐像素不变, 不在此列。
+#   (c) 以下 18 个 → 局部变量/第三方变量/组件自治 keyframes, 逐条写明理由入白名单。
+#
+# 另修复门禁自身一处漏检: 原脚本每行只取 head -1 提取 token, 同一行第 2 个及以后的
+# var() 从不被检查 (实测漏网 --color-text-3)。2026-10-03 改为 awk 展开每行全部 token,
+# 扫描记录 1393 行 -> 1465 条 (已与独立 Python 实现逐条比对一致)。
+#
+# ⚠️ 入白名单的判据 (三类都必须是**局部**语义, 不能是"懒得补 token"):
+#   1. JS 在运行时写入的测量值 (非设计值, 每次渲染都不同);
+#   2. 只在某个选择器作用域内有定义、跨文件引用必然解析失败;
+#   3. 第三方 (Element Plus) 自己的变量, 本项目无权定义。
+#   反例 (本文件永不该出现): 多处复用 + 语义稳定的品牌色/间距 —— 那是 (b)。
+
+# ── (c)-1 JS 运行时写入的测量值 ────────────────────────────────
+# 2 个 token / 3 处引用, 全部是 JS setProperty 写入, CSS 侧只有读取 + fallback 兜底:
+#   --dft-sb  DriveFileTable.vue:242 实测滚动条宽度写入 -> :509 表头补白对齐列网格
+#             (:508 源码注释自述"由 JS 实测写入")
+#   --v       DriveDetailRail.vue:978 音量百分比写入 -> :1746 音量条渐变填充比例
+# 本质是 per-render 测量值, 设计令牌系统不该收; 写入点与读取点同文件同组件, 跨文件
+# 复用不存在。fallback (0px / 100%) 正是"JS 尚未写入"的合理初值。
+--dft-sb
+--v
+
+# ── (c)-2 游离色值 / hover 专用态: 全项目单消费点, 或压根无定义 ────────────
+# --color-accent-2 (meeting-view.css:502)
+#   meeting-view.css:502 写 `background-color: var(--color-accent-2, #ef7256);
+#   border-color: #ef7256` —— 同一属性里 border 已用字面值, 该 var() 只驱动 background。
+#   项目主警告色是 --color-warning; --color-accent 是金橙 #FFB347 系。此处的 #ef7256
+#   砖红既不等于 accent 也不等于 warning, 是个未入系统的第三值。**保留 fallback 而不
+#   提升为令牌**: 提升会把这个游离色值固化成全局令牌, 反而坐实它"应该是设计令牌"的
+#   错觉; 正确处置是让 border/background 同源 (与 --color-warning 同步), 属视觉整改,
+#   不在本门禁范围。
+--color-accent-2
+
+# --color-success-bg-hover (PlanSteps.vue:318)
+#   hover 态专用, 全项目唯一消费点。--color-success-bg (#F0F9EB) 已在 variables.css,
+#   而 hover 需要更深一档 (#e1f3d8); EP 色阶里有 --color-success-light-9 但语义不等价
+#   (那是"成功浅底", 不是"成功浅底 hover")。单消费点 + 派生自已定义令牌 -> 局部合理。
+--color-success-bg-hover
+
+# --color-bg-card-hover (ContentBriefDetail.vue:177 fallback / TaskView.vue:678 裸用)
+#   与 --color-success-bg-hover 同型 (hover 态专用底色)。⚠️ 注意 TaskView.vue:678 是
+#   **裸用** var(--color-bg-card-hover) 无 fallback —— 该行当前解析失败 (声明不存在的
+#   自定义属性 = invalid at computed-value time), 落回 `unset`, 所以 .group-header:hover
+#   今天实际没有 hover 底色。这是既有缺陷, 修它 = 补令牌或删声明, 属视觉整改另立项。
+#   **本门禁只对带 fallback 的形式发言** (见脚本 :73 的 grep), 裸用不在本脚本职责内。
+--color-bg-card-hover
+
+# --mfd-mem (WorkspaceView.vue:218/225)
+#   ".mfd" 成员档案对话框的纪念品青, 定义在 WorkspaceView 的非 scoped <style> 里,
+#   与 --rb-card / --rb-text / --rb-mono 同族同作用域; 该族全部未入全局系统。
+#   提升单点会撕开这族的一致性 (只提 --mfd-mem 不提 --rb-* 是更坏的状态)。
+--mfd-mem
+
+# --dossier-card (ChatViewSSE.vue:2591/2622/2655)
+#   ".chat-immersive" 档案三栏语族 (--dossier-line / --dossier-card / --dossier-paper)
+#   定义在同文件 .chat-immersive 选择器上 (L1394), 且**有 dark 覆盖** (L1399
+#   --dossier-card: var(--color-bg-card))。三处孤儿引用的选择器
+#   (.chat-immersive #chat-header-search-toggle / .chat-immersive .header-search-pill)
+#   都是 .chat-immersive 的后代, **运行时继承得到值, 并没有断** —— 门禁只是因为
+#   "定义在变量所在的 CSS 文件里"这种文本匹配看不到跨组件的 DOM 继承。
+#   ⚠️ 关键: 引用点带 fallback `#fdfefc`, 而 dark 下真值是 var(--color-bg-card)。
+#   **若提升到 :root, dark 模式会从"跟随主题"退化成"永远浅色"** —— 提升是回归。
+--dossier-card
+
+# --wb-frame (DriveFileTable.vue:482/585)
+#   定义在 DesktopDriveView.vue 的 .drive-workbench 选择器 (L1918, dark L1945),
+#   DriveFileTable 是该选择器的 DOM 后代 (DesktopDriveView.vue:30 根节点带
+#   .drive-workbench, L181 挂组件), 故运行时继承成立。墨线框 alpha 只在本仓 drive
+#   工作台一处表达, 进全局会与 variables.css 的 --color-border 系列语义打架
+#   (L1911 已特意注明"全局 token 偏冷灰, 作用域内重映射") —— 提升会摧毁这个
+#   刻意的作用域重映射。
+--wb-frame
+
+# ── (c)-3 只在另一文件 scoped 样式里有定义, 跨文件引用必然解析失败 ──────────
+# 这一组的共同形态: **同名 token 在 A 文件的 <style scoped> 里定义, B 文件引用它**。
+# scoped 会把定义编译成 `[data-v-hash]`, DOM 上是两个不同组件, B 的作用域拿不到 A
+# 的值 -> 必然解析失败。当前全靠 fallback 兜住, 页面没白, 但这是"看似能用实则靠兜底"。
+# 不提升为全局令牌的理由: 它们的值是**档案语族 (DOSSIER) 的局部换肤**, 各视图
+# (Dashboard / Login / Settings) 刻意保持同一组值但语义独立于全局 --color-*。
+# 提升会把三视图的换肤意图固化成全局色, 冲突面远大于收益。
+# 正确处置是三视图间显式共享一个档案语族令牌组, 属另立项的整理, 不在本门禁范围。
+--font-mono
+--teal
+--teal-soft
+--coral
+--line
+
+# --teal-2 (DriveDetailRail.vue:1723, 另有 DriveUploadDialog.vue:507 裸用)
+#   同上族的第三个成员 (#12897C), 但**连 scoped 定义都没有** —— 全项目零定义点。
+#   是 --teal (#0e766e) 在深色播放控件上的提亮版, 与 drive 工作台的档案换肤同源。
+--teal-2
+
+# ── (c)-4 第三方 (Element Plus) 自有变量 ────────────────────────
+# --el-color-danger-light-5
+#   Element Plus theme-chalk 自己在 base.css / el-button.css 定义 (#fab6b6)。
+#   本项目在 drive-view.css:1432 的 .drive-dialog 作用域内重绑成档案砖红 #DE9E85,
+#   属对第三方变量的**合法局部覆盖**; 唯一带 fallback 的引用 (FileCard.vue:832) 取的
+#   正是该覆盖值。⚠️ EP 经 unplugin-vue-components 的 ElementPlusResolver 按需引入
+#   (vite.config.js:252), **是否加载 el-dialog 的 css 取决于运行时用到哪些 el-* 组件**,
+#   所以本项目不能把 EP 的变量当作"必然存在的全局令牌"——这正是本脚本不扫
+#   node_modules 的理由。列白名单是因为**它是第三方的, 我们无权在 :root 定义它**。
+--el-color-danger-light-5
+
+# ── (c)-5 keyframes 名不是令牌: 指向的 @keyframes 由组件各自定义 ──────────
+# --animation-pulse-dot (PlanSteps.vue:341/407)
+#   variables.css:176-191 的 --animation-* 族收的是**已注册 @keyframes 的组合**。
+#   本项目 --animation-pulse-dot 用的 "pulse-dot" 这一族 keyframes **在 variables.css
+#   里有同名定义 (L401)**, 但另有**两处同名 @keyframes 与它参数不同**, 且都写在
+#   <style scoped> 里:
+#     variables.css:401     scale(1)->scale(1.3), opacity .5 -> 1
+#     PlanSteps.vue:509     scale(1)->scale(0.8), opacity 1  -> .4
+#     MobileHeader.vue:156  仅 opacity 1 -> .4
+#   ⚠️ **Vue SFC 的 scoped CSS 不重命名 @keyframes 名** —— 三份全是文档级全局名, 互相
+#   级联, PlanSteps / MobileHeader 实际执行哪一份取决于 CSS import 顺序。这是**既存的
+#   加载顺序脆弱点**(真缺陷, 另立项), 但正因如此**更不能**把 --animation-pulse-dot
+#   提成全局令牌: 提升只会把"靠级联碰运气"固化成"锁死成某一版参数", 三处想各自
+#   调参就必须先给 keyframes 改名 (pulse-dot-shrink / pulse-dot-fade), 属另立项。
+#   本门禁只对"未定义的 var(--token, fallback)"发言, 不介入 keyframes 命名。
+--animation-pulse-dot
+
+# ── (c)-6 视图局部深玻璃变量, 源码注释已明令禁止升为全局令牌 ────────────────
+# --mgsd-panel (MobileSessionDrawer.vue:330)
+#   该行上方源码注释原文 (L319-320): "视图局部深玻璃 token (mobile-glass.css 无深紫
+#   变量, 禁止新增全局 token, 故局部定义; 深紫底色经 var() fallback 携带, 其余为
+#   黑白遮罩豁免)"。同族 --mgsd-fg / --mgsd-border / --mgsd-item-active 定义在
+#   .session-drawer-body 选择器上 (L321-325), 只有 --mgsd-panel 因为底色是深紫
+#   (rgba(36,30,55,.82), 玻璃配方系列里没有的色) 才走 fallback 携带。
+#   源码已明写"禁止新增全局 token" —— 与本文件"局部语义"判据完全一致。
+--mgsd-panel
+
+# ── (c)-7 全局 --color-text-* 阶梯之外的档案语族色, 单消费点 ──────────────────
+# --color-text-3 (DriveDetailRail.vue:1661)
+#   `.rf-auto` 自动播放角标的文字色, 全项目**唯一**消费点, 压在 rgba(255,255,255,.78)
+#   的浅色胶囊上。它的字面值 #8B968F 与档案语族的 --rb-text-3 (DossierPanel.vue:320 /
+#   WorkspaceView.vue:195 / ShareView.vue:168 的 --sh-text-3) **完全同值** —— 即它是
+#   档案语族的三级灰被顺手写成了全局风格的名字, 而全局阶梯 --color-text-primary/
+#   regular/secondary/placeholder 是 Element Plus 中性灰 (#2D2D2D / #606266 / #909399 /
+#   #C0C4CC), 与档案青灰是两个体系。**不提升**: 提升会把档案族的一个成员塞进全局中性灰
+#   阶梯, 既污染阶梯语义, 又只服务一个消费点。正确处置是让它改用 --rb-text-3 语义
+#   (与 (c)-3 同批), 属另立项。
+--color-text-3
