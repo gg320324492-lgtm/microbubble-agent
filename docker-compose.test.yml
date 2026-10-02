@@ -57,7 +57,33 @@ services:
     mem_limit: 256m
 
   # MinIO (端口错开, 独立凭据 + bucket microbubble-test)
+  #
+  # ⚠️ 2026-10-02 S3.7④ 解锁 (默认不启动, 见下方 profiles 注释):
+  #   上游 minio 镜像全仓不可达 (实测 2026-10-02, 非本机问题):
+  #     quay.io/minio/minio:latest + 6 个候选 RELEASE tag -> 全部 "no such manifest"
+  #     quay.io/minio/minio (无 tag) -> 同样 no such manifest  ← 整个 repo 不可达
+  #     minio/minio (Docker Hub)   -> denied / unauthorized
+  #     ghcr.io/minio/minio        -> denied
+  #     对照组 quay.io/prometheus/busybox:latest / redis:7-alpine 均 rc=0 正常
+  #   故**不能靠换 tag 修复** (方案 A 已实测无解), 只能绕开 (方案 B)。
+  #
+  # profiles ["s3"] 的含义 = 默认 `docker compose up` **不启动** minio-test,
+  #   但服务定义原样保留; 需要时 `docker compose --profile s3 up -d minio-test` 即恢复。
+  #   配套改动: app-test.depends_on.minio-test 必须同时加 `required: false`,
+  #   否则 compose 会**传递性**拉起 minio-test, profile 形同虚设 (已实测:
+  #   仅从 `up` 服务列表删掉 minio-test 无效, depends_on 仍会拉它)。
+  #
+  # 为什么可以安全绕开 (三项实测依据):
+  #   1. app-test 启动链不碰 minio: app/main.py:512 /health 是静态 dict (无 minio 依赖),
+  #      main.py 零 minio 引用, file_service.py 已 lazy init (import 阶段 0 网络调用),
+  #      scripts/init_test_db_all.py 零 minio 引用 → app-test 能正常 ready。
+  #   2. a11y job 完全不依赖 S3: 其 testMatch = /a11y\/.*\.spec\.mjs$/ 只跑 a11y/ 子目录。
+  #   3. visual job 内仅 4 个 drive spec 真调 POST /api/v1/drive/files/upload 会受影响
+  #      (无 minio 时该请求 500), 但该 job 是 continue-on-error: true (非阻塞),
+  #      且**当前状态是连启动都失败、0 个测试在跑** —— 去掉 minio 后 a11y 从 0 跑到满, 严格改进。
+  #   待上游恢复后: 删掉本段 profiles + app-test 侧 required: false, 换真实存在的 tag 即可复原。
   minio-test:
+    profiles: ["s3"]
     # 2026-10-01 S3.7 ⚠️ 修复受阻，勿误读为已修：
     #   诊断成立 = 原为 `minio/minio` 无 tag（全文件唯一如此），官方镜像已迁 quay.io，
     #   CI 报 pull access denied / repository does not exist，Playwright 两个 job
@@ -123,8 +149,12 @@ services:
         condition: service_healthy
       redis-test:
         condition: service_healthy
+      # 2026-10-02 S3.7④: required: false 与 minio-test 的 profiles ["s3"] 配套。
+      #   没有 required: false, compose 会在 `up -d app-test` 时传递性拉起 minio-test,
+      #   profile 形同虚设 (已实测)。app-test 启动链不依赖 minio (见 minio-test 段注释)。
       minio-test:
         condition: service_healthy
+        required: false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s

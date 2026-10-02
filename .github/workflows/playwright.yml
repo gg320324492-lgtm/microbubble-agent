@@ -67,7 +67,13 @@ jobs:
           docker pull ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest 2>&1 | tail -3
           docker tag ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest app-test:ci
           docker images app-test:ci --format "✓ app-test:ci ready, {{.Size}}"
-          docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test minio-test 2>&1 | tail -10
+          # 2026-10-02 S3.7④: 不再 up minio-test (上游 quay.io/minio/minio 全仓不可达,
+          #   实测 latest + 6 个 RELEASE tag + 无 tag 形式全部取不到 manifest, 对照组正常,
+          #   换 tag 无解)。app-test 启动链不依赖 minio (/health 是静态 dict + file_service
+          #   已 lazy init), a11y job 的 testMatch 也不含任何 drive/upload spec。
+          #   服务定义仍在 docker-compose.test.yml (profiles ["s3"]),
+          #   上游恢复后加回 minio-test 即可复原。
+          docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test 2>&1 | tail -10
 
           # 等 app /health 200 (最长 180s, app 启动 ~30-60s)
           for i in {1..90}; do
@@ -228,7 +234,10 @@ jobs:
           docker pull ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest 2>&1 | tail -3
           docker tag ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest app-test:ci
           docker images app-test:ci --format "✓ app-test:ci ready, {{.Size}}"
-          docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test minio-test 2>&1 | tail -10
+          # 2026-10-02 S3.7④: 同 a11y job — minio-test 上游不可达故不 up。
+          #   本 job 是 continue-on-error: true, 其中 4 个 drive spec 会真调
+          #   POST /api/v1/drive/files/upload (无 minio 时 500), 不影响门禁。
+          docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test 2>&1 | tail -10
 
           for i in {1..90}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
