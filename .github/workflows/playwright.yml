@@ -108,16 +108,47 @@ jobs:
             sleep 2
           done
 
-      - name: "Init test DB schema + seed + test user (W98 fix)"
+      - name: "Init test DB schema + seed + test user (W98 fix + S3.8 fail-loud)"
         run: |
           # W98 (2026-07-31): CI 空库 app-test 无 xiaoqi_testbot → login AUTH_ERROR →
           #   injectAuth 注入无效 token → 所有页面被 router 守卫带去看 dashboard,
           #   a11y baseline 记录的 25 个全 0 violations 是假绿 (X-18 真登录态守卫).
-          #   复用 qa-bench-ci.yml 同一模式: docker exec app-test 跑 init_test_db_all.py
+          #   复用 qa-bench-ci.yml 同一模式: 在 app-test 容器内跑 init_test_db_all.py
           #   (create_all + seed 24 members + ensure_test_user 幂等建号).
           #   init_db.py 读 settings.DATABASE_URL (容器默认指向 pg-test, compose 内网直连).
-          docker exec -e SKIP_DB_SETUP=1 app-test python scripts/init_test_db_all.py 2>&1 | tail -20
-          # 期望输出: init_db "数据库初始化完成" + ensure_test_user "[OK] 测试账号已存在" 或 "[CREATED]"
+          #
+          # 2026-10-02 S3.8 修复两处**静默失败** (run 37013474583 实测, 门禁红但根因不可见):
+          #
+          #   (1) 容器名不存在: 本行原为 `docker exec ... app-test`, 但 docker-compose.test.yml
+          #       的 app-test / redis-test 都**没有** container_name (只有 glitchtip 和
+          #       pg-exporter-test 有), compose 按 "<project>-<service>-1" 命名, project 取自
+          #       仓库目录名 → CI 真实容器名是 `microbubble-agent-app-test-1`, 日志 step 7 实测:
+          #           Container microbubble-agent-app-test-1  Started
+          #           ✓ app /health OK (attempt 6/90)
+          #       故 `docker exec app-test` 恒报 "No such container: app-test"。
+          #       修法: 改用 `docker compose ... exec -T`, 由 compose 自行解析服务→容器,
+          #       **不硬编码 project 前缀** (目录名/project name 一变又会漂移 —— 类 20.158 同型教训)。
+          #
+          #   (2) 失败被 `| tail -20` 吞掉: 管道后 bash -e 只看到 tail 的退出码 (恒 0),
+          #       于是 docker exec 报错而 step 仍 conclusion=success, 后续 12 步全绿,
+          #       直到快照比对才以"莫名新增违规"的面貌爆出来。
+          #       修法: 输出落文件后 tee, 再 fail-loud 断言 (见下), 断言失败即 exit 1。
+          set -o pipefail
+          docker compose -f docker-compose.test.yml exec -T \
+            -e SKIP_DB_SETUP=1 app-test \
+            python scripts/init_test_db_all.py 2>&1 | tee /tmp/init-db.log
+
+          # fail-loud 三连断言 (任一不满足即 exit 1, 不让"没建号"再流到快照比对才炸):
+          #   数据库初始化完成 ← scripts/init_db.py:29
+          #   [CREATED] / [OK]    ← scripts/ensure_test_user.py:116 / :90
+          #   无 "No such container" / Traceback
+          grep -q "数据库初始化完成" /tmp/init-db.log || {
+            echo "::error::init_test_db_all 未跑成功 (缺 '数据库初始化完成') — 测试账号多半没建"; exit 1; }
+          grep -qE "\[(CREATED|OK)\]" /tmp/init-db.log || {
+            echo "::error::ensure_test_user 未建号 (缺 [CREATED]/[OK]) — 后续 login 必 AUTH_ERROR"; exit 1; }
+          if grep -qE "No such container|Traceback" /tmp/init-db.log; then
+            echo "::error::init_test_db_all 输出含容器/异常错误"; cat /tmp/init-db.log; exit 1
+          fi
 
       - name: Get fresh TEST_TOKEN from app-test
         env:
@@ -129,9 +160,21 @@ jobs:
           #   secret 未设置时用默认测试账号 (env 层 || 生效, 比 secrets.X || 默认 可靠)
           USER="${TEST_USERNAME:-xiaoqi_testbot}"
           PASS="${TEST_PASSWORD:-testbot_pass_2026}"
-          TOKEN=$(curl -s -X POST http://localhost:8001/api/v1/auth/login             -H "Content-Type: application/json"             -d "{\"username\":\"$USER\",\"password\":\"$PASS\"}")
-          echo "TOKEN_LEN=${#TOKEN}"
-          echo "PLAYWRIGHT_TEST_TOKEN=$TOKEN" >> $GITHUB_ENV
+          RESP=$(curl -s -X POST http://localhost:8001/api/v1/auth/login             -H "Content-Type: application/json"             -d "{\"username\":\"$USER\",\"password\":\"$PASS\"}")
+          echo "TOKEN_LEN=${#RESP}"
+          echo "PLAYWRIGHT_TEST_TOKEN=$RESP" >> $GITHUB_ENV
+
+          # 2026-10-02 S3.8 fail-loud: 原实现把**整个响应体**当 token 写进 GITHUB_ENV,
+          #   后端 401 时写入的是字面量 {"error":{"code":"AUTH_ERROR",...}} (65 字节),
+          #   下游 TEST_TOKEN 拿到的就是这个 JSON, injectAuth 照样 return true,
+          #   所有页面被 router 守卫打到 /login → 快照录的是登录页 (假绿)。
+          #   实测 run 37013474583: TOKEN_LEN=65 且 env 里是 AUTH_ERROR JSON。
+          #   断言: 必须是 JWT (三段 base64url, 以 eyJ 开头), 否则 exit 1。
+          case "$RESP" in
+            eyJ*.*.*) echo "✓ token looks like a JWT" ;;
+            *) echo "::error::login 未返回 JWT (前端拿到的是错误 JSON), 长度=${#RESP}: ${RESP:0:200}"
+               exit 1 ;;
+          esac
 
       - name: Update a11y snapshots (warm-up pass, 覆盖 flaky 首写)
         working-directory: web
