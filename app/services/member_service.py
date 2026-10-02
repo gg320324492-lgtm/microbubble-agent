@@ -30,10 +30,11 @@ class MemberService:
         value: Optional[str],
         exclude_member_id: Optional[int] = None,
     ) -> None:
-        """case-insensitive 唯一检查 (PR6-P13/14/15/16 通用)
+        """case-insensitive 唯一检查 (PR6-P13; 原 PR6-P14/15/16 微信三列 2026-09 删)
 
-        反射 Member 表的列名, 支持 4 个 identifier 列.
-        空值/None 跳过检查 (与 PG UNIQUE 索引 NULL 不参与行为一致).
+        反射 Member 表的列名, 白名单当前只含 username (企业微信下线后收窄)。
+        空值/None 跳过检查 (与 PG UNIQUE 索引 NULL 不参与行为一致)。
+        注意白名单检查在空值检查**之前**: 列名不在白名单时即使 value=None 也抛 ValueError。
 
         Args:
             db: AsyncSession
@@ -163,9 +164,6 @@ class MemberService:
         name: str,
         username: Optional[str] = None,
         password_hash: Optional[str] = None,
-        wechat_id: Optional[str] = None,
-        personal_wechat_id: Optional[str] = None,
-        external_userid: Optional[str] = None,
         grade: Optional[str] = None,
         research_area: Optional[str] = None,
         email: Optional[str] = None,
@@ -174,24 +172,24 @@ class MemberService:
     ) -> Member:
         """创建成员
 
-        v2 PR6-P13/P14/P15/P16: 创建前检查 4 个 identifier 是否被占用 (case-insensitive),
-        与 alembic 053/054/055/056 兜底配合.
+        v2 PR6-P13: 创建前检查 username 是否被占用 (case-insensitive), 与 alembic 053 兜底配合.
+
+        2026-10-02 S3.9: 移除 wechat_id/personal_wechat_id/external_userid 三参。
+        这三列已由 alembic 139 删除, 但 create_member 仍对它们调 _assert_identifier_unique,
+        而该方法的白名单检查在 `if not value: return` **之前** ⇒ 传默认 None 也抛 ValueError
+        ⇒ create_member 100% 必然失败 (真 CI 实证: run 37024017862 step 9
+        `ValueError: _assert_identifier_unique 只支持 frozenset({'username'})`)。
+
+        同源第二层: Member 模型已无这 3 个属性, `Member(wechat_id=...)` 会抛
+        TypeError: 'wechat_id' is an invalid keyword argument for Member
+        (生产容器实测)。故形参 + 断言 + ORM 传参三者须一并移除, 只删断言仍会崩。
         """
         # PR6-P13 username 唯一检查
         await self._assert_identifier_unique(self.db, "username", username)
-        # PR6-P14 wechat_id 唯一检查 (comment_service mention 3 路匹配也走 lower)
-        await self._assert_identifier_unique(self.db, "wechat_id", wechat_id)
-        # PR6-P15 personal_wechat_id 唯一检查 (wechat/identity.resolve_by_wechat_id)
-        await self._assert_identifier_unique(self.db, "personal_wechat_id", personal_wechat_id)
-        # PR6-P16 external_userid 唯一检查 (wechat/identity.resolve_by_external_userid)
-        await self._assert_identifier_unique(self.db, "external_userid", external_userid)
         member = Member(
             name=name,
             username=username,
             password_hash=password_hash,
-            wechat_id=wechat_id,
-            personal_wechat_id=personal_wechat_id,
-            external_userid=external_userid,
             grade=grade,
             research_area=research_area,
             email=email,
@@ -207,8 +205,12 @@ class MemberService:
     async def update_member(self, member_id: int, **kwargs) -> Optional[Member]:
         """更新成员信息
 
-        v2 PR6-P13/P14/P15/P16: 如果 kwargs 含 4 个 identifier,
-        走 case-insensitive 唯一检查 (排除自己)
+        v2 PR6-P13: 如果 kwargs 含 username, 走 case-insensitive 唯一检查 (排除自己)。
+
+        2026-10-02 S3.9: 删除 wechat_id / personal_wechat_id / external_userid 三个分支。
+        与 create_member 同源 —— 白名单已收窄为 username, 这三个 key 一旦命中即抛
+        ValueError (即便有值); 且 Member 已无对应属性, 下方 setattr 循环的
+        hasattr 也会跳过。属死分支, 留着就是下一次误传的定时炸弹。
         """
         member = await self.get_member(member_id)
         if not member:
@@ -218,23 +220,6 @@ class MemberService:
         if "username" in kwargs and kwargs["username"] is not None:
             await self._assert_identifier_unique(
                 self.db, "username", kwargs["username"], exclude_member_id=member_id
-            )
-        # PR6-P14 wechat_id
-        if "wechat_id" in kwargs and kwargs["wechat_id"] is not None:
-            await self._assert_identifier_unique(
-                self.db, "wechat_id", kwargs["wechat_id"], exclude_member_id=member_id
-            )
-        # PR6-P15 personal_wechat_id
-        if "personal_wechat_id" in kwargs and kwargs["personal_wechat_id"] is not None:
-            await self._assert_identifier_unique(
-                self.db, "personal_wechat_id", kwargs["personal_wechat_id"],
-                exclude_member_id=member_id,
-            )
-        # PR6-P16 external_userid
-        if "external_userid" in kwargs and kwargs["external_userid"] is not None:
-            await self._assert_identifier_unique(
-                self.db, "external_userid", kwargs["external_userid"],
-                exclude_member_id=member_id,
             )
 
         for key, value in kwargs.items():
