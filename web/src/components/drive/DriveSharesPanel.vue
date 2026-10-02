@@ -196,7 +196,7 @@ export default { name: 'DriveSharesPanel' }
 .sp-empty-hint { margin: 0; font-size: 12px; }
 .sp-list { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px 16px; }
 .sp-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px;
-  border: 1px solid var(--color-border); border-radius: 8px; background: #fafbfa; font-size: 12.5px; }
+  border: 1px solid var(--color-border); border-radius: 8px; background: var(--raw-fafbfa); font-size: 12.5px; }
 .sp-row .ic { flex: none; }
 .nm-wrap { flex: 1; min-width: 0; }
 .sp-row .nm { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -204,16 +204,16 @@ export default { name: 'DriveSharesPanel' }
 .sp-row .path { display: block; font-size: 10.5px; color: var(--color-text-placeholder);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .type-tag { flex: none; font-size: 10px; padding: 2px 7px; border-radius: 999px;
-  background: #f0f9f7; border: 1px solid #cbe4dc; color: #0b5c43; }
+  background: var(--raw-f0f9f7); border: 1px solid #cbe4dc; color: var(--raw-0b5c43); }
 .exp { flex: none; font-family: var(--font-mono, Consolas, monospace); font-size: 10.5px;
   color: var(--color-text-secondary); }
 .exp.soon { color: var(--color-warning); font-weight: 700; }
 .act { flex: none; display: flex; gap: 6px; }
 .sp-btn { font: inherit; font-size: 11.5px; border-radius: 6px; padding: 4px 10px; cursor: pointer;
-  border: 1px solid var(--color-border); background: #fff; color: var(--color-text-regular);
+  border: 1px solid var(--color-border); background: var(--raw-fff); color: var(--color-text-regular);
   transition: all .15s; }
 .sp-btn:disabled { opacity: .55; cursor: default; }
-.sp-btn:hover:not(:disabled) { border-color: #b8e0db; color: #0e766e; }
+.sp-btn:hover:not(:disabled) { border-color: #b8e0db; color: var(--raw-0e766e); }
 .sp-btn.danger { border-color: #fbc4c4; color: var(--color-danger, #f56c6c); }
-.sp-btn.danger:hover:not(:disabled) { background: #fff5f5; }
+.sp-btn.danger:hover:not(:disabled) { background: var(--raw-fff5f5); }
 </style>

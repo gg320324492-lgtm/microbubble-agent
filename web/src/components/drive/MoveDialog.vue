@@ -257,7 +257,7 @@ export default { name: 'MoveDialog' }
 /* 主按钮统一深青 (teleport 逃出 workbench 主色重映射, 批次⑩.9 同款) */
 .mvd-arch .el-button--primary {
   background: linear-gradient(135deg, #0E766E, #12897C) !important;
-  border: none !important; color: #fff !important;
+  border: none !important; color: var(--raw-fff) !important;
 }
 </style>
 
@@ -330,7 +330,7 @@ export default { name: 'MoveDialog' }
 .mvd-btn.ghost:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); }
 .mvd-btn.pri {
   border: none; background: var(--gradient-cta-button, linear-gradient(135deg, #0E766E, #12897C));
-  color: #fff; font-weight: var(--font-weight-semibold);
+  color: var(--raw-fff); font-weight: var(--font-weight-semibold);
   box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), .3);
 }
 .mvd-btn.pri:hover { transform: translateY(-1px); }

@@ -444,7 +444,7 @@ const handleReset = async () => {
 /* ── 右：登录栏 ───────────────────────────────── */
 .gate {
   border-left: 1px solid var(--line);
-  background: #fbfcfb;
+  background: var(--raw-fbfcfb);
   display: flex; flex-direction: column; justify-content: center;
   padding: 0 clamp(36px, 3.4vw, 56px);
   position: relative;
@@ -492,8 +492,8 @@ const handleReset = async () => {
   font-size: 15px; color: var(--ink);
   caret-color: var(--teal);
 }
-.gate__form :deep(.el-input__inner::placeholder) { color: #adbab6; font-size: 13.5px; }
-.gate__form :deep(.el-input__suffix) { color: #97a5a1; }
+.gate__form :deep(.el-input__inner::placeholder) { color: var(--raw-adbab6); font-size: 13.5px; }
+.gate__form :deep(.el-input__suffix) { color: var(--raw-97a5a1); }
 .gate__form :deep(.el-form-item.is-error .el-input__wrapper) {
   border-bottom-color: #c45656;
   box-shadow: none;
@@ -511,13 +511,13 @@ const handleReset = async () => {
 .login-shell .gate .el-button--primary.gate__button {
   width: 100%; height: 52px; margin-top: 12px;
   background: var(--ink); border: 1.5px solid var(--ink); border-radius: 999px;
-  color: #fbfcfb;
+  color: var(--raw-fbfcfb);
   font-size: 15px; font-weight: 700; letter-spacing: 0.12em;
   transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 .login-shell .gate .el-button--primary.gate__button:hover,
 .login-shell .gate .el-button--primary.gate__button:focus {
-  background: var(--teal); border-color: var(--teal); color: #fbfcfb;
+  background: var(--teal); border-color: var(--teal); color: var(--raw-fbfcfb);
   transform: translateY(-2px);
   box-shadow: 0 12px 26px rgba(14, 118, 110, 0.28);
 }

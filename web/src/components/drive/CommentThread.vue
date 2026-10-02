@@ -435,7 +435,7 @@ watch(() => props.fileId, (newId) => {
 .comment-thread-actions :deep(.el-button--primary) {
   background: var(--gradient-cta-button, linear-gradient(135deg, #0E766E, #12897C));
   border: none;
-  color: #fff;
+  color: var(--raw-fff);
   font-weight: 600;
   padding: 8px 20px;
 }
@@ -559,8 +559,8 @@ watch(() => props.fileId, (newId) => {
   font-size: 12px;
   color: var(--color-text-regular, #26302c);
 }
-.compose-reply-head .ico { color: #0E766E; font-weight: 700; }
-.compose-reply-head b { color: #0E766E; font-weight: 650; }
+.compose-reply-head .ico { color: var(--raw-0e766e); font-weight: 700; }
+.compose-reply-head b { color: var(--raw-0e766e); font-weight: 650; }
 .compose-reply-head .x {
   margin-left: auto;
   font-size: 11.5px;
@@ -570,7 +570,7 @@ watch(() => props.fileId, (newId) => {
   border-radius: 6px;
   transition: background var(--duration-fast);
 }
-.compose-reply-head .x:hover { background: #f0eee8; color: var(--color-text-primary); }
+.compose-reply-head .x:hover { background: var(--raw-f0eee8); color: var(--color-text-primary); }
 :deep(.comment-item.reply-target) {
   background: rgba(14, 118, 110, 0.06);
   box-shadow: inset 3px 0 0 #0E766E;

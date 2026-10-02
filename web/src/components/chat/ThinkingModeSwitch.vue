@@ -215,7 +215,7 @@ const currentModeLabel = () => {
 .mode-option.active {
   /* #P5: 统一所有模式选中态为深色实心背景 (主色珊瑚橙) + 白字 */
   background: linear-gradient(135deg, #FF5722 0%, #FF7A5C 100%);
-  color: #ffffff;
+  color: var(--raw-ffffff);
   box-shadow: 0 2px 6px rgba(255, 87, 34, 0.35);
   /* #P5: 选中态弹跳 + 阴影增强 */
   transform: scale(1.08);

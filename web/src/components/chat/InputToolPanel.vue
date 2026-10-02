@@ -177,14 +177,14 @@ onBeforeUnmount(() => {
   width: min(560px, calc(100vw - 32px));
   max-height: 60vh;
   overflow-y: auto;
-  background: #fdfefc;
+  background: var(--raw-fdfefc);
   border: 1.5px solid #16232a;
   border-radius: 10px;
   box-shadow: 5px 5px 0 rgba(22, 35, 42, 0.14);
   z-index: 1000;
   padding: 8px;
   font-size: 14px;
-  color: #16232a;
+  color: var(--raw-16232a);
 }
 /* 档案语言: 顶部标本标签 (压边框线) */
 .input-tool-panel::before {
@@ -192,21 +192,21 @@ onBeforeUnmount(() => {
   position: absolute;
   top: -9px;
   left: 20px;
-  background: #fdfefc;
+  background: var(--raw-fdfefc);
   padding: 0 8px;
   font-family: Consolas, 'SFMono-Regular', monospace;
   font-size: 9px;
   letter-spacing: 0.28em;
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 [data-theme="dark"] .input-tool-panel {
-  background: #172126;
+  background: var(--raw-172126);
   border-color: rgba(226, 236, 234, 0.45);
   box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.4);
 }
 [data-theme="dark"] .input-tool-panel::before {
-  background: #172126;
-  color: #35c2a4;
+  background: var(--raw-172126);
+  color: var(--raw-35c2a4);
 }
 
 .itp-header {
@@ -215,7 +215,6 @@ onBeforeUnmount(() => {
   margin-bottom: 4px;
 }
 .itp-hint {
-  font-size: 12px;
   color: var(--color-text-secondary);
   font-family: Consolas, 'SFMono-Regular', monospace;
   font-size: 10.5px;
@@ -260,13 +259,13 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   border-radius: 8px;
   border: 1px dashed rgba(14, 118, 110, 0.4);
-  color: #0e766e;
+  color: var(--raw-0e766e);
   background: transparent;
   font-family: Consolas, 'SFMono-Regular', monospace;
 }
 [data-theme="dark"] .itp-icon {
   border-color: rgba(53, 194, 164, 0.4);
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
 }
 
 .itp-text {
@@ -290,7 +289,7 @@ onBeforeUnmount(() => {
 
 .itp-action {
   font-size: 12px;
-  color: #0e766e;
+  color: var(--raw-0e766e);
   flex-shrink: 0;
   padding: 4px 10px;
   border-radius: 8px;
@@ -299,7 +298,7 @@ onBeforeUnmount(() => {
   letter-spacing: 0.08em;
 }
 [data-theme="dark"] .itp-action {
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
   border-color: rgba(53, 194, 164, 0.4);
 }
 

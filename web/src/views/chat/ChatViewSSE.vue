@@ -1358,7 +1358,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   z-index: 9999;
   padding: 8px 14px;
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--raw-ffffff);
   border-radius: var(--radius-md);
   font-size: 13px;
   font-weight: 500;
@@ -1422,8 +1422,6 @@ function handleSearchKeydown(e: KeyboardEvent) {
 @media (max-width: 1100px) {
   .cites-panel { display: none; }
 }
-@media (prefers-reduced-motion: reduce) {
-  }
 
 /* ── 档案语言 chrome (只动表皮: 头部/输入区; 0,2,0 特异性压过原 0,1,0 规则) ── */
 .chat-immersive .chat-header {
@@ -1484,6 +1482,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   width: 34px !important;
   height: 34px !important;
   min-width: 34px;
+
   --el-avatar-size: 34px;
 }
 .header-text { line-height: 1.2; }
@@ -1706,7 +1705,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   box-shadow: 0 4px 14px rgba(255,122,92,0.18), 0 1px 3px rgba(255,122,92,0.08);
   border: 1px solid rgba(255,255,255,0.1);
   background: linear-gradient(135deg, #FF7A5C, #E85A3A);
-  color: #fff;
+  color: var(--raw-fff);
 }
 .user-bubble:hover {
   transform: translateY(-1px);
@@ -1721,9 +1720,9 @@ function handleSearchKeydown(e: KeyboardEvent) {
   .bubble,
   .user-bubble,
   .bot-bubble {
-    background: #fff !important;
+    background: var(--raw-fff) !important;
     background-image: none !important;
-    color: #000 !important;
+    color: var(--raw-000) !important;
     border: 1px solid #000 !important;
     box-shadow: none !important;
   }
@@ -1990,7 +1989,6 @@ function handleSearchKeydown(e: KeyboardEvent) {
   display: flex !important;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   width: 20px !important;
   height: 20px !important;
   min-width: 20px;
@@ -2160,7 +2158,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-radius: 16px;
   border: none;
   background: linear-gradient(135deg, #FF5722 0%, #FF7A5C 100%);
-  color: #ffffff;
+  color: var(--raw-ffffff);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 1px;
@@ -2182,8 +2180,8 @@ function handleSearchKeydown(e: KeyboardEvent) {
   transform: scale(0.96);
 }
 .send-btn-pill:disabled {
-  background: #c0c4cc;
-  color: #ffffff;
+  background: var(--raw-c0c4cc);
+  color: var(--raw-ffffff);
   box-shadow: none;
   cursor: not-allowed;
 }
@@ -2197,7 +2195,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-radius: 16px;
   border: none;
   background: var(--color-danger, #f56c6c);
-  color: #ffffff;
+  color: var(--raw-ffffff);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 1px;
@@ -2391,13 +2389,13 @@ function handleSearchKeydown(e: KeyboardEvent) {
 .chat-immersive .bot-avatar,
 .chat-immersive .bot-msg-avatar,
 .chat-immersive .hero-avatar {
-  background: #0e766e !important;
+  background: var(--raw-0e766e) !important;
   background-image: none !important;
 }
 [data-theme="dark"] .chat-immersive .bot-avatar,
 [data-theme="dark"] .chat-immersive .bot-msg-avatar,
 [data-theme="dark"] .chat-immersive .hero-avatar {
-  background: #35c2a4 !important;
+  background: var(--raw-35c2a4) !important;
 }
 /* 深色主题恢复暗色容器底 (上面浅色纸面覆盖带了 !important, 必须同样 !important 压回) */
 [data-theme="dark"] .chat-immersive {
@@ -2412,36 +2410,36 @@ function handleSearchKeydown(e: KeyboardEvent) {
 /* 用户气泡: 问条 — 纸卡 + 珊瑚描边 (原橙渐变改纸卡) */
 .chat-immersive .user-bubble {
   background-image: none !important;
-  background-color: #fdfefc !important;
+  background-color: var(--raw-fdfefc) !important;
   border: 1.5px solid #ef7256 !important;
-  color: #16232a !important;
+  color: var(--raw-16232a) !important;
   border-radius: 12px 3px 12px 12px !important;
   box-shadow: 3px 3px 0 rgba(239, 114, 86, 0.14) !important;
 }
 /* 批次⑩.72 亮色选型 C 纸墨反转: 用户气泡 = 墨色实底白字 (替代珊瑚描边+硬阴影+挖孔时间戳) */
 .chat-immersive .user-bubble {
-  background: #16232a !important;
+  background: var(--raw-16232a) !important;
   border: none !important;
   border-radius: 18px !important;
-  color: #eef4f2 !important;
+  color: var(--raw-eef4f2) !important;
   box-shadow: none !important;
 }
 .chat-immersive .user-bubble::before { display: none; }
 .chat-immersive .user-bubble:hover { transform: none; box-shadow: none; }
 [data-theme="dark"] .chat-immersive .user-bubble {
-  background-color: #172126 !important;
+  background-color: var(--raw-172126) !important;
   border-color: rgba(255, 138, 107, 0.55) !important;
-  color: #e2ecea !important;
+  color: var(--raw-e2ecea) !important;
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35) !important;
 }
 /* 发送按钮: 橙渐变 → 墨色药丸, hover 墨青 */
 .chat-immersive .send-btn {
   background-image: none !important;
-  background-color: #16232a !important;
-  color: #fbfcfb !important;
+  background-color: var(--raw-16232a) !important;
+  color: var(--raw-fbfcfb) !important;
 }
 .chat-immersive .send-btn:hover:not(:disabled) {
-  background-color: #0e766e !important;
+  background-color: var(--raw-0e766e) !important;
 }
 /* 批次⑩.72 亮色选型 C: 发送键 = 墨色圆形↑ (对齐暗色形态), hover 转墨青 */
 .chat-immersive .send-btn-pill {
@@ -2450,7 +2448,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   height: 32px;
   padding: 0;
   border-radius: 999px !important;
-  background: #16232a !important;
+  background: var(--raw-16232a) !important;
   background-image: none !important;
   box-shadow: none !important;
   font-size: 0 !important;
@@ -2467,11 +2465,11 @@ function handleSearchKeydown(e: KeyboardEvent) {
   justify-content: center;
   font-size: 16px;
   font-weight: 700;
-  color: #fbfcfb;
+  color: var(--raw-fbfcfb);
 }
 .chat-immersive .send-btn-pill:hover:not(:disabled) {
   transform: scale(1.05);
-  background: #0e766e !important;
+  background: var(--raw-0e766e) !important;
   box-shadow: none !important;
 }
 .chat-immersive .send-btn-pill:disabled {
@@ -2481,73 +2479,73 @@ function handleSearchKeydown(e: KeyboardEvent) {
 /* 头部/侧栏 新对话按钮: 墨色实底 */
 .chat-immersive .header-new-session.el-button--primary,
 .chat-immersive .session-sidebar .sidebar-header .new-btn {
-  background-color: #16232a !important;
+  background-color: var(--raw-16232a) !important;
   background-image: none !important;
   border-color: #16232a !important;
-  color: #fbfcfb !important;
+  color: var(--raw-fbfcfb) !important;
 }
 .chat-immersive .session-sidebar .sidebar-header .new-btn:hover {
-  background-color: #0e766e !important;
+  background-color: var(--raw-0e766e) !important;
   border-color: #0e766e !important;
-  color: #fbfcfb !important;
+  color: var(--raw-fbfcfb) !important;
 }
 /* 批次⑩.67 (用户选型 A 归档青实底): dark 下新对话/顶栏➕ 用青色渐变白字 (同网盘上传键),
    选中 tab 青色实底 — 与活跃会话青条/模式切换的暗色语言统一, 替换原纸墨反转两块亮纸色 */
 [data-theme="dark"] .chat-immersive .header-new-session.el-button--primary,
 [data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn {
-  background-color: #0e766e !important;
+  background-color: var(--raw-0e766e) !important;
   background-image: linear-gradient(135deg, #0e766e 0%, #12968b 100%) !important;
   border-color: #0e766e !important;
-  color: #ffffff !important;
+  color: var(--raw-ffffff) !important;
 }
 [data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn:hover,
 [data-theme="dark"] .chat-immersive .header-new-session.el-button--primary:hover {
-  background-color: #12968b !important;
+  background-color: var(--raw-12968b) !important;
   background-image: linear-gradient(135deg, #12968b 0%, #17a897 100%) !important;
   border-color: #12968b !important;
-  color: #ffffff !important;
+  color: var(--raw-ffffff) !important;
 }
 [data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn .new-btn-text,
 [data-theme="dark"] .chat-immersive .session-sidebar .sidebar-header .new-btn .el-icon {
-  color: #ffffff !important;
+  color: var(--raw-ffffff) !important;
 }
 /* 归档 tab 选中: 橙 → 墨 (child scoped 同特异性会赢注入序, 这里加链条 + !important) */
 .chat-immersive .session-sidebar .archive-tab.active {
-  background: #16232a !important;
+  background: var(--raw-16232a) !important;
   border-color: #16232a !important;
-  color: #fbfcfb !important;
+  color: var(--raw-fbfcfb) !important;
 }
 [data-theme="dark"] .chat-immersive .session-sidebar .archive-tab.active {
-  background: #0e766e !important;
+  background: var(--raw-0e766e) !important;
   border-color: #0e766e !important;
-  color: #ffffff !important;
+  color: var(--raw-ffffff) !important;
 }
 /* 模式切换 (快速/平衡/深度): 亮色 C = 墨色, 暗色 = 青亮 */
 .chat-immersive .depth-toggle.active {
-  color: #16232a !important;
+  color: var(--raw-16232a) !important;
   background: rgba(22, 35, 42, 0.08) !important;
 }
 .chat-immersive .thinking-mode-switch .mode-option.active,
 .chat-immersive .mode-option.active {
-  background: #16232a !important;
+  background: var(--raw-16232a) !important;
   background-image: none !important;
-  color: #fff !important;
+  color: var(--raw-fff) !important;
 }
 [data-theme="dark"] .chat-immersive .depth-toggle.active {
-  color: #35c2a4 !important;
+  color: var(--raw-35c2a4) !important;
   background: rgba(53, 194, 164, 0.14) !important;
 }
 [data-theme="dark"] .chat-immersive .mode-option.active {
-  background: #35c2a4 !important;
-  color: #0b1512 !important;
+  background: var(--raw-35c2a4) !important;
+  color: var(--raw-0b1512) !important;
 }
 /* 检索徽标: 亮色 C = 墨色调, 暗色 = 青亮 */
 .chat-immersive .retrieval-badge {
-  color: #16232a;
+  color: var(--raw-16232a);
   background: rgba(22, 35, 42, 0.06);
 }
 [data-theme="dark"] .chat-immersive .retrieval-badge {
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
   background: rgba(53, 194, 164, 0.10);
 }
 
@@ -2569,12 +2567,12 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-radius: 9px;
   background: rgba(14, 118, 110, 0.06);
   font-size: 12px;
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 [data-theme="dark"] .chat-immersive .websearch-flag {
   border-color: rgba(53, 194, 164, 0.4);
   background: rgba(53, 194, 164, 0.08);
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
 }
 .chat-immersive .websearch-flag .wsf-off {
   margin-left: auto;
@@ -2599,7 +2597,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 .chat-immersive #chat-header-search-toggle:hover,
 .chat-immersive #chat-header-search-toggle:focus-visible {
   border-color: #0e766e;
-  color: #0e766e;
+  color: var(--raw-0e766e);
   background: rgba(14, 118, 110, 0.06);
 }
 [data-theme="dark"] .chat-immersive #chat-header-search-toggle {
@@ -2609,7 +2607,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 [data-theme="dark"] .chat-immersive #chat-header-search-toggle:hover,
 [data-theme="dark"] .chat-immersive #chat-header-search-toggle:focus-visible {
   border-color: #35c2a4;
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
   background: rgba(53, 194, 164, 0.08);
 }
 /* 侧栏折叠按钮: 图标 + 「会话」文字 chip (用户选定样式 2) */
@@ -2632,7 +2630,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 .chat-immersive .rail-toggle-btn:hover,
 .chat-immersive .rail-toggle-btn:focus-visible {
   border-color: #0e766e;
-  color: #0e766e;
+  color: var(--raw-0e766e);
   background: rgba(14, 118, 110, 0.06);
 }
 .chat-immersive .rail-toggle-btn .rail-toggle-text { line-height: 1; }
@@ -2643,7 +2641,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 [data-theme="dark"] .chat-immersive .rail-toggle-btn:hover,
 [data-theme="dark"] .chat-immersive .rail-toggle-btn:focus-visible {
   border-color: #35c2a4;
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
   background: rgba(53, 194, 164, 0.08);
 }
 
@@ -2661,7 +2659,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 .chat-immersive .header-search-pill:focus-within {
   border-color: #0e766e;
-  background: #fff;
+  background: var(--raw-fff);
 }
 [data-theme="dark"] .chat-immersive .header-search-pill:focus-within {
   border-color: #35c2a4;
@@ -2672,8 +2670,8 @@ function handleSearchKeydown(e: KeyboardEvent) {
   color: var(--color-text-secondary);
   font-size: 13px;
 }
-.chat-immersive .header-search-pill:focus-within .hsp-ico { color: #198e83; }
-[data-theme="dark"] .chat-immersive .header-search-pill:focus-within .hsp-ico { color: #35c2a4; }
+.chat-immersive .header-search-pill:focus-within .hsp-ico { color: var(--raw-198e83); }
+[data-theme="dark"] .chat-immersive .header-search-pill:focus-within .hsp-ico { color: var(--raw-35c2a4); }
 .chat-immersive .header-search-pill input {
   border: 0;
   background: transparent;
@@ -2687,7 +2685,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 .chat-immersive .header-search-pill .hsp-count {
   font-family: Consolas, monospace;
   font-size: 10px;
-  color: #0e766e;
+  color: var(--raw-0e766e);
   white-space: nowrap;
 }
 .chat-immersive .header-search-pill .hsp-nav {
@@ -2699,12 +2697,12 @@ function handleSearchKeydown(e: KeyboardEvent) {
   cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.chat-immersive .header-search-pill .hsp-nav:hover { border-color: #0e766e; color: #0e766e; }
+.chat-immersive .header-search-pill .hsp-nav:hover { border-color: #0e766e; color: var(--raw-0e766e); }
 .chat-immersive .header-search-pill .hsp-clear {
   border: 0; background: transparent; color: var(--color-text-secondary);
   cursor: pointer; font-size: 12px; line-height: 1; padding: 2px;
 }
-.chat-immersive .header-search-pill .hsp-clear:hover { color: #ef7256; }
+.chat-immersive .header-search-pill .hsp-clear:hover { color: var(--raw-ef7256); }
 .chat-immersive .header-search-pill .hsp-kbd {
   font-family: Consolas, monospace;
   font-size: 9px;
@@ -2716,7 +2714,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 [data-theme="dark"] .chat-immersive .header-search-pill .hsp-kbd { border-color: rgba(226,236,234,0.3); }
 .chat-immersive .input-core {
-  background: #fdfefc;
+  background: var(--raw-fdfefc);
   border: 1.5px solid rgba(22, 35, 42, 0.45);
   border-radius: 24px;
   box-shadow: none;
@@ -2730,11 +2728,11 @@ function handleSearchKeydown(e: KeyboardEvent) {
 /* ═══ 会话侧栏 + 引用面板 档案化 (2026-09-03, 与工具面板同轮) ═══ */
 /* 侧栏: 纸面底 + 搜索下划线化 + 会话条目虚线分隔 */
 .chat-immersive .session-sidebar {
-  background: #f4f6f4;
+  background: var(--raw-f4f6f4);
   border-right: 1px solid rgba(22, 35, 42, 0.35);
 }
 [data-theme="dark"] .chat-immersive .session-sidebar {
-  background: #10171b;
+  background: var(--raw-10171b);
   border-right-color: rgba(226, 236, 234, 0.25);
 }
 .chat-immersive .session-sidebar .sidebar-search .el-input__wrapper,
@@ -2756,7 +2754,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 .chat-immersive .session-sidebar .batch-action-btn:hover {
   border-color: #0e766e;
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 .chat-immersive .session-group-header {
   font-family: Consolas, 'SFMono-Regular', monospace;
@@ -2776,11 +2774,11 @@ function handleSearchKeydown(e: KeyboardEvent) {
   transition: background 0.15s, border-color 0.15s;
 }
 .chat-immersive .session-sidebar .session-item:hover {
-  background: #ffffff;
+  background: var(--raw-ffffff);
 }
 .chat-immersive .session-sidebar .session-item.active,
 .chat-immersive .session-sidebar .session-item.selected {
-  background: #fdfefc;
+  background: var(--raw-fdfefc);
   border: 1px solid rgba(22, 35, 42, 0.45);
 }
 /* ═══ 批次⑩.68 暗色会话条目选型 D「卡片描边」(2026-09-10) ═══
@@ -2841,9 +2839,9 @@ function handleSearchKeydown(e: KeyboardEvent) {
 }
 .chat-immersive .trace-pill:hover {
   border-color: rgba(22, 35, 42, 0.32);
-  background: #ffffff;
+  background: var(--raw-ffffff);
 }
-.chat-immersive .trace-pill .tp-arrow { font-size: 10px; color: #8a938e; }
+.chat-immersive .trace-pill .tp-arrow { font-size: 10px; color: var(--raw-8a938e); }
 [data-theme="dark"] .chat-immersive .trace-pill {
   display: inline-flex;
   align-items: center;
@@ -2864,7 +2862,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   border-color: rgba(226, 236, 234, 0.32);
   background: rgba(255, 255, 255, 0.045);
 }
-[data-theme="dark"] .chat-immersive .trace-pill .tp-arrow { font-size: 10px; color: #6b757d; }
+[data-theme="dark"] .chat-immersive .trace-pill .tp-arrow { font-size: 10px; color: var(--raw-6b757d); }
 /* —— 用户气泡: ChatGPT 式中灰圆角 —— */
 [data-theme="dark"] .chat-immersive .user-bubble {
   background: rgba(255, 255, 255, 0.06) !important;
@@ -2904,7 +2902,7 @@ function handleSearchKeydown(e: KeyboardEvent) {
   height: 32px;
   padding: 0;
   border-radius: 999px !important;
-  background: #35c2a4 !important;
+  background: var(--raw-35c2a4) !important;
   background-image: none !important;
   box-shadow: none !important;
   font-size: 0 !important;
@@ -2921,12 +2919,12 @@ function handleSearchKeydown(e: KeyboardEvent) {
   justify-content: center;
   font-size: 16px;
   font-weight: 700;
-  color: #0b1512;
+  color: var(--raw-0b1512);
 }
 [data-theme="dark"] .chat-immersive .send-btn-pill:hover:not(:disabled) {
   transform: scale(1.05);
   box-shadow: none !important;
-  background: #43d4b6 !important;
+  background: var(--raw-43d4b6) !important;
 }
 [data-theme="dark"] .chat-immersive .send-btn-pill:disabled {
   background: rgba(226, 236, 234, 0.14) !important;
@@ -2937,38 +2935,38 @@ function handleSearchKeydown(e: KeyboardEvent) {
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #565f66;
+  color: var(--raw-565f66);
 }
 /* 引用面板: 摘要 teal 印章条 + tab 墨青 + 角色徽章 (我=珊瑚 / AI=墨青) */
 .chat-immersive .cites-panel .cp-summary {
   background: rgba(14, 118, 110, 0.06);
   border: 1px dashed rgba(14, 118, 110, 0.4);
   border-radius: 8px;
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 [data-theme="dark"] .chat-immersive .cites-panel .cp-summary {
   background: rgba(53, 194, 164, 0.08);
   border-color: rgba(53, 194, 164, 0.4);
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
 }
 .chat-immersive .cites-panel .cp-tab.active {
-  color: #0e766e;
+  color: var(--raw-0e766e);
   border-bottom-color: #0e766e;
 }
 [data-theme="dark"] .chat-immersive .cites-panel .cp-tab.active {
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
   border-bottom-color: #35c2a4;
 }
 .chat-immersive .cites-panel .cp-role-badge {
-  background: #0e766e;
+  background: var(--raw-0e766e);
 }
 .chat-immersive .cites-panel .cp-role-user .cp-role-badge {
-  background: #ef7256;
+  background: var(--raw-ef7256);
 }
 [data-theme="dark"] .chat-immersive .cites-panel .cp-role-badge {
-  background: #35c2a4;
+  background: var(--raw-35c2a4);
 }
 [data-theme="dark"] .chat-immersive .cites-panel .cp-role-user .cp-role-badge {
-  background: #ff8a6b;
+  background: var(--raw-ff8a6b);
 }
 </style>

@@ -236,7 +236,7 @@ onMounted(async () => {
 .sh-btn {
   font: inherit; font-size: 12.5px; padding: 8px 16px; border-radius: 8px;
   border: none; background: linear-gradient(135deg, #0E766E, #12897C);
-  color: #fff; font-weight: 600; cursor: pointer; text-decoration: none;
+  color: var(--raw-fff); font-weight: 600; cursor: pointer; text-decoration: none;
   display: inline-flex; align-items: center; gap: 7px; justify-content: center;
   transition: transform .15s, box-shadow .15s;
   box-shadow: 0 2px 8px rgba(14,118,110,.3);

@@ -550,7 +550,7 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
 .dft-av {
   flex: none; width: 17px; height: 17px; border-radius: 50%;
   background: var(--gradient-welcome-hero, linear-gradient(135deg, #0E766E, #12897C));
-  color: #fff; font-size: 9px; display: inline-grid; place-items: center; font-weight: var(--font-weight-semibold);
+  color: var(--raw-fff); font-size: 9px; display: inline-grid; place-items: center; font-weight: var(--font-weight-semibold);
   overflow: hidden;
 }
 .dft-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -584,5 +584,4 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
 }
 .dft-foot-stat { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .dft-foot-sp { flex: 1; }
-.dft.drag-hint { }
 </style>

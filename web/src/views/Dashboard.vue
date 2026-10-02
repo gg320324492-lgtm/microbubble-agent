@@ -424,7 +424,7 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 .stat-value--teal { color: var(--teal); }
-.stat-value--green { color: #3d7a3d; }
+.stat-value--green { color: var(--raw-3d7a3d); }
 .stat-value--coral { color: var(--coral); }
 .stat-rule { border-top: 1px dashed var(--line-dash); margin: 10px 0 8px; }
 .stat-hint { font-size: 12px; color: var(--muted); }
@@ -618,7 +618,7 @@ onMounted(() => {
   transition: all 0.15s ease-out;
 }
 .tv-embed :deep(.create-task-btn:hover) {
-  background: #24363f !important;
+  background: var(--raw-24363f) !important;
   border-color: #24363f !important;
   transform: translate(-1px, -1px);
   box-shadow: 4px 4px 0 var(--shadow-ink);
@@ -643,14 +643,14 @@ onMounted(() => {
   --muted: #8ba4a0;
   --shadow-ink: rgba(0, 0, 0, 0.45);
 }
-[data-theme="dark"] .dashboard-dossier .stat-value--green { color: #7ac07a; }
+[data-theme="dark"] .dashboard-dossier .stat-value--green { color: var(--raw-7ac07a); }
 [data-theme="dark"] .dashboard-dossier .hero-ground { background: linear-gradient(to top, rgba(53, 194, 164, 0.12), transparent); }
 [data-theme="dark"] .dashboard-dossier .group-head { background: linear-gradient(to right, rgba(53, 194, 164, 0.06), transparent 70%); }
 [data-theme="dark"] .dashboard-dossier .group-head:hover { background: rgba(53, 194, 164, 0.1); }
 [data-theme="dark"] .dashboard-dossier .task-row.overdue { background: rgba(255, 138, 107, 0.06); }
-[data-theme="dark"] .dashboard-dossier .monogram { color: #101a16; }
+[data-theme="dark"] .dashboard-dossier .monogram { color: var(--raw-101a16); }
 [data-theme="dark"] .dashboard-dossier .tip--ok .tip-mark,
-[data-theme="dark"] .dashboard-dossier .tip--danger .tip-mark { color: #101a16; }
+[data-theme="dark"] .dashboard-dossier .tip--danger .tip-mark { color: var(--raw-101a16); }
 [data-theme="dark"] .dashboard-dossier .stamp { color: var(--coral); border-color: var(--coral); }
-[data-theme="dark"] .dashboard.dashboard-dossier .el-button--primary { background: var(--teal) !important; border-color: var(--teal) !important; color: #101a16 !important; }
+[data-theme="dark"] .dashboard.dashboard-dossier .el-button--primary { background: var(--teal) !important; border-color: var(--teal) !important; color: var(--raw-101a16) !important; }
 </style>

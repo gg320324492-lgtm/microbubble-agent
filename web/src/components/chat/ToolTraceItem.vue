@@ -352,7 +352,7 @@ async function copyOutput() {
   cursor: pointer;
   min-height: 24px;
 }
-.tti-jump:hover { background: var(--color-primary, #FF7A5C); color: #fff; }
+.tti-jump:hover { background: var(--color-primary, #FF7A5C); color: var(--raw-fff); }
 .tti-jump:focus-visible { outline: 2px solid var(--color-primary, #FF7A5C); outline-offset: 1px; }
 .tti-copy {
   background: var(--color-primary-bg, #FFF0ED);
@@ -365,7 +365,7 @@ async function copyOutput() {
   min-height: 24px;
   transition: background 150ms ease;
 }
-.tti-copy:hover { background: var(--color-primary, #FF7A5C); color: #fff; }
+.tti-copy:hover { background: var(--color-primary, #FF7A5C); color: var(--raw-fff); }
 .tti-copy:focus-visible { outline: 2px solid var(--color-primary, #FF7A5C); outline-offset: 1px; }
 
 .tti-json {

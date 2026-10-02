@@ -80,15 +80,15 @@ function fmtSize(bytes) {
 .dcd-body { font-size: 13px; color: var(--color-text-regular); }
 .dcd-files { margin: 10px 0 4px; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
 .dcd-row { display: flex; align-items: center; gap: 9px; padding: 8px 12px; font-size: 12.5px; color: var(--color-text-regular); }
-.dcd-row:nth-child(even) { background: #fafbfa; }
+.dcd-row:nth-child(even) { background: var(--raw-fafbfa); }
 .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
 .dcd-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dcd-row .sz { flex: none; color: var(--color-text-placeholder); font-family: var(--font-family-mono, monospace); font-size: 10.5px; }
-.dcd-more { padding: 6px 12px; font-size: 11.5px; color: var(--color-text-secondary); background: #fafbfa; border-top: 1px dashed var(--color-border); }
+.dcd-more { padding: 6px 12px; font-size: 11.5px; color: var(--color-text-secondary); background: var(--raw-fafbfa); border-top: 1px dashed var(--color-border); }
 .dcd-recycle {
   display: flex; align-items: center; gap: 7px; margin-top: 10px;
-  background: #f0f9f7; border: 1px solid #cbe4dc; border-radius: 7px;
-  padding: 7px 11px; font-size: 12px; color: #0b5c43;
+  background: var(--raw-f0f9f7); border: 1px solid #cbe4dc; border-radius: 7px;
+  padding: 7px 11px; font-size: 12px; color: var(--raw-0b5c43);
 }
 .dcd-recycle svg { width: 14px; height: 14px; flex: none; stroke: #0b5c43; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dcd-btn {
@@ -99,8 +99,8 @@ function fmtSize(bytes) {
 .dcd-btn:disabled { opacity: 0.55; cursor: default; }
 .dcd-btn:hover:not(:disabled) { border-color: #b8e0db; color: var(--teal, #0e766e); }
 .dcd-primary {
-  background: linear-gradient(135deg, #0e766e, #12897c); border: none; color: #fff;
+  background: linear-gradient(135deg, #0e766e, #12897c); border: none; color: var(--raw-fff);
   font-weight: 600; box-shadow: 0 2px 8px rgba(14, 118, 110, 0.3);
 }
-.dcd-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14, 118, 110, 0.32); color: #fff; }
+.dcd-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14, 118, 110, 0.32); color: var(--raw-fff); }
 </style>

@@ -1629,14 +1629,14 @@ onMounted(async () => {
   position: sticky; top: 12px; z-index: 8;
   display: flex; align-items: center; gap: 14px;
   background: linear-gradient(135deg, #0d201c 0%, #1a3d33 60%, #234a3f 100%);
-  color: #eaf4f0;
+  color: var(--raw-eaf4f0);
   border-radius: 9999px; padding: 10px 26px 10px 14px;
   box-shadow: 0 10px 28px rgba(18, 36, 31, 0.4);
 }
 .player-bar.no-audio-hidden { display: none; }
 .pb-play {
   width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
-  background: #52a896; border: none; color: #0d201c; font-size: 13px;
+  background: var(--raw-52a896); border: none; color: var(--raw-0d201c); font-size: 13px;
   display: grid; place-items: center;
   box-shadow: 0 3px 12px rgba(82, 168, 150, 0.5);
   transition: transform var(--duration-fast, .15s) ease-out;
@@ -1652,7 +1652,7 @@ onMounted(async () => {
 .pb-track:hover { height: 6px; }
 .pb-track i {
   position: absolute; left: 0; top: 0; height: 100%;
-  background: #52a896; border-radius: 3px;
+  background: var(--raw-52a896); border-radius: 3px;
 }
 .pb-spd {
   font-family: Consolas, monospace; font-size: 11px; cursor: pointer;
@@ -1733,5 +1733,5 @@ onMounted(async () => {
   background: linear-gradient(135deg, #0a1815 0%, #142e26 60%, #1b3d34 100%);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
-[data-theme="dark"] .transcript-ts.ts-seek { color: #7fb3aa; }
+[data-theme="dark"] .transcript-ts.ts-seek { color: var(--raw-7fb3aa); }
 </style>

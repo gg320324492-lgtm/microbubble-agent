@@ -68,10 +68,10 @@ const hasChildren = computed(() => props.folderCount > 0 || props.fileCount > 0)
 .fdc-body { font-size: 13px; color: var(--color-text-regular); }
 .fdc-hero {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin: 2px 0 0;
-  background: #fafbfa; border: 1px solid var(--color-border); border-radius: 8px;
+  background: var(--raw-fafbfa); border: 1px solid var(--color-border); border-radius: 8px;
 }
 .fdc-ficon {
-  flex: none; width: 40px; height: 40px; border-radius: 10px; background: #f0f9f7;
+  flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--raw-f0f9f7);
   border: 1px solid #cbe4dc; display: flex; align-items: center; justify-content: center;
 }
 .fdc-ficon svg { width: 22px; height: 22px; fill: none; stroke: #0e766e; stroke-width: 1.7; }
@@ -81,12 +81,12 @@ const hasChildren = computed(() => props.folderCount > 0 || props.fileCount > 0)
 .fdc-info .meta { font-size: 11.5px; color: var(--color-text-secondary); margin-top: 2px; }
 .fdc-admin-warn {
   margin-top: 10px; padding: 8px 11px; border-radius: 7px; font-size: 12px; line-height: 1.55;
-  background: #fef0f0; border: 1px solid #fbc4c4; color: #c45656;
+  background: var(--raw-fef0f0); border: 1px solid #fbc4c4; color: var(--raw-c45656);
 }
 .fdc-recycle {
   display: flex; align-items: center; gap: 7px; margin-top: 10px;
-  background: #f0f9f7; border: 1px solid #cbe4dc; border-radius: 7px;
-  padding: 7px 11px; font-size: 12px; color: #0b5c43;
+  background: var(--raw-f0f9f7); border: 1px solid #cbe4dc; border-radius: 7px;
+  padding: 7px 11px; font-size: 12px; color: var(--raw-0b5c43);
 }
 .fdc-recycle svg { width: 14px; height: 14px; flex: none; stroke: #0b5c43; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .fdc-btn {
@@ -97,8 +97,8 @@ const hasChildren = computed(() => props.folderCount > 0 || props.fileCount > 0)
 .fdc-btn:disabled { opacity: 0.55; cursor: default; }
 .fdc-btn:hover:not(:disabled) { border-color: #b8e0db; color: var(--teal, #0e766e); }
 .fdc-primary {
-  background: linear-gradient(135deg, #0e766e, #12897c); border: none; color: #fff;
+  background: linear-gradient(135deg, #0e766e, #12897c); border: none; color: var(--raw-fff);
   font-weight: 600; box-shadow: 0 2px 8px rgba(14, 118, 110, 0.3);
 }
-.fdc-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14, 118, 110, 0.32); color: #fff; }
+.fdc-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14, 118, 110, 0.32); color: var(--raw-fff); }
 </style>

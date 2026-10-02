@@ -1642,13 +1642,13 @@ defineExpose({ togglePptFull })
   position: relative;
   transition: height .35s cubic-bezier(.4, 0, .2, 1);
 }
-.rf-k-pdf { background: #525659; }
-.rf-k-video { background: #101613; }
+.rf-k-pdf { background: var(--raw-525659); }
+.rf-k-video { background: var(--raw-101613); }
 .rf-k-audio { background: linear-gradient(165deg, #0E766E, #0A5A54); }
 .rf-k-office { background: linear-gradient(165deg, #FFF9F2 0%, #FFEDDD 100%); }
 .rf-img, .rf-media, .rf-pdf { width: 100%; height: 100%; object-fit: cover; display: block; border: none; }
 .rf-media { object-fit: contain; }
-.rf-pdf { background: #525659; }
+.rf-pdf { background: var(--raw-525659); }
 .rf-load { position: absolute; inset: 0; display: grid; place-items: center; }
 .rf-spin {
   width: 22px; height: 22px; border-radius: 50%;
@@ -1665,38 +1665,38 @@ defineExpose({ togglePptFull })
 .rf-audio {
   height: 100%; box-sizing: border-box; padding: 13px 16px;
   display: flex; flex-direction: column; justify-content: center; gap: 9px;
-  background: linear-gradient(135deg, #0E766E 0%, #0A5A54 100%); color: #fff;
+  background: linear-gradient(135deg, #0E766E 0%, #0A5A54 100%); color: var(--raw-fff);
 }
 .rf-audio-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .rf-audio-ico { width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
 .rf-audio-ico svg { width: 17px; height: 17px; fill: #fff; }
 .rf-audio-tt { flex: 1; min-width: 0; }
-.rf-audio-nm { font-size: 12.5px; font-weight: var(--font-weight-medium); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-audio-nm { font-size: 12.5px; font-weight: var(--font-weight-medium); color: var(--raw-fff); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rf-audio-meta { font-size: 10px; color: rgba(255,255,255,.72); margin-top: 2px; }
 .rf-audio-tools { display: flex; align-items: center; gap: 6px; flex: none; margin-left: auto; }
 .rf-audio-volbox { display: flex; align-items: center; gap: 5px; height: 24px; padding: 0 7px; border-radius: 6px; background: rgba(255,255,255,.18); }
-.rf-audio-vol { border: none; background: none; cursor: pointer; color: #fff; display: flex; align-items: center; padding: 0; min-height: 0; }
+.rf-audio-vol { border: none; background: none; cursor: pointer; color: var(--raw-fff); display: flex; align-items: center; padding: 0; min-height: 0; }
 .rf-audio-vol:hover { opacity: .75; }
 .rf-audio-vol svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .rf-audio-vol .v-off { display: none; }
 .rf-audio-vol.muted .v-on { display: none; }
 .rf-audio-vol.muted .v-off { display: block; }
 .rf-audio-vslider { -webkit-appearance: none; appearance: none; width: 60px; height: 3px; border-radius: 999px; outline: none; cursor: pointer; }
-.rf-audio-vslider::-webkit-slider-thumb { -webkit-appearance: none; width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
-.rf-audio-spd { height: 24px; min-height: 0; border: none; cursor: pointer; font-family: var(--font-mono, 'JetBrains Mono', Consolas, monospace); font-size: 10px; font-weight: 700; color: #fff; background: rgba(255,255,255,.18); border-radius: 6px; padding: 0 8px; flex: none; }
+.rf-audio-vslider::-webkit-slider-thumb { -webkit-appearance: none; width: 9px; height: 9px; border-radius: 50%; background: var(--raw-fff); box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.rf-audio-spd { height: 24px; min-height: 0; border: none; cursor: pointer; font-family: var(--font-mono, 'JetBrains Mono', Consolas, monospace); font-size: 10px; font-weight: 700; color: var(--raw-fff); background: rgba(255,255,255,.18); border-radius: 6px; padding: 0 8px; flex: none; }
 .rf-audio-spd:hover { background: rgba(255,255,255,.32); }
 .rf-audio-prow { display: flex; align-items: center; gap: 9px; }
-.rf-audio-play { width: 30px; height: 30px; min-height: 0; border-radius: 50%; border: none; cursor: pointer; background: #fff; color: #0E766E; display: flex; align-items: center; justify-content: center; flex: none; padding: 0; }
+.rf-audio-play { width: 30px; height: 30px; min-height: 0; border-radius: 50%; border: none; cursor: pointer; background: var(--raw-fff); color: var(--raw-0e766e); display: flex; align-items: center; justify-content: center; flex: none; padding: 0; }
 .rf-audio-play:disabled { opacity: .5; cursor: default; }
 .rf-audio-play svg { width: 12px; height: 12px; fill: currentColor; }
 .rf-audio-t { font-size: 10px; color: rgba(255,255,255,.85); flex: none; min-width: 26px; }
 .rf-audio-seek { flex: 1; height: 16px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
 .rf-audio-seek-track { position: relative; width: 100%; height: 4px; border-radius: 999px; background: rgba(255,255,255,.28); }
-.rf-audio-seek-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: #fff; border-radius: 999px; }
-.rf-audio-seek-thumb { position: absolute; top: 50%; left: 0%; width: 11px; height: 11px; border-radius: 50%; background: #fff; transform: translate(-50%,-50%); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.rf-audio-seek-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--raw-fff); border-radius: 999px; }
+.rf-audio-seek-thumb { position: absolute; top: 50%; left: 0%; width: 11px; height: 11px; border-radius: 50%; background: var(--raw-fff); transform: translate(-50%,-50%); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .rf-audio-el { display: none; }
 /* ── 批次⑩.69 (选型 B): 视频自绘播放器 — 满铺画面 + 悬浮控件, 播放中 2.5s 自动隐匿 ── */
-.rf-vid { height: 100%; position: relative; background: #000; }
+.rf-vid { height: 100%; position: relative; background: var(--raw-000); }
 .rf-vid-el { width: 100%; height: 100%; object-fit: contain; display: block; }
 .rf-vid-big {
   position: absolute; inset: 0; margin: auto; z-index: 2;
@@ -1709,7 +1709,7 @@ defineExpose({ togglePptFull })
 .rf-vid-ctrl {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
   display: flex; align-items: center; gap: 8px; padding: 6px 10px 7px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, .72)); color: #fff;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .72)); color: var(--raw-fff);
   transition: opacity .25s;
 }
 .rf-vid.hide .rf-vid-ctrl { opacity: 0; pointer-events: none; }
@@ -1721,10 +1721,10 @@ defineExpose({ togglePptFull })
 .vc-seek { flex: 1; height: 14px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
 .vc-track { position: relative; width: 100%; height: 3.5px; border-radius: 999px; background: rgba(255, 255, 255, .25); }
 .vc-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--teal-2, #12897C); border-radius: 999px; }
-.vc-thumb { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: #fff; transform: translate(-50%, -50%); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+.vc-thumb { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: var(--raw-fff); transform: translate(-50%, -50%); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
 .vc-spd {
   font-family: var(--font-family-mono, monospace); font-size: 9px; font-weight: 700;
-  color: #fff; background: rgba(255, 255, 255, .18); border-radius: 6px; padding: 2px 6px;
+  color: var(--raw-fff); background: rgba(255, 255, 255, .18); border-radius: 6px; padding: 2px 6px;
 }
 .vc-spd:hover { background: rgba(255, 255, 255, .3); }
 /* 批次⑩.70 (选型 C): 音量纵向浮层 — 点喇叭弹出竖杆+百分比 */
@@ -1739,7 +1739,7 @@ defineExpose({ togglePptFull })
   z-index: 6;
 }
 .rf-vid-volbox.open .rf-vid-volpop { opacity: 1; pointer-events: auto; }
-.rf-vid-volpct { font-family: var(--font-family-mono, monospace); font-size: 10px; color: #fff; }
+.rf-vid-volpct { font-family: var(--font-family-mono, monospace); font-size: 10px; color: var(--raw-fff); }
 .rf-vid-volslider {
   -webkit-appearance: none; appearance: none; width: 86px; height: 4px; border-radius: 999px;
   outline: none; cursor: pointer; transform: rotate(-90deg); margin: 34px 0;
@@ -1747,7 +1747,7 @@ defineExpose({ togglePptFull })
 }
 .rf-vid-volslider::-webkit-slider-thumb {
   -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+  background: var(--raw-fff); box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
 }
 :is(.rf-stage):fullscreen .rf-vid-volpop { padding: 14px 11px 11px; }
 :is(.rf-stage):fullscreen .rf-vid-volpct { font-size: 12px; }
@@ -1774,21 +1774,21 @@ defineExpose({ togglePptFull })
 .rf-ext { font-family: var(--font-mono, monospace); font-size: 20px; font-weight: 700; letter-spacing: .08em; color: var(--color-warning); }
 .rf-osz { font-size: 10.5px; color: var(--color-text-secondary); }
 .rf-open {
-  margin-top: 3px; font: inherit; font-size: 11.5px; color: #fff;
+  margin-top: 3px; font: inherit; font-size: 11.5px; color: var(--raw-fff);
   background: var(--gradient-cta-button); border: none; border-radius: 9999px;
   padding: 6px 16px; cursor: pointer; box-shadow: 0 2px 8px rgba(14,118,110,.3);
   transition: transform var(--duration-fast), box-shadow var(--duration-fast);
 }
 .rf-open:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(14,118,110,.32); }
 .rf-tip { font-size: 9.5px; color: var(--color-text-placeholder); }
-.rf-k-ppt { background: #525659; }
+.rf-k-ppt { background: var(--raw-525659); }
 .rf-ppt { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; }
 .rf-slide-wrap { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
-.rf-slide { position: relative; box-shadow: 0 8px 26px rgba(0, 0, 0, .38); overflow: hidden; flex: none; color: #1F2A26; }
+.rf-slide { position: relative; box-shadow: 0 8px 26px rgba(0, 0, 0, .38); overflow: hidden; flex: none; color: var(--raw-1f2a26); }
 /* 玻璃胶囊翻页器 (悬浮舞台底部) */
 .rf-pill {
   position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 9px;
+  align-items: center; gap: 9px;
   background: rgba(20, 40, 35, .62); border: 1px solid rgba(255, 255, 255, .14);
   border-radius: 9999px; padding: 4px 8px; backdrop-filter: blur(8px);
   /* 批次⑩.37 (选型 B): 常态退役 — 翻页/全屏已下沉为下方矩阵按钮; 胶囊仅在全屏放映态浮现 */
@@ -1798,9 +1798,9 @@ defineExpose({ togglePptFull })
 .rf-pill-docx { display: none; }
 :is(.rf-stage, .rf-ppt):fullscreen .rf-pill-docx { display: flex; }
 /* docx 全屏: 缩略图侧栏 + 主视图 */
-.docx-fs-wrap { display: flex; width: 100%; height: 100%; background: #0D1210; }
+.docx-fs-wrap { display: flex; width: 100%; height: 100%; background: var(--raw-0d1210); }
 .docx-thumbs {
-  width: 92px; flex: none; background: #12161A;
+  width: 92px; flex: none; background: var(--raw-12161a);
   overflow-y: auto; padding: 8px 6px;
   display: flex; flex-direction: column; gap: 6px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -1816,7 +1816,7 @@ defineExpose({ togglePptFull })
 .docx-main .rf-slide-wrap { flex: 1; }
 .rf-pill-btn {
   font: inherit; font-size: 12px; border: none; background: none;
-  color: #fff; width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  color: var(--raw-fff); width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
   display: grid; place-items: center; transition: background var(--duration-fast);
 }
 .rf-pill-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .18); }
@@ -1844,11 +1844,11 @@ defineExpose({ togglePptFull })
 .rf-slide table td {
   border: 1px solid #C9CFCC; padding: 2px 5px; color: var(--color-text-regular);
 }
-.rf-slide table tr:first-child td { font-weight: 600; background: #EDF2F0; color: var(--color-text-primary); }
+.rf-slide table tr:first-child td { font-weight: 600; background: var(--raw-edf2f0); color: var(--color-text-primary); }
 /* 全屏放映态 (FIT2 沉浸基因): 舞台铺满视口, 幻灯片居中, 胶囊放大 */
 .rf-ppt-img { display: block; width: 100%; height: auto; border-radius: 4px 4px 0 0; }
 /* 全屏放映: 全屏根是 .rf-stage (rfStageRef, 带内联高度) 而非 .rf-ppt — 选择器必须用 :is(.rf-stage,.rf-ppt):fullscreen 才能命中 */
-:is(.rf-stage, .rf-ppt):fullscreen { background: #0D1210; border: none; }
+:is(.rf-stage, .rf-ppt):fullscreen { background: var(--raw-0d1210); border: none; }
 /* 2026-09-13 修复: .rf-stage 带内联 height (stageHeight, 按侧栏 304px 宽适配),
    内联样式优先级高于 UA 样式表的 :fullscreen height:100% (UA 规则不带 !important)
    → 全屏舞台只有侧栏高度、垂直居中, 页图被 max-height 钳成居中小块, 上下大片黑边。
@@ -1876,7 +1876,7 @@ defineExpose({ togglePptFull })
 .rf-pill-sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .25); margin: 0 2px; }
 .rf-fs-btn {
   display: inline-flex; align-items: center; gap: 5px;
-  border: none; background: none; color: #fff; cursor: pointer;
+  border: none; background: none; color: var(--raw-fff); cursor: pointer;
   font: inherit; font-size: 11px; padding: 4px 11px; border-radius: 9999px;
   white-space: nowrap;
   transition: background var(--duration-fast);
@@ -1927,8 +1927,8 @@ defineExpose({ togglePptFull })
 .rf-act-fs-ico svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rail-act:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); background: var(--color-primary-bg); }
 .rail-act:active { transform: scale(.95); }
-.rail-act.pri { background: var(--gradient-cta-button, var(--color-primary)); border-color: transparent; color: #fff; font-weight: var(--font-weight-semibold); }
-.rail-act.pri:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); color: #fff; }
+.rail-act.pri { background: var(--gradient-cta-button, var(--color-primary)); border-color: transparent; color: var(--raw-fff); font-weight: var(--font-weight-semibold); }
+.rail-act.pri:hover { transform: translateY(-1px); box-shadow: var(--shadow-primary); color: var(--raw-fff); }
 .rail-act.starred { color: var(--color-accent); border-color: var(--color-accent); background: var(--color-accent-bg, transparent); }
 .rail-act.wide { flex-direction: row; gap: 6px; font-size: 12px; }
 .rail-act.danger:hover { color: var(--color-danger); border-color: var(--color-danger); background: var(--color-danger-bg, #fef0f0); }
@@ -2012,13 +2012,13 @@ defineExpose({ togglePptFull })
 
 /* ── 批次⑩.65 (选型 D): XLSX 预览 — 深青横幅头 (音频 C1 同族) + 工作表标签 + 速览表 ── */
 .rf-xlsx { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
-.rf-xlsx-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
+.rf-xlsx-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: var(--raw-fff); padding: 8px 11px; }
 .rf-xlsx-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
 .rf-xlsx-ico svg { width: 14px; height: 14px; fill: #fff; }
 .rf-xlsx-tt { flex: 1; min-width: 0; }
 .rf-xlsx-nm { font-size: 11px; font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rf-xlsx-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
-.rf-xlsx-tabs { flex: none; display: flex; gap: 4px; padding: 5.5px 8px; border-bottom: 1px solid var(--color-border); background: #FBFBF9; overflow-x: auto; }
+.rf-xlsx-tabs { flex: none; display: flex; gap: 4px; padding: 5.5px 8px; border-bottom: 1px solid var(--color-border); background: var(--raw-fbfbf9); overflow-x: auto; }
 .rf-xlsx-tab {
   flex: 1 0 auto; min-width: 0; font-size: 10px; padding: 3px 8px;
   border: none; background: none; cursor: pointer; font-family: inherit;
@@ -2031,16 +2031,16 @@ defineExpose({ togglePptFull })
 .rf-xlsx-grid { width: 100%; border-collapse: collapse; font-size: 10.6px; }
 .rf-xlsx-grid th {
   text-align: left; font-weight: var(--font-weight-semibold); color: var(--color-text-regular);
-  background: #F6F7F5; padding: 4.5px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap;
+  background: var(--raw-f6f7f5); padding: 4.5px 8px; border-bottom: 1px solid var(--color-border); white-space: nowrap;
 }
 .rf-xlsx-grid td {
   padding: 4px 8px; color: var(--color-text-regular); border-bottom: 1px solid #F4F5F2;
   white-space: nowrap; font-family: var(--font-family-mono, monospace); font-size: 10.2px;
 }
-.rf-xlsx-grid tbody tr:nth-child(even) td { background: #FAFBF9; }
+.rf-xlsx-grid tbody tr:nth-child(even) td { background: var(--raw-fafbf9); }
 .rf-xlsx-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
 .rf-xlsx-empty { padding: 26px 14px; text-align: center; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.rf-xlsx-foot { flex: none; display: flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FBFBF9; }
+.rf-xlsx-foot { flex: none; display: flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: var(--raw-fbfbf9); }
 /* 批次⑩.65: 全屏缩放控件簇 (−/％/＋/1:1) */
 .rf-xlsx-zoom { display: inline-flex; align-items: center; gap: 5px; margin-left: 14px; }
 .rf-xlsx-zbtn {
@@ -2055,32 +2055,32 @@ defineExpose({ togglePptFull })
 .rf-xlsx-zreset { font-family: var(--font-family-mono, monospace); }
 /* ── 批次⑩.66 (选型 A): ZIP 预览 — 深青横幅 (全站统一) + 面包屑下钻清单 ── */
 .rf-zip { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
-.rf-zip-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
+.rf-zip-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: var(--raw-fff); padding: 8px 11px; }
 .rf-zip-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.16); display: flex; align-items: center; justify-content: center; flex: none; }
 .rf-zip-ico svg { width: 14px; height: 14px; fill: #fff; }
 .rf-zip-tt { flex: 1; min-width: 0; }
 .rf-zip-nm { font-size: 11px; font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rf-zip-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
-.rf-zip-crumb { flex: none; display: flex; align-items: center; gap: 3px; padding: 5.5px 10px; border-bottom: 1px solid var(--color-border); background: #FAFBFC; font-size: 10px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.rf-zip-crumb { flex: none; display: flex; align-items: center; gap: 3px; padding: 5.5px 10px; border-bottom: 1px solid var(--color-border); background: var(--raw-fafbfc); font-size: 10px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 .rf-zip-crumb::-webkit-scrollbar { display: none; }
-.rf-zip-crumb .zc-seg { border: none; background: none; cursor: pointer; font: inherit; font-size: 10px; color: #0E766E; padding: 0; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.rf-zip-crumb .zc-seg { border: none; background: none; cursor: pointer; font: inherit; font-size: 10px; color: var(--raw-0e766e); padding: 0; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 .rf-zip-crumb .zc-seg:hover { text-decoration: underline; }
 .rf-zip-crumb .zc-seg.cur { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); cursor: default; }
 .rf-zip-crumb .zc-seg.cur:hover { text-decoration: none; }
 .rf-zip-crumb .zc-sep { color: var(--color-text-placeholder); flex: none; }
 .rf-zip-list { flex: 1; min-height: 0; overflow: hidden; position: relative; outline: none; }
 .rf-zip-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; transition: background var(--duration-fast); }
-.rf-zip-item:hover { background: #F4F6F7; }
+.rf-zip-item:hover { background: var(--raw-f4f6f7); }
 .rf-zip-item:hover .nm { color: var(--color-text-primary); }
 .rf-zip-item .glyph { flex: none; font-size: 12px; }
 .rf-zip-item .nm { flex: 1; min-width: 0; font-size: 11.5px; font-weight: var(--font-weight-medium); color: var(--color-text-regular); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color var(--duration-fast); }
-.rf-zip-item .cnt { flex: none; font-size: 9.5px; color: #fff; background: #0E766E; border-radius: 9999px; padding: 1px 7px; font-family: var(--font-family-mono, monospace); }
+.rf-zip-item .cnt { flex: none; font-size: 9.5px; color: var(--raw-fff); background: var(--raw-0e766e); border-radius: 9999px; padding: 1px 7px; font-family: var(--font-family-mono, monospace); }
 .rf-zip-item .sz { flex: none; font-size: 9.5px; color: var(--color-text-placeholder); font-family: var(--font-family-mono, monospace); }
 .rf-zip-item .chev { flex: none; display: inline-flex; }
 .rf-zip-item .chev svg { width: 10px; height: 10px; stroke: var(--color-text-placeholder); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rf-zip-empty { padding: 26px 14px; text-align: center; font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .rf-zip-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
-.rf-zip-foot { flex: none; display: flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FAFBFC; }
+.rf-zip-foot { flex: none; display: flex; align-items: center; justify-content: center; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: var(--raw-fafbfc); }
 :is(.rf-stage):fullscreen .rf-zip-list { overflow: auto; }
 :is(.rf-stage):fullscreen .rf-zip-item { padding: 7px 16px; font-size: 13px; }
 :is(.rf-stage):fullscreen .rf-zip-item .nm { font-size: 13px; }
@@ -2092,7 +2092,7 @@ defineExpose({ togglePptFull })
 :is(.rf-stage):fullscreen .rf-xlsx-grid td { padding: 6px 12px; }
 /* ── 批次⑩.67 (选型 A): CSV 预览 — 深青横幅 + 数据网格 (xlsx 网格同款样式) ── */
 .rf-csv { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
-.rf-csv-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
+.rf-csv-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: var(--raw-fff); padding: 8px 11px; }
 .rf-csv-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
 .rf-csv-ico svg { width: 14px; height: 14px; fill: #fff; }
 .rf-csv-tt { flex: 1; min-width: 0; }
@@ -2102,16 +2102,16 @@ defineExpose({ togglePptFull })
 .rf-csv-gridwrap { flex: 1; min-height: 0; overflow: hidden; position: relative; outline: none; }
 .rf-csv-grid { width: 100%; border-collapse: collapse; font-size: 10.6px; }
 .rf-csv-grid th {
-  text-align: left; font-weight: var(--font-weight-semibold); color: #0F5C38;
-  background: #E9F5EE; padding: 4.5px 8px; border-bottom: 1px solid #CBE4D5; white-space: nowrap;
+  text-align: left; font-weight: var(--font-weight-semibold); color: var(--raw-0f5c38);
+  background: var(--raw-e9f5ee); padding: 4.5px 8px; border-bottom: 1px solid #CBE4D5; white-space: nowrap;
 }
 .rf-csv-grid td {
   padding: 4px 8px; color: var(--color-text-regular); border-bottom: 1px solid #F4F5F2;
   white-space: nowrap; font-family: var(--font-family-mono, monospace); font-size: 10.2px;
 }
-.rf-csv-grid tbody tr:nth-child(even) td { background: #FAFBF9; }
+.rf-csv-grid tbody tr:nth-child(even) td { background: var(--raw-fafbf9); }
 .rf-csv-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(255,255,255,0), #fff); pointer-events: none; }
-.rf-csv-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FBFBF9; }
+.rf-csv-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: var(--raw-fbfbf9); }
 :is(.rf-stage):fullscreen .rf-csv-gridwrap { overflow: auto; }
 :is(.rf-stage):fullscreen .rf-csv-grid { font-size: 12.5px; }
 :is(.rf-stage):fullscreen .rf-csv-grid th,
@@ -2119,13 +2119,13 @@ defineExpose({ togglePptFull })
 :is(.rf-stage):fullscreen .rf-csv-fade { display: none; }
 /* ── 批次⑩.68 (选型 D): 文本类预览 — 深青横幅 + 按扩展名智能渲染 (md 排版/json 高亮/原文) ── */
 .rf-txt { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; background: var(--color-bg-card); }
-.rf-txt-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: #fff; padding: 8px 11px; }
+.rf-txt-head { flex: none; display: flex; align-items: center; gap: 9px; background: linear-gradient(135deg, #0E766E, #0B655E); color: var(--raw-fff); padding: 8px 11px; }
 .rf-txt-ico { width: 26px; height: 26px; border-radius: 7px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; flex: none; }
 .rf-txt-ico svg { width: 14px; height: 14px; fill: #fff; }
 .rf-txt-tt { flex: 1; min-width: 0; }
 .rf-txt-nm { font-size: 11px; font-weight: var(--font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rf-txt-meta { font-size: 9px; color: rgba(255,255,255,.7); margin-top: 1px; }
-.rf-txt-body { flex: 1; min-height: 0; overflow: hidden; position: relative; outline: none; background: #FBFCFB; }
+.rf-txt-body { flex: 1; min-height: 0; overflow: hidden; position: relative; outline: none; background: var(--raw-fbfcfb); }
 .rf-txt-pre { margin: 0; padding: 10px 12px; font-family: var(--font-family-mono, monospace); font-size: 10.2px; line-height: 1.8; color: var(--color-text-regular); white-space: pre-wrap; word-break: break-all; }
 .rf-txt-md { padding: 10px 12px; font-size: 11.5px; line-height: 1.7; color: var(--color-text-regular); }
 .rf-txt-md :is(h1, h2, h3, h4, h5, h6) { margin: 8px 0 4px; color: var(--color-text-primary); font-size: 12px; }
@@ -2133,18 +2133,18 @@ defineExpose({ togglePptFull })
 .rf-txt-md :is(h1, h2, h3, p, ul, ol, pre, blockquote, table):first-child { margin-top: 0; }
 .rf-txt-md p { margin: 0 0 6px; }
 .rf-txt-md ul, .rf-txt-md ol { margin: 0 0 6px; padding-left: 18px; }
-.rf-txt-md code { font-family: var(--font-family-mono, monospace); font-size: 10.5px; background: #EDF1EF; border-radius: 3px; padding: 0 4px; }
-.rf-txt-md pre { background: #EDF1EF; border-radius: 6px; padding: 8px 10px; overflow-x: auto; margin: 0 0 6px; }
+.rf-txt-md code { font-family: var(--font-family-mono, monospace); font-size: 10.5px; background: var(--raw-edf1ef); border-radius: 3px; padding: 0 4px; }
+.rf-txt-md pre { background: var(--raw-edf1ef); border-radius: 6px; padding: 8px 10px; overflow-x: auto; margin: 0 0 6px; }
 .rf-txt-md pre code { background: none; padding: 0; }
 .rf-txt-md blockquote { margin: 0 0 6px; padding: 2px 10px; border-left: 3px solid #0E766E; color: var(--color-text-secondary); }
-.rf-txt-md a { color: #0E766E; }
+.rf-txt-md a { color: var(--raw-0e766e); }
 .rf-txt-md table { border-collapse: collapse; font-size: 10.5px; margin-bottom: 6px; }
 .rf-txt-md :is(th, td) { border: 1px solid #D9DEDA; padding: 2px 6px; }
-.j-k { color: #0F5C38; font-weight: 600; }
-.j-s { color: #8A5A00; }
-.j-n { color: #1D5FA8; }
+.j-k { color: var(--raw-0f5c38); font-weight: 600; }
+.j-s { color: var(--raw-8a5a00); }
+.j-n { color: var(--raw-1d5fa8); }
 .rf-txt-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: linear-gradient(rgba(251,252,251,0), #FBFCFB); pointer-events: none; }
-.rf-txt-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: #FBFBF9; }
+.rf-txt-foot { flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 5px 10px; font-size: 10px; color: var(--color-text-secondary); border-top: 1px solid var(--color-border); background: var(--raw-fbfbf9); }
 :is(.rf-stage):fullscreen .rf-txt-body { overflow: auto; }
 :is(.rf-stage):fullscreen .rf-txt-fade { display: none; }
 :is(.rf-stage):fullscreen :is(.rf-txt-pre, .rf-txt-md) { font-size: 13px; padding: 14px 18px; }

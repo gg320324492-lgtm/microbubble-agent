@@ -46,13 +46,13 @@ const theme = useThemeStore()
   padding: 0;
   border-radius: 12px;
   border: 1px solid #c9d2ca;
-  background: #eaece7;
+  background: var(--raw-eaece7);
   cursor: pointer;
   transition: background 200ms ease, border-color 200ms ease;
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
 }
-.theme-toggle-btn:hover { background: #dcece5; }
+.theme-toggle-btn:hover { background: var(--raw-dcece5); }
 .theme-toggle-btn:focus-visible { outline: 2px solid #0e766e; outline-offset: 2px; }
 .knob {
   position: absolute;
@@ -61,17 +61,17 @@ const theme = useThemeStore()
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #16232a;
-  color: #fdfefc;
+  background: var(--raw-16232a);
+  color: var(--raw-fdfefc);
   display: grid;
   place-items: center;
   transition: left 280ms cubic-bezier(0.6, 0, 0.2, 1), background 200ms ease, color 200ms ease;
 }
 .knob svg { width: 10px; height: 10px; }
 .g-moon { display: none; }
-.theme-toggle-btn.is-night { background: #12312b; border-color: #2c3d44; }
-.theme-toggle-btn.is-night:hover { background: #16403a; }
-.theme-toggle-btn.is-night .knob { left: 26px; background: #35c2a4; color: #0c1215; }
+.theme-toggle-btn.is-night { background: var(--raw-12312b); border-color: #2c3d44; }
+.theme-toggle-btn.is-night:hover { background: var(--raw-16403a); }
+.theme-toggle-btn.is-night .knob { left: 26px; background: var(--raw-35c2a4); color: var(--raw-0c1215); }
 .theme-toggle-btn.is-night .g-sun { display: none; }
 .theme-toggle-btn.is-night .g-moon { display: block; }
 </style>
@@ -79,12 +79,12 @@ const theme = useThemeStore()
 <!-- 兜底: html[data-theme=dark] 下即使 is-night 类没挂上 (异步时序), 轨道也走深色底 -->
 <style>
 [data-theme="dark"] .theme-toggle-btn:not(.is-night) {
-  background: #12312b;
+  background: var(--raw-12312b);
   border-color: #2c3d44;
 }
 [data-theme="dark"] .theme-toggle-btn:not(.is-night) .knob {
   left: 26px;
-  background: #35c2a4;
-  color: #0c1215;
+  background: var(--raw-35c2a4);
+  color: var(--raw-0c1215);
 }
 </style>

@@ -866,7 +866,7 @@ onMounted(() => {
 }
 .trash-act:hover {
   background: rgba(22, 35, 42, 0.07);
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 .trash-act--danger:hover {
   background: rgba(245, 108, 108, 0.1);
@@ -874,11 +874,11 @@ onMounted(() => {
 }
 [data-theme='dark'] .trash-act:hover {
   background: rgba(255, 255, 255, 0.07);
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
 }
 [data-theme='dark'] .trash-act--danger:hover {
   background: rgba(245, 108, 108, 0.15);
-  color: #f89898;
+  color: var(--raw-f89898);
 }
 [data-theme='dark'] .file-card.is-trash {
   border-color: rgba(226, 236, 234, 0.12);

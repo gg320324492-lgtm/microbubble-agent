@@ -523,7 +523,7 @@ const onBatchDelete = () => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* #043 Phase 6: tags inline chip */
@@ -591,7 +591,6 @@ const onBatchDelete = () => {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 4px;
   border-radius: var(--radius-md);
   cursor: pointer;
   /* ★ ★ 修复移动端 sidebar 卡片重叠: 用户实测 19 条卡片互相重叠.

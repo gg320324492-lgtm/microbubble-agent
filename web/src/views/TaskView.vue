@@ -1003,7 +1003,7 @@ onMounted(() => {
 .complete-btn--outline:hover { background: var(--dg-teal-soft) !important; }
 .complete-btn--done {
   background: var(--dg-teal) !important; border-color: var(--dg-teal) !important;
-  color: #fff !important;
+  color: var(--raw-fff) !important;
 }
 .task-action-btn { color: var(--dg-fog) !important; }
 .task-action-btn:hover { color: var(--dg-teal) !important; background: var(--dg-teal-soft) !important; }
@@ -1092,11 +1092,11 @@ onMounted(() => {
     --dg-hair: #27363e; --dg-teal: #35c2a4; --dg-teal-soft: #12312b;
     --dg-coral: #ef7256; --dg-green: #6fbf6f; --dg-amber: #d9a257;
     --dg-paper: #10171b; --dg-shadow: rgba(0, 0, 0, 0.5);
-    background: #0c1215;
+    background: var(--raw-0c1215);
   }
   [data-theme="dark"] .task-view .filter-card .el-button--primary {
     background: var(--dg-card); color: var(--dg-ink);
   }
   [data-theme="dark"] .task-view .head-cnt { color: var(--dg-teal); }
-  [data-theme="dark"] .task-view .complete-btn--done { color: #0c1215 !important; }
+  [data-theme="dark"] .task-view .complete-btn--done { color: var(--raw-0c1215) !important; }
 </style>

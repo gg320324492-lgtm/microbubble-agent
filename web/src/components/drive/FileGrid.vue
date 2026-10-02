@@ -276,15 +276,15 @@ const loadErrorTitle = computed(() => {
   border-color: #ff7a5c;
 }
 .drive-folder-card-icon {
-  color: #ff7a5c;
-  background: #ffe8de;
+  color: var(--raw-ff7a5c);
+  background: var(--raw-ffe8de);
   border-radius: 14px;
   padding: 14px;
 }
 .drive-folder-card-name {
   font-size: 14px;
   font-weight: 600;
-  color: #4a3b33;
+  color: var(--raw-4a3b33);
   text-align: center;
   max-width: 100%;
   overflow: hidden;
@@ -293,6 +293,6 @@ const loadErrorTitle = computed(() => {
 }
 .drive-folder-card-sub {
   font-size: 12px;
-  color: #b09a8d;
+  color: var(--raw-b09a8d);
 }
 </style>

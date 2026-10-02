@@ -755,7 +755,7 @@ onUpdated(() => {
 .archive-tab:hover { background: var(--color-bg-hover); }
 .archive-tab.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--raw-fff);
   border-color: var(--color-primary);
 }
 .session-list { flex: 1; overflow-y: auto; padding: 8px 0; overflow-anchor: none; }
@@ -786,8 +786,8 @@ onUpdated(() => {
      让卡片间有清晰视觉分隔, 不再看起来"挤成一坨" */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
-.session-item:hover { background: #f8f6f3; }
-.session-item.active { background: #fff5f2; border-left-color: #FF7A5C; }
+.session-item:hover { background: var(--raw-f8f6f3); }
+.session-item.active { background: var(--raw-fff5f2); border-left-color: #FF7A5C; }
 .session-item.selected { background: rgba(64, 158, 255, 0.08); border-left-color: var(--el-color-primary); }
 
 /* W100 +28: 分组 header */
@@ -827,7 +827,7 @@ onUpdated(() => {
 .batch-toggle-btn:hover { background: var(--color-bg-hover); }
 .batch-toggle-btn.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--raw-fff);
   border-color: var(--color-primary);
 }
 .batch-mini-btn {
@@ -935,7 +935,7 @@ onUpdated(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  word-break: break-word;
+  overflow-wrap: break-word;
   /* 防止 flex 容器把 preview 撑开, 强制单卡固定高度可预测 */
   flex-shrink: 0;
 }
@@ -1068,7 +1068,7 @@ onUpdated(() => {
 [data-theme="dark"] .session-group-header { color: var(--color-text-secondary); }
 [data-theme="dark"] .batch-toggle-btn { color: var(--color-text-secondary); border-color: var(--color-border-light); }
 [data-theme="dark"] .batch-toggle-btn:hover { background: var(--color-bg-hover); }
-[data-theme="dark"] .batch-toggle-btn.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+[data-theme="dark"] .batch-toggle-btn.active { background: var(--color-primary); color: var(--raw-fff); border-color: var(--color-primary); }
 [data-theme="dark"] .batch-mini-btn { color: var(--color-text-secondary); border-color: var(--color-border-light); }
 [data-theme="dark"] .batch-action-bar { background: var(--color-bg-card); border-top-color: var(--color-border-light); }
 [data-theme="dark"] .batch-action-btn { color: var(--color-text-primary); border-color: var(--color-border-light); }

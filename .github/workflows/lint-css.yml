@@ -287,23 +287,25 @@ jobs:
 
 
       # 2026-10-01 S3.7 ⑤: 基线棘轮 —— 政策是"只降不升"。
-      # 仓库当前有 296 条既有 stylelint 债（2026-06-27 曾清零至 0，之后约 700 个 commit
-      # 重新累积），一次性清理属独立立项。故本步不因"当前 > 0"而 fail，只在
-      # **超过已登记基线** 时 fail —— 让新增违规无法混入存量。
+      # 2026-10-02 S3.7-9: 296 条存量债已**一次性清零**，基线随之降到 0。
+      # 政策不变（只降不升），但语义已从"容忍存量"变成"零容忍" ——
+      # 这与 `Baseline gate (must be 0)` step 终于达成一致：此前该 step 因
+      # 基线取不到而恒真通过（DIFF=0-0），是本仓"本地全绿、真 CI 仍红"的
+      # 典型形态。现在两处门禁口径统一为 0，新增违规无处可藏。
       - name: Check against registered baseline
         env:
-          REGISTERED: 296
+          REGISTERED: 0
           # 2026-10-01 S3.7 ⑤ 补: Bash 普通变量不跨 step 共享。`CURRENT` 只在
           # `Get current error count` 的 shell 里被赋值，`Trend comparison` 里的
           # `CURRENT=${{ steps.current.outputs.current }}` 也只活在那一个 step。
-          # 本 step 原直接写 $CURRENT → 展开为空 → `[ "" -gt 296 ]` 恒假 →
+          # 本 step 原直接写 $CURRENT → 展开为空 → `[ "" -gt <基线> ]` 恒假 →
           # **新增违规静默放行**，棘轮形同虚设。必须经 outputs 显式接线。
           CURRENT: ${{ steps.current.outputs.current }}
         run: |
           echo "已登记基线: $REGISTERED 条"
           echo "本次实测:   $CURRENT 条"
           if [ "$CURRENT" -gt "$REGISTERED" ]; then
-            echo "::error file=.github/workflows/lint-css.yml,title=stylelint 新增违规::新增 $((CURRENT - REGISTERED)) 条（$CURRENT > $REGISTERED）。存量 296 条属既有债单独立项；新增一律 fail。"
+            echo "::error file=.github/workflows/lint-css.yml,title=stylelint 新增违规::新增 $((CURRENT - REGISTERED)) 条（$CURRENT > $REGISTERED）。S3.7-9 已把存量债清零并把基线降到 0，任何新增违规一律 fail。"
             exit 1
           fi
           if [ "$CURRENT" -lt "$REGISTERED" ]; then

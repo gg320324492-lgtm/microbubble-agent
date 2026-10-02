@@ -67,7 +67,12 @@ describe('ChatViewSSE W100 +61 polish (dark mode + 浏览器降级 + print)', ()
 
   it('⑨ @media print: 气泡纯黑白 + 隐藏装饰 ::before/::after + 强制 mask=none', () => {
     expect(source).toMatch(/@media\s+print\s*\{/)
-    expect(source).toMatch(/\.user-bubble,\s*\.bot-bubble[\s\S]*?background:\s*#fff\s*!important/)
+    // 2026-10-02 S3.7-9: `#fff` 已收敛为等值 token `var(--raw-fff)`
+    // (定义值 === #fff, 无主题覆盖, 渲染结果不变)。断言接受两种写法 ——
+    // 盯的是「print 下强制白底」这个契约, 不是色值书写形式。
+    expect(source).toMatch(
+      /\.user-bubble,\s*\.bot-bubble[\s\S]*?background:\s*(?:#fff|var\(--raw-fff\))\s*!important/
+    )
     expect(source).toMatch(/\.user-bubble::before,\s*\.bot-bubble::before,\s*\.bot-bubble::after\s*\{\s*display:\s*none\s*!important/)
     expect(source).toMatch(/\.msg-content-typing[\s\S]*?mask-image:\s*none\s*!important[\s\S]*?-webkit-mask-image:\s*none\s*!important/)
   })

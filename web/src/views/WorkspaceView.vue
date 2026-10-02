@@ -209,7 +209,7 @@ onMounted(async () => {
 .mfd-close {
   position: absolute; top: 14px; right: 14px; z-index: 3;
   width: 28px; height: 28px; border-radius: 50%; border: none;
-  background: rgba(255, 255, 255, .18); color: #fff; font-size: 15px; line-height: 1;
+  background: rgba(255, 255, 255, .18); color: var(--raw-fff); font-size: 15px; line-height: 1;
   cursor: pointer; display: grid; place-items: center;
 }
 .mfd-close:hover { background: rgba(255, 255, 255, .32); }
@@ -222,7 +222,7 @@ onMounted(async () => {
 .mfd-idcard { display: flex; gap: 16px; padding: 0 26px; margin-top: -32px; position: relative; z-index: 2; align-items: flex-end; }
 .mfd-idcard .av {
   width: 76px; height: 76px; border-radius: 16px; border: 3px solid var(--rb-card);
-  background: var(--mfd-mem, #0E766E); color: #fff;
+  background: var(--mfd-mem, #0E766E); color: var(--raw-fff);
   display: grid; place-items: center; font-size: 30px; font-weight: 650; flex: none;
   box-shadow: 0 6px 18px rgba(20, 40, 35, .18); overflow: hidden;
 }
@@ -256,8 +256,8 @@ onMounted(async () => {
 .mfd .vpbox .n small { font-size: 10.5px; color: var(--rb-text-3); font-weight: 400; }
 .mfd .acts { display: flex; gap: 8px; margin-top: 20px; }
 .mfd .btn { font-size: 12.5px; padding: 7px 16px; border-radius: var(--rb-r-md); border: 1px solid var(--rb-line-2); background: var(--rb-card); color: var(--rb-text-2); cursor: pointer; }
-.mfd .btn.main { background: var(--rb-grad-cta); border-color: transparent; color: #fff; font-weight: 600; }
-.mfd .btn.main:hover { opacity: .92; color: #fff; }
+.mfd .btn.main { background: var(--rb-grad-cta); border-color: transparent; color: var(--raw-fff); font-weight: 600; }
+.mfd .btn.main:hover { opacity: .92; color: var(--raw-fff); }
 
 /* dark: 对齐名录 B 稿夜览色板 (色带保持成员哈希色) */
 [data-theme="dark"] .member-file-dialog {
@@ -268,7 +268,7 @@ onMounted(async () => {
   --rb-grad-cta: linear-gradient(135deg, #1D9C81, #35C2A4);
   background: var(--rb-card);
 }
-[data-theme="dark"] .mfd .vpbox { background: #171B18; }
+[data-theme="dark"] .mfd .vpbox { background: var(--raw-171b18); }
 [data-theme="dark"] .mfd .vpbox.owned { background: var(--rb-primary-bg); }
 [data-theme="dark"] .mfd-idcard .av { box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
 </style>

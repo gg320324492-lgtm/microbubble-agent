@@ -1161,7 +1161,7 @@ onUnmounted(() => {
   font-size: 14px;
   line-height: 1.9;
   color: var(--color-text-regular, #606266);
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .raw-content-md :deep(h1),
 .raw-content-md :deep(h2),

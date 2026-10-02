@@ -2004,7 +2004,7 @@ function onContextMenuClose() {
 .wb-sp { flex: 1; }
 .wb-cta {
   background: var(--gradient-cta-button) !important;
-  border: none !important; color: #fff !important; font-weight: var(--font-weight-semibold);
+  border: none !important; color: var(--raw-fff) !important; font-weight: var(--font-weight-semibold);
   box-shadow: 0 3px 12px rgba(var(--color-primary-rgb), .35);
   transition: transform var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal);
 }

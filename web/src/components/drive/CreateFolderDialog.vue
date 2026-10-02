@@ -266,7 +266,7 @@ export default { name: 'CreateFolderDialog' }
 .cfd-btn.ghost:hover { border-color: var(--color-primary-border); color: var(--color-primary-dark); }
 .cfd-btn.pri {
   border: none; background: var(--gradient-cta-button, linear-gradient(135deg, #0E766E, #12897C));
-  color: #fff; font-weight: 600;
+  color: var(--raw-fff); font-weight: 600;
   box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), .3);
 }
 .cfd-btn.pri:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), .32); }

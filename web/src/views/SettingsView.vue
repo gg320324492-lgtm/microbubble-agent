@@ -649,10 +649,10 @@ onMounted(() => {
 .field :deep(.el-select .el-select__caret) { color: var(--muted); }
 .field :deep(.el-input__inner::placeholder),
 .field :deep(.el-textarea__inner::placeholder),
-.section :deep(.el-input__inner::placeholder) { color: #9fb0ab; }
+.section :deep(.el-input__inner::placeholder) { color: var(--raw-9fb0ab); }
 [data-theme="dark"] .section :deep(.el-input__inner::placeholder),
 [data-theme="dark"] .field :deep(.el-input__inner::placeholder),
-[data-theme="dark"] .field :deep(.el-textarea__inner::placeholder) { color: #52706b; }
+[data-theme="dark"] .field :deep(.el-textarea__inner::placeholder) { color: var(--raw-52706b); }
 .section :deep(.el-input__suffix) { color: var(--muted); }
 .section :deep(.el-form-item.is-error .el-input__wrapper),
 .field :deep(.el-form-item.is-error .el-input__wrapper) {
@@ -689,7 +689,7 @@ onMounted(() => {
 .btn:disabled { opacity: 0.6; cursor: default; transform: none !important; box-shadow: none !important; }
 .btn-ink { background: var(--ink); color: var(--paper); border: 1.5px solid var(--ink); }
 .btn-ink:hover:not(:disabled) {
-  background: var(--teal); border-color: var(--teal); color: #fbfcfb;
+  background: var(--teal); border-color: var(--teal); color: var(--raw-fbfcfb);
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(14, 118, 110, 0.26);
 }
@@ -786,7 +786,7 @@ onMounted(() => {
 .settings-dossier :deep(.el-dialog.recovery-dialog .el-button--primary:hover:not(.is-disabled)) {
   background: var(--teal);
   border-color: var(--teal);
-  color: #fbfcfb;
+  color: var(--raw-fbfcfb);
 }
 .settings-dossier :deep(.el-dialog.recovery-dialog .el-dialog__footer) {
   padding: 14px 28px 24px;
@@ -883,7 +883,7 @@ onMounted(() => {
 .el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button--primary:focus {
   background: var(--dp-teal);
   border-color: var(--dp-teal);
-  color: #fbfcfb;
+  color: var(--raw-fbfcfb);
 }
 .el-overlay .el-message-box.dossier-messagebox .el-message-box__btns .el-button:not(.el-button--primary) {
   background: transparent;

@@ -126,7 +126,7 @@ const onPick = (key) => {
 
 .tab-strip__item.is-active {
   background: var(--ts-ink);
-  color: #fbfcfb;
+  color: var(--raw-fbfcfb);
   font-weight: 700;
   box-shadow: none;
   transform: none;
@@ -157,7 +157,7 @@ const onPick = (key) => {
 }
 .tab-strip__count.is-hot {
   background: rgba(163, 84, 63, 0.14);
-  color: #a3543f;
+  color: var(--raw-a3543f);
 }
 .tab-strip__item.is-active .tab-strip__count {
   background: rgba(251, 252, 251, 0.22);
@@ -165,7 +165,7 @@ const onPick = (key) => {
 }
 [data-theme="dark"] .tab-strip__count.is-hot {
   background: rgba(248, 152, 152, 0.18);
-  color: #f89898;
+  color: var(--raw-f89898);
 }
 [data-theme="dark"] .tab-strip__item.is-active .tab-strip__count {
   background: rgba(11, 21, 18, 0.22);
@@ -217,8 +217,8 @@ const onPick = (key) => {
 }
 /* 批次⑩.77: 分段药丸 dark — 选中青实底墨字 */
 [data-theme="dark"] .tab-strip__item.is-active {
-  background: #35c2a4;
-  color: #0b1512;
+  background: var(--raw-35c2a4);
+  color: var(--raw-0b1512);
 }
 [data-theme="dark"] .tab-strip__item.is-active .tab-strip__no { color: rgba(11, 21, 18, 0.65); }
 [data-theme="dark"] .tab-strip__item.is-active .tab-strip__icon { color: rgba(11, 21, 18, 0.8); }

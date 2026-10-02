@@ -480,14 +480,14 @@ function onEditKeydown(e: KeyboardEvent) {
 }
 .tts-btn:hover {
   background-color: rgba(22, 35, 42, 0.07) !important;
-  color: #0e766e !important;
+  color: var(--raw-0e766e) !important;
 }
 [data-theme='dark'] .tts-btn {
   color: var(--color-text-secondary);
 }
 [data-theme='dark'] .tts-btn:hover {
   background-color: rgba(255, 255, 255, 0.07) !important;
-  color: #35c2a4 !important;
+  color: var(--raw-35c2a4) !important;
 }
 
 /* 2026-08-16 #71: 用户消息编辑 + hover 复制/编辑按钮 (ChatGPT 风格) */
@@ -595,9 +595,9 @@ function onEditKeydown(e: KeyboardEvent) {
 .user-edit-send {
   border: none;
   /* 批次⑩.72 亮色 C 纸墨反转: 发送 = 墨色实底; dark 主题转青渐变 */
-  background-color: #16232a;
+  background-color: var(--raw-16232a);
   background-image: none;
-  color: #ffffff;
+  color: var(--raw-ffffff);
   font-size: 12.5px;
   font-weight: 600;
   padding: 7px 18px;
@@ -611,7 +611,7 @@ function onEditKeydown(e: KeyboardEvent) {
   transform: translateY(-1px);
 }
 [data-theme='dark'] .user-edit-send {
-  background-color: #0e766e;
+  background-color: var(--raw-0e766e);
   background-image: linear-gradient(135deg, #0e766e 0%, #12968b 100%);
 }
 .user-edit-send:active {
@@ -647,16 +647,16 @@ function onEditKeydown(e: KeyboardEvent) {
   padding-bottom: 8px;
   margin-bottom: 6px;
 }
-.dossier-entry-head .de-no { color: #0e766e; font-size: 11px; }
-[data-theme="dark"] .dossier-entry-head .de-no { color: #35c2a4; }
+.dossier-entry-head .de-no { color: var(--raw-0e766e); font-size: 11px; }
+[data-theme="dark"] .dossier-entry-head .de-no { color: var(--raw-35c2a4); }
 .bot-bubble:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.02);
 }
 .user-bubble {
   border-radius: 12px 3px 12px 12px;
-  background: #fdfefc;
-  color: #16232a;
+  background: var(--raw-fdfefc);
+  color: var(--raw-16232a);
   border: 1.5px solid #ef7256;
   box-shadow: 3px 3px 0 rgba(239, 122, 86, 0.14);
 }
@@ -666,18 +666,18 @@ function onEditKeydown(e: KeyboardEvent) {
   position: absolute;
   top: -9px;
   right: 12px;
-  background: #f4f6f4;
+  background: var(--raw-f4f6f4);
   padding: 0 6px;
   font-family: Consolas, 'SFMono-Regular', monospace;
   font-size: 8.5px;
   letter-spacing: 0.18em;
-  color: #ef7256;
+  color: var(--raw-ef7256);
 }
-[data-theme="dark"] .user-bubble::before { background: #12191d; }
+[data-theme="dark"] .user-bubble::before { background: var(--raw-12191d); }
 [data-theme="dark"] .user-bubble {
-  background: #172126;
+  background: var(--raw-172126);
   border-color: rgba(255, 138, 107, 0.55);
-  color: #e2ecea;
+  color: var(--raw-e2ecea);
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
 }
 .user-bubble:hover {
@@ -700,7 +700,6 @@ function onEditKeydown(e: KeyboardEvent) {
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   object-fit: cover;
-  display: block;
 }
 .msg-image-clickable:hover {
   transform: scale(1.02);

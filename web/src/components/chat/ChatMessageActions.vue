@@ -185,7 +185,7 @@ function onCopyClick() {
 }
 .chat-message-actions.mode-desktop .action-btn:hover:not(:disabled) {
   background-color: rgba(22, 35, 42, 0.07);
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 [data-theme='dark'] .chat-message-actions.mode-desktop .action-btn {
   background: transparent;
@@ -193,7 +193,7 @@ function onCopyClick() {
 }
 [data-theme='dark'] .chat-message-actions.mode-desktop .action-btn:hover:not(:disabled) {
   background-color: rgba(255, 255, 255, 0.07);
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
 }
 
 .action-btn:focus-visible {

@@ -158,7 +158,7 @@ function onOverflowCmd(cmd) {
 }
 .drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn:not(:disabled):hover {
   background: rgba(22, 35, 42, 0.07) !important;
-  color: #0e766e !important;
+  color: var(--raw-0e766e) !important;
 }
 .drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn-danger:not(:disabled):hover {
   background: rgba(245, 108, 108, 0.1) !important;
@@ -170,11 +170,11 @@ function onOverflowCmd(cmd) {
 }
 [data-theme='dark'] .drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn:not(:disabled):hover {
   background: rgba(255, 255, 255, 0.07) !important;
-  color: #35c2a4 !important;
+  color: var(--raw-35c2a4) !important;
 }
 [data-theme='dark'] .drive-batch-toolbar.is-trash-quiet .drive-batch-toolbar-btn-danger:not(:disabled):hover {
   background: rgba(248, 152, 152, 0.12) !important;
-  color: #f89898 !important;
+  color: var(--raw-f89898) !important;
 }
 
 .drive-batch-toolbar-fade-enter-active,

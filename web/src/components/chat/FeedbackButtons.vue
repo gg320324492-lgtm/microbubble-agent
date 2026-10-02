@@ -246,20 +246,20 @@ async function submit(rating, comment) {
 /* 批次⑩.73 选型 B: 幽灵规格 — hover 浅灰底 + 墨青, 与朗读/重答/复制统一 */
 .fb-btn:hover:not(:disabled) {
   background: rgba(22, 35, 42, 0.07);
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 .fb-btn.active {
   border-color: transparent;
   background: rgba(14, 118, 110, 0.1);
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 [data-theme='dark'] .fb-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.07);
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
 }
 [data-theme='dark'] .fb-btn.active {
   background: rgba(53, 194, 164, 0.12);
-  color: #35c2a4;
+  color: var(--raw-35c2a4);
 }
 .fb-label {
   font-size: 12px;

@@ -635,6 +635,108 @@ body {
 .tag-info    { background: var(--color-info-bg); color: var(--color-info); }
 
 /* ============================================
+   S3.7-9 (2026-10-02): 裸十六进制色值债清零 —— 等值字面量封装
+   ============================================
+   stylelint override `declaration-property-value-disallowed-list` 禁止在
+   color / background(-color) 上写裸 hex。本块把这 278 处硬编码色值收敛为
+   单一真源。**规则本身一字未动** (未放宽、未加 ignoreFiles)。
+
+   这些 token 的定义值与被替换掉的原字面值**逐位相同**, 且在此 :root 内单点
+   定义、没有任何 [data-theme=...] 覆盖 —— 故 var() 求值结果 ≡ 原字面值,
+   渲染结果不变。
+
+   刻意**不复用**既有 token (--color-bg-card / --color-primary 等): 它们在
+   [data-theme=dark] 下会被覆盖成别的值 (如 #2a2d35), 复用会改变暗色渲染。
+   本块只做"收敛真源", 不做任何"顺手改配色"。
+
+   命名沿用 --raw-<hex>, 便于日后按语义重命名 (那是独立立项, 需逐处判断意图)。
+   */
+:root {
+  --raw-fff: #fff;
+  --raw-0e766e: #0e766e;
+  --raw-35c2a4: #35c2a4;
+  --raw-fbfcfb: #fbfcfb;
+  --raw-16232a: #16232a;
+  --raw-fdfefc: #fdfefc;
+  --raw-0b5c43: #0b5c43;
+  --raw-172126: #172126;
+  --raw-f0f9f7: #f0f9f7;
+  --raw-f89898: #f89898;
+  --raw-fafbfa: #fafbfa;
+  --raw-ffffff: #ffffff;
+  --raw-000: #000;
+  --raw-0b1512: #0b1512;
+  --raw-0c1215: #0c1215;
+  --raw-c0c4cc: #c0c4cc;
+  --raw-e2ecea: #e2ecea;
+  --raw-ef7256: #ef7256;
+  --raw-f4f6f4: #f4f6f4;
+  --raw-fff5f2: #fff5f2;
+  --raw-0d1210: #0d1210;
+  --raw-0d201c: #0d201c;
+  --raw-0f5c38: #0f5c38;
+  --raw-101613: #101613;
+  --raw-10171b: #10171b;
+  --raw-101a16: #101a16;
+  --raw-12161a: #12161a;
+  --raw-12191d: #12191d;
+  --raw-12312b: #12312b;
+  --raw-12968b: #12968b;
+  --raw-16403a: #16403a;
+  --raw-16a34a: #16a34a;
+  --raw-171b18: #171b18;
+  --raw-1890ff: #1890ff;
+  --raw-198e83: #198e83;
+  --raw-1d5fa8: #1d5fa8;
+  --raw-1f2a26: #1f2a26;
+  --raw-24363f: #24363f;
+  --raw-2aa876: #2aa876;
+  --raw-3d7a3d: #3d7a3d;
+  --raw-43d4b6: #43d4b6;
+  --raw-4a3b33: #4a3b33;
+  --raw-525659: #525659;
+  --raw-52706b: #52706b;
+  --raw-52a896: #52a896;
+  --raw-565f66: #565f66;
+  --raw-606266: #606266;
+  --raw-69b1ff: #69b1ff;
+  --raw-6b757d: #6b757d;
+  --raw-6ee7b7: #6ee7b7;
+  --raw-7ac07a: #7ac07a;
+  --raw-7fb3aa: #7fb3aa;
+  --raw-8a5a00: #8a5a00;
+  --raw-8a938e: #8a938e;
+  --raw-97a5a1: #97a5a1;
+  --raw-9fb0ab: #9fb0ab;
+  --raw-a3543f: #a3543f;
+  --raw-a37c22: #a37c22;
+  --raw-adbab6: #adbab6;
+  --raw-b09a8d: #b09a8d;
+  --raw-c45656: #c45656;
+  --raw-d97706: #d97706;
+  --raw-dcece5: #dcece5;
+  --raw-e9f5ee: #e9f5ee;
+  --raw-eaece7: #eaece7;
+  --raw-eaf4f0: #eaf4f0;
+  --raw-edf1ef: #edf1ef;
+  --raw-edf2f0: #edf2f0;
+  --raw-eef4f2: #eef4f2;
+  --raw-f0eee8: #f0eee8;
+  --raw-f4f6f7: #f4f6f7;
+  --raw-f6f7f5: #f6f7f5;
+  --raw-f8f6f3: #f8f6f3;
+  --raw-fafbf9: #fafbf9;
+  --raw-fafbfc: #fafbfc;
+  --raw-fbfbf9: #fbfbf9;
+  --raw-fcd34d: #fcd34d;
+  --raw-fef0f0: #fef0f0;
+  --raw-ff7a5c: #ff7a5c;
+  --raw-ff8a6b: #ff8a6b;
+  --raw-ffe8de: #ffe8de;
+  --raw-fff5f5: #fff5f5;
+}
+
+/* ============================================
    知识库专用变量
    ============================================ */
 

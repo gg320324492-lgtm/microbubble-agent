@@ -280,7 +280,7 @@ const anyVisible = computed(
 /* synthesis — 蓝 */
 .event-badge-synthesis {
   background: rgba(64, 158, 255, 0.1);
-  color: #1890ff;
+  color: var(--raw-1890ff);
   border-color: rgba(64, 158, 255, 0.3);
   animation: event-badge-pulse 1s ease-in-out 3;
 }
@@ -288,7 +288,7 @@ const anyVisible = computed(
 /* retry — 橙 (用 --color-accent 金橙) */
 .event-badge-retry {
   background: rgba(255, 179, 71, 0.16);
-  color: #d97706;
+  color: var(--raw-d97706);
   border-color: rgba(255, 179, 71, 0.4);
 }
 .event-badge-retry .event-badge-icon {
@@ -299,14 +299,14 @@ const anyVisible = computed(
 /* critique — 绿 */
 .event-badge-critique {
   background: rgba(103, 194, 58, 0.12);
-  color: #16a34a;
+  color: var(--raw-16a34a);
   border-color: rgba(103, 194, 58, 0.35);
 }
 
 /* tool_compressed — 灰 */
 .event-badge-compressed {
   background: rgba(144, 147, 153, 0.12);
-  color: #606266;
+  color: var(--raw-606266);
   border-color: rgba(144, 147, 153, 0.3);
 }
 
@@ -330,22 +330,22 @@ const anyVisible = computed(
 <style>
 [data-theme='dark'] .event-badge-synthesis {
   background: rgba(64, 158, 255, 0.18);
-  color: #69b1ff;
+  color: var(--raw-69b1ff);
   border-color: rgba(64, 158, 255, 0.4);
 }
 [data-theme='dark'] .event-badge-retry {
   background: rgba(255, 179, 71, 0.22);
-  color: #fcd34d;
+  color: var(--raw-fcd34d);
   border-color: rgba(255, 179, 71, 0.5);
 }
 [data-theme='dark'] .event-badge-critique {
   background: rgba(103, 194, 58, 0.2);
-  color: #6ee7b7;
+  color: var(--raw-6ee7b7);
   border-color: rgba(103, 194, 58, 0.45);
 }
 [data-theme='dark'] .event-badge-compressed {
   background: rgba(180, 180, 180, 0.15);
-  color: #c0c4cc;
+  color: var(--raw-c0c4cc);
   border-color: rgba(180, 180, 180, 0.3);
 }
 </style>

@@ -298,10 +298,10 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
 }
 .et-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .et-btn-pri {
-  background: var(--color-primary); border-color: var(--color-primary); color: #fff;
+  background: var(--color-primary); border-color: var(--color-primary); color: var(--raw-fff);
   font-weight: 600;
 }
-.et-btn-pri:hover { background: var(--color-primary-light); border-color: var(--color-primary-light); color: #fff; }
+.et-btn-pri:hover { background: var(--color-primary-light); border-color: var(--color-primary-light); color: var(--raw-fff); }
 
 /* 常用关系快速过滤 */
 .et-quick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -316,7 +316,7 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
 .et-quick-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .et-quick-chip.on {
   border-style: solid; border-color: var(--color-primary);
-  background: var(--color-primary); color: #fff; font-weight: 600;
+  background: var(--color-primary); color: var(--raw-fff); font-weight: 600;
 }
 .et-quick-clear {
   font-size: 12px; border: none; background: none; cursor: pointer;
@@ -422,7 +422,7 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
   color: var(--color-text-regular) !important;
 }
 [data-theme="dark"] .entity-pagination .el-pager li.is-active {
-  color: #fff !important;
+  color: var(--raw-fff) !important;
   background-color: var(--color-primary) !important;
 }
 </style>

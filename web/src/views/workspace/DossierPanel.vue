@@ -356,7 +356,7 @@ onBeforeUnmount(() => spy?.disconnect())
 .pill .dot.warn { background: var(--rb-danger); }
 .pill .c { font-family: var(--rb-mono); font-size: 10.5px; color: var(--rb-text-4); }
 .pill:hover { border-color: var(--rb-primary-border); color: var(--rb-primary-dark); }
-.pill.on { background: var(--rb-grad-cta); border-color: transparent; color: #fff; font-weight: 600; }
+.pill.on { background: var(--rb-grad-cta); border-color: transparent; color: var(--raw-fff); font-weight: 600; }
 .pill.on .c { color: rgba(255, 255, 255, .75); }
 .pill.dashed { border-style: dashed; }
 
@@ -376,7 +376,7 @@ onBeforeUnmount(() => spy?.disconnect())
 .row:hover { background: var(--rb-bg-hover); }
 .row:hover .op { opacity: 1; }
 .nm { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.av { width: 30px; height: 30px; border-radius: var(--rb-r-md); display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #fff; flex: none; overflow: hidden; }
+.av { width: 30px; height: 30px; border-radius: var(--rb-r-md); display: grid; place-items: center; font-size: 13px; font-weight: 600; color: var(--raw-fff); flex: none; overflow: hidden; }
 .av img { width: 100%; height: 100%; object-fit: cover; }
 .nm b { font-weight: 600; font-size: 13.5px; color: var(--rb-text); }
 .nm .id { font-family: var(--rb-mono); font-size: 10.5px; color: var(--rb-text-4); margin-left: 4px; font-weight: 400; }

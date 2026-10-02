@@ -163,7 +163,6 @@ function cleanSuggestion(s: string): string {
    旧样式: 橙边 + 大块 padding + 多行 (撑爆成气泡)
    2026-09-01: 单行 280px ellipsis → 两行 line-clamp — 完整问句显示不全 (用户反馈) */
 .chip {
-  display: inline-block;
   padding: 6px 14px;
   font-size: 13px;
   line-height: 1.4;
@@ -175,7 +174,7 @@ function cleanSuggestion(s: string): string {
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: normal;
-  word-break: break-word;
+  overflow-wrap: break-word;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;

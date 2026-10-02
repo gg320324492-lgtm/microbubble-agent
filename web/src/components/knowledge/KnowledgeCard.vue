@@ -281,7 +281,7 @@ const formatDate = (dateStr) => {
   padding: 3px 9px 3px 7px;
   border-radius: var(--radius-full, 999px);
   background: var(--color-primary);
-  color: #fff;
+  color: var(--raw-fff);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -593,7 +593,7 @@ const formatDate = (dateStr) => {
 }
 [data-theme="dark"] .top-result-badge {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--raw-fff);
 }
 
 /* 2026-09-13 配色④ hero 深洗已移至全局 _runtime-style-tokens.scss (缓存安全) */

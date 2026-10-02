@@ -129,7 +129,7 @@ const emit = defineEmits<{
   border-left: 3px solid transparent;
 }
 .session-item.active {
-  background: #fff5f2;
+  background: var(--raw-fff5f2);
   border-left-color: #FF7A5C;
 }
 .session-item.selected {

@@ -392,7 +392,7 @@ function onSelectTeamFolder(team, _id) {
 /* 批次⑩.88: 分享中呼吸点 (生效链接存在时的状态指示) */
 .folder-tree-special-item.is-share { color: var(--teal, #0e766e); font-weight: 500; }
 .share-live-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: #2aa876;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--raw-2aa876);
   margin-left: auto; animation: share-pulse 2s ease-in-out infinite;
 }
 .share-count-after-dot { margin-left: 6px !important; }

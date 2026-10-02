@@ -364,18 +364,18 @@ function formatDuration(ms?: number): string {
 }
 .cp-role-user .cp-role-badge {
   background: var(--color-primary, #FF7A5C);
-  color: #fff;
+  color: var(--raw-fff);
 }
 .cp-role-assistant .cp-role-badge {
   background: var(--color-success, #67C23A);
-  color: #fff;
+  color: var(--raw-fff);
 }
 .cp-history-text {
   flex: 1;
   font-size: 13px;
   color: var(--color-text-regular, #606266);
   line-height: 1.5;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* 知识引用项 */
@@ -400,7 +400,7 @@ function formatDuration(ms?: number): string {
   background: rgba(14, 118, 110, 0.06);
 }
 .cp-knowledge-item.clickable:hover .cp-knowledge-title {
-  color: #0e766e;
+  color: var(--raw-0e766e);
 }
 .cp-knowledge-title {
   flex: 1;

@@ -278,7 +278,7 @@ defineExpose({ fetchHypotheses })
 .hyp-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
 .hyp-chip.on {
   border-style: solid; border-color: var(--color-primary);
-  background: var(--color-primary); color: #fff; font-weight: 600;
+  background: var(--color-primary); color: var(--raw-fff); font-weight: 600;
 }
 .hyp-filter-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .hyp-select {
@@ -295,7 +295,7 @@ defineExpose({ fetchHypotheses })
 .hyp-input:focus { border-color: var(--color-primary); }
 .hyp-gen {
   font-size: 13px; padding: 8px 18px; border-radius: 3px; cursor: pointer;
-  background: var(--color-primary); color: #fff; border: none; font-weight: 600;
+  background: var(--color-primary); color: var(--raw-fff); border: none; font-weight: 600;
   white-space: nowrap;
 }
 .hyp-gen:hover:not(:disabled) { background: var(--color-primary-light); }
@@ -332,7 +332,7 @@ defineExpose({ fetchHypotheses })
   font-family: Consolas, monospace; font-size: 10px; letter-spacing: .1em;
   border-radius: 2px; padding: 2px 9px;
 }
-.hyp-stamp-proposed { border: 1px dashed #c99a3a; color: #a37c22; }
+.hyp-stamp-proposed { border: 1px dashed #c99a3a; color: var(--raw-a37c22); }
 .hyp-stamp-validated { border: 1px solid var(--color-primary); color: var(--color-primary); }
 .hyp-stamp-rejected { border: 1px solid var(--color-danger); color: var(--color-danger); }
 .hyp-priority {
@@ -371,7 +371,7 @@ defineExpose({ fetchHypotheses })
   font-weight: 600;
 }
 .hyp-act.ok {
-  background: var(--color-primary); color: #fff; border: 1px solid var(--color-primary);
+  background: var(--color-primary); color: var(--raw-fff); border: 1px solid var(--color-primary);
 }
 .hyp-act.ok:hover { background: var(--color-primary-light); }
 .hyp-act.no {
@@ -404,7 +404,7 @@ defineExpose({ fetchHypotheses })
   color: var(--color-text-regular) !important;
 }
 [data-theme="dark"] .entity-pagination .el-pager li.is-active {
-  color: #fff !important;
+  color: var(--raw-fff) !important;
   background-color: var(--color-primary) !important;
 }
 </style>
