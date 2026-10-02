@@ -63,10 +63,25 @@ jobs:
           #   app/core/llm.py 顶层 import anthropic, 而 rag 测试会经
           #   patch.dict 触发 app.services.knowledge_qa_service 的真实 import
           #   → 12 条用例挂在 ModuleNotFoundError: No module named 'anthropic'。
-          #   依据: run 37002426969 日志里去重后**只有这一个**缺模块;
-          #   容器内(全依赖)同三个文件 22 passed / 14 passed / 4 passed 全绿。
+          #   依据: run 37002426969 日志里去重后 ModuleNotFoundError 只有这一个;
+          #   容器内(全依赖)同三个文件实测 22 / 14 / 4 passed 全绿。
           #   版本约束与 requirements.txt:23 保持一致, 不擅自收紧。
-          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic jieba rank-bm25 "anthropic>=0.39.0"
+          #
+          # 2026-10-02 复检第二轮(实测 run 37009719090): 补 anthropic 后 12 条 -> 6 条。
+          #   剩余 6 条报的是 `AttributeError: module 'app.services' has no attribute
+          #   'knowledge_qa_service' / 'hybrid_retriever'` —— **不是** ModuleNotFoundError。
+          #   真因仍是缺依赖, 只是原始异常被 mock 的 _importer 吞掉了:
+          #   patch.dict 触发 app.services.knowledge_qa_service 真实 import 链 ->
+          #   knowledge_qa_service.py:10 -> app.models.knowledge ->
+          #   app/models/__init__.py:7 -> knowledge_chunk.py:29 -> `from pgvector.sqlalchemy
+          #   import Vector` -> ModuleNotFoundError -> mock 报成 AttributeError。
+          #   复检官本机 venv 直接 import 该模块复现了完整链(见 commit message)。
+          #   => **只看 CI 日志里的 ModuleNotFoundError 会漏判**。
+          #   requirements.txt:57 已声明 pgvector>=0.3.6,<1.0.0, 同样被本手写列表漏掉。
+          # 教训留档: 曾误判 pgvector "不是 CI 的缺口"(理由: 日志里没有它的
+          #   ModuleNotFoundError)。那个判据是错的 —— 异常被 mock 吞了。
+          #   **判"CI 缺哪个包"不能只 grep 日志, 必须能在 CI 装出的环境里逐个 import 断言。**
+          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic jieba rank-bm25 "anthropic>=0.39.0" "pgvector>=0.3.6,<1.0.0"
 
       - name: Run RAG framework tests (mock mode)
         env:
