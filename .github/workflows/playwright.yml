@@ -32,7 +32,17 @@ jobs:
   a11y:
     name: axe-core a11y
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 2026-10-03 S3.9: 15 -> 30 分钟。run 37039049999 实测: 前置开销就已 866s
+    # (15 分钟预算的 96%), 测试一步没跑到就被 job 超时杀掉, 结论是 cancelled
+    # 而非任何真实断言失败。
+    # 前置开销里的大头是 `npx playwright install --with-deps` —— 它会顺带跑 apt
+    # 装字体/mesa 等系统依赖, 实测在 run 37039049999 花了 683s, 而前几次 run
+    # (37037543090 / 37035451684 / 37024017862) 实测只有 25-32s, 相差 20 倍
+    # —— 说明这是 apt 镜像源偶发变慢, 不是固定成本, 但必须能扛住。
+    # 正常态前置开销约 193s (browsers 30 + fonts 6 + testenv 150 + vite 2 +
+    # initdb 5), 实测测试本身 (25 baseline + 5 axe) 约 92s。
+    # 30 分钟 = 最坏前置 866s 后仍留 934s, 约为实测测试耗时的 10 倍余量。
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
