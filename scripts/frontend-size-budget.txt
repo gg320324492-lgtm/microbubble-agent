@@ -1,0 +1,49 @@
+# 前端复杂度热点体量棘轮基线 (wc -l 口径)
+#
+# 消费方: scripts/frontend-size-budget-check.sh  ← .github/workflows/lint-css.yml
+#        job frontend-unit-tests 的 "Frontend size budget (ratchet)" 步
+#
+# 格式: kind|path|limit[|note]
+#   kind=file  单文件上限，文件不存在即门禁失效 (fail)
+#   kind=glob  目录下 *.js **递归** 合计上限，目录为空/不存在则跳过
+#   note       可选，仅支持字面量 provisional（暂定基线，见下）
+#
+# ⚠️ 覆盖边界 —— 本门禁只覆盖下列 5 个条目，不做全仓扫描。
+#   新增大文件**不会**被自动纳入，必须手工加一行才有约束。
+#   已知未覆盖: web/src/utils/ 顶层共 16 个 .js，本基线只点名了其中 1 个
+#   (paperAdapter.js)；web/src/**/*.test.js 亦不在本基线内（见末尾取舍说明）。
+#   棘轮只盯热点是对的，但它**必须写明自己不知道什么**，否则下一个人会误以为
+#   新大文件自动被管住 —— 这与 S3.7 ⑧ "新文件失明" 是同一型错误。
+#
+# ⚠️ 2026-10-02 (S3.8 前置): 新增 glob 一类。
+#   原实现是 declare -A 硬编码三条, 对 paperAdapter.js 拆分产生的新文件
+#   (web/src/utils/paper/*.js) 完全失明 —— "只降不升"的保护在拆分当天即失效。
+#   glob 基线 3700 = 拆分后 paper/ 五个文件的预计合计 (~3600) 上取整预留的
+#   **暂定值**（勘察估算，非实测；拆分尚未开始，无从实测）。
+#   取 3700 而非 3000: 若按 3000 卡, 第一次拆分 PR 必然被自己的棘轮拦下，
+#   只能在同一 PR 里改基线 —— 而"放宽基线"正是 S3.7 ⑧ 刚出过事的那一面，
+#   设 3000 等于在刚修好的地方再压一次。paperAdapter.js 那条 5633 的账
+#   已在管真实减重，新文件合计超不超 600 不影响威慑。
+#   ⚠️ 首次拆分完成后，必须用 `wc -l` 实测合计替换 3700，并把 note 段清空。
+#      脚本会在每次运行时 ::notice 提醒此事（含目录尚未建立的跳过路径）。
+#
+# 纪律: PowerShell 下数行数必须显式 -Encoding UTF8 (或用 pwsh 7+)。
+#   本文件无 BOM, 按 ANSI 代码页解码会吞掉换行 (5633 -> 5011), 再叠加
+#   Measure-Object -Line 跳空行 -> 4588。详见 docs 2026-09-30-phase-closeout-plan.md
+#   "工具可信度判据" 段。**行数一律以 wc -l 为准。**
+
+file|web/src/utils/paperAdapter.js|5633
+file|web/src/views/chat/ChatViewSSE.vue|2973
+file|web/src/components/drive/DriveDetailRail.vue|2151
+file|web/src/views/DesktopDriveView.vue|2229
+glob|web/src/utils/paper|3700|provisional
+#
+# ── 取舍: web/src/utils/__tests__/paperAdapter.test.js (3555 行) 刻意不加 ──
+#   不加。它是测试文件，不进生产 bundle，本次棘轮要防的是"前端热点体量上涨"
+#   （S3.6-3b 减重目标），测试文件大不构成生产热点。
+#   且此文件与 paperAdapter.js 强耦合：拆分 paperAdapter 时测试几乎必然同步
+#   增行（拆出子模块要各自补用例）。若纳入同一条基线，拆分当天就会因
+#   "必须补测试"而被棘轮拦下 —— 用测试覆盖率当减重指标，是把门禁变成负担，
+#   只会诱导下一个人去删测试或放宽基线。
+#   它是 `web/src/utils/` 下第 2 大的文件，缩水动作交给测试侧独立门禁
+#   (CI 已有 vitest 覆盖率线)，不在本棘轮口径内。
