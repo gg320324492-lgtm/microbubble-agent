@@ -58,7 +58,15 @@ jobs:
           # `-r requirements.txt` 改写而来时漏掉的 → CI 收集阶段 ModuleNotFoundError,
           # 整个 RAG 门禁长期红。根治方案(改回 -r requirements.txt, 会连带装 torch 拖慢 CI)
           # 留档单独立项, 本轮只做最小改动让门禁真绿。
-          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic jieba rank-bm25
+          # 2026-10-02 S3.7-R3 复检补: 再补 anthropic。同型漏依赖 ——
+          #   requirements.txt:23 已声明 anthropic>=0.39.0, 但本手写列表漏了它。
+          #   app/core/llm.py 顶层 import anthropic, 而 rag 测试会经
+          #   patch.dict 触发 app.services.knowledge_qa_service 的真实 import
+          #   → 12 条用例挂在 ModuleNotFoundError: No module named 'anthropic'。
+          #   依据: run 37002426969 日志里去重后**只有这一个**缺模块;
+          #   容器内(全依赖)同三个文件 22 passed / 14 passed / 4 passed 全绿。
+          #   版本约束与 requirements.txt:23 保持一致, 不擅自收紧。
+          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic jieba rank-bm25 "anthropic>=0.39.0"
 
       - name: Run RAG framework tests (mock mode)
         env:
