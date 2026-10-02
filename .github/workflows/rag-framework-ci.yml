@@ -81,7 +81,33 @@ jobs:
           # 教训留档: 曾误判 pgvector "不是 CI 的缺口"(理由: 日志里没有它的
           #   ModuleNotFoundError)。那个判据是错的 —— 异常被 mock 吞了。
           #   **判"CI 缺哪个包"不能只 grep 日志, 必须能在 CI 装出的环境里逐个 import 断言。**
-          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx sqlalchemy alembic pydantic jieba rank-bm25 "anthropic>=0.39.0" "pgvector>=0.3.6,<1.0.0"
+          #
+          # 2026-10-02 复检第三轮(忠实 Docker 环境 ubuntu + py3.11 + 本行 pip 列表实测):
+          #   补完 anthropic + pgvector 后剩 3 条失败, 真因是 **缺 greenlet**, 不是缺包名本身。
+          #   两个报错都是它的二次症状:
+          #     - test_agent_retriever.py:218/236 `TypeError: object of type 'NoneType' has no len()`
+          #       -> framework_gate 捕到 ImportError(greenlet 缺) 后 fallback_fn=None 返 None。
+          #     - test_dense_sparse_routing.py:261 `AttributeError: module 'app.services' has no
+          #       attribute 'hybrid_retriever'` -> patch() 自己要先 import 目标模块, import 失败。
+          #   根因链: app/services/hybrid_retriever.py:15 顶层 `from sqlalchemy.ext.asyncio import
+          #   AsyncSession` -> sqlalchemy.ext.asyncio 在 import 期就要求 greenlet(非运行期)。
+          #
+          #   **为什么不直接写 greenlet**: 本行原本写的是裸 `sqlalchemy`, 未 pin 版本, pip 解析到
+          #   **SQLAlchemy 2.1.2**; 而 requirements.txt:8 pin 的是 **==2.0.23**。两版差异是:
+          #     - 2.0.23: greenlet 是**核心**依赖(带平台 marker), 装 sqlalchemy 即自动带上
+          #     - 2.1.2 : greenlet 降级到 `extra == "asyncio"`, 裸装**不带** greenlet
+          #   所以生产容器(pip -r requirements.txt, 2.0.23)有 greenlet 而 CI(2.1.2)没有 ——
+          #   这正是"容器绿 / CI 红"的分叉点。requirements.txt 全文**未**出现 greenlet,
+          #   它是 SQLAlchemy 的传递依赖, 谁都不必显式声明。
+          #   修法二选一实测均可(见下方对比), 采纳 pin 版:
+          #     - `sqlalchemy==2.0.23`         : 与 requirements.txt 对齐, greenlet 自动带入
+          #     - `sqlalchemy[asyncio]==2.0.23`: 显式声明 extras, 不依赖传递依赖推断, 意图更清楚
+          #   选后者: 即使未来 SQLAlchemy 再把 asyncio 依赖挪走, extras 仍显式要求 greenlet。
+          #   实测 ragfw:final(忠实 docker, 本行原样) 82 passed / 0 failed, 连跑 3 次稳定;
+          #   pip check 无冲突; alembic heads 守卫仍 1 head(141_zb2_backup_kb_purge)。
+          #   注: server-tests-baseline.yml:89 走 `pip install -r requirements.txt`, 天然带
+          #   greenlet, 无此隐患 —— 本 bug 仅存在于本 workflow 的手写精简列表。
+          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx "sqlalchemy[asyncio]==2.0.23" alembic pydantic jieba rank-bm25 "anthropic>=0.39.0" "pgvector>=0.3.6,<1.0.0"
 
       - name: Run RAG framework tests (mock mode)
         env:
