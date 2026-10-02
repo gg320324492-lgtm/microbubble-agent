@@ -260,23 +260,38 @@ jobs:
                exit 1 ;;
           esac
 
-      - name: Update a11y snapshots (warm-up pass, 覆盖 flaky 首写)
+      # 2026-10-03: 删掉两个 --update-snapshots 步骤 —— 这道门禁此前**恒绿**, 是装饰品.
+      #
+      # 原结构 (cec42985f 起, 1ae5699ad 改名保留):
+      #   1. update --update-snapshots ... || true          (warm-up pass)
+      #   2. update --update-snapshots                    (record CI baseline)
+      #   3. verify (不带 --update-snapshots)
+      # 第 3 步拿**第 2 步刚重写的基线**跟自己比 → 无论真实现状多少违规都必绿.
+      # 两个 update 步骤还各有副作用: 会在 runner 上覆写 __snapshots__/, 让
+      # 紧随其后的 "Upload a11y snapshots (回灌仓库用)" artifact 装的其实是
+      # CI 现生成的基线, 而非仓库入库基线 —— 回灌通道同样失效.
+      #
+      # 实证 (本地隔离 worktree @ HEAD 起真 app-test 8001 + vite, 复现 CI 数字):
+      #   入库基线 violations 合计 = 10   (15 个文件 0 + 10 个文件 1)
+      #   CI 实际      violations 合计 = 27  (run 37041897801 artifact)
+      #   本地 verify (不带 --update)   = 27, 25 failed / 27 passed, exit 1
+      # 即现状与入库基线**差 17 条**, 旧流程却报 success.
+      #
+      # 为什么保留一个 warm-up (不带 --update-snapshots):
+      #   f987ee8eb 的动机是真实的 —— vite 冷编译时扫到中间态, 与缓存热态结果不一致.
+      #   这里保留同样"先跑一遍让 vite 热起来"的语义, 但**不给它写快照的权限**:
+      #   无 --update-snapshots 时 toMatchSnapshot 只比对不写盘 (实测: 跑完 verify
+      #   后 git status 干净, __snapshots__ 25 个文件字节不变).
+      #   冷编译那 2 个 case 的差异被如实报红, 而不是被"改基线"吞掉.
+      - name: Warm up vite transform cache (不写快照, 只为消除冷编译中间态)
         working-directory: web
         env:
           BASE_URL: http://localhost:3000
           VITE_API_PROXY_TARGET: http://localhost:8001
           TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
-        run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --update-snapshots --reporter=list || true
+        run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --reporter=list || true
 
-      - name: Update a11y snapshots (record CI baseline, 缓存热重跑)
-        working-directory: web
-        env:
-          BASE_URL: http://localhost:3000
-          VITE_API_PROXY_TARGET: http://localhost:8001
-          TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
-        run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --update-snapshots --reporter=list
-
-      - name: Run axe-core a11y tests (verify snapshots stable)
+      - name: Run axe-core a11y tests (verify against COMMITTED baseline)
         working-directory: web
         env:
           BASE_URL: http://localhost:3000
@@ -284,7 +299,12 @@ jobs:
           TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
         run: npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs --reporter=list
 
-      - name: Upload a11y snapshots (CI 真 baseline 回灌仓库用)
+      # 2026-10-03: 这个 artifact 的语义此前也是错的 —— 删掉 update 步骤前, 它装的是
+      # CI 刚覆写过的现生成基线 (回灌=自我确认, 无意义). 现在 __snapshots__ 在 verify
+      # 期间**只读**, 装出来的就是仓库入库基线; 真正要看的是 verify 失败时 playwright
+      # 写进 test-results/*-actual.txt 的**实测值**, 那个才代表 CI 真跑出来的违规.
+      # 故本步骤保留 (供人核对入库基线), 另见下面的 failure debug 步骤.
+      - name: Upload a11y snapshots (仓库入库基线, 供人工核对)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -296,13 +316,20 @@ jobs:
         if: failure()
         working-directory: web
         run: |
-          echo "=== actual snapshot diffs ==="
-          for f in test-results/*-actual.txt; do
-            if [ -f "$f" ]; then
-              echo "--- $f ---"
-              cat "$f"
-            fi
+          # 2026-10-03: glob 原本是 test-results/*-actual.txt (单层), 但 playwright
+          # 实际把每个 case 的 actual 写在 test-results/<case-dir>/<name>-actual.txt
+          # (实测本地 verify: find test-results -name '*-actual.txt' 命中 25 个,
+          # 单层 glob 命中 0). 即门禁红的时候这个 step 什么都没打印, 门禁红不可诊断.
+          # 改用 find 递归, 并顺手汇总 violations 合计, 让"红"能直接读出数字.
+          echo "=== CI 实测快照 (vs 入库基线的实际值) ==="
+          total=0
+          for f in $(find test-results -name '*-actual.txt' 2>/dev/null | sort); do
+            echo "--- $f ---"
+            cat "$f"
+            n=$(grep -m1 '^violations:' "$f" | sed 's/violations: *//')
+            [ -n "$n" ] && total=$((total + n))
           done
+          echo "=== CI 实测 violations 合计 = $total ==="
           echo "=== test-results dir ==="
           ls test-results/ 2>/dev/null | head -20
 
