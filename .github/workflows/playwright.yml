@@ -133,10 +133,37 @@ jobs:
           #       于是 docker exec 报错而 step 仍 conclusion=success, 后续 12 步全绿,
           #       直到快照比对才以"莫名新增违规"的面貌爆出来。
           #       修法: 输出落文件后 tee, 再 fail-loud 断言 (见下), 断言失败即 exit 1。
+          #
+          # 2026-10-02 S3.8 第二次修正 (run 37022083555 实测): 上面的容器名修好后,
+          # init_test_db_all.py 暴露出**自身**的 TypeError, 即这行从来没成功跑过:
+          #     File "/app/scripts/init_test_db_all.py", line 34, in run_ensure_test_user
+          #       args = parse_args([])
+          #     TypeError: parse_args() takes 0 positional arguments but 1 was given
+          #   scripts/ensure_test_user.py:51 的签名是 `def parse_args():` (无参),
+          #   而 init_test_db_all.py:34 传了 [] —— 两者自 830d6243e (2026-07-23)
+          #   起就不兼容, 该脚本的 ensure 分支**从未成功执行过**。
+          #   注意 init_db 部分是成功的 (日志里确有"数据库初始化完成"),
+          #   只有 ensure_test_user 这一步炸, 故账号一直没建出来。
+          #
+          #   为什么不在 workflow 里改用修好的脚本, 而要拆成两条命令:
+          #     - 修 scripts/init_test_db_all.py 需要重建 app-test-latest 镜像才生效
+          #       (Dockerfile 是 COPY . ., 脚本烘进镜像; 仓库无 bind mount 覆盖 scripts/),
+          #       而 build-image.yml 近 3 个月 8 次 push 全部 cancelled/failed,
+          #       唯一一次成功是 2026-09-18。改脚本 = 本轮拿不到新镜像 = 门禁仍红。
+          #     - init_test_db_all.py 本身只是这两个脚本的薄封装
+          #       (run_init_db -> init_db.init_database; run_ensure_test_user -> ensure),
+          #       且 --with-alembic-stamp 本 workflow 从未使用, 故直接分别调用
+          #       两个脚本可执行文件, 语义完全等价, 且立即生效。
+          #   两个脚本都有 `if __name__ == "__main__"` 入口, 可独立运行。
           set -o pipefail
-          docker compose -f docker-compose.test.yml exec -T \
-            -e SKIP_DB_SETUP=1 app-test \
-            python scripts/init_test_db_all.py 2>&1 | tee /tmp/init-db.log
+          {
+            docker compose -f docker-compose.test.yml exec -T \
+              -e SKIP_DB_SETUP=1 app-test \
+              python scripts/init_db.py
+            docker compose -f docker-compose.test.yml exec -T \
+              -e SKIP_DB_SETUP=1 app-test \
+              python scripts/ensure_test_user.py
+          } 2>&1 | tee /tmp/init-db.log
 
           # fail-loud 三连断言 (任一不满足即 exit 1, 不让"没建号"再流到快照比对才炸):
           #   数据库初始化完成 ← scripts/init_db.py:29
