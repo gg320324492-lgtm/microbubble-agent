@@ -219,17 +219,34 @@ jobs:
           PASS="${TEST_PASSWORD:-testbot_pass_2026}"
           RESP=$(curl -s -X POST http://localhost:8001/api/v1/auth/login             -H "Content-Type: application/json"             -d "{\"username\":\"$USER\",\"password\":\"$PASS\"}")
           echo "TOKEN_LEN=${#RESP}"
-          echo "PLAYWRIGHT_TEST_TOKEN=$RESP" >> $GITHUB_ENV
 
-          # 2026-10-02 S3.8 fail-loud: 原实现把**整个响应体**当 token 写进 GITHUB_ENV,
-          #   后端 401 时写入的是字面量 {"error":{"code":"AUTH_ERROR",...}} (65 字节),
+          # 2026-10-02 S3.8 fail-loud: 后端 401 时响应体是错误 JSON,
           #   下游 TEST_TOKEN 拿到的就是这个 JSON, injectAuth 照样 return true,
           #   所有页面被 router 守卫打到 /login → 快照录的是登录页 (假绿)。
           #   实测 run 37013474583: TOKEN_LEN=65 且 env 里是 AUTH_ERROR JSON。
           #   断言: 必须是 JWT (三段 base64url, 以 eyJ 开头), 否则 exit 1。
-          case "$RESP" in
-            eyJ*.*.*) echo "✓ token looks like a JWT" ;;
-            *) echo "::error::login 未返回 JWT (前端拿到的是错误 JSON), 长度=${#RESP}: ${RESP:0:200}"
+          #
+          # 2026-10-03 S3.9 修正 (run 37037543090 实测): S3.8 的断言**写错了对象**。
+          #   /api/v1/auth/login 返回的是 JSON **对象**
+          #     {"access_token":"eyJ...","refresh_token":"eyJ...","user":{...}}
+          #   而不是裸 JWT 字符串。旧代码 `echo "PLAYWRIGHT_TEST_TOKEN=$RESP"` 把整个
+          #   响应体写进 GITHUB_ENV, 于是 injectAuth 注入的是一个 506 字符的 JSON blob:
+          #     - router 守卫只判真值 (`if (requiresAuth && !token)`), blob 也是真值,
+          #       所以页面**不会**被打到 /login → 快照里 authed=yes 仍是**假信号**;
+          #     - 但 web/src/utils/request.js 发的是 `Bearer <localStorage.access_token>`,
+          #       真实前端存的是**裸 access_token 字符串**, 所以每个 API 请求都会带
+          #       这个 blob → 后端 401 → a11y 扫的其实是无数据页面。
+          #   修法: 像真实前端一样取 access_token 字段再注入。
+          #   断言同步收紧到"取出来的 access_token 必须是 JWT", 比原来更严:
+          #   login 失败 (错误 JSON) 时取不到 access_token, 依然 exit 1。
+          ACCESS_TOKEN=$(printf '%s' "$RESP" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("access_token",""))' 2>/dev/null || true)
+          echo "PLAYWRIGHT_TEST_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+
+          case "$ACCESS_TOKEN" in
+            eyJ*.*.*) echo "✓ token looks like a JWT (len=${#ACCESS_TOKEN})" ;;
+            *) echo "::error::login 未返回可用的 access_token (错误 JSON 或响应结构异常)"
+               echo "::error::原始响应(前 200 字符), 长度=${#RESP}: ${RESP:0:200}"
                exit 1 ;;
           esac
 
