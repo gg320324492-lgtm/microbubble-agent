@@ -18,25 +18,48 @@
 # ⚠️ 2026-10-02 (S3.8 前置): 新增 glob 一类。
 #   原实现是 declare -A 硬编码三条, 对 paperAdapter.js 拆分产生的新文件
 #   (web/src/utils/paper/*.js) 完全失明 —— "只降不升"的保护在拆分当天即失效。
-#   glob 基线 3700 = 拆分后 paper/ 五个文件的预计合计 (~3600) 上取整预留的
-#   **暂定值**（勘察估算，非实测；拆分尚未开始，无从实测）。
-#   取 3700 而非 3000: 若按 3000 卡, 第一次拆分 PR 必然被自己的棘轮拦下，
-#   只能在同一 PR 里改基线 —— 而"放宽基线"正是 S3.7 ⑧ 刚出过事的那一面，
-#   设 3000 等于在刚修好的地方再压一次。paperAdapter.js 那条 5633 的账
-#   已在管真实减重，新文件合计超不超 600 不影响威慑。
-#   ⚠️ 首次拆分完成后，必须用 `wc -l` 实测合计替换 3700，并把 note 段清空。
-#      脚本会在每次运行时 ::notice 提醒此事（含目录尚未建立的跳过路径）。
+#   glob 基线 5500 —— 依据是 2026-10-02 实测的按函数边界切分合计 **5348**
+#     (qa 125 / content 684 / sections 1042 / figures 1369 / normalize 2128,
+#      L286-5633 零缝隙零重叠), 外加每文件 ~16 行 boilerplate 余量。
+#   前一版写的 "3700（勘察估算 ~3600）" 低估 1648 行 —— 该估算把"拆分"
+#     当成了带删减的拆分, 实测是**零删减搬家**: 真死码仅 24 行
+#     (_embedAnchors 7 行 + _isTocPage 17 行), 注释 1679 + 空行 429 占 37.4%。
+#     按 3600 卡, 第一次拆分 PR 必然被自己的棘轮拦下, 而"放宽基线"正是
+#     S3.7 ⑧ 刚出过事的那一面。
+#   取 5500 而非 5348: 零余量意味着拆分方只要多写 100 行注释就红灯,
+#     实际会诱发"改基线"而不是"真减重"。152 行余量足够吸收正常增补。
+#   **真减重压力由 paperAdapter.js 那条 5633 承担** —— 它才是主体;
+#     glob 这条是防双计/脱管的护栏, 不是减重指标。
+#   首次拆分 PR 完成后, 必须用 wc -l 实测合计替换 5500, 并把 note 段清空。
+#     脚本会在每次运行时 ::notice 提醒此事（含目录尚未建立的跳过路径）。
 #
 # 纪律: PowerShell 下数行数必须显式 -Encoding UTF8 (或用 pwsh 7+)。
 #   本文件无 BOM, 按 ANSI 代码页解码会吞掉换行 (5633 -> 5011), 再叠加
 #   Measure-Object -Line 跳空行 -> 4588。详见 docs 2026-09-30-phase-closeout-plan.md
 #   "工具可信度判据" 段。**行数一律以 wc -l 为准。**
 
+#
+# ⚠️ 2026-10-02 (E2 决策): S3.8 拆分**不留 barrel**。
+#   留 barrel 的后果: paperAdapter.js 变成 60 行的壳, 仍被计入 file 条目,
+#   而 paper/ 五文件被 glob 计入 —— **同一批代码算两遍**, 合计从 5633 变成约 10400。
+#   合计完全失真(看起来像翻倍恶化, 实际是搬家), 且 API 面没收窄、体量没下降。
+#   故 S3.8 采"真拆": 删除 paperAdapter.js, 改 8 处 import 直接指向 paper/*。
+#
+#   【拆分 PR 必须同批做的两件事, 缺一即 CI 红】
+#   ① 移除本文件 `file|web/src/utils/paperAdapter.js|5633` 这一行。
+#      不移除的后果不是"基线不准", 而是脚本走 `if [ ! -f "$f" ]` 分支
+#      → ::error 体量门禁失效 → exit 1。(这是**预期**行为: 文件没了还盯着它
+#      说明 BUDGET 没跟上。)
+#   ② 把 `glob|...|5500|provisional` 的 5500 换成实测合计并**清空 note 段**。
+#      只改①不改② → 拆分当天必然 5348(或实测值) < 5500, 绿灯, 但基线仍是估的,
+#      暂定提醒永远消不掉。只改②不改① → 永远红。
+#   交付判据: `sh scripts/frontend-size-budget-check.sh` 本地 exit 0,
+#   且输出里**不再出现** `暂定基线待实测替换` 的 notice(说明 note 段已清)。
 file|web/src/utils/paperAdapter.js|5633
 file|web/src/views/chat/ChatViewSSE.vue|2973
 file|web/src/components/drive/DriveDetailRail.vue|2151
 file|web/src/views/DesktopDriveView.vue|2229
-glob|web/src/utils/paper|3700|provisional
+glob|web/src/utils/paper|5500|provisional
 #
 # ── 取舍: web/src/utils/__tests__/paperAdapter.test.js (3555 行) 刻意不加 ──
 #   不加。它是测试文件，不进生产 bundle，本次棘轮要防的是"前端热点体量上涨"
