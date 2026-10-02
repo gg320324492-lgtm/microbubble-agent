@@ -10,12 +10,21 @@ GLOBS=""
 
 # 解析 kind|path|limit[|note]。note 可选, 当前仅取字面量 provisional。
 # 存回时一律补成三段 (path|limit|note), 便于 split_entry 统一拆。
+# kind 三种: file (单文件, 计入合计) / glob (目录递归, 计入合计) /
+#           cap  (单文件**只判不累加**, 见下)。cap 是 2026-10-02 复检新增。
+CAPS=""
 while IFS='|' read -r kind path limit note; do
   case "$kind" in ''|\#*) continue ;; esac
-  if [ "$kind" = "file" ]; then EXACT="$EXACT$path|$limit|$note
-"
-  else GLOBS="$GLOBS$path|$limit|$note
-"; fi
+  case "$kind" in
+    file) EXACT="$EXACT$path|$limit|$note
+" ;;
+    glob) GLOBS="$GLOBS$path|$limit|$note
+" ;;
+    cap)  CAPS="$CAPS$path|$limit|$note
+" ;;
+    *) echo "::error file=$BUDGET_FILE,title=未知 kind::无法识别的条目类型 '$kind'（本脚本支持 file/glob/cap），该条可能未按预期生效。"
+       FAILED=1 ;;
+  esac
 done < "$BUDGET_FILE"
 
 # 拆 entry 为 ENTRY_PATH / ENTRY_LIMIT / ENTRY_NOTE。
@@ -39,6 +48,22 @@ report() {
     FAILED=1
   elif [ "$now" -lt "$limit" ]; then
     echo "::notice title=前端热点体量改善::$name 较基线少 $((limit - now)) 行，请把基线数字调低以固化成果。"
+  fi
+}
+
+# cap 条目: 单文件天花板, **只判不累加**。
+# 为什么需要它: S3.8 拆分后 web/src/utils/paper/normalize.js 有 2136 行, 单看
+# glob 合计 5774 毫无约束 —— 只要同目录别的文件缩了, 这个文件可以无限长。
+# 但若改用 file 条目, 它会被 file 与 glob **各算一遍**, 合计凭空 +2136,
+# 正是 E2 决策(不留 barrel)明令拒绝的"同一批代码算两遍"。
+# 故新增 cap: 判它有没有超天花板, 但不碰合计。
+cap_report() {
+  name="$1"; now="$2"; limit="$3"
+  if [ "$now" -gt "$limit" ]; then
+    echo "::error file=$name,title=单文件天花板突破::$now > cap $limit（+$((now - limit))）。该文件已在其所属 glob 合计内计过, 此条只判不累加；请真拆, 别再加行。"
+    FAILED=1
+  else
+    echo "::notice title=单文件余量::$name $now / cap $limit（余 $((limit - now)) 行）"
   fi
 }
 
@@ -79,6 +104,17 @@ for entry in $GLOBS; do
   sum=0; n=0
   for f in $files; do sum=$((sum + $(wc -l < "$f" | tr -d ' '))); n=$((n+1)); done
   report "$dir 下 *.js 递归合计（$n 个文件）" "$sum" "$limit"
+done
+
+for entry in $CAPS; do
+  split_entry "$entry"
+  f="$ENTRY_PATH"; limit="$ENTRY_LIMIT"
+  if [ ! -f "$f" ]; then
+    echo "::error file=$f,title=单文件天花板失效::cap 指向的文件不存在（可能已被进一步拆分或改名），请更新 BUDGET 的 cap 条目"
+    FAILED=1
+    continue
+  fi
+  cap_report "$f" "$(wc -l < "$f" | tr -d ' ')" "$limit"
 done
 
 echo "合计: $TOTAL_NOW / 基线 $TOTAL_BUDGET"

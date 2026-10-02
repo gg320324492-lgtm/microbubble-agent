@@ -66,6 +66,15 @@ file|web/src/components/drive/DriveDetailRail.vue|2151
 file|web/src/views/DesktopDriveView.vue|2229
 glob|web/src/utils/paper|5774
 #
+# ── cap 条目（只判不累加，2026-10-02 复检新增）────────────────────────────
+#   normalize.js 是拆分后最大的单文件（2136 行，占 paper/ 合计 37%）。
+#   光有 glob 合计 5774 约束不住它: 同目录别的文件一缩，它就能无限长。
+#   但**不能**用 file 条目 —— 那会被 file 与 glob 各算一遍，合计凭空 +2136，
+#   正是上面 E2 决策(不留 barrel)拒绝的"同一批代码算两遍"。
+#   故脚本新增 cap 类型: 判单文件天花板，不进合计。
+#   当前 2136 行 → cap 2300（+164 余量，约 8%）；真拆见 S3.9。
+cap|web/src/utils/paper/normalize.js|2300
+#
 # ── 取舍: web/src/utils/__tests__/paperAdapter.test.js (3555 行) 刻意不加 ──
 #   不加。它是测试文件，不进生产 bundle，本次棘轮要防的是"前端热点体量上涨"
 #   （S3.6-3b 减重目标），测试文件大不构成生产热点。
