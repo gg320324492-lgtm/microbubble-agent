@@ -16,156 +16,178 @@
     class="dft"
     :class="[`dft--${density}`, { 'dft--dragging': draggingIds }]"
     tabindex="0"
-    role="grid"
-    :aria-rowcount="rows.length"
     @keydown="onKeydown"
   >
-    <!-- 列头 -->
-    <div ref="dftHeadRef" class="dft-head" role="row">
-      <!-- 2026-10-03 a11y: role="row" 的**直接子元素必须**是 cell/gridcell/columnheader
-           (WCAG 4.1.2 / ARIA required-owned-elements), 裸 <span>/<input> 会触发
-           axe aria-required-children [critical]. 原来只有 3 个可排序列写了
-           role="columnheader", 全选框/上传者/收藏 3 列漏了 —— 补齐 6 列. -->
-      <span class="dft-c dft-c--check" role="columnheader">
-        <input
-          type="checkbox"
-          :checked="allChecked"
-          :indeterminate.prop="someChecked"
-          aria-label="全选本页文件"
-          @change="$emit('select-all', $event.target.checked)"
-        />
-      </span>
-      <span
-        class="dft-c dft-c--name sortable"
-        role="columnheader"
-        @click="$emit('sort-change', 'file_name')"
-      >名称<span v-if="sortKeyOf === 'file_name'" class="dft-arr">{{ arrow }}</span></span>
-      <span
-        class="dft-c dft-c--size sortable"
-        role="columnheader"
-        @click="$emit('sort-change', 'file_size')"
-      >大小<span v-if="sortKeyOf === 'file_size'" class="dft-arr">{{ arrow }}</span></span>
-      <span class="dft-c dft-c--owner" role="columnheader">上传者</span>
-      <span
-        class="dft-c dft-c--time sortable"
-        role="columnheader"
-        @click="$emit('sort-change', 'created_at')"
-      >上传时间<span v-if="sortKeyOf === 'created_at'" class="dft-arr">{{ arrow }}</span></span>
-      <span class="dft-c dft-c--star dft-star-head" role="columnheader" title="收藏 (仅自己可见)">收藏</span>
-    </div>
+    <!-- 2026-10-03 a11y (aria-required-children 归零): grid 角色从 .dft 下移到本元素。
+         grid 的**直接子元素只能是 row / rowgroup**, 而 .dft 原先同时装着
+         ① .dft-head (row) ② .dft-body ③ .dft-foot (分页 el-pagination)。
+         分页内部是 button / ul / div[tabindex] —— 都不是 row, 每一帧都违规
+         (实测 axe 报 "children which are not allowed: button[aria-disabled], ul, div[tabindex]")。
+         分页是网格**之外**的翻页控件, 不该是 grid 的后代, 故拆出 .dft-grid 只包
+         表头+表体, .dft-foot 留在它外面。
+         .dft-body 自身保持无 role —— axe 的 getOwnedRoles 会**递归穿过无 role
+         且不可聚焦的中间层**, 所以 VirtualList 容器/状态容器不需要 rowgroup。 -->
+    <div class="dft-grid" role="grid" :aria-rowcount="rows.length">
+      <!-- 列头 -->
+      <div ref="dftHeadRef" class="dft-head" role="row">
+        <!-- 2026-10-03 a11y: role="row" 的**直接子元素必须**是 cell/gridcell/columnheader
+             (WCAG 4.1.2 / ARIA required-owned-elements), 裸 <span>/<input> 会触发
+             axe aria-required-children [critical]. 原来只有 3 个可排序列写了
+             role="columnheader", 全选框/上传者/收藏 3 列漏了 —— 补齐 6 列. -->
+        <span class="dft-c dft-c--check" role="columnheader">
+          <input
+            type="checkbox"
+            :checked="allChecked"
+            :indeterminate.prop="someChecked"
+            aria-label="全选本页文件"
+            @change="$emit('select-all', $event.target.checked)"
+          />
+        </span>
+        <span
+          class="dft-c dft-c--name sortable"
+          role="columnheader"
+          @click="$emit('sort-change', 'file_name')"
+        >名称<span v-if="sortKeyOf === 'file_name'" class="dft-arr">{{ arrow }}</span></span>
+        <span
+          class="dft-c dft-c--size sortable"
+          role="columnheader"
+          @click="$emit('sort-change', 'file_size')"
+        >大小<span v-if="sortKeyOf === 'file_size'" class="dft-arr">{{ arrow }}</span></span>
+        <span class="dft-c dft-c--owner" role="columnheader">上传者</span>
+        <span
+          class="dft-c dft-c--time sortable"
+          role="columnheader"
+          @click="$emit('sort-change', 'created_at')"
+        >上传时间<span v-if="sortKeyOf === 'created_at'" class="dft-arr">{{ arrow }}</span></span>
+        <span class="dft-c dft-c--star dft-star-head" role="columnheader" title="收藏 (仅自己可见)">收藏</span>
+      </div>
 
-    <!-- 表体 -->
-    <div class="dft-body">
-      <div v-if="loading" class="dft-states">
-        <div v-for="i in 8" :key="'sk' + i" class="dft-skel" :style="{ animationDelay: i * 60 + 'ms' }">
-          <span class="dft-skel-dot"></span>
-          <span class="dft-skel-line" :style="{ width: 30 + ((i * 37) % 45) + '%' }"></span>
-        </div>
-      </div>
-      <div v-else-if="loadError" class="dft-states dft-states--err">
-        <p>{{ loadError }}</p>
-        <button type="button" class="dft-retry" @click="$emit('retry')">重试</button>
-      </div>
-      <div v-else-if="!rows.length" class="dft-states dft-states--empty">
-        <p class="dft-empty-ico">🗂</p>
-        <p>{{ showPath ? `没有找到相关文件 — 换个更短的关键词试试` : '这个位置还没有文件 — 拖进来或点右上「上传文件」' }}</p>
-      </div>
-      <VirtualList
-        v-else
-        :items="rows"
-        :item-height="rowH"
-        :threshold="60"
-        :container-style="{ height: '100%' }"
-      >
-        <template #default="{ item, index }">
-          <div
-            class="dft-row"
-            :class="{
-              'is-active': item.key === activeKey,
-              'is-sel': item.kind === 'file' && selectedIdSet.has(item.data.id),
-              'is-folder': item.kind === 'folder',
-              'is-drop-into': dropFolderKey === item.key,
-              'is-drag-src': draggingIds && draggingIds.includes(item.data?.id),
-            }"
-            :style="{ height: rowH + 'px' }"
-            :data-row-key="item.key"
-            role="row"
-            :aria-selected="item.kind === 'file' && selectedIdSet.has(item.data.id)"
-            :draggable="true"
-            @click="onRowClick(item, index, $event)"
-            @dblclick="onRowDblclick(item)"
-            @contextmenu.prevent="$emit('row-contextmenu', item, $event)"
-            @dragstart="onRowDragstart(item, $event)"
-            @dragend="onRowDragend"
-            @dragover="onRowFolderDragover(item, $event)"
-            @dragleave="onRowDragleave(item)"
-            @drop="onRowFolderDrop(item, $event)"
-          >
-            <!-- 2026-10-03 a11y: 同表头, role="row" 的 6 个直接子元素全部补 role="gridcell" -->
-            <span class="dft-c dft-c--check" role="gridcell" @click.stop>
-              <template v-if="item.kind === 'file'">
-                <input
-                  type="checkbox"
-                  :checked="selectedIdSet.has(item.data.id)"
-                  :aria-label="'选择 ' + item.label"
-                  @change="$emit('select-toggle', item.data.id)"
-                />
-              </template>
-              <template v-else>
-                <input
-                  type="checkbox"
-                  :checked="selectedFolderSet.has(item.data.id)"
-                  :aria-label="'选择文件夹 ' + item.label"
-                  @change="$emit('select-toggle-folder', item.data.id)"
-                />
-              </template>
-            </span>
-            <span class="dft-c dft-c--name" role="gridcell">
-              <!-- 批次⑧ 对齐视觉稿 .nm: 文件夹=teal 描边图标, 文件=7px 类型色 dot (行内缩略图/缩写色块退役, 封面统一看右栏) -->
-              <svg v-if="item.kind === 'folder'" viewBox="0 0 24 24" class="dft-folder-ic" aria-hidden="true">
-                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              </svg>
-              <span v-else class="dft-dot" :style="{ background: item.color }" :title="item.abbr"></span>
-              <span class="dft-name" :title="item.label">{{ item.label }}</span>
-              <span v-if="item.kind === 'file' && showPath && item.data.folder_name" class="dft-path">
-                {{ item.data.folder_name }}
-              </span>
-              <span v-if="item.kind === 'file' && item.data.is_latest === false" class="dft-old" title="非最新版本">旧版</span>
-            </span>
-            <span class="dft-c dft-c--size num" role="gridcell">{{
-              item.kind === 'file'
-                ? fmtSize(item.data.file_size)
-                : (item.data.size_bytes != null ? fmtSize(item.data.size_bytes) : '—')
-            }}</span>
-            <span class="dft-c dft-c--owner" role="gridcell">
-              <!-- 批次⑩.1: 上传者只对具体文件显示; 头像优先真实照片, 无则首字回退 -->
-              <template v-if="item.kind === 'file' && (item.data.owner_name || item.data.owner_username)">
-                <span class="dft-av">
-                  <img v-if="avatarUrl(item.data.owner_avatar)" :src="avatarUrl(item.data.owner_avatar)" alt="" loading="lazy" />
-                  <template v-else>{{ (item.data.owner_name || item.data.owner_username).slice(0, 1) }}</template>
-                </span>
-                {{ item.data.owner_name || item.data.owner_username }}
-              </template>
-              <template v-else>—</template>
-            </span>
-            <span class="dft-c dft-c--time num" role="gridcell">{{ item.kind === 'file' ? fmtTime(item.data.created_at) : fmtMonth(item.data.latest_file_at) }}</span>
-            <span class="dft-c dft-c--star" role="gridcell" @click.stop>
-              <button
-                type="button"
-                class="dft-star"
-                :class="{ 'on': item.data.is_starred }"
-                :aria-label="(item.data.is_starred ? '取消收藏' : '收藏 (仅自己可见)') + ' — ' + item.label"
-                :aria-pressed="!!item.data.is_starred"
-                @click="$emit('toggle-star', item.data, item.kind)"
-              >★</button>
-            </span>
+      <!-- 表体 -->
+      <div class="dft-body">
+        <div v-if="loading" class="dft-states">
+          <div v-for="i in 8" :key="'sk' + i" class="dft-skel" :style="{ animationDelay: i * 60 + 'ms' }">
+            <span class="dft-skel-dot"></span>
+            <span class="dft-skel-line" :style="{ width: 30 + ((i * 37) % 45) + '%' }"></span>
           </div>
-        </template>
-      </VirtualList>
+        </div>
+        <div v-else-if="loadError" class="dft-states dft-states--err">
+          <p>{{ loadError }}</p>
+          <!-- 2026-10-03 a11y: 错误态的"重试"是**操作按钮**, 不是单元格。
+               role="grid" 只允许 row / rowgroup 直系子元素 (见 axe
+               aria-required-children), 裸 button 每帧都违规, 且它是可聚焦元素
+               → axe 不会像对 .dft-body 那样递归穿透。
+               role="row" + role="gridcell" 保住 grid 语义, 同时按钮仍在无障碍树里
+               (cell 内内容对 AT 可见, 可 Tab 到、可激活)。 -->
+          <div role="row">
+            <div role="gridcell">
+              <button type="button" class="dft-retry" @click="$emit('retry')">重试</button>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="!rows.length" class="dft-states dft-states--empty">
+          <p class="dft-empty-ico">🗂</p>
+          <p>{{ showPath ? `没有找到相关文件 — 换个更短的关键词试试` : '这个位置还没有文件 — 拖进来或点右上「上传文件」' }}</p>
+        </div>
+        <VirtualList
+          v-else
+          :items="rows"
+          :item-height="rowH"
+          :threshold="60"
+          :container-style="{ height: '100%' }"
+        >
+          <template #default="{ item, index }">
+            <div
+              class="dft-row"
+              :class="{
+                'is-active': item.key === activeKey,
+                'is-sel': item.kind === 'file' && selectedIdSet.has(item.data.id),
+                'is-folder': item.kind === 'folder',
+                'is-drop-into': dropFolderKey === item.key,
+                'is-drag-src': draggingIds && draggingIds.includes(item.data?.id),
+              }"
+              :style="{ height: rowH + 'px' }"
+              :data-row-key="item.key"
+              role="row"
+              :aria-selected="item.kind === 'file' && selectedIdSet.has(item.data.id)"
+              :draggable="true"
+              @click="onRowClick(item, index, $event)"
+              @dblclick="onRowDblclick(item)"
+              @contextmenu.prevent="$emit('row-contextmenu', item, $event)"
+              @dragstart="onRowDragstart(item, $event)"
+              @dragend="onRowDragend"
+              @dragover="onRowFolderDragover(item, $event)"
+              @dragleave="onRowDragleave(item)"
+              @drop="onRowFolderDrop(item, $event)"
+            >
+              <!-- 2026-10-03 a11y: 同表头, role="row" 的 6 个直接子元素全部补 role="gridcell" -->
+              <span class="dft-c dft-c--check" role="gridcell" @click.stop>
+                <template v-if="item.kind === 'file'">
+                  <input
+                    type="checkbox"
+                    :checked="selectedIdSet.has(item.data.id)"
+                    :aria-label="'选择 ' + item.label"
+                    @change="$emit('select-toggle', item.data.id)"
+                  />
+                </template>
+                <template v-else>
+                  <input
+                    type="checkbox"
+                    :checked="selectedFolderSet.has(item.data.id)"
+                    :aria-label="'选择文件夹 ' + item.label"
+                    @change="$emit('select-toggle-folder', item.data.id)"
+                  />
+                </template>
+              </span>
+              <span class="dft-c dft-c--name" role="gridcell">
+                <!-- 批次⑧ 对齐视觉稿 .nm: 文件夹=teal 描边图标, 文件=7px 类型色 dot (行内缩略图/缩写色块退役, 封面统一看右栏) -->
+                <svg v-if="item.kind === 'folder'" viewBox="0 0 24 24" class="dft-folder-ic" aria-hidden="true">
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                </svg>
+                <span v-else class="dft-dot" :style="{ background: item.color }" :title="item.abbr"></span>
+                <span class="dft-name" :title="item.label">{{ item.label }}</span>
+                <span v-if="item.kind === 'file' && showPath && item.data.folder_name" class="dft-path">
+                  {{ item.data.folder_name }}
+                </span>
+                <span v-if="item.kind === 'file' && item.data.is_latest === false" class="dft-old" title="非最新版本">旧版</span>
+              </span>
+              <span class="dft-c dft-c--size num" role="gridcell">{{
+                item.kind === 'file'
+                  ? fmtSize(item.data.file_size)
+                  : (item.data.size_bytes != null ? fmtSize(item.data.size_bytes) : '—')
+              }}</span>
+              <span class="dft-c dft-c--owner" role="gridcell">
+                <!-- 批次⑩.1: 上传者只对具体文件显示; 头像优先真实照片, 无则首字回退 -->
+                <template v-if="item.kind === 'file' && (item.data.owner_name || item.data.owner_username)">
+                  <span class="dft-av">
+                    <img v-if="avatarUrl(item.data.owner_avatar)" :src="avatarUrl(item.data.owner_avatar)" alt="" loading="lazy" />
+                    <template v-else>{{ (item.data.owner_name || item.data.owner_username).slice(0, 1) }}</template>
+                  </span>
+                  {{ item.data.owner_name || item.data.owner_username }}
+                </template>
+                <template v-else>—</template>
+              </span>
+              <span class="dft-c dft-c--time num" role="gridcell">{{ item.kind === 'file' ? fmtTime(item.data.created_at) : fmtMonth(item.data.latest_file_at) }}</span>
+              <span class="dft-c dft-c--star" role="gridcell" @click.stop>
+                <button
+                  type="button"
+                  class="dft-star"
+                  :class="{ 'on': item.data.is_starred }"
+                  :aria-label="(item.data.is_starred ? '取消收藏' : '收藏 (仅自己可见)') + ' — ' + item.label"
+                  :aria-pressed="!!item.data.is_starred"
+                  @click="$emit('toggle-star', item.data, item.kind)"
+                >★</button>
+              </span>
+            </div>
+          </template>
+        </VirtualList>
+      </div>
     </div>
 
     <!-- 底部分页 + 计数 (表格自带, B 稿右下角 "共 23 条 · 1-8 · 3 页") -->
-    <div class="dft-foot">
+    <!-- 2026-10-03 a11y: role="group" + aria-label —— 分页已移出 .dft-grid, 但它仍是
+         .dft 内唯一的非网格控件, 显式 group + 可读名比裸 div 更清楚。
+         刻意不用 role="navigation": 那是 landmark, 单表内翻页用 group 更贴切。 -->
+    <div class="dft-foot" role="group" aria-label="文件分页">
       <span class="dft-foot-stat num">{{ footStat }}</span>
       <span class="dft-foot-sp"></span>
       <el-pagination
@@ -485,6 +507,17 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
   outline: none;
 }
 .dft:focus-visible { box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), .25); }
+
+/* 2026-10-03 a11y: .dft 拆出 .dft-grid (role=grid) 后, 表头+表体不再是 .dft 的
+   直接 flex 子项 —— .dft-grid 接管"占满剩余高度 + 纵向 flex"这项职责, 否则
+   表体拿不到高度, 行区会塌。宽度不设 100%: flex 列向默认 stretch, 与原
+   .dft-body 同宽, 保持像素级一致。 */
+.dft-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
 
 .dft-head, .dft-row {
   display: grid;
