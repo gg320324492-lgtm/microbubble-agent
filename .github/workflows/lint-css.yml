@@ -23,6 +23,12 @@ on:
       - "scripts/sync-design-tokens.sh"
       - "packages/design-tokens/**"
       - "apps/desktop/package.json"
+      # 2026-10-02 S3.8 前置: 体量棘轮已从内联 declare -A 抽成
+      # scripts/frontend-size-budget-check.sh + scripts/frontend-size-budget.txt。
+      # 同 S3.7 8 的形态 —— 改了棘轮本身却不在 paths 内, 该门禁既不会被自己触发,
+      # 基线被放宽的 commit 也不会触发它。两条都补。
+      - "scripts/frontend-size-budget-check.sh"
+      - "scripts/frontend-size-budget.txt"
   push:
     branches: [main]
     paths:
@@ -45,6 +51,12 @@ on:
       - "scripts/sync-design-tokens.sh"
       - "packages/design-tokens/**"
       - "apps/desktop/package.json"
+      # 2026-10-02 S3.8 前置: 体量棘轮已从内联 declare -A 抽成
+      # scripts/frontend-size-budget-check.sh + scripts/frontend-size-budget.txt。
+      # 同 S3.7 8 的形态 —— 改了棘轮本身却不在 paths 内, 该门禁既不会被自己触发,
+      # 基线被放宽的 commit 也不会触发它。两条都补。
+      - "scripts/frontend-size-budget-check.sh"
+      - "scripts/frontend-size-budget.txt"
   # v76.4: 允许手动触发 baseline-guard, 输入 max-increase 临时放宽门禁
   # 用法: Actions → Lint CSS → Run workflow → 输入 max_increase + tracking_issue
   workflow_dispatch:
@@ -170,33 +182,10 @@ jobs:
       - name: Frontend size budget (ratchet)
         run: |
           set +e
-          declare -A BUDGET=(
-            ["web/src/utils/paperAdapter.js"]=5633
-            ["web/src/views/chat/ChatViewSSE.vue"]=2973
-            ["web/src/components/drive/DriveDetailRail.vue"]=2151
-          )
-          FAILED=0
-          TOTAL_NOW=0
-          TOTAL_BUDGET=0
-          for f in "${!BUDGET[@]}"; do
-            LIMIT="${BUDGET[$f]}"
-            if [ ! -f "$f" ]; then
-              echo "::error file=$f,title=体量门禁失效::被监控文件不存在，本棘轮已失去意义，请更新 BUDGET"
-              FAILED=1
-              continue
-            fi
-            NOW=$(wc -l < "$f" | tr -d ' ')
-            TOTAL_NOW=$((TOTAL_NOW + NOW))
-            TOTAL_BUDGET=$((TOTAL_BUDGET + LIMIT))
-            if [ "$NOW" -gt "$LIMIT" ]; then
-              echo "::error file=$f,title=前端热点体量新增::$NOW > 基线 $LIMIT（+$((NOW - LIMIT))）。真拆见 S3.6-3b；新增一律 fail。"
-              FAILED=1
-            elif [ "$NOW" -lt "$LIMIT" ]; then
-              echo "::notice title=前端热点体量改善::$f 较基线少 $((LIMIT - NOW)) 行，请把 BUDGET 里该文件的数字调低以固化成果。"
-            fi
-          done
-          echo "合计: $TOTAL_NOW / 基线 $TOTAL_BUDGET"
-          exit $FAILED
+          sh scripts/frontend-size-budget-check.sh
+          rc=$?
+          echo "size budget exit=$rc"
+          exit $rc
 
       - name: Upload vitest report
         if: always()
