@@ -29,29 +29,41 @@ jobs:
   build:
     name: Build & push app-test image to GHCR
     runs-on: ubuntu-latest
-    # 2026-10-02 S3.9: 15 → 30 分钟。依据是 run 36342320802 / 36750392880 的实测分段耗时,
-    # 不是拍脑袋:
-    #   - 冷构建 apt 步 (ffmpeg/libreoffice/fonts-noto-cjk) 846s / 262.4 MB / 实测 263 kB/s
-    #   - pip install -r requirements.txt (torch/torchaudio/funasr/modelscope) 实测 180s
-    #   - #14 exporting to image: app-test 镜像实测 4.24 GB 压缩 / 单层 3651 MB,
-    #     推 GHCR 单步实测 >240s 仍未完成即被 15min 超时杀掉
-    #   合计 ~21-22 分钟上界, 30 分钟给出约 1.4x 余量应对 runner 抖动/镜像层压缩波动。
+    # 2026-10-02 S3.9: 15 -> 60 minutes (tried 30 first, still not enough; see measurements).
     #
-    # ⚠️ 调大 timeout 只是**三选一措施之一**, 单靠它治标: 真正的根因是
-    #   "GHA buildkit cache TTL 7 天过期 → 冷构建跑不完 → 15min 超时先杀 →
-    #    cache-to 从未执行 → 缓存永远写不回去 → 每次触发都是冷构建"的**永久死锁**
-    #   (实测: 最后一次 success 2026-09-20 18:20 → 首次 cancelled 2026-09-27 18:53,
-    #    间隔 7.02 天; gh api repos/:owner/:repo/actions/caches 当前 buildkit 条目数 = 0)。
-    #   对症下药在 Dockerfile: pip 层去掉 --no-cache-dir 改 --mount=type=cache,
-    #   让 pip 缓存独立于 layer cache 存活, 冷构建可复用。
+    # **Measured phase timings** (run 37030254673, this commit, the timeout=30 attempt):
+    #   - #10 apt (ffmpeg/libreoffice/fonts-noto-cjk)      1352.8s  <- far above estimate
+    #   - #12 pip install -r requirements.txt               154.4s  (measure B in effect)
+    #   - #14 exporting to image + pushing layers/manifest   272.1s  (4.24 GB compressed)
+    #   - ~42s setup overhead, then #16 cache export remains
+    #   At 30.5 min it was STILL RUNNING -- #16 "exporting to GitHub Actions Cache"
+    #   was killed mid-write by the 30min timeout. So 30 is measurably insufficient.
     #
-    # 未做的措施 A (显式 cache scope, 即 cache-to/cache-from 加 scope=):
-    #   有意**不做**, 不是漏了。若加 scope, 一旦该 scope 名与本仓库其它 workflow
-    #   (qa-bench-ci.yml / qa-bench-smoke.yml / playwright.yml 同样 build 本 Dockerfile)
-    #   隐式共享的 buildkit cache 命名冲突, 缓存互相驱逐的后果难以预测。
-    #   当前 mode=max 已保留全部中间层, 加上 Dockerfile 的 cache mount 已能覆盖
-    #   "缓存过期后重建太贵" 这个真瓶颈, 再动 scope 属于风险大于收益。
-    timeout-minutes: 30
+    # Why 60 and not 35: cold-build cost varies wildly with mirror/CDN conditions --
+    #   the same apt step took 407s in run 36342320802 vs 1352.8s here (3.3x spread).
+    #   Worst observed (30.5 min, unfinished) x ~2 headroom = 60 minutes.
+    #   Cost: a genuinely stuck build now waits up to 30 extra min before being
+    #   declared dead; benefit: the cache actually gets written back, so every later
+    #   run is a warm build (measured: fully-cached warm build ~2 min).
+    #
+    # NOTE: raising the timeout alone is only part of the fix. Real root cause is a
+    #   deadlock: GHA buildkit cache TTL is 7 days -> cold build cannot finish ->
+    #   timeout kills it -> cache-to never completes -> cache never written back ->
+    #   every trigger is a cold build again. (Measured: last success 2026-09-20
+    #   18:20 -> first cancelled 2026-09-27 18:53, gap 7.02 days; before this fix
+    #   gh api repos/:owner/:repo/actions/caches had ZERO buildkit entries.)
+    #   The targeted remedy is in the Dockerfile: drop --no-cache-dir and use
+    #   --mount=type=cache so the pip cache outlives the layer cache. After the fix
+    #   the first run did produce buildkit cache entries (0 -> 3), proving the path
+    #   works; widening the timeout lets that export finish and close the loop.
+    #
+    # Measure A (explicit cache scope on cache-from/cache-to) is deliberately NOT done
+    #   -- this is intentional, not an oversight. A scope name could collide with the
+    #   implicit buildkit cache shared by qa-bench-ci.yml / qa-bench-smoke.yml /
+    #   playwright.yml (they build this same Dockerfile); mutual eviction would be
+    #   hard to predict. mode=max already keeps all intermediate layers, and the
+    #   Dockerfile cache mount covers the real bottleneck, so scope is risk > benefit.
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
