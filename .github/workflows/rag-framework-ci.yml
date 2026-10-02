@@ -12,8 +12,11 @@ name: RAG Framework CI
 #     + app.rag.gate, 框架 import 全部在函数内 try/except).
 #   - SKIP_DB_SETUP=1: tests/conftest.py 条件跳过 DB 初始化与重型 import
 #     (app.main / app.core.database / 全模型), rag_framework 测试不需要 DB.
-#   - alembic heads 守卫: 期望恰好 1 head = 091_add_kg_entity (串单链纪律,
-#     CLAUDE.md 永久锚点). alembic heads 只读脚本目录, 不加载 env.py, 不连 DB.
+#   - alembic heads 守卫: 断言"恰为 1 个 head"这个不变量 (串单链纪律,
+#     CLAUDE.md 永久锚点). **不写死 head 编号** —— 编号是随迁移推进漂移的快照,
+#     硬编码它等于让守卫每加一个迁移就红一次, 却不提供任何真实保护。
+#     当前 head 编号以实测为准 (2026-10-02 容器实测 = 141_zb2_backup_kb_purge).
+#     alembic heads 只读脚本目录, 不加载 env.py, 不连 DB.
 #
 # 注意 (对齐现有 workflow 风格: actions/checkout@v4 + actions/setup-python@v5
 #   + permissions: contents: read, 参考 qa-bench-smoke.yml / qa-bench-ci.yml):
@@ -116,8 +119,13 @@ jobs:
           python -m pytest tests/rag_framework/ -v
 
       # alembic heads 只读脚本目录 (不加载 env.py, 不连 DB).
-      # 输出格式: "<revision_id> (head)" 每 head 一行; revision_id 即文件名
-      # (如 091_add_kg_entity), 期望恰好 1 行.
+      # 输出格式: "<revision_id> (head)" 每 head 一行; revision_id 即迁移文件名.
+      # 守卫断言 = "恰为 1 个 head". 刻意不校验具体编号 (2026-10-02):
+      #   编号是快照会漂移, 硬编码它会让守卫在每次正常加迁移时红一次, 却不防任何
+      #   真问题。真正要拦的是"双 head" —— 并行 agent 都声明同一个 down_revision
+      #   会在链上分叉, `alembic upgrade head` 直接报 Multiple head revisions
+      #   阻塞部署 (2026-07-24 串单链纪律事故, CLAUDE.md 永久锚点)。单 head 才是
+      #   那个不变量, 也是本守卫提供的全部保护。
       - name: Verify alembic chain (1 head expected)
         run: |
           heads=$(python -m alembic heads)
@@ -125,6 +133,10 @@ jobs:
           count=$(echo "$heads" | grep -c '(head)')
           if [ "$count" -ne 1 ]; then
             echo "FAIL: expected exactly 1 alembic head, got $count"
+            echo "--- heads ---"
+            echo "$heads"
+            echo "--- 常见成因: 并行 migration agent 都声明了同一个 down_revision, 链上分叉成双 head。"
+            echo "--- 修法: 让后一张迁移的 down_revision 接前一张 (串单链), 别用 alembic merge 留坑。"
             exit 1
           fi
-          echo "$heads" | grep -q '091_add_kg_entity' || { echo "FAIL: head is not 091_add_kg_entity"; exit 1; }
+          echo "OK: exactly 1 alembic head ($heads)"
