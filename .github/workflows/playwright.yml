@@ -425,11 +425,57 @@ jobs:
             sleep 2
           done
 
-      - name: "Init test DB schema + seed + test user (W98 fix)"
+      - name: "Init test DB schema + seed + test user (W98 fix + S3.8/S3.9 fix-loud)"
         run: |
           # W98 (2026-07-31): 同 a11y job — CI 空库无 xiaoqi_testbot → login AUTH_ERROR.
-          #   必须先 init_test_db_all.py 建号再拿 token, 否则 visual 全被重定向到 /dashboard.
-          docker exec -e SKIP_DB_SETUP=1 app-test python scripts/init_test_db_all.py 2>&1 | tail -20
+          #   必须先建号再拿 token, 否则 visual 全被重定向到 /dashboard.
+          #
+          # 2026-10-03 S3.10 (本 job 同步 a11y 的 S3.8/S3.9 修复):
+          #   实测 run 37092817894 —— 本 step **从未成功执行过**, 且失败被静默吞掉:
+          #     Error response from daemon: No such container: app-test
+          #   而 step 结论仍是 success, 因为 `2>&1 | tail -20` 让 bash -e 只看到
+          #   tail 的退出码 (恒 0) —— 与 S3.8 记录的第 (2) 类静默失败同型。
+          #
+          #   根因: docker-compose.test.yml 里 app-test **没有** container_name
+          #   (只有 glitchtip / pg-exporter-test 有), compose 按
+          #   "<project>-<service>-1" 命名, project 取自仓库目录名 → CI 真实容器名
+          #   是 microbubble-agent-app-test-1。写死 `app-test` 恒失败。
+          #   ⚠️ 修法**不**是硬编码那个名字 —— project name 会随目录名/环境变 (类 20.158 同型
+          #   教训: 容器名/索引名这类部署态事实必须实测, 不能推理)。改用
+          #   `docker compose exec -T`, 由 compose 自己解析 service → 容器。
+          #
+          #   脚本选择同 a11y job (S3.8 第二次修正): init_test_db_all.py 只是
+          #   init_db.init_database + ensure_test_user 的薄封装, 而其 ensure 分支
+          #   因 scripts/ensure_test_user.py:51 的 parse_args() 无参、而
+          #   init_test_db_all.py:34 传了 [] → TypeError, 该分支**从未成功执行过**。
+          #   直接分别调用两个可执行脚本, 语义等价且立即生效 (改脚本需重建
+          #   app-test-latest 镜像才生效, 本轮拿不到新镜像)。
+          set -o pipefail
+          {
+            docker compose -f docker-compose.test.yml exec -T \
+              -e SKIP_DB_SETUP=1 app-test \
+              python scripts/init_db.py
+            docker compose -f docker-compose.test.yml exec -T \
+              -e SKIP_DB_SETUP=1 app-test \
+              python scripts/ensure_test_user.py
+          } 2>&1 | tee /tmp/init-db-visual.log
+
+          # fail-loud 断言: 不让"没建号"再流到快照比对才以"莫名失败"的面貌爆出来.
+          #   数据库初始化完成 ← scripts/init_db.py:29
+          #   [CREATED] / [OK]    ← scripts/ensure_test_user.py:116 / :90
+          #
+          #   ⚠️ 不能按 "Traceback" 字面量判失败 (S3.9 实测): passlib 探测 bcrypt
+          #   版本时会往 stderr 打一段**良性** trapped 警告, 其字面量就含
+          #   "Traceback" / "AttributeError", 而建号其实已成功 ([CREATED] 已打出)。
+          #   该行恰好顶格, 用 '^Traceback' 也拦不住 —— 只能按内容白名单剔除。
+          grep -q "数据库初始化完成" /tmp/init-db-visual.log || {
+            echo "::error::init_db 未跑成功 (缺 '数据库初始化完成') — 测试账号多半没建"; exit 1; }
+          grep -qE "\[(CREATED|OK)\]" /tmp/init-db-visual.log || {
+            echo "::error::ensure_test_user 未建号 (缺 [CREATED]/[OK]) — 后续 login 必 AUTH_ERROR"; exit 1; }
+          if grep -vE "^\(trapped\)|passlib/handlers/bcrypt\.py|_bcrypt\.__about__|^Traceback \(most recent call last\):$|^ +\^+$|^ *version = _bcrypt|has no attribute '__about__'" /tmp/init-db-visual.log \
+             | grep -qE "No such container|Traceback|Error:"; then
+            echo "::error::init 输出含容器/致命异常错误"; cat /tmp/init-db-visual.log; exit 1
+          fi
 
       - name: Get fresh TEST_TOKEN from app-test
         env:
@@ -438,9 +484,34 @@ jobs:
         run: |
           USER="${TEST_USERNAME:-xiaoqi_testbot}"
           PASS="${TEST_PASSWORD:-testbot_pass_2026}"
-          TOKEN=$(curl -s -X POST http://localhost:8001/api/v1/auth/login             -H "Content-Type: application/json"             -d "{\"username\":\"$USER\",\"password\":\"$PASS\"}")
-          echo "TOKEN_LEN=${#TOKEN}"
-          echo "PLAYWRIGHT_TEST_TOKEN=$TOKEN" >> $GITHUB_ENV
+          RESP=$(curl -s -X POST http://localhost:8001/api/v1/auth/login             -H "Content-Type: application/json"             -d "{\"username\":\"$USER\",\"password\":\"$PASS\"}")
+          echo "TOKEN_LEN=${#RESP}"
+
+          # 2026-10-03 S3.10: 本 job 的登录态此前是**坏的**, 实测 run 37092817894:
+          #   TOKEN_LEN=65, 而写进 GITHUB_ENV 的是整个响应体
+          #     {"error":{"code":"AUTH_ERROR","message":"用户名或密码错误","details":{}}}
+          #   而不是 token。后果: 每个页面请求都带 `Bearer <这个 JSON>` → 后端 401 →
+          #   chat 系列 spec 在填完表单后干等满 test.setTimeout(240_000),
+          #   CI retries: 1 再等一遍 → 单个 spec 吃掉 8 分钟, job 必然 20 分钟超时.
+          #   (对照: 同一 run 的 a11y job TOKEN_LEN=506 = 真 JSON, 能取出 access_token。)
+          #
+          #   /api/v1/auth/login 返回的是 JSON **对象**
+          #     {"access_token":"eyJ...","refresh_token":"eyJ...","user":{...}}
+          #   不是裸 JWT。必须像真实前端那样取 access_token 字段:
+          #   web/src/utils/request.js 发的是 `Bearer <localStorage.access_token>`,
+          #   真实前端存的就是**裸 access_token 字符串**。
+          #   (S3.8 教训: 断言写在"取出来的 access_token 必须是 JWT"上, 而不是
+          #    响应体非空 —— 错误 JSON 也是非空的, 那是假信号。)
+          ACCESS_TOKEN=$(printf '%s' "$RESP" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("access_token",""))' 2>/dev/null || true)
+          echo "PLAYWRIGHT_TEST_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+
+          case "$ACCESS_TOKEN" in
+            eyJ*.*.*) echo "✓ token looks like a JWT (len=${#ACCESS_TOKEN})" ;;
+            *) echo "::error::login 未返回可用的 access_token (错误 JSON 或响应结构异常)"
+               echo "::error::原始响应(前 200 字符), 长度=${#RESP}: ${RESP:0:200}"
+               exit 1 ;;
+          esac
 
       - name: Run visual regression tests
         working-directory: web
@@ -451,15 +522,25 @@ jobs:
           TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
         run: npx playwright test --reporter=list
 
-      - name: Update snapshots (only on main push)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: web
-        env:
-          BASE_URL: http://localhost:3000
-          VITE_API_PROXY_TARGET: http://localhost:8001
-          CI: 'true'
-          TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
-        run: npx playwright test --update-snapshots --reporter=list
+      # 2026-10-03 S3.10: 删掉 "Update snapshots (only on main push)" 整步。
+      #
+      #   该步跑 `npx playwright test --update-snapshots`, 把 runner 上的
+      #   **-snapshots/ 全部重写一遍**, 然后**什么都不产出**:
+      #     - 没有 git commit / git push (下方两步都不是);
+      #     - "Upload visual diff on failure" 只传 web/test-results/,
+      #       不含 __snapshots__, 且只在 failure 时跑;
+      #     - green 时连 artifact 都没有。
+      #   即: 把 257 个用例**整个重跑一遍**换零收益。
+      #
+      #   与 a11y job 被 9cb3337c1 删掉的是同型"自我确认"病灶: 基线在 runner 上
+      #   被改写却从不回灌仓库, 这道门禁因此永远比"自己上一遍刚写的基线"——
+      #   换句话说它无法对基线漂移报红, 只是白烧一轮 CI 时间。
+      #
+      #   真正要重录基线必须是**人工 review 后的本地提交**, 不能靠 CI 自动改写。
+      #   注意: 本 job 的 **-snapshots/ 基线目前在 git 里全都不存在**
+      #   (f9495f13b 废弃 v76 时删, 4c97ae562 删 baseline png, 81423c4a2 又把 PNG
+      #   加进 .gitignore), 所以收敛/重录基线这件事必须走独立决策, 不能在
+      #   workflow 里自动补 —— 见 commit message 的"后续顺序"段。
 
       - name: Upload visual diff on failure
         if: failure()
