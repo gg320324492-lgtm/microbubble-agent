@@ -98,6 +98,38 @@ export default defineConfig({
       threshold: 0.1,
       fullPage: true,
       animations: 'disabled',
+
+      // 2026-10-03 S3.11: 去掉 {snapshotSuffix}, 让**一份基线跨平台通用**。
+      //
+      // ⚠️ 为什么必须去掉 (这不是优化, 是修一个已踩过的坑):
+      //   Playwright 在 lib/index.js:345 无条件写 `testInfo.snapshotSuffix = process.platform`,
+      //   默认模板 `{-snapshotSuffix}` 于是把平台名烙进**基线文件名**:
+      //     本机 Windows 录 -> `xxx-win32.png`
+      //     CI Linux  runner -> 去找 `xxx-linux.png`
+      //   两者永不相遇 ⇒ CI 恒报 "A snapshot doesn't exist"。
+      //   这正是历史基线被删的根因, 4c97ae562 的 commit message 原文:
+      //     "CI Linux runner 找不到 baseline / 我本地 Windows 生成的 baseline 是
+      //      *-win32.png, Linux runner 期望 *-linux.png"
+      //   当时的解法是"让 CI 自动重新生成"(未经审查的固化), 今天已被明确拒绝。
+      //
+      //   去掉后文件名不再含平台 ⇒ 本机录的基线 CI 直接读得到。
+      //   **代价 (已知且被接受)**: 放弃跨平台隔离 —— 本机与 CI 的渲染差异
+      //   (字体/抗锯齿) 会变成真 diff 报红。但这正是门禁该干的活:
+      //   基线漂移本就该报红。CI 是本门禁的唯一消费方, 平台隔离无实际价值。
+      //
+      // ⚠️ {projectName} **必须保留**, 不能一并去掉:
+      //   desktop-chrome (viewport 1280x720) 与 desktop-comments (viewport 1280x800)
+      //   都跑 desktop_drive_comments.spec.mjs, 像素不同 ⇒ 必须两份基线。
+      //   去掉 projectName 会让两者互相覆盖, 静默丢一张基线。
+      //   (projectName 里的 `-` 能存活: Playwright 的 sanitizeForFilePath 只把
+      //    [\x00-\x2C\x2E-\x2F\x3A-\x40\x5B-\x60\x7B-\x7F] 换成 `-`, 不含 \x2D 即 '-';
+      //    4 个 project 名本身全用连字符, 无下划线, 故不会被改写。)
+      //
+      // 与 a11y config (tests/visual/a11y/playwright.a11y.config.mjs:39) 同模式:
+      //   那份用 `'{testDir}/__snapshots__/{arg}-{projectName}{ext}'` 显式去掉了
+      //   平台后缀。本 config 用 legacy 的 {testFileName}-snapshots/ 目录结构
+      //   (保留与历史基线同构), 只把模板里的 {snapshotSuffix} 摘掉。
+      pathTemplate: '{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-projectName}{ext}',
     },
     timeout: 10_000,
   },
