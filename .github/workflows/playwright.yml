@@ -520,7 +520,36 @@ jobs:
           VITE_API_PROXY_TARGET: http://localhost:8001
           CI: 'true'
           TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
-        run: npx playwright test --reporter=list
+        # 2026-10-03 S3.10 第 1 步: 改用专用 config 收敛到**真视觉回归**。
+        #
+        #   旧命令 `npx playwright test` 走 web/playwright.config.js, 它的 testMatch
+        #   是 `tests/visual/.*\.spec\.mjs`, 于是把该目录下 **46 个 spec / 257 用例**
+        #   全部收进这道"视觉回归"门禁。其中真正做像素比对 (toHaveScreenshot) 的
+        #   只有 5 个 spec / 13 处调用点, 其余 41 个是历史 LLM / 功能 E2E 残留
+        #   (chat / drive / RAG / recording 等), 断言的是 DOM 与 computed style。
+        #
+        #   为什么这会让 job 超时 (实测 run 37100057334, 登录态已修好之后):
+        #     测试步 17m02s 只跑到 100/257; chat 系列逐个打满
+        #     test.setTimeout(240_000), CI retries: 1 再翻一倍。
+        #   而被收敛进来的 5 个 spec 全部 no-llm / no-upload (逐个 grep 确认无
+        #   chat/stream 与 drive/files/upload), CI 实测单例 mean 4.10s / max 10.9s
+        #   (n=50, 合计 205.2s) ⇒ 收敛后 ~9 分钟可跑完, 不再 cancelled。
+        #
+        #   收窄到 127 用例, 且**逐 project 复刻**原分布 (28/22/30/47), 因为基线
+        #   文件名带 projectName, 少一个 project 会让既有基线对不上。
+        #
+        # ⚠️ **预期本 job 是 failure, 原因是缺基线, 不是代码回归**:
+        #   这 5 个 spec 的 -snapshots/ 基线在 git 里全都不存在 (f9495f13b 废弃 v76
+        #   时删, 4c97ae562 删 baseline png, 81423c4a2 又把 PNG 加进 .gitignore)。
+        #   实测 Playwright 缺基线时 (updateSnapshots 默认 "missing") 判 1 failed 并报
+        #   `A snapshot doesn't exist at ...`, **不会自动写盘**。
+        #   ⇒ 看到这个红请勿误判成 UI 回归; 它的含义是"还没有基线可比"。
+        #   本步**刻意不带** --update-snapshots: 那会在无人 review 的情况下把基线
+        #   悄悄写进 runner, 正是我们要拒绝的"未经审查的基线固化"。
+        #
+        #   录基线的前置是 ChatViewSSE 的 CSS 抽取完成 —— 像素比对是验收 CSS 改动
+        #   的唯一手段, 顺序不可颠倒: CSS 抽取 → 视觉回归转硬门 → 才谈录基线。
+        run: npx playwright test -c tests/visual/playwright.visual.config.mjs --reporter=list
 
       # 2026-10-03 S3.10: 删掉 "Update snapshots (only on main push)" 整步。
       #
