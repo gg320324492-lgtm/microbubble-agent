@@ -1913,14 +1913,30 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
        故它**两套主题都是 #909399**.
    ⚠️ 不能直接套 --color-text-secondary: 本项目也没覆盖 --el-fill-color-blank,
        计数器的白底在 dark 下依然是 #FFFFFF, 而 dark 的 --color-text-secondary
-       #a8aab0 压白底只有 2.32. 故按 EP 变量作用域给, 两套主题各给一个能过 4.5 的值. */
-:root .el-input__count,
-:root .el-input__count .el-input__count-inner {
-  color: #6B6E76;         /* light: on --el-fill-color-blank #ffffff = 5.10 (原 #909399 = 3.08) */
+       #a8aab0 压白底只有 2.32. 故按 EP 变量作用域给, 两套主题各给一个能过 4.5 的值.
+
+   ⚠️ 2026-10-03 实测返工: 必须覆盖 **自定义属性 --el-color-info**, 不能覆盖
+      color 属性本身. 首次修法写成 `:root .el-input__count { color: #6B6E76 }`,
+      真 Chromium 实测**不生效** (仍是 #909399 on #ffffff = 3.08, axe 照样报
+      color-contrast [serious]) —— 三个变体实测结论:
+        A ours-first + EP 后到   → #909399 (挂)
+        B EP 先 ours 后          → #6B6E76 (过)
+        C 提高 specificity 到 `:root html body .el-input__count` → #909399 (仍挂)
+        D 加 !important          → #6B6E76 (过)
+      机理: vite dev 下 EP 样式经 unplugin-vue-components **按需注入到组件 import 位**,
+      晚于 main.js 顶部的 variables.css, 于是同 specificity 下 EP 的
+      `.el-textarea .el-input__count` 后到胜出; C 的 (0,3,1) 仍输是因为真实堆叠里
+      `:root` 之外的类更多, 特异性没有真正拉开。
+      覆盖自定义属性则**与源顺序无关** —— EP 规则里 color 是 var(--el-color-info),
+      值在计算样式阶段才解析, 我们在元素上把变量本身换掉, 谁先谁后都拿到新值.
+      实测两方向均 5.10. */
+.el-input__count,
+.el-input__count .el-input__count-inner {
+  --el-color-info: #6B6E76;   /* light: on --el-fill-color-blank #ffffff = 5.10 (原 #909399 = 3.08) */
 }
 [data-theme="dark"] .el-input__count,
 [data-theme="dark"] .el-input__count .el-input__count-inner {
-  color: #5C5F66;         /* dark:  底仍是 #ffffff, #5C5F66 = 6.40 */
+  --el-color-info: #5C5F66;   /* dark:  底仍是 #ffffff, #5C5F66 = 6.40 */
 }
 
 /* W101 P3-A11Y: 全局 :focus-visible 兜底 (WCAG 2.4.7)
