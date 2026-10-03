@@ -2280,8 +2280,25 @@ function handleSearchKeydown(e: KeyboardEvent) {
   mask-image: linear-gradient(90deg, var(--reveal-start) 0%, var(--reveal-start) var(--reveal), var(--reveal-end) var(--reveal));
   -webkit-mask-image: linear-gradient(90deg, var(--reveal-start) 0%, var(--reveal-start) var(--reveal), var(--reveal-end) var(--reveal));
 }
-[data-theme="dark"] .msg-content :deep(pre),
-[data-theme="dark"] .msg-content :deep(code) {
+/* W100 死规则修复: 这两条原先用了 Vue 的 scoped 深层穿透伪类, 但落在**非 scoped** 块
+   (本块开头见 "v69 P1b ... 必须非 scoped") —— 该伪类只在 scoped 块才编译, 否则原样留在
+   产物 CSS 里永不生效 (实测产物含字面量伪类). dark 模式下 pre/code 一直拿的是 scoped
+   块的 --color-bg-page (页面底色), 不是代码块底色.
+
+   为什么是纯后代而不是移进 scoped 块: .msg-content 由子组件 ChatMessageRow.vue:156
+   渲染, 不在本组件模板里. Vue 只把父 scope id 传给**子组件根元素**, 实测该 class
+   仅在 assistant 路径 (class 落在 ContentBriefDetail 根元素) 携带父 scope id,
+   user 路径 (内部 div v-html) 不携带 —— 写成 .msg-content[data-v-x] pre 只会命中一半消息.
+   故与本块其余规则 (.msg-content-typing / .bot-bubble / .quick-btn ...) 一致, 用纯后代.
+
+   为什么 pre/code 与下面那条 a 不共用同一个选择器:
+   pre/code 这条是**纯底色**, 桌面/移动两边都能安全接管 —— 移动端
+   MobileMessageBubble.vue:247 已有 .msg-content pre { background: rgba(0,0,0,.05) },
+   两者特异性相同 (0,2,1) 由源码顺序决胜, 且移动/桌面 chat 是 resolveMobileComponent
+   的互斥动态 import (router/index.js:51), 同一页面不会同时加载, 无实际冲突.
+   而链接那条必须限定 .chat-message-row.bot —— 见该规则上方注释. */
+[data-theme="dark"] .msg-content pre,
+[data-theme="dark"] .msg-content code {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
 }
@@ -2315,11 +2332,20 @@ function handleSearchKeydown(e: KeyboardEvent) {
   /* stylelint-disable-next-line color-named */
   color: var(--color-bg-card);
 }
-[data-theme="dark"] .msg-content :deep(a) { color: var(--color-primary-light); }
+/* W100 死规则修复 (同上一条的 pre/code): 该 scoped 伪类在非 scoped 块不编译, 原为死规则.
+
+   ⚠️ 这条**故意不与上面 pre/code 共用纯后代选择器**, 别下一个人为"统一"改回去:
+   .chat-message-row.bot 限定不可省. .msg-content 被移动端 MobileMessageBubble.vue:45,57
+   复用, 且那里的用户气泡是紫粉渐变 (--mg-gradient-btn #7C6BD8→#F08AC0) + 白字.
+   若写成纯 `.msg-content a`, dark 下会把移动端用户气泡里的链接从白字改成珊瑚色:
+     #FF7A5C on #7C6BD8 = 1.65 / on #F08AC0 = 1.11  (WCAG AA 需 4.50)
+     现状白字 = 4.24 / 2.31 —— 纯后代是把回归从"部分不达标"放大成"大幅不达标".
+   限定后只命中桌面 bot 气泡, 该处 #FF7A5C on #2a2d35(--color-bg-card) = 5.37, 过 AA. */
+[data-theme="dark"] .chat-message-row.bot .msg-content a { color: var(--color-primary-light); }
 
 /* ===== 2026-09-02 消息排版升级 · 方案 C 白气泡成对 (用户选定) =====
    文本回答进白底轻阴影气泡, 与用户橙色气泡成对; 工具卡片/富块保持各自样式。
-   放全局块: scoped :deep 链在孙组件 (ContentBriefDetail) 内不可靠。 */
+   放全局块: scoped 深层穿透链在孙组件 (ContentBriefDetail) 内不可靠。 */
 .chat-message-row.bot .msg-content {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
