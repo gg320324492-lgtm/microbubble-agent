@@ -91,12 +91,19 @@ BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 
 cd "$WEB_DIR"
 
-# ⚠️ warm-up 跑在**同一套** update 模式之外: 它只把 vite 的依赖预构建缓存热起来,
-#    否则第一个 spec 会在"冷转换"中间态下截图, 与后续 spec 不同源 (实测会让
-#    前几张基线与后面几张不一致)。这里用 `--update-snapshots=none` 且不写基线。
-echo "▸ warm-up vite transform cache (不写基线)"
+# ⚠️ warm-up 只跑**一个**用例, 不是整套。
+#    目的只是把 vite 的依赖预构建缓存热起来 —— 否则第一个 spec 会在"冷转换"
+#    中间态下截图, 与后续 spec 不同源。
+#    ⚠️ 2026-10-05: 原实现跑的是**整套**, 于是整个门禁跑两遍
+#    (实测 118 张 x2 ≈ 32min), 直接超出 visual job 的 25min 预算。
+#    a11y job 的 warm-up 同样是一整套, 但它只有 25 个用例, 不构成问题;
+#    本 job 有 118 个, 必须只跑一个。
+#    `-g` 过滤 + `--update-snapshots=none` ⇒ 不写任何基线。
+echo "▸ warm-up vite transform cache (单用例, 不写基线)"
+WARMUP_GREP="${VIZ_WARMUP_GREP:-03-chat}"
 npx playwright test -c "${VIZ_CONFIG:-tests/visual/playwright.visual.config.mjs}" \
-  --update-snapshots=none --reporter=line > /tmp/warmup.log 2>&1 || true
+  -g "$WARMUP_GREP" --update-snapshots=none --reporter=line > /tmp/warmup.log 2>&1 || true
+echo "▸ warm-up done (exit 忽略是预期的: 基线可能不存在, 与 warm-up 无关)"
 
 echo "▸ 跑视觉回归 (mode=$MODE)"
 set +e
