@@ -61,8 +61,8 @@ const VISUAL_MATCH =
 // 实测原 config 对这 5 个 spec 的 project 分布 (n=127):
 //   desktop-chrome    28 = chat-topbar-6-themes 6 + desktop_drive_comments 22
 //   desktop-comments  22 = desktop_drive_comments 22
-//   mobile-comments   30 = mobile_drive_comments 30
-//   mobile-iphone14   47 = mobile_drive_comments 30 + secondary-routes 8 + visual-regression 9
+//   (2026-10-05 S3.13 已删除 mobile-comments project: 与 mobile-iphone14 同配置, 基线逐字节重复)
+//   mobile-iphone14   33 = mobile_drive_comments 14 + secondary-routes 8 + visual-regression 9 + dark/longpress 2
 // ⚠️ 注意两个评论 spec 在原 config 里各跑**两个** project (如 desktop_drive_comments
 // 同时属 desktop-chrome 与 desktop-comments), 因为原 project 的 testMatch 是
 // `/desktop\/.*\.spec\.mjs/` 这类目录通配, 而 mobile-comments/mobile-iphone14 的
@@ -154,11 +154,19 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       testMatch: /(chat-topbar-6-themes|desktop_drive_comments)\.spec\.mjs$/,
     },
-    {
-      name: 'mobile-comments',
-      use: iphone14,
-      testMatch: /mobile_drive_comments\.spec\.mjs$/,
-    },
+    // 2026-10-05 S3.13 决策 2: **删除 mobile-comments project** (原本 30 个用例)。
+    //
+    // 实测: 本 project 与 mobile-iphone14 的 `use` 是**同一个 iphone14 对象**
+    // (逐字相同: viewport 390x844 / dsf 3 / isMobile / hasTouch / 同一 UA),
+    // 唯一区别是 testMatch 窄到只跑 mobile_drive_comments。
+    // ⇒ 它跑出的每一张基线都是 mobile-iphone14 同名基线的**逐字节副本**。
+    // 实测确认: iphone-12-01-list 与 pixel-5-01-list 两组 md5 完全相同。
+    //
+    // 为什么以前要保留它: 历史 config 的 testMatch 是目录通配
+    // (`/mobile\/.*\.spec\.mjs/`), 两个评论 spec 各跑两个 project,
+    // 注释里写"基线文件名带 projectName, 少一个 project 会让既有基线对不上"。
+    // 但那是**为不存在的既有基线**保留的 —— 基线早已被 4c97ae562 删光。
+    // 现在从零重录, 没有"对不上"的约束, 纯冗余。
     {
       name: 'desktop-comments',
       use: {
@@ -170,7 +178,22 @@ export default defineConfig({
         userAgent:
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
+      // 2026-10-05 S3.13 决策 2: **收窄到只跑 dark mode + sticky 两个 describe**。
+      //
+      // 实测: 本 project 与 desktop-chrome 只差 viewport 高度 (720 vs 800) 与 UA,
+      // 而 fullPage 截图在"内容不足一屏"时两者像素**完全相同**。实测 5 个宽度
+      // (1280/1440/1680/1920/2560) 的 desktop-chrome 与 desktop-comments 基线
+      // **两两字节相同** —— 即同一画面被存了两遍。
+      //
+      // 后果不只是冗余存储: 某一处真实漂移会**连带报红 2 张**, 放大失败噪音,
+      // 让复检官误判为"多处回归"。
+      //
+      // 保留本 project 的理由: 它**独有**两个非 fullPage 用例 ——
+      //   - dark mode (colorScheme: 'dark')  只有这里设
+      //   - sticky 输入栏 (fullPage: false)     只有这里截可视区
+      // 这两个 desktop-chrome 覆盖不到, 所以 project 本身保留, 只去掉重复部分。
       testMatch: /desktop_drive_comments\.spec\.mjs$/,
+      grep: /Dark Mode|Sticky/,
     },
   ],
 })

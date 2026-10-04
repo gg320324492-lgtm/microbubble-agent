@@ -39,12 +39,26 @@ const VIEWPORTS = [
   { name: 'oneplus-8',       width: 412,  height: 869,  dsf: 2.625,isMobile: true, hasTouch: true },
 ]
 
-// W68 路线 F-3 评论 UI 4 个核心视图
-const COMMENT_PAGES = [
-  { name: '01-list',     path: '/drive/file/99/comments',           desc: '评论列表 (header + tabs + 列表 + 输入栏)' },
-  { name: '02-top',      path: '/drive/file/99/comments?top=1',     desc: '单条顶层评论展开' },
-  { name: '03-thread',   path: '/drive/file/99/comments?thread=1',  desc: '嵌套回复 (thread_depth=1)' },
-  { name: '04-input',    path: '/drive/file/99/comments?focus=1',   desc: '评论输入框聚焦 (键盘弹出)' },
+// W68 路线 F-3 评论 UI 核心视图
+//
+// 2026-10-05 S3.13 决策 2: **删掉 ?top / ?thread / ?focus 三个 query param**。
+//   实测证据 (与 desktop_drive_comments.spec.mjs 同步核实, 不是推断):
+//     1. 全仓 grep `route.query` / `useRoute()` / `$route.query` 在
+//        MobileFileCommentsView 里**零命中** —— 视图根本不读 query。
+//     2. 灌带嵌套的真实数据后, 四个变体 md5 完全相同 (f244bd56 x4),
+//        textLen 也相同 (122) ⇒ 参数是死代码, 不是数据问题。
+//     3. `03-thread` 声称测"嵌套回复 (thread_depth=1)", 但本文件同批实测:
+//        MobileFileCommentsView.vue:343 的 onReply 只有一句
+//        `ElMessage.info('... 内联回复功能即将上线')` —— **内联回复从未实现**。
+//     4. `04-input` 声称测"输入框聚焦", 但 MobileCommentInput 在 mounted 时
+//        **无条件** autofocus, 不需要任何 query。
+//   保留的 02 用例改为**真实可触发的交互态** (长按菜单), 见下方 VIEW_STATES。
+const VIEW_STATES = [
+  { name: '01-list', path: '/drive/file/99/comments', desc: '评论列表 (header + tabs + 列表 + 输入栏)',
+    act: null },
+  // 长按顶层评论 -> context menu (LongPressWrapper delay=600)
+  { name: '02-longpress', path: '/drive/file/99/comments', desc: '长按顶层评论弹 context menu',
+    act: 'longpress' },
 ]
 
 /**
@@ -72,6 +86,77 @@ async function injectAuth(page) {
  * 等待评论 UI 完全渲染 (loading 消失 + 列表渲染)
  * 复用 F-3 组件约定: .mfcc-list / .mfcc-top / .mci-textarea 至少一个出现
  */
+/**
+ * 2026-10-05 S3.13 决策 1: 给评论页补 mock fixture。
+ *
+ * 背景 (实测): 测试库 `drive_documents` / `drive_comments` **都是 0 行**
+ *   (psql 实测), 于是 fileId=99 渲染空态 —— 此前 4 个 query 变体的基线
+ *   字节完全相同, 连画面都没有。
+ *
+ * 数据里**含一条嵌套回复** (parent_comment_id=1): 让"嵌套渲染"这件事
+ *   真的出现在画面上, 这样基线才有覆盖到它。
+ *
+ * 未 mock 的请求**放行**(route.fallback)到真后端而非 404:
+ *   区分"缺数据"与"mock 漏了", 不静默变成统一空态。
+ */
+async function installCommentMocks(page) {
+  const rx = (re) => (p) => re.test(p)
+  const table = [
+    [rx(/^\/api\/v1\/drive\/files\/99$/), () => ({
+      id: 99,
+      file_name: '2026-08-30 超声对照组实验记录.pdf',
+      title: null,
+      file_size: 245760,
+      file_type: 'pdf',
+      visibility: 'team',
+      is_starred: false,
+      created_by: '王天志',
+      created_at: '2026-08-30T10:24:00',
+      updated_at: '2026-08-30T15:02:00',
+      folder_id: 42,
+      version_number: 3,
+      download_count: 7,
+    })],
+    [rx(/^\/api\/v1\/drive\/files\/99\/comments$/), () => ({
+      items: [
+        {
+          id: 1, file_id: 99, user_id: 1, user_name: '王天志',
+          content: '对照组超声功率按 40 kHz / 15 W 记录, 请核对第 3 节数据。',
+          mentions: [2], parent_comment_id: null, thread_depth: 0,
+          reply_count: 1, resolved: false, created_at: '2026-08-30T11:02:00',
+        },
+        {
+          id: 2, file_id: 99, user_id: 2, user_name: '胡小琪',
+          content: '已核对, 第 3 节与原始导出一致。',
+          mentions: [], parent_comment_id: 1, thread_depth: 1,
+          reply_count: 0, resolved: true, created_at: '2026-08-30T13:40:00',
+        },
+      ],
+      total: 2,
+    })],
+    [rx(/^\/api\/v1\/members$/), () => ({
+      items: [
+        { id: 1, username: 'wangtianzhi', name: '王天志', wechat_id: null, avatar: null, role: 'admin' },
+        { id: 2, username: 'huxiaoqi', name: '胡小琪', wechat_id: null, avatar: null, role: 'member' },
+      ],
+      total: 2,
+    })],
+  ]
+  await page.route('**/api/v1/**', (route) => {
+    const url = new URL(route.request().url())
+    for (const [matcher, body] of table) {
+      if (matcher(url.pathname)) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(body(url)),
+        })
+      }
+    }
+    return route.fallback()
+  })
+}
+
 async function waitForCommentsUI(page) {
   await page.waitForLoadState('networkidle')
   await page.waitForTimeout(800)
@@ -106,18 +191,70 @@ test.describe('Mobile Drive Comments 视觉回归 (W68 第 4 批 7×4=28 截图)
           'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       })
 
-      for (const pg of COMMENT_PAGES) {
+      for (const pg of VIEW_STATES) {
         test(`${pg.name}: ${pg.desc}`, async ({ page }) => {
           await injectAuth(page)
+          await installCommentMocks(page)
           await page.goto(`${BASE_URL}${pg.path}`, { waitUntil: 'domcontentloaded' })
           await waitForCommentsUI(page)
 
+          // 2026-10-05 S3.13: 真实交互态 —— 长按顶层评论弹 context menu。
+          //   这取代了此前那个从未生效的 `?top=1` / `?thread=1` / `?focus=1`。
+          if (pg.act === 'longpress') {
+            // ⚠️ 必须用 mouse 而不是 touchscreen.tap, 且**不能断言 wrapper 自身有布局盒**。
+            //
+            // 实测踩坑 (2026-10-05): 我先写成
+            //   const box = await wrapper.boundingBox(); expect(box).not.toBeNull()
+            //   → 7 个 viewport 全挂在 `Cannot read properties of null (reading 'x')`。
+            // 根因: LongPressWrapper.vue:41 的 `.long-press-wrapper { display: contents }`
+            // —— 它**设计上就没有盒子**(注释写明"不影响子元素布局"),
+            // 所以 boundingBox() 必然返回 0x0 的 null。
+            // ⚠️ 原 spec 用 `if (await count() > 0)` 包着, 于是这个"元素不可定位"
+            //   被静默跳过, 从没暴露过。
+            //
+            // 正解: 长按的**子元素**(MobileCommentThread 渲染的评论卡片),
+            // 对子元素取盒 + 用 mouse down/hold/up 模拟长按。
+            const wrapper = page.locator('.long-press-wrapper').first()
+            // ⚠️ viewport >= 768 时 app 走**桌面组件栈**, 那里没有长按 wrapper。
+            //   实测 (2026-10-05): ipad (768x1024) 下
+            //     .long-press-wrapper = 0 个, .mfcc-top = 0 个, bodyLen=173
+            //   其它 6 个 viewport 都是 1 个。
+            //   根因: resolveMobile.js:21 的 MOBILE_BREAKPOINT = 768 是**闭区间**
+            //   (`width < 768` 才算移动端), 768 恰好落在桌面侧。
+            //   ⇒ 这是**规格口径问题**(这个 spec 是移动端 spec), 显式 skip 并写明原因,
+            //      而不是让 `expect(count).toBe(1)` 报一个看不懂的错。
+            if (vp.width >= 768) {
+              test.skip(
+                true,
+                `viewport ${vp.width}px >= 768 ⇒ app 解析成桌面组件栈 ` +
+                  `(resolveMobile.js MOBILE_BREAKPOINT=768 闭区间), ` +
+                  `桌面端无 LongPressWrapper。长按是**移动端专属交互**, ` +
+                  `该 viewport 不适用。若要覆盖, 应另建桌面端 spec。`,
+              )
+            }
+            await expect(wrapper, '应存在长按 wrapper (LongPressWrapper)').toHaveCount(1)
+            // display:contents ⇒ wrapper 自身无盒, 取其子元素
+            const target = wrapper.locator('*').first()
+            await expect(target, 'wrapper 应有子元素承载长按区域').toBeVisible()
+            const box = await target.boundingBox()
+            expect(box, '长按目标应有布局盒').not.toBeNull()
+            // LongPressWrapper delay=600 => 按住 800ms 再松手
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+            await page.mouse.down()
+            await page.waitForTimeout(800)
+            await page.mouse.up()
+            await page.waitForTimeout(400)
+          }
+
           // 验证页面真的渲染了评论 UI (避免空白页通过 baseline 对比)
-          const bodyText = await page.textContent('body')
+          //
+          // 2026-10-05: 阈值 10 -> 80, 实测标定 (空态 51 / 有数据 365),
+          //   理由同 desktop_drive_comments.spec.mjs。
+          const bodyText = (await page.textContent('body')) ?? ''
           expect(
-            bodyText.length,
-            `${vp.name}/${pg.name} 页面应渲染内容 (长度>10)`,
-          ).toBeGreaterThan(10)
+            bodyText.trim().length,
+            `${vp.name}/${pg.name} 页面应渲染内容 (阈值 80 实测标定: 空态 51 / 有数据 365)`,
+          ).toBeGreaterThanOrEqual(80)
 
           // baseline 对比 (首次跑自动生成, 后续跑对比)
           await expect(page).toHaveScreenshot(
@@ -146,11 +283,13 @@ test.describe('Mobile Drive Comments Dark Mode (W68 第 4 批铁律 13)', () => 
 
   test('dark mode 评论列表渲染', async ({ page }) => {
     await injectAuth(page)
+    await installCommentMocks(page)
     await page.goto(`${BASE_URL}/drive/file/99/comments`, { waitUntil: 'domcontentloaded' })
     await waitForCommentsUI(page)
 
     const bodyText = await page.textContent('body')
-    expect(bodyText.length).toBeGreaterThan(10)
+    expect((bodyText ?? '').trim().length,
+      '页面应渲染内容 (阈值 80 实测标定: 空态 51 / 有数据 365)').toBeGreaterThanOrEqual(80)
 
     await expect(page).toHaveScreenshot(
       'iphone-12-01-list-dark.png',
@@ -179,6 +318,7 @@ test.describe('Mobile Drive Comments 长按菜单 (W68 第 4 批铁律 13 vibrat
 
   test('长按顶层评论弹出 context menu', async ({ page }) => {
     await injectAuth(page)
+    await installCommentMocks(page)
     await page.goto(`${BASE_URL}/drive/file/99/comments`, { waitUntil: 'domcontentloaded' })
     await waitForCommentsUI(page)
 
