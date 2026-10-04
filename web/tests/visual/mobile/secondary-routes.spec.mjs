@@ -298,9 +298,14 @@ test.describe('移动端二级页面视觉回归 (全 mock, 与 dev DB 解耦)',
     await page.goto(`${BASE_URL}/dashboard`)
 
     // 行为断言先于像素: 铃铛在 + badge 数字来自 store
-    const bell = page.locator('.home-bell-btn')
+    //
+    // ⚠️ 2026-10-04: 这里**曾经**断言 .home-bell-btn / .home-bell-badge, 从未通过过。
+    //   MobileDashboard.vue 模板 (L7/L13) 用的始终是 .notif-bell / .notif-badge;
+    //   .home-bell-* 只以两段死 CSS 规则的形式留在 <style> 里 (同日已删)。
+    //   姊妹 spec tests/e2e/mobile-baseline.spec.js:248-250 用的正是现行类名。
+    const bell = page.locator('.notif-bell')
     await expect(bell).toBeVisible()
-    await expect(bell.locator('.home-bell-badge')).toHaveText('3')
+    await expect(bell.locator('.notif-badge')).toHaveText('3')
     await shot(page, '01-home-bell')
   })
 
@@ -352,7 +357,15 @@ test.describe('移动端二级页面视觉回归 (全 mock, 与 dev DB 解耦)',
     ])
     await injectAuth(page)
     await page.goto(`${BASE_URL}/admin/agent-traces`)
-    await expect(page.getByText('工具调用 knowledge_search')).toBeVisible()
+    // 2026-10-04: 原断言是 getByText('工具调用 knowledge_search'), **从未通过过** ——
+    //   MobileAgentTracesView.vue:60 是 {{ t.tool_name || t.action || 'Agent 调用' }},
+    //   tool 行优先渲染 tool_name, 而 action 那串文字在该页面上**根本不出现**
+    //   (卡片化列表的有意简化, 非缺字段)。原断言钉的是一个永不出现的字符串。
+    //   改钉"该条 tool trace 的可见卡片", 更贴"列表真渲染出 fixture 行"的原意图。
+    await expect(page.locator('.trace-card')).toHaveCount(TRACES_FIXTURE.total)
+    await expect(
+      page.locator('.trace-name', { hasText: 'knowledge_search' })
+    ).toBeVisible()
     await shot(page, '06-agent-traces')
   })
 
@@ -363,7 +376,16 @@ test.describe('移动端二级页面视觉回归 (全 mock, 与 dev DB 解耦)',
     await injectAuth(page)
     await page.goto(`${BASE_URL}/drive/file/${FILE_ID}`)
     // 关键行为断言 (本次修复目标): 渲染的是文件详情, 而非网盘空态 fallback
-    await expect(page.getByText(FILE_FIXTURE.file_name)).toBeVisible()
+    //
+    // ⚠️ 2026-10-04: 原第一行是 getByText(FILE_FIXTURE.file_name), 从未通过过 ——
+    //   file_name 在页面上渲染**两处** (MobileFileDetailView.vue:39 sticky 标题
+    //   .mfd-title + :83 信息卡内 .mfd-info-name), getByText 宽匹配 → strict mode
+    //   violation, 断言在**下一行之前**就炸了。
+    //   也就是说下面那条 .mfd-info-card 可见性断言**从未被执行到** ——
+    //   门禁红了很久, 却没有任何证据表明它被真正跑过 (本轮修复顺带让它生效)。
+    //   改按位置分别钉两处渲染, 意图不变, 且两处都验。
+    await expect(page.locator('.mfd-title')).toHaveText(FILE_FIXTURE.file_name)
+    await expect(page.locator('.mfd-info-card .mfd-info-name')).toHaveText(FILE_FIXTURE.file_name)
     await expect(page.getByText('当前文件夹暂无文件')).toHaveCount(0)
     await expect(page.locator('.mfd-info-card')).toBeVisible()
     await shot(page, '07-file-detail')
