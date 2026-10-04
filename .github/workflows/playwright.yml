@@ -353,13 +353,43 @@ jobs:
   visual:
     name: visual regression
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     # W89-P-3 第一版: 视觉回归本身易碎 (v76.2 弃用过), 先 non-blocking
     # 等 baseline 稳定后 (manual review) 撤掉 continue-on-error 改 hard fail
     continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # 2026-10-05 S3.12 阶段 2 治①: 视觉回归**改跑专用容器**。
+      #
+      # 为什么不在裸 ubuntu runner 上 (实测, 见下方 FONT EVIDENCE 注释):
+      #   app 的 body 字体栈 (web/src/assets/variables.css:288) 是
+      #     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, ... , sans-serif
+      #   裸 runner 上即使 `apt-get install fonts-noto-cjk` 装好了, fontconfig 仍把
+      #   'Segoe UI' 解析成 **WenQuanYi Zen Hei** —— 因为栈里第一个"存在的"名字
+      #   就是 Segoe UI, Noto 永远轮不到。这就是"Windows 录 → Linux 比 0/118 全炸"
+      #   的根因, 而**不是**"CI 没装字体"。
+      #
+      #   FONT EVIDENCE (容器内实测):
+      #     纯净 playwright 镜像:  fc-match "Segoe UI"  -> WenQuanYi Zen Hei
+      #     + fonts-noto-cjk:      fc-match "Segoe UI"  -> WenQuanYi Zen Hei   (装了不起作用)
+      #     + fontconfig 别名规则:  fc-match "Segoe UI"  -> Noto Sans CJK SC   (才生效)
+      #
+      # 容器同时锁死三件事, 使"录基线"与"跑门禁"跑在**同一确定性环境**:
+      #   1. Chromium 151.0.7922.34 rev1234  ← 与 web/package-lock.json 锁的
+      #      playwright-core 1.62.0 是**同一个浏览器构建**
+      #   2. fonts-noto-cjk **钉版本** 1:20230817+repack1-3 (字体升级会改字形)
+      #   3. fontconfig 别名规则把字体栈每个名字都指向同一字体文件
+      #
+      # ⚠️ 本 step 只做 build, 不改 a11y job (它今天刚修到真绿, 口径不动)。
+      - name: Build pinned visual-regression image (字体+Chromium 钉死)
+        run: |
+          set -euo pipefail
+          docker build \
+            -f docker/visual-regression/Dockerfile \
+            -t microbubble-visual-regression:pin-2026-10-05 \
+            docker/visual-regression
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -372,15 +402,9 @@ jobs:
         working-directory: web
         run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Install Playwright browsers
-        working-directory: web
-        run: npx playwright install --with-deps chromium
-
-      - name: Install CJK fonts (a11y color-contrast 需中文字体)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq fonts-noto-cjk
-          fc-list | grep -i "noto.*cjk" | head -3
+      # ⚠️ **不再**在 runner 上装字体 / 装浏览器。
+      #   浏览器与字体都由上面的容器提供。留在 runner 上装反而制造
+      #   "runner 与容器字体不一致"的假确定性 —— 那正是本 step 要消除的东西。
 
       - name: "Start test environment"
         run: |
@@ -406,20 +430,32 @@ jobs:
             sleep 2
           done
 
-      - name: Start vite dev server (proxy -> app-test:8001)
-        working-directory: web
-        env:
-          VITE_API_PROXY_TARGET: http://localhost:8001
+      # 2026-10-05 S3.12: vite 也改在**同一个容器**里跑。
+      #   为什么要一起挪: vite dev server 的模块转换/依赖预构建如果跑在 runner 上,
+      #   而浏览器跑在容器里, 两边的 Node 平台不同 (rollup/esbuild native 模块) ——
+      #   实测本机把 Windows 的 node_modules 挂进 Linux 容器会直接
+      #   `Cannot find module '@rollup/rollup-linux-x64-gnu'`。
+      #   让 vite 与浏览器同容器 ⇒ 依赖转换结果与截图环境同源。
+      - name: Start vite dev server in pinned container (proxy -> app-test:8001)
         run: |
-          npx vite --port 3000 --strictPort > /tmp/vite-visual.log 2>&1 &
-          for i in {1..60}; do
+          set -euo pipefail
+          docker rm -f visual-vite 2>/dev/null || true
+          docker run -d --name visual-vite \
+            --network host \
+            -e VITE_API_PROXY_TARGET=http://localhost:8001 \
+            -v "$PWD:/app" \
+            -w /app/web \
+            microbubble-visual-regression:pin-2026-10-05 \
+            npx vite --host 0.0.0.0 --port 3000 --strictPort
+
+          for i in {1..90}; do
             if curl -sf http://localhost:3000/ > /dev/null 2>&1; then
-              echo "✓ vite dev OK (attempt $i/60)"
+              echo "✓ vite dev OK (attempt $i/90)"
               break
             fi
-            if [ "$i" -eq 60 ]; then
+            if [ "$i" -eq 90 ]; then
               echo "✗ vite dev never started"
-              cat /tmp/vite-visual.log
+              docker logs visual-vite | tail -40
               exit 1
             fi
             sleep 2
@@ -513,13 +549,43 @@ jobs:
                exit 1 ;;
           esac
 
-      - name: Run visual regression tests
-        working-directory: web
+      - name: Run visual regression tests (pinned container, verify mode)
         env:
           BASE_URL: http://localhost:3000
           VITE_API_PROXY_TARGET: http://localhost:8001
           CI: 'true'
           TEST_TOKEN: ${{ env.PLAYWRIGHT_TEST_TOKEN }}
+        # 2026-10-05 S3.12 阶段 2: 改由 run-visual.sh 统一入口执行, 浏览器跑在
+        # 上面构建的**钉死镜像**里, 且注入 FAKETIME_NO_CACHE=1 冻结时钟。
+        #
+        #   为什么必须在**容器内**跑而不是 runner 上:
+        #     ① 字体 — 裸 runner 上 fc-match "Segoe UI" -> WenQuanYi Zen Hei
+        #        (装 fonts-noto-cjk 也不生效, 见上面 build step 的 FONT EVIDENCE)
+        #     ② 墙钟 — runner 的墙钟是真实时间, MainLayout 时钟牌 20s tick
+        #        ⇒ 跨 20s 边界就飘; 容器内 FAKETIME 冻结
+        #     ③ 浏览器版本 — 容器锁 Chromium 151.0.7922.34 rev1234,
+        #        与 package-lock.json 的 playwright-core 1.62.0 同构建
+        #
+        #   run-visual.sh 先做 **fail-loud 前置断言** (字体锁 + 时钟冻结),
+        #   任一不成立就 `::error::` 退出 —— 不让"环境没钉死"流到像素比对
+        #   才以"莫名全红"的面貌爆出来 (类 20.215 的逐字段圈界思路)。
+        #
+        #   ⚠️ verify 模式**不带** --update-snapshots: 基线只由人工 review 后的
+        #      本地提交产生, CI 不得改写基线 (自我确认 = 无判别力)。
+        run: |
+          set -uo pipefail
+          docker rm -f visual-runner 2>/dev/null || true
+          docker run --rm --name visual-runner \
+            --network host \
+            -e BASE_URL=http://localhost:3000 \
+            -e CI=true \
+            -e TEST_TOKEN="$TEST_TOKEN" \
+            -e VIZ_CONFIG=tests/visual/playwright.visual.config.mjs \
+            -v "$PWD:/app" \
+            -w /app \
+            microbubble-visual-regression:pin-2026-10-05 \
+            bash docker/visual-regression/run-visual.sh verify
+          echo "visual-runner exit=$?"
         # 2026-10-03 S3.10 第 1 步: 改用专用 config 收敛到**真视觉回归**。
         #
         #   旧命令 `npx playwright test` 走 web/playwright.config.js, 它的 testMatch
@@ -549,7 +615,6 @@ jobs:
         #
         #   录基线的前置是 ChatViewSSE 的 CSS 抽取完成 —— 像素比对是验收 CSS 改动
         #   的唯一手段, 顺序不可颠倒: CSS 抽取 → 视觉回归转硬门 → 才谈录基线。
-        run: npx playwright test -c tests/visual/playwright.visual.config.mjs --reporter=list
 
       # 2026-10-03 S3.10: 删掉 "Update snapshots (only on main push)" 整步。
       #
