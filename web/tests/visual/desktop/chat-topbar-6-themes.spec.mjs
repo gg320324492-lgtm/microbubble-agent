@@ -82,12 +82,33 @@ for (const theme of THEMES) {
         localStorage.setItem('access_token', tk)
       }, token)
 
-      // 3. 打开 /chat
+      // 3. 预热 + 打开 /chat
       //
-      //   ⚠️ waitUntil 从 'domcontentloaded' 改成 'networkidle' (实测必需):
-      //   冷 vite 下 'domcontentloaded' 时 Vue 还没挂载完, .chat-header 不存在;
-      //   原代码用 5s waitForSelector 兜底, 但**随后直接 test.skip**,
-      //   于是变成"慢 + 静默跳过"。实测 networkidle 后 .chat-header 稳定出现。
+      //   ⚠️ 2026-10-05 S3.15: 这里也必须**预热**, 与 visual-regression.spec.mjs 同因。
+      //
+      //   实测 (真 CI run 37249439461): 本spec 4 个用例全报
+      //     `.chat-header 缺失但既不在 /login、viewport 也 >= 768
+      //       —— 当前 URL=http://localhost:3000/chat`
+      //   URL 正确、登录态正常, 但元素 15s 没出现 ⇒ 与 S3.14 那 6 处**同一个根因**:
+      //     vite 首次请求异步 chunk 时触发依赖优化, 对已加载模块返回
+      //     `504 (Outdated Optimize Dep)` → 动态 import 失败 → 组件不挂载。
+      //   本机 vite 已预热过所以从不复现, CI 冷启动必然命中。
+      //
+      //   预热为什么用 `waitForFunction` 断言而不是固定 sleep:
+      //     固定 sleep 本身是新的 flaky 源(慢机器不够/快机器白等);
+      //     条件式等待快慢都正确。预热失败只 warn 不阻塞 ——
+      //     第一次访问本来就可能撞 504, 那正是预热要解决的。
+      await page.goto('/chat', { waitUntil: 'domcontentloaded', timeout: 30000 })
+      await page
+        .waitForFunction(
+          () => (document.querySelector('#app')?.innerHTML.length ?? 0) > 500,
+          null,
+          { timeout: 20_000 },
+        )
+        .catch(() => console.warn('[visual] chat 预热未达标(不阻塞)'))
+      await page.waitForTimeout(500)
+
+      // 第二次访问才是截图那次 —— 此时 vite 转换缓存已就绪
       await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 })
 
       // 4. 等待 .chat-header 元素出现。
