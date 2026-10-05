@@ -9,9 +9,11 @@ name: Playwright Tests
 #           分 2 job = PR 视图清晰看到哪个维度红了, 单独 retry 也方便.
 #   - 触发 paths 仅 web/** + .github/workflows/playwright.yml, 避免后端 PR
 #     误触发 (后端 PR 应跑 qa-bench-ci.yml 而非此 workflow).
-#   - visual job 加 "Update snapshots (only on main push)" 自动更新 baseline.
-#   - 不阻塞 (continue-on-error: true) on first iteration, 待 visual baseline 稳定后
-#     再撤掉 continue-on-error 改 hard fail.
+#   - visual job 的 "Update snapshots (only on main push)" 步骤已于 2026-10-03
+#     删除 (它让门禁拿"自己刚写的基线"比自己, 无判别力); 基线只由人工 review
+#     后的本地提交产生。
+#   - visual job 已于 2026-10-06 撤掉 continue-on-error 转硬门, 判据见该 job
+#     的注释 (失败演进 + A/B 对照 + 反向验证)。
 
 on:
   pull_request:
@@ -354,9 +356,39 @@ jobs:
     name: visual regression
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # W89-P-3 第一版: 视觉回归本身易碎 (v76.2 弃用过), 先 non-blocking
-    # 等 baseline 稳定后 (manual review) 撤掉 continue-on-error 改 hard fail
-    continue-on-error: true
+    # 2026-10-06 撤掉 continue-on-error → 转硬门 (W89-P-3 第一版留的 non-blocking)。
+    #
+    # 撤之前判据已逐条建立 (今天这一轮的全部依据):
+    #
+    #   ① **真的会红** —— 失败演进全是真 CI 实测, 不是推断:
+    #        39 passed / 10 failed  (S3.14 前, run 37245358267)
+    #        45 passed /  4 failed  (S3.15/16, run 37252532972 / 37254342251)
+    #        48 passed /  1 flaky   (S3.17,  run 37257035227)
+    #        49 passed /  0 flaky   (S3.18,  run 37328527799 attempt 1 + 2)
+    #      真 CI 测 step 的失败数从 10 → 0, 这条曲线本身就是门禁有判别力的证据。
+    #
+    #   ② **治因后连续多轮 0 flaky** —— S3.18 定位到根因是 vite 依赖再优化在测试
+    #      进行中强制整页 reload (懒发现预构建 + HMR reload), A/B 对照:
+    #        冷 vite -> 1 flaky (3/3 复现)   |   热 vite -> 49 passed / 0 flaky
+    #      修法 = 跑门禁前把 5 个 spec 触及的全部 17 条路由走一遍, 轮询到依赖
+    #      优化指纹连续两轮一致才放行 (run-visual.sh wait_for_deps_stable)。
+    #      真 CI 复验: attempt 1 = 49 passed / 0 flaky, attempt 2 = 49 passed /
+    #      0 flaky / **0 retry**。
+    #
+    #   ③ **反向验证证明它从"装饰品"变成"有牙的门禁"** (本 commit 的核心依据):
+    #      故意改一处真 CSS (`DesktopFileCommentsView.vue` 的 `.dfcv-title`
+    #      font-size 18px → 60px), 跑真实入口 run-visual.sh verify:
+    #        注入前 (control) : 49 passed / exit=0
+    #        注入后           : **15 failed / exit=1 / 0 flaky**
+    #                           33117 pixels (ratio 0.05) are different
+    #                           —— 预算是 maxDiffPixelRatio 0.002, 超 25 倍,
+    #                              且 retry 也红 (0 flaky) 说明不是抖动。
+    #        还原后 (post)    : 49 passed / exit=0, 工作树 git status 干净
+    #      ⇒ 注入必红、还原必绿, 证明 job 结论会跟随 test step。
+    #
+    # ⚠️ 撤除后**验收判据变化**: 此前 job 结论恒为 success (continue-on-error
+    #    的语义), 只能看 test step; 现在 job 结论本身才有意义。CI 上排查时
+    #    请以 job 结论为准, test step 仍是最细的定位点。
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -413,8 +445,13 @@ jobs:
           docker tag ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest app-test:ci
           docker images app-test:ci --format "✓ app-test:ci ready, {{.Size}}"
           # 2026-10-02 S3.7④: 同 a11y job — minio-test 上游不可达故不 up。
-          #   本 job 是 continue-on-error: true, 其中 4 个 drive spec 会真调
-          #   POST /api/v1/drive/files/upload (无 minio 时 500), 不影响门禁。
+          #   注: 当时"其中 4 个 drive spec 会真调 POST /api/v1/drive/files/upload
+          #   (无 minio 时 500), 不影响门禁"这句依赖本 job 是 non-blocking;
+          #   2026-10-06 转硬门后, 该前提已不成立。
+          #   现门禁只跑 5 个做像素比对的 spec (playwright.visual.config.mjs
+          #   收敛结果, S3.10), 实测它们 no-llm / no-upload, 不触达上传路径 ——
+          #   真 CI 连续多轮 49 passed 即为证。留此注记以免误以为 minio 缺失
+          #   会让本 job 变红。
           docker compose -f docker-compose.test.yml up -d app-test pg-test redis-test 2>&1 | tail -10
 
           for i in {1..90}; do
