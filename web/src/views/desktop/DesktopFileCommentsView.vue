@@ -521,7 +521,7 @@ watch(() => props.fileId, (newId, oldId) => {
   align-items: center;
   gap: 8px;
   margin: 0;
-  font-size: 18px;
+  font-size: 60px;
   font-weight: 600;
   color: var(--color-text-primary, #303133);
   flex: 1;
