@@ -105,6 +105,92 @@ npx playwright test -c "${VIZ_CONFIG:-tests/visual/playwright.visual.config.mjs}
   -g "$WARMUP_GREP" --update-snapshots=none --reporter=line > /tmp/warmup.log 2>&1 || true
 echo "▸ warm-up done (exit 忽略是预期的: 基线可能不存在, 与 warm-up 无关)"
 
+# ---------- 治④ vite 依赖再优化 (2026-10-05, flaky 根因) ----------
+#
+# 实测证据 (本机隔离 worktree, 钉死镜像 + run-visual.sh 唯一入口):
+#   冷 vite (deps 0) 跑整套 -> `optimized dependencies changed. reloading`
+#   在 **测试进行中** 触发 6-7 次, 每次都强制整页 reload ⇒ 组件被卸载重挂,
+#   spec 的 waitFor/断言正好落在 reload 窗口里就报"元素不存在"。
+#   被打中的是 secondary-routes `07 file-detail`:
+#     Error: expect(locator).toHaveText(expected) failed
+#     Locator: locator('.mfd-title')  Error: element(s) not found
+#   A/B 对照 (同镜像同入口, 只改 vite 优化器冷热):
+#     冷 vite (全新容器 + 抹掉 .vite) -> 1 flaky (3/3 次复现)
+#     热 vite                          -> 49 passed / 0 flaky
+#   ⇒ 根因确证是 vite 的**懒发现**依赖预构建 + 强制 reload, 与像素无关。
+#
+# 为什么"单用例 warm-up"修不掉它 (S3.12 把它当成已修):
+#   预构建是**懒发现**的 —— vite 只有被请求到才把该依赖纳入优化。
+#   跑 1 个 chat 用例只会热 /chat 这条链; /drive、/knowledge/:id、
+#   /admin/agent-traces 等各自的 element-plus / nutui 子依赖仍是冷,
+#   于是 reload 事件**挪到**这些路由首次被访问时发生 —— warm-up 只是把
+#   问题往后推, 没消除 (这正是 CI 里 flaky 落在 file-detail 的原因)。
+#
+# 修法: 在跑门禁前用**真实浏览器**把 5 个 spec 触及的**全部**路由走一遍,
+#   轮询到依赖优化指纹**连续两轮一致**才放行。
+#   - 走全部路由 (不是单用例) ⇒ 依赖集覆盖完整
+#   - 轮询到稳定 (不是固定 sleep) ⇒ 快慢机器都正确
+#   - 不稳定就 fail-loud ⇒ 环境没钉死时红在这里, 而不是伪装成 flaky 混进门禁
+#
+# 路由表在 web/tests/visual/route-warm.mjs (唯一来源, 与 spec 同处一地
+# 便于同步维护); 本脚本只负责"跑它 + 判稳定 + 不稳定则 fail-loud"。
+#
+# ⚠️ 这里**不加**新的 sleep 固定值, 也不用固定次数 sleep: 全部是条件式等待。
+#
+# 实测成本: 预热轮 4-12s, 冷启动实测 4 轮收敛 / 已热 3 轮收敛,
+#   相对 25min 预算可忽略 (门禁本身 CI 12.3m)。
+
+# 判据: vite 依赖优化的**指纹集合** (`?v=` 版本向量)。
+#   连续两轮扫完全部路由, 指纹集合逐字相同 ⇒ 这一轮没有任何重新优化
+#   ⇒ 依赖集已收敛, 门禁开始跑时不会再有 reload 把组件卸载重挂。
+#
+# ⚠️ 判据换过三版, 每版都被实测证伪 (细节见 route-warm.mjs 顶部注释):
+#   (a) vite deps 目录文件数 —— 再优化时经常不新增文件、只改写已有 chunk,
+#       文件数不变但 reload 照发。实测那版门禁仍 flaky (两轮都报
+#       "deps=156 已稳定", 实际仍 7 次 reload)。
+#   (b) framenavigated 计数 / 同 URL 再导航计数 —— vite 的 HMR client
+#       **每页加载都会重连**并把当前页再导航一次, 实测热依赖下也稳定报 31 次,
+#       全是噪声, 会让门禁永远 fail-loud。
+#   (c) 读 vite 容器 stdout —— CI 里 vite 跑在 workflow 另起的 visual-vite
+#       容器, 本脚本与它不共 stdout, 读不到。
+#   ⇒ 页面侧可见、且与"是否重新优化"严格一一对应的只有 `?v=` 指纹。
+WARM_REPORT=/tmp/route-warm-fingerprint
+
+wait_for_deps_stable() {
+  local round=0 same=0 prev="" cur
+  echo "▸ 预热全部路由, 直到 vite 依赖优化指纹稳定 (判据=连续两轮 ?v= 集合相同)"
+  : > /tmp/route-warm.log
+  while [ "$round" -lt "${VIZ_DEPS_MAX_ROUNDS:-6}" ]; do
+    round=$((round + 1))
+    rm -f "$WARM_REPORT"
+    VIZ_WARM_REPORT="$WARM_REPORT" BASE_URL="$BASE_URL" \
+      node "${VIZ_ROUTE_WARM_SCRIPT:-tests/visual/route-warm.mjs}" >> /tmp/route-warm.log 2>&1 || true
+    if [ ! -s "$WARM_REPORT" ]; then
+      echo "▸ 第 $round 轮: 预热脚本没产出指纹 (见 /tmp/route-warm.log), 再试一轮"
+      continue
+    fi
+    cur="$(cat "$WARM_REPORT")"
+    if [ -n "$prev" ] && [ "$cur" = "$prev" ]; then
+      same=$((same + 1))
+      echo "▸ 第 $round 轮: 指纹与上一轮一致 (第 $same 次)"
+      if [ "$same" -ge 2 ]; then
+        echo "✓ vite 依赖集已收敛 (连续 2 轮指纹一致), 门禁开始"
+        return 0
+      fi
+    else
+      same=0
+      echo "▸ 第 $round 轮: 指纹变化 (本轮 $(echo "$cur" | tr '\n' ' ')), 再走一轮"
+    fi
+    prev="$cur"
+  done
+  fail_loud "vite 依赖集在 ${VIZ_DEPS_MAX_ROUNDS:-6} 轮内未收敛 (指纹持续变化)。
+       依赖再优化会在门禁跑测试的过程中卸载重挂组件 ⇒ 断言与截图会随机失效。
+       先修依赖预构建 / 检查 route-warm.mjs 的 ROUTES 是否覆盖了新路由,
+       不要靠重跑碰运气。"
+}
+
+wait_for_deps_stable
+
 echo "▸ 跑视觉回归 (mode=$MODE)"
 set +e
 BASE_URL="$BASE_URL" CI="${CI:-true}" \
