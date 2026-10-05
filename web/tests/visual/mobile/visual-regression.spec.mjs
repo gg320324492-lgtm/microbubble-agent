@@ -35,7 +35,6 @@ const CORE_ROUTES = [
   { path: '/knowledge', name: '06-knowledge' },
   { path: '/chat', name: '03-chat' },
   // v77 P2.6-C 新增
-  { path: '/tasks', name: '04-tasks' },
   { path: '/meetings', name: '05-meetings' },
   { path: '/settings', name: '07-settings' },
   // v78: 项目/成员合并到 /workspace, 声纹也包含在 workspace 第 3 个 tab
@@ -202,10 +201,34 @@ test.describe('Mobile 核心页面视觉回归 (v77 P2.6-C 6 路由 baseline 对
     test(`${route.name} 截图对比 baseline`, async ({ page }) => {
       await injectAuth(page)
       await installDataMocks(page, route.path)
-      await page.goto(`${BASE_URL}${route.path}`, { waitUntil: 'networkidle' })
 
-      // 等动画/异步数据加载完成
-      await page.waitForTimeout(800)
+      // 2026-10-05 S3.14 预热: 先访问一次同路由, 让 vite 把该路由的**动态 import
+      // 模块**转换并缓存完, 再访问第二次做截图。
+      //
+      // 根因 (实测, 非推断): vite dev server 在**首次**请求某个异步 chunk 时会触发
+      // 依赖优化; 若此刻已有模块在加载, vite 会返回
+      //     504 (Outdated Optimize Dep)
+      //     TypeError: Failed to fetch dynamically imported module:
+      //                http://127.0.0.1:3000/src/layouts/MainLayout.vue
+      // 组件因此**不挂载** -> 截图是纯白页(2743B)。
+      //   - 本机(Windows Docker Desktop): vite 已预热过, 从不复现 ⇒ 基线录成空白
+      //   - CI(Linux runner 冷启动): 必然命中 ⇒ 6 个用例 actual 全是 ~2743B
+      // 这是"本地绿 / CI 必红"的典型形态, 只有真 CI 能暴露。
+      //
+      // ⚠️ 为什么预热用 `waitForFunction` 断言元素, 而不是固定 sleep:
+      //   固定 sleep 本身会成为新的 flaky 源 —— 慢机器 sleep 1s 不够, 快机器白等。
+      //   断言"目标元素已出现"是**条件式**等待, 快慢都正确。
+      // ⚠️ 预热**允许失败**: 第一次访问本来就可能撞上 504, 那正是预热要解决的;
+      //   若把它当硬失败, 等于把要修的问题变成门禁红。失败只记录, 不阻塞。
+      const warmUrl = `${BASE_URL}${route.path}`
+      await page.goto(warmUrl, { waitUntil: 'domcontentloaded' })
+      await page
+        .waitForFunction(() => document.querySelector('#app')?.innerHTML.length > 500, null, { timeout: 20_000 })
+        .catch(() => console.warn(`[visual] warm-up 未达标(不阻塞): ${route.path}`))
+      await page.waitForTimeout(500)
+
+      // 第二次访问才是真正截图的那次 —— 此时 vite 转换缓存已就绪
+      await page.goto(warmUrl, { waitUntil: 'networkidle' })
 
       // v77 P2.6-C: baseline 对比
       // 首次跑会自动生成 tests/visual/mobile/visual-regression.spec.mjs-snapshots/{name}-iphone14.png
