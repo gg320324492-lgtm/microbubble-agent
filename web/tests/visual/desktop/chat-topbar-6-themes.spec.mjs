@@ -142,7 +142,22 @@ for (const theme of THEMES) {
       //   万一不出现, 应该**报错**(说明 UI 真回归了), 而不是安静跳过。
       //   (2026-10-05: 原注释写 "fallback: SPA 可能在 /login, 跳过本测试而不是 fail"
       //    —— 正是这个 fallback 让本 spec 长期 0 基线且无人察觉。)
+      // 2026-10-05 S3.17: **先等, 再判**。
+      //
+      // 真CI (run 37254342251) 仍报同一个错, 但**不是**超时:
+      //     .chat-header 缺失 ... 当前 URL=http://localhost:3000/chat
+      // 根因是 S3.15/S3.16 的顺序写错了:
+      //   `const headerCount = await header.count()` 紧跟在 goto 之后**立即**执行,
+      //   CI 上组件还没挂载完 → count=0 → 直接进"真实 UI 回归"分支 throw;
+      //   下面那句 `waitFor({timeout: 15000})` **根本没机会跑**。
+      //   本机 vite 已预热, 组件总是立刻就绪, 所以这个顺序错误**本地永不复现**。
+      //
+      // 正确顺序: 先给元素一个等待窗口, 等不到再分类诊断。
       const header = page.locator('.chat-header')
+      await header
+        .first()
+        .waitFor({ state: 'attached', timeout: 20_000 })
+        .catch(() => { /* 下面按 URL / viewport 分类诊断 */ })
       const headerCount = await header.count()
       if (headerCount === 0) {
         // 2026-10-05 S3.12: 区分"为什么没有" —— 两种病因的处理完全不同, 混为一谈
@@ -180,8 +195,6 @@ for (const theme of THEMES) {
             `当前 URL=${url}。这是真实 UI 回归 (顶栏元素消失), 必须报红。`,
         )
       }
-      await header.first().waitFor({ state: 'attached', timeout: 15000 })
-
       // 5. 视觉回归 — 截 .chat-header 元素
       //
       //   ⚠️ maxDiffPixelRatio 从 0.05 收紧到 0.002 (与门禁其余 spec 同口径)。

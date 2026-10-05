@@ -230,6 +230,29 @@ test.describe('Mobile 核心页面视觉回归 (v77 P2.6-C 6 路由 baseline 对
       // 第二次访问才是真正截图的那次 —— 此时 vite 转换缓存已就绪
       await page.goto(warmUrl, { waitUntil: 'networkidle' })
 
+      // 2026-10-05 S3.17: 截图前**必须等路由组件真的挂载完**。
+      //
+      // 真 CI 证据 (run 37249439461): 6 个用例的 actual 全是 ~2743B 纯白页,
+      // 而预热只判了 `#app` innerHTML > 500 —— 那个条件在 **MainLayout 的外壳**
+      // 挂上时就满足了, **路由组件**(tasks/meetings/chat...) 可能还没挂完。
+      // 于是预热"看起来成功", 截图却抓到空页面。
+      //
+      // 判据: `main` 里必须有实际内容(textContent 非空), 而不是只看外壳。
+      // 这是**条件式**等待(快慢都正确), 不是固定 sleep。
+      await page
+        .waitForFunction(
+          () => {
+            const main = document.querySelector('main, .main, #app main')
+            return !!main && (main.innerText || '').trim().length > 30
+          },
+          null,
+          { timeout: 20_000 },
+        )
+        .catch(() => {
+          // 不 throw: 让下面的 bodyText >= 80 断言去报红, 那里有更清楚的报错文案
+          console.warn(`[visual] 路由组件未在 20s 内挂载: ${route.path}`)
+        })
+
       // v77 P2.6-C: baseline 对比
       // 首次跑会自动生成 tests/visual/mobile/visual-regression.spec.mjs-snapshots/{name}-iphone14.png
       await expect(page).toHaveScreenshot(`${route.name}.png`, {
