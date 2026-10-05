@@ -61,7 +61,13 @@
 # [S3.8 已完成 2026-10-02] file|web/src/utils/paperAdapter.js|5633 —— 该文件已删除，
 #   实现拆入 web/src/utils/paper/ 七文件（constants/qa/content/sections/figures/normalize/index）。
 #   不留 barrel 是 S3.8 的既定决策（E2）：留壳会被本棘轮与 glob 各算一遍，同一批代码双计。
-file|web/src/views/chat/ChatViewSSE.vue|2973
+file|web/src/views/chat/ChatViewSSE.vue|1352
+# 2026-10-05 (CSS 抽出): 2973 -> 1352（-1621）。script+template 未动。
+# 两个 style 块各自成文件，用 file| 而非 glob| —— 本棘轮的 glob 分支硬编码
+# `find "$dir" -name '*.js'`，glob 指向 .css 会匹配不到任何文件而被静默跳过，
+# 那正是 S3.7 8 "新文件失明" 同一型错误。实测行数直接固化，不留余量。
+file|web/src/views/chat/chatview-scoped.css|888
+file|web/src/views/chat/chatview-global.css|733
 file|web/src/components/drive/DriveDetailRail.vue|2151
 file|web/src/views/DesktopDriveView.vue|2229
 glob|web/src/utils/paper|5774

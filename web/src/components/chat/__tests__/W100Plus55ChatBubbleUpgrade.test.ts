@@ -25,11 +25,15 @@ import PlanSteps from '../PlanSteps.vue'
 import { formatTimeDivider } from '@/utils/timeDivider'
 
 const CHAT_VIEW = resolve(__dirname, '../../../views/chat/ChatViewSSE.vue')
+// 2026-10-05 (CSS 抽出): ① ①b ①c ② ④c ⑦ ⑧ 的 CSS 断言随 <style scoped src>
+// 迁到 chatview-scoped.css (逐条实测: 这些选择器在 scoped 块, 且 scoped 是 global 的超集)。
+// ④b (formatTimeDivider) 与 ⑧b (模板文案) 仍读 .vue —— 目标在 script/template, 未搬。
+const CHAT_VIEW_CSS = resolve(__dirname, '../../../views/chat/chatview-scoped.css')
 const CHAT_ROW = resolve(__dirname, '../ChatMessageRow.vue')
 
 describe('W100 +55 Chat Bubble 全面升级', () => {
   it('① 气泡 ::before/::after CSS 规则在 ChatViewSSE 中', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
+    const src = readFileSync(CHAT_VIEW_CSS, 'utf-8')
     expect(src).toMatch(/\.user-bubble::before/)
     expect(src).toMatch(/position:\s*absolute/)
     expect(src).toMatch(/clip-path:\s*polygon/)
@@ -38,7 +42,7 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
   })
 
   it('①b 气泡 padding 14-18px + border-radius 4px (锐) + 其余 16px', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
+    const src = readFileSync(CHAT_VIEW_CSS, 'utf-8')
     expect(src).toMatch(/padding:\s*14px\s+18px/)
     // 2026-08-31: 桌面气泡后续波次把 W100+55 的单角 longhand 重写为 4 值简写
     // (18px 18px 18px 4px / 18px 18px 4px 18px) — 视觉等价 (右下/左下锐角 4px)。
@@ -55,7 +59,7 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
   })
 
   it('①c 气泡 hover lift (translateY -1px + shadow)', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
+    const src = readFileSync(CHAT_VIEW_CSS, 'utf-8')
     expect(src).toMatch(/\.bubble:hover/)
     expect(src).toMatch(/transform:\s*translateY\(-1px\)/)
     // 2026-08-31: hover 阴影从 var(--shadow-lg) 改为定制值 (bot 中性黑 / user 珊瑚色),
@@ -66,7 +70,7 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
   })
 
   it('② 打字机 --reveal 进度 CSS 规则在 ChatViewSSE 中', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
+    const src = readFileSync(CHAT_VIEW_CSS, 'utf-8')
     expect(src).toMatch(/\.msg-content-typing/)
     expect(src).toMatch(/--reveal:\s*0%/)
     expect(src).toMatch(/mask-image:\s*linear-gradient/)
@@ -107,7 +111,7 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
   })
 
   it('④c time-divider CSS 升级 (居中 + 两侧横线)', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
+    const src = readFileSync(CHAT_VIEW_CSS, 'utf-8')
     expect(src).toMatch(/\.time-divider::before/)
     expect(src).toMatch(/\.time-divider::after/)
     expect(src).toMatch(/max-width:\s*80px/)
@@ -160,7 +164,7 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
   })
 
   it('⑦ send-btn hover scale CSS 规则存在', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
+    const src = readFileSync(CHAT_VIEW_CSS, 'utf-8')
     expect(src).toMatch(/\.send-btn:hover:not\(:disabled\)/)
     expect(src).toMatch(/transform:\s*scale\(1\.05\)/)
     expect(src).toMatch(/\.send-btn:active:not\(:disabled\)/)
@@ -168,7 +172,7 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
   })
 
   it('⑧ input-core:focus-within 边框 + 3px ring', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
+    const src = readFileSync(CHAT_VIEW_CSS, 'utf-8')
     expect(src).toMatch(/\.input-core:focus-within/)
     expect(src).toMatch(/border-color:\s*var\(--color-primary/)
     expect(src).toMatch(/box-shadow:\s*0\s+0\s+0\s+3px/)

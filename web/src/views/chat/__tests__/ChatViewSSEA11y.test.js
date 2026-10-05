@@ -7,6 +7,10 @@
  *
  * 测试策略: 不 mount 整个 ChatViewSSE (依赖 chat stream / store), 直接读源文件
  * 验证模板字符串含必要的 a11y 属性 + CSS 含 skip-link 隐藏规则.
+ *
+ * 2026-10-05 (CSS 抽出): <style scoped> 已搬到 chatview-scoped.css。
+ * ①/② 仍读 .vue (模板未动); ③④⑤ 改读 chatview-scoped.css。
+ * 正则逐字保留, 只改读取位置。
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
@@ -14,6 +18,8 @@ import { resolve } from 'path'
 
 const viewPath = resolve(__dirname, '../ChatViewSSE.vue')
 const source = readFileSync(viewPath, 'utf-8')
+// 2026-10-05 (CSS 抽出): skip-link 样式随 <style scoped src> 迁出
+const scopedCss = readFileSync(resolve(__dirname, '../chatview-scoped.css'), 'utf-8')
 
 describe('ChatViewSSE a11y skip-link + main landmark (W101 +4)', () => {
   it('① template 含 skip-link 第一个可聚焦元素', () => {
@@ -25,17 +31,17 @@ describe('ChatViewSSE a11y skip-link + main landmark (W101 +4)', () => {
   })
 
   it('③ skip-link CSS 含 transform: translateY(-200%) 隐藏', () => {
-    expect(source).toMatch(/\.skip-link\s*\{/)
-    expect(source).toMatch(/transform:\s*translateY\(-200%\)/)
+    expect(scopedCss).toMatch(/\.skip-link\s*\{/)
+    expect(scopedCss).toMatch(/transform:\s*translateY\(-200%\)/)
   })
 
   it('④ skip-link :focus-visible 时 transform: translateY(0) 显示', () => {
-    expect(source).toMatch(/\.skip-link:focus-visible\s*\{/)
-    expect(source).toMatch(/transform:\s*translateY\(0\)/)
+    expect(scopedCss).toMatch(/\.skip-link:focus-visible\s*\{/)
+    expect(scopedCss).toMatch(/transform:\s*translateY\(0\)/)
   })
 
   it('⑤ 复用全局 --focus-outline-* token (W101 +1 验证一致性)', () => {
-    expect(source).toMatch(/var\(--focus-outline-width\)/)
-    expect(source).toMatch(/var\(--focus-outline-offset\)/)
+    expect(scopedCss).toMatch(/var\(--focus-outline-width\)/)
+    expect(scopedCss).toMatch(/var\(--focus-outline-offset\)/)
   })
 })

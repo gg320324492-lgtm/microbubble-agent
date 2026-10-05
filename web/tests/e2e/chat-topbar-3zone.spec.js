@@ -25,10 +25,15 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(__dirname, '../..')
 const SOURCE = resolve(ROOT, 'src/views/chat/ChatViewSSE.vue')
+// 2026-10-05 (CSS 抽出): 原 <style scoped> 块迁到该文件, 断言读它
+const STYLE_SRC = resolve(ROOT, 'src/views/chat/chatview-scoped.css')
 
 beforeAll(() => {
   if (!existsSync(SOURCE)) {
     throw new Error(`ChatViewSSE.vue not found at ${SOURCE}`)
+  }
+  if (!existsSync(STYLE_SRC)) {
+    throw new Error(`chatview-scoped.css not found at ${STYLE_SRC}`)
   }
 })
 
@@ -45,9 +50,10 @@ function extractScript(source) {
 
 /** Extract a `<style scoped>` block */
 function extractStyle(source) {
-  const m = source.match(/<style\s+scoped>([\s\S]*?)<\/style>/)
-  if (!m) throw new Error('No <style scoped> block found')
-  return m[1]
+  // 2026-10-05 (CSS 抽出): scoped 样式已搬到 chatview-scoped.css，
+  // .vue 里只剩 `<style scoped src="...">` 空壳（内联正则必然失配）。
+  // 改为直接读该 CSS 文件；下方断言正则逐字未动。
+  return readFileSync(STYLE_SRC, 'utf-8')
 }
 
 /** Extract `<template>` block */
