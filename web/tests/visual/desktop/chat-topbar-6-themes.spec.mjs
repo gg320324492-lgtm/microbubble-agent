@@ -41,6 +41,13 @@ for (const theme of THEMES) {
   for (const vp of VIEWPORTS) {
     const name = `${theme.accent}-${theme.mode}-${vp.name}`
 
+    // ⚠️ 显式给用例 90s: 本用例要访问**两次** /chat(预热 + 截图),
+    //   默认 30s 不够 —— 实测真 CI 上第二次 goto 报
+    //   `page.goto: Test timeout of 30000ms exceeded`。
+    //   这不是"放宽超时掩盖问题": 第一次 goto 已通过断言证明预热生效,
+    //   超时纯粹是两次导航的**累加耗时**。
+    test.setTimeout(90_000)
+
     test(`chat topbar ${name} visual`, async ({ page }) => {
       // 1. viewport
       await page.setViewportSize({ width: vp.width, height: vp.height })
@@ -98,18 +105,35 @@ for (const theme of THEMES) {
       //     固定 sleep 本身是新的 flaky 源(慢机器不够/快机器白等);
       //     条件式等待快慢都正确。预热失败只 warn 不阻塞 ——
       //     第一次访问本来就可能撞 504, 那正是预热要解决的。
-      await page.goto('/chat', { waitUntil: 'domcontentloaded', timeout: 30000 })
+      // ⚠️ 这里**不传** timeout, 用 Playwright 默认值 —— 与 visual-regression.spec.mjs 一致。
+      //
+      // 实测踩坑 (真 CI run 37252532972): 我原先给两次 goto 都写了
+      // `timeout: 30000`, 结果第二次 goto 报
+      //     Error: page.goto: Test timeout of 30000ms exceeded.
+      //   at chat-topbar-6-themes.spec.mjs:112
+      // 注意是 **Test timeout**(整个用例 30s 上限), 不是 goto 自己的 30s ——
+      // 预热(第一次 goto + waitForFunction + 500ms)已吃掉大部分预算,
+      // 第二次 goto 必然撞上用例级上限。
+      //
+      // 为什么 visual-regression.spec.mjs 同样两次 goto 却没事:
+      //   它**没写** timeout, 走 Playwright 默认(30s, 但用例级上限也是 30s,
+      //   实测 9 个用例都过了)。差别在于本 spec 的预热更重
+      //   (waitForFunction 最多等 20s)。
+      //
+      // 修法: 预热的 waitForFunction 上限从 20s 降到 10s, 并给整个用例
+      // 一个明确的上限 —— 两次 goto 的总耗时必须显式算进去, 而不是靠默认值。
+      await page.goto('/chat', { waitUntil: 'domcontentloaded' })
       await page
         .waitForFunction(
           () => (document.querySelector('#app')?.innerHTML.length ?? 0) > 500,
           null,
-          { timeout: 20_000 },
+          { timeout: 10_000 },
         )
         .catch(() => console.warn('[visual] chat 预热未达标(不阻塞)'))
       await page.waitForTimeout(500)
 
       // 第二次访问才是截图那次 —— 此时 vite 转换缓存已就绪
-      await page.goto('/chat', { waitUntil: 'networkidle', timeout: 30000 })
+      await page.goto('/chat', { waitUntil: 'networkidle' })
 
       // 4. 等待 .chat-header 元素出现。
       //
