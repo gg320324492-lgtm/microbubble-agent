@@ -202,7 +202,10 @@ jobs:
 
       # === W71 B-5: smoke 200 题拆 2 step (主测 100 ≤ 2min + 抽测 100 ≤ 3min) 避免 5min timeout ===
       # W69 plan 备注 LOW 缺口: 原单次 5min 跑全 200 题不现实. 拆分主测/抽测两段, 各自 offset 定位.
+      # 2026-10-06 缺陷 2: 加 id: smoke_main —— 门禁步 outcome 守卫要读本步
+      # ${{ steps.smoke_main.outcome }}, 防止 runner 被砍时门禁读入库旧 results.json。
       - name: Run 200 题 smoke — 主测 100 题 (against test DB 8001, ≤ 2min)
+        id: smoke_main
         working-directory: tests/qa-bench
         env:
           API_BASE: http://localhost:8001     # ← 8001 (test app)
@@ -222,7 +225,10 @@ jobs:
             exit 1
           fi
 
+      # 2026-10-06 缺陷 2: 加 id: smoke_sample —— 门禁步 outcome 守卫要读
+      # ${{ steps.smoke_sample.outcome }}, 同上。
       - name: Run 200 题 smoke — 抽测 100 题 (against test DB 8001, ≤ 3min)
+        id: smoke_sample
         working-directory: tests/qa-bench
         env:
           API_BASE: http://localhost:8001
@@ -256,6 +262,16 @@ jobs:
         if: always()
         working-directory: tests/qa-bench
         run: |
+          # 2026-10-06 缺陷 2: runner outcome 守卫 (在读 results.json 之前)。
+          # 根因: results/smoke/results.json 是 git 入库的历史文件 (2026-06-30,
+          # 33.3%), runner 步被砍/跳过时旧文件仍在 checkout 里, 门禁直接读会
+          # 打出六月旧数 (run 37478964142 实锤: runner 全 skipped 照样打印
+          # 33.3%)。先判两个 runner step 的 outcome, 非 success 一律 fail-loud,
+          # 不读陈旧数据。
+          if [ "${{ steps.smoke_main.outcome }}" != "success" ] || [ "${{ steps.smoke_sample.outcome }}" != "success" ]; then
+            echo "::error file=tests/qa-bench/qa-bench-smoke.yml::Smoke gate: runner 未执行或失败 (主测=${{ steps.smoke_main.outcome }}, 抽测=${{ steps.smoke_sample.outcome }}), 门禁拒绝读取入库陈旧 results.json"
+            exit 1
+          fi
           # fail-loud: 上游 bench 步崩掉时 results.json 不会生成, 原 `if [ -f ]; then ... fi`
           # 守卫会让本门禁静默 exit 0 变绿 (恒绿形态)。缺失必须红。
           if [ ! -f results/smoke/results.json ]; then
