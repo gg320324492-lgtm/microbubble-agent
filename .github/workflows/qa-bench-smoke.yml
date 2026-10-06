@@ -135,13 +135,18 @@ jobs:
           # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
           docker network create qa-bench-net
 
-          # 起 test DB (独立容器, 端口 5433 避免与生产 db:5432 冲突)
+          # 起 test DB (app 经 qa-bench-net 网络以服务名 pg-test 直连)
+          # 2026-10-07 断点 3: postgres:16-alpine 无 vector 扩展二进制, 且
+          # SKIP_DB_SETUP=1 短路了 app lifespan 的 CREATE EXTENSION → init_db
+          # create_all 报 f405 (member.py voice_embedding 是 HALFVEC(192))。
+          # 照抄 D5 (qa-bench-ci.yml 111-162 行): 换 pgvector/pgvector:pg16
+          # 官方镜像 —— 注意它只带扩展二进制、从不自动执行 CREATE EXTENSION。
           docker run -d --name pg-test \
             --network qa-bench-net \
             -e POSTGRES_DB=microbubble_test \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=microbubble2026 \
-            postgres:16-alpine
+            pgvector/pgvector:pg16
           # 等 pg-test ready (最长 60s)
           for i in {1..30}; do
             if docker exec pg-test pg_isready -U postgres > /dev/null 2>&1; then
@@ -155,6 +160,32 @@ jobs:
             fi
             sleep 2
           done
+
+          # === 2026-10-07 断点 3 (照抄 D5 133-162 行): 显式装 vector 扩展 ===
+          # pgvector/pgvector:pg16 官方镜像只是"自带扩展二进制", 从不执行
+          # CREATE EXTENSION —— 实测全新 template1 (POSTGRES_DB 的克隆源) 只有
+          # plpgsql; 而 app lifespan 里的 CREATE EXTENSION 被 SKIP_DB_SETUP=1
+          # 短路。只装 vector: create_all 只用 vector/halfvec 类型即可过。
+          echo "=== install pgvector extension (create_all 需要 halfvec/vector 类型) ==="
+          for i in {1..10}; do
+            if docker exec pg-test psql -U postgres -d microbubble_test \
+                 -c "CREATE EXTENSION IF NOT EXISTS vector;" > /dev/null 2>&1; then
+              echo "✓ pgvector extension 已安装"
+              break
+            fi
+            if [ "$i" -eq 10 ]; then
+              echo "✗ CREATE EXTENSION vector 10 次全失败 — 镜像不含 vector 控制文件?"
+              docker exec pg-test psql -U postgres -d microbubble_test \
+                -c "SELECT extname FROM pg_extension;" || true
+              docker logs pg-test | tail -30
+              exit 1
+            fi
+            sleep 2
+          done
+          # fail-loud 回读: 装没装上不能靠 psql 退出码猜 (某些失败也会退 0)
+          docker exec pg-test psql -U postgres -d microbubble_test -tAc \
+            "SELECT count(*) FROM pg_extension WHERE extname='vector';" \
+            | grep -qx 1 || { echo "✗ vector 扩展装上后回读仍为 0"; exit 1; }
 
           # 起 test app (8001 端口, 接 test DB 通过同网络服务名 pg-test)
           # W67 第 33 步: 用已 build image, 不再 `$(docker build -q .)`
@@ -191,6 +222,11 @@ jobs:
 
       - name: Init test DB schema + seed data
         run: |
+          # 2026-10-07 断点 3: 默认 shell 是 bash -e 无 pipefail, `... | tail -N`
+          # 的管道退出码取 tail (恒 0) → init_db 内部 f405 报错被掩绿成 step
+          # success (run 37488667066 日志实测 2 处)。照抄 D5 (qa-bench-ci.yml
+          # 226 行) 先开 pipefail, 再建表。
+          set -o pipefail
           # 用 Base.metadata.create_all 建表 + seed (init_db.py 同时插入 24 members 等)
           docker exec -e SKIP_DB_SETUP=1 \
             -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
@@ -203,8 +239,24 @@ jobs:
             -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
             app-test alembic stamp head 2>&1 | tail -3
 
+          # === 2026-10-07 断点 3 fail-loud: 建表后 psql 实测表数 > 0 才算真 success ===
+          # \dt 输出肉眼可见 + information_schema 表数断言, 任一缺失即 exit 1,
+          # 不再依赖"命令没报错"这种可被管道/静默失败掩盖的弱信号。
+          echo "=== 建表验证: psql \\dt (public schema) ==="
+          docker exec pg-test psql -U postgres -d microbubble_test -c "\dt"
+          TABLE_COUNT=$(docker exec pg-test psql -U postgres -d microbubble_test -tAc \
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
+          if ! [ "${TABLE_COUNT}" -gt 0 ] 2>/dev/null; then
+            echo "::error::init_db 后 public schema 表数 = '${TABLE_COUNT}' (空/非正数) — 建表未发生, 拒绝假 success"
+            exit 1
+          fi
+          echo "✓ 建表验证通过: public 表数 = ${TABLE_COUNT}"
+
       - name: Ensure test user (xiaoqi_testbot) exists
         run: |
+          # 2026-10-07 断点 3: 同 Init 步 —— `| tail -3` 无 pipefail 会把
+          # ensure_test_user 的非零退出掩成 success, 先开 pipefail。
+          set -o pipefail
           docker exec -e SKIP_DB_SETUP=1 \
             -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
             app-test python scripts/ensure_test_user.py 2>&1 | tail -3
