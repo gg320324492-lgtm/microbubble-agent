@@ -372,6 +372,10 @@ jobs:
       #     真实语法/import 错误同样 exit 1 但无哨兵, 照旧断链。
       #   - pytest: 仅当摘要含 skipped 才接受 exit 5 (NO_TESTS_COLLECTED)。
       #     文件被误删/改名同样 exit 5, 但摘要为 "no tests ran", 不会被误认。
+      #
+      # 注意: GitHub 的 run: 块在 bash -e 下执行, errexit 会让 out=$(python ...)
+      # 在 python 非零退出时直接中断整个 step, 下面的判据根本没机会跑。
+      # 用 `|| rc=$?` 捕获退出码而非让它致命。
       - name: Run D7 baseline audit (71 PASS + 7 SKIP)
         if: always()
         run: |
@@ -379,7 +383,7 @@ jobs:
             cd /app || exit 1
             ARCHIVED_AUDIT=tests/test_baseline_audit.py
 
-            out=$(python "$ARCHIVED_AUDIT" 2>&1); rc=$?
+            rc=0; out=$(python "$ARCHIVED_AUDIT" 2>&1) || rc=$?
             printf "%s\n" "$out"
             if [ "$rc" -ne 0 ]; then
               if [ "$rc" -eq 1 ] && printf "%s" "$out" | grep -q "^Skipped:"; then
@@ -390,7 +394,7 @@ jobs:
               fi
             fi
 
-            out=$(python -m pytest "$ARCHIVED_AUDIT" -q --disable-warnings 2>&1); rc=$?
+            rc=0; out=$(python -m pytest "$ARCHIVED_AUDIT" -q --disable-warnings 2>&1) || rc=$?
             printf "%s\n" "$out"
             if [ "$rc" -ne 0 ]; then
               if [ "$rc" -eq 5 ] && printf "%s" "$out" | grep -Eq "[0-9]+ skipped"; then

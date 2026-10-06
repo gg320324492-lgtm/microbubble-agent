@@ -96,12 +96,17 @@ jobs:
       #   - pytest run: exit 5 (NO_TESTS_COLLECTED) accepted ONLY when the summary
       #     reports a skip. A wrongly deleted/renamed file also exits 5 but reports
       #     "no tests ran", so it is not mistaken for an archived skip.
+      #
+      # IMPORTANT: GitHub runs `run:` blocks under `bash -e`. Under errexit,
+      # `out=$(cmd)` aborts the whole step the moment cmd exits non-zero, so a
+      # plain `out=$(python ...)` would kill the step before the check below could
+      # ever run. Capture with `|| rc=$?` so a non-zero exit is recorded, not fatal.
       - name: Run baseline audit definition (archived - asserts do not execute)
         run: |
           set -o pipefail
           ARCHIVED_AUDIT=tests/test_baseline_audit.py
 
-          out=$(python "$ARCHIVED_AUDIT" 2>&1); rc=$?
+          rc=0; out=$(python "$ARCHIVED_AUDIT" 2>&1) || rc=$?
           printf '%s\n' "$out"
           if [ "$rc" -ne 0 ]; then
             if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q '^Skipped:'; then
@@ -112,7 +117,7 @@ jobs:
             fi
           fi
 
-          out=$(python -m pytest "$ARCHIVED_AUDIT" -q --disable-warnings 2>&1); rc=$?
+          rc=0; out=$(python -m pytest "$ARCHIVED_AUDIT" -q --disable-warnings 2>&1) || rc=$?
           printf '%s\n' "$out"
           if [ "$rc" -ne 0 ]; then
             if [ "$rc" -eq 5 ] && printf '%s' "$out" | grep -Eq '[0-9]+ skipped'; then
