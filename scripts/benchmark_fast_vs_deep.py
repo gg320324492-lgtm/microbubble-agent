@@ -60,7 +60,19 @@ async def run_one_mode(
     """
     sys.path.insert(0, str(Path(__file__).parent.parent / "tests" / "qa-bench"))
     # qa-bench 不是 package (无 __init__.py), 直接 import runner
+    import runner
     from runner import run_single_question, score_seven_dim
+
+    # 2026-10-07 断点 1 修复: api_base 原是死参 —— run_single_question 实际
+    # 请求拼的是 runner 模块常量 API_BASE (runner.py:63 默认 127.0.0.1:8000,
+    # runner.py:829 每次调用时读全局), 本函数收了 api_base 却从不使用。
+    # 后果: CI 里 app-test 在 8001 → 全量 ConnectError → runner retry
+    # 每题 sleep 30s×2 → 90 题 ≈ 45min 撞 job timeout, run 37488667066
+    # 被砍成 cancelled。修法: 把参数接通到 runner.API_BASE (模块属性补丁,
+    # 函数调用时按全局名读到新值)。不改 runner.py —— 它今天刚被两笔修复
+    # 稳定过; 本脚本是独立进程, 与 runner CLI 的 --api-base 路径
+    # (runner.py:1137 写同一属性) 互不干扰。
+    runner.API_BASE = api_base
 
     import httpx
 
