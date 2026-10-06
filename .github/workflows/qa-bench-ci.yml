@@ -567,9 +567,11 @@ jobs:
           PYEOF
           )
             echo "D5 通过率: ${PASS_RATE}%"
-            python3 << 'PYEOF'
+            # 带引号 heredoc 不展开 ${PASS_RATE} => 经 env 传值 (前缀赋值在 heredoc 展开前生效)
+            PASS_RATE="${PASS_RATE}" python3 << 'PYEOF'
+          import os
           import sys
-          pass_rate = float('${PASS_RATE}')
+          pass_rate = float(os.environ['PASS_RATE'])
           threshold = 80.0
           if pass_rate < threshold:
               print(f'❌ 通过率 {pass_rate}% < 阈值 {threshold}%, D5 gate 阻断 merge')
