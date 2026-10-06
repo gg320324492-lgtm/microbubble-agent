@@ -264,8 +264,12 @@ jobs:
           fi
 
       # === 2026-07-13 #P1: 三档推理模式 benchmark (30 题 × 3 mode = 90 次, 验证 fast/balanced/deep 真区分) ===
+      # 2026-10-06 修路径加倍: 脚本在仓库根 scripts/, 本步却设 working-directory
+      # tests/qa-bench => `python scripts/benchmark_fast_vs_deep.py` 解析成
+      # tests/qa-bench/scripts/... (不存在), --questions tests/qa-bench/... 也加倍。
+      # 三处相对路径 (脚本 / 题库 / --output docs/benchmarks) 均按仓库根书写,
+      # 故本步不设 working-directory, cwd 即仓库根。
       - name: Run fast vs balanced vs deep benchmark (30 题 × 3 mode)
-        working-directory: tests/qa-bench
         env:
           API_BASE: http://localhost:8001
           QA_TOKEN: ${{ secrets.QA_TOKEN }}
