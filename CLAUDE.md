@@ -169,7 +169,8 @@
 ## W100 构建确定性永久纪律（2026-08-03，类 20.133）
 
 - **Vite build 必须 deterministic**：同一 source、同一依赖锁定版本、同一构建配置必须产出相同的 `dist` 文件内容、文件名和 hash；提交前应使用两次连续 build + `diff -r` 或 manifest/hash 清单核验。
-- **禁止向构建产物注入进程态值**：build-time `define`、banner/footer、插件 `augmentChunkHash` 等不得使用 `process.env`、`Date.now()`、`new Date()`、`Math.random()`、`crypto.randomUUID()`、`process.pid` 或其他随机/时间/进程 ID 生成 build ID。若需要版本标识，必须从 git commit/tree hash 或 CI 显式固定输入派生。
+- **禁止向构建产物注入进程态值**：build-time `define`、banner/footer、插件 `augmentChunkHash` 等不得使用 `process.env`、`Date.now()`、`new Date()`、`Math.random()`、`crypto.randomUUID()`、`process.pid` 或其他随机/时间/进程 ID 生成 build ID。若需要版本标识，必须从**构建源输入内容哈希**（显式允许清单，绝不含自入库的产物目录——`web/dist` 入清单即哈希循环永不收敛）或 CI 显式固定输入派生。**HEAD 短哈希 / HEAD commit 时间不合格**：任何 commit（含纯 docs）都会变，会沿依赖图级联搅动全部 chunk（R-5 根治，2026-10-07，实现与反循环论证见 `web/vite.config.js` 顶部注释）。
+- **R-5 根治落地（2026-10-07）**：`web/vite.config.js` 的 `BUILD_TIMESTAMP` = `git log -1 --format=%cI -- <SOURCE_INPUTS>`（语义 = **源码最后修改时间**，非构建时刻）；`BUILD_ID` = 源输入清单 sha256 前 12 hex（内容变才变，含未提交工作区改动）。dist/docs/测试提交不再改变二者 → 入库 dist 重建可逐字节复现。降级策略：git 不可用、或 `vite build` 遇浅克隆 path-log 为空 → throw fail-loud（CI 实测从不跑 `vite build`）；仅 dev/CI dev-server 在该场景**确定性**降级为 tip 提交时间（dev 产物不入库），防止 playwright.yml 默认 depth=1 浅克隆被误杀。
 - **`NODE_ENV` 必须在 build script 显式声明**：`NODE_ENV` 与 Vite `mode` 是两个独立维度；不得假定 `vite build` 的 production mode 会替代 `process.env.NODE_ENV`。跨平台脚本应使用仓库认可的环境变量注入方式，并在 CI 日志中打印并核验实际值。
 - **Vite/Rollup 默认不会凭时间生成 chunk hash**：`[hash]` 是渲染内容及依赖关系的内容 hash；任何插件、loader、注入常量或非固定环境输入改变 chunk 字节，都会沿依赖图触发连锁 rename。调查证据见 `docs/research-build-determinism-2026-08-03.md`。
 - **异常 fallback 也必须 fail-loud 或确定**：无 `.git`/detached 环境不得静默退回 PID+时间随机标识；应由 CI 提供固定 `VITE_BUILD_ID`/`VITE_BUILD_TIMESTAMP`，或明确失败并阻止发布。`f31901caf` 的现有 fallback 是后续加固留口，不得复制到新构建配置。
