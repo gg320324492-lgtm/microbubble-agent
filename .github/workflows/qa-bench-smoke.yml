@@ -258,6 +258,32 @@ jobs:
           path: tests/qa-bench/results/smoke/
           retention-days: 14
 
+      # === 2026-07-13 #P1: 三档推理模式 benchmark (30 题 × 3 mode = 90 次, 验证 fast/balanced/deep 真区分) ===
+      # 2026-10-06 修路径加倍: 脚本在仓库根 scripts/, 本步却设 working-directory
+      # tests/qa-bench => `python scripts/benchmark_fast_vs_deep.py` 解析成
+      # tests/qa-bench/scripts/... (不存在), --questions tests/qa-bench/... 也加倍。
+      # 三处相对路径 (脚本 / 题库 / --output docs/benchmarks) 均按仓库根书写,
+      # 故本步不设 working-directory, cwd 即仓库根。
+      # 2026-10-06 缺陷 3: 本步原排在门禁 (always()) 之后 —— 门禁红时默认
+      # success() 条件必 skip, 永不可达。移到门禁之前: env (API_BASE/QA_TOKEN)
+      # 是 step 级自带, 题库/脚本来自 checkout, app-test 直到最后 Teardown 才
+      # 下线, 与本步在门禁前后无关。其 upload 步 (if: always()) 留在门禁后不动。
+      - name: Run fast vs balanced vs deep benchmark (30 题 × 3 mode)
+        env:
+          API_BASE: http://localhost:8001
+          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+        run: |
+          python scripts/benchmark_fast_vs_deep.py \
+            --questions tests/qa-bench/questions_fast_vs_deep.jsonl \
+            --api-base-fast http://localhost:8001 \
+            --api-base-balanced http://localhost:8001 \
+            --api-base-deep http://localhost:8001 \
+            --token "${QA_TOKEN:-mock}" \
+            --concurrency 2 \
+            --output docs/benchmarks/fast-vs-deep-${GITHUB_SHA::8}.md
+          # 注: 单 docker 配置下 3 mode 走同一后端, 实际三档区分由 THINKING_MODE env + 后端 thinking_config 调度
+          # 验证: deep 模式应该 thinking_tokens_used > 0, fast 模式延迟 < balanced < deep
+
       - name: Fail if pass_rate < 80%
         if: always()
         working-directory: tests/qa-bench
@@ -300,28 +326,6 @@ jobs:
           else:
               print(f'✓ 通过率 {pass_rate}% >= 阈值 {threshold}%, PR 通过')
           PYEOF
-
-      # === 2026-07-13 #P1: 三档推理模式 benchmark (30 题 × 3 mode = 90 次, 验证 fast/balanced/deep 真区分) ===
-      # 2026-10-06 修路径加倍: 脚本在仓库根 scripts/, 本步却设 working-directory
-      # tests/qa-bench => `python scripts/benchmark_fast_vs_deep.py` 解析成
-      # tests/qa-bench/scripts/... (不存在), --questions tests/qa-bench/... 也加倍。
-      # 三处相对路径 (脚本 / 题库 / --output docs/benchmarks) 均按仓库根书写,
-      # 故本步不设 working-directory, cwd 即仓库根。
-      - name: Run fast vs balanced vs deep benchmark (30 题 × 3 mode)
-        env:
-          API_BASE: http://localhost:8001
-          QA_TOKEN: ${{ secrets.QA_TOKEN }}
-        run: |
-          python scripts/benchmark_fast_vs_deep.py \
-            --questions tests/qa-bench/questions_fast_vs_deep.jsonl \
-            --api-base-fast http://localhost:8001 \
-            --api-base-balanced http://localhost:8001 \
-            --api-base-deep http://localhost:8001 \
-            --token "${QA_TOKEN:-mock}" \
-            --concurrency 2 \
-            --output docs/benchmarks/fast-vs-deep-${GITHUB_SHA::8}.md
-          # 注: 单 docker 配置下 3 mode 走同一后端, 实际三档区分由 THINKING_MODE env + 后端 thinking_config 调度
-          # 验证: deep 模式应该 thinking_tokens_used > 0, fast 模式延迟 < balanced < deep
 
       - name: Upload thinking mode benchmark report
         if: always()
