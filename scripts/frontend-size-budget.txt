@@ -61,13 +61,23 @@
 # [S3.8 已完成 2026-10-02] file|web/src/utils/paperAdapter.js|5633 —— 该文件已删除，
 #   实现拆入 web/src/utils/paper/ 七文件（constants/qa/content/sections/figures/normalize/index）。
 #   不留 barrel 是 S3.8 的既定决策（E2）：留壳会被本棘轮与 glob 各算一遍，同一批代码双计。
-file|web/src/views/chat/ChatViewSSE.vue|1352
+file|web/src/views/chat/ChatViewSSE.vue|755
 # 2026-10-05 (CSS 抽出): 2973 -> 1352（-1621）。script+template 未动。
+# 2026-10-07 (L-1 script 拆分): 1352 -> 755（-597）。script 拆出 4 个
+#   composables/chat/useChatView{Scroll,Search,Composer,BackgroundPoll}.ts,
+#   template+style 逐字节未动 (diff 实测为空)。行为测试先行见
+#   views/chat/__tests__/ChatViewSSE.behavior.test.js (24 用例)。
+#   其中 ≥300 行的 useChatViewComposer.ts 已单独登记 (下一条);
+#   Scroll(205)/Search(140)/BackgroundPoll(89) 未达 300 不登记 —— 按 L-1 派工
+#   口径仅 ≥300 行新模块必须加 file| 条目 (<300 的裸奔是明示取舍, 不是失明)。
 # 两个 style 块各自成文件，用 file| 而非 glob| —— 本棘轮的 glob 分支硬编码
 # `find "$dir" -name '*.js'`，glob 指向 .css 会匹配不到任何文件而被静默跳过，
 # 那正是 S3.7 8 "新文件失明" 同一型错误。实测行数直接固化，不留余量。
 file|web/src/views/chat/chatview-scoped.css|888
 file|web/src/views/chat/chatview-global.css|733
+# 2026-10-07 (L-1): ChatViewSSE script 拆出的输入/发送/附件/引用/录音/重生成模块。
+#   实测 478 行 (wc -l), 直接固化不留余量。
+file|web/src/composables/chat/useChatViewComposer.ts|478
 file|web/src/components/drive/DriveDetailRail.vue|1604
 file|web/src/components/drive/rail.css|546
 file|web/src/views/DesktopDriveView.vue|2229
