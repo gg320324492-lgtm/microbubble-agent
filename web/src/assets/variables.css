@@ -1809,12 +1809,26 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
 
    策略: 只调 light :root token + 精准选择器, 不动 dark (X-20 已覆盖),
         不改组件结构 — 6 套主题继承同一 token 体系.
+   ⚠️ 2026-10-07 补记实际语义 (注释与行为对齐): 本段**覆盖型** token (dark 块
+      已声明同名者) 必须显式 light-scoped — :root 与 [data-theme="dark"]
+      特异度同为 (0,1,0), 裸 :root 写在 dark 块之后会按源顺序把 dark 计算值
+      盖死 (text-secondary 曾因此在 dark 下算成 #6B6E76, 暗色全站副文本
+      ≈2:1 且该色在任何深底上到不了 4.5)。故下方两条覆盖型声明挂
+      :root:not([data-theme="dark"]), dark 保留 v69 既定值 #a8aab0 / 168,170,176;
+      light 仍得 #6B6E76 (本段 axe 实证 5.10 / 4.60, 值不变)。
+      **新增型** token (dark 块无对应声明的 --color-primary-text 等) 仍挂裸
+      :root 双主题共用 — 移进 light-only 会让 dark 引用变 undefined。
    ============================================ */
-:root {
+/* 覆盖型 (light-only): 这两条覆盖 [data-theme="dark"] 已声明的同名 token,
+   裸 :root 会凭源顺序盖死 dark 值 — 必须显式排除 dark (2026-10-07 级联修复) */
+:root:not([data-theme="dark"]) {
   /* 中性副文本提暗: 3.08 → 5.10 (白底) / 4.60 (最差暖底 #fff0ed) */
   --color-text-secondary: #6B6E76;
   --color-text-secondary-rgb: 107, 110, 118;
+}
 
+/* 新增型 (双主题共用): dark 块无对应声明, 必须留在裸 :root */
+:root {
   /* 主色**文字**变体 — 主色 #FF7A5C 是 bg/装饰用色 (2.56 on white, 永远 fail AA),
      文字场景一律用本 token. 不改 --color-primary 本身 (改了整站视觉全变). */
   --color-primary-text: #B84523;   /* on #ffffff = 5.37, on #fff0ed = 4.84 */
