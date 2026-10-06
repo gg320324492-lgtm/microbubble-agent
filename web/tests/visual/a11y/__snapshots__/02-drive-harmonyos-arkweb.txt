@@ -2,4 +2,5 @@ page: 02-drive  route: /drive
 target: drive-view.css 引用页 (DesktopDriveView/MobileDriveView)
 project: harmonyos-arkweb
 authed: yes   redirected-to-login: no
+render-evidence: 88:74
 violations: 0
