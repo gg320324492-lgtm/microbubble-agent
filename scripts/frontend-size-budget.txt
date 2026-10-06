@@ -68,7 +68,8 @@ file|web/src/views/chat/ChatViewSSE.vue|1352
 # 那正是 S3.7 8 "新文件失明" 同一型错误。实测行数直接固化，不留余量。
 file|web/src/views/chat/chatview-scoped.css|888
 file|web/src/views/chat/chatview-global.css|733
-file|web/src/components/drive/DriveDetailRail.vue|2151
+file|web/src/components/drive/DriveDetailRail.vue|1604
+file|web/src/components/drive/rail.css|546
 file|web/src/views/DesktopDriveView.vue|2229
 glob|web/src/utils/paper|5774
 #
