@@ -65,6 +65,42 @@ STREAM_TIMEOUT_S = 90
 DURATION_WARN_S = 30
 DURATION_FAIL_S = 60
 
+# === 题库路径解析 (S3.22 修 D5 路径重复 bug) ===
+#
+# 历史 bug: --questions 默认值与 --smoke/--include-extra 的覆盖逻辑都硬编码
+# "tests/qa-bench/" 前缀, 但 CI (qa-bench-ci.yml / qa-bench-smoke.yml) 的相关 step
+# 设了 `working-directory: tests/qa-bench`。Path() 相对 cwd 解析 => 实际查找
+# "tests/qa-bench/tests/qa-bench/questions_780.jsonl", 路径被加倍 =>
+# FileNotFoundError。同一行紧邻的 extra_dataset 之所以"看起来对", 是因为它
+# 用 questions_path.parent 派生, 恰好跟着加倍一起错 (见下方 _resolve_dataset)。
+#
+# 修法: 题库一律锚定到本文件所在目录 (tests/qa-bench/), 与 cwd 解耦。
+# 这样 CI (wd=tests/qa-bench)、仓库根目录、以及既有带前缀的调用方
+# (scripts/qa_bench_smoke.py 等) 三种入口得到同一个答案。
+QA_BENCH_DIR = Path(__file__).resolve().parent
+
+
+def _resolve_dataset(name: str) -> Path:
+    """把 --questions 取值解析成真实题库路径 (cwd 无关).
+
+    兼容三种写法, 全部指向 tests/qa-bench/ 下的同一个文件:
+      - "questions.jsonl"                      (裸文件名)
+      - "tests/qa-bench/questions.jsonl"       (历史硬编码前缀)
+      - 绝对路径                              (显式指定, 原样保留)
+
+    带前缀的写法不是被"删掉"而是被归一化 —— scripts/qa_bench_smoke.py 与
+    scripts/benchmark_fast_vs_deep.py 的默认值仍是带前缀形态, 它们不该因为
+    本次修复而改变行为。
+    """
+    candidate = Path(name)
+    if candidate.is_absolute():
+        return candidate
+    parts = candidate.parts
+    if len(parts) >= 2 and parts[-3:-1] == ("tests", "qa-bench"):
+        # 剥掉历史 "tests/qa-bench/" 前缀, 只取末尾文件名
+        return QA_BENCH_DIR / candidate.name
+    return QA_BENCH_DIR / candidate
+
 # 内部事件标签（修复 1 前端 toggle 默认隐藏 — content 里出现算 leak）
 INTERNAL_LABELS = ["🧠 意图", "✨ 综合", "📊 自评", "🔄 重试", "⚠️ 自评"]
 
@@ -1120,12 +1156,15 @@ async def main():
 
     # v3.1 D6: --smoke 简写展开 (CI 路径收敛为单一 flag)
     SMOKE_LIMIT = 200
+    # S3.22: 比较用解析后的路径, 而不是裸字符串 —— 否则 `--questions
+    # questions.jsonl` (裸写法) 不会被识别为"用户没显式指定", 覆盖逻辑失效。
+    default_questions_path = _resolve_dataset("questions.jsonl")
     if args.smoke:
         if args.limit == 0:
             args.limit = SMOKE_LIMIT
         # 仅在用户没显式 --questions 时才覆盖默认 (避免误覆盖)
-        if args.questions == "tests/qa-bench/questions.jsonl":
-            args.questions = "tests/qa-bench/questions_780.jsonl"
+        if _resolve_dataset(args.questions) == default_questions_path:
+            args.questions = str(QA_BENCH_DIR / "questions_780.jsonl")
         print(f"   [smoke mode] limit={args.limit}, questions={args.questions}")
 
     # v3.1 D2 (Agent 6): --enable-intake 隐含 grayscale=100
@@ -1133,11 +1172,21 @@ async def main():
         args.grayscale = 100
 
     # v3.1 D4: include-extra 合并题库
+    # S3.22: extra_dataset 同样锚定 QA_BENCH_DIR, 不再靠 questions_path.parent
+    # 派生 —— 后者会跟着加倍路径一起错, 且失败是**静默**的 (走 else 分支继续跑
+    # 700 题, 80% 通过率门照样放行)。
     extra_dataset = os.environ.get("QA_BENCH_EXTRA_DATASET", "questions_d4_extra_300.jsonl")
-    if args.include_extra and args.questions == "tests/qa-bench/questions.jsonl":
-        args.questions = "tests/qa-bench/questions_780.jsonl"
+    if args.include_extra and _resolve_dataset(args.questions) == default_questions_path:
+        args.questions = str(QA_BENCH_DIR / "questions_780.jsonl")
 
-    questions_path = Path(args.questions)
+    questions_path = _resolve_dataset(args.questions)
+    if not questions_path.exists():
+        print(
+            f"✗ 题库不存在: {questions_path}\n"
+            f"   (--questions 取值: {args.questions!r}; 相对 cwd={Path.cwd()})",
+            file=sys.stderr,
+        )
+        parser.error(f"题库不存在: {questions_path}")
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1150,7 +1199,7 @@ async def main():
             questions.append(json.loads(line))
     # v3.1 D4: merge extra questions after loading the base dataset
     if args.include_extra:
-        extra_path = questions_path.parent / extra_dataset
+        extra_path = _resolve_dataset(extra_dataset)
         if extra_path.exists():
             with extra_path.open(encoding="utf-8") as f:
                 questions.extend(json.loads(line) for line in f if line.strip())
