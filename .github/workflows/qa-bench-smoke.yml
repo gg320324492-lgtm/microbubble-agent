@@ -42,7 +42,23 @@ jobs:
   qa-bench-smoke:
     name: QA Bench 200 题 Smoke (test DB)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 2026-10-06 缺陷 4: timeout 复算 10 -> 15, 依据真 run 时间戳 (非拍脑袋):
+    # 固定开销实测:
+    #   setup -> Install deps   16s  (smoke run 37481598381: 14:45:17 -> 14:45:33)
+    #   Pull pre-built image   151s  (同链路 D5 run 37479098887 step7: 14:29:26 -> 14:31:57)
+    #   Start test DB stack     27s  (D5 step8: 14:31:57 -> 14:32:24)
+    #   init/ensure/gen 题库     ~5s  (D5 step9-12: 14:32:24 -> 14:32:28)
+    #   upload/gate/teardown     ~5s  (D5 step14/16/17: 各 0-1s)
+    #   => 固定 ≈ 3.4 min
+    # 动态部分:
+    #   runner 200 题: 本 workflow W71 B-5 注自带预算 主测 ≤2min + 抽测 ≤3min = 5min
+    #     (CI 内尚无实测, 历史上 runner 从未执行过; 401 快败只会更短)
+    #   fast-vs-deep: 90 req / conc 2, 历史上全 skipped 无实测; 401 快败 <1min,
+    #     按 ~5s/req 保守估 45 波 ≈ 4min
+    #   合计 3.4 + 5 + 4 ≈ 12.4, 加 ~2.5min 余量 = 15
+    #   10min 下动态区只剩 1.6min (5min runner 预算都不够), 故复算取 15。
+    #   原 10min 是 build 步 (6-12min) 尚在时代的紧 budget, build 已被 pull 替代。
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
