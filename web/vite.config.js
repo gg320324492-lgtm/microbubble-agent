@@ -42,8 +42,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 //   等于把 R-5 缩小到"每个源码提交"而不是根治。工作区内容哈希对任意时刻的构建
 //   都忠实反映真实输入: checkout 该提交重建 = 同内容 = 同 ID = 逐字节同 dist。
 //
-// fail-loud (类 20.133「异常 fallback 必须 fail-loud 或确定」):
-//   - git 不可用 (无 .git / 非 git 检出 / PATH 缺 git) → 任何模式都直接 throw;
+// fail-loud (类 20.133「异常 fallback 必须 fail-loud 或确定」), 按 build/dev 分模式:
+//   - git 不可用 (无 .git / 非 git 检出 / PATH 缺 git / 容器内 git 不可用):
+//     `vite build` → 直接 throw; dev → 固定哨兵 'no-git-dev' (确定值; playwright.yml
+//     视觉回归的 visual-vite 容器 git 不可用, 曾被无差别 throw 误杀 —— 2026-10-07 修);
 //   - `vite build` 且 git log 对源输入返回空 (浅克隆未含源路径历史) → throw,
 //     绝不产出浅克隆时间戳的 dist;
 //   - dev / CI dev-server (playwright.yml 的 `npx vite` 是 actions/checkout 默认
@@ -153,38 +155,71 @@ function deriveSourceTreeHash() {
   return hash.digest('hex').slice(0, 12)
 }
 
-// --- fail-loud 预检: 必须身处可用 git 检出 (无 .git / PATH 缺 git → throw) ---
-gitOrDie('git rev-parse --show-toplevel')
-
-// 是否 `vite build` (argv 含 'build'); dev/serve/preview/vitest 不含。
-// 空 git log 的处置按模式分流, 见下。
+// 构建模式判定: `vite build` 的 argv 含 'build'; dev/serve/preview/vitest 不含。
 const IS_VITE_BUILD = process.argv.includes('build')
 
-// --- BUILD_TIMESTAMP: 最后一次触碰源输入的提交时间 (语义见顶部注释) ---
-let BUILD_TIMESTAMP = gitOrDie(`git log -1 --format=%cI -- ${SOURCE_INPUTS.join(' ')}`)
-if (!BUILD_TIMESTAMP) {
-  // 源输入路径在可见历史里无提交 —— 典型场景: actions/checkout 默认 depth=1 浅克隆,
-  // tip 是 dist-only / docs-only / workflow-only 提交 (这些都不在 SOURCE_INPUTS 里)。
+// --- git 可用性预检 (分模式) ---
+//   build: 不可用 → throw fail-loud (验收铁律: 无 .git 跑 build 必须报错退出,
+//          绝不产出兜底标识 dist);
+//   dev:   不可用 → 固定哨兵 'no-git-dev' (确定值, 非随机/进程态, 属类 20.133
+//          「fail-loud 或确定」的「确定」分支)。场景: playwright.yml 视觉回归 job 的
+//          `docker run visual-vite` 挂载了 checkout (-v $PWD:/app) 但容器内 git 不可用
+//          (pinned 镜像无 git / dubious ownership), 2026-10-07 曾被无差别 fail-loud
+//          误杀。dev 产物不入库, 哨兵不会进入 dist; BUILD_ID 是内容哈希, 无 git 也照算。
+let _gitTop = null
+try {
+  _gitTop = execSync('git rev-parse --show-toplevel', {
+    stdio: ['ignore', 'pipe', 'ignore'],
+    encoding: 'utf-8',
+    cwd: WEB_ROOT,
+  }).trim()
+} catch (err) {
+  _gitTop = null
   if (IS_VITE_BUILD) {
-    // 构建模式 fail-loud: 入库 dist 的 TIMESTAMP 必须是真实的源输入提交时间,
-    // 浅克隆拿不到就绝不产出 (CI 实测从不跑 vite build → 现实零成本)。
     throw new Error(
-      '[vite] git log 对源输入路径返回空 (浅克隆未含源输入历史 / 路径从未提交?) — ' +
-      '按类 20.133 fail-loud, 不产出兜底标识 dist。修复: 用完整克隆 (git fetch --unshallow) 运行 npm run build。'
+      `[vite] 构建标识派生失败: \`git rev-parse --show-toplevel\` 执行失败 (${String(err.message).split('\n')[0]})。\n` +
+      '[vite] 按类 20.133 (W100 构建确定性纪律) fail-loud: 无 .git / 非 git 检出 / ' +
+      'PATH 缺 git 时, 构建必须显式失败, 禁止静默退回随机或进程态标识产出 dist。' +
+      '修复: 在完整 git 仓库内运行 npm run build。'
     )
   }
-  // dev / CI dev-server (playwright.yml 的 `npx vite`, 浅克隆 depth=1): 确定性降级。
-  // dev 产物不入库, banner 值仅本机可见; 用 tip 提交时间 (浅克隆内可用, 同 checkout 恒定)
-  // —— 确定性值, 不是随机/进程态, 满足类 20.133「fail-loud 或确定」的「确定」分支。
-  const _tipDate = gitOrDie('git log -1 --format=%cI')
-  if (!_tipDate) {
-    throw new Error('[vite] 仓库无任何提交历史, BUILD_TIMESTAMP 无法派生 — fail-loud (类 20.133)')
-  }
+}
+
+// --- BUILD_TIMESTAMP: 最后一次触碰源输入的提交时间 (语义见顶部注释) ---
+let BUILD_TIMESTAMP
+if (!_gitTop) {
+  // dev 且无可用 git: 固定哨兵, 确定性 (见上方分模式说明)
   console.warn(
-    `[vite] 源输入 git log 为空 (浅克隆 depth=1 且 tip 未触碰源输入?), ` +
-    `BUILD_TIMESTAMP 确定性降级为 tip 提交时间 ${_tipDate} (仅 dev 可见, 不会进入入库 dist)`
+    "[vite] 无可用 git (容器 dev?), BUILD_TIMESTAMP 固定哨兵 'no-git-dev' " +
+    '(确定值, 仅 dev 可见, 不会进入入库 dist); BUILD_ID 仍为源输入内容哈希'
   )
-  BUILD_TIMESTAMP = _tipDate
+  BUILD_TIMESTAMP = 'no-git-dev'
+} else {
+  BUILD_TIMESTAMP = gitOrDie(`git log -1 --format=%cI -- ${SOURCE_INPUTS.join(' ')}`)
+  if (!BUILD_TIMESTAMP) {
+    // 源输入路径在可见历史里无提交 —— 典型场景: actions/checkout 默认 depth=1 浅克隆,
+    // tip 是 dist-only / docs-only / workflow-only 提交 (这些都不在 SOURCE_INPUTS 里)。
+    if (IS_VITE_BUILD) {
+      // 构建模式 fail-loud: 入库 dist 的 TIMESTAMP 必须是真实的源输入提交时间,
+      // 浅克隆拿不到就绝不产出 (CI 实测从不跑 vite build → 现实零成本)。
+      throw new Error(
+        '[vite] git log 对源输入路径返回空 (浅克隆未含源输入历史 / 路径从未提交?) — ' +
+        '按类 20.133 fail-loud, 不产出兜底标识 dist。修复: 用完整克隆 (git fetch --unshallow) 运行 npm run build。'
+      )
+    }
+    // dev / CI dev-server (playwright.yml 的 `npx vite`, 浅克隆 depth=1): 确定性降级。
+    // dev 产物不入库, banner 值仅本机可见; 用 tip 提交时间 (浅克隆内可用, 同 checkout 恒定)
+    // —— 确定性值, 不是随机/进程态, 满足类 20.133「fail-loud 或确定」的「确定」分支。
+    const _tipDate = gitOrDie('git log -1 --format=%cI')
+    if (!_tipDate) {
+      throw new Error('[vite] 仓库无任何提交历史, BUILD_TIMESTAMP 无法派生 — fail-loud (类 20.133)')
+    }
+    console.warn(
+      `[vite] 源输入 git log 为空 (浅克隆 depth=1 且 tip 未触碰源输入?), ` +
+      `BUILD_TIMESTAMP 确定性降级为 tip 提交时间 ${_tipDate} (仅 dev 可见, 不会进入入库 dist)`
+    )
+    BUILD_TIMESTAMP = _tipDate
+  }
 }
 
 // --- BUILD_ID: 源输入内容指纹 (语义见顶部注释) ---
