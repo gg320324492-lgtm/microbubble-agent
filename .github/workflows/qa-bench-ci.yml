@@ -130,6 +130,37 @@ jobs:
             sleep 2
           done
 
+          # === 2026-10-06 建表死锁修复 (根因 A): 必须显式装 vector 扩展 ===
+          # pgvector/pgvector:pg16 官方镜像只是"自带扩展二进制", 从不执行
+          # CREATE EXTENSION —— 实测全新 template1 (POSTGRES_DB 的克隆源) 只有 plpgsql。
+          # 而 app/main.py lifespan 里的 `CREATE EXTENSION IF NOT EXISTS vector`
+          # 被 SKIP_DB_SETUP=1 一并短路掉了。于是下面 create_all 必然炸:
+          #     asyncpg.exceptions.UndefinedObjectError: type "halfvec" does not exist
+          # (app/models/member.py 的 voice_embedding 是 HALFVEC(192))。
+          # 即便没有步骤顺序死锁, 建表步骤本身也会失败 —— 与死锁独立的第二个 bug。
+          # 只装 vector: pg_trgm 仅出现在 alembic 索引 DDL 里, create_all 从不引用
+          # (实测 vector-only 即可让 init_db.py exit 0)。
+          echo "=== install pgvector extension (create_all 需要 halfvec/vector 类型) ==="
+          for i in {1..10}; do
+            if docker exec pg-test psql -U postgres -d microbubble_test \
+                 -c "CREATE EXTENSION IF NOT EXISTS vector;" > /dev/null 2>&1; then
+              echo "✓ pgvector extension 已安装"
+              break
+            fi
+            if [ "$i" -eq 10 ]; then
+              echo "✗ CREATE EXTENSION vector 10 次全失败 — 镜像不含 vector 控制文件?"
+              docker exec pg-test psql -U postgres -d microbubble_test \
+                -c "SELECT extname FROM pg_extension;" || true
+              docker logs pg-test | tail -30
+              exit 1
+            fi
+            sleep 2
+          done
+          # fail-loud 回读: 装没装上不能靠 psql 退出码猜 (某些失败也会退 0)
+          docker exec pg-test psql -U postgres -d microbubble_test -tAc \
+            "SELECT count(*) FROM pg_extension WHERE extname='vector';" \
+            | grep -qx 1 || { echo "✗ vector 扩展装上后回读仍为 0"; exit 1; }
+
           # 起 test app (8001 端口), 切 mimo cloud
           # W67 第 33 步: 用已 build image `app-test:ci`, 启动 ~30-60s (不再 6-10 min)
           docker run -d --name app-test \
@@ -150,46 +181,95 @@ jobs:
             app-test:ci \
             uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
-          # 等 app-test 全 router ready (最长 1800s = 30min)
-          # W67 第 39 步: 实测 1510s, 1500s 还差 10 秒. 提到 1800s 留缓冲 (最后 1 次).
-          # W67 第 41 步 (Agent 21): SKIP_DB_SETUP 短路 lifespan 内 create_all + seed + reminder sync.
-          #   实际启动 < 10 分钟 (含 30+ 模块 import ~3.75s). 保留 1800s 缓冲防回归.
-          # W67 第 44 步 (Agent 24): /health 200 ≠ /auth/login router 就绪.
-          #   lifespan yield 早 → /health ok, 但 @router.post 注册可能在最后阶段.
-          #   改用 /health + /auth/login 双探针: invalid creds 返 401/422 = 路由存活
-          #   (区别于 404 endpoint missing). 200 不期望 — 那是真凭据, 拒绝它.
-          # W67 第 45 步 (Agent 25): 双探针过早接受 ready 反而添乱 — /health 200 后必须等
-          #   5s 让 router 真注册完成, 再 probe /auth/login. 避免在 lifespan yield 和
-          #   router 注册完成之间的窗口期误判 ready (返 404 → 后续 init step 一切失败).
-          # W67 第 47 步 (Agent 27): Agent 26 的 30s 仍不够, 固定等 60s.
-          # /health OK 只代表 lifespan 已 yield; 24 个 v1 router 的同步注册可能仍在继续.
-          # 失败后循环会再次等待 60s 并探测, 直到 login 返回 401/422 或总超时.
-          for i in {1..450}; do
-            if ! curl -sf http://localhost:8001/health > /dev/null 2>&1; then
-              if [ "$i" -eq 450 ]; then
-                echo "✗ app-test /health never returned 200 (final attempt $i/450)"
-                docker logs app-test | tail -80
-                docker logs pg-test | tail -30
-                exit 1
-              fi
-              sleep 2
-              continue
-            fi
-            # /health OK → wait 60s 让 router 真注册完成 (lifespan yield 早于 router 注册, 30s 不够)
-            echo "  [probe $i/450] /health OK, 等 60s 给 router 真注册..."
-            sleep 60
-            # 探针 2: /auth/login 必须 401/422 (路由注册完成, 区别 404 endpoint-missing)
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-              http://localhost:8001/api/v1/auth/login \
-              -H "Content-Type: application/json" \
-              -d '{"username":"xiaoqi_testbot","password":"INVALID_PROBE_ROUTER_READY"}' 2>/dev/null || echo "000")
-            if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "422" ]; then
-              echo "✓ app-test 全 router ready (health=200 + login=$HTTP_CODE, attempt $i/450)"
+          # ====================================================================
+          # 2026-10-06 三处根因修复 (本次 job 红了 117 分钟的真正原因)
+          #
+          # [根因 1] 步骤顺序死锁 —— 建表被排在等待循环**之后**, 循环又在等建表的结果
+          #   旧顺序: docker run app-test → 等 login 探针 → (下一步才) 建表
+          #   SKIP_DB_SETUP=1 (app/main.py:284) 短路掉 lifespan 内全部 create_all,
+          #   ⇒ members 表不存在 ⇒ POST /api/v1/auth/login 恒返 **500**
+          #   (UndefinedTableError: relation "members" does not exist)
+          #   ⇒ 循环永远等不到, 建表步骤被永久挡在后面。实测 114 轮 × 62s = 117 分钟
+          #   后被 job 超时杀掉, 后面的 Init / Diagnostic / 九文件 baseline 从未跑过。
+          #   修法: 建表**上移**到本步内、等待循环之前 (顺序自证), 循环只等 app ready。
+          #
+          # [根因 2] 探针判据没有牙 —— 500 被当成"再等等"
+          #   旧判据只认 401/422 之外的一切都是"router 还没注册完", 于是确定性故障
+          #   (500 = 建表缺失) 被静默重试 114 次。现在: **5xx 立即 dump logs + exit 1**,
+          #   只有 000/连接拒绝 (app 还没起来) 才继续等。
+          #   这一条把"静默等 117 分钟"变成"秒级失败", 是本次最有长期价值的改动。
+          #
+          # [根因 3] 循环预算算错 —— 注释与实现三个数字互相矛盾
+          #   旧: for i in {1..450} × (sleep 60 + sleep 2) ≈ 62s/轮
+          #       ⇒ 450 × 62s = **465 分钟**, 而 job timeout-minutes: 120
+          #       ⇒ 循环自带的 exit 1 (注释称"最长 1800s = 30min") **永不可达**。
+          #       成因: 1800s 是 "sleep 2 × 900 轮" 时代的遗留值;
+          #       commit 7199c7a07 (W67 第 47 步) 把 sleep 30 改成 sleep 60 时
+          #       **只改了一行、没重算预算**。
+          #   新: 两段式有界预算, 全部可在 job 预算内跑完并真正 exit 1:
+          #       阶段 1  /health 200      : 90 轮 × sleep 2  = 180s 上限
+          #       阶段 2  login ∈ {401,422} : 60 轮 × sleep 2  = 120s 上限
+          #       合计最坏 300s (5 分钟), 相对 120 分钟 job 留 24× 余量。
+          #   依据 (实测, 非估算):
+          #       · 本机 /health 首次 200 在第 4 次探测 ≈ 8s
+          #       · 生产日志 docker logs -t 时间戳: lifespan yield 与
+          #         `[router-loader] loaded; 57 routes ready` 相差 **0.4s**
+          #         (17:52:01.765 startup complete → 17:52:02.064 router-loader)
+          #       所以旧的 `sleep 60` 是纯浪费: router 注册在 0.4s 内完成, 不是 1510s。
+          #   注: 阶段 2 仍用 login 探针 (而不是换成 /openapi.json) —— 因为建表
+          #       已上移到这里, login 探针现在能真正验证"路由 + DB 都活着"。
+          # ====================================================================
+
+          # --- 建表 (原"Init test DB schema"步骤上移至此, 见根因 1) ---
+          # 注意: 这里**必须**先于下面的等待循环。app-test 容器已在上面启动,
+          # 建表走 docker exec 进同一容器/同一网络, 不依赖 app 是否 ready。
+          set -o pipefail
+          echo "=== [1/2] init_db: create_all + seed 24 members (需上方 vector 扩展) ==="
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            app-test python scripts/init_db.py 2>&1 | tee /tmp/init-db.log
+          # fail-loud: "数据库初始化完成" 是 init_db.py:29 的成功哨兵。
+          #   不能靠管道退出码 —— tee 会吞掉 docker exec 的失败。
+          grep -q "数据库初始化完成" /tmp/init-db.log || {
+            echo "::error::init_db 未跑成功 (缺 '数据库初始化完成') — 建表/seed 失败, 后续 login 必 500"
+            echo "--- init_db 日志尾部 ---"; tail -40 /tmp/init-db.log; exit 1; }
+
+          echo "=== [2/2] ensure_test_user: 幂等建 xiaoqi_testbot (供下方 Login step 取 JWT) ==="
+          # 刻意**不**用 scripts/init_test_db_all.py —— 它的 run_ensure_test_user 调
+          #   `parse_args([])`, 而 scripts/ensure_test_user.py:51 是 `def parse_args():`
+          #   ⇒ TypeError: parse_args() takes 0 positional arguments but 1 was given
+          #   ⇒ 该脚本自 830d6243e (2026-07-23) 起 ensure 分支**从未成功执行过**
+          #   (实测 exit 1)。改脚本需重建 app-test-latest 镜像才生效
+          #   (Dockerfile 是 COPY . ., 且本 workflow 只 bind-mount 了 app/ 与
+          #   alembic/versions/, **没有** mount scripts/), 而 build-image.yml 近
+          #   3 个月 push 大量 cancelled/failed —— 改脚本 = 本轮拿不到 = 门禁仍红。
+          #   故分别调用两个脚本可执行入口, 语义等价且立即生效
+          #   (本机实测: [CREATED] 测试账号: id=45)。
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            app-test python scripts/ensure_test_user.py 2>&1 | tee /tmp/ensure-user.log
+          # fail-loud: [CREATED] / [OK] 是 ensure_test_user.py:116 / :90 的成功哨兵。
+          grep -qE "\[(CREATED|OK)\]" /tmp/ensure-user.log || {
+            echo "::error::ensure_test_user 未建号 (缺 [CREATED]/[OK]) — 后续 Login step 必 AUTH_ERROR"
+            echo "--- ensure_test_user 日志尾部 ---"; tail -40 /tmp/ensure-user.log; exit 1; }
+          # 真 traceback 兜底 (排除 passlib 探测 bcrypt 版本的良性噪音:
+          #   "(trapped) error reading bcrypt version" + bcrypt.__about__ 属性错误,
+          #   实测该段出现时建号依然成功, 不能按 "Traceback" 字面量判失败)。
+          if grep -vE "^\(trapped\)|passlib/handlers/bcrypt\.py|_bcrypt\.__about__|^Traceback \(most recent call last\):$|^ +\^+$|^ *version = _bcrypt|has no attribute '__about__'" /tmp/ensure-user.log \
+             | grep -qE "No such container|Traceback|Error:"; then
+            echo "::error::ensure_test_user 输出含真 traceback"; cat /tmp/ensure-user.log; exit 1
+          fi
+
+          # --- 阶段 1: 等 /health (app 进程起来) ---
+          echo "=== [阶段 1] 等 app-test /health 200 (90 × 2s = 180s 上限) ==="
+          HEALTH_MAX=90
+          for i in $(seq 1 $HEALTH_MAX); do
+            if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
+              echo "✓ /health 200 (attempt $i/$HEALTH_MAX)"
               break
             fi
-            echo "  [probe $i/450] /health=200 但 login=$HTTP_CODE (非 401/422 = router 还未注册完成), 继续等..."
-            if [ "$i" -eq 450 ]; then
-              echo "✗ app-test router startup timeout (final /health=200 但 login=$HTTP_CODE)"
+            if [ "$i" -eq "$HEALTH_MAX" ]; then
+              echo "✗ app-test /health never returned 200 (final attempt $i/$HEALTH_MAX)"
               docker logs app-test | tail -80
               docker logs pg-test | tail -30
               exit 1
@@ -197,15 +277,78 @@ jobs:
             sleep 2
           done
 
+          # --- 阶段 2: 等 login 路由 (401/422) + 5xx 秒级失败 ---
+          echo "=== [阶段 2] 等 login 路由注册 (60 × 2s = 120s 上限; 5xx 立即失败) ==="
+          ROUTER_MAX=60
+          for i in $(seq 1 $ROUTER_MAX); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              http://localhost:8001/api/v1/auth/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"xiaoqi_testbot","password":"INVALID_PROBE_ROUTER_READY"}' 2>/dev/null || echo "000")
+            case "$HTTP_CODE" in
+              401|422)
+                echo "✓ app-test router ready (health=200 + login=$HTTP_CODE, attempt $i/$ROUTER_MAX)"
+                break
+                ;;
+              # 5xx = 确定性故障 (500 = 建表缺失 / 依赖炸), 重试无意义 → 立即失败
+              5??)
+                echo "✗ app-test login 返 5xx ($HTTP_CODE, attempt $i/$ROUTER_MAX) —— 这是确定性故障, 不再重试"
+                echo "--- app-test 日志尾部 ---"; docker logs app-test | tail -80
+                echo "--- pg-test 日志尾部 ---";  docker logs pg-test | tail -30
+                exit 1
+                ;;
+              *)
+                # 000 = 连接被拒 (app 还没 listen), 404 = 路由未注册, 都属于"继续等"
+                echo "  [probe $i/$ROUTER_MAX] login=$HTTP_CODE (继续等...)"
+                if [ "$i" -eq "$ROUTER_MAX" ]; then
+                  echo "✗ app-test router startup timeout (final /health=200 但 login=$HTTP_CODE)"
+                  docker logs app-test | tail -80
+                  docker logs pg-test | tail -30
+                  exit 1
+                fi
+                sleep 2
+                ;;
+            esac
+          done
+
       - name: Init test DB schema + seed + test user (W67 第 41 步 合并脚本)
         run: |
           # W67 第 41 步 (Agent 21): 合并 init_db + ensure_test_user 到 1 个 Python 进程,
           # 节省 2× import overhead (~7-8s). alembic stamp head 跳过 (test DB 走 init_db.create_all,
           # 不需要 alembic 版本跟踪 — 生产 DB 走 alembic upgrade head 是另一回事).
-          docker exec -e SKIP_DB_SETUP=1 \
+          #
+          # 2026-10-06: 本步骤已**上移**进 "Start test DB stack" (根因 1: 建表必须先于
+          #   login 等待循环, 否则 500 被误判为"router 没注册完"而永久死锁)。
+          #   保留为**幂等复核**: 只做 fail-loud 断言 —— 建表哨兵与建号哨兵缺失即 exit 1,
+          #   绝不重复跑 (建表在上一步已完成)。init_test_db_all.py 自身有
+          #   parse_args([]) TypeError (见上一步注释), 故复核用两个脚本各自的哨兵。
+          # `-i` 是**必需**的: docker exec 不接 -i 时不把宿主 stdin 送进容器,
+          # heredoc 被整个吞掉 —— python 读到空 stdin, 什么都不打印, 连
+          # sys.exit(1) 都返回 exit 0。本机实测 (class 20.219):
+          #   无 -i: exit=0 且 stdout 为空;  有 -i: 脚本正常执行。
+          # 即"漏一个 -i" = 静默假绿的门禁, 比红更危险。
+          echo "=== [复核] 上一步已建表+建号, 此处只断言 DB 状态确实落盘 ==="
+          docker exec -i -e SKIP_DB_SETUP=1 \
             -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
-            app-test python scripts/init_test_db_all.py 2>&1 | tail -20
-          # 期望输出: init_db "数据库初始化完成" + ensure_test_user "[OK] 测试账号已存在" 或 "[CREATED]"
+            app-test python - <<'PYEOF'
+          import asyncio, sys
+          sys.path.insert(0, '/app')
+          from sqlalchemy import select, text
+          from app.core.database import async_session
+          from app.models.member import Member
+
+          async def main():
+              async with async_session() as db:
+                  members = (await db.execute(text('SELECT count(*) FROM members'))).scalar()
+                  print(f'members_table_rows={members}')
+                  if members < 1:
+                      print('MEMBERS_TABLE_EMPTY'); return 1
+                  r = await db.execute(select(Member).where(Member.username == 'xiaoqi_testbot'))
+                  if r.scalar_one_or_none() is None:
+                      print('XIAOQI_TESTBOT_MISSING'); return 1
+                  print('XIAOQI_TESTBOT_PRESENT'); return 0
+          sys.exit(asyncio.run(main()))
+          PYEOF
 
       # === W67 第 43 步 (Agent 23): 在 Login 前诊断 xiaoqi_testbot 实际状态 ===
       # 历史: #35 (run 30011821182) Step 11 Login 30×2s=60s 失败, 无任何 app 端日志可查.
@@ -219,7 +362,9 @@ jobs:
       - name: "Diagnostic - verify xiaoqi_testbot + capture app-test logs (W67 step 43)"
         run: |
           echo "=== [1] Direct DB probe (via app-test container's python + same DATABASE_URL) ==="
-          docker exec -e SKIP_DB_SETUP=1 \
+          # `-i` 必需: 见上方 class 20.219 —— 漏掉它 heredoc 被吞, 本步恒 exit 0。
+          #          这正是本步自 W67 第 43 步起一直**没有真正 fail-loud** 的原因。
+          docker exec -i -e SKIP_DB_SETUP=1 \
             -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
             app-test python - <<'PYEOF'
           import asyncio, sys, os
