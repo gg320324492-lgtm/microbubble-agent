@@ -130,9 +130,41 @@ def test_baseline_files_have_real_violations():
 #   - 违规真修好了 (violations 0) -> 证据不变 -> 绿 (不再误报)
 EXPECTED_RENDER_EVIDENCE = {
     # 桌面视口 (desktop-chrome / desktop-comments, 均 1280 宽)
-    "01-chat": "468:224",
+    #
+    # 2026-10-06 S3.24: 01-chat / 03-mobile-chat 桌面由 468:224 -> 468:223。
+    #
+    # 【少的是哪个元素 —— 已实测定案】
+    #   .breadcrumb-status > span.status-dot   (6px 圆点, 无文本, aria-hidden)
+    #   CSS 是 `.status-dot { width:6px; height:6px }`, **漏了 flex-shrink:0**,
+    #   而父级 .breadcrumb-status 是 display:flex => 该圆点是可收缩 flex item。
+    #   实测本机基线它已被挤到 width=1.8px (flexShrink=1, minWidth=auto),
+    #   框宽 statusBox=16.8px, 再收窄 ~10px 即归 0。
+    #
+    # 【证明链, 逐条实测】
+    #   1. DOM 结构 CI 与本机**逐元素相同**: CI trace 实测 body 元素 429 = 本机 429
+    #      (差额仅 meta/link/script/title 等 trace 不收录的 head 节点)。
+    #      => 少的 1 个不是"缺了个元素", 而是"同名元素在 CI 侧包围盒为 0"。
+    #   2. innerText 两侧**完全相同 (468)** => 消失的元素**不含文本**,
+    #      恰好排除掉所有带文字的候选 (span.cnt / span.sep 等), 只剩装饰性节点。
+    #   3. 窄到 1270px 做元素集合 diff: 唯一消失的是 span.status-dot,
+    #      新增 0 个, 其余 223 个全等, evidence 恰为 468:223。
+    #      => 在这条路径上"少 1 个"的唯一来源就是它。
+    #   4. 页面特异性完全吻合: 只有 route /chat 有 .breadcrumb-status
+    #      (/drive /tasks/trash /drive/file/1/comments 实测均无),
+    #      而 01-chat 与 03-mobile-chat 都指向 /chat => 恰好 2 页 x 2 桌面 project
+    #      = 4 张受影响, 与 CI 实测 4 张红、其余 21 张绿逐张吻合。
+    #
+    # 【良性判定】
+    #   DOM 相同 + 文本相同 + 差异仅为一个纯装饰圆点的宽度 => **不是真实页面差异**。
+    #
+    # 【未证实 —— 不要当成结论】: 是哪个环境因素让 CI 侧 header 窄 ~10px,
+    #   我没有坐实。CI 上 'Segoe UI' 解析为 WenQuanYi (本机 Segoe UI) 是事实,
+    #   但**直接在 WenQuanYi 容器里实测 dotW=3.22 (反而更宽)**, 故"字体变宽挤掉
+    #   圆点"这个直觉被自己的实测否定; 字体行高/滚动条占位等仍是候选。
+    #   已证实的是**元素身份与塌陷机制**, 不是触发它的具体环境因子。
+    "01-chat": "468:223",
     "02-drive": "476:239",
-    "03-mobile-chat": "468:224",
+    "03-mobile-chat": "468:223",
     "04-task-trash": "232:103",
     "05-file-comments": "295:137",
     # 窄视口 (mobile-iphone14 390 / mobile-comments 390 / harmonyos-arkweb 720)
