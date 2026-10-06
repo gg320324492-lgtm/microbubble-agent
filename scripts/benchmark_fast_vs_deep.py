@@ -56,12 +56,13 @@ async def run_one_mode(
 ) -> List[Dict[str, Any]]:
     """对一个 mode 跑全部题, 返回每个题的结果列表。
 
-    复用 tests/qa-bench/runner.py 的 parse_sse + score_seven_dim
+    复用 tests/qa-bench/runner.py 的 run_single_question (7 维分已在其中按
+    现行 5 参签名算好, 本脚本直接取 result["seven_dim"]["dim_scores"])
     """
     sys.path.insert(0, str(Path(__file__).parent.parent / "tests" / "qa-bench"))
     # qa-bench 不是 package (无 __init__.py), 直接 import runner
     import runner
-    from runner import run_single_question, score_seven_dim
+    from runner import run_single_question
 
     # 2026-10-07 断点 1 修复: api_base 原是死参 —— run_single_question 实际
     # 请求拼的是 runner 模块常量 API_BASE (runner.py:63 默认 127.0.0.1:8000,
@@ -95,8 +96,20 @@ async def run_one_mode(
                     )
                     result["mode"] = mode
                     result["duration_ms"] = int((time.monotonic() - t0) * 1000)
-                    # 7 维评分
-                    result["score"] = score_seven_dim(result)
+                    # 7 维评分: 复用 run_single_question 内部已算好的 seven_dim
+                    # (runner.py:962 用现行 5 参签名 score_seven_dim(expect,
+                    # actual, auto_issues, expect_issues, duration_ms, ...) 算
+                    # 好, 无条件挂在 result["seven_dim"], 形状:
+                    # {"dim_scores": {7 维 0-1 float}, "total_score", "grade",
+                    # "veto"})。本行曾以老单参签名重算 → TypeError: missing 4
+                    # required positional arguments → 被本函数 except
+                    # Exception 吃进 error → 每 mode 30/30 全错、报告 7 维分
+                    # 表恒 0 (真 CI run 37495244457 实测)。
+                    # 接法按 compute_stats 的消费形状 (r["score"] 须为
+                    # dim 分数字 dict, 对其 values 取 mean) → 接 dim_scores;
+                    # grade/total_score 报告未消费, 不另取。
+                    seven_dim = result.get("seven_dim") or {}
+                    result["score"] = seven_dim.get("dim_scores") or {}
                     return result
                 except Exception as e:
                     return {
