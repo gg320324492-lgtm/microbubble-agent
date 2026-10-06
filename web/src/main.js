@@ -38,9 +38,11 @@ if ('serviceWorker' in navigator) {
   }
 })()
 
-// 2026-07-20 cache-bust 诊断: build 时间戳 (由 vite.config.js define 注入)
-// 浏览器 DevTools 顶部 console 第一行即可看到 build 时间, 运维判断"页面没更新"时
-// 让用户截图这行 → 对比服务器部署时间 → 知道是 CDN 没回源 / 用户没刷新 / 部署没生效
+// 2026-07-20 cache-bust 诊断: 构建标识 (由 vite.config.js define 注入;
+// 2026-10-07 起双字段改从「构建源输入」派生, 语义与反循环论证见 vite.config.js R-5 注释):
+//   [build] {源输入最后一次提交时间} (id={源输入内容指纹})
+// 浏览器 DevTools 顶部 console 第一行即可看到构建标识, 运维判断"页面没更新"时
+// 让用户截图这行 → id 相同 = 同一份构建产物; id 不同 = 源码有改动、产物重建过。
 // 注意: 必须在 createApp 之前 console.log, 否则 build 标识信息被业务日志覆盖
 console.info(
   `%c[build] ${__BUILD_TIMESTAMP__} (id=${__BUILD_ID__})`,

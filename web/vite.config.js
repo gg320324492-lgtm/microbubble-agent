@@ -1,48 +1,171 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { resolve, join } from 'path'
+import { readdirSync, lstatSync, readFileSync } from 'fs'
+import { createHash } from 'crypto'
 import { execSync } from 'child_process'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import NutUIResolver from '@nutui/nutui/dist/resolver'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// 2026-08-03 [DEPLOY-DETERM] 修复 npm run build 非确定性 (类 20.133):
-//   旧实现用 `new Date().toISOString()` + `Math.random()` 做 BUILD_TIMESTAMP/BUILD_ID，
-//   每次 build 都不同 → vite define 注入到 entry chunk → 所有 chunk 内容 hash 全变
-//   → 同源码 build 两次产出 bit-different dist (实测: index-27e37c81.js → index-c243f137.js,
-//   ~50 个 chunk 全部 rename), git 仓库 dist 历史每次部署都污染一份。
+// ============================================================
+// 2026-10-07 [DEPLOY-DETERM / R-5] BUILD_TIMESTAMP / BUILD_ID 派生根治 (类 20.133)
 //
-//   新实现: 从 git HEAD 派生 BUILD_TIMESTAMP/BUILD_ID。
-//   - BUILD_TIMESTAMP = `git log -1 --format=%cI` (commit author date, ISO 8601 with TZ)
-//   - BUILD_ID = `git rev-parse --short HEAD` (8 字符 commit hash)
-//   这两个值对**同一 git HEAD 永远稳定** → vite define 注入同样稳定 → 同源码 build 产出
-//   bit-identical dist (git diff -- web/dist/ 应为空, 验证见 memory/w100-deploy-determ-2026-08-03.md)。
+// 旧实现 (2026-08-03 首版, 2026-09-16 修过随机兜底后仍在用):
+//   BUILD_TIMESTAMP = `git log -1 --format=%cI`      (HEAD 的提交时间)
+//   BUILD_ID        = `git rev-parse --short HEAD`   (HEAD 短哈希)
+// 二者随**任何** commit 变化 —— 纯 docs commit 也变 → vite define 注入 entry chunk
+// → banner 字节变 → 按依赖图 ~190 个 chunk 级联 rename → 入库的 web/dist (部署契约,
+// 365 tracked) 每次重建都与仓库对不上。收尾规划 R-5 / §3.5 据此根治。
 //
-//   诊断价值保留: 用户截图 console 第一行 → "[build] 2026-08-02T17:59:14+08:00 (id=ed79b2558)"
-//   → 仍然能区分不同部署 (不同 commit 时间戳/hash 不同), 但同一个 commit 重建 dist 不再产生新 hash。
+// 新实现: 双字段都从「构建的真实源输入」派生, 与 HEAD / docs / dist 提交彻底解耦:
+//   BUILD_TIMESTAMP = `git log -1 --format=%cI -- <SOURCE_INPUTS>`
+//       语义 = **最后一次触碰构建源输入的提交的 committer 时间** (ISO 8601 含时区)。
+//       **不是**构建时刻、**不是** HEAD 时间 —— 源输入不动 (docs / 测试 / 其他模块
+//       commit / dist 入库) 它就不变; 只有 src/index.html/lockfile/vite 配置等被提交
+//       才推进。console banner 里它是"源码最后修改时间"。
+//   BUILD_ID = sha256(源输入文件清单 [相对路径 + '\0' + 字节内容]) 前 12 hex
+//       语义 = 构建源内容指纹。内容变 (含未提交的工作区改动) 才变;
+//       提交 dist / docs / 其他目录 → 内容不变 → 不变。
 //
-//   Sentry release 沿用 BUILD_ID (commit hash 是天然 release version, 比 6 字符随机串更稳定)。
+// 反循环论证 (为什么显式允许清单、而不是把 git tree 喂进哈希):
+//   web/dist 自身入库且在 web/ 树内 —— 任何把含 dist 的树喂进哈希的方案
+//   (git rev-parse HEAD^{tree} / ls-tree web / 对 web/ 目录求哈希) 都会:
+//   提交 dist → 树变 → ID 变 → banner 变 → chunk 级联 rename → 下次提交又变,
+//   永不收敛。因此派生输入 = 显式**允许清单** SOURCE_INPUTS (不含 dist),
+//   从磁盘读字节, dist 物理上不可能进入哈希输入。
 //
-//   git 命令失败兜底 (CI 容器无 .git / detached 环境) → 退回 'unknown-{pid}-{time}' 标识,
-//   失败路径虽然非确定性但**只发生在异常环境**, 仍优于旧的每次都非确定性。
-function safeExec(cmd, fallback) {
+// 为什么用「工作区内容哈希」而不是「HEAD tree hash」:
+//   仓库惯例是 src 改动与 dist **同一个 commit** 入库 (build 跑在 commit 之前)。
+//   若按 HEAD 派生, 提交前构建 = 拿旧 HEAD 的 ID 给新源码产物 → 提交后重建又对不上,
+//   等于把 R-5 缩小到"每个源码提交"而不是根治。工作区内容哈希对任意时刻的构建
+//   都忠实反映真实输入: checkout 该提交重建 = 同内容 = 同 ID = 逐字节同 dist。
+//
+// fail-loud (类 20.133「异常 fallback 必须 fail-loud 或确定」, 二选一取 fail-loud):
+//   git 不可用 (无 .git / 非 git 检出 / PATH 缺 git) 或 git log 对源输入路径返回空
+//   (浅克隆未含源路径历史 / 路径从未提交) → 直接 throw, `vite build` 非零退出,
+//   **绝不**产出带兜底标识的 dist。
+//   理由: CI 实测从不跑 vite build (视觉/无障碍测试走 dev server, lint-css 只 lint),
+//   dist 只在维护者本机构建 (恒有完整 .git) → fail-loud 现实成本为零;
+//   未来 CI 若要跑 build, 按本条由 CI **显式固定输入** (而非随机兜底), 届时再加。
+//
+// 明确不做 (类 20.133 红线): 不读 Date.now / new Date / process.env / process.pid /
+// Math.random; 不加静默兜底值; 不用裸 `vite build` (npm run build 是唯一合法命令)。
+// ============================================================
+
+const WEB_ROOT = __dirname
+
+// 构建源输入允许清单 (相对 web/)。判据 = 该文件的字节能改变 `npm run build` 产物:
+//   - src/ index.html public/            vite 打包图 + 静态拷贝
+//   - vite.config.js                     构建配置本体 (define/patch/postcss/manualChunks)
+//   - package.json / package-lock.json   依赖锁定版本 (npm ci 安装的 node_modules 代理)
+//   - scripts/postbuild-fix-manifest.js  npm run build 命令链的后半段
+// 明确**不**入清单 (别加):
+//   - dist/                    自身入库, 入清单即哈希循环 (见上方反循环论证)
+//   - src/**/__tests__/, *.test.* / *.spec.* — vitest 用, 不进 build 产物
+//   - .stylelintrc.json / .hintrc.json / playwright*.config.js / vitest.config.js /
+//     tests/ / tools/ / design-showcase/ / Dockerfile / nginx.conf
+//                              lint / 测试 / 部署面, 不参与 build
+const SOURCE_INPUTS = [
+  'index.html',
+  'package.json',
+  'package-lock.json',
+  'public',
+  'scripts/postbuild-fix-manifest.js',
+  'src',
+  'vite.config.js',
+]
+
+// git 调用: 任何失败 → throw (fail-loud)。禁止在这里加兜底值。
+function gitOrDie(cmd) {
   try {
-    return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf-8' }).trim()
-  } catch {
-    console.warn(`[vite] git 命令失败（${cmd}），使用确定性兜底值: ${fallback}`)
-    return fallback
+    return execSync(cmd, {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf-8',
+      cwd: WEB_ROOT,
+    }).trim()
+  } catch (err) {
+    throw new Error(
+      `[vite] 构建标识派生失败: \`${cmd}\` 执行失败 (${String(err.message).split('\n')[0]})。\n` +
+      '[vite] 按类 20.133 (W100 构建确定性纪律) fail-loud: 无 .git / 非 git 检出 / ' +
+      'PATH 缺 git / 浅克隆缺源路径历史时, 构建必须显式失败, ' +
+      '禁止静默退回随机或进程态标识产出 dist。' +
+      '修复: 在完整 git 仓库内运行 npm run build。'
+    )
   }
 }
-// 2026-09-16 加固：原兜底是 `unknown-${process.pid}-${Date.now()}` —— **非确定性**。
-// 一旦构建环境里没有 git（PATH 不全 / CI 未装 git），BUILD_TIMESTAMP 每次构建都不同，
-// 又回到"所有 chunk 内容 hash 全变"的老问题，而且**静默发生、无人察觉**。
-// 实测就踩了这个坑：用缺 git 的 PATH 连续构建两次，assets 里 380 处文件名差异，
-// 一度误判"构建不可复现"；把 git 放回 PATH 后两次构建 md5 完全一致。
-// 现在兜底改成固定哨兵值：失去"区分部署"的能力，但保住**构建确定性**，
-// 并打印警告让环境问题可见，而不是伪装成"正常构建"。
-const BUILD_TIMESTAMP = safeExec('git log -1 --format=%cI', 'unknown-timestamp')
-const BUILD_ID = safeExec('git rev-parse --short HEAD', 'unknown-head')
+
+// 源输入里不参与构建产物的路径 (即使它在允许清单目录下):
+//   __tests__ / *.test.* / *.spec.*  vitest 用例
+//   .DS_Store / Thumbs.db / desktop.ini  编辑器/系统垃圾 (误入会让 ID 随机器漂移)
+function isNonBuildInput(relPath) {
+  const segs = relPath.split('/')
+  if (segs.includes('__tests__')) return true
+  if (/\.(test|spec)\.[cm]?[jt]sx?$/.test(relPath)) return true
+  if (segs.some((s) => s === '.DS_Store' || s === 'Thumbs.db' || s === 'desktop.ini')) return true
+  return false
+}
+
+function collectSourceFiles(absDir, relBase, out) {
+  // readdirSync(...).sort(): 默认 UTF-16 码元序, 与 locale 无关 → 跨机器顺序稳定
+  for (const name of readdirSync(absDir).sort()) {
+    const abs = join(absDir, name)
+    const rel = relBase ? `${relBase}/${name}` : name
+    if (isNonBuildInput(rel)) continue
+    const st = lstatSync(abs)
+    if (st.isDirectory()) collectSourceFiles(abs, rel, out)
+    else if (st.isFile()) out.push({ rel, abs })  // 符号链接跳过 (Windows/本仓库无)
+  }
+}
+
+// 内容指纹: sha256(排序后的 [rel + '\0' + bytes + '\0'] 流) 前 12 hex。
+// 只读 SOURCE_INPUTS, 不碰 dist → 与 dist 提交次数、与 HEAD 全部解耦。
+function deriveSourceTreeHash() {
+  const files = []
+  for (const input of SOURCE_INPUTS) {
+    const abs = join(WEB_ROOT, input)
+    let st
+    try {
+      st = lstatSync(abs)
+    } catch {
+      throw new Error(`[vite] 构建源输入缺失: web/${input} — 源输入清单与仓库不符, fail-loud (类 20.133)`)
+    }
+    if (st.isDirectory()) collectSourceFiles(abs, input, files)
+    else if (st.isFile()) files.push({ rel: input, abs })
+  }
+  // 最终按相对路径全序排序 (码元比较, 不用 localeCompare —— locale 依赖排序不稳定)
+  files.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))
+  if (files.length === 0) {
+    throw new Error('[vite] 构建源输入清单收集到 0 个文件 — fail-loud (类 20.133)')
+  }
+  const hash = createHash('sha256')
+  for (const { rel, abs } of files) {
+    hash.update(rel, 'utf8')
+    hash.update('\0')
+    hash.update(readFileSync(abs))
+    hash.update('\0')
+  }
+  return hash.digest('hex').slice(0, 12)
+}
+
+// --- fail-loud 预检: 必须身处可用 git 检出 (无 .git / PATH 缺 git → throw) ---
+gitOrDie('git rev-parse --show-toplevel')
+
+// --- BUILD_TIMESTAMP: 最后一次触碰源输入的提交时间 (语义见顶部注释) ---
+const _sourceLastCommit = gitOrDie(`git log -1 --format=%cI -- ${SOURCE_INPUTS.join(' ')}`)
+if (!_sourceLastCommit) {
+  throw new Error(
+    '[vite] git log 对源输入路径返回空 (浅克隆未含源输入历史 / 路径从未提交?) — ' +
+    '按类 20.133 fail-loud, 不产出兜底标识 dist。修复: 用完整克隆构建。'
+  )
+}
+const BUILD_TIMESTAMP = _sourceLastCommit
+
+// --- BUILD_ID: 源输入内容指纹 (语义见顶部注释) ---
+const BUILD_ID = deriveSourceTreeHash()
+
+console.log(`[vite] BUILD_ID=${BUILD_ID} BUILD_TIMESTAMP=${BUILD_TIMESTAMP} (source-derived, 反循环: dist 不入哈希)`)
 
 // webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
 // 不参与 Vite rollup hash 流程，文件名固定 → webhint cache-busting 永远报警告。
