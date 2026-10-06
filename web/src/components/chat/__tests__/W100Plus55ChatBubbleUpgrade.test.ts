@@ -27,7 +27,12 @@ import { formatTimeDivider } from '@/utils/timeDivider'
 const CHAT_VIEW = resolve(__dirname, '../../../views/chat/ChatViewSSE.vue')
 // 2026-10-05 (CSS 抽出): ① ①b ①c ② ④c ⑦ ⑧ 的 CSS 断言随 <style scoped src>
 // 迁到 chatview-scoped.css (逐条实测: 这些选择器在 scoped 块, 且 scoped 是 global 的超集)。
-// ④b (formatTimeDivider) 与 ⑧b (模板文案) 仍读 .vue —— 目标在 script/template, 未搬。
+// ⑧b (模板文案) 仍读 .vue —— 目标在 template, L-1 script 拆分不动 template。
+// 2026-10-07 (L-1 阶段 1): 原 ④b "ChatViewSSE 源码含 formatTimeDivider" 已迁移 ——
+// 该钉实为钉 import 行 (script 物理位置), 且 formatTimeDivider 在 ChatViewSSE 里是
+// 零调用死 import (真正渲染时间分隔线的是 ChatMessageRow, ④ 仍在盯它)。行为断言由
+// views/chat/__tests__/ChatViewSSE.behavior.test.js
+//   "每条消息以 msg + prev-timestamp 接入 ChatMessageRow" 接住 (比源码正则更强)。
 const CHAT_VIEW_CSS = resolve(__dirname, '../../../views/chat/chatview-scoped.css')
 const CHAT_ROW = resolve(__dirname, '../ChatMessageRow.vue')
 
@@ -103,11 +108,6 @@ describe('W100 +55 Chat Bubble 全面升级', () => {
     // 问条的**具体时刻** (14:30), 与 formatTimeDivider 的**日期分隔线** (今天/昨天)
     // 是两个不同场景, 各自需要自己的格式化。源码晚于测试 3 天, 以源码为准。
     // 因此收窄为: formatTimeDivider 必须在场; 不再禁止 userTime 的时刻格式化。
-  })
-
-  it('④b ChatViewSSE 调用 formatTimeDivider', () => {
-    const src = readFileSync(CHAT_VIEW, 'utf-8')
-    expect(src).toMatch(/formatTimeDivider/)
   })
 
   it('④c time-divider CSS 升级 (居中 + 两侧横线)', () => {
