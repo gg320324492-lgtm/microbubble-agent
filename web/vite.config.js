@@ -37,10 +37,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 //   从磁盘读字节, dist 物理上不可能进入哈希输入。
 //
 // 为什么用「工作区内容哈希」而不是「HEAD tree hash」:
-//   仓库惯例是 src 改动与 dist **同一个 commit** 入库 (build 跑在 commit 之前)。
 //   若按 HEAD 派生, 提交前构建 = 拿旧 HEAD 的 ID 给新源码产物 → 提交后重建又对不上,
-//   等于把 R-5 缩小到"每个源码提交"而不是根治。工作区内容哈希对任意时刻的构建
-//   都忠实反映真实输入: checkout 该提交重建 = 同内容 = 同 ID = 逐字节同 dist。
+//   等于把 R-5 缩小到"每个源码提交"而不是根治。工作区内容哈希忠实反映真实输入:
+//   同内容 = 同 ID (含未提交改动), ID 部分对任意时刻的构建都成立。
+//   ⚠️ 但 BUILD_TIMESTAMP 取 path-log (历史), **原子 src+dist 提交会让 timestamp 滞后
+//   一个源提交** (构建时 path-log = 旧源提交; 在新提交上重建 path-log = 新提交自己)
+//   → 该提交上重建 ≠ 入库 dist (banner 时间差 → 级联 rename)。因此入库顺序纪律:
+//   **源输入改动先提交, 再 `npm run build`, 再提 dist** —— e50631024 实战: config
+//   提交前在克隆里构建, timestamp 滞后 20 分钟, 195 文件重建修正。
+//   dist-only / docs 提交不推进 path-log → 在 dist 提交上重建恒等于入库 dist (R-5 主验收)。
 //
 // fail-loud (类 20.133「异常 fallback 必须 fail-loud 或确定」), 按 build/dev 分模式:
 //   - git 不可用 (无 .git / 非 git 检出 / PATH 缺 git / 容器内 git 不可用):
