@@ -216,6 +216,46 @@ jobs:
           python gen780.py --output questions_780.jsonl --schema-only
           wc -l questions_780.jsonl
 
+      # === 2026-10-07 断点 2: 照抄 D5 (qa-bench-ci.yml W67 第 42 步, 421-458 行) Login 模式 ===
+      # 根因: 下方三个 runner/benchmark 步原用 QA_TOKEN=${{ secrets.QA_TOKEN }} +
+      #   --token "${QA_TOKEN:-mock}" —— secret 为空时 fallback "mock" → app 401
+      #   无效的认证凭证 → 双 runner ERROR=100 快败 (run 37488667066 实测)。
+      #   D5 同文件 423 行注释自证老 fallback 曾致 1s fail, 早已废弃此路线。
+      # 改法 (D5 形态): app 就绪后先用 ensure_test_user 创建的
+      #   xiaoqi_testbot / testbot_pass_2026 登录拿真 JWT →
+      #   echo "REAL_QA_TOKEN=$TOKEN" >> $GITHUB_ENV → 下游步
+      #   QA_TOKEN: ${{ env.REAL_QA_TOKEN }} + --token "${QA_TOKEN}" 无 fallback,
+      #   token 缺失即 fail loud。D5 Login 步不含 secrets 引用 (账号密码为
+      #   ensure_test_user 默认值), 本步照抄即全部所需, 无其他 secrets 要搬。
+      - name: Login as testbot to get JWT (D5 W67 第 42 步照抄)
+        run: |
+          # /health 200 不代表路由就绪, 重试 15 次 × 2s = 30s (D5 fail-fast 形态)
+          for i in {1..15}; do
+            HTTP_CODE=$(curl -s -o /tmp/login_resp.txt -w "%{http_code}" \
+              -X POST http://localhost:8001/api/v1/auth/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' 2>&1)
+            if [ "$HTTP_CODE" = "200" ]; then
+              LOGIN_RESP=$(cat /tmp/login_resp.txt)
+              echo "✓ HTTP 200 OK (attempt $i)"
+              break
+            fi
+            echo "✗ attempt $i HTTP $HTTP_CODE: $(head -c 200 /tmp/login_resp.txt)"
+            if [ "$i" -eq 15 ]; then
+              echo "=== app-test logs (final 80 lines) ==="
+              docker logs --tail 80 app-test 2>&1 | tail -80
+              exit 1
+            fi
+            sleep 2
+          done
+          TOKEN=$(echo "$LOGIN_RESP" | python -c "import json,sys; print(json.load(sys.stdin).get('access_token',''))")
+          if [ -z "$TOKEN" ]; then
+            echo "✗ Login response missing access_token: $LOGIN_RESP"
+            exit 1
+          fi
+          echo "✓ Login OK, token length ${#TOKEN}"
+          echo "REAL_QA_TOKEN=$TOKEN" >> $GITHUB_ENV
+
       # === W71 B-5: smoke 200 题拆 2 step (主测 100 ≤ 2min + 抽测 100 ≤ 3min) 避免 5min timeout ===
       # W69 plan 备注 LOW 缺口: 原单次 5min 跑全 200 题不现实. 拆分主测/抽测两段, 各自 offset 定位.
       # 2026-10-06 缺陷 2: 加 id: smoke_main —— 门禁步 outcome 守卫要读本步
@@ -225,11 +265,14 @@ jobs:
         working-directory: tests/qa-bench
         env:
           API_BASE: http://localhost:8001     # ← 8001 (test app)
-          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+          # 2026-10-07 断点 2: 原 ${{ secrets.QA_TOKEN }} (secret 空 → fallback
+          # "mock" → 401) 改用上方 Login 步写进 $GITHUB_ENV 的真 JWT (D5 形态)。
+          QA_TOKEN: ${{ env.REAL_QA_TOKEN }}
         run: |
           # W71 B-5: 主测子集 (前 100 题), --limit 100
+          # 断点 2: 去掉 :-mock fallback —— token 必须来自上方 Login 步, 缺失 fail loud
           python runner.py \
-            --token "${QA_TOKEN:-mock}" \
+            --token "${QA_TOKEN}" \
             --api-base "http://localhost:8001" \
             --smoke --limit 100 \
             --output results/smoke-main \
@@ -248,11 +291,13 @@ jobs:
         working-directory: tests/qa-bench
         env:
           API_BASE: http://localhost:8001
-          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+          # 2026-10-07 断点 2: 同主测步, 真 JWT 来自上方 Login 步 (D5 形态)。
+          QA_TOKEN: ${{ env.REAL_QA_TOKEN }}
         run: |
           # W71 B-5: 抽测子集 (后 100 题), --offset 100 --limit 100
+          # 断点 2: 去掉 :-mock fallback —— token 必须来自上方 Login 步, 缺失 fail loud
           python runner.py \
-            --token "${QA_TOKEN:-mock}" \
+            --token "${QA_TOKEN}" \
             --api-base "http://localhost:8001" \
             --smoke --offset 100 --limit 100 \
             --output results/smoke \
@@ -287,14 +332,15 @@ jobs:
       - name: Run fast vs balanced vs deep benchmark (30 题 × 3 mode)
         env:
           API_BASE: http://localhost:8001
-          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+          # 2026-10-07 断点 2: 同 runner 步, 真 JWT 来自上方 Login 步 (D5 形态)。
+          QA_TOKEN: ${{ env.REAL_QA_TOKEN }}
         run: |
           python scripts/benchmark_fast_vs_deep.py \
             --questions tests/qa-bench/questions_fast_vs_deep.jsonl \
             --api-base-fast http://localhost:8001 \
             --api-base-balanced http://localhost:8001 \
             --api-base-deep http://localhost:8001 \
-            --token "${QA_TOKEN:-mock}" \
+            --token "${QA_TOKEN}" \
             --concurrency 2 \
             --output docs/benchmarks/fast-vs-deep-${GITHUB_SHA::8}.md
           # 注: 单 docker 配置下 3 mode 走同一后端, 实际三档区分由 THINKING_MODE env + 后端 thinking_config 调度
