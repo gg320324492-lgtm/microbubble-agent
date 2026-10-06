@@ -1292,6 +1292,14 @@ async def main():
         "llm_temperature": temperature,
         "by_category": {},
         "issue_distribution": {},
+        # S3.23: seven_dim 必须在此预置空字典。原先只在下方 else 分支 (dim_count==0)
+        # 才创建, 于是 dim_count>0 时 1344 行 `summary["seven_dim"]["dim_std"] = dim_std`
+        # 直接 KeyError。而 1347 行随后又无条件整体重写 summary["seven_dim"], 且用的是
+        # 同一个 dim_std 对象 —— 即 1344 是死代码, 唯一净效果就是崩溃。
+        # 该崩溃此前被 D5 路径重复 bug (更早的 FileNotFoundError) 掩盖, 路径修好后
+        # 才第一次真正跑到这里。预置 {} 与 1347 的结构假设一致, 且不改变 results.json
+        # 的最终内容 (1347 覆盖后完全相同)。
+        "seven_dim": {},
     }
     for r in results:
         cat = r.get("category", "unknown")
