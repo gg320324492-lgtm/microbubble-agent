@@ -224,7 +224,9 @@ function onFollowUpClick(suggestion) {
 }
 
 .bubble-user {
-  background: var(--mg-gradient-btn);
+  /* 2026-10-07 L-6: 原 var(--mg-gradient-btn) 白字最坏 2.31 (#F08AC0 段), 换专用
+     --mg-gradient-bubble 后最坏 4.73 (token 见 mobile-glass.css 同日注释) */
+  background: var(--mg-gradient-bubble);
   /* stylelint-disable-next-line color-named */
   color: var(--mg-on-primary);
   border-radius: 18px 18px 6px 18px;
@@ -239,6 +241,12 @@ function onFollowUpClick(suggestion) {
   border-radius: 18px 18px 18px 6px;
   box-shadow: var(--mg-shadow-sm);
 }
+/* 2026-10-07 L-6: dark 下极光背景更亮, 0.5 玻璃的最坏背景让 .msg-meta
+   (--mg-text-soft) 只有 4.473 < AA 4.5 — 换 0.75 专用玻璃 → 4.556.
+   light 不 override, 像素零变化 (token 见 mobile-glass.css 同日注释) */
+[data-theme="dark"] .bubble-assistant {
+  background: var(--mg-glass-bg-bubble);
+}
 
 /* Markdown 内容样式 */
 .msg-content :deep(p) { margin: 0 0 6px; }
@@ -252,8 +260,10 @@ function onFollowUpClick(suggestion) {
   font-size: 12px;
   margin: 6px 0;
 }
+/* 2026-10-07 L-6: 用户气泡内 pre/code 底改黑 tint — 白 15% tint 压在渐变上会把底
+   提亮 (白字最坏掉到 2.02), 黑 15% 压暗后白字最坏 6.11 ≥ 4.5 */
 .bubble-user .msg-content :deep(pre) {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.15);
 }
 .msg-content :deep(code) {
   background: rgba(0, 0, 0, 0.05);
@@ -262,7 +272,7 @@ function onFollowUpClick(suggestion) {
   font-size: 13px;
 }
 .bubble-user .msg-content :deep(code) {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 /* 工具 trace */

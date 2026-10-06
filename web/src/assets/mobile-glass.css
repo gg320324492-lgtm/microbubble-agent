@@ -52,6 +52,13 @@
   --mg-primary-3: #F08AC0;
   --mg-gradient: linear-gradient(135deg, #7C6BD8 0%, #C66BD8 55%, #F08AC0 100%);
   --mg-gradient-btn: linear-gradient(135deg, #7C6BD8 0%, #B66BD8 60%, #F08AC0 100%);
+  /* 2026-10-07 L-6 a11y: 用户气泡专用渐变 (只给 .bubble-user, 不动 --mg-gradient-btn —
+     那个被 FAB/输入栏/抽屉等 ~20 处共用, 改它会波及全部移动端基线).
+     白字 (--mg-on-primary) 压原 --mg-gradient-btn 三段 = 4.24 / 3.45 / 2.31 (最坏 2.31,
+     AA 4.5 严重不足; 渐变插值亮度不超过两端点, 故逐 stop 校验即全覆盖).
+     新三段保留 紫→品红→玫瑰 色相路径 (243°→281°→328° → 248°→270°→330°), 压暗后
+     白字 = 6.62 / 5.30 / 4.73, 最坏 4.73 ≥ 4.5. 同值双主题 (该对颜色本身与主题无关). */
+  --mg-gradient-bubble: linear-gradient(135deg, #5B4CB8 0%, #8B4CC8 60%, #BC4A82 100%);
   --mg-gradient-soft: linear-gradient(135deg, #EFE9FF 0%, #FFE9F3 100%);
   --mg-on-primary: #FFFFFF;
   --mg-primary-shadow: 0 8px 22px rgba(124, 107, 216, 0.38);
@@ -103,6 +110,13 @@
   --mg-text-faint: #9C93BE;
 
   --mg-glass-bg: rgba(58, 50, 86, 0.5);
+  /* 2026-10-07 L-6 a11y: 助手气泡专用玻璃 (只给 [data-theme="dark"] .bubble-assistant).
+     原 0.5 透明度下最坏背景 = 极光 rgba(120,78,160,.5) 压页面 #16131F (得 rgb 71,49,96)
+     再压 0.5 玻璃 → #41325B, --mg-text-soft (#A79CC4, .msg-meta) 对比度 4.473 < AA 4.5
+     (L-6 登记值 4.47). 0.5 → 0.75 后最坏 = #3D3259 → 4.556 ≥ 4.5 (正文 #EAE6F5
+     9.35→9.53 同步变好), 仍保留 25% 极光透出的毛玻璃质感. 不改 --mg-glass-bg 共享
+     token (卡片/输入框/抽屉都在用, 改它会波及全部 dark 基线). */
+  --mg-glass-bg-bubble: rgba(58, 50, 86, 0.75);
   --mg-glass-bg-strong: rgba(64, 55, 94, 0.66);
   --mg-glass-border: rgba(168, 150, 224, 0.22);
   --mg-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
