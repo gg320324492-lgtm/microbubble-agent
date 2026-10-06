@@ -357,12 +357,50 @@ jobs:
       # === W68 第 12 批 B-3: D7 baseline audit 与 80% gate 同步执行 ===
       # 直接在已安装完整依赖的 app-test 容器内运行，避免宿主 runner 缺少
       # production imports；SKIP_DB_SETUP=1 保持 baseline 不触碰测试数据库。
+      #
+      # tests/test_baseline_audit.py 已归档 (tests/ARCHIVED.md; 2026-09-30 S1.2 R4
+      # 加的模块级 pytest.skip)。因此这一步现在**不再**验证它原本要验证的东西:
+      # 原意是 "audit 模块可导入性 smoke" (设计文档 §5 "preserve the historical
+      # direct command"), 而模块级 skip 在裸跑时抛异常 exit 1 —— smoke 语义与归档
+      # 状态互斥, 归档状态胜出, smoke 检查是**消失**了而不是被满足了。
+      # 现在它验证的是: 该文件仍处于已声明的归档状态; audit 断言**从不执行**。
+      # 真正的 71 PASS + 7 SKIP 守恒门在下一 step (scripts/ci_qa_bench_baseline.sh),
+      # 它守的 9 个文件全部 live。
+      #
+      # 两段都保持 fail-loud:
+      #   - 裸跑: 仅当 stderr 出现 pytest "Skipped:" 哨兵才接受 exit 1。
+      #     真实语法/import 错误同样 exit 1 但无哨兵, 照旧断链。
+      #   - pytest: 仅当摘要含 skipped 才接受 exit 5 (NO_TESTS_COLLECTED)。
+      #     文件被误删/改名同样 exit 5, 但摘要为 "no tests ran", 不会被误认。
       - name: Run D7 baseline audit (71 PASS + 7 SKIP)
         if: always()
         run: |
-          docker exec -e SKIP_DB_SETUP=1 app-test bash -lc \
-            "cd /app && python tests/test_baseline_audit.py && \
-             python -m pytest tests/test_baseline_audit.py -q --disable-warnings"
+          docker exec -e SKIP_DB_SETUP=1 app-test bash -lc '
+            cd /app || exit 1
+            ARCHIVED_AUDIT=tests/test_baseline_audit.py
+
+            out=$(python "$ARCHIVED_AUDIT" 2>&1); rc=$?
+            printf "%s\n" "$out"
+            if [ "$rc" -ne 0 ]; then
+              if [ "$rc" -eq 1 ] && printf "%s" "$out" | grep -q "^Skipped:"; then
+                echo "OK: $ARCHIVED_AUDIT is archived via module-level pytest.skip (expected)"
+              else
+                echo "FAIL: unexpected bare-run exit $rc (not the archived-skip sentinel)"
+                exit 1
+              fi
+            fi
+
+            out=$(python -m pytest "$ARCHIVED_AUDIT" -q --disable-warnings 2>&1); rc=$?
+            printf "%s\n" "$out"
+            if [ "$rc" -ne 0 ]; then
+              if [ "$rc" -eq 5 ] && printf "%s" "$out" | grep -Eq "[0-9]+ skipped"; then
+                echo "OK: module-level skip, nothing collected (expected)"
+              else
+                echo "FAIL: unexpected pytest exit $rc (expected 5 + a skipped summary)"
+                exit 1
+              fi
+            fi
+          '
 
       # === 硬门禁: pass_rate < 80% → exit 1 (即使 runner.py 跑了也得验证) ===
       - name: Fail if pass_rate < 80%

@@ -46,12 +46,49 @@ run_check() {
   fi
 }
 
-# The audit module verifies the nine-file list, stale-file exclusions, and
-# pytest collection count (78). Keep the direct Python invocation for callers
-# that use the historical D7 command, then execute its pytest assertions.
-run_check "baseline audit module smoke" env SKIP_DB_SETUP=1 python tests/test_baseline_audit.py
-run_check "baseline audit assertions" env SKIP_DB_SETUP=1 python -m pytest \
-  tests/test_baseline_audit.py -q --disable-warnings
+# tests/test_baseline_audit.py is ARCHIVED (tests/ARCHIVED.md; module-level
+# pytest.skip added by the 2026-09-30 S1.2 R4 sweep). Its own audit assertions
+# therefore no longer execute, so both invocations below expect the archived
+# shape instead of running the assertions:
+#   - bare `python <file>` raises Skipped at import -> exit 1
+#   - `python -m pytest <file>` collects nothing -> exit 5 (NO_TESTS_COLLECTED)
+#
+# The nine-file contract below is NOT affected: all nine files it guards are
+# live (none carries a module-level skip), so the 71 PASS + 7 SKIP conservation
+# gate still has real assertions behind it.
+#
+# Both archived invocations stay fail-loud for genuine breakage:
+#   - bare run: exit 0 accepted; exit 1 accepted ONLY if stderr shows the
+#     pytest "Skipped:" sentinel (a real syntax/import error exits 1 too, but
+#     without that sentinel, so it still breaks the gate).
+#   - pytest run: exit 5 accepted ONLY when the summary reports a skip. A file
+#     that was wrongly deleted or renamed also yields exit 5, but reports
+#     "no tests ran" instead, so it is not mistaken for an archived skip.
+ARCHIVED_AUDIT="tests/test_baseline_audit.py"
+
+run_check "baseline audit module archived" bash -c '
+  out=$(env SKIP_DB_SETUP=1 python "'"$ARCHIVED_AUDIT"'" 2>&1); rc=$?
+  printf "%s\n" "$out"
+  if [ "$rc" -eq 0 ]; then exit 0; fi
+  if [ "$rc" -eq 1 ] && printf "%s" "$out" | grep -q "^Skipped:"; then
+    echo "OK: archived via module-level pytest.skip (expected)"
+    exit 0
+  fi
+  echo "FAIL: unexpected bare-run exit $rc (not the archived-skip sentinel)"
+  exit 1
+'
+
+run_check "baseline audit assertions archived" bash -c '
+  out=$(env SKIP_DB_SETUP=1 python -m pytest "'"$ARCHIVED_AUDIT"'" \
+    -q --disable-warnings 2>&1); rc=$?
+  printf "%s\n" "$out"
+  if [ "$rc" -eq 5 ] && printf "%s" "$out" | grep -Eq "[0-9]+ skipped"; then
+    echo "OK: module-level skip, nothing collected (expected)"
+    exit 0
+  fi
+  echo "FAIL: unexpected pytest exit $rc (expected 5 + a skipped summary)"
+  exit 1
+'
 
 printf '\n=== nine-file baseline (%s PASS + %s SKIP) ===\n' "$EXPECTED_PASS" "$EXPECTED_SKIP"
 set +e

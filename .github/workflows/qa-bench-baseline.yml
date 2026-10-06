@@ -76,12 +76,52 @@ jobs:
             'numpy==1.26.2' \
             'httpx==0.25.2'
 
-      # Keep this direct invocation as a visible contract. The module is a
-      # pytest test module, so the following pytest invocation executes it.
-      - name: Run baseline audit definition
+      # tests/test_baseline_audit.py is ARCHIVED (tests/ARCHIVED.md; module-level
+      # pytest.skip added by the 2026-09-30 S1.2 R4 sweep), so this step no longer
+      # verifies what it originally did. Read the history before trusting the name:
+      #   - Originally ("preserve the historical direct command", design doc §5) this
+      #     was an import smoke test for the audit module. Archiving made the whole
+      #     module a module-level skip, which raises at bare-run time (exit 1), so the
+      #     smoke check and the archived state are mutually exclusive. The archived
+      #     state wins; the smoke check is gone, not merely satisfied.
+      #   - What it verifies now: that the file is still archived as declared. It does
+      #     NOT verify the audit definitions -- those assertions never execute.
+      #   - The real 71 PASS + 7 SKIP conservation gate is the next step
+      #     (scripts/ci_qa_bench_baseline.sh); all nine files it guards are live.
+      #
+      # Both invocations stay fail-loud for genuine breakage:
+      #   - bare run: exit 1 accepted ONLY when stderr shows the pytest "Skipped:"
+      #     sentinel. A real syntax/import error also exits 1 but without that
+      #     sentinel, so it still fails the step.
+      #   - pytest run: exit 5 (NO_TESTS_COLLECTED) accepted ONLY when the summary
+      #     reports a skip. A wrongly deleted/renamed file also exits 5 but reports
+      #     "no tests ran", so it is not mistaken for an archived skip.
+      - name: Run baseline audit definition (archived - asserts do not execute)
         run: |
-          python tests/test_baseline_audit.py
-          python -m pytest tests/test_baseline_audit.py -q --disable-warnings
+          set -o pipefail
+          ARCHIVED_AUDIT=tests/test_baseline_audit.py
+
+          out=$(python "$ARCHIVED_AUDIT" 2>&1); rc=$?
+          printf '%s\n' "$out"
+          if [ "$rc" -ne 0 ]; then
+            if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q '^Skipped:'; then
+              echo "OK: $ARCHIVED_AUDIT is archived via module-level pytest.skip (expected)"
+            else
+              echo "FAIL: unexpected bare-run exit $rc (not the archived-skip sentinel)"
+              exit 1
+            fi
+          fi
+
+          out=$(python -m pytest "$ARCHIVED_AUDIT" -q --disable-warnings 2>&1); rc=$?
+          printf '%s\n' "$out"
+          if [ "$rc" -ne 0 ]; then
+            if [ "$rc" -eq 5 ] && printf '%s' "$out" | grep -Eq '[0-9]+ skipped'; then
+              echo "OK: module-level skip, nothing collected (expected)"
+            else
+              echo "FAIL: unexpected pytest exit $rc (expected 5 + a skipped summary)"
+              exit 1
+            fi
+          fi
 
       - name: Run nine-file baseline (71 PASS + 7 SKIP)
         run: bash scripts/ci_qa_bench_baseline.sh
