@@ -556,8 +556,13 @@ jobs:
         if: always()
         working-directory: tests/qa-bench
         run: |
-          if [ -f results/baseline_d5_1000/results.json ]; then
-            PASS_RATE=$(python3 << 'PYEOF'
+          # fail-loud: 上游 bench 步崩掉时 results.json 不会生成, 原 `if [ -f ]; then ... fi`
+          # 守卫会让本门禁静默 exit 0 变绿 (恒绿形态)。缺失必须红。
+          if [ ! -f results/baseline_d5_1000/results.json ]; then
+            echo "::error file=tests/qa-bench/results/baseline_d5_1000/results.json::D5 gate: results.json 未生成 (上游 bench 步失败或中断), 门禁拒绝静默通过"
+            exit 1
+          fi
+          PASS_RATE=$(python3 << 'PYEOF'
           import json
           with open('results/baseline_d5_1000/results.json') as f:
               d = json.load(f)
@@ -579,7 +584,6 @@ jobs:
           else:
               print(f'✓ 通过率 {pass_rate}% >= 阈值 {threshold}%, D5 gate 通过')
           PYEOF
-          fi
 
       # === Teardown: 清 test stack ===
       - name: Teardown test stack
