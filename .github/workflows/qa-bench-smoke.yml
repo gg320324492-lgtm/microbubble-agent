@@ -205,6 +205,13 @@ jobs:
           #   method..." → 200/200 题 stream_error_event 快败 0.0% (run
           #   37497190067 实测)。改 openai_compat + OpenRouter (secrets 三件),
           #   与 D5 (qa-bench-ci.yml) 同一凭据链, 逐题进真实 LLM 形态。
+          # 2026-10-07 第 2 修 (run 37503878084): 光切 LLM_OPENAI_COMPAT_* 不够 ——
+          #   容器无 .env (Dockerfile 不拷贝), 聊天链路的**其余模型 env** 全落
+          #   config.py 默认值 (thinking 三档=qwen2.5vl:7b / synthesis=mimo-v2.5 /
+          #   intent+compressor=claude-haiku / reflection=claude-sonnet), 逐个被
+          #   OpenRouter 400 "not a valid model ID" 打回 (首错 qwen2.5vl:7b,
+          #   200 题仍 0.0%)。照本地 .env 的"单模型收敛"打法, 7 个模型 env 全量
+          #   注入同一 OpenRouter 模型 (secrets.OPENROUTER_MODEL)。
           docker run -d --name app-test \
             --network qa-bench-net \
             -p 8001:8000 \
@@ -217,6 +224,13 @@ jobs:
             -e LLM_OPENAI_COMPAT_BASE_URL="${{ secrets.OPENROUTER_BASE_URL }}" \
             -e LLM_OPENAI_COMPAT_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
             -e LLM_OPENAI_COMPAT_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
+            -e AGENT_THINKING_MODE_FAST_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_THINKING_MODE_BALANCED_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_THINKING_MODE_DEEP_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_SYNTHESIS_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_INTENT_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_COMPRESSOR_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_REFLECTION_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
             -e SKIP_DB_SETUP=1 \
             -v $(pwd)/app:/app/app \
             -v $(pwd)/alembic/versions:/app/alembic/versions \

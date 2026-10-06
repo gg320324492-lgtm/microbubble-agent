@@ -168,6 +168,10 @@ jobs:
           # 2026-10-07: 原 mimo (token-plan-cn.xiaomimimo.com/v1 + secrets.MIMO_API_KEY)
           #   上游 401 Invalid API Key, D5 1000/1000 题全 401 快败 0.0%。
           #   换 OpenRouter; key/base/model 三件全走 secrets, 换模型无需改本文件。
+          # 2026-10-07 第 2 修 (smoke run 37503878084 实证): 容器无 .env, 聊天链路
+          #   其余模型 env (thinking 三档/synthesis/intent/compressor/reflection)
+          #   落 config.py 默认值 → OpenRouter 400 "not a valid model ID"。7 个
+          #   模型 env 全量注入同一 OpenRouter 模型 (与 smoke 同步)。
           docker run -d --name app-test \
             --network qa-bench-net \
             -p 8001:8000 \
@@ -180,6 +184,13 @@ jobs:
             -e LLM_OPENAI_COMPAT_BASE_URL="${{ secrets.OPENROUTER_BASE_URL }}" \
             -e LLM_OPENAI_COMPAT_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
             -e LLM_OPENAI_COMPAT_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
+            -e AGENT_THINKING_MODE_FAST_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_THINKING_MODE_BALANCED_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_THINKING_MODE_DEEP_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_SYNTHESIS_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_INTENT_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_COMPRESSOR_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e AGENT_REFLECTION_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
             -e SKIP_DB_SETUP=1 \
             -v $(pwd)/app:/app/app \
             -v $(pwd)/alembic/versions:/app/alembic/versions \
@@ -475,6 +486,15 @@ jobs:
           LLM_BACKEND: openai_compat
           LLM_OPENAI_COMPAT_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
           LLM_OPENAI_COMPAT_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          # 2026-10-07 第 2 修: 聊天链路其余模型 env 与容器注入对齐 (runner 不直连
+          #   LLM, 同为链路自证/调试可读)。
+          AGENT_THINKING_MODE_FAST_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          AGENT_THINKING_MODE_BALANCED_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          AGENT_THINKING_MODE_DEEP_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          AGENT_SYNTHESIS_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          AGENT_INTENT_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          AGENT_COMPRESSOR_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          AGENT_REFLECTION_MODEL: ${{ secrets.OPENROUTER_MODEL }}
         run: |
           # --include-extra: 合并 700 base + 300 extra = 1000 题
           # --rounds 3 + --verdict-consensus majority: 三轮多数决, 减少单轮随机噪声
