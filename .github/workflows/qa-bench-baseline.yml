@@ -52,6 +52,16 @@ jobs:
       # The qa-bench requirements are deliberately small and do not contain the
       # application test harness. Install only the modules imported by the
       # nine baseline files; avoid pulling GPU/ASR production dependencies into CI.
+      #
+      # 2026-10-06: 'anthropic>=0.39.0' added below. Same missing-dependency class as
+      # the RAG-framework CI fix (rag-framework-ci.yml:64): requirements.txt:23 already
+      # declares anthropic>=0.39.0 but this hand-written list omitted it. Without it,
+      # the module-level `import anthropic` in app/core/llm.py (line 55) makes
+      # app/services/meeting_analysis_service unimportable. Inside
+      # orphan_meeting_cleanup._scan_and_cleanup that import sits behind a bare `except`
+      # (line 133), so the failure was swallowed into result["errors"] and the whole
+      # per-meeting cleanup body was skipped -> 5 tests failed with `assert 30x in []`.
+      # Constraint copied verbatim from requirements.txt; deliberately not tightened.
       - name: Install baseline test runtime
         run: |
           pip install --prefer-binary --retries 10 --timeout 60 \
@@ -74,6 +84,7 @@ jobs:
             'alembic==1.13.0' \
             'pgvector==0.2.4' \
             'numpy==1.26.2' \
+            'anthropic>=0.39.0' \
             'httpx==0.25.2'
 
       # tests/test_baseline_audit.py is ARCHIVED (tests/ARCHIVED.md; module-level

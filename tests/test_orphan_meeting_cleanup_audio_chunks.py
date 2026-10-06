@@ -22,6 +22,14 @@ redis.asyncio stub 会永久污染 sys.modules — 反序跑 (orphan 在前) 时
 (如 test_meeting_transcript_buffer) `import redis.asyncio` 拿到 MagicMock, 报
 `TypeError: object MagicMock can't be used in 'await' expression`.
 修法: 用 function-scope autouse fixture + 显式 save/restore sys.modules.
+
+⚠️⚠️ 2026-10-06 订正: 上面这段 "修复" **并未真正生效**。它把注入从模块顶层搬到了
+function-scope fixture, 解决了"永久污染"但引入了新问题: 只 monkeypatch
+sys.modules 而没绑父包属性, 而生产代码的 `import redis.asyncio as aioredis`
+走父包属性解析、**不查 sys.modules** ⇒ stub 始终没被用上, 本文件一直连的是真
+Redis。后果: 本文件单跑 7 failed, 被 test_meeting_transcript_buffer.py 排在前面
+时 11 passed —— 通过与否纯看 import 顺序。现已在 fixture 里同时绑父包属性,
+详见 fixture 内注释。
 """
 import os
 os.environ.setdefault("SKIP_DB_SETUP", "1")
@@ -66,16 +74,40 @@ def _stub_function_level_imports(monkeypatch):
     monkeypatch.setitem(sys.modules, "app.services.chunked_upload_service", _chunked_stub_module)
     monkeypatch.setitem(sys.modules, "app.services.progress_service", _progress_stub_module)
 
-    # redis.asyncio: 整个模块替换为 MagicMock, 让 aioredis.from_url(...) 返可控对象
+    # redis.asyncio: 整个模块替换为 MagicMock, 让 aioredis.from_url(...) 返可控对象。
+    #
+    # ⚠️ 2026-10-06 修复: 必须**同时**写 sys.modules 和父包属性, 只写前者无效。
+    #   orphan_meeting_cleanup.py:62 写的是 `import redis.asyncio as aioredis`,
+    #   该形式对 dotted name 走的是**父包属性查找** (redis.__dict__["asyncio"]),
+    #   不查 sys.modules —— 实测:
+    #       sys.modules["redis.asyncio"] = stub; import redis.asyncio as r
+    #       => r is stub 为 False (拿到的是真模块)
+    #   所以 2026-07-20 那两条"已修 sys.modules 污染"的注释是假的: 旧 fixture
+    #   从未真正生效过, 本文件一直连的是真 Redis。这解释了为什么单跑 7 failed
+    #   而全套跑 11 passed —— 通过与否取决于**别的文件有没有先 import 真
+    #   redis.asyncio**, 纯靠 import 顺序的偶然绿。
+    #   现在两边都绑, 心跳守卫被确定性触发, 不再依赖文件顺序 / 环境里有没有真 Redis。
+    #
+    # exists=0 = 心跳不存在 = 前端已消失 = 真孤儿 = 该清理。
+    # 缺这一行时 is_recording_alive 拿到的是 MagicMock 的 exists, await 抛 TypeError,
+    # 被 recording_heartbeat.py:100 的 except 吞掉并**保守判定为存活** (09-14 事故后
+    # 刻意设计: 宁可漏清一个孤儿, 也不误杀一场正在进行的真实会议) —— 于是每个
+    # orphan 都被 skipped, 被断言的删除路径从未执行。
     _redis_client_stub = MagicMock()
     _redis_client_stub.aclose = AsyncMock(return_value=None)
+    _redis_client_stub.exists = AsyncMock(return_value=0)
     _redis_asyncio_stub = MagicMock()
     _redis_asyncio_stub.from_url = MagicMock(return_value=_redis_client_stub)
     monkeypatch.setitem(sys.modules, "redis.asyncio", _redis_asyncio_stub)
+    # 父包属性: 让 `import redis.asyncio as aioredis` 真正解析到上面的 stub。
+    # raising=False: 首次 import 时 redis 包上可能还没有 asyncio 属性。
+    import redis as _redis_pkg
+
+    monkeypatch.setattr(_redis_pkg, "asyncio", _redis_asyncio_stub, raising=False)
 
     yield
 
-    # monkeypatch 自动在 function 结束时 setitem 回去, 无需手动 restore
+    # monkeypatch 自动在 function 结束时 setitem/setattr 回去, 无需手动 restore
 
 
 def _make_orphan_meeting(
