@@ -58,7 +58,17 @@ jobs:
     #   合计 3.4 + 5 + 4 ≈ 12.4, 加 ~2.5min 余量 = 15
     #   10min 下动态区只剩 1.6min (5min runner 预算都不够), 故复算取 15。
     #   原 10min 是 build 步 (6-12min) 尚在时代的紧 budget, build 已被 pull 替代。
-    timeout-minutes: 15
+    # 2026-10-07 第 2 次复算: 15 -> 30。上面动态部分全部按 401/认证快败估的
+    #   (runner 题均 0.2-1s), 换 OpenRouter 真 LLM 后该前提作废:
+    #   - 本地真探针 (qwen/qwen3.7-flash): 非流式 tool 轮 2.9s, SSE 流式轮 5.6s,
+    #     tool 结果回填轮 6.4s (均含 reasoning, provider=Alibaba)。
+    #   - 主测/抽测各 100 题 @ conc4: app 每题 1-4 次 LLM 轮 → 题均 5-15s
+    #     → 各 ≈ 4min (原预算 2/3min 是 401 时代的数)。
+    #   - fast-vs-deep: 90 req @ conc2 同后端真跑, 历史 6s 是 401 快败,
+    #     真实 ≈ 90×10s/2 ≈ 7.5min (原估 4min 偏紧)。
+    #   合计 3.4(固定实测) + 0.5(login) + 4 + 4 + 8 + 0.5(gate) ≈ 20.4,
+    #   加 ~9.6min 余量 (首跑推理更慢 / 429 退避 / 长题) = 30。
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -189,6 +199,12 @@ jobs:
 
           # 起 test app (8001 端口, 接 test DB 通过同网络服务名 pg-test)
           # W67 第 33 步: 用已 build image, 不再 `$(docker build -q .)`
+          # 2026-10-07 凭据切换: 原 LLM_BACKEND=mock 是**坏值** —— llm.py 只认
+          #   anthropic/openai_compat/ollama, "mock" 落 else 分支走 anthropic +
+          #   空 CLAUDE_API_KEY → SSE 恒出 error "Could not resolve authentication
+          #   method..." → 200/200 题 stream_error_event 快败 0.0% (run
+          #   37497190067 实测)。改 openai_compat + OpenRouter (secrets 三件),
+          #   与 D5 (qa-bench-ci.yml) 同一凭据链, 逐题进真实 LLM 形态。
           docker run -d --name app-test \
             --network qa-bench-net \
             -p 8001:8000 \
@@ -197,7 +213,10 @@ jobs:
             -e MINIO_ENDPOINT="localhost:9000" \
             -e MINIO_BUCKET="microbubble-test" \
             -e MINIO_PUBLIC_URL="http://localhost:9001" \
-            -e LLM_BACKEND=mock \
+            -e LLM_BACKEND=openai_compat \
+            -e LLM_OPENAI_COMPAT_BASE_URL="${{ secrets.OPENROUTER_BASE_URL }}" \
+            -e LLM_OPENAI_COMPAT_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e LLM_OPENAI_COMPAT_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
             -e SKIP_DB_SETUP=1 \
             -v $(pwd)/app:/app/app \
             -v $(pwd)/alembic/versions:/app/alembic/versions \

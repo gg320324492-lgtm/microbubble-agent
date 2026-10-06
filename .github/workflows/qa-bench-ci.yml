@@ -2,7 +2,9 @@ name: qa-bench D5 gate (1000 题 baseline)
 
 # W67 第 30 步 (2026-07-23): 让 D5 gate 真实跑题
 # - 复制 qa-bench-smoke.yml 的 test DB stack 启动逻辑 (pg-test + app-test on 8001)
-# - 切 mimo cloud (而非 mock) 通过 MIMO_API_KEY
+# - 2026-10-07 凭据切换: mimo cloud (MIMO_API_KEY, 上游 401 Invalid API Key 1000/1000
+#   题全灭) → OpenRouter (secrets OPENROUTER_API_KEY/BASE_URL/MODEL)。
+#   llm.py 链 LLM_OPENAI_COMPAT_{API_KEY,BASE_URL,MODEL} 优先于 MIMO_* fallback。
 # - --include-extra 合并 700+300 = 1000 题, --rounds 3 majority consensus
 # - 默认 timeout 90 分钟 (1000 题比 200 题慢)
 # - 真实门禁: pass_rate < 80% → exit 1
@@ -161,8 +163,11 @@ jobs:
             "SELECT count(*) FROM pg_extension WHERE extname='vector';" \
             | grep -qx 1 || { echo "✗ vector 扩展装上后回读仍为 0"; exit 1; }
 
-          # 起 test app (8001 端口), 切 mimo cloud
+          # 起 test app (8001 端口), 切 OpenRouter 云端 LLM (2026-10-07 换凭据)
           # W67 第 33 步: 用已 build image `app-test:ci`, 启动 ~30-60s (不再 6-10 min)
+          # 2026-10-07: 原 mimo (token-plan-cn.xiaomimimo.com/v1 + secrets.MIMO_API_KEY)
+          #   上游 401 Invalid API Key, D5 1000/1000 题全 401 快败 0.0%。
+          #   换 OpenRouter; key/base/model 三件全走 secrets, 换模型无需改本文件。
           docker run -d --name app-test \
             --network qa-bench-net \
             -p 8001:8000 \
@@ -172,9 +177,9 @@ jobs:
             -e MINIO_BUCKET="microbubble-test" \
             -e MINIO_PUBLIC_URL="http://localhost:9001" \
             -e LLM_BACKEND=openai_compat \
-            -e LLM_OPENAI_COMPAT_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1 \
-            -e LLM_OPENAI_COMPAT_MODEL=mimo-v2.5 \
-            -e MIMO_API_KEY="${{ secrets.MIMO_API_KEY }}" \
+            -e LLM_OPENAI_COMPAT_BASE_URL="${{ secrets.OPENROUTER_BASE_URL }}" \
+            -e LLM_OPENAI_COMPAT_MODEL="${{ secrets.OPENROUTER_MODEL }}" \
+            -e LLM_OPENAI_COMPAT_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
             -e SKIP_DB_SETUP=1 \
             -v $(pwd)/app:/app/app \
             -v $(pwd)/alembic/versions:/app/alembic/versions \
@@ -461,14 +466,15 @@ jobs:
       - name: Run qa-bench D5 (1000 题 baseline, against test DB 8001)
         working-directory: tests/qa-bench
         env:
-          # W67 第 29 步: 切 mimo cloud
-          MIMO_API_KEY: ${{ secrets.MIMO_API_KEY }}
+          # 2026-10-07: mimo → OpenRouter (与上方 app-test 容器注入保持一致;
+          #   runner.py 本身不直连 LLM, 这组 env 仅为链路自证/调试可读)。
+          LLM_OPENAI_COMPAT_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           # W67 第 42 步: 用 login 拿的真 JWT (上方 Login step 设的 $GITHUB_ENV), 不再 ${QA_TOKEN:-mock} fallback.
           #   ${{ env.REAL_QA_TOKEN }} 引用 step 间共享的 env (GITHUB_ENV).
           QA_TOKEN: ${{ env.REAL_QA_TOKEN }}
           LLM_BACKEND: openai_compat
-          LLM_OPENAI_COMPAT_BASE_URL: https://token-plan-cn.xiaomimimo.com/v1
-          LLM_OPENAI_COMPAT_MODEL: mimo-v2.5
+          LLM_OPENAI_COMPAT_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
+          LLM_OPENAI_COMPAT_MODEL: ${{ secrets.OPENROUTER_MODEL }}
         run: |
           # --include-extra: 合并 700 base + 300 extra = 1000 题
           # --rounds 3 + --verdict-consensus majority: 三轮多数决, 减少单轮随机噪声
