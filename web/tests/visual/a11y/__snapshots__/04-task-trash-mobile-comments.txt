@@ -2,4 +2,5 @@ page: 04-task-trash  route: /tasks/trash
 target: MobileTaskTrash.vue (8 裸 button)
 project: mobile-comments
 authed: yes   redirected-to-login: no
+render-evidence: 71:55
 violations: 0
