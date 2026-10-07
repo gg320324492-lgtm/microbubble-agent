@@ -68,10 +68,15 @@ jobs:
           format: 'table'
           exit-code: '0'
 
-      # 构建镜像 (失败不阻塞: 部分镜像需要 GPU base / 大依赖)
+      # 构建镜像。原为无条件 continue-on-error: true —— L-9 (收尾计划 §4.11):
+      # schedule/dispatch 硬路径上构建失败会被容错, 后续三步扫描又全部以
+      # steps.build.outcome == 'success' 为条件 → 扫描全 skip、job 无失败步 →
+      # 结论 success, "扫了空气还报平安", 把 schedule 的 fail 语义整个架空。
+      # 改为与 job 级 (:27) 同型惯用法: PR 维持 advisory 设计不变,
+      # schedule/dispatch 构建失败 = 步骤失败 = job 红 (三个 skip 照 skip, job 已红无需兜底)。
       - name: Build image
         id: build
-        continue-on-error: true
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           docker build -f "${{ matrix.dockerfile }}" \
             -t "microbubble-scan-${{ matrix.name }}:ci" \
