@@ -59,10 +59,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 //     的「确定」分支, 同时保证 CI dev server 不被打断;
 //   理由: CI 实测从不跑 vite build (视觉/无障碍走 dev server, lint-css 只 lint),
 //   dist 只在维护者本机构建 (恒有完整 .git) → 构建 fail-loud 现实成本为零;
-//   未来 CI 若要跑 build, 按本条由 CI **显式固定输入** (而非随机兜底), 届时再加。
+//   例外通道 (2026-10-07 加, 即上句"届时再加"): **无 .git 且 dist 不入库**的构建
+//   环境 (web/Dockerfile 镜像内构建, image-scan 扫描用副本) 由构建方**显式固定输入**
+//   VITE_BUILD_ID / VITE_BUILD_TIMESTAMP (非空才采用, 见下方「显式固定输入通道」) ——
+//   这正是类 20.133 原文允许的"由 CI 提供固定 VITE_BUILD_ID/VITE_BUILD_TIMESTAMP"。
 //
-// 明确不做 (类 20.133 红线): 不读 Date.now / new Date / process.env / process.pid /
-// Math.random; 不加静默兜底值; 不用裸 `vite build` (npm run build 是唯一合法命令)。
+// 明确不做 (类 20.133 红线): 不读 Date.now / new Date / process.pid / Math.random;
+// 不加静默兜底值; 不用裸 `vite build` (npm run build 是唯一合法命令);
+// process.env 只许读 VITE_BUILD_ID / VITE_BUILD_TIMESTAMP 这一对**显式固定输入通道**
+// (非空才采用、无默认值、空串 = 未提供), 不得读任何其他 env 派生构建标识。
 // ============================================================
 
 const WEB_ROOT = __dirname
@@ -163,7 +168,24 @@ function deriveSourceTreeHash() {
 // 构建模式判定: `vite build` 的 argv 含 'build'; dev/serve/preview/vitest 不含。
 const IS_VITE_BUILD = process.argv.includes('build')
 
+// --- 显式固定输入通道 (类 20.133: "由 CI 提供固定 VITE_BUILD_ID/VITE_BUILD_TIMESTAMP") ---
+//   - 语义: 环境变量为**非空字符串**即"显式提供" → 直接采用, 跳过对应 git 派生;
+//     空串 / 未设置 → 一律回落原 git 派生路径 (fail-loud 主路径, 不削弱);
+//   - 正当场景 (当前唯一): web/Dockerfile 镜像内构建 —— 构建上下文物理无 .git,
+//     且镜像内 dist 只是 image-scan 扫描用副本, 不入库、不参与部署
+//     (生产前端用入库的 web/dist, 恒在完整 git 仓库内构建)。哨兵值由 Dockerfile
+//     ARG/ENV 显式给出, 语义见其中注释;
+//   - 红线: 提供方必须保证同一构建输入下值恒定 (禁随机/时间/进程态); 本地
+//     `npm run build` 不得导出这两个变量 (会把非源输入值打进入库 dist)。
+//     除这一对通道外, 不读任何其他 env 派生构建标识。
+const ENV_BUILD_ID = process.env.VITE_BUILD_ID || ''
+const ENV_BUILD_TIMESTAMP = process.env.VITE_BUILD_TIMESTAMP || ''
+const HAS_ENV_BUILD_ID = ENV_BUILD_ID !== ''
+const HAS_ENV_BUILD_TIMESTAMP = ENV_BUILD_TIMESTAMP !== ''
+
 // --- git 可用性预检 (分模式) ---
+//   显式固定输入 VITE_BUILD_TIMESTAMP 已提供 → 整个预检跳过 (git 只服务于
+//   BUILD_TIMESTAMP 派生; BUILD_ID 是磁盘内容哈希, 本就不依赖 git);
 //   build: 不可用 → throw fail-loud (验收铁律: 无 .git 跑 build 必须报错退出,
 //          绝不产出兜底标识 dist);
 //   dev:   不可用 → 固定哨兵 'no-git-dev' (确定值, 非随机/进程态, 属类 20.133
@@ -172,27 +194,33 @@ const IS_VITE_BUILD = process.argv.includes('build')
 //          (pinned 镜像无 git / dubious ownership), 2026-10-07 曾被无差别 fail-loud
 //          误杀。dev 产物不入库, 哨兵不会进入 dist; BUILD_ID 是内容哈希, 无 git 也照算。
 let _gitTop = null
-try {
-  _gitTop = execSync('git rev-parse --show-toplevel', {
-    stdio: ['ignore', 'pipe', 'ignore'],
-    encoding: 'utf-8',
-    cwd: WEB_ROOT,
-  }).trim()
-} catch (err) {
-  _gitTop = null
-  if (IS_VITE_BUILD) {
-    throw new Error(
-      `[vite] 构建标识派生失败: \`git rev-parse --show-toplevel\` 执行失败 (${String(err.message).split('\n')[0]})。\n` +
-      '[vite] 按类 20.133 (W100 构建确定性纪律) fail-loud: 无 .git / 非 git 检出 / ' +
-      'PATH 缺 git 时, 构建必须显式失败, 禁止静默退回随机或进程态标识产出 dist。' +
-      '修复: 在完整 git 仓库内运行 npm run build。'
-    )
+if (!HAS_ENV_BUILD_TIMESTAMP) {
+  try {
+    _gitTop = execSync('git rev-parse --show-toplevel', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf-8',
+      cwd: WEB_ROOT,
+    }).trim()
+  } catch (err) {
+    _gitTop = null
+    if (IS_VITE_BUILD) {
+      throw new Error(
+        `[vite] 构建标识派生失败: \`git rev-parse --show-toplevel\` 执行失败 (${String(err.message).split('\n')[0]})。\n` +
+        '[vite] 按类 20.133 (W100 构建确定性纪律) fail-loud: 无 .git / 非 git 检出 / ' +
+        'PATH 缺 git 时, 构建必须显式失败, 禁止静默退回随机或进程态标识产出 dist。' +
+        '修复: 在完整 git 仓库内运行 npm run build (或由构建方显式提供 VITE_BUILD_ID + VITE_BUILD_TIMESTAMP 固定输入)。'
+      )
+    }
   }
 }
 
 // --- BUILD_TIMESTAMP: 最后一次触碰源输入的提交时间 (语义见顶部注释) ---
 let BUILD_TIMESTAMP
-if (!_gitTop) {
+if (HAS_ENV_BUILD_TIMESTAMP) {
+  // 显式固定输入通道 (见上方通道注释): 构建方主动提供 → 直接采用。
+  // 该值不来自 git, 仅存在于本次构建产物 (web/Dockerfile 镜像内 dist 不入库)。
+  BUILD_TIMESTAMP = ENV_BUILD_TIMESTAMP
+} else if (!_gitTop) {
   // dev 且无可用 git: 固定哨兵, 确定性 (见上方分模式说明)
   console.warn(
     "[vite] 无可用 git (容器 dev?), BUILD_TIMESTAMP 固定哨兵 'no-git-dev' " +
@@ -228,9 +256,15 @@ if (!_gitTop) {
 }
 
 // --- BUILD_ID: 源输入内容指纹 (语义见顶部注释) ---
-const BUILD_ID = deriveSourceTreeHash()
+// 显式固定输入 VITE_BUILD_ID 提供时直接采用 (见上方通道注释), 不做内容哈希;
+// 未提供 → 照旧源输入内容哈希。
+const BUILD_ID = HAS_ENV_BUILD_ID ? ENV_BUILD_ID : deriveSourceTreeHash()
 
-console.log(`[vite] BUILD_ID=${BUILD_ID} BUILD_TIMESTAMP=${BUILD_TIMESTAMP} (source-derived, 反循环: dist 不入哈希)`)
+console.log(
+  `[vite] BUILD_ID=${BUILD_ID} (${HAS_ENV_BUILD_ID ? '固定输入 VITE_BUILD_ID' : 'source-derived'}) ` +
+  `BUILD_TIMESTAMP=${BUILD_TIMESTAMP} (${HAS_ENV_BUILD_TIMESTAMP ? '固定输入 VITE_BUILD_TIMESTAMP' : 'source-derived'}) ` +
+  '(反循环: dist 不入哈希)'
+)
 
 // webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
 // 不参与 Vite rollup hash 流程，文件名固定 → webhint cache-busting 永远报警告。
