@@ -1,53 +1,52 @@
 #!/bin/sh
 # scripts/check-dist-before-commit.sh
 #
-# 防止漏 commit web/dist/ 触发服务器 404（CLAUDE.md 2026-06-26 教训 f6a2bc3d）
+# pre-commit dist 校验 — 2026-10-07 硬化 (收尾规划 §4.11 遗留③, 复检官拍板"逐项做")
 #
-# 触发场景：
-#   1. 用户改了 web/src/*.vue (或 js/css)
-#   2. 跑了 npm run build 产出新 hash 文件 (index-<8hex>.js 等)
-#   3. git add 时漏了 `git add -f web/dist/`（因为 web/dist/ 在 .gitignore 第 50 行）
-#   4. git commit 通过，但 git push 后服务器 git pull 只看到 src 改动 + 旧 dist 删除
-#   5. 服务器 index.html 引用新 hash → 404 → SPA fallback 返 text/html → 整站白屏
+# 背景: 本脚本旧版对漏 add web/dist 是「软性自动补 add」—— 会把磁盘上未提交的
+# dist 强塞进当前 commit, 制造原子 src+dist; 且不校验 dist 与源的一致性 (stale
+# dist 照样过)。这与 CLAUDE.md W100 R-5 两段式纪律 (先提交源 → npm run build →
+# 再提交 dist) 相抵触: 原子提交会让 BUILD_TIMESTAMP 滞后一个源提交, 该提交上
+# 重建 ≠ 入库 dist (e50631024 实战)。
 #
-# 历史教训（项目内第 4 次踩坑）：
-#   - 2026-06-03: d619f33 漏 build 后 commit → 白屏
-#   - 2026-06-10: a40e84c `git add -A` 静默跳过 .gitignore 内文件
-#   - 2026-06-14: 同样模式再次踩坑
-#   - 2026-06-26: f6a2bc3d (v70 P2) 漏 add 95 个新 dist → index-fc61064b.js 404
+# 现行两条硬规则 (与 web/scripts/build-id.mjs 单一真源配合):
+#   规则 1 禁原子 src+dist: 同一 commit 同时暂存「构建源输入」(SOURCE_INPUTS,
+#          由 build-id.mjs 给出) 与 web/dist 任何文件 → 拦截, 指引两段式。
+#   规则 2 stale dist 硬校验: commit 含 web/dist 时, 按 SOURCE_INPUTS 算法从
+#          **暂存区 (index)** 重算 BUILD_ID, 与 dist 内嵌 id=<12hex> 比对,
+#          不一致 → 拦截 (报重算值 vs dist 值)。
+# 自动补 add 收敛: 只有本次 commit **未暂存任何构建源输入** (dist-only 提交
+#   漏 add 的场景) 才允许自动补齐; 源输入已暂存时绝不塞入 (那是原子提交制造机),
+#   改为打印两段式指引后放行。
 #
-# 行为：
-#   1. 检测 staged 是否有 web/src/ 改动（没改 → 跳过，不影响 docs/CI 提交）
-#   2. 检测本地 web/dist/ 是否有 hash 命名的 build 产物 不在 HEAD 里
-#   3. 两个条件都满足 → echo 警告 + 自动 `git add -f web/dist/` + 继续 commit
+# 保留的既有语义 (未动):
+#   - token-orphan 硬拦 (web/src 有暂存改动时, CLAUDE.md v73)
+#   - staged index.html ↔ 磁盘资产配套硬拦 (2026-09-12 hard gate B)
+#   - 拒绝非 production 压缩产物硬拦 (2026-09-30 S3.4, 行数判据)
+#   - secrets / design-tokens drift 由 .git/hooks/pre-commit 链在前后执行, 不在本脚本
 #
-# 不是 hard block（避免影响 docs/CI 提交），但保证 build 后 dist 不会漏 commit
+# 逃生口: git commit --no-verify (git 原生, 仅限复检官/主拍批准场景)
 #
-# 用法（pre-commit hook 自动调用，独立调用也行）：
-#   sh scripts/check-dist-before-commit.sh
-#
-# 新成员 setup（CLAUDE.md 纪律）：
-#   cp scripts/check-dist-before-commit.sh .git/hooks/pre-commit
-#   chmod +x .git/hooks/pre-commit
-#
-# W100 +75c 优化（类 20 永久铁律 - Windows 10min timeout 误判）:
-#   - 加 `set +e` 避免 set -e 短路 + 内部 step 短路整个 hook
-#   - 跳过已删 dist 文件 (git status --porcelain 过滤 + test -e 检查)
-#   - `timeout 30` per-step 防御单步卡死
-#   - 末尾加总耗时, 超过 30s 提示"harness timeout 风险"
-#   - fail-loud 但不 exit 1 (避免 hook 误判 abort, 输出显眼警告但 commit 继续)
+# 用法 (pre-commit hook 自动调用; 也可 sh scripts/check-dist-before-commit.sh 独立跑)
+# 新成员 setup: bash scripts/setup-hooks.sh (串联 secrets → dist → drift)
 
-# W100 +75c: set +e (不要 set -e, 否则内部 grep 无匹配返回 1 会短路整个 hook)
+# set +e: 不要 set -e, 否则内部 grep 无匹配返回 1 会短路整个 hook (W100 +75c 教训)
 set +e
 
+# 总耗时统计 (W100 +75c)
+START_TIME=$(date +%s)
+
+# 统一从仓库根执行 (独立调用时 CWD 不受控 — 借鉴 drift 脚本教训)
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+    echo "❌ [pre-commit] 不在 git 仓库里, dist 校验无法执行"
+    exit 1
+fi
+cd "$REPO_ROOT" || exit 1
+
 # ================================================================
-# 2026-09-12 hard gate (index-Dm-g8UdN.js 404 事故沉淀, commit 9bf09f01b):
-# 该事故 = `git add -A` 静默跳过 .gitignore 内新 hash 资产 + 本 hook 未安装。
-# 本节新增两道硬校验 (旧版只 auto-add 不验证, 且验证不了 index.html↔assets 配套):
-#   A. src 改了但 dist/index.html 无更新且无新产物 → 忘了 build, hard block
-#   B. staged index.html 引用的每个 assets/*.{js,css} 必须在本地磁盘存在,
-#      否则 (index.html 与 assets 来自不同次 build / 漏 add) → hard block
-#   逃生口: git commit --no-verify
+# hard gate B: staged index.html 引用的资产必须存在 (2026-09-12
+# index-Dm-g8UdN.js 404 事故沉淀, commit 9bf09f01b) — 既有语义原样保留
 # ================================================================
 hard_verify_dist_refs() {
     # 只在 web/dist/index.html 有 staged 改动时校验 (纯后端/docs 提交零开销)
@@ -68,136 +67,11 @@ hard_verify_dist_refs() {
     fi
 }
 
-# 总耗时统计 (W100 +75c 新增)
-START_TIME=$(date +%s)
-
-# ---- 1. 检测 web/src/ 改动 ----
-# 没改 src 就跳过（docs/CI/test commit 不应触发）
-# 2026-10-01 S3.7 1: 排除纯测试目录。原 pathspec 'web/src/' 前缀匹配会命中
-# web/src/**/__tests__/，导致纯测试提交也被要求重建 dist —— 与 L75 注释
-# "docs/CI/test commit 不应触发" 矛盾。改用 exclude 语法。
-# 语法说明: git pathspec 的 ':(exclude)' 前缀必须先跟一个非排除 pathspec 才生效，
-# 故写成 'web/src/' 后面紧跟 ':(exclude)web/src/**/__tests__/**'。
-SRC_CHANGED=$(git diff --cached --name-only -- 'web/src/' ':(exclude)web/src/**/__tests__/**')
-if [ -z "$SRC_CHANGED" ]; then
-    hard_verify_dist_refs
-    ELAPSED=$(($(date +%s) - START_TIME))
-    exit 0
-fi
-
-# ---- 1.5 v75: Token orphan 检测（防止 var(--xxx, ...) 引用未定义 token）----
-# 集成到 pre-commit 避免 push 后 CI 才报错, dev 体验更早发现问题
-if [ -x "scripts/check-token-orphans.sh" ]; then
-    # W100 +75c: 加 timeout 30 防单步卡死 (Windows 10min timeout 误判场景)
-    ORPHAN_OUTPUT=$(timeout 30 bash scripts/check-token-orphans.sh 2>&1) || true
-    ORPHAN_COUNT=$(echo "$ORPHAN_OUTPUT" | grep -oE '[0-9]+ 真 orphan' | grep -oE '[0-9]+' | head -1)
-    if [ -n "$ORPHAN_COUNT" ] && [ "$ORPHAN_COUNT" -gt 0 ]; then
-        echo ""
-        echo "❌ [pre-commit] 发现 $ORPHAN_COUNT 个 var(--token) orphan (CLAUDE.md v73 沉淀)"
-        echo "   token 不在 variables.css / nutui-theme.scss / mobile-base.css 定义"
-        echo "   修复选项:"
-        echo "   1) 改对 token 名 (推荐, 项目已有 token)"
-        echo "   2) 在 variables.css 补 token 定义"
-        echo "   3) 加到 scripts/.token-orphan-allowlist (仅设计意图)"
-        echo ""
-        echo "📋 orphan 详情:"
-        echo "$ORPHAN_OUTPUT" | grep "ORPHAN:" | sed 's/^/   /'
-        echo ""
-        echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
-        exit 1
-    fi
-fi
-
-# ---- 2. 检测本地 web/dist/ 是否有"新" hash 产物 ----
-# HEAD 跟踪的 dist 文件
-head_dist=$(git ls-tree -r --name-only HEAD -- 'web/dist/' 2>/dev/null || true)
-
-# W100 +75c: 跳过已删 dist 文件 (git status --porcelain 过滤, 避免对 deleted 文件做无谓检查)
-# 用 git status --porcelain web/dist/ 拿到 staged 状态, 排除 D (deleted) 行
-deleted_dist=$(git status --porcelain -- 'web/dist/' | awk '/^.D / {print $2}' | tr '\n' ' ')
-
-# 本地有但 HEAD 没有的 dist 文件（排除 index.html/sw.js 这些总在 HEAD 的）
-# 用 find 列本地 web/dist/assets/ 下 hash 命名的文件
-local_new_dist=""
-if [ -d "web/dist/assets" ]; then
-    # index-<8hex>.js / index-<8hex>.css / <name>-<8hex>.{js,css}
-    for f in web/dist/assets/*; do
-        [ -f "$f" ] || continue
-        bn=$(basename "$f")
-        case "$bn" in
-            index-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9].js) ;;
-            index-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9].css) ;;
-            *-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9].js) ;;
-            *-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9].css) ;;
-            *) continue ;;
-        esac
-        # P3-1 fix (2026-07-08): 原 case "$head_dist" in *"$rel"* 用 unquoted word glob,
-        # 只能匹配第一个 word (head_dist 第一行). HEAD 含多行 dist 文件时,
-        # 从第二个开始永远不匹配 → 重复 add. 改用 echo | grep -qFx (精确行匹配)
-        # 跨 sh 兼容 (dash/bash/zsh) 且无 case glob 限制.
-        rel="web/dist/assets/$bn"
-        if echo "$head_dist" | grep -qFx "$rel"; then
-            continue
-        fi
-        # W100 +75c: 跳过 staged 已删的 dist (避免 deleted vs new 矛盾, hook 短路)
-        case " $deleted_dist " in
-            *" $f "*) continue ;;
-        esac
-        local_new_dist="$local_new_dist $f"
-    done
-fi
-
-if [ -z "$local_new_dist" ]; then
-    # 2026-09-12 hard gate A: src 改了但 index.html 未 staged 且无新产物 → 忘了 build
-    if ! git diff --cached --name-only -- 'web/dist/index.html' 2>/dev/null | grep -q .; then
-        echo ""
-        echo "❌ [pre-commit] web/src/ 有改动, 但 web/dist/index.html 无更新且无新 hash 产物"
-        echo "   大概率忘了 build (改 src 必须重新 build, 否则线上仍是旧前端):"
-        echo "     cd web && npm run build && git add -f web/dist/"
-        echo "   (确要跳过: git commit --no-verify)"
-        exit 1
-    fi
-    hard_verify_dist_refs
-    ELAPSED=$(($(date +%s) - START_TIME))
-    exit 0
-fi
-
-# ---- 3. 警告 + 自动 add ----
-count=$(echo $local_new_dist | wc -w)
-
-echo ""
-echo "⚠️  [pre-commit] 检测到 web/src/ 改动 + 本地有 $count 个未 tracked 的 web/dist/ build 产物"
-echo "   防止漏 commit dist 触发服务器 404 (CLAUDE.md 2026-06-26 教训 f6a2bc3d)"
-echo ""
-echo "未 tracked dist 文件 (前 10):"
-echo "$local_new_dist" | tr ' ' '\n' | grep -v '^$' | head -10 | sed 's/^/   /'
-if [ "$count" -gt 10 ]; then
-    echo "   ... (共 $count 个)"
-fi
-echo ""
-echo "🔧 自动执行: git add -f web/dist/ (绕过 .gitignore 第 50 行 'web/dist/')"
-
-# W100 +75c: 自动 add 加 timeout 30 防 git 卡死
-timeout 30 git add -f web/dist/ || {
-    echo ""
-    echo "❌ [pre-commit] git add 超时 (30s), 手动跑 git add -f web/dist/"
-    exit 0  # W100 +75c: 不阻断 commit, 仅警告
-}
-
-# ---- 3.5 拒绝未压缩产物 (2026-09-30 S3.4 新增) ----
-# 事故: 核查期间工作树出现一份**非 production 构建**的 dist (入口 chunk 280KB → 334KB,
-# 标识符未 mangle)。若被提交, 云端 pull 后会直接服务这份未压缩产物。
-#
-# 判据用**行数**而非字节数 (2026-09-30 修正): 行数与应用规模无关, 不会像绝对字节
-# 阈值那样在应用正常增长到某个体量时误伤一次完全正确的构建 —— 那会制造查不出原因的
-# 假故障。
-#
-# 阈值 30 的由来 (2026-10-01 实测, 原值 200 拦不住已知坏产物):
-#   - production 构建 (npm run build, NODE_ENV=production): **11 行**
-#   - NODE_ENV=test 构建 (未 mangle): **50 行** / 334,468 bytes
-#   取 30 落在两者之间: 正常产物留 2.7x 余量, 已知坏产物 (50 行) 必被拦。
+# ================================================================
+# 拒绝未压缩产物 (2026-09-30 S3.4 新增, 既有语义原样保留)
+# 判据用行数: production 11 行 / NODE_ENV=test 构建 50 行 → 阈值 30 (2026-10-01 实测)
+# ================================================================
 verify_dist_is_minified() {
-    local entry lines
     entry=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' web/dist/index.html 2>/dev/null | head -1)
     if [ -z "$entry" ] || [ ! -f "web/dist/$entry" ]; then
         return 0   # 无入口 chunk, 交给既有校验处理
@@ -213,18 +87,210 @@ verify_dist_is_minified() {
     fi
 }
 
- verify_dist_is_minified
+# ================================================================
+# 0. 暂存状态快照
+# ================================================================
+staged_dist=$(git diff --cached --name-only -- 'web/dist/')
+staged_src=$(git diff --cached --name-only -- 'web/src/' ':(exclude)web/src/**/__tests__/**')
+staged_web=$(git diff --cached --name-only -- 'web/')
 
-# ---- 4. 验证 + 报告 ----
-new_staged=$(git diff --cached --name-only -- 'web/dist/' | wc -l)
-echo ""
-echo "✅ [pre-commit] 已 staged $new_staged 个 web/dist/ 文件, commit 继续"
-echo ""
+# 构建源输入 (SOURCE_INPUTS 单一真源, 见 web/scripts/build-id.mjs)
+# 只要 web/ 下有任何暂存改动就计算一次 (规则 1/2 与自动补 add 收敛都依赖它)
+staged_build_inputs=""
+BUILD_INPUTS_ERR=""
+if [ -n "$staged_web" ]; then
+    _bi=$(node web/scripts/build-id.mjs --staged-build-inputs 2>&1)
+    _bi_rc=$?
+    if [ "$_bi_rc" -eq 0 ]; then
+        staged_build_inputs="$_bi"
+    else
+        BUILD_INPUTS_ERR="$_bi"
+    fi
+fi
 
-# W100 +75c: 总耗时输出 + 30s 警告
-# 2026-09-12 hard gate B: auto-add 之后最终校验 staged index.html ↔ 磁盘资产配套
+# dist 待补内容 (未暂存的修改 + 未跟踪的 dist 文件), 自动补齐与第一段指引共用
+dist_pending=$({ git diff --name-only -- web/dist/; git ls-files --others --exclude-standard -- web/dist/; } | grep -v '^$')
+
+# ================================================================
+# 规则 1: 禁原子 src+dist (暂存了 web/dist 才需要查)
+# ================================================================
+if [ -n "$staged_dist" ]; then
+    if [ -n "$BUILD_INPUTS_ERR" ]; then
+        echo ""
+        echo "❌ [pre-commit] 拦截: web/dist 提交必须先通过「暂存源输入」计算, 但该计算失败:"
+        echo "$BUILD_INPUTS_ERR" | sed 's/^/   /'
+        echo "   fail-loud 不跳过 (类 20.133)。修复: 确认 PATH 里有 node / 上述错误已排除。"
+        echo "   (紧急逃生: git commit --no-verify —— 仅限复检官/主拍批准场景)"
+        echo "🛑 pre-commit 中止 (commit 失败)"
+        exit 1
+    fi
+    if [ -n "$staged_build_inputs" ]; then
+        input_count=$(printf '%s\n' "$staged_build_inputs" | grep -c .)
+        dist_count=$(printf '%s\n' "$staged_dist" | grep -c .)
+        echo ""
+        echo "❌ [pre-commit] 拦截: 同一 commit 同时暂存了「构建源输入」与 web/dist —— 禁止原子 src+dist (R-5 两段式)"
+        echo "   暂存的源输入 ($input_count 个):"
+        printf '%s\n' "$staged_build_inputs" | head -10 | sed 's/^/     /'
+        [ "$input_count" -gt 10 ] && echo "     ... (共 $input_count 个)"
+        echo "   暂存的 dist 文件 ($dist_count 个, 已省略)"
+        echo ""
+        echo "   为什么拦: BUILD_TIMESTAMP = 源输入最后一次提交的 path-log 时间。"
+        echo "   原子 src+dist 会让 dist 内嵌时间滞后一个源提交 → 在该提交上重建 ≠ 入库"
+        echo "   dist (banner 时间差 → chunk 级联 rename)。e50631024 实战, CLAUDE.md W100 R-5。"
+        echo ""
+        echo "   正确操作 (两段式):"
+        echo "     1) 第一段 (本次): 只提交源输入 —— git restore --staged web/dist 后再 commit"
+        echo "     2) 构建:         cd web && npm run build"
+        echo "     3) 第二段:       git add -f web/dist && git commit (单独一次 dist 提交)"
+        echo ""
+        echo "   (紧急逃生: git commit --no-verify —— 仅限复检官/主拍批准场景)"
+        echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+        exit 1
+    fi
+
+    # ================================================================
+    # 自动补齐 — 仅 dist-only 提交 (未暂存任何构建源输入) 漏 add 的场景
+    #   必须在规则 2 **之前**: 只 stage 了 index.html 而新入口 chunk 还没 add 时,
+    #   规则 2 会提取不到 id; 先补齐整个构建产物再做 stale 校验才自洽。
+    #   (旧版对「源输入已暂存 + 磁盘 dist 脏」也自动补 → 制造原子提交, 已收敛到此)
+    # ================================================================
+    if [ -n "$dist_pending" ]; then
+        pending_count=$(printf '%s\n' "$dist_pending" | grep -c .)
+        echo ""
+        echo "⚠️  [pre-commit] dist-only 提交进行中, 磁盘还有 $pending_count 个 web/dist 改动未暂存 (防漏 commit 触发 404, f6a2bc3d)"
+        printf '%s\n' "$dist_pending" | head -10 | sed 's/^/   /'
+        [ "$pending_count" -gt 10 ] && echo "   ... (共 $pending_count 个)"
+        echo "🔧 自动执行: git add -f -A -- web/dist/ (本次未暂存任何构建源输入, 不构成原子提交)"
+        # W100 +75c: 自动 add 加 timeout 30 防 git 卡死; 超时/失败 = 暂存集不完整,
+        # 放行会 404 → fail-loud (旧版此处 exit 0 软放行, 已随硬化一并收紧)
+        if ! timeout 30 git add -f -A -- web/dist/; then
+            echo ""
+            echo "❌ [pre-commit] git add 超时/失败 (30s), 暂存集不完整, 拒绝放行"
+            echo "   手动执行: git add -f -A -- web/dist/ 后重新 commit"
+            echo "   (紧急逃生: git commit --no-verify —— 仅限复检官/主拍批准场景)"
+            exit 1
+        fi
+    fi
+
+    # ================================================================
+    # 规则 2: stale dist 硬校验 (commit 含 web/dist → 从暂存区重算 BUILD_ID 比对)
+    #   重算与比对逻辑的单一真源 = web/scripts/build-id.mjs (vite 构建 import 同一份)
+    # ================================================================
+    _idx=$(node web/scripts/build-id.mjs --from-index 2>&1)
+    _idx_rc=$?
+    if [ "$_idx_rc" -ne 0 ] || ! printf '%s\n' "$_idx" | grep -qxE '[0-9a-f]{12}'; then
+        echo ""
+        echo "❌ [pre-commit] 拦截: 无法从暂存区重算 BUILD_ID (stale dist 校验无法执行):"
+        echo "$_idx" | sed 's/^/   /'
+        echo "   fail-loud 不跳过 (类 20.133)。修复: 排除上述错误后重试。"
+        echo "   (紧急逃生: git commit --no-verify —— 仅限复检官/主拍批准场景)"
+        echo "🛑 pre-commit 中止 (commit 失败)"
+        exit 1
+    fi
+    idx_id=$_idx
+
+    # dist 内嵌 id: staged index.html → 入口 chunk → id=<12hex> (main.js banner 注入)
+    entry=$(git show :web/dist/index.html 2>/dev/null | grep -oE 'assets/index-[A-Za-z0-9_.-]+\.js' | head -1)
+    dist_id=""
+    if [ -n "$entry" ]; then
+        dist_id=$(git show ":web/dist/$entry" 2>/dev/null | grep -oE 'id=[0-9a-f]{12}' | head -1 | sed 's/^id=//')
+    fi
+    if [ -z "$dist_id" ]; then
+        echo ""
+        echo "❌ [pre-commit] 拦截: 无法从暂存 dist 提取内嵌 id=<12hex> —— 无法证明它与已提交源一致"
+        echo "   入口 chunk: ${entry:-<staged index.html 未找到>}"
+        echo "   大概率: dist 不是 \`npm run build\` 产物, 或入口结构变更导致提取方式失效。"
+        echo "   修复: cd web && npm run build && git add -f web/dist/ 重新提交"
+        echo "   (紧急逃生: git commit --no-verify —— 仅限复检官/主拍批准场景)"
+        echo "🛑 pre-commit 中止 (commit 失败)"
+        exit 1
+    fi
+    if [ "$dist_id" != "$idx_id" ]; then
+        echo ""
+        echo "❌ [pre-commit] 拦截: stale dist —— 暂存的 web/dist 与已提交源不符"
+        echo "   从暂存区 (index) 按 SOURCE_INPUTS 算法重算 BUILD_ID = $idx_id"
+        echo "   dist 入口 $entry 内嵌 id=                = $dist_id"
+        echo ""
+        echo "   原因: 源改动入库后没有重新 npm run build 就提交了 dist (或 dist 构建自"
+        echo "   未提交/滞后的源)。照此入库, 云端 pull 到的 dist 与源不配套。"
+        echo ""
+        echo "   正确操作 (两段式):"
+        echo "     1) 确保源输入改动已全部提交 (git status 检查 web/ 下源输入)"
+        echo "     2) cd web && npm run build"
+        echo "     3) git add -f web/dist && git commit"
+        echo ""
+        echo "   (紧急逃生: git commit --no-verify —— 仅限复检官/主拍批准场景)"
+        echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+        exit 1
+    fi
+fi
+
+# ---- token orphan 检测 (v75, 既有硬拦语义原样保留; 触发条件 = web/src 有暂存改动) ----
+if [ -n "$staged_src" ]; then
+    if [ -x "scripts/check-token-orphans.sh" ]; then
+        # W100 +75c: 加 timeout 30 防单步卡死 (Windows 10min timeout 误判场景)
+        ORPHAN_OUTPUT=$(timeout 30 bash scripts/check-token-orphans.sh 2>&1) || true
+        ORPHAN_COUNT=$(echo "$ORPHAN_OUTPUT" | grep -oE '[0-9]+ 真 orphan' | grep -oE '[0-9]+' | head -1)
+        if [ -n "$ORPHAN_COUNT" ] && [ "$ORPHAN_COUNT" -gt 0 ]; then
+            echo ""
+            echo "❌ [pre-commit] 发现 $ORPHAN_COUNT 个 var(--token) orphan (CLAUDE.md v73 沉淀)"
+            echo "   token 不在 variables.css / nutui-theme.scss / mobile-base.css 定义"
+            echo "   修复选项:"
+            echo "   1) 改对 token 名 (推荐, 项目已有 token)"
+            echo "   2) 在 variables.css 补 token 定义"
+            echo "   3) 加到 scripts/.token-orphan-allowlist (仅设计意图)"
+            echo ""
+            echo "📋 orphan 详情:"
+            echo "$ORPHAN_OUTPUT" | grep "ORPHAN:" | sed 's/^/   /'
+            echo ""
+            echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+            exit 1
+        fi
+    fi
+fi
+
+# dist 待补内容 (dist_pending) 已在规则 1 之前计算, 此处直接复用
+
+if [ -n "$staged_build_inputs" ]; then
+    # ================================================================
+    # 两段式第一段: 源输入已暂存, dist 必须留在下一次 commit
+    #   (暂存了 dist 的情况已在上方规则 1 拦截, 走到这里 dist 必未暂存)
+    #   —— 旧版在这里会 `git add -f web/dist/` 把磁盘 dist 强塞进来 (原子提交制造机),
+    #   现改为指引后放行, 绝不自动补 (复检官拍板: 自动补 add 收敛)
+    # ================================================================
+    input_count=$(printf '%s\n' "$staged_build_inputs" | grep -c .)
+    echo ""
+    echo "ℹ️  [pre-commit] 两段式第一段: 本次只提交构建源输入 ($input_count 个), 未附带 web/dist — 正确 ✓"
+    printf '%s\n' "$staged_build_inputs" | head -10 | sed 's/^/     /'
+    [ "$input_count" -gt 10 ] && echo "     ... (共 $input_count 个)"
+    if [ -n "$dist_pending" ]; then
+        pending_count=$(printf '%s\n' "$dist_pending" | grep -c .)
+        echo "   ⚠️  磁盘 web/dist/ 有 $pending_count 个未提交改动 — 本次**不会**自动补 add (那是原子提交制造机)。"
+        echo "   ⚠️  若这批 dist 是在源提交之前构建的, 第二段前必须重新 npm run build:"
+        echo "       BUILD_TIMESTAMP 取源输入 path-log, 提交源之前构建会滞后一个源提交"
+        echo "       (e50631024 实战, CLAUDE.md W100 R-5 两段式)。"
+    fi
+    echo "   下一段 (本次 commit 完成后): cd web && npm run build && git add -f web/dist && git commit"
+    echo "   (第二段会按暂存区源重算 BUILD_ID 与 dist 内嵌 id 比对, 不符即拦截)"
+elif [ -n "$BUILD_INPUTS_ERR" ]; then
+    # 源输入计算失败且没有 dist 暂存: 不阻断 (docs/测试类提交不受此影响), 但显眼警告
+    echo ""
+    echo "⚠️  [pre-commit] 暂存源输入计算失败 (本次未暂存 dist, 不阻断; 自动补 add 已禁用):"
+    echo "$BUILD_INPUTS_ERR" | sed 's/^/   /'
+fi
+# (dist-only 自动补齐分支已上移到规则 1 之后、规则 2 之前 — 见上方说明)
+
+# ---- 末段: dist 内容健全性 (既有语义: 压缩检查 + index.html↔资产配套) ----
+final_staged_dist=$(git diff --cached --name-only -- 'web/dist/')
+if [ -n "$final_staged_dist" ]; then
+    verify_dist_is_minified
+    final_dist_count=$(printf '%s\n' "$final_staged_dist" | grep -c .)
+    echo ""
+    echo "✅ [pre-commit] 已暂存 $final_dist_count 个 web/dist/ 文件, commit 继续"
+fi
 hard_verify_dist_refs
 
+# W100 +75c: 总耗时输出 + 30s 警告
 ELAPSED=$(($(date +%s) - START_TIME))
 echo "⏱  [pre-commit] hook 总耗时: ${ELAPSED}s"
 if [ "$ELAPSED" -gt 30 ]; then

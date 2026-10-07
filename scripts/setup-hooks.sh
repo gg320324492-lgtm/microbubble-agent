@@ -11,7 +11,9 @@
 #
 # 安装的 hooks:
 #   1. pre-commit  → scripts/check-secrets-before-commit.sh + check-dist-before-commit.sh
-#                    (串联, secrets 优先 hard block, dist 后 soft auto-add)
+#                    + check-design-tokens-drift.sh (串联; secrets/drift 硬拦, dist 为
+#                    R-5 两段式硬门禁: 禁原子 src+dist + stale BUILD_ID 校验,
+#                    仅 dist-only 提交漏 add 时自动补齐 — 见 check-dist 头注)
 #   2. post-commit → 自动 git push origin main (CLAUDE.md 2026-06-26 教训)
 #
 # W86-D-1 (pre-commit 框架) 兼容说明 (2026-07-29):
@@ -57,6 +59,9 @@ if [ "$1" = "--check" ]; then
     elif ! grep -q "check-secrets-before-commit.sh" "$HOOKS_DIR/pre-commit" 2>/dev/null; then
         echo "❌ pre-commit 不含 secrets 检查 (过时版本)"
         NEEDS_INSTALL=1
+    elif ! grep -q "|| exit 1" "$HOOKS_DIR/pre-commit" 2>/dev/null; then
+        echo "❌ pre-commit 缺退出码传播 (\`|| exit 1\`) — 各检查的硬拦不会生效 (2026-10-07 修复)"
+        NEEDS_INSTALL=1
     elif ! grep -q "check-dist-before-commit.sh" "$HOOKS_DIR/pre-commit" 2>/dev/null; then
         echo "❌ pre-commit 不含 dist 检查 (过时版本)"
         NEEDS_INSTALL=1
@@ -100,12 +105,13 @@ cat > "$HOOKS_DIR/pre-commit" << 'HOOK_EOF'
 #
 # 串联三个独立检查 (顺序很重要):
 #   1. secrets: hard block (admin JWT 等凭据绝不能入库)
-#   2. dist:    soft auto-fix (漏 add web/dist/ 自动补)
+#   2. dist:    R-5 两段式硬门禁 (禁原子 src+dist + stale BUILD_ID 校验;
+#               仅 dist-only 提交漏 add 时自动补齐)
 #   3. design-tokens drift: hard block (两份副本必须逐字节一致)
 #
 # 为什么顺序: secrets 必须在 dist 之前
-#   - secrets fail → commit 中止, 不应让 dist hook 再 auto-add 文件
-#   - dist auto-add 可能改变 staged diff, 让 secrets check 错位
+#   - secrets fail → commit 中止, 不应让 dist hook 再改动 staged 内容 (自动补齐)
+#   - dist 自动补齐 (dist-only 场景) 可能改变 staged diff, 让 secrets check 错位
 #
 # 为什么 drift 放最后: 前两道通过后才做这个较慢的校验。
 #   package 那份无任何消费者级校验 (Electron 单测只断言 main.ts 里有那行 import,
@@ -116,13 +122,19 @@ cat > "$HOOKS_DIR/pre-commit" << 'HOOK_EOF'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
 # 1. Secrets check (hard block, 教训: 2026-07-01 commit 6573f2b3 删 _login/_token 后沉淀)
-sh "$REPO_ROOT/scripts/check-secrets-before-commit.sh" "$@"
+sh "$REPO_ROOT/scripts/check-secrets-before-commit.sh" "$@" || exit 1
 
-# 2. Dist check (soft auto-fix, 含 token-orphan hard block, 教训: CLAUDE.md 2026-06-26 f6a2bc3d)
-sh "$REPO_ROOT/scripts/check-dist-before-commit.sh" "$@"
+# 2. Dist check (R-5 两段式硬门禁 + token-orphan hard block, 教训: CLAUDE.md 2026-06-26 f6a2bc3d / e50631024)
+sh "$REPO_ROOT/scripts/check-dist-before-commit.sh" "$@" || exit 1
 
 # 3. design-tokens 副本漂移 (2026-10-01 S3.3 甲方案)
-sh "$REPO_ROOT/scripts/check-design-tokens-drift.sh" "$@"
+sh "$REPO_ROOT/scripts/check-design-tokens-drift.sh" "$@" || exit 1
+
+# ⚠️ `|| exit 1` 缺一不可 (2026-10-07 硬化, §4.11 遗留③验收发现):
+#   本 wrapper 自 18d6625ec 起就没有退出码传播 —— 只有最后一条 drift 的退出码
+#   能到达 git, 前面 secrets/dist 的 exit 1 会被静默吞掉, commit 照常通过
+#   ("hard block" 名存实亡, 矩阵 S6 实测 commit 成功后修复)。
+#   shell hook 的退出码 = 最后一条命令的退出码, 逐条 `|| exit 1` 才是 fail-fast。
 HOOK_EOF
 
 chmod +x "$HOOKS_DIR/pre-commit"
@@ -158,7 +170,7 @@ echo "   bash scripts/setup-hooks.sh --check"
 echo ""
 echo "🚀 下次 commit 会自动跑:"
 echo "   1. secrets hook (hard block, 拒绝 admin JWT 入库)"
-echo "   2. dist hook (soft auto-add, 漏 commit web/dist/ 时自动补)"
+echo "   2. dist hook (R-5 两段式硬门禁: 禁原子 src+dist + stale BUILD_ID 校验;"
 echo "   3. post-commit (main 分支自动 push)"
 echo ""
 echo "⚠️  提醒:"

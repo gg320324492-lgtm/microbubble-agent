@@ -1,13 +1,14 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve, join } from 'path'
-import { readdirSync, lstatSync, readFileSync } from 'fs'
-import { createHash } from 'crypto'
+import { resolve } from 'path'
 import { execSync } from 'child_process'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import NutUIResolver from '@nutui/nutui/dist/resolver'
 import { VitePWA } from 'vite-plugin-pwa'
+// SOURCE_INPUTS 清单 + BUILD_ID sha256 算法的单一真源 (与 pre-commit 两段式校验共用,
+// 严禁再写第二份) — 见 web/scripts/build-id.mjs 顶部说明。
+import { SOURCE_INPUTS, deriveSourceTreeHash } from './scripts/build-id.mjs'
 
 // ============================================================
 // 2026-10-07 [DEPLOY-DETERM / R-5] BUILD_TIMESTAMP / BUILD_ID 派生根治 (类 20.133)
@@ -72,26 +73,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const WEB_ROOT = __dirname
 
-// 构建源输入允许清单 (相对 web/)。判据 = 该文件的字节能改变 `npm run build` 产物:
-//   - src/ index.html public/            vite 打包图 + 静态拷贝
-//   - vite.config.js                     构建配置本体 (define/patch/postcss/manualChunks)
-//   - package.json / package-lock.json   依赖锁定版本 (npm ci 安装的 node_modules 代理)
-//   - scripts/postbuild-fix-manifest.js  npm run build 命令链的后半段
-// 明确**不**入清单 (别加):
-//   - dist/                    自身入库, 入清单即哈希循环 (见上方反循环论证)
-//   - src/**/__tests__/, *.test.* / *.spec.* — vitest 用, 不进 build 产物
-//   - .stylelintrc.json / .hintrc.json / playwright*.config.js / vitest.config.js /
-//     tests/ / tools/ / design-showcase/ / Dockerfile / nginx.conf
-//                              lint / 测试 / 部署面, 不参与 build
-const SOURCE_INPUTS = [
-  'index.html',
-  'package.json',
-  'package-lock.json',
-  'public',
-  'scripts/postbuild-fix-manifest.js',
-  'src',
-  'vite.config.js',
-]
+// SOURCE_INPUTS 清单 / isNonBuildInput / deriveSourceTreeHash 已提取到
+// web/scripts/build-id.mjs (2026-10-07, 收尾规划 §4.11 遗留③: pre-commit 硬化)。
+// 提取原因: pre-commit 钩子必须按**同一份**清单与算法从暂存区重算 BUILD_ID 与
+// dist 内嵌 id 比对 (stale dist 硬校验) —— 两处各写一份 = 漂移 = 校验形同虚设。
+// 本文件只 import 消费; 改清单/算法一律改 build-id.mjs。
 
 // git 调用: 任何失败 → throw (fail-loud)。禁止在这里加兜底值。
 function gitOrDie(cmd) {
@@ -112,58 +98,8 @@ function gitOrDie(cmd) {
   }
 }
 
-// 源输入里不参与构建产物的路径 (即使它在允许清单目录下):
-//   __tests__ / *.test.* / *.spec.*  vitest 用例
-//   .DS_Store / Thumbs.db / desktop.ini  编辑器/系统垃圾 (误入会让 ID 随机器漂移)
-function isNonBuildInput(relPath) {
-  const segs = relPath.split('/')
-  if (segs.includes('__tests__')) return true
-  if (/\.(test|spec)\.[cm]?[jt]sx?$/.test(relPath)) return true
-  if (segs.some((s) => s === '.DS_Store' || s === 'Thumbs.db' || s === 'desktop.ini')) return true
-  return false
-}
-
-function collectSourceFiles(absDir, relBase, out) {
-  // readdirSync(...).sort(): 默认 UTF-16 码元序, 与 locale 无关 → 跨机器顺序稳定
-  for (const name of readdirSync(absDir).sort()) {
-    const abs = join(absDir, name)
-    const rel = relBase ? `${relBase}/${name}` : name
-    if (isNonBuildInput(rel)) continue
-    const st = lstatSync(abs)
-    if (st.isDirectory()) collectSourceFiles(abs, rel, out)
-    else if (st.isFile()) out.push({ rel, abs })  // 符号链接跳过 (Windows/本仓库无)
-  }
-}
-
-// 内容指纹: sha256(排序后的 [rel + '\0' + bytes + '\0'] 流) 前 12 hex。
-// 只读 SOURCE_INPUTS, 不碰 dist → 与 dist 提交次数、与 HEAD 全部解耦。
-function deriveSourceTreeHash() {
-  const files = []
-  for (const input of SOURCE_INPUTS) {
-    const abs = join(WEB_ROOT, input)
-    let st
-    try {
-      st = lstatSync(abs)
-    } catch {
-      throw new Error(`[vite] 构建源输入缺失: web/${input} — 源输入清单与仓库不符, fail-loud (类 20.133)`)
-    }
-    if (st.isDirectory()) collectSourceFiles(abs, input, files)
-    else if (st.isFile()) files.push({ rel: input, abs })
-  }
-  // 最终按相对路径全序排序 (码元比较, 不用 localeCompare —— locale 依赖排序不稳定)
-  files.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))
-  if (files.length === 0) {
-    throw new Error('[vite] 构建源输入清单收集到 0 个文件 — fail-loud (类 20.133)')
-  }
-  const hash = createHash('sha256')
-  for (const { rel, abs } of files) {
-    hash.update(rel, 'utf8')
-    hash.update('\0')
-    hash.update(readFileSync(abs))
-    hash.update('\0')
-  }
-  return hash.digest('hex').slice(0, 12)
-}
+// (isNonBuildInput / collectSourceFiles / deriveSourceTreeHash 已随清单一起提取到
+//  web/scripts/build-id.mjs — 本文件不再保留任何一份副本。)
 
 // 构建模式判定: `vite build` 的 argv 含 'build'; dev/serve/preview/vitest 不含。
 const IS_VITE_BUILD = process.argv.includes('build')
@@ -257,8 +193,8 @@ if (HAS_ENV_BUILD_TIMESTAMP) {
 
 // --- BUILD_ID: 源输入内容指纹 (语义见顶部注释) ---
 // 显式固定输入 VITE_BUILD_ID 提供时直接采用 (见上方通道注释), 不做内容哈希;
-// 未提供 → 照旧源输入内容哈希。
-const BUILD_ID = HAS_ENV_BUILD_ID ? ENV_BUILD_ID : deriveSourceTreeHash()
+// 未提供 → 照旧源输入内容哈希 (算法在 web/scripts/build-id.mjs, 单一真源)。
+const BUILD_ID = HAS_ENV_BUILD_ID ? ENV_BUILD_ID : deriveSourceTreeHash(WEB_ROOT)
 
 console.log(
   `[vite] BUILD_ID=${BUILD_ID} (${HAS_ENV_BUILD_ID ? '固定输入 VITE_BUILD_ID' : 'source-derived'}) ` +
