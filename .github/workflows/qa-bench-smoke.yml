@@ -98,7 +98,7 @@ jobs:
       # === 2026-10-06 缺陷 1 根因修复: build 步 (cold cache 6-12 min) 撞 job
       # timeout-minutes: 10 必超时 —— 近 10 次 run 全部死在 build 步被砍 (实测
       # run 37481598381: build 跑 9m35s 撞 10min job timeout, 14:45:43->14:55:18)。
-      # 照抄 qa-bench-ci.yml (D5) W67 第 48 步路线 2 形态: 改拉 build-image.yml
+      # 照抄 qa-bench-ci.yml (D5, 该文件 2026-10-07 已退役删除) W67 第 48 步路线 2 形态: 改拉 build-image.yml
       # 推到 GHCR 的预构建镜像 (D5 实测 pull 151s), buildx + build 两步
       # `if: false` 注释禁用 (保留注释回退形态, 不物理删 step)。
       # 回退路径: buildx/build 两步去掉 `if: false` + 删 Pull 步, 即回本地 buildx 模式。
@@ -149,7 +149,7 @@ jobs:
           # 2026-10-07 断点 3: postgres:16-alpine 无 vector 扩展二进制, 且
           # SKIP_DB_SETUP=1 短路了 app lifespan 的 CREATE EXTENSION → init_db
           # create_all 报 f405 (member.py voice_embedding 是 HALFVEC(192))。
-          # 照抄 D5 (qa-bench-ci.yml 111-162 行): 换 pgvector/pgvector:pg16
+          # 照抄 D5 (qa-bench-ci.yml 111-162 行, 该文件 2026-10-07 已退役删除): 换 pgvector/pgvector:pg16
           # 官方镜像 —— 注意它只带扩展二进制、从不自动执行 CREATE EXTENSION。
           docker run -d --name pg-test \
             --network qa-bench-net \
@@ -204,7 +204,7 @@ jobs:
           #   空 CLAUDE_API_KEY → SSE 恒出 error "Could not resolve authentication
           #   method..." → 200/200 题 stream_error_event 快败 0.0% (run
           #   37497190067 实测)。改 openai_compat + OpenRouter (secrets 三件),
-          #   与 D5 (qa-bench-ci.yml) 同一凭据链, 逐题进真实 LLM 形态。
+          #   与 D5 (qa-bench-ci.yml, 该文件 2026-10-07 已退役删除) 同一凭据链, 逐题进真实 LLM 形态。
           # 2026-10-07 第 2 修 (run 37503878084): 光切 LLM_OPENAI_COMPAT_* 不够 ——
           #   容器无 .env (Dockerfile 不拷贝), 聊天链路的**其余模型 env** 全落
           #   config.py 默认值 (thinking 三档=qwen2.5vl:7b / synthesis=mimo-v2.5 /
@@ -258,7 +258,7 @@ jobs:
           # 2026-10-07 断点 3: 默认 shell 是 bash -e 无 pipefail, `... | tail -N`
           # 的管道退出码取 tail (恒 0) → init_db 内部 f405 报错被掩绿成 step
           # success (run 37488667066 日志实测 2 处)。照抄 D5 (qa-bench-ci.yml
-          # 226 行) 先开 pipefail, 再建表。
+          # 226 行, 该文件 2026-10-07 已退役删除) 先开 pipefail, 再建表。
           set -o pipefail
           # 用 Base.metadata.create_all 建表 + seed (init_db.py 同时插入 24 members 等)
           docker exec -e SKIP_DB_SETUP=1 \
@@ -301,7 +301,7 @@ jobs:
           python gen780.py --output questions_780.jsonl --schema-only
           wc -l questions_780.jsonl
 
-      # === 2026-10-07 断点 2: 照抄 D5 (qa-bench-ci.yml W67 第 42 步, 421-458 行) Login 模式 ===
+      # === 2026-10-07 断点 2: 照抄 D5 (qa-bench-ci.yml W67 第 42 步, 421-458 行, 该文件同日已退役删除) Login 模式 ===
       # 根因: 下方三个 runner/benchmark 步原用 QA_TOKEN=${{ secrets.QA_TOKEN }} +
       #   --token "${QA_TOKEN:-mock}" —— secret 为空时 fallback "mock" → app 401
       #   无效的认证凭证 → 双 runner ERROR=100 快败 (run 37488667066 实测)。
@@ -343,8 +343,9 @@ jobs:
 
       # === W71 B-5: smoke 200 题拆 2 step (主测 100 ≤ 2min + 抽测 100 ≤ 3min) 避免 5min timeout ===
       # W69 plan 备注 LOW 缺口: 原单次 5min 跑全 200 题不现实. 拆分主测/抽测两段, 各自 offset 定位.
-      # 2026-10-06 缺陷 2: 加 id: smoke_main —— 门禁步 outcome 守卫要读本步
-      # ${{ steps.smoke_main.outcome }}, 防止 runner 被砍时门禁读入库旧 results.json。
+      # 2026-10-06 缺陷 2: 加 id: smoke_main —— 原门禁步 outcome 守卫曾读本步
+      # ${{ steps.smoke_main.outcome }} 防止 runner 被砍时读入库旧 results.json;
+      # 门禁已于 2026-10-07 退役 (fa66f4f66 仅报数), 守卫随之删除, id 保留备用。
       - name: Run 200 题 smoke — 主测 100 题 (against test DB 8001, ≤ 2min)
         id: smoke_main
         working-directory: tests/qa-bench
@@ -369,8 +370,8 @@ jobs:
             exit 1
           fi
 
-      # 2026-10-06 缺陷 2: 加 id: smoke_sample —— 门禁步 outcome 守卫要读
-      # ${{ steps.smoke_sample.outcome }}, 同上。
+      # 2026-10-06 缺陷 2: 加 id: smoke_sample —— 原门禁步 outcome 守卫同上;
+      # 守卫已随门禁 2026-10-07 退役删除 (fa66f4f66), id 保留备用。
       - name: Run 200 题 smoke — 抽测 100 题 (against test DB 8001, ≤ 3min)
         id: smoke_sample
         working-directory: tests/qa-bench
