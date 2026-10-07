@@ -538,33 +538,24 @@ export default defineConfig({
       }
     }
   },
-  // webhint cache-busting 兼容：把 chunk/asset 哈希从默认 base64 改成 16 进制
-  // 默认 hash: 'Bd9Mi5i6' (base64url, A-Za-z0-9_-) 被 webhint 内置 [0-9a-f]+ 正则拒绝
-  // hashCharacters: 'hex' 后产出 'bd9a3e21' 这种全小写 16 进制，webhint 通过
+  // ===== 2026-10-07 重复 build: 键合并 (收尾规划 §4.11 登记项) =====
+  // 本对象历史上有两个 `build:` 键 —— JS 对象字面量后者覆盖前者 (esbuild 加载时
+  // 报 duplicate-object-key 警告, 指向 568 行覆盖 549 行), 第一块**从未生效**:
+  //   块1 (死): rollupOptions.output.hashCharacters='hex' (webhint 十六进制 hash 兼容)
+  //             + manualChunks (element-plus-desktop / nutui-mobile / echarts /
+  //             paper-adapter 独立 chunk 切分)
+  //   块2 (活): cssMinify / cacheDir —— 下方合并结果 = 块2, 行为与合并前逐键一致
+  // 死块实证 (2026-10-07 实测): 入库 dist 365 文件中 357 个文件名含大写字母
+  // (= 默认 base64 字符集, hex 应全小写); 且 0 个 element-plus-desktop /
+  // nutui-mobile / paper-adapter 命名 chunk。
   //
-  // PR #2: 独立 chunk 切分（桌面/移动物理隔离）
-  // - element-plus-desktop: 桌面组件库，所有 el-* 组件共享此 chunk
-  // - nutui-mobile: 移动组件库，所有 nut-* 组件共享此 chunk（桌面首屏不下载）
-  // - echarts: 大型图表库独立 chunk（按需懒加载）
-  build: {
-    rollupOptions: {
-      output: {
-        hashCharacters: 'hex',
-        // PR #2: 独立 chunk 切分（桌面/移动物理隔离）
-        // Vite 8 / rolldown 要求 manualChunks 为函数而非对象
-        manualChunks(id) {
-          if (id.includes('node_modules/element-plus/')) return 'element-plus-desktop'
-          if (id.includes('node_modules/@nutui/nutui/')) return 'nutui-mobile'
-          if (id.includes('node_modules/echarts/')) return 'echarts'
-          // v28 step 101 fix: paperAdapter.js 152KB 大文件，Vite 默认 treeshake
-          //   把整个文件消除（named import 无 side effect）。强制独立 chunk 避免被消除
-          if (id.includes('src/utils/paperAdapter') || id.includes('src/utils/chemFormat')) {
-            return 'paper-adapter'
-          }
-        },
-      },
-    },
-  },
+  // ⚠️ 下列两项曾因重复键静默失效, **有意不启用** (合并时按当前生效行为丢弃):
+  //   - rollupOptions.output.hashCharacters: 'hex'
+  //   - rollupOptions.output.manualChunks(...)
+  // 理由: 二者从未在生产跑过; manualChunks 一旦启用会改变全部 chunk 切分, 而生产
+  // chunk 图无任何测试覆盖 (视觉/无障碍走 dev server, vitest 不测 rollup), 启用 =
+  // 发布未经验证的产物。**启用需单独立项并配套 vite preview 冒烟验证**;
+  // hashCharacters 改 hash 字符集会全量 rename dist, 同样需下游缓存引用一并验证。
   build: {
     cssMinify: false,  // W-N 2026-08-14 保留 :hover 规则（esbuild minify 会错误优化掉）
     cacheDir: '',  // 禁用 build 缓存，强制每次重编译
