@@ -431,48 +431,43 @@ jobs:
           # 注: 单 docker 配置下 3 mode 走同一后端, 实际三档区分由 THINKING_MODE env + 后端 thinking_config 调度
           # 验证: deep 模式应该 thinking_tokens_used > 0, fast 模式延迟 < balanced < deep
 
-      - name: Fail if pass_rate < 80%
+      # 2026-10-07 门禁退役 (用户拍板选项 1, 依据收尾计划 §4.15 结构性恒红):
+      # smoke 与 D5 读同一套过时口径题库 (200 题切片 0 条小写期望 / 98.5% 大写
+      # 过时期望), intent_mismatch 虽是 WARN 但 PASS 要求零 issue => 80% 门禁
+      # 结构性恒红、任何模型不可达, 且每次 push 都红 = 永久红灯训练无视。
+      # 原 `Fail if pass_rate < 80%` 判红步整步替换为仅报数 summary 步 ——
+      # 探针价值保留 (真 LLM 应答形态 / 工具调用 / Login / DB / 栈健康 /
+      # runner 可执行性); 上游 runner 真挂了 job 自然红, 轮不到本步兜底,
+      # 故本步恒 exit 0, 不读 outcome 守卫、不判阈值。
+      - name: Smoke pass_rate summary (门禁已退役, 仅报数不判红)
         if: always()
         working-directory: tests/qa-bench
         run: |
-          # 2026-10-06 缺陷 2: runner outcome 守卫 (在读 results.json 之前)。
-          # 根因: results/smoke/results.json 是 git 入库的历史文件 (2026-06-30,
-          # 33.3%), runner 步被砍/跳过时旧文件仍在 checkout 里, 门禁直接读会
-          # 打出六月旧数 (run 37478964142 实锤: runner 全 skipped 照样打印
-          # 33.3%)。先判两个 runner step 的 outcome, 非 success 一律 fail-loud,
-          # 不读陈旧数据。
-          if [ "${{ steps.smoke_main.outcome }}" != "success" ] || [ "${{ steps.smoke_sample.outcome }}" != "success" ]; then
-            echo "::error file=tests/qa-bench/qa-bench-smoke.yml::Smoke gate: runner 未执行或失败 (主测=${{ steps.smoke_main.outcome }}, 抽测=${{ steps.smoke_sample.outcome }}), 门禁拒绝读取入库陈旧 results.json"
-            exit 1
-          fi
-          # fail-loud: 上游 bench 步崩掉时 results.json 不会生成, 原 `if [ -f ]; then ... fi`
-          # 守卫会让本门禁静默 exit 0 变绿 (恒绿形态)。缺失必须红。
-          if [ ! -f results/smoke/results.json ]; then
-            echo "::error file=tests/qa-bench/results/smoke/results.json::Smoke gate: results.json 未生成 (上游 bench 步失败或中断), 门禁拒绝静默通过"
-            exit 1
-          fi
-          PASS_RATE=$(python3 << 'PYEOF'
+          # 2026-10-07 门禁退役（用户拍板，依据收尾计划 §4.15 结构性恒红）—— 本步仅报数
+          echo "2026-10-07 门禁退役（用户拍板，依据收尾计划 §4.15 结构性恒红）—— 本步仅报数"
+          # 恒 exit 0: 关闭默认 bash -e 短路, 任何读取/解析失败都只报数不判红
+          set +e
+          if [ -f results/smoke/results.json ]; then
+            PASS_RATE=$(python3 << 'PYEOF'
           import json
-          with open('results/smoke/results.json') as f:
+          # encoding 显式给 utf-8: results.json 由 runner 以 ensure_ascii=False
+          # UTF-8 写出, locale 编码 (Windows GBK 等) 读中文字段会炸
+          with open('results/smoke/results.json', encoding='utf-8') as f:
               d = json.load(f)
           total = d['summary']['total']
           pass_ = d['summary']['pass']
           print(round(pass_ / max(total, 1) * 100, 1))
           PYEOF
           )
-            echo "Smoke 通过率: ${PASS_RATE}%"
-            # 带引号 heredoc 不展开 ${PASS_RATE} => 经 env 传值 (前缀赋值在 heredoc 展开前生效)
-            PASS_RATE="${PASS_RATE}" python3 << 'PYEOF'
-          import os
-          import sys
-          pass_rate = float(os.environ['PASS_RATE'])
-          threshold = 80.0
-          if pass_rate < threshold:
-              print(f'❌ 通过率 {pass_rate}% < 阈值 {threshold}%, PR 阻断')
-              sys.exit(1)
-          else:
-              print(f'✓ 通过率 {pass_rate}% >= 阈值 {threshold}%, PR 通过')
-          PYEOF
+            if [ -n "${PASS_RATE}" ]; then
+              echo "Smoke 通过率: ${PASS_RATE}%"
+            else
+              echo "结果文件无法解析（仅报数不判红, 上游失败 job 自然红）"
+            fi
+          else
+            echo "结果文件缺失（上游步骤应已报红）"
+          fi
+          exit 0
 
       - name: Upload thinking mode benchmark report
         if: always()
