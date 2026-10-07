@@ -1,6 +1,9 @@
 # Vision MCP Server Docker 镜像
-# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
-FROM python:3.11.15-slim
+# base image bumped for L-8 image-scan CVE zeroing (2026-10-07; prior pin 2026-07-29 W86-C-1)
+FROM python:3.11.17-slim
+
+# L-8 (2026-10-07): 纯 OS 层安全升级 (debian-security 修复), 不动下方 pip pin。
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

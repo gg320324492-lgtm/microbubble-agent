@@ -1,4 +1,6 @@
 # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+# L-8 (2026-10-07): builder node:20.19.6 未动 (与 CI Node 20 同大版本; builder 阶段不进
+# 扫描终镜像, 无 gate 收益, 避免无锁 npm install 重建风险); nginx 终镜像升补丁 + apk upgrade。
 FROM node:20.19.6-alpine as builder
 
 WORKDIR /app
@@ -21,7 +23,10 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-FROM nginx:1.31.2-alpine
+# L-8 (2026-10-07): nginx 终镜像升补丁 (1.31.2→1.31.6) + 纯 OS 层 apk upgrade 清 alpine CVE。
+FROM nginx:1.31.6-alpine
+
+RUN apk upgrade --no-cache
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf

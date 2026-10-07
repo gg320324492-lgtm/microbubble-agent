@@ -1,7 +1,9 @@
-# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
-FROM postgres:16.14-alpine
+# base image bumped for L-8 image-scan CVE zeroing (2026-10-07; prior pin 2026-07-29 W86-C-1)
+FROM postgres:16.15-alpine
 
-RUN apk add --no-cache \
+# L-8 (2026-10-07): apk upgrade = 纯 OS 层安全升级 (alpine 仓库修复 libcrypto3/util-linux), 不动任何 pin。
+RUN apk upgrade --no-cache && \
+    apk add --no-cache \
     gcc \
     make \
     libc-dev \
@@ -18,3 +20,13 @@ RUN apk add --no-cache \
     && cd / \
     && rm -rf /tmp/pgvector \
     && apk del gcc make perl llvm21 clang21 libc-dev
+
+# L-8 (2026-10-07): base 镜像自带的 gosu 1.19 用 go1.24.6 编译 (22 条 Go stdlib CVE,
+# 上游 gosu 无新 release 可换, postgres 镜像上游也未重编)。entrypoint 唯一用法是
+# `gosu postgres <cmd>` (docker-entrypoint.sh:343) —— 换成 alpine 官方包 su-exec
+# (C 实现, 无 Go 栈, 同为 setuid 降权工具, 语法兼容), entrypoint 就地改写。
+# 注意: gosu 必须**真删除** (whiteout), 不能用 symlink 顶替 —— trivy 的分层合并
+# 对 "上层 symlink 覆盖下层同名 ELF" 不生效, 会继续读到下层 Go ELF 报 22 条 CVE (实测)。
+RUN rm -f /usr/local/bin/gosu /usr/local/bin/su-exec && \
+    apk add --no-cache su-exec && \
+    sed -i 's/exec gosu /exec su-exec /' /usr/local/bin/docker-entrypoint.sh

@@ -1,5 +1,5 @@
-# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
-FROM python:3.11.15-slim-bookworm
+# base image bumped for L-8 image-scan CVE zeroing (2026-10-07; prior pin 2026-07-29 W86-C-1)
+FROM python:3.11.17-slim-bookworm
 
 # 阿里云镜像源 (bookworm-security 路径已正确支持)
 RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
@@ -8,7 +8,9 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
     printf 'deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
 
 # Install system dependencies (with retry for transient 502 Bad Gateway)
-RUN apt-get update && apt-get install -y --fix-missing \
+# L-8 (2026-10-07): apt-get upgrade = 纯 OS 层安全升级 (debian-security 修复), 不动 pip pin;
+# 主/回退两个分支都带上, 保证任一分支走到 OS 库都是最新。
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing \
     ffmpeg \
     libavformat-dev \
     libavcodec-dev \
@@ -18,7 +20,7 @@ RUN apt-get update && apt-get install -y --fix-missing \
     libswscale-dev \
     libswresample-dev \
     pkg-config \
-    || (apt-get update && apt-get install -y --fix-missing --no-install-recommends \
+    || (apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing --no-install-recommends \
         ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
         libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
         pkg-config) \

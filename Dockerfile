@@ -1,5 +1,5 @@
-# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
-FROM python:3.11.15-slim-bookworm
+# base image bumped for L-8 image-scan CVE zeroing (2026-10-07; prior pin 2026-07-29 W86-C-1)
+FROM python:3.11.17-slim-bookworm
 
 # 阿里云镜像源 (bookworm-security 路径已正确支持)
 RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
@@ -10,7 +10,22 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
 WORKDIR /app
 
 # Install system dependencies (with retry for transient 502)
-RUN apt-get update && apt-get install -y --fix-missing \
+# L-8 (2026-10-07): apt-get upgrade = 纯 OS 层安全升级 (debian-security 修复),
+# 不触碰任何 pip/requirements pin; 紧跟 update、在 install 前执行。
+# L-8 (2026-10-07) 补强: archives cache mount + Acquire::Retries —— 与下方 pip cache mount
+# 同源理由 (S3.9): 本地/网络抖动时大包 (gcc-12/libllvm15/libreoffice) 连接中途 reset,
+# 重试从零下; cache mount 让已完成 .deb 跨构建保留, 单次 RUN 内 Acquire::Retries=5 兜底。
+# docker-clean 的 Post-Invoke 会把 .deb 清出 cache, 必须在同层删掉; cache mount 不进镜像层。
+# lists 同挂 cache: apt-get update 的 12MB Packages 索引同样受连接中断影响, 挂载后跨构建复用
+# (索引只存 mount, 不进镜像层; 故尾部原 rm -rf /var/lib/apt/lists/* 删除 —— 镜像层不含 lists 不变)。
+# By-Hash off (2026-10-07 L-8): 镜像源 by-hash 路径对大索引限速 (实测 50MB plain by-hash
+# 滴流 ~120kB/s, apt 60s 超时 → Ign 死循环); 关闭后走 plain→404→Packages.gz 正常路径, 传量更小。
+RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
+        --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-retries && \
+    echo 'Acquire::By-Hash "false";' > /etc/apt/apt.conf.d/81-byhash && \
+    apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing \
     ffmpeg \
     libavformat-dev \
     libavcodec-dev \
@@ -22,7 +37,7 @@ RUN apt-get update && apt-get install -y --fix-missing \
     libpq-dev \
     gcc \
     pkg-config \
-    && (apt-get install -y --no-install-recommends libreoffice-impress libreoffice-writer poppler-utils fonts-noto-cjk         || (apt-get update && apt-get install -y --no-install-recommends             libreoffice-impress libreoffice-writer poppler-utils fonts-noto-cjk))     && rm -rf /var/lib/apt/lists/*
+    && (apt-get install -y --no-install-recommends libreoffice-impress libreoffice-writer poppler-utils fonts-noto-cjk         || (apt-get update && apt-get install -y --no-install-recommends             libreoffice-impress libreoffice-writer poppler-utils fonts-noto-cjk))
 
 # 安装Python依赖
 # PyPI 官方源（清华源/aliyun 同步 torch 2.12+ 慢，2026-06-24 ST 5.6.0 升级）
