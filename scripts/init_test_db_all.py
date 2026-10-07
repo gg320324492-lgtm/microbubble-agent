@@ -1,8 +1,8 @@
 """一键初始化 test DB — 合并 init_db + ensure_test_user 节省 2× import overhead.
 
-W67 第 41 步 (Agent 21): qa-bench-ci.yml 之前用 3 个 docker exec 跑
-init_db.py + alembic stamp head + ensure_test_user.py, 每次都重新加载 ~50+ 模型文件.
-合并到 1 个 Python 进程可节省 ~7-8s × 2 = 14-16s.
+W67 第 41 步 (Agent 21): qa-bench-ci.yml (D5 门禁, 已于 2026-10-07 退役) 之前用
+3 个 docker exec 跑 init_db.py + alembic stamp head + ensure_test_user.py,
+每次都重新加载 ~50+ 模型文件. 合并到 1 个 Python 进程可节省 ~7-8s × 2 = 14-16s.
 
 Usage:
     python scripts/init_test_db_all.py [--with-alembic-stamp]

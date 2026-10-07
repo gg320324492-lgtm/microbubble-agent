@@ -19,7 +19,8 @@ name: RAG Framework CI
 #     alembic heads 只读脚本目录, 不加载 env.py, 不连 DB.
 #
 # 注意 (对齐现有 workflow 风格: actions/checkout@v4 + actions/setup-python@v5
-#   + permissions: contents: read, 参考 qa-bench-smoke.yml / qa-bench-ci.yml):
+#   + permissions: contents: read, 参考 qa-bench-smoke.yml; qa-bench-ci.yml D5
+#   门禁已于 2026-10-07 退役):
 #   - 不在此 workflow 内改任何 app/ 文件; 不动 alembic; 不改现有 workflow.
 
 on:

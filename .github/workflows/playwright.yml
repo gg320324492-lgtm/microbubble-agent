@@ -8,7 +8,7 @@ name: Playwright Tests
 #           合并成 1 job = 失败时分不清 a11y 还是 visual 真出 bug, debug 困难.
 #           分 2 job = PR 视图清晰看到哪个维度红了, 单独 retry 也方便.
 #   - 触发 paths 仅 web/** + .github/workflows/playwright.yml, 避免后端 PR
-#     误触发 (后端 PR 应跑 qa-bench-ci.yml 而非此 workflow).
+#     误触发 (后端 PR 原走 qa-bench-ci.yml D5 门禁; 该门禁已于 2026-10-07 退役).
 #   - visual job 的 "Update snapshots (only on main push)" 步骤已于 2026-10-03
 #     删除 (它让门禁拿"自己刚写的基线"比自己, 无判别力); 基线只由人工 review
 #     后的本地提交产生。
@@ -125,7 +125,8 @@ jobs:
           # W98 (2026-07-31): CI 空库 app-test 无 xiaoqi_testbot → login AUTH_ERROR →
           #   injectAuth 注入无效 token → 所有页面被 router 守卫带去看 dashboard,
           #   a11y baseline 记录的 25 个全 0 violations 是假绿 (X-18 真登录态守卫).
-          #   复用 qa-bench-ci.yml 同一模式: 在 app-test 容器内跑 init_test_db_all.py
+          #   复用原 qa-bench-ci.yml (D5 门禁, 已于 2026-10-07 退役) 同一模式:
+          #   在 app-test 容器内跑 init_test_db_all.py
           #   (create_all + seed 24 members + ensure_test_user 幂等建号).
           #   init_db.py 读 settings.DATABASE_URL (容器默认指向 pg-test, compose 内网直连).
           #

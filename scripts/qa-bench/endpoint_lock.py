@@ -5,7 +5,8 @@
 锁定契约 (CI 守门):
   - LLM_BACKEND=mimo (锁定, 不允许切换到 ollama/anthropic/openai)
   - EMBEDDING_MODEL=text2vec-base-chinese (锁定)
-  - RERANK_MODEL=BAAI/bge-reranker-v2-m3 (锁定, W67 D5 gate 实战)
+  - RERANK_MODEL=BAAI/bge-reranker-v2-m3 (锁定, W67 D5 gate 实战;
+    D5 1000 题门禁已于 2026-10-07 退役, 本锁定保留为 r10 replay 前置)
   - API_BASE_URL 不可指向 localhost (防测-生产混淆)
 
 用法:
@@ -31,7 +32,7 @@ LOCKED_CONFIG: dict[str, object] = {
     "LLM_BACKEND": {
         "allowed": ["mimo"],
         "forbidden": ["ollama", "anthropic", "openai", "local-mock"],
-        "reason": "W67 D5 gate 真跑 mimo cloud, 切换破坏 baseline 对照",
+        "reason": "W67 D5 gate 真跑 mimo cloud, 切换破坏 baseline 对照 (D5 门禁已于 2026-10-07 退役, 锁定保留为 r10 replay 前置)",
     },
     "EMBEDDING_MODEL": {
         "allowed": ["text2vec-base-chinese"],

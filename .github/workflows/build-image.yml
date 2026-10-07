@@ -2,11 +2,13 @@ name: "Build app-test image (W67 step 48 路线 2: pre-built)"
 
 # W67 第 48 步 (2026-07-23): GHCR pre-built image 跳过 CI build
 # - 每次 push to main (或 Dockerfile 改) 自动 build image 推到 ghcr.io
-# - qa-bench-ci.yml 用 `docker pull` 直接拉 pre-built image (1-2 min 跨 run cache hit)
+# - qa-bench-smoke.yml / playwright.yml 用 `docker pull` 直接拉 pre-built image (1-2 min 跨 run cache hit;
+#   qa-bench-ci.yml (D5 1000 题门禁) 已于 2026-10-07 退役)
 # - 替代每 CI run 重 build app-test image (6-12 分钟 cold cache)
 #
 # Image 名称约定: ghcr.io/<OWNER>/microbubble-agent:app-test-latest
-# qa-bench-ci.yml Step 6 用 `docker pull` + `docker tag ... app-test:ci` 复用现有 step 7 启动逻辑.
+# qa-bench-smoke.yml 用 `docker pull` + `docker tag ... app-test:ci` 复用启动逻辑
+# (qa-bench-ci.yml Step 6 同模式, 该 D5 门禁已于 2026-10-07 退役).
 
 on:
   push:
@@ -59,8 +61,9 @@ jobs:
     #
     # Measure A (explicit cache scope on cache-from/cache-to) is deliberately NOT done
     #   -- this is intentional, not an oversight. A scope name could collide with the
-    #   implicit buildkit cache shared by qa-bench-ci.yml / qa-bench-smoke.yml /
-    #   playwright.yml (they build this same Dockerfile); mutual eviction would be
+    #   implicit buildkit cache shared by qa-bench-smoke.yml /
+    #   playwright.yml (they build this same Dockerfile; qa-bench-ci.yml D5 门禁已于
+    #   2026-10-07 退役); mutual eviction would be
     #   hard to predict. mode=max already keeps all intermediate layers, and the
     #   Dockerfile cache mount covers the real bottleneck, so scope is risk > benefit.
     timeout-minutes: 60
