@@ -149,6 +149,9 @@ import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useNotificationsStore } from '@/composables/useNotifications'
+// 墙钟单一入口: 60s tick, 让问候语/日期能跨小时、跨午夜自动重算
+// (原先直接 dayjs() 无响应式依赖, computed 求值一次即 latch 在首屏)
+import { useNow } from '@/composables/useNow'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 
 const router = useRouter()
@@ -168,8 +171,10 @@ const recentTasks = ref([])
 
 const username = computed(() => userStore.username || '研究员')
 
+const { now } = useNow(60000)
+
 const greeting = computed(() => {
-  const hour = dayjs().hour()
+  const hour = dayjs(now.value).hour()
   if (hour < 6) return '夜深了'
   if (hour < 12) return '早上好'
   if (hour < 18) return '下午好'
@@ -177,7 +182,7 @@ const greeting = computed(() => {
 })
 
 const currentDate = computed(() => {
-  return dayjs().format('YYYY年M月D日 dddd')
+  return dayjs(now.value).format('YYYY年M月D日 dddd')
 })
 
 // 快捷入口

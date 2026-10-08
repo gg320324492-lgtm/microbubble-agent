@@ -163,7 +163,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -172,6 +172,8 @@ import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useIsMobile } from '@/composables/useIsMobile'
+// 墙钟单一入口 (时刻牌 / 跨页统一取时), 20s tick, 卸载自动清 timer
+import { useNow } from '@/composables/useNow'
 import MobileTabBar from '@/components/mobile/TabBar.vue'
 // G 稿「控制台档案」16px 图标精灵 (MainLayout 挂载一次, 桌面侧栏 <use> 引用)
 import LayoutIconSprite from '@/components/LayoutIconSprite.vue'
@@ -230,8 +232,7 @@ const userRole = computed(() => userStore.userRole)
 const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
 // 2026-09-04 G 稿顶栏: mono 时刻牌 (NOW · HH:MM · WED, 20s tick) + 标本牌身份角标
-const now = ref(new Date())
-let _clockTimer = null
+const { now } = useNow(20000)
 const _WD = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const clockChip = computed(() => {
   const d = now.value
@@ -242,8 +243,6 @@ const roleChip = computed(() => (
   { 导师: 'ADVISOR', 博士后: 'POSTDOC', 博士: 'PHD', 硕士: 'MASTER', 本科生: 'UGRAD', 校友: 'ALUMNI', 成员: 'MEMBER' }[userRole.value]
   || String(userRole.value || '').toUpperCase() || 'MEMBER'
 ))
-onMounted(() => { _clockTimer = setInterval(() => { now.value = new Date() }, 20000) })
-onBeforeUnmount(() => { if (_clockTimer) clearInterval(_clockTimer) })
 // 2026-09-05 角色扁平化: 全员等权, KB 监控等管理入口不再按角色隐藏 (登录即可见)
 const isAdmin = computed(() => userStore.isAdmin)
 

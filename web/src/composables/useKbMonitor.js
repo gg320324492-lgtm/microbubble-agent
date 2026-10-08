@@ -19,6 +19,7 @@
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { useNow } from './useNow'
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000  // 5 分钟
 const POLL_TIMEOUT_MS = 30 * 1000       // 30 秒 (W2 T4 P2-C 2026-07-20: 后端慢响应防御)
@@ -29,6 +30,12 @@ export function useKbMonitor() {
   const error = ref(null)
   const loading = ref(false)
 
+  // 墙钟统一入口 (useNow): intervalMs=0 → 不起定时器, 完全跟随 poll 节奏。
+  // lastUpdate 的语义是"KB 数据新鲜度"—— 只在 poll 成功那一刻打点, 不是每 5min 刷新一次,
+  // 所以不能挂 useNow(300000) 直接读 now.value (那会让失败轮次也把时间推前, 语义变味)。
+  // 正确做法: 成功分支里先 tick() 让 now.value 取当前时刻, 再把它记进 lastUpdate。
+  const { now, tick } = useNow(0)
+
   let pollTimer = null
 
   async function fetchSummary() {
@@ -38,7 +45,8 @@ export function useKbMonitor() {
       // message='timeout of 30000ms exceeded' → 进 catch → 跳过本轮, 下个 5min tick 自然重试
       const res = await axios.get('/api/v1/knowledge/auto-intake-summary', { timeout: POLL_TIMEOUT_MS })
       summary.value = res.data
-      lastUpdate.value = new Date()
+      tick()                          // 成功这一刻的墙钟值 (而非上次 tick 的时刻)
+      lastUpdate.value = now.value    // tick() 每次重新赋值, lastUpdate 持有的 Date 不会被后续 tick 改动
       error.value = null
     } catch (e) {
       // 超时 / 网络错 / 5xx 统一进 catch, 保留上次 data (W5 T5.4 教训)

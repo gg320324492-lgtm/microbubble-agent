@@ -16,12 +16,19 @@
 
 import { ref } from 'vue'
 import axios from 'axios'
+import { useNow } from './useNow'
 
 export function useRAGEval() {
   const reports = ref([])
   const loading = ref(false)
   const error = ref(null)
   const lastUpdate = ref(null)
+
+  // 墙钟统一入口 (useNow): intervalMs=0 → 不起定时器, 完全跟随取数节奏。
+  // lastUpdate 的语义是"报告列表新鲜度"—— 只在 listReports 成功那一刻打点,
+  // 不是定时更新, 所以不能挂 useNow(pollInterval) 直接读 now.value。
+  // 正确做法: 成功分支里先 tick() 让 now.value 取当前时刻, 再把它记进 lastUpdate。
+  const { now, tick } = useNow(0)
 
   async function listReports(limit = 10) {
     loading.value = true
@@ -31,7 +38,8 @@ export function useRAGEval() {
         params: { limit },
       })
       reports.value = resp.data?.reports || []
-      lastUpdate.value = new Date()
+      tick()                        // 成功这一刻的墙钟值 (而非上次 tick 的时刻)
+      lastUpdate.value = now.value  // tick() 每次重新赋值, lastUpdate 持有的 Date 不会被后续 tick 改动
     } catch (e) {
       error.value = e?.response?.data?.detail || e.message
     } finally {
