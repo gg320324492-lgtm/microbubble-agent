@@ -50,9 +50,14 @@ class Meeting(Base, TimestampMixin):
 
     # 录音机模式（2026-06-04 重构）
     audio_url = Column(String(500), nullable=True)           # MinIO 录音路径
-    audio_duration = Column(Integer, nullable=True)           # 录音时长（秒）
-    recording_started_at = Column(DateTime, nullable=True)    # 开始听会时间
-    recording_ended_at = Column(DateTime, nullable=True)      # 结束听会时间
+    audio_duration = Column(Integer, nullable=True)            # 录音时长（秒）
+    recording_started_at = Column(DateTime, nullable=True)     # 开始听会时间
+    recording_ended_at = Column(DateTime, nullable=True)       # 结束听会时间
+    # 2026-10-08 P0-1 (会议 255 事故): 前端 pagehide/sendBeacon 通知后端的
+    # "页面离开" 事件落库点。cleanup 看到 presence < 30min 内的会议即使超时也跳过。
+    # 不替代 Redis heartbeat key —— 那个是 "心跳仍在 = 录音在跑" 的强信号;
+    # recording_presence_at 是 "页面已切走, 可能是孤儿也可能是用户切后台" 的弱信号。
+    recording_presence_at = Column(DateTime, nullable=True)
 
     # 2026-07-12 死代码清理: 删 5 个 audio_archive_* 列 (audio_archive_service.py 孤儿, 列 write-only)
     # alembic 059_drop_audio_archive_columns.py DROP COLUMN IF EXISTS

@@ -56,14 +56,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useChunkedRecorder } from '@/composables/useChunkedRecorder'
-import { sendRecordingHeartbeat } from '@/composables/useMeetingAudioUpload'
+import { ensureHeartbeat, stopHeartbeat as stopModuleHeartbeat, beat as beatModule } from '@/composables/useRecordingHeartbeat'
 import UploadStatusBadge from '@/components/UploadStatusBadge.vue'
 
 const props = defineProps({
@@ -122,37 +122,54 @@ function formatTime(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-// ===== 录音心跳（2026-09-15 P0）=====
+// ===== 录音心跳（2026-09-15 P0, 2026-10-08 P0-1 升级为模块级单例）=====
 // 后端 orphan_meeting_cleanup 每 10 分钟扫一次"录音超 30min 未 stop"的会议并标 error。
-// 事故：会议 250 录了 1h40m，20:14:58 被误标 error，但用户 21:18 才停止 → 录音全丢。
-// 现在录音期间每 60s 上报一次心跳（Redis TTL 300s），心跳仍在的会议会被清理任务跳过。
-let heartbeatTimer = null
+// 事故链：
+//   - 2026-09-14 会议 250（杜同贺 / iPhone）：09-15 修复加了心跳，但 60s interval 在 #207 完整流程下有效
+//   - 2026-10-08 会议 255（user 58 / iOS 18.7 Safari）：发现 09-15 心跳绑 UI 组件，恢复路径
+//     （从其他页面跳回 /meetings/room）直接调 useGlobalRecorder().start()，**绕过**
+//     AudioRecorder.handleStart() → 心跳从未启动 → 38min 录音全程 0 心跳 → orphan 误判 error
+//   - 修复：心跳从组件局部提升为模块级单例（web/src/composables/useRecordingHeartbeat.js），
+//     与 useGlobalRecorder 同寿命，**不**绑 UI 组件生命周期。
+//
+// 调用约定（任务书「重要陷阱 1」）：
+//   - 组件 unmount **不**调用 stopModuleHeartbeat —— 模块级心跳应与录音会话同寿
+//   - 只有 stop-recording / cancel-recording / merge 完成（doStop / handleCancel）才停
+//   - onMounted 内补一次 ensureHeartbeat（堵死 A-6 缺口：组件重建后无心跳）
+
+let iOS5sWarned = false  // P1-1: iOS 5s 无分片提示只弹一次
+let iOS5sWarnTimer = null
 
 function beatHeartbeat() {
-  const mid = meetingIdRef.value
-  if (!mid) return
-  sendRecordingHeartbeat(mid)
+  // 旧组件局部入口保留 — 现在转发到模块级 beat，确保旧路径不破
+  beatModule()
 }
 
+// 启动模块级心跳（启动一次 beat + 60s interval）
+// 重复调幂等 —— ensureHeartbeat 内部有 currentMeetingId !== meetingId 守卫
 function startHeartbeat() {
-  stopHeartbeat()
-  beatHeartbeat()
-  heartbeatTimer = setInterval(beatHeartbeat, 60000)
+  ensureHeartbeat(meetingIdRef.value)
 }
 
+// 停止模块级心跳（**仅**录音真正结束时调用，组件卸载不调）
 function stopHeartbeat() {
-  if (heartbeatTimer) {
-    clearInterval(heartbeatTimer)
-    heartbeatTimer = null
+  stopModuleHeartbeat()
+  if (iOS5sWarnTimer) {
+    clearTimeout(iOS5sWarnTimer)
+    iOS5sWarnTimer = null
   }
 }
 
 // meetingId 是父组件异步创建的，到位后立刻补一次心跳（不等下一个 60s 周期）
+// 2026-10-08 修复：原来 `if (mid && isActive()) beatHeartbeat()`，
+// 但恢复路径时序让 isActive() 在 meetingId 变化时恒为 false → 这条 watch 永远不发
+// 新方案：无条件 ensureHeartbeat —— 让模块级守护接管 A-6 缺口
 watch(meetingIdRef, (mid) => {
-  if (mid && isActive()) beatHeartbeat()
+  if (mid) ensureHeartbeat(mid)
 })
 
-onUnmounted(stopHeartbeat)
+// 注意：onUnmounted **不**调 stopHeartbeat（模块级心跳应继续跑）。
+// 录音真正结束由 doStop / handleCancel 主动 stopHeartbeat。
 
 // ===== 初始化 =====
 
@@ -162,15 +179,57 @@ onMounted(() => {
   if (state.value === 'stopped' || (state.value !== 'idle' && !sessionStorage.getItem('recording_meeting_id'))) {
     reset()
   }
+  // 2026-10-08 P0-1 修复 A-6: 组件重建 / 恢复时若无心跳, 立即补一次
+  // —— 之前 onMounted 从不调 startHeartbeat, 导致组件重建路径心跳永久丢失
+  if (isActive() && meetingIdRef.value) {
+    ensureHeartbeat(meetingIdRef.value)
+  }
 })
 
 // ===== 操作 =====
+
+/**
+ * P1-1 (2026-10-08): 检测是否为 iOS Safari（UA 含 iPhone + Safari 且不包含 Chrome/CriOS/FxiOS）
+ * —— 这是 iOS Safari 不遵守 MediaRecorder.start(timeslice) 的精确判定条件。
+ */
+function isIOSSafari() {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  const isIOS = /iPhone/.test(ua) || (/iPad/.test(ua) && !/Android/.test(ua))
+  const isAppleWebKit = /Safari/.test(ua)
+  // 排除 Chrome/Firefox/Edge 等在 iOS 上的外壳
+  const isNotChromeShell = !/CriOS|Chrome|FxiOS|EdgiOS|OPiOS/.test(ua)
+  return isIOS && isAppleWebKit && isNotChromeShell
+}
 
 async function handleStart() {
   try {
     await start()
     startHeartbeat()
     emit('recording-start')
+
+    // P1-1 (2026-10-08): iOS Safari 5s 内若 totalChunks 仍为 0, 提示用户产品限制.
+    // 不打断录音, 仅 ElMessage 弹一次. 任务书「重要陷阱 4」: UA 含 iPhone+Safari 且不含
+    // Chrome/CriOS/FxiOS 才算 iOS Safari.
+    if (!iOS5sWarned && isIOSSafari()) {
+      iOS5sWarned = true
+      // clear 旧 timer 防止 handleStart 重复调时叠加
+      if (iOS5sWarnTimer) clearTimeout(iOS5sWarnTimer)
+      iOS5sWarnTimer = setTimeout(() => {
+        // 5s 后若实时分片数仍为 0（典型 iOS Safari 行为：timeslice 不触发 ondataavailable）
+        // 则提醒用户产品限制, 引导手机自带录音器补录.
+        if (totalChunks.value === 0) {
+          ElMessage({
+            message: '⚠️ 检测到您使用的是 iOS Safari，网页录音在切换到后台时会被系统挂起，'
+              + '可能导致录音中断或丢失。强烈建议同时开启手机自带「语音备忘录」录音，'
+              + '结束后可在会议详情页上传补充。',
+            type: 'warning',
+            duration: 12000,
+            showClose: true,
+          })
+        }
+      }, 5000)
+    }
   } catch (err) {
     // 2026-07-16 修复 (#207 完整流程): 精细化错误处理 + catch 块完整 rollback
     //   1. 按 DOMException error name 分类给用户精确引导

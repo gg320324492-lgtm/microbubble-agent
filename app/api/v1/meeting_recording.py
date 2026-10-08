@@ -171,8 +171,15 @@ async def upload_audio_chunk(
     # 2026-07-16 修复 (安全加固): 越权守卫 — 任意登录用户可上传分片, 加 created_by 校验
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可上传分片")
-    if meeting.status not in ("recording",):
-        raise HTTPException(status_code=400, detail=f"会议不在录音状态 (status={meeting.status})")
+    if meeting.status not in ("recording", "error"):
+        # 2026-10-08 P0-4 (会议 255 事故): 允许 status='error' 补传
+        # —— 误杀的会议若保留 MinIO 分片 (last_chunk_index>=0),
+        # 前端可通过此端点补传 chunks, 然后调 POST /reprocess 重启流水线.
+        # 不允许 scheduled/completed/processing (后者代表流水线在跑, 补传会污染)。
+        raise HTTPException(
+            status_code=400,
+            detail=f"会议不在录音状态 (status={meeting.status})",
+        )
 
     blob = await file.read()
     if not blob:
@@ -220,13 +227,22 @@ async def reset_chunks_endpoint(
         raise HTTPException(status_code=404, detail="会议不存在")
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可重置分片")
-    # 2026-09-15 P0: 状态守卫 —— reset 会把 audio_url/upload_status 清空,
-    # 若会议已进入 processing/completed, 清空会直接毁掉已有录音与流水线结果。
-    # 前端只在"停止上传前的重传准备"阶段调用, 此时 status 必然是 recording。
-    if meeting.status != "recording":
+    # 2026-10-08 P0-4 (主指挥复验修正): 状态守卫放宽到 ('recording', 'error')。
+    #
+    # 为什么 error 也放行:
+    #   `useMeetingAudioUpload.js:109` 的 uploadBlobInSlices() **第一步就是调本端点**
+    #   （先 reset 服务端已有分片，避免索引撞号合并出交错垃圾音频）。
+    #   而会议 255 类事故（orphan cleanup 误杀）后会议正是 status='error'，
+    #   若此处仍硬性要求 'recording'，Phase 3 的"用户补录 m4a"链路第一步就 400 卡死。
+    #
+    # 为什么 processing/completed 仍然必须挡住（原守卫初衷要保留）:
+    #   reset 会把 audio_url/upload_status/last_chunk_index/total_chunks 全部清空。
+    #   processing 状态代表 ASR→声纹→摘要流水线正在跑，completed 代表已有最终成果，
+    #   此时清空 = 直接毁掉已有录音与派生结果，且用户没有任何补救手段。
+    if meeting.status not in ("recording", "error"):
         raise HTTPException(
             status_code=400,
-            detail=f"会议不在录音状态 (status={meeting.status}), 拒绝重置分片",
+            detail=f"会议不在可重传状态 (status={meeting.status}), 拒绝重置分片",
         )
 
     try:
@@ -389,6 +405,133 @@ async def recording_heartbeat(
     from app.services.recording_heartbeat import touch_recording_heartbeat
     ok = await touch_recording_heartbeat(meeting_id)
     return {"meeting_id": meeting_id, "alive": bool(ok), "status": meeting.status}
+
+
+@router.post("/meetings/{meeting_id}/recording-presence")
+async def recording_presence(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """录音 presence 信号 (2026-10-08 P0-1 后端配套, P0-3 前端 pagehide 触发)
+
+    用途: 前端 pagehide / sendBeacon 通知后端 "页面离开" —— 这是个软信号,
+    与 Redis heartbeat key (强信号: 心跳仍在 = 录音在跑) 互补:
+
+    - Redis key 仍在 → 强信号 → cleanup 跳过
+    - Redis key 消失 + presence_at < 30min → 软信号 → cleanup 降级处理 (不立即判死)
+    - Redis key 消失 + presence_at > 30min 或从未记录 → 视为真孤儿 → 走原清理逻辑
+
+    sendBeacon body 不能 JSON (iOS 限制), 后端必须 accept application/x-www-form-urlencoded
+    或 text/plain. FastAPI 默认解析 form 表单 (Form() 依赖), 这里只读 presence_at 字段做幂等更新.
+
+    不 commit Redis / 状态字段, 仅落库 recording_presence_at (一个 timestamp).
+    """
+    from datetime import datetime, timezone
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可上报录音 presence")
+
+    # 仅在录音态下记录 presence —— 已 stop 的会混淆或终止态不应被覆盖
+    if meeting.status != "recording":
+        # 幂等返回 —— 不抛错, sendBeacon 已 fire 不能重发
+        return {
+            "meeting_id": meeting_id,
+            "presence_recorded": False,
+            "reason": f"meeting not in recording state (status={meeting.status})",
+        }
+
+    meeting.recording_presence_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    return {
+        "meeting_id": meeting_id,
+        "presence_recorded": True,
+        "presence_at": meeting.recording_presence_at.isoformat(),
+    }
+
+
+@router.post("/meetings/{meeting_id}/reprocess")
+async def reprocess_meeting(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """把 status='error' 的会议改回 processing 并触发 Celery 后处理链重新跑 (2026-10-08 P0-4).
+
+    用途: 会议 255 类场景 —— orphan cleanup 把会议误判 error 但其实用户仍在录音 / 音频
+    还能补救. 通过此端点让用户能自救: 先 PUT /audio-chunk 补传分片 (audio-chunk 已扩展
+    接受 error 状态) → 再 POST /merge-chunks?mode=auto|raw → 再 POST /reprocess 重启流水线.
+
+    守卫:
+    - 仅 created_by == current_user.id 可调用
+    - status 必须 == 'error'
+    - 必须 audio_url 或 last_chunk_index >= 0 (有音频数据)
+    """
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可重跑会议流水线")
+    if meeting.status != "error":
+        raise HTTPException(
+            status_code=400,
+            detail=f"会议不在 error 状态 (status={meeting.status}), 不需要 reprocess",
+        )
+
+    # 必须有音频才能重跑
+    has_audio = bool(meeting.audio_url) or (
+        meeting.last_chunk_index is not None and meeting.last_chunk_index >= 0
+    )
+    if not has_audio:
+        raise HTTPException(
+            status_code=400,
+            detail="会议无音频 (audio_url 空 + last_chunk_index < 0), 无法重跑. "
+                   "请先 PUT /audio-chunk 补传, 再 POST /merge-chunks 合并, 再 POST /reprocess",
+        )
+
+    # 改回 processing 触发流水线 (post_meeting_process 会自己设 status='recording' 检测,
+    # 我们用 'processing' 作为入口, 与 stop-recording 后状态一致)
+    meeting.status = "processing"
+    meeting.error_reason = None  # 清掉错误原因
+    # recording_ended_at 已经在 stop-recording 或 cleanup 时填过了, 这里不动
+    await db.commit()
+
+    # 触发 Celery 后处理链 (与 stop-recording 同款)
+    from app.services.post_meeting_tasks import post_meeting_process
+    post_meeting_process.delay(meeting.id)
+
+    # 写审计 (best-effort)
+    # 2026-10-08 主指挥复验修正: action 必须是 audit_service.VALID_ACTIONS 白名单里的值,
+    # 否则会 fallback 成 'read' 并打 warning = 审计语义丢失。
+    # 触发来源放进 metadata（不带 trigger 键是因为 SAFE_META_KEYS 白名单会把它 sanitize 掉,
+    # 但传参保持与 admin_meetings.py 的 meeting_reprocess 一致的形状, 便于将来扩白名单时自动生效）。
+    try:
+        from app.services.audit_service import AuditService
+        await AuditService.log(
+            db,
+            user_id=current_user.id,
+            ip_address=None,
+            user_agent=None,
+            method="POST",
+            path=f"/api/v1/meetings/{meeting_id}/reprocess",
+            action="meeting_reprocess",
+            resource_type="meeting",
+            resource_id=meeting_id,
+            status_code=200,
+            metadata={"trigger": "user_recovery_after_orphan_cleanup"},
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[Audit] user-reprocess 审计失败: {e}")
+
+    return {
+        "meeting_id": meeting.id,
+        "status": "processing",
+        "message": "会议已重置为 processing, Celery 流水线已触发",
+    }
 
 
 @router.get("/meetings/{meeting_id}/upload-status")

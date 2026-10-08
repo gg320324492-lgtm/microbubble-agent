@@ -16,13 +16,20 @@ import { mount, flushPromises } from '@vue/test-utils'
 import axios from 'axios'
 
 // === vi.mock 会 hoist 到文件顶部, mock 引用的 fn 必须用 vi.hoisted 包起来 ===
-const { mockStart, mockUnsubscribe, mockStopRecording, mockElMessageError, mockElMessageSuccess, mockElMessageWarning, postSpy } = vi.hoisted(() => ({
+const { mockStart, mockUnsubscribe, mockStopRecording, mockElMessageError, mockElMessageSuccess, mockElMessageWarning, mockElMessageCall, mockEnsureHeartbeat, mockStopModuleHeartbeat, mockBeat, postSpy } = vi.hoisted(() => ({
   mockStart: vi.fn(),
   mockUnsubscribe: vi.fn(),
   mockStopRecording: vi.fn(),
   mockElMessageError: vi.fn(),
   mockElMessageSuccess: vi.fn(),
   mockElMessageWarning: vi.fn(),
+  // 2026-10-08 P1-1: ElMessage(options) 也被 AudioRecorder 调用 (iOS 5s 提示)
+  mockElMessageCall: vi.fn(),
+  // 2026-10-08 P0-1: useRecordingHeartbeat 模块级单例的 mock,
+  // 让 AudioRecorder 测试不必真正启动心跳
+  mockEnsureHeartbeat: vi.fn(),
+  mockStopModuleHeartbeat: vi.fn(),
+  mockBeat: vi.fn(),
   postSpy: vi.fn().mockResolvedValue({ data: { cancelled: true } }),
 }))
 
@@ -66,12 +73,19 @@ vi.mock('@/composables/useChunkedRecorder', () => ({
   }),
 }))
 
+// 2026-10-08 P0-1: mock 模块级心跳单例, 测试不真发 HTTP
+vi.mock('@/composables/useRecordingHeartbeat', () => ({
+  ensureHeartbeat: mockEnsureHeartbeat,
+  stopHeartbeat: mockStopModuleHeartbeat,
+  beat: mockBeat,
+}))
+
 vi.mock('element-plus', () => ({
-  ElMessage: {
+  ElMessage: Object.assign(mockElMessageCall, {
     error: mockElMessageError,
     success: mockElMessageSuccess,
     warning: mockElMessageWarning,
-  },
+  }),
   ElMessageBox: { confirm: vi.fn() },
 }))
 
@@ -94,6 +108,8 @@ beforeEach(() => {
   postSpy.mockResolvedValue({ data: { cancelled: true } })
   mockStopRecording.mockClear()
   mockElMessageError.mockClear()
+  mockElMessageWarning.mockClear()
+  mockElMessageCall.mockClear()
 })
 
 afterEach(() => {
@@ -185,5 +201,72 @@ describe('AudioRecorder.handleStart 错误类型精细化 (Step 9)', () => {
     await wrapper.vm.handleStart()
     await flushPromises()
     expect(mockElMessageError).toHaveBeenCalledWith(expect.stringMatching(/getUserMedia 5000ms timeout/))
+  })
+})
+
+// 2026-10-08 P1-1: iOS Safari 5s 无分片提示
+// AudioRecorder 内 isIOSSafari 是局部函数, 通过 mount + 修改 navigator.userAgent 间接验证
+describe('AudioRecorder P1-1: iOS Safari 5s 无分片提示', () => {
+  const origUA = navigator.userAgent
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'userAgent', { value: origUA, configurable: true })
+    vi.useRealTimers()
+  })
+
+  it('iOS Safari UA → handleStart 启动 5s 后 totalChunks=0 弹 ElMessage warning', async () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1',
+      configurable: true,
+    })
+    mockStart.mockResolvedValueOnce(undefined)
+    // totalChunks=0 默认 → mock 里 useChunkedRecorder 已经返 { value: 0 }
+
+    vi.useFakeTimers()
+    const wrapper = mountAudio({ meetingId: 207 })
+    await wrapper.vm.handleStart()
+    await flushPromises()
+    // 推进 5s 触发 iOS 5s 提示
+    vi.advanceTimersByTime(5000)
+    await flushPromises()
+    expect(mockElMessageCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringMatching(/iOS Safari/),
+        type: 'warning',
+      }),
+    )
+  })
+
+  it('Chrome on iOS UA → 不弹 iOS 提示', async () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Safari/604.1',
+      configurable: true,
+    })
+    mockStart.mockResolvedValueOnce(undefined)
+
+    vi.useFakeTimers()
+    const wrapper = mountAudio({ meetingId: 207 })
+    await wrapper.vm.handleStart()
+    await flushPromises()
+    vi.advanceTimersByTime(5000)
+    await flushPromises()
+    // iOS Chrome 不命中, ElMessage(options) 不被调
+    expect(mockElMessageCall).not.toHaveBeenCalled()
+  })
+
+  it('桌面 Chrome UA → 不弹 iOS 提示', async () => {
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+      configurable: true,
+    })
+    mockStart.mockResolvedValueOnce(undefined)
+
+    vi.useFakeTimers()
+    const wrapper = mountAudio({ meetingId: 207 })
+    await wrapper.vm.handleStart()
+    await flushPromises()
+    vi.advanceTimersByTime(5000)
+    await flushPromises()
+    expect(mockElMessageCall).not.toHaveBeenCalled()
   })
 })

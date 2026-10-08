@@ -24,6 +24,26 @@
   4. 加录音心跳守卫。事故: 会议 250 录音 1h40m 被本任务在 20:14:58 误标 error,
      而用户 21:18 才停止录音 → 整场录音丢失。原判据只看时间不看前端存活。
      现在心跳仍在的会议会被跳过（skipped_alive），真孤儿仍照常清理。
+
+2026-10-08 P0 改动（听会 10-08 会议 255 事故修复链 · 进一步保守）:
+  5. **数据保护**（不再无条件删 MinIO）:
+     原实现对每个判死的孤儿都调 delete_chunks 把 MinIO 上的 chunk 文件真删掉 ——
+     09-14 事故里若用户桌面 Chrome 已传了 N 个分片后刷新离开，这批音频会被直接销毁，
+     用户连 1 byte 都救不回来（只保护了"判定"，没保护"数据"）。现在:
+       - `has_chunks` (last_chunk_index >= 0) → **保留分片**，
+         error_reason 追加 `chunks_preserved=N`，前端可识别并提示"可尝试恢复"
+       - `presence_recent` (recording_presence_at 在超时阈值内，即前端 pagehide
+         刚发过 presence 信号, 见 web/src/composables/useRecordingHeartbeat.js)
+         → **保留分片**（弱信号不豁免判死，页面已关内存 blob 早已销毁，
+           再等只让真孤儿多占槽位；但万一有实时分片，那仍是唯一能救的东西，绝不能删），
+         error_reason 追加 `presence_recent=True`
+       - 两者都不成立（0 分片 + 从未上报 presence）→ 走原 delete_chunks（此时是 no-op）
+
+  补救链路（配合 2026-10-08 P0-4 的 API 放宽）:
+     PUT  /api/v1/meetings/{id}/audio-chunk        （已放宽接受 status='error'）
+     POST /api/v1/meetings/{id}/chunks/reset       （已放宽接受 status='error'）
+     POST /api/v1/meetings/{id}/merge-chunks       （mode=auto 或 raw）
+     POST /api/v1/meetings/{id}/reprocess          （error → processing + 触发 Celery）
 """
 
 import asyncio
@@ -100,23 +120,59 @@ async def _scan_and_cleanup() -> dict:
                     # 标 error (2026-07-16: error_reason 拼 user_agent 片段)
                     m.status = "error"
                     ua_short = (m.user_agent or 'unknown')[:80]
-                    m.error_reason = (
-                        f"录音超过 {settings.ORPHAN_MEETING_TIMEOUT_MINUTES}min 未 stop "
-                        f"(last_chunk_index={m.last_chunk_index}, total_chunks={m.total_chunks}), "
-                        f"已自动清理 [UA: {ua_short}]"
+
+                    # 2026-10-08 P0-4 + 主指挥复验修正: 判断是否有可保留的数据
+                    #
+                    # 判据 1 — has_chunks: 有 MinIO 分片 (last_chunk_index >= 0)
+                    #   → 保留分片不删, 给用户补传 / reprocess 的补救机会
+                    #
+                    # 判据 2 — presence_recent: recording_presence_at 在超时阈值内
+                    #   （前端 pagehide 刚发过 presence 信号, 说明"页面刚离开",
+                    #     用户可能马上就切回来 —— 见 web/src/composables/useRecordingHeartbeat.js）
+                    #   → 弱信号, **不豁免判死**（页面已关, 内存 blob 早已随导航销毁,
+                    #     再等下去只是让真孤儿多占会议槽位）, 但**强制保留分片**:
+                    #     万一有实时分片已上传, 那是用户唯一能救回来的东西, 绝不能删。
+                    has_chunks = (m.last_chunk_index is not None and m.last_chunk_index >= 0)
+                    chunks_count = (m.last_chunk_index + 1) if has_chunks else 0
+                    presence_recent = bool(
+                        m.recording_presence_at
+                        and (threshold <= m.recording_presence_at)
                     )
+                    # 保留分片的两个充分条件之一成立即保留
+                    preserve_chunks = has_chunks or presence_recent
+
+                    error_reason_parts = [
+                        f"录音超过 {settings.ORPHAN_MEETING_TIMEOUT_MINUTES}min 未 stop",
+                        f"(last_chunk_index={m.last_chunk_index}, total_chunks={m.total_chunks})",
+                    ]
+                    if has_chunks:
+                        error_reason_parts.append(f"chunks_preserved={chunks_count}")
+                    if presence_recent:
+                        error_reason_parts.append("presence_recent=True")
+                    error_reason_parts.append(f"[UA: {ua_short}]")
+                    m.error_reason = ", ".join(error_reason_parts)
                     # 2026-09-13: 占位标题 (正在听会（ID N）) 改为明确状态,
                     # 避免列表里永远显示"正在听会"造成误解
                     from app.services.meeting_analysis_service import is_placeholder_meeting_title
                     if is_placeholder_meeting_title(m.title or ""):
-                        m.title = f"听会记录（已清理 {m.created_at.strftime('%m-%d %H:%M')}）" 
-                    # 顺手清 MinIO（防孤儿文件）
-                    try:
-                        deleted = await chunked_upload_service.delete_chunks(m.id)
-                        if deleted:
-                            logger.info(f"会议 {m.id} 清理 {deleted} 个 chunk")
-                    except Exception as e:
-                        logger.warning(f"清理会议 {m.id} chunks 失败: {e}")
+                        m.title = f"听会记录（已清理 {m.created_at.strftime('%m-%d %H:%M')}）"
+                    # 2026-10-08 P0-4: preserve_chunks → 保留 MinIO (delete_chunks 会真删
+                    # MinIO 上的 chunk 文件, 而这些是用户已上传的音频字节。原版误杀路径会让
+                    # 用户连 1 byte 都救不回来)。无分片且无 presence → 原 delete_chunks
+                    # 走 no-op (MinIO 本来就空)
+                    if not preserve_chunks:
+                        try:
+                            deleted = await chunked_upload_service.delete_chunks(m.id)
+                            if deleted:
+                                logger.info(f"会议 {m.id} 清理 {deleted} 个 chunk")
+                        except Exception as e:
+                            logger.warning(f"清理会议 {m.id} chunks 失败: {e}")
+                    else:
+                        logger.warning(
+                            f"会议 {m.id} 保留 MinIO 供用户补救 "
+                            f"(chunks={chunks_count}, presence_recent={presence_recent}); "
+                            f"可用 POST /api/v1/meetings/{m.id}/reprocess 重启流水线"
+                        )
 
                     # 推 WS 通知
                     try:

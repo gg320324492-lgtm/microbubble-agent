@@ -216,6 +216,11 @@ _rate_limiters = {
     "drive_upload": AsyncRedisRateLimiter(max_attempts=50, window_seconds=60),  # PR2.10: drive 上传 50次/分 (批量友好)
     "drive_list": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # PR2.10: drive 列表 300次/分 (高频浏览)
     "chat_session_delete": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # 2026-08-26 主拍决策放宽: 批量删除 chat session 不应受 30/min write 限流; 给 300/min (5 ops/秒) 满足正常批量清理
+    # 2026-10-08 P0-5 (会议 255 事故根因 G): 录音心跳之前共用 write tier 30/min,
+    # 用户边录边操作聊天/建任务时被挤掉 (心跳丢失 → orphan cleanup 误杀).
+    # 10/min 足够: 前端 1/min 上报, iOS Safari 切回前台 / visibilitychange 会触发额外 1-3 次 burst.
+    # 与 chunked_upload 独立 tier 同级 (W68 §3 "禁止改 rate_limit.py 老基础设施", 本次由主指挥书面批准为例外)
+    "recording_heartbeat": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),
 }
 
 # /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流
@@ -276,6 +281,21 @@ _CHUNKED_UPLOAD_PATH_RE = re.compile(
     r"^/api/v1/meetings/\d+/audio-chunk$"
 )
 
+# 2026-10-08 P0-5 (会议 255 事故根因 G): 录音心跳独立 tier
+# POST /api/v1/meetings/{meeting_id}/recording-heartbeat
+# - 心跳 1/min 上报, 但 iOS Safari visibilitychange→visible 会触发额外 burst
+# - 走 write tier 30/min 时, 全站共享桶, 用户同时操作聊天/建任务会挤掉心跳
+# - 429 还会让 audit 不写 (rate_limit.py:477-484 提前 return 跳过 audit_middleware),
+#   导致 "audit 无心跳 = 前端未发" 的排查方法学失效
+# - 修复: 独立 recording_heartbeat tier 10/min + 改 audit 时序使 429 也写审计
+_RECORDING_HEARTBEAT_PATH_RE = re.compile(
+    r"^/api/v1/meetings/\d+/recording-heartbeat$"
+)
+# presence (P0-3) 同等关键, 也走独立 tier (POST, body 通常 ≤200B, sendBeacon iOS 限制)
+_RECORDING_PRESENCE_PATH_RE = re.compile(
+    r"^/api/v1/meetings/\d+/recording-presence$"
+)
+
 # v31.2.3: /auth/ 路径前缀匹配 (取代 substring "/auth/" in path)
 # 之前 substring '"/auth/" in path' 会误匹配 /api/v1/authentication/...
 # (不带 / 后缀但含 "auth" 子串). prefix 匹配要求路径以 '/api/v1/auth/'
@@ -324,6 +344,15 @@ def _get_rate_limit_type(request: Request) -> str:
     # 未来加其他 chunked upload 端点, 在 _CHUNKED_UPLOAD_PATH_RE 扩展 regex 即可
     if method == "PUT" and _CHUNKED_UPLOAD_PATH_RE.match(path):
         return "chunked_upload"
+
+    # 2026-10-08 P0-5 (会议 255 事故根因 G): 录音心跳独立 tier
+    # 之前与 write 共用 30/min, 心跳被聊天/建任务挤掉 → orphan 误杀
+    # 10/min 上限足够 (前端 1/min + iOS 切前台额外 +1)
+    if method == "POST" and _RECORDING_HEARTBEAT_PATH_RE.match(path):
+        return "recording_heartbeat"
+    # presence (P0-3) 同样保护: pagehide/sendBeacon 弱信号, 误杀比漏发更糟
+    if method == "POST" and _RECORDING_PRESENCE_PATH_RE.match(path):
+        return "recording_heartbeat"
 
     # PR2.10: 课题组网盘 drive 端点 tier 区分
     # 路径匹配 /api/v1/drive/* 和 /api/v1/upload/multipart/*
@@ -473,6 +502,26 @@ async def rate_limit_middleware(request: Request, call_next):
     try:
         await limiter.check(client_key)
     except HTTPException as e:
+        # 2026-10-08 P0-5 (会议 255 事故根因 G): 429 提前 return 会跳过 audit_middleware,
+        # 导致 "audit 无心跳 = 前端未发" 的排查方法学失效 (本次会议 255 调查时 429 完全
+        # 无痕迹, 浪费 ~2h 排查方向). 修复: 429 也写 audit_log (best-effort, 不阻塞 429 响应)
+        try:
+            from app.core.audit_middleware import _audit_request, _parse_token_user_id
+            from app.core.audit_middleware import _get_client_ip as _audit_get_ip
+            user_id = getattr(request.state, "user_id", None) or _parse_token_user_id(request)
+            await _audit_request(
+                user_id=user_id,
+                ip_address=_audit_get_ip(request),
+                user_agent=(request.headers.get("User-Agent") or "")[:1000],
+                method=request.method,
+                path=request.url.path,
+                status_code=e.status_code,
+                duration_ms=0,  # 429 不计入 wall-clock
+            )
+        except Exception:
+            # 审计失败不影响 429 响应
+            pass
+
         return JSONResponse(
             status_code=e.status_code,
             content={"error": {"code": "RATE_LIMIT_EXCEEDED", "message": e.detail}},
