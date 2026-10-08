@@ -34,6 +34,7 @@ WORKDIR /app
 # 关键 2: torch 2.4.0 不支持 sm_120 (Blackwell RTX 5090), 必须用 torch 2.7+ 才支持
 # 关键 3: torch CUDA wheel 走 PyPI 官方 cu128 源 (清华源限速 torch 2.12+)
 RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir --upgrade setuptools && \
     pip3 install --no-cache-dir --prefer-binary \
     --extra-index-url https://download.pytorch.org/whl/cu128 \
     torch==2.7.0 \

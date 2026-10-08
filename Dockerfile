@@ -61,6 +61,7 @@ ARG HTTPS_PROXY
 ARG HTTP_PROXY
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     pip install --upgrade pip && \
+    pip install --upgrade setuptools && \
     pip install --prefer-binary \
         --retries 10 --timeout 60 \
         -r requirements.txt

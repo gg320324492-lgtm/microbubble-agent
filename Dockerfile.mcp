@@ -8,7 +8,8 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # MCP 服务只需最小依赖（不需要 pilk/pgvector/sentence-transformers 等重型包）
-RUN pip install --no-cache-dir \
+RUN pip install --no-cache-dir --upgrade setuptools \
+    && pip install --no-cache-dir \
     anthropic>=0.39.0 \
     mcp>=0.9.0 \
     httpx==0.25.2 \

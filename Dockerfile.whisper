@@ -30,7 +30,8 @@ WORKDIR /app
 
 # 安装Python依赖 + CUDA运行时库（通过pip安装，避免下载大CUDA镜像）
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir --prefer-binary \
+    pip3 install --no-cache-dir --upgrade setuptools \
+    && pip3 install --no-cache-dir --prefer-binary \
     faster-whisper==1.2.1 \
     nvidia-cublas-cu12 \
     nvidia-cuda-nvrtc-cu12 \
