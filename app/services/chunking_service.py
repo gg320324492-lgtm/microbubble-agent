@@ -1,9 +1,11 @@
 """Chunking 策略实现 — PR2 (W88 +10..+13)
 
-3 策略可选 (RAG v1.1 §11.2 chunking_service):
-- paragraph: 按 \\n\\n 切, 默认
+4 策略可选 (RAG v1.1 §11.2 chunking_service):
+- paragraph: 按 \\n\\n 切, 默认; **含 [PAGE:N] 标记时自动按页优先切** (见下)
 - heading: 按 Markdown #/##/### 切 (保留 heading 作为 chunk 起始)
 - window: 固定字符窗口 + overlap
+- page: 按 file_parser_service 输出的 [PAGE:N] 标记切, 页内再按 \\n\\n 切
+  (PPT/PDF 解析产物专用; agent 9 号修复, 2026-10-09)
 
 设计原则:
 - 不依赖外部库, 纯 Python 标准库 (re + str)
@@ -18,6 +20,25 @@ W88 +10: paragraph 策略
 W88 +11: window 策略
 W88 +12: heading 策略 + 路由入口
 W88 +13: write_chunks_for_knowledge — knowledge_service._run_analyze_and_embed 接入入口
+
+2026-10-09 (agent 9 号): 修 PPT/PDF 整份塌成 1 chunk 的 bug
+--------------------------------------------------------------------
+file_parser_service 的 _parse_pdf / _parse_pptx 在**每页前**插入 ``[PAGE:N]``
+标记 (file_parser_service.py:223 / :345, 注释写明"用于 inline 定位")。
+但 `_chunk_paragraph` 只按 ``\\n\\n`` 切, 而 PPT/PDF 解析产物几乎不含 ``\\n\\n``
+(实测一个 17 页 deck: ``\\n\\n`` = 0 次 / ``[PAGE:N]`` = 17 次) → 整份塌成 1 个
+chunk (5902 字符), 召回单元只有应有的 1/17。全库 594 个文件受影响。
+
+修复: 新增 `page` 策略, 并让 `paragraph` 策略在文本**含 [PAGE:N] 标记时自动**
+切换到按页优先切分 (页内再按 ``\\n\\n``)。无标记文本走原路径, 逐字节不变 ——
+既有非 PPT/PDF 语料 (txt/md/docx/会议转录) 行为完全不变。
+
+保留标记: `[PAGE:N]` 作为每个页 chunk 的**起始**, 不剥离。理由:
+- 前端 paperAdapter.js 的 cleanContent/extractPageMarkers 依赖它做 inline 定位
+  (web/src/utils/paper/content.js:548; CLAUDE.md 记录 v28 "任何形式删 [PAGE:N] 都
+  破坏 pageMarkers 提取 → 正文压成 1 段" 事故);
+- chunk 命中时 content 会作为 snippet 直出前端 (hybrid_retriever.py:422/431),
+  保留标记与整份文档路径的展示一致。
 """
 import logging
 import re
@@ -35,6 +56,10 @@ MAX_EMBED_INPUT_CHARS = 6000
 # Window 策略默认参数
 DEFAULT_WINDOW_SIZE = 800
 DEFAULT_WINDOW_OVERLAP = 100
+
+# agent 9 号 (2026-10-09): file_parser_service 输出的页标记, 形如 [PAGE:1] / [PAGE:17]
+# (file_parser_service.py:223 PDF / :345 PPTX)。\d+ 不带 "/总页数", 实测确认格式。
+PAGE_MARKER_RE = re.compile(r"\[PAGE:(\d+)\]")
 
 
 @dataclass
@@ -59,7 +84,7 @@ class Chunk:
 @dataclass
 class ChunkConfig:
     """chunking 配置"""
-    strategy: str = "paragraph"  # paragraph | heading | window
+    strategy: str = "paragraph"  # paragraph | heading | window | page
     window_size: int = DEFAULT_WINDOW_SIZE
     window_overlap: int = DEFAULT_WINDOW_OVERLAP
     max_chars: int = MAX_EMBED_INPUT_CHARS  # 超此 fallback window
@@ -74,6 +99,12 @@ def chunk_text(text: str, config: Optional[ChunkConfig] = None) -> List[Chunk]:
 
     Returns:
         List[Chunk] — 每条 char_start/char_end 严格指回 text 偏移
+
+    agent 9 号 (2026-10-09): paragraph 策略遇 [PAGE:N] 标记时自动按页优先切。
+    - 显式 ``strategy="page"`` 强制按页切
+    - ``strategy="paragraph"`` (含默认): 文本含 [PAGE:N] 时自动走 page 切分,
+      否则走原 ``\\n\\n`` 切分 (无标记文本逐字节不变)
+    - heading / window 不受影响 (调用方显式选择, 不自动切换)
     """
     if not text:
         return []
@@ -81,7 +112,13 @@ def chunk_text(text: str, config: Optional[ChunkConfig] = None) -> List[Chunk]:
         config = ChunkConfig()
 
     if config.strategy == "paragraph":
-        chunks = _chunk_paragraph(text)
+        # 自动感知页标记: PPT/PDF 解析产物不含 \n\n, 只按 \n\n 切会塌成 1 chunk
+        if PAGE_MARKER_RE.search(text):
+            chunks = _chunk_by_page(text)
+        else:
+            chunks = _chunk_paragraph(text)
+    elif config.strategy == "page":
+        chunks = _chunk_by_page(text)
     elif config.strategy == "heading":
         chunks = _chunk_heading(text)
     elif config.strategy == "window":
@@ -149,6 +186,75 @@ def _chunk_paragraph(text: str) -> List[Chunk]:
             strategy="paragraph",
             chunk_metadata={"section_title": None},
         ))
+
+    return chunks
+
+
+def _chunk_by_page(text: str) -> List[Chunk]:
+    """按 [PAGE:N] 标记切页, 页内再按 \\n\\n 切 (agent 9 号, 2026-10-09)
+
+    适用: file_parser_service 的 PPT/PDF 解析产物 —— 每页前有 ``[PAGE:N]`` 标记,
+    页内几乎无 ``\\n\\n`` (PPT) 或偶有 (PDF)。
+
+    切点策略 (两级):
+    1. 顶层: 每个 ``[PAGE:N]`` 标记的起始位置是页边界; 标记本身保留在页 chunk 起始
+       (前端 paperAdapter 依赖它做 inline 定位, 不剥离 —— 见模块 docstring)。
+    2. 页内: 若该页文本含 ``\\n\\n``, 复用 ``_chunk_paragraph`` 逻辑再切细
+       (page-first, paragraph-within-page)。
+
+    不变量 (与其它策略一致):
+    - char_count == char_end - char_start
+    - text[char_start:char_end] == content (内容零丢失, 标记保留)
+    - 空页 (连续 ``[PAGE:N]`` 之间无正文) 跳过, 不产空 chunk
+
+    无标记文本: 退化为 ``_chunk_paragraph`` (理论上不会走到 —— 仅在自包含调用时兜底)。
+    """
+    markers = list(PAGE_MARKER_RE.finditer(text))
+    if not markers:
+        # 无标记 → 段落策略兜底 (调用方自动感知已排除此路径, 此处防直调)
+        return _chunk_paragraph(text)
+
+    # 页边界 = 每个标记的起始; 首个标记前的文本 (若有) 作为独立前导段
+    boundaries = [0]
+    for m in markers:
+        if m.start() > boundaries[-1]:
+            boundaries.append(m.start())
+    boundaries.append(len(text))
+
+    chunks: List[Chunk] = []
+    for i in range(len(boundaries) - 1):
+        start = boundaries[i]
+        end = boundaries[i + 1]
+        if start == end:
+            continue
+        page_text = text[start:end]
+        if not page_text.strip():
+            continue  # 空页 (连续标记) 跳过
+
+        # 页内再按 \n\n 切 (保留标记在页 chunk 起始)
+        if re.search(r"\n\s*\n", page_text):
+            sub = _chunk_paragraph(page_text)
+            for s in sub:
+                # 把页内相对偏移还原为全文偏移
+                new_start = start + s.char_start
+                new_end = start + s.char_end
+                chunks.append(Chunk(
+                    content=s.content,
+                    char_start=new_start,
+                    char_end=new_end,
+                    char_count=new_end - new_start,
+                    strategy="paragraph",  # 页内段落 → 标注 paragraph
+                    chunk_metadata={"section_title": None, "page_split": True},
+                ))
+        else:
+            chunks.append(Chunk(
+                content=page_text,
+                char_start=start,
+                char_end=end,
+                char_count=end - start,
+                strategy="page",
+                chunk_metadata={"section_title": None, "page_split": True},
+            ))
 
     return chunks
 
