@@ -14,6 +14,8 @@ name: Playwright Tests
 #     后的本地提交产生。
 #   - visual job 已于 2026-10-06 撤掉 continue-on-error 转硬门, 判据见该 job
 #     的注释 (失败演进 + A/B 对照 + 反向验证)。
+# 2026-10-09: visual job 超时 25 -> 40 (超时撞线) + push 侧补 paths 过滤 +
+#   concurrency 闸门。依据与逐条清单见下方各处注释。
 
 on:
   pull_request:
@@ -24,7 +26,54 @@ on:
       - '.github/workflows/playwright.yml'
   push:
     branches: [main]
+    # 2026-10-09: push 侧补 paths 过滤 (pull_request 侧早有过滤, push 侧一直没有)。
+    # 实测最近 19 个 push 里约 74% (CLAUDE.md / celery.py / Dockerfile /
+    # web/dist 重建 / 其他 workflow) 与视觉无关, 白跑整轮 22-23min, 且并发
+    # 上会把已贴超时的 visual job 推过 25 分钟上限 (run 37808071926 cancelled)。
+    #
+    # 清单依据 (改前已逐条核对代码实情, 勿随意增删):
+    #   web/src/**          两 job 的 vite dev server 出图源
+    #   web/tests/**        测试用例 + 49 张视觉基线 PNG (visual/**/*.spec.mjs-snapshots/)
+    #   web/scripts/**      vite.config.js:11 import build-id.mjs, dev server 启动即 require
+    #   web/public/**       KaTeX 字体 20 个 .woff2 + katex.min.css (公式渲染进像素, 不在 src 下)
+    #   web/index.html      lang="zh-CN" 影响 axe html-has-lang 与字体回退
+    #   web/vite.config.js  vite 配置
+    #   web/package.json    依赖与脚本
+    #   web/package-lock.json  npm ci + setup-node cache key
+    #   docker/visual-regression/**  Dockerfile (= build context 根) / run-visual.sh 等 4 文件
+    #   docker-compose.test.yml     两 job 起栈 + 建号 + teardown
+    #   .github/workflows/playwright.yml  自身 —— 必须含, 否则改门禁的提交被自己的过滤误杀
+    #
+    # 刻意排除:
+    #   web/dist/**  两 job 都起 npx vite **dev server** 从 src 出图 (全仓无 vite preview),
+    #                build-id.mjs:82 明写不碰 dist; dist 重建是最主要的无谓触发源之一。
+    #   scripts/init_db.py / scripts/ensure_test_user.py
+    #                docker-compose.test.yml:128-131 只挂 ./app / ./alembic/versions /
+    #                ./models/hf_cache, 没挂 ./scripts —— 它们烘在 app-test 镜像里,
+    #                改仓库文件不影响本次 run。留着会造成"我改了脚本所以门禁会验证"的错觉。
+    paths:
+      - 'web/src/**'
+      - 'web/tests/**'
+      - 'web/scripts/**'
+      - 'web/public/**'
+      - 'web/index.html'
+      - 'web/vite.config.js'
+      - 'web/package.json'
+      - 'web/package-lock.json'
+      - 'docker/visual-regression/**'
+      - 'docker-compose.test.yml'
+      - '.github/workflows/playwright.yml'
   workflow_dispatch:
+
+# 2026-10-09: concurrency 闸门 (参照 desktop-release.yml:29-31 的既有范式)。
+#   group **只按 ref 分组, 刻意不带 ${{ github.job }}** —— 本 workflow 有 2 个 job
+#   (a11y + visual); 加 job 维度会让同一次 run 的两个 job 互相排队甚至互杀。
+#   按 github.ref 分组保证"同一次 run 的两个 job 同组可并行", 只在**不同 run 之间**互斥。
+#   cancel-in-progress: true —— 这道门禁验的是"当前 main 是否回归", 旧 commit 的结论在
+#   下一次 push 后即刻过期, 串行积压无价值 (且积压正是 37808071926 超时的放大器)。
+concurrency:
+  group: playwright-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -356,7 +405,18 @@ jobs:
   visual:
     name: visual regression
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
+    # 2026-10-09: 25 -> 40 分钟 (超时撞线, 不是 runner 竞争)。
+    #
+    #   判据 (run 37808071926 cancelled 复盘):
+    #     - 两个 cancelled run 的 visual job 耗时 25m23s / 25m19s, 精确贴 25 分钟上限;
+    #     - 成功 run 的 visual job 基线 22-23min, 余量恒定只有 1-3 分钟;
+    #     - 同 run 内并发的 a11y job **全部成功** —— 若真是 runner 饥饿, a11y 会先饿死,
+    #       这是反证; 并发只是把已贴边的耗时推过界 (npm ci / docker pull / docker build
+    #       三件事抢网络)。
+    #   40 分钟 = 基线 22-23min + 约 17min 余量, 覆盖并发抢网络导致的前置开销尖峰。
+    #   同日加的 push paths 过滤 + concurrency 闸门从源头减少并发 run, 是本条的配套。
+    #   ⚠️ a11y job 的 timeout-minutes: 30 是 2026-10-03 S3.9 独立核算过的值, 未改动。
     # 2026-10-06 撤掉 continue-on-error → 转硬门 (W89-P-3 第一版留的 non-blocking)。
     #
     # 撤之前判据已逐条建立 (今天这一轮的全部依据):
@@ -642,17 +702,18 @@ jobs:
         #   收窄到 127 用例, 且**逐 project 复刻**原分布 (28/22/30/47), 因为基线
         #   文件名带 projectName, 少一个 project 会让既有基线对不上。
         #
-        # ⚠️ **预期本 job 是 failure, 原因是缺基线, 不是代码回归**:
-        #   这 5 个 spec 的 -snapshots/ 基线在 git 里全都不存在 (f9495f13b 废弃 v76
-        #   时删, 4c97ae562 删 baseline png, 81423c4a2 又把 PNG 加进 .gitignore)。
-        #   实测 Playwright 缺基线时 (updateSnapshots 默认 "missing") 判 1 failed 并报
-        #   `A snapshot doesn't exist at ...`, **不会自动写盘**。
-        #   ⇒ 看到这个红请勿误判成 UI 回归; 它的含义是"还没有基线可比"。
-        #   本步**刻意不带** --update-snapshots: 那会在无人 review 的情况下把基线
-        #   悄悄写进 runner, 正是我们要拒绝的"未经审查的基线固化"。
+        # ✅ **基线已入库 —— 本 job 现在红 = 真 UI 回归, 不是缺基线** (2026-10-09 修正)。
+        #   本段原写"预期本 job 是 failure, 原因是缺基线", 该断言已被 fcc0c74b0
+        #   (2026-10-05, "S3.13 视觉回归基线入库") 推翻: 5 个 spec 的
+        #   -snapshots/ 基线**现已入库并被 git 跟踪**, 位于
+        #   web/tests/visual/**/*.spec.mjs-snapshots/ (实测 git ls-files 计数 = 49 张;
+        #   fcc0c74b0 当时入库 50 张, 043d48d12 "修 vite 504 导致的空白页 ——
+        #   预热 + 移除 /tasks + 重录 03-chat" 删掉 1 张旧基线, 净 49)。
+        #   ⇒ 这道门禁是**真在拿入库基线做像素比对并通过**; 看到红请按真 UI 回归处理。
         #
-        #   录基线的前置是 ChatViewSSE 的 CSS 抽取完成 —— 像素比对是验收 CSS 改动
-        #   的唯一手段, 顺序不可颠倒: CSS 抽取 → 视觉回归转硬门 → 才谈录基线。
+        #   本步**仍然刻意不带** --update-snapshots (这条纪律继续有效, 与基线是否入库无关):
+        #   那会在无人 review 的情况下把基线悄悄写进 runner, 正是我们要拒绝的
+        #   "未经审查的基线固化"。基线的产生与重录只能走**人工 review 后的本地提交**。
 
       # 2026-10-03 S3.10: 删掉 "Update snapshots (only on main push)" 整步。
       #
@@ -669,10 +730,10 @@ jobs:
       #   换句话说它无法对基线漂移报红, 只是白烧一轮 CI 时间。
       #
       #   真正要重录基线必须是**人工 review 后的本地提交**, 不能靠 CI 自动改写。
-      #   注意: 本 job 的 **-snapshots/ 基线目前在 git 里全都不存在**
-      #   (f9495f13b 废弃 v76 时删, 4c97ae562 删 baseline png, 81423c4a2 又把 PNG
-      #   加进 .gitignore), 所以收敛/重录基线这件事必须走独立决策, 不能在
-      #   workflow 里自动补 —— 见 commit message 的"后续顺序"段。
+      #   (2026-10-09 修正) 本段原尾注"本 job 的 -snapshots/ 基线目前在 git 里全都不存在"
+      #   已过期 —— fcc0c74b0 (2026-10-05, S3.13) 已把 49 张基线入库并被 git 跟踪。
+      #   因此基线**已是入库状态**, verify 阶段只读它; 日后仍需重录基线时 (UI 有意变更),
+      #   同样只能走人工 review 后的本地提交, 不得让 CI 自动补写。
 
       - name: Upload visual diff on failure
         if: failure()
