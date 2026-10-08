@@ -43,6 +43,32 @@ class OCRUnsupportedError(Exception):
     """请求的 OCR 类型不被支持（如选了 tesseract 但没装）"""
 
 
+def ocr_result_failed(result) -> Optional[str]:
+    """判定 OCR 结果 dict 是否代表「调用失败」（而非「图里本就没文字」）。
+
+    背景（2026-10-09 假成功 bug）：`classify_and_extract` / `extract_figure_structured`
+    在后端调用失败时**不抛异常**，而是返回一个带 `error` 字段的 dict（值 = 错误串）。
+    下游若只检查 `isinstance(result, Exception)` 或 `result.get("text")` 是否为空，
+    就会把「失败」当成「成功但没文字」→ 图片被标 `ocr_status='done'` 且 `ocr_text`
+    为空 —— 这比报错更危险，因为它**抹掉了失败信号**（实测 20 张图 MIMO 401 全被
+    标 done）。
+
+    关键：**唯一的失败判据是 presence of `error` key**，不是 `text` 是否为空。
+    - 后端调用失败 → dict 含 `error`（非空字符串）→ 返回错误串
+    - 图里本就没文字（LLM 正常返回）→ dict **无** `error` 键，但 `text` 可能为空
+      → 返回 None（合法空，不得判失败）
+
+    Returns:
+        失败时返回非空错误串（str，可追溯）；成功（含合法空文本）返回 None。
+    """
+    if not isinstance(result, dict):
+        return None
+    err = result.get("error")
+    if isinstance(err, str) and err.strip():
+        return err
+    return None
+
+
 # ============================================================================
 # Prompt 模板（按提取目标分）
 # ============================================================================
@@ -511,6 +537,11 @@ class OCRService:
                 "isSupportingFigure": bool,
                 "confidence": float,
             }
+
+        ⚠️ 失败契约（同 classify_and_extract）：后端调用失败时不抛异常，返回一个
+        额外带 `error` 键的 dict（其余字段为默认值，figureType='figure'、
+        confidence=0.0）。调用方必须用 `ocr_result_failed()` 判定，否则会把默认
+        值当作「正常的 figure 图」写库（vision_confidence=0 假信号）。
         """
         try:
             result_text = await self._analyze_with_retry(image_bytes, mime_type, PROMPT_FIGURE_ANALYZE)
@@ -554,7 +585,13 @@ class OCRService:
                 "chart_description": "图表描述" or None,
                 "caption": "图注" or None,
             }
+
+        ⚠️ 失败契约（2026-10-09 假成功 bug 修复）：后端调用失败时**不抛异常**，
+        而是返回一个额外带 `error` 键的 dict（error = 错误串），其余字段为默认空。
+        调用方**必须**用 `ocr_result_failed(result)` 判定失败，**不能**用
+        `text` 是否为空来判定 —— 图里本就没文字时 `text` 合法为空但无 `error` 键。
         """
+
         prompt = """你是图片内容分类与提取专家。请分析图片并提取所有可识别的内容。
 
 按以下 JSON 格式输出（严格 JSON，不要任何额外文字）：
@@ -591,7 +628,8 @@ class OCRService:
             parsed = parse_llm_json(result_text)
         except Exception as e:
             logger.warning(f"classify_and_extract JSON 解析失败: {e}, raw={result_text[:200]}")
-            # fallback: 当作普通图
+            # fallback: 当作普通图（LLM 确实有响应，只是非 JSON —— 不算调用失败，
+            # 不置 error 键，否则会被 ocr_result_failed 误判为失败）
             return {
                 "category": "figure",
                 "text": result_text,
@@ -599,6 +637,7 @@ class OCRService:
                 "table_md": None,
                 "chart_description": None,
                 "caption": None,
+                "_parse_failed": True,
             }
 
         # 清洗 LaTeX

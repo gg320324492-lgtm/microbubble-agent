@@ -44,7 +44,13 @@ from app.models.knowledge_multimodal import (
     EXTRACTION_KIND_IMAGE_BLOCK,
 )
 from app.services.file_service import file_service
-from app.services.ocr_service import ocr_service, OCRBackendError, OCRUnsupportedError, _clean_ocr_text
+from app.services.ocr_service import (
+    ocr_service,
+    OCRBackendError,
+    OCRUnsupportedError,
+    _clean_ocr_text,
+    ocr_result_failed,
+)
 
 logger = logging.getLogger("microbubble.multimodal")
 
@@ -447,6 +453,17 @@ class MultimodalExtractionService:
         - 用同一个 semaphore 复用并发池（避免 vision API rate limit）
         - 两调用任一失败不阻塞另一调用（独立 try/except）
         - wall-clock ≈ max(t_classify, t_structured) + 网络开销，相比串行省 ~50%
+
+        ⚠️ 2026-10-09 假成功 bug 修复（关键）：
+        两个 OCR 方法在后端调用失败时**不抛异常**，而是返回带 `error` 键的 dict。
+        原代码用 `isinstance(result, Exception)` 判定失败 → 拿到的是 dict，判定
+        **永远为 False** → 失败的图被当作 `ok=True` 走成功分支，落库
+        `ocr_status='done'` 且 `ocr_text` 为空，**抹掉失败信号**（实测 20 张图
+        MIMO 401 全被标 done）。
+        现改用 `ocr_result_failed()` 显式判定 —— 判据是 **dict 里有没有 `error`
+        键**，而非 `text` 是否为空。这样能区分：
+          - 「OCR 调用失败」（含 error 键）        → ok=False → 落 failed
+          - 「图里本就没文字」（无 error，text=""） → ok=True  → 落 done（合法）
         """
         sem = ocr_service.semaphore
 
@@ -474,25 +491,44 @@ class MultimodalExtractionService:
                 classify_result, structured_result = await asyncio.gather(
                     classify_task, structured_task, return_exceptions=True
                 )
-                # 分类调用错误
+
+                # 结构化结果先做「失败 dict → None」归一：
+                # 失败时 extract_figure_structured 返回带 error 键的默认值 dict，
+                # 若不归一，_apply_v28_structured_fields 会把 figure_type='figure' /
+                # vision_confidence=0 等**默认值**当真实结果写库（第二个被遮蔽的假信号）。
+                if isinstance(structured_result, Exception):
+                    logger.warning(
+                        f"extract_figure_structured 抛异常（用默认值跳过）: {structured_result}"
+                    )
+                    structured_result = None
+                elif ocr_result_failed(structured_result):
+                    logger.warning(
+                        f"extract_figure_structured 失败（用默认值跳过）: "
+                        f"{ocr_result_failed(structured_result)}"
+                    )
+                    structured_result = None
+
+                # 分类调用失败（抛异常 或 返回带 error 的 dict）→ 整张图判失败
                 if isinstance(classify_result, Exception):
                     return {
                         "image_id": img.id,
                         "ok": False,
                         "error": f"classify: {classify_result}",
-                        "structured": structured_result if isinstance(structured_result, dict) else None,
+                        "structured": structured_result,  # 已归一的真实结构化结果（可能 None）
                     }
-                # 结构化调用错误（容错：用默认结构化字段）
-                if isinstance(structured_result, Exception):
-                    logger.warning(
-                        f"extract_figure_structured 失败（用默认值）: {structured_result}"
-                    )
-                    structured_result = None
+                classify_err = ocr_result_failed(classify_result)
+                if classify_err:
+                    return {
+                        "image_id": img.id,
+                        "ok": False,
+                        "error": f"classify: {classify_err}",
+                        "structured": structured_result,
+                    }
                 return {
                     "image_id": img.id,
                     "ok": True,
                     "parsed": classify_result,
-                    "structured": structured_result,  # 可能 None（出错时）
+                    "structured": structured_result,  # None = 结构化失败（不写默认值）
                 }
             except Exception as e:
                 return {"image_id": img.id, "ok": False, "error": f"unexpected: {e}"}
