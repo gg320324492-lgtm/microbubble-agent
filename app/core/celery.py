@@ -224,6 +224,11 @@ celery_app.conf.imports = [
     "app.services.rag_auto_ingest_service",  # W100 +73: RAG 自动 ingestion 流水线
     "app.services.rag_feedback_iteration_service",  # W100 +74: 负面反馈聚合 quarantine
     "app.services.drive_ingest_tasks",  # 2026-09-05 网盘文件默认入库 (上传/版本更新自动 drive → kb)
+    # 2026-10-08 会议 255 事故追查发现: 模块存在但未注册, 任务派发被 worker 静默丢弃
+    # ("Received unregistered task of type ..."), 自 d1aa07adb 起每条新会议转录都没进
+    # meeting_chunks 索引表 → 会议这一路的 RAG 检索实际为空 (chunk 落库本身不依赖 LLM,
+    # 不受 MIMO 401 影响)。
+    "app.services.meeting_chunk_service",  # WP1 会议转录 chunk 索引 (post_meeting 管线 dispatch)
 ]  # fmt: skip
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
 celery_app.autodiscover_tasks(
