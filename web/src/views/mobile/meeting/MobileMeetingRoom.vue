@@ -107,6 +107,7 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
+import { ensureHeartbeat } from '@/composables/useRecordingHeartbeat'
 
 const router = useRouter()
 const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
@@ -254,6 +255,8 @@ onMounted(async () => {
     // 镜像桌面端 v2：自动启动 MediaRecorder 接续录音
     try {
       await startGlobalRecorder()
+      // 2026-10-08 P0-1 (会议 255 事故): 恢复路径必须显式 ensureHeartbeat
+      ensureHeartbeat(id)
       console.warn('[MobileMeetingRoom] 自动启动 MediaRecorder 成功, meetingId =', id)
     } catch (err) {
       console.warn('[MobileMeetingRoom] 自动启动 MediaRecorder 失败 (可能麦克风权限):', err.message)

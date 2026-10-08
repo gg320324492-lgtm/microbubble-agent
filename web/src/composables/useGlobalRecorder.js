@@ -69,6 +69,13 @@ let timerInterval = null
 let animationFrame = null
 let chunkIndex = 0              // 已发出的 chunk 序号（仅 start 时重置）
 let recorderStartEpoch = null  // 2026-06-27 新增：本次录音会话的 wall clock 起点（毫秒）
+// 2026-10-08 P0-1: 当前录音会话的 meetingId（由调用方 setCurrentMeetingId 设置），
+// 让 start() 成功后能兜底 ensureHeartbeat —— 用例：调用方提前设 id 然后 start 录音。
+// 候选实现：
+//   - 任务书「重要陷阱 1」要求 useGlobalRecorder 不感知 meetingId 强耦合,
+//     因此 setter 是显式契约，start() 仅在 setter 调用过且 start 成功后才兜底心跳
+//   - 这是个弱契约, 强保证仍由 AudioRecorder.watch + MeetingRoomView.onMounted 兜底
+let pendingMeetingIdForHeartbeat = null
 const chunkCallbacks = []       // 外部 chunk 钩子（阶段1: 边录边传持久化用）
 
 // ===== 响应式状态（UI 绑定） =====
@@ -130,6 +137,18 @@ async function start() {
 
   // 音量动画
   updateVolumeBars()
+
+  // 2026-10-08 P0-1 (会议 255 事故): 兜底心跳 —— 如果调用方在 start() 之前
+  // 通过 setCurrentMeetingId 注册过 meetingId, 这里直接 ensureHeartbeat。
+  // 这是弱契约: 真正的强保证仍由 AudioRecorder.watch + MeetingRoomView.onMounted 提供
+  if (pendingMeetingIdForHeartbeat) {
+    try {
+      const { ensureHeartbeat } = await import('./useRecordingHeartbeat')
+      ensureHeartbeat(pendingMeetingIdForHeartbeat)
+    } catch (err) {
+      console.warn('[useGlobalRecorder] 兜底心跳启动失败 (best-effort):', err?.message)
+    }
+  }
 }
 
 function pause() {
@@ -302,6 +321,23 @@ function onChunk(cb) {
   }
 }
 
+/**
+ * 2026-10-08 P0-1: 设置 start() 时的兜底心跳 meetingId.
+ *
+ * 用法: 调用方拿到 meetingId 后, 调 setCurrentMeetingId(id), 然后 await startGlobalRecorder()。
+ * start() 成功后内部 ensureHeartbeat(id), 防止调用方忘记显式调 ensureHeartbeat。
+ *
+ * 配套钩子: 真正的强保证仍由 AudioRecorder.watch(meetingIdRef) + MeetingRoomView.onMounted 提供。
+ *
+ * 注意: stop()/reset() **不**自动清 pendingMeetingIdForHeartbeat —— 因为 stop 后立即 start 新会话
+ * 是常见路径 (开发调试), 而不会触发心跳泄漏; 调用方新会话前 set 即可。
+ *
+ * @param {number|null|undefined} id
+ */
+function setCurrentMeetingId(id) {
+  pendingMeetingIdForHeartbeat = id ? Number(id) : null
+}
+
 /** 获取已录制的 blob（仅 stopped 后可用） */
 function getAudioBlob() {
   if (audioChunks.length === 0) return null
@@ -330,5 +366,7 @@ export function useGlobalRecorder() {
     resumeFromStartedAt,
     setChunkStartIndex,
     getChunkStartIndex,
+    // 2026-10-08 P0-1 新增：start() 时兜底心跳 meetingId
+    setCurrentMeetingId,
   }
 }

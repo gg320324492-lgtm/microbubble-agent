@@ -103,6 +103,7 @@ import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
+import { ensureHeartbeat } from '@/composables/useRecordingHeartbeat'
 
 const router = useRouter()
 const route = useRoute()
@@ -274,6 +275,9 @@ onMounted(async () => {
       // v2: 自动启动 MediaRecorder 接续录音
       try {
         await startGlobalRecorder()
+        // 2026-10-08 P0-1 (会议 255 事故): 恢复路径必须显式 ensureHeartbeat
+        // —— 恢复路径不经过 AudioRecorder.handleStart, 心跳守卫需主动启
+        ensureHeartbeat(id)
         console.warn('[MeetingRoomView] 自动启动 MediaRecorder 成功, meetingId =', id)
       } catch (err) {
         console.warn('[MeetingRoomView] 自动启动 MediaRecorder 失败 (可能麦克风权限), 用户需手动点开始:', err.message)
