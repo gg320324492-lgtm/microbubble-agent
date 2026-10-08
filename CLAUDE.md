@@ -159,6 +159,25 @@
 - **类 20.217**: alpine 容器里 healthcheck 用 `localhost` = 解析 `::1`, nginx 只听 IPv4 时
   探针永远 connection refused → 假 unhealthy 长期遮蔽真状态; 探针一律 `127.0.0.1` 字面量,
   且优先探"穿过反代到上游"的路径 (/health 经 nginx→app) 让 healthcheck 本身就是端到端验证。
+- **类 20.218**: **录音心跳必须绑「录音会话」(模块级单例), 不能绑 UI 组件** ——
+  2026-10-08 会议 255 事故 (`docs/incident/2026-10-08-meeting-255-orphan-cleanup.md`)。
+  全站 `<router-view>` 无 `<keep-alive>`, 组件卸载即心跳死亡; 而**恢复/续传路径**
+  (`MeetingRoomView.vue` / `MobileMeetingRoom.vue` 的 onMounted) 直接调
+  `useGlobalRecorder().start()`, **绕过** `AudioRecorder.handleStart()` —— 09-15 的
+  心跳守卫唯一启动入口在按钮上, 于是会议 255 录音 38min **全程 0 心跳**, 被
+  `orphan_meeting_cleanup` 判死。**该修复从未在真机 iOS 上生效过** (会议 253 其实是
+  失败事故, 254 成功只因桌面 Chrome 触发 timeslice 有分片)。
+  **四个必须同时满足**: ①心跳状态是模块级变量, 与 `useGlobalRecorder` 同寿命,
+  **不在 `onUnmounted` 里停** (组件卸载 ≠ 录音结束; 只有 stop-recording /
+  cancel-recording / merge 完成才停); ②meetingId 到位**立刻**补心跳, 且**不用
+  `if (isActive())` 做前置守卫** —— 恢复路径时序是「先设 meetingId (MediaRecorder
+  还没启动) → 后 start()」, 带守卫的 watch 必然一次都不触发; ③恢复/续传路径必须与
+  新建路径**同样**启动心跳, 不许"按钮路径有、恢复路径没有"; ④`visibilitychange →
+  visible` / `pageshow(persisted)` / `focus` 切回前台必须**立即**补一次心跳 (iOS
+  后台挂起后 interval 会被冻结, 那 60s 正是误杀窗口)。
+  **配套后端纪律**: 孤儿清理**有分片就不删 MinIO** (原版无条件删 = 用户连补救机会
+  都没有); 心跳端点必须走**独立限流 tier** 且 **429 也要写审计** (否则"audit 无心跳
+  = 前端未发"的排查方法学失效, 本次白查 2 小时)。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务 (Winlogon 7002) LastRunTime 停在
   8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能); glitchtip + vision-mcp 重启前即 unhealthy;
   `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1` Exited 4 周残留并存。
