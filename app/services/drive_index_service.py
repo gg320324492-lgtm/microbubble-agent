@@ -27,8 +27,39 @@ logger = logging.getLogger("microbubble.drive_index_service")
 # 行为逐字不变); 测试注入测试库 URL 使任务不连生产库
 _index_db_url_override = None
 
-# file_parser_service 支持的扩展名 (与 parser 内 SUPPORTED_EXTENSIONS 对齐)
-SUPPORTED_EXTS = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md"}
+# drive 内容索引放行的扩展名。
+#
+# 注意: 这不是 file_parser_service.SUPPORTED_EXTENSIONS (那份只有 6 项结构化文档,
+# 仅被 drive_to_kb_service 引用), 而是 drive 索引路自己的闸门。真正的解析能力
+# 由 file_parser_service.extract_content 的分派决定 —— 它认 .pdf/.docx/.xlsx/
+# .pptx 的专用解析器, 以及 TEXT_EXTENSIONS 里的整族纯文本。本表此前与那份 6 项
+# 列表重复, 导致 parser 已支持的格式在 drive 索引路上被误挡 (占位 chunk 永不替换)。
+#
+# 2026-10-09 补 .csv / .log (见下方逐项理由)。
+SUPPORTED_EXTS = {
+    ".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md",
+    # .csv: file_parser 有专用 _parse_csv (file_parser_service.py:79-80) —— 不是
+    # 裸文本读! 它走 csv.reader 逐行解析、单元格去空后空格拼接, 输出风格与
+    # _parse_xlsx 一致。实测 2 个网盘 CSV (52B / 1690B) 均解析为**单 chunk**,
+    # 表头 (时间/转化率/温度/催化剂批次) 随正文保留, 搜"转化率"能命中且带列名上下文。
+    # 注: 大 CSV (>6000 字符) 会 fallback 到 window 策略切成数字碎片, 这是 .xlsx
+    # 既有的同款行为, 不是 csv 引入的新风险; 网盘现存 CSV 均远小于该阈值。
+    ".csv",
+    # .log: 已在 file_parser_service.TEXT_EXTENSIONS 内 (file_parser_service.py:50),
+    # 走 _decode_text 的 utf-8 → utf-8-sig → gb18030 编码探测链。实测 2 个网盘
+    # 日志解析出结构化中文运维记录 (自检/标定/丢帧/探头超时), 检索价值高。
+    ".log",
+}
+# 为什么**不加** .json (ZB-2 安全边界, 勿扩):
+# 1) .json 同样有专用 _parse_json 解析器, 技术上能解析, 但 key.json 这类密钥信封
+#    的正文会被 pretty-print 后**明文写进 knowledge_chunks**, 而 embedding 表与
+#    chunk 表都会随之落到备份/导出里 —— 泄密面从 MinIO 单文件扩大到可检索语料。
+# 2) 现有守卫在**任务层**: index_drive_content_task 调 is_backup_artifact_name()
+#    拦截备份产物 (drive_index_service.py:219)。若本表放开 .json, 就多出一条绕过
+#    该守卫的**脚本侧**入口 (backfill_drive_content.py:68 直接 import 本表过滤),
+#    守卫从"唯一收口"退化为"任选其一", 风险大于收益。
+#    ⇒ 真要索引普通 .json, 必须先把 is_backup_artifact_name 下沉为共用谓词,
+#      任务侧与脚本侧同时调用, 而不是在这里加一个字符串。
 
 
 def _ext_of(filename: str) -> str:
