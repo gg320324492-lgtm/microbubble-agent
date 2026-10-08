@@ -191,6 +191,17 @@
   只 log INFO 等于没校验; ③worker 日志 `grep -i unregistered` 应作为**部署后固定验证项**;
   ④验证用 `celery inspect registered` 回读任务名, 别只看容器 healthy (容器健康不代表
   任务注册完整)。
+  **同源第 2 例 (2026-10-09, commit `381958bea`)**: `app/services/drive_index_service.py`
+  (`index_drive_content_task`, 自 `bd9c09bcf` 2026-09-02 落盘起同样漏注册)。**存量后果
+  不是"零 chunk"而是更隐蔽的脏数据**——`rag_auto_ingest_service` (已注册, hourly beat)
+  按 `analysis_status=='pending'` 选行而**不按 `storage_mode` 过滤**, 会把 drive 行的占位
+  `content = "[drive upload] <file_name>"` 当正文切 chunk + embedding, 于是 drive 检索命中
+  的是 30 字符占位串而非 PPT/PDF 真内容 (实测 326 文件: 275 有真 chunk 来自一次性
+  `backfill_drive_content.py` 手工回填, 48 只有占位垃圾, 3 个零 chunk)。
+  **补纪律 ⑤**: 漏注册的链路**未必表现为空**, 会被别的已注册 task 用占位/低质量数据
+  "兜底"填充, 检索层看起来有数据实则全是垃圾——排查时必须**抽查 chunk 正文**, 不能只
+  `count(*)` 行数; ⑥`rag_auto_ingest_service` 这类**通用 ingestion task 应按
+  `storage_mode` 过滤**, 否则会抢占 domain-specific 索引 (drive/meeting) 的职责。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务 (Winlogon 7002) LastRunTime 停在
   8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能); glitchtip + vision-mcp 重启前即 unhealthy;
   `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1` Exited 4 周残留并存。
