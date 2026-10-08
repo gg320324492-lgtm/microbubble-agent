@@ -383,3 +383,88 @@ def test_case_22_observability_files_exist():
     ]
     missing = [f for f in required_files if not (PROJECT_ROOT / f).exists()]
     assert not missing, f"missing files: {missing}"
+
+# ============================================================
+# Case 23-26: RecallObserver._lock 跨 event loop 安全 (类 20.220 / 方案 C 铁律 1)
+# ============================================================
+
+class TestObserverLockCrossLoop:
+    """RecallObserver._lock 跨 event loop 安全回归 (同 OCRService 事故模式)
+
+    背景: RecallObserver 是进程级单例 (get()), 在 celery worker 进程里 import 一次、
+    跨多个 asyncio.run() 任务复用 (hybrid_retriever 经 auto_rag_tasks.
+    retrieve_and_cache_task 调用)。原实现 __init__ 里一次性 asyncio.Lock(), 一旦该锁
+    被跨 loop 争用 (注册 waiter) 就会绑死首个 loop → 后续 loop 抛
+    "is bound to a different event loop"。
+
+    注: 现行 _record() 临界区无 await, 故锁走 fast path、_lock._loop 恒为 None (bug
+    目前是**潜在**而非活跃)。测试直接对锁路径制造跨 loop**竞争**, 既锁定修复, 也防止
+    未来有人在临界区加 await 时回归。
+    """
+
+    def teardown_method(self):
+        from app.services.recall_observability import RecallObserver
+        RecallObserver.reset()
+
+    def test_lock_contended_across_loops_no_error(self):
+        """loop A 制造竞争(有等待者)后, loop B 再竞争同一锁 → 不抛 different loop。"""
+        from app.services.recall_observability import RecallObserver
+        RecallObserver.reset()
+        obs = RecallObserver.get()
+
+        async def _contend():
+            # 持锁跨越一个 await → 第二个 task 成为等待者 → 触发 _get_loop 绑定
+            async def hold():
+                async with obs._get_lock():
+                    await asyncio.sleep(0.02)
+            async def waiter():
+                await asyncio.sleep(0.001)
+                async with obs._get_lock():
+                    pass
+            await asyncio.gather(hold(), waiter())
+
+        # 修复前: loop B 必抛 RuntimeError: ... is bound to a different event loop
+        asyncio.run(_contend())  # loop A
+        asyncio.run(_contend())  # loop B
+        asyncio.run(_contend())  # loop C
+
+    def test_lock_identity_changes_across_loops(self):
+        """不同 loop 拿到不同 Lock 对象 (证明按 loop 重建)。"""
+        from app.services.recall_observability import RecallObserver
+        RecallObserver.reset()
+        obs = RecallObserver.get()
+
+        def _grab():
+            async def _inner():
+                return id(obs._get_lock())
+            return asyncio.run(_inner())
+
+        assert _grab() != _grab()
+
+    def test_lock_same_object_within_one_loop(self):
+        """同一 loop 内多次取是同一对象 (互斥语义不变)。"""
+        from app.services.recall_observability import RecallObserver
+        RecallObserver.reset()
+        obs = RecallObserver.get()
+
+        async def _inner():
+            return obs._get_lock(), obs._get_lock()
+
+        a, b = asyncio.run(_inner())
+        assert a is b
+
+    def test_record_sequence_across_loops_no_error(self):
+        """真实 celery 模式: 单例跨多次 asyncio.run() 调 observe/_record 不抛错。"""
+        from app.services.recall_observability import RecallObserver
+        RecallObserver.reset()
+        obs = RecallObserver.get()
+
+        def _one(i):
+            async def _inner():
+                async with obs.observe(caller_path="hybrid_retriever", original_query=f"q{i}"):
+                    await asyncio.sleep(0.001)
+            return asyncio.run(_inner())
+
+        for i in range(4):
+            _one(i)
+        assert len(obs.traces) == 4

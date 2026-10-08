@@ -143,7 +143,16 @@ class RecallObserver:
 
     def __init__(self) -> None:
         self.traces: List[RecallTrace] = []
-        self._lock = asyncio.Lock()
+        # 跨 event loop 安全 (CLAUDE.md 方案 C 铁律 1 / 类 20.220, 同 OCRService 模式):
+        # asyncio.Lock 在首次注册 waiter (_Lock.acquire 慢路径 -> _get_loop) 时会把
+        # 创建它的 event loop 绑到内部。本类是进程级单例 (get()), 在 celery worker
+        # 进程里 import 一次、跨多个 asyncio.run() 任务复用 (hybrid_retriever 经
+        # auto_rag_tasks.retrieve_and_cache_task / 其它 celery 检索路径调用),
+        # 若锁被跨 loop 争用即抛 "is bound to a different event loop"。
+        # 修法: 按当前 running loop 惰性创建/缓存 (与 app/core/redis.py _get_pool、
+        # app/core/database.py _get_lock、app/services/ocr_service.py 同模式)。
+        self._lock: Optional[asyncio.Lock] = None
+        self._lock_loop: Optional[asyncio.AbstractEventLoop] = None
         # 滚动统计 (用于 grafana)
         self.recent_latencies_ms: List[float] = []
         self.max_recent = 1000
@@ -165,6 +174,20 @@ class RecallObserver:
     def reset(cls) -> None:
         """测试用: 重置全局单例"""
         cls._instance = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        """按当前 running loop 惰性获取 _record 互斥锁 (跨 loop 安全)。
+
+        asyncio.Lock 在首次注册 waiter 时绑定创建它的 loop; celery 任务每次
+        asyncio.run() 是新 loop, 复用旧 loop 的锁会抛 "is bound to a different
+        event loop"。故以 running loop 为 key 缓存: loop 变则重建一份新锁
+        (互斥语义不变, 每 loop 一份)。必须在 async 上下文调用。
+        """
+        loop = asyncio.get_running_loop()
+        if self._lock is None or self._lock_loop is not loop:
+            self._lock = asyncio.Lock()
+            self._lock_loop = loop
+        return self._lock
 
     @asynccontextmanager
     async def observe(
@@ -208,7 +231,7 @@ class RecallObserver:
 
     async def _record(self, trace: RecallTrace) -> None:
         """记录 trace + 滚动缓冲"""
-        async with self._lock:
+        async with self._get_lock():
             self.traces.append(trace)
             self.recent_latencies_ms.append(trace.latency_ms)
             # 滚动裁剪

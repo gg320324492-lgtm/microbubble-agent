@@ -10,7 +10,6 @@ from app.config import settings
 # 避免 "Future attached to a different loop" / "Event loop is closed"。
 _redis_pool: Optional[redis.ConnectionPool] = None
 _redis_pool_loop: Optional[asyncio.AbstractEventLoop] = None
-_pool_lock = asyncio.Lock()
 
 
 def _build_pool() -> redis.ConnectionPool:
