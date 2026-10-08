@@ -84,7 +84,7 @@
 
 > 每条对应一次真实事故，是**现在该怎么做**的规则，不是历史记录。
 > 事故上下文见 `docs/incident/2026-08-04--2026-09-18-status-snapshots.md`。
-> 覆盖类 20.155–217，共 27 条。
+> 覆盖类 20.155–219，共 29 条。
 
 - **类 20.155**: bench 脚本 --help 子进程必须显式 PYTHONPATH=REPO_ROOT
 - **类 20.156**: argparse --help 在某些版本重定向到 stderr, subprocess 必须 capture_output=True
@@ -178,6 +178,19 @@
   **配套后端纪律**: 孤儿清理**有分片就不删 MinIO** (原版无条件删 = 用户连补救机会
   都没有); 心跳端点必须走**独立限流 tier** 且 **429 也要写审计** (否则"audit 无心跳
   = 前端未发"的排查方法学失效, 本次白查 2 小时)。
+- **类 20.219**: **新增 celery task 模块必须同时进 `celery_app.conf.imports` 显式列表** ——
+  2026-10-08 会议 255 事故追查发现。`app/services/meeting_chunk_service.py` 定义了
+  `index_meeting_chunks_task`, 但该模块从未进 imports, autodiscover 也覆盖不到
+  (`related_name=None` 只 import 主模块, 且 imports 才是权威列表) → worker 记
+  `Received unregistered task of type '...'` 后**静默丢弃**。派发点
+  (`post_meeting_tasks.py:1014`) 只打 INFO 不校验, 于是**自 `d1aa07adb` 起每条新会议
+  转录都没进 `meeting_chunks`**, 会议这一路 RAG (`hybrid_retriever.py:450` 第 5 路
+  meeting_chunks 向量召回) 实际为空, 无人察觉。
+  **纪律**: ①`grep -rl "@celery_app.task" app/services/` 的结果**逐个**比对 imports 列表,
+  漏一个就是一条静默失效的链路; ②`.delay()` 派发点必须能区分"派发成功"与"worker 认领",
+  只 log INFO 等于没校验; ③worker 日志 `grep -i unregistered` 应作为**部署后固定验证项**;
+  ④验证用 `celery inspect registered` 回读任务名, 别只看容器 healthy (容器健康不代表
+  任务注册完整)。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务 (Winlogon 7002) LastRunTime 停在
   8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能); glitchtip + vision-mcp 重启前即 unhealthy;
   `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1` Exited 4 周残留并存。
