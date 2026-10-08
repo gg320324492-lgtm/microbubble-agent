@@ -196,37 +196,45 @@ class MeetingQualityEvaluator:
             })
 
         # ---- 润色 ----
-        polished = self.m.get("transcript_polished") or []
-        if polished:
-            diff_count = 0
-            valid = min(len(transcript), len(polished))
-            for i in range(valid):
-                if (transcript[i].get("text") or "") != (polished[i].get("text") or ""):
-                    diff_count += 1
-            polish_ratio = diff_count / valid if valid else 0
-            metrics["polish_real_change_ratio"] = round(polish_ratio, 4)
-            metrics["polish_real_change_segments"] = diff_count
-            # 0 段变化 (会议 242 实测) 与 1-N 段变化率过低, 都属异常;
-            # 但要避免把 "polished 字段恰好跟 raw 字段完全相同" 的正常 case 也告警,
-            # 因此若 valid==0 跳过.
-            if valid > 0 and media_dur and media_dur > 300 and diff_count == 0:
-                issues.append({
-                    "code": "polish_no_effective_change",
-                    "level": "fail",
-                    "message": f"润色实际 0 段变化 (valid={valid}), 形同未润色",
-                })
-            elif (
-                valid > 0
-                and media_dur
-                and media_dur > 300
-                and polish_ratio < self.THRESHOLDS["polish_real_change_warn_ratio"]
-                and diff_count > 0
-            ):
-                issues.append({
-                    "code": "polish_no_effective_change",
-                    "level": "warn",
-                    "message": f"润色实际仅改 {diff_count}/{valid} 段, 改动率 {polish_ratio*100:.2f}%, 形同未润色",
-                })
+        # 2026-10-09: ai_polish 被 MEETING_AI_POLISH_ENABLED 关闭时, transcript_polished
+        # 仍是"原文的副本"(见 post_meeting_tasks: seg.get("text_polished", seg["text"])),
+        # 所以 diff_count 必然为 0 —— 若照常判定会稳定误报 polish_no_effective_change fail,
+        # 把每场 >5min 的会议 quality_status 钉死成 fail。故显式跳过润色项判定。
+        if self.m.get("ai_polish_skipped"):
+            metrics["ai_polish_skipped"] = True
+            metrics["polish_real_change_ratio"] = None
+        else:
+            polished = self.m.get("transcript_polished") or []
+            if polished:
+                diff_count = 0
+                valid = min(len(transcript), len(polished))
+                for i in range(valid):
+                    if (transcript[i].get("text") or "") != (polished[i].get("text") or ""):
+                        diff_count += 1
+                polish_ratio = diff_count / valid if valid else 0
+                metrics["polish_real_change_ratio"] = round(polish_ratio, 4)
+                metrics["polish_real_change_segments"] = diff_count
+                # 0 段变化 (会议 242 实测) 与 1-N 段变化率过低, 都属异常;
+                # 但要避免把 "polished 字段恰好跟 raw 字段完全相同" 的正常 case 也告警,
+                # 因此若 valid==0 跳过.
+                if valid > 0 and media_dur and media_dur > 300 and diff_count == 0:
+                    issues.append({
+                        "code": "polish_no_effective_change",
+                        "level": "fail",
+                        "message": f"润色实际 0 段变化 (valid={valid}), 形同未润色",
+                    })
+                elif (
+                    valid > 0
+                    and media_dur
+                    and media_dur > 300
+                    and polish_ratio < self.THRESHOLDS["polish_real_change_warn_ratio"]
+                    and diff_count > 0
+                ):
+                    issues.append({
+                        "code": "polish_no_effective_change",
+                        "level": "warn",
+                        "message": f"润色实际仅改 {diff_count}/{valid} 段, 改动率 {polish_ratio*100:.2f}%, 形同未润色",
+                    })
 
         # ---- 声纹 / 说话人 ----
         speakers: List[str] = []

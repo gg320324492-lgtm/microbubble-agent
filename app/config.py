@@ -321,6 +321,19 @@ class Settings(BaseSettings):
     # 3000 字 ≈ 2.5~3k tokens，给输出留足空间，单批稳定落在上下文内。
     POLISH_LLM_BATCH_MAX_CHARS: int = 3000
     POLISH_LLM_BATCH_MAX_SEGMENTS: int = 120
+
+    # 2026-10-09 主指挥决策: AI 润色默认关闭。
+    # 实测依据: 会议 255 (3331 段) 切 68 批耗时 ~50-60min, 而产物 100% 被
+    # "差异超过 10% 回退原文" 的兜底丢弃 (polish_real_change_ratio=0.0);
+    # 换 MiniMax 后还频发"段数不匹配"。净收益为负, 故默认关闭。
+    # 需要恢复时: .env 里设 MEETING_AI_POLISH_ENABLED=true
+    #
+    # 注意与上面 ENABLE_AI_POLISH 的区别: 那个开关是 service 层的**兜底闸**
+    # (polish_segments_with_cache 缓存未命中时逐批短路), 不会跳过批次循环、
+    # 也不会把 ai_polish 阶段记成 skipped; 本开关在**流水线层**提前返回。
+    # 两者可并存 (都默认 True/False 各自独立), 恢复润色只需开本开关。
+    MEETING_AI_POLISH_ENABLED: bool = False
+
     TRANSCRIPT_BUFFER_MAX_ENTRIES: int = 200  # Redis LIST 限长（test_maxlen_200 契约）
 
     # ========================================================================

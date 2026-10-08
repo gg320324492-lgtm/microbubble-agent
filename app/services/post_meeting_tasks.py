@@ -731,61 +731,77 @@ def post_meeting_process(self, meeting_id: int):
 
                 # ===== 阶段 2.5: AI 润色转录 =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="AI 润色转录文本", redis_override=redis_client)
-                # 2026-09-15 P0（会议 250 润色 0 变化事故）: 改用分批润色。
-                # 原实现把整场 1904 段一次性发一个 prompt → 63,545 tokens，
-                # 远超 ollama num_ctx=16386（服务端日志明确 truncating），
-                # 截断后撞 10 分钟超时 → 整场降级为原文 → 0 段变化。
-                from app.services.meeting_ai_polish import polish_segments_batched
 
-                # 准备润色上下文
-                participant_names = list(speaker_mapping.values())
-                polish_context = {
-                    "title": meeting.title or "未命名会议",
-                    "participants": participant_names,
-                    "topic": None,
-                    "context": [],
-                }
+                # 类 20.146 W2+N 修复: 显式初始化避免 UnboundLocalError（skip / 异常两条路径共用）
+                polished_segments = []
 
-                # 为润色添加 ts 字段（从 start 时间戳）
-                segments_for_polish = []
-                for seg in transcript_segments:
-                    segments_for_polish.append({
-                        "speaker": seg.get("speaker", "未知"),
-                        "text": seg["text"],
-                        "ts": seg.get("start", 0),
-                    })
-
-                try:
-                    polish_result = await polish_segments_batched(
-                        meeting_id, segments_for_polish, polish_context,
-                        on_progress=lambda done, total: logger.info(
-                            f"  AI 润色进度: {done}/{total} 批"),
+                # 2026-10-09 主指挥决策: AI 润色默认关闭（MEETING_AI_POLISH_ENABLED=false）。
+                # 实测: 会议 255 (3331 段) 切 68 批耗时 ~50-60min, 而产物 100% 被
+                # "差异超过 10% 回退原文" 兜底丢弃（polish_real_change_ratio=0.0）。
+                # 关闭时不调 LLM、不进批次循环, 只留 skipped 阶段记录, 流水线继续往下走。
+                # 恢复润色: .env 设 MEETING_AI_POLISH_ENABLED=true（润色代码本体保留未删）。
+                if not settings.MEETING_AI_POLISH_ENABLED:
+                    logger.info("润色已按配置跳过（MEETING_AI_POLISH_ENABLED=false）")
+                    await _persist_stage(
+                        proc_svc, run, "ai_polish", "skipped",
+                        metrics={"skipped": True, "reason": "MEETING_AI_POLISH_ENABLED=false"},
                     )
-                    polished_segments = polish_result.get("polished", []) or []
-                    if polished_segments:
-                        # 将润色后的文本回写到 transcript_segments
-                        changed = 0
-                        for i, polished in enumerate(polished_segments):
-                            if i < len(transcript_segments):
-                                new_text = polished.get("text", transcript_segments[i]["text"])
-                                transcript_segments[i]["text_polished"] = new_text
-                                if new_text != transcript_segments[i]["text"]:
-                                    changed += 1
-                        logger.info(
-                            f"AI 润色完成: {len(polished_segments)} 段, "
-                            f"其中 {changed} 段实际发生变化"
+                else:
+                    # 2026-09-15 P0（会议 250 润色 0 变化事故）: 改用分批润色。
+                    # 原实现把整场 1904 段一次性发一个 prompt → 63,545 tokens，
+                    # 远超 ollama num_ctx=16386（服务端日志明确 truncating），
+                    # 截断后撞 10 分钟超时 → 整场降级为原文 → 0 段变化。
+                    from app.services.meeting_ai_polish import polish_segments_batched
+
+                    # 准备润色上下文
+                    participant_names = list(speaker_mapping.values())
+                    polish_context = {
+                        "title": meeting.title or "未命名会议",
+                        "participants": participant_names,
+                        "topic": None,
+                        "context": [],
+                    }
+
+                    # 为润色添加 ts 字段（从 start 时间戳）
+                    segments_for_polish = []
+                    for seg in transcript_segments:
+                        segments_for_polish.append({
+                            "speaker": seg.get("speaker", "未知"),
+                            "text": seg["text"],
+                            "ts": seg.get("start", 0),
+                        })
+
+                    try:
+                        polish_result = await polish_segments_batched(
+                            meeting_id, segments_for_polish, polish_context,
+                            on_progress=lambda done, total: logger.info(
+                                f"  AI 润色进度: {done}/{total} 批"),
                         )
-                        if changed == 0:
-                            logger.warning(
-                                "AI 润色完成但 0 段发生变化 —— 极可能是 LLM 侧失败降级"
-                                "（超时/上下文超限），请检查 ollama 日志的 truncating 记录"
+                        polished_segments = polish_result.get("polished", []) or []
+                        if polished_segments:
+                            # 将润色后的文本回写到 transcript_segments
+                            changed = 0
+                            for i, polished in enumerate(polished_segments):
+                                if i < len(transcript_segments):
+                                    new_text = polished.get("text", transcript_segments[i]["text"])
+                                    transcript_segments[i]["text_polished"] = new_text
+                                    if new_text != transcript_segments[i]["text"]:
+                                        changed += 1
+                            logger.info(
+                                f"AI 润色完成: {len(polished_segments)} 段, "
+                                f"其中 {changed} 段实际发生变化"
                             )
-                    else:
-                        logger.warning("AI 润色返回空结果，使用原文")
-                except Exception as e:
-                    polished_segments = []  # 类 20.146 W2+N 修复: 显式初始化避免 UnboundLocalError
-                    logger.warning(f"AI 润色失败（降级为原文）: {e}")
-                await _persist_stage(proc_svc, run, "ai_polish", "success", metrics={"polished_segments": len(polished_segments) if polished_segments else 0})
+                            if changed == 0:
+                                logger.warning(
+                                    "AI 润色完成但 0 段发生变化 —— 极可能是 LLM 侧失败降级"
+                                    "（超时/上下文超限），请检查 ollama 日志的 truncating 记录"
+                                )
+                        else:
+                            logger.warning("AI 润色返回空结果，使用原文")
+                    except Exception as e:
+                        polished_segments = []  # 类 20.146 W2+N 修复: 显式初始化避免 UnboundLocalError
+                        logger.warning(f"AI 润色失败（降级为原文）: {e}")
+                    await _persist_stage(proc_svc, run, "ai_polish", "success", metrics={"polished_segments": len(polished_segments) if polished_segments else 0})
 
                 # 将识别出的发言人添加为会议参与者
                 from app.models.meeting import MeetingParticipant
@@ -964,6 +980,9 @@ def post_meeting_process(self, meeting_id: int):
                     "media_duration_seconds": getattr(meeting, "media_duration_seconds", None),
                     "transcript": meeting.transcript,
                     "transcript_polished": meeting.transcript_polished,
+                    # 2026-10-09: 告诉质量门禁润色是被配置关掉的（而非"润色了但 0 段变化"），
+                    # 否则 transcript_polished=原文副本 会稳定误报 polish_no_effective_change fail。
+                    "ai_polish_skipped": not settings.MEETING_AI_POLISH_ENABLED,
                     "summary": meeting.summary,
                     "key_points": meeting.key_points,
                     "decisions": meeting.decisions,
