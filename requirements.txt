@@ -1,7 +1,7 @@
 # Web框架
 fastapi>=0.109.0
 uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+python-multipart==0.0.30
 websockets==12.0
 
 # 数据库
@@ -80,11 +80,14 @@ python-dotenv==1.0.0
 # 2026-07-31 RAG-FW-DEPLOY 修复: pydantic==2.5.2 pin 与 langchain (>=2.7.4) + llama-index-core 0.13 (>=2.8.0) 冲突, 放宽到 >=2.8.0
 pydantic-settings>=2.4.0
 pydantic[email]>=2.8.0,<3.0.0
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
 # 2026-07-31 Hybrid RAG Stack: langchain-core 0.3 + llama-index-core 0.12 + langfuse 要求 httpx>=0.15.4 (0.25.2 pin 在范围内但过老, 放宽)
 httpx>=0.28.0
+# 2026-10-09 L-8 安全修复: urllib3 为传递依赖 (requests/minio/modelscope 拉入), trivy 报 2.7.0 有 2 条 HIGH,
+# 加下限约束消高危。实测 requests(<3,>=1.26)/minio(无上限)/modelscope(>=1.26) 均兼容, 全 requirements 可解析。
+urllib3>=2.8.0
 email-validator==2.1.0
 
 # 测试
