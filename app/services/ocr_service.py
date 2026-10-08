@@ -389,19 +389,42 @@ class OCRService:
 
     def __init__(self):
         self._backend: Optional[OCRBackend] = None
-        self._init_lock = asyncio.Lock()
         # 并发控制（业务层也要用，但这里存一个默认）
-        self._semaphore = asyncio.Semaphore(settings.MULTIMODAL_OCR_CONCURRENCY)
+        #
+        # 跨 event loop 安全（CLAUDE.md 方案 C 铁律 1）:
+        # asyncio.Semaphore / asyncio.Lock 在首次 acquire() 时会把创建它的 event loop
+        # 绑到内部 waiter 上。本服务是模块级单例（`ocr_service = OCRService()`），
+        # 在 celery worker 进程里 import 一次、跨多个任务复用；而每个 celery 任务
+        # 走 `asyncio.run()`（knowledge_service.analyze_knowledge_task）都会新建 event loop。
+        # 若把 semaphore/lock 在 __init__ 里创建一次，第二及之后的任务复用旧 loop 的
+        # 原语就会抛 "got Future attached to a different loop" / "is bound to a different
+        # event loop"，导致所有 OCR 调用失败（历史事故：4201/5446 = 77% 失败）。
+        #
+        # 修法：按当前 running loop 惰性创建并缓存（与 app/core/redis.py 的
+        # _get_pool/_redis_pool_loop、app/core/database.py 的 _get_lock 同模式）。
+        # 并发上限语义不变（仍为 settings.MULTIMODAL_OCR_CONCURRENCY，每 loop 一份）。
+        self._semaphore: Optional[asyncio.Semaphore] = None
+        self._semaphore_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._init_lock: Optional[asyncio.Lock] = None
+        self._init_lock_loop: Optional[asyncio.AbstractEventLoop] = None
         logger.info(
             f"OCRService 初始化: backend={settings.MULTIMODAL_OCR_BACKEND}, "
             f"concurrency={settings.MULTIMODAL_OCR_CONCURRENCY}, "
             f"max_images/doc={settings.MULTIMODAL_MAX_IMAGES_PER_DOC}"
         )
 
+    def _get_init_lock(self) -> asyncio.Lock:
+        """按当前 running loop 惰性获取 init lock（跨 loop 安全）。"""
+        loop = asyncio.get_running_loop()
+        if self._init_lock is None or self._init_lock_loop is not loop:
+            self._init_lock = asyncio.Lock()
+            self._init_lock_loop = loop
+        return self._init_lock
+
     async def _get_backend(self) -> OCRBackend:
         if self._backend is not None:
             return self._backend
-        async with self._init_lock:
+        async with self._get_init_lock():
             if self._backend is not None:
                 return self._backend
             name = settings.MULTIMODAL_OCR_BACKEND
@@ -416,6 +439,16 @@ class OCRService:
 
     @property
     def semaphore(self) -> asyncio.Semaphore:
+        """返回绑定到当前 running loop 的并发信号量（跨 loop 安全）。
+
+        每次调用用 asyncio.get_running_loop() 做 key：loop 变则重建一份新的
+        Semaphore（初值仍是 settings.MULTIMODAL_OCR_CONCURRENCY）。
+        必须在 async 上下文（有 running loop）中调用。
+        """
+        loop = asyncio.get_running_loop()
+        if self._semaphore is None or self._semaphore_loop is not loop:
+            self._semaphore = asyncio.Semaphore(settings.MULTIMODAL_OCR_CONCURRENCY)
+            self._semaphore_loop = loop
         return self._semaphore
 
     async def _analyze_with_retry(
