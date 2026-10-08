@@ -42,6 +42,20 @@ STATE_FAILED = "failed"
 
 VALID_INGEST_STATES = {STATE_PENDING, STATE_INGESTING, STATE_DONE, STATE_FAILED}
 
+# 2026-10-09 类 20.219 同源第 3 例修复: 只有知识库卡片 (storage_mode='kb') 才走
+# "当正文切 chunk + embedding" 这条路。
+#
+# 背景: Knowledge.content 对 storage_mode='drive' 的行并非真实正文 —— drive_service.py:572
+# 写入的是占位串 ``[drive upload] <file_name>`` (约 30 字符)。本服务原先只按
+# analysis_status='pending' 选行, 不看 storage_mode, 于是把占位串当正文切 chunk +
+# embedding, 检索命中的是文件名占位而不是 PPT/PDF 真实内容 (实测 48 条脏 chunk)。
+# 真实解析正文由 drive_index_service (已注册, upload 时 dispatch) 负责, 那条路做
+# MinIO 下载 + 文件解析, 与本服务互不重叠。
+#
+# 与其余读路径一致 (app/api/v1/knowledge.py:148/161、chat_attachments.py:73、
+# micro_bubble_agent.py:164) —— 全部按 storage_mode=='kb' 硬过滤。
+INGESTABLE_STORAGE_MODE = "kb"
+
 
 # ============================================================
 # Helpers
@@ -80,6 +94,21 @@ def _set_ingest_state(
         base.pop("ingest_last_error", None)
     knowledge.meta = base
     knowledge.analysis_status = state
+
+
+def _ingestable_rows_clause():
+    """Canonical WHERE clause for every query in this service.
+
+    Keeping it in one place guarantees the ingest loop and the two counters can
+    never drift apart — a counter that still counted drive rows would report a
+    queue depth that this service can never drain (drive rows stay ``pending``
+    forever now that we skip them), which is exactly the kind of placeholder-
+    garbage-signal 类 20.219 is about.
+    """
+    return (
+        Knowledge.analysis_status == STATE_PENDING,
+        Knowledge.storage_mode == INGESTABLE_STORAGE_MODE,
+    )
 
 
 # ============================================================
@@ -222,7 +251,7 @@ async def auto_ingest_pending(
         if bounded:
             result = await db.execute(
                 select(Knowledge)
-                .where(Knowledge.analysis_status == STATE_PENDING)
+                .where(*_ingestable_rows_clause())
                 .order_by(Knowledge.created_at.asc(), Knowledge.id.asc())
                 .limit(bounded)
             )
@@ -289,9 +318,7 @@ async def auto_ingest_pending(
         # Remaining pending count (queue depth)
         remaining = 0
         count_res = await db.execute(
-            select(func.count(Knowledge.id)).where(
-                Knowledge.analysis_status == STATE_PENDING
-            )
+            select(func.count(Knowledge.id)).where(*_ingestable_rows_clause())
         )
         remaining = int(count_res.scalar_one() or 0)
 
@@ -299,7 +326,8 @@ async def auto_ingest_pending(
         failed_count = 0
         failed_res = await db.execute(
             select(func.count(Knowledge.id)).where(
-                Knowledge.analysis_status == STATE_FAILED
+                Knowledge.analysis_status == STATE_FAILED,
+                Knowledge.storage_mode == INGESTABLE_STORAGE_MODE,
             )
         )
         failed_count = int(failed_res.scalar_one() or 0)

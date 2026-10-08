@@ -238,6 +238,11 @@ celery_app.conf.imports = [
     # embedding, 于是检索命中的是 30 字符的占位串而非 PPT/PDF 真内容。
     # 修: 注册本模块 → drive 原文重新走 MinIO 下载 + 解析 + 分块 (幂等 DELETE 重插)。
     "app.services.drive_index_service",  # WP2 网盘文件内容索引 (drive_service.create_file dispatch)
+    # 2026-10-09 类 20.219 同源第 3 例: auto_rag_tasks 自 W101 P2 落盘起就从未进过本列表 →
+    # auto_rag_service.py:197 的 retrieve_and_cache_task.delay(...) 被 worker 静默丢弃
+    # ("Received unregistered task of type ...")。任务创建/会议完成/知识库上传后的自动
+    # 预检索缓存 (Redis) 从未真正建立, get_cached_auto_rag() 恒定返回 None。
+    "app.services.auto_rag_tasks",  # W101 P2: Auto-RAG 后台检索 + Redis 缓存 (auto_rag_service dispatch)
 ]  # fmt: skip
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
 celery_app.autodiscover_tasks(
