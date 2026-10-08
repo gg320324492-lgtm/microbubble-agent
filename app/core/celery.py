@@ -229,6 +229,15 @@ celery_app.conf.imports = [
     # meeting_chunks 索引表 → 会议这一路的 RAG 检索实际为空 (chunk 落库本身不依赖 LLM,
     # 不受 MIMO 401 影响)。
     "app.services.meeting_chunk_service",  # WP1 会议转录 chunk 索引 (post_meeting 管线 dispatch)
+    # 2026-10-09 类 20.219 同源第 2 例: drive_index_service 自 bd9c09bcf (2026-09-02)
+    # 落盘起就从未进过本列表 → drive_service.create_file:594 的
+    # index_drive_content_task.delay(knowledge.id) 被 worker 静默丢弃。
+    # 存量后果不是"零 chunk"而是更隐蔽的脏数据: 注册缺失后 drive 原文始终没被解析,
+    # 但 rag_auto_ingest_service (已注册, hourly beat) 不按 storage_mode 过滤,
+    # 会把 drive 行的占位 content "[drive upload] <file_name>" 当正文切 chunk +
+    # embedding, 于是检索命中的是 30 字符的占位串而非 PPT/PDF 真内容。
+    # 修: 注册本模块 → drive 原文重新走 MinIO 下载 + 解析 + 分块 (幂等 DELETE 重插)。
+    "app.services.drive_index_service",  # WP2 网盘文件内容索引 (drive_service.create_file dispatch)
 ]  # fmt: skip
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
 celery_app.autodiscover_tasks(
