@@ -66,6 +66,48 @@ if [ -f "$ALLOWLIST_FILE" ]; then
   done < "$ALLOWLIST_FILE"
 fi
 
+# ── 内建化 (2026-10-08): 单趟预扫描建 "已定义 token" 查表 ────────────────
+#
+# 改造前这段判定是「每条待检记录 × 4 个 TOKEN_SOURCES 各起一次 grep 子进程」
+# (1386 × 4 ≈ 5544 次 spawn; Windows git-bash 单次 spawn ~25ms → 2m+)。
+# 调用方 check-dist-before-commit.sh:232 用 `timeout 30` 包着, 必被 SIGTERM kill
+# → 返回 124 → `|| true` 吞掉 → summary 行从未产生 → 判定顺序落到 exit 0 = **假绿门禁**。
+# 现在整张表在下面读文件时一次建好, 循环内零子进程。
+#
+# ⚠️ 语义等价性是硬要求 —— 必须与被取代的
+#     grep -qE "(^|[[:space:]])${token}([[:space:]]|:|=)"
+# **逐字等价**, 三条边界全部照搬 (这是词边界匹配, 不是子串匹配):
+#   1. 前一位 = 行首 或 [[:space:]]          ← 原正则的 (^|[[:space:]])
+#   2. token 名取 `--` 后**贪婪**的 [a-z0-9_-]+  ← 贪婪保证"后随字符"就是判定位,
+#      于是 `--a-b` 不会被 `--a` 的查表误命中 (原正则同样不命中 `--a`, 后随是 `-`)
+#   3. 后一位 ∈ [[:space:]] 或 `:` 或 `=`      ← 原正则的 ([[:space:]]|:|=)
+#      故 `var(--x)` 这类**引用**不会被算成定义 (原实现同样不算)
+declare -A DEFINED
+for __src in "${TOKEN_SOURCES[@]}"; do
+  [ -f "$__src" ] || continue
+  while IFS= read -r __line || [ -n "$__line" ]; do
+    __tail="$__line"
+    # 同一行可能定义多个 token (如 `--a: red; --b: blue`): 命中后剥掉前缀继续扫。
+    # ⚠️ token 名必须取 BASH_REMATCH[2] (第二个分组), **不能**对 [0] 做 ## 剥空白:
+    #    [[:space:]] 是单字符模式, ## 只剥掉**一个**前导空白 → 键会变成
+    #    " --color-primary" (带前导空格) → 查表全部落空 (实测 379 定义只入表 21 个)。
+    # 第二次 =~ 会覆盖 BASH_REMATCH, 故必须在下一次 =~ 之前取走。
+    while [[ "$__tail" =~ (^|[[:space:]])(--[a-z0-9_-]+) ]]; do
+      __hit="${BASH_REMATCH[0]}"
+      __name="${BASH_REMATCH[2]}"    # 纯 token 名, 不含前导边界空白
+      # ⚠️ 截断必须用 `${__tail#*"$__hit"}`, **不能**用 `${__tail:${#__hit}}`:
+      #    ${#__hit} 是匹配**长度**, 而匹配通常并不贴着 __tail 开头 (前面那 1 个边界
+      #    空白之前可能还有别的字符), 按长度切片会让下一次扫描错位 → 漏掉后续 token
+      #    (实测 379 个定义只入表 21 个)。`#*"$hit"` 截到 __hit 的**首次出现**为止,
+      #    而 =~ 取最左匹配 ⇒ 首次出现位置 = 匹配起点 ⇒ 与"删掉整个匹配"严格等价。
+      __tail="${__tail#*"$__hit"}"
+      if [[ "$__tail" =~ ^([[:space:]]|:|=) ]]; then
+        DEFINED["$__name"]=1
+      fi
+    done
+  done < "$__src"
+done
+
 # v76.5: CI 模式静默, 不打印扫描进度
 if [ "$CI_MODE" -eq 0 ]; then
   echo "🔍 扫描 var(--token, ...) 中的孤儿 token..."
@@ -124,9 +166,12 @@ declare -a ORPHAN_LINES  # 形式: "file:line|token|full_var_call"
 while IFS= read -r line; do
   [ -z "$line" ] && continue
   # 2026-10-03: 格式已由 awk 预展开为 "path:lineno:--token", 无需再从源码行提 token
-  file=$(echo "$line" | cut -d: -f1)
-  lineno=$(echo "$line" | cut -d: -f2)
-  token=$(echo "$line" | cut -d: -f3-)
+  # 2026-10-08 内建化: 原 `echo | cut -d: -f1/-f2/-f3-` 三条管道 = 每条记录 6 次 fork,
+  # 改参数展开 (等价: 路径无冒号 / token 名无冒号, 故 f3- == 第二个冒号之后的全部)
+  __rest="${line#*:}"
+  file="${line%%:*}"
+  lineno="${__rest%%:*}"
+  token="${__rest#*:}"
 
   # 白名单优先
   if [ "${ALLOWLIST[$token]:-}" = "1" ]; then
@@ -134,13 +179,12 @@ while IFS= read -r line; do
     continue
   fi
 
-  found=0
-  for src in "${TOKEN_SOURCES[@]}"; do
-    if grep -qE "(^|[[:space:]])${token}([[:space:]]|:|=)" "$src" 2>/dev/null; then
-      found=1
-      break
-    fi
-  done
+  # 内建化: 关联数组查表取代 4 次 grep 子进程 (边界语义见上方 DEFINED 构建注释)
+  if [ -n "${DEFINED[$token]:-}" ]; then
+    found=1
+  else
+    found=0
+  fi
   if [ "$found" -eq 0 ]; then
     if [ "$CI_MODE" -eq 1 ]; then
       # v76.5: GitHub Actions annotation 格式

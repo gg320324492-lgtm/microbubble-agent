@@ -227,11 +227,36 @@ fi
 
 # ---- token orphan 检测 (v75, 既有硬拦语义原样保留; 触发条件 = web/src 有暂存改动) ----
 if [ -n "$staged_src" ]; then
-    if [ -x "scripts/check-token-orphans.sh" ]; then
-        # W100 +75c: 加 timeout 30 防单步卡死 (Windows 10min timeout 误判场景)
-        ORPHAN_OUTPUT=$(timeout 30 bash scripts/check-token-orphans.sh 2>&1) || true
-        ORPHAN_COUNT=$(echo "$ORPHAN_OUTPUT" | grep -oE '[0-9]+ 真 orphan' | grep -oE '[0-9]+' | head -1)
-        if [ -n "$ORPHAN_COUNT" ] && [ "$ORPHAN_COUNT" -gt 0 ]; then
+    # -f 而非 -x: 调用方式是 `bash <脚本>` 显式指定解释器, 不需要 exec 位。
+    # 本仓 core.fileMode=false, 换机器/新克隆可能丢权限位, -x 会**静默跳过整项检查**
+    # = 第二条假绿路径。文件不存在一律 fail-loud, 不当"没这项检查"处理。
+    if [ ! -f "scripts/check-token-orphans.sh" ]; then
+        echo ""
+        echo "❌ [pre-commit] 找不到 scripts/check-token-orphans.sh (token-orphan 检查无法运行)"
+        echo "   本次 web/src 有暂存改动, token-orphan 硬拦是必跑项, 不能静默跳过"
+        echo "   (旧版用 [ -x ] 判存在 + 缺文件即跳过 → 换机器丢 exec 位时整项检查失效)"
+        echo "   修复: git status 确认脚本未被误删/未 checkout, 恢复后重试"
+        echo ""
+        echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+        exit 1
+    fi
+
+    # W100 +75c: 加 timeout 30 防单步卡死 (Windows 10min timeout 误判场景)
+    # 退出码契约 (scripts/check-token-orphans.sh:9-12):
+    #   0 = 无 orphan | 1 = 有真 orphan | 2 = 配置错误
+    # 另加 timeout 自身的 124 = 超时被 kill → 检查**未完成**, 不能当通过。
+    # 2026-10-08 硬化: 旧版 `|| true` + 从 stdout 刮 "N 真 orphan" 会在超时时
+    # 刮不到数字 → 条件为假 → 顺序落到脚本末尾 exit 0 假绿 (曾连续假绿 18 天)。
+    ORPHAN_OUTPUT=$(timeout 30 bash scripts/check-token-orphans.sh 2>&1)
+    ORPHAN_RC=$?
+    case "$ORPHAN_RC" in
+        0)
+            # 无 orphan (白名单项已自动 skip) → 放行
+            ;;
+        1)
+            # 有真 orphan → 原有报错 + 阻塞
+            ORPHAN_COUNT=$(echo "$ORPHAN_OUTPUT" | grep -oE '[0-9]+ 真 orphan' | grep -oE '[0-9]+' | head -1)
+            [ -z "$ORPHAN_COUNT" ] && ORPHAN_COUNT="未知数量"
             echo ""
             echo "❌ [pre-commit] 发现 $ORPHAN_COUNT 个 var(--token) orphan (CLAUDE.md v73 沉淀)"
             echo "   token 不在 variables.css / nutui-theme.scss / mobile-base.css 定义"
@@ -245,8 +270,38 @@ if [ -n "$staged_src" ]; then
             echo ""
             echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
             exit 1
-        fi
-    fi
+            ;;
+        124)
+            echo ""
+            echo "❌ [pre-commit] token-orphan 检查超时 (timeout 30s 被 kill, 退出码 124)"
+            echo "   本次 token-orphan 硬拦**未完成验证**, 不能当通过处理。"
+            echo "   旧版 '|| true' 吞掉超时码 + summary 行压根没产生 → 静默 exit 0 假绿"
+            echo "   手工跑定位慢在哪一步: bash scripts/check-token-orphans.sh"
+            echo "   若脚本本身过慢, 修脚本让它 < 30s (不要靠放宽 timeout 掩盖)"
+            echo "   紧急逃生: git commit --no-verify (仅限复检官/主拍批准场景)"
+            echo ""
+            echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+            exit 1
+            ;;
+        2)
+            echo ""
+            echo "❌ [pre-commit] token-orphan 检查配置错误 (退出码 2, 见 scripts/check-token-orphans.sh:12)"
+            echo "   输出:"
+            echo "$ORPHAN_OUTPUT" | sed 's/^/   /'
+            echo ""
+            echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+            exit 1
+            ;;
+        *)
+            echo ""
+            echo "❌ [pre-commit] token-orphan 检查返回未知退出码 $ORPHAN_RC — 不当作通过"
+            echo "   输出:"
+            echo "$ORPHAN_OUTPUT" | sed 's/^/   /'
+            echo ""
+            echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+            exit 1
+            ;;
+    esac
 fi
 
 # dist 待补内容 (dist_pending) 已在规则 1 之前计算, 此处直接复用
