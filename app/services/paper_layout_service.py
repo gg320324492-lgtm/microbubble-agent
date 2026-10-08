@@ -23,6 +23,7 @@ from typing import Optional, List, Dict, Any
 
 from app.config import settings
 from app.core.llm import get_anthropic_client, get_default_model
+from app.services.ocr_service import ocr_result_failed
 
 logger = logging.getLogger("microbubble.paper_layout")
 
@@ -303,12 +304,37 @@ class PaperLayoutService:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         clean_results = []
+        failed_pages = []
         for i, r in enumerate(results):
             page_num = i + 1
             if isinstance(r, Exception):
-                logger.warning(f"page {page_num} failed: {r}")
+                # gather(return_exceptions=True) 抓到的是"逃过 analyze_page_layout
+                # 兜底的意外异常"（正常失败已被内部转成 error-dict）。
+                logger.warning(f"page {page_num} raised: {r}")
                 clean_results.append({"page_number": page_num, "blocks": [], "error": str(r)})
+                failed_pages.append(page_num)
+                continue
+            # 2026-10-09 假成功修复（与 OCR 管线 commit 0ec63ee32 同型）:
+            # analyze_page_layout 失败时**不抛异常**，而是返回带 error 键的 dict
+            # （见该方法 4 处 return: pymupdf_not_installed / page_out_of_range /
+            #  渲染异常 / _analyze_page_with_vision 的 LLM 失败）。
+            # 老代码只判 isinstance(r, Exception)，对 dict 永远 False → 全部页
+            # 失败的文档仍产出 page_layouts（每页 blocks=[]），通过下方
+            # `if not page_layouts` 守卫被当"成功 layout"落库。
+            # 判据复用 ocr_service.ocr_result_failed（唯一失败判据 = dict 有无 error
+            # 键），与 OCR 管线保持同一份契约，避免两份判据漂移。
+            err = ocr_result_failed(r)
+            if err:
+                logger.warning(f"page {page_num} failed: {err}")
+                # 归一：失败页补上 error 键（r 已含），确保下游能识别
+                if isinstance(r, dict):
+                    r.setdefault("page_number", page_num)
+                    clean_results.append(r)
+                else:
+                    clean_results.append({"page_number": page_num, "blocks": [], "error": err})
+                failed_pages.append(page_num)
             else:
+                # 合法页：含"本来就没内容块"的正常空页（无 error 键），不算失败
                 clean_results.append(r)
 
         def _sort_key(x):
@@ -317,6 +343,18 @@ class PaperLayoutService:
                 return (1, 0)
             return (0, pn)
         clean_results.sort(key=_sort_key)
+
+        if failed_pages and len(failed_pages) == len(clean_results):
+            logger.error(
+                f"[scan_layout] ALL {len(failed_pages)} pages failed "
+                f"(pages={failed_pages[:10]}{'...' if len(failed_pages) > 10 else ''})"
+            )
+        elif failed_pages:
+            logger.warning(
+                f"[scan_layout] {len(failed_pages)}/{len(clean_results)} pages failed: "
+                f"{failed_pages[:10]}{'...' if len(failed_pages) > 10 else ''}"
+            )
+
         return clean_results
 
 
@@ -339,7 +377,13 @@ def scan_paper_layout_task(self, knowledge_id: int):
     from app.models.knowledge_layout import KnowledgeLayout
 
     async def _run():
-        local_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        # 2026-10-09: 修 pre-existing NameError —— 老代码用未定义的模块全局
+        # `engine` / `async_sessionmaker`（本模块从未定义它们，只有
+        # create_celery_engine_and_session 的 import）→ scan_paper_layout_task
+        # 一被调用即 NameError。改用已 import 的工厂函数按需创建（与
+        # app/core/celery_db.py 文档给出的用法一致）。
+        engine, SessionFactory = create_celery_engine_and_session()
+        local_session_factory = SessionFactory
         try:
             async with local_session_factory() as db:
                 try:
@@ -372,6 +416,27 @@ def scan_paper_layout_task(self, knowledge_id: int):
                     if not page_layouts:
                         logger.warning(f"[scan_layout] knowledge_id={knowledge_id} empty result")
                         return {"status": "error", "reason": "scan_empty"}
+
+                    # 2026-10-09 假成功修复: scan_paper_layout 对"全部页失败"永远返回
+                    # 非空 list（每页 {blocks:[], error}），`if not page_layouts` 守卫
+                    # 拦不住。这里显式统计失败页——全部页失败时**不得**落库假 layout
+                    # （老代码会把这种"空 blocks 的成功"写入 knowledge_layouts）。
+                    failed_pages = [
+                        p.get("page_number") for p in page_layouts if ocr_result_failed(p)
+                    ]
+                    if len(failed_pages) == len(page_layouts):
+                        logger.error(
+                            f"[scan_layout] knowledge_id={knowledge_id} ALL "
+                            f"{len(page_layouts)} pages failed, not persisting layout: "
+                            f"{failed_pages[:10]}"
+                        )
+                        # 不落库（保持 knowledge_layouts 无该行 = 前端 has_layout=False）
+                        return {
+                            "status": "error",
+                            "reason": "all_pages_failed",
+                            "total_pages": len(page_layouts),
+                            "failed_pages": failed_pages,
+                        }
 
                     total_blocks = sum(len(p.get("blocks", [])) for p in page_layouts)
                     total_images = sum(
@@ -410,6 +475,7 @@ def scan_paper_layout_task(self, knowledge_id: int):
                         "total_pages": len(page_layouts),
                         "total_blocks": total_blocks,
                         "total_images": total_images,
+                        "failed_pages": failed_pages,
                     }
                 except Exception as e:
                     logger.error(f"[scan_layout] knowledge_id={knowledge_id} failed: {e}", exc_info=True)
