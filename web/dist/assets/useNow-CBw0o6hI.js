@@ -1,0 +1,1 @@
+import{g as l,l as a}from"./index-DyNCxrND.js";function i(t=0,e=()=>new Date){const o=l(e());let n=null;function u(){o.value=e()}function r(){n&&(clearInterval(n),n=null)}return t>0&&(n=setInterval(u,t)),a(r),{now:o,tick:u}}export{i as u};
