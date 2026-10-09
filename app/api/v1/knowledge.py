@@ -1234,10 +1234,17 @@ async def list_knowledge_images(
     )
     items = items_result.scalars().all()
 
-    # 统计
-    status_count = {"done": 0, "failed": 0, "pending": 0, "skipped": 0}
+    # 统计。status_count 会把未列举的状态（done_no_text / partial / …）也
+    # 记进去，但响应只暴露固定几个字段 —— 2026-10-09 实测 done_no_text 有
+    # 3317 行（占全库 61%）在响应里彻底消失。故显式补齐各桶，且保证
+    # 各桶之和 === total（详见 KnowledgeImageList 的 docstring）。
+    status_count = {"done": 0, "done_no_text": 0, "failed": 0, "pending": 0, "skipped": 0}
+    known_statuses = set(status_count)
+    other = 0
     for img in items:
         status_count[img.ocr_status] = status_count.get(img.ocr_status, 0) + 1
+        if img.ocr_status not in known_statuses:
+            other += 1
 
     def _to_dict(img: KnowledgeImage) -> dict:
         return {
@@ -1268,8 +1275,11 @@ async def list_knowledge_images(
         items=[_to_dict(i) for i in items],
         total=len(items),
         ocr_done=status_count["done"],
+        ocr_done_no_text=status_count["done_no_text"],
         ocr_failed=status_count["failed"],
         ocr_pending=status_count["pending"],
+        ocr_skipped=status_count["skipped"],
+        ocr_other=other,
     )
 
 

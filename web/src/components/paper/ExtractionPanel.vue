@@ -7,11 +7,29 @@
           <el-tag size="small" type="success" effect="light" v-if="imageStats.done">
             <el-icon><CircleCheck /></el-icon> OCR 完成 {{ imageStats.done }}
           </el-tag>
+          <el-tag
+            size="small" type="info" effect="light" v-if="imageStats.doneNoText"
+            title="OCR 跑完但没返回文本。不等于「图里确实没字」—— 换个提取 prompt 重跑可能拿到文字。"
+          >
+            <el-icon><InfoFilled /></el-icon> 无文本 {{ imageStats.doneNoText }}
+          </el-tag>
           <el-tag size="small" type="danger" effect="light" v-if="imageStats.failed">
             <el-icon><CircleClose /></el-icon> 失败 {{ imageStats.failed }}
           </el-tag>
           <el-tag size="small" type="warning" effect="light" v-if="imageStats.pending">
             <el-icon><Loading /></el-icon> 处理中 {{ imageStats.pending }}
+          </el-tag>
+          <el-tag
+            size="small" type="info" effect="plain" v-if="imageStats.skipped"
+            title="模板装饰横幅（母版页眉/校徽），按几何判据主动跳过 OCR。"
+          >
+            <el-icon><InfoFilled /></el-icon> 已跳过 {{ imageStats.skipped }}
+          </el-tag>
+          <el-tag
+            size="small" type="warning" effect="plain" v-if="imageStats.other"
+            title="未归类的 OCR 状态（如 partial）。出现即表示后端新增了枚举、本页口径待补。"
+          >
+            <el-icon><InfoFilled /></el-icon> 其他 {{ imageStats.other }}
           </el-tag>
         </div>
       </div>

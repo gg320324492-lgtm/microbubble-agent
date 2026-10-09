@@ -19,7 +19,9 @@ chart / table / formula 三类 extraction 与装饰图的关联数均为 0。
 ## 判据：**复用** ``app/services/image_decoration_filter.py``，不复制第二份实现
 
 本脚本 import `find_banner_image_ids`（两个信号取交集：极端宽高比 + 同文档内
-同尺寸出现在 >= 3 个不同页 + ``height <= 300`` 保险丝）。**绝不**在这里重写
+同尺寸出现在 >= 2 个不同页 + ``height <= 300`` 保险丝；阈值 2026-10-09 由
+agent33 从 3 降到 2，判据阈值一律以 image_decoration_filter 的常量为准）。
+**绝不**在这里重写
 判据常量或再写一份几何判断 —— 两份判据会各自漂移，届时清理集与检索侧排除集
 不再一致，"已清干净"这句话就是假的（同 agent22 的设计意图）。
 

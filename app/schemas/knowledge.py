@@ -337,12 +337,24 @@ class KnowledgeImageItem(BaseModel):
 
 
 class KnowledgeImageList(BaseModel):
-    """图片列表（含聚合统计）"""
+    """图片列表（含聚合统计）
+
+    `ocr_done` 只数「OCR 跑完且抽到文本」的行（`ocr_status='done'`）。
+    `ocr_done_no_text` 是与之语义相反的另一桶（跑完但返回空），必须单列：
+    并进去会让 `ocr_done` 虚高 2.6 倍（实测 2050 vs 3317），且被读成
+    「这么多图有可检索文字」—— 而 `ocr_text` 非空正是第 5 路多模态召回的
+    硬过滤条件（`multimodal_retriever._load_candidates`）。
+
+    新字段带默认值 0，老调用方 / 老测试构造该模型不会因此报错。
+    """
     items: List[KnowledgeImageItem]
     total: int
     ocr_done: int
     ocr_failed: int
     ocr_pending: int
+    ocr_done_no_text: int = 0
+    ocr_skipped: int = 0
+    ocr_other: int = 0
 
 
 class ExtractionItem(BaseModel):

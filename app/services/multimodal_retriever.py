@@ -140,7 +140,9 @@ class MultimodalRetriever:
 
         这里用与 Python 侧完全相同的两个信号取交集：
           1. 极端宽高比 + 薄高度（横幅条形状）
-          2. 同文档内同尺寸出现在 >= 3 个不同页（母版资产复用）
+          2. 同文档内同尺寸出现在 >= 2 个不同页（母版资产复用；
+             2026-10-09 agent33 由 3 降到 2，理由见 image_decoration_filter
+             模块 docstring。阈值从那里 import，改一处即两侧同步）
         相关子查询按 (knowledge_id, width, height) 走 idx_knowledge_image_kb_page
         / idx_knowledge_image_id，全库 5446 行规模下单次代价可忽略。
         """

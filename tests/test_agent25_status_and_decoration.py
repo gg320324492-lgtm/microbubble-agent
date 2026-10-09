@@ -35,7 +35,8 @@ pipeline 路径（reset_status=False）**完全不受影响** —— 快照/恢�
 
 ═══ 问题 ②：两套装饰图判据并存 ═══
 
-实测全库 5446 张图：几何判据（image_decoration_filter）命中 2051，
+实测全库 5446 张图：几何判据（image_decoration_filter）命中 2051
+（agent33 把 MIN_REPEATED_PAGES 3→2 后为 2095），
 文本判据（`_is_decorative_image`）命中 4344，**几何集 ⊆ 文本集**。
 但这不是冗余证据 —— 两者在流水线不同阶段用不同信号，互补：
 

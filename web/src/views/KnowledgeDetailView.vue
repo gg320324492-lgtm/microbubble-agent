@@ -191,6 +191,7 @@ import axios from 'axios'
 import * as echarts from 'echarts'
 
 import { renderMarkdown } from '@/utils/markdown'
+import { computeImageOcrStats } from '@/utils/imageOcrStats'
 import PaperHeader from '@/components/paper/PaperHeader.vue'
 import AbstractCard from '@/components/paper/AbstractCard.vue'
 import PaperSectionRenderer from '@/components/paper/PaperSectionRenderer.vue'
@@ -703,12 +704,9 @@ const fetchMultimodalData = async (id) => {
     const imgs = imgRes.data?.items || []
     const exts = extRes.data?.items || []
 
-    imageStats.value = {
-      total: imgs.length,
-      done: imgs.filter(i => i.ocr_status === 'done').length,
-      failed: imgs.filter(i => i.ocr_status === 'failed').length,
-      pending: imgs.filter(i => i.ocr_status === 'pending' || i.ocr_status === 'skipped').length,
-    }
+    // 分桶口径见 utils/imageOcrStats.js —— done_no_text / partial 曾因只认
+    // 'done'/'failed'/'pending' 而在 UI 上蒸发（全库 3317 张）。
+    imageStats.value = computeImageOcrStats(imgs)
 
     // 缓存到 window 供 normalize 使用
     window.__paperImagesCache = imgs

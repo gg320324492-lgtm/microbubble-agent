@@ -178,11 +178,28 @@ class TestFindBannerImageIds:
         images = [_img(1, 1055, 203, 1)]
         assert find_banner_image_ids(images) == set()
 
-    def test_two_page_banner_not_flagged(self):
-        """2 页 < MIN_REPEATED_PAGES=3 → 放过。"""
+    def test_two_page_banner_now_flagged(self):
+        """2 页 == MIN_REPEATED_PAGES=2 → 命中。
+
+        2026-10-09（agent33）：阈值由 3 降到 2。原先只落 2 页的母版横幅
+        （PPT 仅 2 页 / 母版元素在正文页外）因差一票漏网，其幻觉 ocr_text
+        一直没被清。取证见 image_decoration_filter 模块 docstring。
+        """
         from app.services.image_decoration_filter import find_banner_image_ids
 
         images = [_img(1, 1055, 203, 1), _img(2, 1055, 203, 2)]
+        assert find_banner_image_ids(images) == {1, 2}
+
+    def test_single_page_still_not_flagged(self):
+        """**边界**：1 页 < MIN_REPEATED_PAGES=2 → 仍放过。
+
+        绝不可再降到 1：全库 pages=1 的 75 行里是真实科研内容（实测 O₃
+        自由基反应方程式 647×73、O₂ 质心追踪 MATLAB 代码 898×72、
+        代谢活性公式、水质参数表），降到 1 会直接误杀。
+        """
+        from app.services.image_decoration_filter import find_banner_image_ids
+
+        images = [_img(1, 647, 73, 8)]  # kb 2392 p8，真实 O₃ 反应方程式
         assert find_banner_image_ids(images) == set()
 
     def test_different_sizes_across_pages_not_treated_as_repeat(self):
