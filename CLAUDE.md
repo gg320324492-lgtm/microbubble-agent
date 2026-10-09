@@ -357,7 +357,7 @@
      python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; c=Config(); c.set_main_option('script_location','alembic'); s=ScriptDirectory.from_config(c); print(s.get_heads())"
      ```
   4. **部署文档第 0 节必含 alembic chain 风险** — 任何写 alembic migration 的 PR 必须在部署文档顶部加"alembic 链风险"段, 提醒主指挥 merge 顺序 (参考 `docs/drive-v2-pr9-deployment.md` 第 0 节)
-  5. **跨 PR 部署 alembic 必须 cp + clear cache** — `docker cp alembic/versions/0XX_*.py microbubble-agent-app-1:/app/alembic/versions/` 后必跑 `docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 rm -rf /app/alembic/versions/__pycache__` (CLAUDE.md 752 行铁律升级 — `__pycache__` 残留会让老 down_revision 继续生效, 双头假修复)
+  5. **跨 PR 部署 alembic 必须 cp + clear cache** — `docker cp alembic/versions/0XX_*.py microbubble-agent-app-1:/app/alembic/versions/` 后必跑 `docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 rm -rf /app/alembic/versions/__pycache__` (**重启纪律** 升级 —— 见下方「部署必做」段: 改完 Python 代码必 `docker compose restart app celery-worker`; `__pycache__` 残留会让老 down_revision 继续生效, 双头假修复。2026-10-09 起改为具名引用, 不再写会漂移的行号)
 - **memory 沉淀**: [`memory/w68-alembic-chain-discipline-2026-07-24.md`](./memory/w68-alembic-chain-discipline-2026-07-24.md) (锚点范式第 46 守恒 + 完整时间线)
 
 ### 2026-06-13 Vue 3.5 'bum' null bug 真根因 + Vite plugin patch（commit `79305b7`）
@@ -609,7 +609,7 @@
 ```bash
 # 1. 跑数据库迁移 (Stage 3 加 7 列)
 docker exec microbubble-agent-db-1 psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql
-# 2. 重启 Python 进程 (CLAUDE.md 752 行铁律)
+# 2. 重启 Python 进程 (**重启纪律**: 改完 app/ 代码必须重启, 否则容器仍跑旧代码。2026-10-09 起此处不再引用 CLAUDE.md 行号 —— 行号会随三层重排漂移, 纪律改内联自述)
 docker compose restart app celery-worker
 ```
 
