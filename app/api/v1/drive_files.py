@@ -1638,6 +1638,30 @@ _LIBREOFFICE_GATE = threading.Semaphore(1)
 # 同一缓存 key 永不重试, 只能等 updated_at 变化或人工清缓存。
 PREVIEW_ERROR_RETRY_SECONDS = 600
 
+# 2026-10-09 (agent39): 预览缓存 key 基准从 updated_at 换成 file_path。
+#
+# 为什么不能用 updated_at: 它是**行级**时间戳, 任何碰这一行的写操作都会让它变,
+# 哪怕文件字节一个没动。2026-10-08 18:58 一次批量重索引把 295 个 drive PPT 的
+# updated_at 全刷新了 → 生产 key 命中率实测 0/295 = 0.0%, 而 PNG 内容没变
+# (抽验 file 1041 / 1071 重转, 20/20 + 22/22 页 sha256 逐字节一致)。
+# 代价不是磁盘而是 CPU: _LIBREOFFICE_GATE 是全局 Semaphore(1), 295 个文件
+# 串行重转要几十分钟, 且期间同一文件的后续请求全被锁挡成 converting。
+#
+# 为什么 file_path 够: 它是 MinIO object_name, 本仓**内容寻址**语义 ——
+# upload_file 走 uuid4().hex; 秒传/新版本/回滚 (drive_service 与
+# drive_version_service) 每次都铸新对象名 (token_hex+hash+ts), 全仓无任何
+# 原地覆写同一 object 的写路径。故 file_path 变 ⟺ 内容变, 而纯元数据写
+# (改名/移动/改 visibility/收藏/重索引) 都不碰 file_path。
+# 实测 326 个 drive 行 file_path 零重复, 且 drive 行 version_number>1 的为 0。
+#
+# 版本前缀沿用 "v2": 与旧 "v1" 天然不撞, 老缓存目录不会被误命中 (见迁移脚本)。
+def _preview_cache_key(file_path: str) -> str:
+    """逐页预览缓存 key —— 基于 file_path (内容身份), 不是 updated_at (行时间戳)。
+
+    file_path 为空 (无 MinIO 对象) 的行由各端点先行 404, 不会走到这里。
+    """
+    return hashlib.md5(("v2:" + str(file_path)).encode()).hexdigest()[:12]
+
 
 def _preview_error_if_fresh(cache_dir: FsPath) -> str | None:
     """error.txt 存在且未过期 → 返回错误消息; 过期 → 删除并返回 None (允许重转)"""
@@ -1727,7 +1751,7 @@ async def get_pptx_pages_status(
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
-    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    key = _preview_cache_key(f.file_path)
     cache_dir = _pptx_cache_dir(file_id, key)
 
     if (cache_dir / "ready.json").exists():
@@ -1780,7 +1804,7 @@ async def get_pptx_page_image(
     f = await svc.get_file(file_id, current_user_id=current_user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在")
-    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    key = _preview_cache_key(f.file_path)
     cache_dir = _pptx_cache_dir(file_id, key)
     p = cache_dir / ("page-%d.png" % page)
     if not p.exists():
@@ -1858,7 +1882,7 @@ async def get_docx_pages_status(
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
-    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    key = _preview_cache_key(f.file_path)
     cache_dir = _docx_cache_dir(file_id, key)
 
     if (cache_dir / "ready.json").exists():
@@ -1909,7 +1933,7 @@ async def get_docx_page_image(
     f = await svc.get_file(file_id, current_user_id=current_user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在")
-    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    key = _preview_cache_key(f.file_path)
     cache_dir = _docx_cache_dir(file_id, key)
     p = cache_dir / ("page-%d.png" % page)
     if not p.exists():
@@ -1929,7 +1953,7 @@ async def get_docx_converted_pdf(
     f = await svc.get_file(file_id, current_user_id=current_user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在")
-    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    key = _preview_cache_key(f.file_path)
     cache_dir = _docx_cache_dir(file_id, key)
     p = cache_dir / "doc.pdf"
     if not p.exists():
@@ -1984,7 +2008,7 @@ async def get_pdf_pages_status(
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
-    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    key = _preview_cache_key(f.file_path)
     cache_dir = _pdf_cache_dir(file_id, key)
 
     if (cache_dir / "ready.json").exists():
@@ -2035,7 +2059,7 @@ async def get_pdf_page_image(
     f = await svc.get_file(file_id, current_user_id=current_user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在")
-    key = hashlib.md5(("v1:" + str(f.updated_at)).encode()).hexdigest()[:12]
+    key = _preview_cache_key(f.file_path)
     cache_dir = _pdf_cache_dir(file_id, key)
     p = cache_dir / ("page-%d.png" % page)
     if not p.exists():
@@ -2054,9 +2078,10 @@ _XLSX_CACHE_COLS = 60
 _XLSX_CELL_MAX_CHARS = 24
 
 
-def _xlsx_cache_key(updated_at) -> str:
-    # v2: 列上限 6→60 后旧缓存 (只有 6 列) 全部作废
-    return hashlib.md5(("v2:" + str(updated_at)).encode()).hexdigest()[:12]
+def _xlsx_cache_key(file_path) -> str:
+    # 2026-10-09 (agent39): 基准从 updated_at 换成 file_path (内容身份), 见 _preview_cache_key。
+    # 此前 "v2" 前缀表示列上限 6→60 的作废, 现前缀语义统一为 key 方案版本。
+    return _preview_cache_key(file_path)
 
 
 def _xlsx_cache_dir(file_id: int, key: str) -> FsPath:
@@ -2163,7 +2188,7 @@ async def get_xlsx_preview_status(
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
-    key = _xlsx_cache_key(f.updated_at)
+    key = _xlsx_cache_key(f.file_path)
     cache_dir = _xlsx_cache_dir(file_id, key)
 
     if (cache_dir / "ready.json").exists():
@@ -2209,8 +2234,9 @@ _ZIP_PREVIEW_ROOT = FsPath("/app/data/zip_preview")
 _ZIP_MAX_ENTRIES = 5000
 
 
-def _zip_cache_key(updated_at) -> str:
-    return hashlib.md5(("v1:" + str(updated_at)).encode()).hexdigest()[:12]
+def _zip_cache_key(file_path) -> str:
+    # 2026-10-09 (agent39): 基准从 updated_at 换成 file_path, 见 _preview_cache_key。
+    return _preview_cache_key(file_path)
 
 
 def _zip_cache_dir(file_id: int, key: str) -> FsPath:
@@ -2279,7 +2305,7 @@ async def get_zip_list(
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
-    key = _zip_cache_key(f.updated_at)
+    key = _zip_cache_key(f.file_path)
     cache_dir = _zip_cache_dir(file_id, key)
 
     if (cache_dir / "ready.json").exists():
@@ -2326,8 +2352,9 @@ _CSV_CACHE_COLS = 60
 _CSV_CELL_MAX_CHARS = 24
 
 
-def _csv_cache_key(updated_at) -> str:
-    return hashlib.md5(("v1:" + str(updated_at)).encode()).hexdigest()[:12]
+def _csv_cache_key(file_path) -> str:
+    # 2026-10-09 (agent39): 基准从 updated_at 换成 file_path, 见 _preview_cache_key。
+    return _preview_cache_key(file_path)
 
 
 def _csv_cache_dir(file_id: int, key: str) -> FsPath:
@@ -2425,7 +2452,7 @@ async def get_csv_preview_status(
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
-    key = _csv_cache_key(f.updated_at)
+    key = _csv_cache_key(f.file_path)
     cache_dir = _csv_cache_dir(file_id, key)
 
     if (cache_dir / "ready.json").exists():

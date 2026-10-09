@@ -1,7 +1,7 @@
 """XLSX 预览 (2026-09-07 选型 D) — worker 解析规则 + 切片纯函数 + 端点状态机测试
 
 覆盖: worker 截断(200 行×6 列)/单元格 24 字符裁剪/空表/truncated 语义/200 行边界,
-_slice_xlsx_sheets 切片, updated_at 变化 → key 轮换,
+_slice_xlsx_sheets 切片, key 基准 (file_path, 非 updated_at),
 端点 .xls/非 xlsx 400 / ready.json 缓存命中 / error.txt / MinIO 下载失败→error+锁释放。
 不依赖 MinIO: worker 直接喂临时文件; 端点下载路径 monkeypatch file_service。
 DB fixture: conftest db (TEST_DATABASE_URL); 缓存走 monkeypatch 的根目录。
@@ -115,12 +115,20 @@ def test_slice_max_rows():
 
 
 @pytest.mark.asyncio
-async def test_cache_key_rotates_with_updated_at(db):
-    """updated_at 变化 → key 变化 → 旧缓存自动失效"""
+async def test_cache_key_stable_across_updated_at_rotates_with_file_path(db):
+    """2026-10-09 (agent39) key 基准改为 file_path (内容身份), 不再是 updated_at。
+
+    旧契约 "updated_at 变化 → key 变化 → 旧缓存自动失效" 恰恰是 bug 本身:
+    updated_at 是行级时间戳, 纯元数据写/批量重索引都会刷新它 → 缓存全失效
+    → LibreOffice 全量重转。file_path 变才等价于内容变。
+    """
     u = await _mk_member(db, "u")
     f1 = await _mk_file(db, u, "a.xlsx")
     f2 = await _mk_file(db, u, "b.xlsx", updated_at=f1.updated_at + timedelta(hours=1))
-    assert _xlsx_cache_key(f1.updated_at) != _xlsx_cache_key(f2.updated_at)
+    assert _xlsx_cache_key(f1.file_path) != _xlsx_cache_key(f2.file_path)
+    bumped = await _mk_file(db, u, "a.xlsx", updated_at=f1.updated_at + timedelta(hours=1))
+    assert bumped.file_path == f1.file_path
+    assert _xlsx_cache_key(bumped.file_path) == _xlsx_cache_key(f1.file_path)
 
 
 # === 端点状态机 (任务 2 合回) ===
@@ -152,7 +160,7 @@ async def test_endpoint_cache_hit(db, tmp_path, monkeypatch):
     u = await _mk_member(db, "u")
     f = await _mk_file(db, u, "exp.xlsx")
     monkeypatch.setattr(drive_files, "_XLSX_PREVIEW_ROOT", tmp_path / "xr")
-    key = _xlsx_cache_key(f.updated_at)
+    key = _xlsx_cache_key(f.file_path)
     d = _xlsx_cache_dir(f.id, key)
     d.mkdir(parents=True)
     (d / "ready.json").write_text(json.dumps({"sheets": [{
@@ -170,7 +178,7 @@ async def test_endpoint_error_file(db, tmp_path, monkeypatch):
     u = await _mk_member(db, "u")
     f = await _mk_file(db, u, "bad.xlsx")
     monkeypatch.setattr(drive_files, "_XLSX_PREVIEW_ROOT", tmp_path / "xr")
-    d = _xlsx_cache_dir(f.id, _xlsx_cache_key(f.updated_at))
+    d = _xlsx_cache_dir(f.id, _xlsx_cache_key(f.file_path))
     d.mkdir(parents=True)
     (d / "error.txt").write_text("BadZipFile: File is not a zip file", encoding="utf-8")
     resp = await get_xlsx_preview_status(file_id=f.id, max_rows=8, db=db, current_user=u)
@@ -193,7 +201,7 @@ async def test_endpoint_download_failure_writes_error_and_releases_lock(db, tmp_
     resp = await get_xlsx_preview_status(file_id=f.id, max_rows=8, db=db, current_user=u)
     assert resp["status"] == "error" and "minio down" in resp["message"]
     assert drive_files._XLSX_PREVIEW_LOCKS == {}          # 锁已释放
-    assert (drive_files._xlsx_cache_dir(f.id, _xlsx_cache_key(f.updated_at)) / "error.txt").exists()
+    assert (drive_files._xlsx_cache_dir(f.id, _xlsx_cache_key(f.file_path)) / "error.txt").exists()
 
 
 def test_worker_exact_200_boundary(tmp_path):

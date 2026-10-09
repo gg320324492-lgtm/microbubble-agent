@@ -1,7 +1,7 @@
 """ZIP 预览 (2026-09-07 选型 A 清单下钻) — worker 条目抽取 + 端点状态机测试
 
 覆盖: worker 目录自动补齐(隐式父目录)/文件+大小/总数统计/条目上限,
-端点 .zip 400/缓存命中/误差文件, updated_at 变化 → key 轮换。
+端点 .zip 400/缓存命中/误差文件, key 基准 (file_path, 非 updated_at)。
 不依赖 MinIO: worker 直接喂临时 zip; 端点走 monkeypatch 的缓存根目录。
 DB fixture: conftest db (TEST_DATABASE_URL)。
 """
@@ -116,7 +116,7 @@ async def test_endpoint_cache_hit(db, tmp_path, monkeypatch):
     f = await _mk_file(db, u, "archive.zip")
     root = tmp_path / "zr"
     monkeypatch.setattr(drive_files, "_ZIP_PREVIEW_ROOT", root)
-    d = drive_files._zip_cache_dir(f.id, _zip_cache_key(f.updated_at))
+    d = drive_files._zip_cache_dir(f.id, _zip_cache_key(f.file_path))
     d.mkdir(parents=True)
     (d / "ready.json").write_text(json.dumps({
         "entries": [{"path": "a.txt", "dir": False, "size": 3}],
@@ -134,7 +134,7 @@ async def test_endpoint_error_file(db, tmp_path, monkeypatch):
     f = await _mk_file(db, u, "bad.zip")
     root = tmp_path / "zr"
     monkeypatch.setattr(drive_files, "_ZIP_PREVIEW_ROOT", root)
-    d = drive_files._zip_cache_dir(f.id, _zip_cache_key(f.updated_at))
+    d = drive_files._zip_cache_dir(f.id, _zip_cache_key(f.file_path))
     d.mkdir(parents=True)
     (d / "error.txt").write_text("BadZipFile", encoding="utf-8")
     resp = await get_zip_list(file_id=f.id, db=db, current_user=u)
@@ -142,8 +142,12 @@ async def test_endpoint_error_file(db, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cache_key_rotates_with_updated_at(db):
+async def test_cache_key_stable_across_updated_at_rotates_with_file_path(db):
+    """2026-10-09 (agent39) key 基准改为 file_path, 理由见 _preview_cache_key。"""
     u = await _mk_member(db, "u")
     f1 = await _mk_file(db, u, "a.zip")
     f2 = await _mk_file(db, u, "b.zip", updated_at=f1.updated_at + timedelta(hours=1))
-    assert _zip_cache_key(f1.updated_at) != _zip_cache_key(f2.updated_at)
+    assert _zip_cache_key(f1.file_path) != _zip_cache_key(f2.file_path)
+    bumped = await _mk_file(db, u, "a.zip", updated_at=f1.updated_at + timedelta(hours=1))
+    assert bumped.file_path == f1.file_path
+    assert _zip_cache_key(bumped.file_path) == _zip_cache_key(f1.file_path)

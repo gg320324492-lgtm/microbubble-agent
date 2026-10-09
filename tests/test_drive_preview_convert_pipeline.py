@@ -39,8 +39,13 @@ UPDATED = datetime(2026, 9, 12, 12, 0, 0)
 
 # ---------- 测试替身 ----------
 
-def _v1_key(updated) -> str:
-    return hashlib.md5(("v1:" + str(updated)).encode()).hexdigest()[:12]
+# 2026-10-09 (agent39): key 基准改为 file_path (内容身份), 不再是 updated_at (行时间戳)
+def _v2_key(file_path) -> str:
+    return hashlib.md5(("v2:" + str(file_path)).encode()).hexdigest()[:12]
+
+
+# _fake_drive_file(1) 的 file_path — key_func 第 2 参现在收 file_path
+FAKE_PATH = "drive/1.bin"
 
 
 def _called_process_error(cmd):
@@ -125,7 +130,7 @@ class _PipelineEnv:
         self.user = SimpleNamespace(id=1)
 
     def cache_dir(self):
-        return self.tmp_path / f"1_{self.key_func(1, UPDATED)}"
+        return self.tmp_path / f"1_{self.key_func(1, FAKE_PATH)}"
 
 
 def _fake_drive_file(file_id=1, name="a.pptx"):
@@ -138,31 +143,31 @@ def _fake_drive_file(file_id=1, name="a.pptx"):
 def _pptx_env(tmp_path, monkeypatch):
     return _PipelineEnv(tmp_path, monkeypatch, "get_pptx_pages_status",
                         "_PPTX_CONVERT_LOCKS", "_pptx_cache_dir", "a.pptx",
-                        lambda fid, u: _v1_key(u))
+                        lambda fid, fp: _v2_key(fp))
 
 
 def _docx_env(tmp_path, monkeypatch):
     return _PipelineEnv(tmp_path, monkeypatch, "get_docx_pages_status",
                         "_DOCX_CONVERT_LOCKS", "_docx_cache_dir", "a.docx",
-                        lambda fid, u: _v1_key(u))
+                        lambda fid, fp: _v2_key(fp))
 
 
 def _pdf_env(tmp_path, monkeypatch):
     return _PipelineEnv(tmp_path, monkeypatch, "get_pdf_pages_status",
                         "_PDF_CONVERT_LOCKS", "_pdf_cache_dir", "a.pdf",
-                        lambda fid, u: _v1_key(u))
+                        lambda fid, fp: _v2_key(fp))
 
 
 def _xlsx_env(tmp_path, monkeypatch):
     return _PipelineEnv(tmp_path, monkeypatch, "get_xlsx_preview_status",
                         "_XLSX_PREVIEW_LOCKS", "_xlsx_cache_dir", "a.xlsx",
-                        lambda fid, u: drive_files._xlsx_cache_key(u))
+                        lambda fid, fp: drive_files._xlsx_cache_key(fp))
 
 
 def _zip_env(tmp_path, monkeypatch):
     return _PipelineEnv(tmp_path, monkeypatch, "get_zip_list",
                         "_ZIP_PREVIEW_LOCKS", "_zip_cache_dir", "a.zip",
-                        lambda fid, u: drive_files._zip_cache_key(u))
+                        lambda fid, fp: drive_files._zip_cache_key(fp))
 
 
 SUBPROCESS_PIPELINES = (_pptx_env, _docx_env, _pdf_env)
@@ -193,7 +198,7 @@ def _write_error(cache_dir, message="soffice exploded", age_seconds=None):
 
 def test_pptx_worker_failure_cleans_lock_table(tmp_path, monkeypatch):
     """失败分支: worker 线程必须结束且锁表 key 被 pop (旧代码在此永久挂起)"""
-    key = _v1_key(UPDATED)
+    key = _v2_key(FAKE_PATH)
     cache_dir = tmp_path / "cache"
     src = tmp_path / "src.pptx"
     src.write_bytes(b"PKfake")
@@ -218,7 +223,7 @@ def test_pptx_worker_failure_cleans_lock_table(tmp_path, monkeypatch):
 
 def test_pptx_worker_success_cleans_lock_table(tmp_path, monkeypatch):
     """成功路径: ready.json 写入 + 锁表 key 清理 (回归保护)"""
-    key = _v1_key(UPDATED)
+    key = _v2_key(FAKE_PATH)
     cache_dir = tmp_path / "cache"
     src = tmp_path / "src.pptx"
     src.write_bytes(b"PKfake")
@@ -232,7 +237,7 @@ def test_pptx_worker_success_cleans_lock_table(tmp_path, monkeypatch):
 
 def test_docx_worker_failure_cleans_lock_table(tmp_path, monkeypatch):
     """docx 同构回归: 失败不死锁"""
-    key = _v1_key(UPDATED)
+    key = _v2_key(FAKE_PATH)
     cache_dir = tmp_path / "cache"
     src = tmp_path / "src.docx"
     src.write_bytes(b"PKfake")
@@ -254,7 +259,7 @@ def test_docx_worker_failure_cleans_lock_table(tmp_path, monkeypatch):
 
 def test_pdf_worker_failure_cleans_lock_table(tmp_path, monkeypatch):
     """pdf 同构回归: 失败不死锁 (pdf 无 soffice, 仅 pdftoppm)"""
-    key = _v1_key(UPDATED)
+    key = _v2_key(FAKE_PATH)
     cache_dir = tmp_path / "cache"
     src = tmp_path / "src.pdf"
     src.write_bytes(b"%PDFfake")
@@ -326,7 +331,7 @@ def test_pptx_soffice_uses_isolated_profile(tmp_path, monkeypatch):
     src.write_bytes(b"PKfake")
 
     drive_files._pptx_convert_worker(1, str(src), tmp_path / "cache",
-                                     _v1_key(UPDATED))
+                                     _v2_key(FAKE_PATH))
 
     assert seen_cmds, "soffice 未被调用"
     joined = " ".join(seen_cmds[0])
@@ -362,7 +367,7 @@ async def test_fresh_error_returns_error_without_reconvert(tmp_path, monkeypatch
 async def test_expired_error_clears_and_reconverts(tmp_path, monkeypatch, env_factory):
     """过期 (>600s) 的 error.txt 被清除并触发重转"""
     env = env_factory(tmp_path, monkeypatch)
-    key = env.key_func(1, UPDATED)
+    key = env.key_func(1, FAKE_PATH)
     _write_error(env.cache_dir(), "stale boom", age_seconds=660)
 
     resp = await env.endpoint(1, db=None, current_user=env.user)

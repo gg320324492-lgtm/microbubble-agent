@@ -1,7 +1,7 @@
 """CSV 预览 (2026-09-07 选型 A 数据网格) — worker 解析 + 端点状态机测试
 
 覆盖: utf-8/gb18030 编码探测, 带引号字段含逗号/换行, 200 行截断与全量行数统计,
-列裁剪, 端点非 csv 400/缓存命中/误差文件, key 轮换。
+列裁剪, 端点非 csv 400/缓存命中/误差文件, key 基准 (file_path, 非 updated_at)。
 不依赖 MinIO: worker 直接喂临时文件; 端点走 monkeypatch 的缓存根目录。
 DB fixture: conftest db (TEST_DATABASE_URL)。
 """
@@ -123,7 +123,7 @@ async def test_endpoint_cache_hit(db, tmp_path, monkeypatch):
     f = await _mk_file(db, u, "sensor.csv")
     root = tmp_path / "cr"
     monkeypatch.setattr(drive_files, "_CSV_PREVIEW_ROOT", root)
-    d = drive_files._csv_cache_dir(f.id, _csv_cache_key(f.updated_at))
+    d = drive_files._csv_cache_dir(f.id, _csv_cache_key(f.file_path))
     d.mkdir(parents=True)
     (d / "ready.json").write_text(json.dumps({
         "rows": [["h1"], ["v1"]], "total_rows": 2, "truncated": False,
@@ -141,7 +141,7 @@ async def test_endpoint_error_file(db, tmp_path, monkeypatch):
     f = await _mk_file(db, u, "bad.csv")
     root = tmp_path / "cr"
     monkeypatch.setattr(drive_files, "_CSV_PREVIEW_ROOT", root)
-    d = drive_files._csv_cache_dir(f.id, _csv_cache_key(f.updated_at))
+    d = drive_files._csv_cache_dir(f.id, _csv_cache_key(f.file_path))
     d.mkdir(parents=True)
     (d / "error.txt").write_text("decoder error", encoding="utf-8")
     resp = await get_csv_preview_status(file_id=f.id, max_rows=8, db=db, current_user=u)
@@ -149,8 +149,19 @@ async def test_endpoint_error_file(db, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cache_key_rotates_with_updated_at(db):
+async def test_cache_key_stable_across_updated_at_rotates_with_file_path(db):
+    """2026-10-09 (agent39) key 基准改为 file_path。
+
+    updated_at 是行级时间戳 (重命名/重索引都会刷新), 用它当 key 会让缓存全失效
+    并触发 LibreOffice 全量重转 → key 必须与它无关。
+    file_path 是 MinIO object_name, 内容变则必变 → 用它当 key。
+    """
     u = await _mk_member(db, "u")
     f1 = await _mk_file(db, u, "a.csv")
     f2 = await _mk_file(db, u, "b.csv", updated_at=f1.updated_at + timedelta(hours=1))
-    assert _csv_cache_key(f1.updated_at) != _csv_cache_key(f2.updated_at)
+    # 内容不同 → key 必须不同
+    assert _csv_cache_key(f1.file_path) != _csv_cache_key(f2.file_path)
+    # 同一 file_path, updated_at 被刷新 (纯元数据写) → key 不变, 不重转
+    bumped = await _mk_file(db, u, "a.csv", updated_at=f1.updated_at + timedelta(hours=1))
+    assert bumped.file_path == f1.file_path
+    assert _csv_cache_key(bumped.file_path) == _csv_cache_key(f1.file_path)
