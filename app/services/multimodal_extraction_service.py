@@ -286,7 +286,79 @@ class MultimodalExtractionService:
                 knowledge.formatted_content = knowledge.formatted_content.split(self.INLINE_MARKER)[0].rstrip()
             await db.commit()
 
+    async def _snapshot_analysis_status(self, knowledge_id: int) -> Optional[str]:
+        """取当前 analysis_status，供手动重跑结束后原样恢复。
+
+        返回 None 表示 knowledge 不存在（此时不做任何恢复动作）。
+        """
+        async with async_session() as db:
+            result = await db.execute(
+                select(Knowledge.analysis_status).where(Knowledge.id == knowledge_id)
+            )
+            return result.scalar_one_or_none()
+
+    async def _restore_analysis_status(self, knowledge_id: int, prior_status: Optional[str]):
+        """把 analysis_status 恢复成重跑前的值（best-effort，失败只记日志）。
+
+        只在 ``prior_status`` 非 None 时写；且**不覆盖**非 'analyzing' 的当前值
+        —— 若重跑期间有别的流程（如 pipeline Step 3）已经落了终态，那个终态
+        才是更新的真相，不该被这里的旧快照抹掉。
+        """
+        if prior_status is None:
+            return
+        try:
+            async with async_session() as db:
+                await db.execute(
+                    update(Knowledge)
+                    .where(
+                        Knowledge.id == knowledge_id,
+                        Knowledge.analysis_status == "analyzing",
+                    )
+                    .values(analysis_status=prior_status)
+                )
+                await db.commit()
+        except Exception as exc:
+            # 恢复失败不能影响重跑本身的结果返回
+            logger.warning(
+                f"knowledge_id={knowledge_id}: 恢复 analysis_status={prior_status} 失败: {exc}"
+            )
+
     async def extract_for_knowledge(self, knowledge_id: int, reset_status: bool = False):
+        """手动/批量重跑的**状态守卫**（2026-10-09 agent25）。
+
+        ``reset_status=True`` 的语义是「重跑期间给 UI 显示 analyzing」，
+        这个中间态必须由**同一次重跑**收尾 —— 否则调用方一返回，行就永久
+        卡在 analyzing（状态机没有从 analyzing 自行退出的路径）。
+
+        历史事故（2026-10-09 取证，290 行存量）：
+          - ``POST /knowledge/{id}/extract-multimodal``（单文档手动重跑）
+          - ``POST /knowledge/reprocess-all-multimodal``（admin 批量重跑）
+          - ``scripts/rerun_failed_ocr.py`（批量 OCR 重跑脚本）
+        三者都传 ``reset_status=True`` 触发 _reset_multimodal_data 翻 analyzing，
+        但**没有任何一个**在结束后写终态 → 290 行卡死（且这些行 embedding /
+        summary / chunks / images / extractions 全都齐全，证明提取本身早已完成，
+        只有状态没收回）。
+
+        为什么恢复**旧快照**而不是写 'done'：多模态重跑只影响图片/公式/表格，
+        不重新做 LLM 分析，也不重新生成 embedding。文档的"分析是否完成"在重跑
+        前后没变，所以正确的终态就是重跑前的那个值（done / partial / failed /
+        pending 各自原样保留），而不是由这里臆造一个 'done'。
+
+        pipeline 调用（reset_status=False）**完全不受影响** —— 快照/恢复整段
+        不执行，终态仍由 _run_analyze_and_embed 的 Step 3 / Step 8 写。
+        """
+        if not reset_status:
+            return await self._extract_impl(knowledge_id, reset_status=False)
+
+        prior_status = await self._snapshot_analysis_status(knowledge_id)
+        try:
+            return await self._extract_impl(knowledge_id, reset_status=True)
+        finally:
+            # finally：异常路径（含未捕获异常向上抛）同样要收回 analyzing，
+            # 否则一次失败的重跑又留下一批永久卡死的行。
+            await self._restore_analysis_status(knowledge_id, prior_status)
+
+    async def _extract_impl(self, knowledge_id: int, reset_status: bool = False):
         """异步提取指定知识条目的图片+OCR+公式/表格
 
         流程：
@@ -301,7 +373,11 @@ class MultimodalExtractionService:
 
         2026-06-30 修复: 加 reset_status 参数转发给 _reset_multimodal_data.
         - reset_status=False (默认, pipeline 调用): 不翻 status, 保留上游终态
-        - reset_status=True (manual UI POST /extract-multimodal): 翻 'analyzing'
+        - reset_status=True (manual UI / admin 批量): 翻 'analyzing'，
+          **由外层 extract_for_knowledge 负责在结束时恢复原值**（见其 docstring）
+
+        2026-10-09 agent25: 本方法降级为 _extract_impl，状态守卫收敛到唯一入口
+        extract_for_knowledge，避免新调用点绕过守卫（= 再造一批卡死行）。
         """
         from app.services.file_service import file_service as fs
 
@@ -998,10 +1074,35 @@ class MultimodalExtractionService:
     INLINE_MARKER = "<!-- MULTIMODAL_INLINED v2 -->"
     PAGE_MARKER_RE = re.compile(r"\[PAGE:(\d+)\]")
     FIGURE_MARKER_RE = re.compile(r"\[FIGURE:(\d+)\]")
-    # 装饰图过滤：标题/版权/封面/目录/logo 等首页元素
+
+    # ── 两套装饰图判据的分工（2026-10-09 agent25 取证，勿合并） ──────────
+    #
+    # 本类**不是** image_decoration_filter 的重复实现，两者在流水线的
+    # **不同阶段**用**不同信号**，互补而非冗余：
+    #
+    #   阶段              判据                        能抓到什么 / 抓不到什么
+    #   ─────────────────────────────────────────────────────────────────
+    #   写入侧（OCR 前）  image_decoration_filter     纯几何（AR + 跨页复用），
+    #                     _skip_banner_images()       在 OCR **之前**拦母版横幅，
+    #                                                 从源头不产生幻觉描述。
+    #                                                 抓不到：单页出现的窄图、
+    #                                                 非几何特征的小图标。
+    #   读取侧（inline）  _is_decorative_image        OCR 文本语义（期刊 masthead
+    #                     （本类）                    / Highlights / Abstract…）+
+    #                                                 文本长度。抓几何抓不到的
+    #                                                 "整页期刊封面截图"。
+    #
+    # 实测全库 5446 张图：几何判据命中 2051，文本判据命中 4344，**几何集是文本集的
+    # 子集**（2051 ⊆ 4344）。但这不是"冗余"的证据 —— 文本判据是在 OCR **之后**才能
+    # 运行的，它无法阻止 OCR 阶段产生幻觉噪声；而几何判据只有 OCR 前才能用。
+    # **谁也替代不了谁**，合并任一方都会在另一侧留洞。
+    #
+    # 全文库核对：文本判据的 101 张关键词命中图逐条抽查，**全部**是 ACS/Elsevier/
+    # Springer 期刊封面或 masthead（LANGMUIR / Plant Soil / I&EC research…），
+    # 无真实图表被误伤。故关键词表与阈值**维持原样**，只修下面那条 fail-closed 分支。
     DECORATIVE_KEYWORDS = (
         "elsevier", "journal of", "journal homepage", "www.elsevier",
-        "highlights", "highlights", "article info", "abstract",
+        "highlights", "article info", "abstract",
         "graphical abstract", "keywords:",
     )
 
@@ -1009,14 +1110,27 @@ class MultimodalExtractionService:
     def _is_decorative_image(cls, img) -> bool:
         """判断一张图是否为装饰图（journal logo / 封面 / 目录等）
 
-        装饰图特征：
+        **只在 inline（读取侧）使用**，判据是 OCR 文本语义：
+
         - OCR 文字里有 ELSEVIER / Journal name / Highlights / Article info 等关键词
         - OCR 文字太短（< 50 字符，无实质内容）
-        - 标题类文本
+
+        与写入侧 ``image_decoration_filter`` 的分工见上方注释。
+
+        2026-10-09 agent25 修复 fail-closed 缺陷：原实现首行是
+        ``if not ocr: return True`` —— **没有 OCR 文字就判装饰**。这与本项目
+        装饰图判据的核心原则（image_decoration_filter docstring：「判不出来时
+        **不拦**，宁可让噪声漏过去，也不能误伤正常内容图」）**正好相反**：
+        OCR 没出文字可能是识别失败，而不是图是装饰。
+
+        该分支在当前两个调用点都不可达（都先短路掉 ``len(ocr_text) > 30``
+        才调进来），所以此修改**不改变任何现有行为**，属防御性修正：防止将来
+        新调用点直接复用本方法时，静默把一批真实图当装饰丢掉。
         """
-        ocr = (img.ocr_text or "").lower()
+        ocr = (img.ocr_text or "").strip().lower()
         if not ocr:
-            return True
+            # 判不出来 → 不判装饰（fail-open，与 image_decoration_filter 一致）
+            return False
         if len(ocr) < 50:
             return True
         for kw in cls.DECORATIVE_KEYWORDS:
