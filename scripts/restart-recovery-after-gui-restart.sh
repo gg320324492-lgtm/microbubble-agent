@@ -91,10 +91,43 @@ echo "  PASS: $PASS / $TOTAL"
 
 # Step 7: 5 件套守恒验证
 echo "--- Step 7: 5 件套守恒验证 ---"
-HEAD=$(docker exec microbubble-agent-app-1 python -m alembic heads 2>&1 | head -1)
-[ "$HEAD" = "105_fix_drift (head)" ] \
-  && ok "alembic head 守恒: $HEAD" \
-  || fail "alembic head 漂移: $HEAD (期望 105_fix_drift)"
+# ---- alembic 守恒: 校验「不变量」, 不写死 head 编号 ----
+# 【为什么不能写死编号】CLAUDE.md 明文纪律: "写断言时用「恰为 1 个 head」不变量,
+# 别写死编号"(084/085/087 三连修正先例)。原实现在此写死 105_fix_drift —— 那是
+# 2026-08-05 当时的 head, 之后每加一个迁移就必然失配。2026-10-09 15:15 手动触发
+# 自愈即因此误判: 前 7 步含 7/7 端点全绿, 却在这最后一步 fail, 上报
+# success:false。改成校验两条不变量后, head 推进无需再动脚本:
+#   1) `alembic heads` 恰为 1 个 —— 0 个 = 链损坏/迁移目录不可读;
+#      >1 个 = 双头, `alembic upgrade head` 会报 Multiple head revisions 阻塞部署
+#      (CLAUDE.md §2.3 串单链纪律 + 084/085/087 三连修正先例)。
+#   2) `alembic current` == head —— DB 已应用版本与迁移链一致, 即 0 schema drift。
+# 两条都是真守门: 真出现双头 / DB 落后于 head 时仍然 fail-fast, 不降级为 warn。
+# 注意: `alembic heads` 只写 stdout; `alembic current` 的 INFO 前缀行写 stderr,
+# 所以两者都取 2>/dev/null 后再解析 (原实现的 `2>&1 | head -1` 在 current 上
+# 会抓到 INFO 行而非版本号 —— 第二个潜在 bug, 一并修掉)。
+ALEMBIC_HEADS=$(docker exec microbubble-agent-app-1 python -m alembic heads 2>/dev/null); HEADS_RC=$?
+if [ "$HEADS_RC" -ne 0 ]; then
+  fail "alembic heads 执行失败 (rc=$HEADS_RC), 容器内迁移目录可能不可读"
+fi
+HEAD_COUNT=$(printf '%s\n' "$ALEMBIC_HEADS" | grep -c '[^[:space:]]' || true)
+if [ "$HEAD_COUNT" -ne 1 ]; then
+  fail "alembic head 数 = $HEAD_COUNT (期望恰为 1; 双头会阻塞部署). 实际: [$(printf '%s' "$ALEMBIC_HEADS" | tr '\n' ' ')]"
+fi
+# 取首行第一字段, 剥掉 "(head)" 后缀 → 纯 revision id
+HEAD_REV=$(printf '%s\n' "$ALEMBIC_HEADS" | head -1 | awk '{print $1}')
+
+ALEMBIC_CURRENT=$(docker exec microbubble-agent-app-1 python -m alembic current 2>/dev/null); CURRENT_RC=$?
+if [ "$CURRENT_RC" -ne 0 ]; then
+  fail "alembic current 执行失败 (rc=$CURRENT_RC), DB 不可达?"
+fi
+CURRENT_REV=$(printf '%s\n' "$ALEMBIC_CURRENT" | grep -v '^[[:space:]]*$' | head -1 | awk '{print $1}')
+if [ -z "$CURRENT_REV" ]; then
+  fail "alembic current 读不到 DB 已应用版本 (alembic_version 表可能为空或不可读)"
+fi
+if [ "$CURRENT_REV" != "$HEAD_REV" ]; then
+  fail "alembic schema drift: DB current=$CURRENT_REV != head=$HEAD_REV (需手动 alembic upgrade head)"
+fi
+ok "alembic 守恒: 恰 1 head 且 current==head ($HEAD_REV)"
 
 CELERY=$(docker exec microbubble-agent-celery-worker-1 celery -A app.core.celery inspect ping --timeout 5 2>&1 | grep -c "pong")
 [ "$CELERY" -ge "1" ] && ok "celery worker 响应 ($CELERY pong)" || fail "celery worker 无响应"
