@@ -312,7 +312,7 @@ class KnowledgeImageItem(BaseModel):
     mime_type: Optional[str] = None
     file_size: Optional[int] = None
     ocr_text: Optional[str] = None
-    ocr_status: str  # pending/done/failed/skipped
+    ocr_status: str  # pending/done/done_no_text/failed/partial/skipped（done_no_text = OCR 跑完但返回空）
     ocr_error: Optional[str] = None
     ocr_model: Optional[str] = None
     ocr_at: Optional[str] = None

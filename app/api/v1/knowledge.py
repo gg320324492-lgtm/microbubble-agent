@@ -1204,7 +1204,14 @@ async def mark_reviewed(
 @router.get("/knowledge/{knowledge_id}/images", response_model=KnowledgeImageList)
 async def list_knowledge_images(
     knowledge_id: int,
-    ocr_status: Optional[str] = Query(None, description="过滤 OCR 状态：pending/done/failed/skipped"),
+    ocr_status: Optional[str] = Query(
+        None,
+        description=(
+            "过滤 OCR 状态：pending/done/done_no_text/failed/partial/skipped。"
+            "注意 done_no_text（OCR 跑完但没抽到字）不等于「已确认图里没字」，"
+            "要筛「有字的」请用 done 或直接看 ocr_text 非空"
+        ),
+    ),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

@@ -140,7 +140,15 @@ async def _fetch_doc_ids(group: str):
     if group in ("failed", "both"):
         clauses.append("(ocr_status = 'failed')")
     if group in ("done_empty", "both"):
-        clauses.append("(ocr_status = 'done' AND (ocr_text IS NULL OR btrim(ocr_text) = ''))")
+        # 2026-10-09（agent31）：`done` 已拆出 `done_no_text`（OCR 跑完但返回空）。
+        # 迁移后空文本行不再是 'done'，只匹配 'done' 会让 B 组静默变成 0 行 ——
+        # 那正是本脚本要抓的脏数据。所以这里必须同时匹配两个状态。
+        # 用 IN 而不是 = 'done'，且**不要**改成只匹配 done_no_text：迁移前的
+        # 存量行、以及任何绕过 _save_extractions 的写入路径仍可能是 'done' + 空。
+        clauses.append(
+            "(ocr_status IN ('done', 'done_no_text') "
+            "AND (ocr_text IS NULL OR btrim(ocr_text) = ''))"
+        )
     where = " OR ".join(clauses)
 
     async with async_session() as db:

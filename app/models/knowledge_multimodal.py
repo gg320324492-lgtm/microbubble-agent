@@ -59,7 +59,12 @@ class KnowledgeImage(Base, TimestampMixin):
 
     # OCR 结果
     ocr_text = Column(Text, nullable=True)  # OCR 提取的纯文本
-    ocr_status = Column(String(20), default="pending", nullable=False)  # pending/done/failed/skipped
+    # pending / done / done_no_text / failed / partial / skipped
+    # done_no_text = OCR 调用跑完但返回空（2026-10-09 agent31 从 done 拆出）。
+    # ⚠️ 它描述的是**这次调用**而非图片内容：实测有图明确带字仍落 done_no_text
+    # （classify prompt 抖动），所以它不等于「已确认无字」。详见
+    # multimodal_extraction_service._save_extractions 的注释。
+    ocr_status = Column(String(20), default="pending", nullable=False)
     ocr_error = Column(Text, nullable=True)
     ocr_model = Column(String(100), nullable=True)  # 使用的模型名（llm-vision / tesseract / paddleocr）
     ocr_at = Column(DateTime, nullable=True)

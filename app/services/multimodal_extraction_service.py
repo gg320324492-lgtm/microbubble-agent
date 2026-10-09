@@ -739,7 +739,21 @@ class MultimodalExtractionService:
                     img.ocr_text = _clean_ocr_text(ocr_text)[:10000]
                 if caption and not ocr_text:
                     img.ocr_text = f"[caption] {_clean_ocr_text(caption)[:500]}"
-                img.ocr_status = "done"
+                # 本次调用是否真的抽到了东西 —— 用局部变量而不是 img.ocr_text，
+                # 避免重跑老行时把上一轮的残留文本误当成本轮成果。
+                produced_text = bool(ocr_text) or bool(caption)
+                # 2026-10-09（agent31）：done 拆成 done / done_no_text。
+                # 旧写法无条件落 'done'，于是「成功且抽到字」和「成功但没抽到字」
+                # 两种**语义相反**的行共用一个状态值 —— 排查时无法区分（类 20.220：
+                # 状态字段会撒谎）。存量 3320 行即由此而来。
+                #
+                # ⚠️ 语义边界：`done_no_text` 描述的是**这一次 OCR 调用**（跑完了、
+                # 返回空），**不是**对图片内容的断言（"这张图确实没字"）。两者不等价：
+                # 2026-10-09 实测 id=6368（核心装置标注图，图上明确有十余处中文标注）
+                # 被落成 done+空，换单一「提取所有文字」prompt 重跑即拿到完整文字。
+                # 所以 done_no_text ≠ 免检，仍可能是 prompt 抖动导致的漏检，
+                # 要重跑请按几何排除装饰图后再筛，别把它当已验证结论。
+                img.ocr_status = "done" if produced_text else "done_no_text"
                 img.ocr_model = model_used
                 img.ocr_at = datetime.utcnow()
 

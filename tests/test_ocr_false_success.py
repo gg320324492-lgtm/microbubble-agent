@@ -12,8 +12,13 @@
 
 本测试锁定修复后的行为：
 - OCR 调用失败（401 / timeout / 网络错）→ 图标 failed，错误保留，ocr_text 空 ≠ 成功
-- 图里真没文字（后端正常返回、text 为空）→ 仍标 done（合法空，不得判 failed）
+- 图里真没文字（后端正常返回、text 为空）→ 标 **done_no_text**（合法空，不得判 failed）
 - 结构化调用失败 → 不把默认值当真实结果写库
+
+2026-10-09（agent31）续修：`done` 原先同时表示「成功且有字」和「成功但没字」
+两种**语义相反**的状态（存量 3317 行），排查时无法区分。现拆为
+`done`（有字）/ `done_no_text`（跑完但没字），迁移 `143_ocr_status_done_no_text`。
+不变式：**`done` ⟺ 本次调用抽到了东西**。
 
 变异测试（见文件末注释）：把 `_process_one` 的 `ocr_result_failed` 判定退回
 `isinstance(x, Exception)`，下列 *failure* 用例会红。
@@ -323,8 +328,13 @@ class TestSaveExtractionsStatus:
         assert img.ocr_text is None  # 空文本不再是成功的标志
 
     @pytest.mark.asyncio
-    async def test_legit_empty_text_writes_done(self):
-        """合法空文本（图无文字）→ done，不得被判 failed。"""
+    async def test_legit_empty_text_writes_done_no_text(self):
+        """合法空文本（图无文字）→ done_no_text，不得被判 failed。
+
+        2026-10-09（agent31）改：原先这里断言 ``done``，那正是「状态字段撒谎」
+        的根源 —— `done` 同时表示「成功且有字」和「成功但没字」。现在拆开：
+        有字 → done，没字 → done_no_text，两者都不算 failed。
+        """
         from app.services.multimodal_extraction_service import (
             multimodal_extraction_service as svc,
         )
@@ -351,8 +361,46 @@ class TestSaveExtractionsStatus:
                 }],
             )
 
-        assert img.ocr_status == "done"
-        assert img.ocr_text is None  # 无文字 → 空，但状态是 done（合法）
+        assert img.ocr_status == "done_no_text"
+        assert img.ocr_text is None  # 无文字 → 空；状态明确是「跑完但没字」
+
+    @pytest.mark.asyncio
+    async def test_empty_text_on_rerun_uses_this_run_not_stale_attr(self):
+        """重跑老行且本次无产出时，状态按**本轮**判定，不被上一轮的残留文本带成 done。
+
+        `done` 必须严格等价于「本次调用抽到了东西」，否则一条空产出能把
+        上一轮的文字重新盖章成 done。
+        """
+        from app.services.multimodal_extraction_service import (
+            multimodal_extraction_service as svc,
+        )
+
+        img = _client_image_row(1)
+        img.ocr_status = "done"
+        img.ocr_text = "上一轮残留的文字"   # 上一轮抽到过
+        img_snapshot = _img_record(1)
+        ctx, _ = _fake_session_ctx({1: img})
+
+        with patch(
+            "app.services.multimodal_extraction_service.async_session",
+            return_value=ctx,
+        ):
+            await svc._save_extractions(
+                knowledge_id=10,
+                image_records=[img_snapshot],
+                ocr_results=[{
+                    "image_id": 1,
+                    "ok": True,
+                    "parsed": {
+                        "category": "figure", "text": "", "latex": None,
+                        "table_md": None, "chart_description": None, "caption": None,
+                    },
+                    "structured": None,
+                }],
+            )
+
+        assert img.ocr_status == "done_no_text"  # 本轮没产出 → 不能是 done
+        assert img.ocr_text == "上一轮残留的文字"  # 残留文本不被覆盖，也不重新盖章
 
     @pytest.mark.asyncio
     async def test_parse_failed_fallback_with_raw_text_writes_done(self):
