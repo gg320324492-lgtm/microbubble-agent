@@ -47,7 +47,8 @@ net start redis
 ### 2. 跑 alembic 到 head 093
 
 ```bash
-export DATABASE_URL=postgresql://postgres:microbubble2026@localhost:5432/microbubble
+# 密码轮换过, 从 .env 取当前值, 不要在文档里硬编码
+export DATABASE_URL="postgresql://postgres:$(grep '^DATABASE_URL=' .env | sed 's|.*postgres:\([^@]*\)@.*|\1|')@localhost:5432/microbubble"
 export SKIP_DB_SETUP=0
 python -m alembic upgrade head
 # 期望: 1 head = 093_add_search_log_answer_rating
@@ -56,7 +57,8 @@ python -m alembic upgrade head
 ### 3. 设环境变量 + 跑真环境 e2e
 
 ```bash
-export DATABASE_URL=postgresql://postgres:microbubble2026@localhost:5432/microbubble
+# 密码轮换过, 从 .env 取当前值, 不要在文档里硬编码
+export DATABASE_URL="postgresql://postgres:$(grep '^DATABASE_URL=' .env | sed 's|.*postgres:\([^@]*\)@.*|\1|')@localhost:5432/microbubble"
 export REDIS_URL=redis://localhost:6379/0
 unset SKIP_DB_SETUP
 python -m pytest tests/realenv -v

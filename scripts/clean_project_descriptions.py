@@ -41,7 +41,8 @@ DB_HOST = os.environ.get("DB_HOST", "db")
 DB_PORT = int(os.environ.get("DB_PORT", "5432"))
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_NAME = os.environ.get("DB_NAME", "microbubble")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "microbubble2026")
+# 密码轮换过, 不再内置过时的 fallback 默认值 (缺失时报错见 _get_db_password 末尾)
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
 
 BACKUP_DIR = Path("/tmp/projects_desc_cleanup_backups")
 
@@ -60,7 +61,11 @@ def _get_db_password():
                 url = line.split("=", 1)[1]
                 if "@" in url and ":" in url.split("@")[0]:
                     return url.split("@")[0].split(":")[-1]
-    return DB_PASSWORD
+    raise SystemExit(
+        "DB_PASSWORD 未设置, 且 .env 中无可解析的 DATABASE_URL。密码已轮换, 不再内置默认值。\n"
+        "从 .env 取当前值: export DB_PASSWORD=$(grep '^DATABASE_URL=' .env "
+        "| sed 's|.*postgres:\\([^@]*\\)@.*|\\1|')"
+    )
 
 
 async def get_conn():

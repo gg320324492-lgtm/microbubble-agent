@@ -21,7 +21,14 @@ ROLLBACK_DAYS = 7
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASS = os.environ.get("DB_PASS", "microbubble2026")
+# 密码轮换过, 不再内置过时的 fallback 默认值; 缺 env 直接报错退出, 避免静默连错库
+DB_PASS = os.environ.get("DB_PASS")
+if not DB_PASS:
+    raise SystemExit(
+        "DB_PASS 未设置。密码已轮换, 不再内置默认值。\n"
+        "从 .env 取当前值: export DB_PASS=$(grep '^DATABASE_URL=' .env "
+        "| sed 's|.*postgres:\\([^@]*\\)@.*|\\1|')"
+    )
 DB_NAME = os.environ.get("DB_NAME", "microbubble")
 
 BACKUP_DIR = Path("backups/auto_intake")

@@ -95,8 +95,9 @@ docker compose -f docker-compose.test.yml up -d
 docker exec -e SKIP_DB_SETUP=1 $(docker compose -f docker-compose.test.yml ps -q app-test) \
     alembic upgrade head
 
-# 3. dump 生产数据 (需要生产 DB 凭据)
-export PROD_DATABASE_URL="postgresql://postgres:microbubble2026@localhost:5432/microbubble"
+# 3. dump 生产数据 (需要生产 DB 凭据 — 密码轮换过, 从 .env 取当前值, 不要硬编码)
+PROD_PW=$(grep '^DATABASE_URL=' .env | sed 's|.*postgres:\([^@]*\)@.*|\1|')
+export PROD_DATABASE_URL="postgresql://postgres:${PROD_PW}@localhost:5432/microbubble"
 bash scripts/dump_prod_to_fixture.sh --apply
 #    → fixtures/prod_dump_$(date +%Y%m%d).sql
 

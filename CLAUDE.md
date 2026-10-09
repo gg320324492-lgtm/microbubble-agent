@@ -608,7 +608,7 @@
 
 ```bash
 # 1. 跑数据库迁移 (Stage 3 加 7 列)
-docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql
+docker exec microbubble-agent-db-1 psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql
 # 2. 重启 Python 进程 (CLAUDE.md 752 行铁律)
 docker compose restart app celery-worker
 ```

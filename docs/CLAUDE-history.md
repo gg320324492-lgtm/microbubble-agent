@@ -6572,7 +6572,9 @@ def make_not_authenticated_error(self) -> HTTPException:
 # 1. test_auth.py 8/8 PASS (修复前 4/8 FAIL)
 docker cp tests/conftest.py microbubble-agent-app-1:/app/tests/conftest.py
 docker cp tests/test_auth.py microbubble-agent-app-1:/app/tests/test_auth.py
-docker exec -e TEST_DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@db:5432/microbubble_test" \
+# 密码轮换过, 从 .env 取当前值, 不要在文档里硬编码
+PW=$(grep '^DATABASE_URL=' .env | sed 's|.*postgres:\([^@]*\)@.*|\1|')
+docker exec -e TEST_DATABASE_URL="postgresql+asyncpg://postgres:${PW}@db:5432/microbubble_test" \
   microbubble-agent-app-1 bash -c "rm -rf /app/tests/__pycache__ && pytest tests/test_auth.py -v"
 # 期望: 8 passed (test_login_success / test_login_wrong_password /
 #         test_login_rate_limit_returns_retry_after / test_login_nonexistent_user /

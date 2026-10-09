@@ -77,7 +77,9 @@ def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 ```bash
 # 1. 重跑 7 skipped E2E
-docker exec -e SKIP_DB_SETUP=0 -e TEST_DATABASE_URL=postgresql://postgres:microbubble2026@db:5432/microbubble_test \
+# 密码轮换过, 从 .env 取当前值, 不要在文档里硬编码
+PW=$(grep '^DATABASE_URL=' .env | sed 's|.*postgres:\([^@]*\)@.*|\1|')
+docker exec -e SKIP_DB_SETUP=0 -e TEST_DATABASE_URL=postgresql://postgres:${PW}@db:5432/microbubble_test \
   microbubble-agent-app-1 bash -c 'cd /app && python -m pytest tests/scripts/test_kb_dedup_admin_cli_e2e.py --tb=line -q'
 # 期望: 7/7 PASS (无 skip)
 

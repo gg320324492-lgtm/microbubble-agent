@@ -43,14 +43,20 @@ OUTPUT_FILE = RESULTS_DIR / "cold_hot_routing_bench_2026-08.json"
 
 
 def get_dsn() -> str:
-    """从 env 拿 DATABASE_URL, 默认 localhost:5432 (host 跑 bench)."""
-    url = os.getenv("DATABASE_URL_BENCH")
+    """从 env 拿完整 DSN (DATABASE_URL_BENCH 优先, 其次 DATABASE_URL).
+
+    容器内 db:5432 vs host localhost:5432 的差异由 DSN 里的主机名承载,
+    因此这里不再自行拼装连接串 (拼装就必然要硬编码密码)。
+    """
+    url = os.getenv("DATABASE_URL_BENCH") or os.getenv("DATABASE_URL")
     if url:
         return url
-    # 容器内 db:5432 vs host localhost:5432
-    if os.path.exists("/.dockerenv"):
-        return "postgresql://postgres:microbubble2026@db:5432/microbubble"
-    return "postgresql://postgres:microbubble2026@localhost:5432/microbubble"
+    # 密码轮换过, 不再内置过时的 fallback 默认值; 缺 env 直接报错退出, 避免静默连错库
+    raise SystemExit(
+        "DATABASE_URL_BENCH / DATABASE_URL 均未设置。密码已轮换, 不再内置默认值。\n"
+        "从 .env 取当前值: export DATABASE_URL=$(grep '^DATABASE_URL=' .env | cut -d= -f2-)\n"
+        "容器内跑请用 DATABASE_URL_BENCH 显式指定 (主机名一般是 db 而非 localhost)"
+    )
 
 
 # SQL 模板 (派工 brief 范畴: 0 schema 改动, 仅查询路径)
