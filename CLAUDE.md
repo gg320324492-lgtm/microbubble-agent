@@ -246,9 +246,32 @@
   (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
   rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
   当前只在手动触发下验证过)。
-  `MicroBubble-DFT-Cleanup` 报 `LastTaskResult=1` 但手工跑 exit=0 且日志显示归档清理全部完成,
-  功能未坏, 下次 10-11 周触发照常; `MicroBubble-GPU-ASR-Daemon` (AtStartup) 与
+  `MicroBubble-DFT-Cleanup` **已于 2026-10-09 划归 `E:\dft-service` 独立项目, 不再是本仓遗留**
+  (本仓 DFT 集成 2026-09-13 已整体移除, 见 commit `48e1cb0f2` / `0d70dd66e`; 该计划任务归那个
+  项目的运维, 主指挥 2026-10-09 明确不许本仓处置它, 原"LastTaskResult=1 但功能未坏"的记录随
+  之移交)。`MicroBubble-GPU-ASR-Daemon` (AtStartup) 与
   `MicroBubble-SSH-Tunnel-Guard` (每5min) 均验证正常, 无需处理。
+- **DFT 已彻底移出本仓 (2026-10-09 复核, 主拍确认本项目不再有 DFT 业务)** —— 取证结论:
+  ①**活代码早已清零**: `app/services/dft_client.py` / `app/agent/tools/dft_tools.py` /
+  `app/api/v1/dft.py` / `tests/test_dft_tools.py` / 前端 `DftView` 与 `/dft` 路由, 均在
+  2026-09-13 由 `48e1cb0f2` (移除集成) + `0d70dd66e` (清死配置) 删除, 2026-10-09 实测文件
+  已不存在; ②`requirements.txt` **零 DFT 专属依赖** (无 pyscf/psi4/ase/scichem/gromacs),
+  无可删项; ③compose / `.env` / `app/config.py` 均无 DFT 残留 (config 已无 `DFT_SERVICE_URL`);
+  ④`dft_jobs` 表**存在但 0 行** (只读实测)。
+  **唯一必须保留的残留 = `alembic/versions/099_add_dft_jobs.py`**: 容器实测 `alembic history`
+  含该 revision 2 次 = **它在活链上** (`104_add_knowledge_chunk_late_embedding.py:12`
+  `down_revision = "099_add_dft_jobs"`), 删它会**断 alembic 链**并阻塞部署。表可留, 代码已无。
+  本次只删 `scripts/dft/README.md` (外置说明的唯一残留) + 2 个 `test_dft_tools` 陈旧 `.pyc`。
+  ⚠️ **`E:\dft-service\` 是用户的独立项目, 不属本仓, 不许删** (含其
+  `MicroBubble-DFT-Cleanup` 计划任务); 且 `~/.claude.json` **全局 mcpServers 仍注册 `dft`**
+  (`E:\dft-service\.venv\Scripts\python.exe E:\dft-service\mcp_server.py`), Claude Code 会
+  拉起它 —— 按类 20.212, "看着像残留" 实为**仍被引用的活链路**, 主指挥 2026-10-09 已裁定不处置。
+- ⚠️ **`.dft` 前缀 ≠ DFT 计算**: `web/src/components/drive/DriveFileTable.vue` 用 `.dft` /
+  `.dft-grid` / `.dft-head` / `.dft-c` 作 **DriveFileTable** 的 CSS 类前缀, `scripts/
+  .token-orphan-allowlist` 的 `--dft-sb` 是其滚动条 token —— **两者都与化学 DFT 无关, 勿动**
+  (grep `dft` 会大量命中此类假阳性)。同理 `app/services/research_profile.py` /
+  `personalized_followup_generator.py` / `web/src/utils/paper/figures.js` 里的 "DFT" 是
+  **科研画像与论文图表的领域关键词**, 属 RAG 业务语义, 非 DFT 服务集成。
 - **vision-mcp 已处置 (2026-10-09)** —— 改为 compose profile 隔离, 默认不启动, 但服务定义完整保留。
   根因不是"当前没人调", 是**架构上走不通**: app 侧视觉走 **stdio 子进程**, 从不连这个容器 ——
   `app/config.py:79` `VISION_USE_MCP=False` / `:80` `VISION_MCP_TRANSPORT="stdio"` /
