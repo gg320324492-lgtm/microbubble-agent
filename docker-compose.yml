@@ -421,7 +421,37 @@ services:
     restart: unless-stopped
 
   # Vision MCP Server
+  #
+  # ⚠️ 2026-10-09 改为 profile 隔离 —— 默认 `docker compose up -d` **不再启动**本服务。
+  #
+  # 为什么默认不启 (不是"暂时用不上", 是架构上走不通):
+  #   app 侧视觉走 **stdio 子进程**, 从不连本容器。实测确认:
+  #     app/config.py:79  VISION_USE_MCP        = False        (整个 MCP 视觉链路关闭)
+  #     app/config.py:80  VISION_MCP_TRANSPORT  = "stdio"
+  #     app/config.py:81  VISION_MCP_SERVER_CMD = "python -m mcp_server.server"
+  #     app/config.py:82  VISION_MCP_BASE_URL   = "http://vision-mcp:8001"
+  #       ↑ 全仓 `git grep` 实测: **除这行定义外零引用**, 这个 http 地址从未被任何代码连过
+  #     app/mcp/client.py:21  __init__ 直接拿 SERVER_CMD, 在 app **本进程内**起子进程
+  #   即便将来打开 VISION_USE_MCP, 默认也是走 stdio —— 仍然用不到这个容器。
+  #   本容器留着的唯一价值: 保持 Dockerfile.mcp + app/mcp/ 的构建/接口可编译 (类 20.215
+  #   "实验块逐字段圈界" 的镜像), 未来若真要改 http 传输形态时有现成起点。
+  #
+  # 怎么手动启用 (服务定义原样保留, 随时可恢复):
+  #     docker compose --profile vision up -d vision-mcp
+  # 确认它已不在默认集合里:
+  #     docker compose config --services            | grep vision-mcp   # 期望**无输出**
+  #     docker compose --profile vision config --services | grep vision-mcp  # 期望有
+  #
+  # profile 命名依据: 跟随 docker-compose.test.yml 里 minio-test 的 `profiles: ["s3"]`
+  #   (同为"服务定义保留 + 按需启用"的同构场景, 用**能力名**而非 `disabled`)。
+  #   本仓的 `disabled` (docker-compose.dev.yml / override 的 nginx) 是另一种语义:
+  #   那个 nginx 是"跑在别处、本机不要起", 与本服务的"按需启用"不是一回事。
+  #
+  # ⚠️ 与 minio-test 同款陷阱已排查: `depends_on` 会**传递性**拉起 profile 服务,
+  #   使 profile 形同虚设 (test.yml 踩过)。全仓 `git grep vision-mcp` 确认
+  #   **零个 depends_on 引用本服务**, 故此 profile 不会被传递性绕过。
   vision-mcp:
+    profiles: ["vision"]
     build:
       context: .
       dockerfile: Dockerfile.mcp

@@ -203,8 +203,30 @@
   `count(*)` 行数; ⑥`rag_auto_ingest_service` 这类**通用 ingestion task 应按
   `storage_mode` 过滤**, 否则会抢占 domain-specific 索引 (drive/meeting) 的职责。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务 (Winlogon 7002) LastRunTime 停在
-  8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能); glitchtip + vision-mcp 重启前即 unhealthy;
-  `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1` Exited 4 周残留并存。
+  8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能)。
+- **vision-mcp 已处置 (2026-10-09)** —— 改为 compose profile 隔离, 默认不启动, 但服务定义完整保留。
+  根因不是"当前没人调", 是**架构上走不通**: app 侧视觉走 **stdio 子进程**, 从不连这个容器 ——
+  `app/config.py:79` `VISION_USE_MCP=False` / `:80` `VISION_MCP_TRANSPORT="stdio"` /
+  `:81` `VISION_MCP_SERVER_CMD="python -m mcp_server.server"`, `app/mcp/client.py:21` 拿该 CMD 在
+  **app 本进程内**起子进程; `app/config.py:82` 的 `VISION_MCP_BASE_URL="http://vision-mcp:8001"`
+  经全仓 `git grep` 实测**除定义行外零引用**, 该 http 地址从未被连过 (无端口映射亦印证)。
+  即便日后打开 `VISION_USE_MCP`, 默认仍走 stdio, 依旧用不到容器; 容器留着只为保住
+  `Dockerfile.mcp` + `app/mcp/` 的可编译性 (类 20.215"实验块逐字段圈界"的镜像)。
+  **启用方式**: `docker compose --profile vision up -d vision-mcp`;
+  验默认不启: `docker compose config --services | grep vision-mcp` 应**无输出**。
+  profile 命名跟随 `docker-compose.test.yml` 里 `minio-test` 的 `profiles: ["s3"]` (同为
+  "服务定义保留 + 按需启用" 的同构场景, 用**能力名**); 本仓另一处 `disabled`
+  (`docker-compose.dev.yml` / override 的 nginx) 语义不同, 那是"跑在别处、本机别起"。
+  ⚠️ `depends_on` 会**传递性**拉起 profile 服务使 profile 形同虚设 (test.yml 踩过), 已 grep 确认
+  **零个 depends_on 引用 vision-mcp**, 故不会被绕过。
+  停容器用 `docker compose stop vision-mcp` (**只 stop 不 rm/down**), 停后其余 13 个服务
+  uptime 未变、`/health` 经 nginx 端到端 200 (类 20.213)。
+  处置说明另见 `docker-compose.yml` 该 service 块内的中文注释。
+- **glitchtip 遗留已失效, 待复核**: 原记 "glitchtip + vision-mcp 重启前即 unhealthy;
+  `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1`
+  Exited 4 周残留并存" —— 2026-10-09 实测 `docker ps -a` 全量 15 个容器, **这三个容器均已不存在**
+  (既非 Exited 也非残留, 是彻底没了)。故该条描述已过时, 但**是否要重建 glitchtip 服务属产品决策,
+  待主拍**, 此处只更正事实、不擅自处置。
 
 
 ---
