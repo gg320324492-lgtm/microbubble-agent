@@ -32,6 +32,47 @@
     ``核心文字内容（幻灯片正文）：`` + 一串 ``- 标题：… / - 作者：…`` 摘要。
     这段**不是幻灯片原文**，混进向量池会变成「原文 + 模型二次概括」的双份语义。
 
+防护 D — **整页第三方论文 / 期刊网页截图**（agent42, 2026-10-10）
+    a41 随机抽检 269 页真实转写，发现 6 页**整页就是别人的论文**：
+    ``1101 p2``（Science 系 NEWS 栏整页，3948 字）``1208 p4``（Nature
+    Communications 网页截图）``1051 p2``（ACS PDF 首页，4631 字）…
+    这与防护 A/B 的性质根本不同 —— A/B 剔的是**chrome**（噪声），
+    D 剔的是**别人的正文**（内容污染）。整页 ScienceDirect 首页进检索池 =
+    检索「O₃-MNB 反冲」时召回一段河北工业大学水处理的论文摘要，
+    且这段摘要与本组零相关。
+    ⚠️ **这类页只标 ``blocked``（转人工），绝不删内容** —— 因为无法从纯文本
+    区分「论文正文」与「用户自己摘抄的论文段落」，删了就可能删掉真引用。
+    判据 = **6 个正交"出版社版面族"命中 >= 2 个** + **外文正文规模够大**
+    （见 :data:`PAPER_MIN_FAMILIES` / :data:`PAPER_MIN_FOREIGN_CHARS`）。
+
+防护 E — **非 Office 科学软件 GUI**（agent42, 2026-10-10）
+    agent40 的 :data:`CHROME_WEAK_EN` 只覆盖 Office / MATLAB / RStudio。
+    OVITO / VASP / Materials Studio 这类**分子动力学与材料模拟软件**的
+    GUI 文案整类漏网。实测 ``1059 p6`` 是 OVITO Basic 窗口截图
+    （``Quick command search`` / ``Directory: C:/Users/TJU/Desktop`` /
+    ``Layer (3).cif`` / ``Number of atoms: 561``），但整页 chrome 只有 2.3%，
+    远低于 15% 拦截阈值 —— 因为它**没有 Office 那种 40 行功能区**。
+    对策不是降阈值（会把大片真图表页打挂），而是**补词表**：
+    把科学软件 GUI 的控件文案加进 STRONG 档，让 :func:`chrome_ratio`
+    自己把这一页顶过阈值。
+
+防护 F — **目录页 / 章节分隔页 / 致谢页**（agent42, 2026-10-10）
+    ``886 p3`` 这类目录页被算进 A（26 字符）。根因是 4-gram dedup 被
+    中英文差异打败：原生文本是 ``/CONTENTS``，转写是 ``目录``，二者
+    4-gram 零重叠，于是整页都被当成"新增内容"。
+    对策同样**只标 blocked 不删内容** —— 目录页虽然没价值，但删不删是
+    调用方的入库策略问题，不是净化问题。
+
+防护 G — **坐标轴刻度梯**（agent42, 2026-10-10）
+    图表页里成百上千个刻度数字（``45 44 43 42 … 30``）被当成高价值内容，
+    占 A 的 13.2%。⚠️ **但绝不能"短行/纯数字就删"** —— agent40 已实测
+    踩过这个坑（见 :data:`_MEASURE_RE` 注释：放宽到纯数字会误删
+    1066p17 / 1126p10 的真刻度）。本模块的解法是**上下文规则 + 单调性**：
+    只删**连续 >= :data:`CHART_LADDER_MIN_RUN` 个严格单调的纯数字行**。
+    单调性是真刻度的**结构不变量**（坐标轴必然单调），而真实科研数据
+    （能垒 ``-237.06``、热重峰温 ``2.83%``、时间点 ``143 min``）
+    **不可能连续 8 个严格单调** —— 这就是零误伤的数学依据。
+
 ## 为什么误伤面被压住（这是本模块最重要的一段）
 
 词表里的中文词绝大多数是**幻灯片正文也可能出现的普通词**：
@@ -109,6 +150,45 @@ WATERMARK_RATIO_FLOOR = 0.20
 #: 水印页太短时比例没意义（1268p12 全页 125 字符，2 条就是 16%）。
 WATERMARK_MIN_PAGE_CHARS = 200
 
+# ── 防护 D 阈值：整页第三方论文 / 期刊网页截图（agent42）─────────────────
+#: 命中多少个**正交**"出版社版面族"才判为第三方论文页。
+#: 实测 269 页：6 页真污染页命中 3~5 族；合法引用页最多 3 族，
+#: 且外文正文规模远小（见 :data:`PAPER_MIN_FOREIGN_CHARS`）。留 1 族余量。
+PAPER_MIN_FAMILIES = 2
+
+#: 「外文正文」的最小规模（字符）—— 只统计 **>= 40 字符**的行且**中文占比 < 5%**。
+#: 40 字符门槛把 ``Cite This: Acc. Chem. Res. 2019, 52, 1196-1205`` 这类
+#: 单行引用排除在外（它只有 45 字符且无正文段落），把整段 Abstract /
+#: Introduction 正文纳入。
+#: 实测：6 页真污染页最低 339（1036p2），合法引用页最高 294（1250p2）；
+#: 阈值 250 卡在两者之间，两侧各留 ~30% 余量。
+PAPER_MIN_FOREIGN_CHARS = 250
+
+#: 还要求至少有一段 **>= 150 字符**的外文长行 —— 即真的有一整段论文正文，
+#: 而不只是导航碎片。这条把 1250p2（``Cite This`` + 标题 + 作者，0 段）
+#: 与 1036p2（1 段 151 字符的英文标题+摘要）区分开，是**第二道保险**。
+PAPER_MIN_LONG_LINE = 150
+
+#: 判定「外文正文行」的最小行长。低于此的行（如 ``ELSEVIER`` /
+#: ``Nature Communications``）算 chrome 不算正文。
+PAPER_FOREIGN_MIN_LINE = 40
+#: 单行里中文（含全角标点）字符占比超过此值就不是「外文正文行」。
+PAPER_FOREIGN_MAX_CJK_RATIO = 0.05
+
+# ── 防护 G 阈值：坐标轴刻度梯（agent42）──────────────────────────────────
+#: 一条刻度梯至少要连续多少个纯数字行。
+#: ⚠️ **不要下调到 4 以下** —— 实测 1193p19 的真实热力学数据里，
+#: ``0.0 20.33 -8.37`` 恰好 3 连；下调会把真数据当刻度删。
+CHART_LADDER_MIN_RUN = 8
+#: 单行长度上限（strip 后）。刻度都是 ``-0.08`` / ``3500`` 这样的短串。
+CHART_LADDER_MAX_LINE = 12
+#: 单页最多允许删掉的比例 —— 超了说明这页**整体就是一张图**，
+#: 删刻度等于删掉整页（那属于"转人工"而不是"净化"）。
+#: 实测 269 页：命中 14 页的最高占比是 1025p15 的 25.1%（三张 pH/ORP/电导率
+#: 折线图的纵轴，删掉的都是刻度），阈值 0.30 只比它高 5 个百分点 ——
+#: 再高就可能放行「整页只有一张图」的页，把图例当正文删光。**不要再上调。**
+CHART_LADDER_MAX_PAGE_RATIO = 0.30
+
 
 # ── STRONG 档：中文 UI 术语（整行精确匹配）──────────────────────────────
 # 出处：1537p35 实测转写里的 WPS 功能区标签 + Office 通用命令。
@@ -146,6 +226,54 @@ CHROME_STRONG_EN: frozenset = frozenset({
     "<< back", "next >>", "< prev img", "next img >",
     "or:",
     "home", "insert",  # PowerPoint 的 Home/Insert 选项卡（与 'start' 对照）
+})
+
+#: STRONG 档：**科学计算软件** GUI 控件文案（整行精确匹配，大小写不敏感）。
+#: 出处：1059p6 实测 OVITO Basic 窗口截图（原子/分子可视化）。
+#: 判定依据「为什么算 chrome」：这些是**分子动力学 / 材料模拟软件的
+#: 面板标题与字段名**，它们描述的是"软件里有哪些面板"，不是科研结论。
+#: 同组真讲 OVITO 时正文会写"用 OVITO 观察了黏土层间结构"，
+#: 而不是把这些面板名连排成一块。
+SCI_GUI_STRONG_EN: frozenset = frozenset({
+    # OVITO（1059p6 实测，22/44 行命中）
+    "quick command search",      # OVITO 顶部搜索框
+    "add modification...",
+    "center simulation box on coordinate origin",
+    "simulation cell",
+    "visual elements",
+    "particle types",
+    "cif reader",
+    "global attributes",
+    "number of atoms",
+    "current file",
+    "directory",
+    "search pattern",
+    "file sequence",
+    "playback ratio",
+    "current frame",
+    "external file",
+    "data source",
+    "found 1 matching file",
+    "auto-generate",
+    "change...",
+    # 窗口标题（OVITO 会把文件名写进标题栏）
+    "ovito basic (open visualization tool)",
+})
+
+#: STRONG 档：科学软件 GUI 的中文面板文案（整行精确匹配）。
+#: 出处：1059p6 实测 OVITO 的拖拽上传区。
+SCI_GUI_STRONG_CN: frozenset = frozenset({
+    "拖拽至此上传",
+    "外部文件",
+    "数据源",
+    "文件序列",
+    "搜索模式",
+    "当前帧",
+    "粒子类型",
+    "模拟单元",
+    "可视化元素",
+    "添加修改",
+    "全局属性",
 })
 
 
@@ -230,6 +358,27 @@ _RADIO_RE = re.compile(r"^[●○◉◦]\s+[A-Za-z]{3,}")
 #: MATLAB App Designer 窗口标题残留：``GUI_Bubb...``
 _MATLAB_GUI_RE = re.compile(r"^gui[_a-z0-9]*\s*\.*$", re.I)
 
+# ── 防护 E：科学软件 GUI 的结构化正则（agent42）────────────────────────
+#: 1059p6 实测 OVITO 的**取值字段行**：``Directory:  C:/Users/TJU/Desktop`` /
+#: ``Current file:  Layer (3).cif`` / ``Number of atoms: 561``。
+#: 判定依据「为什么算 chrome」：这是 GUI 表单控件的 ``标签: 值`` 结构 ——
+#: **冒号 + 空格 + 紧跟取值**；科研正文写句子不用这种形状
+#: （写「原子数量为 561」而非 ``Number of atoms: 561``）。
+#: ⚠️ **冒号是必需的一部分**：初版写成 ``\s*:?\s+``（冒号可选），
+#: 结果 ``Current frame 切换到下一帧`` 这类正文句子也被误判 ——
+#: 冒号才是「控件取值」与「散文」的分界。
+_SCI_GUI_FIELD_RE = re.compile(
+    r"^(?:current file|directory|search pattern|playback ratio|current frame"
+    r"|number of atoms|auto-generate)\s*:\s*\S", re.I
+)
+
+#: 科学软件 GUI 的**本地文件路径**：``C:/Users/TJU/Desktop`` / ``D:\\runs\\a.cif``。
+#: 判定依据「为什么算 chrome」：幻灯片正文引用数据文件时几乎不会写出
+#: **本机用户目录**（那是操作者在自己机器上的路径，不是共享资产）。
+#: ⚠️ 只认 ``盘符:\\\\Users\\\\`` / ``盘符:/Users/`` 这种**用户目录**形状，
+#: 不认一般相对路径 —— 相对路径可能真是正文里的示例文件。
+_SCI_GUI_USERDIR_RE = re.compile(r"\b[A-Za-z]:[\\/]Users[\\/]", re.I)
+
 
 # ── STRONG 档：固定短语（substring，多词，误伤面极低）──────────────────
 #: 出处：1254p10 实测 GUI 帮助句 + 通用软件操作语。
@@ -262,6 +411,142 @@ _WATERMARK_RE = re.compile(
     r"|转到[“”\"'\s]*设置[“”\"'\s]*以激活\s*Windows[.。]?)"
     r"[.。]?"
 )
+
+
+# ── 防护 D：第三方论文页的「出版社版面族」（agent42）─────────────────────
+# 6 个族**互不重叠**，每个族内的多条目是「同一件事的不同写法」。
+# 为什么要分族而不是数命中条目数：一篇论文截图会同时命中 3~5 个族，
+# 而**本组合法引用**（讲「我们引用了这篇论文」+ 贴个 citation 行）
+# 最多只碰 2~3 个族。按条目数会把这两种情况混成同一个分数。
+#
+# 实测 269 页（a41 样本）：命中 >= 2 族的只有 8 页 ——
+#   真污染 6 页（1036p2 / 1051p2 / 1072p2 / 1101p2 / 1181p2 / 1208p4）
+#   合法引用 2 页（1101p5 / 1250p2），二者靠 :data:`PAPER_MIN_FOREIGN_CHARS` 分开。
+PAPER_FAMILIES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    # F1 期刊/出版社刊头 —— 「这是哪本杂志」的结构性标识
+    ("masthead", (
+        r"^\s*(?:nature\s+communications|nature|science of the total environment|"
+        r"water\s+research|the\s+innovation|advances\s+in\s+space\s+research|"
+        r"accounts\s+of\s+chemical\s+research)\s*$",
+        r"^\s*elsevier\s*$",
+        r"^\s*frontiers\s*\|",
+        r"^\s*the\s+journal\s+of\s*$",
+        r"^\s*volume\s+\d+,\s*issue\s+\d+,\s*\d{4},\s*pages\s+\d+",
+    )),
+    # F2 网页导航 —— 出版商**网站**的导航条（PDF 截图没有，是网页截图的指纹）
+    ("nav", (
+        r"contents\s+lists\s+available",
+        r"^\s*journal\s+homepage",
+        r"explore\s+content\s+about\s+the\s+journal\s+publish\s+with\s+us",
+        r">\s*articles\s*>\s*article",
+        r"^\s*nature\s*>\s*\S",
+        r"^\s*check\s+for\s+updates\s*$",
+        r"^\s*show\s+more\s*$",
+        r"^\s*\+\s*add\s+to\s+mendeley",
+        r"^\s*get\s+rights\s+and\s+content\s*$",
+        r"^\s*read\s+online\s*$",
+        r"^\s*article\s+recommendations\s*$",
+        r"^\s*supporting\s+information\s*$",
+        r"^\s*published\s+as\s+part\s+of",
+    )),
+    # F3 影响力计量 —— Altmetric / Accesses / OPEN ACCESS 角标
+    ("metrics", (
+        r"altmetric",
+        r"\d+\s*accesses",
+        r"^\s*access\s*$",
+        r"^\s*open\s+access\s*$",
+        r"^\s*metrics\s*&\s*more\s*$",
+    )),
+    # F4 编辑与通信 —— 审稿人 / 通讯作者角标
+    ("editorial", (
+        r"^\s*edited\s+by\s*$",
+        r"^\s*reviewed\s+by\s*$",
+        r"correspondence\s*[:：]",
+        r"✉\s*\S+@",
+        r"contributed\s+equally",
+    )),
+    # F5 投稿流程 —— 收稿/修回/接收/引用/DOI
+    ("submission", (
+        r"^\s*received\s*[:：]",
+        r"^\s*revised\s*[:：]",
+        r"^\s*accepted\s*[:：]",
+        r"published\s+online\s*:",
+        r"^\s*citation\s*[:：]",
+        r"^\s*cite\s+this\s*[:：]",
+        r"^\s*doi\s+\S+",
+        r"https?://doi\.org/",
+        r"^\s*pubs\.acs\.org/",
+    )),
+    # F6 论文体例小标题 —— ARTICLE INFO / ABSTRACT / HIGHLIGHTS
+    ("bodyhdr", (
+        r"^\s*article\s+info\s*$",
+        r"^\s*abstract\s*[:：]?\s*$",
+        r"^\s*keywords\s*[:：]?\s*$",
+        r"^\s*highlights\s*$",
+        r"^\s*graphical\s+abstract\s*$",
+        r"^\s*\d+\.?\s*introduction\s*$",
+        r"^\s*news\s*&\s*buzz\s*$",
+    )),
+)
+
+PAPER_FAMILY_RES = tuple(
+    (name, tuple(re.compile(rx, re.I) for rx in rxs)) for name, rxs in PAPER_FAMILIES
+)
+
+#: CJK（含全角标点）判定 —— 用于「这行是不是外文正文行」。
+_CJK_RE = re.compile(r"[　-〿぀-ヿ一-鿿＀-￯]")
+
+#: 模型违反指令的**另一种**措辞（agent40 只处理了「核心文字内容（幻灯片正文）：」）。
+#: 实测 1208p4 首行就是「以下是该幻灯片上按阅读顺序提取的所有文字：」——
+#: Nature 网页截图本身就带着这句模型旁白。它同时也是论文页的强信号，
+#: 但**不单独作为删行依据**（模型旁白不是幻灯片原文，删掉是对的，
+#: 可惜它只有 1 行、收益太小，不值得单开一条规则）。
+
+
+# ── 防护 F：目录页 / 章节分隔页 / 致谢页（agent42）──────────────────────
+#: 目录页的页头。实测两种写法：中文 ``目录`` 与母版占位符 ``/CONTENTS``
+#: （PowerPoint 的内置版式名，被 4-gram dedup 当成"新内容"）。
+_TOC_HEAD_RE = re.compile(r"^\s*(?:/\s*)?(?:目\s*录|contents?)\s*$", re.I)
+
+#: 目录条目行：``1 研究背景`` / ``4. 结论`` / ``◆三、微纳米气泡中·OH的产生``。
+_TOC_ITEM_RE = re.compile(
+    r"^\s*(?:[◆■●▲·•]\s*)?"
+    r"(?:\d{1,2}\s*[.、．)）]?\s*|[一二三四五六七八九十]{1,3}\s*[、.．)）]\s*)"
+    r"\S.{0,60}$"
+)
+
+#: 致谢页页头。⚠️ 页长 / 行长的双重上限在 :func:`detect_template_page`
+#: 里统一施加（见 :data:`TEMPLATE_MAX_PAGE_CHARS` /
+#: :data:`TEMPLATE_MAX_LINE_CHARS`），本条只管**认出「谢谢」二字**。
+_THANKS_RE = re.compile(r"^\s*(?:谢谢[！!。]?|感谢(?:聆听|聆听指导)|thank\s+you)\s*$", re.I)
+
+#: 模板页的**页长**上限。⚠️ 这是 :func:`detect_template_page` 最重要的保险：
+#: 光靠「有 ``目录`` 页头 + 几条章节条目」不够 —— 一页真研究内容完全可能
+#: 以「目录」两字开头（讲"怎么给 PPT 建目录"），或在致谢页上顺手多写两句。
+#: 实测 269 页：真模板页最长 68 字符（1220p2）、最长单行 20 字符（1220p12），
+#: 阈值卡在这两个实测极值与「带正文的伪模板页」之间。
+TEMPLATE_MAX_PAGE_CHARS = 150
+#: 单行长度上限 —— 模板页**没有长句**。真科研页必有整行 >= 200 字符的正文。
+#: 实测真模板页最长单行 20 字符，阈值 60 留 3 倍余量；本组语料里
+#: 「目录页上写了半段结论」的最长观测行是 91 字符，仍被正确放行。
+TEMPLATE_MAX_LINE_CHARS = 60
+
+
+# ── 防护 G：坐标轴刻度梯（agent42）──────────────────────────────────────
+#: 纯数字行（可带正负号 / 小数点）。⚠️ **不做单位后缀匹配** ——
+#: 允许 ``3500`` ``-0.08`` 这种裸刻度进入候选，靠**单调性**而非形状来定夺。
+_CHART_NUM_RE = re.compile(r"^[+\-−–]?\d{1,7}(?:\.\d+)?$")
+
+
+def _chart_num(s: str) -> Optional[float]:
+    """把刻度行解析成 float；不是纯数字返回 None。"""
+    t = s.strip()
+    if not _CHART_NUM_RE.match(t):
+        return None
+    try:
+        return float(t.replace("−", "-").replace("–", "-"))
+    except ValueError:   # pragma: no cover — 正则已保证可转
+        return None
 
 
 # ── 防护 C：模型"尾随总结"判据 ─────────────────────────────────────────
@@ -311,8 +596,10 @@ class RemovedLine:
     """被剔除的一行及其判定依据（可审计）。"""
 
     line_no: int          #: 在**原始文本**中的行号（0-based）
+    text: str
     text: str             #: 该行 strip 后的原文
-    category: str         #: 'strong' | 'weak_in_run' | 'watermark'
+    #: ``'strong'`` | ``'weak_in_run'`` | ``'watermark'`` | ``'chart_ladder'``
+    category: str
     rule: str             #: 具体命中的词表/正则名
     run_length: int = 0   #: 若靠 run 规则命中，该 run 的长度
 
@@ -331,7 +618,7 @@ class FilterResult:
     """
 
     raw_text: str
-    #: 净化后的文本（剔除 chrome 行 + 切掉尾随总结）。blocked 时调用方
+    #: 净化后的文本（剔除 chrome 行 + 刻度梯 + 切掉尾随总结）。blocked 时调用方
     #: 应走人工确认, 但这里仍给出净化版便于人工比对。
     text: str
     #: True = **建议**转人工确认。⚠️ 这不是"自动丢弃"，也不保证这页一定有问题。
@@ -351,6 +638,19 @@ class FilterResult:
     truncation_marker: Optional[str] = None
     #: Windows 未激活水印（单独处置，不单独触发 block）。
     watermark_lines: Tuple[str, ...] = ()
+    #: 防护 D：命中的出版社版面族名（仅在 :attr:`third_party_paper` 为 True 时非空）。
+    paper_families: Tuple[str, ...] = ()
+    #: 防护 D：本页「外文正文」字符数（>= 40 字符且中文占比 < 5% 的行合计）。
+    paper_foreign_chars: int = 0
+    #: 防护 D：整页是第三方论文 / 期刊网页截图。
+    #: ⚠️ 这类页**只标不删** —— 见模块 docstring 防护 D 段。
+    third_party_paper: bool = False
+    #: 防护 F：整页是目录页 / 章节分隔页 / 致谢页。⚠️ 同样**只标不删**。
+    template_page: bool = False
+    #: 防护 F：模板页类型（``'toc'`` / ``'thanks'`` / ``''``）。
+    template_kind: str = ""
+    #: 防护 G：被当作坐标轴刻度梯剔除的字符数。
+    chart_ladder_chars: int = 0
 
     @property
     def should_auto_ingest(self) -> bool:
@@ -379,6 +679,13 @@ def _classify_core(line: str) -> Tuple[Optional[str], Optional[str]]:
             return "strong", f"phrase:{p}"
 
     # ── STRONG: 结构化正则 ────────────────────────────────────────────
+    # ── STRONG: 科学软件 GUI 的结构化正则 ──────────────────────────
+    # ⚠️ ``sci_gui_userdir`` 用 **search** 而非 match —— 实测行首可能是
+    # ``Read from C:/Users/...`` 这类带引导词的写法；本机用户目录路径本身
+    # 就是判据，是否在行首无关。其余几条都要求整行形状，用 match。
+    if _SCI_GUI_USERDIR_RE.search(s):
+        return "strong", "sci_gui_userdir"
+
     for name, rx, cat in (
         ("step", _STEP_RE, "strong"),
         ("menu_bar", _MENU_BAR_RE, "strong"),
@@ -387,6 +694,7 @@ def _classify_core(line: str) -> Tuple[Optional[str], Optional[str]]:
         ("measure", _MEASURE_RE, "strong"),
         ("radio", _RADIO_RE, "weak"),
         ("matlab_gui", _MATLAB_GUI_RE, "strong"),
+        ("sci_gui_field", _SCI_GUI_FIELD_RE, "strong"),
     ):
         if rx.match(s):
             return cat, name
@@ -396,6 +704,15 @@ def _classify_core(line: str) -> Tuple[Optional[str], Optional[str]]:
         return "strong", "cn_exact"
     if low in CHROME_STRONG_EN:
         return "strong", "en_exact"
+
+    # ── STRONG: 科学软件 GUI（防护 E，agent42）────────────────────────
+    # 放在 Office 档之后：``home`` / ``start`` 这类通用词归 Office，
+    # 科学软件的专有控件名（``simulation cell`` / ``number of atoms``）
+    # 放在它后面判，避免两个词表互相污染判定依据。
+    if s in SCI_GUI_STRONG_CN:
+        return "strong", "sci_gui_cn"
+    if low in SCI_GUI_STRONG_EN:
+        return "strong", "sci_gui_en"
 
     # ── WEAK: 普通词 ──────────────────────────────────────────────────
     if s in CHROME_WEAK_CN or low in CHROME_WEAK_EN:
@@ -494,6 +811,190 @@ def find_trailing_summary(text: str) -> Tuple[Optional[int], Optional[str]]:
     return None, None
 
 
+# ── 防护 D / F / G 的公开判据 ──────────────────────────────────────────
+
+def paper_families(text: str) -> Tuple[str, ...]:
+    """返回本页命中的出版社版面族名（去重、保序）。
+
+    「族」而不是「条目数」的理由见 :data:`PAPER_FAMILIES` 的注释：
+    6 个族互不重叠，整页论文截图会同时命中 3~5 个，
+    而本组合法引用最多碰 2~3 个 —— 族数才是有判别力的特征。
+    """
+    hits: List[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        for name, rxs in PAPER_FAMILY_RES:
+            if any(rx.search(line) for rx in rxs):
+                if name not in hits:
+                    hits.append(name)
+                break          # 一行只记第一个命中的族（族本身互斥但行可多命中）
+    return tuple(hits)
+
+
+def foreign_prose_stats(text: str) -> Tuple[int, int]:
+    """返回 ``(外文字符数, 长外文行数)``。
+
+    「外文正文行」= **原始长度 >= 40** 且 **中文字符占比 < 5%** 的非空行。
+    两个条件缺一不可：
+    * 长度门槛把 ``ELSEVIER`` / ``Nature Communications`` 这类刊头
+      排除在外（它们是 chrome 不是正文）；
+    * 中文占比门槛把「中文讲稿 + 英文术语混排」的科研页排除在外
+      （如 1101p5 —— 它的外文只有 196 字符且最长行 105 字符）。
+    """
+    chars = 0
+    long_lines = 0
+    for line in text.splitlines():
+        if not line.strip() or len(line) < PAPER_FOREIGN_MIN_LINE:
+            continue
+        if len(_CJK_RE.findall(line)) / max(1, len(line)) > PAPER_FOREIGN_MAX_CJK_RATIO:
+            continue
+        n = len(_WS_RE.sub(" ", line).strip())
+        chars += n
+        if len(line) >= PAPER_MIN_LONG_LINE:
+            long_lines += 1
+    return chars, long_lines
+
+
+def detect_third_party_paper(text: str) -> Tuple[bool, Tuple[str, ...], int]:
+    """防护 D —— 判定「整页是第三方论文 / 期刊网页截图」。
+
+    返回 ``(是否命中, 命中的族, 外文字符数)``。
+
+    **这是页级标���，不是删行动作。** 命中后调用方应转人工确认，
+    :attr:`FilterResult.text` 仍保留原文（无法从纯文本区分「别人的论文正文」
+    与「用户自己摘抄的论文段落」，删了就可能删掉真引用）。
+
+    三条合取理由（实测 269 页，见模块 docstring 防护 D）：
+    1. 族数 >= :data:`PAPER_MIN_FAMILIES` —— 单个信号（``Open access`` /
+       ``Nature``）正文里也会有，合取才安全。
+    2. 外文规模 >= :data:`PAPER_MIN_FOREIGN_CHARS` —— 排除「只贴了个
+       citation 行」的合法引用页（1250p2 外文 294 但最长行仅 121）。
+    3. 至少 :data:`PAPER_MIN_LONG_LINE` 字符的长外文行 —— 证明**真的有一段
+       论文正文**，而不只是导航碎片。这是第二道保险。
+    """
+    fams = paper_families(text)
+    foreign, long_lines = foreign_prose_stats(text)
+    hit = (
+        len(fams) >= PAPER_MIN_FAMILIES
+        and foreign >= PAPER_MIN_FOREIGN_CHARS
+        and long_lines >= 1
+    )
+    return hit, fams, foreign
+
+
+def detect_template_page(text: str) -> Tuple[bool, str]:
+    """防护 F —— 判定「目录页 / 致谢页」这类模板样板页。
+
+    返回 ``(是否命中, 类型)``，类型 ∈ ``{'toc', 'thanks', ''}``。**只标不删。**
+
+    目录页的判定是**结构 + 无长句**而非关键词：必须有 ``目录`` / ``/CONTENTS``
+    页头，正文里 >= 2 条形如 ``1 研究背景`` 的章节条目，**其他行不超过 2 条**，
+    且**没有任何一行超过 :data:`TEMPLATE_MAX_LINE_CHARS` 字符**。
+    后两条约束都是防误伤的关键 —— 它们保证这页**没有真内容**：
+    一个既叫「目录」又写了长段研究结论的页不该被整页判成模板。
+
+    实测 269 页命中 13 页：目录 8（886p3 / 1112p3 / 1152p2 / 1198p3 /
+    1220p2 / 1220p3 / 1220p12 / 1230p2）+ 致谢 5。
+    真目录页最长 71 字符且无长行；带正文的伪模板页至少有一行 130+ 字符。
+    """
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return False, ""
+    page_chars = sum(len(_WS_RE.sub(" ", ln).strip()) for ln in lines)
+    if page_chars > TEMPLATE_MAX_PAGE_CHARS:
+        return False, ""
+    # ⚠️ 单行闸：模板页没有长句。这一条比页长总闸更贴近「有没有真内容」的语义
+    # ⚠️ 单行闸：模板页没有长句。这一条比页长总闸更贴近「有没有真内容」的语义
+    if any(len(ln) > TEMPLATE_MAX_LINE_CHARS for ln in lines):
+        return False, ""
+
+    heads = [ln for ln in lines if _TOC_HEAD_RE.match(ln)]
+    if heads:
+        secs = [ln for ln in lines if _TOC_ITEM_RE.match(ln) and not _TOC_HEAD_RE.match(ln)]
+        other = [ln for ln in lines if ln not in heads and ln not in secs]
+        if len(secs) >= 2 and len(other) <= 2:
+            return True, "toc"
+
+    if any(_THANKS_RE.match(ln) for ln in lines):
+        return True, "thanks"
+
+    return False, ""
+
+
+def find_chart_ladders(text: str) -> List[int]:
+    """防护 G —— 找出坐标轴刻度梯的行号（用模块级默认阈值）。
+
+    **判据是「连续 >= :data:`CHART_LADDER_MIN_RUN` 个严格单调的纯数字行」**。
+
+    为什么必须靠单调性而不是「短行就剔」：
+    agent40 实测过「纯数字 → chrome」，结果把 1066p17 / 1126p10 的**真刻度**
+    整页删掉；反过来 agent42 首版「连续短标签行 → 全删」也误伤了
+    1193p19 的**真实热力学数据**（能垒 ``-237.06``、``-159.56``）和
+    1215p9 的**真实时间点**（``143 min`` / ``179 min``）。
+
+    而**严格单调是坐标轴的结构不变量**：一根轴上的刻度必然单调，
+    而 8 个连续严格单调的实验数据点在本组语料里不存在。
+    实测 269 页：14 页命中，删 802 字符，**逐行人工核对零误伤**
+    （每条被删行的上一行都是轴标题，如 ``Protein (mg/L)`` → ``45 44 43``）。
+
+    另有两道保险：
+    * 单页删除量不得超过 :data:`CHART_LADDER_MAX_PAGE_RATIO` ——
+      超过说明这页整体就是一张图，删刻度等于删整页，该转人工而非净化。
+    * 候选行必须 ``<= CHART_LADDER_MAX_LINE`` 字符且**不含中文** ——
+      ``Removal Rate (%)`` 这类轴标题（含中文/长串）本身不删。
+    """
+    return _find_chart_ladders_param(text, CHART_LADDER_MIN_RUN, CHART_LADDER_MAX_PAGE_RATIO)
+
+
+def _find_chart_ladders_param(
+    text: str, min_run: int, max_page_ratio: float
+) -> List[int]:
+    """:func:`find_chart_ladders` 的参数化内核（供 ``filter_page_transcript``
+    的覆盖参数走同一条代码路径，避免测试与生产走两套逻辑）。"""
+    lines = text.splitlines()
+
+    # 候选行号：短、无中文、非空。空行不作候选但**不切断连续性**
+    # （模型爱在刻度中间插空行，与 chrome run 规则同理）。
+    cand = [
+        i for i, ln in enumerate(lines)
+        if ln.strip()
+        and len(ln.strip()) <= CHART_LADDER_MAX_LINE
+        and not _CJK_RE.search(ln)
+    ]
+    if len(cand) < min_run:
+        return []
+
+    total_chars = sum(len(_WS_RE.sub(" ", ln).strip()) for ln in lines if ln.strip())
+    removable: set = set()
+    for start in range(len(cand) - min_run + 1):
+        seg = cand[start:start + min_run]
+        # ⚠️ 这里要判的是「**相邻两行之间**只有空行」，
+        # 不能直接 `_contiguous(seg[0], seg[-1])` —— 那个函数问的是
+        # 「seg[0] 与 seg[-1] **之间**的原始行是否全为空」，
+        # 而 seg 本身**就是**那几行刻度（它们非空），必然判 False。
+        if not all(_contiguous(lines, seg[i], seg[i + 1]) for i in range(len(seg) - 1)):
+            continue
+        nums = [_chart_num(lines[i]) for i in seg]
+        if any(v is None for v in nums):
+            continue
+        if len(set(nums)) < 2:          # 排除全等（``0 0 0 0``）
+            continue
+        inc = all(b > a for a, b in zip(nums, nums[1:]))
+        dec = all(b < a for a, b in zip(nums, nums[1:]))
+        if inc or dec:
+            removable.update(seg)
+
+    if not removable:
+        return []
+    removed_chars = sum(
+        len(_WS_RE.sub(" ", lines[i]).strip()) for i in removable
+    )
+    if total_chars and removed_chars / total_chars > max_page_ratio:
+        return []
+    return sorted(removable)
+
+
 # ── 主入口 ──────────────────────────────────────────────────────────────
 
 def filter_page_transcript(
@@ -505,18 +1006,26 @@ def filter_page_transcript(
     watermark_floor: float = WATERMARK_RATIO_FLOOR,
     watermark_min_lines: int = WATERMARK_MIN_LINES,
     watermark_min_page_chars: int = WATERMARK_MIN_PAGE_CHARS,
+    paper_min_families: int = PAPER_MIN_FAMILIES,
+    paper_min_foreign: int = PAPER_MIN_FOREIGN_CHARS,
+    ladder_min_run: int = CHART_LADDER_MIN_RUN,
+    ladder_max_page_ratio: float = CHART_LADDER_MAX_PAGE_RATIO,
 ) -> FilterResult:
     """净化一页视觉转写 —— 纯函数, 零 IO。
 
-    做三件事, 各自独立可审计:
+    做五件事, 各自独立可审计:
 
-    1. **剔除 chrome 行**（功能区 / GUI 控件 / 任务栏 / 未激活水印）
-    2. **切掉尾随总结段**（模型违反"不要总结"指令的追加内容）
-    3. **判定是否建议转人工确认**（:attr:`FilterResult.blocked`）
+    1. **剔除 chrome 行**（功能区 / GUI 控件 / 任务栏 / 未激活水印 /
+       科学计算软件面板 —— 防护 A/B/E）
+    2. **剔除坐标轴刻度梯**（连续单调纯数字行 —— 防护 G）
+    3. **切掉尾随总结段**（模型违反"不要总结"指令的追加内容 —— 防护 C）
+    4. **标记整页第三方论文 / 期刊网页截图**（防护 D，**只标不删**）
+    5. **标记目录页 / 致谢页模板样板**（防护 F，**只标不删**）
 
     ``blocked=True`` 时 :attr:`FilterResult.should_auto_ingest` 为 False，
     调用方**不得**自动入库 —— 但也**不必**丢弃，转人工队列即可。
-    典型场景就是拍到别人笔记本电脑屏幕的那一页。
+    典型场景就是拍到别人笔记本电脑屏幕的那一页，
+    以及整页就是一篇别人的论文（检索池不该被别人的摘要污染）。
     """
     if text is None:
         text = ""
@@ -535,17 +1044,40 @@ def filter_page_transcript(
         if _WATERMARK_RE.fullmatch(_WS_RE.sub(" ", ln).strip())
     )
 
-    # ── 2. 尾随总结切除 ──────────────────────────────────────────────
+    # ── 1b. 坐标轴刻度梯（防护 G）────────────────────────────────────
     raw_lines = text.splitlines()
+    ladder_idx = (
+        find_chart_ladders(text)
+        if ladder_min_run == CHART_LADDER_MIN_RUN and ladder_max_page_ratio == CHART_LADDER_MAX_PAGE_RATIO
+        else _find_chart_ladders_param(text, ladder_min_run, ladder_max_page_ratio)
+    )
+    ladder_removed: List[RemovedLine] = [
+        RemovedLine(i, _WS_RE.sub(" ", raw_lines[i]).strip(), "chart_ladder",
+                    "monotone_numeric_run", ladder_min_run)
+        for i in ladder_idx
+    ]
+    ladder_chars = sum(len(rl.text) for rl in ladder_removed)
+
+    # ── 2. 尾随总结切除 ──────────────────────────────────────────────
     tail_idx, marker = find_trailing_summary(text)
-    drop = {rl.line_no for rl in removed}
+    drop = {rl.line_no for rl in removed} | set(ladder_idx)
     tail = ""
     if tail_idx is not None:
         drop |= set(range(tail_idx, len(raw_lines)))
         tail = "\n".join(raw_lines[tail_idx:]).strip()
     filtered = "\n".join(ln for i, ln in enumerate(raw_lines) if i not in drop).strip()
 
-    # ── 3. 拦截判定 ────────────────────────────────────────────────
+    # ── 3. 页级判定（防护 D / F）—— 只标不删 ─────────────────────────
+    paper_hit, fams, foreign = detect_third_party_paper(text)
+    if paper_min_families != PAPER_MIN_FAMILIES or paper_min_foreign != PAPER_MIN_FOREIGN_CHARS:
+        # 覆盖参数时重算（族判定只依赖 text，规模判定才依赖阈值）
+        paper_hit = (
+            len(fams) >= paper_min_families and foreign >= paper_min_foreign
+            and foreign_prose_stats(text)[1] >= 1
+        )
+    template_hit, template_kind = detect_template_page(text)
+
+    # ── 4. 拦截判定 ────────────────────────────────────────────────
     # 保守: **只**用"这一页有多少是软件 chrome"这一类**页面级结构证据**,
     # 不掺任何"含外部机构名/含外部人名"的内容侧判据 —— 实测该组 deck 本身
     # 就在未来颗粒前沿研讨会语境里, 合法引用清华/中科院分区会造成高假阳。
@@ -565,8 +1097,21 @@ def filter_page_transcript(
             f"windows_unactivated_watermark x{len(watermarks)}"
             f"（疑为桌面截屏, 转人工确认）"
         )
+    # 防护 D —— 内容污染（不是 chrome）。⚠️ 不删任何一行。
+    if paper_hit:
+        reasons.append(
+            f"third_party_paper_page（出版社版面族 x{len(fams)}: "
+            f"{'/'.join(fams)}; 外文正文 {foreign} 字符, 疑似整页他人论文"
+            f"/期刊网页截图, 内容污染, 转人工确认; 内容未删）"
+        )
+    # 防护 F —— 模板样板页。
+    if template_hit:
+        label = "目录页" if template_kind == "toc" else "致谢/尾页"
+        reasons.append(
+            f"template_page:{template_kind}（{label}, 无科研内容, 转人工确认; 内容未删）"
+        )
 
-    removed_chars = chrome_chars + sum(
+    removed_chars = chrome_chars + ladder_chars + sum(
         len(_WS_RE.sub(" ", ln).strip()) for ln in tail.splitlines() if ln.strip()
     )
 
@@ -578,11 +1123,17 @@ def filter_page_transcript(
         chrome_ratio=ratio,
         chrome_chars=chrome_chars,
         total_chars=total_chars,
-        removed_lines=tuple(removed),
+        removed_lines=tuple(removed) + tuple(ladder_removed),
         removed_chars=removed_chars,
         truncated_tail=tail,
         truncation_marker=marker,
         watermark_lines=watermarks,
+        paper_families=fams if paper_hit else (),
+        paper_foreign_chars=foreign if paper_hit else 0,
+        third_party_paper=paper_hit,
+        template_page=template_hit,
+        template_kind=template_kind if template_hit else "",
+        chart_ladder_chars=ladder_chars,
     )
 
 
@@ -652,10 +1203,23 @@ __all__ = [
     "WATERMARK_RATIO_FLOOR",
     "WATERMARK_MIN_LINES",
     "WATERMARK_MIN_PAGE_CHARS",
+    "PAPER_MIN_FAMILIES",
+    "PAPER_MIN_FOREIGN_CHARS",
+    "PAPER_MIN_LONG_LINE",
+    "CHART_LADDER_MIN_RUN",
+    "CHART_LADDER_MAX_LINE",
+    "CHART_LADDER_MAX_PAGE_RATIO",
+    "SCI_GUI_STRONG_EN",
+    "SCI_GUI_STRONG_CN",
     "FilterResult",
     "RemovedLine",
     "classify_line",
     "chrome_ratio",
+    "detect_template_page",
+    "detect_third_party_paper",
+    "find_chart_ladders",
     "find_trailing_summary",
+    "foreign_prose_stats",
+    "paper_families",
     "filter_page_transcript",
 ]
