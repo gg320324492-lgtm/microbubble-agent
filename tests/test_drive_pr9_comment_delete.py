@@ -39,12 +39,16 @@ from app.models.member import Member
 
 import app.models  # noqa: F401, E402  # 触发所有 model 注册
 
+from tests.conftest import get_test_database_url  # 测试库隔离 (2026-09-12)
+
 # === 测试 DB 配置 ===
-import os
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:microbubble2026@db:5432/microbubble_test",
-)
+# L-14 (2026-10-09): 原为 os.getenv 带**过期硬编码默认密码** —— 密码轮换后
+# 本地手跑 (无 TEST_DATABASE_URL env) 精确复现 asyncpg InvalidPasswordError。
+# CI 一直是绿的 (server-tests-baseline.yml 已显式设 env, 覆盖掉默认值), 所以这是
+# 「本地手跑地雷」而非恒红点。改走 conftest 惯例: 派生的 TEST_DB_URL 借
+# DATABASE_URL 凭据 + 只换库名, 密码轮换自动跟随, 且永不连生产库。
+# 下方 test_engine/db fixture 仍自建 (刻意绕过 conftest db fixture), 不动。
+TEST_DATABASE_URL = get_test_database_url()
 
 
 # ==========================================================================
