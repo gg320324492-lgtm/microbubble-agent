@@ -30,11 +30,12 @@
     docker exec microbubble-agent-app-1 python scripts/backfill_kb_search_text.py --apply --limit 3
     docker exec microbubble-agent-app-1 python scripts/backfill_kb_search_text.py --apply --refresh-all
 
-⚠️ 输出长度兜底: split_for_tsvector 的 max_chars=6000 截的是**原始输入**,
-   jieba 切词+空格拼接后 token 串可能 > 6000, 撞 ck_knowledge_search_text_len
-   CHECK (length <= 6000)。本脚本对最终输出再兜底截断到 6000。
-   (这是既有入库路径的潜在地雷, 本脚本只规避不修 —— 修 split_for_tsvector
-    属核心索引函数变更, 需主指挥单独决策。)
+⚠️ 输出长度 (2026-10-09 agent24 已修, agent36 删兜底):
+   split_for_tsvector 的 max_chars=6000 现在是**最终输出预算** (按 token 边界
+   裁剪), 保证 len(out) <= 6000, 不会再撞 ck_knowledge_search_text_len。
+   本脚本原先的 `st[:6000]` 字符级兜底已删除 —— 它是**半词污染的源头**
+   (从词中间劈开, 如 "核心 水质 传"; PG 把半词当独立 lexeme 建索引)。
+   现改为 assert: 真超限就 fail loud, 绝不静默造半词。
 """
 from __future__ import annotations
 
@@ -120,11 +121,22 @@ async def main() -> int:
                         continue
                     # kb 直接用 content 作源 (与线上入库钩子 line 208 同语义)
                     st = split_for_tsvector(body)
-                    # 兜底: jieba 空格拼接后可能 > 6000, 撞 CHECK 约束
-                    if len(st) > SEARCH_TEXT_MAX:
-                        logger.warning("[%d/%d] id=%s 输出 %d > %d, 截断",
-                                       i, len(rows), kid, len(st), SEARCH_TEXT_MAX)
-                        st = st[:SEARCH_TEXT_MAX]
+                    # ⚠️ 不做 `st[:6000]` 字符级硬切 (2026-10-09 agent36 删):
+                    #   agent24 已把 max_chars 改成**输出预算**, split_for_tsvector
+                    #   保证 len(out) <= 6000, 这里的兜底已是死代码; 保留反而在
+                    #   将来出 bug 时从词中间劈开 (实测留下 "核心 水质 传" 半词,
+                    #   PG to_tsvector 把半词当独立 lexeme 建索引, 污染召回)。
+                    #   存量受害者: kb 2461/2601/2614 + drive 1086/1226/1239
+                    #   (drive 侧已由 backfill_drive_search_text.py 修复)。
+                    assert len(st) <= SEARCH_TEXT_MAX, (
+                        f"id={kid} split_for_tsvector 输出 {len(st)} > {SEARCH_TEXT_MAX}; "
+                        f"max_chars 语义疑似回退, 拒绝写入以免造半词"
+                    )
+                    # 幂等: 与存量逐字比对, --refresh-all 才不会把 429 行
+                    # 无差别重写 (白白 bump updated_at + 触发 GENERATED 列重算)
+                    if st == (k.search_text or ""):
+                        stats["unchanged"] = stats.get("unchanged", 0) + 1
+                        continue
                     k.search_text = st
                     await db.commit()
                 stats["updated"] += 1
