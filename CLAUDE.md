@@ -84,7 +84,7 @@
 
 > 每条对应一次真实事故，是**现在该怎么做**的规则，不是历史记录。
 > 事故上下文见 `docs/incident/2026-08-04--2026-09-18-status-snapshots.md`。
-> 覆盖类 20.155–220，共 30 条。
+> 覆盖类 20.155–221，共 31 条。
 
 - **类 20.155**: bench 脚本 --help 子进程必须显式 PYTHONPATH=REPO_ROOT
 - **类 20.156**: argparse --help 在某些版本重定向到 stderr, subprocess 必须 capture_output=True
@@ -218,6 +218,30 @@
   current == head。
   **附带教训**: `alembic current` 的 INFO 前缀行走 **stderr**、版本号走 **stdout**, 用
   `2>&1 | head -1` 会抓到 INFO 行而非版本号 —— 解析命令输出前必须确认流归属。
+- **类 20.221**: **DB 存 UTC、主机存 +0800 —— 跨系统对时间必须显式换算** ——
+  2026-10-09 查 `MULTIMODAL_INLINED` 链路时, 三个 agent 连续在同一个坑上栽: 把
+  `meetings` / `knowledge_images` / `knowledge_chunks` 的 `created_at` / `updated_at`
+  当本地时间读, 于是把**昨天 21:41 的全量重跑误判成今天**, 一度得出"今天的 OCR 全量
+  引入了回归"的错误结论。实际: DB 列是 `timestamp without time zone`, 写入用
+  `datetime.utcnow()`; 主机与 docker logs 是 **+0800**; 两边差 **8 小时**。
+  **纪律**: ①凡跨 DB / 容器日志 / 主机文件 / `date` 比对时间, **先声明各自时区**再比,
+  结论里写明用了哪个时区; ②判"某操作发生在什么时候"必须用**相对证据**(如 `min(children.created_at)`
+  vs `min(parent.updated_at)`、chunk 的 `char_end` 与 content 长度对账), 不要只靠绝对时间戳;
+  ③报给用户的时间一律换算成本地 +0800, 避免"凌晨 3 点重跑"这类误导。
+  **同源提示**: `data/` 下的备份文件由宿主机脚本生成, 时间戳是 **+0800**, 与 DB 的 UTC 混排时
+  极易误判 (本次 184MB SQL dump 的 mtime 是本地 14:42, 内容却是 06:42 的 UTC 数据)。
+- **多模态 inline 回填链路 = 未启用特性 (2026-10-09 裁定)** ——
+  `knowledge_extractions` 的 formula/table/chart 通过 `inline_extractions_to_content` 回填进
+  `knowledge.content`, 靠哨兵 `<!-- MULTIMODAL_INLINED v2 -->` 做幂等。实测全库 **755 篇里
+  只有 1 篇 (id=2809) 含 `[FIGURE:N]`** —— 因为 `file_parser_service` 只在正文出现**英文
+  "Fig. N"** 时插占位符, **中文论文写"图 N", 该机制从未对中文文档生效过**。
+  2026-10-09 追查 `MULTIMODAL_INLINED` 标记全库为 0 时确认: 标记是被 `_reset_multimodal_data`
+  的 `split(MARKER)[0]` 剥掉的(字节级铁证: chunk 15866 的 `char_end=1714` 超出当前 content
+  长度 1681, 正是剥离位置), **但 inline markdown 本身在哨兵之前、活下来了** (5 篇文档的
+  `![图(...)]` 完好), **主文本 RAG 没少东西**(哨兵是 HTML 注释, 不进 tsvector)。
+  真正的损失只有: ①幂等哨兵丢失 → 下次回填会与现存 inline 内容**叠加重复**(修前勿跑);
+  ②1 个孤儿 chunk。**主指挥 2026-10-09 裁定: 按"未启用特性"处理, 不启用、不回填、不修中文
+  占位符**。将来若论文改写英文 "Fig. N" 或确有回填需求, 必须先修幂等缺陷再动。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务三层缺陷已于 2026-10-09 全修
   (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
   rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
