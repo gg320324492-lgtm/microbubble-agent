@@ -97,14 +97,44 @@ class VisionService:
             )
 
             # 提取响应文本
+            #
+            # 【2026-10-09 修复 · agent19】这里**不能**取 content[0]。
+            # 带思维链的模型（mimo-v2.5 → MiniMax-M3、MiniMax-M3.1-Flash-Preview 等）
+            # 在 Anthropic 端点返回的是**多块** content：
+            #     content[0] = ThinkingBlock(thinking="We need inspect image...", signature="...")
+            #     content[1] = TextBlock(text="绿色")
+            # 旧写法 `response.content[0]` 会命中 thinking 块，既没有 `.text`
+            # 又不是 dict，于是走 `str(content_block)` 分支把 ThinkingBlock 的
+            # repr（ThinkingBlock(thinking='We need inspect image...', signature='...')）
+            # 当成图片描述返回 → **思维链直接污染 ocr_text / visual_summary**。
+            #
+            # 正确语义与 app/core/llm.py::extract_text_from_response 对齐：
+            # 遍历全部块，优先拼接 text 块；一个 text 块都没有才回退 thinking。
             if response.content and len(response.content) > 0:
-                content_block = response.content[0]
-                if hasattr(content_block, 'text'):
-                    return content_block.text
-                elif isinstance(content_block, dict) and 'text' in content_block:
-                    return content_block['text']
-                else:
-                    return str(content_block)
+                text_content = ""
+                thinking_content = ""
+                for block in response.content:
+                    # 兼容两种形态：Anthropic SDK 对象（有 .text/.thinking 属性）
+                    # 与代理端点常见的裸 dict（{"type": "text", "text": "..."}）
+                    if isinstance(block, dict):
+                        block_text = block.get("text")
+                        block_thinking = block.get("thinking")
+                    else:
+                        block_text = getattr(block, "text", None)
+                        block_thinking = getattr(block, "thinking", None)
+                    if block_text:
+                        text_content += block_text
+                    if block_thinking:
+                        thinking_content += block_thinking
+
+                if text_content.strip():
+                    return text_content
+                if thinking_content.strip():
+                    # 没有任何 text 块：回退 thinking（对齐 extract_text_from_response 语义），
+                    # 总比把整块 repr 写进 ocr_text 好；下游 _clean_ocr_text 还会再剥一遍。
+                    logger.warning("视觉响应无 text 块，回退使用 thinking 内容作为分析结果")
+                    return thinking_content
+                return str(response.content[0])
 
             return "无法解析图片分析结果"
 
