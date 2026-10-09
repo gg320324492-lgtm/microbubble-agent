@@ -84,7 +84,7 @@
 
 > 每条对应一次真实事故，是**现在该怎么做**的规则，不是历史记录。
 > 事故上下文见 `docs/incident/2026-08-04--2026-09-18-status-snapshots.md`。
-> 覆盖类 20.155–219，共 29 条。
+> 覆盖类 20.155–220，共 30 条。
 
 - **类 20.155**: bench 脚本 --help 子进程必须显式 PYTHONPATH=REPO_ROOT
 - **类 20.156**: argparse --help 在某些版本重定向到 stderr, subprocess 必须 capture_output=True
@@ -202,8 +202,29 @@
   "兜底"填充, 检索层看起来有数据实则全是垃圾——排查时必须**抽查 chunk 正文**, 不能只
   `count(*)` 行数; ⑥`rag_auto_ingest_service` 这类**通用 ingestion task 应按
   `storage_mode` 过滤**, 否则会抢占 domain-specific 索引 (drive/meeting) 的职责。
-- **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务 (Winlogon 7002) LastRunTime 停在
-  8/4, 本次重启未触发 (类 20.143 宣称的自愈实际失能)。
+- **类 20.220**: **自动化守门机制必须验"副作用是否真的发生", 不能信状态字段** ——
+  2026-10-09 修 `MicroBubble-Auto-Recovery` 时, 一个任务挖出**三层叠加缺陷**, 每层都伪装成"正常":
+  ① **触发器订阅 `Winlogon EventID=7002`, 而该事件新版 Windows 已不再产生** → 任务自 2026-08-04
+  起从未触发, 但 CLAUDE.md 类 20.143 一直宣称"自愈已生效"; ② **Action 直接指向 `.ps1` 文件,
+  没写解释器** —— 任务计划程序不把 `.ps1` 当可执行文件, 进程**从未启动**, 而它上报的
+  `LastTaskResult = 0`(成功) —— 第 ① 层因此被完全掩盖; ③ **恢复脚本里 alembic 断言写死 head
+  编号 `105_fix_drift`**, 实际 head 早已推进到 `142` → 前 7 步(含 7/7 端点全绿)全过, 却在最后
+  一步误判 fail、上报 `success:false`。
+  **三条纪律**: ①**状态字段会说谎** —— `LastTaskResult=0` / 容器 healthy / 服务 200 都只证明
+  "调度器认为成功", 不证明"代码跑过"; **验证必须查副作用产物**(日志文件是否生成 / 数据是否真变),
+  本次正是靠"今天的日志文件没生成"才抓到第 ② 层; ②**修上游缺陷会暴露下游缺陷**, 一次连修三层
+  才能到底, 只修一层就收工会把下一层当成"修好了"; ③**自动化断言禁止写死会变的编号**(见类 20.219
+  与 `scripts/restart-recovery-after-gui-restart.sh` 的修法), 改校验不变量: 恰为 1 个 head +
+  current == head。
+  **附带教训**: `alembic current` 的 INFO 前缀行走 **stderr**、版本号走 **stdout**, 用
+  `2>&1 | head -1` 会抓到 INFO 行而非版本号 —— 解析命令输出前必须确认流归属。
+- **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务三层缺陷已于 2026-10-09 全修
+  (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
+  rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
+  当前只在手动触发下验证过)。
+  `MicroBubble-DFT-Cleanup` 报 `LastTaskResult=1` 但手工跑 exit=0 且日志显示归档清理全部完成,
+  功能未坏, 下次 10-11 周触发照常; `MicroBubble-GPU-ASR-Daemon` (AtStartup) 与
+  `MicroBubble-SSH-Tunnel-Guard` (每5min) 均验证正常, 无需处理。
 - **vision-mcp 已处置 (2026-10-09)** —— 改为 compose profile 隔离, 默认不启动, 但服务定义完整保留。
   根因不是"当前没人调", 是**架构上走不通**: app 侧视觉走 **stdio 子进程**, 从不连这个容器 ——
   `app/config.py:79` `VISION_USE_MCP=False` / `:80` `VISION_MCP_TRANSPORT="stdio"` /
