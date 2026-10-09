@@ -156,3 +156,189 @@ async def test_update_profile_research_area_clear(client: AsyncClient, auth_head
                             json={"research_area": ""})
     assert resp.status_code == 200
     assert resp.json()["research_area"] == ""
+
+
+# ==========================================================================
+# L-14 P4 (2026-10-09): jose 加密层直测 —— 补 alg confusion / 篡改 / 过期
+#
+# 为什么是**增强**而非修复: 本文件原有 8 个用例全在 HTTP 层 (登录/刷新/鉴权/限流),
+# jose 的 encode/decode 只被**间接**覆盖 (经 /auth/login 返回的 token)。
+# 2026-10-09 python-jose 3.3.0 → 3.4.0 升级动过认证核心, 却没有任何一条测试
+# 直接钉住"伪造/篡改的 token 会被拒绝"这个安全属性 —— 升级若悄悄放宽了校验,
+# 现有 8 条 HTTP 用例**照样全绿**。本节把该属性显式钉死。
+#
+# 本项目是 HS256 **对称**签名 (security.py: ALGORITHM = "HS256", 单一 SECRET_KEY),
+# 所以教科书里那条 RS256→HS256 的算法混淆不适用; 真正该防的是:
+#   ① alg:none 无签名伪造   ② 载荷篡改(改 sub 提权)   ③ 换密钥重签
+#   ④ 过期令牌             ⑤ access/refresh 类型混用
+# ==========================================================================
+import base64
+import json
+from datetime import timedelta
+
+from fastapi import HTTPException
+from jose import jwt
+
+from app.core.security import (
+    SECRET_KEY,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+)
+from app.models.base import utcnow
+
+
+def _b64url(raw: bytes) -> str:
+    """JWT 用的 base64url 无填充编码"""
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def _unsigned_none_alg_token(payload: dict) -> str:
+    """手工拼一个 alg=none 的**无签名** token (经典 JWT 绕过手法)"""
+    header = _b64url(json.dumps({"alg": "none", "typ": "JWT"}).encode())
+    body = _b64url(json.dumps(payload).encode())
+    return f"{header}.{body}."  # 第三段(签名)为空
+
+
+# ---------- 正常往返 (基线: 证明测试本身没把好路径写坏) ----------
+
+def test_access_token_roundtrip():
+    """合法 access token 能解出 sub / type=access"""
+    token = create_access_token({"sub": "42"})
+    payload = decode_token(token)
+    assert payload["sub"] == "42"
+    assert payload["type"] == "access"
+    assert "exp" in payload
+
+
+def test_refresh_token_roundtrip():
+    """合法 refresh token 解出 type=refresh"""
+    token = create_refresh_token({"sub": "42"})
+    assert decode_token(token)["type"] == "refresh"
+
+
+# ---------- ① alg:none 无签名伪造 ----------
+
+def test_alg_none_forged_token_rejected():
+    """alg=none 且签名为空 → 必须 401。
+
+    没有这条, 攻击者随便拼一个 header 就能拿到任意 sub 的合法身份。
+    """
+    forged = _unsigned_none_alg_token({
+        "sub": "1",
+        "type": "access",
+        "exp": int((utcnow() + timedelta(hours=1)).timestamp()),
+    })
+    with pytest.raises(HTTPException) as exc:
+        decode_token(forged)
+    assert exc.value.status_code == 401
+
+
+# ---------- ② 载荷篡改 (改 sub 提权, 签名保持原样) ----------
+
+def test_tampered_payload_rejected():
+    """改动载荷但沿用原签名 → 必须 401。
+
+    这是最贴近真实的攻击: 拿到自己的合法 token, 把 sub 改成别人的 id。
+    """
+    token = create_access_token({"sub": "42"})
+    header, _payload_b64, signature = token.split(".")
+
+    tampered_payload = {
+        "sub": "1",              # 试图冒充别的用户
+        "type": "access",
+        "exp": int((utcnow() + timedelta(hours=1)).timestamp()),
+    }
+    tampered = ".".join([header, _b64url(json.dumps(tampered_payload).encode()), signature])
+
+    with pytest.raises(HTTPException) as exc:
+        decode_token(tampered)
+    assert exc.value.status_code == 401
+
+
+# ---------- ③ 攻击者用自己的密钥重签 ----------
+
+def test_token_signed_with_attacker_key_rejected():
+    """用攻击者密钥签的 token (payload 完全合法) → 必须 401。
+
+    载荷看着再"正"也没用: 签名对不上就一律拒。
+    """
+    forged = jwt.encode(
+        {
+            "sub": "1",
+            "type": "access",
+            "exp": int((utcnow() + timedelta(hours=1)).timestamp()),
+        },
+        "attacker-controlled-secret",
+        algorithm="HS256",
+    )
+    with pytest.raises(HTTPException) as exc:
+        decode_token(forged)
+    assert exc.value.status_code == 401
+
+
+def test_garbage_token_rejected():
+    """完全不是 JWT 的字符串 → 401 (不得抛未捕获异常)"""
+    with pytest.raises(HTTPException) as exc:
+        decode_token("not-a-jwt-at-all")
+    assert exc.value.status_code == 401
+
+
+# ---------- ④ 过期 ----------
+
+def test_expired_token_rejected():
+    """已过期 access token → 401"""
+    expired = create_access_token({"sub": "42"}, expires_delta=timedelta(seconds=-60))
+    with pytest.raises(HTTPException) as exc:
+        decode_token(expired)
+    assert exc.value.status_code == 401
+
+
+# ---------- ⑤ access / refresh 类型混用 ----------
+
+def test_decode_token_does_not_enforce_type_by_itself():
+    """**如实记录当前行为**: decode_token() 只验签不验 type。
+
+    refresh token 在这一层能解开 —— 因为 type 门禁刻意放在 get_current_user
+    (security.py: `payload.get("type") != "access"`) 而不是解码层。
+    本用例把该分层钉住: 免得日后有人以为"解码层已经拦了"而撤掉 get_current_user 的检查。
+    """
+    assert decode_token(create_refresh_token({"sub": "42"}))["type"] == "refresh"
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_rejected_as_bearer(client: AsyncClient, test_member):
+    """**真正的安全属性**: refresh token 当 access token 用 → 401 无效的令牌类型。
+
+    两者同为 HS256 + 同一 SECRET_KEY, 只差 type claim, 所以这层检查一旦失守,
+    长期有效(REFRESH_TOKEN_EXPIRE_DAYS)的 refresh token 就等价于长期 access token。
+    """
+    refresh = create_refresh_token({"sub": str(test_member.id)})
+    resp = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {refresh}"}
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_forged_none_alg_token_rejected_at_http_layer(client: AsyncClient, test_member):
+    """alg=none 伪造令牌打到真实端点 → 401 (端到端确认不是只有单测在拦)"""
+    forged = _unsigned_none_alg_token({
+        "sub": str(test_member.id),
+        "type": "access",
+        "exp": int((utcnow() + timedelta(hours=1)).timestamp()),
+    })
+    resp = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {forged}"}
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_token_without_sub_rejected(client: AsyncClient, test_member):
+    """缺 sub 的合法签名 token → 401 (签名有效也不放行)"""
+    token = create_access_token({"type": "access"})  # 不给 sub
+    resp = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 401
