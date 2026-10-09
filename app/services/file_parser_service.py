@@ -38,6 +38,64 @@ def _find_fig_anchor(text: str, fig_idx: int) -> int:
     return earliest
 
 
+# PPTX 组合形状 (p:grpSp) 递归深度上限 —— 2026-10-09 agent38
+# OOXML 允许 grpSp 嵌套 grpSp, 但实测生产 PPTX 嵌套 ≤2 层; 设 5 层兜底,
+# 防止畸形文件 (或未来某个把整页包一层 group 的模板) 触发深递归。
+_PPTX_GROUP_MAX_DEPTH = 5
+
+
+def _collect_pptx_shape_texts(shapes, out: list, depth: int = 0) -> None:
+    """按文档顺序抽取一组 shape 的文本/表格文本, 就地 append 到 out
+
+    **为什么要递归组合形状 (2026-10-09 agent38)**:
+    修复前 `_parse_pptx` 只遍历 `slide.shapes` 顶层, 组合形状 (`p:grpSp`)
+    里的文本被**静默丢弃** (GroupShape 的 has_text_frame / has_table 恒为
+    False, 且自身不暴露文本)。在生产语料 (295 个 pptx / 5185 页) 上实测:
+      - 含 group 的页 **559 页 (10.8%)**
+      - 净损失 **22,397 字符 (+2.2%)**
+      - **134 页 (2.6%)** 单页损失 >20 字符
+      - 极端: `2023.6.26 研一 李锐远.pptx` (knowledge.id=1118) 的 p5/p15/p16、
+        `2023.9.4 研一 李锐远.pptx` (973) 的 p4、`2025.7.2 研一 冯懿鑫.pptx`
+        (1042) 的 p3 **整页抽出 0 字符**, 而视觉转写能拿到 485-500 字。
+
+    **顺序稳定性**: 递归是**就地展开** —— group 的子形状文本插在该 group
+    原本所处的文档序位置。`slide.shapes` 是 z-order (文档序), group 在其中
+    占据一个位置, 所以既有顶层文本的相对顺序完全不变, 只是在有 group 的
+    位置**插入**新文本; 同一文件多次解析结果逐字节一致 (chunk 边界/embedding
+    只有在真正插入新文本处才位移)。
+
+    **坐标映射不需要做**: 本函数只取文本, 从不读 shape.left/top/width/height。
+    (group 子形状的坐标处于组私有坐标系 `a:chOff/a:chExt`, 若将来要取几何
+    位置再排序, 才需要按 group 的 off/ext 比例映射回幻灯片坐标系 —— 见
+    下文 TODO 注释。)
+
+    **表格**: 组合内的 `p:graphicFrame` 同样走 `has_table` 分支, 与顶层一致。
+    **图表**: `has_chart` 本来就没处理 (顶层和组内都不处理), 本次不动 ——
+    避免顺带改动非 group 路径的输出。
+    """
+    if depth > _PPTX_GROUP_MAX_DEPTH:
+        return
+    from pptx.shapes.group import GroupShape
+
+    for shape in shapes:
+        # 用 isinstance 而非 shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+        # GroupShape 是精确类型判定, 不依赖各 shape 子类的 shape_type 实现
+        # 差异 (占位符/graphicFrame 的 shape_type 语义各不相同)。
+        if isinstance(shape, GroupShape):
+            _collect_pptx_shape_texts(shape.shapes, out, depth + 1)
+            continue
+        if shape.has_text_frame:
+            for para in shape.text_frame.paragraphs:
+                text = para.text.strip()
+                if text:
+                    out.append(text)
+        if shape.has_table:
+            for row in shape.table.rows:
+                row_text = ' '.join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                if row_text:
+                    out.append(row_text)
+
+
 class FileParserService:
     """从各类文件中提取文本和图片"""
 
@@ -335,6 +393,11 @@ class FileParserService:
         """解析 PPT 文件
 
         2026-06-19 Phase 7 v2: 每页前插入 [PAGE:N] 标记，便于多模态 inline 按页定位
+
+        2026-10-09 agent38: 组合形状 (p:grpSp) 递归 —— 修复前组内文本被静默丢弃
+        (实测 559/5185 页含 group, 净损失 22,397 字符, 134 页单页损失 >20 字符;
+        1118/973/1042 三个 pptx 各有整页抽出 0 字符)。详见
+        `_collect_pptx_shape_texts` docstring。
         """
         def _extract():
             from pptx import Presentation
@@ -344,17 +407,7 @@ class FileParserService:
                 # 2026-06-19 Phase 7: 每页前加 [PAGE:N] 标记
                 texts.append(f"[PAGE:{slide_num}]")
                 slide_texts = []
-                for shape in slide.shapes:
-                    if shape.has_text_frame:
-                        for para in shape.text_frame.paragraphs:
-                            text = para.text.strip()
-                            if text:
-                                slide_texts.append(text)
-                    if shape.has_table:
-                        for row in shape.table.rows:
-                            row_text = ' '.join(cell.text.strip() for cell in row.cells if cell.text.strip())
-                            if row_text:
-                                slide_texts.append(row_text)
+                _collect_pptx_shape_texts(slide.shapes, slide_texts)
                 if slide_texts:
                     texts.append(f"--- 第{slide_num}页 ---")
                     texts.extend(slide_texts)
