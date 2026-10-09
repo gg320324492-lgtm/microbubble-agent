@@ -8,6 +8,11 @@ PR3 选 jieba:
 
 边界:
 - 入库文本需先 truncate_for_embedding (PR1) 再 token 化
+- **split_for_tsvector 的 max_chars 是"输出预算"** (2026-10-09 agent24 修正):
+  jieba 切词 + 空格拼接会让长度膨胀 20%-60%, 只按输入截断会撞
+  `ck_knowledge_search_text_len (length <= 6000)` 导致入库钩子 except 吞异常、
+  search_text 静默留空。现按 **token 边界** 裁剪输出, 保证 len(out) <= max_chars
+  且不产生半个词。详见 split_for_tsvector docstring 的语义变更段
 - BM25 + tsvector 共享 token 化路径, 但 BM25 走 jieba 切词, tsvector 走 PG simple config
   (BM25 token = jieba 切词列表; tsvector = PG 默认 simple/english 词根)
 - 命中率 ±5% 门禁见 test_pr3_e2e.py case-10
@@ -134,6 +139,48 @@ def tokens_to_tsvector_input(tokens: List[str]) -> str:
     return " ".join(t for t in tokens if t)
 
 
+def _fit_tokens_to_budget(tokens: List[str], max_chars: Optional[int]) -> str:
+    """把 token 列表拼成字符串并**按 token 边界**裁剪到 max_chars 字符内
+
+    为什么需要它 (2026-10-09 agent24 事故):
+        `" ".join(tokens)` 会在每两个 token 之间插入 1 个分隔空格。中文 jieba
+        平均词长 ~1.5-2.5 字, 即**每 1.5-2 个字符就要补一个空格**, 拼接结果
+        系统性膨胀 20%-60% (实测 5400 字原文 -> 6599 字输出, +22%)。
+        若只按**输入**长度截断 (旧 split_for_tsvector 行为), 输出必然可以
+        超过 `ck_knowledge_search_text_len CHECK (length(search_text) <= 6000)`。
+
+    为什么按 token 边界而不是 `s[:max_chars]`:
+        字符级硬切会从词中间劈开 (实测留下 "核心 水质 传" 这种半词),
+        PG to_tsvector 会把半词当独立 lexeme 建索引 -> 污染召回 + 浪费索引空间。
+        本函数逐 token 累加, **只输出完整 token**, 且保留**前缀**语义
+        (与旧的 "取原文前 N 字符" 一致: 文档开头的信息优先保留)。
+
+    Args:
+        tokens: tokenize_chinese() 输出
+        max_chars: 输出预算 (字符数); None = 不裁剪 (调用方显式放弃上限)
+
+    Returns:
+        空格分隔字符串, 保证 len(out) <= max_chars (max_chars 非 None 时);
+        每个空格分隔段都是**完整 token** (不会出现半个词)。
+    """
+    if max_chars is None:
+        return tokens_to_tsvector_input(tokens)
+
+    kept: List[str] = []
+    used = 0  # 已用字符数 (= " ".join(kept) 的长度)
+    for t in tokens:
+        if not t:
+            continue
+        # 首个 token 不带前导空格, 之后每个都多 1 个分隔符
+        cost = len(t) + (1 if kept else 0)
+        if used + cost > max_chars:
+            # 预算耗尽 -> 停在这里 (保留前缀, 不再往下找更短的 token 填空)
+            break
+        kept.append(t)
+        used += cost
+    return " ".join(kept)
+
+
 def split_for_tsvector(
     text: str,
     *,
@@ -143,26 +190,57 @@ def split_for_tsvector(
     """PR3 tsvector 入库一站式入口 (供 knowledge_service 钩子调用)
 
     流程:
-        1. truncate_for_embedding (PR1 统一截断, 默认 6000 字符)
+        1. 输入预截断 (PR1 统一截断, 再按 max_chars 收紧)
         2. tokenize_chinese (本模块)
         3. tokens_to_tsvector_input (输出 PG tsvector 字符串)
+        4. **输出预算裁剪** (按 token 边界, 保证 len(out) <= max_chars)
+
+    ⚠️ max_chars 语义变更 (2026-10-09, agent24)
+    ------------------------------------------------
+    修复**前** max_chars 只作用于**输入**: `truncate_for_embedding(text)` 取原文
+    前 6000 字 -> jieba 切词 -> 空格拼接, 输出**可以 > 6000**。撞库约束
+    `ck_knowledge_search_text_len (search_text IS NULL OR length(search_text) <= 6000)`
+    -> 抛异常 -> 被 3 个入库钩子的 `except` **吞成 warning** -> 表现为
+    **search_text 静默留空** (全文检索通道对该文档彻底失效, 无任何报错)。
+
+    修复**前**还有第二个更隐蔽的问题: `truncate_for_embedding` 分支
+    **完全忽略 max_chars**, 硬编码走 MAX_EMBED_INPUT_CHARS=6000。
+    实测 `split_for_tsvector('a'*8000, max_chars=100)` 返回 6000 字符 —— 调小
+    max_chars 根本不生效 (而 fallback 分支却是**尊重** max_chars 的,
+    两条分支语义不一致)。
+
+    修复**后** max_chars = **最终输出预算 (字符数)**, 同时作为输入预截断上限:
+        - 输出: 保证 len(out) <= max_chars, 且按 **token 边界**裁剪 (无半个词)
+        - 输入: 仍先走 PR1 统一入口 truncate_for_embedding, 再按 max_chars 收紧
+          (输入 <= max_chars 时第二步是 no-op, 与旧默认行为逐字节一致)
+
+    对调用方是否透明: **透明**。3 个调用方
+    (`knowledge_service.py:63` / `:208` / `rag_auto_ingest_service.py:161`)
+    全部使用默认值 6000, 恰好等于 CHECK 上限 —— 语义变更不影响它们。
 
     Args:
         text: 原始文本
-        max_chars: 截断上限, 默认 6000 (PR1 常量复用); None = 不截
+        max_chars: **输出**预算 (字符数), 默认 6000 (与 CHECK 约束同值);
+            None = 不裁剪 (输出长度无上限, 调用方自行负责)
         lowercase: token lowercase, 默认 True
 
     Returns:
-        tsvector 输入字符串 (PG `to_tsvector('simple', $1)` 可消费)
+        tsvector 输入字符串 (PG `to_tsvector('simple', $1)` 可消费);
+        max_chars 非 None 时保证 len(out) <= max_chars。
+        输出是**空格分隔的完整 token 串**, 不是 JSON —— 下游只经
+        `content_tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(search_text,'')))`
+        消费, 不存在"截出非法 JSON"的风险。
     """
     if not text:
         return ""
-    # 1. 截断 (复用 PR1 入口)
-    if max_chars is not None and truncate_for_embedding is not None:
-        text = truncate_for_embedding(text)
-    elif max_chars is not None and len(text) > max_chars:
-        text = text[:max_chars]
+    # 1. 输入预截断 (复用 PR1 入口 + 按 max_chars 收紧)
+    #    注: 顺序不可颠倒 —— 必须先走 truncate_for_embedding 保持 PR1 统一口径
+    if max_chars is not None:
+        if truncate_for_embedding is not None:
+            text = truncate_for_embedding(text)
+        if len(text) > max_chars:
+            text = text[:max_chars]
     # 2. 切词
     tokens = tokenize_chinese(text, lowercase=lowercase)
-    # 3. 拼 tsvector 入库字符串
-    return tokens_to_tsvector_input(tokens)
+    # 3. 拼 tsvector 入库字符串 + 按 token 边界裁剪到输出预算
+    return _fit_tokens_to_budget(tokens, max_chars)
