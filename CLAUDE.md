@@ -267,11 +267,14 @@
   停容器用 `docker compose stop vision-mcp` (**只 stop 不 rm/down**), 停后其余 13 个服务
   uptime 未变、`/health` 经 nginx 端到端 200 (类 20.213)。
   处置说明另见 `docker-compose.yml` 该 service 块内的中文注释。
-- **glitchtip 遗留已失效, 待复核**: 原记 "glitchtip + vision-mcp 重启前即 unhealthy;
+- **glitchtip 不重建 (2026-10-09 主拍结案)**: 原记 "glitchtip + vision-mcp 重启前即 unhealthy;
   `2ab45943b910_`/`737c1a285543_` 前缀两个老改名容器与 `microbubble-agent-glitchtip-1`
   Exited 4 周残留并存" —— 2026-10-09 实测 `docker ps -a` 全量 15 个容器, **这三个容器均已不存在**
-  (既非 Exited 也非残留, 是彻底没了)。故该条描述已过时, 但**是否要重建 glitchtip 服务属产品决策,
-  待主拍**, 此处只更正事实、不擅自处置。
+  (既非 Exited 也非残留, 是彻底没了)。**主指挥拍板: 不重建 glitchtip**, 该条就此结案。
+  `docker-compose.yml` 里的 glitchtip service 定义**原样保留**(不删, 避免日后要重建时从头写;
+  类 20.215"实验块逐字段圈界"的镜像), 但**默认不启动也不加 profile** —— 与 vision-mcp 的
+  `profiles: ["vision"]` 不同, glitchtip 连 service 都没被启用过, 现状即终态。
+  验: `docker compose config --services | grep glitchtip` 若无输出即符合本决定。
 
 
 ---
