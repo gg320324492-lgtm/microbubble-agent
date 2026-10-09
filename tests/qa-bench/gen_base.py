@@ -19,6 +19,7 @@ qa-bench/gen500.py — 动态生成 500 题测试集
 """
 import argparse
 import json
+import os
 import random
 import sys
 from pathlib import Path
@@ -926,9 +927,18 @@ EXTREME_TEMPLATES = [
 
 def fetch_db_data() -> Dict[str, List[Dict[str, Any]]]:
     """从 DB 提取所有真实数据"""
+    # 密码轮换过, 不再内置过时的 fallback 默认值 (L-14, 2026-10-09);
+    # 缺 env 直接报错退出, 避免静默连错库还以为是连上了。
+    _pw = os.environ.get("POSTGRES_PASSWORD")
+    if not _pw:
+        raise SystemExit(
+            "POSTGRES_PASSWORD 未设置。密码已轮换, 不再内置默认值。\n"
+            "从 .env 取当前值: export POSTGRES_PASSWORD=$(grep '^DATABASE_URL=' .env "
+            "| sed 's|.*postgres:\\([^@]*\\)@.*|\\1|')"
+        )
     conn = psycopg2.connect(
         host="db", port=5432, dbname="microbubble",
-        user="postgres", password="microbubble2026",
+        user="postgres", password=_pw,
     )
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 

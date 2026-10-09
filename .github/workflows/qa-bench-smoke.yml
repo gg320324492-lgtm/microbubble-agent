@@ -155,7 +155,7 @@ jobs:
             --network qa-bench-net \
             -e POSTGRES_DB=microbubble_test \
             -e POSTGRES_USER=postgres \
-            -e POSTGRES_PASSWORD=microbubble2026 \
+            -e POSTGRES_PASSWORD=ci_smoke_test_pw \
             pgvector/pgvector:pg16
           # 等 pg-test ready (最长 60s)
           for i in {1..30}; do
@@ -215,7 +215,7 @@ jobs:
           docker run -d --name app-test \
             --network qa-bench-net \
             -p 8001:8000 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:ci_smoke_test_pw@pg-test:5432/microbubble_test" \
             -e REDIS_URL="redis://localhost:6379/1" \
             -e MINIO_ENDPOINT="localhost:9000" \
             -e MINIO_BUCKET="microbubble-test" \
@@ -262,14 +262,14 @@ jobs:
           set -o pipefail
           # 用 Base.metadata.create_all 建表 + seed (init_db.py 同时插入 24 members 等)
           docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:ci_smoke_test_pw@pg-test:5432/microbubble_test" \
             app-test python scripts/init_db.py 2>&1 | tail -5
 
           # alembic stamp head (init_db 用 create_all, 不走 alembic, 需要手动 stamp)
           # 关键: alembic_version.version_num VARCHAR(32) 上限 (CLAUDE.md 2026-06-02 教训),
           # 055 migration 已重命名为 055_personal_wechat_ci (22 字符) 适配
           docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:ci_smoke_test_pw@pg-test:5432/microbubble_test" \
             app-test alembic stamp head 2>&1 | tail -3
 
           # === 2026-10-07 断点 3 fail-loud: 建表后 psql 实测表数 > 0 才算真 success ===
@@ -291,7 +291,7 @@ jobs:
           # ensure_test_user 的非零退出掩成 success, 先开 pipefail。
           set -o pipefail
           docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:ci_smoke_test_pw@pg-test:5432/microbubble_test" \
             app-test python scripts/ensure_test_user.py 2>&1 | tail -3
           # 期望: [OK] 或 [CREATED] 都行 (幂等)
 

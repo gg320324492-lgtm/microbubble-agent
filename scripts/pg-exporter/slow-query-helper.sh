@@ -22,7 +22,13 @@ DB_HOST="${PG_HOST:-localhost}"
 DB_PORT="${PG_PORT:-5432}"
 DB_NAME="${PG_DATABASE:-microbubble}"
 DB_USER="${PG_USER:-postgres}"
-DB_PASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-microbubble2026}}"
+# 密码轮换过, 不再内置过时的 fallback 默认值; 缺 env 直接报错退出, 避免静默连错库
+DB_PASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-}}"
+if [ -z "$DB_PASSWORD" ]; then
+    echo "ERROR: PGPASSWORD / POSTGRES_PASSWORD 均未设置。密码已轮换, 不再内置默认值。" >&2
+    echo "从 .env 取当前值: export POSTGRES_PASSWORD=\$(grep '^DATABASE_URL=' .env | sed 's|.*postgres:\([^@]*\)@.*|\1|')" >&2
+    exit 1
+fi
 
 echo "=== pg_exporter slow query helper (W86-F-1) ==="
 echo "threshold: ${THRESHOLD_MS}ms"

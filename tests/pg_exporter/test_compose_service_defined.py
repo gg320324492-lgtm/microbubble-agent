@@ -113,8 +113,9 @@ def test_data_source_name_references_postgres(compose_name, expected_host):
         f"[{compose_name}] DATA_SOURCE_NAME 必须包含 '{expected_host}', 实际: {dsn}"
     )
     # 密码必须走环境变量, 不允许明文
-    # 注意: 默认密码 (microbubble2026 / test_password) 是 compose 内的 fallback,
-    # 符合 CLAUDE.md §"2026-06-18 部署链事故" 纪律 (走 ${VAR:-default} 模式)
+    # L-14 (2026-10-09): compose 已从 ${POSTGRES_PASSWORD:-<旧明文默认>}
+    # 改为 ${POSTGRES_PASSWORD:?...} (缺变量即 fail-loud, 不再内置过期密码),
+    # 但仍是 ${...} 形式, 故下面这条断言继续成立。
     assert "${" in dsn, (
         f"[{compose_name}] DATA_SOURCE_NAME 密码必须走环境变量 ${{...}}, 实际: {dsn}"
     )

@@ -103,7 +103,7 @@ services:
     environment:
       POSTGRES_DB: microbubble
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-microbubble2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set_POSTGRES_PASSWORD_in_dot_env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -454,7 +454,7 @@ services:
     image: glitchtip/glitchtip:6.2.2
     container_name: microbubble-agent-glitchtip-1
     environment:
-      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-microbubble2026}@db:5432/glitchtip"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?set_POSTGRES_PASSWORD_in_dot_env}@db:5432/glitchtip"
       VALKEY_URL: "redis://redis:6379/1"
       SECRET_KEY: "${GLITCHTIP_SECRET_KEY:-please-change-me-in-prod}"
       PORT: "8000"
@@ -492,7 +492,7 @@ services:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
     container_name: microbubble-agent-pg-exporter-1
     environment:
-      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD:-microbubble2026}@db:5432/postgres?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD:?set_POSTGRES_PASSWORD_in_dot_env}@db:5432/postgres?sslmode=disable"
     ports:
       - "9187:9187"
     depends_on:

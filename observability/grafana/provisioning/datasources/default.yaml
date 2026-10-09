@@ -27,7 +27,11 @@ datasources:
     url: db:5432
     user: postgres
     secureJsonData:
-      password: microbubble2026
+      # L-14 (2026-10-09): DB 密码轮换后, 移除过期硬编码值。
+      # Grafana provisioning 原生支持 $ENV_VAR 插值 —— 部署时须把 POSTGRES_PASSWORD
+      # 传进 grafana 容器 (env_file: .env 或 environment:), 否则此 datasource 连不上。
+      # 本文件当前无对应 compose service (未部署), 改动为惰性, 不影响现有容器。
+      password: $POSTGRES_PASSWORD
     database: microbubble
     isDefault: true
     editable: true

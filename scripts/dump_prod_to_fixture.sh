@@ -27,7 +27,18 @@ for arg in "$@"; do
   esac
 done
 
-PROD_URL="${PROD_DATABASE_URL:-postgresql://postgres:microbubble2026@localhost:5432/microbubble}"
+# 密码轮换过, 不再内置过时的 fallback 默认值; 缺 env 直接报错退出, 避免静默连错库
+# （且默认 dry-run 时也不该在屏幕上回显一个必然失效的凭据）
+PROD_URL="${PROD_DATABASE_URL:-}"
+if [ -z "$PROD_URL" ]; then
+  echo "ERROR: PROD_DATABASE_URL 未设置。密码已轮换, 不再内置默认值。" >&2
+  echo "从 .env 取当前密码再拼本机 DSN（下面这行是命令, 需你自己执行）:" >&2
+  cat >&2 <<'HINT'
+  export PROD_DATABASE_URL="postgresql://postgres:$(grep '^DATABASE_URL=' .env | sed 's|.*postgres:\([^@]*\)@.*|\1|')@localhost:5432/microbubble"
+HINT
+  echo "或直接给完整 DSN: PROD_DATABASE_URL=postgresql://postgres:<pw>@<host>:5432/microbubble" >&2
+  exit 1
+fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE_DIR="${FIXTURE_DIR:-$REPO_ROOT/fixtures}"
 TS="$(date +%Y%m%d)"

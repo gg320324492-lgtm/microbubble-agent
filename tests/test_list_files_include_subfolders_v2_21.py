@@ -45,9 +45,10 @@ from app.services.drive_service import DriveService
 async def db_session():
     """测试用真 DB + NullPool
 
-    postgresql://postgres:microbubble2026@db:5432/microbubble, 所以直接用就行.
-    本地 (无 override) 会用 default postgresql://postgres:password@localhost:5432/microbubble,
-    测试会自动 SKIP / 失败 — 这是预期的 (本地没 DB fixture).
+    连的是**测试隔离库** (microbubble_test), URL 由 conftest.get_test_database_url()
+    提供 —— 它派生自 DATABASE_URL 的凭据 + 主机、只把库名换成 microbubble_test,
+    所以密码轮换后自动跟随, 不必在此硬编码任何密码。
+    本地 (无 override) 连不上时会 SKIP / 失败 — 这是预期的 (本地没 DB fixture)。
     """
     url = get_test_database_url()  # 2026-09-12 生产库测试迁移: 原 settings.DATABASE_URL 直连生产库, 改 conftest.get_test_database_url()
     engine = create_async_engine(url, poolclass=NullPool)

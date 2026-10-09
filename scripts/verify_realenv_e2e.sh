@@ -15,8 +15,34 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # 默认 DATABASE_URL / REDIS_URL (本机)
-DEFAULT_DB_URL="postgresql://postgres:microbubble2026@localhost:5432/microbubble"
+# 密码轮换过, 不再内置过时的 fallback 默认值 (L-14, 2026-10-09)。
+# 本机默认 DSN 的密码从 POSTGRES_PASSWORD env 或 .env 的 DATABASE_URL 现取;
+# 两者都取不到则 DEFAULT_DB_URL 置空, 由消费它的子命令 fail-loud 报错,
+# 避免拿空密码/过期密码去连生产库还以为是连上了。
+DEFAULT_DB_URL=""
+if [ -n "${POSTGRES_PASSWORD:-}" ]; then
+    DEFAULT_DB_URL="postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5432/microbubble"
+elif [ -f "$PROJECT_ROOT/.env" ]; then
+    _db_pw="$(sed -n 's|^DATABASE_URL=.*postgres:\([^@]*\)@.*|\1|p' "$PROJECT_ROOT/.env" | head -1)"
+    if [ -n "$_db_pw" ]; then
+        DEFAULT_DB_URL="postgresql://postgres:${_db_pw}@localhost:5432/microbubble"
+    fi
+fi
 DEFAULT_REDIS_URL="redis://localhost:6379/0"
+
+# 回显用: 掩掉密码, 避免真密码进终端回滚缓冲/日志 (旧硬编码值无所谓, 现值是生产密码)
+_mask_db_url() {
+    echo "$1" | sed -E 's|://([^:]+):[^@]*@|://\1:***@|'
+}
+
+# 消费 DEFAULT_DB_URL 的子命令在密码取不到时必须 fail-loud
+_require_default_db_url() {
+    if [ -z "$DEFAULT_DB_URL" ]; then
+        echo "ERROR: DATABASE_URL 未设, 且无法从 POSTGRES_PASSWORD / .env 取到 DB 密码。" >&2
+        echo "密码已轮换, 不再内置默认值。设置其一: export POSTGRES_PASSWORD=<pw> 或写 .env" >&2
+        exit 1
+    fi
+}
 
 cmd_check() {
     echo "=== 真环境可达性真查 ==="
@@ -60,10 +86,11 @@ cmd_up() {
     }
     sleep 5
     echo "[OK] docker compose up 完成"
-    # 尝试设默认环境变量
-    export DATABASE_URL="$DEFAULT_DB_URL"
-    export REDIS_URL="$DEFAULT_REDIS_URL"
-    echo "请设置环境变量: export DATABASE_URL=$DEFAULT_DB_URL"
+    # 尝试设默认环境变量 (仅在调用方未显式设置时; 不覆盖用户已有值)
+    _require_default_db_url
+    export DATABASE_URL="${DATABASE_URL:-$DEFAULT_DB_URL}"
+    export REDIS_URL="${REDIS_URL:-$DEFAULT_REDIS_URL}"
+    echo "请设置环境变量: export DATABASE_URL=$(_mask_db_url "$DEFAULT_DB_URL")"
     echo "                  export REDIS_URL=$DEFAULT_REDIS_URL"
 }
 
@@ -81,8 +108,9 @@ cmd_migrate() {
     echo "=== alembic upgrade head ==="
     cd "$PROJECT_ROOT"
     if [ -z "$DATABASE_URL" ]; then
+        _require_default_db_url
         export DATABASE_URL="$DEFAULT_DB_URL"
-        echo "未设 DATABASE_URL, 用默认: $DEFAULT_DB_URL"
+        echo "未设 DATABASE_URL, 用默认: $(_mask_db_url "$DEFAULT_DB_URL")"
     fi
     python -m alembic upgrade head 2>&1 | tail -10
 }
