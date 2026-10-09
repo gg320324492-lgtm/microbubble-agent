@@ -272,9 +272,15 @@
   Exited 4 周残留并存" —— 2026-10-09 实测 `docker ps -a` 全量 15 个容器, **这三个容器均已不存在**
   (既非 Exited 也非残留, 是彻底没了)。**主指挥拍板: 不重建 glitchtip**, 该条就此结案。
   `docker-compose.yml` 里的 glitchtip service 定义**原样保留**(不删, 避免日后要重建时从头写;
-  类 20.215"实验块逐字段圈界"的镜像), 但**默认不启动也不加 profile** —— 与 vision-mcp 的
-  `profiles: ["vision"]` 不同, glitchtip 连 service 都没被启用过, 现状即终态。
-  验: `docker compose config --services | grep glitchtip` 若无输出即符合本决定。
+  类 20.215"实验块逐字段圈界"的镜像), 但**主指挥不重建 = 现状即终态**。
+  ⚠️ **准确描述**: 该 service 挂在 compose **默认 profile** 上(`image: glitchtip/glitchtip:6.2.2`,
+  `container_name: microbubble-agent-glitchtip-1`), 即 `docker compose config --services`
+  **仍会列出 glitchtip** —— 它只是**从未被 `up` 过**, 所以 `docker ps -a` 里没有容器。
+  这与 vision-mcp 的 `profiles: ["vision"]` 隔离**不是一回事**: vision-mcp 是被 profile
+  显式排除出默认启动集, glitchtip 则是"定义在、默认也参与解析、但没人起它"。
+  **不要**给 glitchtip 加 profile(那等于替主指挥做了"要不要隔离"的决定);
+  **只要不执行 `docker compose up glitchtip` 就不会有任何影响**。验: `docker ps -a | grep
+  glitchtip` 应无输出。
 
 
 ---
