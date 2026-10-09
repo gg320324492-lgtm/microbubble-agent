@@ -29,7 +29,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 
 from PIL import Image
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -44,6 +44,7 @@ from app.models.knowledge_multimodal import (
     EXTRACTION_KIND_IMAGE_BLOCK,
 )
 from app.services.file_service import file_service
+from app.services.image_decoration_filter import find_banner_image_ids
 from app.services.ocr_service import (
     ocr_service,
     OCRBackendError,
@@ -376,8 +377,15 @@ class MultimodalExtractionService:
         # 5. 上传 MinIO + 写 KnowledgeImage（pending 状态）
         image_records = await self._upload_images(knowledge_id, candidates)
 
-        # 6. 并发 OCR
-        ocr_results = await self._ocr_images_concurrent(image_records)
+        # 5.5 拦截模板装饰图（母版页眉/校徽/水印）——必须在 OCR **之前**，
+        # 因为噪声的根源就是视觉模型对横幅的幻觉描述（doc 2822 同一张校门图
+        # 被描述成 3 种不同说法）。跳过 LLM 调用 = 幻觉无从产生，也省掉
+        # 每张装饰图 2 次 vision 调用的成本。判据见 image_decoration_filter。
+        banner_ids = await self._skip_banner_images(knowledge_id, image_records)
+        ocr_targets = [img for img in image_records if img.id not in banner_ids]
+
+        # 6. 并发 OCR（只跑非装饰图）
+        ocr_results = await self._ocr_images_concurrent(ocr_targets)
 
         # 7. 写 KnowledgeExtraction
         extraction_counts = await self._save_extractions(knowledge_id, image_records, ocr_results)
@@ -392,6 +400,7 @@ class MultimodalExtractionService:
         logger.info(
             f"knowledge_id={knowledge_id} 多模态提取完成: "
             f"images={len(image_records)}, "
+            f"skipped_banners={len(banner_ids)}, "
             f"formulas={extraction_counts['formula']}, "
             f"tables={extraction_counts['table']}, "
             f"charts={extraction_counts['chart']}, "
@@ -401,6 +410,7 @@ class MultimodalExtractionService:
             "ok": True,
             "knowledge_id": knowledge_id,
             "images_total": len(image_records),
+            "images_skipped_banners": len(banner_ids),
             "images_ocr_ok": sum(1 for r in ocr_results if r.get("ok")),
             "extractions": extraction_counts,
         }
@@ -442,6 +452,50 @@ class MultimodalExtractionService:
                     logger.error(f"图片上传失败(knowledge_id={knowledge_id}, idx={idx}): {e}")
             await db.commit()
         return records
+
+    async def _skip_banner_images(
+        self, knowledge_id: int, image_records: List[KnowledgeImage]
+    ) -> set:
+        """把母版装饰横幅标记为 ocr_status='skipped'，返回被跳过的 image id 集合。
+
+        必须在 OCR 之前调用：装饰图一旦送去 OCR，视觉模型就会对横幅里的
+        校徽/校门产生幻觉描述（doc 2822 实证：同一张图 3 种说法），这些
+        描述还会经 ocr_text 进入第 5 路多模态检索并被 embedding 回写。
+
+        'skipped' 是 knowledge.py 图片列表 API 已经统计的状态值
+        （status_count 含 "skipped"），所以前端无需改动即可正确显示。
+
+        失败时返回空集合 = 全部照常 OCR（判据只是降噪，绝不能阻断主链路）。
+        """
+        try:
+            banner_ids = find_banner_image_ids(image_records)
+        except Exception as exc:  # 判据本身出错 → 降级为不过滤
+            logger.warning(
+                f"knowledge_id={knowledge_id} 装饰图判据异常（本次不过滤）: {exc}"
+            )
+            return set()
+
+        if not banner_ids:
+            return set()
+
+        try:
+            async with async_session() as db:
+                await db.execute(
+                    update(KnowledgeImage)
+                    .where(KnowledgeImage.id.in_(banner_ids))
+                    .values(ocr_status="skipped")
+                )
+                await db.commit()
+        except Exception as exc:
+            logger.warning(
+                f"knowledge_id={knowledge_id} 标记装饰图 skipped 失败（本次仍跳过 OCR）: {exc}"
+            )
+
+        logger.info(
+            f"knowledge_id={knowledge_id}: 跳过 {len(banner_ids)}/{len(image_records)} "
+            f"张模板装饰横幅（母版页眉/校徽），不送 OCR"
+        )
+        return banner_ids
 
     async def _ocr_images_concurrent(
         self, image_records: List[KnowledgeImage]

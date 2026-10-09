@@ -12,11 +12,17 @@ import logging
 import math
 from typing import Any, Dict, List, Optional, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import Numeric, and_, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.knowledge import Knowledge
 from app.models.knowledge_multimodal import KnowledgeImage
+from app.services.image_decoration_filter import (
+    MAX_BANNER_HEIGHT_PX,
+    MIN_ASPECT_RATIO,
+    MIN_REPEATED_PAGES,
+)
 
 logger = logging.getLogger("microbubble.multimodal_retriever")
 
@@ -124,6 +130,39 @@ class MultimodalRetriever:
             except Exception:
                 pass
 
+    @staticmethod
+    def _not_banner_predicate():
+        """SQL 版"非模板装饰横幅"判据，与写入侧 image_decoration_filter 同源。
+
+        写入侧（agent22）已让新文件不再产生装饰图噪声，但**存量**行仍带
+        ocr_text，会被当候选送去 embedding 并回写 knowledge_images.embedding，
+        污染第 5 路召回（"校徽/校名条"和用户 query 的文字相似度并不低）。
+
+        这里用与 Python 侧完全相同的两个信号取交集：
+          1. 极端宽高比 + 薄高度（横幅条形状）
+          2. 同文档内同尺寸出现在 >= 3 个不同页（母版资产复用）
+        相关子查询按 (knowledge_id, width, height) 走 idx_knowledge_image_kb_page
+        / idx_knowledge_image_id，全库 5446 行规模下单次代价可忽略。
+        """
+        alias = aliased(KnowledgeImage)
+        repeat_pages = (
+            select(func.count(distinct(alias.page_number)))
+            .where(
+                alias.knowledge_id == KnowledgeImage.knowledge_id,
+                alias.width == KnowledgeImage.width,
+                alias.height == KnowledgeImage.height,
+            )
+            .correlate(KnowledgeImage)
+            .scalar_subquery()
+        )
+        is_banner_shape = and_(
+            KnowledgeImage.width > 0,
+            KnowledgeImage.height > 0,
+            KnowledgeImage.height <= MAX_BANNER_HEIGHT_PX,
+            KnowledgeImage.width.cast(Numeric) / KnowledgeImage.height >= MIN_ASPECT_RATIO,
+        )
+        return or_(~is_banner_shape, repeat_pages < MIN_REPEATED_PAGES)
+
     async def _load_candidates(self, ocr_status: str) -> List[Dict[str, Any]]:
         stmt = (
             select(
@@ -143,6 +182,8 @@ class MultimodalRetriever:
                 Knowledge.deleted_at.is_(None),
                 Knowledge.storage_mode == "kb",
                 Knowledge.visibility.in_(["team", "public"]),
+                # 模板装饰横幅不进候选（见下）
+                self._not_banner_predicate(),
             )
             .order_by(KnowledgeImage.id)
         )
