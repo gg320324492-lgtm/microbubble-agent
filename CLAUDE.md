@@ -251,6 +251,18 @@
   9000 断线两层问题在切换当时都已存在, 只验 DFT 代理全绿照样漏过。
 - **类 20.214**: 生产依赖的裸进程单点 (ssh.exe 反向隧道) 必须有判活守护 + runbook;
   隧道 -R 端口与容器发布端口的对应关系 (9000↔minio) 必须文档化, 否则换端口/重建即静默断线。
+  **三条排障陷阱 (2026-10-11 SSH 故障排查实测)**:
+  ①**隧道与 GitHub SSH 是两条独立链路** —— 隧道目标 `agent.mnb-lab.cn`, 用本机 key
+  对云服务器, **不连 GitHub**。看到"SSH 挂了"不要先怀疑隧道 (若它依赖 GitHub, 早死了);
+  ②**判活日志写 `logs/tunnel-guard.log`, 不是 `tunnel/ssh-tunnel.log`** —— 后者停在
+  2026-09-21 且尾部有陈旧的 exit 255 重启循环, **排障时被它误导过一次**;
+  权威判活证据 = `logs/tunnel-guard.log` 每 5 分钟一条 `alive (pid=N) - no action`;
+  ③**`tunnel/ssh-tunnel.pid` 内容是陈旧的** (实测写 69952, 实际进程 2828) ——
+  判活以日志里的 pid 为准, **别信这个文件**。
+  **git remote 保持 HTTPS** (2026-10-11 定): GitHub 曾对本机 IP:22 短时阻断
+  (`Connection reset by 20.205.243.166`), 443 与 gitlab:22 同时正常 ⇒ 排除本机防火墙,
+  锁定 GitHub 侧。已自愈, 但**证明 SSH 是会随机断的依赖**; HTTPS 凭
+  `gh auth git-credential` 零摩擦。若确需 SSH 走 `ssh.github.com:443` 而非 `:22`。
 
 - **类 20.215**: 注释实验块必须**逐字段圈界** — app 的 `deploy/mem_limit` 实验连带把
   `healthcheck` 和 `restart: unless-stopped` 一起注释掉, 事故潜伏整个 8 月。生产服务 compose
