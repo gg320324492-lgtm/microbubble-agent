@@ -30,7 +30,7 @@
 | ID | 事项 | 裁定 | 依据 |
 |---|---|---|---|
 | **D1** | `config/intent_routing.yaml` | **删除** | 文件头自述"**本任务未接**"，是刻意留的 ops 参考文档；实际权重硬编码在 `app/rag/intent_router.py:42 DEFAULT_INTENT_WEIGHTS`。零代码/CI 引用 |
-| **D2** | `desktop-conversion/` 合并主仓 | **调研中** | 独立 git 仓（193 commits + 私有远端），主仓已公开 → 先查凭据泄露再定 |
+| **D2** | `desktop-conversion/` 合并主仓 | **调研中** | 独立 git 仓（193 commits + 私有远端），主仓已公开 → **必须先查子仓历史有无凭据泄露**，再定合并方案（submodule / subtree / 只搬文件）。产出见 `docs/audit/2026-10-10-desktop-conversion-merge-feasibility.md` |
 | **D3** | `tests/eval/rag_prompt_meta.test.py` | **删除**（非修复） | 见下方专项 |
 
 ### D3 专项：这是"假绿"测试，删比修好
@@ -66,10 +66,34 @@ SAMPLES = ["结论如下。[1] 相关实验结果见文献。[2]"] * 20   # 硬�
 | **3** | 删 D1 + D3 死文件 | 🟢 | 是 | ⬜ 待执行 |
 | **4** | 修坏引用 + 2 份索引文档 | 🟢 | 否 | ⬜ 待执行 |
 | **5** | 15 个 `aXX_*` 清理 | 🟡⚠️ | 否 | ⬜ 待执行 |
-| **6** | `observability/` → `docker/` | 🟢 | 是 | ⬜ 待执行 |
-| **7** | 全链路验收 | 🟢 | 否 | ⬜ 待执行 |
+| **6** | 4 个边界目录补 README（R1-R4） | 🟢 | 是 | ⬜ 待执行 |
+| **7** | `desktop-conversion/` 合并入主仓（方案 C） | 🟡 | 是 | ⬜ 待执行 |
+| **8** | 全链路验收 | 🟢 | 否 | ⬜ 待执行 |
 
-**刻意不存在的高风险批次**：`web/` `apps/` `tunnel/` 合并 `commercial/` 归位 —— 受类 20.133 构建确定性约束，收益小风险大，留给未来专门立项。
+### 高风险批次翻案结论（主指挥 2026-10-12 裁定：选项 1）
+
+原设计**刻意回避**的 4 项，深度调研（`docs/design/2026-10-12-high-risk-feasibility.md`）+ 主指挥复验后结论一致：**不是"不敢做"，而是"做了对结构没好处"**。
+
+| 项 | 深度调研结论 | 复验证据 | 处置 |
+|---|---|---|---|
+| **R3** `tunnel/` vs `scripts/tunnel/` | **职责互补不是重复** | `tunnel/`=隧道本体（ps1/vbs/log/pid）；`scripts/tunnel/`=守护器（guard/install/uninstall）。一个建隧道，一个守隧道 | **两边各补 README**（批次 6），不合并 |
+| **R4** `observability/` | **外部工具按约定消费的资产**，非孤儿 | 7 个 Grafana provisioning + 6 个查询 SQL；compose 零引用是因为 Grafana 容器按约定路径挂载 | **补 README**（批次 6） |
+| **R1** `apps/` `web/` `packages/` | **pnpm workspace 约定** | `pnpm-workspace.yaml` 声明 `apps/*` + `packages/*`；`packages/` 仅 `design-tokens` 2 文件 | **原地不动**，补边界说明 |
+| **R2** `commercial/` | **零 import，移动=纯 diff 无收益** | 7 处引用全是字符串路径/注释（`prefix="/commercial/billing"` / `__tablename__ = "commercial_plans"`），**零真 import** | **补 README**（批次 6） |
+
+**为什么"补文档"才是这些项的"彻底"形态**：设计原则第 4 条明确"**不制造'为了分类而分类'**"。把零引用的 `commercial/` 从顶层搬到 `app/` 下，新结构并不更清晰——**只是换了个地方没人引用的目录**，只增加 diff 成本与将来 grep 时的困惑。
+
+真正的收益是**让边界可被验证**：任何人（含未来 agent）看一眼就知道这些目录**为什么在顶层、职责是什么、为什么不能动**。这比搬动目录更能防止结构随规模增长而变乱。
+
+### 批次 6 边界文档清单
+
+| 目录 | README 要写清 |
+|---|---|
+| `tunnel/` | "隧道**本体**（启动/密钥/日志）；守护器在 `scripts/tunnel/`。勿合并——职责互补" |
+| `scripts/tunnel/` | "隧道**守护器**（guard/install/uninstall）；本体在 `tunnel/`。被 `MicroBubble-SSH-Tunnel-Guard` 计划任务引用，**勿改名**" |
+| `commercial/` | "商业化代码，与主仓**零 import** 是刻意设计；引用只是 URL 路径字符串。别试图接线或搬移" |
+| `observability/` | "Grafana **按约定路径**消费（provisioning + queries）；compose 不挂载是正常的，不是孤儿" |
+| `apps/desktop/` vs `desktop-conversion/` | 合并后的交叉引用表（解决"`git ls-files` 驱动的脚本会静默跳过独立子仓"） |
 
 ---
 
@@ -156,13 +180,41 @@ grep -rn "_x[0-9]\{1,3\}$" tests/ --include="*.py" | wc -l   # 期望 0
 
 ---
 
-### 批次 6：`observability/` → `docker/` ⬜（可否决）
+### 批次 7：`desktop-conversion/` 合并入主仓（方案 C）⬜（可否决）
 
-零风险但收益也低。
+**主指挥 2026-10-12 已裁定 5 项**：
+
+| # | 事项 | 裁定 |
+|---|---|---|
+| 1 | 丢失 193 commits 明细 | ✅ **接受**（文档仓，历史结论已沉淀） |
+| 2 | 私有远端处置 | ✅ **留作归档不删**（实测在用：所有 commit 已同步，且有 5 个 untracked 在途工作目录） |
+| 3 | `ci-workflow.test.ts:82` forbidden 断言 | ✅ **删** |
+| 4 | 子仓 README | ✅ **合并展示**（与主仓 README 同名冲突） |
+| 5 | 4 条 gitleaks allowlist | ✅ **采纳**（先补 allowlist 再合并） |
+
+**子仓画像**（主指挥复验）：**193 commits / 168 文件**（124 个 `.md` / 16 png / 13 json / 7 mjs），**零 Python**，时间跨度仅 24 天（2026-09-16 → 10-09）。
+
+**凭据风险：低**。193 commits 全历史扫私钥 / `sk-` / `ghp_` / `AKIA` / `xox` → **零命中**；gitleaks 报 4 条 `generic-api-key` 均为一次性测试 fixture（3 个临时探针账号 + 1 个已撤销 token）。
+
+**重叠**：仅 2 处同名（`README.md` / `.gitignore`），语义不同；其余全在 `docs/` 下零重叠。主仓 **21 个文件**引用 `desktop-conversion/` 路径 —— 合并后**自动从悬空变仓内路径**（额外收益）。
+
+**执行步骤**：
+1. 先补 4 条 gitleaks allowlist（否则合并后 secret-scan 阻断 pre-commit）
+2. `git checkout main` → 复制子仓工作树（含 5 个 untracked）到主仓
+3. 删 `apps/desktop/tests/unit/ci-workflow.test.ts:82` 的 forbidden 断言
+4. 子仓 README 内容并入主仓对应文档
+5. 一次 commit 提交
+6. **私有远端保持不动**
+
+**验证**：`gitleaks detect` 零阻塞 + 主仓 CI 8 片全绿 + 抽查 3 处 `desktop-conversion/` 路径引用是否变成仓内相对路径
+
+**风险**：🟡 中。唯一实质代价是丢失 193 commits 明细（已接受）。
+
+**依据**：`docs/audit/2026-10-10-desktop-conversion-merge-feasibility.md`
 
 ---
 
-### 批次 7：全链路验收 ⬜
+### 批次 8：全链路验收 ⬜
 
 8 项清单：CI 绿灯 / 全量 pytest 收集数不变 / 生产路径 curl / compose 完整 / 计划任务仍触发 / 死路径清零 / 文档引用同步 / 新目录可预测性。
 
@@ -201,3 +253,4 @@ grep -rn "_x[0-9]\{1,3\}$" tests/ --include="*.py" | wc -l   # 期望 0
 | 5 | | | | |
 | 6 | | | | |
 | 7 | | | | |
+| 8 | | | | |
