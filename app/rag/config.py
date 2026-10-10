@@ -138,6 +138,19 @@ PAGE_TRANSCRIPT_RETRIEVER_ENABLED: bool = (
 PAGE_TRANSCRIPT_RETRIEVER_WEIGHT: float = float(
     os.getenv("PAGE_TRANSCRIPT_RETRIEVER_WEIGHT", "0.10")
 )
+# 词法路 (agent45 补): 整页 embed 会稀释罕见拉丁词 → 另开 tsvector + ILIKE 字面路。
+# 语义路权重 (0.10) 隐含覆盖词法路; 词法命中同乘 PAGE_TRANSCRIPT_RETRIEVER_WEIGHT。
+PAGE_TRANSCRIPT_LEXICAL_ENABLED: bool = (
+    RAG_FRAMEWORK_ENABLED
+    and os.getenv("PAGE_TRANSCRIPT_LEXICAL_ENABLED", "1").lower()
+    in ("1", "true", "yes")
+)
+# 词法精确命中在 rerank 后**保留的槽位数** (agent45)。reranker 按 content
+# 语义重排会把整页转写 (长篇, 对罕见词语义分低) 挤掉, 故为其预留 final top_k
+# 中的 N 个槽位 (若其被挤掉)。0 = 不预留 (退化为 agent44 行为)。
+PAGE_TRANSCRIPT_PIN_SLOTS: int = int(
+    os.getenv("PAGE_TRANSCRIPT_PIN_SLOTS", "2")
+)
 
 # ===== W100-RAG-6 Temporal Retriever 时间衰减 =====
 # 仅追加, 不改既有 19 项配置 (8 框架 + 5 RAG-1 + 2 RAG-2 + 2 RAG-3 + 4 RAG-4 + 2 RAG-5)

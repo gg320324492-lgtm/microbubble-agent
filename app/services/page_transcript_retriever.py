@@ -145,6 +145,122 @@ class PageTranscriptRetriever:
             )
         return ranked[:top_k]
 
+    async def search_pages_lexical(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> List[dict]:
+        """整页转写的**词法**召回 —— 补语义路对罕见词的稀释 (agent45)。
+
+        ## 为什么另开一路 (agent44 实测缺口)
+
+        整页 embedding 把罕见拉丁词 (物种名/通路名) 稀释进整页语义: 用
+        「只存在于页面转写的罕见词」做探针, 语义路 **0/6 命中 top-5**
+        (``air-nanobubble`` 排到第 10, 其余不在列表)。本方法直接用**字面**
+        命中把这类页捞回来。
+
+        ## 两条字面通道 (缺一不可)
+
+        1. ``content_tsvector @@ plainto_tsquery('simple', :q)`` —— 罕见拉丁
+           **整词**命中。PG ``simple`` 保留连字符整词 (``air-nanobubble``),
+           不像 jieba 会被 ``air`` 这种高频子串稀释 (见迁移 145 docstring 实测)。
+        2. ``content ILIKE '%q%'`` —— **中文子串**兜底。PG ``simple`` 不切中文
+           (整个中文串 = 1 lexeme), 需 ILIKE 才能做「纳米气泡」式子串匹配。
+
+        两通道命中并集, tsvector 命中排在 ILIKE-only 命中之前 (整词匹配
+        强于子串匹配), 再按 ``filename`` 稳定排序。
+
+        ## 结果形态
+
+        与 :meth:`search_pages` 逐字段同款 (``retrieval_method='page_transcript_lexical'``),
+        便于 hybrid_retriever 用 ``knowledge_id`` 折算到同一篇文档。
+        ``similarity``/``score`` 用统一 1.0 (tsvector 命中) / 0.9 (仅 ILIKE)
+        的相对秩, 保证词法命中不会越过语义分 (hybrid 侧再乘 weight)。
+
+        ## 降级
+
+        与全路一致: 异常/空 query 返回 []，不影响语义路与文本四路。
+        """
+        normalized_query = (query or "").strip()
+        if not normalized_query or top_k <= 0:
+            return []
+
+        from sqlalchemy import text as _sql_text
+
+        # 清洗 query 里的 ILIKE 通配符, 否则用户输入的 % / _ 会放大匹配面。
+        # like_safe 本身就是清洗后的子串；空 → 该通道整体不参与 (返回 None),
+        # 由 SQL 的 ILIKE NULL 语义自然跳过 (pattern 为 None 时用不可能匹配的哨兵)。
+        like_safe = normalized_query.replace("\\", "").replace("%", "").replace("_", " ")
+        like_pattern = f"%{like_safe}%" if like_safe.strip() else None
+
+        # tsvector 走 plainto_tsquery (自动 AND 化 + 位置相邻语义);
+        # 我们用 OR 语义 (任一命中), 故拆成 to_tsquery 的 ' | ' 拼接反而复杂,
+        # 这里直接用 plainto_tsquery 的 @@ (对短罕见词足够), ILIKE 兜底其余。
+        sql = _sql_text(
+            """
+            SELECT kpt.id,
+                   kpt.knowledge_id,
+                   kpt.page_number,
+                   kpt.file_name,
+                   kpt.content,
+                   (kpt.content_tsvector @@ plainto_tsquery('simple', :q)) AS ts_hit,
+                   (kpt.content ILIKE :like) AS like_hit
+            FROM knowledge_page_transcripts kpt
+            JOIN knowledge k ON k.id = kpt.knowledge_id
+            WHERE kpt.blocked IS FALSE
+              AND kpt.content IS NOT NULL
+              AND k.deleted_at IS NULL
+              AND k.storage_mode = 'kb'
+              AND k.visibility IN ('team', 'public')
+              AND (
+                    kpt.content_tsvector @@ plainto_tsquery('simple', :q)
+                    OR kpt.content ILIKE :like
+                  )
+            ORDER BY ts_hit DESC, kpt.id
+            LIMIT :lim
+            """
+        )
+
+        try:
+            result = await self.db.execute(
+                sql,
+                {
+                    "q": normalized_query,
+                    # 清洗后为空 → 传 None, ILIKE NULL 恒 false, 该通道不匹配任何行。
+                    # 绝不用原始 query 兜底 (那会把 % / _ 通配符放回来)。
+                    "like": like_pattern,
+                    "lim": max(top_k * 4, 20),
+                },
+            )
+            rows = result.all()
+        except Exception as exc:
+            logger.warning("整页转写词法召回失败 (降级空): %s", exc)
+            return []
+
+        ranked: List[dict] = []
+        for row in rows:
+            # tsvector 整词命中给 1.0，仅 ILIKE 子串命中给 0.9 —— 相对秩,
+            # 让词法路结果按匹配强度排序, 不越过语义分。
+            rel = 1.0 if row.ts_hit else 0.9
+            ranked.append(
+                {
+                    "id": row.knowledge_id,
+                    "knowledge_id": row.knowledge_id,
+                    "page_transcript_id": row.id,
+                    "page_number": row.page_number,
+                    "file_name": row.file_name,
+                    "content": row.content,
+                    "similarity": rel,
+                    "score": rel,
+                    "lexical_match": "tsvector" if row.ts_hit else "ilike",
+                    "retrieval_method": "page_transcript_lexical",
+                }
+            )
+
+        # ORDER BY 已在 SQL 侧保证 (ts_hit DESC, id ASC), 这里再稳定一次
+        ranked.sort(key=lambda item: (-item["similarity"], item["page_transcript_id"]))
+        return ranked[:top_k]
+
     async def _load_candidates(self) -> List[Dict[str, Any]]:
         stmt = (
             select(

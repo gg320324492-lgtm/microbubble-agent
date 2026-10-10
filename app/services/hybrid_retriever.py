@@ -1271,6 +1271,14 @@ async def _retrieve_with_weights_impl(
     # 3b) 整页视觉转写召回 (agent44) — 与第 5 路同款「rerank 前折算进 score」
     # 合并键沿用 knowledge_id: 页面命中折算到同一篇文档上, 不新增结果形态。
     # 降级语义与第 5 路一致 (异常/空 → 静默跳过, 不影响文本四路)。
+    #
+    # agent45: 词法精确命中 (rare token tsvector/ILIKE) 需**绕过 rerank 稀释**。
+    # 主因: hook 3b 在 rerank 前折算, 但 reranker 按 **content 语义** 重排 ——
+    # 整页转写 (长篇) 对单个罕见词的语义分很低 → 被 top_k 截掉 (实测
+    # air-nanobubble/alphafold 词法命中进不了 final top-5)。故词法精确命中
+    # 单独收集, rerank + truncate 后回钉 (reserved slots), 与图像路同款"高精度
+    # 通道不被语义精排淹没"语义。
+    _lexical_pins: Dict[Any, dict] = {}
     try:
         from app.rag import config as _rag_config
 
@@ -1279,10 +1287,43 @@ async def _retrieve_with_weights_impl(
 
             _pt_weight = float(_rag_config.PAGE_TRANSCRIPT_RETRIEVER_WEIGHT)
             if _pt_weight > 0:
-                _pt_results = await PageTranscriptRetriever(db).search_pages(
+                _pt_retriever = PageTranscriptRetriever(db)
+                _pt_results = await _pt_retriever.search_pages(
                     query=query,
                     top_k=top_k,
                 )
+                # agent45: 词法路 —— 补语义路对罕见拉丁词的稀释 (0/6 探针缺口)。
+                # 与语义路合并到同一 _pt_results, 后续折算逻辑一行不改。
+                if getattr(_rag_config, "PAGE_TRANSCRIPT_LEXICAL_ENABLED", True):
+                    try:
+                        _pt_lexical = await _pt_retriever.search_pages_lexical(
+                            query=query,
+                            top_k=top_k,
+                        )
+                        if _pt_lexical:
+                            _pt_seen = {
+                                r.get("page_transcript_id") for r in _pt_results
+                            }
+                            for _lex in _pt_lexical:
+                                # 词法命中无论语义路是否已含该页, 都记入 pin 池
+                                # (rerank 稀释后需回钉; tsvector 整词命中优先)
+                                if _lex.get("knowledge_id") is not None and (
+                                    _lex.get("lexical_match") == "tsvector"
+                                    or _lex.get("knowledge_id") not in _lexical_pins
+                                ):
+                                    _lexical_pins[_lex["knowledge_id"]] = _lex
+                                if _lex.get("page_transcript_id") in _pt_seen:
+                                    continue
+                                _pt_results.append(_lex)
+                                logger.debug(
+                                    "[agent45] page_transcript lexical hit: "
+                                    "p%s kid=%s via=%s",
+                                    _lex.get("page_number"),
+                                    _lex.get("knowledge_id"),
+                                    _lex.get("lexical_match"),
+                                )
+                    except Exception as _e:
+                        logger.debug(f"[agent45] page_transcript lexical skip: {_e}")
                 if _pt_results:
                     _pt_merged = {
                         item.get("id"): dict(item)
@@ -1410,6 +1451,48 @@ async def _retrieve_with_weights_impl(
             logger.debug("[W100-RAG-6] temporal hook applied: %d results", len(raw_results))
     except Exception as _e:
         logger.debug(f"[W100-RAG-6] temporal hook skip: {_e}")
+
+    # 4c) agent45: 词法精确命中回钉 — rerank/truncate 后, 被挤出的整页转写词法
+    # 命中占回 N 个槽位 (PAGE_TRANSCRIPT_PIN_SLOTS)。理由见 hook 3b 顶部注释:
+    # 罕见词的字面命中是**高精度**信号, 不应被 content-语义精排淹没; 与图像路
+    # "高精度通道不被语义精排吃掉" 同款语义。槽位从尾部 (弱相关) 挤占, 词法命中
+    # 排在尾部槽位 (不抢 top1, 但保证在结果集内)。
+    if _lexical_pins and raw_results:
+        try:
+            from app.rag.config import PAGE_TRANSCRIPT_PIN_SLOTS as _PIN_SLOTS
+        except Exception:
+            _PIN_SLOTS = 0
+        if _PIN_SLOTS > 0:
+            _present_ids = {
+                _r.get("id") for _r in raw_results if _r.get("id") is not None
+            }
+            _dropped = [
+                _lex for _kid, _lex in _lexical_pins.items()
+                if _kid not in _present_ids
+            ]
+            if _dropped:
+                # 词法命中按 tsvector 优先排序 (整词 > 子串)
+                _dropped.sort(
+                    key=lambda x: 0 if x.get("lexical_match") == "tsvector" else 1
+                )
+                _pinned = raw_results[: max(0, top_k - _PIN_SLOTS)]
+                _need = min(_PIN_SLOTS, len(_dropped), max(0, top_k - len(_pinned)))
+                for _lex in _dropped[:_need]:
+                    _pin_item = dict(_lex)
+                    # 回钉项得分下沉到列表尾, 不越语义精排的头部
+                    _pin_item.setdefault("score", 0.0)
+                    _pin_item["lexical_pinned"] = True
+                    _pin_item.setdefault("retrieval_methods", []).append(
+                        "page_transcript_lexical"
+                    )
+                    _pinned.append(_pin_item)
+                raw_results = type(raw_results)(_pinned) if isinstance(
+                    raw_results, _CitationList
+                ) else _pinned
+                logger.debug(
+                    "[agent45] page_transcript lexical pins re-inserted: %d",
+                    _need,
+                )
 
     # 5) W99-RAG-2: Citation hook — 在 rerank 之后 (结果已带 chunk_id, WP1.2)
     # 2026-09-01 增强: doc 级命中 (vector/bm25 路无 chunk_id) 从 chunk 路候选

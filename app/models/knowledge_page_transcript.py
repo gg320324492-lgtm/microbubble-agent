@@ -34,6 +34,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Computed,
     Float,
     ForeignKey,
     Index,
@@ -42,7 +43,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 
@@ -95,6 +96,21 @@ class KnowledgePageTranscript(Base, TimestampMixin):
 
     #: 净化后正文的向量 (Qwen3-Embedding-0.6B, 1024d)
     embedding = Column(Vector(1024), nullable=True)
+
+    #: 词法召回列 (agent45, 迁移 145) —— 罕见拉丁词检索路。
+    #: content_tsvector: GENERATED ALWAYS AS
+    #:   (to_tsvector('simple', coalesce(content, ''))) STORED
+    #: **必须**在 ORM 声明 (不只靠 alembic): tests/conftest 用 Base.metadata
+    #: create_all 建测试库 schema, 不声明则测试库缺列 → 词法路查询静默空。
+    #: 读者是 PageTranscriptRetriever.search_pages_lexical (raw SQL 读)。
+    #: 另建 GIN 索引 ix_kpt_content_tsvector。
+    content_tsvector = Column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('simple', coalesce(content, ''))", persisted=True
+        ),
+        nullable=True,
+    )
 
     knowledge = relationship("Knowledge", lazy="selectin")
 
