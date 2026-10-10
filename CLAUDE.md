@@ -150,7 +150,8 @@
 **类 20.218**（录音心跳绑会话不绑组件，见上）/ **类 20.219**（新增 celery task 必须同时进
 `celery_app.conf.imports`）/ **类 20.220**（自动化守门必须验"副作用是否真的发生"，不能信状态字段）/
 **类 20.221**（DB 存 UTC、主机 +0800，跨系统对时必须显式换算）/
-**类 20.222**（CI 硬门必须真的挡得住 —— 开保护前先修红、matrix 下 required checks 必须逐个 job 列，见上）。
+**类 20.222**（CI 硬门必须真的挡得住 —— 开保护前先修红、matrix 下 required checks 必须逐个 job 列，见上）/
+**类 20.223**（判「依赖无用」必须查上游未声明的硬 import + import blocker 实测；能钉别删，见上）。
 
 ### F. 结构重构与 CI 收口（2026-10-10~12，8 批次全完成）
 
@@ -406,6 +407,37 @@
   `"false" is not a boolean`; 且 **`required_pull_request_reviews` / `restrictions`
   即使要设 null 也必须显式传**, 否则 422 `weren't supplied`。
   正确姿势: `--input <json>` 一次性传完整 body。
+- **类 20.223**: **判「某依赖无用」不能只看 `Required-by: 空` + 本仓零 import ——
+  必须查它有没有「metadata 未声明的硬 import」(上游打包 bug)** ——
+  2026-10-12 实战: 主指挥据 4 条证据判定 `datasets` 零用途并**已提交删除**
+  (`7f8719035`), 被并行 agent 用 import blocker 当场证伪, 下一 commit 撤销
+  (`3247085c5`)。**漏掉的那条证据** = `modelscope 1.40.0` 有一条**无try 包裹的
+  顶层裸 import**:
+      modelscope/pipelines/base.py:16   from modelscope.msdatasets import MsDataset
+        → modelscope/msdatasets/ms_dataset.py:9
+            from datasets import (Dataset, DatasetDict, Features, ...)
+  实测: 屏蔽 `datasets` 后 `from modelscope.pipelines import pipeline` **直接
+  ModuleNotFoundError**; 而 `modelscope` 的 metadata **根本不声明 datasets**
+  (只声明 filelock/hub/packaging/requests/setuptools/tqdm/urllib3)
+  ⇒ **requirements.txt 那一行是它唯一的供给来源**。
+  **为什么两条直觉判据都不够**:
+  ①`pip show X → Required-by: 空` 只扫 **base 依赖**, 看不到
+     "metadata 不声明、代码却硬 import" 的上游 bug;
+  ②`grep -rn "import X" app/ scripts/` 只看**自己的代码**, 依赖内部的
+     顶层 import 完全不可见。
+  **正确判据(删任何顶层依赖前必做)**:
+  ①`pip show X` 看 Required-by; ②全仓 grep 自己的代码;
+  ③**读 `pip show X` 的 `Requires` 并逐个核实其 import 链**, 重点查
+     那些 **extras 声明**的包 —— extras 不装不代表没人 import;
+  ④**用 import blocker 做运行时实测**(`sys.meta_path` 插一个 finder 屏蔽 X,
+  再 import 各关键模块), 这是唯一能证伪"删了没事"的一步。
+  **危害形态最恶劣的一点**: `voiceprint_service.py:42` 把 modelscope import
+  包在 `except Exception` 里(设计意图"不让 WS 崩"), 于是**删掉不报任何错**,
+  只是 `_load_pipeline` 恒失败 → **所有发言人退化成 unknown**。类 20.220
+  的完整形态: 状态字段不撒谎、也没有报错、但**副作用没发生**。
+  ⇒ 推论: **"删一个依赖"的爆炸半径永远大于"钉一个版本"**。裸声明会漂移,
+  但漂移是可见的 CI 红; 而删错一个软 import 兜底包, 后果可能在生产跑很久
+  之后才以"功能静默失效"的形式出现。**能钉就钉, 别删。**
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务三层缺陷已于 2026-10-09 全修
   (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
   rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
