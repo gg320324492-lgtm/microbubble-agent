@@ -3,6 +3,58 @@
 > **2026-07-08 P1-10 fix**: 项目从 frp 切到 SSH tunnel (2026-07-02). 此 README 让新成员 clone 仓库后知道怎么启用隧道.
 > 之前部署脚本 `scripts/deploy-local.sh` 引用了 frpc.exe / frpc.toml, 已清理 (dead code).
 
+---
+
+## ⚠️ 目录边界（结构重构批次 6，2026-10-10 补）
+
+本目录是**隧道本体**：负责**建立 / 启动 / 停止** ssh 反向隧道进程本身。
+
+| | 本目录 `tunnel/` | [`../scripts/tunnel/`](../scripts/tunnel/) |
+|---|---|---|
+| 角色 | **隧道本体**（建隧道） | **隧道守护器**（守隧道） |
+| 内容 | `setup-ssh-key.ps1` / `start-ssh-tunnel.ps1` / `start-ssh-tunnel.vbs` | `guard-ssh-tunnel.ps1` / `.bat` / `install-*.bat` / `uninstall-*.bat` |
+| 调用方 | 人工 / 开机任务 `MicroBubble-SSH-Tunnel` | 计划任务 **`MicroBubble-SSH-Tunnel-Guard`**（每 5 分钟） |
+
+**职责互补，不是重复 —— 勿合并。** 一个负责把隧道拉起来（`start-ssh-tunnel.ps1`
+自带 30s 看门狗），一个负责判活并在断了之后重新拉起（`guard-ssh-tunnel.ps1`，
+计划任务每 5 分钟调一次）。合并会同时打断这两条链路。
+
+跨目录耦合是**已知且刻意**的：`scripts/tunnel/guard-ssh-tunnel.ps1` 会回调本目录的
+`tunnel/start-ssh-tunnel.ps1` 重新拉隧道 —— 守护器引用本体是设计，不是层级错乱。
+
+### `ssh-tunnel.log` / `ssh-tunnel.pid` 为什么在目录里
+
+两个都是**运行时产物**，由 `start-ssh-tunnel.ps1` 生成，已在 `.gitignore` 里，
+仓库中看到的通常是本地跑过的残留。**不是**待清理的死文件，也不要 `git add -f` 提交。
+
+### ⚠️ 类 20.214：本隧道是生产依赖的裸进程单点
+
+`ssh.exe` 是一个**没有 supervisor、没有容器托管**的裸进程。隧道一断，
+云端 nginx 的 `proxy_pass http://127.0.0.1:8000` 立刻 502，
+移动端表现就是 "Network Error" —— **全站不可用**。
+
+因此存在两层保障，且都必须保留：
+
+1. `tunnel/start-ssh-tunnel.ps1` 内置 30s 看门狗
+2. `scripts/tunnel/guard-ssh-tunnel.ps1` 由计划任务 **`MicroBubble-SSH-Tunnel-Guard`**
+   每 5 分钟判活并重拉
+
+改任何一侧前先读 `CLAUDE.md` 的**类 20.214**（隧道 `-R` 端口与容器发布端口的对应
+关系：8000↔app、9000↔minio）。
+
+### 判活口径必须与本体一致（2026-09-15 P0 事故教训）
+
+`guard-ssh-tunnel.ps1` 早期要求命令行必须出现 `-R 0.0.0.0:9000` 才算"隧道活着"，
+而本目录 `start-ssh-tunnel.ps1` 拉起的隧道不带这个字面量 —— 两个监管者口径不一致时
+会"互不认账"：守护器认为隧道没了 → 再拉一条 → 远端端口已被占用 → 因
+`ExitOnForwardFailure=yes` 立即退出 255 → 5 分钟后再来一次。
+实测 2026-09-15 白天 `ssh-tunnel.log` 出现 **115 次** `SSH exited immediately (code: 255)`，
+断续约 70 分钟。修法是判活口径放宽为"任何连到本服务器的 `ssh -R` 隧道"。
+
+**改判活逻辑时必须两个目录一起看**，否则会复发。
+
+---
+
 ## 架构
 
 ```
