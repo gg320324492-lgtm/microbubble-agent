@@ -358,6 +358,19 @@
   current == head。
   **附带教训**: `alembic current` 的 INFO 前缀行走 **stderr**、版本号走 **stdout**, 用
   `2>&1 | head -1` 会抓到 INFO 行而非版本号 —— 解析命令输出前必须确认流归属。
+  **第 4 种"状态字段说谎"形态 (2026-10-12 实战): `exit code 0` 也会骗人** ——
+  pytest 的 stdout 被管道截断 (`| head` / `tee` 中断) 时**仍返回 0**,于是
+  "跑完了"不等于"跑过了"。某 agent 首报"exit code 0, 16 文件 130 passed",
+  逐文件重跑后发现**其中 22 个其实是 failed**, 只是被管道吞掉了。
+  ⇒ **纪律**: 报告测试结果**必须给逐文件/分组的 passed-failed 数字**,不能只报
+  exit code; 且 `pytest ... | head` 这类截断管道**禁止用于判定成败**。
+  同源第 2 例: 容器镜像不含 `docs/`(实测 `/app/docs` No such file),而
+  `tests/rag/test_pr10_docs_e2e.py:18` 用 `REPO_ROOT/"docs"/"rag"` 取**宿主**
+  文档 —— 该测试**设计上只能在宿主跑**(其 docstring 自述"本机可直接跑")。
+  故容器内跑它的 22 个 failed 是**环境缺口不是代码缺陷**, 别误判成回归。
+  **容器内 pytest 的已知不可信项**: ①镜像不含 `docs/`; ②镜像早于 worktree
+  (常缺 `fakeredis` 等新依赖 + 持有已删文件的陈旧副本) ⇒ **本地容器结果一律
+  低于 CI 的可信度**, 冲突时以 CI 为准。
 - **类 20.221**: **DB 存 UTC、主机存 +0800 —— 跨系统对时间必须显式换算** ——
   2026-10-09 查 `MULTIMODAL_INLINED` 链路时, 三个 agent 连续在同一个坑上栽: 把
   `meetings` / `knowledge_images` / `knowledge_chunks` 的 `created_at` / `updated_at`
