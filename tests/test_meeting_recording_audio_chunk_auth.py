@@ -6,7 +6,8 @@
 - 同用户 (created_by == current_user.id) → 200
 - 跨用户 (created_by != current_user.id) → 403
 - meeting 不存在 → 404
-- meeting.status != "recording" → 400
+- meeting.status not in ("recording", "error") → 400
+  (⚠️ 2026-10-08 P0-4 起 "error" **已放行**允许补传, 见下方 error 用例注释)
 - chunk 文件为空 → 400
 - chunk 落库字段: last_chunk_index 原子取最大 / total_chunks 累加 / upload_status="uploading"
 
@@ -161,28 +162,51 @@ class TestAudioChunkAuthGuard:
         assert exc.value.status_code == 400
         assert "录音状态" in str(exc.value.detail)
 
-    async def test_cancelled_status_returns_400(self):
-        """meeting.status='error' (cancel-recording 后) 阻止再上传 chunk."""
+    async def test_error_status_allows_chunk_reupload(self):
+        """meeting.status='error' → **允许**补传 chunk (2026-10-08 P0-4 契约反转).
+
+        历史: 本用例原名 test_cancelled_status_returns_400, 断言 status='error'
+        返回 400。那是 **2026-10-08 之前**的契约。会议 255 录音孤儿清理事故
+        (docs/incident/2026-10-08-meeting-255-orphan-cleanup.md, 类 20.218) 修复时
+        有意反转: 被误杀(status='error')但仍留着 MinIO 分片的会议, **必须**能补传
+        chunks 再调 POST /reprocess 重启流水线, 否则用户数据没有补救入口。
+
+        上游代码 app/api/v1/meeting_recording.py upload_audio_chunk 现为:
+            if meeting.status not in ("recording", "error"): raise 400
+        旧断言因此必然失败, 且失败点在守卫之后的 `chunked_upload_service.save_chunk`
+        → 真连 localhost:9000 → CI 无 MinIO 时报 Connection refused (掩盖了真实契约漂移)。
+
+        被拒绝的状态由 test_non_recording_status_returns_400 (status='processing') 覆盖。
+        """
         from app.api.v1 import meeting_recording as mr_module
-        from fastapi import HTTPException
 
         meeting = MagicMock()
         meeting.id = 100
         meeting.created_by = 7
         meeting.status = "error"
+        meeting.last_chunk_index = -1
+        meeting.total_chunks = 0
+        meeting.upload_status = "pending"
         db = self._make_db_with_meeting(meeting)
+
         current_user = MagicMock()
         current_user.id = 7
 
-        with pytest.raises(HTTPException) as exc:
-            await mr_module.upload_audio_chunk(
+        # mock chunked_upload_service.save_chunk —— 不连真 MinIO
+        with patch.object(mr_module, "chunked_upload_service") as mock_svc:
+            mock_svc.save_chunk = AsyncMock(return_value=None)
+            result = await mr_module.upload_audio_chunk(
                 meeting_id=100,
                 chunk_index=0,
                 file=self._make_upload_file(),
                 current_user=current_user,
                 db=db,
             )
-        assert exc.value.status_code == 400
+
+        assert result["chunk_index"] == 0
+        # 守卫放行 → 确实落到写存储这一步
+        mock_svc.save_chunk.assert_awaited_once()
+        db.commit.assert_awaited_once()
 
     # -- chunk 空 → 400 ----------------------------------------------------
 

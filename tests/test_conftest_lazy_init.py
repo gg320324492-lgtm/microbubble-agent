@@ -14,7 +14,9 @@
 """
 import asyncio
 import os
+import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -27,12 +29,46 @@ class TestConftestImports:
     """conftest 模块 import 路径必须兼容"""
 
     def test_skip_db_setup_env_flag_propagated(self):
-        """SKIP_DB_SETUP env var 必须在 conftest 模块顶部读取后正确反映"""
-        import tests.conftest as cf
-        assert hasattr(cf, "SKIP_DB_SETUP")
-        # SKIP 模式下应为 True
-        if os.getenv("SKIP_DB_SETUP"):
-            assert cf.SKIP_DB_SETUP is True
+        """SKIP_DB_SETUP env var 必须在 conftest 模块顶部读取后正确反映
+
+        2026-10-10 CI 全红第三类 (server-tests-baseline shard 4): 本用例原来在
+        **同进程**里比 `os.getenv("SKIP_DB_SETUP")` (当前 env) 与
+        `cf.SKIP_DB_SETUP` (conftest **载入时**算出的常量)。而 tests/conftest.py
+        早在 pytest 启动、收集任何测试模块之前就被 import 并缓存进 sys.modules。
+        同 shard 内另有 6 个测试模块在 **import 期**(收集阶段) 就写全局 env:
+            tests/test_drive_v2_pr10_mention.py:32
+            tests/test_drive_v2_pr12_reactions.py:32
+            tests/test_drive_v2_pr15_version_tags.py:33
+            tests/test_drive_v2_pr3_comment_v2_e2e.py:37
+            tests/test_drive_v2_pr9_ws.py:30
+            tests/test_push_service_e2e.py:33
+            全部是 `os.environ["SKIP_DB_SETUP"] = "1"`
+        CI workflow 里该 env 被设成 `SKIP_DB_SETUP: ""` → conftest 载入时算出 False,
+        之后这 6 个模块把 env 污染成 "1" → `os.getenv(...)` 变真值 → 进了 if 分支,
+        拿当前的 env 去比一个陈旧的常量 → `assert False is True`。
+
+        即: 红灯断言的是**测试执行顺序**, 与被测逻辑无关; 换个 shard 组合就可能不红
+        (典型的 order-dependent flaky)。故改为**子进程隔离**验证: 从干净 env 起,
+        真正 import 一次 conftest, 断言常量确实跟着 env 走 (两种取值都验)。
+        """
+        repo_root = str(Path(__file__).resolve().parents[1])
+        probe = "import tests.conftest as cf; print(repr(cf.SKIP_DB_SETUP))"
+        for env_value, expected in (("1", "True"), ("", "False")):
+            env = dict(os.environ)
+            env["SKIP_DB_SETUP"] = env_value
+            env["PYTHONPATH"] = repo_root + os.pathsep + env.get("PYTHONPATH", "")
+            proc = subprocess.run(
+                [sys.executable, "-c", probe],
+                cwd=repo_root, env=env, capture_output=True, text=True, timeout=180,
+            )
+            assert proc.returncode == 0, (
+                f"SKIP_DB_SETUP={env_value!r} 子进程 import conftest 失败:\n"
+                f"{(proc.stderr or '')[-800:]}"
+            )
+            assert proc.stdout.strip() == expected, (
+                f"SKIP_DB_SETUP={env_value!r} → SKIP_DB_SETUP={proc.stdout.strip()}, "
+                f"期望 {expected}"
+            )
 
     def test_test_bot_constants_importable(self):
         """TEST_BOT_* 常量在 if/else 块外, SKIP 模式也能 import"""

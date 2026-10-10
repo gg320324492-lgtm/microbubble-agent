@@ -64,6 +64,23 @@ neo4j>=5.0.0
 
 # 数据处理
 numpy==1.26.2
+# 2026-10-10 CI 全红根因修复 (server-tests-baseline 连续 9+ 次全红):
+#   requirements.txt:43 的裸 `datasets` 会传递引入 pyarrow>=24.0.0, 但本文件把
+#   numpy 写死 1.26.2。pip 不做 ABI 兼容校验, 于是它照装最新版 pyarrow,
+#   而 pyarrow 26.0.0 起**硬性要求 numpy>=2.0** → import 期才炸:
+#     "ImportError: pyarrow requires NumPy 2.0 or newer, found 1.26.2"
+#   传导链: app.services.embedding_service → sentence_transformers → datasets
+#           → pyarrow → numpy ABI 冲突 → embedding_service 整个 import 失败
+#           → 所有 patch("app.services.embedding_service.*") 的测试报
+#             "module 'app.services' has no attribute 'embedding_service'"。
+#   那些连带红灯**不是** patch 目标漂移(类 20.181), 而是同一条链的下游症状。
+#
+#   修法 = 显式钉住 pyarrow 到与生产容器一致(实测 microbubble-agent-app-1:
+#   pyarrow 25.0.1 + numpy 1.26.2 + datasets 5.0.1 三者共存且 import 正常)。
+#   25.0.1 满足 datasets 的 pyarrow>=24.0.0, 且未引入 numpy>=2 硬约束。
+#   ⚠️ 不改 numpy 版本(升 2.x 是 ABI 破坏面, torch/scipy/sklearn/pandas 全要跟升),
+#     也不改 embedding_service 代码 —— 生产跑得好好的, 坏的只有 CI 依赖解析结果。
+pyarrow==25.0.1
 
 # 文件解析
 PyMuPDF==1.24.0

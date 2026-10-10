@@ -126,6 +126,18 @@ def _make_orphan_meeting(
     m.total_chunks = total_chunks
     m.user_agent = user_agent
     m.error_reason = None
+    # 2026-10-10 CI 全红修复 (与 pyarrow 无关的独立存量 bug):
+    # 本 helper 建的是 MagicMock, 未显式赋值的属性会**自动生成一个真值 MagicMock**,
+    # 于是服务里 2026-10-08 P0-4 新增的判据
+    #     presence_recent = bool(m.recording_presence_at and (threshold <= m.recording_presence_at))
+    # 走到 `threshold <= MagicMock()` 抛 TypeError, 被扫描循环的
+    # `except Exception as e: errors.append(...)` 吞掉。
+    # 后果: 第 121 行 `m.status = "error"` 已执行, 第 153 行 `m.error_reason = ...`
+    # 永远到不了 → 7 个用例报 "TypeError: argument of type 'NoneType' is not iterable"
+    # (在 assert "..." in orphan.error_reason 处), 且 status 断言反而先过了, 极具误导性。
+    # 该列在 app/models/meeting.py:60 是 nullable=True, 真实 DB 里"没有 presence 信号"
+    # 就是 NULL → 这里必须显式赋 None, mock 才忠实于真实行。
+    m.recording_presence_at = None
     return m
 
 
@@ -219,7 +231,14 @@ class TestOrphanMeetingCleanup:
         assert "last_chunk_index=5" in orphan.error_reason
         assert "total_chunks=6" in orphan.error_reason
         assert "[UA:" in orphan.error_reason
-        _chunked_stub.delete_chunks.assert_awaited_once_with(301)
+        # 2026-10-10: 原断言是 delete_chunks.assert_awaited_once_with(301), 但那是
+        # **2026-10-08 P0-4 之前**的契约。会议 255 孤儿清理误删了用户音频后, 有意改成
+        # 「有分片就不删 MinIO」, 给用户留补传 / POST /reprocess 的补救机会
+        # (见 app/services/orphan_meeting_cleanup.py 的 preserve_chunks 分支)。
+        # 本用例 last_chunk_index=5 → has_chunks=True → preserve_chunks=True,
+        # 因此 delete_chunks **正确地不被调用**。原断言与新契约直接矛盾, 必须反过来断言。
+        assert "chunks_preserved=6" in orphan.error_reason
+        _chunked_stub.delete_chunks.assert_not_awaited()
         _update_progress_stub.assert_awaited_once()
         assert 301 in result["cleaned"]
         assert result["count"] == 1
