@@ -47,6 +47,81 @@
 - **PWA 已于 2026-07-27 强制注销**（`36b0b2ec9`，`VitePWA({ disable: true })`）：
   dist 无 manifest / 无 sw.js 是**预期状态**，见下方 971 行失效警示。
 
+## 当前状态 (2026-10-10 会议录音事故追查 → 系统性静默失效清理 → PPT 图片内容入 RAG)
+
+> 上一版"当前状态"停在 2026-09-30；2026-10-08~10 这三天的工作如下。**`alembic` 单 head 已是
+> `145_kpt_content_tsvector`**（本文件其他段落出现的 141/142/143/144 都是当时快照）。
+
+### A. 会议 255 录音丢失事故 → 心跳机制三层修复（类 20.218）
+
+- **事故**：2026-10-08 18:45 iPhone 组会录音 38min，全程 **0 心跳**，被
+  `orphan_meeting_cleanup` 判 error、录音全丢 (`docs/incident/2026-10-08-meeting-255-orphan-cleanup.md`)。
+- **真根因（非"iOS 后台挂起"这一表象）**：心跳 timer 是 `AudioRecorder` **组件局部变量**，
+  而恢复路径 (`MeetingRoomView.vue` / `MobileMeetingRoom.vue` 的 onMounted) 直接调
+  `useGlobalRecorder().start()`，**绕过**了唯一的心跳启动入口 `handleStart()`。
+  **09-15 那次心跳修复从未在真机 iOS 上生效过**（会议 253 其实是失败事故，254 成功只因
+  桌面 Chrome 触发 timeslice 有分片）。
+- **修复**：心跳提升为**模块级单例** (`web/src/composables/useRecordingHeartbeat.js`)；
+  恢复/续传路径显式 `ensureHeartbeat`；`visibilitychange`/`pageshow`/`focus` 切回前台立即补心跳；
+  心跳**独立限流 tier** 且 **429 也写审计**；孤儿清理**有分片就不删 MinIO**。
+- **验证**：用户用手机自带录音器补录的 m4a（2h48m）完整重跑 255 → `completed`，
+  摘要 487 字 / 要点 8 条 / 决议 29 条全部合规。
+
+### B. 一批"静默失效"链路被清出（全部是"看起来在工作、实际没工作"）
+
+| 类别 | 问题 | 修复 |
+|---|---|---|
+| **celery 漏注册 ×3** | `meeting_chunk_service` / `drive_index_service` / `auto_rag_tasks` 定义了 task 但**从未进 `celery_app.conf.imports`** → 派发被 worker 静默丢弃。会议 RAG 的 `meeting_chunks` 路自 `d1aa07adb` 起**一直是空的** | 补注册 + 回填（类 **20.219**） |
+| **`storage_mode` 漏过滤 ×3** | `rag_auto_ingest` / `knowledge_polling` / `admin_kb_monitor` 按 `analysis_status` 选行但**不看 `storage_mode`** → 把 drive 行的占位串 `[drive upload] <文件名>` 当正文切 chunk + embedding | 统一复用 `INGESTABLE_STORAGE_MODE` 判据 |
+| **跨 event loop ×2** | `ocr_service` 模块级 `Semaphore`、`recall_observability` 单例 `Lock` 绑死创建时的 loop → celery 每次 `asyncio.run()` 新 loop 复用即炸（**OCR 实测 77% 失败率 4201/5446**） | 改按 `get_running_loop()` 惰性重建 |
+| **"假成功" ×2** | `classify_and_extract` 失败**返回 dict 而非抛出**，下游 `isinstance(x, Exception)` 永远 False → 失败被标 `done`（**抹掉失败信号**）；`paper_layout_service` 同型（且叠了个 NameError 互相掩盖） | 改判 `error` 键是否存在 |
+| **分块器不认 `[PAGE:N]`** | PPT/PDF 解析产物里 `\n\n` 出现 0 次，而分块器只按 `\n\n` 切 → **整份 17 页 deck 塌成 1 个 chunk** | 加 `page` 策略；全库 `[PAGE:]` chunk **2017 → 10549** |
+| **`split_for_tsvector` 超长** | `max_chars=6000` 截的是**原始输入**，jieba 切词后输出可 >6000 撞 CHECK 约束 → 异常被吞成 warning，`search_text` **静默留空** | 改按 token 边界裁剪输出 |
+| **`_parse_pptx` 不递归 group** | 只遍历 `slide.shapes` 顶层，**组合形状 (`p:grpSp`) 内文本整块丢失**（实测 559 页受影响、134 页损失 >20 字符、**10 页整页为 0**） | 加递归 + 深度上限 |
+
+### C. PPT **图片内容**正式进入 RAG（这是本仓第一次让"图里的字"可检索）
+
+- **背景**：241 个 drive 文件"只产 1 chunk"的主因**已由上面的分块器修复解决**（零成本、17 倍增益）；
+  但**图片内容仍未进检索**（`python-pptx` 只抽文本框，图片型 deck 的文字抽不到）。
+- **随机抽样定标**（269 页，两层 PPS，seed 固定）：全库真实产出率 **49.2%**（剔除第三方论文截图后 40.8%），
+  **A/现有索引 = 1.05x**；但**产出率与现有文本量强反比** ——
+  `native<20` 档 **A/索引 22.9x**、`20-59` 档 5.45x、`>=300` 档仅 **0.37x**（72% 是重复）。
+  **结论：不做无差别全量，按 `native<143` 分档投喂**（该档占全库约 45%）。
+- **已投喂 `native<143` 档**：**2495 行**入库新表 **`knowledge_page_transcripts`**
+  （2229 页正文 + 266 页 metadata-only）；`A` 类纯新增 **~42 万字符**；embedding 全本地 Qwen3。
+- **三条新增基础设施**（都在 `app/services/`）：
+  - `image_decoration_filter.py` —— 母版装饰横幅判据（两信号交集：AR≥5+height≤300 **且** 同文档同尺寸跨≥2 页），
+    写入侧 OCR **前**拦截 + 检索侧排除，两侧**结构上无法漂移**（同一常量）
+  - `page_transcript_filter.py` —— 整页转写净化（三档词表 + `chrome_ratio` 拍摄屏幕拦截 + 尾随总结切尾），
+    被拦页**只标 `blocked` 不删内容**（建议转人工）
+  - `page_transcript_retriever.py` —— 独立召回路：**语义**（权重 0.10）+ **词法**（`content_tsvector` GIN，
+    PG `simple` 保留整词 lexeme，罕见拉丁词 5/5 命中；rerank 后**回钉** 2 槽防被语义分截掉）
+- **关键教训**：`jieba` 会把 `air-nanobubble` 劈成 `air` + `nanobubble`，`air` 高频稀释分数 →
+  字面页 rank 10 掉出 top-5；**PG `simple` 保留整词 → rank 1**。词法路必须用 PG tsvector 而非复用 jieba BM25。
+
+### D. 其他已收口项
+
+- **L-14 DB 密码轮换去硬编码**：21 个文件改读 `.env`（**绝不把新密码写进 git**），
+  交接文档 `desktop-conversion/docs/handoff/2026-10-09-L14-db-password-rotation-handoff.md`。
+- **DFT 已彻底移出本仓**（活代码 2026-09-13 即清零；本次只删 `scripts/dft/README.md`）。
+  ⚠️ **`E:\dft-service\` 是用户的独立项目，不属本仓，不许删**（含其 `MicroBubble-DFT-Cleanup` 计划任务）；
+  ⚠️ **`.dft` 前缀 ≠ DFT 计算**（`DriveFileTable.vue` 的 CSS 类）——grep 会大量假阳性。
+- **`vision-mcp`** 改 compose profile 隔离（默认不启）；**glitchtip 不重建**（主拍结案）。
+- **`pptx-pages` 缓存 key** `updated_at` → `file_path`（11 处调用点；`updated_at` 被行级改动刷新即全失效，
+  实测命中率 **0/295 → 96/295**）。
+- **`ocr_status` 拆出 `done_no_text`**：`done` 从此**全部有可检索文字**（0 例外），
+  与"OCR 成功但图里没字"分离（类 **20.220** 同族：状态字段不许撒谎）。
+- **`ai_polish` 默认关闭**（`MEETING_AI_POLISH_ENABLED=False`）：实测 68 批耗时 50-60min 而
+  产物 100% 被"差异>10% 回退原文"兜底丢弃（`polish_real_change_ratio=0.0`），净收益为负。
+- **LLM 后端已从 MIMO 切到 MiniMax**（MIMO key 失效）；⚠️ **`VISION_MODEL` 必须保持能用图片的模型**，
+  切 `MiniMax-Text-01` 会让 OCR 立刻 500。
+
+### E. 本阶段新增的永久铁律
+
+**类 20.218**（录音心跳绑会话不绑组件，见上）/ **类 20.219**（新增 celery task 必须同时进
+`celery_app.conf.imports`）/ **类 20.220**（自动化守门必须验"副作用是否真的发生"，不能信状态字段）/
+**类 20.221**（DB 存 UTC、主机 +0800，跨系统对时必须显式换算）。
+
 ## 状态快照档案（2026-08-04 → 2026-09-18）
 
 > **2026-09-30 三层重排**：以下 18 段是**历史状态快照**（每段自称「当前状态」实为
@@ -647,6 +722,9 @@
 | `app/services/voiceprint_quality_monitor.py` | 声纹质量门 Celery 30min 监控 (W75 B-1, 6 件套监控)|
 | `app/voice/vad.py` | silero-vad 语音活动检测 |
 | `app/services/audio_processor.py` | 音频格式转换（WebM→WAV）+ 离线 VAD 分段 |
+| `app/services/image_decoration_filter.py` | 母版装饰横幅判据 (2026-10-09, 两信号交集; 写入侧 OCR 前拦截 + 检索侧排除共用同一常量) |
+| `app/services/page_transcript_filter.py` | PPT 整页转写净化 (2026-10-09, 三档词表 + chrome_ratio 拍屏拦截 + 尾随总结; `blocked` 只建议不删内容) |
+| `app/services/page_transcript_retriever.py` | 整页转写独立召回路 (2026-10-10, 语义权重 0.10 + `content_tsvector` 词法路 + rerank 后回钉) |
 
 ## 声纹 90% 硬门禁 (W75 第 1 批 B-1 三层口径澄清, A-2 W74 调研 §5 主拍)
 
