@@ -40,9 +40,19 @@ addict
 # 2026-06-24 v29 Qwen3-Embedding-0.6B: LLM-based embedding wrapper
 accelerate>=0.34
 # transformers>=4.45 / safetensors>=0.4 已在 torch 依赖链中装好, 无需重复声明
-datasets
-sortedcontainers       # modelscope/datasets 传递依赖
-simplejson             # modelscope 传递依赖（CLAUDE.md 模型依赖安装 提示）
+# 2026-10-12 删 datasets: 零用途 + 零 Required-by + 真实 pipeline 无它可跑通。
+#   它是 pyarrow 的唯一上游, 裸声明会随时间解析到新版; pyarrow 26.0.0 起硬性
+#   要求 numpy>=2.0, 而本文件 numpy==1.26.2 → import 期炸 → embedding_service
+#   整条链崩 → CI 连环 64 条红灯 (commit 35ab14c9e 修的就是这个)。
+#   删它的实测依据: app/scripts/web 零 import; pip show datasets 的 Required-by
+#   为空; sentence_transformers 的 6 处 datasets import 全是软 import
+#   (TYPE_CHECKING 或函数内延迟 import), 缺它 ST 仍可 import 且
+#   embedding_service / voiceprint_service 均正常。
+#   ⚠️ sortedcontainers / simplejson 两行**保留** —— 它们是 modelscope 的 base
+#   依赖 (非 extras), 与被删的 datasets 无关; 原注释"modelscope/datasets 传递依赖"
+#   有误, 已按实测改正。
+sortedcontainers       # modelscope base 依赖 (实测: 非 extra)
+simplejson             # modelscope base 依赖
 soundfile              # 3D-Speaker ERes2Net pipeline 读取 wav 需要
 pysoundfile            # soundfile 的 Python 绑定（部分平台需要）
 
@@ -65,9 +75,10 @@ neo4j>=5.0.0
 # 数据处理
 numpy==1.26.2
 # 2026-10-10 CI 全红根因修复 (server-tests-baseline 连续 9+ 次全红):
-#   requirements.txt:43 的裸 `datasets` 会传递引入 pyarrow>=24.0.0, 但本文件把
-#   numpy 写死 1.26.2。pip 不做 ABI 兼容校验, 于是它照装最新版 pyarrow,
-#   而 pyarrow 26.0.0 起**硬性要求 numpy>=2.0** → import 期才炸:
+#   原始根因: 裸 `datasets`(唯一 Required-by pyarrow 的包) 会传递引入
+#   pyarrow>=24.0.0, 但本文件把 numpy 写死 1.26.2。pip 不做 ABI 兼容校验,
+#   于是它照装最新版 pyarrow, 而 pyarrow 26.0.0 起**硬性要求 numpy>=2.0**
+#   → import 期才炸:
 #     "ImportError: pyarrow requires NumPy 2.0 or newer, found 1.26.2"
 #   传导链: app.services.embedding_service → sentence_transformers → datasets
 #           → pyarrow → numpy ABI 冲突 → embedding_service 整个 import 失败
@@ -75,9 +86,15 @@ numpy==1.26.2
 #             "module 'app.services' has no attribute 'embedding_service'"。
 #   那些连带红灯**不是** patch 目标漂移(类 20.181), 而是同一条链的下游症状。
 #
-#   修法 = 显式钉住 pyarrow 到与生产容器一致(实测 microbubble-agent-app-1:
-#   pyarrow 25.0.1 + numpy 1.26.2 + datasets 5.0.1 三者共存且 import 正常)。
-#   25.0.1 满足 datasets 的 pyarrow>=24.0.0, 且未引入 numpy>=2 硬约束。
+#   **2026-10-12 追加: `datasets` 已删, 本行随之变成显式顶层依赖**
+#   (pyarrow 的唯一 Required-by 就是那个被删的 datasets)。保留本行有两个理由:
+#   ① pandas 的可选快路径用 pyarrow, 生产容器实测 pandas 2.3.3 + 本行共存正常;
+#   ② pandas 源码对该依赖是软 import, 删本行不会立刻炸, 但会让 pandas 退到
+#      纯 numpy 路径 (性能与 dtype 行为有差异), 属独立议题不在本次范围。
+#   ⇒ 本行现在是**有意的顶层钉**, 不是任何包的传递物。
+#
+#   钉 25.0.1 的依据 = 与生产容器一致(实测 microbubble-agent-app-1:
+#   pyarrow 25.0.1 + numpy 1.26.2 共存且 import 正常), 该版未引入 numpy>=2 硬约束。
 #   ⚠️ 不改 numpy 版本(升 2.x 是 ABI 破坏面, torch/scipy/sklearn/pandas 全要跟升),
 #     也不改 embedding_service 代码 —— 生产跑得好好的, 坏的只有 CI 依赖解析结果。
 pyarrow==25.0.1
