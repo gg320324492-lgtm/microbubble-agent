@@ -149,7 +149,30 @@
 
 **类 20.218**（录音心跳绑会话不绑组件，见上）/ **类 20.219**（新增 celery task 必须同时进
 `celery_app.conf.imports`）/ **类 20.220**（自动化守门必须验"副作用是否真的发生"，不能信状态字段）/
-**类 20.221**（DB 存 UTC、主机 +0800，跨系统对时必须显式换算）。
+**类 20.221**（DB 存 UTC、主机 +0800，跨系统对时必须显式换算）/
+**类 20.222**（CI 硬门必须真的挡得住 —— 开保护前先修红、matrix 下 required checks 必须逐个 job 列，见上）。
+
+### F. 结构重构与 CI 收口（2026-10-10~12，8 批次全完成）
+
+- **结构重构 8 批次全部完成**：tests 会话编号目录归位（9→语义化目录）/ 深度 3 违规 7→5 /
+  删死文件 / 修坏引用 + 3 份索引文档 / aXX 脚本 15→0（拆活链路 `ppt_pages/` 与探针 `_archive/`）/
+  5 份边界 README / `desktop-conversion/` 子仓并入主仓（176 文件，**gitlink 0**）/ 全链路验收 10 项全过。
+  **测试收集数 400 全程未变**（零丢失）；计划任务引用的 6 个脚本 6/6 在位（类 20.212 防线）。
+  规划与验收：`docs/design/2026-10-10-structure-refactor-plan.md`（含 §七 CI 全红台账、§八 验收、§九 收口）。
+- **CI 连续 9+ 次全红已终结**：根因 = `requirements.txt:43` 裸 `datasets` 传递引入
+  `pyarrow>=24`，而 `:66` 写死 `numpy==1.26.2`，pyarrow 26 起硬性要求 numpy≥2.0 →
+  `embedding_service` import 失败 → 连锁 64 条红灯。**非 2026-10-10 改动引入**
+  （10-09 的 run 已有 33 处同错），10-10 的 embedding executor 只是让它被更多测试 import 而暴露。
+  修法 = 钉 `pyarrow==25.0.1`（与生产对齐），**不升 numpy 2.x**（ABI 破坏面）。
+  ⚠️ `datasets` **仍是裸声明**，下次它升级可能再触发同类冲突。
+- **workflow 审计**（`docs/audit/2026-10-12-workflow-audit.md`）：11 → 保留 5 / 删重复段 1；
+  ⚠️ 审计报告曾误判 `image-scan` "建议删"，执行 agent 交叉验证后**推翻**
+  （`tests/trivy/test_workflow_exists.py:20` 断言其存在且未归档，删了会打红硬门；
+  且它是 L-8 **活跃治理项**，10-07/08/09 连落 3 commit）。
+- **`.trivyignore` 已建并接线**（4 条已知未修复项，每条带实测依据与复查条件）——
+  但**不会让门禁转绿**：门禁带 `ignore-unfixed: true`，无上游修复版的本来就不报。
+  真因是另一批**有修复版但未升级**的依赖（升 `websockets` 12→15 会连带 uvicorn/fastapi
+  栈改造），**属独立立项**。
 
 ## 状态快照档案（2026-08-04 → 2026-09-18）
 
@@ -358,6 +381,31 @@
   真正的损失只有: ①幂等哨兵丢失 → 下次回填会与现存 inline 内容**叠加重复**(修前勿跑);
   ②1 个孤儿 chunk。**主指挥 2026-10-09 裁定: 按"未启用特性"处理, 不启用、不回填、不修中文
   占位符**。将来若论文改写英文 "Fig. N" 或确有回填需求, 必须先修幂等缺陷再动。
+- **类 20.222**: **CI 硬门必须真的挡得住 —— 开保护前先修红、绿了再开** ——
+  2026-10-12 实测 `gh api branches/main/protection` → **404**、`rulesets` → **`[]`**,
+  即**从未有过任何 required check**。而 `server-tests-baseline.yml:15-18` 注释白纸黑字写
+  "任一片失败即红, **阻塞合并**", `continue-on-error` 也确实摘了 —— **红叉亮着, 却从未
+  挡过任何一次 push**。同轮审计还发现该 workflow **连续 9+ 次全红** (2026-09~10-10)。
+  **三条纪律**:
+  ①**"注释宣称阻塞"与"实际阻塞"是两件事** —— 类 20.220 的变体: 不止状态字段会骗人,
+     **配置注释也会骗人**。判断门禁是否真实, 唯一可靠办法是
+     `gh api repos/<owner>/<repo>/branches/main/protection` 回读, **不是读 yml**。
+  ②**开保护前必须先把红修绿** —— 反序会让每次 push 都被挡, 寸步难行。
+     本次顺序: 定位 4 类根因 → 一次推送转绿 → **连续 3/3 全绿** → 才开保护。
+  ③**required checks 在 matrix 下必须逐个 job 列出** —— 本仓是 8 片 matrix
+     (`shard 0`~`shard 7` + `Merge baseline summary` 共 **9 个 context**)。
+     只填 workflow 名 `Server Tests Baseline (full tests/)` **一个都匹配不上, 等于没保护**。
+     取精确名的方法: `gh api repos/<repo>/commits/<sha>/check-runs --jq '.check_runs[].name'`。
+  **2026-10-12 已开启的配置** (`enforce_admins=false` ⇒ **管理员直推不受影响**,
+  实测 empty commit 推送成功): required 9 个 context / `strict=true` /
+  `allow_force_pushes=true` / **`allow_deletions=false`** (禁删 main)。
+  ⚠️ `enforce_admins=false` 的含义是**管理员也能绕过** —— 这道门防误推与非管理员误操作,
+  **防不住主动绕过**; 若哪天要求连管理员也必须等 CI, 改 `true`, 但日常推送会变成
+  "推分支 → 等 13min CI → 合 main"。
+  ⚠️ **`gh api -f` 全按字符串传**, `enforce_admins=false` 会报
+  `"false" is not a boolean`; 且 **`required_pull_request_reviews` / `restrictions`
+  即使要设 null 也必须显式传**, 否则 422 `weren't supplied`。
+  正确姿势: `--input <json>` 一次性传完整 body。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务三层缺陷已于 2026-10-09 全修
   (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
   rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
