@@ -9,6 +9,7 @@ from app.models.knowledge_entity import KnowledgeEntity, EntityCoOccurrence
 from app.models.kg_entity import KGEntity  # PR8 (W94 +0): 知识图谱扁平实体 (与 KnowledgeEntity SPO 三元组互补)
 from app.models.knowledge_hypothesis import KnowledgeHypothesis
 from app.models.knowledge_multimodal import KnowledgeImage, KnowledgeExtraction  # Phase 7
+from app.models.knowledge_page_transcript import KnowledgePageTranscript  # 迁移 144 (agent44): PPT 整页视觉转写
 from app.models.knowledge_layout import KnowledgeLayout  # Phase 8 vision 看整篇
 from app.models.reminder import Reminder
 from app.models.billing import (  # 2026-09-12: 补注册商业表 (原仅 alembic 138 建, create_all 注册表缺失 → 测试库无表)
@@ -65,6 +66,7 @@ __all__ = [
     "AgentTrace",
     "KnowledgeImage",       # Phase 7 多模态
     "KnowledgeExtraction",  # Phase 7 多模态
+    "KnowledgePageTranscript",  # 迁移 144 (agent44): PPT 整页视觉转写
     "KnowledgeLayout",      # Phase 8 vision 看整篇
     "SearchLog",             # v31 检索质量埋点
     "ChatSession",           # #043 账号持久化

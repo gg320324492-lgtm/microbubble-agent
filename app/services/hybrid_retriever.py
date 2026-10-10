@@ -1268,6 +1268,70 @@ async def _retrieve_with_weights_impl(
     except Exception as _e:
         logger.debug(f"[W100-RAG-5] multimodal hook skip: {_e}")
 
+    # 3b) 整页视觉转写召回 (agent44) — 与第 5 路同款「rerank 前折算进 score」
+    # 合并键沿用 knowledge_id: 页面命中折算到同一篇文档上, 不新增结果形态。
+    # 降级语义与第 5 路一致 (异常/空 → 静默跳过, 不影响文本四路)。
+    try:
+        from app.rag import config as _rag_config
+
+        if _rag_config.PAGE_TRANSCRIPT_RETRIEVER_ENABLED:
+            from app.services.page_transcript_retriever import PageTranscriptRetriever
+
+            _pt_weight = float(_rag_config.PAGE_TRANSCRIPT_RETRIEVER_WEIGHT)
+            if _pt_weight > 0:
+                _pt_results = await PageTranscriptRetriever(db).search_pages(
+                    query=query,
+                    top_k=top_k,
+                )
+                if _pt_results:
+                    _pt_merged = {
+                        item.get("id"): dict(item)
+                        for item in raw_results
+                        if item.get("id") is not None
+                    }
+                    for _pt in _pt_results:
+                        _pt_kid = _pt.get("knowledge_id")
+                        if _pt_kid is None:
+                            continue
+                        _pt_weighted = float(_pt.get("score") or 0.0) * _pt_weight
+                        _pt_existing = _pt_merged.get(_pt_kid)
+                        if _pt_existing is None:
+                            _pt_standalone = dict(_pt)
+                            _pt_standalone["score"] = _pt_weighted
+                            _pt_standalone["page_transcript_score"] = float(
+                                _pt.get("score") or 0.0
+                            )
+                            _pt_merged[_pt_kid] = _pt_standalone
+                        else:
+                            _pt_existing["page_transcript_score"] = float(
+                                _pt.get("score") or 0.0
+                            )
+                            _pt_existing["page_transcript_boost"] = _pt_weighted
+                            _pt_existing.setdefault("page_transcript_matches", []).append(
+                                {
+                                    "page_number": _pt.get("page_number"),
+                                    "similarity": float(_pt.get("score") or 0.0),
+                                }
+                            )
+                            _pt_existing.setdefault("retrieval_methods", []).append(
+                                "page_transcript"
+                            )
+                            _pt_existing["score"] = (
+                                float(_pt_existing.get("score") or 0.0) + _pt_weighted
+                            )
+                    raw_results = sorted(
+                        _pt_merged.values(),
+                        key=lambda item: float(item.get("score") or 0.0),
+                        reverse=True,
+                    )[: max(top_k * 2, 10)]
+                    logger.debug(
+                        "[agent44] page_transcript hook applied: pages=%d weight=%.3f",
+                        len(_pt_results),
+                        _pt_weight,
+                    )
+    except Exception as _e:
+        logger.debug(f"[agent44] page_transcript hook skip: {_e}")
+
     if not raw_results:
         return []
 

@@ -123,6 +123,22 @@ MULTIMODAL_RETRIEVER_WEIGHT: float = float(
     os.getenv("MULTIMODAL_RETRIEVER_WEIGHT", "0.15")
 )
 
+# ===== 整页视觉转写召回 (agent44, 2026-10-10) =====
+# PPT/文档「一页一图」的视觉转写文本 (迁移 144 knowledge_page_transcripts)
+# 独立于第 5 路: 第 5 路召回 knowledge_images 的**单张图** OCR, 本路召回
+# **整页**转写。落点是 kb 孪生行 (storage_mode='kb'), 故第 5 路的
+# storage_mode 硬过滤一行未改, 既有 5446 行候选池零影响。
+# 权重默认低于第 5 路: 整页转写覆盖面广、单页颗粒度粗, 与原生解析文本
+# 重叠度高, 过高的权重会把整页视觉噪声顶到原生正文之上。
+PAGE_TRANSCRIPT_RETRIEVER_ENABLED: bool = (
+    RAG_FRAMEWORK_ENABLED
+    and os.getenv("PAGE_TRANSCRIPT_RETRIEVER_ENABLED", "1").lower()
+    in ("1", "true", "yes")
+)
+PAGE_TRANSCRIPT_RETRIEVER_WEIGHT: float = float(
+    os.getenv("PAGE_TRANSCRIPT_RETRIEVER_WEIGHT", "0.10")
+)
+
 # ===== W100-RAG-6 Temporal Retriever 时间衰减 =====
 # 仅追加, 不改既有 19 项配置 (8 框架 + 5 RAG-1 + 2 RAG-2 + 2 RAG-3 + 4 RAG-4 + 2 RAG-5)
 # 1) TEMPORAL_DECAY_ENABLED — 总开关 (默认 True)
