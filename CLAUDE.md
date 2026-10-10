@@ -1061,6 +1061,32 @@ CLAUDE.md W67 第 41 步已记录基线: 锚点范式守卫 — 0 production cod
 - 件 3 PWA 三档（frontend=是/否/子集，PR5 改路径实战，HOTFIX-01 修 Play 实战）
 - 派工 v11 段 9 锚点前缀规则（防止并行 agent 撞号，6 个 W89 分支在途实战）
 - 派工 v11 §13 仓库实情真查（5 子节 + 派生 5 铁律）
+
+### 派工纪律 v12（2026-10-12 补 3 条，全部来自当日实战）
+
+- **纪律 A（后台进程必须自己收尾）**：agent **返回报告前必须清理它自己启动的后台进程**
+  （`docker exec -d`、pytest 长跑、`&` 起的脚本）。当日教训：某 agent 交完报告后，
+  容器里**遗留 2 个跑 CPU 的 pytest**（`tests/rag/` 全量），既占资源又会跟后续测试
+  **抢同一个测试库**（本项目已知坑：并发跑同库会互相 `DROP SCHEMA`）。
+  **派工 prompt 必须写明"返回前清理自己启动的进程"**，并在交付报告里附清理证明。
+  收尾自查用 `/proc/<pid>/cmdline` 遍历（容器内**无 `pgrep`**，`ps` 也常缺——
+  静默返回 0 会让人误判成"进程没了"，见 2026-10-10 误判实录）。
+  ⚠️ **自查时排除探测命令自己**：用 `bash -c "...pytest..."` 遍历时，探测命令的
+  cmdline **自己就含 "pytest" 字样**，会被自己数进去 —— 实测因此差点误杀无辜 shell。
+  必须 `[ "$pid" = "$$" ] && continue` 排除自身。
+- **纪律 B（agent 的结论必须交叉验证后才入库）**：当日连续 3 次 agent 推翻主指挥判断，
+  **每次都对** —— ①workflow 审计报告建议删 `image-scan`，执行 agent 交叉验证后推翻
+  （有测试断言其存在 + 它是活跃治理项）；②主指挥派"补 `.trivyignore`"，agent 实测
+  发现方向本身错（门禁带 `ignore-unfixed: true`）；③主指挥据 4 条证据判定 `datasets`
+  可删并**已提交**，agent 用 import blocker 证伪（上游有未声明的硬 import）。
+  ⇒ **纪律**: 主指挥给 agent 的"事实"若**来自上游 agent 的报告**，必须要求执行方
+  **实测复现**而非转述；主指挥自己下判断前，若该判断会**删除/改动生产接线**，
+  优先派一个**只做取证的 agent** 拿"可否证"的证据。
+  **反向自省**: agent 推翻我 3 次 = 我这 3 次都只做了"看起来充分的静态取证"。
+- **纪律 C（`docker exec -d` 必须重定向日志）**：后台启动的容器内命令若不重定向
+  stdout/stderr，**出问题时既查不到进程也查不到输出**（当日两次因此误判进程已死）。
+  标准写法: `docker exec -d ... sh -c '<cmd> > /tmp/x.log 2>&1'`。
+  ⚠️ Git Bash 下 `docker exec` 的路径参数会被改写，需加 `MSYS_NO_PATHCONV=1`。
 - 派工 v11 CHECKLIST §F verify_*.sh fallback 条款
 - **派工 v10 段 7 E50 实战拦截**：WORKTREE-01 拦截"11 untracked"误判（实为 12 active worktree），0 rm -rf 0 损失
 - **派工 v10 段 7 E48 锚点编号冲突 reconcile**：MERGE-05 squash 解决 GRAND-CLOSURE 477 vs HOTFIX-01 477 共占编号空间
