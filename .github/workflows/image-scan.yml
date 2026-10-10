@@ -67,6 +67,11 @@ jobs:
           severity: 'CRITICAL,HIGH'
           format: 'table'
           exit-code: '0'
+          # L-8: 引用已接受漏洞基线 (见 .trivyignore 全文注释)。
+          # 该入参由 trivy-action entrypoint.sh 处理: 把各文件 cat 合并成
+          # ./trivyignores 并 export TRIVY_IGNOREFILE。**必须显式传** ——
+          # 不传则本文件完全不被读取 (2026-10-11 实测确认原 workflow 零引用)。
+          trivyignores: '.trivyignore'
 
       # 构建镜像。原为无条件 continue-on-error: true —— L-9 (收尾计划 §4.11):
       # schedule/dispatch 硬路径上构建失败会被容错, 后续三步扫描又全部以
@@ -93,6 +98,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-${{ matrix.name }}.sarif'
           exit-code: '0'
+          trivyignores: '.trivyignore'
 
       - name: Upload sarif to code scanning
         if: steps.build.outcome == 'success'
@@ -113,3 +119,4 @@ jobs:
           format: 'table'
           ignore-unfixed: true
           exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          trivyignores: '.trivyignore'
