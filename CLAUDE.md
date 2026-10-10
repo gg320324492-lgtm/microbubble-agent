@@ -314,7 +314,7 @@
      已污染的用 `git commit --amend -F <file>` 修 (未 push 时安全,
      已 push 用 `git push --force-with-lease`)。
   ⚠️ 本机 Python **默认 GBK**, 任何 `print()` 中文都可能抛
-  `UnicodeEncodeError: 'gbk' codec can't encode character '�'` ——
+  `UnicodeEncodeError: 'gbk' codec can't encode character <U+FFFD>` ——
   见到这个报错就是编码问题, 不是代码逻辑问题。
 - **类 20.217**: alpine 容器里 healthcheck 用 `localhost` = 解析 `::1`, nginx 只听 IPv4 时
   探针永远 connection refused → 假 unhealthy 长期遮蔽真状态; 探针一律 `127.0.0.1` 字面量,
