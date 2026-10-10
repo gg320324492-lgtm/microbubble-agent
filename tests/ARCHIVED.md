@@ -46,7 +46,7 @@
 ### 需 playwright + 有效 TOKEN（2 个）
 
 ```
-tests/a11y_violation_x2/test_no_real_violation.py
+tests/a11y/test_no_real_violation.py
 tests/test_mobile_v34_commercial_e2e.py
 ```
 
@@ -55,11 +55,11 @@ tests/test_mobile_v34_commercial_e2e.py
 ```
 tests/alembic/test_pre_commit_hook_passes.py
 tests/api/v1/test_drive_endpoint_envelope.py
-tests/axe_violation_x19/test_axe_x19_no_real_violation.py
-tests/brief_v41_x6/test_doc_exists.py
+tests/a11y/test_axe_x19_no_real_violation.py
+tests/precommit/test_doc_exists.py
 tests/e2e/test_anchor_scripts_smoke.py
 tests/e2e/test_silly_gliding_dahl_implementation.py
-tests/icon_wr1/test_play_to_video.py
+tests/visual/test_play_to_video.py
 tests/integration/test_api_tasks.py
 tests/integration/test_chat_fast_vs_deep.py
 tests/integration/test_chat_v2_e2e.py
@@ -131,8 +131,8 @@ tests/unit/test_tool_call_converter.py
 ### 环境依赖类（5 个）
 
 ```
-tests/ci_real_x29/test_deployment.py
-tests/inject_auth_x4/test_fail_loud.py
+tests/ci/test_deployment.py
+tests/security/test_fail_loud.py
 tests/test_cleanup_safety.py
 tests/test_w86_mini_13_c_kb_summary_e2e.py
 tests/test_w86_mini_4_entity_graph_perf_e2e.py
