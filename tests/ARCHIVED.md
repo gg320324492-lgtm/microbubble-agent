@@ -3,6 +3,8 @@
 > **2026-09-30 S1.2 收敛 R5 建立**。基线 CI 实测 829 条红灯，收敛时对**失去回归价值的存量测试**做了模块级归档（`pytest.skip(..., allow_module_level=True)`）。
 > 文件**全部保留原位**，只跳过执行；每个文件头部都写明了 skip 原因。
 
+> **2026-10-11 路径同步**：结构重构批次 1 把 6 个归档文件从会话编号目录（`a11y_violation_x2` / `axe_violation_x19` / `brief_v41_x6` / `icon_wr1` / `ci_real_x29` / `inject_auth_x4`）迁到语义化目录（`a11y/` / `precommit/` / `visual/` / `ci/` / `security/`），本表路径已同步。文件头部的 `pytest.skip` 注释随文件走，内容未改。
+
 ## 为什么要归档，而不是修
 
 收敛中发现大量测试断言的是**已经不存在的东西**：
