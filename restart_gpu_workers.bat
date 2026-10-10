@@ -1,5 +1,8 @@
 @echo off
 chcp 65001 >nul
+rem 2026-10-10: VIBEVOICE_HOME 从已迁走的 .workbuddy\vibevoice-test 改到 data\vibevoice-test
+rem (与 scripts\start_gpu_asr_daemon.bat 同口径; 旧路径已不存在, 原脚本跑必然失败)
+if "%VIBEVOICE_HOME%"=="" set "VIBEVOICE_HOME=E:\microbubble-agent\data\vibevoice-test"
 echo === 重启 GPU ASR 服务（隐藏窗口运行，日志写入 logs\）===
 
 echo [1/3] 结束现有 app.gpu_worker 进程...
@@ -11,10 +14,10 @@ timeout /t 8 /nobreak >nul
 if not exist "E:\microbubble-agent\logs" mkdir "E:\microbubble-agent\logs"
 
 echo [2/3] 启动 gpu-asr-daemon (:8005, 日志 logs\gpu-asr-daemon.log)...
-powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -WorkingDirectory 'E:\microbubble-agent' -FilePath 'E:\microbubble-agent\.workbuddy\vibevoice-test\venv-gpu\Scripts\python.exe' -ArgumentList '-m','app.gpu_worker.server' -RedirectStandardOutput 'E:\microbubble-agent\logs\gpu-asr-daemon.log' -RedirectStandardError 'E:\microbubble-agent\logs\gpu-asr-daemon.err.log'"
+powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -WorkingDirectory 'E:\microbubble-agent' -FilePath '%VIBEVOICE_HOME%\venv-gpu\Scripts\python.exe' -ArgumentList '-m','app.gpu_worker.server' -RedirectStandardOutput 'E:\microbubble-agent\logs\gpu-asr-daemon.log' -RedirectStandardError 'E:\microbubble-agent\logs\gpu-asr-daemon.err.log'"
 
 echo [3/3] 启动 gpu-streaming (:8006, 日志 logs\gpu-streaming.log)...
-powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -WorkingDirectory 'E:\microbubble-agent' -FilePath 'E:\microbubble-agent\.workbuddy\vibevoice-test\venv-gpu\Scripts\python.exe' -ArgumentList '-m','app.gpu_worker.streaming_server' -RedirectStandardOutput 'E:\microbubble-agent\logs\gpu-streaming.log' -RedirectStandardError 'E:\microbubble-agent\logs\gpu-streaming.err.log'"
+powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -WorkingDirectory 'E:\microbubble-agent' -FilePath '%VIBEVOICE_HOME%\venv-gpu\Scripts\python.exe' -ArgumentList '-m','app.gpu_worker.streaming_server' -RedirectStandardOutput 'E:\microbubble-agent\logs\gpu-streaming.log' -RedirectStandardError 'E:\microbubble-agent\logs\gpu-streaming.err.log'"
 
 echo 等待 5 秒让服务就绪...
 timeout /t 5 /nobreak >nul
