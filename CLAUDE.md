@@ -296,6 +296,26 @@
   会被转义吞成控制字符 (本次 2 个任务路径腐坏: `scripts\tunnel`→`scripts< TAB>unnel`、
   `dft-service\run`→`dft-service<CR>un`), 任务永远 exit 1 且**日志一行不写** (进程根本没启动)。
   注册后必须 `Get-ScheduledTask | % Actions[0].Execute` 回读比对长度 + 无控制字符。
+  **⚠️ 同源第 2 形态 (2026-10-12 实战, 当日自查抓到 7 次): Git Bash 的 GBK 环境
+  会把 heredoc 里的中文吞成 U+FFFD (`\xef\xbf\xbd`)** —— 表现为 commit message
+  或文件里个别汉字消失/变成替换字符, **git 不报错、CI 不报错、测试不报错**,
+  只有主动 `grep -o $'\xef\xbf\xbd'` 才看得见 (今日 7 次全靠这条自查拦住,
+  否则污染会永久进 git 历史且**不可见**)。
+  **同源第 3 形态**: 本机 Python 读中文文件默认 GBK,
+  `open(p,encoding='utf-8')` 缺失即 `UnicodeDecodeError: 'gbk' codec`。
+  **三条纪律**:
+  ① **写含中文的内容一律走文件 + 显式编码**, 不直接写 heredoc:
+     `git log -1 --format=%B > f; PYTHONUTF8=1 python -c "改字节"`;
+ ② **改完必自查**: `grep -o $'\xef\xbf\xbd' <file> | wc -l` 期望 **0**
+     (commit message 用 `git log -1 --format=%B | grep -c $'\xef\xbf\xbd'`);
+  ③ **修字节用 Python 字节层替换, 不用 str.replace** ——
+     str 层会再经一次编码转换, 改完往往还是坏的; 实测用
+     `raw.replace(b'...'.encode()+B*3+b'...', b'...')` 一次到位;
+     已污染的用 `git commit --amend -F <file>` 修 (未 push 时安全,
+     已 push 用 `git push --force-with-lease`)。
+  ⚠️ 本机 Python **默认 GBK**, 任何 `print()` 中文都可能抛
+  `UnicodeEncodeError: 'gbk' codec can't encode character '�'` ——
+  见到这个报错就是编码问题, 不是代码逻辑问题。
 - **类 20.217**: alpine 容器里 healthcheck 用 `localhost` = 解析 `::1`, nginx 只听 IPv4 时
   探针永远 connection refused → 假 unhealthy 长期遮蔽真状态; 探针一律 `127.0.0.1` 字面量,
   且优先探"穿过反代到上游"的路径 (/health 经 nginx→app) 让 healthcheck 本身就是端到端验证。
