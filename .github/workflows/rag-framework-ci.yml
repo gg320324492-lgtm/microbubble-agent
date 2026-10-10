@@ -1,26 +1,50 @@
-name: RAG Framework CI
+name: Alembic Single-Head Guard
 
 # [RAG-FW-12 W98 +0] CI workflow 注册 — Hybrid RAG Stack 框架测试
+# [2026-10-11 瘦身] 删掉 pytest 段, 只保留 alembic 单 head 守卫
 #
-# 设计:
-#   - tests/rag_framework/ 全部 mock (conftest patch sys.modules), CI 无需装
-#     langchain/llama-index/langfuse 框架依赖 → 精装最小依赖集, 避免 torch
-#     (~2GB CPU wheel) + funasr/modelscope 等重依赖拖慢每次 PR.
-#   - pytest + pytest-asyncio (root pytest.ini asyncio_mode=auto) + app 轻依赖链
-#     (pydantic-settings / python-dotenv / httpx / sqlalchemy / alembic 及其依赖)
-#     即可把 app/rag 模块 import 起来 (app/rag/*.py 顶层只依赖 app.rag.config
-#     + app.rag.gate, 框架 import 全部在函数内 try/except).
-#   - SKIP_DB_SETUP=1: tests/conftest.py 条件跳过 DB 初始化与重型 import
-#     (app.main / app.core.database / 全模型), rag_framework 测试不需要 DB.
-#   - alembic heads 守卫: 断言"恰为 1 个 head"这个不变量 (串单链纪律,
-#     CLAUDE.md 永久锚点). **不写死 head 编号** —— 编号是随迁移推进漂移的快照,
-#     硬编码它等于让守卫每加一个迁移就红一次, 却不提供任何真实保护。
-#     当前 head 编号以实测为准 (2026-10-02 容器实测 = 141_zb2_backup_kb_purge).
-#     alembic heads 只读脚本目录, 不加载 env.py, 不连 DB.
+# 为何保留 (本 workflow 唯一不可替代的职责):
+#   `alembic heads` 守卫断言"恰为 1 个 head"这个不变量 (串单链纪律,
+#   CLAUDE.md 永久锚点 / 类 20.171 / 20.220)。实测全仓**只有本 workflow**
+#   断言 head 数 —— 其余 workflow 出现 alembic 字样的三处都不是这个不变量:
+#     - build-image.yml:19      'alembic/**' 只是 paths 过滤 (触发条件)
+#     - qa-bench-smoke.yml:273  'alembic stamp head' 是运行期补版本号
+#     - qa-bench-baseline.yml:84 'alembic==1.13.0' 只是装个包
+#   并行 migration agent 都声明同一个 down_revision 会在链上分叉,
+#   `alembic upgrade head` 直接报 Multiple head revisions 阻塞部署
+#   (2026-07-24 串单链纪律事故)。单 head 才是那个不变量。
+#
+# 为何删掉 pytest 段 (tests/rag_framework/ 9 个 test_*.py):
+#   这 9 个文件位于 tests/ 之下, 已被 server-tests-baseline.yml:108 的
+#   `find tests -name "test_*.py" | sort` 收进 8 片 round-robin 分片, 且该
+#   workflow 走 `pip install -r requirements.txt` 全依赖 ⇒ 执行层面纯重复。
+#   连带甩掉那条"手写精简依赖列表"的长期维护债 —— 它曾漏装 jieba /
+#   anthropic / pgvector / greenlet 四个包, 致本门禁长期红 (2026-10-01/02)。
+#
+# ⚠️ 若将来要把 pytest 段加回来, 先读下面两条教训再动 (它们是那 4 次
+#    ModuleNotFoundError 排查换来的, 不是能重走的弯路):
+#   1. **判"CI 缺哪个包"不能只 grep 日志** —— tests/conftest.py 的 mock
+#      `_importer` 会把 ModuleNotFoundError 吞成 AttributeError (形如
+#      `module 'app.services' has no attribute 'hybrid_retriever'`)。
+#      当时据此误判过"pgvector 不是缺口"。必须在 CI 装出的环境里逐个 import 断言。
+#   2. **"容器绿 / CI 红"的分叉点在 SQLAlchemy 版本**: requirements.txt:8 pin
+#      `SQLAlchemy==2.0.23` (greenlet 是核心依赖, 装 sqlalchemy 即自动带入);
+#      而任何**未 pin** 的裸装 sqlalchemy 会解析到 2.1.x —— greenlet 降级到
+#      `extra == "asyncio"`, 裸装不带 ⇒ sqlalchemy.ext.asyncio 在 import 期就
+#      抛错。requirements.txt 全文未出现 greenlet (它是传递依赖, 谁都不必显式
+#      声明), 所以任何手写依赖列表都会命中这个坑。根治手段是改回
+#      `-r requirements.txt` (代价 = 连带装 torch ~2GB CPU wheel, 拖慢每次 CI)。
+#
+# 守卫实现要点 (原样保留, 未改动):
+#   - **不写死 head 编号** —— 编号是随迁移推进漂移的快照, 硬编码它等于让守卫
+#     每加一个迁移就红一次, 却不防任何真问题 (类 20.220: 自动化断言禁止写死
+#     会变的编号, 改校验不变量)。
+#   - alembic heads 只读脚本目录, 不加载 env.py, 不连 DB。
+#   - 当前 head 编号以实测为准 (2026-10-02 容器实测 = 141_zb2_backup_kb_purge;
+#     后续已推进, 此处仅留档, 断言不依赖它)。
 #
 # 注意 (对齐现有 workflow 风格: actions/checkout@v4 + actions/setup-python@v5
-#   + permissions: contents: read, 参考 qa-bench-smoke.yml; qa-bench-ci.yml D5
-#   门禁已于 2026-10-07 退役):
+#   + permissions: contents: read):
 #   - 不在此 workflow 内改任何 app/ 文件; 不动 alembic; 不改现有 workflow.
 
 on:
@@ -34,10 +58,10 @@ permissions:
   contents: read
 
 jobs:
-  rag-framework-tests:
-    name: RAG framework tests (mock mode)
+  alembic-single-head:
+    name: Alembic single-head guard
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,84 +70,22 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: requirements.txt
 
-      # 精装最小依赖集 (见 workflow 头注释). 不 --no-deps:
-      #   --no-deps 会跳过依赖解析, pytest 的 pluggy/exceptiongroup/iniconfig
-      #   等传递依赖丢失 → pytest 收集阶段直接崩; 且 langchain-core 0.3
-      #   会被显式装进去 (requirements.txt 声明的 langchain-core 依赖链
-      #   通过 deps 正常解析, 无 torch 侧漏).
-      - name: Install core deps
+      # 只装 alembic 一个包 (守卫不连 DB, 故无需 asyncpg / sqlalchemy / 框架依赖)。
+      # 原先此处是 ~13 个包的手写精简列表 —— 已随 pytest 段一并删除。
+      # 不配 cache: pip / cache-dependency-path: requirements.txt —— 已不再从
+      # requirements.txt 安装, 留着会按一个我们并不安装的文件取缓存, 白付 restore
+      # 延迟且语义误导。
+      - name: Install alembic
         run: |
           python -m pip install --upgrade pip
-          # 2026-10-01 S3.7: 补 jieba + rank-bm25。两者都在 requirements.txt:61-62 声明,
-          # 且被 app/services/bm25_service.py:11-12 模块级 import, 但本列表是 L48-52 从
-          # `-r requirements.txt` 改写而来时漏掉的 → CI 收集阶段 ModuleNotFoundError,
-          # 整个 RAG 门禁长期红。根治方案(改回 -r requirements.txt, 会连带装 torch 拖慢 CI)
-          # 留档单独立项, 本轮只做最小改动让门禁真绿。
-          # 2026-10-02 S3.7-R3 复检补: 再补 anthropic。同型漏依赖 ——
-          #   requirements.txt:23 已声明 anthropic>=0.39.0, 但本手写列表漏了它。
-          #   app/core/llm.py 顶层 import anthropic, 而 rag 测试会经
-          #   patch.dict 触发 app.services.knowledge_qa_service 的真实 import
-          #   → 12 条用例挂在 ModuleNotFoundError: No module named 'anthropic'。
-          #   依据: run 37002426969 日志里去重后 ModuleNotFoundError 只有这一个;
-          #   容器内(全依赖)同三个文件实测 22 / 14 / 4 passed 全绿。
-          #   版本约束与 requirements.txt:23 保持一致, 不擅自收紧。
-          #
-          # 2026-10-02 复检第二轮(实测 run 37009719090): 补 anthropic 后 12 条 -> 6 条。
-          #   剩余 6 条报的是 `AttributeError: module 'app.services' has no attribute
-          #   'knowledge_qa_service' / 'hybrid_retriever'` —— **不是** ModuleNotFoundError。
-          #   真因仍是缺依赖, 只是原始异常被 mock 的 _importer 吞掉了:
-          #   patch.dict 触发 app.services.knowledge_qa_service 真实 import 链 ->
-          #   knowledge_qa_service.py:10 -> app.models.knowledge ->
-          #   app/models/__init__.py:7 -> knowledge_chunk.py:29 -> `from pgvector.sqlalchemy
-          #   import Vector` -> ModuleNotFoundError -> mock 报成 AttributeError。
-          #   复检官本机 venv 直接 import 该模块复现了完整链(见 commit message)。
-          #   => **只看 CI 日志里的 ModuleNotFoundError 会漏判**。
-          #   requirements.txt:57 已声明 pgvector>=0.3.6,<1.0.0, 同样被本手写列表漏掉。
-          # 教训留档: 曾误判 pgvector "不是 CI 的缺口"(理由: 日志里没有它的
-          #   ModuleNotFoundError)。那个判据是错的 —— 异常被 mock 吞了。
-          #   **判"CI 缺哪个包"不能只 grep 日志, 必须能在 CI 装出的环境里逐个 import 断言。**
-          #
-          # 2026-10-02 复检第三轮(忠实 Docker 环境 ubuntu + py3.11 + 本行 pip 列表实测):
-          #   补完 anthropic + pgvector 后剩 3 条失败, 真因是 **缺 greenlet**, 不是缺包名本身。
-          #   两个报错都是它的二次症状:
-          #     - test_agent_retriever.py:218/236 `TypeError: object of type 'NoneType' has no len()`
-          #       -> framework_gate 捕到 ImportError(greenlet 缺) 后 fallback_fn=None 返 None。
-          #     - test_dense_sparse_routing.py:261 `AttributeError: module 'app.services' has no
-          #       attribute 'hybrid_retriever'` -> patch() 自己要先 import 目标模块, import 失败。
-          #   根因链: app/services/hybrid_retriever.py:15 顶层 `from sqlalchemy.ext.asyncio import
-          #   AsyncSession` -> sqlalchemy.ext.asyncio 在 import 期就要求 greenlet(非运行期)。
-          #
-          #   **为什么不直接写 greenlet**: 本行原本写的是裸 `sqlalchemy`, 未 pin 版本, pip 解析到
-          #   **SQLAlchemy 2.1.2**; 而 requirements.txt:8 pin 的是 **==2.0.23**。两版差异是:
-          #     - 2.0.23: greenlet 是**核心**依赖(带平台 marker), 装 sqlalchemy 即自动带上
-          #     - 2.1.2 : greenlet 降级到 `extra == "asyncio"`, 裸装**不带** greenlet
-          #   所以生产容器(pip -r requirements.txt, 2.0.23)有 greenlet 而 CI(2.1.2)没有 ——
-          #   这正是"容器绿 / CI 红"的分叉点。requirements.txt 全文**未**出现 greenlet,
-          #   它是 SQLAlchemy 的传递依赖, 谁都不必显式声明。
-          #   修法二选一实测均可(见下方对比), 采纳 pin 版:
-          #     - `sqlalchemy==2.0.23`         : 与 requirements.txt 对齐, greenlet 自动带入
-          #     - `sqlalchemy[asyncio]==2.0.23`: 显式声明 extras, 不依赖传递依赖推断, 意图更清楚
-          #   选后者: 即使未来 SQLAlchemy 再把 asyncio 依赖挪走, extras 仍显式要求 greenlet。
-          #   实测 ragfw:final(忠实 docker, 本行原样) 82 passed / 0 failed, 连跑 3 次稳定;
-          #   pip check 无冲突; alembic heads 守卫仍 1 head(141_zb2_backup_kb_purge)。
-          #   注: server-tests-baseline.yml:89 走 `pip install -r requirements.txt`, 天然带
-          #   greenlet, 无此隐患 —— 本 bug 仅存在于本 workflow 的手写精简列表。
-          pip install --prefer-binary --retries 10 --timeout 60 pytest pytest-asyncio pydantic-settings python-dotenv httpx "sqlalchemy[asyncio]==2.0.23" alembic pydantic jieba rank-bm25 "anthropic>=0.39.0" "pgvector>=0.3.6,<1.0.0"
-
-      - name: Run RAG framework tests (mock mode)
-        env:
-          SKIP_DB_SETUP: "1"
-        run: |
-          python -m pytest tests/rag_framework/ -v
+          pip install --prefer-binary --retries 10 --timeout 60 "alembic>=1.13"
 
       # alembic heads 只读脚本目录 (不加载 env.py, 不连 DB).
       # 输出格式: "<revision_id> (head)" 每 head 一行; revision_id 即迁移文件名.
-      # 守卫断言 = "恰为 1 个 head". 刻意不校验具体编号 (2026-10-02):
+      # 守卫断言 = "恰为 1 个 head". 刻意不校验具体编号:
       #   编号是快照会漂移, 硬编码它会让守卫在每次正常加迁移时红一次, 却不防任何
-      #   真问题。真正要拦的是"双 head" —— 并行 agent 都声明同一个 down_revision
+      #   真问题。真正要拦的是"双 head" —— 并行 agent 都声明了同一个 down_revision
       #   会在链上分叉, `alembic upgrade head` 直接报 Multiple head revisions
       #   阻塞部署 (2026-07-24 串单链纪律事故, CLAUDE.md 永久锚点)。单 head 才是
       #   那个不变量, 也是本守卫提供的全部保护。
