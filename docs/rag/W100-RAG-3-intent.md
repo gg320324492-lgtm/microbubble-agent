@@ -21,7 +21,7 @@
 | Intent Classifier | `app/rag/intent_classifier.py` (~280 行) | LLM-as-judge 分类 5 类 intent |
 | Intent Router | `app/rag/intent_router.py` (~180 行) | classify + 查表 → HybridWeights |
 | Config 扩展 | `app/rag/config.py` | 加 INTENT_CLASSIFIER_ENABLED + INTENT_FALLBACK |
-| YAML 路由策略 | `config/intent_routing.yaml` | 5 类默认 weights (参考 + 未来 yaml/DB override 留口) |
+| YAML 路由策略（**已于 2026-10-10 删除**） | ~~`config/intent_routing.yaml`~~ | 曾是 5 类默认 weights 的 ops 参考件，yaml 预留入口**从未接线**；权重实际硬编码在 `app/rag/intent_router.py` `DEFAULT_INTENT_WEIGHTS` |
 | Hook 接入 | `app/services/hybrid_retriever.py` | retrieve_with_weights 入口加 intent hook (W99-RAG-1 cache 之前) |
 | 单测 | `tests/rag/test_intent_classifier.py` (25 case) | 5 类 / LLM 失败 / parse / 边界 / 路由 / 配置 |
 | E2E | `tests/rag/test_rag_intent_e2e.py` (22 case) | 5 类 e2e + 失败降级 + 串联 W99-RAG-1/2 |
@@ -38,7 +38,7 @@
 
 - **配置化落地点**: `app/rag/intent_router.py` 的 `DEFAULT_INTENT_WEIGHTS` (module-level dict)
 - **测试可覆盖**: `IntentRouter(weights_map=custom_dict)` 或 `patch DEFAULT_INTENT_WEIGHTS`
-- **未来 PR**: yaml 文件 + DB override (本任务只埋点 `config/intent_routing.yaml` 参考)
+- **未来 PR**: yaml 文件 + DB override (原计划只埋点 `config/intent_routing.yaml` 参考, 该文件已于 2026-10-10 作为死配置删除; 如要接线需**重新新建** yaml 文件)
 
 ## 4. Hook 串联顺序 (W99-RAG-1/2/3 三 hook 共存)
 
@@ -108,7 +108,7 @@ retrieve_with_weights(query, ...)
 
 ## 10. 未来 PR 留口
 
-1. **PR-A**: yaml 文件 + DB override 接入 (本任务只埋点 `config/intent_routing.yaml` 参考)
+1. **PR-A**: yaml 文件 + DB override 接入 (原计划只埋点 `config/intent_routing.yaml` 参考, 该文件已于 2026-10-10 作为死配置删除; 接线需**重新新建** yaml 文件)
 2. **PR-B**: weights 实际传给 `_retrieve_impl` 做 per-intent 调参 (本任务只埋点, HybridRetriever.retrieve 内部按 weights 调权重)
 3. **PR-C**: recall_observability 集成 (RecallTrace 加 intent 字段, 串联 PR7)
 4. **PR-D**: qa-bench R8 200 题 5 子集真跑 (本任务只 5 题 fixture 子集)
