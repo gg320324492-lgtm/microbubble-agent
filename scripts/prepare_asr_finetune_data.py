@@ -16,8 +16,8 @@
 
 用法:
   python scripts/prepare_asr_finetune_data.py \
-      --gt meeting83_final.md --segments .workbuddy/vibevoice-test/r_7b_full.json \
-      --audio .workbuddy/vibevoice-test/meeting-083_16k.wav \
+      --gt meeting83_final.md --segments data/vibevoice-test/r_7b_full.json \
+      --audio data/vibevoice-test/meeting-083_16k.wav \
       --out data/asr_finetune/meeting083 [--min-score 0.55]
 """
 import argparse

@@ -10,7 +10,9 @@ import { ref } from 'vue'
  *   const { hash, progress, hashing, error, calc } = useFileHash()
  *   const h = await calc(file)  // 32/64 字符 hex
  *
- * 内部用 Web Worker + spark-md5 流式 4MB 切片 (1GB 文件 ~3-5s, 不卡 UI)
+ * 内部用 Web Worker 流式 4MB 切片读整文件 + SubtleCrypto SHA-256 (不卡 UI)。
+ * 2026-10-10: worker 由 spark-md5 (MD5, 32 chars) 改为 SHA-256 (64 chars),
+ * 与分片路径 sha256.worker.js / 后端 InstantUploadRequest 严格相等比对口径统一。
  *
  * 注意: worker 路径在 build 后会被 Vite 自动 inline 进 chunk, dev 模式走 dev server
  */

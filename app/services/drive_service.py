@@ -2109,6 +2109,11 @@ class DriveService:
         )
 
         # 文件夹校验 (复用 create_file 的逻辑)
+        # 2026-10-10 秒传修复: folder 此前只在 folder_id 非空分支内赋值, 而下方
+        # `if folder is not None` 无条件读它 → folder_id=None (顶级上传) 必抛
+        # UnboundLocalError 500, 秒传永远拿不到 instant:true (dedup 形同虚设)。
+        # 显式初始化 folder=None 保证顶级上传路径可用。
+        folder = None
         if folder_id is not None:
             folder = await self.get_folder(folder_id)
             if folder is None:

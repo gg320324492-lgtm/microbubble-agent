@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 BASE = Path(r"E:\microbubble-agent")
-VVT = BASE / ".workbuddy" / "vibevoice-test"
+VVT = BASE / "data" / "vibevoice-test"
 AUDIO_DIR = BASE / "data" / "meeting-audio-2026-06-27"
 OUT_ROOT = BASE / "data" / "asr_finetune"
 SR = 16000

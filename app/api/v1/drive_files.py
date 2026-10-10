@@ -335,6 +335,9 @@ async def upload_drive_file(
     # v2 PR6-P19: 用户上传时所在的视图 (specialView='team' = True)
     is_team_shared: bool = Form(False, description="v2 PR6-P19: True=团队共享盘上传, 不在个人网盘显示"),
     title: Optional[str] = Form(None, description="文件标题 (默认 = filename)"),
+    # v2 秒传修复 (2026-10-10): 前端已算好的整文件 hash (SHA-256 hex, 64 chars)。
+    # 此前该接口从不接 file_hash → knowledge.file_hash 几乎全空 → 秒传永远 miss。
+    file_hash: Optional[str] = Form(None, description="整文件 hash (SHA-256 hex), 秒传 dedup 用"),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
@@ -417,6 +420,7 @@ async def upload_drive_file(
             created_by=current_user.id,
             source_type="drive",
             is_team_shared=is_team_shared,  # v2 PR6-P19 (2026-09 单一团队空间: 入参已忽略, create_file 服务端恒置 True)
+            file_hash=file_hash,  # v2 秒传修复 (2026-10-10): 落 knowledge.file_hash
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))

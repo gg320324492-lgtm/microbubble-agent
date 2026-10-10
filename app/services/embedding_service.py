@@ -15,9 +15,11 @@ Phase 2 重构 (2026-06-24 sentence-transformers 5.6.0 升级)：
 import asyncio
 import logging
 import os
+import time
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from sentence_transformers import SentenceTransformer
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from app.services.embedding_prompts import build_embedding_prompt
 from app.services.embedding_query_policy import should_use_query_prefix
@@ -266,6 +268,123 @@ def _get_model() -> Optional[SentenceTransformer]:
     return _model
 
 
+# ============================================================================
+# 专用有界 executor（修复"线程不可取消"缺陷，2026-10-10）
+# ============================================================================
+# 缺陷背景：
+#   `generate_embedding` / `generate_embeddings` 原先把 `model.encode()` 包在
+#   `asyncio.to_thread(...)`（= 默认 ThreadPoolExecutor）里，再套 `asyncio.wait_for`
+#   超时。问题：`wait_for` 超时只 cancel 协程，**杀不死底层线程**（Python 无法强杀
+#   线程）。于是每次超时都会泄漏一个仍在跑 `model.encode()` 的线程，累积后：
+#     ① 默认池打满 → 全进程所有 `to_thread` 排队（影响 drive/ocr/file_parser 等
+#        所有共用默认池的调用方）；
+#     ② sentence-transformers / torch 内部锁被慢 encode 长期持有 → 后续 embedding
+#        调用**永久挂住**。
+#   修法（方向 A + D）：给 embedding 一个**专用、有界、跨 loop 安全**的 executor，
+#   并把并发上限设得足够小 —— 因为 sentence-transformers 的 encode 在同一个模型
+#   实例上本来就因内部锁而实质串行，N 个 worker 只会在超时时多泄漏 N 个线程，
+#   1 个 worker 泄漏面最小。超时后置 degraded 标记 + throttle 告警（不改行为，
+#   只做可观测性，避免"静默泄漏"）。
+#
+# 关键纪律（CLAUDE.md 方案 C 铁律 1 / ocr_service 事故）：
+#   本次修复**不引入任何 asyncio.Semaphore/Lock**，因此天然规避"跨 event loop 绑死"。
+#   ThreadPoolExecutor 本身不绑定 event loop（它按需创建 OS 线程），可以安全地跨
+#   `asyncio.run()` 复用 —— 而且**正是要跨 loop 复用**，才能让"被超时线程占用"的
+#   并发额度在 loop 之间也能被看到、不被无限泄漏。
+#   持有 per-loop 状态改用 `id(loop)`（整数 key）而非 `loop` 对象，避免把 loop 对象
+#   强引用在模块级字典里（loop 关闭后可回收）。
+# ============================================================================
+
+# 单进程内所有 loop 共享一个 embedding executor —— 这是有意的：线程泄漏是*进程级*
+# 资源问题，per-loop 独立 executor 会让"每个新 loop 又泄漏一份"。
+_embedding_executor: Optional[ThreadPoolExecutor] = None
+# 进程级降级标记：一旦发生过编码超时（线程被杀不掉），置 True 供健康检查/日志观测。
+_embedding_degraded: bool = False
+_embedding_degraded_since: Optional[float] = None
+# 告警限流：按 id(loop) 记录上次告警时间，避免每个任务刷屏。
+_degraded_alert_loop: Optional[int] = None
+_degraded_alert_last: float = 0.0
+_DEGRADED_ALERT_INTERVAL_SECONDS = 30.0
+_EMBEDDING_THREAD_POOL_SIZE = 1
+
+
+def _get_embedding_executor() -> ThreadPoolExecutor:
+    """返回进程级专用 embedding executor（bounded, 默认 1 worker）。
+
+    线程数刻意取小（默认 1）：sentence-transformers 在同一模型实例上编码内部本就
+    串行，多 worker 只会让超时泄漏面翻倍。上限可通过 EMBEDDING_THREAD_POOL_SIZE
+    覆盖（应急用）。
+    """
+    global _embedding_executor
+    if _embedding_executor is None:
+        _embedding_executor = ThreadPoolExecutor(
+            max_workers=_EMBEDDING_THREAD_POOL_SIZE,
+            thread_name_prefix="emb-encode",
+        )
+        logger.info(
+            f"Embedding 专用 executor 初始化: max_workers={_EMBEDDING_THREAD_POOL_SIZE}"
+        )
+    return _embedding_executor
+
+
+def _mark_embedding_degraded(reason: str) -> None:
+    """记录编码超时/异常导致的进程级降级，并做限流告警。
+
+    只在**首次**置位时打 ERROR；后续按 _DEGRADED_ALERT_INTERVAL_SECONDS 限流 WARNING，
+    避免 celery 高频任务刷屏。线程无法强杀，degraded 标记只是让"泄漏"可观测，
+    不会自动恢复（模型/进程重启才清零）。
+    """
+    global _embedding_degraded, _embedding_degraded_since
+    global _degraded_alert_loop, _degraded_alert_last
+
+    now = time.monotonic()
+    first_time = not _embedding_degraded
+    if first_time:
+        _embedding_degraded = True
+        _embedding_degraded_since = now
+
+    try:
+        loop_id = id(asyncio.get_running_loop())
+    except RuntimeError:
+        loop_id = 0
+    if first_time or loop_id != _degraded_alert_loop or (
+        now - _degraded_alert_last
+    ) >= _DEGRADED_ALERT_INTERVAL_SECONDS:
+        logger.error(
+            f"[embedding degraded] {reason} —— 超时线程无法强杀, 专用 executor "
+            f"(max_workers={_EMBEDDING_THREAD_POOL_SIZE}) 的额度可能被长期占用; "
+            f"若持续出现请重启 app/celery-worker"
+        )
+        _degraded_alert_loop = loop_id
+        _degraded_alert_last = now
+
+
+def is_embedding_degraded() -> bool:
+    """进程级降级标记（供健康检查/监控查询）。"""
+    return _embedding_degraded
+
+
+async def _run_encode_in_executor(fn, timeout: float, what: str):
+    """在专用 executor 上跑同步编码，带超时。
+
+    超时/失败时**不**复用可能已被污染的路径语义：置 degraded 标记后由上层返回 None。
+    返回 (ok, result)；ok=False 表示超时或异常（result=None）。
+    """
+    global _embedding_degraded
+    loop = asyncio.get_running_loop()
+    executor = _get_embedding_executor()
+    try:
+        return True, await asyncio.wait_for(
+            loop.run_in_executor(executor, fn), timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        _mark_embedding_degraded(f"{what} 超时 ({timeout}s)")
+        return False, None
+    except Exception as e:  # noqa: BLE001 - 保持与原 wait_for 路径一致的尽力 FAIL
+        logger.warning(f"{what} 失败: {e}")
+        return False, None
+
+
 def generate_embedding_sync(
     text: str,
     for_query: bool = False,
@@ -313,23 +432,13 @@ async def generate_embedding(
     """
     if for_query is None:
         for_query = should_use_query_prefix(caller_path)
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(
-                generate_embedding_sync,
-                text,
-                for_query,
-                has_query_prompt,
-                caller_path,
-            ),
-            timeout=60.0
-        )
-    except asyncio.TimeoutError:
-        logger.warning("Embedding 生成超时（60s），返回 None")
-        return None
-    except Exception as e:
-        logger.warning(f"Embedding 生成失败: {e}")
-        return None
+
+    ok, result = await _run_encode_in_executor(
+        lambda: generate_embedding_sync(text, for_query, has_query_prompt, caller_path),
+        timeout=60.0,
+        what="Embedding 生成",
+    )
+    return result if ok else None
 
 
 async def generate_embeddings(
@@ -361,17 +470,12 @@ async def generate_embeddings(
             logger.warning(f"批量 Embedding 生成失败: {e}")
             return None
 
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_encode),
-            timeout=120.0
-        )
-    except asyncio.TimeoutError:
-        logger.warning(f"批量 Embedding 生成超时（120s, batch={BATCH_SIZE}），返回 None")
-        return None
-    except Exception as e:
-        logger.warning(f"Embedding 生成失败: {e}")
-        return None
+    ok, result = await _run_encode_in_executor(
+        _encode,
+        timeout=120.0,
+        what=f"批量 Embedding 生成 (batch={BATCH_SIZE})",
+    )
+    return result if ok else None
 
 
 # ============================================================================

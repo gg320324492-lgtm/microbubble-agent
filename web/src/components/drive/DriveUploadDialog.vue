@@ -443,6 +443,12 @@ async function uploadOne(item) {
   // v2 PR6-P19 修复: 小文件路径之前漏传 is_team_shared, 导致走"团队共享盘"
   // 视图上传的小文件仍写入 is_team_shared=false → 显示在个人网盘
   formData.append('is_team_shared', props.isTeamShared ? 'true' : 'false')
+  // 2026-10-10: 把已算好的整文件 hash (SHA-256 hex) 传给 multipart 上传接口,
+  // 后端落 knowledge.file_hash —— 否则秒传 hash 几乎全空, 同文件二次上传永远 miss。
+  // 只在秒传 miss 后走到这里, 此时 item.fileHash 已算好 (见上方 calcHash)。
+  if (item.fileHash) {
+    formData.append('file_hash', item.fileHash)
+  }
 
   await axios.post('/api/v1/drive/files/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

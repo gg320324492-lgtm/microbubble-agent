@@ -115,6 +115,35 @@
   产物 100% 被"差异>10% 回退原文"兜底丢弃（`polish_real_change_ratio=0.0`），净收益为负。
 - **LLM 后端已从 MIMO 切到 MiniMax**（MIMO key 失效）；⚠️ **`VISION_MODEL` 必须保持能用图片的模型**，
   切 `MiniMax-Text-01` 会让 OCR 立刻 500。
+- **`knowledge_chunks` 双写者冲突 = 已缓解 (2026-10-10 复验结案, 无需改动)** ——
+  曾担心 `rag_auto_ingest`(通用 kb 入库) 与 `drive_index`(drive 专用) 两个写者都调
+  `write_chunks_for_knowledge`(先 DELETE 后 INSERT) 互相覆盖。**复验证据**: ①占位串 chunk
+  `content LIKE '%[drive upload]%'` 全库 **0 行**(commit `67b5d2eb0` 当日有 48 行, 已随 drive
+  回填清零); ②四个可能写者选行条件**互斥** —— `rag_auto_ingest`/`knowledge_polling` 共用一个
+  `_ingestable_rows_clause()`(`analysis_status='pending' AND storage_mode='kb'`, 三处调用点
+  254/321/330 全走它), `drive_index` 入口硬校验 `storage_mode != "drive"` 即 skip,
+  `meeting_chunk_service` 写独立表 `meeting_chunks`, `drive_to_kb_service` 新建 kb 行后分析;
+  ③抽查 drive 行 886(parent content 是占位串) 的 32 个 chunk **全是真解析 PPT 正文**;
+  ④回归测试 23 passed。**唯一低风险点**: `drive_to_kb_service` 的 Celery 不可用降级路径
+  (L684) 未被测试覆盖(目标仍是它新建的 kb 行, 不影响边界)。**此项不要再当待办重查**。
+- **`generate_embedding(s)` 线程泄漏已隔离 (2026-10-10, 主拍方案 3 = 保持 1 + 观察一周)** ——
+  原实现把 `model.encode()` 包在 `asyncio.to_thread`(= **默认共享池**) 再套 `asyncio.wait_for`。
+  **超时只 cancel 协程、杀不死底层线程**, 于是每次超时泄漏一个仍持线程/GIL 的 worker;
+  默认池被 `asyncio.to_thread` 的 **23 个文件**共用(drive/ocr/file_parser/audio/whisper…),
+  打满后**全进程所有调用方一起排队**; 若 encode 卡在 torch/ST 内部锁上则**永久挂死**。
+  修法: `embedding_service.py` 新增**专用有界 executor**(`_get_embedding_executor()`,
+  `max_workers=_EMBEDDING_THREAD_POOL_SIZE` **默认 1**), 改走 `loop.run_in_executor`;
+  超时置**进程级 degraded 标记** + 30s 限流告警(`is_embedding_degraded()` 可查)——
+  **线程不可强杀, degraded 只增不减(重启才清零), 这是设计而非 bug**。
+  ⚠️ **`max_workers=1` 是刻意取舍(主拍 2026-10-10)**: ST 对同一模型实例本已因内部锁串行,
+  多 worker 只在超时时把泄漏面同比放大; 而泄漏 ⇒ **不可恢复的挂死**, 吞吐慢 ⇒ 只是慢。
+  **实测代价**: 8 并发任务 / 单次 0.5s 编码 = **1.78s 串行排队**。**观察一周**
+  `[embedding degraded]` 告警与排队耗时, 若确有压力再调 `_EMBEDDING_THREAD_POOL_SIZE`
+  (代价 = 泄漏面同比放大)。**跨 loop 纪律**: 新代码**零** `asyncio.Semaphore`/`Lock`
+  (天然规避绑 loop); executor 是**进程级刻意单例跨 `asyncio.run()` 复用**——
+  线程泄漏本就是进程级资源, per-loop 独立 executor 反而会让每个新 loop 各泄漏一份;
+  per-loop 状态用 `id(loop)` **整数**存(不持 loop 对象引用, 避免 loop 关闭后被强引用)。
+  测试 `tests/test_embedding_timeout_cancel.py` (7 用例, 含"超时后放行慢线程、第二次调用正常")。
 
 ### E. 本阶段新增的永久铁律
 
