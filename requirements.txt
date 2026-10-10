@@ -40,17 +40,39 @@ addict
 # 2026-06-24 v29 Qwen3-Embedding-0.6B: LLM-based embedding wrapper
 accelerate>=0.34
 # transformers>=4.45 / safetensors>=0.4 已在 torch 依赖链中装好, 无需重复声明
-# 2026-10-12 删 datasets: 零用途 + 零 Required-by + 真实 pipeline 无它可跑通。
-#   它是 pyarrow 的唯一上游, 裸声明会随时间解析到新版; pyarrow 26.0.0 起硬性
-#   要求 numpy>=2.0, 而本文件 numpy==1.26.2 → import 期炸 → embedding_service
-#   整条链崩 → CI 连环 64 条红灯 (commit 35ab14c9e 修的就是这个)。
-#   删它的实测依据: app/scripts/web 零 import; pip show datasets 的 Required-by
-#   为空; sentence_transformers 的 6 处 datasets import 全是软 import
-#   (TYPE_CHECKING 或函数内延迟 import), 缺它 ST 仍可 import 且
-#   embedding_service / voiceprint_service 均正常。
-#   ⚠️ sortedcontainers / simplejson 两行**保留** —— 它们是 modelscope 的 base
-#   依赖 (非 extras), 与被删的 datasets 无关; 原注释"modelscope/datasets 传递依赖"
-#   有误, 已按实测改正。
+# 2026-10-12 钉版本(不是删 —— 见下, 删会静默打断声纹识别)。
+#   `datasets` 是 pyarrow 的**唯一上游** (容器实测 `pip show pyarrow` →
+#   Required-by: datasets), 裸声明会随时间解析到新版; pyarrow 26.0.0 起硬性要求
+#   numpy>=2.0, 而本文件 numpy==1.26.2 → import 期炸 → embedding_service 整条链
+#   崩 → CI 连环 64 条红灯 (commit 35ab14c9e 修的就是这个)。只钉 pyarrow 属于
+#   下游兜底, 钉 datasets 才是从源头掐断漂移链。
+#
+# ⚠️ **不可删** (2026-10-12 实测推翻"零用途"结论): app/ 与 tests/ 确实零直接
+#   import, sentence_transformers 的 6 处 datasets import 也全是软 import ——
+#   但 **modelscope 顶层硬依赖它**, 且是 unguarded 顶层 import:
+#     modelscope/pipelines/base.py:16  from modelscope.msdatasets import MsDataset
+#     → modelscope/msdatasets/__init__.py:2
+#     → modelscope/msdatasets/ms_dataset.py:9
+#       from datasets import (Dataset, DatasetDict, Features, IterableDataset, ...)
+#   用 import blocker 实测: 屏蔽 datasets 后 `from modelscope.pipelines import
+#   pipeline` 直接 ImportError。modelscope 1.40.0 的 metadata 不声明 datasets
+#   (Requires 只有 filelock/modelscope-hub/packaging/requests/setuptools/tqdm/
+#   urllib3), 所以 pip 不会替我们装 —— 本行是它**唯一**的供给来源。
+#   危害形态是**静默**的: voiceprint_service.py:43 的 modelscope import 包在
+#   `except Exception` 里(设计成"不让 WS 崩"), 于是删掉 datasets 不会报错, 只是
+#   `_load_pipeline` 恒失败 → 所有发言人退化成 unknown。这正是类 20.220
+#   (守门必须验副作用真发生, 不能信状态字段) 的形态。
+#
+# 5.0.1 = 生产容器实测值, 唯一被真机跑通过的组合:
+#   datasets 5.0.1 + pyarrow 25.0.1 + numpy 1.26.2 + huggingface_hub 1.31.0
+#   四者共存 import 通过; embedding_service 与 voiceprint_service 均正常导入。
+# 5.0.1 的依赖下界对现役钉版全部相容: numpy>=1.17 / pyarrow>=21.0.0 /
+# huggingface-hub<2.0,>=0.25.0 (实测 datasets 的 requires 闭包无一未满足)。
+# ⚠️ 不用最新 5.1.0: 它把 pyarrow 下界抬到>=24.0.0 且 huggingface-hub 抬到
+#   >=1.31.0, 会挤掉 accelerate/transformers 的可选区间; 生产没跑过就没理由升。
+# ⚠️ 本行**需 CI 验证**: 本机容器是已装好的环境, 不会因改 requirements.txt 而变;
+#   真实验证点是 CI 的 `pip install -r requirements.txt` + 全量测试。
+datasets==5.0.1
 sortedcontainers       # modelscope base 依赖 (实测: 非 extra)
 simplejson             # modelscope base 依赖
 soundfile              # 3D-Speaker ERes2Net pipeline 读取 wav 需要
