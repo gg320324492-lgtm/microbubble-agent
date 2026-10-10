@@ -54,7 +54,7 @@ tests/test_mobile_v34_commercial_e2e.py
 
 ```
 tests/alembic/test_pre_commit_hook_passes.py
-tests/api/v1/test_drive_endpoint_envelope.py
+tests/test_drive_endpoint_envelope.py
 tests/a11y/test_axe_x19_no_real_violation.py
 tests/precommit/test_doc_exists.py
 tests/e2e/test_anchor_scripts_smoke.py
