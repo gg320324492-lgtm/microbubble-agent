@@ -131,7 +131,7 @@ microbubble-agent/
 ├── scripts/              # 部署 + 运维 + 一次性修复脚本
 ├── memory/               # 事件复盘笔记 + 铁律沉淀
 ├── docs/                 # 部署 / 迁移 / RAG / 事故复盘 / 会议纪要标准
-├── desktop-conversion/   # 桌面端改造（独立 git 仓）
+├── desktop-conversion/   # 桌面端改造工单/验收/决策归档（2026-10-10 由独立子仓并入）
 │
 ├── 入口脚本 ────────────────────────────────────────────
 ├── setup.ps1                     # 环境初始化
@@ -235,7 +235,7 @@ docker exec microbubble-agent-app-1 python scripts/purge_banner_image_noise.py -
 docker exec microbubble-agent-app-1 python scripts/purge_banner_image_block_extractions.py --apply
 
 # 整页视觉转写补齐（需先部署最新代码；支持断点续跑）
-docker exec -d microbubble-agent-app-1 python scripts/a46_pptx_page_pipeline.py --resume-from N
+docker exec -d microbubble-agent-app-1 python scripts/ppt_pages/a46_pptx_page_pipeline.py --resume-from N
 ```
 
 ### 本地定时任务（已注册 schtasks）

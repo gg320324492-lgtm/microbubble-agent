@@ -7,7 +7,7 @@
 为什么
 ----
 agent44 给整页视觉转写接了**语义路** (``PageTranscriptRetriever.search_pages``,
-纯余弦), 但它的严格验收 (``scripts/a44_verify_probe_rank.py``) 暴露一个边界:
+纯余弦), 但它的严格验收 (``scripts/_archive/a44_verify_probe_rank.py``) 暴露一个边界:
 
     用「只存在于页面转写的罕见拉丁词」(物种名 subgroup 名等) 做探针,
     **0/6 命中 top-5** —— 整页 embedding 把罕见词**稀释**进了整页语义,

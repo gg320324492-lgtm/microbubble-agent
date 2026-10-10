@@ -196,7 +196,7 @@ def test_search_pages_empty_query_returns_empty():
 def test_min_similarity_floor_is_calibrated():
     """下限必须落在「真命中」与「库内不存在的反例」之间。
 
-    实测标定 (scripts/a44_verify_probe_rank.py):
+    实测标定 (scripts/_archive/a44_verify_probe_rank.py):
       真命中语义探针 0.628~0.815 ; 反例探针 0.488~0.517
     取 0.55。若有人把下限调到 0 以下, 「任何 query 都返回 top_k」的缺陷回归。
     """

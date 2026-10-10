@@ -49,7 +49,7 @@ logger = logging.getLogger("microbubble.page_transcript_retriever")
 #: **sim=0.517**, 比多数真探针还高 —— 即「任何 query 都会返回 top_k 条」。
 #: 那样的 top_k 是噪声, 汇进 hybrid_retriever 会给随机文档加 image 式加权。
 #:
-#: 标定依据 (本页真探针 vs 反例探针实测, 见 scripts/a44_verify_probe_rank.py):
+#: 标定依据 (本页真探针 vs 反例探针实测, 见 scripts/_archive/a44_verify_probe_rank.py):
 #:   真命中 (语义探针 top1/top2) 0.628 ~ 0.815
 #:   库内不存在的反例          0.488 ~ 0.517
 #: 取 0.55 落在两者之间, 留 ~0.08 余量防标定漂移。
