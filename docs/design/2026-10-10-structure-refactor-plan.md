@@ -249,11 +249,32 @@ grep -rn "_x[0-9]\{1,3\}$" tests/ --include="*.py" | wc -l   # 期望 0
 | 1 | 2026-10-10 | `d209683d0` | 收集数 400→400 / 9 目录全 R 重命名 / ARCHIVED.md DANGLING 0 | ✅ |
 | 2 | 2026-10-10 | `358862c4a` | 深度 3 违规 7→5（论证后保留 5 个：qa-bench 冻结 / e2e×rag 交叉） | ✅ |
 | 3 | 2026-10-10 | `358862c4a` | 收集数 400→400 / 活引用清零 | ✅ |
-| 4 | 2026-10-10 | 待提交 | 死引用 3 类清理 / 3 份索引文档同步（CLAUDE.md 补 400 文件 4133 函数 + 复现命令） | ✅ |
-| 5 | | | | ⏸ **暂缓**（见下方 P0） |
-| 6 | 2026-10-10 | `9f9d485a6` | 5 份边界 README（4 新建 + 1 扩充 52 行） | ✅ |
-| 7 | | | | ⬜ 待执行（desktop-conversion 方案 C） |
-| 8 | | | | ⬜ 待执行 |
+| 4 | 2026-10-10 | `96aa77b6b` | 死引用 3 类清理 / 3 份索引文档同步（CLAUDE.md 补 400 文件 4133 函数 + 复现命令） | ✅ |
+| 5 | 2026-10-10 | `02d929406` + `47b99df8f` | 顶层 aXX_ 15→0 / ppt_pages 5 + _archive 10 / 15 全 R / 旧路径悬空 0 | ✅ |
+| 6 | 2026-10-10 | `9f9d485a6` | 5 份边界 README（4 新建 + 1 扩充 52 行零删除） | ✅ |
+| 7 | 2026-10-11 | `ba7b3a429` | 176 文件 / **gitlink 0** / 子仓 .git 备份为 .git.subrepo-backup / gitleaks 命中 0 | ✅ |
+| 8 | 2026-10-11 | 见下 | 10 项验收全过（见 §八） | ✅ |
+
+### 批次 5 的一个教训（已修）
+
+首次提交只入库了新位置的文件，**漏了 15 条旧路径删除记录** —— 因 `scripts/_archive/` 被
+`.gitignore:170` 忽略，`git add scripts/_archive/` 未把对应的删除一并 stage，
+导致 **git 索引里同时存在新旧两个路径**。复验时发现，补 `47b99df8f` 修正。
+
+> **纪律**：往被 gitignore 的目录里做移动时，`git add <新目录>` **不会**带上
+> 旧路径的删除。必须 `git add -A <父目录>` 或逐个 `git rm` 旧路径，
+> 提交前用 `git ls-files | grep <旧路径模式>` 确认索引已清零。
+
+### 批次 7 的三个关键处置
+
+1. **`.git` 必须移走**：git 见到含 `.git` 的目录会当 nested repo 并 stage 成
+   **gitlink（mode 160000）**而非文件。子仓 `.git` 已**重命名**为
+   `.git.subrepo-backup`（**备份非删除**，回滚只需 `mv`）。实测 gitlink = 0。
+2. **gitleaks 用文件级不用目录级**：目录级经 canary 实测会**静默放行**
+   （在 `assets/` 内种同形状假密钥 → 不报警；放目录外 → 报警）。改为
+   4 条 `$` 锚定精确路径，canary 复测确认目录内新文件**仍被拦**。
+3. **保留 `desktop-conversion/` 目录而非合进 `docs/`**：后者会产生
+   `docs/desktop-conversion/docs/...` 并打断 22 处现有引用。
 
 ---
 
@@ -318,3 +339,74 @@ app.services.embedding_service import 失败
 **唯一的真重复**：`rag-framework-ci` 的 pytest 段已被全量 400 文件扫描覆盖，但它**独占 alembic 单 head 守卫** ⇒ 建议**只删 pytest 段、留守卫**。
 
 **职责正交不该合**：`build-image`/`image-scan` = 制品生产 vs 审计；`qa-bench-smoke`/`qa-bench-baseline` = 端到端探针 vs 离线守恒。
+
+**CI 修复结果**：`35ab14c9e` 一次推送即转绿（**8 片全 ✓ / 4150 用例通过**，耗时 13m45s）。连续 9+ 次全红终结。
+
+---
+
+## 八、批次 8 全链路验收（2026-10-11，10 项全过）
+
+| # | 验收项 | 判据 | 结果 |
+|---|---|---|---|
+| 1 | **测试收集数** | `find tests -name "test_*.py" -not -path "*__pycache__*"` | ✅ **400**，与重构前基准完全一致（一批测试都没丢） |
+| 2 | **会话编号清零** | `git ls-files` 匹配 `^scripts/a[0-9][0-9]_` | ✅ **0** |
+| 3 | **死路径清零** | `git grep` 代码类文件（`.py/.bat/.ps1/.sh`） | ✅ 无命中（仅存迁移史注释，豁免） |
+| 4 | **gitlink 污染** | `git ls-files -s \| awk '$1=="160000"'` | ✅ **0** |
+| 5 | **ARCHIVED.md 悬空** | 87 条登记路径逐个 `-f` 存在性检查 | ✅ **0 DANGLING** |
+| 6 | **旧路径引用** | 全仓 grep 排除 `docs/audit` `docs/design` | ✅ 活引用 0；4 处命中**全是历史点时记录**（`CHANGELOG.md` "X-29 ci real" / `CLAUDE-history.md` / `memory/w91-*.md` §4 守卫 e2e），按档案铁律**保持原样** |
+| 7 | **生产链路**（类 20.213） | `curl https://agent.mnb-lab.cn/health` + 首页 | ✅ **200 / 200**（打生产域名，非本机端口） |
+| 8 | **容器健康** | `docker ps` app + nginx | ✅ 全 healthy |
+| 9 | **计划任务指向的文件**（H3 冻结区） | 6 个被 `schtasks` 引用的脚本逐个存在性检查 | ✅ **6/6 全在位** |
+| 10 | **gitleaks** | `gitleaks detect --config .gitleaks.toml` | ✅ **desktop-conversion 命中 0**（743 条是既存 bench 数据里的 embedding 向量误判，`tests/` 365 + `results/` 336，早于本次变更；CI 只扫 PR commit 区间故仍绿） |
+
+**第 1 项与第 9 项是本轮最重要的两条**：前者证明 11 个批次、上百次移动/重命名**零丢失**；
+后者是类 20.212 的核心防线（看着像普通脚本、实为生产接线）。
+
+---
+
+## 九、收口结论
+
+### 9.1 完成了什么
+
+| 类别 | 内容 |
+|---|---|
+| **测绘** | 顶层 53 项 / tests 33 子目录 / scripts 247 文件 / 高危引用图（`docs/audit/2026-10-10-structure-mapping.md`） |
+| **设计** | 目标结构 + 7 批方案（`docs/design/2026-10-10-target-structure.md`） |
+| **执行** | **8 个批次全部完成**，11 个 commit |
+| **CI** | 连续 9+ 次全红 → **一次修复转绿**（`35ab14c9e`），并另存 workflow 审计报告 |
+| **验收** | 10 项全过，测试收集数 400 一路未变 |
+
+### 9.2 高风险项的最终处理（与初始"回避"相反）
+
+| 项 | 初始评级 | 最终处理 |
+|---|---|---|
+| `tests/` 9 个会话目录 | 🟢 | ✅ 真归位（消灭 100% 命名债） |
+| `tests/api/v1/` | 🟡 | ✅ 打平（论证：测试树无 v1 轴，44 个同族文件平铺在根） |
+| 15 个 `aXX_*` 脚本 | 🔴 最高风险 | ✅ 拆两堆（活链路 `ppt_pages/` / 探针 `_archive/`） |
+| `desktop-conversion/` | 🟡 不可逆 | ✅ 方案 C 合并，**gitlink 0**，文件级 allowlist |
+| `commercial/` `observability/` `tunnel/` `apps+packages` | 🔴 刻意回避 | ✅ **转为边界 README**（主指挥裁定选项 1）—— 深度调研证明"做了对结构没好处"，补文档让边界**可被验证**比搬目录更能防将来变乱 |
+| CI 长期全红 | — | ✅ 4 类根因定位并修复 |
+
+### 9.3 沉淀的新纪律
+
+1. **`tests/` 必须两层深度** —— 33 个测试用 `parents[2]` 反推仓库根，加层即全错位。
+   实测 `tests/legacy/a11y_login/f.py` 的 `parents[2]` 变成 `tests/` 而非仓库根。
+2. **往被 gitignore 的目录做移动，`git add <新目录>` 不会带上旧路径的删除** ——
+   必须在提交前用 `git ls-files | grep <旧路径>` 确认索引清零。
+3. **gitleaks allowlist 作用域应恰好等于已知误报集合** —— 目录级是刀切（canary 实测
+   会静默放行同形状密钥）；文件级 `$` 锚定才能既豁免已知误报又不给未来留免检区。
+4. **含 `.git` 的目录并入主仓会被 stage 成 gitlink** —— 必须先移走或重命名 `.git`。
+5. **"注释宣称阻塞合并"≠ 真的阻塞** —— `server-tests-baseline.yml` 注释写"任一片失败即
+   阻塞合并"，实际 `main` 分支**零保护、无 required check**，红叉从未挡过任何 push
+   （类 20.220 的教科书案例，见 §七 F1+F3）。
+
+### 9.4 尚未做（明确留给下一阶段）
+
+| 项 | 原因 |
+|---|---|
+| **开 `main` 分支保护** | 主指挥裁定**全绿后再开**。当前 1/3 绿，巡检累计中。⚠️ 本仓是**直推 main** 工作流，开 required checks 会挡住直推，需同步决定是否改走 PR |
+| 删 `image-scan` workflow | 审计建议（5 周定时全红 + 5 次手动全红，硬路径从未绿过）。**待 CI 稳定后处理** |
+| `rag-framework-ci` 删 pytest 段 | 该段已被全量扫描覆盖，但**独占 alembic 单 head 守卫**只能删段不能删文件 |
+| `upload-download-page` 根因 | 唯一那次运行即红，日志已过 90 天保留期，**根因无法取证** |
+| `datasets` 钉版本 | 现只钉了 `pyarrow`。`datasets` 仍是裸声明，下次它升级可能再触发同类冲突 |
+| 全历史 743 条 gitleaks | 既存（bench 数据里的 embedding 向量误判），CI 只扫 PR 区间故不阻塞。清理需人工甄别是否误伤 |
