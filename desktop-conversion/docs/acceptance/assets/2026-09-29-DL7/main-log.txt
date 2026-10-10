@@ -1,0 +1,7 @@
+[main] [updater] Checking for update
+[main] [updater] Generated new staging user ID: 66f37f49-5f8a-5cf5-a995-da59ede00b67
+[main] [updater] Found version 99.0.0 (url: MicroBubbleWorkbench-99.0.0-setup.exe)
+[main] Debugger ending on ws://127.0.0.1:51012/636afdce-3ce8-44fb-9202-ac883f476375
+[main] For help, see: https://nodejs.org/en/docs/inspector
+[main] Debugger ending on ws://127.0.0.1:52173/af2724a0-7e2e-404c-807a-484b13ad2ee9
+[main] For help, see: https://nodejs.org/en/docs/inspector

@@ -1,0 +1,25 @@
+{
+  "sampleSha": "32862119217c35ce4fb2b28a678273016e4563e1756302c9f95955ab78944490",
+  "steps": [
+    "login ok, cloudUsername=CI 冒烟",
+    "chat data created: cs-1790681198605-0983ad"
+  ],
+  "login": {
+    "user": {
+      "id": "u-cloud-1458",
+      "username": "CI 冒烟",
+      "displayName": "CI 冒烟",
+      "role": "researcher",
+      "isActive": true,
+      "createdAt": 1790681198534
+    },
+    "expiresAt": 1790684798535,
+    "firstClaim": true,
+    "claimedCounts": {},
+    "summary": "已接入云端账号，本机无历史数据需要认领。",
+    "cloudUsername": "CI 冒烟"
+  },
+  "chatSessionId": "cs-1790681198605-0983ad",
+  "backupDone": true,
+  "backupLog": "[backup] 云端备份完成：workbench-20260929-192638.mnbbak（36551 bytes，清理 0 项，目录 backups/CI_冒烟）"
+}

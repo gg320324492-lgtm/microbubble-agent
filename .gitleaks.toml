@@ -53,6 +53,28 @@ paths = [
     '''yarn\.lock$''',
     '''poetry\.lock$''',
     '''Pipfile\.lock$''',
+    # 2026-10-10 批次 7: desktop-conversion 并入主仓后的验收取证目录。
+    # 该目录存放"验收证据快照"(HTTP 响应体 / E2E 驱动脚本 / 截图), 按其性质必然含
+    # 一次性且已失效的凭据: ① 已被显式撤销且已过期的网盘分享 token
+    # (a1-share-block-http.json, expires_at 2026-10-06); ② Electron 首启零用户时
+    # 本地注册的临时探针账号口令 dl5/dl6/dl7-probe-12345 (仅 userCount===0 时
+    # 建号, 从不接触服务端账号体系)。均为 generic-api-key 规则误报。
+    #
+    # 粒度: 文件级($ 锚定到具体文件), 不取"目录级"也不取"文件+行号级"。
+    #   · 不取目录级: canary 实测证明 `assets/.*` 会把整个目录变成免检区 ——
+    #     在 assets/ 内种一个 generic-api-key 形状的假密钥不会被拦, 而同形状
+    #     放在目录外会被拦。验收快照恰恰是"真 token 最可能落地"的地方, 后续
+    #     DL8/DL9 的取证一旦误提交真凭据, 目录级会静默放行。
+    #   · 不取行号级: 行号随编辑漂移, allowlist 会静默失效(要么 CI 误红, 要么
+    #     被人"顺手"放宽作用域)。文件路径比行号稳定(仅重命名会断, 而重命名是
+    #     显式动作, 届时连带更新本处即可)。
+    #   · 故作用域恰好等于已知误报集合: 这 4 个文件, 一次不多。
+    # 若未来出现同类 fixture(如 DL8 的 dl8-probe-12345): 先确认它确为一次性且
+    # 已失效的取证快照, 再照本格式追加一条 $ 锚定路径; 不要为省事改成目录级。
+    '''desktop-conversion/docs/acceptance/assets/2026-09-28-DL5/dl5-e2e-driver\.mjs$''',
+    '''desktop-conversion/docs/acceptance/assets/2026-09-29-DL6/dl6-e2e-driver\.mjs$''',
+    '''desktop-conversion/docs/acceptance/assets/2026-09-29-DL7/dl7-e2e-driver\.mjs$''',
+    '''desktop-conversion/docs/acceptance/assets/2026-09-30-FIN1/a1-share-block-http\.json$''',
 ]
 
 # 3. 注释 / 文档字面量兜底 — 含"example" / "TODO" / "FIXME" 的行

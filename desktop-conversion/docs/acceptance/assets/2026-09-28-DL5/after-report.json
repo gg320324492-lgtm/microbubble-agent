@@ -1,0 +1,86 @@
+{
+  "mode": "after",
+  "steps": [],
+  "who": "dl5probe",
+  "msgCount": 8,
+  "a_top": {
+    "innerHeight": 900,
+    "shellMain": {
+      "scrollHeight": 834,
+      "clientHeight": 834,
+      "scrollTop": 0,
+      "overflowY": "auto"
+    },
+    "chatBody": {
+      "scrollHeight": 6717,
+      "clientHeight": 637,
+      "scrollTop": 0,
+      "overflowY": "auto"
+    },
+    "composer": {
+      "top": 726,
+      "bottom": 874,
+      "height": 148
+    },
+    "sessions": {
+      "top": 40,
+      "bottom": 874,
+      "height": 834
+    }
+  },
+  "b_bottom": {
+    "innerHeight": 900,
+    "shellMain": {
+      "scrollHeight": 834,
+      "clientHeight": 834,
+      "scrollTop": 0,
+      "overflowY": "auto"
+    },
+    "chatBody": {
+      "scrollHeight": 6717,
+      "clientHeight": 637,
+      "scrollTop": 6080,
+      "overflowY": "auto"
+    },
+    "composer": {
+      "top": 726,
+      "bottom": 874,
+      "height": 148
+    },
+    "sessions": {
+      "top": 40,
+      "bottom": 874,
+      "height": 834
+    }
+  },
+  "c_chat": {
+    "innerHeight": 640,
+    "shellMain": {
+      "scrollHeight": 574,
+      "clientHeight": 574,
+      "scrollTop": 0,
+      "overflowY": "auto"
+    },
+    "chatBody": {
+      "scrollHeight": 7893,
+      "clientHeight": 377,
+      "scrollTop": 0,
+      "overflowY": "auto"
+    },
+    "composer": {
+      "top": 466,
+      "bottom": 614,
+      "height": 148
+    },
+    "sessions": {
+      "top": 40,
+      "bottom": 614,
+      "height": 574
+    }
+  },
+  "c_settings": {
+    "scrollHeight": 2386,
+    "clientHeight": 574,
+    "scrollable": true
+  }
+}

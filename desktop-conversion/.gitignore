@@ -1,0 +1,11 @@
+# Agent 自留地不入库（总指挥工单 C-1/C-3 机制）
+.agent-backups/
+# 外部 agent 框架的记忆目录（工具残留，本仓上下文一律走 docs/session-log/）
+.workbuddy-ai/
+
+# 系统杂物
+Thumbs.db
+.DS_Store
+
+# 开发期日志（发布脚本/本地 dev server 产物，零信息量）
+*.log

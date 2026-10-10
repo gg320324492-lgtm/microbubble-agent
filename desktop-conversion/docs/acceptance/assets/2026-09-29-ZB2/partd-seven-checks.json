@@ -1,0 +1,27 @@
+{
+  "a": 1458,
+  "b": 1459,
+  "#1_upload": {
+    "status": 201,
+    "id": 2856,
+    "visibility": "private",
+    "folderId": 1541
+  },
+  "#2_B_view": {
+    "searchHits": 0,
+    "directDownload": 404
+  },
+  "#6_legacy_rows": {
+    "bSeenCount": 0,
+    "bDownloadKey2842": 404
+  },
+  "#7_outside": {
+    "visibility": "team",
+    "bSeen": 2,
+    "bDownload": 200
+  },
+  "extra_A_view": {
+    "searchHits": 2,
+    "download": 200
+  }
+}

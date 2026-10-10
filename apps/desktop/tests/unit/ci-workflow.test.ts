@@ -79,7 +79,10 @@ describe('desktop-release.yml — 运行环境与构建范围', () => {
       .split('\n')
       .filter((l) => !/^\s*#/.test(l))
       .join('\n')
-    for (const forbidden of ['web/', 'alembic/', 'docker-compose', 'nginx/', 'desktop-conversion']) {
+    // 2026-10-10 批次 7: 移除 'desktop-conversion' —— 该目录已并入主仓成为普通
+    // 文档目录(不再是独立 git 仓), 继续把它列为"发布 workflow 不得触及的禁区"
+    // 已无门禁意义; 且它与 apps/desktop 同处仓内, 一旦发布链路合法引用会误红。
+    for (const forbidden of ['web/', 'alembic/', 'docker-compose', 'nginx/']) {
       expect(code.includes(forbidden), `workflow 步骤不应涉及 ${forbidden}`).toBe(false)
     }
   })

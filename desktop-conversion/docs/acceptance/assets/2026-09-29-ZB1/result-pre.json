@@ -1,0 +1,63 @@
+{
+  "mode": "pre",
+  "steps": [
+    {
+      "name": "A-login",
+      "username": "cismoke",
+      "id": 1458
+    },
+    {
+      "name": "B-create",
+      "status": 409,
+      "id": null,
+      "conflict": true
+    },
+    {
+      "name": "B-login",
+      "id": 1459
+    },
+    {
+      "name": "REAL-SHAPE-vuln-pre",
+      "drillKeyDownloadByB": 200,
+      "drillRowsSeenByB": 8,
+      "note": "演练产物在根目录(桌面端 uploadFile 丢弃目录信息), 非工单假设的 backups/ 文件夹"
+    },
+    {
+      "name": "backups",
+      "id": 1541
+    },
+    {
+      "name": "A-upload",
+      "container": {
+        "id": 2845,
+        "visibility": "team"
+      },
+      "key": {
+        "id": 2846,
+        "visibility": "team"
+      }
+    },
+    {
+      "name": "B-view-_PRE-MIGRATION_",
+      "searchSeen": [
+        {
+          "id": 2846,
+          "name": "zb1-probe-pre.mnbbak.key.json",
+          "visibility": "team"
+        },
+        {
+          "id": 2845,
+          "name": "zb1-probe-pre.mnbbak",
+          "visibility": "team"
+        }
+      ],
+      "downloadContainer": 200,
+      "downloadKey": 200
+    },
+    {
+      "name": "A-view",
+      "searchSeen": 2,
+      "download": 200
+    }
+  ]
+}

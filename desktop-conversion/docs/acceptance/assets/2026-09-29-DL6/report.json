@@ -1,0 +1,36 @@
+{
+  "who": "dl6probe",
+  "navItems": [
+    "AI 助手",
+    "知识库",
+    "网盘",
+    "会议",
+    "设置"
+  ],
+  "paletteItems": [
+    "AI 助手ai zhushou 助手 assistant",
+    "知识库zsk zhishi 知识 knowledge",
+    "网盘wp wangpan 网盘 drive 文件",
+    "会议hy huiyi 会议 meeting",
+    "设置sz shezhi 设置 settings",
+    "新建会议（会议）xj hy xinjian 新建会议",
+    "退出应用tc tuichu 退出 quit exit"
+  ],
+  "paletteFilterShiyan": [],
+  "partA": {
+    "draftValue": "",
+    "sendBtnText": "发送中…",
+    "sendBtnDisabled": true,
+    "msgCount": 1,
+    "firstMsgRole": "msg msg-user",
+    "firstMsgText": "我你好18:22",
+    "firstMsgIdTemp": true
+  },
+  "partAAfter": {
+    "msgCount": 2,
+    "texts": [
+      "我你好18:22",
+      "AI（模拟真实模型回复）你好！我是科研助手。18:22"
+    ]
+  }
+}

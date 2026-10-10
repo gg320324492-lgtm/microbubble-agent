@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>下载页 UI 提案 · 小气科研工作台</title>
+<style>
+/* ============ 四套主题令牌 ============ */
+body[data-theme="paper"]{
+  --bg:#f3eddf; --hero:#3e5c76; --hero-text:#f3eddf; --card:#fffdf7; --border:#e4d9c3;
+  --text:#33302a; --text2:#8d8574; --accent:#3e5c76; --accent-weak:#e7edf3;
+  --ok:#4a7c59; --radius:10px; --shadow:0 2px 10px rgba(90,70,30,.12);
+  --head-font:Georgia,"Songti SC","STSong","SimSun",serif;
+  --btn-bg:#3e5c76; --btn-text:#fff; --chip-bg:#e7edf3; --chip-text:#3e5c76;
+}
+body[data-theme="slate"]{
+  --bg:#171a20; --hero:#0d1117; --hero-text:#d5dde6; --card:#151d26; --border:#29323e;
+  --text:#d5dde6; --text2:#7d8896; --accent:#4cc2ff; --accent-weak:#12283a;
+  --ok:#3fb950; --radius:10px; --shadow:0 4px 16px rgba(0,0,0,.5);
+  --head-font:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --btn-bg:#1f6feb; --btn-text:#fff; --chip-bg:#12283a; --chip-text:#4cc2ff;
+}
+body[data-theme="saas"]{
+  --bg:#ffffff; --hero:#4f46e5; --hero-text:#ffffff; --card:#ffffff; --border:#e5e7eb;
+  --text:#111827; --text2:#6b7280; --accent:#4f46e5; --accent-weak:#eef2ff;
+  --ok:#059669; --radius:16px; --shadow:0 10px 30px rgba(30,30,60,.10);
+  --head-font:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --btn-bg:#111827; --btn-text:#fff; --chip-bg:#eef2ff; --chip-text:#4f46e5;
+}
+body[data-theme="warm"]{
+  --bg:#2b2118; --hero:#1a1410; --hero-text:#f0e6d8; --card:#33281d; --border:#4a3b2a;
+  --text:#f0e6d8; --text2:#a89478; --accent:#e8a33d; --accent-weak:#3d2f1a;
+  --ok:#8bc34a; --radius:12px; --shadow:0 6px 24px rgba(0,0,0,.5);
+  --head-font:Georgia,"Songti SC","STSong","SimSun",serif;
+  --btn-bg:#e8a33d; --btn-text:#1a1410; --chip-bg:#3d2f1a; --chip-text:#e8a33d;
+}
+/* ============ 基础 ============ */
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:14px/1.7 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;transition:background .25s}
+.switcher{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;padding:14px 22px;background:var(--hero);flex-wrap:wrap}
+.switcher b{font-size:15px;color:#fff;margin-right:6px}
+.sw-btn{padding:7px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;cursor:pointer;font-size:13px;opacity:.75}
+.sw-btn.on{background:#fff;color:var(--hero);border-color:#fff;opacity:1;font-weight:600}
+.switcher .note{margin-left:auto;font-size:12px;color:rgba(255,255,255,.65)}
+.stage{max-width:1060px;margin:30px auto 70px;padding:0 22px}
+/* ============ 下载页 mock ============ */
+.page{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);background:var(--bg)}
+.hero{background:var(--hero);color:var(--hero-text);padding:52px 48px;text-align:center}
+.hero .badge{display:inline-block;font-size:12px;letter-spacing:3px;border:1px solid currentColor;border-radius:999px;padding:3px 14px;opacity:.85;margin-bottom:18px}
+.hero h1{font-family:var(--head-font);font-size:34px;font-weight:600;letter-spacing:1px}
+.hero .slogan{font-size:16px;opacity:.85;margin:12px 0 30px}
+.hero .ver{font-size:12.5px;opacity:.7;margin-top:16px}
+.dl-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.dl-main{display:inline-block;padding:14px 38px;border-radius:var(--radius);background:var(--btn-bg);color:var(--btn-text);font-size:16px;font-weight:700;text-decoration:none}
+.dl-main small{display:block;font-size:11px;font-weight:400;opacity:.75;margin-top:2px}
+.dl-sec{display:inline-block;padding:14px 26px;border-radius:var(--radius);border:1px solid currentColor;color:var(--hero-text);font-size:14px;text-decoration:none;opacity:.9}
+.sec{background:var(--card);padding:26px 30px;border-top:1px solid var(--border)}
+.sec h2{font-family:var(--head-font);font-size:17px;margin-bottom:14px}
+.feats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.feat{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--card)}
+.feat .tile{width:30px;height:30px;border-radius:8px;background:var(--accent-weak);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;margin-bottom:8px}
+.feat b{font-size:13.5px;display:block}
+.feat span{font-size:12px;color:var(--text2)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+.step{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--card);font-size:12.5px}
+.step b{color:var(--accent);font-size:12px}
+.dual{margin-top:10px;font-size:12px;color:var(--text2)}
+.footer{padding:16px 30px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text2);display:flex;justify-content:space-between}
+/* 说明卡 */
+.describe{margin-top:16px;border-left:3px solid var(--accent);padding:10px 16px;background:var(--card);border-radius:0 var(--radius) var(--radius) 0;font-size:13px}
+.describe b{display:block;margin-bottom:2px}
+.describe span{color:var(--text2)}
+</style>
+</head>
+<body data-theme="paper">
+<div class="switcher">
+  <b>下载页 UI 提案</b>
+  <button class="sw-btn on" onclick="setTheme('paper',this)">A · 宣纸暖白（品牌一致）</button>
+  <button class="sw-btn" onclick="setTheme('slate',this)">B · 深夜极简（暗色）</button>
+  <button class="sw-btn" onclick="setTheme('saas',this)">C · 靛蓝现代（SaaS）</button>
+  <button class="sw-btn" onclick="setTheme('warm',this)">D · 暖木暗金（沉稳）</button>
+  <span class="note">同一落地页骨架 × 四套设计语言 · 方向选定后作为下载页基准</span>
+</div>
+
+<div class="stage">
+  <div class="page">
+    <div class="hero">
+      <div class="badge">WINDOWS 10 / 11 · 64 位</div>
+      <h1>小气 · 科研工作台</h1>
+      <div class="slogan">把课题组的数据，装进一台本地工作台。数据存本机，断网可用。</div>
+      <div class="dl-row">
+        <a class="dl-main">下载 Windows 版<small>MicroBubbleWorkbench-1.0.0-setup.exe · 87.9 MB · 国内直连</small></a>
+        <a class="dl-sec">GitHub 下载</a>
+      </div>
+      <div class="ver">v1.0.0 · 2026-09-19 发布 · 未签名安装包（SmartScreen 选「仍要运行」）</div>
+    </div>
+    <div class="sec">
+      <h2>六大功能模块</h2>
+      <div class="feats">
+        <div class="feat"><div class="tile">知</div><b>本地知识库</b><span>Markdown 导入 · 中文全文检索</span></div>
+        <div class="feat"><div class="tile">会</div><b>会议档案</b><span>纪要 · 转录 · 附件一体管理</span></div>
+        <div class="feat"><div class="tile">验</div><b>实验记录本</b><span>自动编号 · 四态流转 · 模板</span></div>
+        <div class="feat"><div class="tile">稿</div><b>稿件库</b><span>目标期刊 · 字数统计 · 版本</span></div>
+        <div class="feat"><div class="tile">AI</div><b>AI 助手</b><span>读写工作区 · 工具卡片可视</span></div>
+        <div class="feat"><div class="tile">备</div><b>加密备份</b><span>AES-256 · 阿里云 OSS 云端</span></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h2>三步开始使用</h2>
+      <div class="steps">
+        <div class="step"><b>STEP 1 · 安装</b><br>双击安装包，首启创建本机管理员账号——账号与数据只存本机</div>
+        <div class="step"><b>STEP 2 · 配置</b><br>配置模型 Key（如 MiMo），选择一个目录作为你的科研工作区</div>
+        <div class="step"><b>STEP 3 · 使用</b><br>六大模块即开即用，断网可用；一键备份，数据可带走</div>
+      </div>
+      <div class="dual">下载源：① 国内直连（阿里云 OSS）② GitHub Releases——内容完全一致，按网络情况自选</div>
+    </div>
+    <div class="footer"><span>© 2026 MicroBubble Lab · 小气 · 科研工作台</span><span>应用内「检查更新」可直升新版本</span></div>
+  </div>
+
+  <div class="describe" id="desc">
+    <b>A · 宣纸暖白（学院）</b>
+    <span>与桌面端 v1.0 界面完全同源：米色纸感 + 靛墨蓝品牌色 + 衬线标题。公众认知零割裂——下载页即产品第一印象。</span>
+  </div>
+</div>
+
+<script>
+const DESC={
+  paper:{t:"A · 宣纸暖白（学院）",d:"与桌面端 v1.0 界面完全同源：米色纸感 + 靛墨蓝品牌色 + 衬线标题。公众认知零割裂——下载页即产品第一印象。"},
+  slate:{t:"B · 深夜极简（暗色）",d:"全暗色落地页 + 亮蓝主按钮，开发者/技术用户亲和；与桌面端亮色界面形成反差，适合「工具感」定位。"},
+  saas:{t:"C · 靛蓝现代（SaaS）",d:"浅色大留白 + 靛蓝渐变 Hero + 大圆角，对标主流软件官网下载页；公众熟悉度高，品牌感独立于桌面端。"},
+  warm:{t:"D · 暖木暗金（沉稳）",d:"深暖木底 + 暗金主色 + 衬线标题，学术沉稳气质，与宣纸同源但更厚重；适合「科研机构官方出品」定位。"}
+};
+function setTheme(t,btn){
+  document.body.dataset.theme=t;
+  document.querySelectorAll('.sw-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const d=DESC[t];
+  document.getElementById('desc').innerHTML='<b>'+d.t+'</b><span>'+d.d+'</span>';
+}
+</script>
+</body>
+</html>

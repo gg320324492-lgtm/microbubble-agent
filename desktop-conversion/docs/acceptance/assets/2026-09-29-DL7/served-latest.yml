@@ -1,0 +1,19 @@
+version: 99.0.0
+files:
+  - url: MicroBubbleWorkbench-99.0.0-setup.exe
+    sha512: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    size: 92113488
+path: MicroBubbleWorkbench-99.0.0-setup.exe
+sha512: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+releaseDate: '2026-09-29T00:00:00.000Z'
+releaseNotes: |-
+    ### 更新内容（DL-7 验收注入）
+
+    - AI 对话**发送即上屏**：草稿即时清空、用户消息即时可见
+    - 下架「实验 ELN」「稿件」两模块（数据保留）
+
+    ```
+    特殊字符行: 冒号: #井号 ---分隔线
+    ```
+
+    谢谢各位组员支持！

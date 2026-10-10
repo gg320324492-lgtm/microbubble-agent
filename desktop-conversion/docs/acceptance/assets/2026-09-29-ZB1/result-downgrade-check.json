@@ -1,0 +1,22 @@
+{
+  "mode": "downgrade-check",
+  "steps": [
+    {
+      "name": "B-view",
+      "searchSeen": [
+        {
+          "id": 2846,
+          "visibility": "team"
+        },
+        {
+          "id": 2845,
+          "visibility": "team"
+        }
+      ]
+    },
+    {
+      "name": "B-direct-download-key",
+      "status": 200
+    }
+  ]
+}

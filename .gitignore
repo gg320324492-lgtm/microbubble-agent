@@ -217,8 +217,10 @@ apps/desktop/dist-electron/
 # 豁免: 桌面端打包资源目录 (icon 等), 不受全局 build/ 规则影响
 !apps/desktop/build/
 
-# 桌面端转化指挥部 (独立 git 仓库, 与本仓库互相隔离)
-desktop-conversion/
+# 桌面端转化指挥部 — 2026-10-10 批次 7 并入主仓(方案 C: 只搬文件不带 193 commits 历史),
+# 原先的整目录 ignore 已撤销, 目录内容现由本仓库跟踪。
+# 仅保留原独立 git 仓的元数据备份(回滚保险), 不入库。
+desktop-conversion/.git.subrepo-backup/
 
 # Agent 会话暂存（2026-09-20）
 .agent-backups/

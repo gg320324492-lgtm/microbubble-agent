@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI 风格提案 · 小气科研工作台</title>
+<style>
+/* ============ 四套主题令牌 ============ */
+body[data-theme="paper"]{
+  --bg:#f3eddf; --panel:#f9f5ec; --card:#fffdf7; --border:#e4d9c3; --border2:#d8cbb0;
+  --text:#33302a; --text2:#8d8574; --accent:#3e5c76; --accent-weak:#e7edf3;
+  --accent2:#9a7b4f; --ok:#4a7c59; --ok-weak:#e4efe7; --warn:#a4504a; --warn-weak:#f6e7e5;
+  --radius:10px; --shadow:0 1px 4px rgba(90,70,30,.10); --head-font:Georgia,"Songti SC","STSong","SimSun",serif;
+  --tile-paper:#efe6d2;
+}
+body[data-theme="slate"]{
+  --bg:#f4f5f7; --panel:#ffffff; --card:#ffffff; --border:#e3e5e9; --border2:#d5d8de;
+  --text:#171a20; --text2:#6d7480; --accent:#4f46e5; --accent-weak:#eceafd;
+  --accent2:#0e7490; --ok:#15803d; --ok-weak:#e5f5ea; --warn:#dc2626; --warn-weak:#fdeaea;
+  --radius:8px; --shadow:0 1px 2px rgba(15,20,30,.07); --head-font:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --tile-paper:#eef0f4;
+}
+body[data-theme="console"]{
+  --bg:#0d1117; --panel:#10161d; --card:#151d26; --border:#29323e; --border2:#39424e;
+  --text:#d5dde6; --text2:#7d8896; --accent:#4cc2ff; --accent-weak:#12283a;
+  --accent2:#3fb950; --ok:#3fb950; --ok-weak:#12261a; --warn:#f85149; --warn-weak:#331a1c;
+  --radius:8px; --shadow:0 2px 8px rgba(0,0,0,.45); --head-font:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --tile-paper:#1a2230;
+}
+body[data-theme="saas"]{
+  --bg:#ffffff; --panel:#f7f7f9; --card:#ffffff; --border:#ececf0; --border2:#dfdfe6;
+  --text:#1f2328; --text2:#7a7f87; --accent:#7c5cff; --accent-weak:#f1edff;
+  --accent2:#0d9488; --ok:#16a34a; --ok-weak:#e8f7ee; --warn:#e5484d; --warn-weak:#fdebec;
+  --radius:14px; --shadow:0 6px 20px rgba(25,25,45,.08); --head-font:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --tile-paper:#f1efff;
+}
+/* ============ 基础 ============ */
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;transition:background .25s}
+.switcher{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;padding:14px 22px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.switcher b{font-size:15px;margin-right:6px}
+.sw-btn{padding:7px 16px;border-radius:999px;border:1px solid var(--border2);background:var(--card);color:var(--text2);cursor:pointer;font-size:13px}
+.sw-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.switcher .note{margin-left:auto;font-size:12px;color:var(--text2)}
+.stage{max-width:1120px;margin:26px auto 60px;padding:0 22px}
+/* ============ 窗口骨架 ============ */
+.win{border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);background:var(--panel)}
+.titlebar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--panel);border-bottom:1px solid var(--border)}
+.dots{display:flex;gap:6px}
+.dots i{width:11px;height:11px;border-radius:50%;background:var(--border2)}
+.dots i:first-child{background:var(--warn)}
+.titlebar .app{font-weight:600;font-size:13px}
+.titlebar .who{font-size:12px;color:var(--text2)}
+.body{display:flex;min-height:560px}
+/* 侧栏 */
+.rail{width:170px;background:var(--panel);border-right:1px solid var(--border);padding:16px 10px;display:flex;flex-direction:column;gap:2px}
+.rail .mark{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin:0 0 18px 8px}
+.nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--text2);font-size:13px;cursor:default}
+.nav .tile{width:26px;height:26px;border-radius:7px;background:var(--tile-paper);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text)}
+.nav.on{background:var(--accent-weak);color:var(--accent);font-weight:600}
+.nav.on .tile{background:var(--accent);color:#fff}
+.rail .spacer{flex:1}
+.rail .avatar{width:30px;height:30px;border-radius:50%;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;margin:0 8px}
+/* 主区 */
+.main{flex:1;padding:26px 30px;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--head-font);font-size:22px;font-weight:600;letter-spacing:.5px}
+.toolbar{display:flex;gap:10px}
+.input{flex:1;padding:8px 12px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--card);color:var(--text);font-size:13px}
+.input::placeholder{color:var(--text2)}
+.btn{padding:8px 16px;border-radius:var(--radius);border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:default}
+.btn.ghost{background:var(--card);color:var(--accent)}
+.btn.danger{background:var(--card);border-color:var(--warn);color:var(--warn)}
+.cardlist{display:flex;flex-direction:column;gap:10px}
+.doc{border:1px solid var(--border);border-radius:var(--radius);background:var(--card);padding:14px 16px}
+.doc .t{display:flex;justify-content:space-between;align-items:baseline}
+.doc .t b{font-size:14px}
+.doc .t span{font-size:12px;color:var(--text2)}
+.doc p{font-size:12.5px;color:var(--text2);margin-top:4px}
+.doc p mark{background:transparent;color:var(--accent);font-weight:600}
+.tags{display:flex;gap:6px;margin-top:8px}
+.tag{font-size:11px;padding:2px 9px;border-radius:999px;background:var(--accent-weak);color:var(--accent)}
+.tag.ok{background:var(--ok-weak);color:var(--ok)}
+.tag.warn{background:var(--warn-weak);color:var(--warn)}
+/* 详情 + 组件条 */
+.grid{display:flex;gap:14px;margin-top:2px}
+.detail{flex:1.35;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);padding:16px 18px}
+.detail h3{font-family:var(--head-font);font-size:15px}
+.detail .meta{font-size:12px;color:var(--text2);margin:4px 0 10px}
+.detail p{font-size:13px}
+.kit{flex:1;border:1px dashed var(--border2);border-radius:var(--radius);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.kit b{font-size:12px;color:var(--text2);font-weight:600;letter-spacing:1px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toggle{width:34px;height:19px;border-radius:999px;background:var(--accent);position:relative}
+.toggle i{position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:50%;background:#fff}
+.progress{height:6px;border-radius:999px;background:var(--border);overflow:hidden;flex:1}
+.progress i{display:block;height:100%;width:62%;background:var(--accent)}
+.mono{font-family:"JetBrains Mono",Consolas,monospace;font-size:12px}
+.statusbar{display:flex;gap:14px;padding:7px 16px;border-top:1px solid var(--border);background:var(--panel);font-size:11.5px;color:var(--text2)}
+.statusbar .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);align-self:center}
+.statusbar .right{margin-left:auto}
+/* 主题说明卡 */
+.describe{margin-top:14px;border-left:3px solid var(--accent);padding:10px 16px;background:var(--card);border-radius:0 var(--radius) var(--radius) 0;font-size:13px}
+.describe b{display:block;margin-bottom:2px}
+.describe span{color:var(--text2)}
+</style>
+</head>
+<body data-theme="paper">
+<div class="switcher">
+  <b>UI 风格提案</b>
+  <button class="sw-btn on" onclick="setTheme('paper',this)">A · 宣纸暖白（学院）</button>
+  <button class="sw-btn" onclick="setTheme('slate',this)">B · 石墨冷灰（专业）</button>
+  <button class="sw-btn" onclick="setTheme('console',this)">C · 深夜控制台（暗色）</button>
+  <button class="sw-btn" onclick="setTheme('saas',this)">D · 晨白现代（SaaS）</button>
+  <span class="note">同一界面骨架 × 四套设计语言 · 方向选定后作为 M7 换新基准</span>
+</div>
+
+<div class="stage">
+  <div class="win">
+    <div class="titlebar">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <span class="app">小气 · 科研工作台</span><span class="who">· 演示账号</span>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <div class="mark">小气</div>
+        <div class="nav"><span class="tile">AI</span>AI 助手</div>
+        <div class="nav"><span class="tile">验</span>实验 ELN</div>
+        <div class="nav"><span class="tile">稿</span>稿件</div>
+        <div class="nav on"><span class="tile">知</span>知识库</div>
+        <div class="nav"><span class="tile">会</span>会议</div>
+        <div class="nav"><span class="tile">设</span>设置</div>
+        <div class="spacer"></div>
+        <div class="avatar">演</div>
+      </div>
+      <div class="main">
+        <h1>知识库</h1>
+        <div class="toolbar">
+          <input class="input" placeholder="全文检索（标题 / 正文，支持中文）…" value="微纳米气泡">
+          <span class="btn">＋ 导入文档</span>
+        </div>
+        <div class="cardlist">
+          <div class="doc">
+            <div class="t"><b>微纳米气泡发生装置实验记录</b><span>2026-09-17 · 12.4 KB</span></div>
+            <p>本实验围绕 <mark>微纳米气泡</mark> 的发生效率展开，对比了三种曝气头在不同水动力条件下的气泡粒径分布…</p>
+            <div class="tags"><span class="tag">实验</span><span class="tag ok">已归档</span></div>
+          </div>
+          <div class="doc">
+            <div class="t"><b>气液界面特性综述草稿</b><span>2026-09-15 · 48 KB</span></div>
+            <p>梳理了 <mark>微纳米气泡</mark> 界面电荷与稳定性研究的主要结论，待补充最新文献…</p>
+            <div class="tags"><span class="tag warn">草稿</span><span class="tag">综述</span></div>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="detail">
+            <h3>微纳米气泡发生装置实验记录</h3>
+            <div class="meta">2026-09-17 · 12.4 KB · 标签：实验、装置</div>
+            <p>采用文丘里结构与旋转空化发生器两种方案进行对照实验。粒径由激光粒度仪测定，均值 48.6 μm；连续运行 2 h 未观测到明显团聚。下一步将结合高速摄像验证气泡界面 zeta 电位假说…</p>
+          </div>
+          <div class="kit">
+            <b>COMPONENT KIT</b>
+            <div class="row"><span class="btn">主要按钮</span><span class="btn ghost">次要按钮</span><span class="btn danger">危险</span></div>
+            <div class="row"><span class="tag">进行中</span><span class="tag ok">已完成</span><span class="tag warn">草稿</span></div>
+            <div class="row"><input class="input" placeholder="输入框"></div>
+            <div class="row"><span class="toggle"><i></i></span><span style="font-size:12.5px">开关组件</span></div>
+            <div class="row"><span class="progress"><i></i></span><span class="mono" style="font-size:11.5px">62%</span></div>
+            <div class="row"><span class="mono">EXP-20260917-01</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar"><span class="dot"></span>本地数据库就绪 · 数据存本机 · 断网可用<span class="right">v0.1.2-alpha · SQLite</span></div>
+  </div>
+
+  <div class="describe" id="desc">
+    <b>A · 宣纸暖白（学院）</b>
+    <span>米色纸感底 + 靛墨蓝主色 + 衬线标题，安静、书卷气，适合长时间阅读与写作；信息密度中等。</span>
+  </div>
+</div>
+
+<script>
+const DESC={
+  paper:{t:"A · 宣纸暖白（学院）",d:"米色纸感底 + 靛墨蓝主色 + 衬线标题，安静、书卷气，适合长时间阅读与写作；信息密度中等。"},
+  slate:{t:"B · 石墨冷灰（专业）",d:"冷灰底 + 靛紫主色 + 紧凑密度与直角小圆角，工具感强、信息效率优先，对标 Linear / 专业 IDE。"},
+  console:{t:"C · 深夜控制台（暗色）",d:"深色底 + 青蓝主色 + 等宽字体点缀，数据密集、夜间友好，科研仪器/控制台气质，自带暗色模式。"},
+  saas:{t:"D · 晨白现代（SaaS）",d:"纯白底 + 紫罗兰主色 + 大圆角与柔和投影 + 彩色模块图标，亲和轻盈，对标 Notion / 现代 SaaS。"}
+};
+function setTheme(t,btn){
+  document.body.dataset.theme=t;
+  document.querySelectorAll('.sw-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  const d=DESC[t];
+  document.getElementById('desc').innerHTML='<b>'+d.t+'</b><span>'+d.d+'</span>';
+}
+</script>
+</body>
+</html>

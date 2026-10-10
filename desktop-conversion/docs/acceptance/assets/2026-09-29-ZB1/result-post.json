@@ -1,0 +1,41 @@
+{
+  "mode": "post",
+  "steps": [
+    {
+      "name": "logins",
+      "a": 1458,
+      "b": 1459
+    },
+    {
+      "name": "A-upload-new",
+      "id": 2849,
+      "visibility": "private"
+    },
+    {
+      "name": "B-view",
+      "searchSeen": [],
+      "downloadNew": 404
+    },
+    {
+      "name": "B-direct-download-old-probes",
+      "container": 404,
+      "key": 404
+    },
+    {
+      "name": "A-view",
+      "newDownload": 200,
+      "oldDownload": 200
+    },
+    {
+      "name": "outside-zero-regression",
+      "plainVisibility": "team",
+      "bSeen": [
+        {
+          "id": 2851,
+          "visibility": "team"
+        }
+      ],
+      "bDownload": 200
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "who": "dl7probe",
+  "dialog": {
+    "version": "v99.0.0",
+    "notes": "### 更新内容（DL-7 验收注入）\n\n- AI 对话**发送即上屏**：草稿即时清空、用户消息即时可见\n- 下架「实验 ELN」「稿件」两模块（数据保留）\n\n```\n特殊字符行: 冒号: #井号 ---分隔线\n```\n\n谢谢各位组员支持",
+    "updateBtn": "立即更新",
+    "laterBtn": "稍后"
+  },
+  "dialogClosedAfterLater": true,
+  "partC": {
+    "created": "workbench-20260929-202245.mnbbak",
+    "upload": "failed-as-expected",
+    "error": "Error: connect ECONNREFUSED 127.0.0.1:9"
+  },
+  "settingsHasUpdateSection": true,
+  "secondLaunch": {
+    "dialogVisible": false,
+    "hash": "#/app/assistant"
+  }
+}

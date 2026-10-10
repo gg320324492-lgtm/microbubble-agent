@@ -1,0 +1,9 @@
+{
+  "steps": [
+    "login: CI 冒烟",
+    "restore: {\"needRestart\":true}"
+  ],
+  "restore": {
+    "needRestart": true
+  }
+}
