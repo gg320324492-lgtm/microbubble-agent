@@ -714,8 +714,12 @@
 
 ### 测试规范
 - **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试。
-  规模：`tests/` 下 **381 个测试文件 / 3782 个 test 函数**；CI 硬门 `server-tests-baseline.yml`
-  8 片实跑 **3112 用例**（2926 passed / 186 skipped）
+  规模：`tests/` 下 **400 个测试文件 / 4133 个 test 函数**（**实测 2026-10-10**；
+  文件数 = `find tests -name "test_*.py" -not -path "*/__pycache__/*" | wc -l`，
+  函数数 = `grep -rhoE "^\s*(async )?def test_" tests/ --include="*.py" | wc -l`
+  —— 写死数字必然随增删漂移，改测试后请按上面两条命令回填）；CI 硬门
+  `server-tests-baseline.yml` 8 片实跑 **3112 用例**（2926 passed / 186 skipped，
+  **该组数字是 2026-09-30 基线**，非实时）
   - ⚠️ **87 个测试文件已归档**（模块级 `pytest.skip`）—— 断言历史 commit / 已下线功能 /
     一次性验收 gate / 需真环境。**恢复流程与分类清单见 [`tests/ARCHIVED.md`](tests/ARCHIVED.md)**。
     守门类测试（`test_no_prod_db_imports.py` 禁止测试直连生产库）**不得归档**。

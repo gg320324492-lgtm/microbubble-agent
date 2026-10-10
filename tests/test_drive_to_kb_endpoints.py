@@ -9,7 +9,7 @@
 - 新 endpoint 不 raise HTTPException (统一 AppException envelope 铁律)
 
 跑法 (SKIP_DB_SETUP=1 模式, 全 mock 无 DB):
-    SKIP_DB_SETUP=1 python -m pytest tests/api/v1/test_drive_to_kb_endpoints.py -v
+    SKIP_DB_SETUP=1 python -m pytest tests/test_drive_to_kb_endpoints.py -v
 """
 import sys
 from unittest.mock import AsyncMock, MagicMock

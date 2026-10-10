@@ -246,11 +246,75 @@ grep -rn "_x[0-9]\{1,3\}$" tests/ --include="*.py" | wc -l   # 期望 0
 
 | 批次 | 执行日期 | commit | 验证结果 | 备注 |
 |---|---|---|---|---|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
-| 4 | | | | |
-| 5 | | | | |
-| 6 | | | | |
-| 7 | | | | |
-| 8 | | | | |
+| 1 | 2026-10-10 | `d209683d0` | 收集数 400→400 / 9 目录全 R 重命名 / ARCHIVED.md DANGLING 0 | ✅ |
+| 2 | 2026-10-10 | `358862c4a` | 深度 3 违规 7→5（论证后保留 5 个：qa-bench 冻结 / e2e×rag 交叉） | ✅ |
+| 3 | 2026-10-10 | `358862c4a` | 收集数 400→400 / 活引用清零 | ✅ |
+| 4 | 2026-10-10 | 待提交 | 死引用 3 类清理 / 3 份索引文档同步（CLAUDE.md 补 400 文件 4133 函数 + 复现命令） | ✅ |
+| 5 | | | | ⏸ **暂缓**（见下方 P0） |
+| 6 | 2026-10-10 | `9f9d485a6` | 5 份边界 README（4 新建 + 1 扩充 52 行） | ✅ |
+| 7 | | | | ⬜ 待执行（desktop-conversion 方案 C） |
+| 8 | | | | ⬜ 待执行 |
+
+---
+
+## 七、P0：CI 长期全红（2026-10-12 插队，优先于批次 5/7）
+
+### 7.1 审计发现的三条硬事实
+
+审计报告：`docs/audit/2026-10-12-workflow-audit.md`
+
+| # | 事实 | 证据 |
+|---|---|---|
+| **F1** | **`main` 分支完全没有保护** | `gh api branches/main/protection` → **404 Branch not protected**；`rulesets` → **`[]`**。**无任何 required check** |
+| **F2** | **`server-tests-baseline` 连续 9+ 次全红**（10-09 至 10-10 从未转绿） | `gh run list --workflow=server-tests-baseline.yml`：10-10 三次、10-09 至少六次，全部 `failure`。CLAUDE.md「829 红灯收敛归零 / 2926 passed」**已失真** |
+| **F3** | **唯一真硬门长期全红 = 门禁形同虚设** | `server-tests-baseline.yml:15-18` 注释白纸黑字写"任一片失败即红，**阻塞合并**"，但 F1 证明**红叉不挡任何 push** |
+
+**F1 + F3 合起来是类 20.220 的教科书案例**：注释宣称"阻塞合并"、配置摘掉了 `continue-on-error` 看起来像硬门，**实际从未阻塞过任何东西**。
+
+### 7.2 根因（已实测取证）
+
+```
+requirements.txt:66   numpy==1.26.2            ← 项目写死
+pyarrow                ← 传递依赖，requirements.txt 根本没声明，要求 numpy >= 2.0
+  ↓ 版本冲突
+app.services.embedding_service import 失败
+  ↓
+"module 'app.services' has no attribute 'embedding_service'"
+  ↓
+连锁打挂 test_recall_fallback / test_rag_query_cache_e2e /
+       test_wp3_resync_indexes / test_embedding_timeout_cancel
+```
+
+**CI 装依赖是纯 `pip install -r requirements.txt`（`server-tests-baseline.yml:88`），不约束传递依赖版本** ⇒ 冲突长期存在。
+
+**⚠️ 该错误非 2026-10-10 改动引入**：`gh run view 37903655731`（**10-09** 的 run）`--log-failed | grep -icE "pyarrow|numpy"` = **137 处命中**，早于当日全部改动。10-10 的 embedding executor 改动只是让 `embedding_service` 被更多测试 import，从而**暴露**了既存冲突。**不需回滚 10-10 的改动**。
+
+### 7.3 修法（主指挥倾向方案 A）
+
+| 方案 | 内容 | 判定 |
+|---|---|---|
+| **A** | 让 `pyarrow` 不进 `embedding_service` 的 import 链（惰性 import / try-except 降级） | ✅ **采纳** —— `embedding_service` 是纯向量计算模块，不该因可选 DataFrame 库版本冲突而整体 import 失败 |
+| B | 升级 numpy 到 2.x | ❌ numpy 2.0 有 ABI 破坏，scipy/sklearn/pandas 全需跟进，连锁风险远大于收益 |
+| C | 显式钉住兼容的 pyarrow 版本 | 备选，若 A 不可行 |
+
+### 7.4 执行顺序（**顺序错会锁死**）
+
+```
+① 修 CI 红灯 ──► ② 确认连续 N 次全绿 ──► ③ 给 main 开分支保护
+```
+
+**⚠️ 绝对不能先开保护再修红灯** —— 那样每次 push 都被挡住，寸步难行。
+
+**主指挥 2026-10-12 明确裁定：全绿之后再开分支保护。**
+
+### 7.5 workflow 判定分布
+
+| 判定 | 数量 | 明细 |
+|---|---|---|
+| 保留 | 5 | `secret-scan` / `desktop-release` / `lint-css` / `build-image` / `playwright` |
+| 可疑 | 5 | `upload-download-page` / `server-tests-baseline` / `qa-bench-baseline` / `rag-framework-ci` / `qa-bench-smoke` |
+| 建议删 | 1 | **`image-scan`** —— 连续 5 周定时全红 + 5 次手动全红，每次烧 8-120 分钟 Actions 额度，**硬路径从未绿过** |
+
+**唯一的真重复**：`rag-framework-ci` 的 pytest 段已被全量 400 文件扫描覆盖，但它**独占 alembic 单 head 守卫** ⇒ 建议**只删 pytest 段、留守卫**。
+
+**职责正交不该合**：`build-image`/`image-scan` = 制品生产 vs 审计；`qa-bench-smoke`/`qa-bench-baseline` = 端到端探针 vs 离线守恒。
