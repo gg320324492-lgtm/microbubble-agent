@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -160,6 +161,45 @@ class Knowledge(Base, TimestampMixin):
     # 列长度约束: ck_knowledge_search_text_len (alembic 089) 限制 ≤ 6000 字符
     search_text = Column(Text, nullable=True)
     # ==================== /PR3 W89 +6 ====================
+
+    # ==================== 多模态子表: 必须在此声明 (2026-10-11) ====================
+    # 原来这两条是 KnowledgeImage / KnowledgeExtraction 上用 backref="images" 自动
+    # 生成的。SQLAlchemy 删父行时, 若 ORM 在**父侧**认得这条一对多且没设
+    # passive_deletes, 就发 `UPDATE 子表 SET knowledge_id=NULL` 让 DB 级联靠边站;
+    # 而 knowledge_images.knowledge_id / knowledge_extractions.knowledge_id 都是
+    # NOT NULL + FK ON DELETE CASCADE ⇒ 撞 NOT NULL:
+    #   NotNullViolationError: null value in column "knowledge_id" ...
+    # 2026-10-11 实测炸点: DriveService.permanent_delete / permanent_delete_batch
+    # 删「网盘文件 + 其 KB 孪生」时, 孪生挂着图片就抛, 而批量是**单事务** ⇒
+    # 用户选 8 个点「彻底删除」→ 整批 0 删除, 前端红 toast「物理删除失败」。
+    #
+    # ⚠️ passive_deletes 必须**父子两侧都**加: 加在本侧(父)、加在子侧、
+    #    写在 backref() 里, 三种写法单独用都无效, backref() 那种还会**静默丢弃**。
+    #    隔离库 scratch_kbcascade + 本仓真实孪生 2818 实测:
+    #      仅子侧 relationship(passive_deletes=True)  → 父侧读出 False → 仍 FAIL
+    #      backref=backref("images", passive_deletes=True) → 父侧 False → 仍 FAIL
+    #      仅本处(父侧) passive_deletes=True            → 父侧 True → **仍 FAIL**
+    #          (父侧 OneToManyDP 跳过了, 但子侧 ManyToOneDP.presort_deletes
+    #           照旧置空 FK —— dependency.py:1039 `if not self.passive_deletes:`)
+    #      父子两侧都 passive_deletes=True + back_populates → OK, 子行归 0
+    #    ⇒ 本处与 knowledge_multimodal.py 的两侧声明必须成对出现, 不可只改一边。
+    #
+    # ⚠️ 为什么不用 cascade="all, delete-orphan" 逐行删: (a) 20 张图 = 20 次往返;
+    #    (b) delete-orphan 语义是"子行一旦解除关联即删除", 而 _reset_multimodal_data
+    #    一类重组逻辑会重连子行, 爆炸半径远大于本 bug。DB 层 CASCADE 已实测存在
+    #    (information_schema.referential_constraints, 两表 delete_rule 均 CASCADE),
+    #    让 DB 负责是与真实 schema 一致的最小改法。
+    #
+    # ⚠️ 未纳入: KnowledgePageTranscript 同样 NOT NULL + CASCADE, 但它那条
+    #    relationship 没有 backref ⇒ 父侧无该关系 ⇒ ORM 不发 UPDATE, DB 级联
+    #    已生效 (隔离库同型实测 DELETE OK / 子行归 0), 故无需改动。
+    images = relationship(
+        "KnowledgeImage", back_populates="knowledge", passive_deletes=True,
+    )
+    extractions = relationship(
+        "KnowledgeExtraction", back_populates="knowledge", passive_deletes=True,
+    )
+    # ==================== 多模态子表: 必须在此声明 (2026-10-11) ====================
 
     # Agent 7 5th-wave 5-file-name 索引 + 长度约束 (table-level)
     __table_args__ = (

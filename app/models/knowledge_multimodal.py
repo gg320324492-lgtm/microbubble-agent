@@ -94,7 +94,17 @@ class KnowledgeImage(Base, TimestampMixin):
     vision_analyzed_at = Column(DateTime, nullable=True)  # 视觉分析时间戳
 
     # 关系
-    knowledge = relationship("Knowledge", backref="images", lazy="selectin")
+    # passive_deletes=True + back_populates: 两侧都要标, 缺一不可 (2026-10-11 实测)。
+    #   · 父侧 Knowledge.images 的 OneToManyDP 负责发那条 UPDATE SET knowledge_id=NULL
+    #   · 本侧 (多对一) 的 ManyToOneDP.presort_deletes 见 dependency.py:1039
+    #     `if not self.passive_deletes:` —— 标了才跳过 FK 置空
+    #   隔离库 scratch_kbcascade 实测: 仅父侧标 → 仍 FAIL; 仅子侧标 → 仍 FAIL;
+    #   两侧都标 → OK 且子行归 0。back_populates 取代原 backref="images",
+    #   因为父侧现在是显式声明 (app/models/knowledge.py), backref 会与之冲突。
+    knowledge = relationship(
+        "Knowledge", back_populates="images", lazy="selectin",
+        passive_deletes=True,
+    )
     extractions = relationship(
         "KnowledgeExtraction",
         backref="source_image",
@@ -148,7 +158,13 @@ class KnowledgeExtraction(Base, TimestampMixin):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # 关系
-    knowledge = relationship("Knowledge", backref="extractions", lazy="selectin")
+    # 同 KnowledgeImage.knowledge: 父子两侧都要 passive_deletes=True + back_populates。
+    # 只修 images 不够 —— 同一批孪生行的 extractions 会在下一步接着炸, 用户仍看到
+    # 「彻底删除失败」(2818 实测挂 15 行 extractions)。
+    knowledge = relationship(
+        "Knowledge", back_populates="extractions", lazy="selectin",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         Index("idx_kb_extraction_kb_kind", "knowledge_id", "kind"),
