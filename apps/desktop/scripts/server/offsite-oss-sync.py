@@ -342,6 +342,11 @@ DEFAULT_INCLUDE = ("*.sql.gz", ".env.*.bak")
 # 与 scripts/backup_db.sh 的 KEEP_DAYS=7 保持一致
 DEFAULT_KEEP_DAYS = 7
 
+# 本项目在共享 prefix 下的专属子目录。依据 = 桶内 `offsite-backup/说明.txt`
+# (2026-09-20 建) 规则 1："每人一个子目录，以自己命名，互不混放"。
+# 它同时是**权限边界**：--cleanup 只删这个子目录下的对象（见 own_prefix）。
+DEFAULT_SUBDIR = "microbubble"
+
 
 # ---------------------------------------------------------------- 凭据
 
@@ -508,12 +513,16 @@ def put_object(creds: Credentials, key: str, path: Path) -> None:
         raise SystemExit(f"[FATAL] 上传失败 {key} (HTTP {status}, {size} bytes): {body[:300]!r}")
 
 
-def list_objects(creds: Credentials) -> list[dict]:
-    """列举 prefix 下全部对象（分页）。"""
+def list_objects(creds: Credentials, prefix: str | None = None) -> list[dict]:
+    """列举 prefix 下全部对象（分页）。prefix 缺省用 creds.prefix。
+
+    传 prefix 是**权限边界**，不只是过滤 —— 见 own_prefix 的说明。
+    """
+    use_prefix = creds.prefix if prefix is None else prefix
     out: list[dict] = []
     token = ""
     while True:
-        q = {"list-type": "2", "prefix": creds.prefix, "max-keys": "1000"}
+        q = {"list-type": "2", "prefix": use_prefix, "max-keys": "1000"}
         if token:
             q["continuation-token"] = token
         status, body = _request(creds, "GET", "", None, q)
@@ -579,14 +588,21 @@ def scan_local(root: Path, prefix: str, includes=DEFAULT_INCLUDE) -> list[Path]:
     return files
 
 
-def remote_key(creds: Credentials, root: Path, path: Path, encrypt: bool) -> str:
-    """远端 key = prefix + 相对根目录的 POSIX 路径（保留目录结构）+ 加密时的 .enc 后缀。
+def remote_key(creds: Credentials, root: Path, path: Path, encrypt: bool,
+               subdir: str = "") -> str:
+    """远端 key = prefix + [子目录/] + 相对根目录的 POSIX 路径 + 加密时的 .enc 后缀。
 
     `.enc` 后缀是**结构性**防线：远端一眼可辨哪些是密文，也让保留策略不会误伤
     任何历史遗留的明文对象（明文 key 不带后缀，自然与本轮 key 不匹配）。
+
+    `subdir` 对齐桶内既有约定（`offsite-backup/说明.txt` 规则 1："每人一个子目录，
+    以自己命名，互不混放"）。默认值空 = 沿用平铺，但那样其他成员的备份会与本项目的
+    文件混在同一前缀下，既违反该约定，也让"谁的文件"无法一眼分辨。
+    注意保留策略按 prefix 列前缀，本子目录仍在 prefix 内，清理逻辑不受影响。
     """
     rel = path.relative_to(root).as_posix()
-    return f"{creds.prefix}{rel}{ENC_SUFFIX if encrypt else ''}"
+    mid = f"{subdir.strip('/')}/" if subdir.strip("/") else ""
+    return f"{creds.prefix}{mid}{rel}{ENC_SUFFIX if encrypt else ''}"
 
 
 def expected_remote_size(path: Path, encrypt: bool) -> int:
@@ -599,10 +615,10 @@ def expected_remote_size(path: Path, encrypt: bool) -> int:
 
 
 def _print_plan(files: list[Path], creds: Credentials, root: Path, encrypt: bool,
-                remote: dict[str, int]) -> int:
+                remote: dict[str, int], subdir: str = "") -> int:
     to_upload, skipped = [], 0
     for f in files:
-        if remote.get(remote_key(creds, root, f, encrypt)) == expected_remote_size(f, encrypt):
+        if remote.get(remote_key(creds, root, f, encrypt, subdir)) == expected_remote_size(f, encrypt):
             skipped += 1
         else:
             to_upload.append(f)
@@ -610,30 +626,47 @@ def _print_plan(files: list[Path], creds: Credentials, root: Path, encrypt: bool
     print(f"[scan] 需上传 {len(to_upload)} 个；同名同大小跳过 {skipped} 个")
     print(f"[scan] 加密={'开（AES-256-GCM）' if encrypt else '关（!! 明文上传 !!）'}")
     for f in to_upload:
-        print(f"       + {remote_key(creds, root, f, encrypt)} "
+        print(f"       + {remote_key(creds, root, f, encrypt, subdir)} "
               f"({f.stat().st_size} → {expected_remote_size(f, encrypt)} bytes)")
     return 0
 
 
-def do_scan(creds: Credentials, root: Path, includes, encrypt: bool) -> int:
+def own_prefix(creds: Credentials, subdir: str = "") -> str:
+    """本项目**独占**的远端前缀 = creds.prefix [+ 子目录/]。
+
+    ⚠️ 这个前缀是权限与安全的边界，不只是命名美化（2026-10-12 补）：
+    `list_objects` 按 creds.prefix 列举，若 prefix 共享给全组，那么
+      ① 幂等比对会看到别人的对象（无害但噪声大）；
+      ② **`--cleanup` 会把别人的备份一起删掉** —— 那是对他人数据的破坏。
+    故列出与清理都必须收敛到自己的子目录；子目录不存在时列举返回空，
+    清理则变成 no-op（而不是"删光 prefix 下全部"）。
+    """
+    mid = subdir.strip("/")
+    return f"{creds.prefix}{mid}/" if mid else creds.prefix
+
+
+def do_scan(creds: Credentials, root: Path, includes, encrypt: bool,
+            subdir: str = "") -> int:
     files = scan_local(root, creds.prefix, includes)
-    remote = {o["key"]: o["size"] for o in list_objects(creds)}
-    return _print_plan(files, creds, root, encrypt, remote)
+    remote = {o["key"]: o["size"]
+              for o in list_objects(creds, prefix=own_prefix(creds, subdir))}
+    return _print_plan(files, creds, root, encrypt, remote, subdir)
 
 
 def do_apply(creds: Credentials, root: Path, includes, encrypt: bool,
-             passphrase: bytes, confirm: bool) -> int:
+             passphrase: bytes, confirm: bool, subdir: str = "") -> int:
     if not confirm:
         print("[apply] 未加 --confirm —— 仅 DRY RUN，未上传任何文件。")
-        return do_scan(creds, root, includes, encrypt)
+        return do_scan(creds, root, includes, encrypt, subdir)
 
     files = scan_local(root, creds.prefix, includes)
-    remote = {o["key"]: o["size"] for o in list_objects(creds)}
+    remote = {o["key"]: o["size"]
+              for o in list_objects(creds, prefix=own_prefix(creds, subdir))}
     uploaded = skipped = 0
     tmpdir = tempfile.mkdtemp(prefix="offsite-enc-") if encrypt else None
     try:
         for f in files:
-            key = remote_key(creds, root, f, encrypt)
+            key = remote_key(creds, root, f, encrypt, subdir)
             if remote.get(key) == expected_remote_size(f, encrypt):
                 skipped += 1
                 continue
@@ -686,10 +719,18 @@ def select_expired(days: int, objects: list[dict]) -> tuple[list[dict], list[dic
     return victims, skipped
 
 
-def do_cleanup(creds: Credentials, days: int, confirm: bool) -> int:
-    victims, undated = select_expired(days, list_objects(creds))
+def do_cleanup(creds: Credentials, days: int, confirm: bool, subdir: str = "") -> int:
+    # ⚠️ 必须按 own_prefix 列举，而不是整个 creds.prefix ——
+    # prefix 是全组共享的根，按它清理会**删掉别人的备份**（对他人数据的破坏）。
+    scope = own_prefix(creds, subdir)
+    objs = list_objects(creds, prefix=scope)
+    if not objs:
+        print(f"[cleanup] {scope} 下无对象，无需清理。")
+        return 0
+    victims, undated = select_expired(days, objs)
+    print(f"[cleanup] 作用域 {scope}：{len(objs)} 个对象，{days} 天前的候选 {len(victims)} 个")
     if not confirm:
-        print(f"[cleanup] 未加 --confirm —— 仅列出 {len(victims)} 个候选（{days} 天前）：")
+        print("[cleanup] 未加 --confirm —— 仅列出候选：")
         for o in victims:
             print(f"          - {o['key']} ({o['last_modified']})")
         return 0
@@ -733,6 +774,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep-days", type=int, default=DEFAULT_KEEP_DAYS,
                         help=f"--apply 成功后顺带清理远端 N 天前的对象（默认 {DEFAULT_KEEP_DAYS}，"
                              f"与 scripts/backup_db.sh 的 KEEP_DAYS 一致；传 0 表示不清理）")
+    parser.add_argument("--subdir", default=DEFAULT_SUBDIR, metavar="NAME",
+                        help=f"远端 prefix 下的本项目专属子目录（默认 {DEFAULT_SUBDIR!r}）。"
+                             "既是命名隔离，也是**权限边界**：--cleanup 只作用于该子目录，"
+                             "不会删掉同 prefix 下其他成员的备份（桶内说明.txt 规则 1）")
     parser.add_argument("--decrypt-into", metavar="DIR",
                         help="解密模式：把给定 .enc 文件解到 DIR")
     parser.add_argument("files", nargs="*", help="--decrypt-into 模式下的密文文件路径")
@@ -740,6 +785,7 @@ def main(argv: list[str] | None = None) -> int:
 
     encrypt = True  # 加密无开关（见模块 docstring）
     includes = tuple(args.includes) if args.includes else DEFAULT_INCLUDE
+    subdir = args.subdir.strip("/")
 
     # --- 解密模式：不碰 OSS 凭据，也不需要备份根目录 ---
     if args.decrypt_into:
@@ -761,16 +807,17 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(args.root) if args.root else default_root()
     print(f"[init] bucket={creds.bucket} endpoint={creds.endpoint} prefix={creds.prefix}")
     print(f"[init] root={root} include={list(includes)} encrypt={encrypt} keep_days={args.keep_days}")
+    print(f"[init] subdir={subdir!r} scope={own_prefix(creds, subdir)}")
 
     if args.scan:
-        return do_scan(creds, root, includes, encrypt)
+        return do_scan(creds, root, includes, encrypt, subdir)
     if args.apply:
-        rc = do_apply(creds, root, includes, encrypt, passphrase, args.confirm)
+        rc = do_apply(creds, root, includes, encrypt, passphrase, args.confirm, subdir)
         if rc == 0 and args.confirm and args.keep_days > 0:
             # 原设计缺的那块：上传完不清理 → 远端无限增长
-            rc = do_cleanup(creds, args.keep_days, confirm=True)
+            rc = do_cleanup(creds, args.keep_days, confirm=True, subdir=subdir)
         return rc
-    return do_cleanup(creds, int(args.cleanup), args.confirm)
+    return do_cleanup(creds, int(args.cleanup), args.confirm, subdir)
 
 
 if __name__ == "__main__":
