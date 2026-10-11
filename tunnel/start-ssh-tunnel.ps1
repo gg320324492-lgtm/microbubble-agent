@@ -1,4 +1,4 @@
-# SSH 反向隧道启动脚本 - 替代 frpc
+﻿# SSH 反向隧道启动脚本 - 替代 frpc
 # 使用 Windows 内置 OpenSSH（微软签名，不受 WDAC 阻止）
 
 param(
@@ -186,7 +186,6 @@ function Watch-SshTunnel {
             $interval = [Math]::Min($BASE_INTERVAL_SEC * [Math]::Pow(2, [Math]::Min($consecutiveFailures, 4)), $MAX_INTERVAL_SEC)
             Write-Log "ERROR: restart failed (连续 $consecutiveFailures 次)，下次 ${interval}s 后重试"
         }
-    }
     }
 }
 
