@@ -56,6 +56,7 @@ import shutil
 import struct
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -73,6 +74,11 @@ DEFAULT_PREFIX = "offsite-backup/"
 # 备份绝不可用该桶。本机环境变量指向的是私有桶 `mnb-workbench-backup`（匿名探测 AccessDenied）。
 SSE_HEADER = "x-oss-server-side-encryption"
 SSE_VALUE = "AES256"
+
+# 网络重试（2026-10-12 首次真实上传实测定标：82MB dump 传 39 秒即超时中断）
+UPLOAD_RETRIES = 5
+UPLOAD_TIMEOUT_S = 300   # 大 dump 上行慢，120s 偏紧
+UPLOAD_BACKOFF_BASE_S = 2 # 2/4/8/16s 指数退避，总计约 30s
 
 # ---------------------------------------------------------------- 口令
 
@@ -281,8 +287,28 @@ def last_chunk_plain_len(hdr: dict) -> int:
     return hdr["plain_len"] - (hdr["chunks"] - 1) * hdr["chunk_bytes"]
 
 
+def _discard_partial(dst: Path) -> None:
+    """丢弃解密到一半的半成品文件。
+
+    ⚠️ 必须**绝不允许抛异常**（2026-10-12 修）。若清理失败就抛，
+    "口令错误"这条本该清晰的 `[FATAL]` 会被无关的 traceback 掩盖，操作者看到的
+    是崩溃而不是原因。实测于 Windows 上调用点位于 `with dst.open("wb")` 块内部、
+    文件句柄仍开着时，`unlink` 直接抛 `PermissionError [WinError 32]`。
+    ⇒ 清理只提示、不中断：错误的**原因**优先级高于"删掉临时文件"。
+    """
+    try:
+        dst.unlink(missing_ok=True)
+    except OSError as e:
+        print(f"[WARN] 半成品文件未能删除（稍后请手动清理）: {dst} ({e})", file=sys.stderr)
+
+
 def decrypt_file(src: Path, dst: Path, passphrase: bytes) -> int:
-    """解密到 dst，返回明文字节数。口令错 / 被篡改 / 截断 全部抛 SystemExit。"""
+    """解密到 dst，返回明文字节数。口令错 / 被篡改 / 截断 全部抛 SystemExit。
+
+    失败时**不留明文残留**：把失败原因暂存，等 with 块（文件句柄）关闭后再删。
+    在块内直接删在 Windows 上必然失败（句柄未关），半成品会留在磁盘上 ——
+    而错口令场景下那文件里已是**已解出的明文**，恰恰是最不该留下的东西。
+    """
     AESGCM, _, _, _, InvalidTag = _crypto()
     hdr = read_envelope_header(src)
     aad_prefix = ENC_AAD_PREFIX.pack(
@@ -292,6 +318,7 @@ def decrypt_file(src: Path, dst: Path, passphrase: bytes) -> int:
     master = _master_key(passphrase, hdr["salt"], hdr["iterations"])
 
     written = 0
+    failure: str | None = None
     with src.open("rb") as fin, dst.open("wb") as fout:
         fin.read(ENC_HEADER.size)  # 头已单独解析
         for index in range(hdr["chunks"]):
@@ -303,11 +330,11 @@ def decrypt_file(src: Path, dst: Path, passphrase: bytes) -> int:
             )
             block = fin.read() if is_last else fin.read(expect)
             if len(block) != expect:
-                dst.unlink(missing_ok=True)
-                raise SystemExit(
+                failure = (
                     f"[FATAL] 密文第 {index}/{hdr['chunks']} 块长度不符"
                     f"（期望 {expect}，实得 {len(block)}）—— 被截断或尾部被追加: {src}"
                 )
+                break
             ct, tag = block[:-ENC_TAG_LEN], block[-ENC_TAG_LEN:]
             aad = aad_prefix + struct.pack(">Q", index)
             try:
@@ -315,16 +342,20 @@ def decrypt_file(src: Path, dst: Path, passphrase: bytes) -> int:
                     _chunk_nonce(hdr["nonce"], index), ct + tag, aad
                 )
             except InvalidTag:
-                dst.unlink(missing_ok=True)
                 # InvalidTag 是"口令错"与"密文被改"共同的表现，无法区分 —— 如实说明
-                raise SystemExit(
-                    f"[FATAL] 第 {index} 块 GCM 校验失败：口令错误，或密文被篡改/块序被打乱。\n"
-                    f"        文件: {src}"
+                failure = (
+                    f"[FATAL] 第 {index} 块 GCM 校验失败："
+                    f"口令错误，或密文被篡改/块序被打乱。\n        文件: {src}"
                 )
+                break
             fout.write(pt)
             written += len(pt)
+
+    if failure:
+        _discard_partial(dst)  # 句柄已关，此刻删除才可能成功
+        raise SystemExit(failure)
     if written != hdr["plain_len"]:  # pragma: no cover - 头与体不自洽
-        dst.unlink(missing_ok=True)
+        _discard_partial(dst)
         raise SystemExit(
             f"[FATAL] 明文长度对账失败（头称 {hdr['plain_len']}，实得 {written}）: {src}"
         )
@@ -476,7 +507,6 @@ def _request(
         extra["Content-Type"] = "application/octet-stream"
         extra["Content-Length"] = str(len(payload))
 
-    auth, date = build_auth_header(creds, method, object_key, extra, query)
     host = f"{creds.bucket}.{creds.endpoint}"
     url = f"https://{host}/"
     if object_key:
@@ -484,19 +514,43 @@ def _request(
     if query:
         url += "?" + _canonical_query(query)
 
-    headers = {
-        "Authorization": auth,
-        "Date": date,
+    base_headers = {
         "User-Agent": "mnb-offsite-sync/1.0",
     }
-    headers.update(extra)
+    base_headers.update(extra)
 
-    req = urllib.request.Request(url, data=payload if body is not None else None, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            return resp.status, resp.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
+    # 网络层重试（指数退避）。
+    # ⚠️ 2026-10-12 首次真实上传实测: 无重试时 39 秒即因 `URLError [WinError 10060]`
+    # 连接超时中断，40 个文件只传完 35 个 —— 大文件（40~82MB）最容易撞上。
+    # 计划任务每天只跑一次，**一次抖动就丢一天**，故必须在此兜。
+    # 只重试传输层错误（URLError/OSError）；HTTPError 已在下面按状态码返回，
+    # 交由调用方判断（4xx 重试无意义，403 签名错重试多少次都一样）。
+    last_exc: Exception | None = None
+    for attempt in range(1, UPLOAD_RETRIES + 1):
+        # ⚠️ 每次重试**必须重新签名**：V1 签名的 Date 头有 15 分钟有效期，
+        # 退避后复用同一个 auth 头会拿到 403 SignatureDoesNotMatch —— 那是"签名过期"
+        # 而非"真的签名错"，不重新签就会把可恢复的网络抖动变成不可恢复的失败。
+        auth, date = build_auth_header(creds, method, object_key, extra, query)
+        req = urllib.request.Request(
+            url, data=payload if body is not None else None,
+            headers={**base_headers, "Authorization": auth, "Date": date}, method=method,
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=UPLOAD_TIMEOUT_S) as resp:
+                return resp.status, resp.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read()
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            last_exc = e
+            if attempt == UPLOAD_RETRIES:
+                break
+            backoff = UPLOAD_BACKOFF_BASE_S * (2 ** (attempt - 1))
+            print(f"[retry] {object_key or '(bucket)'} 第 {attempt}/{UPLOAD_RETRIES} 次失败 "
+                  f"({e}); {backoff:.0f}s 后重试", file=sys.stderr)
+            time.sleep(backoff)
+    raise SystemExit(
+        f"[FATAL] {object_key or '(bucket)'} 网络重试 {UPLOAD_RETRIES} 次仍失败: {last_exc}"
+    )
 
 
 def put_object(creds: Credentials, key: str, path: Path) -> None:
