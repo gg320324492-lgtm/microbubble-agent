@@ -64,6 +64,30 @@ if ((Get-Item $PassphraseFile).Length -lt 32) {
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
 
+# ---- Credential pre-check (unless -CredsFile was given) ----
+# A scheduled task runs with the environment of its principal, NOT of the shell that
+# installs it. The OSS credentials here live in **User-level** env vars, so this only
+# proves anything for a task registered under this same user -- which is why the
+# principal below is the current user, not SYSTEM. Checking now turns "fails at 03:30
+# every night" into "told at install time".
+if ($CredsFile -eq "") {
+    $missing = @()
+    foreach ($k in @("OSS_BUCKET", "OSS_ENDPOINT", "OSS_ACCESS_KEY_ID", "OSS_ACCESS_KEY_SECRET")) {
+        $v = [Environment]::GetEnvironmentVariable($k, "User")
+        if (-not $v) { $missing += $k }
+    }
+    if ($missing.Count -gt 0) {
+        Write-Host "[WARN] not set for user '$env:USERDOMAIN\$env:USERNAME': $($missing -join ', ')" -ForegroundColor Yellow
+        Write-Host "       The sync script will fail-loud at $Time until these are set (setx, then log off/on)." -ForegroundColor Yellow
+        Write-Host "       Or pass -CredsFile <json> to supply them from a file instead." -ForegroundColor Yellow
+    } else {
+        Write-Host "[OK] OSS credentials present in user environment"
+    }
+} else {
+    if (-not (Test-Path $CredsFile)) { Write-Host "[ERROR] -CredsFile not found: $CredsFile" -ForegroundColor Red; exit 1 }
+    Write-Host "[OK] using credentials file: $CredsFile"
+}
+
 # ---- Interpreter self-check (class 20.220: verify the side effect really happens) ----
 # The sync script cannot upload anything without `cryptography` (encryption has no
 # switch). On this machine `python` on PATH resolves to **Python 3.10, which does NOT
@@ -111,7 +135,12 @@ $LogFile = Join-Path $LogDir "offsite-sync-$Stamp.log"
 $CredsArg = ""
 if ($CredsFile -ne "") { $CredsArg = " --creds `"$CredsFile`"" }
 
-$Inner = "`"$PythonExe`" `"$SyncScript`" --apply --confirm --root `"$Root`" --passphrase-file `"$PassphraseFile`"$CredsArg >> `"$LogFile`" 2>&1"
+# Set PYTHONIOENCODING=utf-8 for the child: the script's messages are Chinese and
+# Python encodes them with the **ANSI code page** (GBK on this machine), while
+# `chcp 65001` below makes the console/redirect expect UTF-8. The mismatch is what
+# produced mojibake in the very first real run. Also use ASCII timestamps instead of
+# %DATE%, which injects a Chinese weekday into every log line.
+$Inner = "set `"PYTHONIOENCODING=utf-8`" & `"$PythonExe`" `"$SyncScript`" --apply --confirm --root `"$Root`" --passphrase-file `"$PassphraseFile`"$CredsArg >> `"$LogFile`" 2>&1"
 $Wrapper = Join-Path $LogDir "run-offsite-sync.cmd"
 
 # cmd wrapper keeps schtasks /TR simple and avoids quoting hell in the task definition.
@@ -125,19 +154,42 @@ $WrapperBody = @(
 Set-Content -Path $Wrapper -Value $WrapperBody -Encoding ASCII
 
 # Idempotent: remove an existing task first, otherwise /Create fails with "already exists".
-$existing = schtasks /Query /TN $TaskName 2>$null
-if ($LASTEXITCODE -eq 0) {
+#
+# Use the Get-ScheduledTask cmdlet rather than `schtasks /Query`: schtasks writes
+# "ERROR: The system cannot find the file specified." to **stderr** when the task does
+# not exist -- which is the normal first-install case -- and with
+# $ErrorActionPreference="Stop" that stderr becomes a terminating error. The install
+# therefore aborted on every clean machine (reproduced here). A cmdlet returns $null
+# instead and never writes to stderr.
+$existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+if ($existing) {
     Write-Host "[INFO] removing existing task $TaskName"
-    schtasks /Delete /TN $TaskName /F | Out-Null
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
 
-$output = schtasks /Create /TN $TaskName `
-    /TR "`"$Wrapper`"" `
-    /SC DAILY /ST $Time `
-    /RL HIGHEST /F 2>&1
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] schtasks /Create failed: $output" -ForegroundColor Red
+# Register via the cmdlets rather than `schtasks /Create` for the same stderr reason
+# as above. Register-ScheduledTask also lets us be explicit about the things that
+# silently produce a task that never runs:
+#   - Action points at the .cmd wrapper (an executable), never at a script file;
+#   - StartWhenAvailable, so a machine that was off at 03:30 still runs it.
+#
+# CAUTION: Principal = the **current user**, deliberately NOT SYSTEM. The OSS credentials
+# live in **User-level** environment variables, and SYSTEM does not read those --
+# a SYSTEM task would fail-loud with "missing OSS_BUCKET" every single night.
+# RunLevel stays Limited: registering as SYSTEM is also what silently breaks the
+# `Credentials must not be empty` check above, since a different principal has a
+# different environment.
+$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" `
+    -LogonType Interactive -RunLevel Limited
+$action = New-ScheduledTaskAction -Execute $Wrapper
+$trigger = New-ScheduledTaskTrigger -Daily -At $Time
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries `
+    -AllowStartIfOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+try {
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
+        -Principal $principal -Settings $settings -Force | Out-Null
+} catch {
+    Write-Host "[ERROR] Register-ScheduledTask failed: $_" -ForegroundColor Red
     exit 1
 }
 
