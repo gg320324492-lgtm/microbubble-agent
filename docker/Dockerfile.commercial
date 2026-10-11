@@ -61,6 +61,27 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
         libpq5 libffi8 libssl3 tini curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# 2026-10-12 L-8: **runtime 阶段也要升级 setuptools** —— 本文件是多阶段构建,
+#   builder 段的 `pip install --upgrade setuptools` (:36) 装进的是 builder 自己的
+#   /usr/local/lib/python3.11/site-packages, 而下面只 COPY 了 `/root/.local`,
+#   **那份升级后的 setuptools 根本没进最终镜像**。runtime 是全新的
+#   FROM python:3.11.17-slim ⇒ 保留基础镜像自带的 **setuptools 79.0.1**。
+#
+#   实测危害(trivy 同一份报告的文件清单 + setuptools 79.0.1 tarball 的 _vendor/ 清单
+#   双向取证, 两条完全对上):
+#       setuptools 79.0.1 _vendor/  →  jaraco.context 5.3.0  (CVE-2026-23949)
+#                                      wheel        0.45.1  (CVE-2026-24049)
+#       setuptools 84.0.0 _vendor/  →  jaraco_context 6.1.2 / wheel 0.46.3  (均已修复)
+#   ⇒ commercial 的 6 条 HIGH 比 app / voice-pipeline 的 4 条多出的**正是这 2 条**;
+#     那两个镜像是单阶段构建, `--upgrade setuptools` 生效 ⇒ setuptools 84.0.0。
+#
+#   ⚠️ 这是类 20.220 的一个变体: Dockerfile 里**写着**升级了 setuptools, 构建也成功,
+#     但**副作用没发生在成品镜像里**(多阶段 COPY 只带走了一个目录)。判断"某个包装上了
+#     没有"必须以**最终镜像内实测**为准, 不能读 Dockerfile 就以为它装过。
+#   ⚠️ 本行**不升级 pip**: 与 Dockerfile / Dockerfile.voice-pipeline 同理,
+#     `--upgrade pip` 会把 pip 的 `_vendor/setuptools` 拉到有 CVE 的 70.3.0。
+RUN pip install --no-cache-dir --upgrade setuptools
+
 # 复制 builder 阶段装好的 Python 包
 COPY --from=builder /root/.local /home/microbubble/.local
 ENV PATH=/home/microbubble/.local/bin:$PATH
