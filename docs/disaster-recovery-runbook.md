@@ -26,6 +26,30 @@
 
 > 换机流程：先确认手上有没有这个口令文件，**没有就不要先删旧机**。
 
+### 把口令备份到 Bitwarden（可选但强烈建议）
+
+口令在**两处**：本机 `.secrets/` 明文文件 + Bitwarden 加密库（云端同步）。
+主密码丢了没有任何人能找回（Bitwarden 零知识架构），所以主密码务必与其它网站**不复用**。
+
+**做法（网页版，30 秒）**：
+
+1. `vault.bitwarden.com` → 右上「+」→ **笔记**（不是"登录"）
+2. 名称填 `小气工作台-异地备份口令`
+3. 备注粘贴口令（`Get-Content .secrets\offsite_backup.passphrase -Raw`，复制后终端 `cls` 清屏）
+4. 可选自定义字段：`bucket` / `prefix` / `runbook` / `local_passphrase_file`
+
+**⚠️ 不要用 CLI 自动化（实测踩坑，2026-10-12）**：
+
+`scripts/backup/store_passphrase_in_bitwarden.py` 走 `bw create item`，在 Windows 上
+**读不到管道输入** —— 喂合法 JSON 与喂 `NOT-JSON-AT-ALL` 报**完全相同**的
+`Error parsing the encoded request data.`，等价于读到空 stdin。
+payload 格式本身没问题（`type: 1/2`、`fields`、中文 name 全部试过，一样失败），
+`bw` 是真 exe 非 shim，`status`/`sync`/`list` 全部 rc=0 正常。
+⇒ 只有需要 stdin 的子命令挂。**故走网页/桌面端手动录入。**
+
+⚠️ **CLI 的 session key 是进程级环境变量，不跨终端标签页** ——
+`$env:BW_SESSION = ...` 只在设过它的那个标签里有效，新开标签仍是 `locked`。
+
 ## 恢复步骤
 
 ### 场景 A：取回某一天的数据库备份
