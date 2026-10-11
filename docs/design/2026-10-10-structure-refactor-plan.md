@@ -351,6 +351,16 @@ app.services.embedding_service import 失败
 | 基线 | — | 0/8 | — | 10 周全红 |
 | R1 | `0ec0153f0` | 3/8 | `db` `mcp` `web` | `Dockerfile.mcp` 三重修复（CVE pin / sh 重定向 / COPY 缺失）生效 |
 | R2 | `679721665` | **5/8** | +`whisper` `funasr` | 移除 `pip install --upgrade pip`，消各 4 条 vendor CVE |
+| R3 | `619ae84ad` | 5/8 | — | 消 pyasn1 4 条（每 job 12→4）|
+| R4 | `5ffc56bd2` | **6/8** | +`whisper`(本轮绿) | commercial 6→4，与其余齐平 |
+
+**三轮 CVE 构成的变化（每 job 的 HIGH 条数）**：
+
+| 轮次 | app | voice-pipeline | commercial |
+|---|---|---|---|
+| R2 后 | 12 | 12 | 12 |
+| R3 后 | 4 | 4 | 6 |
+| R4 后 | **4** | **4** | **4** |
 
 **R2 主根因（实测取证，非推断）**：4 条 HIGH 来自 **pip 自己的 `_vendor/`**，不是我们装的包。
 
@@ -361,19 +371,41 @@ app.services.embedding_service import 失败
 
 ⇒ **修法 = 删掉 `pip install --upgrade pip`**（`Dockerfile.whisper` / `Dockerfile.funasr`），
 保留 `--upgrade setuptools`。这是"升级工具本身反而引入 CVE"的典型。
+⚠️ **R2 漏了 `Dockerfile` / `Dockerfile.voice-pipeline`** —— R3 补上(这两处是 `--upgrade pip` 执行者)。
 
-**R2 后剩余 3 红（`app` `commercial` `voice-pipeline`）明细 —— 全是同一批已知项，无新面孔**：
+**R3 根因：pyasn1 被上游硬上界锁死**（不是我们能直接加下限的那种）。
+`python-jose 3.4.0` 的 metadata 是 `pyasn1<0.5.0,>=0.4.1` ⇒ 锁死 0.4.x；
+`3.5.0` 改成 `pyasn1>=0.5.0`（**上界消失，其余约束一字未改**）⇒ 升 python-jose 一个 minor 即可。
+唯一上界来源就是它（`rsa 4.9.1` 只要求 `>=0.1.3`，`ecdsa` 不要 pyasn1）。
+双向实测：`3.5.0 + pyasn1>=0.6.4` 干净解析；`3.4.0 + pyasn1>=0.6.4` ResolutionImpossible。
+
+**R4 根因：多阶段构建让 setuptools 升级白做**（类 20.220 的新变体）。
+`docker/Dockerfile.commercial` 是两阶段：`--upgrade setuptools` 装在 **builder** 的
+`/usr/local`，而 runtime 是全新 `FROM python:3.11.17-slim` 且只 `COPY /root/.local`
+⇒ **升级后的 setuptools 根本没进最终镜像**，留下基础镜像自带的 79.0.1。
+而 `setuptools 79.0.1` 的 `_vendor/` 正好带着两条 CVE：
+
+| setuptools | `_vendor/jaraco.context` | `_vendor/wheel` |
+|---|---|---|
+| 79.0.1（commercial 多阶段漏掉）| 5.3.0 ❌ CVE-2026-23949 | 0.45.1 ❌ CVE-2026-24049 |
+| 84.0.0（app / voice-pipeline 单阶段生效）| 6.1.0 ✅ | 0.46.3 ✅ |
+
+⚠️ **别去动 requirements.txt**：`jaraco.context>=6.1.0` / `wheel>=0.46.2` 两条下限是对的，
+镜像里**真正安装**的这两个包实测就是 6.1.2 / 0.46.3（干净）。报出的老版本**只在 setuptools/_vendor/ 下**。
+
+**R4 后的剩余 —— 已无可低成本修的项**：
 
 | 包 | 现装 | 修的版本 | 阻塞 |
 |---|---|---|---|
 | mcp | 1.12.4 | 1.23.0 / 1.27.2 / 1.28.1 | `uvicorn==0.24.0` 硬钉（ASGI 栈立项）|
 | langchain-core | 0.3.86 | 1.2.22 | 0.3→1.2 跨大版本（独立立项）|
-| pyasn1 | 0.4.8 | 0.6.3 / 0.6.4 | ⚠️ **可单独修**（`python-jose[cryptography]` 拉入）|
-| setuptools | 70.3.0 | 78.1.1 | ⚠️ **可单独修** |
 
-**4/5 已定性的规律**：image-scan 的红不是"代码坏了"，而是"依赖版本落后于 CVE 修复"。
-其中 **pyasn1 + setuptools 两条不牵 ASGI 栈，属低风险可收尾项**；
-mcp + langchain-core 须独立立项（前者动 uvicorn，后者跨 major）。
+**四轮共同的形态（比"某个包版本老"更值得记）**：
+**报出的 CVE 有三类载体 —— pip 的 `_vendor/`、setuptools 的 `_vendor/`、以及真正安装的包。**
+前两类看起来"版本号不对"但**改 requirements.txt 完全无效**（真装的包本来就是干净的），
+只有第三类才能靠改 requirements.txt 解决。⇒ 排查顺序必须是
+**先看 trivy 报的文件路径**（在 `_vendor/` 下还是在 `site-packages/` 下），
+再决定改哪里 —— 否则会在错误的文件里找原因。
 
 ---
 

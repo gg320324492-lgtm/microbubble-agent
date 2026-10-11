@@ -384,6 +384,22 @@
   逐文件重跑后发现**其中 22 个其实是 failed**, 只是被管道吞掉了。
   ⇒ **纪律**: 报告测试结果**必须给逐文件/分组的 passed-failed 数字**,不能只报
   exit code; 且 `pytest ... | head` 这类截断管道**禁止用于判定成败**。
+  ⚠️ **同源第 3 形态 (2026-10-12 image-scan 三轮实战): "Dockerfile 里写着装了" ≠
+  "成品镜像里装了" —— 多阶段构建的副作用会整段丢失**。
+  `docker/Dockerfile.commercial` 的 `pip install --upgrade setuptools` 写在 **builder** 段
+  (装进 builder 的 `/usr/local`), 而 runtime 段是**全新的 `FROM python:3.11.17-slim`**
+  且只 `COPY --from=builder /root/.local` ⇒ **升级后的 setuptools 根本没进最终镜像**,
+  成品里留的是基础镜像自带的 **79.0.1**, 而 79.0.1 的 `_vendor/` 带着 2 条 CVE
+  (`jaraco.context 5.3.0` / `wheel 0.45.1`; 84.0.0 vendor 的是已修复的 6.1.0/0.46.3)。
+  构建成功、Dockerfile 写得对、**副作用却没发生在成品里**。
+  ⇒ **纪律**: 判"某个包装上了没有 / 某次升级生效没有",唯一可靠依据是
+  **最终镜像内实测**(如 `docker run <img> python -c "import setuptools; print(...)"`),
+  **不能读 Dockerfile 就以为它装过** —— 多阶段构建里 builder 与 runtime 是两个文件系统。
+  **配套 (同一轮踩到)**: 排查 CVE 时**先看 trivy 报的文件路径**再决定改哪里 ——
+  报出的老版本若在 `pip/_vendor/` 或 `setuptools/_vendor/` 下, 那是**工具自带的副本**,
+  改 `requirements.txt` **完全无效**(真装的包本来就是干净的); 只有报在 `site-packages/`
+  下的才能靠 requirements.txt 修。image-scan 四轮里 3 类载体(pip vendor /
+  setuptools vendor / 真装的包)各占一批, 不看路径就会在错误的文件里找原因。
   同源第 2 例: 容器镜像不含 `docs/`(实测 `/app/docs` No such file),而
   `tests/rag/test_pr10_docs_e2e.py:18` 用 `REPO_ROOT/"docs"/"rag"` 取**宿主**
   文档 —— 该测试**设计上只能在宿主跑**(其 docstring 自述"本机可直接跑")。
