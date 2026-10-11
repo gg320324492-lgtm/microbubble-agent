@@ -118,82 +118,14 @@ if ($Quiet) {
 }
 
 # ---------- TTS ----------
-# 3 层 fallback：ChatTTS（离线）→ edge-tts（在线高质量）→ SAPI（保底）
-# ChatTTS 跑在容器内，本地推理 0 网络依赖；edge-tts 走 Azure 短文本偶发 rate limit；SAPI 是 100% 保底
-
-# 容器内 ChatTTS 合成（base64 传 text 避免 quoting + 中文问题）
-# 关键：本地缓存 — 同一段文字只合成一次
-function Invoke-ChatTTS {
-    param([string]$Text)
-
-    $container = "microbubble-agent-app-1"
-    $chattsScript = "/app/app/chatts_synth.py"
-
-    # 缓存路径：$env:LOCALAPPDATA\voice-alert-cache\<hash>.wav
-    $cacheDir = Join-Path $env:LOCALAPPDATA "voice-alert-cache"
-    if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
-
-    # Cache key 包含 prompt+seed：任何风格变化都生成新缓存
-    $chattsPrompt = "[oral_2][laugh_0][speed_5]用甜美、温柔的女性声音说话，语气亲切自然，略带活泼"
-    $chattsSeed = 42
-    $cacheKey = [BitConverter]::ToString([System.Security.Cryptography.MD5]::Create().ComputeHash(
-        [Text.Encoding]::UTF8.GetBytes("chatts|$chattsSeed|$chattsPrompt|$Text")
-    )).Replace("-", "").Substring(0, 16)
-    $wavCached = Join-Path $cacheDir "$cacheKey.wav"
-
-    # 命中缓存：直接播
-    if (Test-Path $wavCached) {
-        try {
-            Add-Type -AssemblyName PresentationCore -ErrorAction Stop
-            $player = New-Object System.Windows.Media.MediaPlayer
-            $player.Open($wavCached)
-            $player.Play()
-            $estimatedSec = [Math]::Max(3, [int]($Text.Length / 4.0) + 1)
-            Start-Sleep -Seconds $estimatedSec
-            $player.Close()
-            Write-Log "DEBUG" "chatts cache hit" @{ key = $cacheKey }
-            return $true
-        }
-        catch {
-            Write-Log "DEBUG" "cached WAV playback failed" @{ error = $_.Exception.Message }
-        }
-    }
-
-    # 缓存未命中：调 docker 合成 → 落容器 → cp 出来 → 缓存
-    $wavContainer = "/tmp/chatts-$cacheKey.wav"
-    $textB64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Text))
-
-    $env:MSYS2_ARG_CONV_EXCL = '*'
-    $dockerOut = docker exec $container python $chattsScript "$textB64" $wavContainer --seed $chattsSeed --prompt "$chattsPrompt" 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "DEBUG" "chatts docker exec failed" @{ error = ($dockerOut -join "`n") }
-        return $false
-    }
-
-    # cp WAV 到本机缓存
-    $cpOut = docker cp "${container}:${wavContainer}" $wavCached 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log "DEBUG" "docker cp (chatts) failed" @{ error = ($cpOut -join "`n") }
-        return $false
-    }
-
-    # 播放缓存的 WAV
-    try {
-        Add-Type -AssemblyName PresentationCore -ErrorAction Stop
-        $player = New-Object System.Windows.Media.MediaPlayer
-        $player.Open($wavCached)
-        $player.Play()
-        Write-Log "DEBUG" "chatts voice playing (cached)" @{ key = $cacheKey }
-        $estimatedSec = [Math]::Max(3, [int]($Text.Length / 4.0) + 1)
-        Start-Sleep -Seconds $estimatedSec
-        $player.Close()
-        return $true
-    }
-    catch {
-        Write-Log "DEBUG" "WAV playback failed" @{ error = $_.Exception.Message }
-        return $false
-    }
-}
+# 2 层 fallback：edge-tts（在线高质量）→ SAPI（保底）
+# edge-tts 走 Azure 短文本偶发 rate limit；SAPI 是 100% 离线保底
+#
+# 2026-10-12 删除 ChatTTS 层（死引用清理）：原 `Invoke-ChatTTS` 调用容器内
+# `/app/app/chatts_synth.py`，但该脚本**仓内、容器内均已不存在**
+# （`git grep chatts` 在 *.py/requirements 零命中，requirements 也无 ChatTTS 依赖）。
+# 它每次调用都要 `docker exec` 起一个进程再失败，是纯负开销的假 fallback。
+# 删除后本脚本零死引用；全仓亦再无指向不存在文件的代码路径。
 
 # 容器内 edge-tts 合成（base64 传 text 避免 quoting + 中文问题）
 # 关键：本地缓存 — 同一段文字只合成一次，避免 Microsoft Azure rate limit（短时间多次请求会触发 NoAudioReceived）
@@ -272,12 +204,6 @@ function Invoke-TTS {
     # 主路径 1：edge-tts（XiaoxiaoNeural 甜美女声，缓存命中后完全离线）
     if (Invoke-EdgeTTS -Text $Text -Voice $Voice) {
         Write-Log "INFO" "tts via edge-tts" @{ voice = $Voice }
-        return $true
-    }
-
-    # 主路径 2：ChatTTS（离线推理，男声但 100% 离线保底）
-    if (Invoke-ChatTTS -Text $Text) {
-        Write-Log "INFO" "tts via chatts (offline)" @{}
         return $true
     }
 
