@@ -64,6 +64,43 @@ if ((Get-Item $PassphraseFile).Length -lt 32) {
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
 
+# ---- Interpreter self-check (class 20.220: verify the side effect really happens) ----
+# The sync script cannot upload anything without `cryptography` (encryption has no
+# switch). On this machine `python` on PATH resolves to **Python 3.10, which does NOT
+# have it**, while Python 3.12 does. A task installed against the wrong interpreter
+# would therefore fail silently every night with a log full of "[FATAL] needs
+# cryptography". Catch that here, at install time, instead of at 03:30 every day.
+#
+# NOTE: probe with a snippet that prints a marker and swallows the ImportError, so
+# nothing goes to stderr. `$ErrorActionPreference = "Stop"` turns ANY stderr from a
+# native command into a terminating error, which would surface a raw Python
+# traceback instead of the actionable message below.
+# Resolve the interpreter path FIRST. `Test-Path` alone is wrong here: it returns
+# false for a bare command name like "python" even when it resolves fine on PATH
+# (that mistake made this check reject the very interpreter we wanted to accept).
+# Get-Command handles both an absolute path and a PATH name / py launcher.
+$pyCmd = $null
+try { $pyCmd = Get-Command $PythonExe -ErrorAction Stop } catch { $pyCmd = $null }
+$pyVer = ""
+if ($pyCmd) {
+    $pyVer = (& $PythonExe -c "import sys;print('%d.%d' % sys.version_info[:2])" 2>$null)
+}
+if (-not $pyVer) {
+    Write-Host "[ERROR] -PythonExe '$PythonExe' is not a runnable Python interpreter." -ForegroundColor Red
+    Write-Host "        Check the path, or use the py launcher:  -PythonExe 'py -3.12'" -ForegroundColor Yellow
+    exit 1
+}
+$pyCrypto = (& $PythonExe -c "import importlib.util as u,sys;sys.stdout.write(u.find_spec('cryptography') and 'yes' or 'no')" 2>$null)
+if ($pyCrypto -ne "yes") {
+    Write-Host "[ERROR] interpreter '$PythonExe' (Python $pyVer) has no 'cryptography'." -ForegroundColor Red
+    Write-Host "        Encryption is unconditional, so every upload would fail at $Time nightly." -ForegroundColor Yellow
+    Write-Host "        Either install it:  $PythonExe -m pip install cryptography" -ForegroundColor Yellow
+    Write-Host "        Or point at an interpreter that has it:" -ForegroundColor Yellow
+    Write-Host "          -PythonExe 'C:\Users\pc\AppData\Local\Programs\Python\Python312\python.exe'" -ForegroundColor Yellow
+    exit 1
+}
+Write-Host "[OK] interpreter: $PythonExe (Python $pyVer, cryptography present)"
+
 # Log filename uses an **ISO date**, not %DATE%.
 # zh-CN %DATE% is "2026/10/12 <weekday>" -- it contains Chinese and spaces, so the
 # \=- substitution still leaves Chinese in the name, cmd's redirect then fails on the
