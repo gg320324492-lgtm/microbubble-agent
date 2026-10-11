@@ -9,6 +9,7 @@
 |---|---|---|
 | 运行历史 | `gh run list --workflow=<file> --limit 12` | ✅ 可用（account `gg320324492-lgtm`，scope `repo`） |
 | 失败详情 | `gh run view <id> --log-failed` | ✅ 可用（仅 `upload-download-page` 日志已过保留期） |
+| **元数据兜底** | `gh run view <id>`（annotation）+ `gh api .../actions/runs/<id>/jobs`（step 名 / conclusion / `steps` 长度） | ✅ **保留期远长于日志**。⚠️ **日志过期 ≠ 无法定性** —— 本审计初版正是栽在这里，把"日志没了"当成"证据没了"，误判 `upload-download-page` 根因无法取证（实际根因见该节复审更正）。**先穷尽这条通道再下"无法定性"的结论** |
 | 引用路径 | 对每个 `paths:` / `run:` / `uses:` 引用逐个 `test -e` | ✅ 全部核验 |
 | 分支保护 | `gh api repos/:owner/:repo/branches/main/protection` | ✅ **404 Branch not protected** |
 | Rulesets | `gh api repos/:owner/:repo/rulesets` | ✅ **`[]` 空** |
@@ -83,17 +84,41 @@ $ gh api repos/:owner/:repo/rulesets
 - **阻塞合并**：❌ 否
 - **引用路径**：✅ 全部存在
 - **最近运行**：🔴 **全生命周期仅 1 次运行，2026-09-28 17:37，`failure`，耗时 5 秒**
-- **判定**：⚠️ **可疑 —— 事实上的死 workflow**
-- **理由**：
-  - 唯一一次运行就失败，且 5 秒即挂（典型的凭据缺失/前置条件不满足的秒失败）
-  - 失败日志**已过 90 天保留期**，`gh run view --log-failed` 返回 `log not found`，
-    **本次无法确认根因**
-  - 之后 12 天从未再被手动触发过 ⇒ 无人使用、无人修复
-  - ⚠️ 但它与 `desktop-release.yml:114-126` 的 OSS 镜像步共用同一脚本同源凭据，
-    而后者最近**成功**跑过 ⇒ 该能力并未失效，失效的只是这个"独立手动入口"
+- **判定**：✅ **保留并修（2026-10-12 复审推翻原"可疑-死workflow"判定）**
+- **原判定的错误**：本节初版写"日志已过 90 天保留期 ⇒ **无法确认根因**"。**该结论错误** ——
+  见下方「2026-10-12 复审更正」。
+- **它是什么**：`on: workflow_dispatch` **仅手动触发**的 OSS 发布页上传器
+  （把 `apps/desktop/scripts/download-page.html` 上传到阿里云 OSS，secrets `OSS_UPLOAD_AK/SK`）。
+  **不是** 路径过滤失效，所以"只跑过一次"的真正原因是**没人再手动触发**。
+- **它仍是唯一通道**：`https://releases.mnb-lab.cn/` 实测 200、服务 **v1.3.2**；
+  而 `desktop-release.yml` 跑的是 `--prefix releases` **不带 `--page`**，
+  所以**只有本 workflow 更新发布页**。同日的验收文档称其"计费恢复后可作为规范通道"。
 
-> **不确定**：5 秒失败究竟是 secrets 未配、还是脚本参数问题，本次无法取证。
-> 若 OSS 落地页已在 `desktop-release` 里覆盖，此 workflow 属纯冗余。
+### 2026-10-12 复审更正（本节初版结论已作废）
+
+**根因已查明：GitHub Actions 计费墙，不是代码缺陷。**
+
+```bash
+gh run view <id>          # run annotation 明写:
+# "The job was not started because recent account payments have failed
+#  or your spending limit needs to be increased."
+gh api .../actions/runs/<id>/jobs --jq '.jobs[].steps|length'   # → steps=0
+```
+
+**`steps=0` 是决定性证据**：连 `actions/checkout` 都没执行 —— 若是 secrets 缺失或参数错误，
+至少会跑完 checkout 才在上传步失败。同日的验收文档
+`desktop-conversion/docs/acceptance/2026-09-28-R11-stage-C-release.md:33-35`
+已**逐字记录**了归因（"本月真实大头是 qa-bench D5 gate 20 次/2376 分钟 + Playwright 24 次/150 分钟"）。
+
+**计费问题现已恢复**（2026-10-10 起 CI 正常跑）⇒ 该 workflow **今天可用**。
+
+**方法论教训（类 20.220 同族）**：本审计把「**日志**过期」误当成「**证据**过期」——
+`--log-failed` 确实返回 `log not found`，但 **run annotation 与 jobs 元数据
+（含 step 名、conclusion、steps 数量）保留期远长于日志**，光看这些就足以定性。
+**下次遇到"无法取证"，先穷尽元数据通道**（`gh run view` annotation / `gh api .../jobs`），
+再下"无法定性"的结论。
+
+**已查出的真 bug**：硬编码 `--version 1.3.0`，与线上 v1.3.2 不符 —— 已修。
 
 ---
 
@@ -359,7 +384,7 @@ $ gh api repos/:owner/:repo/rulesets
 | 🔴 **连续 5 周定时红灯 + 烧额度** | `image-scan` | schedule 自 2026-08-31 全红，每次 8-120 分钟，产出为零 |
 | 🟡 **门禁名存实亡** | `qa-bench-smoke` | 80% 通过率门禁 2026-10-07 退役，只剩文件存在性检查；但仍跑 200 题真 LLM |
 | 🟡 **悬挂分支引用** | `secret-scan` | `on: dev` 分支，但仓库实测只有 `main` 一个分支 |
-| 🟡 **1 次运行即失败、日志已过期** | `upload-download-page` | 全生命周期仅 1 次运行（failure, 5s, 2026-09-28），根因无法取证 |
+| ✅ **仅手动触发；失败根因已查明 = GitHub 计费墙**（2026-10-12 复审更正，原写"根因无法取证"） | `upload-download-page` | `on: workflow_dispatch` 只被人手动跑过一次（2026-09-28），撞上账号计费墙（annotation 明写 payments failed，job `steps=0` 连 checkout 都没跑）。计费现已恢复，该 workflow 仍是**唯一**的发布页更新通道（`desktop-release` 不带 `--page`）。已修硬编码版本号 |
 | 🟢 **注释里的 "已退役 D5" 是正确历史说明，非悬挂引用** | `build-image` / `qa-bench-smoke` | `qa-bench-ci.yml` 确认已不存在，注释如实记录 |
 | 🟢 **无被注释掉的 job / step 残留** | 全部 11 个 | `grep` 全仓 workflow 未发现整段注释掉的 job |
 
@@ -461,9 +486,13 @@ $ gh api repos/:owner/:repo/rulesets
 
 ## 本次审计的局限（如实说明）
 
-1. **`upload-download-page` 失败根因无法取证** —— 唯一那次运行（2026-09-28）的日志
-   已过 GitHub 默认 90 天保留期，`gh run view --log-failed` 返回 `log not found`。
-   该 workflow 是否真的坏了**未经验证**，只能确认"跑过一次且失败，之后没人再用"。
+1. ~~**`upload-download-page` 失败根因无法取证**~~ —— **已于 2026-10-12 查明并撤销本条**
+   （详见该 workflow 小节的「复审更正」）。根因 = **GitHub Actions 计费墙**
+   （annotation: `payments have failed / spending limit`；job `steps=0`），
+   **不是代码缺陷**，也不是"workflow 坏了"。计费现已恢复，该 workflow 仍是唯一
+   的发布页更新通道。**原判定的教训**：把「`--log-failed` 日志过期」误当成
+   「证据过期」—— run annotation 与 jobs 元数据保留期远长于日志，
+   **下次先穷尽元数据通道再下"无法定性"的结论**。
 
 2. **`image-scan` 红的具体 CVE 未逐条取证** —— 未拉取 SARIF artifact 逐条分析。
    "基础镜像固有 CVE"是基于 `exit-code: '1'` + 无 `.trivyignore` 的**推断**，

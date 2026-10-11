@@ -36,7 +36,35 @@ jiwer>=4.0.0
 modelscope>=1.14.0
 torch>=2.0.0
 torchaudio>=2.0.0
-addict
+# 2026-10-12 钉版本(不是删 —— 见下, 删会静默打断声纹识别)。
+#   **与本段下方 `datasets` 完全同型**: 同属 modelscope 的上游打包 bug, 静态
+#   证据全"干净"(app/ scripts/ web/src/ tests/ 零引用; `pip show addict` 的
+#   Required-by 为空; 14 条引用全部来自 modelscope 且**全带 `extra ==` 标记**),
+#   但都被上游**无条件裸 import**。本行是 addict 的**唯一**供给来源。
+#
+# ⚠️ **不可删** (2026-10-12 实测推翻"零用途"结论): 与 datasets 不同, addict
+#   不牵涉 numpy/pyarrow ABI 冲突, 纯粹是"上游声明漏了"。modelscope 的 setup
+#   把 addict 声明为**纯 extra**(装 base 不拉), 却在 4 处**无条件顶层 import**
+#   (无 try 包裹):
+#     modelscope/utils/config.py:17                    import addict
+#     modelscope/trainers/training_args.py:7            import addict
+#     modelscope/models/nlp/gpt3/backbone.py:20         import addict
+#     modelscope/models/nlp/gpt3/gpt_moe/backbone.py:20 import addict
+#   而 modelscope 的 metadata 不声明 addict → pip 不会替我们装。
+#   用 import blocker 实测: 屏蔽 addict 后加载 3D-Speaker 模型直接报
+#     "No module named 'addict'"
+#   危害形态是**静默**的: voiceprint_service.py:43 的 `from modelscope.pipelines
+#   import pipeline` 之后的 pipeline 构建被 :51 的 `except Exception` 吞掉
+#   (设计成"不让 WS 崩"), 于是删掉 addict 不报错、不抛异常, 只是
+#   pipeline object 恒为 None → 所有发言人退化成 unknown(实测输出:
+#   "3D-Speaker 模型加载失败: No module named 'addict'(声纹识别将不可用,
+#   所有发言人显示 unknown)")。这正是类 20.220(守门必须验副作用真发生,
+#   不能信状态字段)的形态。
+#
+# 2.4.0 = 生产容器实测值(唯一被真机跑通过的版本)。
+# ⚠️ 本行**需 CI 验证**: 本机容器是已装好的环境, 不会因改 requirements.txt 而变;
+#   真实验证点是 CI 的 `pip install -r requirements.txt` + 全量测试。
+addict==2.4.0
 # 2026-06-24 v29 Qwen3-Embedding-0.6B: LLM-based embedding wrapper
 accelerate>=0.34
 # transformers>=4.45 / safetensors>=0.4 已在 torch 依赖链中装好, 无需重复声明
