@@ -28,41 +28,53 @@ minio==7.2.0
 anthropic>=0.39.0
 # 2026-07-02 openai_compat backend (切 mimo /v1 抗 429 限流)
 openai>=1.0.0,<2.0.0
-# 2026-10-12 L-8: mcp 升 1.28.1 —— **实测被阻塞, 本轮不动, 留档**。
-#   (派工原计划 `mcp>=0.9.0` -> `>=1.28.1`, 声称"影响面小"。**该判断不成立**。)
+# 2026-10-12 L-8: mcp 升 1.28.1 —— 原判断"被 uvicorn 阻塞、必须动 ASGI 栈"。
+#   2026-10-11 复核: **该断言的适用范围被修正如下** (证伪的是 Dockerfile.mcp 路径,
+#   **不是**本文件路径)。本行 `mcp>=0.9.0` 本轮仍不动。
 #
-#   ⚠️ **第 0 层: 改这一行压根修不掉 image-scan 的 mcp job。**
-#   mcp job 扫的是 `Dockerfile.mcp` 构建的镜像, 该文件 `:11-19` 是**独立最小依赖 +
-#   内联 pip install**, 自带 `mcp>=0.9.0`, **不读本文件**。
-#   实测 `microbubble-agent-vision-mcp:latest` 里 mcp=0.9.1, 5 条 HIGH
-#   (CVE-2025-53365/53366/66416/2026-52869/59950)。要修它必须改 `Dockerfile.mcp`。
-#   本行只影响 **app / commercial / voice-pipeline** 三镜像里的 mcp(现装 **1.6.0**)。
-#   对照上面 5 条的 FixedVersion(1.10.0 / 1.9.4 / 1.23.0 / 1.27.2 / 1.28.1) ——
-#   1.6.0 **低于其中每一个**, 故这 5 条在本文件构建出的三个镜像里**同样一条都没修**。
+#   【对 Dockerfile.mcp —— 已解决, 2026-10-11】
+#     mcp 镜像走 stdio 传输(`mcp_server/server.py:1` 自述 stdio, :4 `from mcp.server
+#     import Server`, :5 `from mcp.server.stdio import stdio_server` —— 零 uvicorn /
+#     零 FastAPI), 且 `Dockerfile.mcp` 是**独立内联 pip install**(不读本文件)
+#     ⇒ 本文件 `uvicorn==0.24.0` 的硬钉**约束不到 mcp 镜像**。
+#     实测: mcp 1.28.1 + 不钉 uvicorn → 干净解析(pip 自拉 uvicorn-0.54.0),
+#     无 ResolutionImpossible。已改 `Dockerfile.mcp` 为 `mcp>=1.28.1,<2`,
+#     并验证 image-scan 的 mcp job 转绿。
+#     **故"必须升 ASGI 栈才能修 mcp"的说法, 对本路径不成立。**
 #
-#   ⚠️ **第 1 层: 本镜像内即使改了也会构建失败 —— 传递依赖硬冲突。**
-#   `pip install --dry-run` 实测(2026-10-12, 本机容器 + 本文件全文解析):
-#       ERROR: ResolutionImpossible
-#       Cannot install -r requirements.txt (mcp 行) and uvicorn==0.24.0
-#       mcp 1.28.1 depends on uvicorn>=0.31.1
-#   本文件 **第 3 行** `uvicorn[standard]==0.24.0` 是硬等号。mcp 在 **1.13.0**
-#   就把 uvicorn 下限抬到 >=0.31.1(PyPI metadata 逐版本实测: 1.11.0/1.12.0 仍是
-#   >=0.23.1, 1.13.0 起变 >=0.31.1), 故**凡是修掉 CVE-2026-59950 的 mcp 版本
-#   (>=1.28.1) 必然要求 uvicorn>=0.31.1** —— 不存在"既修 CVE 又不动 uvicorn"的版本。
-#   若强行改, **Docker 构建直接 ResolutionImpossible 失败**(不是运行期问题,
-#   会在 CI 的 build step 就挂, app/commercial/voice-pipeline 三个 job 全红)。
+#   【对本文件(app / commercial / voice-pipeline 三镜像)—— 待验证】
+#     这三镜像**确实读本文件**, 若把 mcp 抬到 >=1.28.1 会撞本文件 **第 3 行**
+#     `uvicorn[standard]==0.24.0` 硬等号: mcp 在 **1.13.0** 就把 uvicorn 下限从
+#     >=0.23.1 抬到 **>=0.31.1**(PyPI metadata 逐版本实测: 1.11.0/1.12.0 仍
+#     >=0.23.1), 故**凡是修掉 CVE-2026-59950 的 mcp 版本(>=1.28.1)必然要求
+#     uvicorn>=0.31.1** —— 不存在"既修 CVE 又不动 uvicorn"的版本。
+#     可否解除取决于 ASGI 栈(uvicorn 0.24.0 -> >=0.31.1, 7 个 minor 服务端大跳,
+#     且与第 5 行 `websockets==12.0` 硬钉 + 全站 SSE / WebSocket 链路耦合)升级,
+#     **属独立立项, 未在本次处理**。本轮改动只针对 `Dockerfile.mcp`。
+#     ⚠️ 现状: 本文件三镜像里的 mcp 仍装 **1.6.0**, 5 条 CVE
+#     (CVE-2025-53365/53366/66416/2026-52869/59950) 的 FixedVersion
+#     (1.10.0 / 1.9.4 / 1.23.0 / 1.27.2 / 1.28.1) **1.6.0 低于其中每一个**,
+#     故这 5 条在本文件构建出的三镜像里**同样一条都没修**。
 #
-#   为什么不动 uvicorn(留给主指挥决策, 本轮不越界):
-#   uvicorn 是**全站 FastAPI 的 ASGI 服务器**(生产域名 agent.mnb-lab.cn 走它),
-#   0.24.0 -> >=0.31.1 是 7 个 minor 的服务端大跳, 且与第 5 行 `websockets==12.0`
-#   硬钉、以及全站 SSE / WebSocket 链路耦合。风险等级与"消 mcp CVE"完全不对等,
-#   必须单独立项 + 独立验证(不能搭在一次 trivy 治理里顺手改)。
-#
-#   附: mcp 本身确实几乎零影响面 —— 全仓仅 2 处 import
+#   附(仍然成立): mcp 本身几乎零影响面 —— 全仓仅 2 处 import
 #   (`mcp_server/server.py:4-5`、`mcp_server/tools/vision.py:7-8`),
 #   用的 `mcp.server.Server` / `stdio_server` / `mcp.types.{Tool,TextContent,CallToolResult}`
 #   在 1.x 全部保留; `app/` 内零 import; vision-mcp 默认不启(`VISION_USE_MCP=False`)。
 #   ⇒ 日后单独处理 uvicorn 升级时, mcp 这条几乎不会再构成障碍。
+#
+#   【2026-10-11 实测补强 (执行 agent 复核, 结论 = 本轮仍不能改, 留给 ASGI 栈立项)】
+#     - 冲突在线复现: 容器内 `pip install --dry-run --ignore-installed -r <本文件>` 当
+#       本行改成 `mcp>=1.28.1,<2` 时报 **ResolutionImpossible**:
+#         `mcp 1.28.1..1.30.0 depends on uvicorn>=0.31.1` ✗ vs `uvicorn[standard]==0.24.0`(第 3 行)。
+#     - **二分找"能解的最高 mcp"**: 逐版本 dry-run, 结果 = **1.12.4 能解, 1.13.0 起全炸**
+#       (1.12.4 的 metadata 是 `uvicorn>=0.23.1`; 1.13.0 起抬到 `>=0.31.1`)。
+#     - ⇒ 能解的 mcp 上限(1.12.4)**低于所有 CVE 的 FixedVersion**
+#       (66416→1.23.0 / 52869→1.27.2 / 59950→1.28.1) ⇒ **改本行一条 CVE 都修不掉**。
+#     - ⚠️ 与运行容器的差异: 当前跑着的 `microbubble-agent-app-1` 里 mcp 仍是 **1.6.0**
+#       (旧镜像), 而按本文件现解析(CI 重建)会装到 **1.12.4** —— 两者都 <1.23.0,
+#       故 CI 的 app/commercial/voice-pipeline 三 job 里这 3 条 CVE 同样一条未修。
+#     - **结论: 本轮不动本行** (改成任何可解版本都是无效改动), 修它必须先完成
+#       uvicorn 0.24.0 → >=0.31.1 的 ASGI 栈升级立项(连带 websockets / SSE / WS 链路)。
 mcp>=0.9.0
 
 # 语音识别

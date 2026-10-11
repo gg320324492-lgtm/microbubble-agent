@@ -12,9 +12,16 @@ docs/
 node_modules/
 dist/
 build/
+# 2026-10-11 镜像卫生修复: 原 `__pycache__/` / `*.pyc` 只匹配根层级,
+# 导致 Dockerfile.mcp 的 `COPY app/rag/ ./app/rag/` 把 app/rag/__pycache__/
+# 下 12 个 Windows 编译 .pyc 打进镜像。补 `**/` 递归形态 (根层级写法保留,
+# 因 .dockerignore 模式语义存在版本差异, 两者并存无害)。
 __pycache__/
+**/__pycache__/
 *.pyc
+**/*.pyc
 *.pyo
+**/*.pyo
 *.log
 .vscode/
 .idea/

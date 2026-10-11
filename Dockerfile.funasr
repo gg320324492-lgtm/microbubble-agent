@@ -33,8 +33,16 @@ WORKDIR /app
 # 关键 1: 必须自带 torch (sensevoice 容器与 app 容器独立, 不能假设继承)
 # 关键 2: torch 2.4.0 不支持 sm_120 (Blackwell RTX 5090), 必须用 torch 2.7+ 才支持
 # 关键 3: torch CUDA wheel 走 PyPI 官方 cu128 源 (清华源限速 torch 2.12+)
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir --upgrade setuptools && \
+#
+# 2026-10-11 L-8 (修 image-scan funasr job 4 条 HIGH, 与 whisper 同型同根因):
+# ⚠️ **本块刻意不再 `pip install --upgrade pip`** —— 消 CVE 的关键, 别加回来。
+# 基础镜像自带 pip 24.0, `pip/_vendor/` vendor 的是
+#   msgpack==1.0.5 / urllib3==1.26.17 / setuptools==68.0.0 → trivy 不报;
+# `--upgrade pip` 到 26.2.1 后 vendor 变成
+#   msgpack==1.1.2 (GHSA-6v7p-g79w-8964) / urllib3==2.7.0 (CVE-2026-97687/97689)
+#   / setuptools==70.3.0 (CVE-2025-47273) → trivy 逐条报 (按 pip/_vendor/vendor.txt)。
+# 实测: 顶层 `pip install "msgpack>=1.2.1"` 等**升不动 vendor**, 只有"不升级 pip"有效。
+RUN pip3 install --no-cache-dir --upgrade setuptools && \
     pip3 install --no-cache-dir --prefer-binary \
     --extra-index-url https://download.pytorch.org/whl/cu128 \
     torch==2.7.0 \

@@ -29,8 +29,24 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing \
 WORKDIR /app
 
 # 安装Python依赖 + CUDA运行时库（通过pip安装，避免下载大CUDA镜像）
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir --upgrade setuptools \
+#
+# 2026-10-11 L-8 (修 image-scan whisper job 4 条 HIGH 全红):
+# ⚠️ **本块刻意不再 `pip install --upgrade pip`** —— 这是消 CVE 的关键，别加回来。
+# 实测根因 (本机 pip 解 + trivy 0.72.0 复现, 非推断):
+#   基础镜像 python:3.11.17-slim-bookworm 自带 pip 24.0, 其 `pip/_vendor/` 里
+#   vendor 的是 msgpack==1.0.5 / urllib3==1.26.17 / setuptools==68.0.0 ——
+#   **这三条 trivy 一条都不报** (对照: mcp 镜像同样 pip 24.0, image-scan 已绿)。
+#   一旦 `--upgrade pip` 到 26.2.1, vendor 变成
+#     msgpack==1.1.2  → GHSA-6v7p-g79w-8964 (修于 1.2.1)
+#     urllib3==2.7.0  → CVE-2026-97687 / CVE-2026-97689 (修于 2.8.0)
+#     setuptools==70.3.0 → CVE-2025-47273 (修于 78.1.1)
+#   ⇒ trivy 按 `pip/_vendor/vendor.txt` 逐条报, 4 条 HIGH 全部来自**升级后的 pip
+#     自带的 vendor**, 与我们真正装的 faster-whisper 无关。
+#   ⚠️ 这些 vendor 是 pip 自身源码的一部分, `pip install "msgpack>=1.2.1"` 之类
+#     **升不动它** (实测: 只会在 site-packages 顶层多装一份, vendor.txt 不变)。
+#     ⇒ 唯一稳妥修法 = **不升级 pip**, 让基础镜像的干净 vendor 留着。
+# pip 24.0 支持下面的 `--prefer-binary`, 功能无损失。
+RUN pip3 install --no-cache-dir --upgrade setuptools \
     && pip3 install --no-cache-dir --prefer-binary \
     faster-whisper==1.2.1 \
     nvidia-cublas-cu12 \
