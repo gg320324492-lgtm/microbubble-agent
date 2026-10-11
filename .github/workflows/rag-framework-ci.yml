@@ -71,15 +71,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 只装 alembic 一个包 (守卫不连 DB, 故无需 asyncpg / sqlalchemy / 框架依赖)。
-      # 原先此处是 ~13 个包的手写精简列表 —— 已随 pytest 段一并删除。
+      # 只装 migration 链真正 import 的三个包, 不走全量 requirements.txt
+      # (后者连带 torch ~2GB, 拖慢每次 CI)。
+      #
+      # ⚠️ 2026-10-12 修长期红灯: 原注释写"守卫不连 DB, 故无需 sqlalchemy"是**错的**。
+      #   `alembic heads` 虽不加载 env.py / 不连 DB, 但它**会 import 每一个
+      #   versions/*.py 以构建 revision map**, 而 `001_initial.py:12` 在**模块顶层**
+      #   `from pgvector.sqlalchemy import Vector` ⇒ 只装 alembic 时直接
+      #   `ModuleNotFoundError: No module named 'pgvector'`。
+      #   该 guard 由此连续红 6 次 (2026-10-11 全部 commit 均红), 红的原因却与
+      #   那些 commit 毫无关系 —— 正是类 20.220 "状态字段/绿灯会骗人"的变体:
+      #   **红灯 ≠ 上次改动引入**。
+      #   实测取依赖: `grep -hoE "^(from|import) [a-zA-Z_]\w*" alembic/versions/*.py`
+      #   去重后第三方包**只有 pgvector 与 sqlalchemy 两个**。
       # 不配 cache: pip / cache-dependency-path: requirements.txt —— 已不再从
       # requirements.txt 安装, 留着会按一个我们并不安装的文件取缓存, 白付 restore
       # 延迟且语义误导。
-      - name: Install alembic
+      - name: Install migration dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --prefer-binary --retries 10 --timeout 60 "alembic>=1.13"
+          pip install --prefer-binary --retries 10 --timeout 60 \
+            "alembic>=1.13" "sqlalchemy>=2.0" "pgvector>=0.3.6,<1.0.0"
 
       # alembic heads 只读脚本目录 (不加载 env.py, 不连 DB).
       # 输出格式: "<revision_id> (head)" 每 head 一行; revision_id 即迁移文件名.
