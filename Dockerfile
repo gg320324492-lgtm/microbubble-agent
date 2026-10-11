@@ -56,11 +56,22 @@ RUN --mount=type=cache,target=/var/cache/apt/archives,sharing=locked \
 #   type==exec.cachemount type==source.git.checkout), 故此 mount 能真正持久化。
 #   纯增量改动: 不增删任何包, 不改任何系统依赖, 镜像内容语义完全不变。
 #   注: cache mount 的内容不进最终镜像层, 镜像体积不受影响。
+#
+# 2026-10-12 L-8: **删掉 `pip install --upgrade pip`** (承 679721665 对
+#   Dockerfile.whisper / Dockerfile.funasr 的同型修复, 本文件当时漏改)。
+#   **升级 pip 本身会引入 HIGH CVE** —— CVE 不在我们装的包里, 而在 pip
+#   自带的 `pip/_vendor/` 里, 随 pip 版本走:
+#       基础镜像自带 pip 24.0  → vendor setuptools 68.0.0  (trivy 不报)
+#       --upgrade  pip 26.2.1  → vendor setuptools 70.3.0  (CVE-2025-47273,
+#                                FixedVersion 78.1.1  ⇒ 必报)
+#   同批被带进来的还有 vendor msgpack(1.0.5→1.1.2) 与 vendor urllib3
+#   (1.26.17→2.7.0)。⇒ **升级构建工具 ≠ 更安全**, 这里保持基础镜像的 pip 24.0。
+#   实测本镜像里**真正安装**的 setuptools 是 84.0.0(干净), 报出的 70.3.0
+#   只是 pip 的 vendored 副本 —— 两者别混谈。
 COPY requirements.txt .
 ARG HTTPS_PROXY
 ARG HTTP_PROXY
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    pip install --upgrade pip && \
     pip install --upgrade setuptools && \
     pip install --prefer-binary \
         --retries 10 --timeout 60 \

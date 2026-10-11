@@ -12,8 +12,14 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
 
 WORKDIR /app
 COPY requirements.txt .
-RUN python3.11 -m pip install --no-cache-dir --upgrade pip && \
-    python3.11 -m pip install --no-cache-dir --upgrade setuptools && \
+# 2026-10-12 L-8: **删掉 `--upgrade pip`** (承 679721665 对 whisper/funasr 的同型修复)。
+#   本镜像的 pip/setuptools 来自 apt 的 `python3-pip`, 但 `--upgrade pip` 同样会把它
+#   拉到新版 —— 实测 CI 构建后是 pip 26.2.1, 其 `pip/_vendor/` 内置 setuptools
+#   70.3.0, 命中 CVE-2025-47273 (FixedVersion 78.1.1)。
+#   ⚠️ 本镜像里**真正安装**的 setuptools 是 84.0.0 (干净), 报出的 70.3.0 只是
+#   pip 的 vendored 副本 —— 两者别混谈(类 20.220: 报告字段要说清是哪一份)。
+#   保留 `--upgrade setuptools`: 那装的是独立包, 84.0.0 无 CVE。
+RUN python3.11 -m pip install --no-cache-dir --upgrade setuptools && \
     python3.11 -m pip install --no-cache-dir -r requirements.txt
 
 # 不复制 app 代码 — 通过 volume 挂载（与主容器共享）

@@ -216,7 +216,23 @@ python-dotenv==1.0.0
 # 2026-07-31 RAG-FW-DEPLOY 修复: pydantic==2.5.2 pin 与 langchain (>=2.7.4) + llama-index-core 0.13 (>=2.8.0) 冲突, 放宽到 >=2.8.0
 pydantic-settings>=2.4.0
 pydantic[email]>=2.8.0,<3.0.0
-python-jose[cryptography]==3.4.0
+# 2026-10-12 L-8: 3.4.0 -> 3.5.0 (次新版, 单点 minor 跳), **唯一目的是放开 pyasn1 上界**。
+#   image-scan 报 pyasn1 0.4.8 命中 4 条 HIGH (CVE-2026-30922/59884/59885/59886,
+#   修复版 0.6.3 / 0.6.4)。根因**不在 pyasn1 自身, 在本行的传递约束** ——
+#   实测 PyPI metadata 逐版对比:
+#       python-jose 3.4.0  ->  pyasn1<0.5.0,>=0.4.1   ← **硬上界**, 锁死 0.4.x
+#       python-jose 3.5.0  ->  pyasn1>=0.5.0            ← 上界消失
+#   两者其余约束**一字未改** (同 `ecdsa!=0.15` / 同 `rsa!=4.1.1,!=4.4,<5.0,>=4.0`),
+#   即 3.5.0 是为放上界而发布的, 不是无关的 feature 版本。
+#   佐证: **唯一上界来源就是本包** —— `rsa 4.9.1` 只要 `pyasn1>=0.1.3`(无上界),
+#   `ecdsa 0.19.2` 干脆不要 pyasn1。所以此前任何"直接给 pyasn1 加下限"的做法都会
+#   ResolutionImpossible(类 20.223 同型: 判"能不能改"必须看**传递方**的约束, 不只看包本身)。
+python-jose[cryptography]==3.5.0
+# pyasn1: 修复 CVE-2026-30922(DoS)/59884/59885/59886(BER/ASN.1 解析)。
+#   0.6.4 = 生产容器实测值(Required-by: python-jose, rsa), 也是可解出的最高版本
+#   (3.5.0 放开上界后 pip 自选)。**依赖本行上方的 python-jose==3.5.0 才成立** ——
+#   若把 python-jose 退回 3.4.0, 本行会立刻冲突(它的上界是 <0.5.0)。
+pyasn1>=0.6.4
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
 # 2026-07-31 Hybrid RAG Stack: langchain-core 0.3 + llama-index-core 0.12 + langfuse 要求 httpx>=0.15.4 (0.25.2 pin 在范围内但过老, 放宽)
