@@ -342,6 +342,39 @@ app.services.embedding_service import 失败
 
 **CI 修复结果**：`35ab14c9e` 一次推送即转绿（**8 片全 ✓ / 4150 用例通过**，耗时 13m45s）。连续 9+ 次全红终结。
 
+### 7.6 image-scan 逐轮推进台账（2026-10-11~12）
+
+`image-scan` 8 个 trivy job，10 周来长期全红。逐轮修完后的实测轨迹：
+
+| 轮次 | commit | 绿/总 | 转绿项 | 备注 |
+|---|---|---|---|---|
+| 基线 | — | 0/8 | — | 10 周全红 |
+| R1 | `0ec0153f0` | 3/8 | `db` `mcp` `web` | `Dockerfile.mcp` 三重修复（CVE pin / sh 重定向 / COPY 缺失）生效 |
+| R2 | `679721665` | **5/8** | +`whisper` `funasr` | 移除 `pip install --upgrade pip`，消各 4 条 vendor CVE |
+
+**R2 主根因（实测取证，非推断）**：4 条 HIGH 来自 **pip 自己的 `_vendor/`**，不是我们装的包。
+
+| | pip 版本 | vendor msgpack | vendor urllib3 | vendor setuptools |
+|---|---|---|---|---|
+| 基础镜像自带 | 24.0 | 1.0.5 | 1.26.17 | 68.0.0 | ← trivy 一条不报 |
+| 执行 `--upgrade pip` 后 | 26.2.1 | 1.1.2 | 2.7.0 | 70.3.0 | ← 4 条全在这 |
+
+⇒ **修法 = 删掉 `pip install --upgrade pip`**（`Dockerfile.whisper` / `Dockerfile.funasr`），
+保留 `--upgrade setuptools`。这是"升级工具本身反而引入 CVE"的典型。
+
+**R2 后剩余 3 红（`app` `commercial` `voice-pipeline`）明细 —— 全是同一批已知项，无新面孔**：
+
+| 包 | 现装 | 修的版本 | 阻塞 |
+|---|---|---|---|
+| mcp | 1.12.4 | 1.23.0 / 1.27.2 / 1.28.1 | `uvicorn==0.24.0` 硬钉（ASGI 栈立项）|
+| langchain-core | 0.3.86 | 1.2.22 | 0.3→1.2 跨大版本（独立立项）|
+| pyasn1 | 0.4.8 | 0.6.3 / 0.6.4 | ⚠️ **可单独修**（`python-jose[cryptography]` 拉入）|
+| setuptools | 70.3.0 | 78.1.1 | ⚠️ **可单独修** |
+
+**4/5 已定性的规律**：image-scan 的红不是"代码坏了"，而是"依赖版本落后于 CVE 修复"。
+其中 **pyasn1 + setuptools 两条不牵 ASGI 栈，属低风险可收尾项**；
+mcp + langchain-core 须独立立项（前者动 uvicorn，后者跨 major）。
+
 ---
 
 ## 八、批次 8 全链路验收（2026-10-11，10 项全过）
