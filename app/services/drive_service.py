@@ -1988,19 +1988,30 @@ class DriveService:
             )
         )
         files = list(result.scalars().all())
+
+        # 2026-10-11 死链修复: ZB-1 可见性**预判**。`_can_see_file` 是同步纯函数,
+        # 先算一遍把「确实会被删的行」摘出来 —— 旧实现对**全部** files 收 key, 却在
+        # 随后的循环里才 `continue` 跳过 private 行, 于是被跳过的文件 DB 行仍活着、
+        # 它的 MinIO 对象 (当前 + 全部版本 + 全部图片) 却已被 purge → 404 死链。
+        # 此前删得掉是因为永久删整体回滚 (748fee987 已修), 删得掉了才显形。
+        # ⚠️ collect / 孪生级联 / 实际 delete 三者必须用**同一个** deletable 集合 ——
+        # 少一处就漏对象 (孤儿), 多一处就删活对象 (死链)。
+        deletable = [f for f in files if self._can_see_file(f, current_user_id)]
+        deletable_ids = {f.id for f in deletable}
+        skipped = [f.id for f in files if f.id not in deletable_ids]
+
         # 2026-09-13 缺口修复: 级联硬删自动入库 KB 孪生 (共享 MinIO 对象, 见
-        # collect_live_kb_twins) — 否则对象被 purge 后孪生存活即成死链
-        kb_twins = await collect_live_kb_twins(self.db, files)
+        # collect_live_kb_twins) — 否则对象被 purge 后孪生存活即成死链。
+        # 2026-10-11 收窄: 孪生级联的**前提**是「网盘源行被删 + 共享对象被 purge」
+        # (见 collect_live_kb_twins docstring)。源行被 ZB-1 跳过时对象根本不会被 purge,
+        # 无死链可言, 此时删孪生纯属无理由销毁存活 KB 数据 (连带它的 chunk/embedding/图片)。
+        # 旧实现无条件删 = 与 bug 版的过度 purge 绑在一起才「看起来自洽」, 一并收窄。
+        kb_twins = await collect_live_kb_twins(self.db, deletable)
         # 批次① B2: 与 permanent_delete 同款 — 全部 key 在任何 db.delete 前收集
-        # (版本行随主行 CASCADE 消失), MinIO 清理工统一挪到 commit 后。
-        object_keys = await collect_object_keys(self.db, files + kb_twins)
-        skipped = []
+        # (版本行随主行 CASCADE 消失), MinIO 清理统一挪到 commit 后。
+        object_keys = await collect_object_keys(self.db, deletable + kb_twins)
         deleted = 0
-        for f in files:
-            # ZB-1: private 文件对非 owner 隐身 (不可被他人批量硬删)
-            if not self._can_see_file(f, current_user_id):
-                skipped.append(f.id)
-                continue
+        for f in deletable:
             # 2026-09 单一团队空间: 删除 created_by/is_admin owner skip
             await self.db.delete(f)
             deleted += 1
