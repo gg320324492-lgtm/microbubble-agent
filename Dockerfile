@@ -1,11 +1,26 @@
 # base image bumped for L-8 image-scan CVE zeroing (2026-10-07; prior pin 2026-07-29 W86-C-1)
 FROM python:3.11.17-slim-bookworm
 
-# 阿里云镜像源 (bookworm-security 路径已正确支持)
+# 2026-10-12: apt 源 mirrors.aliyun.com -> **官方 deb.debian.org**(主指挥裁定)。
+#   起因: 部署 `619ae84ad` 时构建连续两次卡死在 apt 层 ——
+#     `#9 Ign:5 http://mirrors.aliyun.com/debian bookworm/main amd64 Packages`
+#   连续 5 次重试全部 Ign(忽略失败), 8 分钟后 exit 100。**不是代码问题**。
+#
+#   实测取证(同机同时段, 排除"网络整体不通"):
+#     宿主直连 aliyun (不走代理)         -> 200, 1.95s   ← 宿主没问题
+#     容器内 apt + aliyun 源             -> InRelease 151kB 拿到, 但 Packages 大索引超时
+#     容器内 apt + 官方 deb.debian.org   -> Fetched 9388 kB in 5s (1760 kB/s)  ← 正常
+#   ⇒ aliyun 对**大索引**从容器网络不通(小文件能通、大文件超时), 换官方源即可。
+#   注: 宿主能通是因为走了 HTTP_PROXY/HTTPS_PROXY(clash), 而 Docker 构建的 apt
+#   层**没有代理**(本文件的 ARG HTTPS_PROXY 声明在 apt 层之后, 只惠及 pip 层)。
+#
+#   ⚠️ 保留 aliyun 的原意是"国内网络更快", 但**可用性优先于速度** —— 源拉不到索引时
+#      构建直接失败, 没有任何降级。官方源在本机实测 1760 kB/s, 足够快。
+#   ⚠️ 本行改的是**构建期**源, 不影响运行时; 回滚 = 改回 aliyun 三行即可。
 RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
-    printf 'deb http://mirrors.aliyun.com/debian bookworm main contrib\n' > /etc/apt/sources.list && \
-    printf 'deb http://mirrors.aliyun.com/debian bookworm-updates main contrib\n' >> /etc/apt/sources.list && \
-    printf 'deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
+    printf 'deb http://deb.debian.org/debian bookworm main contrib\n' > /etc/apt/sources.list && \
+    printf 'deb http://deb.debian.org/debian bookworm-updates main contrib\n' >> /etc/apt/sources.list && \
+    printf 'deb http://deb.debian.org/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
 
 WORKDIR /app
 
