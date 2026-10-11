@@ -1,4 +1,4 @@
-# MicroBubble Backup Scheduler 安装脚本 (Windows Task Scheduler)
+﻿# MicroBubble Backup Scheduler 安装脚本 (Windows Task Scheduler)
 # P0-2 2026-07-03: 自动注册每日 02:00 备份任务.
 # 部署: powershell -ExecutionPolicy Bypass -File scripts\install-backup-scheduler.ps1
 
