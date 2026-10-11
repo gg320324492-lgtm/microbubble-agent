@@ -1,27 +1,47 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""服务器侧异地同步（R-9 C）—— 把课题组备份共享目录镜像到阿里云 OSS。
+"""异地备份同步 —— 把本地备份目录加密后镜像到阿里云 OSS。
 
 设计约束（对齐工单与父项目复盘教训）：
-  · 零第三方依赖：Python 3.8+ stdlib only（urllib / hmac / hashlib / base64 / argparse）
-  · 手写 V1 签名（与项目 oss-sig.ts / CI 上传脚本同款，2026-09-21 实测修正：原 V4 实现混入 AWS SigV4 头格式被 OSS 拒绝）+ 服务端加密（SSE，x-oss-server-side-encryption: AES256）
+  · **OSS 签名是 V1（HMAC-SHA1），不是 SigV4** —— 本文件早年的头注释自称 "SigV4" 是错的，
+    会把下一个接手的人带偏。2026-09-21 实测：阿里云 OSS **原生 API** 拒绝 AWS SigV4
+    头格式，实现已回退到 V1（与项目 oss-sig.ts / CI 上传脚本同款）。
+    注意这与 `scripts/backup_to_aliyun_oss.py` 用的 S3 兼容端点 + SigV4 是**两套并存**
+    的东西，不要混为一谈（该脚本本单未改动）。
+  · 另加服务端加密 SSE（x-oss-server-side-encryption: AES256）作第二道
   · 三段式 CLI：--scan（只读）/ --apply --confirm（上传）/ --cleanup N（清理 N 天前）
-  · 幂等：远端同名且同大小 → 跳过，不重复上传
-  · **禁止默认凭证回落**：AK/SK 必须由环境变量或显式凭据文件提供，缺失即报错退出，
-    绝不使用内置/兜底值（父项目「默认凭证回落」教训）
+  · 幂等：远端同名且同大小 → 跳过，不重复上传（加密时比对的是**密文**长度，
+    它是明文长度的确定函数，故无需重新加密即可判定）
+  · **禁止默认凭证回落**：AK/SK/桶/endpoint 必须由环境变量或显式凭据文件提供，
+    缺失即报错退出。旧版 DEFAULT_BUCKET 指向 `mnb-workbench-releases` —— 该桶是
+    electron-updater 的**匿名可读**发布源，备份落进去等于公开。已移除全部桶默认值
+  · **上传前先客户端加密**（AES-256-GCM，PBKDF2-HMAC-SHA256 派生密钥，每文件独立 salt）：
+    DB dump 装知识库与会议转写、`.env.*.bak` 装库密码 / JWT SECRET_KEY / MinIO 密钥。
+    **加密没有开关** —— 既然连"桶是私有的"都不能当护栏，就更不能当"可以关加密"。
+    代价：`cryptography` 成为必需依赖（lazy import，只在真加密时载入）
+  · **口令绝不入 git**：只从 `--passphrase-file` 指定的独立文件读，不读 .env、
+    不读环境变量兜底、不内置。文件缺失 / 空 / 纯空白 → 立即退出，绝不降级为明文上传
   · 失败必须可感知：任何一步非零退出并打印可读原因，供计划任务日志捕获
 
 用法：
   # 1) 只看差异（无副作用）
   python offsite-oss-sync.py --scan --root D:\\share\\backups
-  # 2) 真正上传（需二次确认）
-  python offsite-oss-sync.py --apply --confirm --root D:\\share\\backups
-  # 3) 清理远端 N 天前的对象（同样需 --confirm）
+  # 2) 真正上传（需二次确认）—— 加密 + 远端保留 7 天
+  python offsite-oss-sync.py --apply --confirm --root E:\\microbubble-agent\\backups \
+      --passphrase-file E:\\microbubble-agent\\.secrets\\offsite_backup.passphrase
+  # 3) 单独清理远端 N 天前的对象（同样需 --confirm）
   python offsite-oss-sync.py --cleanup 30 --confirm
+  # 4) 解密（灾备取回 / 验证往返）
+  python offsite-oss-sync.py --decrypt-into ./restored \
+      --passphrase-file .secrets/offsite_backup.passphrase ./restored/x.sql.gz.enc
 
 凭据（二选一，均不回显）：
   · 环境变量：OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET
   · 凭据文件：--creds <json>，字段 accessKeyId / accessKeySecret（+ 可选 bucket/endpoint/prefix）
+
+生成口令文件（由使用者自己执行一次，脚本不代劳、不打印口令）：
+  python -c "import secrets,pathlib;p=pathlib.Path('.secrets/offsite_backup.passphrase');\
+p.parent.mkdir(parents=True,exist_ok=True);p.write_text(secrets.token_urlsafe(48),encoding='utf-8')"
 """
 
 from __future__ import annotations
@@ -32,7 +52,10 @@ import hashlib
 import hmac
 import json
 import os
+import shutil
+import struct
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -42,12 +65,282 @@ from pathlib import Path
 
 ALGO = "OSS4-HMAC-SHA256"
 SERVICE = "oss"
-DEFAULT_REGION = "cn-beijing"
-DEFAULT_ENDPOINT = "oss-cn-beijing.aliyuncs.com"
-DEFAULT_BUCKET = "mnb-workbench-releases"
+# region 不设默认值：从 endpoint 反解（oss-cn-beijing → cn-beijing），反解不出就报错。
+# 桶 / endpoint 同样**没有默认值** —— 见 load_credentials 的 fail-loud 说明。
 DEFAULT_PREFIX = "offsite-backup/"
+# ⚠️ 历史坑：`mnb-workbench-releases` 是 electron-updater 的公开发布源，**匿名可读**
+# （2026-10-12 匿名 GET 一个不存在的 key → NoSuchKey 而非 AccessDenied，即证明可读）。
+# 备份绝不可用该桶。本机环境变量指向的是私有桶 `mnb-workbench-backup`（匿名探测 AccessDenied）。
 SSE_HEADER = "x-oss-server-side-encryption"
 SSE_VALUE = "AES256"
+
+# ---------------------------------------------------------------- 口令
+
+# 口令**只**从一个独立于 .env、不在 git 的文件读。三条硬约束：
+#   ① 文件不存在 → 退出；② 空 / 纯空白 → 退出；③ 绝不回落到空口令或明文直传。
+# 不读 .env、不读 OSS_* 环境变量、不内置 —— 这些位置都会随备份一起被复制到 OSS。
+DEFAULT_PASSPHRASE_FILE = ".secrets/offsite_backup.passphrase"
+
+
+class PassphraseMissing(SystemExit):
+    """口令不可用。显式子类，便于测试断言且仍以 SystemExit 语义终止进程。"""
+
+
+def load_passphrase(path: str | Path) -> bytes:
+    """读口令文件。fail-loud：任何"拿不到可用口令"的情形都抛 SystemExit，不降级。"""
+    p = Path(path)
+    if not p.is_file():
+        raise PassphraseMissing(
+            f"[FATAL] 口令文件不存在: {p}\n"
+            "        加密是默认开启的，且**没有**任何降级路径（绝不以明文上传）。\n"
+            "        请先自行生成（脚本不会代劳、不会打印口令）：\n"
+            "        python -c \"import secrets,pathlib;p=pathlib.Path(r'%s');"
+            "p.parent.mkdir(parents=True,exist_ok=True);"
+            "p.write_text(secrets.token_urlsafe(48),encoding='utf-8')\"" % p
+        )
+    try:
+        raw = p.read_bytes()
+    except OSError as e:  # 权限 / 占用
+        raise PassphraseMissing(f"[FATAL] 口令文件无法读取: {p} ({e})")
+
+    # 容忍 UTF-8 BOM 与结尾换行（Windows 编辑器很爱加），但**不**改动其它字符
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    if raw.endswith(b"\r\n"):
+        raw = raw[:-2]
+    elif raw.endswith(b"\n") or raw.endswith(b"\r"):
+        raw = raw[:-1]
+
+    if not raw.strip():
+        raise PassphraseMissing(
+            f"[FATAL] 口令文件为空或纯空白: {p}\n"
+            "        拒绝以空口令继续 —— 那等同于没有加密。"
+        )
+    if len(raw) < 16:
+        print(
+            f"[WARN] 口令仅 {len(raw)} 字节，短口令在 PBKDF2 下仍安全但抗爆破更弱，建议 >= 32 字节。",
+            file=sys.stderr,
+        )
+    return raw
+
+
+# ---------------------------------------------------------------- 加密信封
+# ⚠️ **必须定义在使用它的函数之前**（2026-10-12 修）。
+# `encrypted_size(plain_size, chunk_bytes=ENC_CHUNK_BYTES)` 把 ENC_CHUNK_BYTES
+# 用作**默认参数值** —— 默认参数在函数 `def` 执行时立即求值，不是调用时才查。
+# 常量块原先排在函数段之后 ⇒ `import offsite-oss-sync` 直接 NameError 崩掉。
+# 注意 py_compile **查不出**这个错（语法完全合法），只有真 import 才暴露（类 20.220）。
+#
+# 自描述定长头（57 字节），解密只需「密文 + 口令」，不需要任何外部参数：
+#   0  magic      7B  b"MNBENC1"
+#   7  version    1B  u8
+#   8  kdf_id     1B  u8  (1 = PBKDF2-HMAC-SHA256)
+#   9  iterations 4B  u32 BE
+#  13  chunk      4B  u32 BE
+#  17  plain_len  8B  u64 BE
+#  25  chunks     4B  u32 BE
+#  29  salt      16B
+#  45  nonce     12B
+ENC_MAGIC = b"MNBENC1"
+ENC_VERSION = 1
+ENC_KDF_PBKDF2 = 1
+ENC_HEADER = struct.Struct(">7sBBI IQI16s12s")  # 57 bytes（空白被 struct 忽略）
+ENC_SALT_LEN = 16
+ENC_NONCE_LEN = 12
+ENC_TAG_LEN = 16
+ENC_CHUNK_BYTES = 8 * 1024 * 1024  # 8 MiB —— DB dump 实测 40~82MB，禁止整文件进内存
+PBKDF2_ITERS = 600_000  # OWASP 2023 对 PBKDF2-HMAC-SHA256 的推荐值
+DERIVED_KEY_LEN = 32  # AES-256
+ENC_SUFFIX = ".enc"
+
+# AAD 前缀 = 头的前 29 字节（magic..chunks），绑住 salt/plain_len/chunks 后再拼 chunk 序号，
+# 于是跨文件拼接、块重排、尾部截断三种攻击都会被 GCM 标签校验挡住。
+ENC_AAD_PREFIX = struct.Struct(">7sBBI IQI")
+
+
+# ---------------------------------------------------------------- 加密（AES-256-GCM, 分块）
+
+def _crypto():
+    """lazy import：只有真要加密时才需要 cryptography，保持默认路径零第三方依赖。"""
+    try:
+        from cryptography.exceptions import InvalidTag
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    except ImportError as e:  # pragma: no cover - 取决于运行环境
+        raise SystemExit(
+            f"[FATAL] 需要 cryptography 才能加密: {e}\n"
+            "        pip install cryptography   （本仓已通过 python-jose[cryptography] 间接依赖）"
+        )
+    return AESGCM, HKDF, hashes, PBKDF2HMAC, InvalidTag
+
+
+def _master_key(passphrase: bytes, salt: bytes, iterations: int):
+    AESGCM, HKDF, hashes, PBKDF2HMAC, _ = _crypto()
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=DERIVED_KEY_LEN,
+        salt=salt,
+        iterations=iterations,
+    )
+    return kdf.derive(passphrase)
+
+
+def _chunk_key(master: bytes, salt: bytes, index: int) -> bytes:
+    """每个分块一把独立子密钥（HKDF-SHA256，info 含块序号）。"""
+    _, HKDF, hashes, _, _ = _crypto()
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=DERIVED_KEY_LEN,
+        salt=salt,
+        info=b"MNBENC1-chunk" + struct.pack(">Q", index),
+    )
+    return hkdf.derive(master)
+
+
+def _chunk_nonce(base_nonce: bytes, index: int) -> bytes:
+    """nonce_i = base_nonce XOR i（12 字节补零）。base_nonce 每文件随机 ⇒ 不跨文件重用。"""
+    return bytes(a ^ b for a, b in zip(base_nonce, struct.pack(">Q", index).rjust(12, b"\x00")))
+
+
+def encrypted_size(plain_size: int, chunk_bytes: int = ENC_CHUNK_BYTES) -> int:
+    """给定明文长度即可算出密文长度 —— 幂等比对不需要真加密一遍。"""
+    chunks = max(1, -(-plain_size // chunk_bytes))
+    return ENC_HEADER.size + plain_size + chunks * ENC_TAG_LEN
+
+
+def encrypt_file(src: Path, dst: Path, passphrase: bytes) -> tuple[int, str]:
+    """流式加密到 dst。返回 (明文字节数, 十六进制 salt)。
+
+    分块而非整文件进内存：DB dump 实测 40~82MB，且会继续涨；每块 8MiB 恒定占用。
+    """
+    AESGCM, _, _, _, _ = _crypto()
+    plain_len = src.stat().st_size
+    chunk_bytes = ENC_CHUNK_BYTES
+    chunks = max(1, -(-plain_len // chunk_bytes)) if plain_len else 1
+
+    salt = os.urandom(ENC_SALT_LEN)
+    nonce = os.urandom(ENC_NONCE_LEN)
+    aad_prefix = ENC_AAD_PREFIX.pack(
+        ENC_MAGIC, ENC_VERSION, ENC_KDF_PBKDF2, PBKDF2_ITERS,
+        chunk_bytes, plain_len, chunks,
+    )
+    header = ENC_HEADER.pack(
+        ENC_MAGIC, ENC_VERSION, ENC_KDF_PBKDF2, PBKDF2_ITERS,
+        chunk_bytes, plain_len, chunks, salt, nonce,
+    )
+    master = _master_key(passphrase, salt, PBKDF2_ITERS)
+
+    written = 0
+    with src.open("rb") as fin, dst.open("wb") as fout:
+        fout.write(header)
+        for index in range(chunks):
+            block = fin.read(chunk_bytes)
+            aad = aad_prefix + struct.pack(">Q", index)
+            ct = AESGCM(_chunk_key(master, salt, index)).encrypt(
+                _chunk_nonce(nonce, index), block, aad
+            )
+            fout.write(ct)
+            written += len(block)
+    if written != plain_len:  # pragma: no cover - 源文件在加密期间被改动
+        dst.unlink(missing_ok=True)
+        raise SystemExit(f"[FATAL] 加密期间源文件长度变化（{plain_len} → {written}），已丢弃密文")
+    return plain_len, salt.hex()
+
+
+def read_envelope_header(path: Path) -> dict:
+    with path.open("rb") as fh:
+        raw = fh.read(ENC_HEADER.size)
+    if len(raw) < ENC_HEADER.size:
+        raise SystemExit(f"[FATAL] 文件过短，不是 MNBENC1 密文: {path}")
+    magic, version, kdf_id, iters, chunk, plain_len, chunks, salt, nonce = ENC_HEADER.unpack(raw)
+    if magic != ENC_MAGIC:
+        raise SystemExit(f"[FATAL] 不是 MNBENC1 密文（magic={magic!r}）: {path}")
+    if version != ENC_VERSION:
+        raise SystemExit(f"[FATAL] 不支持的信封版本 {version}，本脚本只认 v{ENC_VERSION}: {path}")
+    if kdf_id != ENC_KDF_PBKDF2:
+        raise SystemExit(f"[FATAL] 不支持的 KDF id {kdf_id}，本脚本只认 PBKDF2-HMAC-SHA256: {path}")
+    return {
+        "iterations": iters, "chunk_bytes": chunk, "plain_len": plain_len,
+        "chunks": chunks, "salt": salt, "nonce": nonce,
+    }
+
+
+def last_chunk_plain_len(hdr: dict) -> int:
+    """末块的**明文**长度。
+
+    末块通常是"短块"（plain_len 不是 chunk_bytes 的整数倍）—— 加密侧 `fin.read()`
+    在 EOF 处自然返回短块，20,000,005 字节 / 8MiB = 2 满块 + 3,222,789 短块。
+    解密侧必须按同样规则算出期望长度，否则会把正常的短末块误判成"密文被截断"
+    （2026-10-12 实测踩到：任何非 chunk_bytes 整数倍的文件都解不开，而 DB dump
+    实测 40~82MB，**必然**落在这个区间）。
+    """
+    if hdr["chunks"] <= 0:
+        return 0
+    return hdr["plain_len"] - (hdr["chunks"] - 1) * hdr["chunk_bytes"]
+
+
+def decrypt_file(src: Path, dst: Path, passphrase: bytes) -> int:
+    """解密到 dst，返回明文字节数。口令错 / 被篡改 / 截断 全部抛 SystemExit。"""
+    AESGCM, _, _, _, InvalidTag = _crypto()
+    hdr = read_envelope_header(src)
+    aad_prefix = ENC_AAD_PREFIX.pack(
+        ENC_MAGIC, ENC_VERSION, ENC_KDF_PBKDF2, hdr["iterations"],
+        hdr["chunk_bytes"], hdr["plain_len"], hdr["chunks"],
+    )
+    master = _master_key(passphrase, hdr["salt"], hdr["iterations"])
+
+    written = 0
+    with src.open("rb") as fin, dst.open("wb") as fout:
+        fin.read(ENC_HEADER.size)  # 头已单独解析
+        for index in range(hdr["chunks"]):
+            is_last = index == hdr["chunks"] - 1
+            # 末块读"剩余全部"，这样**尾部被追加数据**也会被长度校验抓住
+            expect = (
+                last_chunk_plain_len(hdr) + ENC_TAG_LEN
+                if is_last else hdr["chunk_bytes"] + ENC_TAG_LEN
+            )
+            block = fin.read() if is_last else fin.read(expect)
+            if len(block) != expect:
+                dst.unlink(missing_ok=True)
+                raise SystemExit(
+                    f"[FATAL] 密文第 {index}/{hdr['chunks']} 块长度不符"
+                    f"（期望 {expect}，实得 {len(block)}）—— 被截断或尾部被追加: {src}"
+                )
+            ct, tag = block[:-ENC_TAG_LEN], block[-ENC_TAG_LEN:]
+            aad = aad_prefix + struct.pack(">Q", index)
+            try:
+                pt = AESGCM(_chunk_key(master, hdr["salt"], index)).decrypt(
+                    _chunk_nonce(hdr["nonce"], index), ct + tag, aad
+                )
+            except InvalidTag:
+                dst.unlink(missing_ok=True)
+                # InvalidTag 是"口令错"与"密文被改"共同的表现，无法区分 —— 如实说明
+                raise SystemExit(
+                    f"[FATAL] 第 {index} 块 GCM 校验失败：口令错误，或密文被篡改/块序被打乱。\n"
+                    f"        文件: {src}"
+                )
+            fout.write(pt)
+            written += len(pt)
+    if written != hdr["plain_len"]:  # pragma: no cover - 头与体不自洽
+        dst.unlink(missing_ok=True)
+        raise SystemExit(
+            f"[FATAL] 明文长度对账失败（头称 {hdr['plain_len']}，实得 {written}）: {src}"
+        )
+    return written
+
+
+# ---------------------------------------------------------------- 备份范围收敛
+# 默认只同步**本地备份任务产出的两类文件**，不再 rglob 整个目录：
+#   microbubble_*.sql.gz  → backup_db.sh 的 pg_dump 产物（知识库 + 会议转写）
+#   .env.*.bak            → 同一脚本备份的 .env（库密码 / JWT SECRET_KEY / MinIO 密钥）
+# 注意 .env.*.bak 以点开头，早期版本按 "隐藏文件" 整类跳过 —— 那正好漏掉了最敏感的
+# 一类产物。传 --include "*" 可恢复旧的"整目录镜像"行为。
+DEFAULT_INCLUDE = ("*.sql.gz", ".env.*.bak")
+
+# 与 scripts/backup_db.sh 的 KEEP_DAYS=7 保持一致
+DEFAULT_KEEP_DAYS = 7
 
 
 # ---------------------------------------------------------------- 凭据
@@ -65,12 +358,20 @@ class Credentials:
 
 
 def load_credentials(creds_file: str | None) -> Credentials:
-    """凭据来源：显式文件 > 环境变量。两者都缺 → 直接失败（禁止默认回落）。"""
+    """凭据来源：显式文件 > 环境变量。缺任何一项 → 直接失败（禁止默认回落）。
+
+    **桶与 endpoint 没有任何默认值**，这是刻意设计：
+      2026-10-12 匿名探测实测 `mnb-workbench-releases` 返回 NoSuchKey（= 可读，
+      它是 electron-updater 公开发布源），`mnb-workbench-backup` 返回 AccessDenied
+      （私有）。而本脚本旧版把 releases 写成了 DEFAULT_BUCKET —— 一旦环境变量没设，
+      DB dump 与 .env 备份就会静默流进一个**匿名可读**的桶。
+    ⇒ 「回落到默认桶」在本项目等于最坏结果（明文备份进公开桶），故一律 fail-loud。
+    """
     ak = sk = ""
-    bucket = os.environ.get("OSS_BUCKET", "") or DEFAULT_BUCKET
-    endpoint = os.environ.get("OSS_ENDPOINT", "") or DEFAULT_ENDPOINT
-    prefix = os.environ.get("OSS_PREFIX", "") or DEFAULT_PREFIX
-    region = os.environ.get("OSS_REGION", "") or DEFAULT_REGION
+    bucket = os.environ.get("OSS_BUCKET", "").strip()
+    endpoint = os.environ.get("OSS_ENDPOINT", "").strip()
+    prefix = os.environ.get("OSS_PREFIX", "").strip() or DEFAULT_PREFIX
+    region = os.environ.get("OSS_REGION", "").strip()
 
     if creds_file:
         path = Path(creds_file)
@@ -90,11 +391,26 @@ def load_credentials(creds_file: str | None) -> Credentials:
         ak = os.environ.get("OSS_ACCESS_KEY_ID", "").strip()
         sk = os.environ.get("OSS_ACCESS_KEY_SECRET", "").strip()
 
-    if not ak or not sk:
+    missing = [n for n, v in (("OSS_BUCKET", bucket), ("OSS_ENDPOINT", endpoint),
+                               ("OSS_ACCESS_KEY_ID", ak), ("OSS_ACCESS_KEY_SECRET", sk)) if not v]
+    if missing:
         raise SystemExit(
-            "[FATAL] 缺少凭据：请设置环境变量 OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET，"
-            "或用 --creds 指定凭据文件。脚本不提供任何默认凭据。"
+            "[FATAL] 缺少必需配置: " + ", ".join(missing) + "\n"
+            "        本脚本**不提供任何桶/凭据默认值**。曾经的默认桶 mnb-workbench-releases "
+            "是匿名可读的公开发布源，备份落进去等于公开。\n"
+            "        请显式设置（计划任务账户需能读到）：\n"
+            "          setx OSS_BUCKET \"mnb-workbench-backup\"\n"
+            "          setx OSS_ENDPOINT \"oss-cn-beijing.aliyuncs.com\"\n"
+            "          setx OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET\n"
+            "        或用 --creds 指定凭据 JSON（字段 accessKeyId/accessKeySecret/bucket/endpoint）。"
         )
+
+    if not region:
+        # oss-cn-beijing.aliyuncs.com → cn-beijing
+        region = endpoint.split(".")[0].removeprefix("oss-") if endpoint else ""
+        if not region:
+            raise SystemExit(f"[FATAL] 无法从 endpoint 推导 region: {endpoint!r}，请显式设置 OSS_REGION")
+
     endpoint = endpoint.replace("https://", "").replace("http://", "").rstrip("/")
     prefix = prefix.lstrip("/")
     if prefix and not prefix.endswith("/"):
@@ -179,7 +495,12 @@ def _request(
 
 
 def put_object(creds: Credentials, key: str, path: Path) -> None:
-    # 逐块读入（不整文件进内存 —— 父项目「禁止整文件进内存」教训）
+    # ⚠️ 这里**确实是**整文件进内存（旧注释自称"逐块读入"是不实的，已改正）。
+    # 保留现状而非改成真流式上传，理由：V1 签名要把 Content-Length 纳入
+    # string_to_sign，先读长度没问题，但真正流式需要额外处理 urllib 的 body 分块，
+    # 收益（峰值 80MB → 更低）不值这个复杂度。
+    # 峰值受控：加密产物 = 明文 dump + 57B 头 + 每块 16B tag，且**一次只传一个文件**。
+    # 加密侧本身是流式的（encrypt_file 分块，不把明文整个读进内存）。
     size = path.stat().st_size
     payload = path.read_bytes()
     status, body = _request(creds, "PUT", key, payload, encrypt=True)
@@ -223,74 +544,150 @@ def delete_object(creds: Credentials, key: str) -> None:
 
 # ---------------------------------------------------------------- 扫描 / 上传 / 清理
 
-def scan_local(root: Path, prefix: str) -> list[Path]:
-    """递归收集待同步文件（排除临时/隐藏文件）。"""
+def default_root() -> Path:
+    """默认备份根 = 本仓 backups/（scripts/backup_db.sh 的产出目录）。
+
+    脚本位于 <repo>/apps/desktop/scripts/server/，向上 4 层即 <repo>。
+    """
+    return Path(__file__).resolve().parents[4] / "backups"
+
+
+def scan_local(root: Path, prefix: str, includes=DEFAULT_INCLUDE) -> list[Path]:
+    """递归收集待同步文件。
+
+    `includes` 非空时按 glob 白名单收窄，并且**不再**跳过点开头的文件 ——
+    旧实现按 `.startswith(".")` 整类跳过，而 `.env.YYYYMMDD.bak` 正是我们最该备份、
+    也最需要加密的那一类，于是被静默漏掉了（"看起来在工作"的典型形态）。
+    `includes` 为空 / 含 "*" 时退化为整目录镜像并恢复隐藏文件过滤（服务器共享目录用法）。
+    """
     if not root.is_dir():
         raise SystemExit(f"[FATAL] 备份根目录不存在: {root}")
+    mirror_all = not includes or "*" in includes
     files: list[Path] = []
     for p in sorted(root.rglob("*")):
         if not p.is_file():
             continue
-        if p.name.startswith(".") or p.name.endswith((".tmp", ".partial", ".lock")):
+        if p.name.endswith((".tmp", ".partial", ".lock")):
+            continue
+        if mirror_all:
+            if p.name.startswith("."):
+                continue
+        elif not any(p.match(g) or p.name.endswith(g.lstrip("*")) and p.match(g)
+                     for g in includes):
             continue
         files.append(p)
     return files
 
 
-def remote_key(creds: Credentials, root: Path, path: Path) -> str:
-    """远端 key = prefix + 相对根目录的 POSIX 路径（保留服务器侧目录结构）。"""
+def remote_key(creds: Credentials, root: Path, path: Path, encrypt: bool) -> str:
+    """远端 key = prefix + 相对根目录的 POSIX 路径（保留目录结构）+ 加密时的 .enc 后缀。
+
+    `.enc` 后缀是**结构性**防线：远端一眼可辨哪些是密文，也让保留策略不会误伤
+    任何历史遗留的明文对象（明文 key 不带后缀，自然与本轮 key 不匹配）。
+    """
     rel = path.relative_to(root).as_posix()
-    return f"{creds.prefix}{rel}"
+    return f"{creds.prefix}{rel}{ENC_SUFFIX if encrypt else ''}"
 
 
-def do_scan(creds: Credentials, root: Path) -> int:
-    files = scan_local(root, creds.prefix)
-    remote = {o["key"]: o["size"] for o in list_objects(creds)}
+def expected_remote_size(path: Path, encrypt: bool) -> int:
+    """远端应有的字节数 —— 幂等判据。加密时密文长度是明文的**确定函数**，
+    所以不必真加密一遍就能判断"远端是否已是这一份"。
+    （注意：同长度不同内容仍会跳过，这是同名同大小幂等的固有取舍，
+    与原实现一致 —— 备份文件名自带时间戳，内容变了名字也变。）"""
+    size = path.stat().st_size
+    return encrypted_size(size) if encrypt else size
+
+
+def _print_plan(files: list[Path], creds: Credentials, root: Path, encrypt: bool,
+                remote: dict[str, int]) -> int:
     to_upload, skipped = [], 0
     for f in files:
-        key = remote_key(creds, root, f)
-        if remote.get(key) == f.stat().st_size:
+        if remote.get(remote_key(creds, root, f, encrypt)) == expected_remote_size(f, encrypt):
             skipped += 1
         else:
             to_upload.append(f)
-    print(f"[scan] 本地文件 {len(files)} 个；远端对象 {len(remote)} 个")
+    print(f"[scan] 本地待同步 {len(files)} 个；远端对象 {len(remote)} 个")
     print(f"[scan] 需上传 {len(to_upload)} 个；同名同大小跳过 {skipped} 个")
+    print(f"[scan] 加密={'开（AES-256-GCM）' if encrypt else '关（!! 明文上传 !!）'}")
     for f in to_upload:
-        print(f"       + {remote_key(creds, root, f)} ({f.stat().st_size} bytes)")
+        print(f"       + {remote_key(creds, root, f, encrypt)} "
+              f"({f.stat().st_size} → {expected_remote_size(f, encrypt)} bytes)")
     return 0
 
 
-def do_apply(creds: Credentials, root: Path, confirm: bool) -> int:
+def do_scan(creds: Credentials, root: Path, includes, encrypt: bool) -> int:
+    files = scan_local(root, creds.prefix, includes)
+    remote = {o["key"]: o["size"] for o in list_objects(creds)}
+    return _print_plan(files, creds, root, encrypt, remote)
+
+
+def do_apply(creds: Credentials, root: Path, includes, encrypt: bool,
+             passphrase: bytes, confirm: bool) -> int:
     if not confirm:
         print("[apply] 未加 --confirm —— 仅 DRY RUN，未上传任何文件。")
-        return do_scan(creds, root)
-    files = scan_local(root, creds.prefix)
+        return do_scan(creds, root, includes, encrypt)
+
+    files = scan_local(root, creds.prefix, includes)
     remote = {o["key"]: o["size"] for o in list_objects(creds)}
     uploaded = skipped = 0
-    for f in files:
-        key = remote_key(creds, root, f)
-        if remote.get(key) == f.stat().st_size:
-            skipped += 1
-            continue
-        put_object(creds, key, f)
-        uploaded += 1
-        print(f"[apply] ✓ {key} ({f.stat().st_size} bytes)")
+    tmpdir = tempfile.mkdtemp(prefix="offsite-enc-") if encrypt else None
+    try:
+        for f in files:
+            key = remote_key(creds, root, f, encrypt)
+            if remote.get(key) == expected_remote_size(f, encrypt):
+                skipped += 1
+                continue
+            if encrypt:
+                # 密文落临时文件再 PUT：既不把 80MB 明文留在 backups/ 里，
+                # 也不整文件进内存（PBKDF2 600k 次 + AES 都走流式分块）
+                enc_path = Path(tmpdir) / (f.name + ENC_SUFFIX)
+                plain_len, salt_hex = encrypt_file(f, enc_path, passphrase)
+                cipher_len = enc_path.stat().st_size
+                put_object(creds, key, enc_path)
+                enc_path.unlink(missing_ok=True)
+                print(f"[apply] ✓ {key} (明文 {plain_len} → 密文 {cipher_len} bytes, "
+                      f"salt {salt_hex[:12]}…)")
+            else:
+                put_object(creds, key, f)
+                print(f"[apply] ✓ {key} ({f.stat().st_size} bytes)")
+            uploaded += 1
+    finally:
+        if tmpdir:
+            shutil.rmtree(tmpdir, ignore_errors=True)
     print(f"[apply] 完成：上传 {uploaded}，跳过 {skipped}（同名同大小）")
     return 0
 
 
-def do_cleanup(creds: Credentials, days: int, confirm: bool) -> int:
-    if days <= 0:
-        raise SystemExit("[FATAL] --cleanup 需要正整数天数")
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    victims = []
-    for o in list_objects(creds):
+def _parse_last_modified(raw: str):
+    """OSS 的 LastModified 可能是 '...T..:..:..000Z' 或无小数秒的写法，两种都收。"""
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
         try:
-            lm = datetime.strptime(o["last_modified"], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+            return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
         except ValueError:
             continue
-        if lm < cutoff:
+    return None
+
+
+def select_expired(days: int, objects: list[dict]) -> tuple[list[dict], list[dict]]:
+    """按 keep-days 切出过期对象。返回 (victims, skipped_undated)。
+
+    LastModified 解析不出来的对象**不删** —— 宁可多留，不可凭猜测删备份。
+    """
+    if days <= 0:
+        raise SystemExit("[FATAL] 保留天数需为正整数")
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    victims, skipped = [], []
+    for o in objects:
+        lm = _parse_last_modified(o["last_modified"])
+        if lm is None:
+            skipped.append(o)
+        elif lm < cutoff:
             victims.append(o)
+    return victims, skipped
+
+
+def do_cleanup(creds: Credentials, days: int, confirm: bool) -> int:
+    victims, undated = select_expired(days, list_objects(creds))
     if not confirm:
         print(f"[cleanup] 未加 --confirm —— 仅列出 {len(victims)} 个候选（{days} 天前）：")
         for o in victims:
@@ -299,7 +696,18 @@ def do_cleanup(creds: Credentials, days: int, confirm: bool) -> int:
     for o in victims:
         delete_object(creds, o["key"])
         print(f"[cleanup] ✓ 已删除 {o['key']}")
-    print(f"[cleanup] 完成：删除 {len(victims)} 个")
+    print(f"[cleanup] 完成：删除 {len(victims)} 个，保留 {len(undated)} 个（时间戳无法解析，未动）")
+    return 0
+
+
+def do_decrypt(src: Path, out_dir: Path, passphrase: bytes) -> int:
+    """解密单个 .enc → out_dir/<去掉 .enc 的原名>。灾备取回与往返验证都走这里。"""
+    if not src.is_file():
+        raise SystemExit(f"[FATAL] 待解密文件不存在: {src}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dst = out_dir / (src.name[:-len(ENC_SUFFIX)] if src.name.endswith(ENC_SUFFIX) else src.name + ".dec")
+    n = decrypt_file(src, dst, passphrase)
+    print(f"[decrypt] ✓ {src} → {dst} ({n} bytes)")
     return 0
 
 
@@ -307,29 +715,61 @@ def do_cleanup(creds: Credentials, days: int, confirm: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="把备份共享目录镜像到阿里云 OSS（三段式：scan / apply / cleanup）",
+        description="把备份目录**加密后**镜像到阿里云 OSS（scan / apply / cleanup / decrypt）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--scan", action="store_true", help="列出本地/远端差异（无副作用）")
     parser.add_argument("--apply", action="store_true", help="上传差异文件（需 --confirm）")
     parser.add_argument("--cleanup", type=int, metavar="DAYS", help="删除远端 N 天前的对象（需 --confirm）")
     parser.add_argument("--confirm", action="store_true", help="二次确认门（缺省为 DRY RUN）")
-    parser.add_argument("--root", required=True, help="本地备份根目录（服务器共享目录）")
+    parser.add_argument("--root", help="本地备份根目录（默认 <脚本上级仓库>/backups）")
+    parser.add_argument("--include", action="append", metavar="GLOB", dest="includes",
+                        help=f"只同步匹配的文件，可重复；默认 {' '.join(DEFAULT_INCLUDE)}；"
+                             f"传 '*' 恢复整目录镜像")
     parser.add_argument("--creds", help="凭据 JSON 文件路径（缺省则读环境变量）")
+    parser.add_argument("--passphrase-file", default=None,
+                        help=f"加密口令文件（默认 {DEFAULT_PASSPHRASE_FILE}）。"
+                             "加密无开关：任何上传路径都强制加密")
+    parser.add_argument("--keep-days", type=int, default=DEFAULT_KEEP_DAYS,
+                        help=f"--apply 成功后顺带清理远端 N 天前的对象（默认 {DEFAULT_KEEP_DAYS}，"
+                             f"与 scripts/backup_db.sh 的 KEEP_DAYS 一致；传 0 表示不清理）")
+    parser.add_argument("--decrypt-into", metavar="DIR",
+                        help="解密模式：把给定 .enc 文件解到 DIR")
+    parser.add_argument("files", nargs="*", help="--decrypt-into 模式下的密文文件路径")
     args = parser.parse_args(argv)
+
+    encrypt = True  # 加密无开关（见模块 docstring）
+    includes = tuple(args.includes) if args.includes else DEFAULT_INCLUDE
+
+    # --- 解密模式：不碰 OSS 凭据，也不需要备份根目录 ---
+    if args.decrypt_into:
+        pp = load_passphrase(args.passphrase_file or DEFAULT_PASSPHRASE_FILE)
+        if not args.files:
+            parser.error("--decrypt-into 需要至少一个密文文件参数")
+        for src in args.files:
+            do_decrypt(Path(src), Path(args.decrypt_into), pp)
+        return 0
 
     if not (args.scan or args.apply or args.cleanup is not None):
         parser.print_help()
         return 2
 
+    # --- 口令 fail-loud 必须发生在**任何** OSS 调用之前 ---
+    passphrase = load_passphrase(args.passphrase_file or DEFAULT_PASSPHRASE_FILE)
+
     creds = load_credentials(args.creds)
-    root = Path(args.root)
-    print(f"[init] bucket={creds.bucket} endpoint={creds.endpoint} prefix={creds.prefix} root={root}")
+    root = Path(args.root) if args.root else default_root()
+    print(f"[init] bucket={creds.bucket} endpoint={creds.endpoint} prefix={creds.prefix}")
+    print(f"[init] root={root} include={list(includes)} encrypt={encrypt} keep_days={args.keep_days}")
 
     if args.scan:
-        return do_scan(creds, root)
+        return do_scan(creds, root, includes, encrypt)
     if args.apply:
-        return do_apply(creds, root, args.confirm)
+        rc = do_apply(creds, root, includes, encrypt, passphrase, args.confirm)
+        if rc == 0 and args.confirm and args.keep_days > 0:
+            # 原设计缺的那块：上传完不清理 → 远端无限增长
+            rc = do_cleanup(creds, args.keep_days, confirm=True)
+        return rc
     return do_cleanup(creds, int(args.cleanup), args.confirm)
 
 

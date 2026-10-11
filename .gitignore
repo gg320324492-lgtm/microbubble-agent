@@ -224,3 +224,6 @@ desktop-conversion/.git.subrepo-backup/
 
 # Agent 会话暂存（2026-09-20）
 .agent-backups/
+
+# 离站容灾备份加密口令（2026-10-12）— 绝不入库
+.secrets/

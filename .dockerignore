@@ -82,3 +82,6 @@ apps/
 **/.mypy_cache/
 **/.ruff_cache/
 **/htmlcov/
+
+# 离站容灾备份加密口令 — 绝不进镜像
+.secrets/
