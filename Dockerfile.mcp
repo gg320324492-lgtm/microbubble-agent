@@ -8,14 +8,59 @@ RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # MCP 服务只需最小依赖（不需要 pilk/pgvector/sentence-transformers 等重型包）
+#
+# 2026-10-11 L-8（承 2026-10-07 起 10 周全红的 image-scan mcp job）:
+# 本块原为 `mcp>=0.9.0` + httpx/pydantic/pydantic-settings 三个**硬等号**,
+# 实测装出 mcp 0.9.1，带 5 条 HIGH CVE
+# (CVE-2025-53365/53366/66416/2026-52869/59950)，其中 CVE-2026-59950 的
+# FixedVersion 是 1.28.1 —— 即**凡是修掉它的版本都要求 uvicorn>=0.31.1**。
+#
+# ⚠️ **本文件不读 requirements.txt**，所以那里 `uvicorn[standard]==0.24.0`
+# 的硬钉**约束不到这个镜像**（requirements.txt 的 mcp 行影响的是 app /
+# commercial / voice-pipeline 三镜像，不是本文件）。本块里 mcp 会自己拉一个
+# 满足 `>=0.31.1` 的 uvicorn —— 实测 `pip install --dry-run` 解析到
+# uvicorn 0.54.0，两处 uvicorn 不打架。这与 requirements.txt:43-48 记的
+# "改 mcp 会撞 uvicorn==0.24.0 硬钉" 是**两个不同镜像的独立问题**，别混谈。
+#
+# 三个 `==` → `>=` 的依据（容器内 `pip install --dry-run --ignore-installed`
+#   实测，2026-10-11，非凭空猜测）：
+#   - **下限沿用原值**（httpx>=0.25.2 / pydantic[email]>=2.5.2 /
+#     pydantic-settings>=2.1.0）—— 实测这三个下限**本来就够**装下 mcp 1.28.1，
+#     真正的阻塞是 `==` 强钉（会把 mcp 要的新版传递依赖挡在门外触发
+#     ResolutionImpossible）。故只松上界、不抬下限，是最小改动。
+#   - 它们是 **mcp 的传递依赖要求**，不是随手挑的：mcp 的 FastMCP/客户端栈要求
+#     pydantic v2 + pydantic-settings 读环境变量 + httpx 作 HTTP 传输底座。
+#     版本号照抄原值，保留"我们最低支持到这里"的语义。
+#
+# `mcp` 上界 `<2` 的理由：pip 默认解析会选到 **mcp 2.3.0**（跨两个 major），
+# 而 `mcp_server/` 用的是 **0.9.x 时代的低层 API**
+# (`mcp.server.Server` / `mcp.server.stdio.stdio_server` /
+# `mcp.types.{Tool,TextContent,CallToolResult}`)。1.x 全保留，但 **2.x 完全未验证**，
+# 且 `mcp_server/server.py:18-20` 那条注释本身就是 0.9.x 时代的行为约定
+# (`Server.__init__` 只接受 `name`)。钉 `<2` 避开这个未知区域 ——
+# 想升 2.x 必须先单独立项跑一遍下面的 import + 启动验证。
+#
+# ⚠️⚠️ **下面每个版本串都必须加引号，否则整块静默失效**（2026-10-11 踩到并修）：
+# `RUN` 走 `/bin/sh`，**shell 会把 `>` `<` 当重定向符**。未加引号时
+#     anthropic>=0.39.0   →   anthropic > =0.39.0
+# 即 pip 收到的是**裸包名 `anthropic`（版本约束被丢掉，装最新版）**，
+# stdout 被重定向进一个垃圾文件 `=0.39.0`。
+# **这是本文件早就存在的潜伏 bug，不是本次引入的**。实测证据：已发布的
+# `microbubble-agent-vision-mcp:latest`(2026-06-17 构建) 里 anthropic 是
+# **0.109.2** —— 远高于文件里写的 `>=0.39.0`，正是"约束被 shell 吃掉"的铁证。
+# 而带 `==` 的 httpx/pydantic/pydantic-settings 没有重定向字符，是**唯一真正生效**的
+# 三个约束 —— 它们(不是 shell)把 mcp 逼着回退到 0.9.1。
+# 本次加 `<2` 后该坑从"静默失效"升级为**构建硬失败**
+# (`/bin/sh: 1: cannot open 2: No such file`) —— 反而暴露了它。
+# ⇒ **纪律：Dockerfile RUN 里的 pip 版本约束一律加引号**，新写 Dockerfile 同理。
 RUN pip install --no-cache-dir --upgrade setuptools \
     && pip install --no-cache-dir \
-    anthropic>=0.39.0 \
-    mcp>=0.9.0 \
-    httpx==0.25.2 \
-    python-dotenv==1.0.0 \
-    pydantic-settings==2.1.0 \
-    pydantic[email]==2.5.2 \
+    "anthropic>=0.39.0" \
+    "mcp>=1.28.1,<2" \
+    "httpx>=0.25.2" \
+    "python-dotenv==1.0.0" \
+    "pydantic-settings>=2.1.0" \
+    "pydantic[email]>=2.5.2" \
     -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 复制 MCP 服务器代码
@@ -23,6 +68,29 @@ COPY mcp_server/ ./mcp_server/
 COPY app/config.py ./app/config.py
 COPY app/services/vision_service.py ./app/services/vision_service.py
 COPY app/core/llm.py ./app/core/llm.py
+
+# 2026-10-11: 补两个漏掉的 COPY —— 本镜像此前**从来就起不来**(类 20.212 的
+# "看着像活接线, 实则早已失效")。主指挥用 2026-10-07 的旧镜像 l8-scan-mcp:local
+# 实测 `import mcp_server.server` 即 ModuleNotFoundError: app.core.tool_call_converter。
+#
+# 两个条目的**必要性不同**, 别当同一类:
+#   - `tool_call_converter.py` = **硬依赖**。app/core/llm.py:73 是**顶层 import**
+#     (不在 try 里), 缺它 ⇒ 模块加载即炸 ⇒ `python -m mcp_server.server` 必挂。
+#     它自身只 import json/logging/typing ⇒ 零额外依赖, 补进来无副作用。
+#   - `app/rag/` = **软依赖**。llm.py:448 的 `from app.rag import config as _cfg`
+#     被包在 `try: ... except Exception: logger.warning(...)` 里, 所以缺它**不会**
+#     崩进程 —— 但会**静默降级**: LangFuse tracing 永远关不掉、只在日志里留一行
+#     warning。这正是类 20.220 的形态(状态看着正常、副作用没发生), 故一并补齐。
+#     `app/rag/__init__.py` 只有 docstring(不 eager import 任何子模块)、
+#     `config.py` 只 import os ⇒ 整目录 COPY 不会拉起 langchain/llama_index 等
+#     重型包(那两个只在 config.py 函数体内惰性 import)。
+#
+# ⚠️ **"构建成功"会掩盖这个问题**(类 20.220): COPY 漏文件不影响 build, 镜像照样
+# 出产、healthy 也可能为真(healthcheck 只探 /proc 里有无进程, 不探 import),
+# 故障点推迟到容器**启动那一瞬**。所以光看 build 过 / 容器起来不算验证,
+# 必须真 `import mcp_server.server`。
+COPY app/core/tool_call_converter.py ./app/core/tool_call_converter.py
+COPY app/rag/ ./app/rag/
 
 # 暴露端口（HTTP 模式时使用）
 EXPOSE 8001
