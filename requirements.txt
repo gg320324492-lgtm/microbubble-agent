@@ -1,6 +1,29 @@
 # Web框架
 fastapi>=0.109.0
-uvicorn[standard]==0.24.0
+# 2026-10-12 L-8 R5: uvicorn 0.24.0 -> 0.31.1, 为解除 mcp 的 3 条 CVE 阻塞。
+#
+# ⚠️ **本行此前被误判为"连带 websockets / SSE / WS 链路的栈级改造"**, 实测证伪:
+#   `mcp==1.28.1` 与 websockets **无关** (12.0 / 15.0 均可解), 唯一阻塞点是 uvicorn:
+#       mcp 1.28.1 + websockets 12.0 -> 可解
+#       mcp 1.28.1 + websockets 15.0 -> 可解
+#       mcp 1.28.1 + uvicorn   0.24.0 -> 冲突   ← 唯一阻塞
+#       mcp 1.28.1 + uvicorn   0.31.1 -> 可解
+#   (以上为 `pip install --dry-run` 在一次性容器里的实测, 非推断)
+#
+# 爆炸半径实测 (dry-run 解析结果), **不牵动 ASGI 其余组件**:
+#       fastapi   0.143.0 -> 0.143.0   不变
+#       starlette 1.7.0   -> 1.7.0     不变
+#       websockets 15.0.1 -> 15.0.1    不变
+#       anyio     4.15.1  -> 4.15.1    不变
+#       uvicorn   0.24.0  -> 0.31.1    仅此一个真变化
+#   新增的 httptools / uvloop / watchfiles 均为 `[standard]` extra 的可选加速器,
+#   现状 `0.24.0` 本来就带 `[standard]`, 故不是新引入的依赖类别。
+#
+# 代码级风险为零: 全仓 3 处 `import uvicorn` 用的都是
+#   `uvicorn.run(app, host=..., port=...)`  (app/gpu_worker/streaming_server.py:306 /
+#   app/sensevoice_server.py:423 / app/whisper_server.py:236),
+#   该签名在 0.24 -> 0.31 之间未变; 其余 5 处入口全是命令行 `uvicorn app.main:app`。
+uvicorn[standard]==0.31.1
 python-multipart==0.0.30
 # 2026-10-11 L-8: websockets 硬钉 12.0 是**任意中间值**, 背后无任何真实约束方 ——
 #   调研实测 `Required-by: funasr`, 而 funasr 与 uvicorn[standard] **均只要求 >=10.4**。
@@ -60,22 +83,30 @@ openai>=1.0.0,<2.0.0
 #   (`mcp_server/server.py:4-5`、`mcp_server/tools/vision.py:7-8`),
 #   用的 `mcp.server.Server` / `stdio_server` / `mcp.types.{Tool,TextContent,CallToolResult}`
 #   在 1.x 全部保留; `app/` 内零 import; vision-mcp 默认不启(`VISION_USE_MCP=False`)。
-#   ⇒ 日后单独处理 uvicorn 升级时, mcp 这条几乎不会再构成障碍。
 #
-#   【2026-10-11 实测补强 (执行 agent 复核, 结论 = 本轮仍不能改, 留给 ASGI 栈立项)】
-#     - 冲突在线复现: 容器内 `pip install --dry-run --ignore-installed -r <本文件>` 当
-#       本行改成 `mcp>=1.28.1,<2` 时报 **ResolutionImpossible**:
-#         `mcp 1.28.1..1.30.0 depends on uvicorn>=0.31.1` ✗ vs `uvicorn[standard]==0.24.0`(第 3 行)。
-#     - **二分找"能解的最高 mcp"**: 逐版本 dry-run, 结果 = **1.12.4 能解, 1.13.0 起全炸**
-#       (1.12.4 的 metadata 是 `uvicorn>=0.23.1`; 1.13.0 起抬到 `>=0.31.1`)。
-#     - ⇒ 能解的 mcp 上限(1.12.4)**低于所有 CVE 的 FixedVersion**
-#       (66416→1.23.0 / 52869→1.27.2 / 59950→1.28.1) ⇒ **改本行一条 CVE 都修不掉**。
-#     - ⚠️ 与运行容器的差异: 当前跑着的 `microbubble-agent-app-1` 里 mcp 仍是 **1.6.0**
-#       (旧镜像), 而按本文件现解析(CI 重建)会装到 **1.12.4** —— 两者都 <1.23.0,
-#       故 CI 的 app/commercial/voice-pipeline 三 job 里这 3 条 CVE 同样一条未修。
-#     - **结论: 本轮不动本行** (改成任何可解版本都是无效改动), 修它必须先完成
-#       uvicorn 0.24.0 → >=0.31.1 的 ASGI 栈升级立项(连带 websockets / SSE / WS 链路)。
-mcp>=0.9.0
+#   【2026-10-12 结论已翻转 —— 本行现可改, 因为 uvicorn 阻塞已解除】
+#     上一条记的"属独立立项, 未在本次处理"指的是 **uvicorn 升级**; 该升级已于
+#     2026-10-12 完成 (本文件第 3 行 `uvicorn[standard]==0.31.1`, 见该行注释里的
+#     dry-run 实测证据), 因此本行不再是"改任何版本都无效"的死结。
+#     ⇒ 下限抬到 1.28.1, 修掉本文件三镜像的 3 条 CVE:
+#         CVE-2025-66416 (FixedVersion 1.23.0)
+#         CVE-2026-52869 (FixedVersion 1.27.2)
+#         CVE-2026-59950 (FixedVersion 1.28.1)
+#     上界 `<2` 的理由同 `Dockerfile.mcp`: mcp 2.x 是跨 major 且未验证
+#     (`mcp_server/` 用 0.9.x 时代低层 API)。
+#     ⚠️ **归因更正**: 前文"mcp 会撞 websockets==12.0 硬钉"不成立 ——
+#        实测 `mcp 1.28.1 + websockets 12.0/15.0` 均**可解**, 唯一阻塞是 uvicorn。
+#        而第 10 行 websockets 早已是 `>=12.0,<16.0`(2026-10-11 已放宽),
+#        容器实测装的就是 15.0.1。
+#
+#   [留档: 2026-10-11 那轮"本行改不动"的完整论证, 已被上面 2026-10-12 的升级推翻,
+#    但推导过程有参考价值故保留摘要]
+#     - 二分找"能解的最高 mcp": 1.12.4 能解, 1.13.0 起全炸
+#       (1.12.4 metadata = `uvicorn>=0.23.1`; 1.13.0 起抬到 `>=0.31.1`)。
+#     - 当时 uvicorn 钉死 0.24.0, 故能解上限(1.12.4)低于全部 FixedVersion,
+#       改本行一条 CVE 都修不掉 ⇒ 那轮结论"本轮不动"。
+#     - **该结论的前提是 uvicorn 不动**; 前提既已解除, 结论随之翻转 (见上)。
+mcp>=1.28.1,<2
 
 # 语音识别
 pilk>=0.2.4
