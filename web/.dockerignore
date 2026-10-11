@@ -1,0 +1,17 @@
+# 2026-10-12 新建。**本文件此前不存在** ——
+# `web/Dockerfile` 在 image-scan 里用的是**独立构建上下文** (`context: web`),
+# Docker 只认 `<context>/.dockerignore`, 即本文件, **根目录的 .dockerignore 对它无效**。
+#
+# 后果(实测): web 镜像构建的 context 里带着 **web/node_modules 466MB**,
+# 而 `web/Dockerfile` 自己会 `RUN npm install` —— 这 466MB 是**纯浪费**,
+# 拖慢传输且可能被 `COPY . .` 带进 builder 层。
+#
+# 排除 node_modules 是安全的: Dockerfile 的安装路径是
+#     COPY package.json ./  →  RUN npm install  →  COPY . .
+# 即依赖由容器内 npm install 产生, 不消费宿主 node_modules。
+node_modules/
+**/node_modules/
+dist/
+.vite/
+*.log
+.DS_Store

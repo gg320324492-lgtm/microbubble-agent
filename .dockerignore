@@ -52,3 +52,33 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 .wal/
+
+# 2026-10-12 构建上下文瘦身: **两处漏网, 合计约 2.2GB** (实测 du)。
+# 起因: 部署 `619ae84ad` 时 `docker build` 报
+#     `#8 transferring context: 1.62GB 97.6s` —— 单是传上下文就吃掉 1.6 分钟。
+#
+# ⚠️ **与 2026-10-11 修 `__pycache__` 完全同一个坑**: 上面的 `node_modules/` /
+#   `.pytest_cache/` / `.mypy_cache/` / `.ruff_cache/` 都只写了**根层级**形态。
+#   Docker 的 .dockerignore 模式是按 context 相对路径匹配的, `node_modules/`
+#   **只匹配根那一层**, 嵌套的 `web/node_modules` 匹配不到 —— 要写 `**/` 才递归。
+#   (上面已为 `__pycache__` / `*.pyc` 补过 `**/` 形态, 这批漏了。)
+#
+# ① `apps/` = **1.7GB**, 全部是 Electron 桌面应用的**打包产物**
+#    (实测 `apps/desktop/release` 单独就 1.7GB, 另有 node_modules 9.7M / out 3.5M)。
+#    排除依据(类 20.223: 排除前必须确认不是活接线):
+#      - `find apps -name "*.py"` → **零个 .py 文件**(纯 Electron, 无 Python 服务代码);
+#      - `grep -rn "from apps\|import apps"` → 零引用;
+#      - `docker-compose.yml` 零处挂载 apps/;
+#      - `find apps -iname Dockerfile*` → **无 Dockerfile**(Electron 不用 Docker 构建,
+#        那几个 yml 是 electron-builder 的产物), 故排除它不会破坏任何镜像构建。
+#    ⚠️ 本仓构建的 8 个镜像里没有任何一个需要 Electron 代码。
+#
+# ② `**/node_modules/` = **466MB**(实测 `web/node_modules`)。
+#    排除它**不影响 web 镜像构建**: `web/Dockerfile` 自己 `RUN npm install`,
+#    不消费宿主的 node_modules。
+apps/
+**/node_modules/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/htmlcov/
