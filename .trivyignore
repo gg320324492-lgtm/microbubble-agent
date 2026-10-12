@@ -30,32 +30,55 @@
 #
 # 门禁那一步带 `--ignore-unfixed: true`，意思是**「只显示已修复的漏洞」**
 # —— 凡是没有上游修复版本的漏洞，trivy 本来就不会报，门禁本来就不会红。
-# 实测结论：**这 4 条里有 3 条对门禁是彻底的 no-op**（见下方"实测"）。
+# 实测结论：**本文件现存的 3 条对门禁全是彻底的 no-op**（见下方"实测"）。
 #
 # ⚠️ **2026-10-12 更新**: 现存**生效的只有 3 条**，且全是 no-op。
 #   langsmith 那条 `GHSA-f4xh-w4cj-qxq8` 已删除（它自己写的复查条件被触发 ——
 #   websockets 已放宽、langsmith 早已到 0.14.7、uvicorn 也升了）。见第 4 节留档。
 #   ⇒ **本文件当前不含任何真正生效的豁免**。
 #
-#   仍未修的 `langchain-core` CVE-2026-34070 **故意不在本文件**：
-#   它有修复版(1.2.22)，属"该修没修"，登记成豁免等于永久掩盖真实暴露面。
+#   `langchain-core` CVE-2026-34070 当初**故意不登记**是对的（有修复版 1.2.22 却
+#   不修 = 登记即永久掩盖真实暴露面，类 20.220）—— 但结局不是跨 major 迁移，
+#   而是**四个 langchain 包已从 requirements.txt 彻底删除**、暴露面已消除，
+#   trivy 不会再报它，因此也无需登记。见下方"门禁仍然红的真实原因"。
 #
 # 所以本文件的真实作用是：
 #   ① 让「已知未修复」在仓库里有据可查、可 review（主要价值）；
 #   ② 上游一旦放出修复版本，trivy 会立刻重新报出来 —— 那时该修依赖，而不是加豁免。
 #
-# 门禁仍然红的真实原因 —— **2026-10-12 更新：4 条已修掉 3 条，剩 1 条**
+# 门禁仍然红的真实原因 —— **2026-10-12 更新：4 条已全部处理完毕，0 条遗留**
 #   ✅ mcp —— 2026-10-12 已修。原阻塞链是 `requirements.txt:3` 硬钉
 #      `uvicorn[standard]==0.24.0`，而 mcp 1.13.0 起要求 uvicorn>=0.31.1。
 #      升 uvicorn 到 0.31.1（实测不牵动 fastapi/starlette/websockets）+
 #      mcp 下限抬到 >=1.28.1 后，CVE-2025-66416 / 52869 / 59950 三条全修。
 #      ⚠️ 归因更正：当年注释说"连带 websockets 硬钉"是**错的** ——
 #         实测 `mcp 1.28.1 + websockets 12.0/15.0` 均**可解**，唯一阻塞是 uvicorn。
-#   ⬜ langchain-core 0.3.86 —— CVE-2026-34070，修的版本 1.2.22
-#      （0.3→1.2 跨 major）。**仍未修**，需独立立项评估 RAG 主链路影响面。
+#   ✅ langchain-core 0.3.86 —— CVE-2026-34070，修的版本本是 1.2.22（0.3→1.2 跨 major），
+#      但**没走迁移这条路**：langchain 1.x 里 `AgentExecutor` / `create_tool_calling_agent` /
+#      `langchain.tools.Tool` **全部消失**，迁移等于重写 `agent_retriever._init_executor`；
+#      而 import blocker 运行时实测证明 `agent_retriever` 与另两个 RAG-FW 模块
+#      **零调用方** ⇒ 删除依赖远优于迁移。故 `langchain` / `langchain-core` /
+#      `langchain-anthropic` / `langchain-community` 四包已从 requirements.txt 移除
+#      （commit `415cd704e`），容器内实测确认未安装 ⇒ trivy 不会再报该 CVE。
 #   ⚠️ 原先此段还列着 `msgpack` / `setuptools`，二者已于 2026-10-12 修复并转绿
 #      （msgpack 加顶层下限 >=1.2.1；setuptools 的 CVE 是 pip 的 `_vendor/` 副本，
 #        靠删掉 `pip install --upgrade pip` 消除，不是 requirements.txt 能修的）
+#   ⚠️ **CI 侧尚未复核（别把上面当成"门禁已绿"）**：image-scan 的触发器只有
+#      `pull_request`（限 Dockerfile / docker/** / docker-compose*.yml）、
+#      `schedule`（周一）、`workflow_dispatch`，**没有 `push`** ⇒ 改 requirements.txt
+#      从不触发它。2026-10-12 那次运行（head `09769e415`）里 app / commercial /
+#      voice-pipeline 三个 job 红的**唯一原因**就是
+#      `langchain-core (METADATA) │ CVE-2026-34070`，而删除发生在那次运行**之后**
+#      ⇒ **该 CVE 是否已消失，CI 至今未验证**，门禁当前仍显示红。
+#      ✅ **本机已按门禁的真实参数实测预判 = 0 条**（2026-10-12，trivy 扫
+#      `microbubble-agent-app:latest`，参数对齐 `image-scan.yml` 的 gate 步骤：
+#      `--severity CRITICAL,HIGH --ignore-unfixed=true --ignorefile .trivyignore`）
+#      ⇒ app job 预期转绿。⚠️ 但**本地绿 ≠ CI 绿**（CI 是干净构建，见下方"本机镜像的
+#      已知局限"），仍以 CI 那次 schedule 的结论为准。
+#      📌 同一镜像用**空 ignorefile + `--ignore-unfixed=false`** 扫会得到 **626 条** /
+#      88 个包 —— 那 626 条**绝大多数没有 FixedVersion**，门禁那一步根本不显示。
+#      这正是本文件存在的意义：把「上游无修复版」登记在册，让它们可 review，
+#      而不是让 `--ignore-unfixed` 把它们变成没人知道的暗面。
 #
 # ⚠️ **上面这些故意不在本文件里** —— 本文件只登记"上游无修复版"的项；
 #   它们属"有修复版"，登记成豁免等于永久掩盖真实暴露面。
@@ -138,12 +161,14 @@ CVE-2026-81726
 #   mcp 镜像里，"消失"是假象。改用确实存在的 CVE-2026-23949 重测才拿到有效结论。
 #   （呼应类 20.220：验证必须验"副作用是否真的发生"。）
 #
-# 【本文件 4 条的实测归类】
+# 【本文件现存 3 条的实测归类】（2026-10-12 订正，与上方"生效机制"段保持一致）
 #   CVE-2026-85394 / CVE-2024-23342 / CVE-2026-81726
 #       → 门禁那一步带 `--ignore-unfixed: true`，这 3 条无 FixedVersion，
 #         **本来就不会被报出来** ⇒ 加进本文件对门禁是 no-op（纯登记价值）。
 #   GHSA-f4xh-w4cj-qxq8
-#       → 有 FixedVersion 0.8.18，会被门禁报出；本文件是**真实生效**的那一条。
+#       → 曾是本文件**唯一真实生效**的那一条（有 FixedVersion 0.8.18，会被门禁报出），
+#         但它自己写的复查条件已于 2026-10-12 全部触发，**该行已删除**（见第 4 节留档）。
+#   ⇒ **本文件当前不含任何真正生效的豁免。**
 #
 # 【本机镜像的已知局限】
 #   本机用于实测的 l8-scan-* 镜像构建于 2026-10-07，**早于** 7db39f2b1

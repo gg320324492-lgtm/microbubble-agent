@@ -236,12 +236,12 @@
   铁律三条：绝不先删远端、绝不未验证就覆盖本地口令、**绝不跳过"以远端为准逐个实解"** ——
   本次首轮就因为按**本地**文件列表走而漏掉 2 个远端孤儿（本地 `KEEP_DAYS=7` 已清、远端还在）。
 
-### B. image-scan 4 条 CVE **修掉 3 条**（升 uvicorn 0.24.0 → 0.31.1，commit `09769e415`）
+### B. image-scan 4 条 CVE **暴露面已全部消除**（3 条靠升 uvicorn + mcp，1 条靠删 langchain 依赖）
 
 | CVE | 包 | 状态 |
 |---|---|---|
-| CVE-2025-66416 / 52869 / 59950 | mcp | ✅ 已修（升 uvicorn + mcp 下限抬到 `>=1.28.1,<2`）|
-| CVE-2026-34070 | langchain-core 0.3.86 | ⬜ **建议不升**，见 C 段 |
+| CVE-2025-66416 / 52869 / 59950 | mcp | ✅ 已修（升 uvicorn + mcp 下限抬到 `>=1.28.1,<2`），**已在生产镜像实测生效** |
+| CVE-2026-34070 | langchain-core 0.3.86 | ✅ **暴露面已消除**（删依赖，非升级）—— 四包已从镜像移除，见 C 段 |
 
 - ⚠️ **归因已被实测推翻**：注释里"mcp 要 websockets>=15，撞 websockets==12.0 硬钉"**是错的** ——
   `mcp 1.28.1 + websockets 12.0` 与 `+15.0` **均**可解，**唯一阻塞点是 uvicorn**
@@ -252,8 +252,29 @@
   仅 uvicorn 自身 + mcp 变化；代码级全仓 3 处 `import uvicorn` 用的都是
   `uvicorn.run(app, host=, port=)`，该签名 0.24→0.31 **未变**（其余 5 处是命令行
   `uvicorn app.main:app`）。⇒ **升 ASGI 栈前先查这几处，签名稳定就不是栈级改造**。
-- ⚠️ **生产容器当前仍是 uvicorn 0.24.0 / websockets 15.0.1**（本次只提交了
-  `requirements.txt`，**未重建镜像**）—— 重建走正常 `docker compose build` 即可，代码零风险。
+- ✅ **镜像已重建，变更已在生产生效**（2026-10-12 实测，**在运行中的容器里查的版本，
+  不是读 Dockerfile**）：uvicorn **0.24.0 → 0.31.1**、mcp **1.12.4 → 1.30.0**；
+  **langchain / langchain-core / langchain-anthropic / langchain-community 四包全部
+  未安装**（`ModuleNotFoundError`）；fastapi 0.143.0 / starlette 1.7.0 / websockets 15.0.1 /
+  numpy 1.26.2 **完全不变**（印证上面的"爆炸半径为零"）。app / celery-worker / celery-beat /
+  celery-meeting-worker 四个服务重建后全部 healthy 且同在 `microbubble-agent_default`；
+  本机 `/health` 200、**生产域名 `https://agent.mnb-lab.cn/health` 200**、首页 200，
+  worker `ready`、beat 正常调度。
+  **复验方式（务必在运行容器里查，别读 Dockerfile）**：
+  `docker exec microbubble-agent-app-1 python -c "import importlib.metadata as m; print(m.version('uvicorn'))"`
+  —— 多阶段构建下 builder 与 runtime 是两个文件系统，**Dockerfile 里写着装了 ≠ 成品镜像里装了**
+  （类 20.220 第 4 种形态，`setuptools 79.0.1` 事故同型）。
+- ⚠️ **但 CI image-scan 门禁仍红，尚未验证过** —— 2026-10-12 那次 run `38164723646`
+  （head `09769e415`，结论 **failure**）app / commercial / voice-pipeline 三个 job 红，
+  **唯一原因就是 `langchain-core (METADATA) │ CVE-2026-34070`**。而
+  `.github/workflows/image-scan.yml` 的触发器只有 `pull_request`（限 Dockerfile/docker/
+  **docker-compose*.yml**）、`schedule`（周一 05:00 UTC）、`workflow_dispatch`，**没有 `push`**
+  ⇒ **改 `requirements.txt` 从不触发它** ⇒ 删 langchain 之后它**一次都没再跑过**。
+  ⇒ **准确表述：4 条 CVE 的暴露面已在代码与生产镜像层面消除并经本机实测确认；
+  但门禁是否转绿尚未由 CI 证明**，验证点是今晚（周一）北京时间 **18:00–20:00** 之间
+  schedule 自动重跑（GitHub schedule 历史上稳定延迟 5–8 小时：10-05 实际 11:57 UTC /
+  09-28 11:21 / 09-21 10:19 / 09-14 10:13 / 09-07 11:12）。
+  **在门禁转绿前，不要写成"CVE 已全部修复、门禁已绿"**（类 20.220）。
 - ~~**langchain-core CVE-2026-34070 故意不登记进 `.trivyignore`**~~ —— 该判断（同日稍后被推翻）：
   当时认为它「有修复版但升不动」，按 `.trivyignore` 第 5-14 行「有修复版但未升不登记」的
   原则故意不豁免。**最终解法不是登记豁免，而是把依赖删掉**（见下方 C 段）——

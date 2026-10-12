@@ -59,7 +59,8 @@ openai>=1.0.0,<2.0.0
 #     mcp 镜像走 stdio 传输(`mcp_server/server.py:1` 自述 stdio, :4 `from mcp.server
 #     import Server`, :5 `from mcp.server.stdio import stdio_server` —— 零 uvicorn /
 #     零 FastAPI), 且 `Dockerfile.mcp` 是**独立内联 pip install**(不读本文件)
-#     ⇒ 本文件 `uvicorn==0.24.0` 的硬钉**约束不到 mcp 镜像**。
+#     ⇒ 本文件对 uvicorn 的硬钉**约束不到 mcp 镜像**(该硬钉本轮已由 0.24.0 升到
+#     0.31.1, 但结论与此版本无关, 见本块末的 2026-10-12 翻转段)。
 #     实测: mcp 1.28.1 + 不钉 uvicorn → 干净解析(pip 自拉 uvicorn-0.54.0),
 #     无 ResolutionImpossible。已改 `Dockerfile.mcp` 为 `mcp>=1.28.1,<2`,
 #     并验证 image-scan 的 mcp job 转绿。
@@ -74,10 +75,20 @@ openai>=1.0.0,<2.0.0
 #     可否解除取决于 ASGI 栈(uvicorn 0.24.0 -> >=0.31.1, 7 个 minor 服务端大跳,
 #     且与第 5 行 `websockets==12.0` 硬钉 + 全站 SSE / WebSocket 链路耦合)升级,
 #     **属独立立项, 未在本次处理**。本轮改动只针对 `Dockerfile.mcp`。
-#     ⚠️ 现状: 本文件三镜像里的 mcp 仍装 **1.6.0**, 5 条 CVE
-#     (CVE-2025-53365/53366/66416/2026-52869/59950) 的 FixedVersion
-#     (1.10.0 / 1.9.4 / 1.23.0 / 1.27.2 / 1.28.1) **1.6.0 低于其中每一个**,
-#     故这 5 条在本文件构建出的三镜像里**同样一条都没修**。
+#     ⚠️ 2026-10-11 当时现状(历史快照, 已被下一段取代): 本文件三镜像里的 mcp 装
+#     **1.6.0**, 5 条 CVE (CVE-2025-53365/53366/66416/2026-52869/59950) 的
+#     FixedVersion (1.10.0 / 1.9.4 / 1.23.0 / 1.27.2 / 1.28.1) **1.6.0 低于其中
+#     每一个**, 故当时这 5 条在本文件构建出的三镜像里**一条都没修**。
+#     [FixedVersion 台账本身仍然有效, 保留供将来复核 —— 它记录"哪个版本能修哪条"]
+#     ⚠️ 2026-10-12 **现状已改**(实测, 非推断): 生产容器
+#     `microbubble-agent-app:latest` 内 mcp = **1.30.0**(uvicorn 0.31.1), 上表
+#     5 条**全部已消除** —— 用 trivy image 扫该镜像并**绕开 `.trivyignore`**
+#     (空 ignorefile), mcp 命中 **0 条**; 同一次扫描确认镜像内确实解析出
+#     `mcp-1.30.0.dist-info`(否则"0 命中"只是没扫到包的假象), DB 当日更新
+#     (2026-10-12)。**反证对照**: 同一 DB 下扫 `mcp==1.6.0` 的 requirements
+#     仍报满 5 条 ⇒ 结论不是"DB 不含这 5 条"造成的假阴性。
+#     其中 CVE-2025-53365 / 53366 虽不在本轮 3 条修复说明里, 但 FixedVersion
+#     (1.10.0 / 1.9.4) 均低于 1.30.0, 实测同样已消除。
 #
 #   附(仍然成立): mcp 本身几乎零影响面 —— 全仓仅 2 处 import
 #   (`mcp_server/server.py:4-5`、`mcp_server/tools/vision.py:7-8`),
@@ -245,6 +256,9 @@ Pillow>=10.0.0          # 图片处理（缩放、模式转换）
 # 工具库
 python-dotenv==1.0.0
 # 2026-07-31 RAG-FW-DEPLOY 修复: pydantic==2.5.2 pin 与 langchain (>=2.7.4) + llama-index-core 0.13 (>=2.8.0) 冲突, 放宽到 >=2.8.0
+#   ⚠️ 2026-10-12 订正: 本句"与 langchain 冲突"那半边**理由已失效** —— langchain
+#     四个包已整体移除(见下方 LangChain 家族段)。llama-index 那半边**仍成立**
+#     (`llama-index>=0.13.0,<0.14.0` 仍在, 其 core 仍要 pydantic>=2.8.0)。保留原文留档。
 pydantic-settings>=2.4.0
 pydantic[email]>=2.8.0,<3.0.0
 # 2026-10-12 L-8: 3.4.0 -> 3.5.0 (次新版, 单点 minor 跳), **唯一目的是放开 pyasn1 上界**。
@@ -267,6 +281,9 @@ pyasn1>=0.6.4
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
 # 2026-07-31 Hybrid RAG Stack: langchain-core 0.3 + llama-index-core 0.12 + langfuse 要求 httpx>=0.15.4 (0.25.2 pin 在范围内但过老, 放宽)
+#   ⚠️ 2026-10-12 订正: "langchain-core 0.3"那半边**理由已失效** —— langchain 四个包
+#     已整体移除(见下方 LangChain 家族段)。llama-index-core 0.12 与 langfuse 两半
+#     **仍成立**(两个包都还在 requirements 里, 仍约束 httpx)。保留原文留档。
 httpx>=0.28.0
 # 2026-10-09 L-8 安全修复: urllib3 为传递依赖 (requests/minio/modelscope 拉入), trivy 报 2.7.0 有 2 条 HIGH,
 # 加下限约束消高危。实测 requests(<3,>=1.26)/minio(无上限)/modelscope(>=1.26) 均兼容, 全 requirements 可解析。
