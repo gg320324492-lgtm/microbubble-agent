@@ -70,9 +70,17 @@ def _edit_distance(a: str, b: str) -> int:
 
 # 2026-08-04 Batch B-3: 持久化阶段记录的薄包装. 主流程仍由 update_progress 推 Redis 实时进度,
 # 该函数仅写 DB; 失败 best-effort, 不抛错 (DB 异常不能影响主流程).
-async def _persist_stage(proc_svc, run, stage_name: str, status: str, *, error=None, metrics=None):
+#
+# 2026-10-13 修复 (类 20.220, 会议 256 验收): 本函数是**阶段跑完之后**才被调用的,
+# 原来在这里现调 start_stage + finish_stage, 两次调用紧挨着, 中间只隔两次 DB round-trip
+# ⇒ `latency_ms` 记的是**落库耗时**而不是阶段耗时。实测 downloading 18ms / transcribing 59ms /
+# 声纹 4ms, 而真实耗时是 60s / 603s / 117s —— 拿它做耗时监控会得到完全错误的结论。
+# 现在要求调用方在**阶段开工前**掐表 (`_stage_now()`, 与 service 同一个时钟) 并透传进来;
+# 不传则退化成旧行为(仍可用于"我们只关心落库耗时"的场景)。
+async def _persist_stage(proc_svc, run, stage_name: str, status: str, *, error=None, metrics=None,
+                          started_at=None):
     try:
-        stage_row = await proc_svc.start_stage(run, stage_name)
+        stage_row = await proc_svc.start_stage(run, stage_name, started_at=started_at)
         await proc_svc.finish_stage(
             stage_row, status=status, error=error, metrics=metrics,
         )
@@ -109,6 +117,9 @@ def post_meeting_process(self, meeting_id: int):
 
             # 2026-08-04 Batch B-3: 持久化阶段记录 (DB, 与 Redis 实时进度协同)
             from app.services.meeting_processing_service import MeetingProcessingService
+            # 类 20.220: latency_ms 要记真实阶段耗时, 各阶段开工前必须掐表。
+            # 直接复用 service 的 _now() (naive UTC), 避免两处时钟各自漂移 (类 20.221)。
+            from app.services.meeting_processing_service import _now as _stage_now
             proc_svc = MeetingProcessingService(db)
             run = await proc_svc.start_run(
                 meeting_id,
@@ -124,6 +135,7 @@ def post_meeting_process(self, meeting_id: int):
             try:
                 # ===== 阶段 0: 下载音频 + VAD 分段 =====
                 await update_progress(meeting_id, ProgressStage.DOWNLOADING_AUDIO, detail="下载音频并转码", redis_override=redis_client)
+                _t_stage_download = _stage_now()  # 类 20.220: 阶段真实开工时刻
                 from app.services.audio_processor import audio_processor
                 from app.services.file_service import file_service
 
@@ -142,9 +154,10 @@ def post_meeting_process(self, meeting_id: int):
                         f"其中语音样 {gap_evidence.get('speech_like_gap_count')} 个, "
                         f"地板 {gap_evidence.get('floor_db')}dB"
                     )
-                await _persist_stage(proc_svc, run, "downloading_audio", "success", metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2), "audio_gap_evidence": gap_evidence})
+                await _persist_stage(proc_svc, run, "downloading_audio", "success", started_at=_t_stage_download, metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2), "audio_gap_evidence": gap_evidence})
 
                 # ===== 阶段 1: ASR 转写 =====
+                _t_stage_transcribe = _stage_now()  # 类 20.220: GPU 7B 与 SenseVoice 两条分支共用同一开工时刻
                 # 2026-09-07: 优先走 GPU 7B 链路 (VibeVoice-ASR, Who/When/What + 热词,
                 # host 守护服务按需占显存); 服务不可用/失败自动回退 SenseVoice 逐段链路
                 from app.config import settings as _settings
@@ -218,7 +231,7 @@ def post_meeting_process(self, meeting_id: int):
 
                 backend_tag = "gpu-vibevoice-7b" if gpu_segments else "sensevoice"
                 logger.info(f"ASR 转写完成 [{backend_tag}]: {len(transcript_segments)} 段有文本")
-                await _persist_stage(proc_svc, run, "transcribing", "success", metrics={"backend": backend_tag, "raw_segments": len(segments), "with_text": len(transcript_segments)})
+                await _persist_stage(proc_svc, run, "transcribing", "success", started_at=_t_stage_transcribe, metrics={"backend": backend_tag, "raw_segments": len(segments), "with_text": len(transcript_segments)})
 
                 # ===== 阶段 1.3: 语义断句（基于规则的对话切换检测） =====
                 import re
@@ -345,6 +358,7 @@ def post_meeting_process(self, meeting_id: int):
 
                 # ===== 阶段 2: 发言人分离（声纹 + 停顿 + 内容） =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人", redis_override=redis_client)
+                _t_stage_speakers = _stage_now()  # 类 20.220: 阶段真实开工时刻
                 from app.services.voiceprint_service import VoiceprintService
                 from app.services.speaker_assignment import (
                     SpeakerMatch,
@@ -686,7 +700,7 @@ def post_meeting_process(self, meeting_id: int):
                         speaker_mapping[seg["speaker_label"]] = sp
 
                 logger.info(f"声纹识别完成: {len(set(seg.get('speaker','') for seg in transcript_segments))} 位发言人")
-                await _persist_stage(proc_svc, run, "identifying_speakers", "success", metrics={"speaker_count": len(set(seg.get("speaker","") for seg in transcript_segments))})
+                await _persist_stage(proc_svc, run, "identifying_speakers", "success", started_at=_t_stage_speakers, metrics={"speaker_count": len(set(seg.get("speaker","") for seg in transcript_segments))})
 
                 # ===== 阶段 1.7: 低占比发言人过滤（2026-06-30 铁律: 王天志只言片语误识） =====
                 # 触发条件（任一）:
@@ -731,6 +745,7 @@ def post_meeting_process(self, meeting_id: int):
 
                 # ===== 阶段 2.5: AI 润色转录 =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="AI 润色转录文本", redis_override=redis_client)
+                _t_stage_polish = _stage_now()  # 类 20.220: 阶段真实开工时刻 (skip 路径也会立刻落库)
 
                 # 类 20.146 W2+N 修复: 显式初始化避免 UnboundLocalError（skip / 异常两条路径共用）
                 polished_segments = []
@@ -744,6 +759,7 @@ def post_meeting_process(self, meeting_id: int):
                     logger.info("润色已按配置跳过（MEETING_AI_POLISH_ENABLED=false）")
                     await _persist_stage(
                         proc_svc, run, "ai_polish", "skipped",
+                        started_at=_t_stage_polish,
                         metrics={"skipped": True, "reason": "MEETING_AI_POLISH_ENABLED=false"},
                     )
                 else:
@@ -801,7 +817,7 @@ def post_meeting_process(self, meeting_id: int):
                     except Exception as e:
                         polished_segments = []  # 类 20.146 W2+N 修复: 显式初始化避免 UnboundLocalError
                         logger.warning(f"AI 润色失败（降级为原文）: {e}")
-                    await _persist_stage(proc_svc, run, "ai_polish", "success", metrics={"polished_segments": len(polished_segments) if polished_segments else 0})
+                    await _persist_stage(proc_svc, run, "ai_polish", "success", started_at=_t_stage_polish, metrics={"polished_segments": len(polished_segments) if polished_segments else 0})
 
                 # 将识别出的发言人添加为会议参与者
                 from app.models.meeting import MeetingParticipant
@@ -829,6 +845,7 @@ def post_meeting_process(self, meeting_id: int):
 
                 # ===== 阶段 3: AI 分析 =====
                 await update_progress(meeting_id, ProgressStage.GENERATING_ANALYSIS, detail="AI 分析会议内容", redis_override=redis_client)
+                _t_stage_analysis = _stage_now()  # 类 20.220: 阶段真实开工时刻
                 from app.services.meeting_analysis_service import meeting_analysis
 
                 # 优先使用润色后的文本进行分析
@@ -864,6 +881,7 @@ def post_meeting_process(self, meeting_id: int):
                 await _persist_stage(
                     proc_svc, run, "generating_analysis",
                     "error" if analysis_failure else ("warning" if analysis_warning else "success"),
+                    started_at=_t_stage_analysis,
                     metrics={
                         "success_chunk_count": analysis.get("success_chunk_count", 0),
                         "failure_chunk_count": analysis.get("failure_chunk_count", 0),
@@ -921,6 +939,9 @@ def post_meeting_process(self, meeting_id: int):
 
                 # ===== 阶段 4: 自动创建任务（2026-06-19 默认关闭，决策不再自动变任务） =====
                 from app.config import settings
+                # 掐表放在 if 之外: 落库那行 _persist_stage("creating_tasks") 也在 if 之外
+                # (status 恒为 "skipped"), 开关打开与否都要有真实区间。
+                _t_stage_tasks = _stage_now()  # 类 20.220: 阶段真实开工时刻
                 if settings.ENABLE_AUTO_TASK_FROM_MEETING:
                     await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务", redis_override=redis_client)
                     from app.services.meeting_service import MeetingService
@@ -941,10 +962,11 @@ def post_meeting_process(self, meeting_id: int):
                         f"（{len(analysis.get('decisions', []))} 个 decisions 未创建任务；"
                         f"ENABLE_AUTO_TASK_FROM_MEETING=False）"
                     )
-                await _persist_stage(proc_svc, run, "creating_tasks", "skipped", metrics={"enabled": settings.ENABLE_AUTO_TASK_FROM_MEETING})
+                await _persist_stage(proc_svc, run, "creating_tasks", "skipped", started_at=_t_stage_tasks, metrics={"enabled": settings.ENABLE_AUTO_TASK_FROM_MEETING})
 
                 # ===== 阶段 5: 存储结果 =====
                 await update_progress(meeting_id, ProgressStage.STORING_RESULTS, detail="保存结果", redis_override=redis_client)
+                _t_stage_store = _stage_now()  # 类 20.220: 阶段真实开工时刻
 
                 # 2026-08-04 P0: 决定最终状态.
                 # - 转录 + 润色落库成功但分析 0/N 失败 → 不能标 completed, 改为 error 并把原因写入 error_reason.
@@ -995,7 +1017,7 @@ def post_meeting_process(self, meeting_id: int):
                 meeting.quality_status = qa_result["status"]
                 run.metrics = {**(run.metrics or {}), "quality": qa_result["metrics"], "quality_issues": qa_result["issues"]}
                 await db.commit()
-                await _persist_stage(proc_svc, run, "storing_results", "success", metrics={"final_status": final_status, "quality_status": qa_result["status"]})
+                await _persist_stage(proc_svc, run, "storing_results", "success", started_at=_t_stage_store, metrics={"final_status": final_status, "quality_status": qa_result["status"]})
                 await proc_svc.attach_to_meeting(meeting_id, run.id)
                 await proc_svc.finish_run(
                     run,

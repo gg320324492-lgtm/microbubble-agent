@@ -54,13 +54,22 @@ class MeetingProcessingService:
         run: MeetingProcessingRun,
         stage: str,
         attempt: int = 1,
+        started_at: Optional[datetime] = None,
     ) -> MeetingProcessingStage:
+        """开一个阶段行.
+
+        `started_at` 让调用方传入**阶段真实开始时刻** —— 阶段体是"先干活、后落库"
+        的调用方 (post_meeting_tasks._persist_stage) 必须在开工前自己掐表,
+        否则 start/finish 相邻两次调用之间只隔两次 DB round-trip,
+        `latency_ms` 会退化成落库耗时 (类 20.220 字段名在说谎)。
+        留 None 时保持原行为 (立即开始)。
+        """
         st = MeetingProcessingStage(
             run_id=run.id,
             stage=stage,
             attempt=attempt,
             status="started",
-            started_at=_now(),
+            started_at=started_at or _now(),
         )
         self.db.add(st)
         await self.db.flush()
@@ -76,6 +85,15 @@ class MeetingProcessingService:
         retryable: Optional[bool] = None,
         metrics: Optional[dict[str, Any]] = None,
     ) -> None:
+        """收尾一个阶段, 并按 (finished_at - started_at) 写 `latency_ms`.
+
+        **不变量 (类 20.220)**: `latency_ms` 的语义是**该阶段的真实业务耗时**,
+        所以 `started_at` 必须是阶段**开工**时刻, 不是"调用本 service 的时刻"。
+        两个调用方必须都遵守:
+          - meeting_reprocessing_service: 阶段体执行前掐表 (正确, 现状)
+          - post_meeting_tasks._persist_stage: 阶段体执行**前**掐表并透传 (2026-10-13 修复)
+        若哪天再出现"毫秒级 latency_ms 但阶段跑了 10 分钟", 先查调用方有没有掐表。
+        """
         finished = _now()
         stage_row.finished_at = finished
         stage_row.latency_ms = max(
