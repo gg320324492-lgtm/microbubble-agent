@@ -36,6 +36,28 @@ on:
     - cron: '0 5 * * 1'
   workflow_dispatch:
 
+# 2026-10-12: 连续推送时取消同分支的进行中 run。
+#
+# **问题**：本仓是 direct-push（一天 3~6 次），而 `push` 触发器限 `paths`
+# （requirements.txt / .trivyignore / 本文件），连续推几个都命中 paths 时会
+# **同时起多轮 run 互不取消** —— 2026-10-12 实测就撞见过两轮并行。每轮 3 个
+# 镜像构建 + 扫描，各 12-15 分钟，除了白烧 Actions 配额，还加剧了 trivy
+# cache key 抢占用（同一 key 下只有第一轮能存 DB，其余每次重下）。
+#
+# **为什么 group 里带 `github.event_name`**（这不是可选的装饰）：
+#   `schedule` 是**每周一次的全量扫描**（8 个镜像），`push` 是**依赖变更扫描**
+#   （3 个镜像）—— 两者**互补，不可互相取代**。若 group 只用 `github.ref`，
+#   那么"傍晚 18-20 点 schedule 刚起来"碰上"有人推了个改 requirements.txt 的
+#   commit"，push 会**把全量扫描取消掉** ⇒ 本周唯一的全量扫描白跑。
+#   带上 event_name 后：
+#     push     → `image-scan-refs/heads/main-push`      （连续推送之间互相取消 ✅）
+#     schedule → `image-scan-refs/heads/main-schedule`  （独立，不被 push 取消 ✅）
+#     PR       → ref 是 `refs/pull/N/merge`，天然与 main 分开 ✅
+#   `workflow_dispatch` 同理独立，人工触发跑全量不会被日常 push 顶掉。
+concurrency:
+  group: image-scan-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   security-events: write
