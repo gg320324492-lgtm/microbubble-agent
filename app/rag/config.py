@@ -25,28 +25,10 @@ QUERY_TRANSLATION_ENABLED: bool = (
     and os.getenv("QUERY_TRANSLATION_ENABLED", "1").lower() in ("1", "true", "yes")
 )
 
-# Multi-hop — LlamaIndex SubQuestionQueryEngine
-MULTI_HOP_ENABLED: bool = (
-    RAG_FRAMEWORK_ENABLED
-    and os.getenv("MULTI_HOP_ENABLED", "1").lower() in ("1", "true", "yes")
-)
-
-# Agent Router — LangChain AgentExecutor 动态检索选择
-AGENT_ROUTER_ENABLED: bool = (
-    RAG_FRAMEWORK_ENABLED
-    and os.getenv("AGENT_ROUTER_ENABLED", "1").lower() in ("1", "true", "yes")
-)
-
 # Dense/Sparse 一层切换 — LlamaIndex VectorStoreIndex + BM25
 DENSE_SPARSE_ROUTING_ENABLED: bool = (
     RAG_FRAMEWORK_ENABLED
     and os.getenv("DENSE_SPARSE_ROUTING_ENABLED", "1").lower() in ("1", "true", "yes")
-)
-
-# Semantic Chunker — LangChain SemanticChunker
-SEMANTIC_CHUNKER_ENABLED: bool = (
-    RAG_FRAMEWORK_ENABLED
-    and os.getenv("SEMANTIC_CHUNKER_ENABLED", "1").lower() in ("1", "true", "yes")
 )
 
 # 跨模态文档解析 — LlamaIndex Readers
@@ -184,4 +166,3 @@ LLAMAINDEX_PGVECTOR_SCHEMA: str = os.getenv("LLAMAINDEX_PGVECTOR_SCHEMA", "publi
 LLAMAINDEX_EMBEDDING_DIM: int = int(os.getenv("LLAMAINDEX_EMBEDDING_DIM", "1024"))
 
 # Agent Router 限制
-AGENT_ROUTER_MAX_CALLS_PER_REQUEST: int = int(os.getenv("AGENT_ROUTER_MAX_CALLS_PER_REQUEST", "1"))

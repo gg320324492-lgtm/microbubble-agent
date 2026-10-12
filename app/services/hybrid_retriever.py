@@ -577,7 +577,10 @@ class HybridRetriever:
     async def _refresh_bm25_index(
         self, bm25_service, category: Optional[str] = None
     ) -> None:
-        """从数据库刷新 BM25 legacy 索引 (保留: agent_retriever._bm25_only 兜底用)"""
+        """从数据库刷新 BM25 legacy 索引 (供 BM25 召回路径自身使用)。
+
+        2026-10-12 订正: 原注释写"保留: agent_retriever._bm25_only 兜底用", 但该模块
+        经 import blocker 实测确认零调用方已删除 ⇒ 那是条会误导后人的过时注释。"""
         from sqlalchemy import select
         from app.models.knowledge import Knowledge
 

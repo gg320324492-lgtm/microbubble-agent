@@ -329,13 +329,29 @@ pytest-asyncio>=0.25,<1.0
 # Hybrid RAG Stack — 框架融合层 (2026-07-31, On by default 全量安装)
 # ========================================================================
 
-# === LangChain 家族 ===
-# 2026-10-12 移除 `langchain-community`: 全仓唯一使用者是
-# `app/rag/multi_hop_engine.py`(已删, 经 import blocker 298 模块全扫实测零调用方)。
-# `agent_retriever.py` 只用 langchain / langchain_core.prompts / langchain_anthropic, 不含 community。
-langchain>=0.3.0,<0.4.0
-langchain-core>=0.3.0,<0.4.0
-langchain-anthropic>=0.2.0,<0.3.0
+# === LangChain 家族 — 已全部移除 (2026-10-12) ===
+# langchain / langchain-core / langchain-anthropic / langchain-community 四个包在本仓
+# 已**零使用**, 全部移除。CVE-2026-34070 (langchain-core `load_prompt` 路径穿越) 因此消失。
+#
+# 移除依据 (类 20.223: 删依赖前必查上游未声明的硬 import):
+#   1. `git grep langchain -- app/` **零命中** —— 生产代码已无任何 langchain 使用。
+#   2. 四个包的使用者全是 RAG-FW 交付的孤立模块, 均经 **import blocker 运行时实测**
+#      确认零调用方后删除:
+#        - multi_hop_engine    (298 模块全扫)  → 用 langchain_community
+#        - semantic_chunker    (同批)          → 用 langchain_experimental
+#        - agent_retriever     (296 模块全扫)  → langchain 的**唯一活接线消费者**,
+#          但同样零调用。它用的 `AgentExecutor` / `create_tool_calling_agent` /
+#          `langchain.tools.Tool` 在 langchain 1.x 已全部消失(agents 子模块转向
+#          langgraph), 原计划迁移 1.x; **删除远优于迁移** —— 零改造即消掉 CVE。
+#   3. **唯一疑点已排除**: `langfuse`(本仓在用, app/core/llm.py + app/rag/lc_tracing.py)
+#      的 metadata 里确有 `langchain (>=0.0.309)`, 但它是 **`extra == "langchain"`
+#      的可选依赖**, 本仓未安装该 extra。实测: 只装 langfuse 不装 langchain,
+#      `import langfuse` 正常 (2.60.10), 且 langchain 不会被带入。
+#      (sentry-sdk 那个也是 extra, 同理。)
+#
+# ⚠️ 若将来要重新引入 langchain, 注意 CVE 修复版是 **1.2.22** (0.3.86 是 0.3.x 末版,
+#    无更高 0.3.x), 且必须四包同升 —— `langchain-community` **没有 1.x** (最高 0.4.2,
+#    且要求 core>=1.4.0), `langchain-anthropic` 要到 1.0.0 才放开 core<0.4.0 的限制。
 
 # === LlamaIndex 家族 ===
 # 2026-07-31 RAG-FW-DEPLOY 修复: llama-index-vector-stores-pgvector 在 PyPI 404 (包名笔误),
