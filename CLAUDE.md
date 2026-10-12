@@ -417,6 +417,38 @@
   会进 `Ign` 死循环；而**只改 `FROM` 行是危险的** —— `Dockerfile:20-23` 硬编码 bookworm 源，
   改 FROM 后 apt 仍装 bookworm 包，**构建 RC=0 但产出缝合怪镜像**（类 20.220）。
 
+### D3. 会议 256 全流程验收（2026-10-13）—— 流程通，但撞出 4 个待处置问题
+
+用真实 2h24m 录音（73.7MB m4a）从建会跑到出纪要，**全程 17 分 04 秒**，产物达标
+（摘要 344 字 / 讨论要点 8 条 / 决议 29 条，全部符合《会议纪要标准格式》）。以下是验收中
+撞出的问题，**均未修**，等主指挥逐项处置：
+
+| # | 问题 | 位置 | 状态 |
+|---|---|---|---|
+| 🔴 **1** | **会议时长显示错**：`audio_duration` 存的是**录音会话墙钟时长**，媒体真实时长在 `media_duration_seconds`。实测 **256 的 `audio_duration=39` 而真实 8669 秒（差 222 倍）**；**255 的 `audio_duration` 是 NULL** ⇒ 前端 `v-if` 直接把时长标签**整个隐藏** | `app/api/v1/meeting_recording.py:672` + `web/src/views/MeetingDetailView.vue:49,51,500` | 待修 |
+| 🟡 **2** | **处理完成无通知**：docstring 写着"6. done — 完成通知"，但代码里唯一的 notify 在 `post_meeting_tasks.py:1071` 的**失败路径**。成功完成后 `unread_count` 仍为 0 ⇒ 本次要盯 17 分钟，中途离开就不知道跑完了 | `app/services/post_meeting_tasks.py` | 待修 |
+| 🟡 **3** | **`latency_ms` 名不符实**：`meeting_processing_stages` 里它记的是**落库调用本身**耗时（downloading 18ms / transcribing 59ms / 声纹 4ms），而阶段实际耗时是 60s / 603s / 117s ⇒ **用它做耗时监控会得到完全错误的结论**（又一个类 20.220） | `meeting_processing_stages` 写入处 | 待修 |
+| 🔵 **4** | **SenseVoice 跑在 CPU 上**：`SENSEVOICE_DEVICE` 配的是 `cuda`，但容器每次日志都报 `[sensevoice] 本次推理实际使用 cpu`，`/health` 报 `gpu_broken: true`。3100 段仍能在 10 分钟内跑完（rtf≈0.05-0.15），但 GPU 没吃上 ⇒ **本文件"语音识别现役为 SenseVoice（GPU 容器服务）"这句已不准确** | GPU 侧 | 待排查 |
+
+**缺陷 1 的修法比想象的宽 —— 要动三处 + 重建 dist**：`app/schemas/meeting.py:71`
+只有 `audio_duration`、**没有** `media_duration_seconds`；前端全仓**从未引用过**
+`media_duration`。⇒ schema 加字段 → 后端改用 `media_duration_seconds`（回退
+`audio_duration`）→ 前端两处改读 → **`npm run build` 重建 `web/dist`**（W100 确定性构建）。
+**只改后端不改 dist 没用**，用户看到的仍是旧的。
+
+**验收中值得肯定的两点**（别在后续重构里弄丢）：
+- 上传链路无损：18 片（`4MB×17 + 尾片 2.37MB`，前端因 73.7MB > 40MB 安全线自动切分片）
+  5 秒传完，合并产物与源文件 **AAC 码流 MD5 完全一致**；合并产物小 3.9MB 是 `faststart`
+  重排剥掉的容器 padding，**时长 8669.397333s 逐位相同** —— 不是数据丢失
+  （这正是类 20.220 的"别只看合并成功这个状态字段"）。
+- `meeting_chunks` 落 **70 行**，RAG 索引在线 ⇒ 类 20.219 的 celery 补注册修复有效。
+- 音频经**生产域名** Range 请求返回 `HTTP 206 / Content-Range: bytes 0-1048575/69789478`
+  ⇒ 隧道与回放链路正常。
+
+⚠️ **`/transcribe` 的表单参数名是 `audio` 不是 `file`**（`app/sensevoice_server.py:219`
+`audio: UploadFile = File(...)`）。写成 `-F "file=@..."` 会得 **HTTP 400**，很容易误判成
+"服务坏了"。容器内有 `requests`，用它构造 multipart 最稳。
+
 ### D. CI 长期红灯：Alembic 单 head 守卫连续 6 次红 —— 根因是**漏装 pgvector**（`6889f3c32`）
 
 - 守卫只装了 alembic 一个包，注释理由是"不连 DB 故无需 sqlalchemy"。**该前提不成立**：
