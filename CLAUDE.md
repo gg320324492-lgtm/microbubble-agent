@@ -1341,14 +1341,22 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
 
 | 指标 | 数值 | 语义 | 谁用 | 文件 |
 |------|------|------|------|------|
-| **单段 cosine distance 上限** | **0.7** | 在线 matcher 接受阈值 (越小越相似, `<MATCH_THRESHOLD>` 才返成员) | `app/services/voiceprint_service.py:26` (常量, **不动**) | 生产 |
+| **单段 cosine distance 上限** | **0.65** | 在线 matcher 接受阈值 (越小越相似, `<MATCH_THRESHOLD>` 才返成员) | `app/services/voiceprint_service.py:27` (常量, **不动**) | 生产 |
 | **跨会议单段命中阈值** | **0.55** | strict merge 验证: `cos_dist ≤ 0.55` 视为该段命中 | `docs/CLAUDE-history.md:5459-5464` | 历史 |
 | **跨会议总体识别率门禁** | **90%** | 新 embedding/变更**前自动跑**跨会议回归, 加权识别率 ≥ 90% 才接受; < 90% 自动 rollback | B 方案 `voiceprint_cross_meeting_regression.py` 自动化 | W75 B-1 |
 
+> ⚠️ **2026-10-13 订正 —— 本表第一行的数值曾漂移**: 实际常量是
+> `**MATCH_THRESHOLD = 0.65`**（`voiceprint_service.py:27`，2026-09-07 由 0.7 收紧），
+> 而本表、下方两条铁律、以及 `app/services/entity_link_recall.py:50` 的注释
+> **长期都写着 0.7**（共 4 处）。⇒ **凡本文件再出现 `MATCH_THRESHOLD = 0.7` 的地方，
+> 指的都是 2026-09-07 之前的旧值，现值是 0.65**。
+> 铁律的**意图（别动这个阈值）依然有效**，只是数值不能再照抄。
+> 这正是类 20.220 说的「配置注释也会骗人」—— 由 2026-10-13 的声纹准确率评估发现。
+
 ### 派工 v6 段 5 反馈 #6 实战: 拒绝方案 A 字面改 0.9
 
-- **方案 A 字面改 0.9 错误**: 0.7 是 cosine **距离**上限, 把它改成 0.9 会让 matcher 更宽松 (接受更远/更差的匹配). 若目标是 confidence≥0.9, 应等价于 distance≤0.1 — 与 0.9 数值完全无关.
-- **B 方案质量门必确定性**: 4 子门禁 (单段距离 / top1-top2 margin / cluster votes / anchor 状态) **必须确定性**, LLM 最多解释歧义, **不得**越过门禁. **0 production code 改动铁律守恒**: `MATCH_THRESHOLD = 0.7` 保持不变.
+- **方案 A 字面改 0.9 错误**: 0.7（现 **0.65**，见上方订正）是 cosine **距离**上限, 把它改成 0.9 会让 matcher 更宽松 (接受更远/更差的匹配). 若目标是 confidence≥0.9, 应等价于 distance≤0.1 — 与 0.9 数值完全无关.
+- **B 方案质量门必确定性**: 4 子门禁 (单段距离 / top1-top2 margin / cluster votes / anchor 状态) **必须确定性**, LLM 最多解释歧义, **不得**越过门禁. **0 production code 改动铁律守恒**: `MATCH_THRESHOLD` 保持不变（现值 **0.65**）。
 - **王天志 #151 rollback 真实锚点**: 跨会议加权识别率 88.1% (#135 94.6% + #151 83.5%) < 90% → 自动 rollback sample_count 583→384. 历史锚点永久保留.
 
 ### W75 B-1 实施交付 (锚点范式第 253 守恒 +1)
@@ -1364,7 +1372,7 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
 
 ### 5 条铁律 (W75 B-1 沉淀)
 
-1. **不动 `MATCH_THRESHOLD = 0.7`** — 派工 v6 段 5 反馈 #6 实战, 距离方向与 confidence 反向, 字面改 0.9 = 更宽松, 完全错误.
+1. **不动 `MATCH_THRESHOLD`**（⚠️ 现值是 **0.65** 不是 0.7，见三层口径表上方的订正）— 派工 v6 段 5 反馈 #6 实战, 距离方向与 confidence 反向, 字面改 0.9 = 更宽松, 完全错误.
 2. **B 方案质量门必确定性** — LLM 最多解释歧义, 不得越过门禁 (派工 v6 段 5 反馈 #6 实战: 拒绝 LLM 改数值).
 3. **跨会议 90% acceptance gate 自动化** — 任一 embedding/变更**前自动跑** ≥90% 回归, 否则 rollback + 报警. 不靠人工执行.
 4. **三层指标语义不可混写** — 0.7 (distance) / 0.55 (hit) / 90% (cross-meeting) 是不同维度, 任何文档/代码引用必分明.

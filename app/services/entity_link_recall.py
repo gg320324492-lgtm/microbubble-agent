@@ -47,7 +47,7 @@ ENTITY_COUNT_TARGET: int = 5000
 
 # ============== 召回参数 ==============
 
-# cosine 距离上限 — 超过视为不相关 (与声纹 MATCH_THRESHOLD=0.7 三层口径无关, 独立语义)
+# cosine 距离上限 — 超过视为不相关 (与声纹 MATCH_THRESHOLD=0.65 三层口径无关, 独立语义)
 # 参考 CLAUDE.md 声纹三层指标纪律: distance 越小越相似, 此处 0.65 = 中等严格
 ENTITY_MATCH_MAX_DISTANCE: float = 0.65
 
