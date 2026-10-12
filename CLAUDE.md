@@ -428,7 +428,38 @@
 | 🔴 **1** | **会议时长显示错**：`audio_duration` 存的是**录音会话墙钟时长**，媒体真实时长在 `media_duration_seconds`。实测 **256 的 `audio_duration=39` 而真实 8669 秒（差 222 倍）**；**255 的 `audio_duration` 是 NULL** ⇒ 前端 `v-if` 直接把时长标签**整个隐藏** | `app/api/v1/meeting_recording.py:672` + `web/src/views/MeetingDetailView.vue:49,51,500` | 待修 |
 | 🟡 **2** | **处理完成无通知**：docstring 写着"6. done — 完成通知"，但代码里唯一的 notify 在 `post_meeting_tasks.py:1071` 的**失败路径**。成功完成后 `unread_count` 仍为 0 ⇒ 本次要盯 17 分钟，中途离开就不知道跑完了 | `app/services/post_meeting_tasks.py` | 待修 |
 | 🟡 **3** | **`latency_ms` 名不符实**：`meeting_processing_stages` 里它记的是**落库调用本身**耗时（downloading 18ms / transcribing 59ms / 声纹 4ms），而阶段实际耗时是 60s / 603s / 117s ⇒ **用它做耗时监控会得到完全错误的结论**（又一个类 20.220） | `meeting_processing_stages` 写入处 | 待修 |
-| 🔵 **4** | **SenseVoice 跑在 CPU 上**：`SENSEVOICE_DEVICE` 配的是 `cuda`，但容器每次日志都报 `[sensevoice] 本次推理实际使用 cpu`，`/health` 报 `gpu_broken: true`。3100 段仍能在 10 分钟内跑完（rtf≈0.05-0.15），但 GPU 没吃上 ⇒ **本文件"语音识别现役为 SenseVoice（GPU 容器服务）"这句已不准确** | GPU 侧 | 待排查 |
+| ✅ **4** | **SenseVoice 曾跑在 CPU 上** —— **2026-10-13 重建容器后已自动恢复**（当时记为"待排查"，实测**不需要排查，重建即恢复**） | GPU 侧 | ✅ 已解决 |
+
+#### 问题 4 的真相：GPU 状态是**容器级**的，重建即恢复（2026-10-13 实测）
+
+| 指标 | 旧容器（Up 5 days） | 重建后 |
+|---|---|---|
+| `active_device` | **cpu** | **cuda** |
+| `gpu_broken` | **true** | **false** |
+| `vram_mib` | 5874 | **18426** |
+| `model_load_time_sec` | 67.5 | **13.7** |
+| 稳态 rtf | 0.05–0.15 | **0.023**（快 2–6 倍） |
+
+⇒ **配置本身没问题**（`SENSEVOICE_DEVICE` 一直是 `cuda`），是那个跑了 5 天的容器里
+GPU 状态坏了。⇒ **遇到 `gpu_broken: true` 先重建容器再排查**，别急着重配 device。
+对 256 那类 2h24m 会议意味着转写从 ~10 分钟降到 ~3.5 分钟。
+
+#### 重建后的真转写验收（2026-10-13，四轮全绿）
+
+用 `data/asr_eval/synthetic/01_basics.wav` 建基线，重建后跑 4 次：
+
+    HTTP 200  0.09s  rtf=0.023  backend=sensevoice  segments=1
+    text 逐字一致 ✅  '今天天气真好，我们一起去公园散步吧。'
+
+⚠️ **首次推理有 ~15 秒的 CUDA 上下文初始化开销**（实测 14.85s），第二次起降到 0.09s
+—— **别把第一次的慢当成性能回退**。基线那次是 0.3s（跑在 CPU 上），所以
+"重建后反而慢了"的直觉是错的，要跑第二次以上再判断。
+
+⚠️ 验证脚本用 `j["backend"]` 会 `KeyError` —— **`/transcribe` 返回的字段名是
+`_backend`（带下划线）**，而 `/health` 里是 `backend`。两个端点命名不一致，别混。
+
+### D. CI 长期红灯：Alembic 单 head 守卫连续 6 次红 —— 根因是**漏装 pgvector**（`6889f3c32`）
+
 
 **缺陷 1 的修法比想象的宽 —— 要动三处 + 重建 dist**：`app/schemas/meeting.py:71`
 只有 `audio_duration`、**没有** `media_duration_seconds`；前端全仓**从未引用过**

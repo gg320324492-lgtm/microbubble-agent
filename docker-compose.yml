@@ -278,6 +278,31 @@ services:
               capabilities: [gpu]
     mem_limit: 4g
     restart: unless-stopped
+    # 2026-10-13 新增: 本服务此前**没有 healthcheck** ⇒ `docker ps` 只显示
+    # `Up N minutes` 而没有 `(healthy)`, compose / 依赖它的服务无法感知其健康状态
+    # (类 20.220: 状态字段缺失也是一种"看不见")。
+    #
+    # ⚠️ **必须解析 JSON 检查 `model_loaded`, 不能只看 HTTP 200** ——
+    #    `/health` 在模型未加载完时**同样返回 200** (`status` 字段才是 `loading`),
+    #    只看状态码会得到假绿。
+    # ⚠️ 用 `127.0.0.1` 字面量而非 `localhost`(类 20.217: localhost 会解析到 ::1)。
+    # ⚠️ `start_period: 120s` 覆盖模型加载 —— 实测 GPU 正常时 13.7s,
+    #    GPU 异常退回 CPU 时曾达 67.5s, 期间探针失败不算 unhealthy。
+    # ⚠️ 该判据**不会**把"降级到 CPU"误判成不健康: 实测 GPU 坏时
+    #    `model_loaded` 仍为 true(只是 `active_device=cpu`), 那是可服务状态。
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import json, urllib.request, sys
+          j = json.load(urllib.request.urlopen("http://127.0.0.1:8003/health", timeout=20))
+          sys.exit(0 if j.get("model_loaded") else 1)
+      interval: 30s
+      timeout: 25s
+      retries: 3
+      start_period: 120s
 
   # Celery Worker (异步任务)
   celery-worker:
