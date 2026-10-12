@@ -330,9 +330,11 @@ pytest-asyncio>=0.25,<1.0
 # ========================================================================
 
 # === LangChain 家族 ===
+# 2026-10-12 移除 `langchain-community`: 全仓唯一使用者是
+# `app/rag/multi_hop_engine.py`(已删, 经 import blocker 298 模块全扫实测零调用方)。
+# `agent_retriever.py` 只用 langchain / langchain_core.prompts / langchain_anthropic, 不含 community。
 langchain>=0.3.0,<0.4.0
 langchain-core>=0.3.0,<0.4.0
-langchain-community>=0.3.0,<0.4.0
 langchain-anthropic>=0.2.0,<0.3.0
 
 # === LlamaIndex 家族 ===
