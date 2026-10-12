@@ -44,7 +44,19 @@ jobs:
   # 全量 8 个 —— PR / schedule / workflow_dispatch
   scan:
     if: github.event_name != 'push'
-    name: trivy ${{ matrix.name }}
+    # ⚠️ 2026-10-12: 这个 name **必须是纯静态字符串**, 不能带 `${{ }}`。
+    #   job 被 skip 时 matrix **尚未展开**, 于是整个 name 里的表达式不会求值,
+    #   UI 上就原样显示字面量 `trivy ${{ matrix.name }}` —— 看着像配置坏了。
+    #   ⇒ push 那次运行(本 job 必然被 skip)现在显示 `trivy full (8 images)`。
+    #
+    #   取舍: 代价是**可运行时** 8 个 matrix job 同名, 折叠列表里分不出镜像。
+    #   但镜像身份在 job **内部**仍然可见 —— step 名带 `(${{ matrix.dockerfile }})`,
+    #   镜像 tag 是 `microbubble-scan-<name>:ci`, sarif 是 `trivy-<name>.sarif`,
+    #   逐个点开即知。相对地, 若保留 `${{ matrix.name }}` 则可运行时分得清、
+    #   但 skip 时仍显示未展开的字面量 —— 见 git log 同日 commit 的取舍说明。
+    #   ⚠️ `scan-deps` 的 name **故意保留** `${{ matrix.name }}`: 它**从不**被 skip
+    #   (if 条件为真才跑), 所以矩阵总能展开, 逐镜像可区分是有价值的。
+    name: trivy full (8 images)
     runs-on: ubuntu-latest
     # PR 上仅 advisory: 单个矩阵项失败不拖垮整个 workflow
     continue-on-error: ${{ github.event_name == 'pull_request' }}
