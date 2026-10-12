@@ -158,8 +158,10 @@
 - **结构重构 8 批次全部完成**：tests 会话编号目录归位（9→语义化目录）/ 深度 3 违规 7→5 /
   删死文件 / 修坏引用 + 3 份索引文档 / aXX 脚本 15→0（拆活链路 `ppt_pages/` 与探针 `_archive/`）/
   5 份边界 README / `desktop-conversion/` 子仓并入主仓（176 文件，**gitlink 0**）/ 全链路验收 10 项全过。
-  **测试收集数 400 全程未变**（零丢失）；计划任务引用的 6 个脚本 6/6 在位（类 20.212 防线）。
   规划与验收：`docs/design/2026-10-10-structure-refactor-plan.md`（含 §七 CI 全红台账、§八 验收、§九 收口）。
+  ⚠️ **此处"测试收集数 400"是 2026-10-10~12 重构期间的快照，不是现值** ——
+  同日经 import blocker 实测确认零调用方后，连删三个 RAG-FW 专属测试文件
+  （`e5333eb6f` + 删 agent_retriever 那次），现为 **397 文件 / 4119 函数**（见「测试规范」段）。
 - **CI 连续 9+ 次全红已终结**：根因 = `requirements.txt:43` 裸 `datasets` 传递引入
   `pyarrow>=24`，而 `:66` 写死 `numpy==1.26.2`，pyarrow 26 起硬性要求 numpy≥2.0 →
   `embedding_service` import 失败 → 连锁 64 条红灯。**非 2026-10-10 改动引入**
@@ -170,10 +172,177 @@
   ⚠️ 审计报告曾误判 `image-scan` "建议删"，执行 agent 交叉验证后**推翻**
   （`tests/trivy/test_workflow_exists.py:20` 断言其存在且未归档，删了会打红硬门；
   且它是 L-8 **活跃治理项**，10-07/08/09 连落 3 commit）。
-- **`.trivyignore` 已建并接线**（4 条已知未修复项，每条带实测依据与复查条件）——
-  但**不会让门禁转绿**：门禁带 `ignore-unfixed: true`，无上游修复版的本来就不报。
-  真因是另一批**有修复版但未升级**的依赖（升 `websockets` 12→15 会连带 uvicorn/fastapi
-  栈改造），**属独立立项**。
+- **`.trivyignore` 已建并接线** ——
+  ⚠️ **2026-10-12 订正：原文记的"4 条"与"升 websockets 12→15 会连带 uvicorn/fastapi
+  栈改造"两条均已被实测推翻**，详见下方 `## 当前状态 (2026-10-12 ...)` B 段与 **类 20.224**。
+
+## 当前状态 (2026-10-12 离站容灾重做 / image-scan 4 修 3 / 依赖归因连错三轮)
+
+> 上一版"当前状态"停在 2026-10-10~12 的 F 段；2026-10-12 这批工作如下。
+>
+> **本次最大的教训不是某件工作本身，而是「依赖冲突的归因极易搞错，且错了会被文档悄悄继承
+> 下去」** —— 同一个阻塞问题**连续三轮归因，错了两轮**，每一轮的错误结论都被写进
+> `requirements.txt` 注释 / `.trivyignore` 注释，再成为下一轮判断的前提。由此新增 **类 20.224**。
+
+### A. 离站容灾重做 —— 取证证明**这套东西从来没有真正备份过任何东西**
+
+- **取证结论（主指挥裁定"到此为止，不再查主账号"）**：桶 `mnb-workbench-backup` 里**从未有过备份**，
+  只有一个 2026-09-21 19:29:16 +0800 上传的 `说明.txt`（无凭据泄露），全桶活动锁在 **77 秒**内。
+- **2026-09-21 那次 commit `79fc47f41` 写的"真实上传+幂等复扫已验证"验的不是备份** ——
+  它验的是 **OSS 通路**（V1 签名修对、列举能通），**没验证有没有东西可传**：
+  旧版 `scan_local` 的 `if p.name.startswith(".")` 把 `.env.*.bak` **整类静默跳过**，
+  而当时 `backups/` 里**只有** `.env.*.bak` 和一个 8-30 的遗留 `.sql`；
+  `microbubble_*.sql.gz` 要到 **10-04** 才出现。典型**类 20.220**（commit message 说成功，
+  副作用根本没发生）。已排除"曾传后被删"：`mnb-workbench-releases` 的 `offsite-backup/`
+  前缀 **0 对象**，9-21 同步时刻之后该桶无任何新对象。
+- **重做后的实现**（`apps/desktop/scripts/server/offsite-oss-sync.py`，`eb9f55df0` + `da8688fba` +
+  `85dea13f6`）：**加密无开关**（AES-256-GCM + PBKDF2-HMAC-SHA256 600k 轮 + 每文件独立 salt/nonce，
+  分块 8MiB，DB dump 实测 41~82MB）；**口令只从 `--passphrase-file` 读**（不读 .env /
+  不读环境变量 / 不内置，`.secrets/` 已入 `.gitignore` + `.dockerignore` 双排除）；
+  **桶与凭据零默认值**，缺任一项即 fail-loud（旧版 `DEFAULT_BUCKET` 指向**公开**桶是重大隐患）；
+  **`--subdir`（默认 `microbubble`）既是命名隔离也是权限边界** —— ⚠️ **`--cleanup` 不带
+  `--subdir` 会连全组其他成员的备份一起删**（mock 实测会连带删掉 `说明.txt` + `负责人/`）。
+- **⚠️ 桶权限边界（改配置前必读）**：`mnb-workbench-backup` = **私有**；
+  `mnb-workbench-releases` = **匿名可读**（electron-updater 公开发布源），**备份绝不可用它**。
+  当前凭据是 **SubUser（子账号）**，仅对象读写，桶级 `?versioning` / `?lifecycle` / `?versions`
+  一律 **403**（`PolicyType: ResourceGroupLevelIdentityBasedPolicy` + `ImplicitDeny`）。
+- **已闭环验证**：**40 个备份（410.9 MB，全部 `.enc`）真在阿里云**；82MB dump 从 OSS 下载 →
+  解密 → **sha256 与本地完全一致**；幂等复跑 0 上传 40 跳过。计划任务 **`MNB-OffsiteOssSync`**
+  每日 **03:30**（本地备份 02:00，间隔 1.5h）自跑，已实测注册在位（State=Ready）。
+  ⚠️ **主体必须是当前用户 `pc` 而非 SYSTEM** —— OSS 凭据在 User 级环境变量，SYSTEM 读不到。
+- **真实上传暴露了 3 个静态检查与容器内测试全都看不出来的缺陷**（类 20.220 的又一次）：
+  ①**网络无重试** —— 首次全量 39 秒即 `URLError [WinError 10060]` 中断，40 个只传完 35 个，
+  失败的恰是最大的几个；计划任务一天一次 ⇒ **一次抖动丢一天**。已加 5 次 / 300s /
+  2-4-8-16s 指数退避。⚠️ **每次重试必须重新签名**（V1 的 Date 头 15 分钟有效，复用会拿 403
+  `SignatureDoesNotMatch`，把可恢复抖动变成**不可恢复**失败）；HTTPError 不重试。
+  ②**Windows 上解密失败抛 PermissionError 掩盖真实原因** —— 清理调用点在 `with dst.open("wb")`
+  块内，句柄未关，`unlink` 抛 `[WinError 32]`，"口令错误"的清晰 `[FATAL]` 被无关 traceback 盖掉。
+  ③**失败后磁盘残留已解出的明文** —— 错口令时半成品里正是**明文**。三场景实测零残留。
+- **改这个脚本后必须跑往返矩阵**（0B / 5B / 恰好整块 / 短末块 / 40MB / 82MB）验字节全等，
+  `py_compile` 与 `import` 都要做 —— 三个已修的真 bug（模块 import 就炸 / 短末块根本解不开 /
+  `--cleanup` 删别人备份）**没有一个是语法问题**。
+- **配套文档**：`docs/disaster-recovery-runbook.md`（**不含任何密钥**）。
+  ⚠️ **解密口令只在本机** `<仓库根>/.secrets/offsite_backup.passphrase` ——
+  **本机丢失 = 远端 410MB 备份永久不可读**（GCM 没有后门，轮换口令也救不了旧密文）。
+  换机流程：先确认口令文件，**没有就不要先删旧机**。
+- **密钥处置纪律**：密钥（口令/密码/token）**任何情况下不得 print 到终端或对话**，含调试中间态；
+  需要读进程序就走文件/stdin，校验用 **sha256 前 12 位指纹**而非内容本身。
+  本次起因就是我为排查 Bitwarden CLI payload 直接 `print` 了含口令的 JSON，导致 64 字节的
+  备份加密口令明文进了终端滚动缓冲与对话记录（那串口令能解开含库密码 / JWT SECRET_KEY /
+  MinIO 密钥的 410MB 备份）。**Bitwarden 条目走网页版手动录入，不要写 CLI 自动化** ——
+  实测 Windows 上 `bw create item` 读不到管道 stdin（喂合法 JSON 与喂 `NOT-JSON-AT-ALL`
+  报**完全相同**的错，等价于读到空输入）；且 **`BW_SESSION` 是进程级环境变量，不跨终端标签页**。
+  口令轮换走 `scripts/backup/rotate_offsite_passphrase.py`（`--dry-run` 先看计划），
+  铁律三条：绝不先删远端、绝不未验证就覆盖本地口令、**绝不跳过"以远端为准逐个实解"** ——
+  本次首轮就因为按**本地**文件列表走而漏掉 2 个远端孤儿（本地 `KEEP_DAYS=7` 已清、远端还在）。
+
+### B. image-scan 4 条 CVE **修掉 3 条**（升 uvicorn 0.24.0 → 0.31.1，commit `09769e415`）
+
+| CVE | 包 | 状态 |
+|---|---|---|
+| CVE-2025-66416 / 52869 / 59950 | mcp | ✅ 已修（升 uvicorn + mcp 下限抬到 `>=1.28.1,<2`）|
+| CVE-2026-34070 | langchain-core 0.3.86 | ⬜ **建议不升**，见 C 段 |
+
+- ⚠️ **归因已被实测推翻**：注释里"mcp 要 websockets>=15，撞 websockets==12.0 硬钉"**是错的** ——
+  `mcp 1.28.1 + websockets 12.0` 与 `+15.0` **均**可解，**唯一阻塞点是 uvicorn**
+  （`mcp>=1.13.0` 把 uvicorn 下限从 `>=0.23.1` 抬到 `>=0.31.1`，不存在"既修 CVE 又不动 uvicorn"
+  的版本）。而 websockets **早在 2026-10-11 就已放宽成 `>=12.0,<16.0`**，容器实测装 **15.0.1**
+  ⇒ 第 1 轮的前提写下时就已是假的。完整三轮台账见 **类 20.224**。
+- **爆炸半径实测为零**：dry-run 确认**不牵动** fastapi / starlette / websockets / anyio / numpy，
+  仅 uvicorn 自身 + mcp 变化；代码级全仓 3 处 `import uvicorn` 用的都是
+  `uvicorn.run(app, host=, port=)`，该签名 0.24→0.31 **未变**（其余 5 处是命令行
+  `uvicorn app.main:app`）。⇒ **升 ASGI 栈前先查这几处，签名稳定就不是栈级改造**。
+- ⚠️ **生产容器当前仍是 uvicorn 0.24.0 / websockets 15.0.1**（本次只提交了
+  `requirements.txt`，**未重建镜像**）—— 重建走正常 `docker compose build` 即可，代码零风险。
+- ~~**langchain-core CVE-2026-34070 故意不登记进 `.trivyignore`**~~ —— 该判断（同日稍后被推翻）：
+  当时认为它「有修复版但升不动」，按 `.trivyignore` 第 5-14 行「有修复版但未升不登记」的
+  原则故意不豁免。**最终解法不是登记豁免，而是把依赖删掉**（见下方 C 段）——
+  **这才是该原则的正解**：既真修掉暴露面，又不新增任何豁免条目。
+
+### C. 三个 RAG-FW 孤立模块已删 + **langchain 依赖全部移除**（CVE-2026-34070 零改造消失）
+
+- **删** `app/rag/multi_hop_engine.py`(177 行) 与 `app/rag/semantic_chunker.py`(172 行)，
+  **四层证据 + import blocker 运行时实测**（类 20.223 第四步）结论一致"零调用方"：
+  生产容器内屏蔽这两模块后全扫 **298 个** services/api/agent/rag 模块，唯一 import 失败的
+  就是它们自己。连带移除 `requirements.txt` 的 **`langchain-community`**（全仓唯一使用者是
+  已删的 multi_hop_engine），顺带消除 `langchain-experimental` 这个**未在声明里、靠传递依赖
+  进来**的隐式依赖。
+- ⚠️ **差点误判的点**：`docs/rag/HYBRID-RAG-STACK.md` 记着这两个能力由 `MULTI_HOP_ENABLED` /
+  `SEMANTIC_CHUNKER_ENABLED` 控制且**默认值 `"1"`（默认开）** —— 只看这个会以为它们是活接线。
+  但开关只是**模块内部自读**（传给 framework_gate 装饰器），而 `gate.py` 里的 framework_gate
+  只在本模块内使用，**没有任何外部代码 import 这两个模块**。
+  **"配置齐全 + 开关默认开 + 调用方为零"是最容易骗过静态检查的一种形态。**
+  ⚠️ `app/services/graph_retriever.py` 的 `multi_hop_retrieve` 是**图检索的另一套实现**，
+  同名不同物，已核实未动。
+- ⚠️ **下面这条结论已被同一天的进一步取证推翻并订正**（保留原文以留痕，勿再引用）：
+  ~~"langchain 1.x 建议不升"~~ —— 当时的判断是"升 1.x 会打断唯一那条活接线
+  `app/rag/agent_retriever.py`"。但随后用 **import blocker 运行时实测**（296 模块全扫）
+  发现**它同样是零调用方的孤立模块**，于是**根本不需要迁移**：
+  **已连同 `app/rag/config.py` 的 4 个死开关一起删除，并移除全部四个 langchain 包**
+  （`langchain` / `langchain-core` / `langchain-anthropic` / `langchain-community`）。
+  ⇒ **CVE-2026-34070 零改造消失**，`git grep langchain -- app/` 现零命中。
+
+  ⇒ **教训（比结论更重要）**：我在写下"它是唯一活接线"时，依据是
+  `hybrid_retriever.py` 一句**过时注释**（"保留: agent_retriever._bm25_only 兜底用"）
+  + 文档里"开关默认开"。**两者都不是调用关系。** 类 20.223 要求的
+  **import blocker 运行时实测**才是判据，而它当时没做 —— 直到被当成正式立项去做才补上。
+
+  ⚠️ 判据本身也有坑：**计数式探针必须想清楚分母**。我的第一版把"被屏蔽模块自身"
+  也算进 `newly_broken`，于是得出"有调用方"的错误结论；改成"排除自身后"才拿到
+  `0` 这个正确判据。
+- **删 langchain 依赖前查过上游未声明的硬 import**（类 20.223）：唯一疑点是 `langfuse`
+  （本仓在用，`app/core/llm.py` + `app/rag/lc_tracing.py`，其 metadata 含
+  `langchain (>=0.0.309)`）。实测确认那是 **`extra == "langchain"` 的可选依赖**，
+  本仓未装该 extra —— 一次性容器里只装 langfuse 不装 langchain，`import langfuse`
+  正常（2.60.10）且 langchain 不会被带入。（`sentry-sdk` 那个同理也是 extra。）
+  **若将来要重新引入 langchain**：CVE 修复版是 **1.2.22**（0.3.86 是 0.3.x 末版，
+  没有更高的 0.3.x），且必须四包同升 —— `langchain-community` **没有 1.x**
+  （PyPI 最高 0.4.2，且要求 core>=1.4.0），`langchain-anthropic` 要到 1.0.0
+  才放开 core<0.4.0 的限制。
+
+### D. CI 长期红灯：Alembic 单 head 守卫连续 6 次红 —— 根因是**漏装 pgvector**（`6889f3c32`）
+
+- 守卫只装了 alembic 一个包，注释理由是"不连 DB 故无需 sqlalchemy"。**该前提不成立**：
+  `alembic heads` 虽不加载 `env.py` / 不连 DB，但**会 import 每个 `versions/*.py` 以构建
+  revision map**，而 `001_initial.py:12` 在**模块顶层** `from pgvector.sqlalchemy import Vector`
+  ⇒ ModuleNotFoundError，守卫全红。已补装 pgvector + sqlalchemy，一次性容器实测
+  `alembic heads` 输出 `145_kpt_content_tsvector (head)` 计数 1。
+- ⚠️ **该红灯横跨 2026-10-11 的全部 commit**（含与 alembic 毫无关系的备份/隧道/drive 改动）——
+  **红的原因与它们无关**，类 20.220 的变体：**红灯 ≠ 上次改动引入**。
+  类 20.222 的"开保护前先修红"纪律要求把红查到底，而这项此前一直没人查。
+
+### E. 本阶段新增的永久铁律
+
+**类 20.224**（查依赖冲突必须 `pip install --dry-run` 逐对实测；不得引用文档里的"冲突链"，
+且测解析**禁止 `--quiet`** —— 见下节正文）。
+
+## 类 20.224：查依赖冲突必须实测，不得引用文档里的"冲突链"
+
+**规则**：判断两个包能否共存（或某个上限版本卡在哪），唯一可信办法是
+**`pip install --dry-run` 逐对组合实测**。**不得**引用 `requirements.txt` 注释、
+`.trivyignore` 注释或历史 commit message 里写的"冲突链"。且**测解析时禁止 `--quiet`**。
+
+**Why（2026-10-12，同一阻塞问题连续三轮归因、错了两轮）**：
+
+| 轮次 | 当时写下的"冲突链" | 实测真相 |
+|---|---|---|
+| 第 1 轮 | `mcp` 要 `websockets>=15`，撞 `websockets==12.0` 硬钉 | **不成立**。`mcp 1.28.1 + websockets 12.0` 与 `+15.0` **均**可解；唯一阻塞是 uvicorn。且 websockets 早在 2026-10-11 已放宽成 `>=12.0,<16.0`，容器实测装 15.0.1 |
+| 第 2 轮 | "改 mcp 任何版本都无效，必须先做 ASGI 栈升级立项" | **属实**，但前提是"不动 uvicorn" |
+| 第 3 轮 | 我自己：测 `langchain-community==1.0.0` 用了 `--quiet` | **该版本根本不存在**（PyPI 最高 0.4.2），但 `No matching distribution found` **被 `--quiet` 吞掉**，看起来像"可解" |
+
+⇒ **关键机制：冲突链会随别的改动悄悄作废，而文档/注释里的结论不会自动更新。**
+第 1 轮的错误结论就因为写进了 `requirements.txt` 注释，成了第 2 轮推理的前提 ——
+错误被**静默继承**，且每轮都"看起来严谨"。
+
+⇒ **两条配套纪律**：
+1. **实测**：`pip install --dry-run "A==x" "B==y"` 逐对跑，**不加 `--quiet`**
+   （它会吞掉解析失败、制造"可解"假象）。结论要写成"实测 + 组合清单"，不写"根据文档"。
+2. **注释里写冲突链时必须标注日期与复核条件**，否则读者无从判断它是否过期。
+
+**配套坑（同一轮踩到）**：**计数式探针必须想清楚分母**。判"某模块是否孤儿"时用
+import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算进"新增失败"，
+会得出"有调用方"的错误结论 —— 正确判据是**排除自身后**新增失败数。
+（这条与类 20.223 的 import blocker 是同一个工具的两个使用细节。）
 
 ## 状态快照档案（2026-08-04 → 2026-09-18）
 
@@ -212,7 +381,8 @@
 
 > 每条对应一次真实事故，是**现在该怎么做**的规则，不是历史记录。
 > 事故上下文见 `docs/incident/2026-08-04--2026-09-18-status-snapshots.md`。
-> 覆盖类 20.155–221，共 31 条。
+> 覆盖类 20.155–224，共 **34 条**（编号不连续，20.165–20.170 / 20.173–20.179 /
+> 20.189–20.211 无对应条目）。
 
 - **类 20.155**: bench 脚本 --help 子进程必须显式 PYTHONPATH=REPO_ROOT
 - **类 20.156**: argparse --help 在某些版本重定向到 stderr, subprocess 必须 capture_output=True
@@ -512,6 +682,40 @@
   ⇒ 推论: **"删一个依赖"的爆炸半径永远大于"钉一个版本"**。裸声明会漂移,
   但漂移是可见的 CI 红; 而删错一个软 import 兜底包, 后果可能在生产跑很久
   之后才以"功能静默失效"的形式出现。**能钉就钉, 别删。**
+- **类 20.224**: **查依赖冲突必须 `pip install --dry-run` 逐对实测, 不得引用文档 / 注释里
+  写的"冲突链"; 测依赖解析时禁止 `--quiet`** ——
+  2026-10-12 实战: 同一个 image-scan/mcp 阻塞问题**连续三轮归因, 错了两轮**,
+  而**每一轮的错误结论都被写进文档, 于是成为下一轮判断的前提** ⇒ 错误会"继承"。
+  三轮台账:
+
+  | 轮次 | 谁写的 | 当时的结论 | 实测结果 |
+  |---|---|---|---|
+  | 第 1 轮 | 前人写进 `requirements.txt` 注释 | "mcp 要 `websockets>=15`, 撞 `websockets==12.0` 硬钉" | ❌ **证伪**: `mcp 1.28.1 + websockets 12.0` 与 `+15.0` **均**可解 |
+  | 第 2 轮 | 同文件注释 | "mcp 那行改任何版本都是无效改动, 必须先完成 ASGI 栈升级立项" | ✅ **属实**, 该立项 2026-10-12 已完成 |
+  | 第 3 轮 | **本轮自己** | 测 `langchain-community==1.0.0` 用了 `pip install --quiet`, `No matching distribution found` 被吞, 看起来像"可解" | ❌ **该版本根本不存在** (PyPI 最高 0.4.2) |
+
+  **唯一真实阻塞点是 uvicorn**: `mcp>=1.13.0` 把 uvicorn 下限从 `>=0.23.1` 抬到
+  `>=0.31.1`, 不存在"既修 CVE 又不动 uvicorn"的版本。而 websockets **早在 2026-10-11
+  就已放宽成 `>=12.0,<16.0`**(容器实测装 **15.0.1**) ⇒ **第 1 轮的前提在写下时就已是假的**,
+  只是没人回去核。这就是"错误被继承"的完整机制: 冲突链会随**别的**改动作废,
+  而文档里的结论**不会自动更新**, 于是它持续以权威口吻误导下一个读它的人。
+  **四条纪律**:
+  ①**冲突结论必须自己实测**: `pip install --dry-run "A==x" "B==y"` 逐对跑, 不引用
+     注释 / 文档 / issue 里写的冲突链 —— 那些是**某一刻的快照**, 不是不变量。
+     已在 `requirements.txt:5-16` 把第 1 轮的误判就地订正并附 dry-run 证据。
+  ②**测依赖解析禁止 `--quiet`**: 它会把 `No matching distribution found` /
+     `ResolutionImpossible` 吞掉, **制造"可解"的假象**(第 3 轮就是被它骗的)。
+     同样禁用的还有 `--log` 截断; 要判成败必须拿到**完整的解析输出**。
+  ③**冲突链写成文档时必须写"有效期/复查条件"**: `.trivyignore` 每条都带
+     「上游发布 X 后删掉本行」, langsmith 那条更进一步写死了
+     「一旦动了 websockets / uvicorn / fastapi 版本, 必须回来删掉这行」——
+     **2026-10-12 这三个条件全部触发, 该行当天被删除**。这是本项目少见的
+     **"文档主动要求自我作废"的设计, 第一次被执行, 应当推广到所有会漂移的注释**。
+  ④**推翻旧结论时必须留下"被什么证据推翻"的锚点**(dry-run 命令 + 输出), 不要静默改写 ——
+     否则下一个人会以为那条结论从未存在过, 又重新推导一遍。
+  ⚠️ **同源第 2 形态(今日踩到)**: `.trivyignore` 的**复查条件达成 ≠ 门禁会转绿** ——
+  那条豁免删掉后门禁仍红, 因为真因是另一批"有修复版但未升级"的依赖。
+  删豁免与修依赖是两件事, 别用前者冒充后者(类 20.220)。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务三层缺陷已于 2026-10-09 全修
   (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
   rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
@@ -880,14 +1084,25 @@
 
 ### 测试规范
 - **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试。
-  规模：`tests/` 下 **400 个测试文件 / 4133 个 test 函数**（**实测 2026-10-10**；
+  规模：`tests/` 下 **397 个测试文件 / 4119 个 test 函数**（**实测 2026-10-12**；
   文件数 = `find tests -name "test_*.py" -not -path "*/__pycache__/*" | wc -l`，
   函数数 = `grep -rhoE "^\s*(async )?def test_" tests/ --include="*.py" | wc -l`
   —— 写死数字必然随增删漂移，改测试后请按上面两条命令回填）；CI 硬门
   `server-tests-baseline.yml` 8 片实跑 **3112 用例**（2926 passed / 186 skipped，
   **该组数字是 2026-09-30 基线**，非实时）
-  - ⚠️ **87 个测试文件已归档**（模块级 `pytest.skip`）—— 断言历史 commit / 已下线功能 /
-    一次性验收 gate / 需真环境。**恢复流程与分类清单见 [`tests/ARCHIVED.md`](tests/ARCHIVED.md)**。
+  - ⚠️ **397 是 2026-10-12 连删三个 RAG-FW 专属测试文件后的值**
+    （400 → 398 → 397；函数数 4133 → 4128 → 4119）。
+    三次删除分别是 `test_multi_hop_engine.py` / `test_semantic_chunker.py`（`e5333eb6f`）
+    与 `test_agent_retriever.py`（删 agent_retriever 时）—— 三个模块均经
+    **import blocker 运行时实测**确认零调用方后删除。
+    两次都还需从**混合**的 `test_e2e_framework_gate.py` 里摘出对应用例并修
+    `test_08` 冒烟循环（它逐个调用其余用例，漏改会直接 AttributeError），
+    测别的能力的用例全部保留。
+  - ⚠️ **87 个测试文件已归档**（模块级 `pytest.skip(allow_module_level=True)`，
+    2026-10-12 实测仍是 87；⚠️ `grep -rln "pytest.skip"` 会得 116，**那是把函数内
+    skip 也数进去了**，判归档必须带 `allow_module_level=True`）——
+    断言历史 commit / 已下线功能 / 一次性验收 gate / 需真环境。**恢复流程与分类清单见
+    [`tests/ARCHIVED.md`](tests/ARCHIVED.md)**。
     守门类测试（`test_no_prod_db_imports.py` 禁止测试直连生产库）**不得归档**。
 - **前端**：Vitest + @vue/test-utils，composable 测试优先，组件测试选择性覆盖
 - **Mock 策略**：Redis 用 fakeredis，Claude API 用 respx，Embedding 用固定向量
