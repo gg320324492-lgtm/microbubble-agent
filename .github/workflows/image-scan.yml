@@ -46,27 +46,6 @@ jobs:
     runs-on: ubuntu-latest
     # PR 上仅 advisory: 单个矩阵项失败不拖垮整个 workflow
     continue-on-error: ${{ github.event_name == 'pull_request' }}
-    # 2026-10-12: push(仅 requirements.txt / .trivyignore / 本文件变更)时
-    # **只跑 3 个镜像, 而不是全量 8 个** —— 依据是"哪些 Dockerfile 真的读
-    # requirements.txt", 即改动实际影响的那几个:
-    #   ✅ app            (Dockerfile,               COPY + pip install -r)
-    #   ✅ commercial     (docker/Dockerfile.commercial, 同上)
-    #   ✅ voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
-    #   ❌ db / web                      —— 无 Python 依赖
-    #   ❌ funasr / whisper              —— 独立内联 pip install, 不读本文件
-    #   ❌ mcp (Dockerfile.mcp)          —— 同上
-    #
-    # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 来判断 mcp 读不读**
-    #   —— 实测这是**假阳性**: Dockerfile.mcp 的**注释**里就写着
-    #   「⚠️ 本文件不读 requirements.txt」(第 18 行), grep 命中的是那句注释文字。
-    #   今天差点据此把 mcp 也算进受影响范围, 成本会多估近一倍。
-    #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
-    #   即**匹配用法而非提及**。同型坑见 CLAUDE.md 的 `.dft` 前缀假阳性。
-    #
-    # 成本: 全量 8 个约 30 分钟, 只跑 3 个约 12-15 分钟。
-    # 失败语义: push 不在 `continue-on-error` 范围(见上), 也不在 exit-code 的
-    #   advisory 分支(:121 的表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
-    if: github.event_name != 'push' || matrix.name == 'app' || matrix.name == 'commercial' || matrix.name == 'voice-pipeline'
     strategy:
       fail-fast: false
       matrix:
@@ -95,6 +74,34 @@ jobs:
           - name: commercial
             dockerfile: docker/Dockerfile.commercial
             context: .
+        # 2026-10-12: push(仅 requirements.txt / .trivyignore / 本文件变更)时,
+        # 把**不读 requirements.txt 的 5 个镜像排除掉**, 即 push 时只真跑 3 个。
+        # 依据是"哪些 Dockerfile 真的读 requirements.txt", 即改动实际影响的那些:
+        #   ✅ 保留  app            (Dockerfile,                     COPY + pip install -r)
+        #   ✅ 保留  commercial     (docker/Dockerfile.commercial,   同上)
+        #   ✅ 保留  voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
+        #   ❌ 排除  db / web                      —— 无 Python 依赖
+        #   ❌ 排除  funasr / whisper              —— 独立内联 pip install, 不读本文件
+        #   ❌ 排除  mcp (Dockerfile.mcp)          —— 同上
+        #
+        # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 来判断 mcp 读不读**
+        #   —— 实测这是**假阳性**: Dockerfile.mcp 的**注释**里就写着
+        #   「⚠️ 本文件不读 requirements.txt」(第 18 行), grep 命中的是那句注释文字。
+        #   今天差点据此把 mcp 也算进受影响范围, 成本会多估近一倍。
+        #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
+        #   即**匹配用法而非提及**。同型坑见 CLAUDE.md 的 `.dft` 前缀假阳性。
+        #
+        # 成本: 全量 8 个约 30 分钟, 只跑 3 个约 12-15 分钟。
+        # 失败语义: push 不在 `continue-on-error` 范围(见上), 也不在 exit-code 的
+        #   advisory 分支(该表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
+        #
+        # ⚠️ **这里为什么用 `exclude` 而不是 job 级 `if`**(2026-10-12 实测踩到):
+        #   job 级的 `if` 在 **matrix 展开之前**求值, 上下文只有
+        #   `github` / `inputs` / `needs` / `vars` —— **拿不到 `matrix`**。
+        #   写成 `if: ... || matrix.name == 'app'` 会让整个 workflow 报
+        #   "Invalid workflow file" 且 **一个 job 都不起**(实测 event=push 直接 failure,
+        #   jobs API 返回空数组)。actionlint 能离线抓到这个错, 改完先跑它再推。
+        exclude: ${{ github.event_name == 'push' && fromJSON('[{"name":"db"},{"name":"funasr"},{"name":"mcp"},{"name":"whisper"},{"name":"web"}]') || fromJSON('[]') }}
 
     steps:
       - name: Checkout

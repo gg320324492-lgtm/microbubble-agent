@@ -282,8 +282,17 @@
   ⇒ 改依赖从不触发任何门禁，今晚那次 schedule 纯属偶然兜住。
   现已加 `push: paths: [requirements.txt, .trivyignore, 本文件]`（带 `.trivyignore` 是因为
   改豁免清单同样改变门禁结果，"改豁免可以不验证"正是 `.trivyignore` 第 5-14 行原则要防的），
-  并用 job 级 `if` 让 push 时**只跑真正读 `requirements.txt` 的 3 个镜像**
-  （app / commercial / voice-pipeline，约 12-15 分钟；全量 8 个约 30 分钟）。
+  并用 `strategy.matrix.exclude`（表达式）让 push 时**只跑真正读 `requirements.txt` 的
+  3 个镜像**（app / commercial / voice-pipeline，约 12-15 分钟；全量 8 个约 30 分钟）。
+  ⚠️ **第一次实现踩了坑：job 级 `if` 拿不到 `matrix` 上下文** —— `if` 在 matrix **展开之前**
+  求值，可用上下文只有 `github`/`inputs`/`needs`/`vars`。写成
+  `if: ... || matrix.name == 'app'` 会让整个 workflow 报 `Invalid workflow file` 且
+  **一个 job 都不起**（实测 `event=push` 直接 failure、jobs API 返回空数组）。
+  **纪律：改任何 workflow 前先跑 actionlint 离线校验，别推了才发现文件无效** ——
+  ```bash
+  MSYS_NO_PATHCONV=1 docker run --rm -v "E:/microbubble-agent:/repo" -w /repo rhysd/actionlint:latest
+  ```
+  ⚠️ Git Bash 下 `$(pwd)` 会被改写成 `C:/Program Files/Git/repo`，必须用 Windows 绝对路径 + `MSYS_NO_PATHCONV=1`（类 20.214 同型）。
   ⚠️ **加了触发器 ≠ 变成硬门**：main 的 required checks 仍是 9 个 Server Tests Baseline
   context，**不含 image-scan** ⇒ push 红了只是可见红叉，挡不住合并。要变硬门须先连续绿
   若干次再把 job 名加进 required（类 20.222：开保护前先修红）。

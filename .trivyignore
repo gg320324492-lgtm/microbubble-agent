@@ -71,7 +71,11 @@
 #      `pull_request` 限 Dockerfile 类 / `schedule` / `workflow_dispatch`），
 #      而 4 条 CVE 全是改 `requirements.txt` 修的 ⇒ **改依赖从不触发门禁**。
 #      现已加 `push: paths: [requirements.txt, .trivyignore, 本文件]`，push 时用
-#      job 级 `if` 只跑**真正读 requirements.txt 的那 3 个镜像**。
+#      `strategy.matrix.exclude`(表达式) 排除**不读 requirements.txt 的那 5 个镜像**,
+#      即只真跑 app / commercial / voice-pipeline 三个。
+#      ⚠️ 别写成 job 级 `if: ... || matrix.name == 'app'` —— job 级 if 在 matrix
+#      **展开之前**求值, 拿不到 matrix 上下文, 会让整个 workflow 报 Invalid workflow
+#      file 且**一个 job 都不起**(2026-10-12 实测)。改完 workflow 先跑 actionlint 离线校验。
 #      ⚠️ 加了触发器**不等于硬门** —— required checks 仍是 9 个 Server Tests
 #      Baseline context, 不含本 workflow ⇒ push 红了只是可见红叉。
 #      ✅ **本机已按门禁的真实参数实测预判 = 0 条**（2026-10-12，trivy 扫
