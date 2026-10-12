@@ -162,8 +162,9 @@
   ⚠️ **此处"测试收集数 400"是 2026-10-10~12 重构期间的快照，不是现值** ——
   同日经 import blocker 实测确认零调用方后，连删三个 RAG-FW 专属测试文件
   （`e5333eb6f` + 删 agent_retriever 那次），现为 **397 文件 / 4119 函数**（见「测试规范」段）。
-- **CI 连续 9+ 次全红已终结**：根因 = `requirements.txt:43` 裸 `datasets` 传递引入
-  `pyarrow>=24`，而 `:66` 写死 `numpy==1.26.2`，pyarrow 26 起硬性要求 numpy≥2.0 →
+- **CI 连续 9+ 次全红已终结**：根因 = requirements.txt 里裸 `datasets` 那行传递引入
+  `pyarrow>=24`，而同一文件里 `numpy==1.26.2` 那行把 numpy 写死在 1.26.2，
+  pyarrow 26 起硬性要求 numpy≥2.0 →
   `embedding_service` import 失败 → 连锁 64 条红灯。**非 2026-10-10 改动引入**
   （10-09 的 run 已有 33 处同错），10-10 的 embedding executor 只是让它被更多测试 import 而暴露。
   修法 = 钉 `pyarrow==25.0.1`（与生产对齐），**不升 numpy 2.x**（ABI 破坏面）。

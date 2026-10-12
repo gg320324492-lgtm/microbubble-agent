@@ -47,8 +47,8 @@
 #   ② 上游一旦放出修复版本，trivy 会立刻重新报出来 —— 那时该修依赖，而不是加豁免。
 #
 # 门禁仍然红的真实原因 —— **2026-10-12 更新：4 条已全部处理完毕，0 条遗留**
-#   ✅ mcp —— 2026-10-12 已修。原阻塞链是 `requirements.txt:3` 硬钉
-#      `uvicorn[standard]==0.24.0`，而 mcp 1.13.0 起要求 uvicorn>=0.31.1。
+#   ✅ mcp —— 2026-10-12 已修。原阻塞链是 requirements.txt 里 `uvicorn[standard]`
+#      那行硬钉 `uvicorn[standard]==0.24.0`，而 mcp 1.13.0 起要求 uvicorn>=0.31.1。
 #      升 uvicorn 到 0.31.1（实测不牵动 fastapi/starlette/websockets）+
 #      mcp 下限抬到 >=1.28.1 后，CVE-2025-66416 / 52869 / 59950 三条全修。
 #      ⚠️ 归因更正：当年注释说"连带 websockets 硬钉"是**错的** ——
@@ -91,7 +91,8 @@
 # 1. python-jose —— 算法混淆（CRITICAL）
 # ------------------------------------------------------------------------------
 # 漏洞:      CVE-2026-85394
-# 包/版本:   python-jose 3.4.0（requirements.txt:100 `python-jose[cryptography]==3.4.0`）
+# 包/版本:   python-jose 3.5.0（requirements.txt 里声明 `python-jose[cryptography]==3.5.0`
+#            的那行 —— 定位靠声明内容，不写行号：注释一增删行号即漂移）
 # 上游状态:  **无修复版本**。trivy 报 affected 且 FixedVersion 为空；
 #            advisory 标题为 "python-jose through 3.5.0 Algorithm Confusion"，
 #            即当前 PyPI 最新版同样中招。

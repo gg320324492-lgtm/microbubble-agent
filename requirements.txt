@@ -305,7 +305,9 @@ email-validator==2.1.0
 #       jaraco.context 5.3.0  CVE-2026-23949, FixedVersion 6.1.0
 #       wheel 0.45.1         CVE-2026-24049, FixedVersion 0.46.2
 #   ⇒ 要让 **mcp job 转绿, 必须改 `Dockerfile.mcp`, 改本文件一行用都没有。**
-#     (brief 说的"声明位置 requirements.txt:26"只对 `app` 镜像成立, 对 mcp 镜像是错的。)
+#     (brief 说的"声明位置"只对 `app` 镜像成立, 对 mcp 镜像是错的。
+#      ⚠️ 本文件**不对自己写死行号** —— 上方注释一增删, 下面所有行号即漂移。
+#      定位 mcp 声明请用包名搜 `^mcp>=`。)
 #
 #   那为什么仍在本文件加这三条? 因为本文件确实**装**这三个包, 只是**当前版本已经
 #   干净**, 加下限是防未来漂移回退的护栏(与上方 urllib3 先例同型)。实测:
