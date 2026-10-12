@@ -383,6 +383,40 @@
   （PyPI 最高 0.4.2，且要求 core>=1.4.0），`langchain-anthropic` 要到 1.0.0
   才放开 core<0.4.0 的限制。
 
+### D2. `Dockerfile` 改 multi-stage —— 626 → **293** 条，生产已切换（2026-10-13，commit `770b6dedf`）
+
+扫 `microbubble-agent-app:latest`，HIGH/CRITICAL 626 条里，**裸基础镜像只有 65 条**，
+**325 条是构建期 dev 包带进来的**：`linux-libc-dev` **196**（`gcc` 拉入，CVE 最早到 2015）
++ 8×`libav*-dev` 各 16 + `libssl-dev`。改成 builder / runtime 两段后 ——
+
+| 项 | 改造前 | 改造后 |
+|---|---|---|
+| CVE 合计 | 626 | **293**（debian 290 + python-pkg 3），**−333 / −53.2%** |
+| `-dev` 包残留 | 2 | **0** |
+| `gcc` | 在 | **无** |
+| 镜像体积 | 13.5 GB | **13.2 GB** |
+
+- **真正需要现场编译的只有 2 个包**（扫了全镜像 257 个 `.dist-info/WHEEL`，254 个有预编译 wheel）：
+  `pilk`（PyPI 只有 Windows wheel）与 `crcmod`（只有 `.tar.gz`，传递依赖自 `oss2`）。
+  ⇒ **runtime 段必须从 builder 整份搬运 site-packages，绝不能重新 pip install**。
+- ⚠️ **`crcmod` 无 gcc 时会静默降级**：pip **不报错**，但 `_crcfunext` 缺失、退化成纯 Python
+  `_crcfunpy`，CRC 结果仍正确 ⇒ 功能在、速度掉几个数量级，**构建/CI/测试全绿都发现不了**。
+  判据固定用 `hasattr(crcmod, "_crcfunext")`。
+- ⚠️ **COPY 是合并语义，永不删除目标侧独有的文件** —— 不先 `rm -rf` 就 COPY，会让基础镜像
+  自带的 `setuptools-79.0.1.dist-info` 与 builder 的 84.0.0 **两份 dist-info 并存**，
+  `import setuptools` 命中旧元数据 ⇒ trivy 反而**多 2 条** CVE。实测残留 216 个文件。
+  ⇒ 搬运 = **清空 + 全量拷贝**。
+- 残留 top5 是 `ffmpeg` / `libavcodec59` / `libavdevice59` / `libavfilter8` / `libavformat59`
+  （各 16）—— **运行时必需，删不得**。
+- **同类文件尚未改造**：`Dockerfile.funasr` / `.whisper`（单阶段但**无 gcc**，风险更低）；
+  `docker/Dockerfile.commercial` **已是 multi-stage**，但 runtime 缺 ffmpeg+libreoffice，
+  **照抄本 PR 会跑不起来**；`Dockerfile.mcp` 无 apt 包不用动；
+  `Dockerfile.voice-pipeline` 装 `python3.11-dev` 但**未取证**。
+- ⚠️ bookworm → trixie 迁移（可再收一批）**暂缓**：跨 debian 大版本、
+  `libavutil57→59` soname 变化、gcc 12→14，且实测 trixie 在 `deb.debian.org` 的 apt
+  会进 `Ign` 死循环；而**只改 `FROM` 行是危险的** —— `Dockerfile:20-23` 硬编码 bookworm 源，
+  改 FROM 后 apt 仍装 bookworm 包，**构建 RC=0 但产出缝合怪镜像**（类 20.220）。
+
 ### D. CI 长期红灯：Alembic 单 head 守卫连续 6 次红 —— 根因是**漏装 pgvector**（`6889f3c32`）
 
 - 守卫只装了 alembic 一个包，注释理由是"不连 DB 故无需 sqlalchemy"。**该前提不成立**：
@@ -1301,6 +1335,46 @@ docker compose restart app celery-worker
 ```
 
 不跑这两步, 新架构写入 `intent_category` 等列会报 `column does not exist` 500.
+
+#### 重建生产镜像的四条硬纪律（2026-10-13 实测，类 20.220 的四个变体）
+
+**① `docker compose build` 必须串行, 禁止多服务并行**
+4 个服务共用 `build: .`（app / celery-worker / celery-beat / celery-meeting-worker）。
+一条 `docker compose build app celery-worker celery-beat celery-meeting-worker` 会走
+**buildx bake 并行跑 4 个 apt 实例**，同时打 `deb.debian.org` 的 CDN ⇒ **稳定复现
+`502 Bad Gateway`**，且**两次都挂在同一个包** `libdrm-nouveau2_2.4.114-1+b1`。
+而单发 `docker run ... apt-get install libdrm-nouveau2` 同一包**秒装成功**
+⇒ 纯**并发限流**，不是网络不通、不是代理坏、更不是 Dockerfile 写错。
+
+正确写法（逐个来；共用 Dockerfile，第 2 个起会命中缓存，几分钟就完）：
+```bash
+docker compose build app
+docker compose build celery-worker celery-beat celery-meeting-worker
+```
+
+**② 构建失败时 `exit code` 不可信 —— 判据必须是日志**
+同一次失败，第一次 `docker compose build` 返回 **exit 0**、第二次 exit 1。
+**只看退出码会把失败的构建当成成功的**，随后重建容器就会继续用**旧镜像**
+（实测：镜像 ID 仍是旧值、体积未变、gcc 仍在、dev 包仍是 2 个）。
+真实判据：
+```bash
+grep -c "ERROR:" <log>                      # >0 即失败
+grep -c "did not complete successfully" <log> # >0 即失败
+```
+**③ `docker builder prune` 会连带清掉 apt 的 cache mount**
+`Dockerfile` 里 apt 层用了 `--mount=type=cache,target=/var/cache/apt/archives`
+—— 那些 `.deb` 平时躺在 **build cache** 里，prune 一次就得**全量重下 250 MB**，
+把原本被缓存掩盖的源脆弱性顶了出来（本次就是这么撞上 ① 的 502）。
+⇒ 清缓存前先想清楚代价；**生产出问题时不要顺手 prune**。
+
+**④ 重建后必须在运行容器里验产物，不能只看 build 成功**
+```bash
+docker exec microbubble-agent-app-1 sh -c 'dpkg -l | grep -cE "\-dev[[:space:]]"; which gcc || echo "gcc 已移除"'
+docker images --format "{{.Repository}} {{.ID}} {{.Size}}" | grep microbubble-agent-app
+```
+判据：**镜像 ID 变了** + 体积下降 + 关键包版本与基线一致 + 编译产物哨兵仍在
+（本次是 `crcmod._crcfunext` —— 缺 gcc 时它会**静默降级**成纯 Python，
+功能正常只是慢几个数量级，构建/CI/测试全绿都发现不了）。
 
 ### 方案 C 没做的（plan 明确范围外）
 
