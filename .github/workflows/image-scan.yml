@@ -2,6 +2,8 @@ name: image-scan (trivy)
 
 # W86-C-1: Trivy 镜像漏洞扫描
 # - PR: 仅当 Dockerfile* / docker/** / docker-compose*.yml 变化时触发, advisory (不 block PR)
+# - push(main): 仅当 requirements.txt / .trivyignore / 本文件变化时触发, **硬失败**
+#   见下方「2026-10-12 加 push 触发器」的说明
 # - schedule: 每周一 05:00 UTC 全量扫, HIGH/CRITICAL 命中即 fail
 on:
   pull_request:
@@ -10,6 +12,25 @@ on:
       - 'docker/**'
       - 'docker-compose*.yml'
       - 'web/Dockerfile'
+      - '.github/workflows/image-scan.yml'
+  # 2026-10-12 新增 (L-8 收尾): **改 requirements.txt 从前不触发任何门禁**
+  #   —— 本 workflow 原本只有 PR(限 Dockerfile/docker/compose) / schedule /
+  #   workflow_dispatch, **没有 push**。而 L-8 治理的 4 条 CVE **全部是改
+  #   requirements.txt 修的**(升 uvicorn+mcp, 删 langchain), 于是产生了一个
+  #   荒唐局面: 整个治理做完了, CI 却一次都没验证过。2026-10-12 最后一次
+  #   workflow_dispatch(head 09769e415)仍是 failure, 之后所有依赖改动都
+  #   **静默地从未被扫描**。类 20.220: 守门必须验副作用真的发生。
+  #
+  #   为什么还带上 `.trivyignore`: 改豁免清单同样会改变门禁结果, 不触发等于
+  #   "改豁免可以不验证" —— 那正是本文件第 5-14 行的原则要防的事。
+  #
+  #   ⚠️ **这还不是硬门**: main 的 required checks 是 9 个 Server Tests Baseline
+  #   context, **不含本 workflow** ⇒ push 时红了也只是可见红叉, 挡不住合并。
+  #   要变硬门需先连续绿若干次再把 job 名加进 required (类 20.222: 开保护前先修红)。
+  push:
+    paths:
+      - 'requirements.txt'
+      - '.trivyignore'
       - '.github/workflows/image-scan.yml'
   schedule:
     - cron: '0 5 * * 1'
@@ -25,6 +46,27 @@ jobs:
     runs-on: ubuntu-latest
     # PR 上仅 advisory: 单个矩阵项失败不拖垮整个 workflow
     continue-on-error: ${{ github.event_name == 'pull_request' }}
+    # 2026-10-12: push(仅 requirements.txt / .trivyignore / 本文件变更)时
+    # **只跑 3 个镜像, 而不是全量 8 个** —— 依据是"哪些 Dockerfile 真的读
+    # requirements.txt", 即改动实际影响的那几个:
+    #   ✅ app            (Dockerfile,               COPY + pip install -r)
+    #   ✅ commercial     (docker/Dockerfile.commercial, 同上)
+    #   ✅ voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
+    #   ❌ db / web                      —— 无 Python 依赖
+    #   ❌ funasr / whisper              —— 独立内联 pip install, 不读本文件
+    #   ❌ mcp (Dockerfile.mcp)          —— 同上
+    #
+    # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 来判断 mcp 读不读**
+    #   —— 实测这是**假阳性**: Dockerfile.mcp 的**注释**里就写着
+    #   「⚠️ 本文件不读 requirements.txt」(第 18 行), grep 命中的是那句注释文字。
+    #   今天差点据此把 mcp 也算进受影响范围, 成本会多估近一倍。
+    #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
+    #   即**匹配用法而非提及**。同型坑见 CLAUDE.md 的 `.dft` 前缀假阳性。
+    #
+    # 成本: 全量 8 个约 30 分钟, 只跑 3 个约 12-15 分钟。
+    # 失败语义: push 不在 `continue-on-error` 范围(见上), 也不在 exit-code 的
+    #   advisory 分支(:121 的表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
+    if: github.event_name != 'push' || matrix.name == 'app' || matrix.name == 'commercial' || matrix.name == 'voice-pipeline'
     strategy:
       fail-fast: false
       matrix:

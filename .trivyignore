@@ -63,20 +63,26 @@
 #   ⚠️ 原先此段还列着 `msgpack` / `setuptools`，二者已于 2026-10-12 修复并转绿
 #      （msgpack 加顶层下限 >=1.2.1；setuptools 的 CVE 是 pip 的 `_vendor/` 副本，
 #        靠删掉 `pip install --upgrade pip` 消除，不是 requirements.txt 能修的）
-#   ⚠️ **CI 侧尚未复核（别把上面当成"门禁已绿"）**：image-scan 的触发器只有
-#      `pull_request`（限 Dockerfile / docker/** / docker-compose*.yml）、
-#      `schedule`（周一）、`workflow_dispatch`，**没有 `push`** ⇒ 改 requirements.txt
-#      从不触发它。2026-10-12 那次运行（head `09769e415`）里 app / commercial /
-#      voice-pipeline 三个 job 红的**唯一原因**就是
-#      `langchain-core (METADATA) │ CVE-2026-34070`，而删除发生在那次运行**之后**
-#      ⇒ **该 CVE 是否已消失，CI 至今未验证**，门禁当前仍显示红。
+#   ⚠️ **CI 侧尚未复核（别把上面当成"门禁已绿"）**：2026-10-12 那次运行
+#      （head `09769e415`）里 app / commercial / voice-pipeline 三个 job 红的
+#      **唯一原因**就是 `langchain-core (METADATA) │ CVE-2026-34070`，而删除发生
+#      在那次运行**之后** ⇒ **该 CVE 是否已消失，CI 至今未验证**，门禁当前仍显示红。
+#      ✅ **该缺口已于同日补上**：image-scan 原先没有 `push` 触发器（只有
+#      `pull_request` 限 Dockerfile 类 / `schedule` / `workflow_dispatch`），
+#      而 4 条 CVE 全是改 `requirements.txt` 修的 ⇒ **改依赖从不触发门禁**。
+#      现已加 `push: paths: [requirements.txt, .trivyignore, 本文件]`，push 时用
+#      job 级 `if` 只跑**真正读 requirements.txt 的那 3 个镜像**。
+#      ⚠️ 加了触发器**不等于硬门** —— required checks 仍是 9 个 Server Tests
+#      Baseline context, 不含本 workflow ⇒ push 红了只是可见红叉。
 #      ✅ **本机已按门禁的真实参数实测预判 = 0 条**（2026-10-12，trivy 扫
 #      `microbubble-agent-app:latest`，参数对齐 `image-scan.yml` 的 gate 步骤：
 #      `--severity CRITICAL,HIGH --ignore-unfixed=true --ignorefile .trivyignore`）
 #      ⇒ app job 预期转绿。⚠️ 但**本地绿 ≠ CI 绿**（CI 是干净构建，见下方"本机镜像的
-#      已知局限"），仍以 CI 那次 schedule 的结论为准。
-#      📌 同一镜像用**空 ignorefile + `--ignore-unfixed=false`** 扫会得到 **626 条** /
-#      88 个包 —— 那 626 条**绝大多数没有 FixedVersion**，门禁那一步根本不显示。
+#      已知局限"），仍以 CI 那次运行的结论为准。
+#      📌 同一镜像用**空 ignorefile + `--ignore-unfixed=false`** 扫会得到 **626 条**：
+#      **623 条来自 debian 基础镜像**（`python:3.11.17-slim`，修不了只能升 tag），
+#      **python-pkg 只有 3 条，正是本文件登记的这 3 条 —— 零遗漏**。
+#      626 条**全部没有 FixedVersion**，所以门禁那一步一条都不显示。
 #      这正是本文件存在的意义：把「上游无修复版」登记在册，让它们可 review，
 #      而不是让 `--ignore-unfixed` 把它们变成没人知道的暗面。
 #

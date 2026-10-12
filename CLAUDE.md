@@ -267,15 +267,27 @@
   （类 20.220 第 4 种形态，`setuptools 79.0.1` 事故同型）。
 - ⚠️ **但 CI image-scan 门禁仍红，尚未验证过** —— 2026-10-12 那次 run `38164723646`
   （head `09769e415`，结论 **failure**）app / commercial / voice-pipeline 三个 job 红，
-  **唯一原因就是 `langchain-core (METADATA) │ CVE-2026-34070`**。而
-  `.github/workflows/image-scan.yml` 的触发器只有 `pull_request`（限 Dockerfile/docker/
-  **docker-compose*.yml**）、`schedule`（周一 05:00 UTC）、`workflow_dispatch`，**没有 `push`**
-  ⇒ **改 `requirements.txt` 从不触发它** ⇒ 删 langchain 之后它**一次都没再跑过**。
+  **唯一原因就是 `langchain-core (METADATA) │ CVE-2026-34070`**。删 langchain 之后它
+  **一次都没再跑过** —— 根因见下方新段。
   ⇒ **准确表述：4 条 CVE 的暴露面已在代码与生产镜像层面消除并经本机实测确认；
   但门禁是否转绿尚未由 CI 证明**，验证点是今晚（周一）北京时间 **18:00–20:00** 之间
   schedule 自动重跑（GitHub schedule 历史上稳定延迟 5–8 小时：10-05 实际 11:57 UTC /
   09-28 11:21 / 09-21 10:19 / 09-14 10:13 / 09-07 11:12）。
   **在门禁转绿前，不要写成"CVE 已全部修复、门禁已绿"**（类 20.220）。
+- ✅ **同日已补上根因：给 image-scan 加了 `push` 触发器** —— 上面那次 run 之所以是
+  「整轮治理做完了、CI 一次都没验证过」，是因为 `.github/workflows/image-scan.yml`
+  **原本只有 `pull_request`（限 Dockerfile / docker/** / docker-compose*.yml）/
+  `schedule`（周一 05:00 UTC）/ `workflow_dispatch`，没有 `push`**，而 L-8 这 4 条 CVE
+  **全是改 `requirements.txt` 修的**（升 uvicorn + mcp、删 langchain）
+  ⇒ 改依赖从不触发任何门禁，今晚那次 schedule 纯属偶然兜住。
+  现已加 `push: paths: [requirements.txt, .trivyignore, 本文件]`（带 `.trivyignore` 是因为
+  改豁免清单同样改变门禁结果，"改豁免可以不验证"正是 `.trivyignore` 第 5-14 行原则要防的），
+  并用 job 级 `if` 让 push 时**只跑真正读 `requirements.txt` 的 3 个镜像**
+  （app / commercial / voice-pipeline，约 12-15 分钟；全量 8 个约 30 分钟）。
+  ⚠️ **加了触发器 ≠ 变成硬门**：main 的 required checks 仍是 9 个 Server Tests Baseline
+  context，**不含 image-scan** ⇒ push 红了只是可见红叉，挡不住合并。要变硬门须先连续绿
+  若干次再把 job 名加进 required（类 20.222：开保护前先修红）。
+
 - ~~**langchain-core CVE-2026-34070 故意不登记进 `.trivyignore`**~~ —— 该判断（同日稍后被推翻）：
   当时认为它「有修复版但升不动」，按 `.trivyignore` 第 5-14 行「有修复版但未升不登记」的
   原则故意不豁免。**最终解法不是登记豁免，而是把依赖删掉**（见下方 C 段）——
@@ -403,7 +415,7 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
 
 > 每条对应一次真实事故，是**现在该怎么做**的规则，不是历史记录。
 > 事故上下文见 `docs/incident/2026-08-04--2026-09-18-status-snapshots.md`。
-> 覆盖类 20.155–224，共 **34 条**（编号不连续，20.165–20.170 / 20.173–20.179 /
+> 覆盖类 20.155–225，共 **35 条**（编号不连续，20.165–20.170 / 20.173–20.179 /
 > 20.189–20.211 无对应条目）。
 
 - **类 20.155**: bench 脚本 --help 子进程必须显式 PYTHONPATH=REPO_ROOT
@@ -738,6 +750,19 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   ⚠️ **同源第 2 形态(今日踩到)**: `.trivyignore` 的**复查条件达成 ≠ 门禁会转绿** ——
   那条豁免删掉后门禁仍红, 因为真因是另一批"有修复版但未升级"的依赖。
   删豁免与修依赖是两件事, 别用前者冒充后者(类 20.220)。
+- **类 20.225**: **判「某文件是否使用/依赖 X」必须匹配「用法」, 不能匹配「提及」——
+  注释里谈论 X 会让 `grep -q X` 假阳性** ——
+  2026-10-12 实战: 为给 image-scan 加 `push` 触发器, 需先确认"哪些镜像读
+  `requirements.txt`"。用 `grep -q "requirements.txt" Dockerfile.mcp` 得"读",
+  **实测是假阳性** —— 该文件第 18 行就写着
+  `⚠️ **本文件不读 requirements.txt**`, grep 命中的是**那句注释本身**。
+  若据此把 mcp 算进受影响范围, 加触发器的成本会多估近一倍 (7 个镜像 vs 实际 3 个)。
+  **同型坑本仓已有**: `.dft` 前缀(见下方 DFT 段——那是 CSS 类名, grep `dft` 大量假阳性)。
+  ⇒ **纪律**: ①判"用没用 X"要用**用法模式**, 例如
+  `grep -nE "COPY requirements\.txt|pip install .*-r requirements\.txt"`(匹配真正的消费点),
+  而不是 `grep -q "requirements\.txt"`(匹配任意提及);
+  ②**凡是要据此算成本/影响面的 grep, 先把命中的那几行读出来看**, 别只看退出码;
+  ③特别警惕"否定式注释"—— 写着"不读 X""不走 X""已删除 X"的行, 是假阳性的高发区。
 - **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务三层缺陷已于 2026-10-09 全修
   (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
   rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
