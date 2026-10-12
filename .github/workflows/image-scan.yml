@@ -41,7 +41,9 @@ permissions:
   security-events: write
 
 jobs:
+  # 全量 8 个 —— PR / schedule / workflow_dispatch
   scan:
+    if: github.event_name != 'push'
     name: trivy ${{ matrix.name }}
     runs-on: ubuntu-latest
     # PR 上仅 advisory: 单个矩阵项失败不拖垮整个 workflow
@@ -101,7 +103,141 @@ jobs:
         #   写成 `if: ... || matrix.name == 'app'` 会让整个 workflow 报
         #   "Invalid workflow file" 且 **一个 job 都不起**(实测 event=push 直接 failure,
         #   jobs API 返回空数组)。actionlint 能离线抓到这个错, 改完先跑它再推。
-        exclude: ${{ github.event_name == 'push' && fromJSON('[{"name":"db"},{"name":"funasr"},{"name":"mcp"},{"name":"whisper"},{"name":"web"}]') || fromJSON('[]') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 先做 config/IaC 扫描 (不需要 build, 永远能跑)
+      - name: Trivy config scan (${{ matrix.dockerfile }})
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: ${{ matrix.dockerfile }}
+          severity: 'CRITICAL,HIGH'
+          format: 'table'
+          exit-code: '0'
+          # L-8: 引用已接受漏洞基线 (见 .trivyignore 全文注释)。
+          # 该入参由 trivy-action entrypoint.sh 处理: 把各文件 cat 合并成
+          # ./trivyignores 并 export TRIVY_IGNOREFILE。**必须显式传** ——
+          # 不传则本文件完全不被读取 (2026-10-11 实测确认原 workflow 零引用)。
+          trivyignores: '.trivyignore'
+
+      # 构建镜像。原为无条件 continue-on-error: true —— L-9 (收尾计划 §4.11):
+      # schedule/dispatch 硬路径上构建失败会被容错, 后续三步扫描又全部以
+      # steps.build.outcome == 'success' 为条件 → 扫描全 skip、job 无失败步 →
+      # 结论 success, "扫了空气还报平安", 把 schedule 的 fail 语义整个架空。
+      # 改为与 job 级 (:27) 同型惯用法: PR 维持 advisory 设计不变,
+      # schedule/dispatch 构建失败 = 步骤失败 = job 红 (三个 skip 照 skip, job 已红无需兜底)。
+      - name: Build image
+        id: build
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
+        run: |
+          docker build -f "${{ matrix.dockerfile }}" \
+            -t "microbubble-scan-${{ matrix.name }}:ci" \
+            "${{ matrix.context }}"
+
+      # 镜像漏洞扫描 → sarif 上传
+      - name: Trivy image scan (sarif)
+        if: steps.build.outcome == 'success'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.name }}.sarif'
+          exit-code: '0'
+          trivyignores: '.trivyignore'
+
+      - name: Upload sarif to code scanning
+        if: steps.build.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ matrix.name }}.sarif'
+          category: 'trivy-${{ matrix.name }}'
+
+      # table 输出写到 actions log + 严重度门禁
+      # PR: exit-code 0 (advisory); schedule/manual: exit-code 1 (HIGH/CRITICAL 即 fail)
+      - name: Trivy image scan (table + gate)
+        if: steps.build.outcome == 'success'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
+          severity: 'CRITICAL,HIGH'
+          format: 'table'
+          ignore-unfixed: true
+          exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          trivyignores: '.trivyignore'
+
+  # push(仅 requirements.txt / .trivyignore / 本文件变更)时只跑 3 个 ——
+  # 那 3 个 Dockerfile **真的读 requirements.txt**, 即改动实际影响的镜像:
+  #   ✅ app            (Dockerfile,                    COPY + pip install -r)
+  #   ✅ commercial     (docker/Dockerfile.commercial,  同上)
+  #   ✅ voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
+  #   ❌ db / web                      —— 无 Python 依赖
+  #   ❌ funasr / whisper              —— 独立内联 pip install, 不读本文件
+  #   ❌ mcp (Dockerfile.mcp)          —— 同上
+  #
+  # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 判断 mcp 读不读** ——
+  #   实测是**假阳性**: Dockerfile.mcp 的**注释**里就写着
+  #   「⚠️ 本文件不读 requirements.txt」(第 18 行), grep 命中的是那句注释。
+  #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
+  #   即**匹配用法而非提及**(类 20.225)。
+  #
+  # 成本: 全量 8 个约 30 分钟, 只跑 3 个约 12-15 分钟。
+  # 失败语义: push 不在 continue-on-error 范围, 也不在 gate 的 advisory 分支
+  #   (该表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
+    # ⚠️ 2026-10-12 踩坑留档: **job 级 `if` 在 matrix 展开之前求值, 拿不到
+    # `matrix` 上下文**; 而 `strategy.matrix.exclude` 是**静态配置, 不接受
+    # `${{ }}` 表达式**(实测两种写法都让 workflow 报 Invalid workflow file、
+    # **一个 job 都不起**; actionlint 两种都查不出来 —— 它只做静态语法检查,
+    # 不做运行时会话验证)。故只能拆成两个 job, 用 `if` 在 job 级分流。
+  scan-deps:
+    if: github.event_name == 'push'
+    name: trivy deps ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: app
+            dockerfile: Dockerfile
+            context: .
+          - name: voice-pipeline
+            dockerfile: Dockerfile.voice-pipeline
+            context: .
+          - name: commercial
+            dockerfile: docker/Dockerfile.commercial
+            context: .
+        # 2026-10-12: push(仅 requirements.txt / .trivyignore / 本文件变更)时,
+        # 把**不读 requirements.txt 的 5 个镜像排除掉**, 即 push 时只真跑 3 个。
+        # 依据是"哪些 Dockerfile 真的读 requirements.txt", 即改动实际影响的那些:
+        #   ✅ 保留  app            (Dockerfile,                     COPY + pip install -r)
+        #   ✅ 保留  commercial     (docker/Dockerfile.commercial,   同上)
+        #   ✅ 保留  voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
+        #   ❌ 排除  db / web                      —— 无 Python 依赖
+        #   ❌ 排除  funasr / whisper              —— 独立内联 pip install, 不读本文件
+        #   ❌ 排除  mcp (Dockerfile.mcp)          —— 同上
+        #
+        # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 来判断 mcp 读不读**
+        #   —— 实测这是**假阳性**: Dockerfile.mcp 的**注释**里就写着
+        #   「⚠️ 本文件不读 requirements.txt」(第 18 行), grep 命中的是那句注释文字。
+        #   今天差点据此把 mcp 也算进受影响范围, 成本会多估近一倍。
+        #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
+        #   即**匹配用法而非提及**。同型坑见 CLAUDE.md 的 `.dft` 前缀假阳性。
+        #
+        # 成本: 全量 8 个约 30 分钟, 只跑 3 个约 12-15 分钟。
+        # 失败语义: push 不在 `continue-on-error` 范围(见上), 也不在 exit-code 的
+        #   advisory 分支(该表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
+        #
+        # ⚠️ **这里为什么用 `exclude` 而不是 job 级 `if`**(2026-10-12 实测踩到):
+        #   job 级的 `if` 在 **matrix 展开之前**求值, 上下文只有
+        #   `github` / `inputs` / `needs` / `vars` —— **拿不到 `matrix`**。
+        #   写成 `if: ... || matrix.name == 'app'` 会让整个 workflow 报
+        #   "Invalid workflow file" 且 **一个 job 都不起**(实测 event=push 直接 failure,
+        #   jobs API 返回空数组)。actionlint 能离线抓到这个错, 改完先跑它再推。
 
     steps:
       - name: Checkout
