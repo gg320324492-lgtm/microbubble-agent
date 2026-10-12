@@ -11,20 +11,35 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
 # Install system dependencies (with retry for transient 502 Bad Gateway)
 # L-8 (2026-10-07): apt-get upgrade = 纯 OS 层安全升级 (debian-security 修复), 不动 pip pin;
 # 主/回退两个分支都带上, 保证任一分支走到 OS 库都是最新。
+#
+# 2026-10-13 (对标 app 镜像 multi-stage 改造): 删掉 7 个 libav*-dev + pkg-config。
+#
+# 【为什么删 —— 实测依据, 非推断】
+#  ① 本镜像**不编译任何东西**: `which gcc` = no gcc, 且 pip 全是预编译 wheel
+#     (`--prefer-binary`), 没有走源码构建的分支 ⇒ `-dev` 的头文件/静态库/链接期
+#     `libav*.so` 无版本化符号链接无人使用。app 镜像 2026-10-13 改造实测 CVE 626→293 同因。
+#  ② **运行时库一个都不会少**: `dpkg -s ffmpeg` 实测
+#     Depends: libavcodec59 libavdevice59 libavfilter8 libavformat59 libavutil57
+#              libpostproc56 libswresample4 libswscale6
+#     —— 与被删的 8 个 `-dev`(7 个显式 + libavfilter-dev 传递拉入的 libpostproc-dev)
+#     **一一对应的运行时 counter**。删 `-dev` 只少了头文件和链接期符号链接,
+#     `libavcodec.so.59.37.100` 这类真实运行时 .so 全部由 ffmpeg 提供。
+#  ③ 实测收益: 这 8 个 `-dev` 各自带 16 条 CRITICAL+HIGH, 合计 **128 条**
+#     (funasr 镜像 466 → 338)。
+#  ⚠️ **注意这不是全部**: 8 个运行时库 libavcodec59/.../libswscale6 各同样 16 条
+#     (合计 128) + ffmpeg 自身 16 条, 整个 ffmpeg 家族 = 272 条。删 `-dev` 只拿其中
+#     一半; 要进一步降 CVE 必须处理 ffmpeg 本体(其 Depends 的运行时库), 那是另一次立项。
+#
+# 【为什么 ffmpeg 必须保留 —— 实测依据】
+#  ① `app/sensevoice_server.py:141` 的 CMD 入口 `bytes_to_array` 用
+#     `subprocess.run(["ffmpeg","-y","-i",...,"-ar","16000","-ac","1","-f","wav",...])`
+#     做任意格式 → 16kHz mono 解码转码, **是生产在跑的主路径**, 删 ffmpeg = ASR 全线崩。
+#  ② 本镜像 `pip list` **没有 `av`/PyAV** (实测确认), 故没有 PyAV 那条备胎解码路径;
+#     funasr 的音频入参 100% 依赖这个 CLI。删它属于功能改动, 超出本次范围。
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing \
     ffmpeg \
-    libavformat-dev \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavutil-dev \
-    libavfilter-dev \
-    libswscale-dev \
-    libswresample-dev \
-    pkg-config \
     || (apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing --no-install-recommends \
-        ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
-        libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
-        pkg-config) \
+        ffmpeg) \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -10,20 +10,42 @@ RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
 # Install system dependencies (with retry for transient 502 Bad Gateway)
 # L-8 (2026-10-07): apt-get upgrade = 纯 OS 层安全升级 (debian-security 修复), 不动 pip pin;
 # 主/回退两个分支都带上, 保证任一分支走到 OS 库都是最新。
+#
+# 2026-10-13 (对标 app 镜像 multi-stage 改造): 删掉 7 个 libav*-dev + pkg-config。
+#
+# 【为什么删 —— 实测依据, 非推断】
+#  ① 本镜像**不编译任何东西**: `which gcc` = no gcc, pip 走的全是预编译 wheel
+#     (`--prefer-binary`), 没有源码构建分支 ⇒ `-dev` 的头文件/静态库/链接期
+#     `libav*.so` 无版本化符号链接无人使用。app 镜像 2026-10-13 改造实测 CVE 626→293 同因。
+#  ② **运行时库一个都不会少**: `dpkg -s ffmpeg` 实测
+#     Depends: libavcodec59 libavdevice59 libavfilter8 libavformat59 libavutil57
+#              libpostproc56 libswresample4 libswscale6
+#     —— 与被删的 8 个 `-dev`(7 个显式 + libavfilter-dev 传递拉入的 libpostproc-dev)
+#     **一一对应的运行时 counter**。真实运行时 .so (`libavcodec.so.59.37.100` 等)
+#     全部由 ffmpeg 提供, `-dev` 只多出头文件 + 无版本号链接符号链接。
+#  ③ 实测收益: 这 8 个 `-dev` 各自带 16 条 CRITICAL+HIGH, 合计 **128 条**
+#     (whisper 镜像 394 → 266)。
+#  ⚠️ **注意这不是全部**: 8 个运行时库 libavcodec59/.../libswscale6 各同样 16 条
+#     (合计 128) + ffmpeg 自身 16 条, 整个 ffmpeg 家族 = 272 条。删 `-dev` 只拿其中
+#     一半; 要进一步降 CVE 必须处理 ffmpeg 本体(其 Depends 的运行时库), 那是另一次立项。
+#
+# 【为什么 ffmpeg 必须保留 —— 实测依据】
+#  ① `app/whisper_server.py:210` 的 CMD 入口 `bytes_to_array` 用
+#     `subprocess.run(["ffmpeg","-i",...,"-ar","16000","-ac","1","-f","wav",...])`
+#     做音频解码, **是生产在跑的主路径**, 删 ffmpeg = ASR 全线崩。删它属功能改动。
+#  ② **本镜像确实装了 PyAV (`av 18.1.0`, faster-whisper 传递依赖) 且 faster_whisper
+#     真的用它解码** —— 这正是本次唯一有"真依赖"风险的地方, 已实测排除:
+#     `ldd site-packages/av/_core.abi3.so` 显示它的 libav*/libsw* 全部解析到
+#     `site-packages/av/../av.libs/libavcodec-5e6b81c2.so.62.28.102` 等
+#     —— **PyAV 自带一份 FFmpeg 7.x(so.62), 与系统 FFmpeg 5.x(so.59) 完全独立,
+#     零条系统 libav 链接**。故删系统 `-dev` 不影响 PyAV。
+#     实测 `faster_whisper.audio.decode_audio()` 在本镜像内正常解码 1s 16kHz wav。
+#     ⚠️ 推论: `av` 是**从 PyPI wheel 装的**, 系统 apt 的 `-dev` 从来就不是它的供给源
+#     (若删掉 `av` 包, 系统 `-dev` 也装不出能用的 PyAV)。
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing \
     ffmpeg \
-    libavformat-dev \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavutil-dev \
-    libavfilter-dev \
-    libswscale-dev \
-    libswresample-dev \
-    pkg-config \
     || (apt-get update && apt-get upgrade -y && apt-get install -y --fix-missing --no-install-recommends \
-        ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
-        libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
-        pkg-config) \
+        ffmpeg) \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
