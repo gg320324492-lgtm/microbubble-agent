@@ -265,34 +265,46 @@
   `docker exec microbubble-agent-app-1 python -c "import importlib.metadata as m; print(m.version('uvicorn'))"`
   —— 多阶段构建下 builder 与 runtime 是两个文件系统，**Dockerfile 里写着装了 ≠ 成品镜像里装了**
   （类 20.220 第 4 种形态，`setuptools 79.0.1` 事故同型）。
-- ⚠️ **但 CI image-scan 门禁仍红，尚未验证过** —— 2026-10-12 那次 run `38164723646`
-  （head `09769e415`，结论 **failure**）app / commercial / voice-pipeline 三个 job 红，
-  **唯一原因就是 `langchain-core (METADATA) │ CVE-2026-34070`**。删 langchain 之后它
-  **一次都没再跑过** —— 根因见下方新段。
-  ⇒ **准确表述：4 条 CVE 的暴露面已在代码与生产镜像层面消除并经本机实测确认；
-  但门禁是否转绿尚未由 CI 证明**，验证点是今晚（周一）北京时间 **18:00–20:00** 之间
-  schedule 自动重跑（GitHub schedule 历史上稳定延迟 5–8 小时：10-05 实际 11:57 UTC /
-  09-28 11:21 / 09-21 10:19 / 09-14 10:13 / 09-07 11:12）。
-  **在门禁转绿前，不要写成"CVE 已全部修复、门禁已绿"**（类 20.220）。
-- ✅ **同日已补上根因：给 image-scan 加了 `push` 触发器** —— 上面那次 run 之所以是
-  「整轮治理做完了、CI 一次都没验证过」，是因为 `.github/workflows/image-scan.yml`
-  **原本只有 `pull_request`（限 Dockerfile / docker/** / docker-compose*.yml）/
-  `schedule`（周一 05:00 UTC）/ `workflow_dispatch`，没有 `push`**，而 L-8 这 4 条 CVE
+- ✅ **CI 已验证转绿**（2026-10-12，run `38226873852`，head `faf57b501`，
+  event=push，结论 **success**）—— 这是 4 条 CVE 首次拿到 **CI 级证明**：
+  - `trivy deps app` / `commercial` / `voice-pipeline` **三个 job 全绿**，
+    全量 job 被 `if` 正确 skip ⇒ 新的 push 触发器 + 两 job 分流首次实跑成功；
+  - 三个 job 都**真跑了扫描**（日志含 `Detected OS family="debian" version="12.15"`
+    + `[python-pkg] Detecting vulnerabilities...` + Report Summary），
+    **不是"扫了空气报平安"** —— 类 20.220 的检查项，逐项验过；
+  - **决定性判据是退出码不是日志**：push 事件下 gate 的 `exit-code` 表达式返回 `'1'`
+    （硬失败语义），三个 job 仍 success ⇒ **门禁参数下无任何 HIGH/CRITICAL 有修复版命中**。
+  ⇒ **4 条 CVE（mcp 三条 + CVE-2026-34070）已全部消除并经 CI 证明。**
+  历史留档：上一版运行 `38164723646`（head `09769e415`，failure）三个 job 红，
+  **唯一原因**就是 `langchain-core (METADATA) │ CVE-2026-34070`，而 langchain 的
+  删除发生在那次运行**之后** ⇒ 那次是真的红，**不是误报，也不是"未验证"能搪塞过去的**。
+- ✅ **同日补上根因：给 image-scan 加了 `push` 触发器** —— 之所以会出现"整轮治理做完了、
+  CI 一次都没验证过"，是因为 `.github/workflows/image-scan.yml` **原本只有
+  `pull_request`（限 Dockerfile / docker/** / docker-compose*.yml）/ `schedule`
+  （周一 05:00 UTC）/ `workflow_dispatch`，没有 `push`**，而 L-8 这 4 条 CVE
   **全是改 `requirements.txt` 修的**（升 uvicorn + mcp、删 langchain）
-  ⇒ 改依赖从不触发任何门禁，今晚那次 schedule 纯属偶然兜住。
+  ⇒ **改依赖从不触发任何门禁**，当晚的 schedule 纯属偶然兜住。
   现已加 `push: paths: [requirements.txt, .trivyignore, 本文件]`（带 `.trivyignore` 是因为
-  改豁免清单同样改变门禁结果，"改豁免可以不验证"正是 `.trivyignore` 第 5-14 行原则要防的），
-  并用 `strategy.matrix.exclude`（表达式）让 push 时**只跑真正读 `requirements.txt` 的
-  3 个镜像**（app / commercial / voice-pipeline，约 12-15 分钟；全量 8 个约 30 分钟）。
-  ⚠️ **第一次实现踩了坑：job 级 `if` 拿不到 `matrix` 上下文** —— `if` 在 matrix **展开之前**
-  求值，可用上下文只有 `github`/`inputs`/`needs`/`vars`。写成
-  `if: ... || matrix.name == 'app'` 会让整个 workflow 报 `Invalid workflow file` 且
-  **一个 job 都不起**（实测 `event=push` 直接 failure、jobs API 返回空数组）。
-  **纪律：改任何 workflow 前先跑 actionlint 离线校验，别推了才发现文件无效** ——
+  改豁免清单同样改变门禁结果，"改豁免可以不验证"正是 `.trivyignore` 第 5-14 行原则要防的）。
+- ⚠️ **push 时只跑真正读 `requirements.txt` 的 3 个镜像（app / commercial /
+  voice-pipeline，约 12-15 分钟；全量 8 个约 30 分钟），实现方式是拆成两个 job**
+  （`scan` / `scan-deps`，各用 job 级 `if` 分流）。**两条走错路的记录，别重蹈**：
+  - ① **job 级 `if` 拿不到 `matrix` 上下文** —— `if` 在 matrix **展开之前**求值，
+    可用上下文只有 `github` / `inputs` / `needs` / `vars`。写成
+    `if: ... || matrix.name == 'app'` 会让整个 workflow 报 `Invalid workflow file`
+    且**一个 job 都不起**（实测 `event=push` 直接 failure、jobs API 返回空数组）。
+  - ② **`strategy.matrix` 是静态配置，`include` / `exclude` 都不接受 `${{ }}` 表达式**
+    —— 换成 `exclude` 表达式后**仍然**同样失败。
+  ⇒ **两条纪律**：①**「本地 actionlint 绿」不等于「CI 能跑」** —— actionlint 只做静态
+  语法检查、不做运行时会话验证，这两种写法它**都报 0 问题**。它仍值得跑（能查基础语法），
   ```bash
   MSYS_NO_PATHCONV=1 docker run --rm -v "E:/microbubble-agent:/repo" -w /repo rhysd/actionlint:latest
   ```
-  ⚠️ Git Bash 下 `$(pwd)` 会被改写成 `C:/Program Files/Git/repo`，必须用 Windows 绝对路径 + `MSYS_NO_PATHCONV=1`（类 20.214 同型）。
+  但**不能**当作"CI 会跑"的证据。⚠️ Git Bash 下 `$(pwd)` 会被改写成
+  `C:/Program Files/Git/repo`，必须用 Windows 绝对路径 + `MSYS_NO_PATHCONV=1`（类 20.214 同型）。
+  ②**GitHub 对 workflow 文件错误只给一句通用提示**（`This run likely failed because of
+  a workflow file issue`）**不给行号** —— 第一次的根因是靠 actionlint 的离线报错直接指出来的，
+  否则那一次只能瞎猜。
   ⚠️ **加了触发器 ≠ 变成硬门**：main 的 required checks 仍是 9 个 Server Tests Baseline
   context，**不含 image-scan** ⇒ push 红了只是可见红叉，挡不住合并。要变硬门须先连续绿
   若干次再把 job 名加进 required（类 20.222：开保护前先修红）。

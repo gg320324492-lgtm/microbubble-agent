@@ -63,27 +63,42 @@
 #   ⚠️ 原先此段还列着 `msgpack` / `setuptools`，二者已于 2026-10-12 修复并转绿
 #      （msgpack 加顶层下限 >=1.2.1；setuptools 的 CVE 是 pip 的 `_vendor/` 副本，
 #        靠删掉 `pip install --upgrade pip` 消除，不是 requirements.txt 能修的）
-#   ⚠️ **CI 侧尚未复核（别把上面当成"门禁已绿"）**：2026-10-12 那次运行
-#      （head `09769e415`）里 app / commercial / voice-pipeline 三个 job 红的
-#      **唯一原因**就是 `langchain-core (METADATA) │ CVE-2026-34070`，而删除发生
-#      在那次运行**之后** ⇒ **该 CVE 是否已消失，CI 至今未验证**，门禁当前仍显示红。
-#      ✅ **该缺口已于同日补上**：image-scan 原先没有 `push` 触发器（只有
-#      `pull_request` 限 Dockerfile 类 / `schedule` / `workflow_dispatch`），
-#      而 4 条 CVE 全是改 `requirements.txt` 修的 ⇒ **改依赖从不触发门禁**。
-#      现已加 `push: paths: [requirements.txt, .trivyignore, 本文件]`，push 时用
-#      `strategy.matrix.exclude`(表达式) 排除**不读 requirements.txt 的那 5 个镜像**,
-#      即只真跑 app / commercial / voice-pipeline 三个。
-#      ⚠️ 别写成 job 级 `if: ... || matrix.name == 'app'` —— job 级 if 在 matrix
-#      **展开之前**求值, 拿不到 matrix 上下文, 会让整个 workflow 报 Invalid workflow
-#      file 且**一个 job 都不起**(2026-10-12 实测)。改完 workflow 先跑 actionlint 离线校验。
+#   ✅ **CI 已于同日验证转绿**（run `38226873852`，head `faf57b501`，event=push，
+#      结论 **success**）：`trivy deps app` / `commercial` / `voice-pipeline`
+#      三个 job 全绿，全量 job 被 `if` 正确 skip。三个 job 都**真跑了扫描**
+#      （日志含 `Detected OS family="debian" version="12.15"` +
+#      `[python-pkg] Detecting vulnerabilities...` + Report Summary），
+#      不是"扫了空气报平安"。
+#      **决定性判据是退出码而非日志**：push 事件下 gate 的 `exit-code` 表达式
+#      返回 `'1'`（硬失败语义），三个 job 仍 success ⇒ **门禁参数下没有任何
+#      HIGH/CRITICAL 有修复版命中**。至此 4 条 CVE（mcp 三条 + CVE-2026-34070）
+#      全部拿到 **CI 级证明**，不再只有本机实测。
+#
+#   ⚠️ **这段"曾经未验证"的历史本身是教训，值得留档**：上一版运行
+#      （head `09769e415`）里三个 job 红，唯一原因就是
+#      `langchain-core (METADATA) │ CVE-2026-34070`，而 langchain 的删除发生在
+#      那次运行**之后** —— 因为 **image-scan 原先没有 `push` 触发器**
+#      （只有 `pull_request` 限 Dockerfile 类 / `schedule` / `workflow_dispatch`），
+#      而 4 条 CVE **全是改 `requirements.txt` 修的** ⇒ **改依赖从不触发门禁**。
+#      现已加 `push: paths: [requirements.txt, .trivyignore, 本文件]`。
+#
+#   ⚠️ **push 时只跑那 3 个镜像，是拆成两个 job 实现的**（`scan` / `scan-deps`
+#      各用 job 级 `if` 分流）。**两条走错路的记录，别重蹈**：
+#      ① **job 级 `if` 拿不到 `matrix` 上下文**（它在 matrix **展开之前**求值，
+#         可用上下文只有 `github` / `inputs` / `needs` / `vars`）；
+#      ② **`strategy.matrix` 是静态配置，`include`/`exclude` 都不接受 `${{ }}` 表达式**。
+#      两种写法都让 workflow 报 `Invalid workflow file` 且**一个 job 都不起**，
+#      而 **actionlint 两种都查不出来**（它只做静态语法检查，不做运行时会话验证）
+#      ⇒ **「本地 actionlint 绿」不等于「CI 能跑」**。job 级 `if` 只用
+#      `github.*` 判断才是稳妥写法。
 #      ⚠️ 加了触发器**不等于硬门** —— required checks 仍是 9 个 Server Tests
 #      Baseline context, 不含本 workflow ⇒ push 红了只是可见红叉。
-#      ✅ **本机已按门禁的真实参数实测预判 = 0 条**（2026-10-12，trivy 扫
-#      `microbubble-agent-app:latest`，参数对齐 `image-scan.yml` 的 gate 步骤：
+#
+#   📌 本机侧曾按门禁真实参数实测预判 = 0 条（trivy 扫
+#      `microbubble-agent-app:latest`，参数对齐 gate 步骤：
 #      `--severity CRITICAL,HIGH --ignore-unfixed=true --ignorefile .trivyignore`）
-#      ⇒ app job 预期转绿。⚠️ 但**本地绿 ≠ CI 绿**（CI 是干净构建，见下方"本机镜像的
-#      已知局限"），仍以 CI 那次运行的结论为准。
-#      📌 同一镜像用**空 ignorefile + `--ignore-unfixed=false`** 扫会得到 **626 条**：
+#      —— 与上面的 CI 结论一致。另一组对照：同一镜像用**空 ignorefile +
+#      `--ignore-unfixed=false`** 扫会得到 **626 条**：
 #      **623 条来自 debian 基础镜像**（`python:3.11.17-slim`，修不了只能升 tag），
 #      **python-pkg 只有 3 条，正是本文件登记的这 3 条 —— 零遗漏**。
 #      626 条**全部没有 FixedVersion**，所以门禁那一步一条都不显示。
