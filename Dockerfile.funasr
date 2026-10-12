@@ -63,9 +63,19 @@ RUN pip3 install --no-cache-dir --upgrade setuptools && \
     torch==2.7.0 \
     torchaudio==2.7.0 \
     && \
+    # ⚠️⚠️ **下面两个版本串必须加引号，否则整行静默失效**（2026-10-13 实测确认）：
+    # `RUN` 走 `/bin/sh`，**shell 会把 `>` 当重定向符**。不加引号时
+    #     funasr>=1.3.0      →   funasr > =1.3.0    (重定向到文件 `=1.3.0`)
+    #     modelscope>=1.14.0  →   modelscope > =1.14.0
+    # 即 pip 收到的是**裸包名**（版本约束被整个丢掉，装最新版），而 shell 把 pip 的
+    # stdout 重定向进了 `/app/=1.14.0`（实测该文件 24882 字节，装的就是这段输出）。
+    # ⇒ **生产镜像里长期躺着两个垃圾文件** `/app/=1.3.0`(0 字节) 与 `/app/=1.14.0`。
+    # 本次加引号后**行为不变**（`>=` 仍解析到最新版，实测 funasr 1.4.16 / modelscope 1.40.2），
+    # 但约束终于真正生效 —— 将来想加**上界**（如 `<2`）时它才会起作用，否则上界会被 shell 吃掉。
+    # 同型坑已在 `Dockerfile.mcp` 于 2026-10-11 修过一次（其文件内有完整留档）。
     pip3 install --no-cache-dir --prefer-binary \
-    funasr>=1.3.0 \
-    modelscope>=1.14.0 \
+    "funasr>=1.3.0" \
+    "modelscope>=1.14.0" \
     nvidia-cublas-cu12 \
     nvidia-cuda-nvrtc-cu12 \
     fastapi uvicorn python-multipart
