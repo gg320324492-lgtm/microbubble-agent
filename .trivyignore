@@ -91,8 +91,14 @@
 #      而 **actionlint 两种都查不出来**（它只做静态语法检查，不做运行时会话验证）
 #      ⇒ **「本地 actionlint 绿」不等于「CI 能跑」**。job 级 `if` 只用
 #      `github.*` 判断才是稳妥写法。
-#      ⚠️ 加了触发器**不等于硬门** —— required checks 仍是 9 个 Server Tests
-#      Baseline context, 不含本 workflow ⇒ push 红了只是可见红叉。
+#      ⚠️ 加了触发器**不等于硬门**，而且**也不能直接加** —— required checks 仍是
+#      9 个 Server Tests Baseline context, 不含本 workflow ⇒ push 红了只是可见红叉。
+#      ⛔ 若把它加进 required: `push` 触发器带 `paths` 过滤, 推只改 README/CLAUDE.md
+#      的 commit 时本 workflow **根本不触发** ⇒ 那个 required check **永不出现**
+#      ⇒ 推送被永久卡在 "Expected — Waiting for status to be reported"。
+#      **实测依据**: `a27ea3501`(只改 CLAUDE.md) 未触发 / `5a313af6`(改了
+#      .trivyignore) 触发 ⇒ paths 过滤确实生效。**2026-10-12 主指挥已拍板"不加"。**
+#      完整论证与将来变硬门的三个前置选项见 CLAUDE.md 对应段。
 #
 #   📌 本机侧曾按门禁真实参数实测预判 = 0 条（trivy 扫
 #      `microbubble-agent-app:latest`，参数对齐 gate 步骤：

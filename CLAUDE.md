@@ -305,9 +305,26 @@
   ②**GitHub 对 workflow 文件错误只给一句通用提示**（`This run likely failed because of
   a workflow file issue`）**不给行号** —— 第一次的根因是靠 actionlint 的离线报错直接指出来的，
   否则那一次只能瞎猜。
-  ⚠️ **加了触发器 ≠ 变成硬门**：main 的 required checks 仍是 9 个 Server Tests Baseline
-  context，**不含 image-scan** ⇒ push 红了只是可见红叉，挡不住合并。要变硬门须先连续绿
-  若干次再把 job 名加进 required（类 20.222：开保护前先修红）。
+  ⚠️ **不加 required checks —— 2026-10-12 主指挥已拍板"不加"，且这不是"再等等就能加"**：
+  - main 的 required checks 仍是 9 个 Server Tests Baseline context，**不含 image-scan**
+    ⇒ 现在 push 红了只是可见红叉，挡不住合并。
+  - ⚠️ **但也不能直接加** —— `push` 触发器带 `paths` 过滤（requirements.txt /
+    .trivyignore / 本文件），**推一个只改 README/CLAUDE.md 的 commit 时 image-scan
+    根本不触发** ⇒ 那个 required check **永远不会出现** ⇒ 推送被永久卡在
+    "Expected — Waiting for status to be reported"。
+    **实测依据**：`a27ea3501`（只改 CLAUDE.md）image-scan 未触发，
+    `5a313af6`（改了 .trivyignore）触发 —— paths 过滤确实生效。
+    ⇒ **加了 required 等于把"改文档"变成不能推送的操作**（类 20.222 警告的
+    "配置看着在挡、实际挡住所有事"的镜像）。
+  - 将来若要变硬门，**必须同时**解决触发覆盖问题（三选一）：
+    ① 去掉 `paths` 过滤（代价：每次 push 都跑 3 个镜像构建 + 扫描，各 12-15 分钟，
+    按本仓 direct-push 频率约 2250 分钟/月，**可能超公开仓库 2000 分钟/月免费额度**，
+    加之前须先查 Settings → Billing 实际用量）；② 改用 GitHub Rulesets 的
+    required-workflow 语义（**本项目未验证其 path-filter 跳过时是否放行**，别当成已知）；
+    ③ 拆出一个只做轻量检查（如 `pip list` 落 lock 文件 diff）的快 job 进 required，
+    真正的镜像扫描仍作可见红叉。**在 ① 未落实前不要动 required。**
+  - 当前 image-scan 的真实价值已经拿到了（2026-10-12 连续 3 轮 push run success）：
+    **"改依赖会触发扫描"** 与 **"门禁真会红"** 这两点正是此前缺失的。
 
 - ~~**langchain-core CVE-2026-34070 故意不登记进 `.trivyignore`**~~ —— 该判断（同日稍后被推翻）：
   当时认为它「有修复版但升不动」，按 `.trivyignore` 第 5-14 行「有修复版但未升不登记」的
