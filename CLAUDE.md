@@ -305,6 +305,17 @@
   ②**GitHub 对 workflow 文件错误只给一句通用提示**（`This run likely failed because of
   a workflow file issue`）**不给行号** —— 第一次的根因是靠 actionlint 的离线报错直接指出来的，
   否则那一次只能瞎猜。
+- ⚠️ **改了 Dockerfile / docker-compose 必须手动 `gh workflow run` 一次** ——
+  `push.paths` **故意只含 `requirements.txt` / `.trivyignore` / 本 workflow 自身**
+  （2026-10-13 实测：推 `770b6dedf`（改 Dockerfile）**没有**触发 image-scan）。
+  **不要为了"覆盖全"把 `Dockerfile*` / `docker/**` 加进 push.paths** —— push 触发时跑的是
+  `scan-deps`，只含 app / commercial / voice-pipeline **三个**镜像；而改
+  `Dockerfile.funasr` 真正要扫的是 funasr，**它不在这三个里** ⇒ workflow 会跑、会绿、
+  UI 显示"扫描通过"，**而真正受影响的镜像根本没被扫**（类 20.220：状态字段在说谎）。
+  正确做法 = 手动 dispatch 全量 8 个：
+  ```bash
+  gh workflow run ".github/workflows/image-scan.yml" --ref main
+  ```
   ⚠️ **不加 required checks —— 2026-10-12 主指挥已拍板"不加"，且这不是"再等等就能加"**：
   - main 的 required checks 仍是 9 个 Server Tests Baseline context，**不含 image-scan**
     ⇒ 现在 push 红了只是可见红叉，挡不住合并。

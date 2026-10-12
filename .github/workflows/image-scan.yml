@@ -27,6 +27,15 @@ on:
   #   ⚠️ **这还不是硬门**: main 的 required checks 是 9 个 Server Tests Baseline
   #   context, **不含本 workflow** ⇒ push 时红了也只是可见红叉, 挡不住合并。
   #   要变硬门需先连续绿若干次再把 job 名加进 required (类 20.222: 开保护前先修红)。
+  # ⚠️ **这里只覆盖"依赖文件"，故意不含 `Dockerfile*` / `docker/**` /
+  #   `docker-compose*.yml` / `web/Dockerfile`**（那些在 `pull_request.paths` 里）。
+  #   原因是**补上去比不补更危险**：push 触发时跑的是 `scan-deps`，它**只含
+  #   app / commercial / voice-pipeline 三个镜像**。而改 `Dockerfile.funasr` 真正
+  #   需要被扫的是 funasr —— **它不在这三个里** ⇒ workflow 会跑、会绿、UI 上
+  #   显示"扫描通过"，**而真正受影响的那个镜像根本没被扫**。
+  #   这是类 20.220 的形态：状态字段在说谎。
+  #   ⇒ **改 Dockerfile / docker-compose 之后必须手动 `gh workflow run` 一次**
+  #   （全量 8 个镜像）。这条纪律已写进 CLAUDE.md。
   push:
     paths:
       - 'requirements.txt'
