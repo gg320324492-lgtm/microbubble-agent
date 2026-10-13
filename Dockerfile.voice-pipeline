@@ -105,4 +105,23 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
 
 # 不复制 app 代码 — 通过 volume 挂载（与主容器共享）
-CMD ["python", "-c", "print('voice-pipeline 已通过主 app 容器内的 /app 挂载运行')"]
+#
+# ⚠️ **CMD 必须写 `python3.11`，`python` 和 `python3` 在本镜像里都不存在**
+#   (2026-10-13 实测, 类 20.220: 不能读 Dockerfile 就断定装了什么)。
+#   runtime 段只 apt 装了 `python3.11 ffmpeg`, 在 ubuntu 22.04 上实测:
+#       which python     -> 不存在
+#       which python3    -> **也不存在**   ← 不是"改成 python3 就行"
+#       which python3.11 -> /usr/bin/python3.11
+#   `/usr/bin/python3` 由 `python3` 元包提供, 本段**没装**;
+#   而 multi-stage 改造(0fad69098)已移除 `python3-pip`, 它原本会经 `python3:any`
+#   顺带把 `/usr/bin/python3` 装上 ⇒ **改造后连 python3 也没了**。
+#   ⇒ 写死 `python3.11`: 零新增包, 且与本段 apt 声明精确对应。
+#   ⚠️ 代价: 版本名与 ubuntu 大版本绑定(24.04 是 python3.12)。
+#     基础镜像一旦从 22.04 换到 24.04, 这行**必须同步改**, 否则又变静默失效;
+#     下面那行断言会在**构建期**当场抓住它, 而不是等运行时 exec format error。
+RUN command -v python3.11 >/dev/null || { \
+      echo "[FAIL] CMD 依赖的 python3.11 不存在 —— 本镜像只 apt 装了 'python3.11 ffmpeg'"; \
+      echo "       若基础镜像升级(22.04 -> 24.04 是 python3.12), 请同步改 CMD 与本行"; \
+      ls /usr/bin/python* 2>/dev/null || echo "       /usr/bin 下无任何 python*"; \
+      exit 1; }
+CMD ["python3.11", "-c", "print('voice-pipeline 已通过主 app 容器内的 /app 挂载运行')"]
