@@ -50,6 +50,10 @@ class MeetingListItem(BaseModel):
     location: Optional[str] = None
     audio_url: Optional[str] = None
     audio_duration: Optional[int] = None
+    # ffprobe 真实媒体时长（秒）。audio_duration 是录音会话墙钟时长，
+    # 补传/续传时两者严重不等（实测 2h24m 会议 wall=39 而 media=8669）。
+    # ⚠️ 对外描述会议时长**必须优先用本字段**，回退 audio_duration。
+    media_duration_seconds: Optional[int] = None
     speaker_stats_summary: Optional[dict] = None  # {total_speakers, top_speaker}
     task_count: int = 0
     rich_block_type: str = "meeting"
@@ -156,6 +160,7 @@ async def query_meetings(input: QueryMeetingsInput, ctx: ToolContext) -> dict:
             "location": m.location,
             "audio_url": m.audio_url,
             "audio_duration": m.audio_duration,
+            "media_duration_seconds": m.media_duration_seconds,
             "speaker_stats_summary": speaker_stats_summary,
             "task_count": task_count,
             "rich_block_type": "meeting",
@@ -196,6 +201,7 @@ class GetMeetingDetailOutput(BaseModel):
     meeting_url: Optional[str] = None
     audio_url: Optional[str] = None
     audio_duration: Optional[int] = None
+    media_duration_seconds: Optional[int] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     participants: list[MeetingParticipantInfo] = Field(default_factory=list)
@@ -263,6 +269,7 @@ async def get_meeting_detail(input: GetMeetingDetailInput, ctx: ToolContext) -> 
         "meeting_url": m.meeting_url,
         "audio_url": m.audio_url,
         "audio_duration": m.audio_duration,
+        "media_duration_seconds": m.media_duration_seconds,
         "start_time": m.start_time.isoformat() if m.start_time else None,
         "end_time": m.end_time.isoformat() if m.end_time else None,
         "participants": participants,
