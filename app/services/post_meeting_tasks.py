@@ -468,11 +468,26 @@ def post_meeting_process(self, meeting_id: int):
                 # 2.4 识别每个段落的发言人（用声纹查询，不依赖聚类）
                 unique_clusters = set(c for c in clusters if c >= 0)
                 seg_names = []
+                # 2026-10-14: 人工听辨裁决优先 (迁移 146)。
+                # 命中 meeting_speaker_adjudications 的段直接采用裁决结果, 不再过声纹匹配 ——
+                # 同音色的段 (实测会议 256 有 51 段距赵航佳质心仅 0.07-0.33, 阈值 0.65)
+                # 算法改不动, 重跑会把裁决判回去。裁决表绑定音频时间区间, 转录重建也不丢。
+                from app.services.speaker_adjudication_service import build_resolver
+                adjudicator = await build_resolver(db, meeting_id)
+                if len(adjudicator):
+                    logger.info(
+                        "说话人识别: 命中 %d 条人工裁决, 命中区间跳过声纹匹配" % len(adjudicator)
+                    )
+                adjudicated = 0
                 # 先为每个段单独识别
-                seg_names = []
                 for i, seg in enumerate(transcript_segments):
                     if clusters[i] < 0:
                         seg_names.append("发言人?")
+                        continue
+                    decided = adjudicator.lookup(seg.get("start"), seg.get("end"))
+                    if decided:
+                        seg_names.append(decided)
+                        adjudicated += 1
                         continue
                     # 用原始音频段做识别（不是 embedding）
                     # 2026-09-07: identify_speaker → identify_speaker_anchored
@@ -488,6 +503,8 @@ def post_meeting_process(self, meeting_id: int):
                         seg_names.append(name)
                     else:
                         seg_names.append(None)  # 暂时留空，后面统一处理
+                if adjudicated:
+                    logger.info("说话人识别: %d 段采用人工裁决结果" % adjudicated)
 
                 # 2.4.5 兜底：聚类数=1 但有多个明显不同的说话模式时强制分裂
                 if len(unique_clusters) == 1 and len(seg_embeddings) >= 3:
