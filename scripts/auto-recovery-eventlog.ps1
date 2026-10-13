@@ -1,5 +1,10 @@
-﻿# MicroBubble Auto Recovery - Windows Login Trigger + Self-Healing
-# Triggered by: schtasks ONEVENT Microsoft-Windows-Winlogon EventID=7002 /DELAY 0002:00
+﻿# MicroBubble Auto Recovery - Boot/Logon Trigger + Self-Healing
+# Triggered by: 计划任务 `MicroBubble-Auto-Recovery`, 双触发器 (AtStartup + AtLogon), 各延迟 2 分钟。
+#   ⚠️ 2026-10-13 订正: 原触发器是 `schtasks ONEVENT .../Winlogon EventID=7002`,
+#      而该事件在新版 Windows **已不再产生** ⇒ 任务自 2026-08-04 起从未触发过
+#      (类 20.220: 状态字段与注释都在描述一个不存在的东西)。
+#      已改为 AtStartup + AtLogon, 见 scripts/ci/fix-autorecovery-task.ps1。
+#      首次真实自动执行: 2026-10-13 17:23, rc=0 (见 logs/auto-recovery/auto-recovery-20261013.log)。
 # Purpose: Full self-heal after computer reboot (Docker daemon + 8000 port + 7 endpoints)
 #
 # Logic (15 steps):
@@ -119,10 +124,25 @@ function Restart-DockerGUI {
 
 # Main
 $startTime = Get-Date
+# ⚠️ 这里**读回实际配置**而不是硬编码字符串 —— 2026-10-13 之前它写死
+#    "Winlogon EventID=7002 + Delay 2min"，而那时触发器早已改成 AtStartup+AtLogon，
+#    于是**日志在描述一个不存在的触发器**，读日志的人会被误导（类 20.220）。
+$taskTriggers = @()
+try {
+    $tk = Get-ScheduledTask -TaskName 'MicroBubble-Auto-Recovery' -ErrorAction Stop
+    $taskTriggers = @($tk.Triggers | ForEach-Object {
+        "{0}(delay={1})" -f $_.CimClass.CimClassName.Replace('MSFT_Task', '').Replace('Trigger', ''), $_.Delay
+    }) -join ', '
+} catch {
+    $taskTriggers = "读取失败: $($_.Exception.Message)"
+}
+if (-not $taskTriggers) { $taskTriggers = "(无触发器!)" }
+
 Write-Log "INFO" "Auto-recovery started" @{
     user = $env:USERNAME
     pid = $PID
-    trigger = "Winlogon EventID=7002 + Delay 2min"
+    trigger = $taskTriggers
+    note = "实际触发方式见任务定义; 若为 Boot/Logon 则本字段即为准"
 }
 
 $global:GuiRestarted = $false

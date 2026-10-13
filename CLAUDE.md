@@ -1119,11 +1119,28 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   已就位（含回读断言 + 控制字符检查 + 幂等）。
   ⚠️ **`Set-ScheduledTask` 需要管理员权限**，普通 shell 跑会得 `0x80070005` 拒绝访问
   （且失败发生在生效之前，任务定义不会被半改）。
-  **待主指挥以管理员身份执行**：
-  `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\fix-autorecovery-task.ps1`
-  ⚠️ **该脚本刻意不触发执行** —— `auto-recovery-eventlog.ps1` 第 3 步会跑 bash 恢复脚本
-  （重启容器栈），失败兜底还会 `Stop-Process -Force` 杀 Docker Desktop
-  ⇒ 触发它 = 一次停掉全部生产容器。验证时机须由主指挥定。
+
+  ✅ **2026-10-13 17:23 首次真实自动执行成功 —— 四层缺陷全部闭环**（判据是**副作用产物**，
+  `logs/auto-recovery/auto-recovery-20261013.log` 2825 字节，`LastTaskResult=0`）：
+
+  | 环节 | 结果 |
+  |---|---|
+  | 触发 | `MSFT_TaskBootTrigger(PT2M)` + `MSFT_TaskLogonTrigger(PT2M)`，双触发器 |
+  | Step 1 等 Docker daemon | ready（0.2s） |
+  | Step 2 查 8000 僵尸端口 | clean |
+  | Step 3 跑 bash 恢复脚本 | **rc=0**（`PASS 7/7`、alembic 守恒过、celery 2 pong） |
+  | 结果 | `success: true`、`gui_restarted: false`、耗时 15.5s |
+  | 副作用 | 13 个容器仍 Up 14 hours，**未被重启** |
+
+  ⚠️ 触发它的脚本里 `trigger` 字段**曾硬编码** `"Winlogon EventID=7002 + Delay 2min"`，
+  而那时触发器早已改成 Boot+Logon ⇒ **日志在描述一个不存在的触发器**（类 20.220 的
+  变体：连日志里的元数据都会骗人）。已改为**运行时读回任务定义**，实测输出
+  `Boot(delay=PT2M), Logon(delay=PT2M)`。
+
+  ⚠️ **第 ③ 层（alembic 断言）本次顺带被独立验证**：宿主直跑恢复脚本输出
+  `alembic 守恒: 恰 1 head 且 current==head (145_kpt_content_tsvector)`。
+  ⇒ 至此**四层全部有实测证据**，不再有任何一层依赖"当初说修好了"。
+
   `MicroBubble-DFT-Cleanup` **已于 2026-10-09 划归 `E:\dft-service` 独立项目, 不再是本仓遗留**
   (本仓 DFT 集成 2026-09-13 已整体移除, 见 commit `48e1cb0f2` / `0d70dd66e`; 该计划任务归那个
   项目的运维, 主指挥 2026-10-09 明确不许本仓处置它, 原"LastTaskResult=1 但功能未坏"的记录随
