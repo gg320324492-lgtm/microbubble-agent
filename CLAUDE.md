@@ -712,7 +712,23 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
      已污染的用 `git commit --amend -F <file>` 修 (未 push 时安全,
      已 push 用 `git push --force-with-lease`)。
   ⚠️ 本机 Python **默认 GBK**, 任何 `print()` 中文都可能抛
-  `UnicodeEncodeError: 'gbk' codec can't encode character <U+FFFD>` ——
+  - **同源第 4 形态（2026-10-13 实测踩 3 次）: 含中文的 `.ps1` **必须带 UTF-8 BOM**，否则
+    PowerShell 5.1 按 GBK 解码 ⇒ 中文乱码把引号吃掉 ⇒ 报 `MissingExpressionAfterToken` /
+    「字符串缺少终止符」这类**看起来像语法错、其实是编码错**的解析错误。
+    本仓既有约定实测为: **含中文的加 BOM**（`voice-alert.ps1`）、**纯 ASCII 的不加**
+    （`install-offsite-scheduler.ps1`）。⇒ **每次重写含中文的 .ps1 都要重新确认 BOM**
+    （工具重写不带 BOM）。自查 `head -c 3 f.ps1 | od -An -tx1` 应为 `efbbbf`。
+  - **同源第 5 形态（2026-10-13）: Task Scheduler 回读的 `DaysOfWeek` 是 **COM 编号**
+    （Sun=1 Mon=2 Tue=3...），**不是** .NET 的 `DayOfWeek`（Sun=0 Mon=1 Tue=2...）。
+    拿 .NET 枚举解释会把 `Monday(2)` 误判成 `Tuesday`，**连断言都跟着写错**。
+    正确判定: `$svc = New-Object -ComObject Schedule.Service; $svc.Connect();
+    $svc.GetFolder('').GetTask('<name>').Definition.Triggers.Item(1).DaysOfWeek`
+  - **同源第 6 形态（2026-10-13）: 改文件时**必须保留原行尾**。本仓存在**混合行尾**
+    文件（`app/services/reminder_service.py` 是 CRLF，而 `CLAUDE.md` /
+    `app/services/notification_service.py` 是 LF）。用 Python 写文件若用默认换行，
+    会把 CRLF 全压成 LF ⇒ `git diff` 把整个文件视为重写（预期删 89 行、实际
+    **510 insertions / 590 deletions**）。⇒ Python 读写一律 `newline=''` 保住原样；
+    **改完必查 `git diff --stat` 规模是否与预期相符**，不符先 `git checkout --` 恢复重做。  `UnicodeEncodeError: 'gbk' codec can't encode character <U+FFFD>` ——
   见到这个报错就是编码问题, 不是代码逻辑问题。
 - **类 20.217**: alpine 容器里 healthcheck 用 `localhost` = 解析 `::1`, nginx 只听 IPv4 时
   探针永远 connection refused → 假 unhealthy 长期遮蔽真状态; 探针一律 `127.0.0.1` 字面量,
