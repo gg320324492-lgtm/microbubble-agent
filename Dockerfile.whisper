@@ -52,6 +52,21 @@ WORKDIR /app
 
 # 安装Python依赖 + CUDA运行时库（通过pip安装，避免下载大CUDA镜像）
 #
+# 2026-10-13 取证结论: **本镜像不需要 crcmod C 扩展改造** (与 Dockerfile.funasr 对照)。
+#   同日 funasr 镜像修了同一个 crcmod 静默降级问题, 但**只修 funasr 不修本文件**
+#   是实测结论, 不是漏做。证据 (一次性容器 `pip install --dry-run` 走本文件
+#   **逐字复制**的安装行, 输出 `Would install` 即**完整传递闭包**):
+#     av-18.1.0 ctranslate2-4.8.2 faster-whisper-1.2.1 flatbuffers-25.12.19
+#     onnxruntime-1.31.0
+#   —— **闭包里没有 crcmod / oss2**。faster-whisper 的依赖树里根本没有 modelscope,
+#   而 crcmod 正是靠 funasr → oss2 → crcmod 才被拖进来的。
+#   ⇒ 本镜像**压根不装 crcmod**, "静默降级"无从发生 (装的东西没有性能问题)。
+#   ⚠️ 若将来本文件新增 modelscope / funasr 依赖, 必须回头做 Dockerfile.funasr
+#     同款改造: 单独开 builder 装 `gcc` + `libc6-dev` 编译, 只把
+#     `_crcfunext*.so` 搬进主段 (**gcc 单装不够, 缺 libc6-dev 报 stdlib.h 找不到**,
+#     而 crcmod 的 setup.py 用裸 `except:` 吞掉编译失败 → 又变回静默降级)。
+#     判据固定 `hasattr(crcmod.crcmod, "_crcfunext")`, 不能只看构建是否成功。
+#
 # 2026-10-11 L-8 (修 image-scan whisper job 4 条 HIGH 全红):
 # ⚠️ **本块刻意不再 `pip install --upgrade pip`** —— 这是消 CVE 的关键，别加回来。
 # 实测根因 (本机 pip 解 + trivy 0.72.0 复现, 非推断):

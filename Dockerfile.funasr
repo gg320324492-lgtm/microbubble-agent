@@ -1,3 +1,76 @@
+# =============================================================================
+# 2026-10-13: crcmod 静默降级为纯 Python (类 20.220 同族)
+# =============================================================================
+# 【症状】生产容器内实测 `hasattr(crcmod.crcmod, "_crcfunext")` == **False**,
+#   而 app 镜像是 True —— 两个镜像行为不一致。功能不坏 (CRC 结果仍然正确),
+#   但实测吞吐 **23 MiB/s vs app 镜像的 610 MiB/s = 慢 26.5 倍**。
+#
+# 【真根因 —— 三层, 每层都伪装成 "成功", 全靠实测才拆得开】
+#   ① 本镜像没有 gcc, `crcmod` 走 sdist 分支;
+#   ② crcmod 1.7 的 setup.py 用**裸 `except:`** 包住 `setup(ext_modules=...)`:
+#        except:  # If there are any compilation errors or there are no build
+#                  # tools available ... delete the extension module and try to
+#                  # install the pure Python version.
+#        del setup_dict['ext_modules']; setup(**setup_dict)
+#      ⇒ **编译失败不报错**, 静默产出 `crcmod-1.7-py3-none-any.whl`。
+#      实测 (一次性容器): 无编译器时 pip 输出的是
+#      "Building wheel ... finished with status 'done'" —— **字面全绿**。
+#   ③ ⚠️ **只装 gcc 仍然失败** —— 这是最容易漏的一层:
+#      实测 `gcc -c python3/src/_crcfunext.c` 报
+#        fatal error: stdlib.h: No such file or directory
+#      原因是 python:3.11.17-slim **不含 libc6-dev** (实测 `dpkg -s libc6-dev`
+#      → ABSENT), 而 stdlib.h 属于 libc6-dev。**gcc 只是驱动, 头文件在 libc6-dev**。
+#      ⇒ 必须 `gcc` + `libc6-dev` 同时装。缺任一个都落进 ② 的静默兜底。
+#
+# 【为什么单独开一个 builder 而不是给主段加 gcc】—— 实测 CVE 代价:
+#   `apt-get install gcc libc6-dev` 会顺带拉入 **linux-libc-dev**,
+#   而它在 app 镜像实测**单独就带 196 条 HIGH/CRITICAL** (CVE 最早到 2015)。
+#   本镜像改造前 CRITICAL+HIGH 基线 = **266** (trivy 0.72.0, 按 Result.Type 分组:
+#   全部 debian / python-pkg 0 条 / `-dev` 贡献 0 条), 若把 gcc 留在主段,
+#   仅 linux-libc-dev 一项就会把 266 推到 **~462 (+73%)** ——
+#   相当于把 2026-10-12 刚做完的 L-8 CVE 治理**全部倒推回去**。
+#   ⇒ 编译器只在构建期存在, 绝不进最终镜像。
+#
+# 【为什么搬运的是"单个 .so"而不是像 app 镜像那样"整份 site-packages"】
+#   app 镜像搬运整份是因为它装了 65 个直接依赖; **本镜像只装 funasr/torch 等少数包**,
+#   整份搬运会让 builder 的 pip 版本/setuptools 状态成为运行时隐式依赖, 风险面更大。
+#   实测 `ldd _crcfunext*.so` = **statically linked** ⇒ 只拷这一个文件即可,
+#   零动态库依赖, runtime 连 libstdc++ 都不需要。
+#   ⚠️ COPY 是合并语义, 但这里**不需要先 rm -rf**: 目标路径下原本**不存在**
+#   该文件 (纯 Python 版没有 .so), 是新增而非覆盖 ⇒ 不存在 app 镜像那种
+#   "两份 dist-info 并存" 的坑 (那个坑只在整份拷贝 site-packages 时才会发生)。
+FROM python:3.11.17-slim-bookworm AS crcmod-builder
+
+RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm main contrib\n' > /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm-updates main contrib\n' >> /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
+
+# gcc + libc6-dev **必须成对** (见上文第 ③ 层)。--no-install-recommends 是为了
+# 不把 build-essential 全家桶拉进来 (本段产物只有一个 .so, 用不到)。
+# ⚠️ 这里刻意**不**加 gcc 之外的编译器工具链: 实测 crcmod 只需要 C 编译器。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ⚠️ **必须 --no-binary**: crcmod 在 PyPI 上**没有任何 Linux wheel**
+#   (实测 1.7 的 files 只有 crcmod-1.7.tar.gz + 4 个 Windows .msi), 所以默认
+#   本来就走 sdist; 但显式写出来是为了**让"这次确实编译了"成为可读事实**,
+#   而不是依赖"恰好没有 wheel"这种随时会变的外部条件 (类 20.224: 冲突链会随
+#   别的改动悄悄作废, 结论不该只存在于注释里)。
+# ⚠️ 版本钉 1.7 与主段 oss2 解析出的版本一致 (实测主段装的是 crcmod-1.7)。
+RUN pip3 install --no-cache-dir --no-binary crcmod crcmod==1.7
+
+# ⚠️ **fail-loud 守门**: 在 builder 里就断言 C 扩展真的编出来了。
+#   没有这一步, 上游 ② 的静默兜底会把"编译失败"变成"构建成功但产物是纯 Python",
+#   而 COPY 依然会成功 —— 正是类 20.220 描述的形态。
+#   (判据用 hasattr 而非"文件存在", 因为纯 Python 包目录下也可能残留同名文件。)
+RUN python3 -c "import crcmod.crcmod as m; assert hasattr(m, '_crcfunext'), 'crcmod C extension missing'; print('builder: crcmod C extension OK')"
+
+# =============================================================================
+# 主段: 保持单阶段 (无编译器, CVE 与改造前一致)
+# =============================================================================
 # base image bumped for L-8 image-scan CVE zeroing (2026-10-07; prior pin 2026-07-29 W86-C-1)
 FROM python:3.11.17-slim-bookworm
 
@@ -79,6 +152,24 @@ RUN pip3 install --no-cache-dir --upgrade setuptools && \
     nvidia-cublas-cu12 \
     nvidia-cuda-nvrtc-cu12 \
     fastapi uvicorn python-multipart
+
+# ---- crcmod C 扩展 (2026-10-13): 从 builder 搬单个 .so, 主段**不引入任何编译器** ----
+# 主段上面的 pip install 已经把 crcmod 装成了**纯 Python 版** (无 .so)。
+# 这里把 builder 编出来的 .so 补进去, 让 `_crcfunext` 可用。
+#   ⚠️ 实测 `ldd` = statically linked ⇒ 单文件搬运, runtime 无需任何额外 .so 依赖。
+#   ⚠️ COPY 是**新增**而非覆盖 (目标路径原本无此文件), 故不需要 app 镜像那种
+#      "先 rm -rf 再拷" —— 那个坑只在整份拷贝 site-packages 时才成立。
+RUN mkdir -p /usr/local/lib/python3.11/site-packages/crcmod
+COPY --from=crcmod-builder /usr/local/lib/python3.11/site-packages/crcmod/_crcfunext.cpython-311-x86_64-linux-gnu.so \
+     /usr/local/lib/python3.11/site-packages/crcmod/_crcfunext.cpython-311-x86_64-linux-gnu.so
+
+# ⚠️ **主段也要再验一次** (类 20.220: 守门必须验副作用真的发生, 且要在**最终镜像**里验)。
+#   builder 段的断言只证明"编译成功", 不证明"搬运成功" —— COPY 路径写错、
+#   目标目录层级不对、文件名 ABI tag 不匹配, 都会让 .so 到不了 Python 能 import 的位置,
+#   而这些**都不会让 docker build 失败**。
+#   判据固定用 `hasattr(crcmod.crcmod, "_crcfunext")` —— 这正是类 20.220 指定的判据
+#   (功能正常、CRC 结果正确, 只有速度差 26 倍, 静态检查与测试全绿都发现不了)。
+RUN python3 -c "import crcmod.crcmod as m; assert hasattr(m, '_crcfunext'), 'crcmod C extension NOT delivered to runtime'; print('runtime: crcmod C extension OK')"
 
 # 设置CUDA库路径（与 whisper 一致）
 ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib
