@@ -46,9 +46,9 @@
             <template v-if="!editing">{{ meeting.location || '未设置' }}</template>
             <el-input v-else v-model="form.location" size="small" style="width:160px" placeholder="地点" />
           </span>
-          <span v-if="meeting.audio_duration" class="meta-item">
+          <span v-if="effectiveDuration" class="meta-item">
             <el-icon><Microphone /></el-icon>
-            {{ formatDuration(meeting.audio_duration) }}
+            {{ formatDuration(effectiveDuration) }}
           </span>
         </div>
 
@@ -484,6 +484,10 @@ const pbCurrent = ref(0)
 const pbDuration = ref(0)
 const pbSpeed = ref(1)
 const hasAudio = computed(() => !!meeting.value?.audio_url)
+// 展示用时长: media_duration_seconds 是 ffprobe 真实媒体时长, audio_duration 是录音会话墙钟时长。
+// 二者在 App 内正常录音时相等, 但补传 / 续传时会严重不等(实测 2h24m 的会议 audio_duration=39
+// 而真实 8669 秒), 故一律优先取媒体时长, 回退墙钟(历史会议 media_duration_seconds 为 NULL)。
+const effectiveDuration = computed(() => meeting.value?.media_duration_seconds || meeting.value?.audio_duration || 0)
 const pbPct = computed(() => (pbDuration.value ? Math.min(100, (pbCurrent.value / pbDuration.value) * 100) : 0))
 
 function togglePlay() {
@@ -495,13 +499,13 @@ function onAudioTime() {
   if (audioEl.value) pbCurrent.value = audioEl.value.currentTime
 }
 function onAudioMeta() {
-  // 2026-09-13 修复: 流式/缺失元数据时 duration 可能为 Infinity, 回退 audio_duration
+  // 2026-09-13 修复: 流式/缺失元数据时 duration 可能为 Infinity, 回退后端上报的展示时长
   const d = audioEl.value?.duration
-  pbDuration.value = (d && isFinite(d)) ? d : (meeting.value?.audio_duration || 0)
+  pbDuration.value = (d && isFinite(d)) ? d : effectiveDuration.value
 }
 const pbDurText = computed(() => {
   if (pbDuration.value > 0) return formatTs(pbDuration.value)
-  const ad = meeting.value?.audio_duration
+  const ad = effectiveDuration.value
   return ad ? formatTs(ad) : '--:--'
 })
 function seekTo(sec) {

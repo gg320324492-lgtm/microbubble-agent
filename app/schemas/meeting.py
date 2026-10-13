@@ -69,6 +69,10 @@ class MeetingResponse(MeetingBase):
     recording_started_at: Optional[datetime] = None
     audio_url: Optional[str] = None
     audio_duration: Optional[int] = None
+    # ffprobe 解码出的真实媒体时长（秒）。audio_duration 是「录音会话墙钟时长」,
+    # 两者在 App 内正常录音时相等, 但补传 / 中断续传时会严重不等（见 CLAUDE.md 缺陷 1）。
+    # 前端展示时长必须优先读本字段, 回退 audio_duration。
+    media_duration_seconds: Optional[int] = None
     upload_status: Optional[str] = None
     last_chunk_index: Optional[int] = None
     total_chunks: Optional[int] = None

@@ -670,7 +670,10 @@ async def get_audio_url(
 
     # 生成 presigned URL（1 小时有效）
     url = file_service.get_url(meeting.audio_url, expires=3600)
-    return {"audio_url": url, "duration": meeting.audio_duration}
+    # 播放时长必须用 ffprobe 的真实媒体时长: audio_duration 是录音会话墙钟时长,
+    # 补传 / 续传场景下二者不等(实测 2h24m 的会议 audio_duration=39 而真实 8669 秒)。
+    # 回退 audio_duration 兼容历史会议(media_duration_seconds 为 NULL)。
+    return {"audio_url": url, "duration": meeting.media_duration_seconds or meeting.audio_duration}
 
 
 @router.post("/meetings/{meeting_id}/cancel-recording", status_code=200)
