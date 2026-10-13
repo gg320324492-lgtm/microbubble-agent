@@ -9,14 +9,18 @@ Wave 3a: 加速声纹识别和跨成员匹配
 - 本测试使用同步 psycopg2 而非 asyncpg，避开 conftest.py 中 session-scope
   event_loop fixture 与 function-scope async test 之间的已知冲突
   （同一冲突也导致 test_migration_010_voice_embedding.py 无法在容器内运行）。
-- 测试在 module-scope autouse fixture 中先 apply 迁移 SQL（IF NOT EXISTS 幂等），
-  这样 conftest 的 setup_db（create_all + drop_all）下也能验证迁移后的 schema。
+- ⚠️ **apply 迁移 SQL 的代码在测试函数体内，不在 module-scope fixture**（2026-10-13 修正）。
+  conftest 的 `setup_db` 现在是 `scope="function"`（`conftest.py:207`，W6 为修
+  ScopeMismatch 从 session 改来），在每个测试函数前 drop_all → create_all；
+  而 pytest fixture 执行顺序是 session > module > function
+  ⇒ 放在 module-scope fixture 里必然**先于**建表执行 ⇒ `UndefinedTable`。
+  这一点此前连续两轮都修错方向（第一轮归因成"CI 负载高、sleep 0.5 秒不够"，
+  改成轮询等待后 CI 仍红并给出"等 60 秒表仍未出现"才暴露真因 —— **不是竞态，是必现**）。
 - 注意：本测试连 microbubble_test DB，不连 prod microbubble DB。
   验证 prod DB 需手工 psql 检查。
 - 当设置 MIGRATION_013_SKIP=1 时跳过 apply（用于在迁移前手动验证测试会 fail）。
 """
 import os
-import time
 
 import psycopg2
 import pytest
@@ -46,59 +50,32 @@ def _get_test_db_conn():
     )
 
 
-@pytest.fixture(scope="module", autouse=True)
-def _apply_013_migration(request):
-    """在测试运行前先 apply 013 迁移 SQL 到 test DB（IF NOT EXISTS 幂等）。
+def test_member_voice_embedding_hnsw_index_exists():
+    """members 表应有 idx_member_voice_embedding HNSW 索引
 
-    必须等 conftest 的 setup_db 完成 create_all 后才能 ALTER TABLE。
-    conftest 的 setup_db 是 session-scope autouse，会在所有 module fixture 之前
-    完成 create_all。
+    ⚠️ **建索引必须写在测试函数体内，不能放在 module-scope fixture**。
+    根因（2026-10-13 定位，之前连续两轮都修错方向）:
+      conftest 的 `setup_db` 现在是 **`scope="function"`**（`tests/conftest.py:207`，
+      W6 为修 `ScopeMismatch` 从 session 改过来的），它在**每个测试函数前**执行
+      drop_all → create_all。
+      而本文件原来的 `_apply_013_migration` 是 `scope="module"` ——
+      pytest 的 fixture 执行顺序是 **session > module > function**，
+      ⇒ module-scope 的 fixture **必然先于** `setup_db` 运行，
+      ⇒ 建索引时 `members` 表还不存在 ⇒ `UndefinedTable`。
+      **这不是 flaky，是必现。**
+    所以把 CREATE INDEX 移进函数体：此时 autouse function fixture `setup_db` 已跑完。
 
-    ⚠️ **2026-10-13 修复: 原来这里是 `time.sleep(0.5)` 硬等** —— 那是个竞态。
-    `create_all` 要建几十张表的 schema（含 pgvector HNSW 索引），CI 负载高时
-    远超 0.5 秒 ⇒ 直接 `CREATE INDEX ... ON members` 会报
-    `UndefinedTable: relation "members" does not exist`。
-    实测 2026-10-13 04:26 那批 CI（当天推送 11 次、runner 连跑）shard 7 就是这样红的
-    （374 passed / 41 skipped / **1 error**，唯一挂的就是这个），
-    且它是 HARD GATE ⇒ **一次 flaky 就会红整个 CI**。
-    ⇒ 改为**轮询等 `members` 表真的出现**，不再靠猜时间。
-
-    当设置 MIGRATION_013_SKIP=1 时跳过 apply（用于在迁移前手动验证测试会 fail）。
+    当设置 `MIGRATION_013_SKIP=1` 时跳过 apply（用于在迁移前手动验证测试会 fail）。
     """
-    if os.getenv("MIGRATION_013_SKIP") == "1":
-        yield
-        return
-
-    # 轮询等待 create_all 完成（最多 60 秒）。用 to_regclass 判断表是否存在，
-    # 不用 information_schema —— 前者是 PG 原生函数，跨 schema 也稳。
-    deadline = time.time() + 60
-    while True:
+    if os.getenv("MIGRATION_013_SKIP") != "1":
         with _get_test_db_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT to_regclass('public.members')")
-                ready = cur.fetchone()[0] is not None
-        if ready:
-            break
-        if time.time() >= deadline:
-            pytest.fail(
-                "等 60 秒后 public.members 仍未出现 —— conftest 的 setup_db "
-                "要么没跑、要么建表失败。这是环境问题，不是本测试的问题，"
-                "但**不要用固定 sleep 掩盖它**（那正是本 fixture 之前的老毛病）。"
-            )
-        time.sleep(0.5)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_member_voice_embedding "
+                    "ON members USING hnsw (voice_embedding vector_cosine_ops)"
+                )
+            conn.commit()
 
-    with _get_test_db_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "CREATE INDEX IF NOT EXISTS idx_member_voice_embedding "
-                "ON members USING hnsw (voice_embedding vector_cosine_ops)"
-            )
-        conn.commit()
-    yield
-
-
-def test_member_voice_embedding_hnsw_index_exists():
-    """members 表应有 idx_member_voice_embedding HNSW 索引"""
     with _get_test_db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("""
