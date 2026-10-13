@@ -4,7 +4,49 @@
 # pip 层修构建坏死 —— jammy 系统 pip 22.0.2 resolvelib get_topological_weights
 # AssertionError (上游 pip<23 已知 bug, 此前构建从未通过 → 从未被扫描)。
 # python3.11 与 python3-pip 共享 /usr/lib/python3/dist-packages, 故 python3.11 -m pip 可先自举。
-FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+# =============================================================================
+# L-8 multi-stage (2026-10-13): 构建期 dev 包不再进最终镜像 (实测 212 条 -> 7 条)
+# =============================================================================
+# 改造前是**单阶段**: 编译工具链与运行时依赖装在同一层。改造后实测 HIGH/CRITICAL
+# **212 -> 7 (-96.7%)**, 残留 7 条**全部无修复版**(下面逐条列了)。按来源:
+#   linux-libc-dev 202 (含 3 条 CRITICAL) + python3.11-dev 1 +
+#   libpython3.11-dev 1 + libpython3.11 1 = **205 条构建期产物, 一条生产都用不上**;
+#   残留 7 条 = python3.11 运行时包上的 CVE-2022-42919 (4 条, 同一条 CVE 打到 4 个包)
+#              + python-pkg 3 条 (python-jose CRITICAL / nltk / ecdsa), 后者上游无修复版。
+#   对照: ffmpeg + libav*58 合计 **0 条**。
+#   ⚠️ 205 里有 4 条是 dev 链**顺带**带进来的 (libpython3.11 是 python3.11-dev 的依赖),
+#      所以比"只数 -dev 包名"多 1 条 —— 以扫描实测为准, 不按包名心算。
+#
+# ⚠️ **两条 dev 链, 不是一条** —— 删 python3.11-dev 只能拆掉其中一条:
+#   `python3-pip` 经 `python3:any` 同样拖进 python3-dev / python3.10-dev /
+#   build-essential / libpython3.10-dev, 最后照样汇到 libc6-dev -> linux-libc-dev。
+#   runtime 段两个都得删 (实测依据见该段注释)。
+#
+# ⚠️ **为什么不能像 app 那样把底座换成 python:3.11-slim-bookworm**:
+#   本镜像锁死 CUDA 底座是**硬需求**(docs/design/2026-10-02-phase3-closeout-plan.md
+#   :1075 记明 "voice-pipeline 因 CUDA 底座锁死必须保留 nvidia/cuda:12.1.1-runtime-
+#   ubuntu22.04"), 声纹推理要跑 GPU。所以两段都用同一个 CUDA 底座, 拆的是
+#   **apt 层**, 不是底座。
+#
+# ⚠️ 为什么必须"搬运"而不能在 runtime 里重新 pip install:
+#   全量 requirements.txt (与 app 镜像同一份, 65 个直接依赖) 里有 2 个包在 Linux 上
+#   没有预编译 wheel, 必须真编译:
+#     pilk   (requirements.txt:123 pilk>=0.2.4) —— PyPI 全部 6 个版本
+#             (0.0.1-0.2.4) 只有 win_amd64 wheel, 零 manylinux ⇒ 无 gcc 时 pip **硬失败**;
+#     crcmod (传递依赖自 oss2) —— 只有 .tar.gz, 无 gcc 时 pip **不报错**, 但会退化成
+#             纯 Python 实现 (_crcfunext 缺失): CRC 结果仍正确 ⇒ **静默降级**,
+#             构建/CI/测试全绿, 只是慢几个数量级。判据固定用
+#             `hasattr(crcmod, "_crcfunext")`。
+#   ⇒ runtime 段**绝不**再碰 pip, 编译产物原样搬过去。
+#
+# ⚠️⚠️ 下面那行 `rm -rf` 不是洁癖, 是**必需** —— `COPY` 是合并语义, 永远不删除目标侧
+#   独有的文件。app 那次改造就踩过: 不清空就 COPY 会让基础镜像自带的旧 dist-info 与
+#   builder 的新版并存, `importlib.metadata` 先命中旧的, trivy 反而**多出** CVE。
+#   本镜像实测 CUDA 底座的 `/usr/local/bin` 与 `/usr/local/lib` 本来就是**空的**
+#   (probe2 实测), 所以这行当前是空操作, 但它防的是底座将来变化。
+#   ⚠️ 清的**不是** `/usr/local` —— `/usr/local/cuda*` 是 CUDA 底座的运行时, 必须留着。
+# =============================================================================
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 AS builder
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     python3.11 python3.11-dev python3-pip ffmpeg \
@@ -21,6 +63,46 @@ COPY requirements.txt .
 #   保留 `--upgrade setuptools`: 那装的是独立包, 84.0.0 无 CVE。
 RUN python3.11 -m pip install --no-cache-dir --upgrade setuptools && \
     python3.11 -m pip install --no-cache-dir -r requirements.txt
+
+# =============================================================================
+# runtime 段 —— 最终镜像。⚠️ 见文件头: 这里**不做任何 pip install**
+# =============================================================================
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04 AS runtime
+
+# ⚠️ 与 builder 段相比**少两个包**, 而这两个**各自**都能独立拖进整条 dev 链 —— 只删
+#   python3.11-dev 是**不够的**(2026-10-13 实测踩到: 那样 linux-libc-dev 202 条一条
+#   不少地留在最终镜像里, 白改)。两条独立的链, 实测 `apt-cache rdepends`:
+#     python3.11-dev -> libpython3.11-dev  -> libc6-dev -> linux-libc-dev
+#     python3-pip    -> python3:any -> python3-dev -> python3.10-dev
+#                                          -> build-essential(gcc/gcc-11)
+#                                          -> libpython3.10-dev -> libc6-dev -> linux-libc-dev
+#   所以 runtime 只留 python3.11(解释器本身) + ffmpeg(声纹/ASR 跑音频)。
+#
+# ⚠️ 为什么 runtime 不需要 python3-pip: pip 在本镜像里**只是 builder 的安装工具**
+#   (requirements.txt 全部在 builder 装完, runtime 段一次 pip 都不跑), 运行时没有任何
+#   代码需要它 —— `git grep 'pkg_resources|import pip' app/ scripts/voiceprint/` 实测
+#   **零命中**。删掉它同时带走 python3-dev / python3.10-dev / build-essential / gcc,
+#   这些同样只在编译期有用。
+# ⚠️ 保留 ffmpeg: 声纹/ASR 链路要调它的 CLI, 与 app 镜像同理(那是 ASR 回退路径)。
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
+    python3.11 ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# ⚠️ WORKDIR 必须留在最终段 —— 容器以 volume 把主 app 的 /app 挂进来, 工作目录不能丢
+WORKDIR /app
+COPY requirements.txt .
+
+# 从 builder 搬运 Python 环境 —— **精确到两处**, 理由:
+#   /usr/local/bin            = pip 装的 console script (sysconfig scripts 路径);
+#   /usr/local/lib/python3.11/dist-packages = pip 的 purelib/platlib (sysconfig 实测),
+#     全部包及其原生 .so 都在这里 —— pilk/_pilk*.so 与 crcmod/_crcfunext*.so 就在其中,
+#     它们是 builder 编译出来的, 只能搬, 不能在 runtime 重装。
+#   (注意与 app 镜像的路径**不同**: 那边是 python.org 官方镜像的 site-packages,
+#    这里是 apt python3.11 的 dist-packages。sysconfig get_path 实测得出, 别照抄 app。)
+# ⚠️ 上面那行 rm -rf 的理由见文件头 (COPY 合并语义), 不是洁癖。
+RUN rm -rf /usr/local/lib/python3.11/dist-packages /usr/local/bin/*
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
 
 # 不复制 app 代码 — 通过 volume 挂载（与主容器共享）
 CMD ["python", "-c", "print('voice-pipeline 已通过主 app 容器内的 /app 挂载运行')"]
