@@ -658,7 +658,8 @@ _CONTEXT_PRIORITY_MAP = {
     # 2026-09 企业微信下线: 提醒改站内推送 (reminder_service)
     "reminder": NotificationPriority.HIGH,          # 任务到期/逾期, 必须立刻看到
     "reminder_digest": NotificationPriority.HIGH,   # 11AM 每日待办汇总
-    "meeting_reminder": NotificationPriority.HIGH,  # 会议即将开始
+            # 2026-10-13 下线 "meeting_reminder": 随 send_meeting_reminder 死代码
+        # 一并移除(主指挥裁定会议通知全不做)。若将来恢复, 一并加回。
 }
 
 

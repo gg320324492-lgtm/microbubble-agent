@@ -121,95 +121,15 @@ class ReminderService:
 
         return True
 
-    async def send_meeting_reminder(self, reminder: Reminder) -> bool:
-        """发送会议提醒（Wave 3a，兼容旧 API；2026-09 改站内推送）"""
-        from app.models.meeting import Meeting, MeetingParticipant
-
-        meeting_id = getattr(reminder, "meeting_id", None)
-        if not meeting_id:
-            logger.warning(f"会议提醒 {reminder.id} 无 meeting_id，跳过")
-            return False
-
-        meeting = await self.db.get(Meeting, meeting_id)
-        if not meeting:
-            logger.warning(
-                f"会议提醒 {reminder.id}: meeting {meeting_id} 不存在"
-            )
-            return False
-
-        try:
-            participants_result = await self.db.execute(
-                select(Member)
-                .join(
-                    MeetingParticipant,
-                    MeetingParticipant.member_id == Member.id,
-                )
-                .where(
-                    MeetingParticipant.meeting_id == meeting.id,
-                    Member.is_active == True,
-                )
-            )
-            participants = list(participants_result.scalars().all())
-        except Exception as e:
-            logger.error(
-                f"会议提醒 {reminder.id} 查询参会人失败: {e}", exc_info=True
-            )
-            return False
-
-        if not participants:
-            logger.warning(
-                f"会议 {meeting_id} 没有 active 参会人，跳过提醒"
-            )
-            return False
-
-        try:
-            if meeting.start_time and reminder.remind_at:
-                remind_min = max(
-                    0,
-                    int(
-                        (meeting.start_time - reminder.remind_at).total_seconds()
-                        // 60
-                    ),
-                )
-            else:
-                remind_min = 5
-        except Exception:
-            remind_min = 5
-
-        # 站内推送（2026-09 企业微信下线，原走 wechat notifier）
-        start_beijing = (
-            meeting.start_time.replace(tzinfo=timezone.utc).astimezone(
-                BEIJING_TZ
-            )
-            if meeting.start_time
-            else None
-        )
-        start_str = (
-            start_beijing.strftime("%m-%d %H:%M") if start_beijing else "待定"
-        )
-        push_ok = False
-        for p in participants:
-            try:
-                await notify_user(
-                    p.id,
-                    title=f"📅 会议提醒：{meeting.title}",
-                    body=(
-                        f"会议「{meeting.title}」约 {remind_min} 分钟后开始\n"
-                        f"🕘 时间：{start_str}\n"
-                        f"📍 地点：{meeting.location or '线上'}"
-                    ),
-                    context="meeting_reminder",
-                    db=self.db,
-                )
-                push_ok = True
-            except Exception as e:
-                logger.error(
-                    f"会议站内提醒失败: member={p.id} {e}",
-                    exc_info=True,
-                )
-
-        return push_ok
-
+    # 2026-10-13 删除: `send_meeting_reminder` 曾是会议"即将开始"的提醒通道,
+    # 但**全仓零调用点**(2026-10-13 全仓核实)—— `process_reminders` 主循环
+    # 不做 target_type 分发, 压根走不到它。⇒ 它是**从未生效的死代码**, 而
+    # CLAUDE.md 与本文件 docstring 长期把它描述成已有能力
+    # (类 20.220: 注释在描述一个不存在的东西)。
+    # 主指挥 2026-10-13 裁定: **会议的开始与完成都不做通知**。
+    # ⚠️ 若将来要恢复, 收件人判据别用 `meetings.created_by` —— 实测
+    #    26 场会议里 4 场为 NULL(**含 255 与 256**), 按它选人这两场静默收不到;
+    #    现役正确判据见 reminder_service 里 "全部 active 参会者" 那套。
     def _format_reminder_message(self, task: Task, member: Member) -> str:
         """格式化单条提醒消息（兼容旧 API）"""
         now = utcnow()

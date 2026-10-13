@@ -458,7 +458,8 @@ GPU 状态坏了。⇒ **遇到 `gpu_broken: true` 先重建容器再排查**，
 ⚠️ 验证脚本用 `j["backend"]` 会 `KeyError` —— **`/transcribe` 返回的字段名是
 `_backend`（带下划线）**，而 `/health` 里是 `backend`。两个端点命名不一致，别混。
 
-### D. CI 长期红灯：Alembic 单 head 守卫连续 6 次红 —— 根因是**漏装 pgvector**（`6889f3c32`）
+#### 缺陷 1 的修法与验收要点（承接上表）
+⚠️ 2026-10-13 订正: 本段原先被错挂在下面的「Alembic 单 head 守卫」标题下，**标题与内容完全不符**（类 20.224 的错误继承）。已在原位改正。
 
 
 **缺陷 1 的修法比想象的宽 —— 要动三处 + 重建 dist**：`app/schemas/meeting.py:71`
@@ -480,6 +481,28 @@ GPU 状态坏了。⇒ **遇到 `gpu_broken: true` 先重建容器再排查**，
 `audio: UploadFile = File(...)`）。写成 `-F "file=@..."` 会得 **HTTP 400**，很容易误判成
 "服务坏了"。容器内有 `requests`，用它构造 multipart 最稳。
 
+#### 会议通知：**开始与完成都不做**（2026-10-13 主指挥裁定）
+
+会议处理跑完**不给任何人任何通知** —— 这是有意为之，不是遗漏。
+
+**历史真相**（2026-10-13 全仓核实，此前无人发现）：
+
+| 环节 | 文档/代码怎么说 | 实际 |
+|---|---|---|
+| **完成通知** | `post_meeting_tasks.py` docstring 第 10 行写着 `6. done — 完成通知` | **从未实现** —— 全流程唯一的"通知"是 `update_progress(DONE)` → Redis HSET + pub/sub（**1h TTL 不持久化**），消费方只是会议页进度条，关掉页面即失效 |
+| **开始通知** | 有 `reminder_service.send_meeting_reminder()` 完整实现（约 89 行，走 `notify_user(context="meeting_reminder")`） | **死代码** —— `process_reminders` 主循环不做 target_type 分发，**全仓零调用点**；已删除 |
+
+⇒ 二者都是类 20.220 的「注释在描述一个不存在的东西」：读代码的人（包括接手的新会话）
+会以为会议有通知，用户实际一次都没收到过。会议 256 验收时"盯着 17 分钟"就是缺口的暴露。
+
+⚠️ **若将来要恢复通知，收件人判据别用 `meetings.created_by`** —— 实测 **26 场会议里 4 场
+为 NULL**（**含 255 与 256**），按它选人这两场会静默收不到。现役正确判据是
+`reminder_service` 里的「**全部 active 参会者**」（join `MeetingParticipant` +
+`Member.is_active`）。
+
+⚠️ 铃铛（`NotificationBell`）走不通：`notification_service.py` 顶部写明「本服务**只**管
+`file_mentions`（drive 协作提醒）」，而 `FileMention.file_id` 是 `nullable=False` 的 FK →
+`knowledge.id`，**会议进不去**。要红点真亮得改 schema + 前端。
 ### D. CI 长期红灯：Alembic 单 head 守卫连续 6 次红 —— 根因是**漏装 pgvector**（`6889f3c32`）
 
 - 守卫只装了 alembic 一个包，注释理由是"不连 DB 故无需 sqlalchemy"。**该前提不成立**：
