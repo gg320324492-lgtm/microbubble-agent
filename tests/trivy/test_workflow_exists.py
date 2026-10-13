@@ -43,7 +43,13 @@ def test_severity_and_formats(workflow_text: str):
 
 
 def test_matrix_covers_all_dockerfiles(workflow_text: str):
-    """矩阵覆盖 8 个 Dockerfile."""
+    """矩阵覆盖**已启用**的 7 个 Dockerfile.
+
+    ⚠️ `docker/Dockerfile.commercial` **不再扫描**（2026-10-13 主指挥裁定 B）——
+    它是休眠镜像：compose 无该服务、本机无该镜像，而它 COPY 了整个 `app/`
+    （19 个文件用 ffmpeg/soffice）却 runtime 段一个都没装 ⇒ 一旦部署即静默缺件。
+    **Dockerfile 本身保留不删**，将来真要商业化部署、补齐依赖后再加回本清单。
+    """
     for df in (
         "Dockerfile.db",
         "Dockerfile.funasr",
@@ -51,9 +57,13 @@ def test_matrix_covers_all_dockerfiles(workflow_text: str):
         "Dockerfile.voice-pipeline",
         "Dockerfile.whisper",
         "web/Dockerfile",
-        "docker/Dockerfile.commercial",
     ):
         assert df in workflow_text, f"矩阵缺 {df}"
+    # 断言的是 **matrix 记号**而非路径字符串 —— 后者在注释里被讨论是正常的
+    # （本文件与 workflow 都需要留判据），断言路径会把"留档"误判成"已启用"。
+    assert (
+        "- name: commercial" not in workflow_text
+    ), "commercial 已裁定停止扫描, 不应重新出现在 image-scan 的 matrix 里"
 
 
 def test_pr_is_advisory_only(workflow_text: str):

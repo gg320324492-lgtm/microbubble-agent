@@ -7,8 +7,9 @@
     **不保证触发** —— 实测 2026-10-05 之后到 10-13 都没再触发过（同期同为周一
     schedule 的 `secret-scan.yml` 在 10-12 正常触发了，所以不是仓库级开关的问题）。
 
-    而 `push` 触发器只覆盖 3 个**读 requirements.txt** 的镜像
-    （app / commercial / voice-pipeline）；另外 5 个（db / web / funasr / whisper / mcp）
+    而 `push` 触发器只覆盖 2 个**读 requirements.txt** 的镜像
+    （app / voice-pipeline）；另外 5 个（db / web / funasr / whisper / mcp）
+    （2026-10-13 起 commercial 停止扫描 —— 休眠镜像，判据见 image-scan.yml 注释）
     **只在 PR / schedule / dispatch 时才跑** ⇒ schedule 漏跑 = 那 5 个镜像进入扫描盲区。
 
     本任务作为**兜底**：固定每周一触发一次全量。
