@@ -43,27 +43,36 @@ def test_severity_and_formats(workflow_text: str):
 
 
 def test_matrix_covers_all_dockerfiles(workflow_text: str):
-    """矩阵覆盖**已启用**的 7 个 Dockerfile.
+    """矩阵覆盖**已启用**的 6 个 Dockerfile.
 
-    ⚠️ `docker/Dockerfile.commercial` **不再扫描**（2026-10-13 主指挥裁定 B）——
-    它是休眠镜像：compose 无该服务、本机无该镜像，而它 COPY 了整个 `app/`
-    （19 个文件用 ffmpeg/soffice）却 runtime 段一个都没装 ⇒ 一旦部署即静默缺件。
-    **Dockerfile 本身保留不删**，将来真要商业化部署、补齐依赖后再加回本清单。
+    ⚠️ 两个**休眠镜像**已停止扫描（均为 2026-10-13 主指挥裁定，处置同款）：
+
+    - `docker/Dockerfile.commercial`：compose 无该服务、本机无该镜像，而它 COPY 了
+      整个 `app/`（19 个文件用 ffmpeg/soffice）却 runtime 段一个都没装
+      ⇒ 一旦部署即静默缺件。
+    - `Dockerfile.voice-pipeline`：compose 无该服务、本机无该镜像，全仓只有
+      image-scan 与本地扫描脚本引用它；且它的 `CMD` 自身写的是
+      「已通过主 app 容器内的 /app 挂载运行」⇒ **设计上就不作为独立服务起**。
+      体积 15.8 GB（原 8 个镜像里最大），为它烧 CI 配额是净亏。
+      ⚠️ 它的 CMD 缺陷（`python` 与 `python3` **都不存在**）已于同日修好，
+      但**修好 CMD 不等于有运行场景**。
+
+    **两者 Dockerfile 均保留不删**，将来真有运行场景时补齐依赖再加回本清单。
     """
     for df in (
         "Dockerfile.db",
         "Dockerfile.funasr",
         "Dockerfile.mcp",
-        "Dockerfile.voice-pipeline",
         "Dockerfile.whisper",
         "web/Dockerfile",
     ):
         assert df in workflow_text, f"矩阵缺 {df}"
     # 断言的是 **matrix 记号**而非路径字符串 —— 后者在注释里被讨论是正常的
     # （本文件与 workflow 都需要留判据），断言路径会把"留档"误判成"已启用"。
-    assert (
-        "- name: commercial" not in workflow_text
-    ), "commercial 已裁定停止扫描, 不应重新出现在 image-scan 的 matrix 里"
+    for dormant in ("commercial", "voice-pipeline"):
+        assert (
+            f"- name: {dormant}" not in workflow_text
+        ), f"{dormant} 已裁定停止扫描, 不应重新出现在 image-scan 的 matrix 里"
 
 
 def test_pr_is_advisory_only(workflow_text: str):

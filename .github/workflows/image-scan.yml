@@ -30,12 +30,12 @@ on:
   # ⚠️ **这里只覆盖"依赖文件"，故意不含 `Dockerfile*` / `docker/**` /
   #   `docker-compose*.yml` / `web/Dockerfile`**（那些在 `pull_request.paths` 里）。
   #   原因是**补上去比不补更危险**：push 触发时跑的是 `scan-deps`，它**只含
-  #   app / voice-pipeline 两个镜像**。而改 `Dockerfile.funasr` 真正
-  #   需要被扫的是 funasr —— **它不在这两个里** ⇒ workflow 会跑、会绿、UI 上
+  #   只有 app 一个镜像**。而改 `Dockerfile.funasr` 真正
+  #   需要被扫的是 funasr —— **它不在这一个里** ⇒ workflow 会跑、会绿、UI 上
   #   显示"扫描通过"，**而真正受影响的那个镜像根本没被扫**。
   #   这是类 20.220 的形态：状态字段在说谎。
   #   ⇒ **改 Dockerfile / docker-compose 之后必须手动 `gh workflow run` 一次**
-  #   （全量 7 个镜像）。这条纪律已写进 CLAUDE.md。
+  #   （全量 6 个镜像）。这条纪律已写进 CLAUDE.md。
   push:
     paths:
       - 'requirements.txt'
@@ -49,13 +49,13 @@ on:
 #
 # **问题**：本仓是 direct-push（一天 3~6 次），而 `push` 触发器限 `paths`
 # （requirements.txt / .trivyignore / 本文件），连续推几个都命中 paths 时会
-# **同时起多轮 run 互不取消** —— 2026-10-12 实测就撞见过两轮并行。每轮 2 个
-# 镜像构建 + 扫描，各 8-10 分钟，除了白烧 Actions 配额，还加剧了 trivy
+# **同时起多轮 run 互不取消** —— 2026-10-12 实测就撞见过两轮并行。每轮 1 个
+# 镜像构建 + 扫描，约 6-8 分钟，除了白烧 Actions 配额，还加剧了 trivy
 # cache key 抢占用（同一 key 下只有第一轮能存 DB，其余每次重下）。
 #
 # **为什么 group 里带 `github.event_name`**（这不是可选的装饰）：
-#   `schedule` 是**每周一次的全量扫描**（7 个镜像），`push` 是**依赖变更扫描**
-#   （2 个镜像）—— 两者**互补，不可互相取代**。若 group 只用 `github.ref`，
+#   `schedule` 是**每周一次的全量扫描**（6 个镜像），`push` 是**依赖变更扫描**
+#   （1 个镜像）—— 两者**互补，不可互相取代**。若 group 只用 `github.ref`，
 #   那么"傍晚 18-20 点 schedule 刚起来"碰上"有人推了个改 requirements.txt 的
 #   commit"，push 会**把全量扫描取消掉** ⇒ 本周唯一的全量扫描白跑。
 #   带上 event_name 后：
@@ -72,22 +72,22 @@ permissions:
   security-events: write
 
 jobs:
-  # 全量 7 个 —— PR / schedule / workflow_dispatch
+  # 全量 6 个 —— PR / schedule / workflow_dispatch
   scan:
     if: github.event_name != 'push'
     # ⚠️ 2026-10-12: 这个 name **必须是纯静态字符串**, 不能带 `${{ }}`。
     #   job 被 skip 时 matrix **尚未展开**, 于是整个 name 里的表达式不会求值,
     #   UI 上就原样显示字面量 `trivy ${{ matrix.name }}` —— 看着像配置坏了。
-    #   ⇒ push 那次运行(本 job 必然被 skip)现在显示 `trivy full (7 images)`。
+    #   ⇒ push 那次运行(本 job 必然被 skip)现在显示 `trivy full (6 images)`。
     #
-    #   取舍: 代价是**可运行时** 7 个 matrix job 同名, 折叠列表里分不出镜像。
+    #   取舍: 代价是**可运行时** 6 个 matrix job 同名, 折叠列表里分不出镜像。
     #   但镜像身份在 job **内部**仍然可见 —— step 名带 `(${{ matrix.dockerfile }})`,
     #   镜像 tag 是 `microbubble-scan-<name>:ci`, sarif 是 `trivy-<name>.sarif`,
     #   逐个点开即知。相对地, 若保留 `${{ matrix.name }}` 则可运行时分得清、
     #   但 skip 时仍显示未展开的字面量 —— 见 git log 同日 commit 的取舍说明。
     #   ⚠️ `scan-deps` 的 name **故意保留** `${{ matrix.name }}`: 它**从不**被 skip
     #   (if 条件为真才跑), 所以矩阵总能展开, 逐镜像可区分是有价值的。
-    name: trivy full (7 images)
+    name: trivy full (6 images)
     runs-on: ubuntu-latest
     # PR 上仅 advisory: 单个矩阵项失败不拖垮整个 workflow
     continue-on-error: ${{ github.event_name == 'pull_request' }}
@@ -107,9 +107,6 @@ jobs:
           - name: mcp
             dockerfile: Dockerfile.mcp
             context: .
-          - name: voice-pipeline
-            dockerfile: Dockerfile.voice-pipeline
-            context: .
           - name: whisper
             dockerfile: Dockerfile.whisper
             context: .
@@ -118,12 +115,12 @@ jobs:
             context: web
         # 2026-10-12: push(仅 requirements.txt / .trivyignore / 本文件变更)时,
         # 只跑**真的读 requirements.txt 的镜像**, 即改动实际影响的那些:
-        #   ✅ 保留  app            (Dockerfile,                     COPY + pip install -r)
-        #   ✅ 保留  voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
+        #   ✅ 保留  app            (Dockerfile,   COPY + pip install -r)
         #   ❌ 排除  db / web                      —— 无 Python 依赖
         #   ❌ 排除  funasr / whisper              —— 独立内联 pip install, 不读本文件
         #   ❌ 排除  mcp (Dockerfile.mcp)          —— 同上
         #   ❌ 排除  commercial                    —— **休眠镜像**(见下方 scan-deps 同款注释)
+        #   ❌ 排除  voice-pipeline                —— **休眠镜像**(见下方 scan-deps 同款注释)
         #
         # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 来判断 mcp 读不读**
         #   —— 实测这是**假阳性**: Dockerfile.mcp 的**注释**里就写着
@@ -132,7 +129,7 @@ jobs:
         #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
         #   即**匹配用法而非提及**。同型坑见 CLAUDE.md 的 `.dft` 前缀假阳性。
         #
-        # 成本: 全量 7 个约 28 分钟, 只跑 2 个约 8-10 分钟。
+        # 成本: 全量 6 个约 26 分钟, 只跑 1 个约 6-8 分钟。
         # 失败语义: push 不在 `continue-on-error` 范围(见上), 也不在 exit-code 的
         #   advisory 分支(该表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
         #
@@ -210,10 +207,9 @@ jobs:
           exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}
           trivyignores: '.trivyignore'
 
-  # push(仅 requirements.txt / .trivyignore / 本文件变更)时只跑 2 个 ——
-  # 那 2 个 Dockerfile **真的读 requirements.txt**, 即改动实际影响的镜像:
-  #   ✅ app            (Dockerfile,                    COPY + pip install -r)
-  #   ✅ voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
+  # push(仅 requirements.txt / .trivyignore / 本文件变更)时只跑 1 个 ——
+  # 剩下这些里**只有 app 真的读 requirements.txt**, 即改动实际影响的镜像:
+  #   ✅ app   (Dockerfile, COPY + pip install -r)
   #   ❌ db / web                      —— 无 Python 依赖
   #   ❌ funasr / whisper              —— 独立内联 pip install, 不读本文件
   #   ❌ mcp (Dockerfile.mcp)          —— 同上
@@ -225,7 +221,17 @@ jobs:
   #      **四个全无命中** ⇒ 一旦部署即静默缺件（类 20.220）;
   #   ③ 为一个不部署的镜像持续烧 Actions 配额是净亏。
   # ⇒ **Dockerfile 保留不删**（将来真要商业化部署时补齐 ffmpeg+libreoffice 再加回），
-  #   `tests/trivy/test_workflow_exists.py` 的矩阵断言已同步改为 7 个。
+  #   `tests/trivy/test_workflow_exists.py` 的矩阵断言已同步改为 6 个。
+  #
+  # ❌ **voice-pipeline 于 2026-10-13 停止扫描**（主指挥裁定，同 commercial）——
+  #   1) `docker compose config --services` 无该服务，本机也无该镜像，全仓只有
+  #      image-scan 与本地扫描脚本引用它 ⇒ **无人使用**；
+  #   2) 它的 `CMD` 自身写的是「已通过主 app 容器内的 /app 挂载运行」——
+  #      即**设计上就不作为独立服务起**，而 compose 里也确实没有对应服务；
+  #   3) 体积 **15.8 GB**（原 8 个镜像里最大），每次 CI 构建+扫描都在为它烧配额。
+  # ⚠️ 它的 CMD 缺陷已于同日修好（`python` 与 `python3` 在本镜像**都不存在**，改用
+  #   `python3.11` 并加了构建期断言），但**修好 CMD 不等于有运行场景**。
+  # ⇒ Dockerfile 保留不删，将来真有运行场景时再加回 matrix。
   #
   # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 判断 mcp 读不读** ——
   #   实测是**假阳性**: Dockerfile.mcp 的**注释**里就写着
@@ -233,7 +239,7 @@ jobs:
   #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
   #   即**匹配用法而非提及**(类 20.225)。
   #
-  # 成本: 全量 7 个约 28 分钟, 只跑 2 个约 8-10 分钟。
+  # 成本: 全量 6 个约 26 分钟, 只跑 1 个约 6-8 分钟。
   # 失败语义: push 不在 continue-on-error 范围, 也不在 gate 的 advisory 分支
   #   (该表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
     # ⚠️ 2026-10-12 踩坑留档: **job 级 `if` 在 matrix 展开之前求值, 拿不到
@@ -252,17 +258,14 @@ jobs:
           - name: app
             dockerfile: Dockerfile
             context: .
-          - name: voice-pipeline
-            dockerfile: Dockerfile.voice-pipeline
-            context: .
         # 2026-10-12: push(仅 requirements.txt / .trivyignore / 本文件变更)时,
         # 只跑**真的读 requirements.txt 的镜像**, 即改动实际影响的那些:
-        #   ✅ 保留  app            (Dockerfile,                     COPY + pip install -r)
-        #   ✅ 保留  voice-pipeline (Dockerfile.voice-pipeline, :14 COPY + :23 pip install -r)
+        #   ✅ 保留  app            (Dockerfile,   COPY + pip install -r)
         #   ❌ 排除  db / web                      —— 无 Python 依赖
         #   ❌ 排除  funasr / whisper              —— 独立内联 pip install, 不读本文件
         #   ❌ 排除  mcp (Dockerfile.mcp)          —— 同上
         #   ❌ 排除  commercial                    —— **休眠镜像**(见下方 scan-deps 同款注释)
+        #   ❌ 排除  voice-pipeline                —— **休眠镜像**(见下方 scan-deps 同款注释)
         #
         # ⚠️ **别用 `grep -q requirements.txt Dockerfile.mcp` 来判断 mcp 读不读**
         #   —— 实测这是**假阳性**: Dockerfile.mcp 的**注释**里就写着
@@ -271,7 +274,7 @@ jobs:
         #   判据应是 `grep -nE "COPY requirements.txt|pip install .*-r requirements.txt"`,
         #   即**匹配用法而非提及**。同型坑见 CLAUDE.md 的 `.dft` 前缀假阳性。
         #
-        # 成本: 全量 7 个约 28 分钟, 只跑 2 个约 8-10 分钟。
+        # 成本: 全量 6 个约 26 分钟, 只跑 1 个约 6-8 分钟。
         # 失败语义: push 不在 `continue-on-error` 范围(见上), 也不在 exit-code 的
         #   advisory 分支(该表达式对非 PR 事件一律返回 '1') ⇒ **push 红了 = job 红**。
         #
