@@ -65,14 +65,42 @@ def test_member_voice_embedding_hnsw_index_exists():
       **这不是 flaky，是必现。**
     所以把 CREATE INDEX 移进函数体：此时 autouse function fixture `setup_db` 已跑完。
 
+    ⚠️ **上面只解决了第一层，表建出来后还有第二层**（2026-10-13 第三次才撞到）：
+    `DatatypeMismatch: operator class "vector_cosine_ops" does not accept data type halfvec`。
+    根因是**测试照抄了 013 迁移的 SQL，而 013 本身没错** —— 它写 `vector_cosine_ops`
+    时列确实还是 `vector(256)`；此后 `017_voice_embedding_192dim` 改 192 维、
+    `102_voiceprint_halfvec` 再改成 `halfvec(192)` 并用 `halfvec_cosine_ops` 重建了索引，
+    **生产库实测确实如此**，唯独这份拷贝停在 013 那个时刻。
+    ⇒ 修法是按列的真实 `udt_name` 选 opclass（见下方代码），不是再抄一次迁移。
+
     当设置 `MIGRATION_013_SKIP=1` 时跳过 apply（用于在迁移前手动验证测试会 fail）。
     """
     if os.getenv("MIGRATION_013_SKIP") != "1":
         with _get_test_db_conn() as conn:
             with conn.cursor() as cur:
+                # ⚠️ **opclass 必须跟着列的实际类型走**（类 20.162）。
+                # 本测试早年是照抄 013 迁移里的 `vector_cosine_ops`，但那之后
+                # `017_voice_embedding_192dim` 把列改成 192 维、
+                # `102_voiceprint_halfvec` 再改成 `halfvec(192)` 并用
+                # `halfvec_cosine_ops` 重建索引 —— 测试没跟着改 ⇒
+                # `DatatypeMismatch: operator class "vector_cosine_ops"
+                # does not accept data type halfvec`。
+                # 013 迁移**本身没错**（当时列确实是 vector），过时的只有这份拷贝。
+                # ⇒ 按列的真实 `udt_name` 选 opclass，类型再变也不会再漂。
+                cur.execute(
+                    "SELECT udt_name FROM information_schema.columns "
+                    "WHERE table_name = 'members' "
+                    "AND column_name = 'voice_embedding'"
+                )
+                udt = cur.fetchone()[0]
+                assert udt in ("halfvec", "vector"), (
+                    f"members.voice_embedding 类型异常：{udt!r}；"
+                    f"迁移链 010 → 017 → 102 只应产出 halfvec / vector"
+                )
+                ops = "halfvec_cosine_ops" if udt == "halfvec" else "vector_cosine_ops"
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_member_voice_embedding "
-                    "ON members USING hnsw (voice_embedding vector_cosine_ops)"
+                    f"ON members USING hnsw (voice_embedding {ops})"
                 )
             conn.commit()
 
