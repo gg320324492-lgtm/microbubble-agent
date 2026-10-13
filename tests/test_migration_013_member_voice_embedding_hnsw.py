@@ -52,14 +52,41 @@ def _apply_013_migration(request):
 
     必须等 conftest 的 setup_db 完成 create_all 后才能 ALTER TABLE。
     conftest 的 setup_db 是 session-scope autouse，会在所有 module fixture 之前
-    完成 create_all。我们用短 sleep 等它完成。
+    完成 create_all。
+
+    ⚠️ **2026-10-13 修复: 原来这里是 `time.sleep(0.5)` 硬等** —— 那是个竞态。
+    `create_all` 要建几十张表的 schema（含 pgvector HNSW 索引），CI 负载高时
+    远超 0.5 秒 ⇒ 直接 `CREATE INDEX ... ON members` 会报
+    `UndefinedTable: relation "members" does not exist`。
+    实测 2026-10-13 04:26 那批 CI（当天推送 11 次、runner 连跑）shard 7 就是这样红的
+    （374 passed / 41 skipped / **1 error**，唯一挂的就是这个），
+    且它是 HARD GATE ⇒ **一次 flaky 就会红整个 CI**。
+    ⇒ 改为**轮询等 `members` 表真的出现**，不再靠猜时间。
 
     当设置 MIGRATION_013_SKIP=1 时跳过 apply（用于在迁移前手动验证测试会 fail）。
     """
     if os.getenv("MIGRATION_013_SKIP") == "1":
         yield
         return
-    time.sleep(0.5)
+
+    # 轮询等待 create_all 完成（最多 60 秒）。用 to_regclass 判断表是否存在，
+    # 不用 information_schema —— 前者是 PG 原生函数，跨 schema 也稳。
+    deadline = time.time() + 60
+    while True:
+        with _get_test_db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT to_regclass('public.members')")
+                ready = cur.fetchone()[0] is not None
+        if ready:
+            break
+        if time.time() >= deadline:
+            pytest.fail(
+                "等 60 秒后 public.members 仍未出现 —— conftest 的 setup_db "
+                "要么没跑、要么建表失败。这是环境问题，不是本测试的问题，"
+                "但**不要用固定 sleep 掩盖它**（那正是本 fixture 之前的老毛病）。"
+            )
+        time.sleep(0.5)
+
     with _get_test_db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
