@@ -784,6 +784,14 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   `LastTaskResult = 0`(成功) —— 第 ① 层因此被完全掩盖; ③ **恢复脚本里 alembic 断言写死 head
   编号 `105_fix_drift`**, 实际 head 早已推进到 `142` → 前 7 步(含 7/7 端点全绿)全过, 却在最后
   一步误判 fail、上报 `success:false`。
+  **⚠️ 2026-10-13 订正 —— 上面这三层的"修复"其实只落地了第 ③ 层**, ①② 原样未动,
+  该任务**至今从未自动执行过一次**(触发器仍是 Winlogon 7002 订阅、Action 仍无
+  `powershell.exe`)。逐层实测表 + 修复脚本见上方「遗留 (主拍待决)」条。
+  ⇒ **这条铁律要再加一条纪律 ④**: 判"某自动化已修好"**必须逐层回读任务的实际定义**
+  (`Get-ScheduledTask` 的 Trigger/Action), **不能因为 commit message 写了"修了三层"
+  就采信** —— 本例正是"修上游缺陷会暴露下游缺陷"这条纪律的**反向失败**:
+  当时连修三层的动作只做完了底层, 而文档按"已完成"记档, 于是**错误结论被继承至今**。
+  **"手动触发跑通了"≠"调度器拉得起来"** —— 后者才是自动化守门的前提。
   **三条纪律**: ①**状态字段会说谎** —— `LastTaskResult=0` / 容器 healthy / 服务 200 都只证明
   "调度器认为成功", 不证明"代码跑过"; **验证必须查副作用产物**(日志文件是否生成 / 数据是否真变),
   本次正是靠"今天的日志文件没生成"才抓到第 ② 层; ②**修上游缺陷会暴露下游缺陷**, 一次连修三层
@@ -948,10 +956,35 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   而不是 `grep -q "requirements\.txt"`(匹配任意提及);
   ②**凡是要据此算成本/影响面的 grep, 先把命中的那几行读出来看**, 别只看退出码;
   ③特别警惕"否定式注释"—— 写着"不读 X""不走 X""已删除 X"的行, 是假阳性的高发区。
-- **遗留 (主拍待决)**: `MicroBubble-Auto-Recovery` 事件任务三层缺陷已于 2026-10-09 全修
-  (触发器改 AtStartup / Action 补 powershell.exe 解释器 / alembic 断言改不变量), 端到端验证
-  rc=0、`PASS 7/7`; **下次真实重启后需再验证一次** (触发器为 AtStartup + 2min 延迟,
-  当前只在手动触发下验证过)。
+- ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
+  原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /
+  Action 补 powershell.exe 解释器 / alembic 断言改不变量），端到端验证 rc=0、`PASS 7/7`"。
+  **逐层实测结果**（`Get-ScheduledTask` + 读脚本，非读 commit message）：
+
+  | 层 | 声称 | 实测 | 判据 |
+  |---|---|---|---|
+  | ① 触发器改 AtStartup | 已修 | ❌ **未修** | 触发器仍是 `MSFT_TaskEventTrigger`，订阅 `Winlogon EventID=7002`；该任务不在 `MSFT_TaskBootTrigger` 列表里（同一批修好的 `MicroBubble-GPU-ASR-Daemon` **在**） |
+  | ② Action 补解释器 | 已修 | ❌ **未修** | `Execute` 直接是 `.ps1` 路径，`Arguments`/`WorkingDirectory` 全空，无 `powershell.exe` |
+  | ③ alembic 断言改不变量 | 已修 | ✅ **确已修** | `restart-recovery-after-gui-restart.sh:94-103` 确为「恰为 1 个 head」+「current == head」两条不变量 |
+  | ④ 恢复脚本 UTF-8 BOM | 未提及 | ❌ **新发现** | `scripts/auto-recovery-eventlog.ps1` 含 **54 个汉字却无 BOM** ⇒ PS 5.1 按 GBK 解码 ⇒ 解析错误（类 20.216 第 4 形态）|
+
+  **①②叠加 ⇒ 该任务从未自动执行过一次。** 判据是**副作用产物**而非状态字段：
+  `logs/auto-recovery/` 下只有 `auto-recovery-20260804.log` 与 `auto-recovery-20261009.log`，
+  此后再无新文件；`LastRunTime` 停在 2026-10-09、`LastTaskResult=1`。
+  ⚠️ **2026-10-13 03:13 机器真实重启过，`LastRunTime` 仍纹丝不动** —— 这就是
+  "下次重启后需再验证一次"那半句本该抓住的信号，当时没人回读它。
+  ⇒ **`PASS 7/7` 只证明了 bash 恢复脚本本身能跑通，没证明任务能被调度器拉起来** ——
+  这是类 20.220 的完整形态：**"手动触发能跑"被当成了"自动调度能跑"**。
+
+  **已修（本次）**：④ 已补 BOM；① ② 的修复脚本 `scripts/ci/fix-autorecovery-task.ps1`
+  已就位（含回读断言 + 控制字符检查 + 幂等）。
+  ⚠️ **`Set-ScheduledTask` 需要管理员权限**，普通 shell 跑会得 `0x80070005` 拒绝访问
+  （且失败发生在生效之前，任务定义不会被半改）。
+  **待主指挥以管理员身份执行**：
+  `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\fix-autorecovery-task.ps1`
+  ⚠️ **该脚本刻意不触发执行** —— `auto-recovery-eventlog.ps1` 第 3 步会跑 bash 恢复脚本
+  （重启容器栈），失败兜底还会 `Stop-Process -Force` 杀 Docker Desktop
+  ⇒ 触发它 = 一次停掉全部生产容器。验证时机须由主指挥定。
   `MicroBubble-DFT-Cleanup` **已于 2026-10-09 划归 `E:\dft-service` 独立项目, 不再是本仓遗留**
   (本仓 DFT 集成 2026-09-13 已整体移除, 见 commit `48e1cb0f2` / `0d70dd66e`; 该计划任务归那个
   项目的运维, 主指挥 2026-10-09 明确不许本仓处置它, 原"LastTaskResult=1 但功能未坏"的记录随

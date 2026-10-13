@@ -1,4 +1,4 @@
-# MicroBubble Auto Recovery - Windows Login Trigger + Self-Healing
+﻿# MicroBubble Auto Recovery - Windows Login Trigger + Self-Healing
 # Triggered by: schtasks ONEVENT Microsoft-Windows-Winlogon EventID=7002 /DELAY 0002:00
 # Purpose: Full self-heal after computer reboot (Docker daemon + 8000 port + 7 endpoints)
 #
