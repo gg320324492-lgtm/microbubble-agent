@@ -63,10 +63,23 @@ Write-Host ""
 
 Show-State 'BEFORE'
 
-# ---- ① 触发器：AtStartup + 2 分钟延迟 ----
+# ---- ① 触发器：AtStartup + AtLogon 双触发器，各 2 分钟延迟 ----
 # EventID=7002 (Winlogon) 在新版 Windows 已不再产生 ⇒ 事件触发器永不触发。
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$trigger.Delay = 'PT2M'
+#
+# ⚠️ **为什么是"双"触发器而不是只 Boot**（2026-10-13 实测补正）：
+#   实测 `AutoAdminLogon` **未配置**（本机开机不自动登录），而本任务
+#   `LogonType = Interactive` —— **只在有交互式会话时才运行**。
+#   只挂 Boot 的话，开机后若用户尚未登录，任务以 Interactive 身份**跑不了**
+#   （Windows 会挂起等登录，但那是未验证的内部行为，不能当作保证）。
+#   ⇒ 照抄同仓**已确认在跑**的 `MicroBubble-GPU-ASR-Daemon` 的成熟模式：
+#     Boot（开机已登录时）+ Logon（登录时兜底）两个触发器都挂；
+#     配 `MultipleInstances = IgnoreNew` 防止两路同时命中时重复执行。
+#   本机电池数为 0（台式机），故 `DisallowStartIfOnBatteries=True` 不构成阻碍。
+$bootTrigger = New-ScheduledTaskTrigger -AtStartup
+$bootTrigger.Delay = 'PT2M'
+$logonTrigger = New-ScheduledTaskTrigger -AtLogOn
+$logonTrigger.Delay = 'PT2M'
+$triggers = @($bootTrigger, $logonTrigger)
 
 # ---- ② Action：.ps1 必须挂 powershell.exe ----
 # 任务计划程序不把 .ps1 当可执行文件，进程**从未启动**；而它仍会上报 LastTaskResult。
@@ -74,7 +87,7 @@ $argString = '-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $scriptPath
 $action = New-ScheduledTaskAction -Execute $psExe -Argument $argString -WorkingDirectory $repoRoot
 
 # 只传 -Trigger / -Action —— Principal 与 Settings 保持不变
-Set-ScheduledTask -TaskName $taskName -Trigger $trigger -Action $action | Out-Null
+Set-ScheduledTask -TaskName $taskName -Trigger $triggers -Action $action | Out-Null
 
 Write-Host ""
 Show-State 'AFTER'
@@ -82,8 +95,18 @@ Show-State 'AFTER'
 # ---- 回读断言：不信"没报错"，只信读回来的值（类 20.220）----
 $after = Get-ScheduledTask -TaskName $taskName
 $problems = @()
-if ($after.Triggers.CimClass.CimClassName -notcontains 'MSFT_TaskBootTrigger') {
-    $problems += '触发器仍不是 AtStartup'
+$triggerNames = @($after.Triggers | ForEach-Object { $_.CimClass.CimClassName })
+if ($triggerNames -notcontains 'MSFT_TaskBootTrigger') {
+    $problems += '缺 Boot 触发器'
+}
+if ($triggerNames -notcontains 'MSFT_TaskLogonTrigger') {
+    $problems += '缺 Logon 触发器（本机 AutoAdminLogon 未配置 + Interactive 登录类型, 只挂 Boot 不够）'
+}
+# 两路触发器都带延迟, 否则开机瞬间 Docker 还没起来, 等 Docker 的那步会直接超时
+foreach ($trg in $after.Triggers) {
+    if ([string]::IsNullOrEmpty($trg.Delay)) {
+        $problems += ("触发器 {0} 没有延迟" -f $trg.CimClass.CimClassName)
+    }
 }
 if (-not $after.Actions[0].Execute.ToLower().EndsWith('powershell.exe')) {
     $problems += 'Execute 未指向 powershell.exe'
