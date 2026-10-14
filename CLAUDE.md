@@ -1250,11 +1250,20 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   且必须实测 tools 支持；另: CI 的 `paths` 过滤会让 workflow 因"没跑"而显示绿** ——
   2026-10-14 小气助手对话失效，三层叠加，逐层修好才看得见下一层：
 
-  | 层 | 报错 | 根因 |
-  |---|---|---|
-  | 1 | `unknown model 'qwen3.8:27b'` | `LLM_BACKEND=openai_compat`(→MiniMax) 但 **7 个 `AGENT_*_MODEL` 是 Ollama 模型名** |
-  | 2 | `tool result's tool id(plan_00_...) not found` | **系统代查结果冒充模型 tool_call**（见下） |
-  | 3 | CI `value too long for VARCHAR(32)` | alembic revision id 起成 **33 字符** |
+  > 🔴 **交接必读：第 1 层的修复不在 git 里**（`.env` 未入库、含密钥）⇒
+  > **换机 / 重建 `.env` / 交接环境时必须手动同步那 7 行**，否则本故障原样复现。
+  > ⚠️ **只改第 1 层不够** —— 改完模型名，第 2 层（tool 协议）会立刻浮出来，
+  > 此时对话**仍然报错**。第 1 层是**环境问题**、第 2 层是**代码缺陷**
+  > （已随 commit `33490d7ea` 入库），两者缺一不可。
+  > ⚠️ 改完 `.env` 必须 `docker compose up -d --force-recreate`，
+  > **`restart` 不刷新容器 env**（本次实际踩过）。
+  > 完整交接单见 `desktop-conversion/docs/handoff/2026-10-14-env-llm-model-name-handoff.md`。
+
+  | 层 | 报错 | 根因 | 性质 |
+  |---|---|---|---|
+  | 1 | `unknown model 'qwen3.8:27b'` | `LLM_BACKEND=openai_compat`(→MiniMax) 但 **7 个 `AGENT_*_MODEL` 是 Ollama 模型名** | **环境**（`.env`，未入库） |
+  | 2 | `tool result's tool id(plan_00_...) not found` | **系统代查结果冒充模型 tool_call**（见 ②） | **代码**（commit `33490d7ea`） |
+  | 3 | CI `value too long for VARCHAR(32)` | alembic revision id 起成 **33 字符** | **代码**（commit `1fb9c0ab1`） |
 
   **① 后端与模型名是两个独立维度，改一个极易漏另一个**。判"该往哪边修"的唯一办法是
   **同一模型名分别打两个后端实测**（本次: `MiniMax-Text-01`@MiniMax=200 /
