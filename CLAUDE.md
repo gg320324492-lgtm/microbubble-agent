@@ -22,7 +22,7 @@
   `continue-on-error` —— 任一片失败即阻塞合并。**此前 451 个测试文件从未有任何
   workflow 跑过全量**（RAG-FW CI 只跑 `tests/rag_framework/` 一个子集）。
   > ⚠️ 本段是 **2026-09-30 快照**，数字已过时。实时值见下方「测试规范」段
-  > （2026-10-14 实测 3547 用例 / 3361 passed / 186 skipped，run `38447027694` 全绿）。
+  > （2026-10-15 实测 3565 用例 / 3376 passed / 189 skipped，run `38600849147` 全绿）。
 - **87 个测试文件带模块级守卫**（一次性验收快照 / 环境依赖类，全部原位保留 +
   文件头写明恢复条件）。**守门类测试不得归档**（`test_no_prod_db_imports` 禁止测试
   直连生产库）。
@@ -164,7 +164,8 @@
   ⚠️ **此处"测试收集数 400"是 2026-10-10~12 重构期间的快照，不是现值** ——
   同日经 import blocker 实测确认零调用方后，连删三个 RAG-FW 专属测试文件
   （`e5333eb6f` + 删 agent_retriever 那次），当时降到 **397 文件 / 4119 函数**；
-  此后 10-13 / 10-14 又新增 2 个文件回到 399 / 4141。**实时值见「测试规范」段**。
+  此后 10-13 / 10-14 又新增 2 个文件回到 399 / 4141，10-15 再 +3 到 **402 / 4159**。
+  **实时值见「测试规范」段**。
 - **CI 连续 9+ 次全红已终结**：根因 = requirements.txt 里裸 `datasets` 那行传递引入
   `pyarrow>=24`，而同一文件里 `numpy==1.26.2` 那行把 numpy 写死在 1.26.2，
   pyarrow 26 起硬性要求 numpy≥2.0 →
@@ -1746,17 +1747,23 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
 
 ### 测试规范
 - **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试。
-  规模：`tests/` 下 **399 个测试文件 / 4141 个 test 函数**（**实测 2026-10-14**；
+  规模：`tests/` 下 **402 个测试文件 / 4159 个 test 函数**（**实测 2026-10-15**；
   文件数 = `find tests -name "test_*.py" -not -path "*/__pycache__/*" | wc -l`，
   函数数 = `grep -rhoE "^\s*(async )?def test_" tests/ --include="*.py" | wc -l`
   —— 写死数字必然随增删漂移，改测试后请按上面两条命令回填）；CI 硬门
-  `server-tests-baseline.yml` 8 片实跑 **3547 用例**（3361 passed / 186 skipped，
-  **该组数字是 2026-10-14 实测**，run `38447027694`，8 片 + Merge baseline summary 全绿）
-  - ⚠️ **399 / 4141 的构成可对账**：397→399 是两个新文件
+  `server-tests-baseline.yml` 8 片实跑 **3565 用例**（3376 passed / 0 failed /
+  0 errors / 189 skipped，**该组数字是 2026-10-15 实测**，run `38600849147`，
+  8 片 + Merge baseline summary 全绿）
+  - ⚠️ **402 / 4159 的构成可对账**：399→402 是三个新文件
+    （`test_pdf_layout_cleaner.py` 8 + `test_figure_anchor_snap.py` 4
+    + `test_chunk_min_chars.py` 6），函数数 4141→4159 正好 +18，
+    **与 CI 用例 3547→3565 的 +18 精确吻合**，无 unexplained 差额。
+  - ⚠️ **上一轮 +2 的沿革**：397→399 曾是两个新文件
     （`test_meeting_processing_latency.py` 8 函数 + `test_speaker_adjudication.py` 14 函数），
-    函数数 4119→4141 正好 +22，**无 unexplained 差额**。
+    函数数 4119→4141 正好 +22。
   - ⚠️ **上一轮删文件的沿革**（397 曾是 2026-10-12 连删三个 RAG-FW 专属测试文件后的值，
-    现已 +2 回到 399）：400 → 398 → 397（函数数 4133 → 4128 → 4119）。
+    经 +2 → +3 两次新增现为 **402**）：400 → 398 → 397（函数数 4133 → 4128 → 4119），
+    再 4119 → 4141（+2 文件）→ 4159（+3 文件）。
     三次删除分别是 `test_multi_hop_engine.py` / `test_semantic_chunker.py`（`e5333eb6f`）
     与 `test_agent_retriever.py`（删 agent_retriever 时）—— 三个模块均经
     **import blocker 运行时实测**确认零调用方后删除。
