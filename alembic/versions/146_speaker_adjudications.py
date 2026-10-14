@@ -1,6 +1,6 @@
 """146: meeting_speaker_adjudications —— 会议说话人人工裁决表
 
-**Revision ID**: 146_meeting_speaker_adjudications
+**Revision ID**: 146_speaker_adjudications
 **Revises**: 145_kpt_content_tsvector
 **Create Date**: 2026-10-14
 
@@ -38,7 +38,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision: str = "146_meeting_speaker_adjudications"
+revision: str = "146_speaker_adjudications"
 down_revision: Union[str, None] = "145_kpt_content_tsvector"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
