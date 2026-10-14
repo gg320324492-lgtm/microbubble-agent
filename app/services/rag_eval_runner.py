@@ -31,6 +31,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.celery import celery_app
 from app.services.ground_truth_loader import load_ground_truth
 from app.services.hybrid_retriever import HybridRetriever
 from app.models.rag_eval_report import RAGEvaluationReport
@@ -242,27 +243,40 @@ class RAGEvalRunner:
 
 
 # PR5 W91 +6: Celery nightly evaluation task (派工 brief §2 celery 新增)
-# 派工 v11 件 4a 双门控: 仅新增 1 task, 不动 celery_app.conf.imports (旧模块不动)
+# 2026-10-15 修复 (类 20.219 同源): 原实现只有 `async def run_nightly_evaluation()`
+#   既无 @celery_app.task 也不在本模块以外任何处被 await → beat 把
+#   "app.services.rag_eval_runner.run_nightly_evaluation" 当作 task 名派发时,
+#   worker 报 "Received unregistered task" 静默丢弃, nightly 评测从未跑过。
+#   修法照抄本仓既有 Celery 同步 task 范式 (chat_history_tasks / drive_cleanup_tasks/
+#   meeting_inspector): NullPool 独立 engine + asyncio.run, 不复用主进程 async_session
+#   (主 session 绑定主 loop, asyncio.run 新 loop 会触发 "Future attached to different loop")。
 # 异步评测: redis broker + json serializer (与已有 schedule 一致)
-async def run_nightly_evaluation():
+@celery_app.task(name="app.services.rag_eval_runner.run_nightly_evaluation")
+def run_nightly_evaluation():
     """PR5 夜间批量 RAG 评测 — 跑 200 题 ground-truth 写 rag_eval_reports (派工 brief +6)
 
     Celery 入口: 凌晨 2:00 跑 (24h 1 次), 性能门禁 P95 ≤ 10min (派工 brief +10)
     不需要 return value (Celery best-effort 写库)
     """
+    import asyncio
     try:
-        from app.core.database import async_session_maker
-        from app.services.ground_truth_loader import load_ground_truth
-        from app.services.rag_eval_runner import RAGEvalRunner
+        from app.core.celery_db import create_celery_engine_and_session
 
-        async with async_session_maker() as db:
-            runner = RAGEvalRunner(db)
-            # 24h 一次, 200 题全跑 (批生产)
-            report = await runner.run_evaluation(limit=None, top_k=10)
-            logger.info(
-                f"nightly RAG eval done: total={report['ground_truth_total']} "
-                f"ndcg@10={report['ndcg_at_10']} mrr={report['mrr']} hit_rate={report['hit_rate']} "
-                f"elapsed={report['elapsed_seconds']}s report_id={report['report_id']}"
-            )
+        async def _run():
+            engine, session_factory = create_celery_engine_and_session()
+            try:
+                async with session_factory() as db:
+                    runner = RAGEvalRunner(db)
+                    # 24h 一次, 200 题全跑 (批生产)
+                    report = await runner.run_evaluation(limit=None, top_k=10)
+                    logger.info(
+                        f"nightly RAG eval done: total={report['ground_truth_total']} "
+                        f"ndcg@10={report['ndcg_at_10']} mrr={report['mrr']} hit_rate={report['hit_rate']} "
+                        f"elapsed={report['elapsed_seconds']}s report_id={report['report_id']}"
+                    )
+            finally:
+                await engine.dispose()
+
+        asyncio.run(_run())
     except Exception as e:
         logger.error(f"run_nightly_evaluation failed: {e}", exc_info=True)

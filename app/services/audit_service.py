@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.celery import celery_app
 from app.models.knowledge import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -248,3 +249,41 @@ class AuditService:
 
 # 全局单例
 audit_service = AuditService()
+
+
+# 2026-10-15 修复 (类 20.219 同源): celery.py beat (cleanup-old-audit-logs-daily)
+#   注册的 task 名是 "app.services.audit_service.cleanup_old_logs", 但该名字在模块顶层
+#   从未存在 —— 真身是类上 @staticmethod (需 db 参数), 无 @celery_app.task 装饰器,
+#   worker 以 "Received unregistered task" 静默丢弃。实测 audit_log 表 196,827 行
+#   (2026-07-01 起) 从未被清理, audit_cleanup_log 0 行 ⇒ 30 天物理删一次都没跑过。
+#   修法照抄本仓 Celery 同步 task 范式 (NullPool 独立 engine + asyncio.run)。
+@celery_app.task(name="app.services.audit_service.cleanup_old_logs")
+def cleanup_old_logs(days: int = 30):
+    """Celery beat 入口: 物理删除 `days` 天前的 audit_log (默认 30 天)。
+
+    委托 AuditService.cleanup_old_logs (staticmethod, 可单测/reuse),
+    本函数只做 Celery wrapper (NullPool + asyncio.run + logger)。
+    """
+    import asyncio
+    try:
+        from app.core.celery_db import create_celery_engine_and_session
+
+        async def _run():
+            engine, session_factory = create_celery_engine_and_session()
+            try:
+                async with session_factory() as db:
+                    deleted = await AuditService.cleanup_old_logs(db, days=days)
+                    # 删除 0 条也 logger.info 输出 (健康监控可见, 与 chat_history/drive 约定一致)
+                    if deleted > 0:
+                        logger.warning(f"🗑️ [audit_cleanup] 物理删除 {deleted} 条 {days} 天前审计日志")
+                    else:
+                        logger.info(f"✅ [audit_cleanup] 健康: 无超过 {days} 天的审计日志")
+                    return deleted
+            finally:
+                await engine.dispose()
+
+        return asyncio.run(_run())
+    except Exception as e:
+        logger.error(f"❌ [audit_cleanup] 清理失败: {e}", exc_info=True)
+        # 返回形状对齐 chat_history / file_mention 等 cleanup task 的既有约定
+        return {"status": "error", "error": str(e), "deleted_count": 0}

@@ -219,6 +219,11 @@ celery_app.conf.imports = [
     "app.services.drive_comments_path_backfill_tasks",  # 2026-07-24 W68 第 12 批 B-1 Drive v2 PR14 path 回填
     "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
     "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册 Celery beat
+    # 2026-10-15 类 20.219 同源: beat (rag-eval-nightly-2am) 注册了
+    # rag_eval_runner.run_nightly_evaluation, 但该模块既无 @celery_app.task
+    # 也从未进本 imports 列表 → worker 以 "Received unregistered task" 静默丢弃,
+    # 自 PR5 落盘起 nightly 评测一次都没跑过 (rag_eval_reports 全库 0 行)。
+    "app.services.rag_eval_runner",  # PR5 W91 离线 RAG nightly 评测 (beat dispatch)
     "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
     "app.services.meeting_inspector",  # Batch D-4: 会议健康巡检
     "app.services.rag_auto_ingest_service",  # W100 +73: RAG 自动 ingestion 流水线
@@ -264,6 +269,7 @@ celery_app.autodiscover_tasks(
         "app.services.drive_comments_path_backfill_tasks",  # 2026-07-24 W68 第 12 批 B-1 Drive v2 PR14 path 回填
         "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
         "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册
+        "app.services.rag_eval_runner",  # 2026-10-15: nightly RAG 评测注册 (beat dispatch)
         "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
         "app.services.meeting_inspector",  # Batch D-4: 会议健康巡检
         "app.services.rag_auto_ingest_service",  # W100 +73: RAG 自动 ingestion
