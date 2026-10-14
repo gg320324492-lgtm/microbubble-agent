@@ -17,6 +17,7 @@
 | **现在项目什么状态** | `CLAUDE.md` 顶部 `## 当前状态` 段 |
 | **现在该怎么做（规则/铁律）** | `CLAUDE.md` 中段各规范段 + `## 永久铁律`（`grep -n "类 20\." CLAUDE.md`） |
 | **某次事故的完整经过** | `docs/incident/`（README 在内有分工说明） |
+| **跨会话/换机的交接事项**（⚠️ **改动不在 git 里、只在本机 `.env` 的**） | `desktop-conversion/docs/handoff/`：<br>· `2026-10-14-env-llm-model-name-handoff.md` —— **对话全废的根因**：`.env` 里 7 个 `AGENT_*_MODEL` 是 Ollama 模型名而 `LLM_BACKEND` 指向 MiniMax。**换机/重建 `.env` 必须手动同步**，且改完必须 `--force-recreate`（`restart` 不刷新 env）<br>· `2026-10-09-L14-db-password-rotation-handoff.md` —— DB 密码轮换导致的测试失能与硬编码残留 |
 | **当初为什么这么定（决策链）** | `docs/decisions/`、`docs/refactor-decision/`、`docs/W-N-decisions/` |
 | **怎么部署 / 部署出过什么问题** | `docs/deploy.md`（现行）+ 根目录 `deploy-*` `build-dist-runbook.md`（历史） |
 | **RAG 架构与评测** | `docs/rag/`（31 个）、`docs/qa-bench/`、`docs/bench/` |
@@ -38,6 +39,7 @@
 | `plans/` | 2 | 可行性方案（2026-10-09 新增） | 一次性方案 |
 | `grafana/` | 1 | 监控 | 与 `deploy/grafana/` 配置同步 |
 | `history/` | 19 | 历史档案 | 只读 |
+| （`desktop-conversion/docs/handoff/`，**不在本 `docs/` 下**） | 2 | **跨会话/换机交接** | 追加，每份一个时间戳；**内容多为「改动不在 git 里」的环境事实**（如未入库的 `.env`），接手前必读 |
 | `superpowers/` | 22 | 早期方案与审计反馈 | 只读 |
 | `roadmap-phases/` `phase14/` `phase15/` `P2-leftover/` | 38 | 阶段计划与留口 | 多已完结 |
 | `archived/` `_archive_2026-07-12/` | 162 | **归档** | 只读，不再更新 |
