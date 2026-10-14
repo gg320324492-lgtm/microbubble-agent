@@ -2,7 +2,7 @@
 W89-P-3 (2026-07-30): Playwright CI workflow 自身 e2e 验证
 
 派工 brief 步骤 5 硬门禁: 验证 .github/workflows/playwright.yml 是合法的 GH Actions YAML,
-含 a11y + visual 2 job + pull_request 触发 + ubuntu-latest runner.
+含 a11y + visual 2 job + pull_request 触发 + 版本钉死的 ubuntu runner.
 
 派工 v6 §1.2 必真验证: 4 PASS, 不允许 skip.
 """
@@ -23,20 +23,25 @@ def test_workflow_yaml_valid():
 
 
 def test_has_a11y_job():
-    """a11y job 存在 + ubuntu-latest runner + timeout >= 10 min"""
+    """a11y job 存在 + 版本钉死的 ubuntu runner + timeout >= 10 min"""
     data = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     assert "a11y" in data["jobs"]
     job = data["jobs"]["a11y"]
-    assert job["runs-on"] == "ubuntu-latest"
+    # 2026-10-15: ubuntu-latest 将于 2026-10-19 迁 Ubuntu 26 ⇒ 全仓钉成 ubuntu-24.04。
+    # 这里断言"钉死"而非某一个具体值, 避免下次升级 runner 时又改测试。
+    assert job["runs-on"].startswith("ubuntu-"), "runner 必须是 ubuntu"
+    assert job["runs-on"] != "ubuntu-latest", "必须钉死版本, 不能用浮动 latest"
     assert job.get("timeout-minutes", 0) >= 10
 
 
 def test_has_visual_job():
-    """visual job 存在 + ubuntu-latest runner + timeout >= 15 min"""
+    """visual job 存在 + 版本钉死的 ubuntu runner + timeout >= 15 min"""
     data = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     assert "visual" in data["jobs"]
     job = data["jobs"]["visual"]
-    assert job["runs-on"] == "ubuntu-latest"
+    # 同上: 断言钉死, 不锁具体版本号。
+    assert job["runs-on"].startswith("ubuntu-"), "runner 必须是 ubuntu"
+    assert job["runs-on"] != "ubuntu-latest", "必须钉死版本, 不能用浮动 latest"
     assert job.get("timeout-minutes", 0) >= 15
 
 
