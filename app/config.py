@@ -103,7 +103,14 @@ class Settings(BaseSettings):
 
     # (2026-09 企业微信下线: WECHAT_* 7 项配置已删, 见 git 历史 / wechat 包删除 commit)
 
-    # Whisper (2026-06-30 ASR 迁移: 退役中, 留作紧急回滚)
+    # Whisper (2026-06-30 ASR 迁移: 已退役)。⚠️ 三项配置当前**零消费者** ——
+    #   生产路由 (post_meeting_tasks.py:180-186) 只走 GPU 7B / SenseVoice，从不走 Whisper；
+    #   whisper 服务段在 docker-compose.yml 已注释，容器不存在。
+    #   "保留作紧急回滚"是**有意决策**，但回滚**不是改这几个值就能生效**，需人工启用：
+    #     1. 取消 docker-compose.yml 的 whisper 服务段注释并 `docker compose up -d whisper`
+    #        (需 8 GB 显存；该段用 WHISPER_MODEL_SIZE/WHISPER_DEVICE 作 env 默认值)
+    #     2. 恢复 app/voice/asr.py 的 Whisper 调用路径 (当前单 SenseVoice 后端, 无 fallback)
+    #   详见 docker-compose.yml 该段注释 + plan woolly-pondering-muffin.md
     WHISPER_MODEL_SIZE: str = "large-v3"
     WHISPER_DEVICE: str = "cuda"
     WHISPER_SERVICE_URL: str = "http://whisper:8002"
@@ -114,7 +121,10 @@ class Settings(BaseSettings):
     SENSEVOICE_MODEL: str = "iic/SenseVoiceSmall"
     SENSEVOICE_DEVICE: str = "cuda"
     SENSEVOICE_SERVICE_URL: str = "http://sensevoice:8003"
-    # ASR 后端路由: sensevoice (新默认) / whisper (紧急回滚)
+    # ASR 后端路由 (2026-06-30 迁移: sensevoice 新默认 / whisper 旧回滚)。
+    # ⚠️ 当前**零消费者** —— 生产路由 (post_meeting_tasks.py:180-186) 由 GPU_ASR_ENABLED +
+    #   GPU_ASR_MIN_SEC/GPU_ASR_MAX_SEC 决定走 7B 还是 SenseVoice，**从不读本键、也不走 Whisper**；
+    #   app/voice/asr.py 已是单 SenseVoice 后端 (无 fallback)。保留仅为回滚语义说明。
     ASR_DEFAULT_BACKEND: str = "sensevoice"
 
     # 2026-09-07 GPU 会议 ASR (VibeVoice-ASR-7B, host 守护服务按需占显存)
@@ -189,7 +199,12 @@ class Settings(BaseSettings):
     KB_POLLING_INTERVAL_SEC: int = 300
 
     # 2026-07-30 W86 mini-13 C: KB 自动入库总开关 (env 覆盖, 默认关闭)
-    # 开启后 save_to_kb.py / auto_intake_celery_task 才会真正写入, 否则只跑 dry-run 收集统计。
+    # 开启后 save_to_kb.py 才会真正写入, 否则只跑 dry-run 收集统计。
+    # ⚠️ 真实消费方是 tests/qa-bench/save_to_kb.py:75, 它读的是 **进程环境变量**
+    #   (os.environ.get("AUTO_KB_INTAKE_ENABLED")), **不是本 settings 字段** —— 本字段
+    #   仅用于加载验证 (tests/test_w86_mini_13_c_kb_summary_e2e.py)。
+    #   (原注释引用的 auto_intake_celery_task 全仓不存在; 实际 Celery task 是
+    #    app.services.qa_bench_tasks.auto_intake_rollback_task, 与本开关无关。)
     # 灰度发布期间维持 false, 验证完成再切 true。
     AUTO_KB_INTAKE_ENABLED: str = "false"
 
@@ -309,10 +324,9 @@ class Settings(BaseSettings):
     POLISH_CACHE_TTL_SECONDS: int = 86400  # 24h
     POLISH_LOCK_TTL_SECONDS: int = 120  # 2min
 
-    # 2026-06-02 三级润色流水线（实时 / 聚批）— L3 全文润色 2026-07-12 删除（孤儿 service）
-    POLISH_BATCH_INTERVAL_SECONDS: int = 30  # L2 攒批触发间隔
-    POLISH_BATCH_MAX_SEGMENTS: int = 5  # L2 攒批最大段数
-    POLISH_BATCH_MIN_CHARS: int = 30  # L2 攒批最少字符数（避免空批）
+    # 2026-06-02 三级润色流水线（实时 / 聚批 / 全文）已全部删除：
+    #   L2 攒批（30s/5 段/30 字）与 L3 全文润色均于 2026-07-12 随孤儿 service 删除。
+    #   现役只有整场会议分批润色，预算见下方 POLISH_LLM_BATCH_*（用它，不是本文任何项）。
 
     # 2026-09-15 P0（会议 250 润色 0 变化事故）: 整场会议润色的**单批**预算。
     # 事故: 1904 段一次性发一个 prompt → 63,545 tokens，而 ollama num_ctx 只有

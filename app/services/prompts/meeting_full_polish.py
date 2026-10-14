@@ -1,9 +1,9 @@
 """会议转录 L3 全文精润色 prompt（2026-06-02）
 
-与 L2 聚批润色（meeting_polish.py）的区别：
-- L2：每 30s/5 段攒批 1 次，使用 mimo-v2.5 默认模型
-- L3：hangup 时全文 1 次，使用 claude-sonnet-4 高质量模型
-- L3 强调"全文一致性 + 删除孤立幻觉短句 + 输出 removed 字段"
+⚠️ 本模块是 L3 全文精润色 prompt 的**历史遗留**：L2 聚批（每 30s/5 段攒批）与
+L3 全文润色流水线均已于 2026-07-12 随孤儿 service 删除，本 prompt 当前无调用方。
+现役整场会议润色走 meeting_ai_polish.py（分批，预算见
+config.POLISH_LLM_BATCH_MAX_*）。下文保留 L2/L3 的原始设计说明供参考。
 """
 import json
 
