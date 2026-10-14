@@ -259,6 +259,11 @@ class FileParserService:
             import fitz  # PyMuPDF
             import re
 
+            from app.services.pdf_layout_cleaner import (
+                clean_page,
+                is_line_numbered_pdf,
+            )
+
             doc = fitz.open(stream=data, filetype="pdf")
             if doc.needs_pass:
                 doc.close()
@@ -274,6 +279,11 @@ class FileParserService:
             full_text_parts = []  # 累积 text 用于 anchor 搜索
             current_offset = 0
 
+            # 是否「行号版式」稿件：只看**第 1 页**（后续页同样式，无需重复判）。
+            line_numbered = is_line_numbered_pdf(doc[0].get_text()) if len(doc) else False
+            if line_numbered:
+                logger.info("PDF 检出 Word 行号版式，启用版面清洗（断词接合）")
+
             for page_num in range(len(doc)):
                 page = doc[page_num]
 
@@ -285,6 +295,14 @@ class FileParserService:
 
                 # 提取文本
                 text = page.get_text()
+                # 2026-10-14: Word 稿件（行号版式）版面清洗。
+                # 投稿 PDF 每行插行号、每页插页码，且**词被行号劈开**
+                # （`react\n34 \nion` ⇒ "reaction"），直接入库会让 BM25/tsvector
+                # 匹配不到被劈开的词 ⇒ 该文献等于检索不到（类 20.220）。
+                # 只对「行号版式」PDF 施加（is_line_numbered_pdf 判据），
+                # 普通排版 PDF 保持原样不动。
+                if line_numbered:
+                    text = clean_page(text)
                 page_text_start_offset = current_offset
                 if text:
                     pages_text.append(text)
