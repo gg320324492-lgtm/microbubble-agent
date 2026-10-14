@@ -85,14 +85,30 @@ DEFAULT_YAML_PATH = os.getenv(
 
 @dataclass
 class HybridWeights:
-    """四路召回权重
+    """混合检索的**权重配置**（2026-10-14 订正，原 docstring 写"四路"已失真）
 
-    字段:
-        vector: 向量检索 (pgvector HNSW 语义搜索)
-        bm25: BM25 关键词检索 (rank_bm25 + jieba)
-        graph: 知识图谱实体链检索 (Neo4j)
-        rerank: Cross-encoder 重排序 (BGE m3)
-        chunk: chunk 级向量召回 (parent-child, 2026-09-01 WP1.7 RRF 第 4 路)
+    ⚠️ **实测路由**（`HybridRetriever.retrieve()`，非按本 docstring 推断）：
+      **7 路召回**（各自独立取候选池）+ **rerank 后处理**：
+
+      | 路 | 权重 | 来源 | 备注 |
+      |---|---|---|---|
+      | `vector` | 0.4 | `knowledge.embedding` (pgvector HNSW) | 文档级语义（第 1 路） |
+      | `bm25` | 0.3 | `rank_bm25` + jieba 分词 | 关键词（第 2 路） |
+      | `graph` | 0.1 | 知识图谱实体链 (Neo4j) | 第 3 路；候选池通常很小（实测常仅数条） |
+      | `chunk` | 0.2 | `knowledge_chunks.chunk_embedding` | chunk 级向量，第 4 路 (WP1.7) |
+      | `meetings` | **0.8** | `meeting_chunks` | 第 5 路，权重最高（会议转录量大） |
+      | `drive` | **0.7** | `knowledge_chunks` 的 drive 语料域 (`storage_mode='drive'`) | 第 6 路 |
+      | `image` | 0.15 | OCR 图片召回 | W100-RAG-5，第 7 路，**rerank 前**折算进 score |
+
+      另有两个**不是独立召回路**的字段，容易混淆：
+      - `rerank` (0.2)：Cross-encoder (BGE m3) **重排序后处理**，不产生候选池，
+        权重作用于已有候选的最终得分。
+      - `temporal` (0.0)：时间衰减**最终乘子**，刻意保持 0（不参与融合）。
+
+    ⚠️ **权重只对"已被召回的候选"生效** —— 某一路没召回的文档，
+    调高它的权重也救不回来（类 20.223 的形态：先分清是哪一层的问题）。
+    2026-10-14 实测：某篇文献在 7 路里有 5 路未召回，融合后必然缺席，
+    与权重取值无关。
     """
 
     vector: float = 0.4

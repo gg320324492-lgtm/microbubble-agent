@@ -498,7 +498,9 @@ class HybridRetriever:
         except Exception:
             pass
 
-        # WP2 (2026-09-02): drive 文件内容第 7 路 — knowledge_chunks drive 语料域
+        # WP2 (2026-09-02): drive 文件内容路 — knowledge_chunks drive 语料域
+        # 路序按 HybridWeights docstring 的实测口径: drive 是第 6 路,
+        # image (W100-RAG-5) 是第 7 路且在 rerank 前折算进 score。
         # 可见性: private 仅 owner (user_id=None 时仅 team/public)
         _t_drive = time.perf_counter()
         try:
