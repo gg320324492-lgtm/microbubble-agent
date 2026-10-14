@@ -813,8 +813,10 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
 
 > 每条对应一次真实事故，是**现在该怎么做**的规则，不是历史记录。
 > 事故上下文见 `docs/incident/2026-08-04--2026-09-18-status-snapshots.md`。
-> 覆盖类 20.155–226，共 **36 条**（编号不连续，20.165–20.170 / 20.173–20.179 /
+> 覆盖类 20.155–227（编号不连续，20.165–20.170 / 20.173–20.179 /
 > 20.189–20.211 无对应条目）。
+> ⚠️ **本行原先写死"共 36 条"，已删** —— 条数会随新增漂移，写死即失真（类 20.224 的教训）。
+> 要数就现场数：`grep -cE '^- \*\*类 20\.[0-9]+\*\*' CLAUDE.md`。
 
 - **类 20.155**: bench 脚本 --help 子进程必须显式 PYTHONPATH=REPO_ROOT
 - **类 20.156**: argparse --help 在某些版本重定向到 stderr, subprocess 必须 capture_output=True
@@ -1244,6 +1246,48 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
     —— 曾把一个 **237 秒**的块因末尾差 **0.3 秒**判为已用而丢弃；
   - 「先设一个时长门槛」在**样本本身偏短**时会**静默返回空**，
     "没有数据"与"门槛设错"必须分开判——曾因设 15 秒门槛而把一个最长仅 14.5 秒的会议整场滤空。
+- **类 20.227**: **改 `.env` 里的 LLM 配置必须同时对齐「后端」与「模型名」两个维度，
+  且必须实测 tools 支持；另: CI 的 `paths` 过滤会让 workflow 因"没跑"而显示绿** ——
+  2026-10-14 小气助手对话失效，三层叠加，逐层修好才看得见下一层：
+
+  | 层 | 报错 | 根因 |
+  |---|---|---|
+  | 1 | `unknown model 'qwen3.8:27b'` | `LLM_BACKEND=openai_compat`(→MiniMax) 但 **7 个 `AGENT_*_MODEL` 是 Ollama 模型名** |
+  | 2 | `tool result's tool id(plan_00_...) not found` | **系统代查结果冒充模型 tool_call**（见下） |
+  | 3 | CI `value too long for VARCHAR(32)` | alembic revision id 起成 **33 字符** |
+
+  **① 后端与模型名是两个独立维度，改一个极易漏另一个**。判"该往哪边修"的唯一办法是
+  **同一模型名分别打两个后端实测**（本次: `MiniMax-Text-01`@MiniMax=200 /
+  `qwen3.8:27b`@MiniMax=`unknown model` / `qwen3.8:27b`@Ollama=200 ⇒ 后端是好的、
+  是模型名错）。**且必须同时验 tools 支持** —— 否则重演 2026-09-09 那次
+  "不支持 tools → `tool_calls=0` → 全靠编"（**类 20.220: 不报错、但副作用没发生**）。
+  ⚠️ **`.env` 未入库（含密钥）⇒ 这类修复只在本机**，换机/重建/交接需**手动同步**。
+
+  **② 系统代查的工具结果不得冒充模型的 tool_call**。`agentic_loop.py` 两处
+  （Phase 0 计划 / tool-nudge 补查）曾把结果当 Anthropic `tool_result` 块注入，
+  但 `tool_use_id` 是**本地合成**的（`plan_{idx}_{name}` / `nudge_{j}`），
+  **从没经过模型**；而前面只有一条**纯 text 的 assistant 轮** ⇒ OpenAI 协议下
+  `role="tool"` 成**孤儿** ⇒ 严格后端（MiniMax）**400**。
+  ⚠️ **Ollama 兼容层宽松所以长期隐形**，一换严格后端立刻炸 —— 且代码注释里
+  **早就预见过**这个风险（当时只是"退化成纯 text"，没修协议）。
+  ⇒ **判据: `tool_use_id` 是否来自模型**。来自模型的（`tu["id"]`）协议正确、勿动；
+  系统代查的应作**纯文本上下文**注入，不谎报工具来源。
+
+  **③ 🔴 CI 会因为「没跑」而显示绿** —— `server-tests-baseline.yml` 与
+  `qa-bench-smoke.yml` **都有 `paths` 过滤**，而 **`qa-bench-smoke` 的清单里没有
+  `alembic/**`**。改迁移的那次 push **两个都不触发**，CI 面板"绿"但**根本没验证**
+  （类 20.220 的形态: 绿不是因为修好了, 是因为没跑）。
+  **补救 = 手动 dispatch**：
+  ```bash
+  gh workflow run ".github/workflows/qa-bench-smoke.yml" --ref main
+  gh workflow run ".github/workflows/server-tests-baseline.yml" --ref main
+  ```
+  ⚠️ **`qa-bench-smoke` 是唯一会 `alembic stamp head` 的 job** ⇒ 只有它能抓到
+  revision 名过长这类问题；它不触发则缺陷静默进 main。
+  **同名纪律**: revision id **必须 ≤32 字符**（`alembic_version.version_num` 在
+  **CI 是 VARCHAR(32)、生产是 VARCHAR(64)** ⇒ **本地/生产全绿、只有 CI 红**，
+  判据只能是跑 CI）。命名约定早见于 017/030/031 三个迁移的 docstring（055 也为此刻意重命名）。
+
 - ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
   原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /
   Action 补 powershell.exe 解释器 / alembic 断言改不变量），端到端验证 rc=0、`PASS 7/7`"。
