@@ -52,7 +52,7 @@ permissions:
 jobs:
   qa-bench-smoke:
     name: QA Bench 200 题 Smoke (test DB)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     # 2026-10-06 缺陷 4: timeout 复算 10 -> 15, 依据真 run 时间戳 (非拍脑袋):
     # 固定开销实测:
     #   setup -> Install deps   16s  (smoke run 37481598381: 14:45:17 -> 14:45:33)

@@ -77,7 +77,7 @@ permissions:
 jobs:
   stylelint:
     name: Stylelint (CSS / Vue)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -123,7 +123,7 @@ jobs:
   # stylelint 债本身见 S3.7 与 S3.4 (c)（baseline-guard 修复 + 基线棘轮），不在本改动范围。
   frontend-unit-tests:
     name: Frontend unit tests (vitest real gate)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -202,7 +202,7 @@ jobs:
   # P3 守卫：v70/v71/v72 累计的 0 错误基线 + v74 趋势统计
   stylelint-baseline-guard:
     name: Stylelint 0 errors baseline + trend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
@@ -376,7 +376,7 @@ jobs:
   # - 保留 baseline PNG 和 spec 文件作本地 dev 用, 不进 CI
   visual-regression-deprecated: # 占位 job (空), workflow 保持 3 jobs 结构
     name: Visual regression (已废弃)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     if: false  # 永远跳过
     steps:
       - run: echo "Visual regression job 已废弃 (2026-06-29). 见 CLAUDE.md"

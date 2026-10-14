@@ -30,7 +30,7 @@ permissions:
 jobs:
   build:
     name: Build & push app-test image to GHCR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     # 2026-10-02 S3.9: 15 -> 60 minutes (tried 30 first, still not enough; see measurements).
     #
     # **Measured phase timings** (run 37030254673, this commit, the timeout=30 attempt):

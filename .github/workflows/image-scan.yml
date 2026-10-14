@@ -88,7 +88,7 @@ jobs:
     #   ⚠️ `scan-deps` 的 name **故意保留** `${{ matrix.name }}`: 它**从不**被 skip
     #   (if 条件为真才跑), 所以矩阵总能展开, 逐镜像可区分是有价值的。
     name: trivy full (6 images)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     # PR 上仅 advisory: 单个矩阵项失败不拖垮整个 workflow
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     strategy:
@@ -250,7 +250,7 @@ jobs:
   scan-deps:
     if: github.event_name == 'push'
     name: trivy deps ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     strategy:
       fail-fast: false
       matrix:

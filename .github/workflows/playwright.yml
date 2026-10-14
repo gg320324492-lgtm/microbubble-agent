@@ -82,7 +82,7 @@ jobs:
   # ========== Job 1: a11y (axe-core) ==========
   a11y:
     name: axe-core a11y
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     # 2026-10-03 S3.9: 15 -> 30 分钟。run 37039049999 实测: 前置开销就已 866s
     # (15 分钟预算的 96%), 测试一步没跑到就被 job 超时杀掉, 结论是 cancelled
     # 而非任何真实断言失败。
@@ -404,7 +404,7 @@ jobs:
   # ========== Job 2: visual regression ==========
   visual:
     name: visual regression
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # 钉死: latest 标签将于 2026-10-19 迁 Ubuntu 26, 勿改回
     timeout-minutes: 40
     # 2026-10-09: 25 -> 40 分钟 (超时撞线, 不是 runner 竞争)。
     #
