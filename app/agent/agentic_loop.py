@@ -1043,17 +1043,28 @@ class AgenticLoop:
                         label=f"✓ {tool_name}",
                     )
 
-                # 注入 messages (Anthropic tool_use 协议格式, 与 Phase 1 一致)
-                # 关键: 每个 tool_result 是独立 block + tool_use_id 对应 (让 Phase 2 grounding 看得到)
+                # 注入 messages (**不冒充模型工具调用**)
+                # ⚠️ 2026-10-14: 这里原先把 plan_step_results 当 Anthropic tool_result 块注入
+                # (`{"type":"tool_result","tool_use_id":"plan_00_xxx"}`), 但那个 id 是**本地合成**的
+                # (第 979 行 `plan_{idx:02d}_{tool_name}`), 从没经过模型。
+                # OpenAI 协议要求 role="tool" 的前一条 assistant 必须带 tool_calls, 而这里前面
+                # 只有一条纯 text 的 assistant → 成孤儿 → **MiniMax 直接 400**
+                # (`tool result's tool id(plan_00_search_knowledge) not found`)。
+                # Ollama 兼容层宽松, 所以这个缺陷长期只在 ollama 后端下隐形。
+                # ⇒ 改为**纯文本注入**背景信息, 语义不变但不谎报来源。
                 if plan_step_results:
+                    _plan_ctx = "\n\n".join(
+                        "[%s] %s" % (r.get("tool_use_id", ""), r.get("content", ""))
+                        for r in plan_step_results
+                    )
                     messages.append({
-                        "role": "assistant",
-                        "content": [{
-                            "type": "text",
-                            "text": f"[计划阶段] 我已主动查询 {success_count} 个工具获取背景信息。",
-                        }],
+                        "role": "user",
+                        "content": (
+                            "[计划阶段] 系统已代为查询 %d 个工具, 结果如下 "
+                            "(这些是背景资料, 不是你的工具调用):\n\n%s"
+                            % (success_count, _plan_ctx)
+                        ),
                     })
-                    messages.append({"role": "user", "content": plan_step_results})
 
                 # W100 +53: 不再 yield post-loop plan_step done — 每个 tool_result 后已就地更新 status,
                 # 再 yield "phase0_plan done" 会变成孤儿 step (无 tool_use_id 匹配, push 新行).
@@ -1159,14 +1170,24 @@ class AgenticLoop:
                                 except Exception as _e:
                                     logger.warning(f"[tool-nudge] dispatch {_tn} 失败: {_e}")
                             if _inj:
-                                # 注入格式对齐 Phase 0 已验证模式 (纯 text assistant 轮 +
-                                # user tool_result 列表): 手工构造 tool_use 块缺真实
-                                # model-generated id, ollama 兼容层可能拒 (与 400 同族风险)
-                                messages.append({"role": "assistant", "content": [
-                                    {"type": "text",
-                                     "text": "[补查] 检测到需要实时数据, 系统已代为查询 "
-                                             f"{len(_inj)} 个工具。"}]})
-                                messages.append({"role": "user", "content": _inj})
+                                # ⚠️ 2026-10-14: 与 Phase 0 同源修复 —— `_inj` 是**本地合成**的
+                                # tool_result 块 (`nudge_{j}` 这个 id 从没经过模型), 而前面只有一条
+                                # 纯 text 的 assistant 轮。OpenAI 协议要求 role="tool" 必须紧跟
+                                # 带 tool_calls 的 assistant, 否则 **MiniMax 直接 400**
+                                # (`tool result's tool id(...) not found`)。
+                                # ⇒ 改为纯文本注入, 语义不变但不谎报工具来源。
+                                _nudge_ctx = "\n\n".join(
+                                    "[%s] %s" % (r.get("tool_use_id", ""), r.get("content", ""))
+                                    for r in _inj
+                                )
+                                messages.append({
+                                    "role": "user",
+                                    "content": (
+                                        "[补查] 检测到需要实时数据, 系统已代为查询 %d 个工具, "
+                                        "结果如下 (背景资料, 不是你的工具调用):\n\n%s"
+                                        % (len(_inj), _nudge_ctx)
+                                    ),
+                                })
                                 continue
                         # 无可执行工具 → 退回文本 nudge (assistant 轮压平纯字符串防 ollama 400)
                         logger.info("[tool-nudge] 无建议工具, 退回文本指令重试")
