@@ -1,11 +1,11 @@
 """全站 API 限流器 — 按类型分级
 
-5 tier 全站限流，通过 ``rate_limit_middleware`` 统一应用 (v31.2.6)。
+全站 API 限流（11 个 tier），通过 ``rate_limit_middleware`` 统一应用 (v31.2.6)。
 
 完整文档：[`docs/rate-limit.md`](../docs/rate-limit.md)（含响应头/Redis 存储/FAQ）。
 完整 endpoint × tier 矩阵：[`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md)。
 
-5 tier 默认配置（生产）：
+middleware 分派的 tier（生产，共 11 个）：
 
     +-----------------+----------+---------+----------------------------------------------+
     | Tier            | 限制      | 窗口(秒) | 应用场景                                       |
@@ -26,6 +26,8 @@
     | chunked_upload    | 60/min   | PUT /meetings/{id}/audio-chunk        |
     | drive_upload      | 50/min   | /api/v1/drive/* + /upload/* 写操作      |
     | drive_list        | 300/min  | /api/v1/drive/* + /upload/* GET       |
+    | chat_session_delete | 300/min | DELETE /api/v1/chat/sessions[/{id}] (2026-08-26) |
+    | recording_heartbeat | 10/min | POST /meetings/{id}/recording-{heartbeat,presence} (2026-10-08) |
     +-------------------+----------+---------------------------------------+
 
 存储后端（v31.2.5）：Redis ZSET 滑动窗口（``AsyncRedisRateLimiter``）。
@@ -54,6 +56,8 @@
     - v31.2.4  AsyncRedisRateLimiter 类实现（未接入）
     - v31.2.5  切到 AsyncRedisRateLimiter + middleware await 化
     - v31.2.6  Retry-After 头 + login_limiter Redis ZSET 化
+
+登录/重置用独立 limiter（不经 middleware）：login_limiter 5/300s、pwreset_limiter 5/900s。
 
 参考：[memory/rate-limit-redis-2026-06-26.md](../memory/rate-limit-redis-2026-06-26.md)
 """
@@ -309,9 +313,9 @@ def _get_rate_limit_type(request: Request) -> str:
 
     返回 "unlimited" 表示跳过限流（/auth/me 等安全只读端点）。
 
-    完整 5 tier 判定规则 + endpoint 矩阵见：
-      - [`docs/rate-limit.md`](../docs/rate-limit.md) — 5 tier 配置/响应头/FAQ
-      - [`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md) — 31+ endpoint × tier 完整映射
+    完整 tier 判定规则 + endpoint 矩阵见：
+      - [`docs/rate-limit.md`](../docs/rate-limit.md) — tier 配置/响应头/FAQ
+      - [`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md) — endpoint × tier 完整映射
     """
     path = request.url.path
     method = request.method
@@ -462,7 +466,7 @@ def _try_attach_user_id(request: Request) -> None:
 async def rate_limit_middleware(request: Request, call_next):
     """全站限流中间件
 
-    v31.2.6: 当前生产配置（5 tier + 3 扩展 tier）
+    v31.2.6: 当前生产配置（11 tier：9 个通用/路径 tier + chat_session_delete + recording_heartbeat）
 
     - 抗 docker compose restart (Redis 默认 RDB 每分钟 snapshot, AsyncRedisRateLimiter)
     - 跨实例共享 (未来多 worker / 多 pod)
@@ -473,8 +477,8 @@ async def rate_limit_middleware(request: Request, call_next):
     - PR7 集成：响应后调用 ``app.core.audit_middleware._audit_request`` 写 audit_log
 
     完整文档：
-      - [`docs/rate-limit.md`](../docs/rate-limit.md) — 5 tier 配置 / 响应头 / Redis / FAQ
-      - [`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md) — 31+ endpoint × tier 映射
+      - [`docs/rate-limit.md`](../docs/rate-limit.md) — tier 配置 / 响应头 / Redis / FAQ
+      - [`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md) — endpoint × tier 映射
     """
     from starlette.responses import JSONResponse
 

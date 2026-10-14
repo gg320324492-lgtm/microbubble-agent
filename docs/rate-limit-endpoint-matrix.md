@@ -1,6 +1,6 @@
-# 31 endpoint × 5 tier 矩阵
+# endpoint × 11 tier 矩阵
 
-> **配套文档**：[`docs/rate-limit.md`](rate-limit.md) 介绍 5 tier 配置 / 响应头 / Redis 存储。本文档列出全站 31+ endpoint 各自命中的 tier + 客户端维度 + 备注豁免规则。
+> **配套文档**：[`docs/rate-limit.md`](rate-limit.md) 介绍 11 tier 配置 / 响应头 / Redis 存储。本文档列出全站 endpoint 各自命中的 tier + 客户端维度 + 备注豁免规则。
 
 ## TL;DR
 
@@ -15,9 +15,11 @@
 | `chunked_upload` | 60/min | 1 | `PUT /meetings/{id}/audio-chunk` |
 | `drive_upload` | 50/min | 14 | `/drive/files/{upload,init,chunk,complete,abort}` + `/upload/multipart/{init,complete,abort}` + 写操作 |
 | `drive_list` | 300/min | 8 | `GET /drive/files`、`/starred`、`/trash`、`/storage-stats` 等 |
-| `unlimited` (豁免) | ∞ | 5 | `/api/v1/auth/me` + 4 个 analytics 写 |
+| `chat_session_delete` | 300/min | 2 | `DELETE /api/v1/chat/sessions/{id}` + `DELETE /api/v1/chat/sessions`（2026-08-26 放宽批量删除） |
+| `recording_heartbeat` | 10/min | 2 | `POST /meetings/{id}/recording-heartbeat` + `POST /meetings/{id}/recording-presence`（2026-10-08 P0-5） |
+| `unlimited` (豁免) | ∞ | **1+2** | `_AUTH_UNLIMITED_PATHS` = `/api/v1/auth/me`（1 个）；`_ANALYTICS_PATH_RE` 里 2 个写方法（`POST /analytics/search-event` + `PATCH /analytics/search-event/{int}/click`）。两套**独立机制**，见下方 `/auth/*` 段与 `/analytics/*` 段 |
 
-> **判定逻辑**：见 [`app/core/rate_limit.py:_get_rate_limit_type`](../app/core/rate_limit.py#L194-L264)。优先级：`unlimited` (whitelist) > `sse` regex > `chunked_upload` regex > `drive_*` 路径 > `analytics` regex > `/auth/` 细分 > `/upload` 子串 > method (POST/PUT/PATCH/DELETE = write, else read)。
+> **判定逻辑**：见 [`app/core/rate_limit.py:_get_rate_limit_type`](../app/core/rate_limit.py)。优先级：`_AUTH_UNLIMITED_PATHS` (frozenset) > `chat_session_delete` (DELETE chat/sessions) > `sse` regex > `chunked_upload` regex (PUT) > `recording_heartbeat`/`recording_presence` regex (POST) > `drive_*` 路径前缀 > `admin/kb-monitor` 前缀 > `analytics` regex (写豁免 / 读 read) > `/auth/` 细分 > `/upload` 子串 > method (POST/PUT/PATCH/DELETE = write, else read)。
 
 ---
 
@@ -30,12 +32,13 @@
 | `/auth/change-password` | POST | `auth` (20/min) | user_id | |
 | `/auth/reset-password` | POST | `auth` (20/min) | IP | |
 | `/auth/init-password` | POST | `auth` (20/min) | IP | |
-| `/auth/me` | GET | **unlimited** | — | v31.2.3 豁免，JWT 鉴权已防滥用 |
+| `/auth/me` | GET | **unlimited** (`_AUTH_UNLIMITED_PATHS`) | — | v31.2.3 豁免，JWT 鉴权已防滥用 |
 | `/auth/profile` | PUT | `write` (30/min) | user_id | |
 
 > `_AUTH_SENSITIVE_PATHS` 白名单 4 个：login/change-password/reset-password/init-password → `auth` tier。
 > `_AUTH_REFRESH_PATH` 单点：/auth/refresh → `auth_refresh` tier (2026-08-14)。
-> `_AUTH_UNLIMITED_PATHS` 白名单 1 个：`/auth/me` → 完全豁免。
+> `_AUTH_UNLIMITED_PATHS` 白名单**只有 1 个**：`/auth/me` → 完全豁免。
+> ⚠️ `/auth/*` 段**不含** analytics —— analytics 那 4 个端点走的是**独立的** `_ANALYTICS_PATH_RE`（见下方 `/analytics/*` 段），不要与 `_AUTH_UNLIMITED_PATHS` 混为一谈。
 
 ---
 
@@ -88,13 +91,15 @@
 
 ---
 
-## /api/v1/meetings/* 录音子路径 (8 endpoint)
+## /api/v1/meetings/* 录音子路径 (10 endpoint)
 
 | Endpoint | Method | Tier | 客户端维度 | 备注 |
 |----------|--------|------|------------|------|
 | `/meetings/start-recording` | POST | `write` (30/min) | user_id | |
 | `/meetings/{meeting_id}/upload-audio` | POST | `upload` (10/min) | user_id | 整文件上传 |
 | `/meetings/{meeting_id}/audio-chunk` | PUT | **`chunked_upload` (60/min)** | user_id | **MediaRecorder 1s/片**，60/min = 1分钟录音 |
+| `/meetings/{meeting_id}/recording-heartbeat` | POST | **`recording_heartbeat` (10/min)** | user_id | 心跳 1/min 上报，独立 tier（2026-10-08 P0-5） |
+| `/meetings/{meeting_id}/recording-presence` | POST | **`recording_heartbeat` (10/min)** | user_id | presence 上报，与心跳共用同一 tier |
 | `/meetings/{meeting_id}/merge-chunks` | POST | `write` (30/min) | user_id | |
 | `/meetings/{meeting_id}/upload-status` | GET | `read` (200/min) | user_id | |
 | `/meetings/{meeting_id}/stop-recording` | POST | `write` (30/min) | user_id | |
@@ -102,6 +107,8 @@
 | `/meetings/{meeting_id}/cancel-recording` | POST | `write` (30/min) | user_id | |
 
 > ⚠️ **chunked_upload tier 关键**：`_CHUNKED_UPLOAD_PATH_RE` 精确匹配 `PUT /api/v1/meetings/{int}/audio-chunk`。未来加其他分片上传端点（如视频分片）需扩展 regex。
+>
+> ⚠️ **recording_heartbeat tier 关键**（2026-10-08 P0-5，会议 255 事故根因 G）：心跳与 presence 之前共用 `write` tier 30/min，被聊天/建任务挤掉 → 心跳丢失 → orphan cleanup 误杀录音。现独立 10/min，由**两个 regex**命中同一 tier：`_RECORDING_HEARTBEAT_PATH_RE` → `^/api/v1/meetings/\d+/recording-heartbeat$`、`_RECORDING_PRESENCE_PATH_RE` → `^/api/v1/meetings/\d+/recording-presence$`，且**都必须 `method == "POST"`**。429 也会写审计（audit 时序已改），否则"audit 无心跳 = 前端未发"的排查方法学会失效。
 
 ---
 
@@ -187,16 +194,17 @@
 
 ---
 
-## /api/v1/chat/sessions/* + /chat/sync + /chat/shares/* (13 endpoint)
+## /api/v1/chat/sessions/* + /chat/sync + /chat/shares/* (15 endpoint)
 
 | Endpoint | Method | Tier | 客户端维度 | 备注 |
 |----------|--------|------|------------|------|
 | `/chat/sessions` | GET | `read` (200/min) | user_id | 会话列表 |
 | `/chat/sessions` | POST | `write` (30/min) | user_id | |
+| `/chat/sessions` | DELETE | **`chat_session_delete` (300/min)** | user_id | 批量删除（2026-08-26 放宽） |
 | `/chat/sessions/search` | GET | `read` (200/min) | user_id | |
 | `/chat/sessions/{session_id}` | GET | `read` (200/min) | user_id | |
 | `/chat/sessions/{session_id}` | PATCH | `write` (30/min) | user_id | |
-| `/chat/sessions/{session_id}` | DELETE | `write` (30/min) | user_id | 软删除（30 天保留） |
+| `/chat/sessions/{session_id}` | DELETE | **`chat_session_delete` (300/min)** | user_id | 软删除（30 天保留）；2026-08-26 从 write 30/min 放宽到独立 300/min |
 | `/chat/sessions/{session_id}/messages` | GET | `read` (200/min) | user_id | |
 | `/chat/sessions/{session_id}/messages` | POST | `write` (30/min) | user_id | |
 | `/chat/sessions/{session_id}/export` | GET | `read` (200/min) | user_id | |
@@ -456,9 +464,9 @@
 ## 引用
 
 - [`app/core/rate_limit.py`](../app/core/rate_limit.py) — 核心 middleware + tier 实例 + 判定逻辑
-- [`docs/rate-limit.md`](rate-limit.md) — 5 tier 文档（配置 / 响应头 / Redis / FAQ）
+- [`docs/rate-limit.md`](rate-limit.md) — 11 tier 文档（配置 / 响应头 / Redis / FAQ）
 - [`memory/rate-limit-redis-2026-06-26.md`](../memory/rate-limit-redis-2026-06-26.md) — v31.2.5 收官沉淀
 
 ---
 
-**最后更新**：2026-07-23（Agent 6: 全站分级限流文档化 PR）
+**最后更新**：2026-10-15（订正为 11 tier，补 chat_session_delete / recording_heartbeat 分派，拆分 `_AUTH_UNLIMITED_PATHS` 与 `_ANALYTICS_PATH_RE`，去除行号锚点）
