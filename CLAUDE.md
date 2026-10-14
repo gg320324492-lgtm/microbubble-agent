@@ -1409,6 +1409,38 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   必须连同"替代判据"一起写**。已有条目的替代判据陆续回填中（本次补了
   类 20.225 ④⑤ 与 类 20.226 ⑨）。
 
+- **类 20.230**: **改 `.github/workflows/**` 之前，必须先 `grep` 测试目录里谁在断言它
+  —— 本仓有测试直接读 workflow 文件内容做字面量断言** ——
+  2026-10-15 实战：把 9 个 workflow 的 15 处 `runs-on: ubuntu-latest` 钉成
+  `ubuntu-24.04`，**漏改** `tests/playwright_ci/test_workflow_valid.py` 里两条
+  `assert job["runs-on"] == "ubuntu-latest"` ⇒ `Server Tests Baseline` **shard 0
+  红 2 条**，其余 7 片全绿。代价是**白跑一轮 8 个 workflow / 30+ 分钟算力**。
+
+  **改前必做的 grep**（改任何 workflow 的字面量之前）:
+  ```bash
+  grep -rn "<你正在改的那个字面量>" tests/ --include=*.py
+  ```
+  已知会读 workflow 的测试文件（2026-10-15 实测 **6 个**，改动前请重数）：
+  `tests/ci/test_deployment.py` / `tests/gitleaks/test_scan_clean_repo.py` /
+  `tests/playwright_ci/test_workflow_valid.py` / `tests/rag/test_pr5_e2e.py` /
+  `tests/test_workflow_yaml_syntax.py` / `tests/trivy/test_workflow_exists.py`。
+
+  **修法：断言「性质」而不是「某个具体值」** —— 本次没写成
+  `== "ubuntu-24.04"`（那样下次升 runner 又要改一次测试），而是:
+  ```python
+  assert job["runs-on"].startswith("ubuntu-"), "runner 必须是 ubuntu"
+  assert job["runs-on"] != "ubuntu-latest", "必须钉死版本, 不能用浮动 latest"
+  ```
+  ⇒ 升到 `ubuntu-26.04` 时测试不用动，而**一旦有人改回浮动 `latest` 会立刻红** ——
+  把当初的意图固化进测试，**减少下一次同类漏改的机会**。
+
+  ⚠️ **验证这类改动不要用容器内 pytest** —— 镜像里的 `.github/` 是**构建时的旧副本**
+  （镜像早于本次改动），会给出与仓库不符的结果。判据取**宿主**或 **CI**。
+  （类 20.220 已记"容器内 pytest 的已知不可信项②"。）
+
+  **同族**: 类 20.225 ④⑤（判 workflow 触发/身份别用 grep）—— 本条是它的**反向**：
+  **改 workflow 时要主动 grep，因为有人在断言它**。
+
 - ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
   原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /
   Action 补 powershell.exe 解释器 / alembic 断言改不变量），端到端验证 rc=0、`PASS 7/7`"。
