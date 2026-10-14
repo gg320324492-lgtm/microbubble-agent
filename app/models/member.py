@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Text, ARRAY, DateTime, JSON
+from sqlalchemy.sql.expression import true
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -24,11 +25,13 @@ class Member(Base, TimestampMixin):
     phone = Column(String(20))
     avatar = Column(String(500))
     bio = Column(Text)  # 个人简介
-    is_active = Column(Boolean, default=True)
+    # ⚠️ 类 20.184: server_default 的字符串会被**字面量引用**（生成 DEFAULT 'true'
+    # 而不是 DEFAULT true），故布尔列必须用 sa.true() / text()。
+    is_active = Column(Boolean, default=True, server_default=true())
     # 2026-09-05 角色扁平化 (alembic 132): 不再区分 admin/leader/member,
     # 全员等权, 本列仅作历史保留 (恒为 'member'), 不得用于任何权限判断。
     # 成员对外展示统一身份称谓, 由 grade 派生: app/core/member_identity.member_status
-    role = Column(String(20), default="member")
+    role = Column(String(20), default="member", server_default="member")
     custom_instructions = Column(Text)  # 用户自定义指令
     notification_preferences = Column(JSON, nullable=True)  # 通知偏好（2026-06-15 v2）：
     # {"enabled": True, "digest_time": "11:00", "channels": ["in_app"],
