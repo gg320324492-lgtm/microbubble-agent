@@ -1,14 +1,11 @@
 <template>
   <el-config-provider :locale="zhCn">
     <router-view v-slot="{ Component, route }">
-      <!-- 全局路由切换动画（fade-page）
-           Chat 路由（SSE 流式）通过 .is-sse-route 类在 mobile-base.css 中关闭动画 -->
       <Suspense>
         <component
           :is="Component"
           v-if="Component"
           :key="route.fullPath"
-          :class="{ 'is-sse-route': isSseRoute(route) }"
         />
 
         <template #fallback>
@@ -43,8 +40,6 @@
  * App.vue — 全局应用壳
  *
  * PR #1 基建：
- * - 全局路由切换 fade-page 动画
- * - Chat 路由 SSE 例外（is-sse-route 类关闭动画）
  * - useAdaptiveRoute 监听 resize → router.replace 重选组件
  *
  * PR #9 新增：
@@ -63,11 +58,6 @@ const route = useRoute()
 
 // PR #1：启动路由级响应式
 useAdaptiveRoute()
-
-// SSE 例外判断：Chat 路由关闭 fade 动画
-function isSseRoute(r) {
-  return r?.name === 'Chat'
-}
 
 // PR #10：PWA beforeinstallprompt 事件捕获（传给 InstallPrompt 组件）
 const deferredInstallPrompt = ref(null)

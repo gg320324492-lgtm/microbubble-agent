@@ -75,25 +75,6 @@ button,
   }
 }
 
-/* ----- 路由切换动画（仅 fade-page，不破坏 SSE） ----- */
-.fade-page-enter-active,
-.fade-page-leave-active {
-  transition: opacity 180ms ease, transform 180ms ease;
-}
-.fade-page-enter-from {
-  opacity: 0;
-  transform: translateX(8px);
-}
-.fade-page-leave-to {
-  opacity: 0;
-  transform: translateX(-8px);
-}
-/* Chat 路由例外（避免 SSE 流被中断；App.vue 给 Chat 页面根元素加 .is-sse-route 类） */
-.is-sse-route.fade-page-enter-active,
-.is-sse-route.fade-page-leave-active {
-  transition: none;
-}
-
 /* ----- input/textarea 字号修复（iOS 默认 16px 才不会缩放） ----- */
 input,
 textarea,
