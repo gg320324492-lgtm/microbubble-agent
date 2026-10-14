@@ -427,11 +427,25 @@
 （摘要 344 字 / 讨论要点 8 条 / 决议 29 条，全部符合《会议纪要标准格式》）。以下是验收中
 撞出的问题，**均未修**，等主指挥逐项处置：
 
-| # | 问题 | 位置 | 状态 |
+> ⚠️ **2026-10-15 复核订正：下表 1/2/3 三条的「待修」标记全部已过期，无一需再做。**
+> 逐条实测证据如下（**别照着旧表重复开工**）：
+> - **#1 已完全闭环**（`24c60a76f` 代码 + `63960a6e1` dist）：`app/schemas/meeting.py:75`
+>   已加 `media_duration_seconds`；后端 `meeting_recording.py:673` 与
+>   `api/v1/meeting.py:143`、`agent/tools/meeting_tools.py:163,272` 三处**都已同时给出两字段**
+>   并注明"展示必须优先 media"；前端 `MeetingDetailView.vue:490` 已是
+>   `media_duration_seconds || audio_duration || 0`；**真数据已回填**
+>   （DB 实测：256 `media=8669`、255 `media=10118`，而两者 `audio_duration` 仍是错的 39/NULL
+>   —— 这恰好反证前端改读 media 是对的）。
+> - **#3 已修**（`3613c54b9`）：`post_meeting_tasks.py:147` 已有 `_t_stage_download = _stage_now()`
+>   并透传 `_persist_stage(..., started_at=...)`，即"阶段开工前掐表"。
+> - **#2 不是待修，是已裁定不做**：见下方「会议通知：开始与完成都不做」段，
+>   2026-10-13 主指挥明确拍板。它原先被标「待修」本身就是个文档失真。
+
+| # | 问题 | 位置 | 状态（2026-10-15 复核） |
 |---|---|---|---|
-| 🔴 **1** | **会议时长显示错**：`audio_duration` 存的是**录音会话墙钟时长**，媒体真实时长在 `media_duration_seconds`。实测 **256 的 `audio_duration=39` 而真实 8669 秒（差 222 倍）**；**255 的 `audio_duration` 是 NULL** ⇒ 前端 `v-if` 直接把时长标签**整个隐藏** | `app/api/v1/meeting_recording.py:672` + `web/src/views/MeetingDetailView.vue:49,51,500` | 待修 |
-| 🟡 **2** | **处理完成无通知**：docstring 写着"6. done — 完成通知"，但代码里唯一的 notify 在 `post_meeting_tasks.py:1071` 的**失败路径**。成功完成后 `unread_count` 仍为 0 ⇒ 本次要盯 17 分钟，中途离开就不知道跑完了 | `app/services/post_meeting_tasks.py` | 待修 |
-| 🟡 **3** | **`latency_ms` 名不符实**：`meeting_processing_stages` 里它记的是**落库调用本身**耗时（downloading 18ms / transcribing 59ms / 声纹 4ms），而阶段实际耗时是 60s / 603s / 117s ⇒ **用它做耗时监控会得到完全错误的结论**（又一个类 20.220） | `meeting_processing_stages` 写入处 | 待修 |
+| ✅ **1** | **会议时长显示错**：`audio_duration` 存的是**录音会话墙钟时长**，媒体真实时长在 `media_duration_seconds`。实测 **256 的 `audio_duration=39` 而真实 8669 秒（差 222 倍）**；**255 的 `audio_duration` 是 NULL** ⇒ 前端 `v-if` 直接把时长标签**整个隐藏** | `app/api/v1/meeting_recording.py:672` + `web/src/views/MeetingDetailView.vue:49,51,500` | ✅ **已修**（`24c60a76f` + dist `63960a6e1` + 真数据已回填） |
+| ⛔ **2** | **处理完成无通知**：docstring 写着"6. done — 完成通知"，但全文件**无任何 notify 调用**（2026-10-15 实测 `grep -n notify` 零命中；旧表写的 `:1071` 是已位移的过期行号）。成功完成后 `unread_count` 仍为 0 ⇒ 本次要盯 17 分钟，中途离开就不知道跑完了 | `app/services/post_meeting_tasks.py` | ⛔ **已裁定不做**（非待修）—— docstring 那句已于 `d2a425cfb` 清掉 |
+| ✅ **3** | **`latency_ms` 名不符实**：`meeting_processing_stages` 里它记的是**落库调用本身**耗时（downloading 18ms / transcribing 59ms / 声纹 4ms），而阶段实际耗时是 60s / 603s / 117s ⇒ **用它做耗时监控会得到完全错误的结论**（又一个类 20.220） | `meeting_processing_stages` 写入处 | ✅ **已修**（`3613c54b9`，开工前掐表） |
 | ✅ **4** | **SenseVoice 曾跑在 CPU 上** —— **2026-10-13 重建容器后已自动恢复**（当时记为"待排查"，实测**不需要排查，重建即恢复**） | GPU 侧 | ✅ 已解决 |
 
 #### 问题 4 的真相：GPU 状态是**容器级**的，重建即恢复（2026-10-13 实测）
