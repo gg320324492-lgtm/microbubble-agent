@@ -1,15 +1,24 @@
-"""会议后处理任务 — 6 阶段离线处理
+"""会议后处理任务 — 7 阶段离线处理
 
-阶段：
+阶段（编号与下文 `# ===== 阶段 N` 注释一致）：
 0. downloading_audio — 下载音频 + ffmpeg 转 16kHz WAV + VAD 分段
-1. transcribing — faster-whisper ASR 转写
+1. transcribing — GPU 7B 转写优先、回退 SenseVoice（faster-whisper 仅紧急回滚用）
 2. identifying_speakers — 3D-Speaker 声纹识别 + 发言人标注
-3. generating_analysis — Claude Sonnet 分析（标题+摘要+要点+决议）
-4. creating_tasks — 从决议/要点自动创建任务
+    2.5 的 AI 润色转录由 MEETING_AI_POLISH_ENABLED 控制，默认关闭
+3. generating_analysis — LLM 分析（标题+摘要+要点+决议），后端随 LLM_BACKEND 变
+4. creating_tasks — 从决议/要点自动创建任务（ENABLE_AUTO_TASK_FROM_MEETING，默认关闭）
 5. storing_results — 存储结果到 DB
-6. done — 完成通知
+6. done — 流程结束
 
-每步：progress_service.update_progress，失败重试 1 次。
+⚠️ **本流程不发任何通知**：全文件无 notify 调用。用户侧唯一的进度信号是
+update_progress(DONE) 写 Redis（1h TTL，不持久化），关掉页面即失效。
+2026-10-13 主指挥裁定不做，故此处不再声称有（类 20.220：注释别描述不存在的东西）。
+
+`start_run(requested_stages=...)` 列的是 8 个名字，比上面多一个 `ai_polish`
+—— 它对应阶段 2.5，不是独立编号阶段。
+
+每步：progress_service.update_progress；Celery `max_retries=3`
+（default_retry_delay=60s），仅瞬时错误（ValueError/IOError/ConnectionError）重试。
 """
 
 import asyncio

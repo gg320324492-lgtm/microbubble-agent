@@ -32,8 +32,6 @@ entity_co_occurrence 两表 (0 production code 双门控守恒)。
 - 门禁 a 实体链 hit ≥ 25%: `entity_name` + `embedding` pgvector cosine 召回
 - 门禁 b 图谱召回 P95 ≤ 100ms: `ix_kg_entities_embedding_hnsw` + `ix_kg_entities_name`
 - 门禁 c 实体数 ≥ 5000: `SELECT count(*) FROM kg_entities`
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 """
 from typing import Optional
 

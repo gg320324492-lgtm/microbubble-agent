@@ -27,8 +27,6 @@
 - `generate_kg_entity_embedding` 走**函数内 lazy import** — 不在模块顶部 import
   embedding_service, 保证本模块 import 永不崩
 - 失败静默返 None (召回侧降级到精确名匹配路)
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 """
 import logging
 from typing import Any, Dict, List, Optional, Sequence, Tuple

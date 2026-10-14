@@ -412,7 +412,7 @@ class MeetingService:
 
     @classmethod
     async def _generate_summary(cls, transcript_text: str) -> str:
-        """用 Claude 生成会议摘要
+        """用 LLM（backend-aware `LLMClient`）生成会议摘要
 
         2026-08-04 P0: 改为走 backend-aware `LLMClient`, 与 `meeting_analysis_service` 一致,
         避免 `LLM_BACKEND=openai_compat|ollama` 时仍直连 anthropic 复现会议 242 的

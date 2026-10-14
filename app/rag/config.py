@@ -19,7 +19,7 @@ LC_TRACING_ENABLED: bool = (
     and os.getenv("LC_TRACING_ENABLED", "1").lower() in ("1", "true", "yes")
 )
 
-# Query 翻译/重写/扩展 — LangChain MultiQuery + HyDE
+# Query 翻译/重写/扩展 — MultiQuery 多路改写 + HyDE 假设文档 (手写实现, 无 LangChain)
 QUERY_TRANSLATION_ENABLED: bool = (
     RAG_FRAMEWORK_ENABLED
     and os.getenv("QUERY_TRANSLATION_ENABLED", "1").lower() in ("1", "true", "yes")

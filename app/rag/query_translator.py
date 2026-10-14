@@ -1,7 +1,7 @@
 """app/rag/query_translator.py — Query 翻译/重写/扩展
 
-LangChain 三件套:
-1. MultiQueryRetriever: 用户 1 问 → 3-5 路同义改写 → 并行检索 → 合并
+三件套(均为**手写实现**, 不依赖 LangChain —— langchain 四包 2026-10-12 已整体移除):
+1. MultiQuery: 用户 1 问 → 3-5 路同义改写 → 并行检索 → 合并
 2. HyDE: 用户 query → LLM 生成假设文档 → 嵌入假设文档检索 (recall +15-25%)
 3. QueryDecomposition: 复杂问题 → 拆子问题 → 分别检索 → 合并
 

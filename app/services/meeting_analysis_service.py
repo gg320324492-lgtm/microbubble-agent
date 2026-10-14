@@ -263,7 +263,7 @@ class MeetingAnalysisService:
         检测顺序：
         1. 结构化摘要格式（发言人：张三、李四）→ 直接提取
         2. 对话转录格式（【张三】/ 张三说）→ 正则解析
-        3. 纯文本 → Claude AI 检测
+        3. 纯文本 → LLM 检测（backend-aware `LLMClient`）
         """
         # 1. 先尝试摘要格式
         summary = self._parse_summary_format(transcript_text)

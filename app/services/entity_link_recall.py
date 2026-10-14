@@ -24,8 +24,6 @@
 - 门禁 a 实体链 hit ≥ 25%: `ENTITY_LINK_HIT_TARGET`
 - 门禁 b 图谱召回 P95 ≤ 100ms: `ENTITY_LINK_P95_BUDGET_MS`
 - 门禁 c 实体数 ≥ 5000: `ENTITY_COUNT_TARGET`
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 """
 import logging
 import re
