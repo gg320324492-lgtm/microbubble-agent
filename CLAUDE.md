@@ -1187,7 +1187,34 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   `grep -nE "COPY requirements\.txt|pip install .*-r requirements\.txt"`(匹配真正的消费点),
   而不是 `grep -q "requirements\.txt"`(匹配任意提及);
   ②**凡是要据此算成本/影响面的 grep, 先把命中的那几行读出来看**, 别只看退出码;
-  ③特别警惕"否定式注释"—— 写着"不读 X""不走 X""已删除 X"的行, 是假阳性的高发区。
+  ③特别警惕"否定式注释"—— 写着"不读 X""不走 X""已删除 X"的行, 是假阳性的高发区;
+  ④**CI workflow 的「显示名」≠「文件名」** —— `rag-framework-ci.yml` 在
+  `gh run list` / required checks 里显示为 **"Alembic Single-Head Guard"**
+  (它只有一个 job `alembic-single-head`)。2026-10-14 我据此一度以为"它没跑",
+  实际跑了。判"某 workflow 跑没跑"用 `gh run list --workflow=<文件名>`,
+  **别只认显示名**; 且 push 后十几秒就查可能漏掉尚未启动的, 要隔一会儿复查。
+  ⑤**判「某改动会不会触发某 workflow」不要 grep 文件名, 要 YAML 解析** ——
+  `grep -q CLAUDE.md .github/workflows/*.yml` 命中 6 个, **全是注释**
+  ("这条纪律已写进 CLAUDE.md"), paths 列表里根本没有。正解（**可直接跑**；
+  ⚠️ 顶层 `on:` 会被 YAML 解析成**布尔 `True`**，写 `d["on"]` 必 `KeyError`；
+  ⚠️ **`paths` 为 None 有两种含义，必须分开**——"无过滤"与"压根没有 push 触发"）：
+  ```python
+  import yaml
+  d = yaml.safe_load(open(f, encoding='utf-8'))
+  on = d.get(True, d.get('on')) or {}          # ← on 是 True 不是 "on"
+  push = on.get('push')
+  if push is None:
+      verdict = '无 push 触发器, 永不触发'
+  elif 'tags' in push or 'tags-ignore' in push:
+      verdict = f'只按 tags/refs 触发 ({list(push)})'
+  elif push.get('paths'):                     # ← 必须先判 paths:
+      verdict = '有过滤: ' + ('⚠ 命中' if any('CLAUDE.md' in str(p) for p in push['paths']) else '不命中')
+  else:                                       #   省略 branches = 所有分支(含 main), 不是"不触发"
+      verdict = f'⚠ push({push.get("branches", "未限定=所有分支")}) 且无 paths 过滤 = 必触发'
+  ```
+  ⚠️ **推之前先算成本**: 带 paths 过滤的不含该文件 ⇒ 不触发; **无 paths 过滤的**
+  (`push: branches: [main]`) **一律触发** —— 实测推一个纯 CLAUDE.md 提交
+  触发 2 个共 45 秒, 而若捎带 `.github/workflows/**` 则触发 8 个 30+ 分钟。
 - **类 20.226**: **判「某个 X 能不能重建/能不能用」必须先跑「留一认回率 + 抢走率」
   双指标实测，不能凭「样本量够」「基线是 0 所以没损失」推断** ——
   2026-10-13 声纹重建实战，**同日连续三次差点写坏生产数据，全被双指标拦下**：
@@ -1247,6 +1274,23 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
     —— 曾把一个 **237 秒**的块因末尾差 **0.3 秒**判为已用而丢弃；
   - 「先设一个时长门槛」在**样本本身偏短**时会**静默返回空**，
     "没有数据"与"门槛设错"必须分开判——曾因设 15 秒门槛而把一个最长仅 14.5 秒的会议整场滤空。
+
+  **⑨ 探针只能产候选，不能产结论；且判「某框架是否在用」的 grep 不能加行首锚点**
+  —— 2026-10-14 写了个 AST 探针扫 406 个 `.py` 找「docstring 声称了某动作」的行，
+  判据是"docstring 提到的符号有没有出现在本文件里"。结果 **13 条判"缺符号"，
+  人工读代码后 12 条是假阳性**：docstring 里写的是**表名**（`写入 agent_traces 表`）、
+  **跨模块符号**（原文就写"业务代码调用…"）、**别种语言的 API**
+  （`speechSynthesis.speak()` 是 JS）—— 这些本就不该出现在该 `.py` 文件里。
+
+  ⛔ **同一探针的 grep 分支漏掉全部延迟 import，错误结论被写进了 docstring**：
+  查 `llama_index` 是否在用时用了 `^(from|import)` **锚定行首**，于是函数体内的
+  延迟 import 一条没匹配到，据此判「llama-index 零使用」并**把这个结论写进
+  `app/rag/__init__.py`**，靠复查才发现实际有 7 处（`dense_sparse_routing.py`
+  的 VectorStoreIndex/BM25Retriever + `multimodal_parser.py` 的 PDFReader 等）。
+  **本仓的可选依赖普遍用函数内延迟 import**（`framework_gate` 那套"失败自动回退
+  手写实现"的设计）⇒ 判「某框架/某包是否在用」必须匹配 `from X` / `import X`
+  **任意缩进**，**绝不能加 `^`**；且真要用框架做判断，先确认它装没装。
+
 - **类 20.227**: **改 `.env` 里的 LLM 配置必须同时对齐「后端」与「模型名」两个维度，
   且必须实测 tools 支持；另: CI 的 `paths` 过滤会让 workflow 因"没跑"而显示绿** ——
   2026-10-14 小气助手对话失效，三层叠加，逐层修好才看得见下一层：
@@ -1336,6 +1380,34 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   `335` —— Word 把化学式排成一行一个符号）。**纯数字串会匹配任何含数字的查询**，
   把无关 chunk 顶上来。已在 `ChunkConfig` 加 `min_chars`（**默认 0 = 不改既有
   行为**，只在重切时启用）。
+
+- **类 20.229**: **写「验证纪律」时，只写「别信 X」是不够的 —— 必须同时写明
+  「那该信 Y」，且 Y 要是一条可直接执行的命令** ——
+  2026-10-14 一次会话里**连续三次**把「长得像证据的文本」当成证据，
+  而其中**两次违反的是本仓早已存在的铁律**（类 20.225 / 20.226）。
+  规则明明写着还是栽 ⇒ 说明"禁令"本身不产生正确行为，**缺的是可执行的替代动作**。
+
+  | 我误信的 X（长得像证据） | 当时该信的 Y（可直接执行） |
+  |---|---|
+  | AST 探针判「符号不在本文件 ⇒ 声称的动作不存在」（13 条里 12 条假阳性） | **探针只产候选；结论必须人工读代码**。见类 20.226 ⑨ |
+  | `grep ^(from\|import)` 判「llama_index 零使用」（漏掉全部 7 处延迟 import） | `grep -nE "from llama_index\|import llama_index" app/ --include=*.py`（**不加 `^`**）。见类 20.226 ⑨ |
+  | `grep -q CLAUDE.md .github/workflows/` 判「会触发 6 个 CI」（命中全是注释） | `yaml.safe_load(...)` 解出 `push.paths`（⚠️ `on` 是布尔 `True`）。见类 20.225 ⑤ |
+  | 日志里 `tot = {"tests": 0, ...}`（带 ANSI 色码的 **heredoc 脚本源码回显**） | `gh run download <run> -n <artifact>` 后读 `<testsuite tests= failures= errors= skipped=>`。见类 20.220 |
+  | workflow 没出现在列表里 = 没跑（`rag-framework-ci.yml` 显示名是 "Alembic Single-Head Guard"） | `gh run list --workflow=<文件名>`。见类 20.225 ④ |
+
+  **三条通用纪律**：
+  ①**任何"未命中"类判据（grep 无结果 / 符号查不到 / glob 空）先假设探针错了**，
+     再假设事实如此 —— 尤其当"未命中"会推出一个**看起来很合理的坏结论**时
+     （本次 llama_index 那次差点把错误结论写进 docstring）；
+  ②**"看起来像证据"的文本有三类同形陷阱**：**注释里的提及**（类 20.225）、
+     **脚本里的字面量**（heredoc 回显）、**名字与实体不一致**（显示名 ≠ 文件名）。
+     判据：这条文本是**被程序消费**的，还是**被人读的**？
+  ③**误判已发生时要先查自己的产物**（docstring / 注释 / 报告），错误结论一旦写进
+     文件就会像本条 20.220 那样被静默继承 —— 清理死代码时反而制造了新的死代码。
+
+  ⚠️ **本条是元规则**：它不改任何具体操作，只要求**今后新增任何一条验证类铁律时，
+  必须连同"替代判据"一起写**。已有条目的替代判据陆续回填中（本次补了
+  类 20.225 ④⑤ 与 类 20.226 ⑨）。
 
 - ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
   原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /
