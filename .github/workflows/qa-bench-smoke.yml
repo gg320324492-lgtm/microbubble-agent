@@ -18,6 +18,13 @@ on:
       - "app/services/self_rag.py"
       - "app/services/reminder_*.py"
       - "app/config.py"
+      # 2026-10-14 加 alembic/**：本 job 是全仓**唯一**会 `alembic stamp head` 的
+      # CI job ⇒ 只有它能抓到「revision id 超长 / 断链」这类问题
+      # （实测 `alembic_version.version_num` 在 CI 是 VARCHAR(32)、生产是 VARCHAR(64)，
+      #  33 字符的 revision 名本地+生产全绿、只有本 job 红）。
+      # 此前 push.paths 不含 alembic ⇒ 改迁移的 push 本 job 不触发，
+      # 面板显示"绿"但**根本没验证**（类 20.220：绿不是因为修好了，是因为没跑）。
+      - "alembic/**"
       - "tests/qa-bench/**"
       - ".github/workflows/qa-bench-smoke.yml"
   push:
@@ -26,6 +33,10 @@ on:
       - "app/agent/**"
       - "app/services/chat_history*.py"
       - "app/services/self_rag.py"
+      # 与 pull_request 段对齐（此前 push 段漏了 reminder_*，PR 段有）
+      - "app/services/reminder_*.py"
+      - "app/config.py"
+      - "alembic/**"
       - "tests/qa-bench/**"
       - ".github/workflows/qa-bench-smoke.yml"
   workflow_dispatch:
