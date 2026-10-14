@@ -357,16 +357,51 @@ class FileParserService:
             # 按位置倒序插入，避免偏移
             full_text = "".join(full_text_parts) + "\n"  # 末尾加换行
 
+            # ⚠️ **[PAGE:N] 标记的偏移吸附**（2026-10-14 修）
+            # 占位符按**绝对 offset** 插入，若 offset 落在某个 [PAGE:N] 标记
+            # **内部**，插入会把标记从中间劈开（`[PAG` + `[FIGURE:9]` + `E:81]`），
+            # 正则再也匹配不到该标记 ⇒ **按 [PAGE:N] 切块的分块器会认为该页不存在**。
+            #
+            # 实测触发条件（ER-26-18027.pdf 第 81 页）：该页是**整页图片**
+            # （9 张图 + 1227 字符的化学式碎片，全文找不到任何 `Fig. N` 引用），
+            # 于是 9 个占位符**全部落到同一个 offset**（页尾 current_offset），
+            # 而该 offset 恰好是下一页 [PAGE:82] 标记起点 +4 ⇒ 标记被劈开。
+            # ⇒ 任何「整页无图注文」的页（图片页/图表页/参考文献页）都会命中。
+            #
+            # 修法：插入前把落在标记内部的 offset **吸附到该标记之后**
+            # （图归到标记之后，语义上也更对——图属于下一页开头）。
+            page_spans = [
+                (m.start(), m.end())
+                for m in re.finditer(r"\[PAGE:\d+\]", full_text)
+            ]
+
+            def _snap(pos: int) -> int:
+                """offset 若落在某个 [PAGE:N] 标记内部，推到该标记之后"""
+                for start, end in page_spans:
+                    if start < pos < end:
+                        return end
+                return pos
+
             # 排序：先处理 position 大的（后插入的），再处理小的
             sorted_anchors = sorted(
                 [(pos, ph) for _, pos, ph in fig_anchor_positions],
                 key=lambda x: x[0],
                 reverse=True,
             )
+            snapped = 0
             for pos, placeholder in sorted_anchors:
                 # 在 pos 位置插入 placeholder
                 # placeholder 格式: \n[FIGURE:N]\n
-                full_text = full_text[:pos] + placeholder + full_text[pos:]
+                pos2 = _snap(pos)
+                if pos2 != pos:
+                    snapped += 1
+                full_text = full_text[:pos2] + placeholder + full_text[pos2:]
+            if snapped:
+                logger.info(
+                    "PDF: %d 个 [FIGURE:N] 占位符 offset 落在 [PAGE:N] 标记内部，"
+                    "已吸附到标记之后（否则会劈开标记、导致该页被分块器漏切）",
+                    snapped,
+                )
 
             # 用 full_text 替换原来的 pages_text 拼接
             # 注意：pages_text 包含 [PAGE:N] 标记和原 text

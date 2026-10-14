@@ -88,6 +88,9 @@ class ChunkConfig:
     window_size: int = DEFAULT_WINDOW_SIZE
     window_overlap: int = DEFAULT_WINDOW_OVERLAP
     max_chars: int = MAX_EMBED_INPUT_CHARS  # 超此 fallback window
+    #: 丢弃短于该长度的段落 (2026-10-14)。默认 0 = 不过滤, 保持既有行为。
+    #: 用途: Word 稿件 PDF 的化学式碎片 (实测占 chunk 48.5%) 是检索噪声。
+    min_chars: int = 0
 
 
 def chunk_text(text: str, config: Optional[ChunkConfig] = None) -> List[Chunk]:
@@ -114,11 +117,11 @@ def chunk_text(text: str, config: Optional[ChunkConfig] = None) -> List[Chunk]:
     if config.strategy == "paragraph":
         # 自动感知页标记: PPT/PDF 解析产物不含 \n\n, 只按 \n\n 切会塌成 1 chunk
         if PAGE_MARKER_RE.search(text):
-            chunks = _chunk_by_page(text)
+            chunks = _chunk_by_page(text, min_chars=config.min_chars)
         else:
-            chunks = _chunk_paragraph(text)
+            chunks = _chunk_paragraph(text, min_chars=config.min_chars)
     elif config.strategy == "page":
-        chunks = _chunk_by_page(text)
+        chunks = _chunk_by_page(text, min_chars=config.min_chars)
     elif config.strategy == "heading":
         chunks = _chunk_heading(text)
     elif config.strategy == "window":
@@ -154,12 +157,18 @@ def chunk_text(text: str, config: Optional[ChunkConfig] = None) -> List[Chunk]:
     return chunks
 
 
-def _chunk_paragraph(text: str) -> List[Chunk]:
+def _chunk_paragraph(text: str, min_chars: int = 0) -> List[Chunk]:
     """按 \\n\\n 切段落 (PR2 §11.2 paragraph 策略)
 
     - 切点: \\n\\n (连续 2 换行, 中间允许空白)
     - 不切: \\n 单换行 (软换行)
     - 严格保证: char_count == char_end - char_start (派生一致)
+
+    ``min_chars``（2026-10-14 加，**默认 0 = 不过滤**，不改既有行为）：
+    丢弃短于该长度的段落。用于 Word 稿件 PDF —— 那类版面把化学式排成
+    一行一个符号（``O3`` / ``914`` / ``1213``），按空行切会产出大量碎片，
+    实测占 chunk 总数 48.5%（164/338）。这些碎片是**检索噪声**：纯数字串
+    会匹配任何含数字的查询。
     """
     chunks: List[Chunk] = []
     # split 保留分隔符信息
@@ -178,6 +187,8 @@ def _chunk_paragraph(text: str) -> List[Chunk]:
         content = text[start:end]
         if not content.strip():
             continue
+        if min_chars and (end - start) < min_chars:
+            continue
         chunks.append(Chunk(
             content=content,
             char_start=start,
@@ -190,7 +201,7 @@ def _chunk_paragraph(text: str) -> List[Chunk]:
     return chunks
 
 
-def _chunk_by_page(text: str) -> List[Chunk]:
+def _chunk_by_page(text: str, min_chars: int = 0) -> List[Chunk]:
     """按 [PAGE:N] 标记切页, 页内再按 \\n\\n 切 (agent 9 号, 2026-10-09)
 
     适用: file_parser_service 的 PPT/PDF 解析产物 —— 每页前有 ``[PAGE:N]`` 标记,
@@ -212,7 +223,7 @@ def _chunk_by_page(text: str) -> List[Chunk]:
     markers = list(PAGE_MARKER_RE.finditer(text))
     if not markers:
         # 无标记 → 段落策略兜底 (调用方自动感知已排除此路径, 此处防直调)
-        return _chunk_paragraph(text)
+        return _chunk_paragraph(text, min_chars=min_chars)
 
     # 页边界 = 每个标记的起始; 首个标记前的文本 (若有) 作为独立前导段
     boundaries = [0]
@@ -233,7 +244,7 @@ def _chunk_by_page(text: str) -> List[Chunk]:
 
         # 页内再按 \n\n 切 (保留标记在页 chunk 起始)
         if re.search(r"\n\s*\n", page_text):
-            sub = _chunk_paragraph(page_text)
+            sub = _chunk_paragraph(page_text, min_chars=min_chars)
             for s in sub:
                 # 把页内相对偏移还原为全文偏移
                 new_start = start + s.char_start
