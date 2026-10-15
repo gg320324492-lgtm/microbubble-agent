@@ -50,20 +50,26 @@ from app.config import settings as _settings  # 轻量 (pydantic settings), 非 
 # 修复: 派生改成「显式取库名 + 三道 fail-loud 闸」, 任何存疑一律 raise,
 #   不给「先跑起来再说」的机会。
 def _assert_safe_test_db(url: str) -> str:
-    """fail-loud: 断言这是隔离测试库。"""
-    prod = _settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-    db_name = url.rsplit("/", 1)[-1].split("?", 1)[0]
+    """fail-loud: 断言这是隔离测试库。
 
-    if url == prod:
-        raise RuntimeError(
-            "[conftest] 测试库 URL 等于生产库 URL —— 拒绝启动。setup_db 会执行 "
-            "DROP SCHEMA public CASCADE, 等于清空生产数据。请显式设置 "
-            "TEST_DATABASE_URL 指向独立测试库。生产=" + prod + " 测试=" + url
-        )
+    ⚠️ 2026-10-15 修正: 这里**不能**用「URL == settings.DATABASE_URL」当判据。
+    CI 的 workflow 同时设了 DATABASE_URL 与 TEST_DATABASE_URL, 且两者在 CI 里
+    **都指向 microbubble_test** —— 那个判据会让闸门在 CI 上恒为真而全部拒绝启动
+    (实测 8 片全红, ImportError 卡在 conftest 加载)。
+    settings.DATABASE_URL 是「当前配置」, 不是「生产库定义」。
+
+    唯一可靠的判据是**库名白名单**: 目标库必须含 _test / _verify。
+    「连错了库」与「库名不对」在这种情况下无法区分, 而库名检查才是真正要防的那件事
+    —— 旧实现的致命处正是 `.replace()` 匹配不上时静默沿用了一个**不含 _test 的库名**。
+    """
+    db_name = url.rsplit("/", 1)[-1].split("?", 1)[0]
+    if not db_name:
+        raise RuntimeError("[conftest] 无法从测试库 URL 解析库名: " + url)
     if "_test" not in db_name and "_verify" not in db_name:
         raise RuntimeError(
             "[conftest] 测试库名 " + repr(db_name) + " 不含 _test / _verify —— 拒绝启动。"
             "setup_db 会执行 DROP SCHEMA public CASCADE, 库名写错就会打到生产库。"
+            "当前 URL=" + url
         )
     return url
 

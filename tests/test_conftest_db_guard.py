@@ -62,19 +62,36 @@ def test_allows_isolated_test_dbs(db_name):
 
 
 @pytest.mark.parametrize("db_name,why", [
-    ("microbubble",   "等于生产库"),
     ("MicroBubble",   "大小写不同 —— 旧 .replace 的盲区, 会静默沿用生产 URL"),
     ("postgres",      "库名不是 microbubble"),
     ("appdata",       "完全不含 test"),
     ("",              "空串: 静默回落派生分支会掩盖配置错误"),
 ])
 def test_blocks_unsafe_db_names(db_name, why):
-    """指向生产库 / 库名可疑 / 空串 —— 一律必须 fail-loud"""
+    """指向可疑库名 —— 一律必须 fail-loud"""
     derive = _load_guards(PROD)
     os.environ["TEST_DATABASE_URL"] = BASE + "/" + db_name
     try:
         with pytest.raises(RuntimeError):
             derive()
+    finally:
+        os.environ.pop("TEST_DATABASE_URL", None)
+
+
+def test_ci_shape_is_accepted():
+    """CI 形态必须放行: CI 同时设 DATABASE_URL 与 TEST_DATABASE_URL, 且两者
+    **都指向 microbubble_test**。
+
+    这正是第一版加固踩的坑 —— 用「URL == settings.DATABASE_URL」当判据, 在 CI 上
+    恒为真 ⇒ 8 片全红。本用例把该 CI 形态固化为「必须放行」, 防回归。
+    """
+    ci_prod = "postgresql://postgres:postgres@localhost:5432/microbubble_test"
+    derive = _load_guards(ci_prod)
+    os.environ["TEST_DATABASE_URL"] = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/microbubble_test"
+    )
+    try:
+        assert derive().endswith("/microbubble_test")
     finally:
         os.environ.pop("TEST_DATABASE_URL", None)
 
