@@ -29,6 +29,28 @@ log() {
     echo "$*" | tee -a "$REPORT"
 }
 
+# 2026-10-15: trivy 每次扫描会在系统 temp 下建 trivy-<随机数>/ 工作目录
+# (解压 layer / 解包镜像), 单次可留数 GB, 且**从不自动清理**。
+# 实测本机 4 次扫描残留 18.5 G (Temp/trivy-* × 4), C 盘因此只剩 27 G。
+# ⚠️ 与 GitHub CI 的 image-scan **无关** —— 那是 runner 上的容器化 action,
+# 用 runner 自己的 temp; 这些是**本机 winget 装的 trivy 0.72.0** 留下的
+# (2026-07-30 安装; scripts/install-trivy.md 里「本机未安装」那句已过期)。
+cleanup_trivy_tmp() {
+    local tmp_base n
+    tmp_base="$(cygpath -u "${TEMP:-${TMP:-/tmp}}" 2>/dev/null || echo "${TEMP:-${TMP:-/tmp}}")"
+    n=0
+    for d in "$tmp_base"/trivy-*; do
+        [ -d "$d" ] || continue
+        # 双保险: glob 已限定 trivy-* 前缀, 这里再要求后缀是纯数字
+        case "$(basename "$d")" in
+            trivy-[0-9]*) rm -rf "$d" 2>/dev/null && n=$((n+1)) ;;
+        esac
+    done
+    [ "$n" -gt 0 ] && log "已清理 $n 个 trivy 临时目录"
+    return 0
+}
+trap cleanup_trivy_tmp EXIT
+
 log "=== Trivy scan report — $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
 log "trivy: $(trivy --version 2>&1 | head -1)"
 log ""

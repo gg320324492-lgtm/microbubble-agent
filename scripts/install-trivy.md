@@ -1,8 +1,17 @@
 # Trivy 安装说明 (W86-C-1)
 
-> 本机 (2026-07-29 验证) **未安装** trivy — `trivy --version` → `command not found`。
-> 本文档只说明安装方式, **不代表已在系统安装**。CI 侧由
-> `.github/workflows/image-scan.yml` 的 `aquasecurity/trivy-action` 自带 trivy, 无需本机安装。
+> ⚠️ **2026-10-15 订正：上面「本机未安装」已过期。** 本机现装有
+> **trivy 0.72.0**（winget，2026-07-30 装，路径
+> `%LOCALAPPDATA%\Microsoft\WinGet\Packages\AquaSecurity.Trivy_*	rivy.exe`），
+> 供 `scripts/trivy/scan-all.sh` 与 `scan-images.sh` 使用。
+>
+> **这条过期陈述曾造成一次误判**：把 `Temp	rivy-*` 下的 18.5 G 残留归因为
+> 「GitHub CI 的 image-scan 跑完没清」，于是打算去改 workflow —— 而 CI 侧
+> 跑在 runner 的 Linux 容器里、用 runner 自己的 temp，与本机这些目录**无关**。
+> 真实来源是**本机** trivy 扫描留下的。判归属前先确认「谁在跑、跑在哪」。
+>
+> CI 侧另由 `.github/workflows/image-scan.yml` 的 `aquasecurity/trivy-action`
+> 自带 trivy，与本机安装互不相干。
 
 ## macOS
 
