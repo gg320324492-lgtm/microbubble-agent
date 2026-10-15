@@ -41,12 +41,63 @@ SKIP_DB_SETUP = bool(os.getenv("SKIP_DB_SETUP"))
 # (守卫: test_fin1_backup_share_block.py::test_guard_conftest_test_url_differs_from_production)
 from app.config import settings as _settings  # 轻量 (pydantic settings), 非 DB 重型依赖
 
-TEST_DB_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    _settings.DATABASE_URL.replace(
-        "postgresql://", "postgresql+asyncpg://"
-    ).replace("/microbubble", "/microbubble_test"),
-)
+# 2026-10-15 加固 (事故驱动): 下方 setup_db / db fixture 每次都会执行
+#   DROP SCHEMA public CASCADE —— 它清空的是「连上去那个库」的 public schema。
+# 此前唯一的防线是 .replace("/microbubble", "/microbubble_test"),
+# 而 str.replace 匹配不上时**静默返回原串** ⇒ URL 直接沿用生产库地址。
+# 生产事故 (2026-10-15 凌晨 02:51-03:01): microbubble 库 public schema 被清空,
+#   /members /meetings /auth/me 等一律 500, 靠当日 02:00 的备份才救回。
+# 修复: 派生改成「显式取库名 + 三道 fail-loud 闸」, 任何存疑一律 raise,
+#   不给「先跑起来再说」的机会。
+def _assert_safe_test_db(url: str) -> str:
+    """fail-loud: 断言这是隔离测试库。"""
+    prod = _settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    db_name = url.rsplit("/", 1)[-1].split("?", 1)[0]
+
+    if url == prod:
+        raise RuntimeError(
+            "[conftest] 测试库 URL 等于生产库 URL —— 拒绝启动。setup_db 会执行 "
+            "DROP SCHEMA public CASCADE, 等于清空生产数据。请显式设置 "
+            "TEST_DATABASE_URL 指向独立测试库。生产=" + prod + " 测试=" + url
+        )
+    if "_test" not in db_name and "_verify" not in db_name:
+        raise RuntimeError(
+            "[conftest] 测试库名 " + repr(db_name) + " 不含 _test / _verify —— 拒绝启动。"
+            "setup_db 会执行 DROP SCHEMA public CASCADE, 库名写错就会打到生产库。"
+        )
+    return url
+
+
+def _derive_test_db_url() -> str:
+    """优先用显式 TEST_DATABASE_URL; 否则从 settings.DATABASE_URL 显式派生库名。
+
+    不再依赖「replace 匹配不上就认了」—— 库名不认识时直接报错。
+    """
+    explicit = os.getenv("TEST_DATABASE_URL")
+    if explicit is not None:
+        # 空串也算「显式设置了」—— 静默回落到派生分支会掩盖配置错误
+        if not explicit.strip():
+            raise RuntimeError(
+                "[conftest] TEST_DATABASE_URL 被设为空串。请给出完整测试库 URL, "
+                "或**取消设置**该环境变量以走派生分支。"
+            )
+        return _assert_safe_test_db(explicit)
+
+    prod_async = _settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    base, sep, tail = prod_async.rpartition("/")
+    if not sep:
+        raise RuntimeError("[conftest] 无法从 settings.DATABASE_URL 解析库名: " + prod_async)
+    db_name = tail.split("?", 1)[0]
+    if db_name != "microbubble":
+        raise RuntimeError(
+            "[conftest] settings.DATABASE_URL 的库名是 " + repr(db_name) + " (非 microbubble), "
+            "无法安全派生测试库。请显式设置 TEST_DATABASE_URL。"
+        )
+    suffix = tail[len(db_name):]
+    return _assert_safe_test_db(base + "/microbubble_test" + suffix)
+
+
+TEST_DB_URL = _derive_test_db_url()
 
 
 def get_test_database_url():
