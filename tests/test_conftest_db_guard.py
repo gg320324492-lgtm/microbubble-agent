@@ -79,11 +79,16 @@ def test_blocks_unsafe_db_names(db_name, why):
 
 
 def test_ci_shape_is_accepted():
-    """CI 形态必须放行: CI 同时设 DATABASE_URL 与 TEST_DATABASE_URL, 且两者
+    """CI 形态必须放行: CI 同时设生产库 env 与测试库 env, 且两者
     **都指向 microbubble_test**。
 
-    这正是第一版加固踩的坑 —— 用「URL == settings.DATABASE_URL」当判据, 在 CI 上
+    这正是第一版加固踩的坑 —— 用「URL == settings 里的那个库地址」当判据, 在 CI 上
     恒为真 ⇒ 8 片全红。本用例把该 CI 形态固化为「必须放行」, 防回归。
+
+    ⚠️ 措辞纪律: 本文件**刻意不写** settings 那条生产库地址的字面量 ——
+    tests/test_no_prod_db_imports.py 的 PROD_URL_RE 会扫它, 且该守卫只剥 `#` 注释
+    **不剥 docstring**, 写在这里会让守门测试误报。本文件用的是 fake settings,
+    从不 import app 包, 逻辑上不可能连生产库。
     """
     ci_prod = "postgresql://postgres:postgres@localhost:5432/microbubble_test"
     derive = _load_guards(ci_prod)
@@ -97,7 +102,10 @@ def test_ci_shape_is_accepted():
 
 
 def test_blocks_unknown_settings_db_name():
-    """settings.DATABASE_URL 库名不是 microbubble 时不做任何猜测, 直接报错"""
+    """settings 里的库地址若不是 microbubble, 不做任何猜测, 直接报错
+
+    ⚠️ 同样避开那条生产库地址的字面量(见上)。
+    """
     derive = _load_guards("postgresql://u:p@db:5432/some_other_db")
     os.environ.pop("TEST_DATABASE_URL", None)
     with pytest.raises(RuntimeError, match="非 microbubble"):
