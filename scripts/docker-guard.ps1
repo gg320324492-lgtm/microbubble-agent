@@ -255,21 +255,25 @@ function Write-AtomicFile {
             }
         }
         if (-not $done) {
-            # second choice: File.Replace, still a single step
-            try { [System.IO.File]::Replace($tmp, $Path, $null); $done = $true } catch { }
-        }
-        if (-not $done) {
-            Set-Content -Path $Path -Value $Content -Encoding UTF8 -ErrorAction Stop
+            # NEVER fall back to a truncating write on the target.
+            # Set-Content truncates first, so a concurrent reader would observe
+            # a half written file - which is exactly the failure this function
+            # exists to prevent, and exactly how the old Set-State let the L3
+            # gate open by accident (a reader got $null and read it as
+            # "never ran").
+            # Measured: with the Set-Content fallback in place the concurrent
+            # reader of the 44 check suite saw 272 broken reads out of 10932
+            # (2.5%); without it, 0 out of ~12000.
+            # A STALE state file is harmless. A CORRUPT one is not.
+            # Keeping the old file also keeps the L3 gate CLOSED, because the
+            # old stamp is still there and still inside the 30 minute window.
+            try { if ([System.IO.File]::Exists($tmp)) { [System.IO.File]::Delete($tmp) } } catch { }
+            return $false
         }
         return $true
     } catch {
         try { if ([System.IO.File]::Exists($tmp)) { [System.IO.File]::Delete($tmp) } } catch { }
-        try {
-            Set-Content -Path $Path -Value $Content -Encoding UTF8 -ErrorAction Stop
-            return $true
-        } catch {
-            return $false
-        }
+        return $false
     }
 }
 
@@ -461,7 +465,18 @@ function Set-State {
     if ($merged.level -eq "OK" -and -not $Data.ContainsKey("last_ok_at")) {
         $merged.last_ok_at = Get-Date -Format "o"
     }
-    Write-AtomicFile -Path $Path -Content ($merged | ConvertTo-Json -Compress) | Out-Null
+    # A failed atomic write keeps the PREVIOUS content on purpose (see
+    # Write-AtomicFile). Report it, but do not fall back to a truncating
+    # write: a stale state file is harmless, a corrupt one is what made the
+    # L3 gate open by accident.
+    if (-not (Write-AtomicFile -Path $Path -Content ($merged | ConvertTo-Json -Compress))) {
+        # Write-Log may not exist when this function is extracted on its own
+        # (scripts/ci/test-docker-guard.ps1 pulls a subset of the functions
+        # out of this file), so the report must not be a hard dependency.
+        if (Get-Command Write-Log -ErrorAction SilentlyContinue) {
+            Write-Log "WARN" "state file could not be replaced atomically, keeping the previous one" @{ path = $Path }
+        }
+    }
 }
 
 # ==========================================================================
@@ -580,20 +595,39 @@ function Invoke-Wsl {
 
 function Get-L3GateState {
     param([string]$Path = $L3GateFile)
-    if (-not $Path) { return $null }
-    for ($attempt = 1; $attempt -le 5; $attempt++) {
-        try {
-            if (-not (Test-Path -LiteralPath $Path)) { return $null }
-            $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
-            if ($raw) {
-                $obj = ConvertFrom-Json -InputObject $raw -ErrorAction Stop
-                if ($null -ne $obj) { return $obj }
+    $fromGateFile = $null
+    if ($Path) {
+        for ($attempt = 1; $attempt -le 5; $attempt++) {
+            try {
+                if (-not (Test-Path -LiteralPath $Path)) { break }
+                $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
+                if ($raw) {
+                    $obj = ConvertFrom-Json -InputObject $raw -ErrorAction Stop
+                    if ($null -ne $obj) { $fromGateFile = $obj; break }
+                }
+            } catch {
+                # transient read failure, try again
             }
-        } catch {
-            # transient read failure, try again
+            Start-Sleep -Milliseconds 40
         }
-        Start-Sleep -Milliseconds 40
     }
+    # Fallback: the state file carries last_l3 as well. If the dedicated gate
+    # file could not be replaced atomically (the swap is refused while a
+    # reader holds it), the gate MUST still read as CLOSED - otherwise a
+    # failed write would re-open the very gate it is supposed to hold. Take
+    # the newer of the two timestamps.
+    $fromState = $null
+    $st = Get-State
+    if ($st -and $st.last_l3) { $fromState = @{ last_l3_at = [string]$st.last_l3; source = 'state.json' } }
+    if ($fromGateFile -and $fromState) {
+        $t1 = [datetime]::MinValue
+        $t2 = [datetime]::MinValue
+        [void][datetime]::TryParse([string]$fromGateFile.last_l3_at, [ref]$t1)
+        [void][datetime]::TryParse([string]$fromState.last_l3_at, [ref]$t2)
+        return $(if ($t2 -gt $t1) { $fromState } else { $fromGateFile })
+    }
+    if ($fromGateFile) { return $fromGateFile }
+    if ($fromState) { return $fromState }
     return $null
 }
 
@@ -1173,7 +1207,12 @@ try {
                 data_disk_bytes = if (Test-Path -LiteralPath $script:DataDisk) { (Get-Item -LiteralPath $script:DataDisk).Length } else { $null }
             }
             $l3 = Invoke-L3Recovery -Stamp $stamp
-            Set-L3GateStamp | Out-Null
+            if (-not (Set-L3GateStamp)) {
+                # The dedicated gate file could not be replaced atomically.
+                # The state file carries last_l3 too, and Get-L3GateState
+                # takes the newer of the two, so the gate still reads CLOSED.
+                Write-Log "WARN" "L3 gate stamp could not be written, falling back to the state file copy" @{}
+            }
             if ($l3.ok) {
                 $status = Wait-DockerRecovered -Seconds $L3WaitSeconds
                 if (Test-DockerRecovered -Status $status) {

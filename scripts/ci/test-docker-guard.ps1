@@ -53,6 +53,7 @@ $wanted = @(
     'Initialize-AtomicRename',
     'Write-AtomicFile',
     'Get-WslSidCount',
+    'Write-Log',
     'Get-State',
     'Set-State',
     'Get-L3GateState',
@@ -275,13 +276,38 @@ try {
     # physical data root, otherwise the two Docker backend processes bind
     # the same socket twice and the backend dies.
     Write-Host '=== 9. the live machine (read only) ==='
+    #
+    # These canaries read state that the guard MUTATES while it runs: L0
+    # renames the run dir aside and recreates it, L3 unregisters the distro.
+    # The guard holds the global mutex "Global\MicroBubbleDockerGuard" for the
+    # whole run, so if we cannot take that mutex the guard is mid-cycle and
+    # the canaries would race with it and report a FALSE RED (observed once:
+    # 44 checks / 1 failure, then 44 / 0 on the next run seconds later).
+    # Probe the mutex first and skip instead of failing.
+    $guardRunning = $false
+    try {
+        $probe = New-Object System.Threading.Mutex($false, 'Global\MicroBubbleDockerGuard')
+        $guardRunning = -not $probe.WaitOne(0)
+        if (-not $guardRunning) { try { $probe.ReleaseMutex() } catch { } }
+        $probe.Dispose()
+    } catch {
+        $guardRunning = $false
+    }
+
+    if ($guardRunning) {
+        Write-Host '  SKIP  the docker guard is running right now; the live canaries would race with it'
+    } else {
     $resolvedRoot = Resolve-DockerDataRoot -Explicit ''
     Write-Host ("  resolved data root : {0}" -f $resolvedRoot)
     Assert-True ([bool]$resolvedRoot) 'live: the data root is resolved from the Lxss registry'
     if ($resolvedRoot) {
         Assert-True (Test-Path -LiteralPath (Join-Path $resolvedRoot 'wsl\disk\docker_data.vhdx')) `
                     'live: the 62 GB data disk is reachable under the resolved root'
-        Assert-True (Test-Path -LiteralPath (Join-Path $resolvedRoot 'run')) `
+        # The run dir may legitimately be absent for a moment while the guard
+        # renames it aside; a ".stale-" sibling means exactly that.
+        $runPath = Join-Path $resolvedRoot 'run'
+        $runStale = @(Get-ChildItem (Split-Path -Parent $runPath) -Filter 'run.stale-*' -Force -ErrorAction SilentlyContinue)
+        Assert-True ((Test-Path -LiteralPath $runPath) -or ($runStale.Count -gt 0)) `
                     'live: the run dir is reachable under the resolved root'
     }
     $variants = @(Get-DockerPathVariants)
@@ -297,6 +323,7 @@ try {
     Write-Host ("  registry root       : {0}" -f $report.registry_root)
     Assert-True ([bool]$report.agree) `
                 'live: every %LOCALAPPDATA%\Docker variant points at the same data root (AF_UNIX premise)'
+    }
 }
 finally {
     try {
