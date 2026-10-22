@@ -33,6 +33,10 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# 2026-10-22：tempfile 的默认临时目录在 C 盘的 %TEMP%，而下面 verify- 目录里放的是
+# **用新口令解出来的明文** ⇒ 统一改到项目目录的 data\tmp（E 盘）。
+# data/ 已被 .gitignore 第 29 行覆盖，不会进 git。
+_TMP_ROOT = REPO_ROOT / "data" / "tmp"
 SYNC_SCRIPT = REPO_ROOT / "apps" / "desktop" / "scripts" / "server" / "offsite-oss-sync.py"
 
 _spec = importlib.util.spec_from_file_location("oos", SYNC_SCRIPT)
@@ -138,10 +142,11 @@ def main() -> int:
         if st != 200:
             bad.append(f"{key}  (HTTP {st})")
             continue
-        with tempfile.NamedTemporaryFile(suffix=".enc", delete=False) as tf:
+        _TMP_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(suffix=".enc", delete=False, dir=_TMP_ROOT) as tf:
             tf.write(body)
             tmp = Path(tf.name)
-        d = Path(tempfile.mkdtemp(prefix="verify-"))
+        d = Path(tempfile.mkdtemp(prefix="verify-", dir=_TMP_ROOT))
         try:
             oos.decrypt_file(tmp, d / "x", new_pp)
         except SystemExit:

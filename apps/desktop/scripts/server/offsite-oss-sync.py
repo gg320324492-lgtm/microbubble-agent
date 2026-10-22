@@ -87,6 +87,12 @@ UPLOAD_BACKOFF_BASE_S = 2 # 2/4/8/16s 指数退避，总计约 30s
 # 不读 .env、不读 OSS_* 环境变量、不内置 —— 这些位置都会随备份一起被复制到 OSS。
 DEFAULT_PASSPHRASE_FILE = ".secrets/offsite_backup.passphrase"
 
+# 临时工作目录：放在项目目录的 data\tmp 下，**不要**用 tempfile 的默认位置。
+# 2026-10-22：默认临时目录在 C 盘的 %TEMP%，而这里的密文峰值可达 82 MB
+# （单个 DB dump 的 AES-256-GCM 密文）。data/ 已被 .gitignore 第 29 行覆盖，不会进 git。
+_REPO_ROOT = Path(__file__).resolve().parents[4]  # server -> scripts -> desktop -> apps -> <repo>
+_TMP_ROOT = _REPO_ROOT / "data" / "tmp"
+
 
 class PassphraseMissing(SystemExit):
     """口令不可用。显式子类，便于测试断言且仍以 SystemExit 语义终止进程。"""
@@ -717,7 +723,10 @@ def do_apply(creds: Credentials, root: Path, includes, encrypt: bool,
     remote = {o["key"]: o["size"]
               for o in list_objects(creds, prefix=own_prefix(creds, subdir))}
     uploaded = skipped = 0
-    tmpdir = tempfile.mkdtemp(prefix="offsite-enc-") if encrypt else None
+    tmpdir = None
+    if encrypt:
+        _TMP_ROOT.mkdir(parents=True, exist_ok=True)
+        tmpdir = tempfile.mkdtemp(prefix="offsite-enc-", dir=_TMP_ROOT)
     try:
         for f in files:
             key = remote_key(creds, root, f, encrypt, subdir)

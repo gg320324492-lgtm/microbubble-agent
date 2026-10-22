@@ -14,6 +14,115 @@
 > - 想知道"某次事故的完整过程" → `docs/incident/` 或 `docs/history/`
 > - 想找其他项目文档 → **[`docs/README.md`](docs/README.md)**（按性质查找表 + 各目录权威性对照）
 
+## 当前状态 (2026-10-22 Docker 数据进项目目录 + C 盘从 13.8G 腾到 60G + 守护脚本重写)
+
+> 上一版"当前状态"停在 2026-10-13 声纹段；本节是 2026-10-22 这一天的产出。
+> **本节最值钱的是「四层根因链」与「两个 Windows 假象」** —— 前者解释了一次
+> 让 13 个容器停摆两小时的崩溃，后者会让排查整整绕一小时。
+
+### A. Docker 数据已整体搬进项目目录（71 GB）
+
+```
+E:\microbubble-agent\data\docker\
+├── appdata\wsl\disk\docker_data.vhdx   62 GB 数据盘（全部镜像/容器/卷）
+├── appdata\wsl\main\ext4.vhdx           96 MB 发行版系统盘
+├── appdata\{log,run,tasks}\             Docker 运行时目录
+└── wsl\swap.vhdx                        8 GB WSL 交换文件
+```
+
+- **`E:\DockerData\` 已整个删除**；同名 junction 现指向
+  `E:\microbubble-agent\data\docker\appdata`。
+- ⚠️ **`%LOCALAPPDATA%\Docker` 有两个物理视图**（真实路径 + MSIX 包重定向路径），
+  **两者必须同源**，否则 backend 必以 `AF_UNIX EADDRINUSE` 崩溃（见 D 段）。
+- ⚠️ `Lxss` 注册表的 `BasePath` 带 `\\?\` 前缀，**该前缀不穿越 reparse point**
+  ⇒ 搬数据根时**必须同步改注册表**，不能靠 junction 兜底。
+- 同卷搬迁用 `Move-Item`（瞬时重命名，**ACL 完整保留、零拷贝**）。
+- **runbook**：[`docker-data-layout-and-c-drive-2026-10-22.md`](docker-data-layout-and-c-drive-2026-10-22.md)
+
+### B. C 盘腾挪：13.8 GB → 60.0 GB 可用（95.4% → 80.0%）
+
+**用户级 `TEMP`/`TMP` 已改指 `E:\microbubble-agent\data\tmp`**（原先是
+`C:\Users\pc\AppData\Local\Temp`）。存量 `lcp*`/`lcr*` 克隆目录已搬往
+`E:\_displaced_temp_20261022`（**搬走不删**，带 `MANIFEST.txt`；实测 10,249 个条目）。
+⚠️ 搬迁只动**6 小时前**修改的目录 ⇒ 正在跑的 LabCairn 会话（"Symlink 逃逸访问修复"）
+的当前夹具**原封未动**（实测 108 个仍在原处、mtime 是几分钟前）。
+⚠️ 那批目录含**悬空符号链接**，robocopy 必须加 `/SL`（默认跟随符号链接会 rc=9 失败）。
+
+- **真正的灌水点不是本仓**：那 506 个 `lcp*` 目录是 **LabCairn**（`E:\LabCairn`）的
+  测试 harness 克隆自己产生的，**测量时最新目录的 mtime 是 2 分钟前** ⇒ 一直在涨。
+  ⇒ 光改本仓代码堵不住，**必须改 `%TEMP%`**。
+- ⚠️ **Ubuntu-24.04 WSL 发行版（55 GB）在用，不许动**：`E:\dft-service` 的
+  `wsl pkill` 跑在默认发行版里（类 20.212：判据是**被引用**，不是名字与年龄）。
+- **本仓对 C 盘的足迹 ≈ 1.6 GB（占 284 GB 的 0.57%）**：electron Cache 624 MB、
+  electron-builder 83 MB、ms-playwright 703 MB、npm-cache 190 MB、
+  Electron userData 15.6 MB（**含会议附件与知识库原件**）、voice-alert 0.3 MB。
+- **Docker 的镜像/容器/卷从来就不在 C 盘**（2026-06-17 已迁出，
+  `memory/docker-desktop-fix-2026-06-17.md` + `docs/CHANGELOG-history-2026-07-23.md`）。
+  "C 盘有 92 GB Docker"这个前提**不成立**。
+
+### C. `scripts/docker-guard.ps1` 重写（213 → 1238 行，44 项单元测试全过）
+
+新阶梯 **L0（非破坏性新增）→ L1 → L2 → L3（重写）**：
+
+- **L0**：停进程并**轮询到真的停了** → `wsl --shutdown` → **修 `main\ext4.vhdx` 的 ACL**
+  → 把 `run`/`docker-secrets-engine` **改名**（不删）→ 重建空 `run` → 启动 → 等 120 s。
+- **L3 重写为实测配方**：`wsl --unregister` → **确认 `main\ext4.vhdx` 已不存在**
+  （残留就改名，让 Docker 走 provisioning 分支）→ 确认 62 GB 数据盘仍在且大小未变
+  → 重建空 `run` → 启动。
+- 三个结构性修复：**全局互斥锁**（第二个实例立刻退出）/ **L3 闸门独立成文件 + 原子写 +
+  原子抢占**（`state.json` 不再参与判断）/ **判定"恢复了"要验副作用**
+  （`docker info` **且** `docker ps` 都成功）。
+- 每次运行都检查 **AF_UNIX 前提**（两个 `%LOCALAPPDATA%\Docker` 视图是否同源），
+  **不一致时拒绝执行破坏性的 L3**。
+- ⚠️ 实测：并发读压测下 `Move-Item -Force` 产生 **143 次**破读、`Set-Content` 会直接抛
+  IOException；**`MoveFileEx` 与 `File.Replace` 都是 0 次** ⇒ 原子写必须用后者两个。
+- 单元测试：`scripts/ci/test-docker-guard.ps1`（用 AST 抽纯函数，**不执行守护脚本本身**）。
+- ⚠️ 计划任务 `ExecutionTimeLimit` 实测是 **PT72H**（不是 8 分钟），最坏路径约 6.2 分钟 ⇒ 余量充足。
+
+### D. 🔴 本次事故的四层根因链（详见 runbook §3）
+
+1. **05:06:51 空闲自动暂停后恢复失败**（`seeking /sys/fs/cgroup/procd-paused/cgroup.procs`）→ backend 崩。
+2. **守护脚本把一次崩溃放大成雪崩**：55 秒内 3 次 L2、2.4 分钟内 2 次 L3。两个并发来源：
+   ① `scripts/run-hidden.vbs:48` 用 `bWaitOnReturn=False` 起 powershell ⇒ **wscript 立刻退出**
+   ⇒ 任务计划程序认为动作已完成 ⇒ 5 分钟后又起一个（`MultipleInstances=IgnoreNew` 看不见
+   detached 子进程）；② L3 闸门读 `state.json`，而 `Set-State` 是"读-改-写"、`Set-Content`
+   先截断 ⇒ 读者读到半个文件 ⇒ 闸门当成"从没跑过"⇒ 放行。
+   ⇒ 每个并发实例都杀 Docker 再拉新的 ⇒ **两个 backend 争抢同一 AF_UNIX socket**。
+3. **L3 本身无效且制造下一个故障**：`wsl --unregister` **不删** `main\ext4.vhdx`
+   ⇒ 下次 `wslmigrate` 判 "WSL2 disk exists" ⇒ **跳过 provisioning** ⇒ 复用一个已注销的
+   发行版 ⇒ 引擎永远起不来。
+   ⇒ **实测有效配方**（06:41–06:49 一次跑通）：停进程 → `wsl --shutdown` →
+   `wsl --unregister` → 确认 `ext4.vhdx` 已不存在而 `docker_data.vhdx` 完好 →
+   确认 `run\` 存在且空 → 启动。
+4. **AF_UNIX 冲突的真实机制**：`run\` 目录在 Win32 与 Linux 两侧枚举**都是空的**，
+   却仍然 `EADDRINUSE` ⇒ 真因是**两个 backend 进程把 `%LOCALAPPDATA%\Docker` 解析成两个
+   不同字符串却指向同一物理目录**，绑了同一个 socket。
+
+### E. 本仓代码层的"防 C 盘回流"改造（已落地并实测）
+
+| 文件 | 改动 | 实测 |
+|---|---|---|
+| `scripts/voice-alert.ps1` | 缓存 `$env:LOCALAPPDATA\voice-alert-cache` → `$ProjectRoot\data\voice-alert-cache` + **LRU 50 个**（原来无上限） | 塞 55 → 跑一次 → 裁到 50，留的是最新 3 个 ✓ |
+| `apps/desktop/scripts/server/offsite-oss-sync.py` | `mkdtemp` 加 `dir=`（E 盘 `data\tmp`） | AST OK ✓ |
+| `scripts/backup/rotate_offsite_passphrase.py` | 两处 `tempfile` 加 `dir=`（**`verify-` 目录里是用新口令解出的明文**） | AST OK ✓ |
+| `app/services/audio_processor.py` | `import torch` 前设 `TORCH_HOME`（**仅 Windows 宿主**，容器内是 Linux 路径语义不能设） | 容器内导入 OK ✓ |
+| `apps/desktop/package.json` + `scripts/lib/cache-env.mjs` + `scripts/with-cache-env.mjs` | `pack`/`dist`/`release.mjs` 注入 `ELECTRON_CACHE`/`ELECTRON_BUILDER_CACHE` | `node --check` OK ✓ |
+| `.pnpmfile.cjs`（仓库根） | pnpm 生命周期子进程继承 pnpm 进程的 env ⇒ 在这里设同一组变量 | ⚠️ **实测 pnpm 9.15.9 只加载 `.pnpmfile.cjs`（带点）** —— 一次性目录里两个都放，只有带点的被加载 ✓ |
+| `apps/desktop/src/main/index.ts` | **不改代码**：用用户级 `MNB_USER_DATA` 驱动已有的开关 | 旧 `Roaming\MicroBubbleWorkbench\data\` 的 8 个文件（含 `workbench.db`、`session-token.enc`）已**复制**到新位置，旧目录保留 ✓ |
+
+**用户级环境变量**：`TEMP`/`TMP`=`E:\microbubble-agent\data\tmp`、
+`ELECTRON_CACHE`、`ELECTRON_BUILDER_CACHE`、`PLAYWRIGHT_BROWSERS_PATH`、
+`MNB_USER_DATA`（详见 runbook §2 的表）。
+⚠️ **已在运行的进程不会自动切换**（Claude Desktop 及其子进程仍持旧 `%TEMP%`，需重启）。
+⚠️ `npm config get cache` 实测是 **`D:\npm-cache`**（不是 C 盘）⇒ **不要改**。
+
+### F. 本阶段新增的永久铁律
+
+**类 20.231**（MSIX 包重定向）/ **类 20.232**（Windows 上"看不见"的三种假象）/
+**类 20.233**（自愈脚本的并发要先查调度器语义）—— 见下方「永久铁律」段。
+
+---
+
 ## 当前状态 (2026-09-30 阶段收尾全面收口 — CI 硬门转正 / 94GB 死重清零 / 41GB 生产依赖归位 / 远端补齐)
 
 **服务端全量测试首次有真闸门 (S1.2 完成)**:
@@ -1454,6 +1563,59 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
 
   **同族**: 类 20.225 ④⑤（判 workflow 触发/身份别用 grep）—— 本条是它的**反向**：
   **改 workflow 时要主动 grep，因为有人在断言它**。
+
+- **类 20.231**: **在 Claude Desktop 里起的进程，`%LOCALAPPDATA%\<X>` 会被 MSIX 包重定向
+  到 `Packages\Claude_*\LocalCache\Local\<X>`** —— 你以为改的是真实路径，其实改的是包视图 ——
+  2026-10-22 Docker 事故排查整整绕一小时的主因。
+  **Why**：Claude Desktop 是 MSIX 包，包内进程访问 `C:\Users\<u>\AppData\Local\<X>`
+  时被重定向到该包的 LocalCache。实测后果：① 2026-06-17 那个"把 Docker 挪到 E 盘"的
+  junction 是在**包上下文**里建的 ⇒ 它落在包 LocalCache 里，**真实路径下根本没有这个
+  junction**；② 我多次用 PowerShell "删掉" `%LOCALAPPDATA%\Docker\run` 下的残留，
+  **全都作用在包视图上**，真实路径毫发无损 ⇒ "我明明删过了"却一直复现；③ Docker Desktop
+  若从包上下文启动，就会去包视图找数据根。
+  **⇒ 纪律**：①凡要动 `%LOCALAPPDATA%`（或任何用户目录）下的东西，**必须用非包上下文的进程**
+  —— 本仓现成做法 `scripts/ci/run-one-shot-task.ps1`（通过计划任务跑，拿到干净上下文）；
+  ②**判别方法**：`Get-Item 'C:\Users\pc\AppData\Local\Docker' -Force` 的 `.Target`
+  在包上下文里会显示成 `...\Packages\Claude_*\LocalCache\Local\Docker\...`；
+  ③**凡写脚本要操作用户目录，也要考虑它可能被包上下文调用**（本仓的 `docker-guard.ps1`
+  因此用 `User Shell Folders\Local AppData` 从注册表读**真实** LocalAppData）。
+  ⚠️ **同一现象的两个方向**：包重定向是**写**的重定向（路径被换掉），
+  而 `Get-Item` 的 `.Target` 显示的是**解析后**的目标 —— 两者叠加时
+  `.Target` 会显示成一个**根本不存在**的路径（本次实测显示成 `C:\DockerData\appdata\run`，
+  而 `C:\DockerData` 压根不存在）。**⇒ `.Target` 不可全信，必须用 `Test-Path` + 实际读取交叉验证。**
+
+- **类 20.232**: **Windows 上"看不见"有三种不同的成因，别混为一谈** ——
+  2026-10-22 Docker `AF_UNIX EADDRINUSE` 排查，三层各浪费一轮。
+  **① AF_UNIX socket 是 NTFS reparse point**：非正常退出后残留 0 字节文件，
+  `Remove-Item` / `del` / `rmdir` / `[System.IO.File]::Delete` / `fsutil reparsepoint delete`
+  **全部失败（error 1920）**，且**对 `Get-ChildItem` 与 `ls -la` 都不可见**，
+  却仍占着 AF_UNIX 地址 ⇒ 下次 bind 必报 `Only one usage of each socket address`。
+  上游解法（docker/desktop-feedback#460 / #531）是**改名而不是删除**。
+  **② `\\?\` 前缀路径不穿越 reparse point**：实测
+  `[System.IO.File]::Exists('\\?\E:\DockerData\_junctest\...')` = **False**，
+  而同一路径去掉 `\\?\` 则为 True ⇒ **WSL 注册表 `BasePath` 用 `\\?\` ⇒ 靠 junction 兜底是无效的**，
+  必须直接改注册表值。
+  **③ WSL 的 9P 驱动看不到跨卷 junction**：`wsl -d Ubuntu -- ls /mnt/c/Users/pc/AppData/Local/Docker`
+  报 `No such file or directory`，**不代表该路径不存在**，只代表它的目标（E:）出了 9P 的挂载范围。
+  **⇒ 纪律**：①**"枚举不到"≠"不存在"**，判存在性用 `Test-Path` + 实际打开文件交叉验证；
+  ②**"删不掉"≠"该留着"**，先确认它是不是 reparse point；
+  ③**WSL 视角只能证明 WSL 侧的事实**，Windows 侧的事实必须用 Windows API 取。
+
+- **类 20.233**: **自愈/守护脚本的"并发"要先查调度器的实际语义，不能只看
+  `MultipleInstances`** ——
+  2026-10-22 Docker 事故：守护脚本 55 秒内触发 3 次 L2、2.4 分钟内触发 2 次 L3。
+  **根因之一**：`scripts/run-hidden.vbs:48` 用 `shell.Run cmd, 0, False`（`bWaitOnReturn=False`）
+  启动 powershell ⇒ **wscript 立刻退出** ⇒ 任务计划程序认为"动作已完成"⇒ 5 分钟后又起一个，
+  **而上一个 PowerShell 还在跑** ⇒ `MultipleInstances=IgnoreNew` **看不见 detached 子进程**。
+  **⇒ 纪律**：①**判"会不会并发"要追到动作的实际启动器**（`.vbs` / `cmd /c start` / `Start-Process`
+  都会 detach），不是只看任务的 `MultipleInstances`；②**闸门状态不能放在"读-改-写"的文件里** ——
+  `Set-Content` 先截断再写，读者会读到半个文件 ⇒ 判定函数返回"从没跑过"⇒ 闸门被绕过
+  （本次实测 2.4 分钟内放行了两次）；③**原子写必须用 `MoveFileEx(MOVEFILE_REPLACE_EXISTING)`
+  或 `File.Replace`** —— 实测并发读压测：`Move-Item -Force` **143 次**破读、
+  `Set-Content` 直接抛 IOException，两者都是 **0 次**；
+  ④**"抢锁"要用 `FileMode.CreateNew`**（真正的原子创建）而不是"检查再创建"；
+  ⑤**进程级互斥锁（`Global\` 命名 Mutex）作为最后一道防线** —— 脚本层加锁比调度器层可靠，
+  且能同时防住"人手动跑 + 计划任务跑"。
 
 - ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
   原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /

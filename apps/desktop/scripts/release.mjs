@@ -20,6 +20,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { cleanOutDir } from './lib/clean-out.mjs'
+import { withCacheEnv } from './lib/cache-env.mjs'
 import {
   artifactNames,
   buildLatestYml,
@@ -41,7 +42,15 @@ const die = (msg) => {
 
 function run(cmd, args, opts = {}) {
   log(`$ ${cmd} ${args.join(' ')}`)
-  const res = spawnSync(cmd, args, { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32', ...opts })
+  // env 放在最后：electron / electron-builder 的缓存目录必须指到 E 盘
+  // （见 lib/cache-env.mjs —— 否则每次依赖升级都往 C 盘写几百 MB）
+  const res = spawnSync(cmd, args, {
+    cwd: ROOT,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+    ...opts,
+    env: withCacheEnv(opts.env)
+  })
   if (res.status !== 0) die(`命令失败（exit ${res.status}）：${cmd} ${args.join(' ')}`)
 }
 

@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "gate": "pnpm test && pnpm typecheck && pnpm build",
-    "pack": "npm run build && electron-builder --dir -c.npmRebuild=false",
-    "dist": "npm run build && electron-builder --win nsis -c.npmRebuild=false"
+    "pack": "npm run build && node scripts/with-cache-env.mjs electron-builder --dir -c.npmRebuild=false",
+    "dist": "npm run build && node scripts/with-cache-env.mjs electron-builder --win nsis -c.npmRebuild=false"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",

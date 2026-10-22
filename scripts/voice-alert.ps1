@@ -134,9 +134,24 @@ function Invoke-EdgeTTS {
 
     $container = "microbubble-agent-app-1"
 
-    # 缓存路径：$env:LOCALAPPDATA\voice-alert-cache\<hash>.mp3（hash 来自 text + voice）
-    $cacheDir = Join-Path $env:LOCALAPPDATA "voice-alert-cache"
+    # 缓存路径：<repo>\data\voice-alert-cache\<hash>.mp3（hash 来自 text + voice）
+    # ⚠️ 2026-10-22：原为 $env:LOCALAPPDATA\voice-alert-cache —— 缓存写在 C 盘，
+    #    而且**没有任何清理策略**（随触发次数单调增长）⇒ 改到项目目录并加 LRU。
+    $cacheDir = Join-Path $ProjectRoot "data\voice-alert-cache"
     if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
+
+    # LRU：只保留最近 50 个 MP3（按最后写入时间排序），其余删掉。
+    # 纯缓存，删了只会让对应文本下次重新合成一次。
+    $cacheMaxFiles = 50
+    try {
+        $cached = @(Get-ChildItem $cacheDir -Filter "*.mp3" -File -ErrorAction SilentlyContinue |
+                     Sort-Object LastWriteTime -Descending)
+        if ($cached.Count -gt $cacheMaxFiles) {
+            $cached | Select-Object -Skip $cacheMaxFiles | ForEach-Object {
+                Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } catch { }
 
     $cacheKey = [BitConverter]::ToString([System.Security.Cryptography.MD5]::Create().ComputeHash(
         [Text.Encoding]::UTF8.GetBytes("edge-tts|$Voice|$Text")

@@ -8,6 +8,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List
 
 import numpy as np
@@ -103,8 +104,23 @@ class AudioProcessor:
         Returns:
             AudioSegment 列表，每段包含音频数据和时间戳
         """
-        import torch
         import os
+
+        # 2026-10-22：torch.hub 的默认缓存是 ~/.cache/torch/hub —— 在 Windows 宿主上
+        # 就是 C 盘。compose 已经把容器的 /root/.cache/torch/hub bind 到项目的
+        # models/torch_hub，所以这里在**宿主**上也指到同一处，两边共用一份模型。
+        # ⚠️ 只在 Windows 上设：容器内是 Linux 路径语义，设了反而会让 torch 找不到
+        #    已经 bind 好的 /root/.cache/torch/hub。
+        if os.name == "nt":
+            try:
+                _repo_root = Path(__file__).resolve().parents[2]  # services -> app -> <repo>
+                _torch_home = _repo_root / "models" / "torch_hub"
+                if _torch_home.is_dir():
+                    os.environ.setdefault("TORCH_HOME", str(_torch_home))
+            except Exception:  # pragma: no cover - 定位失败就沿用 torch 默认行为
+                pass
+
+        import torch
 
         # 加载 silero-vad（带重试和本地缓存）
         try:
