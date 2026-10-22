@@ -316,9 +316,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\fix-docker-wsl-vh
 | `apps/desktop/scripts/ci/probe-cache-env.mjs` | 常备 | 探针：给 `with-cache-env.mjs` 用，打印子进程看到的缓存环境变量 |
 | `scripts/ci/move-docker-data-to-project.ps1` | 一次性（已执行） | 把 Docker 数据根搬进项目目录（改注册表 BasePath + `.wslconfig` + junction） |
 | `scripts/ci/redirect-temp-off-c.ps1` | 一次性（已执行） | 用户级 `TEMP`/`TMP` 改指 E 盘 + 存量搬迁 |
-| `scripts/ci/recover-docker-wsl-distro.ps1` | 一次性 | 强制走 provisioning 分支的发行版重建（旧 L3 配方） |
-| `scripts/ci/rollback-dockerdata-junction.ps1` | 一次性 | 迁移中途回滚用的 junction 拆除 + 目录复原 |
-| `scripts/ci/docker-restore-layout.ps1`、`docker-unlink-run-dir.ps1` | **实验（假设已被证伪）** | 用来检验"junction 导致 AF_UNIX 冲突"这个假设 —— **假设不成立**（真正成因见 §3.4），保留仅作留痕，**不要按它们的注释去操作** |
+| `scripts/ci/rollback-dockerdata-junction.ps1` | 一次性（已执行） | 迁移中途回滚用的 junction 拆除 + 目录复原。**现在跑是安全的**：它的目标路径已不存在，只会 fail-loud |
+
+> ⚠️ **本轮实测后删掉了三个脚本**，理由都是"看着有用、实际会坑人"：
+> - `docker-unlink-run-dir.ps1`、`docker-restore-layout.ps1` —— 用来检验
+>   "junction 导致 AF_UNIX 冲突"这个假设的实验脚本，**假设已被证伪**（真正成因见 §3.4）。
+>   它们会把当前可用的 junction 布局拆掉 —— 正是守护脚本现在要守卫的不变量。
+> - `recover-docker-wsl-distro.ps1` —— 路径还写着已删除的 `E:\DockerData\appdata`、
+>   **从不启动 Docker**、**不做 ACL 修复**（正是它本该修的那个坑）、
+>   且用 `Set-Content -Encoding UTF8` 改 Docker 的 `settings-store.json`
+>   （PS 5.1 会写入 BOM）。
+>
+> ⇒ **保留一条已实测通过的恢复路径（守护脚本 L0/L3），好过留两条其中一条是坏的。**
+> 机制留在本文 §3 的文字里即可，不需要留成可执行脚本。
 
 ---
 
