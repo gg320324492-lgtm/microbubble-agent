@@ -78,6 +78,15 @@ E:\microbubble-agent\data\docker\
   IOException；**`MoveFileEx` 与 `File.Replace` 都是 0 次** ⇒ 原子写必须用后者两个。
 - 单元测试：`scripts/ci/test-docker-guard.ps1`（用 AST 抽纯函数，**不执行守护脚本本身**）。
 - ⚠️ 计划任务 `ExecutionTimeLimit` 实测是 **PT72H**（不是 8 分钟），最坏路径约 6.2 分钟 ⇒ 余量充足。
+- ✅ **已做真实故障注入验证（2026-10-22 14:01）**：杀掉全部 `com.docker.backend`
+  （daemon DOWN、0 容器运行）后**不干预**，守护任务自己那一轮 **16 秒完成自愈**：
+  `14:01:02 WARN  escalating` → `14:01:07 INFO L0 system disk ACL repaired`
+  （**当场补回被剥掉的 27 个 SID** —— 正是 10-19 事故的成因）→ `14:01:18 INFO
+  Docker came up after L0 {containers_running: 13}`。自愈后与注入前**逐项比对：
+  13 个容器 ID、14 个镜像 ID+tag、10 个卷名全部相同**，数据
+  `meetings=28 / members=36 / knowledge=884 / chunks=519` 一致，生产域名 200。
+  ⚠️ **「Docker 恢复了」≠「业务已就绪」** —— 守护判据是 Docker 层（`docker info` +
+  `docker ps`），数据库 pre-fsync 恢复后业务端点还要再等 1–2 分钟（实测 14:01:18 → 14:02:47）。
 
 ### D. 🔴 本次事故的四层根因链（详见 runbook §3）
 

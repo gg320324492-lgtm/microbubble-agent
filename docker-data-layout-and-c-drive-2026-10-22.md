@@ -81,15 +81,18 @@ Docker 的镜像/容器/卷**从来就不在 C 盘**（2026-06-17 已迁出，�
 
 ### 已落地的代码层改造（2026-10-22）
 
-| 文件 | 改动 | 实测 |
+> ⚠️ 下表的"实测"列是**真的执行过**的结果，不是"应该能work"。
+> 可复跑：`python scripts/ci/verify_c_drive_changes.py`
+
+| 文件 | 改动 | 实测（执行结果） |
 |---|---|---|
-| `scripts/voice-alert.ps1` | 缓存目录 `$env:LOCALAPPDATA\voice-alert-cache` → `$ProjectRoot\data\voice-alert-cache`；加 LRU（只留最近 50 个 MP3） | 塞 55 个假 MP3 → 跑一次 → 裁到 50，且保留的是最新的 3 个 ✓ |
-| `apps/desktop/scripts/server/offsite-oss-sync.py` | `mkdtemp(prefix="offsite-enc-")` → 加 `dir=_TMP_ROOT`（`data\tmp`） | AST OK ✓ |
-| `scripts/backup/rotate_offsite_passphrase.py` | `NamedTemporaryFile` 与 `mkdtemp(prefix="verify-")`（**里面是明文**）都加 `dir=_TMP_ROOT` | AST OK ✓ |
-| `app/services/audio_processor.py` | `import torch` **之前**设 `TORCH_HOME`（**仅 Windows 宿主**，容器内是 Linux 路径语义不能设） | 容器内导入 OK ✓ |
-| `apps/desktop/package.json` + `scripts/lib/cache-env.mjs` + `scripts/with-cache-env.mjs` | `pack`/`dist` 与 `release.mjs` 注入 `ELECTRON_CACHE` / `ELECTRON_BUILDER_CACHE` | `node --check` OK ✓ |
-| `.pnpmfile.cjs`（**仓库根**） | pnpm 的生命周期子进程继承 pnpm 进程的 env ⇒ 在这里设同一组变量，覆盖 `pnpm install` 路径 | ⚠️ **实测 pnpm 9.15.9 加载的是 `.pnpmfile.cjs`（带点），不是 `pnpmfile.cjs`** —— 一次性目录里同时放两个文件实测，只有带点的那个被加载 ✓ |
-| `apps/desktop/src/main/index.ts` | 不改代码：用用户级 `MNB_USER_DATA` 环境变量驱动已有的 `MNB_USER_DATA` 开关 | 旧 `Roaming\MicroBubbleWorkbench\data\` 的 8 个文件（含 `workbench.db` 与 `session-token.enc`）已**复制**到新位置，旧目录原样保留 ✓ |
+| `scripts/voice-alert.ps1` | 缓存目录 `$env:LOCALAPPDATA\voice-alert-cache` → `$ProjectRoot\data\voice-alert-cache`；加 LRU（只留最近 50 个 MP3） | 塞 55 个假 MP3 → 跑一次 → **裁到 50**，保留的是最新的 3 个 ✓ |
+| `apps/desktop/scripts/server/offsite-oss-sync.py` | `mkdtemp(prefix="offsite-enc-")` → 加 `dir=_TMP_ROOT`（`data\tmp`） | `mkdtemp` 实际建在 `E:\...\data\tmp\verify-oos-*` ✓；`--scan` **真跑通**（读真凭证、扫真备份目录、识别出 2 个待上传的加密文件）✓ |
+| `scripts/backup/rotate_offsite_passphrase.py` | `NamedTemporaryFile` 与 `mkdtemp(prefix="verify-")`（**里面是明文**）都加 `dir=_TMP_ROOT` | 两种临时文件都实测建在 `E:\...\data\tmp\` ✓ |
+| `app/services/audio_processor.py` | `import torch` **之前**设 `TORCH_HOME`（**仅 Windows 宿主**，容器内是 Linux 路径语义不能设） | 实跑 `segment_audio`：`TORCH_HOME=E:\microbubble-agent\models\torch_hub`，日志 `Using cache found in E:\...\models\torch_hub\hub\snakers4_silero-vad_master` ⇒ **模型真的从 E 盘加载** ✓ |
+| `apps/desktop/package.json` + `scripts/lib/cache-env.mjs` + `scripts/with-cache-env.mjs` | `pack`/`dist` 与 `release.mjs` 注入 `ELECTRON_CACHE` / `ELECTRON_BUILDER_CACHE` | **A/B 对照**：过 wrapper 两个变量指向 E 盘且 PATH 含 `node_modules/.bin`；不过 wrapper 两者皆 `undefined` ✓ |
+| `.pnpmfile.cjs`（**仓库根**） | pnpm 的生命周期子进程继承 pnpm 进程的 env ⇒ 在这里设同一组变量，覆盖 `pnpm install` 路径 | 实跑 `pnpm --filter @mb/desktop exec node -e ...` → 子进程里两个变量**都被注入** ✓；⚠️ 实测 pnpm 9.15.9 加载的是 `.pnpmfile.cjs`（**带点**），不是 `pnpmfile.cjs` —— 一次性目录里同时放两个文件实测，只有带点的那个被加载 ✓ |
+| `apps/desktop/src/main/index.ts` | 不改代码：用用户级 `MNB_USER_DATA` 环境变量驱动已有的 `MNB_USER_DATA` 开关 | 用户级 `MNB_USER_DATA` 已设且指向 E 盘；`workbench.db`(258,048 B) 与 `session-token.enc` 已到位 ✓；⚠️ **本进程仍读到旧值**（它早于改动启动）—— 新进程才拿得到 |
 
 **用户级环境变量（已写入，机器重启后仍生效）**
 
@@ -235,6 +238,30 @@ powershell -NoProfile -Command "Get-ScheduledTask -TaskName 'MicroBubble-Docker-
 
 ### 4.2 守护脚本自愈阶梯（2026-10-22 重写后）
 
+> **已做真实故障注入验证（2026-10-22 14:01）**，不是只做过静态检查。
+> 注入方式：杀掉全部 `com.docker.backend` 进程（daemon DOWN、0 容器运行），
+> 然后**不干预**，等计划任务自己那一轮：
+>
+> ```
+> 14:01:02 WARN  Docker daemon unavailable, escalating   {'detail': 'docker info exit 1', 'from_level': 'OK'}
+> 14:01:07 INFO  L0 system disk ACL repaired             {'granted 27 SID(s) ... RESULT: OK'}
+> 14:01:07 INFO  L0 runtime socket dirs moved aside      {'moved': [真实路径\Docker\run, 包重定向路径\Docker\run, docker-secrets-engine]}
+> 14:01:18 INFO  Docker came up after L0                 {'containers_running': 13, 'containers_total': 13}
+> ```
+>
+> **⇒ 16 秒完成自愈，全程无人干预。** 关键细节：杀 backend 时系统盘
+> `main\ext4.vhdx` 的 **27 个 `S-1-5-83-1-*` ACE 已经被剥掉了**（正是 2026-10-19 事故的
+> 成因），L0 在 WSL 挂载失败之前就把它补了回来 —— 这次 ACL 修复不是"预防性代码"，
+> 是**当场救了场**。
+>
+> 自愈后与注入前逐项比对：**13 个容器 ID、14 个镜像 ID+tag、10 个卷名全部逐一相同**；
+> 数据库 `meetings=28 / members=36 / knowledge=884 / chunks=519` 一致；
+> `app:8000/health` 与生产域名 `agent.mnb-lab.cn/health` 均 200。
+>
+> ⚠️ **「Docker 恢复了」≠「业务已就绪」**：守护脚本的判据是 `docker info` + `docker ps`
+> （Docker 层），而数据库重启后要做 pre-fsync 恢复、业务端点还要再等 1–2 分钟
+> （实测 14:01:18 Docker 恢复 → 14:02:47 app 才 healthy）。
+
 | 级 | 做什么 | 破坏性 |
 |---|---|---|
 | **L0** | 停进程并**轮询到真的停了** → `wsl --shutdown` → **修 `main\ext4.vhdx` 的 ACL** → 把 `run` / `docker-secrets-engine` **改名**为 `.stale-<时间戳>` → 重建空 `run` → 启动 Docker → 等 120 s | 无 |
@@ -285,6 +312,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci\fix-docker-wsl-vh
 | `scripts/ci/probe_localappdata_docker.ps1` | 常备 | 在干净上下文里看清 `%LOCALAPPDATA%\Docker` 到底是什么（MSIX 陷阱探测器） |
 | `scripts/ci/probe-new-temp.ps1` | 常备 | 验证新进程拿到的 `%TEMP%` 已是 E 盘且可写 |
 | `scripts/ci/test-docker-guard.ps1` | 常备 | 守护脚本的 44 项单元测试（用 AST 抽纯函数，**不执行守护脚本本身**） |
+| `scripts/ci/verify_c_drive_changes.py` | 常备 | **实跑**验证防回流改动：tempfile 落点、TORCH_HOME 真加载模型、桌面端 userData 迁移 |
+| `apps/desktop/scripts/ci/probe-cache-env.mjs` | 常备 | 探针：给 `with-cache-env.mjs` 用，打印子进程看到的缓存环境变量 |
 | `scripts/ci/move-docker-data-to-project.ps1` | 一次性（已执行） | 把 Docker 数据根搬进项目目录（改注册表 BasePath + `.wslconfig` + junction） |
 | `scripts/ci/redirect-temp-off-c.ps1` | 一次性（已执行） | 用户级 `TEMP`/`TMP` 改指 E 盘 + 存量搬迁 |
 | `scripts/ci/recover-docker-wsl-distro.ps1` | 一次性 | 强制走 provisioning 分支的发行版重建（旧 L3 配方） |
