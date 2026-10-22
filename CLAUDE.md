@@ -156,10 +156,33 @@ E:\microbubble-agent\data\docker\
 `No such file or directory` + `pytest exit: 1`。
 **已全部搬回原位复原**（含 `lcp111-scratch`），C 盘剩余 44 GB。
 
+**⇒ 但真工作从未受影响（该会话当场核实、我已复核）**：LabCairn 的活的工作在
+**主仓 `E:\LabCairn`**（分支 `fix/g4-round-four` @ `86e0226`，`main` @ `5dcd6d0`，
+**PR #107 开着**，验收草稿 `docs/acceptance/G4-acceptance.md` 未提交），
+reviewer 的 harness 在 `C:\Users\pc\labcairn-g4\`，**都不在 `%TEMP%` 下**。
+⚠️ 我最初核对的是**遗留 worktree**
+`E:\LabCairn\.claude\worktrees\agent-a6cda21d6e6f80725`（25bad72 / PR #87 已 MERGED）
+⇒ **据此给过用户和对方"成果没丢、PR 已合"的错误结论**（结论恰好无害，但依据是错的）。
+⇒ **纪律**：核对"某项目有没有在跑的活工作"时，**必须看主仓 + 未提交改动 + 开着的 PR**，
+**不能拿一个遗留 worktree 的干净状态当证据**。
+
+**⇒ 附带查清的技术点（给 LabCairn）**：`lcp*` 那 20 GB **不是 pytest 造的**，
+**pytest 的 `--basetemp` 覆盖不到它们** —— 它们由 `tempfile.gettempdir()` 决定：
+
+| 位置 | 代码 | 产物 |
+|---|---|---|
+| `scripts/probes/pdf_spans.py:48` | `tempfile.mkdtemp(prefix="labcairn-probe-")` | `%TEMP%\labcairn-probe-*` |
+| `src/labcairn/analysis/chart/render.py:267` | `MPL_CONFIG_DIR = Path(tempfile.gettempdir()) / "labcairn-matplotlib"` | `%TEMP%\labcairn-matplotlib`（**每次渲染都写**） |
+| `tests/test_api_concurrency.py:278` | `tempfile.TemporaryDirectory(prefix="lcp-concurrency-")` | `%TEMP%\lcp-concurrency-*` |
+
+⇒ 要动它们只能改 `TMPDIR`/`TEMP`/`TMP`（Windows 上 `tempfile` 依次读这三个，
+再 `C:\TEMP`、`C:\`、`C:\Windows\Temp` 兜底），或在调用点显式传 `dir=`。
+
 ⇒ **纪律**：① 批量搬 `%TEMP%` 前先看 `list_sessions`（有在跑的会话就有在用的目录），
    并**看目录 mtime 是否在被持续更新**；⚠️ **注意 robocopy 移动本身会改写目录 mtime**
    ⇒ 搬完后无法再用 mtime 判活跃度，**必须在搬之前记录**；
-② 别人的工作目录**搬走比留着更危险** —— 宁可少腾一点空间。
+② 别人的工作目录**搬走比留着更危险** —— 宁可少腾一点空间；
+③ 搬之前**先问对方在用哪些**（本例应先要一份"还在用"的清单）。
 
 ### H. 本阶段新增的永久铁律
 
