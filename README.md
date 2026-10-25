@@ -194,6 +194,25 @@ git add -f web/dist/ && git commit -m "chore(git): web/dist 重建入库 —— 
 ⚠️ **严禁** src + dist 原子同 commit（会让构建时间戳滞后一个源提交，该提交上重建不恒等）
 ⚠️ **唯一合法构建命令是 `npm run build`**，不要直跑 `vite build`
 
+### 模型按需启动（2026-10-26 起）
+
+本项目**所有模型都不常驻**，按需启动、不用时释放显存（主指挥决策，反转 v31.3 起的老设定）。
+
+- 显存整卡占用实测 **31510/32607 MiB（96.6%）→ 3230 MiB（10%）**。
+- 涉及的组件与实现见 `CLAUDE.md` 同日「当前状态」段与**类 20.237**。
+- ⚠️ **首次调用会比平时慢十几秒**（加载模型），这是**预期**的：
+  SenseVoice 首次约 36s、embedding 首次约 10s。转写请求超时 600s，客户端无感。
+- ⚠️ 判「模型在不在」看 `model_loaded`（不是看进程在不在）：`ollama ps` 为空就是没加载。
+- 手动释放显存：重启对应服务即可（`docker restart <svc>`）。
+
+### 手动补部署（webhook 投递偶发失败时）
+
+```bash
+bash scripts/redeploy-cloud.sh
+```
+
+判据是**云端 HEAD == 本地 HEAD**（不是看 push 是否成功、也不是看 CI 是否绿）。
+
 ### 部署后必做
 
 ```bash

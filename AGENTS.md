@@ -17,6 +17,13 @@
 
 ## 当前开发阶段
 
+**2026-10-26 最新进展** — ①会议 259（10-19 组会）已入库（走生产 API 四步链，产物全套达标）；
+②前端失败态 UI 上线（失败原因翻译成人话 + 补救按钮，桌面/移动端一致）；
+③修掉一个**静默 10 天**的部署故障（云端磁盘被 18GB 刷屏日志占满 ⇒ 部署自 10-15 起每次 push
+都静默中止 ⇒ 生产一直没更新；**push 成功 ≠ 部署成功**，硬判据是比对资源指纹）；
+④**所有模型改为按需启动**，整卡显存 31510 → 3230 MiB。详见 `CLAUDE.md` 顶部同段与 `CHANGELOG.md`。
+
+
 **Phase 1-7 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**（含多模态 OCR），会议系统已升级为**实时声纹识别通话系统**。**2026-06-24 最新进展** — sentence-transformers 5.6.0 跨 3 大版本升级（commit `c8d4df3e`）+ 删 170 行 Qwen3 wrapper + Qwen3 max_seq_length 4x 升到 32K + qa-bench 38%→42%。详见 [CHANGELOG.md](CHANGELOG.md#2026-06-24-sentence-transformers-560-升级phase-12-收官phase-3-跳过) 和 [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)。
 
 **2026-06-12 重大进展** — 详见 [CLAUDE.md](CLAUDE.md) 同日条目与 [README.md](README.md#当前状态2026-06-12)。要点：①会议录音全栈防御机制 5 阶段完成（解决 #84 案例"58 分钟录音断网丢失"）②webhint paint keyframes 治理（49+ 报告清零）③会议详情页 transcriptEntries / polish-text 400 双 bug 修复 ④Vite hash 改 hex 真正消除 cache-busting 误报 ⑤**会议查询 bug 双层根因修复**（`app/agent/core.py:911` 函数体内 `from X import Y` 触发 UnboundLocalError + LLM 撒谎模式 → 删冗余 import + 补 `prompts.py` "工具调用黄金规则 (CRITICAL)" + `tools.py` 中 `query_meetings` 描述改为「【必调工具】」）。详见 `CLAUDE.md` 第 145-149 行（晚间教训）和 `README.md` 近期新增第 25 行。

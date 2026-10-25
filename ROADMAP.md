@@ -3,6 +3,23 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
+## 当前状态 (2026-10-26 会议 259 入库 + 前端失败态 UI + 云端磁盘满致部署静默失败 10 天 + 所有模型改按需启动)
+
+**本段是 2026-10-26 这一天的产出**（main HEAD = `355362fda`）。详细散见
+`CLAUDE.md` 顶部同日「当前状态」段 + `CHANGELOG.md` 同日条目 + `memory/` 两个新文件。
+
+- **会议 259（10-19 组会）已入库**：三份音频查重后两份是重复（= 已入库的 256 / 257），
+  只有压缩包里那份（3424s）是新的。走生产 API 四步链入库，产物全套达标
+  （摘要 321 字 / 要点 8 / 决议 6 / 转录 355 段 / `meeting_chunks` 22 行）。
+- **前端失败态 UI 已上线**（生产域名实测）：失败原因翻译成人话 + 补救按钮（重跑流水线 / 去听会页面上传），
+  桌面与移动端两端一致，19 个新测试全过，Playwright 无 console error。
+- **修掉一个静默了 10 天的部署故障**：云端磁盘被 18GB 刷屏日志占满 ⇒
+  `deploy-auto.sh` 的磁盘检查从 10-15 起让**每次 push 都静默中止** ⇒ 生产一直没更新。
+  **教训**：push 成功 / CI 全绿 / `/health` 200 —— 三个信号全对也**不代表生产已更新**，
+  唯一硬判据是**比对生产首页的资源指纹与本地 `web/dist/index.html` 的指纹**。
+- **所有模型改为按需启动**：整卡显存 31510 → 3230 MiB（释放 28.3GB）。
+  「常驻」有六个来源，只改一处等于没改（类 20.237）。
+
 ## 当前状态 (2026-08-01 W98 P2 batch grand closure 收口 — 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实, 0 production code 守恒)
 
 **W98 P2 batch grand closure 收口 (主指挥协调范式第 81 次派工, CHAT 系列 5 铁证验收 + RAG consistency 收尾 + 微信同步共享 + 10 件套 gate 守恒)**: 锚点范式 W97 477 → W98 P2 batch 4 commits 漂移据实 (派工 brief 期望 W98 +6 → +10, 实测 P2-D2 W98 +7 + P2-F W98 +6 + P2-E2E W98 +6 + P2-GATE W98 +9, 派工 v11 段 9 规则下都是有效锚点). 当前 main HEAD = `58aa29eca` (P2-GATE merge commit, 4 commits 全部合并至 main).
@@ -466,6 +483,17 @@
 - 🆕 [v68 桌面主题切换按钮 + SettingsView 玻璃态](CHANGELOG.md#2026-06-27-v68-桌面主题切换按钮--settingsview-玻璃态)
 - 🆕 [v31.3 Whisper 常驻 + 推理加速](CHANGELOG.md#2026-06-26-v31-3-whisper-常驻--推理加速用户决策chat-asr-时效性优先) - 模型常驻 GPU 8GB
 - 🆕 [v31.2.5 rate-limit Redis ZSET 持久化](CHANGELOG.md#2026-06-26-v31-2-5-rate-limit-收官启用-redis-zset-持久化) - 抗 docker restart
+
+## 🆕 待做（2026-10-26 收口后的遗留项）
+
+| # | 事项 | 归属 | 状态 / 备注 |
+|---|---|---|---|
+| 1 | **云端 staging 实例缺 `JWT_ACCESS_SECRET`**（`lab-miniapp` 项目）⇒ pm2 无限重启把同一堆栈刷成日志，**一旦被重新托管会再次刷爆磁盘** | **lab-miniapp 项目运维**（非本仓） | **未擅自处置**。二选一：补环境变量 / 给 pm2 配日志上限 / 停掉该实例 |
+| 2 | **会议 258**（10-19 失败残留：`last_chunk_index=-1`、0 音频 0 转录、`status=error`） | 本仓 | **保留未删** —— 它正好是失败态 UI 的展示对象；是否清理由主指挥定 |
+| 3 | **刘子煜 / 肖佐林 无声纹** ⇒ 会议 259 里他们的话被误判成「王天志 / 蒋芦笛」 | 本仓 | 桌面 `声纹核对_会议259\优先核对清单.md` 已列出 20 个可疑区块（音频 + 文本 + 距离）；**等主指挥逐块纠正后**用 `transcript_editor.update_transcript_speaker` 写回（**不要用 `reanalyze_with_speakers`，它会丢 `start`/`end`/`speaker_label`**） |
+| 4 | **蒋芦笛名下 83 段整体勉强及格**（到本人质心距离中位数 0.550、MAD 0.041，距阈值 0.65 只差 0.10） | 本仓 | 值得抽查 —— 她名下可能混了别人的声音 |
+| 5 | **webhook 投递偶发 502**（请求根本没到云端 nginx） | 本仓 | 已拍板**不装自动补部署定时任务**；手动补用 `bash scripts/redeploy-cloud.sh`（判据 = 云端 HEAD == 本地 HEAD） |
+| 6 | 本机 GPU 仍常驻约 **3.2G** | — | **不是模型**：桌面应用（Edge/webview2/ToDesk/GameViewer）+ WSL2/Docker 的 CUDA context；Windows 是 WDDM 模式，`nvidia-smi` **不按进程给显存**，归因只能靠停服前后差值 |
 
 ## 🆕 待做：RAG 工业级大改造（10 PR 串行, 2026-08 → 2027-05, 锚点范式 W88-W97）
 
