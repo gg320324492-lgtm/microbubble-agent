@@ -2,6 +2,16 @@
 # 自动部署脚本 — 由 webhook 触发
 # 拉取代码 → 重载 Nginx（前端在本地构建，dist 由 git 提交）
 # 容错策略：关键步骤手动 exit，非关键步骤允许失败继续
+#
+# ============================ 部署拓扑（2026-10-25 补正） ============================
+# 本脚本在**云端服务器**执行，但**云端不跑 MicroBubble 的任何容器**：
+#     nginx(云端) → SSH 反向隧道 → frpc(本地 PC) → Docker app / celery(本地 PC)
+#     数据库与 MinIO 同在本地 PC 的 Docker 里
+# ⇒ 因此本脚本里凡是「docker ps / docker exec」的操作，在云端**必然找不到容器**；
+#    它们只能作为「请到本地 PC 执行」的提示来源，不能当成云端自己会跑通的步骤。
+#    历史上这两处写成了「云端去找容器」，于是每次部署都静默跳过，还打出
+#    「未找到 postgres 容器」这类让人误以为云端该有容器的日志（2026-10-25 订正）。
+# ============================================================================
 
 PROJECT_DIR="/opt/microbubble-agent"
 # 2026-06-13 加固：LOG_FILE 允许环境变量覆盖（deploy 用户调试时可指定可写路径）
@@ -286,18 +296,25 @@ ensure_mime 'font/woff'                 'woff' '(font/woff[^2]|application/font-
 # 幂等（用 ADD COLUMN IF NOT EXISTS），重复跑安全
 # ============================================================================
 MIGRATION_SQL="$PROJECT_DIR/scripts/alter_agent_traces_stage3.sql"
+# 2026-10-25 订正: 云端**不跑** MicroBubble 容器(见文件头「部署拓扑」) ⇒ 在云端必然找不到 db 容器。
+# 旧写法打的是「未找到 postgres 容器，跳过迁移（请手动跑 ALTER TABLE）」——
+#   ① 措辞让人误以为云端本该有容器; ② 没给出可直接执行的命令; ③ 容器名靠 grep 猜, 猜不到就放弃。
+# 现在: 明确这是预期状态, 并给出**本地 PC** 上可复制执行的确切命令
+#   (容器名用现役的 microbubble-agent-db-1, 与 scripts/sync_sequences.sh 一致;
+#    旧名 microbubble-agent-app-revived 已废弃, 别再拿它当判据)。
 if [ -f "$MIGRATION_SQL" ]; then
-    PG_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E 'postgres|db' | head -1)
-    if [ -n "$PG_CONTAINER" ]; then
+    PG_CONTAINER="${DB_CONTAINER:-microbubble-agent-db-1}"
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${PG_CONTAINER}\$"; then
         log "运行 agent_traces schema 迁移（7 列）..."
         if docker exec -i "$PG_CONTAINER" psql -U postgres -d microbubble < "$MIGRATION_SQL" >> "$LOG_FILE" 2>&1; then
             log "agent_traces 迁移成功（intentional 幂等）"
         else
             log "WARN: agent_traces 迁移失败，请手动跑："
-            log "  docker exec $PG_CONTAINER psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql"
+            log "  docker exec -i ${PG_CONTAINER} psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql"
         fi
     else
-        log "WARN: 未找到 postgres 容器，跳过迁移（请手动跑 ALTER TABLE）"
+        log "云端不跑容器(预期) ⇒ 跳过 agent_traces 迁移。如需执行, 请在**本地 PC** 运行:"
+        log "  docker exec -i ${PG_CONTAINER} psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql"
     fi
 else
     log "WARN: $MIGRATION_SQL 不存在（首次部署？git pull 可能漏了）"
@@ -320,7 +337,8 @@ fi
 # 后果: 用户首条 INSERT 报 UniqueViolation 500 (chat_messages_id_seq=6333, max=6339 实战)
 # 修复: 同步所有 public.* 表的 *_id_seq 到 max(id)
 log "类 20.188 后置检查: sequence 漂移修复..."
-DB_CONTAINER="${DB_CONTAINER:-microbubble-agent-app-revived}"  # 兼容 production (revived) + 本地
+DB_CONTAINER="${DB_CONTAINER:-microbubble-agent-db-1}"  # 2026-10-25 订正: 旧默认值 microbubble-agent-app-revived 已废弃,
+                                                      #   与 scripts/sync_sequences.sh 的默认不一致 ⇒ 那段检查在**任何**机器上都是死代码
 DB_NAME="${DB_NAME:-microbubble}"
 DB_USER="${DB_USER:-postgres}"
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${DB_CONTAINER}\$"; then
@@ -328,7 +346,8 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${DB_CONTAINER}\$"; t
         log "✅ sequence 漂移检查完成 (详见日志)" || \
         log "WARN: sequence 漂移修复失败（不影响部署）"
 else
-    log "WARN: 数据库容器 ${DB_CONTAINER} 未运行，跳过 sequence 漂移检查"
+    log "云端不跑容器(预期) ⇒ 跳过 sequence 漂移检查。如需执行, 请在**本地 PC** 运行:"
+    log "  bash scripts/sync_sequences.sh   (容器默认 microbubble-agent-db-1)"
 fi
 
 # 后处理 mnb-lab.cn CSS（修复 webhint vendor prefix 警告）

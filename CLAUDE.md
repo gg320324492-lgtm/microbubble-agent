@@ -1098,6 +1098,22 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
      (云端 = 隧道端点; 本机 nginx 容器 = 容器自己)。实测云端 `getent hosts minio`
      **解析失败**, 所以把 `127.0.0.1:9000` 改成容器网络名 `minio:9000` **会直接打断云端路由**,
      且因为本地测本机 nginx 反而"变绿"而更隐蔽 —— 该改动必须回滚。
+  ⑥ **云端服务器不跑 MicroBubble 的任何容器 —— Docker 全在本地 PC** (2026-10-25 实测澄清) ——
+     拓扑: `nginx(云端) → SSH 反向隧道 → frpc(本地 PC) → Docker app/celery/db/minio(本地 PC)`。
+     云端只跑三样: nginx、webhook 服务(`/opt/microbubble-agent/scripts/webhook.py`, 端口 9001)、
+     以及另一个项目 lab-miniapp 的 node 进程。
+     ⚠️ **云端 `docker info` 仍可能返回 200** (snap 装的 docker 包还在, 历史上云端确实跑过
+     MicroBubble 容器, 迁到本地后镜像/容器成了残留) ⇒ **"docker 能用"不等于"云端该跑容器"**。
+     2026-10-25 实测: 云端 `docker system df` 仍显示 4 镜像 / 3 个**停止的**容器而 `docker ps` 为空
+     —— 全是历史残留, 删掉不影响生产; 而 `scripts/deploy-auto.sh` 的部署日志每次都在打
+     「未找到 postgres 容器」/「数据库容器未运行」, 正是它让人误以为云端该有容器。
+     ⇒ 判「某操作该在哪台机器做」的正确问法是**「它要动的是本地 PC 的容器, 还是云端的文件」**,
+     **不是**「这台机器上 docker 能不能跑」。
+     ⚠️ 同源教训: `scripts/deploy-auto.sh` **同一个文件里两种说法** —— 第 137 行注释写对了
+     拓扑(「Docker app (本地 PC)」), 而第 290 / 326 行却写成「在云端 `docker ps` 找 db 容器」
+     ⇒ 读者取到哪一种**取决于读到哪一段**。已把两处改成「云端不跑容器(预期) → 提示在本地 PC 执行」
+     并把过时的容器名 `microbubble-agent-app-revived` 改成现役的 `microbubble-agent-db-1`
+     (旧名与 `scripts/sync_sequences.sh` 不一致 ⇒ 那段检查在任何机器上都是死代码)。
   **三条排障陷阱 (2026-10-11 SSH 故障排查实测)**:
   ①**隧道与 GitHub SSH 是两条独立链路** —— 隧道目标 `agent.mnb-lab.cn`, 用本机 key
   对云服务器, **不连 GitHub**。看到"SSH 挂了"不要先怀疑隧道 (若它依赖 GitHub, 早死了);
