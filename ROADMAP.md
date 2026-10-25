@@ -494,6 +494,8 @@
 | 4 | **蒋芦笛名下 83 段整体勉强及格**（到本人质心距离中位数 0.550、MAD 0.041，距阈值 0.65 只差 0.10） | 本仓 | 值得抽查 —— 她名下可能混了别人的声音 |
 | 5 | **webhook 投递偶发 502**（请求根本没到云端 nginx） | 本仓 | 已拍板**不装自动补部署定时任务**；手动补用 `bash scripts/redeploy-cloud.sh`（判据 = 云端 HEAD == 本地 HEAD） |
 | 6 | **已停用** `ollama` / `langfuse` / `pg-exporter`（约 667 MiB）⇒ `docker compose up -d` 会再拉起 | 本仓 | 已停（只停不删）；`neo4j`（615 MiB，知识图谱）/ `celery-beat`（72 MiB，定时调度）/ `sensevoice`（1.5 GiB，**ASR 回退路径**）**2026-10-26 主指挥拍板：不再继续停, 保持运行** |
+| 8 | **鲁大师（LuDaShi）完全卸载** —— 2026-10-26 实测**并未卸载干净**: `LudashiProtect64.sys` 内核驱动仍 `State=Running`, `C:\Program Files (x86)\LuDaShi` 仍有 **664 MB**; 已准备管理员脚本 `E:\tools\admin-pool-leak-cleanup.ps1` 的 STEP 2 (停进程/服务 → `pnputil /delete-driver` 卸驱动 → 跑官方卸载器 → 删目录 → 清自启项与计划任务) | 本机运维 | **待做**: 需管理员权限执行, 桌面入口 `Run-AdminPoolLeakCleanup.bat` |
+| 9 | **内核池泄漏定位** —— 非分页池重启前 19441 MB / 重启后 1366 MB(启动 4 分钟), ⇒ 持续泄漏坐实; 运行中的第三方内核驱动: `uuycinput`/`uuycinputmf`(GameViewer 输入过滤)、`OrayVGC`/`OrayUSBVHCI`(向日葵 虚拟显卡/虚拟 USB)、`ToDeskAudio`/`ToDeskVhidEnhance`(ToDesk)、`LudashiProtect`(鲁大师)。用户确认**通过 ToDesk 连机** ⇒ ToDesk 驱动不动 | 本机运维 | 采样器 `E:\tools\pool-sampler.ps1` 每 60s 写 `E:\tools\pool-samples.csv`(240 min); PerfView 抓 tag 见 `E:\tools\admin-pool-leak-cleanup.ps1` STEP 1; GameViewer 服务+输入驱动禁用实验见 STEP 3 |
 | 7 | 本机 GPU 仍常驻约 **3.2G** | — | **不是模型**：桌面应用（Edge/webview2/ToDesk/GameViewer）+ WSL2/Docker 的 CUDA context；Windows 是 WDDM 模式，`nvidia-smi` **不按进程给显存**，归因只能靠停服前后差值 |
 
 ## 🆕 待做：RAG 工业级大改造（10 PR 串行, 2026-08 → 2027-05, 锚点范式 W88-W97）
