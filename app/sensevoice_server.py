@@ -51,6 +51,9 @@ IDLE_UNLOAD_SEC = int(os.getenv("SENSEVOICE_IDLE_UNLOAD_SEC", "600"))
 _model_lock = threading.Lock()   # 加载/卸载互斥, 避免并发请求重复加载或加载中被卸载
 _active_requests = 0             # 正在推理的请求数; 卸载前必须为 0
 _last_used_at: float = 0.0
+# 2026-10-26: 「服务已就绪」标志 —— healthcheck 判它, **不判 model_loaded**
+# (按需加载后模型常态不加载, 判 model_loaded 会让容器永远 unhealthy)。
+_service_ready: bool = False
 
 
 def _load_model_sync():
@@ -253,7 +256,9 @@ async def lifespan(app: FastAPI):
     后台线程在空闲 IDLE_UNLOAD_SEC 秒后自动卸载并归还显存。
     (v31.3 起是「启动即加载 + 永不卸载」的常驻模式, 现按主指挥决策反转为按需启动。)
     """
+    global _service_ready
     threading.Thread(target=_idle_unload_loop, daemon=True).start()
+    _service_ready = True
     print(f"[sensevoice] lazy mode: 按需加载, 空闲 {IDLE_UNLOAD_SEC}s 自动卸载", flush=True)
     yield
     # 进程退出时 OS 自动回收 GPU 内存 (不再 del)
@@ -271,13 +276,18 @@ async def health():
     except Exception:
         cuda_available = False
     return {
-        "status": "healthy" if _model is not None else "loading",
+        # 2026-10-26: status 判据由「模型是否加载」改为「服务是否就绪」——
+        #   按需加载后模型常态为 None, 继续报 "loading" 会与 docker ps 的 healthy 自相矛盾
+        #   (类 20.220: 字段在说谎)。模型状态看 model_loaded 字段。
+        "status": "healthy" if _service_ready else "starting",
         "model": MODEL,
         "device": DEVICE,
         "active_device": _current_device,
         "gpu_broken": _gpu_broken,
         "cuda_available": cuda_available,
         "model_loaded": _model is not None,
+        # 2026-10-26: healthcheck 的判据(服务是否可应答), 与「模型此刻是否加载」分开
+        "service_ready": _service_ready,
         "model_load_time_sec": round(_model_load_time, 1) if _model else None,
         "vram_mib": vram_mib,
         # 2026-10-26: 不常驻 —— 启动不加载, 首次请求按需加载, 空闲 SENSEVOICE_IDLE_UNLOAD_SEC 秒后自动卸载

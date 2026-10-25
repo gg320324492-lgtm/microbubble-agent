@@ -51,6 +51,32 @@
 
 见下方 **类 20.237**（模型常驻/按需的判定、实现与验证纪律）。
 
+### E. 2026-10-26 追加：停用三个无生产引用的容器 + 修掉 sensevoice 的 healthcheck 判据
+
+**停用（`docker compose stop`，只停不删，定义保留、随时可起）**：
+
+| 容器 | 内存 | 停用依据（查的是**生产链路引用**，不是 `depends_on`） |
+|---|---|---|
+| `ollama` | 516 MiB | `.env` 的 `LLM_BACKEND=openai_compat` ⇒ **ollama 后端代码路径根本不激活**（`app/core/llm.py` 只在 `backend == "ollama"` 时才走）；它只是「切回离线 batch 前要先起容器」 |
+| `langfuse` | 148 MiB | 仅 LLM 调用追踪，`app/core/llm.py` 里 import 失败即 no-op ⇒ 停用只失去可观测性，不影响业务 |
+| `pg-exporter` | 2.4 MiB | **全机没有 Prometheus/Grafana 采集端**（`observability/` 只有配置目录，无容器）⇒ 指标无人采集 |
+
+⇒ 三者合计约 **667 MiB** 内存。`docker compose up -d` 会把它们再拉起。
+
+**没停的（各有生产引用）**：`app`（隧道终点）/ `db` / `minio`（音频·头像·知识库原件）/ `redis` /
+`nginx` / `celery-worker` / `celery-meeting-worker`（会议转写流水线）/
+`sensevoice`（**ASR 回退路径**——GPU 7B 优先、它兜底）/ `neo4j`（实体知识图谱）/ `celery-beat`（定时调度）。
+⇒ 停 `neo4j` / `celery-beat` / `sensevoice` 需主指挥单独拍板（各有功能代价）。
+
+**⚠️ 顺带修掉一个我自己引入的回归**：sensevoice 改成按需加载后，原 healthcheck 判
+`model_loaded` ⇒ **模型常态不加载 ⇒ 容器永远 unhealthy**（`docker ps` 显示 unhealthy，
+却没有任何服务 `depends_on` 它要 `service_healthy` ⇒ 不会卡住别人，但状态字段在说谎的镜像版）。
+⇒ 判据改为 **`service_ready`**（lifespan 已完成 ⇒ 服务可应答、模型可按需加载）；
+`/health` 新增 `service_ready` 字段；同时把 `status` 由「模型是否加载」改为「服务是否就绪」
+（否则会与 `docker ps` 的 healthy 自相矛盾）。实测：`status=healthy, model_loaded=False,
+service_ready=True`，容器 **healthy**；重建后转写仍 HTTP 200 / 29.7s / 内容正确。
+
+
 ---
 
 ## 当前状态 (2026-10-22 Docker 数据进项目目录 + C 盘从 13.8G 腾到 60G + 守护脚本重写)

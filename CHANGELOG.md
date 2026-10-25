@@ -2,6 +2,20 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-10-26] 停用三个无生产引用的容器 + 修掉 sensevoice healthcheck 判据
+
+- **停用**：`ollama`（516 MiB，`.env` 的 `LLM_BACKEND=openai_compat` ⇒ ollama 后端路径不激活）、
+  `langfuse`（148 MiB，仅 LLM 追踪，import 失败即 no-op）、
+  `pg-exporter`（2.4 MiB，全机无 Prometheus/Grafana 采集端）⇒ 合计约 667 MiB。
+  用 `docker compose stop`（只停不删，定义保留）；`up -d` 会再拉起。
+- **没停**：app / db / minio / redis / nginx / celery-worker / celery-meeting-worker /
+  sensevoice（ASR 回退）/ neo4j（知识图谱）/ celery-beat（定时调度）—— 各有生产引用。
+- **修掉自引入的回归**：sensevoice 改按需加载后，原 healthcheck 判 `model_loaded`
+  ⇒ 模型常态不加载 ⇒ **容器永远 unhealthy**。判据改为 **`service_ready`**（服务可应答），
+  `/health` 新增该字段；`status` 也由「模型是否加载」改为「服务是否就绪」。
+  实测容器 healthy，重建后转写仍 HTTP 200 / 29.7s / 内容正确。
+
+
 ## [2026-10-26] 会议 259 入库 + 失败态 UI + 云端磁盘满致部署静默失败 10 天 + 所有模型改按需启动
 
 - **会议 259 入库（10-19 组会）**：微信接收目录里 3 份音频查重后，两份是重复

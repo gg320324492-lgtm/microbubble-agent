@@ -291,6 +291,13 @@ services:
     # ⚠️ 该判据**不会**把"降级到 CPU"误判成不健康: 实测 GPU 坏时
     #    `model_loaded` 仍为 true(只是 `active_device=cpu`), 那是可服务状态。
     healthcheck:
+      # 2026-10-26 订正: 判据由 `model_loaded` 改为 `service_ready` ——
+      # 本服务已改为**按需加载**(主指挥决策「所有模型不常驻」), 模型**常态就是不加载**,
+      # 继续判 `model_loaded` 会让容器**永远 unhealthy**(状态字段在说谎的镜像版)。
+      # `service_ready` = lifespan 已完成 ⇒ 服务可应答、模型可按需加载 ⇒ 这才是可服务状态。
+      # ⚠️ 原注释担心"只看 HTTP 200 会假绿"(模型加载中也返回 200) —— 那个前提已随
+      #    「启动即加载」一起消失: 现在加载中/空闲都由 service_ready 覆盖,
+      #    而 model_loaded 只作为**是否已加载**的信息暴露在 /health 里。
       test:
         - CMD
         - python3
@@ -298,7 +305,7 @@ services:
         - |
           import json, urllib.request, sys
           j = json.load(urllib.request.urlopen("http://127.0.0.1:8003/health", timeout=20))
-          sys.exit(0 if j.get("model_loaded") else 1)
+          sys.exit(0 if j.get("service_ready") else 1)
       interval: 30s
       timeout: 25s
       retries: 3

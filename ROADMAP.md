@@ -493,7 +493,8 @@
 | 3 | **刘子煜 / 肖佐林 无声纹** ⇒ 会议 259 里他们的话被误判成「王天志 / 蒋芦笛」 | 本仓 | 桌面 `声纹核对_会议259\优先核对清单.md` 已列出 20 个可疑区块（音频 + 文本 + 距离）；**等主指挥逐块纠正后**用 `transcript_editor.update_transcript_speaker` 写回（**不要用 `reanalyze_with_speakers`，它会丢 `start`/`end`/`speaker_label`**） |
 | 4 | **蒋芦笛名下 83 段整体勉强及格**（到本人质心距离中位数 0.550、MAD 0.041，距阈值 0.65 只差 0.10） | 本仓 | 值得抽查 —— 她名下可能混了别人的声音 |
 | 5 | **webhook 投递偶发 502**（请求根本没到云端 nginx） | 本仓 | 已拍板**不装自动补部署定时任务**；手动补用 `bash scripts/redeploy-cloud.sh`（判据 = 云端 HEAD == 本地 HEAD） |
-| 6 | 本机 GPU 仍常驻约 **3.2G** | — | **不是模型**：桌面应用（Edge/webview2/ToDesk/GameViewer）+ WSL2/Docker 的 CUDA context；Windows 是 WDDM 模式，`nvidia-smi` **不按进程给显存**，归因只能靠停服前后差值 |
+| 6 | **已停用** `ollama` / `langfuse` / `pg-exporter`（约 667 MiB）⇒ `docker compose up -d` 会再拉起 | 本仓 | 已停（只停不删）；`neo4j`（615 MiB，知识图谱）/ `celery-beat`（72 MiB，定时调度）/ `sensevoice`（1.5 GiB，**ASR 回退路径**）**待主指挥单独拍板** |
+| 7 | 本机 GPU 仍常驻约 **3.2G** | — | **不是模型**：桌面应用（Edge/webview2/ToDesk/GameViewer）+ WSL2/Docker 的 CUDA context；Windows 是 WDDM 模式，`nvidia-smi` **不按进程给显存**，归因只能靠停服前后差值 |
 
 ## 🆕 待做：RAG 工业级大改造（10 PR 串行, 2026-08 → 2027-05, 锚点范式 W88-W97）
 
