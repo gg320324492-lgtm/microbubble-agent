@@ -48,6 +48,38 @@
         </div>
       </div>
 
+      <!-- 2026-10-25: 失败态卡片。
+           改前转录空态只把裸技术串(如「录音超过 30min 未 stop, (last_chunk_index=-1...)」)
+           直接甩给用户, 既看不懂也不知道能做什么; 后端早有 reprocess 补救能力,
+           但前端一处都没调用 ⇒ 用户看到失败会议完全无法自救。
+           文案与动作判定与桌面端共用 @/utils/meetingFailure (避免两处漂移)。 -->
+      <div v-if="showFailure" class="failure-card mg-glass mg-rise">
+        <div class="failure-head">
+          <span class="failure-icon" aria-hidden="true">⚠️</span>
+          <span class="failure-title">{{ failureInfo.title }}</span>
+        </div>
+        <div class="failure-detail">{{ failureInfo.detail }}</div>
+        <div v-if="failureInfo.hint" class="failure-hint">{{ failureInfo.hint }}</div>
+        <details v-if="failureInfo.technical" class="failure-technical">
+          <summary>技术详情</summary>
+          <code>{{ failureInfo.technical }}</code>
+        </details>
+        <div class="failure-actions">
+          <button
+            v-if="failureInfo.recoverable"
+            type="button"
+            class="action-btn primary"
+            :disabled="reprocessing"
+            @click="handleReprocess"
+          >
+            {{ reprocessing ? '正在提交…' : failureInfo.actionLabel }}
+          </button>
+          <button v-else type="button" class="action-btn" @click="goRecordRoom">
+            🎤 去听会页面上传
+          </button>
+        </div>
+      </div>
+
       <!-- 标签页 -->
       <div class="tab-bar">
         <button
@@ -131,7 +163,9 @@
           <div v-else class="empty-tab mg-glass">
             <div class="empty-icon">🎙️</div>
             <div class="empty-title">暂无转录内容</div>
-            <div v-if="meeting.error_reason" class="empty-hint error">{{ meeting.error_reason }}</div>
+            <!-- 2026-10-25: 改前直接渲染裸技术串(「录音超过 30min 未 stop, (last_chunk_index=-1, ...)」),
+                 用户看不懂; 改用可读文案。完整说明与补救入口见上方失败态卡片。 -->
+            <div v-if="showFailure" class="empty-hint error">{{ failureInfo.title }} — {{ failureInfo.detail }}</div>
           </div>
         </div>
 
@@ -195,6 +229,8 @@ import dayjs from 'dayjs'
 import axios from 'axios'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useMeetingTranscript } from '@/composables/useMeetingTranscript'
+// 2026-10-25: 失败态文案 + 补救动作判定（移动端与桌面端共用同一份）
+import { describeMeetingFailure, shouldShowFailure } from '@/utils/meetingFailure'
 
 const route = useRoute()
 const router = useRouter()
@@ -267,6 +303,31 @@ const speakerStats = computed(() => {
     .sort((a, b) => b.count - a.count)
     .map((s) => ({ ...s, percent: (s.count / max) * 100 }))
 })
+
+// ====== 2026-10-25: 失败态 (status=error) ======
+// 判据与补救动作见 @/utils/meetingFailure —— 与后端 reprocess 守卫同源,
+// 避免「前端显示可重试、后端回 400」的错位 (类 20.220)。
+const showFailure = computed(() => shouldShowFailure(meeting.value))
+const failureInfo = computed(() => describeMeetingFailure(meeting.value))
+const reprocessing = ref(false)
+
+async function handleReprocess() {
+  if (!meeting.value) return
+  reprocessing.value = true
+  try {
+    await axios.post(`/api/v1/meetings/${meeting.value.id}/reprocess`)
+    ElMessage.success('已重新提交处理')
+    await fetchMeeting()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '重新处理失败，请稍后重试')
+  } finally {
+    reprocessing.value = false
+  }
+}
+
+function goRecordRoom() {
+  router.push('/meetings/room')
+}
 
 // 加载会议详情
 async function fetchMeeting() {
@@ -611,6 +672,65 @@ watch(() => route.params.id, fetchMeeting)
 }
 .empty-hint.error {
   color: var(--mg-danger);
+}
+
+/* ====== 2026-10-25: 失败态卡片 (status=error) ====== */
+.failure-card {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--mg-danger);
+}
+.failure-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.failure-icon {
+  font-size: 18px;
+}
+.failure-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mg-danger);
+}
+.failure-detail {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--mg-text);
+}
+.failure-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--mg-text-soft);
+}
+.failure-technical {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--mg-text-soft);
+}
+.failure-technical summary {
+  cursor: pointer;
+}
+.failure-technical code {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--mg-glass-bg-strong);
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.failure-actions {
+  margin-top: 12px;
+}
+.failure-actions .action-btn {
+  width: 100%;
+  text-align: center;
 }
 
 .load-more {

@@ -113,6 +113,33 @@
     <div class="detail-body">
       <!-- 左侧 Tab 内容 -->
       <div class="detail-main">
+        <!-- 2026-10-25: 失败态卡片。
+             改前只有一枚 status-badge(处理失败), 用户看不到原因、更不知道能做什么 ——
+             而后端早有补救能力(POST /api/v1/meetings/{id}/reprocess), 前端一处都没调用。
+             文案与动作判定统一走 @/utils/meetingFailure, 与移动端共用一份(避免两处漂移)。 -->
+        <div v-if="showFailure" class="failure-banner">
+          <div class="failure-icon" aria-hidden="true">⚠️</div>
+          <div class="failure-body">
+            <div class="failure-title">{{ failureInfo.title }}</div>
+            <div class="failure-detail">{{ failureInfo.detail }}</div>
+            <div v-if="failureInfo.hint" class="failure-hint">{{ failureInfo.hint }}</div>
+            <details v-if="failureInfo.technical" class="failure-technical">
+              <summary>技术详情</summary>
+              <code>{{ failureInfo.technical }}</code>
+            </details>
+          </div>
+          <div class="failure-actions">
+            <el-button
+              v-if="failureInfo.recoverable"
+              type="primary"
+              :loading="reprocessing"
+              @click="handleReprocess"
+            >
+              {{ failureInfo.actionLabel }}
+            </el-button>
+            <el-button v-else @click="goRecordRoom">去听会页面上传</el-button>
+          </div>
+        </div>
         <!-- 铁律 31: tab 统一用 <TabStrip> (lazy → v-show 保留内联模板编辑态) -->
         <div class="tab-strip-wrapper">
           <TabStrip v-model="activeTab" :items="tabItems" aria-label="会议详情视图切换" />
@@ -366,7 +393,12 @@
                   </el-button>
                 </div>
               </template>
-              <el-empty v-else description="暂无转录记录" />
+              <!-- 2026-10-25: 失败时不再只显示一句"暂无转录记录" ——
+                   空态本身要说明原因, 与移动端保持一致 (两端各写一套必然漂移)。 -->
+              <div v-else class="transcript-empty">
+                <el-empty :description="showFailure ? failureInfo.title : '暂无转录记录'" />
+                <div v-if="showFailure" class="transcript-empty-hint">{{ failureInfo.detail }}</div>
+              </div>
             </div>
           </div>
 
@@ -426,6 +458,8 @@ import { useMemberStore } from '@/stores/member'
 import TabStrip from '@/components/common/TabStrip.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import SpeakerStatsCard from '@/components/SpeakerStatsCard.vue'
+// 2026-10-25: 失败态文案 + 补救动作判定（桌面端与移动端共用同一份）
+import { describeMeetingFailure, shouldShowFailure } from '@/utils/meetingFailure'
 
 const route = useRoute()
 const router = useRouter()
@@ -488,6 +522,29 @@ const hasAudio = computed(() => !!meeting.value?.audio_url)
 // 二者在 App 内正常录音时相等, 但补传 / 续传时会严重不等(实测 2h24m 的会议 audio_duration=39
 // 而真实 8669 秒), 故一律优先取媒体时长, 回退墙钟(历史会议 media_duration_seconds 为 NULL)。
 const effectiveDuration = computed(() => meeting.value?.media_duration_seconds || meeting.value?.audio_duration || 0)
+
+// ====== 2026-10-25: 失败态 (status=error) ======
+// 文案与补救动作判定见 @/utils/meetingFailure —— 与后端 reprocess 守卫同源,
+// 避免「前端显示可重试、后端回 400」的错位 (类 20.220)。
+const showFailure = computed(() => shouldShowFailure(meeting.value))
+const failureInfo = computed(() => describeMeetingFailure(meeting.value))
+const reprocessing = ref(false)
+
+const handleReprocess = async () => {
+  if (!meeting.value) return
+  reprocessing.value = true
+  try {
+    await axios.post(`/api/v1/meetings/${meeting.value.id}/reprocess`)
+    ElMessage.success('已重新提交处理，稍后刷新查看结果')
+    await fetchMeeting()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '重新处理失败，请稍后重试')
+  } finally {
+    reprocessing.value = false
+  }
+}
+
+const goRecordRoom = () => router.push('/meetings/room')
 const pbPct = computed(() => (pbDuration.value ? Math.min(100, (pbCurrent.value / pbDuration.value) * 100) : 0))
 
 function togglePlay() {
@@ -1136,6 +1193,75 @@ onMounted(async () => {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--color-border, #ebeef5);
+}
+
+/* ====== 2026-10-25: 失败态卡片 (status=error) ====== */
+.failure-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 16px 20px 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--color-danger, #F56C6C);
+  background: var(--color-danger-bg);
+}
+.failure-icon {
+  font-size: 20px;
+  line-height: 1.4;
+}
+.failure-body {
+  flex: 1;
+  min-width: 0;
+}
+.failure-title {
+  font-weight: 600;
+  color: var(--color-danger, #F56C6C);
+  margin-bottom: 4px;
+}
+.failure-detail {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-regular);
+}
+.failure-hint {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+.failure-technical {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.failure-technical summary {
+  cursor: pointer;
+}
+.failure-technical code {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+.failure-actions {
+  flex-shrink: 0;
+}
+
+/* 转录空态: 失败时补一句可读原因 */
+.transcript-empty-hint {
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  max-width: 520px;
+  margin: -8px auto 0;
+  padding: 0 20px;
 }
 
 /* 铁律 31: 替代原 .detail-tabs el-tabs */
