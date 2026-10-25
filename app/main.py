@@ -393,17 +393,17 @@ async def lifespan(app: FastAPI):
     warmup_task = asyncio.create_task(
         _warmup_ml_background(), name="warmup-ml-imports"
     )
-    # 2026-09-20: 同理预载 embedding 模型 (事故注释见 _warmup_embedding_background)
-    embedding_warmup_task = asyncio.create_task(
-        _warmup_embedding_background(), name="warmup-embedding"
-    )
+    # 2026-10-26: **不再在启动时预载 embedding 模型**(主指挥决策: 所有模型不常驻, 按需启动)。
+    # 保留上面 _warmup_ml_background 的 import 预热 —— 它只让 torch/transformers 进 sys.modules, 不占显存,
+    # 但能避免首屏 import 冻结事件循环 (2026-09-14 事故)。
+    # embedding 模型改为: 首次检索按需加载(在有界 executor 内, 不阻塞 loop) + 空闲自动卸载。
+    # (_warmup_embedding_background 函数保留未删, 需要时可手动调用。)
 
     yield
     # 关闭时执行
     if not warmup_task.done():
         warmup_task.cancel()
-    if not embedding_warmup_task.done():
-        embedding_warmup_task.cancel()
+    # 2026-10-26: embedding 预载任务已移除(模型改按需启动), 故不再有 embedding_warmup_task 需要取消
     if not router_loader_task.done():
         router_loader_task.cancel()
         try:

@@ -30,8 +30,11 @@ W61 R8/R9 BGE m3 生产决策 (2026-07-22, commit `f0f8293e`):
 """
 
 import asyncio
+import gc
 import logging
 import os
+import threading
+import time
 from typing import List, Optional
 
 logger = logging.getLogger("microbubble.reranker")
@@ -53,6 +56,10 @@ class RerankerService:
     def __init__(self):
         self._model = None
         self._device = None
+        # 2026-10-26: 不常驻 —— 空闲自动卸载(主指挥决策: 所有模型按需启动)
+        self._last_used_at = 0.0
+        self._active = 0
+        self._lock = threading.Lock()
         self._model_name = None
 
     def _detect_device(self) -> str:
@@ -101,6 +108,7 @@ class RerankerService:
             logger.info(
                 f"Cross-encoder 模型加载完成 ({self._model_name} on {self._device})"
             )
+            self._last_used_at = time.time()
         except Exception as e:
             logger.error(
                 f"Cross-encoder 模型加载失败: {e}（重排序将不可用, 按原始 score 排序返回）"
@@ -125,6 +133,8 @@ class RerankerService:
         Returns:
             按 Cross-encoder 分数重排序的 top_k 列表, 每条带 rerank_score 字段
         """
+        # 2026-10-26: 每次使用刷新活跃时间, 否则空闲卸载器会误判「用完很久」而卸掉正在用的模型
+        self._last_used_at = time.time()
         if not candidates:
             return []
 
@@ -211,6 +221,41 @@ class RerankerService:
 
 # 全局单例
 _reranker_service: Optional[RerankerService] = None
+
+
+# ===== 2026-10-26: reranker 空闲自动卸载（它占约 1.1GB VRAM, 用完不该常驻）=====
+RERANKER_IDLE_UNLOAD_SEC = int(os.getenv("RERANKER_IDLE_UNLOAD_SEC", "600"))
+
+
+def _reranker_idle_loop() -> None:
+    while True:
+        time.sleep(30)
+        try:
+            svc = _reranker_service
+            if svc is None or svc._model is None or svc._active > 0:
+                continue
+            if RERANKER_IDLE_UNLOAD_SEC <= 0:
+                continue
+            if time.time() - svc._last_used_at <= RERANKER_IDLE_UNLOAD_SEC:
+                continue
+            with svc._lock:
+                if svc._model is None or svc._active > 0:
+                    continue
+                svc._model = None
+                svc._device = None
+                gc.collect()
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                logger.info("[reranker] 空闲超时, 已卸载模型并归还显存")
+        except Exception:  # noqa: BLE001
+            pass
+
+
+threading.Thread(target=_reranker_idle_loop, daemon=True).start()
 
 
 def get_reranker_service() -> RerankerService:

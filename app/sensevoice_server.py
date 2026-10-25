@@ -10,6 +10,7 @@ import asyncio
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -38,6 +39,18 @@ _model_load_time: float = 0
 # (启动时 CUDA 不可用也直接降级 CPU, 避免容器反复崩溃重启。)
 _current_device: str = DEVICE
 _gpu_broken: bool = False
+
+# ===== 2026-10-26: 模型按需加载 + 空闲卸载（主指挥决策: 本项目所有模型不常驻）=====
+# 背景: v31.3 起本服务是「lifespan 启动即加载 + 永不卸载」(resident_mode: true),
+#   实测常驻占显存, 而 SenseVoice 只是**回退**后端(7B GPU ASR 优先) ⇒ 大多数时间纯浪费。
+# 现在: 启动不加载 → 首次 /transcribe 时按需加载 → 空闲 IDLE_UNLOAD_SEC 秒后自动卸载并归还显存。
+# 代价: 空闲后的第一次转写多等一次加载(实测 model_load_time ≈ 19s)。
+# 对调用方透明: app/voice/asr.py 的健康检查只看 /health 的 HTTP 200(不看 model_loaded),
+#   转写请求超时是 600s ⇒ 19s 加载完全在预算内。
+IDLE_UNLOAD_SEC = int(os.getenv("SENSEVOICE_IDLE_UNLOAD_SEC", "600"))
+_model_lock = threading.Lock()   # 加载/卸载互斥, 避免并发请求重复加载或加载中被卸载
+_active_requests = 0             # 正在推理的请求数; 卸载前必须为 0
+_last_used_at: float = 0.0
 
 
 def _load_model_sync():
@@ -85,6 +98,63 @@ def _reload_model_on_cpu_sync():
     _current_device = "cpu"
     _gpu_broken = True
     print(f"[sensevoice] CPU 模型加载完成 ({_model_load_time:.1f}s)", flush=True)
+
+
+def _unload_model_sync():
+    """卸载模型并归还显存 (同步, 在 executor 跑)。2026-10-26 按需启动。"""
+    global _model, _model_load_time, _last_used_at
+    with _model_lock:
+        if _model is None:
+            return
+        if _active_requests > 0:
+            return  # 正在推理, 不动
+        try:
+            _model = None
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            print("[sensevoice] IDLE-UNLOAD: model unloaded, VRAM released", flush=True)
+        except Exception as e:  # noqa: BLE001 — 卸载失败不应拖垮服务
+            print(f"[sensevoice] 卸载模型时出错(忽略): {e}", flush=True)
+        finally:
+            _model_load_time = 0
+            _last_used_at = 0.0
+
+
+async def _ensure_model_loaded_async():
+    """按需加载模型 (并发安全): 已加载直接返回; 未加载则加锁加载一次。
+
+    加锁 + 双检的意义: 多个请求同时到达时, 只有第一个真的加载, 其余等在同一把锁上,
+    拿到的是同一个模型实例 (否则会重复吃一份显存)。
+    """
+    global _last_used_at
+    if _model is not None:
+        _last_used_at = time.time()
+        return
+    loop = asyncio.get_event_loop()
+
+    def _load_with_lock():
+        global _last_used_at
+        with _model_lock:
+            if _model is None:  # 双检: 等锁期间可能已被别的请求加载好了
+                _load_model_sync()
+            _last_used_at = time.time()
+
+    await loop.run_in_executor(None, _load_with_lock)
+
+
+def _idle_unload_loop():
+    """后台线程: 空闲 IDLE_UNLOAD_SEC 秒后卸载模型, 归还显存。"""
+    while True:
+        time.sleep(15)
+        if _model is None or _active_requests > 0:
+            continue
+        if IDLE_UNLOAD_SEC <= 0:
+            continue
+        if time.time() - _last_used_at > IDLE_UNLOAD_SEC:
+            try:
+                _unload_model_sync()  # 直接同步调用, 不绕 executor
+            except Exception as e:  # noqa: BLE001
+                print(f"[sensevoice] idle unload 失败(忽略): {e}", flush=True)
 
 
 async def _infer_with_gpu_fallback(exec_fn):
@@ -179,9 +249,12 @@ def _strip_all_tags(text: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """启动时加载模型, 关闭时不卸载 (v31.3 简化模式)"""
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _load_model_sync)
+    """2026-10-26: **不常驻** —— 启动时不加载模型, 由首次 /transcribe 按需加载,
+    后台线程在空闲 IDLE_UNLOAD_SEC 秒后自动卸载并归还显存。
+    (v31.3 起是「启动即加载 + 永不卸载」的常驻模式, 现按主指挥决策反转为按需启动。)
+    """
+    threading.Thread(target=_idle_unload_loop, daemon=True).start()
+    print(f"[sensevoice] lazy mode: 按需加载, 空闲 {IDLE_UNLOAD_SEC}s 自动卸载", flush=True)
     yield
     # 进程退出时 OS 自动回收 GPU 内存 (不再 del)
 
@@ -207,7 +280,10 @@ async def health():
         "model_loaded": _model is not None,
         "model_load_time_sec": round(_model_load_time, 1) if _model else None,
         "vram_mib": vram_mib,
-        "resident_mode": True,
+        # 2026-10-26: 不常驻 —— 启动不加载, 首次请求按需加载, 空闲 SENSEVOICE_IDLE_UNLOAD_SEC 秒后自动卸载
+        "resident_mode": False,
+        "lazy_mode": True,
+        "idle_unload_sec": IDLE_UNLOAD_SEC,
         "default_batch_size_s": DEFAULT_BATCH_SIZE_S,
         "chunk_duration_sec": CHUNK_DURATION_SEC,
         "long_audio_threshold_sec": LONG_AUDIO_THRESHOLD_SEC,
@@ -242,114 +318,120 @@ async def transcribe(
             "_n_chunks": 1 | 174
         }
     """
-    if _model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded yet")
-
-    # 读取音频
-    audio_data = await audio.read()
-    if len(audio_data) < 1024:
-        raise HTTPException(status_code=400, detail="Audio too small (< 1KB)")
-
-    # 转码
+    # 2026-10-26: 模型按需加载 (原为 503 "Model not loaded yet")。
+    # 调用方 (app/voice/asr.py) 只看 /health 的 HTTP 200, 转写超时 600s ⇒ 首次加载 ~19s 对它透明。
+    await _ensure_model_loaded_async()
+    global _active_requests
+    _active_requests += 1
     try:
-        audio_array, duration = _bytes_to_audio_array(audio_data)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Audio decode failed: {e}")
 
-    # FunASR inference (run in thread pool to avoid blocking event loop)
-    t0 = time.time()
+        # 读取音频
+        audio_data = await audio.read()
+        if len(audio_data) < 1024:
+            raise HTTPException(status_code=400, detail="Audio too small (< 1KB)")
 
-    # 【关键路由 2026-06-30】长音频自动走 chunked
-    # 2026-09-18: 两路推理都包 _infer_with_gpu_fallback — GPU 上下文损坏时自动
-    # 回退 CPU 重载并重试本次请求, 不再把 500 抛给调用方 (会议 253 事故防御)
-    if duration >= LONG_AUDIO_THRESHOLD_SEC:
-        # 长音频: 分块循环推理
-        def _do_chunked():
-            return _chunked_transcribe(audio_array, language, CHUNK_DURATION_SEC, batch_size_s)
-
+        # 转码
         try:
-            res, device_used = await _infer_with_gpu_fallback(_do_chunked)
-            result, n_chunks = res
-            inference_mode = "chunked"
+            audio_array, duration = _bytes_to_audio_array(audio_data)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Chunked inference failed: {e}")
-    else:
-        # 短音频: 单次推理
-        def _do_inference():
-            return _model.generate(
-                input=audio_array,
-                language=language,
-                use_itn=True,
-                cache={},
-                batch_size_s=batch_size_s,
-            )
+            raise HTTPException(status_code=400, detail=f"Audio decode failed: {e}")
 
-        try:
-            result, device_used = await _infer_with_gpu_fallback(_do_inference)
-            n_chunks = 1
-            inference_mode = "single"
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
+        # FunASR inference (run in thread pool to avoid blocking event loop)
+        t0 = time.time()
 
-    if device_used != DEVICE:
-        print(f"[sensevoice] 本次推理实际使用 {device_used} (配置 {DEVICE})", flush=True)
+        # 【关键路由 2026-06-30】长音频自动走 chunked
+        # 2026-09-18: 两路推理都包 _infer_with_gpu_fallback — GPU 上下文损坏时自动
+        # 回退 CPU 重载并重试本次请求, 不再把 500 抛给调用方 (会议 253 事故防御)
+        if duration >= LONG_AUDIO_THRESHOLD_SEC:
+            # 长音频: 分块循环推理
+            def _do_chunked():
+                return _chunked_transcribe(audio_array, language, CHUNK_DURATION_SEC, batch_size_s)
 
-    elapsed = time.time() - t0
+            try:
+                res, device_used = await _infer_with_gpu_fallback(_do_chunked)
+                result, n_chunks = res
+                inference_mode = "chunked"
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Chunked inference failed: {e}")
+        else:
+            # 短音频: 单次推理
+            def _do_inference():
+                return _model.generate(
+                    input=audio_array,
+                    language=language,
+                    use_itn=True,
+                    cache={},
+                    batch_size_s=batch_size_s,
+                )
 
-    if not result:
-        raise HTTPException(status_code=500, detail="Empty inference result")
+            try:
+                result, device_used = await _infer_with_gpu_fallback(_do_inference)
+                n_chunks = 1
+                inference_mode = "single"
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Inference failed: {e}")
 
-    # FunASR 返回: [{"key": "...", "text": "<|zh|><|HAPPY|>...", ...}]
-    raw_text = result[0].get("text", "")
-    # 同时返回 raw_text (含 emotion tags, 给后端 7 层过滤用)
-    # 和 text (供简单前端使用, 已剥 tag 但未过滤)
-    # 注意: sensevoice 容器是独立 Python 环境, 不能 import app.voice.asr_filters
-    # 用内联 _strip_all_tags (从 asr_filters.py 复制)
-    clean_text = _strip_all_tags(raw_text)
+        if device_used != DEVICE:
+            print(f"[sensevoice] 本次推理实际使用 {device_used} (配置 {DEVICE})", flush=True)
 
-    # 构造 Whisper 兼容的 segments 数组
-    # FunASR 可能返回 sentence_info (按标点切分), 没有 no_speech_prob
-    segments = []
-    sentence_info = result[0].get("sentence_info", [])
-    if sentence_info:
-        for s in sentence_info:
+        elapsed = time.time() - t0
+
+        if not result:
+            raise HTTPException(status_code=500, detail="Empty inference result")
+
+        # FunASR 返回: [{"key": "...", "text": "<|zh|><|HAPPY|>...", ...}]
+        raw_text = result[0].get("text", "")
+        # 同时返回 raw_text (含 emotion tags, 给后端 7 层过滤用)
+        # 和 text (供简单前端使用, 已剥 tag 但未过滤)
+        # 注意: sensevoice 容器是独立 Python 环境, 不能 import app.voice.asr_filters
+        # 用内联 _strip_all_tags (从 asr_filters.py 复制)
+        clean_text = _strip_all_tags(raw_text)
+
+        # 构造 Whisper 兼容的 segments 数组
+        # FunASR 可能返回 sentence_info (按标点切分), 没有 no_speech_prob
+        segments = []
+        sentence_info = result[0].get("sentence_info", [])
+        if sentence_info:
+            for s in sentence_info:
+                segments.append({
+                    "start": s.get("start", 0) / 1000.0,  # ms → s
+                    "end": s.get("end", 0) / 1000.0,
+                    "text": strip_all_tags(s.get("text", "")),
+                    "no_speech_prob": None,  # SenseVoice 不提供
+                })
+        else:
+            # 无 sentence_info 时, 单段
             segments.append({
-                "start": s.get("start", 0) / 1000.0,  # ms → s
-                "end": s.get("end", 0) / 1000.0,
-                "text": strip_all_tags(s.get("text", "")),
-                "no_speech_prob": None,  # SenseVoice 不提供
+                "start": 0.0,
+                "end": duration,
+                "text": clean_text,
+                "no_speech_prob": None,
             })
-    else:
-        # 无 sentence_info 时, 单段
-        segments.append({
-            "start": 0.0,
-            "end": duration,
+
+        # 检测语种
+        detected_lang = "zh"  # SenseVoice 不直接返回, 后续可解析 raw_text 的 <|zh|>
+        if "<|zh|>" in raw_text:
+            detected_lang = "zh"
+        elif "<|en|>" in raw_text:
+            detected_lang = "en"
+        elif "<|yue|>" in raw_text:
+            detected_lang = "yue"
+
+        return JSONResponse({
             "text": clean_text,
-            "no_speech_prob": None,
+            "raw_text": raw_text,  # 含 emotion/BGM tags, 供 7 层过滤使用
+            "language": detected_lang,
+            "language_probability": 0.95,
+            "duration": duration,
+            "segments": segments,
+            "_backend": "sensevoice",  # debug 标记
+            "_inference_mode": inference_mode,  # single | chunked
+            "_n_chunks": n_chunks,
+            "_inference_sec": round(elapsed, 3),
+            "_rtf": round(elapsed / duration, 4) if duration > 0 else 0,
         })
-
-    # 检测语种
-    detected_lang = "zh"  # SenseVoice 不直接返回, 后续可解析 raw_text 的 <|zh|>
-    if "<|zh|>" in raw_text:
-        detected_lang = "zh"
-    elif "<|en|>" in raw_text:
-        detected_lang = "en"
-    elif "<|yue|>" in raw_text:
-        detected_lang = "yue"
-
-    return JSONResponse({
-        "text": clean_text,
-        "raw_text": raw_text,  # 含 emotion/BGM tags, 供 7 层过滤使用
-        "language": detected_lang,
-        "language_probability": 0.95,
-        "duration": duration,
-        "segments": segments,
-        "_backend": "sensevoice",  # debug 标记
-        "_inference_mode": inference_mode,  # single | chunked
-        "_n_chunks": n_chunks,
-        "_inference_sec": round(elapsed, 3),
-        "_rtf": round(elapsed / duration, 4) if duration > 0 else 0,
-    })
+    finally:
+        _active_requests -= 1
 
 
 def _chunked_transcribe(audio_array: np.ndarray, language: str, chunk_dur_sec: int, batch_size_s: int):

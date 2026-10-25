@@ -539,7 +539,7 @@ add_h3('3.5.8 v31.3 Whisper 常驻 + 推理加速')
 add_bullet('模型常驻 GPU 8GB（取消 lazy load + 10 分钟空闲卸载）')
 add_bullet('flash_attention=True（Blackwell sm_120 当前不支持，ctranslate2 4.8.0 报错）')
 add_bullet('实际部署 flash_attention=False，等上游补 sm_120 flash attn 2 内核')
-add_bullet('3 条铁律：18s 冷启动 vs 8GB 常驻——用户决策优先级 / flash_attention=True 不加速加载，只加速推理 / files= 文档有但不能用')
+add_bullet('3 条铁律：18s 冷启动 vs 8GB 常驻——用户决策优先级（2026-10-26 已反转: 所有模型改为按需启动, 不用时释放显存） / flash_attention=True 不加速加载，只加速推理 / files= 文档有但不能用')
 
 add_h3('3.5.9 v31.3.1 whisper 容器 bind mount（解决"Dockerfile COPY 烧镜像"陷阱）')
 add_bullet('Dockerfile.whisper 删 COPY app/whisper_server.py')

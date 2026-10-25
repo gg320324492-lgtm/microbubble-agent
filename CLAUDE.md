@@ -14,6 +14,45 @@
 > - 想知道"某次事故的完整过程" → `docs/incident/` 或 `docs/history/`
 > - 想找其他项目文档 → **[`docs/README.md`](docs/README.md)**（按性质查找表 + 各目录权威性对照）
 
+## 当前状态 (2026-10-26 所有模型改为按需启动 —— 显存从 31.5G 降到个位数 G)
+
+> 主指挥决策: **本项目所有模型不常驻, 按需启动, 不用时释放显存**。
+> 这反转了 v31.3 起「SenseVoice 常驻」的老设定。
+
+### A. 改了什么（逐组件）
+
+| 组件 | 原来 | 现在 |
+|---|---|---|
+| **SenseVoice**（容器, `app/sensevoice_server.py`） | `lifespan` 启动即加载 + 永不卸载（`resident_mode: true`） | 启动**不加载** → 首次 `/transcribe` 按需加载 → 空闲 600s 自动卸载并 `empty_cache()` |
+| **embedding**（Qwen3-Embedding-0.6B, `app/services/embedding_service.py`） | app 启动时后台**预载**（`main.py` 的 `_warmup_embedding_background`）⇒ 常驻 | 启动**不预载**（该 create_task 已删）→ 首次检索按需加载 → 空闲 600s 自动卸载 |
+| **reranker**（bge-reranker-v2-m3, `app/services/reranker_service.py`） | 惰性加载但**永不卸载** | 惰性加载 + 空闲 600s 自动卸载（`rerank()` 每次刷新活跃时间，防误卸正在用的模型） |
+| **VibeVoice 流式 ASR**（`app/gpu_worker/streaming_server.py`） | 已有「按需 + 空闲 600s 卸载」机制 | 机制不变；**但发现 10-24 起的那个实例 loaded=true 而 active_sessions=0** ⇒ 白占显存，已重启该服务解决 |
+| **VibeVoice 批处理 ASR**（`app/gpu_worker/server.py`） | 设计上「守护器自身不占显存, 子进程退出即归零」 | 不变（实测守护器 RSS 仅 6MB, 符合设计） |
+| **ollama** | 按需 + `OLLAMA_KEEP_ALIVE=30m` | 不变（`ollama ps` 为空 ⇒ 未加载） |
+
+### B. 实现要点（三处都是同一套模式）
+
+1. **启动不加载**，只在**首次请求**时加载（`_ensure_model_loaded_async` / `_get_model`）。
+2. **加锁 + 双检** ⇒ 并发首请求只有一个真的加载，其余等同一把锁拿同一实例（否则重复吃一份显存）。
+3. **空闲自动卸载**：daemon 线程每 30s 检查「距上次使用 > 600s 且无活跃请求」⇒ 卸载 + `torch.cuda.empty_cache()`。
+4. **活跃计数/时间戳**必须随每次使用刷新 ⇒ 否则会把「正在用的模型」误判为空闲而卸掉。
+5. **调用方透明**：`app/voice/asr.py` 的健康检查只看 `/health` 的 **HTTP 200**（不看 `model_loaded`），
+   转写请求超时 600s ⇒ 首次那次 ~19-36s 的加载完全在预算内。
+6. ⚠️ **保留 `_warmup_ml_imports`**（`main.py`）：它只让 torch/transformers 进 `sys.modules`，**不占显存**，
+   但能避免首屏 import 冻结事件循环（2026-09-14 事故）—— 与「模型不常驻」不冲突，别一起删掉。
+
+### C. 实测
+
+- 改前整卡 **31510 / 32607 MiB（96.6%）**；重启流式 ASR（释放 VibeVoice 7B）后降到 **18444 MiB**。
+- sensevoice 按需加载实测：加载 36.0s（其中模型 28.6s）、二次调用 **0.000s**（不重复加载）、卸载后显存回落。
+- 三个服务重启后 `/health`：`model_loaded: False, resident_mode: False, lazy_mode: True, idle_unload_sec: 600`。
+
+### D. 新增永久铁律
+
+见下方 **类 20.237**（模型常驻/按需的判定、实现与验证纪律）。
+
+---
+
 ## 当前状态 (2026-10-22 Docker 数据进项目目录 + C 盘从 13.8G 腾到 60G + 守护脚本重写)
 
 > 上一版"当前状态"停在 2026-10-13 声纹段；本节是 2026-10-22 这一天的产出。
@@ -1740,6 +1779,29 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   ③**要同时覆盖新旧进程，唯一稳的办法是让两条路径指向同一物理目录**（目录 junction），
   而不是指望环境变量会"渗透"下去；
   ④**判定依据要用「派生链上的祖先进程」而不是「用了什么工具」**。
+
+- **类 20.237**: **「模型不常驻、按需启动」是一类决策，不是一个开关 —— 判定、实现、验证三件事都要做全** ——
+  2026-10-26 主指挥决策「本项目所有模型不常驻, 按需启动, 不用时释放显存」(反转 v31.3 起
+  SenseVoice 常驻的老设定)。落地时踩到/确认了六条纪律：
+  ① **「常驻」不只在一个地方**：本仓同时存在 ①容器服务 lifespan 启动即加载
+     (`app/sensevoice_server.py` 的 `lifespan`) ②**应用启动预载**
+     (`app/main.py` 的 `_warmup_embedding_background`) ③**惰性但永不卸载**的库
+     (`embedding_service` / `reranker_service`) ④**外部服务的 keep_alive**
+     (ollama 的 `OLLAMA_KEEP_ALIVE`) ⑤**调度器拉起的常驻进程**
+     (计划任务 `MicroBubble-GPU-ASR-Daemon`) ⑥**子进程式守护器**(自身不占显存, 子进程退出才归零)。
+     ⇒ **只改一处 = 没改**。逐个组件列出来再逐个改。
+  ② **「加载」与「预热」要分开**：`import torch/transformers` 进 `sys.modules` 不占显存、但能让首屏不冻结，
+     必须**保留**；真正加载权重占显存的才要改成按需。
+  ③ **按需加载必须加锁 + 双检**，否则并发首请求会各加载一份 ⇒ 显存翻倍。
+  ④ **空闲卸载必须判断「正在使用」**：每次使用刷新活跃时间戳 + 活跃计数，
+     否则会把**正在推理的模型**卸掉（长会议 chunked 推理可超过 600s）。
+  ⑤ **调用方必须透明**：`/health` 只能反映「服务活着」(HTTP 200)，**不能**用 `model_loaded` 当可用性判据
+     —— 否则按需加载会让调用方直接判定服务不可用。客户端超时必须大于首次加载耗时。
+  ⑥ **验证要看副作用, 不能看配置**：`/health` 的 `model_loaded` 由 false→true→false 才算验证通过；
+     且**「进程在」不等于「模型在」** —— `ollama ps` 为空就是没加载, `nvidia-smi` 的 WDDM 模式
+     **不按进程给显存**(容器进程完全列不出来), 归因只能靠「停服前后差值」或组件自报。
+     ⚠️ **本机 18G 显存里相当一部分是桌面应用**(Edge/webview2/ToDesk/GameViewer)与 WSL2/Docker 的
+     CUDA context, **不是本项目模型** —— 别把整卡占用都算到模型头上。
 - **类 20.236**: **部署脚本会在执行中「改写自己」—— bash 按旧字节偏移继续读 ⇒ 部署执行的是
   「半新半旧」的内容** ——
   2026-10-25 实测：`scripts/deploy-auto.sh` 在云端执行，它自己会跑 `git reset --hard origin/main`，

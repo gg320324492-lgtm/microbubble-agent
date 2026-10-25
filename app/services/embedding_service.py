@@ -13,8 +13,10 @@ Phase 2 重构 (2026-06-24 sentence-transformers 5.6.0 升级)：
 """
 
 import asyncio
+import gc
 import logging
 import os
+import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
@@ -196,6 +198,53 @@ _model = None
 _model_loading = False
 _detected_device: Optional[str] = None
 
+# ===== 2026-10-26: 模型不常驻 —— 空闲自动卸载（主指挥决策: 所有模型按需启动）=====
+# 原来: app 启动时后台预载 embedding 模型(见 main.py 的 _warmup_embedding_background) ⇒ 常驻 GPU。
+# 现在: 启动不预载; 首次检索时按需加载 —— 加载在**有界 executor** 内进行, 不阻塞事件循环
+#       (2026-09-20「首条语义检索冻结 loop 30s」事故的根因已由 executor 架构解决, 不再依赖启动预载)。
+# 空闲 EMBEDDING_IDLE_UNLOAD_SEC 后自动卸载并归还显存。
+# 注: 单例是**进程级**的, 每个 worker 进程各自加载/卸载自己的副本, 互不影响。
+EMBEDDING_IDLE_UNLOAD_SEC = int(os.getenv("EMBEDDING_IDLE_UNLOAD_SEC", "600"))
+_embedding_last_used_at: float = 0.0
+_embedding_active = 0
+_embedding_lock = threading.Lock()
+
+
+def _unload_model_if_idle() -> None:
+    """空闲超阈值则卸载 embedding 模型, 归还显存 (2026-10-26)。"""
+    global _model, _embedding_last_used_at
+    with _embedding_lock:
+        if _model is None or _embedding_active > 0:
+            return
+        if EMBEDDING_IDLE_UNLOAD_SEC <= 0:
+            return
+        if time.time() - _embedding_last_used_at <= EMBEDDING_IDLE_UNLOAD_SEC:
+            return
+        try:
+            _model = None
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+            logger.info("[embedding] 空闲超时, 已卸载模型并归还显存")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[embedding] 卸载模型失败(忽略): {e}")
+
+
+def _idle_unload_loop() -> None:
+    while True:
+        time.sleep(30)
+        try:
+            _unload_model_if_idle()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+threading.Thread(target=_idle_unload_loop, daemon=True).start()
+
 
 def _detect_device() -> str:
     """自动检测 GPU / CPU
@@ -246,7 +295,9 @@ def _get_model() -> Optional[SentenceTransformer]:
 
     回退策略: 加载失败时返回 None（generate_embedding 会返回 None）
     """
-    global _model, _model_loading
+    global _model, _model_loading, _embedding_last_used_at
+    if _model is not None:
+        _embedding_last_used_at = time.time()
     if _model is None and not _model_loading:
         _model_loading = True
         try:
@@ -265,6 +316,7 @@ def _get_model() -> Optional[SentenceTransformer]:
             _model = None
         finally:
             _model_loading = False
+        _embedding_last_used_at = time.time()
     return _model
 
 
