@@ -33,11 +33,14 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
+# 2026-10-25: 记录**执行前**的自身 sha（防「执行中改写自己」的自检用，详见下面 PY_CHANGED 后的说明）
+DEPLOY_SELF_SHA_BEFORE="${DEPLOY_SELF_SHA_BEFORE:-$(sha256sum "$0" 2>/dev/null | cut -d' ' -f1)}"
+
 # 2026-09-12 自愈回滚机制 (index-Dm-g8UdN.js 404 事故沉淀, commit 9bf09f01b)
 # 背景: 下面的 dist 校验在 `git reset --hard origin/main` 之后执行。旧版校验
 # 失败只 `exit 1`, 但坏状态已经落地, nginx 继续服务损坏目录 → 线上 404。
 # 修复: 记录部署前 commit, 校验失败时回滚工作区到该 commit, 线上继续服务旧版。
-PREV_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+PREV_HEAD="${DEPLOY_PREV_HEAD:-$(git rev-parse HEAD 2>/dev/null || true)}"
 
 # dist 资产完整性: index.html 引用的每一个 assets/*.{js,css} 都必须存在
 dist_refs_ok() {
@@ -151,7 +154,23 @@ fi
 # 修复: deploy-auto.sh 自动检测 .py/alembic 改动 → log 醒目的提醒 + 列出受影响的本地 PC 重启命令
 # 注意: 这是**临时**缓解方案。彻底解决需要 frps 在 git pull 后自动触发本地 PC 重启
 #       (未来可加 scripts/local-auto-restart.sh: 本地 PC daemon 监听云端 signal 或 git pull 通知)
-PY_CHANGED=$(git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -E '^(app/|alembic/)' | wc -l)
+PY_CHANGED="${DEPLOY_PY_CHANGED:-$(git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -E '^(app/|alembic/)' | wc -l)}"
+
+# ---- 2026-10-25 P0: 防「执行中改写自己」导致半新半旧执行 ----
+# 现象(实测): 改了 deploy-auto.sh 并 push 后, 同一次部署的日志**仍打旧文案**(磁盘上已是新版)。
+# 机制: 本脚本会 `git reset --hard origin/main`, 而**本文件本身就在版本库里** ⇒ 被改写;
+#       bash 是**边执行边按字节偏移读脚本**的 ⇒ 文件一改, 后续行偏移全错 ⇒ 执行到新旧拼接的内容。
+# 修法: 记录执行前的自身 sha; git 操作后若自身已被改写 ⇒ exec 重新执行磁盘上的**新版本**。
+# 变量传递: PREV_HEAD / PY_CHANGED 只在第 1 次执行时算对(reflog 依赖), 用环境变量带过去;
+#           DEPLOY_SELF_SHA_BEFORE 作为递归守卫 —— 第 2 次执行时 sha 相同 ⇒ 不再 exec。
+DEPLOY_SELF_SHA_AFTER=$(sha256sum "$0" 2>/dev/null | cut -d' ' -f1)
+if [ -n "${DEPLOY_SELF_SHA_BEFORE:-}" ] && [ "$DEPLOY_SELF_SHA_BEFORE" != "$DEPLOY_SELF_SHA_AFTER" ]; then
+    log "检测到本脚本已被 git 改写 ⇒ 重新 exec 新版本（避免 bash 按旧字节偏移执行半新半旧的内容）"
+    export DEPLOY_SELF_SHA_BEFORE="$DEPLOY_SELF_SHA_AFTER"
+    export DEPLOY_PREV_HEAD="$PREV_HEAD"
+    export DEPLOY_PY_CHANGED="$PY_CHANGED"
+    exec bash "$0"
+fi
 if [ "$PY_CHANGED" -gt 0 ]; then
     log "================================================================"
     log "⚠️  Python 代码有 ${PY_CHANGED} 个文件变更 — 必须手动重启本地 PC Docker！"
