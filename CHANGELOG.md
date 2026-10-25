@@ -24,6 +24,12 @@
   （start-recording → audio-chunk → merge-chunks(auto→raw 字节拼接) → stop-recording）入库。
   产物：摘要 321 字 / 要点 8 条 / 决议 6 条 / 转录 355 段 / `meeting_chunks` 22 行 /
   声纹认出王天志 271 轮 + 蒋芦笛 83 轮。
+- **声纹「重算距离」工具**（`scripts/voiceprint/reeval_speaker_distances.py` +
+  `build_suspect_blocks.py`）：流水线只写最终姓名、**不存距离** ⇒ 光看 transcript 判断不了
+  哪一段归错了；没录声纹的成员（刘子煜 / 肖佐林）其发言会被「最大类兜底」吞进 anchor 名下
+  （会议 259 里 354 段只有 1 段标「发言人?」，`speaker_mapping` 30 个簇里 **29 个映射王天志**）。
+  工具按「相对量」判据（**不设自造阈值**）挑出可疑区块并导出音频，供人工纠正。
+
 - **前端失败态 UI**：新增 `web/src/utils/meetingFailure.js`，把 `error_reason` 归类并翻译成
   「用户能据此行动」的话 + 补救动作判定；桌面与移动端各加一张失败卡片。
   改前：桌面只有一枚「处理失败」徽标，移动端**直接把裸技术串**

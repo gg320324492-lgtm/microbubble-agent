@@ -823,3 +823,34 @@ PYEOF
 ```
 
 ⚠️ **不要用 123456 这种弱密码**！bot/dictionary 攻击秒破。建议强随机 + 16 字符以上 + 字母数字符号混合。
+
+## 2026-10-26 补充：云端不跑容器、healthcheck 判据、手动补部署
+
+### ① 云端服务器**不跑** MicroBubble 的任何容器（2026-10-25 澄清）
+
+拓扑：`nginx(云端) → SSH 反向隧道 → frpc(本地 PC) → Docker app/celery/db/minio(本地 PC)`。
+云端只跑三样：**nginx**、**webhook 服务**（`/opt/microbubble-agent/scripts/webhook.py`，端口 9001）、
+以及另一个项目 lab-miniapp 的 node 进程。
+
+⚠️ **云端 `docker info` 可能仍返回 200**（snap 装的 docker 包还在，历史上云端确实跑过
+MicroBubble 容器，迁到本地后成了残留）⇒ **「docker 能用」不等于「云端该跑容器」**。
+判「某操作该在哪台机器做」的正确问法是**「它要动的是本地 PC 的容器，还是云端的文件」**。
+
+⇒ 可选停用的容器（查过生产引用）：`ollama`（`LLM_BACKEND=openai_compat` ⇒ 该后端路径不激活）、
+`langfuse`（仅 LLM 追踪）、`pg-exporter`（无 Prometheus/Grafana 采集端）。
+
+### ② `sensevoice` 的 healthcheck 判据：判 `service_ready`，不判 `model_loaded`
+
+2026-10-26 起该服务**按需加载**（模型常态不加载）⇒ 继续判 `model_loaded` 会让容器
+**永远 unhealthy**。判据已改为 `service_ready`（lifespan 已完成 ⇒ 服务可应答、模型可按需加载）；
+`/health` 新增该字段，`status` 也改为表达「服务是否就绪」而非「模型是否加载」。
+
+### ③ 手动补部署（webhook 投递偶发失败时）
+
+```bash
+bash scripts/redeploy-cloud.sh
+```
+
+部署链路上「push 成功 + CI 全绿 + `/health` 200」**三者全对也不能证明生产已更新**
+（见 `docs/incident/2026-10-25-cloud-disk-full-silent-deploy-failure.md` 与类 20.238）。
+唯一硬判据是**生产首页引用的资源指纹 == 本地 `web/dist/index.html` 的指纹**。
