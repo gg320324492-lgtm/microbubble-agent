@@ -50,22 +50,22 @@ jobs:
 
           # --- 判定为 fail 的域名 (本 nginx 提供服务) ---
           FAIL_HOSTS="agent.mnb-lab.cn mnb-lab.cn www.mnb-lab.cn releases.mnb-lab.cn"
-          # --- 仅报告不 fail (站点未启用, 属 lab-miniapp 独立项目, 不由本仓负责) ---
-          REPORT_HOSTS="mnb-lims.cn"
+          # ⚠ mnb-lims.cn 已于 2026-10-29 从本检查移除: 它属 lab-miniapp 独立项目,
+          #   站点在 /etc/nginx/sites-enabled/ 里是空的(未启用) ⇒ 域名落到默认 server 块,
+          #   拿到的证书本就不含它, 检查只会得到"默认 server 的证书"这种无意义结果;
+          #   它那条已无法续期的 certbot lineage 也已删除(备份 /root/cert-backup-20261029/)。
+          #   若将来恢复该站点: 先重新签发证书, 再把域名加回 FAIL_HOSTS。
 
           echo "### 证书有效期 + SAN 覆盖"
           echo "| 域名 | 到期(UTC) | 剩余天 | SAN 覆盖 | 结论 |"
           echo "|---|---|---|---|---|"
 
-          for d in $FAIL_HOSTS $REPORT_HOSTS; do
-            REPORT_ONLY=0
-            case " $REPORT_HOSTS " in *" $d "*) REPORT_ONLY=1;; esac
-
+          for d in $FAIL_HOSTS; do
             ENDSTR=$(echo | timeout 20 openssl s_client -connect "$d:443" -servername "$d" 2>/dev/null \
                      | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
             if [ -z "$ENDSTR" ]; then
-              echo "| $d | 握手失败 | - | - | $( [ "$REPORT_ONLY" = "1" ] && echo 'report-only' || echo '**FAIL**' ) |"
-              [ "$REPORT_ONLY" = "1" ] || FAIL=1
+              echo "| $d | 握手失败 | - | - | **FAIL** |"
+              FAIL=1
               continue
             fi
             END=$(date -u -d "$ENDSTR" +%s 2>/dev/null || echo 0)
@@ -76,14 +76,13 @@ jobs:
               SAN=ok
             else
               SAN="**NO**"
-              [ "$REPORT_ONLY" = "1" ] || FAIL=1
+              FAIL=1
             fi
 
-            if [ "$DAYS" -lt 0 ]; then VERDICT="**EXPIRED**"; [ "$REPORT_ONLY" = "1" ] || FAIL=1
-            elif [ "$DAYS" -lt "$WARN_DAYS" ]; then VERDICT="**EXPIRING(<${WARN_DAYS}d)**"; [ "$REPORT_ONLY" = "1" ] || FAIL=1
+            if [ "$DAYS" -lt 0 ]; then VERDICT="**EXPIRED**"; FAIL=1
+            elif [ "$DAYS" -lt "$WARN_DAYS" ]; then VERDICT="**EXPIRING(<${WARN_DAYS}d)**"; FAIL=1
             else VERDICT="ok"; fi
 
-            [ "$REPORT_ONLY" = "1" ] && VERDICT="$VERDICT (report-only)"
             echo "| $d | $ENDSTR | $DAYS | $SAN | $VERDICT |"
           done
 

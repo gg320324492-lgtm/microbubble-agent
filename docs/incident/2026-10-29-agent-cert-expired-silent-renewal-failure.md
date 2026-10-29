@@ -88,7 +88,7 @@ Challenge failed for domain www.mnb-lab.cn
       正是本次第三层的判据）
    ⇒ **不需要任何 secret、不登录服务器、不改生产**，红叉直接落在仓库上。
 
-## 附带发现：`mnb-lims.cn` 的证书根本没被用上（**未处置，属另一个项目**）
+## 附带发现：`mnb-lims.cn` 的证书根本没被用上（**已清理**）
 
 - `mnb-lims.cn` / `www.mnb-lims.cn` 指向**同一个 IP**（60.205.93.8），但它的站点
   （`/etc/nginx/sites-available/lab-miniapp`）**在 `sites-enabled/` 里是空的 ⇒ 未启用**。
@@ -98,11 +98,25 @@ Challenge failed for domain www.mnb-lab.cn
   certbot 里 mnb-lims 那条 lineage 有效期到 12-22，**却一张都没被服务端使用**。
 - `certbot renew --cert-name mnb-lims.cn --dry-run` **失败**
   （`authenticator = nginx` 需要该站点存在才能做挑战）⇒ 11-22 那次续期同样会失败。
-- ⇒ **本次不处置**：lab-miniapp 是**独立于本仓的另一个项目**，且该站点当前是**主动停用**状态
-  （类 20.212：判「残留/无用」必须查生产引用，不能凭名字与年龄）。
-  需要恢复站点或清理该 lineage，由 lab-miniapp 侧决定。
-  体检 workflow 把 `mnb-lims.cn` 列为 **report-only**（只报告、不判失败），
-  避免一个明知停用的域名把告警刷成常红。
+- ⇒ **主指挥裁定「清理掉」，2026-10-29 已执行**：
+  1. **先备份**（删不可逆 ⇒ 留底）：`/root/cert-backup-20261029/mnb-lims.cn/`
+     （全部历史 cert/chain/fullchain pem + renewal conf + 站点配置副本）。
+  2. `certbot delete --cert-name mnb-lims.cn` ⇒ renewal 目录只剩 `mnb-lab.cn.conf`，
+     **certbot.timer 不再有必然失败的续期**（此前每次都刷一条 ERROR）。
+  3. 删除悬空的 `/etc/nginx/ssl/mnb-lims.cn/` 软链目录。
+  4. **不动** `/etc/nginx/sites-available/lab-miniapp`（属 lab-miniapp 独立项目），
+     只在文件头**加了一段 ASCII 警示注释**（正文逐字节未变，已与备份 diff 验证）：
+     当前未启用、证书 lineage 已删、备份路径、**重新启用的三步**（先签证书 → 再软链 →
+     nginx -t && reload），以及提醒它的 `:80` 是 server 级 `return 301` ⇒
+     ACME 挑战会被 301 到 https ⇒ 续期失败（与本次 mnb-lab.cn 同款坑）。
+  5. 体检 workflow 里把 `mnb-lims.cn` **移出检查范围**（它的证书已不存在，
+     继续查只会读到默认 server 的证书 ⇒ 无意义结果）；并写明
+     「若将来恢复该站点：先重新签发证书，再把域名加回 `FAIL_HOSTS`」。
+
+⇒ 清理后状态：`certbot certificates` **只剩一条** `mnb-lab.cn`
+（SAN 含 agent.mnb-lab.cn，到期 12-01），`/etc/letsencrypt/renewal/` 只剩
+`mnb-lab.cn.conf`，`/etc/nginx/ssl/` 只剩 `mnb-lab.cn/`。
+生产复验：`/health` `/` `/drive` 与 `https://mnb-lab.cn/` 全 200、`tls_verify=0`。
 
 ## 验证（全部走外部客户端，不看状态字段）
 
