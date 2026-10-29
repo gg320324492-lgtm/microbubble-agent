@@ -1892,6 +1892,41 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
      问题在于**没人看它的日志** ⇒ 部署链路需要「投递失败 / 部署中止」的可见信号，
      否则一次磁盘满就能让部署静默失效十天。
 
+- **类 20.239**: **「证书现在还有效」≠「续期链路是通的」—— 证书类判据必须是 dry-run，
+  且续期失败必须有人看见** ——
+  2026-10-29 `https://agent.mnb-lab.cn/drive` 报 `NET::ERR_CERT_DATE_INVALID`，
+  根因**三层**，逐层修好才看得见下一层：
+
+  | 层 | 事实 | 证据 |
+  |---|---|---|
+  | ① | certbot 那条 lineage 用 `authenticator = standalone`（需独占 80 端口），而 nginx 常驻占 80 ⇒ **每次 renew 都失败** | 日志 `Could not bind TCP port 80 because it is already in use`，自 2026-09-28 连续失败到 2026-10-28 12:03 过期 |
+  | ② | 2026-09-02 **已经签出一张 SAN 覆盖 agent 的有效证书**（到 12-01），但 nginx 仍指向那条废弃 lineage ⇒ **有效证书白放着** | `certbot certificates` 显示 mnb-lab.cn 那条的 Domains 含 `agent.mnb-lab.cn`，而 nginx 443 block 指 `/etc/nginx/ssl/agent.mnb-lab.cn/` |
+  | ③ | mnb-lab.cn 那条 lineage **其实也续不了** —— dry-run 才暴露 | `reader size limit exceeded` ⇒ LE 读到的是 SPA 的 index.html 而非挑战文件 |
+
+  **五条纪律**：
+  ① **判「证书链路健康」只能用 `certbot renew --cert-name <name> --dry-run`** ——
+     它走 ACME staging，**不消耗生产限额**。`certbot certificates` 显示 `VALID` 只证明
+     **当前这张**没过期，**不证明下次续期能成功**（本次两条 lineage 都是"当前有效、续不了"）。
+  ② **certbot 续期的域名集来自 renewal conf 的 `[[webroot_map]]` 键** ——
+     扩了 SAN 却没有把新域名写进 webroot_map ⇒ **下次续期会悄悄把它丢掉**
+     （本次 agent 就是这么差点在 11-01 续期时从 SAN 里消失）。
+     判据 = dry-run 输出里那行
+     `Simulating renewal of an existing certificate for agent.mnb-lab.cn and 2 more domains`。
+  ③ **nginx 的 server 级 `return` 在 rewrite 阶段执行、早于 location 匹配** ——
+     凡有 ACME 挑战路径的 `:80` server block，**必须把跳转降级进 `location /`**，
+     挑战路径单开 `location /.well-known/acme-challenge/ { root /var/www/certbot; }`。
+     否则挑战请求也被 301 到 https 落到 SPA fallback（agent 的 :80 block 一直是对的，
+     mnb-lab.cn 的裸 `return 301` 是错的 —— **两个域名的 :80 block 写法不一致，
+     抄错就出事**）。
+  ④ **改云端 nginx ≠ 修好** —— `nginx/conf.d/tunnel.conf` 是云端配置源，
+     `scripts/deploy-auto.sh:273` 每次部署**无条件** `cp` 过去 ⇒ 只改云端会被下次部署冲回。
+     判据 = **仓库里也改了且已推送**（类 20.214 ⑤ 的同一条纪律，此处再次确认）。
+  ⑤ **续期成功后 nginx 不会自动换证书** ⇒ 必须挂 `renew_hook`（`nginx -t && nginx -s reload`）。
+     没有 hook 时 certbot 报成功、线上仍是旧证书 —— 状态字段与实际生效分离（类 20.220）。
+  ⑥ **自动化续期失败要有可见告警**：本次失败只写在 `/var/log/letsencrypt/letsencrypt.log` 里，
+     `certbot.timer` 每天跑 4 次、**连续失败 30 天没有任何信号**（与类 20.238 的
+     「部署中止没人看」同族）。
+
 - ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
   原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /
   Action 补 powershell.exe 解释器 / alembic 断言改不变量），端到端验证 rc=0、`PASS 7/7`"。
