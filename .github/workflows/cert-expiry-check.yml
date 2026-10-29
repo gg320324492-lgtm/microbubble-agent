@@ -1,0 +1,111 @@
+# 生产域名证书体检 —— 2026-10-29 证书过期事故的「可见告警」补丁
+#
+# 事故: agent.mnb-lab.cn 的 certbot lineage 用 standalone 认证 (要独占 80 端口),
+#       而 nginx 常驻占着 80 ⇒ 每次 renew 都失败, 错误只写在
+#       /var/log/letsencrypt/letsencrypt.log 里, **连续失败 30 天零信号**,
+#       2026-10-28 证书过期 ⇒ 全站 ERR_CERT_DATE_INVALID。
+#       (类 20.220: 自动化守门必须验副作用; 类 20.239: 续期失败要有可见告警)
+#
+# 本 workflow 只从**公网**探测, 不需要任何 secret, 不登录服务器, 不改生产:
+#   ① 证书有效期 (过期 / 剩余 <21 天 ⇒ fail)
+#   ② SAN 是否真的覆盖该主机名 (openssl -checkhost) —— 抓「ngininx 指向了另一条 lineage」
+#   ③ ACME HTTP-01 挑战路径是否直通 webroot (期望 404; 拿到 200/3xx ⇒ 续期必然失败)
+#      —— 这一条正是 2026-10-29 事故第三层的判据 (mnb-lab.cn 的 :80 块是裸 server 级
+#      return 301, 挑战请求被 301 到 https 落到 SPA fallback ⇒ "reader size limit exceeded")
+#
+# 触发:
+#   - schedule: 每日一次 (cron 用 UTC; 03:23 UTC = 11:23 +0800)
+#   - push: 改了 nginx 配置 / 本 workflow 时立刻复检
+#     (⚠ 类 20.227③: 只挂 paths 的 workflow 在不匹配的 push 上"根本没跑",
+#       面板显示绿但没验证 ⇒ 配置类改动必须能触发复检)
+#   - workflow_dispatch: 手动
+
+name: Cert Expiry Check
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  push:
+    paths:
+      - ".github/workflows/cert-expiry-check.yml"
+      - "nginx/conf.d/tunnel.conf"
+      - "scripts/ops/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-certs:
+    name: 生产域名证书体检
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: 检查证书有效期 / SAN 覆盖 / ACME 挑战路径
+        run: |
+          set -uo pipefail
+          WARN_DAYS=21
+          NOW=$(date -u +%s)
+          FAIL=0
+
+          # --- 判定为 fail 的域名 (本 nginx 提供服务) ---
+          FAIL_HOSTS="agent.mnb-lab.cn mnb-lab.cn www.mnb-lab.cn releases.mnb-lab.cn"
+          # --- 仅报告不 fail (站点未启用, 属 lab-miniapp 独立项目, 不由本仓负责) ---
+          REPORT_HOSTS="mnb-lims.cn"
+
+          echo "### 证书有效期 + SAN 覆盖"
+          echo "| 域名 | 到期(UTC) | 剩余天 | SAN 覆盖 | 结论 |"
+          echo "|---|---|---|---|---|"
+
+          for d in $FAIL_HOSTS $REPORT_HOSTS; do
+            REPORT_ONLY=0
+            case " $REPORT_HOSTS " in *" $d "*) REPORT_ONLY=1;; esac
+
+            ENDSTR=$(echo | timeout 20 openssl s_client -connect "$d:443" -servername "$d" 2>/dev/null \
+                     | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+            if [ -z "$ENDSTR" ]; then
+              echo "| $d | 握手失败 | - | - | $( [ "$REPORT_ONLY" = "1" ] && echo 'report-only' || echo '**FAIL**' ) |"
+              [ "$REPORT_ONLY" = "1" ] || FAIL=1
+              continue
+            fi
+            END=$(date -u -d "$ENDSTR" +%s 2>/dev/null || echo 0)
+            DAYS=$(( (END - NOW) / 86400 ))
+
+            if echo | timeout 20 openssl s_client -connect "$d:443" -servername "$d" 2>/dev/null \
+                 | openssl x509 -noout -checkhost "$d" 2>/dev/null | grep -q "does match"; then
+              SAN=ok
+            else
+              SAN="**NO**"
+              [ "$REPORT_ONLY" = "1" ] || FAIL=1
+            fi
+
+            if [ "$DAYS" -lt 0 ]; then VERDICT="**EXPIRED**"; [ "$REPORT_ONLY" = "1" ] || FAIL=1
+            elif [ "$DAYS" -lt "$WARN_DAYS" ]; then VERDICT="**EXPIRING(<${WARN_DAYS}d)**"; [ "$REPORT_ONLY" = "1" ] || FAIL=1
+            else VERDICT="ok"; fi
+
+            [ "$REPORT_ONLY" = "1" ] && VERDICT="$VERDICT (report-only)"
+            echo "| $d | $ENDSTR | $DAYS | $SAN | $VERDICT |"
+          done
+
+          echo
+          echo "### ACME HTTP-01 挑战路径探针 (期望 404; 200/3xx = 续期会失败)"
+          for d in agent.mnb-lab.cn mnb-lab.cn www.mnb-lab.cn; do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+                   "http://$d/.well-known/acme-challenge/__certcheck_probe__" 2>/dev/null || echo 000)
+            case "$CODE" in
+              404) echo "  $d -> $CODE  ok (挑战路径直通 webroot)";;
+              200|301|302|307|308)
+                echo "  $d -> $CODE  **FAIL (挑战请求没落到 webroot ⇒ 下次续期会失败)**"; FAIL=1;;
+              *)
+                echo "  $d -> $CODE  **FAIL (意外状态码)**"; FAIL=1;;
+            esac
+          done
+
+          echo
+          if [ "$FAIL" = "0" ]; then
+            echo "RESULT: PASS — 全部生产域名证书有效、SAN 覆盖正确、ACME 挑战路径可用"
+          else
+            echo "RESULT: FAIL — 见上表 **FAIL** 行"
+            echo "处置见 docs/incident/2026-10-29-agent-cert-expired-silent-renewal-failure.md"
+          fi
+          exit $FAIL
