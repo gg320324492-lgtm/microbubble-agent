@@ -78,7 +78,11 @@ async def main() -> None:
     print(f"[vp] 会议 {MEETING_ID}: {len(segs)} 段; anchor 池 {len(anchors)} 人: {anchor_names}", flush=True)
 
     # ---- 2. 下载音频 ----
-    audio_path = os.path.join(WORK, "audio.m4a")
+    # ⛔ 缓存文件名必须带**对象键**, 不能用固定名 "audio.m4a" ——
+    # 否则换 AUDIO_KEY 再跑会**静默复用上一场会议的音频** (2026-10-30 实测同型事故:
+    # basename 碰撞让 255/256 两场用了 259 的音频, 而三场打印出来的音频长度一模一样)。
+    # ⇒ 键里把 '/' 换成 '__', 并在解码后做长度自检。
+    audio_path = os.path.join(WORK, "audio_" + AUDIO_KEY.replace("/", "__"))
     if not (os.path.exists(audio_path) and os.path.getsize(audio_path) > 1024):
         from minio import Minio
 
@@ -95,7 +99,12 @@ async def main() -> None:
             fh.write(data)
         print(f"[vp] 已下载 {AUDIO_KEY}: {len(data)} bytes", flush=True)
     pcm = decode_audio(audio_path)
-    print(f"[vp] 音频解码 {len(pcm)/SR:.1f}s", flush=True)
+    # 自检: 音频必须覆盖整场转录, 否则说明取错了对象
+    need = max((float(s.get("end") or 0) for s in segs), default=0.0)
+    if len(pcm) / SR < need * 0.95:
+        raise RuntimeError(
+            f"音频长度不足: {len(pcm)/SR:.1f}s < 转录所需 {need:.1f}s (key={AUDIO_KEY}) —— 取错对象或缓存键碰撞")
+    print(f"[vp] 音频解码 {len(pcm)/SR:.1f}s (转录覆盖到 {need:.1f}s)", flush=True)
 
     # ---- 3. 按转写段切片 ----
     clips, used = [], []
