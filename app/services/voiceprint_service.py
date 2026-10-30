@@ -29,6 +29,28 @@ MATCH_THRESHOLD = 0.65
 VOICEPRINT_MODEL_ID = "iic/speech_eres2net_sv_zh-cn_16k-common"
 
 
+def _margin_passes(sorted_dists: List[float]) -> Tuple[bool, float]:
+    """margin 判据 (CLAUDE.md 类 20.243) —— 返回 (是否通过, 实际 gap)。
+
+    margin = 「第一名必须比第二名强出多少, 才肯给名字」。
+    原判据只看最近者离得近不近 ⇒ 模型在 top1/top2 几乎打平的段上其实分不出来,
+    却被"必须给个名字"逼着硬猜 (实测错名率 27%~30%)。
+    通过 ⇒ gap ≥ settings.VOICEPRINT_MIN_MARGIN; 阈值 ≤ 0 即关闭。
+
+    判据说明 (2200 段人耳真值台账实测, 三条识别路径各自测过):
+      enrolled 池 + 0.7 (vote_with_quality_gates 主路径): 错名率 30.0% → 11.6%
+      enrolled 池 + 0.65 (identify_speaker / _by_embedding): 27.5% → 11.5%
+      anchor   池 + 0.65 (identify_speaker_anchored):          29.4% → 16.5%
+    """
+    min_margin = float(getattr(settings, "VOICEPRINT_MIN_MARGIN", 0.0) or 0.0)
+    if min_margin <= 0 or len(sorted_dists) < 2:
+        # 阈值关闭, 或只有一个候选(没有"第二名"可比) ⇒ 直接通过
+        return True, float("inf")
+    gap = float(sorted_dists[1] - sorted_dists[0])
+    # 1e-9 容差: gap 恰好等于阈值时(如 0.50-0.40 在浮点下是 0.0999...)应算通过
+    return gap >= min_margin - 1e-9, gap
+
+
 class VoiceprintService:
     """声纹录入与识别服务"""
 
@@ -303,18 +325,20 @@ class VoiceprintService:
         # 2026-09-07 防御: 过滤 voice_sample_count=0 的残留向量（0 采样却有 embedding
         # 一定是历史 bug 产物，如 4 名成员共用的同一坏向量）
         # 查询已录入声纹的成员，按余弦距离排序
+        # 2026-10-30: 取 top-2 (margin 判据需要次近者), LIMIT 1 → 2
         result = await db.execute(
             select(Member)
             .where(Member.voice_embedding.isnot(None), Member.is_active == True,
                    Member.voice_sample_count > 0)
             .order_by(Member.voice_embedding.cosine_distance(embedding_list))
-            .limit(1)
+            .limit(2)
         )
-        member = result.scalar_one_or_none()
+        members = list(result.scalars().all())
 
-        if not member:
+        if not members:
             logger.debug("声纹识别：无已录入成员，返回 unknown")
             return None, None, 0.0
+        member = members[0]
 
         # 计算余弦距离
         db_emb = np.array(member.voice_embedding, dtype=np.float32)
@@ -324,9 +348,23 @@ class VoiceprintService:
 
         confidence = float(1.0 - min(cosine_dist, 1.0))
 
-        if cosine_dist < MATCH_THRESHOLD:
+        # margin 判据: 最近者必须明显优于次近者, 否则宁可说「未识别」
+        dists = [cosine_dist]
+        if len(members) > 1:
+            second_emb = np.array(members[1].voice_embedding, dtype=np.float32)
+            dists.append(float(1.0 - np.dot(embedding, second_emb) / (
+                np.linalg.norm(embedding) * np.linalg.norm(second_emb) + 1e-8)))
+        margin_ok, gap = _margin_passes(dists)
+
+        if cosine_dist < MATCH_THRESHOLD and margin_ok:
             logger.debug(f"声纹识别成功：{member.name} (dist={cosine_dist:.3f}, conf={confidence:.3f})")
             return member.name, member.id, confidence
+        elif cosine_dist < MATCH_THRESHOLD:
+            logger.info(
+                "声纹识别放弃(margin 不足): 最近=%s dist=%.3f 次近=%.3f gap=%.3f < %.2f",
+                member.name, cosine_dist, dists[1], gap,
+                float(getattr(settings, "VOICEPRINT_MIN_MARGIN", 0.0) or 0.0))
+            return None, None, confidence
         else:
             logger.debug(f"声纹识别未匹配：最近={member.name} (dist={cosine_dist:.3f} > threshold={MATCH_THRESHOLD})")
             return None, None, confidence
@@ -351,16 +389,18 @@ class VoiceprintService:
         embedding_list = embedding.tolist()
 
         # 2026-09-07 防御: 过滤 voice_sample_count=0 的残留向量
+        # 2026-10-30: 取 top-2 (margin 判据需要次近者), LIMIT 1 → 2
         result = await db.execute(
             select(Member)
             .where(Member.voice_embedding.isnot(None), Member.is_active == True,
                    Member.voice_sample_count > 0)
             .order_by(Member.voice_embedding.cosine_distance(embedding_list))
-            .limit(1)
+            .limit(2)
         )
-        member = result.scalar_one_or_none()
-        if not member:
+        members = list(result.scalars().all())
+        if not members:
             return None, None, 0.0
+        member = members[0]
 
         db_emb = np.array(member.voice_embedding, dtype=np.float32)
         cosine_dist = float(1.0 - np.dot(embedding, db_emb) / (
@@ -368,7 +408,15 @@ class VoiceprintService:
         ))
         confidence = float(1.0 - min(cosine_dist, 1.0))
 
-        if cosine_dist < MATCH_THRESHOLD:
+        # margin 判据 (CLAUDE.md 类 20.243)
+        dists = [cosine_dist]
+        if len(members) > 1:
+            second_emb = np.array(members[1].voice_embedding, dtype=np.float32)
+            dists.append(float(1.0 - np.dot(embedding, second_emb) / (
+                np.linalg.norm(embedding) * np.linalg.norm(second_emb) + 1e-8)))
+        margin_ok, _gap = _margin_passes(dists)
+
+        if cosine_dist < MATCH_THRESHOLD and margin_ok:
             return member.name, member.id, confidence
         else:
             return None, None, confidence
@@ -421,8 +469,12 @@ class VoiceprintService:
 
         Returns:
             Tuple[name, member_id, confidence] - 同 identify_speaker 格式
-            - 如果最近 anchor cos_dist < MATCH_THRESHOLD: 返回该 anchor
-            - 否则: (None, None, 1 - min_dist) 表示"未识别" (新成员)
+            - 如果最近 anchor cos_dist < MATCH_THRESHOLD **且** 通过 margin 判据: 返回该 anchor
+            - 否则: (None, None, 1 - min_dist) 表示"未识别" (新成员 / 判据模糊)
+
+        margin 判据 (2026-10-30, CLAUDE.md 类 20.243):
+            最近者必须比次近者强出 settings.VOICEPRINT_MIN_MARGIN (默认 0.10),
+            否则**弃权**——宁可标「发言人?」也不猜错名字。阈值设 0 即关闭。
 
         用途:
             incremental_anchor.py 主流程, 用已确认的 anchor 识别会议段,
@@ -449,8 +501,19 @@ class VoiceprintService:
         nearest, dist = distances[0]
         confidence = float(1.0 - min(dist, 1.0))
 
-        if dist < MATCH_THRESHOLD:
+        # margin 判据 (CLAUDE.md 类 20.243): 最近者必须明显优于次近者,
+        # 否则宁可说「未识别」—— 模型在 top1/top2 打平的段上其实分不出来,
+        # 却被"必须给个名字"逼着硬猜 (实测错名率 29.4%)。
+        margin_ok, gap = _margin_passes([d for _, d in distances])
+
+        if dist < MATCH_THRESHOLD and margin_ok:
             return nearest.name, nearest.id, confidence
+        elif dist < MATCH_THRESHOLD:
+            logger.info(
+                "声纹识别放弃(margin 不足): 最近=%s dist=%.3f 次近=%.3f gap=%.3f < %.2f",
+                nearest.name, dist, distances[1][1], gap,
+                float(getattr(settings, "VOICEPRINT_MIN_MARGIN", 0.0) or 0.0))
+            return None, None, confidence
         else:
             return None, None, confidence
 

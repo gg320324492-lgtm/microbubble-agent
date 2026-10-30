@@ -35,7 +35,25 @@ from typing import Optional
 import numpy as np
 from sqlalchemy import select
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
+
+
+def get_min_margin() -> float:
+    """margin 判据阈值 (CLAUDE.md 类 20.243)。
+
+    margin = 「第一名必须比第二名强出多少, 才肯给名字」。
+    原判据只看最近者离得近不近 ⇒ 模型在 top1/top2 几乎打平的段上其实分不出来,
+    却被"必须给个名字"逼着硬猜 (实测错名率 30%)。
+
+    设为 0 即完全关闭(回到改造前行为), 可随时灰度回退。
+    """
+    try:
+        return float(getattr(settings, "VOICEPRINT_MIN_MARGIN", 0.0) or 0.0)
+    except Exception:
+        return 0.0
+
 
 
 # ============================================================================
@@ -275,6 +293,7 @@ def vote_with_quality_gates(
     avg_conf_threshold: float = 0.30,
     match_threshold: float = 0.7,
     sample_count_penalty_factor: float = 0.5,
+    min_margin: Optional[float] = None,
 ) -> dict:
     """Cluster-center + Hungarian 分配的 vote, 解决原算法"永远取 most_common"导致大量错标
 
@@ -298,10 +317,15 @@ def vote_with_quality_gates(
         avg_conf_threshold: 段级 conf > 0.30
         match_threshold: 单段匹配距离上限 (默认 0.7)
         sample_count_penalty_factor: samples=1 加权比例 (默认 0.5, samples=3+ 满权)
+        min_margin: margin 判据 (默认 None = 读 settings.VOICEPRINT_MIN_MARGIN)。
+            最近者必须比次近者强出这么多, 该段才投票; 否则**弃权**(宁可不出名,
+            也不猜错)。0 = 关闭。详见 CLAUDE.md 类 20.243。
 
     Returns:
         {cluster_id: (name, avg_conf, votes, total_segments)}
     """
+    if min_margin is None:
+        min_margin = get_min_margin()
     cluster_names = {}
     unique_cids = sorted(set(l for l in labels if l >= 0))
     if not unique_cids or not enrolled:
@@ -330,11 +354,13 @@ def vote_with_quality_gates(
         # 段级 votes: 每段 vs enrolled 最近邻
         name_votes = Counter()
         seg_confs = {}  # name → [conf, ...]
+        ambiguous_segments = 0
         for i in idxs:
             if seg_embs[i] is None or np.all(np.array(seg_embs[i]) == 0):
                 continue
             emb = np.array(seg_embs[i], dtype=np.float32)
             best_name, best_dist = None, 999.0
+            second_dist = 999.0
             for item in enrolled_filtered:
                 mid, name, db_emb = item[0], item[1], item[2]
                 if db_emb is None:
@@ -344,11 +370,22 @@ def vote_with_quality_gates(
                     continue
                 dist = _cosine_distance(emb, db_emb_arr)
                 if dist < best_dist:
+                    second_dist = best_dist
                     best_dist = dist
                     best_name = name
+                elif dist < second_dist:
+                    second_dist = dist
             if best_name and best_dist < match_threshold:
+                # margin 判据: 最近者必须明显优于次近者, 否则本段**弃权**(不投票)
+                if min_margin > 0 and (second_dist - best_dist) < min_margin:
+                    ambiguous_segments += 1
+                    continue
                 name_votes[best_name] += 1
                 seg_confs.setdefault(best_name, []).append(1.0 - best_dist)
+        if ambiguous_segments:
+            logger.info(
+                "[vote] 聚类 %d: %d 段因 margin<%.2f 弃权(最近与次近难分, 不猜名)",
+                cid, ambiguous_segments, min_margin)
         cluster_info[cid] = {
             "center": center,
             "total": len(idxs),

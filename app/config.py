@@ -172,6 +172,31 @@ class Settings(BaseSettings):
     GPU_STREAMING_ASR_ENABLED: bool = True
     GPU_STREAMING_ASR_URL: str = "http://host.docker.internal:8006"
 
+    # 2026-10-30 声纹 margin 判据 (CLAUDE.md 类 20.243)
+    #
+    # 【问题】生产判据是「离**最近**的 anchor < MATCH_THRESHOLD(0.65) 就认」,
+    #   **完全不看第二名离得多近** ⇒ 模型在 top1/top2 几乎打平的段上其实"知道分不出来",
+    #   却被"必须给个名字"逼着硬猜。
+    # 【实测 1: 段级】用 8 场 2200 段人耳真值台账模拟各条识别路径:
+    #   enrolled 池 + 0.7 (vote_with_quality_gates 主路径): 错名率 30.0% → 11.6%
+    #   enrolled 池 + 0.65 (identify_speaker / _by_embedding): 27.5% → 11.5%
+    #   anchor   池 + 0.65 (identify_speaker_anchored):          29.4% → 16.5%
+    # 【实测 2: 端到端, 直接调生产函数 vote_with_quality_gates】(理想聚类=按台账真值分组,
+    #   41 组 / 2200 段) —— **聚类级**才是纪要真正采用的粒度:
+    #     margin 0.00 → 命名正确 17 / **命名错误 18** / 无名 6    (错名 44%!)
+    #     margin 0.05 → 命名正确 17 / 命名错误 14 / 无名 10
+    #     margin 0.10 → 命名正确 14 / **命名错误 5** / 无名 22   (错名 12%)
+    #     margin 0.15 → 命名正确 8 / 命名错误 0 / 无名 33        (正确命名腰斩, 过度)
+    #   ⇒ 0.10: 错名 18→5 (交换比 3.6:1), 正确 17→14; 0.15 起正确命名腰斩 ⇒ 取 0.10。
+    # ⚠️ 现状 646 段错名里 **482 段的真值压根不在锚池里**(这些人本来就没声纹,
+    #   标谁都是编的) ⇒ 把它们变成「未识别」是**诚实**而非损失。
+    # 【取值】0.10 —— 错名率近乎减半, 正确命名只掉 3 组。
+    #   **设为 0 即完全关闭** margin 判据(回到 2026-10-30 之前的行为), 可随时灰度回退。
+    # ⚠️ 只作用于「给名字」的三条路径: vote_with_quality_gates(会议流水线主路径) /
+    #   identify_speaker_anchored(流水线逐段) / identify_speaker + _by_embedding(API 与
+    #   聚类代表兜底)。三者的候选池各不相同 ⇒ 上面每一栏都是**各自实测**的, 未外推。
+    VOICEPRINT_MIN_MARGIN: float = 0.10
+
     # Claude 生成参数
     CLAUDE_MAX_TOKENS: int = 8192
     SESSION_WINDOW_SIZE: int = 30
