@@ -25,6 +25,7 @@ import json
 import os
 import subprocess
 import sys
+from collections import Counter, defaultdict
 
 import numpy as np
 
@@ -33,6 +34,14 @@ sys.path.insert(0, "/app")
 SR = 16000
 MIN_SEC = 0.5
 WORK = "/tmp/vp"
+
+# 安全闸 C 的容差: 新增段到该成员 anchor 的中位距离, 不得超过「同场人耳确认段」
+# 中位距离的该倍数。
+# ⚠️ **这个数不是凭空设的**(类 20.226 ⑤): 6 场实测的比值分两组——
+#   接受组 = {0.957, 0.976, 1.010}(256 张宏魁/王天志, 229 王天志)
+#   拒绝组 = {1.242, 1.281}(250 蒋芦笛/王天志)
+#   两组之间有**空档 [1.010, 1.242]** ⇒ 阈值取空档中部 1.15。
+GATE_C_RATIO_MAX = 1.15
 
 
 def decode_audio(path: str) -> np.ndarray:
@@ -72,6 +81,8 @@ async def main():
     ap.add_argument("--meeting", type=int, required=True)
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--ledger-files", default=os.environ.get(
+        "LEDGER_FILES", "/tmp/ledger_13.json,/tmp/ledger_30.json"))
     args = ap.parse_args()
     mid = args.meeting
 
@@ -91,7 +102,14 @@ async def main():
         raw = list(m.transcript or [])
         pol = list(m.transcript_polished or [])
         audio_url = m.audio_url
-        segs = sorted(raw, key=lambda s: float(s.get("start") or 0))
+        # ⚠️ **下标必须显式映射, 不能靠「库里恰好是排好的」(类 20.248 ⑥ 的同型坑)**:
+        #   `segs` 是**按 start 排序**的, 而 `raw`/`cur_raw` 是**库内原序**。
+        #   若两者顺序不一致 ⇒ 用 `segs` 的下标去写 `cur_raw` ⇒ **段与标签张冠李戴**,
+        #   而且**不会报错**(只是标错人)。
+        #   实测 256/229/243 的库内顺序确实已按 start 排好 ⇒ 当时用下标对齐是对的;
+        #   但那是**当时的事实**, 不是**不变量** ⇒ 这里用 `order` 显式映射, 与顺序无关。
+        order = sorted(range(len(raw)), key=lambda i: float(raw[i].get("start") or 0))
+        segs = [raw[i] for i in order]
 
         # ---- 1. 音频 + 逐段嵌入 ----
         pcm = decode_audio(fetch_audio(audio_url))
@@ -129,6 +147,7 @@ async def main():
             select(Member).where(Member.voice_embedding.isnot(None)))).scalars().all()
         enrolled = [(r.id, r.name, np.array(r.voice_embedding, dtype=np.float32),
                       r.voice_sample_count or 1) for r in rows]
+        all_enrolled_names = {e[1] for e in enrolled}
         ctx_names = set()
         try:
             from app.services.voiceprint_voting import (
@@ -187,7 +206,7 @@ async def main():
 
         # ---- 5b. 安全闸: 用台账真值给「改前/改后」打分, 不达标不写 ----
         ledger_blocks = []
-        for lp in os.environ.get("LEDGER_FILES", "/tmp/ledger_13.json,/tmp/ledger_30.json").split(","):
+        for lp in args.ledger_files.split(","):
             if not lp.strip() or not os.path.exists(lp.strip()):
                 continue
             ld = json.load(open(lp.strip(), encoding="utf-8"))
@@ -235,18 +254,86 @@ async def main():
         if truth_score["after_wrong"]:
             print("[vp]   改后错名明细: %s" % dict(sorted(
                 truth_score["after_wrong"].items(), key=lambda kv: -kv[1])[:6]), flush=True)
-        if args.apply and truth_score["after_ok"] < truth_score["before_ok"]:
+        if truth_score["after_ok"] < truth_score["before_ok"]:
             print("[vp] ⚠ 安全闸A: 改后台账真值判对数(%d) < 改前(%d) ⇒ **不写库**" % (
                 truth_score["after_ok"], truth_score["before_ok"]), flush=True)
             await engine.dispose()
             return
 
-        # ---- 安全闸 B: 不得给「台账里该场会议没出现过」的成员安上大块段 ----
-        # 背景: 会议 259 的重标会把 **75 段判给蒋芦笛** —— 而台账里蒋芦笛在这场
-        #       **一句都没说**(2026-10-30 已确认) ⇒ 这正是刚修好的那个 bug 被重新引入。
-        #       台账是人工逐块听辨建成的 ⇒ 若某个成员在台账里**完全没出现**,
-        #       却拿到 >10% 的段, 说明模型在给一个"人耳从没听见过的人"安名字。
+        # ---- 安全闸 B1: 候选池必须覆盖「台账真值里所有有声纹的人」 ----
+        # 背景: 模型**只能**从候选池里挑名字。若某位真值人物虽然有声纹却被
+        #       `context` 过滤踢出候选池, 重标必然把段**兜底**给池里最接近的别人
+        #       (类 20.247 的「最大类兜底」)。
+        # 实测: 会议 243 的池 = {宋洋,张宏魁,赵航佳,陈金薪,韩重阳}, 而台账真值
+        #       25 段**全是王天志** ⇒ 王天志被踢出 ⇒ 613 段全部兜底给宋洋。
+        # ⇒ 这是**纯逻辑判据, 不依赖任何阈值**。
         ledger_people = {who for mm, s0, e0, who in lb}
+        pool_names = {e[1] for e in enrolled}
+        lost = sorted(p for p in ledger_people
+                      if p in all_enrolled_names and p not in pool_names)
+        if lost:
+            print("[vp] ⚠ 安全闸B1: 台账真值里的人被 context 过滤踢出候选池 ⇒ **不写库**: %s"
+                  % ", ".join(lost), flush=True)
+            print("[vp]     模型不可能认出一个不在候选集里的人; 重标只会把段兜底给最接近的别人。",
+                  flush=True)
+            await engine.dispose()
+            return
+        print("[vp] 安全闸B1: 台账真值里所有有声纹的人都在候选池内 ⇒ 通过 (池 %d 人: %s)"
+              % (len(pool_names), ", ".join(sorted(pool_names))), flush=True)
+
+        # ---- 公共: anchor 向量(用于 B2 / C 的距离计算) ----
+        anchor_vec = {e[1]: e[2] / (np.linalg.norm(e[2]) + 1e-9) for e in enrolled}
+        anchor_names = list(anchor_vec.keys())
+        anchor_mat = np.stack([anchor_vec[n] for n in anchor_names]) if anchor_names else None
+
+        def nearest_anchor(i):
+            e = seg_embs[i]
+            if e is None or anchor_mat is None:
+                return None, None
+            d = np.linalg.norm(anchor_mat - e, axis=1)
+            j = int(np.argmin(d))
+            return anchor_names[j], float(d[j])
+
+        # ---- 迁移报表: 「原本有名字 → 换成另一个名字」是最危险的一类改动 ----
+        # 台账只覆盖 2%–45% 的段 ⇒ 台账外的改动**无法用台账验证**(类 20.244)。
+        # 闸 A / B / C 都看不到「把 A 的段改判成 B」这类**换名**(它们只看
+        # 「未识别→有名字」的补名与总数)⇒ 必须单独报表 + 声学交叉验证。
+        # 判据(相对量, 不设自造阈值): 逐段最近 anchor **支持新名字的比例**;
+        # 若多数段的最近 anchor 仍是**原名字** ⇒ 这次换名没有声学依据 ⇒ 报警。
+        trans = Counter()
+        for i, s in enumerate(segs):
+            cur = s.get("speaker") or "发言人?"
+            new = new_speaker.get(i) or "发言人?"
+            if cur != new:
+                trans["%s -> %s" % (cur, new)] += 1
+        if trans:
+            print("[vp] 迁移明细: %s" % dict(trans.most_common()), flush=True)
+        renames = {}
+        for i, s in enumerate(segs):
+            cur = s.get("speaker") or "发言人?"
+            new = new_speaker.get(i) or "发言人?"
+            if cur == new or cur == "发言人?" or new == "发言人?":
+                continue
+            renames.setdefault("%s -> %s" % (cur, new), []).append(i)
+        for label, idxs in sorted(renames.items(), key=lambda kv: -len(kv[1])):
+            pairs = [nearest_anchor(i) for i in idxs]
+            valid_pairs = [(n, d) for n, d in pairs if n is not None]
+            new_name = label.split(" -> ")[1]
+            agree = sum(1 for n, _ in valid_pairs if n == new_name)
+            ratio = agree / len(valid_pairs) if valid_pairs else 0.0
+            med = (float(np.median([d for _, d in valid_pairs]))
+                   if valid_pairs else float("nan"))
+            print("[vp] 换名 %s: %d 段, 最近 anchor 支持新名字 %.0f%%(%d/%d), 中位距离 %.3f%s" % (
+                label, len(idxs), ratio * 100, agree, len(valid_pairs), med,
+                "" if ratio >= 0.5 else "  ⚠ 声学不支持这次换名 ⇒ 台账外的高风险改动"),
+                flush=True)
+
+        # ---- 安全闸 B2: 「台账外成员占大段」的告警, 必须用**最近 anchor**交叉验证 ----
+        # 背景(类 20.249): 本项目台账覆盖率只有 4%–23%(229 = 8.5%, 243 = 4.1%),
+        #       此时「台账里没出现」**≠**「没发言」⇒ 闸 B 会把真正发了言的人误报。
+        # 实测: 229 的杜同贺(台账里没出现)拿到 31 段(10.9%)触发闸 B, 但
+        #       **逐段最近 anchor 有 24/31 指向杜同贺** ⇒ 告警被证伪 ⇒ 他确实发言了。
+        # 解药 = 逐段最近 anchor: 多数段最近就是他 ⇒ 命名可信, 告警作废。
         total_segs = len(segs)
         new_heavy = []
         for name, cnt in after.items():
@@ -254,29 +341,126 @@ async def main():
                 continue
             if cnt > total_segs * 0.10:
                 new_heavy.append((name, cnt))
-        if new_heavy:
-            print("[vp] ⚠ 安全闸B: 台账里本场没出现过的成员被安上大块段 ⇒ **不写库**:" % ())
-            for name, cnt in new_heavy:
-                print("[vp]     %s 拿到 %d 段 (占 %d 段的 %.0f%%)" % (
-                    name, cnt, total_segs, cnt / max(1, total_segs) * 100))
-            print("[vp]     台账里本场出现的人: %s" % ", ".join(sorted(ledger_people)), flush=True)
+        for name, cnt in new_heavy:
+            newly = [i for i in range(total_segs)
+                     if new_speaker.get(i) == name and segs[i].get("speaker") != name]
+            agree = n_valid = 0
+            for i in newly:
+                na, _d = nearest_anchor(i)
+                if na is None:
+                    continue
+                n_valid += 1
+                if na == name:
+                    agree += 1
+            ratio = (agree / n_valid) if n_valid else 0.0
+            if ratio < 0.5:
+                print("[vp] ⚠ 安全闸B2: %s 拿 %d 段(%.0f%%)但台账里本场没出现过, "
+                      "且逐段最近 anchor 只有 %.0f%% 指向他 ⇒ **不写库**" % (
+                          name, cnt, cnt / max(1, total_segs) * 100, ratio * 100), flush=True)
+                await engine.dispose()
+                return
+            print("[vp] 安全闸B2: %s 拿 %d 段(%.0f%%)触发台账外告警, 但逐段最近 anchor "
+                  "有 %.0f%%(%d/%d) 指向他 ⇒ 告警被交叉验证推翻, 放行" % (
+                      name, cnt, cnt / max(1, total_segs) * 100,
+                      ratio * 100, agree, n_valid), flush=True)
+        if not new_heavy:
+            print("[vp] 安全闸B2: 无『台账外成员占大片段』⇒ 通过", flush=True)
+
+        # ---- 安全闸 C: 新增段的声学是否与该成员**同场人耳确认段**同源 ----
+        # 对照组 = 同一场里该成员的台账确认段(同场同人 ⇒ 最贴近的对照)。
+        #   C1: 新增段到该成员 anchor 的中位距离 ≤ 对照中位 × GATE_C_RATIO_MAX
+        #   C2: 新增段到该成员 anchor 的中位距离 ≤ 「仍未识别段」到同一 anchor 的中位距离
+        #       (符号判据: 若新命名的段比留空的段还远 ⇒ 这次命名是倒退)
+        ledger_conf = defaultdict(list)
+        for mm, s0, e0, who in lb:
+            if who.startswith("发言人"):
+                continue
+            for i, s in enumerate(segs):
+                st = float(s.get("start") or 0)
+                en = float(s.get("end") or 0)
+                if st >= s0 - 1e-6 and en <= e0 + 1e-6:
+                    ledger_conf[who].append(i)
+        unknown_idx = [i for i in range(total_segs) if new_speaker.get(i) == "发言人?"]
+        for name in sorted(set(new_speaker.values())):
+            if name.startswith("发言人"):
+                continue
+            newly = [i for i in range(total_segs)
+                     if new_speaker.get(i) == name and segs[i].get("speaker") != name]
+            if not newly:
+                continue
+            a = anchor_vec.get(name)
+            if a is None:
+                continue
+            d_new = [float(np.linalg.norm(seg_embs[i] - a)) for i in newly
+                     if seg_embs[i] is not None]
+            if not d_new:
+                continue
+            m_new = float(np.median(d_new))
+            conf = ledger_conf.get(name, [])
+            d_con = [float(np.linalg.norm(seg_embs[i] - a)) for i in conf
+                     if seg_embs[i] is not None]
+            d_unk = [float(np.linalg.norm(seg_embs[i] - a)) for i in unknown_idx
+                     if seg_embs[i] is not None]
+            msg = ("[vp]   闸C %s: 新增 %d 段, 到 anchor 中位 %.4f" % (
+                name, len(newly), m_new))
+            if d_con:
+                m_con = float(np.median(d_con))
+                ratio = m_new / max(1e-9, m_con)
+                msg += " / 同场人耳确认中位 %.4f (n=%d) 比值 %.3f" % (
+                    m_con, len(d_con), ratio)
+                if ratio > GATE_C_RATIO_MAX:
+                    print(msg + " ⇒ ⚠ 超过 %.2f" % GATE_C_RATIO_MAX, flush=True)
+                    print("[vp] ⚠ 安全闸C1: 新命名段比同场人耳确认段远 %.0f%% ⇒ **不写库**" % (
+                        (ratio - 1) * 100), flush=True)
+                    await engine.dispose()
+                    return
+            if d_unk:
+                m_unk = float(np.median(d_unk))
+                msg += " / 仍未识别段中位 %.4f (n=%d) 比值 %.3f" % (
+                    m_unk, len(d_unk), m_new / max(1e-9, m_unk))
+                if m_new > m_unk:
+                    print(msg + " ⇒ ⚠ 新命名段比留空段还远", flush=True)
+                    print("[vp] ⚠ 安全闸C2: 新命名段比『仍未识别』段离该成员更远 ⇒ "
+                          "这次命名是倒退 ⇒ **不写库**", flush=True)
+                    await engine.dispose()
+                    return
+            print(msg, flush=True)
+        print("[vp] 安全闸C: 新增段的声学与同场人耳确认段同源 ⇒ 通过", flush=True)
+
+        # ---- 安全闸 D: 全局未识别率不得上升 ----
+        # 背景(类 20.249): 2026-10-30 的 margin=0.10 重标把 5 场会议的命名覆盖打崩
+        #       (250: 34→572 未识别, 256: 263→2023, 243: 91→588, 247: 6→87,
+        #        255: 308→413)。闸 A 只看台账覆盖的段 ⇒ 对**台账外**的崩塌完全失明。
+        # ⇒ 必须有一条**全局**判据兜住。
+        u_before = sum(1 for s in segs if (s.get("speaker") or "发言人?") == "发言人?")
+        u_after = after.get("发言人?", 0)
+        if u_after > u_before:
+            print("[vp] ⚠ 安全闸D: 未识别段 %d → %d (变多) ⇒ **不写库**" % (
+                u_before, u_after), flush=True)
             await engine.dispose()
             return
-        print("[vp] 安全闸B: 无『台账外成员占大片段』⇒ 通过", flush=True)
+        print("[vp] 安全闸D: 未识别段 %d → %d (未变多) ⇒ 通过" % (u_before, u_after), flush=True)
+        print("[vp] ✅ 五道安全闸全部通过 ⇒ %s" % ("可写库" if args.apply else "dry-run, 未写库"),
+              flush=True)
 
         if args.apply:
-            await db.execute(sqlt("DROP TABLE IF EXISTS meeting_%d_backup_pre_margin_relabel" % mid))
-            await db.execute(sqlt("CREATE TABLE meeting_%d_backup_pre_margin_relabel AS "
-                                   "SELECT * FROM meetings WITH NO DATA" % mid))
-            await db.execute(sqlt("INSERT INTO meeting_%d_backup_pre_margin_relabel "
-                                   "SELECT * FROM meetings WHERE id = :i" % mid), {"i": mid})
+            # ⚠️ 备份表名必须**自带判据版本** —— 否则「pre_margin_relabel」这种
+            #   泛名在跑过多次不同 margin 的重标后**无法区分是哪一次的前态**
+            #   (类 20.220: 名字在说谎)。这里用 `margin0p05` 这样的字面量。
+            bk_suffix = "margin%s" % (("%.2f" % margin).replace(".", "p"))
+            bk = "meeting_%d_backup_pre_%s_relabel" % (mid, bk_suffix)
+            await db.execute(sqlt("DROP TABLE IF EXISTS %s" % bk))
+            await db.execute(sqlt("CREATE TABLE %s AS SELECT * FROM meetings WITH NO DATA" % bk))
+            await db.execute(sqlt("INSERT INTO %s SELECT * FROM meetings WHERE id = :i" % bk),
+                             {"i": mid})
             await db.commit()
             applied = 0
             for i, s in enumerate(segs):
                 new_spk = new_speaker.get(i)
-                if not new_spk or cur_raw[i].get("speaker") == new_spk:
+                ri = order[i]          # segs 的下标 → cur_raw(库内原序)的下标
+                if not new_spk or cur_raw[ri].get("speaker") == new_spk:
                     continue
-                u = update_transcript_speaker(cur_raw, cur_pol, cur_map, i, new_spk)
+                u = update_transcript_speaker(cur_raw, cur_pol, cur_map, ri, new_spk)
                 cur_raw, cur_pol, cur_map = u.transcript, u.transcript_polished, u.speaker_mapping
                 applied += 1
             from app.services.meeting_analysis_service import MeetingAnalysisService
@@ -291,12 +475,11 @@ async def main():
             if stats is not None:
                 m.speaker_stats = stats
             await db.commit()
-            print("[vp] 已写回 %d 段 (备份表 meeting_%d_backup_pre_margin_relabel)" % (applied, mid), flush=True)
+            print("[vp] 已写回 %d 段 (备份表 %s)" % (applied, bk), flush=True)
         else:
             print("[vp] dry-run, 未写库", flush=True)
     await engine.dispose()
 
 
 if __name__ == "__main__":
-    from collections import Counter
     asyncio.run(main())
