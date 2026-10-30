@@ -104,8 +104,8 @@ class MeetingQualityEvaluator:
 
         # 时间戳单调性
         monotonic = all(
-            (transcript[i].get("start", 0) <= transcript[i].get("end", 0))
-            and (i == 0 or transcript[i - 1].get("end", 0) <= transcript[i].get("start", 0))
+            ((transcript[i].get("start") or 0) <= (transcript[i].get("end") or 0))
+            and (i == 0 or (transcript[i - 1].get("end") or 0) <= (transcript[i].get("start") or 0))
             for i in range(segments_count)
         )
         metrics["transcript_monotonic"] = bool(monotonic)
@@ -118,22 +118,43 @@ class MeetingQualityEvaluator:
 
         # 时间覆盖 + 最长 gap
         total_dur = sum(
-            max(0.0, (seg.get("end", 0) - seg.get("start", 0)))
+            max(0.0, (seg.get("end") or 0) - (seg.get("start") or 0))
             for seg in transcript
         )
+        # 2026-10-30: 转录**完全没有时间戳**时覆盖率**算不出来**(不是 0%) ——
+        # 会议 242 的 591 段只有 text+speaker ⇒ 覆盖率被算成 0% ⇒ 稳定误报
+        # transcript_low_coverage fail(假失败)。⇒ 算不出来就**不判覆盖率**,
+        # 并把"算不出来"显式记进 metrics + 记一条 warn(可见, 不隐藏, 也不冤枉)。
+        has_ts = any(
+            seg.get("start") is not None and seg.get("end") is not None
+            for seg in transcript
+        )
+        metrics["transcript_has_timestamps"] = has_ts
         if media_dur:
-            coverage = total_dur / media_dur if media_dur > 0 else 0
-            metrics["transcript_coverage_ratio"] = round(coverage, 4)
-            if coverage < 0.3:
+            if has_ts:
+                coverage = total_dur / media_dur if media_dur > 0 else 0
+                metrics["transcript_coverage_ratio"] = round(coverage, 4)
+                if coverage < 0.3:
+                    issues.append({
+                        "code": "transcript_low_coverage",
+                        "level": "fail",
+                        "message": f"转录覆盖率仅 {coverage*100:.1f}% < 30%",
+                    })
+            else:
+                metrics["transcript_coverage_ratio"] = None
+                metrics["transcript_coverage_uncomputable"] = True
                 issues.append({
-                    "code": "transcript_low_coverage",
-                    "level": "fail",
-                    "message": f"转录覆盖率仅 {coverage*100:.1f}% < 30%",
+                    "code": "transcript_no_timestamps",
+                    "level": "warn",
+                    "message": (
+                        "转录没有任何时间戳 ⇒ 覆盖率与空窗判据都无法计算, "
+                        "已跳过覆盖率门禁(不是覆盖率 0%)"
+                    ),
                 })
 
         gaps = []
         for i in range(1, segments_count):
-            gap = transcript[i].get("start", 0) - transcript[i - 1].get("end", 0)
+            gap = (transcript[i].get("start") or 0) - (transcript[i - 1].get("end") or 0)
             if gap > 0:
                 gaps.append(gap)
         if gaps:

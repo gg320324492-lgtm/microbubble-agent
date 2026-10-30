@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc
 
+from app.config import settings
 from app.models.meeting import Meeting
 from app.models.meeting_processing import MeetingProcessingRun, MeetingProcessingStage
 
@@ -23,6 +24,38 @@ SUPPORTED_STAGES = {
     "title", "polish", "analysis", "speaker_assignment",
     "transcription", "quality",
 }
+
+
+async def recover_audio_gap_evidence(db: AsyncSession, meeting_id: int) -> Dict[str, Any]:
+    """从历史阶段的 metrics 里取回音频空窗证据。
+
+    原始流水线的 `downloading_audio` 阶段把 audio_processor 的
+    `last_segment_report` 落进了 stage metrics; 重跑路径不重跑音频处理,
+    但证据当初已落库 ⇒ 从该会议**任意一次**运行的阶段 metrics 里恢复最新的那一份。
+
+    ⚠️ 必须跨**所有** run 找, 不能只看最近一次 run ——
+    2026-10-30 实测: 会议 250 的证据在 run 57 (原始流水线), 而最近一次 run 73
+    是重跑 run (没有 downloading_audio 阶段) ⇒ 只看最近一次 ⇒ 证据丢失
+    ⇒ 长空窗被误判"疑似漏抓" fail (人工听辨已确认那段是唱歌, 不是漏抓)。
+    ⇒ 判据 = **证据在哪个 run 里**, 不是"哪个 run 最新"。
+    """
+    rows = await db.execute(
+        select(MeetingProcessingStage.metrics)
+        .join(MeetingProcessingRun, MeetingProcessingRun.id == MeetingProcessingStage.run_id)
+        .where(
+            MeetingProcessingRun.meeting_id == meeting_id,
+            MeetingProcessingStage.status == "success",
+            MeetingProcessingStage.metrics.isnot(None),
+        )
+        .order_by(desc(MeetingProcessingStage.id))
+        .limit(50)
+    )
+    for (metrics,) in rows.all():
+        if isinstance(metrics, dict):
+            ev = metrics.get("audio_gap_evidence")
+            if ev:
+                return dict(ev)
+    return {}
 
 
 @dataclass
@@ -180,13 +213,32 @@ class MeetingReprocessingService:
                 "media_duration_seconds": getattr(meeting, "media_duration_seconds", None),
                 "transcript": meeting.transcript,
                 "transcript_polished": meeting.transcript_polished,
+                # 2026-10-30: 与 post_meeting_tasks.py 的原始流水线对齐 —— 重跑路径此前漏了
+                # 这个键, 于是 ai_polish 被配置关掉时 (MEETING_AI_POLISH_ENABLED=False),
+                # transcript_polished 只是原文副本 ⇒ 0 段差异 ⇒ 稳定误报
+                # polish_no_effective_change fail, 把每场 >5min 的会议 quality_status 钉死成 fail。
+                # (2026-10-09 的修复只覆盖了原始流水线, 重跑路径没跟上。)
+                "ai_polish_skipped": not settings.MEETING_AI_POLISH_ENABLED,
                 "summary": meeting.summary,
                 "key_points": meeting.key_points,
                 "decisions": meeting.decisions,
+                # 2026-10-30: 同上 —— 音频证据从原始流水线的阶段 metrics 里恢复
+                # (重跑路径不重跑音频处理, 但证据当初已落库), 否则长空窗会被
+                # "缺少音频证据 ⇒ 疑似漏抓" 判 fail。
+                "audio_gap_evidence": await self._recover_audio_gap_evidence(meeting.id),
             }
             qa = evaluate_meeting(meeting_dict)
             meeting.quality_status = qa["status"]
-            run.metrics = {**(run.metrics or {}), "quality": qa}
+            # ⚠️ 键的形状必须与原始流水线 (post_meeting_tasks.py) 一致:
+            # `quality` = 指标字典, `quality_issues` = 问题列表。
+            # 此前这里把整个 qa 字典塞进 `quality` ⇒ 同一个键在两个写入方下形状不同
+            # (类 20.220: 状态字段在说谎 / 同名不同义)。
+            run.metrics = {
+                **(run.metrics or {}),
+                "quality": qa["metrics"],
+                "quality_issues": qa["issues"],
+                "quality_status": qa["status"],
+            }
         except Exception as e:
             result.warnings.append(f"quality_evaluate_failed: {e}")
         if result.errors:
@@ -199,6 +251,9 @@ class MeetingReprocessingService:
         meeting.last_processing_run_id = run.id
         await self.db.commit()
         return result
+
+    async def _recover_audio_gap_evidence(self, meeting_id: int) -> Dict[str, Any]:
+        return await recover_audio_gap_evidence(self.db, meeting_id)
 
     async def _run_stage(
         self, stage: str, meeting: Meeting, run: MeetingProcessingRun, stage_row: MeetingProcessingStage,

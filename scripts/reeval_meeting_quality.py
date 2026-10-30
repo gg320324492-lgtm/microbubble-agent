@@ -13,8 +13,13 @@
 判据与生产一致
 --------------
 复刻 `post_meeting_tasks.py` 的调用形状:
-  - `audio_gap_evidence` 从**该会议最近一次 processing run** 的
-    `downloading_audio` 阶段 metrics 里取(音频证据是音频的事实, 转录改了它也不变);
+  - `audio_gap_evidence` 从该会议**任意一次** processing run 的 `downloading_audio`
+    阶段 metrics 里取(音频证据是音频的事实, 转录改了它也不变);
+    ⚠️ 必须跨**所有** run 找 —— 会议 250 的证据在原始流水线的 run 57,
+    最近一次 run 73 是重跑 run(没有 downloading_audio 阶段) ⇒ 只看最近一次会丢证据
+    ⇒ 判据 = **证据在哪个 run 里**, 不是"哪个 run 最新"。
+    实现与重跑路径**共用同一个函数** `recover_audio_gap_evidence`
+    (两处各写一遍 ⇒ 迟早漂移);
   - `ai_polish_skipped = not settings.MEETING_AI_POLISH_ENABLED`;
   - 结果写 `meetings.quality_status`, 并把 metrics/issues 写回 run.metrics
     (生产里 issue_codes 也只存在 run.metrics 里)。
@@ -41,8 +46,9 @@ async def main():
     from app.config import settings
     from app.core.celery_db import create_celery_engine_and_session
     from app.models.meeting import Meeting
-    from app.models.meeting_processing import MeetingProcessingRun, MeetingProcessingStage
+    from app.models.meeting_processing import MeetingProcessingRun
     from app.services.meeting_quality_service import evaluate_meeting
+    from app.services.meeting_reprocessing_service import recover_audio_gap_evidence
 
     ids = [int(x) for x in args.meetings.split(",") if x.strip()]
     engine, Session = create_celery_engine_and_session()
@@ -54,24 +60,15 @@ async def main():
 
         changed = 0
         for m in meetings:
-            # 最近一次 run + 其 audio_gap_evidence
+            # audio_gap_evidence —— 与重跑路径**共用同一个实现**
+            # (跨所有 run 找, 不只看最近一次: 会议 250 的证据在原始流水线的 run 57,
+            #  最近一次 run 73 是重跑 run 没有 downloading_audio 阶段 ⇒ 只看最近一次会丢证据)
             run = (await db.execute(
                 select(MeetingProcessingRun)
                 .where(MeetingProcessingRun.meeting_id == m.id)
                 .order_by(MeetingProcessingRun.started_at.desc(), MeetingProcessingRun.id.desc())
                 .limit(1))).scalars().first()
-            gap_ev = {}
-            if run is not None:
-                gap_ev = dict((run.metrics or {}).get("audio_gap_evidence") or {})
-                if not gap_ev:
-                    stage = (await db.execute(
-                        select(MeetingProcessingStage)
-                        .where(MeetingProcessingStage.run_id == run.id,
-                               MeetingProcessingStage.stage == "downloading_audio")
-                        .order_by(MeetingProcessingStage.started_at.desc())
-                        .limit(1))).scalars().first()
-                    if stage is not None:
-                        gap_ev = dict((stage.metrics or {}).get("audio_gap_evidence") or {})
+            gap_ev = await recover_audio_gap_evidence(db, m.id)
 
             md = {
                 "audio_url": m.audio_url,
@@ -87,10 +84,11 @@ async def main():
             }
             qa = evaluate_meeting(md)
             old = m.quality_status
-            # ⚠️ **老会议的老转录没有 start/end** ⇒ 转录总时长恒为 0 ⇒ 覆盖率恒为 0%
-            #   ⇒ `transcript_low_coverage` 是**假警报**(实测 64/68/70/71/83/95/120/121/135
-            #   九场全是这一种, 类 20.220: 指标在说谎)。
-            #   ⇒ 这类**不写库**, 只报告 —— 宁可留着旧的 pass, 也不要写一个假的 fail。
+            # ⚠️ **兜底**: 老会议的老转录没有 start/end ⇒ 覆盖率**算不出来**(不是 0%)。
+            #   评估器已于 2026-10-30 修正(无时间戳 ⇒ 不判覆盖率, 改记
+            #   `transcript_no_timestamps` warn), 所以这条分支**现在不会触发**;
+            #   保留它是为了"评估器哪天回退 ⇒ 这行仍然不写一个假的 fail"。
+            #   ⇒ 判据 = **算不出来 ≠ 0%**。
             has_ts = any(
                 (float(s.get("end") or 0) - float(s.get("start") or 0)) > 0
                 for s in (m.transcript or []))
