@@ -236,10 +236,33 @@ async def main():
             print("[vp]   改后错名明细: %s" % dict(sorted(
                 truth_score["after_wrong"].items(), key=lambda kv: -kv[1])[:6]), flush=True)
         if args.apply and truth_score["after_ok"] < truth_score["before_ok"]:
-            print("[vp] ⚠ 安全闸: 改后台账真值判对数(%d) < 改前(%d) ⇒ **不写库**" % (
+            print("[vp] ⚠ 安全闸A: 改后台账真值判对数(%d) < 改前(%d) ⇒ **不写库**" % (
                 truth_score["after_ok"], truth_score["before_ok"]), flush=True)
             await engine.dispose()
             return
+
+        # ---- 安全闸 B: 不得给「台账里该场会议没出现过」的成员安上大块段 ----
+        # 背景: 会议 259 的重标会把 **75 段判给蒋芦笛** —— 而台账里蒋芦笛在这场
+        #       **一句都没说**(2026-10-30 已确认) ⇒ 这正是刚修好的那个 bug 被重新引入。
+        #       台账是人工逐块听辨建成的 ⇒ 若某个成员在台账里**完全没出现**,
+        #       却拿到 >10% 的段, 说明模型在给一个"人耳从没听见过的人"安名字。
+        ledger_people = {who for mm, s0, e0, who in lb}
+        total_segs = len(segs)
+        new_heavy = []
+        for name, cnt in after.items():
+            if name in ledger_people or name.startswith("发言人") or cnt <= 0:
+                continue
+            if cnt > total_segs * 0.10:
+                new_heavy.append((name, cnt))
+        if new_heavy:
+            print("[vp] ⚠ 安全闸B: 台账里本场没出现过的成员被安上大块段 ⇒ **不写库**:" % ())
+            for name, cnt in new_heavy:
+                print("[vp]     %s 拿到 %d 段 (占 %d 段的 %.0f%%)" % (
+                    name, cnt, total_segs, cnt / max(1, total_segs) * 100))
+            print("[vp]     台账里本场出现的人: %s" % ", ".join(sorted(ledger_people)), flush=True)
+            await engine.dispose()
+            return
+        print("[vp] 安全闸B: 无『台账外成员占大片段』⇒ 通过", flush=True)
 
         if args.apply:
             await db.execute(sqlt("DROP TABLE IF EXISTS meeting_%d_backup_pre_margin_relabel" % mid))
