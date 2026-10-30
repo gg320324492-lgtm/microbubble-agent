@@ -670,13 +670,32 @@ def post_meeting_process(self, meeting_id: int):
                     )
 
                 # 2.9 分配发言人到每个段
+                # 2026-10-30: **人工裁决逐段优先于聚类投票** ——
+                # 裁决表的语义就是「重跑说话人识别时直接采用裁决结果, 不再过声纹匹配」
+                # (speaker_adjudication_service 的 docstring 原文)。
+                # 原实现在**逐段识别**时跳过了裁决段, 但最终标签由 v2 聚类投票
+                # (原始 embedding 直接投票) 决定, 且 v2 优先于逐段结果
+                # ⇒ 裁决实际从未生效, 重跑会把裁决判回去 (类 20.220 的老问题,
+                #    2026-10-30 实测确认: 会议 256 的 51 条裁决全部挡不住)。
+                # ⇒ 现在在**最终赋值**处再查一次裁决, 裁决赢。
+                adjudicated_final = 0
                 for i, seg in enumerate(transcript_segments):
+                    decided = adjudicator.lookup(seg.get("start"), seg.get("end"))
+                    if decided:
+                        seg["speaker"] = decided
+                        speaker_mapping[seg.get("speaker_label", f"speaker_{i}")] = decided
+                        adjudicated_final += 1
+                        continue
                     if clusters[i] >= 0:
                         seg["speaker"] = cluster_to_name[clusters[i]]
                         if not seg["speaker"].startswith("发言人"):
                             speaker_mapping[seg.get("speaker_label", f"speaker_{i}")] = seg["speaker"]
                     else:
                         seg["speaker"] = "发言人?"
+                if adjudicated_final:
+                    logger.info(
+                        "说话人最终赋值: %d 段采用人工裁决(优先于聚类投票)" % adjudicated_final
+                    )
 
                 logger.info(f"声纹聚类完成 (v2 优化): {len(known_names_set)} 位发言人, 已知={[n for n in known_names_set if not n.startswith('发言人')]}")
 
