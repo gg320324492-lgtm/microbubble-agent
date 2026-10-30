@@ -2048,6 +2048,34 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
      margin 0.20 更降到 1061（−306）⇒ **全局准确率 84% → 65%**。
      ⇒ 这类改动**影响所有会议**，属主指挥拍板范围，**不得由 agent 自行决定**；
      且**任何 margin 阈值都必须同时报「新人净增益」与「现有 anchor 判对数」两栏**。
+  ⑥ ⚠️ **判据必须复刻「生产路径」，不能复刻「看起来像的那条路」** ——
+     2026-10-30 实测踩中：会议流水线的最终标签**不是** `identify_speaker_anchored` 给的，
+     而是 `voiceprint_voting.vote_with_quality_gates` 的**聚类投票**
+     （每段 vs **全体 enrolled** 池找最近邻，`match_threshold=0.7`，**不是 0.65**）。
+     我第一版测的是 anchor 池 ⇒ **数字全部对不上生产**（重测后生产路径上 margin 0.10 的效果反而更好：
+     错名率 30.0%→11.6%）。⇒ **改判据前必须先定位「最终标签到底由谁写」**
+     （`post_meeting_tasks.py` 里 `seg["speaker"] = cluster_to_name[...]` 那一行往前追）。
+
+  ### ✅ 落地（2026-10-30 主指挥拍板 margin=0.10）
+  **判据**：`margin = 第一名必须比第二名强出 settings.VOICEPRINT_MIN_MARGIN (默认 0.10)`，
+  否则**弃权**（宁可标「发言人?」也不猜错名字）。阈值设 `0` 即完全关闭，可随时灰度回退；
+  `MATCH_THRESHOLD` (0.65) **不动**。
+  **改了三处**（候选池各不相同 ⇒ margin 值在**每一池上各自实测**，未外推）：
+  `app/services/voiceprint_voting.py::vote_with_quality_gates`（流水线主路径，enrolled 池）、
+  `app/services/voiceprint_service.py::identify_speaker_anchored`（流水线逐段，anchor 池）、
+  同文件 `identify_speaker` / `identify_speaker_by_embedding`（enrolled 池，`LIMIT 1→2` 取次近者）。
+  **端到端实测**（直接调生产函数 `vote_with_quality_gates`，理想聚类=按台账真值分组，41 组/2200 段）：
+  | margin | 聚类级命名正确 | **命名错误** | 无名 |
+  |---|---|---|---|
+  | 0.00（改前） | 17 | **18** | 6 |
+  | 0.05 | 17 | 14 | 10 |
+  | **0.10** | 14 | **5** | 22 |
+  | 0.15 | 8 | 0 | 33 |
+  ⇒ 0.10：错名 18→5（交换比 3.6:1），正确命名只从 17 掉到 14；
+  **0.15 起正确命名腰斩 ⇒ 过度**。测试见 `tests/test_voiceprint_margin.py`（14 例，脱离 DB）。
+  ⚠️ **存量会议的转写不会自动重算** —— 改动只影响**之后**新处理的会议；
+  要让历史会议也变准需**逐个 reprocess**（那是另一件事，别默认要做）。
+
   ⛔ **附带订正两处旧结论**（保留原文以便追溯）：
   - 类 20.241 说的「蒋芦笛离主讲 0.594 = 异人量级」**措辞过头** ——
     0.594 只比跨场同人基线 0.5038 高一点，**不足以单凭距离下结论**；
