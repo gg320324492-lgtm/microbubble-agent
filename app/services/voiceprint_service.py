@@ -66,6 +66,9 @@ class VoiceprintService:
             from modelscope.utils.constant import Tasks
 
             logger.info("正在加载 3D-Speaker ERes2Net 模型...")
+            logger.info(
+                "声纹 margin 判据: %.2f (0 = 关闭; 第一名需比第二名强出这么多才肯给名字)",
+                float(getattr(settings, "VOICEPRINT_MIN_MARGIN", 0.0) or 0.0))
             self._pipeline = pipeline(
                 Tasks.speaker_verification,
                 model=VOICEPRINT_MODEL_ID,
