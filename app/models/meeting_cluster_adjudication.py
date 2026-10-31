@@ -51,6 +51,7 @@ from typing import List, Optional, Sequence
 
 from sqlalchemy import (
     Column,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -58,6 +59,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 from app.models.base import TimestampMixin
 
@@ -83,10 +86,15 @@ class MeetingClusterAdjudication(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    #: 所属会议。会议删除时由**应用层**显式清理本表
-    #: (迁移 148 不建外键 —— 生产库 meetings 表无主键, PG 拒绝建 FK;
-    #:  详见 alembic/versions/148_cluster_adjudications.py 的模块 docstring)。
-    meeting_id = Column(Integer, nullable=False, index=True)
+    #: 所属会议。**RESTRICT**: 裁决是人工听辨的不可再生成果, 误删会议不得连带销毁;
+    #: 合法删除路径 (app/api/v1/meeting.py) 已在删会议前显式清本表。
+    #: 外键由迁移 149 建立 (148 当时因生产库 meetings 无主键建不了, 类 20.256)。
+    meeting_id = Column(
+        Integer,
+        ForeignKey("meetings.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
 
     #: 簇的稳定标识 (同一会议内唯一)。人可读, 例: "c3"。
     cluster_key = Column(String(64), nullable=False)
@@ -113,9 +121,7 @@ class MeetingClusterAdjudication(Base, TimestampMixin):
     #: 裁决理由 (人可读)。例: "听 19s 样本, 报的是臭氧杀菌课题"
     note = Column(Text, nullable=True)
 
-    # ⛔ **不声明 relationship("Meeting")**: 无 FK 时 SQLAlchemy 无法推断 join 条件
-    #    ⇒ 导入模型即抛 ArgumentError (实测: _determine_joins 失败)。
-    #    需要按会议取裁决时直接用 meeting_id 查询即可 (本表只有这一个查询入口)。
+    meeting = relationship("Meeting", lazy="selectin")
 
     __table_args__ = (
         UniqueConstraint("meeting_id", "cluster_key", name="uq_mca_meeting_cluster_key"),

@@ -56,10 +56,12 @@ class MeetingSpeakerAdjudication(Base, TimestampMixin):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    #: 所属会议。会议删除时级联清理。
+    #: 所属会议。**RESTRICT** (迁移 149; 146 当初建的是 CASCADE, 主指挥 2026-10-31
+    #: 改判): 裁决是人工听辨的不可再生成果, 误删会议不得连带销毁;
+    #: 合法删除路径 (app/api/v1/meeting.py) 已在删会议前显式清本表。
     meeting_id = Column(
         Integer,
-        ForeignKey("meetings.id", ondelete="CASCADE"),
+        ForeignKey("meetings.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )

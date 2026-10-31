@@ -283,14 +283,19 @@ class TestIsolation:
         assert not any("meeting_speaker_adjudication" in i for i in imported)
         assert "MeetingClusterAdjudication" in imported
 
-    def test_cluster_model_has_no_foreign_key_to_meetings(self):
-        """结构守卫: 簇级模型的 meeting_id **不带 FK**。
+    def test_cluster_model_declares_restrict_fk(self):
+        """结构守卫: 簇级模型的 meeting_id **带 RESTRICT 外键** (迁移 149)。
 
-        生产库 meetings 表无主键 ⇒ PG 拒绝建 FK (迁移 148 已改为不建);
-        模型侧也必须一致 ⇒ 否则 create_all 在无 PK 的库上会炸。
+        RESTRICT = 人工裁决是不可再生成果, 误删会议不得 DB 级联连带销毁;
+        合法删除路径在应用层显式清表 (app/api/v1/meeting.py)。
         """
         import pathlib
         src = pathlib.Path(
             "app/models/meeting_cluster_adjudication.py").read_text(encoding="utf-8")
-        assert "ForeignKey" not in src
-        assert "ForeignKeyConstraint" not in src
+        assert 'ForeignKey("meetings.id", ondelete="RESTRICT")' in src
+        assert 'relationship("Meeting"' in src
+        # 段级模型同步改判 RESTRICT (146 原为 CASCADE, 迁移 149 落地主指挥裁定)
+        src146 = pathlib.Path(
+            "app/models/meeting_speaker_adjudication.py").read_text(encoding="utf-8")
+        assert 'ondelete="RESTRICT"' in src146
+        assert 'ondelete="CASCADE"' not in src146
