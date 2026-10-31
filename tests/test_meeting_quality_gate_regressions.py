@@ -234,3 +234,63 @@ async def test_reprocess_quality_stage_does_not_write_false_fail():
     assert "transcript_low_coverage" not in codes, \
         "无时间戳时覆盖率算不出来，不得报 fail"
     assert meeting.quality_status != "fail"
+
+
+# --------------------------------------------------------------------------------------
+# 2026-10-31 回归守卫 —— 导入路径的 audio_duration 假失败
+#
+# 事故: 会议 263(2026-10-28 外部讲座) 走「导入」路径入库, 质量门禁判 **fail**,
+#       issue = `audio_drift_high`: "媒体/墙钟时长差异 463000.0% > 20%"。
+# 根因: `stop-recording` 只把**录音会话墙钟差**写进 audio_duration。
+#       导入路径下那个墙钟差 = **导入耗时**(实测 1 秒), 而媒体是 77 分钟 ⇒
+#       drift = |4631 - 1| / 1 = 4630 ⇒ 463000%。
+#       ⇒ 同一坑的第三次出现(259: audio_duration=39 而真实 8669 秒; 262/263: 导入耗时)。
+#
+# ⛔ 为什么以前没人发现: 质量门禁的 `audio_drift` 判据把 `audio_duration` 当"墙钟",
+#    而**全仓只有这一处**这么用 —— 前端/API 都优先读 media_duration_seconds。
+#    ⇒ 唯一的触发路径就是「导入 + 门禁同时存在」, 平时碰不到。
+# --------------------------------------------------------------------------------------
+
+
+def test_stop_recording_优先写真实媒体时长():
+    """守卫: stop-recording 必须以 media_duration_seconds 优先写 audio_duration"""
+    import inspect
+
+    from app.api.v1.meeting_recording import stop_recording
+    source = inspect.getsource(stop_recording)
+    assert "media_duration_seconds or delta.total_seconds()" in source, \
+        "audio_duration 必须以真实媒体时长优先(导入路径的墙钟差 = 导入耗时 ⇒ 质量门禁假失败)"
+
+
+def test_导入形状的会议不报_audio_drift_fail():
+    """源头修好后, 导入形状的会议(audio==media)不产生 audio_drift fail"""
+    m = {
+        "audio_url": "recordings/263/merged.m4a",
+        "audio_duration": 4631,               # 修好后 = 真实媒体时长
+        "media_duration_seconds": 4631,
+        "transcript": [_seg(start=i * 10, end=i * 10 + 8) for i in range(120)],
+        "transcript_polished": [_seg(start=i * 10, end=i * 10 + 8) for i in range(120)],
+        "summary": "讲座纪要",
+        "key_points": ["【朱彤】要点一", "【朱彤】要点二"],
+        "decisions": ["【朱彤】决定一"],
+    }
+    qa = evaluate_meeting(m)
+    codes = [i.get("code") for i in qa["issues"]]
+    assert "audio_drift_high" not in codes, \
+        f"导入路径不得报音频漂移 fail: {qa['issues']}"
+
+
+def test_真实漂移仍会被检出():
+    """别把判据一起弄哑: 媒体与墙钟真的差很多时仍要报"""
+    m = {
+        "audio_url": "recordings/x.m4a",
+        "audio_duration": 1000,               # 墙钟 1000 秒
+        "media_duration_seconds": 4000,       # 媒体 4000 秒 → 300% 漂移
+        "transcript": [_seg(start=i * 10, end=i * 10 + 8) for i in range(120)],
+        "transcript_polished": [_seg(start=i * 10, end=i * 10 + 8) for i in range(120)],
+        "summary": "纪要", "key_points": ["a", "b"], "decisions": ["c"],
+    }
+    qa = evaluate_meeting(m)
+    drift_issue = next((i for i in qa["issues"] if i.get("code") == "audio_drift_high"), None)
+    assert drift_issue is not None, "真实漂移必须仍然被检出"
+    assert drift_issue["level"] == "fail"

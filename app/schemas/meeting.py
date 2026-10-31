@@ -69,8 +69,11 @@ class MeetingResponse(MeetingBase):
     recording_started_at: Optional[datetime] = None
     audio_url: Optional[str] = None
     audio_duration: Optional[int] = None
-    # ffprobe 解码出的真实媒体时长（秒）。audio_duration 是「录音会话墙钟时长」,
-    # 两者在 App 内正常录音时相等, 但补传 / 中断续传时会严重不等（见 CLAUDE.md 缺陷 1）。
+    # ffprobe 解码出的真实媒体时长（秒）。
+    # ⚠️ 2026-10-31 起 audio_duration 也以真实媒体时长为准（stop-recording 有 media 时用它）,
+    #   只有拿不到媒体时长时才回退「录音会话墙钟差」—— 因为导入/补传路径下墙钟差
+    #   等于「导入耗时」(实测 1 秒 vs 媒体 77 分钟) ⇒ 会让质量门禁的 audio_drift 假失败。
+    # 遗留会议(2026-10-31 之前入库)的 audio_duration 仍是墙钟差, 与本字段可能严重不等。
     # 前端展示时长必须优先读本字段, 回退 audio_duration。
     media_duration_seconds: Optional[int] = None
     upload_status: Optional[str] = None

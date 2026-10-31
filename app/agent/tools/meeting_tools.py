@@ -50,8 +50,9 @@ class MeetingListItem(BaseModel):
     location: Optional[str] = None
     audio_url: Optional[str] = None
     audio_duration: Optional[int] = None
-    # ffprobe 真实媒体时长（秒）。audio_duration 是录音会话墙钟时长，
-    # 补传/续传时两者严重不等（实测 2h24m 会议 wall=39 而 media=8669）。
+    # ffprobe 真实媒体时长（秒）。⚠️ 2026-10-31 起 audio_duration 也以真实媒体时长为准
+    # (只有拿不到媒体时长时才回退墙钟差) —— 遗留会议两者仍可能严重不等
+    # (实测 2h24m 会议 wall=39 而 media=8669)。
     # ⚠️ 对外描述会议时长**必须优先用本字段**，回退 audio_duration。
     media_duration_seconds: Optional[int] = None
     speaker_stats_summary: Optional[dict] = None  # {total_speakers, top_speaker}

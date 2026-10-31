@@ -134,7 +134,7 @@ async def upload_audio(
     meeting.last_chunk_index = 0
     meeting.total_chunks = 1
     # W2-7: 用 ffprobe 探测真实媒体时长，写入 media_duration_seconds
-    # audio_duration 字段（墙钟差）保持不变，由 stop-recording 阶段写入
+    # audio_duration 由 stop-recording 阶段写入(有真实媒体时长时以它为准, 见该处注释)
     try:
         media_dur = await ffprobe_duration_async(file_data)
         if media_dur is not None and media_dur > 0:
@@ -350,7 +350,7 @@ async def merge_chunks_endpoint(
     # 2026-09-13: faststart 重排 (moov 前置), 修复拖动进度条要顺序拖完已播字节的慢 seek
     ensure_faststart_async(merged_object_name)
     # W2-7: 下载合并后的文件，ffprobe 探测真实媒体时长写入 media_duration_seconds
-    # audio_duration（墙钟差）由 stop-recording 阶段写入，此处不动
+    # audio_duration 由 stop-recording 阶段写入(有真实媒体时长时以它为准, 见该处注释)
     try:
         merged_bytes = await file_service.download_file(merged_object_name)
         if merged_bytes:
@@ -630,9 +630,15 @@ async def stop_recording(
     meeting.status = "processing"
 
     # 计算录音时长
+    # ⚠️ 2026-10-31 修: 原来这里只写**录音会话墙钟差** ⇒ 在「导入/补传/续传」路径下
+    #    它等于**导入耗时**(实测 1 秒) 而媒体是 77 分钟 ⇒ 质量门禁的 audio_drift
+    #    判据算出 |4631-1|/1 = 4630 ⇒ 463000% ⇒ **假失败**(会议 263 实测)。
+    #    同一坑已出现三次(259: audio_duration=39 而真实 8669 秒; 262/263: 导入耗时)。
+    #    ⇒ 有 ffprobe 的真实媒体时长时**以它为准**(实时录音下墙钟本就≈媒体时长);
+    #      拿不到媒体时长才回退墙钟差。
     if meeting.recording_started_at:
         delta = now - meeting.recording_started_at
-        meeting.audio_duration = int(delta.total_seconds())
+        meeting.audio_duration = int(meeting.media_duration_seconds or delta.total_seconds())
 
     await db.commit()
 
@@ -670,8 +676,9 @@ async def get_audio_url(
 
     # 生成 presigned URL（1 小时有效）
     url = file_service.get_url(meeting.audio_url, expires=3600)
-    # 播放时长必须用 ffprobe 的真实媒体时长: audio_duration 是录音会话墙钟时长,
-    # 补传 / 续传场景下二者不等(实测 2h24m 的会议 audio_duration=39 而真实 8669 秒)。
+    # 播放时长必须用 ffprobe 的真实媒体时长: 遗留会议的 audio_duration 可能是
+    # 录音会话墙钟差(补传/续传时严重不等, 实测 2h24m 的会议 audio_duration=39 而真实 8669 秒),
+    # 导入路径下甚至等于「导入耗时」。
     # 回退 audio_duration 兼容历史会议(media_duration_seconds 为 NULL)。
     return {"audio_url": url, "duration": meeting.media_duration_seconds or meeting.audio_duration}
 
