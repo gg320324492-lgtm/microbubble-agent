@@ -211,6 +211,17 @@ class Settings(BaseSettings):
     #   聚类代表兜底)。三者的候选池各不相同 ⇒ 上面每一栏都是**各自实测**的, 未外推。
     VOICEPRINT_MIN_MARGIN: float = 0.05
 
+    # 2026-10-31 [Phase 1f] 会议说话人**簇级命名**的人工裁决开关 (默认关)
+    # 背景: Phase 1f 实测「自动聚类 + 人工给簇命名」形态下, 命名是瓶颈
+    #   (簇纯度 0.85 但簇命名正确率仅 0.64, 且「簇名错 ⇒ 整簇皆错」)。
+    #   人工起完名后必须**固化进裁决表**, 否则重跑流水线会冲掉 (类 20.244 同型风险)。
+    # 实现: app/services/cluster_naming_service.py —— **零 schema 变更**,
+    #   复用既有 `meeting_speaker_adjudications` 的「段中点匹配」语义;
+    #   簇级裁决**逐段**写 (簇在时间轴上交错, 按簇区间写会误伤别的簇的段)。
+    #   「重跑时优先应用」由既有裁决机制负责, **不需要改 post_meeting_tasks.py**。
+    # ⚠️ 默认 false ⇒ 生产行为零变化; 开启后才允许写入簇级命名裁决。
+    CLUSTER_NAMING_ENABLED: bool = False
+
     # Claude 生成参数
     CLAUDE_MAX_TOKENS: int = 8192
     SESSION_WINDOW_SIZE: int = 30
