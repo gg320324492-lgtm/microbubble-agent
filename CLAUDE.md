@@ -2510,6 +2510,58 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   其中两例是**结构守卫**（AST 断言重跑路径的 `meeting_dict` 带齐两个键、
   独立脚本复用同一个证据函数）—— 因为**跑通重跑路径需要真 DB，纯行为测试覆盖不到**。
 
+- **类 20.251**: **后台任务「每天都失败」通常是三层叠加，每层都有东西替它说谎；
+  查「为什么失败」必须从日志里第一条异常一路查到「这个数字有没有真的到界面上」** ——
+  2026-10-31 巡查 `celery-meeting-worker` 日志时发现
+  `qa_bench_tasks.auto_intake_rollback_task` **每天都在失败**（beat 24h 间隔 ⇒ 静默失效一个月+），
+  而**前端 `rollback_count` 恒为 0**，且**旧的 6 个单元测试全是绿的**。三层：
+
+  | 层 | 缺陷 | 表现 |
+  |---|---|---|
+  | ① | cutoff 用 `datetime.now(timezone.utc)`（tz-aware），而列是 `TIMESTAMP WITHOUT TIME ZONE`（naive） | asyncpg `DataError: can't subtract offset-naive and offset-aware datetimes` |
+  | ② | 软删除写 `update(Knowledge).values(is_active=False)` —— **Knowledge 模型根本没有 `is_active` 列**（软删除字段是 `deleted_at`） | 就算 ① 修好，SQL **编译期**就炸（`CompileError: Unconsumed column names`） |
+  | ③ | API 侧把报告里的 **tz-aware** timestamp 跟 **naive 的 `datetime.now()`** 相减，异常被 `except Exception: pass` 吞掉 | 任务跑成功后，界面 `rollback_count` **仍是 0** |
+
+  ⇒ **五条纪律**：
+  ① **DB 列是 `TIMESTAMP WITHOUT TIME ZONE` ⇒ 传进去的 datetime 必须是 naive UTC** ——
+     本仓标准写法是 `datetime.now(timezone.utc).replace(tzinfo=None)`
+     （`app/models/base.py` / `meeting_recording.py` / `admin_kb_monitor.py` 都是它）。
+     ⛔ **`datetime.now(timezone.utc)` 与 `datetime.now()` 是两个不同的 bug**：
+     前者 tz-aware 会在 asyncpg 直接炸；后者是**本地时间**（本机 +0800）⇒ 差 8 小时
+     ⇒ **不报错但算错**。⇒ 写时间参数前先问「这一列是 naive 还是 tz-aware？本仓存的是 UTC 还是本地？」
+  ② **改一个 ORM 字段前先确认它真的存在** ——
+     `hasattr(Model, "col")` 比读文档快；`update(Model).values(不存在的列=...)` 会在
+     **编译期**炸而**不是运行期** ⇒ 只看代码和日志都看不出来。
+     ⚠️ **更危险的是「测试把 bug 焊死」**：旧用例断言 `"is_active" in source` ——
+     而 `is_active` 这一列**根本不存在** ⇒ 断言反而保证了 bug 存活。
+  ③ **判「代码里有没有用到 X」要用 AST，不要用 `grep`/源码字符串** ——
+     docstring 里**提到** X（说明为什么不用它）≠ **用到**它（类 20.225）。
+     我第一版写的就是 `"is_active" not in source`，**被自己的 docstring 打脸**
+     ⇒ 改成 AST 扫 `Attribute.attr` / `keyword.arg` / dict 字符串键。
+  ④ **⛔「测试全绿」在「整体 mock 掉关键调用」时毫无意义** ——
+     旧的 6 个用例**全部 mock 掉 `asyncio.run`** ⇒ `_run()` 从未执行 ⇒ **SQL 从未真跑**
+     ⇒ 类型错误永远碰不到。⇒ **判据：测试有没有让那段代码真的被执行过一次？**
+     做法 = 假 session 捕获**真正构造出来的语句**并检查绑定的参数，
+     **而不是把 `execute` 也 mock 掉**。
+  ⑤ **修「后台任务失败」要一路查到「这个数字有没有真的到界面上」** ——
+     任务 `status=ok` **不等于**功能生效。⇒ **判据链**：任务返回 ok → **DB 回读副作用**
+     → **打生产 API** 看那个数字。修完本次：`rolled_back=83` → DB `still_active` 179→**0**
+     → API `rollback_count=83`（修前恒为 0）。**中间任何一环没验，就不能说修好了**（类 20.220）。
+
+  **替代判据（类 20.229 的要求）**：
+  - 判「某个后台任务是不是在跑」= **看它的日志里有没有 `Task <name>[...]` 的 received/succeeded 行**，
+    **不是**看 `LastTaskResult` 或「容器 healthy」。
+  - 判「某个统计数字对不对」= **打生产 API 读那个字段**，不是看 DB 里对应的行数
+    （本例 DB 有 179 行、任务回滚了 83 条，界面数字却是 0 ⇒ 三者互不代替）。
+  - 判「DB 时间参数对不对」= **在容器里实测一次算式**（`datetime.now() - rb_ts`），
+    不要靠读代码推（本例先读代码起疑、实测后才坐实）。
+
+  ⚠️ **配套的仓库纪律**：**定时任务必须有一个「它今天跑过了吗」的可见信号** ——
+  本例唯一暴露问题的入口是「我恰好去翻了 worker 日志」；beat 静默失败一个月没人知道
+  ⇒ 与类 20.238（部署中止没人看）/ 类 20.239（证书续期失败无告警）**同族**：
+  **自动化失败必须有人看见**，否则它可以静默失效任意久。
+
+
 
 - ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
   原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /
