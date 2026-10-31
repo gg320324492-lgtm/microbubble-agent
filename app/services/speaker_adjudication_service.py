@@ -30,11 +30,19 @@ from app.models.meeting_speaker_adjudication import MeetingSpeakerAdjudication
 async def get_adjudications(
     db: AsyncSession, meeting_id: int
 ) -> List[MeetingSpeakerAdjudication]:
-    """取一场会议的全部裁决, 按 seg_start 升序 (供 bisect 用)。"""
+    """取一场会议的全部裁决, 按 seg_start 升序 (供 bisect 用)。
+
+    tiebreaker ``id ASC``: 同 seg_start 的行 (如新旧两版裁决区间完全相同)
+    **旧行在前、新行在后** —— resolver 的命中扫描**从列表尾往前**走,
+    同起点时后到的 (id 大的) 新裁决先被命中, 胜负不再取决于数据库返回顺序。
+    (2026-10-31 m259 实测: 区间不完全相等的重叠靠 seg_start 排序尚可,
+    完全相等时是掷硬币。)
+    """
     result = await db.execute(
         select(MeetingSpeakerAdjudication)
         .where(MeetingSpeakerAdjudication.meeting_id == meeting_id)
-        .order_by(MeetingSpeakerAdjudication.seg_start)
+        .order_by(MeetingSpeakerAdjudication.seg_start,
+                  MeetingSpeakerAdjudication.id.asc())
     )
     return list(result.scalars().all())
 
@@ -46,7 +54,11 @@ class AdjudicationResolver:
     """
 
     def __init__(self, adjudications: Sequence[MeetingSpeakerAdjudication]):
-        self._rows = sorted(adjudications, key=lambda r: float(r.seg_start))
+        # (seg_start, id): 同起点时**旧行在前、新行在后** ⇒ 命中扫描从列表尾
+        # 往前走, 同起点时先命中新裁决 (id 大)。id 可能为 None (测试手工构造) ⇒ 按 0。
+        self._rows = sorted(
+            adjudications,
+            key=lambda r: (float(r.seg_start), (r.id or 0)))
         self._starts = [float(r.seg_start) for r in self._rows]
 
     def __len__(self) -> int:

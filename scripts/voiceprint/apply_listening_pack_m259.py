@@ -20,6 +20,24 @@
 用法 (容器内):
     python /tmp/vp/apply_listening_pack_m259.py            # dry-run, 只打印
     python /tmp/vp/apply_listening_pack_m259.py --apply    # 真写 (须主指挥确认后执行)
+    python /tmp/vp/apply_listening_pack_m259.py --apply --prune-superseded
+        # 写完顺带清掉"被新裁决完全取代"的旧行 (见下方坑)
+
+## ⛔ 坑: 只写不清 ⇒ 「写了但没生效」(类 20.220, 2026-10-31 m259 实测)
+
+裁决命中按**段中点**找区间; 与新行重叠的旧行 (台账播种等) 不会自动失效 ⇒
+apply 后端到端实测只有 30/38 命中新裁决 —— 与旧行重叠的段胜负取决于
+resolver 对同/近区间的命中顺序 (旧行区间更宽时 seg_start 更小, 新行赢;
+区间几乎重合时是掷硬币)。
+
+⇒ **apply 后必须清理被取代的旧行**, 判据 (保守, 宁漏勿错):
+   旧行**可删** ⇔ 它覆盖的**全部**转录段中点都落在新裁决的 38 段之内
+   (即删它不会让任何"新裁决没覆盖"的段失去既有裁决)。
+   覆盖范围超出新段集合的旧行 ⇒ **保留**并在 dry-run 里列出, 由人裁决。
+   ``--prune-superseded`` 自动执行: 先备份到
+   ``meeting_<id>_adjud_backup_pre_listeningpack`` (已存在则跳过建表), 再删可删行。
+   2026-10-31 实测: 91 条旧裁决中 31 条可删 (14 条精确同段 + 17 条只含新段),
+   删后端到端 38/38 命中; 备份表留底可回溯。
 """
 import argparse
 import asyncio
@@ -51,6 +69,9 @@ async def main():
     ap.add_argument("--apply", action="store_true", help="真写 (默认 dry-run)")
     ap.add_argument("--replace", action="store_true",
                     help="先清掉本脚本此前写入的行 (按 source), 再写")
+    ap.add_argument("--prune-superseded", action="store_true",
+                    help="写完后清掉「覆盖范围完全落在新段集合内」的旧行"
+                         "(先备份到 meeting_<id>_adjud_backup_pre_listeningpack; 详见 docstring)")
     args = ap.parse_args()
 
     # ---- ① 复现试听包的聚类 ----
@@ -109,7 +130,9 @@ async def main():
             raise SystemExit("❌ source=%s 已有 %d 行; 要重写请加 --replace"
                              % (SOURCE_TAG, len(prior)))
         overlaps = []
+        new_mids = set()
         for k, a, b in matched:
+            new_mids.add(round((a + b) / 2.0, 3))
             mid = (a + b) / 2.0
             for r in existing:
                 if r.source != SOURCE_TAG and float(r.seg_start) <= mid <= float(r.seg_end):
@@ -119,6 +142,28 @@ async def main():
             by_sp = collections.Counter((o[2], o[3]) for o in overlaps)
             for (sp, src), n in by_sp.most_common():
                 log("   %s (%s) × %d 段" % (sp, src, n))
+        # ⛔ 坑: 只写不清 ⇒ 新裁决对重叠段不保证生效 (docstring「写了但没生效」节)
+        # 无重叠时两个清单为空, 后续 --prune-superseded 分支是 no-op。
+        prunable, keep = [], []
+        for r in existing:
+            if r.source == SOURCE_TAG:
+                continue
+            inside = [m for m in idx_by_mid
+                      if float(r.seg_start) <= m <= float(r.seg_end)]
+            if inside and set(inside) <= new_mids:
+                prunable.append(r)
+            elif inside:
+                keep.append(r)
+        if prunable or keep:
+            log("被取代旧行清理清单 (判据: 覆盖的段中点全部落在新 38 段内):")
+            log("   可删 %d 条; 覆盖超出新段集合、需人工裁决 %d 条"
+                % (len(prunable), len(keep)))
+            for r in keep[:10]:
+                log("   保留: [%.1f,%.1f] %s (%s)" % (r.seg_start, r.seg_end,
+                                                     r.speaker, r.source))
+            if overlaps and not args.prune_superseded:
+                log("   ⇒ apply 后必须清掉这 %d 条可删行, 否则新裁决对这些段不保证生效"
+                    % len(prunable))
 
         cur_labels = collections.Counter(
             (segs[k].get("speaker") or "?") for k, _, _ in matched)
@@ -151,6 +196,38 @@ async def main():
                 if r.source == SOURCE_TAG]
         log("回读: %d 条在表, speaker 全为 %s ⇒ %s"
             % (len(back), SPEAKER, all(r.speaker == SPEAKER for r in back)))
+
+        # ⛔ 写了不等于生效: 清掉被新裁决完全取代的旧行 (判据见 docstring)
+        if args.prune_superseded:
+            from sqlalchemy import text as sa_text
+            bak = "meeting_%d_adjud_backup_pre_listeningpack" % SR_MEETING
+            exists = (await db.execute(sa_text(
+                "SELECT to_regclass(:t)"), {"t": bak})).scalar()
+            if not exists:
+                await db.execute(sa_text(
+                    "CREATE TABLE %s AS SELECT * FROM meeting_speaker_adjudications "
+                    "WHERE meeting_id = :mid" % bak), {"mid": SR_MEETING})
+                await db.commit()
+                log("已建备份表 %s" % bak)
+            else:
+                log("备份表 %s 已存在 ⇒ 跳过建表 (只备份一次, 保留最初 91 行原貌)" % bak)
+            deleted = 0
+            for r in prunable:
+                await db.execute(sa_text(
+                    "DELETE FROM meeting_speaker_adjudications WHERE id = :i"),
+                    {"i": r.id})
+                deleted += 1
+            await db.commit()
+            log("已清被取代旧行 %d 条 (备份在 %s)" % (deleted, bak))
+            # 端到端回验: 现在每一新段的中点都应命中 listening-pack 行
+            resolver_rows = await get_adjudications(db, SR_MEETING)
+            from app.services.speaker_adjudication_service import AdjudicationResolver
+            res = AdjudicationResolver(resolver_rows)
+            hit = sum(1 for k, a, b in matched
+                      if res.lookup(a, b) == SPEAKER)
+            log("端到端回验: %d/%d 段命中 %s" % (hit, len(matched), SPEAKER))
+            if hit != len(matched):
+                log("⚠️ 未全命中 ⇒ 还有覆盖冲突, 见上方「保留」清单, 交人工裁决")
     await engine.dispose()
 
 

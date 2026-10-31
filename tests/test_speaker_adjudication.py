@@ -111,6 +111,33 @@ class TestResolverEdgeCases:
         assert r.match_index(580.0, 590.0) is row
         assert r.match_index(900.0, 910.0) is None
 
+    def test_same_interval_newest_id_wins(self):
+        """同 seg_start 的两行 (新旧两版裁决区间完全相同) ⇒ **新裁决 (id 大) 胜**。
+
+        2026-10-31 m259 实测的坑: 区间相等时胜负取决于数据库返回顺序。
+        机制: 排序键 (seg_start, id) 把新行排在同起点组的**后面**,
+        而命中扫描从列表尾往前 ⇒ 先命中新行。
+        """
+        old_row = _adj(600.0, 650.0, "王天志")
+        old_row.id = 1
+        new_row = _adj(600.0, 650.0, "肖佐林")
+        new_row.id = 2
+        r = AdjudicationResolver([old_row, new_row])
+        assert r.lookup(610.0, 620.0) == "肖佐林"
+        # 反向传入也一样 (排序在 resolver 内做, 与输入顺序无关)
+        r2 = AdjudicationResolver([new_row, old_row])
+        assert r2.lookup(610.0, 620.0) == "肖佐林"
+
+    def test_narrow_row_inside_wide_row_still_prefers_narrow(self):
+        """窄行在宽行内部时仍取窄行 (seg_start 更大优先于 id tiebreaker)"""
+        wide = _adj(570.0, 700.0, "王天志")
+        wide.id = 99          # id 更大也不该赢 —— seg_start 才是第一排序键
+        narrow = _adj(600.0, 650.0, "张宏魁")
+        narrow.id = 2
+        r = AdjudicationResolver([wide, narrow])
+        assert r.lookup(610.0, 620.0) == "张宏魁"
+        assert r.lookup(580.0, 590.0) == "王天志"
+
 
 @pytest.mark.asyncio
 class TestPersistence:
