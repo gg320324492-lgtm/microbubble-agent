@@ -2646,6 +2646,27 @@ import blocker 屏蔽它再全扫 import，若把**被屏蔽模块自身**也算
   而「k 越大簇越碎」（主导簇占比 0.438@k=4 → 0.106@k=15）⇒ **即便改名率不变，
   更大的 k 也会让起名工作量涨** ⇒ **判据还要带一个「代价量」（簇数/簇大小分布）**。
 
+- **类 20.256**: **用 `pg_dump --data-only` 导出的数据恢复出来的库，会丢掉全部 schema 约束
+  （PK / FK / unique）⇒ 表「在」但没有任何完整性保证；修法必须落在 alembic 迁移链里，
+  不能靠手工 ALTER** ——
+  2026-10-31 实测：生产库 **188 张表只有 7 张有主键**，而那 7 张**正好全是近期由 alembic 建的**
+  （`meeting_cluster_adjudications` / `audit_log` / `audit_cleanup_log` / `activity_events` /
+  `agent_traces` / `alembic_version` / `_repair_backup_20260903`）⇒ 反推其余 181 张表是在一次
+  **不带 schema 的恢复**里进来的；而 `scripts/dump_prod_to_fixture.sh:54` 用的是
+  **`pg_dump --data-only`** ⇒ **`--data-only` 不含 schema ⇒ 恢复即丢全部约束。**
+  ⇒ 后果链（实测）：`meetings` 无主键 ⇒ 引用它的外键全被 `DROP CONSTRAINT ... CASCADE` 连带删掉
+  ⇒ **`alembic/versions/148_cluster_adjudications.py:82` 因此建不了 FK**（PG 报
+  `no unique constraint matching given keys`）⇒ 级联删除只能改应用层 ⇒ **ORM 声明了
+  `primary_key=True` 与 `ForeignKey` 而 DB 里两样都没有 ⇒ 两边不一致。**
+  ⇒ **三条纪律**：
+  ① **凡用 dump/fixture 重建过库，要立刻普查约束**：
+  `SELECT relname FROM pg_class ... JOIN pg_constraint ON contype='p'`（表数 vs 有主键表数）
+  ⇒ 数量对不上就说明约束在那次恢复里丢了。
+  ② **补约束一律写成 alembic 迁移（幂等 + 可重放），不写手工 ALTER** ——
+  手工 ALTER 活不过下一次重建；而重建在这个项目里**有脚本**（`scripts/dump_prod_to_fixture.sh`）。
+  ⇒ 迁移里**先查约束是否存在再决定建不建**，并对「id 有重复/NULL」这类前置条件 **raise 而不是静默跳过**。
+  ③ **加外键前先数孤儿**（`NOT EXISTS` 查引用表）⇒ 有孤儿就**报出来**，不要在迁移里默默删。
+
 - ⚠️ **`MicroBubble-Auto-Recovery` 的"三层全修"是错的 —— 2026-10-13 逐层实测推翻**。
   原文（已废止，勿再引用）称"三层缺陷已于 2026-10-09 全修（触发器改 AtStartup /
   Action 补 powershell.exe 解释器 / alembic 断言改不变量），端到端验证 rc=0、`PASS 7/7`"。
