@@ -253,7 +253,7 @@ async def main():
                "eer_far": round(far, 4) if far is not None else None,
                "eer_frr": round(frr, 4) if frr is not None else None,
                "n_pos": len(pos), "n_neg": len(neg)}
-        for pname in ("strict", "loose"):
+        for pname in ("strict", "loose", "prod"):
             tot = acc = 0
             ceil_num = ceil_den = 0
             purities = []
@@ -264,8 +264,17 @@ async def main():
                     continue
                 cents = clusters[mid]["cents"]
                 seg2c = clusters[mid]["seg2c"]
-                pl = loo_pool(mid) if pname == "strict" else {
-                    q: mem_per_meeting[(q, mid)] for q in POOL13 if (q, mid) in mem_per_meeting}
+                # 三档候选池:
+                #  strict = 留出该场重建 (Phase 1b/1g/1h 的口径, **悲观**: 生产质心其实含本场素材)
+                #  loose  = 该场自己的 (in-sample, 只作参照)
+                #  prod   = **库里的现役生产质心** ⇒ 最贴近生产形态 (含该场素材)
+                if pname == "strict":
+                    pl = loo_pool(mid)
+                elif pname == "loose":
+                    pl = {q: mem_per_meeting[(q, mid)] for q in POOL13
+                          if (q, mid) in mem_per_meeting}
+                else:
+                    pl = {q: db_cent[q] for q in POOL13 if q in db_cent}
                 if not pl:
                     continue
                 names = [min(pl, key=lambda q: dist(c, pl[q])) for c in cents]
@@ -329,10 +338,10 @@ async def main():
         r_all = evaluate(clusterer, tag, DEV_MEETINGS + TEST_MEETINGS)
         res[tag] = {"dev": r_dev, "test": r_test, "all9": r_all}
         for k, r in (("dev", r_dev), ("test", r_test), ("all9", r_all)):
-            log("  %-22s %-5s | EER %.4f | 段级strict %.4f (天花板 %.4f) | 簇纯度 %.4f | 主导簇占比 %.4f | 主导簇纯度 %.4f" % (
-                tag, k, r["eer_cross"], r["seg_acc_strict"], r["ceiling_strict"],
-                r["cluster_purity_strict"], r["dominant_cluster_share_strict"],
-                r["dominant_cluster_purity_strict"]))
+            log("  %-22s %-5s | EER %.4f | 段级strict %.4f | **段级prod(现役池) %.4f** (天花板 %.4f) | 簇纯度 %.4f | 主导簇占比 %.4f" % (
+                tag, k, r["eer_cross"], r["seg_acc_strict"], r.get("seg_acc_prod", -1),
+                r["ceiling_strict"], r["cluster_purity_strict"],
+                r["dominant_cluster_share_strict"]))
 
     out = {"pool13": POOL13, "common_MP": len(common_MP),
            "dev_meetings": DEV_MEETINGS, "test_meetings": TEST_MEETINGS,
