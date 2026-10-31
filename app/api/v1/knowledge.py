@@ -1,5 +1,7 @@
 import asyncio
-from datetime import datetime
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Body
 from fastapi.responses import StreamingResponse
@@ -288,6 +290,40 @@ async def knowledge_stats(
     }
 
 
+def sum_rollback_counts(rollback_dir: Path, now_utc: Optional[datetime] = None,
+                        window_days: int = 7) -> int:
+    """汇总 rollback 报告里的 deleted_count (窗口内)
+
+    ⚠️ 2026-10-31 修: 报告里的 timestamp 是 **tz-aware** ISO (writer 写
+    `datetime.now(timezone.utc).isoformat()`), 而原代码拿它跟 **naive 的
+    `datetime.now()`** 相减 ⇒ TypeError ⇒ 被 `except Exception: pass` 静默吞掉
+    ⇒ **rollback_count 恒为 0** (状态字段在说谎, 类 20.220)。
+    ⇒ 统一归一到 naive UTC 再比, 且比的是 UTC 不是本地时间。
+
+    单独抽成函数是为了能脱离 DB 单测 (类 20.250: 这类缺陷必须补测试)。
+    """
+    if not rollback_dir.exists():
+        return 0
+    if now_utc is None:
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    elif now_utc.tzinfo is not None:
+        now_utc = now_utc.astimezone(timezone.utc).replace(tzinfo=None)
+
+    total = 0
+    for rb_path in sorted(rollback_dir.glob("auto_intake_rollback_*.json"), reverse=True):
+        try:
+            rb_data = json.loads(rb_path.read_text(encoding="utf-8"))
+            rb_ts = datetime.fromisoformat(rb_data.get("timestamp", "1970-01-01"))
+            if rb_ts.tzinfo is not None:
+                rb_ts = rb_ts.astimezone(timezone.utc).replace(tzinfo=None)
+            if (now_utc - rb_ts).days <= window_days:
+                total += rb_data.get("deleted_count", 0)
+        except Exception:
+            # 别再静默吞 —— 报告格式变了要看得见 (类 20.229: 必须写明该信什么)
+            logger.warning("[knowledge] rollback 报告解析失败, 已跳过: %s", rb_path, exc_info=True)
+    return total
+
+
 @router.get("/knowledge/auto-intake-summary")
 async def auto_intake_summary(
     current_user: Member = Depends(get_current_user),
@@ -381,17 +417,8 @@ async def auto_intake_summary(
     )
     result["total_in_db"] = total_result.scalar() or 0
 
-    # 4. 读 rollback 报告 (7 天内)
-    rollback_dir = Path("data")
-    if rollback_dir.exists():
-        for rb_path in sorted(rollback_dir.glob("auto_intake_rollback_*.json"), reverse=True):
-            try:
-                rb_data = json.loads(rb_path.read_text(encoding="utf-8"))
-                rb_ts = datetime.fromisoformat(rb_data.get("timestamp", "1970-01-01"))
-                if (datetime.now() - rb_ts).days <= 7:
-                    result["rollback_count"] += rb_data.get("deleted_count", 0)
-            except Exception:
-                pass
+    # 4. 读 rollback 报告 (7 天内) —— 见 sum_rollback_counts 的注释 (2026-10-31 修 tz 混用)
+    result["rollback_count"] = sum_rollback_counts(Path("data"))
 
     # 5. 命中率 / 负反馈率: 真实 feedback 表聚合 (W86 mini-13 沿用 W86 mini-11 C 实战)
     # 命中率 = rating>=4 / 总数, 负反馈率 = rating<=2 / 总数, 近 7 天
