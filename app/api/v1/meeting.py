@@ -400,6 +400,16 @@ async def delete_meeting(
     from sqlalchemy import delete as sa_delete, update as sa_update
     await db.execute(sa_delete(MeetingParticipant).where(MeetingParticipant.meeting_id == meeting_id))
     await db.execute(sa_update(Task).where(Task.meeting_id == meeting_id).values(meeting_id=None))
+    # 2026-10-31 [迁移 148]: 说话人裁决两表 (段级 146 / 簇级 148)。
+    # ⚠️ 生产库 meetings 表**没有主键** ⇒ 全库没有任何外键指向它 ⇒ **DB 层没有
+    #    ON DELETE CASCADE 可用** ⇒ 只能在这里显式删 (否则留下孤儿裁决行)。
+    #    详见 alembic/versions/148_cluster_adjudications.py 的模块 docstring。
+    from app.models.meeting_speaker_adjudication import MeetingSpeakerAdjudication
+    from app.models.meeting_cluster_adjudication import MeetingClusterAdjudication
+    await db.execute(sa_delete(MeetingSpeakerAdjudication).where(
+        MeetingSpeakerAdjudication.meeting_id == meeting_id))
+    await db.execute(sa_delete(MeetingClusterAdjudication).where(
+        MeetingClusterAdjudication.meeting_id == meeting_id))
     await db.delete(meeting)
     await db.commit()
     return {"message": "会议已删除"}

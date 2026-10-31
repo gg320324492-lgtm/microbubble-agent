@@ -215,10 +215,12 @@ class Settings(BaseSettings):
     # 背景: Phase 1f 实测「自动聚类 + 人工给簇命名」形态下, 命名是瓶颈
     #   (簇纯度 0.85 但簇命名正确率仅 0.64, 且「簇名错 ⇒ 整簇皆错」)。
     #   人工起完名后必须**固化进裁决表**, 否则重跑流水线会冲掉 (类 20.244 同型风险)。
-    # 实现: app/services/cluster_naming_service.py —— **零 schema 变更**,
-    #   复用既有 `meeting_speaker_adjudications` 的「段中点匹配」语义;
-    #   簇级裁决**逐段**写 (簇在时间轴上交错, 按簇区间写会误伤别的簇的段)。
-    #   「重跑时优先应用」由既有裁决机制负责, **不需要改 post_meeting_tasks.py**。
+    # 实现: app/services/cluster_naming_service.py + **独立表**
+    #   `meeting_cluster_adjudications` (迁移 148) —— 粒度=**簇**, 不与段级表混。
+    #   簇的身份靠 `member_spans` (簇内各段时间区间) 表达 ⇒ 重跑聚类后簇号会变,
+    #   但只要区间集合不变 (member_fingerprint 相同), 旧裁决仍可用。
+    #   冲突消解: **段级优先** (段级=定点证据, 簇级=整簇推广; 类 20.244)。
+    #   「重跑时优先应用」在 post_meeting_tasks.py 的两处赋值点接入。
     # ⚠️ 默认 false ⇒ 生产行为零变化; 开启后才允许写入簇级命名裁决。
     CLUSTER_NAMING_ENABLED: bool = False
 

@@ -2,6 +2,7 @@ from app.models.member import Member
 from app.models.task import Task, TaskDependency
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.meeting_speaker_adjudication import MeetingSpeakerAdjudication  # 迁移 146: 人工听辨裁决, 重跑识别时跳过
+from app.models.meeting_cluster_adjudication import MeetingClusterAdjudication  # 迁移 148: 簇级命名裁决 (粒度=簇, 不与段级表混)
 from app.models.project import Project, Milestone
 from app.models.folder import Folder  # 2026-07-01 课题组网盘
 from app.models.knowledge import Knowledge, KnowledgeVersion, ChunkedUploadSession, FileMention, ActivityEvent, FileComment  # PR4: 秒传+版本; PR5: 断点续传; PR6: 通知+活动+评论
@@ -91,4 +92,5 @@ __all__ = [
     "Plan", "CommercialTenant", "Subscription", "Invoice", "UsageRecord", "License",
        # 2026-09-12 商业表补注册 (W72 Phase 8 模型一直漏在 Base.metadata 外)
     "MeetingSpeakerAdjudication",  # 迁移 146: 说话人人工裁决
+    "MeetingClusterAdjudication",  # 迁移 148: 说话人簇级命名裁决
 ]   # noqa

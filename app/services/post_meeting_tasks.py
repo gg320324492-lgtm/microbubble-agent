@@ -487,6 +487,19 @@ def post_meeting_process(self, meeting_id: int):
                     logger.info(
                         "说话人识别: 命中 %d 条人工裁决, 命中区间跳过声纹匹配" % len(adjudicator)
                     )
+                # 2026-10-31 [迁移 148]: **簇级命名裁决** (粒度=簇, 独立表)。
+                # 段级裁决优先, 簇级只填段级没覆盖的段 (裁决更细 ⇒ 优先, 类 20.244)。
+                # 表为空时 cluster_resolver.lookup 恒 None ⇒ 生产行为零变化。
+                from app.services.cluster_naming_service import (
+                    build_cluster_resolver,
+                    build_combined_resolver,
+                )
+                cluster_resolver = await build_cluster_resolver(db, meeting_id)
+                if len(cluster_resolver):
+                    logger.info(
+                        "说话人识别: 命中 %d 条簇级命名裁决(迁移148), 段级优先" % len(cluster_resolver)
+                    )
+                adjudicator = build_combined_resolver(adjudicator, cluster_resolver)
                 adjudicated = 0
                 # 先为每个段单独识别
                 for i, seg in enumerate(transcript_segments):
