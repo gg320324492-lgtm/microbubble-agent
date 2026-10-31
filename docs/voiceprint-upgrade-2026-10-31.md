@@ -108,22 +108,69 @@
   而我们现在的质心是**短段算出来的**（本身就是坏的）⇒ **拿不到长 enrollment 时，TSE 只是换个网络继续用坏质心**。
 - **说话人条件 VAD**：只改「切多碎」，**不改变短段 embedding 不可分**这一事实 ⇒ 边际收益低。
 
-### 2.4 评测方法学：社区没有现成答案，得自己造
+### 2.4 评测方法学：**社区给不了我们的核心指标 —— 但给了两把关键的钥匙**
 
-- ⚠️ **公开基准全是聚类 DER，没有「diarization → 已登记成员」的命名正确率基准**
-  （named diarization 文献极薄）⇒ **我们的核心指标社区没有先例，必须自己量**。
-- 长音频验证（long-form verification）的社区标准做法是**分段嵌入后池化/平均再比对**
-  ⇒ 直接支持「簇质心」这条路。
-- 我们的 7 个坑（自造阈值、验证集本身可能是错的、只报认回率不报抢走率、
-  验证粒度≠生产粒度、分母含取不到样本的段、无跨场基线、候选池变化漂移判据）
-  在社区都有对应的标准判据：
-  - 阈值 ⇒ 用**距离分布**（同场同人 vs 异人两条分布的重叠度），不设单点阈值
-  - 抢走 ⇒ **净增益 = 认回 − 抢走（绝对数）**，且**抢走必须跨全部会议统计**
-  - 基线 ⇒ **取同一个人的两场人工确认块分别建质心量互距**（我们已量：0.5038）
-  - 粒度 ⇒ **验证粒度必须等于生产粒度**
-  - 分母 ⇒ **分母 = 实际参与计算的样本数**
-  - 候选池 ⇒ **报任何未识别数都要带上当时的候选池成员名单**
-  - 影子评测 ⇒ 生产阈值变更走 **shadow evaluation**（新判据并行跑，只记录不生效）
+> ⚠️ 本节同时**订正了本仓此前引用的三处社区说法**（都是我们自己在文档里沿用的）：
+
+| 此前沿用的说法 | 实测真相 |
+|---|---|
+| 「VoxCeleb1-H/E = clean/noisy 两档」 | ❌ **错**。H/E 是**难度集**（hard / extended），不是干净/噪声。真三档 = **Vox1-O original（40人/37,611对）/ Vox1-E extended（1251人/579,818对）/ Vox1-H hard（1251人/550,894对）**（arXiv:2406.02167 Table 2） |
+| 「NIST 的 C=0.01 归一化常数」 | ❌ **错**。SRE24 的成本函数里 0.01 是**先验 PTarget**（SRE24 取 {0.01, 0.005} 两档），不是归一化常数 |
+| 「有 NIST 的 3 秒短语音条件」 | ❌ **不存在**。SRE21 最短测试 10s、SRE24 最短 5s ⇒ **我们的 1.5–3s 在 NIST 里没有对应标准条件**（最新是 **SRE24**） |
+
+#### ⭐ 钥匙一：**DER 测不出「认错人」** ⇒ 我们的核心指标社区确实是空白
+`pyannote.metrics` 源码实测（`identification.py:60` + `diarization.py:134`）：
+先做**匈牙利一对一匹配**再算分 ⇒ **把两个正确的簇换个名字，DER 一点不变**。
+⇒ **DER 永远只测「切错段」，测不出「切对了但叫错名字」。**
+⇒ 我们的「重标 / 改名」工作**必须另建指标** —— 社区在 closed-set 侧没有现成的
+（只有开放集 OSI 那侧的 DIR@FAR）。
+⇒ ⚠️ 而**社区也没有「验证集标注错误」的评测协议** —— 所有标签噪声论文针对的都是
+*训练*标签 ⇒ **这是空白，也是我们可以原创的地方**。
+
+#### ⭐ 钥匙二：**社区对长音频/短语音的标准解法，正是我们 Phase 0 要做的事**
+`arXiv:2211.00815` 原文实测：
+> "**We average all the embeddings belonging to each enrollment speaker to get the final speaker embedding.**"
+> "Because there are many short utterances less than 2s in CN-Celeb dataset, we first
+> **concatenate the short utterances from the same genre and same speaker to make them longer than 5s.**"
+
+⇒ ① 长音频社区做法是**池化 embedding**（不是池化分数）⇒ 直接支持「每成员一个池化质心」；
+② 短语音社区解法是**把同一说话人的短段拼接变长** ⇒ **这就是我们 Phase 0**，
+而且要同时试「拼接」与「整段嵌入」两种变体（我们的 Phase 0 brief 里已写明）。
+
+#### 我们的 7 个坑 ↔ 社区标准判据（逐条对照）
+
+| 我们的坑 | 社区标准做法 | 出处 |
+|---|---|---|
+| 拍脑袋定阈值 | 阈值**从分数分布导出**，且**报多个操作点**（FRR@FAR=0.5% / FAR@FRR=5% / DIR@FAR），不报单点 | VoxWatch `arXiv:2307.00169`；⚠ `arXiv:2606.21584` 证明 in-domain EER 0.21% 可对应跨域 HTER 39.5% ⇒ **EER 单独报 = 骗自己** |
+| 验证集本身标错 | **双人独立标注 + 仲裁 + 报 IAA**（κ/α/γ），且**按段长分层** | Seshat `arXiv:2003.01472`；Mathet γ `10.1162/coli_a_00227` |
+| 只报认回率 | **coverage–selective-risk 曲线**（coverage ρ=接受率，selective risk=错误率/接受率） | Geifman `arXiv:1705.08500` |
+| 验证粒度≠生产粒度 | 评测粒度必须=部署粒度；短语音有标准集 **Vox1-S（0.5–2s）/ Vox1-M** | `arXiv:2401.08342` |
+| 分母含取不到样本的段 | 分母 = 实际参与计算的样本（类 20.250 已修） | — |
+| 无跨场基线 | 用**分布 + bootstrap CI**（非参数 two-sample bootstrap），不报单点 | NIST IR 7722 `10.6028/NIST.IR.7722` |
+| 候选池变化漂移判据 | **VoxWatch 的 "false-alarm problem"**：池从 50 人涨到 500 人，FAR@FRR=5% 从 2.4% → **16.1%（近 7 倍）** ⇒ **池变大 ⇒ margin 阈值必须重标定，且用冻结的验证集标** | VoxWatch §6.1；Sculley NeurIPS'15 §3/§7（**冻结 + 版本化输入**） |
+
+> ⭐ **最后一条正面解释了我们「两次重跑差 787 段 = 候选池变了」的根因** ——
+> 社区的诊断（Sculley：不稳定数据依赖 ⇒ 冻结并版本化）与我们的实测完全一致。
+
+#### 短语音的社区量级（为什么说这是「信号不足」区间）
+- 3D-Speaker ERes2NetV2（`arXiv:2406.02167`）Vox1-O：**全长 0.61% / 3s 0.98% / 2s 1.48%**
+- DAME（`arXiv:2601.13999`）Vox1-O：**1s 3.89%**；VOiCES 远场 1s **17.09%**
+⇒ **1 秒语音最佳 EER ≈ 3–5%（同域）/ ≈17%（远场）** ⇒ 我们的 1.5–3s 落在 1s 与 3s 之间，
+**社区普遍视为「信号不足」区间，不是工程问题** ⇒ 换模型的期望收益要按这个量级估，
+而不是拿全长 0.61% 去想象。
+
+#### 可直接抄的工具
+`BUTSpeechFIT/VBx`（ARD 先验收缩）· `NVIDIA-NeMo/Speech` 的
+`offline_clustering.py`（`SpeakerClustering`/`SpectralClustering`/**`NMESC`**/`estimateNumofSpeakers`）
+与 `md_eval.py`（DER）· `pyannote/pyannote-audio` 的 `AgglomerativeClustering`
+（cosine + centroid）· `fgnt/meeteval`（cpWER/tcpWER/ORC-WER/**DER**）·
+**`fgnt/speaker_reassignment`**（`arXiv:2406.03155`，Interspeech 2024 — 「会议转写后人工改说话人」的现成工具）
+· `speechbrain` 的 `EncoderClassifier` + EER/minDCF · `pygamma-agreement`（IAA）·
+`sklearn` 的 `adjusted_rand_score`/`normalized_mutual_info_score`/`silhouette_score`。
+⚠️ 簇数选择有四条互不等价的社区路线（VBx 的 ARD / eigengap（NeMo 的 NME-SC）/ ELBO+复杂度惩罚 / 经典 GMM-BIC），
+**「VBx 用 eigengap」是常见误解** —— VBx 用 ARD，eigengap 是另一支。
+⚠️ **DIALOKA 无法核实**（arXiv/Crossref/OpenAlex 全 0 命中，GitHub 账号本身不存在）⇒ **不要引用**。
+⚠️ **`fgnt/diarization-kit` 不存在**；真实是 `fgnt/meeteval` 与 `fgnt/speaker_reassignment`。
 
 ---
 
@@ -249,6 +296,26 @@
 **否决条件**：若不降 ⇒ 说明连「同一个人」都不可分 ⇒ 后续范式/模型全部无意义
 ⇒ 只能转向「更长 enrollment（≥2 分钟）+ 降噪前端」或「放弃自动识别、只做人工台账」。
 
+### Phase 0.5 —— ⭐ 评测基建（**没有它，后面的数字都不可信**）
+四份调研里最可执行的一份（按性价比排序）：
+
+| 优先级 | 做什么 | 时长 | 抄谁 |
+|---|---|---|---|
+| **P0** | **冻结评测集 + 候选池快照**：每次评测产出 (segments, 台账, 裁决表, **候选池成员名单**, 质心 hash) 的**不可变快照**并版本化 | 0.5–1 天 | Sculley NeurIPS'15 §3/§7；VoxSRC 回顾「报条件集」 |
+| **P0** | **coverage–selective-risk 曲线取代单一百分比**：margin 扫一遍，画 coverage / selective-risk / **绝对错名数**三条曲线 + bootstrap CI | 2–3 天 | Geifman `arXiv:1705.08500`；NIST IR 7722 |
+| **P0** | **台账 IAA 审计**：双人重标 200–300 段，**按段长分层**报 κ/α/γ；IAA 低的层直接标「不可用」 | 3–5 天（人工为主） | Seshat `arXiv:2003.01472` |
+| **P1** | **生产粒度评测集**：按 1.5–3s 生产段直接构造（Vox1-S 的裁剪思路），从此所有数字按此粒度报 | 2–3 天 | `arXiv:2401.08342` |
+| **P1** | **pool-size 敏感性扫描**：同一场在候选池 3/6/9/12 人下各跑一遍 | 1–2 天 | VoxWatch §6.1 |
+| **P1** | **Shadow 模式跑新判据**：新旧并行、只返旧答案，逐段/逐簇 diff | 3–5 天 | Fowler *Dark Launching*；SR 11-7 |
+| **P2** | **自建「命名正确率」指标**（DER 测不出认错人 ⇒ 社区没现成的） | 2–3 天 | —— 这是**我们可以原创**的地方 |
+| **P2** | **改用聚类后人工命名 + 交互式纠正**（人工只改错名不改全标） | 5–8 天 | `fgnt/speaker_reassignment`（`arXiv:2406.03155`；实测 DER −32%、替换错误 −53%） |
+| **P2** | **成员池化质心替代逐段最近邻**（逐段最近邻只作诊断） | 2–4 天 | `arXiv:2211.00815` |
+| **P3** | **统计检验落地**：McNemar（配对二元）+ paired bootstrap CI，别只比百分比 | 1 天 | Dror et al. ACL'18（ACL'17 180 篇仅 63 篇做显著性检验、6 篇用错检验） |
+
+**为什么必须先做 P0 的「冻结」**：我们「两次重跑差 787 段」的根因是候选池变了，
+社区的诊断（Sculley：不稳定数据依赖 ⇒ 冻结并版本化）与我们的实测**完全一致** ⇒
+不做冻结，后面每次评测都在跟一个会漂的输入比较。
+
 ### Phase 1 —— 同口径模型对比（零生产改动，1–2 天）
 **做什么**：现役 ERes2Net vs **ERes2NetV2** vs CAM++，**同一批 8 场 9336 段**
 （**用 Phase 0 重建后的质心**），每条都跑**留一认回率 + 抢走率（绝对数）**（类 20.226），
@@ -301,6 +368,11 @@
 | 中文 DER 基准的可比性 | 各家测的集子/口径不同（AliMeeting far vs AISHELL-4 vs 内部集），**不可直接横比** |
 | **长 enrollment 的最长连续段到底有多长** | ⚠ **未量** —— 质心样本没留档，只能从转录反推；这是 Phase 0 的第一个待办 |
 | **重建后同人跨场基线能否低于 0.50** | ⚠ **未量**（Phase 0 的硬判据，也是整条链成立与否的总闸） |
+| **VoxCeleb3** | ⚠ **疑似不存在正式论文**（OpenAlex/Crossref/arXiv 检索均 0 命中）⇒ 勿引用 |
+| VoxCeleb 官方 `voxtest_s_clean/noisy` 列表文件 | ⚠ 未核实（voxceleb.org 本机不可达） |
+| **DIALOKA** | ⚠ **无法核实**（GitHub 账号本身不存在）⇒ **不要引用** |
+| **「fgnt/diarization-kit」** | ⚠ **不存在**；真实是 `fgnt/meeteval` 与 `fgnt/speaker_reassignment` |
+| Amelio & Pizzuti 的 B³ 论文 DOI | ⚠ 未核实 |
 
 ---
 
