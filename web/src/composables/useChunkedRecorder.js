@@ -265,6 +265,21 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
     }
   }
 
+  // 2026-11-02 会议 265 事故：分片未传完就关页面 ⇒ 录音只剩浏览器内存/IDB，
+  // 而结束阶段的整段重传一旦中断就再也补不上。pending 未清空或仍在录音时，
+  // 关闭/刷新页面必须给出浏览器原生确认（浏览器只显示通用文案）。
+  function handleBeforeUnload(e) {
+    if (pendingCount.value > 0 || status.value === 'recording') {
+      e.preventDefault()
+      e.returnValue = '录音还有未上传的分片，关闭页面可能丢失录音。'
+      return e.returnValue
+    }
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    onUnmounted(() => window.removeEventListener('beforeunload', handleBeforeUnload))
+  }
+
   return {
     uploadedCount: readonly(uploadedCount),
     pendingCount: readonly(pendingCount),

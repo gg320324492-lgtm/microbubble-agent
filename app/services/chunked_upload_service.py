@@ -36,6 +36,13 @@ class ChunkedUploadService:
     MERGED_OBJECT_TMPL = "recordings/{meeting_id}/merged.webm"
     CHUNK_NAME_TMPL = "chunk_{idx:05d}.webm"  # 5 位数零填充，方便排序
 
+    # 2026-11-02 会议 265 事故（两阶段替换）:
+    # 整段重传**先写 staging**，merge 成功后才清理旧分片。
+    # 旧实现先 chunks/reset 再重传 ⇒ 浏览器中途关闭时，已经上传好的实时分片
+    # 也一起没了，服务器只剩几片切片。staging 与实时分片完全隔离。
+    STAGING_PREFIX_TMPL = "recordings/{meeting_id}/staging"
+    STAGED_CHUNK_NAME_TMPL = "chunk_{idx:05d}.bin"
+
     @property
     def chunk_prefix(self) -> str:
         return self.CHUNK_PREFIX_TMPL
@@ -80,6 +87,88 @@ class ChunkedUploadService:
                 })
         result.sort(key=lambda x: x["chunk_index"])
         return result
+
+    # ---------- staging 暂存分片（2026-11-02 会议 265 事故：两阶段替换） ----------
+
+    def _staging_prefix(self, meeting_id: int) -> str:
+        return self.STAGING_PREFIX_TMPL.format(meeting_id=meeting_id)
+
+    def _staged_chunk_object_name(self, meeting_id: int, idx: int) -> str:
+        return (
+            f"{self._staging_prefix(meeting_id)}/"
+            f"{self.STAGED_CHUNK_NAME_TMPL.format(idx=idx)}"
+        )
+
+    async def save_staged_chunk(self, meeting_id: int, idx: int, blob: bytes) -> str:
+        """保存整段重传的暂存分片。
+
+        与 `save_chunk` 的区别：
+        - 对象写到 `recordings/{id}/staging/`，与实时分片 `recordings/{id}/chunks/` 隔离；
+        - **不更新** last_chunk_index / total_chunks —— 在 merge 成功之前，
+          实时分片仍是权威数据源。
+
+        2026-11-02 会议 265 事故的根因就是「先删后传」：reset 删掉 5041 个实时分片后，
+        浏览器只传了 6 片就关闭 ⇒ 服务器上只剩 24MB。两阶段替换杜绝这一类丢失。
+        """
+        object_name = self._staged_chunk_object_name(meeting_id, idx)
+        _, content_type = self.sniff_audio_container(blob)
+        await file_service.upload_to_path(
+            object_name=object_name,
+            file_data=blob,
+            content_type=content_type,
+        )
+        return object_name
+
+    async def list_staged_chunks(self, meeting_id: int) -> list:
+        """列出 staging 分片，按 idx 升序。返回 [{'object_name', 'size', 'chunk_index'}]"""
+        prefix = self._staging_prefix(meeting_id) + "/"
+        all_objs = await file_service.list_objects(prefix=prefix)
+        result = []
+        pattern = re.compile(r"chunk_(\d+)\.bin$")
+        for obj in all_objs:
+            m = pattern.search(obj["object_name"])
+            if m:
+                result.append({
+                    **obj,
+                    "chunk_index": int(m.group(1)),
+                })
+        result.sort(key=lambda x: x["chunk_index"])
+        return result
+
+    async def delete_staged_chunks(self, meeting_id: int) -> int:
+        """删除 staging 分片。返回删除的对象数。"""
+        prefix = self._staging_prefix(meeting_id) + "/"
+        all_objs = await file_service.list_objects(prefix=prefix)
+        deleted = 0
+        for obj in all_objs:
+            try:
+                file_service.delete_file(obj["object_name"])
+                deleted += 1
+            except Exception as e:  # noqa: BLE001 — 单个清理失败不阻断
+                logger.warning(f"删除暂存分片失败 {obj['object_name']}: {e}")
+        return deleted
+
+    @staticmethod
+    def should_preserve_chunks(
+        media_duration,
+        expected_seconds,
+        ratio: float = 0.9,
+        min_expected: float = 60.0,
+    ) -> bool:
+        """合并产物明显短于录音区间时，**保留分片不删**。
+
+        2026-11-02 会议 265 事故：merge 后无条件 delete_chunks，而当时的合并产物
+        只有 24MB（前端先 reset 再重传、浏览器中途关闭）⇒ 最后的证据也被删掉。
+        现在只有「媒体时长 < 录音墙钟 90% 且区间 > 60s」才保留，其余照旧清理。
+
+        ⚠️ 录音可以暂停，暂停时墙钟 > 媒体时长 ⇒ 会保留分片。这是**故意的**：
+        多留一些 MinIO 对象无副作用，误删分片则不可恢复。
+        """
+        if not media_duration or media_duration <= 0:
+            return False
+        if not expected_seconds or expected_seconds < min_expected:
+            return False
+        return media_duration < expected_seconds * ratio
 
     @staticmethod
     def assert_merged_integrity(merged_size: int, total_in_bytes: int) -> None:
@@ -209,7 +298,17 @@ class ChunkedUploadService:
 
         返回合并后的 MinIO object_name（扩展名按嗅探结果决定）。
         """
-        chunks = await self.list_chunks(meeting_id)
+        return await self._concat_raw(meeting_id, await self.list_chunks(meeting_id))
+
+    async def merge_staged_raw(self, meeting_id: int) -> str:
+        """拼接 staging 里的整段重传分片（2026-11-02 两阶段替换的合并步骤）。
+
+        与 merge_chunks_raw 的唯一区别：输入来自 staging 前缀。
+        产物仍写到同一个 MERGED_OBJECT_TMPL；merge 成功后调用方才清理旧分片。
+        """
+        return await self._concat_raw(meeting_id, await self.list_staged_chunks(meeting_id))
+
+    async def _concat_raw(self, meeting_id: int, chunks: list) -> str:
         if not chunks:
             raise ValueError(f"会议 {meeting_id} 无 chunk 可合并")
 
@@ -278,6 +377,7 @@ class ChunkedUploadService:
         用于 DELETE /meetings/{id} 兜底清理。
         """
         deleted = await self.delete_chunks(meeting_id)
+        deleted += await self.delete_staged_chunks(meeting_id)
         if await self.delete_merged(meeting_id):
             deleted += 1
         return deleted

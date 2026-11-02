@@ -150,6 +150,9 @@ async def upload_audio(
 async def upload_audio_chunk(
     meeting_id: int,
     chunk_index: int = Query(..., ge=0),
+    # ⚠️ 用普通默认值而不是 Query(False)：本端点会被测试直接调用（不经过 FastAPI），
+    # Query 对象在布尔上下文里是 truthy ⇒ 会误走 staging 分支。
+    staging: bool = False,
     file: UploadFile = File(...),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -184,6 +187,12 @@ async def upload_audio_chunk(
     blob = await file.read()
     if not blob:
         raise HTTPException(status_code=400, detail="chunk 为空")
+
+    if staging:
+        # 2026-11-02 会议 265 事故：整段重传先写 staging，**不碰实时分片**。
+        # merge 成功后才由 /merge-chunks?source=staging 清理旧分片。
+        await chunked_upload_service.save_staged_chunk(meeting_id, chunk_index, blob)
+        return {"chunk_index": chunk_index, "size": len(blob), "staging": True}
 
     # 写 MinIO
     await chunked_upload_service.save_chunk(meeting_id, chunk_index, blob)
@@ -276,6 +285,9 @@ async def merge_chunks_endpoint(
         description="auto=按首片容器嗅探自动选; ffmpeg=concat demuxer (实时 webm 分片); "
                     "raw=字节级拼接 (整段 blob 的字节切片)",
     ),
+    # 同样用普通默认值：测试会直接调用本函数，Query 对象会让 source != "staging"
+    # 的判断仍然成立，但传参语义不直观；这里手动校验。
+    source: str = "live",
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -293,6 +305,12 @@ async def merge_chunks_endpoint(
       会议 253 事故)。现在 merge_chunks 内置产物完整性校验, 校验不过自动
       回退 raw; raw 对实时分片本就正确 (分片按序拼接 = 还原原始字节流)。
     `auto` 会下载首片嗅探文件头自动选择，并在 ffmpeg 失败时回退到 raw。
+
+    2026-11-02 会议 265 事故: 新增 `source=staging`。整段重传的分片先写到
+    staging 前缀（不碰实时分片），由本端点合并成 merged 文件；**合并成功后**
+    才清理实时分片。旧前端先 chunks/reset 再重传 ⇒ 浏览器中途关闭时连已经
+    上传好的实时分片一起丢，服务器只剩 24MB。
+    合并产物明显短于录音墙钟时（should_preserve_chunks）保留分片不删。
     """
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
@@ -302,15 +320,30 @@ async def merge_chunks_endpoint(
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可合并分片")
 
-    if (meeting.last_chunk_index is None) or (meeting.last_chunk_index < 0):
-        raise HTTPException(
-            status_code=400,
-            detail=f"无可合并的 chunk (last_chunk_index={meeting.last_chunk_index})"
-        )
+    if source not in ("live", "staging"):
+        raise HTTPException(status_code=422, detail="source 必须是 live 或 staging")
 
-    # auto: 嗅探首片决定合并策略
+    if source == "staging":
+        # staging 上传不更新 last_chunk_index ⇒ 用对象列表判空
+        staged_chunks = await chunked_upload_service.list_staged_chunks(meeting_id)
+        if not staged_chunks:
+            raise HTTPException(
+                status_code=400,
+                detail="无可合并的暂存分片 (staging 为空)",
+            )
+    else:
+        staged_chunks = []
+        if (meeting.last_chunk_index is None) or (meeting.last_chunk_index < 0):
+            raise HTTPException(
+                status_code=400,
+                detail=f"无可合并的 chunk (last_chunk_index={meeting.last_chunk_index})"
+            )
+
+    # auto: 嗅探首片决定合并策略（staging 是整段 blob 的字节切片 ⇒ 固定 raw）
     effective_mode = mode
-    if mode == "auto":
+    if source == "staging":
+        effective_mode = "raw"
+    elif mode == "auto":
         effective_mode = "ffmpeg"
         try:
             chunks = await chunked_upload_service.list_chunks(meeting_id)
@@ -323,7 +356,9 @@ async def merge_chunks_endpoint(
             logger.warning(f"合并模式嗅探失败 (会议 {meeting_id}): {e}, 退回 ffmpeg")
 
     try:
-        if effective_mode == "raw":
+        if source == "staging":
+            merged_object_name = await chunked_upload_service.merge_staged_raw(meeting_id)
+        elif effective_mode == "raw":
             merged_object_name = await chunked_upload_service.merge_chunks_raw(meeting_id)
         else:
             try:
@@ -361,17 +396,42 @@ async def merge_chunks_endpoint(
         logger.warning(f"merge-chunks ffprobe 探测失败 (会议 {meeting_id}): {e}")
     await db.commit()
 
-    # 顺手清掉 chunks
-    try:
-        deleted = await chunked_upload_service.delete_chunks(meeting_id)
-        logger.info(f"会议 {meeting_id} 合并后清理 {deleted} 个 chunk")
-    except Exception as e:
-        logger.warning(f"清理 chunk 失败 (会议 {meeting_id}): {e}")
+    # 2026-11-02 会议 265 事故：合并产物明显短于录音区间 ⇒ 保留分片不删（最后证据）
+    expected_sec = None
+    if meeting.recording_started_at:
+        end = meeting.recording_ended_at or datetime.now(timezone.utc).replace(tzinfo=None)
+        expected_sec = (end - meeting.recording_started_at).total_seconds()
+    preserve_chunks = chunked_upload_service.should_preserve_chunks(
+        meeting.media_duration_seconds, expected_sec
+    )
+
+    if preserve_chunks:
+        logger.warning(
+            f"[merge] 会议 {meeting_id} 合并产物 {meeting.media_duration_seconds}s "
+            f"明显短于录音区间 {expected_sec:.0f}s ⇒ 保留分片不删（防 265 类事故）"
+        )
+    else:
+        # 顺手清掉 chunks
+        try:
+            deleted = await chunked_upload_service.delete_chunks(meeting_id)
+            logger.info(f"会议 {meeting_id} 合并后清理 {deleted} 个 chunk")
+        except Exception as e:
+            logger.warning(f"清理 chunk 失败 (会议 {meeting_id}): {e}")
+
+        # staging 是这次整段重传的中间产物；只有合并成功且产物完整时才清理
+        try:
+            staged_deleted = await chunked_upload_service.delete_staged_chunks(meeting_id)
+            if staged_deleted:
+                logger.info(f"会议 {meeting_id} 合并后清理 {staged_deleted} 个暂存分片")
+        except Exception as e:
+            logger.warning(f"清理暂存分片失败 (会议 {meeting_id}): {e}")
 
     return {
         "audio_url": meeting.audio_url,
-        "chunks_merged": meeting.last_chunk_index + 1,
+        "chunks_merged": len(staged_chunks) if source == "staging" else (meeting.last_chunk_index + 1),
         "merge_mode": effective_mode,
+        "source": source,
+        "chunks_preserved": preserve_chunks,
     }
 
 

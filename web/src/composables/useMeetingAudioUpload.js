@@ -93,7 +93,12 @@ export async function sendRecordingHeartbeat(meetingId) {
 
 /**
  * 分片上传整段 blob（字节切片）+ 字节级合并。
- * 调用前会先 reset 服务端已有分片，避免索引撞号导致合并出交错的垃圾音频。
+ *
+ * 2026-11-02 会议 265 事故：**不再先 reset**。
+ * 旧实现先删掉服务端所有实时分片，再重传整段；浏览器中途关闭时（本次只传了
+ * 6/20 片），已经上传好的 5041 个实时分片也一起没了。
+ * 现在切片写 `staging` 前缀（与实时分片隔离），`merge-chunks?source=staging`
+ * 成功后才由服务端清理旧分片 —— 中途失败时旧分片完好，可继续补传/重跑。
  *
  * @param {number} meetingId
  * @param {Blob} blob
@@ -105,17 +110,14 @@ export async function uploadBlobInSlices(meetingId, blob, onProgress) {
 
   const total = Math.ceil(blob.size / SLICE_SIZE)
 
-  // 1) 复位服务端分片（可能有早先零散上传的实时分片）
-  await axios.post(`/api/v1/meetings/${meetingId}/chunks/reset`, {}, { timeout: 60000 })
-
-  // 2) 顺序切片上传（顺序保证合并时字节顺序正确）
+  // 1) 顺序切片上传到 staging（顺序保证合并时字节顺序正确；不碰实时分片）
   for (let i = 0; i < total; i++) {
     const start = i * SLICE_SIZE
     const part = blob.slice(start, Math.min(blob.size, start + SLICE_SIZE))
     const fd = new FormData()
     fd.append('file', part, `slice_${String(i).padStart(5, '0')}.bin`)
     await axios.put(
-      `/api/v1/meetings/${meetingId}/audio-chunk?chunk_index=${i}`,
+      `/api/v1/meetings/${meetingId}/audio-chunk?chunk_index=${i}&staging=1`,
       fd,
       { timeout: SLICE_TIMEOUT_MS }
     )
@@ -124,7 +126,7 @@ export async function uploadBlobInSlices(meetingId, blob, onProgress) {
 
   // 3) 字节级拼接（不能用 ffmpeg concat —— 这些切片不是独立可解析的媒体文件）
   const res = await axios.post(
-    `/api/v1/meetings/${meetingId}/merge-chunks?mode=raw`,
+    `/api/v1/meetings/${meetingId}/merge-chunks?mode=raw&source=staging`,
     {},
     { timeout: MERGE_TIMEOUT_MS }
   )
