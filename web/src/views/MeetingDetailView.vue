@@ -60,6 +60,30 @@
             :size="36"
           />
         </div>
+
+        <!-- 2026-11-04 选型⑤「融于卡片」: 播放器住进英雄卡 (时间轴 seek 联动不变) -->
+        <div v-if="meeting.audio_url" class="hero-player">
+          <button class="hp-play" @click="togglePlay" :title="isPlaying ? '暂停' : '播放'">
+            {{ isPlaying ? '⏸' : '▶' }}
+          </button>
+          <span class="hp-tm">{{ formatTs(pbCurrent) }} <span class="hp-sep">/</span> {{ pbDurText }}</span>
+          <div class="hp-track" @click="seekToEvent">
+            <i :style="{ width: pbPct + '%' }" />
+          </div>
+          <button class="hp-spd" @click="cycleSpeed">{{ pbSpeed }}x</button>
+          <span class="hp-note">时间戳点击 seek</span>
+          <audio
+            ref="audioEl"
+            preload="metadata"
+            :src="getAudioSrc(meeting.audio_url)"
+            @timeupdate="onAudioTime"
+            @loadedmetadata="onAudioMeta"
+            @ended="isPlaying = false"
+            @pause="isPlaying = false"
+            @play="isPlaying = true"
+          />
+        </div>
+        <div v-else class="hp-noaudio">无录音 · 本会议来自粘贴转录分析，时间轴浏览模式</div>
       </div>
 
       <!-- 操作按钮 -->
@@ -79,34 +103,10 @@
           <el-button @click="cancelEdit">取消</el-button>
         </template>
       </div>
-    </div>
-
-    <!-- ====== 方案B: 墨色常驻播放条 (时间轴 seek 联动) ====== -->
-    <div class="player-bar" v-if="meeting">
-      <template v-if="meeting.audio_url">
-        <button class="pb-play" @click="togglePlay" :title="isPlaying ? '暂停' : '播放'">
-          {{ isPlaying ? '⏸' : '▶' }}
-        </button>
-        <span class="pb-tm">{{ formatTs(pbCurrent) }} <span class="pb-sep">/</span> {{ pbDurText }}</span>
-        <div class="pb-track" @click="seekToEvent">
-          <i :style="{ width: pbPct + '%' }" />
-        </div>
-        <button class="pb-spd" @click="cycleSpeed">{{ pbSpeed }}x</button>
-        <span class="pb-note">时间戳点击 seek</span>
-        <audio
-          ref="audioEl"
-          preload="metadata"
-          :src="getAudioSrc(meeting.audio_url)"
-          @timeupdate="onAudioTime"
-          @loadedmetadata="onAudioMeta"
-          @ended="isPlaying = false"
-          @pause="isPlaying = false"
-          @play="isPlaying = true"
-        />
-      </template>
-      <template v-else>
-        <span class="pb-note">无录音 · 本会议来自粘贴转录分析，时间轴浏览模式</span>
-      </template>
+      <!-- 2026-11-04 选型⑤「融于卡片」: 进度即卡片下边缘的一条 2px 色线 -->
+      <div v-if="meeting && meeting.audio_url" class="hero-progress" aria-hidden="true">
+        <i :style="{ width: pbPct + '%' }" />
+      </div>
     </div>
 
     <!-- ====== 主体区域 ====== -->
@@ -1099,6 +1099,7 @@ onMounted(async () => {
   border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--color-border, #ebeef5);
   flex-shrink: 0;
+  position: relative; /* 2026-11-04: hero-progress(卡片下边缘进度) 的定位基准 */
 }
 
 .hero-back { flex-shrink: 0; }
@@ -1638,6 +1639,9 @@ onMounted(async () => {
   .detail-body { flex-direction: column; }
   .detail-side { width: 100%; }
   .hero-title { font-size: 18px; }
+  /* 选型⑤: 窄屏下播放行允许换行, 隐藏等宽提示 */
+  .hero-player { flex-wrap: wrap; row-gap: 10px; }
+  .hp-note { display: none; }
 }
 </style>
 
@@ -1754,46 +1758,54 @@ onMounted(async () => {
   --el-color-primary-dark-2: #161d20;
 }
 
-/* 2026-09-13 选型②「墨绿胶囊」: 深绿渐变全圆角胶囊 + 亮绿实底圆钮 */
-.player-bar {
-  position: sticky; top: 12px; z-index: 8;
-  display: flex; align-items: center; gap: 14px;
-  background: linear-gradient(135deg, #0d201c 0%, #1a3d33 60%, #234a3f 100%);
-  color: var(--raw-eaf4f0);
-  border-radius: 9999px; padding: 10px 26px 10px 14px;
-  box-shadow: 0 10px 28px rgba(18, 36, 31, 0.4);
+/* 2026-11-04 选型⑤「融于卡片」: 播放器住进英雄卡, 进度=卡片下边缘 */
+.hero-player {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--color-border-light, #eef1f1);
+  display: flex; align-items: center; gap: 12px;
 }
-.player-bar.no-audio-hidden { display: none; }
-.pb-play {
-  width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
-  background: var(--raw-52a896); border: none; color: var(--raw-0d201c); font-size: 13px;
+.hp-play {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  background: var(--color-primary); color: #fff; border: none; font-size: 10px;
   display: grid; place-items: center;
-  box-shadow: 0 3px 12px rgba(82, 168, 150, 0.5);
-  transition: transform var(--duration-fast, .15s) ease-out;
+  transition: transform var(--duration-fast, .15s) ease-out, background .15s;
 }
-.pb-play:hover { transform: scale(1.06); }
-.pb-tm { font-family: Consolas, 'SFMono-Regular', monospace; font-size: 12px; letter-spacing: .06em; white-space: nowrap; }
-.pb-sep { opacity: .45; margin: 0 2px; }
-.pb-track {
-  flex: 1; height: 4px; border-radius: 3px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.16); position: relative;
+.hp-play:hover { transform: scale(1.06); background: var(--color-primary-dark); }
+.hp-tm { font-family: Consolas, 'SFMono-Regular', monospace; font-size: 12px; letter-spacing: .06em; white-space: nowrap; color: var(--color-text-secondary); }
+.hp-sep { opacity: .45; margin: 0 2px; }
+.hp-track {
+  flex: 1; height: 2px; border-radius: 2px; cursor: pointer;
+  background: var(--color-border-light, #e3e8e6); position: relative;
   transition: height .15s ease-out;
 }
-.pb-track:hover { height: 6px; }
-.pb-track i {
+.hp-track:hover { height: 5px; }
+.hp-track i {
   position: absolute; left: 0; top: 0; height: 100%;
-  background: var(--raw-52a896); border-radius: 3px;
+  background: var(--color-primary); border-radius: 2px;
 }
-.pb-spd {
+.hp-spd {
   font-family: Consolas, monospace; font-size: 11px; cursor: pointer;
-  background: transparent; color: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 9999px; padding: 1px 9px;
+  background: transparent; color: var(--color-text-secondary);
+  border: 1px solid var(--color-border); border-radius: 9999px; padding: 1px 9px;
 }
-.pb-spd:hover { border-color: rgba(255, 255, 255, 0.5); }
-.pb-note {
-  font-family: Consolas, monospace; font-size: 10px; letter-spacing: .1em;
-  color: rgba(234, 244, 240, 0.5); white-space: nowrap;
+.hp-spd:hover { color: var(--color-primary); border-color: var(--color-primary-border, rgba(61,107,100,.2)); }
+.hp-note {
+  font-family: Consolas, monospace; font-size: 10px; letter-spacing: .14em;
+  color: var(--color-text-placeholder); white-space: nowrap;
 }
+.hp-noaudio {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--color-border-light);
+  font-family: Consolas, monospace; font-size: 11px; letter-spacing: .08em;
+  color: var(--color-text-placeholder);
+}
+/* 进度 = 卡片下边缘的一条 2px 色线 (detail-hero 加 position:relative) */
+.hero-progress {
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  border-radius: 0 0 var(--radius-lg, 12px) var(--radius-lg, 12px);
+  overflow: hidden; pointer-events: none;
+}
+.hero-progress i { display: block; height: 100%; background: var(--color-primary); transition: width .2s linear; }
 
 /* 转录时间戳 → seek 按钮 */
 .transcript-ts.ts-seek {
@@ -1858,10 +1870,8 @@ onMounted(async () => {
   --el-color-primary-light-9: #1e2e2b;
   --el-color-primary-dark-2: #85b8b1;
 }
-/* 选型② 墨绿胶囊自含深色底, 深色主题下仅加深投影 */
-[data-theme="dark"] .player-bar {
-  background: linear-gradient(135deg, #0a1815 0%, #142e26 60%, #1b3d34 100%);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-}
+/* 选型⑤ 融于卡片: 颜色全部走本页局部 token, 深色主题自动跟随, 只补轨道底色 */
+[data-theme="dark"] .hp-track { background: rgba(255, 255, 255, 0.10); }
+[data-theme="dark"] .hp-noaudio { border-color: rgba(255, 255, 255, 0.08); }
 [data-theme="dark"] .transcript-ts.ts-seek { color: var(--raw-7fb3aa); }
 </style>
