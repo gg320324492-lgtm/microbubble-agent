@@ -12,6 +12,8 @@ import pytest
 from app.models.meeting_speaker_adjudication import MeetingSpeakerAdjudication
 from app.services.speaker_adjudication_service import (
     AdjudicationResolver,
+    collect_index_changes,
+    collect_range_changes,
     get_adjudications,
     record_adjudication,
 )
@@ -180,3 +182,77 @@ class TestPersistence:
         await db.execute(delete(MeetingSpeakerAdjudication).where(
             MeetingSpeakerAdjudication.meeting_id == 99998))
         await db.commit()
+
+
+class TestCollectChanges:
+    """apply_to_transcript 的两个纯收集器 (2026-11-04 会议 265 静默失效修复)
+
+    背景: 会议 265 实战踩中两个坑 ——
+    ① 就地改 dict ⇒ SQLAlchemy 变更检测按值比较 committed 基线（同一对象引用，
+       已被突变污染）⇒ UPDATE 被静默跳过（flag_modified 修）；
+    ② polished 段只有 {ts,text,speaker}、没有 start/end ⇒ 按区间匹配永远落空，
+       transcript_polished 从未被同步（collect_index_changes 修）。
+    """
+
+    @staticmethod
+    def _lookup(start, end):
+        # 模拟 resolver 的中点匹配口径: 段中点落在 [100, 110] 内 → 命中
+        if start is None or end is None:
+            return None
+        mid = (float(start) + float(end)) / 2
+        return "陈金薪" if 100.0 <= mid <= 110.0 else None
+
+    # ---- 区间模式（主转录，段自带 start/end） ----
+
+    def test_range_collects_midpoint_hit(self):
+        entries = [{"start": 100.0, "end": 110.0, "speaker": "发言人B", "text": "a"}]
+        assert collect_range_changes(entries, self._lookup) == {0: "陈金薪"}
+
+    def test_range_skips_same_speaker_and_misses(self):
+        entries = [
+            {"start": 100.0, "end": 110.0, "speaker": "陈金薪"},  # 已是目标
+            {"start": 200.0, "end": 210.0, "speaker": "王天志"},  # 区间外
+        ]
+        assert collect_range_changes(entries, self._lookup) == {}
+
+    def test_range_tolerates_boundary_drift(self):
+        """与 resolver 同口径: 边界 ±0.3s 漂移仍命中（中点在区间内即可）"""
+        entries = [{"start": 99.7, "end": 110.2, "speaker": "发言人B"}]
+        assert collect_range_changes(entries, self._lookup) == {0: "陈金薪"}
+
+    # ---- 索引模式（polished，只有 ts） ----
+
+    def test_index_aligns_by_text(self):
+        base = [{"start": 100.0, "end": 110.0, "speaker": "发言人B", "text": "你好"}]
+        entries = [{"ts": 105.0, "speaker": "发言人B", "text": "你好"}]
+        assert collect_index_changes(entries, base, self._lookup) == {0: "陈金薪"}
+
+    def test_index_falls_back_to_ts_when_text_rewritten(self):
+        """润色改写了文本 ⇒ 文本对不上，用 ts 落回主转录段区间判对齐"""
+        base = [{"start": 100.0, "end": 110.0, "speaker": "发言人B", "text": "原文"}]
+        entries = [{"ts": 105.0, "speaker": "发言人B", "text": "润色后的文字"}]
+        assert collect_index_changes(entries, base, self._lookup) == {0: "陈金薪"}
+
+    def test_index_skips_misaligned_segment(self):
+        """文本不一致且 ts 落不进对应区间 ⇒ 不硬写（宁缺勿错）"""
+        base = [{"start": 100.0, "end": 110.0, "speaker": "发言人B", "text": "原文"}]
+        entries = [{"ts": 999.0, "speaker": "发言人B", "text": "完全不同的话"}]
+        assert collect_index_changes(entries, base, self._lookup) == {}
+
+    def test_index_length_mismatch_is_noop(self):
+        """润色重切了段 ⇒ 结构不同步，整字段跳过"""
+        base = [{"start": 100.0, "end": 110.0, "speaker": "发言人B", "text": "原文"}]
+        entries = [{"ts": 105.0, "speaker": "发言人B", "text": "原文"},
+                   {"ts": 106.0, "speaker": "发言人B", "text": "原文二"}]
+        assert collect_index_changes(entries, base, self._lookup) == {}
+
+    def test_index_skips_already_target(self):
+        base = [{"start": 100.0, "end": 110.0, "speaker": "陈金薪", "text": "你好"}]
+        entries = [{"ts": 105.0, "speaker": "陈金薪", "text": "你好"}]
+        assert collect_index_changes(entries, base, self._lookup) == {}
+
+    def test_index_handles_non_dict_entries(self):
+        base = [{"start": 100.0, "end": 110.0, "speaker": "发言人B", "text": "你好"},
+                None]
+        entries = [{"ts": 105.0, "speaker": "发言人B", "text": "你好"}, "垃圾行"]
+        assert collect_index_changes(entries, base, self._lookup) == {0: "陈金薪"}

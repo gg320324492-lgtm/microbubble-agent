@@ -23,7 +23,7 @@ middleware 分派的 tier（生产，共 11 个）：
     +-------------------+----------+---------------------------------------+
     | Tier              | 限制      | 应用                                    |
     +-------------------+----------+---------------------------------------+
-    | chunked_upload    | 60/min   | PUT /meetings/{id}/audio-chunk        |
+    | chunked_upload    | 120/min  | PUT /meetings/{id}/audio-chunk        |
     | drive_upload      | 50/min   | /api/v1/drive/* + /upload/* 写操作      |
     | drive_list        | 300/min  | /api/v1/drive/* + /upload/* GET       |
     | chat_session_delete | 300/min | DELETE /api/v1/chat/sessions[/{id}] (2026-08-26) |
@@ -216,7 +216,11 @@ _rate_limiters = {
     "read": AsyncRedisRateLimiter(max_attempts=200, window_seconds=60),     # 读操作：200次/分钟
     "upload": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),    # 上传：10次/分钟
     "sse": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),       # v31.2.3: SSE 长连接 10次/分钟
-    "chunked_upload": AsyncRedisRateLimiter(max_attempts=60, window_seconds=60),  # 2026-07-02: 听会边录边传 60次/分钟 (1秒1片 = 60秒录音)
+    # 2026-11-04 (会议 265 事故): 60 → 120。录音固定 1 片/秒 = 60/min，旧额度
+    # **恰好等于产出速率、零余量** —— 任何一次重试/退避都造成永久积压（实测落后 39 分钟），
+    # 且结束时 15s settle 必失败 → 走整段重传兜底。120/min 给重试留出真实余量。
+    # (W68 §3 "禁止改 rate_limit.py 老基础设施"，主指挥 2026-11-04 点名修复为例外)
+    "chunked_upload": AsyncRedisRateLimiter(max_attempts=120, window_seconds=60),
     "drive_upload": AsyncRedisRateLimiter(max_attempts=50, window_seconds=60),  # PR2.10: drive 上传 50次/分 (批量友好)
     "drive_list": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # PR2.10: drive 列表 300次/分 (高频浏览)
     "chat_session_delete": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # 2026-08-26 主拍决策放宽: 批量删除 chat session 不应受 30/min write 限流; 给 300/min (5 ops/秒) 满足正常批量清理
@@ -344,7 +348,9 @@ def _get_rate_limit_type(request: Request) -> str:
 
     # 2026-07-02: 听会边录边传 (chunked audio upload) 独立 tier
     # 走 write tier 30/min → 30秒录音触顶 → 用户看到"网络断开"误以为是断网
-    # 实际是限流。chunked_upload tier 60/min = 1分钟录音足够 (单次听会很少超过 60 秒)
+    # 实际是限流。⚠️ 2026-11-04 订正: 本端点是**实时 1 片/秒**的常驻通路（不是
+    # 早年注释说的"单次听会很少超过 60 秒"），60/min 零余量会被自己的重试打崩，
+    # 额度已提至 120/min（见 RATE_LIMITERS 内注释）。
     # 未来加其他 chunked upload 端点, 在 _CHUNKED_UPLOAD_PATH_RE 扩展 regex 即可
     if method == "PUT" and _CHUNKED_UPLOAD_PATH_RE.match(path):
         return "chunked_upload"

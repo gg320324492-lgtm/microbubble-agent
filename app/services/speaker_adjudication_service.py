@@ -121,18 +121,73 @@ async def record_adjudication(
     return row
 
 
+def collect_range_changes(entries, lookup) -> Dict[int, str]:
+    """段自带 start/end ⇒ 按「中点落区间」收集要改的 {index: speaker}。"""
+    changed: Dict[int, str] = {}
+    if not isinstance(entries, list):
+        return changed
+    for i, seg in enumerate(entries):
+        if not isinstance(seg, dict):
+            continue
+        want = lookup(seg.get("start"), seg.get("end"))
+        if want and seg.get("speaker") != want:
+            changed[i] = want
+    return changed
+
+
+def collect_index_changes(entries, base, lookup) -> Dict[int, str]:
+    """polished 等无 start/end 的平行数组 ⇒ 与主转录**按索引对齐**收集变更。
+
+    对齐判据: 文本一致; 文本被润色改写时用 ``ts`` 落回主转录段区间校验。
+    长度不一致 (润色重切了段) ⇒ 结构不同步, 全部跳过不硬写。
+    """
+    changed: Dict[int, str] = {}
+    if not isinstance(entries, list) or not isinstance(base, list):
+        return changed
+    if len(entries) != len(base):
+        return changed
+    for i, seg in enumerate(entries):
+        if not isinstance(seg, dict) or not isinstance(base[i], dict):
+            continue
+        ref = base[i]
+        aligned = ((seg.get("text") or "").strip()
+                   == (ref.get("text") or "").strip())
+        if (not aligned and seg.get("ts") is not None
+                and isinstance(ref.get("start"), (int, float))):
+            ts = float(seg["ts"])
+            aligned = float(ref["start"]) <= ts <= float(ref.get("end") or 0)
+        if not aligned:
+            continue
+        want = lookup(ref.get("start"), ref.get("end"))
+        if want and seg.get("speaker") != want:
+            changed[i] = want
+    return changed
+
+
 async def apply_to_transcript(
     db: AsyncSession,
     meeting_id: int,
     transcript: Sequence[dict],
     extra_fields: Sequence[str] = ("transcript_polished",),
 ) -> Dict[str, int]:
-    """把裁决就地写回转录的 ``speaker`` 字段。
+    """把裁决写回转录的 ``speaker`` 字段并**确保持久化**。
 
     只改 ``speaker``，**保留 start/end/speaker_label** 等其余字段
     (CLAUDE.md H.9: 重建转录的写法会丢字段, 这里刻意不走那条路)。
-    返回 {speaker: 改动段数} 统计。
+    返回 {speaker: 改动段数} 统计（transcript 与各 extra_fields 合计）。
+    ⚠️ 参数 ``transcript`` 仅为兼容保留, 实际以 meeting 自身字段为准。
+
+    2026-11-04 修复的两个静默失效 (会议 265 实战踩中, 类 20.220):
+    ① **就地改 dict ⇒ SQLAlchemy 检测不到变更** —— 变更检测对 committed 基线做
+       相等比较, 而 committed 存的是**同一个对象的引用**, 就地突变把基线也污染了;
+       事后整体重新赋值也无效 (新值 == 被污染的基线) ⇒ UPDATE 被**静默跳过**,
+       界面永远看不到改动。修法: patch 后 :func:`flag_modified` 强制把属性标脏。
+    ② **polished 段没有 start/end** (是 ``{ts,text,speaker}``) ⇒ resolver 的
+       「中点落区间」永远匹配不上 ⇒ transcript_polished 从未被同步过。
+       修法: 与主转录按索引对齐 (:func:`collect_index_changes`)。
     """
+    from sqlalchemy.orm.attributes import flag_modified
+
     from app.models.meeting import Meeting
 
     resolver = await build_resolver(db, meeting_id)
@@ -141,27 +196,29 @@ async def apply_to_transcript(
     ).scalar_one()
 
     stats: Dict[str, int] = {}
+    main_entries = meeting.transcript
 
-    def patch(entries):
-        changed = {}
-        if not isinstance(entries, list):
-            return changed
-        for i, seg in enumerate(entries):
-            if not isinstance(seg, dict):
-                continue
-            want = resolver.lookup(seg.get("start"), seg.get("end"))
-            if want and seg.get("speaker") != want:
-                changed[i] = want
-        return changed
-
-    all_lists = [("transcript", meeting.transcript)] + [
-        (name, getattr(meeting, name, None)) for name in extra_fields
-    ]
-    for _, entries in all_lists:
-        changed = patch(entries)
+    def apply_field(name: str, entries, use_index: bool) -> None:
+        if use_index:
+            changed = collect_index_changes(entries, main_entries, resolver.lookup)
+        else:
+            changed = collect_range_changes(entries, resolver.lookup)
+        if not changed:
+            return
         for i, want in changed.items():
             entries[i]["speaker"] = want
             stats[want] = stats.get(want, 0) + 1
+        # ⭐ 就地突变必须强制标脏, 否则 commit 会静默跳过 (见 docstring ①)
+        flag_modified(meeting, name)
+
+    apply_field("transcript", main_entries, use_index=False)
+    for name in extra_fields:
+        entries = getattr(meeting, name, None)
+        if not isinstance(entries, list):
+            continue
+        has_range = bool(entries) and isinstance(entries[0], dict) \
+            and entries[0].get("start") is not None
+        apply_field(name, entries, use_index=not has_range)
     return stats
 
 
