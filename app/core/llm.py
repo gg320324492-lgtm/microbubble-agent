@@ -220,6 +220,11 @@ def get_anthropic_client() -> anthropic.AsyncAnthropic:
     async def _create(model, **kwargs):
         if str(model).lower().startswith("minimax"):
             kwargs.pop("thinking", None)
+            # 2026-11-04: M3.x 的自适应思考会消耗输出预算 —— 29 处调用点的 max_tokens
+            # (1024/2048) 都是按"不思考的旧模型"定的, thinking 烧完预算 => 空 text 块
+            # (实测 QA 合成/评测全线空串)。按 .env 前置条件清单抬到 4096 地板。
+            if (kwargs.get("max_tokens") or 0) < 4096:
+                kwargs["max_tokens"] = 4096
         return await original_create(model=model, **kwargs)
 
     client.messages.create = _create  # type: ignore[method-assign]
