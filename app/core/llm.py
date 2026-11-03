@@ -203,11 +203,27 @@ class _OAIStreamShim:
 
 
 def get_anthropic_client() -> anthropic.AsyncAnthropic:
-    """创建异步 Anthropic 客户端（兼容旧代码）"""
-    return anthropic.AsyncAnthropic(
+    """创建异步 Anthropic 客户端（兼容旧代码）
+
+    2026-11-04: MiniMax M3.x 系要求自适应思考, **不接受 thinking={"type":"disabled"}**
+    (400 invalid_request_error, code 2013, error 2013='requires adaptive thinking')。
+    全仓 16 个服务的 Anthropic 端调用点都硬编码了该参数, CLAUDE_MODEL 切到
+    MiniMax-M3.1-Flash 后全部 400。在此客户端层统一剥掉: MiniMax 系一律剥,
+    mimo 系旧模型保留原行为(它们必须显式 disabled 才返 text, 见 llm.py:504 注释)。
+    """
+    client = anthropic.AsyncAnthropic(
         api_key=settings.CLAUDE_API_KEY,
         base_url=settings.CLAUDE_BASE_URL or None,
     )
+    original_create = client.messages.create
+
+    async def _create(model, **kwargs):
+        if str(model).lower().startswith("minimax"):
+            kwargs.pop("thinking", None)
+        return await original_create(model=model, **kwargs)
+
+    client.messages.create = _create  # type: ignore[method-assign]
+    return client
 
 
 def get_default_model() -> str:
