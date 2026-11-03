@@ -24,7 +24,7 @@ fastapi>=0.109.0
 #   app/sensevoice_server.py:423 / app/whisper_server.py:236),
 #   该签名在 0.24 -> 0.31 之间未变; 其余 5 处入口全是命令行 `uvicorn app.main:app`。
 uvicorn[standard]==0.31.1
-python-multipart==0.0.30
+python-multipart==0.0.31  # 2026-11-04: PYSEC-2026-3040 (pip-audit), 修复版 0.0.31
 # 2026-10-11 L-8: websockets 硬钉 12.0 是**任意中间值**, 背后无任何真实约束方 ——
 #   调研实测 `Required-by: funasr`, 而 funasr 与 uvicorn[standard] **均只要求 >=10.4**。
 #   12.0 只是当年随手写的中间版本, 不表达任何依赖方的诉求。
@@ -254,7 +254,7 @@ Pillow>=10.0.0          # 图片处理（缩放、模式转换）
 # pytesseract 可选（备选 OCR 后端，需系统 tesseract 二进制）
 
 # 工具库
-python-dotenv==1.0.0
+python-dotenv>=1.0.0,<2  # 2026-11-04: PYSEC-2026-2270 => 升到 >=1.2.2 (pip-audit)
 # 2026-07-31 RAG-FW-DEPLOY 修复: pydantic==2.5.2 pin 与 langchain (>=2.7.4) + llama-index-core 0.13 (>=2.8.0) 冲突, 放宽到 >=2.8.0
 #   ⚠️ 2026-10-12 订正: 本句"与 langchain 冲突"那半边**理由已失效** —— langchain
 #     四个包已整体移除(见下方 LangChain 家族段)。llama-index 那半边**仍成立**
@@ -391,3 +391,35 @@ langfuse>=2.0.0,<3.0.0
 # fakeredis: tests/rag 缓存与 collab 测试的 Redis mock (CLAUDE.md 测试 mock 策略)。
 pycrdt>=0.14.0
 fakeredis>=2.20.0
+
+# ============================================================================
+# 2026-11-04 升级 pass (全量测试门禁): 冻结已验证的 ML/声纹栈 + 危险大版本,
+# 让 Web/工具层在帽内浮动升级。原则 = 类 20.223「能钉别漂」:
+#   - torch/transformers/sentence-transformers/modelscope/funasr/faster-whisper/
+#     ctranslate2 是声纹+ASR+嵌入链的已验证栈 (Phase 0-1m 全部实验在现版本跑出),
+#     升级会让嵌入数值漂移 => 声纹链路静默失效, 必须钉死;
+#   - anthropic/openai/huggingface-hub/llama-index/langfuse 的下一个大版本都是
+#     breaking major, 本 pass 不吃, 先帽住;
+#   - celery/asyncpg/redis/datasets 维持现钉 (队列/驱动主干, 不与本次同车)。
+torch==2.14.1
+transformers==5.19.0
+sentence-transformers==5.6.0
+modelscope==1.40.2
+funasr==1.4.16
+faster-whisper==1.2.1
+ctranslate2==4.8.2
+anthropic>=1.13.0,<2
+openai>=1.109.1,<2
+huggingface-hub>=1.19,<2
+llama-index>=0.13.6,<0.14
+langfuse>=2.60.10,<3
+sqlalchemy>=2.0.23,<2.1
+fastapi>=0.109.0,<0.164
+uvicorn[standard]>=0.31.1,<1
+anyio>=4,<5
+httpx>=0.27,<1
+pydantic>=2.9,<3
+pydantic-settings>=2,<3
+alembic>=1.13,<1.22
+edge-tts>=7.2.8,<8
+pgvector>=0.5.1,<0.7
