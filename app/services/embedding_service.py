@@ -416,6 +416,18 @@ def is_embedding_degraded() -> bool:
     return _embedding_degraded
 
 
+def is_embedding_loaded() -> bool:
+    """模型是否**已经**在内存里 —— 只读判据, 绝不触发加载。
+
+    存在的理由: 2026-10-26 起模型改为按需加载, 冷启动实测 20–36 秒 (类 20.237)。
+    对延迟敏感的**同步**调用方 (例: 对话召回挂在首字延迟的关键路径上) 必须先问这句,
+    否则一次冷加载就把响应拖成半分钟 —— 而 `generate_embedding` 的超时是 60s,
+    挡不住这种慢, 只会让它慢慢走完。
+    后台/离线调用方不该用这个门 (它们要的就是"顺便把模型加载起来")。
+    """
+    return _model is not None
+
+
 async def _run_encode_in_executor(fn, timeout: float, what: str):
     """在专用 executor 上跑同步编码，带超时。
 

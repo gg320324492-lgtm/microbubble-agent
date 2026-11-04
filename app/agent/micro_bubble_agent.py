@@ -21,7 +21,7 @@ import base64
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 
@@ -157,7 +157,7 @@ def _trim_messages_to_budget(
     messages: List[Dict[str, Any]],
     system: str,
     stage: str,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """2026-11-04 B 档: 送进模型前按 **token 预算**裁剪历史。
 
     替代原先「存 30 条 = 送 30 条」的按条数硬截断。为什么必须按 token:
@@ -169,23 +169,65 @@ def _trim_messages_to_budget(
     两条对话路径 (chat / chat_stream) **都走这里** —— 同一道门禁的多个写入方
     必须逐一对齐, 否则漏一条路径就会行为不一致 (类 20.250 ①)。
     裁剪逻辑本身是纯函数, 见 app/agent/context_budget.py。
+
+    返回 `(送给模型的窗口, 被裁掉的那一段)`。第二个返回值是 **C 档长期记忆的原料**
+    —— 之所以由本函数一并交出、而不是让调用方自己算 `messages[:-len(kept)]`:
+    切点会为了对齐到合法轮次边界而**向前扩展** (见 context_budget.trim_to_budget),
+    被裁的到底是哪几条只有裁剪内部知道。让调用方猜切片边界 = 会把还送给模型的
+    轮次也存进记忆, 或漏存真正被裁掉的轮次。
     """
     budget = getattr(settings, "SESSION_CONTEXT_TOKEN_BUDGET", 0) or 0
     if budget <= 0 or not messages:
-        return messages
+        return messages, []
     try:
         trimmed, dropped, est = trim_to_budget(
             messages, budget, system_chars=len(system or "")
         )
     except Exception as e:  # noqa: BLE001 — 裁剪失败不能阻断对话, 原样送出去
         logger.warning(f"[上下文预算] {stage} 裁剪异常, 按原历史送出: {e}")
-        return messages
+        return messages, []
+    overflow = list(messages[:len(messages) - len(trimmed)]) if dropped else []
     if dropped:
         logger.info(
             f"[上下文预算] {stage} 丢弃较早消息 {dropped} 条, "
             f"估算 prompt≈{est} token (预算 {budget})"
         )
-    return trimmed
+    return trimmed, overflow
+
+
+# C 档 (2026-11-04): 在途的长期记忆写入任务。
+# ⚠️ **必须持有引用** —— asyncio.create_task 的返回值若不被保存, 任务可能在执行前
+# 被 GC 回收, 表现为"记忆一条都没写、但没有任何报错" (CPython 文档明确警告过这点)。
+# 仓里已有的 `_extract_knowledge_bg` 是裸 create_task, 带着同一个隐患;
+# 新写的这条不留同样的坑。
+_BG_MEMORY_TASKS: set = set()
+
+
+def _capture_overflow_memory(
+    user_id: Optional[int],
+    session_id: str,
+    overflow: List[Dict[str, Any]],
+) -> None:
+    """C 档: 把被 token 预算裁掉的轮次交给长期记忆服务 (fire-and-forget)。
+
+    为什么必须后台: embedding 模型按需加载, 冷启动实测 **20–36 秒** (类 20.237 /
+    memory #52)。放进对话主路径 = 把首字延迟从 1 秒变成半分钟。
+    同步部分只做「起任务」, 取向量与写库全在任务里。
+
+    门禁与 `_trim_messages_to_budget` 同一个函数交出的 overflow ⇒ chat 与
+    chat_stream 两条路径**结构上共用同一份原料** (类 20.250 ①)。
+    """
+    if not overflow or not user_id:
+        return
+    if not getattr(settings, "CONVERSATION_MEMORY_ENABLED", False):
+        return
+    try:
+        from app.services.conversation_memory_service import capture_overflow
+        task = asyncio.create_task(capture_overflow(user_id, overflow, session_id or ""))
+        _BG_MEMORY_TASKS.add(task)
+        task.add_done_callback(_BG_MEMORY_TASKS.discard)
+    except Exception as e:  # noqa: BLE001 — 记忆是增益, 起不来不能影响本轮对话
+        logger.warning(f"[长期记忆] 捕获任务启动失败: {e}")
 
 
 async def _load_knowledge_by_ids(db, ids: List[int]) -> List[Dict]:
@@ -633,8 +675,11 @@ class MicroBubbleAgent:
         # 4. 调用 ChatEngine
         # B 档: 送进模型前按 token 预算裁剪。**只传裁剪后的副本, 不动 messages 本体** ——
         # messages 还要带着 assistant 存回 Redis, 原地裁会把长会话的历史裁掉。
+        # C 档: 同时接住被裁掉的那一段, 交给长期记忆 (后台任务, 不占本轮延迟)。
+        send_messages, overflow = _trim_messages_to_budget(messages, system, "chat")
+        _capture_overflow_memory(user_id, session_id, overflow)
         result = await self.engine.chat_with_brief_and_detail(
-            messages=_trim_messages_to_budget(messages, system, "chat"),
+            messages=send_messages,
             system=system,
             user_id=user_id,
             db=db,
@@ -854,9 +899,12 @@ class MicroBubbleAgent:
                 "若搜索失败或无结果, 如实告知用户, 不要编造。"
             )
 
+        # B 档: 与 chat() 同一道预算门禁 (两个写入方必须对齐, 类 20.250 ①)
+        # C 档: 同样接住溢出区间 —— 两条路径共用同一个函数交出的原料, 不会一边接了一边漏
+        send_messages, overflow = _trim_messages_to_budget(messages, system, "chat_stream")
+        _capture_overflow_memory(user_id, session_id, overflow)
         stream_iter = self.engine.chat_stream(
-            # B 档: 与 chat() 同一道预算门禁 (两个写入方必须对齐, 类 20.250 ①)
-            messages=_trim_messages_to_budget(messages, system, "chat_stream"),
+            messages=send_messages,
             system=system,
             user_id=user_id,
             db=db,
@@ -1625,6 +1673,24 @@ class MicroBubbleAgent:
                 )
         except Exception as e:
             logger.error(f"_build_system_prompt: team_overview injection failed: {e}", exc_info=True)
+
+        # 3. 长期记忆召回 (2026-11-04 C 档) —— 把被 token 预算裁掉的历史轮次按语义补回来
+        #    B 档之后, 超出 60k 预算的早期轮次不再送模型; 这些原话并未过期, 只是装不下。
+        #    本步按 query 语义召回 top-K 条注入 —— 窗口装不下的, 用检索补。
+        #    ⚠️ 注入块的标题必须叫「长期记忆」: app/agent/prompts.py:381 的反幻觉纪律
+        #    正是按这个名字生效的 ("下方'长期记忆'section…只作为参考…必须重新验证")。
+        #    改标题 = 让那条纪律指向空气 (类 20.220)。这个位置在 C 档之前一直是空的,
+        #    而函数 docstring 早就写了"记忆"、步骤号从 2.5 直接跳到 4 —— 空头支票现在兑现。
+        #    失败/无结果一律不注入; embedding 模型未加载时直接跳过 (见 recall_memories)。
+        try:
+            from app.services.conversation_memory_service import recall_and_format
+            memory_block = await recall_and_format(db, user_id, query)
+            if memory_block:
+                parts.append(memory_block)
+                logger.debug(
+                    f"_build_system_prompt: long-term memory injected ({len(memory_block)} chars)")
+        except Exception as e:  # noqa: BLE001 — 记忆召回失败不能影响对话
+            logger.warning(f"注入长期记忆失败: {e}")
 
         # 4. 会议转录检测
         if _is_meeting_transcript_query(query):

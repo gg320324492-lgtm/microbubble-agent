@@ -20,6 +20,9 @@ from app.models.billing import (  # 2026-09-12: 补注册商业表 (原仅 alemb
 from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
 from app.models.voiceprint_history import VoiceprintHistory
+# 2026-11-04 C 档: `memories` 表建表三年后**首次**有 ORM 模型 (此前无写入方/读取方,
+# 见 app/models/memory.py 的 docstring)。必须在此注册, 否则测试库 create_all 无此表。
+from app.models.memory import Memory
 from app.models.agent_trace import AgentTrace  # 2026-06-12 可观测性
 from app.models.chat_session_attached_document import ChatSessionAttachedDocument  # Phase 14: P5 (W-N-G+): 聊天附加文档
 from app.models.drive_document import DriveDocument

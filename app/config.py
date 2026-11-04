@@ -240,6 +240,20 @@ class Settings(BaseSettings):
     SESSION_STORE_MAX_MESSAGES: int = 200
     SESSION_WINDOW_SIZE: int = 30  # 遗留: 仅历史语义保留, 实际截断改用上面两个键
 
+    # 2026-11-04 [C 档] 对话长期记忆 —— 被上面 token 预算裁掉的轮次向量化存档、按需召回
+    # 默认 **关闭**: 这是一条增益链路, 先灰度验证再放量。打开后
+    #   写: 每次裁剪把溢出区间里的 user 原话 embedding 后写 memories(memory_type='episode')
+    #       (后台任务 + 独立 session, 不在对话主路径; embedding 冷启动实测 20-36s)
+    #   读: 每次构造 system 时按语义召回 top-K, 注入「长期记忆」section
+    #       (prompts.py:381 的反幻觉纪律要求模型把它当参考、必须用工具重新验证)
+    # 只存 user 轮 —— 把模型输出回灌成记忆 = 固化幻觉 (memory #30 的教训)。
+    CONVERSATION_MEMORY_ENABLED: bool = False
+    CONVERSATION_MEMORY_TOP_K: int = 4
+    # 单用户 episode 记忆条数上限; 超出把最旧的置 is_active=False (**停用不删**)。
+    # 该表在库里没有任何索引 (类 20.256), 召回是全表精扫 —— 千行量级完全够,
+    # 上限是防"跑了一年没人管"导致召回延迟线性劣化。
+    CONVERSATION_MEMORY_MAX_PER_USER: int = 1000
+
     # 2026-08-03 [W100 +31] qa-bench v3.1 D1: LLM 测评温度配置 (plan §D1)
     # LLM 测评稳定性: temperature=0.0 (Anthropic deterministic mode) + 3 轮取众数 fallback.
     # 默认 0.0 用于 qa-bench/测评场景; 默认流式聊天维持 0.3 (不在 settings 层覆盖, 走 app/core/llm.py 默认).
