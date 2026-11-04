@@ -1,0 +1,46 @@
+{
+ "n_docs": 100,
+ "window_count": {
+  "min": 1,
+  "max": 3,
+  "mean": 1.39
+ },
+ "doc_vector_separation": {
+  "norm_mean": 25.0892,
+  "pairwise_dist_mean": 0.2414,
+  "pairwise_dist_std": 0.0678
+ },
+ "metrics": {
+  "Q_A_qwen3": {
+   "top1": 0.01,
+   "top5": 0.05,
+   "mrr": 0.0527,
+   "median_rank": 46,
+   "random_baseline_top1": 0.01
+  },
+  "Q_B_bgem3": {
+   "top1": 0.14,
+   "top5": 0.21,
+   "mrr": 0.199,
+   "median_rank": 31,
+   "random_baseline_top1": 0.01
+  },
+  "Q_GOLD_self": {
+   "top1": 0.97,
+   "top5": 1.0,
+   "mrr": 0.985,
+   "median_rank": 1,
+   "random_baseline_top1": 0.01
+  },
+  "Q_RAND": {
+   "top1": 0.0,
+   "top5": 0.04,
+   "mrr": 0.0396,
+   "median_rank": 51,
+   "random_baseline_top1": 0.01
+  }
+ },
+ "top5_jaccard_qwen3_vs_bgem3": 0.0056,
+ "pipeline_selfcheck_ok": true,
+ "note": "query 由标题+首句合成, 是代理判据, 不代表生产检索效果"
+}
