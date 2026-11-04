@@ -1,8 +1,14 @@
 import json
 import asyncio
+import logging
 from typing import List, Dict, Any, Optional
 import redis.asyncio as redis
 from app.config import settings
+# 2026-11-04 P0: 会话历史净化 —— 防模型原生工具标记被写进历史后自我强化
+# (与 agent/session_manager.py 同一套逻辑, 两个存储层都必须接, 见 message_sanitizer docstring)
+from app.core.message_sanitizer import is_polluted_message, sanitize_messages
+
+logger = logging.getLogger("microbubble.core.redis")
 
 # Lazy-init pool: 模块导入时不创建 ConnectionPool,
 # 而是首次 get_redis() 时按当前 event loop 创建。
@@ -62,17 +68,29 @@ class RedisSessionStore:
         return f"{self.prefix}:{session_id}"
 
     async def get_messages(self, session_id: str) -> List[Dict[str, Any]]:
+        """读取会话消息（**读时净化**，让已污染的老会话自动恢复）。"""
         r = await get_redis()
         data = await r.get(self._key(session_id))
         if not data:
             return []
-        return json.loads(data)
+        kept, dropped = sanitize_messages(json.loads(data))
+        if dropped:
+            logger.warning(
+                f"[净化] session {session_id} 读取时丢弃 {dropped} 条含原生工具标记的消息"
+            )
+        return kept
 
     async def save_messages(self, session_id: str, messages: List[Dict[str, Any]]):
+        """写入会话消息（**存前净化**，堵住新增污染）。"""
+        kept, dropped = sanitize_messages(messages)
+        if dropped:
+            logger.warning(
+                f"[净化] session {session_id} 写入前丢弃 {dropped} 条含原生工具标记的消息"
+            )
         r = await get_redis()
         await r.set(
             self._key(session_id),
-            json.dumps(messages, ensure_ascii=False, default=str),
+            json.dumps(kept, ensure_ascii=False, default=str),
             ex=self.ttl
         )
 
@@ -81,7 +99,13 @@ class RedisSessionStore:
         await r.delete(self._key(session_id))
 
     async def append_message(self, session_id: str, message: Dict[str, Any]):
-        """追加单条消息到会话"""
+        """追加单条消息到会话（含原生工具标记的消息**跳过**，不污染历史）。"""
+        if is_polluted_message(message):
+            logger.warning(
+                f"[净化] session {session_id} 跳过 1 条含原生工具标记的追加消息 "
+                f"(role={message.get('role') if isinstance(message, dict) else '?'})"
+            )
+            return
         r = await get_redis()
         messages = await self.get_messages(session_id)
         messages.append(message)

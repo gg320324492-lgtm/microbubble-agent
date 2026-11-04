@@ -19,6 +19,10 @@ from typing import Any, Dict, List, Optional
 
 from app.core.redis import get_redis
 from app.config import settings
+# 2026-11-04 P0: 会话历史净化 (防模型原生工具标记自我强化污染)
+# 放 app/core 层: 本模块被 core/redis.py 与 agent/session_manager.py 共用,
+# 放 agent 下会让 core 反向依赖 agent (分层倒置)。
+from app.core.message_sanitizer import is_polluted_message, sanitize_messages
 
 logger = logging.getLogger("microbubble.agent.session")
 
@@ -43,7 +47,12 @@ class SessionManager:
     # ---- 消息 CRUD ----
 
     async def get_messages(self, sid: str) -> List[Dict[str, Any]]:
-        """获取所有消息"""
+        """获取所有消息（**读时净化**：丢弃含原生工具标记的历史消息）。
+
+        2026-11-04 P0: 一旦某轮把"文本形态的工具调用"写进了历史，之后每轮都会
+        把它当示范喂给模型 ⇒ 工具永不执行且自我强化。读时过滤让已污染的老会话
+        自动恢复，不需要人工清 Redis。
+        """
         r = await get_redis()
         raw = await r.lrange(self._msgs_key(sid), 0, -1)
         if not raw:
@@ -54,24 +63,47 @@ class SessionManager:
                 result.append(json.loads(msg_json))
             except json.JSONDecodeError:
                 logger.warning(f"session {sid} 消息反序列化失败")
-        return result
+        kept, dropped = sanitize_messages(result)
+        if dropped:
+            logger.warning(
+                f"[净化] session {sid} 读取时丢弃 {dropped} 条含原生工具标记的消息"
+            )
+        return kept
 
     async def save_messages(self, sid: str, messages: List[Dict[str, Any]]):
-        """整体覆盖（用于 chat() 一次性保存整个 session）"""
+        """整体覆盖（用于 chat() 一次性保存整个 session）。
+
+        **存前净化**：含原生工具标记的消息不落历史，堵住新增污染。
+        """
+        kept, dropped = sanitize_messages(messages)
+        if dropped:
+            logger.warning(
+                f"[净化] session {sid} 写入前丢弃 {dropped} 条含原生工具标记的消息"
+            )
         r = await get_redis()
         msgs_key = self._msgs_key(sid)
         # 原子：DEL + RPUSH 多个 + EXPIRE
         pipe = r.pipeline()
         pipe.delete(msgs_key)
-        if messages:
+        if kept:
             pipe.rpush(msgs_key, *[
-                json.dumps(m, ensure_ascii=False, default=str) for m in messages
+                json.dumps(m, ensure_ascii=False, default=str) for m in kept
             ])
         pipe.expire(msgs_key, self.ttl)
         await pipe.execute()
 
     async def append_message(self, sid: str, message: Dict[str, Any]) -> int:
-        """追加单条消息，返回新消息的 index（O(1) RPUSH）"""
+        """追加单条消息，返回新消息的 index（O(1) RPUSH）。
+
+        含原生工具标记的消息直接跳过写入（返回当前长度-1，不污染历史）。
+        """
+        if is_polluted_message(message):
+            logger.warning(
+                f"[净化] session {sid} 跳过 1 条含原生工具标记的追加消息"
+                f" (role={message.get('role') if isinstance(message, dict) else '?'})"
+            )
+            r = await get_redis()
+            return max(0, await r.llen(self._msgs_key(sid)) - 1)
         r = await get_redis()
         msgs_key = self._msgs_key(sid)
         new_len = await r.rpush(
