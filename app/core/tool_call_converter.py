@@ -131,6 +131,23 @@ def anthropic_messages_to_openai(
                             "tool_call_id": block.get("tool_use_id", ""),
                             "content": tr_text,
                         })
+                # ⚠️ 顺序铁律 (2026-11-04 实测): **tool 消息必须紧跟 assistant(tool_calls)**。
+                #
+                # Anthropic 允许一条 user 消息里同时装 tool_result 块和 text 块
+                # (agentic_loop 的 inject_compressed_to_messages 就会往同一条 user 里
+                # 追加 `<compressed>` 文本)。旧实现先把 text_parts 输出成 role=user,
+                # 再 extend(tool_results) ⇒ 序列变成
+                #   assistant(tool_calls) → user(text) → tool(result)
+                # 严格后端 (MiniMax M3.x) 直接 400:
+                #   "invalid params, tool call result does not follow tool call (2013)"
+                # 这条缺陷一直被遮着, 因为 fast 模式原先 max_tool_rounds=0 从不跑
+                # 工具循环; 2026-11-04 放行 fast 数据意图后才第一次暴露
+                # (类 20.220: 修上游缺陷会暴露下游缺陷)。
+                #
+                # 正确顺序 = tool 先、文本后 ⇒
+                #   assistant(tool_calls) → tool(result) → user(text)
+                # 文本仍作为上下文保留, 只是不再夹在 tool_use 与 tool_result 中间。
+                openai_messages.extend(tool_results)
                 # #P5: 构造 OpenAI multimodal content (text + image_url 数组)
                 if image_urls or text_parts:
                     oai_content_parts = []
@@ -142,7 +159,6 @@ def anthropic_messages_to_openai(
                         "role": "user",
                         "content": oai_content_parts,
                     })
-                openai_messages.extend(tool_results)
 
         elif role == "assistant":
             if isinstance(content, list):

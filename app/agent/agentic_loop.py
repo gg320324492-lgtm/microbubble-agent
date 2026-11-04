@@ -1450,6 +1450,13 @@ class AgenticLoop:
             # [snapshot] synthesis_start
             yield StreamEvent(type="synthesis_start", label="✨ 综合分析中...")
 
+            # ⚠️ 2026-11-04: `final_text` 必须在 **Phase 2 之前**初始化。
+            # 原实现在 1535 行 (Phase 4 之后) 才赋 "", 而 except 兜底块
+            # (1674 行 `if rich_blocks and not final_text.strip()`) 会引用它 ——
+            # 一旦 _synthesize_stream 抛异常 (例: 严格后端 400), 异常路径自己再
+            # 抛 UnboundLocalError, 把原始错误盖掉并变成 HTTP 500。
+            # 这正是「修上游缺陷会暴露下游缺陷」(类 20.220) 的掩盖层。
+            final_text = ""
             synthesis_text = ""
             synthesis_blocks: list[RichBlock] = []
             async for evt in self._synthesize_stream(
@@ -1530,9 +1537,9 @@ class AgenticLoop:
                 yield critique_to_sse_event(critique)
                 accumulated_text = retry_text
 
-            # 2026-07-13 #P1 修复: final_text 在 try 内定义, except 块 (异常兜底) 引用会 UnboundLocalError
-            # 提前初始化, 让 except 块安全访问 (L1360 `not final_text.strip()`)
-            final_text = ""
+            # final_text 已在 **Phase 2 之前**初始化 (2026-11-04): 异常兜底需要在
+            # _synthesize_stream 抛错时就能安全访问它。此处不再重复赋值 ——
+            # 否则会把 Phase 4 retry 已经写进去的正文又清空。
 
             # ===== Phase 4.4: 空综合强制重试 (2026-09-20) =====
             # 事故: "搜一下吧" 等 follow_up 轮 synthesis 返回空正文, 且 critique
