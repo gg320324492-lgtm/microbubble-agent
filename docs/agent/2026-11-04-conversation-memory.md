@@ -5,24 +5,46 @@
 
 ## 现状与开关
 
-**默认关闭**（`CONVERSATION_MEMORY_ENABLED=False`）—— 这是一条增益链路，先灰度验证再由主指挥放量。
+**当前 = 白名单灰度，只对 `user_id=3`（杜同贺）生效**（2026-11-04 主指挥拍板）。
+总开关 `CONVERSATION_MEMORY_ENABLED` **仍为 False**，是白名单优先于总开关让它生效的。
 
-打开方式：在 `.env` 里设三个值（改完必须 `docker compose up -d --force-recreate`，
-**`restart` 不刷新容器 env**，类 20.227）：
+判据只有一处：`conversation_memory_service.is_conversation_memory_enabled(user_id)`
+——起后台任务 / 写库 / 召回**三处都调它**（类 20.250 ①）。完整真值表：
+
+| 白名单 | 总开关 | 结果 |
+|---|---|---|
+| 非空 | 任意 | **只有名单内用户启用**（白名单优先，便于总开关还关着就先灰度） |
+| 空 | `True` | 全员启用（将来放量的开关） |
+| 空 | `False` | 全员关闭（代码默认） |
+
+`.env` 当前配置（未入库）：
 
 ```
-CONVERSATION_MEMORY_ENABLED=true
+CONVERSATION_MEMORY_ALLOWED_USERS=3
+# CONVERSATION_MEMORY_ENABLED=true   ← 全员放量时才打开
 CONVERSATION_MEMORY_TOP_K=4
 CONVERSATION_MEMORY_MAX_PER_USER=1000
 ```
 
-⚠️ `.env` 未入库（含密钥）⇒ 换机 / 重建 / 交接时要手动同步这三行。
+⚠️ 改 `.env` 后必须 `docker compose up -d --force-recreate`，
+**`restart` 不刷新容器 env**（类 20.227）。改完要在**运行中的容器里回读**
+`settings.CONVERSATION_MEMORY_ALLOWED_USERS` 与判据的 True/False ——
+「重建成功」不等于「配置生效」（本次就踩过：第一次追加的行没带换行符，
+`docker compose config` 计数为 0，四个容器 healthy 但名单是空的）。
+⚠️ `.env` 未入库（含密钥）⇒ 换机 / 重建 / 交接时要手动同步这几行。
+
+**将来全量**：把 `CONVERSATION_MEMORY_ENABLED` 置 `true` **并清空白名单**
+（白名单非空时会优先，留着 `"3"` 会导致只有一个人能用 —— 这是最容易漏的一步）。
 
 | 配置 | 默认 | 含义 |
 |---|---|---|
-| `CONVERSATION_MEMORY_ENABLED` | `False` | 总开关；关时写/读两条路径都直接 return，不碰 DB、不碰模型 |
+| `CONVERSATION_MEMORY_ENABLED` | `False` | 全员总开关；白名单为空时由它决定 |
+| `CONVERSATION_MEMORY_ALLOWED_USERS` | `""` | 逗号分隔的 user_id；**非空即覆盖总开关**。故意用 `str` 不用 `List[int]` —— BaseSettings 解析复杂类型写错会静默拿默认值（类 20.220），改由 `parse_allowed_users()` 显式解析、坏值跳过并记日志 |
 | `CONVERSATION_MEMORY_TOP_K` | `4` | 每次构造 system 时召回几条 |
 | `CONVERSATION_MEMORY_MAX_PER_USER` | `1000` | 超量把最旧的置 `is_active=False`（**停用不删**，调大即可恢复） |
+
+隐私边界是两层：应用层判据 + SQL 的 `user_id` 过滤。测试里验过「即便把名单外用户
+也加进白名单绕过判据，仍读不到别人的记忆」。
 
 ## 它做了什么
 
@@ -80,8 +102,9 @@ CONVERSATION_MEMORY_MAX_PER_USER=1000
 
 | 项 | 结果 |
 |---|---|
-| `tests/test_conversation_memory.py` | **27 passed**（筛选规则 / 两道门禁 / 默认值 / AST 接线守卫 / 真测试库往返） |
+| `tests/test_conversation_memory.py` | 白名单前 **27 passed**；白名单后 **37 passed**（新增 8 例真值表 + 解析 + 三门禁 AST 守卫 + 真库隔离用例） |
 | 相关回归（B 档 + 净化器 + trace） | **37 passed** |
+| 运行中容器回读（灰度生效的硬判据） | 总开关 `False` / 名单 `'3'` / `user 3=True`、`user 1=False`、`user 58=False` |
 | 真模型端到端 | 冷加载 → 写入 2 条、embedding 非空 → 字面不重叠的语义问句「中试设备的安置场所在哪里，经费额度是多少？」命中「三问园 / 38 万」那条 → 注入块标题与内容正确；隔离表与探针数据已清理，**生产库未被触碰** |
 | 上线后真实 `/chat` | HTTP 200 且有内容；探针会话已清理 |
 | 生产 `/health` + 首页资源指纹 | 200；指纹与本地 `web/dist/index.html` 一致（本次无前端改动） |
@@ -89,6 +112,20 @@ CONVERSATION_MEMORY_MAX_PER_USER=1000
 首批往返用例曾两次失败，两次都是**测试数据**问题、不是实现缺陷：
 ① 第一条文本 19 字卡在 `MIN_TURN_CHARS=20` 下方；② mock 向量用 `hash()`（按进程随机化）
 导致排序没有唯一答案。已改成确定性正交向量，并把 19/20 字边界写成显式用例。
+
+## ⚠️ 本次灰度踩到的两个 `.env` 坑（改配置前必读）
+
+1. **注释里写键名会把「存在性判断」骗成假阳性**（类 20.225）。第一次追加时用
+   `b'CONVERSATION_MEMORY_ALLOWED_USERS' in raw` 判是否已存在，命中的却是
+   **中文注释里提到这个键名**的那一行 ⇒ 赋值行根本没写进去，脚本还报「已存在，未改动」。
+   ⇒ 判「某配置在不在」要匹配**赋值行**（`^KEY=`），不要匹配任意提及；
+   且注释里尽量别写完整键名。
+2. **逐行拼接必须每行自带换行符**。第一次的 `''.join([...])` 里各元素都不带 `\n`，
+   再 `.replace(b'\n', nl)` 等于无的放矢 ⇒ 7 行挤成一整行，`docker compose config`
+   解析出 0 个 C 档键。
+   ⇒ **「四个容器 healthy + 重建成功」完全不能证明配置生效**（类 20.220）。
+   本次是靠在运行中容器里回读 `settings.CONVERSATION_MEMORY_ALLOWED_USERS`
+   发现它仍是 `''` 才抓到的。改完 `.env` 一律回读判据的 True/False。
 
 ## 遗留 / 不在本档范围
 
