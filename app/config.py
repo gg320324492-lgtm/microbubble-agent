@@ -248,6 +248,15 @@ class Settings(BaseSettings):
     #       (prompts.py:381 的反幻觉纪律要求模型把它当参考、必须用工具重新验证)
     # 只存 user 轮 —— 把模型输出回灌成记忆 = 固化幻觉 (memory #30 的教训)。
     CONVERSATION_MEMORY_ENABLED: bool = False
+    # 2026-11-04 灰度: 按 user_id 白名单生效 (逗号分隔, 例 "3,58")。
+    #   非空 ⇒ 只有名单内用户启用 (白名单优先于总开关, 便于"总开关还关着就先灰度");
+    #   为空 ⇒ 退回全局总开关的语义 (默认关; 将来全量只需把总开关置 true)。
+    # ⚠️ 故意用 **str 不是 List[int]**: BaseSettings 从 .env 解析复杂类型时,
+    # 格式写错会静默拿到默认值 (类 20.220), 灰度名单配错了却毫无信号;
+    # 字符串由 is_conversation_memory_enabled() 显式解析并记日志, 坏值看得见。
+    # 判据**只有一处**: app/services/conversation_memory_service.py 的
+    # is_conversation_memory_enabled(user_id), 读/写两条门禁都调它 (类 20.250 ①)。
+    CONVERSATION_MEMORY_ALLOWED_USERS: str = ""
     CONVERSATION_MEMORY_TOP_K: int = 4
     # 单用户 episode 记忆条数上限; 超出把最旧的置 is_active=False (**停用不删**)。
     # 该表在库里没有任何索引 (类 20.256), 召回是全表精扫 —— 千行量级完全够,

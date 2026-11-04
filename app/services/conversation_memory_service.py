@@ -64,6 +64,48 @@ MIN_TURN_CHARS = 20
 MAX_CONTENT_CHARS = 800
 
 
+def parse_allowed_users(raw: str) -> set:
+    """解析 `CONVERSATION_MEMORY_ALLOWED_USERS` (逗号分隔的 user_id)。
+
+    坏值**跳过 + 记日志**而不是整个解析失败 —— 一个手误写进来的 "3，58"
+    (中文逗号) 不该让灰度静默全关; 但也不能悄悄把非数字当成通配。
+    """
+    out = set()
+    for chunk in (raw or "").split(","):
+        s = chunk.strip()
+        if not s:
+            continue
+        try:
+            out.add(int(s))
+        except ValueError:
+            logger.warning("[长期记忆] 白名单里有非数字项, 已跳过: %r", s)
+    return out
+
+
+def is_conversation_memory_enabled(user_id: Optional[int]) -> bool:
+    """**唯一**的生效判据 —— 写路径与读路径都必须调它 (类 20.250 ①)。
+
+    语义 (2026-11-04 主指挥选「按白名单灰度」):
+
+    | 白名单 | 总开关 | 结果 |
+    |---|---|---|
+    | 非空 | 任意 | **只有名单内用户启用** (白名单优先, 便于总开关还关着就先灰度) |
+    | 空   | True  | 全员启用 (将来全量的开关) |
+    | 空   | False | 全员关闭 (默认) |
+
+    为什么不允许「读时判、写时不判」这种分叉: 那会让名单外的用户**召回不到任何东西**
+    (读关) 却仍被后台写入, 或反过来写入关掉但召回一直空跑 —— 两侧不同步的缺陷
+    在功能测试里极难看出 (类 20.220)。
+    """
+    if not user_id:
+        return False
+    raw = getattr(settings, "CONVERSATION_MEMORY_ALLOWED_USERS", "") or ""
+    allowed = parse_allowed_users(raw)
+    if allowed:
+        return int(user_id) in allowed
+    return bool(getattr(settings, "CONVERSATION_MEMORY_ENABLED", False))
+
+
 def content_key(text: str) -> str:
     """内容指纹 (sha256 前 16 位) —— 库里该表**没有唯一约束**，去重全靠它。"""
     return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()[:16]
@@ -158,7 +200,7 @@ async def capture_overflow(
     """
     if not user_id or not dropped:
         return 0
-    if not getattr(settings, "CONVERSATION_MEMORY_ENABLED", False):
+    if not is_conversation_memory_enabled(user_id):
         return 0
 
     texts = pick_memorable_turns(dropped)
@@ -282,9 +324,11 @@ async def recall_memories(
     返回 `Memory` 列表 (已触发 ORM 对象属性可读)。失败一律返 [] ——
     召回不到只是"没有增益", 不能变成对话报错。
     """
-    if not getattr(settings, "CONVERSATION_MEMORY_ENABLED", False):
+    # 与写路径**同一个判据** (类 20.250 ①): 白名单内外必须读写一致,
+    # 否则会出现"名单外的用户一直被后台写入却永远召回不到"。
+    if not is_conversation_memory_enabled(user_id):
         return []
-    if db is None or not user_id or not (query or "").strip():
+    if db is None or not (query or "").strip():
         return []
     k = top_k if top_k is not None else (
         getattr(settings, "CONVERSATION_MEMORY_TOP_K", 4) or 0)

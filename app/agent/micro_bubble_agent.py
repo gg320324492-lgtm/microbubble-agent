@@ -219,10 +219,15 @@ def _capture_overflow_memory(
     """
     if not overflow or not user_id:
         return
-    if not getattr(settings, "CONVERSATION_MEMORY_ENABLED", False):
-        return
+    # ⚠️ 这里**不能**直接判 CONVERSATION_MEMORY_ENABLED: 灰度期白名单优先于总开关
+    # (总开关仍 False, 但名单内用户要生效)。三处门禁 (起任务 / 写库 / 召回) 必须
+    # 调同一个 is_conversation_memory_enabled, 漏一处就会出现"名单内用户根本没起
+    # 捕获任务"而另外两处都开了的静默失效 (类 20.250 ① + 类 20.220)。
     try:
-        from app.services.conversation_memory_service import capture_overflow
+        from app.services.conversation_memory_service import (
+            capture_overflow, is_conversation_memory_enabled)
+        if not is_conversation_memory_enabled(user_id):
+            return
         task = asyncio.create_task(capture_overflow(user_id, overflow, session_id or ""))
         _BG_MEMORY_TASKS.add(task)
         task.add_done_callback(_BG_MEMORY_TASKS.discard)

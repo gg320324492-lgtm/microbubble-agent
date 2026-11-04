@@ -267,6 +267,71 @@ def test_flag_defaults_off():
     assert settings.CONVERSATION_MEMORY_MAX_PER_USER > 0
 
 
+# ---------------------------------------------------------------- 白名单灰度
+
+
+def test_parse_allowed_users_handles_junk(monkeypatch):
+    """坏值跳过并记日志，不该让整份名单静默失效。"""
+    from app.services.conversation_memory_service import parse_allowed_users
+    assert parse_allowed_users("3, 58 ,7") == {3, 58, 7}
+    assert parse_allowed_users("") == set()
+    assert parse_allowed_users("3,abc,58") == {3, 58}
+    assert parse_allowed_users(None) == set()
+
+
+@pytest.mark.parametrize("raw,flag,uid,expected", [
+    # 白名单非空 ⇒ 优先于总开关: 名单内即使总开关关着也生效 (灰度期的形态)
+    ("3,58", False, 3, True),
+    ("3,58", False, 58, True),
+    ("3,58", False, 9, False),
+    ("3,58", True, 9, False),
+    # 白名单为空 ⇒ 退回全局总开关
+    ("", False, 3, False),
+    ("", True, 3, True),
+    # 无名用户一律关
+    ("3", True, None, False),
+])
+def test_whitelist_truth_table(monkeypatch, raw, flag, uid, expected):
+    """完整真值表 —— 两侧门禁共用这一个函数, 表对了行为就不会分叉。"""
+    monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ALLOWED_USERS", raw)
+    monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ENABLED", flag)
+    from app.services.conversation_memory_service import is_conversation_memory_enabled
+    assert is_conversation_memory_enabled(uid) is expected
+
+
+def test_three_gates_share_the_whitelist_predicate():
+    """AST 守卫: 起任务 / 写库 / 召回 **三处**都调同一个判据。
+
+    这是类 20.250 ① 的直接落地: 灰度期最容易写坏的形态是「读时判白名单、
+    写时判总开关」⇒ 名单内用户的记忆永远写不进去 (或反过来一直空跑召回)，
+    而总开关关着时**全链路看起来都很安静**，没有任何报错 (类 20.220)。
+    """
+    svc = (REPO / "app/services/conversation_memory_service.py").read_text(encoding="utf-8")
+    tree = ast.parse(svc)
+    fns = _funcs(tree)
+    for name in ("capture_overflow", "recall_memories"):
+        calls = [
+            n for n in ast.walk(fns[name]) if isinstance(n, ast.Call)
+            and (getattr(n.func, "id", "") == "is_conversation_memory_enabled")
+        ]
+        assert calls, "%s 没有走统一判据" % name
+        # 不许再直接读总开关 (那样就绕过白名单)
+        assert not any(
+            isinstance(n, ast.Attribute) and n.attr == "CONVERSATION_MEMORY_ENABLED"
+            for n in ast.walk(fns[name])
+        ), "%s 里仍直接判总开关 ⇒ 白名单会被绕过" % name
+
+    agent_src = (REPO / "app/agent/micro_bubble_agent.py").read_text(encoding="utf-8")
+    agent_tree = ast.parse(agent_src)
+    fn = _funcs(agent_tree)["_capture_overflow_memory"]
+    assert any(
+        isinstance(n, ast.Call) and getattr(n.func, "id", "") == "is_conversation_memory_enabled"
+        for n in ast.walk(fn)
+    ), "起后台任务处没有走统一判据"
+    assert "CONVERSATION_MEMORY_ENABLED" not in ast.dump(fn), (
+        "起后台任务处仍直接判总开关 ⇒ 灰度用户根本不会起捕获任务")
+
+
 def test_memory_type_fits_column():
     """`memory_type` 是 varchar(20), 超长会在**写库时**才炸。"""
     assert len(MEMORY_TYPE_EPISODE) <= 20
@@ -460,4 +525,63 @@ async def test_capture_then_recall_roundtrip(db, monkeypatch):
 
     # 清理: 别把测试数据留给下一个用例
     await db.execute(Memory.__table__.delete().where(Memory.user_id == user_id))
+    await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_whitelist_isolation_in_real_db(db, monkeypatch):
+    """真库: 名单内用户能写能读, 名单外用户**读不到别人的记忆**。
+
+    白名单不只是"少几个人用", 它同时是隐私边界 —— `recall_memories` 的
+    `user_id` 过滤若被绕过, A 用户的历史原话会被注入到 B 用户的 system 里。
+    """
+    import app.services.embedding_service as emb
+
+    monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ALLOWED_USERS", "3")
+    monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ENABLED", False)  # 仍关着
+
+    def vec(_):
+        return [1.0] + [0.0] * 1023
+
+    async def fake_docs(texts, for_query=False, has_query_prompt=False):
+        return [vec(t) for t in texts]
+
+    monkeypatch.setattr(emb, "generate_embeddings", fake_docs)
+    monkeypatch.setattr(emb, "is_embedding_loaded", lambda: True)
+
+    async def fake_query(*a, **k):
+        return vec("q")
+
+    monkeypatch.setattr(emb, "generate_embedding", fake_query)
+
+    from app.services.conversation_memory_service import (
+        capture_overflow, recall_memories, is_conversation_memory_enabled)
+    from app.models.memory import Memory
+
+    # inside 必须**真的在白名单里** —— 首版写成 9921 而白名单是 "3",
+    # 断言自己就 false 了 (测试数据自相矛盾, 不是实现缺陷)。
+    inside, outside = 3, 9922
+    text = "灰度用户的内部编号是紫蓝鲸七七四一，年底复盘时要用"
+    assert is_conversation_memory_enabled(inside) is True
+    assert is_conversation_memory_enabled(outside) is False
+
+    # 名单外用户即使被直接调 service，也不会写进去
+    assert await capture_overflow(outside, [_user(text)], "isolate") == 0
+    # 名单内用户写入 (总开关仍 False ⇒ 证明白名单真的优先)
+    assert await capture_overflow(inside, [_user(text)], "isolate") == 1
+
+    got_in = await recall_memories(db, inside, "编号是多少")
+    assert got_in and "紫蓝鲸" in got_in[0].content
+    # 名单外: 判据直接拦掉
+    assert await recall_memories(db, outside, "编号是多少") == []
+
+    # 即便把名单外用户也加进白名单 (绕过判据硬查)，SQL 的 user_id 过滤
+    # 也必须挡住 —— 纵深防御，不把隐私边界全押在应用层一个 if 上。
+    monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ALLOWED_USERS", "3,9922")
+    got_cross = await recall_memories(db, outside, "编号是多少")
+    assert got_cross == [], "跨用户读到了别人的记忆"
+
+    await db.execute(Memory.__table__.delete().where(
+        Memory.user_id.in_([inside, outside]),
+        Memory.source_session == "isolate"))
     await db.commit()
