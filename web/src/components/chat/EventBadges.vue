@@ -83,8 +83,13 @@ let synthesisTimer: ReturnType<typeof setTimeout> | null = null
 watch(
   hasSynthesisEvent,
   (now, before) => {
-    if (now && !before) {
-      // 新触发 synthesis_start → 显示 burst
+    // ⚠️ 必须判 `before === false`，不能用 `!before`：本 watch 带 `immediate: true`，
+    //   首次回调时 before 是 **undefined**。用 `!before` 会把「打开会话时历史消息的
+    //   toolTrace 里本来就带着 synthesis 块」误判成「新触发 synthesis_start」，
+    //   于是一进会话就闪出「正在组织回答」、3s 后自动消失
+    //   (2026-11-04 主指挥实测报告)。只有真正的 false→true 转换才是新事件。
+    if (now && before === false) {
+      // 流式中新到达 synthesis_start → 显示 burst
       synthesisVisible.value = true
       if (synthesisTimer) clearTimeout(synthesisTimer)
       synthesisTimer = setTimeout(() => {
@@ -156,8 +161,14 @@ const compressedLabel = computed(() => {
 // ---------------------------------------------------------------------------
 // 总开关 — 4 个状态同时为 false 时组件返回 null
 // ---------------------------------------------------------------------------
+// 进行态徽标只在「消息正在生成」时显示 —— 与下方 retryActive 同口径 (第 115 行)。
+// 双重防御: 即使 burst 窗口内消息已结束 (state 变 idle)，也立刻收起，
+// 不留一个"正在组织回答"挂在已完成的回答上。
 const showSynthesis = computed(
-  () => hasSynthesisEvent.value && synthesisVisible.value,
+  () =>
+    hasSynthesisEvent.value &&
+    synthesisVisible.value &&
+    props.msg.state === 'streaming',
 )
 const showRetry = computed(() => retryActive.value)
 const showCritique = computed(() => critiqueScore.value != null)
