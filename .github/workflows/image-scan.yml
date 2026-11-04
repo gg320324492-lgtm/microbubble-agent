@@ -171,6 +171,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2026-11-04 诊断: setup-trivy 连续 5 次 exit 6 (curl Couldn't resolve host),
+      # 而同一 job 的 checkout/cache 均成功、本地跑同一条 install.sh 成功、
+      # GitHub 官方 status 全绿 ⇒ 让 runner 自己回答"哪些域名解析得了"。
+      # 两个 job 落在不同 runner 实例上, 可区分单机故障与普遍故障。拿到结论后删掉本步骤。
+      - name: Diagnose runner DNS (trivy 下载失败定位)
+        run: |
+          for h in github.com api.github.com codeload.github.com objects.githubusercontent.com raw.githubusercontent.com; do
+            ip=$(getent hosts "$h" 2>/dev/null | awk '{print $1}' | head -1)
+            if [ -n "$ip" ]; then echo "OK   $h -> $ip"; else echo "FAIL $h 解析不了"; fi
+          done
+          curl -sS -o /dev/null -w "release 下载: HTTP %{http_code}\n" --max-time 20 \
+            https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz \
+            || echo "curl_rc=$? (6=解析失败 / 22=HTTP错误 / 28=超时)"
+
       # 先做 config/IaC 扫描 (不需要 build, 永远能跑)
       - name: Trivy config scan (${{ matrix.dockerfile }})
         uses: aquasecurity/trivy-action@v0.36.0
@@ -315,6 +329,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # 2026-11-04 诊断: setup-trivy 连续 5 次 exit 6 (curl Couldn't resolve host),
+      # 而同一 job 的 checkout/cache 均成功、本地跑同一条 install.sh 成功、
+      # GitHub 官方 status 全绿 ⇒ 让 runner 自己回答"哪些域名解析得了"。
+      # 两个 job 落在不同 runner 实例上, 可区分单机故障与普遍故障。拿到结论后删掉本步骤。
+      - name: Diagnose runner DNS (trivy 下载失败定位)
+        run: |
+          for h in github.com api.github.com codeload.github.com objects.githubusercontent.com raw.githubusercontent.com; do
+            ip=$(getent hosts "$h" 2>/dev/null | awk '{print $1}' | head -1)
+            if [ -n "$ip" ]; then echo "OK   $h -> $ip"; else echo "FAIL $h 解析不了"; fi
+          done
+          curl -sS -o /dev/null -w "release 下载: HTTP %{http_code}\n" --max-time 20 \
+            https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz \
+            || echo "curl_rc=$? (6=解析失败 / 22=HTTP错误 / 28=超时)"
 
       # 先做 config/IaC 扫描 (不需要 build, 永远能跑)
       - name: Trivy config scan (${{ matrix.dockerfile }})
