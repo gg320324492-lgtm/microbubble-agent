@@ -507,3 +507,35 @@ def baseline_9_files():
             assert len(baseline_9_files) == 9
     """
     return list(BASELINE_9_FILES)
+
+
+# ================================================================
+# 2026-11-04: 默认阻断 agent_traces 落库 (autouse, 与 SKIP_DB_SETUP 无关)
+# ================================================================
+@pytest.fixture(autouse=True)
+def _block_trace_persist(request, monkeypatch):
+    """防止测试把假记录写进生产 `agent_traces` 表。
+
+    背景: 生产表里曾有 **116 条测试残留** (session_id s1/s2/s3 × message hi/q/m,
+    2026-06-29~07-20 累积)，来源是 tests/unit/test_chat_engine_synthesize.py、
+    tests/test_pronoun_anchor_2026-09-12.py、tests/unit/test_agent_v2_core.py 等
+    直接 `TraceCollector(...)` 的用例。根因: 2026-09-11 (commit 见 tracing.py 注释)
+    trace 正常路径从"Celery 投递"改成 **进程内直写 `_persist_now()`**，
+    而老测试只 patch 了 Celery 退路 `_schedule_persist` —— 于是每次跑测试都真写库。
+
+    要测真实落库: 给该测试加 `@pytest.mark.allow_trace_persist` 显式解除。
+    """
+    if request.node.get_closest_marker("allow_trace_persist"):
+        return
+    try:
+        from unittest.mock import AsyncMock
+
+        from app.agent.tracing import TraceCollector
+    except Exception:  # pragma: no cover - app 不可导入时不阻断
+        return
+    monkeypatch.setattr(
+        TraceCollector, "_persist_now", AsyncMock(return_value=None), raising=False
+    )
+    monkeypatch.setattr(
+        TraceCollector, "_schedule_persist", lambda self: None, raising=False
+    )
