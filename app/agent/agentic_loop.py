@@ -33,6 +33,21 @@ from app.agent.critic import (
 )
 from app.agent.intent_classifier import IntentCategory, IntentResult
 from app.agent.protocol import RichBlock, StreamEvent
+
+# 2026-11-04: fast 模式下「必须查真实数据」才答得对的**只读**意图。
+# 刻意**不含**:
+#   - EXECUTE_ACTION (写操作): fast 原本从没有写库能力, 放行等于悄悄给用户
+#     新增一条写路径。本次要修的是「答案没数据」, 不是「fast 不能写」——
+#     写操作仍由 balanced/deep 承担, 不在灰度里顺手改变权限面。
+#   - CASUAL_CHAT / FOLLOW_UP: 闲聊/续讲调工具 = 当年 930 行注释说的「误调」;
+#   - EXPLAIN_CONCEPT: 解释概念靠模型自身知识即可, 不值得多付一次工具往返;
+#   - TEAM_OVERVIEW: 它有自己的 Phase 0 三件套强制派发 (skip_plan_step=True
+#     时本来就不执行), 放进来会在 fast 下额外起一轮, 改变既有语义。
+_FAST_DATA_INTENTS = frozenset({
+    IntentCategory.DATA_QUERY,        # 任务/会议/统计列表
+    IntentCategory.RECOMMEND_PERSON,  # 找人
+    IntentCategory.SEARCH_INFO,       # 找资料/文献
+})
 from app.agent.result_compressor import (
     CompressionResult,
     compression_to_sse_event,
@@ -828,9 +843,32 @@ class AgenticLoop:
         if max_rounds is None:
             max_rounds = settings.AGENT_MAX_TOOL_ROUNDS
 
-        # 2026-07-15 #P2: thinking_config.max_tool_rounds 覆盖 (fast 模式 = 0 直接跳过 tool loop)
+        # 2026-07-15 #P2: thinking_config.max_tool_rounds 覆盖 (fast 模式旧值 = 0)
+        #
+        # ⚠️ 2026-11-04 修正 (主指挥拍板「让需要真实数据的意图也能查库」):
+        #   fast 的 max_tool_rounds=0 会把**所有意图**的 Phase 1 工具循环钳掉,
+        #   于是「谁负责 X」「查一下 Y」只能凭历史编或答「暂未找到」。
+        #   ⚠️ 930 行那个白名单是 **Phase 0 强制预派** (skip_plan_step=True 时
+        #   根本不执行), 不是工具循环开关 —— 别去改它, 改了不生效还拆掉保护。
+        #
+        #   这里只给「需要真实数据」的四类意图放行**有限轮** (默认 2),
+        #   CASUAL_CHAT / FOLLOW_UP / EXPLAIN_CONCEPT 仍保持 0 ⇒ 闲聊不误调工具,
+        #   也保住 fast 的「快」(2 轮 << balanced 的 5 轮)。
+        #   设 AGENT_FAST_TOOL_ROUNDS_FOR_DATA_INTENTS=0 即完全回到旧行为。
         if _has_thinking_config(ctx):
-            max_rounds = min(max_rounds, ctx.thinking_config.max_tool_rounds)
+            configured = ctx.thinking_config.max_tool_rounds
+            if (ctx.thinking_config.mode == "fast"
+                    and configured == 0
+                    and intent.category in _FAST_DATA_INTENTS):
+                configured = min(
+                    settings.AGENT_FAST_TOOL_ROUNDS_FOR_DATA_INTENTS,
+                    settings.AGENT_MAX_TOOL_ROUNDS,
+                )
+                logger.info(
+                    f"[thinking_config] fast 数据意图放行 tool loop: "
+                    f"category={intent.category.value} rounds={configured}"
+                )
+            max_rounds = min(max_rounds, configured)
             logger.debug(
                 f"[thinking_config] max_rounds clamped: "
                 f"settings.AGENT_MAX_TOOL_ROUNDS={settings.AGENT_MAX_TOOL_ROUNDS} "

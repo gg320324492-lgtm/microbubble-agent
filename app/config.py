@@ -448,6 +448,22 @@ class Settings(BaseSettings):
     AGENT_SYNTHESIS_MODEL: str = "mimo-v2.5"  # 综合主模型 (默认)
     # 流程控制
     AGENT_MAX_TOOL_ROUNDS: int = 5  # agentic loop 最多轮数
+    # 2026-11-04: fast 模式对「需要真实数据」的意图放行有限轮工具循环。
+    #
+    # 旧行为: resolve_thinking_config("fast") 把 max_tool_rounds 设成 0 ⇒
+    #   agentic_loop.run() 里 min() 一钳, **整段 Phase 1 工具循环都不跑**,
+    #   所有意图(不只是 930 行注释里那四类)都只能凭对话历史答 ⇒
+    #   「谁负责 X / 帮我查 Y」这类问题在 fast 下会编或说"暂未找到"。
+    #   ⚠️ 930 行的白名单是 **Phase 0 强制预派工具** 的, 不是工具循环开关
+    #   (skip_plan_step=True 时它根本不执行) —— 别改错地方。
+    #
+    # 只对**只读**的 DATA_QUERY / RECOMMEND_PERSON / SEARCH_INFO 放行;
+    # EXECUTE_ACTION (写操作) 刻意不放 —— fast 原本从没有写库能力, 放行等于
+    # 悄悄新增一条写路径, 超出「让答案有数据」的范围。
+    # CASUAL_CHAT / FOLLOW_UP / EXPLAIN_CONCEPT / TEAM_OVERVIEW 仍保持 0 轮
+    # ⇒ 保住当年「闲聊不误调工具」的保护。
+    # 设 0 = 完全回到旧行为 (灰度回退开关, 不用改代码)。
+    AGENT_FAST_TOOL_ROUNDS_FOR_DATA_INTENTS: int = 2
     AGENT_MAX_SYNTHESIS_TOKENS: int = 4000  # 综合阶段 max_tokens
     AGENT_COMPRESSION_THRESHOLD: int = 5  # 工具结果超过 N 条触发 Haiku 压缩
     AGENT_REFLECTION_THRESHOLD: int = 7  # 自评 < 阈值触发 retry
