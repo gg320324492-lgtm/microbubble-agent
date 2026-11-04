@@ -15,14 +15,23 @@ name: image-scan (trivy)
 # ⚠️ **2026-11-04 的 image-scan 红 = runner 下载 trivy 二进制失败, 与本仓改动无关**:
 #   现象: setup-trivy 打印 `info found version: .../Linux/64bit` 之后
 #   `##[error]Process completed with exit code 6` (curl: Couldn't resolve host)。
-#   连续 3 次红 (0.76.1 一次 + rerun 一次 + 钉 v0.36.0 后一次, 默认 trivy 版本随
-#   action tag 变成 0.70.0 仍同样 exit 6)；11-02 的 schedule 同文件同步骤是绿的。
-#   本地实测同一 release asset **可正常下载** (302→200, objects.githubusercontent.com
-#   可达) ⇒ 不是 GitHub 侧全局故障, 是 runner 到该域名的解析/访问问题。
+#   证据链 (四条, 用于排除"是 action 版本或本仓改动造成"的误判):
+#     ① 11-02 13:15 schedule 用 @master(SHA 8f28faec) **成功**并跑完 10m57s;
+#     ② 11-04 04:16 push 用 @master 失败 exit 6 (下载 trivy 0.76.1);
+#     ③ 11-04 04:22 与 04:35 改用 **v0.36.0 —— 2026-04-22 发布的老版本, 其代码在
+#        11-02 之前数月未变** ⇒ 同样 exit 6 (下载 trivy 0.70.0)。
+#        **这条排除"action 变更是根因"**: 老 action 今天也下不动。
+#     ④ 本仓本地实测同一 release asset 可下载 (302→200, objects.githubusercontent.com
+#        可达) ⇒ 不是 release 本身缺失。
+#   ⇒ 结论: runner 到 GitHub release 资产的下载当天故障 (同时段本仓到 GitHub 的 443
+#     也中断过十余分钟, 像同一场服务抖动的两个侧面)。
+#   ⛔ **不要再在 action 引用方式上绕圈** (钉 tag 已做, 那是加固不是药方);
+#     长期不愈才考虑换安装来源 (apt 装 trivy / 官方 docker 镜像)。
 #   ⇒ 影响面: 本 workflow **不是 required check** (main 的 9 个 required context
-#   全是 Server Tests Baseline) ⇒ 红只是可见红叉, 不阻塞合并与部署。
-#   待办: 若持续红, 换安装方式绕开该下载 (apt 装 trivy / 官方 docker 镜像 /
-#   显式传 `version:` 输入), 而不是反复 rerun。
+#     全是 Server Tests Baseline; 11-04 该门禁对 25930113e **已 success**)
+#     ⇒ 红只是可见红叉, 不阻塞合并与部署。
+#   ⇒ 本次依赖升级的 CVE 证据由 pip-audit 本地实测提供 (9 条: 2 条已升版修复 /
+#     2 条无上游修复已登记 .trivyignore), 不依赖本 workflow。
 on:
   pull_request:
     paths:
