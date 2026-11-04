@@ -5,6 +5,15 @@ name: image-scan (trivy)
 # - push(main): 仅当 requirements.txt / .trivyignore / 本文件变化时触发, **硬失败**
 #   见下方「2026-10-12 加 push 触发器」的说明
 # - schedule: 每周一 05:00 UTC 全量扫, HIGH/CRITICAL 命中即 fail
+#
+# ⚠️ **trivy-action 必须钉 release tag, 不得用 @master** (2026-11-04 实战):
+#   本文件 6 处原本全写 `@master`。2026-11-04 推 requirements.txt 时 image-scan
+#   **连续两次在 12-16s 内失败**，日志是 setup-trivy 新增的 `::error::The 'path'
+#   input must be a literal path...` + `exit code 6` —— 即 **master 当天改了行为,
+#   与本仓改动毫无关系**。schedule(11-02) 还绿着, 就是 master 变了。
+#   ⇒ 浮动引用 = 把上游每一次变更直接吸进自己的门禁, 红了还以为是自己的 CVE。
+#   钉到 v0.36.0 (gh api 实测存在的最新 tag)。
+#   复查条件: 需要 trivy-action 新特性时手动升 tag, **永远不要改回 @master**。
 on:
   pull_request:
     paths:
@@ -146,7 +155,7 @@ jobs:
 
       # 先做 config/IaC 扫描 (不需要 build, 永远能跑)
       - name: Trivy config scan (${{ matrix.dockerfile }})
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'config'
           scan-ref: ${{ matrix.dockerfile }}
@@ -176,7 +185,7 @@ jobs:
       # 镜像漏洞扫描 → sarif 上传
       - name: Trivy image scan (sarif)
         if: steps.build.outcome == 'success'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
           image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
@@ -197,7 +206,7 @@ jobs:
       # PR: exit-code 0 (advisory); schedule/manual: exit-code 1 (HIGH/CRITICAL 即 fail)
       - name: Trivy image scan (table + gate)
         if: steps.build.outcome == 'success'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
           image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
@@ -291,7 +300,7 @@ jobs:
 
       # 先做 config/IaC 扫描 (不需要 build, 永远能跑)
       - name: Trivy config scan (${{ matrix.dockerfile }})
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'config'
           scan-ref: ${{ matrix.dockerfile }}
@@ -321,7 +330,7 @@ jobs:
       # 镜像漏洞扫描 → sarif 上传
       - name: Trivy image scan (sarif)
         if: steps.build.outcome == 'success'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
           image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
@@ -342,7 +351,7 @@ jobs:
       # PR: exit-code 0 (advisory); schedule/manual: exit-code 1 (HIGH/CRITICAL 即 fail)
       - name: Trivy image scan (table + gate)
         if: steps.build.outcome == 'success'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
           image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
