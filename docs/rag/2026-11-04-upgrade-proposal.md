@@ -88,6 +88,33 @@
   anyio<5 / httpx<1 / alembic<1.22 / edge-tts<8 / pgvector<0.7
 - CVE 审计：pip-audit 结果见当日会话记录；image-scan workflow 会随 requirements.txt 的 push 自动复核。
 
+## 五、2026-11-04 追加：late-chunking 召回臂实际是「假数据 + 绑定错误」双失效
+
+盘点待办时从 P1 全量评测日志 `chunk_late_recall FAILED ... (expected str, got list)`
+挖出一条**从落地起就没工作过**的召回臂，已修 (commit `c845323ad`)。两层叠加：
+
+| 层 | 事实 | 判据 |
+|---|---|---|
+| ① 绑定 | `_chunk_late_recall` 用裸 `text()` 查询，无 ORM 列类型 ⇒ 传 `List[float]` 被 asyncpg 拒 | 真库同 SQL：list → `DataError`，字符串 → `distance=0.0`（类 20.157/20.161） |
+| ② 数据 | `scripts/backfill_late_embedding.py:87` 用 **MockForward(np.ones)** 回填 ⇒ 库里 178/12082 行 `chunk_embedding` 是全 1 常量向量 | psql 抽样 `[1,1,1,...]`；常量向量与任意 query 距离都相同 ⇒ 排序无意义 |
+
+⚠️ **只修 ① 会把它改成「活着但召回纯噪声」**：实测去掉守卫能命中 1 行、
+distance=0.9688，这些文档会被顶进 RRF 污染排序。所以修法是
+「绑定转 pgvector 字符串」**加**「SQL 排除与常量方向重合的向量」
+(`(v <=> CAST(:ones AS vector)) > 1e-6`)。守卫是数据驱动的：将来换真模型
+backfill 后向量不再与常量重合 ⇒ 臂自动生效，无需改代码；
+`test_mock_backfill_script_is_clearly_marked` 会在脚本换成真模型时变红提醒复核。
+
+⚠️ **旧测试把 bug 焊死过**：`tests/integration/test_late_chunking_recall.py`
+断言 `len(params["query_embedding"]) == 1024`，只数「有 1024 个东西」不看类型
+⇒ mock 全绿、真库一直炸。已改成断言**性质**（类 20.230 的镜像）。
+
+⇒ **结论：late chunking 目前只是「链路通了」，检索增益仍为 0** ——
+178 行假向量被守卫挡掉，臂返回空集。要真正拿到收益，得做下面这件新待办：
+用**真实嵌入模型**重跑 `backfill_late_embedding.py`（现在是 mock），
+覆盖全部 12082 chunks，并用固定 50 题评测集对比前后 `context_precision`。
+这属「换写入模型」级别改动，成本是全量重嵌，需主指挥单独拍板。
+
 ## 来源
 - jacar.es《RAG reranking with llama.cpp and pgvector, measured》(2026-11)
 - zhguichen.github.io《GraphRAG Two Years Later》
