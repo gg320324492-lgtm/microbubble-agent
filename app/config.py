@@ -227,7 +227,18 @@ class Settings(BaseSettings):
 
     # Claude 生成参数
     CLAUDE_MAX_TOKENS: int = 8192
-    SESSION_WINDOW_SIZE: int = 30
+    # 2026-11-04 B 档: 送进模型的历史按 **token 预算**裁剪, 不再按条数。
+    # 预算 60000 的依据 (实测标定, 见 app/agent/context_budget.py):
+    #   MiniMax /v1 中文 ≈ 0.47 token/字符 (按 0.6 保守估算), 单轮实测 7034 token,
+    #   多轮工具调用实测最高 72847 token —— 60k 约为当前单轮的 8.5 倍,
+    #   同时只占模型 1M 窗口的 6% (留出余量给成本与中段注意力衰减)。
+    # 设 0 或负数 = 关闭裁剪 (退回不限制行为, 仅保留存储上限)。
+    SESSION_CONTEXT_TOKEN_BUDGET: int = 60000
+    # 会话历史在 Redis 的存储上限 (条数)。B 档把「存」和「送」解耦:
+    # 存 200 条保住长会话完整性, 送时再按 token 预算裁 —— 旧实现存 30 条就等于
+    # 永久丢掉更早的轮次, 即使预算允许也找不回来。
+    SESSION_STORE_MAX_MESSAGES: int = 200
+    SESSION_WINDOW_SIZE: int = 30  # 遗留: 仅历史语义保留, 实际截断改用上面两个键
 
     # 2026-08-03 [W100 +31] qa-bench v3.1 D1: LLM 测评温度配置 (plan §D1)
     # LLM 测评稳定性: temperature=0.0 (Anthropic deterministic mode) + 3 轮取众数 fallback.

@@ -26,6 +26,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 from sqlalchemy import select
 
 from app.agent.chat_engine import ChatEngine
+from app.agent.context_budget import trim_to_budget
 from app.agent.intent_classifier import classify_intent
 from app.agent.prompts import (
     _is_meeting_transcript_query,
@@ -150,6 +151,41 @@ async def _get_last_write_fact(session_id: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.warning(f"get last_write_fact skipped (best-effort): {e}")
     return None
+
+
+def _trim_messages_to_budget(
+    messages: List[Dict[str, Any]],
+    system: str,
+    stage: str,
+) -> List[Dict[str, Any]]:
+    """2026-11-04 B 档: 送进模型前按 **token 预算**裁剪历史。
+
+    替代原先「存 30 条 = 送 30 条」的按条数硬截断。为什么必须按 token:
+
+    - 30 条里若有一次工具返回上万字, 条数限制挡不住溢出
+      (实测多轮工具调用 input_tokens 达 72847);
+    - 30 条若都是「嗯/好的」, 又白白丢掉可用轮次。
+
+    两条对话路径 (chat / chat_stream) **都走这里** —— 同一道门禁的多个写入方
+    必须逐一对齐, 否则漏一条路径就会行为不一致 (类 20.250 ①)。
+    裁剪逻辑本身是纯函数, 见 app/agent/context_budget.py。
+    """
+    budget = getattr(settings, "SESSION_CONTEXT_TOKEN_BUDGET", 0) or 0
+    if budget <= 0 or not messages:
+        return messages
+    try:
+        trimmed, dropped, est = trim_to_budget(
+            messages, budget, system_chars=len(system or "")
+        )
+    except Exception as e:  # noqa: BLE001 — 裁剪失败不能阻断对话, 原样送出去
+        logger.warning(f"[上下文预算] {stage} 裁剪异常, 按原历史送出: {e}")
+        return messages
+    if dropped:
+        logger.info(
+            f"[上下文预算] {stage} 丢弃较早消息 {dropped} 条, "
+            f"估算 prompt≈{est} token (预算 {budget})"
+        )
+    return trimmed
 
 
 async def _load_knowledge_by_ids(db, ids: List[int]) -> List[Dict]:
@@ -595,8 +631,10 @@ class MicroBubbleAgent:
         last_write_fact = await _get_last_write_fact(session_id)
 
         # 4. 调用 ChatEngine
+        # B 档: 送进模型前按 token 预算裁剪。**只传裁剪后的副本, 不动 messages 本体** ——
+        # messages 还要带着 assistant 存回 Redis, 原地裁会把长会话的历史裁掉。
         result = await self.engine.chat_with_brief_and_detail(
-            messages=messages,
+            messages=_trim_messages_to_budget(messages, system, "chat"),
             system=system,
             user_id=user_id,
             db=db,
@@ -624,11 +662,16 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.warning(f"chat() write_fact persist skipped (best-effort): {e}")
 
-        # 5. 持久化 session（截断到 window size）
+        # 5. 持久化 session
+        # 2026-11-04 B 档: 存储上限与「送进模型的预算」解耦。
+        # 旧实现存 30 条 = 更早的轮次被**永久丢掉**，即使预算允许也找不回来；
+        # 现在存 SESSION_STORE_MAX_MESSAGES 条，送模型时再按 token 预算裁
+        # (见上面 _trim_messages_to_budget)。
         if history is None:
             messages.append({"role": "assistant", "content": result["content"]})
-            if len(messages) > settings.SESSION_WINDOW_SIZE:
-                messages = messages[-settings.SESSION_WINDOW_SIZE:]
+            store_max = getattr(settings, "SESSION_STORE_MAX_MESSAGES", 200) or 200
+            if len(messages) > store_max:
+                messages = messages[-store_max:]
             await session_manager.save_messages(session_id, messages)
             await session_manager.update_meta(session_id, user_id=user_id)
 
@@ -812,7 +855,8 @@ class MicroBubbleAgent:
             )
 
         stream_iter = self.engine.chat_stream(
-            messages=messages,
+            # B 档: 与 chat() 同一道预算门禁 (两个写入方必须对齐, 类 20.250 ①)
+            messages=_trim_messages_to_budget(messages, system, "chat_stream"),
             system=system,
             user_id=user_id,
             db=db,
