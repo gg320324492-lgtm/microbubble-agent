@@ -6,14 +6,23 @@ name: image-scan (trivy)
 #   见下方「2026-10-12 加 push 触发器」的说明
 # - schedule: 每周一 05:00 UTC 全量扫, HIGH/CRITICAL 命中即 fail
 #
-# ⚠️ **trivy-action 必须钉 release tag, 不得用 @master** (2026-11-04 实战):
-#   本文件 6 处原本全写 `@master`。2026-11-04 推 requirements.txt 时 image-scan
-#   **连续两次在 12-16s 内失败**，日志是 setup-trivy 新增的 `::error::The 'path'
-#   input must be a literal path...` + `exit code 6` —— 即 **master 当天改了行为,
-#   与本仓改动毫无关系**。schedule(11-02) 还绿着, 就是 master 变了。
-#   ⇒ 浮动引用 = 把上游每一次变更直接吸进自己的门禁, 红了还以为是自己的 CVE。
-#   钉到 v0.36.0 (gh api 实测存在的最新 tag)。
+# ⚠️ **trivy-action 必须钉 release tag, 不得用 @master** (2026-11-04):
+#   本文件 6 处原本全写 `@master` ⇒ 上游每次变更都被直接吸进本门禁。
+#   已钉到 gh api 实测存在的最新 tag v0.36.0。**这是加固，不是下面那次红的根因**
+#   (钉完仍红，见下)，两条要分开记，别混成一个结论。
 #   复查条件: 需要 trivy-action 新特性时手动升 tag, **永远不要改回 @master**。
+#
+# ⚠️ **2026-11-04 的 image-scan 红 = runner 下载 trivy 二进制失败, 与本仓改动无关**:
+#   现象: setup-trivy 打印 `info found version: .../Linux/64bit` 之后
+#   `##[error]Process completed with exit code 6` (curl: Couldn't resolve host)。
+#   连续 3 次红 (0.76.1 一次 + rerun 一次 + 钉 v0.36.0 后一次, 默认 trivy 版本随
+#   action tag 变成 0.70.0 仍同样 exit 6)；11-02 的 schedule 同文件同步骤是绿的。
+#   本地实测同一 release asset **可正常下载** (302→200, objects.githubusercontent.com
+#   可达) ⇒ 不是 GitHub 侧全局故障, 是 runner 到该域名的解析/访问问题。
+#   ⇒ 影响面: 本 workflow **不是 required check** (main 的 9 个 required context
+#   全是 Server Tests Baseline) ⇒ 红只是可见红叉, 不阻塞合并与部署。
+#   待办: 若持续红, 换安装方式绕开该下载 (apt 装 trivy / 官方 docker 镜像 /
+#   显式传 `version:` 输入), 而不是反复 rerun。
 on:
   pull_request:
     paths:
