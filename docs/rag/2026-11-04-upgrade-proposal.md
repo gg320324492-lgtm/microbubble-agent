@@ -115,6 +115,38 @@ backfill 后向量不再与常量重合 ⇒ 臂自动生效，无需改代码；
 覆盖全部 12082 chunks，并用固定 50 题评测集对比前后 `context_precision`。
 这属「换写入模型」级别改动，成本是全量重嵌，需主指挥单独拍板。
 
+### 修后 50 题复测：证实「无回归」，但不能当成「有提升」
+
+同一份固定评测集（seed=20261104, 50 题）、同一 judge（MiniMax-M3.1-Flash），
+`n_ok` 两轮都是 50/50，修前 `results/rag-judge-baseline-2026-11-04.json`、
+修后 `results/rag-judge-baseline-2026-11-04-latefix.json`：
+
+| 指标 | 修前 | 修后 | Δ |
+|---|---|---|---|
+| faithfulness | 0.7690 | 0.7944 | +0.0254 |
+| answer_relevancy | 0.8096 | 0.7672 | −0.0424 |
+| context_precision | 0.3506 | 0.3602 | +0.0096 |
+| overall | 0.6431 | 0.6406 | −0.0025 |
+
+**逐题配对后三个指标的中位变化全部是 0**，标准差 0.20–0.25，
+`|Δ|>0.1` 的题有 14–16/50 ⇒ 均值那几个点完全在 LLM-judge 的逐题噪声量级内。
+判读工具 `scripts/rag/compare_judge_baselines.py` 会同时报均值 / 中位数 /
+标准差 / 效应量对比，并在效应量小于标准差时明确判定「无显著变化」——
+**只报均值会把噪声写成「提升」或「退化」**（类 20.226 / 20.255 的同型）。
+
+⚠️ 因此这轮复测的正确读法是：
+① **硬证据**：全量日志 `chunk_late_recall FAILED` 从「反复出现」变成 **0 次**，
+`RC=0`、50/50 全部完成 —— 绑定缺陷确实修好且没有引入新报错；
+② **不是证据**：三指标的均值差不能归因于本次修复，也不能宣称质量提升。
+要拿到可信的检索质量结论，需固定答案多轮重复取均值，或改用确定性检索层指标
+（recall@k / nDCG）。这与「守卫把假向量挡掉 ⇒ 臂返回空集」完全一致。
+
+⚠️ 顺带修了两个后台判读脚本自身的坑（类 20.220）：
+① 判读脚本含中文/箭头，本机 Python 默认 GBK ⇒ `UnicodeEncodeError`
+   崩在最后一行，而外层 sh 仍报 `exit code 0`（**「跑完了」≠「跑过了」**）；
+   现已显式重配 stdout 为 utf-8 并入库到 `scripts/rag/`；
+② 早期版本只报均值，差点把 −0.0424 写成「相关度退化」。
+
 ## 来源
 - jacar.es《RAG reranking with llama.cpp and pgvector, measured》(2026-11)
 - zhguichen.github.io《GraphRAG Two Years Later》
