@@ -43,6 +43,31 @@ casual_chat 跳过 Phase 1」——**这句话是错的**。
 缺 db 而全 0，差点得出「没生效」的错误结论。真正区分 `range(0)` 与
 `range(2)` 的确定性副作用是**循环体有没有调 `llm.complete`**（类 20.220）。
 
+### ⚠️ 放行后立刻暴露的下游缺陷（同日连修，commit `4f5862f02`）
+
+重启跑真实 `/chat` 的 data_query 直接 **HTTP 500**。两层叠加，
+只修一层就会把下一层当成「修好了」（类 20.220）：
+
+| 层 | 错误 | 根因 |
+|---|---|---|
+| ① 根因 | MiniMax 400 `invalid params, tool call result does not follow tool call (2013)` | `anthropic_messages_to_openai()` 把一条 user 消息里的 text 块先输出成 `role=user`，再追加 `tool(result)` ⇒ `assistant(tool_calls) → user(text) → tool(result)`，中间夹了一条 user。而 `inject_compressed_to_messages` 恰恰会往同一条 user 里追加 `<compressed>` 文本 ⇒ **只要工具循环真跑过就必炸** |
+| ② 掩盖层 | `UnboundLocalError: final_text` | `except` 兜底块引用了在 Phase 4 之后才初始化的变量 ⇒ 把 400 盖掉、放大成 500，日志里只看到无关 traceback |
+
+fast 原先从不跑工具循环 ⇒ ① 被遮了一年多；Ollama 兼容层宽松，
+换 M3.1-Flash 后才显形（类 20.227 ② 同型）。
+
+**修法**：① 转换器改为「tool 结果先、上下文文本后」（所有调用方一起受益）；
+② `final_text = ""` 移到 Phase 2 之前，删掉 Phase 4 后那次重复赋值。
+新增活测试 `tests/test_tool_result_adjacency.py`（既有的
+`tests/unit/test_tool_call_converter.py` 整个文件被模块级 skip 归档，
+对现役链路零保护）。回归 55 passed / 1 skipped；重启后真实
+`/chat` 的 data_query 与 casual_chat 都 200，日志里 400 /
+UnboundLocalError / agentic_loop failed 计数全 0。
+
+⇒ **纪律**：改动让某条路径「第一次真正开始跑」时，必须把这条路径的
+端到端副作用跑一遍，不能因为单测全绿就收工 —— 单测覆盖的是判据，
+没覆盖的是那条从没被执行过的链路。
+
 ## 二、前端「重新排版 / 重新润色」→ **保留，补文档**（代码一行未改）
 
 主指挥选择保留。核实过的现状：
