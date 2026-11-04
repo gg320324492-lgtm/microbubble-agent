@@ -22,6 +22,32 @@ logger = logging.getLogger("microbubble.hybrid_retriever")
 MEETING_ID_NS = 10_000_000
 
 
+def vector_to_pg_literal(vec: List[float], expected_dim: int = 1024) -> str:
+    """把 Python 向量转成 pgvector 能接受的字符串字面量 `'[f1,f2,...]'`。
+
+    为什么**只有裸 SQL 需要**这一步 (2026-11-04 实测，类 20.157 / 20.161):
+    - ORM 路径 `.cosine_distance(vec)` 带 `Vector(1024)` 列类型 ⇒ SQLAlchemy 的
+      bind_processor 会自动序列化，传 `List[float]` 完全正常 (本文件 455/521/937 行);
+    - **裸 `text()` 查询没有任何类型信息** ⇒ asyncpg 直接把 list 当数组参数发，
+      报 `invalid input for query argument $1: [...] (expected str, got list)`。
+      `_chunk_late_recall` 正是后者，从落地起这条召回臂其实一直返回空集,
+      异常还被 best-effort `except` 兜住 ⇒ 全链路"看起来在工作" (类 20.220)。
+
+    真库对照 (2026-11-04, data/tmp/probe_vector_bind.py): 同一条 SQL,
+    传 list → DataError; 传本函数产出的字符串 → 正常返回 distance=0.0。
+
+    维度校验是**故意的**: 换嵌入模型时维度变了会静默查出错误结果或 PG 报错,
+    不如在序列化前 fail-loud (类 20.229: 判据要可直接执行)。
+    """
+    if not isinstance(vec, (list, tuple)) or not vec:
+        raise ValueError("向量必须是非空 list/tuple")
+    if expected_dim and len(vec) != expected_dim:
+        raise ValueError(
+            "向量维度 %d 与列 vector(%d) 不符 (嵌入模型换代?)" % (len(vec), expected_dim))
+    # repr(float) 保留足够精度; pgvector 的 text 输入接受科学计数法
+    return "[" + ",".join(repr(float(x)) for x in vec) + "]"
+
+
 def _backfill_normalized_scores(results: List[dict]) -> None:
     """WP8 (2026-09-01): rerank 后把 rerank_score (cross-encoder logits, 无界)
     min-max 归一化回填 normalized_score, 供 temporal 乘子与 QA 置信度阈值分级
@@ -744,6 +770,15 @@ class HybridRetriever:
         import time
         from sqlalchemy import text
 
+        # ⚠️ 常量向量守卫 (2026-11-04): 库里 178 行 chunk_embedding 是
+        # `scripts/backfill_late_embedding.py:87` 用 MockForward(np.ones) 回填的
+        # **全 1 假向量** (psql 实测 `[1,1,1,...]`, 178/12082 行)。
+        # 只修上面的绑定会让这条臂"跑通却召回纯噪声": 常量向量与任何 query 的
+        # cosine distance 都相同 ⇒ 排序无意义, 却会把这些文档顶进候选集污染 RRF。
+        # ⇒ 在 SQL 里直接排除"与常量方向重合"的向量 (cosine distance ≈ 0)。
+        # 这是**数据驱动**的判据, 不依赖"此刻有 178 行假数据"这个时点事实:
+        # 将来用真模型 backfill 后, 向量与常量方向不再重合 ⇒ 臂自动生效, 无需改代码。
+        ones_literal = vector_to_pg_literal([1.0] * 1024)
         stmt = text(
             """
             SELECT kc.knowledge_id, min(v <=> CAST(:query_embedding AS vector)) AS distance
@@ -751,6 +786,7 @@ class HybridRetriever:
             CROSS JOIN LATERAL unnest(kc.chunk_embedding) AS vectors(v)
             JOIN knowledge AS k ON k.id = kc.knowledge_id
             WHERE kc.chunk_embedding IS NOT NULL
+              AND (v <=> CAST(:ones AS vector)) > 1e-6
               AND (CAST(:category AS varchar) IS NULL OR k.category = CAST(:category AS varchar))
             GROUP BY kc.knowledge_id
             ORDER BY distance
@@ -759,9 +795,15 @@ class HybridRetriever:
         )
         start = time.perf_counter()
         try:
+            # ⚠️ 裸 text() 查询没有 ORM 列类型 ⇒ 必须传 pgvector **字符串字面量**,
+            # 不能传 List[float] (类 20.157 / 20.161)。2026-11-04 之前这里直接
+            # 传 list ⇒ asyncpg DataError ⇒ except 兜成空集 ⇒ 整条 late-chunking
+            # 召回臂一直是死的, 而检索整体看起来正常 (类 20.220)。
+            query_literal = vector_to_pg_literal(query_embedding)
             result = await self.db.execute(
                 stmt,
-                {"query_embedding": query_embedding, "category": category, "top_k": top_k},
+                {"query_embedding": query_literal, "ones": ones_literal,
+                 "category": category, "top_k": top_k},
             )
             rows = result.fetchall()
             elapsed_ms = round((time.perf_counter() - start) * 1000, 3)

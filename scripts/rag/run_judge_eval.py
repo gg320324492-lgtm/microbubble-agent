@@ -53,7 +53,7 @@ async def build_set():
     print("[eval-set] 已写 %d 条 -> %s" % (len(picked), EVAL_SET), flush=True)
 
 
-async def run(limit):
+async def run(limit, tag=""):
     from sqlalchemy import select
     from app.core.celery_db import create_celery_engine_and_session
     from app.models.knowledge import Knowledge
@@ -112,7 +112,10 @@ async def run(limit):
         "wall_s": round(time.time() - t_all, 1),
         "judge": "MiniMax-M3.1-Flash", "detail": out,
     }
-    path = "/app/results/rag-judge-baseline-2026-11-04%s.json" % ("-smoke" if limit else "")
+    # --tag 让复测结果另存: 判「改好还是改坏」必须把修前/修后两份都留着,
+    # 覆盖掉基线就等于失去参照 (类 20.252: 跨轮比较先确认参照集没变)。
+    path = "/app/results/rag-judge-baseline-2026-11-04%s%s.json" % (
+        "-smoke" if limit else "", ("-" + tag) if tag else "")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(summary, fh, ensure_ascii=False, indent=1)
     print("\n== 汇总 ==\n%s" % json.dumps(
@@ -126,12 +129,13 @@ def main():
     ap.add_argument("--build-set", action="store_true")
     ap.add_argument("--run", action="store_true")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--tag", default="", help="复测标签, 结果另存不覆盖修前基线")
     args = ap.parse_args()
 
     if args.build_set:
         asyncio.run(build_set())
     elif args.run:
-        asyncio.run(run(args.limit))
+        asyncio.run(run(args.limit, args.tag))
 
 
 if __name__ == "__main__":
