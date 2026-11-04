@@ -162,6 +162,12 @@ class _OAIStreamShim:
             # 2026-09-21: 每个 chunk 都记活跃 (reasoning chunk 不产生业务 event)
             LAST_STREAM_CHUNK_MONOTONIC = time.monotonic()
             chunk_dict = self._chunk_to_dict(chunk)
+            # 2026-11-04 A 档: 带 usage 的最后一个 chunk（choices 为空）会被下面
+            # "无 event 就继续取下一个" 的分支跳过 ⇒ 必须在这里摘出来上报，
+            # 否则流式主答案的 token 永远进不了 trace（真实对话 input_tokens 为
+            # NULL 的根因就是这条）。
+            if chunk_dict.get("usage"):
+                self._capture_usage(chunk_dict["usage"])
             events = openai_streaming_delta_to_anthropic_events(
                 chunk_dict, "", self._tool_acc
             )
@@ -185,6 +191,21 @@ class _OAIStreamShim:
             f"(reasoning_chars={getattr(self._tool_acc, 'reasoning_chars', 0)})"
         )
         raise StopAsyncIteration
+
+    def _capture_usage(self, usage: dict) -> None:
+        """把流式最后一个 chunk 的 usage 上报给当前活跃 TraceCollector。
+
+        不会重复累计：MiniMax 只在这一个 chunk 里给 usage，且该 chunk 的
+        choices 为空、不产生业务 event。
+        """
+        try:
+            from app.agent.tracing import add_usage_to_current_trace
+            add_usage_to_current_trace(
+                int(usage.get("prompt_tokens") or 0),
+                int(usage.get("completion_tokens") or 0),
+            )
+        except Exception as e:  # noqa: BLE001 — 观测不得影响流式主链路
+            logger.debug(f"stream usage 上报跳过: {type(e).__name__}: {e}")
 
     @staticmethod
     def _chunk_to_dict(chunk) -> dict:
@@ -504,6 +525,33 @@ class LLMClient:
         except Exception:
             return _NullSpan()
 
+    def _report_usage(self, resp) -> None:
+        """把一次 LLM 调用的 usage 累计到当前活跃 TraceCollector（2026-11-04 A 档）。
+
+        为什么挂在这里：`app/agent/tracing.py` 的 `set_usage()` 自 2026-06-14 定义后
+        **全仓零调用** ⇒ `agent_traces.input_tokens` 2623 行全 NULL，前端
+        AgentTracesView / MobileMessageBubble 早就在显示 total_tokens 却拿不到数据。
+        在 LLMClient 出口单点上报可覆盖全部调用方（工具决策轮 / critic / 压缩器 /
+        综合），且无需改动方案 C 的保护文件 chat_engine.py / agentic_loop.py。
+
+        只在**真正发起请求**的出口调用：缓存命中不报（无新成本，否则重复累计）。
+        观测失败绝不影响主链路，故整体 try/except。
+        """
+        try:
+            usage = getattr(resp, "usage", None)
+            if usage is None:
+                return
+            # Anthropic 风格属性名 —— tool_call_converter 已把 openai 的
+            # prompt_tokens/completion_tokens 映射为 input_tokens/output_tokens
+            inp = int(getattr(usage, "input_tokens", 0) or 0)
+            out = int(getattr(usage, "output_tokens", 0) or 0)
+            if not (inp or out):
+                return
+            from app.agent.tracing import add_usage_to_current_trace
+            add_usage_to_current_trace(inp, out)
+        except Exception as e:  # noqa: BLE001 — 观测不得影响对话主链路
+            logger.debug(f"usage 上报跳过: {type(e).__name__}: {e}")
+
     async def complete(
         self,
         messages: list[dict],
@@ -550,19 +598,23 @@ class LLMClient:
                 and getattr(settings, "OLLAMA_NATIVE_COMPLETE", True)
             ):
                 try:
-                    return await self._complete_ollama_native(
+                    _r = await self._complete_ollama_native(
                         messages, model=model, system=system,
                         max_tokens=max_tokens, temperature=temperature,
                     )
+                    self._report_usage(_r)
+                    return _r
                 except Exception as e:
                     logger.warning(
                         f"ollama 原生 /api/chat 失败, 回退 /v1: "
                         f"{type(e).__name__}: {e}"
                     )
-            return await self._complete_openai_compat(
+            _r = await self._complete_openai_compat(
                 messages, model=model, system=system, tools=tools,
                 max_tokens=max_tokens, temperature=temperature,
             )
+            self._report_usage(_r)
+            return _r
         # 默认 anthropic 路径
         kwargs = {
             "messages": messages,
@@ -610,6 +662,7 @@ class LLMClient:
                     self.cache.set(cache_key, resp)
                 if not model and m != self.models[0]:
                     logger.info(f"LLM fallback 成功: {self.models[0]} → {m}")
+                self._report_usage(resp)
                 return resp
             except (anthropic.APIError, anthropic.APITimeoutError, anthropic.APIConnectionError) as e:
                 logger.warning(f"模型 {m} 失败: {type(e).__name__}: {e}")
@@ -881,6 +934,13 @@ class LLMClient:
                 }
                 if oai_tools:
                     params["tools"] = oai_tools
+                # 2026-11-04 A 档: 流式默认**不返回 usage**，必须显式索取。
+                #   实测 MiniMax /v1: 不带 stream_options 时全程无 usage；
+                #   带 include_usage 才在最后一个 chunk 返回
+                #   prompt_tokens/completion_tokens。
+                #   只给 openai_compat 加 —— ollama 的 /v1 兼容性未实测，不冒险。
+                if self.backend == "openai_compat":
+                    params["stream_options"] = {"include_usage": True}
                 try:
                     if self.backend == "ollama":
                         # 2026-09-18: 首 token 看门狗 + 云端降级 (见方法 docstring)

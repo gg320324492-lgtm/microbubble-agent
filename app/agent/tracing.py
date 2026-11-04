@@ -20,12 +20,40 @@
 """
 
 import asyncio
+import contextvars
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
 logger = logging.getLogger("microbubble.agent.tracing")
+
+# ---------------------------------------------------------------------------
+# 当前活跃的 TraceCollector（2026-11-04 A 档：token 用量观测）
+#
+# 为什么用 contextvar 而不是把 trace 一路传参：全仓有 10+ 处 LLM 调用点
+# （工具决策轮 / intent / critic / 压缩器 / ollama 综合），而
+# `app/agent/chat_engine.py`、`app/agent/agentic_loop.py` 属方案 C 保护文件。
+# 在 LLMClient 出口单点上报即可全覆盖；子 task 继承父 context ⇒ 只读安全。
+# ---------------------------------------------------------------------------
+_current_trace: contextvars.ContextVar = contextvars.ContextVar(
+    "mnb_current_agent_trace", default=None
+)
+
+
+def add_usage_to_current_trace(input_tokens: int, output_tokens: int) -> None:
+    """把一次 LLM 调用的 usage 累计到当前活跃 collector。
+
+    不在 `async with trace` 作用域内（contextvar 未设置）时静默跳过 ——
+    例如 intent 分类早于 trace 创建，那部分不计入本次观测。
+    """
+    collector = _current_trace.get()
+    if collector is None:
+        return
+    try:
+        collector.add_usage(int(input_tokens or 0), int(output_tokens or 0))
+    except Exception as e:  # noqa: BLE001 — 观测绝不影响主链路
+        logger.debug(f"add_usage_to_current_trace skipped: {e}")
 
 
 @dataclass
@@ -149,10 +177,32 @@ class TraceCollector:
         self.brief = text  # 兼容老 API
 
     def set_usage(self, input_tokens: int, output_tokens: int):
+        """覆盖式设置 usage（保留老 API；当前链路已改用 add_usage 累计）。"""
         self.usage = {
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": input_tokens + output_tokens,
+        }
+
+    def add_usage(self, input_tokens: int, output_tokens: int) -> None:
+        """累计一次 LLM 调用的 usage（2026-11-04 A 档：token 观测接链）。
+
+        语义：本次 chat 内**所有已上报调用**的 token 之和（工具决策轮 / critic /
+        压缩器 / 综合轮），代表这一轮对话的真实上下文与生成成本。
+        单次请求的上下文规模由 B 档的窗口裁剪器单独观测，两者不要混用。
+
+        背景：`set_usage` 自 2026-06-14 定义后**全仓零调用**，导致
+        `agent_traces.input_tokens` 2623 行全为 NULL —— 前端
+        AgentTracesView / MobileMessageBubble 早就在显示 total_tokens，
+        但一直拿不到数据（类 20.220：字段与机制都在，副作用从未发生）。
+        """
+        cur = self.usage or {}
+        i = int(cur.get("input_tokens", 0) or 0) + int(input_tokens or 0)
+        o = int(cur.get("output_tokens", 0) or 0) + int(output_tokens or 0)
+        self.usage = {
+            "input_tokens": i,
+            "output_tokens": o,
+            "total_tokens": i + o,
         }
 
     def set_error(self, error: str):
@@ -193,6 +243,8 @@ class TraceCollector:
     async def __aenter__(self):
         self.start_ts = time.time()
         self.status = TraceStatus.IN_PROGRESS
+        # 2026-11-04 A 档: 把自己绑到当前 context，供 LLMClient 出口上报 usage
+        self._trace_ctx_token = _current_trace.set(self)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -203,6 +255,14 @@ class TraceCollector:
         - exc_value=CancelledError → status=ABORTED，**同步** await 落库（不丢 abort 记录）
         - exc_value=其他 Exception → status=ERROR，**同步** await 落库
         """
+        # 先解绑 context（任何退出路径都要做，否则 collector 会泄漏到后续请求）
+        token = getattr(self, "_trace_ctx_token", None)
+        if token is not None:
+            try:
+                _current_trace.reset(token)
+            except ValueError:  # pragma: no cover - 跨 task reset 的兜底
+                _current_trace.set(None)
+            self._trace_ctx_token = None
         self.end_ts = time.time()
         if exc_val is not None:
             self.error = f"{type(exc_val).__name__}: {exc_val}"
