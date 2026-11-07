@@ -41,6 +41,18 @@ psycopg2-binary==2.9.9
 # Redis
 redis==5.0.1
 celery==5.3.6
+# 2026-11-07 P0: 显式钉 kombu —— celery 5.3.6 只声明 kombu<6,>=5.3.4,
+# 不钉就会随 pip 解析漂到 5.7.0。实测后果 (会议 272 入库时撞到):
+#   app 容器 kombu 5.7.0 的 redis transport **运行时**硬校验
+#   "Redis transport requires redis-py versions 6.1.0 or later. You have 5.0.1"
+#   ⇒ 所有 .delay() 派发抛 VersionMismatch / IndexError, stop-recording 变 500,
+#   而会议状态已被改成 processing ⇒ 状态字段在说谎 (类 20.220)。
+#   worker 容器是 5.6.2 + redis 5.0.1, 一直正常。
+# ⚠️ `pip install --dry-run "kombu==5.7.0" "redis==5.0.1"` **可通过** ——
+#   因为 kombu 的 redis>=6.4 是 extra == "redis" 的可选依赖, 解析期不校验。
+#   ⇒ 类 20.224 的补充: dry-run 只证明「依赖可解析」, 不证明「运行时可用」;
+#   这种冲突只能靠**真跑一次派发**发现, 不能靠静态检查放行。
+kombu==5.6.2
 # W87-B-1: FastAPI + Celery integrations are built into sentry-sdk; default off via SENTRY_DSN
 sentry-sdk[fastapi]==2.13.0
 
