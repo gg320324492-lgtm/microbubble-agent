@@ -191,6 +191,13 @@ if [ "$PY_CHANGED" -gt 0 ]; then
     log "================================================================"
 fi
 
+# 2026-11-10 止损插桩：git gc 在 1.6G 内存的小机器上会榨干内存导致 sshd 无法
+# fork 新会话（实测 /health 被拖到 30-45 秒）。gc 已确认收益极小（磁盘 29G free），
+# 且 gc 中断不会损坏仓库（pack 写入是事务性的）⇒ 每次部署先杀残留 gc 再继续。
+pkill -f "git.*gc --aggressive" 2>/dev/null && log "止损: 已终止残留的 git gc 进程" || true
+pkill -f "git.*pack-objects" 2>/dev/null && log "止损: 已终止残留的 pack-objects 进程" || true
+rm -f "$PROJECT_DIR/.git/objects/pack/tmp_pack_"* 2>/dev/null || true
+
 # 检查可用磁盘空间（至少 500MB）
 AVAILABLE_MB=$(df -m /opt | tail -1 | awk '{print $4}')
 if [ "$AVAILABLE_MB" -lt 500 ]; then
