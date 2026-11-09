@@ -388,9 +388,15 @@
                 </div>
                 <!-- 2026-07-08 修复: 分页按钮（避免 3331 段一次性渲染） -->
                 <div v-if="hasMoreTranscript" class="transcript-load-more">
-                  <el-button @click="loadMoreTranscript" type="primary" plain>
+                  <!-- 2026-11-09: 去掉 el-button。全站 variables.css 末尾的
+                       :root .el-button--primary:not(.is-text):not(.is-link) 会把
+                       **plain 按钮也染成实底**（选择器没排 .is-plain），
+                       W89 a11y 又把文字设成白色 ⇒ 截图里那块「深色实心 + 深色文字」
+                       的不可读黑块。这里用原生 button + 本页 scoped 样式，
+                       不依赖 Element Plus 主题变量，也不会被全局覆盖误伤。 -->
+                  <button type="button" class="load-more-btn" @click="loadMoreTranscript">
                     加载更多 ({{ displayedTranscriptEntries.length }} / {{ transcriptEntries.length }})
-                  </el-button>
+                  </button>
                 </div>
               </template>
               <!-- 2026-10-25: 失败时不再只显示一句"暂无转录记录" ——
@@ -1533,8 +1539,26 @@ onMounted(async () => {
   border-top: 1px dashed var(--color-border, #e0e0e0);
   margin-top: 8px;
 }
-.transcript-load-more .el-button {
+.transcript-load-more .load-more-btn {
   min-width: 240px;
+  padding: 10px 22px;
+  border: 1px solid var(--color-primary-border, #f7c7bb);
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-primary-bg, #fff0ed);
+  color: var(--color-primary-text, #b84523);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-all-normal, background-color .2s, border-color .2s);
+}
+.transcript-load-more .load-more-btn:hover {
+  background: var(--color-primary, #ff7a5c);
+  border-color: var(--color-primary, #ff7a5c);
+  color: #fff;
+}
+.transcript-load-more .load-more-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #ff7a5c);
+  outline-offset: 2px;
 }
 .transcript-body {
   flex: 1;
