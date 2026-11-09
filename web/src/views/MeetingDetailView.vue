@@ -1789,10 +1789,21 @@ onMounted(async () => {
   display: flex; align-items: center; gap: 12px;
 }
 .hp-play {
-  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  /* 2026-11-09: 设计稿是 30×30 的正圆。mobile-base.css 的全局
+     button{min-height:var(--touch-target-min)}（44px）会把 height:30px 钳成
+     44px ⇒ 30×44 椭圆（截图里的形状）。min-height 永远压过 height，
+     单写 !important 也容易被后续规则覆盖 ⇒ 用 aspect-ratio + min-height:0
+     显式解除，并把 44px 触控区挪到 ::before 伪元素（视觉仍是正圆）。 */
+  width: 30px; height: 30px; min-height: 0; aspect-ratio: 1 / 1;
+  box-sizing: border-box; padding: 0; line-height: 1;
+  border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  position: relative;
   background: var(--color-primary); color: #fff; border: none; font-size: 10px;
   display: grid; place-items: center;
   transition: transform var(--duration-fast, .15s) ease-out, background .15s;
+}
+.hp-play::before {
+  content: ''; position: absolute; inset: -7px; border-radius: 50%;
 }
 .hp-play:hover { transform: scale(1.06); background: var(--color-primary-dark); }
 .hp-tm { font-family: Consolas, 'SFMono-Regular', monospace; font-size: 12px; letter-spacing: .06em; white-space: nowrap; color: var(--color-text-secondary); }
