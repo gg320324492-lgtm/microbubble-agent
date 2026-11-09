@@ -169,6 +169,21 @@
       <span v-if="shareCount" class="folder-tree-special-count share-count-after-dot">{{ shareCount }}</span>
     </div>
 
+    <!-- 文件请求入口 (2026-11-10 补回): 批次⑩.87 重构时左侧树节点被移除,
+         桌面端只剩 URL 直达 /drive/requests 与移动端命令面板两条隐形路径,
+         后端 10GB 外部收件上线后用户找不到从哪建链接 ⇒ 按 PR7 原设计
+         补回橙色节点 (Promotion 图标), 点击切 specialView='requests' 打开
+         FileRequestListPanel (DesktopDriveView 已有完整接线, 无需其他改动)。 -->
+    <div
+      class="folder-tree-special-item drive-folder-tree-special-item is-requests"
+      :class="{ 'is-active': specialView === 'requests' }"
+      title="创建匿名收件链接, 外部人员免登录上传大文件"
+      @click="$emit('update:specialView', 'requests')"
+    >
+      <el-icon><Promotion /></el-icon>
+      <span>文件请求</span>
+    </div>
+
     <!-- 批次⑩.81 选型 A: 文件夹删除轻确认 (替换 ElMessageBox, 方案稿 2026-09-08-folder-delete-confirm-4ui) -->
     <FolderDeleteConfirmDialog
       v-model="folderDelete.visible"
