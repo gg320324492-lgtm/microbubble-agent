@@ -228,6 +228,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { parseDbDate } from '@/utils/format'
 import { Document } from '@element-plus/icons-vue'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
@@ -410,10 +411,11 @@ const viewMeeting = (meeting) => {
 
 // v77 P2.6-F.2 Step 1: viewMinutes / startTranscript / onTranscriptComplete / generateMinutes 已删（0 调用方）
 
-// 辅助函数（数据库存 UTC，显示北京时间 UTC+8）
-const formatMonth = (date) => dayjs(date).add(8, 'hour').format('M月')
-const formatDay = (date) => dayjs(date).add(8, 'hour').format('D')
-const formatHour = (date) => dayjs(date).add(8, 'hour').format('HH:mm')
+// 辅助函数 —— 2026-11-10 时区收口：统一走 parseDbDate（显式 UTC 解析），
+// 替换原 dayjs(串).add(8)（naive 串被按本地时区解析，只在中国浏览器碰巧正确）
+const formatMonth = (date) => { const d = parseDbDate(date); return d ? dayjs(d).format('M月') : '--' }
+const formatDay = (date) => { const d = parseDbDate(date); return d ? dayjs(d).format('D') : '--' }
+const formatHour = (date) => { const d = parseDbDate(date); return d ? dayjs(d).format('HH:mm') : '--' }
 // v77 P2.6-F.2 Step 2: formatDate 删（纪要 dialog 搬到 MeetingMinutesDialog 内部有自己的 formatDate）
 
 onMounted(() => {

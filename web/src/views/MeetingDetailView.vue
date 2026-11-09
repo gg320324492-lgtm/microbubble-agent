@@ -460,6 +460,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ArrowDown, ArrowUp, StarFilled, ChatLineRound, PieChart } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { parseDbDate } from '@/utils/format'
 import { useMemberStore } from '@/stores/member'
 import TabStrip from '@/components/common/TabStrip.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
@@ -1044,9 +1045,9 @@ function getAudioSrc(url) {
 }
 
 const formatDate = (d) => {
-  if (!d) return ''
-  // 数据库存储 UTC 时间，显示北京时间（UTC+8）
-  return dayjs(d).add(8, 'hour').format('YYYY-MM-DD HH:mm')
+  // 2026-11-10 时区收口: parseDbDate 显式按 UTC 解析 (替换 dayjs+add(8))
+  const parsed = parseDbDate(d)
+  return parsed ? dayjs(parsed).format('YYYY-MM-DD HH:mm') : ''
 }
 const formatTs = (sec) => {
   const s = Math.floor(sec || 0)

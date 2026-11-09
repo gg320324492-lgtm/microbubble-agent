@@ -389,23 +389,35 @@ async def auto_intake_summary(
             pass
 
     # 2. DB 聚合: 今日 + 7 日入库量 (source_type='auto_expansion')
-    today = datetime.now().date()
-    week_ago = today - timedelta(days=6)
+    # 2026-11-10 时区口径修复 (类 20.221): created_at 列存 naive UTC,
+    # 原 func.date(created_at) == 本地今天 会把【北京 0-8 点】入库的算到昨天
+    # (UTC 还在前一天)。修法: 统计窗口按 UTC 计算 —— 北京"今天 00:00" =
+    # UTC 前一天 16:00, 用 created_at >= 窗口起点 的区间比较代替按天截断。
+    BJ_OFFSET = timedelta(hours=8)
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    today_bj = (now_utc + BJ_OFFSET).date()
 
+    def _bj_day_window_utc(d_bj):
+        """北京日期 d_bj 的 [00:00, 24:00) 对应的 UTC naive 区间。"""
+        start_bj = datetime(d_bj.year, d_bj.month, d_bj.day) - BJ_OFFSET
+        return start_bj, start_bj + timedelta(days=1)
+
+    s, e = _bj_day_window_utc(today_bj)
     today_count_result = await db.execute(
         select(func.count(Knowledge.id))
         .where(Knowledge.source_type == "auto_expansion")
-        .where(func.date(Knowledge.created_at) == today)
+        .where(Knowledge.created_at >= s, Knowledge.created_at < e)
     )
     result["today_intake"] = today_count_result.scalar() or 0
 
     weekly_counts = []
     for d_offset in range(6, -1, -1):
-        d = today - timedelta(days=d_offset)
+        d = today_bj - timedelta(days=d_offset)
+        ws, we = _bj_day_window_utc(d)
         c_result = await db.execute(
             select(func.count(Knowledge.id))
             .where(Knowledge.source_type == "auto_expansion")
-            .where(func.date(Knowledge.created_at) == d)
+            .where(Knowledge.created_at >= ws, Knowledge.created_at < we)
         )
         weekly_counts.append(c_result.scalar() or 0)
     result["weekly_intake"] = weekly_counts
@@ -422,9 +434,11 @@ async def auto_intake_summary(
 
     # 5. 命中率 / 负反馈率: 真实 feedback 表聚合 (W86 mini-13 沿用 W86 mini-11 C 实战)
     # 命中率 = rating>=4 / 总数, 负反馈率 = rating<=2 / 总数, 近 7 天
+    # 2026-11-10 时区收口: created_at 是 naive UTC 列, 窗口起点必须用 UTC now
+    # (原 datetime.now() 是本地 +0800 ⇒ 窗口整体东移 8 小时, 多算 8 小时前的旧数据)
     from app.models.feedback import Feedback
     from sqlalchemy import case
-    week_ago_dt = datetime.now() - timedelta(days=7)
+    week_ago_dt = now_utc - timedelta(days=7)
     try:
         fb_total_result = await db.execute(
             select(func.count(Feedback.id))

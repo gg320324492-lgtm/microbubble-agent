@@ -212,7 +212,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Check, Edit, Delete, Plus, Warning } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { formatDate } from '@/utils/format'
+import { formatDate, parseDbDate } from '@/utils/format'
 import { getPriorityLabel } from '@/utils/task'
 import { groupTasksByAssignee } from '@/utils/taskGroup'  // 2026-06-26: 从本文件抽出，移动端按人分组视图复用
 import { useUserStore } from '@/stores/user'
@@ -497,9 +497,12 @@ const toggleTaskStatus = async (task) => {
 }
 
 // 辅助函数
+// 2026-11-10 时区收口: due_date 是 naive UTC 串, 必须显式按 UTC 解析再比本地 now
+// (原 dayjs(串) 把 UTC 00-08 点的截止算成前一天, 多报一天逾期)
 const isOverdue = (task) => {
   if (!task.due_date || task.status === 'done') return false
-  return dayjs(task.due_date).isBefore(dayjs())
+  const d = parseDbDate(task.due_date)
+  return d ? dayjs(d).isBefore(dayjs()) : false
 }
 
 // 监听 Tab 切换

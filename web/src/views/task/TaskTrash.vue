@@ -179,7 +179,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Delete, RefreshRight, DeleteFilled, Clock, Edit } from '@element-plus/icons-vue'
-import { formatDateTime } from '@/utils/format'
+import { formatDateTime, parseDbDate } from '@/utils/format'
 import { getStatusType, getStatusLabel, getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -285,9 +285,12 @@ const onSizeChange = (size) => {
 }
 
 // 自动删除倒计时 — 精确到分钟
+// 2026-11-10 时区收口: auto_delete_at 是 naive UTC 串, 原 dayjs(串) 按本地时区解析
+// ⇒ 倒计时恒多/少 8 小时 (30 天保留期显示成 29 天 16 小时)。统一 parseDbDate。
 function getAutoDeleteText(autoDeleteAt) {
   if (!autoDeleteAt) return ''
-  const expire = dayjs(autoDeleteAt)
+  const expire = dayjs(parseDbDate(autoDeleteAt))
+  if (!expire.isValid()) return ''
   const diffMin = expire.diff(now.value, 'minute')
   const diffHour = expire.diff(now.value, 'hour')
   const diffDay = Math.floor(diffMin / (60 * 24))
@@ -307,7 +310,9 @@ function getAutoDeleteText(autoDeleteAt) {
 // 剩余小时数（用于颜色分级）
 function getAutoDeleteHours(autoDeleteAt) {
   if (!autoDeleteAt) return Infinity
-  return dayjs(autoDeleteAt).diff(now.value, 'hour', true)
+  const d = parseDbDate(autoDeleteAt)
+  if (!d) return Infinity
+  return dayjs(d).diff(now.value, 'hour', true)
 }
 
 // 颜色分级：< 6h 红 / 6-24h 橙 / 24-72h 黄 / > 72h 灰
@@ -327,7 +332,8 @@ function getAutoDeleteIcon(autoDeleteAt) {
 
 // 准确删除时间 — "06-04 14:30"
 function formatAutoDeleteExact(autoDeleteAt) {
-  return dayjs(autoDeleteAt).format('MM-DD HH:mm')
+  const d = parseDbDate(autoDeleteAt)
+  return d ? dayjs(d).format('MM-DD HH:mm') : ''
 }
 </script>
 

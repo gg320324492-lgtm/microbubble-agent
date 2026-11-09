@@ -100,6 +100,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { parseDbDate } from '@/utils/format'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 
 const traces = ref([])
@@ -136,8 +137,10 @@ function setType(v) {
 }
 
 function formatTime(t) {
-  if (!t) return ''
-  return dayjs(t).format('MM-DD HH:mm:ss')
+  // 2026-11-10 时区收口: agent_traces.created_at 是 naive UTC 列,
+  // dayjs(串) 按本地时区解析 ⇒ 追踪时间显示差 8 小时。统一 parseDbDate。
+  const d = parseDbDate(t)
+  return d ? dayjs(d).format('MM-DD HH:mm:ss') : ''
 }
 
 function viewDetail(trace) {

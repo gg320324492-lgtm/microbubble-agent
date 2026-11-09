@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index, CheckConstraint
+from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index, CheckConstraint, text as sa_text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
@@ -464,8 +464,14 @@ class FileRequest(Base):
     max_total_bytes = Column(BigInteger, nullable=True)   # 本请求累计占盘上限
     used_bytes = Column(BigInteger, nullable=False, server_default="0")
     auto_close_on_limit = Column(Boolean, nullable=False, server_default="true")
-    created_at = Column(DateTime, nullable=False, server_default="now()")
-    updated_at = Column(DateTime, nullable=False, server_default="now()")
+    # ⚠️ 2026-11-10: 原写 server_default="now()" (裸字符串) ⇒ PG 把 DEFAULT 'now()'
+    #    字面量在建表时刻求值成**冻结常量**, 全表任何行的时间戳都=建表日
+    #    (生产实锤: 11-09 新建链接显示 07-01, 迁移 151 修复)。
+    #    必须 text() 包裹才是活函数 —— 类 20.184 的第一次生产事故。
+    #    ⚠️ 这里的 now() 是 DB 会话时区 (UTC) 的 now; 展示层负责转北京时间,
+    #       不要在这里改成本地时间 (统一 UTC 存储是本仓铁律, 类 20.221)。
+    created_at = Column(DateTime, nullable=False, server_default=sa_text("now()"))
+    updated_at = Column(DateTime, nullable=False, server_default=sa_text("now()"))
 
     def __repr__(self):
         return f"<FileRequest(id={self.id}, title='{self.title[:30]}', submissions={self.submission_count}, active={self.is_active})>"

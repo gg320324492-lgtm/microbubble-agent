@@ -107,6 +107,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { parseDbDate } from '@/utils/format'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import PageHeader from '@/components/mobile/PageHeader.vue'
@@ -148,21 +149,33 @@ const fieldConfig = computed(() => ({
     type: row.auto_delete_at ? getAutoDeleteType(row.auto_delete_at) : 'info',
   }),
   fields: (row) => [
-    { key: 'deleted', label: '删除时间', value: row.deleted_at ? dayjs(row.deleted_at).format('MM-DD HH:mm') : '—' },
-    { key: 'auto', label: '自动删除', value: row.auto_delete_at ? `${dayjs(row.auto_delete_at).format('MM-DD HH:mm')} 删除` : '—' },
+    // 2026-11-10 时区收口: naive UTC 串必须经 parseDbDate 解析 (原 dayjs(串) 差 8 小时)
+    { key: 'deleted', label: '删除时间', value: fmtDb(row.deleted_at, 'MM-DD HH:mm') },
+    { key: 'auto', label: '自动删除', value: fmtDb(row.auto_delete_at, 'MM-DD HH:mm', ' 删除') },
   ],
 }))
+
+// 统一的"解析 UTC 串 → 本地格式化"小工具 (空值/解析失败返回占位)
+function fmtDb(v, fmt, suffix = '') {
+  const d = parseDbDate(v)
+  return d ? dayjs(d).format(fmt) + suffix : '—'
+}
 
 // 自动删除倒计时
 function getAutoDeleteHours(autoDeleteAt) {
   if (!autoDeleteAt) return Infinity
-  return dayjs(autoDeleteAt).diff(dayjs(), 'hour', true)
+  const d = parseDbDate(autoDeleteAt)
+  if (!d) return Infinity
+  return dayjs(d).diff(dayjs(), 'hour', true)
 }
 
 function getAutoDeleteText(autoDeleteAt) {
   if (!autoDeleteAt) return ''
-  const diffMin = dayjs(autoDeleteAt).diff(dayjs(), 'minute')
-  const diffHour = dayjs(autoDeleteAt).diff(dayjs(), 'hour')
+  const d = parseDbDate(autoDeleteAt)
+  if (!d) return ''
+  const dj = dayjs(d)
+  const diffMin = dj.diff(dayjs(), 'minute')
+  const diffHour = dj.diff(dayjs(), 'hour')
   const diffDay = Math.floor(diffMin / (60 * 24))
   if (diffMin <= 0) return '即将删除'
   if (diffMin < 60) return `${diffMin} 分钟后`

@@ -91,7 +91,7 @@
             <div class="kpi-big mono">{{ weekMeetings }}<span class="kpi-unit">本周场次</span></div>
             <div class="kpi-ring">
               <div class="kr" v-for="m in upcomingMeetings" :key="m.id">
-                <div class="n">{{ fmtMeetingTime(m.start_time) }}</div>
+                <div class="n">{{ fmtMeetingTime(m) }}</div>
                 <div class="l">{{ m.title }}</div>
               </div>
               <div class="kr" v-if="!upcomingMeetings.length"><div class="l">暂无安排</div></div>
@@ -134,6 +134,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { parseDbDate } from '@/utils/format'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
 import TaskView from './TaskView.vue'
@@ -187,28 +188,39 @@ const greeting = computed(() => {
 // ─── 批次⑩.79 方案 A: 三模块派生 ───
 const overdueTasks = computed(() => inProgressTasks.value.filter(t => isOverdue(t.due_date)))
 const overdueCount = computed(() => overdueTasks.value.length)
+// 2026-11-10 时区收口: due_date 是 naive UTC 串, "今天到期"必须按北京语义比
+// (parseDbDate 解析后与本地 now 比), 原 dayjs(串) 会把 UTC 00-08 点的日期算成前一天
 const todayDueCount = computed(() => inProgressTasks.value.filter(t => {
   if (!t.due_date) return false
-  const d = dayjs(t.due_date)
-  return !d.isBefore(dayjs(), 'day') && d.isBefore(dayjs().add(1, 'day'))
+  const d = parseDbDate(t.due_date)
+  if (!d) return false
+  const dj = dayjs(d)
+  return !dj.isBefore(dayjs(), 'day') && dj.isBefore(dayjs().add(1, 'day'))
 }).length)
 
 // 会议: 今天起的 upcoming, 本周(7 天内)计数 + 最近两场
+// 2026-11-10 时区收口: start_time 是 naive UTC 串, 一切比较/显示先过 parseDbDate。
+// date_from 过滤取消 —— 后端拿北京日期串与 UTC 列比较, 0-8 点的会议会被漏掉
+// (口径错), 这里改为取回后在前端用 parseDbDate 过滤"今天起"(本地语义)。
 const fetchMeetings = async () => {
   try {
-    const from = dayjs().format('YYYY-MM-DD')
-    const res = await axios.get('/api/v1/meetings', { params: { date_from: from, page_size: 10 } })
+    const res = await axios.get('/api/v1/meetings', { params: { page_size: 10, ordering: 'start_time' } })
     const items = res.data?.items || res.data || []
-    meetings.value = [...items].sort((a, b) => dayjs(a.start_time).diff(dayjs(b.start_time)))
+    const todayStart = dayjs().startOf('day')
+    meetings.value = items
+      .map(m => ({ ...m, _start: parseDbDate(m.start_time) }))
+      .filter(m => m._start && dayjs(m._start).isAfter(todayStart))
+      .sort((a, b) => a._start - b._start)
   } catch (e) { console.error('获取会议失败:', e) }
 }
-const weekMeetings = computed(() =>
-  meetings.value.filter(m => dayjs(m.start_time).isBefore(dayjs().add(7, 'day'))).length
-)
+const weekMeetings = computed(() => {
+  const limit = dayjs().add(7, 'day')
+  return meetings.value.filter(m => m._start && dayjs(m._start).isBefore(limit)).length
+})
 const upcomingMeetings = computed(() => meetings.value.slice(0, 2))
-const fmtMeetingTime = (iso) => {
-  if (!iso) return '—'
-  const d = dayjs(iso)
+const fmtMeetingTime = (m) => {
+  const d = m && m._start ? dayjs(m._start) : null
+  if (!d) return '—'
   const pad = n => String(n).padStart(2, '0')
   return d.isSame(dayjs(), 'day')
     ? `${pad(d.hour())}:${pad(d.minute())}`
@@ -223,7 +235,9 @@ const fetchDrive = async () => {
       axios.get('/api/v1/drive/storage-quota').catch(() => null),
     ])
     const items = (filesRes.data?.items || []).slice()
-    items.sort((a, b) => dayjs(b.created_at).diff(dayjs(a.created_at)))
+    // 2026-11-10: created_at 是 naive UTC 串, dayjs(串) 按本地解析做排序——
+    // 所有条目同一口径, 排序结果不受影响, 但统一 parseDbDate 消除歧义
+    items.sort((a, b) => (parseDbDate(b.created_at) || 0) - (parseDbDate(a.created_at) || 0))
     driveFiles.value = items
     driveQuota.value = quotaRes?.data || null
   } catch (e) { console.error('获取网盘数据失败:', e) }
@@ -274,14 +288,20 @@ const fetchInProgressTasks = async () => {
       if (!a.due_date && !b.due_date) return 0
       if (!a.due_date) return 1
       if (!b.due_date) return -1
-      return dayjs(a.due_date).diff(dayjs(b.due_date))
+      return (parseDbDate(a.due_date) || 0) - (parseDbDate(b.due_date) || 0)
     })
     inProgressTasks.value = allTasks
   } catch (e) { console.error('获取进行中任务失败:', e) }
   loadingCards.value = false
 }
 
-const isOverdue = (date) => date && dayjs(date).isBefore(dayjs())
+// 2026-11-10 时区收口: due_date 是 naive UTC 串, 必须显式按 UTC 解析再比本地 now
+// (原 dayjs(串) 把 UTC 00-08 点的截止算成前一天已逾期, 多报一天的逾期)
+const isOverdue = (date) => {
+  if (!date) return false
+  const d = parseDbDate(date)
+  return d ? dayjs(d).isBefore(dayjs()) : false
+}
 
 onMounted(() => {
   updateTime()

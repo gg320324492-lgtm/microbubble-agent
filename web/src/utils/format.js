@@ -1,26 +1,38 @@
 import dayjs from 'dayjs'
 
-// 数据库存储 UTC 时间，前端统一转北京时间（UTC+8）
-const toBeijing = (date) => dayjs(date).add(8, 'hour')
+// 数据库统一存 naive UTC（类 20.221）。
+// ⚠️ 一切"显示"都必须先经 parseDbDate（显式按 UTC 解析 → Date 对象），
+//    再由 dayjs(Date) 按**浏览器本地时区**格式化 —— 中国用户即北京时间，
+//    海外用户看到自己的本地时间（语义正确）。
+// ⛔ 旧写法 dayjs(串).add(8, 'hour') 有两个缺陷：
+//    ① dayjs 把 naive 串按【本地时区】解析，"UTC 串 + 8" 只在中国浏览器碰巧正确；
+//    ② 若串带 Z/偏移（tz-aware 列产出），再加 8 就是双重偏移。
+//    2026-11-10 全部收敛到 parseDbDate（类 20.250 ①：同一件事只留一份实现）。
+const toDisplay = (date) => {
+  const d = parseDbDate(date)
+  return d ? dayjs(d) : null
+}
 
 export function formatDate(date) {
-  if (!date) return '-'
-  return toBeijing(date).format('YYYY-MM-DD')
+  const d = toDisplay(date)
+  return d ? d.format('YYYY-MM-DD') : '-'
 }
 
 export function formatDateTime(date) {
-  if (!date) return '-'
-  return toBeijing(date).format('YYYY-MM-DD HH:mm')
+  const d = toDisplay(date)
+  return d ? d.format('YYYY-MM-DD HH:mm') : '-'
 }
 
 export function formatTime(date) {
-  if (!date) return '-'
-  return toBeijing(date).format('HH:mm')
+  const d = toDisplay(date)
+  return d ? d.format('HH:mm') : '-'
 }
 
 export function formatRelativeTime(date) {
-  if (!date) return '-'
-  const d = dayjs(date)
+  const d = toDisplay(date)
+  if (!d) return '-'
+  // now 用真实当前时刻：parseDbDate 产出的 Date 与 Date.now 同一坐标系，
+  // naive 串被误当本地时区的"两个错误相抵"从此不再存在。
   const now = dayjs()
   const diffMinutes = now.diff(d, 'minute')
   const diffHours = now.diff(d, 'hour')
@@ -67,10 +79,12 @@ export function parseDbDate(input) {
   return isNaN(d.getTime()) ? null : d
 }
 
-// 紧凑日期格式（用于 Dashboard 等空间有限的场景）
+// 紧凑日期格式（用于 Dashboard 等空间有限的场景）。
+// 2026-11-10 同步收敛到 parseDbDate（原实现 dayjs(串) 按本地时区解析 naive UTC，
+// 截止时间的"当天"边界会偏 8 小时）。
 export function formatCompactDate(date, emptyText = '无截止日期') {
-  if (!date) return emptyText
-  const d = dayjs(date)
+  const d = toDisplay(date)
+  if (!d) return emptyText
   const now = dayjs()
   const isSameYear = d.year() === now.year()
   // 有时间信息（非00:00）则显示时间

@@ -225,6 +225,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { parseDbDate } from '@/utils/format'
 import { useMeeting } from '@/composables/useMeeting'
 import { useUserStore } from '@/stores/user'
 import PageHeader from '@/components/mobile/PageHeader.vue'
@@ -288,18 +289,18 @@ function applyDateFilter(filter) {
   fetchMeetings()
 }
 
-// 格式化
+// 格式化 —— 2026-11-10 时区收口: 统一走 parseDbDate (替换 dayjs+add(8))
 function formatMonth(t) {
-  if (!t) return '--'
-  return dayjs(t).add(8, 'hour').format('M月')
+  const d = parseDbDate(t)
+  return d ? dayjs(d).format('M月') : '--'
 }
 function formatDay(t) {
-  if (!t) return '--'
-  return dayjs(t).add(8, 'hour').format('DD')
+  const d = parseDbDate(t)
+  return d ? dayjs(d).format('DD') : '--'
 }
 function formatHour(t) {
-  if (!t) return '--'
-  return dayjs(t).add(8, 'hour').format('HH:mm')
+  const d = parseDbDate(t)
+  return d ? dayjs(d).format('HH:mm') : '--'
 }
 
 function getStatusLabel(s) {

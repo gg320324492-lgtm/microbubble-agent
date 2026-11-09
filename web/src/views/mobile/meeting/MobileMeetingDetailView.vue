@@ -226,6 +226,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import { parseDbDate } from '@/utils/format'
 import axios from 'axios'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useMeetingTranscript } from '@/composables/useMeetingTranscript'
@@ -264,14 +265,14 @@ const tabs = computed(() => [
   },
 ])
 
-// 格式化
+// 格式化 —— 2026-11-10 时区收口: 统一走 parseDbDate (替换 dayjs+add(8))
 function formatDate(t) {
-  if (!t) return ''
-  return dayjs(t).add(8, 'hour').format('YYYY-MM-DD HH:mm')
+  const d = parseDbDate(t)
+  return d ? dayjs(d).format('YYYY-MM-DD HH:mm') : ''
 }
 function formatTime(t) {
-  if (!t) return ''
-  return dayjs(t).add(8, 'hour').format('HH:mm:ss')
+  const d = parseDbDate(t)
+  return d ? dayjs(d).format('HH:mm:ss') : ''
 }
 function getStatusLabel(s) {
   return {
