@@ -43,13 +43,17 @@ from contextlib import contextmanager
 from io import BytesIO
 from typing import Optional
 
+from app.config import settings
 from app.services.file_service import file_service
 
 logger = logging.getLogger("microbubble.chunked_upload")
 
 
 # === 常量 ===
-MAX_DRIVE_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024  # 2GB (PR1 决策)
+# 2026-11-09: 原硬编码 2 GiB（"PR1 决策"）改为由 settings.DRIVE_MAX_FILE_SIZE_MB 派生，
+# 与 drive_service / drive_chunked_upload_service 同源（三处原先各自写死一遍，
+# 10GB 级收件需要同时抬三处，不同源就必然漂移）。
+MAX_DRIVE_FILE_SIZE_BYTES = int(settings.DRIVE_MAX_FILE_SIZE_MB) * 1024 * 1024
 MIN_PART_SIZE = 5 * 1024 * 1024                    # minio 默认 5MB
 # 默认 part_size, 与 minio.put_object 默认一致
 PART_SIZE = 5 * 1024 * 1024

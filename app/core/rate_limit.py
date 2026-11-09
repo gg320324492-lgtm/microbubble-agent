@@ -282,11 +282,16 @@ _SSE_PATH_RE = re.compile(
 # - 走 write tier 30/min → 30秒录音就 429 触顶, 用户看到"网络断开"
 # - 必须独立 tier (60/min = 1分钟录音)
 # - 修复依据: CLAUDE.md v31.2.3 教训 2 "SSE/WS/chunked upload 等长连接必须有独立 tier"
-# 当前只 1 个端点: PUT /meetings/{meeting_id}/audio-chunk
-# 未来加其他 chunked upload 端点 (例如合并 /merge-chunks 不在这条路径里, 它是 POST 一次性),
-# 在 _CHUNKED_UPLOAD_PATH_RE 扩展 regex 即可
+# 端点:
+#   PUT /meetings/{meeting_id}/audio-chunk                听会实时分片 (1 片/秒)
+#   PUT /file-requests/{token}/uploads/{id}/chunks/{idx}  外部收件大文件分片
+# ⚠️ 第二条 (2026-11-09 新增) **必须**进这条白名单, 否则它落 `write` 30/min:
+#    10 GiB / 32 MiB = 320 片 ⇒ 会被自己的限流掐死在第十秒, 前端只看到 429 刷屏
+#    而上传永远完不成 —— 症状与"网络断了"一模一样 (与会议 255 心跳那次同型)。
+#    本文件注释早就写了"未来加其他 chunked upload 端点, 扩展这个 regex 即可"。
 _CHUNKED_UPLOAD_PATH_RE = re.compile(
     r"^/api/v1/meetings/\d+/audio-chunk$"
+    r"|^/api/v1/file-requests/[^/]+/uploads/[^/]+/chunks/\d+$"
 )
 
 # 2026-10-08 P0-5 (会议 255 事故根因 G): 录音心跳独立 tier

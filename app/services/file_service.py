@@ -1,10 +1,12 @@
 """MinIO 文件上传服务"""
 
 import asyncio
+import hashlib
 import io
 import json
 import uuid
 from datetime import timedelta
+from typing import Dict, Sequence
 from minio import Minio
 
 from app.config import settings
@@ -300,6 +302,137 @@ class FileService:
             return stat.size
 
         return await asyncio.to_thread(_sync_copy)
+
+    # ── 大文件服务端合并 / 流式校验 (2026-11-09, 10GB 外部收件) ──────────────
+    # 为什么需要这两个方法: drive 三条上传通路在**合并阶段**都把整份文件读进
+    # Python 内存 (drive_chunked_upload_service 的 source.read() / 旧版 _stream_concat_chunks
+    # 的 f.read() / 单请求通路的 await file.read())，而 app 容器 mem_limit=8g
+    # ⇒ 10 GiB 缓冲必然 OOMKill。抬 2 GiB 上限只是必要条件, 不换合并方式就没用。
+    # compose_object 让 MinIO 在服务端拼 (数据不进 Python)，stream_sha256 用
+    # 8 MB 一块的流式读回算真实内容哈希 (内存峰值 = 一个块, 不是整个文件)。
+
+    async def compose_objects_async(
+        self,
+        src_object_names: Sequence[str],
+        dst_object_name: str,
+        content_type: str = "application/octet-stream",
+    ) -> Dict[str, object]:
+        """MinIO **服务端**把多个对象按顺序拼成一个对象。
+
+        底层是 S3 CreateMultipartUpload + UploadPartCopy ⇒ **数据不出 MinIO**，
+        Python 侧 0 内存、0 网络带宽；10 GiB 的拼接成本只是 MinIO 内部一次拷贝。
+
+        调用方必须保证的 S3/MinIO 硬约束 (违反会直接报错, 不是静默降级):
+          - 除最后一个 source 外, 每个 ≥ 5 MiB (UploadPartCopy 最小 part 尺寸)
+          - source 数 ≤ 10000 (multipart part 上限) ⇒ 32 MiB/片 时够到 320 GB
+          - 列表顺序即拼接顺序
+
+        Args:
+            src_object_names: 源对象键 (桶内, 按序)
+            dst_object_name: 目标对象键
+            content_type: 目标对象 MIME。⚠️ MinIO compose 是否保留 Content-Type
+                需实测, 本方法会在返回里给出**实际** content_type, 调用方据此判断
+                (不要假设它一定等于传入值 —— 类 20.220)。
+
+        Returns:
+            {"size": 合成后字节数, "etag": ..., "content_type": MinIO 实际记录的值,
+             "content_type_matched": bool}
+        """
+        if not src_object_names:
+            raise ValueError("compose_objects_async: sources 不能为空")
+
+        def _sync_compose():
+            from minio.commonconfig import ComposeSource
+
+            sources = [ComposeSource(self.bucket, name) for name in src_object_names]
+            # ⚠️ minio 7.2.0 的 ComposeSource **没有公开 validate()** 方法 —— 之前手写
+            #    `s.validate()` 会 AttributeError (compose 探针实测抓到的真 bug, 单测里
+            #    compose 是 mock 的所以没发现)。part 尺寸 (<5MiB 非末片) 校验由
+            #    compose_object 内部经 _validate_size/build_headers 自己做, 调用方无需预校验。
+            metadata = {"Content-Type": content_type} if content_type else None
+            self.client.compose_object(
+                self.bucket,
+                dst_object_name,
+                sources,
+                metadata=metadata,
+            )
+            stat = self.client.stat_object(self.bucket, dst_object_name)
+            actual_ct = getattr(stat, "content_type", None) or ""
+            return {
+                "size": int(stat.size or 0),
+                "etag": (stat.etag or ""),
+                "content_type": actual_ct,
+                "content_type_matched": actual_ct == content_type,
+            }
+
+        return await asyncio.to_thread(_sync_compose)
+
+    async def stream_sha256_async(
+        self,
+        object_name: str,
+        chunk_size: int = 0,
+    ) -> Dict[str, object]:
+        """流式读一个对象算 SHA256 —— 内存峰值 = 一个块, **不是整个文件**。
+
+        用于 compose 之后校验"拼出来的这份确实是完整内容"，同时产出真实内容哈希
+        给 file_hash (秒传 dedup 的键必须是内容哈希, 不能拿片哈希的派生值冒充 ——
+        否则客户端谎报哈希会让秒传把旧内容当新内容返回, 那是数据错置)。
+
+        Args:
+            object_name: 对象键
+            chunk_size: 块大小, 默认 settings.DRIVE_HASH_CHUNK_MB (8 MB)
+
+        Returns:
+            {"sha256": hex, "size": 读到的总字节数}
+        """
+        if chunk_size <= 0:
+            chunk_size = int(settings.DRIVE_HASH_CHUNK_MB) * 1024 * 1024
+
+        def _sync_hash():
+            hasher = hashlib.sha256()
+            total = 0
+            response = None
+            try:
+                response = self.client.get_object(self.bucket, object_name)
+                for block in response.stream(amt=chunk_size):
+                    if not block:
+                        continue
+                    hasher.update(block)
+                    total += len(block)
+            finally:
+                # minio-py 必须显式 close + release_conn, 否则连接泄漏
+                if response is not None:
+                    response.close()
+                    response.release_conn()
+            return {"sha256": hasher.hexdigest(), "size": total}
+
+        return await asyncio.to_thread(_sync_hash)
+
+    async def delete_objects_async(self, object_names: Sequence[str]) -> int:
+        """批量删除对象, 返回删除成功数 (失败不抛, 逐个统计)。
+
+        分片收件完成后要清掉 staging 片; 逐个 delete_object 会发 N 次请求,
+        这里用 remove_objects 一次批量处理。
+        """
+        names = [n for n in object_names if n]
+        if not names:
+            return 0
+
+        def _sync_remove():
+            errors = []
+            # remove_objects 是 generator, 必须迭代才会真正执行
+            for _ in self.client.remove_objects(
+                self.bucket,
+                iter(names),
+                b_prefix=False,
+            ):
+                pass
+            return len(names)
+
+        try:
+            return await asyncio.to_thread(_sync_remove)
+        except Exception:
+            return 0
 
     async def object_exists(self, object_name: str) -> bool:
         """检查对象是否存在"""

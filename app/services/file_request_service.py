@@ -26,8 +26,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.knowledge import FileRequest, Knowledge
 from app.models.member import Member
+from app.services import file_request_gates as gates
 from app.services.activity_service import activity_service
 from app.services.audit_service import audit_service
 from app.services.drive_service import DriveService
@@ -62,9 +64,13 @@ class FileRequestService:
         description: Optional[str] = None,
         target_folder_id: Optional[int] = None,
         expires_in_days: Optional[int] = None,
+        expires_in_hours: Optional[int] = None,
         allowed_extensions: Optional[List[str]] = None,
         require_uploader_name: bool = True,
         max_file_size_mb: Optional[int] = None,
+        max_submissions: Optional[int] = None,
+        max_total_mb: Optional[int] = None,
+        auto_close_on_limit: Optional[bool] = None,
     ) -> FileRequest:
         """创建文件请求 (登录用户)
 
@@ -74,19 +80,35 @@ class FileRequestService:
             description: 详细说明 (可选)
             target_folder_id: 提交后文件落到的文件夹 (NULL = 创建者根目录)
             expires_in_days: 几天后过期 (NULL = 永久)
+            expires_in_hours: 几小时后过期; **优先于** expires_in_days。
+                (2026-11-09 加: 一次外部收件用"3 天"太粗, 需要小时粒度)
             allowed_extensions: 允许文件类型数组 (如 ['pdf','docx'], NULL=不限)
             require_uploader_name: 是否必填姓名
             max_file_size_mb: 单文件大小上限 MB (NULL=不限)
+            max_submissions: 最多收几个文件 (None = 用严格档默认
+                settings.FILE_REQUEST_MAX_SUBMISSIONS; 传 0 = 显式不限)
+            max_total_mb: 累计总量上限 MB (None = 用 settings.FILE_REQUEST_MAX_TOTAL_MB;
+                传 0 = 显式不限)
+            auto_close_on_limit: 收满后自动关闭链接 (None = 用 settings 默认)
 
         Returns:
             FileRequest 实例 (含 token)
+
+        ⚠️ 2026-11-09 语义变更说明 (刻意保守, 只加不改):
+        - **新增**的两道闸给"严格档默认值" ⇒ 新建的请求从此受总量/次数约束。
+        - **既有语义一律不动**: 不传 expires ⇒ 仍是永久; 老数据这两列为 NULL ⇒
+          仍不限 (行为逐字不变)。这样本次不会悄悄让谁的旧收件链接突然失效。
         """
         if not title or not title.strip():
             raise ValueError("title 不能为空")
 
-        # expires_in_days → expires_at
+        # expires → expires_at (小时优先于天)
         expires_at = None
-        if expires_in_days is not None:
+        if expires_in_hours is not None:
+            if expires_in_hours <= 0 or expires_in_hours > 8760:
+                raise ValueError("expires_in_hours 必须在 1-8760 之间")
+            expires_at = datetime.utcnow() + timedelta(hours=expires_in_hours)
+        elif expires_in_days is not None:
             if expires_in_days <= 0 or expires_in_days > 365:
                 raise ValueError("expires_in_days 必须在 1-365 之间")
             expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
@@ -102,10 +124,27 @@ class FileRequestService:
             if not ext_list:
                 ext_list = None
 
-        # max_file_size_mb 范围
+        # max_file_size_mb 范围 (2026-11-09: 上限从写死 500 抬到 settings,
+        # 否则 10GB 级收件连创建请求都过不去)
+        _mb_cap = int(settings.FILE_REQUEST_MAX_SINGLE_MB)
         if max_file_size_mb is not None:
-            if max_file_size_mb <= 0 or max_file_size_mb > 500:
-                raise ValueError("max_file_size_mb 必须在 1-500 之间")
+            if max_file_size_mb <= 0 or max_file_size_mb > _mb_cap:
+                raise ValueError(f"max_file_size_mb 必须在 1-{_mb_cap} 之间")
+
+        # ── 安全闸默认值 ─────────────────────────────────────────────────────
+        # None ⇒ 严格档默认; 0 ⇒ 显式不限 (调用方明确担风险)
+        if max_submissions is None:
+            max_submissions = int(settings.FILE_REQUEST_MAX_SUBMISSIONS)
+        elif max_submissions <= 0:
+            max_submissions = None
+        if max_total_mb is None:
+            max_total_bytes = int(settings.FILE_REQUEST_MAX_TOTAL_MB) * 1024 * 1024
+        elif max_total_mb <= 0:
+            max_total_bytes = None
+        else:
+            max_total_bytes = int(max_total_mb) * 1024 * 1024
+        if auto_close_on_limit is None:
+            auto_close_on_limit = bool(settings.FILE_REQUEST_AUTO_CLOSE_ON_LIMIT)
 
         req = FileRequest(
             token=_generate_token(),
@@ -117,6 +156,10 @@ class FileRequestService:
             allowed_extensions=ext_list,
             require_uploader_name=require_uploader_name,
             max_file_size_mb=max_file_size_mb,
+            max_submissions=max_submissions,
+            max_total_bytes=max_total_bytes,
+            used_bytes=0,
+            auto_close_on_limit=bool(auto_close_on_limit),
         )
         db.add(req)
         await db.commit()
@@ -190,6 +233,9 @@ class FileRequestService:
             "max_file_size_mb": req.max_file_size_mb,
             "submission_count": req.submission_count,
             "created_at": req.created_at.isoformat() if req.created_at else None,
+            # 门禁摘要 —— 匿名提交页要据此告诉对方"最多能传多大/几个"，
+            # 并且必须与两条上传通路**实际生效的同一份**（gates.public_shape）
+            **gates.public_shape(req),
         }
 
     @staticmethod
@@ -241,15 +287,15 @@ class FileRequestService:
                     f"文件大小 {file_size // 1024 // 1024}MB 超过限制 {req.max_file_size_mb}MB"
                 )
 
-        # 4) allowed_extensions 校验
-        if req.allowed_extensions:
-            ext = (file_name.rsplit(".", 1)[-1] or "").lower()
-            # 去掉路径后缀
-            ext = ext.strip().lower()
-            if ext not in req.allowed_extensions:
-                raise ValueError(
-                    f"不允许的文件类型 '.{ext}'，仅支持 {', '.join(req.allowed_extensions)}"
-                )
+        # 4) allowed_extensions 校验 —— 交给 gates（与匿名分片通路同一份实现）
+        gates.check_extension(req, file_name)
+
+        # 4.5) 累计总量 + 提交次数闸 (2026-11-09 新增, **原先这两道全缺**)
+        #      ⚠️ 必须与分片通路调同一个函数: 同一个门禁两条写入路径各写一遍,
+        #      迟早出现"修了一条、另一条还在漏"（类 20.250 ①）。
+        #      FileRequestGateError 继承 ValueError ⇒ 下面 API 层的 except ValueError
+        #      仍能接住, 老调用方行为逐字不变。
+        await gates.check_gates(db, req, incoming_bytes=file_size)
 
         # 5) 实际创建 Knowledge 行 (drive mode, target_folder_id, team visibility)
         # 用 req.created_by 作为创建者 (审计追到创建者)
@@ -296,8 +342,10 @@ class FileRequestService:
             created_by=req.created_by,
         )
 
-        # 6) submission_count + 1 + activity
-        req.submission_count = (req.submission_count or 0) + 1
+        # 6) 记账 + activity —— 记账函数与分片通路**同一份** (gates.apply_accounting)
+        #    原先这里只 +1 submission_count, 既不累计 used_bytes 也不会自动关闭,
+        #    于是"总量闸"对单请求通路形同不存在。
+        gates.apply_accounting(req, file_size)
         await db.commit()
 
         try:

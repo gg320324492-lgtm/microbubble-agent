@@ -42,6 +42,7 @@ from sqlalchemy import and_, delete, or_, select, func, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.utils.datetime_utils import to_naive_datetime
 
 from app.models.folder import Folder, VISIBILITY_ORDER
@@ -59,8 +60,12 @@ from app.services.drive_upload_service import create_initial_version
 logger = logging.getLogger("microbubble.drive")
 
 
-# 默认配额
-MAX_DRIVE_FILE_SIZE_MB = 2048  # MinIO multipart 安全上限
+# 单文件硬天花板 —— 2026-11-09 起由 settings.DRIVE_MAX_FILE_SIZE_MB 驱动。
+# 原先此处硬编码 2048 MB（注释理由是"MinIO multipart 安全上限"），而 MinIO 自身
+# multipart 上限远在 TB 量级，2 GiB 是我们自己设的闸；10GB 级外部收件需要抬它。
+# ⚠️ 不要改回字面量：generic_chunked_upload_service / drive_chunked_upload_service /
+#    drive_files.py 的 Pydantic 校验都从这里派生，写死会四处漂移（历史正是四处各写一遍）。
+MAX_DRIVE_FILE_SIZE_MB = int(settings.DRIVE_MAX_FILE_SIZE_MB)  # 默认 20480 MB = 20 GiB
 MAX_DRIVE_FILE_SIZE_BYTES = MAX_DRIVE_FILE_SIZE_MB * 1024 * 1024
 
 

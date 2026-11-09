@@ -39,10 +39,17 @@ from app.services.file_service import file_service
 
 logger = logging.getLogger("microbubble.drive_chunked_upload")
 
+from app.config import settings as _conf_settings
+
 DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024
 MIN_CHUNK_SIZE = 256 * 1024
 MAX_CHUNK_SIZE = 32 * 1024 * 1024
-MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024
+# 2026-11-09: 原硬编码 2 GiB ⇒ settings 驱动（与 drive_service /
+# generic_chunked_upload_service 同源）。
+# ⚠️ 抬上限**不等于**这条通路能传 20GiB：下面的 complete_upload 仍把合并结果
+#    整份读进内存（source.read()），而 app 容器 mem_limit=8g ⇒ 实际天花板仍是内存。
+#    外部收件走 file_request_upload_service，那里用 MinIO 服务端 compose_object 拼接。
+MAX_FILE_SIZE = int(_conf_settings.DRIVE_MAX_FILE_SIZE_MB) * 1024 * 1024
 UPLOAD_TTL_HOURS = 24
 CHECKSUM_HEX_LENGTH = 64
 

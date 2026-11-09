@@ -354,6 +354,50 @@ class Settings(BaseSettings):
     # 文件上传大小限制（MB）
     MAX_UPLOAD_SIZE_MB: int = 50
 
+    # ── 网盘 / 外部收件的大文件上限（2026-11-09 10GB 视频收件立项）──────────
+    # 网盘单文件硬天花板。原先在 drive_service / generic_chunked_upload_service /
+    # drive_chunked_upload_service **三处各硬编码 2 GiB**，10GB 文件必被 413 拒；
+    # 现统一由此处驱动（三处常量都改为由它派生）。
+    # ⚠️ 这只是技术天花板，**不是配额**：普通成员仍受 drive_quota_bytes（默认 10 GiB）
+    #    约束，外部收件受 FILE_REQUEST_MAX_TOTAL_MB 约束。
+    DRIVE_MAX_FILE_SIZE_MB: int = 20480  # 20 GiB
+    # ⚠️ 已知遗留：drive 侧三条上传通路在**合并阶段仍把整文件读进内存**
+    #    （drive_chunked_upload_service 的 source.read() / generic 的 len(data) 校验），
+    #    而 app 容器 mem_limit=8g ⇒ 网盘常规分片上传目前实际到不了 20GiB。
+    #    新的外部收件通路改用 MinIO 服务端 compose_object 规避（见下）；drive 侧
+    #    改造是另一件事，本次未动（改了会动到既有 sha256 校验语义与 12 处测试）。
+    # 分片合并阈值：超过此大小走 MinIO 服务端拼接，不进 Python 内存。
+    DRIVE_COMPOSE_THRESHOLD_MB: int = 256
+    # 流式校验（compose 后回读算整文件 SHA256）的分块大小。
+    DRIVE_HASH_CHUNK_MB: int = 8
+
+    # ── 外部人员匿名分片上传（FileRequest「文件请求」通路）────────────────
+    # 严格档默认值（2026-11-09 主指挥拍板）。创建请求时可逐项覆盖，未给则用这些。
+    # 单文件上限（MB）—— 与 DRIVE_MAX_FILE_SIZE_MB 同档，允许 10GB+ 视频。
+    FILE_REQUEST_MAX_SINGLE_MB: int = 20480
+    # 累计总量上限（MB）：本请求全部提交加起来能占多少磁盘。**必须有**，
+    # 否则匿名 token 外泄 = 任何人可无限灌本机磁盘。
+    FILE_REQUEST_MAX_TOTAL_MB: int = 30720  # 30 GiB
+    # 最多提交几个文件。
+    FILE_REQUEST_MAX_SUBMISSIONS: int = 5
+    # 链接默认有效期（小时）—— 比原先的天粒度更细，一次收片 3 天足够。
+    FILE_REQUEST_LINK_TTL_HOURS: int = 72
+    # 传够次数后自动关闭链接（严格档 = True）。
+    FILE_REQUEST_AUTO_CLOSE_ON_LIMIT: bool = True
+    # 匿名分片大小上限（MB）。⚠️ 必须远小于云端 nginx client_max_body_size（1024m），
+    # 否则分片本身被 413 拒 —— 这正是"走分片就不用改 nginx"的前提。
+    FILE_REQUEST_MAX_CHUNK_MB: int = 32
+    # 匿名分片会话 TTL（小时）。10GB 按实测入口 7-8MB/s ≈ 22-25 分钟，24h 余量充足。
+    FILE_REQUEST_UPLOAD_TTL_HOURS: int = 24
+    # 默认扩展名白名单（视频）。留空 = 不限（不推荐）。
+    FILE_REQUEST_VIDEO_EXTS: str = "mp4,mov,m4v,avi,mkv,webm"
+    # 匿名提交是否计入创建者的 drive 配额。
+    # ⚠️ False 是**有意的**：外部灌进来的收件不该吃掉团队成员的个人配额，
+    #    磁盘风险改由 FILE_REQUEST_MAX_TOTAL_MB 这个请求级总量闸兜住。
+    #    （顺带说明：原先 FileRequest 单请求通路会走 create_file，而 create_file
+    #     不查配额 —— 那是"绕过"，此处把它变成"明确豁免 + 另有总量闸"。）
+    FILE_REQUEST_COUNTS_TOWARD_QUOTA: bool = False
+
     # W72 B-3 trash 收口: 与聊天历史/通知一致统一 30 天保留，UI 展示剩余天数。
     DRIVE_RETENTION_DAYS: int = 30
 

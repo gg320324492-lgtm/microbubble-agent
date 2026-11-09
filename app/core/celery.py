@@ -127,6 +127,18 @@ celery_app.conf.update(
             "task": "app.services.drive_chunked_upload_tasks.cleanup_expired_uploads_task",
             "schedule": 3600.0,
         },
+        # 2026-11-09 外部收件 (Alembic 150): 匿名分片会话的 staging 回收。
+        # ⚠️ 这条 beat 不是"可选优化"而是**磁盘安全的兜底**: 收件人传一半关页面
+        #    是最常见的结局, 没有它每次中断都留下 GB 级永久残留, 而 Docker 数据
+        #    就躺在这台机器的 E 盘上 (E 盘剩 1.9 TB, 但"没人管"不等于"不会满")。
+        #    与 drive 那份同频 (1h), 复用同一个清理窗口避免两次扫描。
+        "file-request-upload-cleanup-hourly": {
+            "task": (
+                "app.services.file_request_upload_tasks"
+                ".cleanup_file_request_uploads_task"
+            ),
+            "schedule": 3600.0,
+        },
         # 2026-07-02 v2 PR6-P9: file_mentions 通知 30 天物理清除
         # 一刀切 (is_read 不分), 24h 调度对齐 task 垃圾桶节奏 (CLAUDE.md 2026-06-03 教训)
         "file-mention-cleanup-old": {
@@ -213,6 +225,14 @@ celery_app.conf.imports = [
     "app.services.thumbnail_tasks",  # 2026-07-01 课题组网盘 PR5 缩略图生成
     "app.services.storage_tasks",  # 2026-07-01 课题组网盘 PR5 配额重算 + 分片 session 清理
     "app.services.drive_chunked_upload_tasks",  # W72 B-3 alembic 080 分片上传 24h 清理
+    # 2026-11-09 外部收件分片 (Alembic 150) 过期 staging 清理。
+    # ⚠️ 类 20.219 纪律逐字执行: 本模块定义了 @celery_app.task, 若不同时进本列表,
+    #    beat 派发会被 worker 以 "Received unregistered task" **静默丢弃** ——
+    #    本仓已有 4 例同型 (meeting_chunk / drive_index / auto_rag / rag_eval_runner),
+    #    症状全是"功能看着在、其实从未跑过、且不报任何错"。部署后固定验证项:
+    #    `celery inspect registered | grep file_request_upload`  + worker 日志
+    #    grep -i unregistered 必须为空。
+    "app.services.file_request_upload_tasks",
     "app.services.file_mention_tasks",  # 2026-07-02 v2 PR6-P9 通知 30 天清理
     "app.services.chat_share_tasks",  # 2026-07-20 W2 T3 P2-A 过期 share 清理
     "app.services.drive_collab_tasks",  # 2026-07-24 W68 第 7 批 B-1 Drive v2 PR10 协同编辑刷盘

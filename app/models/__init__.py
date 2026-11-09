@@ -46,6 +46,7 @@ from app.models.drive_version_tag import DriveVersionTag  # v2 PR15 文件版本
 from app.models.push_subscription import PushSubscription, PushTopic, PushTopicSubscription  # v3.2 PWA Push
 from app.models.team_folder import TeamFolder, TeamFolderAuditLog  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
 from app.models.drive_chunked_upload import DriveChunkedUpload  # W72 B-3 alembic 080 分片上传
+from app.models.file_request_upload import FileRequestUpload  # alembic 150 外部收件分片会话
 
 __all__ = [
     "Member",
@@ -90,6 +91,7 @@ __all__ = [
     "TeamFolder",            # v2 PR18 团队共享盘 (W68 第 14 批 B-2)
     "TeamFolderAuditLog",    # v2 PR18 4 维审计日志 (W68 第 14 批 B-2)
     "DriveChunkedUpload",    # W72 B-3 分片上传会话 (alembic 080)
+    "FileRequestUpload",     # alembic 150 外部收件匿名分片会话 (10GB 大文件)
     "KnowledgeChunk",        # PR2 (W88 +15) knowledge 子表, FK CASCADE 100% 完整
     "KGEntity",              # PR8 (W94 +0) 知识图谱扁平实体, FK CASCADE + uq(name,type,kid)
     "Plan", "CommercialTenant", "Subscription", "Invoice", "UsageRecord", "License",

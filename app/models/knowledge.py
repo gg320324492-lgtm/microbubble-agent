@@ -455,6 +455,15 @@ class FileRequest(Base):
     max_file_size_mb = Column(Integer, nullable=True)
     submission_count = Column(Integer, nullable=False, server_default="0")
     is_active = Column(Boolean, nullable=False, server_default="true")
+
+    # ── 安全闸 (alembic 150, 2026-11-09 10GB 外部收件立项) ───────────────────
+    # ⚠️ 这三道闸是**匿名写端点的前置条件**, 不是优化: 原先只有一个自增的
+    #    submission_count 而没有上限, 也没有总量闸 ⇒ token 一外泄, 任何人都能
+    #    无限灌本机磁盘 (Docker 全在这台 PC 上)。
+    max_submissions = Column(Integer, nullable=True)      # NULL = 不限 (创建端点默认给值)
+    max_total_bytes = Column(BigInteger, nullable=True)   # 本请求累计占盘上限
+    used_bytes = Column(BigInteger, nullable=False, server_default="0")
+    auto_close_on_limit = Column(Boolean, nullable=False, server_default="true")
     created_at = Column(DateTime, nullable=False, server_default="now()")
     updated_at = Column(DateTime, nullable=False, server_default="now()")
 

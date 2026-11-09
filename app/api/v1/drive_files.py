@@ -146,8 +146,10 @@ class StorageQuotaResponse(BaseModel):
 class ChunkedUploadInitRequest(BaseModel):
     """POST /api/v1/drive/files/upload/init 请求"""
     file_name: str = Field(..., max_length=500)
-    file_size: int = Field(..., gt=0, le=2 * 1024 * 1024 * 1024)  # 上限 2GB
-    total_chunks: int = Field(..., ge=1, le=2000)
+    # 2026-11-09: 原写死 le=2GiB / le=2000（5MiB×2000 = 9.77GiB，连 10GiB 都进不来）。
+    # 现与 drive_service 同源；片数上限对齐 S3 multipart 的 10000 part 语义。
+    file_size: int = Field(..., gt=0, le=MAX_DRIVE_FILE_SIZE_BYTES)
+    total_chunks: int = Field(..., ge=1, le=10000)
     file_hash: Optional[str] = Field(None, max_length=64)
     folder_id: Optional[int] = None
     visibility: str = "team"
@@ -343,7 +345,11 @@ async def upload_drive_file(
 ):
     """单端点 drive 文件上传 (FastAPI 接收 multipart, minio 自管分片)
 
-    不超过 2GB (MAX_DRIVE_FILE_SIZE_BYTES); 走 init/complete pattern 简化为单端点.
+    不超过 MAX_DRIVE_FILE_SIZE_BYTES (settings.DRIVE_MAX_FILE_SIZE_MB, 现 20 GiB);
+    走 init/complete pattern 简化为单端点.
+    ⚠️ 实际天花板受内存限制: 本通路把请求体整份 read() 进内存, app 容器 mem_limit=8g
+    ⇒ 大文件必须走分片（外部收件用 /api/v1/file-requests/{token}/uploads/*，那里是
+    MinIO 服务端 compose_object 拼接，不进 Python 内存）。
 
     v2 PR6-P19: is_team_shared 标记上传来源, 前端在团队共享盘视图上传时 = true,
     个人视图上传 = false. 后端 list_drive_files 走 view=personal|team 隔离过滤.
