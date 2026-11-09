@@ -53,10 +53,6 @@
 - 若出现可指认句子/数值的「真矛盾」：保留对应 `contradicts` 关系与 `needs_review`，其余按误报清理。
 - 全量 286 条与 700 对明细见 [2026-11-09-knowledge-conflict-review-queue.md](2026-11-09-knowledge-conflict-review-queue.md)。
 
-机器可读抽样：[../../review_queue_2026-11-09/knowledge_conflict_sample_2026-11-09.json](../../review_queue_2026-11-09/knowledge_conflict_sample_2026-11-09.json)
-
-## 9. 抽样复核清单（主指挥 2026-11-09 选定）
-
-按「抽样人工复核」安排生成了 [20 个复核单元清单](2026-11-09-knowledge-conflict-sample.md)：低连通 8 条（含截图 id 2597 + 2 条活跃孤儿标记）、中连通 8 对（两端 partner 数都在 2–9，按两端较小值 2–9 每档一对）、高连通 4 条（连通度最高 hub）。固定随机种子 `20261109`，可复现；机器可读抽样见 [review_queue_2026-11-09/knowledge_conflict_sample_2026-11-09.json](review_queue_2026-11-09/knowledge_conflict_sample_2026-11-09.json)。
+机器可读抽样：[review_queue_2026-11-09/knowledge_conflict_sample_2026-11-09.json](review_queue_2026-11-09/knowledge_conflict_sample_2026-11-09.json)。
 
 本轮只归档，未改任何 `knowledge` / `knowledge_relations` 数据。

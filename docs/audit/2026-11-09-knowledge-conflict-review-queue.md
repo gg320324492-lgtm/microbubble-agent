@@ -8,7 +8,7 @@
 
 ## 1. 这条提示从哪里来
 
-前端红条来自 [PaperHeader.vue](../web/src/components/paper/PaperHeader.vue#L142) 的 `paper.needsReview`。后端由 [auto_research_service.py](../app/services/auto_research_service.py#L197) 每 12 小时经 `health_check_knowledge_base` 调度：先取 `similar >= 0.8` 的关联条目对，再让 LLM 仅回答 `true/false`，判为矛盾就双向写 `contradicts` 关系并把两条 `needs_review=true`。
+前端红条来自 [PaperHeader.vue](../../web/src/components/paper/PaperHeader.vue#L142) 的 `paper.needsReview`。后端由 [auto_research_service.py](../../app/services/auto_research_service.py#L197) 每 12 小时经 `health_check_knowledge_base` 调度：先取 `similar >= 0.8` 的关联条目对，再让 LLM 仅回答 `true/false`，判为矛盾就双向写 `contradicts` 关系并把两条 `needs_review=true`。
 
 关键判据：
 
