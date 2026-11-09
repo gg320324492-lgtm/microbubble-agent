@@ -576,7 +576,13 @@ class MeetingAnalysisService:
                         ),
                     }],
                     system=system_prompt,
-                    max_tokens=8192,
+                    # 2026-11-09 P0 (会议 273): 8192 不够。MiniMax M3.x 的**自适应思考**
+                    # 与正文共用输出预算 —— 实测同一段真实转录在 max_tokens=8192 时
+                    # output_tokens 顶满 8192、正文只吐出 164 字半截 JSON（parse 全失败，
+                    # 分块 1/2 直接判死）；抬到 16384 后 output=8864、正文 3014 字、
+                    # parse 通过（8 要点 / 6 决议）。⇒ 这个值是「思考+正文」的总预算，
+                    # 不能按"只算正文"的旧模型估。
+                    max_tokens=16384,
                     thinking={"type": "disabled"},
                 )
                 text = extract_text_from_response(response)

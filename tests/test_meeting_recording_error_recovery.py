@@ -22,7 +22,8 @@
 - reprocess     : status='error' + 有音频 → 200 + status 改 processing + 触发 Celery
 - reprocess     : status='error' + 无音频 → 400 (先补传再 reprocess)
 - reprocess     : status != 'error' → 400 (幂等, 不重复触发流水线)
-- reprocess     : 越权 (created_by != current_user) → 403
+- reprocess     : 越权 (created_by != current_user) → **2026-11-09 起放行** (主指挥:
+                  重跑权限放开给所有成员; 审计里记 meeting_created_by / triggered_by_is_owner)
 - reprocess     : audit action 必须是 VALID_ACTIONS 白名单里的 'meeting_reprocess'
                   (缺陷 4: 'meeting_reprocess_user_initiated' 会 fallback 成 'read')
 
@@ -273,16 +274,57 @@ class TestReprocessEndpoint:
             await mr.reprocess_meeting(meeting_id=255, current_user=_user(58), db=db)
         assert exc.value.status_code == 400
 
-    async def test_cross_user_403(self):
-        from fastapi import HTTPException
+    async def test_cross_user_can_reprocess(self):
+        """2026-11-09 主指挥: 重跑权限放开给所有成员。
+
+        改前: 非创建者 → 403「仅创建者可重跑会议流水线」(前端横幅也照抄这句话),
+        导致「别人录的会议失败了, 我看得见但点不动」。角色扁平化后全员等权,
+        重跑是幂等的补救动作而不是改写录音数据, 因此放开。
+        判据仍保留: 必须 status='error' + 有音频 (见下面两条用例)。
+        """
         from app.api.v1 import meeting_recording as mr
 
         meeting = _make_meeting(status="error", created_by=58, last_chunk_index=1, audio_url="x")
         db = _make_db_with_meeting(meeting)
+        fake_task = MagicMock()
+        fake_task.delay = MagicMock()
 
-        with pytest.raises(HTTPException) as exc:
-            await mr.reprocess_meeting(meeting_id=255, current_user=_user(99), db=db)
-        assert exc.value.status_code == 403
+        with patch.dict(
+            sys.modules,
+            {"app.services.post_meeting_tasks": MagicMock(post_meeting_process=fake_task)},
+        ):
+            with patch("app.services.audit_service.AuditService.log", new=AsyncMock()) as log_mock:
+                res = await mr.reprocess_meeting(
+                    meeting_id=255, current_user=_user(99), db=db
+                )
+
+        assert res["status"] == "processing"
+        assert meeting.status == "processing"
+        fake_task.delay.assert_called_once_with(255)
+        # 审计必须留下「谁触发的 / 会议归属是谁」—— 放开权限后这是唯一可追溯依据
+        meta = log_mock.await_args.kwargs["metadata"]
+        assert meta["meeting_created_by"] == 58
+        assert meta["triggered_by_is_owner"] is False
+
+    async def test_owner_reprocess_marks_owner_true(self):
+        """本人重跑时审计里 triggered_by_is_owner 必须为 True (与上一条对称)"""
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="error", created_by=58, last_chunk_index=1, audio_url="x")
+        db = _make_db_with_meeting(meeting)
+        fake_task = MagicMock()
+        fake_task.delay = MagicMock()
+
+        with patch.dict(
+            sys.modules,
+            {"app.services.post_meeting_tasks": MagicMock(post_meeting_process=fake_task)},
+        ):
+            with patch("app.services.audit_service.AuditService.log", new=AsyncMock()) as log_mock:
+                await mr.reprocess_meeting(meeting_id=255, current_user=_user(58), db=db)
+
+        meta = log_mock.await_args.kwargs["metadata"]
+        assert meta["meeting_created_by"] == 58
+        assert meta["triggered_by_is_owner"] is True
 
     async def test_audit_action_in_valid_actions_whitelist(self):
         """缺陷 4: action 必须是 VALID_ACTIONS 白名单值, 否则 fallback 'read' 语义丢失"""

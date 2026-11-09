@@ -38,6 +38,23 @@ from app.services.progress_service import ProgressStage, update_progress
 
 logger = logging.getLogger("microbubble.post_meeting")
 
+# ============================================================================
+# meeting.status ↔ meeting_processing_runs.overall_status 的词汇表映射
+# ============================================================================
+# 2026-11-09 P0 (会议 273): 这两个字段**不是同一个字段**，取值集合也不同：
+#   meetings.status                     = scheduled/recording/processing/completed/
+#                                         completed_with_warnings/error   (varchar(32))
+#   meeting_processing_runs.overall_status = running/success/warning/error (varchar(16))
+# 曾把前者直接塞进后者 ⇒ `completed_with_warnings`(23 字符) 撞 varchar(16)
+# ⇒ StringDataRightTruncationError 抛在**流水线最后一步**
+# ⇒ 一次「2 个分块里 1 个 JSON 解析失败」的可恢复 warning 被升级成整条会议 error。
+# ⇒ 必须显式映射，且映射后的值长度 ≤ 16（tests/test_meeting_pipeline_status_mapping.py 守）。
+MEETING_TO_RUN_STATUS = {
+    "completed": "success",
+    "completed_with_warnings": "warning",
+    "error": "error",
+}
+
 
 def _numpy_to_wav_bytes(audio: np.ndarray, sample_rate: int = 16000) -> bytes:
     """float32 PCM numpy → WAV bytes"""
@@ -1077,9 +1094,18 @@ def post_meeting_process(self, meeting_id: int):
                 await db.commit()
                 await _persist_stage(proc_svc, run, "storing_results", "success", started_at=_t_stage_store, metrics={"final_status": final_status, "quality_status": qa_result["status"]})
                 await proc_svc.attach_to_meeting(meeting_id, run.id)
+                # 2026-11-09 P0 (会议 273): `meeting_processing_runs.overall_status` 是
+                # varchar(16), 而 meeting.status 的取值里有 `completed_with_warnings`
+                # (23 字符) —— 直接把 meeting.status 塞进去会在**流水线最后一步**
+                # 抛 StringDataRightTruncationError, 把「分析 1/2 分块失败」这种可恢复的
+                # warning 升级成整条会议 error (实测会议 273: 转录/声纹/质量全过,
+                # 却因为这一个字段超长被判处理失败)。
+                # ⇒ 两个字段的词汇表本来就不同 (见 models/meeting_processing.py:
+                #   overall_status = running/success/warning/error), 必须显式映射。
+                _run_overall_status = MEETING_TO_RUN_STATUS.get(final_status, "warning")
                 await proc_svc.finish_run(
                     run,
-                    overall_status=final_status,
+                    overall_status=_run_overall_status,
                     warning_count=int(analysis_warning),
                     error_summary=meeting.error_reason,
                 )

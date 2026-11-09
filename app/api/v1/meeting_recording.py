@@ -526,7 +526,12 @@ async def reprocess_meeting(
     接受 error 状态) → 再 POST /merge-chunks?mode=auto|raw → 再 POST /reprocess 重启流水线.
 
     守卫:
-    - 仅 created_by == current_user.id 可调用
+    - **任意已登录成员**均可调用 (2026-11-09 主指挥: 重跑权限放开给所有人)。
+      改前只允许 created_by == current_user.id, 导致「别人录的会议失败了, 我看得见
+      但点不动」—— 本项目 2026-09-05 已把角色扁平化 (全员等权), 重跑是**幂等的补救**
+      而非越权写他人数据, 且已写审计 (action=meeting_reprocess), 保留归属即可追溯。
+      ⚠️ 其余端点 (audio-chunk / merge-chunks / stop-recording) **仍保留** created_by 守卫 ——
+      那些是「改写录音数据」, 与「重跑已存在的录音」性质不同, 本次不放宽。
     - status 必须 == 'error'
     - 必须 audio_url 或 last_chunk_index >= 0 (有音频数据)
     """
@@ -534,8 +539,6 @@ async def reprocess_meeting(
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
-    if meeting.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="仅创建者可重跑会议流水线")
     if meeting.status != "error":
         raise HTTPException(
             status_code=400,
@@ -582,7 +585,13 @@ async def reprocess_meeting(
             resource_type="meeting",
             resource_id=meeting_id,
             status_code=200,
-            metadata={"trigger": "user_recovery_after_orphan_cleanup"},
+            # 2026-11-09: 重跑权限已放开给全体成员 ⇒ 审计里必须留下
+            # 「谁触发的 / 会议归属是谁」, 否则无法区分"本人重跑"与"他人代重跑"。
+            metadata={
+                "trigger": "user_recovery_after_orphan_cleanup",
+                "meeting_created_by": meeting.created_by,
+                "triggered_by_is_owner": meeting.created_by == current_user.id,
+            },
         )
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[Audit] user-reprocess 审计失败: {e}")
