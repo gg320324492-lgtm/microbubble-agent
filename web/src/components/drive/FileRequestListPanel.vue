@@ -72,6 +72,7 @@
         <el-form-item label="有效期">
           <el-select v-model="createForm.expires_in_days" placeholder="永久" clearable>
             <el-option label="1 天" :value="1" />
+            <el-option label="3 天" :value="3" />
             <el-option label="7 天" :value="7" />
             <el-option label="30 天" :value="30" />
             <el-option label="90 天" :value="90" />
@@ -79,10 +80,13 @@
           </el-select>
         </el-form-item>
         <el-form-item label="允许类型">
-          <el-input v-model="createForm.extensionsText" placeholder="如: pdf,docx,xlsx (留空=不限)" />
+          <el-input v-model="createForm.extensionsText" placeholder="如: pdf,docx,xlsx / 视频: mp4,mov,mkv (留空=不限)" />
         </el-form-item>
         <el-form-item label="最大大小">
-          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="500" placeholder="MB (留空=不限)" :step="1" controls-position="right" style="width: 160px" />
+          <!-- 2026-11-10: 上限从写死 500 抬到 20480 (后端 settings 已放宽到 20GiB)。
+               若这里仍写死 500, 用户填 500 会让 10GB 视频被后端 413 拒 —— 界面
+               与后端闸必须同源。留空 = 不额外限制 (仍受系统 20GiB 天花板约束)。 -->
+          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="20480" placeholder="MB (留空=系统上限 20GB)" :step="1" controls-position="right" style="width: 200px" />
         </el-form-item>
         <el-form-item label="必填姓名">
           <el-switch v-model="createForm.require_uploader_name" />
