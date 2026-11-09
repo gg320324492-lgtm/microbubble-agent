@@ -5,7 +5,7 @@
         <component
           :is="Component"
           v-if="Component"
-          :key="route.fullPath"
+          :key="routeViewKey"
         />
 
         <template #fallback>
@@ -46,7 +46,8 @@
  * - Suspense + RouterFallbackSkeleton 路由级骨架屏
  * - 离线检测横幅（online/offline 事件 + 手动重试）
  */
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { buildRouteViewKey } from '@/utils/routeViewKey'
 import { useRoute } from 'vue-router'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { useAdaptiveRoute } from '@/composables/useAdaptiveRoute'
@@ -55,6 +56,17 @@ import InstallPrompt from '@/components/InstallPrompt.vue'
 import PwaUpdateToast from '@/components/PwaUpdateToast.vue'
 
 const route = useRoute()
+
+// 2026-11-09: 路由视图 key 不能再用 `route.fullPath`。
+// 会议/知识库/项目统计等页面用 `?tab=` 同步 TabStrip（router.replace），
+// fullPath 一变 ⇒ 整棵路由组件被 Vue 强制卸载重建 ⇒ `<audio>` 元素随之销毁，
+// 播放中的录音被直接打断（用户截图：切「会议纪要 / 转录记录 / 发言统计」就停）。
+// query 只是视图内部状态，不是另一份资源；path + params 才是资源身份。
+// 桌面/移动双栈由 resolveMobileComponent 在首次解析时选定具体组件并缓存，
+// 跨断点时 useAdaptiveRoute 仍会 router.replace；见 utils/routeViewKey.js 的
+// 「仅忽略 tab、其它 query/hash 变化仍重建」契约 —— 不把全部 query 都从 key 里删掉，
+// 避免 resume/search/id/list 这类深链初始化语义被悄悄改掉。
+const routeViewKey = computed(() => buildRouteViewKey(route))
 
 // PR #1：启动路由级响应式
 useAdaptiveRoute()

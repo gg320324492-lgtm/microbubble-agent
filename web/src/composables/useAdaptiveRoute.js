@@ -1,6 +1,6 @@
 import { watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useIsMobile, useViewportRef } from './useIsMobile'
+import { useViewportRef } from './useIsMobile'
 
 /**
  * 路由级响应式：断点变化时自动 router.replace 触发 dynamic import 重选组件
@@ -34,8 +34,8 @@ export function useAdaptiveRoute() {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         lastIsMobile = newIsMobile
-        // router.replace 触发 lazy import 重选组件
-        // 用 replace 不污染 history 栈
+        // router.replace 保留 query/hash；App.vue 的路由视图 key 只对 ?tab=
+        // 做了免重建，其余 query 变化仍按原语义刷新组件。
         try {
           router.replace({
             path: route.path,
