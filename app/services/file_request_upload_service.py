@@ -414,6 +414,8 @@ class FileRequestUploadService:
                 folder_id=req.target_folder_id,
                 source_type="drive",
                 created_by=req.created_by,
+                # 2026-11-10: 真关联 (文件请求详情页据此列出收到哪些文件)
+                file_request_id=req.id,
                 # 内容级真实 hash —— 秒传 dedup 的键必须是内容哈希,
                 # 不能拿片哈希的派生值冒充 (谎报会让秒传返回错内容)
                 file_hash=actual_sha if ext else None,

@@ -358,12 +358,13 @@ class Settings(BaseSettings):
     # 网盘单文件硬天花板。原先在 drive_service / generic_chunked_upload_service /
     # drive_chunked_upload_service **三处各硬编码 2 GiB**，10GB 文件必被 413 拒；
     # 现统一由此处驱动（三处常量都改为由它派生）。
+    # 2026-11-10 主指挥拍板: 单文件上限 20 GiB → 30 GiB。
     # ⚠️ 这只是技术天花板，**不是配额**：普通成员仍受 drive_quota_bytes（默认 10 GiB）
-    #    约束，外部收件受 FILE_REQUEST_MAX_TOTAL_MB 约束。
-    DRIVE_MAX_FILE_SIZE_MB: int = 20480  # 20 GiB
+    #    约束；外部收件的总量闸已按主指挥要求取消（见 FILE_REQUEST_MAX_TOTAL_MB）。
+    DRIVE_MAX_FILE_SIZE_MB: int = 30720  # 30 GiB
     # ⚠️ 已知遗留：drive 侧三条上传通路在**合并阶段仍把整文件读进内存**
     #    （drive_chunked_upload_service 的 source.read() / generic 的 len(data) 校验），
-    #    而 app 容器 mem_limit=8g ⇒ 网盘常规分片上传目前实际到不了 20GiB。
+    #    而 app 容器 mem_limit=8g ⇒ 网盘常规分片上传目前实际到不了 30GiB。
     #    新的外部收件通路改用 MinIO 服务端 compose_object 规避（见下）；drive 侧
     #    改造是另一件事，本次未动（改了会动到既有 sha256 校验语义与 12 处测试）。
     # 分片合并阈值：超过此大小走 MinIO 服务端拼接，不进 Python 内存。
@@ -372,12 +373,15 @@ class Settings(BaseSettings):
     DRIVE_HASH_CHUNK_MB: int = 8
 
     # ── 外部人员匿名分片上传（FileRequest「文件请求」通路）────────────────
-    # 严格档默认值（2026-11-09 主指挥拍板）。创建请求时可逐项覆盖，未给则用这些。
-    # 单文件上限（MB）—— 与 DRIVE_MAX_FILE_SIZE_MB 同档，允许 10GB+ 视频。
-    FILE_REQUEST_MAX_SINGLE_MB: int = 20480
-    # 累计总量上限（MB）：本请求全部提交加起来能占多少磁盘。**必须有**，
-    # 否则匿名 token 外泄 = 任何人可无限灌本机磁盘。
-    FILE_REQUEST_MAX_TOTAL_MB: int = 30720  # 30 GiB
+    # 严格档默认值（2026-11-09 主指挥拍板；2026-11-10 主指挥改单文件上限 30GB、
+    # 取消单链接总量上限）。创建请求时可逐项覆盖，未给则用这些。
+    # 单文件上限（MB）—— 与 DRIVE_MAX_FILE_SIZE_MB 同档。
+    FILE_REQUEST_MAX_SINGLE_MB: int = 30720  # 30 GiB
+    # 累计总量上限（MB）：0 = **不限**（2026-11-10 主指挥拍板）。
+    # ⚠️ 这是有意放开，不是疏漏：匿名 token 外泄时磁盘风险由「单文件上限 × 次数上限」
+    #    （FILE_REQUEST_MAX_SUBMISSIONS，默认 5）兜底，而非按链接总量封顶。
+    #    create_request 里 `max_total_mb <= 0` 一律落成 None（无限）。
+    FILE_REQUEST_MAX_TOTAL_MB: int = 0
     # 最多提交几个文件。
     FILE_REQUEST_MAX_SUBMISSIONS: int = 5
     # 链接默认有效期（小时）—— 比原先的天粒度更细，一次收片 3 天足够。

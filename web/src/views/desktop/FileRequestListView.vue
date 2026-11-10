@@ -35,6 +35,12 @@
       <el-empty description="还没有文件请求。点击右上角'新建文件请求'开始收集文件。" />
     </div>
 
+    <FileRequestFilesView
+      v-else-if="openedRequest"
+      :request="openedRequest"
+      @back="openedRequest = null"
+    />
+
     <ul v-else class="request-list">
       <li v-for="req in requests" :key="req.id" class="request-item">
         <div class="request-main">
@@ -54,6 +60,7 @@
           </div>
         </div>
         <div class="request-actions">
+          <el-button link type="primary" @click="onOpenFiles(req)">查看文件</el-button>
           <el-button link type="primary" @click="onCopyUrl(req)">复制链接</el-button>
           <el-button link type="primary" @click="onPreview(req)">预览</el-button>
           <el-button v-if="req.active" link type="danger" @click="onDeactivate(req)">关闭</el-button>
@@ -94,7 +101,7 @@
         </el-form-item>
         <el-form-item label="最大大小">
           <!-- 上限与后端 settings 同源 (20GiB); 界面写死 500 会让 10GB 视频被 413 拒 -->
-          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="20480" placeholder="MB (留空=系统上限 20GB)" :step="1" controls-position="right" style="width: 200px" />
+          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="30720" placeholder="MB (留空=系统上限 30GB)" :step="1" controls-position="right" style="width: 200px" />
         </el-form-item>
         <el-form-item label="必填姓名">
           <el-switch v-model="createForm.require_uploader_name" />
@@ -129,6 +136,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { useFileRequests } from '@/composables/useFileRequests'
 import { parseDbDate } from '@/utils/format'
 import QrCode from '@/components/common/QrCode.vue'
+import FileRequestFilesView from '@/components/drive/FileRequestFilesView.vue'
 
 const {
   requests,
@@ -139,6 +147,12 @@ const {
   createRequest,
   deactivate,
 } = useFileRequests()
+
+// 2026-11-10: 点进去看该请求收到了哪些文件 + 正在上传的进度
+const openedRequest = ref(null)
+function onOpenFiles(req) {
+  openedRequest.value = req
+}
 
 const includeInactive = ref(false)
 const showCreate = ref(false)

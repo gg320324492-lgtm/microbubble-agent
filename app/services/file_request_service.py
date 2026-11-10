@@ -138,7 +138,12 @@ class FileRequestService:
         elif max_submissions <= 0:
             max_submissions = None
         if max_total_mb is None:
-            max_total_bytes = int(settings.FILE_REQUEST_MAX_TOTAL_MB) * 1024 * 1024
+            # 2026-11-10 主指挥拍板: 单链接**不设**总量上限 ⇒ settings 默认 0 即无限。
+            # ⚠️ 不能写成 `0 * MB = 0`: 那会变成"已用 0 + 本次 > 0"永远 413。
+            configured_total = int(settings.FILE_REQUEST_MAX_TOTAL_MB)
+            max_total_bytes = (
+                configured_total * 1024 * 1024 if configured_total > 0 else None
+            )
         elif max_total_mb <= 0:
             max_total_bytes = None
         else:
@@ -340,6 +345,8 @@ class FileRequestService:
             folder_id=req.target_folder_id,
             source_type="drive",  # 走 drive 路径 (不入 knowledge index)
             created_by=req.created_by,
+            # 2026-11-10: 真关联 (文件请求详情页据此列出收到哪些文件)
+            file_request_id=req.id,
         )
 
         # 6) 记账 + activity —— 记账函数与分片通路**同一份** (gates.apply_accounting)

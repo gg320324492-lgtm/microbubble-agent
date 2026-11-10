@@ -15,6 +15,14 @@
 -->
 <template>
   <div class="file-request-list-panel">
+    <!-- 2026-11-10 主指挥: 点进某个请求看它收到了哪些文件 (与网盘文件夹同一套表格) -->
+    <FileRequestFilesView
+      v-if="openedRequest"
+      :request="openedRequest"
+      @back="openedRequest = null"
+    />
+
+    <template v-else>
     <!-- 工具栏 -->
     <div class="request-toolbar">
       <el-switch v-model="includeInactive" @change="onIncludeInactiveChange" />
@@ -53,12 +61,14 @@
           </div>
         </div>
         <div class="request-actions">
+          <el-button link type="primary" @click="onOpenFiles(req)">查看文件</el-button>
           <el-button link type="primary" @click="onCopyUrl(req)">复制链接</el-button>
           <el-button link type="primary" @click="onPreview(req)">预览</el-button>
           <el-button v-if="req.active" link type="danger" @click="onDeactivate(req)">关闭</el-button>
         </div>
       </li>
     </ul>
+    </template>
 
     <!-- Create Dialog (与列表同上下文, 不能拆出) -->
     <el-dialog v-model="showCreate" class="drive-dialog" title="新建文件请求" width="540px" :close-on-click-modal="false">
@@ -98,7 +108,7 @@
           <!-- 2026-11-10: 上限从写死 500 抬到 20480 (后端 settings 已放宽到 20GiB)。
                若这里仍写死 500, 用户填 500 会让 10GB 视频被后端 413 拒 —— 界面
                与后端闸必须同源。留空 = 不额外限制 (仍受系统 20GiB 天花板约束)。 -->
-          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="20480" placeholder="MB (留空=系统上限 20GB)" :step="1" controls-position="right" style="width: 200px" />
+          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="30720" placeholder="MB (留空=系统上限 30GB)" :step="1" controls-position="right" style="width: 200px" />
         </el-form-item>
         <el-form-item label="必填姓名">
           <el-switch v-model="createForm.require_uploader_name" />
@@ -135,6 +145,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { useFileRequests } from '@/composables/useFileRequests'
 import { parseDbDate } from '@/utils/format'
 import QrCode from '@/components/common/QrCode.vue'
+import FileRequestFilesView from '@/components/drive/FileRequestFilesView.vue'
 
 const {
   requests,
@@ -152,6 +163,12 @@ const showPreview = ref(false)
 const previewUrl = ref('')
 const creating = ref(false)
 const formRef = ref(null)
+// 2026-11-10: 点进去看该请求收到了哪些文件 (与网盘文件夹同一套表格)
+const openedRequest = ref(null)
+
+function onOpenFiles(req) {
+  openedRequest.value = req
+}
 
 function emptyCreateForm() {
   return {

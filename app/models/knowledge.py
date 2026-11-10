@@ -80,6 +80,15 @@ class Knowledge(Base, TimestampMixin):
     # deleted_at: 软删除时间戳，NULL = 活跃，Celery beat 3 天后物理删除
     storage_mode = Column(String(16), nullable=False, server_default="kb", index=True)
     folder_id = Column(Integer, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True)
+    # 2026-11-10: 外部收件来源请求 (文件请求详情页"收到的文件"据此过滤)。
+    # 之前只能靠 content 里的 `[file_request] token=xxxxxxxx***` 标记猜归属 ——
+    # 那是"注释当数据", 改文案即失效 (类 20.225); 这里落成真列。
+    file_request_id = Column(
+        Integer,
+        ForeignKey("file_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     visibility = Column(String(16), nullable=False, server_default="team", index=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
     # W72 B-3 trash 收口: 软删瞬间快照原目录。故意不设 FK，父目录被物理删除后

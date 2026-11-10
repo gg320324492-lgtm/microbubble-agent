@@ -511,6 +511,8 @@ class DriveService:
         file_hash: Optional[str] = None,  # PR4: 秒传 hash
         # v2 PR6-P19: 团队共享盘标识 (前端在 team 视图上传 = true)
         is_team_shared: bool = False,
+        # 2026-11-10: 外部收件来源 (文件请求详情页据此列出"这个请求收到了哪些文件")
+        file_request_id: Optional[int] = None,
     ) -> Knowledge:
         """创建 drive 文件元数据 (multipart complete 后调用, 或从前端直接表单上传)
 
@@ -588,6 +590,7 @@ class DriveService:
             visibility=visibility,
             folder_id=folder_id,
             is_team_shared=is_team_shared,  # v2 PR6-P19
+            file_request_id=file_request_id,
         )
         self.db.add(knowledge)
         await self.db.commit()

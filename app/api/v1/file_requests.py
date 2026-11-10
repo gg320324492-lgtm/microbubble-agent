@@ -27,17 +27,21 @@
   500 合并/校验失败 (已自动丢弃残缺对象)
 """
 import logging
+import re
 from typing import List, Optional
 
 from fastapi import (
     APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile,
 )
 from pydantic import BaseModel, Field
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, get_current_user_optional
+from app.models.file_request_upload import FileRequestUpload
+from app.models.knowledge import FileRequest, Knowledge
 from app.models.member import Member
 from app.services import file_request_gates as gates
 from app.services.file_request_service import file_request_service
@@ -127,6 +131,119 @@ async def create_request(
         # 门禁实际生效值 (可能是严格档默认, 不是请求里传的那个) ——
         # 前端要展示"这个链接最多收多少", 不能显示用户填的数
         **gates.public_shape(req),
+    }
+
+
+@router.get("/{request_id}/files")
+async def list_request_files(
+    request_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """文件请求详情: 已收到的文件 + 正在上传的会话 (带实时进度百分比)
+
+    仅创建者可查看 (匿名 token 不暴露这个列表 —— 那是收件方的私有视图)。
+
+    uploading 里的 percent 是**分片计数**口径 (len(uploaded_chunks)/total_chunks),
+    与公开提交页给上传者看的是同一个进度来源; 它不代表字节进度误差 (片等长,
+    只有末片短, 差异 ≤ 1 片)。
+    """
+    req = (
+        await db.execute(select(FileRequest).where(FileRequest.id == request_id))
+    ).scalar_one_or_none()
+    if not req or req.created_by != user.id:
+        raise HTTPException(status_code=404, detail="文件请求不存在")
+
+    rows = (
+        await db.execute(
+            select(Knowledge)
+            .where(
+                Knowledge.file_request_id == request_id,
+                Knowledge.deleted_at.is_(None),
+            )
+            .order_by(desc(Knowledge.created_at))
+            .limit(500)
+        )
+    ).scalars().all()
+
+    # uploader_name: 分片通路有会话表可 join; 单请求通路只写在 content 标记里
+    # (`[file_request] token=... uploader=张三`), 这里用同一正则兜底解析。
+    upload_names = {}
+    try:
+        done_uploads = (
+            await db.execute(
+                select(FileRequestUpload).where(
+                    FileRequestUpload.request_id == request_id,
+                    FileRequestUpload.knowledge_id.isnot(None),
+                )
+            )
+        ).scalars().all()
+        upload_names = {
+            u.knowledge_id: u.uploader_name for u in done_uploads if u.knowledge_id
+        }
+    except Exception:
+        # 会话表问题不该拖垮"看已收文件"这个主视图
+        logger.warning("[file_requests] 读 uploader_name 失败, 退回 content 解析", exc_info=True)
+
+    files = []
+    for k in rows:
+        uploader = upload_names.get(k.id)
+        if not uploader:
+            m = re.search(r"uploader=([^\s]+)", k.content or "")
+            uploader = m.group(1) if m else None
+        files.append({
+            "id": k.id,
+            "title": k.title,
+            "file_name": k.file_name,
+            "file_size": int(k.file_size or 0),
+            "file_type": k.file_type,
+            "file_hash": k.file_hash,
+            "created_at": k.created_at.isoformat() if k.created_at else None,
+            # DriveFileTable 的"上传者"列读 owner_name/owner_username
+            "owner_name": uploader,
+            "owner_username": uploader,
+            "storage_mode": k.storage_mode,
+            "folder_id": k.folder_id,
+        })
+
+    active = (
+        await db.execute(
+            select(FileRequestUpload)
+            .where(
+                FileRequestUpload.request_id == request_id,
+                FileRequestUpload.status.in_(("pending", "uploading")),
+                FileRequestUpload.expires_at > gates.utcnow_naive(),
+            )
+            .order_by(desc(FileRequestUpload.created_at))
+        )
+    ).scalars().all()
+
+    uploading = []
+    for u in active:
+        total = int(u.total_chunks or 0)
+        done = len(u.uploaded_chunks or [])
+        uploading.append({
+            "upload_id": u.upload_id,
+            "filename": u.filename,
+            "file_size": int(u.file_size or 0),
+            "uploader_name": u.uploader_name,
+            "uploaded_chunks": done,
+            "total_chunks": total,
+            "percent": (round(done * 100.0 / total, 1) if total else 0.0),
+            "status": u.status,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "expires_at": u.expires_at.isoformat() if u.expires_at else None,
+        })
+
+    return {
+        "request": {
+            "id": req.id,
+            "title": req.title,
+            "submission_count": req.submission_count,
+            "is_active": req.is_active,
+        },
+        "files": files,
+        "uploading": uploading,
     }
 
 

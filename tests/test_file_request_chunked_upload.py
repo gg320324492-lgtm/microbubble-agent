@@ -892,9 +892,12 @@ def test_anonymous_chunk_endpoints_exist_without_auth():
 
 
 def test_strict_defaults_are_actually_strict():
-    """严格档的四个默认值不许被悄悄改松 (本次拍板的是严格档)。"""
+    """默认档不变量 (2026-11-10 主指挥改口径: 单文件 30GB / 单链接不限总量)。"""
     assert int(settings.FILE_REQUEST_MAX_SUBMISSIONS) == 5
-    assert int(settings.FILE_REQUEST_MAX_TOTAL_MB) == 30_720
+    # 0 = 不限 (主指挥 2026-11-10 拍板); 不许悄悄改回"有限但没写明"的数
+    assert int(settings.FILE_REQUEST_MAX_TOTAL_MB) == 0
+    assert int(settings.FILE_REQUEST_MAX_SINGLE_MB) == 30_720
+    assert int(settings.DRIVE_MAX_FILE_SIZE_MB) == 30_720
     assert int(settings.FILE_REQUEST_LINK_TTL_HOURS) == 72
     assert bool(settings.FILE_REQUEST_AUTO_CLOSE_ON_LIMIT) is True
     assert int(settings.FILE_REQUEST_MAX_CHUNK_MB) * 1024 * 1024 < 1024 * 1024 * 1024, (
