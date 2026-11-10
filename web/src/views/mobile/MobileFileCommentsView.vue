@@ -111,6 +111,7 @@ import MobileContextMenu from '@/components/mobile/MobileContextMenu.vue'
 import MobileCommentInput from '@/components/mobile/MobileCommentInput.vue'
 // 自递归的 MobileCommentThread 用于嵌套回复展示 (与现有 PR6-P3 /views/mobile/MobileCommentThread.vue 不同)
 import MobileCommentThread from '@/components/mobile/MobileCommentThread.vue'
+import { goBackOr } from '@/utils/goBack'
 
 const props = defineProps({
   // 路由 params.id
@@ -365,8 +366,8 @@ async function onDeleteComment(comment) {
 }
 
 function onBack() {
-  if (window.history.length > 1) router.back()
-  else router.push('/drive')
+  // 站内导航过来就回来源页; 直接打开则回网盘 (不再用 history.length 恒真判据)
+  goBackOr(router, '/drive')
 }
 
 onMounted(() => {

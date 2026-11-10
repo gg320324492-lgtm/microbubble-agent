@@ -197,6 +197,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { goBackOr } from '@/utils/goBack'
 
 const router = useRouter()
 
@@ -350,11 +351,8 @@ async function confirmSubscribe() {
 }
 
 function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.push('/')
-  }
+  // 站内导航过来就回来源页; 直接打开则回首页 (不再用 history.length 恒真判据)
+  goBackOr(router, '/')
 }
 
 onMounted(() => {

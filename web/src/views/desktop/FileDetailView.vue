@@ -146,6 +146,7 @@ import CommentThread from '@/components/drive/CommentThread.vue'
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'
 import { useUserStore } from '@/stores/user'
 import { parseDbDate } from '@/utils/format'
+import { goBackOr } from '@/utils/goBack'
 
 const route = useRoute()
 const router = useRouter()
@@ -211,12 +212,8 @@ function formatDateTime(iso) {
 }
 
 function goBack() {
-  // 优先返回到 /drive, 失败则首页
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.push('/drive')
-  }
+  // 站内导航过来就回来源页; 直接打开则回网盘 (不再用 history.length 恒真判据)
+  goBackOr(router, '/drive')
 }
 
 function openPreview() {

@@ -175,6 +175,7 @@ import {
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import DesktopVersionDiffDialog from '@/components/desktop/DesktopVersionDiffDialog.vue'
 import { formatDateTime } from '@/utils/format'
+import { goBackOr } from '@/utils/goBack'
 
 // 引入 drive-view.css 共享样式 (跟 FileGrid/DriveTrashView 一致)
 import '@/views/drive/drive-view.css'
@@ -286,11 +287,8 @@ async function handleUploadNewVersion({ file, data }) {
 }
 
 function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.push('/drive')
-  }
+  // 站内导航过来就回来源页; 直接打开则回网盘 (不再用 history.length 恒真判据)
+  goBackOr(router, '/drive')
 }
 
 function formatSize(bytes) {

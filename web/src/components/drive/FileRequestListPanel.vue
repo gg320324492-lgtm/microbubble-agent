@@ -19,7 +19,7 @@
     <FileRequestFilesView
       v-if="openedRequest"
       :request="openedRequest"
-      @back="openedRequest = null"
+      @back="closeDetail"
     />
 
     <template v-else>
@@ -164,11 +164,27 @@ const previewUrl = ref('')
 const creating = ref(false)
 const formRef = ref(null)
 // 2026-11-10: 点进去看该请求收到了哪些文件 (与网盘文件夹同一套表格)
+// ⚠️ 这是**页面内的一层**，必须让父层知道 —— 否则全局「后退」箭头按导航历史
+// 走会跳过这一层直接回主界面 (主指挥 2026-11-10 实测)。
 const openedRequest = ref(null)
+const emit = defineEmits(['detail-change'])
 
 function onOpenFiles(req) {
   openedRequest.value = req
+  emit('detail-change', { open: true, title: req?.title || '' })
 }
+
+function closeDetail() {
+  if (!openedRequest.value) return
+  openedRequest.value = null
+  emit('detail-change', { open: false, title: '' })
+}
+
+// 父层 (DesktopDriveView) 的后退键/面包屑要能关掉详情层
+defineExpose({
+  closeDetail,
+  isDetailOpen: () => !!openedRequest.value,
+})
 
 function emptyCreateForm() {
   return {

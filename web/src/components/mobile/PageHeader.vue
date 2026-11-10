@@ -51,7 +51,7 @@
  *   </PageHeader>
  */
 
-import { computed } from 'vue'
+import { computed, getCurrentInstance } from 'vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
@@ -61,6 +61,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['back'])
+const instance = getCurrentInstance()
 
 const headerStyle = computed(() => ({
   paddingTop: props.safeAreaTop ? 'var(--sat)' : '0',
@@ -71,9 +72,16 @@ const innerStyle = computed(() => ({
 }))
 
 function onBack() {
+  // 2026-11-10 修复: 组件**自己** history.back() 的同时, 大量调用方也在
+  // `@back` 里 router.back() ⇒ 一次点击连退两级 (详情页直接回主界面)。
+  // 正确规则: 有监听方 ⇒ 完全交给监听方; 没有监听方才走默认 history.back()。
+  // 这是"返回按钮"的唯一权威实现, 别在调用方再写第二份 (类 20.250 ①)。
   emit('back')
-  // 默认行为：history.back()（调用方如需自定义可监听 back 事件）
-  if (window.history.length > 1) {
+  // ⚠️ 不能用 useAttrs(): defineEmits 声明过的监听器会被 Vue 从 attrs 剔除,
+  //    attrs.onBack 恒为 undefined ⇒ 会把双重返回修成"永远返回两次"。
+  //    唯一可靠判据是 vnode.props 上有没有 onBack 监听器。
+  const hasListener = typeof instance?.vnode?.props?.onBack === 'function'
+  if (!hasListener && window.history.length > 1) {
     window.history.back()
   }
 }

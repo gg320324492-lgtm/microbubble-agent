@@ -144,6 +144,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { useSwipeGesture } from '@/composables/useSwipeGesture'
 import { formatSize } from '@/utils/format'
+import { goBackOr } from '@/utils/goBack'
 
 const route = useRoute()
 const router = useRouter()
@@ -189,11 +190,8 @@ const previewType = computed(() => {
 })
 
 function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.push('/drive')
-  }
+  // 站内导航过来就回来源页; 直接打开则回网盘 (不再用 history.length 恒真判据)
+  goBackOr(router, '/drive')
 }
 
 function goPrev() {

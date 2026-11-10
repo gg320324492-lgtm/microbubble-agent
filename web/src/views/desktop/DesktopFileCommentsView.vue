@@ -189,6 +189,7 @@ import { useCommentBreadcrumb } from '@/composables/useCommentBreadcrumb'
 import { useEmojiLazyLoad } from '@/composables/useEmojiLazyLoad'
 import DesktopCommentThread from '@/components/desktop/DesktopCommentThread.vue'
 import DesktopCommentInput from '@/components/desktop/DesktopCommentInput.vue'
+import { goBackOr } from '@/utils/goBack'
 
 const props = defineProps({
   fileId: { type: [String, Number], required: true },
@@ -468,13 +469,9 @@ async function onDeleteCommentWithConfirm(comment) {
 }
 
 function goBack() {
-  // desktop 优先回文件详情页 (评论嵌内) — 桌面端已经有 FileDetailView 含评论
-  // 如果直接来自桌面 Drive grid, 退回 /drive
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.push(`/drive/file/${props.fileId}`)
-  }
+  // 站内导航过来就回真正来源页; 新标签/外部直接打开则回到该文件详情页
+  // (评论嵌在详情内, 这是明确的一层)。判据统一在 utils/goBack.js。
+  goBackOr(router, `/drive/file/${props.fileId}`)
 }
 
 onMounted(() => {

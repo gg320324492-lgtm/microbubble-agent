@@ -174,7 +174,11 @@
 
         <div class="wb-listarea">
           <!-- specialView 内嵌面板 (右栏/表格/dock 隐藏) -->
-          <FileRequestListPanel v-if="specialView === 'requests'" />
+          <FileRequestListPanel
+            v-if="specialView === 'requests'"
+            ref="requestPanelRef"
+            @detail-change="onRequestDetailChange"
+          />
           <DriveTrashPanel v-else-if="specialView === 'trash'" @changed="refreshSideCounts" />
           <!-- 批次⑩.88 (方案A): 分享中面板 — 撤销后文件夹可见性回团队, 树要同步 -->
           <DriveSharesPanel v-else-if="specialView === 'shared'" @changed="onSharesChanged" />
@@ -1292,6 +1296,13 @@ const currentPathDisplay = computed(() => {
 // ============================================================
 const quotaInfo = ref(null)
 const tableRef = ref(null)
+// 文件请求面板的"某个请求详情"是页面内一层 (不是路由), 必须进导航历史 ——
+// 否则点全局后退箭头会跳过它直接回主界面 (主指挥 2026-11-10 实测)。
+const requestPanelRef = ref(null)
+const requestDetailOpen = ref(false)
+// 标题存在父层: 父层的面包屑要渲染第三级, 而面板在 navGo 关详情后
+// openedRequest 已清空 ⇒ 必须把标题也带出来, 不能从面板实例现场取。
+const requestDetailTitle = ref('')
 
 // 批次⑧ 对齐视觉稿树计数: 团队共享盘 (view=team total) / 我的收藏 / 回收站
 // 三个 mono 计数 — page_size=1 只取 total, 挂载拉一次, 收藏/删除/恢复动作后刷新
@@ -1325,6 +1336,14 @@ watch(specialView, () => refreshSideCounts())
 const navHistory = ref([])
 const navIndex = ref(-1)
 const navRestoring = ref(false)
+
+/**
+ * 2026-11-10 补正: 「文件请求 → 点进去看某个请求的文件」此前是
+ * FileRequestListPanel 的**组件内部状态**, 全局后退箭头按 {specialView,folderId}
+ * 的导航历史走 ⇒ 历史里没有这一层 ⇒ 一按后退直接回主界面。
+ * 现在把 detail 状态并入 loc, 并让 navGo 同步回面板 (面板用 defineExpose 暴露
+ * closeDetail)。「返回文件请求」按钮同样走 closeDetail + pushNav。
+ */
 function pushNav() {
   if (navRestoring.value) return
   const loc = { specialView: specialView.value, folderId: selectedFolderId.value }
@@ -1334,7 +1353,27 @@ function pushNav() {
   navHistory.value.push(loc)
   navIndex.value = navHistory.value.length - 1
 }
+
+function onRequestDetailChange({ open, title }) {
+  // 详情层**不进** navHistory: 它是面板内部的一层, 没有可重放的路由位置
+  // (若入历史, 点「前进」会只恢复父层状态而面板仍是列表 ⇒ 状态在说谎)。
+  requestDetailOpen.value = !!open
+  requestDetailTitle.value = title || ''
+}
+
+function closeRequestDetailIfOpen() {
+  if (!requestDetailOpen.value) return false
+  requestPanelRef.value?.closeDetail?.()
+  requestDetailOpen.value = false
+  requestDetailTitle.value = ''
+  return true
+}
+
 async function navGo(delta) {
+  // 2026-11-10 主指挥: 在「某个文件请求的文件列表」里按后退, 应回到
+  // **文件请求列表**, 而不是跳过它回主界面。详情层不占历史条目 ⇒ 本次点击
+  // 只关详情、不消耗历史 (下一次后退才真正回上一个视图)。
+  if (delta < 0 && closeRequestDetailIfOpen()) return
   const idx = navIndex.value + delta
   if (idx < 0 || idx >= navHistory.value.length) return
   navRestoring.value = true
@@ -1342,6 +1381,7 @@ async function navGo(delta) {
   const loc = navHistory.value[idx]
   specialView.value = loc.specialView
   selectedFolderId.value = loc.folderId
+  requestDetailOpen.value = false
   if (loc.folderId != null && !expandedFolderIds.value.has(loc.folderId)) {
     expandedFolderIds.value.add(loc.folderId)
   }
@@ -1364,6 +1404,15 @@ const crumbItems = computed(() => {
     items.push({ key: 'shared', name: '分享中', loc: { specialView: 'shared', folderId: null } })
   } else if (specialView.value === 'requests') {
     items.push({ key: 'requests', name: '文件请求', loc: { specialView: 'requests', folderId: null } })
+    // 2026-11-10: 点进某个请求看文件时, 面包屑要显示第三级 (当前级),
+    // 否则用户看不出自己在哪一层, 且点「文件请求」无法回列表。
+    if (requestDetailOpen.value) {
+      items.push({
+        key: 'request-detail',
+        name: requestDetailTitle.value || '收到的文件',
+        loc: { specialView: 'requests', folderId: null, requestDetail: true },
+      })
+    }
   } else if (selectedFolderId.value !== null) {
     // 批次⑩.87: 普通浏览也显示文件夹路径 — 此前只在 specialView==='team' 时渲染,
     // 点树节点后面包屑恒为「课题组网盘」, 用户无法分辨自己在哪层 (111 建错层问题的根因之一)
@@ -1376,6 +1425,10 @@ const crumbItems = computed(() => {
 function gotoCrumb(c, idx) {
   specialView.value = c.loc.specialView
   selectedFolderId.value = c.loc.folderId
+  // 从详情层点面包屑「文件请求」⇒ 关掉面板内部详情; 否则会留在详情里
+  if (specialView.value === 'requests' && !c.loc.requestDetail) {
+    requestPanelRef.value?.closeDetail?.()
+  }
   // 树展开到该层 (沿途祖先一并展开, FolderTree 高亮同步)
   for (const it of crumbItems.value.slice(0, idx + 1)) {
     if (it.loc.folderId != null && !expandedFolderIds.value.has(it.loc.folderId)) {
@@ -1438,6 +1491,12 @@ const activeFolderChildren = computed(() => {
 watch([selectedFolderId, specialView], () => {
   activeKey.value = null
   selectedFolderIds.value = []
+  // 2026-11-10: 离开「文件请求」视图时, 面板被 v-if 卸载, 但父层的详情层
+  // 标记若不清, 下次进来面包屑会显示第三级而界面其实是列表 (状态在说谎)。
+  if (specialView.value !== 'requests' && requestDetailOpen.value) {
+    requestDetailOpen.value = false
+    requestDetailTitle.value = ''
+  }
   pushNav()
 })
 
