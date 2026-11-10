@@ -96,21 +96,28 @@ function formatSize(bytes) {
   return n > 0 ? formatBytes(n) : '0 B'
 }
 
-async function load() {
+/**
+ * @param {boolean} [silent] 轮询刷新: 不置 loading (否则表格每 3s 闪一次加载态),
+ *        失败也不覆盖已有内容 —— 一次抖动不该把"正在上传"整块换成错误页。
+ */
+async function load(silent = false) {
   if (!props.request?.id) return
-  loading.value = true
-  loadError.value = null
+  if (!silent) {
+    loading.value = true
+    loadError.value = null
+  }
   try {
     const resp = await axios.get(`/api/v1/file-requests/${props.request.id}/files`)
     files.value = resp.data?.files || []
     uploading.value = resp.data?.uploading || []
+    loadError.value = null
   } catch (e) {
-    loadError.value = e?.response?.data?.detail || e?.message || '加载失败'
+    if (!silent) loadError.value = e?.response?.data?.detail || e?.message || '加载失败'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
     // 有进行中的会话就继续轮询; 全部结束 ⇒ 停 (最后一次 load 已把它们移进 files)
     if (uploading.value.length && !pollTimer) {
-      pollTimer = setInterval(load, 3000)
+      pollTimer = setInterval(() => load(true), 3000)
     } else if (!uploading.value.length && pollTimer) {
       clearInterval(pollTimer)
       pollTimer = null
