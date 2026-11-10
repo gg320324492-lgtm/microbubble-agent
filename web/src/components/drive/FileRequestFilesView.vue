@@ -62,7 +62,7 @@
       :sort-order="'desc'"
       :total="files.length"
       :current-page="1"
-      :page-size="200"
+      :page-size="500"
       @row-preview="onPreview"
       @retry="load"
     />
