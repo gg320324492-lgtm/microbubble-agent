@@ -35,6 +35,24 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
+# ---- 2026-11-10 P0: gc OOM 事故前置闸门 (必须在任何 git 操作之前) ----
+# 事故: 1.6G 内存的小机器上 `git gc --aggressive --prune=now` 榨干内存 ⇒ nginx 被 OOM 杀、
+# sshd 无法 fork 新会话、webhook 超时 ⇒ 全站宕机, 只能从阿里云控制台重启恢复。
+# 三条不变量: ①部署链路绝不主动发起任何 gc (含 git 自动 gc); ②可用内存 < 400MB 直接中止,
+# 因为连 fetch/reset 都可能压垮机器; ③残留 gc 进程与 tmp_pack_* 一律清理。
+AVAIL_MB=$(awk '/MemAvailable/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 9999)
+if [ "$AVAIL_MB" -lt 400 ]; then
+    log "ERROR: 可用内存仅 ${AVAIL_MB}MB (<400MB), 中止部署 (gc OOM 事故防线)"
+    log "========== 部署中止 =========="
+    exit 1
+fi
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=gc.auto
+export GIT_CONFIG_VALUE_0=0
+pkill -f "git.*gc --aggressive" 2>/dev/null && log "止损: 已终止残留的 git gc 进程" || true
+pkill -f "git.*pack-objects" 2>/dev/null && log "止损: 已终止残留的 pack-objects 进程" || true
+rm -f "$PROJECT_DIR/.git/objects/pack/tmp_pack_"* 2>/dev/null || true
+
 # 2026-10-25: 记录**执行前**的自身 sha（防「执行中改写自己」的自检用，详见下面 PY_CHANGED 后的说明）
 DEPLOY_SELF_SHA_BEFORE="${DEPLOY_SELF_SHA_BEFORE:-$(sha256sum "$0" 2>/dev/null | cut -d' ' -f1)}"
 
@@ -191,12 +209,7 @@ if [ "$PY_CHANGED" -gt 0 ]; then
     log "================================================================"
 fi
 
-# 2026-11-10 止损插桩：git gc 在 1.6G 内存的小机器上会榨干内存导致 sshd 无法
-# fork 新会话（实测 /health 被拖到 30-45 秒）。gc 已确认收益极小（磁盘 29G free），
-# 且 gc 中断不会损坏仓库（pack 写入是事务性的）⇒ 每次部署先杀残留 gc 再继续。
-pkill -f "git.*gc --aggressive" 2>/dev/null && log "止损: 已终止残留的 git gc 进程" || true
-pkill -f "git.*pack-objects" 2>/dev/null && log "止损: 已终止残留的 pack-objects 进程" || true
-rm -f "$PROJECT_DIR/.git/objects/pack/tmp_pack_"* 2>/dev/null || true
+# 注: gc OOM 防线已前移到脚本开头（任何 git 操作之前），此处不再重复。
 
 # 检查可用磁盘空间（至少 500MB）
 AVAILABLE_MB=$(df -m /opt | tail -1 | awk '{print $4}')
