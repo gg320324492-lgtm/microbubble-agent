@@ -1,0 +1,1 @@
+function o(c){const t=n=>!n||typeof n!="object"||!("back"in n)?null:n.back!=null;try{const n=t(c?.options?.history?.state);if(n!==null)return n}catch{}try{const n=t(window.history.state);if(n!==null)return n}catch{}return!1}function r(c,t){o(c)?c.back():c.push(t)}export{r as g};
