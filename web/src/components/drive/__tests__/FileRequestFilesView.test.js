@@ -14,8 +14,8 @@ import FileRequestFilesView from '@/components/drive/FileRequestFilesView.vue'
 
 const stubs = {
   DriveFileTable: {
-    props: ['files', 'folders', 'total'],
-    template: `<div class="dft-stub">
+    props: ['files', 'folders', 'total', 'loading'],
+    template: `<div class="dft-stub" :data-loading="loading ? '1' : '0'">
       <span v-for="f in files" :key="f.id" class="dft-file">{{ f.file_name }}|{{ f.owner_name }}</span>
     </div>`,
   },
@@ -88,10 +88,14 @@ describe('正在上传的进度', () => {
     const w = mountView()
     await flushPromises()
     expect(httpGet).toHaveBeenCalledTimes(1)
+    expect(w.find('.dft-stub').attributes('data-loading')).toBe('0')
 
     await vi.advanceTimersByTimeAsync(3000)
     await flushPromises()
     expect(httpGet).toHaveBeenCalledTimes(2)
+    // ⚠️ 主指挥 2026-11-10 反馈「一会儿一没」: 轮询必须是静默的 ——
+    //    每次轮询把 loading 置 true 会让表格每 3s 闪一次骨架屏。
+    expect(w.find('.dft-stub').attributes('data-loading')).toBe('0')
     expect(w.text()).not.toContain('正在上传')
 
     // 已无进行中会话 ⇒ 不再轮询
