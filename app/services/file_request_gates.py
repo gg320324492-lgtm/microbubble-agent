@@ -136,7 +136,16 @@ async def check_gates(
                     )
                 )
             ).scalar_one()
-            if int(active) >= int(max_sub):
+            # 2026-11-10 多件上传: 活跃会话数必须跟**剩余配额**比, 不是跟总上限比。
+            # 旧写法 `active >= max_sub` 在已收过几件后**太松**: max_sub=5 已收 2 件、
+            # active=3 时仍放行新 init ⇒ 已收 2 + 进行中 4 = 6 件, 越过总配额。
+            # 本次新 init 会让进行中变成 active+1, 故判据是 active >= remain
+            # (前面的 submission_count >= max_sub 已先抛错, 故 remain >= 1)。
+            # ⚠️ 此闸只挡"已存在多个进行中会话"(浏览器并发/多窗口), 本次 init
+            #    自己的会话尚未落库; 超额边界由前面的 submission_count 与累计总量闸把守。
+            # 串行队列同一时刻通常只有 1 个 active; 两个窗口并发时才按剩余配额收紧。
+            remain = int(max_sub) - int(req.submission_count or 0)
+            if int(active) >= max(1, remain):
                 raise FileRequestGateError(
                     "该链接的进行中上传数已达上限，请等待当前上传完成或过期", 409
                 )

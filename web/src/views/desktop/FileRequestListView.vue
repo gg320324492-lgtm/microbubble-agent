@@ -80,10 +80,21 @@
           </el-select>
         </el-form-item>
         <el-form-item label="允许类型">
-          <el-input v-model="createForm.extensionsText" placeholder="如: pdf,docx,xlsx (留空=不限)" />
+          <el-select v-model="createForm.extensionMode" style="width: 100%">
+            <el-option label="不限格式（默认）" value="any" />
+            <el-option label="仅视频（mp4/mov/m4v/avi/mkv/webm）" value="video" />
+            <el-option label="自定义类型" value="custom" />
+          </el-select>
+          <el-input
+            v-if="createForm.extensionMode === 'custom'"
+            v-model="createForm.extensionsText"
+            placeholder="如: pdf,docx,xlsx（留空 = 不限）"
+            style="margin-top: 8px"
+          />
         </el-form-item>
         <el-form-item label="最大大小">
-          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="500" placeholder="MB (留空=不限)" :step="1" controls-position="right" style="width: 160px" />
+          <!-- 上限与后端 settings 同源 (20GiB); 界面写死 500 会让 10GB 视频被 413 拒 -->
+          <el-input-number v-model="createForm.max_file_size_mb" :min="1" :max="20480" placeholder="MB (留空=系统上限 20GB)" :step="1" controls-position="right" style="width: 200px" />
         </el-form-item>
         <el-form-item label="必填姓名">
           <el-switch v-model="createForm.require_uploader_name" />
@@ -136,14 +147,27 @@ const previewUrl = ref('')
 const creating = ref(false)
 const formRef = ref(null)
 
-const createForm = ref({
-  title: '',
-  description: '',
-  expires_in_days: null,
-  extensionsText: '',
-  max_file_size_mb: null,
-  require_uploader_name: true,
-})
+function emptyCreateForm() {
+  return {
+    title: '',
+    description: '',
+    expires_in_days: null,
+    extensionMode: 'any',
+    extensionsText: '',
+    max_file_size_mb: null,
+    require_uploader_name: true,
+  }
+}
+const createForm = ref(emptyCreateForm())
+
+/** 三档口径与后端同源: any=NULL(不限) / video=video_only / custom=allowed_extensions */
+function buildExtensionPayload(form) {
+  if (form.extensionMode === 'video') return { video_only: true }
+  if (form.extensionMode === 'custom') {
+    return { allowed_extensions: parseExtensions(form.extensionsText) }
+  }
+  return {}
+}
 
 function parseExtensions(text) {
   if (!text) return null
@@ -178,22 +202,15 @@ async function onCreate() {
       title: createForm.value.title.trim(),
       description: createForm.value.description || null,
       expires_in_days: createForm.value.expires_in_days || null,
-      allowed_extensions: parseExtensions(createForm.value.extensionsText),
       max_file_size_mb: createForm.value.max_file_size_mb || null,
       require_uploader_name: createForm.value.require_uploader_name,
+      ...buildExtensionPayload(createForm.value),
     }
     const created = await createRequest(payload)
     showCreate.value = false
     ElMessage.success(`创建成功！Token: ${created.token.slice(0, 12)}...`)
     // 重置表单
-    createForm.value = {
-      title: '',
-      description: '',
-      expires_in_days: null,
-      extensionsText: '',
-      max_file_size_mb: null,
-      require_uploader_name: true,
-    }
+    createForm.value = emptyCreateForm()
   } catch (e) {
     ElMessage.error(e.message || '创建失败')
   } finally {

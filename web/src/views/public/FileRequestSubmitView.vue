@@ -24,6 +24,21 @@
         <p>该链接可能已失效，请联系发起人重新生成。</p>
       </div>
 
+      <!-- ── 批量汇总: 一次选多件时才出现 (单件仍走下面两张原有成功卡) ── -->
+      <div v-else-if="batchDone" class="submit-success">
+        <h2>✅ 本次上传结束</h2>
+        <p>成功 {{ batchSucceeded }} 件，失败 {{ batchFailed }} 件，未传 {{ batchSkipped }} 件。</p>
+        <ul class="batch-summary">
+          <li v-for="it in queue" :key="it.id" :class="'batch-' + it.status">
+            <span class="batch-name">{{ it.file.name }}</span>
+            <span class="batch-status">{{ batchStatusText(it) }}</span>
+            <code v-if="it.sha256">{{ it.sha256.slice(0, 12) }}</code>
+            <span v-if="it.error" class="batch-error">{{ it.error.title || it.error.detail }}</span>
+          </li>
+        </ul>
+        <button @click="onSubmitAnother" class="submit-btn">再传一批</button>
+      </div>
+
       <!-- ── 成功: 小文件通路 ─────────────────────────────────────────── -->
       <div v-else-if="submitted" class="submit-success">
         <h2>✅ 提交成功</h2>
@@ -34,7 +49,7 @@
       <!-- ── 成功: 分片通路 (带无损凭证) ───────────────────────────────
            ⚠️ 必须排在"链接已关闭"之前: auto_close_on_limit 会让**成功后的那一次刷新**
               把 active 变成 false, 若先判 active 就把对方刚拿到的校验凭证吞掉了 -->
-      <div v-else-if="chunkDone" class="submit-success">
+      <div v-else-if="chunkDone && !batchMode" class="submit-success">
         <h2>✅ 上传成功</h2>
         <p>文件「{{ doneFilename }}」已收到。</p>
         <!-- 服务端合并后**实算**的 sha256 —— 对方留存前 12 位即可自证文件无损。
@@ -62,7 +77,9 @@
         <button @click="onSubmitAnother" class="submit-btn">再提交一份</button>
       </div>
 
-      <div v-else-if="!requestInfo.active" class="submit-state error">
+      <!-- 批量跑到一半链接收满/被关闭时, 仍要留在队列页 (汇总会说明哪些没传),
+           不能把正在跑的队列换成一张"链接已关闭"卡把进度藏起来 -->
+      <div v-else-if="!requestInfo.active && !batchRunning" class="submit-state error">
         <h2>文件请求已关闭</h2>
         <p v-if="requestInfo.expired">链接已于 {{ formatTime(requestInfo.expires_at) }} 过期。</p>
         <p v-else>发起人已关闭此文件请求，无法再提交文件。</p>
@@ -89,9 +106,15 @@
         <div v-if="uploadActive" class="upload-progress" role="status" aria-live="polite">
           <div class="progress-head">
             <span class="progress-title">
-              {{ uploader.status.value === 'merging' ? '服务器正在合并并校验…'
-                : uploader.status.value === 'preparing' ? '正在建立上传会话…'
-                : '正在分片上传' }}
+              <template v-if="batchMode">
+                第 {{ batchCurrentIndex }} / {{ queue.length }} 件：{{ file?.name }}
+                · {{ uploader.status.value === 'merging' ? '合并校验中' : '分片上传中' }}
+              </template>
+              <template v-else>
+                {{ uploader.status.value === 'merging' ? '服务器正在合并并校验…'
+                  : uploader.status.value === 'preparing' ? '正在建立上传会话…'
+                  : '正在分片上传' }}
+              </template>
             </span>
             <span class="progress-pct">{{ uploader.percent.value }}%</span>
           </div>
@@ -124,8 +147,10 @@
             已传的部分会保留到 <b>{{ sessionDeadline }}</b>，在那之前回来都能接着传。
           </p>
           <div class="progress-actions">
+            <!-- 批量队列里没有"整批暂停": pause 只暂停当前分片件,
+                 队列会立刻继续下一件, 语义对不上 ⇒ 只留「放弃」 -->
             <button
-              v-if="uploader.status.value === 'uploading'"
+              v-if="uploader.status.value === 'uploading' && !batchMode"
               class="btn-ghost"
               @click="uploader.pause()"
             >
@@ -180,20 +205,31 @@
           </div>
 
           <div class="form-row">
-            <label>选择文件 <span class="required">*</span></label>
+            <label>选择文件 <span class="required">*</span>（可一次选多个）</label>
             <input
               ref="fileInput"
               type="file"
+              multiple
               required
-              :accept="acceptTypes"
+              :accept="acceptTypes || undefined"
               :disabled="busy"
               @change="onFileChange"
             />
+            <!-- 不限格式时**不设 accept 属性**: `*/*` 在部分浏览器/移动端仍会过滤掉
+                 无扩展名或生僻类型; 只有发起人显式选了格式才下发白名单。 -->
             <small v-if="file" class="file-info">
               {{ file.name }} · {{ formatSize(file.size) }}
               <span v-if="isBigFile" class="file-tag">将分 {{ estimateChunks }} 片上传（每片 {{ formatSize(serverChunkHint) }}）</span>
               <span v-else class="file-tag">小文件，一次传完</span>
             </small>
+            <ul v-if="batchMode" class="file-queue">
+              <li v-for="it in queue" :key="it.id" :class="'queue-' + it.status">
+                <span class="queue-name">{{ it.file.name }}</span>
+                <span class="queue-size">{{ formatSize(it.file.size) }}</span>
+                <span class="queue-badge">{{ batchStatusText(it) }}</span>
+              </li>
+            </ul>
+            <p v-if="batchMode" class="form-hint">共 {{ queue.length }} 个文件，会依次上传；单个失败不影响后面的文件。</p>
           </div>
 
           <div v-if="errorMessage" class="submit-error">{{ errorMessage }}</div>
@@ -250,9 +286,37 @@ const submittedFileName = ref('')
 /** 结构化失败 (describeFileRequestFailure 的形状); 与 errorMessage 互斥使用 */
 const failure = ref(null)
 
+// ── 多件队列 (2026-11-10) ───────────────────────────────────────────────
+// 单件上传的所有既有行为**原样保留**: 只有一次选到 >= 2 个文件才进入 batchMode,
+// 队列按序串行 (同一个 uploader 实例的全局限速窗口才不会被并发打爆)。
+// 每个条目: { id, file, status, sha256, error }。
+// status: pending | uploading | done | failed | skipped
+const queue = ref([])
+const batchRunning = ref(false)
+const batchDone = ref(false)
+let queueSeq = 0
+const batchMode = computed(() => queue.value.length > 1)
+const batchSucceeded = computed(() => queue.value.filter(i => i.status === 'done').length)
+const batchFailed = computed(() => queue.value.filter(i => i.status === 'failed').length)
+const batchSkipped = computed(() => queue.value.filter(i => i.status === 'skipped').length)
+/** 当前件序号 (1-based): 只数已经开始处理的条目, skipped 的不占一次上传 */
+const batchCurrentIndex = computed(() =>
+  queue.value.filter(i => i.status !== 'pending').length
+)
+function batchStatusText(it) {
+  return ({
+    pending: '等待中', uploading: '上传中', done: '已收到',
+    failed: '失败', skipped: '未传',
+  })[it.status] || it.status
+}
+
+// 2026-11-10: **默认不限制格式** —— 返回 '' 让模板不渲染 accept 属性。
+// 旧版返回 '*/*', 在部分浏览器/移动端仍会筛掉无扩展名或生僻类型；
+// 只有发起人显式选择过特定格式 (allowed_extensions 非空) 才下发白名单。
 const acceptTypes = computed(() => {
-  if (!requestInfo.value?.allowed_extensions?.length) return '*/*'
-  return requestInfo.value.allowed_extensions.map(ext => '.' + ext).join(',')
+  const list = requestInfo.value?.allowed_extensions
+  if (!list?.length) return ''
+  return list.map(ext => '.' + String(ext).replace(/^\./, '')).join(',')
 })
 
 // ── 门禁口径: 一律用服务端给的 max_single_file_mb ─────────────────────────────
@@ -285,7 +349,7 @@ const estimateChunks = computed(() =>
 const uploadActive = computed(() =>
   ['preparing', 'uploading', 'merging'].includes(uploader.status.value)
 )
-const busy = computed(() => uploadActive.value)
+const busy = computed(() => uploadActive.value || batchRunning.value)
 const chunkDone = computed(() => uploader.status.value === 'done')
 const chunkResult = computed(() => uploader.result.value || {})
 const hashOn = computed(() => uploader.hashAvailable.value)
@@ -341,14 +405,16 @@ const doneFilename = computed(() =>
 const canSubmit = computed(() => {
   if (!requestInfo.value) return false
   if (requestInfo.value.require_uploader_name && !uploaderName.value.trim()) return false
+  if (batchMode.value) return queue.value.some(i => i.status === 'pending')
   if (!file.value) return false
   return true
 })
 
 const submitLabel = computed(() => {
   if (uploader.status.value === 'merging') return '服务器合并中…'
-  if (uploadActive.value) return '上传中…'
+  if (uploadActive.value || batchRunning.value) return '上传中…'
   if (submitting.value) return '上传中…'
+  if (batchMode.value) return `上传 ${queue.value.length} 个文件`
   return isBigFile.value ? '上传大文件' : '提交文件'
 })
 
@@ -386,60 +452,92 @@ function clientFailure(status, detailText) {
   return describeFileRequestFailure({ response: { status, data: { detail: detailText } } })
 }
 
-function onFileChange(e) {
-  const f = e.target.files[0]
-  failure.value = null
-  errorMessage.value = ''
-  if (!f) return
-  // 客户端检查扩展名 (服务端也查, 双重防御)
+/** 单件预检 (多件复用同一份), 返回结构化失败或 null —— 不在两个分支各写一遍判据 */
+function precheckOne(f) {
+  // 客户端检查扩展名 (服务端也查, 双重防御); **未配置白名单 = 任何格式都放行**
   if (requestInfo.value?.allowed_extensions?.length) {
     const ext = (f.name.split('.').pop() || '').toLowerCase()
     if (!requestInfo.value.allowed_extensions.includes(ext)) {
-      failure.value = clientFailure(415, `不允许的文件类型 .${ext}`)
-      clearFile()
-      return
+      return clientFailure(415, `不允许的文件类型 .${ext}`)
     }
   }
   // 客户端检查大小 —— 用后端同一个数 (effectiveLimitMb)
   if (effectiveLimitMb.value) {
     const maxBytes = effectiveLimitMb.value * 1024 * 1024
     if (f.size > maxBytes) {
-      failure.value = clientFailure(
+      return clientFailure(
         413,
         `文件 ${formatSize(f.size)} 超过单文件上限 ${formatMb(effectiveLimitMb.value)}`,
       )
-      clearFile()
-      return
     }
   }
   // 累计总量闸: 文案里必须带"累计总量"四个字 —— utils/fileRequestFailure.js 的规则表
   // 靠它把 413 分到"链接总容量满了"而不是"你这个文件太大" (两种处置方式不同)
   if (remainTotalMb.value !== null && f.size > remainTotalMb.value * 1024 * 1024) {
-    failure.value = clientFailure(
+    return clientFailure(
       413,
       `本链接累计总量剩余 ${formatMb(remainTotalMb.value)}，装不下 ${formatSize(f.size)}`,
     )
-    clearFile()
-    return
   }
-  // 后端按部署配置才决定支不支持分片 (settings.FILE_REQUEST_MAX_CHUNK_MB=0 之类的
-  // 异常配置会让它 false)。不支持时大文件只能走单请求通路并大概率 413 ——
-  // 与其让对方白传一半再失败, 不如在选文件这一步就讲清楚。
+  // 后端按部署配置才决定支不支持分片
   if (shouldUseChunked(f.size) && requestInfo.value?.chunked_supported === false) {
-    failure.value = makeLocalFailure(
+    return makeLocalFailure(
       FR_FAILURE_CODE.UNKNOWN, '这个链接收不了这么大的文件',
       `服务端当前没开启大文件分片通道，而这个文件有 ${formatSize(f.size)}，` +
         '一次传不完。请联系发起人开启后重试，或先把文件拆小/压缩后再传。',
       FR_FAILURE_ACTION.CONTACT,
       `chunked_supported=false 而文件大小 ${f.size} ≥ 分片阈值`,
     )
-    clearFile()
+  }
+  return null
+}
+
+function onFileChange(e) {
+  const picked = Array.from(e.target.files || [])
+  failure.value = null
+  errorMessage.value = ''
+  if (!picked.length) return
+
+  // ------------------------------------------------------------------
+  // 多件: 全部按同一份预检过一遍, 只在**第一个不合格的文件**上停下。
+  // 单件: 与旧版逐字一致 (预检失败 → 显示失败卡 + clearFile)。
+  // ------------------------------------------------------------------
+  if (picked.length > 1) {
+    let firstBad = null
+    for (const f of picked) {
+      const err = precheckOne(f)
+      if (err) {
+        // 文案里带上文件名, 便于对方在几十个文件里定位是哪一个
+        firstBad = { ...err, detail: `「${f.name}」：${err.detail}` }
+        break
+      }
+    }
+    if (firstBad) {
+      failure.value = firstBad
+      clearFile()
+      return
+    }
+    queue.value = picked.map(f => ({ id: ++queueSeq, file: f, status: 'pending', sha256: '', error: null }))
+    batchDone.value = false
+    // 单件态清干净: 队列模式下进度卡由 uploader 驱动, 但 file 指向当前件。
+    // ⚠️ 这里**不能清空 input.value** —— input 带 required, 清空后浏览器原生校验
+    //    会在 @submit 之前就拦下"请选择文件" (类 20.220: 界面看着能点其实没提交)。
+    //    File 对象已留在 queue 里, input 保留选中的文件正是让 required 继续成立。
+    file.value = null
+    uploader.reset()
+    // 批量页不能被上一件单文件留下的「检测到断点」卡片挡住表单
+    uploader.clearResumable()
     return
   }
+
+  const f = picked[0]
+  const bad = precheckOne(f)
+  if (bad) { failure.value = bad; clearFile(); return }
   // 换文件 = 换一场。先把上一场的内存态清掉, 否则失败卡片上的「继续上传」会拿着
-  // **上一个文件的 upload_id** 去续传新选的文件。断点本身在 localStorage 里,
-  // 清内存态不会丢 (key 带 token+文件名+大小+mtime 指纹, 按新文件重新探测)。
+  // **上一个文件的 upload_id** 去续传新选的文件。
   uploader.reset()
+  queue.value = []
+  batchDone.value = false
   file.value = f
   if (shouldUseChunked(f.size)) uploader.findResumable(f)
   else uploader.clearResumable(f)
@@ -454,6 +552,54 @@ async function onSubmit() {
   if (!canSubmit.value || busy.value) return
   failure.value = null
   errorMessage.value = ''
+
+  // ── 多件队列: 按序串行, 单件失败不阻断后续 ───────────────────────────
+  if (batchMode.value) {
+    batchRunning.value = true
+    batchDone.value = false
+    try {
+      for (const item of queue.value) {
+        // 「放弃」已把 batchRunning 置 false 并收尾 —— 循环不许再往下开新的一件
+        if (!batchRunning.value) break
+        if (item.status !== 'pending') continue
+        // 每传完一件刷新 info (submission_count / used_bytes / is_active 都变了)。
+        // auto_close_on_limit 或累计总量到顶时, 剩余件如实标 skipped, 不伪装成失败。
+        await refreshInfo()
+        if (!requestInfo.value?.active) {
+          item.status = 'skipped'
+          continue
+        }
+        const again = precheckOne(item.file)
+        if (again) {
+          item.status = 'skipped'
+          item.error = again
+          continue
+        }
+        item.status = 'uploading'
+        file.value = item.file
+        const err = await runOne(item.file)
+        // 被「放弃」中断时 runOne 返回的是取消态, 状态已由 onAbort 写好, 不许覆盖
+        if (!batchRunning.value) break
+        if (err) { item.status = 'failed'; item.error = err; continue }
+        item.status = 'done'
+        // 小文件通路不上分片, 没有服务端实算 sha256 ⇒ 必须留空,
+        // 否则 reset() 前残留的**上一件** result 会被误记到这一件头上
+        item.sha256 = shouldUseChunked(item.file.size)
+          ? (uploader.result.value?.sha256 || '')
+          : ''
+        uploader.reset()
+      }
+    } finally {
+      const wasAborted = !batchRunning.value      // onAbort 已收尾则不重复覆盖
+      batchRunning.value = false
+      if (!wasAborted) {
+        batchDone.value = true
+        file.value = null
+        uploader.reset()
+      }
+    }
+    return
+  }
 
   // ── 小文件: 原有单请求通路, 原样保留 ──
   if (!shouldUseChunked(file.value.size)) {
@@ -492,6 +638,37 @@ async function onSubmit() {
   }
 }
 
+/**
+ * 上传一件 (单件页与批量队列共用), 返回结构化失败或 null。
+ * 批量里绝不自己清 file / 弹成功卡 —— 那些由队列汇总页负责。
+ */
+async function runOne(f) {
+  if (!shouldUseChunked(f.size)) {
+    submitting.value = true
+    try {
+      const formData = new FormData()
+      if (requestInfo.value.require_uploader_name) {
+        formData.append('uploader_name', uploaderName.value.trim())
+      }
+      formData.append('file', f)
+      await submitPublic(token, formData)
+      return null
+    } catch (e) {
+      return describeFileRequestFailure(e)
+    } finally {
+      submitting.value = false
+    }
+  }
+  // 每件之前都 reset: 同一个 uploader 实例串行复用, 上一件的进度/断点态不能带过来
+  uploader.reset()
+  const res = await uploader.upload(
+    f,
+    requestInfo.value.require_uploader_name ? uploaderName.value.trim() : undefined,
+  )
+  if (res.ok) return null
+  return res.error || describeFileRequestFailure(null)
+}
+
 async function onResume() {
   if (!file.value) {
     errorMessage.value = '请先重新选择同一个文件，再点「继续上传」。'
@@ -518,17 +695,31 @@ async function onStartFresh() {
 async function onAbort() {
   // 先记下文件名: abort() 内部要用它算 localStorage 的 key
   const f = file.value
-  await uploader.abort(f)
+  if (f) await uploader.abort(f)
   uploader.reset()
+  if (batchRunning.value && queue.value.length) {
+    // 批量「放弃」= 终止当前件后**立即收尾**, 不等队列循环继续跑下去。
+    // 当前件标 failed, 其余未开始的标 skipped; 汇总页如实列出。
+    for (const it of queue.value) {
+      if (it.status === 'pending') it.status = 'skipped'
+      else if (it.status === 'uploading') it.status = 'failed'
+    }
+    batchRunning.value = false
+    batchDone.value = true
+    file.value = null
+  }
   failure.value = null
   errorMessage.value = ''
 }
 
 function onSubmitAnother() {
   submitted.value = false
+  batchDone.value = false
+  queue.value = []
   uploader.reset()
   failure.value = null
   uploaderName.value = ''
+  if (fileInput.value) fileInput.value.value = ''
 }
 
 async function refreshInfo() {
@@ -537,7 +728,8 @@ async function refreshInfo() {
 
 // 上传期间关页面 = 白传, 拦一道 (浏览器原生确认框, 文案由浏览器定)
 function onBeforeUnload(e) {
-  if (!uploadActive.value) return undefined
+  // 批量里小文件阶段 uploadActive=false (走单请求), 只看它会漏掉"队列还在跑"
+  if (!uploadActive.value && !batchRunning.value) return undefined
   e.preventDefault()
   e.returnValue = ''
   return ''
@@ -671,6 +863,50 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   background: var(--color-primary-bg);
   color: var(--color-primary-dark);
+}
+
+/* 多件队列 (2026-11-10): 名字可换行, 状态徽标不被压扁 */
+.file-queue, .batch-summary {
+  list-style: none;
+  margin: 10px 0 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.file-queue li, .batch-summary li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  font-size: var(--font-size-xs);
+}
+.queue-name, .batch-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-all;
+  color: var(--color-text-primary);
+}
+.queue-size, .queue-badge, .batch-status {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+.file-queue .queue-done .queue-badge, .batch-summary .batch-done .batch-status {
+  color: var(--color-success, #67C23A);
+}
+.file-queue .queue-failed .queue-badge, .batch-summary .batch-failed .batch-status {
+  color: var(--color-danger);
+}
+.batch-error {
+  flex-basis: 100%;
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+}
+.batch-summary code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em;
 }
 .form-hint {
   margin: 10px 0 0 0;
