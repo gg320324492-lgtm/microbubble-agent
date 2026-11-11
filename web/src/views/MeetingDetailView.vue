@@ -250,14 +250,6 @@
                         </button>
                       </article>
                     </div>
-                    <button
-                      v-if="topicCards.length > 6"
-                      class="topic-text-btn"
-                      type="button"
-                      @click="showAllTopics = !showAllTopics"
-                    >
-                      {{ showAllTopics ? '收起要点' : `展开全部 ${topicCards.length} 条要点` }}
-                    </button>
                   </section>
 
                   <section v-if="groupedDecisions.length" class="action-board">
@@ -839,9 +831,7 @@ const topicCards = computed(() => (meeting.value?.key_points || []).map((item, i
     anonymous: !speaker,
   }
 }))
-const visibleTopicCards = computed(() => (
-  showAllTopics.value ? topicCards.value : topicCards.value.slice(0, 6)
-))
+const visibleTopicCards = computed(() => topicCards.value)
 const actionColumns = computed(() => groupedDecisions.value.slice(0, 3).map((group) => ({
   speaker: group.speaker || '未识别发言人',
   count: group.items.length,
