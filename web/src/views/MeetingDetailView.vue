@@ -221,7 +221,12 @@
                         v-for="card in visibleTopicCards"
                         :key="card.index"
                         class="topic-card"
-                        :class="{ 'topic-card-anonymous': card.anonymous }"
+                        :class="{ 'topic-card-anonymous': card.anonymous, 'is-expanded': expandedTopics.has(card.index) }"
+                        role="button"
+                        tabindex="0"
+                        :aria-expanded="expandedTopics.has(card.index)"
+                        @click="toggleTopic(card.index)"
+                        @keydown.enter.prevent="toggleTopic(card.index)"
                       >
                         <div class="topic-card-top">
                           <span
@@ -235,6 +240,14 @@
                         </div>
                         <h5>{{ card.title }}</h5>
                         <p :title="card.text">{{ card.text }}</p>
+                        <button
+                          v-if="card.text.length > 60"
+                          class="topic-expand"
+                          type="button"
+                          @click.stop="toggleTopic(card.index)"
+                        >
+                          {{ expandedTopics.has(card.index) ? '收起全文 ↑' : '展开全文 ↓' }}
+                        </button>
                       </article>
                     </div>
                     <button
@@ -577,6 +590,7 @@ const currentTranscriptIdx = computed(() => {
 const showFullSummary = ref(false)
 const showAllTopics = ref(false)
 const showAllDecisions = ref(false)
+const expandedTopics = ref(new Set())
 
 // 转录记录：优先用 polished，回退到原始 transcript
 // 合并策略：只合并短段（合并后 < 60字）；长段保持独立以保证阅读体验
@@ -842,6 +856,13 @@ const summaryPreview = computed(() => {
   return showFullSummary.value || summary.length <= 140 ? summary : `${summary.slice(0, 140)}…`
 })
 const summaryCanExpand = computed(() => (meeting.value?.summary || '').length > 140)
+
+function toggleTopic(index) {
+  const next = new Set(expandedTopics.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  expandedTopics.value = next
+}
 
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
@@ -1965,6 +1986,11 @@ onUnmounted(() => {
 }
 .topic-card h5 { margin: 0 0 5px; color: var(--color-text-primary, #2d2d2d); font-size: 12.5px; line-height: 1.35; font-weight: 700; }
 .topic-card p { margin: 0; color: var(--color-text-regular, #606266); font-size: 12px; line-height: 1.65; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.topic-card { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.topic-card:hover { border-color: #c7d8d0; box-shadow: 0 3px 12px rgba(44, 110, 99, .06); }
+.topic-card.is-expanded { cursor: default; }
+.topic-card.is-expanded p { display: block; overflow: visible; -webkit-line-clamp: unset; }
+.topic-expand { margin-top: 8px; padding: 0; border: 0; background: transparent; color: #2c6e63; font: inherit; font-size: 10px; cursor: pointer; }
 .topic-section .topic-text-btn { align-self: flex-start; }
 .action-board {
   overflow: hidden;
