@@ -189,129 +189,109 @@
 
               <!-- 展示态 -->
               <template v-else>
-                <div v-if="groupedKeyPoints.length" class="section">
-                  <h4>讨论要点</h4>
+                <div class="topic-board">
+                  <section v-if="meeting.summary" class="topic-brief">
+                    <div class="topic-brief-main">
+                      <div class="topic-eyebrow">THE MEETING IN ONE PARAGRAPH</div>
+                      <p>{{ summaryPreview }}</p>
+                      <button
+                        v-if="summaryCanExpand"
+                        class="topic-text-btn"
+                        type="button"
+                        @click="showFullSummary = !showFullSummary"
+                      >
+                        {{ showFullSummary ? '收起摘要' : '展开完整摘要' }}
+                      </button>
+                    </div>
+                    <div class="topic-facts">
+                      <div><b>{{ topicCards.length }}</b><span>讨论要点</span></div>
+                      <div><b>{{ totalDecisionCount }}</b><span>决议事项</span></div>
+                      <div><b>{{ effectiveParticipants.length }}</b><span>发言人</span></div>
+                      <div><b>{{ formatDuration(effectiveDuration) }}</b><span>时长</span></div>
+                    </div>
+                  </section>
 
-                  <!-- v72 P1: 摘要 + 重点摘要 合并, 主题色 TL;DR 卡显示 meeting.summary 完整段落 -->
-                  <div v-if="meeting.summary" class="tldr-card fade-slide-up">
-                    <div class="tldr-header">
-                      <el-icon class="tldr-icon"><StarFilled /></el-icon>
-                      <span class="tldr-title">会议摘要</span>
+                  <section v-if="topicCards.length" class="topic-section">
+                    <div class="topic-section-head">
+                      <div><span class="topic-eyebrow">TOPICS</span><h4>议题板</h4></div>
+                      <span>按内容归类，不再按发言人重复堆叠</span>
                     </div>
-                    <p class="tldr-summary">{{ meeting.summary }}</p>
-                  </div>
-
-                  <!-- v71 P1: 每张发言人卡片默认展开, 常驻前 8 条, 超过 8 条显示"展开全部"按钮 -->
-                  <div v-for="(group, gi) in groupedKeyPoints" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
-                    <div class="speaker-row">
-                      <template v-if="group.speaker">
-                        <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar" :alt="`${group.speaker}的头像`">{{ group.speaker[0] }}</el-avatar>
-                        <span class="speaker-name">{{ group.speaker }}</span>
-                      </template>
-                      <span v-else class="speaker-name speaker-name--anonymous">未识别发言人</span>
-                      <span class="speaker-count">{{ group.items.length }} 条要点</span>
+                    <div class="topic-grid">
+                      <article
+                        v-for="card in visibleTopicCards"
+                        :key="card.index"
+                        class="topic-card"
+                        :class="{ 'topic-card-anonymous': card.anonymous }"
+                      >
+                        <div class="topic-card-top">
+                          <span
+                            class="topic-avatar"
+                            :class="{ 'has-img': !!getSpeakerAvatar(card.speaker) }"
+                            :style="getSpeakerAvatar(card.speaker) ? { backgroundImage: `url(${getSpeakerAvatar(card.speaker)})` } : {}"
+                            :title="card.speaker"
+                          >{{ card.speaker[0] }}</span>
+                          <span class="topic-who">{{ card.speaker }}</span>
+                          <span class="topic-tag">要点 {{ ('0' + (card.index + 1)).slice(-2) }}</span>
+                        </div>
+                        <h5>{{ card.title }}</h5>
+                        <p :title="card.text">{{ card.text }}</p>
+                      </article>
                     </div>
-                    <ul class="points-list">
-                      <li v-for="(item, ii) in (expandedFullGroups.has(gi) ? group.items : group.items.slice(0, MAX_PER_GROUP_DEFAULT))" :key="ii" class="point-item" @click.stop="editingPoint = (editingPoint === `key_points.${gi}.${ii}` ? null : `key_points.${gi}.${ii}`)">
-                        <span class="point-text">{{ item }}</span>
-                        <el-select
-                          v-if="editingPoint === `key_points.${gi}.${ii}`"
-                          v-model="group._editValues[ii]"
-                          size="small"
-                          class="inline-speaker-select"
-                          filterable
-                          @change="(val) => { renameSinglePoint('key_points', group, ii, val); editingPoint = null }"
-                          @click.stop
-                          @blur="editingPoint = null"
-                        >
-                          <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
-                        </el-select>
-                      </li>
-                      <!-- 超过 8 条 + 未展开全部 → 显示"展开全部"按钮 -->
-                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && !expandedFullGroups.has(gi)" class="more-items">
-                        <el-button text size="small" type="primary" class="more-items-button" @click="expandGroupFull(gi)">
-                          <el-icon><ArrowDown /></el-icon>
-                          展开全部（剩 {{ group.items.length - MAX_PER_GROUP_DEFAULT }} 条）
-                        </el-button>
-                      </li>
-                      <!-- 展开全部后 → 显示"收起"按钮 -->
-                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && expandedFullGroups.has(gi)" class="more-items">
-                        <el-button text size="small" type="primary" class="more-items-button" @click="collapseGroupFull(gi)">
-                          <el-icon><ArrowUp /></el-icon>
-                          收起
-                        </el-button>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-                <div v-if="groupedDecisions.length" class="section">
-                  <h4>决议事项 <span class="agenda-count">共 {{ groupedDecisions.reduce((s, g) => s + g.items.length, 0) }} 项</span></h4>
-                  <div v-for="(group, gi) in groupedDecisions" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
-                    <!-- v71 P1: 决议区统一 8 条常驻 + per-card 展开全部 -->
-                    <div class="speaker-row">
-                      <template v-if="group.speaker">
-                        <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar" :alt="`${group.speaker}的头像`">{{ group.speaker[0] }}</el-avatar>
-                        <span class="speaker-name">{{ group.speaker }}</span>
-                      </template>
-                      <span v-else class="speaker-name speaker-name--anonymous">未识别发言人</span>
-                      <span class="speaker-count">{{ group.items.length }} 条决议</span>
-                    </div>
-                    <ul class="decisions-list">
-                      <li v-for="(item, ii) in (expandedFullDecisions.has(gi) ? group.items : group.items.slice(0, MAX_PER_GROUP_DEFAULT))" :key="ii" class="point-item" @click.stop="editingPoint = (editingPoint === `decisions.${gi}.${ii}` ? null : `decisions.${gi}.${ii}`)">
-                        <span class="point-text">{{ item }}</span>
-                        <el-select
-                          v-if="editingPoint === `decisions.${gi}.${ii}`"
-                          v-model="group._editValues[ii]"
-                          size="small"
-                          class="inline-speaker-select"
-                          filterable
-                          @change="(val) => { renameSinglePoint('decisions', group, ii, val); editingPoint = null }"
-                          @click.stop
-                          @blur="editingPoint = null"
-                        >
-                          <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
-                        </el-select>
-                      </li>
-                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && !expandedFullDecisions.has(gi)" class="more-items">
-                        <el-button text size="small" type="primary" class="more-items-button" @click="expandDecisionFull(gi)">
-                          <el-icon><ArrowDown /></el-icon>
-                          展开全部（剩 {{ group.items.length - MAX_PER_GROUP_DEFAULT }} 条）
-                        </el-button>
-                      </li>
-                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && expandedFullDecisions.has(gi)" class="more-items">
-                        <el-button text size="small" type="primary" class="more-items-button" @click="collapseDecisionFull(gi)">
-                          <el-icon><ArrowUp /></el-icon>
-                          收起
-                        </el-button>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-                <div v-if="meeting.agenda?.length" class="section">
-                  <h4>议程 <span class="agenda-count">共 {{ meeting.agenda.length }} 项</span></h4>
-                  <!-- v71 P1: 议程改 el-timeline + 数字圆点 dot (项目内 ProjectView 模式) -->
-                  <el-timeline class="agenda-timeline">
-                    <el-timeline-item
-                      v-for="(item, idx) in meeting.agenda"
-                      :key="idx"
-                      :timestamp="`议程 ${idx + 1}`"
-                      placement="top"
-                      type="primary"
+                    <button
+                      v-if="topicCards.length > 6"
+                      class="topic-text-btn"
+                      type="button"
+                      @click="showAllTopics = !showAllTopics"
                     >
-                      <template #dot>
-                        <div class="agenda-dot">{{ idx + 1 }}</div>
-                      </template>
-                      <div class="agenda-text">{{ item }}</div>
-                    </el-timeline-item>
-                  </el-timeline>
+                      {{ showAllTopics ? '收起要点' : `展开全部 ${topicCards.length} 条要点` }}
+                    </button>
+                  </section>
+
+                  <section v-if="groupedDecisions.length" class="action-board">
+                    <div class="topic-section-head">
+                      <div><span class="topic-eyebrow">ACTIONS</span><h4>行动板</h4></div>
+                      <span>共 {{ totalDecisionCount }} 项 · 按负责人归档</span>
+                    </div>
+                    <div class="action-columns">
+                      <div v-for="col in actionColumns" :key="col.speaker" class="action-column">
+                        <div class="action-column-head"><span>{{ col.speaker }}</span><em>{{ col.count }}</em></div>
+                        <div v-for="(item, i) in col.items" :key="i" class="action-item">
+                          <b>{{ ('0' + (i + 1)).slice(-2) }}</b><span>{{ item }}</span>
+                        </div>
+                        <div v-if="col.more" class="action-more">还有 {{ col.more }} 项</div>
+                      </div>
+                    </div>
+                    <button class="topic-text-btn" type="button" @click="showAllDecisions = !showAllDecisions">
+                      {{ showAllDecisions ? '收起全部决议' : `查看全部 ${totalDecisionCount} 项决议` }}
+                    </button>
+                    <div v-if="showAllDecisions" class="all-decisions">
+                      <div v-for="(group, gi) in groupedDecisions" :key="gi" class="all-decision-group">
+                        <div class="all-decision-who">{{ group.speaker || '未识别发言人' }}<span>{{ group.items.length }}</span></div>
+                        <ul><li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li></ul>
+                      </div>
+                    </div>
+                  </section>
+
+                  <details v-if="meeting.agenda?.length" class="topic-agenda">
+                    <summary>会议议程（{{ meeting.agenda.length }} 项）</summary>
+                    <el-timeline>
+                      <el-timeline-item v-for="(item, idx) in meeting.agenda" :key="idx" :timestamp="''">
+                        <template #dot><div class="agenda-dot">{{ idx + 1 }}</div></template>
+                        <div class="agenda-text">{{ item }}</div>
+                      </el-timeline-item>
+                    </el-timeline>
+                  </details>
+
+                  <div class="topic-board-foot">
+                    <el-button v-if="!editingMinutes" size="small" class="edit-minutes-btn" @click="enterEditMinutes">
+                      <el-icon><Edit /></el-icon> 编辑纪要
+                    </el-button>
+                  </div>
+                  <el-empty
+                    v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length && !meeting.agenda?.length"
+                    description="暂无会议纪要"
+                  />
                 </div>
-                <el-button v-if="!editingMinutes" size="small" class="edit-minutes-btn" @click="enterEditMinutes">
-                  <el-icon><Edit /></el-icon> 编辑纪要
-                </el-button>
-                <el-empty
-                  v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length && !meeting.agenda?.length"
-                  description="暂无会议纪要"
-                />
               </template>
             </div>
           </div>
@@ -417,26 +397,8 @@
           </div>
       </div>
 
-      <!-- 右侧边栏 -->
-      <div class="detail-side">
-        <!-- 方案B: 会话摘要侧卡 (从纪要 Tab 提升常驻) -->
-        <el-card class="side-card side-abstract">
-          <template #header><span class="side-eyebrow">ABSTRACT · 会话摘要</span></template>
-          <p class="side-abstract-text">{{ meeting.summary || '暂无摘要' }}</p>
-        </el-card>
-
-        <!-- 方案B: 决议侧卡 -->
-        <el-card v-if="groupedDecisions.length" class="side-card side-decisions">
-          <template #header><span class="side-eyebrow">DECISIONS · 决议</span></template>
-          <div v-for="(group, gi) in groupedDecisions" :key="gi" class="side-decision-group">
-            <div class="side-decision-who">{{ group.speaker || '未识别发言人' }}</div>
-            <ul class="side-decision-list">
-              <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
-            </ul>
-          </div>
-        </el-card>
-
-        <!-- 相关会议 -->
+      <!-- 右侧边栏：只保留相关会议；纪要 Tab 使用整幅议题板，不再重复摘要/决议 -->
+      <div v-if="relatedMeetings.length && activeTab !== 'minutes'" class="detail-side">
         <el-card v-if="relatedMeetings.length > 0" class="side-card">
           <template #header><span>相关会议</span></template>
           <div v-for="m in relatedMeetings" :key="m.id" class="related-item">
@@ -454,10 +416,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ArrowDown, ArrowUp, StarFilled, ChatLineRound, PieChart } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ChatLineRound, PieChart } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { parseDbDate } from '@/utils/format'
@@ -612,60 +574,9 @@ const currentTranscriptIdx = computed(() => {
   return idx
 })
 
-const editingPoint = ref(null)  // 当前编辑的要点 ID
-
-// v71 P1: 会议纪要视觉迭代 (CLAUDE.md 用户反馈: v70 P3 默认全折叠看不到内容)
-// 每张发言人卡片默认展开, 常驻上限 8 条, 超过 8 条显示"展开全部"按钮按需展开
-const expandedFullGroups = ref(new Set())  // 哪些 group 展开了"全部" (默认空 Set = 全显示前 8 条)
-const expandedFullDecisions = ref(new Set())  // 决议区独立 Set (与 key_points 状态隔离)
-const MAX_PER_GROUP_DEFAULT = 8  // 每张卡片默认显示前 N 条要点
-
-function expandGroupFull(gi) {
-  expandedFullGroups.value.add(gi)
-  expandedFullGroups.value = new Set(expandedFullGroups.value)
-}
-function collapseGroupFull(gi) {
-  expandedFullGroups.value.delete(gi)
-  expandedFullGroups.value = new Set(expandedFullGroups.value)
-}
-function expandDecisionFull(gi) {
-  expandedFullDecisions.value.add(gi)
-  expandedFullDecisions.value = new Set(expandedFullDecisions.value)
-}
-function collapseDecisionFull(gi) {
-  expandedFullDecisions.value.delete(gi)
-  expandedFullDecisions.value = new Set(expandedFullDecisions.value)
-}
-
-// 单独更改某条要点/决议的发言人（仅影响这一条）
-async function renameSinglePoint(type, group, itemIdx, newSpeaker) {
-  const arr = type === 'key_points' ? meeting.value.key_points : meeting.value.decisions
-  if (!arr) return
-
-  // 在原数组中定位这条
-  let foundIdx = -1
-  for (let i = 0; i < arr.length; i++) {
-    const sp = parseSpeaker(arr[i]) || group.speaker
-    if (removeSpeakerPrefix(arr[i]) === group.items[itemIdx] && sp === group.speaker) {
-      foundIdx = i
-      break
-    }
-  }
-  if (foundIdx < 0) return
-
-  const oldSpeaker = parseSpeaker(arr[foundIdx]) || group.speaker
-  arr[foundIdx] = arr[foundIdx].replace(`【${oldSpeaker}】`, `【${newSpeaker}】`)
-  group._editValues[itemIdx] = newSpeaker
-
-  try {
-    await axios.put(`/api/v1/meetings/${meeting.value.id}`, {
-      [type]: [...arr],
-    })
-    ElMessage.success(`已更新为 ${newSpeaker}`)
-  } catch (e) {
-    ElMessage.error('更新失败: ' + (e.response?.data?.detail || e.message))
-  }
-}
+const showFullSummary = ref(false)
+const showAllTopics = ref(false)
+const showAllDecisions = ref(false)
 
 // 转录记录：优先用 polished，回退到原始 transcript
 // 合并策略：只合并短段（合并后 < 60字）；长段保持独立以保证阅读体验
@@ -848,6 +759,20 @@ function removeSpeakerPrefix(text) {
   return text.replace(/^【.+?】/, '')
 }
 
+function topicLabel(text) {
+  const t = String(text || '')
+  if (/ASV|菌群|微生物|多样性|群落/.test(t)
+      && !/赴现场|现场配合|安装调试/.test(t)) return '微生物群落'
+  if (/赴现场|现场配合|现场检查|现场设备|安装调试|水质检测/.test(t)) return '现场与设备'
+  if (/旋流|纯氧机|实验装置|装置设计/.test(t)) return '装置与实验'
+  if (/文献|综述|界面活性氧/.test(t)) return '文献与机制'
+  if (/通过模拟|分子动力学|扩散|模型假设|模拟分析/.test(t)) return '模型与模拟'
+  if (/实测|文件|计算|数据|对照/.test(t)) return '数据可靠性'
+  if (/机制|自由基/.test(t)) return '机制讨论'
+  if (/论文|第\s*25|换水|主线/.test(t)) return '论文主线'
+  return '讨论要点'
+}
+
 // 合并所有同一发言者的条目（非连续也合并）
 function groupBySpeaker(items) {
   if (!items?.length) return []
@@ -887,8 +812,36 @@ function groupBySpeaker(items) {
 }
 
 // 分组后的讨论要点和决议
-const groupedKeyPoints = computed(() => groupBySpeaker(meeting.value?.key_points))
 const groupedDecisions = computed(() => groupBySpeaker(meeting.value?.decisions))
+
+const topicCards = computed(() => (meeting.value?.key_points || []).map((item, index) => {
+  const speaker = parseSpeaker(item)
+  const text = speaker ? removeSpeakerPrefix(item) : item
+  return {
+    speaker: speaker || '未识别发言人',
+    text,
+    title: topicLabel(text),
+    index,
+    anonymous: !speaker,
+  }
+}))
+const visibleTopicCards = computed(() => (
+  showAllTopics.value ? topicCards.value : topicCards.value.slice(0, 6)
+))
+const actionColumns = computed(() => groupedDecisions.value.slice(0, 3).map((group) => ({
+  speaker: group.speaker || '未识别发言人',
+  count: group.items.length,
+  items: group.items.slice(0, 3),
+  more: Math.max(0, group.items.length - 3),
+})))
+const totalDecisionCount = computed(() => (
+  groupedDecisions.value.reduce((sum, group) => sum + group.items.length, 0)
+))
+const summaryPreview = computed(() => {
+  const summary = meeting.value?.summary || ''
+  return showFullSummary.value || summary.length <= 140 ? summary : `${summary.slice(0, 140)}…`
+})
+const summaryCanExpand = computed(() => (meeting.value?.summary || '').length > 140)
 
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
@@ -1079,9 +1032,14 @@ const statusType = (s) => ({
 }[s] || '')
 
 onMounted(async () => {
+  document.body.classList.add('meeting-topic-board')
   await memberStore.fetchMembers()
   await fetchMeeting()
   await loadRelated()
+})
+
+onUnmounted(() => {
+  document.body.classList.remove('meeting-topic-board')
 })
 </script>
 
@@ -1668,6 +1626,23 @@ onMounted(async () => {
   .hero-player { flex-wrap: wrap; row-gap: 10px; }
   .hp-note { display: none; }
 }
+/* 03 议题板外壳：把旧的“大英雄卡”收成简报式页头 */
+.meeting-detail { background: #f7f3eb; padding: 10px 18px; gap: 12px; }
+.detail-hero {
+  padding: 8px 4px 13px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-border, #e5ded2);
+  border-radius: 0;
+}
+.hero-title { font-size: 31px; line-height: 1.22; white-space: normal; }
+.hero-meta { gap: 14px; margin-bottom: 7px; }
+.meta-item { font-size: 11px; }
+.hero-actions { flex-direction: row; align-self: flex-end; gap: 8px; }
+.hero-player { margin-top: 9px; padding-top: 9px; }
+.hp-note { display: none; }
+.hero-progress { display: none; }
+.detail-main { background: transparent; border: 0; border-radius: 0; }
 </style>
 
 <style>
@@ -1878,6 +1853,157 @@ onMounted(async () => {
   padding: 2px 0; position: relative;
 }
 .side-decision-list li::before { content: '·'; color: var(--coral); font-weight: 700; position: absolute; left: -10px; }
+
+/* ====== 议题板（2026-11-11 会议详情重设计 03） ====== */
+.topic-board { display: flex; flex-direction: column; gap: 18px; }
+.topic-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 13px;
+}
+.topic-brief-main {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 20px 22px 18px;
+  color: #eff8f3;
+  background: linear-gradient(135deg, #2c6e63 0%, #24584e 100%);
+}
+.topic-brief-main::after {
+  content: '';
+  position: absolute;
+  width: 180px; height: 180px;
+  right: -55px; top: -80px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.topic-eyebrow {
+  font-family: Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: .18em;
+  color: var(--color-primary, #ff7a5c);
+}
+.topic-brief-main .topic-eyebrow { color: #d0e8df; margin-bottom: 9px; }
+.topic-brief-main p {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+  margin: 0;
+  font-family: "Noto Serif SC", "Songti SC", serif;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #eff8f3;
+}
+.topic-text-btn {
+  display: inline-block;
+  margin-top: 11px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary, #ff7a5c);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+}
+.topic-brief-main .topic-text-btn { color: #d9eee7; }
+.topic-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #ebeef5);
+  border-radius: 12px;
+  background: var(--color-border, #ebeef5);
+}
+.topic-facts > div { background: var(--color-bg-card, #fff); padding: 15px 16px; }
+.topic-facts b {
+  display: block;
+  color: #2c6e63;
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 650;
+}
+.topic-facts span { display: block; margin-top: 6px; color: var(--color-text-secondary, #909399); font-size: 10px; }
+.topic-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 10px;
+}
+.topic-section-head > div { display: flex; align-items: baseline; gap: 10px; }
+.topic-section-head h4 { margin: 0; color: var(--color-text-primary, #2d2d2d); font-size: 16px; font-weight: 700; }
+.topic-section-head > span { color: var(--color-text-secondary, #909399); font-size: 10px; }
+.topic-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
+.topic-card {
+  position: relative;
+  min-height: 116px;
+  overflow: hidden;
+  border: 1px solid var(--color-border, #ebeef5);
+  border-radius: 11px;
+  background: var(--color-bg-card, #fff);
+  padding: 15px 16px 13px;
+}
+.topic-card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--color-primary, #ff7a5c); }
+.topic-card:nth-child(3n+2)::before { background: #c8893d; }
+.topic-card:nth-child(3n+3)::before { background: #6b88a1; }
+.topic-card-anonymous::before { background: var(--color-text-placeholder, #c0c4cc); }
+.topic-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.topic-avatar { width: 23px; height: 23px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center; background: #dbeae5; color: #2c6e63; font-size: 9px; font-weight: 700; background-size: cover; background-position: center; }
+.topic-avatar.has-img { color: transparent; }
+.topic-who { color: var(--color-text-primary, #2d2d2d); font-size: 11px; font-weight: 700; }
+.topic-tag {
+  margin-left: auto;
+  color: var(--color-text-secondary, #909399);
+  border: 1px solid var(--color-border, #ebeef5);
+  border-radius: 3px;
+  padding: 3px 5px;
+  font-size: 8px;
+}
+.topic-card h5 { margin: 0 0 5px; color: var(--color-text-primary, #2d2d2d); font-size: 12.5px; line-height: 1.35; font-weight: 700; }
+.topic-card p { margin: 0; color: var(--color-text-regular, #606266); font-size: 12px; line-height: 1.65; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.topic-section .topic-text-btn { align-self: flex-start; }
+.action-board {
+  overflow: hidden;
+  border: 1px solid var(--color-border, #ebeef5);
+  border-radius: 12px;
+  background: var(--color-bg-card, #fff);
+  padding: 15px 17px 13px;
+}
+.action-board .topic-section-head { margin: 0 0 11px; }
+.action-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--color-border, #ebeef5); border: 1px solid var(--color-border, #ebeef5); border-radius: 8px; overflow: hidden; }
+.action-column { background: var(--color-bg-card, #fff); padding: 12px 14px 13px; min-width: 0; }
+.action-column-head { display: flex; align-items: baseline; justify-content: space-between; color: #2c6e63; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+.action-column-head em { font-style: normal; color: var(--color-text-secondary, #909399); font-family: Consolas, monospace; font-size: 9px; font-weight: 400; }
+.action-item { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 6px; padding: 7px 0; border-top: 1px solid var(--color-border-light, #f0f0f0); color: var(--color-text-regular, #606266); font-size: 11px; line-height: 1.55; }
+.action-item:first-of-type { border-top: 0; }
+.action-item b { color: var(--color-primary, #ff7a5c); font-family: Consolas, monospace; font-size: 9px; font-weight: 400; padding-top: 1px; }
+.action-more { padding-top: 7px; color: var(--color-text-secondary, #909399); font-size: 9px; }
+.all-decisions { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--color-border, #ebeef5); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 22px; }
+.all-decision-who { display: flex; justify-content: space-between; color: #2c6e63; font-size: 10px; font-weight: 700; margin-bottom: 5px; }
+.all-decision-who span { color: var(--color-text-secondary, #909399); font-family: Consolas, monospace; font-weight: 400; }
+.all-decision-group ul { margin: 0; padding-left: 15px; color: var(--color-text-regular, #606266); }
+.all-decision-group li { margin: 4px 0; font-size: 11px; line-height: 1.55; }
+.topic-agenda { border-top: 1px solid var(--color-border, #ebeef5); padding-top: 10px; color: var(--color-text-regular, #606266); font-size: 11px; }
+.topic-agenda summary { cursor: pointer; color: #2c6e63; font-weight: 600; }
+.topic-board-foot { display: flex; justify-content: flex-end; padding-top: 2px; }
+.topic-board-foot .edit-minutes-btn { margin: 0; }
+@media (max-width: 1050px) {
+  .topic-brief { grid-template-columns: 1fr; }
+  .topic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .action-columns { grid-template-columns: 1fr; }
+  .all-decisions { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .topic-grid { grid-template-columns: 1fr; }
+  .topic-brief-main { padding: 17px; }
+  .topic-brief-main p { font-size: 14px; }
+}
+
+
 </style>
 
 <style>
@@ -1910,4 +2036,73 @@ onMounted(async () => {
 [data-theme="dark"] .hp-track { background: rgba(255, 255, 255, 0.10); }
 [data-theme="dark"] .hp-noaudio { border-color: rgba(255, 255, 255, 0.08); }
 [data-theme="dark"] .transcript-ts.ts-seek { color: var(--raw-7fb3aa); }
+
+/* ====== 03 议题板：页面级全局壳层对齐（只在本页 body class 下生效） ====== */
+body.meeting-topic-board .aside {
+  --dg-chrome: #263d37;
+  --dg-card: #365b50;
+  --dg-ink: #f1e5d8;
+  --dg-fog: #b7cbc2;
+  --dg-steel: #b7cbc2;
+  --dg-teal: #e87355;
+  --dg-teal-soft: #3a5b50;
+  --dg-coral: #e87355;
+  --dg-coral-soft: #4b2c24;
+  --dg-hover: rgba(255, 255, 255, .07);
+  background: var(--dg-chrome);
+}
+body.meeting-topic-board .aside .brand .tile {
+  background: #e87355;
+  border-color: #e87355;
+  color: #fff;
+}
+body.meeting-topic-board .aside .brand-name,
+body.meeting-topic-board .aside .ver { color: #f1e5d8; }
+body.meeting-topic-board .aside .taglabel { color: #9eb5aa; }
+body.meeting-topic-board .aside .mitem { color: #bed0c7; }
+body.meeting-topic-board .aside .mitem.active { background: #365b50; color: #fff; }
+body.meeting-topic-board .aside .mitem.active .s { color: #ffd0c2; }
+body.meeting-topic-board .aside .gsep { background: rgba(255,255,255,.14); }
+body.meeting-topic-board .aside .stamp { border-color: #b7cbc2; }
+body.meeting-topic-board .header {
+  --dg-card: #f7f3eb;
+  --dg-ink: #2b2824;
+  --dg-teal: #2c6e63;
+  --dg-teal-soft: #dbeae5;
+  --dg-coral: #ad4a35;
+  background: #f7f3eb;
+  border-bottom: 1px solid #e5ded2;
+}
+body.meeting-topic-board .main { background: #f7f3eb; }
+
+/* 03 方案没有大块头像和返回条；保留播放器，但收成细条 */
+body.meeting-topic-board .hero-back,
+body.meeting-topic-board .hero-participants { display: none; }
+body.meeting-topic-board .hero-actions { align-self: flex-end; }
+
+/* Tab 从胶囊改成分隔线导航，接近 03 的简洁页头 */
+body.meeting-topic-board .tab-strip {
+  gap: 20px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid #e5ded2;
+  border-radius: 0;
+  background: transparent;
+}
+body.meeting-topic-board .tab-strip__item {
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #817b70;
+}
+body.meeting-topic-board .tab-strip__item.is-active {
+  background: transparent;
+  color: #2c6e63;
+  border-bottom-color: #2c6e63;
+}
+body.meeting-topic-board .tab-strip__no { color: #a8a096; }
+body.meeting-topic-board .tab-strip__item.is-active .tab-strip__no { color: #2c6e63; }
+
 </style>
