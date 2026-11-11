@@ -46,10 +46,15 @@ MIN_CHUNK_SIZE = 256 * 1024
 MAX_CHUNK_SIZE = 32 * 1024 * 1024
 # 2026-11-09: 原硬编码 2 GiB ⇒ settings 驱动（与 drive_service /
 # generic_chunked_upload_service 同源）。
-# ⚠️ 抬上限**不等于**这条通路能传 20GiB：下面的 complete_upload 仍把合并结果
-#    整份读进内存（source.read()），而 app 容器 mem_limit=8g ⇒ 实际天花板仍是内存。
-#    外部收件走 file_request_upload_service，那里用 MinIO 服务端 compose_object 拼接。
+# 2026-11-11: 大文件 (>256MiB) 走 MinIO 服务端 compose_object + 流式回读哈希,
+#    不再把整份合并结果读进 Python 内存 ⇒ settings 的 30 GiB 上限现在**真的可达**。
+#    小片旧会话 (<5MiB/片) 受 S3 UploadPartCopy 下限约束, 仍走内存合并 (文件小, 安全)。
+#    ⚠️ 非末片 ≥5MiB 是 compose_object 内部校验的硬约束。
 MAX_FILE_SIZE = int(_conf_settings.DRIVE_MAX_FILE_SIZE_MB) * 1024 * 1024
+# 大文件自动用 32 MiB 分片: 5 MiB 也能 compose, 但 30 GiB / 5 MiB = 6144 片,
+# 直逼 10000 part 上限且请求数翻倍。≤256 MiB 仍保持原有 5 MiB 片 (兼容旧会话)。
+COMPOSE_CHUNK_THRESHOLD = 256 * 1024 * 1024
+COMPOSE_CHUNK_SIZE = MAX_CHUNK_SIZE  # 32 MiB
 UPLOAD_TTL_HOURS = 24
 CHECKSUM_HEX_LENGTH = 64
 
@@ -122,16 +127,24 @@ async def _put_object_with_retry(
     await _upload()
 
 
-async def _merge_chunks(
-    upload: DriveChunkedUpload,
-    final_object_name: str,
-) -> tuple[int, str, bytes]:
-    """Merge staging chunks through a bounded-memory temporary file.
+COMPOSE_MIN_PART = 5 * 1024 * 1024  # S3 UploadPartCopy 非末片最小尺寸
 
-    MinIO's Python client is synchronous, so downloads and final put run in a worker thread.
+
+def _can_compose(upload: DriveChunkedUpload) -> bool:
+    """非末片 ≥5MiB 才能走 S3 compose_object (硬约束)。
+
+    老会话 / 测试用 256KiB 小片、以及末片更小时不能 compose；这类会话文件
+    本身就小 (256KiB × 片数)，走内存合并是安全的。
     """
+    if upload.total_chunks <= 1:
+        return False  # 单片直接上传即可, 不必 compose
+    last = upload.file_size - (upload.total_chunks - 1) * upload.chunk_size
+    return upload.chunk_size >= COMPOSE_MIN_PART and 0 < last <= upload.chunk_size
 
-    def _sync_merge() -> tuple[int, str]:
+
+async def _merge_chunks_small(upload: DriveChunkedUpload) -> tuple[int, str, bytes]:
+    """小片旧会话的内存合并 (保留原实现, 文件小 ⇒ 不会 OOM)。"""
+    def _sync_merge() -> tuple[int, str, bytes]:
         hasher = hashlib.sha256()
         total_size = 0
         fd, temp_path = tempfile.mkstemp(prefix=f"drive_{upload.upload_id}_", suffix=".part")
@@ -146,9 +159,7 @@ async def _merge_chunks(
                     hasher.update(data)
                     total_size += len(data)
             with open(temp_path, "rb") as source:
-                # The actual upload is retried by the async wrapper below.
-                source_bytes = source.read()
-            return total_size, hasher.hexdigest(), source_bytes
+                return total_size, hasher.hexdigest(), source.read()
         finally:
             try:
                 os.unlink(temp_path)
@@ -156,6 +167,41 @@ async def _merge_chunks(
                 pass
 
     return await asyncio.to_thread(_sync_merge)
+
+
+async def _merge_chunks_compose(
+    upload: DriveChunkedUpload,
+    final_object_name: str,
+) -> tuple[int, str]:
+    """2026-11-11: MinIO **服务端**拼接 + 流式回读算 SHA256。
+
+    旧实现把整份合并结果 `source.read()` 进 Python 内存 (app 容器 mem_limit=8g)
+    ⇒ 12.5GB 压缩包在 complete 阶段必 OOM。现在数据完全不出 MinIO:
+      compose_object (S3 UploadPartCopy) → stat 对账长度 → stream_sha256_async
+      (内存峰值 = 8 MiB 一块)。返回 (总字节数, 实算 sha256 hex)。
+
+    ⚠️ final_object_name 由调用方生成; 校验失败时调用方必须删掉它,
+       本函数只负责"产出真实内容哈希", 不吞掉失败 (类 20.220)。
+    """
+    chunk_keys = [
+        _chunk_object_name(upload.upload_id, i)
+        for i in range(upload.total_chunks)
+    ]
+    merged = await file_service.compose_objects_async(
+        src_object_names=chunk_keys,
+        dst_object_name=final_object_name,
+        content_type=(
+            mimetypes.guess_type(upload.filename)[0] or "application/octet-stream"
+        ),
+    )
+    merged_size = int(merged.get("size") or 0)
+    hashed = await file_service.stream_sha256_async(final_object_name)
+    actual_size = int(hashed.get("size") or 0)
+    if actual_size != merged_size:
+        raise DriveChunkedUploadError(
+            f"回读字节数 {actual_size} 与合成对象 {merged_size} 不一致", 500
+        )
+    return merged_size, str(hashed.get("sha256") or "")
 
 
 class DriveChunkedUploadService:
@@ -199,6 +245,11 @@ class DriveChunkedUploadService:
                 f"chunk_size 必须在 {MIN_CHUNK_SIZE} 到 {MAX_CHUNK_SIZE} 之间",
                 400,
             )
+        # 2026-11-11: 大文件自动升到 32 MiB/片 (服务端 compose 要求非末片 ≥5MiB;
+        # 5 MiB 虽也合规但 30GiB 会切 6000+ 片, 逼近 10000 part 上限)。
+        # 用 min 保证调用方显式传更小的片时不被悄悄改大 (续传会话片大小必须一致)。
+        if file_size > COMPOSE_CHUNK_THRESHOLD and chunk_size < COMPOSE_CHUNK_SIZE:
+            chunk_size = min(COMPOSE_CHUNK_SIZE, MAX_CHUNK_SIZE)
         checksum = _validate_sha256(checksum, "checksum")
 
         if parent_id is not None:
@@ -322,14 +373,31 @@ class DriveChunkedUploadService:
         if visibility not in ("private", "team", "public"):
             raise DriveChunkedUploadError("visibility 非法", 400)
 
-        requested_checksum = _validate_sha256(final_checksum, "final_checksum") or upload.checksum
-        final_object_name = _final_object_name(upload)
-        total_size, actual_checksum, merged_data = await _merge_chunks(upload, final_object_name)
-        await _put_object_with_retry(
-            final_object_name,
-            merged_data,
-            mimetypes.guess_type(upload.filename)[0] or "application/octet-stream",
+        # 2026-11-11: 前端不再算整文件哈希 (12.5GB 会把浏览器 worker 撑爆),
+        # 所以 checksum / final_checksum 允许为 None; 服务端 compose 后**流式实算**
+        # 的哈希才是 file_hash (秒传 dedup 的权威值)。
+        # 显式传了 checksum 时仍做严格比对 (兼容老客户端 / 秒传声明)。
+        requested_checksum = _validate_sha256(final_checksum, "final_checksum") or _validate_sha256(
+            upload.checksum, "checksum"
         )
+        final_object_name = _final_object_name(upload)
+        content_type = mimetypes.guess_type(upload.filename)[0] or "application/octet-stream"
+        if _can_compose(upload):
+            # 大文件: 服务端拼接, 数据不进 Python 内存
+            try:
+                total_size, actual_checksum = await _merge_chunks_compose(upload, final_object_name)
+            except Exception:
+                # compose/流式回读任何一步失败都不能留下半份最终对象
+                try:
+                    await asyncio.to_thread(file_service.delete_file, final_object_name)
+                except Exception as cleanup_exc:
+                    logger.warning("合并失败后清理 %s 失败: %s", final_object_name, cleanup_exc)
+                raise
+        else:
+            # 小片旧会话 (256KiB/片等): compose 的 5MiB 下限不满足 ⇒ 内存合并。
+            # 这类会话总量小, 读整份进内存是安全的 (且需保留 _put_object_with_retry)。
+            total_size, actual_checksum, merged_data = await _merge_chunks_small(upload)
+            await _put_object_with_retry(final_object_name, merged_data, content_type)
         if total_size != upload.file_size:
             await asyncio.to_thread(file_service.delete_file, final_object_name)
             raise DriveChunkedUploadError(

@@ -7,44 +7,9 @@ const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024
 const MAX_CONCURRENT_CHUNKS = 3
 const MAX_CHUNK_RETRIES = 3
 
-let workerInstance = null
-let nextHashId = 1
-const hashWaiters = new Map()
-
-function getHashWorker() {
-  if (workerInstance) return workerInstance
-  workerInstance = new Worker(
-    new URL('../workers/sha256.worker.js', import.meta.url),
-    { type: 'module' }
-  )
-  workerInstance.onmessage = (event) => {
-    const msg = event.data || {}
-    const waiters = hashWaiters.get(msg.id)
-    if (!waiters) return
-    hashWaiters.delete(msg.id)
-    if (msg.type === 'done') waiters.resolve(msg.hash)
-    else waiters.reject(new Error(msg.message || 'hash failed'))
-  }
-  workerInstance.onerror = (err) => {
-    hashWaiters.forEach((w) => w.reject(err))
-    hashWaiters.clear()
-  }
-  return workerInstance
-}
-
-function hashChunk(blob) {
-  if (typeof Worker === 'undefined' && typeof crypto !== 'undefined' && crypto.subtle) {
-    return crypto.subtle.digest('SHA-256', blob).then((buf) =>
-      Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('')
-    )
-  }
-  const id = nextHashId++
-  const worker = getHashWorker()
-  return new Promise((resolve, reject) => {
-    hashWaiters.set(id, { resolve, reject })
-    worker.postMessage({ id, blob })
-  })
-}
+// 2026-11-11: 整文件 SHA256 worker 已移除 (12.5GB 会撑爆浏览器内存)。
+// 片哈希直接在主线程用 crypto.subtle 算, 每片 ≤32MiB; 整文件哈希由服务端
+// compose_object 之后流式实算并回写 knowledge.file_hash。
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -121,6 +86,15 @@ export function useDriveChunkedUpload() {
     const end = Math.min(start + chunkSize.value, file.size)
     const blob = file.slice(start, end)
     const buffer = await blob.arrayBuffer()
+    // 逐片 SHA256 (内存峰值 = 32 MiB, 与整文件哈希无关); 浏览器非安全上下文
+    // 下 crypto.subtle 不可用时降级为不带片校验, 服务端仍会对最终对象流式实算哈希。
+    let chunkSha = null
+    if (globalThis.crypto?.subtle) {
+      try {
+        const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer)
+        chunkSha = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+      } catch { chunkSha = null }
+    }
     let attempt = 0
     let lastError
     while (attempt < MAX_CHUNK_RETRIES) {
@@ -131,6 +105,7 @@ export function useDriveChunkedUpload() {
           {
             headers: Object.assign(
               { 'Content-Type': 'application/octet-stream' },
+              chunkSha ? { 'X-Chunk-SHA256': chunkSha } : {},
               authHeaders()
             ),
             transformRequest: (data) => data,
@@ -153,14 +128,12 @@ export function useDriveChunkedUpload() {
     fileSize.value = file.size
     parentId.value = parent_id
     chunkSize.value = DEFAULT_CHUNK_SIZE
-    status.value = 'hashing'
-    try {
-      checksum.value = await hashChunk(file)
-    } catch (error) {
-      status.value = 'error'
-      errorMessage.value = '计算 SHA256 失败'
-      throw error
-    }
+    // 2026-11-11: **不再算整文件 SHA256** —— 12.5GB 文件在 worker 里
+    // `blob.arrayBuffer()` 一次性读入会撑爆浏览器内存, 报
+    // "The requested file could not be read", 连第一片都发不出去。
+    // 现在: 每片单独算片哈希 (内存峰值 = 一片), 整文件哈希由服务端
+    // compose 后流式实算并回写 knowledge.file_hash (秒传仍可用)。
+    checksum.value = ''
     status.value = 'initializing'
     const initResp = await axios.post(
       '/api/v1/drive/chunked-uploads/init',
@@ -169,7 +142,7 @@ export function useDriveChunkedUpload() {
         file_size: file.size,
         chunk_size: DEFAULT_CHUNK_SIZE,
         parent_id,
-        checksum: checksum.value,
+        checksum: null,
       },
       { headers: authHeaders() }
     )
@@ -191,7 +164,8 @@ export function useDriveChunkedUpload() {
     try {
       await runChunkUploads(file)
       status.value = 'finalizing'
-      await completeWithRetry({ final_checksum: checksum.value, visibility, is_team_shared })
+      // final_checksum 留空: 整文件哈希由服务端 compose 后流式实算
+      await completeWithRetry({ final_checksum: null, visibility, is_team_shared })
       status.value = 'done'
       resumable.removeSession(uploadId.value)
     } catch (error) {
@@ -259,7 +233,7 @@ export function useDriveChunkedUpload() {
     try {
       await runChunkUploads(file)
       status.value = 'finalizing'
-      await completeWithRetry({ final_checksum: checksum.value || null, visibility: session.visibility || 'team' })
+      await completeWithRetry({ final_checksum: null, visibility: session.visibility || 'team' })
       status.value = 'done'
       resumable.removeSession(uploadId.value)
     } catch (error) {

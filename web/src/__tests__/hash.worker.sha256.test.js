@@ -2,10 +2,11 @@
  * hash.worker.sha256.test.js — 秒传 hash 算法一致性守卫 (2026-10-10)
  *
  * 秒传查询侧 (InstantUploadRequest.file_hash → DriveService.hash_lookup) 是**严格
- * 字符串相等**比对。前端有两条 hashing 路径:
- *   - 小文件: useFileHash.js → workers/hash.worker.js
- *   - 分片:   useDriveChunkedUpload.js → workers/sha256.worker.js
- * 二者必须产同一算法 (整文件 SHA-256 hex), 否则同文件跨路径永远 miss。
+ * 字符串相等**比对。2026-11-11 起前端只有一条 hashing 路径:
+ *   - 小文件 (<50MB): useFileHash.js → workers/hash.worker.js
+ *   - 分片 (>=50MB): 浏览器不再算整文件哈希, 服务端 compose 后流式实算并回写
+ *     knowledge.file_hash (否则 12.5GB 会把 worker 撑爆)
+ * 两侧都必须是整文件 SHA-256 hex, 否则同文件跨路径永远 miss。
  *
  * 旧实现: hash.worker.js 用 spark-md5 产 32 字符 MD5, 与分片的 64 字符 SHA256
  * 不同 → 已修复为 SHA-256。本测试锁死该不变量: hash.worker.js 产出的 hash 必须

@@ -57,9 +57,6 @@
     <p v-else-if="state === 'done'" class="drive-chunked-uploader-success" role="status">
       ✓ 上传完成
     </p>
-    <p v-else-if="state === 'hashing'" class="drive-chunked-uploader-info">
-      正在计算 SHA256 …
-    </p>
     <p v-else-if="state === 'initializing'" class="drive-chunked-uploader-info">
       正在初始化上传会话 …
     </p>
