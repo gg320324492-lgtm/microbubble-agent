@@ -2037,44 +2037,6 @@ onUnmounted(() => {
 [data-theme="dark"] .hp-noaudio { border-color: rgba(255, 255, 255, 0.08); }
 [data-theme="dark"] .transcript-ts.ts-seek { color: var(--raw-7fb3aa); }
 
-/* ====== 03 议题板：页面级全局壳层对齐（只在本页 body class 下生效） ====== */
-body.meeting-topic-board .aside {
-  --dg-chrome: #263d37;
-  --dg-card: #365b50;
-  --dg-ink: #f1e5d8;
-  --dg-fog: #b7cbc2;
-  --dg-steel: #b7cbc2;
-  --dg-teal: #e87355;
-  --dg-teal-soft: #3a5b50;
-  --dg-coral: #e87355;
-  --dg-coral-soft: #4b2c24;
-  --dg-hover: rgba(255, 255, 255, .07);
-  background: var(--dg-chrome);
-}
-body.meeting-topic-board .aside .brand .tile {
-  background: #e87355;
-  border-color: #e87355;
-  color: #fff;
-}
-body.meeting-topic-board .aside .brand-name,
-body.meeting-topic-board .aside .ver { color: #f1e5d8; }
-body.meeting-topic-board .aside .taglabel { color: #9eb5aa; }
-body.meeting-topic-board .aside .mitem { color: #bed0c7; }
-body.meeting-topic-board .aside .mitem.active { background: #365b50; color: #fff; }
-body.meeting-topic-board .aside .mitem.active .s { color: #ffd0c2; }
-body.meeting-topic-board .aside .gsep { background: rgba(255,255,255,.14); }
-body.meeting-topic-board .aside .stamp { border-color: #b7cbc2; }
-body.meeting-topic-board .header {
-  --dg-card: #f7f3eb;
-  --dg-ink: #2b2824;
-  --dg-teal: #2c6e63;
-  --dg-teal-soft: #dbeae5;
-  --dg-coral: #ad4a35;
-  background: #f7f3eb;
-  border-bottom: 1px solid #e5ded2;
-}
-body.meeting-topic-board .main { background: #f7f3eb; }
-
 /* 03 方案没有大块头像和返回条；保留播放器，但收成细条 */
 body.meeting-topic-board .hero-back,
 body.meeting-topic-board .hero-participants { display: none; }
