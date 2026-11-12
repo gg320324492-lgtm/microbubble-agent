@@ -2468,33 +2468,24 @@ class DriveService:
     async def check_quota(
         self, user_id: int, additional_bytes: int
     ) -> Tuple[bool, int, int]:
-        """配额检查 (上传前调用)
+        """配额检查 (上传前调用) — 2026-11-12 起**不再拦截**。
 
-        Args:
-            user_id: Member.id
-            additional_bytes: 待上传字节数
+        主指挥拍板「去掉配额显示」: 界面不再展示 10GB 上限/进度条。若后端
+        仍按 members.drive_quota_bytes (默认 10GiB) 拒绝上传, 就会出现
+        "界面说不限、上传却 413" 的状态说谎 (类 20.220)。
 
-        Returns:
-            (allowed, used_after, quota_total)
-            - allowed=True: 可上传 (剩余配额足够)
-            - allowed=False: 配额不足 (返回 used_after=当前值, 调用方返 413)
-
-        简化策略:
-        - 单 user 维度 (不按 file_type 分层)
-        - 不预扣配额 (上传过程中可能失败, 失败不扣)
-        - 上传成功后才 recalc (storage_tasks.recalc_user_storage_task fire-and-forget)
+        保留本方法与返回形状 (其它调用方 / 老代码兼容), 恒 allowed=True;
+        used 仍返回真实占用快照, quota 返回记录值仅供统计/日志, 不参与判定。
+        单文件大小仍由 MAX_DRIVE_FILE_SIZE_BYTES 独立把关。
         """
         user = (await self.db.execute(
             select(Member).where(Member.id == user_id)
         )).scalar_one_or_none()
         if not user:
-            return False, 0, 0
-        # 用户可主动调 storage-stats API 刷新, 这里读快照
-        used = user.drive_used_bytes or 0
-        quota = user.drive_quota_bytes or 10737418240
-        if used + additional_bytes > quota:
-            return False, used, quota
-        return True, used + additional_bytes, quota
+            return False, 0, 0   # 用户不存在仍拒绝 (鉴权语义, 非配额)
+        used = int(user.drive_used_bytes or 0)
+        quota = int(user.drive_quota_bytes or 0)
+        return True, used + int(additional_bytes), quota
 
     async def get_storage_quota(self, user_id: int) -> dict:
         """获取用户配额详情 (含百分比, 用于 UI badge)
@@ -2560,7 +2551,8 @@ class DriveService:
     ) -> ChunkedUploadSession:
         """初始化分片上传 session (POST /files/upload/init)
 
-        配额检查: 配额不足时抛 DriveServiceError 413
+        2026-11-12: 配额闸已下线 (主指挥「去掉配额显示」) ⇒ 本方法不再因
+        drive_quota_bytes 报 413; 单文件大小仍由 MAX_DRIVE_FILE_SIZE_BYTES 把关。
         24h TTL: expires_at = now + 24h
         status='active': 等 chunks 写入
 
@@ -2568,12 +2560,10 @@ class DriveService:
         决定 final 视图归属, init 阶段用户可能还没决定). service 层 complete_chunked_upload
         接 is_team_shared 参数 (Optional, None=默认 personal/false).
         """
-        # 配额检查
-        allowed, _, quota = await self.check_quota(user_id, file_size)
+        # 保留调用 (用户不存在时仍拒绝), 但不再按配额大小拦上传
+        allowed, _, _quota = await self.check_quota(user_id, file_size)
         if not allowed:
-            raise DriveServiceError(
-                f"配额不足: 文件 {file_size} 字节, 配额上限 {quota} 字节", status_code=413
-            )
+            raise DriveServiceError("用户不存在或无权上传", status_code=403)
 
         # 文件大小校验
         if file_size > MAX_DRIVE_FILE_SIZE_BYTES:

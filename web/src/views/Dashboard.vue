@@ -111,7 +111,8 @@
         <div class="kpi-body">
           <div v-if="loadingCards" class="sk tri-skel-line"></div>
           <template v-else>
-            <div class="kpi-big mono">{{ driveUsedGB }}<span class="kpi-unit">/ {{ driveQuotaGB }} GB</span></div>
+            <!-- 2026-11-12 主指挥拍板「去掉配额显示」: 只留真实已用容量, 不再写 / 10GB 上限 -->
+            <div class="kpi-big mono">{{ driveUsedGB }}<span class="kpi-unit"> GB 已用</span></div>
             <div class="kpi-ring">
               <div class="kr"><div class="n">{{ driveWeekNew }}</div><div class="l">本周新增</div></div>
               <div class="kr"><div class="n">{{ drive24h }}</div><div class="l">最近 24h</div></div>
@@ -245,10 +246,6 @@ const fetchDrive = async () => {
 const driveUsedGB = computed(() => {
   const used = driveQuota.value?.used_bytes
   return used ? (used / Math.pow(1024, 3)).toFixed(1) : '—'
-})
-const driveQuotaGB = computed(() => {
-  const quota = driveQuota.value?.quota_bytes
-  return quota ? (quota / Math.pow(1024, 3)).toFixed(0) : '—'
 })
 const driveFileCount = computed(() => driveQuota.value?.file_count ?? '—')
 const driveWeekNew = computed(() =>

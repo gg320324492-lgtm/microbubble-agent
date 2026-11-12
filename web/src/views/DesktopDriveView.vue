@@ -93,9 +93,9 @@
           @share-folder="onShareFolder"
           @drop-files="onMoveDrop"
         />
-        <div class="wb-rail-foot">
-          <StorageQuotaBadge v-if="quotaInfo" :quota-info="quotaInfo" />
-        </div>
+        <!-- 2026-11-12 主指挥拍板「去掉配额显示」: 不再展示 10GB 上限/进度条。
+             真实占用仍由后端 storage-quota 统计, 但界面不再把它画成一根会爆红的线。 -->
+        <div class="wb-rail-foot" />
       </aside>
 
       <!-- 中: 面包屑 + 筛选 chips + 行表/内嵌面板 + 批量 dock -->
@@ -346,7 +346,6 @@ import DriveDetailRail from '@/components/drive/DriveDetailRail.vue'
 import DeleteConfirmDialog from '@/components/drive/DeleteConfirmDialog.vue'  // 批次⑩.73 选型 A 轻确认卡片
 import FolderDeleteConfirmDialog from '@/components/drive/FolderDeleteConfirmDialog.vue'  // 批次⑩.81 选型 A 文件夹删除轻确认
 import { useUserStore } from '@/stores/user'
-import StorageQuotaBadge from '@/components/drive/StorageQuotaBadge.vue'
 import VersionHistoryDialog from '@/components/drive/VersionHistoryDialog.vue'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
 // 2026-07-02: DriveSubSidebar 已删除 (PR7 反转), 此处不再 import
@@ -969,10 +968,8 @@ onMounted(async () => {
   // 2026-09 单一团队工作区: 网盘已合并为课题组单盘, 树/文件统一 team scope
   fetchFolderTree('team')
   fetchDriveFiles({ folder_id: null, view: 'team' })
-  // 批次③: 左栏配额条 (GET /drive/storage-quota, 失败静默不阻塞主数据)
-  axios.get('/api/v1/drive/storage-quota')
-    .then((r) => { quotaInfo.value = r.data })
-    .catch(() => { /* 配额缺失只是少一条进度条 */ })
+  // 2026-11-12: 配额徽章已下线 ⇒ 不再为它发一次 GET /storage-quota,
+  // 避免"界面不显示但还在请求"的静默开销。
   // PR3.5: 等 DOM ready 后绑定主区域为 drop zone
   await nextTick()
   if (driveMainRef.value) {
@@ -1294,7 +1291,6 @@ const currentPathDisplay = computed(() => {
 // 批次③ B 三栏工作台 — 视图状态与接线 (2026-09-05)
 // 全部动作接真实既有 handler/composable, 0 stub。
 // ============================================================
-const quotaInfo = ref(null)
 const tableRef = ref(null)
 // 文件请求面板的"某个请求详情"是页面内一层 (不是路由), 必须进导航历史 ——
 // 否则点全局后退箭头会跳过它直接回主界面 (主指挥 2026-11-10 实测)。
@@ -2247,9 +2243,9 @@ function onContextMenuClose() {
 /* 旧 drive-drop-hero 沿用 (scoped 块里已有定义), 此处仅调层级到三栏之上 */
 .drive-drop-hero { z-index: 20; }
 
-/* ── 批次⑥ 复刻视觉稿: 配额徽章 → qbox 卡 + 批量 dock → 描边小按钮 (仅 workbench 作用域, 其他视图零影响) ── */
+/* ── 批次⑥ 复刻视觉稿: 批量 dock → 描边小按钮 (仅 workbench 作用域, 其他视图零影响) ──
+   2026-11-12: 配额徽章已下线, 对应 CSS 一并删除。 */
 .wb-rail-foot { padding: 0 2px 12px; }
-.wb-rail-foot :deep(.storage-quota-badge) { width: 100%; box-sizing: border-box; }
 
 .wb-dock :deep(.drive-batch-toolbar) {
   padding: 10px 14px; gap: 10px;
