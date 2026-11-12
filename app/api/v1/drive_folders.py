@@ -574,6 +574,12 @@ async def get_folder_tree(
 
         def _attach(nodes: list) -> None:
             for n in nodes:
+                # ⚠️ 2026-11-12 实测修复: 必须**后序** (先递归子节点再算父)。
+                #    原来从上往下算 `size_bytes = 直属 + sum(child.size_bytes)`,
+                #    但此时子节点的 size_bytes 还没赋值 ⇒ 恒取 0 ⇒ 有子文件夹的
+                #    目录 (AutoCAD) 显示 0 B。latest_file_at 的递推同理依赖子节点
+                #    已算好的 _latest_dt。COMSOL/MATLAB 无子目录所以看似正常。
+                _attach(n["children"])
                 owner_name, owner_avatar = owner_map.get(n["owner_id"], (None, None))
                 n["owner_name"] = owner_name
                 n["owner_avatar"] = owner_avatar
@@ -589,7 +595,6 @@ async def get_folder_tree(
                 n["size_bytes"] = direct_size.get(n["id"], 0) + sum(
                     c.get("size_bytes", 0) for c in n["children"]
                 )
-                _attach(n["children"])
 
         _attach(tree)
         # 清理内部键 (jsonable_encoder 不认识 datetime 也无妨, 但保持响应干净)

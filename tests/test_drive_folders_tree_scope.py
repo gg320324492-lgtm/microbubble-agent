@@ -136,3 +136,54 @@ async def test_private_folder_visible_to_all(db, client, test_member, auth_heade
     tree_ids = {f['id'] for f in data['tree']}
     assert priv.id in tree_ids, "单一团队空间: 树无 private/owner 过滤"
 
+
+
+@pytest.mark.asyncio
+async def test_tree_size_bytes_includes_nested_children(db, client, test_member, auth_headers):
+    """2026-11-12: 有子文件夹时父节点 size_bytes 必须递归累加 (AutoCAD 0 B 事故)。
+
+    事故: /folders/tree 的 _attach 从上往下算 `直属 + sum(child.size_bytes)`,
+    但此时子节点尚未赋值 ⇒ 恒为 0。修法改成后序遍历。
+    """
+    from app.models.knowledge import Knowledge
+
+    parent = Folder(name='tree_size_parent', owner_id=test_member.id,
+                    visibility='team', parent_id=None)
+    db.add(parent)
+    await db.commit()
+    await db.refresh(parent)
+    child = Folder(name='tree_size_child', owner_id=test_member.id,
+                   visibility='team', parent_id=parent.id)
+    db.add(child)
+    await db.commit()
+    await db.refresh(child)
+
+    # 父直属 0 字节文件; 子文件夹里放 2 个文件 ⇒ 父必须显示 300, 而不是 0
+    db.add(Knowledge(
+        title='nested.bin', content='[drive upload] nested.bin',
+        file_path='uploads/test/nested.bin', file_name='nested.bin',
+        file_size=300, created_by=test_member.id,
+        storage_mode='drive', visibility='team', folder_id=child.id,
+    ))
+    await db.commit()
+
+    resp = await client.get('/api/v1/folders/tree?scope=all', headers=auth_headers)
+    assert resp.status_code == 200
+
+    def find(nodes, fid):
+        for n in nodes:
+            if n['id'] == fid:
+                return n
+            hit = find(n.get('children') or [], fid)
+            if hit is not None:
+                return hit
+        return None
+
+    tree = resp.json()['tree']
+    p, c = find(tree, parent.id), find(tree, child.id)
+    assert p is not None and c is not None
+    assert c['size_bytes'] == 300, f"子节点应为 300, 实得 {c['size_bytes']}"
+    assert p['size_bytes'] == 300, (
+        f"父节点必须递归累加子文件夹: 期望 300, 实得 {p['size_bytes']} (旧 bug 会给 0)"
+    )
+    assert p['latest_file_at'] is not None, "最新文件时间也要能沿子层级递推到父"
