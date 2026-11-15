@@ -14,6 +14,7 @@ import pytest
 
 from app.api.v1 import drive_files
 from app.api.v1.drive_files import (
+    _decode_archive_name,
     _zip_cache_key,
     _zip_preview_worker,
     get_zip_list,
@@ -116,7 +117,7 @@ async def test_endpoint_cache_hit(db, tmp_path, monkeypatch):
     f = await _mk_file(db, u, "archive.zip")
     root = tmp_path / "zr"
     monkeypatch.setattr(drive_files, "_ZIP_PREVIEW_ROOT", root)
-    d = drive_files._zip_cache_dir(f.id, _zip_cache_key(f.file_path))
+    d = drive_files._zip_cache_dir(f.id, _zip_cache_key("v3:" + f.file_path))
     d.mkdir(parents=True)
     (d / "ready.json").write_text(json.dumps({
         "entries": [{"path": "a.txt", "dir": False, "size": 3}],
@@ -134,7 +135,7 @@ async def test_endpoint_error_file(db, tmp_path, monkeypatch):
     f = await _mk_file(db, u, "bad.zip")
     root = tmp_path / "zr"
     monkeypatch.setattr(drive_files, "_ZIP_PREVIEW_ROOT", root)
-    d = drive_files._zip_cache_dir(f.id, _zip_cache_key(f.file_path))
+    d = drive_files._zip_cache_dir(f.id, _zip_cache_key("v3:" + f.file_path))
     d.mkdir(parents=True)
     (d / "error.txt").write_text("BadZipFile", encoding="utf-8")
     resp = await get_zip_list(file_id=f.id, db=db, current_user=u)
@@ -151,3 +152,77 @@ async def test_cache_key_stable_across_updated_at_rotates_with_file_path(db):
     bumped = await _mk_file(db, u, "a.zip", updated_at=f1.updated_at + timedelta(hours=1))
     assert bumped.file_path == f1.file_path
     assert _zip_cache_key(bumped.file_path) == _zip_cache_key(f1.file_path)
+
+
+def test_decode_archive_name_restores_cp437_gbk_bytes():
+    """zipfile 对无 UTF-8 flag 的条目按 cp437 解码；还原原始字节再按 GB18030 解码。"""
+    info = zipfile.ZipInfo("placeholder")
+    info.filename = "╥╗╝ⁿ░▓╫░-Origin2025b.bat"
+    info.flag_bits = 0
+
+    assert _decode_archive_name(info) == "一键安装-Origin2025b.bat"
+
+
+def test_decode_archive_name_keeps_utf8_flag_names():
+    """UTF-8 flag 已置位的条目保持 Python zipfile 的正确解码结果。"""
+    info = zipfile.ZipInfo("安装说明.md")
+    info.flag_bits = 0x800
+
+    assert _decode_archive_name(info) == "安装说明.md"
+
+
+def test_worker_decodes_cp437_gbk_zip_bytes(tmp_path):
+    """真实 ZIP 中央目录里写入 GBK 字节，worker 应产出中文条目名而不是乱码。"""
+    p = tmp_path / "gbk.zip"
+    gbk_name = "一键安装-Origin2025b.bat"
+    # ASCII 占位名长度必须等于 GBK 名称字节数，字节替换才不会改变 ZIP 的偏移。
+    gbk_bytes = gbk_name.encode("gbk")
+    ascii_name = b"x" * len(gbk_bytes) + b".bat"
+    stored_name = gbk_bytes + b".bat"
+    with zipfile.ZipFile(p, "w") as zf:
+        zf.writestr(ascii_name.decode(), b"echo ok")
+    raw = p.read_bytes()
+    # 本地文件头 + 中央目录各一处；等长替换，CRC / 偏移都不变。
+    assert raw.count(ascii_name) == 2
+    p.write_bytes(raw.replace(ascii_name, stored_name))
+    with zipfile.ZipFile(p) as zf:
+        stored = zf.infolist()[0]
+        assert not (stored.flag_bits & 0x800)
+        assert stored.orig_filename.encode("cp437") == stored_name
+    cache_dir = tmp_path / "cache"
+    _zip_preview_worker(4, str(p), cache_dir, "k")
+    data = json.loads((cache_dir / "ready.json").read_text(encoding="utf-8"))
+    names = {e["path"] for e in data["entries"]}
+    assert gbk_name + ".bat" in names
+    assert not any("╥╗" in n or "░▓" in n for n in names)
+
+
+def test_rar_range_file_reads_only_needed_bytes():
+    """RAR 清单只读主头部，不整包下载；seek/read 均走 Range。"""
+    calls = []
+
+    class FakeResponse:
+        def read(self): return b"X" * 8
+        def close(self): pass
+        def release_conn(self): pass
+
+    class FakeClient:
+        def get_object(self, bucket, object_name, offset=0, length=0):
+            calls.append((offset, length))
+            return FakeResponse()
+
+    class FakeService:
+        bucket = "test"
+        client = FakeClient()
+
+    original = drive_files.file_service
+    drive_files.file_service = FakeService()
+    try:
+        f = drive_files._MinioRangeFile("k.rar", 1024)
+        f.seek(16)
+        assert f.read(8) == b"X" * 8
+        assert f.tell() == 24
+        assert calls == [(16, 8)]
+        assert f.bytes_read == 8
+    finally:
+        drive_files.file_service = original

@@ -18,8 +18,10 @@ Multipart 简化 (PR2.3): 单端点流式接收 + minio 自管分片
                                                  folder_id?, visibility?, storage_mode?}
 """
 import io
+import json
 import logging
 import math
+import zipfile
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -2253,42 +2255,159 @@ def _zip_cache_dir(file_id: int, key: str) -> FsPath:
     return _ZIP_PREVIEW_ROOT / ("%d_%s" % (file_id, key))
 
 
+def _decode_archive_name(info) -> str:
+    """还原压缩包条目名。
+
+    zipfile 对未设置 UTF-8 flag 的条目一律按 cp437 解码；国内打包工具常直接写
+    GBK 字节（截图里的「╥╗╝ⁿ░▓╫░」即由此而来）。先取原始字节再按 GB18030
+    解码，UTF-8 flag / 已是合法 Unicode 的 RAR 条目保持原样。
+    """
+    name = info.filename.replace("\\", "/")
+    # RAR 条目没有 ZipInfo.flag_bits；只有 ZIP 的「未置 UTF-8 flag」条目需要还原字节。
+    if isinstance(info, zipfile.ZipInfo) and not (info.flag_bits & 0x800):
+        try:
+            raw = name.encode("cp437")
+            for enc in ("utf-8", "gb18030"):
+                try:
+                    name = raw.decode(enc).replace("\\", "/")
+                    break
+                except UnicodeDecodeError:
+                    continue
+        except UnicodeEncodeError:
+            pass
+    return name
+
+
+def _archive_entries(path: str) -> list:
+    """只读 ZIP / RAR 中央目录，返回 [{path, dir, size}]，不解压文件内容。"""
+    from app.utils import rarfile
+
+    if path.lower().endswith(".rar"):
+        with rarfile.RarFile(path, charset="gb18030", errors="stop") as rf:
+            return [
+                {
+                    "path": info.filename.replace("\\", "/").rstrip("/"),
+                    "dir": bool(info.is_dir()),
+                    "size": 0 if info.is_dir() else int(info.file_size),
+                }
+                for info in rf.infolist()
+            ]
+    with zipfile.ZipFile(path) as zf:
+        return [
+            {
+                "path": _decode_archive_name(info).rstrip("/"),
+                "dir": info.is_dir(),
+                "size": 0 if info.is_dir() else int(info.file_size),
+            }
+            for info in zf.infolist()
+        ]
+
+
+class _MinioRangeFile(io.RawIOBase):
+    """给 rarfile 用的 seekable 只读视图：每次 seek+read 走 MinIO Range，不整包落盘。
+
+    RAR 主头部在文件开头，对 13.6GB 的 R2025a.rar 实测只需约 800 字节即可拿到全部条目。
+    """
+
+    def __init__(self, object_name: str, size: int):
+        self.object_name = object_name
+        self.size = int(size)
+        self.pos = 0
+        self.bytes_read = 0
+
+    def readable(self) -> bool: return True
+    def seekable(self) -> bool: return True
+    def tell(self) -> int: return self.pos
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        base = {0: 0, 1: self.pos, 2: self.size}[whence]
+        self.pos = max(0, base + offset)
+        return self.pos
+
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            size = max(0, self.size - self.pos)
+        length = min(int(size), max(0, self.size - self.pos))
+        if length <= 0:
+            return b""
+        response = file_service.client.get_object(
+            file_service.bucket, self.object_name, offset=self.pos, length=length,
+        )
+        try:
+            data = response.read()
+        finally:
+            response.close()
+            response.release_conn()
+        self.pos += len(data)
+        self.bytes_read += len(data)
+        return data
+
+
+def _write_archive_payload(file_id: int, cache_dir: FsPath, entries: list) -> None:
+    """把 ZIP/RAR 条目清单归一后原子写入预览缓存。"""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    files, dirs, total_size = [], set(), 0
+    for entry in entries:
+        name = entry["path"]
+        if not name:
+            continue
+        if entry["dir"] or name.endswith("/"):
+            dirs.add(name.rstrip("/"))
+            continue
+        files.append({"path": name, "dir": False, "size": entry["size"]})
+        total_size += entry["size"]
+        parts = name.split("/")[:-1]
+        for i in range(1, len(parts) + 1):
+            dirs.add("/".join(parts[:i]))
+    dir_list = [{"path": d, "dir": True, "size": 0} for d in sorted(dirs)]
+    total = len(dir_list) + len(files)
+    payload = {
+        "entries": sorted(dir_list + files, key=lambda e: e["path"])[:_ZIP_MAX_ENTRIES],
+        "total_files": len(files),
+        "total_dirs": len(dirs),
+        "total_size": total_size,
+        "truncated": total > _ZIP_MAX_ENTRIES,
+    }
+    tmp_json = cache_dir / "ready.json.tmp"
+    tmp_json.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    tmp_json.replace(cache_dir / "ready.json")
+    logger.info("[zip-list] 解析完成 file=%d 文件=%d 文件夹=%d", file_id, len(files), len(dirs))
+
+
+def _rar_preview_worker(file_id: int, object_name: str, cache_dir: FsPath, key: str) -> None:
+    """RAR 只读清单解析；同步执行（只发少量 Range 请求，不阻塞下载大文件）。"""
+    try:
+        from app.utils import rarfile
+        stat = file_service.client.stat_object(file_service.bucket, object_name)
+        with _MinioRangeFile(object_name, int(stat.size or 0)) as stream:
+            with rarfile.RarFile(stream, charset="gb18030", errors="stop") as rf:
+                entries = [
+                    {
+                        "path": info.filename.replace("\\", "/").rstrip("/"),
+                        "dir": bool(info.is_dir()),
+                        "size": 0 if info.is_dir() else int(info.file_size),
+                    }
+                    for info in rf.infolist()
+                ]
+        _write_archive_payload(file_id, cache_dir, entries)
+    except Exception as e:
+        logger.error("[rar-preview] file=%s 解析失败: %s", file_id, e)
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
+        except Exception:
+            pass
+    finally:
+        _ZIP_PREVIEW_LOCKS.pop(key, None)
+
+
 def _zip_preview_worker(file_id: int, src_path: str, cache_dir: FsPath, key: str):
     try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        import zipfile
-        files = []
-        dirs = set()
-        total_size = 0
-        with zipfile.ZipFile(src_path) as zf:
-            for info in zf.infolist():
-                name = info.filename.replace("\\", "/")
-                if not name:
-                    continue
-                if name.endswith("/"):
-                    dirs.add(name.rstrip("/"))
-                    continue
-                files.append({"path": name, "dir": False, "size": int(info.file_size)})
-                total_size += int(info.file_size)
-                parts = name.split("/")[:-1]
-                for i in range(1, len(parts) + 1):
-                    dirs.add("/".join(parts[:i]))
-        dir_list = [{"path": d, "dir": True, "size": 0} for d in sorted(dirs)]
-        total = len(dir_list) + len(files)
-        payload = {
-            "entries": sorted(dir_list + files, key=lambda e: e["path"])[:_ZIP_MAX_ENTRIES],
-            "total_files": len(files),
-            "total_dirs": len(dirs),
-            "total_size": total_size,
-            "truncated": total > _ZIP_MAX_ENTRIES,
-        }
-        tmp_json = cache_dir / "ready.json.tmp"
-        tmp_json.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        tmp_json.replace(cache_dir / "ready.json")
-        logger.info("[zip-list] 解析完成 file=%d 文件=%d 文件夹=%d", file_id, len(files), len(dirs))
+        _write_archive_payload(file_id, cache_dir, _archive_entries(src_path))
     except Exception as e:
         logger.error("[zip-preview] file=%s 解析失败: %s", file_id, e)
         try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
             (cache_dir / "error.txt").write_text(str(e)[:500], encoding="utf-8")
         except Exception:
             pass
@@ -2302,20 +2421,21 @@ async def get_zip_list(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """ZIP 清单速览: 轮询状态端点 (ready 时返回全量条目 JSON, 前端按 path 前缀下钻).
+    """压缩包清单速览: .zip 走本地中央目录、.rar 走 MinIO Range 只读主头部。
 
-    zipfile 只读中央目录, 不解压; .zip 以外返回 400。
+    两者都只返回条目名与大小，不解压、不下载整包；前端按 path 前缀下钻。
     """
     svc = DriveService(db)
     f = await svc.get_file(file_id, current_user_id=current_user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在或无权访问")
-    if not (f.file_name or "").lower().endswith(".zip"):
-        raise HTTPException(status_code=400, detail="仅支持 .zip")
+    if not (f.file_name or "").lower().endswith((".zip", ".rar")):
+        raise HTTPException(status_code=400, detail="仅支持 .zip / .rar")
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
-    key = _zip_cache_key(f.file_path)
+    # v3: 文件名解码规则变化，旧缓存里可能存着 cp437 乱码，必须换目录重算。
+    key = _zip_cache_key("v3:" + str(f.file_path))
     cache_dir = _zip_cache_dir(file_id, key)
 
     if (cache_dir / "ready.json").exists():
@@ -2332,6 +2452,16 @@ async def get_zip_list(
     if not lock.acquire(blocking=False):
         return {"status": "converting"}
     try:
+        ext = (f.file_name or "").rsplit(".", 1)[-1].lower()
+        if ext == "rar":
+            # RAR 只读主头部（实测 13.6GB 文件约 800 字节），绝不整包下载到 /tmp。
+            _rar_preview_worker(file_id, f.file_path, cache_dir, key)
+            ready = cache_dir / "ready.json"
+            if ready.exists():
+                return {"status": "ready", **json.loads(ready.read_text(encoding="utf-8"))}
+            err_file = cache_dir / "error.txt"
+            message = err_file.read_text(encoding="utf-8")[:200] if err_file.exists() else "RAR 清单解析失败"
+            return {"status": "error", "message": message}
         src = FsPath("/tmp") / ("zip_src_%d.zip" % file_id)
         if not src.exists():
             raw = await file_service.download_file(f.file_path)

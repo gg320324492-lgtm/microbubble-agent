@@ -367,7 +367,14 @@ class DriveChunkedUploadService:
         upload = await self._get_owned(upload_id, user_id, active_only=True)
         if upload is None:
             raise DriveChunkedUploadError("上传会话不存在、已完成或无权访问", 404)
-        missing = sorted(set(range(upload.total_chunks)) - set(upload.uploaded_chunks or []))
+        # 2026-11-15 预签名直传路径: 分片不经 app 落盘, uploaded_chunks 不会更新;
+        # 以 MinIO 里实际存在的分片对象为准做对账 (对象存在 = 分片真的传到了)。
+        existing = {
+            int(item["object_name"].rsplit("_", 1)[-1])
+            for item in await file_service.list_objects(_chunk_prefix(upload_id))
+        }
+        recorded = set(upload.uploaded_chunks or [])
+        missing = sorted(set(range(upload.total_chunks)) - recorded - existing)
         if missing:
             raise DriveChunkedUploadError(f"仍缺少 chunks: {missing[:20]}", 409)
         if visibility not in ("private", "team", "public"):
