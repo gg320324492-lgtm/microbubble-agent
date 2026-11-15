@@ -1058,7 +1058,7 @@ function onPageSizeChange(size) {
 
 const detailRailRef = ref(null)
 // 批次⑩.65~68: 有真实预览的类型, 列表双击 → 选中并直接全屏放映
-const FULLSCREEN_PREVIEW_EXTS = /\.(xlsx|zip|csv|pdf|docx|pptx|md|json|txt|log|png|jpe?g|gif|webp|mp4|mov|webm|mp3|m4a|wav|flac|aac|ogg)$/i
+const FULLSCREEN_PREVIEW_EXTS = /\.(xlsx|zip|rar|csv|pdf|docx|pptx|md|json|txt|log|png|jpe?g|gif|webp|mp4|mov|webm|mp3|m4a|wav|flac|aac|ogg)$/i
 function handleFilePreview(file) {
   // 批次⑩.61: 双击/Enter/Space → 右栏选中预览 (旧 FilePreviewDialog 弹窗退役)
   if (file && file.id != null) activeKey.value = file.id
@@ -1524,9 +1524,13 @@ function gotoFolder(folderId) {
   selectedFolderId.value = folderId
 }
 
-// 下载 (与 FileCard 同路: 原生下载 URL)
-function handleFileDownload(file) {
-  window.open(`/api/v1/drive/files/${file.id}/download?disposition=attachment`, '_blank')
+// 下载 (2026-11-15: window.open 不带 Authorization → 401, 改带 token 的 downloadFile)
+async function handleFileDownload(file) {
+  try {
+    await driveFilesStore.downloadFile(file)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '下载失败，请稍后重试')
+  }
 }
 
 // 版本 dialog (右键/右栏「版本与对比」入口; VersionHistoryDialog 含恢复 + 两版 diff)

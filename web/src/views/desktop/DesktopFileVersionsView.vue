@@ -185,7 +185,7 @@ const router = useRouter()
 
 const fileId = computed(() => Number(route.params.id))
 
-const { listVersions, restoreVersion: restoreApi } = useDriveFiles()
+const { listVersions, restoreVersion: restoreApi, downloadFileVersion } = useDriveFiles()
 
 // === 数据 ===
 const versions = ref([])
@@ -232,11 +232,13 @@ async function fetchVersions() {
 }
 
 async function downloadVersion(v) {
-  // 历史版本: 走 file 下载端点 (DriveVersionService 当前实现: 历史版直接返当前版字节,
-  // 完整实现需另起 GET /versions/{vid}/download 端点 — 待 PR9 后续)
-  const url = `/api/v1/drive/versions/versions/${v.id}/download`
-  window.open(url, '_blank')
-  ElMessage.info(`下载 v${v.version_number}: 当前实现仅供查阅 (历史版独立下载端点待后续 PR)`)
+  // 历史版本: 独立下载端点 (2026-11-15 改带认证下载, 原 window.open 会 401)
+  try {
+    await downloadFileVersion(v)
+    ElMessage.info(`下载 v${v.version_number} 成功`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '下载失败，请稍后重试')
+  }
 }
 
 async function restoreVersion(v) {

@@ -422,6 +422,54 @@ export function useDriveFiles() {
   }
 
   /**
+   * 带认证的单文件下载 (2026-11-15 修复 "Not authenticated")。
+   * 旧实现 window.open(downloadUrl) 新标签页不带 Authorization 头 → 401。
+   * 这里走 axios(自动带 token) 拉 blob, 再用 objectURL 触发浏览器保存;
+   * 大文件场景后续可换 presigned URL, 当前保持与批量下载同一套实现。
+   */
+  async function downloadFile(file) {
+    const resp = await axios.get(
+      `/api/v1/drive/files/${file.id}/download?disposition=attachment`,
+      { responseType: 'blob' },
+    )
+    let filename = file.file_name || file.title || `file_${file.id}`
+    const disposition = resp.headers?.['content-disposition'] || resp.headers?.['Content-Disposition']
+    if (disposition) {
+      const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition)
+      if (m && m[1]) filename = decodeURIComponent(m[1])
+    }
+    triggerBlobDownload(resp.data, filename)
+    return true
+  }
+
+  /** 指定历史版本下载 (带认证; /api/v1/drive/versions/versions/{id}/download) */
+  async function downloadFileVersion(version) {
+    const resp = await axios.get(
+      `/api/v1/drive/versions/versions/${version.id}/download`,
+      { responseType: 'blob' },
+    )
+    let filename = version.file_name || `version_${version.id}`
+    const disposition = resp.headers?.['content-disposition'] || resp.headers?.['Content-Disposition']
+    if (disposition) {
+      const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition)
+      if (m && m[1]) filename = decodeURIComponent(m[1])
+    }
+    triggerBlobDownload(resp.data, filename)
+    return true
+  }
+
+  function triggerBlobDownload(data, filename) {
+    const url = URL.createObjectURL(new Blob([data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  /**
    * 批量下载 (v77 留尾清理 2026-07-20; 批次⑩.87i 支持文件夹混合)
    * 复用后端 POST /api/v1/drive/files/batch-download
    * 后端流式生成 ZIP, 无权限文件跳过并写入 _skipped.txt; folder_ids 内容按 <文件夹名>/ 归档
@@ -506,6 +554,8 @@ export function useDriveFiles() {
     listVersions,
     restoreVersion,
     downloadFileUrl,
+    downloadFile,
+    downloadFileVersion,
     batchDownload,
     // 内部
     toggleSelect,

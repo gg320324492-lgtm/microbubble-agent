@@ -148,7 +148,7 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'restored'])
 
 // PR4: 走 composable 共享 listVersions / restoreVersion
-const { listVersions, restoreVersion: restoreApi, downloadFileUrl } = useDriveFiles()
+const { listVersions, restoreVersion: restoreApi, downloadFile } = useDriveFiles()
 
 const versions = ref([])
 const loading = ref(false)
@@ -183,13 +183,17 @@ function rowClassName({ row }) {
   return row.is_current ? 'version-row-current' : ''
 }
 
-function downloadVersion(row) {
+async function downloadVersion(row) {
   // 历史版本直接走当前 file 的 download 端点 — 用户拿到的是当前最新版本字节
   // PR4 完整版应支持按 version_id 取历史 object_name, 当前 PR 阶段先简化:
   // "恢复" 按钮已能还原任意历史版本, "下载" 暂给当前版本
-  const url = downloadFileUrl(props.file)
-  window.open(url, '_blank')
-  ElMessage.info(`下载 v${row.version_number}: 当前文件 (历史版本下载请用"恢复"后下载)`)
+  // 2026-11-15: window.open 缺认证 401, 改带 token 的 downloadFile
+  try {
+    await downloadFile(props.file)
+    ElMessage.info(`下载 v${row.version_number}: 当前文件 (历史版本下载请用"恢复"后下载)`)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '下载失败，请稍后重试')
+  }
 }
 
 async function restoreVersion(row) {

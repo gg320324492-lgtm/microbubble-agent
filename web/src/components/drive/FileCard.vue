@@ -325,6 +325,7 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useDriveFiles } from '@/composables/useDriveFiles'
 import axios from 'axios'
 import {
   Document, Picture, VideoCamera, Headset, Download, View, MoreFilled,
@@ -451,10 +452,16 @@ function visibilityLabel(v) {
   return v
 }
 
-function handleDownload() {
-  // 触发浏览器原生下载 (PR2.6 已实现 /api/v1/drive/files/{id}/download)
-  const url = `/api/v1/drive/files/${props.file.id}/download?disposition=attachment`
-  window.open(url, '_blank')
+async function handleDownload() {
+  // 2026-11-15: window.open 直开下载 URL 不带 Authorization → 401 "Not authenticated"
+  // (Visio/Office 入库后实测踩中)。改走 useDriveFiles.downloadFile: axios 带 token 拉
+  // blob 再触发保存; 失败时提示, 不再弹裸 JSON 错误页。
+  const { downloadFile } = useDriveFiles()
+  try {
+    await downloadFile(props.file)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '下载失败，请稍后重试')
+  }
 }
 
 // === v3.3 (2026-07-24) W68 第 14 批 C-3: 缩略图懒加载 + LQIP ===

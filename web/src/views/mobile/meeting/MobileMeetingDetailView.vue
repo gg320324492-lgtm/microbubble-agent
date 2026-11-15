@@ -345,10 +345,19 @@ async function fetchMeeting() {
   }
 }
 
-function playAudio() {
+async function playAudio() {
   if (!meeting.value?.audio_url) return
   // 2026-08-04 P0: 与桌面端一致走受控 proxy, 避免相对路径在 MinIO 上 404.
-  window.open(`/api/v1/meetings/${meeting.value.id}/audio`, '_blank')
+  // 2026-11-15: 该端点要求登录, window.open 新标签不带 Authorization → 401;
+  // 改为带 token 请求拿 presigned audio_url 再打开, 失败时给出可见提示。
+  try {
+    const resp = await axios.get(`/api/v1/meetings/${meeting.value.id}/audio`)
+    const url = resp.data?.audio_url
+    if (!url) { ElMessage.error('未拿到录音地址'); return }
+    window.open(url, '_blank')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '获取录音失败，请稍后重试')
+  }
 }
 
 function handleStartLive() {
