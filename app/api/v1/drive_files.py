@@ -24,6 +24,7 @@ import logging
 import math
 import os
 import tempfile
+import threading
 import zipfile
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -1333,8 +1334,27 @@ async def download_drive_file(
                 length = end - start + 1
 
                 async def _range_stream():
-                    chunk = await _download_range(f.file_path, start, length)
-                    yield chunk
+                    # 2026-11-15: 不能一次 read(length) —— 浏览器 Range 可能请求
+                    # 整个 2.7GB 文件，会把内存打爆并拖死隧道。按 8MB 分块转发。
+                    def _open_range():
+                        return file_service.client.get_object(
+                            file_service.bucket, f.file_path,
+                            offset=start, length=length,
+                        )
+                    response = await asyncio.to_thread(_open_range)
+                    remaining = length
+                    try:
+                        while remaining > 0:
+                            chunk = await asyncio.to_thread(
+                                response.read, min(8 * 1024 * 1024, remaining),
+                            )
+                            if not chunk:
+                                break
+                            remaining -= len(chunk)
+                            yield chunk
+                    finally:
+                        response.close()
+                        response.release_conn()
 
                 headers = {
                     "Content-Range": f"bytes {start}-{end}/{file_size}",
@@ -1359,8 +1379,20 @@ async def download_drive_file(
     headers["Accept-Ranges"] = "bytes"
 
     async def _full_stream():
-        data = await file_service.download_file(f.file_path)
-        yield data
+        # 2026-11-15: 原来 download_file() 整文件进内存，2.7GB ISO 直接吃满内存。
+        # 改为 MinIO 流式读 + 8MB 分块转发。
+        def _open_full():
+            return file_service.client.get_object(file_service.bucket, f.file_path)
+        response = await asyncio.to_thread(_open_full)
+        try:
+            while True:
+                chunk = await asyncio.to_thread(response.read, 8 * 1024 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            response.close()
+            response.release_conn()
 
     return StreamingResponse(
         _full_stream(),
@@ -1402,6 +1434,10 @@ class BatchDownloadRequest(BaseModel):
     ids: Optional[List[int]] = Field(None, description="文件 id 列表")
     folder_id: Optional[int] = Field(None, description="递归下载整个 folder")
     folder_ids: Optional[List[int]] = Field(None, description="递归下载多个 folder (可与 ids 混用)")
+
+
+# 批量 ZIP 打包串行化: 多个大文件并发打包会打满 MinIO 连接池与 SSH 隧道。
+_BATCH_BUILD_SEM = threading.Semaphore(1)
 
 
 @router.post("/files/batch-download")
@@ -1524,7 +1560,17 @@ async def _perform_batch_download(
     # 2026-11-15: 原实现在内存 BytesIO 里装整个 ZIP (2.7GB ISO 直接 OOM /
     # 长时间无响应)。改为后台线程写临时文件, 每个文件从 MinIO 分块拷贝,
     # 内存峰值 = 一个 8MB 块; 响应阶段只按 1MB 分块读文件。
-    zip_path = await asyncio.to_thread(_build_batch_zip_sync, entries, skipped)
+    # 同时只允许一个批量打包任务: 多个 2.7GB ISO 并发打包会把 MinIO 连接池
+    # (urllib3 pool=10) 和 SSH 隧道一起打满, 导致全站 API 超时。
+    if not _BATCH_BUILD_SEM.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail="已有批量下载正在打包，请稍后再试",
+        )
+    try:
+        zip_path = await asyncio.to_thread(_build_batch_zip_sync, entries, skipped)
+    finally:
+        _BATCH_BUILD_SEM.release()
 
     def _zip_stream():
         try:
@@ -3548,8 +3594,20 @@ async def public_download_by_token(
         headers["Content-Length"] = str(file_size)
 
     async def _full_stream():
-        data = await file_service.download_file(f.file_path)
-        yield data
+        # 2026-11-15: 原来 download_file() 整文件进内存，2.7GB ISO 直接吃满内存。
+        # 改为 MinIO 流式读 + 8MB 分块转发。
+        def _open_full():
+            return file_service.client.get_object(file_service.bucket, f.file_path)
+        response = await asyncio.to_thread(_open_full)
+        try:
+            while True:
+                chunk = await asyncio.to_thread(response.read, 8 * 1024 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            response.close()
+            response.release_conn()
 
     return StreamingResponse(
         _full_stream(),
