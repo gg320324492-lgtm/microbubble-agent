@@ -1591,6 +1591,8 @@ async def _perform_batch_download(
         media_type="application/zip",
         headers={
             "Content-Disposition": build_content_disposition("attachment", zip_filename),
+            # 明确总长度：浏览器/解压器可据此发现传输截断，避免把半包当成功。
+            "Content-Length": str(os.path.getsize(zip_path)),
         },
     )
 
@@ -1630,9 +1632,15 @@ def _build_batch_zip_sync(entries, skipped) -> str:
                         zipfile.ZIP_STORED if suffix in store_exts
                         else zipfile.ZIP_DEFLATED
                     )
+                    # zipfile 的 ZIP64 阈值是 2 GiB（不是 4 GiB）；2.7GB ISO
+                    # 不加 force_zip64 会在 close 时抛 "File size too large"，
+                    # 并把整个 ZIP 写成空中央目录。已知大小就直接声明。
+                    known_size = int(f.file_size or 0)
+                    zinfo.file_size = known_size
+                    force_zip64 = known_size > zipfile.ZIP64_LIMIT
                     response = file_service.client.get_object(file_service.bucket, f.file_path)
                     try:
-                        with zf.open(zinfo, "w") as dest:
+                        with zf.open(zinfo, "w", force_zip64=force_zip64) as dest:
                             while True:
                                 chunk = response.read(8 * 1024 * 1024)
                                 if not chunk:
