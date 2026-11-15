@@ -78,7 +78,7 @@
             {{ formatBytes(file.file_size) }}
           </el-descriptions-item>
           <el-descriptions-item label="上传者">
-            {{ file.created_by || '未知' }}
+            {{ file.owner_name || file.owner_username || '未知' }}
           </el-descriptions-item>
           <el-descriptions-item label="上传时间">
             {{ formatDateTime(file.created_at) }}

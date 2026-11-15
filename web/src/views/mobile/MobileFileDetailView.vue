@@ -92,7 +92,7 @@
           </li>
           <li class="mfd-info-row">
             <span class="mfd-info-label">上传者</span>
-            <span class="mfd-info-value">{{ file.created_by || '未知' }}</span>
+            <span class="mfd-info-value">{{ file.owner_name || file.owner_username || '未知' }}</span>
           </li>
           <li class="mfd-info-row">
             <span class="mfd-info-label">上传时间</span>
