@@ -1565,7 +1565,7 @@ async def _perform_batch_download(
     if not _BATCH_BUILD_SEM.acquire(blocking=False):
         raise HTTPException(
             status_code=429,
-            detail="已有批量下载正在打包，请稍后再试",
+            detail="有其他同学或并行任务正在批量打包，请稍后再试",
         )
     try:
         zip_path = await asyncio.to_thread(_build_batch_zip_sync, entries, skipped)
