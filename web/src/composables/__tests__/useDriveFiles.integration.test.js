@@ -149,11 +149,8 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
       vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     })
 
-    it('server 返 blob + Content-Disposition: 触发 anchor.click + 解码文件名', async () => {
-      mockAxiosPost.mockResolvedValueOnce({
-        data: new Blob(['zip-bytes'], { type: 'application/zip' }),
-        headers: { 'content-disposition': "attachment; filename*=UTF-8''drive_alice_20260720.zip" },
-      })
+    it('先换下载 token，再触发浏览器原生下载', async () => {
+      mockAxiosPost.mockResolvedValueOnce({ data: { token: 'test-token', expires_in: 120 } })
 
       const { useDriveFiles } = await import('@/composables/useDriveFiles')
       const { batchDownload } = useDriveFiles()
@@ -161,14 +158,15 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
       const ret = await batchDownload([1, 2, 3])
 
       expect(ret).toBe(true)
-      // POST URL 正确
-      expect(mockAxiosPost.mock.calls[0][0]).toBe('/api/v1/drive/files/batch-download')
+      expect(mockAxiosPost.mock.calls[0][0]).toBe('/api/v1/drive/files/batch-download-token')
       expect(mockAxiosPost.mock.calls[0][1]).toEqual({ ids: [1, 2, 3] })
-      // responseType 必须 blob (后端流式 ZIP)
-      expect(mockAxiosPost.mock.calls[0][2]).toMatchObject({ responseType: 'blob' })
-      // URL.createObjectURL + revokeObjectURL 配对
-      expect(global.URL.createObjectURL).toHaveBeenCalledTimes(1)
-      expect(global.URL.revokeObjectURL).toHaveBeenCalledTimes(1)
+      // 原生下载: anchor.click 被触发, href 带 dt token 与 ids
+      const anchor = document.querySelector('a[download]') || null
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1)
+      const href = HTMLAnchorElement.prototype.click.mock.instances[0].href
+      expect(href).toContain('/api/v1/drive/batch-download-stream?')
+      expect(href).toContain('dt=test-token')
+      expect(href).toContain('ids=1%2C2%2C3')
     })
 
     it('server 返 500: batchDownload catch 转 Error(detail) (W1 修, 跟其他方法风格统一)', async () => {

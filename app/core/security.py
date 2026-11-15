@@ -58,6 +58,66 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
+DOWNLOAD_TOKEN_EXPIRE_SECONDS = 120
+
+
+def create_download_token(member_id: int, file_id: int,
+                          expires_seconds: int = DOWNLOAD_TOKEN_EXPIRE_SECONDS) -> str:
+    """短时效下载 token (2026-11-15)。
+
+    浏览器原生下载无法携带 Authorization 头；改用短 token 拼在 URL 上，
+    下载端点以它代替登录态。有效期默认 120s，只够发起一次下载请求；
+    请求一旦建立，后续字节流不受 token 过期影响。
+    """
+    payload = {
+        "sub": str(member_id),
+        "type": "download",
+        "file_id": int(file_id),
+        "exp": utcnow() + timedelta(seconds=expires_seconds),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_batch_download_token(member_id: int, ids=None, folder_id=None,
+                                folder_ids=None,
+                                expires_seconds: int = DOWNLOAD_TOKEN_EXPIRE_SECONDS) -> str:
+    """批量 ZIP 下载 token (浏览器原生下载用, 120s)。"""
+    payload = {
+        "sub": str(member_id),
+        "type": "batch_download",
+        "ids": list(ids or []),
+        "folder_id": folder_id,
+        "folder_ids": list(folder_ids or []),
+        "exp": utcnow() + timedelta(seconds=expires_seconds),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_batch_download_token(token: str) -> Optional[dict]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    if payload.get("type") != "batch_download":
+        return None
+    return payload
+
+
+def decode_download_token(token: str) -> Optional[dict]:
+    """校验下载 token；无效/过期/类型不符返回 None（不抛 401）。"""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    if payload.get("type") != "download":
+        return None
+    return payload
+
+
 def create_refresh_token(data: dict) -> str:
     """
     创建刷新令牌

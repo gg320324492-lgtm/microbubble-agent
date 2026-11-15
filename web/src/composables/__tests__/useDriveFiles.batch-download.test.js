@@ -32,11 +32,8 @@ describe('useDriveFiles batchDownload (v77 留尾清理)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    // 模拟后端返回 blob + Content-Disposition
-    mockAxiosPost.mockResolvedValue({
-      data: new Blob(['zip-bytes'], { type: 'application/zip' }),
-      headers: { 'content-disposition': "attachment; filename*=UTF-8''drive_alice_20260720.zip" },
-    })
+    // 2026-11-15: 批量下载先换短 token，再由浏览器原生下载（大 ZIP 不再走 blob）
+    mockAxiosPost.mockResolvedValue({ data: { token: 'test-token', expires_in: 120 } })
     // jsdom 没实现 URL.createObjectURL / revokeObjectURL
     global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
     global.URL.revokeObjectURL = vi.fn()
@@ -52,12 +49,13 @@ describe('useDriveFiles batchDownload (v77 留尾清理)', () => {
 
     expect(ret).toBe(true)
     const callArgs = mockAxiosPost.mock.calls[0]
-    expect(callArgs[0]).toBe('/api/v1/drive/files/batch-download')
+    expect(callArgs[0]).toBe('/api/v1/drive/files/batch-download-token')
     expect(callArgs[1]).toEqual({ ids: [1] })
-    expect(callArgs[2].responseType).toBe('blob')
     expect(clickSpy).toHaveBeenCalledTimes(1)
-    expect(global.URL.createObjectURL).toHaveBeenCalled()
-    expect(global.URL.revokeObjectURL).toHaveBeenCalled()
+    const href = clickSpy.mock.instances[0].href
+    expect(href).toContain('/api/v1/drive/batch-download-stream?')
+    expect(href).toContain('dt=test-token')
+    expect(href).toContain('ids=1')
   })
 
   it('多选: batchDownload([1,2,3]) POST batch-download {ids:[1,2,3]}', async () => {
@@ -68,9 +66,10 @@ describe('useDriveFiles batchDownload (v77 留尾清理)', () => {
 
     expect(ret).toBe(true)
     const callArgs = mockAxiosPost.mock.calls[0]
-    expect(callArgs[0]).toBe('/api/v1/drive/files/batch-download')
+    expect(callArgs[0]).toBe('/api/v1/drive/files/batch-download-token')
     expect(callArgs[1]).toEqual({ ids: [1, 2, 3] })
     expect(clickSpy).toHaveBeenCalledTimes(1)
+    expect(clickSpy.mock.instances[0].href).toContain('ids=1%2C2%2C3')
   })
 
   it('空选择: batchDownload([]) return false, 不发请求 (disable 保护)', async () => {

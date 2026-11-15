@@ -422,12 +422,29 @@ export function useDriveFiles() {
   }
 
   /**
-   * 带认证的单文件下载 (2026-11-15 修复 "Not authenticated")。
-   * 旧实现 window.open(downloadUrl) 新标签页不带 Authorization 头 → 401。
-   * 这里走 axios(自动带 token) 拉 blob, 再用 objectURL 触发浏览器保存;
-   * 大文件场景后续可换 presigned URL, 当前保持与批量下载同一套实现。
+   * 单文件下载 (2026-11-15)。
+   * window.open 直开下载 URL 不带 Authorization → 401；改成 axios blob 又会
+   * 把整个文件读进内存、大文件（如 2.7GB ISO）长时间无反应。正确做法：
+   * 先用登录态换 120s 短 token，再让浏览器原生下载（流式落盘 + 进度条）。
+   * token 拿不到时回退 blob（小文件仍可用）。
    */
   async function downloadFile(file) {
+    let token = null
+    try {
+      const resp = await axios.get(`/api/v1/drive/files/${file.id}/download-token`)
+      token = resp.data?.token || null
+    } catch { token = null }
+
+    if (token) {
+      const a = document.createElement('a')
+      a.href = `/api/v1/drive/files/${file.id}/download?disposition=attachment&dt=${encodeURIComponent(token)}`
+      a.download = file.file_name || file.title || `file_${file.id}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      return true
+    }
+
     const resp = await axios.get(
       `/api/v1/drive/files/${file.id}/download?disposition=attachment`,
       { responseType: 'blob' },
@@ -442,19 +459,19 @@ export function useDriveFiles() {
     return true
   }
 
-  /** 指定历史版本下载 (带认证; /api/v1/drive/versions/versions/{id}/download) */
+  /** 指定历史版本下载：端点返回 presigned URL，直接交给浏览器流式下载 */
   async function downloadFileVersion(version) {
     const resp = await axios.get(
       `/api/v1/drive/versions/versions/${version.id}/download`,
-      { responseType: 'blob' },
     )
-    let filename = version.file_name || `version_${version.id}`
-    const disposition = resp.headers?.['content-disposition'] || resp.headers?.['Content-Disposition']
-    if (disposition) {
-      const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition)
-      if (m && m[1]) filename = decodeURIComponent(m[1])
-    }
-    triggerBlobDownload(resp.data, filename)
+    const url = resp.data?.download_url
+    if (!url) throw new Error('未拿到下载地址')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = resp.data?.file_name || version.file_name || `version_${version.id}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     return true
   }
 
@@ -484,27 +501,37 @@ export function useDriveFiles() {
     if (folderIds?.length) body.folder_ids = folderIds
     if (!body.ids && !body.folder_ids) return false
     try {
+      // 2026-11-15: 大批量（含 GB 级 ISO）不能走 blob —— 浏览器要先收完整个
+      // ZIP 才落盘，长时间无反应且内存爆掉。改为换短 token 交给浏览器原生下载。
+      const tokenResp = await axios.post('/api/v1/drive/files/batch-download-token', body)
+      const token = tokenResp.data?.token
+      if (token) {
+        const qs = new URLSearchParams()
+        qs.set('dt', token)
+        if (body.ids) qs.set('ids', body.ids.join(','))
+        if (body.folder_ids) qs.set('folder_ids', body.folder_ids.join(','))
+        const a = document.createElement('a')
+        a.href = `/api/v1/drive/batch-download-stream?${qs.toString()}`
+        a.download = 'drive_download.zip'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        return true
+      }
+
+      // 回退：token 接口不可用时仍走原 blob 方式
       const resp = await axios.post(
         '/api/v1/drive/files/batch-download',
         body,
         { responseType: 'blob' },
       )
-      // 从 Content-Disposition 解析文件名 (后端给 drive_<user>_<ts>.zip)
       let filename = 'drive_download.zip'
       const disposition = resp.headers?.['content-disposition'] || resp.headers?.['Content-Disposition']
       if (disposition) {
         const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition)
         if (m && m[1]) filename = decodeURIComponent(m[1])
       }
-      const blob = new Blob([resp.data], { type: 'application/zip' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      triggerBlobDownload(resp.data, filename)
       return true
     } catch (e) {
       throw new Error(e.response?.data?.error?.message || e.response?.data?.detail || '批量下载失败')

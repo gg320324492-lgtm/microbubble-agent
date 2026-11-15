@@ -17,10 +17,13 @@ Multipart 简化 (PR2.3): 单端点流式接收 + minio 自管分片
                                           form: {file, filename, content_type, total_size,
                                                  folder_id?, visibility?, storage_mode?}
 """
+import asyncio
 import io
 import json
 import logging
 import math
+import os
+import tempfile
 import zipfile
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -38,7 +41,14 @@ from app.api.v1._drive_error_helper import (
     raise_app_error,
 )
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import (
+    create_batch_download_token,
+    create_download_token,
+    decode_batch_download_token,
+    decode_download_token,
+    get_current_user,
+    get_current_user_optional,
+)
 from app.models.knowledge import Knowledge
 from app.models.folder import Folder
 from app.models.member import Member
@@ -1225,20 +1235,61 @@ def _check_download_visibility(file_knowledge, current_user_id: int) -> None:
     return None
 
 
+@router.get("/files/{file_id}/download-token")
+async def get_download_token(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """签发短时效下载 token (120s)。
+
+    浏览器原生下载/`<a download>` 无法带 Authorization 头；前端先调本端点拿
+    token，再用 `?dt=<token>` 发起下载，从而走浏览器流式下载（有进度、不占内存）。
+    """
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    return {
+        "token": create_download_token(current_user.id, file_id),
+        "expires_in": 120,
+    }
+
+
 @router.get("/files/{file_id}/download")
 async def download_drive_file(
     file_id: int,
     request: Request,
     disposition: str = Query("attachment", pattern="^(attachment|inline)$"),
+    dt: Optional[str] = Query(None, description="短时效下载 token (浏览器原生下载用)"),
     db: AsyncSession = Depends(get_db),
-    current_user: Member = Depends(get_current_user),
+    current_user: Optional[Member] = Depends(get_current_user_optional),
 ):
-    """单文件下载 (支持 Range 断点续传 + 中文文件名 URL 编码)"""
+    """单文件下载 (支持 Range 断点续传 + 中文文件名 URL 编码)
+
+    认证二选一: Authorization Bearer（axios 调用）或 ?dt=<下载 token>
+    （浏览器原生下载，token 由 /download-token 签发，120s 有效）。
+    """
+    user = current_user
+    if user is None:
+        payload = decode_download_token(dt or "")
+        if not payload or int(payload.get("file_id") or -1) != file_id:
+            raise HTTPException(
+                status_code=401, detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user = await db.get(Member, int(payload.get("sub") or 0))
+        if user is None or not user.is_active:
+            raise HTTPException(
+                status_code=401, detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     svc = DriveService(db)
-    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    f = await svc.get_file(file_id, current_user_id=user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在或无权访问")
-    _check_download_visibility(f, current_user.id)
+    _check_download_visibility(f, user.id)
 
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
@@ -1359,7 +1410,70 @@ async def batch_download_drive_files(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """批量 ZIP 下载 (流式生成, 不落盘)
+    """批量 ZIP 下载（axios 调用，响应流式 ZIP）。"""
+    return await _perform_batch_download(payload, current_user, db)
+
+
+@router.post("/files/batch-download-token")
+async def get_batch_download_token(
+    payload: BatchDownloadRequest,
+    current_user: Member = Depends(get_current_user),
+):
+    """签发批量下载短 token（120s），供浏览器原生下载使用。"""
+    if not payload.ids and not payload.folder_id and not payload.folder_ids:
+        raise_app_error(400, ERR_BATCH_PARAM_MISSING, "ids / folder_id / folder_ids 必填其一")
+    return {
+        "token": create_batch_download_token(
+            current_user.id, payload.ids, payload.folder_id, payload.folder_ids,
+        ),
+        "expires_in": 120,
+    }
+
+
+@router.get("/batch-download-stream")
+async def batch_download_stream(
+    ids: Optional[str] = Query(None, description="逗号分隔文件 id"),
+    folder_id: Optional[int] = Query(None),
+    folder_ids: Optional[str] = Query(None, description="逗号分隔文件夹 id"),
+    dt: Optional[str] = Query(None, description="短时效批量下载 token"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[Member] = Depends(get_current_user_optional),
+):
+    """浏览器原生批量下载入口（?dt=token，无需 Authorization 头）。"""
+    user = current_user
+    if user is None:
+        payload_token = decode_batch_download_token(dt or "")
+        if not payload_token:
+            raise HTTPException(
+                status_code=401, detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user = await db.get(Member, int(payload_token.get("sub") or 0))
+        if user is None or not user.is_active:
+            raise HTTPException(
+                status_code=401, detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        payload = BatchDownloadRequest(
+            ids=payload_token.get("ids") or None,
+            folder_id=payload_token.get("folder_id"),
+            folder_ids=payload_token.get("folder_ids") or None,
+        )
+    else:
+        def _ints(raw):
+            return [int(x) for x in raw.split(",") if x.strip()] if raw else None
+        payload = BatchDownloadRequest(
+            ids=_ints(ids), folder_id=folder_id, folder_ids=_ints(folder_ids),
+        )
+    return await _perform_batch_download(payload, user, db)
+
+
+async def _perform_batch_download(
+    payload: BatchDownloadRequest,
+    current_user: Member,
+    db: AsyncSession,
+):
+    """批量 ZIP 下载实现（POST 与 GET token 两条入口共用）。
 
     body: {"ids": [1,2,3]} OR {"folder_id": 4} OR {"ids": [...], "folder_ids": [...]}
     无权限文件跳过, ZIP 根目录生成 _skipped.txt; folder_ids 内容按 <文件夹名>/ 前缀归档
@@ -1407,30 +1521,24 @@ async def batch_download_drive_files(
     timestamp = _dt_now.now().strftime("%Y%m%d_%H%M%S")
     zip_filename = f"drive_{current_user.username}_{timestamp}.zip"
 
-    async def _zip_stream():
-        # BytesIO 缓冲区 zip stream
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            for f, prefix in entries:
-                try:
-                    data = await file_service.download_file(f.file_path)
-                    # ZIP 内路径: [前缀/]file_name (避免重复)
-                    arcname = f"{prefix}{f.file_name or f'file_{f.id}'}"
-                    # 防路径冲突 (同名)
-                    existing = [n for n in zf.namelist() if n == arcname]
-                    if existing:
-                        arcname = f"{f.id}_{arcname}"
-                    zf.writestr(arcname, data)
-                except Exception as e:
-                    logger.warning(f"批量下载跳过 file_id={f.id}: {e}")
-                    continue
-            # skipped list 写 _skipped.txt
-            if skipped:
-                skipped_content = "\n".join(skipped)
-                zf.writestr("_skipped.txt", skipped_content)
-        # yield 一次完整 buffer (PR3 优化: chunked write)
-        buffer.seek(0)
-        yield buffer.read()
+    # 2026-11-15: 原实现在内存 BytesIO 里装整个 ZIP (2.7GB ISO 直接 OOM /
+    # 长时间无响应)。改为后台线程写临时文件, 每个文件从 MinIO 分块拷贝,
+    # 内存峰值 = 一个 8MB 块; 响应阶段只按 1MB 分块读文件。
+    zip_path = await asyncio.to_thread(_build_batch_zip_sync, entries, skipped)
+
+    def _zip_stream():
+        try:
+            with open(zip_path, "rb") as fh:
+                while True:
+                    chunk = fh.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            try:
+                os.unlink(zip_path)
+            except OSError:
+                pass
 
     return StreamingResponse(
         _zip_stream(),
@@ -1439,6 +1547,66 @@ async def batch_download_drive_files(
             "Content-Disposition": build_content_disposition("attachment", zip_filename),
         },
     )
+
+
+def _build_batch_zip_sync(entries, skipped) -> str:
+    """把批量下载内容写进临时 ZIP 文件 (同步, 由 to_thread 调用)。
+
+    逐文件从 MinIO 流式读出并写入 zip, 单文件内存峰值 8MB, 不再整体入内存。
+    返回临时文件路径; 调用方负责在响应结束后删除。
+    """
+    tmp = tempfile.NamedTemporaryFile(
+        prefix="drive_batch_", suffix=".zip", dir="/tmp", delete=False,
+    )
+    tmp_path = tmp.name
+    tmp.close()
+    used = set()
+    # 已压缩格式再 deflate 只烧 CPU、几乎不减小体积（2.7GB ISO 实测 109s，
+    # 其中绝大部分是无效压缩）。这些扩展名改用 ZIP_STORED，直接拷字节。
+    store_exts = {
+        ".iso", ".zip", ".rar", ".7z", ".gz", ".bz2", ".xz",
+        ".mp4", ".mov", ".mkv", ".avi", ".webm",
+        ".jpg", ".jpeg", ".png", ".gif", ".webp",
+        ".mp3", ".m4a", ".wav", ".flac", ".aac", ".ogg",
+        ".pdf", ".docx", ".xlsx", ".pptx",
+    }
+    try:
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+            for f, prefix in entries:
+                try:
+                    arcname = f"{prefix}{f.file_name or f'file_{f.id}'}"
+                    if arcname in used:
+                        arcname = f"{f.id}_{arcname}"
+                    used.add(arcname)
+                    suffix = os.path.splitext(arcname)[1].lower()
+                    zinfo = zipfile.ZipInfo(arcname)
+                    zinfo.compress_type = (
+                        zipfile.ZIP_STORED if suffix in store_exts
+                        else zipfile.ZIP_DEFLATED
+                    )
+                    response = file_service.client.get_object(file_service.bucket, f.file_path)
+                    try:
+                        with zf.open(zinfo, "w") as dest:
+                            while True:
+                                chunk = response.read(8 * 1024 * 1024)
+                                if not chunk:
+                                    break
+                                dest.write(chunk)
+                    finally:
+                        response.close()
+                        response.release_conn()
+                except Exception as e:
+                    logger.warning("批量下载跳过 file_id=%s: %s", f.id, e)
+                    continue
+            if skipped:
+                zf.writestr("_skipped.txt", "\n".join(skipped))
+        return tmp_path
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 async def _collect_folder_files(
