@@ -34,3 +34,14 @@ describe('结构守卫: 大文件不整文件哈希', () => {
     expect(SOURCE).toContain("'X-Chunk-SHA256': chunkSha")
   })
 })
+
+describe('结构守卫: 分片预签名直传 (2026-11-15 减少云端中转)', () => {
+  it('先向后端要预签名 URL, 再直传 MinIO', () => {
+    expect(SOURCE).toContain("/chunks/presign")
+    expect(SOURCE).toContain("directUrl")
+  })
+
+  it('保留原 app PUT 端点作为回退', () => {
+    expect(SOURCE).toContain("'/api/v1/drive/chunked-uploads/' + uploadId.value + '/chunks/' + index")
+  })
+})

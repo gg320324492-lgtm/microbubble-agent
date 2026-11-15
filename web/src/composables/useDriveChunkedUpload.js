@@ -99,18 +99,37 @@ export function useDriveChunkedUpload() {
     let lastError
     while (attempt < MAX_CHUNK_RETRIES) {
       try {
-        await axios.put(
-          '/api/v1/drive/chunked-uploads/' + uploadId.value + '/chunks/' + index,
-          buffer,
-          {
-            headers: Object.assign(
-              { 'Content-Type': 'application/octet-stream' },
-              chunkSha ? { 'X-Chunk-SHA256': chunkSha } : {},
-              authHeaders()
-            ),
+        // 2026-11-15 减少云端中转: 优先向后端要 MinIO 预签名 URL 直传
+        // (云端 frps:19000 → 本机 frpc → MinIO), 字节流不再经 app 中转。
+        // 预签名失败/不可用时自动回退到原 app PUT 端点, 行为与老版一致。
+        let directUrl = null
+        try {
+          const presign = await axios.post(
+            '/api/v1/drive/chunked-uploads/' + uploadId.value + '/chunks/presign',
+            { chunk_indexes: [index] },
+            { headers: authHeaders() }
+          )
+          directUrl = presign.data?.urls?.[String(index)] || null
+        } catch { directUrl = null }
+        if (directUrl) {
+          await axios.put(directUrl, buffer, {
+            headers: { 'Content-Type': 'application/octet-stream' },
             transformRequest: (data) => data,
-          }
-        )
+          })
+        } else {
+          await axios.put(
+            '/api/v1/drive/chunked-uploads/' + uploadId.value + '/chunks/' + index,
+            buffer,
+            {
+              headers: Object.assign(
+                { 'Content-Type': 'application/octet-stream' },
+                chunkSha ? { 'X-Chunk-SHA256': chunkSha } : {},
+                authHeaders()
+              ),
+              transformRequest: (data) => data,
+            }
+          )
+        }
         return
       } catch (error) {
         lastError = error

@@ -66,6 +66,8 @@
   --color-file-image-rgb: 156, 39, 176;
   --color-file-default: #909399; /* 默认 (其他类型) */
   --color-file-default-rgb: 144, 147, 153;
+  --color-file-archive: #8B6B3D;  /* 棕 — 压缩包(zip/rar) 2026-11-15 */
+  --color-file-archive-rgb: 139, 107, 61;
   --color-bg-warm: #FFF8F5;
 
   /* W101 P3-A11Y: 统一 focus-visible token (WCAG 2.4.7 焦点可见)
@@ -820,6 +822,7 @@ body {
   --color-file-excel: #198754;
   --color-file-image: #9C27B0;
   --color-file-default: #909399;
+  --color-file-archive: #8B6B3D;
   --color-bg-hover: #3a3d45;
   --color-border: #3a3d45; /* v69: 新增 — 与 --color-border-base 同步 (light 是 #EBEEF5) */
   --color-border-base: #3a3d45;

@@ -714,6 +714,7 @@ const TYPE_COLOR = {
   gif: 'var(--color-file-image)', tiff: 'var(--color-file-image)',
   mp4: 'var(--color-danger)', mov: 'var(--color-danger)',
   m4a: 'var(--color-accent)', mp3: 'var(--color-accent)', wav: 'var(--color-accent)',
+  zip: 'var(--color-file-archive)', rar: 'var(--color-file-archive)',
 }
 /** 最近条目按扩展名着色 (与 typeColor 同源映射, 纯函数供模板使用) */
 function extOfName(f) {
@@ -736,7 +737,7 @@ watch(() => [props.file?.id, props.file?.thumbnail_status], async () => {
   coverUrl.value = null
   const f = props.file
   if (!f) return
-  if (['doc', 'docx', 'pdf', 'xlsx', 'zip', 'csv'].includes(extOf.value)) return  // 批次⑩.62 分页/⑩.65 excel/⑩.66 zip/⑩.67 csv 预览分支接管
+  if (['doc', 'docx', 'pdf', 'xlsx', 'zip', 'rar', 'csv'].includes(extOf.value)) return  // 批次⑩.62 分页/⑩.65 excel/⑩.66 压缩包/⑩.67 csv 预览分支接管
   if (f.thumbnail_status === 'ready') {
     try {
       const resp = await axios.get(`/api/v1/drive/files/${f.id}/thumbnail`)
@@ -757,7 +758,7 @@ const previewKind = computed(() => {
   if (['md', 'txt', 'json', 'log'].includes(e)) return 'text'
   if (['doc', 'docx'].includes(e)) return 'docx'   // 批次⑩.53: LibreOffice 管线预览
   if (e === 'xlsx') return 'excel'   // 批次⑩.65 (选型 D): openpyxl JSON 速览 (xls 留 office 占位)
-  if (e === 'zip') return 'zip'      // 批次⑩.66 (选型 A): zip-list 清单下钻
+  if (['zip', 'rar'].includes(e)) return 'zip' // 批次⑩.66: 压缩包清单下钻 (2026-11-13 补 RAR)
   if (['ppt', 'xls'].includes(e)) return 'office'
   return 'none'
 })
