@@ -128,6 +128,12 @@
           <span class="wb-total">{{ isSearching ? ('匹配 ' + total + ' 项') : ('共 ' + total + ' 项') }}</span>
           <button
             type="button" class="wb-density"
+            :title="viewMode === 'grid' ? '切换为表格视图' : '切换为大图标视图'"
+            @click="toggleViewMode"
+          >{{ viewMode === 'grid' ? '☰ 列表' : '▦ 大图标' }}</button>
+          <button
+            v-if="viewMode !== 'grid'"
+            type="button" class="wb-density"
             :title="density === 'comfortable' ? '行密度: 舒适 (点击切紧凑)' : '行密度: 紧凑 (点击切舒适)'"
             @click="toggleDensity"
           >{{ density === 'comfortable' ? '☰ 舒适' : '≡ 紧凑' }}</button>
@@ -197,6 +203,7 @@
             :sort-order="sortOrder"
             :show-path="isSearching"
             :density="density"
+            :view-mode="viewMode"
             :total="total"
             :current-page="currentPage"
             :page-size="pageSize"
@@ -452,6 +459,14 @@ watch(density, (v) => {
   try { localStorage.setItem(DENSITY_KEY, v) } catch { /* 隐身模式等存储失败静默 */ }
 })
 function toggleDensity() { density.value = density.value === 'comfortable' ? 'compact' : 'comfortable' }
+
+// 2026-11-16: 表格 / 大图标 双视图（类桌面图标），偏好持久化
+const VIEW_MODE_KEY = 'drive-view-mode'
+const viewMode = ref(localStorage.getItem(VIEW_MODE_KEY) === 'grid' ? 'grid' : 'table')
+watch(viewMode, (v) => {
+  try { localStorage.setItem(VIEW_MODE_KEY, v) } catch { /* 忽略存储失败 */ }
+})
+function toggleViewMode() { viewMode.value = viewMode.value === 'grid' ? 'table' : 'grid' }
 
 // === 2026-08-30: 团队共享盘子文件夹 (大图标卡片) ===
 // 当前层的子文件夹: team 顶层 = is_team_default 根 (组会PPT); 进入子层 = 该节点 children

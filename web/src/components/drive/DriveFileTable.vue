@@ -29,7 +29,7 @@
          且不可聚焦的中间层**, 所以 VirtualList 容器/状态容器不需要 rowgroup。 -->
     <div class="dft-grid" role="grid" :aria-rowcount="rows.length">
       <!-- 列头 -->
-      <div ref="dftHeadRef" class="dft-head" role="row">
+      <div v-if="viewMode !== 'grid'" ref="dftHeadRef" class="dft-head" role="row">
         <!-- 2026-10-03 a11y: role="row" 的**直接子元素必须**是 cell/gridcell/columnheader
              (WCAG 4.1.2 / ARIA required-owned-elements), 裸 <span>/<input> 会触发
              axe aria-required-children [critical]. 原来只有 3 个可排序列写了
@@ -87,6 +87,56 @@
         <div v-else-if="!rows.length" class="dft-states dft-states--empty">
           <p class="dft-empty-ico">🗂</p>
           <p>{{ showPath ? `没有找到相关文件 — 换个更短的关键词试试` : '这个位置还没有文件 — 拖进来或点右上「上传文件」' }}</p>
+        </div>
+        <!-- 2026-11-16: 大图标视图（类桌面图标），与表格视图共用 rows / 事件 / 选中态 -->
+        <div v-else-if="viewMode === 'grid'" class="dft-tiles" role="rowgroup">
+          <div
+            v-for="(item, index) in rows"
+            :key="item.key"
+            class="dft-tile"
+            :class="{
+              'is-active': item.key === activeKey,
+              'is-sel': item.kind === 'file' ? selectedIdSet.has(item.data.id) : selectedFolderSet.has(item.data.id),
+              'is-folder': item.kind === 'folder',
+              'is-drop-into': dropFolderKey === item.key,
+              'is-drag-src': draggingIds && draggingIds.includes(item.data?.id),
+            }"
+            :data-row-key="item.key"
+            role="row"
+            :aria-selected="item.kind === 'file' ? selectedIdSet.has(item.data.id) : selectedFolderSet.has(item.data.id)"
+            :draggable="true"
+            @click="onRowClick(item, index, $event)"
+            @dblclick="onRowDblclick(item)"
+            @contextmenu.prevent="$emit('row-contextmenu', item, $event)"
+            @dragstart="onRowDragstart(item, $event)"
+            @dragend="onRowDragend"
+            @dragover="onRowFolderDragover(item, $event)"
+            @dragleave="onRowDragleave(item)"
+            @drop="onRowFolderDrop(item, $event)"
+          >
+            <span class="dft-tile-check" role="gridcell" @click.stop>
+              <input
+                v-if="item.kind === 'file'"
+                type="checkbox"
+                :checked="selectedIdSet.has(item.data.id)"
+                :aria-label="'选择 ' + item.label"
+                @change="$emit('select-toggle', item.data.id)"
+              />
+              <input
+                v-else
+                type="checkbox"
+                :checked="selectedFolderSet.has(item.data.id)"
+                :aria-label="'选择文件夹 ' + item.label"
+                @change="$emit('select-toggle-folder', item.data.id)"
+              />
+            </span>
+            <span class="dft-tile-ico" role="gridcell" :style="item.kind === 'folder' ? {} : { color: item.color }" aria-hidden="true">
+              <template v-if="item.kind === 'folder'">📁</template>
+              <template v-else>{{ item.abbr.slice(0, 4) }}</template>
+            </span>
+            <span class="dft-tile-name" role="gridcell" :title="item.label">{{ item.label }}</span>
+            <span class="dft-tile-meta" role="gridcell">{{ item.kind === 'folder' ? '文件夹' : fmtSize(item.data.file_size) }}</span>
+          </div>
         </div>
         <VirtualList
           v-else
@@ -224,6 +274,8 @@ const props = defineProps({
   /** 搜索态: 名称列内联"所属文件夹" */
   showPath: Boolean,
   density: { type: String, default: 'comfortable' }, // comfortable | compact
+  /** 2026-11-16: table=密集表格 | grid=大图标 */
+  viewMode: { type: String, default: 'table' },
   total: { type: Number, default: 0 },
   currentPage: { type: Number, default: 1 },
   pageSize: { type: Number, default: 20 },
@@ -622,4 +674,62 @@ defineExpose({ focus: () => nextTick(() => document.querySelector('.dft')?.focus
 }
 .dft-foot-stat { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 .dft-foot-sp { flex: 1; }
+
+/* 2026-11-16: 大图标视图 — 类桌面图标，按文件类型色块 + 名称/大小 */
+.dft-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  padding: 14px;
+  height: 100%;
+  overflow-y: auto;
+  align-content: start;
+}
+.dft-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 6px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  cursor: default;
+  user-select: none;
+}
+.dft-tile:hover { background: var(--color-bg-hover); }
+.dft-tile.is-active { border-color: var(--color-primary-border); background: var(--color-primary-bg); }
+.dft-tile.is-sel { border-color: var(--color-primary); background: var(--color-primary-bg); }
+.dft-tile.is-drop-into { outline: 2px dashed var(--color-primary); outline-offset: -3px; }
+.dft-tile.is-drag-src { opacity: .45; }
+.dft-tile-check { position: absolute; top: 5px; left: 5px; opacity: 0; transition: opacity .15s; }
+.dft-tile:hover .dft-tile-check, .dft-tile.is-sel .dft-tile-check { opacity: 1; }
+.dft-tile-ico {
+  width: 62px;
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: .3px;
+  color: var(--color-primary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light, var(--color-border));
+}
+.dft-tile.is-folder .dft-tile-ico { font-size: 30px; background: var(--color-primary-bg); }
+.dft-tile-name {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  line-height: 1.3;
+  text-align: center;
+  color: var(--color-text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
+.dft-tile-meta { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 </style>
