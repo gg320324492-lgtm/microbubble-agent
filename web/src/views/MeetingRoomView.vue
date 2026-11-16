@@ -101,7 +101,7 @@ import axios from 'axios'
 import AudioRecorder from '@/components/AudioRecorder.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
-import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
+import { useGlobalRecorder, getCurrentSessionId } from '@/composables/useGlobalRecorder'
 import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
 import { ensureHeartbeat, stopHeartbeatForMeeting } from '@/composables/useRecordingHeartbeat'
 
@@ -170,7 +170,7 @@ async function onAudioReady(blob) {
   } catch (err) {
     ElMessage.error('上传失败: ' + describeUploadError(err))
     showProgress.value = false
-    // finalize 已经自动停了一次，这里兜底旧的 sessionId/phase 残留
+    // finalize + stop-recording 失败后也必须停心跳，避免孤儿心跳一直发
     stopHeartbeatForMeeting(meetingId.value)
   }
 }
@@ -281,7 +281,8 @@ onMounted(async () => {
         await startGlobalRecorder()
         // 2026-10-08 P0-1 (会议 255 事故): 恢复路径必须显式 ensureHeartbeat
         // —— 恢复路径不经过 AudioRecorder.handleStart, 心跳守卫需主动启
-        ensureHeartbeat(id)
+        // 2026-11-16: start() 已建立 sessionId，心跳必须带上它，否则后端无法关联会话。
+        ensureHeartbeat(id, { sessionId: getCurrentSessionId(), phase: 'recording' })
         console.warn('[MeetingRoomView] 自动启动 MediaRecorder 成功, meetingId =', id)
       } catch (err) {
         console.warn('[MeetingRoomView] 自动启动 MediaRecorder 失败 (可能麦克风权限), 用户需手动点开始:', err.message)

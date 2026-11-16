@@ -40,6 +40,18 @@ def test_integrity_raises_at_half_threshold():
     svc.assert_merged_integrity(501, 1000)
 
 
+@pytest.mark.parametrize("size", [0, "0", " 0 ", 0.0])
+def test_validate_chunk_indices_rejects_zero_size_in_all_shapes(size):
+    """MinIO 返回 int、JSON/DB 可能返回字符串 '0' —— 都必须拒绝。"""
+    ok, details = ChunkedUploadService.validate_chunk_indices([
+        {"object_name": "recordings/1/chunks/chunk_00000.webm", "chunk_index": 0, "size": size},
+        {"object_name": "recordings/1/chunks/chunk_00001.webm", "chunk_index": 1, "size": 100},
+    ])
+    assert ok is False
+    assert details["error"] == "zero_size"
+    assert len(details["zero_size"]) == 1
+
+
 def test_merge_chunks_raw_refuses_missing_index_before_any_io():
     """缺片时必须 fail-loud: 不下载、不拼接、不上传任何产物。"""
     service = ChunkedUploadService()

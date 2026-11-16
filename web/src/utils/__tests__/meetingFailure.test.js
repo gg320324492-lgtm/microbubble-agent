@@ -12,11 +12,17 @@
  * ④ 未知错误 → pipeline_failed
  * ⑤ 规则顺序: no_audio 的判据里含 last_chunk_index=-1, 不得被 interrupted 规则抢先
  * ⑥ 有音频(error + audio_url) ⇒ recoverable, 动作=重新处理
- * ⑦ 有分片(last_chunk_index=0) ⇒ recoverable
+ * ⑦ 有分片(last_chunk_index=0) ⇒ hasRecoverableAudio=true（但无 audio_url ⇒ 动作仍是重新上传）
  * ⑧ last_chunk_index=null ⇒ 不可补救(与后端 `is not None` 守卫一致; Number(null)===0 的坑)
  * ⑨ error_reason 缺失 ⇒ unknown, 但仍给出可读标题
  * ⑩ null meeting 不抛异常
  * ⑪ shouldShowFailure 认 error/failed, 不认 completed
+ *
+ * 2026-11-17 矩阵收紧:
+ * - chooseFailureAction 只看 media_duration_seconds（不再 fallback audio_duration）
+ * - 无 audio_url（chunks-only）必须 REUPLOAD
+ * - duration<=0 / <30s 一律 REUPLOAD
+ * - recoverable 字段严格等于 action===REPROCESS
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -68,6 +74,7 @@ describe('describeMeetingFailure 失败态可读化', () => {
       error_reason: 'merge failed: ffmpeg exited 1',
       audio_url: 'recordings/259/merged.m4a',
       last_chunk_index: 2,
+      media_duration_seconds: 120,
     })
     expect(info.code).toBe(FAILURE_CODE.MERGE_FAILED)
     expect(info.recoverable).toBe(true)
@@ -120,7 +127,7 @@ describe('hasRecoverableAudio 与后端 reprocess 守卫对齐', () => {
   })
 })
 
-describe('失败补救动作矩阵 (2026-11-16)', () => {
+describe('失败补救动作矩阵 (2026-11-16 建立, 2026-11-17 收紧)', () => {
   it('error + 无 audio_url/分片 ⇒ reupload', () => {
     const info = describeMeetingFailure({
       status: 'error',
@@ -133,7 +140,23 @@ describe('失败补救动作矩阵 (2026-11-16)', () => {
     expect(info.hint).toContain('听会')
   })
 
-  it('error + audio_url + media_duration<30s ⇒ reupload', () => {
+  it('【新】chunks-only（last_chunk_index>=0 但无 audio_url）⇒ 必须 reupload，recoverable=false', () => {
+    const meeting = {
+      status: 'error',
+      error_reason: 'merge failed',
+      audio_url: null,
+      last_chunk_index: 5,
+      media_duration_seconds: 3600,
+    }
+    // hasRecoverableAudio 仍按后端"有分片"语义返回 true；但动作/recoverable 收紧
+    expect(hasRecoverableAudio(meeting)).toBe(true)
+    expect(chooseFailureAction(meeting)).toBe(FAILURE_ACTION.REUPLOAD)
+    const info = describeMeetingFailure(meeting)
+    expect(info.action).toBe(FAILURE_ACTION.REUPLOAD)
+    expect(info.recoverable).toBe(false)
+  })
+
+  it('error + audio_url + media_duration<30s ⇒ reupload（recoverable=false，与 action 对齐）', () => {
     const info = describeMeetingFailure({
       status: 'error',
       error_reason: 'merge failed',
@@ -142,7 +165,31 @@ describe('失败补救动作矩阵 (2026-11-16)', () => {
       media_duration_seconds: 3,
     })
     expect(info.action).toBe(FAILURE_ACTION.REUPLOAD)
-    expect(info.recoverable).toBe(true)
+    expect(info.recoverable).toBe(false)
+  })
+
+  it('【新】media_duration=0 或负数 ⇒ reupload（0/负数不是"未知"）', () => {
+    for (const d of [0, -1, -0.5]) {
+      expect(chooseFailureAction({
+        audio_url: 'recordings/278/merged.m4a',
+        media_duration_seconds: d,
+      })).toBe(FAILURE_ACTION.REUPLOAD)
+    }
+  })
+
+  it('【新】只看 media_duration_seconds，不 fallback 到 audio_duration', () => {
+    // audio_duration 记的是"导入耗时"，3 秒，不能当真实媒体时长
+    expect(chooseFailureAction({
+      audio_url: 'recordings/278/merged.m4a',
+      audio_duration: 3,
+      media_duration_seconds: 3424,
+    })).toBe(FAILURE_ACTION.REPROCESS)
+    // 反过来：media 明确短，audio_duration 再大也不能洗白
+    expect(chooseFailureAction({
+      audio_url: 'recordings/278/merged.m4a',
+      audio_duration: 9999,
+      media_duration_seconds: 3,
+    })).toBe(FAILURE_ACTION.REUPLOAD)
   })
 
   it('error + audio_url + duration 未知(null) ⇒ reprocess', () => {
@@ -157,6 +204,20 @@ describe('失败补救动作矩阵 (2026-11-16)', () => {
       audio_url: 'recordings/278/merged.m4a',
       media_duration_seconds: 3424,
     })).toBe(FAILURE_ACTION.REPROCESS)
+  })
+
+  it('【新】describeMeetingFailure 的 recoverable 严格等于 action===REPROCESS', () => {
+    const cases = [
+      { audio_url: null, last_chunk_index: 3, media_duration_seconds: 100 },
+      { audio_url: 'x', media_duration_seconds: 0 },
+      { audio_url: 'x', media_duration_seconds: 29 },
+      { audio_url: 'x', media_duration_seconds: 30 },
+      { audio_url: 'x', media_duration_seconds: null },
+    ]
+    for (const c of cases) {
+      const info = describeMeetingFailure({ status: 'error', error_reason: 'boom', ...c })
+      expect(info.recoverable).toBe(info.action === FAILURE_ACTION.REPROCESS)
+    }
   })
 })
 

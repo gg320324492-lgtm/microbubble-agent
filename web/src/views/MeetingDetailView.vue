@@ -524,29 +524,35 @@ const uploadingRecovery = ref(false)
 const audioFileInput = ref(null)
 
 async function probeAudioDuration(file) {
+  let url = null
+  let audio = null
+  let timer = null
   try {
-    const url = URL.createObjectURL(file)
-    try {
-      const audio = new Audio()
-      audio.preload = 'metadata'
+    url = URL.createObjectURL(file)
+    audio = new Audio()
+    audio.preload = 'metadata'
+    return await new Promise((resolve) => {
+      const done = (value) => {
+        if (timer) clearTimeout(timer)
+        audio.removeEventListener('loadedmetadata', onLoaded)
+        audio.removeEventListener('error', onError)
+        resolve(value)
+      }
+      const onLoaded = () => done(Number.isFinite(audio.duration) ? audio.duration : null)
+      const onError = () => done(null)
+      audio.addEventListener('loadedmetadata', onLoaded, { once: true })
+      audio.addEventListener('error', onError, { once: true })
+      // 5s 硬超时：metadata 永远不来时不能再挂住补传流程（超时返回 null = 时长未知）
+      timer = setTimeout(() => done(null), 5000)
       audio.src = url
-      const duration = await new Promise((resolve, reject) => {
-        const done = (value) => {
-          audio.removeEventListener('loadedmetadata', onLoaded)
-          audio.removeEventListener('error', onError)
-          resolve(value)
-        }
-        const onLoaded = () => done(Number.isFinite(audio.duration) ? audio.duration : null)
-        const onError = () => reject(new Error('metadata unavailable'))
-        audio.addEventListener('loadedmetadata', onLoaded, { once: true })
-        audio.addEventListener('error', onError, { once: true })
-      })
-      return duration
-    } finally {
-      URL.revokeObjectURL(url)
-    }
+      audio.load()
+    })
   } catch {
     return null
+  } finally {
+    if (timer) clearTimeout(timer)
+    if (audio) audio.removeAttribute('src')
+    if (url) URL.revokeObjectURL(url)
   }
 }
 
@@ -579,11 +585,12 @@ async function handleRecoveryFile(event) {
     })
     await axios.post(`/api/v1/meetings/${meeting.value.id}/reprocess`)
     // 恢复后把失败判定同步回 meeting，避免卡片仍按补传前状态渲染
+    // 2026-11-17: 不伪造 audio_url —— merged 对象是否存在只能由后端确认；
+    // 乐观塞一个约定路径会让 UI 误报"音频已在"，reprocess 失败后状态更不可信。
     meeting.value = {
       ...meeting.value,
       status: 'processing',
       error_reason: null,
-      audio_url: meeting.value.audio_url || `recordings/${meeting.value.id}/merged.m4a`,
       media_duration_seconds: mediaDuration ?? meeting.value.media_duration_seconds,
     }
     ElMessage.success('录音已补传并重新提交处理')
@@ -600,13 +607,15 @@ const handleReprocess = async () => {
   if (!meeting.value) return
   reprocessing.value = true
   try {
-    // 分片合并后可能得到只有容器头的短静音文件；必须确认真实媒体时长，
-    // 否则 reprocess 只会产出空转录，用户还以为已经恢复成功。
-    const probe = await axios.get(`/api/v1/meetings/${meeting.value.id}/upload-status`)
-    const reportedDuration = probe?.data?.media_duration_seconds
-    const mediaDuration = Number(reportedDuration || 0)
-    if (!meeting.value.audio_url || (reportedDuration != null && Number.isFinite(mediaDuration) && mediaDuration > 0 && mediaDuration < 30)) {
+    // 2026-11-17: 不再以 GET /upload-status 做必过前置 —— 后端已对非 owner 脱敏且允许 reprocess；
+    // 本地只保留两个确定性守卫，其余交给后端返回明确错误（避免非 owner 被前端误拦）。
+    if (!meeting.value.audio_url) {
       ElMessage.warning('音频不完整，请选择完整录音文件补传')
+      return
+    }
+    const mediaDuration = Number(meeting.value.media_duration_seconds)
+    if (Number.isFinite(mediaDuration) && mediaDuration >= 0 && mediaDuration < 30) {
+      ElMessage.warning('录音时长不足 30 秒，请选择完整会议录音补传')
       return
     }
     await axios.post(`/api/v1/meetings/${meeting.value.id}/reprocess`)

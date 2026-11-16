@@ -96,6 +96,9 @@ def _stub_function_level_imports(monkeypatch):
     _redis_client_stub = MagicMock()
     _redis_client_stub.aclose = AsyncMock(return_value=None)
     _redis_client_stub.exists = AsyncMock(return_value=0)
+    # 2026-11-17: is_recording_alive 现在用 get()+解析时间戳判断新鲜度；
+    # fake redis 必须提供 awaitable get，默认 None 代表无心跳。
+    _redis_client_stub.get = AsyncMock(return_value=None)
     _redis_asyncio_stub = MagicMock()
     _redis_asyncio_stub.from_url = MagicMock(return_value=_redis_client_stub)
     monkeypatch.setitem(sys.modules, "redis.asyncio", _redis_asyncio_stub)

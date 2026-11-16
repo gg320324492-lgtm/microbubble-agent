@@ -21,14 +21,18 @@ def _run(coro):
 
 
 class _FakeRedis:
-    def __init__(self, values=None, exists_error=False):
+    def __init__(self, values=None, exists_error=False, get_error=False):
         self.values = dict(values or {})
         self.exists_error = exists_error
+        self.get_error = get_error
         self.set_calls = []
         self.delete_calls = []
         self.aclose = AsyncMock(return_value=None)
 
     async def get(self, key):
+        if self.get_error:
+            raise RuntimeError("Redis down")
+        await asyncio.sleep(0)
         return self.values.get(key)
 
     async def set(self, key, value, ex=None):
@@ -63,19 +67,23 @@ def test_parse_new_and_legacy_heartbeat_values():
     assert hb._parse_heartbeat_value("not-a-timestamp") is None
 
 
-def test_touch_writes_session_heartbeat_with_ttl_300():
+def test_touch_writes_session_heartbeat_with_ttl_by_phase():
     redis = _FakeRedis()
     with patch.object(hb, "_get_client", AsyncMock(return_value=redis)):
         assert _run(hb.touch_recording_heartbeat(278, "sess-9", "finalizing")) is True
+        assert _run(hb.touch_recording_heartbeat(278, "sess-9", "recording")) is True
 
     key, value, ttl = redis.set_calls[0]
     assert key == hb.heartbeat_key(278)
-    assert ttl == 300
+    assert ttl == hb.UPLOAD_FINALIZING_GRACE_SECONDS == 600
     ts, session_id, phase = value.split("|")
     assert int(ts) <= int(time.time())
     assert session_id == "sess-9"
     assert phase == "finalizing"
-    redis.aclose.assert_awaited_once()
+
+    key, value, ttl = redis.set_calls[1]
+    assert ttl == hb.HEARTBEAT_TTL_SECONDS == 300
+    redis.aclose.assert_awaited()
 
 
 def test_touch_failure_is_best_effort():
@@ -92,8 +100,26 @@ def test_read_recording_heartbeat_parses_old_pure_timestamp():
     assert got["session_id"] == ""
 
 
+def test_is_recording_alive_uses_value_freshness_not_exists():
+    key = hb.heartbeat_key(255)
+    now = int(time.time())
+    fresh = _FakeRedis({key: f"{now}|sess-1|recording"})
+    assert _run(hb.is_recording_alive(255, redis_client=fresh)) is True
+
+    # 值里的 ts 过期，即使 key 仍存在也不判活。
+    stale = _FakeRedis({key: f"{now - 301}|sess-1|recording"})
+    assert _run(hb.is_recording_alive(255, redis_client=stale)) is False
+
+    # 收尾相位用 600s 窗口。
+    finalizing = _FakeRedis({key: f"{now - 400}|sess-1|finalizing"})
+    assert _run(hb.is_recording_alive(255, redis_client=finalizing)) is True
+
+    unparsable = _FakeRedis({key: "garbage"})
+    assert _run(hb.is_recording_alive(255, redis_client=unparsable)) is False
+
+
 def test_is_recording_alive_stays_true_on_redis_error():
-    redis = _FakeRedis(exists_error=True)
+    redis = _FakeRedis(get_error=True)
     assert _run(hb.is_recording_alive(255, redis_client=redis)) is True
 
 

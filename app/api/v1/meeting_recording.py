@@ -91,17 +91,17 @@ async def upload_audio(
         raise HTTPException(status_code=403, detail="仅创建者可上传录音")
     # 2026-11-16 会议 278 修复：orphan cleanup 误杀后，用户手上有完整录音文件时
     # 必须能直接补传到原会议。audio-chunk 早已接受 error，upload-audio 也要对齐。
-    # 只在「error 且尚无 audio_url」时放行：有音频的失败会议走 reprocess，不能被覆盖。
-    # 2026-11-16 加固：error 态只要有 audio_url（哪怕纯函数判为短静音、建议 reupload），
-    # 也不允许整段覆盖原录音 —— 补传必须先走 chunks/reset 清掉 audio_url，
-    # 否则用户会在不知情的情况下抹掉原始证据（会议 278 类事故）。
-    if meeting.status == "error" and meeting.audio_url:
+    # 恢复状态机判为 reupload 时允许整段覆盖（包括短静音 audio_url 的失败会议）：
+    # 这类会议的旧 audio_url 本身就是无效证据，覆盖是有意的补救；
+    # 而判为 reprocess 的 error+audio_url 会议仍禁止覆盖。
+    # ⚠️ 不能用「audio_url 是否存在」直接决定 —— 否则短音频补传链路永远 400。
+    recovery = evaluate_recovery(meeting)
+    if meeting.status == "error" and meeting.audio_url and recovery["recommended_action"] != "reupload":
         raise HTTPException(
             status_code=400,
             detail="会议已有录音，请直接重新处理，不要覆盖原录音；"
                    "若需补传请先重置分片",
         )
-    recovery = evaluate_recovery(meeting)
     if not recovery["can_upload"]:
         raise HTTPException(
             status_code=400,
@@ -155,13 +155,20 @@ async def upload_audio(
     meeting.last_chunk_index = 0
     meeting.total_chunks = 1
     # W2-7: 用 ffprobe 探测真实媒体时长，写入 media_duration_seconds
-    # audio_duration 由 stop-recording 阶段写入(有真实媒体时长时以它为准, 见该处注释)
+    # audio_duration 由 stop-recording 阶段写入(有真实媒体时长时以它为准, 见该处注释)。
+    # 2026-11-16 加固：探测失败/时长无效必须 fail-loud —— 否则 reprocess 守卫
+    # 会拿到 None 当成"历史会议"放行，静音片段又被误当有效录音（会议 278 类事故）。
+    media_dur = None
     try:
         media_dur = await ffprobe_duration_async(file_data)
-        if media_dur is not None and media_dur > 0:
-            meeting.media_duration_seconds = media_dur
-    except Exception as e:  # noqa: BLE001 — best-effort 兜底
+    except Exception as e:  # noqa: BLE001 — 转成下面的统一 400
         logger.warning(f"upload-audio ffprobe 探测失败 (会议 {meeting_id}): {e}")
+    if media_dur is None or media_dur <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"录音文件无法解析有效时长 (duration={media_dur})，请换完整录音文件重试",
+        )
+    meeting.media_duration_seconds = media_dur
     await db.commit()
 
     return {"audio_url": meeting.audio_url, "size": len(file_data)}
@@ -277,7 +284,6 @@ async def reset_chunks_endpoint(
 
     # 2026-11-16 加固：reset 意味着放弃当前这次录音，心跳必须同步撤销；
     # 否则残留心跳会长期给孤儿清理器"还在录"的假信号（类 20.220）。
-    # staging 前缀的分片保留（整段重传的中间产物由 merge 成功后自行清理）。
     try:
         from app.services.recording_heartbeat import clear_recording_heartbeat
         await clear_recording_heartbeat(meeting_id)
@@ -286,6 +292,9 @@ async def reset_chunks_endpoint(
 
     try:
         deleted = await chunked_upload_service.delete_chunks(meeting_id)
+        # staging 分片也必须清空：否则上一次整段重传遗留的 staging 片会在下次
+        # merge?source=staging 时被拼进来，污染本次补传的录音（残留 chunk_index 撞号）。
+        deleted += await chunked_upload_service.delete_staged_chunks(meeting_id)
     except Exception as e:
         logger.error(f"重置分片时删除 MinIO chunk 失败 (会议 {meeting_id}): {e}")
         raise HTTPException(status_code=500, detail=f"清空分片失败: {e}")
@@ -615,15 +624,15 @@ async def reprocess_meeting(
     #    None 兼容历史会议（当时还未记录 media_duration_seconds）。
     media_duration = getattr(meeting, "media_duration_seconds", None)
     media_duration_value = normalize_media_duration(media_duration)
-    if media_duration_value is not None:
-        if 0 < media_duration_value < MIN_REPROCESS_AUDIO_SECONDS:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"合并音频疑似空/静音（media_duration_seconds={media_duration}s "
-                    f"< {MIN_REPROCESS_AUDIO_SECONDS}s），请补传完整录音后再重跑"
-                ),
-            )
+    if media_duration_value is not None and media_duration_value < MIN_REPROCESS_AUDIO_SECONDS:
+        # 0 秒 / 负值与短静音同样无效，必须拒绝（None 仍兼容历史会议）。
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"合并音频疑似空/静音（media_duration_seconds={media_duration}s "
+                f"< {MIN_REPROCESS_AUDIO_SECONDS}s），请补传完整录音后再重跑"
+            ),
+        )
 
     # 并发幂等：条件 UPDATE error → processing，只有抢到的请求才能派发 Celery。
     # 数据库层原子条件更新；mock DB 下 rowcount 未设置时按 >=0 视为抢到（保持既有测试）。
@@ -699,17 +708,18 @@ async def get_upload_status(
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
-    # 2026-11-16 加固：与其他录音写操作一致，防止任意登录成员探测他人会议录音状态；
-    # 恢复动作本身（reprocess）仍按主指挥 2026-11-09 决定对全体成员开放。
-    if meeting.created_by != current_user.id:
-        raise HTTPException(status_code=403, detail="仅创建者可查询上传状态")
+    # 2026-11-16 复核：reprocess 故意对全体已登录成员开放（主指挥 2026-11-09），
+    # 前端先 probe 本端点再渲染恢复 UI。若此处 403，非创建者看不到 recovery 判定，
+    # "全体可用"在界面上等于不可用。因此不再拒绝非 owner；
+    # 但 audio_url（对象存储路径）仅 owner 可见，其他字段（时长/恢复动作）保持脱敏可读。
+    is_owner = meeting.created_by == current_user.id
     return {
         "meeting_id": meeting_id,
         "status": meeting.status,
         "upload_status": meeting.upload_status,
         "last_chunk_index": meeting.last_chunk_index,
         "total_chunks": meeting.total_chunks,
-        "audio_url": meeting.audio_url,
+        "audio_url": meeting.audio_url if is_owner else None,
         # 2026-11-16: 恢复链路必须能判断合并产物是不是只有容器头的短静音文件。
         "media_duration_seconds": meeting.media_duration_seconds,
         # 前后端同源恢复判定：前端只读按此矩阵渲染，不再自行猜。
@@ -776,16 +786,12 @@ async def stop_recording(
                 merged_name = await chunked_upload_service.merge_chunks_raw(meeting_id)
             meeting.audio_url = merged_name
             meeting.upload_status = "completed"
-            # 2026-11-16 加固：自动 merge 成功后必须探测并写入真实媒体时长；
-            # 否则 upload-status/reprocess 无法识别 4 秒静音产物（会议 278）。
-            # 探测失败 = fail loud：标 failed 并抛 500，绝不带着未知时长触发后处理。
-            merged_bytes = await file_service.download_file(merged_name)
-            if not merged_bytes:
-                raise RuntimeError(f"自动 merge 产物为空 (object_name={merged_name})")
-            media_duration = await ffprobe_duration_async(merged_bytes)
-            if media_duration is None or media_duration <= 0:
-                raise RuntimeError(f"自动 merge 产物时长无效 (duration={media_duration})")
-            meeting.media_duration_seconds = media_duration
+            # 2026-11-16 加固：merged_name 为空代表 merge 服务"看似成功但没给产物"，
+            # 必须 fail loud。⚠️ 不再为了 ffprobe 下载整个 merged 对象 ——
+            # 2h+ 会议上百 MB，下载一次既慢又可能 OOM；时长由 merge 阶段已记录的值
+            # （如有）或后续 upload-status/reprocess 守卫处理，本处不额外写入。
+            if not merged_name:
+                raise RuntimeError("自动 merge 未返回 object_name")
             await db.commit()
         except Exception as e:
             logger.error(f"自动 merge 失败: {e}")

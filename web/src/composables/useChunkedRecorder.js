@@ -70,29 +70,22 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
   // {index, blob, size}[]
   const chunkBuffer = []
 
-  // 启动时：恢复当前会议 + 所有历史会议的 pending chunks（不只依赖 online 事件）
+  // 启动时：只恢复【当前会议】的 pending chunks（不只依赖 online 事件）
+  // 2026-11-16 审核：禁止扫描/入队所有历史会议 —— completed 会议的 stale pending
+  // 会被永久重试并留在 uploadQueue 内存里；历史会议由用户明确进入该会议时再恢复。
   async function resumePending() {
     try {
-      const allPending = await idbStore.getAllMeetingsWithPending()
       const mid = getMid()
-      // idbStore 返回 { meeting_id, count }；实际 blob 仍需按 meeting 单独取。
-      const current = mid ? allPending.find((item) => Number(item.meeting_id) === mid) : null
-      const pending = mid ? await idbStore.getPendingChunks(mid) : []
+      if (!mid) return
+      const pending = await idbStore.getPendingChunks(mid)
       pendingCount.value = pending.length
-      if (mid) {
-        uploadedCount.value = await idbStore.countUploaded(mid)
-        lastChunkIndex.value = await idbStore.getLastChunkIndex(mid)
-      }
-      for (const item of allPending) {
-        const otherMid = Number(item.meeting_id)
-        if (!Number.isFinite(otherMid) || (mid && otherMid === mid) || !item.count) continue
-        const pendingChunks = await idbStore.getPendingChunks(otherMid)
-        if (!pendingChunks.length) continue
-        console.log(`[useChunkedRecorder] 恢复 ${otherMid} ${pendingChunks.length} 个未上传 chunk`)
-        uploader.enqueue(otherMid, pendingChunks)
-      }
-      // 页面加载时即尝试清空队列（在线才会真正发请求；离线时由 online 监听续传）
-      uploader.drainQueue()
+      uploadedCount.value = await idbStore.countUploaded(mid)
+      lastChunkIndex.value = await idbStore.getLastChunkIndex(mid)
+      if (!pending.length) return
+      // enqueue(mid, pending) 内部已按 mid 调 drainQueue；原实现只 drainQueue() 无 id，
+      // 队列键是 mid，无 id 永远取不到刚入队的队列 ⇒ 首屏恢复实际从不上传。
+      console.log(`[useChunkedRecorder] 恢复当前会议 ${mid} ${pending.length} 个未上传 chunk`)
+      uploader.enqueue(mid, pending)
     } catch (err) {
       console.error('[useChunkedRecorder] 恢复 pending 失败:', err)
     }
@@ -257,7 +250,7 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
     })
   }
 
-  // 启动时扫描所有会议的 pending（即使当前 meetingId 未就绪也要恢复历史会议）
+  // 启动时只恢复当前会议的 pending（历史会议由用户进入该会议时再明确恢复）
   resumePending()
 
   onUnmounted(() => {

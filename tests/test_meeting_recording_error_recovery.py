@@ -160,6 +160,7 @@ class TestChunksResetStatusGuard:
 
         with patch.object(mr, "chunked_upload_service") as mock_svc:
             mock_svc.delete_chunks = AsyncMock(return_value=3)
+            mock_svc.delete_staged_chunks = AsyncMock(return_value=0)
             mock_svc.delete_merged = AsyncMock(return_value=0)
             res = await mr.reset_chunks_endpoint(
                 meeting_id=255,

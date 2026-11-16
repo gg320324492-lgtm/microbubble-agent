@@ -102,14 +102,21 @@ async def touch_recording_heartbeat(
     """上报一次录音心跳。失败不抛错（心跳是 best-effort，不能拖垮录音主流程）。
 
     Redis value 使用 `ts|session_id|phase`（旧版纯 ts 可读但不再写出）。
-    TTL 仍为 300s；phase=finalizing/uploading 时由 `is_upload_finalizing`
-    额外按 600s 新鲜窗口做孤儿清理宽限。
+    phase=recording 时 TTL 300s（前端每 60s 一次，容忍 4 次丢包）；
+    phase=finalizing/uploading 时 TTL 用 UPLOAD_FINALIZING_GRACE_SECONDS(600)，
+    这样 key 本身就能撑过"停止计时 → 分片继续上传 → merge"的收尾期，
+    `is_upload_finalizing` 再按同一个 600s 新鲜窗口判孤儿清理宽限。
     """
     client = None
     try:
         value = f"{int(time.time())}|{session_id or ''}|{phase or ''}"
+        ttl = (
+            UPLOAD_FINALIZING_GRACE_SECONDS
+            if phase in _FINALIZING_PHASES
+            else HEARTBEAT_TTL_SECONDS
+        )
         client = await _get_client()
-        await client.set(heartbeat_key(meeting_id), value, ex=HEARTBEAT_TTL_SECONDS)
+        await client.set(heartbeat_key(meeting_id), value, ex=ttl)
         return True
     except Exception as e:  # noqa: BLE001 — 心跳失败不影响录音
         logger.warning(f"录音心跳写入失败 (会议 {meeting_id}): {e}")
@@ -166,8 +173,32 @@ async def is_recording_alive(meeting_id: int, redis_client=None) -> bool:
         if client is None:
             client = await _get_client()
             own_client = True
-        exists = await client.exists(heartbeat_key(meeting_id))
-        return bool(exists)
+        try:
+            raw = await client.get(heartbeat_key(meeting_id))
+        except TypeError:
+            # 兼容只实现了 exists 的旧版/测试 stub：get 不可用时退回旧判据。
+            # 真实 aioredis 客户端不会走这里。
+            exists = await client.exists(heartbeat_key(meeting_id))
+            return bool(exists)
+        hb = _parse_heartbeat_value(raw)
+        if hb is None:
+            return False
+        phase = hb["phase"] or "recording"
+        session_id = hb["session_id"]
+        # 窗口按 phase 分档：收尾心跳用 600s，普通录音心跳用 300s。
+        # 只 exists 会把"值已过期但 key 还没被 Redis 回收"误判成活着。
+        fresh_window = (
+            UPLOAD_FINALIZING_GRACE_SECONDS
+            if phase in _FINALIZING_PHASES
+            else HEARTBEAT_TTL_SECONDS
+        )
+        age = time.time() - hb["ts"]
+        alive = hb["ts"] > 0 and -1 <= age <= fresh_window
+        logger.debug(
+            "录音心跳判活 会议=%s alive=%s phase=%s session_id=%s age=%.1fs window=%ss",
+            meeting_id, alive, phase, session_id, age, fresh_window,
+        )
+        return alive
     except Exception as e:  # noqa: BLE001 — 查询失败 → 保守判定为活着
         logger.warning(f"录音心跳查询失败 (会议 {meeting_id}), 保守判定为存活: {e}")
         return True

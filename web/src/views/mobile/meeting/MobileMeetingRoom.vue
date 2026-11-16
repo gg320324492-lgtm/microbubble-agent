@@ -105,7 +105,7 @@ import AudioRecorder from '@/components/AudioRecorder.vue'
 import ProcessingSheet from '@/components/mobile/ProcessingSheet.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
-import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
+import { useGlobalRecorder, getCurrentSessionId } from '@/composables/useGlobalRecorder'
 import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
 import { ensureHeartbeat, stopHeartbeatForMeeting } from '@/composables/useRecordingHeartbeat'
 
@@ -177,7 +177,7 @@ async function onAudioReady(blob) {
     ElMessage.error('上传失败: ' + describeUploadError(err))
     // 上传失败时关闭进度弹窗，让用户可以重试
     showProgress.value = false
-    // finalize 已经自动停了一次，这里兜底旧的 sessionId/phase 残留
+    // finalize + stop-recording 失败后也必须停心跳，避免孤儿心跳一直发
     stopHeartbeatForMeeting(meetingId.value)
   }
 }
@@ -260,7 +260,8 @@ onMounted(async () => {
     try {
       await startGlobalRecorder()
       // 2026-10-08 P0-1 (会议 255 事故): 恢复路径必须显式 ensureHeartbeat
-      ensureHeartbeat(id)
+      // 2026-11-16: 带上 start() 建立的 sessionId，后端才能关联正确录音会话。
+      ensureHeartbeat(id, { sessionId: getCurrentSessionId(), phase: 'recording' })
       console.warn('[MobileMeetingRoom] 自动启动 MediaRecorder 成功, meetingId =', id)
     } catch (err) {
       console.warn('[MobileMeetingRoom] 自动启动 MediaRecorder 失败 (可能麦克风权限):', err.message)

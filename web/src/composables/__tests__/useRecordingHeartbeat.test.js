@@ -245,6 +245,42 @@ describe('useRecordingHeartbeat 会话 ID 与 finalizing 阶段 (2026-11-16)', (
     )
   })
 
+  it('【新 2026-11-17】uploading 是合法心跳阶段（与后端对齐）', () => {
+    ensureHeartbeat(265, { sessionId: 'session-abc' })
+    sendRecordingHeartbeat.mockClear()
+    setHeartbeatPhase('uploading')
+    expect(getHeartbeatPhase()).toBe('uploading')
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(
+      265,
+      expect.objectContaining({ sessionId: 'session-abc', phase: 'uploading' })
+    )
+  })
+
+  it('【新 2026-11-17】ensureHeartbeat 换会议但 options 未传 sessionId ⇒ 不清掉已有 sessionId', () => {
+    // 组件 watch 早于 useGlobalRecorder.start() 的场景：
+    // start() 已建立 sessionId，组件 watch 先带空 options 进来时不能把它清掉。
+    ensureHeartbeat(264, { sessionId: 'session-from-start' })
+    expect(getCurrentSessionId()).toBe('session-from-start')
+    sendRecordingHeartbeat.mockClear()
+    ensureHeartbeat(265)  // 组件 watch：只有 mid，没有 sessionId
+    expect(getCurrentMeetingId()).toBe(265)
+    expect(getCurrentSessionId()).toBe('session-from-start')
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(
+      265,
+      expect.objectContaining({ sessionId: 'session-from-start' })
+    )
+  })
+
+  it('【新 2026-11-17】显式传新 sessionId 换会议 ⇒ 覆盖旧会话 ID', () => {
+    ensureHeartbeat(264, { sessionId: 'old-session' })
+    ensureHeartbeat(265, { sessionId: 'new-session' })
+    expect(getCurrentSessionId()).toBe('new-session')
+    expect(sendRecordingHeartbeat).toHaveBeenLastCalledWith(
+      265,
+      expect.objectContaining({ sessionId: 'new-session' })
+    )
+  })
+
   it('stopHeartbeatForMeeting 只停匹配会议', () => {
     ensureHeartbeat(265, { sessionId: 'session-abc' })
     expect(stopHeartbeatForMeeting(999)).toBe(false)

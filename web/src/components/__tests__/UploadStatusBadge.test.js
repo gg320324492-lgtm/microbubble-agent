@@ -91,7 +91,7 @@ describe('UploadStatusBadge v2.2 — stale-chunk 容错', () => {
     expect(wrapper.find('.upload-status-badge').classes()).toContain('is-uploading')
   })
 
-  it('7.【v2.2 关键】手动重试按钮在 allUploaded 时隐藏', () => {
+  it('7.【v2.2 关键】allUploaded 时显示已保存，且无手动重试按钮（按钮已删除）', () => {
     const wrapper = factory({
       online: false,
       uploadedCount: 5,
@@ -99,11 +99,12 @@ describe('UploadStatusBadge v2.2 — stale-chunk 容错', () => {
       pendingCount: 0,
       state: 'stopped',
     })
-    // v2.2: 已上传完成即使 online=false 也不显示手动重试
+    expect(wrapper.find('.badge-text').text()).toBe('✓ 录音已安全保存')
+    // 组件已移除手动重试按钮；离线 pending 由上传器自动续传，不再依赖用户点按钮
     expect(wrapper.find('.badge-action').exists()).toBe(false)
   })
 
-  it('8. 手动重试按钮在 pendingCount > 0 + 未完成时显示 (online=false)', () => {
+  it('8. 离线 pending 文案提示待联网重传，且无手动重试按钮', () => {
     const wrapper = factory({
       online: false,
       uploadedCount: 2,
@@ -111,7 +112,9 @@ describe('UploadStatusBadge v2.2 — stale-chunk 容错', () => {
       pendingCount: 3,
       state: 'recording',
     })
-    expect(wrapper.find('.badge-action').exists()).toBe(true)
+    expect(wrapper.find('.badge-text').text()).toBe('⚠ 网络已断开，3 片待联网重传')
+    // 2026-11-17: badge-action 按钮已从组件删除，测试不再期望它存在
+    expect(wrapper.find('.badge-action').exists()).toBe(false)
   })
 
   it('9. 极端边界: uploadedCount=0 + totalCount=0 + online=false + pendingCount=0 → 显示兜底文案', () => {

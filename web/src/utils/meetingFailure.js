@@ -93,17 +93,21 @@ const PIPELINE_DETAIL =
   '处理这条会议时发生了错误。可以重试一次；若仍然失败，请重新上传录音后再次处理。'
 
 /**
- * 失败会议补救动作：音频存在但时长明显不足时，reprocess 救不回内容，必须重新上传。
- * 约定：只有显式给出有限数值且 <30s 才判短音频；null/undefined 仍按可重处理，
- * 避免「未知」被误判成「短到没内容」而把用户导向错误的补救路径。
+ * 失败会议补救动作（2026-11-17 审核收紧）：
+ * ① 只看 media_duration_seconds —— audio_duration 记的是"导入耗时"（类 20.220 状态说谎），
+ *    拿它当时长会把"没音频/短音频"误判成可重处理；
+ * ② 无 audio_url（仅 chunks、尚未合并）必须重新上传，不能靠 reprocess 兜底；
+ * ③ duration <=0 或 <30s 一律 REUPLOAD —— 负数/0 不是"未知"，是坏数据；
+ * ④ duration 未知（null/undefined/非有限值）按 REPROCESS，避免把未知误判成短音频。
  */
 export function chooseFailureAction(meeting) {
-  const hasAudio = hasRecoverableAudio(meeting)
-  if (!hasAudio) return FAILURE_ACTION.REUPLOAD
-  const raw = meeting?.media_duration_seconds ?? meeting?.audio_duration
+  if (!meeting) return FAILURE_ACTION.REUPLOAD
+  if (!meeting.audio_url) return FAILURE_ACTION.REUPLOAD
+  const raw = meeting.media_duration_seconds
   if (raw === null || raw === undefined || raw === '') return FAILURE_ACTION.REPROCESS
   const seconds = Number(raw)
-  if (Number.isFinite(seconds) && seconds < 30) return FAILURE_ACTION.REUPLOAD
+  if (!Number.isFinite(seconds)) return FAILURE_ACTION.REPROCESS
+  if (seconds <= 0 || seconds < 30) return FAILURE_ACTION.REUPLOAD
   return FAILURE_ACTION.REPROCESS
 }
 
@@ -115,24 +119,21 @@ export function chooseFailureAction(meeting) {
  */
 export function describeMeetingFailure(meeting) {
   const raw = typeof meeting?.error_reason === 'string' ? meeting.error_reason.trim() : ''
-  const recoverable = hasRecoverableAudio(meeting)
   const rule = raw ? RULES.find((r) => r.match(raw)) : null
 
   const code = rule ? rule.code : raw ? FAILURE_CODE.PIPELINE_FAILED : FAILURE_CODE.UNKNOWN
   const title = rule ? rule.title : PIPELINE_TITLE
   const detail = rule ? rule.detail : PIPELINE_DETAIL
-  // 2026-11-16 会议 278: 有 last_chunk_index 但 audio_url 为空时，分片可能只有容器头/静音；
-  // 即使 audio_url 存在，显式 media_duration <30s 也应按短音频处理。两类都必须先补传，
-  // 否则 reprocess 只会重跑出空/极短转录。duration 未知（null）仍按重处理（任务约定）。
   const action = chooseFailureAction(meeting)
   const isReupload = action === FAILURE_ACTION.REUPLOAD
+  const isReProcess = action === FAILURE_ACTION.REPROCESS
 
   return {
     code,
     title,
     detail,
-    /** 音频是否还在 —— 决定能不能直接重跑流水线 */
-    recoverable,
+    /** 是否可直接重跑流水线 —— 必须等于 action===REPROCESS，避免"有分片但没 merged"时 UI 误报可重试 */
+    recoverable: isReProcess,
     action,
     actionLabel: isReupload ? '重新上传录音' : '重新处理',
     /** 无音频时给出去处; 有音频时为空串 */

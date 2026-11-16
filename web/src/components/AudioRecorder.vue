@@ -59,7 +59,7 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
+import { useGlobalRecorder, getCurrentSessionId } from '@/composables/useGlobalRecorder'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useChunkedRecorder } from '@/composables/useChunkedRecorder'
@@ -152,8 +152,12 @@ function beatHeartbeat() {
 
 // 启动模块级心跳（启动一次 beat + 60s interval）
 // 重复调幂等 —— ensureHeartbeat 内部有 currentMeetingId !== meetingId 守卫
+// 2026-11-16: 必须带 sessionId + phase，否则后端无法把心跳关联到当前录音会话。
 function startHeartbeat() {
-  ensureHeartbeat(meetingIdRef.value)
+  ensureHeartbeat(meetingIdRef.value, {
+    sessionId: getCurrentSessionId(),
+    phase: 'recording',
+  })
 }
 
 // 停止模块级心跳（**仅**录音真正结束时调用，组件卸载不调）
@@ -170,7 +174,11 @@ function stopHeartbeat() {
 // 但恢复路径时序让 isActive() 在 meetingId 变化时恒为 false → 这条 watch 永远不发
 // 新方案：无条件 ensureHeartbeat —— 让模块级守护接管 A-6 缺口
 watch(meetingIdRef, (mid) => {
-  if (mid) ensureHeartbeat(mid)
+  // 组件 watch 可能早于 useGlobalRecorder.start()；勿显式传空 sessionId，
+  // 让模块级单例保留 start 建立的会话 ID（ensureHeartbeat 内部已做保护）。
+  if (mid) {
+    ensureHeartbeat(mid, { sessionId: getCurrentSessionId(), phase: 'recording' })
+  }
 })
 
 // 注意：onUnmounted **不**调 stopHeartbeat（模块级心跳应继续跑）。
@@ -187,7 +195,10 @@ onMounted(() => {
   // 2026-10-08 P0-1 修复 A-6: 组件重建 / 恢复时若无心跳, 立即补一次
   // —— 之前 onMounted 从不调 startHeartbeat, 导致组件重建路径心跳永久丢失
   if (isActive() && meetingIdRef.value) {
-    ensureHeartbeat(meetingIdRef.value)
+    ensureHeartbeat(meetingIdRef.value, {
+      sessionId: getCurrentSessionId(),
+      phase: 'recording',
+    })
   }
 })
 

@@ -104,7 +104,8 @@ def evaluate_recovery(meeting: Any) -> Dict[str, Any]:
             # 有合并产物时按真实媒体时长分档（None 兼容历史会议）。
             duration_value = normalize_media_duration(duration)
             if duration_value is not None:
-                if duration_value is not None and 0 < duration_value < MIN_REPROCESS_AUDIO_SECONDS:
+                # 0 秒与负值也是无效/空产物：必须落到 reupload，不能 fallthrough 到 reprocess。
+                if duration_value < MIN_REPROCESS_AUDIO_SECONDS:
                     return _result(
                         STATE_ERROR_WITH_AUDIO, ACTION_REUPLOAD,
                         can_upload=True, can_merge=True, can_reprocess=False,

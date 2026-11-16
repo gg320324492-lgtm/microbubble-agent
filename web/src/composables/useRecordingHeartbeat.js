@@ -52,8 +52,8 @@ let listenersRegistered = false
 let lastBeatAt = 0
 let isPausedForVisibility = false  // 仅诊断用：visibilitychange → hidden 时打 log
 
-/** 合法心跳阶段：录音中 / 收尾上传中（收尾阶段仍要防止孤儿清理误杀） */
-const HEARTBEAT_PHASES = new Set(['recording', 'finalizing'])
+/** 合法心跳阶段：录音中 / 收尾上传中 / 恢复上传中（后两阶段仍要防止孤儿清理误杀，与后端对齐） */
+const HEARTBEAT_PHASES = new Set(['recording', 'finalizing', 'uploading'])
 
 function normalizePhase(phase) {
   return HEARTBEAT_PHASES.has(phase) ? phase : 'recording'
@@ -107,9 +107,12 @@ export function ensureHeartbeat(meetingId, options = {}) {
       timer = null
     }
     currentMeetingId = meetingId
-    // 换会议 = 新会话；旧 sessionId/phase 不得跨会议继承
-    currentSessionId = options.sessionId || null
-    currentPhase = normalizePhase(options.phase)
+    // 换会议时只在调用方【显式】给出 sessionId 时才覆盖；组件 watch 早于
+    // useGlobalRecorder.start() 触发时必须保住 start 建立的 currentSessionId，
+    // 否则心跳丢掉 session_id，后端无法把心跳关联到正确录音会话（2026-11-16 审核）。
+    // 没有 sessionId 时保留当前 phase（不回退成 recording：可能正处 finalizing/uploading）。
+    if (options.sessionId) currentSessionId = options.sessionId
+    if (options.phase !== undefined) currentPhase = normalizePhase(options.phase)
   } else {
     // 同会议收到显式 sessionId = 一次新的录音会话，允许覆盖旧 id
     if (options.sessionId) currentSessionId = options.sessionId

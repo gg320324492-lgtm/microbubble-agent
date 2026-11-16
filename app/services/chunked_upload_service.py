@@ -172,7 +172,16 @@ class ChunkedUploadService:
 
         indices: list[int] = []
         for chunk in chunks:
-            if isinstance(chunk, dict) and chunk.get("size") == 0:
+            # size 可能来自 MinIO list_objects（int）或 JSON/DB（字符串 "0"）。
+            # 两种形态都必须识别，否则 0 字节片会被拼进产物造成"看似成功"的静音音频。
+            size = chunk.get("size") if isinstance(chunk, dict) else None
+            is_zero = str(size).strip() == "0"
+            if not is_zero and size not in (None, ""):
+                try:
+                    is_zero = int(size) == 0
+                except (TypeError, ValueError):
+                    is_zero = False
+            if is_zero:
                 details.setdefault("zero_size", []).append(chunk)
                 continue
             idx = chunk.get("chunk_index") if isinstance(chunk, dict) else None

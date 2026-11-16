@@ -286,20 +286,14 @@ async function finalizeMeetingAudioUploadCore({
 }
 
 /**
- * 统一收尾入口：无论成功/失败都停掉 finalizing 心跳。
- * 停心跳按 meetingId 精确匹配，避免 finalize 旧会议时误杀当前新会话。
+ * 统一收尾入口。
+ * 2026-11-16 审核：wrapper 不再停心跳 —— finalize 只是"上传收尾"，后端
+ * stop-recording 还没调，录音会话仍未结束；父组件 MeetingRoomView /
+ * MobileMeetingRoom 在 finalize + stop-recording 的成功/失败分支各自
+ * stopHeartbeatForMeeting。wrapper 提前停会打断 finalizing 保护窗口。
  */
 export async function finalizeMeetingAudioUpload(opts = {}) {
-  try {
-    return await finalizeMeetingAudioUploadCore(opts)
-  } finally {
-    try {
-      const { stopHeartbeatForMeeting } = await import('./useRecordingHeartbeat')
-      stopHeartbeatForMeeting(opts?.meetingId)
-    } catch (err) {
-      console.warn('[audioUpload] 停止收尾心跳失败:', err?.message || err)
-    }
-  }
+  return finalizeMeetingAudioUploadCore(opts)
 }
 
 export function useMeetingAudioUpload() {
