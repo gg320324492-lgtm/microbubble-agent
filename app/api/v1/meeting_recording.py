@@ -6,7 +6,7 @@ POST /merge-chunks, GET /upload-status。
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, UploadFile, File, Query, HTTPException, Depends, Request
+from fastapi import APIRouter, UploadFile, File, Query, Body, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -20,6 +20,11 @@ from app.services.faststart import ensure_faststart_async
 
 from app.services.chunked_upload_service import chunked_upload_service
 from app.services.audio_metadata import ffprobe_duration_async
+from app.services.meeting_recovery import (
+    evaluate_recovery,
+    normalize_media_duration,
+    MIN_REPROCESS_AUDIO_SECONDS,
+)
 
 router = APIRouter()
 
@@ -87,14 +92,21 @@ async def upload_audio(
     # 2026-11-16 会议 278 修复：orphan cleanup 误杀后，用户手上有完整录音文件时
     # 必须能直接补传到原会议。audio-chunk 早已接受 error，upload-audio 也要对齐。
     # 只在「error 且尚无 audio_url」时放行：有音频的失败会议走 reprocess，不能被覆盖。
-    if meeting.status == "error":
-        if meeting.audio_url:
-            raise HTTPException(
-                status_code=400,
-                detail="会议已有录音，请直接重新处理，不要覆盖原录音",
-            )
-    elif meeting.status != "recording":
-        raise HTTPException(status_code=400, detail="会议不在录音状态")
+    # 2026-11-16 加固：error 态只要有 audio_url（哪怕纯函数判为短静音、建议 reupload），
+    # 也不允许整段覆盖原录音 —— 补传必须先走 chunks/reset 清掉 audio_url，
+    # 否则用户会在不知情的情况下抹掉原始证据（会议 278 类事故）。
+    if meeting.status == "error" and meeting.audio_url:
+        raise HTTPException(
+            status_code=400,
+            detail="会议已有录音，请直接重新处理，不要覆盖原录音；"
+                   "若需补传请先重置分片",
+        )
+    recovery = evaluate_recovery(meeting)
+    if not recovery["can_upload"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"会议当前状态不允许上传录音 ({meeting.status})：{recovery['reasons'][0]}",
+        )
 
     file_data = await file.read()
     if len(file_data) == 0:
@@ -263,6 +275,15 @@ async def reset_chunks_endpoint(
             detail=f"会议不在可重传状态 (status={meeting.status}), 拒绝重置分片",
         )
 
+    # 2026-11-16 加固：reset 意味着放弃当前这次录音，心跳必须同步撤销；
+    # 否则残留心跳会长期给孤儿清理器"还在录"的假信号（类 20.220）。
+    # staging 前缀的分片保留（整段重传的中间产物由 merge 成功后自行清理）。
+    try:
+        from app.services.recording_heartbeat import clear_recording_heartbeat
+        await clear_recording_heartbeat(meeting_id)
+    except Exception as e:  # noqa: BLE001 — best-effort，与 cancel/stop 一致
+        logger.warning(f"reset 时清录音心跳失败 (会议 {meeting_id}): {e}")
+
     try:
         deleted = await chunked_upload_service.delete_chunks(meeting_id)
     except Exception as e:
@@ -279,6 +300,9 @@ async def reset_chunks_endpoint(
     meeting.total_chunks = 0
     meeting.audio_url = None
     meeting.upload_status = "pending"
+    # 2026-11-16 加固：恢复元数据一并归零，避免旧失败原因/旧时长误导状态机。
+    meeting.media_duration_seconds = None
+    meeting.error_reason = None
     await db.commit()
 
     logger.info(f"会议 {meeting_id} 分片已复位: 删除 {deleted} 个 chunk")
@@ -328,6 +352,16 @@ async def merge_chunks_endpoint(
     # 2026-07-16 修复 (安全加固): 越权守卫
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可合并分片")
+
+    # 2026-11-16 会议 278 加固：merge 会改写 audio_url 并删分片，
+    # 只允许录音中或失败恢复态；processing/completed 再合并会毁掉流水线输入。
+    # can_merge 对 error+无 audio 也为 True（补传链路需要），此处显式按状态守卫：
+    # processing / completed 一律拒绝，recording / error 放行给后续 chunk 校验。
+    if meeting.status not in ("recording", "error"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"会议状态不允许合并分片 (status={meeting.status})",
+        )
 
     if source not in ("live", "staging"):
         raise HTTPException(status_code=422, detail="source 必须是 live 或 staging")
@@ -447,6 +481,7 @@ async def merge_chunks_endpoint(
 @router.post("/meetings/{meeting_id}/recording-heartbeat")
 async def recording_heartbeat(
     meeting_id: int,
+    payload: dict | None = Body(default=None),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -471,8 +506,18 @@ async def recording_heartbeat(
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可上报录音心跳")
 
+    # 直接单测调用（不经过 FastAPI）时默认值可能是 Body 对象；真实请求则为 dict/None。
+    # 非 dict 一律按空 payload 处理，保持老调用兼容。
+    if not isinstance(payload, dict):
+        payload = {}
+    session_id = payload.get("session_id")
+    phase = payload.get("phase")
+    # 不信任前端自由文本：未知 phase 统一降级为 recording（与前端 normalizePhase 同语义）。
+    if phase not in ("recording", "finalizing", "uploading"):
+        phase = "recording"
+
     from app.services.recording_heartbeat import touch_recording_heartbeat
-    ok = await touch_recording_heartbeat(meeting_id)
+    ok = await touch_recording_heartbeat(meeting_id, session_id=session_id, phase=phase)
     return {"meeting_id": meeting_id, "alive": bool(ok), "status": meeting.status}
 
 
@@ -542,33 +587,62 @@ async def reprocess_meeting(
       ⚠️ 其余端点 (audio-chunk / merge-chunks / stop-recording) **仍保留** created_by 守卫 ——
       那些是「改写录音数据」, 与「重跑已存在的录音」性质不同, 本次不放宽。
     - status 必须 == 'error'
-    - 必须 audio_url 或 last_chunk_index >= 0 (有音频数据)
+    - 2026-11-16 加固: 必须 audio_url 非空（仅有 chunks 不够，会议 278 的 4s 静音分片
+      曾据此跑完整流水线）; media_duration_seconds 在 (0, 30) 视为短静音产物拒绝重跑;
+      None 兼容历史会议。条件 UPDATE error → processing 保证并发只派发一次。
     """
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
-    if meeting.status != "error":
+    # 2026-11-16 会议 278 加固：所有守卫由纯函数统一判定，避免"看状态猜动作"。
+    recovery = evaluate_recovery(meeting)
+    if not recovery["can_reprocess"]:
         raise HTTPException(
             status_code=400,
-            detail=f"会议不在 error 状态 (status={meeting.status}), 不需要 reprocess",
+            detail="当前状态不允许 reprocess：" + "；".join(recovery["reasons"]),
         )
 
-    # 必须有音频才能重跑
-    has_audio = bool(meeting.audio_url) or (
-        meeting.last_chunk_index is not None and meeting.last_chunk_index >= 0
-    )
-    if not has_audio:
+    # 显式 hard guard（与纯函数一致，便于静态阅读与未来规则漂移时 fail closed）：
+    # 1) 必须 audio_url 非空：仅有 chunks 的 error 会议不能重跑（278 只有 4s 静音）。
+    if not meeting.audio_url:
         raise HTTPException(
             status_code=400,
-            detail="会议无音频 (audio_url 空 + last_chunk_index < 0), 无法重跑. "
+            detail="会议无合并后的音频 (audio_url 为空), 无法重跑. "
                    "请先 PUT /audio-chunk 补传, 再 POST /merge-chunks 合并, 再 POST /reprocess",
         )
+    # 2) 0 < media_duration_seconds < 30 视为疑似空/静音产物，拒绝重跑；
+    #    None 兼容历史会议（当时还未记录 media_duration_seconds）。
+    media_duration = getattr(meeting, "media_duration_seconds", None)
+    media_duration_value = normalize_media_duration(media_duration)
+    if media_duration_value is not None:
+        if 0 < media_duration_value < MIN_REPROCESS_AUDIO_SECONDS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"合并音频疑似空/静音（media_duration_seconds={media_duration}s "
+                    f"< {MIN_REPROCESS_AUDIO_SECONDS}s），请补传完整录音后再重跑"
+                ),
+            )
 
-    # 改回 processing 触发流水线 (post_meeting_process 会自己设 status='recording' 检测,
-    # 我们用 'processing' 作为入口, 与 stop-recording 后状态一致)
+    # 并发幂等：条件 UPDATE error → processing，只有抢到的请求才能派发 Celery。
+    # 数据库层原子条件更新；mock DB 下 rowcount 未设置时按 >=0 视为抢到（保持既有测试）。
+    from sqlalchemy import update as sqlalchemy_update
+    claim = await db.execute(
+        sqlalchemy_update(Meeting)
+        .where(Meeting.id == meeting_id)
+        .where(Meeting.status == "error")
+        .values(status="processing", error_reason=None)
+    )
+    claimed = getattr(claim, "rowcount", 1)
+    # 只对真实整数 0 判冲突（mock DB 的 rowcount 是 MagicMock，按抢到处理）。
+    if isinstance(claimed, int) and claimed == 0:
+        raise HTTPException(
+            status_code=409,
+            detail="会议状态已被其他请求更新，reprocess 已由该请求触发，请勿重复提交",
+        )
     meeting.status = "processing"
-    meeting.error_reason = None  # 清掉错误原因
+    meeting.error_reason = None
     # recording_ended_at 已经在 stop-recording 或 cleanup 时填过了, 这里不动
     await db.commit()
 
@@ -625,6 +699,10 @@ async def get_upload_status(
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
+    # 2026-11-16 加固：与其他录音写操作一致，防止任意登录成员探测他人会议录音状态；
+    # 恢复动作本身（reprocess）仍按主指挥 2026-11-09 决定对全体成员开放。
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可查询上传状态")
     return {
         "meeting_id": meeting_id,
         "status": meeting.status,
@@ -634,6 +712,8 @@ async def get_upload_status(
         "audio_url": meeting.audio_url,
         # 2026-11-16: 恢复链路必须能判断合并产物是不是只有容器头的短静音文件。
         "media_duration_seconds": meeting.media_duration_seconds,
+        # 前后端同源恢复判定：前端只读按此矩阵渲染，不再自行猜。
+        "recovery": evaluate_recovery(meeting),
     }
 
 
@@ -696,6 +776,16 @@ async def stop_recording(
                 merged_name = await chunked_upload_service.merge_chunks_raw(meeting_id)
             meeting.audio_url = merged_name
             meeting.upload_status = "completed"
+            # 2026-11-16 加固：自动 merge 成功后必须探测并写入真实媒体时长；
+            # 否则 upload-status/reprocess 无法识别 4 秒静音产物（会议 278）。
+            # 探测失败 = fail loud：标 failed 并抛 500，绝不带着未知时长触发后处理。
+            merged_bytes = await file_service.download_file(merged_name)
+            if not merged_bytes:
+                raise RuntimeError(f"自动 merge 产物为空 (object_name={merged_name})")
+            media_duration = await ffprobe_duration_async(merged_bytes)
+            if media_duration is None or media_duration <= 0:
+                raise RuntimeError(f"自动 merge 产物时长无效 (duration={media_duration})")
+            meeting.media_duration_seconds = media_duration
             await db.commit()
         except Exception as e:
             logger.error(f"自动 merge 失败: {e}")

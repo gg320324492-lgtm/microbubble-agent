@@ -173,6 +173,8 @@ class TestChunksResetStatusGuard:
         assert meeting.last_chunk_index == -1
         assert meeting.total_chunks == 0
         assert meeting.audio_url is None
+        assert meeting.media_duration_seconds is None
+        assert meeting.error_reason is None
 
     @pytest.mark.parametrize("status", ["processing", "completed", "scheduled"])
     async def test_pipeline_statuses_still_rejected(self, status):
@@ -229,24 +231,18 @@ class TestReprocessEndpoint:
         assert meeting.error_reason is None
         fake_task.delay.assert_called_once_with(255)
 
-    async def test_error_with_chunks_only_no_audio_url_ok(self):
-        """只有分片没有 audio_url 也应放行 (merge 后才有 audio_url)"""
+    async def test_error_with_chunks_only_no_audio_url_rejected(self):
+        """2026-11-16 会议 278: 只有分片无 audio_url 禁止 reprocess（可能是 4s 静音）。"""
+        from fastapi import HTTPException
         from app.api.v1 import meeting_recording as mr
 
         meeting = _make_meeting(status="error", last_chunk_index=2, audio_url=None)
         db = _make_db_with_meeting(meeting)
-        fake_task = MagicMock()
-        fake_task.delay = MagicMock()
 
-        with patch.dict(
-            sys.modules,
-            {"app.services.post_meeting_tasks": MagicMock(post_meeting_process=fake_task)},
-        ):
-            with patch("app.services.audit_service.AuditService.log", new=AsyncMock()):
-                res = await mr.reprocess_meeting(
-                    meeting_id=255, current_user=_user(58), db=db
-                )
-        assert res["status"] == "processing"
+        with pytest.raises(HTTPException) as exc:
+            await mr.reprocess_meeting(meeting_id=255, current_user=_user(58), db=db)
+        assert exc.value.status_code == 400
+        assert "禁止直接 reprocess" in str(exc.value.detail)
 
     async def test_error_without_audio_returns_400(self):
         """0 分片 + 无 audio_url → 400, 提示先补传"""
@@ -259,7 +255,7 @@ class TestReprocessEndpoint:
         with pytest.raises(HTTPException) as exc:
             await mr.reprocess_meeting(meeting_id=255, current_user=_user(58), db=db)
         assert exc.value.status_code == 400
-        assert "audio-chunk" in str(exc.value.detail)
+        assert "补传" in str(exc.value.detail)
 
     @pytest.mark.parametrize("status", ["recording", "processing", "completed"])
     async def test_non_error_status_idempotent_400(self, status):
@@ -274,18 +270,52 @@ class TestReprocessEndpoint:
             await mr.reprocess_meeting(meeting_id=255, current_user=_user(58), db=db)
         assert exc.value.status_code == 400
 
-    def test_upload_audio_allows_error_without_audio_url(self):
+    async def test_upload_audio_allows_error_without_audio_url(self):
         """2026-11-16 会议 278: 被 orphan cleanup 误杀后必须能把完整录音补传到原会议。
 
         与 audio-chunk 早已放宽到 status='error' 对齐；但已有 audio_url 的失败会议
         不允许被整段覆盖（那种情况应走 reprocess）。
         """
-        import inspect
-        src = inspect.getsource(mr.upload_audio)
-        assert 'if meeting.status == "error":' in src
-        assert 'if meeting.audio_url:' in src
-        assert '不要覆盖原录音' in src
-        assert 'elif meeting.status != "recording":' in src
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="error", audio_url=None)
+        db = _make_db_with_meeting(meeting)
+
+        with patch.object(mr, "file_service") as mock_file_service, patch.object(
+            mr, "ffprobe_duration_async", new=AsyncMock(return_value=120.0)
+        ), patch.object(mr, "ensure_faststart_async"):
+            mock_file_service.upload_file = AsyncMock(
+                return_value={"object_name": "recordings/255/full.m4a"}
+            )
+            res = await mr.upload_audio(
+                meeting_id=255,
+                file=_make_upload_file(),
+                current_user=_user(58),
+                db=db,
+            )
+
+        assert res["audio_url"] == "recordings/255/full.m4a"
+        assert meeting.audio_url == "recordings/255/full.m4a"
+        # Integer 列：ffprobe 返回 float 会由 SQLAlchemy 驱动转换，此处断言数值本身。
+        assert meeting.media_duration_seconds in (120, 120.0)
+
+    async def test_upload_audio_rejects_error_with_audio_url(self):
+        """已有合并录音的 error 会议不能整段覆盖。"""
+        from fastapi import HTTPException
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="error", audio_url="recordings/255/merged.m4a")
+        db = _make_db_with_meeting(meeting)
+
+        with pytest.raises(HTTPException) as exc:
+            await mr.upload_audio(
+                meeting_id=255,
+                file=_make_upload_file(),
+                current_user=_user(58),
+                db=db,
+            )
+        assert exc.value.status_code == 400
+        assert meeting.audio_url == "recordings/255/merged.m4a"
 
     async def test_cross_user_can_reprocess(self):
         """2026-11-09 主指挥: 重跑权限放开给所有成员。
@@ -396,3 +426,65 @@ class TestRecordingPresenceEndpoint:
         with pytest.raises(HTTPException) as exc:
             await mr.recording_presence(meeting_id=255, current_user=_user(99), db=db)
         assert exc.value.status_code == 403
+
+# ============================================================================
+# recording-heartbeat 会话化端点 (2026-11-16 深度加固)
+# ============================================================================
+
+
+class TestRecordingHeartbeatSessionEndpoint:
+    async def test_heartbeat_passes_session_and_phase(self):
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="recording", created_by=58)
+        db = _make_db_with_meeting(meeting)
+        touch = AsyncMock(return_value=True)
+
+        with patch(
+            "app.services.recording_heartbeat.touch_recording_heartbeat", new=touch
+        ):
+            res = await mr.recording_heartbeat(
+                meeting_id=255,
+                payload={"session_id": "sess-1", "phase": "finalizing"},
+                current_user=_user(58),
+                db=db,
+            )
+
+        assert res["alive"] is True
+        touch.assert_awaited_once_with(255, session_id="sess-1", phase="finalizing")
+
+    async def test_heartbeat_unknown_phase_falls_back_to_recording(self):
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="recording", created_by=58)
+        db = _make_db_with_meeting(meeting)
+        touch = AsyncMock(return_value=True)
+
+        with patch(
+            "app.services.recording_heartbeat.touch_recording_heartbeat", new=touch
+        ):
+            await mr.recording_heartbeat(
+                meeting_id=255,
+                payload={"session_id": "sess-2", "phase": "bogus"},
+                current_user=_user(58),
+                db=db,
+            )
+
+        touch.assert_awaited_once_with(255, session_id="sess-2", phase="recording")
+
+    async def test_heartbeat_empty_payload_backward_compatible(self):
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="recording", created_by=58)
+        db = _make_db_with_meeting(meeting)
+        touch = AsyncMock(return_value=True)
+
+        with patch(
+            "app.services.recording_heartbeat.touch_recording_heartbeat", new=touch
+        ):
+            res = await mr.recording_heartbeat(
+                meeting_id=255, current_user=_user(58), db=db
+            )
+
+        assert res["alive"] is True
+        touch.assert_awaited_once_with(255, session_id=None, phase="recording")

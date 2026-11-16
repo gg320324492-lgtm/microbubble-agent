@@ -14,7 +14,10 @@
  */
 
 const DB_NAME = 'microbubble_recorder'
-const DB_VERSION = 1
+// v2 (2026-11-16 会议录音深度加固): chunks 增加 [meeting_id, chunk_index] 唯一复合索引。
+// 老库可能有重复 index；升级时去重保留最新一条，再建唯一索引，避免刷新恢复重复写导致重复上传。
+const DB_VERSION = 2
+const INDEX_MEETING_CHUNK = 'by_meeting_chunk'
 const STORE_CHUNKS = 'chunks'
 const STORE_META = 'meta'
 
@@ -35,15 +38,56 @@ export function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
     req.onupgradeneeded = (event) => {
       const db = event.target.result
+      const oldVersion = event.oldVersion || 0
+      let chunksStore
       if (!db.objectStoreNames.contains(STORE_CHUNKS)) {
-        const store = db.createObjectStore(STORE_CHUNKS, {
+        chunksStore = db.createObjectStore(STORE_CHUNKS, {
           keyPath: 'id',
           autoIncrement: true,
         })
-        store.createIndex('by_meeting', 'meeting_id', { unique: false })
+        chunksStore.createIndex('by_meeting', 'meeting_id', { unique: false })
+      } else {
+        chunksStore = req.transaction.objectStore(STORE_CHUNKS)
       }
       if (!db.objectStoreNames.contains(STORE_META)) {
         db.createObjectStore(STORE_META, { keyPath: 'meeting_id' })
+      }
+      // v2: 去重历史重复 chunk_index，再建唯一复合索引。
+      // 老库里 add(record) 可能写入同会议同 index 多行（刷新恢复/重复回调），
+      // 唯一索引前必须只保留每个 (meeting_id, chunk_index) 最新一条，否则 upgrade 失败。
+      if (oldVersion < 2 && !chunksStore.indexNames.contains(INDEX_MEETING_CHUNK)) {
+        const allReq = chunksStore.getAll()
+        allReq.onsuccess = () => {
+          const records = allReq.result || []
+          const latest = new Map()
+          for (const record of records) {
+            const key = `${record.meeting_id}:${record.chunk_index}`
+            const prev = latest.get(key)
+            if (!prev || (record.created_at || 0) >= (prev.created_at || 0)) {
+              latest.set(key, record)
+            }
+          }
+          const keepIds = new Set([...latest.values()].map(r => r.id))
+          if (keepIds.size === records.length) {
+            chunksStore.createIndex(INDEX_MEETING_CHUNK, ['meeting_id', 'chunk_index'], { unique: true })
+            return
+          }
+          // 用游标逐个删除重复项；每个 delete 都落在同一 upgrade 事务里，
+          // 游标完成后再 createIndex，避免唯一索引撞到尚未删除的旧记录。
+          const cursorReq = chunksStore.openCursor()
+          cursorReq.onsuccess = (ev) => {
+            const cursor = ev.target.result
+            if (!cursor) {
+              chunksStore.createIndex(INDEX_MEETING_CHUNK, ['meeting_id', 'chunk_index'], { unique: true })
+              return
+            }
+            if (!keepIds.has(cursor.value.id)) cursor.delete()
+            cursor.continue()
+          }
+          cursorReq.onerror = () => {
+            console.error('[idbStore] v2 去重游标失败:', cursorReq.error)
+          }
+        }
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -89,10 +133,19 @@ export async function putChunk(meetingId, index, blob, opts = {}) {
     created_at: Date.now(),
     size: safeBlob.size,
   }
-  const id = await reqToPromise(store.add(record))
+  // 2026-11-16 加固：同会议同 index 是逻辑唯一键。先查复合唯一索引复用主键再 put，
+  // 否则重复回调 / 刷新恢复会用新自增主键 add 撞 ConstraintError 并丢失后续上传链。
+  const existing = store.indexNames.contains(INDEX_MEETING_CHUNK)
+    ? await reqToPromise(store.index(INDEX_MEETING_CHUNK).get(IDBKeyRange.only([meetingId, index])))
+    : null
+  if (existing) record.id = existing.id
+  const id = await reqToPromise(store.put(record))
   await txDone(tx)
   return id
 }
+
+/** putChunk 的语义化别名：upsert 同会议同序号的 chunk */
+export const upsertChunk = putChunk
 
 /**
  * 把一个 chunk 标记为已上传（用 chunk_index 查 + 改字段）

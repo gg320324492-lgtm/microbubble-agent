@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest'
 import {
   FAILURE_ACTION,
   FAILURE_CODE,
+  chooseFailureAction,
   describeMeetingFailure,
   hasRecoverableAudio,
   shouldShowFailure,
@@ -116,6 +117,46 @@ describe('hasRecoverableAudio 与后端 reprocess 守卫对齐', () => {
     expect(info).toBeTruthy()
     expect(info.recoverable).toBe(false)
     expect(info.action).toBe(FAILURE_ACTION.REUPLOAD)
+  })
+})
+
+describe('失败补救动作矩阵 (2026-11-16)', () => {
+  it('error + 无 audio_url/分片 ⇒ reupload', () => {
+    const info = describeMeetingFailure({
+      status: 'error',
+      error_reason: 'something went sideways',
+      audio_url: null,
+      last_chunk_index: -1,
+    })
+    expect(info.action).toBe(FAILURE_ACTION.REUPLOAD)
+    expect(info.actionLabel).toBe('重新上传录音')
+    expect(info.hint).toContain('听会')
+  })
+
+  it('error + audio_url + media_duration<30s ⇒ reupload', () => {
+    const info = describeMeetingFailure({
+      status: 'error',
+      error_reason: 'merge failed',
+      audio_url: 'recordings/278/merged.m4a',
+      last_chunk_index: 2,
+      media_duration_seconds: 3,
+    })
+    expect(info.action).toBe(FAILURE_ACTION.REUPLOAD)
+    expect(info.recoverable).toBe(true)
+  })
+
+  it('error + audio_url + duration 未知(null) ⇒ reprocess', () => {
+    expect(chooseFailureAction({
+      audio_url: 'recordings/278/merged.m4a',
+      media_duration_seconds: null,
+    })).toBe(FAILURE_ACTION.REPROCESS)
+  })
+
+  it('error + audio_url + duration>=30s ⇒ reprocess', () => {
+    expect(chooseFailureAction({
+      audio_url: 'recordings/278/merged.m4a',
+      media_duration_seconds: 3424,
+    })).toBe(FAILURE_ACTION.REPROCESS)
   })
 })
 

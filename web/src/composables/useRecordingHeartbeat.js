@@ -46,9 +46,18 @@ import { sendRecordingHeartbeat } from './useMeetingAudioUpload'
 
 let timer = null
 let currentMeetingId = null
+let currentSessionId = null
+let currentPhase = 'recording'
 let listenersRegistered = false
 let lastBeatAt = 0
 let isPausedForVisibility = false  // 仅诊断用：visibilitychange → hidden 时打 log
+
+/** 合法心跳阶段：录音中 / 收尾上传中（收尾阶段仍要防止孤儿清理误杀） */
+const HEARTBEAT_PHASES = new Set(['recording', 'finalizing'])
+
+function normalizePhase(phase) {
+  return HEARTBEAT_PHASES.has(phase) ? phase : 'recording'
+}
 
 /** 当前是否有活跃心跳（用于 UI 状态查询 / 测试断言） */
 export function isHeartbeatActive() {
@@ -65,6 +74,16 @@ export function getLastBeatAt() {
   return lastBeatAt
 }
 
+/** 取当前录音会话 ID（模块级，跨组件挂载/卸载持久） */
+export function getCurrentSessionId() {
+  return currentSessionId
+}
+
+/** 取当前心跳阶段（recording / finalizing） */
+export function getHeartbeatPhase() {
+  return currentPhase
+}
+
 // ===== 核心方法 =====
 
 /**
@@ -72,14 +91,29 @@ export function getLastBeatAt() {
  * - 幂等：重复调不会创建第二个 timer
  * - 立即发一次 beat（不等 60s）—— 上层刚拿到 meetingId 时不要等一整周期
  * @param {number|null|undefined} meetingId
+ * @param {{sessionId?: string|null, phase?: string}} [options]
+ *   旧调用只传 meetingId 时保持完全兼容；sessionId 只在首次建立会话时采纳，
+ *   防止组件重挂载用旧 id 覆盖 useGlobalRecorder.start() 新建的会话。
  */
-export function ensureHeartbeat(meetingId) {
+export function ensureHeartbeat(meetingId, options = {}) {
   if (!meetingId) {
     console.warn('[useRecordingHeartbeat] ensureHeartbeat called without meetingId')
     return
   }
   if (currentMeetingId !== meetingId) {
+    // 换会议但心跳还在（组件重建先于 stop）→ 先清掉旧会话的 timer，避免旧会议被打字
+    if (currentMeetingId && timer) {
+      clearInterval(timer)
+      timer = null
+    }
     currentMeetingId = meetingId
+    // 换会议 = 新会话；旧 sessionId/phase 不得跨会议继承
+    currentSessionId = options.sessionId || null
+    currentPhase = normalizePhase(options.phase)
+  } else {
+    // 同会议收到显式 sessionId = 一次新的录音会话，允许覆盖旧 id
+    if (options.sessionId) currentSessionId = options.sessionId
+    if (options.phase !== undefined) currentPhase = normalizePhase(options.phase)
   }
   registerListenersOnce()
   // 立即补一次（不等下一个 60s 周期 —— 这正是恢复路径最容易死的窗口）
@@ -87,6 +121,18 @@ export function ensureHeartbeat(meetingId) {
   if (!timer) {
     timer = setInterval(beat, 60000)
   }
+}
+
+/**
+ * 切换心跳阶段（e.g. 停止录音进入 finalize 时切到 finalizing）。
+ * 阶段变化会立即发一次 beat，让后端马上看到"还在收尾"而不是等下一个 60s 周期。
+ * @param {string} phase 'recording' | 'finalizing'
+ */
+export function setHeartbeatPhase(phase) {
+  const next = normalizePhase(phase)
+  if (!currentMeetingId || next === currentPhase) return
+  currentPhase = next
+  beat()
 }
 
 /**
@@ -101,22 +147,37 @@ export function stopHeartbeat() {
     timer = null
   }
   currentMeetingId = null
+  currentSessionId = null
+  currentPhase = 'recording'
   lastBeatAt = 0
   isPausedForVisibility = false
+}
+
+/**
+ * 只在 heartbeat 服务于指定会议时停表 —— finalize 成功/失败的 finally 调用。
+ * 防止 stop-recording 后立刻又开始另一场录音时被旧收尾误杀。
+ */
+export function stopHeartbeatForMeeting(meetingId) {
+  if (!meetingId || currentMeetingId !== meetingId) return false
+  stopHeartbeat()
+  return true
 }
 
 /**
  * 主动发一次心跳（外部触发：visibilitychange → visible / pageshow persisted / focus）
  * 没有 currentMeetingId 时直接返回（录音未开）
  */
-export function beat() {
+export function beat(phase) {
   if (!currentMeetingId) return
+  if (phase !== undefined) currentPhase = normalizePhase(phase)
   lastBeatAt = Date.now()
   // sendRecordingHeartbeat 内部 try/catch + console.warn，best-effort
-  sendRecordingHeartbeat(currentMeetingId)
+  sendRecordingHeartbeat(currentMeetingId, {
+    sessionId: currentSessionId,
+    phase: currentPhase,
+  })
+  return true
 }
-
-// ===== 可见性 / 焦点 监听 =====
 
 // ===== 可见性 / 焦点 监听 =====
 
@@ -142,6 +203,8 @@ function registerListenersOnce() {
           if (currentMeetingId) {
             localStorage.setItem('recording:presence', JSON.stringify({
               meetingId: currentMeetingId,
+              sessionId: currentSessionId,
+              phase: currentPhase,
               hiddenAt: Date.now(),
             }))
           }
@@ -195,7 +258,12 @@ function registerListenersOnce() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ hiddenAt: Date.now(), presence: 'pagehide' }),
+          body: JSON.stringify({
+            hiddenAt: Date.now(),
+            presence: 'pagehide',
+            sessionId: currentSessionId,
+            phase: currentPhase,
+          }),
         }).catch((err) => {
           // pagehide 是弱信号, 失败静默 —— 后端会依赖 Redis TTL 判死
           console.warn('[useRecordingHeartbeat] pagehide presence 上报失败:', err?.message)

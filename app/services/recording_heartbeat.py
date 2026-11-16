@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any, Optional
 
 logger = logging.getLogger("microbubble.recording_heartbeat")
 
@@ -46,6 +47,11 @@ HEARTBEAT_KEY_TMPL = "meeting:recording:heartbeat:{meeting_id}"
 
 # TTL(秒)。前端每 60s 上报一次，给 5 倍冗余：容忍 4 次连续丢包/抖动。
 HEARTBEAT_TTL_SECONDS = 300
+
+# 上传收尾宽限窗口。心跳 key 自身 TTL 仍是 300s；这里额外允许 600s 是为了覆盖
+# 「前端停止计时 → 分片持续上传 → 触发 merge」这段可能超过 TTL 的时间。
+UPLOAD_FINALIZING_GRACE_SECONDS = 600
+_FINALIZING_PHASES = frozenset({"finalizing", "uploading"})
 
 
 def heartbeat_key(meeting_id: int) -> str:
@@ -59,18 +65,83 @@ async def _get_client():
     return aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
-async def touch_recording_heartbeat(meeting_id: int) -> bool:
-    """上报一次录音心跳。失败不抛错（心跳是 best-effort，不能拖垮录音主流程）。"""
+def _parse_heartbeat_value(raw: Any) -> Optional[dict]:
+    """解析 Redis value，兼容旧版纯时间戳字符串。"""
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+
+    session_id = ""
+    phase = ""
+    ts_text = text
+    if "|" in text:
+        parts = text.split("|", 2)
+        ts_text = parts[0].strip()
+        session_id = parts[1].strip() if len(parts) > 1 else ""
+        phase = parts[2].strip() if len(parts) > 2 else ""
+
+    try:
+        ts = float(ts_text)
+    except (TypeError, ValueError):
+        return None
+    return {
+        "ts": ts,
+        "session_id": session_id,
+        "phase": phase,
+        "raw": text,
+    }
+
+
+async def touch_recording_heartbeat(
+    meeting_id: int,
+    session_id: Optional[str] = None,
+    phase: Optional[str] = None,
+) -> bool:
+    """上报一次录音心跳。失败不抛错（心跳是 best-effort，不能拖垮录音主流程）。
+
+    Redis value 使用 `ts|session_id|phase`（旧版纯 ts 可读但不再写出）。
+    TTL 仍为 300s；phase=finalizing/uploading 时由 `is_upload_finalizing`
+    额外按 600s 新鲜窗口做孤儿清理宽限。
+    """
     client = None
     try:
+        value = f"{int(time.time())}|{session_id or ''}|{phase or ''}"
         client = await _get_client()
-        await client.set(heartbeat_key(meeting_id), str(int(time.time())), ex=HEARTBEAT_TTL_SECONDS)
+        await client.set(heartbeat_key(meeting_id), value, ex=HEARTBEAT_TTL_SECONDS)
         return True
     except Exception as e:  # noqa: BLE001 — 心跳失败不影响录音
         logger.warning(f"录音心跳写入失败 (会议 {meeting_id}): {e}")
         return False
     finally:
         if client is not None:
+            try:
+                await client.aclose()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+async def _get_client_if_needed(redis_client=None):
+    """返回 (client, owns_client)；调用方负责关闭 own client。"""
+    if redis_client is not None:
+        return redis_client, False
+    return await _get_client(), True
+
+
+async def read_recording_heartbeat(meeting_id: int, redis_client=None) -> Optional[dict]:
+    """读取并解析心跳。任何读取/解析失败都返回 None（调用方自行决定保守策略）。"""
+    client = None
+    own_client = False
+    try:
+        client, own_client = await _get_client_if_needed(redis_client)
+        raw = await client.get(heartbeat_key(meeting_id))
+        return _parse_heartbeat_value(raw)
+    except Exception as e:  # noqa: BLE001 — 查询失败与"没有心跳"都返回 None
+        logger.warning(f"录音心跳读取失败 (会议 {meeting_id}): {e}")
+        return None
+    finally:
+        if own_client and client is not None:
             try:
                 await client.aclose()
             except Exception:  # noqa: BLE001
@@ -106,6 +177,22 @@ async def is_recording_alive(meeting_id: int, redis_client=None) -> bool:
                 await client.aclose()
             except Exception:  # noqa: BLE001
                 pass
+
+
+async def is_upload_finalizing(meeting_id: int, redis_client=None) -> bool:
+    """心跳 phase 为 finalizing/uploading 且时间戳在 600s 内时返回 True。
+
+    用于孤儿清理的额外宽限：上传/合并尚未收尾时绝不判死。
+    Redis 异常时返回 False（由 `is_recording_alive` 的保守 True 继续兜底）。
+    """
+    hb = await read_recording_heartbeat(meeting_id, redis_client=redis_client)
+    if not hb:
+        return False
+    if hb["phase"] not in _FINALIZING_PHASES:
+        return False
+    if hb["ts"] <= 0 or (time.time() - hb["ts"]) > UPLOAD_FINALIZING_GRACE_SECONDS:
+        return False
+    return True
 
 
 async def clear_recording_heartbeat(meeting_id: int, redis_client=None) -> bool:

@@ -149,6 +149,73 @@ class ChunkedUploadService:
         return deleted
 
     @staticmethod
+    def validate_chunk_indices(chunks: list) -> tuple[bool, dict]:
+        """合并前校验分片下标：必须从 0 连续、无重复、无缺失。
+
+        2026-11-16 会议 253/265 事故共性：中途丢片或先删后传导致分片不连续，
+        而现有 concat 仍把"手上有的片"拼成看似成功的产物。必须在拼接前失败，
+        且失败时不得上传任何产物。返回 (ok, details)，details 便于端点/日志定位。
+        """
+        details = {
+            "count": 0,
+            "unique_count": 0,
+            "indices": [],
+            "duplicates": [],
+            "missing": [],
+            "unexpected": [],
+            "invalid": [],
+            "zero_size": [],
+        }
+        if not chunks:
+            details["error"] = "empty"
+            return False, details
+
+        indices: list[int] = []
+        for chunk in chunks:
+            if isinstance(chunk, dict) and chunk.get("size") == 0:
+                details.setdefault("zero_size", []).append(chunk)
+                continue
+            idx = chunk.get("chunk_index") if isinstance(chunk, dict) else None
+            if idx is None:
+                idx = chunk.get("idx") if isinstance(chunk, dict) else None
+            try:
+                idx = int(idx)
+            except (TypeError, ValueError):
+                details.setdefault("invalid", []).append(chunk)
+                continue
+            indices.append(idx)
+
+        details["count"] = len(chunks)
+        details["indices"] = sorted(indices)
+        if details["invalid"]:
+            details["error"] = "invalid_index"
+            return False, details
+        if details["zero_size"]:
+            details["error"] = "zero_size"
+            return False, details
+
+        counts: dict[int, int] = {}
+        for i in indices:
+            counts[i] = counts.get(i, 0) + 1
+        details["unique_count"] = len(counts)
+        duplicates = sorted(i for i, n in counts.items() if n > 1)
+        # 下标可带网关/客户端重试产生的重复对象，先去重再判断是否覆盖 0..N-1。
+        expected = set(range(len(counts)))
+        missing = sorted(expected.difference(counts))
+        unexpected = sorted(set(counts).difference(expected))
+        details["duplicates"] = duplicates
+        details["missing"] = missing
+        details["unexpected"] = unexpected
+
+        if duplicates:
+            details["error"] = "duplicate"
+            return False, details
+        if missing or unexpected:
+            details["error"] = "missing_or_unexpected"
+            return False, details
+        return True, details
+
+    @staticmethod
     def should_preserve_chunks(
         media_duration,
         expected_seconds,
@@ -193,8 +260,9 @@ class ChunkedUploadService:
         返回合并后的 MinIO object_name。
         """
         chunks = await self.list_chunks(meeting_id)
-        if not chunks:
-            raise ValueError(f"会议 {meeting_id} 无 chunk 可合并")
+        ok, details = self.validate_chunk_indices(chunks)
+        if not ok:
+            raise ValueError(f"会议 {meeting_id} 分片下标不完整，拒绝合并: {details}")
 
         logger.info(f"开始合并会议 {meeting_id} 的 {len(chunks)} 个 chunk")
 
@@ -309,8 +377,9 @@ class ChunkedUploadService:
         return await self._concat_raw(meeting_id, await self.list_staged_chunks(meeting_id))
 
     async def _concat_raw(self, meeting_id: int, chunks: list) -> str:
-        if not chunks:
-            raise ValueError(f"会议 {meeting_id} 无 chunk 可合并")
+        ok, details = self.validate_chunk_indices(chunks)
+        if not ok:
+            raise ValueError(f"会议 {meeting_id} 分片下标不完整，拒绝 raw 合并: {details}")
 
         logger.info(f"开始原始字节拼接会议 {meeting_id} 的 {len(chunks)} 个 chunk")
 

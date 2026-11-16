@@ -130,7 +130,7 @@
           </div>
           <div class="failure-actions">
             <el-button
-              v-if="failureInfo.recoverable"
+              v-if="failureInfo.action === 'reprocess'"
               type="primary"
               :loading="reprocessing"
               @click="handleReprocess"
@@ -523,6 +523,33 @@ const reprocessing = ref(false)
 const uploadingRecovery = ref(false)
 const audioFileInput = ref(null)
 
+async function probeAudioDuration(file) {
+  try {
+    const url = URL.createObjectURL(file)
+    try {
+      const audio = new Audio()
+      audio.preload = 'metadata'
+      audio.src = url
+      const duration = await new Promise((resolve, reject) => {
+        const done = (value) => {
+          audio.removeEventListener('loadedmetadata', onLoaded)
+          audio.removeEventListener('error', onError)
+          resolve(value)
+        }
+        const onLoaded = () => done(Number.isFinite(audio.duration) ? audio.duration : null)
+        const onError = () => reject(new Error('metadata unavailable'))
+        audio.addEventListener('loadedmetadata', onLoaded, { once: true })
+        audio.addEventListener('error', onError, { once: true })
+      })
+      return duration
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  } catch {
+    return null
+  }
+}
+
 function chooseRecoveryFile() {
   audioFileInput.value?.click()
 }
@@ -533,13 +560,32 @@ async function handleRecoveryFile(event) {
   uploadingRecovery.value = true
   try {
     ElMessage.warning('正在补传录音，请勿关闭页面')
+    // 先用浏览器原生能力探测真实时长；<30s 基本是静音/容器头，不污染原会议。
+    const mediaDuration = await probeAudioDuration(file)
+    if (mediaDuration !== null && mediaDuration < 30) {
+      ElMessage.warning('所选录音不足 30 秒，可能是空录音或片段，请选择完整会议录音')
+      return
+    }
     await finalizeMeetingAudioUpload({
       meetingId: meeting.value.id,
       blob: file,
-      liveStats: { uploadedCount: 0, totalChunks: 0, pendingCount: 0 },
+      liveStats: {
+        uploadedCount: 0,
+        totalChunks: 0,
+        pendingCount: 0,
+        mediaDuration,
+      },
       onNotice: (msg) => ElMessage({ message: msg, type: 'warning', duration: 6000 }),
     })
     await axios.post(`/api/v1/meetings/${meeting.value.id}/reprocess`)
+    // 恢复后把失败判定同步回 meeting，避免卡片仍按补传前状态渲染
+    meeting.value = {
+      ...meeting.value,
+      status: 'processing',
+      error_reason: null,
+      audio_url: meeting.value.audio_url || `recordings/${meeting.value.id}/merged.m4a`,
+      media_duration_seconds: mediaDuration ?? meeting.value.media_duration_seconds,
+    }
     ElMessage.success('录音已补传并重新提交处理')
     await fetchMeeting()
   } catch (e) {
@@ -559,7 +605,7 @@ const handleReprocess = async () => {
     const probe = await axios.get(`/api/v1/meetings/${meeting.value.id}/upload-status`)
     const reportedDuration = probe?.data?.media_duration_seconds
     const mediaDuration = Number(reportedDuration || 0)
-    if (!meeting.value.audio_url || (reportedDuration != null && mediaDuration > 0 && mediaDuration < 30)) {
+    if (!meeting.value.audio_url || (reportedDuration != null && Number.isFinite(mediaDuration) && mediaDuration > 0 && mediaDuration < 30)) {
       ElMessage.warning('音频不完整，请选择完整录音文件补传')
       return
     }

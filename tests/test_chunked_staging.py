@@ -81,6 +81,41 @@ def test_delete_staged_chunks_deletes_only_staging_objects():
     assert deleted_names == [o["object_name"] for o in objs]
 
 
+def test_validate_chunk_indices_normal_missing_duplicate_and_empty():
+    ok, details = svc.validate_chunk_indices([
+        {"chunk_index": 0}, {"chunk_index": 1}, {"chunk_index": 2},
+    ])
+    assert ok is True
+    assert details["indices"] == [0, 1, 2]
+
+    ok, details = svc.validate_chunk_indices([
+        {"chunk_index": 0}, {"chunk_index": 2},
+    ])
+    assert ok is False
+    assert details["error"] == "missing_or_unexpected"
+    assert details["missing"] == [1]
+
+    ok, details = svc.validate_chunk_indices([
+        {"chunk_index": 0}, {"chunk_index": 0}, {"chunk_index": 2},
+    ])
+    assert ok is False
+    assert details["error"] == "duplicate"
+    assert details["duplicates"] == [0]
+
+    ok, details = svc.validate_chunk_indices([])
+    assert ok is False
+    assert details["error"] == "empty"
+
+
+def test_validate_chunk_indices_rejects_zero_size_object():
+    ok, details = svc.validate_chunk_indices([
+        {"chunk_index": 0, "size": 10},
+        {"chunk_index": 1, "size": 0},
+    ])
+    assert ok is False
+    assert details["error"] == "zero_size"
+
+
 def test_merge_staged_raw_concatenates_only_staged_chunks():
     chunks = [
         {"object_name": "recordings/265/staging/chunk_00000.bin", "chunk_index": 0},
@@ -103,7 +138,7 @@ def test_merge_staged_raw_raises_when_empty():
         try:
             _run(svc.merge_staged_raw(265))
         except ValueError as e:
-            assert "无 chunk 可合并" in str(e)
+            assert "分片下标不完整" in str(e)
         else:  # pragma: no cover
             raise AssertionError("空 staging 必须抛 ValueError")
 

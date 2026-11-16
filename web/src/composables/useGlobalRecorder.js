@@ -76,7 +76,28 @@ let recorderStartEpoch = null  // 2026-06-27 新增：本次录音会话的 wall
 //     因此 setter 是显式契约，start() 仅在 setter 调用过且 start 成功后才兜底心跳
 //   - 这是个弱契约, 强保证仍由 AudioRecorder.watch + MeetingRoomView.onMounted 兜底
 let pendingMeetingIdForHeartbeat = null
+// 2026-11-16 会议恢复加固：模块级录音会话 ID。
+// 每次 start()（含刷新恢复 start）都新建，传给心跳让后端能区分「上一轮残留心跳」与「本轮录音」。
+// 组件卸载/重挂载不会改它，只有真正的新 start() 才重置。
+let currentSessionId = null
 const chunkCallbacks = []       // 外部 chunk 钩子（阶段1: 边录边传持久化用）
+
+/** 生成录音会话 ID：优先 crypto.randomUUID，老 WebView 用时间戳+随机数兜底 */
+function createSessionId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+  } catch {
+    // 某些内嵌 WebView 暴露 crypto 但 randomUUID 抛错 → 走兜底
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** 供 UI / 心跳调用方读取当前录音会话 ID */
+export function getCurrentSessionId() {
+  return currentSessionId
+}
 
 // ===== 响应式状态（UI 绑定） =====
 const state = ref('idle')       // idle | recording | paused | stopped
@@ -90,6 +111,8 @@ async function start() {
   if (state.value === 'recording' || state.value === 'paused') return
 
   state.value = 'recording'
+  // 新录音会话 = 新 sessionId（即使 recordingStartEpoch 因恢复路径保留旧值）
+  currentSessionId = createSessionId()
   // 2026-06-27 改：不再无条件清零 elapsed。
   // 手动 start() 路径（用户点"开始听会"）elapsed 默认 0 → 行为不变。
   // 刷新恢复路径（MeetingRoomView 先调 setElapsed(N) 再 start()）保留 N，
@@ -138,13 +161,13 @@ async function start() {
   // 音量动画
   updateVolumeBars()
 
-  // 2026-10-08 P0-1 (会议 255 事故): 兜底心跳 —— 如果调用方在 start() 之前
+  // 2026-10-08 P0-1 / 2026-11-16 加固 (会议 255 事故): 兜底心跳 —— 如果调用方在 start() 之前
   // 通过 setCurrentMeetingId 注册过 meetingId, 这里直接 ensureHeartbeat。
   // 这是弱契约: 真正的强保证仍由 AudioRecorder.watch + MeetingRoomView.onMounted 提供
   if (pendingMeetingIdForHeartbeat) {
     try {
       const { ensureHeartbeat } = await import('./useRecordingHeartbeat')
-      ensureHeartbeat(pendingMeetingIdForHeartbeat)
+      ensureHeartbeat(pendingMeetingIdForHeartbeat, { sessionId: currentSessionId, phase: 'recording' })
     } catch (err) {
       console.warn('[useGlobalRecorder] 兜底心跳启动失败 (best-effort):', err?.message)
     }
@@ -368,5 +391,7 @@ export function useGlobalRecorder() {
     getChunkStartIndex,
     // 2026-10-08 P0-1 新增：start() 时兜底心跳 meetingId
     setCurrentMeetingId,
+    // 2026-11-16 恢复加固：当前录音会话 ID
+    getCurrentSessionId,
   }
 }

@@ -103,7 +103,7 @@ import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
-import { ensureHeartbeat } from '@/composables/useRecordingHeartbeat'
+import { ensureHeartbeat, stopHeartbeatForMeeting } from '@/composables/useRecordingHeartbeat'
 
 const router = useRouter()
 const route = useRoute()
@@ -165,9 +165,13 @@ async function onAudioReady(blob) {
       onNotice: (msg) => ElMessage({ message: msg, type: 'warning', duration: 6000 }),
     })
     await axios.post(`/api/v1/meetings/${meetingId.value}/stop-recording`)
+    // finalize + stop-recording 全成功后才停 heartbeat；不提前打断 finalizing 保护窗口
+    stopHeartbeatForMeeting(meetingId.value)
   } catch (err) {
     ElMessage.error('上传失败: ' + describeUploadError(err))
     showProgress.value = false
+    // finalize 已经自动停了一次，这里兜底旧的 sessionId/phase 残留
+    stopHeartbeatForMeeting(meetingId.value)
   }
 }
 

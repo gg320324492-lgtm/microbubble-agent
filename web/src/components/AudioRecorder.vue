@@ -63,7 +63,12 @@ import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useChunkedRecorder } from '@/composables/useChunkedRecorder'
-import { ensureHeartbeat, stopHeartbeat as stopModuleHeartbeat, beat as beatModule } from '@/composables/useRecordingHeartbeat'
+import {
+  ensureHeartbeat,
+  setHeartbeatPhase,
+  stopHeartbeat as stopModuleHeartbeat,
+  beat as beatModule,
+} from '@/composables/useRecordingHeartbeat'
 import UploadStatusBadge from '@/components/UploadStatusBadge.vue'
 
 const props = defineProps({
@@ -266,6 +271,8 @@ async function handleStart() {
       meetingIdRef.value = null
     }
     clearRecordingIndicator()
+    // 启动失败时没有 audio-ready/finalize 父回调，必须自己停掉模块级心跳
+    stopHeartbeat()
     ElMessage.error('录音启动失败: ' + userHint)
   }
 }
@@ -290,13 +297,17 @@ function confirmStop() {
 
 async function doStop() {
   stoppedDuration.value = elapsed.value
-  stopHeartbeat()
+  // 收尾上传仍需防孤儿清理：切到 finalizing 但不停止心跳。
+  // 真正的 stopHeartbeat 由父组件 finalize 成功/失败后调用（见 onFinalizeComplete）。
+  setHeartbeatPhase('finalizing')
   const blob = await stop()
   emit('recording-stop')
   // 清除全局录音指示器（胶囊）
   clearRecordingIndicator()
   if (blob) {
     emit('audio-ready', blob)
+  } else {
+    stopHeartbeat()
   }
   nextTick(() => generateWaveform())
 }

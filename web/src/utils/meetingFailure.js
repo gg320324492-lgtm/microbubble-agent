@@ -93,6 +93,21 @@ const PIPELINE_DETAIL =
   '处理这条会议时发生了错误。可以重试一次；若仍然失败，请重新上传录音后再次处理。'
 
 /**
+ * 失败会议补救动作：音频存在但时长明显不足时，reprocess 救不回内容，必须重新上传。
+ * 约定：只有显式给出有限数值且 <30s 才判短音频；null/undefined 仍按可重处理，
+ * 避免「未知」被误判成「短到没内容」而把用户导向错误的补救路径。
+ */
+export function chooseFailureAction(meeting) {
+  const hasAudio = hasRecoverableAudio(meeting)
+  if (!hasAudio) return FAILURE_ACTION.REUPLOAD
+  const raw = meeting?.media_duration_seconds ?? meeting?.audio_duration
+  if (raw === null || raw === undefined || raw === '') return FAILURE_ACTION.REPROCESS
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds < 30) return FAILURE_ACTION.REUPLOAD
+  return FAILURE_ACTION.REPROCESS
+}
+
+/**
  * 把一条失败会议翻译成 { code, title, detail, recoverable, action, actionLabel, hint, technical }
  *
  * @param {object|null} meeting 会议对象(至少含 status / error_reason / audio_url / last_chunk_index)
@@ -106,21 +121,24 @@ export function describeMeetingFailure(meeting) {
   const code = rule ? rule.code : raw ? FAILURE_CODE.PIPELINE_FAILED : FAILURE_CODE.UNKNOWN
   const title = rule ? rule.title : PIPELINE_TITLE
   const detail = rule ? rule.detail : PIPELINE_DETAIL
-  // 2026-11-16 会议 278: 有 last_chunk_index 但 audio_url 为空时，分片可能只有容器头/静音，
-  // reprocess 会直接跑出空转录。必须先让用户把完整录音补传到原会议，再触发重跑。
-  const canReprocess = Boolean(meeting?.audio_url)
-  const action = canReprocess ? FAILURE_ACTION.REPROCESS : FAILURE_ACTION.REUPLOAD
+  // 2026-11-16 会议 278: 有 last_chunk_index 但 audio_url 为空时，分片可能只有容器头/静音；
+  // 即使 audio_url 存在，显式 media_duration <30s 也应按短音频处理。两类都必须先补传，
+  // 否则 reprocess 只会重跑出空/极短转录。duration 未知（null）仍按重处理（任务约定）。
+  const action = chooseFailureAction(meeting)
+  const isReupload = action === FAILURE_ACTION.REUPLOAD
 
   return {
     code,
     title,
     detail,
     /** 音频是否还在 —— 决定能不能直接重跑流水线 */
-    recoverable: canReprocess,
+    recoverable,
     action,
-    actionLabel: canReprocess ? '重新处理' : '重新上传录音',
+    actionLabel: isReupload ? '重新上传录音' : '重新处理',
     /** 无音频时给出去处; 有音频时为空串 */
-    hint: canReprocess ? '' : '当前只保留了不完整的分片。请点「补传录音到本会议」上传完整录音；也可回到听会页面重新录制。',
+    hint: isReupload
+      ? '当前音频不完整或时长过短。请点「补传录音到本会议」上传完整录音；也可回到听会页面重新录制。'
+      : '',
     /** 原始技术串, 供折叠展示/排查, 不作为主文案 */
     technical: raw,
   }

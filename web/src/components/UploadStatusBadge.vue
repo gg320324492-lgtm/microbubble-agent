@@ -6,9 +6,6 @@
         <span v-else class="dot dot-offline" />
       </span>
       <span class="badge-text">{{ message }}</span>
-      <button v-if="!effectiveOnline && pendingCount > 0 && !allUploaded" class="badge-action" @click="onManualRetry">
-        手动重试
-      </button>
     </div>
   </Transition>
 </template>
@@ -23,8 +20,6 @@ const props = defineProps({
   pendingCount: { type: Number, default: 0 },
   state: { type: String, default: 'idle' },  // idle/recording/paused/stopped
 })
-
-const emit = defineEmits(['manual-retry'])
 
 // v2.2 修复 (2026-07-03): "全部 chunk 已上传" 是事实级信号，强于探测翻红
 // 录音停止后 30s 窗口内 probe 偶发 3 次失败 → online 短暂 false → 徽章误报离线
@@ -79,10 +74,6 @@ const message = computed(() => {
   }
   return '录音中…'
 })
-
-function onManualRetry() {
-  emit('manual-retry')
-}
 </script>
 
 <style scoped>

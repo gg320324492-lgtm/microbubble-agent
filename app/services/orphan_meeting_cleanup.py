@@ -88,6 +88,7 @@ async def _scan_and_cleanup() -> dict:
     cleaned = []
     errors = []
     skipped_alive = []  # 2026-09-15: 心跳仍在, 主动跳过的会议
+    grace_extended = []  # 2026-11-16: phase=finalizing/uploading, 上传收尾宽限跳过
 
     try:
         async with session_factory() as db:
@@ -109,12 +110,25 @@ async def _scan_and_cleanup() -> dict:
                     # 于是任何超过 30 分钟的会议都会被误杀。
                     # 修法: 录音页面每 60s 写一次 Redis 心跳 (TTL 300s),
                     # 心跳仍在 → 前端还活着 → 跳过, 交给用户自己 stop。
-                    from app.services.recording_heartbeat import is_recording_alive
+                    from app.services.recording_heartbeat import (
+                        is_recording_alive, is_upload_finalizing,
+                    )
                     if await is_recording_alive(m.id, redis_client=redis_client):
                         logger.info(
-                            f"会议 {m.id} 录音超时但心跳仍在 (前端仍在录音), 跳过清理"
+                            f"会议 {m.id} skipped_alive: "
+                            "录音超时但心跳仍在 (前端仍在录音), 跳过清理"
                         )
                         skipped_alive.append(m.id)
+                        continue
+
+                    # 2026-11-16: 录音心跳可能已因 TTL 过期, 但分片仍在上传/合并收尾。
+                    # 此时判死会把正在成形的录音标 error, 用户也无法补传完整音频。
+                    if await is_upload_finalizing(m.id, redis_client=redis_client):
+                        logger.info(
+                            f"会议 {m.id} grace_extended: "
+                            "录音超时但处于上传收尾阶段, 跳过清理"
+                        )
+                        grace_extended.append(m.id)
                         continue
 
                     # 标 error (2026-07-16: error_reason 拼 user_agent 片段)
@@ -164,12 +178,12 @@ async def _scan_and_cleanup() -> dict:
                         try:
                             deleted = await chunked_upload_service.delete_chunks(m.id)
                             if deleted:
-                                logger.info(f"会议 {m.id} 清理 {deleted} 个 chunk")
+                                logger.info(f"会议 {m.id}: 删除 {deleted} 个 chunk")
                         except Exception as e:
                             logger.warning(f"清理会议 {m.id} chunks 失败: {e}")
                     else:
                         logger.warning(
-                            f"会议 {m.id} 保留 MinIO 供用户补救 "
+                            f"会议 {m.id} preserved: 保留 MinIO 供用户补救 "
                             f"(chunks={chunks_count}, presence_recent={presence_recent}); "
                             f"可用 POST /api/v1/meetings/{m.id}/reprocess 重启流水线"
                         )
@@ -185,6 +199,9 @@ async def _scan_and_cleanup() -> dict:
                     except Exception as e:
                         logger.warning(f"推 WS 失败: {e}")
 
+                    # 清理时显式记录结束时间, 与"用户主动 stop"的时间语义区分开:
+                    # 这里表示录音会话已被系统判死, 而不是媒体时长/成功结束。
+                    m.recording_ended_at = datetime.utcnow()
                     cleaned.append(m.id)
                 except Exception as e:
                     errors.append(f"{m.id}: {e}")
@@ -200,4 +217,5 @@ async def _scan_and_cleanup() -> dict:
         "errors": errors,
         "count": len(cleaned),
         "skipped_alive": skipped_alive,
+        "grace_extended": grace_extended,
     }

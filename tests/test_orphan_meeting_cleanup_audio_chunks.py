@@ -199,6 +199,8 @@ class TestOrphanMeetingCleanup:
         assert result["cleaned"] == []
         assert result["count"] == 0
         assert result["errors"] == []
+        assert result["skipped_alive"] == []
+        assert result["grace_extended"] == []
         # 没 commit (无状态变更)
         session.commit.assert_not_awaited()
         # 没触发 chunked 清理
@@ -381,3 +383,54 @@ class TestOrphanMeetingCleanup:
         # 关键: MinIO 失败时, status 仍标 error
         assert orphan.status == "error"
         assert 307 in result["cleaned"]
+
+    async def test_upload_finalizing_grace_skips_cleanup(self, caplog):
+        """心跳已消失但 phase=finalizing/uploading 且新鲜 → 宽限、不判死。"""
+        import logging
+        from app.services import orphan_meeting_cleanup as cleanup
+        from app.services.orphan_meeting_cleanup import _scan_and_cleanup
+
+        orphan = _make_orphan_meeting(meeting_id=310)
+        create_engine_session, session = _setup_session([orphan])
+
+        # 生产代码是在函数内部 from ... import is_upload_finalizing,
+        # 必须替换原模块上的符号才能被 import 拿到。
+        with patch(
+            "app.services.orphan_meeting_cleanup.create_celery_engine_and_session",
+            create_engine_session,
+        ), patch(
+            "app.services.recording_heartbeat.is_upload_finalizing",
+            new_callable=AsyncMock,
+            return_value=True,
+        ), patch(
+            "app.services.recording_heartbeat.is_recording_alive",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with caplog.at_level(logging.INFO, logger="microbubble.orphan_cleanup"):
+                result = await _scan_and_cleanup()
+
+        assert result["cleaned"] == []
+        assert result["grace_extended"] == [310]
+        assert result["skipped_alive"] == []
+        assert orphan.status == "recording"
+        assert any("grace_extended" in rec.getMessage() for rec in caplog.records)
+        session.commit.assert_not_awaited()
+
+    async def test_recording_ended_at_is_written_on_cleanup(self):
+        """孤儿判死路径必须写 recording_ended_at, 否则结束时间字段说谎。"""
+        from app.services.orphan_meeting_cleanup import _scan_and_cleanup
+
+        orphan = _make_orphan_meeting(meeting_id=311)
+        create_engine_session, session = _setup_session([orphan])
+
+        with patch(
+            "app.services.orphan_meeting_cleanup.create_celery_engine_and_session",
+            create_engine_session,
+        ):
+            result = await _scan_and_cleanup()
+
+        assert result["cleaned"] == [311]
+        assert orphan.status == "error"
+        assert isinstance(orphan.recording_ended_at, datetime)
+        session.commit.assert_awaited_once()

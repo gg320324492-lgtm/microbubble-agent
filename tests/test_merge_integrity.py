@@ -5,6 +5,9 @@
 一个词。校验函数必须在"产物 << 输入"时抛错, 触发调用方的 raw 字节拼接兜底。
 """
 
+import asyncio
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from app.services.chunked_upload_service import ChunkedUploadService
@@ -35,3 +38,72 @@ def test_integrity_raises_at_half_threshold():
     with pytest.raises(RuntimeError):
         svc.assert_merged_integrity(499, 1000)
     svc.assert_merged_integrity(501, 1000)
+
+
+def test_merge_chunks_raw_refuses_missing_index_before_any_io():
+    """缺片时必须 fail-loud: 不下载、不拼接、不上传任何产物。"""
+    service = ChunkedUploadService()
+    chunks = [
+        {"object_name": "recordings/1/chunks/chunk_00000.webm", "chunk_index": 0},
+        {"object_name": "recordings/1/chunks/chunk_00002.webm", "chunk_index": 2},
+    ]
+
+    async def scenario():
+        with patch.object(service, "list_chunks", AsyncMock(return_value=chunks)), \
+             patch("app.services.chunked_upload_service.file_service") as fs:
+            fs.download_file = AsyncMock()
+            fs.upload_to_path = AsyncMock()
+            with pytest.raises(ValueError, match="分片下标不完整"):
+                await service.merge_chunks_raw(1)
+            fs.download_file.assert_not_awaited()
+            fs.upload_to_path.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_merge_chunks_refuses_missing_index_before_ffmpeg_concat():
+    """缺片时不得调用 concat 子进程，也不得上传产物。"""
+    service = ChunkedUploadService()
+    chunks = [
+        {"object_name": "recordings/3/chunks/chunk_00000.webm", "chunk_index": 0},
+        {"object_name": "recordings/3/chunks/chunk_00002.webm", "chunk_index": 2},
+    ]
+
+    async def scenario():
+        with patch.object(service, "list_chunks", AsyncMock(return_value=chunks)), \
+             patch(
+                 "app.services.chunked_upload_service.asyncio.create_subprocess_exec",
+                 new_callable=AsyncMock,
+             ) as subprocess, \
+             patch("app.services.chunked_upload_service.file_service") as fs:
+            fs.download_file = AsyncMock()
+            fs.upload_to_path = AsyncMock()
+            with pytest.raises(ValueError, match="分片下标不完整"):
+                await service.merge_chunks(3)
+            subprocess.assert_not_awaited()
+            fs.download_file.assert_not_awaited()
+            fs.upload_to_path.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_merge_staged_raw_refuses_missing_index_before_any_io():
+    """staging 缺片时同样不得下载/上传任何产物。"""
+    service = ChunkedUploadService()
+    chunks = [
+        {"object_name": "recordings/2/staging/chunk_00000.bin", "chunk_index": 0},
+        {"object_name": "recordings/2/staging/chunk_00001.bin", "chunk_index": 1},
+        {"object_name": "recordings/2/staging/chunk_00003.bin", "chunk_index": 3},
+    ]
+
+    async def scenario():
+        with patch.object(service, "list_staged_chunks", AsyncMock(return_value=chunks)), \
+             patch("app.services.chunked_upload_service.file_service") as fs:
+            fs.download_file = AsyncMock()
+            fs.upload_to_path = AsyncMock()
+            with pytest.raises(ValueError, match="分片下标不完整"):
+                await service.merge_staged_raw(2)
+            fs.download_file.assert_not_awaited()
+            fs.upload_to_path.assert_not_awaited()
+
+    asyncio.run(scenario())

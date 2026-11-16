@@ -70,19 +70,29 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
   // {index, blob, size}[]
   const chunkBuffer = []
 
-  // 启动时：恢复上次未上传的 chunks（如果刷新页面后回到录音页）
+  // 启动时：恢复当前会议 + 所有历史会议的 pending chunks（不只依赖 online 事件）
   async function resumePending() {
-    const mid = getMid()
-    if (!mid) return  // 没 meetingId 无法恢复
     try {
-      const pending = await idbStore.getPendingChunks(mid)
+      const allPending = await idbStore.getAllMeetingsWithPending()
+      const mid = getMid()
+      // idbStore 返回 { meeting_id, count }；实际 blob 仍需按 meeting 单独取。
+      const current = mid ? allPending.find((item) => Number(item.meeting_id) === mid) : null
+      const pending = mid ? await idbStore.getPendingChunks(mid) : []
       pendingCount.value = pending.length
-      uploadedCount.value = await idbStore.countUploaded(mid)
-      lastChunkIndex.value = await idbStore.getLastChunkIndex(mid)
-      if (pending.length > 0) {
-        console.log(`[useChunkedRecorder] 恢复 ${mid} ${pending.length} 个未上传 chunk`)
-        uploader.enqueue(mid, pending)
+      if (mid) {
+        uploadedCount.value = await idbStore.countUploaded(mid)
+        lastChunkIndex.value = await idbStore.getLastChunkIndex(mid)
       }
+      for (const item of allPending) {
+        const otherMid = Number(item.meeting_id)
+        if (!Number.isFinite(otherMid) || (mid && otherMid === mid) || !item.count) continue
+        const pendingChunks = await idbStore.getPendingChunks(otherMid)
+        if (!pendingChunks.length) continue
+        console.log(`[useChunkedRecorder] 恢复 ${otherMid} ${pendingChunks.length} 个未上传 chunk`)
+        uploader.enqueue(otherMid, pendingChunks)
+      }
+      // 页面加载时即尝试清空队列（在线才会真正发请求；离线时由 online 监听续传）
+      uploader.drainQueue()
     } catch (err) {
       console.error('[useChunkedRecorder] 恢复 pending 失败:', err)
     }
@@ -110,7 +120,7 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
         // IDB 写完后立即尝试上传
         return uploader.uploadOne(mid, index, blob).then(() => {
           uploadedCount.value++
-          pendingCount.value = Math.max(0, pendingCount.value)
+          pendingCount.value = Math.max(0, pendingCount.value - 1)
           return idbStore.markChunkUploaded(mid, index)
         }).catch((err) => {
           // v2.1 修复: 4xx 业务错 (401/403/404) 不算"待重传"
@@ -162,8 +172,29 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
         })
       })
       .catch((err) => {
+        // IDB 写失败也要可见 + 进待上传队列，否则 refresh 后无本地副本可补传
         console.error(`[useChunkedRecorder] chunk ${index} IDB 写入失败:`, err)
+        pendingCount.value++
+        try {
+          uploader.enqueue(mid, [{ chunk_index: index, blob }])
+        } catch (enqErr) {
+          console.warn('[useChunkedRecorder] IDB 失败后 enqueue 也失败:', enqErr?.message || enqErr)
+        }
+        ElMessage.warning(`录音分片 ${index} 本地保存失败，已加入重试队列`)
       })
+  }
+
+  // 手动重试：把 IDB 中未上传的分片重新入队（徽章按钮已禁用，保留供后续调用）
+  function drain() {
+    const mid = getMid()
+    if (!mid) return
+    idbStore.getPendingChunks(mid).then((pending) => {
+      if (!pending.length) return
+      uploader.enqueue(mid, pending)
+      pendingCount.value = pending.length
+    }).catch((err) => {
+      console.warn('[useChunkedRecorder] 手动重传扫描失败:', err?.message || err)
+    })
   }
 
   // v2: watch meetingId 变化, meetingId 回来时 flush buffer
@@ -226,10 +257,8 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
     })
   }
 
-  // 启动时尝试恢复 (meetingId 就绪时才恢复)
-  if (initialMid) {
-    resumePending()
-  }
+  // 启动时扫描所有会议的 pending（即使当前 meetingId 未就绪也要恢复历史会议）
+  resumePending()
 
   onUnmounted(() => {
     if (unsubscribe) {
@@ -281,6 +310,7 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
   }
 
   return {
+    drain,
     uploadedCount: readonly(uploadedCount),
     pendingCount: readonly(pendingCount),
     lastChunkIndex: readonly(lastChunkIndex),

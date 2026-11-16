@@ -47,6 +47,21 @@ const MERGE_TIMEOUT_MS = 600000
 /** 停止后等待实时分片收敛的最长时间（桌面 Chrome 每 1s 一片，通常 1~2s 内传完） */
 const SETTLE_TIMEOUT_MS = 15000
 
+/** 单片切片失败重试次数（整段 blob 分片上传；失败只重传当前片，不从头开始） */
+const SLICE_MAX_ATTEMPTS = 3
+/** 单片重试退避基数（1s / 2s） */
+const SLICE_RETRY_BASE_MS = 1000
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** 4xx（除 408/429）是业务错，重试无用；其余错误按退避重试 */
+function isRetryableSliceError(err) {
+  const status = err?.response?.status
+  return !status || status === 408 || status === 429 || status >= 500
+}
+
 function humanSize(bytes) {
   if (!bytes && bytes !== 0) return '?'
   if (bytes < 1024) return `${bytes}B`
@@ -79,11 +94,16 @@ export function describeUploadError(err) {
 /**
  * 上报一次录音心跳（防止后端孤儿清理误杀仍在录音的会议）
  * @param {number} meetingId
+ * @param {{sessionId?: string|null, phase?: string}} [options]
+ *   options 可选，旧调用方只传 meetingId 时请求体为空，后端行为不变。
  */
-export async function sendRecordingHeartbeat(meetingId) {
+export async function sendRecordingHeartbeat(meetingId, options = {}) {
   if (!meetingId) return false
   try {
-    await axios.post(`/api/v1/meetings/${meetingId}/recording-heartbeat`, {}, { timeout: 15000 })
+    const payload = {}
+    if (options.sessionId) payload.session_id = options.sessionId
+    if (options.phase) payload.phase = options.phase
+    await axios.post(`/api/v1/meetings/${meetingId}/recording-heartbeat`, payload, { timeout: 15000 })
     return true
   } catch (err) {
     console.warn('[audioUpload] 录音心跳上报失败:', err?.message)
@@ -116,11 +136,23 @@ export async function uploadBlobInSlices(meetingId, blob, onProgress) {
     const part = blob.slice(start, Math.min(blob.size, start + SLICE_SIZE))
     const fd = new FormData()
     fd.append('file', part, `slice_${String(i).padStart(5, '0')}.bin`)
-    await axios.put(
-      `/api/v1/meetings/${meetingId}/audio-chunk?chunk_index=${i}&staging=1`,
-      fd,
-      { timeout: SLICE_TIMEOUT_MS }
-    )
+    let lastErr = null
+    for (let attempt = 0; attempt < SLICE_MAX_ATTEMPTS; attempt++) {
+      try {
+        await axios.put(
+          `/api/v1/meetings/${meetingId}/audio-chunk?chunk_index=${i}&staging=1`,
+          fd,
+          { timeout: SLICE_TIMEOUT_MS }
+        )
+        lastErr = null
+        break
+      } catch (err) {
+        lastErr = err
+        if (!isRetryableSliceError(err) || attempt === SLICE_MAX_ATTEMPTS - 1) break
+        await sleep(SLICE_RETRY_BASE_MS * (attempt + 1))
+      }
+    }
+    if (lastErr) throw lastErr
     if (typeof onProgress === 'function') onProgress(i + 1, total)
   }
 
@@ -151,7 +183,7 @@ export async function uploadBlobInSlices(meetingId, blob, onProgress) {
  * @param {(done:number,total:number)=>void} [opts.onProgress]
  * @returns {Promise<{mode:string, chunks?:number, bytes?:number, mergeMode?:string}>}
  */
-export async function finalizeMeetingAudioUpload({
+async function finalizeMeetingAudioUploadCore({
   meetingId,
   blob,
   liveStats = {},
@@ -165,15 +197,23 @@ export async function finalizeMeetingAudioUpload({
     else console.warn('[audioUpload]', m)
   }
 
+  const toFiniteNumber = (v) => {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
   const readStats = () => {
     const s = typeof liveStats === 'function' ? liveStats() : liveStats
+    const mediaDuration = toFiniteNumber(s?.mediaDuration ?? s?.media_duration_seconds ?? s?.audio_duration)
     return {
       uploadedCount: Number(s?.uploadedCount || 0),
       totalChunks: Number(s?.totalChunks || 0),
       pendingCount: Number(s?.pendingCount || 0),
+      mediaDuration,
     }
   }
-  const isComplete = (s) => s.totalChunks > 0 && s.uploadedCount >= s.totalChunks && s.pendingCount === 0
+  // pendingCount 曾因上传成功后未自减而永久 >0，不能拿它当收敛的必要条件，
+  // 否则 15s 内明明已传完也被误判“未完成”，白白整段重传。
+  const isComplete = (s) => s.totalChunks > 0 && s.uploadedCount >= s.totalChunks
 
   let stats = readStats()
 
@@ -183,10 +223,8 @@ export async function finalizeMeetingAudioUpload({
     const deadline = Date.now() + SETTLE_TIMEOUT_MS
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 1000))
-      const next = readStats()
-      const done = next.uploadedCount >= next.totalChunks || next.pendingCount > 0
-      stats = next
-      if (done) break
+      stats = readStats()
+      if (isComplete(stats)) break
     }
   }
 
@@ -197,7 +235,12 @@ export async function finalizeMeetingAudioUpload({
       {},
       { timeout: MERGE_TIMEOUT_MS }
     )
-    return { mode: 'live-chunks', chunks: stats.totalChunks, mergeMode: res?.data?.merge_mode }
+    return {
+      mode: 'live-chunks',
+      chunks: stats.totalChunks,
+      mergeMode: res?.data?.merge_mode,
+      mediaDuration: stats.mediaDuration,
+    }
   }
 
   const size = blob?.size || 0
@@ -209,7 +252,10 @@ export async function finalizeMeetingAudioUpload({
   // ---- 路径 B：大文件 → 字节切片上传 ----
   if (size > ONESHOT_SAFE_BYTES) {
     notify(`录音 ${humanSize(size)}，正在分片上传，请保持页面在前台…`)
-    return await uploadBlobInSlices(meetingId, blob, onProgress)
+    const result = await uploadBlobInSlices(meetingId, blob, onProgress)
+    // 若调用方从 upload-status 提供了时长，随结果回传供 UI 判断短音频
+    if (stats.mediaDuration !== null) result.mediaDuration = stats.mediaDuration
+    return result
   }
 
   // ---- 路径 C：小文件 → 一次性上传（老路径）----
@@ -222,7 +268,7 @@ export async function finalizeMeetingAudioUpload({
         if (typeof onProgress === 'function' && e?.total) onProgress(e.loaded, e.total)
       },
     })
-    return { mode: 'oneshot', bytes: size }
+    return { mode: 'oneshot', bytes: size, mediaDuration: stats.mediaDuration }
   } catch (err) {
     // 双保险：即便走了小文件路径也被拒（例如反向代理上限又被动过），
     // 自动降级到切片路径再试一次，而不是把 "Network Error" 甩给用户。
@@ -230,9 +276,29 @@ export async function finalizeMeetingAudioUpload({
     if (status === 413 || !status) {
       console.warn('[audioUpload] 一次性上传失败，降级为分片上传重试:', err?.message)
       notify('一次性上传被拒，正在改用分片上传重试…')
-      return await uploadBlobInSlices(meetingId, blob, onProgress)
+      const result = await uploadBlobInSlices(meetingId, blob, onProgress)
+      // 若调用方从 upload-status 提供了时长，随结果回传供 UI 判断短音频
+      if (stats.mediaDuration !== null) result.mediaDuration = stats.mediaDuration
+      return result
     }
     throw err
+  }
+}
+
+/**
+ * 统一收尾入口：无论成功/失败都停掉 finalizing 心跳。
+ * 停心跳按 meetingId 精确匹配，避免 finalize 旧会议时误杀当前新会话。
+ */
+export async function finalizeMeetingAudioUpload(opts = {}) {
+  try {
+    return await finalizeMeetingAudioUploadCore(opts)
+  } finally {
+    try {
+      const { stopHeartbeatForMeeting } = await import('./useRecordingHeartbeat')
+      stopHeartbeatForMeeting(opts?.meetingId)
+    } catch (err) {
+      console.warn('[audioUpload] 停止收尾心跳失败:', err?.message || err)
+    }
   }
 }
 

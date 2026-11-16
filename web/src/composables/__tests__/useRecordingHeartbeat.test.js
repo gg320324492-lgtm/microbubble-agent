@@ -30,6 +30,10 @@ import {
   isHeartbeatActive,
   getCurrentMeetingId,
   getLastBeatAt,
+  getCurrentSessionId,
+  getHeartbeatPhase,
+  setHeartbeatPhase,
+  stopHeartbeatForMeeting,
   _resetForTests,
 } from '@/composables/useRecordingHeartbeat'
 
@@ -56,7 +60,7 @@ describe('useRecordingHeartbeat 模块级单例 (P0-1)', () => {
     expect(getLastBeatAt()).toBeGreaterThan(0)
     // 立即 beat 一次
     expect(sendRecordingHeartbeat).toHaveBeenCalledTimes(1)
-    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(255)
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(255, expect.objectContaining({ phase: 'recording' }))
   })
 
   it('重复 ensureHeartbeat 同 id 幂等 (setInterval 不重建, 但 beat 仍发一次)', () => {
@@ -127,7 +131,7 @@ describe('useRecordingHeartbeat 模块级心跳在组件卸载后仍发 (P0-1 �
 
     // 3 个 60s 周期 = 3 次 beat
     expect(sendRecordingHeartbeat).toHaveBeenCalledTimes(3)
-    expect(sendRecordingHeartbeat).toHaveBeenLastCalledWith(255)
+    expect(sendRecordingHeartbeat).toHaveBeenLastCalledWith(255, expect.objectContaining({ phase: 'recording' }))
   })
 
   it('beat() 无 currentMeetingId 不抛错 (录音未启动场景)', () => {
@@ -172,7 +176,7 @@ describe('useRecordingHeartbeat visibilitychange 切回前台立即 beat (P0-2 �
 
     // 切回前台立即 beat 一次 (不等 60s)
     expect(sendRecordingHeartbeat).toHaveBeenCalledTimes(1)
-    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(255)
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(255, expect.objectContaining({ phase: 'recording' }))
   })
 
   it('切到 hidden 时写 localStorage presence (P0-3 弱信号)', () => {
@@ -190,6 +194,63 @@ describe('useRecordingHeartbeat visibilitychange 切回前台立即 beat (P0-2 �
       expect.stringContaining('"meetingId":255')
     )
     setItemSpy.mockRestore()
+  })
+})
+
+describe('useRecordingHeartbeat 会话 ID 与 finalizing 阶段 (2026-11-16)', () => {
+  let sendRecordingHeartbeat
+
+  beforeEach(async () => {
+    _resetForTests()
+    const mod = await import('@/composables/useMeetingAudioUpload')
+    sendRecordingHeartbeat = mod.sendRecordingHeartbeat
+    sendRecordingHeartbeat.mockClear()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    _resetForTests()
+  })
+
+  it('ensureHeartbeat 传 sessionId 并透传给每次心跳', () => {
+    ensureHeartbeat(265, { sessionId: 'session-abc', phase: 'recording' })
+    expect(getCurrentSessionId()).toBe('session-abc')
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(
+      265,
+      expect.objectContaining({ sessionId: 'session-abc', phase: 'recording' })
+    )
+    sendRecordingHeartbeat.mockClear()
+    vi.advanceTimersByTime(60000)
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(
+      265,
+      expect.objectContaining({ sessionId: 'session-abc' })
+    )
+  })
+
+  it('setHeartbeatPhase(finalizing) 立即上报新阶段且保持 interval', () => {
+    ensureHeartbeat(265, { sessionId: 'session-abc' })
+    sendRecordingHeartbeat.mockClear()
+    setHeartbeatPhase('finalizing')
+    expect(getHeartbeatPhase()).toBe('finalizing')
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(
+      265,
+      expect.objectContaining({ sessionId: 'session-abc', phase: 'finalizing' })
+    )
+    sendRecordingHeartbeat.mockClear()
+    vi.advanceTimersByTime(60000)
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(
+      265,
+      expect.objectContaining({ phase: 'finalizing' })
+    )
+  })
+
+  it('stopHeartbeatForMeeting 只停匹配会议', () => {
+    ensureHeartbeat(265, { sessionId: 'session-abc' })
+    expect(stopHeartbeatForMeeting(999)).toBe(false)
+    expect(isHeartbeatActive()).toBe(true)
+    expect(stopHeartbeatForMeeting(265)).toBe(true)
+    expect(isHeartbeatActive()).toBe(false)
   })
 })
 
@@ -316,7 +377,7 @@ describe('useRecordingHeartbeat 恢复路径 startGlobalRecorder 后心跳启动
     // 验证: 心跳已启, currentMeetingId 正确
     expect(isHeartbeatActive()).toBe(true)
     expect(getCurrentMeetingId()).toBe(255)
-    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(255)
+    expect(sendRecordingHeartbeat).toHaveBeenCalledWith(255, expect.objectContaining({ phase: 'recording' }))
   })
 
   it('录音真正结束 stopHeartbeat 后心跳停 (组件卸载但 stopHeartbeat 没调 → 心跳仍跑)', () => {
