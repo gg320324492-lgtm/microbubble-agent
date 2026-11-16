@@ -439,7 +439,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ChatLineRound, PieChart } from '@element-plus/icons-vue'
@@ -1155,14 +1155,9 @@ const statusType = (s) => ({
 }[s] || '')
 
 onMounted(async () => {
-  document.body.classList.add('meeting-topic-board')
   await memberStore.fetchMembers()
   await fetchMeeting()
   await loadRelated()
-})
-
-onUnmounted(() => {
-  document.body.classList.remove('meeting-topic-board')
 })
 </script>
 
@@ -2172,12 +2167,12 @@ onUnmounted(() => {
 [data-theme="dark"] .transcript-ts.ts-seek { color: var(--raw-7fb3aa); }
 
 /* 03 方案没有大块头像和返回条；保留播放器，但收成细条 */
-body.meeting-topic-board .hero-back,
-body.meeting-topic-board .hero-participants { display: none; }
-body.meeting-topic-board .hero-actions { align-self: flex-end; }
+.meeting-detail .hero-back,
+.meeting-detail .hero-participants { display: none; }
+.meeting-detail .hero-actions { align-self: flex-end; }
 
 /* Tab 从胶囊改成分隔线导航，接近 03 的简洁页头 */
-body.meeting-topic-board .tab-strip {
+.meeting-detail .tab-strip {
   gap: 20px;
   padding: 0;
   border: 0;
@@ -2185,7 +2180,7 @@ body.meeting-topic-board .tab-strip {
   border-radius: 0;
   background: transparent;
 }
-body.meeting-topic-board .tab-strip__item {
+.meeting-detail .tab-strip__item {
   padding: 10px 0;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -2193,34 +2188,34 @@ body.meeting-topic-board .tab-strip__item {
   background: transparent;
   color: #817b70;
 }
-body.meeting-topic-board .tab-strip__item.is-active {
+.meeting-detail .tab-strip__item.is-active {
   background: transparent;
   color: #2c6e63;
   border-bottom-color: #2c6e63;
 }
-body.meeting-topic-board .tab-strip__no { color: #a8a096; }
-body.meeting-topic-board .tab-strip__item.is-active .tab-strip__no { color: #2c6e63; }
+.meeting-detail .tab-strip__no { color: #a8a096; }
+.meeting-detail .tab-strip__item.is-active .tab-strip__no { color: #2c6e63; }
 
 /* ====== 03 议题板：深色主题（只作用于会议详情页，全局组件不变） ====== */
-[data-theme="dark"] body.meeting-topic-board .meeting-detail {
+[data-theme="dark"] .meeting-detail .meeting-detail {
   background: #101817;
 }
-[data-theme="dark"] body.meeting-topic-board .detail-hero {
+[data-theme="dark"] .meeting-detail .detail-hero {
   background: transparent;
   border-bottom-color: #26332f;
 }
-[data-theme="dark"] body.meeting-topic-board .hero-title { color: #eef3f0; }
-[data-theme="dark"] body.meeting-topic-board .meta-item { color: #a7b7b0; }
-[data-theme="dark"] body.meeting-topic-board .meta-item .el-icon { color: #83978e; }
-[data-theme="dark"] body.meeting-topic-board .hp-tm { color: #9db0a8; }
-[data-theme="dark"] body.meeting-topic-board .tab-strip { border-bottom-color: #26332f; }
-[data-theme="dark"] body.meeting-topic-board .tab-strip__item { color: #8fa29a; }
-[data-theme="dark"] body.meeting-topic-board .tab-strip__item.is-active {
+[data-theme="dark"] .meeting-detail .hero-title { color: #eef3f0; }
+[data-theme="dark"] .meeting-detail .meta-item { color: #a7b7b0; }
+[data-theme="dark"] .meeting-detail .meta-item .el-icon { color: #83978e; }
+[data-theme="dark"] .meeting-detail .hp-tm { color: #9db0a8; }
+[data-theme="dark"] .meeting-detail .tab-strip { border-bottom-color: #26332f; }
+[data-theme="dark"] .meeting-detail .tab-strip__item { color: #8fa29a; }
+[data-theme="dark"] .meeting-detail .tab-strip__item.is-active {
   color: #7bc0b3;
   border-bottom-color: #7bc0b3;
 }
-[data-theme="dark"] body.meeting-topic-board .tab-strip__no { color: #6f847b; }
-[data-theme="dark"] body.meeting-topic-board .tab-strip__item.is-active .tab-strip__no { color: #7bc0b3; }
+[data-theme="dark"] .meeting-detail .tab-strip__no { color: #6f847b; }
+[data-theme="dark"] .meeting-detail .tab-strip__item.is-active .tab-strip__no { color: #7bc0b3; }
 
 [data-theme="dark"] .topic-brief-main {
   background: linear-gradient(135deg, #1d4a42 0%, #173b34 100%);
