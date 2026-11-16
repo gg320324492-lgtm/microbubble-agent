@@ -777,20 +777,47 @@ const stageHeight = computed(() => {
   return { image: 220, video: 189, audio: 130, pdf: 470, text: 300, office: 220, excel: 268, zip: 272, csv: 268 }[previewKind.value] || 168
 })
 
-/* 媒体/PDF blob 流 (带鉴权 axios → objectURL; 换文件/卸载即 revoke) */
+/* 媒体/PDF 预览取流。
+   2026-11-16: 视频/音频/图片改为「短 token + 原生 Range 流式 URL」，
+   否则 axios blob 会把 4GB 视频整个读进内存，在线播放必卡死。
+   PDF 仍走 blob（后续由分页渲染管线消费）。 */
 const stageUrl = ref(null)
 const stageLoading = ref(false)
 let stageSeq = 0
+let stageIsBlob = false
+function clearStageUrl() {
+  if (stageUrl.value && stageIsBlob) {
+    try { URL.revokeObjectURL(stageUrl.value) } catch { /* 忽略 */ }
+  }
+  stageUrl.value = null
+  stageIsBlob = false
+}
 async function loadStageBlob() {
   const seq = ++stageSeq
-  if (stageUrl.value) { URL.revokeObjectURL(stageUrl.value); stageUrl.value = null }
+  clearStageUrl()
   const kind = previewKind.value
   if (!props.file || !['video', 'audio', 'pdf', 'image'].includes(kind)) { stageLoading.value = false; return }
   stageLoading.value = true
   try {
+    if (['video', 'audio', 'image'].includes(kind)) {
+      // 视频/音频播放期间会持续发 Range 请求，token 给 6h；图片给 10 分钟。
+      const ttl = kind === 'image' ? 600 : 21600
+      const tokenResp = await axios.get(
+        `/api/v1/drive/files/${props.file.id}/download-token`,
+        { params: { expires_seconds: ttl } },
+      )
+      if (seq !== stageSeq) return
+      const token = tokenResp.data?.token
+      if (!token) return
+      stageUrl.value =
+        `/api/v1/drive/files/${props.file.id}/download?disposition=inline&dt=${encodeURIComponent(token)}`
+      stageIsBlob = false
+      return
+    }
     const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/download?disposition=inline`, { responseType: 'blob' })
     if (seq !== stageSeq) return
     stageUrl.value = URL.createObjectURL(resp.data)
+    stageIsBlob = true
   } catch { /* 加载失败回落占位 */ }
   finally { if (seq === stageSeq) stageLoading.value = false }
 }
@@ -1549,7 +1576,7 @@ watch([fileStamp, previewKind], async () => {
   loadStageBlob()
   loadTextPreview()
 }, { immediate: true })
-onBeforeUnmount(() => { if (stageUrl.value) URL.revokeObjectURL(stageUrl.value) })
+onBeforeUnmount(() => { clearStageUrl() })
 
 /* ---- 版本 ---- */
 const versions = ref([])

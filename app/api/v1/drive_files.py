@@ -1239,21 +1239,23 @@ def _check_download_visibility(file_knowledge, current_user_id: int) -> None:
 @router.get("/files/{file_id}/download-token")
 async def get_download_token(
     file_id: int,
+    expires_seconds: int = Query(120, ge=30, le=21600),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """签发短时效下载 token (120s)。
+    """签发短时效下载 token（默认 120s）。
 
     浏览器原生下载/`<a download>` 无法带 Authorization 头；前端先调本端点拿
     token，再用 `?dt=<token>` 发起下载，从而走浏览器流式下载（有进度、不占内存）。
+    视频/音频在线播放会持续发 Range 请求，可传 expires_seconds=21600（6h）。
     """
     svc = DriveService(db)
     f = await svc.get_file(file_id, current_user_id=current_user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在或无权访问")
     return {
-        "token": create_download_token(current_user.id, file_id),
-        "expires_in": 120,
+        "token": create_download_token(current_user.id, file_id, expires_seconds),
+        "expires_in": expires_seconds,
     }
 
 
