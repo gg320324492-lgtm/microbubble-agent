@@ -2197,7 +2197,7 @@ onMounted(async () => {
 .meeting-detail .tab-strip__item.is-active .tab-strip__no { color: #2c6e63; }
 
 /* ====== 03 议题板：深色主题（只作用于会议详情页，全局组件不变） ====== */
-[data-theme="dark"] .meeting-detail .meeting-detail {
+[data-theme="dark"] .meeting-detail {
   background: #101817;
 }
 [data-theme="dark"] .meeting-detail .detail-hero {
