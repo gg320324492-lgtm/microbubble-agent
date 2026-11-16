@@ -84,7 +84,16 @@ async def upload_audio(
     # 2026-08-04 P0: 越权守卫 (与其他端点一致)
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可上传录音")
-    if meeting.status != "recording":
+    # 2026-11-16 会议 278 修复：orphan cleanup 误杀后，用户手上有完整录音文件时
+    # 必须能直接补传到原会议。audio-chunk 早已接受 error，upload-audio 也要对齐。
+    # 只在「error 且尚无 audio_url」时放行：有音频的失败会议走 reprocess，不能被覆盖。
+    if meeting.status == "error":
+        if meeting.audio_url:
+            raise HTTPException(
+                status_code=400,
+                detail="会议已有录音，请直接重新处理，不要覆盖原录音",
+            )
+    elif meeting.status != "recording":
         raise HTTPException(status_code=400, detail="会议不在录音状态")
 
     file_data = await file.read()
@@ -623,6 +632,8 @@ async def get_upload_status(
         "last_chunk_index": meeting.last_chunk_index,
         "total_chunks": meeting.total_chunks,
         "audio_url": meeting.audio_url,
+        # 2026-11-16: 恢复链路必须能判断合并产物是不是只有容器头的短静音文件。
+        "media_duration_seconds": meeting.media_duration_seconds,
     }
 
 

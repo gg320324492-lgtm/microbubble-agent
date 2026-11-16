@@ -106,18 +106,21 @@ export function describeMeetingFailure(meeting) {
   const code = rule ? rule.code : raw ? FAILURE_CODE.PIPELINE_FAILED : FAILURE_CODE.UNKNOWN
   const title = rule ? rule.title : PIPELINE_TITLE
   const detail = rule ? rule.detail : PIPELINE_DETAIL
-  const action = recoverable ? FAILURE_ACTION.REPROCESS : FAILURE_ACTION.REUPLOAD
+  // 2026-11-16 会议 278: 有 last_chunk_index 但 audio_url 为空时，分片可能只有容器头/静音，
+  // reprocess 会直接跑出空转录。必须先让用户把完整录音补传到原会议，再触发重跑。
+  const canReprocess = Boolean(meeting?.audio_url)
+  const action = canReprocess ? FAILURE_ACTION.REPROCESS : FAILURE_ACTION.REUPLOAD
 
   return {
     code,
     title,
     detail,
     /** 音频是否还在 —— 决定能不能直接重跑流水线 */
-    recoverable,
+    recoverable: canReprocess,
     action,
-    actionLabel: recoverable ? '重新处理' : '重新上传录音',
+    actionLabel: canReprocess ? '重新处理' : '重新上传录音',
     /** 无音频时给出去处; 有音频时为空串 */
-    hint: recoverable ? '' : '请回到「听会」页面重新上传这段录音，处理会自动重新开始。',
+    hint: canReprocess ? '' : '当前只保留了不完整的分片。请点「补传录音到本会议」上传完整录音；也可回到听会页面重新录制。',
     /** 原始技术串, 供折叠展示/排查, 不作为主文案 */
     technical: raw,
   }

@@ -274,6 +274,19 @@ class TestReprocessEndpoint:
             await mr.reprocess_meeting(meeting_id=255, current_user=_user(58), db=db)
         assert exc.value.status_code == 400
 
+    def test_upload_audio_allows_error_without_audio_url(self):
+        """2026-11-16 会议 278: 被 orphan cleanup 误杀后必须能把完整录音补传到原会议。
+
+        与 audio-chunk 早已放宽到 status='error' 对齐；但已有 audio_url 的失败会议
+        不允许被整段覆盖（那种情况应走 reprocess）。
+        """
+        import inspect
+        src = inspect.getsource(mr.upload_audio)
+        assert 'if meeting.status == "error":' in src
+        assert 'if meeting.audio_url:' in src
+        assert '不要覆盖原录音' in src
+        assert 'elif meeting.status != "recording":' in src
+
     async def test_cross_user_can_reprocess(self):
         """2026-11-09 主指挥: 重跑权限放开给所有成员。
 

@@ -137,7 +137,23 @@
             >
               {{ failureInfo.actionLabel }}
             </el-button>
-            <el-button v-else @click="goRecordRoom">去听会页面上传</el-button>
+            <template v-else>
+              <input
+                ref="audioFileInput"
+                type="file"
+                accept="audio/*,.m4a,.webm,.wav,.mp3,.aac"
+                class="recovery-file-input"
+                @change="handleRecoveryFile"
+              />
+              <el-button
+                type="primary"
+                :loading="uploadingRecovery"
+                @click="chooseRecoveryFile"
+              >
+                补传录音到本会议
+              </el-button>
+              <el-button @click="goRecordRoom">重新录制</el-button>
+            </template>
           </div>
         </div>
         <!-- 铁律 31: tab 统一用 <TabStrip> (lazy → v-show 保留内联模板编辑态) -->
@@ -434,6 +450,7 @@ import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import SpeakerStatsCard from '@/components/SpeakerStatsCard.vue'
 // 2026-10-25: 失败态文案 + 补救动作判定（桌面端与移动端共用同一份）
 import { describeMeetingFailure, shouldShowFailure } from '@/utils/meetingFailure'
+import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
 
 const route = useRoute()
 const router = useRouter()
@@ -503,11 +520,49 @@ const effectiveDuration = computed(() => meeting.value?.media_duration_seconds |
 const showFailure = computed(() => shouldShowFailure(meeting.value))
 const failureInfo = computed(() => describeMeetingFailure(meeting.value))
 const reprocessing = ref(false)
+const uploadingRecovery = ref(false)
+const audioFileInput = ref(null)
+
+function chooseRecoveryFile() {
+  audioFileInput.value?.click()
+}
+
+async function handleRecoveryFile(event) {
+  const file = event?.target?.files?.[0]
+  if (!file || !meeting.value) return
+  uploadingRecovery.value = true
+  try {
+    ElMessage.warning('正在补传录音，请勿关闭页面')
+    await finalizeMeetingAudioUpload({
+      meetingId: meeting.value.id,
+      blob: file,
+      liveStats: { uploadedCount: 0, totalChunks: 0, pendingCount: 0 },
+      onNotice: (msg) => ElMessage({ message: msg, type: 'warning', duration: 6000 }),
+    })
+    await axios.post(`/api/v1/meetings/${meeting.value.id}/reprocess`)
+    ElMessage.success('录音已补传并重新提交处理')
+    await fetchMeeting()
+  } catch (e) {
+    ElMessage.error('补传失败: ' + describeUploadError(e))
+  } finally {
+    uploadingRecovery.value = false
+    if (audioFileInput.value) audioFileInput.value.value = ''
+  }
+}
 
 const handleReprocess = async () => {
   if (!meeting.value) return
   reprocessing.value = true
   try {
+    // 分片合并后可能得到只有容器头的短静音文件；必须确认真实媒体时长，
+    // 否则 reprocess 只会产出空转录，用户还以为已经恢复成功。
+    const probe = await axios.get(`/api/v1/meetings/${meeting.value.id}/upload-status`)
+    const reportedDuration = probe?.data?.media_duration_seconds
+    const mediaDuration = Number(reportedDuration || 0)
+    if (!meeting.value.audio_url || (reportedDuration != null && mediaDuration > 0 && mediaDuration < 30)) {
+      ElMessage.warning('音频不完整，请选择完整录音文件补传')
+      return
+    }
     await axios.post(`/api/v1/meetings/${meeting.value.id}/reprocess`)
     ElMessage.success('已重新提交处理，稍后刷新查看结果')
     await fetchMeeting()
@@ -1228,7 +1283,13 @@ onUnmounted(() => {
 }
 .failure-actions {
   flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
+.recovery-file-input { display: none; }
 
 /* 转录空态: 失败时补一句可读原因 */
 .transcript-empty-hint {
