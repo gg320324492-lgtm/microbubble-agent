@@ -804,7 +804,7 @@ async function loadStageBlob() {
       const ttl = kind === 'image' ? 600 : 21600
       const tokenResp = await axios.get(
         `/api/v1/drive/files/${props.file.id}/download-token`,
-        { params: { expires_seconds: ttl } },
+        { params: { expires_seconds: ttl, ...(kind === 'video' ? { proxy: 1 } : {}) } },
       )
       if (seq !== stageSeq) return
       const token = tokenResp.data?.token

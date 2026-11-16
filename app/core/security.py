@@ -62,17 +62,20 @@ DOWNLOAD_TOKEN_EXPIRE_SECONDS = 120
 
 
 def create_download_token(member_id: int, file_id: int,
-                          expires_seconds: int = DOWNLOAD_TOKEN_EXPIRE_SECONDS) -> str:
+                          expires_seconds: int = DOWNLOAD_TOKEN_EXPIRE_SECONDS,
+                          proxy: bool = False) -> str:
     """短时效下载 token (2026-11-15)。
 
     浏览器原生下载无法携带 Authorization 头；改用短 token 拼在 URL 上，
     下载端点以它代替登录态。有效期默认 120s，只够发起一次下载请求；
     请求一旦建立，后续字节流不受 token 过期影响。
+    proxy=True 表示优先使用 knowledge.meta 里的播放代理（视频 720p H.264）。
     """
     payload = {
         "sub": str(member_id),
         "type": "download",
         "file_id": int(file_id),
+        "proxy": bool(proxy),
         "exp": utcnow() + timedelta(seconds=expires_seconds),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)

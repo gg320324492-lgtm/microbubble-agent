@@ -1240,6 +1240,7 @@ def _check_download_visibility(file_knowledge, current_user_id: int) -> None:
 async def get_download_token(
     file_id: int,
     expires_seconds: int = Query(120, ge=30, le=21600),
+    proxy: bool = Query(False, description="优先使用 720p 播放代理"),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
@@ -1248,14 +1249,20 @@ async def get_download_token(
     浏览器原生下载/`<a download>` 无法带 Authorization 头；前端先调本端点拿
     token，再用 `?dt=<token>` 发起下载，从而走浏览器流式下载（有进度、不占内存）。
     视频/音频在线播放会持续发 Range 请求，可传 expires_seconds=21600（6h）。
+    proxy=True 时若 knowledge.meta 有 video_proxy_key，token 会指向 720p 代理。
     """
     svc = DriveService(db)
     f = await svc.get_file(file_id, current_user_id=current_user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    proxy_available = bool((f.meta or {}).get("video_proxy_key"))
+    use_proxy = bool(proxy and proxy_available)
     return {
-        "token": create_download_token(current_user.id, file_id, expires_seconds),
+        "token": create_download_token(
+            current_user.id, file_id, expires_seconds, proxy=use_proxy,
+        ),
         "expires_in": expires_seconds,
+        "proxy": use_proxy,
     }
 
 
@@ -1274,6 +1281,7 @@ async def download_drive_file(
     （浏览器原生下载，token 由 /download-token 签发，120s 有效）。
     """
     user = current_user
+    use_proxy = False
     if user is None:
         payload = decode_download_token(dt or "")
         if not payload or int(payload.get("file_id") or -1) != file_id:
@@ -1281,6 +1289,7 @@ async def download_drive_file(
                 status_code=401, detail="Not authenticated",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        use_proxy = bool(payload.get("proxy"))
         user = await db.get(Member, int(payload.get("sub") or 0))
         if user is None or not user.is_active:
             raise HTTPException(
@@ -1296,6 +1305,12 @@ async def download_drive_file(
 
     if not f.file_path:
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+    # 视频预览代理：token 带 proxy=True 且 meta 里登记了代理键时，读代理对象。
+    object_path = f.file_path
+    if use_proxy:
+        proxy_key = (f.meta or {}).get("video_proxy_key")
+        if proxy_key:
+            object_path = proxy_key
 
     # 文件元信息
     # PR4.6 修复: f.file_type 是 ".txt" 字面量 (DB 存的是扩展名), 直接返会触发 nosniff 阻断
@@ -1324,7 +1339,7 @@ async def download_drive_file(
             start = int(m.group(1))
             end_str = m.group(2)
             # 读 total size
-            file_size = await _get_object_size(f.file_path)
+            file_size = await _get_object_size(object_path)
             if file_size is None:
                 # 没拿到 size, 走完整下载
                 start = None
@@ -1340,7 +1355,7 @@ async def download_drive_file(
                     # 整个 2.7GB 文件，会把内存打爆并拖死隧道。按 8MB 分块转发。
                     def _open_range():
                         return file_service.client.get_object(
-                            file_service.bucket, f.file_path,
+                            file_service.bucket, object_path,
                             offset=start, length=length,
                         )
                     response = await asyncio.to_thread(_open_range)
@@ -1372,7 +1387,7 @@ async def download_drive_file(
                 )
 
     # 完整下载
-    file_size = await _get_object_size(f.file_path)
+    file_size = await _get_object_size(object_path)
     headers = {
         "Content-Disposition": build_content_disposition(disposition, filename),
     }
@@ -1384,7 +1399,7 @@ async def download_drive_file(
         # 2026-11-15: 原来 download_file() 整文件进内存，2.7GB ISO 直接吃满内存。
         # 改为 MinIO 流式读 + 8MB 分块转发。
         def _open_full():
-            return file_service.client.get_object(file_service.bucket, f.file_path)
+            return file_service.client.get_object(file_service.bucket, object_path)
         response = await asyncio.to_thread(_open_full)
         try:
             while True:
