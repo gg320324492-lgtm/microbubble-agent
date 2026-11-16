@@ -2199,4 +2199,74 @@ body.meeting-topic-board .tab-strip__item.is-active {
 body.meeting-topic-board .tab-strip__no { color: #a8a096; }
 body.meeting-topic-board .tab-strip__item.is-active .tab-strip__no { color: #2c6e63; }
 
+/* ====== 03 议题板：深色主题（只作用于会议详情页，全局组件不变） ====== */
+[data-theme="dark"] body.meeting-topic-board .meeting-detail {
+  background: #101817;
+}
+[data-theme="dark"] body.meeting-topic-board .detail-hero {
+  background: transparent;
+  border-bottom-color: #26332f;
+}
+[data-theme="dark"] body.meeting-topic-board .hero-title { color: #eef3f0; }
+[data-theme="dark"] body.meeting-topic-board .meta-item { color: #a7b7b0; }
+[data-theme="dark"] body.meeting-topic-board .meta-item .el-icon { color: #83978e; }
+[data-theme="dark"] body.meeting-topic-board .hp-tm { color: #9db0a8; }
+[data-theme="dark"] body.meeting-topic-board .tab-strip { border-bottom-color: #26332f; }
+[data-theme="dark"] body.meeting-topic-board .tab-strip__item { color: #8fa29a; }
+[data-theme="dark"] body.meeting-topic-board .tab-strip__item.is-active {
+  color: #7bc0b3;
+  border-bottom-color: #7bc0b3;
+}
+[data-theme="dark"] body.meeting-topic-board .tab-strip__no { color: #6f847b; }
+[data-theme="dark"] body.meeting-topic-board .tab-strip__item.is-active .tab-strip__no { color: #7bc0b3; }
+
+[data-theme="dark"] .topic-brief-main {
+  background: linear-gradient(135deg, #1d4a42 0%, #173b34 100%);
+  border: 1px solid #2f5b52;
+}
+[data-theme="dark"] .topic-brief-main p { color: #d9eae3; }
+[data-theme="dark"] .topic-brief-main .topic-eyebrow,
+[data-theme="dark"] .topic-brief-main .topic-text-btn { color: #a9d4c8; }
+[data-theme="dark"] .topic-facts > div {
+  background: #17211f;
+  border-color: #26332f;
+}
+[data-theme="dark"] .topic-facts b { color: #7bc0b3; }
+[data-theme="dark"] .topic-section-head h4,
+[data-theme="dark"] .topic-card h5,
+[data-theme="dark"] .topic-who { color: #e6ede9; }
+[data-theme="dark"] .topic-card {
+  background: #17211f;
+  border-color: #2a3733;
+}
+[data-theme="dark"] .topic-card:hover {
+  border-color: #3a5b52;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .28);
+}
+[data-theme="dark"] .topic-card p,
+[data-theme="dark"] .topic-section-head > span,
+[data-theme="dark"] .topic-tag,
+[data-theme="dark"] .action-more,
+[data-theme="dark"] .topic-agenda { color: #aebdb6; }
+[data-theme="dark"] .topic-avatar {
+  background: #29453e;
+  color: #bfe2d8;
+}
+[data-theme="dark"] .topic-expand,
+[data-theme="dark"] .action-column-head,
+[data-theme="dark"] .all-decision-who,
+[data-theme="dark"] .topic-agenda summary { color: #7bc0b3; }
+[data-theme="dark"] .action-board {
+  background: #17211f;
+  border-color: #2a3733;
+}
+[data-theme="dark"] .action-columns {
+  background: #26332f;
+  border-color: #26332f;
+}
+[data-theme="dark"] .action-column { background: #17211f; }
+[data-theme="dark"] .action-item { color: #c3d0c9; border-top-color: #26332f; }
+[data-theme="dark"] .all-decisions { border-top-color: #26332f; }
+[data-theme="dark"] .all-decision-group ul { color: #c3d0c9; }
+
 </style>
