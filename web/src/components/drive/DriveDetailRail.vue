@@ -136,6 +136,7 @@
                 </div>
               </div>
               <span class="vc-t">{{ fmtAudioTime(vidDur) }}</span>
+              <button class="vc-btn vc-quality" :title="videoQuality === '720p' ? '当前 720p 流畅播放，点击切 4K 原片' : '当前 4K 原片，点击切 720p 流畅播放'" @click.stop="toggleVideoQuality">{{ videoQuality === '720p' ? '720p' : '4K' }}</button>
               <button class="vc-btn vc-spd" title="播放倍速" @click.stop="vidCycleSpeed">{{ vidSpeed }}x</button>
               <span class="rf-vid-volbox" :class="{ open: vidVolShow }" @dblclick.stop>
                 <span class="rf-vid-volpop">
@@ -785,6 +786,9 @@ const stageUrl = ref(null)
 const stageLoading = ref(false)
 let stageSeq = 0
 let stageIsBlob = false
+// 视频画质：默认 720p 代理（流畅）；可切 4K 原片（需要 HEVC 解码支持）
+const videoQuality = ref('720p') // 720p | 4k
+const pendingVideoSeek = ref(null)
 function clearStageUrl() {
   if (stageUrl.value && stageIsBlob) {
     try { URL.revokeObjectURL(stageUrl.value) } catch { /* 忽略 */ }
@@ -804,7 +808,7 @@ async function loadStageBlob() {
       const ttl = kind === 'image' ? 600 : 21600
       const tokenResp = await axios.get(
         `/api/v1/drive/files/${props.file.id}/download-token`,
-        { params: { expires_seconds: ttl, ...(kind === 'video' ? { proxy: 1 } : {}) } },
+        { params: { expires_seconds: ttl, ...(kind === 'video' && videoQuality.value === '720p' ? { proxy: 1 } : {}) } },
       )
       if (seq !== stageSeq) return
       const token = tokenResp.data?.token
@@ -965,7 +969,24 @@ function onVidTime() {
 }
 function onVidMeta() {
   const el = videoElRef.value
-  if (el) vidDur.value = el.duration || 0
+  if (el) {
+    vidDur.value = el.duration || 0
+    if (pendingVideoSeek.value != null) {
+      const t = pendingVideoSeek.value
+      pendingVideoSeek.value = null
+      if (isFinite(t) && t > 0) {
+        try { el.currentTime = t } catch { /* 忽略 */ }
+      }
+    }
+  }
+}
+
+function toggleVideoQuality() {
+  if (!props.file || previewKind.value !== 'video') return
+  const t = videoElRef.value?.currentTime || 0
+  pendingVideoSeek.value = t
+  videoQuality.value = videoQuality.value === '720p' ? '4k' : '720p'
+  loadStageBlob()
 }
 let vidSeeking = false
 function vidSeekStart(e) {
@@ -1573,6 +1594,8 @@ const inlineUrl = computed(() =>
   props.file ? `/api/v1/drive/files/${props.file.id}/download?disposition=inline` : '')
 
 watch([fileStamp, previewKind], async () => {
+  videoQuality.value = '720p'
+  pendingVideoSeek.value = null
   loadStageBlob()
   loadTextPreview()
 }, { immediate: true })

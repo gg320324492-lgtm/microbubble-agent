@@ -19,6 +19,7 @@ vi.mock('@/composables/useDriveFiles', () => ({
   }),
 }))
 
+import axios from 'axios'
 import DriveDetailRail from '@/components/drive/DriveDetailRail.vue'
 import CommentThread from '@/components/drive/CommentThread.vue'
 
@@ -112,6 +113,37 @@ describe('DriveDetailRail', () => {
     expect(second[0].text()).toContain('重命名')
     expect(second[1].text()).toContain('移动')
     expect(second[2].text()).toContain('删除')
+  })
+
+  it('视频默认 720p 代理，按钮可切 4K 原片并保留进度', async () => {
+    axios.get.mockImplementation((url, config) => {
+      if (url.endsWith('/download-token')) {
+        return Promise.resolve({ data: { token: `${config?.params?.proxy ? 'proxy' : 'orig'}-token` } })
+      }
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    const w = factory({ file: { ...file, id: 3011, file_name: '外部学习会议.mp4', file_type: '.mp4' } })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(axios.get).toHaveBeenCalledWith(
+      '/api/v1/drive/files/3011/download-token',
+      expect.objectContaining({ params: expect.objectContaining({ proxy: 1 }) }),
+    )
+
+    const video = w.find('video')
+    Object.defineProperty(video.element, 'currentTime', { value: 42, configurable: true })
+    const quality = w.find('.vc-quality')
+    expect(quality.text()).toBe('720p')
+    await quality.trigger('click')
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(axios.get).toHaveBeenCalledWith(
+      '/api/v1/drive/files/3011/download-token',
+      expect.objectContaining({ params: expect.not.objectContaining({ proxy: 1 }) }),
+    )
+    expect(w.find('.vc-quality').text()).toBe('4K')
+    video.element.dispatchEvent(new Event('loadedmetadata'))
+    await w.vm.$nextTick()
+    expect(video.element.currentTime).toBe(42)
   })
 
   it('评论 tab 挂 CommentThread 且 fileId 正确', () => {
