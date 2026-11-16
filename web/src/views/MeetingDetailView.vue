@@ -245,12 +245,14 @@
                         @keydown.enter.prevent="toggleTopic(card.index)"
                       >
                         <div class="topic-card-top">
-                          <span
-                            class="topic-avatar"
-                            :class="{ 'has-img': !!getSpeakerAvatar(card.speaker) }"
-                            :style="getSpeakerAvatar(card.speaker) ? { backgroundImage: `url(${getSpeakerAvatar(card.speaker)})` } : {}"
+                          <img
+                            v-if="getSpeakerAvatar(card.speaker)"
+                            class="topic-avatar topic-avatar-image"
+                            :src="getSpeakerAvatar(card.speaker)"
+                            :alt="`${card.speaker}的头像`"
                             :title="card.speaker"
-                          >{{ card.speaker[0] }}</span>
+                          />
+                          <span v-else class="topic-avatar" :title="card.speaker">{{ card.speaker[0] }}</span>
                           <span class="topic-who">{{ card.speaker }}</span>
                           <span class="topic-tag">要点 {{ ('0' + (card.index + 1)).slice(-2) }}</span>
                         </div>
@@ -2080,7 +2082,7 @@ onUnmounted(() => {
 .topic-card-anonymous::before { background: var(--color-text-placeholder, #c0c4cc); }
 .topic-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .topic-avatar { width: 23px; height: 23px; border-radius: 50%; flex: 0 0 auto; display: grid; place-items: center; background: #dbeae5; color: #2c6e63; font-size: 9px; font-weight: 700; background-size: cover; background-position: center; }
-.topic-avatar.has-img { color: transparent; }
+.topic-avatar-image { display: block; object-fit: cover; border: 1px solid rgba(0,0,0,.08); }
 .topic-who { color: var(--color-text-primary, #2d2d2d); font-size: 11px; font-weight: 700; }
 .topic-tag {
   margin-left: auto;
@@ -2251,6 +2253,10 @@ body.meeting-topic-board .tab-strip__item.is-active .tab-strip__no { color: #2c6
 [data-theme="dark"] .topic-avatar {
   background: #29453e;
   color: #bfe2d8;
+}
+[data-theme="dark"] .topic-avatar-image {
+  background: #29453e;
+  border-color: rgba(255,255,255,.14);
 }
 [data-theme="dark"] .topic-expand,
 [data-theme="dark"] .action-column-head,
