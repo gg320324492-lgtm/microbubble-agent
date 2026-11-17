@@ -124,6 +124,8 @@ async def transcribe_full_audio(
                 if resp.status_code == 200:
                     payload = resp.json()
                     text = (payload.get("text") or "").strip()
+                    if text and is_noise_text(text):
+                        text = ""
                     if text:
                         segments.append({
                             "text": text,
@@ -174,6 +176,21 @@ async def transcribe_full_audio(
 # 代价：请求数从 15 涨到数百，用并发（默认 6）压到 1–2 分钟。
 # ============================================================================
 SEGMENT_CONCURRENCY = 3  # 2026-11-17 实测: 6 并发触发云端 429
+
+
+# 2026-11-17: 云端对噪声/静音段会吐外语幻觉 (会议 259 实测 44/1084 段, 如
+# "E o túnel de Dirac." / "True." / "Yeah.")。中文会议里**整段无汉字且词数少**
+# 的片段按噪声丢弃; 保留长英文引用 (词数 > 8) 以免误删真实英文发言。
+_NOISE_MAX_WORDS = 8
+
+
+def is_noise_text(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return True
+    if any("一" <= ch <= "鿿" for ch in t):
+        return False
+    return len(t.split()) <= _NOISE_MAX_WORDS
 
 
 def _float32_to_wav_bytes(audio, sample_rate: int) -> bytes:
@@ -271,8 +288,12 @@ async def transcribe_segments(
         results = await asyncio.gather(*(one(i, s) for i, s in enumerate(items)))
 
     out = []
+    filtered = 0
     for idx, seg, text in sorted(results, key=lambda x: x[1].start_time):
         if not text:
+            continue
+        if is_noise_text(text):
+            filtered += 1
             continue
         out.append({
             "text": text,
@@ -287,6 +308,7 @@ async def transcribe_segments(
         "mode": "vad",
         "clips": total,
         "failed_clips": len(errors),
+        "filtered_noise": filtered,
         "elapsed_sec": round(time.time() - t0, 1),
         "last_error": errors[0] if errors else None,
     }
