@@ -22,7 +22,7 @@ class DB:
         q = params["query_embedding"]
         assert isinstance(q, str), "裸 SQL 的 pgvector 参数必须是字符串, 不能是 list"
         assert q.startswith("[") and q.endswith("]"), "不是 pgvector 字面量: %r" % q[:30]
-        assert len(q.split(",")) == 1024, "向量维度不对"
+        assert len(q.split(",")) == 1536, "向量维度不对 (2026-11-17 切 1536)"
         assert isinstance(params.get("ones"), str), "常量守卫向量也必须是字符串"
         assert "(v <=> CAST(:ones AS vector)) > 1e-6" in str(statement), (
             "常量假向量守卫丢了 —— MockForward(np.ones) 回填的 178 行会污染排序")
@@ -31,7 +31,7 @@ class DB:
 
 @pytest.mark.asyncio
 async def test_chunk_late_recall_maps_parent_score():
-    rows = await HybridRetriever(DB())._chunk_late_recall([0.0] * 1024, top_k=5)
+    rows = await HybridRetriever(DB())._chunk_late_recall([0.0] * 1536, top_k=5)
     assert rows == [{"id": 7, "score": pytest.approx(0.8), "retrieval_method": "chunk_late"}]
 
 
@@ -41,4 +41,4 @@ async def test_chunk_late_recall_is_best_effort():
         async def execute(self, statement, params):
             raise RuntimeError("column unavailable during rollout")
 
-    assert await HybridRetriever(FailingDB())._chunk_late_recall([0.0] * 1024) == []
+    assert await HybridRetriever(FailingDB())._chunk_late_recall([0.0] * 1536) == []
