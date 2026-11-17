@@ -463,6 +463,9 @@ async def test_capture_then_recall_roundtrip(db, monkeypatch):
     import app.services.embedding_service as emb
 
     monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ENABLED", True)
+    # 2026-11-17: 本机 .env 可能配了灰度白名单 (如 "3") ⇒ 9911 落到"名单外"写入 0 条。
+    # 本用例语义是"全员启用", 必须显式清空白名单, 否则本地与 CI 行为不一致。
+    monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ALLOWED_USERS", "")
 
     # 确定性正交向量: 不用 hash() —— Python 的字符串 hash 按进程随机化,
     # 两条文本可能撞进同一个桶, 排序就没有唯一正确答案 (本次首轮实测踩过:
@@ -541,7 +544,8 @@ async def test_whitelist_isolation_in_real_db(db, monkeypatch):
     monkeypatch.setattr(settings, "CONVERSATION_MEMORY_ENABLED", False)  # 仍关着
 
     def vec(_):
-        return [1.0] + [0.0] * 1023
+        # 2026-11-17: embedding_mm 列是 vector(1536), 假向量必须同维
+        return [1.0] + [0.0] * 1535
 
     async def fake_docs(texts, for_query=False, has_query_prompt=False):
         return [vec(t) for t in texts]
