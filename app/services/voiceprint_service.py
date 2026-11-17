@@ -486,7 +486,9 @@ class VoiceprintService:
         from app.models.member import Member
         from scipy.spatial.distance import cosine
 
-        self._load_pipeline()
+        # 2026-11-17: 不再在这里显式 _load_pipeline() —— extract_embedding 内部
+        # 本身就会按需加载。提前加载让"只测 margin 逻辑"的单测也必须联网下载
+        # 3D-Speaker 模型 (CI shard 7 连续两次 timeout 的根因)。
         emb = self.extract_embedding(audio)
         anchors = await self.get_anchor_members(db)
 
