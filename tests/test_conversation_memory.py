@@ -482,6 +482,11 @@ async def test_capture_then_recall_roundtrip(db, monkeypatch):
     async def fake_docs(texts, for_query=False, has_query_prompt=False):
         return [vec(t) for t in texts]
 
+    # ⚠️ 2026-11-17: fake_docs 此前**定义了却忘了挂上去** ⇒ 写库走真 embedding。
+    # 本机有云端 key 时返回 1536 维"碰巧"通过, CI 无 key 回退本地 1024 维即失败
+    # (expected 1536 dimensions, not 1024)。写路径必须与查询路径同样 mock。
+    monkeypatch.setattr(emb, "generate_embeddings", fake_docs)
+
     from app.services.conversation_memory_service import (
         capture_overflow, pick_memorable_turns, recall_memories)
 
