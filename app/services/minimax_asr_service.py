@@ -201,23 +201,20 @@ _LATIN_PREFIX_RE = None
 def strip_leading_latin_hallucination(text: str) -> str:
     """去掉"拉丁前缀 + 中文"混合段开头的幻觉前缀。
 
-    会议 259 实测: "E o túnel de Dirac. 放几块抽真空。保证。" —— 云端把噪声段
-    误识成外语短语后接上真实中文。只在前缀**≥2 个词**时剥离, 避免误伤
-    "UV 处理" / "COD 指标" 这类正常单缩写。
+    会议 259 实测: "E o túnel de Dirac.。 放放几块抽真空。 保证。" —— 云端把噪声段
+    误识成外语短语后接上真实中文。做法: 找第一个汉字位置, 前缀里**≥2 个拉丁词**
+    才判定为幻觉并剥离; 单缩写 ("UV 处理" / "COD 指标") 保留。
     """
-    global _LATIN_PREFIX_RE
     import re
-    if _LATIN_PREFIX_RE is None:
-        _LATIN_PREFIX_RE = re.compile(
-            r"^([A-Za-zÀ-ɏ'’.,\- ]{4,}?)(?=[一-鿿])"
-        )
     t = (text or "").strip()
-    m = _LATIN_PREFIX_RE.match(t)
-    if not m:
+    idx = next((i for i, ch in enumerate(t) if "一" <= ch <= "鿿"), None)
+    if idx is None or idx == 0:
         return t
-    if len(m.group(1).split()) < 2:
+    prefix = t[:idx]
+    words = re.findall(r"[A-Za-zÀ-ɏ']+", prefix)
+    if len(words) < 2 or len(prefix.strip()) < 4:
         return t
-    return t[m.end():].lstrip()
+    return t[idx:].lstrip()
 
 
 def _float32_to_wav_bytes(audio, sample_rate: int) -> bytes:
