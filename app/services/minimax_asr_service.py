@@ -173,7 +173,7 @@ async def transcribe_full_audio(
 # VAD 分段模式下每段 3–30 秒，时间戳就是声学边界，声纹可正常切音频。
 # 代价：请求数从 15 涨到数百，用并发（默认 6）压到 1–2 分钟。
 # ============================================================================
-SEGMENT_CONCURRENCY = 6
+SEGMENT_CONCURRENCY = 3  # 2026-11-17 实测: 6 并发触发云端 429
 
 
 def _float32_to_wav_bytes(audio, sample_rate: int) -> bytes:
@@ -209,6 +209,13 @@ async def _post_one(client, api_key: str, wav_bytes: bytes, name: str):
                 return (resp.json().get("text") or "").strip(), None
             if 400 <= resp.status_code < 500 and resp.status_code not in (408, 429):
                 return None, f"HTTP {resp.status_code}: {resp.text[:150]}"
+            if resp.status_code == 429:
+                # 云端并发/配额限流: 退避要比普通错误长, 并尊重 Retry-After
+                ra = resp.headers.get("Retry-After")
+                wait = float(ra) if ra and ra.isdigit() else 4.0 * (attempt + 1)
+                last_err = f"HTTP 429, attempt {attempt + 1}, wait {wait:.0f}s"
+                await asyncio.sleep(min(30, wait))
+                continue
             last_err = f"HTTP {resp.status_code}, attempt {attempt + 1}"
         except Exception as e:  # noqa: BLE001
             last_err = f"attempt {attempt + 1}: {e}"
