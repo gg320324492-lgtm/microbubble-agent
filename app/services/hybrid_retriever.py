@@ -780,17 +780,19 @@ class HybridRetriever:
         # ⇒ 在 SQL 里直接排除"与常量方向重合"的向量 (cosine distance ≈ 0)。
         # 这是**数据驱动**的判据, 不依赖"此刻有 178 行假数据"这个时点事实:
         # 将来用真模型 backfill 后, 向量与常量方向不再重合 ⇒ 臂自动生效, 无需改代码。
-        ones_literal = vector_to_pg_literal([1.0] * 1024)
-        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — ⚠️ 此臂读的是
-        # knowledge_chunks.chunk_embedding (late-chunking vector(1024)[] **数组列**),
-        # 不是普通 embedding 列, 与 embedding_mm 切换无关, 原样保留 (1024 维数据未重建)。
+        ones_literal = vector_to_pg_literal([1.0] * 1536, expected_dim=1536)
+        # 2026-11-17 链条收口: 此臂从 late-chunking(1024, 本地 Qwen3 token 级) 切到
+        # **多窗口向量**(1536, 云端 embo-01)。云端只给句/段向量、无 token 级输出,
+        # 真正的 late chunking 无法复现 ⇒ 改为把 chunk 正文按句切窗、每窗一个向量,
+        # 语义保持"细粒度多向量取最小距离", 且与主检索同一向量空间。
+        # 旧列 chunk_embedding(1024[]) 冻结保留为回滚。
         stmt = text(
             """
             SELECT kc.knowledge_id, min(v <=> CAST(:query_embedding AS vector)) AS distance
             FROM knowledge_chunks AS kc
-            CROSS JOIN LATERAL unnest(kc.chunk_embedding) AS vectors(v)
+            CROSS JOIN LATERAL unnest(kc.chunk_embedding_mm) AS vectors(v)
             JOIN knowledge AS k ON k.id = kc.knowledge_id
-            WHERE kc.chunk_embedding IS NOT NULL
+            WHERE kc.chunk_embedding_mm IS NOT NULL
               AND (v <=> CAST(:ones AS vector)) > 1e-6
               AND (CAST(:category AS varchar) IS NULL OR k.category = CAST(:category AS varchar))
             GROUP BY kc.knowledge_id
@@ -804,7 +806,8 @@ class HybridRetriever:
             # 不能传 List[float] (类 20.157 / 20.161)。2026-11-04 之前这里直接
             # 传 list ⇒ asyncpg DataError ⇒ except 兜成空集 ⇒ 整条 late-chunking
             # 召回臂一直是死的, 而检索整体看起来正常 (类 20.220)。
-            query_literal = vector_to_pg_literal(query_embedding)
+            # 2026-11-17: 本臂已切 1536 维 (chunk_embedding_mm), 维度守卫同步
+            query_literal = vector_to_pg_literal(query_embedding, expected_dim=1536)
             result = await self.db.execute(
                 stmt,
                 {"query_embedding": query_literal, "ones": ones_literal,
