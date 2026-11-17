@@ -107,7 +107,10 @@ class MultimodalRetriever:
         return ranked[:top_k]
 
     async def _persist_embeddings(self, pairs) -> None:
-        """回填 knowledge_images.embedding (best-effort, 失败不阻塞检索)"""
+        """回填 knowledge_images.embedding (best-effort, 失败不阻塞检索)
+
+        2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚。
+        """
         if not pairs:
             return
         try:
@@ -119,7 +122,7 @@ class MultimodalRetriever:
                 await self.db.execute(
                     update(KnowledgeImage)
                     .where(KnowledgeImage.id == image_id)
-                    .values(embedding=emb)
+                    .values(embedding_mm=emb)
                 )
             await self.db.commit()
             logger.debug("多模态 embedding 回填: %d rows", len(pairs))
@@ -173,7 +176,8 @@ class MultimodalRetriever:
                 KnowledgeImage.image_url,
                 KnowledgeImage.ocr_text,
                 KnowledgeImage.page_number,
-                KnowledgeImage.embedding,
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                KnowledgeImage.embedding_mm,
             )
             .join(Knowledge, Knowledge.id == KnowledgeImage.knowledge_id)
             .where(
@@ -203,7 +207,7 @@ class MultimodalRetriever:
                 "image_url": row.image_url,
                 "ocr_text": row.ocr_text,
                 "page_number": row.page_number,
-                "embedding": row.embedding,
+                "embedding": row.embedding_mm,  # 2026-11-17: 切 embedding_mm
             }
             for row in rows
         ]

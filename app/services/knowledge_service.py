@@ -51,7 +51,8 @@ async def resync_content_indexes(
             from app.services.embedding_service import generate_embedding
             emb = await generate_embedding(content)
             if emb is not None:
-                k.embedding = emb
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧 halfvec 列冻结保留为回滚
+                k.embedding_mm = emb
                 await db.commit()
                 results["embedding"] = True
         except Exception as e:
@@ -177,7 +178,8 @@ async def _run_analyze_and_embed(
                 )
                 knowledge = result.scalar_one_or_none()
                 if knowledge:
-                    knowledge.embedding = embedding
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧 halfvec 列冻结保留为回滚
+                    knowledge.embedding_mm = embedding
                     await db.commit()
                     embedding_ok = True
 
@@ -869,7 +871,8 @@ class KnowledgeService:
                 )
                 k = result.scalar_one_or_none()
                 if k:
-                    k.embedding = embedding
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧 halfvec 列冻结保留为回滚
+                    k.embedding_mm = embedding
                     await self.db.commit()
         except Exception as e:
             logger.warning(
@@ -881,7 +884,8 @@ class KnowledgeService:
         from app.services.embedding_service import generate_embedding
         embedding = await generate_embedding(content)
         if embedding is not None:
-            knowledge.embedding = embedding
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧 halfvec 列冻结保留为回滚
+            knowledge.embedding_mm = embedding
             await self.db.commit()
             await self.db.refresh(knowledge)
 
@@ -1076,7 +1080,8 @@ class KnowledgeService:
             # private 文件即使 owner 也不通过 search_knowledge 看到 (走 search_my_files 工具)
             stmt = select(
                 Knowledge,
-                Knowledge.embedding.cosine_distance(query_embedding).label("distance")
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                Knowledge.embedding_mm.cosine_distance(query_embedding).label("distance")
             ).where(
                 Knowledge.deleted_at.is_(None),
                 Knowledge.storage_mode == "kb",
@@ -1086,7 +1091,8 @@ class KnowledgeService:
             if category:
                 stmt = stmt.where(Knowledge.category == category)
 
-            stmt = stmt.order_by(Knowledge.embedding.cosine_distance(query_embedding))
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+            stmt = stmt.order_by(Knowledge.embedding_mm.cosine_distance(query_embedding))
             stmt = stmt.limit(top_k)
 
             result = await self.db.execute(stmt)

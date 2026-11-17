@@ -96,6 +96,9 @@ class KnowledgePageTranscript(Base, TimestampMixin):
 
     #: 净化后正文的向量 (Qwen3-Embedding-0.6B, 1024d)
     embedding = Column(Vector(1024), nullable=True)
+    #: 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — DB 为 vector(1536) (迁移 153);
+    #: 旧 vector(1024) 列冻结保留为回滚, 不再写入。
+    embedding_mm = Column(Vector(1536), nullable=True)
 
     #: 词法召回列 (agent45, 迁移 145) —— 罕见拉丁词检索路。
     #: content_tsvector: GENERATED ALWAYS AS

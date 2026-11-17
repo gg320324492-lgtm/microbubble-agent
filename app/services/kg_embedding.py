@@ -140,6 +140,9 @@ async def backfill_kg_entity_embeddings(
 
     只处理 embedding IS NULL 的行, 幂等可重跑。
     返回 {"scanned": N, "updated": M, "skipped": K}
+
+    2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — 写新列,
+    旧 vector(1024) 列冻结保留为回滚。
     """
     stats = {"scanned": 0, "updated": 0, "skipped": 0}
     try:
@@ -150,7 +153,7 @@ async def backfill_kg_entity_embeddings(
         for _ in range(max_batches):
             stmt = (
                 select(KGEntity)
-                .where(KGEntity.embedding.is_(None))
+                .where(KGEntity.embedding_mm.is_(None))
                 .limit(batch_size)
             )
             result = await db.execute(stmt)
@@ -163,7 +166,8 @@ async def backfill_kg_entity_embeddings(
                     entity.entity_name, entity.entity_type
                 )
                 if emb:
-                    entity.embedding = emb
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                    entity.embedding_mm = emb
                     stats["updated"] += 1
                 else:
                     stats["skipped"] += 1

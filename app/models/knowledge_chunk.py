@@ -59,6 +59,9 @@ class KnowledgeChunk(Base, TimestampMixin):
 
     content = Column(Text, nullable=False)
     embedding = Column(Vector(1024), nullable=True)
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — DB 为 vector(1536) (迁移 153);
+    # 旧 vector(1024) 列冻结保留为回滚, 不再写入。⚠️ chunk_embedding (late-chunking 数组列) 不在此列切换范围。
+    embedding_mm = Column(Vector(1536), nullable=True)
 
     # 位置元数据 — 召回时拼上下文 window 用
     char_start = Column(Integer, nullable=False)

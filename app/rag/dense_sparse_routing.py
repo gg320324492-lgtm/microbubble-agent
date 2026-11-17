@@ -86,8 +86,8 @@ class DenseSparseRouter:
     async def _init_vector_index(self):
         """初始化 LlamaIndex VectorStoreIndex
 
-        - 复用现有 knowledge.embedding HNSW 索引 (pgvector)
-        - 显式 embedding_dim=1024 (Qwen3-Embedding, LLAMAINDEX_EMBEDDING_DIM 可覆盖)
+        - 复用现有 knowledge.embedding_mm HNSW 列 (pgvector)
+        - 显式 embedding_dim=1536 (2026-11-17: MiniMax embo-01, LLAMAINDEX_EMBEDDING_DIM 可覆盖)
         - 只读模式: perform_setup=False (SELECT only, 不建表/不建索引/不 UPSERT)
         - 失败 (llama_index 未装 / 老表列结构不匹配) → 抛异常 → retrieve() 回退手写
         """

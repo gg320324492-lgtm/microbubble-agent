@@ -14,14 +14,15 @@ from app.services.recall_observability import RecallTrace
 
 
 def _image(image_id=1, knowledge_id=10, text="oxygen transfer chart", url="https://img/1"):
-    # embedding 对齐迁移 129 后的 ORM 行形状 (None = 未回填, 走实时计算路径)
+    # embedding 对齐迁移 129/153 后的 ORM 行形状 (None = 未回填, 走实时计算路径)
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — mock 行字段同步
     return SimpleNamespace(
         image_id=image_id,
         knowledge_id=knowledge_id,
         image_url=url,
         ocr_text=text,
         page_number=1,
-        embedding=None,
+        embedding_mm=None,
     )
 
 

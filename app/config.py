@@ -167,6 +167,16 @@ class Settings(BaseSettings):
     GPU_ASR_MAX_SEC: int = 5400
     GPU_ASR_STALL_SEC: int = 900
 
+    # 2026-11-17: 会议转写后端选择 (评测 CER: MiniMax asr-1.0 0.089 vs SenseVoice 0.156)。
+    # minimax = 云端 asr-1.0 优先 (GPU 7B 之后、SenseVoice 之前), 失败自动回退;
+    # 本地 VibeVoice-7B / SenseVoice 保留为替补。取值: minimax | sensevoice
+    MEETING_ASR_BACKEND: str = "minimax"
+
+    # 2026-11-17: Embedding 后端选择 (评测: embo-01 与 Qwen3 检索 top-1 5/5 一致)。
+    # minimax = 云端 embo-01 (1536 维) 优先, 失败自动回退本地 Qwen3 (1024 维, 替补)。
+    # ⚠️ 维度不同: 切换后必须全量重建存量向量 (knowledge_chunks / knowledge.embedding 等)。
+    EMBEDDING_BACKEND: str = "minimax"
+
     # 2026-09-08 Streaming-7B 实时 ASR (host 常驻 8006, RTF~0.1, 2.9s 增量块)
     # 注意: 常驻 ~16GB 显存; 与 meeting_worker 并发时后者 OOM 会自动回退 SenseVoice
     GPU_STREAMING_ASR_ENABLED: bool = True

@@ -43,7 +43,9 @@ BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "64"))
 # 注意: 保留原 _model singleton + 通过 EMBEDDING_BACKEND env var 路由,
 # 不破坏现有 generate_embedding_sync / generate_embedding / generate_embeddings /
 # get_or_compute_query_embedding 调用方.
-EMBEDDING_BACKEND_NAME = os.getenv("EMBEDDING_BACKEND", "qwen3").lower()  # qwen3 | bge_m3
+# 2026-11-17: 优先读 config.settings (主指挥可经 .env 覆盖), 默认 qwen3 (本地替补)。
+from app.config import settings as _embed_settings
+EMBEDDING_BACKEND_NAME = (_embed_settings.EMBEDDING_BACKEND or "qwen3").lower()  # qwen3 | bge_m3 | minimax
 BGE_M3_MODEL_NAME = "BAAI/bge-m3"
 
 # W-N-F +3: LoRA adapter 加载逻辑占位 (派工 brief 派工起点, 严禁真加载)
@@ -85,8 +87,9 @@ class EmbeddingBackend(ABC):
 
     @classmethod
     def from_env(cls) -> "EmbeddingBackend":
-        if EMBEDDING_BACKEND_NAME == "bge_m3":
-            return BGEM3Backend()
+        # 2026-11-17: minimax 后端走 generate_embedding(s) 内的云端分支 (embo-01),
+        # 不经 EmbeddingBackend 对象 (云端无本地模型实例), 这里返回 Qwen3Backend
+        # 仅作失败回退占位。
         return Qwen3Backend()
 
 
@@ -497,6 +500,18 @@ async def generate_embedding(
     if for_query is None:
         for_query = should_use_query_prefix(caller_path)
 
+    # 2026-11-17: EMBEDDING_BACKEND=minimax 时走云端 embo-01 (1536 维),
+    # 失败自动回退本地 Qwen3 (1024 维, 替补)。⚠️ 维度不同 ⇒ 切换必须全量重建向量。
+    if EMBEDDING_BACKEND_NAME == "minimax":
+        try:
+            from app.services.minimax_embedding_service import embed_texts
+            ttype = "query" if for_query else "db"
+            vectors = await embed_texts([text], text_type=ttype)
+            if vectors and len(vectors) == 1:
+                return vectors[0]
+        except Exception as e:
+            logger.warning(f"[minimax-embed] 单条生成失败, 回退本地: {e}")
+
     ok, result = await _run_encode_in_executor(
         lambda: generate_embedding_sync(text, for_query, has_query_prompt, caller_path),
         timeout=60.0,
@@ -517,6 +532,17 @@ async def generate_embeddings(
         for_query: 保留兼容（当前所有调用都用 False）
         has_query_prompt: 模型是否支持 query prefix（同 generate_embedding_sync）
     """
+    # 2026-11-17: EMBEDDING_BACKEND=minimax 时走云端 embo-01, 失败回退本地。
+    if EMBEDDING_BACKEND_NAME == "minimax":
+        try:
+            from app.services.minimax_embedding_service import embed_texts
+            ttype = "query" if for_query else "db"
+            vectors = await embed_texts(list(texts), text_type=ttype)
+            if vectors:
+                return vectors
+        except Exception as e:
+            logger.warning(f"[minimax-embed] 批量生成失败, 回退本地: {e}")
+
     model = _get_model()
     if model is None:
         return None

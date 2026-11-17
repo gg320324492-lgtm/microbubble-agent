@@ -13,7 +13,7 @@ async def test_compute_and_store_embedding_basic():
     meeting.summary = "讨论项目"
     meeting.key_points = ["要点1"]
     meeting.decisions = ["决策1"]
-    meeting.embedding = None
+    meeting.embedding_mm = None
     db.get = AsyncMock(return_value=meeting)
     db.commit = AsyncMock()
 
@@ -22,7 +22,8 @@ async def test_compute_and_store_embedding_basic():
         await compute_and_store_embedding(db, meeting_id=1)
     mock_gen.assert_called_once()
 
-    assert meeting.embedding == mock_embedding
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — 写入目标列同步
+    assert meeting.embedding_mm == mock_embedding
     db.commit.assert_called_once()
 
 
@@ -32,7 +33,7 @@ async def test_find_related_meetings_returns_top_k():
     db = MagicMock()
     current = MagicMock()
     current.id = 1
-    current.embedding = [0.1] * 768
+    current.embedding_mm = [0.1] * 768
     db.get = AsyncMock(return_value=current)
 
     m1 = MagicMock(); m1.id = 2; m1.title = "M2"; m1.start_time = None; m1.summary = "s"
@@ -55,11 +56,11 @@ async def test_find_related_meetings_returns_top_k():
 
 @pytest.mark.asyncio
 async def test_find_related_returns_empty_when_no_embedding():
-    """当前会议无 embedding → []"""
+    """当前会议无 embedding → [] (2026-11-17: 切 embedding_mm)"""
     db = MagicMock()
     current = MagicMock()
     current.id = 1
-    current.embedding = None
+    current.embedding_mm = None
     db.get = AsyncMock(return_value=current)
 
     result = await find_related_meetings(db, meeting_id=1, top_k=3)

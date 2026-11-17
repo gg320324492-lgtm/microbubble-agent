@@ -177,7 +177,8 @@ async def index_meeting_transcript(
                 for idx, emb in enumerate(embeddings):
                     target = by_index.get(idx)
                     if target is not None and emb is not None:
-                        target.embedding = emb
+                        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                        target.embedding_mm = emb
                         stats["embedded"] += 1
                 await db.commit()
     except Exception as e:

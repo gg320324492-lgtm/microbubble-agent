@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.base import TimestampMixin
 from app.models.types import HalfVector  # W-N-B 阶段 B.5: halfvec 量化
+from pgvector.sqlalchemy import Vector  # 2026-11-17: embedding_mm (1536d) 用 vector 类型
 
 
 class Meeting(Base, TimestampMixin):
@@ -77,6 +78,9 @@ class Meeting(Base, TimestampMixin):
     agenda = Column(JSON, nullable=True)
     # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
     embedding = Column(HalfVector(1024), nullable=True)  # W-N-B 阶段 B.5: float32 -> float16
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — DB 为 vector(1536) (迁移 153);
+    # 旧 halfvec(1024) 列冻结保留为回滚, 不再写入。
+    embedding_mm = Column(Vector(1536), nullable=True)
     # W-N-C 阶段 C.2: embedding 后端版本标记 (qwen3-0.6b | bge-m3 灰度)
     embedding_model_version = Column(
         String(32), nullable=False, server_default="qwen3-0.6b"

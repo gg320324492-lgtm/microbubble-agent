@@ -269,7 +269,8 @@ class PageTranscriptRetriever:
                 KnowledgePageTranscript.page_number,
                 KnowledgePageTranscript.content,
                 KnowledgePageTranscript.file_name,
-                KnowledgePageTranscript.embedding,
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                KnowledgePageTranscript.embedding_mm,
             )
             .join(Knowledge, Knowledge.id == KnowledgePageTranscript.knowledge_id)
             .where(
@@ -297,7 +298,7 @@ class PageTranscriptRetriever:
                 "page_number": row.page_number,
                 "content": row.content,
                 "file_name": row.file_name,
-                "embedding": row.embedding,
+                "embedding": row.embedding_mm,  # 2026-11-17: 切 embedding_mm
             }
             for row in rows
         ]
@@ -313,7 +314,8 @@ class PageTranscriptRetriever:
                 await self.db.execute(
                     update(KnowledgePageTranscript)
                     .where(KnowledgePageTranscript.id == row_id)
-                    .values(embedding=emb)
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                    .values(embedding_mm=emb)
                 )
             await self.db.commit()
             logger.debug("整页转写 embedding 回填: %d rows", len(pairs))

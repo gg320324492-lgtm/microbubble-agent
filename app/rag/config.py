@@ -163,6 +163,7 @@ LANGFUSE_TRACE_ENABLED: bool = (
 
 # LlamaIndex PGVector 配置 (复用现有表, 不建新表)
 LLAMAINDEX_PGVECTOR_SCHEMA: str = os.getenv("LLAMAINDEX_PGVECTOR_SCHEMA", "public")
-LLAMAINDEX_EMBEDDING_DIM: int = int(os.getenv("LLAMAINDEX_EMBEDDING_DIM", "1024"))
+# 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — 默认维度从 1024 改 1536 (迁移 153)
+LLAMAINDEX_EMBEDDING_DIM: int = int(os.getenv("LLAMAINDEX_EMBEDDING_DIM", "1536"))
 
 # Agent Router 限制

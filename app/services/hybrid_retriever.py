@@ -478,7 +478,8 @@ class HybridRetriever:
 
             query_embedding = await _gocqe(query, has_query_prompt=True)
             if query_embedding is not None:
-                _mdist = _MC.embedding.cosine_distance(query_embedding).label("distance")
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                _mdist = _MC.embedding_mm.cosine_distance(query_embedding).label("distance")
                 mstmt = (
                     _msel(
                         _MC.meeting_id,
@@ -490,7 +491,7 @@ class HybridRetriever:
                         _mdist,
                     )
                     .join(_M, _M.id == _MC.meeting_id)
-                    .where(_MC.embedding.isnot(None))
+                    .where(_MC.embedding_mm.isnot(None))  # 2026-11-17: 切 embedding_mm
                     .order_by(_mdist)
                     .limit(candidate_k)
                 )
@@ -544,7 +545,8 @@ class HybridRetriever:
                     if user_id is not None
                     else (_KD.visibility != "private")
                 )
-                _ddist = _KC.embedding.cosine_distance(drive_emb).label("distance")
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                _ddist = _KC.embedding_mm.cosine_distance(drive_emb).label("distance")
                 dstmt = (
                     _dsel(
                         _KC.knowledge_id,
@@ -556,7 +558,7 @@ class HybridRetriever:
                     )
                     .join(_KD, _KD.id == _KC.knowledge_id)
                     .where(
-                        _KC.embedding.isnot(None),
+                        _KC.embedding_mm.isnot(None),  # 2026-11-17: 切 embedding_mm
                         _KD.deleted_at.is_(None),
                         _KD.storage_mode == "drive",
                         vis_cond,
@@ -779,6 +781,9 @@ class HybridRetriever:
         # 这是**数据驱动**的判据, 不依赖"此刻有 178 行假数据"这个时点事实:
         # 将来用真模型 backfill 后, 向量与常量方向不再重合 ⇒ 臂自动生效, 无需改代码。
         ones_literal = vector_to_pg_literal([1.0] * 1024)
+        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — ⚠️ 此臂读的是
+        # knowledge_chunks.chunk_embedding (late-chunking vector(1024)[] **数组列**),
+        # 不是普通 embedding 列, 与 embedding_mm 切换无关, 原样保留 (1024 维数据未重建)。
         stmt = text(
             """
             SELECT kc.knowledge_id, min(v <=> CAST(:query_embedding AS vector)) AS distance
@@ -976,13 +981,15 @@ async def retrieve_chunks_by_vector(
         KnowledgeChunk.char_end,
         KnowledgeChunk.char_count,
         KnowledgeChunk.strategy,
-        KnowledgeChunk.embedding.cosine_distance(query_embedding).label("distance"),
+        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+        KnowledgeChunk.embedding_mm.cosine_distance(query_embedding).label("distance"),
     ).join(
         Knowledge, Knowledge.id == KnowledgeChunk.knowledge_id
     )
 
     # chunk 必须有 embedding (召回前)
-    stmt = stmt.where(KnowledgeChunk.embedding.is_not(None))
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+    stmt = stmt.where(KnowledgeChunk.embedding_mm.is_not(None))
 
     # 2026-09-01 可见性硬边界 (与 search_semantic 同款过滤):
     # 软删除 / drive 模式 / private 文档的 chunk 不可召回

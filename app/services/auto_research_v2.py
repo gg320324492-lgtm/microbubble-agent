@@ -172,7 +172,8 @@ class AutoResearchV2Service:
             # 2. 取最近 N 条 + similarity (pgvector cosine_distance)
             # ORDER BY embedding <=> :emb → cosine_distance, similarity = 1 - distance
             N_FETCH = 20
-            distance_expr = Knowledge.embedding.cosine_distance(emb)
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+            distance_expr = Knowledge.embedding_mm.cosine_distance(emb)
             similarity_expr = 1 - distance_expr
             stmt = (
                 select(
@@ -182,7 +183,7 @@ class AutoResearchV2Service:
                     Knowledge.content,
                     similarity_expr.label("similarity"),
                 )
-                .where(Knowledge.embedding.isnot(None))
+                .where(Knowledge.embedding_mm.isnot(None))  # 2026-11-17: 切 embedding_mm
                 .order_by(distance_expr)
                 .limit(N_FETCH)
             )

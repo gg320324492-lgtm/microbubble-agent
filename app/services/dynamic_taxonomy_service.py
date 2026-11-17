@@ -101,20 +101,21 @@ class DynamicTaxonomyService:
         target = result.scalar_one_or_none()
         # 必须用 is None 不用 not: pgvector embedding 是 numpy 数组,
         # `not numpy_array` 会抛 "truth value ambiguous" (2026-06-28 教训)
-        if target is None or target.embedding is None:
+        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+        if target is None or target.embedding_mm is None:
             return None
 
         # 找最相似的有分类的条目
         try:
             stmt = text("""
-                SELECT k.id, k.category, 1 - cosine_distance(k.embedding::vector, :emb::vector) AS sim
+                SELECT k.id, k.category, 1 - cosine_distance(k.embedding_mm::vector, :emb::vector) AS sim
                 FROM knowledge k
                 WHERE k.id != :kid AND k.category IS NOT NULL AND k.category != ''
                 ORDER BY sim DESC
                 LIMIT 1
             """)
             result = await self.db.execute(stmt, {
-                "emb": target.embedding,
+                "emb": target.embedding_mm,
                 "kid": knowledge_id,
             })
             row = result.one_or_none()

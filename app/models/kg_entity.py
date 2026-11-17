@@ -101,6 +101,9 @@ class KGEntity(Base, TimestampMixin):
 
     # 实体向量 (pgvector, PR1 truncate_for_embedding 预处理后生成)
     embedding = Column(Vector(KG_ENTITY_VECTOR_DIM), nullable=True)
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — DB 为 vector(1536) (迁移 153);
+    # 旧 vector(1024) 列冻结保留为回滚, 不再写入。
+    embedding_mm = Column(Vector(1536), nullable=True)
 
     # 实体生命周期 (first_seen_at 首次抽取 / last_seen_at 最近一次命中)
     first_seen_at = Column(DateTime, nullable=False, server_default=func.now())

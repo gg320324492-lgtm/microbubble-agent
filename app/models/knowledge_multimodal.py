@@ -71,6 +71,9 @@ class KnowledgeImage(Base, TimestampMixin):
     # 2026-09-01 WP5: OCR 文本 embedding (第 5 路多模态召回持久化)
     # 此前每次 query 实时重算全部候选 → 图多了拖垮检索; 迁移 129 加列 + HNSW
     embedding = Column(Vector(1024), nullable=True)
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — DB 为 vector(1536) (迁移 153);
+    # 旧 vector(1024) 列冻结保留为回滚, 不再写入。
+    embedding_mm = Column(Vector(1536), nullable=True)
 
     # ── v28 step 2: vision 模型输出的结构化字段（替代前端 paperAdapter 正则推断）
     # 图号与类型

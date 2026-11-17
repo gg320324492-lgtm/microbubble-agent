@@ -287,7 +287,8 @@ class EntityLinkRecall:
             if not emb:
                 return []
 
-            distance = KGEntity.embedding.cosine_distance(emb).label("distance")
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+            distance = KGEntity.embedding_mm.cosine_distance(emb).label("distance")
             stmt = (
                 select(
                     KGEntity.id,
@@ -295,7 +296,7 @@ class EntityLinkRecall:
                     KGEntity.knowledge_id,
                     distance,
                 )
-                .where(KGEntity.embedding.isnot(None))
+                .where(KGEntity.embedding_mm.isnot(None))
                 .order_by(distance)
                 .limit(MAX_SEED_ENTITIES * 2)
             )

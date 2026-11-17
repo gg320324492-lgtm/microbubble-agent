@@ -536,7 +536,8 @@ async def compute_and_store_embedding(
         return
 
     embedding = await generate_embedding(full_text)
-    meeting.embedding = embedding
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧 halfvec 列冻结保留为回滚
+    meeting.embedding_mm = embedding
     await db.commit()
 
 
@@ -549,19 +550,20 @@ async def find_related_meetings(
     current = await db.get(Meeting, meeting_id)
     # 必须用 is None 不用 not: pgvector embedding 是 numpy 数组,
     # `not numpy_array` 会抛 "truth value ambiguous" (2026-06-28 教训: 会议 64 报 500)
-    if current is None or current.embedding is None:
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+    if current is None or current.embedding_mm is None:
         return []
 
     stmt = (
         select(
             Meeting,
-            Meeting.embedding.cosine_distance(current.embedding).label("distance"),
+            Meeting.embedding_mm.cosine_distance(current.embedding_mm).label("distance"),
         )
         .where(
             Meeting.id != meeting_id,
-            Meeting.embedding.isnot(None),
+            Meeting.embedding_mm.isnot(None),
         )
-        .order_by(Meeting.embedding.cosine_distance(current.embedding))
+        .order_by(Meeting.embedding_mm.cosine_distance(current.embedding_mm))
         .limit(top_k)
     )
     result = await db.execute(stmt)

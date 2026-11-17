@@ -255,7 +255,8 @@ async def capture_overflow(
                     last_accessed_at=now,
                     source_session=(session_id or "")[:100],
                     is_active=True,
-                    embedding=vec,
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                    embedding_mm=vec,
                 ))
             await db.commit()
             written = sum(1 for _, v in zip(fresh, vecs) if v is not None)
@@ -358,14 +359,15 @@ async def recall_memories(
             logger.debug("[长期记忆] query embedding 不可用, 跳过召回")
             return []
 
-        dist = Memory.embedding.cosine_distance(qvec).label("dist")
+        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+        dist = Memory.embedding_mm.cosine_distance(qvec).label("dist")
         rows = (await db.execute(
             select(Memory, dist)
             .where(
                 Memory.user_id == user_id,
                 Memory.memory_type == MEMORY_TYPE_EPISODE,
                 Memory.is_active.is_(True),
-                Memory.embedding.isnot(None),
+                Memory.embedding_mm.isnot(None),
             )
             .order_by(dist)
             .limit(k)

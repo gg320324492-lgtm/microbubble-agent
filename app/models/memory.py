@@ -77,6 +77,9 @@ class Memory(Base, TimestampMixin):
     is_active = Column(Boolean, nullable=True, default=True)
     # 该列是 pgvector 的 vector(1024) (不是 knowledge 表用的 halfvec)
     embedding = Column(Vector(1024), nullable=True)
+    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — DB 为 vector(1536) (迁移 153);
+    # 旧 vector(1024) 列冻结保留为回滚, 不再写入。
+    embedding_mm = Column(Vector(1536), nullable=True)
 
     def __repr__(self) -> str:
         return "<Memory id=%s user=%s type=%s key=%s>" % (

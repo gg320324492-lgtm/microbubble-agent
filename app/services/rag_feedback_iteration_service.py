@@ -135,7 +135,8 @@ async def aggregate_negative_feedback(
         #    joining chat_messages → search_logs; keep this minimal per 派工 v6 §13.3.
         candidate_q = await db.execute(
             select(Knowledge)
-            .where(Knowledge.embedding.isnot(None))
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+            .where(Knowledge.embedding_mm.isnot(None))
             .order_by(Knowledge.created_at.desc())
             .limit(1)
         )

@@ -7,7 +7,7 @@ PR9 量化门禁 #2: 跨文档去重准确率 ≥ 95%。
 2. **闸门 2 (LLM-as-judge)**: 对粗筛候选做语义判定, 排除同义改写但不同主题的假阳性
 
 **派工纪要 v6 §2 复用纪律**:
-- 复用 `Knowledge.embedding.cosine_distance` (pgvector 原生)
+- 复用 `Knowledge.embedding_mm.cosine_distance` (pgvector 原生; 2026-11-17 切 1536d MiniMax embo-01)
 - 复用 `app.services.auto_research_v2.AutoResearchV2Service.llm_as_judge`
 - 复用 `app.services.embedding_service.generate_embedding`
 
@@ -111,7 +111,8 @@ class CrossDocDedupService:
         if emb is None:
             return []
 
-        distance_expr = Knowledge.embedding.cosine_distance(emb)
+        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+        distance_expr = Knowledge.embedding_mm.cosine_distance(emb)
         similarity_expr = 1 - distance_expr
 
         # 取 threshold 之上的 top_k + 一定 buffer (LLM judge 需要上下文)
@@ -123,7 +124,7 @@ class CrossDocDedupService:
                 Knowledge.content,
                 similarity_expr.label("similarity"),
             )
-            .where(Knowledge.embedding.isnot(None))
+            .where(Knowledge.embedding_mm.isnot(None))  # 2026-11-17: 切 embedding_mm
             .order_by(distance_expr)
             .limit(top_k * 4)  # 4x buffer 让 LLM judge 有更多上下文
         )

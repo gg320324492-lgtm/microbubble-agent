@@ -189,15 +189,16 @@ class EntityService:
         if not budget_hit:
             a = aliased(KnowledgeEntity, name="a")
             b = aliased(KnowledgeEntity, name="b")
-            sim = 1 - a.embedding.cosine_distance(b.embedding)
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+            sim = 1 - a.embedding_mm.cosine_distance(b.embedding_mm)
             cand_stmt = (
                 select(a.id.label("x"), b.id.label("y"))
                 .select_from(sqlalchemy_join(a, b, and_(
                     b.predicate == a.predicate,
                     b.id > a.id,
-                    b.embedding.isnot(None),
+                    b.embedding_mm.isnot(None),
                 )))
-                .where(a.embedding.isnot(None))
+                .where(a.embedding_mm.isnot(None))
                 .where(sim >= self.FUSION_SIMILARITY_THRESHOLD)
                 .order_by(sim.desc())
                 .limit(max_candidates)
@@ -271,9 +272,10 @@ class EntityService:
         if embedding:
             try:
                 stmt = (
-                    select(KnowledgeEntity, 1 - KnowledgeEntity.embedding.cosine_distance(embedding))
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                    select(KnowledgeEntity, 1 - KnowledgeEntity.embedding_mm.cosine_distance(embedding))
                     .where(KnowledgeEntity.predicate == predicate)
-                    .order_by(KnowledgeEntity.embedding.cosine_distance(embedding))
+                    .order_by(KnowledgeEntity.embedding_mm.cosine_distance(embedding))
                     .limit(5)
                 )
                 sim_rows = await self.db.execute(stmt)
@@ -351,7 +353,8 @@ class EntityService:
                     text += f" ({entity.condition})"
                 emb = await generate_embedding(text)
                 if emb:
-                    entity.embedding = emb
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                    entity.embedding_mm = emb
                     await db.commit()
         except Exception as e:
             logger.warning(f"实体 embedding 生成失败(entity_id={entity_id}): {e}")

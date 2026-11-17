@@ -71,8 +71,13 @@ async def _record_executor_id(sink):
 # 2. 单条 generate_embedding: 超时返回 None + 置 degraded, 且不泄漏线程
 # ---------------------------------------------------------------------------
 
+def _force_local_backend(monkeypatch):
+    """评测主拍切了 minimax 云端后端；本文件只测本地路径逻辑，强制回 qwen3。"""
+    monkeypatch.setattr(es, "EMBEDDING_BACKEND_NAME", "qwen3")
+
 @pytest.mark.asyncio
 async def test_generate_embedding_timeout_returns_none_and_marks_degraded(monkeypatch):
+    _force_local_backend(monkeypatch)
     """慢 encode 触发超时 → 返回 None, 且进程级 degraded 标记置位。"""
     entered = threading.Event()
     release = threading.Event()
@@ -108,6 +113,7 @@ async def test_generate_embedding_timeout_returns_none_and_marks_degraded(monkey
 
 @pytest.mark.asyncio
 async def test_generate_embeddings_timeout_marks_degraded(monkeypatch):
+    _force_local_backend(monkeypatch)
     release = threading.Event()
 
     class _SlowModel:
@@ -140,6 +146,7 @@ async def test_generate_embeddings_timeout_marks_degraded(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_timeout_does_not_permanently_block_dedicated_executor(monkeypatch):
+    _force_local_backend(monkeypatch)
     """这是修复的核心价值证明。
 
     场景: 第一次调用超时 (慢线程被杀不掉, 仍占着唯一的 executor worker),
@@ -193,6 +200,7 @@ async def test_timeout_does_not_permanently_block_dedicated_executor(monkeypatch
 
 @pytest.mark.asyncio
 async def test_fast_path_unaffected(monkeypatch):
+    _force_local_backend(monkeypatch)
     monkeypatch.setattr(
         es, "generate_embedding_sync", lambda *a, **k: [0.1, 0.2, 0.3]
     )

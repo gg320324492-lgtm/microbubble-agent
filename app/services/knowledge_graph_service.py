@@ -201,12 +201,13 @@ class KnowledgeGraphService:
     async def _calc_similarity(self, a: Knowledge, b: Knowledge) -> Optional[float]:
         """计算两个条目的语义相似度"""
         try:
-            if a.embedding is None or b.embedding is None:
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+            if a.embedding_mm is None or b.embedding_mm is None:
                 return None
 
             # Use pgvector cosine_distance via SQLAlchemy column expression
             stmt = select(
-                1 - Knowledge.embedding.cosine_distance(b.embedding)
+                1 - Knowledge.embedding_mm.cosine_distance(b.embedding_mm)
             ).where(Knowledge.id == a.id)
             result = await self.db.execute(stmt)
             row = result.one_or_none()
@@ -576,7 +577,8 @@ async def _add_entity_links(db: AsyncSession, knowledge_id: int) -> dict:
             )
             emb = await generate_kg_entity_embedding(name, etype)
             if emb:
-                entity.embedding = emb
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                entity.embedding_mm = emb
             db.add(entity)
             stats["created"] += 1
 

@@ -258,8 +258,9 @@ class AutoResearchService:
         duplicates = []
 
         # 获取所有有 embedding 的条目
+        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
         result = await self.db.execute(
-            select(Knowledge).where(Knowledge.embedding.isnot(None))
+            select(Knowledge).where(Knowledge.embedding_mm.isnot(None))
         )
         all_knowledge = result.scalars().all()
 
@@ -267,7 +268,7 @@ class AutoResearchService:
         for i in range(len(all_knowledge)):
             for j in range(i + 1, len(all_knowledge)):
                 a, b = all_knowledge[i], all_knowledge[j]
-                if a.embedding is None or b.embedding is None:
+                if a.embedding_mm is None or b.embedding_mm is None:
                     continue
 
                 try:

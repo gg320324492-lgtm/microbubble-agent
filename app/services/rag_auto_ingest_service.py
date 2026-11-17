@@ -134,7 +134,8 @@ async def _ingest_one(
 
         embedding = await generate_embedding(content)
         if embedding is not None:
-            knowledge.embedding = embedding
+            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+            knowledge.embedding_mm = embedding
 
         # 2. Chunk (W88 PR2) — chunking_service writes via separate session_factory;
         #    pass a tiny inline factory reusing the outer AsyncSession. Optional,

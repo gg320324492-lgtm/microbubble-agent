@@ -381,7 +381,7 @@ async def write_chunks_for_knowledge(
                     knowledge_id=knowledge_id,
                     chunk_index=idx,
                     content=c.content,
-                    embedding=None,
+                    embedding_mm=None,  # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01), 初插留空
                     char_start=c.char_start,
                     char_end=c.char_end,
                     char_count=c.char_count,
@@ -437,7 +437,8 @@ async def write_chunks_for_knowledge(
                     for idx, (c, emb) in enumerate(zip(chunks, embeddings)):
                         target = by_index.get(idx)
                         if target is not None and emb is not None:
-                            target.embedding = emb
+                            # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                            target.embedding_mm = emb
                     await db.commit()
                 logger.info(
                     f"chunk embedding 回填完成(knowledge_id={knowledge_id}): {len(chunk_row_ids)} rows"

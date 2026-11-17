@@ -134,7 +134,8 @@ def recalc_one_embedding(self, table: str, row_id: int):
                 row = await db.get(Model, row_id)
                 if row is None:
                     return {"status": "skipped", "table": table, "row_id": row_id, "reason": "not_found"}
-                if row.embedding is not None:
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — 判空与写列都走新列
+                if row.embedding_mm is not None:
                     return {"status": "skipped", "table": table, "row_id": row_id, "reason": "already_done"}
                 text = _get_embedding_text(table, row)
                 if not text:
@@ -144,7 +145,7 @@ def recalc_one_embedding(self, table: str, row_id: int):
                 text = truncate_for_embedding(text)
                 embedding = await generate_embedding(text)
                 if embedding:
-                    row.embedding = embedding
+                    row.embedding_mm = embedding
                     await db.commit()
                     return {"status": "done", "table": table, "row_id": row_id, "dim": len(embedding)}
                 else:
@@ -179,11 +180,12 @@ def recalc_all_embeddings(table: str, batch_size: int = 50):
         try:
             async with session_factory() as db:
                 total = await db.scalar(select(func.count(Model.id)))
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — 统计与选行走新列
                 pending = await db.scalar(
-                    select(func.count(Model.id)).where(Model.embedding.is_(None))
+                    select(func.count(Model.id)).where(Model.embedding_mm.is_(None))
                 )
                 result = await db.execute(
-                    select(Model.id).where(Model.embedding.is_(None)).limit(batch_size)
+                    select(Model.id).where(Model.embedding_mm.is_(None)).limit(batch_size)
                 )
                 row_ids = [r[0] for r in result.fetchall()]
                 for row_id in row_ids:
