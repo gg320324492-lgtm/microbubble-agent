@@ -2,7 +2,8 @@
 
 阶段（编号与下文 `# ===== 阶段 N` 注释一致）：
 0. downloading_audio — 下载音频 + ffmpeg 转 16kHz WAV + VAD 分段
-1. transcribing — GPU 7B 转写优先、回退 SenseVoice（faster-whisper 仅紧急回滚用）
+1. transcribing — MiniMax asr-1.0（VAD 分段）优先、回退 VibeVoice-7B
+   （2026-11-17 主拍：回退只保留一个；GPU 7B 已移出会议链路，faster-whisper 仅紧急回滚用）
 2. identifying_speakers — 3D-Speaker 声纹识别 + 发言人标注
     2.5 的 AI 润色转录由 MEETING_AI_POLISH_ENABLED 控制，默认关闭
 3. generating_analysis — LLM 分析（标题+摘要+要点+决议），后端随 LLM_BACKEND 变
@@ -183,15 +184,14 @@ def post_meeting_process(self, meeting_id: int):
                 await _persist_stage(proc_svc, run, "downloading_audio", "success", started_at=_t_stage_download, metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2), "audio_gap_evidence": gap_evidence})
 
                 # ===== 阶段 1: ASR 转写 =====
-                _t_stage_transcribe = _stage_now()  # 类 20.220: 三条后端共用同一开工时刻
+                _t_stage_transcribe = _stage_now()  # 类 20.220: 两条后端共用同一开工时刻
                 from app.config import settings as _settings
                 audio_total_sec = len(audio_pcm) / sample_rate
-                gpu_segments = None
                 minimax_segments = None
+                gpu_segments = None
 
-                # 2026-11-17 主拍: MEETING_ASR_BACKEND=minimax 时云端 asr-1.0 优先
-                # (评测 CER 0.089 优于 SenseVoice 0.156, 与 7B 相当但省 21GB 显存);
-                # GPU 7B / SenseVoice 降级为替补。失败/未配 key 自动回退 GPU 链路。
+                # 2026-11-17 主拍: MiniMax asr-1.0 为主力; 失败/未配 key 时
+                # **只回退 VibeVoice-7B**（这次被替换下来的本地主力）。
                 if _settings.MEETING_ASR_BACKEND == "minimax":
                     try:
                         from app.services.minimax_asr_service import transcribe_full_audio
@@ -221,25 +221,41 @@ def post_meeting_process(self, meeting_id: int):
                             f"{mm_meta['elapsed_sec']}s, last_err={mm_meta.get('last_error')}")
                     except Exception as mm_err:
                         logger.warning(
-                            f"MiniMax ASR 链路失败, 回退 GPU/SenseVoice: "
+                            f"MiniMax ASR 链路失败, 回退 VibeVoice-7B: "
                             f"{type(mm_err).__name__}: {mm_err}")
                         minimax_segments = None
 
+                # 唯一回退: VibeVoice-7B（被替换下来的本地主力）。
+                # 不再走 SenseVoice —— 2026-11-17 主拍「回退只保留一个」。
+                if not minimax_segments and _settings.GPU_ASR_ENABLED:
+                    try:
+                        from app.services.gpu_asr_client import get_gpu_asr_client
+                        gpu_client = get_gpu_asr_client()
+                        if await gpu_client.healthy():
+                            await update_progress(
+                                meeting_id, ProgressStage.TRANSCRIBING,
+                                detail=f"回退 GPU 7B 转写整场会议 ({audio_total_sec:.0f}s)",
+                                redis_override=redis_client)
+                            gpu_segments = await asyncio.wait_for(
+                                gpu_client.transcribe_meeting(
+                                    audio_pcm, sr=sample_rate, meeting_id=meeting_id,
+                                    progress_cb=lambda msg: logger.info(f"  [gpu-asr] {msg}")),
+                                timeout=_settings.GPU_ASR_TIMEOUT)
+                            logger.info(
+                                f"GPU 7B 回退转写完成: {len(gpu_segments or [])} 段")
+                        else:
+                            logger.error(
+                                f"MiniMax 失败且 GPU ASR 不可用 "
+                                f"({getattr(gpu_client, 'health_detail', 'unknown')})")
+                    except Exception as gpu_err:
+                        logger.error(
+                            f"GPU 7B 回退也失败: {type(gpu_err).__name__}: {gpu_err}")
+                        gpu_segments = None
+
                 transcript_segments = []
-                # 2026-11-17: MiniMax 分支已前置到 GPU 判断之前（主拍路由：
-                # minimax → GPU 7B → SenseVoice），此处不再重复置 None。
-                if gpu_segments:
-                    # 7B 已自带时间戳与说话人标签; 后续声纹聚类流程照常复用 (会用
-                    # speaker_label 之外的声纹嵌入重新聚类+投票, 因此这里仅透传)
-                    for s in gpu_segments:
-                        if (s.get("content") or "").strip():
-                            transcript_segments.append({
-                                "text": s["content"].strip(),
-                                "start": round(s["start"], 2),
-                                "end": round(s["end"], 2),
-                                "speaker_label": s.get("speaker_label") or "gpu_unknown",
-                            })
-                elif minimax_segments:
+                # 2026-11-17 主拍: 回退只保留**一个** —— MiniMax 失败 ⇒ VibeVoice-7B
+                # （被替换下来的本地主力）。SenseVoice 已退出会议链路。
+                if minimax_segments:
                     # MiniMax 按切片返回整段文本, 时间戳为切片边界; 每片一段
                     for s in minimax_segments:
                         if (s.get("text") or "").strip():
@@ -255,26 +271,29 @@ def post_meeting_process(self, meeting_id: int):
                                 # clip = 480s 片边界(判据失真, 质量门跳过并记 warn)
                                 "time_precision": s.get("time_precision", "clip"),
                             })
-                else:
-                    await update_progress(meeting_id, ProgressStage.TRANSCRIBING, detail=f"转写 {len(segments)} 个语音段", redis_override=redis_client)
-                    from app.voice.asr import asr_service
-
-                    for i, seg in enumerate(segments):
-                        wav_bytes = _numpy_to_wav_bytes(seg.audio, sample_rate)
-                        result = await asr_service.transcribe(wav_bytes, language="zh", skip_convert=True)
-                        text = result.get("text", "").strip()
-                        if text:
+                elif gpu_segments:
+                    # 7B 自带时间戳与说话人标签; 后续声纹聚类照常复用
+                    for s in gpu_segments:
+                        if (s.get("content") or "").strip():
                             transcript_segments.append({
-                                "text": text,
-                                "start": round(seg.start_time, 2),
-                                "end": round(seg.end_time, 2),
-                                "speaker_label": f"speaker_{i}",
+                                "text": s["content"].strip(),
+                                "start": round(s["start"], 2),
+                                "end": round(s["end"], 2),
+                                "speaker_label": s.get("speaker_label") or "gpu_unknown",
                             })
-                        logger.debug(f"  段 {i+1}/{len(segments)}: [{seg.start_time:.1f}-{seg.end_time:.1f}s] {text[:50]}")
+                else:
+                    # 两个后端都不可用 ⇒ fail loud（静默产出空转录会让质量门和
+                    # 用户都以为"这场没人说话"）
+                    raise RuntimeError(
+                        "ASR 全部后端不可用（MiniMax + VibeVoice-7B），"
+                        "本场无法转写"
+                    )
 
                 _mm_mode = (mm_meta or {}).get("mode", "clip") if minimax_segments else None
-                backend_tag = ("gpu-vibevoice-7b" if gpu_segments
-                               else f"minimax-asr-1.0-{_mm_mode}" if minimax_segments else "sensevoice")
+                backend_tag = (
+                    f"minimax-asr-1.0-{_mm_mode}" if minimax_segments
+                    else "gpu-vibevoice-7b"
+                )
                 logger.info(f"ASR 转写完成 [{backend_tag}]: {len(transcript_segments)} 段有文本")
                 await _persist_stage(proc_svc, run, "transcribing", "success", started_at=_t_stage_transcribe, metrics={"backend": backend_tag, "raw_segments": len(segments), "with_text": len(transcript_segments)})
 
