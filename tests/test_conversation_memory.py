@@ -204,7 +204,7 @@ async def test_recall_skipped_when_model_cold(monkeypatch):
 
     async def _spy(*a, **k):
         called.append(1)
-        return [0.0] * 1024
+        return [0.0] * 1536
 
     monkeypatch.setattr(emb, "generate_embedding", _spy)
 
@@ -469,7 +469,7 @@ async def test_capture_then_recall_roundtrip(db, monkeypatch):
     # 召回把第二条排到了前面)。按关键词分配互不重叠的维度 ⇒
     # 同方向 cosine_distance=0, 正交=1, "最相关"有硬判据。
     def vec(seed: str):
-        base = [0.0] * 1024
+        base = [0.0] * 1536
         if "膜分离" in seed or "刘莫菲" in seed:
             base[0] = 1.0
         else:

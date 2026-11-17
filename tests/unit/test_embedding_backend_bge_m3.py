@@ -36,11 +36,17 @@ def test_qwen3_backend_default_name_and_dim():
 def test_bge_m3_backend_from_env(monkeypatch):
     """EMBEDDING_BACKEND=bge_m3 → BGEM3Backend, name=bge_m3, dim=1024."""
     monkeypatch.setenv("EMBEDDING_BACKEND", "bge_m3")
+    # 2026-11-17: EMBEDDING_BACKEND_NAME 现在优先读 config.settings (默认 minimax),
+    # reload 前必须同步 monkeypatch settings, 否则 reload 后仍取 settings 值。
+    from app.config import settings as cfg
+    monkeypatch.setattr(cfg, "EMBEDDING_BACKEND", "bge_m3")
     import app.services.embedding_service as es
     importlib.reload(es)
     backend = es.EmbeddingBackend.from_env()
     assert backend.name == "bge_m3"
     assert backend.dim == 1024
+    # 还原 settings 默认 (本仓现役 minimax), 防 reload 副作用泄漏到其他用例
+    monkeypatch.setattr(cfg, "EMBEDDING_BACKEND", "minimax")
 
 
 def test_get_embedding_backend_singleton(monkeypatch):

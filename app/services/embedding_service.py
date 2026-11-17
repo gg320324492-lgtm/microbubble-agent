@@ -90,6 +90,8 @@ class EmbeddingBackend(ABC):
         # 2026-11-17: minimax 后端走 generate_embedding(s) 内的云端分支 (embo-01),
         # 不经 EmbeddingBackend 对象 (云端无本地模型实例), 这里返回 Qwen3Backend
         # 仅作失败回退占位。
+        if EMBEDDING_BACKEND_NAME == "bge_m3":
+            return BGEM3Backend()
         return Qwen3Backend()
 
 
