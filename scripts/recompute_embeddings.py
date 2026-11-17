@@ -49,8 +49,9 @@ async def recompute_table(table: str) -> dict:
     redis = await get_redis()
     async with async_session() as db:
         total = await db.scalar(select(func.count(Model.id)))
+        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01) — 选行/判空/写列全走新列
         pending_q = await db.execute(
-            select(Model.id).where(Model.embedding.is_(None))
+            select(Model.id).where(Model.embedding_mm.is_(None))
         )
         row_ids = [r[0] for r in pending_q.fetchall()]
         if not row_ids:
@@ -63,7 +64,7 @@ async def recompute_table(table: str) -> dict:
             if row is None:
                 skipped += 1
                 continue
-            if row.embedding is not None:
+            if row.embedding_mm is not None:
                 skipped += 1
                 continue
             text = _get_embedding_text(table, row)
@@ -72,12 +73,14 @@ async def recompute_table(table: str) -> dict:
                 continue
             text = text[:6000]  # 截断超长文本
             embedding = await generate_embedding(text)
-            # 期望维度从模型 dim 动态读取 (text2vec=768, Qwen3-0.6B=1024)
-            from app.services.embedding_service import _get_model
-            m = _get_model()
-            expected_dim = m.get_embedding_dimension() if m and hasattr(m, "get_embedding_dimension") else 768
+            # 2026-11-17: MiniMax embo-01 无本地模型实例, 期望维度按 1536 (embo-01);
+            # 本地 Qwen3 回退时 generate_embedding 同样返回 1536? 否 — 回退是 1024,
+            # 此时维度不匹配旧 1024 列也应写入 embedding_mm (vector(1536) 列存 1024 维向量
+            # pgvector 会拒收) ⇒ 混维度期间由维度一致才写, 防止脏列。
+            expected_dim = 1536
             if embedding and len(embedding) == expected_dim:
-                row.embedding = embedding
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                row.embedding_mm = embedding
                 await db.commit()
                 done += 1
             else:

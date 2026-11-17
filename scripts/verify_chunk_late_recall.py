@@ -139,8 +139,9 @@ async def main() -> int:
     async with async_session() as db:
         row = await db.execute(
             text(
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
                 "SELECT k.id, k.title FROM knowledge k "
-                "WHERE k.embedding IS NOT NULL "
+                "WHERE k.embedding_mm IS NOT NULL "
                 "ORDER BY k.id LIMIT 1"
             )
         )

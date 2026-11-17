@@ -69,7 +69,8 @@ async def main() -> int:
                 # 摘要 embedding 缺失 → 补算
                 async with Session() as db:
                     m = await db.get(Meeting, mid)
-                    if m is not None and m.embedding is None:
+                    # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                    if m is not None and m.embedding_mm is None:
                         await compute_and_store_embedding(db, mid)
                         stats["summary_embedded"] += 1
                 stats["indexed"] += 1

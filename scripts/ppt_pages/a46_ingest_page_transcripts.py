@@ -237,7 +237,7 @@ async def main() -> None:
                     chrome_ratio=p["chrome_ratio"],
                     file_name=p["file_name"],
                     ingest_batch=args.batch,
-                    embedding=vec,
+                    embedding_mm=vec,  # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
                 ).on_conflict_do_update(
                     constraint="uq_kpt_knowledge_page",
                     set_=dict(
@@ -245,7 +245,7 @@ async def main() -> None:
                         blocked=False, block_reasons=[],
                         chrome_ratio=p["chrome_ratio"],
                         file_name=p["file_name"], ingest_batch=args.batch,
-                        embedding=vec,
+                        embedding_mm=vec,  # 2026-11-17: 切 embedding_mm
                         updated_at=sqlt("now()"),
                     ),
                 )
@@ -268,14 +268,14 @@ async def main() -> None:
                 blocked=True, block_reasons=_reasons(b),
                 chrome_ratio=float(b.get("chrome_ratio") or 0.0),
                 file_name=(b.get("file_name") or "")[:300],
-                ingest_batch=args.batch, embedding=None,
+                ingest_batch=args.batch, embedding_mm=None,  # 2026-11-17: 切 embedding_mm
             ).on_conflict_do_update(
                 constraint="uq_kpt_knowledge_page",
                 set_=dict(content=None, char_count=None, blocked=True,
                           block_reasons=_reasons(b),
                           chrome_ratio=float(b.get("chrome_ratio") or 0.0),
                           file_name=(b.get("file_name") or "")[:300],
-                          ingest_batch=args.batch, embedding=None,
+                          ingest_batch=args.batch, embedding_mm=None,  # 2026-11-17: 切 embedding_mm
                           updated_at=sqlt("now()")),
             )
             await db.execute(stmt)

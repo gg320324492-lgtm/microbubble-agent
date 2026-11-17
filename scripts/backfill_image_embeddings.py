@@ -59,7 +59,8 @@ async def main() -> int:
                         KnowledgeImage.ocr_text,
                     )
                     .where(
-                        KnowledgeImage.embedding.is_(None),
+                        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                        KnowledgeImage.embedding_mm.is_(None),
                         KnowledgeImage.ocr_status == "done",
                         KnowledgeImage.ocr_text.isnot(None),
                         KnowledgeImage.ocr_text != "",
@@ -94,7 +95,8 @@ async def main() -> int:
                     await db.execute(
                         update(KnowledgeImage)
                         .where(KnowledgeImage.id == image_id)
-                        .values(embedding=emb)
+                        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                        .values(embedding_mm=emb)
                     )
                     stats["embedded"] += 1
                 await db.commit()

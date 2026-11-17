@@ -146,7 +146,8 @@ async def main() -> int:
                     )
                     emb = await generate_kg_entity_embedding(name, etype)
                     if emb:
-                        entity.embedding = emb
+                        # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01); 旧列冻结保留为回滚
+                        entity.embedding_mm = emb
                     wdb.add(entity)
                     local_stats["created"] += 1
                 await wdb.commit()

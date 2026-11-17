@@ -93,7 +93,8 @@ def collect_synthetic_queries():
             result = await db.execute(
                 select(Knowledge.id, Knowledge.title, Knowledge.summary, Knowledge.category)
                 .where(Knowledge.title.isnot(None))
-                .where(Knowledge.embedding.isnot(None))  # 只用已嵌入的
+                # 2026-11-17: 切 embedding_mm (1536d, MiniMax embo-01)
+                .where(Knowledge.embedding_mm.isnot(None))  # 只用已嵌入的
                 .order_by(Knowledge.id)
                 .limit(200)
             )
