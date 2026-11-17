@@ -237,6 +237,10 @@ def post_meeting_process(self, meeting_id: int):
                                 "start": s["start"],
                                 "end": s["end"],
                                 "speaker_label": f"clip_{s.get('clip', 0)}",
+                                # 2026-11-17: MiniMax 按 480s 切片, start/end 是**片边界**
+                                # (后续语义断句只是近似分配), 不是声学边界 ⇒
+                                # 覆盖率/长空档判据对它失真, 质量门据此跳过并记 warn。
+                                "time_precision": "clip",
                             })
                 else:
                     await update_progress(meeting_id, ProgressStage.TRANSCRIBING, detail=f"转写 {len(segments)} 个语音段", redis_override=redis_client)

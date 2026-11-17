@@ -82,8 +82,9 @@ class Meeting(Base, TimestampMixin):
     # 旧 halfvec(1024) 列冻结保留为回滚, 不再写入。
     embedding_mm = Column(Vector(1536), nullable=True)
     # W-N-C 阶段 C.2: embedding 后端版本标记 (qwen3-0.6b | bge-m3 灰度)
+    # 2026-11-17: 默认值改 embo-01 (云端口径); 迁移 154 同步了 server_default 与存量行
     embedding_model_version = Column(
-        String(32), nullable=False, server_default="qwen3-0.6b"
+        String(32), nullable=False, server_default="embo-01"
     )
     related_meeting_ids = Column(JSON, nullable=True)
 

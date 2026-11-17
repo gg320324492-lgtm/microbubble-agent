@@ -130,7 +130,25 @@ class MeetingQualityEvaluator:
             for seg in transcript
         )
         metrics["transcript_has_timestamps"] = has_ts
-        if media_dur:
+        # 2026-11-17: MiniMax asr-1.0 按 480s 切片, 时间戳是**片边界**(近似分配),
+        # 不是声学边界 ⇒ 覆盖率恒 100%、永远检测不到空档 ⇒ 两个判据都失真。
+        # 与「没有时间戳」同构处理: 算不出来就不判, 显式记 warn (类 20.250 ②)。
+        clip_precision = any(
+            seg.get("time_precision") == "clip" for seg in transcript
+        )
+        metrics["transcript_time_precision"] = "clip" if clip_precision else "segment"
+        if clip_precision:
+            metrics["transcript_coverage_ratio"] = None
+            metrics["transcript_coverage_uncomputable"] = True
+            issues.append({
+                "code": "transcript_clip_level_timestamps",
+                "level": "warn",
+                "message": (
+                    "时间戳为 480s 切片边界（云端 ASR 不回传句级时间）⇒ "
+                    "覆盖率与长空档判据失真, 已跳过（不是覆盖率 100%）"
+                ),
+            })
+        if media_dur and not clip_precision:
             if has_ts:
                 coverage = total_dur / media_dur if media_dur > 0 else 0
                 metrics["transcript_coverage_ratio"] = round(coverage, 4)

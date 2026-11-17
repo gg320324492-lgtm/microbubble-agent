@@ -69,8 +69,9 @@ class Knowledge(Base, TimestampMixin):
     # W-N-C 阶段 C.2: embedding 后端版本标记 (qwen3-0.6b | bge-m3 灰度)
     # nullable=False + server_default="qwen3-0.6b" 兼容历史全部行
     # 灰度切换时: WHERE embedding_model_version = 'qwen3-0.6b' 选行重 embed
+    # 2026-11-17: 默认值改 embo-01 (云端口径); 迁移 154 同步了 server_default 与存量行
     embedding_model_version = Column(
-        String(32), nullable=False, server_default="qwen3-0.6b", index=True
+        String(32), nullable=False, server_default="embo-01", index=True
     )
 
     # 创建者 (2026-09 单一团队空间: 纯溯源字段, 不再参与权限判定;
