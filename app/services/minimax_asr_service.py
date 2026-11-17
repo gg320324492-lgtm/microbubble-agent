@@ -162,3 +162,128 @@ async def transcribe_full_audio(
         f"{meta['elapsed_sec']}s, last_err={last_err or 'none'}"
     )
     return segments, meta
+
+
+# ============================================================================
+# 2026-11-17: VAD 分段模式（推荐）—— 每段 VAD 音频单独送云端
+# ----------------------------------------------------------------------------
+# 片级(480s)模式虽然请求少，但返回的是整片文本、无句级时间戳 ⇒ 声纹按近似区间
+# 切音频 ⇒ 会议 259 实测"未识别说话人"从 2.9% 升到 45.1%。
+# VAD 分段模式下每段 3–30 秒，时间戳就是声学边界，声纹可正常切音频。
+# 代价：请求数从 15 涨到数百，用并发（默认 6）压到 1–2 分钟。
+# ============================================================================
+SEGMENT_CONCURRENCY = 6
+
+
+def _float32_to_wav_bytes(audio, sample_rate: int) -> bytes:
+    """float32(-1..1) 数组 → 16-bit 单声道 WAV 字节。"""
+    import io
+    import wave as wavmod
+
+    import numpy as np
+
+    arr = np.asarray(audio, dtype=np.float32).reshape(-1)
+    pcm_int16 = (arr * 32768.0).clip(-32768, 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wavmod.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_int16.tobytes())
+    return buf.getvalue()
+
+
+async def _post_one(client, api_key: str, wav_bytes: bytes, name: str):
+    """单段请求 + 重试。返回 (text, error)。"""
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = await client.post(
+                MINIMAX_ASR_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                files={"file": (name, wav_bytes, "audio/wav")},
+                data={"model": "asr-1.0"},
+            )
+            if resp.status_code == 200:
+                return (resp.json().get("text") or "").strip(), None
+            if 400 <= resp.status_code < 500 and resp.status_code not in (408, 429):
+                return None, f"HTTP {resp.status_code}: {resp.text[:150]}"
+            last_err = f"HTTP {resp.status_code}, attempt {attempt + 1}"
+        except Exception as e:  # noqa: BLE001
+            last_err = f"attempt {attempt + 1}: {e}"
+        await asyncio.sleep(min(30, 2 ** attempt))
+    return None, last_err
+
+
+async def transcribe_segments(
+    segments,
+    sample_rate: int = 16000,
+    language: str = "zh",
+    concurrency: int = SEGMENT_CONCURRENCY,
+    on_progress=None,
+):
+    """按 VAD 段逐段调用 MiniMax，返回带**声学边界**时间戳的段落。
+
+    Args:
+        segments: audio_processor 产出的段列表，每项需有 .audio(float32)/.start_time/.end_time
+        on_progress: 可选回调 (done, total)
+
+    Returns:
+        (segments, meta) — segments 项: {"text","start","end","idx","time_precision":"vad"}
+    """
+    api_key = _get_api_key()
+    if not api_key:
+        raise RuntimeError("MiniMax ASR key 未配置 (LLM_OPENAI_COMPAT_API_KEY/MIMO_API_KEY)")
+
+    items = [s for s in (segments or []) if getattr(s, "audio", None) is not None]
+    total = len(items)
+    if not total:
+        return [], {"backend": "minimax-asr-1.0", "mode": "vad", "clips": 0, "elapsed_sec": 0.0}
+
+    sem = asyncio.Semaphore(max(1, concurrency))
+    done = {"n": 0}
+    t0 = time.time()
+    errors = []
+
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        async def one(idx, seg):
+            async with sem:
+                wav = _float32_to_wav_bytes(seg.audio, sample_rate)
+                text, err = await _post_one(client, api_key, wav, f"seg_{idx:04d}.wav")
+            done["n"] += 1
+            if on_progress:
+                try:
+                    on_progress(done["n"], total)
+                except Exception:
+                    pass
+            if err:
+                errors.append(f"seg{idx}: {err}")
+            return idx, seg, text
+
+        results = await asyncio.gather(*(one(i, s) for i, s in enumerate(items)))
+
+    out = []
+    for idx, seg, text in sorted(results, key=lambda x: x[1].start_time):
+        if not text:
+            continue
+        out.append({
+            "text": text,
+            "start": round(float(seg.start_time), 2),
+            "end": round(float(seg.end_time), 2),
+            "idx": idx,
+            "time_precision": "vad",
+        })
+
+    meta = {
+        "backend": "minimax-asr-1.0",
+        "mode": "vad",
+        "clips": total,
+        "failed_clips": len(errors),
+        "elapsed_sec": round(time.time() - t0, 1),
+        "last_error": errors[0] if errors else None,
+    }
+    logger.info(
+        f"[minimax-asr:vad] {len(out)} 段文本 / {total} 段音频, "
+        f"{meta['elapsed_sec']}s, failed={len(errors)}, err={meta['last_error'] or 'none'}"
+    )
+    return out, meta

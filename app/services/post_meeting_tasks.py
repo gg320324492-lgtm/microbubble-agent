@@ -199,12 +199,23 @@ def post_meeting_process(self, meeting_id: int):
                             meeting_id, ProgressStage.TRANSCRIBING,
                             detail=f"MiniMax 云端转写 ({audio_total_sec:.0f}s, ≤480s/片)",
                             redis_override=redis_client)
-                        # ⚠️ 传 float32 数组, 不传 .tobytes() —— 按 int16 解释会得到噪声
-                        # (2026-11-17 会议 259 实测: 15 片全返回空文本)
-                        minimax_segments, mm_meta = await transcribe_full_audio(
-                            audio_pcm,
-                            sample_rate=sample_rate, language="zh",
-                            on_clip_done=lambda d, t: logger.info(f"  [minimax-asr] clip {d}/{t}"))
+                        # 2026-11-17 主拍: 优先 **VAD 分段**模式 —— 时间戳是声学边界,
+                        # 声纹能正常切音频 (片级模式下 259 实测未识别 45.1% vs 2.9%)。
+                        # 没有 VAD 段时才回退 480s 片级模式。
+                        if segments:
+                            from app.services.minimax_asr_service import transcribe_segments
+                            minimax_segments, mm_meta = await transcribe_segments(
+                                segments, sample_rate=sample_rate,
+                                on_progress=lambda d, t: (
+                                    logger.info(f"  [minimax-asr] seg {d}/{t}")
+                                    if d % 50 == 0 or d == t else None))
+                        else:
+                            # ⚠️ 传 float32 数组, 不传 .tobytes() —— 按 int16 解释会得到噪声
+                            # (2026-11-17 会议 259 实测: 15 片全返回空文本)
+                            minimax_segments, mm_meta = await transcribe_full_audio(
+                                audio_pcm,
+                                sample_rate=sample_rate, language="zh",
+                                on_clip_done=lambda d, t: logger.info(f"  [minimax-asr] clip {d}/{t}"))
                         logger.info(
                             f"[minimax-asr] {mm_meta['clips']} 片, {len(minimax_segments)} 段文本, "
                             f"{mm_meta['elapsed_sec']}s, last_err={mm_meta.get('last_error')}")
@@ -236,11 +247,13 @@ def post_meeting_process(self, meeting_id: int):
                                 "text": s["text"].strip(),
                                 "start": s["start"],
                                 "end": s["end"],
-                                "speaker_label": f"clip_{s.get('clip', 0)}",
-                                # 2026-11-17: MiniMax 按 480s 切片, start/end 是**片边界**
-                                # (后续语义断句只是近似分配), 不是声学边界 ⇒
-                                # 覆盖率/长空档判据对它失真, 质量门据此跳过并记 warn。
-                                "time_precision": "clip",
+                                "speaker_label": (
+                                    f"seg_{s.get('idx', 0)}" if s.get("time_precision") == "vad"
+                                    else f"clip_{s.get('clip', 0)}"
+                                ),
+                                # vad = 声学边界(质量门正常判覆盖率/空档);
+                                # clip = 480s 片边界(判据失真, 质量门跳过并记 warn)
+                                "time_precision": s.get("time_precision", "clip"),
                             })
                 else:
                     await update_progress(meeting_id, ProgressStage.TRANSCRIBING, detail=f"转写 {len(segments)} 个语音段", redis_override=redis_client)
@@ -259,8 +272,9 @@ def post_meeting_process(self, meeting_id: int):
                             })
                         logger.debug(f"  段 {i+1}/{len(segments)}: [{seg.start_time:.1f}-{seg.end_time:.1f}s] {text[:50]}")
 
+                _mm_mode = (mm_meta or {}).get("mode", "clip") if minimax_segments else None
                 backend_tag = ("gpu-vibevoice-7b" if gpu_segments
-                               else "minimax-asr-1.0" if minimax_segments else "sensevoice")
+                               else f"minimax-asr-1.0-{_mm_mode}" if minimax_segments else "sensevoice")
                 logger.info(f"ASR 转写完成 [{backend_tag}]: {len(transcript_segments)} 段有文本")
                 await _persist_stage(proc_svc, run, "transcribing", "success", started_at=_t_stage_transcribe, metrics={"backend": backend_tag, "raw_segments": len(segments), "with_text": len(transcript_segments)})
 
