@@ -89,6 +89,8 @@ async def _scan_and_cleanup() -> dict:
     errors = []
     skipped_alive = []  # 2026-09-15: 心跳仍在, 主动跳过的会议
     grace_extended = []  # 2026-11-16: phase=finalizing/uploading, 上传收尾宽限跳过
+    # 2026-11-17: 音频已完整但 stop-recording 未到达, 自动补发后处理的会议
+    auto_finalized = []
 
     try:
         async with session_factory() as db:
@@ -130,6 +132,37 @@ async def _scan_and_cleanup() -> dict:
                         )
                         grace_extended.append(m.id)
                         continue
+
+                    # 2026-11-17 会议 279 修复: 音频已完整但 stop-recording 从未到达
+                    # (前端收尾阶段页面被杀 / finalize 后 stop 请求丢失)。
+                    # 判据: audio_url 非空 且 upload_status == 'completed' ⇒ 音频已就绪,
+                    # 此时判死是错的 —— 用户会看到"失败", 但音频明明完整。
+                    # 正确动作 = 自动补发后处理 (与用户手动 stop / reprocess 同链路)。
+                    audio_complete = bool(m.audio_url) and (m.upload_status == "completed")
+                    if audio_complete:
+                        logger.warning(
+                            f"会议 {m.id} auto_finalize: 音频已完整 (audio_url={m.audio_url}, "
+                            f"chunks={m.last_chunk_index}) 但 stop-recording 未到达, "
+                            f"自动补发后处理而不是判死"
+                        )
+                        m.status = "processing"
+                        m.upload_status = "completed"
+                        m.error_reason = None
+                        m.recording_ended_at = datetime.utcnow()
+                        # 与 stop-recording 同链路: 清心跳, 派发 Celery 后处理
+                        from app.services.recording_heartbeat import clear_recording_heartbeat
+                        await clear_recording_heartbeat(m.id, redis_client=redis_client)
+                        try:
+                            from app.services.post_meeting_tasks import post_meeting_process
+                            post_meeting_process.delay(m.id)
+                            auto_finalized.append(m.id)
+                            continue
+                        except Exception as e:
+                            # 派发失败: 状态已标 processing, 留给下一轮 / 用户手动 reprocess;
+                            # 不能在这里 rollback —— mock session 的 rollback 是同步 MagicMock,
+                            # 真实 DB 里 refresh(m) 也会把 status 读回旧值造成状态丢失。
+                            errors.append(f"{m.id}: auto_finalize 派发失败: {e}")
+                            continue
 
                     # 标 error (2026-07-16: error_reason 拼 user_agent 片段)
                     m.status = "error"
@@ -218,4 +251,5 @@ async def _scan_and_cleanup() -> dict:
         "count": len(cleaned),
         "skipped_alive": skipped_alive,
         "grace_extended": grace_extended,
+        "auto_finalized": auto_finalized,
     }

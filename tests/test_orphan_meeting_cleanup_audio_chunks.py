@@ -37,7 +37,7 @@ os.environ.setdefault("SKIP_DB_SETUP", "1")
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -141,6 +141,11 @@ def _make_orphan_meeting(
     # 该列在 app/models/meeting.py:60 是 nullable=True, 真实 DB 里"没有 presence 信号"
     # 就是 NULL → 这里必须显式赋 None, mock 才忠实于真实行。
     m.recording_presence_at = None
+    # 2026-11-17: 显式赋值, 防止 MagicMock 自动真值误入 auto_finalize 分支。
+    # audio_complete = bool(audio_url) and upload_status == "completed",
+    # 真实 DB 里"无一次性上传"就是 NULL/pending。
+    m.audio_url = None
+    m.upload_status = "pending"
     return m
 
 
@@ -419,6 +424,109 @@ class TestOrphanMeetingCleanup:
         assert orphan.status == "recording"
         assert any("grace_extended" in rec.getMessage() for rec in caplog.records)
         session.commit.assert_not_awaited()
+
+    async def test_audio_complete_auto_finalize(self):
+        """会议 279 形态: merged 已存在 + upload_status=completed 但 stop 未到达。
+
+        应自动补发后处理 (status=processing + post_meeting_process.delay),
+        而不是判 error。分片/merged 都保留。
+        """
+        import logging
+        from app.services.orphan_meeting_cleanup import _scan_and_cleanup
+
+        orphan = _make_orphan_meeting(meeting_id=320, last_chunk_index=2819, total_chunks=2820)
+        orphan.audio_url = "recordings/279/merged.webm"
+        orphan.upload_status = "completed"
+        create_engine_session, session = _setup_session([orphan])
+
+        fake_task = MagicMock()
+        fake_task.delay = MagicMock()
+        clear_heartbeat = AsyncMock(return_value=True)
+
+        with patch(
+            "app.services.orphan_meeting_cleanup.create_celery_engine_and_session",
+            create_engine_session,
+        ), patch(
+            "app.services.recording_heartbeat.is_recording_alive",
+            new_callable=AsyncMock, return_value=False,
+        ), patch(
+            "app.services.recording_heartbeat.is_upload_finalizing",
+            new_callable=AsyncMock, return_value=False,
+        ), patch(
+            "app.services.recording_heartbeat.clear_recording_heartbeat",
+            new=clear_heartbeat,
+        ), patch(
+            "app.services.post_meeting_tasks.post_meeting_process", new=fake_task,
+        ):
+            result = await _scan_and_cleanup()
+
+        assert result["auto_finalized"] == [320]
+        assert result["cleaned"] == []
+        assert orphan.status == "processing"
+        assert orphan.error_reason is None
+        assert orphan.recording_ended_at is not None
+        fake_task.delay.assert_called_once_with(320)
+        clear_heartbeat.assert_awaited_once_with(320, redis_client=ANY)
+
+    async def test_audio_complete_dispatch_failure_keeps_recording(self):
+        """auto_finalize 派发失败 → 回滚到 recording, 报 errors, 不判 error。"""
+        from app.services.orphan_meeting_cleanup import _scan_and_cleanup
+
+        orphan = _make_orphan_meeting(meeting_id=321)
+        orphan.audio_url = "recordings/321/merged.webm"
+        orphan.upload_status = "completed"
+        create_engine_session, session = _setup_session([orphan])
+
+        fake_task = MagicMock()
+        fake_task.delay = MagicMock(side_effect=RuntimeError("broker down"))
+        clear_heartbeat = AsyncMock(return_value=True)
+
+        with patch(
+            "app.services.orphan_meeting_cleanup.create_celery_engine_and_session",
+            create_engine_session,
+        ), patch(
+            "app.services.recording_heartbeat.is_recording_alive",
+            new_callable=AsyncMock, return_value=False,
+        ), patch(
+            "app.services.recording_heartbeat.is_upload_finalizing",
+            new_callable=AsyncMock, return_value=False,
+        ), patch(
+            "app.services.recording_heartbeat.clear_recording_heartbeat",
+            new=clear_heartbeat,
+        ), patch(
+            "app.services.post_meeting_tasks.post_meeting_process", new=fake_task,
+        ):
+            result = await _scan_and_cleanup()
+
+        assert result["auto_finalized"] == []
+        assert result["cleaned"] == []
+        assert len(result["errors"]) == 1
+        assert "auto_finalize" in result["errors"][0]
+        # 派发失败时状态已标 processing（不回滚），留给下一轮清理任务重试
+        assert orphan.status == "processing"
+
+    async def test_audio_incomplete_still_marked_error(self):
+        """只有分片没有 merged (audio_url=None) → 仍走判 error 保留分片老路径。"""
+        from app.services.orphan_meeting_cleanup import _scan_and_cleanup
+
+        orphan = _make_orphan_meeting(meeting_id=322)
+        create_engine_session, session = _setup_session([orphan])
+
+        with patch(
+            "app.services.orphan_meeting_cleanup.create_celery_engine_and_session",
+            create_engine_session,
+        ), patch(
+            "app.services.recording_heartbeat.is_recording_alive",
+            new_callable=AsyncMock, return_value=False,
+        ), patch(
+            "app.services.recording_heartbeat.is_upload_finalizing",
+            new_callable=AsyncMock, return_value=False,
+        ):
+            result = await _scan_and_cleanup()
+
+        assert result["cleaned"] == [322]
+        assert result["auto_finalized"] == []
+        assert orphan.status == "error"
 
     async def test_recording_ended_at_is_written_on_cleanup(self):
         """孤儿判死路径必须写 recording_ended_at, 否则结束时间字段说谎。"""
