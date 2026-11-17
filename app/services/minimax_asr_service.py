@@ -40,15 +40,16 @@ async def check_health() -> bool:
 
 
 async def transcribe_full_audio(
-    pcm_bytes: bytes,
+    audio_pcm,
     sample_rate: int = 16000,
     language: str = "zh",
     on_clip_done=None,
 ) -> Tuple[List[Dict], Dict]:
-    """把整段 PCM 按 ≤480s 切片调 MiniMax asr-1.0, 按顺序拼接时间戳。
+    """把整段音频按 ≤480s 切片调 MiniMax asr-1.0, 按顺序拼接时间戳。
 
     Args:
-        pcm_bytes: 16-bit 单声道 PCM 原始字节
+        audio_pcm: **float32 numpy 数组, 取值 -1..1** (与 audio_processor 同约定);
+                   也兼容 bytes(按 int16 解释, 仅调试用)
         sample_rate: 采样率
         language: 语言 (仅记录, asr-1.0 自动识别)
         on_clip_done: 回调 (done, total) 进度
@@ -57,6 +58,9 @@ async def transcribe_full_audio(
         (segments, meta)
         segments: [{"text", "start", "end", "clip"}]
         meta: {"clips": N, "backend": "minimax-asr-1.0", "elapsed_sec": ...}
+
+    ⚠️ 2026-11-17 实锤: 会议 259 首跑 15 个切片全部返回空文本 —— 原因是把
+    float32(-1..1) 的字节按 int16 解释 ⇒ 全是噪声。**必须**按 float32 处理。
     """
     api_key = _get_api_key()
     if not api_key:
@@ -64,7 +68,17 @@ async def transcribe_full_audio(
 
     import numpy as np
 
-    pcm = np.frombuffer(pcm_bytes, dtype=np.int16)
+    if isinstance(audio_pcm, (bytes, bytearray)):
+        # 兼容旧调用: 按 int16 解释 (调用方须自行保证)
+        pcm = np.frombuffer(bytes(audio_pcm), dtype=np.int16).astype(np.float32) / 32768.0
+    else:
+        pcm = np.asarray(audio_pcm, dtype=np.float32)
+        if pcm.ndim > 1:
+            pcm = pcm.reshape(-1)
+        peak = float(np.max(np.abs(pcm))) if pcm.size else 0.0
+        if peak > 1.5:
+            # 传进来的其实是 int16 量级 (|x| 最大 32768), 归一化到 -1..1
+            pcm = np.clip(pcm / 32768.0, -1.0, 1.0)
     total_sec = len(pcm) / sample_rate
     clip_samples = MAX_CLIP_SEC * sample_rate
     clips = []
@@ -85,11 +99,13 @@ async def transcribe_full_audio(
         import wave as wavmod
 
         buf = io.BytesIO()
+        # float32(-1..1) → int16, 与 app/services/post_meeting_tasks.py::_numpy_to_wav_bytes 同约定
+        pcm_int16 = (chunk * 32768.0).clip(-32768, 32767).astype(np.int16)
         with wavmod.open(buf, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
             wf.setframerate(sample_rate)
-            wf.writeframes(chunk.tobytes())
+            wf.writeframes(pcm_int16.tobytes())
         wav_bytes = buf.getvalue()
 
         ok = False

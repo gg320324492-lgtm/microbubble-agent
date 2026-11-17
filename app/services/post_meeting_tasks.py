@@ -183,73 +183,40 @@ def post_meeting_process(self, meeting_id: int):
                 await _persist_stage(proc_svc, run, "downloading_audio", "success", started_at=_t_stage_download, metrics={"segment_count": len(segments), "media_seconds": round(len(audio_pcm)/sample_rate, 2), "audio_gap_evidence": gap_evidence})
 
                 # ===== 阶段 1: ASR 转写 =====
-                _t_stage_transcribe = _stage_now()  # 类 20.220: GPU 7B 与 SenseVoice 两条分支共用同一开工时刻
-                # 2026-09-07: 优先走 GPU 7B 链路 (VibeVoice-ASR, Who/When/What + 热词,
-                # host 守护服务按需占显存); 服务不可用/失败自动回退 SenseVoice 逐段链路
+                _t_stage_transcribe = _stage_now()  # 类 20.220: 三条后端共用同一开工时刻
                 from app.config import settings as _settings
                 audio_total_sec = len(audio_pcm) / sample_rate
                 gpu_segments = None
-                # 2026-09-15 P0（会议 250 重跑事故）: 长音频时长闸门。
-                # 事故: 96 分 27 秒的会议走了 7B，2 小时硬超时被杀，白占 GPU 且
-                # 客户端全程拿不到进展信号，最后还是回退 SenseVoice。
-                # 7B 实测 rtf 0.9~1.0+，超过 GPU_ASR_MAX_SEC 的会议**必然跑不完**，
-                # 直接跳过（不提交作业、不占 GPU），把时间留给真正能出结果的路径。
-                if _settings.GPU_ASR_ENABLED and audio_total_sec > _settings.GPU_ASR_MAX_SEC:
-                    logger.info(
-                        f"音频 {audio_total_sec:.0f}s 超过 GPU_ASR_MAX_SEC="
-                        f"{_settings.GPU_ASR_MAX_SEC}s，跳过 7B 链路直接走 SenseVoice"
-                        f"（避免必然超时的长作业独占 GPU）"
-                    )
-                elif _settings.GPU_ASR_ENABLED and audio_total_sec >= _settings.GPU_ASR_MIN_SEC:
-                    try:
-                        from app.services.gpu_asr_client import get_gpu_asr_client
-                        gpu_client = get_gpu_asr_client()
-                        if await gpu_client.healthy():
-                            await update_progress(meeting_id, ProgressStage.TRANSCRIBING,
-                                                  detail=f"GPU 7B 转写整场会议 ({audio_total_sec:.0f}s)",
-                                                  redis_override=redis_client)
-                            gpu_segments = await asyncio.wait_for(
-                                gpu_client.transcribe_meeting(
-                                    audio_pcm, sr=sample_rate, meeting_id=meeting_id,
-                                    progress_cb=lambda msg: logger.info(f"  [gpu-asr] {msg}")),
-                                timeout=_settings.GPU_ASR_TIMEOUT)
-                            logger.info(f"GPU 7B 转写完成: {len(gpu_segments)} 段")
-                        else:
-                            logger.warning(
-                                f"GPU ASR 守护不可用/正忙（{gpu_client.health_detail}），"
-                                f"直接走 SenseVoice"
-                            )
-                    except Exception as gpu_err:
-                        logger.warning(
-                            f"GPU ASR 链路失败, 回退 SenseVoice: "
-                            f"{type(gpu_err).__name__}: {gpu_err}"
-                        )
-                        gpu_segments = None
-
-                transcript_segments = []
                 minimax_segments = None
-                # 2026-11-17: MiniMax asr-1.0 云端转写（评测 CER 0.089 优于 SenseVoice 0.156）。
-                # 由 MEETING_ASR_BACKEND=minimax 控制; 失败/未配 key 自动回退原链路
-                # (GPU 7B 已在上方跑完, 这里的云端分支只覆盖 SenseVoice 兜底位置之前)。
-                if not gpu_segments and _settings.MEETING_ASR_BACKEND == "minimax":
+
+                # 2026-11-17 主拍: MEETING_ASR_BACKEND=minimax 时云端 asr-1.0 优先
+                # (评测 CER 0.089 优于 SenseVoice 0.156, 与 7B 相当但省 21GB 显存);
+                # GPU 7B / SenseVoice 降级为替补。失败/未配 key 自动回退 GPU 链路。
+                if _settings.MEETING_ASR_BACKEND == "minimax":
                     try:
                         from app.services.minimax_asr_service import transcribe_full_audio
                         await update_progress(
                             meeting_id, ProgressStage.TRANSCRIBING,
                             detail=f"MiniMax 云端转写 ({audio_total_sec:.0f}s, ≤480s/片)",
                             redis_override=redis_client)
+                        # ⚠️ 传 float32 数组, 不传 .tobytes() —— 按 int16 解释会得到噪声
+                        # (2026-11-17 会议 259 实测: 15 片全返回空文本)
                         minimax_segments, mm_meta = await transcribe_full_audio(
-                            audio_pcm.tobytes() if hasattr(audio_pcm, "tobytes") else audio_pcm,
-                            sample_rate=sample_rate, language="zh")
+                            audio_pcm,
+                            sample_rate=sample_rate, language="zh",
+                            on_clip_done=lambda d, t: logger.info(f"  [minimax-asr] clip {d}/{t}"))
                         logger.info(
                             f"[minimax-asr] {mm_meta['clips']} 片, {len(minimax_segments)} 段文本, "
                             f"{mm_meta['elapsed_sec']}s, last_err={mm_meta.get('last_error')}")
                     except Exception as mm_err:
                         logger.warning(
-                            f"MiniMax ASR 链路失败, 回退 SenseVoice: "
+                            f"MiniMax ASR 链路失败, 回退 GPU/SenseVoice: "
                             f"{type(mm_err).__name__}: {mm_err}")
                         minimax_segments = None
 
+                transcript_segments = []
+                # 2026-11-17: MiniMax 分支已前置到 GPU 判断之前（主拍路由：
+                # minimax → GPU 7B → SenseVoice），此处不再重复置 None。
                 if gpu_segments:
                     # 7B 已自带时间戳与说话人标签; 后续声纹聚类流程照常复用 (会用
                     # speaker_label 之外的声纹嵌入重新聚类+投票, 因此这里仅透传)
