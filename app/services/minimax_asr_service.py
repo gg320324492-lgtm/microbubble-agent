@@ -27,7 +27,13 @@ REQUEST_TIMEOUT = 600
 
 
 def _get_api_key() -> str:
-    """复用 MiniMax 对话链路同源 key (LLM_OPENAI_COMPAT_API_KEY 优先, 回退 MIMO_API_KEY)。"""
+    """复用 MiniMax 对话链路同源 key (LLM_OPENAI_COMPAT_API_KEY 优先, 回退 MIMO_API_KEY)。
+
+    2026-11-17: MINIMAX_ASR_ENABLED=false 时直接返回空 —— 调用方会抛错并回退
+    VibeVoice-7B，用于回退链路演练/临时停用云端。
+    """
+    if not getattr(settings, "MINIMAX_ASR_ENABLED", True):
+        return ""
     return (
         getattr(settings, "LLM_OPENAI_COMPAT_API_KEY", "")
         or getattr(settings, "MIMO_API_KEY", "")

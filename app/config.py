@@ -172,6 +172,11 @@ class Settings(BaseSettings):
     # 本地 VibeVoice-7B / SenseVoice 保留为替补。取值: minimax | sensevoice
     MEETING_ASR_BACKEND: str = "minimax"
 
+    # 2026-11-17: MiniMax ASR kill switch（运维/演练用）。
+    # false ⇒ _get_api_key() 返回空 ⇒ transcribe 抛错 ⇒ 自动回退 VibeVoice-7B，
+    # 用于验证回退链路或临时停用云端（无需改代码/删 key）。
+    MINIMAX_ASR_ENABLED: bool = True
+
     # 2026-11-17: Embedding 后端选择 (评测: embo-01 与 Qwen3 检索 top-1 5/5 一致)。
     # minimax = 云端 embo-01 (1536 维) 优先, 失败自动回退本地 Qwen3 (1024 维, 替补)。
     # ⚠️ 维度不同: 切换后必须全量重建存量向量 (knowledge_chunks / knowledge.embedding 等)。
