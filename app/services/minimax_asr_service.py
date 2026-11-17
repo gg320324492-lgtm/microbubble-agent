@@ -127,6 +127,8 @@ async def transcribe_full_audio(
                     if text and is_noise_text(text):
                         text = ""
                     if text:
+                        text = strip_leading_latin_hallucination(text)
+                    if text:
                         segments.append({
                             "text": text,
                             "start": round(offset_sec, 2),
@@ -191,6 +193,31 @@ def is_noise_text(text: str) -> bool:
     if any("一" <= ch <= "鿿" for ch in t):
         return False
     return len(t.split()) <= _NOISE_MAX_WORDS
+
+
+_LATIN_PREFIX_RE = None
+
+
+def strip_leading_latin_hallucination(text: str) -> str:
+    """去掉"拉丁前缀 + 中文"混合段开头的幻觉前缀。
+
+    会议 259 实测: "E o túnel de Dirac. 放几块抽真空。保证。" —— 云端把噪声段
+    误识成外语短语后接上真实中文。只在前缀**≥2 个词**时剥离, 避免误伤
+    "UV 处理" / "COD 指标" 这类正常单缩写。
+    """
+    global _LATIN_PREFIX_RE
+    import re
+    if _LATIN_PREFIX_RE is None:
+        _LATIN_PREFIX_RE = re.compile(
+            r"^([A-Za-zÀ-ɏ'’.,\- ]{4,}?)(?=[一-鿿])"
+        )
+    t = (text or "").strip()
+    m = _LATIN_PREFIX_RE.match(t)
+    if not m:
+        return t
+    if len(m.group(1).split()) < 2:
+        return t
+    return t[m.end():].lstrip()
 
 
 def _float32_to_wav_bytes(audio, sample_rate: int) -> bytes:
@@ -293,6 +320,10 @@ async def transcribe_segments(
         if not text:
             continue
         if is_noise_text(text):
+            filtered += 1
+            continue
+        text = strip_leading_latin_hallucination(text)
+        if not text:
             filtered += 1
             continue
         out.append({
