@@ -69,7 +69,7 @@ async def test_case_01_failure_logs_warning_and_counter_increments(caplog):
 
     db = _FailingDB()
     with caplog.at_level(logging.WARNING, logger="microbubble.hybrid_retriever"):
-        result = await HybridRetriever(db)._chunk_late_recall([0.0] * 1024, top_k=5)
+        result = await HybridRetriever(db)._chunk_late_recall([0.0] * 1536, top_k=5)
 
     # 返回空集 (best-effort 守恒)
     assert result == []
@@ -100,7 +100,7 @@ async def test_case_02_success_logs_count_and_returns_rows(caplog):
 
     db = _MockDB()
     with caplog.at_level(logging.DEBUG, logger="microbubble.hybrid_retriever"):
-        result = await HybridRetriever(db)._chunk_late_recall([0.0] * 1024, top_k=5)
+        result = await HybridRetriever(db)._chunk_late_recall([0.0] * 1536, top_k=5)
 
     # 返回 1 行
     assert len(result) == 1
@@ -214,7 +214,7 @@ async def test_case_06_disabled_no_counter_but_warning_still_logs(caplog):
     ro.ENABLE_OBSERVABILITY = False
     try:
         with caplog.at_level(logging.WARNING, logger="microbubble.hybrid_retriever"):
-            result = await HybridRetriever(_FailingDB())._chunk_late_recall([0.0] * 1024)
+            result = await HybridRetriever(_FailingDB())._chunk_late_recall([0.0] * 1536)
         assert result == []
         # 计数器不增 (关闭时静默)
         assert observer._chunk_late_recall_failures_total == initial_failures
@@ -303,7 +303,7 @@ async def test_case_08_observer_failure_does_not_break_main_flow(monkeypatch):
 
     db = _MockDB()
     # 不应抛错 (主流程不受影响)
-    result = await HybridRetriever(db)._chunk_late_recall([0.0] * 1024, top_k=5)
+    result = await HybridRetriever(db)._chunk_late_recall([0.0] * 1536, top_k=5)
     assert len(result) == 1
     assert result[0]["id"] == 7
 
