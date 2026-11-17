@@ -8,6 +8,7 @@
 端点: POST https://api.minimaxi.com/v1/speech_to_text  (multipart: model + file)
 返回: {"text": "...", "duration": <sec>, "trace_id": "..."}
 """
+import asyncio
 import logging
 import os
 import time
