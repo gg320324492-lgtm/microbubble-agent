@@ -33,15 +33,30 @@ else
   warn ".env 缺失且找不到 ../.env, 继续 (可能 .env 在别处)"
 fi
 
-# Step 3: 验证 app-1 是否在 default network
-echo "--- Step 3: 验证 app-1 在 default network ---"
+# Step 3: 验证 app-1 是否在 default network, 且服务名别名 'app' 是否存在
+# 2026-11-20 修复: 原实现只查「是否在网」, 不查「别名在不在」⇒ 容器在网但
+# 'app' 别名丢失时 (compose 管的别名被手工 network connect 覆盖) 判为通过,
+# 而 nginx 的 upstream 'app:8000' 解析失败 ⇒ 本机 nginx 崩溃重启循环
+# (RestartCount 累计到 2559)。现在两个条件都必须满足才判通过。
+echo "--- Step 3: 验证 app-1 在 default network 且带 'app' 别名 ---"
 APP_ON_NET=$(docker network inspect microbubble-agent_default --format '{{range .Containers}}{{.Name}} {{"\n"}}{{end}}' 2>/dev/null | grep -c "microbubble-agent-app-1" || true)
+APP_HAS_ALIAS=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{range .Aliases}}{{.}} {{end}}{{end}}' microbubble-agent-app-1 2>/dev/null | tr ' ' '\n' | grep -c '^app$' || true)
+
 if [ "$APP_ON_NET" = "0" ]; then
   warn "app-1 漏 attach 到 default network, 自动 attach"
   docker network connect --alias app microbubble-agent_default microbubble-agent-app-1 2>&1 || fail "attach 失败, 请确认 Docker Desktop GUI 已完全启动"
   ok "app-1 已 attach"
+elif [ "$APP_HAS_ALIAS" = "0" ]; then
+  # 在网但别名丢了 ⇒ 必须重连以重建别名 (disconnect 后端口映射会保留, 见实测)
+  warn "app-1 在网但 'app' 服务名别名丢失 (nginx upstream 会解析失败), 重建网络附着"
+  docker network disconnect microbubble-agent_default microbubble-agent-app-1 2>&1 || fail "disconnect 失败"
+  docker network connect --alias app microbubble-agent_default microbubble-agent-app-1 2>&1 || fail "reconnect 失败, 请确认 Docker Desktop GUI 已完全启动"
+  # 宿主端口转发会因容器 IP 变化而失效 ⇒ 必须重启容器重建转发 (类 20.240)
+  warn "容器 IP 已变, 重启 app-1 重建宿主端口转发"
+  docker restart microbubble-agent-app-1 >/dev/null 2>&1 || fail "restart app-1 失败"
+  ok "app-1 已带 'app' 别名重新附着并重启"
 else
-  ok "app-1 已在 default network"
+  ok "app-1 已在 default network 且 'app' 别名完好"
 fi
 
 # Step 4: 验证 DNS
