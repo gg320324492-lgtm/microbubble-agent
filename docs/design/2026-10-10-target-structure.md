@@ -8,6 +8,8 @@
 
 ---
 
+> **2026-11-20 实际归位（主指挥拍板，已推送 `a78156d2c`）**：本方案 §0 定的"构建部署 · 全部原地 / 工具链红线不碰"已按主指挥决定调整 —— `Dockerfile.{funasr,mcp,voice-pipeline,whisper}` 与 `setup.ps1`、`restart_gpu_workers.bat` **已归位**到 `docker/` 与 `scripts/`。COPY 相对 build context（均为 `context: .`）故 Dockerfile 内容零改动，仅 rename + 同步 11 处真实路径引用。本次同时补了 `setup.ps1` 的 UTF-8 BOM（此前无 BOM 被 PS 5.1 按 GBK 解码，解析器报 3 个错 —— 类 20.216 第 4 形态）。本文其余结论与本方案其余部分**未变**。
+
 ## 0. 对测绘报告的三处修正（会影响决策，先读）
 
 测绘报告的三条结论经复核**部分不成立**。若照抄会做错决策，故前置澄清。
@@ -151,7 +153,8 @@ microbubble-agent/
 │
 ├── 【构建部署 · 全部原地】
 │   ├── docker/                 🟡 Dockerfile.commercial + visual-regression/
-│   ├── Dockerfile{,.db,.funasr,.mcp,.voice-pipeline,.whisper}
+│   │                           ← 2026-11-20 起 Dockerfile.{funasr,mcp,voice-pipeline,whisper} 已归位至此
+│   ├── Dockerfile{,.db}        ← 主线在用 (compose build.context=.)
 │   ├── docker-compose{,.dev,.test}.yml     🔴 test.yml:79 引 scripts/init_test_db_all.py
 │   ├── funasr_entrypoint.sh    🔴 compose :264 挂载
 │   ├── whisper_entrypoint.sh   🟡
@@ -179,14 +182,14 @@ microbubble-agent/
 │   ├── .agents/                🔴 54 文件，任务书明令不碰
 │   ├── .claude/                🔴
 │   ├── .codex/                 🔴
-│   └── setup.ps1               🟢
+│   └── scripts/setup.ps1       🟢 ← 2026-11-20 自仓库根归位 (PROJECT_DIR 已上溯一级; 补 UTF-8 BOM 修 PS 5.1 解析错)
 │
 ├── 【判定为"不动" · 需主指挥裁定生死，见 §5】
 │   ├── commercial/             🟡 边界模糊，但**判定保留**
 │   ├── observability/          🟢 孤儿 → 建议移入 docker/observability/（批次 6，低优先）
 │   ├── config/                 🟢 1 文件零引用 → **需裁定：接线还是删除**
 │   ├── results/                🟢 65 文件 4.9M 纯归档 → 建议移入 docs/ 或保持
-│   └── restart_gpu_workers.bat 🟢 **已修好，原地不动**
+│   └── scripts/restart_gpu_workers.bat 🟢 ← 2026-11-20 自仓库根归位 (绝对路径不变)
 │
 └── 【独立 git 子仓 · 不在主仓 🔴】
     └── desktop-conversion/     193 commits + 私有远端，不在主仓 git ls-files
