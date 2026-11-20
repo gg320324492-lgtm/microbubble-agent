@@ -256,7 +256,7 @@ services:
   sensevoice:
     build:
       context: .
-      dockerfile: Dockerfile.funasr
+      dockerfile: docker/Dockerfile.funasr
     volumes:
       - ./models:/app/models
       - ./models/hf_cache:/root/.cache/huggingface
@@ -486,7 +486,7 @@ services:
     profiles: ["vision"]
     build:
       context: .
-      dockerfile: Dockerfile.mcp
+      dockerfile: docker/Dockerfile.mcp
     # MCP stdio 服务器默认 stdin 会被 Docker 关闭 → 进程退出 → restart 死循环
     # 必须 stdin_open + tty 保持 stdio 开放，等待 MCP 客户端连接
     stdin_open: true

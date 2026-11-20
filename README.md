@@ -109,10 +109,10 @@ microbubble-agent/
 ├── docker-compose.override.yml   # 本地覆盖
 ├── Dockerfile                    # 主应用镜像
 ├── Dockerfile.db                 # 数据库镜像
-├── Dockerfile.funasr             # ASR (FunASR/SenseVoice)
-├── Dockerfile.mcp                # MCP 服务
-├── Dockerfile.voice-pipeline     # 声纹流水线
-├── Dockerfile.whisper            # faster-whisper（回滚用）
+├── docker/Dockerfile.funasr      # ASR (FunASR/SenseVoice)   ← 2026-11-20 自根目录归位
+├── docker/Dockerfile.mcp         # MCP 服务                    ← 2026-11-20 自根目录归位
+├── docker/Dockerfile.voice-pipeline # 声纹流水线               ← 2026-11-20 自根目录归位
+├── docker/Dockerfile.whisper     # faster-whisper（回滚用）     ← 2026-11-20 自根目录归位
 ├── nginx/                # 反向代理配置
 ├── tunnel/               # FRP 内网穿透
 ├── config/               # 配置文件
@@ -134,8 +134,8 @@ microbubble-agent/
 ├── desktop-conversion/   # 桌面端改造工单/验收/决策归档（2026-10-10 由独立子仓并入）
 │
 ├── 入口脚本 ────────────────────────────────────────────
-├── setup.ps1                     # 环境初始化
-├── restart_gpu_workers.bat       # GPU worker 重启
+├── scripts/setup.ps1              # 环境初始化（2026-11-20 自根目录归位）
+├── scripts/restart_gpu_workers.bat # GPU worker 重启（2026-11-20 自根目录归位）
 ├── funasr_entrypoint.sh          # ASR 容器入口
 ├── whisper_entrypoint.sh         # whisper 容器入口
 │

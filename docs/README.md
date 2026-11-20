@@ -42,7 +42,7 @@
 | （`desktop-conversion/docs/handoff/`，**不在本 `docs/` 下**） | 2 | **跨会话/换机交接** | 追加，每份一个时间戳；**内容多为「改动不在 git 里」的环境事实**（如未入库的 `.env`），接手前必读 |
 | `superpowers/` | 22 | 早期方案与审计反馈 | 只读 |
 | `roadmap-phases/` `phase14/` `phase15/` `P2-leftover/` | 38 | 阶段计划与留口 | 多已完结 |
-| `archived/` `_archive_2026-07-12/` | 162 | **归档** | 只读，不再更新 |
+| `archived/`（含 `2026-07-12-root-snapshots/`） | 162 | **归档** | 只读，不再更新 |
 | （根目录现存 84 个） | 84 | 混合：现行 runbook + 专题方案 + 活引用锚点 | 见上方查找表 |
 
 ## 写文档的纪律

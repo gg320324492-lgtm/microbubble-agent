@@ -1,5 +1,5 @@
-# MicroBubble Agent - Windows 一键初始化脚本
-# 用法: 右键 -> 使用 PowerShell 运行，或在终端执行: powershell -ExecutionPolicy Bypass -File setup.ps1
+﻿# MicroBubble Agent - Windows 一键初始化脚本
+# 用法: 右键 -> 使用 PowerShell 运行，或在终端执行: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 
 param(
     [switch]$SkipFrontend,   # 跳过前端构建（已有 dist 时使用）
@@ -9,7 +9,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$PROJECT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
+# 2026-11-20 本脚本从仓库根目录归位到 scripts/ ⇒ 需上溯一级才是项目根
+$PROJECT_DIR = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 
 # ---- 颜色工具 ----
 function Write-Step  { param($n, $total, $msg) Write-Host "`n[$n/$total] $msg" -ForegroundColor Cyan }
@@ -369,7 +370,7 @@ Write-Host ""
 Write-Host "  [4] 数据迁移（可选）" -ForegroundColor White
 Write-Host "      如需保留旧数据，将旧电脑的 data/ 目录复制到新电脑" -ForegroundColor Gray
 Write-Host "      包含: PostgreSQL 数据库 + Redis 缓存 + MinIO 文件" -ForegroundColor Gray
-Write-Host "      复制后重新运行: powershell -ExecutionPolicy Bypass -File setup.ps1 -Migrate" -ForegroundColor Gray
+Write-Host "      复制后重新运行: powershell -ExecutionPolicy Bypass -File scripts\setup.ps1 -Migrate" -ForegroundColor Gray
 Write-Host ""
 
 Write-Host "  [5] 云服务器 Nginx + FRP 服务端（无需修改）" -ForegroundColor White

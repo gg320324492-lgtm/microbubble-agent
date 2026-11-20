@@ -61,12 +61,12 @@ trap cleanup_trivy_tmp EXIT
 DOCKERFILES=(
     "Dockerfile"
     "Dockerfile.db"
-    "Dockerfile.funasr"
-    "Dockerfile.mcp"
+    "docker/Dockerfile.funasr"
+    "docker/Dockerfile.mcp"
     # 2026-10-13 起不再扫 voice-pipeline: 休眠镜像(compose 无服务/本机无镜像),
     # 其 CMD 自述"经主 app 容器挂载运行"即设计上不独立起, 且体积 15.8GB。
     # 主指挥裁定停止扫描; Dockerfile 本身保留不删。
-    "Dockerfile.whisper"
+    "docker/Dockerfile.whisper"
     "web/Dockerfile"
     # 2026-10-13 起不再扫 commercial: 休眠镜像(compose 无服务/本机无镜像),
     # runtime 段无 ffmpeg+libreoffice 却 COPY 了整个 app/(19 文件依赖它),

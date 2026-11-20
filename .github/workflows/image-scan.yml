@@ -138,13 +138,13 @@ jobs:
             dockerfile: Dockerfile.db
             context: .
           - name: funasr
-            dockerfile: Dockerfile.funasr
+            dockerfile: docker/Dockerfile.funasr
             context: .
           - name: mcp
-            dockerfile: Dockerfile.mcp
+            dockerfile: docker/Dockerfile.mcp
             context: .
           - name: whisper
-            dockerfile: Dockerfile.whisper
+            dockerfile: docker/Dockerfile.whisper
             context: .
           - name: web
             dockerfile: web/Dockerfile
