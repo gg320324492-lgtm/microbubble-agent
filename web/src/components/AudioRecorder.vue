@@ -189,7 +189,8 @@ watch(meetingIdRef, (mid) => {
 onMounted(() => {
   // 如果录音已停止或胶囊已消失（无会议ID），重置为 idle
   // 如果录音正在进行中且胶囊仍在（用户从其他页面返回），保持当前状态
-  if (state.value === 'stopped' || (state.value !== 'idle' && !sessionStorage.getItem('recording_meeting_id'))) {
+  // 2026-11-23: stale sessionStorage meeting id must not revive recording UI.
+  if (state.value === 'stopped' || !isActive()) {
     reset()
   }
   // 2026-10-08 P0-1 修复 A-6: 组件重建 / 恢复时若无心跳, 立即补一次

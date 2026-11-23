@@ -234,7 +234,21 @@ async function handleBack() {
 onMounted(async () => {
   await checkActiveRecording()  // 异步校验后端 recording 状态
   if (recordingMeetingId.value && !meetingId.value) {
-    meetingId.value = recordingMeetingId.value
+    // 2026-11-23 规则：只允许真正 recording/error 的会议续录；已完成会议是终态。
+    const id = recordingMeetingId.value
+    let resumeAllowed = false
+    try {
+      const detail = await axios.get(`/api/v1/meetings/${id}`)
+      resumeAllowed = ['recording', 'error'].includes(detail.data?.status)
+    } catch (err) {
+      console.warn('[MobileMeetingRoom] resume 校验失败，拒绝恢复旧会议:', err.message)
+    }
+    if (!resumeAllowed) {
+      stopRecording()
+      ElMessage.warning('该会议已完成或不可恢复，已退出续录')
+      return
+    }
+    meetingId.value = id
   }
 
   // 仅当有 active recording 时才回填 + 自动启动（避免空跑）

@@ -246,6 +246,22 @@ onMounted(async () => {
   if (resumeFromQuery && !meetingId.value) {
     const id = Number(resumeFromQuery)
     if (!Number.isNaN(id) && id > 0) {
+      // 2026-11-23 规则：已完成/处理中的会议是终态，不能被 ?resume= 恢复成录音会话。
+      // 这里先查后端；查不到、登录态失效、或状态不是 recording/error 时一律清空续录态。
+      let resumeAllowed = false
+      try {
+        const detail = await axios.get(`/api/v1/meetings/${id}`)
+        resumeAllowed = ['recording', 'error'].includes(detail.data?.status)
+      } catch (err) {
+        console.warn('[MeetingRoomView] resume 校验失败，拒绝恢复旧会议:', err.message)
+      }
+      if (!resumeAllowed) {
+        meetingId.value = null
+        stopRecording()
+        router.replace('/meetings/room')
+        ElMessage.warning('该会议已完成或不可恢复，已切换到新建听会')
+        return
+      }
       // 仅当 store 没值或值不同时才调 startRecording，避免与 MainLayout 已 set 的状态冲突
       // 重复 set 同一值会触发 Vue 3 notify 链 → set value → trigger → notify 循环
       // (因为 startRecording 内部 set recordingMeetingTitle，placeholder 与后端真实 title

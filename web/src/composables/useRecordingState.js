@@ -82,15 +82,10 @@ async function checkActiveRecording({ force = false } = {}) {
       stopRecording()
     }
   } catch (err) {
-    log('API failed, falling back to sessionStorage:', err.message)
-    // API 失败时降级读 sessionStorage，但标记未验证
-    const cached = sessionStorage.getItem('recording_meeting_id')
-    if (cached) {
-      recordingMeetingId.value = Number(cached)
-      recordingMeetingTitle.value = sessionStorage.getItem('recording_meeting_title') || `正在听会（ID ${cached}）`
-    } else {
-      log('no sessionStorage cache either — recordingMeetingId stays null')
-    }
+    // 2026-11-23 规则：无法向后端验证时，绝不用 sessionStorage 旧值恢复“正在听会”。
+    // 已完成会议必须保持终态；只有后端明确返回 recording 才允许显示录音胶囊。
+    log('API validation failed, clearing stale local recording state:', err.message)
+    stopRecording()
   }
 }
 

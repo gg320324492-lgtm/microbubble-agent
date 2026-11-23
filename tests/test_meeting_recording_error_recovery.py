@@ -454,6 +454,29 @@ class TestRecordingHeartbeatSessionEndpoint:
         assert res["alive"] is True
         touch.assert_awaited_once_with(255, session_id="sess-1", phase="finalizing")
 
+    async def test_heartbeat_rejects_completed_meeting(self):
+        """已完成会议是终态：心跳必须明确 alive=False，且不能写 Redis。"""
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="completed", created_by=58)
+        db = _make_db_with_meeting(meeting)
+        touch = AsyncMock(return_value=True)
+
+        with patch(
+            "app.services.recording_heartbeat.touch_recording_heartbeat", new=touch
+        ):
+            res = await mr.recording_heartbeat(
+                meeting_id=255,
+                payload={"session_id": "stale", "phase": "recording"},
+                current_user=_user(58),
+                db=db,
+            )
+
+        assert res["alive"] is False
+        assert res["status"] == "completed"
+        assert res["reason"] == "meeting_not_recordable"
+        touch.assert_not_awaited()
+
     async def test_heartbeat_unknown_phase_falls_back_to_recording(self):
         from app.api.v1 import meeting_recording as mr
 

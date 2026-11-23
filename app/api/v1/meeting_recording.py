@@ -515,6 +515,16 @@ async def recording_heartbeat(
     if meeting.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="仅创建者可上报录音心跳")
 
+    # 2026-11-23：终态会议不可续录。拒绝为 completed/processing 等状态续写心跳，
+    # 避免前端拿旧 URL 或 sessionStorage 制造“仍在录音”的假信号。
+    if meeting.status not in ("recording", "error"):
+        return {
+            "meeting_id": meeting_id,
+            "alive": False,
+            "status": meeting.status,
+            "reason": "meeting_not_recordable",
+        }
+
     # 直接单测调用（不经过 FastAPI）时默认值可能是 Body 对象；真实请求则为 dict/None。
     # 非 dict 一律按空 payload 处理，保持老调用兼容。
     if not isinstance(payload, dict):
