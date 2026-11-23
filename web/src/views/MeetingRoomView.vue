@@ -27,7 +27,8 @@
         ref="recorderRef"
         :meeting-id="meetingId"
         :meeting-title="pageTitle"
-        @recording-start="onRecordingStart"
+        :prepare-recording="prepareRecording"
+        @recording-start-failed="onRecordingStartFailed"
         @recording-stop="onRecordingStop"
         @audio-ready="onAudioReady"
       />
@@ -101,6 +102,8 @@ import axios from 'axios'
 import AudioRecorder from '@/components/AudioRecorder.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
+import { useMeetingRecordingStart } from '@/composables/useMeetingRecordingStart'
+import { validateRecordingSession } from '@/composables/useRecordingSessionGuard'
 import { useGlobalRecorder, getCurrentSessionId } from '@/composables/useGlobalRecorder'
 import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
 import { ensureHeartbeat, stopHeartbeatForMeeting } from '@/composables/useRecordingHeartbeat'
@@ -108,6 +111,7 @@ import { ensureHeartbeat, stopHeartbeatForMeeting } from '@/composables/useRecor
 const router = useRouter()
 const route = useRoute()
 const { startRecording, stopRecording, recordingMeetingId } = useRecordingState()
+const { prepareRecording, onRecordingStartFailed: onRecordingStartFailedHelper } = useMeetingRecordingStart(meetingId)
 const {
   start: startGlobalRecorder,
   isActive: isGlobalRecorderActive,
@@ -125,22 +129,9 @@ const pageTitle = computed(() => {
   return '开始听会'
 })
 
-async function onRecordingStart() {
-  // 恢复模式：已有 meetingId，跳过创建（与桌面端 MeetingRoom.vue 同款逻辑）
-  if (meetingId.value) {
-    startRecording(meetingId.value, `正在听会（ID ${meetingId.value}）`)
-    ElMessage.success('继续听会')
-    return
-  }
-  // 新建模式：创建会议拿 meetingId
-  try {
-    const res = await axios.post('/api/v1/meetings/start-recording')
-    meetingId.value = res.data.id
-    startRecording(res.data.id, res.data.title || `正在听会（ID ${res.data.id}）`)
-    ElMessage.success('开始听会')
-  } catch (err) {
-    ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
-  }
+function onRecordingStartFailed() {
+  // MediaRecorder 启动失败：清掉刚创建的会议 ID 和右下角胶囊，避免假录音态。
+  onRecordingStartFailedHelper()
 }
 
 function onRecordingStop() {
@@ -246,20 +237,16 @@ onMounted(async () => {
   if (resumeFromQuery && !meetingId.value) {
     const id = Number(resumeFromQuery)
     if (!Number.isNaN(id) && id > 0) {
-      // 2026-11-23 规则：已完成/处理中的会议是终态，不能被 ?resume= 恢复成录音会话。
-      // 这里先查后端；查不到、登录态失效、或状态不是 recording/error 时一律清空续录态。
-      let resumeAllowed = false
-      try {
-        const detail = await axios.get(`/api/v1/meetings/${id}`)
-        resumeAllowed = ['recording', 'error'].includes(detail.data?.status)
-      } catch (err) {
-        console.warn('[MeetingRoomView] resume 校验失败，拒绝恢复旧会议:', err.message)
-      }
-      if (!resumeAllowed) {
+      // 2026-11-23 规则：会议状态可录 + Redis 心跳存活才允许恢复。
+      // 只看 status 会把服务端残留的旧 recording 会议复活成假录音（现场是 278）。
+      const guard = await validateRecordingSession(id)
+      if (!guard.allowed) {
         meetingId.value = null
         stopRecording()
         router.replace('/meetings/room')
-        ElMessage.warning('该会议已完成或不可恢复，已切换到新建听会')
+        ElMessage.warning(guard.reason === 'recording_heartbeat_dead'
+          ? '该录音会话已经结束，已切换到新建听会'
+          : '该会议已完成或不可恢复，已切换到新建听会')
         return
       }
       // 仅当 store 没值或值不同时才调 startRecording，避免与 MainLayout 已 set 的状态冲突

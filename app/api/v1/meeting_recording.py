@@ -487,6 +487,35 @@ async def merge_chunks_endpoint(
     }
 
 
+@router.get("/meetings/{meeting_id}/recording-heartbeat")
+async def get_recording_heartbeat(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """只读查询录音心跳：恢复会话前判断这条会议是否真的还在录音。
+
+    2026-11-23：旧前端只看 status='recording' 会复活服务端残留的旧会议。
+    这里返回 alive=Redis 心跳是否存在；调用方必须同时检查会议状态与 alive。
+    """
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可查询录音心跳")
+
+    from app.services.recording_heartbeat import read_recording_heartbeat
+    heartbeat = await read_recording_heartbeat(meeting_id)
+    return {
+        "meeting_id": meeting_id,
+        "alive": bool(heartbeat),
+        "status": meeting.status,
+        "session_id": heartbeat.get("session_id") if heartbeat else None,
+        "phase": heartbeat.get("phase") if heartbeat else None,
+    }
+
+
 @router.post("/meetings/{meeting_id}/recording-heartbeat")
 async def recording_heartbeat(
     meeting_id: int,

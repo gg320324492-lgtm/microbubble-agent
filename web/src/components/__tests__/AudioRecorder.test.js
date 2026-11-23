@@ -16,7 +16,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import axios from 'axios'
 
 // === vi.mock 会 hoist 到文件顶部, mock 引用的 fn 必须用 vi.hoisted 包起来 ===
-const { mockStart, mockUnsubscribe, mockStopRecording, mockElMessageError, mockElMessageSuccess, mockElMessageWarning, mockElMessageCall, mockEnsureHeartbeat, mockStopModuleHeartbeat, mockBeat, postSpy } = vi.hoisted(() => ({
+const { mockStart, mockUnsubscribe, mockStopRecording, mockElMessageError, mockElMessageSuccess, mockElMessageWarning, mockElMessageCall, mockEnsureHeartbeat, mockStopModuleHeartbeat, mockBeat, postSpy, mockPrepareRecording } = vi.hoisted(() => ({
   mockStart: vi.fn(),
   mockUnsubscribe: vi.fn(),
   mockStopRecording: vi.fn(),
@@ -31,9 +31,11 @@ const { mockStart, mockUnsubscribe, mockStopRecording, mockElMessageError, mockE
   mockStopModuleHeartbeat: vi.fn(),
   mockBeat: vi.fn(),
   postSpy: vi.fn().mockResolvedValue({ data: { cancelled: true } }),
+  mockPrepareRecording: vi.fn(),
 }))
 
 vi.mock('@/composables/useGlobalRecorder', () => ({
+  getCurrentSessionId: () => 'test-session',
   useGlobalRecorder: () => ({
     state: { value: 'idle' },
     elapsed: { value: 0 },
@@ -99,13 +101,20 @@ import AudioRecorder from '@/components/AudioRecorder.vue'
 
 const mountAudio = (props = {}) => {
   return mount(AudioRecorder, {
-    props: { meetingId: 207, meetingTitle: '正在听会（ID 207）', ...props },
+    props: {
+      meetingId: 207,
+      meetingTitle: '正在听会（ID 207）',
+      prepareRecording: mockPrepareRecording,
+      ...props,
+    },
   })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   postSpy.mockResolvedValue({ data: { cancelled: true } })
+  mockPrepareRecording.mockReset()
+  mockPrepareRecording.mockResolvedValue({ meetingId: 207, resumed: false })
   mockStopRecording.mockClear()
   mockElMessageError.mockClear()
   mockElMessageWarning.mockClear()
@@ -114,6 +123,26 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('AudioRecorder 建会/开录时序 (2026-11-23 深层 bug)', () => {
+  it('prepareRecording reject → 不启动 MediaRecorder，不进入录音中', async () => {
+    mockPrepareRecording.mockRejectedValueOnce(new Error('创建会议失败'))
+    const wrapper = mountAudio()
+    await wrapper.vm.handleStart()
+    await flushPromises()
+    expect(mockStart).not.toHaveBeenCalled()
+    expect(mockEnsureHeartbeat).not.toHaveBeenCalled()
+    expect(wrapper.emitted('recording-start')).toBeFalsy()
+  })
+
+  it('prepareRecording 成功后才启动 MediaRecorder', async () => {
+    const wrapper = mountAudio()
+    await wrapper.vm.handleStart()
+    await flushPromises()
+    expect(mockPrepareRecording).toHaveBeenCalledTimes(1)
+    expect(mockStart).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('AudioRecorder.handleStart catch 完整 rollback (Step 4, #207 修复)', () => {
@@ -130,6 +159,7 @@ describe('AudioRecorder.handleStart catch 完整 rollback (Step 4, #207 修复)'
   it('start() reject + meetingId=null → 不调 cancel-recording', async () => {
     const someErr = new Error('boom')
     mockStart.mockRejectedValueOnce(someErr)
+    mockPrepareRecording.mockResolvedValueOnce({ meetingId: null, resumed: false })
     const wrapper = mountAudio({ meetingId: null })
     await wrapper.vm.handleStart()
     await flushPromises()

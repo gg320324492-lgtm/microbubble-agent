@@ -9,7 +9,8 @@
     <main class="room-main">
       <AudioRecorder
         ref="recorderRef"
-        @recording-start="onRecordingStart"
+        :prepare-recording="prepareRecording"
+        @recording-start-failed="onRecordingStartFailed"
         @recording-stop="onRecordingStop"
         @audio-ready="onAudioReady"
       />
@@ -31,6 +32,7 @@ import axios from 'axios'
 import AudioRecorder from '@/components/AudioRecorder.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
+import { useMeetingRecordingStart } from '@/composables/useMeetingRecordingStart'
 
 const props = defineProps({
   meetingId: { type: Number, default: null },
@@ -40,6 +42,7 @@ const props = defineProps({
 const emit = defineEmits(['call-ended'])
 
 const { startRecording, stopRecording } = useRecordingState()
+const { prepareRecording, onRecordingStartFailed: onRecordingStartFailedHelper } = useMeetingRecordingStart(meetingId)
 
 const recorderRef = ref(null)
 const meetingId = ref(props.meetingId)
@@ -50,25 +53,9 @@ const pageTitle = computed(() => {
   return '开始听会'
 })
 
-async function onRecordingStart() {
-  // 恢复模式：已有 meetingId，跳过创建
-  if (meetingId.value) {
-    startRecording(meetingId.value, `正在听会（ID ${meetingId.value}）`)
-    ElMessage.success('继续听会')
-    return
-  }
-
-  // 新建模式：创建会议
-  setTimeout(async () => {
-    try {
-      const res = await axios.post('/api/v1/meetings/start-recording')
-      meetingId.value = res.data.id
-      startRecording(res.data.id, res.data.title || `正在听会（ID ${res.data.id}）`)
-      ElMessage.success('开始听会')
-    } catch (err) {
-      ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
-    }
-  }, 0)
+function onRecordingStartFailed() {
+  // MediaRecorder 启动失败：清掉刚创建的会议 ID 和右下角胶囊，避免假录音态。
+  onRecordingStartFailedHelper()
 }
 
 function onRecordingStop() {

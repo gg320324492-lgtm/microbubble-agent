@@ -434,6 +434,34 @@ class TestRecordingPresenceEndpoint:
 
 
 class TestRecordingHeartbeatSessionEndpoint:
+    async def test_get_heartbeat_reflects_redis_state(self):
+        """只读心跳接口是恢复态硬判据：健康/失活必须如实返回。"""
+        from app.api.v1 import meeting_recording as mr
+
+        meeting = _make_meeting(status="recording", created_by=58)
+        db = _make_db_with_meeting(meeting)
+        hb = {"ts": 1, "session_id": "sess-live", "phase": "recording"}
+
+        with patch(
+            "app.services.recording_heartbeat.read_recording_heartbeat",
+            new=AsyncMock(return_value=hb),
+        ):
+            res = await mr.get_recording_heartbeat(
+                meeting_id=255, current_user=_user(58), db=db
+            )
+        assert res["alive"] is True
+        assert res["session_id"] == "sess-live"
+
+        with patch(
+            "app.services.recording_heartbeat.read_recording_heartbeat",
+            new=AsyncMock(return_value=None),
+        ):
+            res = await mr.get_recording_heartbeat(
+                meeting_id=255, current_user=_user(58), db=db
+            )
+        assert res["alive"] is False
+        assert res["session_id"] is None
+
     async def test_heartbeat_passes_session_and_phase(self):
         from app.api.v1 import meeting_recording as mr
 

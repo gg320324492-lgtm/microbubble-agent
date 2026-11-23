@@ -74,9 +74,12 @@ import UploadStatusBadge from '@/components/UploadStatusBadge.vue'
 const props = defineProps({
   meetingId: { type: Number, default: null },
   meetingTitle: { type: String, default: '' },
+  // 2026-11-23: 可等待的建会回调。父组件必须先确保服务端会议存在，
+  // 子组件才会启动 MediaRecorder，避免「波形在动但 meetingId=null」。
+  prepareRecording: { type: Function, default: null },
 })
 
-const emit = defineEmits(['recording-start', 'recording-stop', 'audio-ready'])
+const emit = defineEmits(['recording-start', 'recording-stop', 'recording-start-failed', 'audio-ready'])
 
 const {
   state, elapsed, barHeights, isPaused,
@@ -220,10 +223,20 @@ function isIOSSafari() {
 }
 
 async function handleStart() {
+  let sessionPrepared = false
   try {
+    // 2026-11-23 深层竞态修复：先 await 父组件建会/校验，成功后才开 MediaRecorder。
+    // emit 是同步派发，不能等待 async 父处理，因此必须用可等待 prop。
+    if (typeof props.prepareRecording === 'function') {
+      const prepared = await props.prepareRecording()
+      if (prepared?.meetingId) meetingIdRef.value = prepared.meetingId
+    } else {
+      // 兼容旧调用点：没有 prepareRecording 时保留原事件语义。
+      emit('recording-start')
+    }
+    sessionPrepared = true
     await start()
     startHeartbeat()
-    emit('recording-start')
 
     // P1-1 (2026-10-08): iOS Safari 5s 内若 totalChunks 仍为 0, 提示用户产品限制.
     // 不打断录音, 仅 ElMessage 弹一次. 任务书「重要陷阱 4」: UA 含 iPhone+Safari 且不含
@@ -285,6 +298,7 @@ async function handleStart() {
     clearRecordingIndicator()
     // 启动失败时没有 audio-ready/finalize 父回调，必须自己停掉模块级心跳
     stopHeartbeat()
+    if (sessionPrepared) emit('recording-start-failed')
     ElMessage.error('录音启动失败: ' + userHint)
   }
 }

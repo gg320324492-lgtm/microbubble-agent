@@ -20,7 +20,8 @@
     <main class="room-main mg-glass-strong mg-rise">
       <AudioRecorder
         ref="recorderRef"
-        @recording-start="onRecordingStart"
+        :prepare-recording="prepareRecording"
+        @recording-start-failed="onRecordingStartFailed"
         @recording-stop="onRecordingStop"
         @audio-ready="onAudioReady"
       />
@@ -105,12 +106,15 @@ import AudioRecorder from '@/components/AudioRecorder.vue'
 import ProcessingSheet from '@/components/mobile/ProcessingSheet.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
+import { useMeetingRecordingStart } from '@/composables/useMeetingRecordingStart'
+import { validateRecordingSession } from '@/composables/useRecordingSessionGuard'
 import { useGlobalRecorder, getCurrentSessionId } from '@/composables/useGlobalRecorder'
 import { finalizeMeetingAudioUpload, describeUploadError } from '@/composables/useMeetingAudioUpload'
 import { ensureHeartbeat, stopHeartbeatForMeeting } from '@/composables/useRecordingHeartbeat'
 
 const router = useRouter()
 const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
+const { prepareRecording, onRecordingStartFailed: onRecordingStartFailedHelper } = useMeetingRecordingStart(meetingId)
 const {
   isActive: isGlobalRecorderActive,
   start: startGlobalRecorder,
@@ -128,21 +132,9 @@ const pageTitle = computed(() => {
   return '开始听会'
 })
 
-async function onRecordingStart() {
-  // 录音真实开始后，创建会议拿 meetingId（与桌面端 MeetingRoom 同款链路）
-  if (meetingId.value) {
-    startRecording(meetingId.value, `正在听会（ID ${meetingId.value}）`)
-    ElMessage.success('继续听会')
-    return
-  }
-  try {
-    const res = await axios.post('/api/v1/meetings/start-recording')
-    meetingId.value = res.data.id
-    startRecording(res.data.id, res.data.title || `正在听会（ID ${res.data.id}）`)
-    ElMessage.success('开始听会')
-  } catch (err) {
-    ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
-  }
+function onRecordingStartFailed() {
+  // MediaRecorder 启动失败：清掉刚创建的会议 ID 和右下角胶囊，避免假录音态。
+  onRecordingStartFailedHelper()
 }
 
 function onRecordingStop() {
@@ -234,18 +226,14 @@ async function handleBack() {
 onMounted(async () => {
   await checkActiveRecording()  // 异步校验后端 recording 状态
   if (recordingMeetingId.value && !meetingId.value) {
-    // 2026-11-23 规则：只允许真正 recording/error 的会议续录；已完成会议是终态。
+    // 2026-11-23 规则：会议状态可录 + Redis 心跳存活才允许恢复。
     const id = recordingMeetingId.value
-    let resumeAllowed = false
-    try {
-      const detail = await axios.get(`/api/v1/meetings/${id}`)
-      resumeAllowed = ['recording', 'error'].includes(detail.data?.status)
-    } catch (err) {
-      console.warn('[MobileMeetingRoom] resume 校验失败，拒绝恢复旧会议:', err.message)
-    }
-    if (!resumeAllowed) {
+    const guard = await validateRecordingSession(id)
+    if (!guard.allowed) {
       stopRecording()
-      ElMessage.warning('该会议已完成或不可恢复，已退出续录')
+      ElMessage.warning(guard.reason === 'recording_heartbeat_dead'
+        ? '该录音会话已经结束，已退出续录'
+        : '该会议已完成或不可恢复，已退出续录')
       return
     }
     meetingId.value = id

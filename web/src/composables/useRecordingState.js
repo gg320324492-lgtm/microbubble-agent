@@ -67,20 +67,24 @@ async function checkActiveRecording({ force = false } = {}) {
   initialized.value = true
 
   try {
-    // 始终查后端确认是否有 recording 状态的会议
+    // 2026-11-23：列表里的 status='recording' 只能算候选。
+    // 服务端停止/崩溃后可能留下旧 recording 行；必须有 Redis 心跳才算真录音。
+    const { validateRecordingSession } = await import('./useRecordingSessionGuard')
     const res = await axios.get('/api/v1/meetings', {
-      params: { status: 'recording', page_size: 1 }
+      params: { status: 'recording', page_size: 5 }
     })
-    const items = res.data.items || res.data
-    if (items && items.length > 0) {
-      const m = items[0]
-      log('backend has active recording, syncing id =', m.id, 'title =', m.title)
-      startRecording(m.id, m.title)
-    } else {
-      // 后端没有录音中的会议，清除 sessionStorage 残留
-      log('backend has NO active recording, clearing local state')
-      stopRecording()
+    const items = res.data.items || res.data || []
+    for (const m of items) {
+      const guard = await validateRecordingSession(m.id)
+      if (guard.allowed) {
+        log('backend has live recording, syncing id =', m.id, 'title =', m.title)
+        startRecording(m.id, m.title)
+        return
+      }
+      log('backend recording candidate rejected:', m.id, guard.reason)
     }
+    log('backend has NO live recording, clearing local state')
+    stopRecording()
   } catch (err) {
     // 2026-11-23 规则：无法向后端验证时，绝不用 sessionStorage 旧值恢复“正在听会”。
     // 已完成会议必须保持终态；只有后端明确返回 recording 才允许显示录音胶囊。
